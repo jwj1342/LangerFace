@@ -47,13 +47,40 @@ ok(atlas.lines[0].points[0][0] === 5, "图谱点保留三角面 id");
 const xyz = m.toXyzJSON();
 ok(xyz.lines[0].points[0].length === 3 && xyz.lines[0].points.length === 2, "xyz 折线导出正确");
 
+// ── 表面路径：跨三角形的控制点应展开为沿网格边的路径，而不是空间直线 ───────
+const surf = new AnnotationModel("rstl");
+const verts = [
+  [0, 0, 0], [1, 0, 0], [0, 1, 0],
+  [1, 1, 0.5],
+];
+const tris = [[0, 1, 2], [1, 3, 2]];
+surf.setSurface(verts, tris);
+surf.startLine({ name: "surface" });
+surf.addPoint({ xyz: [0.2, 0.2, 0], tri: 0, bary: [0.6, 0.2, 0.2] });
+surf.addPoint({ xyz: [0.8, 0.8, 0.35], tri: 1, bary: [0.2, 0.6, 0.2] });
+surf.finishLine();
+ok(surf.lines[0].points.length > 2, "跨三角形控制点展开为表面路径点");
+ok(surf.toAtlasJSON().lines[0].points.length > 2, "图谱导出使用表面路径点");
+
+let threw = false;
+const custom = new AnnotationModel("rstl");
+custom.setSurface(verts, tris);
+custom.startLine({ name: "custom" });
+custom.addPoint({ xyz: [0.2, 0.2, 0], tri: 0, bary: [0.6, 0.2, 0.2], exportable: false });
+custom.addPoint({ xyz: [0.8, 0.8, 0.35], tri: 1, bary: [0.2, 0.6, 0.2], exportable: false });
+custom.finishLine();
+ok(custom.toXyzJSON().lines[0].points.length > 2, "自定义头模也使用表面路径导出 xyz");
+threw = false;
+try { custom.toAtlasJSON(); } catch { threw = true; }
+ok(threw, "自定义头模表面路径不允许导出项目图谱格式");
+
 // ── 无重心时拒绝导出图谱 ─────────────────────────────────────────────────────
 const m2 = new AnnotationModel();
 m2.startLine();
 m2.addPoint({ xyz: [0, 0, 0], tri: null, bary: null });
 m2.addPoint({ xyz: [1, 1, 1], tri: null, bary: null });
 m2.finishLine();
-let threw = false;
+threw = false;
 try { m2.toAtlasJSON(); } catch { threw = true; }
 ok(threw, "缺重心坐标时拒绝导出图谱格式");
 

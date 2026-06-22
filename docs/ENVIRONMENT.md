@@ -38,6 +38,16 @@ cd web
 npm run dev
 ```
 
+## Preview / 部署访问
+
+本地环境只负责开发、构建和测试。PR 创建后，Vercel Git 集成会自动生成 Preview URL；协作流程见 [CONTRIBUTING.md](CONTRIBUTING.md#pr--preview-工作流)。
+
+如果 Preview 启用了 Deployment Protection：
+
+- 长期协作者需要被加入 Vercel project/team，并用自己的 Vercel 账号登录访问。
+- 外部短期评审应使用维护者生成的 Shareable Link 或 Password Protection。
+- 自动化访问才使用 Protection Bypass for Automation，secret 不应出现在本地 `.env`、仓库或前端 `VITE_*` 环境变量中。
+
 ## Compute Canada / Alliance 集群环境
 
 集群上不要裸装到系统 Python。使用 venv，并尽量走集群 wheelhouse。Node 使用可用的新模块版本：
