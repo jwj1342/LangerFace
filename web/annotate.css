@@ -1,0 +1,21 @@
+/* 3D 网页标注页的补充样式（基于 style.css 的设计变量）。 */
+#stage { width: 100%; height: 100%; border-radius: 14px; background: #0b0e13; cursor: crosshair; touch-action: none; }
+
+.text-input {
+  width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: #fff; font-size: 13.5px; color: var(--ink);
+}
+.text-input::placeholder { color: var(--muted); }
+
+a.badge { text-decoration: none; }
+
+.line-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+.line-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #f8f9f5; border: 1px solid var(--line); border-radius: 9px; padding: 7px 10px; font-size: 13px;
+}
+.line-row em { color: var(--muted); font-style: normal; font-variant-numeric: tabular-nums; }
+.line-row .del {
+  border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; padding: 2px 6px;
+}
+.line-row .del:hover { color: #c0263d; }

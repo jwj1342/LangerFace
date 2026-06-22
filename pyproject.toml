@@ -38,6 +38,9 @@ version = { attr = "langerface.__version__" }
 line-length = 110
 target-version = "py310"
 src = ["src", "tools", "tests"]
+# Vendored research pipeline (other student's HeadSpace scripts): kept faithful,
+# not held to repo lint rules. Algorithms it relies on live in langerface/ and ARE linted.
+extend-exclude = ["tools/headspace"]
 
 [tool.ruff.lint]
 # E402 (import not at top) is intentional in a couple of tool scripts; keep the rest strict.

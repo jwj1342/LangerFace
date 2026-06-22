@@ -28,3 +28,6 @@ local_outputs/
 *.mp4
 web/test/face.jpg
 web/test/face_small.jpg
+
+# 3D head-scan datasets (HeadSpace / FaceScape — licensed, real biometric; never commit)
+tools/headspace/data/
