@@ -12,9 +12,11 @@
 
 两套等价的几何实现，共享同一份图谱与三角拓扑：
 
-- **Python 库 `langerlines/`**：2D 管线 + 批处理（cli）+ **验证基准（ground truth）** + 3D 重建离线工具。
-- **浏览器客户端 `web/`**：纯客户端 MediaPipe（tasks-vision，CDN）+ `geometry.js`（Python 几何的忠实移植）
-  + `three3d.js`（3D Beta）。实时、本地、不上传。
+- **Python 库 `src/langerface/`**：分层核心库 + console scripts + **验证基准（ground truth）** + 3D 重建离线工具。
+- **浏览器客户端 `web/`**：Vite 8 + 原生 ES Modules + MediaPipe Tasks Vision + `geometry.js`
+  （Python 几何的忠实移植）+ `three3d.js`（3D Beta）。实时、本地、不上传。
+  前端状态在 `state.js` 中按 `modelState` / `renderState` / `sourceState` / `recordingState` / `reconState`
+  分片；`pipeline.js` 不依赖 `mode3d.js`，3D 实时投影通过无 DOM 的 `projection3d.js` 适配，避免模块环。
 
 > 关键不变式：`web/geometry.js` 的映射/遮挡/平滑必须与 Python 端**逐点一致**，由
 > `tools/test_web_mapping.mjs` 持续对拍保证（误差 < 1e-2 px、可见性 0 不一致）。
@@ -28,7 +30,7 @@
   - 像素化：`px = x·W, py = y·H, pz = z·W`（z 乘宽，保持与 x 同尺度，供 3D 法向计算）。
 - **标准脸模型** `canonical_face_model.obj`（MediaPipe 提供）：468 顶点（厘米，x 右 / y 上 / z 朝观察者）、
   **898 个三角面**、UV。顶点顺序 == 关键点索引 0..467，故 obj 的三角面可直接用于检测到的关键点。
-  解析见 [`langerlines/canonical.py`](../langerlines/canonical.py)。
+  解析见 [`src/langerface/geometry/canonical.py`](../src/langerface/geometry/canonical.py)。
 
 ---
 
@@ -40,16 +42,16 @@
 P = u·V0 + v·V1 + w·V2
 ```
 
-- 实现：[`langerlines/mapping.py`](../langerlines/mapping.py) 与 `web/geometry.js: mapAtlas`。
+- 实现：[`src/langerface/lines/mapping.py`](../src/langerface/lines/mapping.py) 与 `web/geometry.js: mapAtlas`。
 - 性质：**对仿射变换不变**——人脸做任意仿射形变，线条随之等价形变。由 `tests/test_mapping.py` 证明。
 - 这等价于 AR"脸绘"的纹理贴合：线条天生贴在皮肤上、随姿态/表情/身份变化。
 
 ### 3.1 时间平滑（One-Euro）
-[`langerlines/smoothing.py`](../langerlines/smoothing.py) / `web/geometry.js: OneEuro`。逐关键点逐坐标自适应低通：
+[`src/langerface/detection/smoothing.py`](../src/langerface/detection/smoothing.py) / `web/geometry.js: OneEuro`。逐关键点逐坐标自适应低通：
 低速重平滑（去抖），高速低滞后（跟手）。参数 `min_cutoff / beta / dcutoff`；网页"平滑"滑杆映射到 `min_cutoff/beta`。
 
 ### 3.2 背面剔除（自遮挡）
-[`langerlines/occlusion.py`](../langerlines/occlusion.py) / `web/geometry.js: visibleTriangles`。
+[`src/langerface/rendering/occlusion.py`](../src/langerface/rendering/occlusion.py) / `web/geometry.js: visibleTriangles`。
 对每个三角面用检测到的 3D 顶点求法向，取 `nz`；**用鼻尖(索引1)所在三角面自标定"朝前"的符号**
 （避免依赖缠绕方向/手性），`sign·nz ≥ 阈值` 即可见。转头时背侧线条隐藏。
 
@@ -60,11 +62,11 @@ P = u·V0 + v·V1 + w·V2
 - 由 `tools/test_occlusion.mjs` 验证（缝隙点不被挡，旧凸包会误挡）。
 
 ### 3.4 渲染
-`web/app.js: draw` / [`langerlines/render.py`](../langerlines/render.py)：抗锯齿折线，被遮挡点处**断开**子段；
+`web/render.js: draw` / [`src/langerface/rendering/overlay.py`](../src/langerface/rendering/overlay.py)：抗锯齿折线，被遮挡点处**断开**子段；
 按面部上/中/下三段分色（额=琥珀、中=蓝、下=绿）；alpha 由"透明度"控制 + 丢脸淡入淡出。
 
 ### 3.5 关键区域放大窗
-`web/app.js: drawZooms`。6 个区域（额·眉间/右眼周/左眼周/鼻·鼻唇沟/口周/颏部）各由一组关键点界定取景框，
+`web/render.js: drawZooms`。6 个区域（额·眉间/右眼周/左眼周/鼻·鼻唇沟/口周/颏部）各由一组关键点界定取景框，
 直接从**已叠加线条的主画布**裁剪放大到小窗 → 线条/配色/遮挡自动带过去；随脸移动；与主画面同步镜像。
 
 ---
@@ -72,7 +74,7 @@ P = u·V0 + v·V1 + w·V2
 ## 4. 3D 路线（Beta）
 
 ### 4.1 重建个性化 3D 人头
-离线：[`tools/reconstruct_3d.py`](../tools/reconstruct_3d.py)；在线：`web/app.js: startScan/finishScan`。
+离线：[`tools/reconstruct_3d.py`](../tools/reconstruct_3d.py)；在线：`web/mode3d.js: startScan/finishScan`。
 - 每帧取 478→前 468 关键点；用 **Umeyama 相似变换**（scale+rot+trans）把该帧网格的**刚性锚点**
   （眼角、鼻梁、轮廓极值等 16 点 `RIGID3D`）对齐到统一参考系（标准脸翻到关键点手性）。
 - 对齐后的网格**逐顶点取中位数** → 稳定的个性化中性脸（中位数对表情/抖动/遮挡鲁棒）。
@@ -81,13 +83,13 @@ P = u·V0 + v·V1 + w·V2
   由 `tools/test_umeyama.mjs` 验证（恢复已知变换误差 ~1e-13）。
 
 ### 4.2 把线贴到 3D 头并查看
-[`web/three3d.js`](../web/three3d.js)（Three.js 0.160，按需动态加载，CDN 故障不影响 2D）：
+[`web/three3d.js`](../web/three3d.js)（Three.js 0.184，由 Vite 打包，按需动态加载）：
 - 头网格 = 重建顶点 + 898 三角面，皮肤材质 + 光照。
 - 线条 = 图谱重心坐标 → 重建顶点上的 3D 点，**沿插值法向微抬**避免 z-fighting，按高度分色。
 - `depthTest` + 头网格深度 → 旋转时背面线条被头自动遮挡。鼠标拖拽旋转。
 
 ### 4.3 实时配准投影
-`web/app.js: projectVerts`（投影模式）：每帧用 `RIGID3D` 锚点做 `umeyama(重建网格 → 当前帧活体关键点)`，
+`web/mode3d.js: projectVerts`（投影模式）：每帧用 `RIGID3D` 锚点做 `umeyama(重建网格 → 当前帧活体关键点)`，
 把整套重建顶点刚性变换到屏幕空间，再走 2D 的 `draw`（含背面剔除/手部遮挡）。
 线条来自**稳定的重建网格**，不随表情抖动。
 
@@ -137,34 +139,44 @@ P = u·V0 + v·V1 + w·V2
 | `atlas_rstl.json` / `atlas_langer.json` | 本项目生成（Borges RSTL 走向，示意首版）| 线条图谱 |
 | `triangles.json` / `canonical_vertices.json` | 由 obj 导出 | 网页端拓扑/几何 |
 | `recon_demo.json` | 示例视频重建 | 3D Beta 直接体验 |
-| MediaPipe tasks-vision (JS) | jsDelivr CDN `@0.10.18` | 浏览器端推理（wasm）|
-| Three.js | jsDelivr CDN `@0.160.0` | 3D 渲染 |
+| MediaPipe tasks-vision (JS) | npm `@mediapipe/tasks-vision@0.10.35` + jsDelivr wasm `@0.10.35` | 浏览器端推理（wasm）|
+| Three.js | npm `three@0.184.0` | 3D 渲染 |
 
 下载脚本：`tools/download_assets.py`（obj + 人脸模型）；手部模型与 web 资产见 README 复现步骤；`tools/export_web_assets.py` 导出网页资产。
 
 ---
 
-## 9. 网页服务与端口
+## 9. 网页开发、构建与部署
 
-- `tools/serve_web.py`：静态服务 `web/`，正确的 JS MIME，端口默认 8000，也读 `PORT` 环境变量。
+- 本地开发：`cd web && npm run dev`，Vite 默认监听 `http://127.0.0.1:5173`。
+- 生产构建：`cd web && npm ci && npm run build`，输出 `web/dist/`。
+- 生产预览：`cd web && npm run preview`，Vite 默认监听 `http://127.0.0.1:4173`。
+- `web/assets.js` 用 Vite `?url` 导入 `.task`、atlas JSON 与 3D 示例资产，构建后自动进入哈希化 `dist/assets/`。
+- `tools/serve_web.py` 仍可服务未打包的 `web/` 源文件，但正式前端开发与部署以 Vite 为准。
 - `getUserMedia`（摄像头）要求安全上下文：`http://localhost`/`127.0.0.1` 即可（无需 https）。
 - 首次加载从 CDN 拉取 MediaPipe wasm（数秒）；之后浏览器缓存。
 
 ### 部署（Vercel，纯静态）
-- `web/` 是纯静态站点，无后端；`cd web && npx vercel deploy --prod --yes` 即可（首次需 `npx vercel login`）。
-- [`web/vercel.json`](../web/vercel.json)：`/assets/*` 设 `Cache-Control: immutable` 长缓存（~11MB 模型只下一次）；`.js/.mjs` 强制 `text/javascript`。
-- [`web/.vercelignore`](../web/.vercelignore)：排除 `test/`、`package.json`，避免 Vercel 误判为 Node 构建。
+- Vercel 使用 [`web/vercel.json`](../web/vercel.json) 运行 `npm run build`，输出目录为 `dist/`。
+- [`web/vercel.json`](../web/vercel.json)：`/assets/*` 设 `Cache-Control: immutable` 长缓存（~11MB 模型只下一次）。
+- [`web/.vercelignore`](../web/.vercelignore)：排除本地测试/构建缓存。
 - Vercel 自动 HTTPS → 线上摄像头（getUserMedia，安全上下文）可用。
 - 线上：https://web-black-one-34.vercel.app
-- 更新：改 `web/` 后（动了几何/图谱/3D 资产先 `export_web_assets.py`）重跑 `npx vercel deploy --prod`。
+- 更新：改 `web/` 后（动了几何/图谱/3D 资产先 `export_web_assets.py`）重跑 `cd web && npm run build && npx vercel deploy --prod`。
 
 ---
 
 ## 10. 从零复现要点（清单）
 
-1. Python 3.12 + `pip install -r requirements.txt`；Node ≥ 18。
+1. Python 3.10–3.12 + `pip install -e ".[all]"`；Node 24.15+ / npm 11+。
 2. `download_assets.py` + 手部模型 → `build_field_atlas.py` → `export_web_assets.py`。
 3.（可选）`reconstruct_3d.py` 生成 3D 示例。
-4. `pytest` + 三个 `node tools/test_*.mjs` 全绿。
-5. `serve_web.py` → 浏览器 `http://127.0.0.1:8000` 验证 2D 实时与 3D 查看。
+4. `pytest` + `cd web && npm test` 全绿；`cd web && npm run build` 可生产构建。
+5. `cd web && npm run dev` → 浏览器打开 Vite 地址，验证 2D 实时与 3D 查看。
 6. 临床校验图谱（`annotate_atlas.py`）后置 `validated:true` 方可作正式参考。
+
+## 11. 前端鲁棒性约束
+
+- `tools/test_web_architecture.mjs` 会检查 `web/*.js` 的静态相对 import 图，禁止新增模块环。
+- `web/logger.js` 统一记录浏览器端关键故障与降级事件；调试时可在控制台查看 `window.langerfaceDiagnostics`。
+- `web/.npmrc` 启用 `engine-strict=true`，安装依赖时会严格执行 `package.json` 中的 Node/npm 版本要求。

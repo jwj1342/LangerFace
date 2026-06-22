@@ -1,0 +1,165 @@
+// 浏览器实时管线：摄像头/上传 → MediaPipe FaceLandmarker(客户端) → 平滑 →
+// 图谱映射 → 背面剔除 + 手部遮挡 → 画布叠加。
+import { FaceLandmarker, HandLandmarker, FilesetResolver }
+  from "@mediapipe/tasks-vision";
+import { assetUrls } from "./assets.js";
+import { CDN } from "./constants.js";
+import { ctx, els } from "./dom.js";
+import { buildHandMasks, noseTriangles, toPixels } from "./geometry.js";
+import { countMetric, logInfo, logWarn } from "./logger.js";
+import { projectVerts } from "./projection3d.js";
+import { clearZooms, draw, drawZooms, updateStats } from "./render.js";
+import { modelState, renderState, sourceState } from "./state.js";
+import { setLive, setMsg } from "./ui.js";
+
+// ── 资产 / 模型加载 ───────────────────────────────────────────────────────────
+export async function ensureReady() {
+  if (modelState.landmarker) return;
+  const [tri, rstl, langer] = await Promise.all([
+    fetch(assetUrls.triangles).then((r) => r.json()),
+    fetch(assetUrls.atlasRstl).then((r) => r.json()),
+    fetch(assetUrls.atlasLanger).then((r) => r.json()),
+  ]);
+  modelState.triangles = tri; modelState.noseTris = noseTriangles(tri);
+  modelState.atlases.rstl = rstl.lines; modelState.atlases.langer = langer.lines;
+  const resolver = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
+  const build = (delegate) => FaceLandmarker.createFromOptions(resolver, {
+    baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
+    runningMode: "VIDEO", numFaces: 1,
+    minFaceDetectionConfidence: 0.5, minFacePresenceConfidence: 0.5, minTrackingConfidence: 0.5,
+  });
+  try { modelState.landmarker = await build("GPU"); }
+  catch (e) {
+    countMetric("faceLandmarker.gpuFallback");
+    logWarn("Face Landmarker GPU 初始化失败，回退到 CPU。", e);
+    modelState.landmarker = await build("CPU");
+  }
+
+  // 手部检测器（用于前方手部遮挡）。失败不阻塞主流程。
+  const buildHand = (delegate) => HandLandmarker.createFromOptions(resolver, {
+    baseOptions: { modelAssetPath: assetUrls.handLandmarkerTask, delegate },
+    runningMode: "VIDEO", numHands: 2,
+    minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5, minTrackingConfidence: 0.5,
+  });
+  try { modelState.handLandmarker = await buildHand("GPU"); }
+  catch (e) {
+    countMetric("handLandmarker.gpuFallback");
+    logWarn("Hand Landmarker GPU 初始化失败，回退到 CPU。", e);
+    try { modelState.handLandmarker = await buildHand("CPU"); }
+    catch (err) {
+      countMetric("handLandmarker.loadFailure");
+      logWarn("手部模型加载失败，手部遮挡功能将暂不可用。", err);
+    }
+  }
+
+  els.badge.textContent = "模型就绪"; els.badge.classList.remove("loading");
+  logInfo("模型与图谱加载完成。", {
+    triangles: tri.length,
+    rstlLines: rstl.lines.length,
+    langerLines: langer.lines.length,
+    handOcclusionReady: Boolean(modelState.handLandmarker),
+  });
+}
+
+// 检测手部 → 凸包列表（图像空间），落在其中的脸部线点将被剔除
+export function detectHands(t, W, H) {
+  if (!renderState.handOcc || !modelState.handLandmarker) return [];
+  const hr = modelState.handLandmarker.detectForVideo(sourceState.source, t);
+  if (!hr.landmarks || !hr.landmarks.length) return [];
+  const margin = Math.max(5, W * 0.006);
+  return buildHandMasks(hr.landmarks.map((h) => toPixels(h, W, H)), 0.16, margin);
+}
+
+// ── 数据源 ────────────────────────────────────────────────────────────────────
+export async function startCamera() {
+  if (sourceState.sourceKind === "camera") { stopSource(); setLive(false, "待机"); els.cam.setAttribute("aria-pressed","false"); return; }
+  setMsg("加载模型…");
+  try {
+    await ensureReady();
+    setMsg("请求摄像头权限…");
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: false });
+    stopSource();
+    els.video.srcObject = stream; await els.video.play();
+    setSource(els.video, "camera", els.video.videoWidth, els.video.videoHeight);
+    els.cam.setAttribute("aria-pressed", "true");
+  } catch (e) {
+    countMetric("camera.openFailure");
+    logWarn("无法开启摄像头。", e);
+    setMsg("无法开启摄像头：" + e.message);
+  }
+}
+
+export async function handleFile(file) {
+  if (!file) return;
+  setMsg("加载模型…"); await ensureReady();
+  stopSource();
+  const url = URL.createObjectURL(file);
+  if (file.type.startsWith("image/")) {
+    const img = new Image(); img.src = url; await img.decode();
+    sourceState.imageCacheLM = null;
+    setSource(img, "image", img.naturalWidth, img.naturalHeight);
+  } else {
+    els.video.srcObject = null; els.video.src = url; els.video.loop = true; await els.video.play();
+    setSource(els.video, "video", els.video.videoWidth, els.video.videoHeight);
+  }
+  els.cam.setAttribute("aria-pressed", "false");
+}
+
+export function setSource(src, kind, w, h) {
+  sourceState.source = src; sourceState.sourceKind = kind;
+  els.canvas.width = w || 1280; els.canvas.height = h || 720;
+  renderState.smoother.reset(); sourceState.presence = 0; sourceState.running = true; sourceState.paused = false;
+  els.pause.disabled = false; els.export.disabled = false; els.pause.textContent = "⏸ 暂停";
+  setMsg(null); setLive(true, kind === "camera" ? "实时摄像头" : kind === "video" ? "视频" : "照片");
+  requestAnimationFrame(loop);
+}
+
+export function stopSource() {
+  const ms = els.video.srcObject;
+  if (ms) ms.getTracks().forEach((t) => t.stop());
+  els.video.srcObject = null; els.video.removeAttribute("src");
+  sourceState.source = null; sourceState.sourceKind = null; sourceState.running = false;
+}
+
+// ── 主循环 ────────────────────────────────────────────────────────────────────
+let fpsEMA = 0, lastT = performance.now();
+export function loop() {
+  if (!sourceState.running || sourceState.paused) return;
+  const W = els.canvas.width, H = els.canvas.height;
+  ctx.drawImage(sourceState.source, 0, 0, W, H);
+  const t = performance.now();
+
+  let lm = null, hulls = [];
+  if (sourceState.sourceKind === "image") {
+    if (!sourceState.imageCacheLM) {
+      const res = modelState.landmarker.detectForVideo(sourceState.source, t);
+      sourceState.imageCacheLM = (res.faceLandmarks && res.faceLandmarks[0]) ? toPixels(res.faceLandmarks[0], W, H) : null;
+      sourceState.imageHulls = detectHands(t, W, H);
+    }
+    lm = sourceState.imageCacheLM; hulls = sourceState.imageHulls || [];
+    sourceState.presence = lm ? 1 : 0;
+  } else if (sourceState.source.currentTime !== undefined) {
+    const res = modelState.landmarker.detectForVideo(sourceState.source, t);
+    if (res.faceLandmarks && res.faceLandmarks.length) {
+      lm = toPixels(res.faceLandmarks[0], W, H);
+      if (renderState.smoothLevel > 0) lm = renderState.smoother.filter(lm, t / 1000);
+      sourceState.lastLM = lm; sourceState.presence = Math.min(1, sourceState.presence + 0.34);
+    } else {
+      sourceState.presence = Math.max(0, sourceState.presence - 0.16);
+      if (sourceState.presence <= 0) { renderState.smoother.reset(); sourceState.lastLM = null; }
+      lm = sourceState.lastLM;
+    }
+    hulls = detectHands(t, W, H);
+  }
+
+  let lineCount = 0;
+  if (lm && sourceState.presence > 0) { const dlm = projectVerts(lm); lineCount = draw(dlm, W, H, hulls); drawZooms(dlm, W); }
+  else clearZooms();
+  updateStats(lm, W, H, lineCount);
+
+  const now = performance.now();
+  fpsEMA = fpsEMA ? fpsEMA * 0.9 + (1000 / Math.max(1, now - lastT)) * 0.1 : 30;
+  lastT = now; els.fps.textContent = fpsEMA.toFixed(0) + " fps";
+  requestAnimationFrame(loop);
+}

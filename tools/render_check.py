@@ -6,18 +6,19 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 
 import cv2
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from langerlines.config import Config, DEFAULT_STYLES, LineStyle
-from langerlines.pipeline import LinePipeline
+from langerface.config import DEFAULT_STYLES, Config, LineStyle
+from langerface.pipeline import LinePipeline
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOCAL_MEDIA = os.path.join(REPO, "local_media")
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--video", default="IMG_3458.MOV")
+    ap.add_argument("--video", default=os.path.join(LOCAL_MEDIA, "IMG_3458.MOV"))
     ap.add_argument("--frame", type=int, default=156)
     ap.add_argument("--system", default="rstl")
     ap.add_argument("--thickness", type=int, default=1)
@@ -31,7 +32,8 @@ def main():
     ok, frame = cap.read()
     cap.release()
     if not ok:
-        print("cannot read frame"); return 1
+        print("cannot read frame")
+        return 1
 
     cfg = Config(system=args.system)
     cfg.occlusion = not args.no_occlusion

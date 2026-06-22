@@ -4,105 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>面部朗格线迁移 · 实时</title>
-<style>
-  :root{
-    --bg:#eef0ea; --side:#f6f7f3; --card:#ffffff; --line:#e6e8e1;
-    --ink:#1b2024; --muted:#6c7480; --green:#0f9b6e; --green-d:#0c8460;
-    --green-soft:#d9f2e7; --stage:#0c0f14; --stage-bar:#11151c;
-    --amber:#f0c24b; --blue:#56bdf2; --teal:#3fd39c;
-    --shadow:0 1px 2px rgba(20,30,25,.05),0 6px 18px rgba(20,30,25,.06);
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
-  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",system-ui,sans-serif;
-       color:var(--ink);background:var(--bg);overflow:hidden}
-  .app{display:grid;grid-template-columns:340px 1fr;height:100vh}
-
-  /* ── Sidebar ───────────────────────────────── */
-  .sidebar{background:var(--side);border-right:1px solid var(--line);
-           padding:22px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
-  .brand .eyebrow{font-size:10.5px;letter-spacing:.14em;color:var(--muted);font-weight:600}
-  .brand-top{display:flex;justify-content:space-between;align-items:center}
-  .brand h1{font-size:25px;margin:6px 0 0;font-weight:700;letter-spacing:-.01em}
-  .badge{font-size:11px;font-weight:600;color:var(--green-d);background:var(--green-soft);
-         padding:4px 10px;border-radius:999px;white-space:nowrap}
-  .badge.loading{color:#9a6a00;background:#fbeecd}
-
-  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
-        padding:14px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px}
-
-  .btn{appearance:none;border:1px solid var(--line);background:#fff;color:var(--ink);
-       font-size:14px;font-weight:600;padding:10px 12px;border-radius:10px;cursor:pointer;
-       display:flex;align-items:center;justify-content:center;gap:7px;transition:.15s}
-  .btn:hover{background:#f3f4f0}
-  .btn:active{transform:translateY(1px)}
-  .btn[aria-pressed="true"]{border-color:var(--green);color:var(--green-d);background:var(--green-soft)}
-  .btn-primary{background:var(--green);border-color:var(--green);color:#fff;padding:12px}
-  .btn-primary:hover{background:var(--green-d)}
-  .btn-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-  .btn-row .btn{padding:9px 6px;font-size:13px}
-  .btn:disabled{opacity:.45;cursor:default}
-
-  .field-label{font-size:12.5px;font-weight:600;color:var(--muted);
-               display:flex;justify-content:space-between;align-items:center}
-  .field-label .val{color:var(--ink);font-variant-numeric:tabular-nums}
-  .select{appearance:none;width:100%;padding:9px 12px;border:1px solid var(--line);
-          border-radius:10px;background:#fff;font-size:14px;font-weight:600;color:var(--ink);
-          background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236c7480' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-          background-repeat:no-repeat;background-position:right 12px center;cursor:pointer}
-  input[type=range]{width:100%;accent-color:var(--green);cursor:pointer;margin:2px 0}
-  .check{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:500;cursor:pointer}
-  .check input{accent-color:var(--green);width:16px;height:16px}
-
-  .quality-top{display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;color:var(--muted)}
-  .quality-top span:last-child{color:var(--ink);font-size:20px;font-variant-numeric:tabular-nums}
-  .bar{height:7px;background:#e9ebe4;border-radius:99px;overflow:hidden;margin-top:7px}
-  .bar-fill{height:100%;width:0;background:linear-gradient(90deg,#2fbf8b,var(--green));
-            border-radius:99px;transition:width .25s}
-  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .stat{background:#f8f9f5;border:1px solid var(--line);border-radius:10px;padding:9px 11px;
-        display:flex;flex-direction:column;gap:3px}
-  .stat .k{font-size:11px;color:var(--muted)}
-  .stat .v{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
-  .hint{font-size:11.5px;color:var(--muted);margin:0}
-  .disclaimer{font-size:10.5px;color:var(--muted);line-height:1.6;margin:0}
-
-  /* ── Stage ─────────────────────────────────── */
-  .stage{background:var(--stage);display:flex;flex-direction:column;min-width:0}
-  .stage-top{height:56px;display:flex;align-items:center;justify-content:space-between;
-             padding:0 22px;background:var(--stage-bar);border-bottom:1px solid #1c222c}
-  .live{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#aeb6c2;
-        background:rgba(255,255,255,.05);padding:6px 13px;border-radius:999px}
-  .live .dot{width:8px;height:8px;border-radius:50%;background:#6b7280}
-  .live.on{color:#d6f5e7}.live.on .dot{background:#34e3a4;box-shadow:0 0 0 4px rgba(52,227,164,.18)}
-  .fps{font-size:13px;font-weight:600;color:#8b94a3;font-variant-numeric:tabular-nums}
-  .stage-body{flex:1;display:flex;flex-direction:column;gap:14px;padding:16px;min-height:0}
-  .main-wrap{flex:1;display:flex;align-items:center;justify-content:center;position:relative;min-height:0}
-  video{display:none}
-  #canvas{max-width:100%;max-height:100%;border-radius:14px;background:#000;
-          box-shadow:0 10px 40px rgba(0,0,0,.45)}
-  #canvas.mirror{transform:scaleX(-1)}
-  .overlay-msg{position:absolute;color:#9aa3b2;font-size:14px;background:rgba(10,14,20,.6);
-               padding:12px 18px;border-radius:12px;border:1px solid #232a35}
-  .overlay-msg.hidden{display:none}
-  .zoom-strip{display:flex;gap:10px;justify-content:center;flex:0 0 auto}
-  .zoom-strip.hidden{display:none}
-  .zoom-card{position:relative;flex:1 1 0;min-width:0;max-width:190px;aspect-ratio:1;background:#000;
-             border-radius:10px;overflow:hidden;border:1px solid #232a35;box-shadow:0 4px 14px rgba(0,0,0,.35)}
-  .zoom-card canvas{width:100%;height:100%;display:block;background:#05070a}
-  .zoom-card canvas.mirror{transform:scaleX(-1)}
-  .zoom-card .tag{position:absolute;top:6px;left:6px;font-size:11px;font-weight:600;color:#e7edf3;
-                  background:rgba(0,0,0,.55);padding:2px 8px;border-radius:6px;z-index:2}
-  .hidden{display:none !important}
-  #three{position:absolute;inset:0;width:100%;height:100%;border-radius:14px;cursor:grab}
-  #three:active{cursor:grabbing}
-  .badge.beta{color:#7c3aed;background:#ede4fb}
-
-  @media(max-width:880px){
-    .app{grid-template-columns:1fr;grid-template-rows:auto 1fr}
-    .sidebar{flex-direction:column;max-height:46vh}
-  }
-</style>
+<link rel="stylesheet" href="style.css" />
 </head>
 <body>
 <div class="app">
@@ -209,6 +111,6 @@
     </div>
   </main>
 </div>
-<script type="module" src="app.js"></script>
+<script type="module" src="main.js"></script>
 </body>
 </html>

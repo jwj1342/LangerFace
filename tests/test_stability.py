@@ -4,7 +4,7 @@
 """
 import numpy as np
 
-from langerlines.smoothing import LandmarkSmoother
+from langerface.detection import LandmarkSmoother
 
 
 def _interframe_jitter(seq):

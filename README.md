@@ -1,5 +1,7 @@
 # 面部朗格线迁移 · Facial Langer/RSTL Line Projection
 
+[![CI](https://github.com/jwj1342/LangerFace/actions/workflows/ci.yml/badge.svg)](https://github.com/jwj1342/LangerFace/actions/workflows/ci.yml)
+
 把皮肤张力线（**RSTL / Langer 线**）**稳定地、贴合地**叠加到人脸的照片、视频或实时摄像头画面上，
 作为面部手术**切口规划的决策辅助可视化**——医生能直观看到沿哪个方向下刀疤痕最小、恢复最好。
 
@@ -10,18 +12,79 @@
 ---
 
 ## 目录
+- [项目定位](#项目定位)
+- [系统模块与数据流](#系统模块与数据流)
 - [它能做什么](#它能做什么)
 - [核心原理（为什么稳，而非"图一乐"）](#核心原理)
 - [两条技术路线](#两条技术路线)
 - [快速开始 / 复现](#快速开始--复现)
 - [使用方式](#使用方式)
 - [线条图谱（数据）](#线条图谱数据)
-- [代码结构](#代码结构)
+- [目录结构](#目录结构)
 - [验证与测试](#验证与测试)
 - [已知局限](#已知局限)
-- [部署（Vercel）](#部署vercel)
+- [持续集成与部署（CI/CD）](#持续集成与部署cicd)
+- [开发文档](#开发文档)
 - [后续路线图](#后续路线图)
 - [文档维护约定](#文档维护约定)
+
+---
+
+## 项目定位
+
+LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它把医学上可校验、可编辑的 RSTL / Langer 线图谱编码到 MediaPipe 标准脸网格上，再在照片、视频或实时摄像头画面中将图谱稳定映射到当前人脸。
+
+项目分成三层：
+
+1. **领域数据层**：`assets/` 与 `web/assets/` 保存标准脸、关键点模型、三角拓扑和线条图谱。
+2. **核心算法层**：`src/langerface/` 和 `web/geometry.js` 实现关键点输入、重心坐标映射、平滑、遮挡、渲染与 3D 配准。
+3. **用户界面层**：`web/` 提供唯一正式前端；`src/langerface/apps/` 只保留 CLI 和 OpenCV webcam 入口。
+
+当前阶段是 **Stage 1：稳定显示面部 RSTL / Langer 皮肤张力线**。Stage 2 才会扩展到肿物模拟、切口设计和更完整的术前辅助工作流。项目不训练自定义医学模型，不上传用户图像，也不声称自动给出手术方案。
+
+---
+
+## 系统模块与数据流
+
+系统按“资产与医学知识 -> 感知 -> 配准 -> 标注/模拟/规划 -> 渲染与交互”分层。当前代码重点完成 Stage 1 的张力线标注与配准；Stage 2 的脸部肿物模拟和切口设计会作为同级业务模块扩展，而不是塞进 `lines/` 或 `rendering/`。
+
+| 层级 / 模块 | 当前状态 | 职责 | 主要位置 |
+|---|---|---|---|
+| 资产与医学知识层 | 已实现 | 标准脸、三角拓扑、MediaPipe 模型、RSTL/Langer 线图谱 | `assets/`, `web/assets/` |
+| 感知层 | 已实现 | 从图片、视频、摄像头中提取 478 个 3D 人脸关键点；网页端还检测手部遮挡 | `src/langerface/detection/`, `web/pipeline.js` |
+| 配准与几何层 | 已实现 | 2D 路线用重心坐标把图谱贴合当前脸网格；3D Beta 用 Umeyama 相似变换做个性化头模重建和实时刚性配准 | `src/langerface/geometry/`, `web/geometry.js`, `web/projection3d.js`, `tools/reconstruct_3d.py` |
+| 面部标注 / 图谱层 | 已实现 | 生成、读取、校验和映射 RSTL/Langer 线条；临床医生可编辑图谱 | `src/langerface/lines/`, `tools/annotate_atlas.py`, `tools/digitize_from_diagram.py` |
+| 肿物模拟层 | Stage 2 规划 | 表示脸部肿物的位置、边界、大小、深度和与皮肤表面的关系；为切口规划提供约束输入 | 计划新增 `src/langerface/tumor/`, `web/tumor*.js` |
+| 切口设计层 | Stage 2 规划 | 综合张力线方向、肿物边界、安全边距、医生编辑和审阅，生成候选切口可视化；只做决策辅助，不输出手术指令 | 计划新增 `src/langerface/incision/`, `web/incision*.js` |
+| 渲染与交互层 | 已实现 / 扩展中 | 2D Canvas 叠加、3D 查看、遮挡、放大窗、导出和 UI 控制 | `src/langerface/rendering/`, `web/render.js`, `web/three3d.js`, `web/main.js` |
+
+整体数据流：
+
+```mermaid
+flowchart LR
+  Input[照片 / 视频 / 摄像头帧] --> Detect[人脸与手部关键点检测]
+  Assets[标准脸 / 三角拓扑 / 模型资产] --> Register[人脸配准与几何归一化]
+  Detect --> Register
+
+  Author[临床标注与图谱生成工具] --> Atlas[RSTL / Langer 线图谱]
+  Assets --> Author
+  Atlas --> Map[线图谱重心坐标映射]
+  Register --> Map
+
+  Detect --> Occlusion[平滑 / 背面剔除 / 手部遮挡]
+  Map --> Occlusion
+  Occlusion --> Render[2D/3D 叠加渲染、放大窗、导出]
+
+  Register --> Recon[3D 头模重建 Beta]
+  Recon --> Map
+
+  Register --> Tumor[Stage 2: 肿物模拟]
+  Tumor --> Incision[Stage 2: 切口候选设计]
+  Atlas --> Incision
+  Incision --> Render
+```
+
+Stage 2 的设计原则是：肿物模拟只负责病灶几何与约束表达，切口设计只负责候选方案生成与可视化，最终判断仍由临床医生完成。
 
 ---
 
@@ -81,11 +144,12 @@
 
 ## 快速开始 / 复现
 
-环境：**Python 3.12.x**（勿用 3.13，mediapipe 暂不支持）、**Node ≥ 18**（仅用于离线验证）、现代浏览器（建议 Chrome）。
+环境：**Python 3.10–3.12**（勿用 3.13，mediapipe 暂不支持）、**Node 24.15+ / npm 11+**（Vite 前端）、现代浏览器（建议 Chrome）。
+在 Compute Canada / Alliance 集群上，前端开发可先运行 `module load nodejs/24.15.0`。
 
 ```bash
 # 1) 依赖
-pip install -r requirements.txt
+pip install -e ".[all]"
 
 # 2) 下载 MediaPipe 资产（标准脸 obj + 人脸关键点模型）
 python3 tools/download_assets.py
@@ -100,26 +164,29 @@ python3 tools/build_field_atlas.py 0.014        # 数字越小越密
 python3 tools/export_web_assets.py
 
 # 5)（可选）用示例视频重建一个 3D 头，供 3D Beta 直接体验
-python3 tools/reconstruct_3d.py IMG_3458.MOV    # -> web/assets/recon_demo.json
+python3 tools/reconstruct_3d.py local_media/IMG_3458.MOV    # -> web/assets/recon_demo.json
 
-# 6) 测试
-pytest -q                       # Python 端
-node tools/test_web_mapping.mjs # JS 几何与 Python 逐点一致
-node tools/test_occlusion.mjs   # 手部遮挡掩膜
-node tools/test_umeyama.mjs     # 3D 相似变换
+# 6) 测试 / 构建
+pytest -q                         # Python 端
+cd web
+npm ci
+npm run build                      # Vite 生产构建
+npm test                           # JS 几何/遮挡/Umeyama 对拍
+cd ..
 
 # 7) 启动网页
-python3 tools/serve_web.py      # http://127.0.0.1:8000
+cd web
+npm run dev                      # Vite dev server，默认 http://127.0.0.1:5173
 ```
 
-浏览器打开 **http://127.0.0.1:8000** → 点「摄像头」→ 允许权限。首次加载会从 CDN 下载 MediaPipe wasm（数秒）。
+浏览器打开 Vite 提示的本地地址 → 点「摄像头」→ 允许权限。首次加载会从 CDN 下载 MediaPipe wasm（数秒）。
 
 ---
 
 ## 使用方式
 
 ### 网页（推荐，实时）
-打开 `http://127.0.0.1:8000`：
+进入 `web/` 后运行 `npm run dev`，打开 Vite 提示的本地地址：
 - **数据源**：上传照片/视频，或开摄像头；可暂停、导出（录制画布为 webm）。
 - **模板**：RSTL（首选）/ Langer。
 - **滑杆**：线密度、平滑、透明度。
@@ -129,10 +196,9 @@ python3 tools/serve_web.py      # http://127.0.0.1:8000
 
 ### 命令行
 ```bash
-python3 apps/cli.py --image face.jpg --system rstl -o out.png
-python3 apps/cli.py --video clip.mp4 --system langer -o out.mp4
-python3 apps/webcam.py --system rstl     # 原生窗口实时（热键 t/o/s/q）
-python3 apps/web_app.py                  # Gradio 上传界面（非实时）
+langerface --image face.jpg --system rstl -o out.png
+langerface --video clip.mp4 --system langer -o out.mp4
+langerface-webcam --system rstl          # 原生窗口实时（热键 t/o/s/q）
 ```
 
 ### 临床校验图谱（关键）
@@ -146,7 +212,7 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 
 ## 线条图谱（数据）
 
-- **格式**（JSON）：每条线是点序列，每点 `[三角面id, u, v]`（重心坐标，`w = 1−u−v`）。见 [`langerlines/atlas.py`](langerlines/atlas.py)。
+- **格式**（JSON）：每条线是点序列，每点 `[三角面id, u, v]`（重心坐标，`w = 1−u−v`）。见 [`src/langerface/lines/atlas.py`](src/langerface/lines/atlas.py)。
 - **生成**：[`tools/build_field_atlas.py`](tools/build_field_atlas.py) —— 在"人脸归一化框"上定义张力线**方向场** θ(x,y)
   （前额横、鼻/人中竖、眼周同心、口周放射、颊部斜行），用 Jobard–Lefèvre **等间距流线**算法追踪出布满全脸的细密线，
   再投影到网格三角面。当前 RSTL **132 条线**、Langer **110 条线**。
@@ -155,42 +221,39 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 
 ---
 
-## 代码结构
+## 目录结构
 
-```
-langerlines/              # Python 核心库（2D 管线 + 批处理 + 验证基准）
-  canonical.py            # 解析标准脸 obj：顶点/三角拓扑/UV；正面投影；点→三角面定位
-  atlas.py                # 图谱数据模型：加载/保存/校验
-  mapping.py              # 重心坐标映射（图谱→图像空间，分片仿射变形）
-  detector.py             # MediaPipe Face Landmarker 封装（image/video）
-  smoothing.py            # One-Euro 时间平滑
-  occlusion.py            # 背面剔除（三角面法向 + 鼻尖自标定符号）
-  render.py               # 抗锯齿折线叠加（遮挡处断开 + alpha 淡入淡出）
-  pipeline.py             # 高层引擎：检测→平滑→映射→遮挡→渲染
-  videoio.py              # 视频写出（优先 H.264 avc1，回退 mp4v）
-  config.py               # 线系统、样式、阈值、资产路径
+| 路径 | 作用 |
+|---|---|
+| `.claude/` | Claude Code 相关启动配置；本地私有设置文件已被 `.gitignore` 排除。 |
+| `.github/` | GitHub Actions CI；包含 Python 测试、JS/Vite 构建和几何对拍。 |
+| `assets/` | Python 端权威资产：MediaPipe 标准脸 obj、人脸 landmarker `.task`、RSTL/Langer atlas JSON。 |
+| `docs/` | 项目文档：架构、医学声明、环境配置、贡献指南。 |
+| `src/langerface/` | Python 核心库，按 `config/geometry/detection/lines/rendering/pipeline/media/apps` 分层。 |
+| `tests/` | pytest 测试，覆盖图谱、标准脸、映射、稳定性、渲染和 pipeline 行为。 |
+| `tools/` | 资产下载、图谱生成、web 资产导出、3D 重建、临床标注、目检和对拍脚本。 |
+| `web/` | Vite 8 前端；原生 ES Modules + Canvas 2D + MediaPipe Tasks + Three.js 3D Beta。 |
+| `web/assets/` | 浏览器端静态资产，由 `tools/export_web_assets.py` 同步或复制。 |
+| `web/test/` | JS/Python 几何对拍用 ground truth 和本地测试图像；真实图片被忽略。 |
+| `local_media/` | 本地视频、照片和输出视频，例如 `IMG_3458.MOV`、`out_rstl.mp4`；不提交。 |
+| `logs/` | 本地运行日志；不提交。 |
+| `local_outputs/` | 本地调试输出，例如 `local_outputs/debug_frames/` 里的目检截图和拼图；不提交。 |
+| `local_archives/` | 本地压缩包、外部资料归档；不提交。 |
 
-web/                      # 浏览器实时客户端（全程本地，无服务器推理）
-  index.html              # 仪表盘 UI（控制栏 + 深色舞台 + 放大窗）
-  app.js                  # 主逻辑：摄像头/上传、UI、统计、2D 渲染、放大窗、3D 路线调度
-  geometry.js             # 纯几何（Node 可测）：映射/遮挡/平滑/手部掩膜/Umeyama
-  three3d.js              # 3D Beta：Three.js 重建头查看 + 线条贴面（按需动态加载）
-  assets/                 # triangles/atlas/canonical_vertices/recon_demo + 两个 .task 模型
-  test/expected.json      # Python 端 ground truth，供 JS 对拍
+关键文件：
 
-apps/                     # cli.py（图/视频）· webcam.py（原生实时）· web_app.py（Gradio 上传）
-tools/                    # 资产下载/图谱生成/导出/重建/标注/服务器/各种目检与测试脚本
-tests/                    # pytest：atlas/canonical/mapping/stability/render
-assets/                   # canonical_face_model.obj · face_landmarker.task · atlas_*.json
-docs/MEDICAL.md           # 医学声明、图谱来源、局限
-docs/ARCHITECTURE.md      # 深入技术原理与复现细节
-```
+| 文件 | 作用 |
+|---|---|
+| `pyproject.toml` | Python 包元数据、可选依赖、console scripts、ruff/pytest 配置。 |
+| `requirements.txt` | 兼容旧流程的 Python 依赖入口；推荐使用 `pip install -e ".[all]"`。 |
+| `web/package.json` | Node 24 / Vite 8 前端脚本和 npm 依赖。 |
+| `web/vite.config.js` | Vite 静态资产处理、生产构建和本地 dev server 配置。 |
 
 ---
 
 ## 验证与测试
 
-- **JS 与 Python 逐点一致**（`node tools/test_web_mapping.mjs`）：用真实帧关键点对拍，映射误差 ~5×10⁻⁵px、遮挡 0 不一致。
+- **前端架构与 JS/Python 逐点一致**（`cd web && npm test`）：先检查 `web/*.js` 静态 import 无模块环，再用真实帧关键点对拍，映射误差 ~5×10⁻⁵px、遮挡 0 不一致。
 - **手部遮挡掩膜**（`node tools/test_occlusion.mjs`）：手指上/手掌被挡、**指缝保留**、无手不剔除。
 - **Umeyama 相似变换**（`node tools/test_umeyama.mjs`）：施加已知变换可恢复（误差 ~1e-13）。
 - **Python 单测**（`pytest`）：图谱完整性、标准脸解析、映射仿射不变性、平滑降抖动、端到端渲染。
@@ -208,23 +271,49 @@ docs/ARCHITECTURE.md      # 深入技术原理与复现细节
 
 ---
 
-## 部署（Vercel）
+## 持续集成与部署（CI/CD）
 
-网页端是**纯静态站点**（`web/`，全部在浏览器运行，无后端），可直接部署到 Vercel。
+### 持续集成（GitHub Actions）
+
+每次推送到 `master` / `refactor/**` 分支或发起 Pull Request，都会自动运行 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)。三个并行 job 共同把关：
+
+| Job | 运行内容 | 说明 |
+|---|---|---|
+| `lint` | `ruff check .` | Python 代码风格、import 排序、pyupgrade —— 硬门禁。 |
+| `python-tests` | `pip install -e ".[dev]"` → `pytest`；矩阵 **Python 3.10 / 3.11 / 3.12** | 不装 mediapipe（测试注入假检测器 / 合成关键点）；资产随仓库提交，故标准脸 / 渲染 / pipeline 测试真正执行而非跳过。 |
+| `js-tests` | **Node 24** → `npm ci` → `npm run build`（Vite 生产构建）→ `npm test` | 验证前端可构建，并用真实帧逐点对拍 `web/geometry.js` 与 Python 端一致（架构 / 映射 / 遮挡 / Umeyama）。 |
+
+- **触发**：push 到 `master`、`refactor/**`，以及所有 Pull Request。
+- **并发**：同一 ref 的旧运行自动取消（`cancel-in-progress`），节省额度。
+- **本地预检**：提交前可装 `pre-commit`（见 [`.pre-commit-config.yaml`](.pre-commit-config.yaml)）自动跑 ruff，并拦截大文件 / 人脸影像误提交。
+
+### 持续部署（Vercel）
+
+网页端是 **Vite 构建出的纯静态站点**（`web/dist/`，全部在浏览器运行，无后端），可直接部署到 Vercel。
 Vercel 自动提供 **HTTPS**，因此线上 `getUserMedia`（摄像头）可用。
 
 - **线上地址**：https://web-black-one-34.vercel.app
 - **部署命令**（从 `web/` 目录）：
   ```bash
   cd web
+  npm ci
+  npm run build
   npx vercel login          # 首次：登录你的 Vercel 账号
   npx vercel deploy --prod --yes
   ```
 - **配置文件**：
-  - [`web/vercel.json`](../web/vercel.json)：`/assets/*` 长缓存（immutable，加速 ~11MB 模型重复加载）、`.js/.mjs` 强制 `text/javascript`。
-  - [`web/.vercelignore`](../web/.vercelignore)：排除 `test/`（对拍 ground truth）与 `package.json`，保持纯静态。
-- **更新流程**：改完 `web/` 后（若动了图谱/几何/3D 资产，先 `python3 tools/export_web_assets.py` 重新导出），再 `cd web && npx vercel deploy --prod`。
+  - [`web/vite.config.js`](web/vite.config.js)：Vite 静态资产导入与生产构建设置。
+  - [`web/vercel.json`](web/vercel.json)：Vercel 使用 `npm run build`，输出 `dist/`，并为 `/assets/*` 配置长缓存。
+  - [`web/.vercelignore`](web/.vercelignore)：排除本地测试/构建缓存。
+- **更新流程**：改完 `web/` 后（若动了图谱/几何/3D 资产，先 `python3 tools/export_web_assets.py` 重新导出），再 `cd web && npm run build && npx vercel deploy --prod`。
 - **隐私**：`web/assets/recon_demo.json` 是示例视频重建出的 3D 人头，会随站点**公开**。不想公开就把它加入 `web/.vercelignore`（此时网页"用示例重建"按钮会失效，仍可用"转头扫描"）。
+
+## 开发文档
+
+- [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md)：本地环境、集群环境、venv、Node 24、测试与本地产物目录。
+- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)：协作流程、测试约定、扩展点和 PR 要求。
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：核心算法、坐标系、2D/3D 路线、资产与部署细节。
+- [docs/MEDICAL.md](docs/MEDICAL.md)：医学声明、图谱状态和临床局限。
 
 ## 后续路线图
 
@@ -237,6 +326,6 @@ Vercel 自动提供 **HTTPS**，因此线上 `getUserMedia`（摄像头）可用
 
 ## 文档维护约定
 
-**本仓库的 [README.md](README.md) 与 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 必须与代码保持同步。**
-任何功能更新（新增/修改特性、改动数据流、增删模块或资产、调整使用方式）都要在同一改动中更新这两份文档，
+**本仓库的 [README.md](README.md)、[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、[docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) 必须与代码保持同步。**
+任何功能更新（新增/修改特性、改动数据流、增删模块或资产、调整使用方式）都要在同一改动中更新这些文档，
 确保"读文档即可了解全貌并复现项目"。医学相关变化同时更新 [docs/MEDICAL.md](docs/MEDICAL.md)。

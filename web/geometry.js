@@ -252,15 +252,16 @@ function det3(A) {
        + A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
 }
 
-// 求相似变换 (scale c, 旋转 R, 平移 t) 使 c*R*S + t ≈ T。S,T: [[x,y,z]...]
-export function umeyama(S, T) {
-  const n = S.length, mS = [0, 0, 0], mT = [0, 0, 0];
-  for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) { mS[k] += S[i][k] / n; mT[k] += T[i][k] / n; }
+// 求相似变换 (scale c, 旋转 R, 平移 t) 使 c*R*sourcePts + t ≈ targetPts。
+// sourcePts/targetPts: [[x,y,z]...]
+export function umeyama(sourcePts, targetPts) {
+  const n = sourcePts.length, mS = [0, 0, 0], mT = [0, 0, 0];
+  for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) { mS[k] += sourcePts[i][k] / n; mT[k] += targetPts[i][k] / n; }
   const cov = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
   let varS = 0;
   for (let i = 0; i < n; i++) {
-    const sc = [S[i][0] - mS[0], S[i][1] - mS[1], S[i][2] - mS[2]];
-    const tc = [T[i][0] - mT[0], T[i][1] - mT[1], T[i][2] - mT[2]];
+    const sc = [sourcePts[i][0] - mS[0], sourcePts[i][1] - mS[1], sourcePts[i][2] - mS[2]];
+    const tc = [targetPts[i][0] - mT[0], targetPts[i][1] - mT[1], targetPts[i][2] - mT[2]];
     for (let r = 0; r < 3; r++) for (let cIdx = 0; cIdx < 3; cIdx++) cov[r][cIdx] += tc[r] * sc[cIdx] / n;
     varS += (sc[0] * sc[0] + sc[1] * sc[1] + sc[2] * sc[2]) / n;
   }

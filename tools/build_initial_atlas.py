@@ -9,15 +9,11 @@
 """
 from __future__ import annotations
 
-import os
-import sys
-
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from langerlines.atlas import Atlas, AtlasLine          # noqa: E402
-from langerlines.canonical import CanonicalFaceModel    # noqa: E402
-from langerlines.config import CANONICAL_OBJ, ATLAS_PATHS, SYSTEM_RSTL, SYSTEM_LANGER  # noqa: E402
+from langerface.config import ATLAS_PATHS, CANONICAL_OBJ, SYSTEM_LANGER, SYSTEM_RSTL  # noqa: E402
+from langerface.geometry import CanonicalFaceModel  # noqa: E402
+from langerface.lines import Atlas, AtlasLine  # noqa: E402
 
 
 # ── 归一化空间曲线生成器（返回 (n,2) 的 [0,1]^2 点）──────────────────────────────
@@ -56,7 +52,9 @@ def mirror(pts):
 # ── RSTL（Borges 走向）──────────────────────────────────────────────────────────
 def rstl_lines():
     L = []
-    add = lambda name, region, pts: L.append((name, region, pts))
+
+    def add(name, region, pts):
+        L.append((name, region, pts))
 
     # 前额：水平
     for i, ny in enumerate((0.05, 0.11, 0.17)):
@@ -100,7 +98,9 @@ def rstl_lines():
 # ── Langer（在分歧区域做方向区分；其余与 RSTL 总体一致）─────────────────────────
 def langer_lines():
     L = []
-    add = lambda name, region, pts: L.append((name, region, pts))
+
+    def add(name, region, pts):
+        L.append((name, region, pts))
 
     for i, ny in enumerate((0.05, 0.11, 0.17)):
         add(f"forehead_h{i}", "forehead", hline(ny, 0.20, 0.80, bow=0.02))
