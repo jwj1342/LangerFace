@@ -38,6 +38,7 @@ async function buildViewer() {
   reconState.head3d.setGeometry(
     disp,
     modelState.triangles,
+    // setActiveAtlas() updates this shared atlas table; 3D view picks it up only when buildViewer() reruns.
     modelState.atlases[renderState.system],
     { showSurface: true, bands: renderState.bands },
   );
