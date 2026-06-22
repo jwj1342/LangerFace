@@ -27,9 +27,14 @@ class FaceLandmarkDetector:
     ):
         require_asset(model_path, what="Face Landmarker 模型")
         # 延迟导入，避免未装 mediapipe 时整个包不可导入（也便于纯几何单测）。
-        import mediapipe as mp
-        from mediapipe.tasks import python as mp_python
-        from mediapipe.tasks.python import vision
+        try:
+            import mediapipe as mp
+            from mediapipe.tasks import python as mp_python
+            from mediapipe.tasks.python import vision
+        except ImportError as exc:  # 检测后端是可选的，给出明确安装指引
+            raise ImportError(
+                "需要 mediapipe 检测后端，但未安装。请运行  pip install 'langerface[mediapipe]'"
+            ) from exc
 
         self._mp = mp
         self._vision = vision

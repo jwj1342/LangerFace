@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: ["master", "refactor/**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    # Advisory until the first ruff cleanup pass (esp. tools/). Make this
+    # blocking (remove continue-on-error) once `ruff check .` is green.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install "ruff>=0.5"
+      - run: ruff check .
+
+  python-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      # dev extra = numpy + opencv + pytest + ruff. mediapipe NOT needed:
+      # tests inject fake detectors / synthetic landmarks. Assets are committed,
+      # so canonical/render/pipeline tests run rather than skip.
+      - run: pip install -e ".[dev]"
+      - run: pytest
+
+  js-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # Pure-node parity tests pin web/geometry.js against the Python reference
+      # (web/test/expected.json). No npm install required.
+      - run: node tools/test_umeyama.mjs
+      - run: node tools/test_occlusion.mjs
+      - run: node tools/test_web_mapping.mjs

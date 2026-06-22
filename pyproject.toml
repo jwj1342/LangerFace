@@ -14,14 +14,16 @@ dynamic = ["version"]
 dependencies = [
     "numpy>=1.26",
     "opencv-python>=4.9",   # video I/O + anti-aliased polyline rendering
-    "mediapipe>=0.10.14",   # Face Landmarker: 478 3D landmarks (image/video/live)
 ]
 
 [project.optional-dependencies]
-web = ["gradio>=4.0"]              # apps.gradio_app upload UI
-annotate = ["matplotlib>=3.8"]    # interactive atlas annotation/validation tools
+# Detection backend is pluggable (see detection.Detector); mediapipe is one impl.
+# Kept optional so the core lib + test suite install without it (tests inject fakes).
+mediapipe = ["mediapipe>=0.10.14"]   # Face Landmarker: 478 3D landmarks (image/video/live)
+web = ["gradio>=4.0"]                 # apps.gradio_app upload UI
+annotate = ["matplotlib>=3.8"]        # interactive atlas annotation/validation tools
 dev = ["pytest>=8.0", "ruff>=0.5"]
-all = ["langerface[web,annotate,dev]"]
+all = ["langerface[mediapipe,web,annotate,dev]"]
 
 [project.scripts]
 langerface = "langerface.apps.cli:main"
