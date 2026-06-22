@@ -79,17 +79,22 @@ Required status checks 建议包含：
 
 ## 日常发布流程
 
-1. 开 feature branch。
-2. 提 PR。
-3. GitHub Actions 跑 Python / JS / build。
-4. Vercel 自动生成 Preview URL。
-5. 在 Preview URL 上手动检查：
-   - 首页能加载。
-   - `face_landmarker.task`、`hand_landmarker.task`、atlas JSON 能加载。
-   - 上传图片或摄像头入口不报资源路径错误。
-   - `annotate.html` 能打开。
-6. Actions 和 Vercel check 都通过后合并。
-7. 合并到 `master` 后，Vercel 自动发布 Production。
+协作者的日常流程见 [CONTRIBUTING.md](CONTRIBUTING.md#pr--preview-工作流)。本文件只保留维护者需要的 Vercel / GitHub 设置细节。
+
+## Preview 访问策略
+
+Vercel [Deployment Protection](https://vercel.com/docs/deployment-protection) 可以保护 Preview 和 Production URL。当前项目的默认建议是：**Production 公开；Preview 受保护**。原因是后续 Preview 可能包含未发布功能、受限头模或临床评审素材。
+
+协作者访问方式：
+
+| 场景 | 推荐做法 | 说明 |
+|---|---|---|
+| 项目组成员看 Preview | 加入 Vercel project/team，用自己的 Vercel 账号登录 | 适合长期协作者；权限可撤销 |
+| 外部医生 / 短期评审 | 维护者生成 Vercel [Shareable Link](https://vercel.com/docs/deployments/sharing-deployments)，或启用 [Password Protection](https://vercel.com/docs/deployment-protection/methods-to-protect-deployments/password-protection) 后单独发密码 | 不要求对方加入 Vercel team |
+| 自动化测试访问 protected Preview | 使用 [Protection Bypass for Automation](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation)，secret 放在 GitHub Secrets | 只给 CI / E2E / monitoring；不要人工分享 |
+| 完全公开 Preview | 仅在确认不含受限数据、真实人脸影像、未发布临床材料时使用 | 便利性高，但风险也最高 |
+
+不要把 Vercel bypass token 写进仓库、PR、issue、聊天记录或前端环境变量。若需要 E2E 自动化访问 protected Preview，单独新增 GitHub Secret，并在 workflow 中通过 header 或 Vercel 官方支持的 bypass 方式注入。
 
 ## 环境变量
 
@@ -134,17 +139,15 @@ Vite 只会把 `VITE_` 前缀变量注入浏览器端。不要把私钥、R2 tok
 
 生产环境把 `preview` 换成 `production`，并给 `vercel build` / `vercel deploy` 加 `--prod`。
 
-## 我还需要你提供什么
+## 排障时需要收集什么
 
-如果要我继续把线上配置落成可运行状态，需要这些信息：
+Preview / Production 出问题时，先收集这些信息再排查：
 
-1. Vercel 使用个人账号还是 team；如果是 team，team slug 是什么。
-2. 是否已经把 GitHub 仓库导入 Vercel；如果已经导入，给我 Project 名称或 Project URL。
-3. 生产分支确认：继续用 `master`，还是准备迁到 `main`。
-4. 是否要绑定自定义域名；域名是什么。
-5. 采用哪种部署策略：
-   - 推荐：Vercel Git 集成部署。
-   - 可选：GitHub Actions + Vercel CLI 部署。
-6. 将来 Worker API 的域名或计划域名；如果暂时没有，可以先不配环境变量。
+1. PR URL 和 commit SHA。
+2. Vercel Preview URL 和 Vercel Deployment URL。
+3. 失败的 GitHub check 名称和链接。
+4. 浏览器控制台错误截图或文本。
+5. Network 面板里失败资源的 URL、status code、response。
+6. 是否正在访问 protected Preview；如果是，访问者是否有 Vercel 权限或 Shareable Link。
 
-不要把 `VERCEL_TOKEN`、Cloudflare token、R2 密钥直接发在聊天里。需要用它们时，把它们放到 GitHub Repository Secrets 或 Vercel Dashboard Environment Variables。
+不要把 `VERCEL_TOKEN`、Cloudflare token、R2 密钥、Vercel bypass token 直接发在聊天里。需要用它们时，把它们放到 GitHub Repository Secrets 或 Vercel Dashboard Environment Variables。
