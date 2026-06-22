@@ -7,6 +7,7 @@ export const modelState = {
   triangles: null,
   noseTris: null,
   atlases: {},
+  officialAtlases: {},
 };
 
 export const renderState = {

@@ -5,7 +5,7 @@ import { FaceLandmarker, HandLandmarker, FilesetResolver }
 import { assetUrls } from "./assets.js";
 import { CDN } from "./constants.js";
 import { ctx, els } from "./dom.js";
-import { buildHandMasks, noseTriangles, toPixels } from "./geometry.js";
+import { buildHandMasks, noseTriangles, toPixels, validateAtlasLines } from "./geometry.js";
 import { countMetric, logInfo, logWarn } from "./logger.js";
 import { projectVerts } from "./projection3d.js";
 import { clearZooms, draw, drawZooms, updateStats } from "./render.js";
@@ -22,6 +22,7 @@ export async function ensureReady() {
   ]);
   modelState.triangles = tri; modelState.noseTris = noseTriangles(tri);
   modelState.atlases.rstl = rstl.lines; modelState.atlases.langer = langer.lines;
+  modelState.officialAtlases.rstl = rstl.lines; modelState.officialAtlases.langer = langer.lines;
   const resolver = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
   const build = (delegate) => FaceLandmarker.createFromOptions(resolver, {
     baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
@@ -59,6 +60,39 @@ export async function ensureReady() {
     langerLines: langer.lines.length,
     handOcclusionReady: Boolean(modelState.handLandmarker),
   });
+}
+
+function requestRedraw() {
+  if (sourceState.running && !sourceState.paused) requestAnimationFrame(loop);
+}
+
+function isSupportedAtlasSystem(system) {
+  return system === "rstl" || system === "langer";
+}
+
+export function setActiveAtlas(system, lines) {
+  if (!isSupportedAtlasSystem(system)) {
+    logWarn("拒绝注入未知图谱系统。", { system });
+    return false;
+  }
+  if (!validateAtlasLines(lines, modelState.triangles)) {
+    logWarn("拒绝注入无效图谱。", { system, lineCount: Array.isArray(lines) ? lines.length : null });
+    return false;
+  }
+  modelState.atlases[system] = lines;
+  renderState.system = system;
+  requestRedraw();
+  return true;
+}
+
+export function restoreOfficialAtlas(system) {
+  if (!isSupportedAtlasSystem(system) || !modelState.officialAtlases[system]) {
+    logWarn("无法恢复官方图谱。", { system });
+    return false;
+  }
+  modelState.atlases[system] = modelState.officialAtlases[system];
+  requestRedraw();
+  return true;
 }
 
 // 检测手部 → 凸包列表（图像空间），落在其中的脸部线点将被剔除
@@ -124,6 +158,7 @@ export function stopSource() {
 
 // ── 主循环 ────────────────────────────────────────────────────────────────────
 let fpsEMA = 0, lastT = performance.now();
+let drawFailureLogged = false;
 export function loop() {
   if (!sourceState.running || sourceState.paused) return;
   const W = els.canvas.width, H = els.canvas.height;
@@ -154,7 +189,18 @@ export function loop() {
   }
 
   let lineCount = 0;
-  if (lm && sourceState.presence > 0) { const dlm = projectVerts(lm); lineCount = draw(dlm, W, H, hulls); drawZooms(dlm, W); }
+  if (lm && sourceState.presence > 0) {
+    const dlm = projectVerts(lm);
+    try {
+      lineCount = draw(dlm, W, H, hulls);
+      drawZooms(dlm, W);
+      drawFailureLogged = false;
+    } catch (e) {
+      if (!drawFailureLogged) logWarn("渲染图谱失败，本帧已跳过。", e);
+      drawFailureLogged = true;
+      clearZooms();
+    }
+  }
   else clearZooms();
   updateStats(lm, W, H, lineCount);
 
