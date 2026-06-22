@@ -74,6 +74,38 @@ threw = false;
 try { custom.toAtlasJSON(); } catch { threw = true; }
 ok(threw, "自定义头模表面路径不允许导出项目图谱格式");
 
+// ── 断连网格：跨岛连线必须退回直线，且非静默（带 fallback 标记）─────────────
+const disjoint = new AnnotationModel("rstl");
+const islandVerts = [
+  [0, 0, 0], [1, 0, 0], [0, 1, 0],   // 岛 A
+  [5, 5, 5], [6, 5, 5], [5, 6, 5],   // 岛 B（顶点集与 A 不相交）
+];
+const islandTris = [[0, 1, 2], [3, 4, 5]];
+disjoint.setSurface(islandVerts, islandTris);
+disjoint.startLine({ name: "cross-island" });
+const r0 = disjoint.addPoint({ xyz: [0.2, 0.2, 0], tri: 0, bary: [0.6, 0.2, 0.2] });
+ok(r0.fallback === false, "断连网格：首点不触发 fallback");
+const r1 = disjoint.addPoint({ xyz: [5.2, 5.2, 5], tri: 1, bary: [0.6, 0.2, 0.2] });
+ok(r1.fallback === true, "断连网格：跨岛连线被标记为 fallback（非静默）");
+ok(disjoint.current.points.length === 2, "断连网格：退回直线只有两个端点");
+
+// ── 单连通多三角：路由路径沿表面（点数 > 2 且每个点都落在网格上）─────────────
+const conn = new AnnotationModel("rstl");
+const connVerts = [
+  [0, 0, 0], [1, 0, 0], [2, 0, 0],
+  [0, 1, 0], [1, 1, 0.4], [2, 1, 0],
+];
+const connTris = [[0, 1, 3], [1, 4, 3], [1, 2, 4], [2, 5, 4]];
+conn.setSurface(connVerts, connTris);
+conn.startLine({ name: "along-surface" });
+const c0 = conn.addPoint({ xyz: [0.2, 0.2, 0], tri: 0, bary: [0.6, 0.2, 0.2] });
+const c1 = conn.addPoint({ xyz: [1.8, 0.8, 0], tri: 3, bary: [0.2, 0.6, 0.2] });
+ok(c0.fallback === false && c1.fallback === false, "单连通网格：跨三角路由不触发 fallback");
+ok(conn.current.points.length > 2, "单连通网格：路由路径点 > 2（沿面而非直线）");
+const onMesh = (q) => connVerts.some((v) => close(v[0], q[0]) && close(v[1], q[1]) && close(v[2], q[2]));
+const middle = conn.current.points.slice(1, -1);
+ok(middle.length > 0 && middle.every((p) => onMesh(p.xyz)), "单连通网格：中间路径点全部落在网格顶点上（沿面）");
+
 // ── 无重心时拒绝导出图谱 ─────────────────────────────────────────────────────
 const m2 = new AnnotationModel();
 m2.startLine();
