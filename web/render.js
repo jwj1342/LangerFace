@@ -1,7 +1,7 @@
 // 2D 渲染：线条叠加、细节放大窗、统计面板。
 import { SOLID, BAND, ZOOM_REGIONS } from "./constants.js";
 import { ctx, els } from "./dom.js";
-import { mapAtlas, pointInHandMasks, visibleRuns, visibleTriangles } from "./geometry.js";
+import { innerMouthTriangles, mapAtlas, pointInHandMasks, visibleRuns, visibleTriangles } from "./geometry.js";
 import { modelState, renderState, sourceState } from "./state.js";
 import { setLive } from "./ui.js";
 
@@ -14,6 +14,7 @@ export function faceBBox(lm) {
 export function draw(lm, W, H, masks = []) {
   const atlas = modelState.atlases[renderState.system];
   const vis = renderState.clip ? visibleTriangles(lm, modelState.triangles, modelState.noseTris) : null;
+  const innerMouth = innerMouthTriangles(modelState.triangles); // 口裂三角面（张嘴会落进口内/牙齿），永久排除
   const mapped = mapAtlas(atlas, lm, modelState.triangles);
   const bb = faceBBox(lm);
   const stride = Math.max(1, Math.round(100 / (renderState.densityFrac * 100)));
@@ -30,9 +31,10 @@ export function draw(lm, W, H, masks = []) {
       let my = 0; for (const p of ln.pts) my += p[1]; my = (my / ln.pts.length - bb.y0) / (bb.h || 1);
       ctx.strokeStyle = my < 0.36 ? BAND.top : my < 0.66 ? BAND.mid : BAND.low;
     } else ctx.strokeStyle = SOLID[renderState.system];
-    // 每点可见性 = 朝向相机(背面剔除) 且 不在前方手部凸包内
+    // 每点可见性 = 朝向相机(背面剔除) 且 不属于口裂三角面 且 不在前方手部凸包内
     const mask = ln.pts.map((p, i) => {
       const v = vis ? vis[ln.tris[i]] : 1;
+      if (innerMouth.has(ln.tris[i])) return 0; // 口裂三角面无论朝向都排除（#38）
       return v && !(hasMasks && pointInHandMasks(p, masks)) ? 1 : 0;
     });
     for (const run of visibleRuns(ln.pts, mask)) {
