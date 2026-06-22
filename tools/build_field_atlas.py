@@ -19,10 +19,9 @@ import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from langerlines.atlas import Atlas, AtlasLine
-from langerlines.canonical import CanonicalFaceModel
-from langerlines.config import CANONICAL_OBJ, ATLAS_PATHS, SYSTEM_RSTL, SYSTEM_LANGER
+from langerface.lines import Atlas, AtlasLine
+from langerface.geometry import CanonicalFaceModel
+from langerface.config import CANONICAL_OBJ, ATLAS_PATHS, SYSTEM_RSTL, SYSTEM_LANGER
 
 
 # ── 人脸掩膜（椭圆，挖去眼/口）──────────────────────────────────────────────────

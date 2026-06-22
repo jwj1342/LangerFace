@@ -15,10 +15,9 @@ import sys
 import cv2
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from langerlines.canonical import CanonicalFaceModel
-from langerlines.config import CANONICAL_OBJ, FACE_LANDMARKER_TASK
-from langerlines.detector import FaceLandmarkDetector
+from langerface.geometry import CanonicalFaceModel
+from langerface.config import CANONICAL_OBJ, FACE_LANDMARKER_TASK
+from langerface.detection import FaceLandmarkDetector
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(REPO, "web", "assets", "recon_demo.json")

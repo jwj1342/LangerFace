@@ -14,10 +14,9 @@ import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from langerlines.atlas import Atlas, AtlasLine          # noqa: E402
-from langerlines.canonical import CanonicalFaceModel    # noqa: E402
-from langerlines.config import CANONICAL_OBJ, ATLAS_PATHS, SYSTEM_RSTL, SYSTEM_LANGER  # noqa: E402
+from langerface.lines import Atlas, AtlasLine          # noqa: E402
+from langerface.geometry import CanonicalFaceModel    # noqa: E402
+from langerface.config import CANONICAL_OBJ, ATLAS_PATHS, SYSTEM_RSTL, SYSTEM_LANGER  # noqa: E402
 
 
 # ── 归一化空间曲线生成器（返回 (n,2) 的 [0,1]^2 点）──────────────────────────────

@@ -10,9 +10,8 @@ import sys
 
 import cv2
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from langerlines.config import Config, DEFAULT_STYLES, LineStyle
-from langerlines.pipeline import LinePipeline
+from langerface.config import Config, DEFAULT_STYLES, LineStyle
+from langerface.pipeline import LinePipeline
 
 
 def main():

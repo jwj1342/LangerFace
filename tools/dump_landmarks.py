@@ -12,13 +12,12 @@ import sys
 import cv2
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from langerlines.atlas import Atlas
-from langerlines.canonical import CanonicalFaceModel
-from langerlines.config import CANONICAL_OBJ, ATLAS_PATHS, FACE_LANDMARKER_TASK
-from langerlines.detector import FaceLandmarkDetector
-from langerlines.mapping import map_atlas
-from langerlines.occlusion import BackfaceCuller
+from langerface.lines import Atlas
+from langerface.geometry import CanonicalFaceModel
+from langerface.config import CANONICAL_OBJ, ATLAS_PATHS, FACE_LANDMARKER_TASK
+from langerface.detection import FaceLandmarkDetector
+from langerface.lines import map_atlas
+from langerface.rendering import BackfaceCuller
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(REPO, "web", "test", "expected.json")

@@ -1,6 +1,7 @@
 """实时摄像头：把张力线实时叠加到摄像头画面。
 
-  python apps/webcam.py --system rstl
+  langerface-webcam --system rstl
+（或：python -m langerface.apps.webcam --system rstl）
 
 热键： t = 切换 RSTL/Langer    o = 切换遮挡剔除    s = 切换平滑    q/Esc = 退出
 （macOS 首次运行需在系统设置中授予终端“摄像头”权限）
@@ -8,32 +9,38 @@
 from __future__ import annotations
 
 import argparse
-import os
-import sys
 import time
 
-import cv2
+from ..config.constants import SYSTEM_LANGER, SYSTEM_RSTL, VALID_SYSTEMS
+from ..config.settings import build_config
+from ..log import configure_logging, get_logger
+from ..pipeline.line_pipeline import LinePipeline
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from langerlines.config import Config, SYSTEM_RSTL, SYSTEM_LANGER, VALID_SYSTEMS  # noqa: E402
-from langerlines.pipeline import LinePipeline                                      # noqa: E402
+log = get_logger(__name__)
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description="朗格线/RSTL 面部投射 — 实时摄像头")
     ap.add_argument("--system", choices=VALID_SYSTEMS, default="rstl")
     ap.add_argument("--camera", type=int, default=0, help="摄像头索引")
     ap.add_argument("--num-faces", type=int, default=1)
-    args = ap.parse_args()
+    return ap
+
+
+def main() -> int:
+    import cv2
+
+    configure_logging()
+    args = build_parser().parse_args()
 
     cap = cv2.VideoCapture(args.camera)
     if not cap.isOpened():
-        print(f"[err] 无法打开摄像头 {args.camera}")
+        log.error("无法打开摄像头 %s", args.camera)
         return 1
 
-    cfg = Config(system=args.system, num_faces=args.num_faces)
+    cfg = build_config(args.system, args.num_faces)
     win = "Langer/RSTL projection (t:切换 o:遮挡 s:平滑 q:退出)"
-    print("[info] 已启动。窗口热键： t 切换线系统 / o 遮挡 / s 平滑 / q 退出")
+    log.info("已启动。窗口热键： t 切换线系统 / o 遮挡 / s 平滑 / q 退出")
 
     with LinePipeline(cfg, mode="video") as pipe:
         t0 = time.monotonic()
@@ -57,11 +64,9 @@ def main() -> int:
             elif key == ord("t"):
                 pipe.set_system(SYSTEM_LANGER if cfg.system == SYSTEM_RSTL else SYSTEM_RSTL)
             elif key == ord("o"):
-                from langerlines.occlusion import BackfaceCuller
-                cfg.occlusion = not cfg.occlusion
-                pipe.culler = BackfaceCuller(pipe.triangles) if cfg.occlusion else None
+                pipe.set_occlusion(not cfg.occlusion)
             elif key == ord("s"):
-                cfg.smoothing = not cfg.smoothing
+                pipe.set_smoothing(not cfg.smoothing)
 
     cap.release()
     cv2.destroyAllWindows()

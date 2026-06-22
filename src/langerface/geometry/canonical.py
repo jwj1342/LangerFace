@@ -10,10 +10,13 @@
 """
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 
 import numpy as np
+
+from ..config.assets import require_asset
+from ..config.constants import FACE_FRAME_ANCHORS
+from .barycentric import barycentric_batch
 
 
 @dataclass
@@ -25,11 +28,7 @@ class CanonicalFaceModel:
     # ── 解析 .obj ────────────────────────────────────────────────────────────
     @classmethod
     def from_obj(cls, path: str) -> "CanonicalFaceModel":
-        if not os.path.exists(path):
-            raise FileNotFoundError(
-                f"找不到标准脸模型 {path}。\n"
-                f"请先运行  python tools/download_assets.py  下载资产。"
-            )
+        require_asset(path, what="标准脸模型")
         verts: list[tuple[float, float, float]] = []
         texs: list[tuple[float, float]] = []
         faces: list[tuple[int, int, int]] = []
@@ -79,12 +78,12 @@ class CanonicalFaceModel:
     def face_frame(self) -> tuple[np.ndarray, np.ndarray]:
         """人脸归一化框：用稳定的解剖锚点定义 [0,1]^2 坐标系，与全网格范围无关。
 
-        锚点（MediaPipe 标准索引）：上=10(前额顶) 下=152(下巴) 左/右=234/454(两颊缘)。
+        锚点（config.constants.FACE_FRAME_ANCHORS）：上=10 下=152 左/右=234/454。
         返回 (origin(2,), size(2,))，使  norm = (proj - origin) / size。
         """
         proj = self.project_front()
-        top, bottom = proj[10], proj[152]
-        left, right = proj[234], proj[454]
+        top, bottom = proj[FACE_FRAME_ANCHORS["top"]], proj[FACE_FRAME_ANCHORS["bottom"]]
+        left, right = proj[FACE_FRAME_ANCHORS["left"]], proj[FACE_FRAME_ANCHORS["right"]]
         x0, x1 = sorted((left[0], right[0]))
         y0, y1 = top[1], bottom[1]  # 顶在上（y 较小），底在下
         origin = np.array([x0, y0])
@@ -110,7 +109,7 @@ class CanonicalFaceModel:
         a = proj[tris[:, 0]]
         b = proj[tris[:, 1]]
         c = proj[tris[:, 2]]
-        bary = _barycentric_batch(p, a, b, c)            # (M, 3)
+        bary = barycentric_batch(p, a, b, c)             # (M, 3)
         # 正交投影会让正面与后脑的三角面在 2D 重叠；优先选最靠近观察者（z 最大）的，
         # 避免把面部线点错配到后脑三角面（否则运行时会被背面剔除/错位）。
         tri_z = self.vertices[tris, 2].mean(axis=1)      # (M,) 三角面平均深度
@@ -142,21 +141,3 @@ def _parse_face(line: str):
 def _fan(idx):
     for i in range(1, len(idx) - 1):
         yield idx[0], idx[i], idx[i + 1]
-
-
-def _barycentric_batch(p: np.ndarray, a: np.ndarray, b: np.ndarray, c: np.ndarray) -> np.ndarray:
-    """对一批三角面 (a,b,c) 计算点 p 的重心坐标，返回 (M, 3) = (u,v,w) 对应 (a,b,c)。"""
-    v0 = b - a
-    v1 = c - a
-    v2 = p[None, :] - a
-    d00 = np.einsum("ij,ij->i", v0, v0)
-    d01 = np.einsum("ij,ij->i", v0, v1)
-    d11 = np.einsum("ij,ij->i", v1, v1)
-    d20 = np.einsum("ij,ij->i", v2, v0)
-    d21 = np.einsum("ij,ij->i", v2, v1)
-    denom = d00 * d11 - d01 * d01
-    denom = np.where(np.abs(denom) < 1e-12, 1e-12, denom)
-    v = (d11 * d20 - d01 * d21) / denom
-    w = (d00 * d21 - d01 * d20) / denom
-    u = 1.0 - v - w
-    return np.column_stack([u, v, w])

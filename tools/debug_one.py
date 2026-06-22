@@ -8,10 +8,9 @@ import sys
 import cv2
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from langerlines.config import Config
-from langerlines.detector import FaceLandmarkDetector
-from langerlines.pipeline import LinePipeline
+from langerface.config import Config
+from langerface.detection import FaceLandmarkDetector
+from langerface.pipeline import LinePipeline
 
 # MediaPipe 面部轮廓（face oval）关键点索引
 FACE_OVAL = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365,
@@ -31,7 +30,7 @@ def main():
     assert ok
 
     cfg = Config(system=system)
-    from langerlines.config import LineStyle
+    from langerface.config import LineStyle
     cfg.styles[system] = LineStyle(color=(255, 0, 255), thickness=3, alpha=1.0)  # 高对比品红，便于目检
     pipe = LinePipeline(cfg, mode="image")
     det = FaceLandmarkDetector(cfg.landmarker_task, mode="image", num_faces=1)

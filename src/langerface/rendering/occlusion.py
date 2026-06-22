@@ -5,16 +5,17 @@
 鼻尖附近的三角面一定朝向相机，用它确定“朝前”的符号。
 
 注：MediaPipe 不提供外部遮挡（如手挡脸）的深度，故此处仅处理自遮挡（朝向）。
+（手部遮挡目前仅在 web 前端实现，见 web/geometry.js。）
 """
 from __future__ import annotations
 
 import numpy as np
 
-NOSE_TIP = 1  # MediaPipe 鼻尖关键点索引
+from ..config.constants import DEFAULT_OCCLUSION_THRESHOLD, NOSE_TIP
 
 
 class BackfaceCuller:
-    def __init__(self, triangles: np.ndarray, threshold: float = -0.05):
+    def __init__(self, triangles: np.ndarray, threshold: float = DEFAULT_OCCLUSION_THRESHOLD):
         """threshold: 朝向打分阈值（略小于 0，保留接近掠射的边缘三角面）。"""
         self.triangles = triangles
         self.threshold = float(threshold)

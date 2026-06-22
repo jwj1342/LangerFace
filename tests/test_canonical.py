@@ -1,20 +1,5 @@
-"""标准脸模型解析与点定位（需 canonical_face_model.obj）。"""
-import os
-
+"""标准脸模型解析与点定位（需 canonical_face_model.obj；canonical 夹具见 conftest）。"""
 import numpy as np
-import pytest
-
-from langerlines.config import CANONICAL_OBJ
-
-pytestmark = pytest.mark.skipif(
-    not os.path.exists(CANONICAL_OBJ), reason="需先下载 canonical_face_model.obj"
-)
-
-
-@pytest.fixture(scope="module")
-def canonical():
-    from langerlines.canonical import CanonicalFaceModel
-    return CanonicalFaceModel.from_obj(CANONICAL_OBJ)
 
 
 def test_vertex_count(canonical):

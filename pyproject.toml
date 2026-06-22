@@ -1,0 +1,48 @@
+# LangerFace — facial Langer/RSTL line projection (Stage 1) and, later,
+# tumor-simulation / incision-design (Stage 2). See docs/ and MEMORY for vision.
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "langerface"
+description = "Facial Langer/RSTL skin-tension-line projection for surgical incision-planning visualization"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"   # mediapipe has no 3.13 wheels yet
+license = { text = "Proprietary — research draft" }
+dynamic = ["version"]
+dependencies = [
+    "numpy>=1.26",
+    "opencv-python>=4.9",   # video I/O + anti-aliased polyline rendering
+    "mediapipe>=0.10.14",   # Face Landmarker: 478 3D landmarks (image/video/live)
+]
+
+[project.optional-dependencies]
+web = ["gradio>=4.0"]              # apps.gradio_app upload UI
+annotate = ["matplotlib>=3.8"]    # interactive atlas annotation/validation tools
+dev = ["pytest>=8.0", "ruff>=0.5"]
+all = ["langerface[web,annotate,dev]"]
+
+[project.scripts]
+langerface = "langerface.apps.cli:main"
+langerface-webcam = "langerface.apps.webcam:main"
+langerface-web = "langerface.apps.gradio_app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "langerface.__version__" }
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+src = ["src", "apps", "tools", "tests"]
+
+[tool.ruff.lint]
+# E402 (import not at top) is intentional in a couple of tool scripts; keep the rest strict.
+select = ["E", "F", "W", "I", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

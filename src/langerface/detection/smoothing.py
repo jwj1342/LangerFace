@@ -2,10 +2,13 @@
 
 参考: Casiez, Roussel, Vogel (2012) "1€ Filter"。
 对整组关键点 (N, 3) 逐元素向量化滤波，按帧时间戳自适应截止频率。
+默认参数取自 config.constants（与 Config 同一事实来源）。
 """
 from __future__ import annotations
 
 import numpy as np
+
+from ..config.constants import ONEEURO_BETA, ONEEURO_DCUTOFF, ONEEURO_MIN_CUTOFF
 
 
 def _alpha(cutoff: float, dt: float) -> float:
@@ -16,7 +19,12 @@ def _alpha(cutoff: float, dt: float) -> float:
 class LandmarkSmoother:
     """对 (N, 3) 关键点数组做 One-Euro 平滑，保持每个分量的内部状态。"""
 
-    def __init__(self, min_cutoff: float = 1.5, beta: float = 0.05, dcutoff: float = 1.0):
+    def __init__(
+        self,
+        min_cutoff: float = ONEEURO_MIN_CUTOFF,
+        beta: float = ONEEURO_BETA,
+        dcutoff: float = ONEEURO_DCUTOFF,
+    ):
         self.min_cutoff = float(min_cutoff)
         self.beta = float(beta)
         self.dcutoff = float(dcutoff)

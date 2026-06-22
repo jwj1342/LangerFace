@@ -3,14 +3,15 @@
 - 被遮挡（背面）的点处断开折线，只画可见段
 - 整图 addWeighted 混合：未绘制像素 overlay==frame，故不会被压暗，只有线条像素混合
 - global_alpha 供 pipeline 做丢脸淡入淡出
+
+cv2 延迟导入，使纯几何/映射逻辑无需 OpenCV 也可被导入与单测。
 """
 from __future__ import annotations
 
-import cv2
 import numpy as np
 
-from .config import LineStyle
-from .mapping import MappedLine
+from ..config.settings import LineStyle
+from ..lines.mapping import MappedLine
 
 
 def draw_overlay(
@@ -24,10 +25,11 @@ def draw_overlay(
 
     visible_tri: (M,) bool 或 None（None=全部可见）。
     """
+    import cv2
+
     if global_alpha <= 0 or not mapped_lines:
         return frame
     overlay = frame.copy()
-    h, w = frame.shape[:2]
 
     for ln in mapped_lines:
         xy = ln.pts[:, :2]
@@ -62,6 +64,8 @@ def _visible_runs(xy: np.ndarray, vis: np.ndarray):
 
 
 def _draw_ticks(overlay: np.ndarray, seg: np.ndarray, style: LineStyle, every: int = 8, length: int = 5):
+    import cv2
+
     for i in range(0, len(seg) - 1, every):
         p0, p1 = seg[i], seg[i + 1]
         d = p1 - p0

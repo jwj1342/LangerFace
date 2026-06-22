@@ -4,8 +4,8 @@ import os
 import numpy as np
 import pytest
 
-from langerlines.atlas import Atlas, AtlasLine
-from langerlines.config import ATLAS_PATHS, CANONICAL_OBJ
+from langerface.config import ATLAS_PATHS
+from langerface.lines import Atlas, AtlasLine
 
 
 def test_validate_catches_bad_index():
@@ -35,13 +35,10 @@ def test_roundtrip(tmp_path):
     assert len(b.lines) == 1 and b.lines[0].points.shape == (2, 3)
 
 
-@pytest.mark.skipif(not os.path.exists(CANONICAL_OBJ), reason="需先下载 canonical_face_model.obj")
-def test_generated_atlases_valid():
-    from langerlines.canonical import CanonicalFaceModel
-    canonical = CanonicalFaceModel.from_obj(CANONICAL_OBJ)
+def test_generated_atlases_valid(canonical):
     n_tri = len(canonical.triangles)
     for system, path in ATLAS_PATHS.items():
         if not os.path.exists(path):
-            pytest.skip(f"{system} 图谱未生成（先跑 build_initial_atlas.py）")
+            pytest.skip(f"{system} 图谱未生成（先跑 build_field_atlas.py）")
         atlas = Atlas.load(path)
         assert atlas.validate(n_tri) == [], f"{system} 图谱校验未通过"

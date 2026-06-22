@@ -4,8 +4,8 @@
 """
 import numpy as np
 
-from langerlines.atlas import Atlas, AtlasLine
-from langerlines.mapping import map_atlas
+from langerface.lines import Atlas, AtlasLine
+from langerface.lines import map_atlas
 
 
 def _one_line_atlas():

@@ -10,10 +10,9 @@ import sys
 import cv2
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from langerlines.config import Config             # noqa: E402
-from langerlines.detector import FaceLandmarkDetector  # noqa: E402
-from langerlines.pipeline import LinePipeline     # noqa: E402
+from langerface.config import Config             # noqa: E402
+from langerface.detection import FaceLandmarkDetector  # noqa: E402
+from langerface.pipeline import LinePipeline     # noqa: E402
 
 
 def main():

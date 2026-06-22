@@ -1,4 +1,4 @@
-"""人脸关键点检测：MediaPipe Face Landmarker 封装。
+"""人脸关键点检测：MediaPipe Face Landmarker 封装（实现 detection.base.Detector）。
 
 输出 478 个 3D 关键点（前 468 个对应标准网格顶点；后 10 个为虹膜）。
 - IMAGE 模式：单张图片
@@ -6,17 +6,13 @@
 """
 from __future__ import annotations
 
-import os
-from dataclasses import dataclass
-
 import numpy as np
 
+from ..config.assets import require_asset
+from ..log import get_logger
+from .base import FaceResult
 
-@dataclass
-class FaceResult:
-    landmarks_px: np.ndarray   # (478, 3) 图像空间 (x_px, y_px, z*width)
-    normalized: np.ndarray     # (478, 3) 归一化 (x,y in [0,1], z)
-    transform: np.ndarray | None  # (4,4) 头部位姿矩阵或 None
+log = get_logger(__name__)
 
 
 class FaceLandmarkDetector:
@@ -29,12 +25,8 @@ class FaceLandmarkDetector:
         min_face_presence_confidence: float = 0.5,
         min_tracking_confidence: float = 0.5,
     ):
-        if not os.path.exists(model_path):
-            raise FileNotFoundError(
-                f"找不到 Face Landmarker 模型 {model_path}。\n"
-                f"请先运行  python tools/download_assets.py  下载资产。"
-            )
-        # 延迟导入，避免未装 mediapipe 时整个包不可导入
+        require_asset(model_path, what="Face Landmarker 模型")
+        # 延迟导入，避免未装 mediapipe 时整个包不可导入（也便于纯几何单测）。
         import mediapipe as mp
         from mediapipe.tasks import python as mp_python
         from mediapipe.tasks.python import vision
@@ -88,8 +80,8 @@ class FaceLandmarkDetector:
     def close(self) -> None:
         try:
             self._landmarker.close()
-        except Exception:
-            pass
+        except Exception as exc:  # 仅记录，不让清理错误掩盖主流程
+            log.warning("关闭 FaceLandmarker 时出错: %s", exc)
 
     def __enter__(self):
         return self

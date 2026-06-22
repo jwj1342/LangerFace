@@ -12,9 +12,8 @@ import os
 import shutil
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from langerlines.canonical import CanonicalFaceModel
-from langerlines.config import CANONICAL_OBJ, ATLAS_PATHS, FACE_LANDMARKER_TASK
+from langerface.geometry import CanonicalFaceModel
+from langerface.config import CANONICAL_OBJ, ATLAS_PATHS, FACE_LANDMARKER_TASK
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEB_ASSETS = os.path.join(REPO, "web", "assets")
