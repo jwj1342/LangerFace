@@ -16,7 +16,7 @@
 Stage 2（计划中）将以同级子包 tumor/、incision/ 接入，复用 geometry/detection/rendering。
 
 医学声明：本系统是可视化辅助工具，不是手术指令，也不是受监管的医疗器械。
-内置线条图谱为示意性首版，必须经临床医生校验后方可参考。详见 docs/MEDICAL.md。
+内置线条图谱为示意性首版，必须经临床医生校验后方可参考。详见 README《已知局限与医学声明》。
 """
 from __future__ import annotations
 
