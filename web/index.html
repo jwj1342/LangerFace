@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>面部朗格线迁移 · 实时</title>
+<style>
+  :root{
+    --bg:#eef0ea; --side:#f6f7f3; --card:#ffffff; --line:#e6e8e1;
+    --ink:#1b2024; --muted:#6c7480; --green:#0f9b6e; --green-d:#0c8460;
+    --green-soft:#d9f2e7; --stage:#0c0f14; --stage-bar:#11151c;
+    --amber:#f0c24b; --blue:#56bdf2; --teal:#3fd39c;
+    --shadow:0 1px 2px rgba(20,30,25,.05),0 6px 18px rgba(20,30,25,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",system-ui,sans-serif;
+       color:var(--ink);background:var(--bg);overflow:hidden}
+  .app{display:grid;grid-template-columns:340px 1fr;height:100vh}
+
+  /* ── Sidebar ───────────────────────────────── */
+  .sidebar{background:var(--side);border-right:1px solid var(--line);
+           padding:22px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
+  .brand .eyebrow{font-size:10.5px;letter-spacing:.14em;color:var(--muted);font-weight:600}
+  .brand-top{display:flex;justify-content:space-between;align-items:center}
+  .brand h1{font-size:25px;margin:6px 0 0;font-weight:700;letter-spacing:-.01em}
+  .badge{font-size:11px;font-weight:600;color:var(--green-d);background:var(--green-soft);
+         padding:4px 10px;border-radius:999px;white-space:nowrap}
+  .badge.loading{color:#9a6a00;background:#fbeecd}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+        padding:14px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px}
+
+  .btn{appearance:none;border:1px solid var(--line);background:#fff;color:var(--ink);
+       font-size:14px;font-weight:600;padding:10px 12px;border-radius:10px;cursor:pointer;
+       display:flex;align-items:center;justify-content:center;gap:7px;transition:.15s}
+  .btn:hover{background:#f3f4f0}
+  .btn:active{transform:translateY(1px)}
+  .btn[aria-pressed="true"]{border-color:var(--green);color:var(--green-d);background:var(--green-soft)}
+  .btn-primary{background:var(--green);border-color:var(--green);color:#fff;padding:12px}
+  .btn-primary:hover{background:var(--green-d)}
+  .btn-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .btn-row .btn{padding:9px 6px;font-size:13px}
+  .btn:disabled{opacity:.45;cursor:default}
+
+  .field-label{font-size:12.5px;font-weight:600;color:var(--muted);
+               display:flex;justify-content:space-between;align-items:center}
+  .field-label .val{color:var(--ink);font-variant-numeric:tabular-nums}
+  .select{appearance:none;width:100%;padding:9px 12px;border:1px solid var(--line);
+          border-radius:10px;background:#fff;font-size:14px;font-weight:600;color:var(--ink);
+          background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236c7480' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+          background-repeat:no-repeat;background-position:right 12px center;cursor:pointer}
+  input[type=range]{width:100%;accent-color:var(--green);cursor:pointer;margin:2px 0}
+  .check{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:500;cursor:pointer}
+  .check input{accent-color:var(--green);width:16px;height:16px}
+
+  .quality-top{display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;color:var(--muted)}
+  .quality-top span:last-child{color:var(--ink);font-size:20px;font-variant-numeric:tabular-nums}
+  .bar{height:7px;background:#e9ebe4;border-radius:99px;overflow:hidden;margin-top:7px}
+  .bar-fill{height:100%;width:0;background:linear-gradient(90deg,#2fbf8b,var(--green));
+            border-radius:99px;transition:width .25s}
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .stat{background:#f8f9f5;border:1px solid var(--line);border-radius:10px;padding:9px 11px;
+        display:flex;flex-direction:column;gap:3px}
+  .stat .k{font-size:11px;color:var(--muted)}
+  .stat .v{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+  .hint{font-size:11.5px;color:var(--muted);margin:0}
+  .disclaimer{font-size:10.5px;color:var(--muted);line-height:1.6;margin:0}
+
+  /* ── Stage ─────────────────────────────────── */
+  .stage{background:var(--stage);display:flex;flex-direction:column;min-width:0}
+  .stage-top{height:56px;display:flex;align-items:center;justify-content:space-between;
+             padding:0 22px;background:var(--stage-bar);border-bottom:1px solid #1c222c}
+  .live{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#aeb6c2;
+        background:rgba(255,255,255,.05);padding:6px 13px;border-radius:999px}
+  .live .dot{width:8px;height:8px;border-radius:50%;background:#6b7280}
+  .live.on{color:#d6f5e7}.live.on .dot{background:#34e3a4;box-shadow:0 0 0 4px rgba(52,227,164,.18)}
+  .fps{font-size:13px;font-weight:600;color:#8b94a3;font-variant-numeric:tabular-nums}
+  .stage-body{flex:1;display:flex;flex-direction:column;gap:14px;padding:16px;min-height:0}
+  .main-wrap{flex:1;display:flex;align-items:center;justify-content:center;position:relative;min-height:0}
+  video{display:none}
+  #canvas{max-width:100%;max-height:100%;border-radius:14px;background:#000;
+          box-shadow:0 10px 40px rgba(0,0,0,.45)}
+  #canvas.mirror{transform:scaleX(-1)}
+  .overlay-msg{position:absolute;color:#9aa3b2;font-size:14px;background:rgba(10,14,20,.6);
+               padding:12px 18px;border-radius:12px;border:1px solid #232a35}
+  .overlay-msg.hidden{display:none}
+  .zoom-strip{display:flex;gap:10px;justify-content:center;flex:0 0 auto}
+  .zoom-strip.hidden{display:none}
+  .zoom-card{position:relative;flex:1 1 0;min-width:0;max-width:190px;aspect-ratio:1;background:#000;
+             border-radius:10px;overflow:hidden;border:1px solid #232a35;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+  .zoom-card canvas{width:100%;height:100%;display:block;background:#05070a}
+  .zoom-card canvas.mirror{transform:scaleX(-1)}
+  .zoom-card .tag{position:absolute;top:6px;left:6px;font-size:11px;font-weight:600;color:#e7edf3;
+                  background:rgba(0,0,0,.55);padding:2px 8px;border-radius:6px;z-index:2}
+  .hidden{display:none !important}
+  #three{position:absolute;inset:0;width:100%;height:100%;border-radius:14px;cursor:grab}
+  #three:active{cursor:grabbing}
+  .badge.beta{color:#7c3aed;background:#ede4fb}
+
+  @media(max-width:880px){
+    .app{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+    .sidebar{flex-direction:column;max-height:46vh}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-top">
+        <span class="eyebrow">COMPUTER VISION PROTOTYPE</span>
+        <span class="badge loading" id="modelBadge">模型加载中…</span>
+      </div>
+      <h1>面部朗格线迁移</h1>
+    </div>
+
+    <div class="card">
+      <label class="field-label" for="routeSel">技术路线</label>
+      <select id="routeSel" class="select" style="margin-top:7px">
+        <option value="2d">2D 贴合（默认，稳定）</option>
+        <option value="3d">3D 重建（Beta）</option>
+      </select>
+      <div id="route3dPanel" class="hidden" style="display:flex;flex-direction:column;gap:10px">
+        <div class="btn-row" style="grid-template-columns:1fr 1fr">
+          <button class="btn" id="reconDemoBtn">用示例重建</button>
+          <button class="btn" id="reconScanBtn">转头扫描</button>
+        </div>
+        <p class="hint" id="reconStatus">先重建你的 3D 人头 → 可旋转查看 → 再投影到实时画面。</p>
+        <div class="btn-row" style="grid-template-columns:1fr 1fr">
+          <button class="btn" id="view3dBtn" disabled aria-pressed="true">旋转查看</button>
+          <button class="btn" id="project3dBtn" disabled>投影到画面</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <button class="btn btn-primary" id="uploadBtn">⬆&nbsp; 上传照片 / 视频</button>
+      <input type="file" id="fileInput" accept="image/*,video/*" hidden />
+      <div class="btn-row">
+        <button class="btn" id="camBtn" aria-pressed="false">◉ 摄像头</button>
+        <button class="btn" id="pauseBtn" disabled>⏸ 暂停</button>
+        <button class="btn" id="exportBtn" disabled>⬇ 导出</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div>
+        <label class="field-label" for="templateSel">模板</label>
+        <select id="templateSel" class="select" style="margin-top:7px">
+          <option value="rstl">面部 RSTL 指南（首选）</option>
+          <option value="langer">面部 Langer 线（对照）</option>
+        </select>
+      </div>
+      <div>
+        <label class="field-label">线密度 <span class="val" id="densityVal">100%</span></label>
+        <input type="range" id="density" min="12" max="100" value="100" />
+      </div>
+      <div>
+        <label class="field-label">平滑 <span class="val" id="smoothVal">中</span></label>
+        <input type="range" id="smooth" min="0" max="100" value="60" />
+      </div>
+      <div>
+        <label class="field-label">透明度 <span class="val" id="opacityVal">92%</span></label>
+        <input type="range" id="opacity" min="25" max="100" value="92" />
+      </div>
+    </div>
+
+    <div class="card">
+      <label class="check"><input type="checkbox" id="clip" checked /> 限制在面部轮廓内（背面剔除）</label>
+      <label class="check"><input type="checkbox" id="handOcc" checked /> 前方手部遮挡（手挡处不画线）</label>
+      <label class="check"><input type="checkbox" id="mirror" checked /> 镜像（自拍视角）</label>
+      <label class="check"><input type="checkbox" id="bands" checked /> 按面部分区着色</label>
+      <label class="check"><input type="checkbox" id="zoom" checked /> 细节放大窗（关键区域）</label>
+      <label class="check"><input type="checkbox" id="meshPts" /> 显示网格采样点</label>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="quality-top"><span>追踪质量</span><span id="qualityVal">0</span></div>
+        <div class="bar"><div class="bar-fill" id="qualityBar"></div></div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat"><span class="k">状态</span><span class="v" id="statState">未开始</span></div>
+        <div class="stat"><span class="k">脸部占比</span><span class="v" id="statFace">—</span></div>
+        <div class="stat"><span class="k">偏航估计</span><span class="v" id="statYaw">—</span></div>
+        <div class="stat"><span class="k">线束数量</span><span class="v" id="statLines">—</span></div>
+      </div>
+      <p class="hint">姿态与光照自适应 · 全程本地运行，不上传任何画面</p>
+    </div>
+
+    <p class="disclaimer">⚠️ 内置图谱为示意性首版（未经临床验证），方向参考 Borges RSTL。
+       决策辅助可视化，非手术指令、非医疗器械；最终切口由主刀医生负责。</p>
+  </aside>
+
+  <main class="stage">
+    <div class="stage-top">
+      <span class="live" id="livePill"><span class="dot"></span>待机</span>
+      <span class="fps" id="fps">— fps</span>
+    </div>
+    <div class="stage-body">
+      <div class="main-wrap">
+        <video id="video" playsinline autoplay muted></video>
+        <canvas id="canvas" class="mirror" width="1280" height="720"></canvas>
+        <canvas id="three" class="hidden"></canvas>
+        <div class="overlay-msg" id="overlayMsg">点击「摄像头」或「上传照片 / 视频」开始</div>
+      </div>
+      <div class="zoom-strip" id="zoomStrip"></div>
+    </div>
+  </main>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
