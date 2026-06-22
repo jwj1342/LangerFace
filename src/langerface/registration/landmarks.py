@@ -23,7 +23,9 @@ FACE_FINE_IDX = sorted({
 })
 
 
-def build_landmark_weights(n: int, preset: str = "fine", w_fine: float = 4.0, w_contour: float = 0.25) -> np.ndarray:
+def build_landmark_weights(
+    n: int, preset: str = "fine", w_fine: float = 4.0, w_contour: float = 0.25,
+) -> np.ndarray:
     """构造 (n,) 关键点权重：上调五官细节点、下调脸缘轮廓点。
 
     preset="fine" 时进一步把非细节点整体下调，强调五官区域的配准精度。

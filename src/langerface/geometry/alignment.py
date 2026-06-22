@@ -25,7 +25,10 @@ def weighted_umeyama_sim3(
         raise ValueError("src/tgt 必须是同形的 (N, 3)")
 
     n = src.shape[0]
-    w = np.ones(n) if weights is None else np.clip(np.asarray(weights, dtype=np.float64).reshape(-1), 0.0, None)
+    if weights is None:
+        w = np.ones(n)
+    else:
+        w = np.clip(np.asarray(weights, dtype=np.float64).reshape(-1), 0.0, None)
     sw = w.sum()
     if sw <= 1e-12:
         raise ValueError("权重之和为 0")
@@ -61,7 +64,9 @@ def umeyama(src: np.ndarray, tgt: np.ndarray, with_scale: bool = True):
 def apply_sim3(points: np.ndarray, s: float, R: np.ndarray, t: np.ndarray) -> np.ndarray:
     """对点集 ``points (N, 3)`` 施加 Sim3：``s·R·P + t``。"""
     points = np.asarray(points, dtype=np.float64)
-    return (s * (np.asarray(R, dtype=np.float64) @ points.T)).T + np.asarray(t, dtype=np.float64).reshape(1, 3)
+    Rm = np.asarray(R, dtype=np.float64)
+    tv = np.asarray(t, dtype=np.float64).reshape(1, 3)
+    return (s * (Rm @ points.T)).T + tv
 
 
 def sim3_matrix(s: float, R: np.ndarray, t: np.ndarray) -> np.ndarray:
