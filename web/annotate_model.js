@@ -18,6 +18,136 @@ export function barycentric(p, a, b, c) {
 }
 
 const round6 = (x) => Math.round(x * 1e6) / 1e6;
+const dist3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+function vertexPoint(surface, vi, exportable) {
+  const ref = surface.vertexRefs[vi];
+  return {
+    xyz: surface.verts[vi].slice(),
+    tri: ref?.tri ?? null,
+    bary: ref?.bary ?? null,
+    exportable,
+  };
+}
+
+function buildSurface(verts, tris) {
+  const adj = Array.from({ length: verts.length }, () => new Map());
+  const vertexRefs = Array.from({ length: verts.length }, () => null);
+  const addEdge = (a, b) => {
+    const w = dist3(verts[a], verts[b]);
+    const prev = adj[a].get(b);
+    if (prev == null || w < prev) { adj[a].set(b, w); adj[b].set(a, w); }
+  };
+  tris.forEach((t, tri) => {
+    for (let i = 0; i < 3; i++) {
+      const vi = t[i];
+      if (!vertexRefs[vi]) {
+        const bary = [0, 0, 0];
+        bary[i] = 1;
+        vertexRefs[vi] = { tri, bary };
+      }
+    }
+    addEdge(t[0], t[1]);
+    addEdge(t[1], t[2]);
+    addEdge(t[2], t[0]);
+  });
+  return { verts, tris, adj, vertexRefs };
+}
+
+function nearestSurfacePath(surface, a, b) {
+  if (!surface || a.tri == null || b.tri == null || !Array.isArray(a.bary) || !Array.isArray(b.bary)) {
+    return [a, b];
+  }
+  if (a.tri === b.tri) return [a, b];
+
+  const startVerts = surface.tris[a.tri] || [];
+  const endVerts = surface.tris[b.tri] || [];
+  if (startVerts.length !== 3 || endVerts.length !== 3) return [a, b];
+
+  const n = surface.verts.length;
+  const dist = new Float64Array(n);
+  dist.fill(Infinity);
+  const prev = new Int32Array(n);
+  prev.fill(-1);
+  const visited = new Uint8Array(n);
+  const heap = [];
+  const push = (node, score) => {
+    heap.push([node, score]);
+    let i = heap.length - 1;
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (heap[p][1] <= score) break;
+      [heap[p], heap[i]] = [heap[i], heap[p]];
+      i = p;
+    }
+  };
+  const pop = () => {
+    if (!heap.length) return null;
+    const root = heap[0];
+    const last = heap.pop();
+    if (heap.length && last) {
+      heap[0] = last;
+      let i = 0;
+      for (;;) {
+        let best = i;
+        const l = 2 * i + 1, r = l + 1;
+        if (l < heap.length && heap[l][1] < heap[best][1]) best = l;
+        if (r < heap.length && heap[r][1] < heap[best][1]) best = r;
+        if (best === i) break;
+        [heap[i], heap[best]] = [heap[best], heap[i]];
+        i = best;
+      }
+    }
+    return root;
+  };
+
+  for (const vi of startVerts) {
+    const d = dist3(a.xyz, surface.verts[vi]);
+    if (d < dist[vi]) { dist[vi] = d; push(vi, d); }
+  }
+
+  const endSet = new Set(endVerts);
+  let bestEnd = -1;
+  let bestTotal = Infinity;
+  while (heap.length) {
+    const item = pop();
+    if (!item) break;
+    const [u, du] = item;
+    if (visited[u] || du !== dist[u]) continue;
+    visited[u] = 1;
+    if (endSet.has(u)) {
+      const total = du + dist3(surface.verts[u], b.xyz);
+      if (total < bestTotal) { bestTotal = total; bestEnd = u; }
+    }
+    if (du > bestTotal) break;
+    for (const [v, w] of surface.adj[u]) {
+      const nd = du + w;
+      if (nd < dist[v]) {
+        dist[v] = nd;
+        prev[v] = u;
+        push(v, nd);
+      }
+    }
+  }
+  if (bestEnd < 0) return [a, b];
+
+  const vertexPath = [];
+  for (let u = bestEnd; u >= 0; u = prev[u]) vertexPath.push(u);
+  vertexPath.reverse();
+
+  const exportable = a.exportable !== false && b.exportable !== false;
+  const out = [a];
+  for (const vi of vertexPath) {
+    const vp = vertexPoint(surface, vi, exportable);
+    if (dist3(out[out.length - 1].xyz, vp.xyz) > 1e-9 && dist3(vp.xyz, b.xyz) > 1e-9) out.push(vp);
+  }
+  if (dist3(out[out.length - 1].xyz, b.xyz) > 1e-9) out.push(b);
+  return out;
+}
+
+function controlsOf(line) {
+  return line.controls || line.points;
+}
 
 // 一个标注点：xyz=世界坐标；tri/bary 仅在标注于已知三角拓扑（如标准脸）时存在。
 //   { xyz:[x,y,z], tri:int|null, bary:[u,v,w]|null }
@@ -26,23 +156,43 @@ export class AnnotationModel {
     this.system = system;
     this.lines = [];      // 已完成的线：{ name, region, points:[pt,...] }
     this.current = null;  // 正在画的线
+    this.surface = null;  // 可选：用于把控制点之间展开成网格表面路径
+  }
+
+  setSurface(verts, tris) {
+    this.surface = buildSurface(verts, tris);
+    for (const line of this.lines) this._rebuildLinePoints(line);
+    if (this.current) this._rebuildLinePoints(this.current);
   }
 
   startLine({ name, region } = {}) {
-    this.current = { name: name || `line_${this.lines.length + 1}`, region: region || "", points: [] };
+    this.current = { name: name || `line_${this.lines.length + 1}`, region: region || "", points: [], controls: [] };
   }
 
   addPoint(pt) {
     if (!this.current) this.startLine();
-    this.current.points.push(pt);
+    this.current.controls.push(pt);
+    if (this.current.controls.length === 1) {
+      this.current.points = [pt];
+    } else {
+      const controls = this.current.controls;
+      const path = nearestSurfacePath(this.surface, controls[controls.length - 2], pt);
+      this.current.points.push(...path.slice(1));
+    }
   }
 
   undoPoint() {
-    if (this.current && this.current.points.length) this.current.points.pop();
+    if (!this.current) return;
+    if (this.current.controls) {
+      this.current.controls.pop();
+      this._rebuildLinePoints(this.current);
+    } else if (this.current.points.length) {
+      this.current.points.pop();
+    }
   }
 
   finishLine() {
-    if (this.current && this.current.points.length >= 2) this.lines.push(this.current);
+    if (this.current && controlsOf(this.current).length >= 2) this.lines.push(this.current);
     const done = this.current;
     this.current = null;
     return done;
@@ -57,7 +207,7 @@ export class AnnotationModel {
   // 每条已完成线的每个点是否都带三角拓扑（决定能否导出图谱格式）
   hasBarycentric() {
     return this.lines.length > 0 && this.lines.every(
-      (l) => l.points.every((p) => p.tri != null && Array.isArray(p.bary)),
+      (l) => l.points.every((p) => p.exportable !== false && p.tri != null && Array.isArray(p.bary)),
     );
   }
 
@@ -89,5 +239,20 @@ export class AnnotationModel {
         points: l.points.map((p) => [round6(p.xyz[0]), round6(p.xyz[1]), round6(p.xyz[2])]),
       })),
     };
+  }
+
+  _rebuildLinePoints(line) {
+    const controls = controlsOf(line);
+    line.controls = controls;
+    line.points = [];
+    for (let i = 0; i < controls.length; i++) {
+      const pt = controls[i];
+      if (!line.points.length) {
+        line.points.push(pt);
+      } else {
+        const path = nearestSurfacePath(this.surface, controls[i - 1], pt);
+        line.points.push(...path.slice(1));
+      }
+    }
   }
 }

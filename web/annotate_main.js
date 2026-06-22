@@ -80,7 +80,7 @@ function addPointAt(e) {
   const hit = viewer.raycast(ndcX, ndcY);
   if (!hit) return;
   if (!model.current) startLineFromInputs();
-  if (!onCanonical) { hit.tri = null; hit.bary = null; }   // 自定义头模：只存 xyz
+  hit.exportable = onCanonical;   // 自定义头模仍用 tri/bary 贴面连线，但不能导出项目图谱
   model.addPoint(hit);
   viewer.rebuildLines();
   refresh();
@@ -131,7 +131,8 @@ function saveCurrentLine() {
     setHint("请先点击“开始一条线”，或直接在脸表面点击开始。");
     return;
   }
-  if (model.current.points.length < 2) {
+  const controlCount = controlsOf(model.current).length;
+  if (controlCount < 2) {
     setHint("当前线至少需要 2 个点才能保存。");
     return;
   }
@@ -143,9 +144,9 @@ function saveCurrentLine() {
 }
 
 function undoLast() {
-  if (model.current && model.current.points.length) {
+  if (model.current && controlsOf(model.current).length) {
     model.undoPoint();
-    setHint(`已撤销当前线的上一个点，剩余 ${model.current.points.length} 个点。`);
+    setHint(`已撤销当前线的上一个点，剩余 ${controlsOf(model.current).length} 个控制点。`);
   } else if (model.current) {
     model.cancelLine();
     setHint("已取消当前空线。");
@@ -184,6 +185,10 @@ function isTextControl(el) {
   return el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
 }
 
+function controlsOf(line) {
+  return line ? (line.controls || line.points || []) : [];
+}
+
 function exportJSON(build, filename) {
   let data;
   try { data = build(); } catch (err) { setHint("导出失败：" + err.message); return; }
@@ -198,14 +203,14 @@ function exportJSON(build, filename) {
 // ── UI 刷新 ───────────────────────────────────────────────────────────────────
 function setHint(t) { els.hint.textContent = t; }
 function refresh() {
-  const curPts = model.current ? model.current.points.length : 0;
+  const curPts = controlsOf(model.current).length;
   els.status.textContent = `${model.lines.length} 条`;
   els.current.classList.toggle("active", Boolean(model.current));
   els.current.textContent = model.current
     ? `正在绘制：${model.current.name} · ${SYSTEM_LABELS[model.system]} · ${curPts} 点${curPts < 2 ? "（至少 2 点可保存）" : ""}`
     : "当前没有正在绘制的线。点击“开始一条线”，或直接在脸表面点击开始。";
   els.btnNew.disabled = Boolean(model.current);
-  els.btnFinish.disabled = !(model.current && model.current.points.length >= 2);
+  els.btnFinish.disabled = !model.current;
   els.btnUndo.disabled = !(model.current || model.lines.length);
   els.exAtlas.disabled = !(model.lines.length && onCanonical);
   els.exXyz.disabled = !model.lines.length;
@@ -225,7 +230,7 @@ function refresh() {
     title.textContent = `${i + 1}. ${ln.name}`;
     const meta = document.createElement("span");
     meta.className = "line-meta";
-    meta.textContent = `${SYSTEM_LABELS[model.system]}${ln.region ? " · " + ln.region : ""} · ${ln.points.length} 点`;
+    meta.textContent = `${SYSTEM_LABELS[model.system]}${ln.region ? " · " + ln.region : ""} · ${controlsOf(ln).length} 控制点 · ${ln.points.length} 路径点`;
     main.appendChild(title);
     main.appendChild(meta);
     const actions = document.createElement("div");

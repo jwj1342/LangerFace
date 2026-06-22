@@ -51,10 +51,15 @@ export class Annotator3D {
     });
     this.mesh = new THREE.Mesh(mg, mat);
     this.group.add(this.mesh);
+    this.model?.setSurface?.(verts, tris);
     this.rebuildLines();
   }
 
-  setAnnotation(model) { this.model = model; this.rebuildLines(); }
+  setAnnotation(model) {
+    this.model = model;
+    if (this.verts && this.tris) this.model?.setSurface?.(this.verts, this.tris);
+    this.rebuildLines();
+  }
 
   // NDC (x,y ∈ [-1,1]) → { xyz(局部), tri, bary } | null
   raycast(ndcX, ndcY) {
@@ -79,15 +84,17 @@ export class Annotator3D {
     if (!this.model) return;
 
     const segPos = [], segCol = [], mkPos = [], mkCol = [];
-    const addLine = (pts, color) => {
+    const addLine = (line, color) => {
+      const pts = line.points || [];
+      const controls = line.controls || pts;
       for (let i = 0; i + 1 < pts.length; i++) {
         segPos.push(...pts[i].xyz, ...pts[i + 1].xyz);
         segCol.push(...color, ...color);
       }
-      for (const p of pts) { mkPos.push(...p.xyz); mkCol.push(...color); }
+      for (const p of controls) { mkPos.push(...p.xyz); mkCol.push(...color); }
     };
-    for (const ln of this.model.lines) addLine(ln.points, FINISHED_COLOR);
-    if (this.model.current) addLine(this.model.current.points, CURRENT_COLOR);
+    for (const ln of this.model.lines) addLine(ln, FINISHED_COLOR);
+    if (this.model.current) addLine(this.model.current, CURRENT_COLOR);
 
     if (segPos.length) {
       const g = new THREE.BufferGeometry();
