@@ -1,5 +1,7 @@
 # 面部朗格线迁移 · Facial Langer/RSTL Line Projection
 
+[![CI](https://github.com/jwj1342/LangerFace/actions/workflows/ci.yml/badge.svg)](https://github.com/jwj1342/LangerFace/actions/workflows/ci.yml)
+
 把皮肤张力线（**RSTL / Langer 线**）**稳定地、贴合地**叠加到人脸的照片、视频或实时摄像头画面上，
 作为面部手术**切口规划的决策辅助可视化**——医生能直观看到沿哪个方向下刀疤痕最小、恢复最好。
 
@@ -11,6 +13,7 @@
 
 ## 目录
 - [项目定位](#项目定位)
+- [系统模块与数据流](#系统模块与数据流)
 - [它能做什么](#它能做什么)
 - [核心原理（为什么稳，而非"图一乐"）](#核心原理)
 - [两条技术路线](#两条技术路线)
@@ -20,7 +23,7 @@
 - [目录结构](#目录结构)
 - [验证与测试](#验证与测试)
 - [已知局限](#已知局限)
-- [部署（Vercel）](#部署vercel)
+- [持续集成与部署（CI/CD）](#持续集成与部署cicd)
 - [开发文档](#开发文档)
 - [后续路线图](#后续路线图)
 - [文档维护约定](#文档维护约定)
@@ -38,6 +41,50 @@ LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它
 3. **用户界面层**：`web/` 提供唯一正式前端；`src/langerface/apps/` 只保留 CLI 和 OpenCV webcam 入口。
 
 当前阶段是 **Stage 1：稳定显示面部 RSTL / Langer 皮肤张力线**。Stage 2 才会扩展到肿物模拟、切口设计和更完整的术前辅助工作流。项目不训练自定义医学模型，不上传用户图像，也不声称自动给出手术方案。
+
+---
+
+## 系统模块与数据流
+
+系统按“资产与医学知识 -> 感知 -> 配准 -> 标注/模拟/规划 -> 渲染与交互”分层。当前代码重点完成 Stage 1 的张力线标注与配准；Stage 2 的脸部肿物模拟和切口设计会作为同级业务模块扩展，而不是塞进 `lines/` 或 `rendering/`。
+
+| 层级 / 模块 | 当前状态 | 职责 | 主要位置 |
+|---|---|---|---|
+| 资产与医学知识层 | 已实现 | 标准脸、三角拓扑、MediaPipe 模型、RSTL/Langer 线图谱 | `assets/`, `web/assets/` |
+| 感知层 | 已实现 | 从图片、视频、摄像头中提取 478 个 3D 人脸关键点；网页端还检测手部遮挡 | `src/langerface/detection/`, `web/pipeline.js` |
+| 配准与几何层 | 已实现 | 2D 路线用重心坐标把图谱贴合当前脸网格；3D Beta 用 Umeyama 相似变换做个性化头模重建和实时刚性配准 | `src/langerface/geometry/`, `web/geometry.js`, `web/projection3d.js`, `tools/reconstruct_3d.py` |
+| 面部标注 / 图谱层 | 已实现 | 生成、读取、校验和映射 RSTL/Langer 线条；临床医生可编辑图谱 | `src/langerface/lines/`, `tools/annotate_atlas.py`, `tools/digitize_from_diagram.py` |
+| 肿物模拟层 | Stage 2 规划 | 表示脸部肿物的位置、边界、大小、深度和与皮肤表面的关系；为切口规划提供约束输入 | 计划新增 `src/langerface/tumor/`, `web/tumor*.js` |
+| 切口设计层 | Stage 2 规划 | 综合张力线方向、肿物边界、安全边距、医生编辑和审阅，生成候选切口可视化；只做决策辅助，不输出手术指令 | 计划新增 `src/langerface/incision/`, `web/incision*.js` |
+| 渲染与交互层 | 已实现 / 扩展中 | 2D Canvas 叠加、3D 查看、遮挡、放大窗、导出和 UI 控制 | `src/langerface/rendering/`, `web/render.js`, `web/three3d.js`, `web/main.js` |
+
+整体数据流：
+
+```mermaid
+flowchart LR
+  Input[照片 / 视频 / 摄像头帧] --> Detect[人脸与手部关键点检测]
+  Assets[标准脸 / 三角拓扑 / 模型资产] --> Register[人脸配准与几何归一化]
+  Detect --> Register
+
+  Author[临床标注与图谱生成工具] --> Atlas[RSTL / Langer 线图谱]
+  Assets --> Author
+  Atlas --> Map[线图谱重心坐标映射]
+  Register --> Map
+
+  Detect --> Occlusion[平滑 / 背面剔除 / 手部遮挡]
+  Map --> Occlusion
+  Occlusion --> Render[2D/3D 叠加渲染、放大窗、导出]
+
+  Register --> Recon[3D 头模重建 Beta]
+  Recon --> Map
+
+  Register --> Tumor[Stage 2: 肿物模拟]
+  Tumor --> Incision[Stage 2: 切口候选设计]
+  Atlas --> Incision
+  Incision --> Render
+```
+
+Stage 2 的设计原则是：肿物模拟只负责病灶几何与约束表达，切口设计只负责候选方案生成与可视化，最终判断仍由临床医生完成。
 
 ---
 
@@ -206,7 +253,7 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 
 ## 验证与测试
 
-- **JS 与 Python 逐点一致**（`cd web && npm test`）：用真实帧关键点对拍，映射误差 ~5×10⁻⁵px、遮挡 0 不一致。
+- **前端架构与 JS/Python 逐点一致**（`cd web && npm test`）：先检查 `web/*.js` 静态 import 无模块环，再用真实帧关键点对拍，映射误差 ~5×10⁻⁵px、遮挡 0 不一致。
 - **手部遮挡掩膜**（`node tools/test_occlusion.mjs`）：手指上/手掌被挡、**指缝保留**、无手不剔除。
 - **Umeyama 相似变换**（`node tools/test_umeyama.mjs`）：施加已知变换可恢复（误差 ~1e-13）。
 - **Python 单测**（`pytest`）：图谱完整性、标准脸解析、映射仿射不变性、平滑降抖动、端到端渲染。
@@ -224,7 +271,23 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 
 ---
 
-## 部署（Vercel）
+## 持续集成与部署（CI/CD）
+
+### 持续集成（GitHub Actions）
+
+每次推送到 `master` / `refactor/**` 分支或发起 Pull Request，都会自动运行 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)。三个并行 job 共同把关：
+
+| Job | 运行内容 | 说明 |
+|---|---|---|
+| `lint` | `ruff check .` | Python 代码风格、import 排序、pyupgrade —— 硬门禁。 |
+| `python-tests` | `pip install -e ".[dev]"` → `pytest`；矩阵 **Python 3.10 / 3.11 / 3.12** | 不装 mediapipe（测试注入假检测器 / 合成关键点）；资产随仓库提交，故标准脸 / 渲染 / pipeline 测试真正执行而非跳过。 |
+| `js-tests` | **Node 24** → `npm ci` → `npm run build`（Vite 生产构建）→ `npm test` | 验证前端可构建，并用真实帧逐点对拍 `web/geometry.js` 与 Python 端一致（架构 / 映射 / 遮挡 / Umeyama）。 |
+
+- **触发**：push 到 `master`、`refactor/**`，以及所有 Pull Request。
+- **并发**：同一 ref 的旧运行自动取消（`cancel-in-progress`），节省额度。
+- **本地预检**：提交前可装 `pre-commit`（见 [`.pre-commit-config.yaml`](.pre-commit-config.yaml)）自动跑 ruff，并拦截大文件 / 人脸影像误提交。
+
+### 持续部署（Vercel）
 
 网页端是 **Vite 构建出的纯静态站点**（`web/dist/`，全部在浏览器运行，无后端），可直接部署到 Vercel。
 Vercel 自动提供 **HTTPS**，因此线上 `getUserMedia`（摄像头）可用。

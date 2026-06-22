@@ -15,6 +15,8 @@
 - **Python 库 `src/langerface/`**：分层核心库 + console scripts + **验证基准（ground truth）** + 3D 重建离线工具。
 - **浏览器客户端 `web/`**：Vite 8 + 原生 ES Modules + MediaPipe Tasks Vision + `geometry.js`
   （Python 几何的忠实移植）+ `three3d.js`（3D Beta）。实时、本地、不上传。
+  前端状态在 `state.js` 中按 `modelState` / `renderState` / `sourceState` / `recordingState` / `reconState`
+  分片；`pipeline.js` 不依赖 `mode3d.js`，3D 实时投影通过无 DOM 的 `projection3d.js` 适配，避免模块环。
 
 > 关键不变式：`web/geometry.js` 的映射/遮挡/平滑必须与 Python 端**逐点一致**，由
 > `tools/test_web_mapping.mjs` 持续对拍保证（误差 < 1e-2 px、可见性 0 不一致）。
@@ -172,3 +174,9 @@ P = u·V0 + v·V1 + w·V2
 4. `pytest` + `cd web && npm test` 全绿；`cd web && npm run build` 可生产构建。
 5. `cd web && npm run dev` → 浏览器打开 Vite 地址，验证 2D 实时与 3D 查看。
 6. 临床校验图谱（`annotate_atlas.py`）后置 `validated:true` 方可作正式参考。
+
+## 11. 前端鲁棒性约束
+
+- `tools/test_web_architecture.mjs` 会检查 `web/*.js` 的静态相对 import 图，禁止新增模块环。
+- `web/logger.js` 统一记录浏览器端关键故障与降级事件；调试时可在控制台查看 `window.langerfaceDiagnostics`。
+- `web/.npmrc` 启用 `engine-strict=true`，安装依赖时会严格执行 `package.json` 中的 Node/npm 版本要求。

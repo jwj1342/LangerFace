@@ -2,7 +2,7 @@
 import { SOLID, BAND, ZOOM_REGIONS } from "./constants.js";
 import { ctx, els } from "./dom.js";
 import { mapAtlas, pointInHandMasks, visibleRuns, visibleTriangles } from "./geometry.js";
-import { S } from "./state.js";
+import { modelState, renderState, sourceState } from "./state.js";
 import { setLive } from "./ui.js";
 
 export function faceBBox(lm) {
@@ -12,24 +12,24 @@ export function faceBBox(lm) {
 }
 
 export function draw(lm, W, H, masks = []) {
-  const atlas = S.atlases[S.system];
-  const vis = S.clip ? visibleTriangles(lm, S.triangles, S.noseTris) : null;
-  const mapped = mapAtlas(atlas, lm, S.triangles);
+  const atlas = modelState.atlases[renderState.system];
+  const vis = renderState.clip ? visibleTriangles(lm, modelState.triangles, modelState.noseTris) : null;
+  const mapped = mapAtlas(atlas, lm, modelState.triangles);
   const bb = faceBBox(lm);
-  const stride = Math.max(1, Math.round(100 / (S.densityFrac * 100)));
+  const stride = Math.max(1, Math.round(100 / (renderState.densityFrac * 100)));
   const hasMasks = masks.length > 0;
 
   ctx.save();
-  ctx.globalAlpha = S.opacity; ctx.lineWidth = Math.max(1, W / 1300);
+  ctx.globalAlpha = renderState.opacity; ctx.lineWidth = Math.max(1, W / 1300);
   ctx.lineJoin = "round"; ctx.lineCap = "round";
   let count = 0;
   for (let li = 0; li < mapped.length; li++) {
     if (li % stride !== 0) continue;
     const ln = mapped[li];
-    if (S.bands) {
+    if (renderState.bands) {
       let my = 0; for (const p of ln.pts) my += p[1]; my = (my / ln.pts.length - bb.y0) / (bb.h || 1);
       ctx.strokeStyle = my < 0.36 ? BAND.top : my < 0.66 ? BAND.mid : BAND.low;
-    } else ctx.strokeStyle = SOLID[S.system];
+    } else ctx.strokeStyle = SOLID[renderState.system];
     // 每点可见性 = 朝向相机(背面剔除) 且 不在前方手部凸包内
     const mask = ln.pts.map((p, i) => {
       const v = vis ? vis[ln.tris[i]] : 1;
@@ -42,8 +42,8 @@ export function draw(lm, W, H, masks = []) {
     }
     count++;
   }
-  if (S.meshPts) {
-    ctx.globalAlpha = Math.min(1, S.opacity); ctx.fillStyle = "rgba(255,255,255,.55)";
+  if (renderState.meshPts) {
+    ctx.globalAlpha = Math.min(1, renderState.opacity); ctx.fillStyle = "rgba(255,255,255,.55)";
     for (let i = 0; i < lm.length; i += 2) {
       if (hasMasks && pointInHandMasks(lm[i], masks)) continue;
       ctx.beginPath(); ctx.arc(lm[i][0], lm[i][1], Math.max(1, W / 1100), 0, 6.283); ctx.fill();
@@ -56,10 +56,10 @@ export function draw(lm, W, H, masks = []) {
 // ── 细节放大窗 ────────────────────────────────────────────────────────────────
 export function buildZoomCards() {
   els.zoomStrip.innerHTML = "";
-  S.zoomCards = ZOOM_REGIONS.map((r) => {
+  renderState.zoomCards = ZOOM_REGIONS.map((r) => {
     const card = document.createElement("div"); card.className = "zoom-card";
     const cv = document.createElement("canvas"); cv.width = 300; cv.height = 300;
-    if (S.mirror) cv.classList.add("mirror");
+    if (renderState.mirror) cv.classList.add("mirror");
     const tag = document.createElement("div"); tag.className = "tag"; tag.textContent = r.label;
     card.appendChild(cv); card.appendChild(tag); els.zoomStrip.appendChild(card);
     return { region: r, canvas: cv, ctx: cv.getContext("2d") };
@@ -67,14 +67,14 @@ export function buildZoomCards() {
 }
 
 export function clearZooms() {
-  for (const zc of S.zoomCards) { zc.ctx.fillStyle = "#05070a"; zc.ctx.fillRect(0, 0, zc.canvas.width, zc.canvas.height); }
+  for (const zc of renderState.zoomCards) { zc.ctx.fillStyle = "#05070a"; zc.ctx.fillRect(0, 0, zc.canvas.width, zc.canvas.height); }
 }
 
 // 从已叠加线条的主画布上裁剪关键区域并放大到各窗口（线条随之放大显示）
 export function drawZooms(lm, W) {
-  if (!S.zoom || !S.zoomCards.length) return;
+  if (!renderState.zoom || !renderState.zoomCards.length) return;
   const faceW = faceBBox(lm).w || W;
-  for (const zc of S.zoomCards) {
+  for (const zc of renderState.zoomCards) {
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
     for (const i of zc.region.idx) {
       const p = lm[i]; if (!p) continue;
@@ -92,15 +92,15 @@ export function drawZooms(lm, W) {
 
 // ── 统计 ──────────────────────────────────────────────────────────────────────
 export function updateStats(lm, W, H, lineCount) {
-  const q = Math.round(S.presence * 100);
+  const q = Math.round(sourceState.presence * 100);
   els.qualityVal.textContent = q; els.qualityBar.style.width = q + "%";
-  if (!lm || S.presence <= 0) {
-    els.statState.textContent = S.running ? "搜索中" : "未开始";
+  if (!lm || sourceState.presence <= 0) {
+    els.statState.textContent = sourceState.running ? "搜索中" : "未开始";
     els.statFace.textContent = els.statYaw.textContent = els.statLines.textContent = "—";
-    setLive(S.running && S.sourceKind === "camera", S.running ? els.live.dataset.k || "运行中" : "待机");
+    setLive(sourceState.running && sourceState.sourceKind === "camera", sourceState.running ? els.live.dataset.k || "运行中" : "待机");
     return;
   }
-  els.statState.textContent = S.presence > 0.85 ? "稳定" : "搜索中";
+  els.statState.textContent = sourceState.presence > 0.85 ? "稳定" : "搜索中";
   const bb = faceBBox(lm);
   els.statFace.textContent = Math.round(100 * (bb.w * bb.h) / (W * H)) + "%";
   // 偏航估计：鼻尖相对两颊中点的水平偏移 / 脸宽

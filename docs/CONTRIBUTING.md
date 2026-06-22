@@ -63,9 +63,21 @@ ruff check .                 # 代码风格
 - **新增线系统**：在 `config.constants.VALID_SYSTEMS` 注册，提供对应图谱 JSON 与 `DEFAULT_STYLES` 样式。
 - **Stage 2**：新增**同级子包** `langerface/tumor/`、`langerface/incision/`，复用 `geometry`/`detection`/`rendering`，不要把肿物/切口逻辑塞进 `lines/`。
 
+## Engineering Principles
+
+- **DRY (Don't Repeat Yourself)** – eliminate duplicated logic by extracting shared utilities and modules.
+- **Separation of Concerns** – each module should handle one distinct responsibility.
+- **Single Responsibility Principle (SRP)** – every class/module/function/file should have exactly one reason to change.
+- **Clear Abstractions & Contracts** – expose intent through small, stable interfaces and hide implementation details.
+- **Low Coupling, High Cohesion** – keep modules self-contained and minimize cross-dependencies.
+- **Scalability & Statelessness** – design components to scale horizontally and prefer stateless services when possible.
+- **Observability & Testability** – build in logging, metrics, tracing, and ensure components can be unit/integration tested.
+- **KISS (Keep It Simple, Sir)** – keep solutions as simple as possible.
+- **YAGNI (You're Not Gonna Need It)** – avoid speculative complexity or over-engineering.
+
 ## 约定
 
-- 遵循 DRY / 单一职责 / 低耦合高内聚 / KISS / YAGNI（见本目录文档）。
+- 遵循上面的 Engineering Principles。
 - 新增模块即补单元测试；纯逻辑测试不要依赖资产或 mediapipe。
 - 不提交大二进制 / 人脸影像（`.gitignore` 已拦截，pre-commit 兜底）。
 - 分支开发 + PR，CI（lint + pytest 矩阵 + JS 对拍）需通过。
