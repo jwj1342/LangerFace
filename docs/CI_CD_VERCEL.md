@@ -61,8 +61,8 @@ pull request / push
 - Require a pull request before merging.
 - Require status checks to pass before merging.
 - Require branches to be up to date before merging.
+- Require approvals: `1`.
 - Disable force pushes.
-- 多人协作后可要求至少 1 个 approval。
 
 Required status checks 建议包含：
 
