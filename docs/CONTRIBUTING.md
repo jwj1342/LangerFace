@@ -61,6 +61,8 @@ ruff check .                 # 代码风格
 6. checks 全绿、Preview 验收通过、且至少 1 个 reviewer approval 后，把 Draft PR 标记为 ready 并合并到 `master`。
 7. 合并到 `master` 后，Vercel 自动发布 Production。
 
+PR 描述必须保留“技术资料 / 临床依据”小节。凡涉及医学规则、CV/AI 算法、模型、数据集、部署平台或隐私边界的改动，应在 PR 中列出使用的资料链接、医生团队说明、关联 issue 和设计文档；若不适用，也要显式写“不适用”。这样 reviewer 不需要反向猜测实现依据。
+
 PR 上应关注这些 checks：
 
 | Check | 作用 |
