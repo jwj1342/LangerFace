@@ -5,7 +5,7 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口设
 
 ## Stage 1 收尾
 - [ ] 临床医生校验线图谱并置 `validated:true`（Stage 1 真正出口）— [#2](https://github.com/jwj1342/LangerFace/issues/2)
-      · 现可用[网页 3D 标注](annotation_web.md)在标准脸上直接产出图谱格式
+      · 现可用[网页 3D 标注](ARCHITECTURE.md#12-网页-3d-线标注与图谱校验)在标准脸上直接产出图谱格式
 
 ## 增强
 - [ ] 通用外部遮挡：语义分割识别器械 / 纱布 / 口罩 — [#3](https://github.com/jwj1342/LangerFace/issues/3)

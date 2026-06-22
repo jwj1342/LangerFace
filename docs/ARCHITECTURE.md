@@ -180,3 +180,97 @@ P = u·V0 + v·V1 + w·V2
 - `tools/test_web_architecture.mjs` 会检查 `web/*.js` 的静态相对 import 图，禁止新增模块环。
 - `web/logger.js` 统一记录浏览器端关键故障与降级事件；调试时可在控制台查看 `window.langerfaceDiagnostics`。
 - `web/.npmrc` 启用 `engine-strict=true`，安装依赖时会严格执行 `package.json` 中的 Node/npm 版本要求。
+
+---
+
+## 12. 网页 3D 线标注与图谱校验
+
+网页 3D 标注把医生在 3D 头模上标注张力线的工作流，从桌面专业软件（早期 3D Slicer 方案）搬进**浏览器**：
+与项目现有 Vite + Three.js 前端同栈、零安装，并能直接导出项目图谱格式。
+
+### 打开方式
+
+```bash
+cd web
+npm run dev
+# 浏览器打开 Vite 地址下的 /annotate.html，例如 http://127.0.0.1:5173/annotate.html
+```
+
+生产构建（Vercel）已把 `annotate.html` 纳入多页入口，配置见 [`web/vite.config.js`](../web/vite.config.js)。
+
+### 标注工作流
+
+1. **加载网格**：点「加载标准脸」使用内置标准脸网格；或「上传头模 JSON」（`{vertices:[[x,y,z]...], triangles:[[a,b,c]...]}`）。
+2. **选线系统**：RSTL（首选）/ Langer；可填写线名与区域。
+3. **画线**：拖拽旋转、滚轮缩放；点击在网格表面落控制点。相邻控制点会沿三角网格表面连接，避免直接穿过头模。
+4. **保存线**：一条线至少 2 个控制点；保存后可继续标下一条线，也可从列表中编辑或删除已保存线。
+5. **导出**：
+   - **导出图谱**（仅标准脸）：输出 langerface 图谱格式，每点 `[三角面 id, u, v]`（重心坐标，`w=1-u-v`），与 [`src/langerface/lines/atlas.py`](../src/langerface/lines/atlas.py)、`assets/atlas_*.json` 一致。
+   - **导出 xyz**（任意头模）：输出 3D 折线坐标（`[x,y,z]`，网格局部坐标），与 `tools/headspace` 的 `*_xyz` 线兼容。
+
+### 接入项目
+
+- **临床校验闭环（issue #2）**：医生在标准脸上画/改线 → 导出图谱 → 评审后替换 `assets/atlas_rstl.json` / `assets/atlas_langer.json`，将 `validated` 置 `true`，并在 `provenance` 记录校验者。
+- **3D 头模标注**：HeadSpace 等头模经离线管线导出为 `{vertices, triangles}` JSON 后，可在 `/annotate.html` 上传加载；标注得到的 xyz 线可继续经 `langerface.geometry`（加权 Sim3）在头模与标准脸之间迁移。
+- **数据隐私**：真实头模（HeadSpace / FaceScape）不入库，仅本地使用；标注产物（图谱/xyz JSON，仅坐标）可入库评审。
+
+### 实现文件
+
+| 文件 | 职责 |
+|---|---|
+| `web/annotate_model.js` | 纯数据模型：线/点管理、表面路径展开、重心坐标、导出图谱/xyz（node 可单测，见 `tools/test_annotate_model.mjs`） |
+| `web/annotate_viewer.js` | Three.js 场景：网格加载、射线表面拾取、线与控制点渲染 |
+| `web/annotate_main.js` | UI、模型、视图装配（指针拖拽/点击、导出、列表、快捷键） |
+| `web/annotate.html` / `web/annotate.css` | 标注页与样式 |
+
+---
+
+## 13. HeadSpace / FaceScape 离线数据与配准管线
+
+`tools/headspace/` 是把模板张力线配准到 3D 头模的离线管线：多视角标定 → 3D 关键点 → 加权 Sim3 配准 + 局部残差 → 渲染/叠加。该部分整理自外部实现（`pre_facegeo_headspace_pipeline`），可复用算法核心已收敛到 `langerface` 包，脚本层只保留数据集相关 I/O、编排与渲染。
+
+### 数据获取与本地目录
+
+HeadSpace / FaceScape 数据集受许可限制，且含真人生物特征，因此**不随本仓库分发，也不应提交到公开仓库**。请各自申请许可后放在本地目录；仓库已通过 `.gitignore` 忽略数据目录。
+
+- **HeadSpace**：多视角 PNG + `.tka` 标定 + textured OBJ。
+- **FaceScape**：模板头模 / landmarks。
+
+本地目录示例（可经 CLI 参数覆盖）：
+
+```
+tools/headspace/data/            # 本地，被 .gitignore 忽略
+├─ headspacePngTka/              # 多视角采集：subjects/<sid>/<capture>/*.png + calib_*.tka
+├─ headspaceOnline/              # textured OBJ：subjects/<sid>/<capture>.obj(.mtl/.bmp)
+└─ out/                          # 检测/融合/配准/渲染产物
+```
+
+脚本通过 `--png_tka_root / --online_root / --out_root / --target_mesh / ...` 指定路径，无内置绝对路径默认值。
+`assets/face_landmarker.task`（仓库已含）即 MediaPipe Face Landmarker，脚本默认用它，无需另置外部副本。
+
+### 算法核心
+
+| 能力 | 包内位置（已测试） |
+|---|---|
+| 加权 Umeyama / Sim3、`apply_sim3`、折线重采样 | `langerface.geometry`（`alignment.py` / `polyline.py`） |
+| 多视角关键点融合、关键点加权 | `langerface.registration.landmarks` |
+| 标定相机射线 / 投影 / 射线-网格求交 | `langerface.registration.camera` |
+
+`tools/headspace/scripts/` 里的脚本通过 `from langerface... import ...` 消费上述核心，避免重复实现。
+
+### 脚本清单
+
+- `headspace_detect_468_landmarks.py`：多视角 PNG+TKA 上检测 MediaPipe 468 点。
+- `headspace_fuse_468_from_tka.py`：用 TKA 标定把 2D 点抬升并融合为 3D 关键点。
+- `lmk2d_to_3d_and_prealign_weighted_multiview.py`：多视角加权 Sim3 预对齐 CLI（也是兄弟脚本的核心 re-export 入口）。
+- `facescape_to_headspace_468_sim3.py`：模板线 → 目标头模的 Sim3 配准。
+- `headspace_apply_local_residual.py`：全局 Sim3 之上的局部残差场修正。
+- `headspace_eval_sim3_regions.py`：配准区域误差评估。
+- `headspace_overlay_lines_on_tka_image.py` / `headspace_overlay_mesh_projection_on_tka_image.py`：投影到真实采集照片。
+- `render_headspace_*.py`：Blender 渲染（转台 / TKA 视角 / 视频 / 正脸），需 `bpy` + `ffmpeg`。
+
+### 依赖与网页标注关系
+
+`pip install -e ".[mediapipe]"` + `trimesh`；Blender 脚本另需 Blender 与 ffmpeg。脚本均为 argparse 驱动，原作者机器上的绝对路径默认值已移除（改为 `required`）。
+
+离线管线产出/配准 3D 头模与线；交互式标注/校验使用网页 `/annotate.html`。把头模导出为 `{vertices, triangles}` JSON 后上传到标注页，导出的标注线（xyz / 图谱）只含坐标，可入库评审。

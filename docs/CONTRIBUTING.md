@@ -58,7 +58,7 @@ ruff check .                 # 代码风格
 3. push 分支并创建 PR。可以先开 Draft PR。
 4. 等 GitHub Actions 和 Vercel Preview check 自动运行。
 5. 打开 PR 里的 Vercel Preview 链接做人工验收。
-6. checks 全绿、Preview 验收通过后，把 Draft PR 标记为 ready 并合并到 `master`。
+6. checks 全绿、Preview 验收通过、且至少 1 个 reviewer approval 后，把 Draft PR 标记为 ready 并合并到 `master`。
 7. 合并到 `master` 后，Vercel 自动发布 Production。
 
 PR 上应关注这些 checks：
@@ -87,6 +87,7 @@ Preview 人工验收清单：
   - 自动化测试：只使用 Vercel Protection Bypass for Automation，secret 放在 GitHub Secrets；不要把 bypass token 当作人工分享链接。
   - 只有确认 Preview 不含受限头模、真实人脸影像或未公开数据时，才考虑关闭 Preview protection。
 - PR Preview 和生产站不是同一个地址。验证分支改动时不要只看 `https://langer-face.vercel.app`；那是 `master` 的 Production。
+- `master` 受 GitHub Branch Protection 保护：PR 合并前必须通过必需 checks，并至少获得 1 个 approving review。
 - 详细的 Vercel 项目设置、branch protection 和排障信息见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md)。
 
 ## 架构与扩展点
@@ -127,4 +128,4 @@ Preview 人工验收清单：
 - 遵循上面的 Engineering Principles。
 - 新增模块即补单元测试；纯逻辑测试不要依赖资产或 mediapipe。
 - 不提交大二进制 / 人脸影像（`.gitignore` 已拦截，pre-commit 兜底）。
-- 分支开发 + PR；CI、Vercel Preview 和必要的人工验收需通过后再合并。
+- 分支开发 + PR；CI、Vercel Preview、至少 1 个 reviewer approval 和必要的人工验收需通过后再合并。

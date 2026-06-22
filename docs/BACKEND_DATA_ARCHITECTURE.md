@@ -1,9 +1,9 @@
-# ADR-0001：后端与数据层架构
+# 后端与数据层架构
 
 - **状态**：Accepted
 - **日期**：2026-06-22
 - **决策者**：项目组
-- **相关**：issue #2（临床校验图谱）、[annotation_web.md](annotation_web.md)、[headspace_pipeline.md](headspace_pipeline.md)
+- **相关**：issue #2（临床校验图谱）、[ARCHITECTURE.md](ARCHITECTURE.md#12-网页-3d-线标注与图谱校验)、[ARCHITECTURE.md](ARCHITECTURE.md#13-headspace--facescape-离线数据与配准管线)
 
 ## 背景
 
@@ -44,7 +44,7 @@ Cloudflare Workers 是 V8 隔离 /（Python 版）Pyodide-WASM 运行时，**不
 
 ## 重计算边界（明确约束）
 
-本 ADR 中的**重计算**指：不能作为一次普通在线 API 请求稳定完成、且依赖原生 Python/图像/网格/视频工具链的计算。它通常具有以下特征之一：运行时间长、输入/输出文件大、需要本地文件系统、需要 OpenCV / MediaPipe / trimesh / Blender / ffmpeg 等原生依赖、需要 HPC/GPU/批处理调度，或处理受限/生物特征数据。
+本文中的**重计算**指：不能作为一次普通在线 API 请求稳定完成、且依赖原生 Python/图像/网格/视频工具链的计算。它通常具有以下特征之一：运行时间长、输入/输出文件大、需要本地文件系统、需要 OpenCV / MediaPipe / trimesh / Blender / ffmpeg 等原生依赖、需要 HPC/GPU/批处理调度，或处理受限/生物特征数据。
 
 归入重计算的内容包括：
 
@@ -55,7 +55,7 @@ Cloudflare Workers 是 V8 隔离 /（Python 版）Pyodide-WASM 运行时，**不
 | HeadSpace 多视角管线 | 相机模型、射线-网格求交、多视角融合、局部残差修正 | 本地 / HPC |
 | 网格投影、纹理、重采样、批量资产导出 | 大对象和几何处理，不适合短请求 Worker | 本地 / HPC |
 | OpenCV / ffmpeg / Blender 渲染 | 原生二进制、长任务、文件系统依赖 | 本地 / HPC |
-| Stage 2 肿物模拟 / 切口候选优化 | 一旦涉及约束优化、批量评估或复杂几何，即视为重计算 | 先放本地 / HPC，另开 ADR 决定是否在线化 |
+| Stage 2 肿物模拟 / 切口候选优化 | 一旦涉及约束优化、批量评估或复杂几何，即视为重计算 | 先放本地 / HPC，另开设计文档决定是否在线化 |
 
 不归入重计算、可以放在 Worker 的内容包括：
 
@@ -86,7 +86,7 @@ Worker
   加载产物做查看、标注、复核和导出
 ```
 
-如果未来确实需要从网页触发计算，Worker 也只应创建作业记录、校验权限、返回作业 id；实际 runner 由本地/HPC/单独 Python 服务轮询或接收任务执行。引入在线 Python 计算服务（Fly/Render/VM/HPC 调度器等）必须另开 ADR，单独评估运行时、成本、隐私、合规、队列与失败恢复。
+如果未来确实需要从网页触发计算，Worker 也只应创建作业记录、校验权限、返回作业 id；实际 runner 由本地/HPC/单独 Python 服务轮询或接收任务执行。引入在线 Python 计算服务（Fly/Render/VM/HPC 调度器等）必须另开设计文档，单独评估运行时、成本、隐私、合规、队列与失败恢复。
 
 ## 数据分层
 
@@ -198,7 +198,7 @@ UI 不直接 `fetch("assets/...")` 或下载文件，改为调用一个数据源
 
 ## 离线重计算
 
-`langerface` 的配准/重建/渲染继续在**本地/HPC**批处理；产物（网格、recon JSON）上传 R2、元数据登记 D1。**不**作为在线 Worker 端点。若将来确需在线重计算，再单独引入能跑 Python 原生的服务（Fly/Render/VM/HPC），届时另开 ADR。
+`langerface` 的配准/重建/渲染继续在**本地/HPC**批处理；产物（网格、recon JSON）上传 R2、元数据登记 D1。**不**作为在线 Worker 端点。若将来确需在线重计算，再单独引入能跑 Python 原生的服务（Fly/Render/VM/HPC），届时另开设计文档。
 
 ## 后果
 
@@ -223,4 +223,4 @@ UI 不直接 `fetch("assets/...")` 或下载文件，改为调用一个数据源
 
 - **Phase 0（现在）**：静态 Vercel + 网页标注**下载 JSON** → 评审 → 提交进仓库（issue #2 单图谱闭环，无需后端）。**现在就低成本埋 `web/data_source.js`（LocalDataSource 实现）**。
 - **Phase 1（触发：多用户在线标注持久化 / 在线服务受限头模）**：起 Worker + D1 + R2，实现 `ApiDataSource`。
-- **Phase 2（触发：需要在线重计算）**：单独 Python 服务（另开 ADR）。
+- **Phase 2（触发：需要在线重计算）**：单独 Python 服务（另开设计文档）。
