@@ -12,13 +12,12 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 
 import numpy as np
 
-from langerface.lines import Atlas, AtlasLine          # noqa: E402
-from langerface.geometry import CanonicalFaceModel    # noqa: E402
-from langerface.config import CANONICAL_OBJ, ATLAS_PATHS, VALID_SYSTEMS  # noqa: E402
+from langerface.config import ATLAS_PATHS, CANONICAL_OBJ, VALID_SYSTEMS  # noqa: E402
+from langerface.geometry import CanonicalFaceModel  # noqa: E402
+from langerface.lines import Atlas, AtlasLine  # noqa: E402
 
 
 def main() -> int:
@@ -68,12 +67,16 @@ def main() -> int:
             current = []
             redraw()
         elif event.key == "u" and current:
-            current.pop(); redraw()
+            current.pop()
+            redraw()
         elif event.key == "d" and completed:
-            completed.pop(); ax.lines[-1].remove(); fig.canvas.draw_idle()
+            completed.pop()
+            ax.lines[-1].remove()
+            fig.canvas.draw_idle()
         elif event.key == "w":
             if len(current) >= 2:
-                completed.append(np.asarray(current)); current = []
+                completed.append(np.asarray(current))
+                current = []
             atlas = Atlas(system=args.system, version="0.1",
                           provenance=f"digitized from diagram {os.path.basename(args.diagram)}",
                           validated=False)
@@ -84,7 +87,10 @@ def main() -> int:
                     out[i] = [tri, bary[0], bary[1]]
                 atlas.lines.append(AtlasLine(f"line_{k}", "digitized", out))
             atlas.save(ATLAS_PATHS[args.system])
-            print(f"[ok] 已保存 {len(completed)} 条曲线 -> {ATLAS_PATHS[args.system]}（validated=false，待临床校验）")
+            print(
+                f"[ok] 已保存 {len(completed)} 条曲线 -> "
+                f"{ATLAS_PATHS[args.system]}（validated=false，待临床校验）"
+            )
         elif event.key == "q":
             plt.close(fig)
 

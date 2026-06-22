@@ -11,7 +11,7 @@
     rendering/   叠加渲染、遮挡剔除
     pipeline/    高层编排（检测→平滑→映射→剔除→渲染）
     media/       视频 I/O 与逐帧处理工具
-    apps/        命令行 / 摄像头 / 网页入口（瘦壳）
+    apps/        命令行 / 摄像头入口（瘦壳）
 
 Stage 2（计划中）将以同级子包 tumor/、incision/ 接入，复用 geometry/detection/rendering。
 
@@ -24,11 +24,11 @@ __version__ = "0.2.0"
 
 # 稳定的顶层公共 API —— 子包内部的文件组织对调用方隐藏。
 from .config import (  # noqa: E402
+    SYSTEM_LANGER,
+    SYSTEM_RSTL,
+    VALID_SYSTEMS,
     Config,
     LineStyle,
-    SYSTEM_RSTL,
-    SYSTEM_LANGER,
-    VALID_SYSTEMS,
     build_config,
 )
 

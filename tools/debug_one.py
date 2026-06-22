@@ -19,6 +19,7 @@ FACE_OVAL = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOCAL_MEDIA = os.path.join(REPO, "local_media")
+DEBUG_DIR = os.path.join(REPO, "local_outputs", "debug_frames")
 
 
 def main():
@@ -51,13 +52,16 @@ def main():
         x0, x1 = int(xs.min()), int(xs.max())
         y0, y1 = int(ys.min()), int(ys.max())
         pad = int(0.25 * (x1 - x0))
-        x0 = max(0, x0 - pad); y0 = max(0, y0 - pad)
-        x1 = min(frame.shape[1], x1 + pad); y1 = min(frame.shape[0], y1 + pad)
+        x0 = max(0, x0 - pad)
+        y0 = max(0, y0 - pad)
+        x1 = min(frame.shape[1], x1 + pad)
+        y1 = min(frame.shape[0], y1 + pad)
         crop = overlay[y0:y1, x0:x1]
     else:
         crop = overlay
 
-    out = f"debug_frames/one_{system}_{idx:04d}.png"
+    os.makedirs(DEBUG_DIR, exist_ok=True)
+    out = os.path.join(DEBUG_DIR, f"one_{system}_{idx:04d}.png")
     cv2.imwrite(out, crop)
     print(f"saved {out}  shape={crop.shape}")
 

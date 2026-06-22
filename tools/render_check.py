@@ -6,11 +6,10 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 
 import cv2
 
-from langerface.config import Config, DEFAULT_STYLES, LineStyle
+from langerface.config import DEFAULT_STYLES, Config, LineStyle
 from langerface.pipeline import LinePipeline
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,7 +32,8 @@ def main():
     ok, frame = cap.read()
     cap.release()
     if not ok:
-        print("cannot read frame"); return 1
+        print("cannot read frame")
+        return 1
 
     cfg = Config(system=args.system)
     cfg.occlusion = not args.no_occlusion

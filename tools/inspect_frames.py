@@ -10,17 +10,18 @@ import sys
 import cv2
 import numpy as np
 
-from langerface.config import Config             # noqa: E402
+from langerface.config import Config  # noqa: E402
 from langerface.detection import FaceLandmarkDetector  # noqa: E402
-from langerface.pipeline import LinePipeline     # noqa: E402
+from langerface.pipeline import LinePipeline  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOCAL_MEDIA = os.path.join(REPO, "local_media")
+DEBUG_DIR = os.path.join(REPO, "local_outputs", "debug_frames")
 
 
 def main():
     video = sys.argv[1] if len(sys.argv) > 1 else os.path.join(LOCAL_MEDIA, "IMG_3458.MOV")
-    outdir = "debug_frames"
+    outdir = DEBUG_DIR
     os.makedirs(outdir, exist_ok=True)
 
     cap = cv2.VideoCapture(video)

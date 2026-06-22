@@ -48,8 +48,8 @@ class Atlas:
 
     # ── I/O ───────────────────────────────────────────────────────────────────
     @classmethod
-    def load(cls, path: str) -> "Atlas":
-        with open(path, "r", encoding="utf-8") as f:
+    def load(cls, path: str) -> Atlas:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         lines = [
             AtlasLine(

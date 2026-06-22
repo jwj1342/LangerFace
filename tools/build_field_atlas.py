@@ -14,14 +14,13 @@
 from __future__ import annotations
 
 import math
-import os
 import sys
 
 import numpy as np
 
-from langerface.lines import Atlas, AtlasLine
+from langerface.config import ATLAS_PATHS, CANONICAL_OBJ, SYSTEM_LANGER, SYSTEM_RSTL
 from langerface.geometry import CanonicalFaceModel
-from langerface.config import CANONICAL_OBJ, ATLAS_PATHS, SYSTEM_RSTL, SYSTEM_LANGER
+from langerface.lines import Atlas, AtlasLine
 
 
 # ── 人脸掩膜（椭圆，挖去眼/口）──────────────────────────────────────────────────
@@ -210,7 +209,7 @@ def main():
     canonical = CanonicalFaceModel.from_obj(CANONICAL_OBJ)
     for variant in (SYSTEM_RSTL, SYSTEM_LANGER):
         atlas = build(canonical, variant, d_sep)
-        npts = sum(len(l.points) for l in atlas.lines)
+        npts = sum(len(line.points) for line in atlas.lines)
         issues = atlas.validate(len(canonical.triangles))
         if issues:
             print(f"[warn] {variant}: {issues[:3]}")

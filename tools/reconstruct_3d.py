@@ -15,9 +15,9 @@ import sys
 import cv2
 import numpy as np
 
-from langerface.geometry import CanonicalFaceModel
 from langerface.config import CANONICAL_OBJ, FACE_LANDMARKER_TASK
 from langerface.detection import FaceLandmarkDetector
+from langerface.geometry import CanonicalFaceModel
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOCAL_MEDIA = os.path.join(REPO, "local_media")

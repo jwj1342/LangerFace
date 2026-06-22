@@ -4,7 +4,6 @@
 mediapipe>=0.10.14      # Face Landmarker: 478 个 3D 关键点，image/video/live 模式
 opencv-python>=4.9      # 视频 I/O 与抗锯齿折线渲染
 numpy>=1.26
-gradio>=4.0             # 网页上传界面
 matplotlib>=3.8         # annotate_atlas.py 交互式图谱标注/校验工具
 
 # 可选

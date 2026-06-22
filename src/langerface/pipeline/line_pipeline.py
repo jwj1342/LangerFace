@@ -13,8 +13,8 @@ import os
 
 import numpy as np
 
-from ..config.settings import Config
 from ..config.constants import VALID_SYSTEMS
+from ..config.settings import Config
 from ..detection.base import Detector
 from ..detection.mediapipe_detector import FaceLandmarkDetector
 from ..detection.smoothing import LandmarkSmoother

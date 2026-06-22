@@ -25,7 +25,7 @@ from .constants import (
     SYSTEM_RSTL,
     VALID_SYSTEMS,
 )
-from .settings import Config, DEFAULT_STYLES, LineStyle, build_config
+from .settings import DEFAULT_STYLES, Config, LineStyle, build_config
 
 __all__ = [
     # 线系统

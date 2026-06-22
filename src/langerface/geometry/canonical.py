@@ -27,14 +27,14 @@ class CanonicalFaceModel:
 
     # ── 解析 .obj ────────────────────────────────────────────────────────────
     @classmethod
-    def from_obj(cls, path: str) -> "CanonicalFaceModel":
+    def from_obj(cls, path: str) -> CanonicalFaceModel:
         require_asset(path, what="标准脸模型")
         verts: list[tuple[float, float, float]] = []
         texs: list[tuple[float, float]] = []
         faces: list[tuple[int, int, int]] = []
         vt_of_v: dict[int, int] = {}  # 顶点 -> 对应的 vt 索引（取首次出现）
 
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        with open(path, encoding="utf-8", errors="ignore") as f:
             for line in f:
                 if line.startswith("v "):
                     _, x, y, z = line.split()[:4]

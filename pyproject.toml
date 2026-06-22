@@ -20,15 +20,13 @@ dependencies = [
 # Detection backend is pluggable (see detection.Detector); mediapipe is one impl.
 # Kept optional so the core lib + test suite install without it (tests inject fakes).
 mediapipe = ["mediapipe>=0.10.14"]   # Face Landmarker: 478 3D landmarks (image/video/live)
-web = ["gradio>=4.0"]                 # apps.gradio_app upload UI
 annotate = ["matplotlib>=3.8"]        # interactive atlas annotation/validation tools
 dev = ["pytest>=8.0", "ruff>=0.5"]
-all = ["langerface[mediapipe,web,annotate,dev]"]
+all = ["langerface[mediapipe,annotate,dev]"]
 
 [project.scripts]
 langerface = "langerface.apps.cli:main"
 langerface-webcam = "langerface.apps.webcam:main"
-langerface-web = "langerface.apps.gradio_app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -39,7 +37,7 @@ version = { attr = "langerface.__version__" }
 [tool.ruff]
 line-length = 110
 target-version = "py310"
-src = ["src", "apps", "tools", "tests"]
+src = ["src", "tools", "tests"]
 
 [tool.ruff.lint]
 # E402 (import not at top) is intentional in a couple of tool scripts; keep the rest strict.

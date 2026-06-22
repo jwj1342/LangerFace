@@ -19,14 +19,13 @@ from __future__ import annotations
 import argparse
 import getpass
 import os
-import sys
 from datetime import datetime
 
 import numpy as np
 
-from langerface.lines import Atlas, AtlasLine          # noqa: E402
-from langerface.geometry import CanonicalFaceModel    # noqa: E402
-from langerface.config import CANONICAL_OBJ, ATLAS_PATHS, VALID_SYSTEMS  # noqa: E402
+from langerface.config import ATLAS_PATHS, CANONICAL_OBJ, VALID_SYSTEMS  # noqa: E402
+from langerface.geometry import CanonicalFaceModel  # noqa: E402
+from langerface.lines import Atlas, AtlasLine  # noqa: E402
 
 
 def main() -> int:
@@ -113,9 +112,13 @@ def main() -> int:
 
 
 def _save(canonical, proj, completed, system, path):
+    provenance = (
+        f"clinician-annotated by {getpass.getuser()} "
+        f"at {datetime.now().isoformat(timespec='seconds')}"
+    )
     atlas = Atlas(
         system=system, version="0.1",
-        provenance=f"clinician-annotated by {getpass.getuser()} at {datetime.now().isoformat(timespec='seconds')}",
+        provenance=provenance,
         validated=True,
     )
     for k, pts2d in enumerate(completed):

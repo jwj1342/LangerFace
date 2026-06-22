@@ -9,8 +9,8 @@ cv2 延迟导入，保持纯逻辑模块在无 OpenCV 环境下可被导入。
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Callable, Iterator
 
 import numpy as np
 

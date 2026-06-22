@@ -7,16 +7,14 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 
 import cv2
 import numpy as np
 
-from langerface.lines import Atlas
-from langerface.geometry import CanonicalFaceModel
-from langerface.config import CANONICAL_OBJ, ATLAS_PATHS, FACE_LANDMARKER_TASK
+from langerface.config import ATLAS_PATHS, CANONICAL_OBJ, FACE_LANDMARKER_TASK
 from langerface.detection import FaceLandmarkDetector
-from langerface.lines import map_atlas
+from langerface.geometry import CanonicalFaceModel
+from langerface.lines import Atlas, map_atlas
 from langerface.rendering import BackfaceCuller
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

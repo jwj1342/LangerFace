@@ -10,6 +10,7 @@ import numpy as np
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOCAL_MEDIA = os.path.join(REPO, "local_media")
+DEBUG_DIR = os.path.join(REPO, "local_outputs", "debug_frames")
 
 video = sys.argv[1] if len(sys.argv) > 1 else os.path.join(LOCAL_MEDIA, "out_rstl.mp4")
 cap = cv2.VideoCapture(video)
@@ -32,5 +33,7 @@ h = min(t.shape[0] for t in tiles)
 w = min(t.shape[1] for t in tiles)
 tiles = [t[:h, :w] for t in tiles]
 rows = [np.hstack(tiles[r * 4:r * 4 + 4]) for r in range(4)]
-cv2.imwrite("debug_frames/montage.png", np.vstack(rows))
-print("saved debug_frames/montage.png frames", idxs)
+os.makedirs(DEBUG_DIR, exist_ok=True)
+out = os.path.join(DEBUG_DIR, "montage.png")
+cv2.imwrite(out, np.vstack(rows))
+print(f"saved {out} frames", idxs)

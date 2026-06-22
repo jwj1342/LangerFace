@@ -10,9 +10,10 @@ import numpy as np
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOCAL_MEDIA = os.path.join(REPO, "local_media")
+DEBUG_DIR = os.path.join(REPO, "local_outputs", "debug_frames")
 
 video = sys.argv[1] if len(sys.argv) > 1 else os.path.join(LOCAL_MEDIA, "out_rstl.mp4")
-outdir = "debug_frames"
+outdir = DEBUG_DIR
 os.makedirs(outdir, exist_ok=True)
 
 cap = cv2.VideoCapture(video)

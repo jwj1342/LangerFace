@@ -13,14 +13,17 @@ venv/
 logs/
 *.log
 
+# Local archives / external bundles
+local_archives/
+
 # Local Claude Code settings
 .claude/settings.local.json
 
 # Personal face footage / imagery — not for public repo
 local_media/
+local_outputs/
 *.MOV
 *.mov
 *.mp4
-debug_frames/
 web/test/face.jpg
 web/test/face_small.jpg

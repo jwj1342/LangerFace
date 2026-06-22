@@ -10,18 +10,34 @@
 ---
 
 ## 目录
+- [项目定位](#项目定位)
 - [它能做什么](#它能做什么)
 - [核心原理（为什么稳，而非"图一乐"）](#核心原理)
 - [两条技术路线](#两条技术路线)
 - [快速开始 / 复现](#快速开始--复现)
 - [使用方式](#使用方式)
 - [线条图谱（数据）](#线条图谱数据)
-- [代码结构](#代码结构)
+- [目录结构](#目录结构)
 - [验证与测试](#验证与测试)
 - [已知局限](#已知局限)
 - [部署（Vercel）](#部署vercel)
+- [开发文档](#开发文档)
 - [后续路线图](#后续路线图)
 - [文档维护约定](#文档维护约定)
+
+---
+
+## 项目定位
+
+LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它把医学上可校验、可编辑的 RSTL / Langer 线图谱编码到 MediaPipe 标准脸网格上，再在照片、视频或实时摄像头画面中将图谱稳定映射到当前人脸。
+
+项目分成三层：
+
+1. **领域数据层**：`assets/` 与 `web/assets/` 保存标准脸、关键点模型、三角拓扑和线条图谱。
+2. **核心算法层**：`src/langerface/` 和 `web/geometry.js` 实现关键点输入、重心坐标映射、平滑、遮挡、渲染与 3D 配准。
+3. **用户界面层**：`web/` 提供唯一正式前端；`src/langerface/apps/` 只保留 CLI 和 OpenCV webcam 入口。
+
+当前阶段是 **Stage 1：稳定显示面部 RSTL / Langer 皮肤张力线**。Stage 2 才会扩展到肿物模拟、切口设计和更完整的术前辅助工作流。项目不训练自定义医学模型，不上传用户图像，也不声称自动给出手术方案。
 
 ---
 
@@ -136,7 +152,6 @@ npm run dev                      # Vite dev server，默认 http://127.0.0.1:517
 langerface --image face.jpg --system rstl -o out.png
 langerface --video clip.mp4 --system langer -o out.mp4
 langerface-webcam --system rstl          # 原生窗口实时（热键 t/o/s/q）
-langerface-web                          # Gradio 上传界面（非实时）
 ```
 
 ### 临床校验图谱（关键）
@@ -159,37 +174,33 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 
 ---
 
-## 代码结构
+## 目录结构
 
-```
-src/langerface/           # Python 核心库（分层包，可 editable install）
-  config/                 # 配置、常量、资产路径
-  geometry/               # 标准脸、投影、重心坐标等几何
-  detection/              # Detector 协议 + MediaPipe 后端（可选依赖）
-  lines/                  # Atlas 数据模型与映射
-  rendering/              # 背面剔除、抗锯齿线条叠加
-  pipeline/               # LinePipeline 编排
-  media/                  # 视频 I/O
-  apps/                   # console scripts: langerface / langerface-webcam / langerface-web
+| 路径 | 作用 |
+|---|---|
+| `.claude/` | Claude Code 相关启动配置；本地私有设置文件已被 `.gitignore` 排除。 |
+| `.github/` | GitHub Actions CI；包含 Python 测试、JS/Vite 构建和几何对拍。 |
+| `assets/` | Python 端权威资产：MediaPipe 标准脸 obj、人脸 landmarker `.task`、RSTL/Langer atlas JSON。 |
+| `docs/` | 项目文档：架构、医学声明、环境配置、贡献指南。 |
+| `src/langerface/` | Python 核心库，按 `config/geometry/detection/lines/rendering/pipeline/media/apps` 分层。 |
+| `tests/` | pytest 测试，覆盖图谱、标准脸、映射、稳定性、渲染和 pipeline 行为。 |
+| `tools/` | 资产下载、图谱生成、web 资产导出、3D 重建、临床标注、目检和对拍脚本。 |
+| `web/` | Vite 8 前端；原生 ES Modules + Canvas 2D + MediaPipe Tasks + Three.js 3D Beta。 |
+| `web/assets/` | 浏览器端静态资产，由 `tools/export_web_assets.py` 同步或复制。 |
+| `web/test/` | JS/Python 几何对拍用 ground truth 和本地测试图像；真实图片被忽略。 |
+| `local_media/` | 本地视频、照片和输出视频，例如 `IMG_3458.MOV`、`out_rstl.mp4`；不提交。 |
+| `logs/` | 本地运行日志；不提交。 |
+| `local_outputs/` | 本地调试输出，例如 `local_outputs/debug_frames/` 里的目检截图和拼图；不提交。 |
+| `local_archives/` | 本地压缩包、外部资料归档；不提交。 |
 
-web/                      # Vite + 原生 ES Modules 前端（全程本地，无服务器推理）
-  index.html              # 仪表盘 UI 外壳
-  style.css               # 前端样式
-  main.js                 # 入口：事件绑定与初始化
-  pipeline.js             # 摄像头/上传、MediaPipe 初始化、主循环
-  render.js               # Canvas 2D 线条/放大窗/统计渲染
-  mode3d.js               # 3D Beta 路线调度、扫描、投影
-  geometry.js             # 纯几何（Node 可测）：映射/遮挡/平滑/手部掩膜/Umeyama
-  three3d.js              # Three.js 重建头查看 + 线条贴面（按需动态加载）
-  assets.js               # Vite ?url 静态资产入口
-  assets/                 # triangles/atlas/canonical_vertices/recon_demo + 两个 .task 模型
-  package.json            # Vite 8 / Node 24 前端工程
+关键文件：
 
-tools/                    # 资产下载/图谱生成/导出/重建/标注/服务器/各种目检与测试脚本
-tests/                    # pytest：atlas/canonical/mapping/stability/render/pipeline
-assets/                   # canonical_face_model.obj · face_landmarker.task · atlas_*.json
-docs/                     # 医学声明、架构说明等
-```
+| 文件 | 作用 |
+|---|---|
+| `pyproject.toml` | Python 包元数据、可选依赖、console scripts、ruff/pytest 配置。 |
+| `requirements.txt` | 兼容旧流程的 Python 依赖入口；推荐使用 `pip install -e ".[all]"`。 |
+| `web/package.json` | Node 24 / Vite 8 前端脚本和 npm 依赖。 |
+| `web/vite.config.js` | Vite 静态资产处理、生产构建和本地 dev server 配置。 |
 
 ---
 
@@ -234,6 +245,13 @@ Vercel 自动提供 **HTTPS**，因此线上 `getUserMedia`（摄像头）可用
 - **更新流程**：改完 `web/` 后（若动了图谱/几何/3D 资产，先 `python3 tools/export_web_assets.py` 重新导出），再 `cd web && npm run build && npx vercel deploy --prod`。
 - **隐私**：`web/assets/recon_demo.json` 是示例视频重建出的 3D 人头，会随站点**公开**。不想公开就把它加入 `web/.vercelignore`（此时网页"用示例重建"按钮会失效，仍可用"转头扫描"）。
 
+## 开发文档
+
+- [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md)：本地环境、集群环境、venv、Node 24、测试与本地产物目录。
+- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)：协作流程、测试约定、扩展点和 PR 要求。
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：核心算法、坐标系、2D/3D 路线、资产与部署细节。
+- [docs/MEDICAL.md](docs/MEDICAL.md)：医学声明、图谱状态和临床局限。
+
 ## 后续路线图
 
 - [ ] 临床医生校验图谱，置 `validated:true`
@@ -245,6 +263,6 @@ Vercel 自动提供 **HTTPS**，因此线上 `getUserMedia`（摄像头）可用
 
 ## 文档维护约定
 
-**本仓库的 [README.md](README.md) 与 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 必须与代码保持同步。**
-任何功能更新（新增/修改特性、改动数据流、增删模块或资产、调整使用方式）都要在同一改动中更新这两份文档，
+**本仓库的 [README.md](README.md)、[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、[docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) 必须与代码保持同步。**
+任何功能更新（新增/修改特性、改动数据流、增删模块或资产、调整使用方式）都要在同一改动中更新这些文档，
 确保"读文档即可了解全貌并复现项目"。医学相关变化同时更新 [docs/MEDICAL.md](docs/MEDICAL.md)。
