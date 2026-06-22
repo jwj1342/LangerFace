@@ -1,10 +1,11 @@
 // 3D 重建（Beta）：转头扫描/示例重建 → 旋转查看 → 相似变换投影回实时画面。
 import { RIGID3D } from "./constants.js";
 import { assetUrls } from "./assets.js";
+import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./camera.js";
 import { els } from "./dom.js";
 import { applySim, toPixels, umeyama } from "./geometry.js";
 import { countMetric, logWarn } from "./logger.js";
-import { ensureReady, startCamera, stopSource } from "./pipeline.js";
+import { ensureReady, showCameraPlaceholder, startCamera, stopSource } from "./pipeline.js";
 import { modelState, reconState, renderState, sourceState } from "./state.js";
 import { setLive, setMsg } from "./ui.js";
 
@@ -83,12 +84,16 @@ export async function startScan() {
   els.reconStatus.textContent = "加载模型…"; await ensureReady();
   const ref = await fetchCanonicalRef(); const refRigid = RIGID3D.map((i) => ref[i]);
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: false });
+    const stream = await openCameraStream(CAMERA_CONSTRAINTS);
     stopSource(); els.video.srcObject = stream; await els.video.play();
   } catch (e) {
-    countMetric("scan.cameraOpenFailure");
-    logWarn("3D 扫描无法开启摄像头。", e);
-    els.reconStatus.textContent = "无法开启摄像头：" + e.message;
+    const detail = describeCameraError(e);
+    countMetric(`scan.cameraOpenFailure.${detail.reason}`);
+    logWarn("3D 扫描无法开启摄像头。", { reason: detail.reason, error: e });
+    els.reconStatus.textContent = detail.message;
+    els.canvas.classList.remove("hidden"); els.three.classList.add("hidden");
+    showCameraPlaceholder(detail.message);
+    setMsg(detail.message); setLive(false, "3D Beta");
     return;
   }
   els.canvas.classList.add("hidden"); els.three.classList.add("hidden");

@@ -3,6 +3,7 @@
 import { FaceLandmarker, HandLandmarker, FilesetResolver }
   from "@mediapipe/tasks-vision";
 import { assetUrls } from "./assets.js";
+import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./camera.js";
 import { CDN } from "./constants.js";
 import { ctx, els } from "./dom.js";
 import { buildHandMasks, noseTriangles, toPixels } from "./geometry.js";
@@ -77,17 +78,34 @@ export async function startCamera() {
   try {
     await ensureReady();
     setMsg("请求摄像头权限…");
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: false });
+    const stream = await openCameraStream(CAMERA_CONSTRAINTS);
     stopSource();
     els.video.srcObject = stream; await els.video.play();
     setSource(els.video, "camera", els.video.videoWidth, els.video.videoHeight);
     els.cam.setAttribute("aria-pressed", "true");
   } catch (e) {
-    countMetric("camera.openFailure");
-    logWarn("无法开启摄像头。", e);
-    setMsg("无法开启摄像头：" + e.message);
+    const detail = describeCameraError(e);
+    countMetric(`camera.openFailure.${detail.reason}`);
+    logWarn("无法开启摄像头。", { reason: detail.reason, error: e });
+    els.cam.setAttribute("aria-pressed", "false");
+    if (!sourceState.source) {
+      showCameraPlaceholder(detail.message);
+      setLive(false, "待机");
+    }
+    setMsg(detail.message);
   }
+}
+
+export function showCameraPlaceholder(message) {
+  const W = els.canvas.width || 1280, H = els.canvas.height || 720;
+  els.canvas.width = W; els.canvas.height = H;
+  ctx.save();
+  ctx.fillStyle = "#07111f"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(255,255,255,.84)";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = `${Math.max(18, Math.round(W / 46))}px system-ui, sans-serif`;
+  ctx.fillText(message, W / 2, H / 2);
+  ctx.restore();
 }
 
 export async function handleFile(file) {
