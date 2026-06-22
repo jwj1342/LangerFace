@@ -65,14 +65,23 @@ export class Head3D {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x111820);
     this.camera = new THREE.PerspectiveCamera(35, 1, 0.01, 100);
     this.group = new THREE.Group();
     this.scene.add(this.group);
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.75));
-    const d = new THREE.DirectionalLight(0xffffff, 0.65); d.position.set(0.4, 0.8, 1.2);
+    this.scene.add(new THREE.HemisphereLight(0xddeeff, 0x334055, 0.72));
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.28));
+    const d = new THREE.DirectionalLight(0xffffff, 0.8); d.position.set(0.4, 0.8, 1.2);
     this.scene.add(d);
+    const fill = new THREE.DirectionalLight(0xb8d9ff, 0.28); fill.position.set(-0.8, 0.2, -0.7);
+    this.scene.add(fill);
+    this.grid = new THREE.GridHelper(2, 12, 0x334155, 0x243041);
+    this.grid.position.y = -0.72;
+    this.grid.material.transparent = true; this.grid.material.opacity = 0.38;
+    this.scene.add(this.grid);
     this.mesh = null; this.lines = null;
     this.rotX = 0; this.rotY = 0; this._dist = 3;
+    this._minDist = 0.8; this._maxDist = 8;
   }
 
   setGeometry(verts, tris, atlasLines, { showSurface = true, bands = true } = {}) {
@@ -104,9 +113,22 @@ export class Head3D {
     this.group.add(this.lines);
 
     this._dist = bb.size * 1.6;
+    this._minDist = Math.max(0.35, bb.size * 0.8);
+    this._maxDist = Math.max(this._minDist * 1.5, bb.size * 3.5);
+    this.grid.scale.setScalar(Math.max(0.7, bb.size * 0.75));
+    this.grid.position.y = -Math.max(0.45, bb.size * 0.38);
   }
 
   setRotation(rx, ry) { this.rotX = rx; this.rotY = ry; }
+
+  zoom(factor) {
+    this._dist = Math.max(this._minDist, Math.min(this._maxDist, this._dist * factor));
+  }
+
+  resetView() {
+    this.rotX = 0; this.rotY = 0;
+    this._dist = Math.max(this._minDist, Math.min(this._maxDist, this._maxDist / 2.2));
+  }
 
   resize(w, h) {
     this.renderer.setSize(w, h, false);

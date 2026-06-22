@@ -1,7 +1,7 @@
 // 入口：装配 UI 事件绑定并初始化。各功能模块见 pipeline/render/mode3d/ui/state。
 import { els } from "./dom.js";
 import { countMetric, logError } from "./logger.js";
-import { enterRoute, loadDemoRecon, setMode3d, startScan } from "./mode3d.js";
+import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan } from "./mode3d.js";
 import { ensureReady, handleFile, loop, startCamera } from "./pipeline.js";
 import { buildZoomCards } from "./render.js";
 import { recordingState, reconState, renderState, sourceState } from "./state.js";
@@ -55,6 +55,7 @@ els.reconDemo.onclick = loadDemoRecon;
 els.reconScan.onclick = startScan;
 els.view3d.onclick = () => { if (reconState.reconVerts) setMode3d("view"); };
 els.project3d.onclick = () => { if (reconState.reconVerts) setMode3d("project"); };
+els.reset3d.onclick = resetView3d;
 
 // ── 初始化 ────────────────────────────────────────────────────────────────────
 buildZoomCards();

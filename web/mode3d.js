@@ -1,7 +1,7 @@
 // 3D 重建（Beta）：转头扫描/示例重建 → 旋转查看 → 相似变换投影回实时画面。
 import { RIGID3D } from "./constants.js";
 import { assetUrls } from "./assets.js";
-import { els } from "./dom.js";
+import { ctx, els } from "./dom.js";
 import { applySim, toPixels, umeyama } from "./geometry.js";
 import { countMetric, logWarn } from "./logger.js";
 import { ensureReady, startCamera, stopSource } from "./pipeline.js";
@@ -9,6 +9,9 @@ import { modelState, reconState, renderState, sourceState } from "./state.js";
 import { setLive, setMsg } from "./ui.js";
 
 let canonicalRef = null;
+const SCAN_TARGET_SECS = 9;
+const SCAN_TARGET_FRAMES = 40;
+const YAW_DISPLAY_SPAN = 0.5;
 
 async function fetchCanonicalRef() {
   if (canonicalRef) return canonicalRef;
@@ -30,6 +33,12 @@ async function ensureHead3D() {
     px = e.clientX; py = e.clientY;
   });
   els.three.addEventListener("pointerup", () => { drag = false; });
+  els.three.addEventListener("pointercancel", () => { drag = false; });
+  els.three.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    reconState.head3d.zoom(Math.exp(Math.max(-160, Math.min(160, e.deltaY || 0)) * 0.001));
+  }, { passive: false });
+  els.three.addEventListener("dblclick", resetView3d);
 }
 
 async function buildViewer() {
@@ -42,7 +51,13 @@ async function buildViewer() {
     { showSurface: true, bands: renderState.bands },
   );
   els.view3d.disabled = false; els.project3d.disabled = false;
+  els.reset3d.disabled = false;
   setMode3d("view");
+}
+
+export function resetView3d() {
+  reconState.rot.x = 0; reconState.rot.y = 0;
+  reconState.head3d?.resetView();
 }
 
 function viewerLoop() {
@@ -58,6 +73,7 @@ export function setMode3d(m) {
   reconState.mode3d = m;
   els.view3d.setAttribute("aria-pressed", String(m === "view"));
   els.project3d.setAttribute("aria-pressed", String(m === "project"));
+  els.scanPanel.classList.add("hidden"); els.scanToast.classList.add("hidden");
   if (m === "view") {
     stopSource(); sourceState.running = false;
     els.canvas.classList.add("hidden"); els.three.classList.remove("hidden");
@@ -71,6 +87,7 @@ export function setMode3d(m) {
 }
 
 export async function loadDemoRecon() {
+  els.scanPanel.classList.add("hidden"); els.scanToast.classList.add("hidden");
   els.reconStatus.textContent = "加载示例重建（基于你的视频）…";
   await ensureReady();
   const d = await fetch(assetUrls.reconDemo).then((r) => r.json());
@@ -91,29 +108,72 @@ export async function startScan() {
     els.reconStatus.textContent = "无法开启摄像头：" + e.message;
     return;
   }
-  els.canvas.classList.add("hidden"); els.three.classList.add("hidden");
+  els.canvas.width = els.video.videoWidth || 1280;
+  els.canvas.height = els.video.videoHeight || 720;
+  els.canvas.classList.remove("hidden"); els.three.classList.add("hidden");
+  els.msg.classList.add("hidden"); els.scanPanel.classList.remove("hidden"); els.scanToast.classList.remove("hidden");
+  updateScanPanel(0, 0, 0, null);
   const collected = []; const t0 = performance.now(); let ymin = 1e9, ymax = -1e9;
   reconState.scan = { active: true };
   const tick = () => {
     if (!reconState.scan || !reconState.scan.active) return;
     const t = performance.now();
     const res = modelState.landmarker.detectForVideo(els.video, t);
+    const secs = (t - t0) / 1000;
     if (res.faceLandmarks && res.faceLandmarks.length) {
       const lm = toPixels(res.faceLandmarks[0], els.video.videoWidth, els.video.videoHeight).slice(0, 468);
       collected.push(applySim(umeyama(RIGID3D.map((i) => lm[i]), refRigid), lm));
       const nose = lm[1], cl = lm[234], cr = lm[454], yaw = (nose[0] - (cl[0] + cr[0]) / 2) / (Math.abs(cr[0] - cl[0]) || 1);
       ymin = Math.min(ymin, yaw); ymax = Math.max(ymax, yaw);
+      drawScanFrame(lm, secs, collected.length, ymin, ymax);
+    } else {
+      drawScanFrame(null, secs, collected.length, ymin, ymax);
     }
-    const secs = (t - t0) / 1000;
-    els.reconStatus.textContent = `扫描中 ${secs.toFixed(1)}s：缓慢左右上下转头（已采 ${collected.length} 帧，偏航 ${ymin.toFixed(2)}~${ymax.toFixed(2)}）`;
-    if (secs > 9 && collected.length > 40) { finishScan(collected, ymin, ymax); return; }
+    const yawRange = Number.isFinite(ymin) && Number.isFinite(ymax) ? `${ymin.toFixed(2)}~${ymax.toFixed(2)}` : "等待人脸";
+    els.reconStatus.textContent = `扫描中 ${secs.toFixed(1)}s：缓慢左右上下转头（已采 ${collected.length} 帧，偏航 ${yawRange}）`;
+    updateScanPanel(secs, collected.length, ymax - ymin, Number.isFinite(ymin) && Number.isFinite(ymax) ? (ymin + ymax) / 2 : null);
+    if (secs > SCAN_TARGET_SECS && collected.length > SCAN_TARGET_FRAMES) { finishScan(collected, ymin, ymax); return; }
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
 }
 
+function drawScanFrame(lm, secs, frames, ymin, ymax) {
+  const W = els.canvas.width, H = els.canvas.height;
+  ctx.drawImage(els.video, 0, 0, W, H);
+  if (lm && modelState.triangles) {
+    ctx.save();
+    ctx.lineWidth = Math.max(0.7, W / 1800);
+    ctx.strokeStyle = "rgba(86,189,242,.22)";
+    for (const tri of modelState.triangles) {
+      const a = lm[tri[0]], b = lm[tri[1]], c = lm[tri[2]];
+      if (!a || !b || !c) continue;
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.closePath(); ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(78,216,255,.75)";
+    for (let i = 0; i < lm.length; i += 3) {
+      const p = lm[i]; ctx.beginPath(); ctx.arc(p[0], p[1], Math.max(1.1, W / 1150), 0, 6.283); ctx.fill();
+    }
+    ctx.restore();
+  }
+  const yawText = Number.isFinite(ymin) && Number.isFinite(ymax) ? `角度覆盖 ${(ymax - ymin).toFixed(2)} · ${frames} 帧` : `${frames} 帧`;
+  els.scanToast.textContent = `扫描中 ${secs.toFixed(1)}s · ${yawText} · 缓慢转向另一侧`;
+}
+
+function updateScanPanel(secs, frames, yawSpan, yawMid) {
+  const pct = Math.min(1, Math.max(secs / SCAN_TARGET_SECS, frames / SCAN_TARGET_FRAMES));
+  els.scanProgressVal.textContent = Math.round(pct * 100) + "%";
+  els.scanProgressBar.style.width = Math.round(pct * 100) + "%";
+  els.scanYawVal.textContent = Number.isFinite(yawSpan) ? yawSpan.toFixed(2) : "0.00";
+  const wideEnough = Number.isFinite(yawSpan) && yawSpan > YAW_DISPLAY_SPAN * 0.55;
+  els.scanYawLeft.classList.toggle("active", wideEnough || (Number.isFinite(yawMid) && yawMid < -0.08));
+  els.scanYawMid.classList.toggle("active", Number.isFinite(yawMid));
+  els.scanYawRight.classList.toggle("active", wideEnough || (Number.isFinite(yawMid) && yawMid > 0.08));
+}
+
 function finishScan(collected, ymin, ymax) {
   reconState.scan = null;
+  els.scanPanel.classList.add("hidden"); els.scanToast.classList.add("hidden");
   const N = collected.length, V = 468, verts = [];
   const med = (k) => { k.sort((a, b) => a - b); return k[(k.length - 1) >> 1]; };
   for (let v = 0; v < V; v++) {
@@ -129,6 +189,7 @@ function finishScan(collected, ymin, ymax) {
 
 export function enterRoute(route) {
   reconState.route = route;
+  els.scanPanel.classList.add("hidden"); els.scanToast.classList.add("hidden");
   if (route === "3d") {
     els.route3dPanel.classList.remove("hidden"); els.badge.classList.add("beta");
     sourceState.running = false; stopSource();
@@ -136,9 +197,11 @@ export function enterRoute(route) {
     setMsg(reconState.reconVerts ? null : "3D Beta：请先「用示例重建」或「转头扫描」"); setLive(false, "3D Beta");
     if (reconState.reconVerts) buildViewer();
   } else {
+    reconState.scan = null;
     cancelAnimationFrame(reconState.viewerRAF);
     els.route3dPanel.classList.add("hidden"); els.badge.classList.remove("beta");
     els.three.classList.add("hidden"); els.canvas.classList.remove("hidden");
+    els.reset3d.disabled = true;
     if (renderState.zoom) els.zoomStrip.classList.remove("hidden");
     stopSource(); sourceState.running = false;
     setMsg("点击「摄像头」或「上传照片 / 视频」开始"); setLive(false, "待机");
