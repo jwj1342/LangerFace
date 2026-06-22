@@ -1,6 +1,6 @@
 // 3D Beta：用 Three.js 渲染重建出的 3D 人头，并把张力线贴到其表面。
 // 既支持「可旋转查看」模式，也支持「投影到实时画面」（深度缓冲精确自遮挡）模式。
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import * as THREE from "three";
 
 const BAND = { top: [0.94, 0.76, 0.29], mid: [0.34, 0.74, 0.95], low: [0.25, 0.83, 0.62] };
 
