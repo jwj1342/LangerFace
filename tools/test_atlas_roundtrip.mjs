@@ -3,6 +3,7 @@
 // 断言「医生在标注端画的点」经 toAtlasJSON() 序列化、再经实时端 mapAtlas() 还原后，
 // 与原始 3D 坐标逐点一致 —— 即闭环不丢、不漂。同时验证注入前的边界校验 validateAtlasLines。
 import { AnnotationModel, barycentric } from "../web/annotate_model.js";
+import { dataSource } from "../web/data_source.js";
 import { mapAtlas, validateAtlasLines } from "../web/geometry.js";
 
 let fail = 0;
@@ -61,6 +62,37 @@ threw = false;
 try { ok(mapAtlas(null, lm, triangles).length === 0, "mapAtlas(null) 返回空而非抛错"); }
 catch { threw = true; }
 ok(!threw, "mapAtlas(null) 不抛错");
+
+// ── dataSource 跨页预览桥：一次性消费 + 存储失败降级 ─────────────────────────
+function makeSessionStorage() {
+  const store = new Map();
+  return {
+    setItem(k, v) { store.set(String(k), String(v)); },
+    getItem(k) { return store.has(String(k)) ? store.get(String(k)) : null; },
+    removeItem(k) { store.delete(String(k)); },
+  };
+}
+
+globalThis.sessionStorage = makeSessionStorage();
+ok(dataSource.stagePreviewAtlas(atlas), "预览图谱可暂存到 sessionStorage");
+const staged = dataSource.takePreviewAtlas();
+ok(staged?.system === "rstl" && staged.lines.length === atlas.lines.length, "预览图谱可跨入口取出");
+ok(dataSource.takePreviewAtlas() === null, "预览图谱取出后立即清除");
+
+globalThis.sessionStorage = {
+  setItem() { throw new Error("blocked"); },
+  getItem() { return null; },
+  removeItem() {},
+};
+ok(dataSource.stagePreviewAtlas(atlas) === false, "sessionStorage 写入失败时返回 false");
+
+globalThis.sessionStorage = {
+  setItem() {},
+  getItem() { return "{bad json"; },
+  removeItem() {},
+};
+ok(dataSource.takePreviewAtlas() === null, "sessionStorage 坏数据返回 null 而非抛错");
+delete globalThis.sessionStorage;
 
 console.log(fail === 0 ? "\n✅ 标注→实时 闭环保真" : `\n❌ ${fail} 项失败`);
 process.exit(fail ? 1 : 0);
