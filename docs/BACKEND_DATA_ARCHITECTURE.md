@@ -3,7 +3,7 @@
 - **状态**：Accepted
 - **日期**：2026-06-22
 - **决策者**：项目组
-- **相关**：issue #2（临床校验图谱）、[ARCHITECTURE.md](ARCHITECTURE.md#12-网页-3d-线标注与图谱校验)、[ARCHITECTURE.md](ARCHITECTURE.md#13-headspace--facescape-离线数据与配准管线)
+- **相关**：issue #2（临床校验图谱）、issue #11-#22（Stage 2 肿物与切口设计）、[ARCHITECTURE.md](ARCHITECTURE.md#12-网页-3d-线标注与图谱校验)、[ARCHITECTURE.md](ARCHITECTURE.md#13-headspace--facescape-离线数据与配准管线)、[ARCHITECTURE.md](ARCHITECTURE.md#14-stage-2-肿物与切口设计技术路线)
 
 ## 背景
 
@@ -11,6 +11,7 @@
 
 - **头模资产**：HeadSpace 等 3D 头模（大、二进制、**受许可、含生物特征**）。
 - **标注产物**：医生在网页上画的 RSTL/Langer 线（结构化、可变、需评审/校验）。
+- **Stage 2 术前规划记录**：肿物输入、候选切口、风险提示、医生编辑与审阅 provenance。
 - **重计算**：Sim3 配准、网格求交、MediaPipe 检测、Blender 渲染、未来肿物模拟。
 
 当前是纯静态前端（Vercel）+ 离线 `langerface` 包 + 本地 gitignore 的大数据，**没有运行时数据层与 API 边界**。目标是在**接近零成本**的前提下，把"代码 / 结构化状态 / 大二进制 / 受限数据 / 重计算"分开。
@@ -22,8 +23,8 @@
 ```
 前端 (Vercel, 静态)                Cloudflare Worker (瘦 API, TS)              数据层
 ────────────────────              ─────────────────────────────              ─────────────────────────
-实时叠加 / 3D 标注 / 切口     →    /api/heads · /api/annotations · 鉴权   →    D1   : 标注 / 用户 / provenance
-只做交互与渲染                     发 R2 签名 URL、CRUD、校验状态流转           R2   : 头模 / 纹理 / 重建(签名URL)
+实时叠加 / 3D 标注 / 切口     →    /api/heads · /api/annotations · 鉴权   →    D1   : 标注 / 肿物 / 候选 / provenance
+只做交互与渲染                     /api/cases · /api/tumors · /api/incisions  R2   : 头模 / 纹理 / 重建(签名URL)
 经 API + 签名URL 取数据            ❌ 不放重计算                               ↑ 受限数据：私有桶 + Worker 鉴权
 
 重计算 (langerface: 配准/重建/渲染)  →  本地 / HPC 离线批处理  →  产物上传 R2，元数据登记 D1
@@ -65,6 +66,7 @@ Cloudflare Workers 是 V8 隔离 /（Python 版）Pyodide-WASM 运行时，**不
 | atlas JSON 轻量校验 | 只做 schema、字段、点数、状态流转检查；不做几何重建 |
 | R2 签名 URL 生成 | Worker 鉴权后返回短期访问 URL |
 | 已有标注导出为 `atlas.json` | 从 D1 读出线和点，重组 JSON；不重新计算几何 |
+| 肿物与切口候选记录 | 保存医生输入、候选几何、警告、覆盖原因和审阅状态 |
 | 作业状态记录 | 只记录 `queued/running/succeeded/failed` 等状态，不在 Worker 内执行作业 |
 
 推荐作业流如下：
@@ -94,7 +96,10 @@ Worker
 |---|---|---|
 | 标准脸、三角拓扑、`.task`、示例 atlas | 小、参考、可公开 | **仓库 / 前端静态资产** |
 | 标注线（`[tri,u,v]`/xyz + 作者/时间/校验状态/provenance） | 结构化、可变、多用户 | **D1** |
+| 临床规则库（区域、RSTL、皱襞、亚单位、敏感结构） | 结构化、版本化、需医生审核 | **仓库 draft / D1 validated copy** |
+| 肿物输入与切口候选 | 结构化、含病例上下文、需审计 | **D1（不含原始影像）** |
 | HeadSpace 头模、纹理、重建网格 | 大、二进制、**受许可/生物特征** | **R2（私有桶 + Worker 鉴权 + 签名 URL）** |
+| 患者照片、视频、3D 纹理、超声资料 | 敏感个人信息 / 医疗资料 | **默认不入公开仓库；仅本地、医院环境或受控 R2** |
 
 ## D1 表结构（SQLite DDL）
 
@@ -155,6 +160,51 @@ CREATE INDEX idx_lines_ann       ON annotation_lines(annotation_id);
 > （`{system, version, provenance, validated, lines:[{name,region,points:[[tri,u,v]...]}]}`），
 > 直接替换 `assets/atlas_*.json` —— 即 issue #2 的闭环。
 
+### Stage 2 表结构扩展（草图）
+
+肿物与切口候选属于术前规划记录。D1 只保存结构化元数据和几何，不默认保存原始照片、视频、纹理或超声文件；这些敏感资料如确需在线访问，应走私有 R2 + Worker 鉴权 + 审计。
+
+```sql
+CREATE TABLE cases (
+  id            INTEGER PRIMARY KEY,
+  case_code     TEXT NOT NULL UNIQUE,       -- 脱敏病例编号，不是姓名/病历号
+  head_model_id INTEGER REFERENCES head_models(id),
+  status        TEXT NOT NULL DEFAULT 'draft', -- draft | reviewed | archived
+  created_by    INTEGER REFERENCES users(id),
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE tumors (
+  id             INTEGER PRIMARY KEY,
+  case_id        INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  tumor_type     TEXT NOT NULL,       -- subcutaneous | cutaneous
+  region         TEXT,
+  center_json    TEXT NOT NULL,       -- 2D/3D 坐标 + 坐标系 + 单位
+  boundary_json  TEXT,                -- 皮表肿物轮廓，可为空
+  diameter_mm    REAL,
+  depth_mm       REAL,
+  margin_mm      REAL,
+  source         TEXT NOT NULL,       -- manual | ultrasound | imported
+  provenance     TEXT,
+  created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE incision_candidates (
+  id              INTEGER PRIMARY KEY,
+  tumor_id        INTEGER NOT NULL REFERENCES tumors(id) ON DELETE CASCADE,
+  candidate_type  TEXT NOT NULL,      -- linear | fusiform
+  geometry_json   TEXT NOT NULL,      -- 端点/曲线/轴线/指标
+  rule_trace_json TEXT NOT NULL,      -- RSTL/皱襞/亚单位/敏感结构命中
+  warnings_json   TEXT,
+  status          TEXT NOT NULL DEFAULT 'generated', -- generated | edited | accepted | rejected
+  edited_by       INTEGER REFERENCES users(id),
+  review_note     TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
+
 ## Worker API 草图（REST，TS）
 
 | 方法 & 路径 | 作用 |
@@ -168,6 +218,10 @@ CREATE INDEX idx_lines_ann       ON annotation_lines(annotation_id);
 | `PUT /api/annotations/:id` | 更新 |
 | `POST /api/annotations/:id/validate` | （clinician）置 `validated` + 记录校验者/时间 |
 | `GET /api/annotations/:id/atlas.json` | 导出 `langerface` 图谱格式 |
+| `POST /api/cases` | （clinician/researcher）创建脱敏病例工作区 |
+| `POST /api/tumors` | 保存肿物输入（中心、边界、直径、切缘、来源） |
+| `POST /api/incision-candidates` | 保存候选切口、规则 trace、警告与医生编辑 |
+| `POST /api/incision-candidates/:id/review` | 医生接受 / 拒绝 / 备注 / 覆盖原因 |
 
 - **鉴权**：优先 **Cloudflare Access（Zero-Trust）** 套在 Worker 前；或简单 Bearer Token。受限 R2 资源只经 Worker 校验后发签名 URL，**桶绝不公开**。
 - **CORS**：Vercel 前端跨域调用 Worker，需在 Worker 配置允许来源。
@@ -190,6 +244,7 @@ UI 不直接 `fetch("assets/...")` 或下载文件，改为调用一个数据源
 
 ```js
 // 接口：listHeads() · getHeadMesh(id) · loadAtlas(system) · saveAnnotation(payload) · listAnnotations(q)
+// Stage 2：saveTumor(payload) · generateLocalCandidate(input) · saveIncisionCandidate(payload)
 // 今天：LocalDataSource —— 静态 fetch + 文件下载 + localStorage（无后端）
 // 将来：ApiDataSource   —— 调用上面的 Worker API（仅切换实现，UI 不变）
 ```

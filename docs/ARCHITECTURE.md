@@ -274,3 +274,151 @@ tools/headspace/data/            # 本地，被 .gitignore 忽略
 `pip install -e ".[mediapipe]"` + `trimesh`；Blender 脚本另需 Blender 与 ffmpeg。脚本均为 argparse 驱动，原作者机器上的绝对路径默认值已移除（改为 `required`）。
 
 离线管线产出/配准 3D 头模与线；交互式标注/校验使用网页 `/annotate.html`。把头模导出为 `{vertices, triangles}` JSON 后上传到标注页，导出的标注线（xyz / 图谱）只含坐标，可入库评审。
+
+---
+
+## 14. Stage 2 肿物与切口设计技术路线
+
+Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部皮肤肿物术前切口候选设计”。系统仍然坚持一个边界：**算法只生成可解释候选与风险提示，最终切口由临床医生确认**。
+
+### 14.1 临床输入与输出
+
+输入分三类：
+
+| 输入 | 来源 | 说明 |
+|---|---|---|
+| 患者脸部几何 | 照片 / 视频 / 实时摄像头 / 3D 扫描 | 由 MediaPipe 关键点、标准脸拓扑、2D/3D 配准得到可投射坐标系 |
+| 肿物约束 | 医生标注 / 术前超声 / 病理判断 | 皮下肿物以中心、直径、深度为主；皮表肿物以边界、类圆化直径、安全切缘为主 |
+| 临床规则 | 医生团队规则库 | RSTL、自然皱襞、美学亚单位边界、敏感结构例外、安全边界和禁用范围 |
+
+输出不是“手术方案”，而是：
+
+- RSTL / 皱襞 / 亚单位边界叠加图。
+- 一个或多个候选切口线（线性或梭形）。
+- 规则命中、角度偏差、长宽/尖端角/平滑指标、敏感结构警告。
+- 医生编辑后的确认版本和 provenance。
+
+### 14.2 模块拆分
+
+| 模块 | 计划位置 | 职责 | Issue |
+|---|---|---|---|
+| 临床规则库 | `assets/clinical_rules_face_incision.json` | 结构化区域规则、优先级、例外、审核状态 | #11 |
+| 面部分区 / 亚单位 | `src/langerface/anatomy/`, `web/anatomy*.js` | 把点或肿物中心映射到临床区域 / 美学亚单位 | #12 |
+| RSTL 方向服务 | `src/langerface/lines/direction.py`, `web/*direction*.js` | 查询局部方向、置信度和依据 | #13 |
+| 肿物模型 | `src/langerface/tumor/`, `web/tumor*.js` | 表示皮下 / 皮表肿物输入与单位 | #14 |
+| 皮下线性切口 | `src/langerface/incision/linear.py` | 基于超声直径和 RSTL 方向生成线性候选 | #15 |
+| 皮表梭形切口 | `src/langerface/incision/fusiform.py` | 生成梭形候选，约束比例、尖端角和平滑对称 | #16 |
+| 敏感结构 guardrails | `src/langerface/incision/guardrails.py` | 下睑、唇红缘、鼻翼等风险提示和方向例外 | #17 |
+| 医生审阅 UI | `web/incision*.js` | 候选解释、编辑、覆盖、导出 | #18 |
+| AR / 视频叠加 | `web/render.js`, `web/projection3d.js` | 把肿物和切口候选投射回照片、视频、实时视图 | #19 |
+| 验证指标 | `docs/VALIDATION.md` 或本文扩展 | 角度误差、稳定性、医生接受率、失败分类 | #20 |
+| 隐私 / 审计 | `docs/BACKEND_DATA_ARCHITECTURE.md` 等 | 敏感数据边界、审计记录、受限存储 | #21 |
+| AI 次级依据 | `tools/`, future model scripts | 皱襞/皱纹/肿物边界候选识别 | #22 |
+
+这些模块应与 `lines/`、`rendering/` 同级接入：`lines/` 仍只负责张力线图谱，`tumor/` 负责病灶几何输入，`incision/` 负责候选曲线生成与规则解释。
+
+### 14.3 规则优先级
+
+默认方向选择按以下顺序：
+
+1. **RSTL**：首选。切口长轴尽量平行松弛皮肤张力线，以降低闭合时垂直张力。
+2. **自然皱襞 / 皱纹**：次选。额纹、鱼尾纹、鼻唇沟、睑缘纹、颏纹等自然凹陷可隐藏瘢痕。
+3. **美学亚单位边界**：次选。眉缘、唇红缘、发际线、鼻翼沟、耳前皱襞等结构边界可降低视觉干扰。
+4. **敏感结构例外**：下睑、唇红缘、鼻翼等游离边缘附近，如果平行 RSTL 会导致牵拉方向伤害形态或功能，系统必须提示，并允许医生选择保护性方向。
+
+规则库不能只存一句文本；它至少应包含：
+
+```json
+{
+  "region": "lower_eyelid",
+  "primary_axis": "parallel_to_lid_margin",
+  "priority": ["rstl", "natural_crease", "free_margin_guardrail"],
+  "warnings": ["avoid_vertical_tension_that_may_pull_lid_margin"],
+  "requires_manual_confirmation": true,
+  "review_status": "draft",
+  "source": "clinical_team"
+}
+```
+
+### 14.4 两类肿物的候选生成
+
+#### 皮下肿物
+
+皮下肿物默认不设计梭形切除。候选线由肿物中心、术前超声直径、局部 RSTL 方向和医生配置的长度规则决定：
+
+```
+center = tumor.center_on_face
+axis = query_rstl_direction(center)
+length = f(ultrasound_diameter, clinical_rule)
+candidate = segment(center, axis, length)
+```
+
+必须显示：
+
+- 超声直径与单位来源。
+- 切口长度规则。
+- 与局部 RSTL 的角度偏差。
+- 是否命中敏感结构 guardrail。
+
+#### 皮表肿物
+
+皮表肿物生成梭形候选。医生给出的当前默认规则是：长轴平行 RSTL；长轴与类圆化后的肿物直径按 3:1 控制；两端尖角默认 30°；两侧弧线对称平滑，从最宽处向两端逐渐收窄至尖点。
+
+实现时要把这些写成**参数化临床规则**，不要硬编码为不可变数学常量。原因是 3:1 与 30°在几何上并不总能同时严格成立；工程上应显示实际指标，让医生在比例、尖端角、邻近解剖结构和可直接拉拢缝合之间做判断。
+
+候选输出建议格式：
+
+```json
+{
+  "type": "fusiform",
+  "axis_source": "rstl",
+  "center": [0.52, 0.41],
+  "axis_angle_deg": 18.5,
+  "length_mm": 18.0,
+  "width_mm": 6.0,
+  "target_ratio": 3.0,
+  "tip_angle_deg": 30.0,
+  "curve": [[0.1, 0.2], [0.2, 0.25]],
+  "warnings": [],
+  "overrides": []
+}
+```
+
+### 14.5 区域规则最小集
+
+医生团队给出的区域规则先作为规则库 draft 进入，不直接作为 validated 临床依据：
+
+| 区域 | 默认方向 / 设计提示 |
+|---|---|
+| 额部 | RSTL 水平，长轴尽量嵌入额纹；靠近眉部可贴近眉上缘阴影 |
+| 颞部 / 外眦 | 斜行，沿鱼尾纹方向 |
+| 上睑 | 平行睑缘弧形，优先重睑线或自然皱襞 |
+| 下睑 | 平行睑缘，沿睫毛下皱襞；严禁造成纵向牵拉风险 |
+| 内眦 | 沿内眦赘皮自然皱襞斜行，避免破坏内眦形态 |
+| 鼻背 / 鼻根 | 中线肿物可考虑纵行，避免横跨鼻梁造成视觉干扰 |
+| 鼻翼 / 鼻侧壁 | 优先鼻翼沟、鼻唇沟上段；警惕鼻翼移位或塌陷 |
+| 鼻尖 | 皮肤致密、松弛度差，仅小肿物适合直接切除候选 |
+| 颊部 / 鼻唇沟 | 长轴倾向平行鼻唇沟 |
+| 唇红 / 口周 | 唇红缘对齐优先；避免造成唇红切迹、外翻或口角牵拉 |
+| 颏部 / 下颌缘 | 颏部水平弧形；下颌缘平行下颌缘弧线 |
+| 耳周 | 耳前皱襞或耳后沟是优先隐藏位置 |
+
+### 14.6 验证与失败模式
+
+Stage 2 必须先定义验证指标，再谈临床可用：
+
+- RSTL 方向误差：候选长轴与医生确认方向的角度差。
+- 投影稳定性：视频 / AR 中候选线端点和肿物中心的帧间抖动。
+- 肿物边界误差：人工边界与系统边界的 IoU / Hausdorff / 直径误差。
+- 几何规则误差：长宽比例、尖端角、曲率连续性、左右对称性。
+- 敏感结构安全：敏感区警告召回率和误报率。
+- 医生接受率：候选被直接接受、轻微修改、重大修改、否决的比例。
+
+失败模式必须显式记录：检测失败、面部分区错分、方向低置信度、图谱未 validated、皮肤松弛度不足、病变性质/切缘未输入、敏感结构漏警、用户把系统输出误认为手术指令等。
+
+### 14.7 参考依据
+
+- DermNet: [Skin tension lines](https://dermnetnz.org/topics/skin-tension-lines) 说明 RSTL / BEST 等张力线与切口张力、瘢痕的关系，也指出 Langer 线并不总适合作为手术切口方向。
+- Google AI Edge: [MediaPipe Face Landmarker](https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker) 输出 3D face landmarks、blendshapes 与 transformation matrices，是当前感知层依据。
+- MediaPipe Wiki: [Face Mesh](https://github.com/google-ai-edge/mediapipe/wiki/MediaPipe-Face-Mesh) 描述 canonical face model、468 拓扑与 AR face effect 的几何管线。
+- PubMed: [Fusiform excision](https://pubmed.ncbi.nlm.nih.gov/12722855/) 记录传统梭形切除 3:1 与 30°经验规则；后续数学模型文献提示该规则需要参数化处理，不能无条件同时严格满足。
