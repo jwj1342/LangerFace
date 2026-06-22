@@ -51,8 +51,8 @@ LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它
 |---|---|---|---|
 | 资产与医学知识层 | 已实现 | 标准脸、三角拓扑、MediaPipe 模型、RSTL/Langer 线图谱 | `assets/`, `web/assets/` |
 | 感知层 | 已实现 | 从图片、视频、摄像头中提取 478 个 3D 人脸关键点；网页端还检测手部遮挡 | `src/langerface/detection/`, `web/pipeline.js` |
-| 配准与几何层 | 已实现 | 2D 路线用重心坐标把图谱贴合当前脸网格；3D Beta 用 Umeyama 相似变换做个性化头模重建和实时刚性配准 | `src/langerface/geometry/`, `web/geometry.js`, `web/projection3d.js`, `tools/reconstruct_3d.py` |
-| 面部标注 / 图谱层 | 已实现 | 生成、读取、校验和映射 RSTL/Langer 线条；临床医生可编辑图谱 | `src/langerface/lines/`, `tools/annotate_atlas.py`, `tools/digitize_from_diagram.py` |
+| 配准与几何层 | 已实现 | 2D 重心坐标贴合；3D Beta Umeyama 重建与刚性配准；离线 HeadSpace 多视角加权 Sim3 配准 | `src/langerface/geometry/`, `src/langerface/registration/`, `web/geometry.js`, `web/projection3d.js`, `tools/reconstruct_3d.py`, `tools/headspace/` |
+| 面部标注 / 图谱层 | 已实现 | 生成、读取、校验和映射 RSTL/Langer 线条；临床医生可编辑图谱（含**网页 3D 标注**） | `src/langerface/lines/`, `web/annotate*.js`, `tools/annotate_atlas.py`, `tools/digitize_from_diagram.py` |
 | 肿物模拟层 | Stage 2 规划 | 表示脸部肿物的位置、边界、大小、深度和与皮肤表面的关系；为切口规划提供约束输入 | 计划新增 `src/langerface/tumor/`, `web/tumor*.js` |
 | 切口设计层 | Stage 2 规划 | 综合张力线方向、肿物边界、安全边距、医生编辑和审阅，生成候选切口可视化；只做决策辅助，不输出手术指令 | 计划新增 `src/langerface/incision/`, `web/incision*.js` |
 | 渲染与交互层 | 已实现 / 扩展中 | 2D Canvas 叠加、3D 查看、遮挡、放大窗、导出和 UI 控制 | `src/langerface/rendering/`, `web/render.js`, `web/three3d.js`, `web/main.js` |
@@ -96,6 +96,7 @@ Stage 2 的设计原则是：肿物模拟只负责病灶几何与约束表达，
 - 🖐️ **遮挡处理**：转头时背面线条隐藏；**手挡在脸前时，手覆盖处不画线**（贴合手形掩膜，指缝保留）。
 - 🔍 **关键区域放大窗**：主画面下方 6 个放大窗（额·眉间 / 双眼周 / 鼻·鼻唇沟 / 口周 / 颏部）同屏显示细节。
 - 🧊 **3D 重建（Beta）**：多视角转头扫描 → 重建个性化 3D 人头 → 把线贴到 3D 表面 → 可旋转查看 / 实时配准投影。
+- ✍️ **网页 3D 标注**：在浏览器里于标准脸 / 3D 头模表面手绘 RSTL/Langer 线，导出项目图谱格式（`[tri,u,v]`，可直接用于校验），见 [网页 3D 标注](docs/annotation_web.md)。
 - 🎛️ **实时可调**：线密度、平滑强度、透明度、遮挡、镜像、分区着色、放大窗等。
 - 🔒 **全程本地运行**，不上传任何画面（隐私友好）。
 
@@ -227,7 +228,7 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 | `.claude/` | Claude Code 相关启动配置；本地私有设置文件已被 `.gitignore` 排除。 |
 | `.github/` | GitHub Actions CI；包含 Python 测试、JS/Vite 构建和几何对拍。 |
 | `assets/` | Python 端权威资产：MediaPipe 标准脸 obj、人脸 landmarker `.task`、RSTL/Langer atlas JSON。 |
-| `docs/` | 项目文档：架构、环境配置、贡献指南。 |
+| `docs/` | **全部项目文档集中于此**：架构、环境、贡献、路线图（TODO）、网页 3D 标注、headspace 管线/数据说明。 |
 | `src/langerface/` | Python 核心库，按 `config/geometry/detection/lines/rendering/pipeline/media/apps` 分层。 |
 | `tests/` | pytest 测试，覆盖图谱、标准脸、映射、稳定性、渲染和 pipeline 行为。 |
 | `tools/` | 资产下载、图谱生成、web 资产导出、3D 重建、临床标注、目检和对拍脚本。 |
@@ -342,11 +343,13 @@ Vercel 自动提供 **HTTPS**，因此线上 `getUserMedia`（摄像头）可用
 - [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md)：本地环境、集群环境、venv、Node 24、测试与本地产物目录。
 - [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)：协作流程、测试约定、扩展点和 PR 要求。
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：核心算法、坐标系、2D/3D 路线、资产与部署细节。
-- [TODO.md](TODO.md)：路线图与待办（与 GitHub Issues 同步）。
+- [docs/annotation_web.md](docs/annotation_web.md)：网页 3D 线标注工作流（替代 3D Slicer）。
+- [docs/headspace_pipeline.md](docs/headspace_pipeline.md) · [docs/headspace_data.md](docs/headspace_data.md)：离线 3D 头模配准管线与（不入库的）数据获取说明。
+- [docs/TODO.md](docs/TODO.md)：路线图与待办（与 GitHub Issues 同步）。
 - 医学声明、图谱状态与临床局限见 README [已知局限与医学声明](#已知局限与医学声明)。
 
 ## 文档维护约定
 
 **本仓库的 [README.md](README.md)、[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、[docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) 必须与代码保持同步。**
 任何功能更新（新增/修改特性、改动数据流、增删模块或资产、调整使用方式）都要在同一改动中更新这些文档，
-确保"读文档即可了解全貌并复现项目"。医学相关变化同时更新本 README 的[已知局限与医学声明](#已知局限与医学声明)小节；路线图变化更新 [TODO.md](TODO.md)。
+确保"读文档即可了解全貌并复现项目"。医学相关变化同时更新本 README 的[已知局限与医学声明](#已知局限与医学声明)小节；路线图变化更新 [docs/TODO.md](docs/TODO.md)。

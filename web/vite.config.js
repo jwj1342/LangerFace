@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+
 import { defineConfig } from "vite";
 
 export default defineConfig({
@@ -5,6 +7,12 @@ export default defineConfig({
   assetsInclude: ["**/*.task"],
   build: {
     assetsInlineLimit: 0,
+    rollupOptions: {
+      input: {
+        main: resolve(import.meta.dirname, "index.html"),
+        annotate: resolve(import.meta.dirname, "annotate.html"),
+      },
+    },
   },
   server: {
     host: "127.0.0.1",

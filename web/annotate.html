@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>面部张力线 · 3D 网页标注</title>
+<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="annotate.css" />
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-top">
+        <span class="eyebrow">3D LINE ANNOTATION</span>
+        <a class="badge" href="index.html">← 实时叠加</a>
+      </div>
+      <h1>3D 网页标注</h1>
+    </div>
+
+    <div class="card">
+      <p class="hint" id="hint">加载网格后开始标注。</p>
+      <button class="btn btn-primary" id="btnLoadCanonical">加载标准脸</button>
+      <label class="btn" for="meshFile">上传头模 JSON（{vertices, triangles}）</label>
+      <input type="file" id="meshFile" accept="application/json,.json" hidden />
+    </div>
+
+    <div class="card">
+      <div>
+        <label class="field-label" for="annSystem">线系统</label>
+        <select id="annSystem" class="select" style="margin-top:7px">
+          <option value="rstl">RSTL（首选）</option>
+          <option value="langer">Langer</option>
+        </select>
+      </div>
+      <input class="text-input" id="annName" placeholder="线名（如 forehead_h1，可留空）" />
+      <input class="text-input" id="annRegion" placeholder="区域（如 forehead，可留空）" />
+      <div class="btn-row">
+        <button class="btn" id="btnNew">＋ 新建线</button>
+        <button class="btn" id="btnUndo">↶ 撤销点</button>
+        <button class="btn" id="btnFinish">✓ 完成线</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="quality-top"><span>已标注</span><span id="annStatus">0 条</span></div>
+      <div class="line-list" id="lineList"></div>
+      <div class="btn-row" style="grid-template-columns:1fr 1fr">
+        <button class="btn" id="btnExportAtlas" disabled>导出图谱</button>
+        <button class="btn" id="btnExportXyz" disabled>导出 xyz</button>
+      </div>
+      <button class="btn" id="btnClear">清空</button>
+    </div>
+
+    <p class="disclaimer">⚠️ 标注用于生成/校验线图谱（决策辅助可视化），非手术指令、非医疗器械。
+       在标准脸上标注可直接导出项目图谱格式（tri,u,v）。</p>
+  </aside>
+
+  <main class="stage">
+    <div class="stage-top">
+      <span class="live on"><span class="dot"></span>标注模式</span>
+      <span class="fps">拖拽旋转 · 滚轮缩放 · 点击落点</span>
+    </div>
+    <div class="stage-body">
+      <div class="main-wrap">
+        <canvas id="stage"></canvas>
+      </div>
+    </div>
+  </main>
+</div>
+<script type="module" src="annotate_main.js"></script>
+</body>
+</html>
