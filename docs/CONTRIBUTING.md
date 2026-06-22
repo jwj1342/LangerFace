@@ -125,9 +125,23 @@ Preview 人工验收清单：
 - **KISS (Keep It Simple, Sir)** – keep solutions as simple as possible.
 - **YAGNI (You're Not Gonna Need It)** – avoid speculative complexity or over-engineering.
 
+## Issue 标签 (Labels)
+
+给 issue / PR 打标签时按维度走，方便筛选与排期。**每个 issue 至少 1 个「类型」**，建议再各加 1 个「优先级」与 ≥1 个「领域」：
+
+- **类型**（必填）：`bug` · `enhancement` · `documentation` · `tech-debt` · `testing` · `epic` · `question`
+- **优先级**（建议）：`priority: critical | high | medium | low`
+- **领域**（建议，可叠加）：`area: web` · `area: 3d` · `area: atlas` · `area: pipeline` · `area: clinical` · `area: infra`
+- **协作 / 关闭原因**（按需）：`good first issue` · `help wanted` ／ `duplicate` · `invalid` · `wontfix`
+
+速查：报 bug → `bug` + 一个 `area:` + 优先级；提需求 → `enhancement` + `area:`；重构 / 解耦 → `tech-debt` + `area:`；只改文档 → `documentation`。
+
+每个标签的精确定义、何时打哪个、颜色约定，见 **[标签规范 (LABELS.md)](LABELS.md)**。
+
 ## 约定
 
 - 遵循上面的 Engineering Principles。
+- 按 [标签规范 (LABELS.md)](LABELS.md) 给 issue / PR 打标签：至少 1 个类型，建议补优先级与领域。
 - 新增模块即补单元测试；纯逻辑测试不要依赖资产或 mediapipe。
 - 不提交大二进制 / 人脸影像（`.gitignore` 已拦截，pre-commit 兜底）。
 - 分支开发 + PR；CI、Vercel Preview、至少 1 个 reviewer approval 和必要的人工验收需通过后再合并。
