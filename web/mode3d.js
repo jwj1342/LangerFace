@@ -9,6 +9,8 @@ import { modelState, reconState, renderState, sourceState } from "./state.js";
 import { setLive, setMsg } from "./ui.js";
 
 let canonicalRef = null;
+let scanColorCanvas = null, scanColorCtx = null;
+const COLOR_SAMPLE_W = 320;
 
 async function fetchCanonicalRef() {
   if (canonicalRef) return canonicalRef;
@@ -39,7 +41,7 @@ async function buildViewer() {
     disp,
     modelState.triangles,
     modelState.atlases[renderState.system],
-    { showSurface: true, bands: renderState.bands },
+    { showSurface: true, bands: renderState.bands, vertexColors: reconState.reconColors },
   );
   els.view3d.disabled = false; els.project3d.disabled = false;
   setMode3d("view");
@@ -74,7 +76,7 @@ export async function loadDemoRecon() {
   els.reconStatus.textContent = "加载示例重建（基于你的视频）…";
   await ensureReady();
   const d = await fetch(assetUrls.reconDemo).then((r) => r.json());
-  reconState.reconVerts = d.vertices;
+  reconState.reconVerts = d.vertices; reconState.reconColors = null;
   els.reconStatus.textContent = `示例重建就绪：${d.frames} 帧，偏航 ${d.yaw_min}~${d.yaw_max}。可旋转查看 / 投影。`;
   await buildViewer();
 }
@@ -92,7 +94,7 @@ export async function startScan() {
     return;
   }
   els.canvas.classList.add("hidden"); els.three.classList.add("hidden");
-  const collected = []; const t0 = performance.now(); let ymin = 1e9, ymax = -1e9;
+  const collected = [], colorFrames = []; const t0 = performance.now(); let ymin = 1e9, ymax = -1e9;
   reconState.scan = { active: true };
   const tick = () => {
     if (!reconState.scan || !reconState.scan.active) return;
@@ -101,18 +103,49 @@ export async function startScan() {
     if (res.faceLandmarks && res.faceLandmarks.length) {
       const lm = toPixels(res.faceLandmarks[0], els.video.videoWidth, els.video.videoHeight).slice(0, 468);
       collected.push(applySim(umeyama(RIGID3D.map((i) => lm[i]), refRigid), lm));
+      colorFrames.push(sampleFrameColors(lm));
       const nose = lm[1], cl = lm[234], cr = lm[454], yaw = (nose[0] - (cl[0] + cr[0]) / 2) / (Math.abs(cr[0] - cl[0]) || 1);
       ymin = Math.min(ymin, yaw); ymax = Math.max(ymax, yaw);
     }
     const secs = (t - t0) / 1000;
     els.reconStatus.textContent = `扫描中 ${secs.toFixed(1)}s：缓慢左右上下转头（已采 ${collected.length} 帧，偏航 ${ymin.toFixed(2)}~${ymax.toFixed(2)}）`;
-    if (secs > 9 && collected.length > 40) { finishScan(collected, ymin, ymax); return; }
+    if (secs > 9 && collected.length > 40) { finishScan(collected, ymin, ymax, colorFrames); return; }
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
 }
 
-function finishScan(collected, ymin, ymax) {
+function sampleFrameColors(lm) {
+  if (!scanColorCanvas) {
+    scanColorCanvas = document.createElement("canvas");
+    scanColorCtx = scanColorCanvas.getContext("2d", { willReadFrequently: true });
+  }
+  const vw = els.video.videoWidth || 1, vh = els.video.videoHeight || 1;
+  const scale = Math.min(1, COLOR_SAMPLE_W / vw);
+  const W = Math.max(1, Math.round(vw * scale)), H = Math.max(1, Math.round(vh * scale));
+  scanColorCanvas.width = W; scanColorCanvas.height = H;
+  scanColorCtx.drawImage(els.video, 0, 0, W, H);
+  const data = scanColorCtx.getImageData(0, 0, W, H).data;
+  return lm.map((p) => {
+    const x = Math.max(0, Math.min(W - 1, Math.round(p[0] * scale)));
+    const y = Math.max(0, Math.min(H - 1, Math.round(p[1] * scale)));
+    const j = (y * W + x) * 4;
+    return [data[j] / 255, data[j + 1] / 255, data[j + 2] / 255];
+  });
+}
+
+function mergeVertexColors(colorFrames, count) {
+  if (!colorFrames.length) return null;
+  const out = Array.from({ length: count }, () => [0, 0, 0]);
+  for (const frame of colorFrames) {
+    for (let i = 0; i < count; i++) {
+      out[i][0] += frame[i][0]; out[i][1] += frame[i][1]; out[i][2] += frame[i][2];
+    }
+  }
+  return out.map((c) => c.map((v) => v / colorFrames.length));
+}
+
+function finishScan(collected, ymin, ymax, colorFrames = []) {
   reconState.scan = null;
   const N = collected.length, V = 468, verts = [];
   const med = (k) => { k.sort((a, b) => a - b); return k[(k.length - 1) >> 1]; };
@@ -123,6 +156,7 @@ function finishScan(collected, ymin, ymax) {
   }
   const c = [0, 0, 0]; for (const p of verts) for (let k = 0; k < 3; k++) c[k] += p[k] / V;
   reconState.reconVerts = verts.map((p) => [p[0] - c[0], p[1] - c[1], p[2] - c[2]]);
+  reconState.reconColors = mergeVertexColors(colorFrames, V);
   els.reconStatus.textContent = `重建完成：${N} 帧，偏航 ${ymin.toFixed(2)}~${ymax.toFixed(2)}。可旋转查看 / 投影。`;
   buildViewer();
 }

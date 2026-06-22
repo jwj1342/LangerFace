@@ -48,10 +48,11 @@ async function loadMeshFile(file) {
     setHint("网格 JSON 需含 {vertices:[[x,y,z]...], triangles:[[a,b,c]...]}");
     return;
   }
-  viewer.setMesh(data.vertices, data.triangles, { showSurface: true });
+  const colors = data.colors || data.vertexColors || null;
+  viewer.setMesh(data.vertices, data.triangles, { showSurface: true, colors });
   onCanonical = false;
   els.drawMode.textContent = "自定义头模";
-  setHint("已载入自定义头模。导出为 xyz 折线（非标准脸拓扑，无法导出图谱）。");
+  setHint(`已载入自定义头模${colors ? "（含顶点色）" : ""}。导出为 xyz 折线（非标准脸拓扑，无法导出图谱）。`);
   refresh();
 }
 
