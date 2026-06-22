@@ -11,6 +11,10 @@ const SCALAR_BYTES = {
   double: 8, float64: 8,
 };
 
+// Defensive caps so a malformed / hostile mesh file cannot OOM or hang the tab.
+const MAX_MESH_BYTES = 200 * 1024 * 1024; // 200 MB
+const MAX_PLY_ELEMENTS = 50_000_000;
+
 function assertMesh(vertices, triangles, source, colors = null) {
   if (!Array.isArray(vertices) || !Array.isArray(triangles)) {
     throw new Error(`${source} must contain vertices and triangles`);
@@ -72,6 +76,7 @@ function parseObjMesh(text) {
     if (!line || line.startsWith("#")) continue;
     const parts = line.split(/\s+/);
     if (parts[0] === "v") {
+      if (parts.length < 4) throw new Error(`OBJ vertex line needs 3 coordinates: "${line}"`);
       vertices.push([Number(parts[1]), Number(parts[2]), Number(parts[3])]);
     } else if (parts[0] === "f") {
       const indices = parts.slice(1).map((p) => parseObjIndex(p, vertices.length));
@@ -110,6 +115,7 @@ function parsePlyHeader(headerText) {
     if (parts[0] === "element") {
       current = { name: parts[1], count: Number.parseInt(parts[2], 10), properties: [] };
       if (!Number.isInteger(current.count) || current.count < 0) throw new Error(`Invalid PLY element count: ${line}`);
+      if (current.count > MAX_PLY_ELEMENTS) throw new Error(`PLY element count exceeds limit (${current.count} > ${MAX_PLY_ELEMENTS})`);
       elements.push(current);
     } else if (parts[0] === "property" && current) {
       if (parts[1] === "list") {
@@ -171,12 +177,16 @@ function parsePlyAscii(bytes, headerEnd, elements) {
   const triangles = [];
   for (const element of elements) {
     for (let i = 0; i < element.count; i++) {
-      const row = {};
+      const row = Object.create(null); // null-proto: a "__proto__" property name cannot pollute prototypes
       let faceIndices = null;
+      let firstList = null;
       for (const prop of element.properties) {
         const value = prop.kind === "list" ? readAsciiList(tokens, state, prop) : readAsciiScalar(tokens, state, prop.type);
         row[prop.name] = value;
-        if (prop.kind === "list" && !faceIndices && /^(vertex_indices|vertex_index|vertices|verts)$/.test(prop.name)) faceIndices = value;
+        if (prop.kind === "list") {
+          if (!firstList) firstList = value;
+          if (!faceIndices && /^(vertex_indices|vertex_index|vertices|verts)$/.test(prop.name)) faceIndices = value;
+        }
       }
       if (element.name === "vertex") {
         vertices.push([row.x, row.y, row.z]);
@@ -185,7 +195,7 @@ function parsePlyAscii(bytes, headerEnd, elements) {
         const b = row.blue ?? row.diffuse_blue ?? row.b;
         if (r != null && g != null && b != null) colors.push([r, g, b]);
       }
-      if (element.name === "face") triangulate(faceIndices, triangles);
+      if (element.name === "face") triangulate(faceIndices ?? firstList, triangles);
     }
   }
   return assertMesh(vertices, triangles, "PLY mesh", colors.length === vertices.length ? colors : null);
@@ -199,7 +209,7 @@ function parsePlyBinary(buffer, headerEnd, elements, littleEndian) {
   const triangles = [];
   for (const element of elements) {
     for (let i = 0; i < element.count; i++) {
-      const row = {};
+      const row = Object.create(null); // null-proto: a "__proto__" property name cannot pollute prototypes
       let faceIndices = null;
       let firstList = null;
       for (const prop of element.properties) {
@@ -239,6 +249,9 @@ function parsePlyMesh(buffer) {
 export async function parseMeshFile(file) {
   const name = (file?.name || "").toLowerCase();
   const buffer = await file.arrayBuffer();
+  if (buffer.byteLength > MAX_MESH_BYTES) {
+    throw new Error(`网格文件过大（${(buffer.byteLength / 1048576).toFixed(0)}MB），超过 ${MAX_MESH_BYTES / 1048576}MB 上限，请精简后再导入`);
+  }
   if (name.endsWith(".obj")) return parseObjMesh(TEXT_DECODER.decode(buffer));
   if (name.endsWith(".ply")) return parsePlyMesh(buffer);
   if (name.endsWith(".json")) return parseJsonMesh(TEXT_DECODER.decode(buffer));

@@ -4,6 +4,12 @@ const scale = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
 const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
+// Defensive caps so a malformed .mrk.json (e.g. two control points astronomically
+// far apart with a tiny spacing) cannot spin an unbounded loop and freeze/OOM the tab.
+const MAX_CONTROL_POINTS = 100000;
+const MAX_STEPS_PER_SEGMENT = 4000;
+const MAX_OUTPUT_POINTS = 500000;
+
 function cleanPoint(p) {
   if (!Array.isArray(p) || p.length < 3) return null;
   const q = [Number(p[0]), Number(p[1]), Number(p[2])];
@@ -16,8 +22,8 @@ function parseSlicerMarkups(text) {
   return markups
     .filter((m) => !m.type || String(m.type).toLowerCase() === "curve")
     .map((m, i) => ({
-      name: m.name || `slicer_curve_${i + 1}`,
-      region: m.region || "slicer",
+      name: (typeof m.name === "string" && m.name) ? m.name : `slicer_curve_${i + 1}`,
+      region: (typeof m.region === "string" && m.region) ? m.region : "slicer",
       coordinateSystem: data.coordinateSystem || m.coordinateSystem || "",
       controlPoints: (m.controlPoints || [])
         .map((cp) => cleanPoint(cp.position))
@@ -42,7 +48,7 @@ function catmullRomPoint(p0, p1, p2, p3, u, alpha = 0.5) {
   return lerp(B1, B2, (t - t1) / (t2 - t1));
 }
 
-function makeDenseCatmullRom(points, spacing) {
+function makeDenseCatmullRom(points, spacing, alpha = 0.5) {
   if (points.length <= 2) return points.slice();
   const dense = [points[0]];
   for (let i = 0; i + 1 < points.length; i++) {
@@ -50,8 +56,14 @@ function makeDenseCatmullRom(points, spacing) {
     const p2 = points[i + 1];
     const p0 = i > 0 ? points[i - 1] : add(p1, sub(p1, p2));
     const p3 = i + 2 < points.length ? points[i + 2] : add(p2, sub(p2, p1));
-    const steps = Math.max(8, Math.ceil((dist(p1, p2) / Math.max(0.001, spacing)) * 5));
-    for (let j = 1; j <= steps; j++) dense.push(catmullRomPoint(p0, p1, p2, p3, j / steps));
+    const steps = Math.min(
+      MAX_STEPS_PER_SEGMENT,
+      Math.max(8, Math.ceil((dist(p1, p2) / Math.max(0.001, spacing)) * 5)),
+    );
+    for (let j = 1; j <= steps; j++) dense.push(catmullRomPoint(p0, p1, p2, p3, j / steps, alpha));
+    if (dense.length > MAX_OUTPUT_POINTS) {
+      throw new Error(`Slicer 曲线加密点数超过上限（${MAX_OUTPUT_POINTS}）：控制点坐标量级过大或重采样间距过小，请增大间距`);
+    }
   }
   return dense;
 }
@@ -68,6 +80,9 @@ function resampleByArcLength(points, spacing) {
       const t = carry / seg;
       const p = lerp(prev, cur, t);
       out.push(p);
+      if (out.length > MAX_OUTPUT_POINTS) {
+        throw new Error(`Slicer 曲线重采样点数超过上限（${MAX_OUTPUT_POINTS}）：控制点坐标量级过大或重采样间距过小，请增大间距`);
+      }
       prev = p;
       seg = dist(prev, cur);
       carry = spacing;
@@ -83,6 +98,9 @@ function resampleByArcLength(points, spacing) {
 export function smoothAndResample(points, { spacing = 2, alpha = 0.5 } = {}) {
   const clean = points.map(cleanPoint).filter(Boolean);
   if (clean.length < 2) return [];
+  if (clean.length > MAX_CONTROL_POINTS) {
+    throw new Error(`Slicer 曲线控制点过多（${clean.length} > ${MAX_CONTROL_POINTS}）`);
+  }
   const step = Math.max(0.05, Number(spacing) || 2);
   if (clean.length === 2) return resampleByArcLength(clean, step);
   return resampleByArcLength(makeDenseCatmullRom(clean, step, alpha), step);
