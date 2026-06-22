@@ -13,10 +13,13 @@ import cv2
 from langerface.config import Config, DEFAULT_STYLES, LineStyle
 from langerface.pipeline import LinePipeline
 
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOCAL_MEDIA = os.path.join(REPO, "local_media")
+
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--video", default="IMG_3458.MOV")
+    ap.add_argument("--video", default=os.path.join(LOCAL_MEDIA, "IMG_3458.MOV"))
     ap.add_argument("--frame", type=int, default=156)
     ap.add_argument("--system", default="rstl")
     ap.add_argument("--thickness", type=int, default=1)

@@ -10,12 +10,14 @@ __pycache__/
 venv/
 
 # Logs
+logs/
 *.log
 
 # Local Claude Code settings
 .claude/settings.local.json
 
 # Personal face footage / imagery — not for public repo
+local_media/
 *.MOV
 *.mov
 *.mp4

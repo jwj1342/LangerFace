@@ -101,7 +101,7 @@ python3 tools/build_field_atlas.py 0.014        # 数字越小越密
 python3 tools/export_web_assets.py
 
 # 5)（可选）用示例视频重建一个 3D 头，供 3D Beta 直接体验
-python3 tools/reconstruct_3d.py IMG_3458.MOV    # -> web/assets/recon_demo.json
+python3 tools/reconstruct_3d.py local_media/IMG_3458.MOV    # -> web/assets/recon_demo.json
 
 # 6) 测试 / 构建
 pytest -q                         # Python 端

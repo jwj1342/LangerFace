@@ -1,6 +1,6 @@
 """单帧高清调试：叠加线 + 人脸轮廓边界，裁到脸部区域，便于判断线是否越界。
 
-  python3 tools/debug_one.py IMG_3458.MOV 156 rstl
+  python3 tools/debug_one.py local_media/IMG_3458.MOV 156 rstl
 """
 import os
 import sys
@@ -17,9 +17,12 @@ FACE_OVAL = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365
              379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93,
              234, 127, 162, 21, 54, 103, 67, 109]
 
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOCAL_MEDIA = os.path.join(REPO, "local_media")
+
 
 def main():
-    video = sys.argv[1] if len(sys.argv) > 1 else "IMG_3458.MOV"
+    video = sys.argv[1] if len(sys.argv) > 1 else os.path.join(LOCAL_MEDIA, "IMG_3458.MOV")
     idx = int(sys.argv[2]) if len(sys.argv) > 2 else 156
     system = sys.argv[3] if len(sys.argv) > 3 else "rstl"
 

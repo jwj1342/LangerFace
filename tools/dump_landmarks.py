@@ -20,6 +20,7 @@ from langerface.lines import map_atlas
 from langerface.rendering import BackfaceCuller
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOCAL_MEDIA = os.path.join(REPO, "local_media")
 OUT = os.path.join(REPO, "web", "test", "expected.json")
 
 
@@ -31,7 +32,7 @@ def main():
     atlas = Atlas.load(ATLAS_PATHS["rstl"])
     det = FaceLandmarkDetector(FACE_LANDMARKER_TASK, mode="image", num_faces=1)
 
-    cap = cv2.VideoCapture(os.path.join(REPO, "IMG_3458.MOV"))
+    cap = cv2.VideoCapture(os.path.join(LOCAL_MEDIA, "IMG_3458.MOV"))
     frames_out = []
     for idx in (50, 156, 219):
         cap.set(cv2.CAP_PROP_POS_FRAMES, idx)

@@ -1,6 +1,6 @@
 """从输出视频抽帧目检：跨时间抽样 + 连续帧拼条（看抖动/连续性）。
 
-  python3 tools/sample_output.py out_rstl.mp4
+  python3 tools/sample_output.py local_media/out_rstl.mp4
 """
 import os
 import sys
@@ -8,7 +8,10 @@ import sys
 import cv2
 import numpy as np
 
-video = sys.argv[1] if len(sys.argv) > 1 else "out_rstl.mp4"
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOCAL_MEDIA = os.path.join(REPO, "local_media")
+
+video = sys.argv[1] if len(sys.argv) > 1 else os.path.join(LOCAL_MEDIA, "out_rstl.mp4")
 outdir = "debug_frames"
 os.makedirs(outdir, exist_ok=True)
 

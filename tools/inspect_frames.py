@@ -1,6 +1,6 @@
 """抽取若干帧跑图像管线，保存 原图|关键点|叠加 三联图，供人工目检。
 
-  python3 tools/inspect_frames.py IMG_3458.MOV
+  python3 tools/inspect_frames.py local_media/IMG_3458.MOV
 """
 from __future__ import annotations
 
@@ -14,9 +14,12 @@ from langerface.config import Config             # noqa: E402
 from langerface.detection import FaceLandmarkDetector  # noqa: E402
 from langerface.pipeline import LinePipeline     # noqa: E402
 
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOCAL_MEDIA = os.path.join(REPO, "local_media")
+
 
 def main():
-    video = sys.argv[1] if len(sys.argv) > 1 else "IMG_3458.MOV"
+    video = sys.argv[1] if len(sys.argv) > 1 else os.path.join(LOCAL_MEDIA, "IMG_3458.MOV")
     outdir = "debug_frames"
     os.makedirs(outdir, exist_ok=True)
 
