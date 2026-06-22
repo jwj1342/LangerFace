@@ -323,7 +323,8 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 Vercel 自动提供 **HTTPS**，因此线上 `getUserMedia`（摄像头）可用。
 
 - **线上地址**：https://web-black-one-34.vercel.app
-- **部署命令**（从 `web/` 目录）：
+- **推荐流程**：使用 Vercel Git 集成自动部署，GitHub Actions 负责质量门禁；Vercel Project 的 Root Directory 设为 `web`。详细配置见 [CI/CD 与 Vercel 部署指南](docs/CI_CD_VERCEL.md)。
+- **手动部署 fallback**（从 `web/` 目录）：
   ```bash
   cd web
   npm ci
@@ -335,7 +336,7 @@ Vercel 自动提供 **HTTPS**，因此线上 `getUserMedia`（摄像头）可用
   - [`web/vite.config.js`](web/vite.config.js)：Vite 静态资产导入与生产构建设置。
   - [`web/vercel.json`](web/vercel.json)：Vercel 使用 `npm run build`，输出 `dist/`，并为 `/assets/*` 配置长缓存。
   - [`web/.vercelignore`](web/.vercelignore)：排除本地测试/构建缓存。
-- **更新流程**：改完 `web/` 后（若动了图谱/几何/3D 资产，先 `python3 tools/export_web_assets.py` 重新导出），再 `cd web && npm run build && npx vercel deploy --prod`。
+- **更新流程**：改完 `web/` 后（若动了图谱/几何/3D 资产，先 `python3 tools/export_web_assets.py` 重新导出），发 PR；CI 和 Vercel Preview 都通过后合并到 `master`，由 Vercel 自动发布生产环境。
 - **隐私**：`web/assets/recon_demo.json` 是示例视频重建出的 3D 人头，会随站点**公开**。不想公开就把它加入 `web/.vercelignore`（此时网页"用示例重建"按钮会失效，仍可用"转头扫描"）。
 
 ## 开发文档
