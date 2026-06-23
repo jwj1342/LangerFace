@@ -13,7 +13,7 @@ const els = {
   stage: $("stage"), system: $("annSystem"), name: $("annName"), region: $("annRegion"),
   btnNew: $("btnNew"), btnUndo: $("btnUndo"), btnFinish: $("btnFinish"), btnClear: $("btnClear"),
   exAtlas: $("btnExportAtlas"), exXyz: $("btnExportXyz"), setActive: $("btnSetActiveAtlas"),
-  loadCanonical: $("btnLoadCanonical"), loadFlame: $("btnLoadFlame"),
+  loadCanonical: $("btnLoadCanonical"), loadFlame: $("btnLoadFlame"), loadFittedFlame: $("btnLoadFittedFlame"),
   meshFile: $("meshFile"), slicerFile: $("slicerFile"),
   resampleSpacing: $("resampleSpacing"),
   list: $("lineList"), status: $("annStatus"), hint: $("hint"),
@@ -46,31 +46,38 @@ async function loadCanonical() {
 // FLAME 资产为 dev-local（gitignore）：用 import.meta.glob 在构建期按存在与否解析，
 // 缺失（CI / 生产构建）时 glob 为空 → FLAME 入口自动隐藏，绝不影响构建。
 const FLAME_URLS = import.meta.glob(
-  "./assets/{topology_flame_2023,flame_neutral_vertices}.json",
+  "./assets/{topology_flame_2023,flame_neutral_vertices,flame_fitted_vertices}.json",
   { query: "?url", import: "default", eager: true },
 );
 const flameUrl = (name) => FLAME_URLS[`./assets/${name}.json`] || null;
 const flameAvailable = () =>
   Boolean(flameUrl("topology_flame_2023") && flameUrl("flame_neutral_vertices"));
+// 个体（拟合后）FLAME 头：tools/fit_flame_to_landmarks.py 离线产出 flame_fitted_vertices.json。
+const fittedFlameAvailable = () =>
+  Boolean(flameUrl("topology_flame_2023") && flameUrl("flame_fitted_vertices"));
 
-async function loadFlame() {
-  if (!flameAvailable()) {
-    setHint("FLAME 资产未生成（dev-local）。本地放好 assets/flame/flame2023_Open.pkl 后运行 tools/export_flame_topology.py。");
+async function loadFlameMesh(vertsName, label) {
+  const vurl = flameUrl(vertsName);
+  const turl = flameUrl("topology_flame_2023");
+  if (!vurl || !turl) {
+    setHint("FLAME 资产未生成（dev-local）。本地放好 assets/flame/flame2023_Open.pkl 后运行 tools/export_flame_topology.py（个体网格再跑 fit_flame_to_landmarks.py）。");
     return;
   }
-  setHint("加载 FLAME 头模…");
+  setHint(`加载 ${label}…`);
   const [verts, topology] = await Promise.all([
-    fetchJSON(flameUrl("flame_neutral_vertices"), "FLAME 顶点"),
-    fetchJSON(flameUrl("topology_flame_2023"), "FLAME 拓扑"),
+    fetchJSON(vurl, label),
+    fetchJSON(turl, "FLAME 拓扑"),
   ]);
   const meta = topologyMeta("flame-2023");
   model.setTopology({ topologyId: meta.id, topologyVersion: meta.version });
   viewer.setMesh(verts, topology.triangles, { showSurface: true });
   onCanonical = true;
-  els.drawMode.textContent = meta.label;
-  setHint(`在 FLAME 头上点击落点（${topology.vertexCount} 顶点）；导出得 flame-2023 图谱(tri,u,v)。`);
+  els.drawMode.textContent = label;
+  setHint(`在 ${label} 上点击落点（${topology.vertexCount} 顶点）；导出得 flame-2023 图谱(tri,u,v)。`);
   refresh();
 }
+const loadFlame = () => loadFlameMesh("flame_neutral_vertices", topologyMeta("flame-2023").label);
+const loadFittedFlame = () => loadFlameMesh("flame_fitted_vertices", "FLAME 个体（拟合）");
 
 async function fetchJSON(url, label) {
   const res = await fetch(url);
@@ -183,6 +190,7 @@ els.exXyz.onclick = () => exportJSON(() => model.toXyzJSON(), `lines_${model.sys
 els.setActive.onclick = previewActiveAtlas;
 els.loadCanonical.onclick = loadCanonical;
 els.loadFlame.onclick = loadFlame;
+els.loadFittedFlame.onclick = loadFittedFlame;
 els.meshFile.onchange = (e) => loadMeshFile(e.target.files[0]);
 els.slicerFile.onchange = (e) => loadSlicerFile(e.target.files[0]);
 
@@ -364,6 +372,7 @@ function tick() {
 }
 
 if (!flameAvailable()) els.loadFlame.style.display = "none";
+if (!fittedFlameAvailable()) els.loadFittedFlame.style.display = "none";
 refresh();
 setHint("点「加载标准脸」开始，或上传头模 JSON / OBJ / PLY。");
 loadCanonical().catch((e) => setHint("标准脸加载失败：" + e.message));

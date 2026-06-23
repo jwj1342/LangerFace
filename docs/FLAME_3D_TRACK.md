@@ -65,14 +65,28 @@
 
 bary 迁移保证线条落在解剖对应位置、方向随曲面形变。但「张力线能否纯由几何形状从模板迁到个体」本身是**临床假设**，与 RSTL 出处弱、#2 校验未解同源。先按 `validated:false / 几何近似，须临床校验` 标注。
 
-## 9. 敏捷 backlog
+## 9. 敏捷 backlog 与进度
 
-- **Sprint 0（本 PR）✅**：本设计/选型文档；`flame-2023` 拓扑常量；FLAME 拓扑导出工具 `tools/export_flame_topology.py`（OBJ → topology JSON，资产缺失安全跳过）；license 边界（`.gitignore` + `assets/flame/README.md`）；合成 fixture 单测（不依赖真模型）。
-- **Sprint 1**：Web 端拓扑可选——3D 标注器/查看器经现有 `mesh_io.parseMeshFile`/`setMesh` 加载 FLAME neutral mesh（路线 A）；`snapToSurface` 加空间索引应对 5023 顶点；合成 FLAME-shaped fixture 驱动开发（仍不需真模型）。
-- **Sprint 2**：在 FLAME 上标注标准张力线 → 导出 `topologyId:"flame-2023"` 独立图谱。
-- **Sprint 3**：离线拟合（模式 A 关键点）——`FLAME_PyTorch`(MIT) + 自写优化器 + FLAME 2023 Open；产 landmark-embedding；输出个体 FLAME + 迁移张力线静态资产。
-- **Sprint 4**：离线拟合（模式 B 3D 扫描）——scan-to-FLAME 配准后端。
-- **Sprint 5**：个体可视化 + 验收（眼周放射线不退化、贴面平滑、拓扑契约单测）。
+- **Sprint 0 ✅**：选型文档；`flame-2023` 拓扑常量；拓扑导出工具 `tools/export_flame_topology.py`（读 FLAME .pkl → topology + neutral 顶点 JSON，缺资产安全跳过）；license 边界（`.gitignore` + `assets/flame/README.md`）；合成 fixture 单测。
+- **Sprint 1 ✅**：`web/topology_registry.js` + 3D 标注器「加载 FLAME 头模」（`import.meta.glob` 加载 dev-local FLAME 资产；缺失则入口隐藏、不影响构建）。
+- **Sprint 2 ✅**：在 FLAME 上标注 → 导出 `topologyId:"flame-2023"` 独立图谱；「设为活动图谱并预览」（2D 实时入口）按拓扑闸到 mediapipe-468。
+- **Sprint 3 ✅（模式 A 关键点）**：`langerface.flame` 纯 numpy 线性形状拟合（FLAME 线性基最小二乘 + 项目 Umeyama，CPU 离线，**无需 PyTorch/GPU**）；`tools/fit_flame_to_landmarks.py` 用官方 `mediapipe_landmark_embedding.npz`（105 点）把 FLAME 拟合到 MediaPipe 关键点 → 个体 FLAME。真模型实测：5023 顶点、105 关键点、残差 ~1.6mm。合成单测验证 β 恢复 + `transfer_points` 线随形变迁移。
+- **Sprint 4 ✅（个体可视化·初版）**：标注器「加载个体 FLAME（拟合）」加载 `flame_fitted_vertices.json`，可视化拟合后的个体脸。
+- **Sprint 5（剩余）**：把医生的 flame-2023 标准线**渲染到个体脸上**（载入已存图谱 + 在个体网格 `transfer_points` 重心采样）；**模式 B 3D 扫描配准**后端；眼周放射线/贴面平滑验收 fixture；`snapToSurface` 空间索引（5023 顶点）。
+
+## 10. 端到端怎么跑（本地，dev-only）
+
+```bash
+# 1) 资产就位（仅一次）：FLAME 2023 Open 放 assets/flame/flame2023_Open.pkl（见 §7）
+# 2) 导出 FLAME 拓扑 + neutral 顶点（读 pkl 需 scipy）
+python tools/export_flame_topology.py
+# 3) 拟合到一组 MediaPipe 关键点（缺省用标准脸做自包含 demo）
+python tools/fit_flame_to_landmarks.py [your_landmarks.json]
+# 4) 前端：web/ 下 npm run dev → annotate 页
+#    「加载 FLAME 头模」在标准头标注；「加载个体 FLAME（拟合）」看个体脸
+```
+
+集群上读 pkl 需 scipy：`module load scipy-stack`；若非交互 shell 里 module 不生效，用 venv + `pip install --no-index scipy`，并以 `PYTHONPATH=src` 运行。所有 FLAME 衍生产物（topology/neutral/fitted JSON）均 **gitignore，dev-local，不部署**。
 
 ## 来源（选型核实）
 
