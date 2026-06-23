@@ -107,8 +107,14 @@ function lesionSizes() {
 }
 
 // 沿 longAxis 做梭形切除并启动闭合沉降。longAxis 沿 RSTL → 短轴(闭合方向)=垂直 RSTL(软)→ 平和。
+function setActiveCut(type) {       // 高亮当前切向按钮（选中反馈）
+  els.along.classList.toggle("active", type === "along");
+  els.across.classList.toggle("active", type === "across");
+}
+
 function doExcision(longAxisVec, cutType) {
   if (!S.dir) return;
+  setActiveCut(cutType);
   S.simFrames = 0;
   const i = S.lesion;
   const longAxis = norm(longAxisVec);
@@ -125,6 +131,7 @@ function doExcision(longAxisVec, cutType) {
 
 function reset() {
   S.sb = null; S.simActive = false; S.shortAxis = null; S.cutType = null;
+  setActiveCut(null);
   S.settled = { along: null, across: null };
   S.colors = S.verts.map(() => [1, 1, 1]);
   rebuildMesh(S.tris);

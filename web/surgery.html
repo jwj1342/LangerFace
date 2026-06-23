@@ -7,6 +7,15 @@
 <title>面部张力线 · 切除闭合演示（Beta）</title>
 <link rel="stylesheet" href="style.css" />
 <link rel="stylesheet" href="annotate.css" />
+<style>
+  /* 切向按钮语义配色：沿 RSTL=绿（平和），逆 RSTL=红（绷紧）；选中时强填充 + 光晕 */
+  .btn.cut-along{border-color:var(--green);color:var(--green-d);background:var(--green-soft)}
+  .btn.cut-along:hover{background:#c7ecdb}
+  .btn.cut-across{border-color:#e2776f;color:#c0392b;background:#fde7e4}
+  .btn.cut-across:hover{background:#fbd9d4}
+  .btn.cut-along.active{background:var(--green);color:#fff;border-color:var(--green-d);box-shadow:0 0 0 3px rgba(15,155,110,.3)}
+  .btn.cut-across.active{background:#d6473e;color:#fff;border-color:#b83227;box-shadow:0 0 0 3px rgba(214,71,62,.3)}
+</style>
 </head>
 <body>
 <div class="app">
@@ -27,8 +36,8 @@
       <input id="sizeRange" type="range" min="60" max="220" value="120" />
       <div class="section-title"><span>2. 选择切向并切除</span></div>
       <div class="btn-row" style="grid-template-columns:1fr 1fr">
-        <button class="btn btn-primary" id="btnAlong">沿 RSTL 切除</button>
-        <button class="btn" id="btnAcross">逆 RSTL 切除</button>
+        <button class="btn cut-along" id="btnAlong">沿 RSTL 切除</button>
+        <button class="btn cut-across" id="btnAcross">逆 RSTL 切除</button>
       </div>
       <button class="btn" id="btnReset" style="margin-top:8px">↺ 复位（长回新皮肤）</button>
       <label class="btn" style="margin-top:8px"><input type="checkbox" id="showLines" checked /> 显示 RSTL 张力线</label>
