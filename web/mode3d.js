@@ -8,6 +8,10 @@ import { ensureReady, startCamera, stopSource } from "./pipeline.js";
 import { modelState, reconState, renderState, sourceState } from "./state.js";
 import { setLive, setMsg } from "./ui.js";
 
+// 偏航覆盖门控：扫描结束前要求左右转头的偏航跨度（ymax-ymin）至少达到该值，
+// 否则只采到近正脸样本、深度 Z 无侧脸视角约束，不同人深度剖面会趋同（见 #36）。
+const YAW_SPAN_MIN = 0.5;
+
 let canonicalRef = null;
 
 async function fetchCanonicalRef() {
@@ -71,11 +75,11 @@ export function setMode3d(m) {
 }
 
 export async function loadDemoRecon() {
-  els.reconStatus.textContent = "加载示例重建（基于你的视频）…";
+  els.reconStatus.textContent = "加载固定演示模型（非你的脸，仅用于体验流程）…";
   await ensureReady();
   const d = await fetch(assetUrls.reconDemo).then((r) => r.json());
   reconState.reconVerts = d.vertices;
-  els.reconStatus.textContent = `示例重建就绪：${d.frames} 帧，偏航 ${d.yaw_min}~${d.yaw_max}。可旋转查看 / 投影。`;
+  els.reconStatus.textContent = `固定演示模型就绪（非你的脸）：${d.frames} 帧，偏航 ${d.yaw_min}~${d.yaw_max}。可旋转查看 / 投影。想重建自己的脸请用「转头扫描」。`;
   await buildViewer();
 }
 
@@ -105,14 +109,22 @@ export async function startScan() {
       ymin = Math.min(ymin, yaw); ymax = Math.max(ymax, yaw);
     }
     const secs = (t - t0) / 1000;
-    els.reconStatus.textContent = `扫描中 ${secs.toFixed(1)}s：缓慢左右上下转头（已采 ${collected.length} 帧，偏航 ${ymin.toFixed(2)}~${ymax.toFixed(2)}）`;
-    if (secs > 9 && collected.length > 40) { finishScan(collected, ymin, ymax); return; }
+    const yawSpan = ymax - ymin;
+    els.reconStatus.textContent = `扫描中 ${secs.toFixed(1)}s：缓慢左右上下转头（已采 ${collected.length} 帧，偏航跨度 ${yawSpan.toFixed(2)} / 需 ${YAW_SPAN_MIN}）`;
+    // 时长+帧数+偏航覆盖都满足才正常结束，确保有侧脸视角约束深度 Z（见 #36）。
+    if (secs > 9 && collected.length > 40 && yawSpan > YAW_SPAN_MIN) { finishScan(collected, ymin, ymax); return; }
+    // 硬上限：避免偏航始终不足时无限扫描；此时仍结束，但明确标注深度置信度低。
+    if (secs > 20 && collected.length > 40) { finishScan(collected, ymin, ymax, yawSpan <= YAW_SPAN_MIN); return; }
+    // 时长+帧数已够、但偏航跨度仍不足：不结束，提示用户继续转头。
+    if (secs > 9 && collected.length > 40) {
+      els.reconStatus.textContent = `请继续向左 / 右转头：当前偏航跨度 ${yawSpan.toFixed(2)}，需达到 ${YAW_SPAN_MIN} 才能完成（${secs.toFixed(1)}s，已采 ${collected.length} 帧）`;
+    }
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
 }
 
-function finishScan(collected, ymin, ymax) {
+function finishScan(collected, ymin, ymax, lowDepthConfidence = false) {
   reconState.scan = null;
   const N = collected.length, V = 468, verts = [];
   const med = (k) => { k.sort((a, b) => a - b); return k[(k.length - 1) >> 1]; };
@@ -123,7 +135,9 @@ function finishScan(collected, ymin, ymax) {
   }
   const c = [0, 0, 0]; for (const p of verts) for (let k = 0; k < 3; k++) c[k] += p[k] / V;
   reconState.reconVerts = verts.map((p) => [p[0] - c[0], p[1] - c[1], p[2] - c[2]]);
-  els.reconStatus.textContent = `重建完成：${N} 帧，偏航 ${ymin.toFixed(2)}~${ymax.toFixed(2)}。可旋转查看 / 投影。`;
+  els.reconStatus.textContent = lowDepthConfidence
+    ? `重建完成（深度置信度低：偏航跨度 ${(ymax - ymin).toFixed(2)} < ${YAW_SPAN_MIN}，缺侧脸视角，深度不可靠）：${N} 帧。可旋转查看 / 投影。`
+    : `重建完成：${N} 帧，偏航 ${ymin.toFixed(2)}~${ymax.toFixed(2)}。可旋转查看 / 投影。`;
   buildViewer();
 }
 
