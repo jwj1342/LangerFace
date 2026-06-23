@@ -45,6 +45,17 @@ ok(atlas.topologyId === TOPOLOGY_ID && atlas.topologyVersion === TOPOLOGY_VERSIO
 ok(atlas.lines[0].points[0].length === 3, "图谱点为 [tri,u,v] 三元组");
 ok(atlas.lines[0].points[0][0] === 5, "图谱点保留三角面 id");
 
+// ── FLAME 拓扑：在 FLAME 头上标注，导出图谱应打 flame-2023 标（独立 3D 轨图谱）──
+const mf = new AnnotationModel("rstl");
+mf.setTopology({ topologyId: "flame-2023", topologyVersion: "flame-2023-v1" });
+mf.startLine({ name: "f0", region: "cheek" });
+mf.addPoint({ xyz: [0, 0, 0], tri: 9000, bary: [0.5, 0.3, 0.2] });
+mf.addPoint({ xyz: [1, 0, 0], tri: 9001, bary: [0.2, 0.4, 0.4] });
+mf.finishLine();
+const fAtlas = mf.toAtlasJSON();
+ok(fAtlas.topologyId === "flame-2023" && fAtlas.topologyVersion === "flame-2023-v1", "FLAME 图谱导出打 flame-2023 标");
+ok(fAtlas.lines[0].points[0][0] === 9000, "FLAME 图谱点保留 FLAME 三角面 id");
+
 // ── 导出 xyz ─────────────────────────────────────────────────────────────────
 const xyz = m.toXyzJSON();
 ok(xyz.lines[0].points[0].length === 3 && xyz.lines[0].points.length === 2, "xyz 折线导出正确");
