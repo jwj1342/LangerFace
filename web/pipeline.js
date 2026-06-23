@@ -48,7 +48,7 @@ export async function ensureReady() {
   const resolver = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
   const build = (delegate) => FaceLandmarker.createFromOptions(resolver, {
     baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
-    runningMode: "VIDEO", numFaces: 1,
+    runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: true,  // jawOpen 等驱动实时孪生表情/张嘴
     minFaceDetectionConfidence: 0.5, minFacePresenceConfidence: 0.5, minTrackingConfidence: 0.5,
   });
   try { modelState.landmarker = await build("GPU"); }
@@ -249,6 +249,10 @@ export function loop() {
     sourceState.presence = lm ? 1 : 0;
   } else if (sourceState.source.currentTime !== undefined) {
     const res = modelState.landmarker.detectForVideo(sourceState.source, t);
+    if (res.faceBlendshapes && res.faceBlendshapes.length) {
+      const jo = res.faceBlendshapes[0].categories.find((c) => c.categoryName === "jawOpen");
+      sourceState.jawOpen = jo ? jo.score : 0;
+    }
     if (res.faceLandmarks && res.faceLandmarks.length) {
       lm = toPixels(res.faceLandmarks[0], W, H);
       if (renderState.smoothLevel > 0) lm = renderState.smoother.filter(lm, t / 1000);

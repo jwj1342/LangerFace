@@ -4,7 +4,7 @@ import { assetUrls } from "./assets.js";
 import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./camera.js";
 import { ctx, els } from "./dom.js";
 import { applySim, toPixels, umeyama } from "./geometry.js";
-import { fitFlame, loadFlameBasis } from "./flame_fit.js";
+import { facesArray, fitExpression, fitShape, flameForward, loadFlameBasis } from "./flame_fit.js";
 import { countMetric, logWarn } from "./logger.js";
 import { ensureReady, showCameraPlaceholder, startCamera, stopSource } from "./pipeline.js";
 import { modelState, reconState, renderState, sourceState } from "./state.js";
@@ -69,26 +69,20 @@ export function resetView3d() {
   reconState.head3d?.resetView();
 }
 
-// ── 实时孪生：左实时人脸 / 右 FLAME 头随头姿实时转 + 浏览器本地拟合 + 实时误差 ──────────
-// 头姿调参（这边看不到渲染，给默认 + 易翻转符号；若「转反了」翻对应 sign）。
+// ── 实时孪生：左实时人脸 / 右 FLAME 头随头姿转 + 浏览器本地拟合（身份 + 表情 + 张嘴）──────
+// 头姿调参（这边看不到渲染，留旋钮；若「转反了」翻对应 sign）。jaw 调参见 flame_fit.js 的 JAW。
 const POSE = { yawSign: 1, pitchSign: 1, pitchClamp: 1.3 };
-const TWIN_FIT_MS = 900;  // 本地拟合节流（形状 + 误差刷新；头姿每帧跟随）
-let twinRAF = null, twinLastFit = 0, twinFaces = null, twinNeutral = null;
-
-const meshFromFlat = (flat, n) => {
-  const out = new Array(n);
-  for (let i = 0; i < n; i++) out[i] = [flat[i * 3], flat[i * 3 + 1], flat[i * 3 + 2]];
-  return out;
-};
+const ZERO_BETA = new Float64Array(60);  // 标准头身份系数（全 0 = neutral 标准脸）
+let twinRAF = null, twinFaces = null, twinMeshReady = false;
 
 export function stopTwin() {
   cancelAnimationFrame(twinRAF); twinRAF = null;
   els.mainWrap.classList.remove("twin");
 }
 
-// 「▶ 实时孪生」：加载基(一次) → 分屏 + 开摄像头(左) → 右 FLAME 头随头姿实时转 + 节流本地拟合。
+// 「▶ 实时孪生」：加载基(一次) → 分屏 + 开摄像头(左) → 右 FLAME 头随头姿转 + 每帧本地表情/张嘴拟合。
 export async function startTwin() {
-  els.reconStatus.textContent = "加载 FLAME 基（约 3.8MB，仅首次）…";
+  els.reconStatus.textContent = "加载 FLAME 基（约 6.9MB，仅首次）…";
   try {
     if (!reconState.flameBasis) reconState.flameBasis = await loadFlameBasis(assetUrls.flameBasis);
     if (!canonicalRef) await fetchCanonicalRef();
@@ -97,37 +91,43 @@ export async function startTwin() {
     return;
   }
   const basis = reconState.flameBasis;
-  twinFaces = meshFromFlat(basis.faces, basis.nFaces);
-  twinNeutral = meshFromFlat(basis.vTemplate, basis.nVerts);
-
-  await ensureHead3D();
-  reconState.head3d.setGeometry(twinNeutral, twinFaces, [], { showSurface: true, bands: false });
+  twinFaces = facesArray(basis);
+  twinMeshReady = false;
+  reconState.flameBeta = null;  // 身份待首帧拟合
   reconState.twinMode = "individual";
   els.flameStd.checked = false;
   els.flameHeadToggleWrap.style.display = "";
+
+  await ensureHead3D();
+  reconState.head3d.setGeometry(
+    flameForward(basis, ZERO_BETA, new Float64Array(basis.NE), 0), twinFaces, [], { showSurface: true, bands: false });
+  twinMeshReady = true;
 
   reconState.route = "3d"; reconState.mode3d = "twin";
   els.mainWrap.classList.add("twin");
   els.canvas.classList.remove("hidden"); els.three.classList.remove("hidden");
   setLive(true, "实时孪生");
-  twinLastFit = 0;
-  await startCamera();  // 复用主管线：画左侧人脸 + 每帧更新 sourceState.lastLM
+  await startCamera();  // 复用主管线：画左侧人脸 + 每帧更新 sourceState.lastLM / jawOpen
   cancelAnimationFrame(twinRAF); twinLoop();
 }
 
-// 每帧：头姿跟随（本地，复用 Umeyama）+ 节流本地拟合（形状 + 误差）+ 渲染右侧。
+// 每帧：头姿跟随 + 身份(首帧一次) + 表情拟合 + 张嘴(MediaPipe jawOpen) → FLAME 前向 → 原地更新顶点。
 function twinLoop() {
   if (reconState.mode3d !== "twin" || !reconState.head3d) return;
-  const lm = sourceState.lastLM;
-  if (lm && lm.length && canonicalRef) {
+  const lm = sourceState.lastLM, basis = reconState.flameBasis;
+  if (lm && lm.length && canonicalRef && basis) {
     applyHeadPose(lm);
-    const now = performance.now();
-    if (reconState.twinMode === "individual" && now - twinLastFit > TWIN_FIT_MS) {
-      twinLastFit = now;
+    if (!reconState.flameBeta) { try { reconState.flameBeta = fitShape(lm, basis).beta; } catch { /* 等下一帧 */ } }
+    if (reconState.flameBeta) {
       try {
-        const res = fitFlame(lm, reconState.flameBasis);
-        reconState.head3d.setGeometry(res.verts, res.faces, [], { showSurface: true, bands: false });
-        els.reconStatus.textContent = `实时孪生 · 个体 · 残差 ${(res.residual * 1000).toFixed(1)}mm`;
+        const beta = reconState.twinMode === "standard" ? ZERO_BETA : reconState.flameBeta;
+        const psi = fitExpression(lm, basis, beta).psi;
+        const jaw = sourceState.jawOpen || 0;
+        const verts = flameForward(basis, beta, psi, jaw);
+        if (twinMeshReady) reconState.head3d.updateVerts(verts);
+        else { reconState.head3d.setGeometry(verts, twinFaces, [], { showSurface: true, bands: false }); twinMeshReady = true; }
+        els.reconStatus.textContent =
+          `实时孪生 · ${reconState.twinMode === "standard" ? "标准" : "个体"} · 张嘴 ${Math.round(jaw * 100)}%`;
       } catch (err) {
         els.reconStatus.textContent = "拟合失败：" + err.message;
       }
@@ -151,17 +151,10 @@ function applyHeadPose(lm) {
   reconState.head3d.setRotation(pitch, yaw);
 }
 
-// 「标准⇄个体」开关（实时孪生用）：标准 = neutral 头（仍随姿）；个体 = 本地实时拟合。
+// 「标准⇄个体」开关：仅切 twinMode，下一帧 twinLoop 自动按之渲染。
 export function toggleTwinHead() {
-  if (reconState.mode3d !== "twin" || !reconState.flameBasis) return;
-  if (els.flameStd.checked) {
-    reconState.twinMode = "standard";
-    reconState.head3d.setGeometry(twinNeutral, twinFaces, [], { showSurface: true, bands: false });
-    els.reconStatus.textContent = "实时孪生 · 标准头";
-  } else {
-    reconState.twinMode = "individual";
-    twinLastFit = 0;  // 立即重拟合
-  }
+  if (reconState.mode3d !== "twin") return;
+  reconState.twinMode = els.flameStd.checked ? "standard" : "individual";
 }
 
 function viewerLoop() {

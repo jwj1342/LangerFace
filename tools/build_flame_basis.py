@@ -1,38 +1,56 @@
-"""从 FLAME 2023 Open .pkl 抽出云函数所需的**紧凑基** → web/api/flame_basis.npz。
+"""从 FLAME 2023 Open .pkl 抽出紧凑基 → web/api/flame_basis.npz（云，身份）+ web/assets/flame_basis.bin（浏览器，身份+表情+jaw）。
 
-内容（float32/int32 压缩）：v_template、shapedirs[:, :, :N_SHAPE]、faces、官方 mediapipe embedding。
-供 Vercel Python 云函数 web/api/fit.py 离线加载（运行时只需 numpy，**不需 scipy**——
-scipy 只在这里读原始 .pkl 时用到）。
+浏览器 .bin 固定布局（小端），供 web/flame_fit.js 切 typed arrays / 实现 FLAME 前向（含表情 + jaw 蒙皮）：
+  v_template f32(NV*3) · shapeDirs f32(NV*3*NS) · exprDirs f32(NV*3*NE) · faces i32(NF*3)
+  · lmk_face_idx i32(NL) · lmk_b_coords f32(NL*3) · landmark_indices i32(NL)
+  · jawReg f32(NV)   —— J_regressor 第 2 行（jaw 关节）· jawW f32(NV) —— weights[:,2]（jaw 蒙皮权重）
+计数固定：NV=5023 NF=9976 NL=105 NS=60 NE=50（FLAME 2023 Open + 官方 embedding）。
 
-License：FLAME 2023 Open = CC-BY-4.0，衍生基可随仓库分发，**须保留署名**
-（见 web/api/flame_basis.NOTICE.md）。读 .pkl 需 scipy（集群 `module load scipy-stack`
-或 venv 内 `pip install --no-index scipy`），并以 `PYTHONPATH=src` 运行。
+License：FLAME 2023 Open = CC-BY-4.0，衍生基可随仓库分发（署名见 web/api/flame_basis.NOTICE.md）。
+读 .pkl 需 scipy；以 `PYTHONPATH=src` 运行。
 """
 import os
+import pickle
 
 import numpy as np
+import scipy.sparse as sp
 
 from langerface.flame import load_flame_model, load_mediapipe_embedding
 
-N_SHAPE = 60  # 身份 PCA 维数：60 维已覆盖绝大多数个体形状，控制基体积（~3.6MB）
+NS, NE = 60, 50          # 身份 / 表情 PCA 维数
+JAW_JOINT = 2            # FLAME 关节：0 global · 1 neck · 2 jaw · 3/4 eyes
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PKL = os.path.join(REPO, "assets", "flame", "flame2023_Open.pkl")
-NPZ = os.path.join(REPO, "assets", "flame", "mediapipe_landmark_embedding.npz")
+NPZ_EMB = os.path.join(REPO, "assets", "flame", "mediapipe_landmark_embedding.npz")
 OUT = os.path.join(REPO, "web", "api", "flame_basis.npz")
 WEB_BIN = os.path.join(REPO, "web", "assets", "flame_basis.bin")
-# 浏览器内拟合的紧凑基（固定布局，小端）：web/flame_fit.js 按此顺序切 typed arrays。
-# 顺序：v_template f32(nVerts*3) · shapedirs f32(nVerts*3*nShape) · faces i32(nFaces*3)
-#       · lmk_face_idx i32(nLmk) · lmk_b_coords f32(nLmk*3) · landmark_indices i32(nLmk)
-# 计数固定：nVerts=5023 nFaces=9976 nLmk=105 nShape=60（FLAME 2023 Open + 官方 embedding）。
+
+
+def _raw(pkl):
+    with open(pkl, "rb") as f:
+        m = pickle.load(f, encoding="latin1")
+    sd = np.asarray(m["shapedirs"], dtype=np.float64)  # (NV,3,400) = 300 shape + 100 expr
+    jr = m["J_regressor"]
+    jr = jr.toarray() if sp.issparse(jr) else np.asarray(jr)
+    return {
+        "v_template": np.asarray(m["v_template"], dtype=np.float64).reshape(-1, 3),
+        "shape": sd[:, :, :NS],
+        "expr": sd[:, :, 300:300 + NE],
+        "faces": np.asarray(m["f"], dtype=np.int64).reshape(-1, 3),
+        "jaw_reg": np.asarray(jr[JAW_JOINT], dtype=np.float64),       # (NV,)
+        "jaw_w": np.asarray(m["weights"], dtype=np.float64)[:, JAW_JOINT],  # (NV,)
+    }
 
 
 def main() -> int:
-    if not (os.path.exists(PKL) and os.path.exists(NPZ)):
-        print(f"[skip] 缺 FLAME 资产（{PKL} / {NPZ}）。见 assets/flame/README.md。")
+    if not (os.path.exists(PKL) and os.path.exists(NPZ_EMB)):
+        print(f"[skip] 缺 FLAME 资产（{PKL} / {NPZ_EMB}）。见 assets/flame/README.md。")
         return 0
-    model = load_flame_model(PKL, n_shape=N_SHAPE)
-    emb = load_mediapipe_embedding(NPZ)
+    emb = load_mediapipe_embedding(NPZ_EMB)
+
+    # 云函数 npz（身份 only，运行时只需 numpy）—— 维持不变
+    model = load_flame_model(PKL, n_shape=NS)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     np.savez_compressed(
         OUT,
@@ -43,19 +61,21 @@ def main() -> int:
         lmk_b_coords=emb["lmk_b_coords"].astype(np.float32),
         landmark_indices=emb["landmark_indices"].astype(np.int32),
     )
-    mb = os.path.getsize(OUT) / 1e6
-    print(f"[ok] {OUT}  {mb:.2f} MB  verts={model['v_template'].shape[0]} "
-          f"shapedirs={model['shapedirs'].shape} faces={model['faces'].shape}")
+    print(f"[ok] {OUT}  {os.path.getsize(OUT) / 1e6:.2f} MB（云·身份）")
 
-    # 浏览器二进制基（固定布局，小端）——供 web/flame_fit.js 本地拟合（CC-BY-4.0，可入库）。
+    # 浏览器 .bin（身份 + 表情 + jaw）
+    r = _raw(PKL)
     with open(WEB_BIN, "wb") as f:
-        f.write(np.ascontiguousarray(model["v_template"], dtype="<f4").tobytes())
-        f.write(np.ascontiguousarray(model["shapedirs"], dtype="<f4").tobytes())
-        f.write(np.ascontiguousarray(model["faces"], dtype="<i4").tobytes())
+        f.write(np.ascontiguousarray(r["v_template"], dtype="<f4").tobytes())
+        f.write(np.ascontiguousarray(r["shape"], dtype="<f4").tobytes())
+        f.write(np.ascontiguousarray(r["expr"], dtype="<f4").tobytes())
+        f.write(np.ascontiguousarray(r["faces"], dtype="<i4").tobytes())
         f.write(np.ascontiguousarray(emb["lmk_face_idx"], dtype="<i4").tobytes())
         f.write(np.ascontiguousarray(emb["lmk_b_coords"], dtype="<f4").tobytes())
         f.write(np.ascontiguousarray(emb["landmark_indices"], dtype="<i4").tobytes())
-    print(f"[ok] {WEB_BIN}  {os.path.getsize(WEB_BIN) / 1e6:.2f} MB  (浏览器本地拟合基)")
+        f.write(np.ascontiguousarray(r["jaw_reg"], dtype="<f4").tobytes())
+        f.write(np.ascontiguousarray(r["jaw_w"], dtype="<f4").tobytes())
+    print(f"[ok] {WEB_BIN}  {os.path.getsize(WEB_BIN) / 1e6:.2f} MB（浏览器·身份+表情+jaw，NS={NS} NE={NE}）")
     return 0
 
 

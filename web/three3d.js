@@ -122,6 +122,16 @@ export class Head3D {
     this.grid.position.y = -Math.max(0.45, bb.size * 0.38);
   }
 
+  // 原地更新顶点（不重建网格 / 不重置相机）——供实时孪生每帧刷新表情 / 张嘴。
+  updateVerts(verts) {
+    if (!this.mesh) return;
+    const pos = this.mesh.geometry.attributes.position, arr = pos.array;
+    const n = Math.min(verts.length, arr.length / 3);
+    for (let i = 0; i < n; i++) { arr[i * 3] = verts[i][0]; arr[i * 3 + 1] = verts[i][1]; arr[i * 3 + 2] = verts[i][2]; }
+    pos.needsUpdate = true;
+    this.mesh.geometry.computeVertexNormals();
+  }
+
   setRotation(rx, ry) { this.rotX = rx; this.rotY = ry; }
 
   zoom(factor) {
