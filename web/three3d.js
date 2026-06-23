@@ -1,6 +1,7 @@
 // 3D Beta：用 Three.js 渲染重建出的 3D 人头，并把张力线贴到其表面。
 // 既支持「可旋转查看」模式，也支持「投影到实时画面」（深度缓冲精确自遮挡）模式。
 import * as THREE from "three";
+import { addSkinLighting, configureSkinRenderer, createSkinMaterial } from "./skin_material.js";
 
 const BAND = { top: [0.94, 0.76, 0.29], mid: [0.34, 0.74, 0.95], low: [0.25, 0.83, 0.62] };
 
@@ -64,17 +65,13 @@ export class Head3D {
     this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    configureSkinRenderer(this.renderer);
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x111820);
     this.camera = new THREE.PerspectiveCamera(35, 1, 0.01, 100);
     this.group = new THREE.Group();
     this.scene.add(this.group);
-    this.scene.add(new THREE.HemisphereLight(0xddeeff, 0x334055, 0.72));
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.28));
-    const d = new THREE.DirectionalLight(0xffffff, 0.8); d.position.set(0.4, 0.8, 1.2);
-    this.scene.add(d);
-    const fill = new THREE.DirectionalLight(0xb8d9ff, 0.28); fill.position.set(-0.8, 0.2, -0.7);
-    this.scene.add(fill);
+    addSkinLighting(this.scene);
     this.grid = new THREE.GridHelper(2, 12, 0x334155, 0x243041);
     this.grid.position.y = -0.72;
     this.grid.material.transparent = true; this.grid.material.opacity = 0.38;
@@ -85,7 +82,12 @@ export class Head3D {
   }
 
   setGeometry(verts, tris, atlasLines, { showSurface = true, bands = true, vertexColors = null } = {}) {
-    if (this.mesh) { this.group.remove(this.mesh); this.mesh.geometry.dispose(); this.mesh = null; }
+    if (this.mesh) {
+      this.group.remove(this.mesh);
+      this.mesh.geometry.dispose();
+      this.mesh.material.dispose();
+      this.mesh = null;
+    }
     if (this.lines) { this.group.remove(this.lines); this.lines.geometry.dispose(); this.lines = null; }
     const normals = vertexNormals(verts, tris);
     const bb = bbox(verts);
@@ -99,19 +101,17 @@ export class Head3D {
     const hasVertexColors = Array.isArray(vertexColors) && vertexColors.length === verts.length;
     if (hasVertexColors) mg.setAttribute("color", new THREE.Float32BufferAttribute(vertexColors.flat(), 3));
     mg.computeVertexNormals();
-    const mat = new THREE.MeshStandardMaterial({
-      color: showSurface ? 0xd9b79c : 0x000000, roughness: 0.85, metalness: 0.0,
-      side: THREE.DoubleSide,
-      colorWrite: showSurface,          // 投影模式下仅作深度遮挡，不上色
+    const mat = createSkinMaterial(verts, {
+      showSurface,
       vertexColors: hasVertexColors,
-      transparent: false,
     });
     this.mesh = new THREE.Mesh(mg, mat);
     this.group.add(this.mesh);
 
     // 张力线
     const lg = buildLineGeometry(atlasLines, verts, tris, normals, bands);
-    this.lines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ vertexColors: true }));
+    // toneMapped:false：张力线为编码临床语义的纯色，不参与 ACES 色调映射，避免分区色被偏移/去饱和。
+    this.lines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ vertexColors: true, toneMapped: false }));
     this.lines.renderOrder = 2;
     this.group.add(this.lines);
 
