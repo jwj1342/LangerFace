@@ -13,7 +13,7 @@ import os
 
 import numpy as np
 
-from ..config.constants import VALID_SYSTEMS
+from ..config.constants import ATLAS_VERSION, VALID_SYSTEMS
 from ..config.settings import Config
 from ..detection.base import Detector
 from ..detection.mediapipe_detector import FaceLandmarkDetector
@@ -42,7 +42,13 @@ class LinePipeline:
         self.atlases: dict[str, Atlas] = {}
         for system, path in config.atlas_paths.items():
             if os.path.exists(path):
-                self.atlases[system] = Atlas.load(path)
+                atlas = Atlas.load(path)
+                issues = atlas.validate(len(self._triangles), expected_version=ATLAS_VERSION)
+                if issues:
+                    msg = f"图谱 {system!r} 校验失败：{'；'.join(issues)}"
+                    log.error(msg)
+                    raise ValueError(msg)
+                self.atlases[system] = atlas
         if not self.atlases:
             log.warning("未找到任何图谱；请先运行 tools/build_field_atlas.py 生成。")
 

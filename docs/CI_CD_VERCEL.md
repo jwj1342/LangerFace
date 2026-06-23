@@ -46,6 +46,14 @@ pull request / push
 | Production Branch | `master`（除非仓库改成 `main`） |
 | Node.js Version | 24.x；项目要求 Node `>=24.15.0`、npm `>=11.0.0` |
 
+## Production URL
+
+当前 `master` 生产环境的权威地址是：
+
+- https://langer-face.vercel.app
+
+其余文档只引用本节，避免 Vercel 自动生成域名和人工别名在多处漂移。
+
 本仓库已有 [web/vercel.json](../web/vercel.json)，里面声明了：
 - `buildCommand`: `npm run build`
 - `outputDirectory`: `dist`

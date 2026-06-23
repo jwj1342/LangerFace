@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..config.constants import DEFAULT_OCCLUSION_THRESHOLD, NOSE_TIP
+from ..config.constants import DEFAULT_OCCLUSION_THRESHOLD, NOSE_TIP, inner_mouth_triangles
 
 
 class BackfaceCuller:
@@ -22,9 +22,13 @@ class BackfaceCuller:
         # 预计算包含鼻尖的三角面（用于每帧符号标定）
         mask = np.any(triangles == NOSE_TIP, axis=1)
         self._nose_tris = np.where(mask)[0]
+        # 预计算口裂（内唇）三角面：张嘴时背面剔除剔不掉它们，需单独永久排除（#38）
+        self._inner_mouth_tris = np.fromiter(
+            inner_mouth_triangles(triangles), dtype=np.intp,
+        )
 
     def visible_triangles(self, landmarks_px: np.ndarray) -> np.ndarray:
-        """返回 (M,) bool：每个三角面是否朝向相机。"""
+        """返回 (M,) bool：每个三角面是否朝向相机且不属于口裂三角面。"""
         tris = self.triangles
         v0 = landmarks_px[tris[:, 0], :3]
         v1 = landmarks_px[tris[:, 1], :3]
@@ -37,4 +41,8 @@ class BackfaceCuller:
             sign = 1.0 if ref >= 0 else -1.0
         else:
             sign = 1.0
-        return (sign * nz) >= self.threshold
+        vis = (sign * nz) >= self.threshold
+        # 口裂三角面无论朝向如何一律排除（张嘴时线会落进口内 / 牙齿）
+        if self._inner_mouth_tris.size:
+            vis[self._inner_mouth_tris] = False
+        return vis

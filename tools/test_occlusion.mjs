@@ -1,7 +1,8 @@
 // 验证遮挡几何：贴合手形掩膜（手掌+指胶囊）只挡住手本身，张开手指间的缝隙保留。
 //   node tools/test_occlusion.mjs
 import { convexHull, pointInConvex, buildHandMasks, pointInHandMasks,
-         buildOccluderHulls, pointInHulls } from "../web/geometry.js";
+         buildOccluderHulls, pointInHulls,
+         innerMouthTriangles, INNER_LIP } from "../web/geometry.js";
 
 let fail = 0;
 const ok = (c, m) => { if (!c) { console.error("FAIL:", m); fail++; } else console.log("ok:", m); };
@@ -38,5 +39,29 @@ ok(pointInHulls(gap, fullHull), "  （对照）旧的整手凸包会错误地挡
 // 无手时不剔除
 ok(!pointInHandMasks([281, 318], []), "无手掩膜时不剔除");
 
-console.log(fail === 0 ? "\n✅ 贴合手形遮挡正确：只挡手本身，缝隙保留" : `\n❌ ${fail} 项失败`);
+// ── 口裂（内唇）三角面排除（#38）────────────────────────────────────────────────
+// 合成三角拓扑：tri0 是普通脸部三角面，tri1 是已核实的口裂三角面 (78,95,191)，
+// tri2 仅 1 个内唇顶点（不应被排除——避免把唇周正常线一并误删）。
+const triangles = [
+  [1, 234, 454],   // tri0：鼻尖 + 两颊（普通三角面）
+  [78, 95, 191],   // tri1：issue #38 核实的口裂三角面（3 顶点全内唇）
+  [95, 234, 454],  // tri2：仅 1 个内唇顶点（95），保留
+];
+const innerMouth = innerMouthTriangles(triangles);
+
+ok(INNER_LIP.has(78) && INNER_LIP.has(95) && INNER_LIP.has(191), "INNER_LIP 含核实的内唇顶点");
+ok(innerMouth.has(1), "★ 口裂三角面 (78,95,191) 被识别为内唇三角面");
+ok(!innerMouth.has(0), "普通脸部三角面不被误判为内唇三角面");
+ok(!innerMouth.has(2), "仅 1 内唇顶点的三角面不被排除（唇周正常线保留）");
+
+// 模拟 render.js 的逐点 mask：落在口裂三角面上的图谱点被强制排除（mask=0）
+const atlasPointTris = [0, 1, 2];          // 三个图谱点分别落在 tri0/tri1/tri2 上
+const mask = atlasPointTris.map((tri) => (innerMouth.has(tri) ? 0 : 1));
+ok(mask[1] === 0, "★ 落在口裂三角面上的图谱点被遮挡（张嘴不画到牙齿）");
+ok(mask[0] === 1 && mask[2] === 1, "其余图谱点（含唇周）仍可见");
+
+// memoize：同一 triangles 引用返回同一 Set 实例（不每帧重算）
+ok(innerMouthTriangles(triangles) === innerMouth, "innerMouthTriangles 按引用 memoize");
+
+console.log(fail === 0 ? "\n✅ 贴合手形遮挡 + 口裂排除正确" : `\n❌ ${fail} 项失败`);
 process.exit(fail ? 1 : 0);

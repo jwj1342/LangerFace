@@ -3,13 +3,16 @@
 import { AnnotationModel } from "./annotate_model.js";
 import { Annotator3D } from "./annotate_viewer.js";
 import { assetUrls } from "./assets.js";
+import { parseMeshFile } from "./mesh_io.js";
+import { parseSlicerCurveFile } from "./slicer_curve.js";
 
 const $ = (id) => document.getElementById(id);
 const els = {
   stage: $("stage"), system: $("annSystem"), name: $("annName"), region: $("annRegion"),
   btnNew: $("btnNew"), btnUndo: $("btnUndo"), btnFinish: $("btnFinish"), btnClear: $("btnClear"),
   exAtlas: $("btnExportAtlas"), exXyz: $("btnExportXyz"),
-  loadCanonical: $("btnLoadCanonical"), meshFile: $("meshFile"),
+  loadCanonical: $("btnLoadCanonical"), meshFile: $("meshFile"), slicerFile: $("slicerFile"),
+  resampleSpacing: $("resampleSpacing"),
   list: $("lineList"), status: $("annStatus"), hint: $("hint"),
   current: $("currentState"), drawMode: $("drawMode"),
 };
@@ -43,35 +46,83 @@ async function fetchJSON(url, label) {
 
 async function loadMeshFile(file) {
   if (!file) return;
-  const data = JSON.parse(await file.text());
-  if (!Array.isArray(data.vertices) || !Array.isArray(data.triangles)) {
-    setHint("网格 JSON 需含 {vertices:[[x,y,z]...], triangles:[[a,b,c]...]}");
+  setHint(`正在读取 ${file.name} ...`);
+  let mesh;
+  try {
+    mesh = await parseMeshFile(file);
+  } catch (err) {
+    setHint("头模加载失败：" + err.message);
     return;
   }
-  viewer.setMesh(data.vertices, data.triangles, { showSurface: true });
+  viewer.setMesh(mesh.vertices, mesh.triangles, { showSurface: true, colors: mesh.colors });
   onCanonical = false;
   els.drawMode.textContent = "自定义头模";
-  setHint("已载入自定义头模。导出为 xyz 折线（非标准脸拓扑，无法导出图谱）。");
+  setHint(`已载入 ${file.name}：${mesh.vertices.length} 顶点 / ${mesh.triangles.length} 三角面。导出为 xyz 折线。`);
+  refresh();
+}
+
+async function loadSlicerFile(file) {
+  if (!file) return;
+  if (!viewer.hasMesh()) {
+    setHint("请先加载标准脸或上传头模，再导入 Slicer 曲线。");
+    return;
+  }
+  const spacing = Number(els.resampleSpacing.value) || 2;
+  setHint(`正在导入 ${file.name} 并按 ${spacing} 重采样 ...`);
+  let curves;
+  try {
+    curves = await parseSlicerCurveFile(file, { spacing });
+  } catch (err) {
+    setHint("Slicer 曲线导入失败：" + err.message);
+    return;
+  }
+  let imported = 0, points = 0;
+  for (const curve of curves) {
+    const snapped = curve.points.map((p) => viewer.snapToSurface(p)).filter(Boolean);
+    if (snapped.length < 2) continue;
+    for (const pt of snapped) pt.exportable = onCanonical;
+    model.addLine({ name: curve.name, region: curve.region, controls: snapped });
+    imported += 1;
+    points += snapped.length;
+  }
+  viewer.rebuildLines();
+  setHint(`已导入 ${imported} 条 Slicer 曲线，生成 ${points} 个表面采样点。`);
   refresh();
 }
 
 // ── 指针交互：拖拽旋转 vs 点击落点 ────────────────────────────────────────────
 let drag = null;
 els.stage.addEventListener("pointerdown", (e) => {
-  drag = { x: e.clientX, y: e.clientY, moved: false };
+  drag = {
+    x: e.clientX, y: e.clientY,
+    startX: e.clientX, startY: e.clientY,
+    moved: false, axis: null,
+  };
   els.stage.setPointerCapture(e.pointerId);
 });
 els.stage.addEventListener("pointermove", (e) => {
   if (!drag) return;
-  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-  if (!drag.moved && Math.hypot(dx, dy) > 4) drag.moved = true;
+  let dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  const totalDx = e.clientX - drag.startX, totalDy = e.clientY - drag.startY;
+  if (!drag.moved && Math.hypot(totalDx, totalDy) > 4) drag.moved = true;
+  if (!drag.axis && drag.moved && Math.hypot(totalDx, totalDy) > 10) {
+    drag.axis = Math.abs(totalDx) >= Math.abs(totalDy) * 1.25 ? "yaw"
+      : Math.abs(totalDy) >= Math.abs(totalDx) * 1.25 ? "pitch"
+      : "free";
+  }
+  if (drag.axis === "yaw") dy = 0;
+  if (drag.axis === "pitch") dx = 0;
   if (drag.moved) { viewer.orbit(dx, dy); drag.x = e.clientX; drag.y = e.clientY; }
 });
 els.stage.addEventListener("pointerup", (e) => {
   if (drag && !drag.moved) addPointAt(e);
   drag = null;
 });
-els.stage.addEventListener("wheel", (e) => { e.preventDefault(); viewer.zoom(e.deltaY > 0 ? 1.1 : 0.9); }, { passive: false });
+els.stage.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const delta = Math.max(-180, Math.min(180, e.deltaY || 0));
+  viewer.zoom(Math.exp(delta * 0.00055));
+}, { passive: false });
 
 function addPointAt(e) {
   const r = els.stage.getBoundingClientRect();
@@ -81,9 +132,10 @@ function addPointAt(e) {
   if (!hit) return;
   if (!model.current) startLineFromInputs();
   hit.exportable = onCanonical;   // 自定义头模仍用 tri/bary 贴面连线，但不能导出项目图谱
-  model.addPoint(hit);
+  const { fallback } = model.addPoint(hit);
   viewer.rebuildLines();
   refresh();
+  if (fallback) setHint("两点不在同一连通网格上，已退回直线连接，可能穿面");
 }
 
 // ── 按钮 ──────────────────────────────────────────────────────────────────────
@@ -96,6 +148,7 @@ els.exAtlas.onclick = () => exportJSON(() => model.toAtlasJSON(), `atlas_${model
 els.exXyz.onclick = () => exportJSON(() => model.toXyzJSON(), `lines_${model.system}_xyz.json`);
 els.loadCanonical.onclick = loadCanonical;
 els.meshFile.onchange = (e) => loadMeshFile(e.target.files[0]);
+els.slicerFile.onchange = (e) => loadSlicerFile(e.target.files[0]);
 
 document.addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || e.shiftKey) return;
@@ -258,6 +311,6 @@ function tick() {
 }
 
 refresh();
-setHint("点「加载标准脸」开始，或上传头模 JSON。");
+setHint("点「加载标准脸」开始，或上传头模 JSON / OBJ / PLY。");
 loadCanonical().catch((e) => setHint("标准脸加载失败：" + e.message));
 requestAnimationFrame(tick);
