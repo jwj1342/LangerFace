@@ -38,8 +38,9 @@ def test_sample_bary_shapes():
     m = _toy_model()
     emb = _toy_emb(m)
     L = emb["landmark_indices"].size
-    assert sample_bary(m["v_template"], m["faces"], emb["lmk_face_idx"], emb["lmk_b_coords"]).shape == (L, 3)
-    assert sample_bary(m["shapedirs"], m["faces"], emb["lmk_face_idx"], emb["lmk_b_coords"]).shape == (L, 3, 3)
+    fi, bc = emb["lmk_face_idx"], emb["lmk_b_coords"]
+    assert sample_bary(m["v_template"], m["faces"], fi, bc).shape == (L, 3)
+    assert sample_bary(m["shapedirs"], m["faces"], fi, bc).shape == (L, 3, 3)
 
 
 def test_fit_recovers_known_shape():
