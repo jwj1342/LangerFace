@@ -366,7 +366,7 @@ Stage 2 的切口候选必须受以下边界约束：
 网页端是 **Vite 构建出的纯静态站点**（`web/dist/`，全部在浏览器运行，无后端），可直接部署到 Vercel。
 Vercel 自动提供 **HTTPS**，因此线上 `getUserMedia`（摄像头）可用。
 
-- **线上地址**：https://web-black-one-34.vercel.app
+- **线上地址**：见 [CI/CD 与 Vercel 部署指南](docs/CI_CD_VERCEL.md#production-url) 中的 Production URL。
 - **推荐流程**：使用 Vercel Git 集成自动部署，GitHub Actions 负责质量门禁；Vercel Project 的 Root Directory 设为 `web`。详细配置见 [CI/CD 与 Vercel 部署指南](docs/CI_CD_VERCEL.md)。
 - **手动部署 fallback**（从 `web/` 目录）：
   ```bash

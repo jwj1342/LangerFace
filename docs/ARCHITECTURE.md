@@ -160,7 +160,7 @@ P = u·V0 + v·V1 + w·V2
 - [`web/vercel.json`](../web/vercel.json)：`/assets/*` 设 `Cache-Control: immutable` 长缓存（~11MB 模型只下一次）。
 - [`web/.vercelignore`](../web/.vercelignore)：排除本地测试/构建缓存。
 - Vercel 自动 HTTPS → 线上摄像头（getUserMedia，安全上下文）可用。
-- 线上：https://web-black-one-34.vercel.app
+- 线上：见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#production-url) 中的 Production URL。
 - 推荐使用 Vercel Git 集成自动部署，GitHub Actions 负责质量门禁；Vercel Project 的 Root Directory 设为 `web`。操作手册见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md)。
 - 更新：改 `web/` 后（动了几何/图谱/3D 资产先 `export_web_assets.py`）发 PR；CI 与 Vercel Preview 通过后合并到 `master`，由 Vercel 自动发布生产环境。
 
