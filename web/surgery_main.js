@@ -23,7 +23,7 @@ const norm = (v) => { const l = len(v) || 1; return [v[0] / l, v[1] / l, v[2] / 
 
 // 上色用的是「闭合新增张力」= 当前张力 − 静息基线（逐顶点扣除）。皮肤沿 RSTL 本就有高静息张力，
 // 若画绝对张力则整脸全红；扣掉基线后只剩闭合**新增**的那部分 → 远处归零（中性肤色）、仅伤口变红。
-const EXC_LO = 0.02, EXC_HI = 0.13;   // 新增张力色标窗口
+const EXC_LO = 0.03, EXC_HI = 0.13;   // 新增张力色标窗口
 const RELEASE = 1.6;                  // 游离半径 / 长轴（小→张力局部化，不糊满脸）
 const FUSIFORM = 0.5;                 // 短轴/长轴比（梭形细长度）
 function tensionColor(t) {            // 低=中性肤色，高=偏红（顶点色与肤色相乘）
@@ -172,9 +172,11 @@ function updateTensionAndColors() {
   const wound = [];
   for (let i = 0; i < S.verts.length; i++) {
     if (S.sb.removed[i]) { S.colors[i] = [0.2, 0.2, 0.22]; continue; }
-    const ex = Math.max(0, tens[i] - (S.baseline ? S.baseline[i] : 0));
+    const d = len(sub(S.verts[i], S.verts[S.lesion]));
+    const mask = Math.max(0, Math.min(1, (rel * 1.9 - d) / (rel * 0.6)));  // 平滑限定在伤口区，远处归零→干净肤色
+    const ex = Math.max(0, tens[i] - (S.baseline ? S.baseline[i] : 0)) * mask;
     S.colors[i] = tensionColor(ex);
-    if (!S.anchored[i] && len(sub(S.verts[i], S.verts[S.lesion])) < rel * 1.3) wound.push(ex);
+    if (!S.anchored[i] && d < rel * 1.3) wound.push(ex);
   }
   wound.sort((a, b) => b - a);
   const top = wound.slice(0, 3);
