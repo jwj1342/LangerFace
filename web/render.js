@@ -5,6 +5,11 @@ import { innerMouthTriangles, mapAtlas, pointInHandMasks, visibleRuns, visibleTr
 import { modelState, renderState, sourceState } from "./state.js";
 import { setLive } from "./ui.js";
 
+const focusScratch = document.createElement("canvas");
+const focusCtx = focusScratch.getContext("2d");
+const focusZoomRange = { min: 1, max: 4.5 };
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
 export function faceBBox(lm) {
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   for (const p of lm) { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); }
@@ -56,16 +61,46 @@ export function draw(lm, W, H, masks = []) {
 }
 
 // ── 细节放大窗 ────────────────────────────────────────────────────────────────
-export function buildZoomCards() {
+export function buildZoomCards(onSelect = () => {}) {
   els.zoomStrip.innerHTML = "";
-  renderState.zoomCards = ZOOM_REGIONS.map((r) => {
+  const zoomItems = [{ label: "全脸", region: null }, ...ZOOM_REGIONS.map((region) => ({ label: region.label, region }))];
+  renderState.zoomCards = zoomItems.map((item) => {
     const card = document.createElement("div"); card.className = "zoom-card";
+    card.tabIndex = 0;
     const cv = document.createElement("canvas"); cv.width = 300; cv.height = 300;
     if (renderState.mirror) cv.classList.add("mirror");
-    const tag = document.createElement("div"); tag.className = "tag"; tag.textContent = r.label;
+    const tag = document.createElement("div"); tag.className = "tag"; tag.textContent = item.label;
     card.appendChild(cv); card.appendChild(tag); els.zoomStrip.appendChild(card);
-    return { region: r, canvas: cv, ctx: cv.getContext("2d") };
+    const select = () => {
+      const nextRegion = item.region && renderState.focusRegion !== item.region ? item.region : null;
+      setFocusRegion(nextRegion);
+      onSelect();
+    };
+    card.addEventListener("click", select);
+    card.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      select();
+    });
+    return { region: item.region, card, canvas: cv, ctx: cv.getContext("2d") };
   });
+  syncFocusCards();
+}
+
+export function setFocusRegion(region) {
+  renderState.focusRegion = region;
+  syncFocusCards();
+}
+
+export function adjustFocusZoom(deltaY) {
+  if (!renderState.focusRegion) return false;
+  const delta = clamp(deltaY || 0, -120, 120);
+  renderState.focusZoom = clamp(renderState.focusZoom * Math.exp(-delta * 0.0018), focusZoomRange.min, focusZoomRange.max);
+  return true;
+}
+
+function syncFocusCards() {
+  renderState.zoomCards.forEach((zc) => zc.card.classList.toggle("active", zc.region === renderState.focusRegion));
 }
 
 export function clearZooms() {
@@ -77,25 +112,74 @@ export function drawZooms(lm, W) {
   if (!renderState.zoom || !renderState.zoomCards.length) return;
   const faceW = faceBBox(lm).w || W;
   for (const zc of renderState.zoomCards) {
-    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-    for (const i of zc.region.idx) {
-      const p = lm[i]; if (!p) continue;
-      x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]);
-    }
-    if (x1 < x0) continue;
-    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-    let s = Math.max(x1 - x0, y1 - y0) * 1.7;
-    s = Math.max(s, faceW * 0.13);   // 避免过度放大、保留一点周边
     const g = zc.ctx, dw = zc.canvas.width, dh = zc.canvas.height;
     g.fillStyle = "#05070a"; g.fillRect(0, 0, dw, dh);
+    if (!zc.region) {
+      drawFullFrameCard(g, dw, dh, W, els.canvas.height);
+      continue;
+    }
+    const box = regionBounds(lm, zc.region);
+    if (!box) continue;
+    const cx = (box.x0 + box.x1) / 2, cy = (box.y0 + box.y1) / 2;
+    let s = Math.max(box.w, box.h) * 1.7;
+    s = Math.max(s, faceW * 0.13);   // 避免过度放大、保留一点周边
     g.drawImage(els.canvas, cx - s / 2, cy - s / 2, s, s, 0, 0, dw, dh);
   }
+  syncFocusCards();
+}
+
+function drawFullFrameCard(g, dw, dh, W, H) {
+  const scale = Math.min(dw / W, dh / H);
+  const tw = W * scale;
+  const th = H * scale;
+  g.drawImage(els.canvas, 0, 0, W, H, (dw - tw) / 2, (dh - th) / 2, tw, th);
+}
+
+function regionBounds(lm, region) {
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const i of region.idx) {
+    const p = lm[i]; if (!p) continue;
+    x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]);
+  }
+  if (x1 < x0) return null;
+  return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 };
+}
+
+export function drawFocusedRegion(lm, W, H) {
+  if (!renderState.focusRegion || !lm) return;
+  const crop = focusCropRect(lm, renderState.focusRegion, W, H);
+  if (!crop) return;
+
+  focusScratch.width = W;
+  focusScratch.height = H;
+  focusCtx.drawImage(els.canvas, 0, 0);
+  ctx.drawImage(focusScratch, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, W, H);
+}
+
+function focusCropRect(lm, region, W, H) {
+  const box = regionBounds(lm, region);
+  if (!box) return null;
+  const faceW = faceBBox(lm).w || W;
+  const cx = (box.x0 + box.x1) / 2;
+  const cy = (box.y0 + box.y1) / 2;
+  const zoom = clamp(renderState.focusZoom || 1.8, focusZoomRange.min, focusZoomRange.max);
+  let sw = Math.max(box.w * 2.5, faceW * 0.42) / zoom;
+  let sh = sw * (H / W);
+  if (sh < box.h * 2.2) { sh = box.h * 2.2; sw = sh * (W / H); }
+  sw = Math.min(W, sw); sh = Math.min(H, sh);
+  return {
+    sx: clamp(cx - sw / 2, 0, W - sw),
+    sy: clamp(cy - sh / 2, 0, H - sh),
+    sw,
+    sh,
+  };
 }
 
 // ── 统计 ──────────────────────────────────────────────────────────────────────
 export function updateStats(lm, W, H, lineCount) {
   const q = Math.round(sourceState.presence * 100);
-  els.qualityVal.textContent = q; els.qualityBar.style.width = q + "%";
+  const label = q >= 85 ? "稳定" : q >= 45 ? "一般" : q > 0 ? "寻找中" : "未开始";
+  els.qualityVal.textContent = `${label} ${q}%`; els.qualityBar.style.width = q + "%";
   if (!lm || sourceState.presence <= 0) {
     els.statState.textContent = sourceState.running ? "搜索中" : "未开始";
     els.statFace.textContent = els.statYaw.textContent = els.statLines.textContent = "—";

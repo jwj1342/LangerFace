@@ -4,6 +4,7 @@ import { FaceLandmarker, HandLandmarker, FilesetResolver }
   from "@mediapipe/tasks-vision";
 import { validateAtlas } from "./atlas_contract.js";
 import { assetUrls } from "./assets.js";
+import { clearCanvasDisplayFit, fitCanvasDisplayToStage } from "./canvas_fit.js";
 import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./camera.js";
 import { CDN } from "./constants.js";
 import { ctx, els } from "./dom.js";
@@ -11,7 +12,7 @@ import { buildHandMasks, noseTriangles, toPixels, validateAtlasLines } from "./g
 import { prepareImageSource } from "./image_source.js";
 import { countMetric, logInfo, logWarn } from "./logger.js";
 import { projectVerts } from "./projection3d.js";
-import { clearZooms, draw, drawZooms, updateStats } from "./render.js";
+import { clearZooms, draw, drawFocusedRegion, drawZooms, updateStats } from "./render.js";
 import { modelState, renderState, sourceState } from "./state.js";
 import { setLive, setMsg } from "./ui.js";
 
@@ -175,6 +176,14 @@ export async function handleFile(file) {
 export function setSource(src, kind, w, h) {
   sourceState.source = src; sourceState.sourceKind = kind;
   els.canvas.width = w || 1280; els.canvas.height = h || 720;
+  els.mainWrap.classList.toggle("image-viewer", kind === "image");
+  els.canvas.classList.toggle("image-source", kind === "image");
+  if (kind === "image") {
+    fitCanvasDisplayToStage({ resetView: true });
+    requestAnimationFrame(() => fitCanvasDisplayToStage({ resetView: true }));
+  } else {
+    clearCanvasDisplayFit();
+  }
   renderState.smoother.reset();
   sourceState.presence = 0; sourceState.lastLM = null; sourceState.imageCacheLM = null; sourceState.imageHulls = null;
   sourceState.running = true; sourceState.paused = false;
@@ -188,6 +197,9 @@ export function stopSource() {
   if (ms) ms.getTracks().forEach((t) => t.stop());
   els.video.srcObject = null; els.video.removeAttribute("src");
   sourceState.source = null; sourceState.sourceKind = null; sourceState.running = false;
+  els.mainWrap.classList.remove("image-viewer");
+  els.canvas.classList.remove("image-source");
+  clearCanvasDisplayFit();
   sourceState.imageCacheLM = null; sourceState.imageHulls = null; sourceState.lastLM = null;
 }
 
@@ -240,6 +252,7 @@ export function loop() {
     try {
       lineCount = draw(dlm, W, H, hulls);
       drawZooms(dlm, W);
+      drawFocusedRegion(dlm, W, H);
       drawFailureLogged = false;
     } catch (e) {
       if (!drawFailureLogged) logWarn("渲染图谱失败，本帧已跳过。", e);

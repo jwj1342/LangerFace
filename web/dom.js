@@ -3,7 +3,7 @@
 const $ = (id) => document.getElementById(id);
 
 export const els = {
-  video: $("video"), canvas: $("canvas"), msg: $("overlayMsg"),
+  video: $("video"), canvas: $("canvas"), msg: $("overlayMsg"), mainWrap: document.querySelector(".main-wrap"),
   upload: $("uploadBtn"), file: $("fileInput"),
   cam: $("camBtn"), pause: $("pauseBtn"), export: $("exportBtn"),
   tmpl: $("templateSel"), density: $("density"), smooth: $("smooth"), opacity: $("opacity"),

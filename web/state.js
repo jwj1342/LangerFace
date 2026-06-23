@@ -11,8 +11,14 @@ export const modelState = {
 };
 
 export const renderState = {
-  system: "rstl", clip: true, handOcc: true, mirror: true, bands: true, zoom: true, meshPts: false,
+  system: "rstl", clip: true, handOcc: true, mirror: true, bands: false, zoom: true, meshPts: false,
   zoomCards: [],
+  focusRegion: null, focusZoom: 1.8,
+  imageView: {
+    baseWidth: 0, baseHeight: 0, fitScale: 1,
+    zoom: 1, minZoom: 1, maxZoom: 5,
+    offsetX: 0, offsetY: 0,
+  },
   densityFrac: 1, smoothLevel: 0.6, opacity: 0.92,
   smoother: new OneEuro({ minCutoff: 1.5, beta: 0.05 }),
 };
