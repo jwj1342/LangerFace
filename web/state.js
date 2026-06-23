@@ -29,6 +29,6 @@ export const recordingState = {
 };
 
 export const reconState = {
-  route: "2d", head3d: null, reconVerts: null, mode3d: "view",
+  route: "2d", head3d: null, reconVerts: null, reconColors: null, mode3d: "view",
   viewerRAF: null, rot: { x: 0, y: 0 }, scan: null,
 };

@@ -21,8 +21,12 @@
     <div class="card">
       <p class="hint" id="hint">加载网格后开始标注。</p>
       <button class="btn btn-primary" id="btnLoadCanonical">加载标准脸</button>
-      <label class="btn" for="meshFile">上传头模 JSON（{vertices, triangles}）</label>
-      <input type="file" id="meshFile" accept="application/json,.json" hidden />
+      <label class="btn" for="meshFile">上传头模（JSON / OBJ / PLY）</label>
+      <input type="file" id="meshFile" accept="application/json,.json,.obj,.ply,model/obj,model/ply" hidden />
+      <label class="field-label" for="resampleSpacing" style="margin-top:10px">Slicer 曲线重采样间距</label>
+      <input class="text-input" id="resampleSpacing" type="number" min="0.2" step="0.2" value="2" />
+      <label class="btn" for="slicerFile">导入 Slicer 曲线（.mrk.json）</label>
+      <input type="file" id="slicerFile" accept=".mrk.json,application/json,.json" hidden />
       <a class="btn" href="index.html">返回实时 Langer 线显示</a>
     </div>
 
@@ -72,13 +76,13 @@
         <li>每条线至少 2 个点；点够后点击“保存当前线”。</li>
         <li>相邻控制点会沿网格表面连接，不会直接穿过头模；跨区域时可多点控制走向。</li>
         <li>继续填写下一条线并保存，直到完成该区域。</li>
-        <li>在标准脸上标注后导出图谱；交给临床复核后再进入项目资产。</li>
+        <li>在标准脸上标注后导出待复核图谱草案；通过临床评审后再进入项目资产。</li>
       </ol>
       <p>快捷键：Ctrl/⌘ + Z 撤销上一个点；如果当前没有正在画的线，会恢复上一条已保存线继续编辑。</p>
     </details>
 
-    <p class="disclaimer">⚠️ 标注用于生成/校验线图谱（决策辅助可视化），非手术指令、非医疗器械。
-       在标准脸上标注可直接导出项目图谱格式（tri,u,v）。</p>
+    <p class="disclaimer">⚠️ 标注用于生成待复核线图谱草案（决策辅助可视化），非手术指令、非医疗器械。
+       在标准脸上标注可导出项目图谱格式（tri,u,v），但不会自动完成临床校验或置 validated:true。</p>
   </aside>
 
   <main class="stage">

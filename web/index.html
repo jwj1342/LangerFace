@@ -29,17 +29,28 @@
           <button class="btn" id="reconScanBtn">转头扫描</button>
         </div>
         <p class="hint" id="reconStatus">先重建你的 3D 人头 → 可旋转查看 → 再投影到实时画面。</p>
+        <div class="scan-panel hidden" id="scanPanel">
+          <div class="scan-row"><span>扫描进度</span><span id="scanProgressVal">0%</span></div>
+          <div class="bar"><div class="bar-fill" id="scanProgressBar"></div></div>
+          <div class="scan-row"><span>角度覆盖</span><span id="scanYawVal">0.00</span></div>
+          <div class="yaw-meter">
+            <span id="scanYawLeft"></span>
+            <span id="scanYawMid"></span>
+            <span id="scanYawRight"></span>
+          </div>
+        </div>
         <div class="btn-row" style="grid-template-columns:1fr 1fr">
           <button class="btn" id="view3dBtn" disabled aria-pressed="true">旋转查看</button>
           <button class="btn" id="project3dBtn" disabled>投影到画面</button>
         </div>
+        <button class="btn" id="reset3dBtn" disabled>复位视角</button>
       </div>
     </div>
 
     <div class="card">
       <div>
-        <label class="field-label">图谱校验</label>
-        <p class="hint" style="margin-top:7px">在 3D 标准脸上绘制或复核 RSTL / Langer 线，导出项目图谱格式。</p>
+        <label class="field-label">候选图谱草案</label>
+        <p class="hint" style="margin-top:7px">在 3D 标准脸上绘制新的 RSTL / Langer 候选线，导出 validated:false 的项目图谱草案。</p>
       </div>
       <a class="btn btn-primary" href="annotate.html" style="text-decoration:none">打开 3D 线标注</a>
     </div>
@@ -115,6 +126,7 @@
         <video id="video" playsinline autoplay muted></video>
         <canvas id="canvas" class="mirror" width="1280" height="720"></canvas>
         <canvas id="three" class="hidden"></canvas>
+        <div class="scan-toast hidden" id="scanToast">扫描中：请缓慢左右转头</div>
         <div class="overlay-msg" id="overlayMsg">点击「摄像头」或「上传照片 / 视频」开始</div>
       </div>
       <div class="zoom-strip" id="zoomStrip"></div>

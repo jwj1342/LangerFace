@@ -2,10 +2,13 @@
 // 图谱映射 → 背面剔除 + 手部遮挡 → 画布叠加。
 import { FaceLandmarker, HandLandmarker, FilesetResolver }
   from "@mediapipe/tasks-vision";
+import { validateAtlas } from "./atlas_contract.js";
 import { assetUrls } from "./assets.js";
+import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./camera.js";
 import { CDN } from "./constants.js";
 import { ctx, els } from "./dom.js";
 import { buildHandMasks, noseTriangles, toPixels, validateAtlasLines } from "./geometry.js";
+import { prepareImageSource } from "./image_source.js";
 import { countMetric, logInfo, logWarn } from "./logger.js";
 import { projectVerts } from "./projection3d.js";
 import { clearZooms, draw, drawZooms, updateStats } from "./render.js";
@@ -20,9 +23,19 @@ export async function ensureReady() {
     fetch(assetUrls.atlasRstl).then((r) => r.json()),
     fetch(assetUrls.atlasLanger).then((r) => r.json()),
   ]);
+  const loadAtlas = (system, atlas) => {
+    const issues = validateAtlas(atlas, tri.length, { expectedSystem: system });
+    if (issues.length) {
+      logWarn(`图谱 ${system} 校验失败。`, { issues });
+      throw new Error(`图谱 ${system} 校验失败：${issues.join("；")}`);
+    }
+    return atlas.lines;
+  };
   modelState.triangles = tri; modelState.noseTris = noseTriangles(tri);
-  modelState.atlases.rstl = rstl.lines; modelState.atlases.langer = langer.lines;
-  modelState.officialAtlases.rstl = rstl.lines; modelState.officialAtlases.langer = langer.lines;
+  modelState.atlases.rstl = loadAtlas("rstl", rstl);
+  modelState.atlases.langer = loadAtlas("langer", langer);
+  modelState.officialAtlases.rstl = modelState.atlases.rstl;
+  modelState.officialAtlases.langer = modelState.atlases.langer;
   const resolver = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
   const build = (delegate) => FaceLandmarker.createFromOptions(resolver, {
     baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
@@ -111,17 +124,34 @@ export async function startCamera() {
   try {
     await ensureReady();
     setMsg("请求摄像头权限…");
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: false });
+    const stream = await openCameraStream(CAMERA_CONSTRAINTS);
     stopSource();
     els.video.srcObject = stream; await els.video.play();
     setSource(els.video, "camera", els.video.videoWidth, els.video.videoHeight);
     els.cam.setAttribute("aria-pressed", "true");
   } catch (e) {
-    countMetric("camera.openFailure");
-    logWarn("无法开启摄像头。", e);
-    setMsg("无法开启摄像头：" + e.message);
+    const detail = describeCameraError(e);
+    countMetric(`camera.openFailure.${detail.reason}`);
+    logWarn("无法开启摄像头。", { reason: detail.reason, error: e });
+    els.cam.setAttribute("aria-pressed", "false");
+    if (!sourceState.source) {
+      showCameraPlaceholder(detail.message);
+      setLive(false, "待机");
+    }
+    setMsg(detail.message);
   }
+}
+
+export function showCameraPlaceholder(message) {
+  const W = els.canvas.width || 1280, H = els.canvas.height || 720;
+  els.canvas.width = W; els.canvas.height = H;
+  ctx.save();
+  ctx.fillStyle = "#07111f"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(255,255,255,.84)";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = `${Math.max(18, Math.round(W / 46))}px system-ui, sans-serif`;
+  ctx.fillText(message, W / 2, H / 2);
+  ctx.restore();
 }
 
 export async function handleFile(file) {
@@ -131,8 +161,10 @@ export async function handleFile(file) {
   const url = URL.createObjectURL(file);
   if (file.type.startsWith("image/")) {
     const img = new Image(); img.src = url; await img.decode();
-    sourceState.imageCacheLM = null;
-    setSource(img, "image", img.naturalWidth, img.naturalHeight);
+    const prepared = prepareImageSource(img);
+    setSource(prepared.source, "image", prepared.width, prepared.height);
+    URL.revokeObjectURL(url);
+    if (prepared.scaled) setMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
   } else {
     els.video.srcObject = null; els.video.src = url; els.video.loop = true; await els.video.play();
     setSource(els.video, "video", els.video.videoWidth, els.video.videoHeight);
@@ -143,10 +175,12 @@ export async function handleFile(file) {
 export function setSource(src, kind, w, h) {
   sourceState.source = src; sourceState.sourceKind = kind;
   els.canvas.width = w || 1280; els.canvas.height = h || 720;
-  renderState.smoother.reset(); sourceState.presence = 0; sourceState.running = true; sourceState.paused = false;
+  renderState.smoother.reset();
+  sourceState.presence = 0; sourceState.lastLM = null; sourceState.imageCacheLM = null; sourceState.imageHulls = null;
+  sourceState.running = true; sourceState.paused = false;
   els.pause.disabled = false; els.export.disabled = false; els.pause.textContent = "⏸ 暂停";
   setMsg(null); setLive(true, kind === "camera" ? "实时摄像头" : kind === "video" ? "视频" : "照片");
-  requestAnimationFrame(loop);
+  requestFrame();
 }
 
 export function stopSource() {
@@ -154,12 +188,22 @@ export function stopSource() {
   if (ms) ms.getTracks().forEach((t) => t.stop());
   els.video.srcObject = null; els.video.removeAttribute("src");
   sourceState.source = null; sourceState.sourceKind = null; sourceState.running = false;
+  sourceState.imageCacheLM = null; sourceState.imageHulls = null; sourceState.lastLM = null;
 }
 
 // ── 主循环 ────────────────────────────────────────────────────────────────────
 let fpsEMA = 0, lastT = performance.now();
 let drawFailureLogged = false;
+let frameScheduled = false;
+
+export function requestFrame() {
+  if (!sourceState.running || sourceState.paused || frameScheduled) return;
+  frameScheduled = true;
+  requestAnimationFrame(loop);
+}
+
 export function loop() {
+  frameScheduled = false;
   if (!sourceState.running || sourceState.paused) return;
   const W = els.canvas.width, H = els.canvas.height;
   ctx.drawImage(sourceState.source, 0, 0, W, H);
@@ -171,8 +215,10 @@ export function loop() {
       const res = modelState.landmarker.detectForVideo(sourceState.source, t);
       sourceState.imageCacheLM = (res.faceLandmarks && res.faceLandmarks[0]) ? toPixels(res.faceLandmarks[0], W, H) : null;
       sourceState.imageHulls = detectHands(t, W, H);
+    } else if (renderState.handOcc && sourceState.imageHulls === null) {
+      sourceState.imageHulls = detectHands(t, W, H);
     }
-    lm = sourceState.imageCacheLM; hulls = sourceState.imageHulls || [];
+    lm = sourceState.imageCacheLM; hulls = renderState.handOcc ? sourceState.imageHulls || [] : [];
     sourceState.presence = lm ? 1 : 0;
   } else if (sourceState.source.currentTime !== undefined) {
     const res = modelState.landmarker.detectForVideo(sourceState.source, t);
@@ -207,5 +253,5 @@ export function loop() {
   const now = performance.now();
   fpsEMA = fpsEMA ? fpsEMA * 0.9 + (1000 / Math.max(1, now - lastT)) * 0.1 : 30;
   lastT = now; els.fps.textContent = fpsEMA.toFixed(0) + " fps";
-  requestAnimationFrame(loop);
+  if (sourceState.sourceKind !== "image") requestFrame();
 }

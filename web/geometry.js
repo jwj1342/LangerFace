@@ -67,6 +67,30 @@ export function noseTriangles(triangles) {
   return out;
 }
 
+// 内唇关键点集合（上唇下缘 + 下唇上缘 + 口角）。三个顶点全在此集合内的三角面
+// 横跨口裂：闭口时近乎退化、张嘴时拉开横跨口腔空洞，落在其上的图谱点会跳进口内/牙齿。
+// 单一事实来源：与 Python src/langerface/config/constants.py 的 INNER_LIP 一致（见 #38）。
+export const INNER_LIP = new Set([78, 80, 88, 95, 191, 308, 310, 318, 324, 415]);
+
+// 预计算「≥2 个顶点属于 INNER_LIP」的口裂三角面索引集合（渲染期据此排除）。
+// 按 triangles 数组引用 memoize：拓扑全程不变，故只在首帧计算一次，不必每帧重算。
+const _innerMouthCache = new WeakMap();
+export function innerMouthTriangles(triangles) {
+  let s = _innerMouthCache.get(triangles);
+  if (s) return s;
+  s = new Set();
+  for (let i = 0; i < triangles.length; i++) {
+    const t = triangles[i];
+    let n = 0;
+    if (INNER_LIP.has(t[0])) n++;
+    if (INNER_LIP.has(t[1])) n++;
+    if (INNER_LIP.has(t[2])) n++;
+    if (n >= 2) s.add(i);
+  }
+  _innerMouthCache.set(triangles, s);
+  return s;
+}
+
 // 背面剔除：返回 Uint8Array(每个三角面是否朝向相机)。与 Python BackfaceCuller 一致。
 export function visibleTriangles(landmarksPx, triangles, noseTris, threshold = -0.05) {
   const M = triangles.length;
