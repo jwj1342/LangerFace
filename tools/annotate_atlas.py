@@ -25,7 +25,7 @@ import numpy as np
 
 from langerface.config import ATLAS_PATHS, CANONICAL_OBJ, VALID_SYSTEMS  # noqa: E402
 from langerface.geometry import CanonicalFaceModel  # noqa: E402
-from langerface.lines import Atlas, AtlasLine  # noqa: E402
+from langerface.lines import Atlas, atlas_line_from_points2d  # noqa: E402
 
 
 def main() -> int:
@@ -122,11 +122,9 @@ def _save(canonical, proj, completed, system, path):
         validated=True,
     )
     for k, pts2d in enumerate(completed):
-        out = np.zeros((len(pts2d), 3), dtype=np.float64)
-        for i, p in enumerate(pts2d):
-            tri, bary = canonical.locate(p, proj=proj)
-            out[i] = [tri, bary[0], bary[1]]
-        atlas.lines.append(AtlasLine(name=f"line_{k}", region="annotated", points=out))
+        atlas.lines.append(
+            atlas_line_from_points2d(canonical, f"line_{k}", "annotated", pts2d, proj=proj)
+        )
     atlas.save(path)
 
 

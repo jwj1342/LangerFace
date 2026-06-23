@@ -13,7 +13,7 @@ import numpy as np
 
 from langerface.config import ATLAS_PATHS, CANONICAL_OBJ, SYSTEM_LANGER, SYSTEM_RSTL  # noqa: E402
 from langerface.geometry import CanonicalFaceModel  # noqa: E402
-from langerface.lines import Atlas, AtlasLine  # noqa: E402
+from langerface.lines import Atlas, atlas_line_from_points2d  # noqa: E402
 
 
 # ── 归一化空间曲线生成器（返回 (n,2) 的 [0,1]^2 点）──────────────────────────────
@@ -142,11 +142,7 @@ def build_atlas(system, line_defs, canonical, provenance):
     atlas = Atlas(system=system, version="0.1", provenance=provenance, validated=False)
     for name, region, norm_pts in line_defs:
         world = canonical.norm_to_proj(norm_pts)
-        pts = np.zeros((len(world), 3), dtype=np.float64)
-        for i, p in enumerate(world):
-            tri, bary = canonical.locate(p, proj=proj)
-            pts[i] = [tri, bary[0], bary[1]]
-        atlas.lines.append(AtlasLine(name=name, region=region, points=pts))
+        atlas.lines.append(atlas_line_from_points2d(canonical, name, region, world, proj=proj))
     return atlas
 
 
