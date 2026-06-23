@@ -1,5 +1,6 @@
 // 静态常量：CDN、配色、细节放大区域、3D 刚性配准锚点。
 export const CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35";
+export const ATLAS_VERSION = "0.2";
 
 // 单色（按模板）；开启分区着色时按面部上/中/下分色
 export const SOLID = { rstl: "#c026d3", langer: "#06b6d4" };

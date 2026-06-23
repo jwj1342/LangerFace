@@ -160,7 +160,7 @@ P = u·V0 + v·V1 + w·V2
 - [`web/vercel.json`](../web/vercel.json)：`/assets/*` 设 `Cache-Control: immutable` 长缓存（~11MB 模型只下一次）。
 - [`web/.vercelignore`](../web/.vercelignore)：排除本地测试/构建缓存。
 - Vercel 自动 HTTPS → 线上摄像头（getUserMedia，安全上下文）可用。
-- 线上：https://web-black-one-34.vercel.app
+- 线上：见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#production-url) 中的 Production URL。
 - 推荐使用 Vercel Git 集成自动部署，GitHub Actions 负责质量门禁；Vercel Project 的 Root Directory 设为 `web`。操作手册见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md)。
 - 更新：改 `web/` 后（动了几何/图谱/3D 资产先 `export_web_assets.py`）发 PR；CI 与 Vercel Preview 通过后合并到 `master`，由 Vercel 自动发布生产环境。
 
@@ -183,10 +183,10 @@ P = u·V0 + v·V1 + w·V2
 
 ---
 
-## 12. 网页 3D 线标注与图谱校验
+## 12. 网页 3D 线标注与图谱草案导出
 
 网页 3D 标注把医生在 3D 头模上标注张力线的工作流，从桌面专业软件（早期 3D Slicer 方案）搬进**浏览器**：
-与项目现有 Vite + Three.js 前端同栈、零安装，并能直接导出项目图谱格式。
+与项目现有 Vite + Three.js 前端同栈、零安装，并能导出待复核的项目图谱草案。当前网页工具不载入既有 atlas 做复核，也不写入医生署名或 `validated:true`。
 
 ### 打开方式
 
@@ -205,12 +205,12 @@ npm run dev
 3. **画线**：拖拽旋转、滚轮缩放；点击在网格表面落控制点。相邻控制点会沿三角网格表面连接，避免直接穿过头模。
 4. **保存线**：一条线至少 2 个控制点；保存后可继续标下一条线，也可从列表中编辑或删除已保存线。
 5. **导出**：
-   - **导出图谱**（仅标准脸）：输出 langerface 图谱格式，每点 `[三角面 id, u, v]`（重心坐标，`w=1-u-v`），与 [`src/langerface/lines/atlas.py`](../src/langerface/lines/atlas.py)、`assets/atlas_*.json` 一致。
+   - **导出图谱**（仅标准脸）：输出 langerface 图谱格式，每点 `[三角面 id, u, v]`（重心坐标，`w=1-u-v`），与 [`src/langerface/lines/atlas.py`](../src/langerface/lines/atlas.py)、`assets/atlas_*.json` 一致；导出结果保持 `validated:false`，作为后续临床复核草案。
    - **导出 xyz**（任意头模）：输出 3D 折线坐标（`[x,y,z]`，网格局部坐标），与 `tools/headspace` 的 `*_xyz` 线兼容。
 
 ### 接入项目
 
-- **临床校验闭环（issue #2）**：医生在标准脸上画/改线 → 导出图谱 → 评审后替换 `assets/atlas_rstl.json` / `assets/atlas_langer.json`，将 `validated` 置 `true`，并在 `provenance` 记录校验者。
+- **临床校验闭环（issue #2）**：网页标注器只生成候选图谱草案；评审通过后，再由 `tools/annotate_atlas.py` 或资产维护流程替换 `assets/atlas_rstl.json` / `assets/atlas_langer.json`，将 `validated` 置 `true`，并在 `provenance` 记录校验者。
 - **3D 头模标注**：HeadSpace 等头模经离线管线导出为 `{vertices, triangles}` JSON 后，可在 `/annotate.html` 上传加载；标注得到的 xyz 线可继续经 `langerface.geometry`（加权 Sim3）在头模与标准脸之间迁移。
 - **数据隐私**：真实头模（HeadSpace / FaceScape）不入库，仅本地使用；标注产物（图谱/xyz JSON，仅坐标）可入库评审。
 

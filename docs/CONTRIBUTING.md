@@ -88,7 +88,7 @@ Preview 人工验收清单：
   - 外部临床评审：由维护者在 Vercel 生成 Shareable Link，或临时开启 Password Protection 并单独发送密码。
   - 自动化测试：只使用 Vercel Protection Bypass for Automation，secret 放在 GitHub Secrets；不要把 bypass token 当作人工分享链接。
   - 只有确认 Preview 不含受限头模、真实人脸影像或未公开数据时，才考虑关闭 Preview protection。
-- PR Preview 和生产站不是同一个地址。验证分支改动时不要只看 `https://langer-face.vercel.app`；那是 `master` 的 Production。
+- PR Preview 和生产站不是同一个地址。验证分支改动时不要只看 Production URL（见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#production-url)）；那是 `master` 的生产环境。
 - `master` 受 GitHub Branch Protection 保护：PR 合并前必须通过必需 checks，并至少获得 1 个 approving review。
 - 详细的 Vercel 项目设置、branch protection 和排障信息见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md)。
 

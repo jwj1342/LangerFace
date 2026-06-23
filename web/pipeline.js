@@ -2,7 +2,9 @@
 // 图谱映射 → 背面剔除 + 手部遮挡 → 画布叠加。
 import { FaceLandmarker, HandLandmarker, FilesetResolver }
   from "@mediapipe/tasks-vision";
+import { validateAtlas } from "./atlas_contract.js";
 import { assetUrls } from "./assets.js";
+import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./camera.js";
 import { CDN } from "./constants.js";
 import { ctx, els } from "./dom.js";
 import { buildHandMasks, noseTriangles, toPixels } from "./geometry.js";
@@ -21,8 +23,17 @@ export async function ensureReady() {
     fetch(assetUrls.atlasRstl).then((r) => r.json()),
     fetch(assetUrls.atlasLanger).then((r) => r.json()),
   ]);
+  const loadAtlas = (system, atlas) => {
+    const issues = validateAtlas(atlas, tri.length, { expectedSystem: system });
+    if (issues.length) {
+      logWarn(`图谱 ${system} 校验失败。`, { issues });
+      throw new Error(`图谱 ${system} 校验失败：${issues.join("；")}`);
+    }
+    return atlas.lines;
+  };
   modelState.triangles = tri; modelState.noseTris = noseTriangles(tri);
-  modelState.atlases.rstl = rstl.lines; modelState.atlases.langer = langer.lines;
+  modelState.atlases.rstl = loadAtlas("rstl", rstl);
+  modelState.atlases.langer = loadAtlas("langer", langer);
   const resolver = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
   const build = (delegate) => FaceLandmarker.createFromOptions(resolver, {
     baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
@@ -78,17 +89,34 @@ export async function startCamera() {
   try {
     await ensureReady();
     setMsg("请求摄像头权限…");
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: false });
+    const stream = await openCameraStream(CAMERA_CONSTRAINTS);
     stopSource();
     els.video.srcObject = stream; await els.video.play();
     setSource(els.video, "camera", els.video.videoWidth, els.video.videoHeight);
     els.cam.setAttribute("aria-pressed", "true");
   } catch (e) {
-    countMetric("camera.openFailure");
-    logWarn("无法开启摄像头。", e);
-    setMsg("无法开启摄像头：" + e.message);
+    const detail = describeCameraError(e);
+    countMetric(`camera.openFailure.${detail.reason}`);
+    logWarn("无法开启摄像头。", { reason: detail.reason, error: e });
+    els.cam.setAttribute("aria-pressed", "false");
+    if (!sourceState.source) {
+      showCameraPlaceholder(detail.message);
+      setLive(false, "待机");
+    }
+    setMsg(detail.message);
   }
+}
+
+export function showCameraPlaceholder(message) {
+  const W = els.canvas.width || 1280, H = els.canvas.height || 720;
+  els.canvas.width = W; els.canvas.height = H;
+  ctx.save();
+  ctx.fillStyle = "#07111f"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(255,255,255,.84)";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = `${Math.max(18, Math.round(W / 46))}px system-ui, sans-serif`;
+  ctx.fillText(message, W / 2, H / 2);
+  ctx.restore();
 }
 
 export async function handleFile(file) {
