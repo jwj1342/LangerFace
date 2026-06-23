@@ -3,7 +3,7 @@
 - **状态**：Accepted
 - **日期**：2026-06-22
 - **决策者**：项目组
-- **相关**：issue #2（临床校验图谱）、issue #11-#22（Stage 2 肿物与切口设计）、[ARCHITECTURE.md](ARCHITECTURE.md#12-网页-3d-线标注与图谱校验)、[ARCHITECTURE.md](ARCHITECTURE.md#13-headspace--facescape-离线数据与配准管线)、[ARCHITECTURE.md](ARCHITECTURE.md#14-stage-2-肿物与切口设计技术路线)
+- **相关**：issue #2（临床校验图谱）、issue #11-#22（Stage 2 肿物与切口设计）、[ARCHITECTURE.md](ARCHITECTURE.md#12-网页-3d-线标注与图谱草案导出)、[ARCHITECTURE.md](ARCHITECTURE.md#13-headspace--facescape-离线数据与配准管线)、[ARCHITECTURE.md](ARCHITECTURE.md#14-stage-2-肿物与切口设计技术路线)
 
 ## 背景
 
