@@ -52,6 +52,12 @@ input[type=range]{width:100%;accent-color:var(--green);cursor:pointer;margin:2px
 .bar{height:7px;background:#e9ebe4;border-radius:99px;overflow:hidden;margin-top:7px}
 .bar-fill{height:100%;width:0;background:linear-gradient(90deg,#2fbf8b,var(--green));
           border-radius:99px;transition:width .25s}
+.scan-panel{background:#f8f9f5;border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.scan-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;color:var(--muted)}
+.scan-row span:last-child{color:var(--ink);font-variant-numeric:tabular-nums}
+.yaw-meter{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.yaw-meter span{height:28px;border-radius:8px;background:#eef0ea;border:1px solid var(--line)}
+.yaw-meter span.active{background:var(--green);border-color:var(--green);box-shadow:0 0 0 3px rgba(15,155,110,.14)}
 .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .stat{background:#f8f9f5;border:1px solid var(--line);border-radius:10px;padding:9px 11px;
       display:flex;flex-direction:column;gap:3px}
@@ -78,6 +84,11 @@ video{display:none}
 .overlay-msg{position:absolute;color:#9aa3b2;font-size:14px;background:rgba(10,14,20,.6);
              padding:12px 18px;border-radius:12px;border:1px solid #232a35}
 .overlay-msg.hidden{display:none}
+.scan-toast{position:absolute;top:18px;left:50%;transform:translateX(-50%);z-index:3;
+            color:#edf7ff;font-size:15px;font-weight:700;background:rgba(16,20,26,.68);
+            padding:11px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.18);
+            box-shadow:0 8px 28px rgba(0,0,0,.28)}
+.scan-toast.hidden{display:none}
 .zoom-strip{display:flex;gap:10px;justify-content:center;flex:0 0 auto}
 .zoom-strip.hidden{display:none}
 .zoom-card{position:relative;flex:1 1 0;min-width:0;max-width:190px;aspect-ratio:1;background:#000;
@@ -87,7 +98,8 @@ video{display:none}
 .zoom-card .tag{position:absolute;top:6px;left:6px;font-size:11px;font-weight:600;color:#e7edf3;
                 background:rgba(0,0,0,.55);padding:2px 8px;border-radius:6px;z-index:2}
 .hidden{display:none !important}
-#three{position:absolute;inset:0;width:100%;height:100%;border-radius:14px;cursor:grab}
+#three{position:absolute;inset:0;width:100%;height:100%;border-radius:14px;cursor:grab;
+       background:radial-gradient(circle at 50% 38%,#222b35 0%,#121821 52%,#0b0f15 100%)}
 #three:active{cursor:grabbing}
 .badge.beta{color:#7c3aed;background:#ede4fb}
 
