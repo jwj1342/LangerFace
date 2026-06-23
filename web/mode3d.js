@@ -92,11 +92,46 @@ export async function cloudFitFlame() {
   await ensureHead3D();
   // 返回的 faces 为 FLAME 9976 三角拓扑；FLAME 顶点 y 上，查看器相机沿 +z，直接渲染、可拖拽旋转。
   reconState.head3d.setGeometry(res.verts, res.faces, [], { showSurface: true, bands: false });
+  reconState.flameFit = { verts: res.verts, faces: res.faces };
+  els.flameStd.checked = false;
+  els.flameHeadToggleWrap.style.display = "";  // 拟合成功后才出现「标准⇄个体」开关
   els.view3d.disabled = false; els.reset3d.disabled = false;
   const mm = res.residual != null ? (res.residual * 1000).toFixed(1) : "?";
   els.reconStatus.textContent =
     `云端 FLAME 拟合完成：${res.verts.length} 顶点 · ${res.nLandmarks} 关键点 · 残差 ${mm}mm。拖拽旋转查看。`;
   setMode3d("view");
+}
+
+// 右侧头切换：标准 FLAME neutral ⇄ 个体（云端拟合）。标准头从 /api/fit {neutral:true} 取一次并缓存。
+export async function toggleFlameHead() {
+  if (!reconState.flameFit) return;
+  let mesh;
+  if (els.flameStd.checked) {
+    if (!reconState.flameNeutral) {
+      els.reconStatus.textContent = "加载标准 FLAME 头…";
+      try {
+        const r = await fetch("/api/fit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ neutral: true }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
+        reconState.flameNeutral = { verts: d.verts, faces: d.faces };
+      } catch (err) {
+        els.reconStatus.textContent = "标准头加载失败：" + err.message;
+        els.flameStd.checked = false;
+        return;
+      }
+    }
+    mesh = reconState.flameNeutral;
+    els.reconStatus.textContent = "右侧：FLAME 标准头（neutral）。";
+  } else {
+    mesh = reconState.flameFit;
+    els.reconStatus.textContent = "右侧：你的个体 FLAME（拟合）。";
+  }
+  await ensureHead3D();
+  reconState.head3d.setGeometry(mesh.verts, mesh.faces, [], { showSurface: true, bands: false });
 }
 
 function viewerLoop() {

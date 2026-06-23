@@ -14,6 +14,7 @@ export const els = {
   routeSel: $("routeSel"), route3dPanel: $("route3dPanel"), reconDemo: $("reconDemoBtn"),
   reconScan: $("reconScanBtn"), view3d: $("view3dBtn"), project3d: $("project3dBtn"),
   reset3d: $("reset3dBtn"), cloudFitFlame: $("cloudFitFlameBtn"),
+  flameStd: $("flameStdToggle"), flameHeadToggleWrap: $("flameHeadToggleWrap"),
   scanPanel: $("scanPanel"), scanProgressVal: $("scanProgressVal"),
   scanProgressBar: $("scanProgressBar"), scanYawVal: $("scanYawVal"),
   scanYawLeft: $("scanYawLeft"), scanYawMid: $("scanYawMid"), scanYawRight: $("scanYawRight"),

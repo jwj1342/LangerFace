@@ -38,4 +38,6 @@ export const recordingState = {
 export const reconState = {
   route: "2d", head3d: null, reconVerts: null, reconColors: null, mode3d: "view",
   viewerRAF: null, rot: { x: 0, y: 0 }, scan: null,
+  flameFit: null,      // 云端拟合出的个体 FLAME {verts, faces}
+  flameNeutral: null,  // 标准 FLAME neutral {verts, faces}（缓存）
 };

@@ -114,6 +114,14 @@ class handler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", 0) or 0)
             data = json.loads(self.rfile.read(length) or b"{}")
+            if data.get("neutral"):  # 标准 FLAME neutral 头（不拟合）
+                b = _load_basis()
+                return self._send(200, {
+                    "topologyId": "flame-2023",
+                    "verts": np.round(b["v_template"].astype(np.float64), 5).tolist(),
+                    "faces": b["faces"].astype(np.int64).tolist(),
+                    "residual": 0.0, "nLandmarks": 0, "neutral": True,
+                })
             lmks = np.asarray(data.get("landmarks"), dtype=np.float64)
             if lmks.ndim != 2 or lmks.shape[1] != 3:
                 return self._send(400, {"error": "landmarks 必须是 (N,3) 数组"})
