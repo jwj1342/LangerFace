@@ -27,8 +27,9 @@ export function clearCanvasDisplayFit() {
   resetImageView({ apply: false });
   els.canvas.style.width = "";
   els.canvas.style.height = "";
-  els.canvas.style.marginLeft = "";
-  els.canvas.style.marginTop = "";
+  els.canvas.style.removeProperty("--img-zoom");
+  els.canvas.style.removeProperty("--img-pan-x");
+  els.canvas.style.removeProperty("--img-pan-y");
 }
 
 export function resetImageView({ apply = true } = {}) {
@@ -72,10 +73,13 @@ export function panImageViewBy(deltaX, deltaY) {
 export function applyImageViewStyle() {
   const view = renderState.imageView;
   if (!view.baseWidth || !view.baseHeight) return;
-  els.canvas.style.width = `${Math.round(view.baseWidth * view.zoom)}px`;
-  els.canvas.style.height = `${Math.round(view.baseHeight * view.zoom)}px`;
-  els.canvas.style.marginLeft = `${Math.round(view.offsetX)}px`;
-  els.canvas.style.marginTop = `${Math.round(view.offsetY)}px`;
+  // 布局盒保持「贴合」尺寸；缩放/平移走 CSS transform（合成层，避免每帧改 width/margin 触发 reflow）。
+  // 不写内联 transform：镜像由 #canvas.image-source.mirror 规则按需追加 scaleX(-1)，故仅设自定义属性。
+  els.canvas.style.width = `${Math.round(view.baseWidth)}px`;
+  els.canvas.style.height = `${Math.round(view.baseHeight)}px`;
+  els.canvas.style.setProperty("--img-zoom", `${view.zoom}`);
+  els.canvas.style.setProperty("--img-pan-x", `${Math.round(view.offsetX)}px`);
+  els.canvas.style.setProperty("--img-pan-y", `${Math.round(view.offsetY)}px`);
 }
 
 function clampImageViewOffset() {

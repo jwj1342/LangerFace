@@ -82,7 +82,11 @@ input[type=range]{width:100%;accent-color:var(--green);cursor:pointer;margin:2px
 video{display:none}
 #canvas{max-width:100%;max-height:100%;border-radius:14px;background:#000;
         box-shadow:0 10px 40px rgba(0,0,0,.45);display:block;min-width:0;min-height:0}
-#canvas.image-source{max-width:none;max-height:none;flex:none;user-select:none}
+#canvas.image-source{max-width:none;max-height:none;flex:none;user-select:none;
+        transform:translate(var(--img-pan-x,0),var(--img-pan-y,0)) scale(var(--img-zoom,1))}
+/* 图片视图镜像：比 #canvas.mirror 更高特异度，在缩放/平移变换后追加 scaleX(-1)，二者不互相覆盖 */
+#canvas.image-source.mirror{
+        transform:translate(var(--img-pan-x,0),var(--img-pan-y,0)) scale(var(--img-zoom,1)) scaleX(-1)}
 #canvas.mirror{transform:scaleX(-1)}
 .overlay-msg{position:absolute;color:#9aa3b2;font-size:14px;background:rgba(10,14,20,.6);
              padding:12px 18px;border-radius:12px;border:1px solid #232a35}
