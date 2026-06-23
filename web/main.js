@@ -1,10 +1,11 @@
 // 入口：装配 UI 事件绑定并初始化。各功能模块见 pipeline/render/mode3d/ui/state。
 import { els } from "./dom.js";
+import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./canvas_fit.js";
 import { dataSource } from "./data_source.js";
 import { countMetric, logError } from "./logger.js";
 import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan } from "./mode3d.js";
 import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera } from "./pipeline.js";
-import { buildZoomCards } from "./render.js";
+import { adjustFocusZoom, buildZoomCards } from "./render.js";
 import { recordingState, reconState, renderState, sourceState } from "./state.js";
 import { setMsg, setProvenance, smoothLabel } from "./ui.js";
 
@@ -34,6 +35,40 @@ function applyStagedAtlas() {
 // ── UI 绑定 ───────────────────────────────────────────────────────────────────
 function refreshStaticImage() {
   if (sourceState.sourceKind === "image") requestFrame();
+}
+
+let imageDrag = null;
+
+function startImageDrag(e) {
+  if (sourceState.sourceKind !== "image" || e.button !== 0) return;
+  imageDrag = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
+  els.mainWrap.classList.add("dragging");
+  els.mainWrap.setPointerCapture(e.pointerId);
+}
+
+function moveImageDrag(e) {
+  if (!imageDrag || e.pointerId !== imageDrag.pointerId) return;
+  panImageViewBy(e.clientX - imageDrag.x, e.clientY - imageDrag.y);
+  imageDrag.x = e.clientX;
+  imageDrag.y = e.clientY;
+  e.preventDefault();
+}
+
+function endImageDrag(e) {
+  if (!imageDrag || e.pointerId !== imageDrag.pointerId) return;
+  imageDrag = null;
+  els.mainWrap.classList.remove("dragging");
+  if (els.mainWrap.hasPointerCapture(e.pointerId)) els.mainWrap.releasePointerCapture(e.pointerId);
+}
+
+function handleMainWheel(e) {
+  if (sourceState.sourceKind === "image") {
+    if (zoomImageViewAt(e.clientX, e.clientY, e.deltaY)) e.preventDefault();
+    return;
+  }
+  if (!adjustFocusZoom(e.deltaY)) return;
+  e.preventDefault();
+  refreshStaticImage();
 }
 
 els.upload.onclick = () => els.file.click();
@@ -102,7 +137,15 @@ els.project3d.onclick = () => { if (reconState.reconVerts) setMode3d("project");
 els.reset3d.onclick = resetView3d;
 
 // ── 初始化 ────────────────────────────────────────────────────────────────────
-buildZoomCards();
+buildZoomCards(refreshStaticImage);
+observeCanvasStageResize(() => {
+  if (sourceState.sourceKind === "image") fitCanvasDisplayToStage();
+});
+els.mainWrap.addEventListener("pointerdown", startImageDrag);
+els.mainWrap.addEventListener("pointermove", moveImageDrag);
+els.mainWrap.addEventListener("pointerup", endImageDrag);
+els.mainWrap.addEventListener("pointercancel", endImageDrag);
+els.mainWrap.addEventListener("wheel", handleMainWheel, { passive: false });
 els.smoothVal.textContent = smoothLabel(+els.smooth.value);
 renderState.smoother.minCutoff = 6.0 - 5.5 * renderState.smoothLevel;
 renderState.smoother.beta = 0.02 + 0.06 * renderState.smoothLevel;
