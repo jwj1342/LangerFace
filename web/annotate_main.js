@@ -132,9 +132,10 @@ function addPointAt(e) {
   if (!hit) return;
   if (!model.current) startLineFromInputs();
   hit.exportable = onCanonical;   // 自定义头模仍用 tri/bary 贴面连线，但不能导出项目图谱
-  model.addPoint(hit);
+  const { fallback } = model.addPoint(hit);
   viewer.rebuildLines();
   refresh();
+  if (fallback) setHint("两点不在同一连通网格上，已退回直线连接，可能穿面");
 }
 
 // ── 按钮 ──────────────────────────────────────────────────────────────────────

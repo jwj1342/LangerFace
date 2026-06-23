@@ -58,8 +58,10 @@ ruff check .                 # 代码风格
 3. push 分支并创建 PR。可以先开 Draft PR。
 4. 等 GitHub Actions 和 Vercel Preview check 自动运行。
 5. 打开 PR 里的 Vercel Preview 链接做人工验收。
-6. checks 全绿、Preview 验收通过后，把 Draft PR 标记为 ready 并合并到 `master`。
+6. checks 全绿、Preview 验收通过、且至少 1 个 reviewer approval 后，把 Draft PR 标记为 ready 并合并到 `master`。
 7. 合并到 `master` 后，Vercel 自动发布 Production。
+
+PR 描述必须保留“技术资料 / 临床依据”小节。凡涉及医学规则、CV/AI 算法、模型、数据集、部署平台或隐私边界的改动，应在 PR 中列出使用的资料链接、医生团队说明、关联 issue 和设计文档；若不适用，也要显式写“不适用”。这样 reviewer 不需要反向猜测实现依据。
 
 PR 上应关注这些 checks：
 
@@ -86,7 +88,8 @@ Preview 人工验收清单：
   - 外部临床评审：由维护者在 Vercel 生成 Shareable Link，或临时开启 Password Protection 并单独发送密码。
   - 自动化测试：只使用 Vercel Protection Bypass for Automation，secret 放在 GitHub Secrets；不要把 bypass token 当作人工分享链接。
   - 只有确认 Preview 不含受限头模、真实人脸影像或未公开数据时，才考虑关闭 Preview protection。
-- PR Preview 和生产站不是同一个地址。验证分支改动时不要只看 `https://langer-face.vercel.app`；那是 `master` 的 Production。
+- PR Preview 和生产站不是同一个地址。验证分支改动时不要只看 Production URL（见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#production-url)）；那是 `master` 的生产环境。
+- `master` 受 GitHub Branch Protection 保护：PR 合并前必须通过必需 checks，并至少获得 1 个 approving review。
 - 详细的 Vercel 项目设置、branch protection 和排障信息见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md)。
 
 ## 架构与扩展点
@@ -122,9 +125,23 @@ Preview 人工验收清单：
 - **KISS (Keep It Simple, Sir)** – keep solutions as simple as possible.
 - **YAGNI (You're Not Gonna Need It)** – avoid speculative complexity or over-engineering.
 
+## Issue 标签 (Labels)
+
+给 issue / PR 打标签时按维度走，方便筛选与排期。**每个 issue 至少 1 个「类型」**，建议再各加 1 个「优先级」与 ≥1 个「领域」：
+
+- **类型**（必填）：`bug` · `enhancement` · `documentation` · `tech-debt` · `testing` · `epic` · `question`
+- **优先级**（建议）：`priority: critical | high | medium | low`
+- **领域**（建议，可叠加）：`area: web` · `area: 3d` · `area: atlas` · `area: pipeline` · `area: clinical` · `area: infra`
+- **协作 / 关闭原因**（按需）：`good first issue` · `help wanted` ／ `duplicate` · `invalid` · `wontfix`
+
+速查：报 bug → `bug` + 一个 `area:` + 优先级；提需求 → `enhancement` + `area:`；重构 / 解耦 → `tech-debt` + `area:`；只改文档 → `documentation`。
+
+每个标签的精确定义、何时打哪个、颜色约定，见 **[标签规范 (LABELS.md)](LABELS.md)**。
+
 ## 约定
 
 - 遵循上面的 Engineering Principles。
+- 按 [标签规范 (LABELS.md)](LABELS.md) 给 issue / PR 打标签：至少 1 个类型，建议补优先级与领域。
 - 新增模块即补单元测试；纯逻辑测试不要依赖资产或 mediapipe。
 - 不提交大二进制 / 人脸影像（`.gitignore` 已拦截，pre-commit 兜底）。
-- 分支开发 + PR；CI、Vercel Preview 和必要的人工验收需通过后再合并。
+- 分支开发 + PR；CI、Vercel Preview、至少 1 个 reviewer approval 和必要的人工验收需通过后再合并。

@@ -14,6 +14,7 @@
 ## 目录
 - [项目定位](#项目定位)
 - [系统模块与数据流](#系统模块与数据流)
+- [临床目标与 Stage 2 路线](#临床目标与-stage-2-路线)
 - [它能做什么](#它能做什么)
 - [核心原理（为什么稳，而非"图一乐"）](#核心原理)
 - [两条技术路线](#两条技术路线)
@@ -39,7 +40,7 @@ LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它
 2. **核心算法层**：`src/langerface/` 和 `web/geometry.js` 实现关键点输入、重心坐标映射、平滑、遮挡、渲染与 3D 配准。
 3. **用户界面层**：`web/` 提供唯一正式前端；`src/langerface/apps/` 只保留 CLI 和 OpenCV webcam 入口。
 
-当前阶段是 **Stage 1：稳定显示面部 RSTL / Langer 皮肤张力线**。Stage 2 才会扩展到肿物模拟、切口设计和更完整的术前辅助工作流。项目不训练自定义医学模型，不上传用户图像，也不声称自动给出手术方案。
+当前阶段是 **Stage 1：稳定显示面部 RSTL / Langer 皮肤张力线**。Stage 2 会扩展到**面部皮肤肿物手术切口候选设计**：在患者照片、视频或实时 AR 扫描中，将个性化 RSTL / 皱襞 / 美学亚单位边界投射到脸上，再围绕医生标注的肿物生成可解释、可编辑、可审阅的候选切口线。项目不训练自定义医学模型，不上传用户图像，也不声称自动给出手术方案。
 
 ---
 
@@ -52,9 +53,9 @@ LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它
 | 资产与医学知识层 | 已实现 | 标准脸、三角拓扑、MediaPipe 模型、RSTL/Langer 线图谱 | `assets/`, `web/assets/` |
 | 感知层 | 已实现 | 从图片、视频、摄像头中提取 478 个 3D 人脸关键点；网页端还检测手部遮挡 | `src/langerface/detection/`, `web/pipeline.js` |
 | 配准与几何层 | 已实现 | 2D 重心坐标贴合；3D Beta Umeyama 重建与刚性配准；离线 HeadSpace 多视角加权 Sim3 配准 | `src/langerface/geometry/`, `src/langerface/registration/`, `web/geometry.js`, `web/projection3d.js`, `tools/reconstruct_3d.py`, `tools/headspace/` |
-| 面部标注 / 图谱层 | 已实现 | 生成、读取、校验和映射 RSTL/Langer 线条；临床医生可编辑图谱（含**网页 3D 标注**） | `src/langerface/lines/`, `web/annotate*.js`, `tools/annotate_atlas.py`, `tools/digitize_from_diagram.py` |
-| 肿物模拟层 | Stage 2 规划 | 表示脸部肿物的位置、边界、大小、深度和与皮肤表面的关系；为切口规划提供约束输入 | 计划新增 `src/langerface/tumor/`, `web/tumor*.js` |
-| 切口设计层 | Stage 2 规划 | 综合张力线方向、肿物边界、安全边距、医生编辑和审阅，生成候选切口可视化；只做决策辅助，不输出手术指令 | 计划新增 `src/langerface/incision/`, `web/incision*.js` |
+| 面部标注 / 图谱层 | 已实现 | 生成、读取、校验和映射 RSTL/Langer 线条；网页 3D 标注只产出待复核草案，临床校验由 Python/评审流程完成 | `src/langerface/lines/`, `web/annotate*.js`, `tools/annotate_atlas.py`, `tools/digitize_from_diagram.py` |
+| 肿物模拟层 | Stage 2 规划（#14） | 表示脸部肿物的位置、边界、大小、深度和与皮肤表面的关系；为切口规划提供约束输入 | 计划新增 `src/langerface/tumor/`, `web/tumor*.js` |
+| 切口设计层 | Stage 2 规划（#15/#16/#17/#18） | 综合张力线方向、肿物边界、安全切缘、敏感结构、医生编辑和审阅，生成候选切口可视化；只做决策辅助，不输出手术指令 | 计划新增 `src/langerface/incision/`, `web/incision*.js` |
 | 渲染与交互层 | 已实现 / 扩展中 | 2D Canvas 叠加、3D 查看、遮挡、放大窗、导出和 UI 控制 | `src/langerface/rendering/`, `web/render.js`, `web/three3d.js`, `web/main.js` |
 
 整体数据流：
@@ -87,6 +88,39 @@ Stage 2 的设计原则是：肿物模拟只负责病灶几何与约束表达，
 
 ---
 
+## 临床目标与 Stage 2 路线
+
+面部皮肤肿物切除的核心问题不是“能否画出一条线”，而是**能否在保留功能和形态的前提下，把瘢痕藏到张力最低、视觉干扰最小的位置**。本项目的 Stage 2 目标是把计算机视觉和 AI 技术用在这个术前规划场景中：
+
+1. **迁移面部皮纹线**：把经临床校验的标准 RSTL 图谱迁移到患者照片、视频或实时扫描的脸上，作为切口方向的第一依据。
+2. **表示肿物约束**：由医生输入或标注皮下 / 皮表肿物的位置、直径、边界、深度、安全切缘和可直接拉拢缝合前提。
+3. **生成候选切口**：系统按规则生成线性或梭形切口候选，医生可以调整、覆盖、确认或否决。
+4. **输出可追溯记录**：导出候选线、规则依据、风险提示、医生修改和版本 provenance。
+
+两类应用情形：
+
+| 情形 | 输入 | 默认候选 |
+|---|---|---|
+| **皮下肿物** | 肿物中心 + 术前超声直径 / 深度 / 医生判断 | 平行局部 RSTL 的线性切口，不做梭形切除 |
+| **皮表肿物** | 肿物边界或类圆化直径 + 安全切缘 + 医生判断 | 梭形切口，长轴优先平行 RSTL，并约束长宽比例、尖端角和平滑对称 |
+
+切口方向优先级：
+
+1. **首选：RSTL**。切口长轴尽量平行松弛皮肤张力线，以降低闭合时垂直张力。
+2. **次选：自然皱襞 / 皱纹**。额纹、鱼尾纹、鼻唇沟、睑缘纹、颏纹等自然凹陷可帮助隐藏瘢痕。
+3. **次选：美学亚单位边界**。眉缘、唇红缘、发际线、鼻翼沟、耳前皱襞等结构分界处可降低视觉干扰。
+4. **敏感结构例外**。下睑、唇红缘、鼻翼等游离边缘附近，系统必须提示形态牵拉风险；医生可选择违背 RSTL 的保护性方向。
+
+安全边界：
+
+- 默认只覆盖**可直接拉拢缝合、无需皮瓣 / 植皮**的适应证范围；适应证、松弛度、创缘成活性和安全切缘由医生团队写作和确认。
+- 良性、癌前病变、恶性肿瘤的切缘策略不同，系统只记录医生输入的切缘规则，不自动判断病理性质。
+- AI/CV 输出只作为候选和提示；术前仍需医生结合触诊、皮肤松弛度、器官功能风险和病理要求确认。
+
+Stage 2 任务拆解已同步到 [docs/TODO.md](docs/TODO.md) 与 GitHub Issues。
+
+---
+
 ## 它能做什么
 
 - 🎥 **网页实时摄像头**：浏览器打开网址 → 开摄像头 → 张力线实时贴合人脸，做任何动作线条都跟随。
@@ -96,7 +130,8 @@ Stage 2 的设计原则是：肿物模拟只负责病灶几何与约束表达，
 - 🖐️ **遮挡处理**：转头时背面线条隐藏；**手挡在脸前时，手覆盖处不画线**（贴合手形掩膜，指缝保留）。
 - 🔍 **关键区域放大窗**：主画面下方 6 个放大窗（额·眉间 / 双眼周 / 鼻·鼻唇沟 / 口周 / 颏部）同屏显示细节。
 - 🧊 **3D 重建（Beta）**：多视角转头扫描 → 重建个性化 3D 人头 → 把线贴到 3D 表面 → 可旋转查看 / 实时配准投影。
-- ✍️ **网页 3D 标注**：在浏览器里于标准脸 / 3D 头模表面手绘 RSTL/Langer 线，导出项目图谱格式（`[tri,u,v]`，可直接用于校验），见 [网页 3D 标注](docs/annotation_web.md)。
+- ✍️ **网页 3D 标注**：在浏览器里于标准脸 / 3D 头模表面手绘 RSTL/Langer 候选线，导出 `validated:false` 的图谱草案（`[tri,u,v]`）或 xyz 折线；临床复核与置 `validated:true` 仍走 Python/评审流程，见 [网页 3D 标注与图谱草案导出](docs/ARCHITECTURE.md#12-网页-3d-线标注与图谱草案导出)。
+- 🧭 **Stage 2 规划中**：皮下肿物线性切口、皮表肿物梭形切口、敏感结构风险提示、医生审阅编辑和 AR 叠加。
 - 🎛️ **实时可调**：线密度、平滑强度、透明度、遮挡、镜像、分区着色、放大窗等。
 - 🔒 **全程本地运行**，不上传任何画面（隐私友好）。
 
@@ -228,7 +263,7 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 | `.claude/` | Claude Code 相关启动配置；本地私有设置文件已被 `.gitignore` 排除。 |
 | `.github/` | GitHub Actions CI；包含 Python 测试、JS/Vite 构建和几何对拍。 |
 | `assets/` | Python 端权威资产：MediaPipe 标准脸 obj、人脸 landmarker `.task`、RSTL/Langer atlas JSON。 |
-| `docs/` | **全部项目文档集中于此**：架构、环境、贡献、路线图（TODO）、网页 3D 标注、headspace 管线/数据说明。 |
+| `docs/` | **全部项目文档集中于此**：架构、后端数据层、环境、贡献、CI/CD、路线图（TODO）。 |
 | `src/langerface/` | Python 核心库，按 `config/geometry/detection/lines/rendering/pipeline/media/apps` 分层。 |
 | `tests/` | pytest 测试，覆盖图谱、标准脸、映射、稳定性、渲染和 pipeline 行为。 |
 | `tools/` | 资产下载、图谱生成、web 资产导出、3D 重建、临床标注、目检和对拍脚本。 |
@@ -285,6 +320,15 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 
 ⚠️ 内置图谱为**示意性首版（`validated: false`）**：由 `tools/build_field_atlas.py` 按 Borges RSTL 总体走向程序化生成，几何为近似，**尚未经临床验证，不得直接用于真实临床决策**。校验流程见上文[临床校验图谱](#临床校验图谱关键)，完成后图谱 `validated` 置 `true` 并在 `provenance` 记录校验者。
 
+### 切口设计临床边界
+
+Stage 2 的切口候选必须受以下边界约束：
+
+- 皮下肿物与皮表肿物分开建模；皮下肿物默认生成线性切口，皮表肿物才生成梭形切口。
+- 3:1 长轴 / 类圆化肿物直径、尖端角 30°、两侧弧线对称平滑等规则按医生团队指定实现为**可配置规则**，同时保留医生覆盖。
+- 下睑、唇红缘、鼻翼等敏感游离边缘附近，系统必须优先提示功能与形态风险；必要时可由医生选择违背 RSTL 的保护性方向。
+- 安全切缘、松弛度、可无张力自然对合、是否需要皮瓣 / 植皮等不由算法自动判断，必须由医生团队在术前评估中确认。
+
 ### 技术稳定性边界（已知较弱区域）
 
 - **图谱医学准确性**是首要限制：CV 管线可做到很稳，但源图谱须临床专家验证。
@@ -322,7 +366,7 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 网页端是 **Vite 构建出的纯静态站点**（`web/dist/`，全部在浏览器运行，无后端），可直接部署到 Vercel。
 Vercel 自动提供 **HTTPS**，因此线上 `getUserMedia`（摄像头）可用。
 
-- **线上地址**：https://web-black-one-34.vercel.app
+- **线上地址**：见 [CI/CD 与 Vercel 部署指南](docs/CI_CD_VERCEL.md#production-url) 中的 Production URL。
 - **推荐流程**：使用 Vercel Git 集成自动部署，GitHub Actions 负责质量门禁；Vercel Project 的 Root Directory 设为 `web`。详细配置见 [CI/CD 与 Vercel 部署指南](docs/CI_CD_VERCEL.md)。
 - **手动部署 fallback**（从 `web/` 目录）：
   ```bash
@@ -336,16 +380,16 @@ Vercel 自动提供 **HTTPS**，因此线上 `getUserMedia`（摄像头）可用
   - [`web/vite.config.js`](web/vite.config.js)：Vite 静态资产导入与生产构建设置。
   - [`web/vercel.json`](web/vercel.json)：Vercel 使用 `npm run build`，输出 `dist/`，并为 `/assets/*` 配置长缓存。
   - [`web/.vercelignore`](web/.vercelignore)：排除本地测试/构建缓存。
-- **更新流程**：改完 `web/` 后（若动了图谱/几何/3D 资产，先 `python3 tools/export_web_assets.py` 重新导出），发 PR；CI 和 Vercel Preview 都通过后合并到 `master`，由 Vercel 自动发布生产环境。
+- **更新流程**：改完 `web/` 后（若动了图谱/几何/3D 资产，先 `python3 tools/export_web_assets.py` 重新导出），发 PR；CI、Vercel Preview 和至少 1 个 reviewer approval 都通过后合并到 `master`，由 Vercel 自动发布生产环境。
 - **隐私**：`web/assets/recon_demo.json` 是示例视频重建出的 3D 人头，会随站点**公开**。不想公开就把它加入 `web/.vercelignore`（此时网页"用示例重建"按钮会失效，仍可用"转头扫描"）。
 
 ## 开发文档
 
 - [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md)：本地环境、集群环境、venv、Node 24、测试与本地产物目录。
 - [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)：协作流程、测试约定、扩展点和 PR 要求。
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：核心算法、坐标系、2D/3D 路线、资产与部署细节。
-- [docs/annotation_web.md](docs/annotation_web.md)：网页 3D 线标注工作流（替代 3D Slicer）。
-- [docs/headspace_pipeline.md](docs/headspace_pipeline.md) · [docs/headspace_data.md](docs/headspace_data.md)：离线 3D 头模配准管线与（不入库的）数据获取说明。
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：核心算法、坐标系、2D/3D 路线、网页 3D 标注、HeadSpace 离线管线、Stage 2 肿物与切口设计路线、资产与部署细节。
+- [docs/BACKEND_DATA_ARCHITECTURE.md](docs/BACKEND_DATA_ARCHITECTURE.md)：后端数据层、Cloudflare Worker/D1/R2、重计算边界与阶段落地。
+- [docs/CI_CD_VERCEL.md](docs/CI_CD_VERCEL.md)：Vercel 项目设置、Preview 访问策略、branch protection 与排障。
 - [docs/TODO.md](docs/TODO.md)：路线图与待办（与 GitHub Issues 同步）。
 - 医学声明、图谱状态与临床局限见 README [已知局限与医学声明](#已知局限与医学声明)。
 
