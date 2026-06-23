@@ -73,7 +73,8 @@ export function resetView3d() {
 // 头姿调参（这边看不到渲染，留旋钮；若「转反了」翻对应 sign）。jaw 调参见 flame_fit.js 的 JAW。
 const POSE = { yawSign: 1, pitchSign: 1, pitchClamp: 1.3 };
 const ZERO_BETA = new Float64Array(60);  // 标准头身份系数（全 0 = neutral 标准脸）
-let twinRAF = null, twinFaces = null, twinMeshReady = false;
+const EXPR_AMPLIFY = 1.3;  // 表情放大（landmark-only 拟合偏淡，放大更明显；旋钮）
+let twinRAF = null, twinFaces = null, twinMeshReady = false, twinTexturedMesh = false;
 
 export function stopTwin() {
   cancelAnimationFrame(twinRAF); twinRAF = null;
@@ -92,11 +93,13 @@ export async function startTwin() {
   }
   const basis = reconState.flameBasis;
   twinFaces = facesArray(basis);
-  twinMeshReady = false;
+  twinMeshReady = false; twinTexturedMesh = false;
   reconState.flameBeta = null;  // 身份待首帧拟合
   reconState.twinMode = "individual";
   els.flameStd.checked = false;
+  els.twinTexture.checked = false; reconState.twinTexture = false;
   els.flameHeadToggleWrap.style.display = "";
+  els.twinTextureWrap.style.display = "";
 
   await ensureHead3D();
   reconState.head3d.setGeometry(
@@ -122,12 +125,19 @@ function twinLoop() {
       try {
         const beta = reconState.twinMode === "standard" ? ZERO_BETA : reconState.flameBeta;
         const psi = fitExpression(lm, basis, beta).psi;
+        for (let i = 0; i < psi.length; i++) psi[i] *= EXPR_AMPLIFY;  // 表情放大
         const jaw = sourceState.jawOpen || 0;
         const verts = flameForward(basis, beta, psi, jaw);
-        if (twinMeshReady) reconState.head3d.updateVerts(verts);
-        else { reconState.head3d.setGeometry(verts, twinFaces, [], { showSurface: true, bands: false }); twinMeshReady = true; }
+        const colors = reconState.twinTexture ? projectColors(verts, lm, basis) : null;
+        const wantTextured = !!colors;
+        if (twinMeshReady && wantTextured === twinTexturedMesh) {
+          reconState.head3d.updateVerts(verts, colors);
+        } else {
+          reconState.head3d.setGeometry(verts, twinFaces, [], { showSurface: true, bands: false, vertexColors: colors });
+          twinMeshReady = true; twinTexturedMesh = wantTextured;
+        }
         els.reconStatus.textContent =
-          `实时孪生 · ${reconState.twinMode === "standard" ? "标准" : "个体"} · 张嘴 ${Math.round(jaw * 100)}%`;
+          `实时孪生 · ${reconState.twinMode === "standard" ? "标准" : "个体"} · 张嘴 ${Math.round(jaw * 100)}%${reconState.twinTexture ? " · 贴脸" : ""}`;
       } catch (err) {
         els.reconStatus.textContent = "拟合失败：" + err.message;
       }
@@ -155,6 +165,39 @@ function applyHeadPose(lm) {
 export function toggleTwinHead() {
   if (reconState.mode3d !== "twin") return;
   reconState.twinMode = els.flameStd.checked ? "standard" : "individual";
+}
+
+// 实时贴脸纹理：用 FLAME 关键点 ↔ 当前帧关键点的相似变换，把每个 FLAME 顶点投回画面、
+// 采样 #canvas（左侧实时画面）的像素 → 每顶点色。轻量、配合 MediaPipe，不需要神经网络。
+function projectColors(verts, lm, basis) {
+  const fl = [], lv = [];
+  for (let i = 0; i < basis.NL; i++) {
+    const idx = basis.landmarkIndices[i];
+    if (idx >= lm.length) continue;
+    const f = basis.lmkFaceIdx[i], a = basis.faces[f * 3], b = basis.faces[f * 3 + 1], c = basis.faces[f * 3 + 2];
+    const w0 = basis.lmkBCoords[i * 3], w1 = basis.lmkBCoords[i * 3 + 1], w2 = basis.lmkBCoords[i * 3 + 2];
+    fl.push([0, 1, 2].map((x) => w0 * verts[a][x] + w1 * verts[b][x] + w2 * verts[c][x]));
+    lv.push(lm[idx]);
+  }
+  let proj;
+  try { proj = applySim(umeyama(fl, lv), verts); } catch { return null; }
+  const W = els.canvas.width, H = els.canvas.height;
+  let data;
+  try { data = ctx.getImageData(0, 0, W, H).data; } catch { return null; }
+  const out = new Array(verts.length);
+  for (let i = 0; i < verts.length; i++) {
+    const px = proj[i][0] | 0, py = proj[i][1] | 0;
+    if (px >= 0 && px < W && py >= 0 && py < H) {
+      const o = (py * W + px) * 4;
+      out[i] = [data[o] / 255, data[o + 1] / 255, data[o + 2] / 255];
+    } else out[i] = [0.72, 0.56, 0.5];  // 投影外（背面/越界）退回中性肤色
+  }
+  return out;
+}
+
+// 「贴真实人脸纹理」开关（实时孪生）：下一帧 twinLoop 自动按之采样/渲染。
+export function toggleTwinTexture() {
+  reconState.twinTexture = els.twinTexture.checked;
 }
 
 function viewerLoop() {

@@ -110,7 +110,7 @@ export function fitExpression(landmarks, basis, beta, opts = {}) {
   const target = keep.map((i) => landmarks[basis.landmarkIndices[i]]);
   const base = new Float64Array(basis.NV * 3);
   for (let k = 0; k < basis.NV * 3; k++) { let s = basis.vTemplate[k]; const b = k * basis.NS; for (let d = 0; d < basis.NS; d++) s += basis.shapeDirs[b + d] * beta[d]; base[k] = s; }
-  const r = fitCoeffs(target, base, basis.exprDirs, basis.NE, basis, keep, opts.reg ?? 2e-3, opts.iters ?? 2);
+  const r = fitCoeffs(target, base, basis.exprDirs, basis.NE, basis, keep, opts.reg ?? 8e-4, opts.iters ?? 2);
   return { psi: r.coeffs, residual: r.residual };
 }
 

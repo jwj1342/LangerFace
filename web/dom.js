@@ -15,6 +15,7 @@ export const els = {
   reconScan: $("reconScanBtn"), view3d: $("view3dBtn"), project3d: $("project3dBtn"),
   reset3d: $("reset3dBtn"), cloudFitFlame: $("cloudFitFlameBtn"),
   flameStd: $("flameStdToggle"), flameHeadToggleWrap: $("flameHeadToggleWrap"),
+  twinTexture: $("twinTextureToggle"), twinTextureWrap: $("twinTextureWrap"),
   scanPanel: $("scanPanel"), scanProgressVal: $("scanProgressVal"),
   scanProgressBar: $("scanProgressBar"), scanYawVal: $("scanYawVal"),
   scanYawLeft: $("scanYawLeft"), scanYawMid: $("scanYawMid"), scanYawRight: $("scanYawRight"),

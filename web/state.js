@@ -43,4 +43,5 @@ export const reconState = {
   flameBasis: null,    // 浏览器本地拟合基（flame_fit.js，一次加载）
   flameBeta: null,     // 实时孪生：身份系数（首帧拟合一次后固定）
   twinMode: "individual",  // 实时孪生右侧头：individual | standard
+  twinTexture: false,      // 实时孪生：贴真实人脸纹理开关
 };
