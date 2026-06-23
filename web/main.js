@@ -1,11 +1,35 @@
 // 入口：装配 UI 事件绑定并初始化。各功能模块见 pipeline/render/mode3d/ui/state。
 import { els } from "./dom.js";
+import { dataSource } from "./data_source.js";
 import { countMetric, logError } from "./logger.js";
 import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan } from "./mode3d.js";
-import { ensureReady, handleFile, requestFrame, startCamera } from "./pipeline.js";
+import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera } from "./pipeline.js";
 import { buildZoomCards } from "./render.js";
 import { recordingState, reconState, renderState, sourceState } from "./state.js";
-import { smoothLabel } from "./ui.js";
+import { setMsg, setProvenance, smoothLabel } from "./ui.js";
+
+let previewSystem = null;
+let previewMeta = null;
+
+function syncPreviewControls() {
+  const previewIsActive = Boolean(previewSystem && previewMeta && renderState.system === previewSystem);
+  setProvenance(previewIsActive ? previewMeta : null);
+  els.restoreAtlas.classList.toggle("hidden", !previewIsActive);
+}
+
+function applyStagedAtlas() {
+  const atlas = dataSource.takePreviewAtlas();
+  if (!atlas || !Array.isArray(atlas.lines)) return;
+  if (!setActiveAtlas(atlas.system, atlas.lines)) {
+    setMsg("标注预览图谱加载失败：图谱格式无效。已继续使用内置图谱。");
+    return;
+  }
+  previewSystem = atlas.system;
+  previewMeta = { source: "标注会话", validated: atlas.validated === true, count: atlas.lines.length };
+  els.tmpl.value = atlas.system;
+  syncPreviewControls();
+  if (!sourceState.running) setMsg("已载入标注预览图谱（未验证）。开启摄像头或上传照片即可在脸上查看。");
+}
 
 // ── UI 绑定 ───────────────────────────────────────────────────────────────────
 function refreshStaticImage() {
@@ -19,7 +43,7 @@ els.pause.onclick = () => {
   sourceState.paused = !sourceState.paused; els.pause.textContent = sourceState.paused ? "▶ 继续" : "⏸ 暂停";
   if (!sourceState.paused) requestFrame();
 };
-els.tmpl.onchange = (e) => { renderState.system = e.target.value; refreshStaticImage(); };
+els.tmpl.onchange = (e) => { renderState.system = e.target.value; syncPreviewControls(); refreshStaticImage(); };
 els.density.oninput = (e) => { renderState.densityFrac = e.target.value / 100; els.densityVal.textContent = e.target.value + "%"; refreshStaticImage(); };
 els.smooth.oninput = (e) => {
   const v = +e.target.value; renderState.smoothLevel = v / 100; els.smoothVal.textContent = smoothLabel(v);
@@ -43,6 +67,16 @@ els.mirror.onchange = (e) => {
 els.bands.onchange = (e) => { renderState.bands = e.target.checked; refreshStaticImage(); };
 els.zoom.onchange = (e) => { renderState.zoom = e.target.checked; els.zoomStrip.classList.toggle("hidden", !renderState.zoom); refreshStaticImage(); };
 els.meshPts.onchange = (e) => { renderState.meshPts = e.target.checked; refreshStaticImage(); };
+els.restoreAtlas.onclick = () => {
+  if (!previewSystem) return;
+  if (!restoreOfficialAtlas(previewSystem)) {
+    setMsg("恢复官方图谱失败。");
+    return;
+  }
+  previewSystem = null; previewMeta = null;
+  syncPreviewControls();
+  setMsg(null);
+};
 
 // 导出：录制画布为 webm 下载
 els.export.onclick = () => {
@@ -74,7 +108,7 @@ renderState.smoother.minCutoff = 6.0 - 5.5 * renderState.smoothLevel;
 renderState.smoother.beta = 0.02 + 0.06 * renderState.smoothLevel;
 
 // 预加载模型并反馈状态
-ensureReady().catch((e) => {
+ensureReady().then(applyStagedAtlas).catch((e) => {
   countMetric("bootstrap.loadFailure");
   els.badge.textContent = "模型加载失败";
   logError("启动时模型加载失败。", e);

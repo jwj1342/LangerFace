@@ -3,6 +3,7 @@
 import { AnnotationModel } from "./annotate_model.js";
 import { Annotator3D } from "./annotate_viewer.js";
 import { assetUrls } from "./assets.js";
+import { dataSource } from "./data_source.js";
 import { parseMeshFile } from "./mesh_io.js";
 import { parseSlicerCurveFile } from "./slicer_curve.js";
 
@@ -10,7 +11,7 @@ const $ = (id) => document.getElementById(id);
 const els = {
   stage: $("stage"), system: $("annSystem"), name: $("annName"), region: $("annRegion"),
   btnNew: $("btnNew"), btnUndo: $("btnUndo"), btnFinish: $("btnFinish"), btnClear: $("btnClear"),
-  exAtlas: $("btnExportAtlas"), exXyz: $("btnExportXyz"),
+  exAtlas: $("btnExportAtlas"), exXyz: $("btnExportXyz"), setActive: $("btnSetActiveAtlas"),
   loadCanonical: $("btnLoadCanonical"), meshFile: $("meshFile"), slicerFile: $("slicerFile"),
   resampleSpacing: $("resampleSpacing"),
   list: $("lineList"), status: $("annStatus"), hint: $("hint"),
@@ -146,6 +147,7 @@ els.btnFinish.onclick = saveCurrentLine;
 els.btnClear.onclick = () => { if (confirm("清空所有线？")) { model.clear(); viewer.rebuildLines(); refresh(); } };
 els.exAtlas.onclick = () => exportJSON(() => model.toAtlasJSON(), `atlas_${model.system}_annotated.json`);
 els.exXyz.onclick = () => exportJSON(() => model.toXyzJSON(), `lines_${model.system}_xyz.json`);
+els.setActive.onclick = previewActiveAtlas;
 els.loadCanonical.onclick = loadCanonical;
 els.meshFile.onchange = (e) => loadMeshFile(e.target.files[0]);
 els.slicerFile.onchange = (e) => loadSlicerFile(e.target.files[0]);
@@ -253,6 +255,21 @@ function exportJSON(build, filename) {
   setHint(`已导出 ${filename}`);
 }
 
+function previewActiveAtlas() {
+  let atlas;
+  try {
+    atlas = model.toAtlasJSON({ provenance: "web-annotator-live" });
+  } catch (err) {
+    setHint("预览失败：" + err.message);
+    return;
+  }
+  if (!dataSource.stagePreviewAtlas(atlas)) {
+    setHint("预览失败：浏览器无法暂存图谱。请检查站点存储权限。");
+    return;
+  }
+  location.href = "index.html";
+}
+
 // ── UI 刷新 ───────────────────────────────────────────────────────────────────
 function setHint(t) { els.hint.textContent = t; }
 function refresh() {
@@ -266,6 +283,7 @@ function refresh() {
   els.btnFinish.disabled = !model.current;
   els.btnUndo.disabled = !(model.current || model.lines.length);
   els.exAtlas.disabled = !(model.lines.length && onCanonical);
+  els.setActive.disabled = !(model.lines.length && onCanonical);
   els.exXyz.disabled = !model.lines.length;
   els.list.innerHTML = "";
   if (!model.lines.length) {

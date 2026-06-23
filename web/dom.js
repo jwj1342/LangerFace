@@ -7,6 +7,7 @@ export const els = {
   upload: $("uploadBtn"), file: $("fileInput"),
   cam: $("camBtn"), pause: $("pauseBtn"), export: $("exportBtn"),
   tmpl: $("templateSel"), density: $("density"), smooth: $("smooth"), opacity: $("opacity"),
+  prov: $("atlasProvenance"), restoreAtlas: $("restoreAtlasBtn"),
   densityVal: $("densityVal"), smoothVal: $("smoothVal"), opacityVal: $("opacityVal"),
   clip: $("clip"), handOcc: $("handOcc"), mirror: $("mirror"), bands: $("bands"),
   zoom: $("zoom"), zoomStrip: $("zoomStrip"), meshPts: $("meshPts"),

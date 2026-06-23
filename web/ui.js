@@ -12,6 +12,19 @@ export function setLive(on, label) {
   els.live.innerHTML = `<span class="dot"></span>${label}`;
 }
 
+export function setProvenance(meta) {
+  if (!meta) {
+    els.prov.textContent = "";
+    els.prov.classList.add("hidden");
+    return;
+  }
+  const count = Number.isFinite(meta.count) ? meta.count : 0;
+  const source = meta.source || "未知来源";
+  const validation = meta.validated ? "已验证" : "未验证（仅预览）";
+  els.prov.textContent = `活动图谱：${source} · ${validation} · ${count} 条线`;
+  els.prov.classList.remove("hidden");
+}
+
 export function smoothLabel(v) {
   return v === 0 ? "关" : v < 35 ? "弱" : v < 70 ? "中" : "强";
 }

@@ -17,13 +17,16 @@ export function toPixels(landmarks, W, H) {
 // lines: [{name, points:[[tri,u,v],...]}], landmarksPx:[[x,y,z]...], triangles:[[i0,i1,i2]...]
 export function mapAtlas(lines, landmarksPx, triangles) {
   const result = [];
+  if (!Array.isArray(lines)) return result;   // 注入空/坏图谱时不让 for...of 抛错崩掉整帧
   for (const ln of lines) {
     const pts = [];
     const tris = [];
     for (const p of ln.points) {
       const tri = p[0], u = p[1], v = p[2], w = 1 - u - v;
       const t = triangles[tri];
+      if (!t) continue;                          // 越界三角面：跳过该点而非崩溃整帧
       const a = landmarksPx[t[0]], b = landmarksPx[t[1]], c = landmarksPx[t[2]];
+      if (!a || !b || !c) continue;              // 关键点缺失：跳过该点
       pts.push([
         u * a[0] + v * b[0] + w * c[0],
         u * a[1] + v * b[1] + w * c[1],
@@ -34,6 +37,24 @@ export function mapAtlas(lines, landmarksPx, triangles) {
     result.push({ name: ln.name, pts, tris });
   }
   return result;
+}
+
+// 注入预览前的最小边界校验：判断一份图谱线集合能否安全喂给 mapAtlas，
+// 避免医生画的内存图谱里出现越界三角面 / 非法重心坐标而让渲染循环抛错黑屏。
+// 要求：非空数组；每条线 points 为数组；每点 [tri,u,v] 的 tri 为 triangles 内合法整数、u/v 有限。
+export function validateAtlasLines(lines, triangles) {
+  if (!Array.isArray(lines) || lines.length === 0) return false;
+  const triCount = Array.isArray(triangles) ? triangles.length : 0;
+  for (const ln of lines) {
+    if (!ln || !Array.isArray(ln.points)) return false;
+    for (const p of ln.points) {
+      if (!Array.isArray(p) || p.length < 3) return false;
+      const tri = p[0], u = p[1], v = p[2];
+      if (!Number.isInteger(tri) || tri < 0 || tri >= triCount) return false;
+      if (!Number.isFinite(u) || !Number.isFinite(v)) return false;
+    }
+  }
+  return true;
 }
 
 // 预计算包含鼻尖的三角面索引
