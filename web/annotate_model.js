@@ -187,6 +187,20 @@ export class AnnotationModel {
     return { fallback };
   }
 
+  addLine({ name, region, points, controls }) {
+    const lineControls = Array.isArray(controls) ? controls : points;
+    if (!Array.isArray(lineControls) || lineControls.length < 2) return null;
+    const line = {
+      name: name || `line_${this.lines.length + 1}`,
+      region: region || "",
+      controls: lineControls,
+      points: [],
+    };
+    this._rebuildLinePoints(line);
+    this.lines.push(line);
+    return line;
+  }
+
   undoPoint() {
     if (!this.current) return;
     if (this.current.controls) {

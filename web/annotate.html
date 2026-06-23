@@ -21,8 +21,12 @@
     <div class="card">
       <p class="hint" id="hint">加载网格后开始标注。</p>
       <button class="btn btn-primary" id="btnLoadCanonical">加载标准脸</button>
-      <label class="btn" for="meshFile">上传头模 JSON（{vertices, triangles}）</label>
-      <input type="file" id="meshFile" accept="application/json,.json" hidden />
+      <label class="btn" for="meshFile">上传头模（JSON / OBJ / PLY）</label>
+      <input type="file" id="meshFile" accept="application/json,.json,.obj,.ply,model/obj,model/ply" hidden />
+      <label class="field-label" for="resampleSpacing" style="margin-top:10px">Slicer 曲线重采样间距</label>
+      <input class="text-input" id="resampleSpacing" type="number" min="0.2" step="0.2" value="2" />
+      <label class="btn" for="slicerFile">导入 Slicer 曲线（.mrk.json）</label>
+      <input type="file" id="slicerFile" accept=".mrk.json,application/json,.json" hidden />
       <a class="btn" href="index.html">返回实时 Langer 线显示</a>
     </div>
 
