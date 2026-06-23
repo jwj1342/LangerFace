@@ -84,7 +84,7 @@ export class Head3D {
     this._minDist = 0.8; this._maxDist = 8;
   }
 
-  setGeometry(verts, tris, atlasLines, { showSurface = true, bands = true } = {}) {
+  setGeometry(verts, tris, atlasLines, { showSurface = true, bands = true, vertexColors = null } = {}) {
     if (this.mesh) { this.group.remove(this.mesh); this.mesh.geometry.dispose(); this.mesh = null; }
     if (this.lines) { this.group.remove(this.lines); this.lines.geometry.dispose(); this.lines = null; }
     const normals = vertexNormals(verts, tris);
@@ -96,11 +96,14 @@ export class Head3D {
     const mg = new THREE.BufferGeometry();
     mg.setAttribute("position", new THREE.Float32BufferAttribute(verts.flat(), 3));
     mg.setIndex(tris.flat());
+    const hasVertexColors = Array.isArray(vertexColors) && vertexColors.length === verts.length;
+    if (hasVertexColors) mg.setAttribute("color", new THREE.Float32BufferAttribute(vertexColors.flat(), 3));
     mg.computeVertexNormals();
     const mat = new THREE.MeshStandardMaterial({
       color: showSurface ? 0xd9b79c : 0x000000, roughness: 0.85, metalness: 0.0,
       side: THREE.DoubleSide,
       colorWrite: showSurface,          // 投影模式下仅作深度遮挡，不上色
+      vertexColors: hasVertexColors,
       transparent: false,
     });
     this.mesh = new THREE.Mesh(mg, mat);

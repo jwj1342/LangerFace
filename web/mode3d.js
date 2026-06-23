@@ -13,6 +13,8 @@ import { setLive, setMsg } from "./ui.js";
 const YAW_SPAN_MIN = 0.5;
 
 let canonicalRef = null;
+let scanColorCanvas = null, scanColorCtx = null;
+const COLOR_SAMPLE_W = 320;
 const SCAN_TARGET_SECS = 9;
 const SCAN_TARGET_FRAMES = 40;
 const YAW_DISPLAY_SPAN = 0.5;
@@ -52,7 +54,7 @@ async function buildViewer() {
     disp,
     modelState.triangles,
     modelState.atlases[renderState.system],
-    { showSurface: true, bands: renderState.bands },
+    { showSurface: true, bands: renderState.bands, vertexColors: reconState.reconColors },
   );
   els.view3d.disabled = false; els.project3d.disabled = false;
   els.reset3d.disabled = false;
@@ -95,7 +97,7 @@ export async function loadDemoRecon() {
   els.reconStatus.textContent = "加载固定演示模型（非你的脸，仅用于体验流程）…";
   await ensureReady();
   const d = await fetch(assetUrls.reconDemo).then((r) => r.json());
-  reconState.reconVerts = d.vertices;
+  reconState.reconVerts = d.vertices; reconState.reconColors = null;
   els.reconStatus.textContent = `固定演示模型就绪（非你的脸）：${d.frames} 帧，偏航 ${d.yaw_min}~${d.yaw_max}。可旋转查看 / 投影。想重建自己的脸请用「转头扫描」。`;
   await buildViewer();
 }
@@ -117,7 +119,7 @@ export async function startScan() {
   els.canvas.classList.remove("hidden"); els.three.classList.add("hidden");
   els.msg.classList.add("hidden"); els.scanPanel.classList.remove("hidden"); els.scanToast.classList.remove("hidden");
   updateScanPanel(0, 0, 0, null);
-  const collected = []; const t0 = performance.now(); let ymin = 1e9, ymax = -1e9;
+  const collected = [], colorFrames = []; const t0 = performance.now(); let ymin = 1e9, ymax = -1e9;
   reconState.scan = { active: true };
   const tick = () => {
     if (!reconState.scan || !reconState.scan.active) return;
@@ -127,6 +129,7 @@ export async function startScan() {
     if (res.faceLandmarks && res.faceLandmarks.length) {
       const lm = toPixels(res.faceLandmarks[0], els.video.videoWidth, els.video.videoHeight).slice(0, 468);
       collected.push(applySim(umeyama(RIGID3D.map((i) => lm[i]), refRigid), lm));
+      colorFrames.push(sampleFrameColors(lm));
       const nose = lm[1], cl = lm[234], cr = lm[454], yaw = (nose[0] - (cl[0] + cr[0]) / 2) / (Math.abs(cr[0] - cl[0]) || 1);
       ymin = Math.min(ymin, yaw); ymax = Math.max(ymax, yaw);
       drawScanFrame(lm, secs, collected.length, ymin, ymax);
@@ -138,9 +141,9 @@ export async function startScan() {
     els.reconStatus.textContent = `扫描中 ${secs.toFixed(1)}s：缓慢左右上下转头（已采 ${collected.length} 帧，偏航 ${yawRange} / 需跨度 ${YAW_SPAN_MIN}）`;
     updateScanPanel(secs, collected.length, yawSpan, Number.isFinite(ymin) && Number.isFinite(ymax) ? (ymin + ymax) / 2 : null);
     // 时长+帧数+偏航覆盖都满足才正常结束，确保有侧脸视角约束深度 Z（见 #36）。
-    if (secs > SCAN_TARGET_SECS && collected.length > SCAN_TARGET_FRAMES && yawSpan > YAW_SPAN_MIN) { finishScan(collected, ymin, ymax); return; }
+    if (secs > SCAN_TARGET_SECS && collected.length > SCAN_TARGET_FRAMES && yawSpan > YAW_SPAN_MIN) { finishScan(collected, ymin, ymax, colorFrames); return; }
     // 硬上限：避免偏航始终不足时无限扫描；此时仍结束，但明确标注深度置信度低。
-    if (secs > 20 && collected.length > SCAN_TARGET_FRAMES) { finishScan(collected, ymin, ymax, yawSpan <= YAW_SPAN_MIN); return; }
+    if (secs > 20 && collected.length > SCAN_TARGET_FRAMES) { finishScan(collected, ymin, ymax, colorFrames, yawSpan <= YAW_SPAN_MIN); return; }
     // 时长+帧数已够、但偏航跨度仍不足：不结束，提示用户继续转头。
     if (secs > SCAN_TARGET_SECS && collected.length > SCAN_TARGET_FRAMES) {
       els.reconStatus.textContent = `请继续向左 / 右转头：当前偏航跨度 ${yawSpan.toFixed(2)}，需达到 ${YAW_SPAN_MIN} 才能完成（${secs.toFixed(1)}s，已采 ${collected.length} 帧）`;
@@ -148,6 +151,36 @@ export async function startScan() {
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
+}
+
+function sampleFrameColors(lm) {
+  if (!scanColorCanvas) {
+    scanColorCanvas = document.createElement("canvas");
+    scanColorCtx = scanColorCanvas.getContext("2d", { willReadFrequently: true });
+  }
+  const vw = els.video.videoWidth || 1, vh = els.video.videoHeight || 1;
+  const scale = Math.min(1, COLOR_SAMPLE_W / vw);
+  const W = Math.max(1, Math.round(vw * scale)), H = Math.max(1, Math.round(vh * scale));
+  scanColorCanvas.width = W; scanColorCanvas.height = H;
+  scanColorCtx.drawImage(els.video, 0, 0, W, H);
+  const data = scanColorCtx.getImageData(0, 0, W, H).data;
+  return lm.map((p) => {
+    const x = Math.max(0, Math.min(W - 1, Math.round(p[0] * scale)));
+    const y = Math.max(0, Math.min(H - 1, Math.round(p[1] * scale)));
+    const j = (y * W + x) * 4;
+    return [data[j] / 255, data[j + 1] / 255, data[j + 2] / 255];
+  });
+}
+
+function mergeVertexColors(colorFrames, count) {
+  if (!colorFrames.length) return null;
+  const out = Array.from({ length: count }, () => [0, 0, 0]);
+  for (const frame of colorFrames) {
+    for (let i = 0; i < count; i++) {
+      out[i][0] += frame[i][0]; out[i][1] += frame[i][1]; out[i][2] += frame[i][2];
+    }
+  }
+  return out.map((c) => c.map((v) => v / colorFrames.length));
 }
 
 function drawScanFrame(lm, secs, frames, ymin, ymax) {
@@ -183,7 +216,7 @@ function updateScanPanel(secs, frames, yawSpan, yawMid) {
   els.scanYawRight.classList.toggle("active", wideEnough || (Number.isFinite(yawMid) && yawMid > 0.08));
 }
 
-function finishScan(collected, ymin, ymax, lowDepthConfidence = false) {
+function finishScan(collected, ymin, ymax, colorFrames = [], lowDepthConfidence = false) {
   reconState.scan = null;
   els.scanPanel.classList.add("hidden"); els.scanToast.classList.add("hidden");
   const N = collected.length, V = 468, verts = [];
@@ -195,6 +228,7 @@ function finishScan(collected, ymin, ymax, lowDepthConfidence = false) {
   }
   const c = [0, 0, 0]; for (const p of verts) for (let k = 0; k < 3; k++) c[k] += p[k] / V;
   reconState.reconVerts = verts.map((p) => [p[0] - c[0], p[1] - c[1], p[2] - c[2]]);
+  reconState.reconColors = mergeVertexColors(colorFrames, V);
   els.reconStatus.textContent = lowDepthConfidence
     ? `重建完成（深度置信度低：偏航跨度 ${(ymax - ymin).toFixed(2)} < ${YAW_SPAN_MIN}，缺侧脸视角，深度不可靠）：${N} 帧。可旋转查看 / 投影。`
     : `重建完成：${N} 帧，偏航 ${ymin.toFixed(2)}~${ymax.toFixed(2)}。可旋转查看 / 投影。`;

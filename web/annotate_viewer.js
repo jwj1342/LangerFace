@@ -6,6 +6,18 @@ import { barycentric } from "./annotate_model.js";
 const FINISHED_COLOR = [0.78, 0.15, 1.0];   // 已完成线（品红）
 const CURRENT_COLOR = [1.0, 0.78, 0.2];     // 正在画的线（琥珀）
 
+function normalizedColors(colors, count) {
+  if (!Array.isArray(colors) || colors.length !== count) return null;
+  const clamp = (v) => Math.max(0, Math.min(1, v));
+  const out = [];
+  for (const c of colors) {
+    if (!Array.isArray(c) || c.length < 3) return null;
+    const scale = Math.max(c[0], c[1], c[2]) > 1 ? 255 : 1;
+    out.push([clamp(c[0] / scale), clamp(c[1] / scale), clamp(c[2] / scale)]);
+  }
+  return out;
+}
+
 const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -98,13 +110,13 @@ export class Annotator3D {
 
     const mg = new THREE.BufferGeometry();
     mg.setAttribute("position", new THREE.Float32BufferAttribute(verts.flat(), 3));
-    const hasColors = Array.isArray(colors) && colors.length === verts.length;
-    if (hasColors) mg.setAttribute("color", new THREE.Float32BufferAttribute(colors.flat(), 3));
     mg.setIndex(tris.flat());
+    const vertexColors = normalizedColors(colors, verts.length);
+    if (vertexColors) mg.setAttribute("color", new THREE.Float32BufferAttribute(vertexColors.flat(), 3));
     mg.computeVertexNormals();
     const mat = new THREE.MeshStandardMaterial({
       color: showSurface ? 0xd9b79c : 0x9aa6b2, roughness: 0.85, metalness: 0.0, side: THREE.DoubleSide,
-      vertexColors: hasColors,
+      vertexColors: Boolean(vertexColors),
     });
     this.mesh = new THREE.Mesh(mg, mat);
     this.group.add(this.mesh);
