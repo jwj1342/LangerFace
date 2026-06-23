@@ -8,6 +8,7 @@ import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./cam
 import { CDN } from "./constants.js";
 import { ctx, els } from "./dom.js";
 import { buildHandMasks, noseTriangles, toPixels } from "./geometry.js";
+import { prepareImageSource } from "./image_source.js";
 import { countMetric, logInfo, logWarn } from "./logger.js";
 import { projectVerts } from "./projection3d.js";
 import { clearZooms, draw, drawZooms, updateStats } from "./render.js";
@@ -125,8 +126,10 @@ export async function handleFile(file) {
   const url = URL.createObjectURL(file);
   if (file.type.startsWith("image/")) {
     const img = new Image(); img.src = url; await img.decode();
-    sourceState.imageCacheLM = null;
-    setSource(img, "image", img.naturalWidth, img.naturalHeight);
+    const prepared = prepareImageSource(img);
+    setSource(prepared.source, "image", prepared.width, prepared.height);
+    URL.revokeObjectURL(url);
+    if (prepared.scaled) setMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
   } else {
     els.video.srcObject = null; els.video.src = url; els.video.loop = true; await els.video.play();
     setSource(els.video, "video", els.video.videoWidth, els.video.videoHeight);
@@ -137,10 +140,12 @@ export async function handleFile(file) {
 export function setSource(src, kind, w, h) {
   sourceState.source = src; sourceState.sourceKind = kind;
   els.canvas.width = w || 1280; els.canvas.height = h || 720;
-  renderState.smoother.reset(); sourceState.presence = 0; sourceState.running = true; sourceState.paused = false;
+  renderState.smoother.reset();
+  sourceState.presence = 0; sourceState.lastLM = null; sourceState.imageCacheLM = null; sourceState.imageHulls = null;
+  sourceState.running = true; sourceState.paused = false;
   els.pause.disabled = false; els.export.disabled = false; els.pause.textContent = "⏸ 暂停";
   setMsg(null); setLive(true, kind === "camera" ? "实时摄像头" : kind === "video" ? "视频" : "照片");
-  requestAnimationFrame(loop);
+  requestFrame();
 }
 
 export function stopSource() {
@@ -148,11 +153,21 @@ export function stopSource() {
   if (ms) ms.getTracks().forEach((t) => t.stop());
   els.video.srcObject = null; els.video.removeAttribute("src");
   sourceState.source = null; sourceState.sourceKind = null; sourceState.running = false;
+  sourceState.imageCacheLM = null; sourceState.imageHulls = null; sourceState.lastLM = null;
 }
 
 // ── 主循环 ────────────────────────────────────────────────────────────────────
 let fpsEMA = 0, lastT = performance.now();
+let frameScheduled = false;
+
+export function requestFrame() {
+  if (!sourceState.running || sourceState.paused || frameScheduled) return;
+  frameScheduled = true;
+  requestAnimationFrame(loop);
+}
+
 export function loop() {
+  frameScheduled = false;
   if (!sourceState.running || sourceState.paused) return;
   const W = els.canvas.width, H = els.canvas.height;
   ctx.drawImage(sourceState.source, 0, 0, W, H);
@@ -164,8 +179,10 @@ export function loop() {
       const res = modelState.landmarker.detectForVideo(sourceState.source, t);
       sourceState.imageCacheLM = (res.faceLandmarks && res.faceLandmarks[0]) ? toPixels(res.faceLandmarks[0], W, H) : null;
       sourceState.imageHulls = detectHands(t, W, H);
+    } else if (renderState.handOcc && sourceState.imageHulls === null) {
+      sourceState.imageHulls = detectHands(t, W, H);
     }
-    lm = sourceState.imageCacheLM; hulls = sourceState.imageHulls || [];
+    lm = sourceState.imageCacheLM; hulls = renderState.handOcc ? sourceState.imageHulls || [] : [];
     sourceState.presence = lm ? 1 : 0;
   } else if (sourceState.source.currentTime !== undefined) {
     const res = modelState.landmarker.detectForVideo(sourceState.source, t);
@@ -189,5 +206,5 @@ export function loop() {
   const now = performance.now();
   fpsEMA = fpsEMA ? fpsEMA * 0.9 + (1000 / Math.max(1, now - lastT)) * 0.1 : 30;
   lastT = now; els.fps.textContent = fpsEMA.toFixed(0) + " fps";
-  requestAnimationFrame(loop);
+  if (sourceState.sourceKind !== "image") requestFrame();
 }

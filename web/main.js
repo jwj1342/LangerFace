@@ -2,37 +2,47 @@
 import { els } from "./dom.js";
 import { countMetric, logError } from "./logger.js";
 import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan } from "./mode3d.js";
-import { ensureReady, handleFile, loop, startCamera } from "./pipeline.js";
+import { ensureReady, handleFile, requestFrame, startCamera } from "./pipeline.js";
 import { buildZoomCards } from "./render.js";
 import { recordingState, reconState, renderState, sourceState } from "./state.js";
 import { smoothLabel } from "./ui.js";
 
 // ── UI 绑定 ───────────────────────────────────────────────────────────────────
+function refreshStaticImage() {
+  if (sourceState.sourceKind === "image") requestFrame();
+}
+
 els.upload.onclick = () => els.file.click();
 els.file.onchange = (e) => handleFile(e.target.files[0]);
 els.cam.onclick = startCamera;
 els.pause.onclick = () => {
   sourceState.paused = !sourceState.paused; els.pause.textContent = sourceState.paused ? "▶ 继续" : "⏸ 暂停";
-  if (!sourceState.paused) requestAnimationFrame(loop);
+  if (!sourceState.paused) requestFrame();
 };
-els.tmpl.onchange = (e) => { renderState.system = e.target.value; };
-els.density.oninput = (e) => { renderState.densityFrac = e.target.value / 100; els.densityVal.textContent = e.target.value + "%"; };
+els.tmpl.onchange = (e) => { renderState.system = e.target.value; refreshStaticImage(); };
+els.density.oninput = (e) => { renderState.densityFrac = e.target.value / 100; els.densityVal.textContent = e.target.value + "%"; refreshStaticImage(); };
 els.smooth.oninput = (e) => {
   const v = +e.target.value; renderState.smoothLevel = v / 100; els.smoothVal.textContent = smoothLabel(v);
   renderState.smoother.minCutoff = 6.0 - 5.5 * renderState.smoothLevel;
   renderState.smoother.beta = 0.02 + 0.06 * renderState.smoothLevel;
+  refreshStaticImage();
 };
-els.opacity.oninput = (e) => { renderState.opacity = e.target.value / 100; els.opacityVal.textContent = e.target.value + "%"; };
-els.clip.onchange = (e) => { renderState.clip = e.target.checked; };
-els.handOcc.onchange = (e) => { renderState.handOcc = e.target.checked; };
+els.opacity.oninput = (e) => { renderState.opacity = e.target.value / 100; els.opacityVal.textContent = e.target.value + "%"; refreshStaticImage(); };
+els.clip.onchange = (e) => { renderState.clip = e.target.checked; refreshStaticImage(); };
+els.handOcc.onchange = (e) => {
+  renderState.handOcc = e.target.checked;
+  sourceState.imageHulls = null;
+  refreshStaticImage();
+};
 els.mirror.onchange = (e) => {
   renderState.mirror = e.target.checked;
   els.canvas.classList.toggle("mirror", renderState.mirror);
   renderState.zoomCards.forEach((zc) => zc.canvas.classList.toggle("mirror", renderState.mirror));
+  refreshStaticImage();
 };
-els.bands.onchange = (e) => { renderState.bands = e.target.checked; };
-els.zoom.onchange = (e) => { renderState.zoom = e.target.checked; els.zoomStrip.classList.toggle("hidden", !renderState.zoom); };
-els.meshPts.onchange = (e) => { renderState.meshPts = e.target.checked; };
+els.bands.onchange = (e) => { renderState.bands = e.target.checked; refreshStaticImage(); };
+els.zoom.onchange = (e) => { renderState.zoom = e.target.checked; els.zoomStrip.classList.toggle("hidden", !renderState.zoom); refreshStaticImage(); };
+els.meshPts.onchange = (e) => { renderState.meshPts = e.target.checked; refreshStaticImage(); };
 
 // 导出：录制画布为 webm 下载
 els.export.onclick = () => {
