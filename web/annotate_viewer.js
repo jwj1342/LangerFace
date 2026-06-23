@@ -2,6 +2,7 @@
 // 复用项目的 three 依赖；拾取结果在网格「局部坐标系」中给出（与旋转无关）。
 import * as THREE from "three";
 import { barycentric } from "./annotate_model.js";
+import { addSkinLighting, configureSkinRenderer, createSkinMaterial } from "./skin_material.js";
 
 const FINISHED_COLOR = [0.78, 0.15, 1.0];   // 已完成线（品红）
 const CURRENT_COLOR = [1.0, 0.78, 0.2];     // 正在画的线（琥珀）
@@ -61,14 +62,13 @@ export class Annotator3D {
     this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    configureSkinRenderer(this.renderer);
     this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x0b1016);
     this.camera = new THREE.PerspectiveCamera(35, 1, 0.01, 100);
     this.group = new THREE.Group();
     this.scene.add(this.group);
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-    const d = new THREE.DirectionalLight(0xffffff, 0.6);
-    d.position.set(0.4, 0.8, 1.2);
-    this.scene.add(d);
+    addSkinLighting(this.scene);
 
     this.verts = null;
     this.tris = null;
@@ -94,7 +94,11 @@ export class Annotator3D {
       this._vertexFaces[t[1]]?.push(i);
       this._vertexFaces[t[2]]?.push(i);
     }
-    if (this.mesh) { this.group.remove(this.mesh); this.mesh.geometry.dispose(); }
+    if (this.mesh) {
+      this.group.remove(this.mesh);
+      this.mesh.geometry.dispose();
+      this.mesh.material.dispose();
+    }
 
     const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
     for (const v of verts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], v[k]); hi[k] = Math.max(hi[k], v[k]); }
@@ -114,9 +118,10 @@ export class Annotator3D {
     const vertexColors = normalizedColors(colors, verts.length);
     if (vertexColors) mg.setAttribute("color", new THREE.Float32BufferAttribute(vertexColors.flat(), 3));
     mg.computeVertexNormals();
-    const mat = new THREE.MeshStandardMaterial({
-      color: showSurface ? 0xd9b79c : 0x9aa6b2, roughness: 0.85, metalness: 0.0, side: THREE.DoubleSide,
+    const mat = createSkinMaterial(verts, {
+      showSurface,
       vertexColors: Boolean(vertexColors),
+      fallbackColor: showSurface ? 0xd6aa8f : 0x9aa6b2,
     });
     this.mesh = new THREE.Mesh(mg, mat);
     this.group.add(this.mesh);
@@ -197,7 +202,8 @@ export class Annotator3D {
       const g = new THREE.BufferGeometry();
       g.setAttribute("position", new THREE.Float32BufferAttribute(segPos, 3));
       g.setAttribute("color", new THREE.Float32BufferAttribute(segCol, 3));
-      this.linesObj = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false }));
+      // toneMapped:false：已完成/当前标注线为语义纯色，不参与 ACES 色调映射，保证品红/琥珀不偏色。
+      this.linesObj = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, toneMapped: false }));
       this.linesObj.renderOrder = 3;
       this.group.add(this.linesObj);
     }
@@ -206,7 +212,7 @@ export class Annotator3D {
       g.setAttribute("position", new THREE.Float32BufferAttribute(mkPos, 3));
       g.setAttribute("color", new THREE.Float32BufferAttribute(mkCol, 3));
       const size = this._dist * 0.012;
-      this.markersObj = new THREE.Points(g, new THREE.PointsMaterial({ vertexColors: true, size, depthTest: false, sizeAttenuation: true }));
+      this.markersObj = new THREE.Points(g, new THREE.PointsMaterial({ vertexColors: true, size, depthTest: false, sizeAttenuation: true, toneMapped: false }));
       this.markersObj.renderOrder = 4;
       this.group.add(this.markersObj);
     }
