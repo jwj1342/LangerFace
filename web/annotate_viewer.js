@@ -202,7 +202,8 @@ export class Annotator3D {
       const g = new THREE.BufferGeometry();
       g.setAttribute("position", new THREE.Float32BufferAttribute(segPos, 3));
       g.setAttribute("color", new THREE.Float32BufferAttribute(segCol, 3));
-      this.linesObj = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false }));
+      // toneMapped:false：已完成/当前标注线为语义纯色，不参与 ACES 色调映射，保证品红/琥珀不偏色。
+      this.linesObj = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, toneMapped: false }));
       this.linesObj.renderOrder = 3;
       this.group.add(this.linesObj);
     }
@@ -211,7 +212,7 @@ export class Annotator3D {
       g.setAttribute("position", new THREE.Float32BufferAttribute(mkPos, 3));
       g.setAttribute("color", new THREE.Float32BufferAttribute(mkCol, 3));
       const size = this._dist * 0.012;
-      this.markersObj = new THREE.Points(g, new THREE.PointsMaterial({ vertexColors: true, size, depthTest: false, sizeAttenuation: true }));
+      this.markersObj = new THREE.Points(g, new THREE.PointsMaterial({ vertexColors: true, size, depthTest: false, sizeAttenuation: true, toneMapped: false }));
       this.markersObj.renderOrder = 4;
       this.group.add(this.markersObj);
     }

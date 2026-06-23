@@ -1,6 +1,17 @@
 import * as THREE from "three";
+import { logWarn } from "./logger.js";
 
 const DEFAULT_SKIN_COLOR = 0xd6aa8f;
+
+// 程序化皮肤依赖在这些 three 内置 shader chunk 之后注入代码。three 升级若改名/删除
+// 任一锚点，replace 会静默失效；这里先校验存在性并告警，避免无声地丢失皮肤效果。
+const VERTEX_ANCHORS = ["#include <common>", "#include <begin_vertex>"];
+const FRAGMENT_ANCHORS = [
+  "#include <common>",
+  "#include <map_fragment>",
+  "#include <roughnessmap_fragment>",
+  "#include <normal_fragment_maps>",
+];
 
 export function meshBounds(verts) {
   const min = [Infinity, Infinity, Infinity];
@@ -57,6 +68,13 @@ export function createSkinMaterial(verts, {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.skinCenter = { value: new THREE.Vector3(...bounds.center) };
     shader.uniforms.skinExtent = { value: new THREE.Vector3(...bounds.extent) };
+
+    for (const anchor of VERTEX_ANCHORS) {
+      if (!shader.vertexShader.includes(anchor)) logWarn("皮肤材质：顶点着色器缺少注入锚点，皮肤效果可能失效（three 版本变化？）。", { anchor });
+    }
+    for (const anchor of FRAGMENT_ANCHORS) {
+      if (!shader.fragmentShader.includes(anchor)) logWarn("皮肤材质：片元着色器缺少注入锚点，皮肤效果可能失效（three 版本变化？）。", { anchor });
+    }
 
     shader.vertexShader = shader.vertexShader
       .replace(

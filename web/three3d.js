@@ -110,7 +110,8 @@ export class Head3D {
 
     // 张力线
     const lg = buildLineGeometry(atlasLines, verts, tris, normals, bands);
-    this.lines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ vertexColors: true }));
+    // toneMapped:false：张力线为编码临床语义的纯色，不参与 ACES 色调映射，避免分区色被偏移/去饱和。
+    this.lines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ vertexColors: true, toneMapped: false }));
     this.lines.renderOrder = 2;
     this.group.add(this.lines);
 
