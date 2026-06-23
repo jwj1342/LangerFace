@@ -14,6 +14,7 @@ from .assets import (
     require_asset,
 )
 from .constants import (
+    ATLAS_VERSION,
     DEFAULT_FADE_FRAMES,
     DEFAULT_OCCLUSION_THRESHOLD,
     FACE_FRAME_ANCHORS,
@@ -29,7 +30,7 @@ from .settings import DEFAULT_STYLES, Config, LineStyle, build_config
 
 __all__ = [
     # 线系统
-    "SYSTEM_RSTL", "SYSTEM_LANGER", "VALID_SYSTEMS",
+    "SYSTEM_RSTL", "SYSTEM_LANGER", "VALID_SYSTEMS", "ATLAS_VERSION",
     # 配置
     "Config", "LineStyle", "DEFAULT_STYLES", "build_config",
     # 常量

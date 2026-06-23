@@ -87,9 +87,11 @@ class Atlas:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     # ── 校验 ───────────────────────────────────────────────────────────────────
-    def validate(self, num_triangles: int) -> list[str]:
+    def validate(self, num_triangles: int, expected_version: str | None = None) -> list[str]:
         """返回问题列表（空 = 通过）。检查三角面索引合法、重心坐标范围、曲线非空。"""
         issues: list[str] = []
+        if expected_version is not None and self.version != expected_version:
+            issues.append(f"图谱版本 {self.version!r} 与期望 {expected_version!r} 不一致")
         if not self.lines:
             issues.append("图谱不含任何曲线")
         for ln in self.lines:

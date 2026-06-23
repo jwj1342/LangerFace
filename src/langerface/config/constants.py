@@ -10,6 +10,10 @@ SYSTEM_RSTL = "rstl"      # Borges 松弛皮肤张力线（面部手术首选，
 SYSTEM_LANGER = "langer"  # 经典 Langer 裂线
 VALID_SYSTEMS = (SYSTEM_RSTL, SYSTEM_LANGER)
 
+# 当前运行时消费的 atlas JSON 契约版本。旧版生成器仍可离线读取，
+# 但正式 LinePipeline 加载边界必须拒绝版本漂移的图谱。
+ATLAS_VERSION = "0.2"
+
 # ── MediaPipe 关键点索引（Face Landmarker 478 点约定，索引稳定）────────────────
 NOSE_TIP = 1  # 鼻尖：背面剔除每帧符号标定的参考点
 
