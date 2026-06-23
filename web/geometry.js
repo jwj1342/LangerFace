@@ -1,6 +1,8 @@
 // 几何核心：Python 端 mapping/occlusion/smoothing 的忠实 JS 移植。
 // 纯函数、无 DOM，可同时在浏览器与 Node 下运行（Node 用于离线对拍验证）。
 
+import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.js";
+
 export const NOSE_TIP = 1; // MediaPipe 鼻尖关键点索引
 
 // 关键点（归一化 x,y in [0,1], z）→ 图像像素 (x*W, y*H, z*W)
@@ -42,7 +44,17 @@ export function mapAtlas(lines, landmarksPx, triangles) {
 // 注入预览前的最小边界校验：判断一份图谱线集合能否安全喂给 mapAtlas，
 // 避免医生画的内存图谱里出现越界三角面 / 非法重心坐标而让渲染循环抛错黑屏。
 // 要求：非空数组；每条线 points 为数组；每点 [tri,u,v] 的 tri 为 triangles 内合法整数、u/v 有限。
-export function validateAtlasLines(lines, triangles) {
+export function validateAtlasLines(atlasOrLines, triangles, { expectedTopologyId, expectedTopologyVersion } = {}) {
+  const atlas = atlasOrLines && typeof atlasOrLines === "object" && !Array.isArray(atlasOrLines)
+    ? atlasOrLines
+    : null;
+  if (expectedTopologyId && atlas && (atlas.topologyId ?? TOPOLOGY_ID) !== expectedTopologyId) {
+    return false;
+  }
+  if (expectedTopologyVersion && atlas && (atlas.topologyVersion ?? TOPOLOGY_VERSION) !== expectedTopologyVersion) {
+    return false;
+  }
+  const lines = atlas ? atlas.lines : atlasOrLines;
   if (!Array.isArray(lines) || lines.length === 0) return false;
   const triCount = Array.isArray(triangles) ? triangles.length : 0;
   for (const ln of lines) {

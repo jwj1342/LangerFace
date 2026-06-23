@@ -4,6 +4,7 @@ import { OneEuro } from "./geometry.js";
 export const modelState = {
   landmarker: null,
   handLandmarker: null,
+  topology: null,
   triangles: null,
   noseTris: null,
   atlases: {},

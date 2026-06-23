@@ -4,7 +4,7 @@ import os
 import numpy as np
 import pytest
 
-from langerface.config import ATLAS_PATHS
+from langerface.config import ATLAS_PATHS, TOPOLOGY_ID, TOPOLOGY_VERSION
 from langerface.lines import Atlas, AtlasLine
 
 
@@ -32,7 +32,24 @@ def test_roundtrip(tmp_path):
     a.save(str(p))
     b = Atlas.load(str(p))
     assert b.system == "rstl" and b.validated is True
+    assert b.topology_id == TOPOLOGY_ID and b.topology_version == TOPOLOGY_VERSION
     assert len(b.lines) == 1 and b.lines[0].points.shape == (2, 3)
+
+
+def test_validate_catches_topology_mismatch():
+    a = Atlas(system="rstl", topology_id="flame-2023", lines=[
+        AtlasLine("l0", "forehead", np.array([[0, 0.5, 0.3], [1, 0.2, 0.2]], dtype=float)),
+    ])
+    issues = a.validate(num_triangles=100, expected_topology_id=TOPOLOGY_ID)
+    assert any("拓扑" in s for s in issues)
+
+
+def test_validate_catches_topology_version_mismatch():
+    a = Atlas(system="rstl", topology_version="other", lines=[
+        AtlasLine("l0", "forehead", np.array([[0, 0.5, 0.3], [1, 0.2, 0.2]], dtype=float)),
+    ])
+    issues = a.validate(num_triangles=100, expected_topology_version=TOPOLOGY_VERSION)
+    assert any("拓扑版本" in s for s in issues)
 
 
 def test_generated_atlases_valid(canonical):
@@ -41,4 +58,8 @@ def test_generated_atlases_valid(canonical):
         if not os.path.exists(path):
             pytest.skip(f"{system} 图谱未生成（先跑 build_field_atlas.py）")
         atlas = Atlas.load(path)
-        assert atlas.validate(n_tri) == [], f"{system} 图谱校验未通过"
+        assert atlas.validate(
+            n_tri,
+            expected_topology_id=TOPOLOGY_ID,
+            expected_topology_version=TOPOLOGY_VERSION,
+        ) == [], f"{system} 图谱校验未通过"

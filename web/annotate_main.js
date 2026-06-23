@@ -28,10 +28,12 @@ const SYSTEM_LABELS = { rstl: "RSTL", langer: "Langer" };
 // ── 网格加载 ──────────────────────────────────────────────────────────────────
 async function loadCanonical() {
   setHint("加载标准脸…");
-  const [verts, tris] = await Promise.all([
+  const [verts, topology] = await Promise.all([
     fetchJSON(assetUrls.canonicalVertices, "标准脸顶点"),
-    fetchJSON(assetUrls.triangles, "标准脸三角拓扑"),
+    fetchJSON(assetUrls.topology, "标准脸拓扑"),
   ]);
+  const tris = Array.isArray(topology) ? topology : topology.triangles;
+  model.setTopology(topology);
   viewer.setMesh(verts, tris, { showSurface: true });
   onCanonical = true;
   els.drawMode.textContent = "标准脸图谱";
