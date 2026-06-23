@@ -1,6 +1,8 @@
 {
   "system": "rstl",
   "version": "0.2",
+  "topologyId": "mediapipe-468",
+  "topologyVersion": "mediapipe-canonical-468-v1",
   "provenance": "稠密方向场（流线）首版：方向遵循 Borges RSTL 走向，几何近似；Langer 在分歧区做方向区分。validated=false，须临床校验。",
   "validated": false,
   "lines": [

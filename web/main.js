@@ -21,7 +21,7 @@ function syncPreviewControls() {
 function applyStagedAtlas() {
   const atlas = dataSource.takePreviewAtlas();
   if (!atlas || !Array.isArray(atlas.lines)) return;
-  if (!setActiveAtlas(atlas.system, atlas.lines)) {
+  if (!setActiveAtlas(atlas.system, atlas)) {
     setMsg("标注预览图谱加载失败：图谱格式无效。已继续使用内置图谱。");
     return;
   }

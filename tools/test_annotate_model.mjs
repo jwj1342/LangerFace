@@ -1,5 +1,6 @@
 // 网页标注纯模型测试（无 Three.js / DOM）。  node tools/test_annotate_model.mjs
 import { AnnotationModel, barycentric } from "../web/annotate_model.js";
+import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "../web/constants.js";
 
 let fail = 0;
 const ok = (c, m) => { if (!c) { console.error("FAIL:", m); fail++; } else console.log("ok:", m); };
@@ -40,6 +41,7 @@ ok(m.lines.length === 1, "单点线不收录");
 // ── 导出图谱格式 ──────────────────────────────────────────────────────────────
 const atlas = m.toAtlasJSON();
 ok(atlas.system === "rstl" && atlas.validated === false, "图谱 system/validated 正确");
+ok(atlas.topologyId === TOPOLOGY_ID && atlas.topologyVersion === TOPOLOGY_VERSION, "图谱拓扑声明正确");
 ok(atlas.lines[0].points[0].length === 3, "图谱点为 [tri,u,v] 三元组");
 ok(atlas.lines[0].points[0][0] === 5, "图谱点保留三角面 id");
 

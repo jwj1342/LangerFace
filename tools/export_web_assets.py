@@ -1,5 +1,6 @@
 """导出网页端所需资产到 web/assets/：
   - triangles.json   标准网格三角拓扑 (898,3)
+  - topology_mediapipe_468.json   带 topologyId 的标准网格合同
   - atlas_rstl.json / atlas_langer.json   线图谱（直接复用）
   - face_landmarker.task   MediaPipe 模型（浏览器本地加载）
 
@@ -11,7 +12,13 @@ import json
 import os
 import shutil
 
-from langerface.config import ATLAS_PATHS, CANONICAL_OBJ, FACE_LANDMARKER_TASK
+from langerface.config import (
+    ATLAS_PATHS,
+    CANONICAL_OBJ,
+    FACE_LANDMARKER_TASK,
+    TOPOLOGY_ID,
+    TOPOLOGY_VERSION,
+)
 from langerface.geometry import CanonicalFaceModel
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -25,6 +32,17 @@ def main():
     with open(os.path.join(WEB_ASSETS, "triangles.json"), "w") as f:
         json.dump(c.triangles.astype(int).tolist(), f)
     print(f"[ok] triangles.json  {c.triangles.shape}")
+
+    topology = {
+        "topologyId": TOPOLOGY_ID,
+        "topologyVersion": TOPOLOGY_VERSION,
+        "vertexCount": int(c.vertices.shape[0]),
+        "triangleCount": int(c.triangles.shape[0]),
+        "triangles": c.triangles.astype(int).tolist(),
+    }
+    with open(os.path.join(WEB_ASSETS, "topology_mediapipe_468.json"), "w") as f:
+        json.dump(topology, f)
+    print(f"[ok] topology_mediapipe_468.json  {TOPOLOGY_ID}")
 
     # 标准 3D 顶点（y 上），3D Beta 的兜底几何
     import numpy as np
