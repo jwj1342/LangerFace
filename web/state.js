@@ -40,4 +40,6 @@ export const reconState = {
   viewerRAF: null, rot: { x: 0, y: 0 }, scan: null,
   flameFit: null,      // 云端拟合出的个体 FLAME {verts, faces}
   flameNeutral: null,  // 标准 FLAME neutral {verts, faces}（缓存）
+  flameBasis: null,    // 浏览器本地拟合基（flame_fit.js，一次加载）
+  twinMode: "individual",  // 实时孪生右侧头：individual | standard
 };

@@ -1,6 +1,7 @@
 import atlasLangerUrl from "./assets/atlas_langer.json?url";
 import atlasRstlUrl from "./assets/atlas_rstl.json?url";
 import canonicalVerticesUrl from "./assets/canonical_vertices.json?url";
+import flameBasisUrl from "./assets/flame_basis.bin?url";
 import faceLandmarkerTaskUrl from "./assets/face_landmarker.task?url";
 import handLandmarkerTaskUrl from "./assets/hand_landmarker.task?url";
 import reconDemoUrl from "./assets/recon_demo.json?url";
@@ -11,6 +12,7 @@ export const assetUrls = {
   atlasLanger: atlasLangerUrl,
   atlasRstl: atlasRstlUrl,
   canonicalVertices: canonicalVerticesUrl,
+  flameBasis: flameBasisUrl,
   faceLandmarkerTask: faceLandmarkerTaskUrl,
   handLandmarkerTask: handLandmarkerTaskUrl,
   reconDemo: reconDemoUrl,

@@ -111,6 +111,10 @@ video{display:none}
 #three{position:absolute;inset:0;width:100%;height:100%;border-radius:14px;cursor:grab;
        background:radial-gradient(circle at 50% 38%,#222b35 0%,#121821 52%,#0b0f15 100%)}
 #three:active{cursor:grabbing}
+/* 实时孪生：左实时人脸 / 右 FLAME 头，平分舞台 */
+.main-wrap.twin{flex-direction:row;gap:12px;align-items:center;justify-content:center}
+.main-wrap.twin>#canvas{position:static;flex:1 1 0;min-width:0;max-width:50%;max-height:100%;height:auto}
+.main-wrap.twin>#three{position:static;flex:1 1 0;min-width:0;width:auto;height:100%;display:block}
 .badge.beta{color:#7c3aed;background:#ede4fb}
 
 @media(max-width:880px){

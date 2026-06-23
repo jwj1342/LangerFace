@@ -4,6 +4,7 @@ import { assetUrls } from "./assets.js";
 import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./camera.js";
 import { ctx, els } from "./dom.js";
 import { applySim, toPixels, umeyama } from "./geometry.js";
+import { fitFlame, loadFlameBasis } from "./flame_fit.js";
 import { countMetric, logWarn } from "./logger.js";
 import { ensureReady, showCameraPlaceholder, startCamera, stopSource } from "./pipeline.js";
 import { modelState, reconState, renderState, sourceState } from "./state.js";
@@ -68,70 +69,99 @@ export function resetView3d() {
   reconState.head3d?.resetView();
 }
 
-// 云端拟合：把扫描/重建得到的关键点 POST 到 /api/fit（Vercel Python 云函数）→ 拿回个体
-// FLAME 网格（5023 顶点）→ 在同一 3D 查看器渲染。先「转头扫描」（你的脸）或「用示例重建」即可。
-export async function cloudFitFlame() {
-  if (!reconState.reconVerts) {
-    els.reconStatus.textContent = "请先「转头扫描」或「用示例重建」采集人脸，再云端拟合 FLAME。";
-    return;
-  }
-  els.reconStatus.textContent = "云端拟合 FLAME 中…（首次冷启动约 1–2 秒）";
-  let res;
-  try {
-    const r = await fetch("/api/fit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ landmarks: reconState.reconVerts }),
-    });
-    res = await r.json().catch(() => ({}));
-    if (!r.ok || res.error) throw new Error(res.error || `HTTP ${r.status}`);
-  } catch (err) {
-    els.reconStatus.textContent = "云端拟合失败：" + err.message;
-    return;
-  }
-  await ensureHead3D();
-  // 返回的 faces 为 FLAME 9976 三角拓扑；FLAME 顶点 y 上，查看器相机沿 +z，直接渲染、可拖拽旋转。
-  reconState.head3d.setGeometry(res.verts, res.faces, [], { showSurface: true, bands: false });
-  reconState.flameFit = { verts: res.verts, faces: res.faces };
-  els.flameStd.checked = false;
-  els.flameHeadToggleWrap.style.display = "";  // 拟合成功后才出现「标准⇄个体」开关
-  els.view3d.disabled = false; els.reset3d.disabled = false;
-  const mm = res.residual != null ? (res.residual * 1000).toFixed(1) : "?";
-  els.reconStatus.textContent =
-    `云端 FLAME 拟合完成：${res.verts.length} 顶点 · ${res.nLandmarks} 关键点 · 残差 ${mm}mm。拖拽旋转查看。`;
-  setMode3d("view");
+// ── 实时孪生：左实时人脸 / 右 FLAME 头随头姿实时转 + 浏览器本地拟合 + 实时误差 ──────────
+// 头姿调参（这边看不到渲染，给默认 + 易翻转符号；若「转反了」翻对应 sign）。
+const POSE = { yawSign: 1, pitchSign: 1, pitchClamp: 1.3 };
+const TWIN_FIT_MS = 900;  // 本地拟合节流（形状 + 误差刷新；头姿每帧跟随）
+let twinRAF = null, twinLastFit = 0, twinFaces = null, twinNeutral = null;
+
+const meshFromFlat = (flat, n) => {
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) out[i] = [flat[i * 3], flat[i * 3 + 1], flat[i * 3 + 2]];
+  return out;
+};
+
+export function stopTwin() {
+  cancelAnimationFrame(twinRAF); twinRAF = null;
+  els.mainWrap.classList.remove("twin");
 }
 
-// 右侧头切换：标准 FLAME neutral ⇄ 个体（云端拟合）。标准头从 /api/fit {neutral:true} 取一次并缓存。
-export async function toggleFlameHead() {
-  if (!reconState.flameFit) return;
-  let mesh;
-  if (els.flameStd.checked) {
-    if (!reconState.flameNeutral) {
-      els.reconStatus.textContent = "加载标准 FLAME 头…";
+// 「▶ 实时孪生」：加载基(一次) → 分屏 + 开摄像头(左) → 右 FLAME 头随头姿实时转 + 节流本地拟合。
+export async function startTwin() {
+  els.reconStatus.textContent = "加载 FLAME 基（约 3.8MB，仅首次）…";
+  try {
+    if (!reconState.flameBasis) reconState.flameBasis = await loadFlameBasis(assetUrls.flameBasis);
+    if (!canonicalRef) await fetchCanonicalRef();
+  } catch (err) {
+    els.reconStatus.textContent = "FLAME 基加载失败：" + err.message;
+    return;
+  }
+  const basis = reconState.flameBasis;
+  twinFaces = meshFromFlat(basis.faces, basis.nFaces);
+  twinNeutral = meshFromFlat(basis.vTemplate, basis.nVerts);
+
+  await ensureHead3D();
+  reconState.head3d.setGeometry(twinNeutral, twinFaces, [], { showSurface: true, bands: false });
+  reconState.twinMode = "individual";
+  els.flameStd.checked = false;
+  els.flameHeadToggleWrap.style.display = "";
+
+  reconState.route = "3d"; reconState.mode3d = "twin";
+  els.mainWrap.classList.add("twin");
+  els.canvas.classList.remove("hidden"); els.three.classList.remove("hidden");
+  setLive(true, "实时孪生");
+  twinLastFit = 0;
+  await startCamera();  // 复用主管线：画左侧人脸 + 每帧更新 sourceState.lastLM
+  cancelAnimationFrame(twinRAF); twinLoop();
+}
+
+// 每帧：头姿跟随（本地，复用 Umeyama）+ 节流本地拟合（形状 + 误差）+ 渲染右侧。
+function twinLoop() {
+  if (reconState.mode3d !== "twin" || !reconState.head3d) return;
+  const lm = sourceState.lastLM;
+  if (lm && lm.length && canonicalRef) {
+    applyHeadPose(lm);
+    const now = performance.now();
+    if (reconState.twinMode === "individual" && now - twinLastFit > TWIN_FIT_MS) {
+      twinLastFit = now;
       try {
-        const r = await fetch("/api/fit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ neutral: true }),
-        });
-        const d = await r.json().catch(() => ({}));
-        if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
-        reconState.flameNeutral = { verts: d.verts, faces: d.faces };
+        const res = fitFlame(lm, reconState.flameBasis);
+        reconState.head3d.setGeometry(res.verts, res.faces, [], { showSurface: true, bands: false });
+        els.reconStatus.textContent = `实时孪生 · 个体 · 残差 ${(res.residual * 1000).toFixed(1)}mm`;
       } catch (err) {
-        els.reconStatus.textContent = "标准头加载失败：" + err.message;
-        els.flameStd.checked = false;
-        return;
+        els.reconStatus.textContent = "拟合失败：" + err.message;
       }
     }
-    mesh = reconState.flameNeutral;
-    els.reconStatus.textContent = "右侧：FLAME 标准头（neutral）。";
-  } else {
-    mesh = reconState.flameFit;
-    els.reconStatus.textContent = "右侧：你的个体 FLAME（拟合）。";
   }
-  await ensureHead3D();
-  reconState.head3d.setGeometry(mesh.verts, mesh.faces, [], { showSurface: true, bands: false });
+  const tr = els.three.getBoundingClientRect();
+  reconState.head3d.resize(Math.max(2, tr.width | 0), Math.max(2, tr.height | 0));
+  reconState.head3d.render();
+  twinRAF = requestAnimationFrame(twinLoop);
+}
+
+// 用 Umeyama(标准脸→当前关键点) 的旋转，提取 yaw/pitch 驱动右侧头（roll 暂略）。
+function applyHeadPose(lm) {
+  const src = RIGID3D.map((i) => canonicalRef[i]);
+  const dst = RIGID3D.map((i) => lm[i]);
+  let R;
+  try { R = umeyama(src, dst).R; } catch { return; }
+  let yaw = Math.atan2(R[0][2], R[2][2]) * POSE.yawSign;
+  let pitch = Math.atan2(-R[1][2], Math.hypot(R[1][0], R[1][1])) * POSE.pitchSign;
+  pitch = Math.max(-POSE.pitchClamp, Math.min(POSE.pitchClamp, pitch));
+  reconState.head3d.setRotation(pitch, yaw);
+}
+
+// 「标准⇄个体」开关（实时孪生用）：标准 = neutral 头（仍随姿）；个体 = 本地实时拟合。
+export function toggleTwinHead() {
+  if (reconState.mode3d !== "twin" || !reconState.flameBasis) return;
+  if (els.flameStd.checked) {
+    reconState.twinMode = "standard";
+    reconState.head3d.setGeometry(twinNeutral, twinFaces, [], { showSurface: true, bands: false });
+    els.reconStatus.textContent = "实时孪生 · 标准头";
+  } else {
+    reconState.twinMode = "individual";
+    twinLastFit = 0;  // 立即重拟合
+  }
 }
 
 function viewerLoop() {
@@ -144,6 +174,7 @@ function viewerLoop() {
 }
 
 export function setMode3d(m) {
+  stopTwin();  // 离开实时孪生：取消其 RAF + 撤销分屏
   reconState.mode3d = m;
   els.view3d.setAttribute("aria-pressed", String(m === "view"));
   els.project3d.setAttribute("aria-pressed", String(m === "project"));
@@ -308,6 +339,7 @@ function finishScan(collected, ymin, ymax, colorFrames = [], lowDepthConfidence 
 }
 
 export function enterRoute(route) {
+  stopTwin();
   reconState.route = route;
   els.scanPanel.classList.add("hidden"); els.scanToast.classList.add("hidden");
   if (route === "3d") {
