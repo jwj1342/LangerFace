@@ -21,17 +21,20 @@ const len = (v) => Math.hypot(v[0], v[1], v[2]);
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const norm = (v) => { const l = len(v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
 
-const TLO = 0.08, THI = 0.42;      // 张力色标窗口（力 ∝ k×应变；窗口化以放大对比）
-const FUSIFORM = 0.4;              // 短轴/长轴比（梭形细长度）
-function tensionColor(t) {         // 低=中性肤色，高=偏红（顶点色与肤色相乘）
-  const f = Math.max(0, Math.min(1, (t - TLO) / (THI - TLO)));
+// 上色用的是「闭合新增张力」= 当前张力 − 静息基线（逐顶点扣除）。皮肤沿 RSTL 本就有高静息张力，
+// 若画绝对张力则整脸全红；扣掉基线后只剩闭合**新增**的那部分 → 远处归零（中性肤色）、仅伤口变红。
+const EXC_LO = 0.02, EXC_HI = 0.13;   // 新增张力色标窗口
+const RELEASE = 1.6;                  // 游离半径 / 长轴（小→张力局部化，不糊满脸）
+const FUSIFORM = 0.5;                 // 短轴/长轴比（梭形细长度）
+function tensionColor(t) {            // 低=中性肤色，高=偏红（顶点色与肤色相乘）
+  const f = Math.max(0, Math.min(1, (t - EXC_LO) / (EXC_HI - EXC_LO)));
   return [1 + 0.6 * f, 1 - 0.85 * f, 1 - 0.88 * f];
 }
 
 const S = {                        // 全局状态
-  verts: null, tris: null, atlas: null, dir: null, anchored: null, normalsRest: null,
+  verts: null, tris: null, atlas: null, atlasSub: null, dir: null, anchored: null, normalsRest: null,
   meanEdge: 1, head: null, lines: null, marker: null, raycaster: new THREE.Raycaster(),
-  sb: null, colors: null, shortAxis: null, lesion: 0, simActive: false, linesDirty: true,
+  sb: null, colors: null, baseline: null, shortAxis: null, lesion: 0, simActive: false, linesDirty: true,
   cutType: null, lastScar: 0, settled: { along: null, across: null }, simFrames: 0,
 };
 
@@ -50,10 +53,14 @@ async function boot() {
   for (const [a, b, c] of tris) for (const [p, q] of [[a, b], [b, c], [c, a]]) { e += len(sub(verts[p], verts[q])); n++; }
   S.meanEdge = e / n;
 
+  S.atlasSub = { lines: atlas.lines.filter((_, i) => i % 2 === 0) };   // 隔行抽稀，避免线条糊满脸
+
   S.head = new Head3D(els.canvas);
   S.colors = verts.map(() => [1, 1, 1]);
   rebuildMesh(tris);                // 初始：完整网格
-  S.lines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ vertexColors: true, toneMapped: false }));
+  // RSTL 线 = 半透明青色导引层（与红色张力图对比），统一色不随顶点
+  S.lines = new THREE.LineSegments(new THREE.BufferGeometry(),
+    new THREE.LineBasicMaterial({ color: 0x6fe9ff, transparent: true, opacity: 0.5, toneMapped: false }));
   S.lines.renderOrder = 3;
   S.head.group.add(S.lines);
 
@@ -102,7 +109,7 @@ function setLesion(i) {
 }
 
 function lesionSizes() {
-  const la = S.meanEdge * (Number(els.size.value) / 100) * 2.2;
+  const la = S.meanEdge * (Number(els.size.value) / 100) * 2.0;
   return { la, lb: la * FUSIFORM };
 }
 
@@ -122,7 +129,8 @@ function doExcision(longAxisVec, cutType) {
   S.cutType = cutType;
   S.sb = buildSoftBody(S.verts, S.tris, S.dir, { anchored: S.anchored });
   const { la, lb } = lesionSizes();
-  const removed = excise(S.sb, S.verts, S.verts[i], longAxis, la, lb);
+  const removed = excise(S.sb, S.verts, S.verts[i], longAxis, la, lb, la * RELEASE);
+  S.baseline = vertexTension(S.sb, S.shortAxis);   // 静息基线（沉降前 pos=rest0）→ 之后扣除
   S.marker.visible = false;
   rebuildMesh(aliveFaces());         // 显示洞 + 重建带顶点色的网格
   S.simActive = true; S.linesDirty = true;
@@ -130,7 +138,7 @@ function doExcision(longAxisVec, cutType) {
 }
 
 function reset() {
-  S.sb = null; S.simActive = false; S.shortAxis = null; S.cutType = null;
+  S.sb = null; S.simActive = false; S.shortAxis = null; S.cutType = null; S.baseline = null;
   setActiveCut(null);
   S.settled = { along: null, across: null };
   S.colors = S.verts.map(() => [1, 1, 1]);
@@ -148,27 +156,32 @@ function onSettled() {
   S.settled[S.cutType] = S.lastScar;
   const a = S.settled.along, b = S.settled.across;
   if (a != null && b != null) {
-    const pct = Math.round((b / a - 1) * 100);
-    els.verdict.innerHTML = `顺皮纹 <b>${a.toFixed(2)}</b> ｜ 逆皮纹 <b>${b.toFixed(2)}</b><br>逆皮纹瘢痕张力高 <b>${pct}%</b> → 顺皮纹更平和 ✅`;
-    els.verdict.style.color = "#34d399";
+    els.verdict.innerHTML = `顺皮纹新增张力 <b>${Math.round(a)}</b> ｜ 逆皮纹 <b>${Math.round(b)}</b>（满分100）<br>${a < b ? "→ 顺皮纹更平和 ✅" : "→ 本处差异不明显，换个位置再试"}`;
+    els.verdict.style.color = a < b ? "#34d399" : "#fbbf24";
     els.hint.textContent = "对比完成：换个位置（复位后点击）再试。";
   } else {
     els.hint.textContent = `${S.cutType === "along" ? "沿" : "逆"}皮纹闭合完成。再点另一种切向直接对比。`;
   }
 }
 
-// 跨伤口瘢痕张力（短轴方向、力加权，伤口邻域均值）+ 上色
+// 闭合新增张力（当前 − 静息基线）上色 + 0–100 指数。指数取伤口区 top-3 峰值（最绷紧处），稳健可比。
 function updateTensionAndColors() {
   const tens = vertexTension(S.sb, S.shortAxis);
-  let s = 0, c = 0;
   const { la } = lesionSizes();
+  const rel = la * RELEASE;
+  const wound = [];
   for (let i = 0; i < S.verts.length; i++) {
-    S.colors[i] = S.sb.removed[i] ? [0.2, 0.2, 0.22] : tensionColor(tens[i]);
-    if (!S.sb.removed[i] && !S.anchored[i] && len(sub(S.verts[i], S.verts[S.lesion])) < la * 2.2) { s += tens[i]; c++; }
+    if (S.sb.removed[i]) { S.colors[i] = [0.2, 0.2, 0.22]; continue; }
+    const ex = Math.max(0, tens[i] - (S.baseline ? S.baseline[i] : 0));
+    S.colors[i] = tensionColor(ex);
+    if (!S.anchored[i] && len(sub(S.verts[i], S.verts[S.lesion])) < rel * 1.3) wound.push(ex);
   }
-  S.lastScar = c ? s / c : 0;
-  els.tensionVal.textContent = S.lastScar.toFixed(2);
-  els.tensionBar.style.width = Math.max(0, Math.min(100, ((S.lastScar - TLO) / (THI - TLO)) * 100)).toFixed(0) + "%";
+  wound.sort((a, b) => b - a);
+  const top = wound.slice(0, 3);
+  const peak = top.length ? top.reduce((s, x) => s + x, 0) / top.length : 0;
+  S.lastScar = Math.max(0, Math.min(100, ((peak - EXC_LO) / (EXC_HI - EXC_LO)) * 100));
+  els.tensionVal.textContent = Math.round(S.lastScar);
+  els.tensionBar.style.width = S.lastScar.toFixed(0) + "%";
 }
 
 // RSTL 线随皮肤形变（用当前位置 + 法向重建）
@@ -179,7 +192,7 @@ function refreshLines() {
   const pos = S.sb ? S.sb.pos : S.verts;
   const normals = S.sb ? vertexNormals(pos, S.tris) : S.normalsRest;
   const old = S.lines.geometry;
-  S.lines.geometry = buildLineGeometry(S.atlas.lines, pos, S.tris, normals, false);
+  S.lines.geometry = buildLineGeometry(S.atlasSub.lines, pos, S.tris, normals, false);
   old.dispose();
 }
 

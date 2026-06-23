@@ -33,7 +33,7 @@
       <div class="section-title"><span>1. 标记肿物</span><span id="lesionState">默认在脸颊</span></div>
       <p class="hint">在右侧脸上<b>点击</b>放置肿物（红点）；拖拽旋转、滚轮缩放。</p>
       <label class="field-label" for="sizeRange">切口大小</label>
-      <input id="sizeRange" type="range" min="60" max="220" value="120" />
+      <input id="sizeRange" type="range" min="80" max="200" value="110" />
       <div class="section-title"><span>2. 选择切向并切除</span></div>
       <div class="btn-row" style="grid-template-columns:1fr 1fr">
         <button class="btn cut-along" id="btnAlong">沿 RSTL 切除</button>
@@ -44,7 +44,7 @@
     </div>
 
     <div class="card">
-      <div class="quality-top"><span>跨伤口瘢痕张力</span><span id="tensionVal">—</span></div>
+      <div class="quality-top"><span>闭合新增张力（0–100）</span><span id="tensionVal">—</span></div>
       <div class="bar"><div class="bar-fill" id="tensionBar" style="background:linear-gradient(90deg,#34d399,#fbbf24,#f87171)"></div></div>
       <p class="hint" id="verdict">切一刀看看：顺皮纹更平和，逆皮纹更绷紧。</p>
     </div>
@@ -52,12 +52,13 @@
     <details class="card help-doc" open>
       <summary>这是在演示什么？</summary>
       <ol>
-        <li>右侧是标准脸（MediaPipe 标准头），紫色是医生标注的 <b>RSTL 皮肤张力线</b>。</li>
+        <li>右侧是标准脸（MediaPipe 标准头），青色是医生标注的 <b>RSTL 皮肤张力线</b>。</li>
         <li>标一个肿物 → 做一个梭形切除（把那块组织去掉）。</li>
         <li>周围皮肤被<b>预张力</b>拉着把伤口合上，并有轻微回弹。</li>
-        <li><b>沿 RSTL 切</b>：闭合拉的是"垂直皮纹的软皮肤"→ 张力低、瘢痕平和（偏绿）。</li>
-        <li><b>逆 RSTL 切</b>：闭合拉的是"顺皮纹的硬皮肤"→ 张力高、瘢痕绷紧（偏红）。</li>
-        <li>颜色越红 = 跨伤口张力越大。这正是临床"切口顺皮纹"的力学直觉。</li>
+        <li>颜色 = 闭合<b>新增</b>的张力（已扣除皮肤静息张力）：远处保持肤色，只有伤口处会变。</li>
+        <li><b>沿 RSTL 切</b>：拉的是"垂直皮纹的软皮肤"→ 几乎不新增张力，伤口基本不变红、平和。</li>
+        <li><b>逆 RSTL 切</b>：拉的是"顺皮纹的硬皮肤"→ 新增张力大，伤口明显<b>变红、绷紧</b>。</li>
+        <li>同一肿物切两种切向，左下"新增张力"指数直接对比。这正是临床"切口顺皮纹"的力学直觉。</li>
       </ol>
     </details>
 
