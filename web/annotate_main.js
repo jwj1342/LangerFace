@@ -6,13 +6,15 @@ import { assetUrls } from "./assets.js";
 import { dataSource } from "./data_source.js";
 import { parseMeshFile } from "./mesh_io.js";
 import { parseSlicerCurveFile } from "./slicer_curve.js";
+import { topologyMeta } from "./topology_registry.js";
 
 const $ = (id) => document.getElementById(id);
 const els = {
   stage: $("stage"), system: $("annSystem"), name: $("annName"), region: $("annRegion"),
   btnNew: $("btnNew"), btnUndo: $("btnUndo"), btnFinish: $("btnFinish"), btnClear: $("btnClear"),
   exAtlas: $("btnExportAtlas"), exXyz: $("btnExportXyz"), setActive: $("btnSetActiveAtlas"),
-  loadCanonical: $("btnLoadCanonical"), meshFile: $("meshFile"), slicerFile: $("slicerFile"),
+  loadCanonical: $("btnLoadCanonical"), loadFlame: $("btnLoadFlame"), loadFittedFlame: $("btnLoadFittedFlame"),
+  cloudFit: $("btnCloudFit"), meshFile: $("meshFile"), slicerFile: $("slicerFile"),
   resampleSpacing: $("resampleSpacing"),
   list: $("lineList"), status: $("annStatus"), hint: $("hint"),
   current: $("currentState"), drawMode: $("drawMode"),
@@ -38,6 +40,75 @@ async function loadCanonical() {
   onCanonical = true;
   els.drawMode.textContent = "标准脸图谱";
   setHint("在脸上点击落点；拖拽旋转、滚轮缩放。导出可得图谱(tri,u,v)。");
+  refresh();
+}
+
+// FLAME 资产为 dev-local（gitignore）：用 import.meta.glob 在构建期按存在与否解析，
+// 缺失（CI / 生产构建）时 glob 为空 → FLAME 入口自动隐藏，绝不影响构建。
+const FLAME_URLS = import.meta.glob(
+  "./assets/{topology_flame_2023,flame_neutral_vertices,flame_fitted_vertices}.json",
+  { query: "?url", import: "default", eager: true },
+);
+const flameUrl = (name) => FLAME_URLS[`./assets/${name}.json`] || null;
+const flameAvailable = () =>
+  Boolean(flameUrl("topology_flame_2023") && flameUrl("flame_neutral_vertices"));
+// 个体（拟合后）FLAME 头：tools/fit_flame_to_landmarks.py 离线产出 flame_fitted_vertices.json。
+const fittedFlameAvailable = () =>
+  Boolean(flameUrl("topology_flame_2023") && flameUrl("flame_fitted_vertices"));
+
+async function loadFlameMesh(vertsName, label) {
+  const vurl = flameUrl(vertsName);
+  const turl = flameUrl("topology_flame_2023");
+  if (!vurl || !turl) {
+    setHint("FLAME 资产未生成（dev-local）。本地放好 assets/flame/flame2023_Open.pkl 后运行 tools/export_flame_topology.py（个体网格再跑 fit_flame_to_landmarks.py）。");
+    return;
+  }
+  setHint(`加载 ${label}…`);
+  const [verts, topology] = await Promise.all([
+    fetchJSON(vurl, label),
+    fetchJSON(turl, "FLAME 拓扑"),
+  ]);
+  const meta = topologyMeta("flame-2023");
+  model.setTopology({ topologyId: meta.id, topologyVersion: meta.version });
+  viewer.setMesh(verts, topology.triangles, { showSurface: true });
+  onCanonical = true;
+  els.drawMode.textContent = label;
+  setHint(`在 ${label} 上点击落点（${topology.vertexCount} 顶点）；导出得 flame-2023 图谱(tri,u,v)。`);
+  refresh();
+}
+const loadFlame = () => loadFlameMesh("flame_neutral_vertices", topologyMeta("flame-2023").label);
+const loadFittedFlame = () => loadFlameMesh("flame_fitted_vertices", "FLAME 个体（拟合）");
+
+// 云端拟合演示：把标准脸关键点 POST 到 /api/fit（Vercel Python 云函数）→ 拿回个体 FLAME 网格渲染。
+// 全程云端、无需本地资产，可直接在 PR 预览里用。
+async function cloudFitFlame() {
+  setHint("云端拟合 FLAME 中…（首次冷启动约 1–2 秒）");
+  let observed;
+  try {
+    observed = await fetchJSON(assetUrls.canonicalVertices, "标准脸顶点");
+  } catch (err) {
+    setHint("加载标准脸失败：" + err.message);
+    return;
+  }
+  let res;
+  try {
+    const r = await fetch("/api/fit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ landmarks: observed }),
+    });
+    res = await r.json().catch(() => ({}));
+    if (!r.ok || res.error) throw new Error(res.error || `HTTP ${r.status}`);
+  } catch (err) {
+    setHint("云端拟合失败：" + err.message);
+    return;
+  }
+  model.setTopology({ topologyId: "flame-2023", topologyVersion: "flame-2023-v1" });
+  viewer.setMesh(res.verts, res.faces, { showSurface: true });
+  onCanonical = false;
+  els.drawMode.textContent = "FLAME 个体（云端拟合）";
+  const mm = res.residual != null ? (res.residual * 1000).toFixed(1) : "?";
+  setHint(`云端拟合完成：${res.verts.length} 顶点 · ${res.nLandmarks} 关键点 · 残差 ${mm}mm。`);
   refresh();
 }
 
@@ -151,6 +222,9 @@ els.exAtlas.onclick = () => exportJSON(() => model.toAtlasJSON(), `atlas_${model
 els.exXyz.onclick = () => exportJSON(() => model.toXyzJSON(), `lines_${model.system}_xyz.json`);
 els.setActive.onclick = previewActiveAtlas;
 els.loadCanonical.onclick = loadCanonical;
+els.loadFlame.onclick = loadFlame;
+els.loadFittedFlame.onclick = loadFittedFlame;
+els.cloudFit.onclick = cloudFitFlame;
 els.meshFile.onchange = (e) => loadMeshFile(e.target.files[0]);
 els.slicerFile.onchange = (e) => loadSlicerFile(e.target.files[0]);
 
@@ -285,7 +359,8 @@ function refresh() {
   els.btnFinish.disabled = !model.current;
   els.btnUndo.disabled = !(model.current || model.lines.length);
   els.exAtlas.disabled = !(model.lines.length && onCanonical);
-  els.setActive.disabled = !(model.lines.length && onCanonical);
+  // 「设为活动图谱并预览」是 2D MediaPipe 实时轨入口；FLAME 图谱（独立 3D 轨）不走 2D 预览。
+  els.setActive.disabled = !(model.lines.length && onCanonical && model.topologyId === "mediapipe-468");
   els.exXyz.disabled = !model.lines.length;
   els.list.innerHTML = "";
   if (!model.lines.length) {
@@ -330,6 +405,8 @@ function tick() {
   requestAnimationFrame(tick);
 }
 
+if (!flameAvailable()) els.loadFlame.style.display = "none";
+if (!fittedFlameAvailable()) els.loadFittedFlame.style.display = "none";
 refresh();
 setHint("点「加载标准脸」开始，或上传头模 JSON / OBJ / PLY。");
 loadCanonical().catch((e) => setHint("标准脸加载失败：" + e.message));

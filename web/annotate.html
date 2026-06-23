@@ -21,6 +21,9 @@
     <div class="card">
       <p class="hint" id="hint">加载网格后开始标注。</p>
       <button class="btn btn-primary" id="btnLoadCanonical">加载标准脸</button>
+      <button class="btn" id="btnLoadFlame">加载 FLAME 头模</button>
+      <button class="btn" id="btnLoadFittedFlame">加载个体 FLAME（拟合）</button>
+      <button class="btn btn-primary" id="btnCloudFit">☁ 云端拟合 FLAME（演示）</button>
       <label class="btn" for="meshFile">上传头模（JSON / OBJ / PLY）</label>
       <input type="file" id="meshFile" accept="application/json,.json,.obj,.ply,model/obj,model/ply" hidden />
       <label class="field-label" for="resampleSpacing" style="margin-top:10px">Slicer 曲线重采样间距</label>
