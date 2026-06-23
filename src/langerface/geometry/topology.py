@@ -49,3 +49,29 @@ def topology_from_obj(text: str, topology_id: str, topology_version: str) -> dic
     """OBJ 文本 → 拓扑契约 dict。"""
     nverts, tris = parse_obj_mesh(text)
     return build_topology_contract(topology_id, topology_version, nverts, tris)
+
+
+def flame_topology_and_vertices_from_pkl(
+    path: str,
+    topology_id: str,
+    topology_version: str,
+) -> tuple[dict, list[list[float]]]:
+    """读 FLAME .pkl（如 flame2023_Open.pkl）→ (拓扑契约 dict, neutral 顶点 list)。
+
+    只取 v_template（neutral 顶点）+ f（三角面）。注意：加载真 FLAME pkl 需环境有 numpy，
+    且 pkl 内若含 scipy 稀疏 J_regressor 则需 scipy（集群上 `module load scipy-stack`）。
+    本仓库不提交模型，故该函数只在本地资产就位的离线环境运行；合成 pkl（plain dict，仅含
+    v_template/f）的单测不需要 scipy。
+    """
+    import pickle
+
+    import numpy as np
+
+    with open(path, "rb") as fh:
+        model = pickle.load(fh, encoding="latin1")
+    verts = np.asarray(model["v_template"], dtype=float).reshape(-1, 3)
+    faces = np.asarray(model["f"], dtype=np.int64).reshape(-1, 3)
+    contract = build_topology_contract(
+        topology_id, topology_version, int(verts.shape[0]), faces.tolist()
+    )
+    return contract, verts.tolist()

@@ -57,3 +57,25 @@ def test_build_topology_rejects_empty():
 def test_build_topology_rejects_out_of_range():
     with pytest.raises(ValueError):
         build_topology_contract(TOPOLOGY_ID_FLAME, TOPOLOGY_VERSION_FLAME, 3, [[0, 1, 5]])
+
+
+def test_flame_pkl_reader_synthetic(tmp_path):
+    """合成 plain-dict pkl（仅 v_template/f，不需 scipy）验证 FLAME pkl 读取路径。"""
+    import pickle
+
+    import numpy as np
+
+    from langerface.geometry.topology import flame_topology_and_vertices_from_pkl
+
+    verts = np.array([[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], dtype=float)
+    faces = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int64)
+    p = tmp_path / "synthetic_flame.pkl"
+    with open(p, "wb") as f:
+        pickle.dump({"v_template": verts, "f": faces}, f)
+
+    topo, vlist = flame_topology_and_vertices_from_pkl(
+        str(p), TOPOLOGY_ID_FLAME, TOPOLOGY_VERSION_FLAME
+    )
+    assert topo["topologyId"] == TOPOLOGY_ID_FLAME
+    assert topo["vertexCount"] == 4 and topo["triangleCount"] == 2
+    assert len(vlist) == 4 and vlist[0] == [0.0, 0.0, 0.0]

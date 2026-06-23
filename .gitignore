@@ -36,3 +36,6 @@ tools/headspace/data/
 # Keep the README (download/license instructions); ignore every actual asset.
 assets/flame/*
 !assets/flame/README.md
+# FLAME-derived web assets — generated locally from the licensed model; never commit / deploy.
+web/assets/topology_flame_*.json
+web/assets/flame_neutral_vertices.json
