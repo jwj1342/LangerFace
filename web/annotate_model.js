@@ -54,15 +54,18 @@ function buildSurface(verts, tris) {
   return { verts, tris, adj, vertexRefs };
 }
 
+// 返回 { points, fallback }：points 为 a→b 的折线；fallback=true 表示无法沿网格
+// 表面路由，已退回空间直线 [a, b]（缺拓扑、三角退化，或两点位于不同连通分量），
+// 由调用方上抛，UI 可据此提示「可能穿面」，避免静默穿脸。
 function nearestSurfacePath(surface, a, b) {
   if (!surface || a.tri == null || b.tri == null || !Array.isArray(a.bary) || !Array.isArray(b.bary)) {
-    return [a, b];
+    return { points: [a, b], fallback: true };
   }
-  if (a.tri === b.tri) return [a, b];
+  if (a.tri === b.tri) return { points: [a, b], fallback: false };
 
   const startVerts = surface.tris[a.tri] || [];
   const endVerts = surface.tris[b.tri] || [];
-  if (startVerts.length !== 3 || endVerts.length !== 3) return [a, b];
+  if (startVerts.length !== 3 || endVerts.length !== 3) return { points: [a, b], fallback: true };
 
   const n = surface.verts.length;
   const dist = new Float64Array(n);
@@ -129,7 +132,7 @@ function nearestSurfacePath(surface, a, b) {
       }
     }
   }
-  if (bestEnd < 0) return [a, b];
+  if (bestEnd < 0) return { points: [a, b], fallback: true };
 
   const vertexPath = [];
   for (let u = bestEnd; u >= 0; u = prev[u]) vertexPath.push(u);
@@ -142,7 +145,7 @@ function nearestSurfacePath(surface, a, b) {
     if (dist3(out[out.length - 1].xyz, vp.xyz) > 1e-9 && dist3(vp.xyz, b.xyz) > 1e-9) out.push(vp);
   }
   if (dist3(out[out.length - 1].xyz, b.xyz) > 1e-9) out.push(b);
-  return out;
+  return { points: out, fallback: false };
 }
 
 function controlsOf(line) {
@@ -169,16 +172,19 @@ export class AnnotationModel {
     this.current = { name: name || `line_${this.lines.length + 1}`, region: region || "", points: [], controls: [] };
   }
 
+  // 返回 { fallback }：fallback=true 表示这一段无法沿表面路由、已退回直线（可能穿面），
+  // 由 UI 据此提示医生。
   addPoint(pt) {
     if (!this.current) this.startLine();
     this.current.controls.push(pt);
     if (this.current.controls.length === 1) {
       this.current.points = [pt];
-    } else {
-      const controls = this.current.controls;
-      const path = nearestSurfacePath(this.surface, controls[controls.length - 2], pt);
-      this.current.points.push(...path.slice(1));
+      return { fallback: false };
     }
+    const controls = this.current.controls;
+    const { points, fallback } = nearestSurfacePath(this.surface, controls[controls.length - 2], pt);
+    this.current.points.push(...points.slice(1));
+    return { fallback };
   }
 
   undoPoint() {
@@ -241,18 +247,23 @@ export class AnnotationModel {
     };
   }
 
+  // 返回 { fallback }：fallback=true 表示重建出的某段已退回直线（可能穿面）。
   _rebuildLinePoints(line) {
     const controls = controlsOf(line);
     line.controls = controls;
     line.points = [];
+    let fallback = false;
     for (let i = 0; i < controls.length; i++) {
       const pt = controls[i];
       if (!line.points.length) {
         line.points.push(pt);
       } else {
         const path = nearestSurfacePath(this.surface, controls[i - 1], pt);
-        line.points.push(...path.slice(1));
+        line.points.push(...path.points.slice(1));
+        if (path.fallback) fallback = true;
       }
     }
+    line.fallback = fallback;
+    return { fallback };
   }
 }
