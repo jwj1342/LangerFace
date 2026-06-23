@@ -59,13 +59,44 @@ async function buildViewer() {
     { showSurface: true, bands: renderState.bands, vertexColors: reconState.reconColors },
   );
   els.view3d.disabled = false; els.project3d.disabled = false;
-  els.reset3d.disabled = false;
+  els.reset3d.disabled = false; els.cloudFitFlame.disabled = false;
   setMode3d("view");
 }
 
 export function resetView3d() {
   reconState.rot.x = 0; reconState.rot.y = 0;
   reconState.head3d?.resetView();
+}
+
+// 云端拟合：把扫描/重建得到的关键点 POST 到 /api/fit（Vercel Python 云函数）→ 拿回个体
+// FLAME 网格（5023 顶点）→ 在同一 3D 查看器渲染。先「转头扫描」（你的脸）或「用示例重建」即可。
+export async function cloudFitFlame() {
+  if (!reconState.reconVerts) {
+    els.reconStatus.textContent = "请先「转头扫描」或「用示例重建」采集人脸，再云端拟合 FLAME。";
+    return;
+  }
+  els.reconStatus.textContent = "云端拟合 FLAME 中…（首次冷启动约 1–2 秒）";
+  let res;
+  try {
+    const r = await fetch("/api/fit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ landmarks: reconState.reconVerts }),
+    });
+    res = await r.json().catch(() => ({}));
+    if (!r.ok || res.error) throw new Error(res.error || `HTTP ${r.status}`);
+  } catch (err) {
+    els.reconStatus.textContent = "云端拟合失败：" + err.message;
+    return;
+  }
+  await ensureHead3D();
+  // 返回的 faces 为 FLAME 9976 三角拓扑；FLAME 顶点 y 上，查看器相机沿 +z，直接渲染、可拖拽旋转。
+  reconState.head3d.setGeometry(res.verts, res.faces, [], { showSurface: true, bands: false });
+  els.view3d.disabled = false; els.reset3d.disabled = false;
+  const mm = res.residual != null ? (res.residual * 1000).toFixed(1) : "?";
+  els.reconStatus.textContent =
+    `云端 FLAME 拟合完成：${res.verts.length} 顶点 · ${res.nLandmarks} 关键点 · 残差 ${mm}mm。拖拽旋转查看。`;
+  setMode3d("view");
 }
 
 function viewerLoop() {
