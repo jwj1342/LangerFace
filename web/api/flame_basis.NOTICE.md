@@ -1,7 +1,8 @@
 # 署名 / Attribution — `flame_basis.npz`
 
-`flame_basis.npz` 是从 **FLAME 2023 Open** 模型抽出的紧凑基（neutral 顶点 + 前 60 维身份
-shapedirs + 三角面 + 官方 MediaPipe landmark embedding），供云函数 `api/fit.py` 离线拟合用。
+`api/flame_basis.npz`（云函数 `api/fit.py` 用）与 `assets/flame_basis.bin`（浏览器内
+`flame_fit.js` 用）都是从 **FLAME 2023 Open** 模型抽出的同一紧凑基（neutral 顶点 + 前 60 维
+身份 shapedirs + 三角面 + 官方 MediaPipe landmark embedding）。
 
 - **模型来源**：FLAME (Faces Learned with an Articulated Model and Expressions),
   Max Planck Institute for Intelligent Systems — <https://flame.is.tue.mpg.de>

@@ -20,6 +20,11 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PKL = os.path.join(REPO, "assets", "flame", "flame2023_Open.pkl")
 NPZ = os.path.join(REPO, "assets", "flame", "mediapipe_landmark_embedding.npz")
 OUT = os.path.join(REPO, "web", "api", "flame_basis.npz")
+WEB_BIN = os.path.join(REPO, "web", "assets", "flame_basis.bin")
+# 浏览器内拟合的紧凑基（固定布局，小端）：web/flame_fit.js 按此顺序切 typed arrays。
+# 顺序：v_template f32(nVerts*3) · shapedirs f32(nVerts*3*nShape) · faces i32(nFaces*3)
+#       · lmk_face_idx i32(nLmk) · lmk_b_coords f32(nLmk*3) · landmark_indices i32(nLmk)
+# 计数固定：nVerts=5023 nFaces=9976 nLmk=105 nShape=60（FLAME 2023 Open + 官方 embedding）。
 
 
 def main() -> int:
@@ -41,6 +46,16 @@ def main() -> int:
     mb = os.path.getsize(OUT) / 1e6
     print(f"[ok] {OUT}  {mb:.2f} MB  verts={model['v_template'].shape[0]} "
           f"shapedirs={model['shapedirs'].shape} faces={model['faces'].shape}")
+
+    # 浏览器二进制基（固定布局，小端）——供 web/flame_fit.js 本地拟合（CC-BY-4.0，可入库）。
+    with open(WEB_BIN, "wb") as f:
+        f.write(np.ascontiguousarray(model["v_template"], dtype="<f4").tobytes())
+        f.write(np.ascontiguousarray(model["shapedirs"], dtype="<f4").tobytes())
+        f.write(np.ascontiguousarray(model["faces"], dtype="<i4").tobytes())
+        f.write(np.ascontiguousarray(emb["lmk_face_idx"], dtype="<i4").tobytes())
+        f.write(np.ascontiguousarray(emb["lmk_b_coords"], dtype="<f4").tobytes())
+        f.write(np.ascontiguousarray(emb["landmark_indices"], dtype="<i4").tobytes())
+    print(f"[ok] {WEB_BIN}  {os.path.getsize(WEB_BIN) / 1e6:.2f} MB  (浏览器本地拟合基)")
     return 0
 
 
