@@ -14,7 +14,7 @@ const els = {
   btnNew: $("btnNew"), btnUndo: $("btnUndo"), btnFinish: $("btnFinish"), btnClear: $("btnClear"),
   exAtlas: $("btnExportAtlas"), exXyz: $("btnExportXyz"), setActive: $("btnSetActiveAtlas"),
   loadCanonical: $("btnLoadCanonical"), loadFlame: $("btnLoadFlame"), loadFittedFlame: $("btnLoadFittedFlame"),
-  meshFile: $("meshFile"), slicerFile: $("slicerFile"),
+  cloudFit: $("btnCloudFit"), meshFile: $("meshFile"), slicerFile: $("slicerFile"),
   resampleSpacing: $("resampleSpacing"),
   list: $("lineList"), status: $("annStatus"), hint: $("hint"),
   current: $("currentState"), drawMode: $("drawMode"),
@@ -78,6 +78,39 @@ async function loadFlameMesh(vertsName, label) {
 }
 const loadFlame = () => loadFlameMesh("flame_neutral_vertices", topologyMeta("flame-2023").label);
 const loadFittedFlame = () => loadFlameMesh("flame_fitted_vertices", "FLAME 个体（拟合）");
+
+// 云端拟合演示：把标准脸关键点 POST 到 /api/fit（Vercel Python 云函数）→ 拿回个体 FLAME 网格渲染。
+// 全程云端、无需本地资产，可直接在 PR 预览里用。
+async function cloudFitFlame() {
+  setHint("云端拟合 FLAME 中…（首次冷启动约 1–2 秒）");
+  let observed;
+  try {
+    observed = await fetchJSON(assetUrls.canonicalVertices, "标准脸顶点");
+  } catch (err) {
+    setHint("加载标准脸失败：" + err.message);
+    return;
+  }
+  let res;
+  try {
+    const r = await fetch("/api/fit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ landmarks: observed }),
+    });
+    res = await r.json().catch(() => ({}));
+    if (!r.ok || res.error) throw new Error(res.error || `HTTP ${r.status}`);
+  } catch (err) {
+    setHint("云端拟合失败：" + err.message);
+    return;
+  }
+  model.setTopology({ topologyId: "flame-2023", topologyVersion: "flame-2023-v1" });
+  viewer.setMesh(res.verts, res.faces, { showSurface: true });
+  onCanonical = false;
+  els.drawMode.textContent = "FLAME 个体（云端拟合）";
+  const mm = res.residual != null ? (res.residual * 1000).toFixed(1) : "?";
+  setHint(`云端拟合完成：${res.verts.length} 顶点 · ${res.nLandmarks} 关键点 · 残差 ${mm}mm。`);
+  refresh();
+}
 
 async function fetchJSON(url, label) {
   const res = await fetch(url);
@@ -191,6 +224,7 @@ els.setActive.onclick = previewActiveAtlas;
 els.loadCanonical.onclick = loadCanonical;
 els.loadFlame.onclick = loadFlame;
 els.loadFittedFlame.onclick = loadFittedFlame;
+els.cloudFit.onclick = cloudFitFlame;
 els.meshFile.onchange = (e) => loadMeshFile(e.target.files[0]);
 els.slicerFile.onchange = (e) => loadSlicerFile(e.target.files[0]);
 

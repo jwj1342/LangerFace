@@ -2,6 +2,11 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/**/*.py": {
+      "excludeFiles": "{node_modules/**,dist/**,assets/**,test/**,**/*.task}"
+    }
+  },
   "headers": [
     {
       "source": "/assets/(.*)",
