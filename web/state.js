@@ -4,6 +4,7 @@ import { OneEuro } from "./geometry.js";
 export const modelState = {
   landmarker: null,
   handLandmarker: null,
+  topology: null,
   triangles: null,
   noseTris: null,
   atlases: {},
@@ -26,7 +27,7 @@ export const renderState = {
 export const sourceState = {
   source: null, sourceKind: null,      // 'camera' | 'video' | 'image'
   running: false, paused: false, presence: 0,
-  lastLM: null, imageCacheLM: null, imageHulls: null,
+  lastLM: null, imageCacheLM: null, imageHulls: null, jawOpen: 0,
 };
 
 export const recordingState = {
@@ -37,4 +38,10 @@ export const recordingState = {
 export const reconState = {
   route: "2d", head3d: null, reconVerts: null, reconColors: null, mode3d: "view",
   viewerRAF: null, rot: { x: 0, y: 0 }, scan: null,
+  flameFit: null,      // 云端拟合出的个体 FLAME {verts, faces}
+  flameNeutral: null,  // 标准 FLAME neutral {verts, faces}（缓存）
+  flameBasis: null,    // 浏览器本地拟合基（flame_fit.js，一次加载）
+  flameBeta: null,     // 实时孪生：身份系数（首帧拟合一次后固定）
+  twinMode: "individual",  // 实时孪生右侧头：individual | standard
+  twinTexture: false,      // 实时孪生：贴真实人脸纹理开关
 };
