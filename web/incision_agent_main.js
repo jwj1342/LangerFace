@@ -592,6 +592,32 @@ function renderTrace(trace) {
   }
 }
 
+function handleAgentStreamEvent(trace, evt) {
+  const { event, data } = evt || {};
+  if (event === "provider") {
+    const provider = data || {};
+    els.providerState.textContent = provider.model
+      ? `${provider.mode || "agent"} · ${provider.model}`
+      : provider.mode || "agent";
+    els.providerState.style.color = provider.error ? "#b45309" : "";
+    els.stageStatus.textContent = "Agent 已连接，等待工具 trace…";
+    return;
+  }
+  if (event === "trace") {
+    const step = data || {};
+    const index = Number.isInteger(step.index) ? step.index : trace.length;
+    trace[index] = step;
+    const visibleTrace = trace.filter(Boolean);
+    renderTrace(visibleTrace);
+    els.stageStatus.textContent = `工具 trace ${visibleTrace.length} 步${step.action ? `：${step.action}` : ""}`;
+    return;
+  }
+  if (event === "fallback") {
+    const msg = data?.error ? `：${String(data.error).slice(0, 80)}` : "";
+    els.stageStatus.textContent = `SSE trace 不可用，改用普通 Agent 请求${msg}`;
+  }
+}
+
 function renderGuardrailDetails(guardrails) {
   const warnings = guardrails?.warnings || [];
   els.guardrailDetails.classList.toggle("warn", warnings.some((w) => w.severity === "medium"));
@@ -985,10 +1011,13 @@ async function runAgent() {
   let result;
   if (els.useAgentServer.checked) {
     try {
+      const streamedTrace = [];
       result = await requestAgentPlan(tumor, {
         endpoint: els.endpoint.value.trim(),
         timeoutMs: Number(els.providerTimeout.value) * 1000,
         providerConfig: providerConfig(),
+        stream: true,
+        onStreamEvent: (evt) => handleAgentStreamEvent(streamedTrace, evt),
       });
     } catch (err) {
       result = planIncisionDeterministic({ tumor, verts: S.verts, tris: S.tris, atlas: S.atlas, normal: S.normals[S.lesion] });

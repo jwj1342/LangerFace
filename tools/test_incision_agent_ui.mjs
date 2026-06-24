@@ -31,6 +31,9 @@ assert.ok(js.includes("review_gate"), "review records include review gate state"
 assert.ok(js.includes("reviewReadiness"), "review workflow validates approval readiness");
 assert.ok(js.includes("highGuardrailWarnings"), "review workflow detects high guardrail warnings");
 assert.ok(js.includes("live_overlay_ready"), "review gate records live overlay readiness");
+assert.ok(js.includes("handleAgentStreamEvent"), "workbench consumes agent SSE trace events");
+assert.ok(js.includes("stream: true"), "workbench prefers streaming agent trace");
+assert.ok(js.includes("SSE trace 不可用"), "workbench reports JSON fallback when streaming is unavailable");
 assert.ok(js.includes("建议覆盖项"), "markdown report includes suggested override details");
 assert.ok(js.includes("最近敏感游离缘"), "markdown report includes sensitive free-margin distance");
 assert.ok(js.includes("发送到实时叠加前，请先确认当前候选草案"), "live overlay requires candidate approval");

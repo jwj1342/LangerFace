@@ -49,6 +49,8 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候
 - [ ] 隐私、合规与审计记录：限定临床研究使用边界 — [#21](https://github.com/jwj1342/LangerFace/issues/21)
       · 本 PR 已更新 README/隐私文档、导出字段边界、provider 配置脱敏、`privacy_audit` 字段和 `tools/audit_export_privacy.py`，可在分享审阅/肿物/诊断 JSON 前拦截原始媒体标记、未脱敏 secret、明显身份字段和疑似嵌入媒体 payload；真实临床访问控制、日志保留、签名和 DPA 仍需合规流程
 - [ ] AI 辅助识别自然皱襞、皱纹与肿物边界：作为 RSTL 之外的次级依据 — [#22](https://github.com/jwj1342/LangerFace/issues/22)
+- [ ] Epic：手术切口 Agentic 设计——肿物模拟 + RSTL 原则驱动的 LLM 切口规划 — [#64](https://github.com/jwj1342/LangerFace/issues/64)
+      · 本 PR 已支持确定性工具链、工具 schema、LLM 摘要、provider 配置、SSE trace 端点、前端流式 trace 可视化、JSON fallback、候选保存/审阅/导出和隐私守门；多轮自主规划、工具失败恢复、跨候选自动比较和正式审计执行器仍需后续架构拆分
 
 > 设计原则与数据流见 [README《临床目标与 Stage 2 路线》](../README.md#临床目标与-stage-2-路线) 和 [ARCHITECTURE.md#14](ARCHITECTURE.md#14-stage-2-肿物与切口设计技术路线)。
 > Stage 2 业务模块作为**同级子包**接入，复用 `geometry` / `detection` / `rendering`，不塞进 `lines/` 或 `rendering/`。
