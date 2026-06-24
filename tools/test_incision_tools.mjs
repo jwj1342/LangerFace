@@ -185,6 +185,30 @@ ok(shiftedGuard.passed === false, "far-shifted cutaneous boundary fails guardrai
 ok(shiftedGuard.warnings.some((w) => w.code === "cutaneous_boundary_center_shift"),
   "guardrails flag cutaneous boundary center shift");
 
+const degenerateBoundaryTumor = {
+  ...boundaryTumor,
+  boundary: [[3, 2, 0], [4, 2.01, 0], [5, 2, 0], [4, 1.99, 0]],
+};
+const degenerateFusiform = T.generateFusiformIncision(degenerateBoundaryTumor, { vector: [1, 0, 0], confidence: 0.9 }, 0.1, [0, 0, 1]);
+ok(degenerateFusiform.metrics.boundary_area_ratio_to_diameter_disk < 0.08,
+  "fusiform records degenerate boundary area ratio");
+const degenerateGuard = T.evaluateGuardrails(degenerateFusiform, { region: "cheek", confidence: 0.8 });
+ok(degenerateGuard.passed === false, "degenerate cutaneous boundary area fails guardrails");
+ok(degenerateGuard.warnings.some((w) => w.code === "cutaneous_boundary_degenerate_area"),
+  "guardrails flag degenerate cutaneous boundary area");
+
+const selfIntersectingBoundaryTumor = {
+  ...boundaryTumor,
+  boundary: [[3, 1, 0], [5, 3, 0], [3, 3, 0], [5, 1, 0]],
+};
+const selfIntersectingFusiform = T.generateFusiformIncision(selfIntersectingBoundaryTumor, { vector: [1, 0, 0], confidence: 0.9 }, 0.1, [0, 0, 1]);
+ok(selfIntersectingFusiform.metrics.boundary_self_intersection === true,
+  "fusiform records self-intersecting boundary");
+const selfIntersectingGuard = T.evaluateGuardrails(selfIntersectingFusiform, { region: "cheek", confidence: 0.8 });
+ok(selfIntersectingGuard.passed === false, "self-intersecting cutaneous boundary fails guardrails");
+ok(selfIntersectingGuard.warnings.some((w) => w.code === "cutaneous_boundary_self_intersection"),
+  "guardrails flag self-intersecting cutaneous boundary");
+
 const anatomy = T.classifyRegion([3, 6, 0], verts);
 const guard = T.evaluateGuardrails({ direction_confidence: 0.8 }, anatomy);
 ok(anatomy.region === "lower_eyelid", "region classifier reaches sensitive lower eyelid bucket");

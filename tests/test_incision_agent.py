@@ -279,6 +279,42 @@ def test_guardrails_fail_when_cutaneous_boundary_is_far_from_selected_center():
     assert any(w["code"] == "cutaneous_boundary_center_shift" for w in guardrails["warnings"])
 
 
+def test_guardrails_fail_for_degenerate_cutaneous_boundary_area():
+    direction = {"vector": [1, 0, 0], "confidence": 0.9}
+    tumor = TumorInput(
+        kind="cutaneous",
+        center=(4, 2, 0),
+        diameter_mm=8,
+        margin_mm=1,
+        boundary=((3, 2, 0), (4, 2.01, 0), (5, 2, 0), (4, 1.99, 0)),
+        boundary_mode="freehand",
+        boundary_source="manual_freehand",
+    )
+    candidate = fusiform_cutaneous_incision(tumor, direction, units_per_mm=0.1)
+    assert candidate["metrics"]["boundary_area_ratio_to_diameter_disk"] < 0.08
+    guardrails = evaluate_guardrails(candidate, {"region": "cheek", "confidence": 0.8})
+    assert guardrails["passed"] is False
+    assert any(w["code"] == "cutaneous_boundary_degenerate_area" for w in guardrails["warnings"])
+
+
+def test_guardrails_fail_for_self_intersecting_cutaneous_boundary():
+    direction = {"vector": [1, 0, 0], "confidence": 0.9}
+    tumor = TumorInput(
+        kind="cutaneous",
+        center=(4, 2, 0),
+        diameter_mm=8,
+        margin_mm=1,
+        boundary=((3, 1, 0), (5, 3, 0), (3, 3, 0), (5, 1, 0)),
+        boundary_mode="freehand",
+        boundary_source="manual_freehand",
+    )
+    candidate = fusiform_cutaneous_incision(tumor, direction, units_per_mm=0.1)
+    assert candidate["metrics"]["boundary_self_intersection"] is True
+    guardrails = evaluate_guardrails(candidate, {"region": "cheek", "confidence": 0.8})
+    assert guardrails["passed"] is False
+    assert any(w["code"] == "cutaneous_boundary_self_intersection" for w in guardrails["warnings"])
+
+
 @pytest.mark.parametrize(
     ("point", "region"),
     [

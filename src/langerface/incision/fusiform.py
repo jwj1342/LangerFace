@@ -11,6 +11,60 @@ from ..tumor import TumorInput
 from .geometry import clamp, normalize, tangent_perp
 
 
+def _polygon_area(points: np.ndarray) -> float:
+    if len(points) < 3:
+        return 0.0
+    x = points[:, 0]
+    y = points[:, 1]
+    return 0.5 * abs(float(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1))))
+
+
+def _orientation(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> float:
+    return float((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]))
+
+
+def _on_segment(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> bool:
+    eps = 1e-9
+    return (
+        min(a[0], c[0]) - eps <= b[0] <= max(a[0], c[0]) + eps
+        and min(a[1], c[1]) - eps <= b[1] <= max(a[1], c[1]) + eps
+        and abs(_orientation(a, b, c)) <= eps
+    )
+
+
+def _segments_intersect(a: np.ndarray, b: np.ndarray, c: np.ndarray, d: np.ndarray) -> bool:
+    eps = 1e-9
+    o1 = _orientation(a, b, c)
+    o2 = _orientation(a, b, d)
+    o3 = _orientation(c, d, a)
+    o4 = _orientation(c, d, b)
+    if o1 * o2 < -eps and o3 * o4 < -eps:
+        return True
+    return (
+        _on_segment(a, c, b)
+        or _on_segment(a, d, b)
+        or _on_segment(c, a, d)
+        or _on_segment(c, b, d)
+    )
+
+
+def _polygon_self_intersects(points: np.ndarray) -> bool:
+    n = len(points)
+    if n < 4:
+        return False
+    for i in range(n):
+        a = points[i]
+        b = points[(i + 1) % n]
+        for j in range(i + 1, n):
+            if abs(i - j) <= 1 or {i, j} == {0, n - 1}:
+                continue
+            c = points[j]
+            d = points[(j + 1) % n]
+            if _segments_intersect(a, b, c, d):
+                return True
+    return False
+
+
 def _boundary_profile(
     tumor: TumorInput,
     axis: np.ndarray,
@@ -24,8 +78,11 @@ def _boundary_profile(
     boundary = np.asarray(tumor.boundary, dtype=np.float64)
     center = boundary.mean(axis=0)
     delta = boundary - center
-    axis_diameter_mm = 2.0 * float(np.max(np.abs(delta @ axis))) / units_per_mm
-    perp_diameter_mm = 2.0 * float(np.max(np.abs(delta @ perp))) / units_per_mm
+    projected = np.column_stack((delta @ axis, delta @ perp))
+    axis_diameter_mm = 2.0 * float(np.max(np.abs(projected[:, 0]))) / units_per_mm
+    perp_diameter_mm = 2.0 * float(np.max(np.abs(projected[:, 1]))) / units_per_mm
+    area_mm2 = _polygon_area(projected) / (units_per_mm * units_per_mm)
+    nominal_disk_area_mm2 = float(np.pi * (tumor.diameter_mm * 0.5) ** 2)
     tumor_center = np.asarray(tumor.center, dtype=np.float64)
     center_shift_mm = float(np.linalg.norm(center - tumor_center)) / units_per_mm
     return {
@@ -33,6 +90,9 @@ def _boundary_profile(
         "center": center,
         "axis_diameter_mm": axis_diameter_mm,
         "perp_diameter_mm": perp_diameter_mm,
+        "area_mm2": area_mm2,
+        "area_ratio_to_diameter_disk": area_mm2 / max(nominal_disk_area_mm2, 1e-9),
+        "self_intersection": _polygon_self_intersects(projected),
         "center_shift_mm": center_shift_mm,
     }
 
@@ -166,6 +226,11 @@ def fusiform_cutaneous_incision(
             "boundary_point_count": int(boundary["point_count"]) if boundary else len(tumor.boundary),
             "boundary_axis_diameter_mm": float(boundary["axis_diameter_mm"]) if boundary else None,
             "boundary_perp_diameter_mm": float(boundary["perp_diameter_mm"]) if boundary else None,
+            "boundary_area_mm2": float(boundary["area_mm2"]) if boundary else None,
+            "boundary_area_ratio_to_diameter_disk": (
+                float(boundary["area_ratio_to_diameter_disk"]) if boundary else None
+            ),
+            "boundary_self_intersection": bool(boundary["self_intersection"]) if boundary else False,
             "boundary_center_shift_mm": float(boundary["center_shift_mm"]) if boundary else None,
         },
         "provenance": {

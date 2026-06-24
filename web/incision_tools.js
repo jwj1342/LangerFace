@@ -17,6 +17,7 @@ const DEFAULT_RULES = {
     low_region_confidence: 0.45,
     free_margin_distance_warn_mm: 18,
     min_freehand_boundary_points: 6,
+    min_boundary_area_diameter_disk_fraction: 0.08,
     boundary_center_shift_diameter_multiplier: 1,
     sensitive_regions: {
       lower_eyelid: "Protect the lower eyelid free margin; consider manual override away from vertical traction.",
@@ -303,21 +304,75 @@ function tangentPerp(axis, normal) {
   return norm(p);
 }
 
+function polygonArea(points) {
+  if (points.length < 3) return 0;
+  let s = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i], b = points[(i + 1) % points.length];
+    s += a[0] * b[1] - a[1] * b[0];
+  }
+  return Math.abs(s) * 0.5;
+}
+
+function orientation(a, b, c) {
+  return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+}
+
+function onSegment(a, b, c) {
+  const eps = 1e-9;
+  return (
+    Math.min(a[0], c[0]) - eps <= b[0] && b[0] <= Math.max(a[0], c[0]) + eps &&
+    Math.min(a[1], c[1]) - eps <= b[1] && b[1] <= Math.max(a[1], c[1]) + eps &&
+    Math.abs(orientation(a, b, c)) <= eps
+  );
+}
+
+function segmentsIntersect(a, b, c, d) {
+  const eps = 1e-9;
+  const o1 = orientation(a, b, c);
+  const o2 = orientation(a, b, d);
+  const o3 = orientation(c, d, a);
+  const o4 = orientation(c, d, b);
+  if (o1 * o2 < -eps && o3 * o4 < -eps) return true;
+  return onSegment(a, c, b) || onSegment(a, d, b) || onSegment(c, a, d) || onSegment(c, b, d);
+}
+
+function polygonSelfIntersects(points) {
+  if (points.length < 4) return false;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i], b = points[(i + 1) % points.length];
+    for (let j = i + 1; j < points.length; j++) {
+      if (Math.abs(i - j) <= 1 || (i === 0 && j === points.length - 1)) continue;
+      const c = points[j], d = points[(j + 1) % points.length];
+      if (segmentsIntersect(a, b, c, d)) return true;
+    }
+  }
+  return false;
+}
+
 function boundaryProfile(tumor, axis, perp, unitsPerMm) {
   const boundary = (tumor.boundary || []).filter((p) => Array.isArray(p) && p.length === 3).map((p) => p.map(Number));
   if (boundary.length < 3 || !(unitsPerMm > 0)) return null;
   const center = boundary.reduce((acc, p) => add(acc, p), [0, 0, 0]).map((v) => v / boundary.length);
+  const projected = [];
   let maxAxis = 0, maxPerp = 0;
   for (const p of boundary) {
     const d = sub(p, center);
-    maxAxis = Math.max(maxAxis, Math.abs(dot(d, axis)));
-    maxPerp = Math.max(maxPerp, Math.abs(dot(d, perp)));
+    const q = [dot(d, axis), dot(d, perp)];
+    projected.push(q);
+    maxAxis = Math.max(maxAxis, Math.abs(q[0]));
+    maxPerp = Math.max(maxPerp, Math.abs(q[1]));
   }
+  const areaMm2 = polygonArea(projected) / (unitsPerMm * unitsPerMm);
+  const nominalDiskAreaMm2 = Math.PI * (tumor.diameter_mm * 0.5) ** 2;
   return {
     point_count: boundary.length,
     center,
     axis_diameter_mm: 2 * maxAxis / unitsPerMm,
     perp_diameter_mm: 2 * maxPerp / unitsPerMm,
+    area_mm2: areaMm2,
+    area_ratio_to_diameter_disk: areaMm2 / Math.max(nominalDiskAreaMm2, 1e-9),
+    self_intersection: polygonSelfIntersects(projected),
     center_shift_mm: Math.hypot(...sub(center, tumor.center)) / unitsPerMm,
   };
 }
@@ -387,6 +442,9 @@ export function summarizeTumorBoundary(tumorInput, axis = [1, 0, 0], normal = [0
     center: profile.center,
     axis_diameter_mm: profile.axis_diameter_mm,
     perp_diameter_mm: profile.perp_diameter_mm,
+    area_mm2: profile.area_mm2,
+    area_ratio_to_diameter_disk: profile.area_ratio_to_diameter_disk,
+    self_intersection: profile.self_intersection,
     center_shift_mm: profile.center_shift_mm,
     aspect_ratio: ratio,
     warnings,
@@ -446,6 +504,9 @@ export function generateFusiformIncision(tumorInput, direction, unitsPerMm, norm
       boundary_point_count: boundary?.point_count || tumor.boundary.length,
       boundary_axis_diameter_mm: boundary?.axis_diameter_mm || null,
       boundary_perp_diameter_mm: boundary?.perp_diameter_mm || null,
+      boundary_area_mm2: boundary?.area_mm2 || null,
+      boundary_area_ratio_to_diameter_disk: boundary?.area_ratio_to_diameter_disk || null,
+      boundary_self_intersection: Boolean(boundary?.self_intersection),
       boundary_center_shift_mm: boundary?.center_shift_mm || null,
     },
     provenance: {
@@ -503,6 +564,33 @@ export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
       suggested_overrides.push({
         kind: "redraw_cutaneous_boundary",
         reason: "Add more lesion boundary points or use ellipse mode before accepting this candidate.",
+      });
+    }
+
+    if (candidate.metrics?.boundary_self_intersection) {
+      warnings.push({
+        code: "cutaneous_boundary_self_intersection",
+        severity: "high",
+        message: "Cutaneous lesion boundary self-intersects; redraw a simple closed contour.",
+      });
+      suggested_overrides.push({
+        kind: "redraw_cutaneous_boundary",
+        reason: "Self-intersecting lesion contours cannot be treated as valid excision boundaries.",
+      });
+    }
+
+    const areaRatio = candidate.metrics?.boundary_area_ratio_to_diameter_disk;
+    const minAreaRatio = Number(cfg.min_boundary_area_diameter_disk_fraction || 0.08);
+    if (areaRatio != null && Number(areaRatio) < minAreaRatio) {
+      const area = candidate.metrics?.boundary_area_mm2;
+      warnings.push({
+        code: "cutaneous_boundary_degenerate_area",
+        severity: "high",
+        message: `Cutaneous lesion boundary encloses too little projected area (ratio ${Number(areaRatio).toFixed(3)}${area != null ? `, area ${Number(area).toFixed(1)} mm^2` : ""}); redraw the lesion contour.`,
+      });
+      suggested_overrides.push({
+        kind: "redraw_cutaneous_boundary",
+        reason: "Boundary points are nearly collinear or do not enclose the selected lesion.",
       });
     }
 

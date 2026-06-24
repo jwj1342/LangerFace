@@ -184,6 +184,38 @@ def evaluate_guardrails(
                 ),
             })
 
+        if metrics.get("boundary_self_intersection"):
+            warnings.append({
+                "code": "cutaneous_boundary_self_intersection",
+                "severity": "high",
+                "message": "Cutaneous lesion boundary self-intersects; redraw a simple closed contour.",
+            })
+            suggested_overrides.append({
+                "kind": "redraw_cutaneous_boundary",
+                "reason": "Self-intersecting lesion contours cannot be treated as valid excision boundaries.",
+            })
+
+        area_ratio = metrics.get("boundary_area_ratio_to_diameter_disk")
+        min_area_ratio = float(
+            cfg.get("min_boundary_area_diameter_disk_fraction", 0.08)  # type: ignore[union-attr]
+        )
+        if area_ratio is not None and float(area_ratio) < min_area_ratio:
+            area_mm2 = metrics.get("boundary_area_mm2")
+            warnings.append({
+                "code": "cutaneous_boundary_degenerate_area",
+                "severity": "high",
+                "message": (
+                    "Cutaneous lesion boundary encloses too little projected area "
+                    f"(ratio {float(area_ratio):.3f}"
+                    + (f", area {float(area_mm2):.1f} mm^2" if area_mm2 is not None else "")
+                    + "); redraw the lesion contour."
+                ),
+            })
+            suggested_overrides.append({
+                "kind": "redraw_cutaneous_boundary",
+                "reason": "Boundary points are nearly collinear or do not enclose the selected lesion.",
+            })
+
         center_shift = metrics.get("boundary_center_shift_mm")
         lesion_diameter = float(metrics.get("diameter_mm") or 0.0)
         multiplier = float(cfg.get("boundary_center_shift_diameter_multiplier", 1.0))  # type: ignore[union-attr]

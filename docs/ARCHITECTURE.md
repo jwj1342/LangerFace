@@ -364,7 +364,7 @@ candidate = segment(center, axis, length)
 
 #### 皮表肿物
 
-皮表肿物生成梭形候选。医生给出的当前默认规则是：长轴平行 RSTL；长轴与类圆化后的肿物直径按 3:1 控制；两端尖角默认 30°；两侧弧线对称平滑，从最宽处向两端逐渐收窄至尖点。当前实现使用对称 cubic Hermite profile：端点切线由 `tip_angle_deg` 决定，中点达到最大宽度且切线水平，导出 `tip_angle_target_deg`、`tip_angle_estimated_deg` 和 `tip_angle_error_deg`。同时导出 `boundary_point_count`、`boundary_center_shift_mm`、`axis_coverage_required_mm` 与 `axis_coverage_deficit_mm`；当自由轮廓点数过少、边界中心明显偏离选中肿物中心，或最大长度规则导致候选短于边界加切缘覆盖需求时，guardrails 必须提示医生复核。
+皮表肿物生成梭形候选。医生给出的当前默认规则是：长轴平行 RSTL；长轴与类圆化后的肿物直径按 3:1 控制；两端尖角默认 30°；两侧弧线对称平滑，从最宽处向两端逐渐收窄至尖点。当前实现使用对称 cubic Hermite profile：端点切线由 `tip_angle_deg` 决定，中点达到最大宽度且切线水平，导出 `tip_angle_target_deg`、`tip_angle_estimated_deg` 和 `tip_angle_error_deg`。同时导出 `boundary_point_count`、`boundary_area_mm2`、`boundary_self_intersection`、`boundary_center_shift_mm`、`axis_coverage_required_mm` 与 `axis_coverage_deficit_mm`；当自由轮廓点数过少、面积退化、自交、边界中心明显偏离选中肿物中心，或最大长度规则导致候选短于边界加切缘覆盖需求时，guardrails 必须提示医生复核。
 
 实现时要把这些写成**参数化临床规则**，不要硬编码为不可变数学常量。原因是 3:1 与 30°在几何上并不总能同时严格成立；工程上应显示实际指标，让医生在比例、尖端角、邻近解剖结构和可直接拉拢缝合之间做判断。
 
