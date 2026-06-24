@@ -20,7 +20,7 @@
 
     <div class="card">
       <p class="hint" id="hint">加载网格后开始标注。</p>
-      <button class="btn btn-primary" id="btnLoadCanonical">加载标准脸</button>
+      <button class="btn btn-primary" id="btnLoadCanonical">加载 FLAME 标准脸</button>
       <button class="btn" id="btnLoadFlame">加载 FLAME 头模</button>
       <button class="btn" id="btnLoadFittedFlame">加载个体 FLAME（拟合）</button>
       <button class="btn btn-primary" id="btnCloudFit">☁ 云端拟合 FLAME（演示）</button>
@@ -36,7 +36,7 @@
     <div class="card">
       <div class="section-title">
         <span>1. 选择线系统</span>
-        <span id="drawMode">标准脸</span>
+        <span id="drawMode">FLAME 标准脸</span>
       </div>
       <div>
         <label class="field-label" for="annSystem">线系统</label>
@@ -73,7 +73,7 @@
     <details class="card help-doc" open>
       <summary>标注帮助</summary>
       <ol>
-        <li>先加载标准脸；如果标注自定义头模，只能导出 xyz 折线。</li>
+        <li>先加载 FLAME 标准脸；如果标注自定义头模，只能导出 xyz 折线。</li>
         <li>选择 RSTL 或 Langer，填写线名和面部分区。</li>
         <li>点击“开始一条线”，然后在 3D 脸表面逐点点击。</li>
         <li>每条线至少 2 个点；点够后点击“保存当前线”。</li>
