@@ -768,6 +768,16 @@ h(u) = (s - 2)u^3 + (3 - 2s)u^2 + su
 
 生成从端点 `h(0)=0` 到中点 `h(1)=1`、且中点切线水平 `h'(1)=0` 的平滑轮廓。为避免极端长宽比下曲线过冲，工程上会限制可用端点斜率并在 metrics 中记录 `tip_angle_target_deg`、`tip_angle_estimated_deg`、`tip_angle_error_deg` 和 `tip_angle_limited_by_ratio`。
 
+边界覆盖按长轴投影单独计算：
+
+```text
+axis_coverage_required_mm = lesion_axis_diameter_mm + 2 * margin_mm
+length_target_mm = max(width_mm * length_to_width_ratio, axis_coverage_required_mm)
+axis_coverage_deficit_mm = max(0, axis_coverage_required_mm - length_mm)
+```
+
+如果 `length_mm` 因 `max_length_mm` 被截断而小于 `axis_coverage_required_mm`，guardrails 输出 `fusiform_axis_coverage_deficit` 高风险警告；医生需要增加长度、调整切缘或重新标注边界，不能把该候选静默当作已覆盖病灶。
+
 候选结构建议：
 
 ```json
@@ -784,7 +794,9 @@ h(u) = (s - 2)u^3 + (3 - 2s)u^2 + su
     "profile": "cubic_hermite_tip_angle_constrained",
     "tip_angle_target_deg": 30.0,
     "tip_angle_estimated_deg": 30.0,
-    "tip_angle_error_deg": 0.0
+    "tip_angle_error_deg": 0.0,
+    "axis_coverage_required_mm": 18.0,
+    "axis_coverage_deficit_mm": 0.0
   },
   "curve": [[0.1, 0.2], [0.2, 0.25]],
   "warnings": [],

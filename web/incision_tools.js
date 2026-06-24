@@ -380,11 +380,10 @@ export function generateFusiformIncision(tumorInput, direction, unitsPerMm, norm
   const lesionWidthMm = Math.max(tumor.diameter_mm, Number(boundary?.perp_diameter_mm || 0));
   const widthMm = lesionWidthMm + 2 * tumor.margin_mm;
   const axisCoverageMm = lesionAxisMm + 2 * tumor.margin_mm;
-  const lengthMm = clamp(
-    Math.max(widthMm * cfg.length_to_width_ratio, axisCoverageMm),
-    cfg.min_length_mm,
-    cfg.max_length_mm,
-  );
+  const ratioLengthMm = widthMm * cfg.length_to_width_ratio;
+  const targetLengthMm = Math.max(ratioLengthMm, axisCoverageMm);
+  const lengthMm = clamp(targetLengthMm, cfg.min_length_mm, cfg.max_length_mm);
+  const axisCoverageDeficitMm = Math.max(0, axisCoverageMm - lengthMm);
   const halfL = lengthMm * unitsPerMm * 0.5, halfW = widthMm * unitsPerMm * 0.5;
   const samples = Math.max(12, cfg.samples || 56);
   const profile = fusiformProfile(center, axis, perp, halfL, halfW, samples, cfg.tip_angle_deg);
@@ -412,6 +411,12 @@ export function generateFusiformIncision(tumorInput, direction, unitsPerMm, norm
       ...profile.metrics,
       diameter_mm: tumor.diameter_mm,
       margin_mm: tumor.margin_mm,
+      length_target_mm: targetLengthMm,
+      length_ratio_target_mm: ratioLengthMm,
+      axis_coverage_required_mm: axisCoverageMm,
+      axis_coverage_deficit_mm: axisCoverageDeficitMm,
+      length_clamped_by_min: targetLengthMm < cfg.min_length_mm,
+      length_clamped_by_max: targetLengthMm > cfg.max_length_mm,
       boundary_used: Boolean(boundary),
       boundary_point_count: boundary?.point_count || tumor.boundary.length,
       boundary_axis_diameter_mm: boundary?.axis_diameter_mm || null,
@@ -448,6 +453,19 @@ export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
     suggested_overrides.push({ kind: "free_margin_distance_review", reason: "Confirm functional and contour risk before accepting this direction." });
   }
   const candidateDistance = candidate.metrics?.sensitive_free_margin_min_distance_mm;
+  const axisCoverageDeficit = Number(candidate.metrics?.axis_coverage_deficit_mm || 0);
+  if (candidate.type === "fusiform" && axisCoverageDeficit > 1e-6) {
+    const required = candidate.metrics?.axis_coverage_required_mm;
+    warnings.push({
+      code: "fusiform_axis_coverage_deficit",
+      severity: "high",
+      message: `Fusiform candidate is shorter than the lesion boundary plus margin coverage requirement by ${axisCoverageDeficit.toFixed(1)} mm${required != null ? ` (required ${Number(required).toFixed(1)} mm).` : "."}`,
+    });
+    suggested_overrides.push({
+      kind: "fusiform_length_or_margin_review",
+      reason: "Increase candidate length, reduce margin only with explicit clinician decision, or redraw boundary.",
+    });
+  }
   if (candidateDistance != null && Number(candidateDistance) <= cfg.free_margin_distance_warn_mm) {
     warnings.push({
       code: "candidate_near_sensitive_free_margin",
@@ -503,6 +521,8 @@ function buildEditedFusiform(base, center, axis, normal, unitsPerMm, edit) {
   const widthAxis = tangentPerp(axis, normal);
   const lengthMm = Math.max(1, Number(base.length_mm || 1) * Number(edit.length_scale || 1));
   const widthMm = Math.max(1, Number(base.width_mm || 1) * Number(edit.width_scale || 1));
+  const axisCoverageRequiredMm = Number(base.metrics?.axis_coverage_required_mm || 0);
+  const axisCoverageDeficitMm = axisCoverageRequiredMm > 0 ? Math.max(0, axisCoverageRequiredMm - lengthMm) : 0;
   const halfL = lengthMm * unitsPerMm * 0.5;
   const halfW = widthMm * unitsPerMm * 0.5;
   const samples = Math.max(12, Math.round((base.outline?.length || 58) / 2));
@@ -528,6 +548,7 @@ function buildEditedFusiform(base, center, axis, normal, unitsPerMm, edit) {
       rstl_deviation_deg: Math.abs(Number(edit.angle_offset_deg || 0)),
       length_to_width_ratio: lengthMm / widthMm,
       ...profile.metrics,
+      axis_coverage_deficit_mm: axisCoverageDeficitMm,
     },
   };
 }

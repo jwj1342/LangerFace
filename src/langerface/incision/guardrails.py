@@ -145,6 +145,26 @@ def evaluate_guardrails(
         })
 
     metrics = candidate.get("metrics") or {}
+    axis_coverage_deficit = float(metrics.get("axis_coverage_deficit_mm") or 0.0)
+    if candidate.get("type") == "fusiform" and axis_coverage_deficit > 1e-6:
+        required = metrics.get("axis_coverage_required_mm")
+        warnings.append({
+            "code": "fusiform_axis_coverage_deficit",
+            "severity": "high",
+            "message": (
+                "Fusiform candidate is shorter than the lesion boundary plus margin coverage "
+                f"requirement by {axis_coverage_deficit:.1f} mm"
+                + (f" (required {float(required):.1f} mm)." if required is not None else ".")
+            ),
+        })
+        suggested_overrides.append({
+            "kind": "fusiform_length_or_margin_review",
+            "reason": (
+                "Increase candidate length, reduce margin only with explicit clinician decision, "
+                "or redraw boundary."
+            ),
+        })
+
     candidate_margin_distance = metrics.get("sensitive_free_margin_min_distance_mm")
     if candidate_margin_distance is not None and float(candidate_margin_distance) <= float(
         cfg.get("free_margin_distance_warn_mm", 18.0)  # type: ignore[union-attr]

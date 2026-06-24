@@ -8,6 +8,7 @@ import pytest
 
 from langerface.agent import plan_incision_case
 from langerface.anatomy import classify_region
+from langerface.clinical import default_clinical_rules
 from langerface.incision import (
     annotate_candidate_sensitive_distances,
     evaluate_guardrails,
@@ -160,7 +161,30 @@ def test_fusiform_cutaneous_candidate_uses_freehand_boundary_extent():
     assert candidate["metrics"]["boundary_axis_diameter_mm"] > 35
     assert candidate["center"][0] > 4
     assert candidate["length_mm"] >= candidate["metrics"]["boundary_axis_diameter_mm"] + 2
+    assert candidate["metrics"]["axis_coverage_deficit_mm"] == 0
     assert candidate["provenance"]["boundary_source"] == "manual_freehand"
+
+
+def test_fusiform_guardrail_flags_boundary_axis_coverage_deficit():
+    direction = {"vector": [1, 0, 0], "confidence": 0.9}
+    tumor = TumorInput(
+        kind="cutaneous",
+        center=(4, 2, 0),
+        diameter_mm=8,
+        margin_mm=2,
+        boundary=((0, 2, 0), (4, 3, 0), (10, 2, 0), (4, 1, 0)),
+        boundary_mode="freehand",
+        boundary_source="manual_freehand",
+    )
+    rules = default_clinical_rules()
+    rules["fusiform_cutaneous"]["max_length_mm"] = 40.0
+    candidate = fusiform_cutaneous_incision(tumor, direction, rules=rules, units_per_mm=0.1)
+    assert candidate["metrics"]["axis_coverage_required_mm"] > candidate["length_mm"]
+    assert candidate["metrics"]["axis_coverage_deficit_mm"] > 0
+    assert candidate["metrics"]["length_clamped_by_max"] is True
+    guardrails = evaluate_guardrails(candidate, {"region": "cheek", "confidence": 0.8})
+    assert guardrails["passed"] is False
+    assert any(w["code"] == "fusiform_axis_coverage_deficit" for w in guardrails["warnings"])
 
 
 @pytest.mark.parametrize(

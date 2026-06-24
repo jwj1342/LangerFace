@@ -106,6 +106,27 @@ ok(boundaryFusiform.center[0] > 4, "fusiform candidate recenters to boundary cen
 ok(boundaryFusiform.length_mm >= boundaryFusiform.metrics.boundary_axis_diameter_mm + 2,
   "fusiform length covers freehand boundary plus margin");
 
+const coverageRules = structuredClone(T.DEFAULT_RULES);
+coverageRules.fusiform_cutaneous.max_length_mm = 40;
+const oversizedBoundaryTumor = {
+  ...boundaryTumor,
+  margin_mm: 2,
+  boundary: [[0, 2, 0], [4, 3, 0], [10, 2, 0], [4, 1, 0]],
+};
+const clampedFusiform = T.generateFusiformIncision(
+  oversizedBoundaryTumor,
+  { vector: [1, 0, 0], confidence: 0.9 },
+  0.1,
+  [0, 0, 1],
+  coverageRules,
+);
+ok(clampedFusiform.metrics.axis_coverage_deficit_mm > 0, "fusiform records boundary axis coverage deficit");
+ok(clampedFusiform.metrics.length_clamped_by_max === true, "fusiform records max-length clamp");
+const coverageGuard = T.evaluateGuardrails(clampedFusiform, { region: "cheek", confidence: 0.8 }, coverageRules);
+ok(coverageGuard.passed === false, "boundary coverage deficit fails guardrails");
+ok(coverageGuard.warnings.some((w) => w.code === "fusiform_axis_coverage_deficit"),
+  "guardrails flag fusiform axis coverage deficit");
+
 const anatomy = T.classifyRegion([3, 6, 0], verts);
 const guard = T.evaluateGuardrails({ direction_confidence: 0.8 }, anatomy);
 ok(anatomy.region === "lower_eyelid", "region classifier reaches sensitive lower eyelid bucket");

@@ -107,8 +107,12 @@ def fusiform_cutaneous_incision(
     lesion_width_mm = max(tumor.diameter_mm, float(boundary["perp_diameter_mm"]) if boundary else 0.0)
     width_mm = max(lesion_width_mm + 2.0 * tumor.margin_mm, 1e-6)
     axis_coverage_mm = lesion_axis_mm + 2.0 * tumor.margin_mm
-    target_length = max(width_mm * float(cfg["length_to_width_ratio"]), axis_coverage_mm)
-    length_mm = clamp(target_length, float(cfg["min_length_mm"]), float(cfg["max_length_mm"]))
+    ratio_length_mm = width_mm * float(cfg["length_to_width_ratio"])
+    target_length = max(ratio_length_mm, axis_coverage_mm)
+    min_length_mm = float(cfg["min_length_mm"])
+    max_length_mm = float(cfg["max_length_mm"])
+    length_mm = clamp(target_length, min_length_mm, max_length_mm)
+    axis_coverage_deficit_mm = max(0.0, axis_coverage_mm - length_mm)
     half_l = length_mm * units_per_mm * 0.5
     half_w = width_mm * units_per_mm * 0.5
     samples = max(12, int(cfg.get("samples", 56)))
@@ -152,6 +156,12 @@ def fusiform_cutaneous_incision(
             **profile_metrics,
             "diameter_mm": tumor.diameter_mm,
             "margin_mm": tumor.margin_mm,
+            "length_target_mm": target_length,
+            "length_ratio_target_mm": ratio_length_mm,
+            "axis_coverage_required_mm": axis_coverage_mm,
+            "axis_coverage_deficit_mm": axis_coverage_deficit_mm,
+            "length_clamped_by_min": target_length < min_length_mm,
+            "length_clamped_by_max": target_length > max_length_mm,
             "boundary_used": boundary is not None,
             "boundary_point_count": int(boundary["point_count"]) if boundary else len(tumor.boundary),
             "boundary_axis_diameter_mm": float(boundary["axis_diameter_mm"]) if boundary else None,
