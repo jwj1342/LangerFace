@@ -20,6 +20,7 @@ const COLOR_SAMPLE_W = 320;
 const SCAN_TARGET_SECS = 9;
 const SCAN_TARGET_FRAMES = 40;
 const YAW_DISPLAY_SPAN = 0.5;
+let flameDemoLines = null;
 
 async function fetchCanonicalRef() {
   if (canonicalRef) return canonicalRef;
@@ -51,15 +52,19 @@ async function ensureHead3D() {
 
 async function buildViewer() {
   await ensureHead3D();
-  const disp = reconState.reconVerts.map((p) => [p[0], -p[1], -p[2]]);  // 翻成 y 上 供查看
+  const disp = reconState.reconDisplaySpace === "screen"
+    ? reconState.reconVerts.map((p) => [p[0], -p[1], -p[2]])  // MediaPipe 重建：翻成 y 上供查看
+    : reconState.reconVerts;
+  const faces = reconState.reconFaces || modelState.triangles;
+  const atlasLines = reconState.reconAtlasLines ?? modelState.atlases[renderState.system];
   reconState.head3d.setGeometry(
     disp,
-    modelState.triangles,
+    faces,
     // setActiveAtlas() updates this shared atlas table; 3D view picks it up only when buildViewer() reruns.
-    modelState.atlases[renderState.system],
+    atlasLines,
     { showSurface: true, bands: renderState.bands, vertexColors: reconState.reconColors },
   );
-  els.view3d.disabled = false; els.project3d.disabled = false;
+  els.view3d.disabled = false; els.project3d.disabled = !reconState.reconProjectable;
   els.reset3d.disabled = false; els.cloudFitFlame.disabled = false;
   setMode3d("view");
 }
@@ -195,6 +200,159 @@ function projectColors(verts, lm, basis) {
   return out;
 }
 
+function sampleFlameLandmarkPairs(verts, basis, canonical) {
+  const src = [], dst = [];
+  for (let i = 0; i < basis.NL; i++) {
+    const idx = basis.landmarkIndices[i];
+    if (idx >= canonical.length) continue;
+    const f = basis.lmkFaceIdx[i];
+    const a = basis.faces[f * 3], b = basis.faces[f * 3 + 1], c = basis.faces[f * 3 + 2];
+    const w0 = basis.lmkBCoords[i * 3], w1 = basis.lmkBCoords[i * 3 + 1], w2 = basis.lmkBCoords[i * 3 + 2];
+    src.push(canonical[idx]);
+    dst.push([
+      w0 * verts[a][0] + w1 * verts[b][0] + w2 * verts[c][0],
+      w0 * verts[a][1] + w1 * verts[b][1] + w2 * verts[c][1],
+      w0 * verts[a][2] + w1 * verts[b][2] + w2 * verts[c][2],
+    ]);
+  }
+  return { src, dst };
+}
+
+const vsub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const vadd = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const vscale = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+const vdot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const vcross = (a, b) => [
+  a[1] * b[2] - a[2] * b[1],
+  a[2] * b[0] - a[0] * b[2],
+  a[0] * b[1] - a[1] * b[0],
+];
+const vnorm = (a) => {
+  const l = Math.hypot(a[0], a[1], a[2]) || 1;
+  return [a[0] / l, a[1] / l, a[2] / l];
+};
+const dist2 = (a, b) => {
+  const dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
+  return dx * dx + dy * dy + dz * dz;
+};
+
+function closestPointOnTriangle(p, a, b, c) {
+  const ab = vsub(b, a), ac = vsub(c, a), ap = vsub(p, a);
+  const d1 = vdot(ab, ap), d2 = vdot(ac, ap);
+  if (d1 <= 0 && d2 <= 0) return a;
+
+  const bp = vsub(p, b);
+  const d3 = vdot(ab, bp), d4 = vdot(ac, bp);
+  if (d3 >= 0 && d4 <= d3) return b;
+
+  const vc = d1 * d4 - d3 * d2;
+  if (vc <= 0 && d1 >= 0 && d3 <= 0) return vadd(a, vscale(ab, d1 / (d1 - d3)));
+
+  const cp = vsub(p, c);
+  const d5 = vdot(ab, cp), d6 = vdot(ac, cp);
+  if (d6 >= 0 && d5 <= d6) return c;
+
+  const vb = d5 * d2 - d1 * d6;
+  if (vb <= 0 && d2 >= 0 && d6 <= 0) return vadd(a, vscale(ac, d2 / (d2 - d6)));
+
+  const va = d3 * d6 - d5 * d4;
+  if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0) {
+    return vadd(b, vscale(vsub(c, b), (d4 - d3) / ((d4 - d3) + (d5 - d6))));
+  }
+
+  const denom = 1 / (va + vb + vc);
+  const v = vb * denom, w = vc * denom;
+  return vadd(a, vadd(vscale(ab, v), vscale(ac, w)));
+}
+
+function buildTriangleGrid(verts, faces) {
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity], center = [0, 0, 0];
+  for (const p of verts) {
+    for (let k = 0; k < 3; k++) {
+      lo[k] = Math.min(lo[k], p[k]);
+      hi[k] = Math.max(hi[k], p[k]);
+      center[k] += p[k] / verts.length;
+    }
+  }
+  const size = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) || 1;
+  const cell = size / 28;
+  const key = (ix, iy, iz) => `${ix},${iy},${iz}`;
+  const idx = (p) => [
+    Math.floor((p[0] - lo[0]) / cell),
+    Math.floor((p[1] - lo[1]) / cell),
+    Math.floor((p[2] - lo[2]) / cell),
+  ];
+  const buckets = new Map();
+  faces.forEach((f, fi) => {
+    const A = verts[f[0]], B = verts[f[1]], C = verts[f[2]];
+    const mn = [
+      Math.min(A[0], B[0], C[0]), Math.min(A[1], B[1], C[1]), Math.min(A[2], B[2], C[2]),
+    ];
+    const mx = [
+      Math.max(A[0], B[0], C[0]), Math.max(A[1], B[1], C[1]), Math.max(A[2], B[2], C[2]),
+    ];
+    const a = idx(mn), b = idx(mx);
+    for (let x = a[0]; x <= b[0]; x++) for (let y = a[1]; y <= b[1]; y++) for (let z = a[2]; z <= b[2]; z++) {
+      const k = key(x, y, z);
+      if (!buckets.has(k)) buckets.set(k, []);
+      buckets.get(k).push(fi);
+    }
+  });
+  return { buckets, cell, lo, center, eps: size * 0.003, key, idx };
+}
+
+function snapPointToMesh(p, verts, faces, grid) {
+  const base = grid.idx(p);
+  let candidates = [];
+  for (let r = 0; r <= 3 && candidates.length === 0; r++) {
+    const seen = new Set();
+    for (let x = base[0] - r; x <= base[0] + r; x++) {
+      for (let y = base[1] - r; y <= base[1] + r; y++) {
+        for (let z = base[2] - r; z <= base[2] + r; z++) {
+          for (const fi of grid.buckets.get(grid.key(x, y, z)) || []) {
+            if (!seen.has(fi)) { seen.add(fi); candidates.push(fi); }
+          }
+        }
+      }
+    }
+  }
+  if (!candidates.length) candidates = faces.map((_, i) => i);
+
+  let best = p, bestN = [0, 0, 1], bestD = Infinity;
+  for (const fi of candidates) {
+    const f = faces[fi], A = verts[f[0]], B = verts[f[1]], C = verts[f[2]];
+    const q = closestPointOnTriangle(p, A, B, C);
+    const d = dist2(p, q);
+    if (d < bestD) {
+      best = q;
+      bestN = vnorm(vcross(vsub(B, A), vsub(C, A)));
+      bestD = d;
+    }
+  }
+  if (vdot(bestN, vsub(best, grid.center)) < 0) bestN = vscale(bestN, -1);
+  return vadd(best, vscale(bestN, grid.eps));
+}
+
+function mediaPipeAtlasToFlameLines(atlas, canonical, triangles, flameVerts, basis) {
+  const { src, dst } = sampleFlameLandmarkPairs(flameVerts, basis, canonical);
+  const sim = umeyama(src, dst);
+  const flameFaces = facesArray(basis);
+  const grid = buildTriangleGrid(flameVerts, flameFaces);
+  return (atlas?.lines || []).map((ln) => {
+    const rawPoints = ln.points.map(([tri, u, v]) => {
+      const t = triangles[tri], w = 1 - u - v;
+      const A = canonical[t[0]], B = canonical[t[1]], C = canonical[t[2]];
+      return [
+        u * A[0] + v * B[0] + w * C[0],
+        u * A[1] + v * B[1] + w * C[1],
+        u * A[2] + v * B[2] + w * C[2],
+      ];
+    });
+    const points3d = applySim(sim, rawPoints).map((p) => snapPointToMesh(p, flameVerts, flameFaces, grid));
+    return { name: ln.name, region: ln.region, points3d };
+  });
+}
+
 // 「贴真实人脸纹理」开关（实时孪生）：下一帧 twinLoop 自动按之采样/渲染。
 export function toggleTwinTexture() {
   reconState.twinTexture = els.twinTexture.checked;
@@ -211,6 +369,10 @@ function viewerLoop() {
 
 export function setMode3d(m) {
   stopTwin();  // 离开实时孪生：取消其 RAF + 撤销分屏
+  if (m === "project" && !reconState.reconProjectable) {
+    setMsg("FLAME 示例脸仅支持 3D 旋转查看；投影回实时画面请使用「转头扫描」。");
+    return;
+  }
   reconState.mode3d = m;
   els.view3d.setAttribute("aria-pressed", String(m === "view"));
   els.project3d.setAttribute("aria-pressed", String(m === "project"));
@@ -229,11 +391,30 @@ export function setMode3d(m) {
 
 export async function loadDemoRecon() {
   els.scanPanel.classList.add("hidden"); els.scanToast.classList.add("hidden");
-  els.reconStatus.textContent = "加载固定演示模型（非你的脸，仅用于体验流程）…";
-  await ensureReady();
-  const d = await fetch(assetUrls.reconDemo).then((r) => r.json());
-  reconState.reconVerts = d.vertices; reconState.reconColors = null;
-  els.reconStatus.textContent = `固定演示模型就绪（非你的脸）：${d.frames} 帧，偏航 ${d.yaw_min}~${d.yaw_max}。可旋转查看 / 投影。想重建自己的脸请用「转头扫描」。`;
+  els.reconStatus.textContent = "加载 FLAME 标准示例脸（无需摄像头）…";
+  try {
+    if (!reconState.flameBasis) reconState.flameBasis = await loadFlameBasis(assetUrls.flameBasis);
+  } catch (err) {
+    els.reconStatus.textContent = "FLAME 示例脸加载失败：" + err.message;
+    return;
+  }
+  const basis = reconState.flameBasis;
+  reconState.reconVerts = flameForward(basis, ZERO_BETA, new Float64Array(basis.NE), 0);
+  reconState.reconFaces = facesArray(basis);
+  if (!flameDemoLines) {
+    const [canonical, topology, atlas] = await Promise.all([
+      fetch(assetUrls.canonicalVertices).then((r) => r.json()),
+      fetch(assetUrls.topology).then((r) => r.json()),
+      fetch(assetUrls.atlasRstl).then((r) => r.json()),
+    ]);
+    const triangles = Array.isArray(topology) ? topology : topology.triangles;
+    flameDemoLines = mediaPipeAtlasToFlameLines(atlas, canonical, triangles, reconState.reconVerts, basis);
+  }
+  reconState.reconAtlasLines = flameDemoLines;
+  reconState.reconColors = null;
+  reconState.reconProjectable = false;
+  reconState.reconDisplaySpace = "model";
+  els.reconStatus.textContent = `FLAME 标准示例脸就绪：${basis.NV} 顶点 / ${basis.NF} 三角面，已叠加 RSTL 线。可旋转查看；投影回实时画面请用「转头扫描」。`;
   await buildViewer();
 }
 
@@ -367,7 +548,11 @@ function finishScan(collected, ymin, ymax, colorFrames = [], lowDepthConfidence 
   }
   const c = [0, 0, 0]; for (const p of verts) for (let k = 0; k < 3; k++) c[k] += p[k] / V;
   reconState.reconVerts = verts.map((p) => [p[0] - c[0], p[1] - c[1], p[2] - c[2]]);
+  reconState.reconFaces = null;
+  reconState.reconAtlasLines = null;
   reconState.reconColors = mergeVertexColors(colorFrames, V);
+  reconState.reconProjectable = true;
+  reconState.reconDisplaySpace = "screen";
   const yawSpan = ymax - ymin;
   const scanDetail = {
     phase: "scan",
@@ -396,7 +581,7 @@ export function enterRoute(route) {
     els.route3dPanel.classList.remove("hidden"); els.badge.classList.add("beta");
     sourceState.running = false; stopSource();
     els.zoomStrip.classList.add("hidden"); els.canvas.classList.add("hidden");
-    setMsg(reconState.reconVerts ? null : "3D Beta：请先「用示例重建」或「转头扫描」"); setLive(false, "3D Beta");
+    setMsg(reconState.reconVerts ? null : "3D Beta：请先「用示例脸」或「转头扫描」"); setLive(false, "3D Beta");
     if (reconState.reconVerts) buildViewer();
   } else {
     reconState.scan = null;
