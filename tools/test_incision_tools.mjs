@@ -233,6 +233,46 @@ const candidateGuard = T.evaluateGuardrails(nearMarginCandidate, { region: "chee
 ok(candidateGuard.passed === false, "candidate geometry near sensitive margin fails guardrails");
 ok(candidateGuard.warnings.some((w) => w.code === "candidate_near_sensitive_free_margin"),
   "guardrails flag candidate geometry near sensitive margin");
+const nasalCenterGuard = T.evaluateGuardrails(
+  { type: "linear", direction_confidence: 0.9, metrics: { rstl_deviation_deg: 0 } },
+  { region: "cheek", confidence: 0.8, free_margin_distance_mm: 11, nearby_landmarks: ["nasal_tip"] },
+);
+ok(!nasalCenterGuard.warnings.some((w) => w.code === "near_sensitive_free_margin"),
+  "nasal-tip center threshold does not flag 11 mm");
+const eyelidCenterGuard = T.evaluateGuardrails(
+  { type: "linear", direction_confidence: 0.9, metrics: { rstl_deviation_deg: 0 } },
+  { region: "cheek", confidence: 0.8, free_margin_distance_mm: 11, nearby_landmarks: ["left_lower_eyelid_margin"] },
+);
+ok(eyelidCenterGuard.warnings.some((w) => w.code === "near_sensitive_free_margin" && w.message.includes("threshold 16.0 mm")),
+  "lower-eyelid center threshold flags 11 mm and reports threshold");
+const nasalCandidateGuard = T.evaluateGuardrails(
+  {
+    type: "linear",
+    direction_confidence: 0.9,
+    metrics: {
+      rstl_deviation_deg: 0,
+      sensitive_free_margin_min_distance_mm: 11,
+      sensitive_free_margin_nearest: "nasal_tip",
+    },
+  },
+  { region: "cheek", confidence: 0.8 },
+);
+ok(!nasalCandidateGuard.warnings.some((w) => w.code === "candidate_near_sensitive_free_margin"),
+  "nasal-tip candidate threshold does not flag 11 mm");
+const eyelidCandidateGuard = T.evaluateGuardrails(
+  {
+    type: "linear",
+    direction_confidence: 0.9,
+    metrics: {
+      rstl_deviation_deg: 0,
+      sensitive_free_margin_min_distance_mm: 11,
+      sensitive_free_margin_nearest: "left_lower_eyelid_margin",
+    },
+  },
+  { region: "cheek", confidence: 0.8 },
+);
+ok(eyelidCandidateGuard.warnings.some((w) => w.code === "candidate_near_sensitive_free_margin" && w.message.includes("threshold 16.0 mm")),
+  "lower-eyelid candidate threshold flags 11 mm and reports threshold");
 
 const regionCases = {
   forehead: [5, 8.6, 0],
@@ -297,7 +337,12 @@ const comparison = T.compareCandidateRecords([
     review_status: "approved_for_discussion",
     candidate: {
       type: "linear",
-      metrics: { rstl_deviation_deg: 20, diameter_coverage_deficit_mm: 3, sensitive_free_margin_min_distance_mm: 4 },
+      metrics: {
+        rstl_deviation_deg: 20,
+        diameter_coverage_deficit_mm: 3,
+        sensitive_free_margin_min_distance_mm: 4,
+        sensitive_free_margin_nearest: "left_lower_eyelid_margin",
+      },
     },
     guardrails: { passed: false, warnings: [{ code: "candidate_near_sensitive_free_margin", severity: "high" }] },
   },
@@ -312,6 +357,8 @@ const comparison = T.compareCandidateRecords([
 ok(comparison[0].id === "baseline", "candidate comparison ranks low-risk candidate first");
 ok(comparison[2].id === "rejected", "candidate comparison ranks rejected candidate last");
 ok(comparison[1].reasons.some((r) => r.includes("high guardrail")), "candidate comparison explains high-risk score");
+ok(comparison[1].score_breakdown.sensitive_free_margin_threshold_mm === 16,
+  "candidate comparison records per-structure sensitive-margin threshold");
 ok(comparison[0].clinical_boundary.includes("不是临床推荐"), "candidate comparison records clinical boundary");
 
 console.log(`test_incision_tools: ${passed} assertions passed`);

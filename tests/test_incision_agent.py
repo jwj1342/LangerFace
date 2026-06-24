@@ -379,6 +379,65 @@ def test_guardrails_flag_candidate_geometry_near_sensitive_free_margin():
     assert guardrails["passed"] is False
 
 
+def test_guardrails_use_per_sensitive_structure_distance_thresholds():
+    candidate = {"type": "linear", "direction_confidence": 0.9, "metrics": {"rstl_deviation_deg": 0}}
+    nasal_center = {
+        "region": "cheek",
+        "confidence": 0.8,
+        "free_margin_distance_mm": 11.0,
+        "nearby_landmarks": ["nasal_tip"],
+    }
+    nasal_guardrails = evaluate_guardrails(candidate, nasal_center)
+    assert not any(w["code"] == "near_sensitive_free_margin" for w in nasal_guardrails["warnings"])
+
+    eyelid_center = {
+        "region": "cheek",
+        "confidence": 0.8,
+        "free_margin_distance_mm": 11.0,
+        "nearby_landmarks": ["left_lower_eyelid_margin"],
+    }
+    eyelid_guardrails = evaluate_guardrails(candidate, eyelid_center)
+    eyelid_warning = next(
+        w for w in eyelid_guardrails["warnings"] if w["code"] == "near_sensitive_free_margin"
+    )
+    assert "threshold 16.0 mm" in eyelid_warning["message"]
+
+    nasal_candidate = {
+        "type": "linear",
+        "direction_confidence": 0.9,
+        "metrics": {
+            "rstl_deviation_deg": 0,
+            "sensitive_free_margin_min_distance_mm": 11.0,
+            "sensitive_free_margin_nearest": "nasal_tip",
+        },
+    }
+    nasal_candidate_guardrails = evaluate_guardrails(nasal_candidate, {"region": "cheek", "confidence": 0.8})
+    assert not any(
+        w["code"] == "candidate_near_sensitive_free_margin"
+        for w in nasal_candidate_guardrails["warnings"]
+    )
+
+    eyelid_candidate = {
+        "type": "linear",
+        "direction_confidence": 0.9,
+        "metrics": {
+            "rstl_deviation_deg": 0,
+            "sensitive_free_margin_min_distance_mm": 11.0,
+            "sensitive_free_margin_nearest": "left_lower_eyelid_margin",
+        },
+    }
+    eyelid_candidate_guardrails = evaluate_guardrails(
+        eyelid_candidate,
+        {"region": "cheek", "confidence": 0.8},
+    )
+    eyelid_candidate_warning = next(
+        w
+        for w in eyelid_candidate_guardrails["warnings"]
+        if w["code"] == "candidate_near_sensitive_free_margin"
+    )
+    assert "threshold 16.0 mm" in eyelid_candidate_warning["message"]
+
+
 def test_anatomy_classifier_covers_representative_stage2_regions():
     vertices, _, _ = _simple_mesh_and_atlas()
     cases = {

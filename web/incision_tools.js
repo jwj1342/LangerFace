@@ -16,6 +16,18 @@ const DEFAULT_RULES = {
     low_direction_confidence: 0.35,
     low_region_confidence: 0.45,
     free_margin_distance_warn_mm: 18,
+    free_margin_distance_thresholds_mm: {
+      default: 18,
+      lower_eyelid: 16,
+      lower_eyelid_margin: 16,
+      lip_vermilion: 14,
+      lip_vermilion_margin: 14,
+      oral_commissure: 14,
+      nasal_ala: 12,
+      nasal_ala_margin: 12,
+      nasal_tip: 10,
+      inner_canthus: 14,
+    },
     min_freehand_boundary_points: 6,
     min_boundary_area_diameter_disk_fraction: 0.08,
     boundary_center_shift_diameter_multiplier: 1,
@@ -544,6 +556,41 @@ export function generateFusiformIncision(tumorInput, direction, unitsPerMm, norm
   };
 }
 
+function asLandmarkNames(value) {
+  if (value == null) return [];
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.map((item) => String(item)).filter(Boolean);
+  return [String(value)];
+}
+
+function freeMarginDistanceThresholdMm(landmarks, cfg, fallbackRegion = "unknown") {
+  const fallback = Number(cfg?.free_margin_distance_warn_mm ?? 18);
+  const thresholds = cfg?.free_margin_distance_thresholds_mm || {};
+  const defaultThreshold = Number(thresholds.default ?? fallback);
+  const names = asLandmarkNames(landmarks);
+  if (!names.length) names.push(fallbackRegion);
+
+  const matched = [];
+  for (const name of names) {
+    const normalized = String(name).toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(thresholds, normalized)) {
+      const threshold = Number(thresholds[normalized]);
+      if (Number.isFinite(threshold)) matched.push(threshold);
+      continue;
+    }
+    for (const [key, rawThreshold] of Object.entries(thresholds)) {
+      const normalizedKey = String(key).toLowerCase();
+      if (normalizedKey !== "default" && normalizedKey && normalized.includes(normalizedKey)) {
+        const threshold = Number(rawThreshold);
+        if (Number.isFinite(threshold)) matched.push(threshold);
+        break;
+      }
+    }
+  }
+
+  return matched.length ? Math.max(...matched) : defaultThreshold;
+}
+
 export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
   const cfg = rules.guardrails;
   const warnings = [], suggested_overrides = [];
@@ -557,11 +604,12 @@ export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
     warnings.push({ code: `sensitive_region_${anatomy.region}`, severity: "high", message: cfg.sensitive_regions[anatomy.region] });
     suggested_overrides.push({ kind: "manual_direction_confirmation", reason: `${anatomy.region} is a sensitive free-margin region.` });
   }
-  if (anatomy.free_margin_distance_mm != null && Number(anatomy.free_margin_distance_mm) <= cfg.free_margin_distance_warn_mm) {
+  const centerThreshold = freeMarginDistanceThresholdMm(anatomy.nearby_landmarks, cfg, anatomy.region);
+  if (anatomy.free_margin_distance_mm != null && Number(anatomy.free_margin_distance_mm) <= centerThreshold) {
     warnings.push({
       code: "near_sensitive_free_margin",
       severity: "high",
-      message: `Candidate center is approximately ${Number(anatomy.free_margin_distance_mm).toFixed(1)} mm from sensitive free-margin landmark(s): ${(anatomy.nearby_landmarks || []).join(", ") || anatomy.region}.`,
+      message: `Candidate center is approximately ${Number(anatomy.free_margin_distance_mm).toFixed(1)} mm from sensitive free-margin landmark(s): ${(anatomy.nearby_landmarks || []).join(", ") || anatomy.region} (threshold ${centerThreshold.toFixed(1)} mm).`,
     });
     suggested_overrides.push({ kind: "free_margin_distance_review", reason: "Confirm functional and contour risk before accepting this direction." });
   }
@@ -652,11 +700,13 @@ export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
       reason: "Increase candidate length, reduce margin only with explicit clinician decision, or redraw boundary.",
     });
   }
-  if (candidateDistance != null && Number(candidateDistance) <= cfg.free_margin_distance_warn_mm) {
+  const nearestSensitiveMargin = candidate.metrics?.sensitive_free_margin_nearest || anatomy.region;
+  const candidateThreshold = freeMarginDistanceThresholdMm(nearestSensitiveMargin, cfg, anatomy.region);
+  if (candidateDistance != null && Number(candidateDistance) <= candidateThreshold) {
     warnings.push({
       code: "candidate_near_sensitive_free_margin",
       severity: "high",
-      message: `Candidate geometry is approximately ${Number(candidateDistance).toFixed(1)} mm from sensitive free-margin landmark: ${candidate.metrics?.sensitive_free_margin_nearest || anatomy.region}.`,
+      message: `Candidate geometry is approximately ${Number(candidateDistance).toFixed(1)} mm from sensitive free-margin landmark: ${nearestSensitiveMargin} (threshold ${candidateThreshold.toFixed(1)} mm).`,
     });
     suggested_overrides.push({ kind: "candidate_free_margin_distance_review", reason: "Review the full candidate path/outline near sensitive free margins." });
   }
@@ -883,7 +933,7 @@ function warningSeverityCounts(guardrails = {}) {
   };
 }
 
-function comparisonReasons({ severity, metrics, reviewStatus, sensitiveDistance, candidateType }) {
+function comparisonReasons({ severity, metrics, reviewStatus, sensitiveDistance, sensitiveThreshold, candidateType }) {
   const reasons = [];
   if (reviewStatus === "rejected_by_clinician") reasons.push("医生已否决");
   if (severity.high) reasons.push(`${severity.high} 个 high guardrail`);
@@ -898,13 +948,14 @@ function comparisonReasons({ severity, metrics, reviewStatus, sensitiveDistance,
     const tipError = finiteOr(metrics.tip_angle_error_deg, 0);
     if (tipError > 0.5) reasons.push(`尖端角误差 ${tipError.toFixed(1)}°`);
   }
-  if (Number.isFinite(sensitiveDistance) && sensitiveDistance < 10) {
-    reasons.push(`距敏感游离缘 ${sensitiveDistance.toFixed(1)} mm`);
+  if (Number.isFinite(sensitiveDistance) && Number.isFinite(sensitiveThreshold) && sensitiveDistance <= sensitiveThreshold) {
+    reasons.push(`距敏感游离缘 ${sensitiveDistance.toFixed(1)} mm（阈值 ${sensitiveThreshold.toFixed(1)} mm）`);
   }
   return reasons.length ? reasons : ["工程指标未见额外扣分"];
 }
 
-export function compareCandidateRecords(records = []) {
+export function compareCandidateRecords(records = [], rules = DEFAULT_RULES) {
+  const cfg = rules?.guardrails || DEFAULT_RULES.guardrails;
   return (records || [])
     .filter(Boolean)
     .map((record, index) => {
@@ -913,8 +964,15 @@ export function compareCandidateRecords(records = []) {
       const severity = warningSeverityCounts(record.guardrails);
       const reviewStatus = record.review_status || record.review?.status || "pending_clinician_confirmation";
       const sensitiveDistance = finiteOr(metrics.sensitive_free_margin_min_distance_mm, Infinity);
+      const sensitiveThreshold = Number.isFinite(sensitiveDistance)
+        ? freeMarginDistanceThresholdMm(
+            metrics.sensitive_free_margin_nearest || record.anatomy?.region || candidate.region,
+            cfg,
+            record.anatomy?.region || candidate.region || "unknown",
+          )
+        : Infinity;
       const sensitivePenalty = Number.isFinite(sensitiveDistance)
-        ? Math.max(0, 10 - sensitiveDistance) * 5
+        ? Math.max(0, sensitiveThreshold - sensitiveDistance) * 5
         : 0;
       const score =
         severity.high * 100 +
@@ -940,6 +998,7 @@ export function compareCandidateRecords(records = []) {
           diameter_coverage_deficit_mm: finiteOr(metrics.diameter_coverage_deficit_mm, 0),
           axis_coverage_deficit_mm: finiteOr(metrics.axis_coverage_deficit_mm, 0),
           tip_angle_error_deg: finiteOr(metrics.tip_angle_error_deg, 0),
+          sensitive_free_margin_threshold_mm: Number.isFinite(sensitiveThreshold) ? sensitiveThreshold : null,
           sensitive_margin_penalty: sensitivePenalty,
           rejected_penalty: reviewStatus === "rejected_by_clinician" ? 1000 : 0,
         },
@@ -948,6 +1007,7 @@ export function compareCandidateRecords(records = []) {
           metrics,
           reviewStatus,
           sensitiveDistance,
+          sensitiveThreshold,
           candidateType: candidate.type,
         }),
       };

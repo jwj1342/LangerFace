@@ -73,6 +73,47 @@ def annotate_candidate_sensitive_distances(
     return candidate
 
 
+def _as_landmark_names(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    try:
+        return [str(item) for item in value if str(item)]
+    except TypeError:
+        return [str(value)]
+
+
+def _free_margin_distance_threshold_mm(landmarks: Any, cfg: dict[str, Any], *, fallback_region: str) -> float:
+    fallback = float(cfg.get("free_margin_distance_warn_mm", 18.0))
+    raw_thresholds = cfg.get("free_margin_distance_thresholds_mm") or {}
+    if not isinstance(raw_thresholds, dict):
+        return fallback
+
+    thresholds: dict[str, float] = {}
+    for key, value in raw_thresholds.items():
+        try:
+            thresholds[str(key).lower()] = float(value)
+        except (TypeError, ValueError):
+            continue
+
+    default = thresholds.get("default", fallback)
+    names = _as_landmark_names(landmarks) or [fallback_region]
+
+    matched: list[float] = []
+    for name in names:
+        normalized = str(name).lower()
+        if normalized in thresholds:
+            matched.append(thresholds[normalized])
+            continue
+        for key, threshold in thresholds.items():
+            if key != "default" and key in normalized:
+                matched.append(threshold)
+                break
+
+    return max(matched) if matched else default
+
+
 def evaluate_guardrails(
     candidate: dict[str, Any],
     anatomy: AnatomyContext | dict[str, Any],
@@ -130,16 +171,20 @@ def evaluate_guardrails(
             "reason": f"{region} is a sensitive free-margin region.",
         })
 
-    if free_margin_distance is not None and float(free_margin_distance) <= float(
-        cfg.get("free_margin_distance_warn_mm", 18.0)  # type: ignore[union-attr]
-    ):
+    center_threshold = _free_margin_distance_threshold_mm(
+        nearby_landmarks,
+        cfg,
+        fallback_region=region,
+    )
+    if free_margin_distance is not None and float(free_margin_distance) <= center_threshold:
         landmarks = ", ".join(str(x) for x in nearby_landmarks) or region
         warnings.append({
             "code": "near_sensitive_free_margin",
             "severity": "high",
             "message": (
                 f"Candidate center is approximately {float(free_margin_distance):.1f} mm "
-                f"from sensitive free-margin landmark(s): {landmarks}."
+                f"from sensitive free-margin landmark(s): {landmarks} "
+                f"(threshold {center_threshold:.1f} mm)."
             ),
         })
         suggested_overrides.append({
@@ -263,16 +308,20 @@ def evaluate_guardrails(
         })
 
     candidate_margin_distance = metrics.get("sensitive_free_margin_min_distance_mm")
-    if candidate_margin_distance is not None and float(candidate_margin_distance) <= float(
-        cfg.get("free_margin_distance_warn_mm", 18.0)  # type: ignore[union-attr]
-    ):
-        nearest = str(metrics.get("sensitive_free_margin_nearest") or region)
+    nearest = str(metrics.get("sensitive_free_margin_nearest") or region)
+    candidate_threshold = _free_margin_distance_threshold_mm(
+        nearest,
+        cfg,
+        fallback_region=region,
+    )
+    if candidate_margin_distance is not None and float(candidate_margin_distance) <= candidate_threshold:
         warnings.append({
             "code": "candidate_near_sensitive_free_margin",
             "severity": "high",
             "message": (
                 f"Candidate geometry is approximately {float(candidate_margin_distance):.1f} mm "
-                f"from sensitive free-margin landmark: {nearest}."
+                f"from sensitive free-margin landmark: {nearest} "
+                f"(threshold {candidate_threshold:.1f} mm)."
             ),
         })
         suggested_overrides.append({
