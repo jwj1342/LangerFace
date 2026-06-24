@@ -178,7 +178,7 @@ export class AnnotationModel {
   }
 
   startLine({ name, region } = {}) {
-    this.current = { name: name || `line_${this.lines.length + 1}`, region: region || "", points: [], controls: [] };
+    this.current = { name: name || `line_${this.lines.length + 1}`, region: region || "", points: [], controls: [], fallback: false };
   }
 
   // 返回 { fallback }：fallback=true 表示这一段无法沿表面路由、已退回直线（可能穿面），
@@ -188,11 +188,13 @@ export class AnnotationModel {
     this.current.controls.push(pt);
     if (this.current.controls.length === 1) {
       this.current.points = [pt];
+      this.current.fallback = false;
       return { fallback: false };
     }
     const controls = this.current.controls;
     const { points, fallback } = nearestSurfacePath(this.surface, controls[controls.length - 2], pt);
     this.current.points.push(...points.slice(1));
+    this.current.fallback = this.current.fallback || fallback;
     return { fallback };
   }
 

@@ -3,6 +3,8 @@
 待办与 [GitHub Issues](https://github.com/jwj1342/LangerFace/issues) 同步。
 Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候选设计。
 
+> PR #91 已把 Stage 2 的工程闭环推进到候选切口、审阅导出、2D 实时叠加、验证文档与隐私审计；合并前下列 issue 仍在 GitHub 显示 open。当前产品边界见 [PRODUCT_BOUNDARIES.md](PRODUCT_BOUNDARIES.md)。
+
 ## Stage 1 收尾
 - [ ] 临床医生校验线图谱并置 `validated:true`（Stage 1 真正出口）— [#2](https://github.com/jwj1342/LangerFace/issues/2)
       · 现可用[网页 3D 标注](ARCHITECTURE.md#12-网页-3d-线标注与图谱草案导出)在标准脸上产出待复核图谱草案
@@ -39,3 +41,7 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候
 
 > 设计原则与数据流见 [README《临床目标与 Stage 2 路线》](../README.md#临床目标与-stage-2-路线) 和 [ARCHITECTURE.md#14](ARCHITECTURE.md#14-stage-2-肿物与切口设计技术路线)。
 > Stage 2 业务模块作为**同级子包**接入，复用 `geometry` / `detection` / `rendering`，不塞进 `lines/` 或 `rendering/`。
+
+## 暂缓路线
+
+- 肌肉骨骼实时孪生、术中级软组织/肌肉骨骼耦合模拟：当前不属于 Stage 2 切口 Agent 目标。未来如重启，需另开决策 gate，详见 [PRODUCT_BOUNDARIES.md](PRODUCT_BOUNDARIES.md)。

@@ -73,7 +73,11 @@ surf.addPoint({ xyz: [0.2, 0.2, 0], tri: 0, bary: [0.6, 0.2, 0.2] });
 surf.addPoint({ xyz: [0.8, 0.8, 0.35], tri: 1, bary: [0.2, 0.6, 0.2] });
 surf.finishLine();
 ok(surf.lines[0].points.length > 2, "跨三角形控制点展开为表面路径点");
-ok(surf.toAtlasJSON().lines[0].points.length > 2, "图谱导出使用表面路径点");
+const previewPointCount = surf.lines[0].points.length;
+const exportedSurfaceLine = surf.toAtlasJSON().lines[0];
+ok(exportedSurfaceLine.points.length === previewPointCount, "图谱导出与屏幕预览路径点数一致");
+ok(exportedSurfaceLine.points.length > surf.lines[0].controls.length, "图谱导出使用贴面展开后的路径点");
+ok(surf.lines[0].fallback === false, "连通网格预览线无 fallback 风险");
 
 let threw = false;
 const custom = new AnnotationModel("rstl");
