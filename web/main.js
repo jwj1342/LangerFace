@@ -42,7 +42,10 @@ function applyStagedIncisionOverlay() {
     return;
   }
   renderState.incisionOverlay = overlay;
-  setMsg("已载入切口候选叠加。上传照片、视频或开启摄像头后，会随 RSTL 一起显示。");
+  const highCodes = overlay.guardrail_summary?.high_codes || overlay.review_gate?.high_guardrail_codes || [];
+  const reviewLabel = overlay.review?.status === "approved_for_discussion" ? "已确认候选草案" : "待复核候选";
+  const riskText = highCodes.length ? `；高风险项 ${highCodes.join("、")}` : "";
+  setMsg(`已载入切口候选叠加（${reviewLabel}${riskText}）。上传照片、视频或开启摄像头后，会随 RSTL 一起显示。`);
 }
 
 // ── UI 绑定 ───────────────────────────────────────────────────────────────────

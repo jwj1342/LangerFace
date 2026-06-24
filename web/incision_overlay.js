@@ -66,10 +66,44 @@ function refsFromPolyline(points, verts, tris) {
   return points.map((p) => pointToSurfaceRef(p, verts, tris)).filter(Boolean);
 }
 
+function codesBySeverity(guardrails, severity) {
+  return (guardrails?.warnings || [])
+    .filter((w) => w.severity === severity)
+    .map((w) => w.code)
+    .filter(Boolean);
+}
+
+function guardrailSummary(record) {
+  const summary = record?.guardrail_summary || {};
+  const guardrails = record?.guardrails || {};
+  return {
+    passed: summary.passed ?? Boolean(guardrails.passed),
+    high_codes: Array.isArray(summary.high_codes) ? summary.high_codes : codesBySeverity(guardrails, "high"),
+    medium_codes: Array.isArray(summary.medium_codes) ? summary.medium_codes : codesBySeverity(guardrails, "medium"),
+  };
+}
+
+function normalizeReviewGate(gate) {
+  return {
+    reviewer_required: gate?.reviewer_required === true,
+    reviewer_present: gate?.reviewer_present === true,
+    notes_required_for_high_guardrails: gate?.notes_required_for_high_guardrails === true,
+    notes_present: gate?.notes_present === true,
+    high_guardrail_codes: Array.isArray(gate?.high_guardrail_codes) ? gate.high_guardrail_codes : [],
+    approval_ready: gate?.approval_ready === true,
+    live_overlay_ready: gate?.live_overlay_ready === true,
+    reason: gate?.reason || "",
+  };
+}
+
 export function compileIncisionOverlay(record, verts, tris) {
   const candidate = record?.candidate;
   const tumor = record?.tumor || {};
+  const reviewGate = normalizeReviewGate(record?.review_gate);
   if (!candidate || !Array.isArray(candidate.polyline) || !Array.isArray(tumor.center)) return null;
+  if (reviewGate.live_overlay_ready !== true) return null;
+  const reviewStatus = record?.review?.status || record?.review_status || "pending_clinician_confirmation";
+  const summary = guardrailSummary(record);
   const overlay = {
     schema_version: "incision-overlay/v0.1",
     created_at: new Date().toISOString(),
@@ -86,22 +120,46 @@ export function compileIncisionOverlay(record, verts, tris) {
       polyline_refs: refsFromPolyline(candidate.polyline, verts, tris),
       length_mm: candidate.length_mm,
       width_mm: candidate.width_mm,
-      guardrails_passed: record.guardrails?.passed === true,
+      guardrails_passed: summary.passed === true,
+      high_guardrail_codes: summary.high_codes,
     },
+    review: {
+      status: reviewStatus,
+      reviewer: record?.review?.reviewer || "",
+      notes_present: Boolean(record?.review?.notes),
+    },
+    guardrail_summary: summary,
+    review_gate: reviewGate,
     audit: {
       raw_image_sent: false,
       source: "web/incision_agent",
       review_required: true,
+      review_status: reviewStatus,
+      approval_ready: reviewGate.approval_ready,
+      live_overlay_ready: reviewGate.live_overlay_ready,
     },
   };
   return validateIncisionOverlay(overlay) ? overlay : null;
 }
 
+function validSurfaceRef(ref) {
+  if (!ref || !Number.isInteger(ref.tri) || ref.tri < 0) return false;
+  const u = Number(ref.u), v = Number(ref.v), w = Number(ref.w ?? (1 - u - v));
+  if (![u, v, w].every(Number.isFinite)) return false;
+  if (Math.abs((u + v + w) - 1) > 1e-4) return false;
+  if (ref.distance != null && !Number.isFinite(Number(ref.distance))) return false;
+  return u >= -1e-4 && v >= -1e-4 && w >= -1e-4;
+}
+
 export function validateIncisionOverlay(overlay) {
   if (!overlay || overlay.schema_version !== "incision-overlay/v0.1") return false;
-  if (!overlay.tumor?.center_ref) return false;
+  if (!validSurfaceRef(overlay.tumor?.center_ref)) return false;
   if (!Array.isArray(overlay.candidate?.polyline_refs) || overlay.candidate.polyline_refs.length < 2) return false;
-  return overlay.candidate.polyline_refs.every((ref) => Number.isInteger(ref.tri) && Number.isFinite(ref.u) && Number.isFinite(ref.v));
+  if (!overlay.candidate.polyline_refs.every(validSurfaceRef)) return false;
+  if (overlay.audit?.raw_image_sent !== false || overlay.audit?.review_required !== true) return false;
+  if (overlay.review_gate && overlay.review_gate.live_overlay_ready !== true) return false;
+  if (overlay.audit?.live_overlay_ready != null && overlay.audit.live_overlay_ready !== true) return false;
+  return true;
 }
 
 export function mapSurfaceRefs(refs, landmarksPx, triangles) {

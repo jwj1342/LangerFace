@@ -16,7 +16,7 @@
 - 皮表肿物边界点：抽象 3D 坐标，不包含原始影像像素。
 - 候选切口几何、guardrails、工具调用 trace。
 - Provider 通信配置：Base URL、model、timeout 和本次请求的 API Key。
-- 实时叠加暂存：`incision-overlay/v0.1` 只保存三角面 id、重心坐标、肿物/候选几何和审计标记，不保存照片/视频像素。
+- 实时叠加暂存：`incision-overlay/v0.1` 只保存三角面 id、重心坐标、肿物/候选几何、`review_gate`、`guardrail_summary` 和审计标记，不保存照片/视频像素。
 
 ## 审计记录
 
@@ -29,7 +29,7 @@
 - `trace`：工具调用、输入和观察。
 - `provider_config`：去敏后的 provider 配置。
 - `privacy_audit`：数据出域声明，明确 `raw_image_sent=false`。
-- `incision-overlay/v0.1`：用于照片/视频/实时页的短期 sessionStorage 叠加，不作为病历或长期审计系统。
+- `incision-overlay/v0.1`：用于照片/视频/实时页的短期 sessionStorage 叠加，必须带 `raw_image_sent=false` 和 `live_overlay_ready=true`，不作为病历或长期审计系统。
 
 ## 仍需单独完成的合规工作
 
