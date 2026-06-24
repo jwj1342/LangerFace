@@ -17,7 +17,7 @@ import numpy as np
 
 from langerface.config import ATLAS_PATHS, CANONICAL_OBJ, VALID_SYSTEMS  # noqa: E402
 from langerface.geometry import CanonicalFaceModel  # noqa: E402
-from langerface.lines import Atlas, AtlasLine  # noqa: E402
+from langerface.lines import Atlas, atlas_line_from_points2d  # noqa: E402
 
 
 def main() -> int:
@@ -81,11 +81,9 @@ def main() -> int:
                           provenance=f"digitized from diagram {os.path.basename(args.diagram)}",
                           validated=False)
             for k, pts2d in enumerate(completed):
-                out = np.zeros((len(pts2d), 3))
-                for i, p in enumerate(pts2d):
-                    tri, bary = canonical.locate(p, proj=proj)
-                    out[i] = [tri, bary[0], bary[1]]
-                atlas.lines.append(AtlasLine(f"line_{k}", "digitized", out))
+                atlas.lines.append(
+                    atlas_line_from_points2d(canonical, f"line_{k}", "digitized", pts2d, proj=proj)
+                )
             atlas.save(ATLAS_PATHS[args.system])
             print(
                 f"[ok] 已保存 {len(completed)} 条曲线 -> "

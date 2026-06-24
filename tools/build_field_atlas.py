@@ -20,7 +20,7 @@ import numpy as np
 
 from langerface.config import ATLAS_PATHS, CANONICAL_OBJ, SYSTEM_LANGER, SYSTEM_RSTL
 from langerface.geometry import CanonicalFaceModel
-from langerface.lines import Atlas, AtlasLine
+from langerface.lines import Atlas, atlas_line_from_points2d
 
 
 # ── 人脸掩膜（椭圆，挖去眼/口）──────────────────────────────────────────────────
@@ -196,11 +196,7 @@ def build(canonical, variant, d_sep):
                   validated=False)
     for i, nl in enumerate(norm_lines):
         world = canonical.norm_to_proj(nl)
-        pts = np.zeros((len(world), 3))
-        for j, p in enumerate(world):
-            tri, bary = canonical.locate(p, proj=proj)
-            pts[j] = [tri, bary[0], bary[1]]
-        atlas.lines.append(AtlasLine(f"f{i}", variant, pts))
+        atlas.lines.append(atlas_line_from_points2d(canonical, f"f{i}", variant, world, proj=proj))
     return atlas
 
 
