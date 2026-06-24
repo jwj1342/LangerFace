@@ -178,7 +178,7 @@ P = u·V0 + v·V1 + w·V2
 ## 11. 前端鲁棒性约束
 
 - `tools/test_web_architecture.mjs` 会检查 `web/*.js` 的静态相对 import 图，禁止新增模块环。
-- `web/logger.js` 统一记录浏览器端关键故障与降级事件；调试时可在控制台查看 `window.langerfaceDiagnostics`。
+- `web/logger.js` 统一记录浏览器端关键故障、降级事件、帧指标和资产版本；调试时可在控制台查看 `window.langerfaceDiagnostics`，或调用 `window.exportLangerfaceDiagnostics()` 导出脱敏 JSON。字段约定见 [OBSERVABILITY.md](OBSERVABILITY.md)。
 - `web/.npmrc` 启用 `engine-strict=true`，安装依赖时会严格执行 `package.json` 中的 Node/npm 版本要求。
 
 ---
@@ -311,8 +311,8 @@ Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部
 | 敏感结构 guardrails | `src/langerface/incision/guardrails.py` | 下睑、唇红缘、鼻翼等风险提示和方向例外 | #17 |
 | 医生审阅 UI | `web/incision*.js` | 候选解释、编辑、覆盖、导出 | #18 |
 | AR / 视频叠加 | `web/render.js`, `web/projection3d.js` | 把肿物和切口候选投射回照片、视频、实时视图 | #19 |
-| 验证指标 | `docs/VALIDATION.md` 或本文扩展 | 角度误差、稳定性、医生接受率、失败分类 | #20 |
-| 隐私 / 审计 | `docs/BACKEND_DATA_ARCHITECTURE.md` 等 | 敏感数据边界、审计记录、受限存储 | #21 |
+| 验证指标 | `docs/VALIDATION.md` | 角度误差、稳定性、医生接受率、失败分类 | #20 |
+| 隐私 / 审计 | `docs/PRIVACY_AND_AUDIT.md` | 敏感数据边界、审计记录、受限存储 | #21 |
 | AI 次级依据 | `tools/`, future model scripts | 皱襞/皱纹/肿物边界候选识别 | #22 |
 
 这些模块应与 `lines/`、`rendering/` 同级接入：`lines/` 仍只负责张力线图谱，`tumor/` 负责病灶几何输入，`incision/` 负责候选曲线生成与规则解释。
