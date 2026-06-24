@@ -57,6 +57,7 @@ const els = {
   directionConf: $("directionConf"),
   regionVal: $("regionVal"),
   guardrailVal: $("guardrailVal"),
+  guardrailDetails: $("guardrailDetails"),
   llmSummary: $("llmSummary"),
   nextStep: $("nextStep"),
   editStatus: $("editStatus"),
@@ -320,6 +321,21 @@ function setReviewControls(review = {}) {
   updateReviewStateUI();
 }
 
+function highGuardrailWarnings(result = S.result) {
+  return (result?.guardrails?.warnings || []).filter((w) => w.severity === "high");
+}
+
+function reviewReadiness(status, result = S.result) {
+  if (!result) return { ok: false, message: "没有可审阅的候选" };
+  if (status === "approved_for_discussion") {
+    if (!els.reviewerName.value.trim()) return { ok: false, message: "确认候选前请填写审阅人。" };
+    if (highGuardrailWarnings(result).length && !els.reviewNotes.value.trim()) {
+      return { ok: false, message: "当前候选有高风险 guardrail；确认前请填写审阅备注或覆盖原因。" };
+    }
+  }
+  return { ok: true, message: "" };
+}
+
 function resetReviewControls() {
   setReviewControls({ status: "pending_clinician_confirmation", reviewer: els.reviewerName.value });
 }
@@ -377,7 +393,9 @@ function updateBoundaryStatus() {
     return;
   }
   const warn = summary.warnings?.length ? ` · ${summary.warnings.map((w) => w.code).join(", ")}` : "";
-  els.boundaryStatus.textContent = `皮表边界：${summary.point_count} 点 · 横向 ${fmt(summary.perp_diameter_mm)} mm · 长轴覆盖 ${fmt(summary.axis_diameter_mm)} mm${warn}`;
+  const area = summary.area_mm2 != null ? ` · 面积 ${fmt(summary.area_mm2)} mm²` : "";
+  const selfX = summary.self_intersection ? " · 自交" : "";
+  els.boundaryStatus.textContent = `皮表边界：${summary.point_count} 点 · 横向 ${fmt(summary.perp_diameter_mm)} mm · 长轴覆盖 ${fmt(summary.axis_diameter_mm)} mm${area}${selfX}${warn}`;
 }
 
 function tangentFrame(normal, axis = [1, 0, 0]) {
@@ -574,6 +592,17 @@ function renderTrace(trace) {
   }
 }
 
+function renderGuardrailDetails(guardrails) {
+  const warnings = guardrails?.warnings || [];
+  els.guardrailDetails.classList.toggle("warn", warnings.some((w) => w.severity === "medium"));
+  els.guardrailDetails.classList.toggle("danger", warnings.some((w) => w.severity === "high"));
+  if (!warnings.length) {
+    els.guardrailDetails.textContent = "Guardrails：未发现需要复核的规则项。";
+    return;
+  }
+  els.guardrailDetails.textContent = `Guardrails：${warnings.map((w) => `${w.code}(${w.severity})`).join(" · ")}`;
+}
+
 function renderResult(result) {
   S.result = result;
   drawCandidate(result);
@@ -593,6 +622,7 @@ function renderResult(result) {
   els.regionVal.textContent = result.anatomy.region;
   els.guardrailVal.textContent = result.guardrails.passed ? "通过" : "复核";
   els.guardrailVal.style.color = result.guardrails.passed ? "" : "#b45309";
+  renderGuardrailDetails(result.guardrails);
   els.llmSummary.textContent = result.llm?.summary || "已生成候选。";
   els.nextStep.textContent = result.llm?.next_step || "";
   renderTrace(result.trace);
@@ -699,6 +729,16 @@ function saveCurrentCandidate(label = "医生候选") {
   els.stageStatus.textContent = "候选已保存到审阅列表";
 }
 
+function saveReviewRecord() {
+  const status = els.reviewDecision.value || "pending_clinician_confirmation";
+  const readiness = reviewReadiness(status);
+  if (!readiness.ok) {
+    els.stageStatus.textContent = readiness.message;
+    return;
+  }
+  saveCurrentCandidate("审阅候选");
+}
+
 function makeVariantCandidates() {
   if (!S.baseResult) return;
   const variants = [
@@ -717,6 +757,11 @@ function makeVariantCandidates() {
 function recordReviewDecision(status, label) {
   if (!S.result) {
     els.stageStatus.textContent = "没有可审阅的候选";
+    return;
+  }
+  const readiness = reviewReadiness(status);
+  if (!readiness.ok) {
+    els.stageStatus.textContent = readiness.message;
     return;
   }
   els.reviewDecision.value = status;
@@ -848,6 +893,15 @@ function stageLiveOverlay() {
   }
   if (els.reviewDecision.value === "rejected_by_clinician") {
     els.stageStatus.textContent = "当前候选已被否决，不发送到实时叠加。";
+    return;
+  }
+  if (els.reviewDecision.value !== "approved_for_discussion") {
+    els.stageStatus.textContent = "发送到实时叠加前，请先确认当前候选草案。";
+    return;
+  }
+  const readiness = reviewReadiness("approved_for_discussion");
+  if (!readiness.ok) {
+    els.stageStatus.textContent = readiness.message;
     return;
   }
   const overlay = compileIncisionOverlay(reviewRecord(S.result, "实时叠加候选"), S.verts, S.tris);
@@ -1041,7 +1095,7 @@ els.resetEdit.onclick = () => {
 els.reviewDecision.onchange = updateReviewStateUI;
 els.approveCandidate.onclick = () => recordReviewDecision("approved_for_discussion", "确认候选");
 els.rejectCandidate.onclick = () => recordReviewDecision("rejected_by_clinician", "否决候选");
-els.saveReview.onclick = () => saveCurrentCandidate("审阅候选");
+els.saveReview.onclick = saveReviewRecord;
 els.saveCandidate.onclick = () => saveCurrentCandidate();
 els.makeVariants.onclick = makeVariantCandidates;
 els.clearSaved.onclick = () => { S.saved = []; renderSaved(); };

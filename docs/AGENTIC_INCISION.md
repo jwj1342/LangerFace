@@ -13,7 +13,7 @@
 - 医生调整：候选生成后可调整方向、长度、中心位移；梭形候选还可调宽度。调整会保留原始工具建议、覆盖原因、trace 和 provenance。
 - 皮表肿物边界：支持椭圆近似和自由轮廓点输入；梭形生成会读取边界在 RSTL 长轴/短轴上的投影范围，必要时调整候选中心、宽度和长度，同时保留 3:1 长宽比、30° 默认尖端角和左右平滑对称的工程指标；如果最大长度规则导致候选无法覆盖边界加切缘，系统会记录 `axis_coverage_deficit_mm` 并触发 high guardrail；自由轮廓点数过少、面积退化、自交或边界中心明显偏离选中中心也会进入 guardrails；导出时保留 boundary、boundary source、author 和 units。
 - 自然皱襞 / 肿物边界辅助线索：当前只提供合成样例 CV 原型和验证指标入口，见 `tools/prototype_wrinkle_lesion_cues.py`；它只能作为低置信度 secondary cue，不自动改写切口几何。
-- 审阅最小工作流：支持保存多个候选、生成方向备选、记录审阅人/确认/退回/否决状态和备注，并导出 JSON、Markdown 报告草案和 PNG 截图；候选几何调整后审阅状态会回到待医生确认。
+- 审阅最小工作流：支持保存多个候选、生成方向备选、记录审阅人/确认/退回/否决状态和备注，并导出 JSON、Markdown 报告草案和 PNG 截图；候选几何调整后审阅状态会回到待医生确认；高风险 guardrail 候选确认前必须填写审阅备注或覆盖原因，发送到实时叠加前必须先确认候选草案。
 - 照片 / 视频 / 实时叠加：工作台可把当前候选暂存为 `incision-overlay/v0.1`，实时页读取后按三角面重心坐标投射到上传照片、视频或摄像头 landmarks 上，并复用背面剔除、手部遮挡和放大窗。
 - Agent 工具 schema：`assets/agentic_incision_tool_schema.json` 固化工具名、输入输出和 LLM 边界。
 - 隐私审计：`docs/INCISION_PRIVACY_AUDIT.md` 记录不出域数据、可发送抽象字段和导出审计字段。

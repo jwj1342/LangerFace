@@ -12,6 +12,7 @@ assert.ok(html.includes('id="tumorImportFile"'), "workbench exposes hidden tumor
 assert.ok(html.includes('id="reviewerName"'), "workbench captures clinician reviewer identity");
 assert.ok(html.includes('id="reviewDecision"'), "workbench exposes clinician review decision");
 assert.ok(html.includes('id="reviewNotes"'), "workbench exposes clinician review notes");
+assert.ok(html.includes('id="guardrailDetails"'), "workbench exposes guardrail detail feedback");
 assert.ok(html.includes('id="approveCandidateBtn"'), "workbench exposes candidate approval action");
 assert.ok(html.includes('id="rejectCandidateBtn"'), "workbench exposes candidate rejection action");
 assert.ok(html.includes('id="candidateWidth"'), "workbench exposes fusiform width and ratio metric");
@@ -25,5 +26,9 @@ assert.ok(js.includes("incision-review-record/v0.3"), "review records use explic
 assert.ok(js.includes("approved_for_discussion"), "review records support clinician approval");
 assert.ok(js.includes("rejected_by_clinician"), "review records support clinician rejection");
 assert.ok(js.includes("audit_events"), "review records include audit events");
+assert.ok(js.includes("reviewReadiness"), "review workflow validates approval readiness");
+assert.ok(js.includes("highGuardrailWarnings"), "review workflow detects high guardrail warnings");
+assert.ok(js.includes("发送到实时叠加前，请先确认当前候选草案"), "live overlay requires candidate approval");
+assert.ok(js.includes("当前候选有高风险 guardrail"), "high-risk approval requires review notes");
 
 console.log("test_incision_agent_ui: tumor boundary IO and review workflow assertions passed");

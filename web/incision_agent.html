@@ -39,6 +39,9 @@
   .review-state.approved{background:#d9f2e7;color:var(--green-d)}
   .review-state.rejected{background:#fee2e2;color:#991b1b}
   .review-state.revision{background:#fff1c8;color:#8a5a00}
+  .guardrail-details{font-size:11px;line-height:1.55;color:var(--muted);margin:8px 0 0}
+  .guardrail-details.warn{color:#8a5a00;font-weight:700}
+  .guardrail-details.danger{color:#991b1b;font-weight:700}
   #agentCanvas{position:absolute;inset:0;width:100%;height:100%;border-radius:14px;background:#111820}
   @media(max-width:880px){#agentCanvas{position:static;min-height:420px}.metric-grid{grid-template-columns:1fr}}
 </style>
@@ -131,6 +134,7 @@
       </div>
       <p class="hint" id="llmSummary">尚未生成。</p>
       <p class="hint" id="nextStep"></p>
+      <p class="guardrail-details" id="guardrailDetails">Guardrails 尚未运行。</p>
     </div>
 
     <div class="card agent-grid">
