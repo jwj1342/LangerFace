@@ -3,8 +3,71 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
+
 from ..anatomy import AnatomyContext
+from ..anatomy.regions import SENSITIVE_ANCHORS
 from ..clinical import default_clinical_rules
+
+
+def _candidate_points(candidate: dict[str, Any]) -> np.ndarray:
+    raw = candidate.get("polyline") or candidate.get("outline") or candidate.get("endpoints") or []
+    points: list[list[float]] = []
+    for point in raw:
+        if isinstance(point, list | tuple) and len(point) == 3:
+            try:
+                p = [float(point[0]), float(point[1]), float(point[2])]
+            except (TypeError, ValueError):
+                continue
+            if all(np.isfinite(p)):
+                points.append(p)
+    return np.asarray(points, dtype=np.float64)
+
+
+def annotate_candidate_sensitive_distances(
+    candidate: dict[str, Any],
+    vertices: np.ndarray,
+    *,
+    face_height_mm: float = 180.0,
+) -> dict[str, Any]:
+    """Add candidate-geometry distance-to-sensitive-free-margin metrics.
+
+    Distances are normalized by the current face bounding box and scaled to an
+    adult face-height approximation. This is a conservative screening metric,
+    not a clinical measurement.
+    """
+
+    points = _candidate_points(candidate)
+    V = np.asarray(vertices, dtype=np.float64)
+    if points.size == 0 or V.size == 0:
+        return candidate
+    lo = V.min(axis=0)
+    hi = V.max(axis=0)
+    span = np.maximum(hi - lo, 1e-9)
+    normalized = np.column_stack([
+        np.clip((points[:, 0] - lo[0]) / span[0], 0.0, 1.0),
+        np.clip((points[:, 1] - lo[1]) / span[1], 0.0, 1.0),
+    ])
+    best_name = ""
+    best_distance = float("inf")
+    best_point = None
+    for point, norm_xy in zip(points, normalized, strict=False):
+        for name, anchor in SENSITIVE_ANCHORS.items():
+            distance = float(np.hypot(norm_xy[0] - anchor[0], norm_xy[1] - anchor[1]) * face_height_mm)
+            if distance < best_distance:
+                best_distance = distance
+                best_name = name
+                best_point = point
+    if not np.isfinite(best_distance):
+        return candidate
+    metrics = dict(candidate.get("metrics") or {})
+    metrics.update({
+        "sensitive_free_margin_min_distance_mm": best_distance,
+        "sensitive_free_margin_nearest": best_name,
+        "sensitive_free_margin_point": [float(x) for x in best_point] if best_point is not None else None,
+    })
+    candidate["metrics"] = metrics
+    return candidate
 
 
 def evaluate_guardrails(
@@ -81,10 +144,28 @@ def evaluate_guardrails(
             "reason": "Confirm functional and contour risk before accepting this direction.",
         })
 
+    metrics = candidate.get("metrics") or {}
+    candidate_margin_distance = metrics.get("sensitive_free_margin_min_distance_mm")
+    if candidate_margin_distance is not None and float(candidate_margin_distance) <= float(
+        cfg.get("free_margin_distance_warn_mm", 18.0)  # type: ignore[union-attr]
+    ):
+        nearest = str(metrics.get("sensitive_free_margin_nearest") or region)
+        warnings.append({
+            "code": "candidate_near_sensitive_free_margin",
+            "severity": "high",
+            "message": (
+                f"Candidate geometry is approximately {float(candidate_margin_distance):.1f} mm "
+                f"from sensitive free-margin landmark: {nearest}."
+            ),
+        })
+        suggested_overrides.append({
+            "kind": "candidate_free_margin_distance_review",
+            "reason": "Review the full candidate path/outline near sensitive free margins.",
+        })
+
     rule_key = "fusiform_cutaneous" if candidate.get("type") == "fusiform" else "linear_subcutaneous"
     type_cfg = (rules or default_clinical_rules()).get(rule_key, {})
     max_deviation = float(type_cfg.get("max_rstl_deviation_deg", 15.0))  # type: ignore[union-attr]
-    metrics = candidate.get("metrics") or {}
     deviation = abs(float(metrics.get("rstl_deviation_deg", 0.0)))
     if deviation > max_deviation:
         edit = (candidate.get("provenance") or {}).get("clinician_edit") or {}

@@ -13,8 +13,10 @@ import numpy as np
 
 SENSITIVE_REGIONS = {"lower_eyelid", "lip_vermilion", "nasal_ala", "nasal_tip", "oral_commissure"}
 SENSITIVE_ANCHORS = {
-    "lower_eyelid": (0.30, 0.59),
-    "nasal_ala": (0.50, 0.49),
+    "left_lower_eyelid": (0.30, 0.59),
+    "right_lower_eyelid": (0.70, 0.59),
+    "left_nasal_ala": (0.40, 0.49),
+    "right_nasal_ala": (0.60, 0.49),
     "nasal_tip": (0.50, 0.43),
     "lip_vermilion": (0.50, 0.31),
     "left_oral_commissure": (0.35, 0.32),

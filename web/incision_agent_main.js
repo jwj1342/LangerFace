@@ -486,7 +486,7 @@ function updateEditVisibility(result) {
 function applyEditControls() {
   syncEditLabels();
   if (!S.baseResult) return;
-  const result = applyCandidateEdit(S.baseResult, currentEdit(), S.normals[S.lesion], S.unitsPerMm);
+  const result = applyCandidateEdit(S.baseResult, currentEdit(), S.normals[S.lesion], S.unitsPerMm, S.verts);
   renderResult(result);
 }
 
@@ -610,7 +610,7 @@ function makeVariantCandidates() {
     { angle_offset_deg: 10, length_scale: 1, width_scale: 1, reason: "variant exploration: +10 deg" },
   ];
   for (const v of variants) {
-    const result = applyCandidateEdit(S.baseResult, v, S.normals[S.lesion], S.unitsPerMm);
+    const result = applyCandidateEdit(S.baseResult, v, S.normals[S.lesion], S.unitsPerMm, S.verts);
     S.saved.push(reviewRecord(result, `备选 ${S.saved.length + 1}`));
   }
   renderSaved();

@@ -36,6 +36,17 @@ const TOOL_SCHEMAS = [
   { name: "save_review_record", input: ["candidate", "tumor", "trace", "privacy_audit"], output: ["review_record_json", "report_markdown", "screenshot_png"] },
 ];
 
+const SENSITIVE_ANCHORS = {
+  left_lower_eyelid: [0.30, 0.59],
+  right_lower_eyelid: [0.70, 0.59],
+  left_nasal_ala: [0.40, 0.49],
+  right_nasal_ala: [0.60, 0.49],
+  nasal_tip: [0.50, 0.43],
+  lip_vermilion: [0.50, 0.31],
+  left_oral_commissure: [0.35, 0.32],
+  right_oral_commissure: [0.65, 0.32],
+};
+
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -84,17 +95,9 @@ export function classifyRegion(point, verts) {
   else if (ny >= 0.24 && ny < 0.34 && nx >= 0.34 && nx <= 0.66) [region, subunit, confidence] = ["lip_vermilion", "oral_free_margin", 0.66];
   else if (ny < 0.22 && nx >= 0.28 && nx <= 0.72) [region, subunit, confidence] = ["chin", "chin", 0.58];
   else if (ny < 0.30 || nx < 0.18 || nx > 0.82) [region, subunit, confidence] = ["jawline", "mandibular_border", 0.50];
-  const anchors = {
-    lower_eyelid: [0.3, 0.59],
-    nasal_ala: [0.5, 0.49],
-    nasal_tip: [0.5, 0.43],
-    lip_vermilion: [0.5, 0.31],
-    left_oral_commissure: [0.35, 0.32],
-    right_oral_commissure: [0.65, 0.32],
-  };
   const nearby = [];
   let freeMarginDistanceMm = null;
-  for (const [name, a] of Object.entries(anchors)) {
+  for (const [name, a] of Object.entries(SENSITIVE_ANCHORS)) {
     const dist = Math.hypot(nx - a[0], ny - a[1]) * 180;
     if (dist <= 28) {
       nearby.push(name);
@@ -111,6 +114,35 @@ export function classifyRegion(point, verts) {
     nearby_landmarks: nearby,
     free_margin_distance_mm: freeMarginDistanceMm,
   };
+}
+
+function candidatePoints(candidate) {
+  const raw = candidate.polyline || candidate.outline || candidate.endpoints || [];
+  return raw.filter((p) => Array.isArray(p) && p.length === 3).map((p) => p.map(Number)).filter((p) => p.every(Number.isFinite));
+}
+
+export function annotateCandidateSensitiveDistances(candidate, verts, faceHeightMm = 180) {
+  const points = candidatePoints(candidate);
+  if (!points.length || !Array.isArray(verts) || !verts.length) return candidate;
+  const { lo, hi } = bbox(verts);
+  const span = [Math.max(hi[0] - lo[0], 1e-9), Math.max(hi[1] - lo[1], 1e-9)];
+  let best = { distance: Infinity, landmark: "", point: null };
+  for (const point of points) {
+    const nx = clamp((point[0] - lo[0]) / span[0], 0, 1);
+    const ny = clamp((point[1] - lo[1]) / span[1], 0, 1);
+    for (const [landmark, anchor] of Object.entries(SENSITIVE_ANCHORS)) {
+      const distance = Math.hypot(nx - anchor[0], ny - anchor[1]) * faceHeightMm;
+      if (distance < best.distance) best = { distance, landmark, point };
+    }
+  }
+  if (!Number.isFinite(best.distance)) return candidate;
+  candidate.metrics = {
+    ...(candidate.metrics || {}),
+    sensitive_free_margin_min_distance_mm: best.distance,
+    sensitive_free_margin_nearest: best.landmark,
+    sensitive_free_margin_point: best.point,
+  };
+  return candidate;
 }
 
 function atlasSamples(verts, tris, atlas) {
@@ -385,6 +417,15 @@ export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
     });
     suggested_overrides.push({ kind: "free_margin_distance_review", reason: "Confirm functional and contour risk before accepting this direction." });
   }
+  const candidateDistance = candidate.metrics?.sensitive_free_margin_min_distance_mm;
+  if (candidateDistance != null && Number(candidateDistance) <= cfg.free_margin_distance_warn_mm) {
+    warnings.push({
+      code: "candidate_near_sensitive_free_margin",
+      severity: "high",
+      message: `Candidate geometry is approximately ${Number(candidateDistance).toFixed(1)} mm from sensitive free-margin landmark: ${candidate.metrics?.sensitive_free_margin_nearest || anatomy.region}.`,
+    });
+    suggested_overrides.push({ kind: "candidate_free_margin_distance_review", reason: "Review the full candidate path/outline near sensitive free margins." });
+  }
   const typeCfg = candidate.type === "fusiform" ? rules.fusiform_cutaneous : rules.linear_subcutaneous;
   const maxDeviation = Number(typeCfg?.max_rstl_deviation_deg ?? 15);
   const deviation = Math.abs(Number(candidate.metrics?.rstl_deviation_deg || 0));
@@ -464,7 +505,7 @@ function buildEditedFusiform(base, center, axis, normal, unitsPerMm, edit) {
   };
 }
 
-export function applyCandidateEdit(plan, edit = {}, normal = [0, 0, 1], unitsPerMm = 1) {
+export function applyCandidateEdit(plan, edit = {}, normal = [0, 0, 1], unitsPerMm = 1, verts = null) {
   const out = clonePlan(plan);
   const base = clonePlan(plan.original_candidate || plan.candidate);
   const axis0 = norm(base.axis || [1, 0, 0]);
@@ -507,6 +548,7 @@ export function applyCandidateEdit(plan, edit = {}, normal = [0, 0, 1], unitsPer
     candidate = buildEditedFusiform(base, center, axis, normal, unitsPerMm, editRecord);
   }
 
+  if (verts) annotateCandidateSensitiveDistances(candidate, verts);
   candidate.provenance = {
     ...(base.provenance || {}),
     source_candidate_id: base.id,
@@ -555,6 +597,7 @@ export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atla
   const candidate = tumor.kind === "subcutaneous"
     ? generateLinearIncision(tumor, direction, unitsPerMm)
     : generateFusiformIncision(tumor, direction, unitsPerMm, normal);
+  annotateCandidateSensitiveDistances(candidate, verts);
   const guardrails = evaluateGuardrails(candidate, anatomy);
   const trace = [
     { summary: "定位病灶所在面部分区。", action: "classify_region", input: { point: tumor.center }, observation: anatomy },
@@ -595,6 +638,7 @@ export const __incisionToolsForTests = {
   classifyRegion,
   queryDirection,
   normalizeTumorInput,
+  annotateCandidateSensitiveDistances,
   summarizeTumorBoundary,
   generateLinearIncision,
   generateFusiformIncision,

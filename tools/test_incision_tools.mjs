@@ -91,6 +91,18 @@ ok(anatomy.region === "lower_eyelid", "region classifier reaches sensitive lower
 ok(guard.passed === false && guard.warnings.some((w) => w.severity === "high"), "guardrails flag sensitive region");
 ok(T.classifyRegion([5, 3, 0], verts).region === "lip_vermilion", "region classifier reaches lip vermilion bucket");
 ok(T.classifyRegion([4.2, 4.6, 0], verts).region === "nasal_ala", "region classifier reaches nasal ala bucket");
+const nearMarginCandidate = {
+  type: "linear",
+  direction_confidence: 0.9,
+  polyline: [[2.9, 5.9, 0], [4.5, 5.9, 0]],
+  metrics: { rstl_deviation_deg: 0 },
+};
+T.annotateCandidateSensitiveDistances(nearMarginCandidate, verts);
+ok(nearMarginCandidate.metrics.sensitive_free_margin_min_distance_mm < 5, "candidate path distance to sensitive margin is measured");
+const candidateGuard = T.evaluateGuardrails(nearMarginCandidate, { region: "cheek", confidence: 0.8 });
+ok(candidateGuard.passed === false, "candidate geometry near sensitive margin fails guardrails");
+ok(candidateGuard.warnings.some((w) => w.code === "candidate_near_sensitive_free_margin"),
+  "guardrails flag candidate geometry near sensitive margin");
 
 const regionCases = {
   forehead: [5, 8.6, 0],

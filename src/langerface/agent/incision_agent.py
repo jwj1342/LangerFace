@@ -13,6 +13,7 @@ import numpy as np
 from ..anatomy import classify_region
 from ..clinical import default_clinical_rules
 from ..incision import (
+    annotate_candidate_sensitive_distances,
     evaluate_guardrails,
     fusiform_cutaneous_incision,
     linear_subcutaneous_incision,
@@ -198,6 +199,7 @@ def plan_incision_case(
     else:
         candidate = fusiform_cutaneous_incision(tumor, direction, rules=rules, units_per_mm=units_per_mm)
         tool_name = "fusiform_cutaneous_incision"
+    candidate = annotate_candidate_sensitive_distances(candidate, V)
     trace.append(_trace(
         tool_name,
         {"tumor": tumor.to_dict(), "direction": direction.to_dict(), "units_per_mm": units_per_mm},

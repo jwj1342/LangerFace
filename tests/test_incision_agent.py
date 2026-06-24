@@ -9,6 +9,7 @@ import pytest
 from langerface.agent import plan_incision_case
 from langerface.anatomy import classify_region
 from langerface.incision import (
+    annotate_candidate_sensitive_distances,
     evaluate_guardrails,
     fusiform_cutaneous_incision,
     linear_subcutaneous_incision,
@@ -186,6 +187,22 @@ def test_guardrails_flag_near_sensitive_free_margin_distance():
     assert anatomy.free_margin_distance_mm is not None
     guardrails = evaluate_guardrails({"type": "linear", "direction_confidence": 0.9}, anatomy)
     assert any(w["code"] == "near_sensitive_free_margin" for w in guardrails["warnings"])
+
+
+def test_guardrails_flag_candidate_geometry_near_sensitive_free_margin():
+    vertices, _, _ = _simple_mesh_and_atlas()
+    candidate = {
+        "type": "linear",
+        "direction_confidence": 0.9,
+        "polyline": [[2.9, 5.9, 0.0], [4.5, 5.9, 0.0]],
+        "metrics": {"rstl_deviation_deg": 0},
+    }
+    annotate_candidate_sensitive_distances(candidate, vertices)
+    assert candidate["metrics"]["sensitive_free_margin_min_distance_mm"] < 5
+    assert candidate["metrics"]["sensitive_free_margin_nearest"] == "left_lower_eyelid"
+    guardrails = evaluate_guardrails(candidate, {"region": "cheek", "confidence": 0.8})
+    assert any(w["code"] == "candidate_near_sensitive_free_margin" for w in guardrails["warnings"])
+    assert guardrails["passed"] is False
 
 
 def test_anatomy_classifier_covers_representative_stage2_regions():
