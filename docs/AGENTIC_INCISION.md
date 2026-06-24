@@ -9,7 +9,7 @@
 - 肿物数据模型：统一 `subcutaneous` / `cutaneous`、中心点、直径、深度、切缘、边界、来源、作者和单位字段。
 - 确定性工具：面部分区、RSTL 局部方向查询、线性切口、梭形切口、敏感区 guardrails 和候选几何到敏感游离缘的最短距离筛查。
 - Agent 编排：LLM 只读取工具结果并生成摘要，不计算几何、不覆盖安全规则。
-- 前端工作台：`web/incision_agent.html` 可在标准脸上点选肿物位置，显示肿物环、候选切口、工具调用 trace、provider 状态和摘要。
+- 前端工作台：`web/incision_agent.html` 可在标准脸上点选肿物位置，显示肿物环、候选切口、梭形宽度/长宽比/尖端角误差、工具调用 trace、provider 状态和摘要。
 - 医生调整：候选生成后可调整方向、长度、中心位移；梭形候选还可调宽度。调整会保留原始工具建议、覆盖原因、trace 和 provenance。
 - 皮表肿物边界：支持椭圆近似和自由轮廓点输入；梭形生成会读取边界在 RSTL 长轴/短轴上的投影范围，必要时调整候选中心、宽度和长度，同时保留 3:1 长宽比、30° 默认尖端角和左右平滑对称的工程指标；导出时保留 boundary、boundary source、author 和 units。
 - 自然皱襞 / 肿物边界辅助线索：当前只提供合成样例 CV 原型和验证指标入口，见 `tools/prototype_wrinkle_lesion_cues.py`；它只能作为低置信度 secondary cue，不自动改写切口几何。

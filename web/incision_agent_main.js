@@ -52,6 +52,8 @@ const els = {
   providerState: $("providerState"),
   candidateType: $("candidateType"),
   candidateLength: $("candidateLength"),
+  candidateWidth: $("candidateWidth"),
+  candidateTipAngle: $("candidateTipAngle"),
   directionConf: $("directionConf"),
   regionVal: $("regionVal"),
   guardrailVal: $("guardrailVal"),
@@ -578,6 +580,15 @@ function renderResult(result) {
   const c = result.candidate;
   els.candidateType.textContent = c.type === "linear" ? "线性" : "梭形";
   els.candidateLength.textContent = `${fmt(c.length_mm)} mm`;
+  if (c.type === "fusiform") {
+    const ratio = c.metrics?.length_to_width_ratio;
+    const err = c.metrics?.tip_angle_error_deg;
+    els.candidateWidth.textContent = `${fmt(c.width_mm)} mm / ${fmt(ratio, 2)}:1`;
+    els.candidateTipAngle.textContent = `${fmt(c.tip_angle_deg)}° · 误差 ${fmt(err)}°`;
+  } else {
+    els.candidateWidth.textContent = "—";
+    els.candidateTipAngle.textContent = "—";
+  }
   els.directionConf.textContent = `${Math.round((result.direction.confidence || 0) * 100)}%`;
   els.regionVal.textContent = result.anatomy.region;
   els.guardrailVal.textContent = result.guardrails.passed ? "通过" : "复核";
@@ -800,12 +811,18 @@ function exportReport() {
     `- 面部分区：${r.anatomy.region} / ${r.anatomy.subunit}`,
     `- RSTL 方向置信度：${Math.round((r.direction.confidence || 0) * 100)}%`,
     `- 候选长度：${fmt(r.candidate.length_mm)} mm`,
+    r.candidate.type === "fusiform"
+      ? `- 梭形宽度 / 长宽比：${fmt(r.candidate.width_mm)} mm / ${fmt(r.candidate.metrics?.length_to_width_ratio, 2)}:1`
+      : null,
+    r.candidate.type === "fusiform"
+      ? `- 尖端角：${fmt(r.candidate.tip_angle_deg)}°；目标 ${fmt(r.candidate.metrics?.tip_angle_target_deg)}°；误差 ${fmt(r.candidate.metrics?.tip_angle_error_deg)}°`
+      : null,
     `- Guardrails：${r.guardrails.passed ? "通过" : "需医生复核"}`,
     `- 警告：${(r.guardrails.warnings || []).map((w) => `${w.code}:${w.severity}`).join(", ") || "无"}`,
     `- 审阅状态：${reviewStatusLabel(r.review_status)}；审阅人：${r.review?.reviewer || "未填写"}`,
     `- 审阅备注：${r.review?.notes || "无"}`,
     `- 审阅边界：研究候选记录，非手术指令。`,
-  ].join("\n")).join("\n\n");
+  ].filter(Boolean).join("\n")).join("\n\n");
   downloadText(`incision_report_${Date.now()}.md`, `# 切口候选审阅草案\n\n${body}\n`, "text/markdown");
 }
 
