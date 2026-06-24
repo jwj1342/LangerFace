@@ -129,6 +129,25 @@ def test_fusiform_cutaneous_candidate_has_three_to_one_default_ratio():
     assert len(candidate["outline"]) > 20
 
 
+def test_fusiform_cutaneous_candidate_uses_freehand_boundary_extent():
+    direction = {"vector": [1, 0, 0], "confidence": 0.9}
+    tumor = TumorInput(
+        kind="cutaneous",
+        center=(4, 2, 0),
+        diameter_mm=8,
+        margin_mm=1,
+        boundary=((3, 2, 0), (4, 3, 0), (7, 2, 0), (4, 1, 0)),
+        boundary_mode="freehand",
+        boundary_source="manual_freehand",
+    )
+    candidate = fusiform_cutaneous_incision(tumor, direction, units_per_mm=0.1)
+    assert candidate["metrics"]["boundary_used"] is True
+    assert candidate["metrics"]["boundary_axis_diameter_mm"] > 35
+    assert candidate["center"][0] > 4
+    assert candidate["length_mm"] >= candidate["metrics"]["boundary_axis_diameter_mm"] + 2
+    assert candidate["provenance"]["boundary_source"] == "manual_freehand"
+
+
 @pytest.mark.parametrize(
     ("point", "region"),
     [

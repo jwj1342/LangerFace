@@ -11,6 +11,32 @@ from ..tumor import TumorInput
 from .geometry import clamp, normalize, tangent_perp
 
 
+def _boundary_profile(
+    tumor: TumorInput,
+    axis: np.ndarray,
+    perp: np.ndarray,
+    units_per_mm: float,
+) -> dict[str, Any] | None:
+    """Return conservative projected boundary extents for a cutaneous lesion."""
+
+    if len(tumor.boundary) < 3 or units_per_mm <= 0:
+        return None
+    boundary = np.asarray(tumor.boundary, dtype=np.float64)
+    center = boundary.mean(axis=0)
+    delta = boundary - center
+    axis_diameter_mm = 2.0 * float(np.max(np.abs(delta @ axis))) / units_per_mm
+    perp_diameter_mm = 2.0 * float(np.max(np.abs(delta @ perp))) / units_per_mm
+    tumor_center = np.asarray(tumor.center, dtype=np.float64)
+    center_shift_mm = float(np.linalg.norm(center - tumor_center)) / units_per_mm
+    return {
+        "point_count": int(len(boundary)),
+        "center": center,
+        "axis_diameter_mm": axis_diameter_mm,
+        "perp_diameter_mm": perp_diameter_mm,
+        "center_shift_mm": center_shift_mm,
+    }
+
+
 def fusiform_cutaneous_incision(
     tumor: TumorInput,
     direction: DirectionQueryResult | dict[str, Any],
@@ -25,10 +51,18 @@ def fusiform_cutaneous_incision(
     axis_raw = direction.vector if isinstance(direction, DirectionQueryResult) else direction["vector"]
     axis = normalize(axis_raw)
     perp = tangent_perp(axis, None if normal is None else np.asarray(normal, dtype=np.float64))
-    width_mm = max(tumor.effective_diameter_mm, 1e-6)
-    target_length = width_mm * float(cfg["length_to_width_ratio"])
+    boundary = _boundary_profile(tumor, axis, perp, units_per_mm)
+    center = (
+        np.asarray(boundary["center"], dtype=np.float64)
+        if boundary is not None
+        else np.asarray(tumor.center, dtype=np.float64)
+    )
+    lesion_axis_mm = max(tumor.diameter_mm, float(boundary["axis_diameter_mm"]) if boundary else 0.0)
+    lesion_width_mm = max(tumor.diameter_mm, float(boundary["perp_diameter_mm"]) if boundary else 0.0)
+    width_mm = max(lesion_width_mm + 2.0 * tumor.margin_mm, 1e-6)
+    axis_coverage_mm = lesion_axis_mm + 2.0 * tumor.margin_mm
+    target_length = max(width_mm * float(cfg["length_to_width_ratio"]), axis_coverage_mm)
     length_mm = clamp(target_length, float(cfg["min_length_mm"]), float(cfg["max_length_mm"]))
-    center = np.asarray(tumor.center, dtype=np.float64)
     half_l = length_mm * units_per_mm * 0.5
     half_w = width_mm * units_per_mm * 0.5
     samples = max(12, int(cfg.get("samples", 56)))
@@ -70,9 +104,15 @@ def fusiform_cutaneous_incision(
             "length_to_width_ratio": length_mm / width_mm,
             "diameter_mm": tumor.diameter_mm,
             "margin_mm": tumor.margin_mm,
+            "boundary_used": boundary is not None,
+            "boundary_point_count": int(boundary["point_count"]) if boundary else len(tumor.boundary),
+            "boundary_axis_diameter_mm": float(boundary["axis_diameter_mm"]) if boundary else None,
+            "boundary_perp_diameter_mm": float(boundary["perp_diameter_mm"]) if boundary else None,
+            "boundary_center_shift_mm": float(boundary["center_shift_mm"]) if boundary else None,
         },
         "provenance": {
             "generator": "fusiform_cutaneous_incision",
             "rules_version": (rules or default_clinical_rules()).get("version"),
+            "boundary_source": tumor.boundary_source,
         },
     }

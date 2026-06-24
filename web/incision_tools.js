@@ -183,7 +183,7 @@ export function queryDirection(point, verts, tris, atlas) {
   };
 }
 
-function validateTumor(tumor) {
+export function normalizeTumorInput(tumor) {
   if (!["subcutaneous", "cutaneous"].includes(tumor.kind)) throw new Error("tumor.kind must be subcutaneous or cutaneous");
   if (!Array.isArray(tumor.center) || tumor.center.length !== 3) throw new Error("tumor.center must be a 3D point");
   if (!(tumor.diameter_mm > 0)) throw new Error("tumor.diameter_mm must be positive");
@@ -193,13 +193,22 @@ function validateTumor(tumor) {
     diameter_mm: Number(tumor.diameter_mm),
     depth_mm: tumor.depth_mm == null ? null : Number(tumor.depth_mm),
     margin_mm: Number(tumor.margin_mm || 0),
-    boundary: Array.isArray(tumor.boundary) ? tumor.boundary : [],
+    boundary: Array.isArray(tumor.boundary)
+      ? tumor.boundary
+        .filter((p) => Array.isArray(p) && p.length === 3)
+        .map((p) => p.map(Number))
+        .filter((p) => p.every(Number.isFinite))
+      : [],
     boundary_mode: tumor.boundary_mode || "center_diameter",
     boundary_source: tumor.boundary_source || "manual",
     source: tumor.source || "manual",
     author: tumor.author || "",
     units: tumor.units || "mm",
   };
+}
+
+function validateTumor(tumor) {
+  return normalizeTumorInput(tumor);
 }
 
 export function generateLinearIncision(tumorInput, direction, unitsPerMm, rules = DEFAULT_RULES) {
@@ -237,14 +246,78 @@ function tangentPerp(axis, normal) {
   return norm(p);
 }
 
+function boundaryProfile(tumor, axis, perp, unitsPerMm) {
+  const boundary = (tumor.boundary || []).filter((p) => Array.isArray(p) && p.length === 3).map((p) => p.map(Number));
+  if (boundary.length < 3 || !(unitsPerMm > 0)) return null;
+  const center = boundary.reduce((acc, p) => add(acc, p), [0, 0, 0]).map((v) => v / boundary.length);
+  let maxAxis = 0, maxPerp = 0;
+  for (const p of boundary) {
+    const d = sub(p, center);
+    maxAxis = Math.max(maxAxis, Math.abs(dot(d, axis)));
+    maxPerp = Math.max(maxPerp, Math.abs(dot(d, perp)));
+  }
+  return {
+    point_count: boundary.length,
+    center,
+    axis_diameter_mm: 2 * maxAxis / unitsPerMm,
+    perp_diameter_mm: 2 * maxPerp / unitsPerMm,
+    center_shift_mm: Math.hypot(...sub(center, tumor.center)) / unitsPerMm,
+  };
+}
+
+export function summarizeTumorBoundary(tumorInput, axis = [1, 0, 0], normal = [0, 0, 1], unitsPerMm = 1) {
+  const tumor = validateTumor(tumorInput);
+  const a = norm(axis);
+  const perp = tangentPerp(a, normal);
+  const profile = boundaryProfile(tumor, a, perp, unitsPerMm);
+  const warnings = [];
+  if (tumor.kind === "cutaneous" && tumor.boundary_mode === "freehand" && tumor.boundary.length < 6) {
+    warnings.push({ code: "few_boundary_points", severity: "medium", message: "Freehand lesion boundary has fewer than 6 points." });
+  }
+  if (!profile) {
+    return {
+      mode: tumor.boundary_mode,
+      source: tumor.boundary_source,
+      point_count: tumor.boundary.length,
+      boundary_used: false,
+      warnings,
+    };
+  }
+  const ratio = profile.perp_diameter_mm > 1e-6 ? profile.axis_diameter_mm / profile.perp_diameter_mm : Infinity;
+  if (profile.center_shift_mm > Math.max(tumor.diameter_mm, 1)) {
+    warnings.push({ code: "boundary_center_shift", severity: "medium", message: "Boundary centroid is far from selected tumor center." });
+  }
+  return {
+    mode: tumor.boundary_mode,
+    source: tumor.boundary_source,
+    point_count: profile.point_count,
+    boundary_used: true,
+    center: profile.center,
+    axis_diameter_mm: profile.axis_diameter_mm,
+    perp_diameter_mm: profile.perp_diameter_mm,
+    center_shift_mm: profile.center_shift_mm,
+    aspect_ratio: ratio,
+    warnings,
+  };
+}
+
 export function generateFusiformIncision(tumorInput, direction, unitsPerMm, normal = [0, 0, 1], rules = DEFAULT_RULES) {
   const tumor = validateTumor(tumorInput);
   if (tumor.kind !== "cutaneous") throw new Error("fusiform incision requires cutaneous tumor");
   const cfg = rules.fusiform_cutaneous;
   const axis = norm(direction.vector);
   const perp = tangentPerp(axis, normal);
-  const widthMm = tumor.diameter_mm + 2 * tumor.margin_mm;
-  const lengthMm = clamp(widthMm * cfg.length_to_width_ratio, cfg.min_length_mm, cfg.max_length_mm);
+  const boundary = boundaryProfile(tumor, axis, perp, unitsPerMm);
+  const center = boundary?.center || tumor.center;
+  const lesionAxisMm = Math.max(tumor.diameter_mm, Number(boundary?.axis_diameter_mm || 0));
+  const lesionWidthMm = Math.max(tumor.diameter_mm, Number(boundary?.perp_diameter_mm || 0));
+  const widthMm = lesionWidthMm + 2 * tumor.margin_mm;
+  const axisCoverageMm = lesionAxisMm + 2 * tumor.margin_mm;
+  const lengthMm = clamp(
+    Math.max(widthMm * cfg.length_to_width_ratio, axisCoverageMm),
+    cfg.min_length_mm,
+    cfg.max_length_mm,
+  );
   const halfL = lengthMm * unitsPerMm * 0.5, halfW = widthMm * unitsPerMm * 0.5;
   const samples = Math.max(12, cfg.samples || 56);
   const upper = [], lower = [];
@@ -252,18 +325,18 @@ export function generateFusiformIncision(tumorInput, direction, unitsPerMm, norm
     const t = i / samples;
     const x = (t - 0.5) * 2 * halfL;
     const y = Math.sin(Math.PI * t) * halfW;
-    upper.push(add(add(tumor.center, mul(axis, x)), mul(perp, y)));
-    lower.push(add(add(tumor.center, mul(axis, x)), mul(perp, -y)));
+    upper.push(add(add(center, mul(axis, x)), mul(perp, y)));
+    lower.push(add(add(center, mul(axis, x)), mul(perp, -y)));
   }
   const outline = upper.concat(lower.slice(1, -1).reverse());
   return {
     id: "fusiform_cutaneous_candidate",
     type: "fusiform",
     tumor_kind: tumor.kind,
-    center: tumor.center,
+    center,
     axis,
     width_axis: perp,
-    endpoints: [sub(tumor.center, mul(axis, halfL)), add(tumor.center, mul(axis, halfL))],
+    endpoints: [sub(center, mul(axis, halfL)), add(center, mul(axis, halfL))],
     outline,
     polyline: outline.concat([outline[0]]),
     length_mm: lengthMm,
@@ -277,8 +350,17 @@ export function generateFusiformIncision(tumorInput, direction, unitsPerMm, norm
       length_to_width_ratio: lengthMm / widthMm,
       diameter_mm: tumor.diameter_mm,
       margin_mm: tumor.margin_mm,
+      boundary_used: Boolean(boundary),
+      boundary_point_count: boundary?.point_count || tumor.boundary.length,
+      boundary_axis_diameter_mm: boundary?.axis_diameter_mm || null,
+      boundary_perp_diameter_mm: boundary?.perp_diameter_mm || null,
+      boundary_center_shift_mm: boundary?.center_shift_mm || null,
     },
-    provenance: { generator: "generateFusiformIncision", rules_version: rules.version },
+    provenance: {
+      generator: "generateFusiformIncision",
+      rules_version: rules.version,
+      boundary_source: tumor.boundary_source,
+    },
   };
 }
 
@@ -512,6 +594,8 @@ export const __incisionToolsForTests = {
   applyCandidateEdit,
   classifyRegion,
   queryDirection,
+  normalizeTumorInput,
+  summarizeTumorBoundary,
   generateLinearIncision,
   generateFusiformIncision,
   evaluateGuardrails,

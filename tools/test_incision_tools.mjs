@@ -55,9 +55,6 @@ const fusiform = T.generateFusiformIncision(
     center: [4, 2, 0],
     diameter_mm: 8,
     margin_mm: 2,
-    boundary: [[3, 2, 0], [4, 3, 0], [5, 2, 0]],
-    boundary_mode: "freehand",
-    boundary_source: "manual_freehand",
     author: "clinician",
   },
   { vector: [1, 0, 0], confidence: 0.9 },
@@ -68,6 +65,25 @@ ok(fusiform.type === "fusiform", "fusiform candidate generated");
 ok(near(fusiform.width_mm, 12), "fusiform width includes margins");
 ok(near(fusiform.length_mm, 36), "fusiform length uses 3:1 default");
 ok(fusiform.outline.length > 20, "fusiform outline is renderable");
+
+const boundaryTumor = {
+  kind: "cutaneous",
+  center: [4, 2, 0],
+  diameter_mm: 8,
+  margin_mm: 1,
+  boundary: [[3, 2, 0], [4, 3, 0], [7, 2, 0], [4, 1, 0]],
+  boundary_mode: "freehand",
+  boundary_source: "manual_freehand",
+  author: "clinician",
+};
+const boundarySummary = T.summarizeTumorBoundary(boundaryTumor, [1, 0, 0], [0, 0, 1], 0.1);
+ok(boundarySummary.boundary_used === true, "freehand boundary summary is used");
+ok(boundarySummary.axis_diameter_mm > 35, "freehand boundary records long-axis coverage");
+const boundaryFusiform = T.generateFusiformIncision(boundaryTumor, { vector: [1, 0, 0], confidence: 0.9 }, 0.1, [0, 0, 1]);
+ok(boundaryFusiform.metrics.boundary_used === true, "fusiform candidate records boundary use");
+ok(boundaryFusiform.center[0] > 4, "fusiform candidate recenters to boundary centroid");
+ok(boundaryFusiform.length_mm >= boundaryFusiform.metrics.boundary_axis_diameter_mm + 2,
+  "fusiform length covers freehand boundary plus margin");
 
 const anatomy = T.classifyRegion([3, 6, 0], verts);
 const guard = T.evaluateGuardrails({ direction_confidence: 0.8 }, anatomy);
