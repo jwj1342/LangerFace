@@ -3,6 +3,7 @@
 // 断言「医生在标注端画的点」经 toAtlasJSON() 序列化、再经实时端 mapAtlas() 还原后，
 // 与原始 3D 坐标逐点一致 —— 即闭环不丢、不漂。同时验证注入前的边界校验 validateAtlasLines。
 import { AnnotationModel, barycentric } from "../web/annotate_model.js";
+import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "../web/constants.js";
 import { dataSource } from "../web/data_source.js";
 import { mapAtlas, validateAtlasLines } from "../web/geometry.js";
 
@@ -31,8 +32,13 @@ model.finishLine();
 // ── 序列化（标注端产物）──────────────────────────────────────────────────────
 const atlas = model.toAtlasJSON({ provenance: "web-annotator-live" });
 ok(atlas.system === "rstl" && atlas.validated === false, "图谱 system/validated 正确");
+ok(atlas.topologyId === TOPOLOGY_ID && atlas.topologyVersion === TOPOLOGY_VERSION, "图谱声明 MediaPipe 468 拓扑");
 ok(Array.isArray(atlas.lines) && atlas.lines[0].points[0].length === 3, "图谱点为 [tri,u,v] 三元组");
-ok(validateAtlasLines(atlas.lines, triangles), "标注产物通过注入边界校验");
+ok(validateAtlasLines(
+  atlas,
+  triangles,
+  { expectedTopologyId: TOPOLOGY_ID, expectedTopologyVersion: TOPOLOGY_VERSION },
+), "标注产物通过注入边界校验");
 
 // ── 还原（实时端消费）：mapAtlas(atlas.lines) 应逐点重建原始 xyz ───────────────
 const mapped = mapAtlas(atlas.lines, lm, triangles);
@@ -50,6 +56,13 @@ ok(validateAtlasLines([], triangles) === false, "拒绝空图谱");
 ok(validateAtlasLines([{ name: "x", points: [[999, 0.3, 0.3]]}], triangles) === false, "拒绝越界三角面 id");
 ok(validateAtlasLines([{ name: "x", points: [[0, NaN, 0.3]]}], triangles) === false, "拒绝非有限重心坐标");
 ok(validateAtlasLines([{ name: "x", points: [[0, 0.3, 0.3]]}], triangles) === true, "接受合法图谱");
+ok(validateAtlasLines({ ...atlas, topologyId: "flame-2023" }, triangles, { expectedTopologyId: TOPOLOGY_ID }) === false,
+  "拒绝错误拓扑的完整图谱");
+ok(validateAtlasLines(
+  { ...atlas, topologyVersion: "other" },
+  triangles,
+  { expectedTopologyVersion: TOPOLOGY_VERSION },
+) === false, "拒绝错误拓扑版本的完整图谱");
 
 // ── mapAtlas 对坏数据降级而非抛错（最后一道防线）────────────────────────────
 let threw = false;

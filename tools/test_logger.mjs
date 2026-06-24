@@ -48,4 +48,15 @@ resetDiagnostics();
 assert.deepEqual(snapshotDiagnostics().events, []);
 assert.equal(Object.keys(snapshotDiagnostics().counters).length, 0);
 
+// 回归：对外导出入口绝不能因某条 detail 含循环引用而抛错；嵌套 Error 应被归一化为可读字段。
+const circular = { reason: "loop" };
+circular.self = circular;
+recordEvent("diag.circular", circular);
+recordEvent("diag.nestedError", { reason: "fail", error: new Error("boom") });
+assert.doesNotThrow(() => exportDiagnostics());
+const robust = JSON.parse(exportDiagnostics());
+assert.equal(robust.events.at(-2).detail.reason, "loop");
+assert.equal(robust.events.at(-2).detail.self, "[circular]");
+assert.equal(robust.events.at(-1).detail.error.message, "boom");
+
 console.log("ok: browser diagnostics logger exports structured snapshots");

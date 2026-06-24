@@ -21,7 +21,25 @@ function normalize(detail) {
 }
 
 function clonePlain(value) {
-  return JSON.parse(JSON.stringify(value ?? null));
+  // 诊断导出绝不能因某条 detail 含循环引用而整体抛错（window.exportLangerfaceDiagnostics
+  // 是对外入口）：用 replacer 兜住循环引用并归一化嵌套 Error，再以 try/catch 兜底。
+  const seen = new WeakSet();
+  try {
+    return JSON.parse(
+      JSON.stringify(value ?? null, (_key, val) => {
+        if (val instanceof Error) {
+          return { name: val.name, message: val.message, stack: val.stack };
+        }
+        if (val && typeof val === "object") {
+          if (seen.has(val)) return "[circular]";
+          seen.add(val);
+        }
+        return val;
+      }),
+    );
+  } catch {
+    return { unserializable: true };
+  }
 }
 
 function boundedPush(items, item, maxItems) {

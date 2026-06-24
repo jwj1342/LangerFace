@@ -4,6 +4,7 @@ import { assetUrls } from "./assets.js";
 import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./camera.js";
 import { ctx, els } from "./dom.js";
 import { applySim, toPixels, umeyama } from "./geometry.js";
+import { facesArray, fitExpression, fitShape, flameForward, loadFlameBasis } from "./flame_fit.js";
 import { countMetric, logWarn, recordEvent, recordMetricSample } from "./logger.js";
 import { ensureReady, showCameraPlaceholder, startCamera, stopSource } from "./pipeline.js";
 import { modelState, reconState, renderState, sourceState } from "./state.js";
@@ -59,13 +60,144 @@ async function buildViewer() {
     { showSurface: true, bands: renderState.bands, vertexColors: reconState.reconColors },
   );
   els.view3d.disabled = false; els.project3d.disabled = false;
-  els.reset3d.disabled = false;
+  els.reset3d.disabled = false; els.cloudFitFlame.disabled = false;
   setMode3d("view");
 }
 
 export function resetView3d() {
   reconState.rot.x = 0; reconState.rot.y = 0;
   reconState.head3d?.resetView();
+}
+
+// ── 实时孪生：左实时人脸 / 右 FLAME 头随头姿转 + 浏览器本地拟合（身份 + 表情 + 张嘴）──────
+// 头姿调参（这边看不到渲染，留旋钮；若「转反了」翻对应 sign）。jaw 调参见 flame_fit.js 的 JAW。
+const POSE = { yawSign: 1, pitchSign: 1, pitchClamp: 1.3 };
+const ZERO_BETA = new Float64Array(60);  // 标准头身份系数（全 0 = neutral 标准脸）
+const EXPR_AMPLIFY = 1.3;  // 表情放大（landmark-only 拟合偏淡，放大更明显；旋钮）
+let twinRAF = null, twinFaces = null, twinMeshReady = false, twinTexturedMesh = false;
+
+export function stopTwin() {
+  cancelAnimationFrame(twinRAF); twinRAF = null;
+  els.mainWrap.classList.remove("twin");
+}
+
+// 「▶ 实时孪生」：加载基(一次) → 分屏 + 开摄像头(左) → 右 FLAME 头随头姿转 + 每帧本地表情/张嘴拟合。
+export async function startTwin() {
+  els.reconStatus.textContent = "加载 FLAME 基（约 6.9MB，仅首次）…";
+  try {
+    if (!reconState.flameBasis) reconState.flameBasis = await loadFlameBasis(assetUrls.flameBasis);
+    if (!canonicalRef) await fetchCanonicalRef();
+  } catch (err) {
+    els.reconStatus.textContent = "FLAME 基加载失败：" + err.message;
+    return;
+  }
+  const basis = reconState.flameBasis;
+  twinFaces = facesArray(basis);
+  twinMeshReady = false; twinTexturedMesh = false;
+  reconState.flameBeta = null;  // 身份待首帧拟合
+  reconState.twinMode = "individual";
+  els.flameStd.checked = false;
+  els.twinTexture.checked = false; reconState.twinTexture = false;
+  els.flameHeadToggleWrap.style.display = "";
+  els.twinTextureWrap.style.display = "";
+
+  await ensureHead3D();
+  reconState.head3d.setGeometry(
+    flameForward(basis, ZERO_BETA, new Float64Array(basis.NE), 0), twinFaces, [], { showSurface: true, bands: false });
+  twinMeshReady = true;
+
+  reconState.route = "3d"; reconState.mode3d = "twin";
+  els.mainWrap.classList.add("twin");
+  els.canvas.classList.remove("hidden"); els.three.classList.remove("hidden");
+  setLive(true, "实时孪生");
+  await startCamera();  // 复用主管线：画左侧人脸 + 每帧更新 sourceState.lastLM / jawOpen
+  cancelAnimationFrame(twinRAF); twinLoop();
+}
+
+// 每帧：头姿跟随 + 身份(首帧一次) + 表情拟合 + 张嘴(MediaPipe jawOpen) → FLAME 前向 → 原地更新顶点。
+function twinLoop() {
+  if (reconState.mode3d !== "twin" || !reconState.head3d) return;
+  const lm = sourceState.lastLM, basis = reconState.flameBasis;
+  if (lm && lm.length && canonicalRef && basis) {
+    applyHeadPose(lm);
+    if (!reconState.flameBeta) { try { reconState.flameBeta = fitShape(lm, basis).beta; } catch { /* 等下一帧 */ } }
+    if (reconState.flameBeta) {
+      try {
+        const beta = reconState.twinMode === "standard" ? ZERO_BETA : reconState.flameBeta;
+        const psi = fitExpression(lm, basis, beta).psi;
+        for (let i = 0; i < psi.length; i++) psi[i] *= EXPR_AMPLIFY;  // 表情放大
+        const jaw = sourceState.jawOpen || 0;
+        const verts = flameForward(basis, beta, psi, jaw);
+        const colors = reconState.twinTexture ? projectColors(verts, lm, basis) : null;
+        const wantTextured = !!colors;
+        if (twinMeshReady && wantTextured === twinTexturedMesh) {
+          reconState.head3d.updateVerts(verts, colors);
+        } else {
+          reconState.head3d.setGeometry(verts, twinFaces, [], { showSurface: true, bands: false, vertexColors: colors });
+          twinMeshReady = true; twinTexturedMesh = wantTextured;
+        }
+        els.reconStatus.textContent =
+          `实时孪生 · ${reconState.twinMode === "standard" ? "标准" : "个体"} · 张嘴 ${Math.round(jaw * 100)}%${reconState.twinTexture ? " · 贴脸" : ""}`;
+      } catch (err) {
+        els.reconStatus.textContent = "拟合失败：" + err.message;
+      }
+    }
+  }
+  const tr = els.three.getBoundingClientRect();
+  reconState.head3d.resize(Math.max(2, tr.width | 0), Math.max(2, tr.height | 0));
+  reconState.head3d.render();
+  twinRAF = requestAnimationFrame(twinLoop);
+}
+
+// 用 Umeyama(标准脸→当前关键点) 的旋转，提取 yaw/pitch 驱动右侧头（roll 暂略）。
+function applyHeadPose(lm) {
+  const src = RIGID3D.map((i) => canonicalRef[i]);
+  const dst = RIGID3D.map((i) => lm[i]);
+  let R;
+  try { R = umeyama(src, dst).R; } catch { return; }
+  let yaw = Math.atan2(R[0][2], R[2][2]) * POSE.yawSign;
+  let pitch = Math.atan2(-R[1][2], Math.hypot(R[1][0], R[1][1])) * POSE.pitchSign;
+  pitch = Math.max(-POSE.pitchClamp, Math.min(POSE.pitchClamp, pitch));
+  reconState.head3d.setRotation(pitch, yaw);
+}
+
+// 「标准⇄个体」开关：仅切 twinMode，下一帧 twinLoop 自动按之渲染。
+export function toggleTwinHead() {
+  if (reconState.mode3d !== "twin") return;
+  reconState.twinMode = els.flameStd.checked ? "standard" : "individual";
+}
+
+// 实时贴脸纹理：用 FLAME 关键点 ↔ 当前帧关键点的相似变换，把每个 FLAME 顶点投回画面、
+// 采样 #canvas（左侧实时画面）的像素 → 每顶点色。轻量、配合 MediaPipe，不需要神经网络。
+function projectColors(verts, lm, basis) {
+  const fl = [], lv = [];
+  for (let i = 0; i < basis.NL; i++) {
+    const idx = basis.landmarkIndices[i];
+    if (idx >= lm.length) continue;
+    const f = basis.lmkFaceIdx[i], a = basis.faces[f * 3], b = basis.faces[f * 3 + 1], c = basis.faces[f * 3 + 2];
+    const w0 = basis.lmkBCoords[i * 3], w1 = basis.lmkBCoords[i * 3 + 1], w2 = basis.lmkBCoords[i * 3 + 2];
+    fl.push([0, 1, 2].map((x) => w0 * verts[a][x] + w1 * verts[b][x] + w2 * verts[c][x]));
+    lv.push(lm[idx]);
+  }
+  let proj;
+  try { proj = applySim(umeyama(fl, lv), verts); } catch { return null; }
+  const W = els.canvas.width, H = els.canvas.height;
+  let data;
+  try { data = ctx.getImageData(0, 0, W, H).data; } catch { return null; }
+  const out = new Array(verts.length);
+  for (let i = 0; i < verts.length; i++) {
+    const px = proj[i][0] | 0, py = proj[i][1] | 0;
+    if (px >= 0 && px < W && py >= 0 && py < H) {
+      const o = (py * W + px) * 4;
+      out[i] = [data[o] / 255, data[o + 1] / 255, data[o + 2] / 255];
+    } else out[i] = [0.72, 0.56, 0.5];  // 投影外（背面/越界）退回中性肤色
+  }
+  return out;
+}
+
+// 「贴真实人脸纹理」开关（实时孪生）：下一帧 twinLoop 自动按之采样/渲染。
+export function toggleTwinTexture() {
+  reconState.twinTexture = els.twinTexture.checked;
 }
 
 function viewerLoop() {
@@ -78,6 +210,7 @@ function viewerLoop() {
 }
 
 export function setMode3d(m) {
+  stopTwin();  // 离开实时孪生：取消其 RAF + 撤销分屏
   reconState.mode3d = m;
   els.view3d.setAttribute("aria-pressed", String(m === "view"));
   els.project3d.setAttribute("aria-pressed", String(m === "project"));
@@ -256,6 +389,7 @@ function finishScan(collected, ymin, ymax, colorFrames = [], lowDepthConfidence 
 }
 
 export function enterRoute(route) {
+  stopTwin();
   reconState.route = route;
   els.scanPanel.classList.add("hidden"); els.scanToast.classList.add("hidden");
   if (route === "3d") {

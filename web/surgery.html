@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>面部张力线 · 切除闭合演示（Beta）</title>
+<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="annotate.css" />
+<style>
+  /* 切向按钮语义配色：沿 RSTL=绿（平和），逆 RSTL=红（绷紧）；选中时强填充 + 光晕 */
+  .btn.cut-along{border-color:var(--green);color:var(--green-d);background:var(--green-soft)}
+  .btn.cut-along:hover{background:#c7ecdb}
+  .btn.cut-across{border-color:#e2776f;color:#c0392b;background:#fde7e4}
+  .btn.cut-across:hover{background:#fbd9d4}
+  .btn.cut-along.active{background:var(--green);color:#fff;border-color:var(--green-d);box-shadow:0 0 0 3px rgba(15,155,110,.3)}
+  .btn.cut-across.active{background:#d6473e;color:#fff;border-color:#b83227;box-shadow:0 0 0 3px rgba(214,71,62,.3)}
+  .legend{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);margin-top:7px}
+  .legend-sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-top">
+        <span class="eyebrow">RSTL · EXCISION DEMO</span>
+        <a class="badge" href="index.html">返回实时显示</a>
+      </div>
+      <h1>切除 → 闭合演示</h1>
+    </div>
+
+    <div class="card">
+      <p class="hint" id="hint">加载中…</p>
+      <div class="section-title"><span>① 规划切口</span><span id="lesionState">默认在脸颊</span></div>
+      <p class="hint">在右侧脸上<b>点击</b>定位病灶；拖拽旋转、滚轮缩放。
+        右图 <b style="color:#18c08a">绿色</b>=沿 RSTL 切口、<b style="color:#f06a5e">红色</b>=逆 RSTL 切口轮廓，随下方滑块更新。</p>
+      <label class="field-label" for="sizeRange">切口大小 <span id="sizeVal">110%</span></label>
+      <input id="sizeRange" type="range" min="80" max="200" value="110" />
+      <div class="section-title"><span>② 执行切除并闭合</span></div>
+      <div class="btn-row" style="grid-template-columns:1fr 1fr">
+        <button class="btn cut-along" id="btnAlong">沿 RSTL 切除</button>
+        <button class="btn cut-across" id="btnAcross">逆 RSTL 切除</button>
+      </div>
+      <button class="btn" id="btnReset" style="margin-top:8px">↺ 复位</button>
+      <label class="btn" style="margin-top:8px"><input type="checkbox" id="showLines" checked /> 显示 RSTL 张力线</label>
+    </div>
+
+    <div class="card">
+      <div class="quality-top"><span>闭合新增张力</span><span><b id="tensionVal">—</b> / 100</span></div>
+      <div class="bar"><div class="bar-fill" id="tensionBar" style="background:linear-gradient(90deg,#34d399,#fbbf24,#f87171)"></div></div>
+      <div class="legend">
+        <span class="legend-sw" style="background:#d6aa8f"></span>无新增（平和）
+        <span class="legend-sw" style="background:#d65b4a;margin-left:10px"></span>高（绷紧）
+      </div>
+      <p class="hint" id="verdict">分别试「沿」与「逆」两种切向：顺皮纹闭合更平和，逆皮纹更绷紧。</p>
+    </div>
+
+    <details class="card help-doc" open>
+      <summary>这是在演示什么？</summary>
+      <ol>
+        <li>右侧是标准脸（MediaPipe 标准头），青色是医生标注的 <b>RSTL 皮肤张力线</b>。</li>
+        <li>标一个肿物 → 做一个梭形切除（把那块组织去掉）。</li>
+        <li>周围皮肤被<b>预张力</b>拉着把伤口合上，并有轻微回弹。</li>
+        <li>颜色 = 闭合<b>新增</b>的张力（已扣除皮肤静息张力）：远处保持肤色，只有伤口处会变。</li>
+        <li><b>沿 RSTL 切</b>：拉的是"垂直皮纹的软皮肤"→ 几乎不新增张力，伤口基本不变红、平和。</li>
+        <li><b>逆 RSTL 切</b>：拉的是"顺皮纹的硬皮肤"→ 新增张力大，伤口明显<b>变红、绷紧</b>。</li>
+        <li>同一肿物切两种切向，左下"新增张力"指数直接对比。这正是临床"切口顺皮纹"的力学直觉。</li>
+      </ol>
+    </details>
+
+    <p class="disclaimer">⚠️ 表面质点-弹簧软体的<b>定性</b>模型，非有限元、非患者个体化建模，<b>不是手术指令、非医疗器械</b>。
+       真实软组织力学需体网格 FEM + 影像，本工具只为直观呈现 RSTL 与闭合张力的关系。</p>
+  </aside>
+
+  <main class="stage">
+    <div class="stage-top">
+      <span class="live on"><span class="dot"></span>切除闭合演示</span>
+      <div class="stage-actions">
+        <span class="fps">拖拽旋转 · 滚轮缩放 · 点击标记肿物</span>
+        <a class="stage-link" href="index.html">返回实时显示</a>
+      </div>
+    </div>
+    <div class="stage-body">
+      <div class="main-wrap">
+        <canvas id="surgeryCanvas"></canvas>
+      </div>
+    </div>
+  </main>
+</div>
+<script type="module" src="surgery_main.js"></script>
+</body>
+</html>

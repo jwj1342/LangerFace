@@ -2,13 +2,13 @@
 // 图谱映射 → 背面剔除 + 手部遮挡 → 画布叠加。
 import { FaceLandmarker, HandLandmarker, FilesetResolver }
   from "@mediapipe/tasks-vision";
-import { validateAtlas } from "./atlas_contract.js";
+import { resolveAtlasForInjection, validateAtlas } from "./atlas_contract.js";
 import { assetUrls } from "./assets.js";
 import { clearCanvasDisplayFit, fitCanvasDisplayToStage } from "./canvas_fit.js";
 import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./camera.js";
-import { CDN } from "./constants.js";
+import { CDN, TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.js";
 import { ctx, els } from "./dom.js";
-import { buildHandMasks, noseTriangles, toPixels, validateAtlasLines } from "./geometry.js";
+import { buildHandMasks, noseTriangles, toPixels } from "./geometry.js";
 import { prepareImageSource } from "./image_source.js";
 import { countMetric, logInfo, logWarn, recordMetricSample, setAssetVersions } from "./logger.js";
 import { projectVerts } from "./projection3d.js";
@@ -19,26 +19,35 @@ import { setLive, setMsg } from "./ui.js";
 // ── 资产 / 模型加载 ───────────────────────────────────────────────────────────
 export async function ensureReady() {
   if (modelState.landmarker) return;
-  const [tri, rstl, langer] = await Promise.all([
-    fetch(assetUrls.triangles).then((r) => r.json()),
+  const [topology, rstl, langer] = await Promise.all([
+    fetch(assetUrls.topology).then((r) => r.json()),
     fetch(assetUrls.atlasRstl).then((r) => r.json()),
     fetch(assetUrls.atlasLanger).then((r) => r.json()),
   ]);
+  const tri = Array.isArray(topology) ? topology : topology.triangles;
+  const topologyId = topology?.topologyId ?? TOPOLOGY_ID;
+  const topologyVersion = topology?.topologyVersion ?? TOPOLOGY_VERSION;
   const loadAtlas = (system, atlas) => {
-    const issues = validateAtlas(atlas, tri.length, { expectedSystem: system });
+    const issues = validateAtlas(
+      atlas,
+      tri.length,
+      { expectedSystem: system, expectedTopologyId: topologyId, expectedTopologyVersion: topologyVersion },
+    );
     if (issues.length) {
       logWarn(`图谱 ${system} 校验失败。`, { issues });
       throw new Error(`图谱 ${system} 校验失败：${issues.join("；")}`);
     }
     return atlas.lines;
   };
+  modelState.topology = { ...topology, topologyId, topologyVersion, triangles: tri };
   modelState.triangles = tri; modelState.noseTris = noseTriangles(tri);
   modelState.atlases.rstl = loadAtlas("rstl", rstl);
   modelState.atlases.langer = loadAtlas("langer", langer);
   modelState.officialAtlases.rstl = modelState.atlases.rstl;
   modelState.officialAtlases.langer = modelState.atlases.langer;
   setAssetVersions({
-    topology: "mediapipe-468",
+    topology: topologyId,
+    topologyVersion,
     triangles: tri.length,
     rstlAtlasVersion: rstl.version ?? "unknown",
     langerAtlasVersion: langer.version ?? "unknown",
@@ -48,7 +57,7 @@ export async function ensureReady() {
   const resolver = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
   const build = (delegate) => FaceLandmarker.createFromOptions(resolver, {
     baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
-    runningMode: "VIDEO", numFaces: 1,
+    runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: true,  // jawOpen 等驱动实时孪生表情/张嘴
     minFaceDetectionConfidence: 0.5, minFacePresenceConfidence: 0.5, minTrackingConfidence: 0.5,
   });
   try { modelState.landmarker = await build("GPU"); }
@@ -92,16 +101,23 @@ function isSupportedAtlasSystem(system) {
   return system === "rstl" || system === "langer";
 }
 
-export function setActiveAtlas(system, lines) {
+export function setActiveAtlas(system, atlasOrLines) {
   if (!isSupportedAtlasSystem(system)) {
     logWarn("拒绝注入未知图谱系统。", { system });
     return false;
   }
-  if (!validateAtlasLines(lines, modelState.triangles)) {
-    logWarn("拒绝注入无效图谱。", { system, lineCount: Array.isArray(lines) ? lines.length : null });
+  const expectedTopologyId = modelState.topology?.topologyId ?? TOPOLOGY_ID;
+  const expectedTopologyVersion = modelState.topology?.topologyVersion ?? TOPOLOGY_VERSION;
+  const res = resolveAtlasForInjection(atlasOrLines, modelState.triangles, {
+    expectedSystem: system,
+    expectedTopologyId,
+    expectedTopologyVersion,
+  });
+  if (!res.ok) {
+    logWarn("拒绝注入无效图谱。", { system, reason: res.reason, issues: res.issues });
     return false;
   }
-  modelState.atlases[system] = lines;
+  modelState.atlases[system] = res.lineList;
   renderState.system = system;
   requestRedraw();
   return true;
@@ -243,6 +259,10 @@ export function loop() {
     sourceState.presence = lm ? 1 : 0;
   } else if (sourceState.source.currentTime !== undefined) {
     const res = modelState.landmarker.detectForVideo(sourceState.source, t);
+    if (res.faceBlendshapes && res.faceBlendshapes.length) {
+      const jo = res.faceBlendshapes[0].categories.find((c) => c.categoryName === "jawOpen");
+      sourceState.jawOpen = jo ? jo.score : 0;
+    }
     if (res.faceLandmarks && res.faceLandmarks.length) {
       lm = toPixels(res.faceLandmarks[0], W, H);
       if (renderState.smoothLevel > 0) lm = renderState.smoother.filter(lm, t / 1000);
