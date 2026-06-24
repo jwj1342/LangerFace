@@ -76,11 +76,14 @@ def test_committed_flame_rstl_atlas_matches_flame_topology():
         expected_topology_version=TOPOLOGY_VERSION_FLAME,
     )
 
-    source = Atlas.load(str(ROOT / "assets" / "atlas_rstl.json"))
-    assert len(atlas.lines) == len(source.lines)
-    assert sum(len(line.points) for line in atlas.lines) == sum(len(line.points) for line in source.lines)
-
     with atlas_path.open(encoding="utf-8") as f:
         data = json.load(f)
+    reg = data["registration"]
+    assert reg["diagramSource"] == "RSTL/RSTL PRSgo.png"
+    assert "sourceAtlas" not in reg
+    assert reg["diagramExtraction"]["lineCount"] == len(atlas.lines)
+    assert reg["diagramExtraction"]["lineCount"] >= 200
+    assert reg["diagramExtraction"]["pointCount"] == sum(len(line.points) for line in atlas.lines)
+    assert reg["diagramExtraction"]["pointCount"] >= 1500
     assert data["registration"]["classicSourceBundle"]["path"] == "RSTL"
     assert data["registration"]["classicSourceBundle"]["files"]

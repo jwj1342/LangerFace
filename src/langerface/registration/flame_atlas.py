@@ -23,6 +23,36 @@ from langerface.config.constants import TOPOLOGY_ID_FLAME, TOPOLOGY_VERSION_FLAM
 from langerface.flame import sample_bary
 from langerface.geometry.topology import build_topology_contract
 from langerface.lines.atlas import Atlas, AtlasLine
+from langerface.lines.build import atlas_line_from_points2d
+
+
+@dataclass(frozen=True)
+class DiagramExtractionConfig:
+    crop: tuple[int, int, int, int] = (0, 0, 620, 805)
+    face_box: tuple[float, float, float, float] = (50.0, 0.0, 570.0, 720.0)
+    dark_threshold: int = 10
+    gray_min: int = 55
+    gray_max: int = 235
+    ellipse_center: tuple[int, int] = (310, 345)
+    ellipse_axes: tuple[int, int] = (270, 350)
+    excluded_boxes: tuple[tuple[int, int, int, int], ...] = (
+        (90, 270, 250, 360),
+        (365, 270, 530, 360),
+        (210, 380, 410, 500),
+        (190, 555, 430, 640),
+    )
+    min_component_pixels: int = 20
+    min_component_extent: int = 8
+    bin_size: int = 2
+    max_points_per_line: int = 80
+
+
+@dataclass(frozen=True)
+class DiagramExtractionResult:
+    lines: list[np.ndarray]
+    mask: np.ndarray
+    crop_image: np.ndarray
+    config: DiagramExtractionConfig
 
 
 @dataclass(frozen=True)
@@ -72,6 +102,76 @@ def load_flame_basis(path: str | Path) -> FlameBasis:
         lmk_face_idx=np.asarray(data["lmk_face_idx"], dtype=np.int64),
         lmk_b_coords=np.asarray(data["lmk_b_coords"], dtype=np.float64).reshape(-1, 3),
         landmark_indices=np.asarray(data["landmark_indices"], dtype=np.int64),
+    )
+
+
+def extract_rstl_lines_from_diagram(
+    path: str | Path,
+    config: DiagramExtractionConfig | None = None,
+) -> DiagramExtractionResult:
+    """Extract centerline polylines from the classic frontal RSTL diagram."""
+    import cv2
+
+    cfg = config or DiagramExtractionConfig()
+    img = cv2.imread(str(path))
+    if img is None:
+        raise FileNotFoundError(f"diagram image not found or unreadable: {path}")
+
+    x0, y0, x1, y1 = cfg.crop
+    crop = img[y0:y1, x0:x1].copy()
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    blur = cv2.GaussianBlur(gray, (0, 0), 5)
+    dark = cv2.subtract(blur, gray)
+    _, mask = cv2.threshold(dark, cfg.dark_threshold, 255, cv2.THRESH_BINARY)
+    gray_range = ((gray > cfg.gray_min) & (gray < cfg.gray_max)).astype("uint8") * 255
+    mask = cv2.bitwise_and(mask, gray_range)
+
+    ellipse = np.zeros_like(mask)
+    cv2.ellipse(ellipse, cfg.ellipse_center, cfg.ellipse_axes, 0, 0, 360, 255, -1)
+    mask = cv2.bitwise_and(mask, ellipse)
+
+    excluded = np.zeros_like(mask)
+    for box in cfg.excluded_boxes:
+        cv2.rectangle(excluded, box[:2], box[2:], 255, -1)
+    mask = cv2.bitwise_and(mask, cv2.bitwise_not(excluded))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
+
+    n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
+    lines: list[np.ndarray] = []
+    for label in range(1, n_labels):
+        area = int(stats[label, cv2.CC_STAT_AREA])
+        width = int(stats[label, cv2.CC_STAT_WIDTH])
+        height = int(stats[label, cv2.CC_STAT_HEIGHT])
+        if area < cfg.min_component_pixels or max(width, height) < cfg.min_component_extent:
+            continue
+        ys, xs = np.where(labels == label)
+        line = _component_centerline(xs, ys, cfg)
+        if line.shape[0] >= 2:
+            lines.append(line)
+    return DiagramExtractionResult(lines=lines, mask=mask, crop_image=crop, config=cfg)
+
+
+def diagram_lines_to_canonical_atlas(
+    extraction: DiagramExtractionResult,
+    canonical,
+    *,
+    system: str = "rstl",
+    name_prefix: str = "rstl_prsgo",
+    provenance: str = "",
+) -> Atlas:
+    proj = canonical.project_front()
+    lines: list[AtlasLine] = []
+    for i, pixel_line in enumerate(extraction.lines):
+        norm = _diagram_pixels_to_norm(pixel_line, extraction.config.face_box)
+        pts2d = canonical.norm_to_proj(norm)
+        region = _region_for_norm_line(norm)
+        lines.append(atlas_line_from_points2d(canonical, f"{name_prefix}_{i:03d}", region, pts2d, proj=proj))
+    return Atlas(
+        system=system,
+        lines=lines,
+        version="diagram-draft.1",
+        provenance=provenance,
+        validated=False,
     )
 
 
@@ -253,3 +353,45 @@ def _pairwise_distances(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 def _kernel(r: np.ndarray) -> np.ndarray:
     return np.asarray(r, dtype=np.float64)
+
+
+def _component_centerline(xs: np.ndarray, ys: np.ndarray, cfg: DiagramExtractionConfig) -> np.ndarray:
+    if (xs.max() - xs.min()) >= (ys.max() - ys.min()):
+        points = []
+        for x0 in range(int(xs.min()), int(xs.max()) + 1, cfg.bin_size):
+            keep = (xs >= x0) & (xs < x0 + cfg.bin_size)
+            if np.any(keep):
+                points.append([float(np.median(xs[keep])), float(np.median(ys[keep]))])
+        out = np.asarray(points, dtype=np.float64)
+        order = np.argsort(out[:, 0])
+    else:
+        points = []
+        for y0 in range(int(ys.min()), int(ys.max()) + 1, cfg.bin_size):
+            keep = (ys >= y0) & (ys < y0 + cfg.bin_size)
+            if np.any(keep):
+                points.append([float(np.median(xs[keep])), float(np.median(ys[keep]))])
+        out = np.asarray(points, dtype=np.float64)
+        order = np.argsort(out[:, 1])
+    out = out[order]
+    if out.shape[0] > cfg.max_points_per_line:
+        idx = np.linspace(0, out.shape[0] - 1, cfg.max_points_per_line).round().astype(int)
+        out = out[idx]
+    return out
+
+
+def _diagram_pixels_to_norm(points: np.ndarray, face_box: tuple[float, float, float, float]) -> np.ndarray:
+    x0, y0, x1, y1 = face_box
+    pts = np.asarray(points, dtype=np.float64)
+    norm = np.column_stack([(pts[:, 0] - x0) / (x1 - x0), (pts[:, 1] - y0) / (y1 - y0)])
+    return norm
+
+
+def _region_for_norm_line(norm: np.ndarray) -> str:
+    y = float(np.mean(norm[:, 1]))
+    if y < 0.33:
+        return "forehead"
+    if y < 0.52:
+        return "periorbital"
+    if y < 0.78:
+        return "midface"
+    return "chin"
