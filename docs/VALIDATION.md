@@ -84,6 +84,26 @@ Stage 2 涉及肿物模拟和候选切口，只能在医生审阅路径中评估
 
 真实数据验证时必须把这些指标替换为医生手工边界 / 皱纹线标注的对比结果，不能用合成样例分数代表临床性能。
 
+## Stage 2 审阅导出汇总
+
+切口 Agent 工作台导出的 `incision-review-record/v0.3` 或 `incision-review-export/v0.3` 可用脚本汇总为脱敏指标：
+
+```bash
+python tools/evaluate_stage2_validation.py incision_review_*.json --output stage2_validation_summary.json
+```
+
+脚本只读取审阅 JSON，不需要原始照片、视频帧、头模纹理或超声影像。输出 schema 为
+`stage2-validation-summary/v0.1`，包含：
+
+- 候选数、肿物类型分布、切口类型分布。
+- 医生确认 / 否决状态计数和确认率。
+- guardrail 通过率、warning severity/code 分布。
+- `rstl_deviation_deg`、方向置信度、皮下直径覆盖缺口、梭形长宽比、尖端角误差、边界覆盖缺口、敏感游离缘距离和边界面积比的 count / mean / median / P90 / min / max。
+- 失败模式计数：脚本会读取人工 `failure_modes`，也会把高层 warning code 映射到 `direction_error`、`region_misclassification`、`sensitive_structure_warning`、`incision_rule_violation`、`tumor_boundary_input_quality` 等验证分类。
+- 隐私审计计数：`raw_media_sent_count` 和 `provider_secret_leak_count` 必须保持 0。
+
+这个汇总只能证明工程记录可复现，不能证明临床安全性。正式研究仍需受控病例库、医生标注和统计计划。
+
 ## 失败案例分类
 
 每个失败样例至少记录一个主因：

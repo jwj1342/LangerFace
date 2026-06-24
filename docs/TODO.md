@@ -45,6 +45,7 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候
 - [ ] 照片、视频与 AR 实时叠加：把肿物和切口候选稳定投射到患者脸上 — [#19](https://github.com/jwj1342/LangerFace/issues/19)
       · 本 PR 已支持把已确认候选以 `incision-overlay/v0.1` 暂存到实时页，按三角面重心坐标投射到照片/视频/摄像头 landmarks，并在 overlay 中保留 `review_gate`、`guardrail_summary`、审阅状态和 `raw_image_sent=false` 审计字段；患者个体化 3D/AR 配准和稳定性评估仍属后续
 - [ ] 临床验证数据集与评估指标：从演示原型走向可验证研究系统 — [#20](https://github.com/jwj1342/LangerFace/issues/20)
+      · 本 PR 已补齐 Stage 1/2 指标、验证集格式、失败分类和 `tools/evaluate_stage2_validation.py`，可把脱敏 `incision-review-record/export` 汇总为候选类型、医生确认率、guardrail 分布、RSTL 偏角、梭形几何误差、敏感距离、失败模式和隐私审计计数；真实病例库和医生统计验证仍需受控临床流程
 - [ ] 隐私、合规与审计记录：限定临床研究使用边界 — [#21](https://github.com/jwj1342/LangerFace/issues/21)
 - [ ] AI 辅助识别自然皱襞、皱纹与肿物边界：作为 RSTL 之外的次级依据 — [#22](https://github.com/jwj1342/LangerFace/issues/22)
 
