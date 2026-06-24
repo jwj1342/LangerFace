@@ -6,7 +6,8 @@ import { ctx, els } from "./dom.js";
 import { applySim, toPixels, umeyama } from "./geometry.js";
 import { facesArray, fitExpression, fitShape, flameForward, loadFlameBasis } from "./flame_fit.js";
 import { countMetric, logWarn, recordEvent, recordMetricSample } from "./logger.js";
-import { ensureReady, showCameraPlaceholder, startCamera, stopSource } from "./pipeline.js";
+import { ensureReady } from "./pipeline/models.js";
+import { showCameraPlaceholder, startCamera, stopSource } from "./pipeline/source.js";
 import { modelState, reconState, renderState, sourceState } from "./state.js";
 import { setLive, setMsg } from "./ui.js";
 
