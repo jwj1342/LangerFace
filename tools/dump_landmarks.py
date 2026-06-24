@@ -7,7 +7,7 @@
                        需要本机有 mediapipe、cv2 及私有素材，CI 不跑。
   * ``regen()``     —— **纯**重算路径：只吃 expected.json 里**已嵌入**的关键点 + 图谱 + 三角拓扑，
                        重算每帧 lines[].pts / lines[].vis 以及 One-Euro 夹具。无 mediapipe / 无 cv2 /
-                       无私有素材，CI 与本地都可一键复现金标（见 docs/cross_lang_parity.md）。
+                       无私有素材，CI 与本地都可一键复现金标（见 docs/CROSS_LANG_PARITY.md）。
 
 更新金标（生产数学合法变更后）：
 

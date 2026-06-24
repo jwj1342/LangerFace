@@ -8,7 +8,7 @@ CI 的唯一跨语言护栏是 tools/test_web_mapping.mjs（JS 对 web/test/expe
   * vis 与金标**逐位精确**相等（含 #38 口裂三角面排除）；
   * One-Euro 夹具：LandmarkSmoother(input) == 金标 expected（紧公差）。
 
-更新金标见 docs/cross_lang_parity.md（一键纯重算，无 mediapipe / 无私有素材）。
+更新金标见 docs/CROSS_LANG_PARITY.md（一键纯重算，无 mediapipe / 无私有素材）。
 """
 from __future__ import annotations
 

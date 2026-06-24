@@ -12,12 +12,13 @@
 两套等价的几何实现，共享同一份图谱与三角拓扑：
 
 - **Python 库 `src/langerface/`**：分层核心库 + console scripts + **验证基准（ground truth）** + 3D 重建离线工具。
-- **浏览器客户端 `web/`**：Vite 8 + 原生 ES Modules + MediaPipe Tasks Vision + `geometry.js`
-  （Python 几何的忠实移植）+ `three3d.js`（3D Beta）。实时、本地、不上传。
+- **浏览器客户端 `web/`**：Vite 8 + 原生 ES Modules + MediaPipe Tasks Vision + `geometry/`
+  （Python 几何的忠实移植，按 atlas / smoothing / occluders / transform 子系统分模块，`geometry.js` 为兼容 barrel re-export）
+  + `three3d.js`（3D Beta）。实时、本地、不上传。
   前端状态在 `state.js` 中按 `modelState` / `renderState` / `sourceState` / `recordingState` / `reconState`
   分片；`pipeline.js` 不依赖 `mode3d.js`，3D 实时投影通过无 DOM 的 `projection3d.js` 适配，避免模块环。
 
-> 关键不变式：`web/geometry.js` 的映射/遮挡/平滑必须与 Python 端**逐点一致**，由
+> 关键不变式：`web/geometry/` 的映射/遮挡/平滑必须与 Python 端**逐点一致**，由
 > `tools/test_web_mapping.mjs` 持续对拍保证（误差 < 1e-2 px、可见性 0 不一致）。
 
 ---
@@ -41,21 +42,21 @@
 P = u·V0 + v·V1 + w·V2
 ```
 
-- 实现：[`src/langerface/lines/mapping.py`](../src/langerface/lines/mapping.py) 与 `web/geometry.js: mapAtlas`。
+- 实现：[`src/langerface/lines/mapping.py`](../src/langerface/lines/mapping.py) 与 `web/geometry/atlas.js: mapAtlas`。
 - 性质：**对仿射变换不变**——人脸做任意仿射形变，线条随之等价形变。由 `tests/test_mapping.py` 证明。
 - 这等价于 AR"脸绘"的纹理贴合：线条天生贴在皮肤上、随姿态/表情/身份变化。
 
 ### 3.1 时间平滑（One-Euro）
-[`src/langerface/detection/smoothing.py`](../src/langerface/detection/smoothing.py) / `web/geometry.js: OneEuro`。逐关键点逐坐标自适应低通：
+[`src/langerface/detection/smoothing.py`](../src/langerface/detection/smoothing.py) / `web/geometry/smoothing.js: OneEuro`。逐关键点逐坐标自适应低通：
 低速重平滑（去抖），高速低滞后（跟手）。参数 `min_cutoff / beta / dcutoff`；网页"平滑"滑杆映射到 `min_cutoff/beta`。
 
 ### 3.2 背面剔除（自遮挡）
-[`src/langerface/rendering/occlusion.py`](../src/langerface/rendering/occlusion.py) / `web/geometry.js: visibleTriangles`。
+[`src/langerface/rendering/occlusion.py`](../src/langerface/rendering/occlusion.py) / `web/geometry/atlas.js: visibleTriangles`。
 对每个三角面用检测到的 3D 顶点求法向，取 `nz`；**用鼻尖(索引1)所在三角面自标定"朝前"的符号**
 （避免依赖缠绕方向/手性），`sign·nz ≥ 阈值` 即可见。转头时背侧线条隐藏。
 
 ### 3.3 手部遮挡（外物，仅网页）
-`web/geometry.js: buildHandMasks / pointInHandMasks`。并行跑 MediaPipe **Hand Landmarker**（`hand_landmarker.task`，21 点/手）：
+`web/geometry/occluders.js: buildHandMasks / pointInHandMasks`。并行跑 MediaPipe **Hand Landmarker**（`hand_landmarker.task`，21 点/手）：
 - 不用整手大凸包（会连指缝一起挡），而是**贴合手形掩膜** = 手掌点凸包 + 沿各指骨的"胶囊"（半径按掌宽自适应）。
 - 落在掌内或任一指骨胶囊内的脸部线点剔除；**张开手指间的缝隙保留**（脸继续显示）。
 - 由 `tools/test_occlusion.mjs` 验证（缝隙点不被挡，旧凸包会误挡）。
@@ -78,7 +79,7 @@ P = u·V0 + v·V1 + w·V2
   （眼角、鼻梁、轮廓极值等 16 点 `RIGID3D`）对齐到统一参考系（标准脸翻到关键点手性）。
 - 对齐后的网格**逐顶点取中位数** → 稳定的个性化中性脸（中位数对表情/抖动/遮挡鲁棒）。
 - 坐标统一在**屏幕手性**（x 右 / y 下 / z 入屏），便于实时配准；查看时前端翻 y/z 成 y 上。
-- Umeyama 实现：`web/geometry.js: umeyama/applySim`（3×3 对称特征分解 Jacobi → SVD → R, c, t），
+- Umeyama 实现：`web/geometry/transform.js: umeyama/applySim`（3×3 对称特征分解 Jacobi → SVD → R, c, t），
   由 `tools/test_umeyama.mjs` 验证（恢复已知变换误差 ~1e-13）。
 
 ### 4.2 把线贴到 3D 头并查看
