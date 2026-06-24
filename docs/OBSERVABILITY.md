@@ -85,6 +85,35 @@ window.exportLangerfaceDiagnostics()
 
 这些字段用于把一次评审或 bug 报告回指到具体图谱、拓扑和模型版本。
 
+## Python 端（业务路径结构化日志）
+
+Python 端复用与 web 同一套字段命名（单一真源），通过标准 `logging` 的
+`extra={...}` 把结构化字段挂到日志记录上。库代码只 `get_logger`，由应用入口
+（`apps/*`）调用一次 `configure_logging()` 决定 handler 与级别——库不打印、不配置 handler。
+
+字段约定（`src/langerface/log.py` 集中定义，与上表对齐）：
+
+- `event`：稳定事件名，如 `assets.loaded` / `frame.detect` / `frame.noFace` / `detect.failure`。
+- `phase`：阶段名常量 `Phase`（`assets` / `frame` / `detect` / `scan`）。
+- `durationMs`：阶段耗时（`time.perf_counter()` 测得）。
+- `reason`：可枚举失败原因常量 `DetectFailureReason`（`no_face` / `no_timestamp` /
+  `atlas_missing` / `no_atlas_loaded` / `detector_close_error`），不再是自由文本告警。
+- `assetVersions`：构造 `LinePipeline` 时一次性记录，含 `langerfaceVersion`（=`langerface.__version__`）、
+  `model`、`topologyId` / `topologyVersion`、各线系统图谱 `version`。
+
+业务路径埋点位置：
+
+- `pipeline/line_pipeline.py`：`assets.loaded`（资产版本一次性）、`frame.detect`（检测阶段耗时）、
+  `frame.noFace` / `frame.atlasMissing`（可枚举 `reason`）。
+- `detection/mediapipe_detector.py`：`detect.infer`（推理阶段耗时）、`detect.noFace` /
+  `detect.failure` / `detect.closeError`（可枚举 `reason`）。
+- `media/video.py`：`frame.progress`（每 N 帧的逐帧耗时）、`video.finished`（总耗时 + 平均 fps）。
+
+采集方式（多人评审）：把诊断字段落到结构化输出，例如在应用入口装一个 JSON formatter
+或 `logging` handler 读取 `record.__dict__` 中上述字段；阶段耗时多为 `DEBUG`，
+失败原因为 `WARNING` / `ERROR`，资产版本为 `INFO`。设 `LANGERFACE_LOG_LEVEL=DEBUG`
+可采全部阶段耗时。`perf_counter`/`extra` 不含任何像素或患者身份信息。
+
 ## 分享前检查
 
 导出诊断 JSON 前需要确认：

@@ -9,12 +9,13 @@ cv2 延迟导入，保持纯逻辑模块在无 OpenCV 环境下可被导入。
 """
 from __future__ import annotations
 
+import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 import numpy as np
 
-from ..log import get_logger
+from ..log import Phase, get_logger
 
 log = get_logger(__name__)
 
@@ -85,6 +86,7 @@ def process_video(
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
         raise FileNotFoundError(f"无法打开视频 {input_path}")
+    t_start = time.perf_counter()
     try:
         meta = read_meta(cap, fps_default)
         writer = make_writer(output_path, meta.fps, meta.size)
@@ -92,13 +94,37 @@ def process_video(
             idx = 0
             for frame in iter_frames(cap):
                 ts = int(idx * 1000.0 / meta.fps)
+                # 逐帧阶段耗时（perf_counter）：每帧测得 durationMs，用于聚合 fps/耗时指标。
+                t_frame = time.perf_counter()
                 writer.write(processor(frame, ts))
+                frame_ms = (time.perf_counter() - t_frame) * 1000.0
                 idx += 1
                 if progress_every and idx % progress_every == 0:
-                    log.info("已处理 %d 帧", idx)
+                    log.info(
+                        "已处理 %d 帧",
+                        idx,
+                        extra={
+                            "event": "frame.progress",
+                            "phase": Phase.FRAME,
+                            "durationMs": frame_ms,
+                            "framesProcessed": idx,
+                        },
+                    )
         finally:
             writer.release()
     finally:
         cap.release()
-    log.info("已写出 %s（%d 帧）", output_path, idx)
+    total_ms = (time.perf_counter() - t_start) * 1000.0
+    log.info(
+        "已写出 %s（%d 帧）",
+        output_path,
+        idx,
+        extra={
+            "event": "video.finished",
+            "phase": Phase.FRAME,
+            "durationMs": total_ms,
+            "framesProcessed": idx,
+            "fps": (idx / (total_ms / 1000.0)) if total_ms > 0 else 0.0,
+        },
+    )
     return idx
