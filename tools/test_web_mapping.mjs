@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { mapAtlas, visibleTriangles, noseTriangles, OneEuro } from "../web/geometry.js";
+import { mapAtlas, visibleTriangles, noseTriangles, innerMouthTriangles, OneEuro } from "../web/geometry.js";
 
 const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const J = (p) => JSON.parse(fs.readFileSync(path.join(REPO, p), "utf8"));
@@ -12,6 +12,9 @@ const triangles = J("web/assets/triangles.json");
 const atlas = J("web/assets/atlas_rstl.json").lines;
 const expected = J("web/test/expected.json");
 const noseTris = noseTriangles(triangles);
+// #38 口裂三角面：生产渲染期永久排除，对拍时也要应用，否则 JS vis 会与
+// （含口裂排除的）Python 金标在张嘴帧上出现 ~14 位不一致。
+const innerMouth = innerMouthTriangles(triangles);
 
 let maxPosErr = 0;
 let visMismatches = 0;
@@ -33,24 +36,35 @@ for (const fr of expected.frames) {
       const dx = Math.abs(js.pts[i][0] - py.pts[i][0]);
       const dy = Math.abs(js.pts[i][1] - py.pts[i][1]);
       maxPosErr = Math.max(maxPosErr, dx, dy);
-      const jsVis = vis[js.tris[i]] ? 1 : 0;
+      const tri = js.tris[i];
+      const jsVis = (vis[tri] && !innerMouth.has(tri)) ? 1 : 0;
       if (jsVis !== py.vis[i]) visMismatches++;
     }
   }
 }
 
-// One-Euro 基本正确性：静止信号输出应收敛
-const oe = new OneEuro({ minCutoff: 1.5, beta: 0.05 });
-let last = null;
-const base = [[100, 200, 0], [300, 50, 5]];
-for (let i = 0; i < 60; i++) last = oe.filter(base.map((p) => p.slice()), i / 30);
-const oeErr = Math.max(...last.flatMap((p, i) => p.map((v, k) => Math.abs(v - base[i][k]))));
+// One-Euro 跨语言夹具：用 Python 端常量生成的固定输入序列，断言 JS OneEuro 逐位一致。
+// 同一夹具也被 tests/test_cross_lang_parity.py 断言 → Python==JS==golden 三方闭环。
+const oeFix = expected.oneEuro;
+const oe = new OneEuro({
+  minCutoff: oeFix.minCutoff, beta: oeFix.beta, dcutoff: oeFix.dcutoff,
+});
+let oeErr = 0;
+for (let f = 0; f < oeFix.inputs.length; f++) {
+  const out = oe.filter(oeFix.inputs[f].map((p) => p.slice()), oeFix.times[f]);
+  const exp = oeFix.expected[f];
+  for (let i = 0; i < out.length; i++) {
+    for (let k = 0; k < out[i].length; k++) {
+      oeErr = Math.max(oeErr, Math.abs(out[i][k] - exp[i][k]));
+    }
+  }
+}
 
 console.log(`points compared: ${nPts}`);
 console.log(`max position error (px): ${maxPosErr.toExponential(3)}`);
 console.log(`visibility mismatches: ${visMismatches}`);
-console.log(`one-euro steady-state error: ${oeErr.toExponential(3)}`);
+console.log(`one-euro fixture max error: ${oeErr.toExponential(3)}`);
 
-const ok = maxPosErr < 1e-2 && visMismatches === 0 && oeErr < 1e-6;
+const ok = maxPosErr < 1e-2 && visMismatches === 0 && oeErr < 1e-9;
 console.log(ok ? "\n✅ JS 几何与 Python 一致" : "\n❌ 存在不一致");
 process.exit(ok ? 0 : 1);
