@@ -31,3 +31,11 @@ web/test/face_small.jpg
 
 # 3D head-scan datasets (HeadSpace / FaceScape — licensed, real biometric; never commit)
 tools/headspace/data/
+
+# FLAME model assets — license-gated (https://flame.is.tue.mpg.de), never commit FLAME-derived data.
+# Keep the README (download/license instructions); ignore every actual asset.
+assets/flame/*
+!assets/flame/README.md
+# FLAME-derived web assets — generated locally from the licensed model; never commit / deploy.
+web/assets/topology_flame_*.json
+web/assets/flame_*.json
