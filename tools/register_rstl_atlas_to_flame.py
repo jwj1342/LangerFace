@@ -212,6 +212,10 @@ def _config_to_json(cfg: DiagramExtractionConfig) -> dict:
         "minComponentExtent": cfg.min_component_extent,
         "binSize": cfg.bin_size,
         "maxPointsPerLine": cfg.max_points_per_line,
+        "bridgeMaxGap": cfg.bridge_max_gap,
+        "bridgeMaxAngleDeg": cfg.bridge_max_angle_deg,
+        "bridgeMaxOppositeAngleDeg": cfg.bridge_max_opposite_angle_deg,
+        "bridgeStep": cfg.bridge_step,
     }
 
 

@@ -82,8 +82,9 @@ def test_committed_flame_rstl_atlas_matches_flame_topology():
     assert reg["diagramSource"] == "RSTL/RSTL PRSgo.png"
     assert "sourceAtlas" not in reg
     assert reg["diagramExtraction"]["lineCount"] == len(atlas.lines)
-    assert reg["diagramExtraction"]["lineCount"] >= 200
+    assert 80 <= reg["diagramExtraction"]["lineCount"] <= 130
     assert reg["diagramExtraction"]["pointCount"] == sum(len(line.points) for line in atlas.lines)
-    assert reg["diagramExtraction"]["pointCount"] >= 1500
+    assert reg["diagramExtraction"]["pointCount"] >= 2400
+    assert reg["diagramExtraction"]["bridgeMaxGap"] > 0
     assert data["registration"]["classicSourceBundle"]["path"] == "RSTL"
     assert data["registration"]["classicSourceBundle"]["files"]

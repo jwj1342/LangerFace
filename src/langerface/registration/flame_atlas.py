@@ -45,6 +45,10 @@ class DiagramExtractionConfig:
     min_component_extent: int = 8
     bin_size: int = 2
     max_points_per_line: int = 80
+    bridge_max_gap: float = 42.0
+    bridge_max_angle_deg: float = 38.0
+    bridge_max_opposite_angle_deg: float = 45.0
+    bridge_step: float = 4.0
 
 
 @dataclass(frozen=True)
@@ -148,7 +152,28 @@ def extract_rstl_lines_from_diagram(
         line = _component_centerline(xs, ys, cfg)
         if line.shape[0] >= 2:
             lines.append(line)
+    lines = bridge_centerline_gaps(lines, cfg)
     return DiagramExtractionResult(lines=lines, mask=mask, crop_image=crop, config=cfg)
+
+
+def bridge_centerline_gaps(lines: list[np.ndarray], cfg: DiagramExtractionConfig) -> list[np.ndarray]:
+    """Join fragmented diagram centerlines when endpoints continue the same stroke."""
+    out = [np.asarray(line, dtype=np.float64) for line in lines if len(line) >= 2]
+    while True:
+        best = None
+        for i in range(len(out)):
+            for j in range(i + 1, len(out)):
+                for side_i in (0, 1):
+                    for side_j in (0, 1):
+                        score = _bridge_score(out[i], side_i, out[j], side_j, cfg)
+                        if score is not None and (best is None or score < best[0]):
+                            best = (score, i, side_i, j, side_j)
+        if best is None:
+            return out
+        _, i, side_i, j, side_j = best
+        merged = _merge_lines_at_endpoints(out[i], side_i, out[j], side_j, cfg.bridge_step)
+        out = [line for k, line in enumerate(out) if k not in (i, j)]
+        out.append(merged)
 
 
 def diagram_lines_to_canonical_atlas(
@@ -377,6 +402,66 @@ def _component_centerline(xs: np.ndarray, ys: np.ndarray, cfg: DiagramExtraction
         idx = np.linspace(0, out.shape[0] - 1, cfg.max_points_per_line).round().astype(int)
         out = out[idx]
     return out
+
+
+def _bridge_score(
+    a: np.ndarray,
+    side_a: int,
+    b: np.ndarray,
+    side_b: int,
+    cfg: DiagramExtractionConfig,
+) -> float | None:
+    pa = a[0] if side_a == 0 else a[-1]
+    pb = b[0] if side_b == 0 else b[-1]
+    connector = pb - pa
+    gap = float(np.linalg.norm(connector))
+    if gap <= 1e-6 or gap > cfg.bridge_max_gap:
+        return None
+
+    ta = _endpoint_outward_tangent(a, side_a)
+    tb = _endpoint_outward_tangent(b, side_b)
+    c = connector / gap
+    angle_a = _angle_deg(ta, c)
+    angle_b = _angle_deg(tb, -c)
+    opposite = _angle_deg(ta, -tb)
+
+    # Very short gaps tolerate more local pixel noise; larger gaps need clear continuation.
+    relax = 18.0 if gap <= 12.0 else 8.0 if gap <= 24.0 else 0.0
+    if angle_a > cfg.bridge_max_angle_deg + relax:
+        return None
+    if angle_b > cfg.bridge_max_angle_deg + relax:
+        return None
+    if opposite > cfg.bridge_max_opposite_angle_deg + relax:
+        return None
+    return gap + 0.35 * (angle_a + angle_b + opposite)
+
+
+def _endpoint_outward_tangent(line: np.ndarray, side: int, lookahead: int = 5) -> np.ndarray:
+    n = min(max(1, lookahead), line.shape[0] - 1)
+    if side == 0:
+        vec = line[0] - line[n]
+    else:
+        vec = line[-1] - line[-1 - n]
+    norm = float(np.linalg.norm(vec))
+    if norm < 1e-9:
+        return np.array([1.0, 0.0], dtype=np.float64)
+    return vec / norm
+
+
+def _angle_deg(a: np.ndarray, b: np.ndarray) -> float:
+    dot = float(np.clip(np.dot(a, b), -1.0, 1.0))
+    return float(np.degrees(np.arccos(dot)))
+
+
+def _merge_lines_at_endpoints(a: np.ndarray, side_a: int, b: np.ndarray, side_b: int, step: float) -> np.ndarray:
+    aa = a if side_a == 1 else a[::-1]
+    bb = b if side_b == 0 else b[::-1]
+    gap = float(np.linalg.norm(bb[0] - aa[-1]))
+    if gap <= step:
+        return np.vstack([aa, bb])
+    n = max(1, int(np.floor(gap / step)))
+    bridge = np.linspace(aa[-1], bb[0], n + 2, dtype=np.float64)[1:-1]
+    return np.vstack([aa, bridge, bb])
 
 
 def _diagram_pixels_to_norm(points: np.ndarray, face_box: tuple[float, float, float, float]) -> np.ndarray:
