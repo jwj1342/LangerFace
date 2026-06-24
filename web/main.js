@@ -133,7 +133,7 @@ els.routeSel.onchange = (e) => enterRoute(e.target.value);
 els.reconDemo.onclick = loadDemoRecon;
 els.reconScan.onclick = startScan;
 els.view3d.onclick = () => { if (reconState.reconVerts) setMode3d("view"); };
-els.project3d.onclick = () => { if (reconState.reconVerts) setMode3d("project"); };
+els.project3d.onclick = () => { if (reconState.reconVerts && reconState.reconProjectable) setMode3d("project"); };
 els.reset3d.onclick = resetView3d;
 els.cloudFitFlame.onclick = startTwin;
 els.flameStd.onchange = toggleTwinHead;

@@ -4,6 +4,7 @@ import { AnnotationModel } from "./annotate_model.js";
 import { Annotator3D } from "./annotate_viewer.js";
 import { assetUrls } from "./assets.js";
 import { dataSource } from "./data_source.js";
+import { facesArray, flameForward, loadFlameBasis } from "./flame_fit.js";
 import { parseMeshFile } from "./mesh_io.js";
 import { parseSlicerCurveFile } from "./slicer_curve.js";
 import { topologyMeta } from "./topology_registry.js";
@@ -26,20 +27,46 @@ viewer.setAnnotation(model);
 let onCanonical = false;   // 是否在标准脸拓扑上标注（决定能否导出图谱）
 
 const SYSTEM_LABELS = { rstl: "RSTL", langer: "Langer" };
+let bundledFlameBasis = null;
+
+async function loadBundledFlameStandard() {
+  if (!bundledFlameBasis) bundledFlameBasis = await loadFlameBasis(assetUrls.flameBasis);
+  const verts = flameForward(
+    bundledFlameBasis,
+    new Float64Array(bundledFlameBasis.NS),
+    new Float64Array(bundledFlameBasis.NE),
+    0,
+  );
+  return { verts, tris: facesArray(bundledFlameBasis) };
+}
 
 // ── 网格加载 ──────────────────────────────────────────────────────────────────
 async function loadCanonical() {
-  setHint("加载标准脸…");
-  const [verts, topology] = await Promise.all([
-    fetchJSON(assetUrls.canonicalVertices, "标准脸顶点"),
-    fetchJSON(assetUrls.topology, "标准脸拓扑"),
-  ]);
-  const tris = Array.isArray(topology) ? topology : topology.triangles;
-  model.setTopology(topology);
-  viewer.setMesh(verts, tris, { showSurface: true });
+  setHint("加载 FLAME 标准脸…");
+  let mesh;
+  try {
+    mesh = await loadBundledFlameStandard();
+  } catch (err) {
+    setHint("FLAME 标准脸加载失败，回退到 MediaPipe 标准脸：" + err.message);
+    const [verts, topology] = await Promise.all([
+      fetchJSON(assetUrls.canonicalVertices, "MediaPipe 标准脸顶点"),
+      fetchJSON(assetUrls.topology, "MediaPipe 标准脸拓扑"),
+    ]);
+    const tris = Array.isArray(topology) ? topology : topology.triangles;
+    model.setTopology(topology);
+    viewer.setMesh(verts, tris, { showSurface: true });
+    onCanonical = true;
+    els.drawMode.textContent = "MediaPipe 标准图谱";
+    setHint("已回退到 MediaPipe 标准脸；可导出 mediapipe-468 图谱(tri,u,v)。");
+    refresh();
+    return;
+  }
+  const meta = topologyMeta("flame-2023");
+  model.setTopology({ topologyId: meta.id, topologyVersion: meta.version });
+  viewer.setMesh(mesh.verts, mesh.tris, { showSurface: true });
   onCanonical = true;
-  els.drawMode.textContent = "标准脸图谱";
-  setHint("在脸上点击落点；拖拽旋转、滚轮缩放。导出可得图谱(tri,u,v)。");
+  els.drawMode.textContent = "FLAME 标准图谱";
+  setHint(`在 FLAME 标准脸上点击落点（${mesh.verts.length} 顶点）；导出可得 flame-2023 图谱(tri,u,v)。`);
   refresh();
 }
 
@@ -87,7 +114,7 @@ async function cloudFitFlame() {
   try {
     observed = await fetchJSON(assetUrls.canonicalVertices, "标准脸顶点");
   } catch (err) {
-    setHint("加载标准脸失败：" + err.message);
+    setHint("加载 MediaPipe 参考点失败：" + err.message);
     return;
   }
   let res;
@@ -138,7 +165,7 @@ async function loadMeshFile(file) {
 async function loadSlicerFile(file) {
   if (!file) return;
   if (!viewer.hasMesh()) {
-    setHint("请先加载标准脸或上传头模，再导入 Slicer 曲线。");
+    setHint("请先加载 FLAME 标准脸或上传头模，再导入 Slicer 曲线。");
     return;
   }
   const spacing = Number(els.resampleSpacing.value) || 2;
@@ -408,6 +435,6 @@ function tick() {
 if (!flameAvailable()) els.loadFlame.style.display = "none";
 if (!fittedFlameAvailable()) els.loadFittedFlame.style.display = "none";
 refresh();
-setHint("点「加载标准脸」开始，或上传头模 JSON / OBJ / PLY。");
+setHint("点「加载 FLAME 标准脸」开始，或上传头模 JSON / OBJ / PLY。");
 loadCanonical().catch((e) => setHint("标准脸加载失败：" + e.message));
 requestAnimationFrame(tick);

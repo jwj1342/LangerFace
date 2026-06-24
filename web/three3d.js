@@ -33,20 +33,22 @@ function buildLineGeometry(atlasLines, verts, tris, normals, bands) {
   const eps = bb.size * 0.004;
   const pos = [], col = [];
   for (const ln of atlasLines) {
-    const pts3 = ln.points.map((p) => {
-      const [ti, u, v] = p, w = 1 - u - v, t = tris[ti];
-      const A = verts[t[0]], B = verts[t[1]], C = verts[t[2]];
-      const nA = normals[t[0]], nB = normals[t[1]], nC = normals[t[2]];
-      const nx = u * nA[0] + v * nB[0] + w * nC[0];
-      const ny = u * nA[1] + v * nB[1] + w * nC[1];
-      const nz = u * nA[2] + v * nB[2] + w * nC[2];
-      const nl = Math.hypot(nx, ny, nz) || 1;
-      return [
-        u * A[0] + v * B[0] + w * C[0] + (nx / nl) * eps,
-        u * A[1] + v * B[1] + w * C[1] + (ny / nl) * eps,
-        u * A[2] + v * B[2] + w * C[2] + (nz / nl) * eps,
-      ];
-    });
+    const pts3 = Array.isArray(ln.points3d)
+      ? ln.points3d
+      : ln.points.map((p) => {
+        const [ti, u, v] = p, w = 1 - u - v, t = tris[ti];
+        const A = verts[t[0]], B = verts[t[1]], C = verts[t[2]];
+        const nA = normals[t[0]], nB = normals[t[1]], nC = normals[t[2]];
+        const nx = u * nA[0] + v * nB[0] + w * nC[0];
+        const ny = u * nA[1] + v * nB[1] + w * nC[1];
+        const nz = u * nA[2] + v * nB[2] + w * nC[2];
+        const nl = Math.hypot(nx, ny, nz) || 1;
+        return [
+          u * A[0] + v * B[0] + w * C[0] + (nx / nl) * eps,
+          u * A[1] + v * B[1] + w * C[1] + (ny / nl) * eps,
+          u * A[2] + v * B[2] + w * C[2] + (nz / nl) * eps,
+        ];
+      });
     let my = 0; for (const q of pts3) my += q[1]; my = (my / pts3.length - bb.lo[1]) / ((bb.hi[1] - bb.lo[1]) || 1);
     const c = bands ? (my > 0.64 ? BAND.top : my > 0.34 ? BAND.mid : BAND.low) : [0.78, 0.15, 1.0];
     for (let i = 0; i + 1 < pts3.length; i++) {       // 相邻点成段
