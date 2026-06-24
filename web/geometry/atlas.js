@@ -2,9 +2,16 @@
 // 对应 Python 端 lines/mapping.py 与 rendering/occlusion.py 的忠实移植（纯函数、无 DOM）。
 // 拆分自原 web/geometry.js（见 #49）。
 
-import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "../constants.js";
+// 共享标量/索引来自 constants.py 的生成物（跨语言单一真源，见 #30）。
+import {
+  DEFAULT_OCCLUSION_THRESHOLD,
+  INNER_LIP as INNER_LIP_IDX,
+  NOSE_TIP,
+  TOPOLOGY_ID,
+  TOPOLOGY_VERSION,
+} from "../constants_generated.js";
 
-export const NOSE_TIP = 1; // MediaPipe 鼻尖关键点索引
+export { NOSE_TIP }; // MediaPipe 鼻尖关键点索引（保留 barrel 导出）
 
 // 关键点（归一化 x,y in [0,1], z）→ 图像像素 (x*W, y*H, z*W)
 export function toPixels(landmarks, W, H) {
@@ -82,8 +89,8 @@ export function noseTriangles(triangles) {
 
 // 内唇关键点集合（上唇下缘 + 下唇上缘 + 口角）。三个顶点全在此集合内的三角面
 // 横跨口裂：闭口时近乎退化、张嘴时拉开横跨口腔空洞，落在其上的图谱点会跳进口内/牙齿。
-// 单一事实来源：与 Python src/langerface/config/constants.py 的 INNER_LIP 一致（见 #38）。
-export const INNER_LIP = new Set([78, 80, 88, 95, 191, 308, 310, 318, 324, 415]);
+// 单一事实来源：索引由 constants.py 的 INNER_LIP 生成（见 #30/#38），此处仅包成 Set。
+export const INNER_LIP = new Set(INNER_LIP_IDX);
 
 // 预计算「≥2 个顶点属于 INNER_LIP」的口裂三角面索引集合（渲染期据此排除）。
 // 按 triangles 数组引用 memoize：拓扑全程不变，故只在首帧计算一次，不必每帧重算。
@@ -104,8 +111,9 @@ export function innerMouthTriangles(triangles) {
   return s;
 }
 
-// 背面剔除：返回 Uint8Array(每个三角面是否朝向相机)。与 Python BackfaceCuller 一致。
-export function visibleTriangles(landmarksPx, triangles, noseTris, threshold = -0.05) {
+// 背面剔除：返回 Uint8Array(每个三角面是否朝向相机)。移植自 Python rendering/occlusion.py BackfaceCuller。
+// threshold 默认值来自 constants.py 的 DEFAULT_OCCLUSION_THRESHOLD（生成，见 #30）。
+export function visibleTriangles(landmarksPx, triangles, noseTris, threshold = DEFAULT_OCCLUSION_THRESHOLD) {
   const M = triangles.length;
   const nz = new Float64Array(M);
   for (let i = 0; i < M; i++) {
