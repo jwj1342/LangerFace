@@ -254,12 +254,9 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 
 ## 线条图谱（数据）
 
-- **格式**（JSON）：图谱信封带 `topologyId` / `topologyVersion`，每条线是点序列，每点 `[三角面id, u, v]`（重心坐标，`w = 1−u−v`）。见 [`src/langerface/lines/atlas.py`](src/langerface/lines/atlas.py)；网页注入路径会校验拓扑身份，避免把 FLAME / MediaPipe 图谱混用。
-- **生成**：[`tools/build_field_atlas.py`](tools/build_field_atlas.py) —— 在"人脸归一化框"上定义张力线**方向场** θ(x,y)
-  （前额横、鼻/人中竖、眼周同心、口周放射、颊部斜行），用 Jobard–Lefèvre **等间距流线**算法追踪出布满全脸的细密线，
-  再投影到网格三角面。当前 RSTL **132 条线**、Langer **110 条线**。
-- **来源与状态**：方向遵循 **Borges RSTL** 的总体走向；几何为**近似**；`validated: false`。
-- **校验闭环**：`annotate_atlas.py` / `digitize_from_diagram.py` 让临床医生修正，保存后 `validated` 置 `true` 并记录校验者。
+线图谱是 JSON：信封带 `topologyId` / `topologyVersion`，每条线为 `[三角面id, u, v]` 重心坐标点序列（`w = 1−u−v`），网页注入时校验拓扑身份。由 [`tools/build_field_atlas.py`](tools/build_field_atlas.py) 用张力线**方向场 + 等间距流线**生成，当前 RSTL **132 条**、Langer **110 条**；方向遵循 **Borges RSTL** 走向、几何为近似、`validated: false`，临床医生经 `annotate_atlas.py` / `digitize_from_diagram.py` 修正后置 `validated: true`。
+
+> 数据格式、方向场算法与生成流程的完整说明见 [ARCHITECTURE.md «6. 图谱（数据）生成与格式»](docs/ARCHITECTURE.md)。
 
 ---
 
@@ -270,7 +267,7 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 | `.claude/` | Claude Code 相关启动配置；本地私有设置文件已被 `.gitignore` 排除。 |
 | `.github/` | GitHub Actions CI；包含 Python 测试、JS/Vite 构建和几何对拍。 |
 | `assets/` | Python 端权威资产：MediaPipe 标准脸 obj、人脸 landmarker `.task`、RSTL/Langer atlas JSON；`assets/flame/` 仅放本地 license-gated 原始 FLAME 资产。 |
-| `docs/` | **全部项目文档集中于此**：架构、后端数据层、环境、贡献、CI/CD、路线图（TODO）。 |
+| `docs/` | **全部项目文档集中于此**，命名统一 `UPPER_SNAKE_CASE.md`、单一职责；完整清单见下方[开发文档索引](#开发文档)。 |
 | `src/langerface/` | Python 核心库，按 `config/geometry/detection/lines/rendering/pipeline/media/apps` 分层。 |
 | `tests/` | pytest 测试，覆盖图谱、标准脸、映射、稳定性、渲染和 pipeline 行为。 |
 | `tools/` | 资产下载、图谱生成、web 资产导出、3D 重建、临床标注、目检和对拍脚本。 |
@@ -296,15 +293,9 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 
 ## 验证与测试
 
-- **前端架构与 JS/Python 逐点一致**（`cd web && npm test`）：先检查 `web/*.js` 静态 import 无模块环，再用真实帧关键点对拍，映射误差 ~5×10⁻⁵px、遮挡 0 不一致，并覆盖 One-Euro fixture。
-- **手部遮挡掩膜**（`node tools/test_occlusion.mjs`）：手指上/手掌被挡、**指缝保留**、无手不剔除。
-- **Umeyama 相似变换**（`node tools/test_umeyama.mjs`）：施加已知变换可恢复（误差 ~1e-13）。
-- **拓扑与图谱契约**：测试覆盖 `topologyId` / `topologyVersion` 守卫、标注图谱注入边界和 atlas roundtrip。
-- **FLAME / soft-body 实验**：JS 测试覆盖 FLAME basis 拟合、jaw / 表情前向，以及 RSTL 切除闭合演示的张力方向断言。
-- **浏览器诊断导出**：`tools/test_logger.mjs` 锁定 `window.exportLangerfaceDiagnostics()` 的结构化 JSON 契约。
-- **Python 单测**（`pytest`）：图谱完整性、标准脸解析、映射仿射不变性、平滑降抖动、端到端渲染。
-- **目检脚本**：`tools/render_check.py`、`inspect_frames.py`、`montage.py`、`sample_output.py`、`debug_one.py`。
-- **浏览器实测**：UI/3D 查看通过截图核对；实时摄像头链路需在带摄像头的浏览器中确认。
+两套几何实现（Python / JS）由**逐点对拍**保证一致：`cd web && npm test`（架构无环 + 映射误差 ~5×10⁻⁵px + 背面剔除 0 不一致 + One-Euro / 拓扑契约 / FLAME / soft-body / 诊断导出）与 `pytest`（图谱完整性、仿射不变性、渲染、资产同步、可观测性）全绿即可。
+
+> 各测试的职责、目检脚本与浏览器实测清单见 [CONTRIBUTING.md «运行测试»](docs/CONTRIBUTING.md#运行测试)；跨语言对拍不变式与金标重生成见 [CROSS_LANG_PARITY.md](docs/CROSS_LANG_PARITY.md)。
 
 ---
 
@@ -362,57 +353,46 @@ Stage 2 的切口候选必须受以下边界约束：
 
 ## 持续集成与部署（CI/CD）
 
-### 持续集成（GitHub Actions）
+- **CI**：push 到 `master` / `refactor/**` 或发 PR 时，[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 跑三个并行 job —— `lint`（`ruff check .`）、`python-tests`（`pytest`，**Python 3.10 / 3.11 / 3.12** 矩阵，不装 mediapipe）、`js-tests`（**Node 24**：`npm ci` + `npm run build` + `npm test` 对拍 `web/geometry/` 与 Python 一致）。提交前可装 `pre-commit`（[`.pre-commit-config.yaml`](.pre-commit-config.yaml)）做本地预检。
+- **CD**：网页是 Vite 构建的**纯静态站点**（`web/dist/`，全程浏览器运行、无后端），经 Vercel Git 集成自动部署（自动 HTTPS → 线上摄像头可用），Vercel Project 的 Root Directory 设为 `web`。
+- **隐私**：`web/assets/recon_demo.json` 是示例视频重建出的 468 点关键点网格，随站点**公开**；不想公开就把它加入 [`web/.vercelignore`](web/.vercelignore)（"用示例重建"按钮失效，仍可"转头扫描"）。
 
-每次推送到 `master` / `refactor/**` 分支或发起 Pull Request，都会自动运行 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)。三个并行 job 共同把关：
-
-| Job | 运行内容 | 说明 |
-|---|---|---|
-| `lint` | `ruff check .` | Python 代码风格、import 排序、pyupgrade —— 硬门禁。 |
-| `python-tests` | `pip install -e ".[dev]"` → `pytest`；矩阵 **Python 3.10 / 3.11 / 3.12** | 不装 mediapipe（测试注入假检测器 / 合成关键点）；资产随仓库提交，故标准脸 / 渲染 / pipeline 测试真正执行而非跳过。 |
-| `js-tests` | **Node 24** → `npm ci` → `npm run build`（Vite 生产构建）→ `npm test` | 验证前端可构建，并用真实帧逐点对拍 `web/geometry/` 与 Python 端一致（架构 / 映射 / 遮挡 / Umeyama）。 |
-
-- **触发**：push 到 `master`、`refactor/**`，以及所有 Pull Request。
-- **并发**：同一 ref 的旧运行自动取消（`cancel-in-progress`），节省额度。
-- **本地预检**：提交前可装 `pre-commit`（见 [`.pre-commit-config.yaml`](.pre-commit-config.yaml)）自动跑 ruff，并拦截大文件 / 人脸影像误提交。
-
-### 持续部署（Vercel）
-
-网页端是 **Vite 构建出的纯静态站点**（`web/dist/`，全部在浏览器运行，无后端），可直接部署到 Vercel。
-Vercel 自动提供 **HTTPS**，因此线上 `getUserMedia`（摄像头）可用。
-
-- **线上地址**：见 [CI/CD 与 Vercel 部署指南](docs/CI_CD_VERCEL.md#production-url) 中的 Production URL。
-- **推荐流程**：使用 Vercel Git 集成自动部署，GitHub Actions 负责质量门禁；Vercel Project 的 Root Directory 设为 `web`。详细配置见 [CI/CD 与 Vercel 部署指南](docs/CI_CD_VERCEL.md)。
-- **手动部署 fallback**（从 `web/` 目录）：
-  ```bash
-  cd web
-  npm ci
-  npm run build
-  npx vercel login          # 首次：登录你的 Vercel 账号
-  npx vercel deploy --prod --yes
-  ```
-- **配置文件**：
-  - [`web/vite.config.js`](web/vite.config.js)：Vite 静态资产导入与生产构建设置。
-  - [`web/vercel.json`](web/vercel.json)：Vercel 使用 `npm run build`，输出 `dist/`，并为 `/assets/*` 配置长缓存。
-  - [`web/.vercelignore`](web/.vercelignore)：排除本地测试/构建缓存。
-- **更新流程**：改完 `web/` 后（若动了图谱/几何/3D 资产，先 `python3 tools/export_web_assets.py` 重新导出），发 PR；CI、Vercel Preview 和至少 1 个 reviewer approval 都通过后合并到 `master`，由 Vercel 自动发布生产环境。
-- **隐私**：`web/assets/recon_demo.json` 是示例视频重建出的 468 点关键点网格，会随站点**公开**。不想公开就把它加入 `web/.vercelignore`（此时网页"用示例重建"按钮会失效，仍可用"转头扫描"）。
+> Vercel Project 设置、Production URL、branch protection 必需检查、Preview 访问策略、手动部署 fallback 与排障清单，全部见 **[CI/CD 与 Vercel 部署指南](docs/CI_CD_VERCEL.md)**。
 
 ## 开发文档
 
-- [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md)：本地环境、集群环境、venv、Node 24、测试与本地产物目录。
-- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)：协作流程、测试约定、扩展点和 PR 要求。
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：核心算法、坐标系、2D/3D 路线、网页 3D 标注、HeadSpace 离线管线、Stage 2 肿物与切口设计路线、资产与部署细节。
-- [docs/BACKEND_DATA_ARCHITECTURE.md](docs/BACKEND_DATA_ARCHITECTURE.md)：后端数据层、Cloudflare Worker/D1/R2、重计算边界与阶段落地。
-- [docs/VALIDATION.md](docs/VALIDATION.md)：临床验证数据集、Stage 1/Stage 2 指标、失败分类和人工评审表。
-- [docs/PRIVACY_AND_AUDIT.md](docs/PRIVACY_AND_AUDIT.md)：敏感数据边界、禁止提交项、导出约束和审计记录字段。
-- [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)：浏览器诊断 JSON、结构化事件字段、计数器和运行时指标约定。
-- [docs/CI_CD_VERCEL.md](docs/CI_CD_VERCEL.md)：Vercel 项目设置、Preview 访问策略、branch protection 与排障。
-- [docs/TODO.md](docs/TODO.md)：路线图与待办（与 GitHub Issues 同步）。
-- 医学声明、图谱状态与临床局限见 README [已知局限与医学声明](#已知局限与医学声明)。
+所有项目文档集中在 `docs/`，文件名统一为 `UPPER_SNAKE_CASE.md`，**每个文档单一职责**。下表为索引（按「上手 → 架构 → 质量 → 临床 → 规划」分组）——想用 AI 编码工具熟悉本项目，从这里按需进入：
+
+| 文档 | 职责 |
+|---|---|
+| **上手 / 协作** | |
+| [ENVIRONMENT.md](docs/ENVIRONMENT.md) | 本地 / 集群环境、venv、Node 24、测试与本地产物目录 |
+| [CONTRIBUTING.md](docs/CONTRIBUTING.md) | 协作流程、测试约定、扩展点、PR 要求 |
+| [ENGINEERING_LESSONS.md](docs/ENGINEERING_LESSONS.md) | 多人并行协作踩过的坑、避坑规则与提交前清单 |
+| **架构 / 数据** | |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 核心算法、坐标系、2D/3D 路线、网页 3D 标注、HeadSpace 离线管线、Stage 2 路线、资产与部署 |
+| [BACKEND_DATA_ARCHITECTURE.md](docs/BACKEND_DATA_ARCHITECTURE.md) | 后端数据层、Cloudflare Worker/D1/R2、重计算边界与阶段落地 |
+| [FLAME_3D_TRACK.md](docs/FLAME_3D_TRACK.md) | 3D FLAME 配准 / 标注轨的设计与技术选型（issue #61）|
+| **质量 / 运维** | |
+| [CROSS_LANG_PARITY.md](docs/CROSS_LANG_PARITY.md) | Python ⇄ JS ⇄ 金标逐点对拍不变式与金标重生成 |
+| [OBSERVABILITY.md](docs/OBSERVABILITY.md) | 浏览器诊断 JSON、结构化事件字段、计数器与运行时指标（issue #51）|
+| [CI_CD_VERCEL.md](docs/CI_CD_VERCEL.md) | Vercel 设置、Preview 访问策略、branch protection 与排障 |
+| [LABELS.md](docs/LABELS.md) | issue / PR 标签规范 |
+| **临床 / 合规** | |
+| [VALIDATION.md](docs/VALIDATION.md) | 临床验证数据集、Stage 1/2 指标、失败分类、人工评审表（issue #20）|
+| [PRIVACY_AND_AUDIT.md](docs/PRIVACY_AND_AUDIT.md) | 敏感数据边界、禁止提交项、导出约束、审计字段（issue #21）|
+| **规划** | |
+| [TODO.md](docs/TODO.md) | 路线图与待办（与 GitHub Issues 同步）|
+
+> 医学声明、图谱状态与临床局限见 README [已知局限与医学声明](#已知局限与医学声明)。
 
 ## 文档维护约定
 
 **本仓库的 [README.md](README.md)、[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、[docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) 必须与代码保持同步。**
 任何功能更新（新增/修改特性、改动数据流、增删模块或资产、调整使用方式）都要在同一改动中更新这些文档，
 确保"读文档即可了解全貌并复现项目"。医学相关变化同时更新本 README 的[已知局限与医学声明](#已知局限与医学声明)小节；路线图变化更新 [docs/TODO.md](docs/TODO.md)。
+
+**文档规范**（便于人与 AI 编码工具都能快速定位）：
+- 文件名统一 `UPPER_SNAKE_CASE.md`，放在 `docs/`；一个文档只承担一个职责，别把不相关主题塞进同一篇。
+- 新增文档时，**同步把它加进上方[「开发文档」索引](#开发文档)表**并写清职责；删除/重命名文档时同步改索引与所有引用它的链接。
+- 文档顶部用一句话点明本篇职责（"本文…"），与索引里的职责描述一致。
