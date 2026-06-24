@@ -17,6 +17,7 @@
 - 照片 / 视频 / 实时叠加：工作台只允许把已确认候选暂存为 `incision-overlay/v0.1`，payload 保留 `review_gate`、`guardrail_summary`、审阅状态和 `raw_image_sent=false` 审计字段；实时页读取后按三角面重心坐标投射到上传照片、视频或摄像头 landmarks 上，并复用背面剔除、手部遮挡和放大窗。
 - Agent 工具 schema：`assets/agentic_incision_tool_schema.json` 固化工具名、输入输出和 LLM 边界。
 - 隐私审计：`docs/INCISION_PRIVACY_AUDIT.md` 记录不出域数据、可发送抽象字段和导出审计字段。
+- 导出守门：`tools/audit_export_privacy.py` 可在分享审阅、肿物或诊断 JSON 前拦截原始媒体标记、未脱敏 secret、明显身份字段和疑似嵌入媒体 payload。
 - 验证汇总：`tools/evaluate_stage2_validation.py` 可读取脱敏审阅 JSON，汇总候选类型、医生确认率、guardrail 分布、RSTL 偏角、梭形几何误差、敏感距离、失败模式和隐私审计计数。
 - Provider 接口：默认支持 Ollama/Qwen，本地或集群 vLLM 可通过 OpenAI-compatible endpoint 切入。
 - 前端 Provider 配置：工作台暴露 Agent endpoint、Base URL、model、API Key 和 timeout；API Key 只发送给本地 Agent 代理，导出记录中会脱敏。

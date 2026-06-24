@@ -31,6 +31,14 @@
 - `privacy_audit`：数据出域声明，明确 `raw_image_sent=false`。
 - `incision-overlay/v0.1`：用于照片/视频/实时页的短期 sessionStorage 叠加，必须带 `raw_image_sent=false` 和 `live_overlay_ready=true`，不作为病历或长期审计系统。
 
+导出 JSON 分享前可运行：
+
+```bash
+python tools/audit_export_privacy.py incision_review_*.json tumor_input_*.json
+```
+
+脚本会拦截原始媒体标记、未脱敏 provider secret、明显身份字段和疑似嵌入媒体 payload。
+
 ## 仍需单独完成的合规工作
 
 - 研究伦理和数据治理审批。

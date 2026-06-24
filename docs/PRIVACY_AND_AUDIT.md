@@ -98,3 +98,21 @@
 - `events[].detail` 中没有姓名、病例号或自由文本身份信息。
 - `assetVersions` 不含私有下载 URL 或 secret。
 - 诊断文件只用于调试、验证汇总或 PR 说明，不作为临床病历系统替代品。
+
+## 导出前自动审计
+
+分享审阅记录、肿物输入或诊断 JSON 前，可运行：
+
+```bash
+python tools/audit_export_privacy.py incision_review_*.json tumor_input_*.json
+```
+
+脚本输出 `export-privacy-audit/v0.1` 报告，默认发现违规即返回非 0。当前检查项包括：
+
+- `privacy_audit.raw_image_sent`、`raw_video_sent` 或 `contains_face_image` 被置为 `true`。
+- `api_key`、`token`、`secret`、`authorization` 等字段未脱敏。
+- `patient_name`、`mrn`、`phone`、`email`、`date_of_birth` 等身份字段被填充。
+- 自由文本中出现 email 或电话样式字符串。
+- 媒体相关字段中疑似嵌入 base64 图像 / 视频 / DICOM payload。
+
+该脚本只是工程守门，不能替代机构合规审查。
