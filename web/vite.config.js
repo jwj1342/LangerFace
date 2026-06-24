@@ -12,6 +12,7 @@ export default defineConfig({
         main: resolve(import.meta.dirname, "index.html"),
         annotate: resolve(import.meta.dirname, "annotate.html"),
         surgery: resolve(import.meta.dirname, "surgery.html"),
+        incisionAgent: resolve(import.meta.dirname, "incision_agent.html"),
       },
     },
   },

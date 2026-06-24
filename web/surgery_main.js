@@ -1,5 +1,5 @@
-// 切除 → 闭合演示页：标准脸（MediaPipe 标准头）+ 医生 RSTL 张力线，做表面质点-弹簧软体。
-// 标一个肿物 → 梭形切除 → 周围皮肤预张力把伤口拉合（含轻微回弹）；顺皮纹 vs 逆皮纹的跨伤口张力不同。
+// 沿 RSTL 闭合演示页：标准脸 + 医生 RSTL 张力线，做表面质点-弹簧软体。
+// 标一个肿物 → 沿 RSTL 梭形切除 → 周围皮肤预张力把伤口拉合（含轻微回弹）。
 // 物理核心在 soft_body.js（已 Node 单测）；本文件只负责渲染、拾取、交互、上色。
 import * as THREE from "three";
 
@@ -11,7 +11,7 @@ import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.js";
 const $ = (id) => document.getElementById(id);
 const els = {
   canvas: $("surgeryCanvas"), wrap: document.querySelector(".main-wrap"), hint: $("hint"),
-  lesionState: $("lesionState"), size: $("sizeRange"), sizeVal: $("sizeVal"), along: $("btnAlong"), across: $("btnAcross"),
+  lesionState: $("lesionState"), size: $("sizeRange"), sizeVal: $("sizeVal"), along: $("btnAlong"),
   reset: $("btnReset"), showLines: $("showLines"), tensionVal: $("tensionVal"),
   tensionBar: $("tensionBar"), verdict: $("verdict"),
 };
@@ -35,8 +35,8 @@ const S = {                        // 全局状态
   verts: null, tris: null, atlas: null, atlasSub: null, dir: null, anchored: null, normalsRest: null,
   meanEdge: 1, head: null, lines: null, marker: null, raycaster: new THREE.Raycaster(),
   sb: null, colors: null, baseline: null, shortAxis: null, lesion: 0, simActive: false, linesDirty: true,
-  cutType: null, lastScar: 0, settled: { along: null, across: null }, simFrames: 0,
-  previewAlong: null, previewAcross: null, woundBed: null,
+  cutType: null, lastScar: 0, simFrames: 0,
+  previewAlong: null, woundBed: null,
 };
 
 async function loadJSON(url) { return (await fetch(url)).json(); }
@@ -59,7 +59,7 @@ async function boot() {
   S.head = new Head3D(els.canvas);
   S.colors = verts.map(() => [1, 1, 1]);
   rebuildMesh(tris);                // 初始：完整网格
-  // RSTL 线 = 半透明青色导引层（与红色张力图对比），统一色不随顶点
+  // RSTL 线 = 半透明青色导引层，统一色不随顶点
   S.lines = new THREE.LineSegments(new THREE.BufferGeometry(),
     new THREE.LineBasicMaterial({ color: 0x6fe9ff, transparent: true, opacity: 0.5, toneMapped: false }));
   S.lines.renderOrder = 3;
@@ -69,11 +69,10 @@ async function boot() {
   S.marker = new THREE.Mesh(new THREE.SphereGeometry(mr, 16, 12), new THREE.MeshBasicMaterial({ color: 0xff2b4e, toneMapped: false }));
   S.head.group.add(S.marker);
 
-  // 切口预览：两条朝向的梭形轮廓（绿=沿 RSTL，红=逆 RSTL），随滑块/落点实时更新
+  // 切口预览：沿 RSTL 的梭形轮廓，随滑块/落点实时更新。
   S.previewAlong = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x18c08a, toneMapped: false }));
-  S.previewAcross = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xf06a5e, toneMapped: false }));
-  S.previewAlong.renderOrder = 5; S.previewAcross.renderOrder = 5;
-  S.head.group.add(S.previewAlong); S.head.group.add(S.previewAcross);
+  S.previewAlong.renderOrder = 5;
+  S.head.group.add(S.previewAlong);
 
   // 创面床：肿物正后方的暗红圆盘，切除后透过缺口看到的是创面而非黑色背景
   S.woundBed = new THREE.Mesh(new THREE.CircleGeometry(1, 28),
@@ -86,7 +85,7 @@ async function boot() {
   S.head.resetView();
   fitSize();
   refreshLines();
-  els.hint.textContent = "已就绪：在脸上点击标记肿物，再选「沿 / 逆 RSTL 切除」。";
+  els.hint.textContent = "已就绪：在脸上点击标记肿物，再执行沿 RSTL 切除。";
   loop();
 }
 
@@ -148,23 +147,20 @@ function ellipsePositions(center, normal, longAxis, la, lb, N = 56) {
   return g;
 }
 
-// 切口预览：在落点画两条梭形轮廓（绿=沿 RSTL，红=逆 RSTL），切除后隐藏
+// 切口预览：在落点画沿 RSTL 的梭形轮廓，切除后隐藏。
 function updatePreview() {
   const show = Boolean(S.head && !S.sb);
-  S.previewAlong.visible = show; S.previewAcross.visible = show; S.marker.visible = show;
+  S.previewAlong.visible = show; S.marker.visible = show;
   if (!show) return;
   const i = S.lesion, n = S.normalsRest[i], c = S.verts[i];
   const { la, lb } = lesionSizes();
   S.previewAlong.geometry.dispose();
   S.previewAlong.geometry = ellipsePositions(c, n, S.dir[i], la, lb);
-  S.previewAcross.geometry.dispose();
-  S.previewAcross.geometry = ellipsePositions(c, n, norm(cross(n, S.dir[i])), la, lb);
 }
 
 // 沿 longAxis 做梭形切除并启动闭合沉降。longAxis 沿 RSTL → 短轴(闭合方向)=垂直 RSTL(软)→ 平和。
 function setActiveCut(type) {       // 高亮当前切向按钮（选中反馈）
   els.along.classList.toggle("active", type === "along");
-  els.across.classList.toggle("active", type === "across");
 }
 
 function doExcision(longAxisVec, cutType) {
@@ -188,35 +184,28 @@ function doExcision(longAxisVec, cutType) {
   updatePreview();                   // S.sb 已置 → 隐藏预览轮廓与标记
   rebuildMesh(aliveFaces());         // 显示缺口 + 重建带顶点色的网格
   S.simActive = true; S.linesDirty = true;
-  els.hint.textContent = `${cutType === "along" ? "沿" : "逆"} RSTL 切除 ${removed} 个顶点，正在闭合…`;
+  els.hint.textContent = `沿 RSTL 切除 ${removed} 个顶点，正在闭合…`;
 }
 
 function reset() {
   S.sb = null; S.simActive = false; S.shortAxis = null; S.cutType = null; S.baseline = null;
   setActiveCut(null);
-  S.settled = { along: null, across: null };
   S.colors = S.verts.map(() => [1, 1, 1]);
   S.woundBed.visible = false;
   rebuildMesh(S.tris);
   setLesion(S.lesion);               // → updatePreview 重新显示预览轮廓
   S.linesDirty = true; refreshLines();
   els.tensionVal.textContent = "—"; els.tensionBar.style.width = "0%";
-  els.verdict.textContent = "切一刀看看：顺皮纹更平和，逆皮纹更绷紧。";
+  els.verdict.textContent = "点击沿 RSTL 切除后，观察闭合区域新增张力。";
   els.verdict.style.color = "";
   els.hint.textContent = "已复位（长回新皮肤）。";
 }
 
-// 沉降完成后定格：记录该切向的瘢痕张力，若两种切向都切过 → 直接对比给结论
+// 沉降完成后定格：记录沿 RSTL 闭合新增张力。
 function onSettled() {
-  S.settled[S.cutType] = S.lastScar;
-  const a = S.settled.along, b = S.settled.across;
-  if (a != null && b != null) {
-    els.verdict.innerHTML = `顺皮纹新增张力 <b>${Math.round(a)}</b> ｜ 逆皮纹 <b>${Math.round(b)}</b>（满分100）<br>${a < b ? "→ 顺皮纹更平和 ✅" : "→ 本处差异不明显，换个位置再试"}`;
-    els.verdict.style.color = a < b ? "#34d399" : "#fbbf24";
-    els.hint.textContent = "对比完成：换个位置（复位后点击）再试。";
-  } else {
-    els.hint.textContent = `${S.cutType === "along" ? "沿" : "逆"}皮纹闭合完成。再点另一种切向直接对比。`;
-  }
+  els.verdict.innerHTML = `沿 RSTL 闭合新增张力指数 <b>${Math.round(S.lastScar)}</b> / 100。`;
+  els.verdict.style.color = S.lastScar > 55 ? "#b45309" : "#0c8460";
+  els.hint.textContent = "闭合完成：可复位后换一个落点继续观察。";
 }
 
 // 闭合新增张力（当前 − 静息基线）上色 + 0–100 指数。指数取伤口区 top-3 峰值（最绷紧处），稳健可比。
@@ -311,7 +300,6 @@ function fitSize() {
 new ResizeObserver(fitSize).observe(els.wrap);
 
 els.along.onclick = () => doExcision(S.dir[S.lesion], "along");                                  // 长轴沿 RSTL
-els.across.onclick = () => doExcision(norm(cross(S.normalsRest[S.lesion], S.dir[S.lesion])), "across"); // 长轴逆 RSTL
 els.reset.onclick = reset;
 els.showLines.onchange = () => { S.linesDirty = true; refreshLines(); };
 els.size.oninput = () => { els.sizeVal.textContent = `${els.size.value}%`; if (!S.sb) updatePreview(); };

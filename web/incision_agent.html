@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>切口 Agent · 肿物与 RSTL 切口规划</title>
+<link rel="stylesheet" href="style.css" />
+<style>
+  .agent-grid{display:grid;grid-template-columns:1fr;gap:12px}
+  .metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .metric{background:#f8f9f5;border:1px solid var(--line);border-radius:10px;padding:9px 10px}
+  .metric .k{display:block;font-size:11px;color:var(--muted);font-weight:600}
+  .metric .v{display:block;margin-top:3px;font-size:15px;font-weight:750;font-variant-numeric:tabular-nums}
+  .trace-list{display:flex;flex-direction:column;gap:8px}
+  .trace-step{border:1px solid var(--line);background:#f8f9f5;border-radius:10px;padding:10px}
+  .trace-step .top{display:flex;justify-content:space-between;gap:10px;align-items:center}
+  .trace-step code{font-size:11px;background:#eef0ea;border:1px solid #e0e4dc;border-radius:6px;padding:2px 5px}
+  .trace-step p{margin:7px 0 0;font-size:11.5px;color:var(--muted);line-height:1.45}
+  .trace-step pre{white-space:pre-wrap;word-break:break-word;max-height:150px;overflow:auto;margin:8px 0 0;
+    font-size:11px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px;color:#34404b}
+  .status-pill{font-size:11px;font-weight:700;border-radius:999px;padding:4px 8px;background:#eef0ea;color:#44505d}
+  .status-pill.ok{background:#d9f2e7;color:var(--green-d)}
+  .status-pill.warn{background:#fff1c8;color:#8a5a00}
+  .stage-actions{display:flex;align-items:center;gap:12px}
+  .agent-note{font-size:11px;color:var(--muted);line-height:1.55;margin:0}
+  .edit-status{font-size:11px;font-weight:700;border-radius:999px;padding:4px 8px;background:#eef0ea;color:#44505d}
+  .edit-status.active{background:#fff1c8;color:#8a5a00}
+  #agentCanvas{position:absolute;inset:0;width:100%;height:100%;border-radius:14px;background:#111820}
+  @media(max-width:880px){#agentCanvas{position:static;min-height:420px}.metric-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-top">
+        <span class="eyebrow">STAGE 2 · AGENTIC INCISION</span>
+        <a class="badge" href="index.html">返回实时显示</a>
+      </div>
+      <h1>切口 Agent 工作台</h1>
+    </div>
+
+    <div class="card agent-grid">
+      <label class="field-label" for="tumorKind">肿物类型</label>
+      <select id="tumorKind" class="select">
+        <option value="subcutaneous">皮下肿物 · 线性切口</option>
+        <option value="cutaneous">皮表肿物 · 梭形切口</option>
+      </select>
+      <div>
+        <label class="field-label" for="diameterMm">直径 mm <span id="diameterVal" class="val">12</span></label>
+        <input id="diameterMm" type="range" min="4" max="40" value="12" />
+      </div>
+      <div id="depthWrap">
+        <label class="field-label" for="depthMm">深度 mm <span id="depthVal" class="val">6</span></label>
+        <input id="depthMm" type="range" min="0" max="35" value="6" />
+      </div>
+      <div id="marginWrap" class="hidden">
+        <label class="field-label" for="marginMm">安全切缘 mm <span id="marginVal" class="val">2</span></label>
+        <input id="marginMm" type="range" min="0" max="10" value="2" />
+      </div>
+      <button class="btn btn-primary" id="runAgentBtn">生成候选切口</button>
+      <p class="agent-note" id="pickState">当前点位：默认右颊。右侧标准脸可点击重选。</p>
+    </div>
+
+    <div class="card agent-grid">
+      <label class="check"><input type="checkbox" id="useAgentServer" checked /> 使用本地 Qwen 代理</label>
+      <input id="agentEndpoint" class="select" value="http://127.0.0.1:8765/api/agentic-incision" />
+      <p class="agent-note">代理不可用时自动使用浏览器内确定性工具；候选几何保持同一契约。</p>
+      <div class="quality-top"><span>Provider</span><span id="providerState">待运行</span></div>
+    </div>
+
+    <div class="card">
+      <div class="quality-top"><span>候选结果</span><span id="candidateType">—</span></div>
+      <div class="metric-grid">
+        <div class="metric"><span class="k">长度</span><span class="v" id="candidateLength">—</span></div>
+        <div class="metric"><span class="k">RSTL 置信度</span><span class="v" id="directionConf">—</span></div>
+        <div class="metric"><span class="k">面部分区</span><span class="v" id="regionVal">—</span></div>
+        <div class="metric"><span class="k">Guardrails</span><span class="v" id="guardrailVal">—</span></div>
+      </div>
+      <p class="hint" id="llmSummary">尚未生成。</p>
+      <p class="hint" id="nextStep"></p>
+    </div>
+
+    <div class="card agent-grid">
+      <div class="quality-top"><span>医生调整</span><span class="edit-status" id="editStatus">工具建议</span></div>
+      <div>
+        <label class="field-label" for="angleOffsetDeg">方向偏移 deg <span id="angleOffsetVal" class="val">0</span></label>
+        <input id="angleOffsetDeg" type="range" min="-35" max="35" value="0" />
+      </div>
+      <div>
+        <label class="field-label" for="lengthScale">长度比例 <span id="lengthScaleVal" class="val">100%</span></label>
+        <input id="lengthScale" type="range" min="70" max="150" value="100" />
+      </div>
+      <div id="widthScaleWrap" class="hidden">
+        <label class="field-label" for="widthScale">宽度比例 <span id="widthScaleVal" class="val">100%</span></label>
+        <input id="widthScale" type="range" min="70" max="150" value="100" />
+      </div>
+      <div>
+        <label class="field-label" for="shiftAlongMm">沿长轴移动 mm <span id="shiftAlongVal" class="val">0</span></label>
+        <input id="shiftAlongMm" type="range" min="-12" max="12" value="0" />
+      </div>
+      <div>
+        <label class="field-label" for="shiftPerpMm">垂直长轴移动 mm <span id="shiftPerpVal" class="val">0</span></label>
+        <input id="shiftPerpMm" type="range" min="-12" max="12" value="0" />
+      </div>
+      <select id="editReason" class="select">
+        <option value="">未选择覆盖原因</option>
+        <option value="manual scar camouflage">瘢痕隐蔽优先</option>
+        <option value="manual free-margin protection">游离缘保护优先</option>
+        <option value="manual subunit boundary alignment">贴合美学亚单位边界</option>
+        <option value="manual clinician preference">医生人工判断</option>
+      </select>
+      <button class="btn" id="resetEditBtn">恢复工具建议</button>
+      <p class="agent-note">调整只改变候选草案并记录 provenance；真实切口仍需医生复核。</p>
+    </div>
+
+    <div class="card">
+      <div class="quality-top"><span>工具调用轨迹</span><span id="traceCount">0</span></div>
+      <div class="trace-list" id="traceList"></div>
+    </div>
+
+    <p class="disclaimer">⚠️ 研究原型：LLM 只做编排摘要，方向、几何和 guardrails 均由确定性工具输出。候选切口必须由医生审阅确认。</p>
+  </aside>
+
+  <main class="stage">
+    <div class="stage-top">
+      <span class="live on"><span class="dot"></span>标准脸规划</span>
+      <div class="stage-actions">
+        <span class="fps" id="stageStatus">拖拽旋转 · 滚轮缩放 · 点击定位</span>
+        <a class="stage-link fps" href="annotate.html">3D 标注与演示</a>
+      </div>
+    </div>
+    <div class="stage-body">
+      <div class="main-wrap">
+        <canvas id="agentCanvas"></canvas>
+      </div>
+    </div>
+  </main>
+</div>
+<script type="module" src="incision_agent_main.js"></script>
+</body>
+</html>
