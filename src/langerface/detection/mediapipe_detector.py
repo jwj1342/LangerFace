@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..config.assets import require_asset
-from ..log import get_logger
+from ..log import DetectFailureReason, Phase, get_logger, log_stage_duration
 from .base import FaceResult
 
 log = get_logger(__name__)
@@ -63,10 +63,30 @@ class FaceLandmarkDetector:
 
         if self.mode == "video":
             if timestamp_ms is None:
+                log.error(
+                    "VIDEO 模式缺时间戳。",
+                    extra={
+                        "event": "detect.failure",
+                        "phase": Phase.DETECT,
+                        "reason": DetectFailureReason.NO_TIMESTAMP,
+                    },
+                )
                 raise ValueError("VIDEO 模式需要 timestamp_ms")
-            result = self._landmarker.detect_for_video(mp_image, int(timestamp_ms))
+            with log_stage_duration(log, "detect.infer", Phase.DETECT, mode=self.mode):
+                result = self._landmarker.detect_for_video(mp_image, int(timestamp_ms))
         else:
-            result = self._landmarker.detect(mp_image)
+            with log_stage_duration(log, "detect.infer", Phase.DETECT, mode=self.mode):
+                result = self._landmarker.detect(mp_image)
+
+        if not result.face_landmarks:
+            log.debug(
+                "本帧未检测到人脸。",
+                extra={
+                    "event": "detect.noFace",
+                    "phase": Phase.DETECT,
+                    "reason": DetectFailureReason.NO_FACE,
+                },
+            )
 
         faces: list[FaceResult] = []
         transforms = getattr(result, "facial_transformation_matrixes", None) or []
@@ -86,7 +106,15 @@ class FaceLandmarkDetector:
         try:
             self._landmarker.close()
         except Exception as exc:  # 仅记录，不让清理错误掩盖主流程
-            log.warning("关闭 FaceLandmarker 时出错: %s", exc)
+            log.warning(
+                "关闭 FaceLandmarker 时出错: %s",
+                exc,
+                extra={
+                    "event": "detect.closeError",
+                    "phase": Phase.DETECT,
+                    "reason": DetectFailureReason.DETECTOR_CLOSE_ERROR,
+                },
+            )
 
     def __enter__(self):
         return self
