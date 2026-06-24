@@ -144,4 +144,8 @@ Preview 人工验收清单：
 - 按 [标签规范 (LABELS.md)](LABELS.md) 给 issue / PR 打标签：至少 1 个类型，建议补优先级与领域。
 - 新增模块即补单元测试；纯逻辑测试不要依赖资产或 mediapipe。
 - 不提交大二进制 / 人脸影像（`.gitignore` 已拦截，pre-commit 兜底）。
+- 用 `git add <明确路径>` 暂存，**不要** `git add -A` / `.`（避免误提交 `node_modules` symlink 等本地产物，见下）。
 - 分支开发 + PR；CI、Vercel Preview、至少 1 个 reviewer approval 和必要的人工验收需通过后再合并。
+
+> 多人并行改本仓库踩过的坑（`git add -A` 误提交、伞状 PR 合并后批量过期、分支保护与合并机制、
+> 登录节点测试、行为保持式重构纪律）已沉淀到 [工程教训 (ENGINEERING_LESSONS.md)](ENGINEERING_LESSONS.md)，提交前值得过一遍速查清单。
