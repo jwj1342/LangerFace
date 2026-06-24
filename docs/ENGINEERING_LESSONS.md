@@ -58,6 +58,12 @@ master 受保护：**1 个 approval + 5 个必需检查**（`lint` / `python-tes
   要么对**文件不相交**的 PR 用 `--admin` 一次性合掉（省一轮 CI），但务必先确认互不冲突。
 - `gh pr merge --squash --delete-branch` 对**仍被 worktree 检出**的本地分支会删除失败（报 "Cannot delete branch ... checked out at ..."）——
   **远端分支已删成功**，本地分支需先 `git worktree remove` 再 `git branch -D` 单独清理。
+- **`--admin` 不绕过 draft**：草稿（draft）PR 即便 `gh pr merge --admin` 也会失败（报 "Pull Request is still a draft"）。
+  合并前先查 `gh pr view N --json isDraft`；是草稿就先 `gh pr ready N` 标就绪。（codex 自动建的 PR 常是 draft。）
+- **别用管道吞掉合并的退出码**：`gh pr merge --admin --delete-branch | grep …` 会吃掉失败的 merge 退出码——
+  于是 merge 没成、`--delete-branch` 却照删，**分支被删 + PR 被关**。真实事故见 #77（草稿合并失败 + 管道吞码），
+  所幸提交还在本地分支上，靠「重推分支 → `gh pr reopen` + `gh pr ready` → 正常合并」恢复。
+  **合并步骤单独跑并检查退出码，别和清理串进同一条管道。**
 - **关联 issue 规约**：完全解决才用 `Closes`，部分进展用 `Refs`，**绝不**用 `Closes` 自动关掉 epic
   （详见 [CONTRIBUTING.md](CONTRIBUTING.md) 与团队约定）。`Closes #N` 必须是**纯文本**——写进反引号代码块里 GitHub 不解析。
 
@@ -109,4 +115,4 @@ master 受保护：**1 个 approval + 5 个必需检查**（`lint` / `python-tes
 - [ ] 与他人会改同一文件的 PR 串行；不相交的才并行。
 - [ ] 本地跑 ruff + pytest + `npm test` + `npm run build`（容忍那 2 个已知 cv2 失败）。
 - [ ] 关联 issue：完全解决 `Closes`（纯文本）、部分 `Refs`、epic 不自动关。
-- [ ] 自己作者的 PR 合不了别人审 → `--admin`；合完清理本地分支/worktree。
+- [ ] 自己作者的 PR 合不了别人审 → `--admin`（先确认非 draft，必要时 `gh pr ready`）；合并与清理分两步、检查退出码，别串进一条管道。
