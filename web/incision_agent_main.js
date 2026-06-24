@@ -71,6 +71,13 @@ const els = {
   shiftPerpVal: $("shiftPerpVal"),
   editReason: $("editReason"),
   resetEdit: $("resetEditBtn"),
+  reviewerName: $("reviewerName"),
+  reviewDecision: $("reviewDecision"),
+  reviewNotes: $("reviewNotes"),
+  reviewState: $("reviewState"),
+  approveCandidate: $("approveCandidateBtn"),
+  rejectCandidate: $("rejectCandidateBtn"),
+  saveReview: $("saveReviewBtn"),
   saveCandidate: $("saveCandidateBtn"),
   makeVariants: $("makeVariantsBtn"),
   clearSaved: $("clearSavedBtn"),
@@ -115,6 +122,13 @@ const S = {
   saved: [],
   result: null,
   baseResult: null,
+};
+
+const REVIEW_LABELS = {
+  pending_clinician_confirmation: "待医生确认",
+  approved_for_discussion: "确认候选草案",
+  needs_revision: "退回修改",
+  rejected_by_clinician: "否决候选",
 };
 
 async function loadJSON(url) { return (await fetch(url)).json(); }
@@ -270,6 +284,50 @@ function privacyAudit(provider = {}) {
     remote_provider_configured: remote,
     provider_state: provider,
   };
+}
+
+function reviewStatusLabel(status) {
+  return REVIEW_LABELS[status] || REVIEW_LABELS.pending_clinician_confirmation;
+}
+
+function updateReviewStateUI() {
+  const status = els.reviewDecision.value || "pending_clinician_confirmation";
+  els.reviewState.textContent = reviewStatusLabel(status);
+  els.reviewState.classList.toggle("approved", status === "approved_for_discussion");
+  els.reviewState.classList.toggle("rejected", status === "rejected_by_clinician");
+  els.reviewState.classList.toggle("revision", status === "needs_revision");
+}
+
+function currentReviewMetadata(at = new Date().toISOString()) {
+  const status = els.reviewDecision.value || "pending_clinician_confirmation";
+  const terminal = status !== "pending_clinician_confirmation";
+  return {
+    status,
+    label: reviewStatusLabel(status),
+    reviewer: els.reviewerName.value.trim(),
+    notes: els.reviewNotes.value.trim(),
+    reviewed_at: terminal ? at : null,
+    confirmation_scope: "research_candidate_only_not_surgical_order",
+  };
+}
+
+function setReviewControls(review = {}) {
+  els.reviewDecision.value = review.status || "pending_clinician_confirmation";
+  els.reviewerName.value = review.reviewer || "";
+  els.reviewNotes.value = review.notes || "";
+  updateReviewStateUI();
+}
+
+function resetReviewControls() {
+  setReviewControls({ status: "pending_clinician_confirmation", reviewer: els.reviewerName.value });
+}
+
+function invalidateReviewAfterGeometryChange(message = "候选几何已变化，审阅状态已回到待医生确认。") {
+  if (els.reviewDecision.value !== "pending_clinician_confirmation") {
+    els.reviewDecision.value = "pending_clinician_confirmation";
+    updateReviewStateUI();
+    els.stageStatus.textContent = message;
+  }
 }
 
 function downloadText(filename, text, type = "application/json") {
@@ -486,6 +544,7 @@ function updateEditVisibility(result) {
 function applyEditControls() {
   syncEditLabels();
   if (!S.baseResult) return;
+  if (editIsActive()) invalidateReviewAfterGeometryChange();
   const result = applyCandidateEdit(S.baseResult, currentEdit(), S.normals[S.lesion], S.unitsPerMm, S.verts);
   renderResult(result);
 }
@@ -541,11 +600,14 @@ function renderResult(result) {
 }
 
 function reviewRecord(result = S.result, label = "候选") {
+  const createdAt = new Date().toISOString();
+  const review = currentReviewMetadata(createdAt);
+  const actor = review.reviewer || result.tumor?.author || "unknown";
   return {
-    schema_version: "incision-review-record/v0.2",
+    schema_version: "incision-review-record/v0.3",
     id: `candidate_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
     label,
-    created_at: new Date().toISOString(),
+    created_at: createdAt,
     tumor: result.tumor,
     anatomy: result.anatomy,
     direction: result.direction,
@@ -557,7 +619,25 @@ function reviewRecord(result = S.result, label = "候选") {
     provider: result.provider,
     provider_config: redactedProviderConfig(),
     privacy_audit: privacyAudit(result.provider),
-    review_status: "requires_clinician_confirmation",
+    review_status: review.status,
+    review,
+    audit_events: [
+      {
+        event: "candidate_saved",
+        at: createdAt,
+        actor,
+        status: review.status,
+      },
+      ...(review.status === "pending_clinician_confirmation"
+        ? []
+        : [{
+          event: "clinician_review_recorded",
+          at: createdAt,
+          actor,
+          status: review.status,
+          notes_present: Boolean(review.notes),
+        }]),
+    ],
   };
 }
 
@@ -572,19 +652,25 @@ function renderSaved() {
     const title = document.createElement("span");
     title.textContent = `${rec.label} · ${rec.candidate.type === "linear" ? "线性" : "梭形"}`;
     const status = document.createElement("span");
-    status.className = rec.guardrails.passed ? "" : "danger-text";
-    status.textContent = rec.guardrails.passed ? "guardrails 通过" : "需复核";
+    status.className = rec.review_status === "rejected_by_clinician" || !rec.guardrails.passed ? "danger-text" : "";
+    status.textContent = reviewStatusLabel(rec.review_status);
     top.append(title, status);
     const meta = document.createElement("div");
     meta.className = "meta";
-    meta.textContent = `长度 ${fmt(rec.candidate.length_mm)} mm · 区域 ${rec.anatomy.region} · ${rec.created_at}`;
+    const reviewer = rec.review?.reviewer ? ` · 审阅人 ${rec.review.reviewer}` : "";
+    const guardrails = rec.guardrails.passed ? "guardrails 通过" : "guardrails 需复核";
+    meta.textContent = `长度 ${fmt(rec.candidate.length_mm)} mm · 区域 ${rec.anatomy.region} · ${guardrails}${reviewer} · ${rec.created_at}`;
     const actions = document.createElement("div");
     actions.className = "btn-row";
     actions.style.gridTemplateColumns = "1fr 1fr";
     const load = document.createElement("button");
     load.className = "btn";
     load.textContent = "载入";
-    load.onclick = () => renderResult(rec);
+    load.onclick = () => {
+      S.baseResult = rec;
+      setReviewControls(rec.review || { status: rec.review_status });
+      renderResult(rec);
+    };
     const remove = document.createElement("button");
     remove.className = "btn";
     remove.textContent = "删除";
@@ -617,13 +703,23 @@ function makeVariantCandidates() {
   els.stageStatus.textContent = "已生成 3 个方向备选并复跑 guardrails";
 }
 
+function recordReviewDecision(status, label) {
+  if (!S.result) {
+    els.stageStatus.textContent = "没有可审阅的候选";
+    return;
+  }
+  els.reviewDecision.value = status;
+  updateReviewStateUI();
+  saveCurrentCandidate(label);
+}
+
 function exportReviewJson() {
   if (!S.result && !S.saved.length) {
     els.stageStatus.textContent = "没有可导出的候选";
     return;
   }
   const payload = {
-    schema_version: "incision-review-export/v0.2",
+    schema_version: "incision-review-export/v0.3",
     exported_at: new Date().toISOString(),
     current: S.result ? reviewRecord(S.result, "当前候选") : null,
     saved: S.saved,
@@ -706,7 +802,9 @@ function exportReport() {
     `- 候选长度：${fmt(r.candidate.length_mm)} mm`,
     `- Guardrails：${r.guardrails.passed ? "通过" : "需医生复核"}`,
     `- 警告：${(r.guardrails.warnings || []).map((w) => `${w.code}:${w.severity}`).join(", ") || "无"}`,
-    `- 审阅状态：需医生确认；非手术指令。`,
+    `- 审阅状态：${reviewStatusLabel(r.review_status)}；审阅人：${r.review?.reviewer || "未填写"}`,
+    `- 审阅备注：${r.review?.notes || "无"}`,
+    `- 审阅边界：研究候选记录，非手术指令。`,
   ].join("\n")).join("\n\n");
   downloadText(`incision_report_${Date.now()}.md`, `# 切口候选审阅草案\n\n${body}\n`, "text/markdown");
 }
@@ -729,6 +827,10 @@ function exportScreenshot() {
 function stageLiveOverlay() {
   if (!S.result) {
     els.stageStatus.textContent = "没有可发送的候选";
+    return;
+  }
+  if (els.reviewDecision.value === "rejected_by_clinician") {
+    els.stageStatus.textContent = "当前候选已被否决，不发送到实时叠加。";
     return;
   }
   const overlay = compileIncisionOverlay(reviewRecord(S.result, "实时叠加候选"), S.verts, S.tris);
@@ -761,6 +863,7 @@ async function runAgent() {
   }
   S.baseResult = result;
   resetEditControls();
+  resetReviewControls();
   renderResult(result);
   els.run.disabled = false;
 }
@@ -915,8 +1018,13 @@ els.editReason.onchange = applyEditControls;
 els.resetEdit.onclick = () => {
   if (!S.baseResult) return;
   resetEditControls();
+  invalidateReviewAfterGeometryChange("已恢复工具建议，审阅状态已回到待医生确认。");
   renderResult(S.baseResult);
 };
+els.reviewDecision.onchange = updateReviewStateUI;
+els.approveCandidate.onclick = () => recordReviewDecision("approved_for_discussion", "确认候选");
+els.rejectCandidate.onclick = () => recordReviewDecision("rejected_by_clinician", "否决候选");
+els.saveReview.onclick = () => saveCurrentCandidate("审阅候选");
 els.saveCandidate.onclick = () => saveCurrentCandidate();
 els.makeVariants.onclick = makeVariantCandidates;
 els.clearSaved.onclick = () => { S.saved = []; renderSaved(); };

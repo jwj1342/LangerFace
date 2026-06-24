@@ -65,8 +65,16 @@ TOOL_SCHEMAS = [
     },
     {
         "name": "save_review_record",
-        "input": ["candidate", "tumor", "trace", "privacy_audit"],
-        "output": ["review_record_json", "report_markdown", "screenshot_png"],
+        "input": [
+            "candidate",
+            "tumor",
+            "trace",
+            "privacy_audit",
+            "reviewer",
+            "review_status",
+            "review_notes",
+        ],
+        "output": ["review_record_json", "report_markdown", "screenshot_png", "audit_events"],
     },
 ]
 

@@ -33,7 +33,7 @@ const TOOL_SCHEMAS = [
   { name: "fusiform_cutaneous_incision", input: ["tumor", "direction", "units_per_mm"], output: ["outline", "length_mm", "width_mm", "metrics"] },
   { name: "evaluate_guardrails", input: ["candidate", "anatomy"], output: ["passed", "warnings", "suggested_overrides"] },
   { name: "clinician_edit_candidate", input: ["edit"], output: ["candidate", "guardrails", "provenance"] },
-  { name: "save_review_record", input: ["candidate", "tumor", "trace", "privacy_audit"], output: ["review_record_json", "report_markdown", "screenshot_png"] },
+  { name: "save_review_record", input: ["candidate", "tumor", "trace", "privacy_audit", "reviewer", "review_status", "review_notes"], output: ["review_record_json", "report_markdown", "screenshot_png", "audit_events"] },
 ];
 
 const SENSITIVE_ANCHORS = {

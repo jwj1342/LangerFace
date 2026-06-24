@@ -32,8 +32,13 @@
   .candidate-row .meta{font-size:11px;color:var(--muted);line-height:1.45}
   .danger-text{color:#b45309}
   .text-input{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:13px;color:var(--ink)}
+  .text-area{width:100%;min-height:74px;resize:vertical;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:13px;color:var(--ink);font-family:inherit;line-height:1.45}
   .boundary-status{font-size:11px;color:var(--muted);line-height:1.55;margin:0}
   .boundary-status.warn{color:#8a5a00;font-weight:700}
+  .review-state{font-size:11px;font-weight:700;border-radius:999px;padding:4px 8px;background:#eef0ea;color:#44505d}
+  .review-state.approved{background:#d9f2e7;color:var(--green-d)}
+  .review-state.rejected{background:#fee2e2;color:#991b1b}
+  .review-state.revision{background:#fff1c8;color:#8a5a00}
   #agentCanvas{position:absolute;inset:0;width:100%;height:100%;border-radius:14px;background:#111820}
   @media(max-width:880px){#agentCanvas{position:static;min-height:420px}.metric-grid{grid-template-columns:1fr}}
 </style>
@@ -157,6 +162,27 @@
       </select>
       <button class="btn" id="resetEditBtn">恢复工具建议</button>
       <p class="agent-note">调整只改变候选草案并记录 provenance；真实切口仍需医生复核。</p>
+    </div>
+
+    <div class="card agent-grid">
+      <div class="quality-top"><span>医生审阅</span><span class="review-state" id="reviewState">待医生确认</span></div>
+      <div>
+        <label class="field-label" for="reviewerName">审阅人</label>
+        <input id="reviewerName" class="text-input" placeholder="clinician reviewer" />
+      </div>
+      <select id="reviewDecision" class="select">
+        <option value="pending_clinician_confirmation">待医生确认</option>
+        <option value="approved_for_discussion">确认候选草案</option>
+        <option value="needs_revision">退回修改</option>
+        <option value="rejected_by_clinician">否决候选</option>
+      </select>
+      <textarea id="reviewNotes" class="text-area" placeholder="审阅备注、覆盖原因或需要回看的位置"></textarea>
+      <div class="btn-row" style="grid-template-columns:1fr 1fr">
+        <button class="btn" id="approveCandidateBtn">确认当前候选</button>
+        <button class="btn" id="rejectCandidateBtn">否决当前候选</button>
+      </div>
+      <button class="btn btn-primary" id="saveReviewBtn">保存审阅记录</button>
+      <p class="agent-note">确认只代表进入研究审阅记录，不是手术指令；候选几何一旦调整，审阅状态会回到待确认。</p>
     </div>
 
     <div class="card agent-grid">

@@ -1,5 +1,5 @@
 {
-  "version": "0.2-agentic-incision-tools",
+  "version": "0.3-agentic-incision-tools",
   "trace_mode": "single_turn_react_with_deterministic_tools",
   "boundary": "The LLM may select, summarize, and request deterministic tools; it must not compute incision geometry or override guardrails.",
   "tools": [
@@ -35,8 +35,8 @@
     },
     {
       "name": "save_review_record",
-      "input": ["candidate", "tumor", "trace", "privacy_audit"],
-      "output": ["review_record_json", "report_markdown", "screenshot_png"]
+      "input": ["candidate", "tumor", "trace", "privacy_audit", "reviewer", "review_status", "review_notes"],
+      "output": ["review_record_json", "report_markdown", "screenshot_png", "audit_events"]
     }
   ]
 }
