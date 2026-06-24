@@ -203,6 +203,41 @@ def test_fusiform_guardrail_flags_boundary_axis_coverage_deficit():
     assert any(w["code"] == "fusiform_axis_coverage_deficit" for w in guardrails["warnings"])
 
 
+def test_guardrails_warn_for_sparse_cutaneous_boundary():
+    direction = {"vector": [1, 0, 0], "confidence": 0.9}
+    tumor = TumorInput(
+        kind="cutaneous",
+        center=(4, 2, 0),
+        diameter_mm=8,
+        margin_mm=1,
+        boundary=((3, 2, 0), (4, 3, 0), (5, 2, 0)),
+        boundary_mode="freehand",
+        boundary_source="manual_freehand",
+    )
+    candidate = fusiform_cutaneous_incision(tumor, direction, units_per_mm=0.1)
+    guardrails = evaluate_guardrails(candidate, {"region": "cheek", "confidence": 0.8})
+    warning = next(w for w in guardrails["warnings"] if w["code"] == "cutaneous_boundary_too_few_points")
+    assert warning["severity"] == "medium"
+    assert guardrails["passed"] is True
+
+
+def test_guardrails_fail_when_cutaneous_boundary_is_far_from_selected_center():
+    direction = {"vector": [1, 0, 0], "confidence": 0.9}
+    tumor = TumorInput(
+        kind="cutaneous",
+        center=(0, 2, 0),
+        diameter_mm=8,
+        margin_mm=1,
+        boundary=((3, 2, 0), (4, 3, 0), (5, 2, 0), (4, 1, 0)),
+        boundary_mode="freehand",
+        boundary_source="manual_freehand",
+    )
+    candidate = fusiform_cutaneous_incision(tumor, direction, units_per_mm=0.1)
+    guardrails = evaluate_guardrails(candidate, {"region": "cheek", "confidence": 0.8})
+    assert guardrails["passed"] is False
+    assert any(w["code"] == "cutaneous_boundary_center_shift" for w in guardrails["warnings"])
+
+
 @pytest.mark.parametrize(
     ("point", "region"),
     [

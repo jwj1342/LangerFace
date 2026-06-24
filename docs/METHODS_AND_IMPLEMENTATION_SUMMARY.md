@@ -781,6 +781,8 @@ axis_coverage_deficit_mm = max(0, axis_coverage_required_mm - length_mm)
 
 如果 `length_mm` 因 `max_length_mm` 被截断而小于 `axis_coverage_required_mm`，guardrails 输出 `fusiform_axis_coverage_deficit` 高风险警告；医生需要增加长度、调整切缘或重新标注边界，不能把该候选静默当作已覆盖病灶。
 
+自由轮廓还会进入边界质量 guardrails：`boundary_point_count < min_freehand_boundary_points` 输出 medium 级 `cutaneous_boundary_too_few_points`；`boundary_center_shift_mm` 超过 `diameter_mm * boundary_center_shift_diameter_multiplier` 输出 high 级 `cutaneous_boundary_center_shift`。这些规则用于防止误点、漏点或把中心点与轮廓标在不同病灶上。
+
 候选结构建议：
 
 ```json

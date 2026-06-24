@@ -144,6 +144,26 @@ ok(coverageGuard.passed === false, "boundary coverage deficit fails guardrails")
 ok(coverageGuard.warnings.some((w) => w.code === "fusiform_axis_coverage_deficit"),
   "guardrails flag fusiform axis coverage deficit");
 
+const sparseBoundaryTumor = {
+  ...boundaryTumor,
+  boundary: [[3, 2, 0], [4, 3, 0], [5, 2, 0]],
+};
+const sparseFusiform = T.generateFusiformIncision(sparseBoundaryTumor, { vector: [1, 0, 0], confidence: 0.9 }, 0.1, [0, 0, 1]);
+const sparseGuard = T.evaluateGuardrails(sparseFusiform, { region: "cheek", confidence: 0.8 });
+ok(sparseGuard.passed === true, "sparse cutaneous boundary is a review warning, not an automatic failure");
+ok(sparseGuard.warnings.some((w) => w.code === "cutaneous_boundary_too_few_points" && w.severity === "medium"),
+  "guardrails warn about sparse cutaneous boundary");
+
+const shiftedBoundaryTumor = {
+  ...boundaryTumor,
+  center: [0, 2, 0],
+};
+const shiftedFusiform = T.generateFusiformIncision(shiftedBoundaryTumor, { vector: [1, 0, 0], confidence: 0.9 }, 0.1, [0, 0, 1]);
+const shiftedGuard = T.evaluateGuardrails(shiftedFusiform, { region: "cheek", confidence: 0.8 });
+ok(shiftedGuard.passed === false, "far-shifted cutaneous boundary fails guardrails");
+ok(shiftedGuard.warnings.some((w) => w.code === "cutaneous_boundary_center_shift"),
+  "guardrails flag cutaneous boundary center shift");
+
 const anatomy = T.classifyRegion([3, 6, 0], verts);
 const guard = T.evaluateGuardrails({ direction_confidence: 0.8 }, anatomy);
 ok(anatomy.region === "lower_eyelid", "region classifier reaches sensitive lower eyelid bucket");

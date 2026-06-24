@@ -16,6 +16,8 @@ const DEFAULT_RULES = {
     low_direction_confidence: 0.35,
     low_region_confidence: 0.45,
     free_margin_distance_warn_mm: 18,
+    min_freehand_boundary_points: 6,
+    boundary_center_shift_diameter_multiplier: 1,
     sensitive_regions: {
       lower_eyelid: "Protect the lower eyelid free margin; consider manual override away from vertical traction.",
       lip_vermilion: "Protect vermilion border alignment; require clinician confirmation before committing.",
@@ -473,6 +475,39 @@ export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
       kind: "linear_length_or_access_review",
       reason: "Increase incision length, confirm a smaller imaging diameter, or record an explicit clinician access decision.",
     });
+  }
+  if (candidate.type === "fusiform" && candidate.metrics?.boundary_used) {
+    const boundaryPoints = Number(candidate.metrics?.boundary_point_count || 0);
+    const minPoints = Number(cfg.min_freehand_boundary_points || 6);
+    if (boundaryPoints > 0 && boundaryPoints < minPoints) {
+      warnings.push({
+        code: "cutaneous_boundary_too_few_points",
+        severity: "medium",
+        message: `Cutaneous lesion boundary has ${boundaryPoints} point(s); ${minPoints} or more are recommended before review.`,
+      });
+      suggested_overrides.push({
+        kind: "redraw_cutaneous_boundary",
+        reason: "Add more lesion boundary points or use ellipse mode before accepting this candidate.",
+      });
+    }
+
+    const centerShift = candidate.metrics?.boundary_center_shift_mm;
+    const lesionDiameter = Number(candidate.metrics?.diameter_mm || 0);
+    const multiplier = Number(cfg.boundary_center_shift_diameter_multiplier || 1);
+    if (centerShift != null && lesionDiameter > 0) {
+      const threshold = Math.max(lesionDiameter * multiplier, 1e-6);
+      if (Number(centerShift) > threshold) {
+        warnings.push({
+          code: "cutaneous_boundary_center_shift",
+          severity: "high",
+          message: `Cutaneous lesion boundary centroid is ${Number(centerShift).toFixed(1)} mm from the selected tumor center (threshold ${threshold.toFixed(1)} mm).`,
+        });
+        suggested_overrides.push({
+          kind: "tumor_center_or_boundary_review",
+          reason: "Re-pick tumor center, redraw boundary, or record why the boundary is intentionally eccentric.",
+        });
+      }
+    }
   }
   const axisCoverageDeficit = Number(candidate.metrics?.axis_coverage_deficit_mm || 0);
   if (candidate.type === "fusiform" && axisCoverageDeficit > 1e-6) {

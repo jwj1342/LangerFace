@@ -165,6 +165,48 @@ def evaluate_guardrails(
             ),
         })
 
+    if candidate.get("type") == "fusiform" and metrics.get("boundary_used"):
+        boundary_points = int(metrics.get("boundary_point_count") or 0)
+        min_points = int(cfg.get("min_freehand_boundary_points", 6))  # type: ignore[union-attr]
+        if 0 < boundary_points < min_points:
+            warnings.append({
+                "code": "cutaneous_boundary_too_few_points",
+                "severity": "medium",
+                "message": (
+                    f"Cutaneous lesion boundary has {boundary_points} point(s); "
+                    f"{min_points} or more are recommended before review."
+                ),
+            })
+            suggested_overrides.append({
+                "kind": "redraw_cutaneous_boundary",
+                "reason": (
+                    "Add more lesion boundary points or use ellipse mode before accepting this candidate."
+                ),
+            })
+
+        center_shift = metrics.get("boundary_center_shift_mm")
+        lesion_diameter = float(metrics.get("diameter_mm") or 0.0)
+        multiplier = float(cfg.get("boundary_center_shift_diameter_multiplier", 1.0))  # type: ignore[union-attr]
+        if center_shift is not None and lesion_diameter > 0.0:
+            threshold = max(lesion_diameter * multiplier, 1e-6)
+            if float(center_shift) > threshold:
+                warnings.append({
+                    "code": "cutaneous_boundary_center_shift",
+                    "severity": "high",
+                    "message": (
+                        "Cutaneous lesion boundary centroid is "
+                        f"{float(center_shift):.1f} mm from the selected tumor center "
+                        f"(threshold {threshold:.1f} mm)."
+                    ),
+                })
+                suggested_overrides.append({
+                    "kind": "tumor_center_or_boundary_review",
+                    "reason": (
+                        "Re-pick tumor center, redraw boundary, or record why the boundary is "
+                        "intentionally eccentric."
+                    ),
+                })
+
     axis_coverage_deficit = float(metrics.get("axis_coverage_deficit_mm") or 0.0)
     if candidate.get("type") == "fusiform" and axis_coverage_deficit > 1e-6:
         required = metrics.get("axis_coverage_required_mm")

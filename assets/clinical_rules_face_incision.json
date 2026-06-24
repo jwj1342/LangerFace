@@ -222,6 +222,8 @@
     "low_direction_confidence": 0.35,
     "low_region_confidence": 0.45,
     "free_margin_distance_warn_mm": 18.0,
+    "min_freehand_boundary_points": 6,
+    "boundary_center_shift_diameter_multiplier": 1.0,
     "sensitive_regions": {
       "lower_eyelid": "Protect the lower eyelid free margin; consider manual override away from vertical traction.",
       "lip_vermilion": "Protect vermilion border alignment; require clinician confirmation before committing.",
