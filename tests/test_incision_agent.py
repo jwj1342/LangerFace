@@ -52,6 +52,37 @@ def _simple_mesh_and_atlas():
     return vertices, triangles, atlas
 
 
+def _axis_wrap_mesh_and_atlas():
+    vertices = np.array(
+        [
+            [0.2, 0.0035, 0.0],
+            [0.0, 0.0, 0.0],
+            [-0.2, -0.0035, 0.0],
+            [0.2, -0.0035, 0.0],
+            [0.0, 0.0, 0.0],
+            [-0.2, 0.0035, 0.0],
+        ],
+        dtype=float,
+    )
+    triangles = np.array([[0, 1, 2], [3, 4, 5]], dtype=int)
+    atlas = Atlas(
+        system="rstl",
+        lines=[
+            AtlasLine(
+                "wrap_negative",
+                "cheek",
+                np.array([[0, 1.0, 0.0], [0, 0.0, 1.0], [0, 0.0, 0.0]], dtype=float),
+            ),
+            AtlasLine(
+                "wrap_positive",
+                "cheek",
+                np.array([[1, 1.0, 0.0], [1, 0.0, 1.0], [1, 0.0, 0.0]], dtype=float),
+            ),
+        ],
+    )
+    return vertices, triangles, atlas
+
+
 def _left_tip_angle_deg(candidate: dict) -> float:
     outline = [np.asarray(p, dtype=float) for p in candidate["outline"]]
     tip = outline[0]
@@ -85,6 +116,16 @@ def test_query_direction_returns_low_confidence_far_from_atlas():
     result = query_direction([10.0, 10.0, 0.0], vertices, triangles, atlas)
     assert result.confidence < 0.1
     assert result.source == "rstl_atlas_weighted_nearest"
+
+
+def test_query_direction_uses_axial_spread_across_angle_wrap():
+    vertices, triangles, atlas = _axis_wrap_mesh_and_atlas()
+    result = query_direction([0.0, 0.0, 0.0], vertices, triangles, atlas)
+    assert result.support_count >= 4
+    assert result.angular_spread_deg < 3.0
+    assert result.confidence > 0.9
+    assert abs(result.vector[0]) > 0.999
+    assert abs(result.vector[1]) < 0.02
 
 
 def test_query_direction_js_python_parity_for_same_points():

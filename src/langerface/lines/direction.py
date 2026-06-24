@@ -39,6 +39,23 @@ def _norm(v: np.ndarray) -> np.ndarray:
     return v / n
 
 
+def _axis_angle_diff_deg(a: float, b: float) -> float:
+    """Smallest angle between two undirected axes, in degrees."""
+
+    return abs((a - b + 90.0) % 180.0 - 90.0)
+
+
+def _axial_angular_spread_deg(vectors: np.ndarray, reference: np.ndarray) -> float:
+    if len(vectors) <= 1:
+        return 0.0
+    ref_angle = float(np.degrees(np.arctan2(reference[1], reference[0])))
+    max_dev = 0.0
+    for v in vectors:
+        angle = float(np.degrees(np.arctan2(v[1], v[0])))
+        max_dev = max(max_dev, _axis_angle_diff_deg(angle, ref_angle))
+    return min(180.0, 2.0 * max_dev)
+
+
 def _atlas_samples(
     vertices: np.ndarray,
     triangles: np.ndarray,
@@ -109,8 +126,7 @@ def query_direction(
         if float(np.dot(signed_tans[i], ref)) < 0:
             signed_tans[i] *= -1.0
     vector = _norm(np.average(signed_tans, axis=0, weights=weights))
-    angles = np.degrees(np.arctan2(signed_tans[:, 1], signed_tans[:, 0]))
-    angular_spread = float(np.max(angles) - np.min(angles)) if len(angles) > 1 else 0.0
+    angular_spread = _axial_angular_spread_deg(signed_tans, vector)
     if angular_spread > 90.0:
         confidence *= 0.75
     angle = float(np.degrees(np.arctan2(vector[1], vector[0])))

@@ -57,6 +57,27 @@ ok(Math.max(...repeatedAngles) - Math.min(...repeatedAngles) < 1e-9, "queryDirec
 const farDirection = T.queryDirection([10, 10, 0], verts, tris, atlas);
 ok(farDirection.confidence < 0.1, "queryDirection returns low confidence far from atlas support");
 
+const wrapVerts = [
+  [0.2, 0.0035, 0],
+  [0, 0, 0],
+  [-0.2, -0.0035, 0],
+  [0.2, -0.0035, 0],
+  [0, 0, 0],
+  [-0.2, 0.0035, 0],
+];
+const wrapTris = [[0, 1, 2], [3, 4, 5]];
+const wrapAtlas = {
+  system: "rstl",
+  lines: [
+    { name: "wrap_negative", region: "cheek", points: [[0, 1, 0], [0, 0, 1], [0, 0, 0]] },
+    { name: "wrap_positive", region: "cheek", points: [[1, 1, 0], [1, 0, 1], [1, 0, 0]] },
+  ],
+};
+const wrapDirection = T.queryDirection([0, 0, 0], wrapVerts, wrapTris, wrapAtlas);
+ok(wrapDirection.support_count >= 4, "queryDirection keeps wrapped-angle support samples");
+ok(wrapDirection.angular_spread_deg < 3, "queryDirection treats 179/-179 as low axial spread");
+ok(wrapDirection.confidence > 0.9, "queryDirection does not penalize confidence across axial angle wrap");
+
 const linear = T.generateLinearIncision(
   { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 10, depth_mm: 5 },
   { vector: [1, 0, 0], confidence: 0.9 },

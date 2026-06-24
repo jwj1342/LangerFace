@@ -173,6 +173,21 @@ function atlasSamples(verts, tris, atlas) {
   return { pts, tans };
 }
 
+function axisAngleDiffDeg(a, b) {
+  return Math.abs((((a - b + 90) % 180) + 180) % 180 - 90);
+}
+
+function axialAngularSpreadDeg(vectors, reference) {
+  if (vectors.length <= 1) return 0;
+  const refAngle = Math.atan2(reference[1], reference[0]) * 180 / Math.PI;
+  let maxDev = 0;
+  for (const v of vectors) {
+    const angle = Math.atan2(v[1], v[0]) * 180 / Math.PI;
+    maxDev = Math.max(maxDev, axisAngleDiffDeg(angle, refAngle));
+  }
+  return Math.min(180, 2 * maxDev);
+}
+
 export function queryDirection(point, verts, tris, atlas) {
   const { pts, tans } = atlasSamples(verts, tris, atlas);
   if (!pts.length) {
@@ -193,17 +208,17 @@ export function queryDirection(point, verts, tris, atlas) {
   const order = dist2.map((d, i) => [d, i]).sort((a, b) => a[0] - b[0]).slice(0, Math.min(7, dist2.length));
   const ref = tans[best];
   let acc = [0, 0, 0], weightSum = 0;
-  const angles = [];
+  const signed = [];
   for (const [d2, i] of order) {
     let t = tans[i];
     if (dot(t, ref) < 0) t = mul(t, -1);
     const w = 1 / (Math.sqrt(d2) + 1e-6);
     acc = add(acc, mul(t, w));
     weightSum += w;
-    angles.push(Math.atan2(t[1], t[0]) * 180 / Math.PI);
+    signed.push(t);
   }
   const vector = norm(mul(acc, 1 / Math.max(weightSum, 1e-9)));
-  const spread = angles.length > 1 ? Math.max(...angles) - Math.min(...angles) : 0;
+  const spread = axialAngularSpreadDeg(signed, vector);
   const confidence = clamp((1 - nearest / maxDistance) * (spread > 90 ? 0.75 : 1), 0, 1);
   return {
     point,

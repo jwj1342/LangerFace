@@ -751,6 +751,15 @@ angle_error = arccos(|dot(axis_candidate, axis_rstl)|)
 
 取绝对值是因为切口轴线无方向，`theta` 和 `theta + pi` 等价。
 
+局部 RSTL 方向服务同样按无向切线轴统计邻域离散度。对候选邻域切线角 `theta_i` 和加权平均轴 `theta_ref`，使用：
+
+```text
+axis_diff(theta_i, theta_ref) = |((theta_i - theta_ref + 90) mod 180) - 90|
+angular_spread = 2 * max_i axis_diff(theta_i, theta_ref)
+```
+
+这样 `179°` 与 `-179°` 被视为约 `2°` 的轴向差异，而不是普通有向角 `max(theta)-min(theta)` 下的 `358°`。方向置信度因此只在真实邻域方向冲突时下降，不会在角度表示边界处误报低置信度。
+
 ### 21.5 皮表肿物梭形切口
 
 皮表肿物生成梭形候选。默认临床经验参数：
