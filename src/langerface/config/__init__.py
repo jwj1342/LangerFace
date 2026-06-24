@@ -24,6 +24,10 @@ from .constants import (
     ONEEURO_MIN_CUTOFF,
     SYSTEM_LANGER,
     SYSTEM_RSTL,
+    TOPOLOGY_ID,
+    TOPOLOGY_ID_FLAME,
+    TOPOLOGY_VERSION,
+    TOPOLOGY_VERSION_FLAME,
     VALID_SYSTEMS,
 )
 from .settings import DEFAULT_STYLES, Config, LineStyle, build_config
@@ -31,6 +35,7 @@ from .settings import DEFAULT_STYLES, Config, LineStyle, build_config
 __all__ = [
     # 线系统
     "SYSTEM_RSTL", "SYSTEM_LANGER", "VALID_SYSTEMS", "ATLAS_VERSION",
+    "TOPOLOGY_ID", "TOPOLOGY_VERSION", "TOPOLOGY_ID_FLAME", "TOPOLOGY_VERSION_FLAME",
     # 配置
     "Config", "LineStyle", "DEFAULT_STYLES", "build_config",
     # 常量

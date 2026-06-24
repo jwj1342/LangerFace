@@ -13,7 +13,7 @@ import os
 
 import numpy as np
 
-from ..config.constants import ATLAS_VERSION, VALID_SYSTEMS
+from ..config.constants import ATLAS_VERSION, TOPOLOGY_ID, TOPOLOGY_VERSION, VALID_SYSTEMS
 from ..config.settings import Config
 from ..detection.base import Detector
 from ..detection.mediapipe_detector import FaceLandmarkDetector
@@ -43,7 +43,12 @@ class LinePipeline:
         for system, path in config.atlas_paths.items():
             if os.path.exists(path):
                 atlas = Atlas.load(path)
-                issues = atlas.validate(len(self._triangles), expected_version=ATLAS_VERSION)
+                issues = atlas.validate(
+                    len(self._triangles),
+                    expected_version=ATLAS_VERSION,
+                    expected_topology_id=TOPOLOGY_ID,
+                    expected_topology_version=TOPOLOGY_VERSION,
+                )
                 if issues:
                     msg = f"图谱 {system!r} 校验失败：{'；'.join(issues)}"
                     log.error(msg)

@@ -3,7 +3,7 @@ import { els } from "./dom.js";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./canvas_fit.js";
 import { dataSource } from "./data_source.js";
 import { countMetric, logError } from "./logger.js";
-import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan } from "./mode3d.js";
+import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.js";
 import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera } from "./pipeline.js";
 import { adjustFocusZoom, buildZoomCards } from "./render.js";
 import { recordingState, reconState, renderState, sourceState } from "./state.js";
@@ -21,7 +21,7 @@ function syncPreviewControls() {
 function applyStagedAtlas() {
   const atlas = dataSource.takePreviewAtlas();
   if (!atlas || !Array.isArray(atlas.lines)) return;
-  if (!setActiveAtlas(atlas.system, atlas.lines)) {
+  if (!setActiveAtlas(atlas.system, atlas)) {
     setMsg("标注预览图谱加载失败：图谱格式无效。已继续使用内置图谱。");
     return;
   }
@@ -135,6 +135,9 @@ els.reconScan.onclick = startScan;
 els.view3d.onclick = () => { if (reconState.reconVerts) setMode3d("view"); };
 els.project3d.onclick = () => { if (reconState.reconVerts) setMode3d("project"); };
 els.reset3d.onclick = resetView3d;
+els.cloudFitFlame.onclick = startTwin;
+els.flameStd.onchange = toggleTwinHead;
+els.twinTexture.onchange = toggleTwinTexture;
 
 // ── 初始化 ────────────────────────────────────────────────────────────────────
 buildZoomCards(refreshStaticImage);

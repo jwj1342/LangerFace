@@ -122,6 +122,21 @@ export class Head3D {
     this.grid.position.y = -Math.max(0.45, bb.size * 0.38);
   }
 
+  // 原地更新顶点（+ 可选每顶点色）——供实时孪生每帧刷新表情 / 张嘴 / 贴脸纹理，不重建网格。
+  updateVerts(verts, colors = null) {
+    if (!this.mesh) return;
+    const geo = this.mesh.geometry, pos = geo.attributes.position, arr = pos.array;
+    const n = Math.min(verts.length, arr.length / 3);
+    for (let i = 0; i < n; i++) { arr[i * 3] = verts[i][0]; arr[i * 3 + 1] = verts[i][1]; arr[i * 3 + 2] = verts[i][2]; }
+    pos.needsUpdate = true;
+    if (colors && geo.attributes.color) {
+      const carr = geo.attributes.color.array;
+      for (let i = 0; i < n; i++) { carr[i * 3] = colors[i][0]; carr[i * 3 + 1] = colors[i][1]; carr[i * 3 + 2] = colors[i][2]; }
+      geo.attributes.color.needsUpdate = true;
+    }
+    geo.computeVertexNormals();
+  }
+
   setRotation(rx, ry) { this.rotX = rx; this.rotY = ry; }
 
   zoom(factor) {
