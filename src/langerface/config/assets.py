@@ -23,6 +23,7 @@ def assets_dir() -> str:
 ASSETS_DIR = assets_dir()
 CANONICAL_OBJ = os.path.join(ASSETS_DIR, "canonical_face_model.obj")
 FACE_LANDMARKER_TASK = os.path.join(ASSETS_DIR, "face_landmarker.task")
+HAND_LANDMARKER_TASK = os.path.join(ASSETS_DIR, "hand_landmarker.task")
 ATLAS_PATHS = {
     SYSTEM_RSTL: os.path.join(ASSETS_DIR, "atlas_rstl.json"),
     SYSTEM_LANGER: os.path.join(ASSETS_DIR, "atlas_langer.json"),

@@ -1,10 +1,13 @@
-"""导出网页端所需资产到 web/assets/：
+"""导出网页端所需资产到 web/assets/（assets/ 是唯一权威源，web/assets/ 全部派生，见 #47）：
   - triangles.json   标准网格三角拓扑 (898,3)
   - topology_mediapipe_468.json   带 topologyId 的标准网格合同
+  - canonical_vertices.json   标准 3D 顶点（3D Beta 兜底几何）
   - atlas_rstl.json / atlas_langer.json   线图谱（直接复用）
-  - face_landmarker.task   MediaPipe 模型（浏览器本地加载）
+  - face_landmarker.task / hand_landmarker.task   MediaPipe 模型（浏览器本地加载）
 
   python3 tools/export_web_assets.py
+
+缺任一源资产（含手部模型）会显式 [warn]，不再静默漏掉。
 """
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ from langerface.config import (
     ATLAS_PATHS,
     CANONICAL_OBJ,
     FACE_LANDMARKER_TASK,
+    HAND_LANDMARKER_TASK,
     TOPOLOGY_ID,
     TOPOLOGY_VERSION,
 )
@@ -57,11 +61,17 @@ def main():
         shutil.copyfile(path, dst)
         print(f"[ok] {os.path.basename(path)}")
 
-    if os.path.exists(FACE_LANDMARKER_TASK):
-        shutil.copyfile(FACE_LANDMARKER_TASK, os.path.join(WEB_ASSETS, "face_landmarker.task"))
-        print("[ok] face_landmarker.task")
-    else:
-        print("[warn] 缺 face_landmarker.task，请先 download_assets.py")
+    # 模型文件：从 assets/ 派生到 web/assets/，任一缺失显式 [warn]（不再静默漏掉手部模型）。
+    for src, name, feature in (
+        (FACE_LANDMARKER_TASK, "face_landmarker.task", "人脸关键点检测"),
+        (HAND_LANDMARKER_TASK, "hand_landmarker.task", "手部遮挡"),
+    ):
+        if os.path.exists(src):
+            shutil.copyfile(src, os.path.join(WEB_ASSETS, name))
+            print(f"[ok] {name}")
+        else:
+            print(f"[warn] 缺 {name}（assets/ 内未找到），请先 download_assets.py —— "
+                  f"否则浏览器端「{feature}」不可用")
 
 
 if __name__ == "__main__":
