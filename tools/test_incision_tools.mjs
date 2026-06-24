@@ -9,6 +9,23 @@ function ok(cond, msg) {
 function near(a, b, eps = 1e-9) {
   return Math.abs(a - b) <= eps;
 }
+function sub(a, b) {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+function dot(a, b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+function norm(a) {
+  return Math.hypot(a[0], a[1], a[2]);
+}
+function leftTipAngleDeg(candidate) {
+  const outline = candidate.outline;
+  const tip = outline[0];
+  const upper = sub(outline[1], tip);
+  const lower = sub(outline[outline.length - 1], tip);
+  const cos = Math.max(-1, Math.min(1, dot(upper, lower) / (norm(upper) * norm(lower))));
+  return Math.acos(cos) * 180 / Math.PI;
+}
 
 const verts = [
   [0, 0, 0],
@@ -64,6 +81,10 @@ const fusiform = T.generateFusiformIncision(
 ok(fusiform.type === "fusiform", "fusiform candidate generated");
 ok(near(fusiform.width_mm, 12), "fusiform width includes margins");
 ok(near(fusiform.length_mm, 36), "fusiform length uses 3:1 default");
+ok(near(fusiform.tip_angle_deg, 30, 1e-9), "fusiform tip angle follows configured rule");
+ok(fusiform.metrics.profile === "cubic_hermite_tip_angle_constrained", "fusiform records constrained profile");
+ok(near(fusiform.metrics.tip_angle_error_deg, 0, 1e-9), "fusiform records near-zero tip angle error");
+ok(leftTipAngleDeg(fusiform) > 29 && leftTipAngleDeg(fusiform) < 32, "fusiform outline segment angle matches tip rule");
 ok(fusiform.outline.length > 20, "fusiform outline is renderable");
 
 const boundaryTumor = {

@@ -51,6 +51,15 @@ def _simple_mesh_and_atlas():
     return vertices, triangles, atlas
 
 
+def _left_tip_angle_deg(candidate: dict) -> float:
+    outline = [np.asarray(p, dtype=float) for p in candidate["outline"]]
+    tip = outline[0]
+    upper = outline[1] - tip
+    lower = outline[-1] - tip
+    cosang = float(np.dot(upper, lower) / (np.linalg.norm(upper) * np.linalg.norm(lower)))
+    return float(np.degrees(np.arccos(np.clip(cosang, -1.0, 1.0))))
+
+
 def test_query_direction_reads_nearest_rstl_tangent():
     vertices, triangles, atlas = _simple_mesh_and_atlas()
     result = query_direction([4.0, 2.0, 0.0], vertices, triangles, atlas)
@@ -127,6 +136,11 @@ def test_fusiform_cutaneous_candidate_has_three_to_one_default_ratio():
     assert candidate["width_mm"] == 12
     assert candidate["length_mm"] == 36
     assert 2.99 < candidate["metrics"]["length_to_width_ratio"] < 3.01
+    assert 29.9 < candidate["tip_angle_deg"] < 30.1
+    assert candidate["metrics"]["profile"] == "cubic_hermite_tip_angle_constrained"
+    assert candidate["metrics"]["tip_angle_target_deg"] == 30.0
+    assert candidate["metrics"]["tip_angle_error_deg"] < 1e-6
+    assert 29.0 < _left_tip_angle_deg(candidate) < 32.0
     assert len(candidate["outline"]) > 20
 
 

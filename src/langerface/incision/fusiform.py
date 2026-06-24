@@ -37,6 +37,52 @@ def _boundary_profile(
     }
 
 
+def _hermite_half_width(u: float, tip_slope: float) -> float:
+    """Cubic half-profile from tip (0) to center (1) with controlled tip slope."""
+
+    return (tip_slope - 2.0) * u**3 + (3.0 - 2.0 * tip_slope) * u**2 + tip_slope * u
+
+
+def _fusiform_profile(
+    center: np.ndarray,
+    axis: np.ndarray,
+    perp: np.ndarray,
+    *,
+    half_l: float,
+    half_w: float,
+    samples: int,
+    tip_angle_deg: float,
+) -> tuple[list[np.ndarray], list[np.ndarray], dict[str, float | bool | str]]:
+    if half_l <= 1e-9 or half_w <= 1e-9:
+        raise ValueError("fusiform profile requires positive length and width")
+    ratio = half_l / half_w
+    target_angle = clamp(float(tip_angle_deg), 8.0, 75.0)
+    target_slope = float(np.tan(np.deg2rad(target_angle / 2.0)))
+    requested_shape_slope = ratio * target_slope
+    # Cubic Hermite profiles stay monotone for endpoint slope <= 3.
+    shape_slope = min(requested_shape_slope, 2.95)
+    actual_slope = shape_slope / ratio
+    actual_angle = float(np.rad2deg(2.0 * np.arctan(actual_slope)))
+
+    upper: list[np.ndarray] = []
+    lower: list[np.ndarray] = []
+    for i in range(samples + 1):
+        t = i / samples
+        x = (t - 0.5) * 2.0 * half_l
+        u = 2.0 * t if t <= 0.5 else 2.0 * (1.0 - t)
+        y = _hermite_half_width(u, shape_slope) * half_w
+        upper.append(center + axis * x + perp * y)
+        lower.append(center + axis * x - perp * y)
+
+    return upper, lower, {
+        "profile": "cubic_hermite_tip_angle_constrained",
+        "tip_angle_target_deg": target_angle,
+        "tip_angle_estimated_deg": actual_angle,
+        "tip_angle_error_deg": abs(actual_angle - target_angle),
+        "tip_angle_limited_by_ratio": shape_slope < requested_shape_slope,
+    }
+
+
 def fusiform_cutaneous_incision(
     tumor: TumorInput,
     direction: DirectionQueryResult | dict[str, Any],
@@ -66,14 +112,15 @@ def fusiform_cutaneous_incision(
     half_l = length_mm * units_per_mm * 0.5
     half_w = width_mm * units_per_mm * 0.5
     samples = max(12, int(cfg.get("samples", 56)))
-    upper: list[np.ndarray] = []
-    lower: list[np.ndarray] = []
-    for i in range(samples + 1):
-        t = i / samples
-        x = (t - 0.5) * 2.0 * half_l
-        y = np.sin(np.pi * t) * half_w
-        upper.append(center + axis * x + perp * y)
-        lower.append(center + axis * x - perp * y)
+    upper, lower, profile_metrics = _fusiform_profile(
+        center,
+        axis,
+        perp,
+        half_l=half_l,
+        half_w=half_w,
+        samples=samples,
+        tip_angle_deg=float(cfg["tip_angle_deg"]),
+    )
     outline = upper + list(reversed(lower[1:-1]))
     confidence = (
         direction.confidence
@@ -97,11 +144,12 @@ def fusiform_cutaneous_incision(
         "width_mm": width_mm,
         "length_units": length_mm * units_per_mm,
         "width_units": width_mm * units_per_mm,
-        "tip_angle_deg": float(cfg["tip_angle_deg"]),
+        "tip_angle_deg": float(profile_metrics["tip_angle_estimated_deg"]),
         "direction_confidence": float(confidence),
         "metrics": {
             "rstl_deviation_deg": 0.0,
             "length_to_width_ratio": length_mm / width_mm,
+            **profile_metrics,
             "diameter_mm": tumor.diameter_mm,
             "margin_mm": tumor.margin_mm,
             "boundary_used": boundary is not None,

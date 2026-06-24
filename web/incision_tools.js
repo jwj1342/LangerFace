@@ -297,6 +297,41 @@ function boundaryProfile(tumor, axis, perp, unitsPerMm) {
   };
 }
 
+function hermiteHalfWidth(u, tipSlope) {
+  return (tipSlope - 2) * u ** 3 + (3 - 2 * tipSlope) * u ** 2 + tipSlope * u;
+}
+
+function fusiformProfile(center, axis, perp, halfL, halfW, samples, tipAngleDeg) {
+  if (!(halfL > 1e-9) || !(halfW > 1e-9)) throw new Error("fusiform profile requires positive length and width");
+  const ratio = halfL / halfW;
+  const targetAngle = clamp(Number(tipAngleDeg || 30), 8, 75);
+  const targetSlope = Math.tan((targetAngle / 2) * Math.PI / 180);
+  const requestedShapeSlope = ratio * targetSlope;
+  const shapeSlope = Math.min(requestedShapeSlope, 2.95);
+  const actualSlope = shapeSlope / ratio;
+  const actualAngle = Math.atan(actualSlope) * 2 * 180 / Math.PI;
+  const upper = [], lower = [];
+  for (let i = 0; i <= samples; i++) {
+    const t = i / samples;
+    const x = (t - 0.5) * 2 * halfL;
+    const u = t <= 0.5 ? 2 * t : 2 * (1 - t);
+    const y = hermiteHalfWidth(u, shapeSlope) * halfW;
+    upper.push(add(add(center, mul(axis, x)), mul(perp, y)));
+    lower.push(add(add(center, mul(axis, x)), mul(perp, -y)));
+  }
+  return {
+    upper,
+    lower,
+    metrics: {
+      profile: "cubic_hermite_tip_angle_constrained",
+      tip_angle_target_deg: targetAngle,
+      tip_angle_estimated_deg: actualAngle,
+      tip_angle_error_deg: Math.abs(actualAngle - targetAngle),
+      tip_angle_limited_by_ratio: shapeSlope < requestedShapeSlope,
+    },
+  };
+}
+
 export function summarizeTumorBoundary(tumorInput, axis = [1, 0, 0], normal = [0, 0, 1], unitsPerMm = 1) {
   const tumor = validateTumor(tumorInput);
   const a = norm(axis);
@@ -352,14 +387,8 @@ export function generateFusiformIncision(tumorInput, direction, unitsPerMm, norm
   );
   const halfL = lengthMm * unitsPerMm * 0.5, halfW = widthMm * unitsPerMm * 0.5;
   const samples = Math.max(12, cfg.samples || 56);
-  const upper = [], lower = [];
-  for (let i = 0; i <= samples; i++) {
-    const t = i / samples;
-    const x = (t - 0.5) * 2 * halfL;
-    const y = Math.sin(Math.PI * t) * halfW;
-    upper.push(add(add(center, mul(axis, x)), mul(perp, y)));
-    lower.push(add(add(center, mul(axis, x)), mul(perp, -y)));
-  }
+  const profile = fusiformProfile(center, axis, perp, halfL, halfW, samples, cfg.tip_angle_deg);
+  const { upper, lower } = profile;
   const outline = upper.concat(lower.slice(1, -1).reverse());
   return {
     id: "fusiform_cutaneous_candidate",
@@ -375,11 +404,12 @@ export function generateFusiformIncision(tumorInput, direction, unitsPerMm, norm
     width_mm: widthMm,
     length_units: lengthMm * unitsPerMm,
     width_units: widthMm * unitsPerMm,
-    tip_angle_deg: cfg.tip_angle_deg,
+    tip_angle_deg: profile.metrics.tip_angle_estimated_deg,
     direction_confidence: direction.confidence,
     metrics: {
       rstl_deviation_deg: 0,
       length_to_width_ratio: lengthMm / widthMm,
+      ...profile.metrics,
       diameter_mm: tumor.diameter_mm,
       margin_mm: tumor.margin_mm,
       boundary_used: Boolean(boundary),
@@ -476,14 +506,9 @@ function buildEditedFusiform(base, center, axis, normal, unitsPerMm, edit) {
   const halfL = lengthMm * unitsPerMm * 0.5;
   const halfW = widthMm * unitsPerMm * 0.5;
   const samples = Math.max(12, Math.round((base.outline?.length || 58) / 2));
-  const upper = [], lower = [];
-  for (let i = 0; i <= samples; i++) {
-    const t = i / samples;
-    const x = (t - 0.5) * 2 * halfL;
-    const y = Math.sin(Math.PI * t) * halfW;
-    upper.push(add(add(center, mul(axis, x)), mul(widthAxis, y)));
-    lower.push(add(add(center, mul(axis, x)), mul(widthAxis, -y)));
-  }
+  const targetTipAngle = base.metrics?.tip_angle_target_deg || base.tip_angle_deg || 30;
+  const profile = fusiformProfile(center, axis, widthAxis, halfL, halfW, samples, targetTipAngle);
+  const { upper, lower } = profile;
   const outline = upper.concat(lower.slice(1, -1).reverse());
   return {
     ...base,
@@ -497,10 +522,12 @@ function buildEditedFusiform(base, center, axis, normal, unitsPerMm, edit) {
     width_mm: widthMm,
     length_units: lengthMm * unitsPerMm,
     width_units: widthMm * unitsPerMm,
+    tip_angle_deg: profile.metrics.tip_angle_estimated_deg,
     metrics: {
       ...(base.metrics || {}),
       rstl_deviation_deg: Math.abs(Number(edit.angle_offset_deg || 0)),
       length_to_width_ratio: lengthMm / widthMm,
+      ...profile.metrics,
     },
   };
 }

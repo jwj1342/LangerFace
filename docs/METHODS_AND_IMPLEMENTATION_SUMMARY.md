@@ -760,6 +760,14 @@ tip_angle ≈ 30 degrees
 
 但工程实现应参数化这些值，因为 3:1 长宽比和 30 度尖端角在不同几何条件下不一定能同时严格满足。系统应输出实际指标，而不是隐瞒偏差。
 
+当前梭形候选轮廓使用对称 cubic Hermite profile。设 `u` 为从端点到中点的归一化距离，`R = half_length / half_width`，目标尖端半角斜率 `m = tan(tip_angle / 2)`，则半轮廓端点斜率为 `s = R * m`，并用：
+
+```text
+h(u) = (s - 2)u^3 + (3 - 2s)u^2 + su
+```
+
+生成从端点 `h(0)=0` 到中点 `h(1)=1`、且中点切线水平 `h'(1)=0` 的平滑轮廓。为避免极端长宽比下曲线过冲，工程上会限制可用端点斜率并在 metrics 中记录 `tip_angle_target_deg`、`tip_angle_estimated_deg`、`tip_angle_error_deg` 和 `tip_angle_limited_by_ratio`。
+
 候选结构建议：
 
 ```json
@@ -772,6 +780,12 @@ tip_angle ≈ 30 degrees
   "width_mm": 6.0,
   "target_ratio": 3.0,
   "tip_angle_deg": 30.0,
+  "metrics": {
+    "profile": "cubic_hermite_tip_angle_constrained",
+    "tip_angle_target_deg": 30.0,
+    "tip_angle_estimated_deg": 30.0,
+    "tip_angle_error_deg": 0.0
+  },
   "curve": [[0.1, 0.2], [0.2, 0.25]],
   "warnings": [],
   "overrides": []
