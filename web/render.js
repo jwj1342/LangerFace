@@ -2,6 +2,7 @@
 import { SOLID, BAND, ZOOM_REGIONS } from "./constants.js";
 import { ctx, els } from "./dom.js";
 import { innerMouthTriangles, mapAtlas, pointInHandMasks, visibleRuns, visibleTriangles } from "./geometry.js";
+import { mapSurfaceRefs } from "./incision_overlay.js";
 import { modelState, renderState, sourceState } from "./state.js";
 import { setLive } from "./ui.js";
 
@@ -56,8 +57,63 @@ export function draw(lm, W, H, masks = []) {
       ctx.beginPath(); ctx.arc(lm[i][0], lm[i][1], Math.max(1, W / 1100), 0, 6.283); ctx.fill();
     }
   }
+  drawIncisionOverlay(lm, W, masks, vis, innerMouth);
   ctx.restore();
   return count;
+}
+
+function overlayMask(mapped, masks, vis, innerMouth) {
+  const hasMasks = masks.length > 0;
+  return mapped.pts.map((p, i) => {
+    const tri = mapped.tris[i];
+    const front = vis ? vis[tri] : 1;
+    if (innerMouth.has(tri)) return 0;
+    return front && !(hasMasks && pointInHandMasks(p, masks)) ? 1 : 0;
+  });
+}
+
+function strokeOverlayRefs(refs, lm, masks, vis, innerMouth, style) {
+  const mapped = mapSurfaceRefs(refs, lm, modelState.triangles);
+  if (mapped.pts.length < 2) return;
+  const mask = overlayMask(mapped, masks, vis, innerMouth);
+  ctx.strokeStyle = style.color;
+  ctx.lineWidth = style.lineWidth;
+  ctx.setLineDash(style.dash || []);
+  for (const run of visibleRuns(mapped.pts, mask)) {
+    ctx.beginPath();
+    ctx.moveTo(run[0][0], run[0][1]);
+    for (let i = 1; i < run.length; i++) ctx.lineTo(run[i][0], run[i][1]);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
+function drawIncisionOverlay(lm, W, masks, vis, innerMouth) {
+  const overlay = renderState.incisionOverlay;
+  if (!overlay) return;
+  ctx.save();
+  ctx.globalAlpha = 0.98;
+  const baseWidth = Math.max(2, W / 520);
+  strokeOverlayRefs(overlay.tumor?.boundary_refs || [], lm, masks, vis, innerMouth, {
+    color: "#facc15",
+    lineWidth: baseWidth,
+    dash: [baseWidth * 3, baseWidth * 2],
+  });
+  strokeOverlayRefs(overlay.candidate?.polyline_refs || [], lm, masks, vis, innerMouth, {
+    color: overlay.candidate_type === "linear" ? "#22c55e" : "#5eead4",
+    lineWidth: baseWidth * 1.35,
+  });
+  const center = mapSurfaceRefs([overlay.tumor?.center_ref], lm, modelState.triangles).pts[0];
+  if (center && !(masks.length && pointInHandMasks(center, masks))) {
+    ctx.fillStyle = "#facc15";
+    ctx.strokeStyle = "#111820";
+    ctx.lineWidth = Math.max(1, W / 900);
+    ctx.beginPath();
+    ctx.arc(center[0], center[1], Math.max(4, W / 180), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 // ── 细节放大窗 ────────────────────────────────────────────────────────────────

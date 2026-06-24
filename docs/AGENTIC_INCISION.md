@@ -14,6 +14,7 @@
 - 皮表肿物边界：支持椭圆近似和自由轮廓点输入，导出时保留 boundary、boundary source、author 和 units。
 - 自然皱襞 / 肿物边界辅助线索：当前只提供合成样例 CV 原型和验证指标入口，见 `tools/prototype_wrinkle_lesion_cues.py`；它只能作为低置信度 secondary cue，不自动改写切口几何。
 - 审阅最小工作流：支持保存多个候选、生成方向备选、导出 JSON、Markdown 报告草案和 PNG 截图。
+- 照片 / 视频 / 实时叠加：工作台可把当前候选暂存为 `incision-overlay/v0.1`，实时页读取后按三角面重心坐标投射到上传照片、视频或摄像头 landmarks 上，并复用背面剔除、手部遮挡和放大窗。
 - Agent 工具 schema：`assets/agentic_incision_tool_schema.json` 固化工具名、输入输出和 LLM 边界。
 - 隐私审计：`docs/INCISION_PRIVACY_AUDIT.md` 记录不出域数据、可发送抽象字段和导出审计字段。
 - Provider 接口：默认支持 Ollama/Qwen，本地或集群 vLLM 可通过 OpenAI-compatible endpoint 切入。
@@ -28,7 +29,7 @@
 - 医生审阅：当前支持候选保存、方向备选和 JSON/Markdown/PNG 导出；正式医生签名、病例系统绑定和审阅锁定属于后续受控临床系统集成。
 - Guardrails：已覆盖低 RSTL 置信度、低分区置信度、近敏感游离缘距离、下睑/唇红缘/鼻翼/鼻尖/口角敏感区提示、RSTL 偏角覆盖原因检查；阈值仍需临床审核。
 - LLM Agentic：LLM 只做摘要和解释，工具 schema、trace 和 stream 契约已固化；长程自主规划仍必须受确定性工具、审计记录和医生确认约束。
-- 3D/AR 呈现：当前在标准脸工作台上展示候选，和“切除闭合演示”保持入口分离；真实患者照片、视频或实时摄像头叠加需要额外隐私和临床验证。
+- 3D/AR 呈现：当前支持从标准脸工作台向 2D 实时页投射候选；3D Beta 头模上的患者个体化切口 overlay 仍需额外配准和临床验证。
 
 ## 临床与合规边界
 

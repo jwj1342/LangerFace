@@ -22,6 +22,7 @@ export const renderState = {
   },
   densityFrac: 1, smoothLevel: 0.6, opacity: 0.92,
   smoother: new OneEuro({ minCutoff: 1.5, beta: 0.05 }),
+  incisionOverlay: null,
 };
 
 export const sourceState = {

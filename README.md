@@ -40,7 +40,7 @@ LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它
 2. **核心算法层**：`src/langerface/` 与 `web/geometry/` 实现关键点输入、重心坐标映射、平滑、遮挡、渲染与 3D 配准；`web/geometry.js` 仅作为兼容旧导入的 barrel re-export。
 3. **用户界面层**：`web/` 提供唯一正式前端；`src/langerface/apps/` 只保留 CLI 和 OpenCV webcam 入口。
 
-当前主线是 **Stage 1：稳定显示面部 RSTL 皮肤张力线**。Stage 2 已开始进入受限功能切片：围绕医生手动输入的面部皮肤肿物，按结构化临床规则生成可解释、可编辑、可审阅的候选切口线。完整 Stage 2 仍需真实肿物边界标注、医生审阅导出、照片 / 视频 / AR 叠加与临床验证。项目不训练自定义医学模型，不上传用户图像，也不声称自动给出手术方案。
+当前主线是 **Stage 1：稳定显示面部 RSTL 皮肤张力线**。Stage 2 已进入受限工程闭环：围绕医生手动输入的面部皮肤肿物，按结构化临床规则生成可解释、可编辑、可审阅的候选切口线，并可把候选暂存到照片 / 视频 / 摄像头实时叠加层。完整 Stage 2 仍需真实肿物边界标注、医生审阅签名、3D/AR 个体化叠加与临床验证。项目不训练自定义医学模型，不上传用户图像，也不声称自动给出手术方案。
 
 ---
 
@@ -55,7 +55,7 @@ LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它
 | 配准与几何层 | 已实现 | 2D 重心坐标贴合；3D Beta Umeyama 关键点网格重建与刚性配准；FLAME 关键点拟合实验；离线 HeadSpace 多视角加权 Sim3 配准 | `src/langerface/geometry/`, `src/langerface/registration/`, `src/langerface/flame.py`, `web/geometry/`, `web/projection3d.js`, `tools/reconstruct_3d.py`, `tools/headspace/` |
 | 面部标注 / 图谱层 | 已实现 | 生成、读取、校验和映射 RSTL/Langer 线条；网页 3D 标注只产出待复核草案，临床校验由 Python/评审流程完成 | `src/langerface/lines/`, `web/annotate*.js`, `tools/annotate_atlas.py`, `tools/digitize_from_diagram.py` |
 | 肿物模拟层 | Stage 2 功能切片（#14） | 表示脸部肿物的位置、大小、深度、安全切缘和与皮肤表面的关系；当前支持手动中心点 + 近圆形直径，真实边界勾画仍待补 | `src/langerface/tumor/`, `web/incision_agent*.js` |
-| 切口设计层 | Stage 2 功能切片（#11/#13/#15/#16/#17/#18） | 综合张力线方向、肿物约束、安全切缘、敏感结构、医生编辑和审阅，生成候选切口可视化；只做决策辅助，不输出手术指令 | `assets/clinical_rules_face_incision.json`, `src/langerface/incision/`, `src/langerface/agent/`, `web/incision*.js` |
+| 切口设计层 | Stage 2 工程闭环（#11-#22/#64/#83/#85） | 综合张力线方向、肿物约束、安全切缘、敏感结构、医生编辑、审阅导出和 2D 实时叠加，生成候选切口可视化；只做决策辅助，不输出手术指令 | `assets/clinical_rules_face_incision.json`, `src/langerface/incision/`, `src/langerface/agent/`, `web/incision*.js` |
 | 渲染与交互层 | 已实现 / 扩展中 | 2D Canvas 叠加、3D 查看、遮挡、放大窗、录制导出和 UI 控制 | `src/langerface/rendering/`, `web/render.js`, `web/three3d.js`, `web/main.js` |
 | 实验演示层 | 已实现（研究演示） | FLAME 实时孪生；RSTL 切除 -> 闭合定性软体演示 | `web/flame_fit.js`, `web/mode3d.js`, `web/surgery.html`, `web/soft_body.js` |
 
@@ -136,7 +136,7 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 - 🧊 **3D 重建（Beta）**：转头扫描 → 多帧 468 点关键点网格对齐 / 取中位数 → 旋转查看 / 实时刚性投影；这是关键点网格演示，不是临床级稠密 3D 扫描。
 - 🧬 **FLAME 实时孪生（实验）**：浏览器加载紧凑 FLAME basis，本地拟合身份 / 表情 / 张嘴，右侧 FLAME 头随左侧真实人脸头姿和表情运动，可切标准 / 个体与贴脸纹理。
 - ✍️ **网页 3D 标注**：在浏览器里于标准脸 / 3D 头模表面手绘 RSTL/Langer 候选线，可导入 JSON/OBJ/PLY 头模和 3D Slicer `.mrk.json` 曲线，导出 `validated:false` 的图谱草案（`[tri,u,v]`）或 xyz 折线；临床复核与置 `validated:true` 仍走 Python/评审流程，见 [网页 3D 标注与图谱草案导出](docs/ARCHITECTURE.md#12-网页-3d-线标注与图谱草案导出)。
-- 🧭 **切口 Agent 工作台**：在标准脸上手动放置皮下 / 皮表肿物，生成线性或梭形候选切口，显示 RSTL 方向、面部分区、guardrails、工具调用 trace 和 provider 状态；完整医生审阅导出与 AR 叠加仍在后续任务中。
+- 🧭 **切口 Agent 工作台**：在标准脸上手动放置皮下 / 皮表肿物，生成线性或梭形候选切口，显示 RSTL 方向、面部分区、guardrails、工具调用 trace 和 provider 状态；候选可导出审阅记录，也可发送到实时页叠加到上传照片、视频或摄像头画面。
 - 🔬 **RSTL 切除 -> 闭合演示（Beta）**：作为 3D 标注上下文中的力学直觉演示，只展示沿 RSTL 的绿色切除闭合路径；不是 FEM、不是患者个体化建模，也不是正式候选生成模块。
 - 🎛️ **实时控制**：主界面暴露数据源、线密度、透明度、镜像和网格采样点；平滑、背面剔除、手部遮挡、分区着色和放大窗为底层支持或默认能力，部分调试开关当前隐藏。
 - 🔒 **全程本地运行**，不上传任何画面（隐私友好）。

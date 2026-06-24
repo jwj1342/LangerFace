@@ -1,6 +1,8 @@
 import * as THREE from "three";
 
 import { assetUrls } from "./assets.js";
+import { dataSource } from "./data_source.js";
+import { compileIncisionOverlay } from "./incision_overlay.js";
 import { applyCandidateEdit, planIncisionDeterministic, unitsPerMmFromVertices } from "./incision_tools.js";
 import { requestAgentPlan } from "./llm_provider.js";
 import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.js";
@@ -65,6 +67,7 @@ const els = {
   exportJson: $("exportJsonBtn"),
   exportReport: $("exportReportBtn"),
   exportPng: $("exportPngBtn"),
+  stageLiveOverlay: $("stageLiveOverlayBtn"),
   candidateList: $("candidateList"),
   savedCount: $("savedCount"),
   privacyState: $("privacyState"),
@@ -619,6 +622,19 @@ function exportScreenshot() {
   });
 }
 
+function stageLiveOverlay() {
+  if (!S.result) {
+    els.stageStatus.textContent = "没有可发送的候选";
+    return;
+  }
+  const overlay = compileIncisionOverlay(reviewRecord(S.result, "实时叠加候选"), S.verts, S.tris);
+  if (!overlay || !dataSource.stageIncisionOverlay(overlay)) {
+    els.stageStatus.textContent = "切口候选叠加暂存失败";
+    return;
+  }
+  els.stageStatus.textContent = "已发送到实时叠加；返回实时显示后上传照片、视频或开启摄像头查看。";
+}
+
 async function runAgent() {
   if (!S.verts) return;
   els.run.disabled = true;
@@ -801,6 +817,7 @@ els.clearSaved.onclick = () => { S.saved = []; renderSaved(); };
 els.exportJson.onclick = exportReviewJson;
 els.exportReport.onclick = exportReport;
 els.exportPng.onclick = exportScreenshot;
+els.stageLiveOverlay.onclick = stageLiveOverlay;
 new ResizeObserver(fitSize).observe(els.wrap);
 
 function renderLoop() {

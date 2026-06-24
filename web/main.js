@@ -2,6 +2,7 @@
 import { els } from "./dom.js";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./canvas_fit.js";
 import { dataSource } from "./data_source.js";
+import { validateIncisionOverlay } from "./incision_overlay.js";
 import { countMetric, logError } from "./logger.js";
 import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.js";
 import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera } from "./pipeline.js";
@@ -30,6 +31,18 @@ function applyStagedAtlas() {
   els.tmpl.value = atlas.system;
   syncPreviewControls();
   if (!sourceState.running) setMsg("已载入标注预览图谱（未验证）。开启摄像头或上传照片即可在脸上查看。");
+}
+
+function applyStagedIncisionOverlay() {
+  const overlay = dataSource.loadIncisionOverlay();
+  if (!overlay) return;
+  if (!validateIncisionOverlay(overlay)) {
+    dataSource.clearIncisionOverlay();
+    setMsg("切口候选叠加数据无效，已清除。");
+    return;
+  }
+  renderState.incisionOverlay = overlay;
+  setMsg("已载入切口候选叠加。上传照片、视频或开启摄像头后，会随 RSTL 一起显示。");
 }
 
 // ── UI 绑定 ───────────────────────────────────────────────────────────────────
@@ -154,7 +167,10 @@ renderState.smoother.minCutoff = 6.0 - 5.5 * renderState.smoothLevel;
 renderState.smoother.beta = 0.02 + 0.06 * renderState.smoothLevel;
 
 // 预加载模型并反馈状态
-ensureReady().then(applyStagedAtlas).catch((e) => {
+ensureReady().then(() => {
+  applyStagedAtlas();
+  applyStagedIncisionOverlay();
+}).catch((e) => {
   countMetric("bootstrap.loadFailure");
   els.badge.textContent = "模型加载失败";
   logError("启动时模型加载失败。", e);
