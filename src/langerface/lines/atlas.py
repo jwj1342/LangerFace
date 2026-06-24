@@ -6,6 +6,8 @@
 {
   "system": "rstl",
   "version": "0.1",
+  "topologyId": "mediapipe-468",
+  "topologyVersion": "mediapipe-canonical-468-v1",
   "provenance": "...",
   "validated": false,
   "lines": [
@@ -20,6 +22,8 @@ import json
 from dataclasses import dataclass, field
 
 import numpy as np
+
+from ..config.constants import TOPOLOGY_ID, TOPOLOGY_VERSION
 
 
 @dataclass
@@ -43,6 +47,8 @@ class Atlas:
     system: str
     lines: list[AtlasLine] = field(default_factory=list)
     version: str = "0.1"
+    topology_id: str = TOPOLOGY_ID
+    topology_version: str = TOPOLOGY_VERSION
     provenance: str = ""
     validated: bool = False
 
@@ -63,6 +69,8 @@ class Atlas:
             system=data["system"],
             lines=lines,
             version=data.get("version", "0.1"),
+            topology_id=data.get("topologyId", TOPOLOGY_ID),
+            topology_version=data.get("topologyVersion", TOPOLOGY_VERSION),
             provenance=data.get("provenance", ""),
             validated=bool(data.get("validated", False)),
         )
@@ -71,6 +79,8 @@ class Atlas:
         data = {
             "system": self.system,
             "version": self.version,
+            "topologyId": self.topology_id,
+            "topologyVersion": self.topology_version,
             "provenance": self.provenance,
             "validated": self.validated,
             "lines": [
@@ -87,11 +97,23 @@ class Atlas:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     # ── 校验 ───────────────────────────────────────────────────────────────────
-    def validate(self, num_triangles: int, expected_version: str | None = None) -> list[str]:
+    def validate(
+        self,
+        num_triangles: int,
+        expected_version: str | None = None,
+        expected_topology_id: str | None = None,
+        expected_topology_version: str | None = None,
+    ) -> list[str]:
         """返回问题列表（空 = 通过）。检查三角面索引合法、重心坐标范围、曲线非空。"""
         issues: list[str] = []
         if expected_version is not None and self.version != expected_version:
             issues.append(f"图谱版本 {self.version!r} 与期望 {expected_version!r} 不一致")
+        if expected_topology_id is not None and self.topology_id != expected_topology_id:
+            issues.append(f"图谱拓扑 {self.topology_id!r} 与期望 {expected_topology_id!r} 不一致")
+        if expected_topology_version is not None and self.topology_version != expected_topology_version:
+            issues.append(
+                f"图谱拓扑版本 {self.topology_version!r} 与期望 {expected_topology_version!r} 不一致"
+            )
         if not self.lines:
             issues.append("图谱不含任何曲线")
         for ln in self.lines:

@@ -8,7 +8,7 @@ import json
 import numpy as np
 import pytest
 
-from langerface.config import ATLAS_VERSION, SYSTEM_RSTL, build_config
+from langerface.config import ATLAS_VERSION, SYSTEM_RSTL, TOPOLOGY_ID, TOPOLOGY_VERSION, build_config
 from langerface.detection.base import FaceResult
 from langerface.pipeline import LinePipeline
 
@@ -32,10 +32,19 @@ class _FakeDetector:
         self.closed = True
 
 
-def _write_atlas(path, *, version=ATLAS_VERSION, points=None):
+def _write_atlas(
+    path,
+    *,
+    version=ATLAS_VERSION,
+    topology_id=TOPOLOGY_ID,
+    topology_version=TOPOLOGY_VERSION,
+    points=None,
+):
     path.write_text(json.dumps({
         "system": SYSTEM_RSTL,
         "version": version,
+        "topologyId": topology_id,
+        "topologyVersion": topology_version,
         "validated": False,
         "lines": [{
             "name": "test",
@@ -97,6 +106,28 @@ def test_pipeline_rejects_atlas_version_mismatch(tmp_path):
     cfg.atlas_paths = {SYSTEM_RSTL: str(path)}
 
     with pytest.raises(ValueError, match="版本"):
+        LinePipeline(cfg, detector=_FakeDetector(np.zeros((478, 3))), mode="image")
+
+
+@requires_canonical
+def test_pipeline_rejects_atlas_topology_mismatch(tmp_path):
+    path = tmp_path / "flame_atlas.json"
+    _write_atlas(path, topology_id="flame-2023")
+    cfg = build_config(SYSTEM_RSTL)
+    cfg.atlas_paths = {SYSTEM_RSTL: str(path)}
+
+    with pytest.raises(ValueError, match="拓扑"):
+        LinePipeline(cfg, detector=_FakeDetector(np.zeros((478, 3))), mode="image")
+
+
+@requires_canonical
+def test_pipeline_rejects_atlas_topology_version_mismatch(tmp_path):
+    path = tmp_path / "old_topology_atlas.json"
+    _write_atlas(path, topology_version="other")
+    cfg = build_config(SYSTEM_RSTL)
+    cfg.atlas_paths = {SYSTEM_RSTL: str(path)}
+
+    with pytest.raises(ValueError, match="拓扑版本"):
         LinePipeline(cfg, detector=_FakeDetector(np.zeros((478, 3))), mode="image")
 
 
