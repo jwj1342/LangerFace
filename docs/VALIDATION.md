@@ -64,10 +64,25 @@ Stage 2 涉及肿物模拟和候选切口，只能在医生审阅路径中评估
 | 目标 | 指标 | 说明 |
 | --- | --- | --- |
 | 肿物输入一致性 | 中心/直径/边界误差 | 与人工边界或超声直径对比 |
+| 皮表边界辅助线索 | mask IoU、precision、recall | 仅用于低置信度 CV/AI 辅助线索，不自动改切口 |
+| 皱纹 / 自然皱襞辅助线索 | recall、precision、角度误差 | 作为 RSTL 外的次级候选依据，必须人工确认 |
 | 切口方向 | RSTL 偏角 | 候选长轴与局部 RSTL 方向差 |
 | 梭形几何 | 长宽比、尖端角、平滑性 | 皮表肿物候选必须报告 |
 | 敏感结构保护 | 警告召回率 | 下睑、唇红缘、鼻翼等风险区域 |
 | 医生审阅 | 接受率、修改次数、覆盖原因 | 系统建议不能绕过医生确认 |
+
+当前公开仓库只提供合成样例原型，见 [WRINKLE_LESION_CUES.md](WRINKLE_LESION_CUES.md) 和
+`tools/prototype_wrinkle_lesion_cues.py`。该脚本输出 `metrics.json`，字段包括：
+
+```json
+{
+  "lesion": {"precision": 0.0, "recall": 0.0, "iou": 0.0},
+  "wrinkle": {"precision": 0.0, "recall": 0.0, "iou": 0.0},
+  "confidence_label": "low_confidence_cv_cue_requires_manual_confirmation"
+}
+```
+
+真实数据验证时必须把这些指标替换为医生手工边界 / 皱纹线标注的对比结果，不能用合成样例分数代表临床性能。
 
 ## 失败案例分类
 
