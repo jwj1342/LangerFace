@@ -5,6 +5,9 @@
 下载：
   - canonical_face_model.obj  （标准脸网格：顶点/三角拓扑/UV）
   - face_landmarker.task       （Face Landmarker 模型 bundle，478 关键点）
+  - hand_landmarker.task       （Hand Landmarker 模型 bundle，手部遮挡用）
+
+assets/ 是唯一权威源；web/assets/ 全部由 export_web_assets.py 派生，勿手动 curl（见 #47）。
 """
 from __future__ import annotations
 
@@ -21,6 +24,9 @@ DOWNLOADS = {
     "face_landmarker.task":
         "https://storage.googleapis.com/mediapipe-models/face_landmarker/"
         "face_landmarker/float16/1/face_landmarker.task",
+    "hand_landmarker.task":
+        "https://storage.googleapis.com/mediapipe-models/hand_landmarker/"
+        "hand_landmarker/float16/1/hand_landmarker.task",
 }
 
 

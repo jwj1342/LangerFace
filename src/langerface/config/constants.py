@@ -52,3 +52,7 @@ ONEEURO_BETA = 0.05
 ONEEURO_DCUTOFF = 1.0
 
 DEFAULT_FADE_FRAMES = 6  # 丢脸淡出 / 重检测淡入帧数
+
+# 3D 重建相似变换的刚性锚点（稳定的骨性/中线 MediaPipe 关键点索引）。
+# 单一事实来源：web 端 RIGID3D 由 tools/gen_web_constants.py 从此处生成（见 #30）。
+RIGID3D = (33, 263, 133, 362, 168, 6, 195, 5, 4, 1, 10, 152, 234, 454, 127, 356)

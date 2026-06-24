@@ -1,9 +1,12 @@
-// One-Euro 时间平滑（与 Python detection/smoothing.py 的 LandmarkSmoother 等价）。
+// One-Euro 时间平滑（移植自 Python detection/smoothing.py 的 LandmarkSmoother）。
 // 纯逻辑、无 DOM。拆分自原 web/geometry.js（见 #49）。
+// 默认参数来自 constants.py 的 ONEEURO_*（跨语言单一真源，生成，见 #30）。
+
+import { ONEEURO_BETA, ONEEURO_DCUTOFF, ONEEURO_MIN_CUTOFF } from "../constants_generated.js";
 
 // One-Euro 时间平滑。对 [[x,y,z]...] 逐元素滤波。
 export class OneEuro {
-  constructor({ minCutoff = 1.5, beta = 0.05, dcutoff = 1.0 } = {}) {
+  constructor({ minCutoff = ONEEURO_MIN_CUTOFF, beta = ONEEURO_BETA, dcutoff = ONEEURO_DCUTOFF } = {}) {
     this.minCutoff = minCutoff;
     this.beta = beta;
     this.dcutoff = dcutoff;
