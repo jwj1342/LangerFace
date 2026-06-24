@@ -61,9 +61,9 @@ def test_rstl_direction_prior_builder_reproduces_contract(tmp_path):
         ],
         cwd=ROOT,
         text=True,
-        check=True,
         capture_output=True,
     )
+    assert result.returncode == 0, result.stderr
     assert "[ok]" in result.stdout
     built = _load_prior(output)
     committed = _load_prior()

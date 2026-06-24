@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import UTC, date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -238,7 +238,7 @@ def main() -> None:
     # Accept full ISO datetimes while keeping the committed asset date-only.
     generated_at = args.generated_at
     if generated_at == "now":
-        generated_at = datetime.now(UTC).date().isoformat()
+        generated_at = datetime.now(timezone.utc).date().isoformat()
 
     prior = build_direction_prior(
         canonical_obj=Path(args.canonical_obj),
