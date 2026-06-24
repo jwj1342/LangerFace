@@ -36,11 +36,20 @@ cd ..
 
 ```bash
 pytest                       # Python 单元/集成测试
-cd web && npm test           # JS↔Python 几何对拍（三个 .mjs）
+cd web && npm test           # JS↔Python 几何对拍（多支 .mjs）
 ruff check .                 # 代码风格
 ```
 
 测试**不需要** mediapipe（注入假检测器 / 合成关键点）；资产已随仓库提交，故几何与渲染测试会真正运行。
+
+各测试覆盖（从 README 收口到此，作为测试事实来源）：
+
+- **JS ↔ Python 逐点对拍**（`cd web && npm test`）：先查 `web/*.js` 静态 import 无模块环，再用真实帧关键点对拍映射（误差 ~5×10⁻⁵px）/ 背面剔除（0 不一致）/ One-Euro fixture；并含 `test_occlusion`（贴合手形掩膜、指缝保留、无手不剔除）、`test_umeyama`（恢复已知相似变换 ~1e-13）、`topologyId`/`topologyVersion` 守卫与 atlas roundtrip 契约、FLAME basis 拟合 + jaw/表情前向、RSTL 切除闭合 soft-body 张力方向断言、`test_logger`（`window.exportLangerfaceDiagnostics()` 结构化 JSON 契约）。
+- **Python 单测**（`pytest`）：图谱完整性、标准脸解析、映射仿射不变性、平滑降抖动、端到端渲染、`assets/`↔`web/assets/` 同步门禁、结构化可观测性。
+- **目检脚本**：`tools/render_check.py`、`inspect_frames.py`、`montage.py`、`sample_output.py`、`debug_one.py`。
+- **浏览器实测**：UI/3D 查看通过截图核对；实时摄像头链路需在带摄像头的浏览器中确认。
+
+跨语言对拍的不变式与金标重生成见 [CROSS_LANG_PARITY.md](CROSS_LANG_PARITY.md)。
 
 ## PR / Preview 工作流
 
@@ -144,4 +153,8 @@ Preview 人工验收清单：
 - 按 [标签规范 (LABELS.md)](LABELS.md) 给 issue / PR 打标签：至少 1 个类型，建议补优先级与领域。
 - 新增模块即补单元测试；纯逻辑测试不要依赖资产或 mediapipe。
 - 不提交大二进制 / 人脸影像（`.gitignore` 已拦截，pre-commit 兜底）。
+- 用 `git add <明确路径>` 暂存，**不要** `git add -A` / `.`（避免误提交 `node_modules` symlink 等本地产物，见下）。
 - 分支开发 + PR；CI、Vercel Preview、至少 1 个 reviewer approval 和必要的人工验收需通过后再合并。
+
+> 多人并行改本仓库踩过的坑（`git add -A` 误提交、伞状 PR 合并后批量过期、分支保护与合并机制、
+> 登录节点测试、行为保持式重构纪律）已沉淀到 [工程教训 (ENGINEERING_LESSONS.md)](ENGINEERING_LESSONS.md)，提交前值得过一遍速查清单。

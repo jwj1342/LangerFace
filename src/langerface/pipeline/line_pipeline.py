@@ -21,7 +21,13 @@ from ..detection.smoothing import LandmarkSmoother
 from ..geometry.canonical import CanonicalFaceModel
 from ..lines.atlas import Atlas
 from ..lines.mapping import map_atlas
-from ..log import get_logger
+from ..log import (
+    DetectFailureReason,
+    Phase,
+    get_logger,
+    langerface_version,
+    log_stage_duration,
+)
 from ..rendering.occlusion import BackfaceCuller
 from ..rendering.overlay import draw_overlay
 
@@ -55,7 +61,33 @@ class LinePipeline:
                     raise ValueError(msg)
                 self.atlases[system] = atlas
         if not self.atlases:
-            log.warning("未找到任何图谱；请先运行 tools/build_field_atlas.py 生成。")
+            log.warning(
+                "未找到任何图谱；请先运行 tools/build_field_atlas.py 生成。",
+                extra={
+                    "event": "atlas.load",
+                    "phase": Phase.ASSETS,
+                    "reason": DetectFailureReason.NO_ATLAS_LOADED,
+                },
+            )
+
+        # 资产/模型版本：一次性结构化记录，使任意一帧诊断都能回指到具体资产版本。
+        self._asset_versions = {
+            "langerfaceVersion": langerface_version(),
+            "model": os.path.basename(config.landmarker_task),
+            "topologyId": TOPOLOGY_ID,
+            "topologyVersion": TOPOLOGY_VERSION,
+            "atlasVersions": {sys: a.version for sys, a in self.atlases.items()},
+        }
+        log.info(
+            "已加载资产：langerface=%s 图谱=%s",
+            self._asset_versions["langerfaceVersion"],
+            self._asset_versions["atlasVersions"],
+            extra={
+                "event": "assets.loaded",
+                "phase": Phase.ASSETS,
+                "assetVersions": self._asset_versions,
+            },
+        )
 
         self.detector: Detector = detector or FaceLandmarkDetector(
             model_path=config.landmarker_task,
@@ -97,6 +129,16 @@ class LinePipeline:
     # ── 主入口 ─────────────────────────────────────────────────────────────────
     def process(self, frame_bgr: np.ndarray, timestamp_ms: int | None = None) -> np.ndarray:
         if self.cfg.system not in self.atlases:
+            log.error(
+                "线系统 %r 的图谱缺失。",
+                self.cfg.system,
+                extra={
+                    "event": "frame.atlasMissing",
+                    "phase": Phase.FRAME,
+                    "reason": DetectFailureReason.ATLAS_MISSING,
+                    "system": self.cfg.system,
+                },
+            )
             raise ValueError(
                 f"线系统 {self.cfg.system!r} 的图谱缺失。"
                 f"请先运行 tools/build_field_atlas.py 生成图谱。"
@@ -105,8 +147,21 @@ class LinePipeline:
         style = self.cfg.style()
         t_sec = (timestamp_ms or 0) / 1000.0
 
-        faces = self.detector.detect(frame_bgr, timestamp_ms)
+        # 阶段耗时（detect）：用 perf_counter 度量，落结构化 durationMs。
+        with log_stage_duration(log, "frame.detect", Phase.DETECT):
+            faces = self.detector.detect(frame_bgr, timestamp_ms)
         out = frame_bgr
+
+        if not faces:
+            # 检测失败/丢脸：可枚举 reason，而非仅自由文本。
+            log.debug(
+                "本帧未检测到人脸。",
+                extra={
+                    "event": "frame.noFace",
+                    "phase": Phase.FRAME,
+                    "reason": DetectFailureReason.NO_FACE,
+                },
+            )
 
         for i in range(self.cfg.num_faces):
             if i < len(faces):

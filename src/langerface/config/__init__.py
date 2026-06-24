@@ -10,6 +10,7 @@ from .assets import (
     ATLAS_PATHS,
     CANONICAL_OBJ,
     FACE_LANDMARKER_TASK,
+    HAND_LANDMARKER_TASK,
     assets_dir,
     require_asset,
 )
@@ -22,6 +23,7 @@ from .constants import (
     ONEEURO_BETA,
     ONEEURO_DCUTOFF,
     ONEEURO_MIN_CUTOFF,
+    RIGID3D,
     SYSTEM_LANGER,
     SYSTEM_RSTL,
     TOPOLOGY_ID,
@@ -40,8 +42,8 @@ __all__ = [
     "Config", "LineStyle", "DEFAULT_STYLES", "build_config",
     # 常量
     "NOSE_TIP", "FACE_FRAME_ANCHORS", "DEFAULT_OCCLUSION_THRESHOLD",
-    "ONEEURO_MIN_CUTOFF", "ONEEURO_BETA", "ONEEURO_DCUTOFF", "DEFAULT_FADE_FRAMES",
+    "ONEEURO_MIN_CUTOFF", "ONEEURO_BETA", "ONEEURO_DCUTOFF", "DEFAULT_FADE_FRAMES", "RIGID3D",
     # 资产
-    "ASSETS_DIR", "CANONICAL_OBJ", "FACE_LANDMARKER_TASK", "ATLAS_PATHS",
+    "ASSETS_DIR", "CANONICAL_OBJ", "FACE_LANDMARKER_TASK", "HAND_LANDMARKER_TASK", "ATLAS_PATHS",
     "assets_dir", "require_asset",
 ]
