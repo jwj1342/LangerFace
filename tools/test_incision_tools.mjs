@@ -33,6 +33,12 @@ const atlas = {
 const direction = T.queryDirection([4, 2, 0], verts, tris, atlas);
 ok(direction.confidence > 0.5, "queryDirection returns useful confidence near atlas line");
 ok(Math.abs(direction.vector[0]) > 0.95, "queryDirection follows horizontal atlas tangent");
+ok(direction.source === "rstl_atlas_weighted_nearest", "queryDirection uses weighted nearest support");
+ok(direction.support_count >= 1, "queryDirection records support count");
+const repeatedAngles = Array.from({ length: 100 }, () => T.queryDirection([4, 2, 0], verts, tris, atlas).angle_deg);
+ok(Math.max(...repeatedAngles) - Math.min(...repeatedAngles) < 1e-9, "queryDirection is stable across repeated static queries");
+const farDirection = T.queryDirection([10, 10, 0], verts, tris, atlas);
+ok(farDirection.confidence < 0.1, "queryDirection returns low confidence far from atlas support");
 
 const linear = T.generateLinearIncision(
   { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 10, depth_mm: 5 },
@@ -44,7 +50,16 @@ ok(near(linear.length_mm, 12.5), "linear length follows multiplier");
 ok(near(linear.endpoints[0][0], 3.375) && near(linear.endpoints[1][0], 4.625), "linear endpoints centered on tumor");
 
 const fusiform = T.generateFusiformIncision(
-  { kind: "cutaneous", center: [4, 2, 0], diameter_mm: 8, margin_mm: 2 },
+  {
+    kind: "cutaneous",
+    center: [4, 2, 0],
+    diameter_mm: 8,
+    margin_mm: 2,
+    boundary: [[3, 2, 0], [4, 3, 0], [5, 2, 0]],
+    boundary_mode: "freehand",
+    boundary_source: "manual_freehand",
+    author: "clinician",
+  },
   { vector: [1, 0, 0], confidence: 0.9 },
   0.1,
   [0, 0, 1],
@@ -58,6 +73,30 @@ const anatomy = T.classifyRegion([3, 6, 0], verts);
 const guard = T.evaluateGuardrails({ direction_confidence: 0.8 }, anatomy);
 ok(anatomy.region === "lower_eyelid", "region classifier reaches sensitive lower eyelid bucket");
 ok(guard.passed === false && guard.warnings.some((w) => w.severity === "high"), "guardrails flag sensitive region");
+ok(T.classifyRegion([5, 3, 0], verts).region === "lip_vermilion", "region classifier reaches lip vermilion bucket");
+ok(T.classifyRegion([4.2, 4.6, 0], verts).region === "nasal_ala", "region classifier reaches nasal ala bucket");
+
+const regionCases = {
+  forehead: [5, 8.6, 0],
+  ear_region: [0.8, 5.5, 0],
+  temple_cheek: [1.8, 6.8, 0],
+  upper_eyelid: [3, 7.2, 0],
+  lower_eyelid: [3, 6, 0],
+  inner_canthus: [5, 6, 0],
+  nasal_dorsum: [5, 5.2, 0],
+  nasal_ala: [4.2, 4.6, 0],
+  nasal_tip: [5, 4.2, 0],
+  nasolabial_fold: [3, 4.1, 0],
+  cheek: [7, 5, 0],
+  lip_vermilion: [5, 3, 0],
+  upper_lip: [5, 3.7, 0],
+  oral_commissure: [3.4, 3.1, 0],
+  chin: [5, 1.6, 0],
+  jawline: [2, 2.4, 0],
+};
+for (const [region, point] of Object.entries(regionCases)) {
+  ok(T.classifyRegion(point, verts).region === region, `region classifier covers ${region}`);
+}
 
 const plan = T.planIncisionDeterministic({
   tumor: { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 10, depth_mm: 5 },
@@ -67,6 +106,9 @@ const plan = T.planIncisionDeterministic({
 });
 ok(plan.trace.length === 4, "deterministic plan records four tool calls");
 ok(plan.candidate.type === "linear", "deterministic plan returns candidate");
+ok(plan.agent_trace_mode === "single_turn_react_with_deterministic_tools", "plan records trace mode");
+ok(T.TOOL_SCHEMAS.some((s) => s.name === "clinician_edit_candidate"), "tool schemas include clinician edit");
+ok(T.TOOL_SCHEMAS.some((s) => s.name === "save_review_record"), "tool schemas include review record export");
 
 const edited = T.applyCandidateEdit(plan, {
   angle_offset_deg: 20,

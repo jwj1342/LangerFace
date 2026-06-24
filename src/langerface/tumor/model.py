@@ -30,8 +30,11 @@ class TumorInput:
     depth_mm: float | None = None
     margin_mm: float = 0.0
     boundary: tuple[tuple[float, float, float], ...] = field(default_factory=tuple)
+    boundary_mode: str = "center_diameter"
+    boundary_source: str = "manual"
     source: str = "manual"
     author: str = ""
+    units: str = "mm"
 
     def __post_init__(self) -> None:
         if self.kind not in {"subcutaneous", "cutaneous"}:
@@ -60,8 +63,11 @@ class TumorInput:
             "depth_mm": self.depth_mm,
             "margin_mm": self.margin_mm,
             "boundary": [list(p) for p in self.boundary],
+            "boundary_mode": self.boundary_mode,
+            "boundary_source": self.boundary_source,
             "source": self.source,
             "author": self.author,
+            "units": self.units,
         }
 
 
@@ -76,6 +82,9 @@ def tumor_from_dict(data: dict[str, object]) -> TumorInput:
         depth_mm=None if data.get("depth_mm") is None else float(data["depth_mm"]),
         margin_mm=float(data.get("margin_mm", 0.0)),
         boundary=tuple(_point3(p, "boundary point") for p in boundary_raw),
+        boundary_mode=str(data.get("boundary_mode", "center_diameter")),
+        boundary_source=str(data.get("boundary_source", "manual")),
         source=str(data.get("source", "manual")),
         author=str(data.get("author", "")),
+        units=str(data.get("units", "mm")),
     )

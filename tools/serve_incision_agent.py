@@ -21,7 +21,12 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from langerface.agent import OpenAICompatibleProvider, plan_incision_case, provider_from_env  # noqa: E402
+from langerface.agent import (  # noqa: E402
+    OpenAICompatibleProvider,
+    plan_incision_case,
+    provider_from_config,
+    provider_from_env,
+)
 from langerface.lines import Atlas  # noqa: E402
 
 
@@ -51,6 +56,48 @@ class AgentHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _send_sse(self, result: dict[str, Any]) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "content-type")
+        self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        self.end_headers()
+
+        def emit(event: str, payload: dict[str, Any]) -> None:
+            data = json.dumps(payload, ensure_ascii=False)
+            self.wfile.write(f"event: {event}\ndata: {data}\n\n".encode())
+            self.wfile.flush()
+
+        emit("provider", result.get("provider", {}))
+        for index, step in enumerate(result.get("trace", [])):
+            emit("trace", {"index": index, **step})
+        emit("result", result)
+        emit("done", {"ok": True})
+
+    def _plan_from_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        tumor = payload.get("tumor", payload)
+        if not isinstance(tumor, dict):
+            raise ValueError("request must include a tumor object")
+        request_provider = self.provider
+        provider_config = payload.get("provider_config")
+        if self.use_llm and isinstance(provider_config, dict):
+            request_provider = provider_from_config(provider_config)
+        result = plan_incision_case(
+            tumor,
+            self.vertices,
+            self.triangles,
+            self.atlas,
+            provider=request_provider,
+            use_llm=self.use_llm,
+        )
+        if isinstance(provider_config, dict):
+            safe_config = {k: v for k, v in provider_config.items() if k != "api_key"}
+            safe_config["api_key"] = "[redacted]" if provider_config.get("api_key") else ""
+            result["provider_config"] = safe_config
+        return result
+
     def do_OPTIONS(self) -> None:  # noqa: N802
         self._send_json(204, {})
 
@@ -68,24 +115,17 @@ class AgentHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": "not_found"})
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path != "/api/agentic-incision":
+        if self.path not in {"/api/agentic-incision", "/api/agentic-incision/stream"}:
             self._send_json(404, {"error": "not_found"})
             return
         try:
             length = int(self.headers.get("content-length", "0"))
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            tumor = payload.get("tumor", payload)
-            if not isinstance(tumor, dict):
-                raise ValueError("request must include a tumor object")
-            result = plan_incision_case(
-                tumor,
-                self.vertices,
-                self.triangles,
-                self.atlas,
-                provider=self.provider,
-                use_llm=self.use_llm,
-            )
-            self._send_json(200, result)
+            result = self._plan_from_payload(payload)
+            if self.path.endswith("/stream"):
+                self._send_sse(result)
+            else:
+                self._send_json(200, result)
         except Exception as exc:  # noqa: BLE001
             self._send_json(400, {"error": str(exc)})
 
@@ -107,6 +147,7 @@ def main() -> int:
     server = ThreadingHTTPServer((args.host, args.port), AgentHandler)
     print(f"incision agent server listening on http://{args.host}:{args.port}")
     print("POST /api/agentic-incision")
+    print("POST /api/agentic-incision/stream")
     server.serve_forever()
     return 0
 

@@ -24,6 +24,16 @@ def evaluate_guardrails(
         if isinstance(anatomy, AnatomyContext)
         else float(anatomy.get("confidence", 0.0))
     )
+    free_margin_distance = (
+        anatomy.free_margin_distance_mm
+        if isinstance(anatomy, AnatomyContext)
+        else anatomy.get("free_margin_distance_mm")
+    )
+    nearby_landmarks = (
+        anatomy.nearby_landmarks
+        if isinstance(anatomy, AnatomyContext)
+        else tuple(anatomy.get("nearby_landmarks", []))
+    )
     sensitive_rules = cfg["sensitive_regions"]  # type: ignore[index]
     warnings: list[dict[str, Any]] = []
     suggested_overrides: list[dict[str, Any]] = []
@@ -52,6 +62,23 @@ def evaluate_guardrails(
         suggested_overrides.append({
             "kind": "manual_direction_confirmation",
             "reason": f"{region} is a sensitive free-margin region.",
+        })
+
+    if free_margin_distance is not None and float(free_margin_distance) <= float(
+        cfg.get("free_margin_distance_warn_mm", 18.0)  # type: ignore[union-attr]
+    ):
+        landmarks = ", ".join(str(x) for x in nearby_landmarks) or region
+        warnings.append({
+            "code": "near_sensitive_free_margin",
+            "severity": "high",
+            "message": (
+                f"Candidate center is approximately {float(free_margin_distance):.1f} mm "
+                f"from sensitive free-margin landmark(s): {landmarks}."
+            ),
+        })
+        suggested_overrides.append({
+            "kind": "free_margin_distance_review",
+            "reason": "Confirm functional and contour risk before accepting this direction.",
         })
 
     rule_key = "fusiform_cutaneous" if candidate.get("type") == "fusiform" else "linear_subcutaneous"

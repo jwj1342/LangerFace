@@ -579,7 +579,9 @@ export function enterRoute(route) {
   reconState.route = route;
   els.scanPanel.classList.add("hidden"); els.scanToast.classList.add("hidden");
   if (route === "3d") {
-    els.route3dPanel.classList.remove("hidden"); els.rstlMigrationPanel.classList.remove("hidden"); els.badge.classList.add("beta");
+    els.route3dPanel.classList.remove("hidden"); els.badge.classList.add("beta");
+    els.threeDWorkflowCard?.classList.remove("hidden");
+    if (els.routeModeHint) els.routeModeHint.textContent = "当前是 3D 重建 / 标注上下文，可进入 3D 线标注和沿 RSTL 闭合演示。";
     sourceState.running = false; stopSource();
     els.zoomStrip.classList.add("hidden"); els.canvas.classList.add("hidden");
     setMsg(reconState.reconVerts ? null : "3D Beta：请先「用示例脸」或「转头扫描」"); setLive(false, "3D Beta");
@@ -587,7 +589,9 @@ export function enterRoute(route) {
   } else {
     reconState.scan = null;
     cancelAnimationFrame(reconState.viewerRAF);
-    els.route3dPanel.classList.add("hidden"); els.rstlMigrationPanel.classList.add("hidden"); els.badge.classList.remove("beta");
+    els.route3dPanel.classList.add("hidden"); els.badge.classList.remove("beta");
+    els.threeDWorkflowCard?.classList.add("hidden");
+    if (els.routeModeHint) els.routeModeHint.textContent = "当前是 2D 实时贴合模式，只显示稳定主流程。";
     els.three.classList.add("hidden"); els.canvas.classList.remove("hidden");
     els.reset3d.disabled = true;
     if (renderState.zoom) els.zoomStrip.classList.remove("hidden");

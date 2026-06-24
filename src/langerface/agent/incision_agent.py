@@ -23,6 +23,52 @@ from ..lines.direction import query_direction
 from ..tumor import TumorInput, tumor_from_dict
 from .provider import OpenAICompatibleProvider
 
+TOOL_SCHEMAS = [
+    {
+        "name": "classify_region",
+        "input": ["point"],
+        "output": ["region", "subunit", "confidence", "free_margin_distance_mm"],
+    },
+    {
+        "name": "query_rstl_direction",
+        "input": ["point", "source"],
+        "output": ["vector", "angle_deg", "confidence", "support_count"],
+    },
+    {
+        "name": "linear_subcutaneous_incision",
+        "input": ["tumor", "direction", "units_per_mm"],
+        "output": ["endpoints", "length_mm", "metrics"],
+    },
+    {
+        "name": "fusiform_cutaneous_incision",
+        "input": ["tumor", "direction", "units_per_mm"],
+        "output": ["outline", "length_mm", "width_mm", "metrics"],
+    },
+    {
+        "name": "evaluate_guardrails",
+        "input": ["candidate", "anatomy"],
+        "output": ["passed", "warnings", "suggested_overrides"],
+    },
+    {
+        "name": "clinician_edit_candidate",
+        "input": [
+            "candidate",
+            "angle_offset_deg",
+            "length_scale",
+            "width_scale",
+            "shift_along_mm",
+            "shift_perp_mm",
+            "reason",
+        ],
+        "output": ["edited_candidate", "guardrails", "provenance"],
+    },
+    {
+        "name": "save_review_record",
+        "input": ["candidate", "tumor", "trace", "privacy_audit"],
+        "output": ["review_record_json", "report_markdown", "screenshot_png"],
+    },
+]
+
 
 def _trace(
     action: str,
@@ -195,6 +241,8 @@ def plan_incision_case(
 
     return {
         "schema_version": "agentic-incision-plan/v0.1",
+        "agent_trace_mode": "single_turn_react_with_deterministic_tools",
+        "tool_schemas": TOOL_SCHEMAS,
         "tumor": tumor.to_dict(),
         "anatomy": anatomy.to_dict(),
         "direction": direction.to_dict(),

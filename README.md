@@ -349,6 +349,8 @@ Stage 2 的切口候选必须受以下边界约束：
 
 病人面部影像属敏感个人信息。本工具默认**本地运行，不上传任何数据**。Vite 前端默认用于本地研究演示；如需对外暴露，请自行加访问控制与合规审查（HIPAA / GDPR / 《个人信息保护法》）。
 
+Stage 2 切口 Agent 默认只把肿物参数、标准化坐标、候选切口、工具调用 trace 和审阅记录作为结构化 JSON 处理；导出 JSON / 报告草案不默认包含原始照片、视频帧、摄像头画面或纹理。前端允许配置 OpenAI-compatible / Ollama 等 LLM Provider 的 Base URL、模型和访问密钥；密钥仅用于当前浏览器到本地代理/远端服务的请求，审阅记录与服务端返回会做脱敏，不写入公开仓库。详细边界见 [`docs/INCISION_PRIVACY_AUDIT.md`](docs/INCISION_PRIVACY_AUDIT.md)。
+
 ---
 
 ## 持续集成与部署（CI/CD）

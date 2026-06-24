@@ -12,16 +12,31 @@ const els = {
   tumorKind: $("tumorKind"),
   diameter: $("diameterMm"),
   diameterVal: $("diameterVal"),
+  tumorAuthor: $("tumorAuthor"),
   depth: $("depthMm"),
   depthVal: $("depthVal"),
   depthWrap: $("depthWrap"),
   margin: $("marginMm"),
   marginVal: $("marginVal"),
   marginWrap: $("marginWrap"),
+  boundaryWrap: $("boundaryWrap"),
+  boundaryMode: $("boundaryMode"),
+  ellipseWrap: $("ellipseWrap"),
+  ellipseRatio: $("ellipseRatio"),
+  ellipseRatioVal: $("ellipseRatioVal"),
+  freehandControls: $("freehandControls"),
+  startBoundary: $("startBoundaryBtn"),
+  clearBoundary: $("clearBoundaryBtn"),
   run: $("runAgentBtn"),
   pickState: $("pickState"),
   useAgentServer: $("useAgentServer"),
   endpoint: $("agentEndpoint"),
+  providerMode: $("providerMode"),
+  providerBaseUrl: $("providerBaseUrl"),
+  providerModel: $("providerModel"),
+  providerApiKey: $("providerApiKey"),
+  providerTimeout: $("providerTimeout"),
+  providerTimeoutVal: $("providerTimeoutVal"),
   providerState: $("providerState"),
   candidateType: $("candidateType"),
   candidateLength: $("candidateLength"),
@@ -44,6 +59,16 @@ const els = {
   shiftPerpVal: $("shiftPerpVal"),
   editReason: $("editReason"),
   resetEdit: $("resetEditBtn"),
+  saveCandidate: $("saveCandidateBtn"),
+  makeVariants: $("makeVariantsBtn"),
+  clearSaved: $("clearSavedBtn"),
+  exportJson: $("exportJsonBtn"),
+  exportReport: $("exportReportBtn"),
+  exportPng: $("exportPngBtn"),
+  candidateList: $("candidateList"),
+  savedCount: $("savedCount"),
+  privacyState: $("privacyState"),
+  privacyAudit: $("privacyAudit"),
   traceList: $("traceList"),
   traceCount: $("traceCount"),
   stageStatus: $("stageStatus"),
@@ -52,6 +77,7 @@ const els = {
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const mul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const len = (v) => Math.hypot(v[0], v[1], v[2]);
 const norm = (v) => { const l = len(v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -66,9 +92,14 @@ const S = {
   head: null,
   marker: null,
   tumorRing: null,
+  boundaryLine: null,
   candidateLine: null,
+  endpointHandles: [],
   raycaster: new THREE.Raycaster(),
   lesion: 0,
+  boundaryPoints: [],
+  boundaryActive: false,
+  saved: [],
   result: null,
   baseResult: null,
 };
@@ -122,13 +153,27 @@ async function boot() {
     new THREE.BufferGeometry(),
     new THREE.LineBasicMaterial({ color: 0xfacc15, toneMapped: false }),
   );
+  S.boundaryLine = new THREE.Line(
+    new THREE.BufferGeometry(),
+    new THREE.LineBasicMaterial({ color: 0xfb7185, toneMapped: false }),
+  );
   S.candidateLine = new THREE.Line(
     new THREE.BufferGeometry(),
     new THREE.LineBasicMaterial({ color: 0x34d399, toneMapped: false, linewidth: 2 }),
   );
-  S.marker.renderOrder = 5; S.tumorRing.renderOrder = 5; S.candidateLine.renderOrder = 6;
-  S.head.group.add(S.marker, S.tumorRing, S.candidateLine);
+  S.endpointHandles = [0, 1].map((idx) => {
+    const h = new THREE.Mesh(
+      new THREE.SphereGeometry(S.meanEdge * 0.38, 16, 10),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
+    );
+    h.userData.handle = idx;
+    h.renderOrder = 8;
+    return h;
+  });
+  S.marker.renderOrder = 5; S.tumorRing.renderOrder = 5; S.boundaryLine.renderOrder = 6; S.candidateLine.renderOrder = 7;
+  S.head.group.add(S.marker, S.tumorRing, S.boundaryLine, S.candidateLine, ...S.endpointHandles);
 
+  loadProviderPrefs();
   setLesion(defaultLesion());
   fitSize();
   renderLoop();
@@ -140,14 +185,93 @@ function fitSize() {
   S.head.resize(w, h);
 }
 
+function providerConfig() {
+  const cfg = {
+    provider: els.providerMode.value,
+    base_url: els.providerBaseUrl.value.trim(),
+    model: els.providerModel.value.trim(),
+    timeout_s: Number(els.providerTimeout.value),
+  };
+  if (els.providerApiKey.value) cfg.api_key = els.providerApiKey.value;
+  return cfg;
+}
+
+function redactedProviderConfig() {
+  const cfg = providerConfig();
+  return {
+    ...cfg,
+    api_key: cfg.api_key ? "[redacted]" : "",
+  };
+}
+
+function saveProviderPrefs() {
+  const cfg = redactedProviderConfig();
+  localStorage.setItem("langerface.incision.provider", JSON.stringify({
+    provider: cfg.provider,
+    base_url: cfg.base_url,
+    model: cfg.model,
+    timeout_s: cfg.timeout_s,
+  }));
+}
+
+function loadProviderPrefs() {
+  try {
+    const raw = JSON.parse(localStorage.getItem("langerface.incision.provider") || "{}");
+    if (raw.provider) els.providerMode.value = raw.provider;
+    if (raw.base_url) els.providerBaseUrl.value = raw.base_url;
+    if (raw.model) els.providerModel.value = raw.model;
+    if (raw.timeout_s) els.providerTimeout.value = String(raw.timeout_s);
+  } catch {
+    // Keep defaults.
+  }
+  els.providerTimeoutVal.textContent = els.providerTimeout.value;
+}
+
+function privacyAudit(provider = {}) {
+  const remote = Boolean(providerConfig().base_url && els.useAgentServer.checked);
+  return {
+    raw_image_sent: false,
+    raw_video_sent: false,
+    data_sent_to_agent: [
+      "tumor.kind",
+      "tumor.center",
+      "tumor.diameter_mm",
+      "tumor.depth_mm",
+      "tumor.margin_mm",
+      "tumor.boundary",
+      "abstract face coordinates",
+      "candidate geometry",
+      "tool trace",
+    ],
+    provider: redactedProviderConfig(),
+    remote_provider_configured: remote,
+    provider_state: provider,
+  };
+}
+
+function downloadText(filename, text, type = "application/json") {
+  const blob = new Blob([text], { type });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 function tumorInput() {
+  const boundary = tumorBoundaryPoints();
   return {
     kind: els.tumorKind.value,
     center: S.verts[S.lesion],
     diameter_mm: Number(els.diameter.value),
     depth_mm: els.tumorKind.value === "subcutaneous" ? Number(els.depth.value) : null,
     margin_mm: els.tumorKind.value === "cutaneous" ? Number(els.margin.value) : 0,
+    boundary,
+    boundary_mode: els.tumorKind.value === "cutaneous" ? els.boundaryMode.value : "center_diameter",
+    boundary_source: els.tumorKind.value === "cutaneous" ? `manual_${els.boundaryMode.value}` : "ultrasound_diameter",
     source: "manual_web_agent",
+    author: els.tumorAuthor.value.trim(),
+    units: "mm",
   };
 }
 
@@ -165,6 +289,40 @@ function ringGeometry(center, normal, radius) {
   for (let i = 0; i <= 72; i++) {
     const t = i / 72 * Math.PI * 2;
     const p = add(add(center, mul(u, Math.cos(t) * radius)), add(mul(v, Math.sin(t) * radius), mul(normal, lift)));
+    pos.push(...p);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  return g;
+}
+
+function ellipseBoundaryPoints(samples = 32) {
+  const center = S.verts[S.lesion], normal = S.normals[S.lesion];
+  const { u, v } = tangentFrame(normal, [0, 1, 0]);
+  const radiusMm = Number(els.diameter.value) / 2 + Number(els.margin.value || 0);
+  const ratio = Number(els.ellipseRatio.value) / 100;
+  const a = radiusMm * S.unitsPerMm;
+  const b = radiusMm * ratio * S.unitsPerMm;
+  const pts = [];
+  for (let i = 0; i < samples; i++) {
+    const t = i / samples * Math.PI * 2;
+    pts.push(add(add(center, mul(u, Math.cos(t) * a)), mul(v, Math.sin(t) * b)));
+  }
+  return pts;
+}
+
+function tumorBoundaryPoints() {
+  if (els.tumorKind.value !== "cutaneous") return [];
+  if (els.boundaryMode.value === "freehand" && S.boundaryPoints.length >= 3) return S.boundaryPoints;
+  return ellipseBoundaryPoints();
+}
+
+function boundaryGeometry(points, normal, closed = true) {
+  const lift = S.meanEdge * 0.22;
+  const pos = [];
+  const pts = closed && points.length ? points.concat([points[0]]) : points;
+  for (const p0 of pts || []) {
+    const p = add(p0, mul(normal, lift));
     pos.push(...p);
   }
   const g = new THREE.BufferGeometry();
@@ -199,6 +357,11 @@ function updateTumorRing() {
   const old = S.tumorRing.geometry;
   S.tumorRing.geometry = ringGeometry(S.verts[S.lesion], S.normals[S.lesion], radiusMm * S.unitsPerMm);
   old.dispose();
+  const bold = S.boundaryLine.geometry;
+  const boundary = tumorBoundaryPoints();
+  S.boundaryLine.geometry = boundaryGeometry(boundary, S.normals[S.lesion], boundary.length >= 3);
+  S.boundaryLine.visible = tumor.kind === "cutaneous" && boundary.length >= 2;
+  bold.dispose();
 }
 
 function drawCandidate(result) {
@@ -206,12 +369,21 @@ function drawCandidate(result) {
   S.candidateLine.geometry = polylineGeometry(result.candidate.polyline, S.normals[S.lesion]);
   old.dispose();
   S.candidateLine.material.color.set(result.candidate.type === "linear" ? 0x34d399 : 0x5eead4);
+  const endpoints = result.candidate.endpoints || [];
+  for (const [idx, h] of S.endpointHandles.entries()) {
+    const p = endpoints[idx];
+    h.visible = Boolean(p);
+    if (p) h.position.set(p[0], p[1], p[2]);
+  }
 }
 
 function updateFormVisibility() {
   const cutaneous = els.tumorKind.value === "cutaneous";
   els.depthWrap.classList.toggle("hidden", cutaneous);
   els.marginWrap.classList.toggle("hidden", !cutaneous);
+  els.boundaryWrap.classList.toggle("hidden", !cutaneous);
+  els.ellipseWrap.classList.toggle("hidden", !cutaneous || els.boundaryMode.value !== "ellipse");
+  els.freehandControls.classList.toggle("hidden", !cutaneous || els.boundaryMode.value !== "freehand");
   updateTumorRing();
 }
 
@@ -312,8 +484,139 @@ function renderResult(result) {
   els.providerState.textContent = provider.model ? `${provider.mode} · ${provider.model}` : provider.mode || "deterministic";
   els.providerState.style.color = provider.error ? "#b45309" : "";
   updateEditVisibility(result);
+  const audit = privacyAudit(provider);
+  els.privacyState.textContent = audit.remote_provider_configured ? "抽象参数出域" : "浏览器本地";
+  els.privacyAudit.textContent = audit.raw_image_sent
+    ? "警告：检测到原始影像出域配置。"
+    : `不上传原始影像；发送给 Agent 的是 ${audit.data_sent_to_agent.length} 类抽象字段，API Key 仅在本次请求中传给代理。`;
   const edited = result.candidate.edited ? " · 已记录医生调整" : "";
   els.stageStatus.textContent = provider.error ? `LLM fallback: ${provider.error.slice(0, 80)}${edited}` : `候选已更新${edited}`;
+}
+
+function reviewRecord(result = S.result, label = "候选") {
+  return {
+    schema_version: "incision-review-record/v0.2",
+    id: `candidate_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+    label,
+    created_at: new Date().toISOString(),
+    tumor: result.tumor,
+    anatomy: result.anatomy,
+    direction: result.direction,
+    candidate: result.candidate,
+    original_candidate: result.original_candidate || result.candidate,
+    guardrails: result.guardrails,
+    trace: result.trace,
+    llm: result.llm,
+    provider: result.provider,
+    provider_config: redactedProviderConfig(),
+    privacy_audit: privacyAudit(result.provider),
+    review_status: "requires_clinician_confirmation",
+  };
+}
+
+function renderSaved() {
+  els.savedCount.textContent = String(S.saved.length);
+  els.candidateList.innerHTML = "";
+  for (const rec of S.saved) {
+    const row = document.createElement("div");
+    row.className = "candidate-row";
+    const top = document.createElement("div");
+    top.className = "top";
+    const title = document.createElement("span");
+    title.textContent = `${rec.label} · ${rec.candidate.type === "linear" ? "线性" : "梭形"}`;
+    const status = document.createElement("span");
+    status.className = rec.guardrails.passed ? "" : "danger-text";
+    status.textContent = rec.guardrails.passed ? "guardrails 通过" : "需复核";
+    top.append(title, status);
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = `长度 ${fmt(rec.candidate.length_mm)} mm · 区域 ${rec.anatomy.region} · ${rec.created_at}`;
+    const actions = document.createElement("div");
+    actions.className = "btn-row";
+    actions.style.gridTemplateColumns = "1fr 1fr";
+    const load = document.createElement("button");
+    load.className = "btn";
+    load.textContent = "载入";
+    load.onclick = () => renderResult(rec);
+    const remove = document.createElement("button");
+    remove.className = "btn";
+    remove.textContent = "删除";
+    remove.onclick = () => { S.saved = S.saved.filter((x) => x.id !== rec.id); renderSaved(); };
+    actions.append(load, remove);
+    row.append(top, meta, actions);
+    els.candidateList.append(row);
+  }
+}
+
+function saveCurrentCandidate(label = "医生候选") {
+  if (!S.result) return;
+  S.saved.push(reviewRecord(S.result, `${label} ${S.saved.length + 1}`));
+  renderSaved();
+  els.stageStatus.textContent = "候选已保存到审阅列表";
+}
+
+function makeVariantCandidates() {
+  if (!S.baseResult) return;
+  const variants = [
+    { angle_offset_deg: -10, length_scale: 1, width_scale: 1, reason: "variant exploration: -10 deg" },
+    { angle_offset_deg: 0, length_scale: 1, width_scale: 1, reason: "variant exploration: tool baseline" },
+    { angle_offset_deg: 10, length_scale: 1, width_scale: 1, reason: "variant exploration: +10 deg" },
+  ];
+  for (const v of variants) {
+    const result = applyCandidateEdit(S.baseResult, v, S.normals[S.lesion], S.unitsPerMm);
+    S.saved.push(reviewRecord(result, `备选 ${S.saved.length + 1}`));
+  }
+  renderSaved();
+  els.stageStatus.textContent = "已生成 3 个方向备选并复跑 guardrails";
+}
+
+function exportReviewJson() {
+  if (!S.result && !S.saved.length) {
+    els.stageStatus.textContent = "没有可导出的候选";
+    return;
+  }
+  const payload = {
+    schema_version: "incision-review-export/v0.2",
+    exported_at: new Date().toISOString(),
+    current: S.result ? reviewRecord(S.result, "当前候选") : null,
+    saved: S.saved,
+  };
+  downloadText(`incision_review_${Date.now()}.json`, JSON.stringify(payload, null, 2));
+}
+
+function exportReport() {
+  if (!S.result && !S.saved.length) {
+    els.stageStatus.textContent = "没有可导出的候选";
+    return;
+  }
+  const rows = (S.saved.length ? S.saved : [reviewRecord(S.result, "当前候选")]).filter(Boolean);
+  const body = rows.map((r, idx) => [
+    `## 候选 ${idx + 1}: ${r.label}`,
+    `- 类型：${r.candidate.type === "linear" ? "皮下线性切口" : "皮表梭形切口"}`,
+    `- 肿物：${r.tumor.kind}，直径 ${fmt(r.tumor.diameter_mm)} mm，切缘 ${fmt(r.tumor.margin_mm)} mm`,
+    `- 面部分区：${r.anatomy.region} / ${r.anatomy.subunit}`,
+    `- RSTL 方向置信度：${Math.round((r.direction.confidence || 0) * 100)}%`,
+    `- 候选长度：${fmt(r.candidate.length_mm)} mm`,
+    `- Guardrails：${r.guardrails.passed ? "通过" : "需医生复核"}`,
+    `- 警告：${(r.guardrails.warnings || []).map((w) => `${w.code}:${w.severity}`).join(", ") || "无"}`,
+    `- 审阅状态：需医生确认；非手术指令。`,
+  ].join("\n")).join("\n\n");
+  downloadText(`incision_report_${Date.now()}.md`, `# 切口候选审阅草案\n\n${body}\n`, "text/markdown");
+}
+
+function exportScreenshot() {
+  if (!S.result) {
+    els.stageStatus.textContent = "没有可截图的候选";
+    return;
+  }
+  els.canvas.toBlob((blob) => {
+    if (!blob) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `incision_candidate_${Date.now()}.png`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
 }
 
 async function runAgent() {
@@ -324,7 +627,11 @@ async function runAgent() {
   let result;
   if (els.useAgentServer.checked) {
     try {
-      result = await requestAgentPlan(tumor, { endpoint: els.endpoint.value.trim() });
+      result = await requestAgentPlan(tumor, {
+        endpoint: els.endpoint.value.trim(),
+        timeoutMs: Number(els.providerTimeout.value) * 1000,
+        providerConfig: providerConfig(),
+      });
     } catch (err) {
       result = planIncisionDeterministic({ tumor, verts: S.verts, tris: S.tris, atlas: S.atlas, normal: S.normals[S.lesion] });
       result.provider = { mode: "browser_deterministic_fallback", model: null, error: err.message };
@@ -338,17 +645,77 @@ async function runAgent() {
   els.run.disabled = false;
 }
 
-function pick(e) {
-  if (!S.head) return;
+function facePointFromEvent(e) {
+  if (!S.head) return null;
   const r = els.canvas.getBoundingClientRect();
   const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   S.head.camera.updateMatrixWorld(true);
   S.head.scene.updateMatrixWorld(true);
   S.raycaster.setFromCamera(ndc, S.head.camera);
   const hit = S.raycaster.intersectObject(S.head.mesh, false)[0];
-  if (!hit || !hit.face) return;
+  if (!hit || !hit.face) return null;
   const local = S.head.group.worldToLocal(hit.point.clone());
-  const lp = [local.x, local.y, local.z];
+  return { point: [local.x, local.y, local.z], face: hit.face };
+}
+
+function handleFromEvent(e) {
+  if (!S.head || !S.endpointHandles.length) return null;
+  const r = els.canvas.getBoundingClientRect();
+  const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  S.head.camera.updateMatrixWorld(true);
+  S.head.scene.updateMatrixWorld(true);
+  S.raycaster.setFromCamera(ndc, S.head.camera);
+  const hit = S.raycaster.intersectObjects(S.endpointHandles.filter((h) => h.visible), false)[0];
+  return hit?.object?.userData?.handle ?? null;
+}
+
+function signedAngleDeg(axis0, axis1, normal) {
+  const perp = norm(cross(normal, axis0));
+  return Math.atan2(dot(axis1, perp), dot(axis1, axis0)) * 180 / Math.PI;
+}
+
+function setEditFromGeometry(center, axis, lengthMm) {
+  if (!S.baseResult) return;
+  const base = S.baseResult.original_candidate || S.baseResult.candidate;
+  const axis0 = norm(base.axis || [1, 0, 0]);
+  const normal = S.normals[S.lesion];
+  const perp0 = norm(cross(normal, axis0));
+  const delta = sub(center, base.center || S.baseResult.tumor.center);
+  const angle = clamp(signedAngleDeg(axis0, axis, normal), Number(els.angleOffset.min), Number(els.angleOffset.max));
+  const lengthScale = clamp((lengthMm / Math.max(Number(base.length_mm || 1), 1)) * 100, Number(els.lengthScale.min), Number(els.lengthScale.max));
+  const shiftAlong = clamp(dot(delta, axis0) / S.unitsPerMm, Number(els.shiftAlong.min), Number(els.shiftAlong.max));
+  const shiftPerp = clamp(dot(delta, perp0) / S.unitsPerMm, Number(els.shiftPerp.min), Number(els.shiftPerp.max));
+  els.angleOffset.value = String(Math.round(angle));
+  els.lengthScale.value = String(Math.round(lengthScale));
+  els.shiftAlong.value = String(Math.round(shiftAlong));
+  els.shiftPerp.value = String(Math.round(shiftPerp));
+  applyEditControls();
+}
+
+function dragEndpointTo(e, idx) {
+  if (!S.result?.candidate?.endpoints) return;
+  const hit = facePointFromEvent(e);
+  if (!hit) return;
+  const current = S.result.candidate.endpoints;
+  const p0 = idx === 0 ? hit.point : current[0];
+  const p1 = idx === 1 ? hit.point : current[1];
+  const center = mul(add(p0, p1), 0.5);
+  const axis = norm(sub(p1, p0));
+  const lengthMm = len(sub(p1, p0)) / S.unitsPerMm;
+  setEditFromGeometry(center, axis, lengthMm);
+}
+
+function pick(e) {
+  if (!S.head) return;
+  const hit = facePointFromEvent(e);
+  if (!hit) return;
+  if (S.boundaryActive && els.tumorKind.value === "cutaneous" && els.boundaryMode.value === "freehand") {
+    S.boundaryPoints.push(hit.point);
+    updateTumorRing();
+    els.pickState.textContent = `自由轮廓点：${S.boundaryPoints.length} 个`;
+    return;
+  }
+  const lp = hit.point;
   let best = hit.face.a, bd = Infinity;
   for (const vi of [hit.face.a, hit.face.b, hit.face.c]) {
     const d = len(sub(S.verts[vi], lp));
@@ -360,11 +727,23 @@ function pick(e) {
 
 let drag = null;
 els.canvas.addEventListener("pointerdown", (e) => {
+  const handle = handleFromEvent(e);
+  if (handle != null) {
+    drag = { x: e.clientX, y: e.clientY, moved: 0, id: e.pointerId, handle };
+    els.canvas.setPointerCapture(e.pointerId);
+    return;
+  }
   drag = { x: e.clientX, y: e.clientY, moved: 0, id: e.pointerId };
   els.canvas.setPointerCapture(e.pointerId);
 });
 els.canvas.addEventListener("pointermove", (e) => {
   if (!drag || e.pointerId !== drag.id) return;
+  if (drag.handle != null) {
+    dragEndpointTo(e, drag.handle);
+    drag.moved += Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y);
+    drag.x = e.clientX; drag.y = e.clientY;
+    return;
+  }
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   drag.moved += Math.abs(dx) + Math.abs(dy);
   S.head.setRotation(clamp(S.head.rotX + dy * 0.01, -1.2, 1.2), S.head.rotY + dx * 0.01);
@@ -385,7 +764,24 @@ els.depth.oninput = () => { els.depthVal.textContent = els.depth.value; };
 els.depth.onchange = runAgent;
 els.margin.oninput = () => { els.marginVal.textContent = els.margin.value; updateTumorRing(); };
 els.margin.onchange = runAgent;
+els.ellipseRatio.oninput = () => { els.ellipseRatioVal.textContent = `${els.ellipseRatio.value}%`; updateTumorRing(); };
+els.ellipseRatio.onchange = runAgent;
+els.boundaryMode.onchange = () => { S.boundaryActive = false; updateFormVisibility(); runAgent(); };
 els.run.onclick = runAgent;
+els.providerMode.onchange = saveProviderPrefs;
+els.providerBaseUrl.onchange = saveProviderPrefs;
+els.providerModel.onchange = saveProviderPrefs;
+els.providerTimeout.oninput = () => { els.providerTimeoutVal.textContent = els.providerTimeout.value; saveProviderPrefs(); };
+els.startBoundary.onclick = () => {
+  S.boundaryActive = !S.boundaryActive;
+  els.startBoundary.textContent = S.boundaryActive ? "结束轮廓" : "开始轮廓";
+  els.pickState.textContent = S.boundaryActive ? "请在脸上连续点击皮表肿物边界点。" : `自由轮廓点：${S.boundaryPoints.length} 个`;
+};
+els.clearBoundary.onclick = () => {
+  S.boundaryPoints = [];
+  updateTumorRing();
+  els.pickState.textContent = "自由轮廓已清空。";
+};
 [
   els.angleOffset,
   els.lengthScale,
@@ -399,6 +795,12 @@ els.resetEdit.onclick = () => {
   resetEditControls();
   renderResult(S.baseResult);
 };
+els.saveCandidate.onclick = () => saveCurrentCandidate();
+els.makeVariants.onclick = makeVariantCandidates;
+els.clearSaved.onclick = () => { S.saved = []; renderSaved(); };
+els.exportJson.onclick = exportReviewJson;
+els.exportReport.onclick = exportReport;
+els.exportPng.onclick = exportScreenshot;
 new ResizeObserver(fitSize).observe(els.wrap);
 
 function renderLoop() {

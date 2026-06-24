@@ -153,3 +153,29 @@ def provider_from_env() -> OpenAICompatibleProvider:
     if provider == "ollama":
         return OllamaProvider.from_env()
     return OpenAICompatibleProvider.from_env()
+
+
+def provider_from_config(config: dict[str, Any] | None) -> OpenAICompatibleProvider:
+    """Build a provider from request-scoped UI config.
+
+    The API key is accepted only by the local agent proxy and is not echoed in
+    planning results.
+    """
+
+    if not config:
+        return provider_from_env()
+    provider = str(config.get("provider", config.get("mode", "openai-compatible"))).strip().lower()
+    timeout_s = float(config.get("timeout_s", os.environ.get("LANGERFACE_LLM_TIMEOUT_S", "20")))
+    model = str(config.get("model", os.environ.get("LANGERFACE_LLM_MODEL", "qwen3:8b")))
+    if provider == "ollama":
+        return OllamaProvider(
+            base_url=str(config.get("base_url", os.environ.get("LANGERFACE_OLLAMA_BASE_URL", "http://127.0.0.1:11434"))),
+            model=model,
+            timeout_s=timeout_s,
+        )
+    return OpenAICompatibleProvider(
+        base_url=str(config.get("base_url", os.environ.get("LANGERFACE_LLM_BASE_URL", "http://127.0.0.1:8000/v1"))),
+        model=model,
+        api_key=str(config.get("api_key", os.environ.get("LANGERFACE_LLM_API_KEY", ""))),
+        timeout_s=timeout_s,
+    )

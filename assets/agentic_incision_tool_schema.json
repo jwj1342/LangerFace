@@ -1,0 +1,42 @@
+{
+  "version": "0.2-agentic-incision-tools",
+  "trace_mode": "single_turn_react_with_deterministic_tools",
+  "boundary": "The LLM may select, summarize, and request deterministic tools; it must not compute incision geometry or override guardrails.",
+  "tools": [
+    {
+      "name": "classify_region",
+      "input": ["point"],
+      "output": ["region", "subunit", "confidence", "nearby_landmarks", "free_margin_distance_mm"]
+    },
+    {
+      "name": "query_rstl_direction",
+      "input": ["point", "source", "k_nearest"],
+      "output": ["vector", "angle_deg", "confidence", "support_count", "angular_spread_deg"]
+    },
+    {
+      "name": "linear_subcutaneous_incision",
+      "input": ["tumor", "direction", "units_per_mm", "rules"],
+      "output": ["endpoints", "polyline", "length_mm", "metrics", "provenance"]
+    },
+    {
+      "name": "fusiform_cutaneous_incision",
+      "input": ["tumor", "direction", "normal", "units_per_mm", "rules"],
+      "output": ["outline", "polyline", "length_mm", "width_mm", "metrics", "provenance"]
+    },
+    {
+      "name": "evaluate_guardrails",
+      "input": ["candidate", "anatomy", "rules"],
+      "output": ["passed", "warnings", "suggested_overrides"]
+    },
+    {
+      "name": "clinician_edit_candidate",
+      "input": ["candidate", "angle_offset_deg", "length_scale", "width_scale", "shift_along_mm", "shift_perp_mm", "reason"],
+      "output": ["edited_candidate", "guardrails", "provenance"]
+    },
+    {
+      "name": "save_review_record",
+      "input": ["candidate", "tumor", "trace", "privacy_audit"],
+      "output": ["review_record_json", "report_markdown", "screenshot_png"]
+    }
+  ]
+}

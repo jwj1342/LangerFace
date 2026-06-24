@@ -1,6 +1,6 @@
-# Agentic 切口设计阶段性功能切片
+# Agentic 切口设计工程闭环
 
-本文档记录 Stage 2 当前 PR 的真实边界：这是一个“肿物输入 + RSTL 方向 + 确定性切口工具 + LLM 摘要 + 医生调整 provenance”的阶段性功能切片，不是完整 E-Show 产品线。
+本文档记录 Stage 2 当前 PR 的工程闭环：肿物输入、面部分区、RSTL 方向服务、确定性切口工具、guardrails、LLM 摘要、医生调整 provenance、候选保存导出和隐私审计。它仍然是临床研究决策辅助可视化，不是自动手术指令或已验证医疗器械。
 
 ## 本 PR 已完成
 
@@ -11,21 +11,28 @@
 - Agent 编排：LLM 只读取工具结果并生成摘要，不计算几何、不覆盖安全规则。
 - 前端工作台：`web/incision_agent.html` 可在标准脸上点选肿物位置，显示肿物环、候选切口、工具调用 trace、provider 状态和摘要。
 - 医生调整：候选生成后可调整方向、长度、中心位移；梭形候选还可调宽度。调整会保留原始工具建议、覆盖原因、trace 和 provenance。
+- 皮表肿物边界：支持椭圆近似和自由轮廓点输入，导出时保留 boundary、boundary source、author 和 units。
+- 审阅最小工作流：支持保存多个候选、生成方向备选、导出 JSON、Markdown 报告草案和 PNG 截图。
+- Agent 工具 schema：`assets/agentic_incision_tool_schema.json` 固化工具名、输入输出和 LLM 边界。
+- 隐私审计：`docs/INCISION_PRIVACY_AUDIT.md` 记录不出域数据、可发送抽象字段和导出审计字段。
 - Provider 接口：默认支持 Ollama/Qwen，本地或集群 vLLM 可通过 OpenAI-compatible endpoint 切入。
+- 前端 Provider 配置：工作台暴露 Agent endpoint、Base URL、model、API Key 和 timeout；API Key 只发送给本地 Agent 代理，导出记录中会脱敏。
+- Agent 代理接口：支持普通 JSON `POST /api/agentic-incision`，同时预留 SSE trace `POST /api/agentic-incision/stream`，事件包括 `provider`、逐步 `trace`、`result` 和 `done`。
 
-## 只完成了一部分
+## 当前工程边界
 
-- 肿物模拟：目前是“手动中心点 + 圆形/近圆形直径”的几何近似；还不是医生在真实照片/3D 扫描上勾画真实肿物边界。
-- 皮表肿物边界：模型字段保留 `boundary`，但前端尚未实现自由勾画轮廓或从图像识别边界。
-- 医生审阅：当前支持参数化调整候选、记录覆盖原因和 provenance；还没有多候选保存、撤销/重做或导出正式审阅记录。
-- Guardrails：已覆盖低 RSTL 置信度、低分区置信度、下睑/唇红缘/鼻翼敏感区提示、RSTL 偏角覆盖原因检查；尚未覆盖完整面部亚单位和真实游离缘距离测量。
-- LLM Agentic：当前是“确定性工具链 + LLM 摘要”的单轮功能切片；还不是完整 ReAct 多轮规划、浏览器工具执行器、SSE 流式 trace 或多候选迭代。
-- 3D/AR 呈现：当前在标准脸工作台上展示候选；尚未把肿物和切口稳定叠加到上传照片、视频或实时摄像头。
+- 面部分区：当前覆盖额部、耳周、颞颊、上睑、下睑、内眦、鼻背、鼻翼、鼻尖、鼻唇沟、颊部、唇红、上唇白唇、口角、颏部和下颌缘；前额、耳周、内眦和下颌缘等区域会保守给出较低置信度，必须人工确认。
+- RSTL 方向：当前使用 atlas weighted-nearest 查询并记录 support count、角度 spread 和低置信度；同一静态查询连续 100 次保持稳定，JS/Python 有对拍测试。
+- 肿物模拟：当前可表达中心点、椭圆近似和自由轮廓点；真实照片/3D 扫描自动识别边界不属于本 PR 的临床验证范围。
+- 医生审阅：当前支持候选保存、方向备选和 JSON/Markdown/PNG 导出；正式医生签名、病例系统绑定和审阅锁定属于后续受控临床系统集成。
+- Guardrails：已覆盖低 RSTL 置信度、低分区置信度、近敏感游离缘距离、下睑/唇红缘/鼻翼/鼻尖/口角敏感区提示、RSTL 偏角覆盖原因检查；阈值仍需临床审核。
+- LLM Agentic：LLM 只做摘要和解释，工具 schema、trace 和 stream 契约已固化；长程自主规划仍必须受确定性工具、审计记录和医生确认约束。
+- 3D/AR 呈现：当前在标准脸工作台上展示候选，和“切除闭合演示”保持入口分离；真实患者照片、视频或实时摄像头叠加需要额外隐私和临床验证。
 
-## 本 PR 未完成
+## 临床与合规边界
 
 - 不做自动诊断、肿物性质判断或安全切缘医学推荐。
-- 不做真实患者影像/扫描的完整隐私审计和出域控制。
+- 不把原始患者影像、视频帧、摄像头画面或纹理默认送给 LLM Provider。
 - 不做临床验证数据集、医生评分、误差指标或论文级评估。
 - 不做 FLAME/BFM 个体化 3DMM 拟合和 RSTL 3D 拓扑先验的完整注册。
 - 不把候选切口表达为自动手术指令；所有输出都必须进入医生复核。

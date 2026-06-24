@@ -16,6 +16,8 @@ class DirectionQueryResult:
     confidence: float
     source: str
     nearest_distance: float
+    support_count: int = 0
+    angular_spread_deg: float = 0.0
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -25,6 +27,8 @@ class DirectionQueryResult:
             "confidence": self.confidence,
             "source": self.source,
             "nearest_distance": self.nearest_distance,
+            "support_count": self.support_count,
+            "angular_spread_deg": self.angular_spread_deg,
         }
 
 
@@ -74,6 +78,7 @@ def query_direction(
     atlas: Atlas,
     *,
     max_distance: float | None = None,
+    k_nearest: int = 7,
 ) -> DirectionQueryResult:
     """Return nearest local RSTL tangent around ``point``.
 
@@ -90,18 +95,32 @@ def query_direction(
 
     delta = pts - p
     dist2 = np.einsum("ij,ij->i", delta, delta)
-    idx = int(np.argmin(dist2))
+    order = np.argsort(dist2)
+    support_idx = order[: max(1, min(int(k_nearest), len(order)))]
+    idx = int(support_idx[0])
     nearest_distance = float(np.sqrt(dist2[idx]))
     diag = float(np.linalg.norm(V.max(axis=0) - V.min(axis=0))) if len(V) else 1.0
     max_d = max_distance if max_distance is not None else max(diag * 0.18, 1e-9)
     confidence = max(0.0, min(1.0, 1.0 - nearest_distance / max_d))
-    vector = _norm(tans[idx])
+    weights = 1.0 / (np.sqrt(dist2[support_idx]) + 1e-6)
+    signed_tans = tans[support_idx].copy()
+    ref = tans[idx]
+    for i in range(len(signed_tans)):
+        if float(np.dot(signed_tans[i], ref)) < 0:
+            signed_tans[i] *= -1.0
+    vector = _norm(np.average(signed_tans, axis=0, weights=weights))
+    angles = np.degrees(np.arctan2(signed_tans[:, 1], signed_tans[:, 0]))
+    angular_spread = float(np.max(angles) - np.min(angles)) if len(angles) > 1 else 0.0
+    if angular_spread > 90.0:
+        confidence *= 0.75
     angle = float(np.degrees(np.arctan2(vector[1], vector[0])))
     return DirectionQueryResult(
         point=tuple(float(x) for x in p),
         vector=tuple(float(x) for x in vector),
         angle_deg=angle,
         confidence=confidence,
-        source="rstl_atlas_nearest",
+        source="rstl_atlas_weighted_nearest",
         nearest_distance=nearest_distance,
+        support_count=int(len(support_idx)),
+        angular_spread_deg=angular_spread,
     )

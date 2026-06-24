@@ -73,11 +73,29 @@
       "review_status": "draft_not_clinically_validated",
       "last_reviewed_at": "2026-06-24"
     },
+    "ear_region": {
+      "recommended_direction": "manual_review_required",
+      "priority_order": ["aesthetic_subunit_secondary", "rstl_primary"],
+      "warnings": ["Ear and periauricular landmarks are weak in the current face mesh classifier."],
+      "clinician_note": "Require manual confirmation around preauricular and postauricular boundaries.",
+      "source": "clinician_rule",
+      "review_status": "draft_not_clinically_validated",
+      "last_reviewed_at": "2026-06-24"
+    },
     "periorbital": {
       "recommended_direction": "periorbital_rstl_or_crease",
       "priority_order": ["sensitive_margin_exception", "rstl_primary", "natural_crease_secondary"],
       "warnings": ["Check eyelid position and canthal support before accepting any candidate."],
       "clinician_note": "RSTL is only acceptable after free-margin risk is reviewed.",
+      "source": "clinician_rule",
+      "review_status": "draft_not_clinically_validated",
+      "last_reviewed_at": "2026-06-24"
+    },
+    "upper_eyelid": {
+      "recommended_direction": "upper_eyelid_crease_or_rstl",
+      "priority_order": ["sensitive_margin_exception", "natural_crease_secondary", "rstl_primary"],
+      "warnings": ["Upper eyelid crease and lid margin require clinician confirmation."],
+      "clinician_note": "Use eyelid crease and functional lid assessment before accepting RSTL-only direction.",
       "source": "clinician_rule",
       "review_status": "draft_not_clinically_validated",
       "last_reviewed_at": "2026-06-24"
@@ -91,6 +109,24 @@
       "review_status": "draft_not_clinically_validated",
       "last_reviewed_at": "2026-06-24"
     },
+    "inner_canthus": {
+      "recommended_direction": "manual_canthal_review",
+      "priority_order": ["sensitive_margin_exception", "aesthetic_subunit_secondary", "rstl_primary"],
+      "warnings": ["Medial canthal contour and lacrimal region require manual review."],
+      "clinician_note": "Do not rely on broad RSTL alone near the medial canthus.",
+      "source": "clinician_rule",
+      "review_status": "draft_not_clinically_validated",
+      "last_reviewed_at": "2026-06-24"
+    },
+    "nasal_dorsum": {
+      "recommended_direction": "nasal_subunit_or_rstl",
+      "priority_order": ["aesthetic_subunit_secondary", "rstl_primary"],
+      "warnings": ["Nasal dorsum/root boundaries are approximate in the current classifier."],
+      "clinician_note": "Nasal subunit boundaries may be preferable to local RSTL in selected cases.",
+      "source": "clinician_rule",
+      "review_status": "draft_not_clinically_validated",
+      "last_reviewed_at": "2026-06-24"
+    },
     "nasal_ala": {
       "recommended_direction": "protect_alar_contour",
       "priority_order": ["sensitive_margin_exception", "aesthetic_subunit_secondary", "rstl_primary"],
@@ -100,11 +136,29 @@
       "review_status": "draft_not_clinically_validated",
       "last_reviewed_at": "2026-06-24"
     },
+    "nasal_tip": {
+      "recommended_direction": "protect_nasal_tip_contour",
+      "priority_order": ["sensitive_margin_exception", "aesthetic_subunit_secondary", "rstl_primary"],
+      "warnings": ["Risk of nasal tip contour distortion; require clinician confirmation."],
+      "clinician_note": "Nasal tip support and subunit boundaries can override local RSTL.",
+      "source": "clinician_rule",
+      "review_status": "draft_not_clinically_validated",
+      "last_reviewed_at": "2026-06-24"
+    },
     "cheek": {
       "recommended_direction": "local_rstl",
       "priority_order": ["rstl_primary", "natural_crease_secondary", "aesthetic_subunit_secondary"],
       "warnings": ["Check proximity to nasolabial fold, lower eyelid, and oral commissure manually."],
       "clinician_note": "Cheek candidates can usually follow local RSTL unless a nearby free margin changes the priority.",
+      "source": "clinician_rule",
+      "review_status": "draft_not_clinically_validated",
+      "last_reviewed_at": "2026-06-24"
+    },
+    "nasolabial_fold": {
+      "recommended_direction": "nasolabial_crease_secondary",
+      "priority_order": ["natural_crease_secondary", "rstl_primary", "aesthetic_subunit_secondary"],
+      "warnings": ["Confirm fold position and oral traction before accepting the candidate."],
+      "clinician_note": "Nasolabial fold can be a secondary scar-camouflage cue.",
       "source": "clinician_rule",
       "review_status": "draft_not_clinically_validated",
       "last_reviewed_at": "2026-06-24"
@@ -127,6 +181,24 @@
       "review_status": "draft_not_clinically_validated",
       "last_reviewed_at": "2026-06-24"
     },
+    "upper_lip": {
+      "recommended_direction": "upper_lip_subunit_or_rstl",
+      "priority_order": ["aesthetic_subunit_secondary", "rstl_primary", "sensitive_margin_exception"],
+      "warnings": ["Check philtrum, white roll, and vermilion proximity manually."],
+      "clinician_note": "White lip subunits and vermilion alignment may override local RSTL.",
+      "source": "clinician_rule",
+      "review_status": "draft_not_clinically_validated",
+      "last_reviewed_at": "2026-06-24"
+    },
+    "oral_commissure": {
+      "recommended_direction": "protect_oral_commissure_alignment",
+      "priority_order": ["sensitive_margin_exception", "aesthetic_subunit_secondary", "rstl_primary"],
+      "warnings": ["Risk of oral commissure traction, notching, or asymmetry."],
+      "clinician_note": "Commissure alignment and functional contour can override RSTL.",
+      "source": "clinician_rule",
+      "review_status": "draft_not_clinically_validated",
+      "last_reviewed_at": "2026-06-24"
+    },
     "chin": {
       "recommended_direction": "chin_rstl_or_mental_crease",
       "priority_order": ["rstl_primary", "natural_crease_secondary", "aesthetic_subunit_secondary"],
@@ -135,15 +207,27 @@
       "source": "clinician_rule",
       "review_status": "draft_not_clinically_validated",
       "last_reviewed_at": "2026-06-24"
+    },
+    "jawline": {
+      "recommended_direction": "mandibular_border_or_rstl",
+      "priority_order": ["aesthetic_subunit_secondary", "rstl_primary", "natural_crease_secondary"],
+      "warnings": ["Jawline and neck transition are approximate; confirm mandibular border manually."],
+      "clinician_note": "Mandibular border/subunit contour may be a secondary guide.",
+      "source": "clinician_rule",
+      "review_status": "draft_not_clinically_validated",
+      "last_reviewed_at": "2026-06-24"
     }
   },
   "guardrails": {
     "low_direction_confidence": 0.35,
     "low_region_confidence": 0.45,
+    "free_margin_distance_warn_mm": 18.0,
     "sensitive_regions": {
       "lower_eyelid": "Protect the lower eyelid free margin; consider manual override away from vertical traction.",
       "lip_vermilion": "Protect vermilion border alignment; require clinician confirmation before committing.",
-      "nasal_ala": "Protect nasal alar contour; evaluate distortion risk before accepting."
+      "nasal_ala": "Protect nasal alar contour; evaluate distortion risk before accepting.",
+      "nasal_tip": "Protect nasal tip contour and support; require clinician confirmation before committing.",
+      "oral_commissure": "Protect oral commissure alignment and traction; require clinician confirmation before committing."
     },
     "source": "clinician_rule",
     "review_status": "draft_not_clinically_validated",

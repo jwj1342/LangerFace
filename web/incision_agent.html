@@ -26,6 +26,12 @@
   .agent-note{font-size:11px;color:var(--muted);line-height:1.55;margin:0}
   .edit-status{font-size:11px;font-weight:700;border-radius:999px;padding:4px 8px;background:#eef0ea;color:#44505d}
   .edit-status.active{background:#fff1c8;color:#8a5a00}
+  .candidate-list{display:flex;flex-direction:column;gap:8px}
+  .candidate-row{border:1px solid var(--line);border-radius:10px;background:#f8f9f5;padding:9px;display:grid;gap:6px}
+  .candidate-row .top{display:flex;justify-content:space-between;gap:8px;font-size:12px;font-weight:700}
+  .candidate-row .meta{font-size:11px;color:var(--muted);line-height:1.45}
+  .danger-text{color:#b45309}
+  .text-input{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:13px;color:var(--ink)}
   #agentCanvas{position:absolute;inset:0;width:100%;height:100%;border-radius:14px;background:#111820}
   @media(max-width:880px){#agentCanvas{position:static;min-height:420px}.metric-grid{grid-template-columns:1fr}}
 </style>
@@ -51,6 +57,10 @@
         <label class="field-label" for="diameterMm">直径 mm <span id="diameterVal" class="val">12</span></label>
         <input id="diameterMm" type="range" min="4" max="40" value="12" />
       </div>
+      <div>
+        <label class="field-label" for="tumorAuthor">记录者</label>
+        <input id="tumorAuthor" class="text-input" value="clinician" />
+      </div>
       <div id="depthWrap">
         <label class="field-label" for="depthMm">深度 mm <span id="depthVal" class="val">6</span></label>
         <input id="depthMm" type="range" min="0" max="35" value="6" />
@@ -59,14 +69,40 @@
         <label class="field-label" for="marginMm">安全切缘 mm <span id="marginVal" class="val">2</span></label>
         <input id="marginMm" type="range" min="0" max="10" value="2" />
       </div>
+      <div id="boundaryWrap" class="hidden">
+        <label class="field-label" for="boundaryMode">皮表边界</label>
+        <select id="boundaryMode" class="select">
+          <option value="ellipse">椭圆近似</option>
+          <option value="freehand">自由轮廓点</option>
+        </select>
+      </div>
+      <div id="ellipseWrap" class="hidden">
+        <label class="field-label" for="ellipseRatio">椭圆短轴比例 <span id="ellipseRatioVal" class="val">70%</span></label>
+        <input id="ellipseRatio" type="range" min="40" max="100" value="70" />
+      </div>
+      <div class="btn-row hidden" id="freehandControls" style="grid-template-columns:1fr 1fr">
+        <button class="btn" id="startBoundaryBtn">开始轮廓</button>
+        <button class="btn" id="clearBoundaryBtn">清空轮廓</button>
+      </div>
       <button class="btn btn-primary" id="runAgentBtn">生成候选切口</button>
       <p class="agent-note" id="pickState">当前点位：默认右颊。右侧标准脸可点击重选。</p>
     </div>
 
     <div class="card agent-grid">
-      <label class="check"><input type="checkbox" id="useAgentServer" checked /> 使用本地 Qwen 代理</label>
+      <label class="check"><input type="checkbox" id="useAgentServer" checked /> 使用 Agent 代理</label>
       <input id="agentEndpoint" class="select" value="http://127.0.0.1:8765/api/agentic-incision" />
-      <p class="agent-note">代理不可用时自动使用浏览器内确定性工具；候选几何保持同一契约。</p>
+      <select id="providerMode" class="select">
+        <option value="openai-compatible">OpenAI-compatible / vLLM</option>
+        <option value="ollama">Ollama native</option>
+      </select>
+      <input id="providerBaseUrl" class="text-input" value="http://127.0.0.1:8000/v1" />
+      <input id="providerModel" class="text-input" value="Qwen/Qwen3-14B" />
+      <input id="providerApiKey" class="text-input" type="password" placeholder="API Key（仅发送给本地 Agent 代理）" />
+      <div>
+        <label class="field-label" for="providerTimeout">LLM timeout 秒 <span id="providerTimeoutVal" class="val">60</span></label>
+        <input id="providerTimeout" type="range" min="5" max="180" value="60" />
+      </div>
+      <p class="agent-note">Base URL、Model、API Key 会随请求发给 Agent 代理；代理不可用时自动使用浏览器内确定性工具。</p>
       <div class="quality-top"><span>Provider</span><span id="providerState">待运行</span></div>
     </div>
 
@@ -113,6 +149,26 @@
       </select>
       <button class="btn" id="resetEditBtn">恢复工具建议</button>
       <p class="agent-note">调整只改变候选草案并记录 provenance；真实切口仍需医生复核。</p>
+    </div>
+
+    <div class="card agent-grid">
+      <div class="quality-top"><span>候选库</span><span id="savedCount">0</span></div>
+      <button class="btn btn-primary" id="saveCandidateBtn">保存当前候选</button>
+      <div class="btn-row" style="grid-template-columns:1fr 1fr">
+        <button class="btn" id="makeVariantsBtn">生成备选</button>
+        <button class="btn" id="clearSavedBtn">清空候选库</button>
+      </div>
+      <div class="btn-row" style="grid-template-columns:1fr 1fr 1fr">
+        <button class="btn" id="exportJsonBtn">导出 JSON</button>
+        <button class="btn" id="exportReportBtn">导出报告</button>
+        <button class="btn" id="exportPngBtn">导出截图</button>
+      </div>
+      <div class="candidate-list" id="candidateList"></div>
+    </div>
+
+    <div class="card">
+      <div class="quality-top"><span>隐私 / 审计</span><span id="privacyState">本地几何</span></div>
+      <p class="hint" id="privacyAudit">不上传原始影像；Agent 只接收肿物参数、抽象坐标、规则和候选几何。</p>
     </div>
 
     <div class="card">

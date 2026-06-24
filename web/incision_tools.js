@@ -15,13 +15,26 @@ const DEFAULT_RULES = {
   guardrails: {
     low_direction_confidence: 0.35,
     low_region_confidence: 0.45,
+    free_margin_distance_warn_mm: 18,
     sensitive_regions: {
       lower_eyelid: "Protect the lower eyelid free margin; consider manual override away from vertical traction.",
       lip_vermilion: "Protect vermilion border alignment; require clinician confirmation before committing.",
       nasal_ala: "Protect nasal alar contour; evaluate distortion risk before accepting.",
+      nasal_tip: "Protect nasal tip contour and support; require clinician confirmation before committing.",
+      oral_commissure: "Protect oral commissure alignment and traction; require clinician confirmation before committing.",
     },
   },
 };
+
+const TOOL_SCHEMAS = [
+  { name: "classify_region", input: ["point"], output: ["region", "subunit", "confidence", "free_margin_distance_mm"] },
+  { name: "query_rstl_direction", input: ["point", "source"], output: ["vector", "angle_deg", "confidence", "support_count"] },
+  { name: "linear_subcutaneous_incision", input: ["tumor", "direction", "units_per_mm"], output: ["endpoints", "length_mm", "metrics"] },
+  { name: "fusiform_cutaneous_incision", input: ["tumor", "direction", "units_per_mm"], output: ["outline", "length_mm", "width_mm", "metrics"] },
+  { name: "evaluate_guardrails", input: ["candidate", "anatomy"], output: ["passed", "warnings", "suggested_overrides"] },
+  { name: "clinician_edit_candidate", input: ["edit"], output: ["candidate", "guardrails", "provenance"] },
+  { name: "save_review_record", input: ["candidate", "tumor", "trace", "privacy_audit"], output: ["review_record_json", "report_markdown", "screenshot_png"] },
+];
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -56,15 +69,48 @@ export function classifyRegion(point, verts) {
   const nx = clamp((point[0] - lo[0]) / span[0], 0, 1);
   const ny = clamp((point[1] - lo[1]) / span[1], 0, 1);
   let region = "cheek", subunit = "midface", confidence = 0.64;
-  if (ny >= 0.78) [region, subunit, confidence] = ["forehead", "forehead", 0.62];
-  else if (ny >= 0.61 && ny < 0.78 && nx >= 0.18 && nx <= 0.82) [region, subunit, confidence] = ["periorbital", "upper_midface", 0.58];
-  else if (ny >= 0.53 && ny < 0.66 && ((nx >= 0.2 && nx <= 0.4) || (nx >= 0.6 && nx <= 0.8))) [region, subunit, confidence] = ["lower_eyelid", "free_margin", 0.66];
-  else if (ny >= 0.4 && ny < 0.58 && nx >= 0.38 && nx <= 0.62) [region, subunit, confidence] = ["nasal_ala", "nose", 0.62];
-  else if (ny >= 0.24 && ny < 0.39 && nx >= 0.34 && nx <= 0.66) [region, subunit, confidence] = ["lip_vermilion", "oral_free_margin", 0.66];
-  else if (ny < 0.24) [region, subunit, confidence] = ["chin", "chin", 0.58];
-  else if (nx < 0.23 || nx > 0.77) [region, subunit, confidence] = ["temple_cheek", "lateral_face", 0.56];
-  const sensitive = ["lower_eyelid", "lip_vermilion", "nasal_ala"].includes(region);
-  return { region, subunit, confidence, normalized_xy: [nx, ny], sensitive };
+  if (ny >= 0.80) [region, subunit, confidence] = ["forehead", "forehead", 0.56];
+  else if ((nx <= 0.12 || nx >= 0.88) && ny >= 0.30 && ny <= 0.76) [region, subunit, confidence] = ["ear_region", "preauricular_or_postauricular", 0.42];
+  else if ((nx < 0.22 || nx > 0.78) && ny >= 0.58) [region, subunit, confidence] = ["temple_cheek", "lateral_face", 0.54];
+  else if (ny >= 0.68 && ny < 0.80 && nx >= 0.22 && nx <= 0.78) [region, subunit, confidence] = ["upper_eyelid", "upper_eyelid", 0.58];
+  else if (ny >= 0.55 && ny < 0.68 && nx >= 0.43 && nx <= 0.57) [region, subunit, confidence] = ["inner_canthus", "medial_canthal_region", 0.50];
+  else if (ny >= 0.53 && ny < 0.68 && ((nx >= 0.2 && nx <= 0.42) || (nx >= 0.58 && nx <= 0.8))) [region, subunit, confidence] = ["lower_eyelid", "free_margin", 0.66];
+  else if (ny >= 0.50 && ny < 0.62 && nx >= 0.43 && nx <= 0.57) [region, subunit, confidence] = ["nasal_dorsum", "nasal_root_or_dorsum", 0.56];
+  else if (ny >= 0.39 && ny < 0.47 && nx >= 0.44 && nx <= 0.56) [region, subunit, confidence] = ["nasal_tip", "nasal_tip", 0.54];
+  else if (ny >= 0.40 && ny < 0.56 && nx >= 0.36 && nx <= 0.64) [region, subunit, confidence] = ["nasal_ala", "nose", 0.62];
+  else if (ny >= 0.34 && ny < 0.49 && ((nx >= 0.24 && nx <= 0.38) || (nx >= 0.62 && nx <= 0.76))) [region, subunit, confidence] = ["nasolabial_fold", "midface_crease", 0.52];
+  else if (ny >= 0.28 && ny < 0.40 && ((nx >= 0.30 && nx < 0.39) || (nx > 0.61 && nx <= 0.70))) [region, subunit, confidence] = ["oral_commissure", "oral_commissure", 0.54];
+  else if (ny >= 0.34 && ny < 0.42 && nx >= 0.39 && nx <= 0.61) [region, subunit, confidence] = ["upper_lip", "white_lip", 0.58];
+  else if (ny >= 0.24 && ny < 0.34 && nx >= 0.34 && nx <= 0.66) [region, subunit, confidence] = ["lip_vermilion", "oral_free_margin", 0.66];
+  else if (ny < 0.22 && nx >= 0.28 && nx <= 0.72) [region, subunit, confidence] = ["chin", "chin", 0.58];
+  else if (ny < 0.30 || nx < 0.18 || nx > 0.82) [region, subunit, confidence] = ["jawline", "mandibular_border", 0.50];
+  const anchors = {
+    lower_eyelid: [0.3, 0.59],
+    nasal_ala: [0.5, 0.49],
+    nasal_tip: [0.5, 0.43],
+    lip_vermilion: [0.5, 0.31],
+    left_oral_commissure: [0.35, 0.32],
+    right_oral_commissure: [0.65, 0.32],
+  };
+  const nearby = [];
+  let freeMarginDistanceMm = null;
+  for (const [name, a] of Object.entries(anchors)) {
+    const dist = Math.hypot(nx - a[0], ny - a[1]) * 180;
+    if (dist <= 28) {
+      nearby.push(name);
+      freeMarginDistanceMm = freeMarginDistanceMm == null ? dist : Math.min(freeMarginDistanceMm, dist);
+    }
+  }
+  const sensitive = ["lower_eyelid", "lip_vermilion", "nasal_ala", "nasal_tip", "oral_commissure"].includes(region) || nearby.length > 0;
+  return {
+    region,
+    subunit,
+    confidence,
+    normalized_xy: [nx, ny],
+    sensitive,
+    nearby_landmarks: nearby,
+    free_margin_distance_mm: freeMarginDistanceMm,
+  };
 }
 
 function atlasSamples(verts, tris, atlas) {
@@ -99,23 +145,41 @@ export function queryDirection(point, verts, tris, atlas) {
     return { point, vector: [1, 0, 0], angle_deg: 0, confidence: 0, source: "rstl_atlas_empty", nearest_distance: Infinity };
   }
   let best = 0, bd = Infinity;
+  const dist2 = [];
   for (let i = 0; i < pts.length; i++) {
     const d = sub(pts[i], point);
     const dd = dot(d, d);
+    dist2.push(dd);
     if (dd < bd) { bd = dd; best = i; }
   }
   const { lo, hi } = bbox(verts);
   const diag = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
   const nearest = Math.sqrt(bd);
   const maxDistance = Math.max(diag * 0.18, 1e-9);
-  const vector = norm(tans[best]);
+  const order = dist2.map((d, i) => [d, i]).sort((a, b) => a[0] - b[0]).slice(0, Math.min(7, dist2.length));
+  const ref = tans[best];
+  let acc = [0, 0, 0], weightSum = 0;
+  const angles = [];
+  for (const [d2, i] of order) {
+    let t = tans[i];
+    if (dot(t, ref) < 0) t = mul(t, -1);
+    const w = 1 / (Math.sqrt(d2) + 1e-6);
+    acc = add(acc, mul(t, w));
+    weightSum += w;
+    angles.push(Math.atan2(t[1], t[0]) * 180 / Math.PI);
+  }
+  const vector = norm(mul(acc, 1 / Math.max(weightSum, 1e-9)));
+  const spread = angles.length > 1 ? Math.max(...angles) - Math.min(...angles) : 0;
+  const confidence = clamp((1 - nearest / maxDistance) * (spread > 90 ? 0.75 : 1), 0, 1);
   return {
     point,
     vector,
     angle_deg: Math.atan2(vector[1], vector[0]) * 180 / Math.PI,
-    confidence: clamp(1 - nearest / maxDistance, 0, 1),
-    source: "rstl_atlas_nearest",
+    confidence,
+    source: "rstl_atlas_weighted_nearest",
     nearest_distance: nearest,
+    support_count: order.length,
+    angular_spread_deg: spread,
   };
 }
 
@@ -130,8 +194,11 @@ function validateTumor(tumor) {
     depth_mm: tumor.depth_mm == null ? null : Number(tumor.depth_mm),
     margin_mm: Number(tumor.margin_mm || 0),
     boundary: Array.isArray(tumor.boundary) ? tumor.boundary : [],
+    boundary_mode: tumor.boundary_mode || "center_diameter",
+    boundary_source: tumor.boundary_source || "manual",
     source: tumor.source || "manual",
     author: tumor.author || "",
+    units: tumor.units || "mm",
   };
 }
 
@@ -227,6 +294,14 @@ export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
   if (cfg.sensitive_regions[anatomy.region]) {
     warnings.push({ code: `sensitive_region_${anatomy.region}`, severity: "high", message: cfg.sensitive_regions[anatomy.region] });
     suggested_overrides.push({ kind: "manual_direction_confirmation", reason: `${anatomy.region} is a sensitive free-margin region.` });
+  }
+  if (anatomy.free_margin_distance_mm != null && Number(anatomy.free_margin_distance_mm) <= cfg.free_margin_distance_warn_mm) {
+    warnings.push({
+      code: "near_sensitive_free_margin",
+      severity: "high",
+      message: `Candidate center is approximately ${Number(anatomy.free_margin_distance_mm).toFixed(1)} mm from sensitive free-margin landmark(s): ${(anatomy.nearby_landmarks || []).join(", ") || anatomy.region}.`,
+    });
+    suggested_overrides.push({ kind: "free_margin_distance_review", reason: "Confirm functional and contour risk before accepting this direction." });
   }
   const typeCfg = candidate.type === "fusiform" ? rules.fusiform_cutaneous : rules.linear_subcutaneous;
   const maxDeviation = Number(typeCfg?.max_rstl_deviation_deg ?? 15);
@@ -412,6 +487,8 @@ export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atla
   ];
   return {
     schema_version: "agentic-incision-plan/v0.1",
+    agent_trace_mode: "single_turn_react_with_deterministic_tools",
+    tool_schemas: TOOL_SCHEMAS,
     tumor,
     anatomy,
     direction,
@@ -431,6 +508,7 @@ export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atla
 
 export const __incisionToolsForTests = {
   DEFAULT_RULES,
+  TOOL_SCHEMAS,
   applyCandidateEdit,
   classifyRegion,
   queryDirection,
