@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 
 from ..anatomy import AnatomyContext
-from ..anatomy.regions import SENSITIVE_ANCHORS
+from ..anatomy.regions import sensitive_margin_distances
 from ..clinical import default_clinical_rules
 
 
@@ -52,8 +52,11 @@ def annotate_candidate_sensitive_distances(
     best_distance = float("inf")
     best_point = None
     for point, norm_xy in zip(points, normalized, strict=False):
-        for name, anchor in SENSITIVE_ANCHORS.items():
-            distance = float(np.hypot(norm_xy[0] - anchor[0], norm_xy[1] - anchor[1]) * face_height_mm)
+        distances = sensitive_margin_distances(
+            (float(norm_xy[0]), float(norm_xy[1])),
+            face_height_mm=face_height_mm,
+        )
+        for name, distance in distances:
             if distance < best_distance:
                 best_distance = distance
                 best_name = name

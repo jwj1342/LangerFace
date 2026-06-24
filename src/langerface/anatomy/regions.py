@@ -22,6 +22,13 @@ SENSITIVE_ANCHORS = {
     "left_oral_commissure": (0.35, 0.32),
     "right_oral_commissure": (0.65, 0.32),
 }
+SENSITIVE_MARGIN_SEGMENTS = {
+    "left_lower_eyelid_margin": ((0.20, 0.59), (0.42, 0.59)),
+    "right_lower_eyelid_margin": ((0.58, 0.59), (0.80, 0.59)),
+    "left_nasal_ala_margin": ((0.36, 0.45), (0.42, 0.52)),
+    "right_nasal_ala_margin": ((0.58, 0.52), (0.64, 0.45)),
+    "lip_vermilion_margin": ((0.34, 0.31), (0.66, 0.31)),
+}
 
 
 @dataclass(frozen=True)
@@ -51,6 +58,41 @@ def _bbox(vertices: np.ndarray | None) -> tuple[np.ndarray, np.ndarray]:
         return np.array([-1.0, -1.0, -1.0]), np.array([1.0, 1.0, 1.0])
     V = np.asarray(vertices, dtype=np.float64)
     return V.min(axis=0), V.max(axis=0)
+
+
+def _point_segment_distance(
+    point: tuple[float, float],
+    segment: tuple[tuple[float, float], tuple[float, float]],
+) -> float:
+    p = np.asarray(point, dtype=np.float64)
+    a = np.asarray(segment[0], dtype=np.float64)
+    b = np.asarray(segment[1], dtype=np.float64)
+    ab = b - a
+    denom = float(np.dot(ab, ab))
+    if denom <= 1e-12:
+        return float(np.linalg.norm(p - a))
+    t = float(np.clip(np.dot(p - a, ab) / denom, 0.0, 1.0))
+    closest = a + t * ab
+    return float(np.linalg.norm(p - closest))
+
+
+def sensitive_margin_distances(
+    normalized_xy: tuple[float, float],
+    *,
+    face_height_mm: float = 180.0,
+) -> list[tuple[str, float]]:
+    """Return normalized-face distances to sensitive free-margin anchors and segments."""
+
+    distances: list[tuple[str, float]] = []
+    for name, anchor in SENSITIVE_ANCHORS.items():
+        distance = float(
+            np.hypot(normalized_xy[0] - anchor[0], normalized_xy[1] - anchor[1])
+            * face_height_mm
+        )
+        distances.append((name, distance))
+    for name, segment in SENSITIVE_MARGIN_SEGMENTS.items():
+        distances.append((name, _point_segment_distance(normalized_xy, segment) * face_height_mm))
+    return distances
 
 
 def classify_region(
@@ -101,10 +143,9 @@ def classify_region(
     clipped = (max(0.0, min(1.0, nx)), max(0.0, min(1.0, ny)))
     nearby: list[str] = []
     nearest_margin = None
-    for name, anchor in SENSITIVE_ANCHORS.items():
+    for name, dist_mm in sensitive_margin_distances(clipped):
         # Normalize to an adult face-height scale. This is a conservative
         # screening distance, not a clinical measurement.
-        dist_mm = float(np.hypot(clipped[0] - anchor[0], clipped[1] - anchor[1]) * 180.0)
         if dist_mm <= 28.0:
             nearby.append(name)
             nearest_margin = dist_mm if nearest_margin is None else min(nearest_margin, dist_mm)

@@ -355,6 +355,14 @@ def test_guardrails_flag_near_sensitive_free_margin_distance():
     assert any(w["code"] == "near_sensitive_free_margin" for w in guardrails["warnings"])
 
 
+def test_sensitive_free_margin_distance_uses_margin_segments():
+    vertices, _, _ = _simple_mesh_and_atlas()
+    anatomy = classify_region([4.0, 5.9, 0.0], vertices)
+    assert anatomy.free_margin_distance_mm is not None
+    assert anatomy.free_margin_distance_mm < 1.0
+    assert "left_lower_eyelid_margin" in anatomy.nearby_landmarks
+
+
 def test_guardrails_flag_candidate_geometry_near_sensitive_free_margin():
     vertices, _, _ = _simple_mesh_and_atlas()
     candidate = {
@@ -365,7 +373,7 @@ def test_guardrails_flag_candidate_geometry_near_sensitive_free_margin():
     }
     annotate_candidate_sensitive_distances(candidate, vertices)
     assert candidate["metrics"]["sensitive_free_margin_min_distance_mm"] < 5
-    assert candidate["metrics"]["sensitive_free_margin_nearest"] == "left_lower_eyelid"
+    assert candidate["metrics"]["sensitive_free_margin_nearest"] == "left_lower_eyelid_margin"
     guardrails = evaluate_guardrails(candidate, {"region": "cheek", "confidence": 0.8})
     assert any(w["code"] == "candidate_near_sensitive_free_margin" for w in guardrails["warnings"])
     assert guardrails["passed"] is False

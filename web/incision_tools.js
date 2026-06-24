@@ -49,6 +49,13 @@ const SENSITIVE_ANCHORS = {
   left_oral_commissure: [0.35, 0.32],
   right_oral_commissure: [0.65, 0.32],
 };
+const SENSITIVE_MARGIN_SEGMENTS = {
+  left_lower_eyelid_margin: [[0.20, 0.59], [0.42, 0.59]],
+  right_lower_eyelid_margin: [[0.58, 0.59], [0.80, 0.59]],
+  left_nasal_ala_margin: [[0.36, 0.45], [0.42, 0.52]],
+  right_nasal_ala_margin: [[0.58, 0.52], [0.64, 0.45]],
+  lip_vermilion_margin: [[0.34, 0.31], [0.66, 0.31]],
+};
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -69,6 +76,27 @@ function bbox(verts) {
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   for (const v of verts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], v[k]); hi[k] = Math.max(hi[k], v[k]); }
   return { lo, hi };
+}
+
+function pointSegmentDistance2d(point, segment) {
+  const [a, b] = segment;
+  const ab = [b[0] - a[0], b[1] - a[1]];
+  const denom = ab[0] * ab[0] + ab[1] * ab[1];
+  if (denom <= 1e-12) return Math.hypot(point[0] - a[0], point[1] - a[1]);
+  const t = clamp(((point[0] - a[0]) * ab[0] + (point[1] - a[1]) * ab[1]) / denom, 0, 1);
+  const closest = [a[0] + t * ab[0], a[1] + t * ab[1]];
+  return Math.hypot(point[0] - closest[0], point[1] - closest[1]);
+}
+
+function sensitiveMarginDistances(normalizedXY, faceHeightMm = 180) {
+  const distances = [];
+  for (const [name, anchor] of Object.entries(SENSITIVE_ANCHORS)) {
+    distances.push([name, Math.hypot(normalizedXY[0] - anchor[0], normalizedXY[1] - anchor[1]) * faceHeightMm]);
+  }
+  for (const [name, segment] of Object.entries(SENSITIVE_MARGIN_SEGMENTS)) {
+    distances.push([name, pointSegmentDistance2d(normalizedXY, segment) * faceHeightMm]);
+  }
+  return distances;
 }
 
 export function unitsPerMmFromVertices(verts, faceHeightMm = 180) {
@@ -100,8 +128,7 @@ export function classifyRegion(point, verts) {
   else if (ny < 0.30 || nx < 0.18 || nx > 0.82) [region, subunit, confidence] = ["jawline", "mandibular_border", 0.50];
   const nearby = [];
   let freeMarginDistanceMm = null;
-  for (const [name, a] of Object.entries(SENSITIVE_ANCHORS)) {
-    const dist = Math.hypot(nx - a[0], ny - a[1]) * 180;
+  for (const [name, dist] of sensitiveMarginDistances([nx, ny])) {
     if (dist <= 28) {
       nearby.push(name);
       freeMarginDistanceMm = freeMarginDistanceMm == null ? dist : Math.min(freeMarginDistanceMm, dist);
@@ -133,8 +160,7 @@ export function annotateCandidateSensitiveDistances(candidate, verts, faceHeight
   for (const point of points) {
     const nx = clamp((point[0] - lo[0]) / span[0], 0, 1);
     const ny = clamp((point[1] - lo[1]) / span[1], 0, 1);
-    for (const [landmark, anchor] of Object.entries(SENSITIVE_ANCHORS)) {
-      const distance = Math.hypot(nx - anchor[0], ny - anchor[1]) * faceHeightMm;
+    for (const [landmark, distance] of sensitiveMarginDistances([nx, ny], faceHeightMm)) {
       if (distance < best.distance) best = { distance, landmark, point };
     }
   }

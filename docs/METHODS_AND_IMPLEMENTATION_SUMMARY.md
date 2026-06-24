@@ -792,6 +792,8 @@ axis_coverage_deficit_mm = max(0, axis_coverage_required_mm - length_mm)
 
 自由轮廓还会进入边界质量 guardrails：`boundary_point_count < min_freehand_boundary_points` 输出 medium 级 `cutaneous_boundary_too_few_points`；投影面积相对名义直径圆盘过小输出 high 级 `cutaneous_boundary_degenerate_area`；轮廓自交输出 high 级 `cutaneous_boundary_self_intersection`；`boundary_center_shift_mm` 超过 `diameter_mm * boundary_center_shift_diameter_multiplier` 输出 high 级 `cutaneous_boundary_center_shift`。这些规则用于防止误点、漏点、近共线轮廓、蝴蝶结式轮廓，或把中心点与轮廓标在不同病灶上。
 
+敏感结构 guardrails 的距离计算使用标准脸归一化坐标。下睑、鼻翼和唇红缘除保留代表性锚点外，还加入简化游离缘线段；中心点或候选几何到这些锚点/线段的最短距离乘以成人脸高近似值，得到 `free_margin_distance_mm` 或 `sensitive_free_margin_min_distance_mm`。这比单点锚更稳健，但仍是标准脸工程筛查，不能当作真实毫米级临床测量。
+
 候选结构建议：
 
 ```json

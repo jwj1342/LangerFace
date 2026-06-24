@@ -213,6 +213,10 @@ const anatomy = T.classifyRegion([3, 6, 0], verts);
 const guard = T.evaluateGuardrails({ direction_confidence: 0.8 }, anatomy);
 ok(anatomy.region === "lower_eyelid", "region classifier reaches sensitive lower eyelid bucket");
 ok(guard.passed === false && guard.warnings.some((w) => w.severity === "high"), "guardrails flag sensitive region");
+const segmentAnatomy = T.classifyRegion([4, 5.9, 0], verts);
+ok(segmentAnatomy.free_margin_distance_mm < 1, "free-margin distance uses eyelid margin segments");
+ok(segmentAnatomy.nearby_landmarks.includes("left_lower_eyelid_margin"),
+  "free-margin landmarks include eyelid margin segment");
 ok(T.classifyRegion([5, 3, 0], verts).region === "lip_vermilion", "region classifier reaches lip vermilion bucket");
 ok(T.classifyRegion([4.2, 4.6, 0], verts).region === "nasal_ala", "region classifier reaches nasal ala bucket");
 const nearMarginCandidate = {
@@ -223,6 +227,8 @@ const nearMarginCandidate = {
 };
 T.annotateCandidateSensitiveDistances(nearMarginCandidate, verts);
 ok(nearMarginCandidate.metrics.sensitive_free_margin_min_distance_mm < 5, "candidate path distance to sensitive margin is measured");
+ok(nearMarginCandidate.metrics.sensitive_free_margin_nearest === "left_lower_eyelid_margin",
+  "candidate path distance can use sensitive margin segments");
 const candidateGuard = T.evaluateGuardrails(nearMarginCandidate, { region: "cheek", confidence: 0.8 });
 ok(candidateGuard.passed === false, "candidate geometry near sensitive margin fails guardrails");
 ok(candidateGuard.warnings.some((w) => w.code === "candidate_near_sensitive_free_margin"),
