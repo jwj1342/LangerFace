@@ -640,10 +640,53 @@ function renderResult(result) {
   els.stageStatus.textContent = provider.error ? `LLM fallback: ${provider.error.slice(0, 80)}${edited}` : `候选已更新${edited}`;
 }
 
+function guardrailSummary(guardrails = {}) {
+  const warnings = guardrails.warnings || [];
+  const high = warnings.filter((w) => w.severity === "high");
+  const medium = warnings.filter((w) => w.severity === "medium");
+  return {
+    passed: Boolean(guardrails.passed),
+    high_count: high.length,
+    medium_count: medium.length,
+    high_codes: high.map((w) => w.code),
+    medium_codes: medium.map((w) => w.code),
+    warnings: warnings.map((w) => ({
+      code: w.code,
+      severity: w.severity,
+      message: w.message || "",
+    })),
+    suggested_overrides: guardrails.suggested_overrides || [],
+  };
+}
+
+function reviewGate(review, result) {
+  const summary = guardrailSummary(result.guardrails);
+  const reviewerRequired = review.status === "approved_for_discussion";
+  const notesRequired = reviewerRequired && summary.high_count > 0;
+  const reviewerPresent = Boolean(review.reviewer);
+  const notesPresent = Boolean(review.notes);
+  const approvalReady = review.status === "approved_for_discussion" &&
+    (!reviewerRequired || reviewerPresent) &&
+    (!notesRequired || notesPresent);
+  return {
+    reviewer_required: reviewerRequired,
+    reviewer_present: reviewerPresent,
+    notes_required_for_high_guardrails: notesRequired,
+    notes_present: notesPresent,
+    high_guardrail_codes: summary.high_codes,
+    approval_ready: approvalReady,
+    live_overlay_ready: approvalReady,
+    reason: approvalReady
+      ? "approved_candidate_ready_for_research_overlay"
+      : "pending_clinician_confirmation_or_missing_required_review_context",
+  };
+}
+
 function reviewRecord(result = S.result, label = "候选") {
   const createdAt = new Date().toISOString();
   const review = currentReviewMetadata(createdAt);
   const actor = review.reviewer || result.tumor?.author || "unknown";
+  const gate = reviewGate(review, result);
   return {
     schema_version: "incision-review-record/v0.3",
     id: `candidate_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
@@ -662,12 +705,16 @@ function reviewRecord(result = S.result, label = "候选") {
     privacy_audit: privacyAudit(result.provider),
     review_status: review.status,
     review,
+    review_gate: gate,
+    guardrail_summary: guardrailSummary(result.guardrails),
     audit_events: [
       {
         event: "candidate_saved",
         at: createdAt,
         actor,
         status: review.status,
+        approval_ready: gate.approval_ready,
+        live_overlay_ready: gate.live_overlay_ready,
       },
       ...(review.status === "pending_clinician_confirmation"
         ? []
@@ -677,6 +724,7 @@ function reviewRecord(result = S.result, label = "候选") {
           actor,
           status: review.status,
           notes_present: Boolean(review.notes),
+          high_guardrail_codes: gate.high_guardrail_codes,
         }]),
     ],
   };
@@ -849,7 +897,15 @@ function exportReport() {
     return;
   }
   const rows = (S.saved.length ? S.saved : [reviewRecord(S.result, "当前候选")]).filter(Boolean);
-  const body = rows.map((r, idx) => [
+  const body = rows.map((r, idx) => {
+    const metrics = r.candidate.metrics || {};
+    const warningLines = (r.guardrails.warnings || [])
+      .map((w) => `  - ${w.code} [${w.severity}] ${w.message || ""}`)
+      .join("\n") || "  - 无";
+    const overrideLines = (r.guardrails.suggested_overrides || [])
+      .map((o) => `  - ${o.kind}: ${o.reason || ""}`)
+      .join("\n") || "  - 无";
+    return [
     `## 候选 ${idx + 1}: ${r.label}`,
     `- 类型：${r.candidate.type === "linear" ? "皮下线性切口" : "皮表梭形切口"}`,
     `- 肿物：${r.tumor.kind}，直径 ${fmt(r.tumor.diameter_mm)} mm，切缘 ${fmt(r.tumor.margin_mm)} mm`,
@@ -862,12 +918,21 @@ function exportReport() {
     r.candidate.type === "fusiform"
       ? `- 尖端角：${fmt(r.candidate.tip_angle_deg)}°；目标 ${fmt(r.candidate.metrics?.tip_angle_target_deg)}°；误差 ${fmt(r.candidate.metrics?.tip_angle_error_deg)}°`
       : null,
+    r.candidate.type === "fusiform"
+      ? `- 边界质量：点数 ${metrics.boundary_point_count ?? "—"}；面积 ${fmt(metrics.boundary_area_mm2)} mm²；自交 ${metrics.boundary_self_intersection ? "是" : "否"}；中心偏移 ${fmt(metrics.boundary_center_shift_mm)} mm`
+      : null,
+    metrics.sensitive_free_margin_min_distance_mm != null
+      ? `- 最近敏感游离缘：${metrics.sensitive_free_margin_nearest || "—"}，${fmt(metrics.sensitive_free_margin_min_distance_mm)} mm`
+      : null,
     `- Guardrails：${r.guardrails.passed ? "通过" : "需医生复核"}`,
-    `- 警告：${(r.guardrails.warnings || []).map((w) => `${w.code}:${w.severity}`).join(", ") || "无"}`,
+    `- 警告：\n${warningLines}`,
+    `- 建议覆盖项：\n${overrideLines}`,
+    `- 审阅门槛：approval_ready=${Boolean(r.review_gate?.approval_ready)}；live_overlay_ready=${Boolean(r.review_gate?.live_overlay_ready)}；high=${(r.review_gate?.high_guardrail_codes || []).join(", ") || "无"}`,
     `- 审阅状态：${reviewStatusLabel(r.review_status)}；审阅人：${r.review?.reviewer || "未填写"}`,
     `- 审阅备注：${r.review?.notes || "无"}`,
     `- 审阅边界：研究候选记录，非手术指令。`,
-  ].filter(Boolean).join("\n")).join("\n\n");
+  ].filter(Boolean).join("\n");
+  }).join("\n\n");
   downloadText(`incision_report_${Date.now()}.md`, `# 切口候选审阅草案\n\n${body}\n`, "text/markdown");
 }
 

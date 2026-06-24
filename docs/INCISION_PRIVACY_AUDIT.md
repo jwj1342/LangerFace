@@ -25,6 +25,7 @@
 - `tumor`：结构化肿物输入。
 - `candidate` / `original_candidate`：候选几何与医生调整前后的差异。
 - `guardrails`：警告、建议覆盖和是否通过。
+- `guardrail_summary` / `review_gate`：高风险 guardrail 汇总、审阅备注要求和实时叠加就绪状态。
 - `trace`：工具调用、输入和观察。
 - `provider_config`：去敏后的 provider 配置。
 - `privacy_audit`：数据出域声明，明确 `raw_image_sent=false`。

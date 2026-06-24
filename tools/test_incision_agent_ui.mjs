@@ -26,8 +26,13 @@ assert.ok(js.includes("incision-review-record/v0.3"), "review records use explic
 assert.ok(js.includes("approved_for_discussion"), "review records support clinician approval");
 assert.ok(js.includes("rejected_by_clinician"), "review records support clinician rejection");
 assert.ok(js.includes("audit_events"), "review records include audit events");
+assert.ok(js.includes("guardrail_summary"), "review records include guardrail summary");
+assert.ok(js.includes("review_gate"), "review records include review gate state");
 assert.ok(js.includes("reviewReadiness"), "review workflow validates approval readiness");
 assert.ok(js.includes("highGuardrailWarnings"), "review workflow detects high guardrail warnings");
+assert.ok(js.includes("live_overlay_ready"), "review gate records live overlay readiness");
+assert.ok(js.includes("建议覆盖项"), "markdown report includes suggested override details");
+assert.ok(js.includes("最近敏感游离缘"), "markdown report includes sensitive free-margin distance");
 assert.ok(js.includes("发送到实时叠加前，请先确认当前候选草案"), "live overlay requires candidate approval");
 assert.ok(js.includes("当前候选有高风险 guardrail"), "high-risk approval requires review notes");
 

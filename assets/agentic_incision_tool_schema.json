@@ -36,7 +36,7 @@
     {
       "name": "save_review_record",
       "input": ["candidate", "tumor", "trace", "privacy_audit", "reviewer", "review_status", "review_notes"],
-      "output": ["review_record_json", "report_markdown", "screenshot_png", "audit_events"]
+      "output": ["review_record_json", "report_markdown", "screenshot_png", "guardrail_summary", "review_gate", "audit_events"]
     }
   ]
 }
