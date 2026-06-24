@@ -4,6 +4,8 @@
 
 // 3D 点 p 在三角形 (a,b,c) 中的重心坐标 [u,v,w]，满足 p ≈ u·a + v·b + w·c。
 // 约定与 langerface 的图谱一致：点存为 [tri, u, v]，w = 1 - u - v。
+import { ATLAS_VERSION, TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.js";
+
 export function barycentric(p, a, b, c) {
   const v0 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
   const v1 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
@@ -155,11 +157,18 @@ function controlsOf(line) {
 // 一个标注点：xyz=世界坐标；tri/bary 仅在标注于已知三角拓扑（如标准脸）时存在。
 //   { xyz:[x,y,z], tri:int|null, bary:[u,v,w]|null }
 export class AnnotationModel {
-  constructor(system = "rstl") {
+  constructor(system = "rstl", { topologyId = TOPOLOGY_ID, topologyVersion = TOPOLOGY_VERSION } = {}) {
     this.system = system;
+    this.topologyId = topologyId;
+    this.topologyVersion = topologyVersion;
     this.lines = [];      // 已完成的线：{ name, region, points:[pt,...] }
     this.current = null;  // 正在画的线
     this.surface = null;  // 可选：用于把控制点之间展开成网格表面路径
+  }
+
+  setTopology({ topologyId = TOPOLOGY_ID, topologyVersion = TOPOLOGY_VERSION } = {}) {
+    this.topologyId = topologyId;
+    this.topologyVersion = topologyVersion;
   }
 
   setSurface(verts, tris) {
@@ -232,13 +241,20 @@ export class AnnotationModel {
   }
 
   // 导出为 langerface 图谱格式（点 = [tri, u, v]）。需所有点带重心坐标。
-  toAtlasJSON({ version = "0.1", provenance = "web-annotator" } = {}) {
+  toAtlasJSON({
+    version = ATLAS_VERSION,
+    provenance = "web-annotator",
+    topologyId = this.topologyId,
+    topologyVersion = this.topologyVersion,
+  } = {}) {
     if (!this.hasBarycentric()) {
       throw new Error("存在不含三角拓扑的点，无法导出图谱格式（请在标准脸网格上标注）");
     }
     return {
       system: this.system,
       version,
+      topologyId,
+      topologyVersion,
       provenance,
       validated: false,
       lines: this.lines.map((l) => ({
