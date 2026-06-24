@@ -591,7 +591,7 @@ v2 = p - a
 
 ## 15. 手术模拟原型
 
-仓库包含 `web/surgery.html`、`web/surgery_main.js`、`web/soft_body.js`、`web/rstl_field.js`，用于演示“顺 RSTL 切除”和“逆 RSTL 切除”在闭合张力上的差异。该部分是 demo 级软体模拟，不是临床级有限元模型。
+仓库包含 `web/surgery.html`、`web/surgery_main.js`、`web/soft_body.js`、`web/rstl_field.js`，用于演示沿 RSTL 梭形切除后的闭合新增张力。该部分是 demo 级软体模拟，不是临床级有限元模型，也不和切口 Agent 的候选生成混用。
 
 ### 15.1 RSTL 方向场采样
 
@@ -636,11 +636,11 @@ k = 1 + (ANISO - 1) * align
 F = stiffness * k * (L - rest)
 ```
 
-这表达了一个演示级假设：沿 RSTL 方向更不易拉伸，垂直 RSTL 方向更容易被拉拢。因此切口长轴平行 RSTL 时，闭合方向垂直 RSTL，新增闭合张力较低；切口长轴逆 RSTL 时，闭合需要拉动沿 RSTL 的较硬方向，新增张力较高。
+这表达了一个演示级假设：沿 RSTL 方向更不易拉伸，垂直 RSTL 方向更容易被拉拢。因此切口长轴平行 RSTL 时，闭合方向垂直 RSTL，新增闭合张力较低。当前 UI 只保留沿 RSTL 的绿色演示路径，避免把“好 / 坏”二元对比混入正式切口候选设计。
 
 ### 15.3 梭形切除与闭合
 
-用户点击肿物点后，系统生成沿 RSTL 和逆 RSTL 的梭形切除预览。椭圆切除判定：
+用户点击肿物点后，系统生成沿 RSTL 的梭形切除预览。椭圆切除判定：
 
 ```text
 along = dot(P - center, axis)
@@ -807,7 +807,7 @@ tip_angle ≈ 30 degrees
 
 ## 24. 推荐复现路径
 
-> 从零搭建环境、安装依赖与构建步骤见 [CONTRIBUTING.md «开发环境»](CONTRIBUTING.md#开发环境) 与 [ENVIRONMENT.md](ENVIRONMENT.md)；测试运行见 [CONTRIBUTING.md «运行测试»](CONTRIBUTING.md#运行测试)。体验路径：Web 首页摄像头实时叠加 → 上传图片看贴合/平滑/背面剔除 → 3D Beta（示例脸或扫描重建）→ `/annotate.html` 标注导出草案 → `surgery.html` 顺/逆 RSTL 切除对比；改几何代码后务必跑 `pytest` 和 `cd web && npm test` 确认对拍仍通过。
+> 从零搭建环境、安装依赖与构建步骤见 [CONTRIBUTING.md «开发环境»](CONTRIBUTING.md#开发环境) 与 [ENVIRONMENT.md](ENVIRONMENT.md)；测试运行见 [CONTRIBUTING.md «运行测试»](CONTRIBUTING.md#运行测试)。体验路径：Web 首页摄像头实时叠加 → 上传图片看贴合/平滑/背面剔除 → 3D Beta（示例脸或扫描重建）→ `/annotate.html` 标注导出草案与沿 RSTL 闭合演示 → `incision_agent.html` 生成肿物切口候选；改几何代码后务必跑 `pytest` 和 `cd web && npm test` 确认对拍仍通过。
 
 ## 25. 一句话总结
 

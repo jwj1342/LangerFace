@@ -7,6 +7,15 @@ from __future__ import annotations
 
 from .atlas import Atlas, AtlasLine
 from .build import atlas_line_from_points2d
+from .direction import DirectionQueryResult, query_direction
 from .mapping import MappedLine, map_atlas
 
-__all__ = ["Atlas", "AtlasLine", "MappedLine", "atlas_line_from_points2d", "map_atlas"]
+__all__ = [
+    "Atlas",
+    "AtlasLine",
+    "DirectionQueryResult",
+    "MappedLine",
+    "atlas_line_from_points2d",
+    "map_atlas",
+    "query_direction",
+]
