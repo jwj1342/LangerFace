@@ -389,6 +389,9 @@ Vercel 自动提供 **HTTPS**，因此线上 `getUserMedia`（摄像头）可用
 - [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)：协作流程、测试约定、扩展点和 PR 要求。
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：核心算法、坐标系、2D/3D 路线、网页 3D 标注、HeadSpace 离线管线、Stage 2 肿物与切口设计路线、资产与部署细节。
 - [docs/BACKEND_DATA_ARCHITECTURE.md](docs/BACKEND_DATA_ARCHITECTURE.md)：后端数据层、Cloudflare Worker/D1/R2、重计算边界与阶段落地。
+- [docs/VALIDATION.md](docs/VALIDATION.md)：临床验证数据集、Stage 1/Stage 2 指标、失败分类和人工评审表。
+- [docs/PRIVACY_AND_AUDIT.md](docs/PRIVACY_AND_AUDIT.md)：敏感数据边界、禁止提交项、导出约束和审计记录字段。
+- [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)：浏览器诊断 JSON、结构化事件字段、计数器和运行时指标约定。
 - [docs/CI_CD_VERCEL.md](docs/CI_CD_VERCEL.md)：Vercel 项目设置、Preview 访问策略、branch protection 与排障。
 - [docs/TODO.md](docs/TODO.md)：路线图与待办（与 GitHub Issues 同步）。
 - 医学声明、图谱状态与临床局限见 README [已知局限与医学声明](#已知局限与医学声明)。

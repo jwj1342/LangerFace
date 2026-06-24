@@ -10,7 +10,7 @@ import { CDN, TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.js";
 import { ctx, els } from "./dom.js";
 import { buildHandMasks, noseTriangles, toPixels } from "./geometry.js";
 import { prepareImageSource } from "./image_source.js";
-import { countMetric, logInfo, logWarn } from "./logger.js";
+import { countMetric, logInfo, logWarn, recordMetricSample, setAssetVersions } from "./logger.js";
 import { projectVerts } from "./projection3d.js";
 import { clearZooms, draw, drawFocusedRegion, drawZooms, updateStats } from "./render.js";
 import { modelState, renderState, sourceState } from "./state.js";
@@ -45,6 +45,15 @@ export async function ensureReady() {
   modelState.atlases.langer = loadAtlas("langer", langer);
   modelState.officialAtlases.rstl = modelState.atlases.rstl;
   modelState.officialAtlases.langer = modelState.atlases.langer;
+  setAssetVersions({
+    topology: topologyId,
+    topologyVersion,
+    triangles: tri.length,
+    rstlAtlasVersion: rstl.version ?? "unknown",
+    langerAtlasVersion: langer.version ?? "unknown",
+    faceLandmarker: "mediapipe/tasks-vision@0.10.35",
+    handLandmarker: "mediapipe/tasks-vision@0.10.35",
+  });
   const resolver = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
   const build = (delegate) => FaceLandmarker.createFromOptions(resolver, {
     baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
@@ -222,6 +231,7 @@ export function stopSource() {
 let fpsEMA = 0, lastT = performance.now();
 let drawFailureLogged = false;
 let frameScheduled = false;
+let frameMetricsSeen = 0;
 
 export function requestFrame() {
   if (!sourceState.running || sourceState.paused || frameScheduled) return;
@@ -284,6 +294,20 @@ export function loop() {
 
   const now = performance.now();
   fpsEMA = fpsEMA ? fpsEMA * 0.9 + (1000 / Math.max(1, now - lastT)) * 0.1 : 30;
+  frameMetricsSeen += 1;
+  if (sourceState.sourceKind !== "image" && frameMetricsSeen % 30 === 0) {
+    const detail = {
+      phase: "frame",
+      sourceKind: sourceState.sourceKind,
+      facePresent: Boolean(lm && sourceState.presence > 0),
+      lineCount,
+      canvasWidth: W,
+      canvasHeight: H,
+    };
+    recordMetricSample("frame.fps", Number(fpsEMA.toFixed(2)), detail);
+    recordMetricSample("frame.durationMs", Number((now - t).toFixed(2)), detail);
+    if (!detail.facePresent) countMetric(`faceLandmarker.noFaceFrame.${sourceState.sourceKind || "unknown"}`);
+  }
   lastT = now; els.fps.textContent = fpsEMA.toFixed(0) + " fps";
   if (sourceState.sourceKind !== "image") requestFrame();
 }

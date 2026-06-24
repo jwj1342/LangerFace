@@ -5,7 +5,7 @@ import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./cam
 import { ctx, els } from "./dom.js";
 import { applySim, toPixels, umeyama } from "./geometry.js";
 import { facesArray, fitExpression, fitShape, flameForward, loadFlameBasis } from "./flame_fit.js";
-import { countMetric, logWarn } from "./logger.js";
+import { countMetric, logWarn, recordEvent, recordMetricSample } from "./logger.js";
 import { ensureReady, showCameraPlaceholder, startCamera, stopSource } from "./pipeline.js";
 import { modelState, reconState, renderState, sourceState } from "./state.js";
 import { setLive, setMsg } from "./ui.js";
@@ -280,9 +280,9 @@ export async function startScan() {
     els.reconStatus.textContent = `扫描中 ${secs.toFixed(1)}s：缓慢左右上下转头（已采 ${collected.length} 帧，偏航 ${yawRange} / 需跨度 ${YAW_SPAN_MIN}）`;
     updateScanPanel(secs, collected.length, yawSpan, Number.isFinite(ymin) && Number.isFinite(ymax) ? (ymin + ymax) / 2 : null);
     // 时长+帧数+偏航覆盖都满足才正常结束，确保有侧脸视角约束深度 Z（见 #36）。
-    if (secs > SCAN_TARGET_SECS && collected.length > SCAN_TARGET_FRAMES && yawSpan > YAW_SPAN_MIN) { finishScan(collected, ymin, ymax, colorFrames); return; }
+    if (secs > SCAN_TARGET_SECS && collected.length > SCAN_TARGET_FRAMES && yawSpan > YAW_SPAN_MIN) { finishScan(collected, ymin, ymax, colorFrames, false, t - t0); return; }
     // 硬上限：避免偏航始终不足时无限扫描；此时仍结束，但明确标注深度置信度低。
-    if (secs > 20 && collected.length > SCAN_TARGET_FRAMES) { finishScan(collected, ymin, ymax, colorFrames, yawSpan <= YAW_SPAN_MIN); return; }
+    if (secs > 20 && collected.length > SCAN_TARGET_FRAMES) { finishScan(collected, ymin, ymax, colorFrames, yawSpan <= YAW_SPAN_MIN, t - t0); return; }
     // 时长+帧数已够、但偏航跨度仍不足：不结束，提示用户继续转头。
     if (secs > SCAN_TARGET_SECS && collected.length > SCAN_TARGET_FRAMES) {
       els.reconStatus.textContent = `请继续向左 / 右转头：当前偏航跨度 ${yawSpan.toFixed(2)}，需达到 ${YAW_SPAN_MIN} 才能完成（${secs.toFixed(1)}s，已采 ${collected.length} 帧）`;
@@ -355,7 +355,7 @@ function updateScanPanel(secs, frames, yawSpan, yawMid) {
   els.scanYawRight.classList.toggle("active", wideEnough || (Number.isFinite(yawMid) && yawMid > 0.08));
 }
 
-function finishScan(collected, ymin, ymax, colorFrames = [], lowDepthConfidence = false) {
+function finishScan(collected, ymin, ymax, colorFrames = [], lowDepthConfidence = false, durationMs = null) {
   reconState.scan = null;
   els.scanPanel.classList.add("hidden"); els.scanToast.classList.add("hidden");
   const N = collected.length, V = 468, verts = [];
@@ -368,6 +368,20 @@ function finishScan(collected, ymin, ymax, colorFrames = [], lowDepthConfidence 
   const c = [0, 0, 0]; for (const p of verts) for (let k = 0; k < 3; k++) c[k] += p[k] / V;
   reconState.reconVerts = verts.map((p) => [p[0] - c[0], p[1] - c[1], p[2] - c[2]]);
   reconState.reconColors = mergeVertexColors(colorFrames, V);
+  const yawSpan = ymax - ymin;
+  const scanDetail = {
+    phase: "scan",
+    frames: N,
+    yawMin: ymin,
+    yawMax: ymax,
+    yawSpan,
+    lowDepthConfidence,
+  };
+  if (Number.isFinite(durationMs)) {
+    scanDetail.durationMs = Number(durationMs.toFixed(2));
+    recordMetricSample("scan.durationMs", scanDetail.durationMs, scanDetail);
+  }
+  recordEvent("scan.finished", scanDetail);
   els.reconStatus.textContent = lowDepthConfidence
     ? `重建完成（深度置信度低：偏航跨度 ${(ymax - ymin).toFixed(2)} < ${YAW_SPAN_MIN}，缺侧脸视角，深度不可靠）：${N} 帧。可旋转查看 / 投影。`
     : `重建完成：${N} 帧，偏航 ${ymin.toFixed(2)}~${ymax.toFixed(2)}。可旋转查看 / 投影。`;
