@@ -14,6 +14,7 @@
 | 资产 | 拓扑 | 格式 | 状态 | 用途 |
 | --- | --- | --- | --- | --- |
 | `web/assets/atlas_rstl.json` | `mediapipe-468` | `lines[].points = [tri,u,v]` | `validated:false` | Stage 1/2 的标准脸 RSTL 草案和 #13 方向服务输入 |
+| `assets/rstl_mediapipe_direction_prior.json` | `mediapipe-468` | 每个三角面中心的方向向量 / 置信度 / provenance | `validated:false` | 高密度方向场审阅资产，供 #13 方向服务和 #86 3DMM 先验注册对照 |
 | `web/assets/atlas_langer.json` | `mediapipe-468` | `lines[].points = [tri,u,v]` | `validated:false` | Langer 对照 / 教学，不作为面部主切口方向 |
 | `assets/rstl_3dmm_prior_manifest.json` | 多拓扑 manifest | JSON | `draft_not_clinically_validated` | 记录来源、拓扑、生成脚本和临床校验闸 |
 | FLAME/BFM RSTL atlas | `flame-2023` / BFM | 待生成 `[tri,u,v]` | pending | #61 3DMM 标注/迁移轨后续资产 |
@@ -27,6 +28,22 @@
 - `validated:false`，直到医生按 #2 完成逐线校验。
 - 生成脚本、规则版本、来源说明、生成日期或 commit。
 - 适用范围和低置信区域说明，尤其是前额、耳周、侧脸和表情形变区域。
+
+## 高密度方向场草案
+
+`tools/build_rstl_direction_prior.py` 会从当前 `assets/atlas_rstl.json` 读取 RSTL 流线，在
+`canonical_face_model.obj` 的每个三角面中心查询 weighted-nearest 局部方向，并输出
+`assets/rstl_mediapipe_direction_prior.json`。这份资产包含：
+
+- `topologyId:"mediapipe-468"` 和 `topologyVersion:"mediapipe-canonical-468-v1"`。
+- `sample_kind:"triangle_centroid_direction"`，当前覆盖 898 个标准脸三角面。
+- 每个样本的 `vector`、`angle_deg`、`confidence`、`support_count` 和 `angular_spread_deg`。
+- `validated:false`、`review_status:"draft_not_clinically_validated"` 和生成脚本。
+
+这不是新的临床真值，也不是 FLAME/BFM 图谱本体。它的作用是把现有 RSTL 草案变成可审阅、
+可版本管理的高密度方向场中间资产：医生可以按 #2 复核低置信区域，#13 可以用同一套
+confidence / support 语义对齐方向服务，#86 后续把同类结构注册到 FLAME/BFM 时也有明确的
+provenance 和拓扑边界可对照。
 
 ## 与 #13 的衔接
 

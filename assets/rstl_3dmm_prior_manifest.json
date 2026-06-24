@@ -21,6 +21,19 @@
       "limitations": ["geometry is approximate", "requires clinician line-by-line review", "forehead and ear regions require manual confirmation"]
     },
     {
+      "id": "mediapipe_rstl_direction_prior",
+      "system": "rstl",
+      "topologyId": "mediapipe-468",
+      "topologyVersion": "mediapipe-canonical-468-v1",
+      "path": "assets/rstl_mediapipe_direction_prior.json",
+      "format": "triangle centroid direction samples with vector, confidence, and provenance",
+      "generated_by": "tools/build_rstl_direction_prior.py",
+      "status": "available_draft_direction_field",
+      "validated": false,
+      "uses": ["rstl_direction_service_prior_review", "stage2_incision_planning_review", "3dmm_prior_bridge_asset"],
+      "limitations": ["derived from the current MediaPipe RSTL draft atlas", "triangle-centroid samples are not a clinician-approved atlas", "requires #2 clinical review before validated use"]
+    },
+    {
       "id": "mediapipe_langer_contrast",
       "system": "langer",
       "topologyId": "mediapipe-468",

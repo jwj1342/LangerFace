@@ -28,12 +28,18 @@ def test_rstl_3dmm_prior_manifest_preserves_draft_status():
     ids = {asset["id"]: asset for asset in manifest["assets"]}
     assert ids["mediapipe_rstl_draft"]["topologyId"] == "mediapipe-468"
     assert ids["mediapipe_rstl_draft"]["validated"] is False
+    assert ids["mediapipe_rstl_direction_prior"]["topologyId"] == "mediapipe-468"
+    assert ids["mediapipe_rstl_direction_prior"]["path"] == "assets/rstl_mediapipe_direction_prior.json"
+    assert ids["mediapipe_rstl_direction_prior"]["status"] == "available_draft_direction_field"
+    assert ids["mediapipe_rstl_direction_prior"]["validated"] is False
     assert ids["flame_rstl_prior"]["topologyId"] == "flame-2023"
     assert ids["flame_rstl_prior"]["status"] == "pending_doctor_annotation"
     assert ids["flame_rstl_prior"]["validated"] is False
 
     doc = (ROOT / "docs" / "RSTL_3DMM_PRIOR.md").read_text()
     assert "Borges" in doc
+    assert "rstl_mediapipe_direction_prior.json" in doc
+    assert "triangle_centroid_direction" in doc
     assert "#2" in doc
     assert "#13" in doc
     assert "#61" in doc
