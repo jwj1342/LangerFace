@@ -42,8 +42,17 @@ python tools/build_flame_basis.py
 
 # 拟合到 MediaPipe 关键点，生成本地个体 FLAME 顶点（产物 gitignore）
 python tools/fit_flame_to_landmarks.py [landmarks.json]
+
+# 生成 RSTL-on-FLAME 草案图谱；读取随仓库分发的 flame_basis.npz，不需要原始 pkl
+python tools/register_rstl_atlas_to_flame.py
 ```
 
 资产缺失时这些脚本会安全跳过并打印获取指引，CI / 他人 checkout 不受影响。
 
 亦可用环境变量 `LANGERFACE_ASSETS_DIR` 把资产目录指到仓库外的本地路径（见 `src/langerface/config/assets.py`）。
+
+`register_rstl_atlas_to_flame.py` 会读取本地 `RSTL/RSTL PRSgo.png`
+经典正面图谱，并把 `RSTL/` 资料清单写入 provenance，输出
+`assets/atlas_rstl_flame.json`。该资产是
+`topologyId:"flame-2023"` 的几何注册草案，始终保持 `validated:false`，
+不得替代逐线临床复核。
