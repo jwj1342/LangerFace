@@ -145,6 +145,26 @@ def evaluate_guardrails(
         })
 
     metrics = candidate.get("metrics") or {}
+    diameter_coverage_deficit = float(metrics.get("diameter_coverage_deficit_mm") or 0.0)
+    if candidate.get("type") == "linear" and diameter_coverage_deficit > 1e-6:
+        required = metrics.get("diameter_coverage_required_mm")
+        warnings.append({
+            "code": "linear_diameter_coverage_deficit",
+            "severity": "high",
+            "message": (
+                "Linear candidate is shorter than the recorded subcutaneous lesion diameter "
+                f"by {diameter_coverage_deficit:.1f} mm"
+                + (f" (required {float(required):.1f} mm)." if required is not None else ".")
+            ),
+        })
+        suggested_overrides.append({
+            "kind": "linear_length_or_access_review",
+            "reason": (
+                "Increase incision length, confirm a smaller imaging diameter, or record an explicit "
+                "clinician access decision."
+            ),
+        })
+
     axis_coverage_deficit = float(metrics.get("axis_coverage_deficit_mm") or 0.0)
     if candidate.get("type") == "fusiform" and axis_coverage_deficit > 1e-6:
         required = metrics.get("axis_coverage_required_mm")

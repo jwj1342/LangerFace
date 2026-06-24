@@ -125,8 +125,24 @@ def test_linear_subcutaneous_candidate_uses_rstl_axis_and_length_rules():
     candidate = linear_subcutaneous_incision(tumor, direction, units_per_mm=0.1)
     assert candidate["type"] == "linear"
     assert candidate["length_mm"] == 12.5
+    assert candidate["metrics"]["length_target_mm"] == 12.5
+    assert candidate["metrics"]["diameter_coverage_deficit_mm"] == 0
     assert np.allclose(candidate["endpoints"][0], [3.375, 2.0, 0.0])
     assert np.allclose(candidate["endpoints"][1], [4.625, 2.0, 0.0])
+
+
+def test_linear_guardrail_flags_diameter_coverage_deficit():
+    direction = {"vector": [1, 0, 0], "confidence": 0.9}
+    tumor = TumorInput(kind="subcutaneous", center=(4, 2, 0), diameter_mm=40, depth_mm=5)
+    rules = default_clinical_rules()
+    rules["linear_subcutaneous"]["max_length_mm"] = 30.0
+    candidate = linear_subcutaneous_incision(tumor, direction, rules=rules, units_per_mm=0.1)
+    assert candidate["length_mm"] == 30.0
+    assert candidate["metrics"]["diameter_coverage_deficit_mm"] == 10.0
+    assert candidate["metrics"]["length_clamped_by_max"] is True
+    guardrails = evaluate_guardrails(candidate, {"region": "cheek", "confidence": 0.8})
+    assert guardrails["passed"] is False
+    assert any(w["code"] == "linear_diameter_coverage_deficit" for w in guardrails["warnings"])
 
 
 def test_fusiform_cutaneous_candidate_has_three_to_one_default_ratio():

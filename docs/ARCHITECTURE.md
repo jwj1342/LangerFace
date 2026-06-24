@@ -358,6 +358,7 @@ candidate = segment(center, axis, length)
 
 - 超声直径与单位来源。
 - 切口长度规则。
+- `length_target_mm`、`diameter_coverage_required_mm` 与 `diameter_coverage_deficit_mm`；如果最大长度规则导致线性候选短于记录直径，guardrails 必须提示医生复核。
 - 与局部 RSTL 的角度偏差。
 - 是否命中敏感结构 guardrail。
 

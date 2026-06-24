@@ -64,7 +64,24 @@ const linear = T.generateLinearIncision(
 );
 ok(linear.type === "linear", "linear candidate generated");
 ok(near(linear.length_mm, 12.5), "linear length follows multiplier");
+ok(near(linear.metrics.length_target_mm, 12.5), "linear records target length");
+ok(near(linear.metrics.diameter_coverage_deficit_mm, 0), "linear records zero diameter coverage deficit");
 ok(near(linear.endpoints[0][0], 3.375) && near(linear.endpoints[1][0], 4.625), "linear endpoints centered on tumor");
+
+const linearRules = structuredClone(T.DEFAULT_RULES);
+linearRules.linear_subcutaneous.max_length_mm = 30;
+const clampedLinear = T.generateLinearIncision(
+  { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 40, depth_mm: 5 },
+  { vector: [1, 0, 0], confidence: 0.9 },
+  0.1,
+  linearRules,
+);
+ok(near(clampedLinear.length_mm, 30), "linear candidate respects max length");
+ok(near(clampedLinear.metrics.diameter_coverage_deficit_mm, 10), "linear records diameter coverage deficit");
+const linearCoverageGuard = T.evaluateGuardrails(clampedLinear, { region: "cheek", confidence: 0.8 }, linearRules);
+ok(linearCoverageGuard.passed === false, "linear diameter coverage deficit fails guardrails");
+ok(linearCoverageGuard.warnings.some((w) => w.code === "linear_diameter_coverage_deficit"),
+  "guardrails flag linear diameter coverage deficit");
 
 const fusiform = T.generateFusiformIncision(
   {

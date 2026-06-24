@@ -23,11 +23,11 @@ def linear_subcutaneous_incision(
     cfg = (rules or default_clinical_rules())["linear_subcutaneous"]  # type: ignore[index]
     axis_raw = direction.vector if isinstance(direction, DirectionQueryResult) else direction["vector"]
     axis = normalize(axis_raw)
-    length_mm = clamp(
-        tumor.diameter_mm * float(cfg["length_multiplier"]),
-        float(cfg["min_length_mm"]),
-        float(cfg["max_length_mm"]),
-    )
+    target_length_mm = tumor.diameter_mm * float(cfg["length_multiplier"])
+    min_length_mm = float(cfg["min_length_mm"])
+    max_length_mm = float(cfg["max_length_mm"])
+    length_mm = clamp(target_length_mm, min_length_mm, max_length_mm)
+    diameter_coverage_deficit_mm = max(0.0, tumor.diameter_mm - length_mm)
     half = axis * (length_mm * units_per_mm * 0.5)
     center = np.asarray(tumor.center, dtype=np.float64)
     p0 = center - half
@@ -51,6 +51,12 @@ def linear_subcutaneous_incision(
         "metrics": {
             "rstl_deviation_deg": 0.0,
             "diameter_mm": tumor.diameter_mm,
+            "diameter_coverage_required_mm": tumor.diameter_mm,
+            "diameter_coverage_deficit_mm": diameter_coverage_deficit_mm,
+            "length_target_mm": target_length_mm,
+            "length_target_deficit_mm": max(0.0, target_length_mm - length_mm),
+            "length_clamped_by_min": target_length_mm < min_length_mm,
+            "length_clamped_by_max": target_length_mm > max_length_mm,
             "length_multiplier": length_mm / tumor.diameter_mm,
         },
         "provenance": {

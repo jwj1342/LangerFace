@@ -248,7 +248,9 @@ export function generateLinearIncision(tumorInput, direction, unitsPerMm, rules 
   if (tumor.kind !== "subcutaneous") throw new Error("linear incision requires subcutaneous tumor");
   const cfg = rules.linear_subcutaneous;
   const axis = norm(direction.vector);
-  const lengthMm = clamp(tumor.diameter_mm * cfg.length_multiplier, cfg.min_length_mm, cfg.max_length_mm);
+  const targetLengthMm = tumor.diameter_mm * cfg.length_multiplier;
+  const lengthMm = clamp(targetLengthMm, cfg.min_length_mm, cfg.max_length_mm);
+  const diameterCoverageDeficitMm = Math.max(0, tumor.diameter_mm - lengthMm);
   const half = mul(axis, lengthMm * unitsPerMm * 0.5);
   const p0 = sub(tumor.center, half), p1 = add(tumor.center, half);
   return {
@@ -265,6 +267,12 @@ export function generateLinearIncision(tumorInput, direction, unitsPerMm, rules 
     metrics: {
       rstl_deviation_deg: 0,
       diameter_mm: tumor.diameter_mm,
+      diameter_coverage_required_mm: tumor.diameter_mm,
+      diameter_coverage_deficit_mm: diameterCoverageDeficitMm,
+      length_target_mm: targetLengthMm,
+      length_target_deficit_mm: Math.max(0, targetLengthMm - lengthMm),
+      length_clamped_by_min: targetLengthMm < cfg.min_length_mm,
+      length_clamped_by_max: targetLengthMm > cfg.max_length_mm,
       length_multiplier: lengthMm / tumor.diameter_mm,
     },
     provenance: { generator: "generateLinearIncision", rules_version: rules.version },
@@ -453,6 +461,19 @@ export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
     suggested_overrides.push({ kind: "free_margin_distance_review", reason: "Confirm functional and contour risk before accepting this direction." });
   }
   const candidateDistance = candidate.metrics?.sensitive_free_margin_min_distance_mm;
+  const diameterCoverageDeficit = Number(candidate.metrics?.diameter_coverage_deficit_mm || 0);
+  if (candidate.type === "linear" && diameterCoverageDeficit > 1e-6) {
+    const required = candidate.metrics?.diameter_coverage_required_mm;
+    warnings.push({
+      code: "linear_diameter_coverage_deficit",
+      severity: "high",
+      message: `Linear candidate is shorter than the recorded subcutaneous lesion diameter by ${diameterCoverageDeficit.toFixed(1)} mm${required != null ? ` (required ${Number(required).toFixed(1)} mm).` : "."}`,
+    });
+    suggested_overrides.push({
+      kind: "linear_length_or_access_review",
+      reason: "Increase incision length, confirm a smaller imaging diameter, or record an explicit clinician access decision.",
+    });
+  }
   const axisCoverageDeficit = Number(candidate.metrics?.axis_coverage_deficit_mm || 0);
   if (candidate.type === "fusiform" && axisCoverageDeficit > 1e-6) {
     const required = candidate.metrics?.axis_coverage_required_mm;
@@ -577,6 +598,7 @@ export function applyCandidateEdit(plan, edit = {}, normal = [0, 0, 1], unitsPer
   let candidate;
   if (base.type === "linear") {
     const lengthMm = Math.max(1, Number(base.length_mm || 1) * editRecord.length_scale);
+    const diameterCoverageRequiredMm = Number(base.metrics?.diameter_coverage_required_mm || plan.tumor?.diameter_mm || 0);
     const half = mul(axis, lengthMm * unitsPerMm * 0.5);
     candidate = {
       ...base,
@@ -590,6 +612,9 @@ export function applyCandidateEdit(plan, edit = {}, normal = [0, 0, 1], unitsPer
         ...(base.metrics || {}),
         rstl_deviation_deg: Math.abs(editRecord.angle_offset_deg),
         length_multiplier: lengthMm / Math.max(Number(plan.tumor?.diameter_mm || base.metrics?.diameter_mm || 1), 1),
+        diameter_coverage_deficit_mm: diameterCoverageRequiredMm > 0
+          ? Math.max(0, diameterCoverageRequiredMm - lengthMm)
+          : 0,
       },
     };
   } else {
