@@ -371,6 +371,7 @@ Stage 2 的切口候选必须受以下边界约束：
 | [ENGINEERING_LESSONS.md](docs/ENGINEERING_LESSONS.md) | 多人并行协作踩过的坑、避坑规则与提交前清单 |
 | **架构 / 数据** | |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 核心算法、坐标系、2D/3D 路线、网页 3D 标注、HeadSpace 离线管线、Stage 2 路线、资产与部署 |
+| [METHODS_AND_IMPLEMENTATION_SUMMARY.md](docs/METHODS_AND_IMPLEMENTATION_SUMMARY.md) | 各核心算法的**数学公式与推导**集中参考（重心映射 / One-Euro / 遮挡 / 流线生成 / Umeyama / FLAME / 软体 / 切口几何）；模块契约见 ARCHITECTURE，测试见 CONTRIBUTING |
 | [BACKEND_DATA_ARCHITECTURE.md](docs/BACKEND_DATA_ARCHITECTURE.md) | 后端数据层、Cloudflare Worker/D1/R2、重计算边界与阶段落地 |
 | [FLAME_3D_TRACK.md](docs/FLAME_3D_TRACK.md) | 3D FLAME 配准 / 标注轨的设计与技术选型（issue #61）|
 | **质量 / 运维** | |

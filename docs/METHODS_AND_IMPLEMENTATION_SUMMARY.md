@@ -1,6 +1,14 @@
-# LangerFace 方法原理与功能实现总结
+# LangerFace 方法原理与算法公式参考
 
-本文总结当前仓库代码的技术路线、核心算法、实现功能和后续扩展方向。它面向需要理解、复现或继续开发 LangerFace 的读者，重点说明系统如何把 RSTL / Langer 面部皮肤张力线稳定投射到照片、视频、实时摄像头或 3D 头模上，并解释现有手术模拟原型与 Stage 2 切口规划路线。
+本文是 LangerFace **各核心算法的数学公式与推导的集中参考**：重心坐标映射、One-Euro 平滑、背面剔除、手部遮挡、流线图谱生成、Umeyama/Sim3、FLAME 拟合、软体张力与切口几何。面向需要理解算法**为什么这样算**、或要复现/继续开发的读者。
+
+> **职责边界（避免与其它文档重复）**：本文只讲**算法与公式**。下列主题各有 owning 文档，本文按需引用、不复制：
+> - 模块分层、稳定契约、扩展点 → [ARCHITECTURE.md](ARCHITECTURE.md)、[CONTRIBUTING.md «架构与扩展点»](CONTRIBUTING.md#架构与扩展点)
+> - 环境与复现步骤 → [ENVIRONMENT.md](ENVIRONMENT.md)、[CONTRIBUTING.md «开发环境»](CONTRIBUTING.md#开发环境)
+> - 测试体系与跨语言对拍 → [CONTRIBUTING.md «运行测试»](CONTRIBUTING.md#运行测试)、[CROSS_LANG_PARITY.md](CROSS_LANG_PARITY.md)
+> - 诊断 / 隐私 / 可观测性 → [OBSERVABILITY.md](OBSERVABILITY.md)、[PRIVACY_AND_AUDIT.md](PRIVACY_AND_AUDIT.md)
+> - FLAME 3D 轨的设计与选型 → [FLAME_3D_TRACK.md](FLAME_3D_TRACK.md)
+> - 已实现功能清单 / 路线图 → [README «它能做什么»](../README.md#它能做什么)、[TODO.md](TODO.md)
 
 ## 1. 项目定位
 
@@ -14,17 +22,9 @@ LangerFace 是一个面向面部手术规划研究的计算机视觉原型。当
 4. 对实时场景加入时间平滑、自遮挡、手部遮挡、淡入淡出、诊断日志和跨语言对拍测试，保证工程稳定性。
 5. 所有内置图谱当前仍是 `validated:false` 的示意首版，正式临床使用前必须由医生团队校验。
 
-## 2. 总体架构
+## 2. 数据流总览
 
-仓库由 Python 核心库、浏览器前端、资产生成工具和测试验证体系组成。
-
-| 层级 | 主要位置 | 作用 |
-| --- | --- | --- |
-| 资产层 | `assets/`, `web/assets/` | MediaPipe 标准脸、Face/Hand Landmarker、三角拓扑、RSTL/Langer 图谱、3D 示例资产 |
-| Python 核心库 | `src/langerface/` | 标准脸解析、图谱 I/O、重心映射、检测、平滑、遮挡、渲染、视频/CLI 管线、3D 配准基元 |
-| Web 前端 | `web/` | Vite + 原生 ES Modules + MediaPipe Tasks Vision + Canvas 2D + Three.js，实现实时摄像头、上传图片/视频、3D Beta、网页 3D 标注器、手术模拟 demo |
-| 工具脚本 | `tools/` | 下载资产、生成图谱、导出 Web 资产、重建 3D 头模、临床标注、HeadSpace 离线配准、测试夹具生成 |
-| 测试验证 | `tests/`, `tools/test_*.mjs` | Python 单测、JS 单测、Python/JS 几何对拍、架构环依赖检查、图谱合同检查、遮挡与 Umeyama 验证 |
+> 仓库的模块分层（资产层 / Python 核心库 / Web 前端 / 工具脚本 / 测试）与各层稳定契约见 [ARCHITECTURE.md](ARCHITECTURE.md)、[CONTRIBUTING.md «架构与扩展点»](CONTRIBUTING.md#架构与扩展点)。本文只给**方法视角**的端到端数据流：
 
 整体数据流如下：
 
@@ -659,48 +659,11 @@ extra_tension = max(0, current_tension - baseline_tension)
 
 ## 16. 前端功能实现
 
-当前 Web 前端提供以下功能：
-
-1. 摄像头实时叠加 RSTL / Langer 线。
-2. 上传图片并叠加线条。
-3. 上传视频逐帧处理。
-4. RSTL / Langer 一键切换。
-5. 线条密度、透明度、平滑强度调节。
-6. 背面剔除、手部遮挡、镜像显示、分区着色。
-7. 关键区域放大窗，包括额眉间、双眼周、鼻鼻唇沟、口周、颏部等区域。
-8. 3D Beta：加载示例重建、扫描重建、旋转查看、投影回实时画面。
-9. 网页 3D 标注器：标准脸/头模上线条标注与图谱草案导出。
-10. 手术模拟 demo：梭形切除、闭合张力可视化、顺/逆 RSTL 对比。
-11. 诊断日志导出：`window.exportLangerfaceDiagnostics()`。
-
-前端主要模块：
-
-| 文件 | 职责 |
-| --- | --- |
-| `web/pipeline.js` | 资产加载、MediaPipe 检测、数据源切换、帧循环 |
-| `web/geometry.js` | 映射、平滑、遮挡、Umeyama 等几何核心 |
-| `web/render.js` | Canvas 2D 绘制、统计、放大窗 |
-| `web/mode3d.js` | 3D 扫描、重建、查看、实时投影 |
-| `web/three3d.js` | Three.js 头模和线条渲染 |
-| `web/logger.js` | 诊断事件、计数器、指标和资产版本 |
-| `web/annotate_*.js` | 网页 3D 标注器 |
-| `web/soft_body.js` | 手术模拟的软体物理核心 |
+> Web 前端各模块（`web/pipeline.js` / `geometry.js` / `render.js` / `mode3d.js` / `three3d.js` / `logger.js` / `annotate_*.js` / `soft_body.js`）的职责与分层见 [ARCHITECTURE.md](ARCHITECTURE.md)；用户可见的功能清单见 [README «它能做什么»](../README.md#它能做什么)。本文不重复模块表——上面各算法章节已在节内标注其 Web 实现文件（如 `mapAtlas` 在 `web/geometry.js`）。
 
 ## 17. Python 功能实现
 
-Python 包提供可复用核心能力：
-
-| 模块 | 功能 |
-| --- | --- |
-| `detection/` | 检测器接口、MediaPipe Face Landmarker 实现、One-Euro 平滑 |
-| `geometry/` | 标准脸解析、三角拓扑、重心坐标、Sim3/Umeyama、折线重采样 |
-| `lines/` | 图谱数据模型、图谱加载/保存/校验、图谱映射 |
-| `rendering/` | 背面剔除、OpenCV 叠加渲染 |
-| `pipeline/` | 单帧到输出帧的高层处理管线 |
-| `media/` | 视频读取、写出和逐帧处理 |
-| `apps/` | CLI 和原生 OpenCV webcam |
-| `registration/` | 多视角关键点融合、相机投影/反投影、射线网格求交 |
-| `flame.py` | FLAME 线性形状拟合和线条迁移 |
+> Python 包（`src/langerface/` 的 `detection/` / `geometry/` / `lines/` / `rendering/` / `pipeline/` / `media/` / `apps/` / `registration/` / `flame.py`）的分层职责与稳定契约见 [ARCHITECTURE.md](ARCHITECTURE.md) 与 [CONTRIBUTING.md «架构与扩展点»](CONTRIBUTING.md#架构与扩展点)。各算法的 Python 实现文件见对应算法章节。
 
 ## 18. HeadSpace / FaceScape 离线配准
 
@@ -723,80 +686,11 @@ Python 包提供可复用核心能力：
 
 ## 19. 诊断、隐私与可观测性
 
-`web/logger.js` 和 `docs/OBSERVABILITY.md` 定义了浏览器端诊断 JSON。导出内容包括：
-
-- schema 版本。
-- 启动时间和导出时间。
-- 资产版本。
-- 事件列表。
-- 计数器。
-- 帧率和耗时指标。
-
-诊断 JSON 不得包含：
-
-- 图像像素。
-- 视频帧。
-- 3D 纹理。
-- 患者姓名、病例号、联系方式。
-- 私有 URL 或 secret。
-
-该约束使问题复现和多人评审可以在不暴露患者敏感数据的情况下进行。
+> 浏览器诊断 JSON 的 schema、结构化事件字段、计数器与运行时指标见 [OBSERVABILITY.md](OBSERVABILITY.md)；导出内容的隐私边界（禁止混入像素 / 视频帧 / 3D 纹理 / 患者身份 / secret）与审计约束见 [PRIVACY_AND_AUDIT.md](PRIVACY_AND_AUDIT.md)。这两条是本项目的硬约束——任何新增日志/导出都不得越界。
 
 ## 20. 验证与测试体系
 
-当前验证体系分为 Python 测试、Web 测试和跨语言对拍。
-
-### 20.1 Python 测试
-
-`tests/` 覆盖：
-
-- 标准脸解析。
-- 图谱合法性。
-- 重心映射的仿射不变性。
-- One-Euro 平滑稳定性。
-- 背面剔除。
-- 端到端 pipeline。
-- FLAME 拟合基础行为。
-- 多视角/配准相关基元。
-
-运行：
-
-```bash
-pytest
-```
-
-### 20.2 Web 测试
-
-`web/package.json` 的 `npm test` 会运行多个 Node 脚本，包括：
-
-- `test_web_architecture.mjs`：检查前端模块 import 图，防止环依赖。
-- `test_web_mapping.mjs`：JS 几何与 Python ground truth 对拍。
-- `test_occlusion.mjs`：手部遮挡掩膜测试。
-- `test_umeyama.mjs`：相似变换恢复测试。
-- `test_annotate_model.mjs`：3D 标注数据模型测试。
-- `test_flame_fit_js.mjs`：前端 FLAME 拟合测试。
-- `test_soft_body.mjs`：软体模拟核心测试。
-- `test_logger.mjs`：诊断日志测试。
-
-运行：
-
-```bash
-cd web
-npm test
-```
-
-### 20.3 Python / JS 对拍
-
-`tools/dump_landmarks.py` 生成 `web/test/expected.json`，包含示例帧关键点、Python 映射结果和可见性结果。
-
-`tools/test_web_mapping.mjs` 用同一输入在 JS 端运行 `mapAtlas` 和 `visibleTriangles`，要求：
-
-```text
-映射误差 < 1e-2 px
-可见性不一致数 = 0
-```
-
-这个测试保证 Web 实时结果与 Python 参考实现逐点一致。
+> 各测试的职责、目检脚本与浏览器实测清单见 [CONTRIBUTING.md «运行测试»](CONTRIBUTING.md#运行测试)（测试事实来源）；Python ⇄ JS ⇄ 金标逐点对拍的不变式（映射误差 < 1e-2 px、可见性不一致数 = 0）与金标重生成见 [CROSS_LANG_PARITY.md](CROSS_LANG_PARITY.md)。本文不重复测试枚举，只强调：改动任何几何代码后，`pytest` 与 `cd web && npm test` 的对拍必须仍逐点一致。
 
 ## 21. Stage 2 切口规划路线
 
@@ -899,25 +793,7 @@ tip_angle ≈ 30 degrees
 
 ## 22. 已实现功能清单
 
-当前仓库已经实现：
-
-1. Python 和 Web 两套等价的重心坐标映射。
-2. MediaPipe Face Landmarker 人脸关键点检测。
-3. RSTL / Langer 图谱加载、校验、生成和导出。
-4. 图片、视频、摄像头上的线条叠加。
-5. One-Euro 实时平滑。
-6. 背面剔除和口裂排除。
-7. Web 手部遮挡。
-8. 抗锯齿折线渲染和可见线段断开。
-9. 多区域颜色显示和关键区域放大窗。
-10. 3D Beta 多帧关键点重建、查看和实时投影。
-11. FLAME 形状拟合和重心线条迁移。
-12. 网页 3D 标注器和 `[tri,u,v]` 图谱草案导出。
-13. HeadSpace / FaceScape 离线配准脚本。
-14. 手术梭形切除与闭合张力演示原型。
-15. 浏览器诊断日志导出。
-16. Python/JS 几何对拍测试和前端架构测试。
-17. Vite 静态构建与 Vercel 部署配置。
+> 用户可见的已实现功能清单见 [README «它能做什么»](../README.md#它能做什么)，路线图与待办见 [TODO.md](TODO.md)。本文聚焦算法原理，不维护功能清单（避免与 README 漂移）。
 
 ## 23. 当前边界与局限
 
@@ -931,30 +807,7 @@ tip_angle ≈ 30 degrees
 
 ## 24. 推荐复现路径
 
-从零复现建议按以下顺序：
-
-```bash
-pip install -e ".[all]"
-python tools/download_assets.py
-python tools/build_field_atlas.py 0.014
-python tools/export_web_assets.py
-pytest
-
-cd web
-npm ci
-npm test
-npm run build
-npm run dev
-```
-
-体验路径：
-
-1. 打开 Web 首页，测试摄像头实时 RSTL 叠加。
-2. 上传静态图片，观察线条贴合、透明度、平滑和背面剔除。
-3. 打开 3D Beta，加载示例重建或扫描生成个性化头模。
-4. 打开 `/annotate.html`，在标准脸上标注线并导出图谱草案。
-5. 打开 `surgery.html`，体验顺/逆 RSTL 梭形切除的软体模拟差异。
-6. 修改几何代码后，运行 `pytest` 和 `cd web && npm test`，确保 Python/JS 对拍仍通过。
+> 从零搭建环境、安装依赖与构建步骤见 [CONTRIBUTING.md «开发环境»](CONTRIBUTING.md#开发环境) 与 [ENVIRONMENT.md](ENVIRONMENT.md)；测试运行见 [CONTRIBUTING.md «运行测试»](CONTRIBUTING.md#运行测试)。体验路径：Web 首页摄像头实时叠加 → 上传图片看贴合/平滑/背面剔除 → 3D Beta（示例脸或扫描重建）→ `/annotate.html` 标注导出草案 → `surgery.html` 顺/逆 RSTL 切除对比；改几何代码后务必跑 `pytest` 和 `cd web && npm test` 确认对拍仍通过。
 
 ## 25. 一句话总结
 
