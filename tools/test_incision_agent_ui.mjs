@@ -28,6 +28,8 @@ assert.ok(js.includes("rejected_by_clinician"), "review records support clinicia
 assert.ok(js.includes("audit_events"), "review records include audit events");
 assert.ok(js.includes("guardrail_summary"), "review records include guardrail summary");
 assert.ok(js.includes("review_gate"), "review records include review gate state");
+assert.ok(js.includes("candidate_comparison"), "review export includes candidate comparison");
+assert.ok(js.includes("不是临床推荐或手术指令"), "candidate comparison warns it is not clinical recommendation");
 assert.ok(js.includes("reviewReadiness"), "review workflow validates approval readiness");
 assert.ok(js.includes("highGuardrailWarnings"), "review workflow detects high guardrail warnings");
 assert.ok(js.includes("live_overlay_ready"), "review gate records live overlay readiness");

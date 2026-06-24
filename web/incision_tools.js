@@ -36,6 +36,7 @@ const TOOL_SCHEMAS = [
   { name: "fusiform_cutaneous_incision", input: ["tumor", "direction", "units_per_mm"], output: ["outline", "length_mm", "width_mm", "metrics"] },
   { name: "evaluate_guardrails", input: ["candidate", "anatomy"], output: ["passed", "warnings", "suggested_overrides"] },
   { name: "clinician_edit_candidate", input: ["edit"], output: ["candidate", "guardrails", "provenance"] },
+  { name: "compare_candidates", input: ["review_records"], output: ["ranked_candidates", "score_breakdown", "clinical_boundary"] },
   { name: "save_review_record", input: ["candidate", "tumor", "trace", "privacy_audit", "reviewer", "review_status", "review_notes"], output: ["review_record_json", "report_markdown", "screenshot_png", "audit_events"] },
 ];
 
@@ -868,10 +869,103 @@ export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atla
   };
 }
 
+function finiteOr(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function warningSeverityCounts(guardrails = {}) {
+  const warnings = Array.isArray(guardrails.warnings) ? guardrails.warnings : [];
+  return {
+    high: warnings.filter((w) => w.severity === "high").length,
+    medium: warnings.filter((w) => w.severity === "medium").length,
+    low: warnings.filter((w) => w.severity === "low").length,
+  };
+}
+
+function comparisonReasons({ severity, metrics, reviewStatus, sensitiveDistance, candidateType }) {
+  const reasons = [];
+  if (reviewStatus === "rejected_by_clinician") reasons.push("医生已否决");
+  if (severity.high) reasons.push(`${severity.high} 个 high guardrail`);
+  if (severity.medium) reasons.push(`${severity.medium} 个 medium guardrail`);
+  const rstlDeviation = finiteOr(metrics.rstl_deviation_deg, 0);
+  if (rstlDeviation > 0) reasons.push(`RSTL 偏角 ${rstlDeviation.toFixed(1)}°`);
+  const linearDeficit = finiteOr(metrics.diameter_coverage_deficit_mm, 0);
+  if (linearDeficit > 0) reasons.push(`直径覆盖缺口 ${linearDeficit.toFixed(1)} mm`);
+  const axisDeficit = finiteOr(metrics.axis_coverage_deficit_mm, 0);
+  if (axisDeficit > 0) reasons.push(`边界覆盖缺口 ${axisDeficit.toFixed(1)} mm`);
+  if (candidateType === "fusiform") {
+    const tipError = finiteOr(metrics.tip_angle_error_deg, 0);
+    if (tipError > 0.5) reasons.push(`尖端角误差 ${tipError.toFixed(1)}°`);
+  }
+  if (Number.isFinite(sensitiveDistance) && sensitiveDistance < 10) {
+    reasons.push(`距敏感游离缘 ${sensitiveDistance.toFixed(1)} mm`);
+  }
+  return reasons.length ? reasons : ["工程指标未见额外扣分"];
+}
+
+export function compareCandidateRecords(records = []) {
+  return (records || [])
+    .filter(Boolean)
+    .map((record, index) => {
+      const candidate = record.candidate || {};
+      const metrics = candidate.metrics || {};
+      const severity = warningSeverityCounts(record.guardrails);
+      const reviewStatus = record.review_status || record.review?.status || "pending_clinician_confirmation";
+      const sensitiveDistance = finiteOr(metrics.sensitive_free_margin_min_distance_mm, Infinity);
+      const sensitivePenalty = Number.isFinite(sensitiveDistance)
+        ? Math.max(0, 10 - sensitiveDistance) * 5
+        : 0;
+      const score =
+        severity.high * 100 +
+        severity.medium * 25 +
+        severity.low * 5 +
+        finiteOr(metrics.rstl_deviation_deg, 0) +
+        finiteOr(metrics.diameter_coverage_deficit_mm, 0) * 10 +
+        finiteOr(metrics.axis_coverage_deficit_mm, 0) * 10 +
+        finiteOr(metrics.tip_angle_error_deg, 0) * 2 +
+        sensitivePenalty +
+        (reviewStatus === "rejected_by_clinician" ? 1000 : 0);
+      return {
+        id: record.id || `candidate_${index}`,
+        label: record.label || `候选 ${index + 1}`,
+        original_index: index,
+        candidate_type: candidate.type || "unknown",
+        review_status: reviewStatus,
+        score,
+        score_breakdown: {
+          high_guardrails: severity.high,
+          medium_guardrails: severity.medium,
+          rstl_deviation_deg: finiteOr(metrics.rstl_deviation_deg, 0),
+          diameter_coverage_deficit_mm: finiteOr(metrics.diameter_coverage_deficit_mm, 0),
+          axis_coverage_deficit_mm: finiteOr(metrics.axis_coverage_deficit_mm, 0),
+          tip_angle_error_deg: finiteOr(metrics.tip_angle_error_deg, 0),
+          sensitive_margin_penalty: sensitivePenalty,
+          rejected_penalty: reviewStatus === "rejected_by_clinician" ? 1000 : 0,
+        },
+        reasons: comparisonReasons({
+          severity,
+          metrics,
+          reviewStatus,
+          sensitiveDistance,
+          candidateType: candidate.type,
+        }),
+      };
+    })
+    .sort((a, b) => a.score - b.score || a.original_index - b.original_index)
+    .map((item, idx) => ({
+      ...item,
+      rank: idx + 1,
+      score: Number(item.score.toFixed(3)),
+      clinical_boundary: "工程排序仅用于候选对比，不是临床推荐或手术指令。",
+    }));
+}
+
 export const __incisionToolsForTests = {
   DEFAULT_RULES,
   TOOL_SCHEMAS,
   applyCandidateEdit,
+  compareCandidateRecords,
   classifyRegion,
   queryDirection,
   normalizeTumorInput,

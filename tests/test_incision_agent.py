@@ -441,6 +441,7 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     assert result["provider"]["mode"] == "deterministic_fallback"
     assert result["agent_trace_mode"] == "single_turn_react_with_deterministic_tools"
     assert any(tool["name"] == "evaluate_guardrails" for tool in result["tool_schemas"])
+    assert any(tool["name"] == "compare_candidates" for tool in result["tool_schemas"])
     assert any(tool["name"] == "save_review_record" for tool in result["tool_schemas"])
 
 
@@ -493,6 +494,7 @@ def test_agent_tool_schema_and_privacy_doc_cover_review_export():
         "fusiform_cutaneous_incision",
         "evaluate_guardrails",
         "clinician_edit_candidate",
+        "compare_candidates",
         "save_review_record",
     } <= names
     privacy = (ROOT / "docs" / "INCISION_PRIVACY_AUDIT.md").read_text()

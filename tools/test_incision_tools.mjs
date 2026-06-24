@@ -266,6 +266,7 @@ ok(plan.trace.length === 4, "deterministic plan records four tool calls");
 ok(plan.candidate.type === "linear", "deterministic plan returns candidate");
 ok(plan.agent_trace_mode === "single_turn_react_with_deterministic_tools", "plan records trace mode");
 ok(T.TOOL_SCHEMAS.some((s) => s.name === "clinician_edit_candidate"), "tool schemas include clinician edit");
+ok(T.TOOL_SCHEMAS.some((s) => s.name === "compare_candidates"), "tool schemas include candidate comparison");
 ok(T.TOOL_SCHEMAS.some((s) => s.name === "save_review_record"), "tool schemas include review record export");
 
 const edited = T.applyCandidateEdit(plan, {
@@ -281,5 +282,36 @@ ok(near(edited.candidate.metrics.rstl_deviation_deg, 20), "edited candidate reco
 ok(edited.candidate.provenance.clinician_edit.reason.includes("free-margin"), "edited candidate records override reason");
 ok(edited.trace.some((step) => step.action === "clinician_edit_candidate"), "edited plan adds trace step");
 ok(edited.guardrails.warnings.some((w) => w.code === "rstl_deviation_override"), "edited deviation triggers guardrail warning");
+
+const comparison = T.compareCandidateRecords([
+  {
+    id: "baseline",
+    label: "低风险候选",
+    review_status: "approved_for_discussion",
+    candidate: { type: "linear", metrics: { rstl_deviation_deg: 0, diameter_coverage_deficit_mm: 0 } },
+    guardrails: { passed: true, warnings: [] },
+  },
+  {
+    id: "high-risk",
+    label: "高风险候选",
+    review_status: "approved_for_discussion",
+    candidate: {
+      type: "linear",
+      metrics: { rstl_deviation_deg: 20, diameter_coverage_deficit_mm: 3, sensitive_free_margin_min_distance_mm: 4 },
+    },
+    guardrails: { passed: false, warnings: [{ code: "candidate_near_sensitive_free_margin", severity: "high" }] },
+  },
+  {
+    id: "rejected",
+    label: "否决候选",
+    review_status: "rejected_by_clinician",
+    candidate: { type: "fusiform", metrics: { rstl_deviation_deg: 0, tip_angle_error_deg: 0 } },
+    guardrails: { passed: true, warnings: [] },
+  },
+]);
+ok(comparison[0].id === "baseline", "candidate comparison ranks low-risk candidate first");
+ok(comparison[2].id === "rejected", "candidate comparison ranks rejected candidate last");
+ok(comparison[1].reasons.some((r) => r.includes("high guardrail")), "candidate comparison explains high-risk score");
+ok(comparison[0].clinical_boundary.includes("不是临床推荐"), "candidate comparison records clinical boundary");
 
 console.log(`test_incision_tools: ${passed} assertions passed`);

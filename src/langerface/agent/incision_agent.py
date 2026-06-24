@@ -64,6 +64,11 @@ TOOL_SCHEMAS = [
         "output": ["edited_candidate", "guardrails", "provenance"],
     },
     {
+        "name": "compare_candidates",
+        "input": ["review_records"],
+        "output": ["ranked_candidates", "score_breakdown", "clinical_boundary"],
+    },
+    {
         "name": "save_review_record",
         "input": [
             "candidate",

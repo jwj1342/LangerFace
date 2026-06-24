@@ -5,6 +5,7 @@ import { dataSource } from "./data_source.js";
 import { compileIncisionOverlay } from "./incision_overlay.js";
 import {
   applyCandidateEdit,
+  compareCandidateRecords,
   normalizeTumorInput,
   planIncisionDeterministic,
   summarizeTumorBoundary,
@@ -759,7 +760,9 @@ function reviewRecord(result = S.result, label = "候选") {
 function renderSaved() {
   els.savedCount.textContent = String(S.saved.length);
   els.candidateList.innerHTML = "";
+  const comparisonById = new Map(compareCandidateRecords(S.saved).map((c) => [c.id, c]));
   for (const rec of S.saved) {
+    const comparison = comparisonById.get(rec.id);
     const row = document.createElement("div");
     row.className = "candidate-row";
     const top = document.createElement("div");
@@ -774,7 +777,8 @@ function renderSaved() {
     meta.className = "meta";
     const reviewer = rec.review?.reviewer ? ` · 审阅人 ${rec.review.reviewer}` : "";
     const guardrails = rec.guardrails.passed ? "guardrails 通过" : "guardrails 需复核";
-    meta.textContent = `长度 ${fmt(rec.candidate.length_mm)} mm · 区域 ${rec.anatomy.region} · ${guardrails}${reviewer} · ${rec.created_at}`;
+    const rank = comparison ? `工程排序 #${comparison.rank} · 分 ${fmt(comparison.score, 1)} · ${comparison.reasons.slice(0, 2).join("；")} · ` : "";
+    meta.textContent = `${rank}长度 ${fmt(rec.candidate.length_mm)} mm · 区域 ${rec.anatomy.region} · ${guardrails}${reviewer} · ${rec.created_at}`;
     const actions = document.createElement("div");
     actions.className = "btn-row";
     actions.style.gridTemplateColumns = "1fr 1fr";
@@ -825,7 +829,7 @@ function makeVariantCandidates() {
     S.saved.push(reviewRecord(result, `备选 ${S.saved.length + 1}`));
   }
   renderSaved();
-  els.stageStatus.textContent = "已生成 3 个方向备选并复跑 guardrails";
+  els.stageStatus.textContent = "已生成 3 个方向备选、复跑 guardrails，并更新工程排序";
 }
 
 function recordReviewDecision(status, label) {
@@ -848,11 +852,14 @@ function exportReviewJson() {
     els.stageStatus.textContent = "没有可导出的候选";
     return;
   }
+  const current = S.result ? reviewRecord(S.result, "当前候选") : null;
+  const records = [current, ...S.saved].filter(Boolean);
   const payload = {
     schema_version: "incision-review-export/v0.3",
     exported_at: new Date().toISOString(),
-    current: S.result ? reviewRecord(S.result, "当前候选") : null,
+    current,
     saved: S.saved,
+    candidate_comparison: compareCandidateRecords(records),
   };
   downloadText(`incision_review_${Date.now()}.json`, JSON.stringify(payload, null, 2));
 }
@@ -923,6 +930,17 @@ function exportReport() {
     return;
   }
   const rows = (S.saved.length ? S.saved : [reviewRecord(S.result, "当前候选")]).filter(Boolean);
+  const comparison = compareCandidateRecords(rows);
+  const comparisonBody = comparison.length
+    ? [
+      "## 候选工程排序",
+      "",
+      "该排序只按 guardrails、RSTL 偏角、覆盖缺口、敏感距离和几何误差比较，不是临床推荐或手术指令。",
+      "",
+      ...comparison.map((c) => `- #${c.rank} ${c.label}：${fmt(c.score, 1)} 分；${c.reasons.join("；")}`),
+      "",
+    ].join("\n")
+    : "";
   const body = rows.map((r, idx) => {
     const metrics = r.candidate.metrics || {};
     const warningLines = (r.guardrails.warnings || [])
@@ -959,7 +977,7 @@ function exportReport() {
     `- 审阅边界：研究候选记录，非手术指令。`,
   ].filter(Boolean).join("\n");
   }).join("\n\n");
-  downloadText(`incision_report_${Date.now()}.md`, `# 切口候选审阅草案\n\n${body}\n`, "text/markdown");
+  downloadText(`incision_report_${Date.now()}.md`, `# 切口候选审阅草案\n\n${comparisonBody}${body}\n`, "text/markdown");
 }
 
 function exportScreenshot() {
