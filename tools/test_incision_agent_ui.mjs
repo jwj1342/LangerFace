@@ -37,6 +37,13 @@ assert.ok(html.includes('id="candidateTipAngle"'), "workbench exposes fusiform t
 assert.ok(js.includes("exportTumorJson"), "workbench implements tumor JSON export");
 assert.ok(js.includes("importTumorFile"), "workbench implements tumor JSON import");
 assert.ok(js.includes("applyImportedTumor"), "workbench applies imported tumor payloads");
+assert.ok(js.includes("browser-export-privacy-preflight/v0.1"), "browser export preflight has a schema");
+assert.ok(js.includes("exportPreflightPasses(payload"), "JSON exports run browser privacy preflight");
+assert.ok(js.includes("导出隐私预检未通过"), "browser preflight blocks unsafe exports with feedback");
+assert.ok(js.includes("raw_media_flag_true"), "browser preflight catches raw media flags");
+assert.ok(js.includes("secret_value_present"), "browser preflight catches unredacted secrets");
+assert.ok(js.includes("pii_pattern_present"), "browser preflight catches direct PII patterns");
+assert.ok(js.includes('!leaf.toLowerCase().endsWith("_at")'), "browser preflight does not flag timestamps as phone numbers");
 assert.ok(js.includes("summarizeTumorBoundary"), "workbench renders deterministic boundary summaries");
 assert.ok(tools.includes("units_per_mm"), "tumor boundary summary exports coordinate-to-mm scale for audit");
 assert.ok(tools.includes("summary_axis"), "tumor boundary summary exports summary axis for audit");
