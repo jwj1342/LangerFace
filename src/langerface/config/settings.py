@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from ..texture import TextureWarpConfig, WrinkleFieldConfig
 from .assets import ATLAS_PATHS, CANONICAL_OBJ, FACE_LANDMARKER_TASK
 from .constants import (
     DEFAULT_FADE_FRAMES,
@@ -13,7 +14,6 @@ from .constants import (
     SYSTEM_RSTL,
     VALID_SYSTEMS,
 )
-from ..texture import TextureWarpConfig, WrinkleFieldConfig
 
 
 @dataclass

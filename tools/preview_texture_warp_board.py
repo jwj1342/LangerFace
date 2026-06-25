@@ -60,7 +60,14 @@ def render_row(image_id: str, image_file: Path, mask_file: Path, args) -> np.nda
     )
 
 
-def render_overlay(frame: np.ndarray, mask: np.ndarray | None, *, warp: bool, color: tuple[int, int, int], args):
+def render_overlay(
+    frame: np.ndarray,
+    mask: np.ndarray | None,
+    *,
+    warp: bool,
+    color: tuple[int, int, int],
+    args,
+):
     cfg = Config(system=SYSTEM_RSTL, occlusion=False)
     cfg.styles = dict(cfg.styles)
     cfg.styles[SYSTEM_RSTL] = LineStyle(color=color, thickness=args.thickness, alpha=args.alpha)
