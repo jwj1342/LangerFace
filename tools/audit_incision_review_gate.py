@@ -172,6 +172,272 @@ def _candidate_axis(record: dict[str, Any]) -> tuple[float, float, float] | None
     return _point(candidate.get("axis"))
 
 
+def _whole_number(value: Any) -> int | None:
+    number = _finite_number(value)
+    if number is None:
+        return None
+    rounded = round(number)
+    if abs(number - rounded) > 1e-9:
+        return None
+    return int(rounded)
+
+
+def _candidate_edit_session_issues(record: dict[str, Any]) -> list[dict[str, str]]:
+    candidate = record.get("candidate") if isinstance(record.get("candidate"), dict) else {}
+    if not candidate:
+        return []
+
+    provenance = candidate.get("provenance")
+    session = record.get("candidate_edit_session")
+    issues: list[dict[str, str]] = []
+    if not isinstance(provenance, dict):
+        issues.append(
+            _issue(
+                "candidate_provenance_missing",
+                "Review candidate must include provenance for versioned clinician review.",
+                path="candidate.provenance",
+            )
+        )
+        return issues
+    if session is None:
+        issues.append(
+            _issue(
+                "candidate_edit_session_missing",
+                "Review records must export candidate_edit_session derived from candidate provenance.",
+                path="candidate_edit_session",
+            )
+        )
+        return issues
+    if not isinstance(session, dict):
+        issues.append(
+            _issue(
+                "candidate_edit_session_invalid",
+                "candidate_edit_session must be an object.",
+                path="candidate_edit_session",
+            )
+        )
+        return issues
+    if session.get("schema_version") != "candidate-edit-session/v0.1":
+        issues.append(
+            _issue(
+                "candidate_edit_session_schema_mismatch",
+                (
+                    "candidate_edit_session.schema_version must be "
+                    "'candidate-edit-session/v0.1'."
+                ),
+                path="candidate_edit_session.schema_version",
+            )
+        )
+
+    candidate_version = _whole_number(provenance.get("candidate_version"))
+    session_version = _whole_number(session.get("candidate_version"))
+    if candidate_version is None or candidate_version < 1:
+        issues.append(
+            _issue(
+                "candidate_edit_history_version_mismatch",
+                "candidate.provenance.candidate_version must be an integer >= 1.",
+                path="candidate.provenance.candidate_version",
+            )
+        )
+    elif session_version != candidate_version:
+        issues.append(
+            _issue(
+                "candidate_edit_session_mismatch",
+                (
+                    f"candidate_edit_session.candidate_version={session.get('candidate_version')!r} "
+                    f"does not match candidate.provenance.candidate_version={candidate_version!r}."
+                ),
+                path="candidate_edit_session.candidate_version",
+            )
+        )
+
+    history = provenance.get("edit_history")
+    session_history = session.get("history")
+    if not isinstance(history, list):
+        issues.append(
+            _issue(
+                "candidate_edit_history_invalid",
+                "candidate.provenance.edit_history must be a list.",
+                path="candidate.provenance.edit_history",
+            )
+        )
+        return issues
+    if not isinstance(session_history, list):
+        issues.append(
+            _issue(
+                "candidate_edit_session_invalid",
+                "candidate_edit_session.history must be a list.",
+                path="candidate_edit_session.history",
+            )
+        )
+        return issues
+
+    edit_count = _whole_number(session.get("edit_count"))
+    if edit_count != len(history):
+        issues.append(
+            _issue(
+                "candidate_edit_session_mismatch",
+                (
+                    f"candidate_edit_session.edit_count={session.get('edit_count')!r} "
+                    f"does not match provenance edit_history length {len(history)}."
+                ),
+                path="candidate_edit_session.edit_count",
+            )
+        )
+    if len(session_history) != len(history):
+        issues.append(
+            _issue(
+                "candidate_edit_session_mismatch",
+                (
+                    f"candidate_edit_session.history length {len(session_history)} "
+                    f"does not match provenance edit_history length {len(history)}."
+                ),
+                path="candidate_edit_session.history",
+            )
+        )
+
+    last_version: int | None = None
+    edit_ids: set[str] = set()
+    for index, entry in enumerate(history):
+        if not isinstance(entry, dict):
+            issues.append(
+                _issue(
+                    "candidate_edit_history_invalid",
+                    "candidate.provenance.edit_history entries must be objects.",
+                    path=f"candidate.provenance.edit_history[{index}]",
+                )
+            )
+            continue
+        edit_id = str(entry.get("edit_id") or "")
+        version = _whole_number(entry.get("resulting_candidate_version"))
+        if not edit_id:
+            issues.append(
+                _issue(
+                    "candidate_edit_history_invalid",
+                    "candidate.provenance.edit_history entries must include edit_id.",
+                    path=f"candidate.provenance.edit_history[{index}].edit_id",
+                )
+            )
+        elif edit_id in edit_ids:
+            issues.append(
+                _issue(
+                    "candidate_edit_history_invalid",
+                    f"candidate.provenance.edit_history contains duplicate edit_id {edit_id!r}.",
+                    path=f"candidate.provenance.edit_history[{index}].edit_id",
+                )
+            )
+        edit_ids.add(edit_id)
+        if version is None or version < 2:
+            issues.append(
+                _issue(
+                    "candidate_edit_history_version_mismatch",
+                    "Each clinician edit must record resulting_candidate_version >= 2.",
+                    path=f"candidate.provenance.edit_history[{index}].resulting_candidate_version",
+                )
+            )
+            continue
+        if last_version is not None and version <= last_version:
+            issues.append(
+                _issue(
+                    "candidate_edit_history_version_mismatch",
+                    "candidate.provenance.edit_history versions must increase monotonically.",
+                    path=f"candidate.provenance.edit_history[{index}].resulting_candidate_version",
+                )
+            )
+        last_version = version
+
+        if index < len(session_history) and isinstance(session_history[index], dict):
+            session_entry = session_history[index]
+            if session_entry.get("edit_id") != entry.get("edit_id"):
+                issues.append(
+                    _issue(
+                        "candidate_edit_session_mismatch",
+                        "candidate_edit_session.history edit_id does not match provenance edit_history.",
+                        path=f"candidate_edit_session.history[{index}].edit_id",
+                    )
+                )
+            if session_entry.get("resulting_candidate_version") != entry.get("resulting_candidate_version"):
+                issues.append(
+                    _issue(
+                        "candidate_edit_session_mismatch",
+                        (
+                            "candidate_edit_session.history resulting_candidate_version does not "
+                            "match provenance edit_history."
+                        ),
+                        path=f"candidate_edit_session.history[{index}].resulting_candidate_version",
+                    )
+                )
+        elif index < len(session_history):
+            issues.append(
+                _issue(
+                    "candidate_edit_session_invalid",
+                    "candidate_edit_session.history entries must be objects.",
+                    path=f"candidate_edit_session.history[{index}]",
+                )
+            )
+
+    if history:
+        latest = history[-1] if isinstance(history[-1], dict) else {}
+        latest_edit_id = latest.get("edit_id")
+        latest_version = _whole_number(latest.get("resulting_candidate_version"))
+        clinician_edit = provenance.get("clinician_edit")
+        if candidate_version is not None and latest_version != candidate_version:
+            issues.append(
+                _issue(
+                    "candidate_edit_history_version_mismatch",
+                    (
+                        "candidate.provenance.candidate_version must match the latest "
+                        "edit_history resulting_candidate_version."
+                    ),
+                    path="candidate.provenance.candidate_version",
+                )
+            )
+        if not isinstance(clinician_edit, dict) or clinician_edit.get("edit_id") != latest_edit_id:
+            issues.append(
+                _issue(
+                    "candidate_edit_current_mismatch",
+                    "candidate.provenance.clinician_edit must point to the latest edit_history entry.",
+                    path="candidate.provenance.clinician_edit",
+                )
+            )
+        if session.get("current_edit_id") != latest_edit_id:
+            issues.append(
+                _issue(
+                    "candidate_edit_current_mismatch",
+                    "candidate_edit_session.current_edit_id must match the latest edit_history edit_id.",
+                    path="candidate_edit_session.current_edit_id",
+                )
+            )
+    else:
+        if candidate_version is not None and candidate_version != 1:
+            issues.append(
+                _issue(
+                    "candidate_edit_history_version_mismatch",
+                    "Unedited candidates must keep candidate_version=1.",
+                    path="candidate.provenance.candidate_version",
+                )
+            )
+        if session.get("current_edit_id") not in (None, ""):
+            issues.append(
+                _issue(
+                    "candidate_edit_current_mismatch",
+                    "Unedited candidates must not export a current_edit_id.",
+                    path="candidate_edit_session.current_edit_id",
+                )
+            )
+
+    for key in ("undo_available", "redo_available"):
+        if key in session and not isinstance(session[key], bool):
+            issues.append(
+                _issue(
+                    "candidate_edit_session_invalid",
+                    f"candidate_edit_session.{key} must be boolean when present.",
+                    path=f"candidate_edit_session.{key}",
+                )
+            )
+    return issues
+
+
 def _record_tumor(record: dict[str, Any]) -> tuple[TumorInput | None, list[dict[str, str]]]:
     tumor_payload = record.get("tumor")
     if not isinstance(tumor_payload, dict):
@@ -516,6 +782,7 @@ def audit_review_record(record: dict[str, Any], *, source: str = "<memory>") -> 
 
     issues.extend(_tumor_quality_issues(record, tumor))
     issues.extend(_tumor_boundary_summary_issues(record, tumor))
+    issues.extend(_candidate_edit_session_issues(record))
 
     high_issues = [issue for issue in issues if issue["severity"] == "high"]
     return {

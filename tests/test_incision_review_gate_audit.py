@@ -36,6 +36,21 @@ def _record(
             "type": "linear",
             "polyline": [[-1, 0, 0], [1, 0, 0]],
             "metrics": {"rstl_deviation_deg": 0},
+            "provenance": {
+                "generator": "linear_subcutaneous_incision",
+                "candidate_version": 1,
+                "edit_history": [],
+            },
+        },
+        "candidate_edit_session": {
+            "schema_version": "candidate-edit-session/v0.1",
+            "candidate_version": 1,
+            "edit_count": 0,
+            "current_edit_id": None,
+            "undo_available": False,
+            "redo_available": False,
+            "source": "web/incision_agent",
+            "history": [],
         },
         "guardrails": {"passed": not high_codes, "warnings": warnings, "suggested_overrides": []},
         "guardrail_summary": {
@@ -110,6 +125,11 @@ def _cutaneous_record() -> dict:
             "boundary_self_intersection": False,
             "boundary_center_shift_mm": 3.4359213546813843,
         },
+        "provenance": {
+            "generator": "fusiform_cutaneous_incision",
+            "candidate_version": 1,
+            "edit_history": [],
+        },
     }
     record["tumor_boundary_summary"] = {
         "mode": "freehand",
@@ -131,6 +151,76 @@ def _cutaneous_record() -> dict:
     return record
 
 
+def _edited_record() -> dict:
+    record = _record()
+    edit_1 = {
+        "kind": "clinician_adjustment",
+        "edit_id": "edit_v2_first",
+        "resulting_candidate_version": 2,
+        "angle_offset_deg": -5,
+        "length_scale": 1,
+        "width_scale": 1,
+        "shift_along_mm": 0,
+        "shift_perp_mm": 0,
+        "reason": "manual scar camouflage",
+        "interaction": "control_change",
+    }
+    edit_2 = {
+        "kind": "clinician_adjustment",
+        "edit_id": "edit_v3_second",
+        "resulting_candidate_version": 3,
+        "angle_offset_deg": 10,
+        "length_scale": 1.1,
+        "width_scale": 1,
+        "shift_along_mm": 2,
+        "shift_perp_mm": 0,
+        "reason": "manual clinician preference",
+        "interaction": "endpoint_drag",
+    }
+    record["candidate"]["provenance"] = {
+        "generator": "linear_subcutaneous_incision",
+        "source_candidate_id": "linear_subcutaneous_candidate",
+        "parent_candidate_id": "linear_subcutaneous_candidate",
+        "candidate_version": 3,
+        "clinician_edit": edit_2,
+        "edit_history": [edit_1, edit_2],
+    }
+    record["candidate_edit_session"] = {
+        "schema_version": "candidate-edit-session/v0.1",
+        "candidate_version": 3,
+        "edit_count": 2,
+        "current_edit_id": "edit_v3_second",
+        "undo_available": True,
+        "redo_available": False,
+        "source": "web/incision_agent",
+        "history": [
+            {
+                "edit_id": edit_1["edit_id"],
+                "resulting_candidate_version": edit_1["resulting_candidate_version"],
+                "angle_offset_deg": edit_1["angle_offset_deg"],
+                "length_scale": edit_1["length_scale"],
+                "width_scale": edit_1["width_scale"],
+                "shift_along_mm": edit_1["shift_along_mm"],
+                "shift_perp_mm": edit_1["shift_perp_mm"],
+                "reason": edit_1["reason"],
+                "interaction": edit_1["interaction"],
+            },
+            {
+                "edit_id": edit_2["edit_id"],
+                "resulting_candidate_version": edit_2["resulting_candidate_version"],
+                "angle_offset_deg": edit_2["angle_offset_deg"],
+                "length_scale": edit_2["length_scale"],
+                "width_scale": edit_2["width_scale"],
+                "shift_along_mm": edit_2["shift_along_mm"],
+                "shift_perp_mm": edit_2["shift_perp_mm"],
+                "reason": edit_2["reason"],
+                "interaction": edit_2["interaction"],
+            },
+        ],
+    }
+    return record
+
+
 def test_review_gate_audit_accepts_ready_approved_record():
     report = audit_review_record(_record())
 
@@ -138,6 +228,57 @@ def test_review_gate_audit_accepts_ready_approved_record():
     assert report["passed"] is True
     assert report["issue_count"] == 0
     assert report["expected_review_gate"]["live_overlay_ready"] is True
+
+
+def test_review_gate_audit_accepts_multi_step_candidate_edit_session():
+    report = audit_review_record(_edited_record())
+
+    assert report["passed"] is True
+    assert report["issue_count"] == 0
+
+
+def test_review_gate_audit_flags_missing_candidate_edit_session():
+    record = _record()
+    del record["candidate_edit_session"]
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "candidate_edit_session_missing" in codes
+
+
+def test_review_gate_audit_flags_candidate_edit_version_mismatch():
+    record = _edited_record()
+    record["candidate_edit_session"]["candidate_version"] = 2
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "candidate_edit_session_mismatch" in codes
+
+
+def test_review_gate_audit_flags_candidate_edit_history_version_mismatch():
+    record = _edited_record()
+    record["candidate"]["provenance"]["edit_history"][1]["resulting_candidate_version"] = 2
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "candidate_edit_history_version_mismatch" in codes
+
+
+def test_review_gate_audit_flags_candidate_current_edit_mismatch():
+    record = _edited_record()
+    record["candidate_edit_session"]["current_edit_id"] = "edit_v2_first"
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "candidate_edit_current_mismatch" in codes
 
 
 def test_review_gate_audit_accepts_cutaneous_boundary_summary():
