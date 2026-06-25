@@ -13,7 +13,7 @@ const REPLAY_QA_SCHEMA = "incision-overlay-replay-qa/v0.1";
 
 function usage() {
   return [
-    "Usage: node tools/audit_incision_overlay_replay.mjs --input replay.json [--output qa.json]",
+    "Usage: node tools/audit_incision_overlay_replay.mjs --input replay.json [--output qa.json] [--csv-output qa.csv]",
     "",
     "Input JSON:",
     "  {",
@@ -49,6 +49,7 @@ function parseArgs(argv) {
     }
     if (key === "--input") { args.input = next || ""; i += 1; continue; }
     if (key === "--output") { args.output = next || ""; i += 1; continue; }
+    if (key === "--csv-output") { args.csvOutput = next || ""; i += 1; continue; }
     if (key === "--generated-at") { args.generatedAt = next || ""; i += 1; continue; }
     if (key === "--max-rms-px") { args.maxRmsPx = Number(next); i += 1; continue; }
     if (key === "--max-p95-px") { args.maxP95Px = Number(next); i += 1; continue; }
@@ -191,6 +192,118 @@ export function buildIncisionOverlayReplayQa(payload, options = {}) {
   };
 }
 
+const CSV_FIELDS = [
+  "record_type",
+  "source",
+  "schema_version",
+  "generated_at",
+  "passed",
+  "reason",
+  "frame_index",
+  "frame_count",
+  "registration_passed_count",
+  "registration_failed_count",
+  "registration_pass_rate",
+  "first_failed_frame_index",
+  "stability_passed",
+  "stability_reason",
+  "stability_rms_px",
+  "stability_p95_px",
+  "stability_max_px",
+  "tracked_point_count",
+  "stability_sample_count",
+  "mapped_point_count",
+  "candidate_point_count",
+  "total_ref_count",
+  "invalid_ref_count",
+  "missing_landmark_count",
+  "degenerate_triangle_count",
+  "out_of_frame_count",
+  "out_of_frame_fraction",
+  "bbox_diagonal_px",
+  "bbox_frame_fraction",
+  "reasons",
+  "clinical_boundary",
+];
+
+function csvEscape(value) {
+  if (value === null || value === undefined) return "";
+  const text = Array.isArray(value) ? value.join(";") : String(value);
+  if (/[",\n\r]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
+  return text;
+}
+
+function rowWithDefaults(row) {
+  return Object.fromEntries(CSV_FIELDS.map((field) => [field, row[field] ?? ""]));
+}
+
+export function replayQaCsvRows(report, { source = "" } = {}) {
+  const registrationSummary = report?.registration_summary || {};
+  const stability = report?.stability || {};
+  const stabilityOverall = stability.overall || {};
+  const rows = [
+    rowWithDefaults({
+      record_type: "summary",
+      source,
+      schema_version: report?.schema_version || "",
+      generated_at: report?.generated_at || "",
+      passed: report?.passed === true,
+      reason: report?.reason || "",
+      frame_count: report?.frame_count ?? "",
+      registration_passed_count: registrationSummary.passed_count ?? "",
+      registration_failed_count: registrationSummary.failed_count ?? "",
+      registration_pass_rate: registrationSummary.pass_rate ?? "",
+      first_failed_frame_index: registrationSummary.first_failed_frame_index ?? "",
+      stability_passed: stability.passed === true,
+      stability_reason: stability.reason || "",
+      stability_rms_px: stabilityOverall.rms_px ?? "",
+      stability_p95_px: stabilityOverall.p95_px ?? "",
+      stability_max_px: stabilityOverall.max_px ?? "",
+      tracked_point_count: stability.tracked_point_count ?? "",
+      stability_sample_count: stability.sample_count ?? "",
+      reasons: Object.entries(registrationSummary.reason_counts || {})
+        .map(([reason, count]) => `${reason}:${count}`)
+        .join(";"),
+      clinical_boundary: report?.clinical_boundary || "",
+    }),
+  ];
+  for (const frame of report?.registration_frames || []) {
+    rows.push(rowWithDefaults({
+      record_type: "registration_frame",
+      source,
+      schema_version: frame.schema_version || "",
+      generated_at: report?.generated_at || "",
+      passed: frame.passed === true,
+      reason: frame.reason || "",
+      frame_index: frame.frame_index ?? "",
+      frame_count: report?.frame_count ?? "",
+      mapped_point_count: frame.mapped_point_count ?? "",
+      candidate_point_count: frame.candidate_point_count ?? "",
+      total_ref_count: frame.total_ref_count ?? "",
+      invalid_ref_count: frame.invalid_ref_count ?? "",
+      missing_landmark_count: frame.missing_landmark_count ?? "",
+      degenerate_triangle_count: frame.degenerate_triangle_count ?? "",
+      out_of_frame_count: frame.out_of_frame_count ?? "",
+      out_of_frame_fraction: frame.out_of_frame_fraction ?? "",
+      bbox_diagonal_px: frame.bbox_px?.diagonal_px ?? "",
+      bbox_frame_fraction: frame.bbox_px?.frame_fraction ?? "",
+      reasons: (frame.reasons || [frame.reason || ""]).join(";"),
+      clinical_boundary: frame.clinical_boundary || "",
+    }));
+  }
+  return rows;
+}
+
+export function replayQaCsvText(report, options = {}) {
+  const rows = replayQaCsvRows(report, options);
+  return `${CSV_FIELDS.join(",")}\n${rows.map((row) => CSV_FIELDS.map((field) => csvEscape(row[field])).join(",")).join("\n")}\n`;
+}
+
+export function writeReplayQaCsv(report, filePath, options = {}) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, replayQaCsvText(report, options), "utf8");
+}
+
 export function loadReplayInput(filePath) {
   return readJson(filePath);
 }
@@ -207,6 +320,10 @@ function main() {
       console.log(`[ok] ${args.output} ${report.frame_count} frames pass=${report.passed}`);
     } else {
       process.stdout.write(text);
+    }
+    if (args.csvOutput) {
+      writeReplayQaCsv(report, args.csvOutput, { source: path.basename(args.input) });
+      console.log(`[ok] ${args.csvOutput} replay CSV rows=${1 + report.registration_frames.length}`);
     }
   } catch (error) {
     console.error(`[error] ${error.message}`);

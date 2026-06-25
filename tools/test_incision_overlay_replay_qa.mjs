@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildIncisionOverlayReplayQa } from "./audit_incision_overlay_replay.mjs";
+import { buildIncisionOverlayReplayQa, replayQaCsvRows } from "./audit_incision_overlay_replay.mjs";
 import { __incisionOverlayForTests as T } from "../web/incision_overlay.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -73,6 +73,14 @@ assert.equal(stableReport.registration_summary.pass_rate, 1);
 assert.equal(stableReport.stability.schema_version, "incision-overlay-stability/v0.1");
 assert.equal(stableReport.registration_frames[0].schema_version, "incision-overlay-registration/v0.1");
 assert.ok(stableReport.clinical_boundary.includes("not patient-specific clinical AR registration"));
+const csvRows = replayQaCsvRows(stableReport, { source: "stable-replay.json" });
+assert.equal(csvRows.length, 4, "CSV export includes one summary row and one row per frame");
+assert.equal(csvRows[0].record_type, "summary");
+assert.equal(csvRows[0].source, "stable-replay.json");
+assert.equal(csvRows[0].registration_pass_rate, 1);
+assert.equal(csvRows[1].record_type, "registration_frame");
+assert.equal(csvRows[1].mapped_point_count, stableReport.registration_frames[0].mapped_point_count);
+assert.equal(csvRows[1].reasons, "runtime_projection_registration_ready");
 
 const unstableInput = {
   ...stableInput,
@@ -88,6 +96,7 @@ assert.ok(unstableReport.registration_summary.reason_counts.out_of_frame_project
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "incision-overlay-replay-"));
 const inputPath = path.join(tmpDir, "replay.json");
 const outputPath = path.join(tmpDir, "qa.json");
+const csvOutputPath = path.join(tmpDir, "qa.csv");
 fs.writeFileSync(inputPath, JSON.stringify(stableInput), "utf8");
 const cli = spawnSync(
   process.execPath,
@@ -97,6 +106,8 @@ const cli = spawnSync(
     inputPath,
     "--output",
     outputPath,
+    "--csv-output",
+    csvOutputPath,
     "--generated-at",
     "2026-06-24T00:00:00Z",
   ],
@@ -104,8 +115,13 @@ const cli = spawnSync(
 );
 assert.equal(cli.status, 0, cli.stderr);
 assert.ok(cli.stdout.includes("[ok]"), "CLI reports successful output");
+assert.ok(cli.stdout.includes("replay CSV"), "CLI reports CSV output");
 const cliReport = JSON.parse(fs.readFileSync(outputPath, "utf8"));
 assert.equal(cliReport.passed, true, "CLI output matches stable QA pass");
 assert.equal(cliReport.frame_count, 3);
+const cliCsv = fs.readFileSync(csvOutputPath, "utf8");
+assert.ok(cliCsv.includes("record_type,source,schema_version"), "CSV has a stable header");
+assert.ok(cliCsv.includes("summary,replay.json,incision-overlay-replay-qa/v0.1"), "CSV includes summary row");
+assert.ok(cliCsv.includes("registration_frame,replay.json,incision-overlay-registration/v0.1"), "CSV includes frame rows");
 
 console.log("test_incision_overlay_replay_qa: offline replay QA assertions passed");
