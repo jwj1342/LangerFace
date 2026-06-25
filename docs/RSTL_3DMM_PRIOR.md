@@ -19,6 +19,7 @@
 | `assets/rstl_3dmm_prior_manifest.json` | 多拓扑 manifest | JSON | `draft_not_clinically_validated` | 记录来源、拓扑、生成脚本和临床校验闸 |
 | FLAME/BFM RSTL atlas | `flame-2023` / BFM | 待生成 `[tri,u,v]` | pending | #61 3DMM 标注/迁移轨后续资产 |
 | FLAME RSTL direction prior | `flame-2023` | dev-local triangle centroid direction field | pending / `validated:false` | `tools/build_flame_rstl_direction_prior.py` 可在本地 FLAME 资产就位后生成，产物位于 gitignored `assets/flame/rstl_flame_direction_prior.json` |
+| FLAME/BFM review packet | `flame-2023` / BFM | `rstl-3dmm-review-packet/v0.1` | `draft_not_clinically_validated` | `tools/build_rstl_3dmm_review_packet.py` 从方向先验抽样生成医生审阅包，产物位于 gitignored `assets/flame/rstl_3dmm_review_packet.json` |
 
 ## Provenance 要求
 
@@ -56,6 +57,29 @@ python tools/build_flame_rstl_direction_prior.py --generated-at now
 ```
 
 该生成器只是 MediaPipe 草案方向场到 FLAME 拓扑的 bbox-aligned nearest-neighbor review scaffold，输出 schema 为 `rstl-3dmm-direction-prior/v0.1`，仍保持 `validated:false`。它不是 Borges 原图的正式 FLAME/BFM 注册，也不是临床可用 atlas；真实可关闭 #86 的 FLAME/BFM 图谱仍需要 #61 的本地资产流程、医生在 FLAME/BFM 标准头上的逐线审核，以及 #2 的临床校验出口。
+
+## FLAME/BFM 医生审阅包
+
+`tools/build_rstl_3dmm_review_packet.py` 会读取 `validated:false` 的方向先验，生成
+`rstl-3dmm-review-packet/v0.1` 审阅包。默认输入是
+`assets/rstl_mediapipe_direction_prior.json`，默认输出是 gitignored
+`assets/flame/rstl_3dmm_review_packet.json`；当本地 FLAME 方向先验可用时，也可以显式传入
+`assets/flame/rstl_flame_direction_prior.json`。
+
+```bash
+python tools/build_rstl_3dmm_review_packet.py \
+  --prior assets/flame/rstl_flame_direction_prior.json \
+  --generated-at now
+```
+
+审阅包会优先抽取低置信度、高方向离散度、空间极值和均匀覆盖样本，并为每个样本保留：
+
+- `tri` / `bary` / `point` / `vector` / `angle_deg` 等拓扑和方向字段。
+- `confidence`、`angular_spread_deg`、`support_count` 和 `priority_reasons`。
+- `clinician_review` 占位字段：`decision`、`reviewer`、`reviewed_at`、`region_label`、`direction_accepted`、`corrected_angle_deg`、`corrected_vector`、`notes`。
+
+这一步只把草案方向先验变成可分发、可抽查、可回填的医生审阅任务包。它不会把任何方向置为
+`validated:true`，也不能替代正式 FLAME/BFM 标准头逐线标注、医生审核和临床校验。
 
 ## 与 #13 的衔接
 

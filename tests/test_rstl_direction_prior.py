@@ -195,3 +195,101 @@ def test_flame_rstl_direction_prior_builder_with_synthetic_topology(tmp_path):
         assert len(sample["vector"]) == 3
         norm = math.sqrt(sum(float(v) * float(v) for v in sample["vector"]))
         assert math.isclose(norm, 1.0, rel_tol=2e-4, abs_tol=2e-4)
+
+
+def test_rstl_3dmm_review_packet_builder_with_synthetic_prior(tmp_path):
+    prior = {
+        "schema_version": "rstl-3dmm-direction-prior/v0.1",
+        "system": "rstl",
+        "topologyId": "flame-2023",
+        "topologyVersion": "flame-2023-v1",
+        "validated": False,
+        "review_status": "draft_not_clinically_validated",
+        "samples": [
+            {
+                "tri": 0,
+                "bary": [0.333333, 0.333333, 0.333334],
+                "point": [0, 0, 0],
+                "vector": [1, 0, 0],
+                "angle_deg": 0,
+                "confidence": 0.9,
+                "angular_spread_deg": 2,
+                "support_count": 3,
+            },
+            {
+                "tri": 1,
+                "bary": [0.333333, 0.333333, 0.333334],
+                "point": [1, 0, 0],
+                "vector": [0, 1, 0],
+                "angle_deg": 90,
+                "confidence": 0.2,
+                "angular_spread_deg": 12,
+                "support_count": 3,
+            },
+            {
+                "tri": 2,
+                "bary": [0.333333, 0.333333, 0.333334],
+                "point": [0, 1, 0],
+                "vector": [0, 1, 0],
+                "angle_deg": 90,
+                "confidence": 0.7,
+                "angular_spread_deg": 60,
+                "support_count": 3,
+            },
+            {
+                "tri": 3,
+                "bary": [0.333333, 0.333333, 0.333334],
+                "point": [1, 1, 1],
+                "vector": [1, 0, 0],
+                "angle_deg": 0,
+                "confidence": 0.8,
+                "angular_spread_deg": 3,
+                "support_count": 3,
+            },
+        ],
+    }
+    prior_path = tmp_path / "rstl_flame_direction_prior.json"
+    output_path = tmp_path / "rstl_3dmm_review_packet.json"
+    prior_path.write_text(json.dumps(prior))
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "tools/build_rstl_3dmm_review_packet.py",
+            "--prior",
+            str(prior_path),
+            "--output",
+            str(output_path),
+            "--generated-at",
+            "2026-06-24",
+            "--max-items",
+            "4",
+            "--low-confidence-threshold",
+            "0.35",
+            "--high-spread-threshold-deg",
+            "45",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "[ok]" in result.stdout
+    packet = json.loads(output_path.read_text())
+    assert packet["schema_version"] == "rstl-3dmm-review-packet/v0.1"
+    assert packet["topologyId"] == "flame-2023"
+    assert packet["source_validated"] is False
+    assert packet["review_status"] == "draft_not_clinically_validated"
+    assert packet["source_sample_count"] == 4
+    assert packet["review_item_count"] == 4
+    assert packet["priority_reason_counts"]["low_confidence"] == 1
+    assert packet["priority_reason_counts"]["high_angular_spread"] == 1
+    assert "spatial_min_x" in packet["priority_reason_counts"]
+    assert "spatial_max_z" in packet["priority_reason_counts"]
+    assert packet["review_completion"]["completion_rate"] == 0.0
+    assert "direction_accepted" in packet["required_clinician_fields"]
+    assert {item["clinician_review"]["decision"] for item in packet["items"]} == {"pending"}
+    low_conf = next(item for item in packet["items"] if item["tri"] == 1)
+    assert "low_confidence" in low_conf["priority_reasons"]
+    high_spread = next(item for item in packet["items"] if item["tri"] == 2)
+    assert "high_angular_spread" in high_spread["priority_reasons"]
