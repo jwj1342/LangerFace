@@ -35,10 +35,16 @@ def test_rstl_3dmm_prior_manifest_preserves_draft_status():
     assert ids["flame_rstl_prior"]["topologyId"] == "flame-2023"
     assert ids["flame_rstl_prior"]["status"] == "pending_doctor_annotation"
     assert ids["flame_rstl_prior"]["validated"] is False
+    assert ids["flame_rstl_direction_prior"]["topologyId"] == "flame-2023"
+    assert ids["flame_rstl_direction_prior"]["generated_by"] == "tools/build_flame_rstl_direction_prior.py"
+    assert ids["flame_rstl_direction_prior"]["status"] == "pending_dev_local_generation"
+    assert ids["flame_rstl_direction_prior"]["path"] is None
+    assert ids["flame_rstl_direction_prior"]["validated"] is False
 
     doc = (ROOT / "docs" / "RSTL_3DMM_PRIOR.md").read_text()
     assert "Borges" in doc
     assert "rstl_mediapipe_direction_prior.json" in doc
+    assert "build_flame_rstl_direction_prior.py" in doc
     assert "triangle_centroid_direction" in doc
     assert "#2" in doc
     assert "#13" in doc

@@ -46,6 +46,9 @@ python tools/fit_flame_to_landmarks.py [landmarks.json]
 # 从 RSTL/RSTL PRSgo.png 经典图谱抽线，生成 RSTL-on-FLAME 草案图谱；
 # 读取随仓库分发的 flame_basis.npz，不需要原始 pkl
 python tools/register_rstl_atlas_to_flame.py
+
+# 生成 dev-local FLAME RSTL 方向先验（产物 gitignore，validated:false）
+python tools/build_flame_rstl_direction_prior.py --generated-at now
 ```
 
 资产缺失时这些脚本会安全跳过并打印获取指引，CI / 他人 checkout 不受影响。

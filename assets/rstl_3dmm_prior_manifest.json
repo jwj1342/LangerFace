@@ -58,6 +58,25 @@
       "validated": false,
       "uses": ["flame_standard_head_annotation", "flame_individual_transfer"],
       "limitations": ["FLAME assets are not redistributed", "requires #61 workflow", "requires #2 clinical review before validated use"]
+    },
+    {
+      "id": "flame_rstl_direction_prior",
+      "system": "rstl",
+      "topologyId": "flame-2023",
+      "topologyVersion": "flame-2023-v1",
+      "path": null,
+      "format": "dev-local triangle centroid direction field generated under assets/flame/",
+      "generated_by": "tools/build_flame_rstl_direction_prior.py",
+      "status": "pending_dev_local_generation",
+      "validated": false,
+      "uses": ["flame_direction_prior_review", "flame_standard_head_annotation_qc", "flame_individual_transfer_qc"],
+      "limitations": [
+        "FLAME assets and generated direction fields are not redistributed",
+        "generated output is gitignored under assets/flame/rstl_flame_direction_prior.json",
+        "nearest-neighbor MediaPipe-to-FLAME bridge is not clinical registration",
+        "requires #61 workflow",
+        "requires #2 clinical review before validated use"
+      ]
     }
   ]
 }
