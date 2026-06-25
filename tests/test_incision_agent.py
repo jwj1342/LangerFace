@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import langerface.agent.incision_agent as incision_agent_module
 from langerface.agent import agent_trace_gate, compare_candidate_records, plan_incision_case
 from langerface.anatomy import classify_region
 from langerface.clinical import default_clinical_rules
@@ -635,6 +636,52 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     assert any(tool["name"] == "recover_tool_failure" for tool in result["tool_schemas"])
     assert any(tool["name"] == "compare_candidates" for tool in result["tool_schemas"])
     assert any(tool["name"] == "save_review_record" for tool in result["tool_schemas"])
+
+
+def test_plan_incision_case_recovers_failed_candidate_variant(monkeypatch):
+    original_make_candidate = incision_agent_module._make_candidate_for_direction
+
+    def flaky_make_candidate(tumor, direction, rules, units_per_mm, vertices):
+        if float(direction.get("angle_offset_deg", 0.0)) == 10.0:
+            raise RuntimeError("synthetic variant failure")
+        return original_make_candidate(tumor, direction, rules, units_per_mm, vertices)
+
+    monkeypatch.setattr(incision_agent_module, "_make_candidate_for_direction", flaky_make_candidate)
+    vertices, triangles, atlas = _simple_mesh_and_atlas()
+    result = plan_incision_case(
+        {"kind": "subcutaneous", "center": [4, 2, 0], "diameter_mm": 10, "depth_mm": 5},
+        vertices,
+        triangles,
+        atlas,
+        use_llm=False,
+    )
+
+    actions = [step["action"] for step in result["trace"]]
+    assert actions.count("linear_subcutaneous_incision") == 2
+    assert actions.count("evaluate_guardrails") == 2
+    assert "recover_tool_failure" in actions
+    assert actions[-1] == "compare_candidates"
+    assert len(result["candidate_alternatives"]) == 2
+    assert {item["angle_offset_deg"] for item in result["candidate_alternatives"]} == {-10.0, 0.0}
+    assert len(result["candidate_comparison"]) == 2
+    assert [item["rank"] for item in result["candidate_comparison"]] == [1, 2]
+    assert result["agent_trace_gate"]["passed"] is True
+    assert result["agent_trace_gate"]["missing_actions"] == []
+
+    audit = result["agent_orchestration_audit"]
+    assert audit["candidate_count"] == 2
+    assert audit["comparison_ready"] is True
+    assert audit["tool_failure_count"] == 1
+    assert audit["trace_gate_passed"] is True
+    assert audit["recovered_failures"] == [
+        {
+            "tool": "linear_subcutaneous_incision",
+            "variant": "offset_+10deg",
+            "angle_offset_deg": 10.0,
+            "error": "synthetic variant failure",
+            "recovery": "skipped_failed_variant_and_kept_other_candidates",
+        }
+    ]
 
 
 def test_compare_candidate_records_ranks_high_guardrail_after_clean_candidate():
