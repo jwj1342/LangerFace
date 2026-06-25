@@ -32,6 +32,7 @@
 - Guardrails：已覆盖低 RSTL 置信度、低分区置信度、中心点近敏感游离缘、候选线/轮廓近敏感游离缘、下睑/唇红缘/鼻翼/鼻尖/口角敏感区提示、皮下线性直径覆盖不足、皮表边界点数/面积/自交/中心偏移质量、梭形边界轴向覆盖不足、RSTL 偏角覆盖原因检查；敏感游离缘距离使用标准脸归一化锚点和下睑/鼻翼/唇红缘简化线段，并按下睑、唇红缘、鼻翼、鼻尖、口角等结构使用 draft 距离阈值；命中敏感结构时会在 `suggested_overrides` 中给出 `protective_direction` 保护性方向建议并要求医生记录覆盖原因。阈值和保护性方向仍需临床审核。
 - LLM Agentic：LLM 只做摘要和解释，工具 schema、trace、stream 契约、工具门控、后端方向备选、候选比较工具和失败恢复审计已固化，前端会实时展示工具 trace、Agent 工具门控和后端候选比较；`agent-trace-gate/v0.1` 由 Python agent 输出并通过 SSE `trace_gate` 事件暴露，会把缺失工具动作、顺序异常和确定性几何缺失写入审阅记录，并阻断未过门控的确认候选。当前仍是单轮多候选工具链，不是完整长程自主规划系统；后续多轮计划、工具失败重试策略和正式审计执行器仍必须受确定性工具、审计记录和医生确认约束。
 - 3D/AR 呈现：当前支持从标准脸工作台向 2D 实时页投射已确认候选；overlay 校验会拒绝未达 `live_overlay_ready` 的 payload，并可用静态连续帧 jitter 指标检查候选线与肿物标记是否稳定跟随 landmarks；前端合约测试覆盖照片/视频输入、摄像头入口、视频/摄像头连续帧调度、主 canvas webm 录制导出和“切口候选”放大窗。3D Beta 头模上的患者个体化切口 overlay 仍需额外配准和临床验证。
+- L40S/vLLM 部署：`tools/slurm/serve_qwen_agent_l40s.sbatch` 负责把 Qwen/vLLM 放到 L40S 计算节点，当前由 `tools/test_slurm_qwen_agent.mjs` 静态锁定 GPU 申请、Qwen 默认模型、OpenAI-compatible vLLM 启动、health gate、Agent proxy provider 环境变量和端口转发提示。
 
 ## 临床与合规边界
 
@@ -119,6 +120,7 @@ npm run dev
 pytest tests/test_incision_agent.py
 pytest tests/test_incision_agent_server.py
 cd web && node ../tools/test_export_canvas.mjs
+cd web && node ../tools/test_slurm_qwen_agent.mjs
 cd web && npm test && npm run build
 ```
 
