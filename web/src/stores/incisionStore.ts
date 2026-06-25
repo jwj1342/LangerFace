@@ -82,6 +82,14 @@ export interface IncisionResultViewState {
   guardrailDetailsDanger: boolean;
 }
 
+export interface IncisionSavedCandidateSummary {
+  id: string;
+  title: string;
+  statusLabel: string;
+  statusDanger: boolean;
+  meta: string;
+}
+
 export interface IncisionWorkflowRuntime {
   executor: string;
   worker: boolean;
@@ -99,6 +107,7 @@ export interface IncisionControllerSnapshot {
   edit: IncisionEditState;
   candidate: IncisionCandidateSummary | null;
   resultView: IncisionResultViewState;
+  savedCandidates: IncisionSavedCandidateSummary[];
   workflowRuntime: IncisionWorkflowRuntime | null;
   savedCount: number;
   updatedAt: string;

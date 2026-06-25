@@ -165,6 +165,7 @@ function createRuntimeState() {
     tumorReactCommandHandler: null,
     editReactCommandHandler: null,
     reviewReactCommandHandler: null,
+    libraryReactCommandHandler: null,
     editTimeline: null,
     editCursor: 0,
     lastConsoleTraceSignature: "",
@@ -184,6 +185,7 @@ const INCISION_PROVIDER_REACT_STATE_EVENT = "langerface:incision-provider-react-
 const INCISION_TUMOR_REACT_COMMAND_EVENT = "langerface:incision-tumor-react-command";
 const INCISION_EDIT_REACT_COMMAND_EVENT = "langerface:incision-edit-react-command";
 const INCISION_REVIEW_REACT_COMMAND_EVENT = "langerface:incision-review-react-command";
+const INCISION_LIBRARY_REACT_COMMAND_EVENT = "langerface:incision-library-react-command";
 
 function numericControlValue(el) {
   if (!el) return null;
@@ -301,6 +303,25 @@ function currentResultViewSnapshot() {
   };
 }
 
+function currentSavedCandidateSummaries() {
+  const comparisonById = new Map(compareCandidateRecords(S.saved || []).map((c) => [c.id, c]));
+  return (S.saved || []).map((rec) => {
+    const comparison = comparisonById.get(rec.id);
+    const reviewer = rec.review?.reviewer ? ` · 审阅人 ${rec.review.reviewer}` : "";
+    const guardrails = rec.guardrails?.passed ? "guardrails 通过" : "guardrails 需复核";
+    const rank = comparison
+      ? `工程排序 #${comparison.rank} · 分 ${fmt(comparison.score, 1)} · ${comparison.reasons.slice(0, 2).join("；")} · `
+      : "";
+    return {
+      id: rec.id,
+      title: `${rec.label} · ${rec.candidate?.type === "linear" ? "线性" : "梭形"}`,
+      statusLabel: reviewStatusLabel(rec.review_status),
+      statusDanger: rec.review_status === "rejected_by_clinician" || !rec.guardrails?.passed,
+      meta: `${rank}长度 ${fmt(rec.candidate?.length_mm)} mm · 区域 ${rec.anatomy?.region || "—"} · ${guardrails}${reviewer} · ${rec.created_at}`,
+    };
+  });
+}
+
 function publishIncisionState(reason = "state_update") {
   if (!S.mounted || typeof window === "undefined" || !els.stageStatus) return;
   window.dispatchEvent(new CustomEvent(INCISION_CONTROLLER_STATE_EVENT, {
@@ -314,6 +335,7 @@ function publishIncisionState(reason = "state_update") {
       edit: currentEditSnapshot(),
       candidate: currentCandidateSnapshot(),
       resultView: currentResultViewSnapshot(),
+      savedCandidates: currentSavedCandidateSummaries(),
       workflowRuntime: S.result?.workflow_runtime || null,
       savedCount: S.saved?.length || 0,
       updatedAt: new Date().toISOString(),
@@ -1613,6 +1635,10 @@ function reviewRecord(result = S.result, label = "候选") {
 }
 
 function renderSaved() {
+  if (window.__LANGERFACE_REACT_MANAGED__) {
+    publishIncisionState("saved_candidates");
+    return;
+  }
   els.savedCount.textContent = String(S.saved.length);
   els.candidateList.innerHTML = "";
   const comparisonById = new Map(compareCandidateRecords(S.saved).map((c) => [c.id, c]));
@@ -1640,15 +1666,11 @@ function renderSaved() {
     const load = document.createElement("button");
     load.className = "btn";
     load.textContent = "载入";
-    load.onclick = () => {
-      S.baseResult = rec;
-      setReviewControls(rec.review || { status: rec.review_status });
-      renderResult(rec);
-    };
+    load.onclick = () => loadSavedCandidate(rec.id);
     const remove = document.createElement("button");
     remove.className = "btn";
     remove.textContent = "删除";
-    remove.onclick = () => { S.saved = S.saved.filter((x) => x.id !== rec.id); renderSaved(); };
+    remove.onclick = () => removeSavedCandidate(rec.id);
     actions.append(load, remove);
     row.append(top, meta, actions);
     els.candidateList.append(row);
@@ -1656,11 +1678,36 @@ function renderSaved() {
   publishIncisionState("saved_candidates");
 }
 
+function loadSavedCandidate(id) {
+  const rec = S.saved.find((item) => item.id === id);
+  if (!rec) return;
+  S.baseResult = rec;
+  setReviewControls(rec.review || { status: rec.review_status });
+  renderResult(rec);
+  els.stageStatus.textContent = "已载入候选草案";
+  publishIncisionState("saved_candidate_loaded");
+}
+
+function removeSavedCandidate(id) {
+  const before = S.saved.length;
+  S.saved = S.saved.filter((item) => item.id !== id);
+  if (S.saved.length !== before) {
+    els.stageStatus.textContent = "候选已从候选库删除";
+    renderSaved();
+  }
+}
+
+function clearSavedCandidates() {
+  S.saved = [];
+  els.stageStatus.textContent = "候选库已清空";
+  renderSaved();
+}
+
 function saveCurrentCandidate(label = "医生候选") {
   if (!S.result) return;
   S.saved.push(reviewRecord(S.result, `${label} ${S.saved.length + 1}`));
-  renderSaved();
   els.stageStatus.textContent = "候选已保存到审阅列表";
+  renderSaved();
 }
 
 function saveReviewRecord() {
@@ -1719,8 +1766,8 @@ function makeVariantCandidates() {
       const result = workflowAlternativeResult(S.result, alternative);
       S.saved.push(reviewRecord(result, alternative.label || `浏览器备选 ${S.saved.length + 1}`));
     }
-    renderSaved();
     els.stageStatus.textContent = `已保存 ${workflowAlternatives.length} 个浏览器方向备选，并保留各自 guardrails、敏感结构复核和工程排序`;
+    renderSaved();
     return;
   }
   const variants = [
@@ -1732,8 +1779,8 @@ function makeVariantCandidates() {
     const result = applyCandidateEdit(S.baseResult, v, S.normals[S.lesion], S.unitsPerMm, S.verts);
     S.saved.push(reviewRecord(result, `备选 ${S.saved.length + 1}`));
   }
-  renderSaved();
   els.stageStatus.textContent = "已生成 3 个方向备选、复跑 guardrails，并更新工程排序";
+  renderSaved();
 }
 
 function recordReviewDecision(status, label) {
@@ -1767,6 +1814,45 @@ function handleReactReviewCommand(event) {
   }
   if (command === "save_review") {
     saveReviewRecord();
+  }
+}
+
+function handleReactLibraryCommand(event) {
+  const { command, id } = event?.detail || {};
+  if (command === "save_current") {
+    saveCurrentCandidate();
+    return;
+  }
+  if (command === "make_variants") {
+    makeVariantCandidates();
+    return;
+  }
+  if (command === "clear_saved") {
+    clearSavedCandidates();
+    return;
+  }
+  if (command === "load_candidate") {
+    loadSavedCandidate(id);
+    return;
+  }
+  if (command === "remove_candidate") {
+    removeSavedCandidate(id);
+    return;
+  }
+  if (command === "export_json") {
+    exportReviewJson();
+    return;
+  }
+  if (command === "export_report") {
+    exportReport();
+    return;
+  }
+  if (command === "export_png") {
+    exportScreenshot();
+    return;
+  }
+  if (command === "stage_live_overlay") {
+    stageLiveOverlay();
   }
 }
 
@@ -2270,18 +2356,23 @@ function bindWorkbenchEvents() {
     els.rejectCandidate.onclick = () => recordReviewDecision("rejected_by_clinician", "否决候选");
     els.saveReview.onclick = saveReviewRecord;
   }
-  els.saveCandidate.onclick = () => saveCurrentCandidate();
-  els.makeVariants.onclick = makeVariantCandidates;
-  els.clearSaved.onclick = () => { S.saved = []; renderSaved(); };
-  els.exportJson.onclick = exportReviewJson;
+  if (window.__LANGERFACE_REACT_MANAGED__) {
+    S.libraryReactCommandHandler = handleReactLibraryCommand;
+    window.addEventListener(INCISION_LIBRARY_REACT_COMMAND_EVENT, S.libraryReactCommandHandler);
+  } else {
+    els.saveCandidate.onclick = () => saveCurrentCandidate();
+    els.makeVariants.onclick = makeVariantCandidates;
+    els.clearSaved.onclick = clearSavedCandidates;
+    els.exportJson.onclick = exportReviewJson;
+    els.exportReport.onclick = exportReport;
+    els.exportPng.onclick = exportScreenshot;
+    els.stageLiveOverlay.onclick = stageLiveOverlay;
+  }
   els.tumorImportFile.onchange = (e) => importTumorFile(e.target.files?.[0]);
   els.importSecondaryCue.onclick = () => els.secondaryCueImportFile.click();
   els.clearSecondaryCue.onclick = clearSecondaryCues;
   els.secondaryCueImportFile.onchange = (e) => importSecondaryCueFile(e.target.files?.[0]);
   els.secondaryCueConfirmed.onchange = renderSecondaryCuePanel;
-  els.exportReport.onclick = exportReport;
-  els.exportPng.onclick = exportScreenshot;
-  els.stageLiveOverlay.onclick = stageLiveOverlay;
   S.resizeObserver = new ResizeObserver(fitSize);
   S.resizeObserver.observe(els.wrap);
 }
@@ -2313,6 +2404,10 @@ export function disposeIncisionAgentWorkbench() {
   if (S.reviewReactCommandHandler) {
     window.removeEventListener(INCISION_REVIEW_REACT_COMMAND_EVENT, S.reviewReactCommandHandler);
     S.reviewReactCommandHandler = null;
+  }
+  if (S.libraryReactCommandHandler) {
+    window.removeEventListener(INCISION_LIBRARY_REACT_COMMAND_EVENT, S.libraryReactCommandHandler);
+    S.libraryReactCommandHandler = null;
   }
   S.head?.dispose?.();
 }

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+import { CandidateLibraryPanel } from "../components/CandidateLibraryPanel";
 import { CandidateResultPanel } from "../components/CandidateResultPanel";
 import { EditControlsPanel } from "../components/EditControlsPanel";
 import { IncisionStatePanel } from "../components/IncisionStatePanel";
@@ -42,21 +43,7 @@ export function IncisionWorkbench() {
 
         <ReviewControlsPanel />
 
-        <div className="card agent-grid">
-          <div className="quality-top"><span>候选库</span><span id="savedCount">0</span></div>
-          <button className="btn btn-primary" id="saveCandidateBtn" type="button">保存当前候选</button>
-          <div className="btn-row two-cols">
-            <button className="btn" id="makeVariantsBtn" type="button">生成备选</button>
-            <button className="btn" id="clearSavedBtn" type="button">清空候选库</button>
-          </div>
-          <div className="btn-row three-cols">
-            <button className="btn" id="exportJsonBtn" type="button">导出 JSON</button>
-            <button className="btn" id="exportReportBtn" type="button">导出报告</button>
-            <button className="btn" id="exportPngBtn" type="button">导出截图</button>
-          </div>
-          <button className="btn" id="stageLiveOverlayBtn" type="button">发送到实时叠加</button>
-          <div className="candidate-list" id="candidateList"></div>
-        </div>
+        <CandidateLibraryPanel />
 
         <div className="card">
           <div className="quality-top"><span>隐私 / 审计</span><span id="privacyState">本地几何</span></div>
