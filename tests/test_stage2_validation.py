@@ -25,6 +25,7 @@ def _record(
     secondary_cues: dict | None = None,
     overlay_stability: dict | None = None,
     overlay_registration: dict | None = None,
+    overlay_runtime: dict | None = None,
     overlay_3d_view: dict | None = None,
 ) -> dict:
     record = {
@@ -61,6 +62,8 @@ def _record(
         record["incision_overlay_stability"] = overlay_stability
     if overlay_registration is not None:
         record["incision_overlay_registration"] = overlay_registration
+    if overlay_runtime is not None:
+        record["diagnostics"] = {"sections": {"incision_overlay_runtime": overlay_runtime}}
     if overlay_3d_view is not None:
         record["incision_overlay_3d_view"] = overlay_3d_view
     return record
@@ -174,6 +177,46 @@ def _overlay_replay_qa(
     }
 
 
+def _local_region_quality(
+    *,
+    passed: bool,
+    reason: str,
+    source_kind: str,
+    active_regions: list[str],
+    regions: list[dict],
+) -> dict:
+    return {
+        "schema_version": "rstl-local-region-quality-gate/v0.1",
+        "passed": passed,
+        "reason": reason,
+        "reasons": [reason] if reason != "local_regions_passed" else [],
+        "source_kind": source_kind,
+        "active_region_count": len(active_regions),
+        "active_regions": active_regions,
+        "regions": regions,
+        "thresholds": {
+            "dim_region_motion_norm": 0.025,
+            "freeze_region_motion_norm": 0.045,
+            "dim_eye_blink": 0.45,
+            "freeze_eye_blink": 0.7,
+            "dim_jaw_open": 0.3,
+            "freeze_jaw_open": 0.5,
+            "dim_opacity_scale": 0.36,
+        },
+        "clinical_boundary": "Local region quality is not clinical video validation.",
+    }
+
+
+def _overlay_runtime(local_region_quality: dict) -> dict:
+    return {
+        "schema_version": "incision-overlay-runtime-diagnostics/v0.1",
+        "exported_raw_pixels": False,
+        "exported_landmarks": False,
+        "local_region_quality": local_region_quality,
+        "clinical_boundary": "Runtime diagnostics are engineering QA signals.",
+    }
+
+
 def _overlay_3d_view(
     *,
     rendered: bool,
@@ -221,6 +264,26 @@ def _export_payload() -> dict:
             out_of_frame_count=0,
             degenerate_triangle_count=0,
             reason="runtime_projection_registration_ready",
+        ),
+        overlay_runtime=_overlay_runtime(
+            _local_region_quality(
+                passed=True,
+                reason="local_regions_passed",
+                source_kind="camera",
+                active_regions=[],
+                regions=[
+                    {
+                        "id": "brow_eye",
+                        "label": "眼眉区",
+                        "action": "normal",
+                        "opacity_scale": 1,
+                        "reasons": [],
+                        "motion_norm": 0.01,
+                        "expression_metric": "eye_blink_max",
+                        "expression_value": 0.1,
+                    }
+                ],
+            )
         ),
         overlay_3d_view=_overlay_3d_view(
             rendered=True,
@@ -277,6 +340,36 @@ def _export_payload() -> dict:
                 out_of_frame_count=2,
                 degenerate_triangle_count=1,
                 reason="out_of_frame_projection",
+            ),
+            overlay_runtime=_overlay_runtime(
+                _local_region_quality(
+                    passed=False,
+                    reason="eye_blink_local_expression",
+                    source_kind="video",
+                    active_regions=["brow_eye"],
+                    regions=[
+                        {
+                            "id": "brow_eye",
+                            "label": "眼眉区",
+                            "action": "dim",
+                            "opacity_scale": 0.36,
+                            "reasons": ["eye_blink_local_expression"],
+                            "motion_norm": 0.031,
+                            "expression_metric": "eye_blink_max",
+                            "expression_value": 0.52,
+                        },
+                        {
+                            "id": "mouth",
+                            "label": "口周",
+                            "action": "normal",
+                            "opacity_scale": 1,
+                            "reasons": [],
+                            "motion_norm": 0.009,
+                            "expression_metric": "jaw_open",
+                            "expression_value": 0.08,
+                        },
+                    ],
+                )
             ),
             overlay_3d_view=_overlay_3d_view(
                 rendered=False,
@@ -371,6 +464,23 @@ def test_stage2_validation_summary_aggregates_review_export():
     assert summary["metrics"]["incision_overlay_replay_frame_count"]["mean"] == 3
     assert summary["metrics"]["incision_overlay_replay_registration_failed_count"]["max"] == 1
     assert summary["metrics"]["incision_overlay_replay_registration_pass_rate"]["min"] == 2 / 3
+    assert summary["incision_overlay_local_region_quality"]["present_count"] == 2
+    assert summary["incision_overlay_local_region_quality"]["passed_count"] == 1
+    assert summary["incision_overlay_local_region_quality"]["failed_count"] == 1
+    assert summary["incision_overlay_local_region_quality"]["pass_rate"] == 0.5
+    assert summary["incision_overlay_local_region_quality"]["reason_counts"] == {
+        "eye_blink_local_expression": 1,
+        "local_regions_passed": 1,
+    }
+    assert summary["incision_overlay_local_region_quality"]["active_region_counts"] == {"brow_eye": 1}
+    assert summary["incision_overlay_local_region_quality"]["action_counts"] == {"dim": 1}
+    assert summary["incision_overlay_local_region_quality"]["source_kind_counts"] == {
+        "camera": 1,
+        "video": 1,
+    }
+    assert summary["metrics"]["incision_overlay_local_active_region_count"]["max"] == 1
+    assert summary["metrics"]["incision_overlay_local_region_motion_norm"]["mean"] == 0.031
+    assert summary["metrics"]["incision_overlay_local_region_expression_value"]["mean"] == 0.52
     assert summary["incision_overlay_3d_view"]["present_count"] == 2
     assert summary["incision_overlay_3d_view"]["rendered_count"] == 1
     assert summary["incision_overlay_3d_view"]["failed_count"] == 1
@@ -389,6 +499,7 @@ def test_stage2_validation_summary_aggregates_review_export():
     assert summary["failure_mode_counts"]["incision_rule_violation"] == 1
     assert summary["failure_mode_counts"]["overlay_3d_view_failure"] == 1
     assert summary["failure_mode_counts"]["overlay_instability"] == 1
+    assert summary["failure_mode_counts"]["overlay_local_region_quality_review"] == 1
     assert summary["failure_mode_counts"]["overlay_registration_failure"] == 1
     assert summary["failure_mode_counts"]["overlay_replay_failure"] == 1
     assert summary["failure_mode_counts"]["tumor_boundary_input_quality"] == 1
@@ -406,6 +517,7 @@ def test_stage2_validation_summary_aggregates_review_export():
     assert {
         ("overview", "record_count", "", 3),
         ("clinician_review", "approval_rate", "", 2 / 3),
+        ("incision_overlay_local_region_quality", "pass_rate", "", 0.5),
         ("incision_overlay_replay_qa", "pass_rate", "", 0.5),
         ("privacy_audit", "raw_media_sent_count", "", 0),
         ("secondary_cues", "used_for_agent_prompt_count", "", 0),
@@ -417,6 +529,13 @@ def test_stage2_validation_summary_aggregates_review_export():
         row["section"] == "metrics"
         and row["metric"] == "incision_overlay_replay_registration_pass_rate"
         and row["min"] == 2 / 3
+        for row in csv_rows
+    )
+    assert any(
+        row["section"] == "incision_overlay_local_region_quality"
+        and row["metric"] == "active_region_counts"
+        and row["submetric"] == "brow_eye"
+        and row["value"] == 1
         for row in csv_rows
     )
 
@@ -459,5 +578,12 @@ def test_stage2_validation_cli_writes_summary(tmp_path: Path):
         row["section"] == "metrics"
         and row["metric"] == "incision_overlay_registration_out_of_frame_count"
         and float(row["max"]) == 2
+        for row in rows
+    )
+    assert any(
+        row["section"] == "incision_overlay_local_region_quality"
+        and row["metric"] == "action_counts"
+        and row["submetric"] == "dim"
+        and row["value"] == "1"
         for row in rows
     )

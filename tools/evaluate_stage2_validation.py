@@ -23,6 +23,8 @@ EXPORT_SCHEMA = "incision-review-export/v0.3"
 SUMMARY_SCHEMA = "stage2-validation-summary/v0.1"
 OVERLAY_3D_VIEW_DIAGNOSTICS_SCHEMA = "incision-overlay-3d-view-diagnostics/v0.1"
 OVERLAY_3D_VIEW_SCHEMA = "incision-overlay-3d-view/v0.1"
+OVERLAY_RUNTIME_DIAGNOSTICS_SCHEMA = "incision-overlay-runtime-diagnostics/v0.1"
+LOCAL_REGION_QUALITY_SCHEMA = "rstl-local-region-quality-gate/v0.1"
 
 STATUS_APPROVED = "approved_for_discussion"
 STATUS_REJECTED = "rejected_by_clinician"
@@ -146,6 +148,9 @@ def _failure_modes(record: dict[str, Any]) -> list[str]:
     replay_qa = _overlay_replay_qa(record)
     if replay_qa and replay_qa.get("passed") is False:
         modes.append("overlay_replay_failure")
+    local_region_quality = _overlay_local_region_quality(record)
+    if local_region_quality and local_region_quality.get("passed") is False:
+        modes.append("overlay_local_region_quality_review")
     view_3d = _overlay_3d_view(record)
     if view_3d:
         viewer = _overlay_3d_viewer(view_3d)
@@ -225,6 +230,40 @@ def _overlay_3d_view(record: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
+def _overlay_runtime(record: dict[str, Any]) -> dict[str, Any] | None:
+    diagnostics = record.get("diagnostics") or {}
+    sections = diagnostics.get("sections") if isinstance(diagnostics, dict) else {}
+    overlay = record.get("incision_overlay") or {}
+    overlay = overlay if isinstance(overlay, dict) else {}
+    sections = sections if isinstance(sections, dict) else {}
+    runtime = (
+        record.get("incision_overlay_runtime")
+        or record.get("overlay_runtime")
+        or overlay.get("runtime")
+        or sections.get("incision_overlay_runtime")
+    )
+    if not isinstance(runtime, dict):
+        return None
+    if runtime.get("schema_version") != OVERLAY_RUNTIME_DIAGNOSTICS_SCHEMA:
+        return None
+    return runtime
+
+
+def _overlay_local_region_quality(record: dict[str, Any]) -> dict[str, Any] | None:
+    local_quality = (
+        record.get("incision_overlay_local_region_quality")
+        or record.get("overlay_local_region_quality")
+    )
+    if not isinstance(local_quality, dict):
+        runtime = _overlay_runtime(record)
+        local_quality = runtime.get("local_region_quality") if isinstance(runtime, dict) else None
+    if not isinstance(local_quality, dict):
+        return None
+    if local_quality.get("schema_version") != LOCAL_REGION_QUALITY_SCHEMA:
+        return None
+    return local_quality
+
+
 def _overlay_3d_viewer(view_3d: dict[str, Any]) -> dict[str, Any]:
     viewer = view_3d.get("viewer")
     return viewer if isinstance(viewer, dict) else view_3d
@@ -290,6 +329,9 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     overlay_replay_registration_pass_rate: list[float] = []
     overlay_3d_candidate_point_count: list[float] = []
     overlay_3d_boundary_point_count: list[float] = []
+    overlay_local_active_region_count: list[float] = []
+    overlay_local_region_motion_norm: list[float] = []
+    overlay_local_region_expression_value: list[float] = []
 
     passed_guardrails = 0
     raw_image_sent_count = 0
@@ -312,6 +354,13 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     overlay_replay_passed_count = 0
     overlay_replay_failed_count = 0
     overlay_replay_reason_counts: Counter[str] = Counter()
+    overlay_local_region_present_count = 0
+    overlay_local_region_passed_count = 0
+    overlay_local_region_failed_count = 0
+    overlay_local_region_reason_counts: Counter[str] = Counter()
+    overlay_local_region_active_region_counts: Counter[str] = Counter()
+    overlay_local_region_action_counts: Counter[str] = Counter()
+    overlay_local_region_source_kind_counts: Counter[str] = Counter()
     overlay_3d_present_count = 0
     overlay_3d_rendered_count = 0
     overlay_3d_failed_count = 0
@@ -429,6 +478,31 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
                 value = _numeric(source.get(key) if isinstance(source, dict) else None)
                 if value is not None:
                     target.append(value)
+
+        local_quality = _overlay_local_region_quality(record)
+        if local_quality:
+            overlay_local_region_present_count += 1
+            if local_quality.get("passed") is True:
+                overlay_local_region_passed_count += 1
+            elif local_quality.get("passed") is False:
+                overlay_local_region_failed_count += 1
+            overlay_local_region_reason_counts[str(local_quality.get("reason") or "unknown")] += 1
+            overlay_local_region_source_kind_counts[str(local_quality.get("source_kind") or "unknown")] += 1
+            active_count = _numeric(local_quality.get("active_region_count"))
+            if active_count is not None:
+                overlay_local_active_region_count.append(active_count)
+            for region_id in local_quality.get("active_regions") or []:
+                overlay_local_region_active_region_counts[str(region_id)] += 1
+            for region in local_quality.get("regions") or []:
+                if not isinstance(region, dict) or region.get("action") == "normal":
+                    continue
+                overlay_local_region_action_counts[str(region.get("action") or "unknown")] += 1
+                motion = _numeric(region.get("motion_norm"))
+                if motion is not None:
+                    overlay_local_region_motion_norm.append(motion)
+                expression_value = _numeric(region.get("expression_value"))
+                if expression_value is not None:
+                    overlay_local_region_expression_value.append(expression_value)
 
         view_3d = _overlay_3d_view(record)
         if view_3d:
@@ -556,6 +630,15 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
             "incision_overlay_3d_boundary_point_count": summarize_numbers(
                 overlay_3d_boundary_point_count,
             ),
+            "incision_overlay_local_active_region_count": summarize_numbers(
+                overlay_local_active_region_count,
+            ),
+            "incision_overlay_local_region_motion_norm": summarize_numbers(
+                overlay_local_region_motion_norm,
+            ),
+            "incision_overlay_local_region_expression_value": summarize_numbers(
+                overlay_local_region_expression_value,
+            ),
         },
         "failure_mode_counts": dict(sorted(failure_mode_counts.items())),
         "incision_overlay_stability": {
@@ -591,6 +674,20 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
             "clinical_boundary": (
                 "Overlay replay QA aggregates sanitized overlay surface refs and landmark frames; "
                 "it is an offline engineering replay check, not clinical AR validation."
+            ),
+        },
+        "incision_overlay_local_region_quality": {
+            "present_count": overlay_local_region_present_count,
+            "passed_count": overlay_local_region_passed_count,
+            "failed_count": overlay_local_region_failed_count,
+            "pass_rate": _ratio(overlay_local_region_passed_count, overlay_local_region_present_count),
+            "reason_counts": dict(sorted(overlay_local_region_reason_counts.items())),
+            "active_region_counts": dict(sorted(overlay_local_region_active_region_counts.items())),
+            "action_counts": dict(sorted(overlay_local_region_action_counts.items())),
+            "source_kind_counts": dict(sorted(overlay_local_region_source_kind_counts.items())),
+            "clinical_boundary": (
+                "Local region quality is an engineering overlay confidence signal for high-motion "
+                "eye/brow and mouth regions; it is not clinical video validation."
             ),
         },
         "incision_overlay_3d_view": {
@@ -747,6 +844,7 @@ def validation_summary_csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]
         "incision_overlay_stability",
         "incision_overlay_registration",
         "incision_overlay_replay_qa",
+        "incision_overlay_local_region_quality",
         "incision_overlay_3d_view",
     ]:
         data = summary.get(section) or {}
@@ -766,7 +864,14 @@ def validation_summary_csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]
                     value=data.get(metric, ""),
                     clinical_boundary=boundary,
                 ))
-        for count_metric in ["reason_counts", "context_counts", "mapping_mode_counts"]:
+        for count_metric in [
+            "reason_counts",
+            "context_counts",
+            "mapping_mode_counts",
+            "active_region_counts",
+            "action_counts",
+            "source_kind_counts",
+        ]:
             rows.extend(_count_rows(section, count_metric, data.get(count_metric, {}) or {}))
 
     privacy = summary.get("privacy_audit") or {}
