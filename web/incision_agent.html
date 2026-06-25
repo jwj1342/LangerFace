@@ -105,6 +105,17 @@
     </div>
 
     <div class="card agent-grid">
+      <div class="quality-top"><span>辅助线索</span><span id="secondaryCueState">未导入</span></div>
+      <p class="agent-note" id="secondaryCueSummary">仅展示自然皱襞、皱纹和皮表肿物边界的低置信度线索；不会自动改变肿物边界或候选切口。</p>
+      <div class="btn-row" style="grid-template-columns:1fr 1fr">
+        <button class="btn" id="importSecondaryCueBtn">导入线索</button>
+        <button class="btn" id="clearSecondaryCueBtn">清空线索</button>
+      </div>
+      <input id="secondaryCueImportFile" class="hidden" type="file" accept="application/json,.json" />
+      <label class="check"><input type="checkbox" id="secondaryCueConfirmed" /> 已人工确认辅助线索</label>
+    </div>
+
+    <div class="card agent-grid">
       <label class="check"><input type="checkbox" id="useAgentServer" checked /> 使用 Agent 代理</label>
       <input id="agentEndpoint" class="select" value="http://127.0.0.1:8765/api/agentic-incision" />
       <select id="providerMode" class="select">

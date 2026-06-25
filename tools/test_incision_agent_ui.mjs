@@ -9,6 +9,11 @@ assert.ok(html.includes('id="boundaryStatus"'), "workbench exposes tumor boundar
 assert.ok(html.includes('id="exportTumorBtn"'), "workbench exposes tumor export button");
 assert.ok(html.includes('id="importTumorBtn"'), "workbench exposes tumor import button");
 assert.ok(html.includes('id="tumorImportFile"'), "workbench exposes hidden tumor import file input");
+assert.ok(html.includes('id="secondaryCueState"'), "workbench exposes secondary cue status");
+assert.ok(html.includes('id="importSecondaryCueBtn"'), "workbench exposes secondary cue import action");
+assert.ok(html.includes('id="secondaryCueImportFile"'), "workbench exposes hidden secondary cue import file input");
+assert.ok(html.includes('id="secondaryCueConfirmed"'), "workbench captures manual secondary cue confirmation");
+assert.ok(html.includes("低置信度线索"), "workbench labels secondary cues as low confidence");
 assert.ok(html.includes('id="reviewerName"'), "workbench captures clinician reviewer identity");
 assert.ok(html.includes('id="reviewDecision"'), "workbench exposes clinician review decision");
 assert.ok(html.includes('id="reviewNotes"'), "workbench exposes clinician review notes");
@@ -24,6 +29,11 @@ assert.ok(js.includes("summarizeTumorBoundary"), "workbench renders deterministi
 assert.ok(js.includes("summarizeTumorInputQuality"), "workbench renders tumor input quality summaries");
 assert.ok(js.includes("tumorQualityFor"), "workbench keeps tumor quality in review exports");
 assert.ok(js.includes("肿物输入提示"), "markdown report includes tumor input quality warnings");
+assert.ok(js.includes("normalizeSecondaryCuePayload"), "workbench normalizes secondary cue imports");
+assert.ok(js.includes("secondary_cues"), "review exports include secondary cue summaries");
+assert.ok(js.includes("used_for_geometry: false"), "secondary cues never drive geometry");
+assert.ok(js.includes("used_for_agent_prompt: false"), "secondary cues are not sent to the agent prompt");
+assert.ok(js.includes("辅助线索仅随审阅导出，不发送给 Agent"), "privacy copy keeps secondary cues out of agent requests");
 assert.ok(js.includes("tip_angle_error_deg"), "workbench renders fusiform tip angle error");
 assert.ok(js.includes("incision-review-record/v0.3"), "review records use explicit review workflow schema");
 assert.ok(js.includes("approved_for_discussion"), "review records support clinician approval");

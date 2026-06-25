@@ -49,13 +49,13 @@ pytest tests/test_wrinkle_lesion_cues.py
 
 ## 前端展示要求
 
-- 展示文案使用“辅助线索”“低置信度”“需医生确认”，不得使用“自动识别病灶”或“推荐切口”。
-- 导出审阅记录必须保留 `source=synthetic|manual|restricted_cv`、模型/脚本版本、作者和时间。
+- `web/incision_agent.html` 支持导入 `metrics.json` 或等价 JSON，并只读展示“辅助线索 / 低置信度 / 需医生确认”摘要。
+- 前端导入辅助线索不会触发候选重新生成，不会自动改变肿物边界、切口方向或 guardrails。
+- 导出审阅记录保留 `secondary_cues`，包括 `source=synthetic|manual|restricted_cv`、脚本/模型来源、导入时间、metrics、人工确认状态，以及 `used_for_geometry=false` / `used_for_agent_prompt=false`。
 - 公开 PR Preview 不加载真实患者图像或受限模型输出。
 
 ## 下一步
 
 1. 用医生手工边界建立受控小样本验证集，格式见 [VALIDATION.md](VALIDATION.md)。
 2. 把医生修正后的边界与候选 mask 做 IoU / 边界距离统计。
-3. 在 `web/incision_agent.html` 只读展示低置信度辅助线索，不自动改变候选切口。
-4. 若引入远端模型，必须先完成 [PRIVACY_AND_AUDIT.md](PRIVACY_AND_AUDIT.md) 和 [INCISION_PRIVACY_AUDIT.md](INCISION_PRIVACY_AUDIT.md) 的出域审计。
+3. 若引入远端模型，必须先完成 [PRIVACY_AND_AUDIT.md](PRIVACY_AND_AUDIT.md) 和 [INCISION_PRIVACY_AUDIT.md](INCISION_PRIVACY_AUDIT.md) 的出域审计。

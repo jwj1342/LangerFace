@@ -43,6 +43,12 @@ const els = {
   tumorImportFile: $("tumorImportFile"),
   run: $("runAgentBtn"),
   pickState: $("pickState"),
+  secondaryCueState: $("secondaryCueState"),
+  secondaryCueSummary: $("secondaryCueSummary"),
+  importSecondaryCue: $("importSecondaryCueBtn"),
+  clearSecondaryCue: $("clearSecondaryCueBtn"),
+  secondaryCueImportFile: $("secondaryCueImportFile"),
+  secondaryCueConfirmed: $("secondaryCueConfirmed"),
   useAgentServer: $("useAgentServer"),
   endpoint: $("agentEndpoint"),
   providerMode: $("providerMode"),
@@ -127,6 +133,7 @@ const S = {
   saved: [],
   result: null,
   baseResult: null,
+  secondaryCues: null,
 };
 
 const REVIEW_LABELS = {
@@ -216,6 +223,7 @@ async function boot() {
   S.head.group.add(S.marker, S.tumorRing, S.boundaryLine, S.candidateLine, ...S.endpointHandles);
 
   loadProviderPrefs();
+  renderSecondaryCuePanel();
   setLesion(defaultLesion());
   fitSize();
   renderLoop();
@@ -288,7 +296,79 @@ function privacyAudit(provider = {}) {
     provider: redactedProviderConfig(),
     remote_provider_configured: remote,
     provider_state: provider,
+    secondary_cues_present: Boolean(S.secondaryCues),
+    secondary_cues_sent_to_agent: false,
   };
+}
+
+function metricSummary(raw = {}) {
+  const numberOrNull = (key) => {
+    if (raw[key] == null) return null;
+    const value = Number(raw[key]);
+    return Number.isFinite(value) ? value : null;
+  };
+  return {
+    precision: numberOrNull("precision"),
+    recall: numberOrNull("recall"),
+    iou: numberOrNull("iou"),
+  };
+}
+
+function normalizeSecondaryCuePayload(payload = {}) {
+  const metrics = payload.metrics || payload;
+  return {
+    schema_version: "secondary-cue-summary/v0.1",
+    source: payload.source || metrics.source || "synthetic",
+    source_tool: payload.source_tool || metrics.source_tool || "tools/prototype_wrinkle_lesion_cues.py",
+    imported_at: new Date().toISOString(),
+    confidence_label: metrics.confidence_label || "low_confidence_cv_cue_requires_manual_confirmation",
+    manual_confirmation_required: true,
+    used_for_geometry: false,
+    used_for_agent_prompt: false,
+    clinical_boundary: "辅助线索 / 低置信度 / 需医生确认；不自动改变肿物边界或候选切口。",
+    lesion: metricSummary(metrics.lesion || {}),
+    wrinkle: metricSummary(metrics.wrinkle || {}),
+    outputs: metrics.outputs || {},
+    counts: {
+      lesion_polylines: Array.isArray(payload.lesion_polylines) ? payload.lesion_polylines.length : null,
+      wrinkle_polylines: Array.isArray(payload.wrinkle_polylines) ? payload.wrinkle_polylines.length : null,
+    },
+  };
+}
+
+function secondaryCueReviewSummary() {
+  if (!S.secondaryCues) {
+    return {
+      present: false,
+      manual_confirmed: false,
+      used_for_geometry: false,
+      used_for_agent_prompt: false,
+    };
+  }
+  return {
+    present: true,
+    ...S.secondaryCues,
+    manual_confirmed: Boolean(els.secondaryCueConfirmed?.checked),
+  };
+}
+
+function renderSecondaryCuePanel() {
+  if (!els.secondaryCueState || !els.secondaryCueSummary) return;
+  if (!S.secondaryCues) {
+    els.secondaryCueState.textContent = "未导入";
+    els.secondaryCueSummary.textContent = "仅展示自然皱襞、皱纹和皮表肿物边界的低置信度线索；不会自动改变肿物边界或候选切口。";
+    return;
+  }
+  const lesion = S.secondaryCues.lesion || {};
+  const wrinkle = S.secondaryCues.wrinkle || {};
+  els.secondaryCueState.textContent = "低置信度 · 需医生确认";
+  els.secondaryCueSummary.textContent = [
+    `来源：${S.secondaryCues.source} · ${S.secondaryCues.source_tool}`,
+    `标签：${S.secondaryCues.confidence_label}`,
+    `皮表边界 IoU ${fmt(lesion.iou, 2)} / precision ${fmt(lesion.precision, 2)} / recall ${fmt(lesion.recall, 2)}`,
+    `皱纹 recall ${fmt(wrinkle.recall, 2)} / precision ${fmt(wrinkle.precision, 2)}`,
+    "只读展示：不进入几何生成，不发送给 Agent prompt。",
+  ].join("\n");
 }
 
 function reviewStatusLabel(status) {
@@ -686,7 +766,7 @@ function renderResult(result) {
   els.privacyState.textContent = audit.remote_provider_configured ? "抽象参数出域" : "浏览器本地";
   els.privacyAudit.textContent = audit.raw_image_sent
     ? "警告：检测到原始影像出域配置。"
-    : `不上传原始影像；发送给 Agent 的是 ${audit.data_sent_to_agent.length} 类抽象字段，API Key 仅在本次请求中传给代理。`;
+    : `不上传原始影像；发送给 Agent 的是 ${audit.data_sent_to_agent.length} 类抽象字段，API Key 仅在本次请求中传给代理。${audit.secondary_cues_present ? " 辅助线索仅随审阅导出，不发送给 Agent。" : ""}`;
   const edited = result.candidate.edited ? " · 已记录医生调整" : "";
   els.stageStatus.textContent = provider.error ? `LLM fallback: ${provider.error.slice(0, 80)}${edited}` : `候选已更新${edited}`;
 }
@@ -745,6 +825,7 @@ function reviewRecord(result = S.result, label = "候选") {
     created_at: createdAt,
     tumor: result.tumor,
     tumor_quality: tumorQualityFor(result),
+    secondary_cues: secondaryCueReviewSummary(),
     anatomy: result.anatomy,
     direction: result.direction,
     candidate: result.candidate,
@@ -884,6 +965,7 @@ function exportReviewJson() {
     exported_at: new Date().toISOString(),
     current,
     saved: S.saved,
+    secondary_cues: secondaryCueReviewSummary(),
     candidate_comparison: compareCandidateRecords(records),
   };
   downloadText(`incision_review_${Date.now()}.json`, JSON.stringify(payload, null, 2));
@@ -950,6 +1032,28 @@ async function importTumorFile(file) {
   }
 }
 
+async function importSecondaryCueFile(file) {
+  if (!file) return;
+  try {
+    const payload = JSON.parse(await file.text());
+    S.secondaryCues = normalizeSecondaryCuePayload(payload);
+    if (els.secondaryCueConfirmed) els.secondaryCueConfirmed.checked = false;
+    renderSecondaryCuePanel();
+    els.stageStatus.textContent = "已导入低置信辅助线索；候选几何未改变。";
+  } catch (err) {
+    els.stageStatus.textContent = `导入辅助线索失败：${err.message}`;
+  } finally {
+    els.secondaryCueImportFile.value = "";
+  }
+}
+
+function clearSecondaryCues() {
+  S.secondaryCues = null;
+  if (els.secondaryCueConfirmed) els.secondaryCueConfirmed.checked = false;
+  renderSecondaryCuePanel();
+  els.stageStatus.textContent = "已清空辅助线索；候选几何未改变。";
+}
+
 function exportReport() {
   if (!S.result && !S.saved.length) {
     els.stageStatus.textContent = "没有可导出的候选";
@@ -982,6 +1086,9 @@ function exportReport() {
     `- 肿物：${r.tumor.kind}，直径 ${fmt(r.tumor.diameter_mm)} mm，切缘 ${fmt(r.tumor.margin_mm)} mm`,
     (r.tumor_quality?.warnings || []).length
       ? `- 肿物输入提示：${r.tumor_quality.warnings.map((w) => `${w.code}(${w.severity})`).join("；")}`
+      : null,
+    r.secondary_cues?.present
+      ? `- 辅助线索：${r.secondary_cues.confidence_label}；人工确认 ${r.secondary_cues.manual_confirmed ? "是" : "否"}；不参与几何 ${r.secondary_cues.used_for_geometry === false ? "是" : "否"}`
       : null,
     `- 面部分区：${r.anatomy.region} / ${r.anatomy.subunit}`,
     (r.anatomy.confidence_reasons || []).length
@@ -1251,6 +1358,10 @@ els.exportJson.onclick = exportReviewJson;
 els.exportTumor.onclick = exportTumorJson;
 els.importTumor.onclick = () => els.tumorImportFile.click();
 els.tumorImportFile.onchange = (e) => importTumorFile(e.target.files?.[0]);
+els.importSecondaryCue.onclick = () => els.secondaryCueImportFile.click();
+els.clearSecondaryCue.onclick = clearSecondaryCues;
+els.secondaryCueImportFile.onchange = (e) => importSecondaryCueFile(e.target.files?.[0]);
+els.secondaryCueConfirmed.onchange = renderSecondaryCuePanel;
 els.exportReport.onclick = exportReport;
 els.exportPng.onclick = exportScreenshot;
 els.stageLiveOverlay.onclick = stageLiveOverlay;
