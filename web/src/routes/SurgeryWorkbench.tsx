@@ -1,6 +1,41 @@
 import { Link } from "react-router-dom";
+import type { ReactNode } from "react";
 
-export function SurgeryWorkbench() {
+type VerdictTone = "neutral" | "ok" | "warn";
+
+interface SurgeryWorkbenchProps {
+  activeCut: "along" | null;
+  hint: string;
+  isReady: boolean;
+  lesionState: string;
+  showLines: boolean;
+  sizePct: number;
+  stage: ReactNode;
+  tensionScore: number | null;
+  verdict: string;
+  verdictTone: VerdictTone;
+  onExciseAlong: () => void;
+  onReset: () => void;
+  onShowLinesChange: (checked: boolean) => void;
+  onSizeChange: (value: number) => void;
+}
+
+export function SurgeryWorkbench({
+  activeCut,
+  hint,
+  isReady,
+  lesionState,
+  showLines,
+  sizePct,
+  stage,
+  tensionScore,
+  verdict,
+  verdictTone,
+  onExciseAlong,
+  onReset,
+  onShowLinesChange,
+  onSizeChange,
+}: SurgeryWorkbenchProps) {
   return (
     <div className="app surgery-workbench">
       <aside className="sidebar">
@@ -13,32 +48,58 @@ export function SurgeryWorkbench() {
         </div>
 
         <div className="card">
-          <p className="hint" id="hint">加载中...</p>
-          <div className="section-title"><span>① 规划切口</span><span id="lesionState">默认在脸颊</span></div>
+          <p className="hint" id="hint">{hint}</p>
+          <div className="section-title"><span>① 规划切口</span><span id="lesionState">{lesionState}</span></div>
           <p className="hint">
             在右侧脸上<b>点击</b>定位病灶；拖拽旋转、滚轮缩放。
             右图 <b className="surgery-green-copy">绿色</b>=沿 RSTL 的梭形切除轮廓，随下方滑块更新。
           </p>
-          <label className="field-label" htmlFor="sizeRange">切口大小 <span id="sizeVal">110%</span></label>
-          <input id="sizeRange" type="range" min="80" max="200" defaultValue="110" />
+          <label className="field-label" htmlFor="sizeRange">切口大小 <span id="sizeVal">{sizePct}%</span></label>
+          <input
+            id="sizeRange"
+            type="range"
+            min="80"
+            max="200"
+            value={sizePct}
+            onChange={(event) => onSizeChange(Number(event.currentTarget.value))}
+          />
           <div className="section-title"><span>② 执行切除并闭合</span></div>
           <div className="btn-row surgery-action-row">
-            <button className="btn cut-along" id="btnAlong" type="button">沿 RSTL 切除</button>
+            <button
+              className={`btn cut-along${activeCut === "along" ? " active" : ""}`}
+              id="btnAlong"
+              type="button"
+              disabled={!isReady}
+              onClick={onExciseAlong}
+            >
+              沿 RSTL 切除
+            </button>
           </div>
-          <button className="btn" id="btnReset" type="button">↺ 复位</button>
+          <button className="btn" id="btnReset" type="button" disabled={!isReady} onClick={onReset}>↺ 复位</button>
           <label className="btn">
-            <input type="checkbox" id="showLines" defaultChecked /> 显示 RSTL 张力线
+            <input
+              type="checkbox"
+              id="showLines"
+              checked={showLines}
+              onChange={(event) => onShowLinesChange(event.currentTarget.checked)}
+            /> 显示 RSTL 张力线
           </label>
         </div>
 
         <div className="card">
-          <div className="quality-top"><span>闭合新增张力</span><span><b id="tensionVal">—</b> / 100</span></div>
-          <div className="bar"><div className="bar-fill surgery-tension-bar" id="tensionBar" /></div>
+          <div className="quality-top"><span>闭合新增张力</span><span><b id="tensionVal">{tensionScore ?? "—"}</b> / 100</span></div>
+          <div className="bar">
+            <div
+              className="bar-fill surgery-tension-bar"
+              id="tensionBar"
+              style={{ width: `${Math.max(0, Math.min(100, tensionScore ?? 0))}%` }}
+            />
+          </div>
           <div className="legend">
             <span className="legend-sw surgery-legend-skin" />无新增（平和）
             <span className="legend-sw surgery-legend-red" />闭合新增张力升高
           </div>
-          <p className="hint" id="verdict">点击沿 RSTL 切除后，观察闭合区域新增张力如何局部集中。</p>
+          <p className={`hint surgery-verdict-${verdictTone}`} id="verdict">{verdict}</p>
         </div>
 
         <details className="card help-doc" open>
@@ -69,7 +130,7 @@ export function SurgeryWorkbench() {
         </div>
         <div className="stage-body">
           <div className="main-wrap">
-            <canvas id="surgeryCanvas" />
+            {stage}
           </div>
         </div>
       </main>

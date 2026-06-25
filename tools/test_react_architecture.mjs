@@ -24,6 +24,7 @@ const incisionWorkbench = read("src/routes/IncisionWorkbench.tsx");
 const liveRoute = read("src/routes/LiveRoute.tsx");
 const liveWorkbench = read("src/routes/LiveWorkbench.tsx");
 const surgeryRoute = read("src/routes/SurgeryRoute.tsx");
+const surgeryR3FScene = read("src/routes/SurgeryR3FScene.tsx");
 const surgeryWorkbench = read("src/routes/SurgeryWorkbench.tsx");
 const threeRoute = read("src/routes/ThreePreviewRoute.tsx");
 const worker = read("src/workers/workflow.worker.ts");
@@ -187,13 +188,27 @@ assert.ok(liveController.includes("stopSource()"), "live controller stops camera
 assert.ok(liveController.includes("stopTwin()"), "live controller stops twin RAF on dispose");
 assert.ok(liveController.includes("!window.__LANGERFACE_REACT_MANAGED__"), "legacy live HTML still auto-mounts outside React");
 assert.ok(surgeryRoute.includes("__LANGERFACE_REACT_MANAGED__"), "React surgery route disables controller auto-mount");
-assert.ok(surgeryRoute.includes("mountSurgeryClosureDemo"), "React surgery route mounts the surgery controller explicitly");
-assert.ok(surgeryRoute.includes("disposeSurgeryClosureDemo"), "React surgery route can dispose the surgery controller");
-assert.ok(surgeryRoute.includes("<SurgeryWorkbench />"), "React surgery route renders the closure demo as TSX");
+assert.ok(surgeryRoute.includes("loadJsonAsset"), "React surgery route lazy-loads closure demo assets");
+assert.ok(surgeryRoute.includes("SurgeryR3FScene"), "React surgery route renders the R3F closure scene directly");
+assert.ok(!surgeryRoute.includes("surgery_main.js"), "React surgery route should not mount the legacy surgery controller");
+assert.ok(!surgeryRoute.includes("mountSurgeryClosureDemo"), "React surgery route should not call the legacy surgery controller");
+assert.ok(!surgeryRoute.includes("disposeSurgeryClosureDemo"), "React surgery route should not dispose a controller it no longer owns");
+assert.ok(surgeryRoute.includes("<SurgeryWorkbench"), "React surgery route renders the closure demo as TSX");
 assert.ok(!surgeryRoute.includes("DOMParser"), "React surgery route should not parse legacy HTML");
 assert.ok(!surgeryRoute.includes("innerHTML"), "React surgery route should not inject legacy HTML");
+assert.ok(surgeryR3FScene.includes("@react-three/fiber"), "React surgery scene uses @react-three/fiber");
+assert.ok(surgeryR3FScene.includes("@react-three/drei"), "React surgery scene uses drei helpers");
+assert.ok(surgeryR3FScene.includes("useFrame"), "React surgery scene keeps per-frame simulation inside the renderer loop");
+assert.ok(surgeryR3FScene.includes("runtimeRef"), "React surgery scene keeps high-frequency soft-body state in refs");
+assert.ok(surgeryR3FScene.includes("buildSoftBody"), "React surgery scene imports the soft-body tool directly");
+assert.ok(surgeryR3FScene.includes("stepSoftBody"), "React surgery scene advances soft-body simulation in R3F");
+assert.ok(surgeryR3FScene.includes("vertexTension"), "React surgery scene computes closure tension");
+assert.ok(surgeryR3FScene.includes("rstlDirField"), "React surgery scene derives local RSTL direction");
+assert.ok(surgeryR3FScene.includes("buildLineGeometry"), "React surgery scene renders RSTL guide lines");
+assert.ok(surgeryR3FScene.includes('id="surgeryCanvas"'), "React surgery R3F canvas keeps #surgeryCanvas for UI tests");
+assert.ok(!surgeryR3FScene.includes("useAppStore"), "React surgery scene should not put frame state into Zustand");
+assert.ok(!surgeryR3FScene.includes("innerHTML"), "React surgery scene should not inject HTML strings");
 for (const id of [
-  "surgeryCanvas",
   "btnAlong",
   "btnReset",
   "showLines",
