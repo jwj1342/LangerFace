@@ -20,6 +20,7 @@ assert.ok(html.includes('id="reviewDecision"'), "workbench exposes clinician rev
 assert.ok(html.includes('id="reviewNotes"'), "workbench exposes clinician review notes");
 assert.ok(html.includes('id="guardrailDetails"'), "workbench exposes guardrail detail feedback");
 assert.ok(html.includes('id="directionSource"'), "workbench exposes direction source explanation");
+assert.ok(html.includes('id="agentGate"'), "workbench exposes agent trace gate feedback");
 assert.ok(html.includes('id="approveCandidateBtn"'), "workbench exposes candidate approval action");
 assert.ok(html.includes('id="rejectCandidateBtn"'), "workbench exposes candidate rejection action");
 assert.ok(html.includes('id="candidateWidth"'), "workbench exposes fusiform width and ratio metric");
@@ -46,6 +47,14 @@ assert.ok(js.includes("rejected_by_clinician"), "review records support clinicia
 assert.ok(js.includes("audit_events"), "review records include audit events");
 assert.ok(js.includes("guardrail_summary"), "review records include guardrail summary");
 assert.ok(js.includes("review_gate"), "review records include review gate state");
+assert.ok(js.includes("agent_trace_gate"), "review records include agent trace gate state");
+assert.ok(js.includes("agent-trace-gate/v0.1"), "agent trace gate has an explicit schema");
+assert.ok(js.includes("AGENT_TRACE_GATE_REQUIRED"), "workbench defines required agent tool actions");
+assert.ok(js.includes("summarize_tumor_input_quality"), "agent gate requires tumor input quality tool");
+assert.ok(js.includes("linear_subcutaneous_incision"), "agent gate accepts linear incision generation tool");
+assert.ok(js.includes("fusiform_cutaneous_incision"), "agent gate accepts fusiform incision generation tool");
+assert.ok(js.includes("Agent 工具 trace 未通过门控"), "approval is blocked when agent trace gate fails");
+assert.ok(js.includes("Agent 工具门控"), "markdown report includes agent trace gate status");
 assert.ok(js.includes("candidate_comparison"), "review export includes candidate comparison");
 assert.ok(js.includes("不是临床推荐或手术指令"), "candidate comparison warns it is not clinical recommendation");
 assert.ok(js.includes("reviewReadiness"), "review workflow validates approval readiness");

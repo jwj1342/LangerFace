@@ -52,7 +52,7 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候
 - [ ] AI 辅助识别自然皱襞、皱纹与肿物边界：作为 RSTL 之外的次级依据 — [#22](https://github.com/jwj1342/LangerFace/issues/22)
       · 本 PR 已补齐调研记录、合成 CV 原型、mask/overlay/metrics 导出、precision/recall/IoU 测试，以及 `incision_agent.html` 低置信辅助线索只读导入/展示；辅助线索会进入审阅导出但 `used_for_geometry=false`、`used_for_agent_prompt=false`，不会自动改变肿物边界或候选切口
 - [ ] Epic：手术切口 Agentic 设计——肿物模拟 + RSTL 原则驱动的 LLM 切口规划 — [#64](https://github.com/jwj1342/LangerFace/issues/64)
-      · 本 PR 已支持确定性工具链、工具 schema、LLM 摘要、provider 配置、SSE trace 端点、前端流式 trace 可视化、JSON fallback、候选保存/审阅/导出、工程候选比较和隐私守门；多轮自主规划、工具失败恢复和正式审计执行器仍需后续架构拆分
+      · 本 PR 已支持确定性工具链、工具 schema、LLM 摘要、provider 配置、SSE trace 端点、前端流式 trace 可视化、JSON fallback、`agent-trace-gate/v0.1` 工具门控、候选保存/审阅/导出、工程候选比较和隐私守门；工具门控要求 trace 包含肿物输入质量、面部分区、RSTL 查询、确定性切口生成和 guardrails，未通过时不能确认候选；多轮自主规划、工具失败恢复和正式审计执行器仍需后续架构拆分
 
 > 设计原则与数据流见 [README《临床目标与 Stage 2 路线》](../README.md#临床目标与-stage-2-路线) 和 [ARCHITECTURE.md#14](ARCHITECTURE.md#14-stage-2-肿物与切口设计技术路线)。
 > Stage 2 业务模块作为**同级子包**接入，复用 `geometry` / `detection` / `rendering`，不塞进 `lines/` 或 `rendering/`。

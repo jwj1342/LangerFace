@@ -68,6 +68,7 @@ const els = {
   regionVal: $("regionVal"),
   guardrailVal: $("guardrailVal"),
   directionSource: $("directionSource"),
+  agentGate: $("agentGate"),
   guardrailDetails: $("guardrailDetails"),
   llmSummary: $("llmSummary"),
   nextStep: $("nextStep"),
@@ -410,9 +411,51 @@ function highGuardrailWarnings(result = S.result) {
   return (result?.guardrails?.warnings || []).filter((w) => w.severity === "high");
 }
 
+const AGENT_TRACE_GATE_REQUIRED = [
+  { key: "tumor_input_quality", label: "肿物输入质量", actions: ["summarize_tumor_input_quality"] },
+  { key: "face_region", label: "面部分区", actions: ["classify_region"] },
+  { key: "rstl_direction", label: "RSTL 查询", actions: ["query_rstl_direction"] },
+  { key: "candidate_generation", label: "确定性切口生成", actions: ["linear_subcutaneous_incision", "fusiform_cutaneous_incision"] },
+  { key: "guardrails", label: "Guardrails", actions: ["evaluate_guardrails"] },
+];
+
+function agentTraceGate(result = S.result) {
+  const actions = (result?.trace || []).map((step) => step?.action).filter(Boolean);
+  const observed = new Set(actions);
+  const required = AGENT_TRACE_GATE_REQUIRED.map((req) => ({
+    key: req.key,
+    label: req.label,
+    actions: req.actions,
+    observed: req.actions.some((action) => observed.has(action)),
+    first_index: Math.min(...req.actions.map((action) => {
+      const idx = actions.indexOf(action);
+      return idx < 0 ? Infinity : idx;
+    })),
+  }));
+  const missing = required.filter((req) => !req.observed);
+  const presentIndexes = required.filter((req) => req.observed).map((req) => req.first_index);
+  const orderOk = presentIndexes.every((idx, i) => i === 0 || idx >= presentIndexes[i - 1]);
+  const geometryPresent = Array.isArray(result?.candidate?.polyline) && result.candidate.polyline.length >= 2;
+  return {
+    schema_version: "agent-trace-gate/v0.1",
+    passed: missing.length === 0 && orderOk && geometryPresent,
+    mode: result?.agent_trace_mode || "unknown",
+    observed_actions: actions,
+    required_actions: required.map((req) => ({ key: req.key, label: req.label, actions: req.actions })),
+    missing_actions: missing.map((req) => ({ key: req.key, label: req.label, actions: req.actions })),
+    order_ok: orderOk,
+    deterministic_geometry_present: geometryPresent,
+    boundary: "LLM may summarize and explain only after deterministic tools provide geometry and guardrail observations.",
+  };
+}
+
 function reviewReadiness(status, result = S.result) {
   if (!result) return { ok: false, message: "没有可审阅的候选" };
   if (status === "approved_for_discussion") {
+    const traceGate = agentTraceGate(result);
+    if (!traceGate.passed) {
+      return { ok: false, message: "Agent 工具 trace 未通过门控；缺少必要工具动作或顺序异常，不能确认候选。" };
+    }
     if (!els.reviewerName.value.trim()) return { ok: false, message: "确认候选前请填写审阅人。" };
     if (highGuardrailWarnings(result).length && !els.reviewNotes.value.trim()) {
       return { ok: false, message: "当前候选有高风险 guardrail；确认前请填写审阅备注或覆盖原因。" };
@@ -771,6 +814,16 @@ function renderDirectionSource(result) {
   els.directionSource.classList.toggle("warn", direction.confidence < 0.35 || overrides.length > 0 || Boolean(result.candidate?.edited));
 }
 
+function renderAgentGate(result) {
+  if (!els.agentGate) return;
+  const gate = agentTraceGate(result);
+  els.agentGate.classList.toggle("warn", !gate.passed);
+  const missing = gate.missing_actions.map((item) => item.label).join("、");
+  const status = gate.passed ? "通过" : `未通过${missing ? `；缺 ${missing}` : ""}`;
+  els.agentGate.textContent = `Agent 工具门控：${status} · ${gate.observed_actions.length} 个 trace 动作 · ${gate.boundary}`;
+  els.agentGate.title = `observed_actions=${gate.observed_actions.join(", ")}`;
+}
+
 function tumorQualityFor(result = S.result) {
   if (!result?.tumor) return { warnings: [], warning_count: 0, passed: true };
   return result.tumor_quality || summarizeTumorInputQuality(result.tumor);
@@ -801,6 +854,7 @@ function renderResult(result) {
   els.guardrailVal.style.color = result.guardrails.passed ? "" : "#b45309";
   renderGuardrailDetails(result.guardrails);
   renderDirectionSource(result);
+  renderAgentGate(result);
   const tumorQuality = tumorQualityFor(result);
   if (tumorQuality.warning_count) {
     els.guardrailDetails.textContent += `\n肿物输入：${tumorQuality.warnings.map((w) => `${w.code}(${w.severity})`).join(" · ")}`;
@@ -843,11 +897,13 @@ function guardrailSummary(guardrails = {}) {
 
 function reviewGate(review, result) {
   const summary = guardrailSummary(result.guardrails);
+  const traceGate = agentTraceGate(result);
   const reviewerRequired = review.status === "approved_for_discussion";
   const notesRequired = reviewerRequired && summary.high_count > 0;
   const reviewerPresent = Boolean(review.reviewer);
   const notesPresent = Boolean(review.notes);
   const approvalReady = review.status === "approved_for_discussion" &&
+    traceGate.passed &&
     (!reviewerRequired || reviewerPresent) &&
     (!notesRequired || notesPresent);
   return {
@@ -856,11 +912,13 @@ function reviewGate(review, result) {
     notes_required_for_high_guardrails: notesRequired,
     notes_present: notesPresent,
     high_guardrail_codes: summary.high_codes,
+    agent_trace_gate_passed: traceGate.passed,
+    agent_trace_gate_missing: traceGate.missing_actions.map((item) => item.key),
     approval_ready: approvalReady,
     live_overlay_ready: approvalReady,
     reason: approvalReady
       ? "approved_candidate_ready_for_research_overlay"
-      : "pending_clinician_confirmation_or_missing_required_review_context",
+      : traceGate.passed ? "pending_clinician_confirmation_or_missing_required_review_context" : "agent_trace_gate_failed",
   };
 }
 
@@ -869,6 +927,7 @@ function reviewRecord(result = S.result, label = "候选") {
   const review = currentReviewMetadata(createdAt);
   const actor = review.reviewer || result.tumor?.author || "unknown";
   const gate = reviewGate(review, result);
+  const traceGate = agentTraceGate(result);
   return {
     schema_version: "incision-review-record/v0.3",
     id: `candidate_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
@@ -883,6 +942,7 @@ function reviewRecord(result = S.result, label = "候选") {
     original_candidate: result.original_candidate || result.candidate,
     guardrails: result.guardrails,
     trace: result.trace,
+    agent_trace_gate: traceGate,
     llm: result.llm,
     provider: result.provider,
     provider_config: redactedProviderConfig(),
@@ -899,6 +959,7 @@ function reviewRecord(result = S.result, label = "候选") {
         status: review.status,
         approval_ready: gate.approval_ready,
         live_overlay_ready: gate.live_overlay_ready,
+        agent_trace_gate_passed: traceGate.passed,
       },
       ...(review.status === "pending_clinician_confirmation"
         ? []
@@ -1150,6 +1211,7 @@ function exportReport() {
     (r.direction.confidence_reasons || []).length
       ? `- RSTL 低置信原因：${r.direction.confidence_reasons.join(", ")}`
       : null,
+    `- Agent 工具门控：passed=${Boolean(r.agent_trace_gate?.passed)}；order_ok=${Boolean(r.agent_trace_gate?.order_ok)}；missing=${(r.agent_trace_gate?.missing_actions || []).map((item) => item.label || item.key).join(", ") || "无"}`,
     `- 候选长度：${fmt(r.candidate.length_mm)} mm`,
     r.candidate.type === "fusiform"
       ? `- 梭形宽度 / 长宽比：${fmt(r.candidate.width_mm)} mm / ${fmt(r.candidate.metrics?.length_to_width_ratio, 2)}:1`
@@ -1166,7 +1228,7 @@ function exportReport() {
     `- Guardrails：${r.guardrails.passed ? "通过" : "需医生复核"}`,
     `- 警告：\n${warningLines}`,
     `- 建议覆盖项：\n${overrideLines}`,
-    `- 审阅门槛：approval_ready=${Boolean(r.review_gate?.approval_ready)}；live_overlay_ready=${Boolean(r.review_gate?.live_overlay_ready)}；high=${(r.review_gate?.high_guardrail_codes || []).join(", ") || "无"}`,
+    `- 审阅门槛：approval_ready=${Boolean(r.review_gate?.approval_ready)}；live_overlay_ready=${Boolean(r.review_gate?.live_overlay_ready)}；agent_trace_gate=${Boolean(r.review_gate?.agent_trace_gate_passed)}；high=${(r.review_gate?.high_guardrail_codes || []).join(", ") || "无"}`,
     `- 审阅状态：${reviewStatusLabel(r.review_status)}；审阅人：${r.review?.reviewer || "未填写"}`,
     `- 审阅备注：${r.review?.notes || "无"}`,
     `- 审阅边界：研究候选记录，非手术指令。`,
