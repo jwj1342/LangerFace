@@ -22,7 +22,8 @@ const INCISION_ZOOM_REGION = { kind: "incision_overlay" };
 const INCISION_OVERLAY_STABILITY_FRAMES = 8;
 const LIVE_OCCLUSION_MIN_TRIANGLE_AREA_PX2 = 1;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const overlayRuntimeDiagnostics = { key: null, landmarkFrames: [], poseGatePreviousFrame: null };
+const renderQualityDiagnostics = { source: null, previousFrame: null };
+const overlayRuntimeDiagnostics = { key: null, landmarkFrames: [] };
 
 function fmtPx(value) {
   const n = Number(value);
@@ -43,6 +44,30 @@ function fmtPercent(value) {
   return Number.isFinite(n) ? `${Math.round(n * 100)}%` : "—";
 }
 
+function currentFaceExpression() {
+  return {
+    jawOpen: sourceState.jawOpen,
+    eyeBlinkLeft: sourceState.eyeBlinkLeft,
+    eyeBlinkRight: sourceState.eyeBlinkRight,
+  };
+}
+
+function estimateRenderQualityGate(lm, W, H) {
+  if (renderQualityDiagnostics.source !== sourceState.source) {
+    renderQualityDiagnostics.source = sourceState.source;
+    renderQualityDiagnostics.previousFrame = null;
+  }
+  const gate = estimateFacePoseQuality(lm, W, H, {
+    presence: sourceState.presence,
+    sourceKind: sourceState.sourceKind,
+    previousLandmarks: renderQualityDiagnostics.previousFrame,
+    expression: currentFaceExpression(),
+  });
+  renderQualityDiagnostics.previousFrame = cloneLandmarkFrame(lm);
+  sourceState.qualityGate = gate;
+  return gate;
+}
+
 export function draw(lm, W, H, masks = []) {
   const atlas = modelState.atlases[renderState.system];
   const vis = renderState.clip
@@ -55,39 +80,43 @@ export function draw(lm, W, H, masks = []) {
   const bb = faceBBox(lm);
   const stride = Math.max(1, Math.round(100 / (renderState.densityFrac * 100)));
   const hasMasks = masks.length > 0;
+  const frameQualityGate = estimateRenderQualityGate(lm, W, H);
+  const canDrawAtlas = sourceState.sourceKind === "image" || frameQualityGate.passed;
 
   ctx.save();
   ctx.globalAlpha = renderState.opacity; ctx.lineWidth = Math.max(1, W / 1300);
   ctx.lineJoin = "round"; ctx.lineCap = "round";
   let count = 0;
-  for (let li = 0; li < mapped.length; li++) {
-    if (li % stride !== 0) continue;
-    const ln = mapped[li];
-    if (renderState.bands) {
-      let my = 0; for (const p of ln.pts) my += p[1]; my = (my / ln.pts.length - bb.y0) / (bb.h || 1);
-      ctx.strokeStyle = my < 0.36 ? BAND.top : my < 0.66 ? BAND.mid : BAND.low;
-    } else ctx.strokeStyle = SOLID[renderState.system];
-    // 每点可见性 = 朝向相机(背面剔除) 且 不属于口裂三角面 且 不在前方手部凸包内
-    const mask = ln.pts.map((p, i) => {
-      const v = vis ? vis[ln.tris[i]] : 1;
-      if (innerMouth.has(ln.tris[i])) return 0; // 口裂三角面无论朝向都排除（#38）
-      return v && !(hasMasks && pointInHandMasks(p, masks)) ? 1 : 0;
-    });
-    for (const run of visibleRuns(ln.pts, mask)) {
-      ctx.beginPath(); ctx.moveTo(run[0][0], run[0][1]);
-      for (let i = 1; i < run.length; i++) ctx.lineTo(run[i][0], run[i][1]);
-      ctx.stroke();
+  if (canDrawAtlas) {
+    for (let li = 0; li < mapped.length; li++) {
+      if (li % stride !== 0) continue;
+      const ln = mapped[li];
+      if (renderState.bands) {
+        let my = 0; for (const p of ln.pts) my += p[1]; my = (my / ln.pts.length - bb.y0) / (bb.h || 1);
+        ctx.strokeStyle = my < 0.36 ? BAND.top : my < 0.66 ? BAND.mid : BAND.low;
+      } else ctx.strokeStyle = SOLID[renderState.system];
+      // 每点可见性 = 朝向相机(背面剔除) 且 不属于口裂三角面 且 不在前方手部凸包内
+      const mask = ln.pts.map((p, i) => {
+        const v = vis ? vis[ln.tris[i]] : 1;
+        if (innerMouth.has(ln.tris[i])) return 0; // 口裂三角面无论朝向都排除（#38）
+        return v && !(hasMasks && pointInHandMasks(p, masks)) ? 1 : 0;
+      });
+      for (const run of visibleRuns(ln.pts, mask)) {
+        ctx.beginPath(); ctx.moveTo(run[0][0], run[0][1]);
+        for (let i = 1; i < run.length; i++) ctx.lineTo(run[i][0], run[i][1]);
+        ctx.stroke();
+      }
+      count++;
     }
-    count++;
   }
-  if (renderState.meshPts) {
+  if (canDrawAtlas && renderState.meshPts) {
     ctx.globalAlpha = Math.min(1, renderState.opacity); ctx.fillStyle = "rgba(255,255,255,.55)";
     for (let i = 0; i < lm.length; i += 2) {
       if (hasMasks && pointInHandMasks(lm[i], masks)) continue;
       ctx.beginPath(); ctx.arc(lm[i][0], lm[i][1], Math.max(1, W / 1100), 0, 6.283); ctx.fill();
     }
   }
-  drawIncisionOverlay(lm, W, H, masks, vis, innerMouth);
+  drawIncisionOverlay(lm, W, H, masks, vis, innerMouth, frameQualityGate);
   ctx.restore();
   return count;
 }
@@ -374,12 +403,11 @@ function recordIncisionOverlayPoseGate(poseGate) {
   }
 }
 
-function drawIncisionOverlay(lm, W, H, masks, vis, innerMouth) {
+function drawIncisionOverlay(lm, W, H, masks, vis, innerMouth, poseGate) {
   const overlay = renderState.incisionOverlay;
   if (!overlay) {
     overlayRuntimeDiagnostics.key = null;
     overlayRuntimeDiagnostics.landmarkFrames = [];
-    overlayRuntimeDiagnostics.poseGatePreviousFrame = null;
     setDiagnosticSection("incision_overlay_runtime", null);
     setIncisionOverlayQa(null);
     return;
@@ -388,19 +416,7 @@ function drawIncisionOverlay(lm, W, H, masks, vis, innerMouth) {
   if (overlayRuntimeDiagnostics.key !== key) {
     overlayRuntimeDiagnostics.key = key;
     overlayRuntimeDiagnostics.landmarkFrames = [];
-    overlayRuntimeDiagnostics.poseGatePreviousFrame = null;
   }
-  const poseGate = estimateFacePoseQuality(lm, W, H, {
-    presence: sourceState.presence,
-    sourceKind: sourceState.sourceKind,
-    previousLandmarks: overlayRuntimeDiagnostics.poseGatePreviousFrame,
-    expression: {
-      jawOpen: sourceState.jawOpen,
-      eyeBlinkLeft: sourceState.eyeBlinkLeft,
-      eyeBlinkRight: sourceState.eyeBlinkRight,
-    },
-  });
-  overlayRuntimeDiagnostics.poseGatePreviousFrame = cloneLandmarkFrame(lm);
   recordIncisionOverlayPoseGate(poseGate);
   const registration = recordIncisionOverlayRegistration(overlay, lm, W, H);
   let stability = null;
@@ -584,21 +600,23 @@ function focusCropRect(lm, region, W, H) {
 
 // ── 统计 ──────────────────────────────────────────────────────────────────────
 export function updateStats(lm, W, H, lineCount) {
-  const q = Math.round(sourceState.presence * 100);
-  const label = q >= 85 ? "稳定" : q >= 45 ? "一般" : q > 0 ? "寻找中" : "未开始";
+  const gate = sourceState.qualityGate;
+  const rawQ = Math.round(sourceState.presence * 100);
+  const q = gate && !gate.passed ? Math.min(rawQ, 44) : rawQ;
+  const label = gate && !gate.passed ? "需复核" : q >= 85 ? "稳定" : q >= 45 ? "一般" : q > 0 ? "寻找中" : "未开始";
   els.qualityVal.textContent = `${label} ${q}%`; els.qualityBar.style.width = q + "%";
   if (!lm || sourceState.presence <= 0) {
+    sourceState.qualityGate = null;
+    renderQualityDiagnostics.previousFrame = null;
+    renderQualityDiagnostics.source = sourceState.source;
     els.statState.textContent = sourceState.running ? "搜索中" : "未开始";
     els.statFace.textContent = els.statYaw.textContent = els.statLines.textContent = "—";
     setLive(sourceState.running && sourceState.sourceKind === "camera", sourceState.running ? els.live.dataset.k || "运行中" : "待机");
     return;
   }
-  els.statState.textContent = sourceState.presence > 0.85 ? "稳定" : "搜索中";
+  els.statState.textContent = gate && !gate.passed ? "需复核" : sourceState.presence > 0.85 ? "稳定" : "搜索中";
   const bb = faceBBox(lm);
   els.statFace.textContent = Math.round(100 * (bb.w * bb.h) / (W * H)) + "%";
-  // 偏航估计：鼻尖相对两颊中点的水平偏移 / 脸宽
-  const nose = lm[1], cheekL = lm[234], cheekR = lm[454];
-  const cx = (cheekL[0] + cheekR[0]) / 2, fw = Math.abs(cheekR[0] - cheekL[0]) || 1;
-  els.statYaw.textContent = ((nose[0] - cx) / fw).toFixed(2);
+  els.statYaw.textContent = gate?.yaw_norm != null ? gate.yaw_norm.toFixed(2) : "—";
   els.statLines.textContent = lineCount;
 }

@@ -30,6 +30,7 @@ export const sourceState = {
   running: false, paused: false, presence: 0,
   lastLM: null, imageCacheLM: null, imageHulls: null,
   jawOpen: 0, eyeBlinkLeft: 0, eyeBlinkRight: 0,
+  qualityGate: null,
 };
 
 export const recordingState = {

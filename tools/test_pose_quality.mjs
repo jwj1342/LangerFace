@@ -37,6 +37,12 @@ const pass = estimateFacePoseQuality(neutral, 640, 480, {
 assert.equal(pass.passed, true, "neutral high-quality frame passes pose gate");
 assert.equal(pass.schema_version, "incision-overlay-pose-gate/v0.2");
 
+const firstFrame = estimateFacePoseQuality(neutral, 640, 480, {
+  presence: 1,
+  sourceKind: "camera",
+});
+assert.equal(firstFrame.passed, true, "first frame without a previous frame does not fail motion gate");
+
 const side = estimateFacePoseQuality(makeFace({ noseX: 450 }), 640, 480, {
   presence: 1,
   sourceKind: "camera",

@@ -44,7 +44,10 @@ assert.ok(poseQuality.includes("incision-overlay-pose-gate/v0.2"), "renderer exp
 assert.ok(poseQuality.includes("rapid_frame_motion"), "pose gate blocks rapid frame-to-frame motion");
 assert.ok(poseQuality.includes("jaw_open_expression"), "pose gate blocks large jaw-open expression");
 assert.ok(poseQuality.includes("eye_blink_expression"), "pose gate blocks strong blink expression");
-assert.ok(render.includes("poseGatePreviousFrame"), "renderer compares against previous frame for motion gate");
+assert.ok(render.includes("renderQualityDiagnostics"), "renderer tracks previous frame for whole-frame quality gate");
+assert.ok(render.includes("sourceState.qualityGate = gate"), "renderer stores whole-frame quality gate for status UI");
+assert.ok(render.includes('const canDrawAtlas = sourceState.sourceKind === "image" || frameQualityGate.passed'), "renderer pauses live RSTL lines when quality gate fails");
+assert.ok(render.includes('gate && !gate.passed ? "需复核"'), "quality indicator reflects gated frames as review-needed");
 assert.ok(render.includes("incisionOverlay.poseGate.frameMotionNorm"), "renderer records overlay motion gate metric");
 assert.ok(render.includes("incisionOverlay.poseGate.eyeBlinkMax"), "renderer records overlay blink gate metric");
 assert.ok(render.includes("minTriangleAreaPx2"), "renderer filters degenerate projected triangles during live occlusion");
