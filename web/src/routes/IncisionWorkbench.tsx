@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import { IncisionStatePanel } from "../components/IncisionStatePanel";
 
 export function IncisionWorkbench() {
@@ -7,7 +9,7 @@ export function IncisionWorkbench() {
         <div className="brand">
           <div className="brand-top">
             <span className="eyebrow">STAGE 2 · AGENTIC INCISION</span>
-            <a className="badge" href="/index.html">返回实时显示</a>
+            <Link className="badge" to="/live">返回实时显示</Link>
           </div>
           <h1>切口 Agent 工作台</h1>
         </div>
@@ -195,7 +197,7 @@ export function IncisionWorkbench() {
           <span className="live on"><span className="dot"></span>标准脸规划</span>
           <div className="stage-actions">
             <span className="fps" id="stageStatus">拖拽旋转 · 滚轮缩放 · 点击定位</span>
-            <a className="stage-link fps" href="/app/annotate">3D 标注与演示</a>
+            <Link className="stage-link fps" to="/annotate">3D 标注与演示</Link>
           </div>
         </div>
         <div className="stage-body">

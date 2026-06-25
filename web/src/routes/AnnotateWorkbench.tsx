@@ -7,7 +7,7 @@ export function AnnotateWorkbench() {
         <div className="brand">
           <div className="brand-top">
             <span className="eyebrow">3D LINE ANNOTATION</span>
-            <a className="badge" href="/index.html">返回实时显示</a>
+            <Link className="badge" to="/live">返回实时显示</Link>
           </div>
           <h1>3D 网页标注</h1>
         </div>
@@ -25,7 +25,7 @@ export function AnnotateWorkbench() {
           <label className="btn" htmlFor="slicerFile">导入 Slicer 曲线（.mrk.json）</label>
           <input type="file" id="slicerFile" accept=".mrk.json,application/json,.json" hidden />
           <Link className="btn" to="/surgery">沿 RSTL 闭合演示</Link>
-          <a className="btn" href="/index.html">返回实时 Langer 线显示</a>
+          <Link className="btn" to="/live">返回实时 Langer 线显示</Link>
         </div>
 
         <div className="card">
@@ -90,7 +90,7 @@ export function AnnotateWorkbench() {
           <span className="live on"><span className="dot" />标注模式</span>
           <div className="stage-actions">
             <span className="fps">拖拽旋转 · 滚轮缩放 · 点击落点</span>
-            <a className="stage-link" href="/index.html">返回实时显示</a>
+            <Link className="stage-link" to="/live">返回实时显示</Link>
           </div>
         </div>
         <div className="stage-body">

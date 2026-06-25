@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 export function LiveWorkbench() {
   return (
     <div className="app live-workbench">
@@ -53,7 +55,7 @@ export function LiveWorkbench() {
             <label className="field-label">3D 线标注与研究演示</label>
             <p className="hint live-inline-top">在 3D 标准脸上绘制 RSTL 候选线，并从标注页进入沿 RSTL 闭合力学演示。</p>
           </div>
-          <a className="btn btn-primary" href="/app/annotate">打开 3D 线标注</a>
+          <Link className="btn btn-primary" to="/annotate">打开 3D 线标注</Link>
         </div>
 
         <div className="card" id="incisionWorkflowCard">
@@ -61,7 +63,7 @@ export function LiveWorkbench() {
             <label className="field-label">肿物切口候选设计</label>
             <p className="hint live-inline-top">手动放置皮下 / 皮表肿物，生成线性或梭形候选切口，并查看规则、trace、隐私审计和医生调整记录。</p>
           </div>
-          <a className="btn btn-primary" href="/app/incision">打开切口 Agent 工作台</a>
+          <Link className="btn btn-primary" to="/incision">打开切口 Agent 工作台</Link>
         </div>
 
         <div className="card">

@@ -411,7 +411,7 @@ function previewActiveAtlas() {
     setHint("预览失败：浏览器无法暂存图谱。请检查站点存储权限。");
     return;
   }
-  location.href = window.__LANGERFACE_REACT_MANAGED__ ? "/index.html" : "index.html";
+  location.href = window.__LANGERFACE_REACT_MANAGED__ ? "/app/live" : "index.html";
 }
 
 // ── UI 刷新 ───────────────────────────────────────────────────────────────────

@@ -101,8 +101,8 @@ for (const id of [
 ]) {
   assert.ok(incisionWorkbench.includes(`id="${id}"`), `React incision workbench exposes #${id}`);
 }
-assert.ok(incisionWorkbench.includes('href="/index.html"'), "React incision workbench uses absolute links outside /app");
-assert.ok(incisionWorkbench.includes('href="/app/annotate"'), "React incision workbench links to the React 3D annotation route");
+assert.ok(incisionWorkbench.includes('to="/live"'), "React incision workbench returns to the React live route");
+assert.ok(incisionWorkbench.includes('to="/annotate"'), "React incision workbench links to the React 3D annotation route");
 assert.ok(controller.includes("export function mountIncisionAgentWorkbench"), "incision controller exposes a mount lifecycle");
 assert.ok(controller.includes("export function disposeIncisionAgentWorkbench"), "incision controller exposes a dispose lifecycle");
 assert.ok(controller.includes("cancelAnimationFrame"), "incision controller cancels its render loop on dispose");
@@ -147,11 +147,13 @@ for (const id of [
   assert.ok(annotateWorkbench.includes(`id="${id}"`), `React annotate workbench exposes #${id}`);
 }
 assert.ok(annotateWorkbench.includes('to="/surgery"'), "React annotation route links to the React surgery closure route");
+assert.ok(annotateWorkbench.includes('to="/live"'), "React annotation route returns to the React live route");
 assert.ok(annotateController.includes("export function mountAnnotateWorkbench"), "annotation controller exposes a mount lifecycle");
 assert.ok(annotateController.includes("export function disposeAnnotateWorkbench"), "annotation controller exposes a dispose lifecycle");
 assert.ok(annotateController.includes("cancelAnimationFrame"), "annotation controller cancels its render loop on dispose");
 assert.ok(annotateController.includes("abortController?.abort"), "annotation controller aborts DOM listeners on dispose");
 assert.ok(annotateController.includes("activeSession"), "annotation controller guards async loaders across SPA unmounts");
+assert.ok(annotateController.includes('"/app/live"'), "annotation preview jumps back to the React live route when managed by React");
 assert.ok(annotateController.includes("!window.__LANGERFACE_REACT_MANAGED__"), "legacy annotation HTML still auto-mounts outside React");
 assert.ok(annotateViewer.includes("dispose()"), "annotation viewer exposes a WebGL dispose lifecycle");
 assert.ok(liveRoute.includes("__LANGERFACE_REACT_MANAGED__"), "React live route disables controller auto-mount");
@@ -172,8 +174,8 @@ for (const id of [
 ]) {
   assert.ok(liveWorkbench.includes(`id="${id}"`), `React live workbench exposes #${id}`);
 }
-assert.ok(liveWorkbench.includes('href="/app/annotate"'), "React live workbench links to the React annotation route");
-assert.ok(liveWorkbench.includes('href="/app/incision"'), "React live workbench links to the React incision route");
+assert.ok(liveWorkbench.includes('to="/annotate"'), "React live workbench links to the React annotation route");
+assert.ok(liveWorkbench.includes('to="/incision"'), "React live workbench links to the React incision route");
 assert.ok(dom.includes("export function bindDom"), "DOM module can rebind element references for SPA route mounts");
 assert.ok(dom.includes("export let ctx"), "DOM module exports a live canvas context binding");
 assert.ok(liveController.includes("export function mountLiveWorkbench"), "live controller exposes a mount lifecycle");
