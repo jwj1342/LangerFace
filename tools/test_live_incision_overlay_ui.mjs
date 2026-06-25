@@ -10,6 +10,7 @@ const three3d = fs.readFileSync("three3d.js", "utf8");
 const source = fs.readFileSync("pipeline/source.js", "utf8");
 const loop = fs.readFileSync("pipeline/loop.js", "utf8");
 const exporter = fs.readFileSync("export_canvas.js", "utf8");
+const poseQuality = fs.readFileSync("geometry/pose_quality.js", "utf8");
 
 assert.ok(html.includes('accept="image/*,video/*"'), "live page accepts uploaded photos and videos");
 assert.ok(html.includes('id="camBtn"'), "live page exposes camera entry for realtime overlay");
@@ -20,6 +21,9 @@ assert.ok(source.includes('setSource(prepared.source, "image"'), "uploaded photo
 assert.ok(source.includes('setSource(els.video, "video"'), "uploaded videos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "camera"'), "camera frames enter the shared live render source");
 assert.ok(loop.includes('sourceState.sourceKind !== "image"'), "video and camera sources schedule continuous overlay frames");
+assert.ok(loop.includes("eyeBlinkLeft"), "pipeline extracts left blink blendshape for overlay quality gate");
+assert.ok(loop.includes("eyeBlinkRight"), "pipeline extracts right blink blendshape for overlay quality gate");
+assert.ok(loop.includes("jawOpen"), "pipeline extracts jaw-open blendshape for overlay quality gate");
 assert.ok(main.includes("applyStagedIncisionOverlay"), "live page loads staged incision overlay payloads");
 assert.ok(main.includes("validateIncisionOverlay(overlay)"), "live page validates incision overlay payloads before rendering");
 assert.ok(main.includes("renderState.incisionOverlay = overlay"), "live page stores validated incision overlay in render state");
@@ -36,7 +40,13 @@ assert.ok(exporter.includes("drawContain(g, extra.canvas"), "export controller d
 assert.ok(exporter.includes('mimeType: "video/webm"'), "export controller records playable webm output");
 assert.ok(render.includes("drawIncisionOverlay(lm"), "renderer draws incision overlay on every frame");
 assert.ok(render.includes("estimateFacePoseQuality"), "renderer estimates pose quality before drawing incision overlay");
-assert.ok(render.includes("incision-overlay-pose-gate/v0.1"), "renderer exports a versioned incision overlay pose gate");
+assert.ok(poseQuality.includes("incision-overlay-pose-gate/v0.2"), "renderer exports a versioned incision overlay pose gate");
+assert.ok(poseQuality.includes("rapid_frame_motion"), "pose gate blocks rapid frame-to-frame motion");
+assert.ok(poseQuality.includes("jaw_open_expression"), "pose gate blocks large jaw-open expression");
+assert.ok(poseQuality.includes("eye_blink_expression"), "pose gate blocks strong blink expression");
+assert.ok(render.includes("poseGatePreviousFrame"), "renderer compares against previous frame for motion gate");
+assert.ok(render.includes("incisionOverlay.poseGate.frameMotionNorm"), "renderer records overlay motion gate metric");
+assert.ok(render.includes("incisionOverlay.poseGate.eyeBlinkMax"), "renderer records overlay blink gate metric");
 assert.ok(render.includes("minTriangleAreaPx2"), "renderer filters degenerate projected triangles during live occlusion");
 assert.ok(render.includes("measureIncisionOverlayRegistration"), "renderer measures incision overlay projection registration");
 assert.ok(render.includes("measureIncisionOverlayJitter"), "renderer measures live incision overlay rolling jitter");

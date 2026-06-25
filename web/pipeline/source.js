@@ -78,6 +78,7 @@ export function setSource(src, kind, w, h) {
   }
   renderState.smoother.reset();
   sourceState.presence = 0; sourceState.lastLM = null; sourceState.imageCacheLM = null; sourceState.imageHulls = null;
+  sourceState.jawOpen = 0; sourceState.eyeBlinkLeft = 0; sourceState.eyeBlinkRight = 0;
   sourceState.running = true; sourceState.paused = false;
   els.pause.disabled = false; els.export.disabled = false; els.pause.textContent = "⏸ 暂停";
   setMsg(null); setLive(true, kind === "camera" ? "实时摄像头" : kind === "video" ? "视频" : "照片");
@@ -93,4 +94,5 @@ export function stopSource() {
   els.canvas.classList.remove("image-source");
   clearCanvasDisplayFit();
   sourceState.imageCacheLM = null; sourceState.imageHulls = null; sourceState.lastLM = null;
+  sourceState.jawOpen = 0; sourceState.eyeBlinkLeft = 0; sourceState.eyeBlinkRight = 0;
 }

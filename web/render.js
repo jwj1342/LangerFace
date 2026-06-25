@@ -1,7 +1,15 @@
 // 2D 渲染：线条叠加、细节放大窗、统计面板。
 import { SOLID, BAND, ZOOM_REGIONS } from "./constants.js";
 import { ctx, els } from "./dom.js";
-import { innerMouthTriangles, mapAtlas, pointInHandMasks, visibleRuns, visibleTriangles } from "./geometry.js";
+import {
+  estimateFacePoseQuality,
+  faceBBox,
+  innerMouthTriangles,
+  mapAtlas,
+  pointInHandMasks,
+  visibleRuns,
+  visibleTriangles,
+} from "./geometry.js";
 import { mapSurfaceRefs, measureIncisionOverlayJitter, measureIncisionOverlayRegistration } from "./incision_overlay.js";
 import { countMetric, recordMetricSample, setDiagnosticSection } from "./logger.js";
 import { modelState, renderState, sourceState } from "./state.js";
@@ -13,13 +21,8 @@ const focusZoomRange = { min: 1, max: 4.5 };
 const INCISION_ZOOM_REGION = { kind: "incision_overlay" };
 const INCISION_OVERLAY_STABILITY_FRAMES = 8;
 const LIVE_OCCLUSION_MIN_TRIANGLE_AREA_PX2 = 1;
-const INCISION_OVERLAY_POSE_GATE = {
-  schema_version: "incision-overlay-pose-gate/v0.1",
-  min_presence: 0.45,
-  max_abs_yaw_norm: 0.42,
-};
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const overlayRuntimeDiagnostics = { key: null, landmarkFrames: [] };
+const overlayRuntimeDiagnostics = { key: null, landmarkFrames: [], poseGatePreviousFrame: null };
 
 function fmtPx(value) {
   const n = Number(value);
@@ -38,59 +41,6 @@ function fmtRatio(value) {
 function fmtPercent(value) {
   const n = Number(value);
   return Number.isFinite(n) ? `${Math.round(n * 100)}%` : "—";
-}
-
-export function faceBBox(lm) {
-  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-  for (const p of lm) { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); }
-  return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 };
-}
-
-export function estimateFacePoseQuality(
-  lm,
-  W,
-  H,
-  { presence = sourceState.presence, sourceKind = sourceState.sourceKind } = {},
-) {
-  const thresholds = { ...INCISION_OVERLAY_POSE_GATE };
-  const reasons = [];
-  let yawNorm = null;
-  let absYawNorm = null;
-  let faceFrameFraction = null;
-  const presenceValue = Number(presence);
-  if (!Array.isArray(lm) || !lm[1] || !lm[234] || !lm[454]) {
-    reasons.push("missing_pose_landmarks");
-  } else {
-    const bb = faceBBox(lm);
-    if (Number.isFinite(W) && Number.isFinite(H) && W > 0 && H > 0) {
-      faceFrameFraction = (bb.w * bb.h) / (W * H);
-    }
-    const nose = lm[1], cheekL = lm[234], cheekR = lm[454];
-    const cx = (cheekL[0] + cheekR[0]) / 2;
-    const fw = Math.abs(cheekR[0] - cheekL[0]);
-    yawNorm = fw > 0 ? (nose[0] - cx) / fw : null;
-    absYawNorm = Number.isFinite(yawNorm) ? Math.abs(yawNorm) : null;
-    if (!Number.isFinite(absYawNorm)) reasons.push("invalid_pose_yaw");
-    else if (absYawNorm > thresholds.max_abs_yaw_norm) reasons.push("side_pose_yaw_too_large");
-  }
-  if (!Number.isFinite(presenceValue) || presenceValue < thresholds.min_presence) {
-    reasons.push("low_face_presence");
-  }
-  return {
-    schema_version: thresholds.schema_version,
-    passed: reasons.length === 0,
-    reason: reasons[0] || "pose_gate_passed",
-    reasons,
-    source_kind: sourceKind || "unknown",
-    presence: Number.isFinite(presenceValue) ? Number(presenceValue.toFixed(3)) : null,
-    yaw_norm: Number.isFinite(yawNorm) ? Number(yawNorm.toFixed(4)) : null,
-    abs_yaw_norm: Number.isFinite(absYawNorm) ? Number(absYawNorm.toFixed(4)) : null,
-    face_frame_fraction: Number.isFinite(faceFrameFraction) ? Number(faceFrameFraction.toFixed(5)) : null,
-    thresholds: {
-      min_presence: thresholds.min_presence,
-      max_abs_yaw_norm: thresholds.max_abs_yaw_norm,
-    },
-  };
 }
 
 export function draw(lm, W, H, masks = []) {
@@ -235,7 +185,9 @@ function compactPoseGate(poseGate) {
     presence: poseGate.presence,
     yaw_norm: poseGate.yaw_norm,
     abs_yaw_norm: poseGate.abs_yaw_norm,
+    frame_motion_norm: poseGate.frame_motion_norm,
     face_frame_fraction: poseGate.face_frame_fraction,
+    expression: poseGate.expression,
     thresholds: poseGate.thresholds,
   };
 }
@@ -271,7 +223,7 @@ function updateIncisionOverlayQa(registration, stability, poseGate) {
     setIncisionOverlayQa({
       tone: "warn",
       label: "姿态需复核",
-      detail: `工程 QA：${compactReason(poseGate.reason)}；偏航 ${fmtRatio(poseGate.yaw_norm)} / 门槛 ±${fmtRatio(poseGate.thresholds?.max_abs_yaw_norm)}，检测 ${fmtPercent(poseGate.presence)}。暂不绘制候选叠加。`,
+      detail: `工程 QA：${compactReason(poseGate.reason)}；${poseGateQaSummary(poseGate)}。暂不绘制候选叠加。`,
     });
     return;
   }
@@ -296,6 +248,23 @@ function updateIncisionOverlayQa(registration, stability, poseGate) {
     label: stability.passed ? "叠加稳定" : "抖动需复核",
     detail: stability.passed ? detail : `${detail} 原因：${compactReason(stability.reason)}。`,
   });
+}
+
+function poseGateQaSummary(poseGate) {
+  const parts = [
+    `偏航 ${fmtRatio(poseGate.yaw_norm)} / 门槛 ±${fmtRatio(poseGate.thresholds?.max_abs_yaw_norm)}`,
+    `检测 ${fmtPercent(poseGate.presence)}`,
+  ];
+  if (poseGate.frame_motion_norm != null) {
+    parts.push(`运动 ${fmtRatio(poseGate.frame_motion_norm)} / 门槛 ${fmtRatio(poseGate.thresholds?.max_frame_motion_norm)}`);
+  }
+  if (poseGate.expression?.jaw_open != null) {
+    parts.push(`张口 ${fmtPercent(poseGate.expression.jaw_open)}`);
+  }
+  if (poseGate.expression?.eye_blink_max != null) {
+    parts.push(`眨眼 ${fmtPercent(poseGate.expression.eye_blink_max)}`);
+  }
+  return parts.join("，");
 }
 
 function recordIncisionOverlayRegistration(overlay, lm, W, H) {
@@ -382,6 +351,27 @@ function recordIncisionOverlayPoseGate(poseGate) {
       sourceKind: poseGate.source_kind,
     });
   }
+  if (poseGate.frame_motion_norm != null) {
+    recordMetricSample("incisionOverlay.poseGate.frameMotionNorm", poseGate.frame_motion_norm, {
+      passed: poseGate.passed,
+      reason: poseGate.reason,
+      sourceKind: poseGate.source_kind,
+    });
+  }
+  if (poseGate.expression?.jaw_open != null) {
+    recordMetricSample("incisionOverlay.poseGate.jawOpen", poseGate.expression.jaw_open, {
+      passed: poseGate.passed,
+      reason: poseGate.reason,
+      sourceKind: poseGate.source_kind,
+    });
+  }
+  if (poseGate.expression?.eye_blink_max != null) {
+    recordMetricSample("incisionOverlay.poseGate.eyeBlinkMax", poseGate.expression.eye_blink_max, {
+      passed: poseGate.passed,
+      reason: poseGate.reason,
+      sourceKind: poseGate.source_kind,
+    });
+  }
 }
 
 function drawIncisionOverlay(lm, W, H, masks, vis, innerMouth) {
@@ -389,18 +379,34 @@ function drawIncisionOverlay(lm, W, H, masks, vis, innerMouth) {
   if (!overlay) {
     overlayRuntimeDiagnostics.key = null;
     overlayRuntimeDiagnostics.landmarkFrames = [];
+    overlayRuntimeDiagnostics.poseGatePreviousFrame = null;
     setDiagnosticSection("incision_overlay_runtime", null);
     setIncisionOverlayQa(null);
     return;
   }
-  const poseGate = estimateFacePoseQuality(lm, W, H);
+  const key = overlayRuntimeKey(overlay);
+  if (overlayRuntimeDiagnostics.key !== key) {
+    overlayRuntimeDiagnostics.key = key;
+    overlayRuntimeDiagnostics.landmarkFrames = [];
+    overlayRuntimeDiagnostics.poseGatePreviousFrame = null;
+  }
+  const poseGate = estimateFacePoseQuality(lm, W, H, {
+    presence: sourceState.presence,
+    sourceKind: sourceState.sourceKind,
+    previousLandmarks: overlayRuntimeDiagnostics.poseGatePreviousFrame,
+    expression: {
+      jawOpen: sourceState.jawOpen,
+      eyeBlinkLeft: sourceState.eyeBlinkLeft,
+      eyeBlinkRight: sourceState.eyeBlinkRight,
+    },
+  });
+  overlayRuntimeDiagnostics.poseGatePreviousFrame = cloneLandmarkFrame(lm);
   recordIncisionOverlayPoseGate(poseGate);
   const registration = recordIncisionOverlayRegistration(overlay, lm, W, H);
   let stability = null;
   if (poseGate.passed) {
     stability = recordIncisionOverlayStability(overlay, lm);
   } else {
-    overlayRuntimeDiagnostics.key = overlayRuntimeKey(overlay);
     overlayRuntimeDiagnostics.landmarkFrames = [];
   }
   updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stability, poseGate);
