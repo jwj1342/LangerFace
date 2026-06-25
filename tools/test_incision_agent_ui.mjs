@@ -46,7 +46,11 @@ assert.ok(js.includes("classifyRegion(S.verts[S.lesion]"), "workbench derives an
 assert.ok(js.includes("当前点位分区"), "workbench labels live anatomy preview in Chinese");
 assert.ok(js.includes("updateAnatomyPreview"), "workbench refreshes anatomy preview when the selected point changes");
 assert.ok(js.includes("tumorQualityFor"), "workbench keeps tumor quality in review exports");
+assert.ok(js.includes("tumor_boundary_summary"), "review records include tumor boundary summary geometry");
+assert.ok(js.includes("boundarySummaryFor(result.tumor, result)"), "review records summarize tumor boundary against the saved candidate axis");
 assert.ok(js.includes("肿物输入提示"), "markdown report includes tumor input quality warnings");
+assert.ok(js.includes("肿物边界摘要"), "markdown report includes tumor boundary summary");
+assert.ok(js.includes("梭形包络"), "markdown report includes fusiform outline and boundary envelope metrics");
 assert.ok(js.includes("normalizeSecondaryCuePayload"), "workbench normalizes secondary cue imports");
 assert.ok(js.includes("secondary_cues"), "review exports include secondary cue summaries");
 assert.ok(js.includes("used_for_geometry: false"), "secondary cues never drive geometry");

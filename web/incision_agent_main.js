@@ -511,9 +511,11 @@ function tumorInput() {
   };
 }
 
-function boundarySummaryFor(tumor = tumorInput()) {
-  const axis = S.result?.candidate?.axis || S.baseResult?.candidate?.axis || [1, 0, 0];
-  return summarizeTumorBoundary(tumor, axis, S.normals?.[S.lesion] || [0, 0, 1], S.unitsPerMm || 1);
+function boundarySummaryFor(tumor = tumorInput(), result = S.result) {
+  const axis = result?.candidate?.axis || result?.original_candidate?.axis || S.result?.candidate?.axis || S.baseResult?.candidate?.axis || [1, 0, 0];
+  const lesionIndex = Array.isArray(tumor?.center) ? nearestVertex(tumor.center) : S.lesion;
+  const normal = S.normals?.[lesionIndex] || S.normals?.[S.lesion] || [0, 0, 1];
+  return summarizeTumorBoundary(tumor, axis, normal, S.unitsPerMm || 1);
 }
 
 function updateBoundaryStatus() {
@@ -1253,6 +1255,7 @@ function reviewRecord(result = S.result, label = "候选") {
   const actor = review.reviewer || result.tumor?.author || "unknown";
   const gate = reviewGate(review, result);
   const traceGate = agentTraceGate(result);
+  const tumorBoundarySummary = boundarySummaryFor(result.tumor, result);
   return {
     schema_version: "incision-review-record/v0.3",
     id: `candidate_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
@@ -1260,6 +1263,7 @@ function reviewRecord(result = S.result, label = "候选") {
     created_at: createdAt,
     tumor: result.tumor,
     tumor_quality: tumorQualityFor(result),
+    tumor_boundary_summary: tumorBoundarySummary,
     secondary_cues: secondaryCueReviewSummary(),
     anatomy: result.anatomy,
     direction: result.direction,
@@ -1516,6 +1520,7 @@ function exportReport() {
     : "";
   const body = rows.map((r, idx) => {
     const metrics = r.candidate.metrics || {};
+    const boundary = r.tumor_boundary_summary || {};
     const warningLines = (r.guardrails.warnings || [])
       .map((w) => `  - ${w.code} [${w.severity}] ${w.message || ""}`)
       .join("\n") || "  - 无";
@@ -1536,6 +1541,9 @@ function exportReport() {
       : null,
     r.secondary_cues?.present
       ? `- 辅助线索：${r.secondary_cues.confidence_label}；人工确认 ${r.secondary_cues.manual_confirmed ? "是" : "否"}；不参与几何 ${r.secondary_cues.used_for_geometry === false ? "是" : "否"}`
+      : null,
+    boundary.boundary_used
+      ? `- 肿物边界摘要：点数 ${boundary.point_count ?? "—"}；长轴 ${fmt(boundary.axis_diameter_mm)} mm；短轴 ${fmt(boundary.perp_diameter_mm)} mm；面积 ${fmt(boundary.area_mm2)} mm²；自交 ${boundary.self_intersection ? "是" : "否"}；中心偏移 ${fmt(boundary.center_shift_mm)} mm`
       : null,
     `- 面部分区：${r.anatomy.region} / ${r.anatomy.subunit}`,
     (r.anatomy.confidence_reasons || []).length
@@ -1569,6 +1577,9 @@ function exportReport() {
       : null,
     r.candidate.type === "fusiform"
       ? `- 边界质量：点数 ${metrics.boundary_point_count ?? "—"}；面积 ${fmt(metrics.boundary_area_mm2)} mm²；自交 ${metrics.boundary_self_intersection ? "是" : "否"}；中心偏移 ${fmt(metrics.boundary_center_shift_mm)} mm`
+      : null,
+    r.candidate.type === "fusiform"
+      ? `- 梭形包络：outline 面积 ${fmt(metrics.outline_area_mm2)} mm²；单峰收窄 ${metrics.outline_half_width_monotone === false ? "否" : "是"}；对称误差 ${fmt(metrics.outline_symmetry_max_error_mm)} mm；自交 ${metrics.outline_self_intersection ? "是" : "否"}；边界余量 ${fmt(metrics.boundary_envelope_min_margin_mm)} mm；出界点 ${metrics.boundary_envelope_outside_count ?? 0}`
       : null,
     metrics.sensitive_free_margin_min_distance_mm != null
       ? `- 最近敏感游离缘：${metrics.sensitive_free_margin_nearest || "—"}，${fmt(metrics.sensitive_free_margin_min_distance_mm)} mm`
