@@ -28,7 +28,14 @@ TOOL_SCHEMAS = [
     {
         "name": "classify_region",
         "input": ["point"],
-        "output": ["region", "subunit", "confidence", "free_margin_distance_mm"],
+        "output": [
+            "region",
+            "subunit",
+            "confidence",
+            "confidence_reasons",
+            "region_boundary_margin_norm",
+            "free_margin_distance_mm",
+        ],
     },
     {
         "name": "query_rstl_direction",

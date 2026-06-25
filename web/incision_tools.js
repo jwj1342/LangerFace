@@ -42,7 +42,7 @@ const DEFAULT_RULES = {
 };
 
 const TOOL_SCHEMAS = [
-  { name: "classify_region", input: ["point"], output: ["region", "subunit", "confidence", "free_margin_distance_mm"] },
+  { name: "classify_region", input: ["point"], output: ["region", "subunit", "confidence", "confidence_reasons", "region_boundary_margin_norm", "free_margin_distance_mm"] },
   { name: "query_rstl_direction", input: ["point", "source"], output: ["vector", "angle_deg", "confidence", "support_count", "angular_spread_deg", "confidence_reasons"] },
   { name: "linear_subcutaneous_incision", input: ["tumor", "direction", "units_per_mm"], output: ["endpoints", "length_mm", "metrics"] },
   { name: "fusiform_cutaneous_incision", input: ["tumor", "direction", "units_per_mm"], output: ["outline", "length_mm", "width_mm", "metrics"] },
@@ -68,6 +68,24 @@ const SENSITIVE_MARGIN_SEGMENTS = {
   left_nasal_ala_margin: [[0.36, 0.45], [0.42, 0.52]],
   right_nasal_ala_margin: [[0.58, 0.52], [0.64, 0.45]],
   lip_vermilion_margin: [[0.34, 0.31], [0.66, 0.31]],
+};
+const REGION_BOUNDARY_X = [
+  0.12, 0.18, 0.20, 0.22, 0.24, 0.28, 0.30, 0.34, 0.36, 0.38,
+  0.39, 0.42, 0.43, 0.44, 0.56, 0.57, 0.58, 0.61, 0.62, 0.64,
+  0.66, 0.70, 0.72, 0.76, 0.78, 0.80, 0.82, 0.88,
+];
+const REGION_BOUNDARY_Y = [
+  0.22, 0.24, 0.28, 0.30, 0.34, 0.39, 0.40, 0.42, 0.47, 0.49,
+  0.50, 0.53, 0.55, 0.56, 0.58, 0.62, 0.68, 0.76, 0.80,
+];
+const REGION_TRANSITION_REASONS = {
+  ear_region: "lateral_face_edge_bucket",
+  temple_cheek: "lateral_face_transition",
+  inner_canthus: "overlapping_sensitive_subunit",
+  nasal_tip: "narrow_nasal_tip_band",
+  nasolabial_fold: "nasolabial_transition_band",
+  oral_commissure: "oral_commissure_transition_band",
+  jawline: "jawline_or_face_boundary",
 };
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -118,11 +136,34 @@ export function unitsPerMmFromVertices(verts, faceHeightMm = 180) {
   return height > 1e-9 ? height / faceHeightMm : 1;
 }
 
+function regionBoundaryMarginNorm(normalizedXY) {
+  const [nx, ny] = normalizedXY;
+  const xMargin = Math.min(...REGION_BOUNDARY_X.map((boundary) => Math.abs(nx - boundary)));
+  const yMargin = Math.min(...REGION_BOUNDARY_Y.map((boundary) => Math.abs(ny - boundary)));
+  const edgeMargin = Math.min(nx, 1 - nx, ny, 1 - ny);
+  return Math.min(xMargin, yMargin, edgeMargin);
+}
+
+function regionConfidenceReasons({ region, confidence, rawXY, clippedXY, nearbyLandmarks, boundaryMargin }) {
+  const reasons = ["bbox_heuristic_region_classifier"];
+  const [rawX, rawY] = rawXY;
+  const [nx, ny] = clippedXY;
+  if (rawX < 0 || rawX > 1 || rawY < 0 || rawY > 1) reasons.push("outside_canonical_face_bbox");
+  if (Math.min(nx, 1 - nx, ny, 1 - ny) <= 0.02) reasons.push("near_canonical_face_edge");
+  if (boundaryMargin <= 0.015) reasons.push("near_region_rule_boundary");
+  if (confidence < 0.55) reasons.push("heuristic_region_low_confidence");
+  if ((nearbyLandmarks || []).length) reasons.push("near_sensitive_free_margin");
+  if (REGION_TRANSITION_REASONS[region]) reasons.push(REGION_TRANSITION_REASONS[region]);
+  return [...new Set(reasons)];
+}
+
 export function classifyRegion(point, verts) {
   const { lo, hi } = bbox(verts);
   const span = [Math.max(hi[0] - lo[0], 1e-9), Math.max(hi[1] - lo[1], 1e-9)];
-  const nx = clamp((point[0] - lo[0]) / span[0], 0, 1);
-  const ny = clamp((point[1] - lo[1]) / span[1], 0, 1);
+  const rawNx = (point[0] - lo[0]) / span[0];
+  const rawNy = (point[1] - lo[1]) / span[1];
+  const nx = clamp(rawNx, 0, 1);
+  const ny = clamp(rawNy, 0, 1);
   let region = "cheek", subunit = "midface", confidence = 0.64;
   if (ny >= 0.80) [region, subunit, confidence] = ["forehead", "forehead", 0.56];
   else if ((nx <= 0.12 || nx >= 0.88) && ny >= 0.30 && ny <= 0.76) [region, subunit, confidence] = ["ear_region", "preauricular_or_postauricular", 0.42];
@@ -148,6 +189,15 @@ export function classifyRegion(point, verts) {
     }
   }
   const sensitive = ["lower_eyelid", "lip_vermilion", "nasal_ala", "nasal_tip", "oral_commissure"].includes(region) || nearby.length > 0;
+  const boundaryMargin = regionBoundaryMarginNorm([nx, ny]);
+  const confidenceReasons = regionConfidenceReasons({
+    region,
+    confidence,
+    rawXY: [rawNx, rawNy],
+    clippedXY: [nx, ny],
+    nearbyLandmarks: nearby,
+    boundaryMargin,
+  });
   return {
     region,
     subunit,
@@ -156,6 +206,8 @@ export function classifyRegion(point, verts) {
     sensitive,
     nearby_landmarks: nearby,
     free_margin_distance_mm: freeMarginDistanceMm,
+    confidence_reasons: confidenceReasons,
+    region_boundary_margin_norm: boundaryMargin,
   };
 }
 
@@ -633,7 +685,12 @@ export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
     });
   }
   if ((anatomy.confidence || 0) < cfg.low_region_confidence) {
-    warnings.push({ code: "low_region_confidence", severity: "medium", message: "Face region classification is low confidence; require clinician review." });
+    const reasons = anatomy.confidence_reasons || [];
+    warnings.push({
+      code: "low_region_confidence",
+      severity: "medium",
+      message: `Face region classification is low confidence; require clinician review${reasons.length ? ` (${reasons.join(", ")}).` : "."}`,
+    });
   }
   if (cfg.sensitive_regions[anatomy.region]) {
     warnings.push({ code: `sensitive_region_${anatomy.region}`, severity: "high", message: cfg.sensitive_regions[anatomy.region] });

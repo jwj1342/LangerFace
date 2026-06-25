@@ -6,7 +6,7 @@
     {
       "name": "classify_region",
       "input": ["point"],
-      "output": ["region", "subunit", "confidence", "nearby_landmarks", "free_margin_distance_mm"]
+      "output": ["region", "subunit", "confidence", "confidence_reasons", "region_boundary_margin_norm", "nearby_landmarks", "free_margin_distance_mm"]
     },
     {
       "name": "query_rstl_direction",

@@ -382,6 +382,22 @@ def test_sensitive_free_margin_distance_uses_margin_segments():
     assert anatomy.free_margin_distance_mm is not None
     assert anatomy.free_margin_distance_mm < 1.0
     assert "left_lower_eyelid_margin" in anatomy.nearby_landmarks
+    assert "near_sensitive_free_margin" in anatomy.confidence_reasons
+
+
+def test_anatomy_classifier_records_region_confidence_reasons():
+    vertices, _, _ = _simple_mesh_and_atlas()
+    anatomy = classify_region([0.8, 5.5, 0.0], vertices)
+    assert anatomy.region == "ear_region"
+    assert anatomy.confidence < 0.45
+    assert "bbox_heuristic_region_classifier" in anatomy.confidence_reasons
+    assert "heuristic_region_low_confidence" in anatomy.confidence_reasons
+    assert "lateral_face_edge_bucket" in anatomy.confidence_reasons
+    assert anatomy.region_boundary_margin_norm is not None
+
+    guardrails = evaluate_guardrails({"type": "linear", "direction_confidence": 0.9}, anatomy)
+    warning = next(w for w in guardrails["warnings"] if w["code"] == "low_region_confidence")
+    assert "lateral_face_edge_bucket" in warning["message"]
 
 
 def test_guardrails_flag_candidate_geometry_near_sensitive_free_margin():

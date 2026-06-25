@@ -29,6 +29,66 @@ SENSITIVE_MARGIN_SEGMENTS = {
     "right_nasal_ala_margin": ((0.58, 0.52), (0.64, 0.45)),
     "lip_vermilion_margin": ((0.34, 0.31), (0.66, 0.31)),
 }
+REGION_BOUNDARY_X = (
+    0.12,
+    0.18,
+    0.20,
+    0.22,
+    0.24,
+    0.28,
+    0.30,
+    0.34,
+    0.36,
+    0.38,
+    0.39,
+    0.42,
+    0.43,
+    0.44,
+    0.56,
+    0.57,
+    0.58,
+    0.61,
+    0.62,
+    0.64,
+    0.66,
+    0.70,
+    0.72,
+    0.76,
+    0.78,
+    0.80,
+    0.82,
+    0.88,
+)
+REGION_BOUNDARY_Y = (
+    0.22,
+    0.24,
+    0.28,
+    0.30,
+    0.34,
+    0.39,
+    0.40,
+    0.42,
+    0.47,
+    0.49,
+    0.50,
+    0.53,
+    0.55,
+    0.56,
+    0.58,
+    0.62,
+    0.68,
+    0.76,
+    0.80,
+)
+REGION_TRANSITION_REASONS = {
+    "ear_region": "lateral_face_edge_bucket",
+    "temple_cheek": "lateral_face_transition",
+    "inner_canthus": "overlapping_sensitive_subunit",
+    "nasal_tip": "narrow_nasal_tip_band",
+    "nasolabial_fold": "nasolabial_transition_band",
+    "oral_commissure": "oral_commissure_transition_band",
+    "jawline": "jawline_or_face_boundary",
+}
 
 
 @dataclass(frozen=True)
@@ -40,6 +100,8 @@ class AnatomyContext:
     sensitive: bool = False
     nearby_landmarks: tuple[str, ...] = ()
     free_margin_distance_mm: float | None = None
+    confidence_reasons: tuple[str, ...] = ()
+    region_boundary_margin_norm: float | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -50,6 +112,8 @@ class AnatomyContext:
             "sensitive": self.sensitive,
             "nearby_landmarks": list(self.nearby_landmarks),
             "free_margin_distance_mm": self.free_margin_distance_mm,
+            "confidence_reasons": list(self.confidence_reasons),
+            "region_boundary_margin_norm": self.region_boundary_margin_norm,
         }
 
 
@@ -95,6 +159,41 @@ def sensitive_margin_distances(
     return distances
 
 
+def _region_boundary_margin_norm(normalized_xy: tuple[float, float]) -> float:
+    nx, ny = normalized_xy
+    x_margin = min(abs(nx - boundary) for boundary in REGION_BOUNDARY_X)
+    y_margin = min(abs(ny - boundary) for boundary in REGION_BOUNDARY_Y)
+    edge_margin = min(nx, 1.0 - nx, ny, 1.0 - ny)
+    return float(min(x_margin, y_margin, edge_margin))
+
+
+def _region_confidence_reasons(
+    *,
+    region: str,
+    confidence: float,
+    raw_xy: tuple[float, float],
+    clipped_xy: tuple[float, float],
+    nearby_landmarks: list[str],
+    boundary_margin: float,
+) -> tuple[str, ...]:
+    reasons: list[str] = ["bbox_heuristic_region_classifier"]
+    raw_x, raw_y = raw_xy
+    if raw_x < 0.0 or raw_x > 1.0 or raw_y < 0.0 or raw_y > 1.0:
+        reasons.append("outside_canonical_face_bbox")
+    if min(clipped_xy[0], 1.0 - clipped_xy[0], clipped_xy[1], 1.0 - clipped_xy[1]) <= 0.02:
+        reasons.append("near_canonical_face_edge")
+    if boundary_margin <= 0.015:
+        reasons.append("near_region_rule_boundary")
+    if confidence < 0.55:
+        reasons.append("heuristic_region_low_confidence")
+    if nearby_landmarks:
+        reasons.append("near_sensitive_free_margin")
+    transition_reason = REGION_TRANSITION_REASONS.get(region)
+    if transition_reason:
+        reasons.append(transition_reason)
+    return tuple(dict.fromkeys(reasons))
+
+
 def classify_region(
     point: tuple[float, float, float] | list[float],
     vertices: np.ndarray | None = None,
@@ -102,8 +201,10 @@ def classify_region(
     lo, hi = _bbox(vertices)
     span = np.maximum(hi - lo, 1e-9)
     p = np.asarray(point, dtype=np.float64)
-    nx = float((p[0] - lo[0]) / span[0])
-    ny = float((p[1] - lo[1]) / span[1])
+    raw_nx = float((p[0] - lo[0]) / span[0])
+    raw_ny = float((p[1] - lo[1]) / span[1])
+    nx = raw_nx
+    ny = raw_ny
 
     # Canonical MediaPipe y is vertical in this project. These bands are
     # intentionally broad: low confidence is safer than pretending precision.
@@ -149,6 +250,15 @@ def classify_region(
         if dist_mm <= 28.0:
             nearby.append(name)
             nearest_margin = dist_mm if nearest_margin is None else min(nearest_margin, dist_mm)
+    boundary_margin = _region_boundary_margin_norm(clipped)
+    confidence_reasons = _region_confidence_reasons(
+        region=region,
+        confidence=conf,
+        raw_xy=(raw_nx, raw_ny),
+        clipped_xy=clipped,
+        nearby_landmarks=nearby,
+        boundary_margin=boundary_margin,
+    )
 
     return AnatomyContext(
         region=region,
@@ -158,4 +268,6 @@ def classify_region(
         sensitive=region in SENSITIVE_REGIONS or bool(nearby),
         nearby_landmarks=tuple(nearby),
         free_margin_distance_mm=nearest_margin,
+        confidence_reasons=confidence_reasons,
+        region_boundary_margin_norm=boundary_margin,
     )

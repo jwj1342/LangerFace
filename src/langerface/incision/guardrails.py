@@ -131,6 +131,11 @@ def evaluate_guardrails(
         if isinstance(anatomy, AnatomyContext)
         else float(anatomy.get("confidence", 0.0))
     )
+    region_reasons = (
+        anatomy.confidence_reasons
+        if isinstance(anatomy, AnatomyContext)
+        else tuple(anatomy.get("confidence_reasons", []))
+    )
     free_margin_distance = (
         anatomy.free_margin_distance_mm
         if isinstance(anatomy, AnatomyContext)
@@ -163,7 +168,10 @@ def evaluate_guardrails(
         warnings.append({
             "code": "low_region_confidence",
             "severity": "medium",
-            "message": "Face region classification is low confidence; require clinician review.",
+            "message": (
+                "Face region classification is low confidence; require clinician review"
+                + (f" ({', '.join(str(x) for x in region_reasons)})." if region_reasons else ".")
+            ),
         })
 
     if region in sensitive_rules:

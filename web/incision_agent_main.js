@@ -648,7 +648,9 @@ function renderResult(result) {
   const directionReasons = result.direction.confidence_reasons || [];
   els.directionConf.textContent = `${Math.round((result.direction.confidence || 0) * 100)}%${directionReasons.length ? ` · ${directionReasons.join(", ")}` : ""}`;
   els.directionConf.title = directionReasons.length ? `RSTL 低置信原因：${directionReasons.join(", ")}` : "";
-  els.regionVal.textContent = result.anatomy.region;
+  const regionReasons = result.anatomy.confidence_reasons || [];
+  els.regionVal.textContent = `${result.anatomy.region}${regionReasons.length ? ` · ${regionReasons.join(", ")}` : ""}`;
+  els.regionVal.title = regionReasons.length ? `分区置信原因：${regionReasons.join(", ")}` : "";
   els.guardrailVal.textContent = result.guardrails.passed ? "通过" : "复核";
   els.guardrailVal.style.color = result.guardrails.passed ? "" : "#b45309";
   renderGuardrailDetails(result.guardrails);
@@ -956,6 +958,9 @@ function exportReport() {
     `- 类型：${r.candidate.type === "linear" ? "皮下线性切口" : "皮表梭形切口"}`,
     `- 肿物：${r.tumor.kind}，直径 ${fmt(r.tumor.diameter_mm)} mm，切缘 ${fmt(r.tumor.margin_mm)} mm`,
     `- 面部分区：${r.anatomy.region} / ${r.anatomy.subunit}`,
+    (r.anatomy.confidence_reasons || []).length
+      ? `- 分区置信原因：${r.anatomy.confidence_reasons.join(", ")}`
+      : null,
     `- RSTL 方向置信度：${Math.round((r.direction.confidence || 0) * 100)}%`,
     (r.direction.confidence_reasons || []).length
       ? `- RSTL 低置信原因：${r.direction.confidence_reasons.join(", ")}`

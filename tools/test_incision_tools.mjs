@@ -232,6 +232,19 @@ const segmentAnatomy = T.classifyRegion([4, 5.9, 0], verts);
 ok(segmentAnatomy.free_margin_distance_mm < 1, "free-margin distance uses eyelid margin segments");
 ok(segmentAnatomy.nearby_landmarks.includes("left_lower_eyelid_margin"),
   "free-margin landmarks include eyelid margin segment");
+ok(segmentAnatomy.confidence_reasons.includes("near_sensitive_free_margin"),
+  "region classifier records sensitive-margin confidence reason");
+const earAnatomy = T.classifyRegion([0.8, 5.5, 0], verts);
+ok(earAnatomy.region === "ear_region", "region classifier reaches ear bucket");
+ok(earAnatomy.confidence_reasons.includes("heuristic_region_low_confidence"),
+  "region classifier records low-confidence heuristic reason");
+ok(earAnatomy.confidence_reasons.includes("lateral_face_edge_bucket"),
+  "region classifier records lateral edge reason");
+ok(Number.isFinite(earAnatomy.region_boundary_margin_norm),
+  "region classifier records normalized boundary margin");
+const earGuard = T.evaluateGuardrails({ type: "linear", direction_confidence: 0.9 }, earAnatomy);
+ok(earGuard.warnings.some((w) => w.code === "low_region_confidence" && w.message.includes("lateral_face_edge_bucket")),
+  "low-region guardrail reports region confidence reason");
 ok(T.classifyRegion([5, 3, 0], verts).region === "lip_vermilion", "region classifier reaches lip vermilion bucket");
 ok(T.classifyRegion([4.2, 4.6, 0], verts).region === "nasal_ala", "region classifier reaches nasal ala bucket");
 const nearMarginCandidate = {

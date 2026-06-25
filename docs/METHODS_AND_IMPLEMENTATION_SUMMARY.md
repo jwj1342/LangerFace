@@ -722,6 +722,8 @@ Stage 2 目标是在当前张力线迁移基础上，加入肿物输入、临床
 3. 美学亚单位边界：眉缘、唇红缘、发际线、鼻翼沟、耳前皱襞等。
 4. 敏感结构例外：下睑、唇红缘、鼻翼等区域需要优先保护形态和功能。
 
+当前面部分区仍是标准脸 bbox 启发式，但分区输出会携带 `confidence_reasons` 和 `region_boundary_margin_norm`。`bbox_heuristic_region_classifier`、`near_region_rule_boundary`、`near_canonical_face_edge`、`near_sensitive_free_margin`、`heuristic_region_low_confidence` 以及耳周、鼻尖、口角、下颌缘等过渡区标签会进入工具 trace、guardrail 文案和审阅报告，帮助医生区分“规则边界附近”与“明确敏感结构附近”。这些解释不是临床级分区验证。
+
 ### 21.4 皮下肿物线性切口
 
 皮下肿物默认生成线性切口：
@@ -825,7 +827,7 @@ axis_coverage_deficit_mm = max(0, axis_coverage_required_mm - length_mm)
 | 模块 | 计划位置 | 职责 |
 | --- | --- | --- |
 | 临床规则库 | `assets/clinical_rules_face_incision.json` | 区域规则、优先级、例外和审核状态 |
-| 面部分区 | `src/langerface/anatomy/`, `web/anatomy*.js` | 点位到临床区域和美学亚单位的映射 |
+| 面部分区 | `src/langerface/anatomy/`, `web/anatomy*.js` | 点位到临床区域和美学亚单位的映射，输出分区低置信原因 |
 | RSTL 方向服务 | `src/langerface/lines/direction.py` | 查询局部方向、置信度和依据 |
 | 肿物模型 | `src/langerface/tumor/`, `web/tumor*.js` | 表达皮下/皮表肿物约束 |
 | 切口生成 | `src/langerface/incision/` | 线性和梭形候选生成 |

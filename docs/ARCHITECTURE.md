@@ -306,7 +306,7 @@ Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部
 | 模块 | 计划位置 | 职责 | Issue |
 |---|---|---|---|
 | 临床规则库 | `assets/clinical_rules_face_incision.json` | 结构化区域规则、优先级、例外、审核状态 | #11 |
-| 面部分区 / 亚单位 | `src/langerface/anatomy/`, `web/anatomy*.js` | 把点或肿物中心映射到临床区域 / 美学亚单位 | #12 |
+| 面部分区 / 亚单位 | `src/langerface/anatomy/`, `web/anatomy*.js` | 把点或肿物中心映射到临床区域 / 美学亚单位，并输出 bbox/边界/过渡区/敏感游离缘相关 `confidence_reasons` | #12 |
 | RSTL 方向服务 | `src/langerface/lines/direction.py`, `web/*direction*.js` | 查询局部方向、置信度和依据；离散度使用无向轴角，并输出 atlas 为空、支持点过远/过少、角度冲突等 `confidence_reasons` | #13 |
 | 肿物模型 | `src/langerface/tumor/`, `web/tumor*.js` | 表示皮下 / 皮表肿物输入与单位 | #14 |
 | 皮下线性切口 | `src/langerface/incision/linear.py` | 基于超声直径和 RSTL 方向生成线性候选 | #15 |
