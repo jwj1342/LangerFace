@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 
 import numpy as np
 
@@ -30,6 +31,7 @@ from ..log import (
 )
 from ..rendering.occlusion import BackfaceCuller
 from ..rendering.overlay import draw_overlay
+from ..texture import HessianWrinkleExtractor, warp_mapped_lines
 
 log = get_logger(__name__)
 
@@ -104,6 +106,7 @@ class LinePipeline:
         self._last_mapped: list[list | None] = [None] * n
         self._last_visible: list[np.ndarray | None] = [None] * n
         self._fade_step = 1.0 / max(1, config.fade_frames)
+        self._wrinkle_extractor = HessianWrinkleExtractor(config.wrinkle_field)
 
     def _new_smoother(self) -> LandmarkSmoother:
         return LandmarkSmoother(
@@ -126,8 +129,17 @@ class LinePipeline:
     def set_smoothing(self, enabled: bool) -> None:
         self.cfg.smoothing = bool(enabled)
 
+    def set_texture_warp(self, enabled: bool) -> None:
+        """Enable/disable patient-specific wrinkle-guided local warping."""
+        self.cfg.texture_warp = replace(self.cfg.texture_warp, enabled=bool(enabled))
+
     # ── 主入口 ─────────────────────────────────────────────────────────────────
-    def process(self, frame_bgr: np.ndarray, timestamp_ms: int | None = None) -> np.ndarray:
+    def process(
+        self,
+        frame_bgr: np.ndarray,
+        timestamp_ms: int | None = None,
+        wrinkle_mask: np.ndarray | None = None,
+    ) -> np.ndarray:
         if self.cfg.system not in self.atlases:
             log.error(
                 "线系统 %r 的图谱缺失。",
@@ -151,6 +163,10 @@ class LinePipeline:
         with log_stage_duration(log, "frame.detect", Phase.DETECT):
             faces = self.detector.detect(frame_bgr, timestamp_ms)
         out = frame_bgr
+        wrinkle_field = None
+        if self.cfg.texture_warp.enabled and faces:
+            with log_stage_duration(log, "frame.texture", Phase.FRAME):
+                wrinkle_field = self._wrinkle_extractor.extract(frame_bgr, wrinkle_mask=wrinkle_mask)
 
         if not faces:
             # 检测失败/丢脸：可枚举 reason，而非仅自由文本。
@@ -169,6 +185,8 @@ class LinePipeline:
                 if self.cfg.smoothing and self.mode == "video":
                     lm = self._smoothers[i].filter(lm, t_sec)
                 mapped = map_atlas(atlas, lm, self._triangles)
+                if wrinkle_field is not None:
+                    mapped = warp_mapped_lines(mapped, wrinkle_field, self.cfg.texture_warp)
                 visible = self.culler.visible_triangles(lm) if self.culler else None
                 self._last_mapped[i] = mapped
                 self._last_visible[i] = visible

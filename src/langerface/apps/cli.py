@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 
 from ..config.constants import VALID_SYSTEMS
 from ..config.settings import build_config
@@ -24,21 +25,41 @@ def run_image(args) -> int:
     if frame is None:
         log.error("无法读取图片 %s", args.image)
         return 1
-    cfg = build_config(args.system, args.num_faces,
-                       smoothing=not args.no_smoothing, occlusion=not args.no_occlusion)
+    wrinkle_mask = None
+    if args.wrinkle_mask:
+        wrinkle_mask = cv2.imread(args.wrinkle_mask, cv2.IMREAD_GRAYSCALE)
+        if wrinkle_mask is None:
+            log.error("unable to read wrinkle mask %s", args.wrinkle_mask)
+            return 1
+    cfg = _config_from_args(args)
     with LinePipeline(cfg, mode="image") as pipe:
-        out = pipe.process(frame)
+        out = pipe.process(frame, wrinkle_mask=wrinkle_mask)
     cv2.imwrite(args.output, out)
     log.info("已写出 %s", args.output)
     return 0
 
 
 def run_video(args) -> int:
-    cfg = build_config(args.system, args.num_faces,
-                       smoothing=not args.no_smoothing, occlusion=not args.no_occlusion)
+    cfg = _config_from_args(args)
     with LinePipeline(cfg, mode="video") as pipe:
         process_video(args.video, args.output, pipe.process)
     return 0
+
+
+def _config_from_args(args):
+    cfg = build_config(
+        args.system,
+        args.num_faces,
+        smoothing=not args.no_smoothing,
+        occlusion=not args.no_occlusion,
+        texture_warp=args.texture_warp,
+    )
+    cfg.texture_warp = replace(
+        cfg.texture_warp,
+        max_shift_px=args.texture_warp_max_shift,
+        search_radius_px=args.texture_warp_radius,
+    )
+    return cfg
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -51,6 +72,27 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--num-faces", type=int, default=1)
     ap.add_argument("--no-smoothing", action="store_true", help="关闭时间平滑")
     ap.add_argument("--no-occlusion", action="store_true", help="关闭背面剔除")
+    ap.add_argument(
+        "--texture-warp",
+        action="store_true",
+        help="enable patient wrinkle-guided local warping",
+    )
+    ap.add_argument(
+        "--texture-warp-max-shift",
+        type=float,
+        default=5.0,
+        help="maximum local warp shift in pixels",
+    )
+    ap.add_argument(
+        "--texture-warp-radius",
+        type=float,
+        default=8.0,
+        help="normal-search radius for wrinkle ridges",
+    )
+    ap.add_argument(
+        "--wrinkle-mask",
+        help="optional model-predicted wrinkle mask for --image texture warping",
+    )
     return ap
 
 
