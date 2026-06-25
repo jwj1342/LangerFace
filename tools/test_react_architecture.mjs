@@ -21,6 +21,7 @@ const incisionStore = read("src/stores/incisionStore.ts");
 const incisionBridge = read("src/hooks/useIncisionControllerBridge.ts");
 const incisionStatePanel = read("src/components/IncisionStatePanel.tsx");
 const tumorPanel = read("src/components/TumorInputPanel.tsx");
+const candidateResultPanel = read("src/components/CandidateResultPanel.tsx");
 const providerPanel = read("src/components/ProviderConfigPanel.tsx");
 const editPanel = read("src/components/EditControlsPanel.tsx");
 const reviewPanel = read("src/components/ReviewControlsPanel.tsx");
@@ -151,6 +152,26 @@ assert.ok(incisionWorkbench.includes("TumorInputPanel"), "React incision workben
 assert.ok(tumorPanel.includes("TUMOR_REACT_COMMAND_EVENT"), "React tumor panel dispatches tumor commands to the controller boundary");
 assert.ok(tumorPanel.includes("useIncisionStore"), "React tumor panel syncs low-frequency tumor status from Zustand");
 for (const id of [
+  "candidateType",
+  "candidateLength",
+  "candidateWidth",
+  "candidateTipAngle",
+  "directionConf",
+  "regionVal",
+  "guardrailVal",
+  "llmSummary",
+  "directionSource",
+  "agentGate",
+  "agentComparison",
+  "nextStep",
+  "guardrailDetails",
+]) {
+  assert.ok(candidateResultPanel.includes(`id="${id}"`), `React candidate result panel exposes #${id}`);
+}
+assert.ok(incisionStore.includes("IncisionResultViewState"), "incision Zustand store keeps typed candidate result view state");
+assert.ok(incisionWorkbench.includes("CandidateResultPanel"), "React incision workbench renders the candidate result as a React component");
+assert.ok(candidateResultPanel.includes("useIncisionStore"), "React candidate result panel reads low-frequency result view state from Zustand");
+for (const id of [
   "providerMode",
   "providerBaseUrl",
   "providerModel",
@@ -210,6 +231,7 @@ assert.ok(controller.includes("export function mountIncisionAgentWorkbench"), "i
 assert.ok(controller.includes("export function disposeIncisionAgentWorkbench"), "incision controller exposes a dispose lifecycle");
 assert.ok(controller.includes("INCISION_TUMOR_REACT_COMMAND_EVENT"), "incision controller listens for React tumor input commands");
 assert.ok(controller.includes("handleReactTumorCommand"), "incision controller routes React tumor commands to existing tumor workflow functions");
+assert.ok(controller.includes("currentResultViewSnapshot"), "incision controller publishes candidate result view state for React rendering");
 assert.ok(controller.includes("INCISION_PROVIDER_REACT_STATE_EVENT"), "incision controller listens for React provider state changes");
 assert.ok(controller.includes("INCISION_REVIEW_REACT_COMMAND_EVENT"), "incision controller listens for React review commands");
 assert.ok(controller.includes("handleReactReviewCommand"), "incision controller routes React review commands to existing review workflow functions");

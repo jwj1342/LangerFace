@@ -261,6 +261,46 @@ function currentCandidateSnapshot(result = S.result) {
   };
 }
 
+function textOf(el, fallback = "") {
+  return el?.textContent || fallback;
+}
+
+function titleOf(el) {
+  return el?.title || "";
+}
+
+function hasClass(el, className) {
+  return Boolean(el?.classList?.contains(className));
+}
+
+function currentResultViewSnapshot() {
+  return {
+    candidateType: textOf(els.candidateType, "—"),
+    candidateLength: textOf(els.candidateLength, "—"),
+    candidateWidth: textOf(els.candidateWidth, "—"),
+    candidateTipAngle: textOf(els.candidateTipAngle, "—"),
+    directionConfidence: textOf(els.directionConf, "—"),
+    directionTitle: titleOf(els.directionConf),
+    region: textOf(els.regionVal, "—"),
+    regionTitle: titleOf(els.regionVal),
+    guardrailLabel: textOf(els.guardrailVal, "—"),
+    guardrailWarn: Boolean(els.guardrailVal?.style?.color),
+    llmSummary: textOf(els.llmSummary, "尚未生成。"),
+    directionSource: textOf(els.directionSource, "方向依据：尚未生成。"),
+    directionSourceWarn: hasClass(els.directionSource, "warn"),
+    agentGate: textOf(els.agentGate, "Agent 工具门控：尚未生成。"),
+    agentGateWarn: hasClass(els.agentGate, "warn"),
+    agentGateTitle: titleOf(els.agentGate),
+    agentComparison: textOf(els.agentComparison, "Agent 候选比较：尚未生成。"),
+    agentComparisonWarn: hasClass(els.agentComparison, "warn"),
+    agentComparisonTitle: titleOf(els.agentComparison),
+    nextStep: textOf(els.nextStep, ""),
+    guardrailDetails: textOf(els.guardrailDetails, "Guardrails 尚未运行。"),
+    guardrailDetailsWarn: hasClass(els.guardrailDetails, "warn"),
+    guardrailDetailsDanger: hasClass(els.guardrailDetails, "danger"),
+  };
+}
+
 function publishIncisionState(reason = "state_update") {
   if (!S.mounted || typeof window === "undefined" || !els.stageStatus) return;
   window.dispatchEvent(new CustomEvent(INCISION_CONTROLLER_STATE_EVENT, {
@@ -273,6 +313,7 @@ function publishIncisionState(reason = "state_update") {
       review: currentReviewSnapshot(),
       edit: currentEditSnapshot(),
       candidate: currentCandidateSnapshot(),
+      resultView: currentResultViewSnapshot(),
       workflowRuntime: S.result?.workflow_runtime || null,
       savedCount: S.saved?.length || 0,
       updatedAt: new Date().toISOString(),

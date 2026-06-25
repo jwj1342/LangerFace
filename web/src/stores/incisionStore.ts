@@ -56,6 +56,32 @@ export interface IncisionCandidateSummary {
   edited: boolean;
 }
 
+export interface IncisionResultViewState {
+  candidateType: string;
+  candidateLength: string;
+  candidateWidth: string;
+  candidateTipAngle: string;
+  directionConfidence: string;
+  directionTitle: string;
+  region: string;
+  regionTitle: string;
+  guardrailLabel: string;
+  guardrailWarn: boolean;
+  llmSummary: string;
+  directionSource: string;
+  directionSourceWarn: boolean;
+  agentGate: string;
+  agentGateWarn: boolean;
+  agentGateTitle: string;
+  agentComparison: string;
+  agentComparisonWarn: boolean;
+  agentComparisonTitle: string;
+  nextStep: string;
+  guardrailDetails: string;
+  guardrailDetailsWarn: boolean;
+  guardrailDetailsDanger: boolean;
+}
+
 export interface IncisionWorkflowRuntime {
   executor: string;
   worker: boolean;
@@ -72,6 +98,7 @@ export interface IncisionControllerSnapshot {
   review: IncisionReviewState;
   edit: IncisionEditState;
   candidate: IncisionCandidateSummary | null;
+  resultView: IncisionResultViewState;
   workflowRuntime: IncisionWorkflowRuntime | null;
   savedCount: number;
   updatedAt: string;

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+import { CandidateResultPanel } from "../components/CandidateResultPanel";
 import { EditControlsPanel } from "../components/EditControlsPanel";
 import { IncisionStatePanel } from "../components/IncisionStatePanel";
 import { ProviderConfigPanel } from "../components/ProviderConfigPanel";
@@ -35,23 +36,7 @@ export function IncisionWorkbench() {
 
         <ProviderConfigPanel />
 
-        <div className="card">
-          <div className="quality-top"><span>候选结果</span><span id="candidateType">—</span></div>
-          <div className="metric-grid">
-            <div className="metric"><span className="k">长度</span><span className="v" id="candidateLength">—</span></div>
-            <div className="metric"><span className="k">宽度 / 比例</span><span className="v" id="candidateWidth">—</span></div>
-            <div className="metric"><span className="k">尖端角</span><span className="v" id="candidateTipAngle">—</span></div>
-            <div className="metric"><span className="k">RSTL 置信度</span><span className="v" id="directionConf">—</span></div>
-            <div className="metric"><span className="k">面部分区</span><span className="v" id="regionVal">—</span></div>
-            <div className="metric"><span className="k">Guardrails</span><span className="v" id="guardrailVal">—</span></div>
-          </div>
-          <p className="hint" id="llmSummary">尚未生成。</p>
-          <p className="guardrail-details" id="directionSource">方向依据：尚未生成。</p>
-          <p className="guardrail-details" id="agentGate">Agent 工具门控：尚未生成。</p>
-          <p className="guardrail-details" id="agentComparison">Agent 候选比较：尚未生成。</p>
-          <p className="hint" id="nextStep"></p>
-          <p className="guardrail-details" id="guardrailDetails">Guardrails 尚未运行。</p>
-        </div>
+        <CandidateResultPanel />
 
         <EditControlsPanel />
 
