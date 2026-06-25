@@ -60,6 +60,9 @@ assert.ok(js.includes("candidate_comparison"), "review export includes candidate
 assert.ok(js.includes("candidate_alternatives"), "review export includes backend candidate alternatives");
 assert.ok(js.includes("agent_orchestration_audit"), "review export includes backend orchestration audit");
 assert.ok(js.includes("renderAgentComparison"), "workbench renders backend candidate comparison");
+assert.ok(js.includes("formatRecoveredFailureSummary"), "workbench formats recovered tool failures");
+assert.ok(js.includes("Agent 恢复详情"), "markdown report includes recovered failure details");
+assert.ok(js.includes("已跳过失败变体并继续比较"), "recovered failure summary explains candidate skip behavior");
 assert.ok(js.includes("不是临床推荐或手术指令"), "candidate comparison warns it is not clinical recommendation");
 assert.ok(js.includes("reviewReadiness"), "review workflow validates approval readiness");
 assert.ok(js.includes("highGuardrailWarnings"), "review workflow detects high guardrail warnings");

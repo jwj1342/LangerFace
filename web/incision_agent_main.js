@@ -835,6 +835,22 @@ function renderAgentGate(result) {
   els.agentGate.title = `observed_actions=${gate.observed_actions.join(", ")}`;
 }
 
+function formatRecoveredFailureSummary(audit, includeError = false) {
+  const failures = Array.isArray(audit?.recovered_failures) ? audit.recovered_failures : [];
+  return failures
+    .map((failure) => {
+      const variant = failure.variant
+        || (failure.angle_offset_deg != null ? `${fmt(failure.angle_offset_deg)}°` : "候选变体");
+      const tool = failure.tool || "确定性工具";
+      const recovery = failure.recovery === "skipped_failed_variant_and_kept_other_candidates"
+        ? "已跳过失败变体并继续比较"
+        : failure.recovery || "已记录恢复动作";
+      const error = includeError && failure.error ? `；错误 ${String(failure.error).slice(0, 80)}` : "";
+      return `${variant}/${tool}：${recovery}${error}`;
+    })
+    .join("；");
+}
+
 function renderAgentComparison(result) {
   if (!els.agentComparison) return;
   const comparison = Array.isArray(result.candidate_comparison) ? result.candidate_comparison : [];
@@ -848,8 +864,14 @@ function renderAgentComparison(result) {
     .slice(0, 3)
     .map((item) => `#${item.rank} ${item.label || item.id} ${fmt(item.score, 1)}分`)
     .join("；");
-  const failures = audit.tool_failure_count ? `；恢复失败 ${audit.tool_failure_count} 个` : "";
+  const failureSummary = formatRecoveredFailureSummary(audit);
+  const failures = audit.tool_failure_count
+    ? `；恢复失败 ${audit.tool_failure_count} 个${failureSummary ? `（${failureSummary}）` : ""}`
+    : "";
   els.agentComparison.classList.toggle("warn", Boolean(audit.tool_failure_count));
+  els.agentComparison.title = failureSummary
+    ? `recovered_failures=${formatRecoveredFailureSummary(audit, true)}`
+    : "";
   els.agentComparison.textContent =
     `Agent 候选比较：${comparison.length} 个后端候选 · ${top}${failures}。工程排序不是临床推荐或手术指令。`;
 }
@@ -1225,6 +1247,7 @@ function exportReport() {
     const overrideLines = (r.guardrails.suggested_overrides || [])
       .map((o) => `  - ${o.kind}: ${o.reason || ""}`)
       .join("\n") || "  - 无";
+    const recoveredFailureDetails = formatRecoveredFailureSummary(r.agent_orchestration_audit, true);
     return [
     `## 候选 ${idx + 1}: ${r.label}`,
     `- 类型：${r.candidate.type === "linear" ? "皮下线性切口" : "皮表梭形切口"}`,
@@ -1249,6 +1272,7 @@ function exportReport() {
     r.agent_orchestration_audit
       ? `- Agent 编排审计：候选 ${r.agent_orchestration_audit.candidate_count || 0} 个；比较 ${r.agent_orchestration_audit.comparison_ready ? "已生成" : "未生成"}；恢复失败 ${r.agent_orchestration_audit.tool_failure_count || 0} 个`
       : null,
+    recoveredFailureDetails ? `- Agent 恢复详情：${recoveredFailureDetails}` : null,
     (r.candidate_comparison || []).length
       ? `- Agent 后端候选比较：${r.candidate_comparison.map((c) => `#${c.rank} ${c.label || c.id} ${fmt(c.score, 1)}分`).join("；")}（不是临床推荐或手术指令）`
       : null,
