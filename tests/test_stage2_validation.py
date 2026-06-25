@@ -207,12 +207,45 @@ def _local_region_quality(
     }
 
 
-def _overlay_runtime(local_region_quality: dict) -> dict:
+def _landmark_smoothing(
+    *,
+    smooth_level: float,
+    global_min_cutoff: float,
+    global_beta: float,
+    enabled: bool = True,
+) -> dict:
+    return {
+        "schema_version": "landmark-motion-stabilized-smoothing/v0.1",
+        "enabled": enabled,
+        "smooth_level": smooth_level,
+        "method": "global_translation_plus_local_one_euro",
+        "local": {"min_cutoff": 1.5, "beta": 0.05, "dcutoff": 1.0},
+        "global": {
+            "min_cutoff": global_min_cutoff,
+            "beta": global_beta,
+            "dcutoff": 1.0,
+            "anchor_count": 16,
+        },
+        "exported_landmarks": False,
+        "clinical_boundary": "Smoothing diagnostics expose parameters only.",
+    }
+
+
+def _overlay_runtime(
+    local_region_quality: dict,
+    landmark_smoothing: dict | None = None,
+) -> dict:
     return {
         "schema_version": "incision-overlay-runtime-diagnostics/v0.1",
         "exported_raw_pixels": False,
         "exported_landmarks": False,
         "local_region_quality": local_region_quality,
+        "landmark_smoothing": landmark_smoothing
+        or _landmark_smoothing(
+            smooth_level=0.6,
+            global_min_cutoff=1.65,
+            global_beta=0.0124,
+        ),
         "clinical_boundary": "Runtime diagnostics are engineering QA signals.",
     }
 
@@ -369,7 +402,12 @@ def _export_payload() -> dict:
                             "expression_value": 0.08,
                         },
                     ],
-                )
+                ),
+                _landmark_smoothing(
+                    smooth_level=0.8,
+                    global_min_cutoff=1.2,
+                    global_beta=0.0152,
+                ),
             ),
             overlay_3d_view=_overlay_3d_view(
                 rendered=False,
@@ -481,6 +519,19 @@ def test_stage2_validation_summary_aggregates_review_export():
     assert summary["metrics"]["incision_overlay_local_active_region_count"]["max"] == 1
     assert summary["metrics"]["incision_overlay_local_region_motion_norm"]["mean"] == 0.031
     assert summary["metrics"]["incision_overlay_local_region_expression_value"]["mean"] == 0.52
+    assert summary["incision_overlay_landmark_smoothing"]["present_count"] == 2
+    assert summary["incision_overlay_landmark_smoothing"]["enabled_count"] == 2
+    assert summary["incision_overlay_landmark_smoothing"]["disabled_count"] == 0
+    assert summary["incision_overlay_landmark_smoothing"]["enabled_rate"] == 1.0
+    assert summary["incision_overlay_landmark_smoothing"]["method_counts"] == {
+        "global_translation_plus_local_one_euro": 2,
+    }
+    assert summary["metrics"]["incision_overlay_smoothing_smooth_level"]["min"] == 0.6
+    assert summary["metrics"]["incision_overlay_smoothing_smooth_level"]["max"] == 0.8
+    assert summary["metrics"]["incision_overlay_smoothing_local_min_cutoff"]["mean"] == 1.5
+    assert summary["metrics"]["incision_overlay_smoothing_global_min_cutoff"]["min"] == 1.2
+    assert summary["metrics"]["incision_overlay_smoothing_global_beta"]["max"] == 0.0152
+    assert summary["metrics"]["incision_overlay_smoothing_global_anchor_count"]["mean"] == 16
     assert summary["incision_overlay_3d_view"]["present_count"] == 2
     assert summary["incision_overlay_3d_view"]["rendered_count"] == 1
     assert summary["incision_overlay_3d_view"]["failed_count"] == 1
@@ -518,6 +569,7 @@ def test_stage2_validation_summary_aggregates_review_export():
         ("overview", "record_count", "", 3),
         ("clinician_review", "approval_rate", "", 2 / 3),
         ("incision_overlay_local_region_quality", "pass_rate", "", 0.5),
+        ("incision_overlay_landmark_smoothing", "enabled_rate", "", 1.0),
         ("incision_overlay_replay_qa", "pass_rate", "", 0.5),
         ("privacy_audit", "raw_media_sent_count", "", 0),
         ("secondary_cues", "used_for_agent_prompt_count", "", 0),
@@ -529,6 +581,19 @@ def test_stage2_validation_summary_aggregates_review_export():
         row["section"] == "metrics"
         and row["metric"] == "incision_overlay_replay_registration_pass_rate"
         and row["min"] == 2 / 3
+        for row in csv_rows
+    )
+    assert any(
+        row["section"] == "metrics"
+        and row["metric"] == "incision_overlay_smoothing_global_min_cutoff"
+        and row["min"] == 1.2
+        for row in csv_rows
+    )
+    assert any(
+        row["section"] == "incision_overlay_landmark_smoothing"
+        and row["metric"] == "method_counts"
+        and row["submetric"] == "global_translation_plus_local_one_euro"
+        and row["value"] == 2
         for row in csv_rows
     )
     assert any(
@@ -585,5 +650,12 @@ def test_stage2_validation_cli_writes_summary(tmp_path: Path):
         and row["metric"] == "action_counts"
         and row["submetric"] == "dim"
         and row["value"] == "1"
+        for row in rows
+    )
+    assert any(
+        row["section"] == "incision_overlay_landmark_smoothing"
+        and row["metric"] == "method_counts"
+        and row["submetric"] == "global_translation_plus_local_one_euro"
+        and row["value"] == "2"
         for row in rows
     )

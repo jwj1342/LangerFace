@@ -25,6 +25,7 @@ OVERLAY_3D_VIEW_DIAGNOSTICS_SCHEMA = "incision-overlay-3d-view-diagnostics/v0.1"
 OVERLAY_3D_VIEW_SCHEMA = "incision-overlay-3d-view/v0.1"
 OVERLAY_RUNTIME_DIAGNOSTICS_SCHEMA = "incision-overlay-runtime-diagnostics/v0.1"
 LOCAL_REGION_QUALITY_SCHEMA = "rstl-local-region-quality-gate/v0.1"
+LANDMARK_SMOOTHING_SCHEMA = "landmark-motion-stabilized-smoothing/v0.1"
 
 STATUS_APPROVED = "approved_for_discussion"
 STATUS_REJECTED = "rejected_by_clinician"
@@ -264,6 +265,21 @@ def _overlay_local_region_quality(record: dict[str, Any]) -> dict[str, Any] | No
     return local_quality
 
 
+def _overlay_landmark_smoothing(record: dict[str, Any]) -> dict[str, Any] | None:
+    smoothing = (
+        record.get("incision_overlay_landmark_smoothing")
+        or record.get("overlay_landmark_smoothing")
+    )
+    if not isinstance(smoothing, dict):
+        runtime = _overlay_runtime(record)
+        smoothing = runtime.get("landmark_smoothing") if isinstance(runtime, dict) else None
+    if not isinstance(smoothing, dict):
+        return None
+    if smoothing.get("schema_version") != LANDMARK_SMOOTHING_SCHEMA:
+        return None
+    return smoothing
+
+
 def _overlay_3d_viewer(view_3d: dict[str, Any]) -> dict[str, Any]:
     viewer = view_3d.get("viewer")
     return viewer if isinstance(viewer, dict) else view_3d
@@ -332,6 +348,14 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     overlay_local_active_region_count: list[float] = []
     overlay_local_region_motion_norm: list[float] = []
     overlay_local_region_expression_value: list[float] = []
+    overlay_smoothing_smooth_level: list[float] = []
+    overlay_smoothing_local_min_cutoff: list[float] = []
+    overlay_smoothing_local_beta: list[float] = []
+    overlay_smoothing_local_dcutoff: list[float] = []
+    overlay_smoothing_global_min_cutoff: list[float] = []
+    overlay_smoothing_global_beta: list[float] = []
+    overlay_smoothing_global_dcutoff: list[float] = []
+    overlay_smoothing_global_anchor_count: list[float] = []
 
     passed_guardrails = 0
     raw_image_sent_count = 0
@@ -361,6 +385,10 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     overlay_local_region_active_region_counts: Counter[str] = Counter()
     overlay_local_region_action_counts: Counter[str] = Counter()
     overlay_local_region_source_kind_counts: Counter[str] = Counter()
+    overlay_smoothing_present_count = 0
+    overlay_smoothing_enabled_count = 0
+    overlay_smoothing_disabled_count = 0
+    overlay_smoothing_method_counts: Counter[str] = Counter()
     overlay_3d_present_count = 0
     overlay_3d_rendered_count = 0
     overlay_3d_failed_count = 0
@@ -504,6 +532,30 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
                 if expression_value is not None:
                     overlay_local_region_expression_value.append(expression_value)
 
+        smoothing = _overlay_landmark_smoothing(record)
+        if smoothing:
+            overlay_smoothing_present_count += 1
+            if smoothing.get("enabled") is True:
+                overlay_smoothing_enabled_count += 1
+            elif smoothing.get("enabled") is False:
+                overlay_smoothing_disabled_count += 1
+            overlay_smoothing_method_counts[str(smoothing.get("method") or "unknown")] += 1
+            local = smoothing.get("local") or {}
+            global_params = smoothing.get("global") or {}
+            for target, source, key in [
+                (overlay_smoothing_smooth_level, smoothing, "smooth_level"),
+                (overlay_smoothing_local_min_cutoff, local, "min_cutoff"),
+                (overlay_smoothing_local_beta, local, "beta"),
+                (overlay_smoothing_local_dcutoff, local, "dcutoff"),
+                (overlay_smoothing_global_min_cutoff, global_params, "min_cutoff"),
+                (overlay_smoothing_global_beta, global_params, "beta"),
+                (overlay_smoothing_global_dcutoff, global_params, "dcutoff"),
+                (overlay_smoothing_global_anchor_count, global_params, "anchor_count"),
+            ]:
+                value = _numeric(source.get(key) if isinstance(source, dict) else None)
+                if value is not None:
+                    target.append(value)
+
         view_3d = _overlay_3d_view(record)
         if view_3d:
             overlay_3d_present_count += 1
@@ -639,6 +691,30 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
             "incision_overlay_local_region_expression_value": summarize_numbers(
                 overlay_local_region_expression_value,
             ),
+            "incision_overlay_smoothing_smooth_level": summarize_numbers(
+                overlay_smoothing_smooth_level,
+            ),
+            "incision_overlay_smoothing_local_min_cutoff": summarize_numbers(
+                overlay_smoothing_local_min_cutoff,
+            ),
+            "incision_overlay_smoothing_local_beta": summarize_numbers(
+                overlay_smoothing_local_beta,
+            ),
+            "incision_overlay_smoothing_local_dcutoff": summarize_numbers(
+                overlay_smoothing_local_dcutoff,
+            ),
+            "incision_overlay_smoothing_global_min_cutoff": summarize_numbers(
+                overlay_smoothing_global_min_cutoff,
+            ),
+            "incision_overlay_smoothing_global_beta": summarize_numbers(
+                overlay_smoothing_global_beta,
+            ),
+            "incision_overlay_smoothing_global_dcutoff": summarize_numbers(
+                overlay_smoothing_global_dcutoff,
+            ),
+            "incision_overlay_smoothing_global_anchor_count": summarize_numbers(
+                overlay_smoothing_global_anchor_count,
+            ),
         },
         "failure_mode_counts": dict(sorted(failure_mode_counts.items())),
         "incision_overlay_stability": {
@@ -688,6 +764,17 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
             "clinical_boundary": (
                 "Local region quality is an engineering overlay confidence signal for high-motion "
                 "eye/brow and mouth regions; it is not clinical video validation."
+            ),
+        },
+        "incision_overlay_landmark_smoothing": {
+            "present_count": overlay_smoothing_present_count,
+            "enabled_count": overlay_smoothing_enabled_count,
+            "disabled_count": overlay_smoothing_disabled_count,
+            "enabled_rate": _ratio(overlay_smoothing_enabled_count, overlay_smoothing_present_count),
+            "method_counts": dict(sorted(overlay_smoothing_method_counts.items())),
+            "clinical_boundary": (
+                "Landmark smoothing diagnostics expose filter parameters only; they do not export "
+                "landmark coordinates and do not prove clinical AR stability."
             ),
         },
         "incision_overlay_3d_view": {
@@ -845,6 +932,7 @@ def validation_summary_csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]
         "incision_overlay_registration",
         "incision_overlay_replay_qa",
         "incision_overlay_local_region_quality",
+        "incision_overlay_landmark_smoothing",
         "incision_overlay_3d_view",
     ]:
         data = summary.get(section) or {}
@@ -854,6 +942,9 @@ def validation_summary_csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]
             "passed_count",
             "failed_count",
             "pass_rate",
+            "enabled_count",
+            "disabled_count",
+            "enabled_rate",
             "rendered_count",
             "rendered_rate",
         ]:
@@ -871,6 +962,7 @@ def validation_summary_csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]
             "active_region_counts",
             "action_counts",
             "source_kind_counts",
+            "method_counts",
         ]:
             rows.extend(_count_rows(section, count_metric, data.get(count_metric, {}) or {}))
 
