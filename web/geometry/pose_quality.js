@@ -11,6 +11,37 @@ export const INCISION_OVERLAY_POSE_GATE = {
 };
 
 export const POSE_MOTION_ANCHORS = [1, 33, 263, 61, 291, 199, 234, 454];
+export const LOCAL_REGION_QUALITY_GATE = {
+  schema_version: "rstl-local-region-quality-gate/v0.1",
+  dim_region_motion_norm: 0.025,
+  freeze_region_motion_norm: 0.045,
+  dim_eye_blink: 0.45,
+  freeze_eye_blink: 0.7,
+  dim_jaw_open: 0.3,
+  freeze_jaw_open: 0.5,
+  dim_opacity_scale: 0.36,
+};
+
+export const LOCAL_REGION_QUALITY_REGIONS = [
+  {
+    id: "brow_eye",
+    label: "眼眉区",
+    landmarks: [10, 151, 9, 8, 107, 336, 69, 299, 33, 133, 159, 145, 153, 246, 7, 163, 362, 263, 386, 374, 380, 466, 249, 390],
+    expressionMetric: "eye_blink_max",
+    dimExpression: "dim_eye_blink",
+    freezeExpression: "freeze_eye_blink",
+    expressionReason: "eye_blink_local_expression",
+  },
+  {
+    id: "mouth",
+    label: "口周",
+    landmarks: [61, 291, 0, 17, 13, 14, 40, 270, 78, 308, 82, 312, 87, 317],
+    expressionMetric: "jaw_open",
+    dimExpression: "dim_jaw_open",
+    freezeExpression: "freeze_jaw_open",
+    expressionReason: "jaw_open_local_expression",
+  },
+];
 
 function finitePoint(p) {
   return Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]);
@@ -54,6 +85,10 @@ export function frameMotionNorm(lm, previousLandmarks, anchors = POSE_MOTION_ANC
   return Math.sqrt(sum / count) / faceDiag;
 }
 
+export function regionMotionNorm(lm, previousLandmarks, landmarkIndices) {
+  return frameMotionNorm(lm, previousLandmarks, landmarkIndices);
+}
+
 export function normalizeFaceExpression(expression = {}) {
   const jawOpen = Number(expression.jawOpen ?? expression.jaw_open ?? 0);
   const eyeBlinkLeft = Number(expression.eyeBlinkLeft ?? expression.eye_blink_left ?? 0);
@@ -67,6 +102,89 @@ export function normalizeFaceExpression(expression = {}) {
     eye_blink_left: Number.isFinite(eyeBlinkLeft) ? roundOrNull(eyeBlinkLeft, 3) : 0,
     eye_blink_right: Number.isFinite(eyeBlinkRight) ? roundOrNull(eyeBlinkRight, 3) : 0,
     eye_blink_max: roundOrNull(eyeBlinkMax, 3),
+  };
+}
+
+function uniqueReasons(reasons) {
+  return [...new Set(reasons.filter(Boolean))];
+}
+
+function regionAction(reasons, motionNorm, exprValue, region, thresholds) {
+  let action = "normal";
+  const outReasons = [...reasons];
+  if (motionNorm != null && motionNorm > thresholds.freeze_region_motion_norm) {
+    action = "freeze";
+    outReasons.push(`${region.id}_rapid_local_motion`);
+  } else if (motionNorm != null && motionNorm > thresholds.dim_region_motion_norm) {
+    action = "dim";
+    outReasons.push(`${region.id}_local_motion_review`);
+  }
+  if (exprValue != null && exprValue > thresholds[region.freezeExpression]) {
+    action = "freeze";
+    outReasons.push(region.expressionReason);
+  } else if (exprValue != null && exprValue > thresholds[region.dimExpression] && action !== "freeze") {
+    action = "dim";
+    outReasons.push(region.expressionReason);
+  }
+  return { action, reasons: uniqueReasons(outReasons) };
+}
+
+export function estimateLocalRegionQuality(
+  lm,
+  W,
+  H,
+  {
+    sourceKind = "unknown",
+    previousLandmarks = null,
+    expression = {},
+    thresholds: overrides = {},
+  } = {},
+) {
+  const thresholds = { ...LOCAL_REGION_QUALITY_GATE, ...overrides };
+  const expr = normalizeFaceExpression(expression);
+  const regions = [];
+  const reasons = [];
+  const liveSource = sourceKind !== "image";
+
+  for (const region of LOCAL_REGION_QUALITY_REGIONS) {
+    const motionNorm = liveSource ? regionMotionNorm(lm, previousLandmarks, region.landmarks) : null;
+    const exprValue = expr[region.expressionMetric];
+    const result = liveSource
+      ? regionAction([], motionNorm, exprValue, region, thresholds)
+      : { action: "normal", reasons: [] };
+    regions.push({
+      id: region.id,
+      label: region.label,
+      action: result.action,
+      opacity_scale: result.action === "dim" ? thresholds.dim_opacity_scale : result.action === "freeze" ? 0 : 1,
+      reasons: result.reasons,
+      motion_norm: roundOrNull(motionNorm),
+      expression_metric: region.expressionMetric,
+      expression_value: roundOrNull(exprValue, 3),
+    });
+    reasons.push(...result.reasons);
+  }
+
+  const activeRegions = regions.filter((r) => r.action !== "normal");
+  return {
+    schema_version: thresholds.schema_version,
+    passed: activeRegions.length === 0,
+    reason: activeRegions[0]?.reasons?.[0] || "local_regions_passed",
+    reasons: uniqueReasons(reasons),
+    source_kind: sourceKind || "unknown",
+    active_region_count: activeRegions.length,
+    active_regions: activeRegions.map((r) => r.id),
+    regions,
+    thresholds: {
+      dim_region_motion_norm: thresholds.dim_region_motion_norm,
+      freeze_region_motion_norm: thresholds.freeze_region_motion_norm,
+      dim_eye_blink: thresholds.dim_eye_blink,
+      freeze_eye_blink: thresholds.freeze_eye_blink,
+      dim_jaw_open: thresholds.dim_jaw_open,
+      freeze_jaw_open: thresholds.freeze_jaw_open,
+      dim_opacity_scale: thresholds.dim_opacity_scale,
+    },
+    clinical_boundary: "Local region quality is an engineering overlay confidence signal, not a clinical stability validation.",
   };
 }
 
@@ -89,6 +207,12 @@ export function estimateFacePoseQuality(
   let faceFrameFraction = null;
   const presenceValue = Number(presence);
   const expr = normalizeFaceExpression(expression);
+  const localRegionQuality = estimateLocalRegionQuality(lm, W, H, {
+    sourceKind,
+    previousLandmarks,
+    expression,
+    thresholds: overrides,
+  });
 
   if (!Array.isArray(lm) || !finitePoint(lm[1]) || !finitePoint(lm[234]) || !finitePoint(lm[454])) {
     reasons.push("missing_pose_landmarks");
@@ -133,6 +257,7 @@ export function estimateFacePoseQuality(
     frame_motion_norm: roundOrNull(motionNorm),
     face_frame_fraction: roundOrNull(faceFrameFraction, 5),
     expression: expr,
+    local_region_quality: localRegionQuality,
     thresholds: {
       min_presence: thresholds.min_presence,
       max_abs_yaw_norm: thresholds.max_abs_yaw_norm,

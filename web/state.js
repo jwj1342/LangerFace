@@ -31,6 +31,7 @@ export const sourceState = {
   lastLM: null, imageCacheLM: null, imageHulls: null,
   jawOpen: 0, eyeBlinkLeft: 0, eyeBlinkRight: 0,
   qualityGate: null,
+  localRegionQuality: null,
 };
 
 export const recordingState = {

@@ -21,6 +21,10 @@ const focusZoomRange = { min: 1, max: 4.5 };
 const INCISION_ZOOM_REGION = { kind: "incision_overlay" };
 const INCISION_OVERLAY_STABILITY_FRAMES = 8;
 const LIVE_OCCLUSION_MIN_TRIANGLE_AREA_PX2 = 1;
+const LOCAL_REGION_RENDER_GROUPS = {
+  brow_eye: ["额·眉间", "右眼周", "左眼周"],
+  mouth: ["口周"],
+};
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const renderQualityDiagnostics = { source: null, previousFrame: null };
 const overlayRuntimeDiagnostics = { key: null, landmarkFrames: [] };
@@ -65,6 +69,7 @@ function estimateRenderQualityGate(lm, W, H) {
   });
   renderQualityDiagnostics.previousFrame = cloneLandmarkFrame(lm);
   sourceState.qualityGate = gate;
+  sourceState.localRegionQuality = gate.local_region_quality || null;
   return gate;
 }
 
@@ -82,6 +87,8 @@ export function draw(lm, W, H, masks = []) {
   const hasMasks = masks.length > 0;
   const frameQualityGate = estimateRenderQualityGate(lm, W, H);
   const canDrawAtlas = sourceState.sourceKind === "image" || frameQualityGate.passed;
+  const localRegionQuality = frameQualityGate.local_region_quality;
+  const localRegionMasks = buildLocalRegionMasks(lm, localRegionQuality);
 
   ctx.save();
   ctx.globalAlpha = renderState.opacity; ctx.lineWidth = Math.max(1, W / 1300);
@@ -99,13 +106,18 @@ export function draw(lm, W, H, masks = []) {
       const mask = ln.pts.map((p, i) => {
         const v = vis ? vis[ln.tris[i]] : 1;
         if (innerMouth.has(ln.tris[i])) return 0; // 口裂三角面无论朝向都排除（#38）
+        if (localActionForPoints([p], localRegionMasks).action === "freeze") return 0;
         return v && !(hasMasks && pointInHandMasks(p, masks)) ? 1 : 0;
       });
+      const localLineAction = localActionForPoints(ln.pts, localRegionMasks.filter((region) => region.action === "dim"));
+      const savedAlpha = ctx.globalAlpha;
+      if (localLineAction.action === "dim") ctx.globalAlpha = savedAlpha * localLineAction.opacityScale;
       for (const run of visibleRuns(ln.pts, mask)) {
         ctx.beginPath(); ctx.moveTo(run[0][0], run[0][1]);
         for (let i = 1; i < run.length; i++) ctx.lineTo(run[i][0], run[i][1]);
         ctx.stroke();
       }
+      ctx.globalAlpha = savedAlpha;
       count++;
     }
   }
@@ -116,25 +128,29 @@ export function draw(lm, W, H, masks = []) {
       ctx.beginPath(); ctx.arc(lm[i][0], lm[i][1], Math.max(1, W / 1100), 0, 6.283); ctx.fill();
     }
   }
-  drawIncisionOverlay(lm, W, H, masks, vis, innerMouth, frameQualityGate);
+  drawIncisionOverlay(lm, W, H, masks, vis, innerMouth, frameQualityGate, localRegionQuality, localRegionMasks);
   ctx.restore();
   return count;
 }
 
-function overlayMask(mapped, masks, vis, innerMouth) {
+function overlayMask(mapped, masks, vis, innerMouth, localRegionMasks = []) {
   const hasMasks = masks.length > 0;
   return mapped.pts.map((p, i) => {
     const tri = mapped.tris[i];
     const front = vis ? vis[tri] : 1;
     if (innerMouth.has(tri)) return 0;
+    if (localActionForPoints([p], localRegionMasks).action === "freeze") return 0;
     return front && !(hasMasks && pointInHandMasks(p, masks)) ? 1 : 0;
   });
 }
 
-function strokeOverlayRefs(refs, lm, masks, vis, innerMouth, style) {
+function strokeOverlayRefs(refs, lm, masks, vis, innerMouth, style, localRegionMasks = []) {
   const mapped = mapSurfaceRefs(refs, lm, modelState.triangles);
   if (mapped.pts.length < 2) return;
-  const mask = overlayMask(mapped, masks, vis, innerMouth);
+  const mask = overlayMask(mapped, masks, vis, innerMouth, localRegionMasks);
+  const localAction = localActionForPoints(mapped.pts, localRegionMasks);
+  const savedAlpha = ctx.globalAlpha;
+  if (localAction.action === "dim") ctx.globalAlpha = savedAlpha * localAction.opacityScale;
   ctx.strokeStyle = style.color;
   ctx.lineWidth = style.lineWidth;
   ctx.setLineDash(style.dash || []);
@@ -145,6 +161,7 @@ function strokeOverlayRefs(refs, lm, masks, vis, innerMouth, style) {
     ctx.stroke();
   }
   ctx.setLineDash([]);
+  ctx.globalAlpha = savedAlpha;
 }
 
 function overlayRuntimeKey(overlay) {
@@ -221,7 +238,102 @@ function compactPoseGate(poseGate) {
   };
 }
 
-function updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stability, poseGate) {
+function compactLocalRegionQuality(localRegionQuality) {
+  if (!localRegionQuality) return null;
+  return {
+    schema_version: localRegionQuality.schema_version,
+    passed: localRegionQuality.passed,
+    reason: localRegionQuality.reason,
+    reasons: localRegionQuality.reasons || [],
+    source_kind: localRegionQuality.source_kind,
+    active_region_count: localRegionQuality.active_region_count,
+    active_regions: localRegionQuality.active_regions || [],
+    regions: (localRegionQuality.regions || []).map((region) => ({
+      id: region.id,
+      label: region.label,
+      action: region.action,
+      opacity_scale: region.opacity_scale,
+      reasons: region.reasons || [],
+      motion_norm: region.motion_norm,
+      expression_metric: region.expression_metric,
+      expression_value: region.expression_value,
+    })),
+    thresholds: localRegionQuality.thresholds,
+    clinical_boundary: localRegionQuality.clinical_boundary,
+  };
+}
+
+function localQualityNeedsReview(localRegionQuality) {
+  return Boolean(localRegionQuality && localRegionQuality.passed === false && localRegionQuality.active_region_count > 0);
+}
+
+function localQualitySummary(localRegionQuality) {
+  const active = (localRegionQuality?.regions || []).filter((region) => region.action !== "normal");
+  if (!active.length) return "局部区域通过";
+  return active
+    .map((region) => `${region.label || region.id}:${region.action === "freeze" ? "冻结" : "降透明"}(${compactReason(region.reasons?.[0])})`)
+    .join("；");
+}
+
+function expandedBox(box, padFrac = 0.18) {
+  if (!box) return null;
+  const pad = Math.max(box.w, box.h) * padFrac;
+  return {
+    x0: box.x0 - pad,
+    y0: box.y0 - pad,
+    x1: box.x1 + pad,
+    y1: box.y1 + pad,
+  };
+}
+
+function pointInBox(p, box) {
+  return p && box && p[0] >= box.x0 && p[0] <= box.x1 && p[1] >= box.y0 && p[1] <= box.y1;
+}
+
+function pointMean(points) {
+  let x = 0, y = 0, count = 0;
+  for (const p of points || []) {
+    if (!p || !Number.isFinite(p[0]) || !Number.isFinite(p[1])) continue;
+    x += p[0]; y += p[1]; count += 1;
+  }
+  return count ? [x / count, y / count] : null;
+}
+
+function buildLocalRegionMasks(lm, localRegionQuality) {
+  return (localRegionQuality?.regions || [])
+    .filter((region) => region.action && region.action !== "normal")
+    .map((region) => {
+      const labels = LOCAL_REGION_RENDER_GROUPS[region.id] || [];
+      const boxes = labels
+        .map((label) => ZOOM_REGIONS.find((r) => r.label === label))
+        .filter(Boolean)
+        .map((sourceRegion) => expandedBox(regionBounds(lm, sourceRegion)))
+        .filter(Boolean);
+      return {
+        id: region.id,
+        label: region.label,
+        action: region.action,
+        opacityScale: Number.isFinite(region.opacity_scale) ? region.opacity_scale : 1,
+        boxes,
+      };
+    })
+    .filter((region) => region.boxes.length);
+}
+
+function localActionForPoints(points, localRegionMasks = []) {
+  const action = { action: "normal", opacityScale: 1 };
+  if (!localRegionMasks.length) return action;
+  const probes = [...(points || []), pointMean(points)].filter(Boolean);
+  for (const region of localRegionMasks) {
+    if (!probes.some((p) => region.boxes.some((box) => pointInBox(p, box)))) continue;
+    if (region.action === "freeze") return { action: "freeze", opacityScale: 0 };
+    if (region.action === "dim") action.action = "dim";
+    action.opacityScale = Math.min(action.opacityScale, region.opacityScale);
+  }
+  return action;
+}
+
+function updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stability, poseGate, localRegionQuality) {
   setDiagnosticSection("incision_overlay_runtime", {
     schema_version: "incision-overlay-runtime-diagnostics/v0.1",
     updated_at: new Date().toISOString(),
@@ -241,13 +353,14 @@ function updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stabilit
       live_overlay_ready: overlay?.review_gate?.live_overlay_ready === true,
     },
     pose_gate: compactPoseGate(poseGate),
+    local_region_quality: compactLocalRegionQuality(localRegionQuality),
     registration: compactRegistration(registration),
     stability: compactStability(stability),
     clinical_boundary: "Runtime overlay diagnostics are engineering QA signals, not clinical AR registration.",
   });
 }
 
-function updateIncisionOverlayQa(registration, stability, poseGate) {
+function updateIncisionOverlayQa(registration, stability, poseGate, localRegionQuality) {
   if (poseGate && !poseGate.passed) {
     setIncisionOverlayQa({
       tone: "warn",
@@ -261,6 +374,14 @@ function updateIncisionOverlayQa(registration, stability, poseGate) {
       tone: "warn",
       label: "投射需复核",
       detail: `工程 QA：${compactReason(registration?.reason)}；映射点 ${registration?.mapped_point_count ?? 0}，出画面 ${registration?.out_of_frame_count ?? 0}。`,
+    });
+    return;
+  }
+  if (localQualityNeedsReview(localRegionQuality) && registration?.passed) {
+    setIncisionOverlayQa({
+      tone: "warn",
+      label: "局部需复核",
+      detail: `工程 QA：${localQualitySummary(localRegionQuality)}；局部线条已降透明或断开，请在静止帧复核。`,
     });
     return;
   }
@@ -403,7 +524,27 @@ function recordIncisionOverlayPoseGate(poseGate) {
   }
 }
 
-function drawIncisionOverlay(lm, W, H, masks, vis, innerMouth, poseGate) {
+function recordLocalRegionQuality(localRegionQuality) {
+  if (!localRegionQuality) return;
+  countMetric(localQualityNeedsReview(localRegionQuality)
+    ? "incisionOverlay.localRegionQuality.review"
+    : "incisionOverlay.localRegionQuality.pass");
+  recordMetricSample("incisionOverlay.localRegionQuality.activeRegionCount", localRegionQuality.active_region_count || 0, {
+    passed: localRegionQuality.passed,
+    reason: localRegionQuality.reason,
+  });
+  for (const region of localRegionQuality.regions || []) {
+    if (region.motion_norm != null) {
+      recordMetricSample("incisionOverlay.localRegionQuality.regionMotionNorm", region.motion_norm, {
+        region: region.id,
+        action: region.action,
+        reason: region.reasons?.[0] || "local_regions_passed",
+      });
+    }
+  }
+}
+
+function drawIncisionOverlay(lm, W, H, masks, vis, innerMouth, poseGate, localRegionQuality, localRegionMasks) {
   const overlay = renderState.incisionOverlay;
   if (!overlay) {
     overlayRuntimeDiagnostics.key = null;
@@ -418,6 +559,7 @@ function drawIncisionOverlay(lm, W, H, masks, vis, innerMouth, poseGate) {
     overlayRuntimeDiagnostics.landmarkFrames = [];
   }
   recordIncisionOverlayPoseGate(poseGate);
+  recordLocalRegionQuality(localRegionQuality);
   const registration = recordIncisionOverlayRegistration(overlay, lm, W, H);
   let stability = null;
   if (poseGate.passed) {
@@ -425,8 +567,8 @@ function drawIncisionOverlay(lm, W, H, masks, vis, innerMouth, poseGate) {
   } else {
     overlayRuntimeDiagnostics.landmarkFrames = [];
   }
-  updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stability, poseGate);
-  updateIncisionOverlayQa(registration, stability, poseGate);
+  updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stability, poseGate, localRegionQuality);
+  updateIncisionOverlayQa(registration, stability, poseGate, localRegionQuality);
   if (!poseGate.passed) return;
   ctx.save();
   ctx.globalAlpha = 0.98;
@@ -435,13 +577,17 @@ function drawIncisionOverlay(lm, W, H, masks, vis, innerMouth, poseGate) {
     color: "#facc15",
     lineWidth: baseWidth,
     dash: [baseWidth * 3, baseWidth * 2],
-  });
+  }, localRegionMasks);
   strokeOverlayRefs(overlay.candidate?.polyline_refs || [], lm, masks, vis, innerMouth, {
     color: overlay.candidate_type === "linear" ? "#22c55e" : "#5eead4",
     lineWidth: baseWidth * 1.35,
-  });
+  }, localRegionMasks);
   const center = mapSurfaceRefs([overlay.tumor?.center_ref], lm, modelState.triangles).pts[0];
-  if (center && !(masks.length && pointInHandMasks(center, masks))) {
+  const centerLocalAction = localActionForPoints([center], localRegionMasks);
+  const centerOccluded = center && masks.length && pointInHandMasks(center, masks);
+  if (center && centerLocalAction.action !== "freeze" && !centerOccluded) {
+    const savedAlpha = ctx.globalAlpha;
+    if (centerLocalAction.action === "dim") ctx.globalAlpha = savedAlpha * centerLocalAction.opacityScale;
     ctx.fillStyle = "#facc15";
     ctx.strokeStyle = "#111820";
     ctx.lineWidth = Math.max(1, W / 900);
@@ -449,6 +595,7 @@ function drawIncisionOverlay(lm, W, H, masks, vis, innerMouth, poseGate) {
     ctx.arc(center[0], center[1], Math.max(4, W / 180), 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    ctx.globalAlpha = savedAlpha;
   }
   ctx.restore();
 }
@@ -601,12 +748,15 @@ function focusCropRect(lm, region, W, H) {
 // ── 统计 ──────────────────────────────────────────────────────────────────────
 export function updateStats(lm, W, H, lineCount) {
   const gate = sourceState.qualityGate;
+  const localRegionQuality = sourceState.localRegionQuality || gate?.local_region_quality;
+  const localNeedsReview = gate?.passed && localQualityNeedsReview(localRegionQuality) && sourceState.sourceKind !== "image";
   const rawQ = Math.round(sourceState.presence * 100);
-  const q = gate && !gate.passed ? Math.min(rawQ, 44) : rawQ;
-  const label = gate && !gate.passed ? "需复核" : q >= 85 ? "稳定" : q >= 45 ? "一般" : q > 0 ? "寻找中" : "未开始";
+  const q = gate && !gate.passed ? Math.min(rawQ, 44) : localNeedsReview ? Math.min(rawQ, 68) : rawQ;
+  const label = gate && !gate.passed ? "需复核" : localNeedsReview ? "局部复核" : q >= 85 ? "稳定" : q >= 45 ? "一般" : q > 0 ? "寻找中" : "未开始";
   els.qualityVal.textContent = `${label} ${q}%`; els.qualityBar.style.width = q + "%";
   if (!lm || sourceState.presence <= 0) {
     sourceState.qualityGate = null;
+    sourceState.localRegionQuality = null;
     renderQualityDiagnostics.previousFrame = null;
     renderQualityDiagnostics.source = sourceState.source;
     els.statState.textContent = sourceState.running ? "搜索中" : "未开始";
@@ -614,7 +764,7 @@ export function updateStats(lm, W, H, lineCount) {
     setLive(sourceState.running && sourceState.sourceKind === "camera", sourceState.running ? els.live.dataset.k || "运行中" : "待机");
     return;
   }
-  els.statState.textContent = gate && !gate.passed ? "需复核" : sourceState.presence > 0.85 ? "稳定" : "搜索中";
+  els.statState.textContent = gate && !gate.passed ? "需复核" : localNeedsReview ? "局部复核" : sourceState.presence > 0.85 ? "稳定" : "搜索中";
   const bb = faceBBox(lm);
   els.statFace.textContent = Math.round(100 * (bb.w * bb.h) / (W * H)) + "%";
   els.statYaw.textContent = gate?.yaw_norm != null ? gate.yaw_norm.toFixed(2) : "—";
