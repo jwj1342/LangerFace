@@ -181,6 +181,108 @@ export function mapSurfaceRefs(refs, landmarksPx, triangles) {
   return { pts, tris: triIds };
 }
 
+function overlayPointTracks(overlay, landmarksPx, triangles) {
+  const tracks = [];
+  const addTrack = (group, refs) => {
+    const mapped = mapSurfaceRefs(refs, landmarksPx, triangles);
+    mapped.pts.forEach((pt, i) => tracks.push({ group, index: i, pt }));
+  };
+  addTrack("tumor_center", [overlay?.tumor?.center_ref].filter(Boolean));
+  addTrack("tumor_boundary", overlay?.tumor?.boundary_refs || []);
+  addTrack("candidate_polyline", overlay?.candidate?.polyline_refs || []);
+  return tracks;
+}
+
+function displacementStats(values) {
+  if (!values.length) return { count: 0, mean_px: null, rms_px: null, p95_px: null, max_px: null };
+  const sorted = [...values].sort((a, b) => a - b);
+  const sum = values.reduce((acc, v) => acc + v, 0);
+  const sumSq = values.reduce((acc, v) => acc + v * v, 0);
+  const p95Idx = Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1);
+  return {
+    count: values.length,
+    mean_px: sum / values.length,
+    rms_px: Math.sqrt(sumSq / values.length),
+    p95_px: sorted[p95Idx],
+    max_px: sorted[sorted.length - 1],
+  };
+}
+
+function roundMetric(value) {
+  return value == null ? null : Math.round(value * 1000) / 1000;
+}
+
+export function measureIncisionOverlayJitter(
+  overlay,
+  landmarkFrames,
+  triangles,
+  {
+    maxRmsPx = 2,
+    maxP95Px = 4,
+    maxMaxPx = 8,
+    context = "static_camera_or_paused_video",
+  } = {},
+) {
+  const thresholds = { max_rms_px: maxRmsPx, max_p95_px: maxP95Px, max_max_px: maxMaxPx, context };
+  if (!validateIncisionOverlay(overlay) || !Array.isArray(landmarkFrames) || landmarkFrames.length < 2) {
+    return {
+      schema_version: "incision-overlay-stability/v0.1",
+      passed: false,
+      reason: "invalid_overlay_or_insufficient_frames",
+      frame_count: Array.isArray(landmarkFrames) ? landmarkFrames.length : 0,
+      tracked_point_count: 0,
+      thresholds,
+      overall: displacementStats([]),
+      by_group: {},
+    };
+  }
+
+  const perFrame = landmarkFrames.map((frame) => overlayPointTracks(overlay, frame, triangles));
+  const trackedPointCount = Math.min(...perFrame.map((tracks) => tracks.length));
+  const byGroup = {};
+  const all = [];
+  for (let f = 1; f < perFrame.length; f++) {
+    const prev = perFrame[f - 1], cur = perFrame[f];
+    const n = Math.min(prev.length, cur.length, trackedPointCount);
+    for (let i = 0; i < n; i++) {
+      if (prev[i].group !== cur[i].group || prev[i].index !== cur[i].index) continue;
+      const dx = cur[i].pt[0] - prev[i].pt[0];
+      const dy = cur[i].pt[1] - prev[i].pt[1];
+      const d = Math.hypot(dx, dy);
+      all.push(d);
+      (byGroup[prev[i].group] ||= []).push(d);
+    }
+  }
+
+  const overallRaw = displacementStats(all);
+  const passed = Boolean(
+    all.length
+    && overallRaw.rms_px <= maxRmsPx
+    && overallRaw.p95_px <= maxP95Px
+    && overallRaw.max_px <= maxMaxPx,
+  );
+  const normalizeStats = (stats) => ({
+    count: stats.count,
+    mean_px: roundMetric(stats.mean_px),
+    rms_px: roundMetric(stats.rms_px),
+    p95_px: roundMetric(stats.p95_px),
+    max_px: roundMetric(stats.max_px),
+  });
+  return {
+    schema_version: "incision-overlay-stability/v0.1",
+    passed,
+    reason: passed ? "within_static_overlay_jitter_thresholds" : "jitter_threshold_exceeded",
+    frame_count: landmarkFrames.length,
+    tracked_point_count: trackedPointCount,
+    sample_count: all.length,
+    thresholds,
+    overall: normalizeStats(overallRaw),
+    by_group: Object.fromEntries(
+      Object.entries(byGroup).map(([group, values]) => [group, normalizeStats(displacementStats(values))]),
+    ),
+  };
+}
+
 function hasSessionStorage() {
   try { return typeof sessionStorage !== "undefined" && sessionStorage !== null; }
   catch { return false; }
@@ -215,6 +317,7 @@ export function clearIncisionOverlay() {
 export const __incisionOverlayForTests = {
   compileIncisionOverlay,
   mapSurfaceRefs,
+  measureIncisionOverlayJitter,
   pointToSurfaceRef,
   validateIncisionOverlay,
 };

@@ -65,6 +65,39 @@ const near = T.pointToSurfaceRef([11, 5, 0], verts, tris);
 assert.equal(near.tri, 1, "off-surface point snaps to nearest surface triangle");
 assert.ok(near.distance > 0, "off-surface snap records distance");
 
+const shiftedLandmarks = (dx, dy) => landmarks.map(([x, y, z]) => [x + dx, y + dy, z]);
+const stableJitter = T.measureIncisionOverlayJitter(
+  overlay,
+  [shiftedLandmarks(0, 0), shiftedLandmarks(0.4, 0.2), shiftedLandmarks(0.1, -0.1)],
+  tris,
+  { maxRmsPx: 1, maxP95Px: 1.5, maxMaxPx: 2 },
+);
+assert.equal(stableJitter.schema_version, "incision-overlay-stability/v0.1");
+assert.equal(stableJitter.passed, true, "small frame-to-frame overlay displacement passes static jitter gate");
+assert.ok(stableJitter.tracked_point_count >= 3, "jitter report tracks tumor and candidate points");
+assert.ok(stableJitter.by_group.candidate_polyline.rms_px <= 1, "candidate jitter is reported by group");
+assert.ok(stableJitter.by_group.tumor_center.rms_px <= 1, "tumor center jitter is reported by group");
+
+const unstableFrames = [
+  shiftedLandmarks(0, 0),
+  [
+    [0, 0, 0],
+    [112, 0, 0],
+    [0, 100, 0],
+    [112, 100, 0],
+  ],
+  shiftedLandmarks(0, 0),
+];
+const unstableJitter = T.measureIncisionOverlayJitter(
+  overlay,
+  unstableFrames,
+  tris,
+  { maxRmsPx: 1, maxP95Px: 2, maxMaxPx: 3 },
+);
+assert.equal(unstableJitter.passed, false, "large frame-to-frame overlay displacement fails static jitter gate");
+assert.equal(unstableJitter.reason, "jitter_threshold_exceeded");
+assert.ok(unstableJitter.overall.max_px > 3, "unstable jitter report exposes max displacement");
+
 assert.equal(T.validateIncisionOverlay({}), false, "bad overlay is rejected");
 assert.equal(
   T.compileIncisionOverlay({ ...record, review_gate: { ...record.review_gate, live_overlay_ready: false } }, verts, tris),

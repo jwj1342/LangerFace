@@ -70,6 +70,7 @@ Stage 2 涉及肿物模拟和候选切口，只能在医生审阅路径中评估
 | 梭形几何 | 长宽比、尖端角、平滑性 | 皮表肿物候选必须报告 |
 | 敏感结构保护 | 警告召回率 | 下睑、唇红缘、鼻翼等风险区域 |
 | 医生审阅 | 接受率、修改次数、覆盖原因 | 系统建议不能绕过医生确认 |
+| 照片 / 视频 / 实时叠加 | overlay 抖动 RMS / P95 / max | 静止头部或暂停视频连续 landmarks 帧中，肿物中心、边界和候选线 surface refs 的帧间像素位移；当前工程门槛 RMS ≤ 2px、P95 ≤ 4px、max ≤ 8px |
 
 当前公开仓库只提供合成样例原型，见 [WRINKLE_LESION_CUES.md](WRINKLE_LESION_CUES.md) 和
 `tools/prototype_wrinkle_lesion_cues.py`。该脚本输出 `metrics.json`，字段包括：
@@ -100,6 +101,7 @@ python tools/evaluate_stage2_validation.py incision_review_*.json --output stage
 - guardrail 通过率、warning severity/code 分布。
 - `rstl_deviation_deg`、方向置信度、皮下直径覆盖缺口、梭形长宽比、尖端角误差、边界覆盖缺口、敏感游离缘距离和边界面积比的 count / mean / median / P90 / min / max。
 - `secondary_cues` 汇总：低置信辅助线索导入数、人工确认率、来源/置信标签分布、lesion/wrinkle precision/recall/IoU，以及 `used_for_geometry_count` / `used_for_agent_prompt_count`。后两项必须保持 0。
+- `incision-overlay-stability/v0.1`：可由 `measureIncisionOverlayJitter` 对连续 landmarks 帧计算候选切口和肿物叠加的 RMS / P95 / max 像素抖动；该指标用于工程回归，不替代真实视频/摄像头目检和临床评审。
 - 失败模式计数：脚本会读取人工 `failure_modes`，也会把高层 warning code 映射到 `direction_error`、`region_misclassification`、`sensitive_structure_warning`、`incision_rule_violation`、`tumor_boundary_input_quality` 等验证分类。
 - 隐私审计计数：`raw_media_sent_count` 和 `provider_secret_leak_count` 必须保持 0。
 
