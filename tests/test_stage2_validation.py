@@ -134,6 +134,38 @@ def _overlay_registration(
     }
 
 
+def _overlay_replay_qa(
+    *,
+    passed: bool,
+    reason: str,
+    frame_count: int,
+    registration_failed_count: int,
+    registration_pass_rate: float,
+) -> dict:
+    return {
+        "schema_version": "incision-overlay-replay-qa/v0.1",
+        "passed": passed,
+        "reason": reason,
+        "frame_count": frame_count,
+        "registration_summary": {
+            "frame_count": frame_count,
+            "passed_count": frame_count - registration_failed_count,
+            "failed_count": registration_failed_count,
+            "pass_rate": registration_pass_rate,
+            "reason_counts": {
+                "runtime_projection_registration_ready": frame_count - registration_failed_count,
+            },
+            "first_failed_frame_index": 1 if registration_failed_count else None,
+        },
+        "stability": {
+            "schema_version": "incision-overlay-stability/v0.1",
+            "passed": passed,
+            "reason": "within_static_overlay_jitter_thresholds" if passed else "jitter_threshold_exceeded",
+        },
+        "clinical_boundary": "Offline replay QA is not patient-specific clinical AR registration.",
+    }
+
+
 def _export_payload() -> dict:
     current = _record(
         record_id="linear-ok",
@@ -168,6 +200,13 @@ def _export_payload() -> dict:
             "lesion": {"iou": 0.91, "precision": 0.94, "recall": 0.90},
             "wrinkle": {"precision": 0.78, "recall": 0.76},
         },
+    )
+    current["incision_overlay_replay_qa"] = _overlay_replay_qa(
+        passed=True,
+        reason="offline_overlay_replay_passed",
+        frame_count=3,
+        registration_failed_count=0,
+        registration_pass_rate=1.0,
     )
     saved = [
         _record(
@@ -216,6 +255,13 @@ def _export_payload() -> dict:
             },
         ),
     ]
+    saved[0]["incision_overlay_replay_qa"] = _overlay_replay_qa(
+        passed=False,
+        reason="registration_frame_failure",
+        frame_count=3,
+        registration_failed_count=1,
+        registration_pass_rate=2 / 3,
+    )
     return {
         "schema_version": "incision-review-export/v0.3",
         "exported_at": "2026-06-24T00:00:00Z",
@@ -267,9 +313,21 @@ def test_stage2_validation_summary_aggregates_review_export():
     assert summary["incision_overlay_registration"]["context_counts"] == {
         "runtime_landmark_surface_ref_projection": 2
     }
+    assert summary["incision_overlay_replay_qa"]["present_count"] == 2
+    assert summary["incision_overlay_replay_qa"]["passed_count"] == 1
+    assert summary["incision_overlay_replay_qa"]["failed_count"] == 1
+    assert summary["incision_overlay_replay_qa"]["pass_rate"] == 0.5
+    assert summary["incision_overlay_replay_qa"]["reason_counts"] == {
+        "offline_overlay_replay_passed": 1,
+        "registration_frame_failure": 1,
+    }
+    assert summary["metrics"]["incision_overlay_replay_frame_count"]["mean"] == 3
+    assert summary["metrics"]["incision_overlay_replay_registration_failed_count"]["max"] == 1
+    assert summary["metrics"]["incision_overlay_replay_registration_pass_rate"]["min"] == 2 / 3
     assert summary["failure_mode_counts"]["incision_rule_violation"] == 1
     assert summary["failure_mode_counts"]["overlay_instability"] == 1
     assert summary["failure_mode_counts"]["overlay_registration_failure"] == 1
+    assert summary["failure_mode_counts"]["overlay_replay_failure"] == 1
     assert summary["failure_mode_counts"]["tumor_boundary_input_quality"] == 1
     assert summary["failure_mode_counts"]["review_rejected"] == 1
     assert summary["privacy_audit"]["raw_media_sent_count"] == 0

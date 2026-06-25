@@ -126,6 +126,9 @@ def _failure_modes(record: dict[str, Any]) -> list[str]:
     registration = _overlay_registration(record)
     if registration and registration.get("passed") is False:
         modes.append("overlay_registration_failure")
+    replay_qa = _overlay_replay_qa(record)
+    if replay_qa and replay_qa.get("passed") is False:
+        modes.append("overlay_replay_failure")
     for warning in _warnings(record):
         code = str(warning.get("code") or "")
         mapped = WARNING_FAILURE_MODE_MAP.get(code)
@@ -158,6 +161,19 @@ def _overlay_registration(record: dict[str, Any]) -> dict[str, Any] | None:
     if registration.get("schema_version") != "incision-overlay-registration/v0.1":
         return None
     return registration
+
+
+def _overlay_replay_qa(record: dict[str, Any]) -> dict[str, Any] | None:
+    replay_qa = (
+        record.get("incision_overlay_replay_qa")
+        or record.get("overlay_replay_qa")
+        or (record.get("incision_overlay") or {}).get("replay_qa")
+    )
+    if not isinstance(replay_qa, dict):
+        return None
+    if replay_qa.get("schema_version") != "incision-overlay-replay-qa/v0.1":
+        return None
+    return replay_qa
 
 
 def _has_secret_leak(value: Any, key_path: tuple[str, ...] = ()) -> bool:
@@ -215,6 +231,9 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     overlay_registration_out_of_frame_fraction: list[float] = []
     overlay_registration_bbox_diagonal: list[float] = []
     overlay_registration_bbox_frame_fraction: list[float] = []
+    overlay_replay_frame_count: list[float] = []
+    overlay_replay_registration_failed_count: list[float] = []
+    overlay_replay_registration_pass_rate: list[float] = []
 
     passed_guardrails = 0
     raw_image_sent_count = 0
@@ -233,6 +252,10 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     overlay_registration_failed_count = 0
     overlay_registration_reason_counts: Counter[str] = Counter()
     overlay_registration_context_counts: Counter[str] = Counter()
+    overlay_replay_present_count = 0
+    overlay_replay_passed_count = 0
+    overlay_replay_failed_count = 0
+    overlay_replay_reason_counts: Counter[str] = Counter()
 
     for record in records:
         candidate = record.get("candidate") or {}
@@ -323,6 +346,24 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
                 (overlay_registration_out_of_frame_fraction, registration, "out_of_frame_fraction"),
                 (overlay_registration_bbox_diagonal, bbox, "diagonal_px"),
                 (overlay_registration_bbox_frame_fraction, bbox, "frame_fraction"),
+            ]:
+                value = _numeric(source.get(key) if isinstance(source, dict) else None)
+                if value is not None:
+                    target.append(value)
+
+        replay_qa = _overlay_replay_qa(record)
+        if replay_qa:
+            overlay_replay_present_count += 1
+            if replay_qa.get("passed") is True:
+                overlay_replay_passed_count += 1
+            elif replay_qa.get("passed") is False:
+                overlay_replay_failed_count += 1
+            overlay_replay_reason_counts[str(replay_qa.get("reason") or "unknown")] += 1
+            registration_summary = replay_qa.get("registration_summary") or {}
+            for target, source, key in [
+                (overlay_replay_frame_count, replay_qa, "frame_count"),
+                (overlay_replay_registration_failed_count, registration_summary, "failed_count"),
+                (overlay_replay_registration_pass_rate, registration_summary, "pass_rate"),
             ]:
                 value = _numeric(source.get(key) if isinstance(source, dict) else None)
                 if value is not None:
@@ -423,6 +464,13 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
             "incision_overlay_registration_bbox_frame_fraction": summarize_numbers(
                 overlay_registration_bbox_frame_fraction,
             ),
+            "incision_overlay_replay_frame_count": summarize_numbers(overlay_replay_frame_count),
+            "incision_overlay_replay_registration_failed_count": summarize_numbers(
+                overlay_replay_registration_failed_count,
+            ),
+            "incision_overlay_replay_registration_pass_rate": summarize_numbers(
+                overlay_replay_registration_pass_rate,
+            ),
         },
         "failure_mode_counts": dict(sorted(failure_mode_counts.items())),
         "incision_overlay_stability": {
@@ -447,6 +495,17 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
             "clinical_boundary": (
                 "Overlay registration is a runtime surface-ref projection QA signal computed from "
                 "sanitized landmark geometry; it is not patient-specific clinical AR registration."
+            ),
+        },
+        "incision_overlay_replay_qa": {
+            "present_count": overlay_replay_present_count,
+            "passed_count": overlay_replay_passed_count,
+            "failed_count": overlay_replay_failed_count,
+            "pass_rate": _ratio(overlay_replay_passed_count, overlay_replay_present_count),
+            "reason_counts": dict(sorted(overlay_replay_reason_counts.items())),
+            "clinical_boundary": (
+                "Overlay replay QA aggregates sanitized overlay surface refs and landmark frames; "
+                "it is an offline engineering replay check, not clinical AR validation."
             ),
         },
         "privacy_audit": {
