@@ -38,6 +38,33 @@ const DEFAULT_RULES = {
       nasal_tip: "Protect nasal tip contour and support; require clinician confirmation before committing.",
       oral_commissure: "Protect oral commissure alignment and traction; require clinician confirmation before committing.",
     },
+    protective_direction_hints: {
+      lower_eyelid: {
+        direction_hint: "parallel_to_lower_eyelid_margin_or_eyelid_crease",
+        canonical_axis: [1, 0, 0],
+        reason: "Prefer a clinician-confirmed axis that protects lower eyelid support before following local RSTL.",
+      },
+      lip_vermilion: {
+        direction_hint: "parallel_to_vermilion_border_or_white_roll",
+        canonical_axis: [1, 0, 0],
+        reason: "Protect vermilion alignment; subunit border alignment may override local RSTL.",
+      },
+      oral_commissure: {
+        direction_hint: "protect_commissure_alignment_with_manual_axis",
+        canonical_axis: [1, 0, 0],
+        reason: "Protect oral commissure symmetry and avoid unreviewed traction vectors.",
+      },
+      nasal_ala: {
+        direction_hint: "parallel_to_alar_groove_or_nasal_subunit_boundary",
+        canonical_axis: [0.65, 0.76, 0],
+        reason: "Protect alar contour; nasal subunit boundary can override local RSTL.",
+      },
+      nasal_tip: {
+        direction_hint: "manual_nasal_tip_subunit_axis",
+        canonical_axis: [1, 0, 0],
+        reason: "Protect nasal tip contour and support before following local RSTL.",
+      },
+    },
   },
 };
 
@@ -770,6 +797,39 @@ function freeMarginDistanceThresholdMm(landmarks, cfg, fallbackRegion = "unknown
   return matched.length ? Math.max(...matched) : defaultThreshold;
 }
 
+function protectiveDirectionRule(names, cfg, fallbackRegion = "unknown") {
+  const rules = cfg?.protective_direction_hints || {};
+  const candidates = asLandmarkNames(names).concat([fallbackRegion]);
+  for (const name of candidates) {
+    const normalized = String(name).toLowerCase();
+    if (rules[normalized]) return [normalized, rules[normalized]];
+    for (const [key, rule] of Object.entries(rules)) {
+      const normalizedKey = String(key).toLowerCase();
+      if (normalizedKey && normalized.includes(normalizedKey)) return [normalizedKey, rule];
+    }
+  }
+  return null;
+}
+
+function appendProtectiveDirectionOverride(suggestedOverrides, cfg, names, fallbackRegion, sourceWarning) {
+  const match = protectiveDirectionRule(names, cfg, fallbackRegion);
+  if (!match) return;
+  const [structure, rule] = match;
+  if (suggestedOverrides.some((item) => item.kind === "protective_direction" && item.structure === structure)) {
+    return;
+  }
+  suggestedOverrides.push({
+    kind: "protective_direction",
+    structure,
+    source_warning: sourceWarning,
+    direction_hint: rule.direction_hint || "manual_sensitive_margin_axis",
+    canonical_axis: rule.canonical_axis || null,
+    reason: rule.reason || "Protect sensitive free-margin anatomy before following local RSTL.",
+    requires_clinician_override_reason: true,
+    priority: "sensitive_margin_exception_before_rstl",
+  });
+}
+
 export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
   const cfg = rules.guardrails;
   const warnings = [], suggested_overrides = [];
@@ -792,6 +852,13 @@ export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
   if (cfg.sensitive_regions[anatomy.region]) {
     warnings.push({ code: `sensitive_region_${anatomy.region}`, severity: "high", message: cfg.sensitive_regions[anatomy.region] });
     suggested_overrides.push({ kind: "manual_direction_confirmation", reason: `${anatomy.region} is a sensitive free-margin region.` });
+    appendProtectiveDirectionOverride(
+      suggested_overrides,
+      cfg,
+      anatomy.region,
+      anatomy.region,
+      `sensitive_region_${anatomy.region}`,
+    );
   }
   const centerThreshold = freeMarginDistanceThresholdMm(anatomy.nearby_landmarks, cfg, anatomy.region);
   if (anatomy.free_margin_distance_mm != null && Number(anatomy.free_margin_distance_mm) <= centerThreshold) {
@@ -801,6 +868,13 @@ export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
       message: `Candidate center is approximately ${Number(anatomy.free_margin_distance_mm).toFixed(1)} mm from sensitive free-margin landmark(s): ${(anatomy.nearby_landmarks || []).join(", ") || anatomy.region} (threshold ${centerThreshold.toFixed(1)} mm).`,
     });
     suggested_overrides.push({ kind: "free_margin_distance_review", reason: "Confirm functional and contour risk before accepting this direction." });
+    appendProtectiveDirectionOverride(
+      suggested_overrides,
+      cfg,
+      anatomy.nearby_landmarks,
+      anatomy.region,
+      "near_sensitive_free_margin",
+    );
   }
   const candidateDistance = candidate.metrics?.sensitive_free_margin_min_distance_mm;
   const diameterCoverageDeficit = Number(candidate.metrics?.diameter_coverage_deficit_mm || 0);
@@ -898,6 +972,13 @@ export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
       message: `Candidate geometry is approximately ${Number(candidateDistance).toFixed(1)} mm from sensitive free-margin landmark: ${nearestSensitiveMargin} (threshold ${candidateThreshold.toFixed(1)} mm).`,
     });
     suggested_overrides.push({ kind: "candidate_free_margin_distance_review", reason: "Review the full candidate path/outline near sensitive free margins." });
+    appendProtectiveDirectionOverride(
+      suggested_overrides,
+      cfg,
+      nearestSensitiveMargin,
+      anatomy.region,
+      "candidate_near_sensitive_free_margin",
+    );
   }
   const typeCfg = candidate.type === "fusiform" ? rules.fusiform_cutaneous : rules.linear_subcutaneous;
   const maxDeviation = Number(typeCfg?.max_rstl_deviation_deg ?? 15);

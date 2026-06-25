@@ -234,6 +234,11 @@ const anatomy = T.classifyRegion([3, 6, 0], verts);
 const guard = T.evaluateGuardrails({ direction_confidence: 0.8 }, anatomy);
 ok(anatomy.region === "lower_eyelid", "region classifier reaches sensitive lower eyelid bucket");
 ok(guard.passed === false && guard.warnings.some((w) => w.severity === "high"), "guardrails flag sensitive region");
+ok(guard.suggested_overrides.some((o) =>
+  o.kind === "protective_direction" &&
+  o.structure === "lower_eyelid" &&
+  o.requires_clinician_override_reason === true),
+  "guardrails suggest protective lower-eyelid direction");
 const segmentAnatomy = T.classifyRegion([4, 5.9, 0], verts);
 ok(segmentAnatomy.free_margin_distance_mm < 1, "free-margin distance uses eyelid margin segments");
 ok(segmentAnatomy.nearby_landmarks.includes("left_lower_eyelid_margin"),
@@ -253,6 +258,18 @@ ok(earGuard.warnings.some((w) => w.code === "low_region_confidence" && w.message
   "low-region guardrail reports region confidence reason");
 ok(T.classifyRegion([5, 3, 0], verts).region === "lip_vermilion", "region classifier reaches lip vermilion bucket");
 ok(T.classifyRegion([4.2, 4.6, 0], verts).region === "nasal_ala", "region classifier reaches nasal ala bucket");
+const lipGuard = T.evaluateGuardrails({ direction_confidence: 0.9 }, T.classifyRegion([5, 3, 0], verts));
+ok(lipGuard.suggested_overrides.some((o) =>
+  o.kind === "protective_direction" &&
+  o.structure === "lip_vermilion" &&
+  o.direction_hint.includes("vermilion")),
+  "guardrails suggest protective lip-vermilion direction");
+const alarGuard = T.evaluateGuardrails({ direction_confidence: 0.9 }, T.classifyRegion([4.2, 4.6, 0], verts));
+ok(alarGuard.suggested_overrides.some((o) =>
+  o.kind === "protective_direction" &&
+  o.structure === "nasal_ala" &&
+  o.direction_hint.includes("alar")),
+  "guardrails suggest protective nasal-ala direction");
 const nearMarginCandidate = {
   type: "linear",
   direction_confidence: 0.9,
@@ -267,6 +284,11 @@ const candidateGuard = T.evaluateGuardrails(nearMarginCandidate, { region: "chee
 ok(candidateGuard.passed === false, "candidate geometry near sensitive margin fails guardrails");
 ok(candidateGuard.warnings.some((w) => w.code === "candidate_near_sensitive_free_margin"),
   "guardrails flag candidate geometry near sensitive margin");
+ok(candidateGuard.suggested_overrides.some((o) =>
+  o.kind === "protective_direction" &&
+  o.source_warning === "candidate_near_sensitive_free_margin" &&
+  o.structure === "lower_eyelid"),
+  "candidate-margin guardrail suggests protective direction");
 const nasalCenterGuard = T.evaluateGuardrails(
   { type: "linear", direction_confidence: 0.9, metrics: { rstl_deviation_deg: 0 } },
   { region: "cheek", confidence: 0.8, free_margin_distance_mm: 11, nearby_landmarks: ["nasal_tip"] },
@@ -279,6 +301,11 @@ const eyelidCenterGuard = T.evaluateGuardrails(
 );
 ok(eyelidCenterGuard.warnings.some((w) => w.code === "near_sensitive_free_margin" && w.message.includes("threshold 16.0 mm")),
   "lower-eyelid center threshold flags 11 mm and reports threshold");
+ok(eyelidCenterGuard.suggested_overrides.some((o) =>
+  o.kind === "protective_direction" &&
+  o.source_warning === "near_sensitive_free_margin" &&
+  o.structure === "lower_eyelid"),
+  "center-margin guardrail suggests protective lower-eyelid direction");
 const nasalCandidateGuard = T.evaluateGuardrails(
   {
     type: "linear",
@@ -307,6 +334,11 @@ const eyelidCandidateGuard = T.evaluateGuardrails(
 );
 ok(eyelidCandidateGuard.warnings.some((w) => w.code === "candidate_near_sensitive_free_margin" && w.message.includes("threshold 16.0 mm")),
   "lower-eyelid candidate threshold flags 11 mm and reports threshold");
+ok(eyelidCandidateGuard.suggested_overrides.some((o) =>
+  o.kind === "protective_direction" &&
+  o.source_warning === "candidate_near_sensitive_free_margin" &&
+  o.structure === "lower_eyelid"),
+  "candidate-threshold guardrail suggests protective lower-eyelid direction");
 
 const regionCases = {
   forehead: [5, 8.6, 0],

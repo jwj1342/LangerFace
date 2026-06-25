@@ -114,6 +114,60 @@ def _free_margin_distance_threshold_mm(landmarks: Any, cfg: dict[str, Any], *, f
     return max(matched) if matched else default
 
 
+def _protective_direction_rule(
+    names: Any,
+    cfg: dict[str, Any],
+    *,
+    fallback_region: str,
+) -> tuple[str, dict[str, Any]] | None:
+    raw_rules = cfg.get("protective_direction_hints") or {}
+    if not isinstance(raw_rules, dict):
+        return None
+    normalized_rules = {
+        str(key).lower(): value
+        for key, value in raw_rules.items()
+        if isinstance(value, dict)
+    }
+    candidates = _as_landmark_names(names) + [fallback_region]
+    for name in candidates:
+        normalized = str(name).lower()
+        if normalized in normalized_rules:
+            return normalized, normalized_rules[normalized]
+        for key, rule in normalized_rules.items():
+            if key in normalized:
+                return key, rule
+    return None
+
+
+def _append_protective_direction_override(
+    suggested_overrides: list[dict[str, Any]],
+    cfg: dict[str, Any],
+    names: Any,
+    *,
+    fallback_region: str,
+    source_warning: str,
+) -> None:
+    match = _protective_direction_rule(names, cfg, fallback_region=fallback_region)
+    if match is None:
+        return
+    structure, rule = match
+    if any(
+        item.get("kind") == "protective_direction" and item.get("structure") == structure
+        for item in suggested_overrides
+    ):
+        return
+    suggested_overrides.append({
+        "kind": "protective_direction",
+        "structure": structure,
+        "source_warning": source_warning,
+        "direction_hint": rule.get("direction_hint", "manual_sensitive_margin_axis"),
+        "canonical_axis": rule.get("canonical_axis"),
+        "reason": rule.get("reason", "Protect sensitive free-margin anatomy before following local RSTL."),
+        "requires_clinician_override_reason": True,
+        "priority": "sensitive_margin_exception_before_rstl",
+    })
+
+
 def evaluate_guardrails(
     candidate: dict[str, Any],
     anatomy: AnatomyContext | dict[str, Any],
@@ -184,6 +238,13 @@ def evaluate_guardrails(
             "kind": "manual_direction_confirmation",
             "reason": f"{region} is a sensitive free-margin region.",
         })
+        _append_protective_direction_override(
+            suggested_overrides,
+            cfg,
+            region,
+            fallback_region=region,
+            source_warning=f"sensitive_region_{region}",
+        )
 
     center_threshold = _free_margin_distance_threshold_mm(
         nearby_landmarks,
@@ -205,6 +266,13 @@ def evaluate_guardrails(
             "kind": "free_margin_distance_review",
             "reason": "Confirm functional and contour risk before accepting this direction.",
         })
+        _append_protective_direction_override(
+            suggested_overrides,
+            cfg,
+            nearby_landmarks,
+            fallback_region=region,
+            source_warning="near_sensitive_free_margin",
+        )
 
     metrics = candidate.get("metrics") or {}
     diameter_coverage_deficit = float(metrics.get("diameter_coverage_deficit_mm") or 0.0)
@@ -342,6 +410,13 @@ def evaluate_guardrails(
             "kind": "candidate_free_margin_distance_review",
             "reason": "Review the full candidate path/outline near sensitive free margins.",
         })
+        _append_protective_direction_override(
+            suggested_overrides,
+            cfg,
+            nearest,
+            fallback_region=region,
+            source_warning="candidate_near_sensitive_free_margin",
+        )
 
     rule_key = "fusiform_cutaneous" if candidate.get("type") == "fusiform" else "linear_subcutaneous"
     type_cfg = (rules or default_clinical_rules()).get(rule_key, {})

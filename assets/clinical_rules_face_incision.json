@@ -244,6 +244,33 @@
       "nasal_tip": "Protect nasal tip contour and support; require clinician confirmation before committing.",
       "oral_commissure": "Protect oral commissure alignment and traction; require clinician confirmation before committing."
     },
+    "protective_direction_hints": {
+      "lower_eyelid": {
+        "direction_hint": "parallel_to_lower_eyelid_margin_or_eyelid_crease",
+        "canonical_axis": [1.0, 0.0, 0.0],
+        "reason": "Prefer a clinician-confirmed axis that protects lower eyelid support before following local RSTL."
+      },
+      "lip_vermilion": {
+        "direction_hint": "parallel_to_vermilion_border_or_white_roll",
+        "canonical_axis": [1.0, 0.0, 0.0],
+        "reason": "Protect vermilion alignment; subunit border alignment may override local RSTL."
+      },
+      "oral_commissure": {
+        "direction_hint": "protect_commissure_alignment_with_manual_axis",
+        "canonical_axis": [1.0, 0.0, 0.0],
+        "reason": "Protect oral commissure symmetry and avoid unreviewed traction vectors."
+      },
+      "nasal_ala": {
+        "direction_hint": "parallel_to_alar_groove_or_nasal_subunit_boundary",
+        "canonical_axis": [0.65, 0.76, 0.0],
+        "reason": "Protect alar contour; nasal subunit boundary can override local RSTL."
+      },
+      "nasal_tip": {
+        "direction_hint": "manual_nasal_tip_subunit_axis",
+        "canonical_axis": [1.0, 0.0, 0.0],
+        "reason": "Protect nasal tip contour and support before following local RSTL."
+      }
+    },
     "source": "clinician_rule",
     "review_status": "draft_not_clinically_validated",
     "last_reviewed_at": "2026-06-24"

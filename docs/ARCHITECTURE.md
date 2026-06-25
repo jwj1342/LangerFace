@@ -311,7 +311,7 @@ Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部
 | 肿物模型 | `src/langerface/tumor/`, `web/tumor*.js` | 表示皮下 / 皮表肿物输入、单位与输入质量摘要 | #14 |
 | 皮下线性切口 | `src/langerface/incision/linear.py` | 基于超声直径和 RSTL 方向生成线性候选 | #15 |
 | 皮表梭形切口 | `src/langerface/incision/fusiform.py` | 生成梭形候选，约束比例、尖端角和平滑对称 | #16 |
-| 敏感结构 guardrails | `src/langerface/incision/guardrails.py` | 下睑、唇红缘、鼻翼、鼻尖、口角等风险提示、分结构 draft 距离阈值和方向例外 | #17 |
+| 敏感结构 guardrails | `src/langerface/incision/guardrails.py` | 下睑、唇红缘、鼻翼、鼻尖、口角等风险提示、分结构 draft 距离阈值、`protective_direction` 保护性方向建议和方向例外 | #17 |
 | 医生审阅 UI | `web/incision*.js` | 候选解释、编辑、版本化 provenance、覆盖、导出 | #18 |
 | AR / 视频叠加 | `web/render.js`, `web/projection3d.js` | 把肿物和切口候选投射回照片、视频、实时视图 | #19 |
 | 验证指标 | `docs/VALIDATION.md` | 角度误差、稳定性、医生接受率、失败分类 | #20 |

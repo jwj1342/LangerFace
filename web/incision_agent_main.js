@@ -622,13 +622,23 @@ function handleAgentStreamEvent(trace, evt) {
 
 function renderGuardrailDetails(guardrails) {
   const warnings = guardrails?.warnings || [];
+  const overrides = guardrails?.suggested_overrides || [];
   els.guardrailDetails.classList.toggle("warn", warnings.some((w) => w.severity === "medium"));
   els.guardrailDetails.classList.toggle("danger", warnings.some((w) => w.severity === "high"));
   if (!warnings.length) {
     els.guardrailDetails.textContent = "Guardrails：未发现需要复核的规则项。";
+    if (overrides.length) {
+      els.guardrailDetails.textContent += `\n建议：${overrides.map((o) => o.kind).join(" · ")}`;
+    }
     return;
   }
   els.guardrailDetails.textContent = `Guardrails：${warnings.map((w) => `${w.code}(${w.severity})`).join(" · ")}`;
+  if (overrides.length) {
+    els.guardrailDetails.textContent += `\n建议：${overrides.map((o) => {
+      if (o.kind === "protective_direction") return `${o.kind}:${o.structure}/${o.direction_hint}`;
+      return `${o.kind}:${o.reason || ""}`;
+    }).join(" · ")}`;
+  }
 }
 
 function tumorQualityFor(result = S.result) {

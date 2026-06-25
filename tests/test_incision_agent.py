@@ -341,14 +341,14 @@ def test_guardrails_fail_for_self_intersecting_cutaneous_boundary():
 
 
 @pytest.mark.parametrize(
-    ("point", "region"),
+    ("point", "region", "protective_structure"),
     [
-        ([3.0, 6.0, 0.0], "lower_eyelid"),
-        ([5.0, 3.0, 0.0], "lip_vermilion"),
-        ([4.2, 4.6, 0.0], "nasal_ala"),
+        ([3.0, 6.0, 0.0], "lower_eyelid", "lower_eyelid"),
+        ([5.0, 3.0, 0.0], "lip_vermilion", "lip_vermilion"),
+        ([4.2, 4.6, 0.0], "nasal_ala", "nasal_ala"),
     ],
 )
-def test_guardrails_flag_sensitive_regions(point, region):
+def test_guardrails_flag_sensitive_regions(point, region, protective_structure):
     vertices, _, _ = _simple_mesh_and_atlas()
     anatomy = classify_region(point, vertices)
     candidate = {"direction_confidence": 0.8}
@@ -356,6 +356,15 @@ def test_guardrails_flag_sensitive_regions(point, region):
     assert anatomy.region == region
     assert guardrails["passed"] is False
     assert guardrails["warnings"][0]["severity"] == "high"
+    protective = next(
+        override
+        for override in guardrails["suggested_overrides"]
+        if override["kind"] == "protective_direction"
+    )
+    assert protective["structure"] == protective_structure
+    assert protective["requires_clinician_override_reason"] is True
+    assert protective["priority"] == "sensitive_margin_exception_before_rstl"
+    assert protective["direction_hint"]
 
 
 def test_guardrails_track_rstl_deviation_override_reason():
@@ -418,6 +427,13 @@ def test_guardrails_flag_candidate_geometry_near_sensitive_free_margin():
     guardrails = evaluate_guardrails(candidate, {"region": "cheek", "confidence": 0.8})
     assert any(w["code"] == "candidate_near_sensitive_free_margin" for w in guardrails["warnings"])
     assert guardrails["passed"] is False
+    protective = next(
+        override
+        for override in guardrails["suggested_overrides"]
+        if override["kind"] == "protective_direction"
+    )
+    assert protective["structure"] == "lower_eyelid"
+    assert protective["source_warning"] == "candidate_near_sensitive_free_margin"
 
 
 def test_guardrails_use_per_sensitive_structure_distance_thresholds():
@@ -442,6 +458,13 @@ def test_guardrails_use_per_sensitive_structure_distance_thresholds():
         w for w in eyelid_guardrails["warnings"] if w["code"] == "near_sensitive_free_margin"
     )
     assert "threshold 16.0 mm" in eyelid_warning["message"]
+    eyelid_protective = next(
+        override
+        for override in eyelid_guardrails["suggested_overrides"]
+        if override["kind"] == "protective_direction"
+    )
+    assert eyelid_protective["structure"] == "lower_eyelid"
+    assert eyelid_protective["source_warning"] == "near_sensitive_free_margin"
 
     nasal_candidate = {
         "type": "linear",
