@@ -95,20 +95,29 @@ def _review_status(record: dict[str, Any]) -> str:
     return str(record.get("review_status") or review.get("status") or STATUS_PENDING)
 
 
+def _guardrail_warnings(record: dict[str, Any]) -> list[dict[str, Any]]:
+    guardrails = record.get("guardrails") if isinstance(record.get("guardrails"), dict) else {}
+    warnings = guardrails.get("warnings") if isinstance(guardrails.get("warnings"), list) else []
+    return [warning for warning in warnings if isinstance(warning, dict)]
+
+
+def _guardrail_codes_by_severity(record: dict[str, Any], severity: str) -> list[str]:
+    return [
+        str(warning.get("code"))
+        for warning in _guardrail_warnings(record)
+        if warning.get("severity") == severity and warning.get("code")
+    ]
+
+
 def _high_guardrail_codes(record: dict[str, Any]) -> list[str]:
+    warning_codes = _guardrail_codes_by_severity(record, "high")
+    if warning_codes:
+        return warning_codes
     summary = record.get("guardrail_summary") if isinstance(record.get("guardrail_summary"), dict) else {}
     high_codes = summary.get("high_codes")
     if isinstance(high_codes, list):
         return [str(code) for code in high_codes if str(code)]
-    guardrails = record.get("guardrails") if isinstance(record.get("guardrails"), dict) else {}
-    warnings = guardrails.get("warnings") if isinstance(guardrails.get("warnings"), list) else []
-    return [
-        str(warning.get("code"))
-        for warning in warnings
-        if isinstance(warning, dict)
-        and warning.get("severity") == "high"
-        and warning.get("code")
-    ]
+    return []
 
 
 def _stored_gate(record: dict[str, Any]) -> dict[str, Any]:
@@ -167,6 +176,117 @@ def _compare_gate_field(
                 path=f"review_gate.{field}",
             )
         )
+
+
+def _guardrail_warning_signature(warnings: Any) -> list[tuple[str, str]]:
+    if not isinstance(warnings, list):
+        return []
+    return [
+        (
+            str(warning.get("code") or ""),
+            str(warning.get("severity") or "medium"),
+        )
+        for warning in warnings
+        if isinstance(warning, dict)
+    ]
+
+
+def _stable_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _guardrail_summary_issues(record: dict[str, Any]) -> list[dict[str, str]]:
+    summary = record.get("guardrail_summary")
+    if summary is None:
+        return [
+            _issue(
+                "guardrail_summary_missing",
+                "Review records must export guardrail_summary derived from guardrails.",
+                path="guardrail_summary",
+            )
+        ]
+    if not isinstance(summary, dict):
+        return [
+            _issue(
+                "guardrail_summary_invalid",
+                "guardrail_summary must be an object.",
+                path="guardrail_summary",
+            )
+        ]
+
+    guardrails = record.get("guardrails") if isinstance(record.get("guardrails"), dict) else {}
+    warnings = _guardrail_warnings(record)
+    high_codes = _guardrail_codes_by_severity(record, "high")
+    medium_codes = _guardrail_codes_by_severity(record, "medium")
+    expected = {
+        "passed": bool(guardrails.get("passed")),
+        "high_count": len(high_codes),
+        "medium_count": len(medium_codes),
+        "high_codes": high_codes,
+        "medium_codes": medium_codes,
+    }
+    issues: list[dict[str, str]] = []
+    for key, expected_value in expected.items():
+        if summary.get(key) != expected_value:
+            issues.append(
+                _issue(
+                    "guardrail_summary_mismatch",
+                    (
+                        f"guardrail_summary.{key}={summary.get(key)!r} does not match "
+                        f"guardrails-derived {expected_value!r}."
+                    ),
+                    path=f"guardrail_summary.{key}",
+                )
+            )
+
+    exported_warnings = summary.get("warnings")
+    if exported_warnings is None:
+        issues.append(
+            _issue(
+                "guardrail_summary_missing_warnings",
+                "guardrail_summary.warnings must preserve guardrail warning codes and severities.",
+                path="guardrail_summary.warnings",
+            )
+        )
+    elif not isinstance(exported_warnings, list) or any(
+        not isinstance(warning, dict) for warning in exported_warnings
+    ):
+        issues.append(
+            _issue(
+                "guardrail_summary_invalid",
+                "guardrail_summary.warnings must be a list of objects.",
+                path="guardrail_summary.warnings",
+            )
+        )
+    elif _guardrail_warning_signature(exported_warnings) != _guardrail_warning_signature(warnings):
+        issues.append(
+            _issue(
+                "guardrail_summary_warnings_mismatch",
+                "guardrail_summary.warnings code/severity list does not match guardrails.warnings.",
+                path="guardrail_summary.warnings",
+            )
+        )
+
+    expected_overrides = guardrails.get("suggested_overrides") or []
+    exported_overrides = summary.get("suggested_overrides") or []
+    if isinstance(expected_overrides, list) and isinstance(exported_overrides, list):
+        if _stable_json(exported_overrides) != _stable_json(expected_overrides):
+            issues.append(
+                _issue(
+                    "guardrail_summary_overrides_mismatch",
+                    "guardrail_summary.suggested_overrides does not match guardrails.suggested_overrides.",
+                    path="guardrail_summary.suggested_overrides",
+                )
+            )
+    else:
+        issues.append(
+            _issue(
+                "guardrail_summary_invalid",
+                "guardrail_summary.suggested_overrides must be a list when present.",
+                path="guardrail_summary.suggested_overrides",
+            )
+        )
+    return issues
 
 
 def _candidate_axis(record: dict[str, Any]) -> tuple[float, float, float] | None:
@@ -944,6 +1064,7 @@ def audit_review_record(record: dict[str, Any], *, source: str = "<memory>") -> 
     tumor, tumor_parse_issues = _record_tumor(record)
     expected_tumor_quality = tumor.input_quality() if tumor is not None else None
     issues.extend(tumor_parse_issues)
+    issues.extend(_guardrail_summary_issues(record))
 
     if not gate:
         issues.append(

@@ -64,6 +64,15 @@ def _record(
             "high_codes": high_codes,
             "medium_count": 0,
             "medium_codes": [],
+            "warnings": [
+                {
+                    "code": warning["code"],
+                    "severity": warning["severity"],
+                    "message": warning["message"],
+                }
+                for warning in warnings
+            ],
+            "suggested_overrides": [],
         },
         "agent_trace_gate": {
             "schema_version": "agent-trace-gate/v0.1",
@@ -299,6 +308,48 @@ def test_review_gate_audit_flags_fusiform_candidate_open_polyline():
 
     assert report["passed"] is False
     assert "candidate_geometry_polyline_invalid" in codes
+
+
+def test_review_gate_audit_flags_guardrail_summary_hiding_high_warning():
+    record = _record(high_codes=["near_sensitive_free_margin"])
+    record["guardrail_summary"]["passed"] = True
+    record["guardrail_summary"]["high_count"] = 0
+    record["guardrail_summary"]["high_codes"] = []
+    record["guardrail_summary"]["warnings"] = []
+    record["review_gate"]["high_guardrail_codes"] = []
+    record["review_gate"]["notes_required_for_high_guardrails"] = False
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "guardrail_summary_mismatch" in codes
+    assert "guardrail_summary_warnings_mismatch" in codes
+    assert "review_gate_high_codes_mismatch" in codes
+
+
+def test_review_gate_audit_flags_guardrail_summary_warning_severity_mismatch():
+    record = _record(high_codes=["candidate_near_sensitive_free_margin"])
+    record["guardrail_summary"]["warnings"][0]["severity"] = "medium"
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "guardrail_summary_warnings_mismatch" in codes
+
+
+def test_review_gate_audit_flags_guardrail_summary_override_mismatch():
+    record = _record()
+    record["guardrails"]["suggested_overrides"] = [
+        {"kind": "override_reason_required", "reason": "Candidate long axis deviates from local RSTL."}
+    ]
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "guardrail_summary_overrides_mismatch" in codes
 
 
 def test_review_gate_audit_accepts_multi_step_candidate_edit_session():
