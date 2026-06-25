@@ -234,6 +234,16 @@ function currentSecondaryCueSnapshot() {
   };
 }
 
+function currentPrivacyAuditSnapshot() {
+  const stateLabel = els.privacyState?.textContent || "本地几何";
+  const message = els.privacyAudit?.textContent || "不上传原始影像；Agent 只接收肿物参数、抽象坐标、规则和候选几何。";
+  return {
+    stateLabel,
+    message,
+    blocked: /阻断|警告/.test(`${stateLabel} ${message}`),
+  };
+}
+
 function currentReviewSnapshot() {
   return {
     status: els.reviewDecision?.value || "pending_clinician_confirmation",
@@ -342,6 +352,7 @@ function publishIncisionState(reason = "state_update") {
       stageStatus: els.stageStatus?.textContent || "",
       tumor: currentTumorFormSnapshot(),
       secondaryCue: currentSecondaryCueSnapshot(),
+      privacyAudit: currentPrivacyAuditSnapshot(),
       provider: currentProviderSnapshot(),
       review: currentReviewSnapshot(),
       edit: currentEditSnapshot(),
@@ -814,6 +825,7 @@ function exportPreflightPasses(payload, label) {
   els.stageStatus.textContent = `${label}已阻断：隐私预检发现 ${report.violation_count} 个问题：${preview}`;
   els.privacyAudit.textContent = "导出隐私预检未通过；请移除原始媒体、明文密钥或直接身份字段后再导出。";
   els.privacyState.textContent = "导出已阻断";
+  publishIncisionState("privacy_preflight_failed");
   return false;
 }
 

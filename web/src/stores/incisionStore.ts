@@ -32,6 +32,12 @@ export interface IncisionSecondaryCueState {
   manualConfirmed: boolean;
 }
 
+export interface IncisionPrivacyAuditState {
+  stateLabel: string;
+  message: string;
+  blocked: boolean;
+}
+
 export interface IncisionReviewState {
   status: string;
   reviewer: string;
@@ -110,6 +116,7 @@ export interface IncisionControllerSnapshot {
   stageStatus: string;
   tumor: IncisionTumorState;
   secondaryCue: IncisionSecondaryCueState;
+  privacyAudit: IncisionPrivacyAuditState;
   provider: IncisionProviderState;
   review: IncisionReviewState;
   edit: IncisionEditState;

@@ -24,6 +24,7 @@ const tumorPanel = read("src/components/TumorInputPanel.tsx");
 const secondaryCuePanel = read("src/components/SecondaryCuePanel.tsx");
 const candidateResultPanel = read("src/components/CandidateResultPanel.tsx");
 const candidateLibraryPanel = read("src/components/CandidateLibraryPanel.tsx");
+const privacyAuditPanel = read("src/components/PrivacyAuditPanel.tsx");
 const providerPanel = read("src/components/ProviderConfigPanel.tsx");
 const editPanel = read("src/components/EditControlsPanel.tsx");
 const reviewPanel = read("src/components/ReviewControlsPanel.tsx");
@@ -204,6 +205,15 @@ assert.ok(incisionWorkbench.includes("CandidateLibraryPanel"), "React incision w
 assert.ok(candidateLibraryPanel.includes("LIBRARY_REACT_COMMAND_EVENT"), "React candidate library dispatches library commands to the controller boundary");
 assert.ok(candidateLibraryPanel.includes("useIncisionStore"), "React candidate library reads saved candidate summaries from Zustand");
 for (const id of [
+  "privacyState",
+  "privacyAudit",
+]) {
+  assert.ok(privacyAuditPanel.includes(`id="${id}"`), `React privacy audit panel exposes #${id}`);
+}
+assert.ok(incisionStore.includes("IncisionPrivacyAuditState"), "incision Zustand store keeps typed privacy audit state");
+assert.ok(incisionWorkbench.includes("PrivacyAuditPanel"), "React incision workbench renders the privacy audit panel as a React component");
+assert.ok(privacyAuditPanel.includes("useIncisionStore"), "React privacy audit panel reads low-frequency audit state from Zustand");
+for (const id of [
   "providerMode",
   "providerBaseUrl",
   "providerModel",
@@ -267,6 +277,8 @@ assert.ok(controller.includes("INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT"), "in
 assert.ok(controller.includes("handleReactSecondaryCueCommand"), "incision controller routes React secondary cue commands to existing cue workflow functions");
 assert.ok(controller.includes("currentResultViewSnapshot"), "incision controller publishes candidate result view state for React rendering");
 assert.ok(controller.includes("currentSavedCandidateSummaries"), "incision controller publishes saved candidate summaries for React rendering");
+assert.ok(controller.includes("currentPrivacyAuditSnapshot"), "incision controller publishes privacy audit state for React rendering");
+assert.ok(controller.includes('publishIncisionState("privacy_preflight_failed")'), "privacy preflight failures republish React audit state");
 assert.ok(controller.includes("INCISION_PROVIDER_REACT_STATE_EVENT"), "incision controller listens for React provider state changes");
 assert.ok(controller.includes("INCISION_REVIEW_REACT_COMMAND_EVENT"), "incision controller listens for React review commands");
 assert.ok(controller.includes("handleReactReviewCommand"), "incision controller routes React review commands to existing review workflow functions");

@@ -4,6 +4,7 @@ import { CandidateLibraryPanel } from "../components/CandidateLibraryPanel";
 import { CandidateResultPanel } from "../components/CandidateResultPanel";
 import { EditControlsPanel } from "../components/EditControlsPanel";
 import { IncisionStatePanel } from "../components/IncisionStatePanel";
+import { PrivacyAuditPanel } from "../components/PrivacyAuditPanel";
 import { ProviderConfigPanel } from "../components/ProviderConfigPanel";
 import { ReviewControlsPanel } from "../components/ReviewControlsPanel";
 import { SecondaryCuePanel } from "../components/SecondaryCuePanel";
@@ -37,10 +38,7 @@ export function IncisionWorkbench() {
 
         <CandidateLibraryPanel />
 
-        <div className="card">
-          <div className="quality-top"><span>隐私 / 审计</span><span id="privacyState">本地几何</span></div>
-          <p className="hint" id="privacyAudit">不上传原始影像；Agent 只接收肿物参数、抽象坐标、规则和候选几何。</p>
-        </div>
+        <PrivacyAuditPanel />
 
         <p className="disclaimer">⚠️ 研究原型：LLM 只做编排摘要，方向、几何和 guardrails 均由确定性工具输出。候选切口必须由医生审阅确认。</p>
       </aside>
