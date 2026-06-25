@@ -110,6 +110,34 @@ TOOL_SCHEMAS = [
     },
 ]
 
+AGENT_TRACE_GATE_REQUIRED = [
+    {
+        "key": "tumor_input_quality",
+        "label": "tumor input quality",
+        "actions": ["summarize_tumor_input_quality"],
+    },
+    {
+        "key": "face_region",
+        "label": "face region",
+        "actions": ["classify_region"],
+    },
+    {
+        "key": "rstl_direction",
+        "label": "RSTL direction",
+        "actions": ["query_rstl_direction"],
+    },
+    {
+        "key": "candidate_generation",
+        "label": "deterministic incision generation",
+        "actions": ["linear_subcutaneous_incision", "fusiform_cutaneous_incision"],
+    },
+    {
+        "key": "guardrails",
+        "label": "guardrails",
+        "actions": ["evaluate_guardrails"],
+    },
+]
+
 
 def _trace(
     action: str,
@@ -151,6 +179,54 @@ def _fallback_summary(tumor: TumorInput, candidate: dict[str, Any], guardrails: 
         f"The long axis follows the local RSTL direction from the atlas. {status}; "
         f"{len(warnings)} warning(s) recorded."
     )
+
+
+def agent_trace_gate(
+    trace: list[dict[str, Any]],
+    candidate: dict[str, Any] | None = None,
+    *,
+    mode: str = "single_turn_react_with_deterministic_tools",
+) -> dict[str, Any]:
+    """Validate that the agent trace contains the required deterministic gates."""
+
+    actions = [str(step.get("action", "")) for step in trace if step.get("action")]
+    observed = set(actions)
+    required: list[dict[str, Any]] = []
+    for req in AGENT_TRACE_GATE_REQUIRED:
+        indexes = [actions.index(action) for action in req["actions"] if action in observed]
+        required.append({
+            "key": req["key"],
+            "label": req["label"],
+            "actions": req["actions"],
+            "observed": bool(indexes),
+            "first_index": min(indexes) if indexes else None,
+        })
+    missing = [req for req in required if not req["observed"]]
+    present_indexes = [int(req["first_index"]) for req in required if req["first_index"] is not None]
+    order_ok = all(idx >= present_indexes[i - 1] for i, idx in enumerate(present_indexes) if i > 0)
+    geometry_present = bool(
+        candidate
+        and isinstance(candidate.get("polyline"), list)
+        and len(candidate["polyline"]) >= 2
+    )
+    return {
+        "schema_version": "agent-trace-gate/v0.1",
+        "passed": not missing and order_ok and geometry_present,
+        "mode": mode,
+        "observed_actions": actions,
+        "required_actions": [
+            {"key": req["key"], "label": req["label"], "actions": req["actions"]} for req in required
+        ],
+        "missing_actions": [
+            {"key": req["key"], "label": req["label"], "actions": req["actions"]} for req in missing
+        ],
+        "order_ok": order_ok,
+        "deterministic_geometry_present": geometry_present,
+        "boundary": (
+            "LLM may summarize and explain only after deterministic tools provide "
+            "geometry and guardrail observations."
+        ),
+    }
 
 
 def _ask_llm_for_summary(
@@ -289,6 +365,7 @@ def plan_incision_case(
                 "error": str(exc),
             }
 
+    trace_gate = agent_trace_gate(trace, candidate)
     return {
         "schema_version": "agentic-incision-plan/v0.1",
         "agent_trace_mode": "single_turn_react_with_deterministic_tools",
@@ -300,6 +377,7 @@ def plan_incision_case(
         "candidate": candidate,
         "guardrails": guardrails,
         "trace": trace,
+        "agent_trace_gate": trace_gate,
         "llm": llm,
         "provider": provider_status,
     }

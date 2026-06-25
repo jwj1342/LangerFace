@@ -761,6 +761,16 @@ function handleAgentStreamEvent(trace, evt) {
     els.stageStatus.textContent = `工具 trace ${visibleTrace.length} 步${step.action ? `：${step.action}` : ""}`;
     return;
   }
+  if (event === "trace_gate") {
+    const gate = data || {};
+    if (els.agentGate) {
+      els.agentGate.classList.toggle("warn", gate.passed !== true);
+      const missing = (gate.missing_actions || []).map((item) => item.label || item.key).join("、");
+      els.agentGate.textContent = `Agent 工具门控：${gate.passed ? "通过" : `未通过${missing ? `；缺 ${missing}` : ""}`} · SSE`;
+    }
+    els.stageStatus.textContent = gate.passed ? "Agent 工具门控已通过" : "Agent 工具门控未通过";
+    return;
+  }
   if (event === "fallback") {
     const msg = data?.error ? `：${String(data.error).slice(0, 80)}` : "";
     els.stageStatus.textContent = `SSE trace 不可用，改用普通 Agent 请求${msg}`;

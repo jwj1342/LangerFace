@@ -8,7 +8,7 @@
 - 皮表肿物：手动放置中心点，输入直径、安全切缘和边界，生成长轴平行局部 RSTL 的梭形候选切口；轮廓使用对称 cubic Hermite profile 约束目标尖端角，并在 metrics 中报告目标角、估计角和误差。
 - 肿物数据模型：统一 `subcutaneous` / `cutaneous`、中心点、直径、深度、切缘、边界、来源、作者和单位字段，并在工具 trace、JSON 导出、审阅记录和 Markdown 报告中输出 `tumor_quality` 输入质量摘要。
 - 确定性工具：面部分区、RSTL 局部方向查询、线性切口、梭形切口、敏感区 guardrails 和候选几何到敏感游离缘的最短距离筛查。
-- Agent 编排：LLM 只读取工具结果并生成摘要，不计算几何、不覆盖安全规则；前端会用 `agent-trace-gate/v0.1` 检查 trace 至少包含肿物输入质量、面部分区、RSTL 查询、确定性切口生成和 guardrails，未通过时不能确认候选。
+- Agent 编排：LLM 只读取工具结果并生成摘要，不计算几何、不覆盖安全规则；Python agent、SSE 代理和前端会用 `agent-trace-gate/v0.1` 检查 trace 至少包含肿物输入质量、面部分区、RSTL 查询、确定性切口生成和 guardrails，未通过时不能确认候选。
 - 前端工作台：`web/incision_agent.html` 可在标准脸上点选肿物位置，并在生成前实时显示当前肿物中心的面部分区、亚单位、置信度和靠近敏感游离缘/规则边界的提示；生成后显示肿物环、候选切口、梭形宽度/长宽比/尖端角误差、RSTL 方向来源、辅助线索只读边界、医生人工覆盖状态、流式工具调用 trace、provider 状态和摘要。
 - 医生调整：候选生成后可调整方向、长度、中心位移；梭形候选还可调宽度。调整会保留原始工具建议、覆盖原因、trace 和 provenance。
 - 皮表肿物边界：支持椭圆近似和自由轮廓点输入；梭形生成会读取边界在 RSTL 长轴/短轴上的投影范围，必要时调整候选中心、宽度和长度，同时保留 3:1 长宽比、30° 默认尖端角和左右平滑对称的工程指标；如果最大长度规则导致候选无法覆盖边界加切缘，系统会记录 `axis_coverage_deficit_mm` 并触发 high guardrail；自由轮廓点数过少、面积退化、自交或边界中心明显偏离选中中心也会进入 guardrails；导出时保留 boundary、boundary source、author 和 units，并额外提示缺作者、非 mm 单位、缺皮下深度、缺切缘或边界过稀等输入质量问题。
@@ -21,7 +21,7 @@
 - 验证汇总：`tools/evaluate_stage2_validation.py` 可读取脱敏审阅 JSON，汇总候选类型、医生确认率、guardrail 分布、RSTL 偏角、梭形几何误差、敏感距离、失败模式和隐私审计计数。
 - Provider 接口：默认支持 Ollama/Qwen，本地或集群 vLLM 可通过 OpenAI-compatible endpoint 切入。
 - 前端 Provider 配置：工作台暴露 Agent endpoint、Base URL、model、API Key 和 timeout；API Key 只发送给本地 Agent 代理，导出记录中会脱敏。
-- Agent 代理接口：支持普通 JSON `POST /api/agentic-incision` 和 SSE trace `POST /api/agentic-incision/stream`；前端优先消费 `provider`、逐步 `trace`、`result` 和 `done` 事件，流式不可用时自动退回普通 JSON 请求。
+- Agent 代理接口：支持普通 JSON `POST /api/agentic-incision` 和 SSE trace `POST /api/agentic-incision/stream`；前端优先消费 `provider`、逐步 `trace`、`trace_gate`、`result` 和 `done` 事件，流式不可用时自动退回普通 JSON 请求。
 
 ## 当前工程边界
 
@@ -30,7 +30,7 @@
 - 肿物模拟：当前可表达中心点、椭圆近似和自由轮廓点，并支持肿物输入 JSON 导入/导出；`summarize_tumor_input_quality` 会把来源、作者、单位、深度、切缘和边界完整性写入 trace、导出 JSON、审阅记录和报告。真实照片/3D 扫描自动识别边界不属于本 PR 的临床验证范围。
 - 医生审阅：当前支持候选保存、方向备选、工程排序比较、审阅人、审阅状态、备注、确认/否决动作、JSON/Markdown/PNG 导出和 `audit_events`；工具生成候选从 `candidate_version=1` 开始，医生参数编辑会生成 `parent_candidate_id`、`edit_id`、`candidate_version` 和 `edit_history`，报告会显示候选版本与编辑记录数；候选比较只按 guardrails、RSTL 偏角、覆盖缺口、敏感距离和几何误差做工程排序，不是临床推荐。正式电子签名、病例系统绑定、权限控制和审阅锁定属于后续受控临床系统集成。
 - Guardrails：已覆盖低 RSTL 置信度、低分区置信度、中心点近敏感游离缘、候选线/轮廓近敏感游离缘、下睑/唇红缘/鼻翼/鼻尖/口角敏感区提示、皮下线性直径覆盖不足、皮表边界点数/面积/自交/中心偏移质量、梭形边界轴向覆盖不足、RSTL 偏角覆盖原因检查；敏感游离缘距离使用标准脸归一化锚点和下睑/鼻翼/唇红缘简化线段，并按下睑、唇红缘、鼻翼、鼻尖、口角等结构使用 draft 距离阈值；命中敏感结构时会在 `suggested_overrides` 中给出 `protective_direction` 保护性方向建议并要求医生记录覆盖原因。阈值和保护性方向仍需临床审核。
-- LLM Agentic：LLM 只做摘要和解释，工具 schema、trace、stream 契约、工具门控和候选比较工具已固化，前端会实时展示工具 trace；`agent-trace-gate/v0.1` 会把缺失工具动作、顺序异常和确定性几何缺失写入审阅记录，并阻断未过门控的确认候选。长程自主规划仍必须受确定性工具、审计记录和医生确认约束。
+- LLM Agentic：LLM 只做摘要和解释，工具 schema、trace、stream 契约、工具门控和候选比较工具已固化，前端会实时展示工具 trace；`agent-trace-gate/v0.1` 由 Python agent 输出并通过 SSE `trace_gate` 事件暴露，会把缺失工具动作、顺序异常和确定性几何缺失写入审阅记录，并阻断未过门控的确认候选。长程自主规划仍必须受确定性工具、审计记录和医生确认约束。
 - 3D/AR 呈现：当前支持从标准脸工作台向 2D 实时页投射已确认候选；overlay 校验会拒绝未达 `live_overlay_ready` 的 payload，并可用静态连续帧 jitter 指标检查候选线与肿物标记是否稳定跟随 landmarks；前端静态合约测试覆盖照片/视频输入、摄像头入口、主 canvas 录制导出和“切口候选”放大窗。3D Beta 头模上的患者个体化切口 overlay 仍需额外配准和临床验证。
 
 ## 临床与合规边界

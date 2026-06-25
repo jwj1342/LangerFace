@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from langerface.agent import plan_incision_case
+from langerface.agent import agent_trace_gate, plan_incision_case
 from langerface.anatomy import classify_region
 from langerface.clinical import default_clinical_rules
 from langerface.incision import (
@@ -602,10 +602,32 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     assert result["tumor_quality"]["warnings"][0]["code"] == "missing_tumor_author"
     assert result["provider"]["mode"] == "deterministic_fallback"
     assert result["agent_trace_mode"] == "single_turn_react_with_deterministic_tools"
+    assert result["agent_trace_gate"]["schema_version"] == "agent-trace-gate/v0.1"
+    assert result["agent_trace_gate"]["passed"] is True
+    assert result["agent_trace_gate"]["missing_actions"] == []
+    assert result["agent_trace_gate"]["deterministic_geometry_present"] is True
+    assert "evaluate_guardrails" in result["agent_trace_gate"]["observed_actions"]
     assert any(tool["name"] == "summarize_tumor_input_quality" for tool in result["tool_schemas"])
     assert any(tool["name"] == "evaluate_guardrails" for tool in result["tool_schemas"])
     assert any(tool["name"] == "compare_candidates" for tool in result["tool_schemas"])
     assert any(tool["name"] == "save_review_record" for tool in result["tool_schemas"])
+
+
+def test_agent_trace_gate_fails_when_required_tool_step_is_missing():
+    trace = [
+        {"action": "summarize_tumor_input_quality"},
+        {"action": "classify_region"},
+        {"action": "linear_subcutaneous_incision"},
+        {"action": "evaluate_guardrails"},
+    ]
+    gate = agent_trace_gate(trace, {"polyline": [[0, 0, 0], [1, 0, 0]]})
+    assert gate["schema_version"] == "agent-trace-gate/v0.1"
+    assert gate["passed"] is False
+    assert gate["order_ok"] is True
+    assert gate["deterministic_geometry_present"] is True
+    assert gate["missing_actions"] == [
+        {"key": "rstl_direction", "label": "RSTL direction", "actions": ["query_rstl_direction"]}
+    ]
 
 
 def test_clinical_rules_asset_has_region_provenance_and_required_fields():
@@ -649,6 +671,9 @@ def test_clinical_rules_asset_has_region_provenance_and_required_fields():
 
 def test_agent_tool_schema_and_privacy_doc_cover_review_export():
     schema = json.loads((ROOT / "assets" / "agentic_incision_tool_schema.json").read_text())
+    assert schema["trace_gate"]["schema_version"] == "agent-trace-gate/v0.1"
+    assert schema["trace_gate"]["blocks_confirmation"] is True
+    assert ["query_rstl_direction"] in schema["trace_gate"]["required_actions"]
     names = {tool["name"] for tool in schema["tools"]}
     assert {
         "classify_region",

@@ -62,6 +62,8 @@ assert.ok(js.includes("highGuardrailWarnings"), "review workflow detects high gu
 assert.ok(js.includes("live_overlay_ready"), "review gate records live overlay readiness");
 assert.ok(js.includes("handleAgentStreamEvent"), "workbench consumes agent SSE trace events");
 assert.ok(js.includes("stream: true"), "workbench prefers streaming agent trace");
+assert.ok(js.includes('event === "trace_gate"'), "workbench consumes agent trace gate SSE events");
+assert.ok(js.includes("Agent 工具门控已通过"), "workbench reports successful SSE trace gate");
 assert.ok(js.includes("SSE trace 不可用"), "workbench reports JSON fallback when streaming is unavailable");
 assert.ok(js.includes("建议覆盖项"), "markdown report includes suggested override details");
 assert.ok(js.includes("protective_direction"), "workbench displays protective direction guardrail suggestions");
