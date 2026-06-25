@@ -6,6 +6,7 @@ import { EditControlsPanel } from "../components/EditControlsPanel";
 import { IncisionStatePanel } from "../components/IncisionStatePanel";
 import { ProviderConfigPanel } from "../components/ProviderConfigPanel";
 import { ReviewControlsPanel } from "../components/ReviewControlsPanel";
+import { SecondaryCuePanel } from "../components/SecondaryCuePanel";
 import { TumorInputPanel } from "../components/TumorInputPanel";
 
 export function IncisionWorkbench() {
@@ -24,16 +25,7 @@ export function IncisionWorkbench() {
 
         <TumorInputPanel />
 
-        <div className="card agent-grid">
-          <div className="quality-top"><span>辅助线索</span><span id="secondaryCueState">未导入</span></div>
-          <p className="agent-note" id="secondaryCueSummary">仅展示自然皱襞、皱纹和皮表肿物边界的低置信度线索；不会自动改变肿物边界或候选切口。</p>
-          <div className="btn-row two-cols">
-            <button className="btn" id="importSecondaryCueBtn" type="button">导入线索</button>
-            <button className="btn" id="clearSecondaryCueBtn" type="button">清空线索</button>
-          </div>
-          <input id="secondaryCueImportFile" className="hidden" type="file" accept="application/json,.json" />
-          <label className="check"><input type="checkbox" id="secondaryCueConfirmed" /> 已人工确认辅助线索</label>
-        </div>
+        <SecondaryCuePanel />
 
         <ProviderConfigPanel />
 

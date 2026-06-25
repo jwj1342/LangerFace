@@ -163,6 +163,7 @@ function createRuntimeState() {
     workflowWorkerFailed: false,
     providerReactStateHandler: null,
     tumorReactCommandHandler: null,
+    secondaryCueReactCommandHandler: null,
     editReactCommandHandler: null,
     reviewReactCommandHandler: null,
     libraryReactCommandHandler: null,
@@ -183,6 +184,7 @@ const REVIEW_LABELS = {
 const INCISION_CONTROLLER_STATE_EVENT = "langerface:incision-state";
 const INCISION_PROVIDER_REACT_STATE_EVENT = "langerface:incision-provider-react-state";
 const INCISION_TUMOR_REACT_COMMAND_EVENT = "langerface:incision-tumor-react-command";
+const INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT = "langerface:incision-secondary-cue-react-command";
 const INCISION_EDIT_REACT_COMMAND_EVENT = "langerface:incision-edit-react-command";
 const INCISION_REVIEW_REACT_COMMAND_EVENT = "langerface:incision-review-react-command";
 const INCISION_LIBRARY_REACT_COMMAND_EVENT = "langerface:incision-library-react-command";
@@ -220,6 +222,15 @@ function currentProviderSnapshot() {
     timeoutS: Number.isFinite(Number(cfg.timeout_s)) ? Number(cfg.timeout_s) : null,
     stateLabel: els.providerState?.textContent || "待运行",
     testLabel: els.providerTestState?.textContent || "",
+  };
+}
+
+function currentSecondaryCueSnapshot() {
+  return {
+    present: Boolean(S.secondaryCues),
+    stateLabel: els.secondaryCueState?.textContent || "未导入",
+    summary: els.secondaryCueSummary?.textContent || "仅展示自然皱襞、皱纹和皮表肿物边界的低置信度线索；不会自动改变肿物边界或候选切口。",
+    manualConfirmed: Boolean(els.secondaryCueConfirmed?.checked),
   };
 }
 
@@ -330,6 +341,7 @@ function publishIncisionState(reason = "state_update") {
       reason,
       stageStatus: els.stageStatus?.textContent || "",
       tumor: currentTumorFormSnapshot(),
+      secondaryCue: currentSecondaryCueSnapshot(),
       provider: currentProviderSnapshot(),
       review: currentReviewSnapshot(),
       edit: currentEditSnapshot(),
@@ -698,6 +710,7 @@ function renderSecondaryCuePanel() {
   if (!S.secondaryCues) {
     els.secondaryCueState.textContent = "未导入";
     els.secondaryCueSummary.textContent = "仅展示自然皱襞、皱纹和皮表肿物边界的低置信度线索；不会自动改变肿物边界或候选切口。";
+    publishIncisionState("secondary_cue_state");
     return;
   }
   const lesion = S.secondaryCues.lesion || {};
@@ -710,6 +723,15 @@ function renderSecondaryCuePanel() {
     `皱纹 recall ${fmt(wrinkle.recall, 2)} / precision ${fmt(wrinkle.precision, 2)}`,
     "只读展示：不进入几何生成，不发送给 Agent prompt。",
   ].join("\n");
+  publishIncisionState("secondary_cue_state");
+}
+
+function setSecondaryCueConfirmedFromControl() {
+  renderSecondaryCuePanel();
+  els.stageStatus.textContent = els.secondaryCueConfirmed?.checked
+    ? "辅助线索已标记为人工确认；仍不参与候选几何。"
+    : "辅助线索人工确认已取消；仍不参与候选几何。";
+  publishIncisionState("secondary_cue_confirmed");
 }
 
 function reviewStatusLabel(status) {
@@ -1045,6 +1067,21 @@ function handleReactTumorCommand(event) {
   }
   if (command === "run_agent") {
     runAgent();
+  }
+}
+
+function handleReactSecondaryCueCommand(event) {
+  const command = event?.detail?.command;
+  if (command === "import_secondary_cue") {
+    els.secondaryCueImportFile.click();
+    return;
+  }
+  if (command === "clear_secondary_cue") {
+    clearSecondaryCues();
+    return;
+  }
+  if (command === "secondary_cue_confirmed") {
+    setSecondaryCueConfirmedFromControl();
   }
 }
 
@@ -1946,8 +1983,10 @@ async function importSecondaryCueFile(file) {
     if (els.secondaryCueConfirmed) els.secondaryCueConfirmed.checked = false;
     renderSecondaryCuePanel();
     els.stageStatus.textContent = "已导入低置信辅助线索；候选几何未改变。";
+    publishIncisionState("secondary_cue_imported");
   } catch (err) {
     els.stageStatus.textContent = `导入辅助线索失败：${err.message}`;
+    publishIncisionState("secondary_cue_import_failed");
   } finally {
     els.secondaryCueImportFile.value = "";
   }
@@ -1958,6 +1997,7 @@ function clearSecondaryCues() {
   if (els.secondaryCueConfirmed) els.secondaryCueConfirmed.checked = false;
   renderSecondaryCuePanel();
   els.stageStatus.textContent = "已清空辅助线索；候选几何未改变。";
+  publishIncisionState("secondary_cue_cleared");
 }
 
 function exportReport() {
@@ -2322,6 +2362,14 @@ function bindWorkbenchEvents() {
     els.providerTimeout.oninput = () => { els.providerTimeoutVal.textContent = els.providerTimeout.value; saveProviderPrefs(); };
   }
   if (window.__LANGERFACE_REACT_MANAGED__) {
+    S.secondaryCueReactCommandHandler = handleReactSecondaryCueCommand;
+    window.addEventListener(INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT, S.secondaryCueReactCommandHandler);
+  } else {
+    els.importSecondaryCue.onclick = () => els.secondaryCueImportFile.click();
+    els.clearSecondaryCue.onclick = clearSecondaryCues;
+    els.secondaryCueConfirmed.onchange = setSecondaryCueConfirmedFromControl;
+  }
+  if (window.__LANGERFACE_REACT_MANAGED__) {
     S.editReactCommandHandler = handleReactEditCommand;
     window.addEventListener(INCISION_EDIT_REACT_COMMAND_EVENT, S.editReactCommandHandler);
   } else {
@@ -2369,10 +2417,7 @@ function bindWorkbenchEvents() {
     els.stageLiveOverlay.onclick = stageLiveOverlay;
   }
   els.tumorImportFile.onchange = (e) => importTumorFile(e.target.files?.[0]);
-  els.importSecondaryCue.onclick = () => els.secondaryCueImportFile.click();
-  els.clearSecondaryCue.onclick = clearSecondaryCues;
   els.secondaryCueImportFile.onchange = (e) => importSecondaryCueFile(e.target.files?.[0]);
-  els.secondaryCueConfirmed.onchange = renderSecondaryCuePanel;
   S.resizeObserver = new ResizeObserver(fitSize);
   S.resizeObserver.observe(els.wrap);
 }
@@ -2396,6 +2441,10 @@ export function disposeIncisionAgentWorkbench() {
   if (S.tumorReactCommandHandler) {
     window.removeEventListener(INCISION_TUMOR_REACT_COMMAND_EVENT, S.tumorReactCommandHandler);
     S.tumorReactCommandHandler = null;
+  }
+  if (S.secondaryCueReactCommandHandler) {
+    window.removeEventListener(INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT, S.secondaryCueReactCommandHandler);
+    S.secondaryCueReactCommandHandler = null;
   }
   if (S.editReactCommandHandler) {
     window.removeEventListener(INCISION_EDIT_REACT_COMMAND_EVENT, S.editReactCommandHandler);

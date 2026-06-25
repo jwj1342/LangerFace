@@ -25,6 +25,13 @@ export interface IncisionProviderState {
   testLabel: string;
 }
 
+export interface IncisionSecondaryCueState {
+  present: boolean;
+  stateLabel: string;
+  summary: string;
+  manualConfirmed: boolean;
+}
+
 export interface IncisionReviewState {
   status: string;
   reviewer: string;
@@ -102,6 +109,7 @@ export interface IncisionControllerSnapshot {
   reason: string;
   stageStatus: string;
   tumor: IncisionTumorState;
+  secondaryCue: IncisionSecondaryCueState;
   provider: IncisionProviderState;
   review: IncisionReviewState;
   edit: IncisionEditState;
