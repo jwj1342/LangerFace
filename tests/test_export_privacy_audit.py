@@ -39,6 +39,32 @@ def test_privacy_audit_accepts_sanitized_review_export(tmp_path: Path):
     assert report["violation_count"] == 0
 
 
+def test_privacy_audit_accepts_sanitized_secondary_cues():
+    payload = _safe_review_export()
+    payload["current"]["secondary_cues"] = {
+        "schema_version": "secondary-cue-summary/v0.1",
+        "present": True,
+        "source": "synthetic_fixture",
+        "confidence_label": "low",
+        "manual_confirmed": True,
+        "used_for_geometry": False,
+        "used_for_agent_prompt": False,
+        "outputs": {
+            "cue_overlay": "cue-overlay-review.png",
+            "lesion_mask": "lesion-mask-review.png",
+        },
+        "metrics": {
+            "lesion_iou": 0.72,
+            "wrinkle_precision": 0.81,
+        },
+    }
+
+    report = audit_payload(payload, file="secondary-cues-safe.json")
+
+    assert report["passed"] is True
+    assert report["violation_count"] == 0
+
+
 def test_privacy_audit_flags_secret_raw_media_and_pii():
     payload = _safe_review_export()
     record = payload["current"]
@@ -55,6 +81,44 @@ def test_privacy_audit_flags_secret_raw_media_and_pii():
     assert "raw_media_flag_true" in codes
     assert "pii_field_present" in codes
     assert "pii_pattern_present" in codes
+
+
+def test_privacy_audit_flags_embedded_secondary_cue_media():
+    payload = _safe_review_export()
+    payload["current"]["secondary_cues"] = {
+        "schema_version": "secondary-cue-summary/v0.1",
+        "present": True,
+        "source": "synthetic_fixture",
+        "used_for_geometry": False,
+        "used_for_agent_prompt": False,
+        "outputs": {
+            "cue_overlay": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB",
+        },
+    }
+
+    report = audit_payload(payload, file="secondary-cues-unsafe.json")
+    codes = {v["code"] for v in report["violations"]}
+
+    assert report["passed"] is False
+    assert "embedded_media_payload" in codes
+
+
+def test_privacy_audit_flags_secondary_cue_boundary_violations():
+    payload = _safe_review_export()
+    payload["current"]["secondary_cues"] = {
+        "schema_version": "secondary-cue-summary/v0.1",
+        "present": True,
+        "source": "synthetic_fixture",
+        "used_for_geometry": True,
+        "used_for_agent_prompt": True,
+    }
+
+    report = audit_payload(payload, file="secondary-cues-boundary.json")
+    codes = {v["code"] for v in report["violations"]}
+
+    assert report["passed"] is False
+    assert "secondary_cue_used_for_geometry" in codes
+    assert "secondary_cue_sent_to_agent_prompt" in codes
 
 
 def test_privacy_audit_cli_exits_nonzero_on_violation(tmp_path: Path):

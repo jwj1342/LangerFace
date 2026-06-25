@@ -38,12 +38,14 @@
 - `validated`、`provenance`、`topologyId`、`topologyVersion`、`atlasVersion` 等版本字段。
 - 诊断事件、计数器、阶段耗时、fps、失败原因枚举。
 - 审阅记录中的医生编号或角色编码。
+- 低置信辅助线索的结构化摘要、metrics、来源和人工确认状态；若包含 mask / overlay，只能保存文件名或受控对象引用，不得内嵌像素。
 
 默认导出不应包含：
 
 - 原始图像像素、视频帧、头模纹理。
 - 未脱敏病历、超声图像或病理文本。
 - 可识别个人身份的自由文本。
+- 辅助线索的 base64 mask、overlay、DICOM、视频帧或任何可还原人脸/病灶影像的 payload。
 
 ## 审计记录最小字段
 
@@ -114,5 +116,8 @@ python tools/audit_export_privacy.py incision_review_*.json tumor_input_*.json
 - `patient_name`、`mrn`、`phone`、`email`、`date_of_birth` 等身份字段被填充。
 - 自由文本中出现 email 或电话样式字符串。
 - 媒体相关字段中疑似嵌入 base64 图像 / 视频 / DICOM payload。
+- `secondary_cues.used_for_geometry` 或 `secondary_cues.used_for_agent_prompt` 被置为 `true`。
+
+辅助线索当前只能作为医生审阅时的只读证据进入导出，不得自动改变肿物边界、候选切口或 LLM Agent 的 prompt；若后续要让受控 CV/LLM 模型参与几何生成，必须重新定义出域、访问控制和临床验证流程。
 
 该脚本只是工程守门，不能替代机构合规审查。

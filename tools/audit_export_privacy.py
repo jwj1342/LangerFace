@@ -31,8 +31,22 @@ PII_KEY_HINTS = (
     "dob",
     "address",
 )
-MEDIA_KEY_HINTS = ("image", "photo", "video", "frame", "texture", "pixels", "exif", "ultrasound")
+MEDIA_KEY_HINTS = (
+    "image",
+    "photo",
+    "video",
+    "frame",
+    "texture",
+    "pixels",
+    "exif",
+    "ultrasound",
+    "dicom",
+    "mask",
+    "overlay",
+    "bytes",
+)
 RAW_MEDIA_FLAG_KEYS = ("raw_image_sent", "raw_video_sent", "contains_face_image", "contains_raw_media")
+SECONDARY_CUE_FORBIDDEN_TRUE_KEYS = ("used_for_geometry", "used_for_agent_prompt")
 
 EMAIL_RE = re.compile(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b")
 PHONE_RE = re.compile(r"(?<!\d)(?:\+?\d[\d .()\-]{8,}\d)(?!\d)")
@@ -120,6 +134,25 @@ def _audit_node(value: Any, *, file: str, path: tuple[str, ...]) -> list[dict[st
                 path,
                 "raw_media_flag_true",
                 "Export marks raw image/video media as sent or present.",
+            )
+        )
+
+    if (
+        "secondary_cues" in lower_path
+        and leaf in SECONDARY_CUE_FORBIDDEN_TRUE_KEYS
+        and value is True
+    ):
+        code = (
+            "secondary_cue_used_for_geometry"
+            if leaf == "used_for_geometry"
+            else "secondary_cue_sent_to_agent_prompt"
+        )
+        violations.append(
+            _violation(
+                file,
+                path,
+                code,
+                "Secondary cue exports must remain review-only and must not drive geometry or LLM prompts.",
             )
         )
 

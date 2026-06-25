@@ -16,6 +16,7 @@
 - 皮表肿物边界点：抽象 3D 坐标，不包含原始影像像素。
 - 候选切口几何、guardrails、工具调用 trace。
 - Provider 通信配置：Base URL、model、timeout 和本次请求的 API Key。
+- 辅助线索摘要：来源、置信度、metrics 和人工确认状态；它只能用于审阅展示，不能作为几何生成或 LLM prompt 输入。
 - 实时叠加暂存：`incision-overlay/v0.1` 只保存三角面 id、重心坐标、肿物/候选几何、`review_gate`、`guardrail_summary` 和审计标记，不保存照片/视频像素。
 
 ## 审计记录
@@ -29,6 +30,7 @@
 - `trace`：工具调用、输入和观察。
 - `provider_config`：去敏后的 provider 配置。
 - `privacy_audit`：数据出域声明，明确 `raw_image_sent=false`。
+- `secondary_cues`：只读辅助线索摘要，必须保留 `used_for_geometry=false` 和 `used_for_agent_prompt=false`，且不得内嵌 mask / overlay / DICOM / 视频帧。
 - `incision-overlay/v0.1`：用于照片/视频/实时页的短期 sessionStorage 叠加，必须带 `raw_image_sent=false` 和 `live_overlay_ready=true`，不作为病历或长期审计系统。
 
 导出 JSON 分享前可运行：
@@ -37,7 +39,7 @@
 python tools/audit_export_privacy.py incision_review_*.json tumor_input_*.json
 ```
 
-脚本会拦截原始媒体标记、未脱敏 provider secret、明显身份字段和疑似嵌入媒体 payload。
+脚本会拦截原始媒体标记、未脱敏 provider secret、明显身份字段、疑似嵌入媒体 payload，以及辅助线索越界参与几何或 Agent prompt 的标记。
 
 ## 仍需单独完成的合规工作
 
