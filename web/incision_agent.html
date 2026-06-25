@@ -35,6 +35,8 @@
   .text-area{width:100%;min-height:74px;resize:vertical;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:13px;color:var(--ink);font-family:inherit;line-height:1.45}
   .boundary-status{font-size:11px;color:var(--muted);line-height:1.55;margin:0}
   .boundary-status.warn{color:#8a5a00;font-weight:700}
+  .anatomy-preview{font-size:11px;color:var(--muted);line-height:1.55;margin:0}
+  .anatomy-preview.warn{color:#8a5a00;font-weight:700}
   .review-state{font-size:11px;font-weight:700;border-radius:999px;padding:4px 8px;background:#eef0ea;color:#44505d}
   .review-state.approved{background:#d9f2e7;color:var(--green-d)}
   .review-state.rejected{background:#fee2e2;color:#991b1b}
@@ -102,6 +104,7 @@
       <input id="tumorImportFile" class="hidden" type="file" accept="application/json,.json" />
       <button class="btn btn-primary" id="runAgentBtn">生成候选切口</button>
       <p class="agent-note" id="pickState">当前点位：默认右颊。右侧标准脸可点击重选。</p>
+      <p class="anatomy-preview" id="anatomyPreview">当前点位分区：待加载</p>
     </div>
 
     <div class="card agent-grid">
@@ -144,6 +147,7 @@
         <div class="metric"><span class="k">Guardrails</span><span class="v" id="guardrailVal">—</span></div>
       </div>
       <p class="hint" id="llmSummary">尚未生成。</p>
+      <p class="guardrail-details" id="directionSource">方向依据：尚未生成。</p>
       <p class="hint" id="nextStep"></p>
       <p class="guardrail-details" id="guardrailDetails">Guardrails 尚未运行。</p>
     </div>

@@ -5,6 +5,7 @@ import { dataSource } from "./data_source.js";
 import { compileIncisionOverlay } from "./incision_overlay.js";
 import {
   applyCandidateEdit,
+  classifyRegion,
   compareCandidateRecords,
   normalizeTumorInput,
   planIncisionDeterministic,
@@ -43,6 +44,7 @@ const els = {
   tumorImportFile: $("tumorImportFile"),
   run: $("runAgentBtn"),
   pickState: $("pickState"),
+  anatomyPreview: $("anatomyPreview"),
   secondaryCueState: $("secondaryCueState"),
   secondaryCueSummary: $("secondaryCueSummary"),
   importSecondaryCue: $("importSecondaryCueBtn"),
@@ -65,6 +67,7 @@ const els = {
   directionConf: $("directionConf"),
   regionVal: $("regionVal"),
   guardrailVal: $("guardrailVal"),
+  directionSource: $("directionSource"),
   guardrailDetails: $("guardrailDetails"),
   llmSummary: $("llmSummary"),
   nextStep: $("nextStep"),
@@ -480,6 +483,25 @@ function updateBoundaryStatus() {
   els.boundaryStatus.textContent = `皮表边界：${summary.point_count} 点 · 横向 ${fmt(summary.perp_diameter_mm)} mm · 长轴覆盖 ${fmt(summary.axis_diameter_mm)} mm${area}${selfX}${warn}`;
 }
 
+function updateAnatomyPreview() {
+  if (!els.anatomyPreview || !S.verts) return;
+  const anatomy = classifyRegion(S.verts[S.lesion], S.verts);
+  const reasons = anatomy.confidence_reasons || [];
+  const confidence = Math.round((anatomy.confidence || 0) * 100);
+  const freeMargin = anatomy.free_margin_distance_mm != null
+    ? ` · 游离缘 ${fmt(anatomy.free_margin_distance_mm)} mm`
+    : "";
+  const reasonText = reasons.length ? ` · ${reasons.join(", ")}` : "";
+  els.anatomyPreview.textContent = `当前点位分区：${anatomy.region} / ${anatomy.subunit} · 置信 ${confidence}%${freeMargin}${reasonText}`;
+  els.anatomyPreview.title = reasons.length ? `分区置信原因：${reasons.join(", ")}` : "";
+  els.anatomyPreview.classList.toggle(
+    "warn",
+    (anatomy.confidence || 0) < 0.55 ||
+      reasons.includes("near_sensitive_free_margin") ||
+      reasons.includes("near_region_rule_boundary"),
+  );
+}
+
 function tangentFrame(normal, axis = [1, 0, 0]) {
   const u0 = norm(cross(normal, axis));
   const u = len(u0) > 0 ? u0 : [1, 0, 0];
@@ -553,6 +575,7 @@ function setLesion(i) {
   S.marker.position.set(center[0], center[1], center[2]);
   updateTumorRing();
   els.pickState.textContent = `当前点位：顶点 #${i}`;
+  updateAnatomyPreview();
 }
 
 function updateTumorRing() {
@@ -591,6 +614,7 @@ function updateFormVisibility() {
   els.ellipseWrap.classList.toggle("hidden", !cutaneous || els.boundaryMode.value !== "ellipse");
   els.freehandControls.classList.toggle("hidden", !cutaneous || els.boundaryMode.value !== "freehand");
   updateTumorRing();
+  updateAnatomyPreview();
 }
 
 function fmt(x, digits = 1) {
@@ -721,6 +745,32 @@ function renderGuardrailDetails(guardrails) {
   }
 }
 
+function directionSourceLabel(source) {
+  const labels = {
+    rstl_atlas_weighted_nearest: "RSTL 图谱 weighted-nearest",
+    rstl_atlas_empty: "RSTL 图谱无可用支持点",
+  };
+  return labels[source] || source || "未记录";
+}
+
+function renderDirectionSource(result) {
+  if (!els.directionSource) return;
+  const direction = result.direction || {};
+  const sources = [
+    directionSourceLabel(direction.source),
+    `support ${direction.support_count ?? 0}`,
+    direction.angular_spread_deg != null ? `轴向离散 ${fmt(direction.angular_spread_deg)}°` : null,
+  ].filter(Boolean);
+  const overrides = (result.guardrails?.suggested_overrides || []).filter((o) => o.kind === "protective_direction");
+  if (overrides.length) {
+    sources.push(`敏感结构方向例外：${overrides.map((o) => `${o.structure}/${o.direction_hint}`).join("；")}`);
+  }
+  sources.push(S.secondaryCues ? "皱襞/边界辅助线索：只读审阅，不参与几何" : "皱襞/边界辅助线索：未参与几何");
+  if (result.candidate?.edited) sources.push("医生人工覆盖已记录");
+  els.directionSource.textContent = `方向依据：${sources.join(" · ")}`;
+  els.directionSource.classList.toggle("warn", direction.confidence < 0.35 || overrides.length > 0 || Boolean(result.candidate?.edited));
+}
+
 function tumorQualityFor(result = S.result) {
   if (!result?.tumor) return { warnings: [], warning_count: 0, passed: true };
   return result.tumor_quality || summarizeTumorInputQuality(result.tumor);
@@ -750,6 +800,7 @@ function renderResult(result) {
   els.guardrailVal.textContent = result.guardrails.passed ? "通过" : "复核";
   els.guardrailVal.style.color = result.guardrails.passed ? "" : "#b45309";
   renderGuardrailDetails(result.guardrails);
+  renderDirectionSource(result);
   const tumorQuality = tumorQualityFor(result);
   if (tumorQuality.warning_count) {
     els.guardrailDetails.textContent += `\n肿物输入：${tumorQuality.warnings.map((w) => `${w.code}(${w.severity})`).join(" · ")}`;
@@ -1094,6 +1145,7 @@ function exportReport() {
     (r.anatomy.confidence_reasons || []).length
       ? `- 分区置信原因：${r.anatomy.confidence_reasons.join(", ")}`
       : null,
+    `- RSTL 来源：${directionSourceLabel(r.direction.source)}；support ${r.direction.support_count ?? 0}；轴向离散 ${fmt(r.direction.angular_spread_deg)}°`,
     `- RSTL 方向置信度：${Math.round((r.direction.confidence || 0) * 100)}%`,
     (r.direction.confidence_reasons || []).length
       ? `- RSTL 低置信原因：${r.direction.confidence_reasons.join(", ")}`

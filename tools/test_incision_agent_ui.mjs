@@ -6,6 +6,7 @@ const html = fs.readFileSync("incision_agent.html", "utf8");
 const js = fs.readFileSync("incision_agent_main.js", "utf8");
 
 assert.ok(html.includes('id="boundaryStatus"'), "workbench exposes tumor boundary status");
+assert.ok(html.includes('id="anatomyPreview"'), "workbench exposes live anatomy preview for selected tumor center");
 assert.ok(html.includes('id="exportTumorBtn"'), "workbench exposes tumor export button");
 assert.ok(html.includes('id="importTumorBtn"'), "workbench exposes tumor import button");
 assert.ok(html.includes('id="tumorImportFile"'), "workbench exposes hidden tumor import file input");
@@ -18,6 +19,7 @@ assert.ok(html.includes('id="reviewerName"'), "workbench captures clinician revi
 assert.ok(html.includes('id="reviewDecision"'), "workbench exposes clinician review decision");
 assert.ok(html.includes('id="reviewNotes"'), "workbench exposes clinician review notes");
 assert.ok(html.includes('id="guardrailDetails"'), "workbench exposes guardrail detail feedback");
+assert.ok(html.includes('id="directionSource"'), "workbench exposes direction source explanation");
 assert.ok(html.includes('id="approveCandidateBtn"'), "workbench exposes candidate approval action");
 assert.ok(html.includes('id="rejectCandidateBtn"'), "workbench exposes candidate rejection action");
 assert.ok(html.includes('id="candidateWidth"'), "workbench exposes fusiform width and ratio metric");
@@ -27,6 +29,9 @@ assert.ok(js.includes("importTumorFile"), "workbench implements tumor JSON impor
 assert.ok(js.includes("applyImportedTumor"), "workbench applies imported tumor payloads");
 assert.ok(js.includes("summarizeTumorBoundary"), "workbench renders deterministic boundary summaries");
 assert.ok(js.includes("summarizeTumorInputQuality"), "workbench renders tumor input quality summaries");
+assert.ok(js.includes("classifyRegion(S.verts[S.lesion]"), "workbench derives anatomy preview from selected tumor center");
+assert.ok(js.includes("当前点位分区"), "workbench labels live anatomy preview in Chinese");
+assert.ok(js.includes("updateAnatomyPreview"), "workbench refreshes anatomy preview when the selected point changes");
 assert.ok(js.includes("tumorQualityFor"), "workbench keeps tumor quality in review exports");
 assert.ok(js.includes("肿物输入提示"), "markdown report includes tumor input quality warnings");
 assert.ok(js.includes("normalizeSecondaryCuePayload"), "workbench normalizes secondary cue imports");
@@ -51,6 +56,10 @@ assert.ok(js.includes("stream: true"), "workbench prefers streaming agent trace"
 assert.ok(js.includes("SSE trace 不可用"), "workbench reports JSON fallback when streaming is unavailable");
 assert.ok(js.includes("建议覆盖项"), "markdown report includes suggested override details");
 assert.ok(js.includes("protective_direction"), "workbench displays protective direction guardrail suggestions");
+assert.ok(js.includes("directionSourceLabel"), "workbench labels RSTL direction source");
+assert.ok(js.includes("皱襞/边界辅助线索：只读审阅，不参与几何"), "workbench explains secondary cues do not drive direction geometry");
+assert.ok(js.includes("医生人工覆盖已记录"), "workbench exposes manual direction override state");
+assert.ok(js.includes("RSTL 来源"), "markdown report includes direction source provenance");
 assert.ok(js.includes("最近敏感游离缘"), "markdown report includes sensitive free-margin distance");
 assert.ok(js.includes("候选版本"), "markdown report includes candidate version provenance");
 assert.ok(js.includes("发送到实时叠加前，请先确认当前候选草案"), "live overlay requires candidate approval");
