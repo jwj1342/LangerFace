@@ -61,6 +61,22 @@ function refreshStaticImage() {
   if (sourceState.sourceKind === "image") requestFrame();
 }
 
+function visibleRecordingCanvases() {
+  const extras = [];
+  if (renderState.zoom && !els.zoomStrip.classList.contains("hidden")) {
+    renderState.zoomCards.forEach((zc) => {
+      if (!zc?.canvas || !zc.canvas.width || !zc.canvas.height) return;
+      if (zc.card?.offsetParent === null) return;
+      const label = zc.card?.querySelector(".tag")?.textContent || "细节放大窗";
+      extras.push({ label, canvas: zc.canvas });
+    });
+  }
+  if (els.three && !els.three.classList.contains("hidden") && els.three.width && els.three.height) {
+    extras.push({ label: "3D 视图", canvas: els.three });
+  }
+  return extras;
+}
+
 let imageDrag = null;
 
 function startImageDrag(e) {
@@ -142,6 +158,7 @@ els.export.onclick = () => {
   if (!recordingController) {
     recordingController = createCanvasRecordingController({
       canvas: els.canvas,
+      getExtraCanvases: visibleRecordingCanvases,
       system: () => renderState.system,
       onStateChange(recording) {
         recordingState.recorder = recording ? recordingController : null;

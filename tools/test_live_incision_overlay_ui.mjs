@@ -28,7 +28,11 @@ assert.ok(main.includes("上传照片、视频或开启摄像头后，会随 RST
 assert.ok(main.includes("buildZoomCards(refreshStaticImage)"), "live page rebuilds zoom cards after loading incision overlay");
 assert.ok(main.includes("createCanvasRecordingController"), "live page uses the tested canvas export controller");
 assert.ok(main.includes("canvas: els.canvas"), "live page exports the rendered main canvas, including incision overlay");
-assert.ok(exporter.includes("canvas.captureStream(fps)"), "export controller records the canvas stream");
+assert.ok(main.includes("getExtraCanvases: visibleRecordingCanvases"), "live page includes zoom/3D canvases in composite export");
+assert.ok(main.includes('label: "3D 视图"'), "live page labels the 3D view in export");
+assert.ok(exporter.includes("sourceCanvas.captureStream(fps)"), "export controller records the selected source canvas stream");
+assert.ok(exporter.includes("createCompositeSource(extras)"), "export controller can compose detail and 3D canvases");
+assert.ok(exporter.includes("drawContain(g, extra.canvas"), "export controller draws extra canvases into recording");
 assert.ok(exporter.includes('mimeType: "video/webm"'), "export controller records playable webm output");
 assert.ok(render.includes("drawIncisionOverlay(lm"), "renderer draws incision overlay on every frame");
 assert.ok(render.includes("measureIncisionOverlayRegistration"), "renderer measures incision overlay projection registration");

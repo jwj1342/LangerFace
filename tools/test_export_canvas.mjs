@@ -94,4 +94,79 @@ assert.throws(
   /canvas\.captureStream/,
 );
 
+const compositeCalls = [];
+const compositeCtx = {
+  fillStyle: "",
+  strokeStyle: "",
+  lineWidth: 1,
+  font: "",
+  textBaseline: "",
+  fillRect: (...args) => compositeCalls.push({ op: "fillRect", args }),
+  strokeRect: (...args) => compositeCalls.push({ op: "strokeRect", args }),
+  fillText: (...args) => compositeCalls.push({ op: "fillText", args }),
+  drawImage: (...args) => compositeCalls.push({ op: "drawImage", source: args[0]?.name || args[0]?.kind || "unknown", args }),
+};
+
+const compositeCanvas = {
+  name: "composite-canvas",
+  width: 0,
+  height: 0,
+  getContext(type) {
+    assert.equal(type, "2d");
+    return compositeCtx;
+  },
+  captureStream(fps) {
+    compositeCalls.push({ op: "captureStream", source: "composite", fps });
+    return { kind: "composite-stream", fps };
+  },
+};
+
+const mainCanvas = {
+  name: "main-canvas",
+  width: 1280,
+  height: 720,
+  captureStream(fps) {
+    compositeCalls.push({ op: "captureStream", source: "main", fps });
+    return { kind: "main-stream", fps };
+  },
+};
+
+const zoomCanvas = { name: "切口候选", width: 300, height: 300 };
+const threeCanvas = { name: "3D 视图", width: 640, height: 480 };
+const compositeRecorderCalls = [];
+class CompositeRecorder extends FakeMediaRecorder {
+  constructor(stream, options) {
+    super(stream, options);
+    compositeRecorderCalls.push({ stream, options });
+  }
+}
+
+const compositeController = createCanvasRecordingController({
+  canvas: mainCanvas,
+  getExtraCanvases: () => [
+    { label: "切口候选", canvas: zoomCanvas },
+    { label: "3D 视图", canvas: threeCanvas },
+  ],
+  Recorder: CompositeRecorder,
+  BlobCtor: FakeBlob,
+  createCanvas: () => compositeCanvas,
+  requestFrame() { compositeCalls.push({ op: "requestFrame" }); return 44; },
+  cancelFrame(id) { compositeCalls.push({ op: "cancelFrame", id }); },
+  createObjectURL(blob) { return `blob://composite/${blob.size}`; },
+  createLink() { return { click() {} }; },
+});
+
+assert.equal(compositeController.start(), true);
+assert.equal(compositeCanvas.width, 1280 + Math.max(12, Math.round(1280 * 0.012)) + Math.max(240, Math.min(420, Math.round(1280 * 0.28))));
+assert.equal(compositeCanvas.height, 720);
+assert.equal(compositeRecorderCalls[0].stream.kind, "composite-stream");
+assert.ok(compositeCalls.some((call) => call.op === "captureStream" && call.source === "composite"), "composite canvas stream is recorded");
+assert.ok(!compositeCalls.some((call) => call.op === "captureStream" && call.source === "main"), "main canvas is not recorded directly when extras exist");
+assert.ok(compositeCalls.some((call) => call.op === "drawImage" && call.source === "main-canvas"), "composite export draws main canvas");
+assert.ok(compositeCalls.some((call) => call.op === "drawImage" && call.source === "切口候选"), "composite export draws zoom canvas");
+assert.ok(compositeCalls.some((call) => call.op === "drawImage" && call.source === "3D 视图"), "composite export draws 3D canvas");
+assert.ok(compositeCalls.some((call) => call.op === "fillText" && call.args[0] === "切口候选"), "composite export labels zoom view");
+assert.equal(compositeController.stop(), true);
+assert.ok(compositeCalls.some((call) => call.op === "cancelFrame" && call.id === 44), "composite painter is stopped");
+
 console.log("test_export_canvas: canvas webm recorder contract assertions passed");
