@@ -392,10 +392,54 @@ function editFingerprint(editRecord) {
   return Math.abs(hash).toString(36);
 }
 
-function versionedEditProvenance(base, editRecord) {
+function editRecordIsActive(editRecord = {}) {
+  return Number(editRecord.angle_offset_deg || 0) !== 0 ||
+    Number(editRecord.length_scale || 1) !== 1 ||
+    Number(editRecord.width_scale || 1) !== 1 ||
+    Number(editRecord.shift_along_mm || 0) !== 0 ||
+    Number(editRecord.shift_perp_mm || 0) !== 0 ||
+    Boolean(editRecord.reason);
+}
+
+function normalizeEditHistoryEntry(base, raw, index, baseVersion) {
+  const entry = {
+    kind: "clinician_adjustment",
+    angle_offset_deg: Number(raw.angle_offset_deg || 0),
+    length_scale: Number(raw.length_scale || 1),
+    width_scale: Number(raw.width_scale || 1),
+    shift_along_mm: Number(raw.shift_along_mm || 0),
+    shift_perp_mm: Number(raw.shift_perp_mm || 0),
+    reason: String(raw.reason || ""),
+    source: raw.source || "web/incision_agent",
+    interaction: raw.interaction || "committed_control_edit",
+    committed_at: raw.committed_at || null,
+    history_index: Number(raw.history_index || index + 1),
+    parent_candidate_id: base.id,
+    resulting_candidate_version: baseVersion + index + 1,
+  };
+  entry.edit_id = raw.edit_id || `edit_v${entry.resulting_candidate_version}_${editFingerprint(entry)}`;
+  return entry;
+}
+
+function versionedEditProvenance(base, editRecord, sessionHistory = null) {
   const baseProvenance = base.provenance || {};
   const previousHistory = Array.isArray(baseProvenance.edit_history) ? baseProvenance.edit_history : [];
-  const candidateVersion = Number(baseProvenance.candidate_version || 1) + 1;
+  const baseVersion = Number(baseProvenance.candidate_version || 1);
+  const activeSession = Array.isArray(sessionHistory)
+    ? sessionHistory.filter((entry) => editRecordIsActive(entry) || entry.interaction === "control_change")
+    : [];
+  if (activeSession.length) {
+    const editHistory = activeSession.map((entry, index) => normalizeEditHistoryEntry(base, entry, index, baseVersion));
+    return {
+      ...baseProvenance,
+      source_candidate_id: base.id,
+      parent_candidate_id: base.id,
+      candidate_version: baseVersion + editHistory.length,
+      clinician_edit: editHistory.at(-1),
+      edit_history: editHistory,
+    };
+  }
+  const candidateVersion = baseVersion + 1;
   const editEntry = {
     ...editRecord,
     edit_id: `edit_v${candidateVersion}_${editFingerprint(editRecord)}`,
@@ -1080,6 +1124,9 @@ export function applyCandidateEdit(plan, edit = {}, normal = [0, 0, 1], unitsPer
     reason: String(edit.reason || ""),
     source: "web/incision_agent",
   };
+  const sessionHistory = Array.isArray(edit.session_history) ? edit.session_history : [];
+  const sessionHasEdits = sessionHistory.some((entry) => editRecordIsActive(entry) || entry.interaction === "control_change");
+  if (!editRecordIsActive(editRecord) && !sessionHasEdits) return out;
 
   let candidate;
   if (base.type === "linear") {
@@ -1108,7 +1155,7 @@ export function applyCandidateEdit(plan, edit = {}, normal = [0, 0, 1], unitsPer
   }
 
   if (verts) annotateCandidateSensitiveDistances(candidate, verts);
-  candidate.provenance = versionedEditProvenance(base, editRecord);
+  candidate.provenance = versionedEditProvenance(base, editRecord, sessionHistory);
   candidate.edited = true;
 
   out.original_candidate = plan.original_candidate || plan.candidate;

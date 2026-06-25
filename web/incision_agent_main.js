@@ -88,7 +88,10 @@ const els = {
   shiftPerp: $("shiftPerpMm"),
   shiftPerpVal: $("shiftPerpVal"),
   editReason: $("editReason"),
+  undoEdit: $("undoEditBtn"),
+  redoEdit: $("redoEditBtn"),
   resetEdit: $("resetEditBtn"),
+  editHistoryState: $("editHistoryState"),
   reviewerName: $("reviewerName"),
   reviewDecision: $("reviewDecision"),
   reviewNotes: $("reviewNotes"),
@@ -141,6 +144,8 @@ const S = {
   result: null,
   baseResult: null,
   secondaryCues: null,
+  editTimeline: null,
+  editCursor: 0,
 };
 
 const REVIEW_LABELS = {
@@ -668,7 +673,18 @@ function fmt(x, digits = 1) {
   return Number.isFinite(Number(x)) ? Number(x).toFixed(digits) : "—";
 }
 
-function currentEdit() {
+function neutralEdit() {
+  return {
+    angle_offset_deg: 0,
+    length_scale: 1,
+    width_scale: 1,
+    shift_along_mm: 0,
+    shift_perp_mm: 0,
+    reason: "",
+  };
+}
+
+function currentEditBase() {
   return {
     angle_offset_deg: Number(els.angleOffset.value),
     length_scale: Number(els.lengthScale.value) / 100,
@@ -688,6 +704,65 @@ function editIsActive(edit = currentEdit()) {
     Boolean(edit.reason);
 }
 
+function editsEqual(a = neutralEdit(), b = neutralEdit()) {
+  return Number(a.angle_offset_deg || 0) === Number(b.angle_offset_deg || 0) &&
+    Number(a.length_scale || 1) === Number(b.length_scale || 1) &&
+    Number(a.width_scale || 1) === Number(b.width_scale || 1) &&
+    Number(a.shift_along_mm || 0) === Number(b.shift_along_mm || 0) &&
+    Number(a.shift_perp_mm || 0) === Number(b.shift_perp_mm || 0) &&
+    String(a.reason || "") === String(b.reason || "");
+}
+
+function cloneEdit(edit = neutralEdit()) {
+  return {
+    angle_offset_deg: Number(edit.angle_offset_deg || 0),
+    length_scale: Number(edit.length_scale || 1),
+    width_scale: Number(edit.width_scale || 1),
+    shift_along_mm: Number(edit.shift_along_mm || 0),
+    shift_perp_mm: Number(edit.shift_perp_mm || 0),
+    reason: String(edit.reason || ""),
+  };
+}
+
+function ensureEditTimeline() {
+  if (!Array.isArray(S.editTimeline) || !S.editTimeline.length) {
+    S.editTimeline = [neutralEdit()];
+    S.editCursor = 0;
+  }
+}
+
+function editHistoryEntriesForCurrent(edit = currentEditBase()) {
+  ensureEditTimeline();
+  const rawCommitted = S.editTimeline.slice(1, Math.max(1, S.editCursor + 1));
+  const committedSource = rawCommitted.some((entry) => editIsActive(entry))
+    ? rawCommitted
+    : rawCommitted.filter((entry) => editIsActive(entry));
+  const committed = committedSource.map((entry, idx) => ({
+      ...cloneEdit(entry),
+      source: "web/incision_agent",
+      interaction: entry.interaction || "committed_control_edit",
+      history_index: idx + 1,
+    }));
+  const cursorEdit = S.editTimeline[S.editCursor] || neutralEdit();
+  if (!editsEqual(edit, cursorEdit) && editIsActive(edit)) {
+    committed.push({
+      ...cloneEdit(edit),
+      source: "web/incision_agent",
+      interaction: "live_preview_uncommitted_edit",
+      history_index: committed.length + 1,
+    });
+  }
+  return committed;
+}
+
+function currentEdit() {
+  const edit = currentEditBase();
+  return {
+    ...edit,
+    session_history: editHistoryEntriesForCurrent(edit),
+  };
+}
+
 function syncEditLabels() {
   els.angleOffsetVal.textContent = els.angleOffset.value;
   els.lengthScaleVal.textContent = `${els.lengthScale.value}%`;
@@ -696,14 +771,88 @@ function syncEditLabels() {
   els.shiftPerpVal.textContent = els.shiftPerp.value;
 }
 
-function resetEditControls() {
-  els.angleOffset.value = 0;
-  els.lengthScale.value = 100;
-  els.widthScale.value = 100;
-  els.shiftAlong.value = 0;
-  els.shiftPerp.value = 0;
-  els.editReason.value = "";
+function setEditControls(edit = neutralEdit()) {
+  els.angleOffset.value = String(Math.round(Number(edit.angle_offset_deg || 0)));
+  els.lengthScale.value = String(Math.round(Number(edit.length_scale || 1) * 100));
+  els.widthScale.value = String(Math.round(Number(edit.width_scale || 1) * 100));
+  els.shiftAlong.value = String(Math.round(Number(edit.shift_along_mm || 0)));
+  els.shiftPerp.value = String(Math.round(Number(edit.shift_perp_mm || 0)));
+  els.editReason.value = String(edit.reason || "");
   syncEditLabels();
+}
+
+function resetEditControls() {
+  setEditControls(neutralEdit());
+}
+
+function resetEditTimeline() {
+  S.editTimeline = [neutralEdit()];
+  S.editCursor = 0;
+  renderEditHistoryState();
+}
+
+function renderEditHistoryState() {
+  if (!els.editHistoryState) return;
+  ensureEditTimeline();
+  const edit = currentEditBase();
+  const committedCount = Math.max(0, S.editCursor);
+  const uncommitted = !editsEqual(edit, S.editTimeline[S.editCursor] || neutralEdit());
+  const historyCount = editHistoryEntriesForCurrent(edit).length;
+  const version = 1 + historyCount;
+  const pending = uncommitted ? " · 当前预览未提交" : "";
+  els.editHistoryState.textContent = historyCount
+    ? `编辑版本：v${version} · 已提交 ${committedCount} 步${pending}`
+    : `编辑版本：v1 · 无已提交调整${pending}`;
+  if (els.undoEdit) els.undoEdit.disabled = S.editCursor <= 0;
+  if (els.redoEdit) els.redoEdit.disabled = S.editCursor >= S.editTimeline.length - 1;
+}
+
+function commitEditSnapshot(interaction = "control_change") {
+  ensureEditTimeline();
+  const edit = {
+    ...cloneEdit(currentEditBase()),
+    interaction,
+    committed_at: new Date().toISOString(),
+  };
+  const current = S.editTimeline[S.editCursor] || neutralEdit();
+  if (editsEqual(edit, current)) {
+    renderEditHistoryState();
+    return;
+  }
+  S.editTimeline = S.editTimeline.slice(0, S.editCursor + 1);
+  S.editTimeline.push(edit);
+  S.editCursor = S.editTimeline.length - 1;
+  renderEditHistoryState();
+  if (S.baseResult) {
+    const result = applyCandidateEdit(S.baseResult, currentEdit(), S.normals[S.lesion], S.unitsPerMm, S.verts);
+    renderResult(result);
+  }
+}
+
+function applyEditSnapshot(edit) {
+  setEditControls(edit);
+  if (S.baseResult) {
+    const result = applyCandidateEdit(S.baseResult, currentEdit(), S.normals[S.lesion], S.unitsPerMm, S.verts);
+    renderResult(result);
+  } else {
+    renderEditHistoryState();
+  }
+}
+
+function undoEditSnapshot() {
+  ensureEditTimeline();
+  if (S.editCursor <= 0) return;
+  S.editCursor -= 1;
+  invalidateReviewAfterGeometryChange("已撤销上一步医生调整，审阅状态已回到待医生确认。");
+  applyEditSnapshot(S.editTimeline[S.editCursor]);
+}
+
+function redoEditSnapshot() {
+  ensureEditTimeline();
+  if (S.editCursor >= S.editTimeline.length - 1) return;
+  S.editCursor += 1;
+  invalidateReviewAfterGeometryChange("已重做医生调整，审阅状态已回到待医生确认。");
+  applyEditSnapshot(S.editTimeline[S.editCursor]);
 }
 
 function updateEditVisibility(result) {
@@ -712,10 +861,12 @@ function updateEditVisibility(result) {
   const active = editIsActive();
   els.editStatus.textContent = active ? "已调整" : "工具建议";
   els.editStatus.classList.toggle("active", active);
+  renderEditHistoryState();
 }
 
 function applyEditControls() {
   syncEditLabels();
+  renderEditHistoryState();
   if (!S.baseResult) return;
   if (editIsActive()) invalidateReviewAfterGeometryChange();
   const result = applyCandidateEdit(S.baseResult, currentEdit(), S.normals[S.lesion], S.unitsPerMm, S.verts);
@@ -1071,6 +1222,31 @@ function reviewGate(review, result) {
   };
 }
 
+function candidateEditSession(result = S.result) {
+  const provenance = result?.candidate?.provenance || {};
+  const history = Array.isArray(provenance.edit_history) ? provenance.edit_history : [];
+  return {
+    schema_version: "candidate-edit-session/v0.1",
+    candidate_version: Number(provenance.candidate_version || 1),
+    edit_count: history.length,
+    current_edit_id: provenance.clinician_edit?.edit_id || null,
+    undo_available: Boolean(els.undoEdit && !els.undoEdit.disabled),
+    redo_available: Boolean(els.redoEdit && !els.redoEdit.disabled),
+    source: "web/incision_agent",
+    history: history.map((entry) => ({
+      edit_id: entry.edit_id,
+      resulting_candidate_version: entry.resulting_candidate_version,
+      angle_offset_deg: entry.angle_offset_deg,
+      length_scale: entry.length_scale,
+      width_scale: entry.width_scale,
+      shift_along_mm: entry.shift_along_mm,
+      shift_perp_mm: entry.shift_perp_mm,
+      reason: entry.reason || "",
+      interaction: entry.interaction || entry.source || "clinician_adjustment",
+    })),
+  };
+}
+
 function reviewRecord(result = S.result, label = "候选") {
   const createdAt = new Date().toISOString();
   const review = currentReviewMetadata(createdAt);
@@ -1089,6 +1265,7 @@ function reviewRecord(result = S.result, label = "候选") {
     direction: result.direction,
     candidate: result.candidate,
     original_candidate: result.original_candidate || result.candidate,
+    candidate_edit_session: candidateEditSession(result),
     guardrails: result.guardrails,
     trace: result.trace,
     agent_trace_gate: traceGate,
@@ -1350,6 +1527,9 @@ function exportReport() {
     `## 候选 ${idx + 1}: ${r.label}`,
     `- 类型：${r.candidate.type === "linear" ? "皮下线性切口" : "皮表梭形切口"}`,
     `- 候选版本：v${r.candidate.provenance?.candidate_version || 1}；编辑记录 ${(r.candidate.provenance?.edit_history || []).length} 条`,
+    r.candidate_edit_session?.edit_count
+      ? `- 编辑时间线：${r.candidate_edit_session.edit_count} 步；当前 edit_id ${r.candidate_edit_session.current_edit_id || "—"}`
+      : null,
     `- 肿物：${r.tumor.kind}，直径 ${fmt(r.tumor.diameter_mm)} mm，切缘 ${fmt(r.tumor.margin_mm)} mm`,
     (r.tumor_quality?.warnings || []).length
       ? `- 肿物输入提示：${r.tumor_quality.warnings.map((w) => `${w.code}(${w.severity})`).join("；")}`
@@ -1471,6 +1651,7 @@ async function runAgent() {
   }
   S.baseResult = result;
   resetEditControls();
+  resetEditTimeline();
   resetReviewControls();
   renderResult(result);
   els.run.disabled = false;
@@ -1581,7 +1762,10 @@ els.canvas.addEventListener("pointermove", (e) => {
   drag.x = e.clientX; drag.y = e.clientY;
 });
 els.canvas.addEventListener("pointerup", (e) => {
-  if (drag && drag.moved < 6) pick(e);
+  const endpointDrag = drag?.handle != null;
+  const moved = drag?.moved || 0;
+  if (drag && drag.moved < 6 && !endpointDrag) pick(e);
+  if (endpointDrag && moved >= 1) commitEditSnapshot("endpoint_drag");
   drag = null;
 });
 els.canvas.addEventListener("wheel", (e) => { e.preventDefault(); S.head.zoom(e.deltaY > 0 ? 1.1 : 0.9); }, { passive: false });
@@ -1622,10 +1806,23 @@ els.clearBoundary.onclick = () => {
   els.shiftAlong,
   els.shiftPerp,
 ].forEach((el) => { el.oninput = applyEditControls; });
-els.editReason.onchange = applyEditControls;
+[
+  els.angleOffset,
+  els.lengthScale,
+  els.widthScale,
+  els.shiftAlong,
+  els.shiftPerp,
+].forEach((el) => { el.onchange = () => commitEditSnapshot("control_change"); });
+els.editReason.onchange = () => {
+  applyEditControls();
+  commitEditSnapshot("reason_change");
+};
+els.undoEdit.onclick = undoEditSnapshot;
+els.redoEdit.onclick = redoEditSnapshot;
 els.resetEdit.onclick = () => {
   if (!S.baseResult) return;
   resetEditControls();
+  resetEditTimeline();
   invalidateReviewAfterGeometryChange("已恢复工具建议，审阅状态已回到待医生确认。");
   renderResult(S.baseResult);
 };

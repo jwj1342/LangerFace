@@ -197,7 +197,12 @@
         <option value="manual subunit boundary alignment">贴合美学亚单位边界</option>
         <option value="manual clinician preference">医生人工判断</option>
       </select>
+      <div class="btn-row" style="grid-template-columns:1fr 1fr">
+        <button class="btn" id="undoEditBtn">撤销调整</button>
+        <button class="btn" id="redoEditBtn">重做调整</button>
+      </div>
       <button class="btn" id="resetEditBtn">恢复工具建议</button>
+      <p class="agent-note" id="editHistoryState">编辑版本：v1 · 无已提交调整</p>
       <p class="agent-note">调整只改变候选草案并记录 provenance；真实切口仍需医生复核。</p>
     </div>
 

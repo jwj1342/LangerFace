@@ -21,6 +21,9 @@ assert.ok(html.includes('id="reviewNotes"'), "workbench exposes clinician review
 assert.ok(html.includes('id="guardrailDetails"'), "workbench exposes guardrail detail feedback");
 assert.ok(html.includes('id="directionSource"'), "workbench exposes direction source explanation");
 assert.ok(html.includes('id="agentGate"'), "workbench exposes agent trace gate feedback");
+assert.ok(html.includes('id="undoEditBtn"'), "workbench exposes clinician edit undo");
+assert.ok(html.includes('id="redoEditBtn"'), "workbench exposes clinician edit redo");
+assert.ok(html.includes('id="editHistoryState"'), "workbench exposes clinician edit history status");
 assert.ok(html.includes('id="agentExecutionList"'), "workbench exposes Agent execution events list");
 assert.ok(html.includes('id="agentPlanList"'), "workbench exposes Agent ReAct plan list");
 assert.ok(html.includes("execution-event"), "workbench styles Agent execution events");
@@ -52,6 +55,11 @@ assert.ok(js.includes("rejected_by_clinician"), "review records support clinicia
 assert.ok(js.includes("audit_events"), "review records include audit events");
 assert.ok(js.includes("guardrail_summary"), "review records include guardrail summary");
 assert.ok(js.includes("review_gate"), "review records include review gate state");
+assert.ok(js.includes("candidate_edit_session"), "review records include clinician edit session state");
+assert.ok(js.includes("candidate-edit-session/v0.1"), "clinician edit session has an explicit schema");
+assert.ok(js.includes("undoEditSnapshot"), "workbench implements clinician edit undo");
+assert.ok(js.includes("redoEditSnapshot"), "workbench implements clinician edit redo");
+assert.ok(js.includes("commitEditSnapshot(\"endpoint_drag\")"), "endpoint dragging commits provenance history");
 assert.ok(js.includes("agent_trace_gate"), "review records include agent trace gate state");
 assert.ok(js.includes("agent_react_plan"), "review records include Agent ReAct plan state");
 assert.ok(js.includes("agent_execution_events"), "review records include Agent execution events");

@@ -418,6 +418,42 @@ ok(edited.candidate.provenance.edit_history[0].edit_id.startsWith("edit_v2_"),
 ok(edited.trace.some((step) => step.action === "clinician_edit_candidate"), "edited plan adds trace step");
 ok(edited.guardrails.warnings.some((w) => w.code === "rstl_deviation_override"), "edited deviation triggers guardrail warning");
 
+const multiStepEdited = T.applyCandidateEdit(plan, {
+  angle_offset_deg: 10,
+  length_scale: 1.1,
+  shift_along_mm: 2,
+  reason: "manual clinician preference",
+  session_history: [
+    {
+      angle_offset_deg: -5,
+      length_scale: 1,
+      width_scale: 1,
+      shift_along_mm: 0,
+      shift_perp_mm: 0,
+      reason: "manual scar camouflage",
+      interaction: "control_change",
+    },
+    {
+      angle_offset_deg: 10,
+      length_scale: 1.1,
+      width_scale: 1,
+      shift_along_mm: 2,
+      shift_perp_mm: 0,
+      reason: "manual clinician preference",
+      interaction: "endpoint_drag",
+    },
+  ],
+}, [0, 0, 1], 0.1);
+ok(multiStepEdited.candidate.provenance.candidate_version === 3,
+  "multi-step edit history increments candidate version per committed edit");
+ok(multiStepEdited.candidate.provenance.edit_history.length === 2,
+  "multi-step edit history is preserved in provenance");
+ok(multiStepEdited.candidate.provenance.clinician_edit.interaction === "endpoint_drag",
+  "latest edit records the interaction source");
+ok(multiStepEdited.candidate.provenance.edit_history[0].edit_id.startsWith("edit_v2_") &&
+  multiStepEdited.candidate.provenance.edit_history[1].edit_id.startsWith("edit_v3_"),
+  "multi-step edit ids track resulting candidate versions");
+
 const comparison = T.compareCandidateRecords([
   {
     id: "baseline",
