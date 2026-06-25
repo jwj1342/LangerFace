@@ -263,6 +263,30 @@ function compactLocalRegionQuality(localRegionQuality) {
   };
 }
 
+function compactLandmarkSmoothing() {
+  const smoother = renderState.smoother || {};
+  const hasGlobal = Number.isFinite(smoother.globalMinCutoff) || Number.isFinite(smoother.globalBeta);
+  return {
+    schema_version: "landmark-motion-stabilized-smoothing/v0.1",
+    enabled: renderState.smoothLevel > 0,
+    smooth_level: Number(renderState.smoothLevel.toFixed(3)),
+    method: hasGlobal ? "global_translation_plus_local_one_euro" : "pointwise_one_euro",
+    local: {
+      min_cutoff: smoother.minCutoff,
+      beta: smoother.beta,
+      dcutoff: smoother.dcutoff,
+    },
+    global: hasGlobal ? {
+      min_cutoff: smoother.globalMinCutoff,
+      beta: smoother.globalBeta,
+      dcutoff: smoother.globalDcutoff,
+      anchor_count: smoother.anchorIndices?.length || 0,
+    } : null,
+    exported_landmarks: false,
+    clinical_boundary: "Smoothing diagnostics expose parameters only, not landmark coordinates.",
+  };
+}
+
 function localQualityNeedsReview(localRegionQuality) {
   return Boolean(localRegionQuality && localRegionQuality.passed === false && localRegionQuality.active_region_count > 0);
 }
@@ -354,6 +378,7 @@ function updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stabilit
     },
     pose_gate: compactPoseGate(poseGate),
     local_region_quality: compactLocalRegionQuality(localRegionQuality),
+    landmark_smoothing: compactLandmarkSmoothing(),
     registration: compactRegistration(registration),
     stability: compactStability(stability),
     clinical_boundary: "Runtime overlay diagnostics are engineering QA signals, not clinical AR registration.",

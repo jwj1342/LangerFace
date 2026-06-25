@@ -71,6 +71,9 @@ assert.ok(render.includes("exported_landmarks: false"), "overlay diagnostics do 
 assert.ok(render.includes("updateIncisionOverlayQa(registration, stability, poseGate, localRegionQuality)"), "renderer updates visible overlay QA from measured results");
 assert.ok(render.includes("pose_gate: compactPoseGate(poseGate)"), "runtime overlay diagnostics include sanitized pose gate state");
 assert.ok(render.includes("local_region_quality: compactLocalRegionQuality(localRegionQuality)"), "runtime overlay diagnostics include sanitized local region quality");
+assert.ok(render.includes("landmark_smoothing: compactLandmarkSmoothing()"), "runtime overlay diagnostics include smoothing parameters");
+assert.ok(render.includes("landmark-motion-stabilized-smoothing/v0.1"), "renderer exports versioned smoothing diagnostics");
+assert.ok(render.includes('method: hasGlobal ? "global_translation_plus_local_one_euro"'), "smoothing diagnostics identify global motion stabilization");
 assert.ok(render.includes("姿态需复核"), "renderer surfaces pose-gated overlay feedback");
 assert.ok(render.includes("局部需复核"), "renderer surfaces local-region overlay feedback");
 assert.ok(render.includes("投射需复核"), "renderer surfaces registration failure feedback");
