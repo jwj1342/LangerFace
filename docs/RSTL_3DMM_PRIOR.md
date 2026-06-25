@@ -20,6 +20,7 @@
 | FLAME/BFM RSTL atlas | `flame-2023` / BFM | 待生成 `[tri,u,v]` | pending | #61 3DMM 标注/迁移轨后续资产 |
 | FLAME RSTL direction prior | `flame-2023` | dev-local triangle centroid direction field | pending / `validated:false` | `tools/build_flame_rstl_direction_prior.py` 可在本地 FLAME 资产就位后生成，产物位于 gitignored `assets/flame/rstl_flame_direction_prior.json` |
 | FLAME/BFM review packet | `flame-2023` / BFM | `rstl-3dmm-review-packet/v0.1` | `draft_not_clinically_validated` | `tools/build_rstl_3dmm_review_packet.py` 从方向先验抽样生成医生审阅包，产物位于 gitignored `assets/flame/rstl_3dmm_review_packet.json` |
+| FLAME/BFM review-applied prior | `flame-2023` / BFM | `rstl-3dmm-reviewed-direction-prior/v0.1` | `validated:false` | `tools/apply_rstl_3dmm_review_packet.py` 把医生审阅包回填到草案方向场，产物位于 gitignored `assets/flame/rstl_3dmm_reviewed_direction_prior.json` |
 
 ## Provenance 要求
 
@@ -80,6 +81,31 @@ python tools/build_rstl_3dmm_review_packet.py \
 
 这一步只把草案方向先验变成可分发、可抽查、可回填的医生审阅任务包。它不会把任何方向置为
 `validated:true`，也不能替代正式 FLAME/BFM 标准头逐线标注、医生审核和临床校验。
+
+## 审阅回填应用
+
+医生在审阅包里填写 `clinician_review` 后，可以用
+`tools/apply_rstl_3dmm_review_packet.py` 把 `accepted`、`corrected`、`rejected` 和 `pending`
+决策应用到一个新的草案方向先验中。默认输入是 gitignored 的
+`assets/flame/rstl_3dmm_review_packet.json`，默认输出是 gitignored 的
+`assets/flame/rstl_3dmm_reviewed_direction_prior.json`：
+
+```bash
+python tools/apply_rstl_3dmm_review_packet.py \
+  --prior assets/flame/rstl_flame_direction_prior.json \
+  --packet assets/flame/rstl_3dmm_review_packet.json \
+  --generated-at now
+```
+
+输出 schema 为 `rstl-3dmm-reviewed-direction-prior/v0.1`，并保留：
+
+- `review_application`：reviewed / accepted / corrected / rejected / pending 计数、reviewer 计数、校正和拒绝样本索引。
+- `applied_reviews`：每条已应用审阅的 sample index、tri、decision、reviewer、reviewed_at、是否改向量、是否 excluded。
+- `samples[*].clinician_review`：接受、校正或拒绝的原始审阅元数据。
+
+校正方向可以使用 `corrected_vector`，也可以使用 `corrected_angle_deg` 生成单位方向向量；拒绝项会标记
+`excluded_from_reviewed_prior=true`，不会被静默删除。该工具仍强制输出 `validated:false` 和
+`draft_not_clinically_validated`，所以它只是审阅回填记录，不是临床验证出口。
 
 ## 与 #13 的衔接
 

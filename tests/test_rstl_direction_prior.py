@@ -293,3 +293,171 @@ def test_rstl_3dmm_review_packet_builder_with_synthetic_prior(tmp_path):
     assert "low_confidence" in low_conf["priority_reasons"]
     high_spread = next(item for item in packet["items"] if item["tri"] == 2)
     assert "high_angular_spread" in high_spread["priority_reasons"]
+
+
+def test_rstl_3dmm_review_packet_application_with_synthetic_decisions(tmp_path):
+    prior = {
+        "schema_version": "rstl-3dmm-direction-prior/v0.1",
+        "system": "rstl",
+        "topologyId": "flame-2023",
+        "topologyVersion": "flame-2023-v1",
+        "validated": False,
+        "review_status": "draft_not_clinically_validated",
+        "samples": [
+            {
+                "tri": 0,
+                "bary": [0.333333, 0.333333, 0.333334],
+                "point": [0, 0, 0],
+                "vector": [1, 0, 0],
+                "angle_deg": 0,
+                "confidence": 0.9,
+            },
+            {
+                "tri": 1,
+                "bary": [0.333333, 0.333333, 0.333334],
+                "point": [1, 0, 0],
+                "vector": [0, 1, 0],
+                "angle_deg": 90,
+                "confidence": 0.2,
+            },
+            {
+                "tri": 2,
+                "bary": [0.333333, 0.333333, 0.333334],
+                "point": [0, 1, 0],
+                "vector": [0, 1, 0],
+                "angle_deg": 90,
+                "confidence": 0.7,
+            },
+            {
+                "tri": 3,
+                "bary": [0.333333, 0.333333, 0.333334],
+                "point": [1, 1, 0],
+                "vector": [1, 0, 0],
+                "angle_deg": 0,
+                "confidence": 0.8,
+            },
+        ],
+    }
+    packet = {
+        "schema_version": "rstl-3dmm-review-packet/v0.1",
+        "source_validated": False,
+        "review_status": "draft_not_clinically_validated",
+        "system": "rstl",
+        "topologyId": "flame-2023",
+        "topologyVersion": "flame-2023-v1",
+        "source_sample_count": 4,
+        "items": [
+            {
+                "review_id": "rstl3dmm-0001",
+                "source_sample_index": 0,
+                "tri": 0,
+                "clinician_review": {
+                    "decision": "accepted",
+                    "reviewer": "Dr A",
+                    "reviewed_at": "2026-06-24",
+                    "region_label": "cheek",
+                    "direction_accepted": True,
+                    "notes": "ok",
+                },
+            },
+            {
+                "review_id": "rstl3dmm-0002",
+                "source_sample_index": 1,
+                "tri": 1,
+                "clinician_review": {
+                    "decision": "corrected",
+                    "reviewer": "Dr A",
+                    "reviewed_at": "2026-06-24",
+                    "region_label": "lower_eyelid",
+                    "direction_accepted": False,
+                    "corrected_angle_deg": 45,
+                    "notes": "follow lower eyelid margin",
+                },
+            },
+            {
+                "review_id": "rstl3dmm-0003",
+                "source_sample_index": 2,
+                "tri": 2,
+                "clinician_review": {
+                    "decision": "rejected",
+                    "reviewer": "Dr B",
+                    "reviewed_at": "2026-06-25",
+                    "region_label": "nasal_ala",
+                    "direction_accepted": False,
+                    "notes": "wrong region",
+                },
+            },
+            {
+                "review_id": "rstl3dmm-0004",
+                "source_sample_index": 3,
+                "tri": 3,
+                "clinician_review": {
+                    "decision": "pending",
+                    "reviewer": "",
+                    "reviewed_at": "",
+                    "direction_accepted": None,
+                    "notes": "",
+                },
+            },
+        ],
+    }
+    prior_path = tmp_path / "rstl_flame_direction_prior.json"
+    packet_path = tmp_path / "rstl_3dmm_review_packet.json"
+    output_path = tmp_path / "rstl_3dmm_reviewed_direction_prior.json"
+    prior_path.write_text(json.dumps(prior))
+    packet_path.write_text(json.dumps(packet))
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "tools/apply_rstl_3dmm_review_packet.py",
+            "--prior",
+            str(prior_path),
+            "--packet",
+            str(packet_path),
+            "--output",
+            str(output_path),
+            "--generated-at",
+            "2026-06-25",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "[ok]" in result.stdout
+    reviewed = json.loads(output_path.read_text())
+    assert reviewed["schema_version"] == "rstl-3dmm-reviewed-direction-prior/v0.1"
+    assert reviewed["validated"] is False
+    assert reviewed["review_status"] == "draft_not_clinically_validated"
+    assert reviewed["generated_by"] == "tools/apply_rstl_3dmm_review_packet.py"
+    assert reviewed["review_application"] == {
+        "reviewed_count": 3,
+        "accepted_count": 1,
+        "corrected_count": 1,
+        "rejected_count": 1,
+        "pending_count": 1,
+        "applied_sample_count": 2,
+        "completion_rate": 0.75,
+        "reviewer_counts": {"Dr A": 2, "Dr B": 1},
+        "corrected_sample_indices": [1],
+        "rejected_sample_indices": [2],
+    }
+    assert reviewed["samples"][0]["review_applied"] is True
+    assert reviewed["samples"][0]["clinician_review"]["decision"] == "accepted"
+    assert reviewed["samples"][1]["review_applied"] is True
+    assert reviewed["samples"][1]["pre_review_vector"] == [0, 1, 0]
+    assert math.isclose(reviewed["samples"][1]["angle_deg"], 45.0, abs_tol=0.01)
+    assert math.isclose(
+        math.sqrt(sum(float(v) * float(v) for v in reviewed["samples"][1]["vector"])),
+        1.0,
+        rel_tol=2e-4,
+        abs_tol=2e-4,
+    )
+    assert reviewed["samples"][1]["review_correction_source"] == "corrected_angle_deg"
+    assert reviewed["samples"][2]["excluded_from_reviewed_prior"] is True
+    assert reviewed["samples"][2]["review_applied"] is False
+    assert "clinician_review" not in reviewed["samples"][3]
+    assert reviewed["applied_reviews"][1]["vector_changed"] is True
+    assert reviewed["applied_reviews"][2]["excluded"] is True
+    assert "validated:false" in reviewed["clinical_boundary"]
