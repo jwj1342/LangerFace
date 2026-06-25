@@ -744,7 +744,7 @@ candidate = segment(center, axis, length)
 - `length_target_mm`、`length_target_deficit_mm`、`diameter_coverage_required_mm` 和 `diameter_coverage_deficit_mm`。
 - 与局部 RSTL 的角度偏差。
 - 是否命中敏感结构 guardrail。
-- `candidate_version`、`parent_candidate_id`、`edit_id` 和 `edit_history`；工具生成候选为 v1，医生参数编辑或端点拖拽后的候选至少为 v2，多步编辑会按提交顺序递增版本并写入 `candidate-edit-session/v0.1`，导出报告显示候选版本和编辑记录数，`tools/audit_incision_review_gate.py` 会核对 session 与 provenance 的版本、步数、当前 edit_id 和每步 resulting version 是否一致。
+- `candidate_version`、`parent_candidate_id`、`edit_id` 和 `edit_history`；工具生成候选为 v1，医生参数编辑或端点拖拽后的候选至少为 v2，多步编辑会按提交顺序递增版本并写入 `candidate-edit-session/v0.1`，导出报告显示候选版本和编辑记录数，`tools/audit_incision_review_gate.py` 会核对 session 与 provenance 的版本、步数、当前 edit_id 和每步 resulting version 是否一致，也会核对线性候选端点/中心/长度与梭形 outline/polyline/长短轴字段是否自洽。
 - `tumor_quality` 与 `tumor_boundary_summary`；审阅记录会保存肿物输入质量摘要，并按保存候选的长轴重新汇总肿物边界点数、长短轴、面积、自交和中心偏移，Markdown 报告同时显示“肿物输入提示”“肿物边界摘要”和“梭形包络”，`tools/audit_incision_review_gate.py` 会重放质量摘要和边界摘要，并核对梭形候选 metrics，避免 reviewer 只看到候选线而漏看输入质量或边界质量。
 
 如果最大长度规则使线性候选短于记录的超声直径，guardrails 输出 `linear_diameter_coverage_deficit` 高风险警告；医生需要增加长度、确认更小影像直径，或记录明确的人工 access decision。

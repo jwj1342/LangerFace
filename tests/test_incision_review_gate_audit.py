@@ -34,7 +34,12 @@ def _record(
         },
         "candidate": {
             "type": "linear",
+            "center": [0, 0, 0],
+            "axis": [1, 0, 0],
+            "endpoints": [[-1, 0, 0], [1, 0, 0]],
             "polyline": [[-1, 0, 0], [1, 0, 0]],
+            "length_mm": 20,
+            "length_units": 2,
             "metrics": {"rstl_deviation_deg": 0},
             "provenance": {
                 "generator": "linear_subcutaneous_incision",
@@ -113,8 +118,30 @@ def _cutaneous_record() -> dict:
     }
     record["candidate"] = {
         "type": "fusiform",
+        "center": [4.083333333333333, 2.3333333333333335, 0.0],
         "axis": [1.0, 0.0, 0.0],
-        "polyline": [[-1, 0, 0], [1, 0, 0], [1, 1, 0], [-1, 1, 0]],
+        "width_axis": [0.0, 1.0, 0.0],
+        "endpoints": [
+            [2.083333333333333, 2.3333333333333335, 0.0],
+            [6.083333333333333, 2.3333333333333335, 0.0],
+        ],
+        "outline": [
+            [2.083333333333333, 2.3333333333333335, 0.0],
+            [4.083333333333333, 3.3333333333333335, 0.0],
+            [6.083333333333333, 2.3333333333333335, 0.0],
+            [4.083333333333333, 1.3333333333333335, 0.0],
+        ],
+        "polyline": [
+            [2.083333333333333, 2.3333333333333335, 0.0],
+            [4.083333333333333, 3.3333333333333335, 0.0],
+            [6.083333333333333, 2.3333333333333335, 0.0],
+            [4.083333333333333, 1.3333333333333335, 0.0],
+            [2.083333333333333, 2.3333333333333335, 0.0],
+        ],
+        "length_mm": 40.0,
+        "width_mm": 20.0,
+        "length_units": 4.0,
+        "width_units": 2.0,
         "metrics": {
             "rstl_deviation_deg": 0,
             "boundary_point_count": len(boundary),
@@ -228,6 +255,50 @@ def test_review_gate_audit_accepts_ready_approved_record():
     assert report["passed"] is True
     assert report["issue_count"] == 0
     assert report["expected_review_gate"]["live_overlay_ready"] is True
+
+
+def test_review_gate_audit_flags_linear_candidate_length_mismatch():
+    record = _record()
+    record["candidate"]["length_units"] = 3
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "candidate_geometry_length_mismatch" in codes
+
+
+def test_review_gate_audit_flags_linear_candidate_polyline_mismatch():
+    record = _record()
+    record["candidate"]["polyline"] = [[-1, 0, 0], [2, 0, 0]]
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "candidate_geometry_polyline_mismatch" in codes
+
+
+def test_review_gate_audit_flags_fusiform_candidate_width_axis_mismatch():
+    record = _cutaneous_record()
+    record["candidate"]["width_axis"] = [1, 0, 0]
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "candidate_geometry_axis_mismatch" in codes
+
+
+def test_review_gate_audit_flags_fusiform_candidate_open_polyline():
+    record = _cutaneous_record()
+    record["candidate"]["polyline"] = record["candidate"]["outline"]
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "candidate_geometry_polyline_invalid" in codes
 
 
 def test_review_gate_audit_accepts_multi_step_candidate_edit_session():

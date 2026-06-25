@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +42,7 @@ REVIEW_EXPORT_SCHEMA = "incision-review-export/v0.3"
 STATUS_APPROVED = "approved_for_discussion"
 STATUS_REJECTED = "rejected_by_clinician"
 STATUS_PENDING = "pending_clinician_confirmation"
+GEOMETRY_TOLERANCE = 1e-6
 
 
 def _issue(code: str, message: str, *, severity: str = "high", path: str = "$") -> dict[str, str]:
@@ -172,6 +174,53 @@ def _candidate_axis(record: dict[str, Any]) -> tuple[float, float, float] | None
     return _point(candidate.get("axis"))
 
 
+def _point_list(value: Any) -> list[tuple[float, float, float]] | None:
+    if not isinstance(value, list):
+        return None
+    points = [_point(item) for item in value]
+    if any(point is None for point in points):
+        return None
+    return points  # type: ignore[return-value]
+
+
+def _vec_sub(
+    a: tuple[float, float, float],
+    b: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def _vec_mid(
+    a: tuple[float, float, float],
+    b: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    return ((a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5, (a[2] + b[2]) * 0.5)
+
+
+def _vec_dot(a: tuple[float, float, float], b: tuple[float, float, float]) -> float:
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _vec_len(v: tuple[float, float, float]) -> float:
+    return math.hypot(v[0], v[1], v[2])
+
+
+def _vec_unit(v: tuple[float, float, float]) -> tuple[float, float, float] | None:
+    length = _vec_len(v)
+    if length <= GEOMETRY_TOLERANCE:
+        return None
+    return (v[0] / length, v[1] / length, v[2] / length)
+
+
+def _points_close(
+    a: tuple[float, float, float],
+    b: tuple[float, float, float],
+    *,
+    tolerance: float = GEOMETRY_TOLERANCE,
+) -> bool:
+    return _vec_len(_vec_sub(a, b)) <= tolerance
+
+
 def _whole_number(value: Any) -> int | None:
     number = _finite_number(value)
     if number is None:
@@ -180,6 +229,208 @@ def _whole_number(value: Any) -> int | None:
     if abs(number - rounded) > 1e-9:
         return None
     return int(rounded)
+
+
+def _candidate_geometry_issues(record: dict[str, Any]) -> list[dict[str, str]]:
+    candidate = record.get("candidate")
+    if not isinstance(candidate, dict):
+        return [
+            _issue(
+                "candidate_geometry_missing",
+                "Review records must export a candidate object.",
+                path="candidate",
+            )
+        ]
+
+    candidate_type = str(candidate.get("type") or "")
+    if candidate_type not in {"linear", "fusiform"}:
+        return []
+
+    issues: list[dict[str, str]] = []
+    center = _point(candidate.get("center"))
+    axis = _point(candidate.get("axis"))
+    axis_unit = _vec_unit(axis) if axis is not None else None
+    endpoints = _point_list(candidate.get("endpoints"))
+    polyline = _point_list(candidate.get("polyline"))
+    length_units = _finite_number(candidate.get("length_units"))
+    length_mm = _finite_number(candidate.get("length_mm"))
+
+    if center is None:
+        issues.append(
+            _issue(
+                "candidate_geometry_center_missing",
+                "Candidate center must be a finite 3D point.",
+                path="candidate.center",
+            )
+        )
+    if axis_unit is None:
+        issues.append(
+            _issue(
+                "candidate_geometry_axis_invalid",
+                "Candidate axis must be a non-zero finite 3D vector.",
+                path="candidate.axis",
+            )
+        )
+    if endpoints is None or len(endpoints) != 2:
+        issues.append(
+            _issue(
+                "candidate_geometry_endpoints_invalid",
+                "Candidate endpoints must contain exactly two finite 3D points.",
+                path="candidate.endpoints",
+            )
+        )
+    if length_mm is None or length_mm <= 0:
+        issues.append(
+            _issue(
+                "candidate_geometry_length_invalid",
+                "Candidate length_mm must be positive.",
+                path="candidate.length_mm",
+            )
+        )
+    if length_units is None or length_units <= 0:
+        issues.append(
+            _issue(
+                "candidate_geometry_length_invalid",
+                "Candidate length_units must be positive.",
+                path="candidate.length_units",
+            )
+        )
+
+    if endpoints is not None and len(endpoints) == 2:
+        p0, p1 = endpoints
+        segment = _vec_sub(p1, p0)
+        segment_len = _vec_len(segment)
+        segment_unit = _vec_unit(segment)
+        if center is not None and not _points_close(_vec_mid(p0, p1), center):
+            issues.append(
+                _issue(
+                    "candidate_geometry_center_mismatch",
+                    "Candidate endpoints must be symmetric around candidate.center.",
+                    path="candidate.center",
+                )
+            )
+        if length_units is not None and length_units > 0:
+            tolerance = max(GEOMETRY_TOLERANCE, length_units * 1e-6)
+            if abs(segment_len - length_units) > tolerance:
+                issues.append(
+                    _issue(
+                        "candidate_geometry_length_mismatch",
+                        (
+                            f"Endpoint distance {segment_len!r} does not match "
+                            f"candidate.length_units={length_units!r}."
+                        ),
+                        path="candidate.length_units",
+                    )
+                )
+        if axis_unit is not None and segment_unit is not None:
+            if abs(_vec_dot(axis_unit, segment_unit)) < 1.0 - 1e-6:
+                issues.append(
+                    _issue(
+                        "candidate_geometry_axis_mismatch",
+                        "Candidate endpoint segment must align with candidate.axis.",
+                        path="candidate.axis",
+                    )
+                )
+
+    if candidate_type == "linear":
+        if polyline is None or len(polyline) != 2:
+            issues.append(
+                _issue(
+                    "candidate_geometry_polyline_invalid",
+                    "Linear candidates must export a two-point polyline.",
+                    path="candidate.polyline",
+                )
+            )
+        elif endpoints is not None and len(endpoints) == 2:
+            if not _points_close(polyline[0], endpoints[0]) or not _points_close(polyline[1], endpoints[1]):
+                issues.append(
+                    _issue(
+                        "candidate_geometry_polyline_mismatch",
+                        "Linear candidate polyline must match candidate.endpoints.",
+                        path="candidate.polyline",
+                    )
+                )
+        return issues
+
+    width_axis = _point(candidate.get("width_axis"))
+    width_axis_unit = _vec_unit(width_axis) if width_axis is not None else None
+    width_units = _finite_number(candidate.get("width_units"))
+    width_mm = _finite_number(candidate.get("width_mm"))
+    outline = _point_list(candidate.get("outline"))
+    if width_axis_unit is None:
+        issues.append(
+            _issue(
+                "candidate_geometry_axis_invalid",
+                "Fusiform candidates must export a non-zero finite width_axis.",
+                path="candidate.width_axis",
+            )
+        )
+    elif axis_unit is not None and abs(_vec_dot(axis_unit, width_axis_unit)) > 1e-6:
+        issues.append(
+            _issue(
+                "candidate_geometry_axis_mismatch",
+                "Fusiform candidate.width_axis must be perpendicular to candidate.axis.",
+                path="candidate.width_axis",
+            )
+        )
+    if width_mm is None or width_mm <= 0:
+        issues.append(
+            _issue(
+                "candidate_geometry_width_invalid",
+                "Fusiform candidate width_mm must be positive.",
+                path="candidate.width_mm",
+            )
+        )
+    if width_units is None or width_units <= 0:
+        issues.append(
+            _issue(
+                "candidate_geometry_width_invalid",
+                "Fusiform candidate width_units must be positive.",
+                path="candidate.width_units",
+            )
+        )
+    if outline is None or len(outline) < 4:
+        issues.append(
+            _issue(
+                "candidate_geometry_outline_invalid",
+                "Fusiform candidates must export an outline with at least four finite points.",
+                path="candidate.outline",
+            )
+        )
+    if polyline is None or len(polyline) < 5:
+        issues.append(
+            _issue(
+                "candidate_geometry_polyline_invalid",
+                "Fusiform candidates must export a closed renderable polyline.",
+                path="candidate.polyline",
+            )
+        )
+    elif not _points_close(polyline[0], polyline[-1]):
+        issues.append(
+            _issue(
+                "candidate_geometry_polyline_mismatch",
+                "Fusiform candidate polyline must be closed.",
+                path="candidate.polyline",
+            )
+        )
+    elif outline is not None and len(outline) >= 4:
+        if len(polyline) != len(outline) + 1:
+            issues.append(
+                _issue(
+                    "candidate_geometry_polyline_mismatch",
+                    "Fusiform candidate polyline must contain outline points plus a closing point.",
+                    path="candidate.polyline",
+                )
+            )
+        elif any(not _points_close(polyline[index], point) for index, point in enumerate(outline)):
+            issues.append(
+                _issue(
+                    "candidate_geometry_polyline_mismatch",
+                    "Fusiform candidate polyline must preserve outline point order.",
+                    path="candidate.polyline",
+                )
+            )
+    return issues
 
 
 def _candidate_edit_session_issues(record: dict[str, Any]) -> list[dict[str, str]]:
@@ -783,6 +1034,7 @@ def audit_review_record(record: dict[str, Any], *, source: str = "<memory>") -> 
     issues.extend(_tumor_quality_issues(record, tumor))
     issues.extend(_tumor_boundary_summary_issues(record, tumor))
     issues.extend(_candidate_edit_session_issues(record))
+    issues.extend(_candidate_geometry_issues(record))
 
     high_issues = [issue for issue in issues if issue["severity"] == "high"]
     return {
