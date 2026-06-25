@@ -20,6 +20,7 @@ def _record(
     secondary_cues: dict | None = None,
     overlay_stability: dict | None = None,
     overlay_registration: dict | None = None,
+    overlay_3d_view: dict | None = None,
 ) -> dict:
     record = {
         "schema_version": "incision-review-record/v0.3",
@@ -55,6 +56,8 @@ def _record(
         record["incision_overlay_stability"] = overlay_stability
     if overlay_registration is not None:
         record["incision_overlay_registration"] = overlay_registration
+    if overlay_3d_view is not None:
+        record["incision_overlay_3d_view"] = overlay_3d_view
     return record
 
 
@@ -166,6 +169,31 @@ def _overlay_replay_qa(
     }
 
 
+def _overlay_3d_view(
+    *,
+    rendered: bool,
+    reason: str,
+    mapping_mode: str,
+    candidate_points: int,
+    boundary_points: int,
+) -> dict:
+    return {
+        "schema_version": "incision-overlay-3d-view-diagnostics/v0.1",
+        "raw_image_sent": False,
+        "exported_raw_pixels": False,
+        "mapping_mode": mapping_mode,
+        "recon_display_space": "screen" if mapping_mode == "mediapipe_468_surface_refs" else "model",
+        "viewer": {
+            "schema_version": "incision-overlay-3d-view/v0.1",
+            "rendered": rendered,
+            "reason": reason,
+            "candidate_point_count": candidate_points,
+            "boundary_point_count": boundary_points,
+            "tumor_center_rendered": rendered,
+        },
+    }
+
+
 def _export_payload() -> dict:
     current = _record(
         record_id="linear-ok",
@@ -188,6 +216,13 @@ def _export_payload() -> dict:
             out_of_frame_count=0,
             degenerate_triangle_count=0,
             reason="runtime_projection_registration_ready",
+        ),
+        overlay_3d_view=_overlay_3d_view(
+            rendered=True,
+            reason="incision_overlay_rendered_on_3d_head",
+            mapping_mode="mediapipe_468_surface_refs",
+            candidate_points=2,
+            boundary_points=4,
         ),
         secondary_cues={
             "present": True,
@@ -237,6 +272,13 @@ def _export_payload() -> dict:
                 out_of_frame_count=2,
                 degenerate_triangle_count=1,
                 reason="out_of_frame_projection",
+            ),
+            overlay_3d_view=_overlay_3d_view(
+                rendered=False,
+                reason="no_renderable_overlay_points",
+                mapping_mode="mediapipe_468_refs_to_flame_demo_nearest_surface",
+                candidate_points=0,
+                boundary_points=0,
             ),
         ),
         _record(
@@ -324,7 +366,23 @@ def test_stage2_validation_summary_aggregates_review_export():
     assert summary["metrics"]["incision_overlay_replay_frame_count"]["mean"] == 3
     assert summary["metrics"]["incision_overlay_replay_registration_failed_count"]["max"] == 1
     assert summary["metrics"]["incision_overlay_replay_registration_pass_rate"]["min"] == 2 / 3
+    assert summary["incision_overlay_3d_view"]["present_count"] == 2
+    assert summary["incision_overlay_3d_view"]["rendered_count"] == 1
+    assert summary["incision_overlay_3d_view"]["failed_count"] == 1
+    assert summary["incision_overlay_3d_view"]["rendered_rate"] == 0.5
+    assert summary["incision_overlay_3d_view"]["reason_counts"] == {
+        "incision_overlay_rendered_on_3d_head": 1,
+        "no_renderable_overlay_points": 1,
+    }
+    assert summary["incision_overlay_3d_view"]["mapping_mode_counts"] == {
+        "mediapipe_468_refs_to_flame_demo_nearest_surface": 1,
+        "mediapipe_468_surface_refs": 1,
+    }
+    assert summary["metrics"]["incision_overlay_3d_candidate_point_count"]["count"] == 2
+    assert summary["metrics"]["incision_overlay_3d_candidate_point_count"]["mean"] == 1
+    assert summary["metrics"]["incision_overlay_3d_boundary_point_count"]["max"] == 4
     assert summary["failure_mode_counts"]["incision_rule_violation"] == 1
+    assert summary["failure_mode_counts"]["overlay_3d_view_failure"] == 1
     assert summary["failure_mode_counts"]["overlay_instability"] == 1
     assert summary["failure_mode_counts"]["overlay_registration_failure"] == 1
     assert summary["failure_mode_counts"]["overlay_replay_failure"] == 1

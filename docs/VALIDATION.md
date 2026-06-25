@@ -108,7 +108,7 @@ python tools/evaluate_stage2_validation.py incision_review_*.json --output stage
 - `incision-overlay-registration/v0.1`：可由 `measureIncisionOverlayRegistration` 对单帧 runtime landmarks 计算 surface refs 投射质量；脚本会汇总 `present_count`、`passed_count`、`failed_count`、`pass_rate`、`reason_counts`、`context_counts`，并把 mapped point count、candidate point count、invalid ref、missing landmark、degenerate triangle、out-of-frame、bbox diagonal 和 frame fraction 写入 `metrics`。该指标用于工程 QA，不代表患者个体化临床 AR 配准。
 - `incision-overlay-stability/v0.1`：可由 `measureIncisionOverlayJitter` 对连续 landmarks 帧计算候选切口和肿物叠加的 RMS / P95 / max 像素抖动；脚本会汇总 `present_count`、`passed_count`、`failed_count`、`pass_rate`、`reason_counts`、`context_counts`，并把 RMS / P95 / max、tracked point count 和 sample count 写入 `metrics`。该指标用于工程回归，不替代真实视频/摄像头目检和临床评审。
 - `incision-overlay-runtime-diagnostics/v0.1`：浏览器实时页在有候选 overlay 时写入 diagnostics `sections.incision_overlay_runtime`，包含候选摘要、最近一帧 registration、最近 8 帧滚动 stability、阈值、失败原因和 `exported_landmarks=false` / `exported_raw_pixels=false` 标记；候选切换或 overlay 清空时会重置该 section。它用于 PR preview 和问题复现，不进入长期病例记录。
-- `incision-overlay-3d-view-diagnostics/v0.1`：3D Beta 查看器在有候选 overlay 且重建头可用时写入 diagnostics `sections.incision_overlay_3d_view`，包含 mapping mode、重建显示空间、候选摘要、rendered 状态、候选线点数、肿物边界点数和 `exported_raw_pixels=false` 标记；FLAME 示例脸使用 MediaPipe refs 到 FLAME 示例头的近邻贴面映射，只作为工程预览。
+- `incision-overlay-3d-view-diagnostics/v0.1`：3D Beta 查看器在有候选 overlay 且重建头可用时写入 diagnostics `sections.incision_overlay_3d_view`，包含 mapping mode、重建显示空间、候选摘要、rendered 状态、候选线点数、肿物边界点数和 `exported_raw_pixels=false` 标记；脚本会汇总 `present_count`、`rendered_count`、`failed_count`、`rendered_rate`、`reason_counts`、`mapping_mode_counts`，并把候选线点数和肿物边界点数写入 `metrics`。FLAME 示例脸使用 MediaPipe refs 到 FLAME 示例头的近邻贴面映射，只作为工程预览。
 - `incision-overlay-replay-qa/v0.1`：可由 `tools/audit_incision_overlay_replay.mjs` 读取已脱敏的 `incision-overlay/v0.1`、三角拓扑和 runtime landmarks 帧数组，离线复算每帧 registration 与整体 jitter；脚本会汇总 `present_count`、`passed_count`、`failed_count`、`pass_rate`、`reason_counts`，并把复放帧数、registration 失败帧数和 registration pass rate 写入 `metrics`。输入不包含照片、视频帧、纹理或超声影像；该指标只是 #19 的工程复放 QA，不是临床 AR 验证。
 - 失败模式计数：脚本会读取人工 `failure_modes`，也会把高层 warning code 映射到 `direction_error`、`region_misclassification`、`sensitive_structure_warning`、`incision_rule_violation`、`tumor_boundary_input_quality` 等验证分类。
 - 隐私审计计数：`raw_media_sent_count` 和 `provider_secret_leak_count` 必须保持 0。
@@ -131,6 +131,7 @@ python tools/evaluate_stage2_validation.py incision_review_*.json --output stage
 - `overlay_registration_failure`：切口 / 肿物实时叠加的 `incision-overlay-registration/v0.1` 未通过 surface-ref 投射质量门槛，例如 landmarks 缺失、运行时三角形退化、出画面或映射点不足。
 - `overlay_instability`：切口 / 肿物实时叠加的 `incision-overlay-stability/v0.1` 未通过工程抖动阈值。
 - `overlay_replay_failure`：切口 / 肿物实时叠加的 `incision-overlay-replay-qa/v0.1` 离线复放未通过，通常来自单帧 registration 失败或连续帧 jitter 超阈值。
+- `overlay_3d_view_failure`：3D Beta 查看器的 `incision-overlay-3d-view-diagnostics/v0.1` 未能渲染候选切口或肿物边界点，通常来自缺少可映射 surface refs 或示例头近邻贴面映射失败。
 
 ## 人工评审表
 

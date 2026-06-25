@@ -19,6 +19,8 @@ from typing import Any
 RECORD_SCHEMA = "incision-review-record/v0.3"
 EXPORT_SCHEMA = "incision-review-export/v0.3"
 SUMMARY_SCHEMA = "stage2-validation-summary/v0.1"
+OVERLAY_3D_VIEW_DIAGNOSTICS_SCHEMA = "incision-overlay-3d-view-diagnostics/v0.1"
+OVERLAY_3D_VIEW_SCHEMA = "incision-overlay-3d-view/v0.1"
 
 STATUS_APPROVED = "approved_for_discussion"
 STATUS_REJECTED = "rejected_by_clinician"
@@ -129,6 +131,11 @@ def _failure_modes(record: dict[str, Any]) -> list[str]:
     replay_qa = _overlay_replay_qa(record)
     if replay_qa and replay_qa.get("passed") is False:
         modes.append("overlay_replay_failure")
+    view_3d = _overlay_3d_view(record)
+    if view_3d:
+        viewer = _overlay_3d_viewer(view_3d)
+        if viewer.get("rendered") is False:
+            modes.append("overlay_3d_view_failure")
     for warning in _warnings(record):
         code = str(warning.get("code") or "")
         mapped = WARNING_FAILURE_MODE_MAP.get(code)
@@ -174,6 +181,38 @@ def _overlay_replay_qa(record: dict[str, Any]) -> dict[str, Any] | None:
     if replay_qa.get("schema_version") != "incision-overlay-replay-qa/v0.1":
         return None
     return replay_qa
+
+
+def _overlay_3d_view(record: dict[str, Any]) -> dict[str, Any] | None:
+    diagnostics = record.get("diagnostics") or {}
+    sections = diagnostics.get("sections") if isinstance(diagnostics, dict) else {}
+    overlay = record.get("incision_overlay") or {}
+    overlay = overlay if isinstance(overlay, dict) else {}
+    sections = sections if isinstance(sections, dict) else {}
+    view_3d = (
+        record.get("incision_overlay_3d_view")
+        or record.get("overlay_3d_view")
+        or overlay.get("view_3d")
+        or overlay.get("view3d")
+        or sections.get("incision_overlay_3d_view")
+    )
+    if not isinstance(view_3d, dict):
+        return None
+    schema = view_3d.get("schema_version")
+    if schema == OVERLAY_3D_VIEW_DIAGNOSTICS_SCHEMA:
+        return view_3d
+    if schema == OVERLAY_3D_VIEW_SCHEMA:
+        return {
+            "schema_version": OVERLAY_3D_VIEW_DIAGNOSTICS_SCHEMA,
+            "mapping_mode": "unknown",
+            "viewer": view_3d,
+        }
+    return None
+
+
+def _overlay_3d_viewer(view_3d: dict[str, Any]) -> dict[str, Any]:
+    viewer = view_3d.get("viewer")
+    return viewer if isinstance(viewer, dict) else view_3d
 
 
 def _has_secret_leak(value: Any, key_path: tuple[str, ...] = ()) -> bool:
@@ -234,6 +273,8 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     overlay_replay_frame_count: list[float] = []
     overlay_replay_registration_failed_count: list[float] = []
     overlay_replay_registration_pass_rate: list[float] = []
+    overlay_3d_candidate_point_count: list[float] = []
+    overlay_3d_boundary_point_count: list[float] = []
 
     passed_guardrails = 0
     raw_image_sent_count = 0
@@ -256,6 +297,11 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     overlay_replay_passed_count = 0
     overlay_replay_failed_count = 0
     overlay_replay_reason_counts: Counter[str] = Counter()
+    overlay_3d_present_count = 0
+    overlay_3d_rendered_count = 0
+    overlay_3d_failed_count = 0
+    overlay_3d_reason_counts: Counter[str] = Counter()
+    overlay_3d_mapping_mode_counts: Counter[str] = Counter()
 
     for record in records:
         candidate = record.get("candidate") or {}
@@ -369,6 +415,24 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
                 if value is not None:
                     target.append(value)
 
+        view_3d = _overlay_3d_view(record)
+        if view_3d:
+            overlay_3d_present_count += 1
+            viewer = _overlay_3d_viewer(view_3d)
+            if viewer.get("rendered") is True:
+                overlay_3d_rendered_count += 1
+            elif viewer.get("rendered") is False:
+                overlay_3d_failed_count += 1
+            overlay_3d_reason_counts[str(viewer.get("reason") or view_3d.get("reason") or "unknown")] += 1
+            overlay_3d_mapping_mode_counts[str(view_3d.get("mapping_mode") or "unknown")] += 1
+            for target, key in [
+                (overlay_3d_candidate_point_count, "candidate_point_count"),
+                (overlay_3d_boundary_point_count, "boundary_point_count"),
+            ]:
+                value = _numeric(viewer.get(key))
+                if value is not None:
+                    target.append(value)
+
         privacy = record.get("privacy_audit") or {}
         if privacy.get("raw_image_sent") is True or privacy.get("raw_video_sent") is True:
             raw_image_sent_count += 1
@@ -471,6 +535,12 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
             "incision_overlay_replay_registration_pass_rate": summarize_numbers(
                 overlay_replay_registration_pass_rate,
             ),
+            "incision_overlay_3d_candidate_point_count": summarize_numbers(
+                overlay_3d_candidate_point_count,
+            ),
+            "incision_overlay_3d_boundary_point_count": summarize_numbers(
+                overlay_3d_boundary_point_count,
+            ),
         },
         "failure_mode_counts": dict(sorted(failure_mode_counts.items())),
         "incision_overlay_stability": {
@@ -506,6 +576,18 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
             "clinical_boundary": (
                 "Overlay replay QA aggregates sanitized overlay surface refs and landmark frames; "
                 "it is an offline engineering replay check, not clinical AR validation."
+            ),
+        },
+        "incision_overlay_3d_view": {
+            "present_count": overlay_3d_present_count,
+            "rendered_count": overlay_3d_rendered_count,
+            "failed_count": overlay_3d_failed_count,
+            "rendered_rate": _ratio(overlay_3d_rendered_count, overlay_3d_present_count),
+            "reason_counts": dict(sorted(overlay_3d_reason_counts.items())),
+            "mapping_mode_counts": dict(sorted(overlay_3d_mapping_mode_counts.items())),
+            "clinical_boundary": (
+                "3D overlay view diagnostics confirm that sanitized overlay geometry was renderable "
+                "in the engineering viewer; they are not patient-specific clinical AR registration."
             ),
         },
         "privacy_audit": {
