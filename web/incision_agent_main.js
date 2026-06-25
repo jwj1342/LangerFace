@@ -1567,7 +1567,7 @@ function exportReport() {
       ? `- RSTL 低置信原因：${r.direction.confidence_reasons.join(", ")}`
       : null,
     r.sensitive_structure_inspection
-      ? `- 敏感结构检查：中心距 ${fmt(r.sensitive_structure_inspection.center_free_margin_distance_mm)} mm / 阈值 ${fmt(r.sensitive_structure_inspection.center_free_margin_threshold_mm)} mm；warning ${r.sensitive_structure_inspection.warning_count || 0} 个；保护方向 ${r.sensitive_structure_inspection.protective_direction?.direction_hint || "无"}`
+      ? `- 敏感结构检查：中心距 ${fmt(r.sensitive_structure_inspection.center_free_margin_distance_mm)} mm / 阈值 ${fmt(r.sensitive_structure_inspection.center_free_margin_threshold_mm)} mm；候选几何距 ${fmt(r.sensitive_structure_inspection.candidate_free_margin_distance_mm)} mm / 阈值 ${fmt(r.sensitive_structure_inspection.candidate_free_margin_threshold_mm)} mm；warning ${r.sensitive_structure_inspection.warning_count || 0} 个；保护方向 ${r.sensitive_structure_inspection.protective_direction?.direction_hint || "无"}`
       : null,
     `- Agent 工具门控：passed=${Boolean(r.agent_trace_gate?.passed)}；order_ok=${Boolean(r.agent_trace_gate?.order_ok)}；missing=${(r.agent_trace_gate?.missing_actions || []).map((item) => item.label || item.key).join(", ") || "无"}`,
     r.agent_react_plan

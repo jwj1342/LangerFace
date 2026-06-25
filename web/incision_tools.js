@@ -1436,12 +1436,13 @@ export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atla
   const tumorQuality = summarizeTumorInputQuality(tumor);
   const anatomy = classifyRegion(tumor.center, verts);
   const direction = queryDirection(tumor.center, verts, tris, atlas);
-  const sensitiveInspection = inspectSensitiveStructures(anatomy);
+  const preCandidateSensitiveInspection = inspectSensitiveStructures(anatomy);
   const unitsPerMm = unitsPerMmFromVertices(verts);
   const candidate = tumor.kind === "subcutaneous"
     ? generateLinearIncision(tumor, direction, unitsPerMm)
     : generateFusiformIncision(tumor, direction, unitsPerMm, normal);
   annotateCandidateSensitiveDistances(candidate, verts);
+  const sensitiveInspection = inspectSensitiveStructures(anatomy, candidate);
   const guardrails = evaluateGuardrails(candidate, anatomy);
   const preview = previewIncisionOnFace(tumor, candidate, anatomy, guardrails);
   const trace = [
@@ -1453,13 +1454,14 @@ export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atla
     },
     { summary: "定位病灶所在面部分区。", action: "classify_region", input: { point: tumor.center }, observation: anatomy },
     { summary: "查询局部 RSTL 方向。", action: "query_rstl_direction", input: { point: tumor.center, source: "rstl_atlas" }, observation: direction },
-    { summary: "检查附近敏感游离缘和保护性方向例外。", action: "inspect_sensitive_structures", input: { anatomy }, observation: sensitiveInspection },
+    { summary: "检查附近敏感游离缘和保护性方向例外。", action: "inspect_sensitive_structures", input: { anatomy }, observation: preCandidateSensitiveInspection },
     {
       summary: "用确定性工具生成切口候选。",
       action: tumor.kind === "subcutaneous" ? "linear_subcutaneous_incision" : "fusiform_cutaneous_incision",
       input: { tumor, direction, units_per_mm: unitsPerMm },
       observation: shortCandidate(candidate),
     },
+    { summary: "复核候选几何到敏感游离缘的距离。", action: "inspect_sensitive_structures", input: { anatomy, candidate: shortCandidate(candidate) }, observation: sensitiveInspection },
     { summary: "评估敏感结构和置信度 guardrails。", action: "evaluate_guardrails", input: { candidate: shortCandidate(candidate), anatomy }, observation: guardrails },
     { summary: "在标准脸上预览候选切口，确认几何可渲染后再进入医生审阅。", action: "preview_incision_on_face", input: { candidate: shortCandidate(candidate), tumor, anatomy }, observation: preview },
   ];

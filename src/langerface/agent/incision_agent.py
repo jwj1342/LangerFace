@@ -1097,11 +1097,11 @@ def plan_incision_case(
         "Read local RSTL direction from the validated-or-draft atlas; do not infer it with the LLM.",
     ))
 
-    sensitive_inspection = inspect_sensitive_structures(anatomy, rules=rules)
+    pre_candidate_sensitive_inspection = inspect_sensitive_structures(anatomy, rules=rules)
     trace.append(_trace(
         "inspect_sensitive_structures",
         {"anatomy": anatomy.to_dict()},
-        sensitive_inspection,
+        pre_candidate_sensitive_inspection,
         (
             "Inspect nearby sensitive free margins and protective direction "
             "exceptions before geometry generation."
@@ -1121,6 +1121,17 @@ def plan_incision_case(
         {"tumor": tumor.to_dict(), "direction": direction_data, "units_per_mm": units_per_mm},
         _short_candidate(candidate),
         "Generate candidate geometry with deterministic rules and RSTL-parallel long axis.",
+    ))
+
+    sensitive_inspection = inspect_sensitive_structures(anatomy, candidate, rules=rules)
+    trace.append(_trace(
+        "inspect_sensitive_structures",
+        {"anatomy": anatomy.to_dict(), "candidate": _short_candidate(candidate)},
+        sensitive_inspection,
+        (
+            "Re-check the generated candidate geometry against sensitive free-margin "
+            "thresholds before guardrail evaluation."
+        ),
     ))
 
     guardrails = evaluate_guardrails(candidate, anatomy, rules=rules)

@@ -460,9 +460,10 @@ const plan = T.planIncisionDeterministic({
   tris,
   atlas,
 });
-ok(plan.trace.length === 7, "deterministic plan records seven tool calls");
+ok(plan.trace.length === 8, "deterministic plan records eight tool calls");
 ok(plan.trace[0].action === "summarize_tumor_input_quality", "deterministic plan checks tumor input first");
 ok(plan.trace[3].action === "inspect_sensitive_structures", "deterministic plan inspects sensitive structures before geometry");
+ok(plan.trace[5].action === "inspect_sensitive_structures", "deterministic plan re-checks sensitive structures after geometry");
 ok(plan.trace.at(-1).action === "preview_incision_on_face", "deterministic plan previews the candidate before review");
 ok(plan.preview.renderable === true, "deterministic preview confirms renderable geometry");
 ok(plan.preview.raw_image_sent === false, "deterministic preview does not send raw images");
@@ -471,6 +472,8 @@ ok(plan.tumor_quality.warning_count === 1, "deterministic plan returns tumor qua
 ok(plan.tumor_quality.warnings[0].code === "missing_tumor_author", "tumor quality flags missing author");
 ok(plan.sensitive_structure_inspection.schema_version === "sensitive-structure-inspection/v0.1",
   "deterministic plan returns sensitive structure inspection summary");
+ok(plan.sensitive_structure_inspection.candidate_free_margin_distance_mm != null,
+  "sensitive structure inspection records generated candidate distance");
 ok(plan.agent_trace_mode === "single_turn_react_with_deterministic_tools", "plan records trace mode");
 ok(T.TOOL_SCHEMAS.some((s) => s.name === "summarize_tumor_input_quality"),
   "tool schemas include tumor input quality");

@@ -628,15 +628,16 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     )
     assert result["candidate"]["type"] == "linear"
     actions = [step["action"] for step in result["trace"]]
-    assert actions[:6] == [
+    assert actions[:7] == [
         "summarize_tumor_input_quality",
         "classify_region",
         "query_rstl_direction",
         "inspect_sensitive_structures",
         "linear_subcutaneous_incision",
+        "inspect_sensitive_structures",
         "evaluate_guardrails",
     ]
-    assert actions.count("inspect_sensitive_structures") == 1
+    assert actions.count("inspect_sensitive_structures") == 2
     assert "propose_direction_variants" in actions
     assert actions.count("linear_subcutaneous_incision") == 3
     assert actions.count("evaluate_guardrails") == 3
@@ -650,6 +651,8 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     assert result["tumor_quality"]["warnings"][0]["code"] == "missing_tumor_author"
     assert result["sensitive_structure_inspection"]["schema_version"] == "sensitive-structure-inspection/v0.1"
     assert result["sensitive_structure_inspection"]["clinician_review_required"] is True
+    assert result["sensitive_structure_inspection"]["candidate_free_margin_distance_mm"] is not None
+    assert result["sensitive_structure_inspection"]["candidate_free_margin_threshold_mm"] is not None
     assert result["provider"]["mode"] == "deterministic_fallback"
     assert result["agent_trace_mode"] == "single_turn_react_multi_candidate_with_deterministic_tools"
     assert result["agent_trace_gate"]["schema_version"] == "agent-trace-gate/v0.1"
