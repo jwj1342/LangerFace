@@ -12,6 +12,7 @@ from langerface.agent import (
     agent_trace_gate,
     compare_candidate_records,
     plan_incision_case,
+    plan_incision_session,
 )
 from langerface.anatomy import classify_region
 from langerface.clinical import default_clinical_rules
@@ -685,6 +686,66 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     assert any(tool["name"] == "save_review_record" for tool in result["tool_schemas"])
 
 
+def test_plan_incision_session_records_multi_round_clinician_feedback():
+    vertices, triangles, atlas = _simple_mesh_and_atlas()
+    session = plan_incision_session(
+        {
+            "kind": "subcutaneous",
+            "center": [4, 2, 0],
+            "diameter_mm": 10,
+            "depth_mm": 5,
+            "author": "session-test",
+        },
+        vertices,
+        triangles,
+        atlas,
+        rounds=[
+            {"round_id": "initial", "trigger": "initial_plan"},
+            {
+                "round_id": "revise-diameter",
+                "trigger": "clinician_feedback_revision",
+                "clinician_feedback": {
+                    "requested_change": "ultrasound diameter corrected after review",
+                    "reviewer": "coded-reviewer-1",
+                },
+                "tumor_overrides": {"diameter_mm": 14},
+            },
+        ],
+        use_llm=False,
+    )
+
+    assert session["schema_version"] == "agentic-incision-session/v0.1"
+    assert session["mode"] == "multi_round_react_session_with_deterministic_tools"
+    assert session["passed"] is True
+    assert session["round_count"] == 2
+    assert session["final_round_index"] == 1
+    assert session["final_candidate_id"] == session["rounds"][1]["selected_candidate_id"]
+    assert session["provider"]["mode"] == "deterministic_fallback"
+    assert session["tumor"]["diameter_mm"] == 14.0
+    assert session["agent_session_audit"]["schema_version"] == "agent-session-audit/v0.1"
+    assert session["agent_session_audit"]["round_count"] == 2
+    assert session["agent_session_audit"]["revision_round_count"] == 1
+    assert session["agent_session_audit"]["all_round_trace_gates_passed"] is True
+    assert session["agent_session_audit"]["all_round_react_plans_passed"] is True
+    assert session["agent_session_audit"]["all_round_execution_events_passed"] is True
+    assert session["agent_session_audit"]["final_candidate_present"] is True
+    assert session["agent_session_audit"]["raw_image_sent"] is False
+    assert session["agent_session_audit"]["raw_video_sent"] is False
+    assert session["rounds"][0]["tumor_delta"]["changed"] is False
+    assert session["rounds"][1]["tumor_delta"]["changed"] is True
+    assert session["rounds"][1]["tumor_delta"]["changed_fields"] == ["diameter_mm"]
+    assert session["rounds"][1]["clinician_feedback"]["reviewer"] == "coded-reviewer-1"
+    assert session["rounds"][0]["plan"]["schema_version"] == "agentic-incision-plan/v0.1"
+    assert session["rounds"][1]["plan"]["agent_trace_gate"]["passed"] is True
+    assert session["rounds"][1]["plan"]["agent_react_plan"]["passed"] is True
+    assert session["rounds"][1]["plan"]["agent_execution_events"]["passed"] is True
+    assert (
+        session["rounds"][1]["plan"]["candidate"]["length_mm"]
+        > session["rounds"][0]["plan"]["candidate"]["length_mm"]
+    )
+    assert "clinician review remains required" in session["clinical_boundary"].lower()
+
+
 def test_plan_incision_case_recovers_failed_candidate_variant(monkeypatch):
     original_make_candidate = incision_agent_module._make_candidate_for_direction
 
@@ -915,7 +976,7 @@ def test_clinical_rules_asset_has_region_provenance_and_required_fields():
 
 def test_agent_tool_schema_and_privacy_doc_cover_review_export():
     schema = json.loads((ROOT / "assets" / "agentic_incision_tool_schema.json").read_text())
-    assert schema["version"] == "0.8-agentic-incision-tools"
+    assert schema["version"] == "0.9-agentic-incision-tools"
     assert schema["trace_gate"]["schema_version"] == "agent-trace-gate/v0.1"
     assert schema["trace_gate"]["blocks_confirmation"] is True
     assert ["query_rstl_direction"] in schema["trace_gate"]["required_actions"]
@@ -925,10 +986,15 @@ def test_agent_tool_schema_and_privacy_doc_cover_review_export():
     assert "compare_direction_variants" in schema["react_plan"]["steps"]
     assert schema["execution_events"]["schema_version"] == "agent-execution-events/v0.1"
     assert "execution_event" in schema["execution_events"]["sse_events"]
+    assert schema["session"]["schema_version"] == "agentic-incision-session/v0.1"
+    assert schema["session"]["audit_schema_version"] == "agent-session-audit/v0.1"
+    assert "session_round" in schema["session"]["sse_events"]
+    assert "session_audit" in schema["session"]["sse_events"]
     assert "react_plan_passed" in schema["orchestration_audit"]["records"]
     assert schema["trace_audit_executor"]["schema_version"] == "agentic-incision-trace-audit/v0.1"
     assert schema["trace_audit_executor"]["tool"] == "tools/audit_agentic_incision_trace.py"
     assert "agent-react-plan replay" in schema["trace_audit_executor"]["checks"]
+    assert "agentic-incision-session/v0.1" in schema["trace_audit_executor"]["inputs"]
     names = {tool["name"] for tool in schema["tools"]}
     assert {
         "classify_region",

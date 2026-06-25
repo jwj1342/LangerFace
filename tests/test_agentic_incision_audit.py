@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from tools.audit_agentic_incision_trace import audit_agentic_record, audit_payloads
 
-from langerface.agent import plan_incision_case
+from langerface.agent import plan_incision_case, plan_incision_session
 from langerface.lines import Atlas, AtlasLine
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -208,3 +208,52 @@ def test_agentic_trace_audit_reads_review_export_and_cli(tmp_path: Path):
     cli_summary = json.loads(output_path.read_text(encoding="utf-8"))
     assert cli_summary["schema_version"] == "agentic-incision-trace-audit-summary/v0.1"
     assert cli_summary["passed_count"] == 1
+
+
+def test_agentic_trace_audit_expands_multi_round_session(tmp_path: Path):
+    vertices, triangles, atlas = _simple_mesh_and_atlas()
+    session = plan_incision_session(
+        {"kind": "subcutaneous", "center": [4, 2, 0], "diameter_mm": 10, "depth_mm": 5},
+        vertices,
+        triangles,
+        atlas,
+        rounds=[
+            {"round_id": "initial", "trigger": "initial_plan"},
+            {
+                "round_id": "revised",
+                "trigger": "clinician_feedback_revision",
+                "clinician_feedback": {"requested_change": "increase diameter from ultrasound"},
+                "tumor_overrides": {"diameter_mm": 12},
+            },
+        ],
+        use_llm=False,
+    )
+
+    summary = audit_payloads([session], sources=["session-fixture.json"])
+    assert summary["passed"] is True
+    assert summary["record_count"] == 2
+    assert summary["records"][0]["source"] == "session-fixture.json#rounds[0].plan"
+    assert summary["records"][1]["source"] == "session-fixture.json#rounds[1].plan"
+    assert all(
+        record["input_schema_version"] == "agentic-incision-plan/v0.1"
+        for record in summary["records"]
+    )
+
+    input_path = tmp_path / "agent_session.json"
+    output_path = tmp_path / "agent_session_audit.json"
+    input_path.write_text(json.dumps(session), encoding="utf-8")
+    subprocess.run(
+        [
+            sys.executable,
+            "tools/audit_agentic_incision_trace.py",
+            str(input_path),
+            "--output",
+            str(output_path),
+        ],
+        cwd=ROOT,
+        check=True,
+    )
+    cli_summary = json.loads(output_path.read_text(encoding="utf-8"))
+    assert cli_summary["schema_version"] == "agentic-incision-trace-audit-summary/v0.1"
+    assert cli_summary["record_count"] == 2
+    assert cli_summary["passed_count"] == 2

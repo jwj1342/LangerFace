@@ -150,6 +150,64 @@ def test_incision_agent_proxy_json_and_sse_contract():
         assert streamed_result["agent_orchestration_audit"]["comparison_ready"] is True
         boundary = streamed_result["candidate_comparison"][0]["clinical_boundary"]
         assert boundary.startswith("Engineering ranking")
+
+        session_payload = {
+            "session_id": "server-session-test",
+            "tumor": payload["tumor"],
+            "rounds": [
+                {"round_id": "initial", "trigger": "initial_plan"},
+                {
+                    "round_id": "diameter-revision",
+                    "trigger": "clinician_feedback_revision",
+                    "clinician_feedback": {
+                        "requested_change": "diameter corrected before discussion",
+                        "reviewer": "server-test-reviewer",
+                    },
+                    "tumor_overrides": {"diameter_mm": 12},
+                },
+            ],
+            "provider_config": payload["provider_config"],
+        }
+        session = _request_json(
+            f"http://127.0.0.1:{port}/api/agentic-incision/session",
+            session_payload,
+        )
+        assert session["schema_version"] == "agentic-incision-session/v0.1"
+        assert session["session_id"] == "server-session-test"
+        assert session["provider"]["mode"] == "deterministic_fallback"
+        assert session["provider_config"]["api_key"] == "[redacted]"
+        assert session["passed"] is True
+        assert session["round_count"] == 2
+        assert session["agent_session_audit"]["all_round_trace_gates_passed"] is True
+        assert session["rounds"][1]["clinician_feedback"]["reviewer"] == "server-test-reviewer"
+        assert session["rounds"][1]["tumor_delta"]["changed_fields"] == ["diameter_mm"]
+
+        session_events = _request_sse(
+            f"http://127.0.0.1:{port}/api/agentic-incision/session/stream",
+            session_payload,
+        )
+        session_names = [event["event"] for event in session_events]
+        assert session_names[0] == "provider"
+        assert session_names.count("session_round") == 2
+        assert "session_audit" in session_names
+        assert "result" in session_names
+        assert session_names[-1] == "done"
+        session_rounds = [
+            event["data"] for event in session_events if event["event"] == "session_round"
+        ]
+        assert [item["round_id"] for item in session_rounds] == ["initial", "diameter-revision"]
+        session_trace_gates = [
+            event["data"] for event in session_events if event["event"] == "trace_gate"
+        ]
+        assert {item["session_round_index"] for item in session_trace_gates} == {0, 1}
+        assert all(item["passed"] is True for item in session_trace_gates)
+        session_execution_events = [
+            event["data"] for event in session_events if event["event"] == "execution_event"
+        ]
+        assert {item["session_round_index"] for item in session_execution_events} == {0, 1}
+        session_audit = next(event["data"] for event in session_events if event["event"] == "session_audit")
+        assert session_audit["schema_version"] == "agent-session-audit/v0.1"
+        assert session_audit["round_count"] == 2
     finally:
         proc.terminate()
         try:

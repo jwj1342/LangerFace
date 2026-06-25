@@ -656,6 +656,165 @@ def compare_candidate_records(
     return ranked
 
 
+def _merge_tumor_round_data(base: dict[str, Any], round_request: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    tumor = round_request.get("tumor")
+    if isinstance(tumor, dict):
+        merged.update(tumor)
+    overrides = round_request.get("tumor_overrides")
+    if isinstance(overrides, dict):
+        merged.update(overrides)
+    return merged
+
+
+def _tumor_delta_summary(previous: dict[str, Any] | None, current: dict[str, Any]) -> dict[str, Any]:
+    if previous is None:
+        return {
+            "changed": False,
+            "changed_fields": [],
+            "previous_values": {},
+            "current_values": {},
+        }
+    keys = sorted(set(previous) | set(current))
+    changed_fields = [key for key in keys if previous.get(key) != current.get(key)]
+    return {
+        "changed": bool(changed_fields),
+        "changed_fields": changed_fields,
+        "previous_values": {key: previous.get(key) for key in changed_fields},
+        "current_values": {key: current.get(key) for key in changed_fields},
+    }
+
+
+def _best_candidate_id(plan: dict[str, Any]) -> str | None:
+    comparison = plan.get("candidate_comparison")
+    if not isinstance(comparison, list) or not comparison:
+        return None
+    first = comparison[0]
+    if not isinstance(first, dict):
+        return None
+    candidate_id = first.get("id")
+    return str(candidate_id) if candidate_id else None
+
+
+def plan_incision_session(
+    tumor_data: dict[str, Any],
+    vertices: np.ndarray,
+    triangles: np.ndarray,
+    atlas: Atlas,
+    *,
+    rounds: list[dict[str, Any]] | None = None,
+    session_id: str = "agentic-incision-session",
+    provider: OpenAICompatibleProvider | None = None,
+    use_llm: bool = True,
+    rules: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Run a multi-round Agentic planning session.
+
+    Each round still delegates geometry and safety checks to
+    :func:`plan_incision_case`. The session layer only records clinician
+    feedback, changed structured inputs, and per-round audit state.
+    """
+
+    round_requests = rounds or [{"trigger": "initial_plan"}]
+    current_tumor = dict(tumor_data)
+    previous_tumor: dict[str, Any] | None = None
+    session_rounds: list[dict[str, Any]] = []
+    for index, raw_request in enumerate(round_requests):
+        round_request = raw_request if isinstance(raw_request, dict) else {}
+        current_tumor = _merge_tumor_round_data(current_tumor, round_request)
+        feedback = round_request.get("clinician_feedback", round_request.get("feedback", {}))
+        if not isinstance(feedback, dict):
+            feedback = {"note": str(feedback)}
+        delta = _tumor_delta_summary(previous_tumor, current_tumor)
+        plan = plan_incision_case(
+            current_tumor,
+            vertices,
+            triangles,
+            atlas,
+            provider=provider,
+            use_llm=use_llm,
+            rules=rules,
+        )
+        selected_candidate_id = _best_candidate_id(plan)
+        round_id = str(round_request.get("round_id") or f"round_{index + 1}")
+        trigger = str(
+            round_request.get(
+                "trigger",
+                "initial_plan" if index == 0 else "clinician_feedback_revision",
+            )
+        )
+        session_rounds.append({
+            "schema_version": "agentic-incision-session-round/v0.1",
+            "round_index": index,
+            "round_id": round_id,
+            "trigger": trigger,
+            "clinician_feedback": feedback,
+            "tumor_delta": delta,
+            "tumor": dict(current_tumor),
+            "selected_candidate_id": selected_candidate_id,
+            "trace_gate_passed": bool(plan.get("agent_trace_gate", {}).get("passed")),
+            "react_plan_passed": bool(plan.get("agent_react_plan", {}).get("passed")),
+            "execution_events_passed": bool(plan.get("agent_execution_events", {}).get("passed")),
+            "candidate_count": len(plan.get("candidate_alternatives", []) or []),
+            "trace_event_count": len(plan.get("trace", []) or []),
+            "plan": plan,
+        })
+        previous_tumor = dict(current_tumor)
+
+    final_round = session_rounds[-1]
+    audit = {
+        "schema_version": "agent-session-audit/v0.1",
+        "mode": "multi_round_react_session_with_deterministic_tools",
+        "round_count": len(session_rounds),
+        "revision_round_count": sum(
+            1 for item in session_rounds
+            if item["round_index"] > 0
+            or item.get("tumor_delta", {}).get("changed")
+            or bool(item.get("clinician_feedback"))
+        ),
+        "all_round_trace_gates_passed": all(item["trace_gate_passed"] for item in session_rounds),
+        "all_round_react_plans_passed": all(item["react_plan_passed"] for item in session_rounds),
+        "all_round_execution_events_passed": all(
+            item["execution_events_passed"] for item in session_rounds
+        ),
+        "final_candidate_present": bool(final_round.get("selected_candidate_id")),
+        "selected_candidate_ids": [
+            item["selected_candidate_id"] for item in session_rounds if item.get("selected_candidate_id")
+        ],
+        "raw_image_sent": False,
+        "raw_video_sent": False,
+        "clinical_boundary": (
+            "Multi-round session audit records deterministic planning rounds and clinician "
+            "feedback context only; it is not autonomous clinical reasoning or a surgical "
+            "instruction."
+        ),
+    }
+    passed = (
+        audit["all_round_trace_gates_passed"]
+        and audit["all_round_react_plans_passed"]
+        and audit["all_round_execution_events_passed"]
+        and audit["final_candidate_present"]
+    )
+    return {
+        "schema_version": "agentic-incision-session/v0.1",
+        "session_id": session_id,
+        "mode": "multi_round_react_session_with_deterministic_tools",
+        "passed": bool(passed),
+        "round_count": len(session_rounds),
+        "rounds": session_rounds,
+        "final_round_index": int(final_round["round_index"]),
+        "final_candidate_id": final_round.get("selected_candidate_id"),
+        "tumor": final_round.get("tumor"),
+        "provider": final_round.get("plan", {}).get("provider", {}),
+        "agent_session_audit": audit,
+        "tool_schemas": TOOL_SCHEMAS,
+        "clinical_boundary": (
+            "This session can iterate structured lesion inputs and deterministic candidate "
+            "plans across rounds, but clinician review remains required for every candidate."
+        ),
+    }
+
+
 def _fallback_summary(tumor: TumorInput, candidate: dict[str, Any], guardrails: dict[str, Any]) -> str:
     warnings = guardrails.get("warnings", [])
     kind = "linear subcutaneous" if candidate["type"] == "linear" else "fusiform cutaneous"

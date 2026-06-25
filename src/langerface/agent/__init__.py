@@ -7,6 +7,7 @@ from .incision_agent import (
     agent_trace_gate,
     compare_candidate_records,
     plan_incision_case,
+    plan_incision_session,
 )
 from .provider import OllamaProvider, OpenAICompatibleProvider, provider_from_config, provider_from_env
 
@@ -18,6 +19,7 @@ __all__ = [
     "agent_react_plan",
     "compare_candidate_records",
     "plan_incision_case",
+    "plan_incision_session",
     "provider_from_config",
     "provider_from_env",
 ]

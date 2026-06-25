@@ -1,6 +1,6 @@
 {
-  "version": "0.8-agentic-incision-tools",
-  "trace_mode": "single_turn_react_multi_candidate_with_deterministic_tools",
+  "version": "0.9-agentic-incision-tools",
+  "trace_mode": "single_or_multi_round_react_with_deterministic_tools",
   "boundary": "The LLM may select, summarize, and request deterministic tools; it must not compute incision geometry or override guardrails.",
   "trace_gate": {
     "schema_version": "agent-trace-gate/v0.1",
@@ -43,10 +43,20 @@
     "sse_events": ["execution_event"],
     "boundary": "Execution events replay deterministic tool observations for UI feedback and offline audit; they are not autonomous clinical reasoning or surgical instructions."
   },
+  "session": {
+    "schema_version": "agentic-incision-session/v0.1",
+    "mode": "multi_round_react_session_with_deterministic_tools",
+    "round_schema_version": "agentic-incision-session-round/v0.1",
+    "audit_schema_version": "agent-session-audit/v0.1",
+    "records": ["rounds", "final_candidate_id", "agent_session_audit", "clinical_boundary"],
+    "round_records": ["round_index", "trigger", "clinician_feedback", "tumor_delta", "selected_candidate_id", "trace_gate_passed", "react_plan_passed", "plan"],
+    "sse_events": ["session_round", "execution_event", "trace", "trace_gate", "react_plan", "session_audit", "result", "done"],
+    "boundary": "A session may iterate structured tumor inputs and deterministic plans across clinician-feedback rounds; it must not bypass per-round trace gates, guardrails, or clinician review."
+  },
   "trace_audit_executor": {
     "schema_version": "agentic-incision-trace-audit/v0.1",
     "tool": "tools/audit_agentic_incision_trace.py",
-    "inputs": ["agentic-incision-plan/v0.1", "incision-review-record/v0.3", "incision-review-export/v0.3"],
+    "inputs": ["agentic-incision-plan/v0.1", "agentic-incision-session/v0.1", "incision-review-record/v0.3", "incision-review-export/v0.3"],
     "checks": [
       "agent-trace-gate replay",
       "stored trace gate consistency",
@@ -61,7 +71,8 @@
       "LLM summary clinician-review boundary",
       "LLM forbidden surgical directive scan",
       "LLM raw provider payload exclusion",
-      "provider secret redaction"
+      "provider secret redaction",
+      "multi-round session plan expansion"
     ],
     "boundary": "Offline audit verifies deterministic Agentic trace contracts only; it is not clinical validation or a surgical instruction."
   },

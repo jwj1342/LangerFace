@@ -19,6 +19,7 @@ AUDIT_SCHEMA = "agentic-incision-trace-audit/v0.1"
 PLAN_SCHEMA = "agentic-incision-plan/v0.1"
 REVIEW_RECORD_SCHEMA = "incision-review-record/v0.3"
 REVIEW_EXPORT_SCHEMA = "incision-review-export/v0.3"
+SESSION_SCHEMA = "agentic-incision-session/v0.1"
 
 TRACE_GENERATION_ACTIONS = {"linear_subcutaneous_incision", "fusiform_cutaneous_incision"}
 SECRET_KEY_HINTS = ("api_key", "secret", "token", "authorization", "password", "private_key")
@@ -86,6 +87,16 @@ def _entries_from_payload(payload: Any, source: str = "<memory>") -> list[dict[s
             "label": payload.get("label") or payload.get("id") or source,
             "payload": payload,
         }]
+
+    if schema == SESSION_SCHEMA:
+        entries = []
+        for index, round_result in enumerate(payload.get("rounds", [])):
+            if not isinstance(round_result, dict):
+                continue
+            plan = round_result.get("plan")
+            if isinstance(plan, dict):
+                entries.extend(_entries_from_payload(plan, f"{source}#rounds[{index}].plan"))
+        return entries
 
     if schema == REVIEW_EXPORT_SCHEMA:
         entries = []

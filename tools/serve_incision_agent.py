@@ -24,6 +24,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from langerface.agent import (  # noqa: E402
     OpenAICompatibleProvider,
     plan_incision_case,
+    plan_incision_session,
     provider_from_config,
     provider_from_env,
 )
@@ -71,16 +72,49 @@ class AgentHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         emit("provider", result.get("provider", {}))
-        for event in (result.get("agent_execution_events") or {}).get("events", []):
-            emit("execution_event", event)
-        for index, step in enumerate(result.get("trace", [])):
-            emit("trace", {"index": index, **step})
-        emit("trace_gate", result.get("agent_trace_gate", {}))
-        emit("react_plan", result.get("agent_react_plan", {}))
+        if result.get("schema_version") == "agentic-incision-session/v0.1":
+            for round_result in result.get("rounds", []):
+                if not isinstance(round_result, dict):
+                    continue
+                round_index = int(round_result.get("round_index") or 0)
+                plan = round_result.get("plan") if isinstance(round_result.get("plan"), dict) else {}
+                emit("session_round", {
+                    "round_index": round_index,
+                    "round_id": round_result.get("round_id"),
+                    "trigger": round_result.get("trigger"),
+                    "selected_candidate_id": round_result.get("selected_candidate_id"),
+                    "trace_gate_passed": round_result.get("trace_gate_passed"),
+                    "react_plan_passed": round_result.get("react_plan_passed"),
+                })
+                for event in (plan.get("agent_execution_events") or {}).get("events", []):
+                    emit("execution_event", {"session_round_index": round_index, **event})
+                for index, step in enumerate(plan.get("trace", [])):
+                    emit("trace", {"session_round_index": round_index, "index": index, **step})
+                emit("trace_gate", {
+                    "session_round_index": round_index,
+                    **(plan.get("agent_trace_gate") or {}),
+                })
+                emit("react_plan", {
+                    "session_round_index": round_index,
+                    **(plan.get("agent_react_plan") or {}),
+                })
+            emit("session_audit", result.get("agent_session_audit", {}))
+        else:
+            for event in (result.get("agent_execution_events") or {}).get("events", []):
+                emit("execution_event", event)
+            for index, step in enumerate(result.get("trace", [])):
+                emit("trace", {"index": index, **step})
+            emit("trace_gate", result.get("agent_trace_gate", {}))
+            emit("react_plan", result.get("agent_react_plan", {}))
         emit("result", result)
         emit("done", {"ok": True})
 
-    def _plan_from_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _safe_provider_config(self, provider_config: dict[str, Any]) -> dict[str, Any]:
+        safe_config = {k: v for k, v in provider_config.items() if k != "api_key"}
+        safe_config["api_key"] = "[redacted]" if provider_config.get("api_key") else ""
+        return safe_config
+
+    def _plan_from_payload(self, payload: dict[str, Any], *, session: bool = False) -> dict[str, Any]:
         tumor = payload.get("tumor", payload)
         if not isinstance(tumor, dict):
             raise ValueError("request must include a tumor object")
@@ -88,18 +122,31 @@ class AgentHandler(BaseHTTPRequestHandler):
         provider_config = payload.get("provider_config")
         if self.use_llm and isinstance(provider_config, dict):
             request_provider = provider_from_config(provider_config)
-        result = plan_incision_case(
-            tumor,
-            self.vertices,
-            self.triangles,
-            self.atlas,
-            provider=request_provider,
-            use_llm=self.use_llm,
-        )
+        if session:
+            rounds = payload.get("rounds")
+            if rounds is not None and not isinstance(rounds, list):
+                raise ValueError("session request rounds must be a list")
+            result = plan_incision_session(
+                tumor,
+                self.vertices,
+                self.triangles,
+                self.atlas,
+                rounds=rounds,
+                session_id=str(payload.get("session_id") or "agentic-incision-session"),
+                provider=request_provider,
+                use_llm=self.use_llm,
+            )
+        else:
+            result = plan_incision_case(
+                tumor,
+                self.vertices,
+                self.triangles,
+                self.atlas,
+                provider=request_provider,
+                use_llm=self.use_llm,
+            )
         if isinstance(provider_config, dict):
-            safe_config = {k: v for k, v in provider_config.items() if k != "api_key"}
-            safe_config["api_key"] = "[redacted]" if provider_config.get("api_key") else ""
-            result["provider_config"] = safe_config
+            result["provider_config"] = self._safe_provider_config(provider_config)
         return result
 
     def do_OPTIONS(self) -> None:  # noqa: N802
@@ -119,13 +166,19 @@ class AgentHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": "not_found"})
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path not in {"/api/agentic-incision", "/api/agentic-incision/stream"}:
+        allowed = {
+            "/api/agentic-incision",
+            "/api/agentic-incision/stream",
+            "/api/agentic-incision/session",
+            "/api/agentic-incision/session/stream",
+        }
+        if self.path not in allowed:
             self._send_json(404, {"error": "not_found"})
             return
         try:
             length = int(self.headers.get("content-length", "0"))
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            result = self._plan_from_payload(payload)
+            result = self._plan_from_payload(payload, session="/session" in self.path)
             if self.path.endswith("/stream"):
                 self._send_sse(result)
             else:
@@ -152,6 +205,8 @@ def main() -> int:
     print(f"incision agent server listening on http://{args.host}:{args.port}")
     print("POST /api/agentic-incision")
     print("POST /api/agentic-incision/stream")
+    print("POST /api/agentic-incision/session")
+    print("POST /api/agentic-incision/session/stream")
     server.serve_forever()
     return 0
 
