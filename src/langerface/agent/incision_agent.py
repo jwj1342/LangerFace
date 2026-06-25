@@ -1126,7 +1126,7 @@ def plan_incision_case(
     sensitive_inspection = inspect_sensitive_structures(anatomy, candidate, rules=rules)
     trace.append(_trace(
         "inspect_sensitive_structures",
-        {"anatomy": anatomy.to_dict(), "candidate": _short_candidate(candidate)},
+        {"anatomy": anatomy.to_dict(), "candidate": _short_candidate(candidate), "variant": "baseline"},
         sensitive_inspection,
         (
             "Re-check the generated candidate geometry against sensitive free-margin "
@@ -1182,6 +1182,7 @@ def plan_incision_case(
             variant_candidate = candidate
             variant_guardrails = guardrails
             variant_preview = preview
+            variant_sensitive_inspection = sensitive_inspection
             variant_tool = tool_name
         else:
             try:
@@ -1202,6 +1203,21 @@ def plan_incision_case(
                     },
                     _short_candidate(variant_candidate),
                     "Generate a deterministic nearby direction candidate for comparison.",
+                ))
+                variant_sensitive_inspection = inspect_sensitive_structures(
+                    anatomy,
+                    variant_candidate,
+                    rules=rules,
+                )
+                trace.append(_trace(
+                    "inspect_sensitive_structures",
+                    {
+                        "anatomy": anatomy.to_dict(),
+                        "candidate": _short_candidate(variant_candidate),
+                        "variant": variant_id,
+                    },
+                    variant_sensitive_inspection,
+                    "Re-check deterministic candidate variant geometry against sensitive free margins.",
                 ))
                 variant_guardrails = evaluate_guardrails(variant_candidate, anatomy, rules=rules)
                 trace.append(_trace(
@@ -1269,6 +1285,25 @@ def plan_incision_case(
                         _short_candidate(variant_candidate),
                         "Generate a deterministic nearby direction candidate after bounded retry.",
                     ))
+                    variant_sensitive_inspection = inspect_sensitive_structures(
+                        anatomy,
+                        variant_candidate,
+                        rules=rules,
+                    )
+                    trace.append(_trace(
+                        "inspect_sensitive_structures",
+                        {
+                            "anatomy": anatomy.to_dict(),
+                            "candidate": _short_candidate(variant_candidate),
+                            "variant": variant_id,
+                            "retry_attempt": 1,
+                        },
+                        variant_sensitive_inspection,
+                        (
+                            "Re-check retried deterministic candidate variant geometry "
+                            "against sensitive free margins."
+                        ),
+                    ))
                     variant_guardrails = evaluate_guardrails(variant_candidate, anatomy, rules=rules)
                     trace.append(_trace(
                         "evaluate_guardrails",
@@ -1324,6 +1359,7 @@ def plan_incision_case(
             "candidate": variant_candidate,
             "guardrails": variant_guardrails,
             "preview": variant_preview,
+            "sensitive_structure_inspection": variant_sensitive_inspection,
             "anatomy": anatomy.to_dict(),
             "review_status": "pending_clinician_confirmation",
         }

@@ -637,7 +637,7 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
         "inspect_sensitive_structures",
         "evaluate_guardrails",
     ]
-    assert actions.count("inspect_sensitive_structures") == 2
+    assert actions.count("inspect_sensitive_structures") == 4
     assert "propose_direction_variants" in actions
     assert actions.count("linear_subcutaneous_incision") == 3
     assert actions.count("evaluate_guardrails") == 3
@@ -692,6 +692,15 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     assert result["agent_execution_events"]["events"][-1]["event"] == "react_plan_evaluated"
     assert len(result["candidate_alternatives"]) == 3
     assert all(item["preview"]["renderable"] is True for item in result["candidate_alternatives"])
+    assert all(
+        item["sensitive_structure_inspection"]["candidate_free_margin_distance_mm"] is not None
+        for item in result["candidate_alternatives"]
+    )
+    assert all(
+        item["sensitive_structure_inspection"]["candidate_free_margin_distance_mm"]
+        == item["candidate"]["metrics"]["sensitive_free_margin_min_distance_mm"]
+        for item in result["candidate_alternatives"]
+    )
     assert {item["angle_offset_deg"] for item in result["candidate_alternatives"]} == {-10.0, 0.0, 10.0}
     assert [item["rank"] for item in result["candidate_comparison"]] == [1, 2, 3]
     assert result["candidate_comparison"][0]["clinical_boundary"].startswith("Engineering ranking")
@@ -817,12 +826,14 @@ def test_plan_incision_case_recovers_failed_candidate_variant(monkeypatch):
 
     actions = [step["action"] for step in result["trace"]]
     assert actions.count("linear_subcutaneous_incision") == 2
+    assert actions.count("inspect_sensitive_structures") == 3
     assert actions.count("evaluate_guardrails") == 2
     assert actions.count("preview_incision_on_face") == 2
     assert actions.count("retry_tool_failure") == 1
     assert "recover_tool_failure" in actions
     assert actions[-1] == "compare_candidates"
     assert len(result["candidate_alternatives"]) == 2
+    assert all("sensitive_structure_inspection" in item for item in result["candidate_alternatives"])
     assert {item["angle_offset_deg"] for item in result["candidate_alternatives"]} == {-10.0, 0.0}
     assert len(result["candidate_comparison"]) == 2
     assert [item["rank"] for item in result["candidate_comparison"]] == [1, 2]
@@ -897,8 +908,10 @@ def test_plan_incision_case_retries_transient_candidate_variant_failure(monkeypa
     actions = [step["action"] for step in result["trace"]]
     assert actions.count("retry_tool_failure") == 1
     assert "recover_tool_failure" not in actions
+    assert actions.count("inspect_sensitive_structures") == 4
     assert actions.count("preview_incision_on_face") == 3
     assert len(result["candidate_alternatives"]) == 3
+    assert all("sensitive_structure_inspection" in item for item in result["candidate_alternatives"])
     assert {item["angle_offset_deg"] for item in result["candidate_alternatives"]} == {-10.0, 0.0, 10.0}
     assert [item["rank"] for item in result["candidate_comparison"]] == [1, 2, 3]
     assert result["agent_trace_gate"]["passed"] is True

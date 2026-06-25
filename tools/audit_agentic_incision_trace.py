@@ -323,6 +323,67 @@ def _comparison_replay(
     }
 
 
+def _numbers_match(left: Any, right: Any, *, tolerance: float = 1e-6) -> bool:
+    if left is None and right is None:
+        return True
+    if left is None or right is None:
+        return False
+    try:
+        return abs(float(left) - float(right)) <= tolerance
+    except (TypeError, ValueError):
+        return False
+
+
+def _candidate_sensitive_inspection_audit(
+    trace: list[dict[str, Any]],
+    alternatives: list[dict[str, Any]],
+) -> dict[str, Any]:
+    candidate_observation_count = sum(
+        1
+        for step in trace
+        if step.get("action") == "inspect_sensitive_structures"
+        and isinstance(step.get("input"), dict)
+        and isinstance(step["input"].get("candidate"), dict)
+        and isinstance(step.get("observation"), dict)
+    )
+    missing_ids: list[str] = []
+    mismatch_ids: list[str] = []
+    for index, item in enumerate(alternatives):
+        label = str(item.get("id") or item.get("label") or f"candidate_{index}")
+        candidate = item.get("candidate") if isinstance(item.get("candidate"), dict) else {}
+        metrics = candidate.get("metrics") if isinstance(candidate.get("metrics"), dict) else {}
+        inspection = (
+            item.get("sensitive_structure_inspection")
+            if isinstance(item.get("sensitive_structure_inspection"), dict)
+            else None
+        )
+        if inspection is None:
+            missing_ids.append(label)
+            continue
+        if (
+            inspection.get("schema_version") != "sensitive-structure-inspection/v0.1"
+            or not _numbers_match(
+                inspection.get("candidate_free_margin_distance_mm"),
+                metrics.get("sensitive_free_margin_min_distance_mm"),
+            )
+            or inspection.get("candidate_free_margin_nearest")
+            != metrics.get("sensitive_free_margin_nearest")
+        ):
+            mismatch_ids.append(label)
+    return {
+        "candidate_count": len(alternatives),
+        "candidate_observation_count": candidate_observation_count,
+        "trace_observation_count_sufficient": candidate_observation_count >= len(alternatives),
+        "missing_candidate_ids": missing_ids,
+        "mismatch_candidate_ids": mismatch_ids,
+        "passed": (
+            candidate_observation_count >= len(alternatives)
+            and not missing_ids
+            and not mismatch_ids
+        ),
+    }
+
+
 def _react_plan_matches(stored: dict[str, Any], replayed: dict[str, Any]) -> bool:
     if not stored:
         return False
@@ -390,6 +451,7 @@ def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") ->
     ]
     comparison = [item for item in record.get("candidate_comparison", []) if isinstance(item, dict)]
     comparison_replay = _comparison_replay(alternatives, comparison)
+    candidate_sensitive_inspections = _candidate_sensitive_inspection_audit(trace, alternatives)
 
     retry_trace_count = actions.count("retry_tool_failure")
     recovery_trace_count = actions.count("recover_tool_failure")
@@ -454,6 +516,15 @@ def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") ->
             compare_indexes and generation_indexes and min(compare_indexes) > min(generation_indexes)
         ),
         "candidate_comparison_replay_passed": comparison_replay["passed"],
+        "candidate_sensitive_inspections_present": not candidate_sensitive_inspections[
+            "missing_candidate_ids"
+        ],
+        "candidate_sensitive_inspections_match_metrics": not candidate_sensitive_inspections[
+            "mismatch_candidate_ids"
+        ],
+        "candidate_sensitive_inspections_observed_in_trace": candidate_sensitive_inspections[
+            "trace_observation_count_sufficient"
+        ],
         "orchestration_candidate_count_matches": (
             not orchestration
             or orchestration.get("candidate_count") in {None, len(alternatives)}
@@ -500,6 +571,7 @@ def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") ->
         "stored_execution_events_present": bool(stored_execution_events),
         "llm_boundary_audit": llm_boundary,
         "candidate_comparison_replay": comparison_replay,
+        "candidate_sensitive_inspections": candidate_sensitive_inspections,
         "orchestration_audit": {
             "present": bool(orchestration),
             "candidate_count": orchestration.get("candidate_count"),

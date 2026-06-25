@@ -69,6 +69,8 @@
       "agent-execution-events replay",
       "stored execution events consistency",
       "candidate comparison replay",
+      "candidate alternative sensitive-structure inspection presence",
+      "candidate alternative sensitive-distance metric consistency",
       "orchestration audit count consistency",
       "retry_tool_failure trace consistency",
       "recover_tool_failure trace consistency",

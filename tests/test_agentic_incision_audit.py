@@ -102,12 +102,39 @@ def test_agentic_trace_audit_replays_valid_plan():
     assert audit["checks"]["provider_config_secret_redacted"] is True
     assert "preview_incision_on_face" in audit["trace_gate_replay"]["observed_actions"]
     assert audit["checks"]["candidate_comparison_replay_passed"] is True
+    assert audit["checks"]["candidate_sensitive_inspections_present"] is True
+    assert audit["checks"]["candidate_sensitive_inspections_match_metrics"] is True
+    assert audit["checks"]["candidate_sensitive_inspections_observed_in_trace"] is True
+    assert audit["candidate_sensitive_inspections"]["candidate_count"] == 3
+    assert audit["candidate_sensitive_inspections"]["candidate_observation_count"] == 3
     assert (
         audit["candidate_comparison_replay"]["expected_ranked_ids"]
         == audit["candidate_comparison_replay"]["observed_ranked_ids"]
     )
     assert len(audit["candidate_comparison_replay"]["observed_ranked_ids"]) == 3
     assert audit["orchestration_audit"]["candidate_count"] == 3
+
+
+def test_agentic_trace_audit_detects_missing_candidate_sensitive_inspection():
+    plan = _plan()
+    del plan["candidate_alternatives"][0]["sensitive_structure_inspection"]
+    audit = audit_agentic_record(plan, source="missing-sensitive-alternative")
+
+    assert audit["passed"] is False
+    assert "candidate_sensitive_inspections_present" in audit["failures"]
+    assert audit["candidate_sensitive_inspections"]["missing_candidate_ids"] == ["agent_offset_-10deg"]
+
+
+def test_agentic_trace_audit_detects_tampered_candidate_sensitive_distance():
+    plan = _plan()
+    plan["candidate_alternatives"][0]["sensitive_structure_inspection"][
+        "candidate_free_margin_distance_mm"
+    ] = 999.0
+    audit = audit_agentic_record(plan, source="tampered-sensitive-alternative")
+
+    assert audit["passed"] is False
+    assert "candidate_sensitive_inspections_match_metrics" in audit["failures"]
+    assert audit["candidate_sensitive_inspections"]["mismatch_candidate_ids"] == ["agent_offset_-10deg"]
 
 
 def test_agentic_trace_audit_detects_missing_required_tool():
