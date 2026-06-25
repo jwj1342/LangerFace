@@ -1,5 +1,5 @@
 {
-  "version": "0.6-agentic-incision-tools",
+  "version": "0.7-agentic-incision-tools",
   "trace_mode": "single_turn_react_multi_candidate_with_deterministic_tools",
   "boundary": "The LLM may select, summarize, and request deterministic tools; it must not compute incision geometry or override guardrails.",
   "trace_gate": {
@@ -33,6 +33,14 @@
     "records": ["required_action_groups", "observed_actions", "trace_indexes", "status", "issues"],
     "boundary": "The ReAct plan is an audit scaffold over deterministic tool calls; it is not autonomous clinical reasoning or a surgical instruction."
   },
+  "execution_events": {
+    "schema_version": "agent-execution-events/v0.1",
+    "mode": "single_turn_react_multi_candidate_with_deterministic_tools",
+    "records": ["events", "event_count", "tool_event_count", "retry_event_count", "recovery_event_count"],
+    "event_fields": ["event", "status", "trace_index", "action", "plan_step_ids", "message"],
+    "sse_events": ["execution_event"],
+    "boundary": "Execution events replay deterministic tool observations for UI feedback and offline audit; they are not autonomous clinical reasoning or surgical instructions."
+  },
   "trace_audit_executor": {
     "schema_version": "agentic-incision-trace-audit/v0.1",
     "tool": "tools/audit_agentic_incision_trace.py",
@@ -42,6 +50,8 @@
       "stored trace gate consistency",
       "agent-react-plan replay",
       "stored react plan consistency",
+      "agent-execution-events replay",
+      "stored execution events consistency",
       "candidate comparison replay",
       "orchestration audit count consistency",
       "retry_tool_failure trace consistency",

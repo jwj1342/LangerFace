@@ -69,6 +69,7 @@ const els = {
   guardrailVal: $("guardrailVal"),
   directionSource: $("directionSource"),
   agentGate: $("agentGate"),
+  agentExecutionList: $("agentExecutionList"),
   agentPlanList: $("agentPlanList"),
   agentComparison: $("agentComparison"),
   guardrailDetails: $("guardrailDetails"),
@@ -743,7 +744,43 @@ function renderTrace(trace) {
   }
 }
 
-function handleAgentStreamEvent(trace, evt) {
+function renderAgentExecutionEvents(execution) {
+  if (!els.agentExecutionList) return;
+  els.agentExecutionList.innerHTML = "";
+  const events = Array.isArray(execution?.events) ? execution.events : [];
+  if (!events.length) {
+    const div = document.createElement("div");
+    div.className = "execution-event warn";
+    div.textContent = "Agent 执行事件：尚未生成。";
+    els.agentExecutionList.append(div);
+    return;
+  }
+  for (const event of events) {
+    const status = String(event.status || "unknown");
+    const warn = status === "failed" || status === "retrying" || status === "recovered";
+    const div = document.createElement("div");
+    div.className = `execution-event${warn ? " warn" : ""}`;
+    const top = document.createElement("div");
+    top.className = "top";
+    const title = document.createElement("strong");
+    const traceLabel = event.trace_index == null ? "system" : `trace #${Number(event.trace_index) + 1}`;
+    title.textContent = `${event.event || "execution_event"} · ${traceLabel}`;
+    const pill = document.createElement("span");
+    pill.className = `status-pill ${warn ? "warn" : "ok"}`;
+    pill.textContent = status;
+    top.append(title, pill);
+    const action = event.action ? `工具：${event.action}` : "工具：—";
+    const planSteps = (event.plan_step_ids || []).join(" · ") || "—";
+    const meta = document.createElement("p");
+    meta.textContent = `${action} · plan steps: ${planSteps}`;
+    const msg = document.createElement("p");
+    msg.textContent = event.message || "";
+    div.append(top, meta, msg);
+    els.agentExecutionList.append(div);
+  }
+}
+
+function handleAgentStreamEvent(streamState, evt) {
   const { event, data } = evt || {};
   if (event === "provider") {
     const provider = data || {};
@@ -754,11 +791,23 @@ function handleAgentStreamEvent(trace, evt) {
     els.stageStatus.textContent = "Agent 已连接，等待工具 trace…";
     return;
   }
+  if (event === "execution_event") {
+    const step = data || {};
+    const index = Number.isInteger(step.index) ? step.index : streamState.executionEvents.length;
+    streamState.executionEvents[index] = step;
+    const visibleEvents = streamState.executionEvents.filter(Boolean);
+    renderAgentExecutionEvents({
+      schema_version: "agent-execution-events/v0.1",
+      events: visibleEvents,
+    });
+    els.stageStatus.textContent = `Agent 执行事件 ${visibleEvents.length} 条${step.event ? `：${step.event}` : ""}`;
+    return;
+  }
   if (event === "trace") {
     const step = data || {};
-    const index = Number.isInteger(step.index) ? step.index : trace.length;
-    trace[index] = step;
-    const visibleTrace = trace.filter(Boolean);
+    const index = Number.isInteger(step.index) ? step.index : streamState.trace.length;
+    streamState.trace[index] = step;
+    const visibleTrace = streamState.trace.filter(Boolean);
     renderTrace(visibleTrace);
     els.stageStatus.textContent = `工具 trace ${visibleTrace.length} 步${step.action ? `：${step.action}` : ""}`;
     return;
@@ -951,6 +1000,7 @@ function renderResult(result) {
   renderGuardrailDetails(result.guardrails);
   renderDirectionSource(result);
   renderAgentGate(result);
+  renderAgentExecutionEvents(result.agent_execution_events);
   renderAgentReactPlan(result.agent_react_plan);
   renderAgentComparison(result);
   const tumorQuality = tumorQualityFor(result);
@@ -1042,6 +1092,7 @@ function reviewRecord(result = S.result, label = "候选") {
     trace: result.trace,
     agent_trace_gate: traceGate,
     agent_react_plan: result.agent_react_plan || null,
+    agent_execution_events: result.agent_execution_events || null,
     candidate_alternatives: result.candidate_alternatives || [],
     candidate_comparison: result.candidate_comparison || [],
     agent_orchestration_audit: result.agent_orchestration_audit || null,
@@ -1318,6 +1369,9 @@ function exportReport() {
     r.agent_react_plan
       ? `- Agent ReAct 计划：passed=${Boolean(r.agent_react_plan.passed)}；步骤 ${r.agent_react_plan.completed_step_count || 0}/${r.agent_react_plan.step_count || 0}；失败 ${r.agent_react_plan.failed_step_count || 0}`
       : null,
+    r.agent_execution_events
+      ? `- Agent 执行事件：passed=${Boolean(r.agent_execution_events.passed)}；事件 ${r.agent_execution_events.event_count || 0} 条；工具事件 ${r.agent_execution_events.tool_event_count || 0} 条；重试 ${r.agent_execution_events.retry_event_count || 0}；恢复 ${r.agent_execution_events.recovery_event_count || 0}`
+      : null,
     r.agent_orchestration_audit
       ? `- Agent 编排审计：候选 ${r.agent_orchestration_audit.candidate_count || 0} 个；比较 ${r.agent_orchestration_audit.comparison_ready ? "已生成" : "未生成"}；恢复失败 ${r.agent_orchestration_audit.tool_failure_count || 0} 个`
       : null,
@@ -1399,13 +1453,13 @@ async function runAgent() {
   let result;
   if (els.useAgentServer.checked) {
     try {
-      const streamedTrace = [];
+      const streamState = { trace: [], executionEvents: [] };
       result = await requestAgentPlan(tumor, {
         endpoint: els.endpoint.value.trim(),
         timeoutMs: Number(els.providerTimeout.value) * 1000,
         providerConfig: providerConfig(),
         stream: true,
-        onStreamEvent: (evt) => handleAgentStreamEvent(streamedTrace, evt),
+        onStreamEvent: (evt) => handleAgentStreamEvent(streamState, evt),
       });
     } catch (err) {
       result = planIncisionDeterministic({ tumor, verts: S.verts, tris: S.tris, atlas: S.atlas, normal: S.normals[S.lesion] });

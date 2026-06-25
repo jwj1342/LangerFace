@@ -7,7 +7,12 @@ import json
 from pathlib import Path
 from typing import Any
 
-from langerface.agent import agent_react_plan, agent_trace_gate, compare_candidate_records
+from langerface.agent import (
+    agent_execution_events,
+    agent_react_plan,
+    agent_trace_gate,
+    compare_candidate_records,
+)
 
 AUDIT_SCHEMA = "agentic-incision-trace-audit/v0.1"
 PLAN_SCHEMA = "agentic-incision-plan/v0.1"
@@ -151,6 +156,30 @@ def _react_plan_matches(stored: dict[str, Any], replayed: dict[str, Any]) -> boo
     )
 
 
+def _execution_events_matches(stored: dict[str, Any], replayed: dict[str, Any]) -> bool:
+    if not stored:
+        return False
+    if (
+        stored.get("schema_version") != replayed.get("schema_version")
+        or stored.get("passed") != replayed.get("passed")
+        or stored.get("event_count") != replayed.get("event_count")
+        or stored.get("tool_event_count") != replayed.get("tool_event_count")
+        or stored.get("retry_event_count") != replayed.get("retry_event_count")
+        or stored.get("recovery_event_count") != replayed.get("recovery_event_count")
+    ):
+        return False
+    stored_events = [event for event in stored.get("events", []) if isinstance(event, dict)]
+    replayed_events = [event for event in replayed.get("events", []) if isinstance(event, dict)]
+    if len(stored_events) != len(replayed_events):
+        return False
+    comparable_keys = ["event", "status", "trace_index", "action", "plan_step_ids"]
+    for stored_event, replayed_event in zip(stored_events, replayed_events, strict=False):
+        for key in comparable_keys:
+            if stored_event.get(key) != replayed_event.get(key):
+                return False
+    return True
+
+
 def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") -> dict[str, Any]:
     trace = [step for step in record.get("trace", []) if isinstance(step, dict)]
     actions = _action_names(trace)
@@ -198,6 +227,17 @@ def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") ->
         recovered_failures=recovered_failures,
         mode=str(orchestration.get("mode") or "single_turn_react_multi_candidate_with_deterministic_tools"),
     )
+    stored_execution_events = (
+        record.get("agent_execution_events")
+        if isinstance(record.get("agent_execution_events"), dict)
+        else {}
+    )
+    replayed_execution_events = agent_execution_events(
+        trace,
+        trace_gate=replayed_gate,
+        react_plan=replayed_react_plan,
+        mode=str(orchestration.get("mode") or "single_turn_react_multi_candidate_with_deterministic_tools"),
+    )
 
     checks = {
         "trace_gate_replayed_passed": replayed_gate["passed"],
@@ -205,6 +245,12 @@ def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") ->
         "react_plan_present": bool(stored_react_plan),
         "react_plan_replayed_passed": replayed_react_plan["passed"],
         "stored_react_plan_matches_replay": _react_plan_matches(stored_react_plan, replayed_react_plan),
+        "execution_events_present": bool(stored_execution_events),
+        "execution_events_replayed_passed": replayed_execution_events["passed"],
+        "stored_execution_events_matches_replay": _execution_events_matches(
+            stored_execution_events,
+            replayed_execution_events,
+        ),
         "deterministic_generation_observed": bool(generation_indexes),
         "guardrails_observed_after_generation": bool(
             generation_indexes and guardrail_indexes and max(guardrail_indexes) > min(generation_indexes)
@@ -255,6 +301,8 @@ def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") ->
         "stored_trace_gate_present": bool(stored_gate),
         "react_plan_replay": replayed_react_plan,
         "stored_react_plan_present": bool(stored_react_plan),
+        "execution_events_replay": replayed_execution_events,
+        "stored_execution_events_present": bool(stored_execution_events),
         "candidate_comparison_replay": comparison_replay,
         "orchestration_audit": {
             "present": bool(orchestration),

@@ -309,6 +309,110 @@ def agent_react_plan(
     }
 
 
+def _react_plan_step_ids_by_trace_index(react_plan: dict[str, Any]) -> dict[int, list[str]]:
+    by_index: dict[int, list[str]] = {}
+    for step in react_plan.get("steps", []):
+        if not isinstance(step, dict):
+            continue
+        step_id = str(step.get("id") or "")
+        if not step_id:
+            continue
+        for trace_index in step.get("trace_indexes", []):
+            try:
+                index = int(trace_index)
+            except (TypeError, ValueError):
+                continue
+            by_index.setdefault(index, []).append(step_id)
+    return by_index
+
+
+def agent_execution_events(
+    trace: list[dict[str, Any]],
+    *,
+    trace_gate: dict[str, Any],
+    react_plan: dict[str, Any],
+    mode: str = "single_turn_react_multi_candidate_with_deterministic_tools",
+) -> dict[str, Any]:
+    """Build a replayable execution timeline from trace and plan facts.
+
+    The events are derived from deterministic tool observations that already
+    exist in ``trace``. They provide a UI/SSE execution contract without
+    claiming that the LLM autonomously executed clinical reasoning.
+    """
+
+    step_ids_by_trace_index = _react_plan_step_ids_by_trace_index(react_plan)
+    events: list[dict[str, Any]] = [{
+        "index": 0,
+        "event": "execution_started",
+        "status": "started",
+        "message": "Agent execution started; deterministic tools own geometry and guardrails.",
+        "trace_index": None,
+        "action": None,
+        "plan_step_ids": [],
+    }]
+    for trace_index, step in enumerate(trace):
+        action = str(step.get("action") or "")
+        status = "observed"
+        if action == "retry_tool_failure":
+            status = "retrying"
+        elif action == "recover_tool_failure":
+            status = "recovered"
+        events.append({
+            "index": len(events),
+            "event": "tool_observed",
+            "status": status,
+            "trace_index": trace_index,
+            "action": action,
+            "plan_step_ids": step_ids_by_trace_index.get(trace_index, []),
+            "message": str(step.get("summary") or action),
+        })
+    events.append({
+        "index": len(events),
+        "event": "trace_gate_evaluated",
+        "status": "passed" if trace_gate.get("passed") else "failed",
+        "trace_index": None,
+        "action": "agent_trace_gate",
+        "plan_step_ids": [],
+        "message": (
+            "Agent trace gate passed."
+            if trace_gate.get("passed")
+            else "Agent trace gate failed; candidate confirmation must remain blocked."
+        ),
+        "missing_actions": trace_gate.get("missing_actions", []),
+    })
+    events.append({
+        "index": len(events),
+        "event": "react_plan_evaluated",
+        "status": "passed" if react_plan.get("passed") else "failed",
+        "trace_index": None,
+        "action": "agent_react_plan",
+        "plan_step_ids": [
+            str(step.get("id"))
+            for step in react_plan.get("steps", [])
+            if isinstance(step, dict) and step.get("id")
+        ],
+        "message": (
+            f"ReAct plan evaluated: {react_plan.get('completed_step_count', 0)}/"
+            f"{react_plan.get('step_count', 0)} steps completed."
+        ),
+        "failed_step_count": int(react_plan.get("failed_step_count") or 0),
+    })
+    return {
+        "schema_version": "agent-execution-events/v0.1",
+        "mode": mode,
+        "passed": bool(trace_gate.get("passed")) and bool(react_plan.get("passed")),
+        "event_count": len(events),
+        "tool_event_count": len(trace),
+        "retry_event_count": sum(1 for event in events if event.get("status") == "retrying"),
+        "recovery_event_count": sum(1 for event in events if event.get("status") == "recovered"),
+        "events": events,
+        "clinical_boundary": (
+            "Execution events replay deterministic tool observations for audit and UI feedback; "
+            "they are not autonomous clinical reasoning or surgical instructions."
+        ),
+    }
+
+
 def _short_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
     keys = [
         "id",
@@ -845,6 +949,11 @@ def plan_incision_case(
         retried_failures=retried_failures,
         recovered_failures=recovered_failures,
     )
+    execution_events = agent_execution_events(
+        trace,
+        trace_gate=trace_gate,
+        react_plan=react_plan,
+    )
     orchestration_audit = {
         "schema_version": "agent-orchestration-audit/v0.1",
         "mode": "single_turn_react_multi_candidate_with_deterministic_tools",
@@ -877,6 +986,7 @@ def plan_incision_case(
         "trace": trace,
         "agent_trace_gate": trace_gate,
         "agent_react_plan": react_plan,
+        "agent_execution_events": execution_events,
         "agent_orchestration_audit": orchestration_audit,
         "llm": llm,
         "provider": provider_status,

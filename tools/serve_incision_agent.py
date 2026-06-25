@@ -71,6 +71,8 @@ class AgentHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         emit("provider", result.get("provider", {}))
+        for event in (result.get("agent_execution_events") or {}).get("events", []):
+            emit("execution_event", event)
         for index, step in enumerate(result.get("trace", [])):
             emit("trace", {"index": index, **step})
         emit("trace_gate", result.get("agent_trace_gate", {}))

@@ -7,7 +7,12 @@ import numpy as np
 import pytest
 
 import langerface.agent.incision_agent as incision_agent_module
-from langerface.agent import agent_trace_gate, compare_candidate_records, plan_incision_case
+from langerface.agent import (
+    agent_execution_events,
+    agent_trace_gate,
+    compare_candidate_records,
+    plan_incision_case,
+)
 from langerface.anatomy import classify_region
 from langerface.clinical import default_clinical_rules
 from langerface.incision import (
@@ -627,6 +632,16 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     ]
     assert result["agent_react_plan"]["steps"][-1]["status"] == "completed"
     assert "compare_candidates" in result["agent_react_plan"]["steps"][-1]["observed_actions"]
+    assert result["agent_execution_events"]["schema_version"] == "agent-execution-events/v0.1"
+    assert result["agent_execution_events"]["passed"] is True
+    assert result["agent_execution_events"]["tool_event_count"] == len(result["trace"])
+    assert result["agent_execution_events"]["retry_event_count"] == 0
+    assert result["agent_execution_events"]["recovery_event_count"] == 0
+    assert result["agent_execution_events"]["events"][0]["event"] == "execution_started"
+    assert result["agent_execution_events"]["events"][1]["trace_index"] == 0
+    assert result["agent_execution_events"]["events"][1]["plan_step_ids"] == ["inspect_tumor_input"]
+    assert result["agent_execution_events"]["events"][-2]["event"] == "trace_gate_evaluated"
+    assert result["agent_execution_events"]["events"][-1]["event"] == "react_plan_evaluated"
     assert len(result["candidate_alternatives"]) == 3
     assert {item["angle_offset_deg"] for item in result["candidate_alternatives"]} == {-10.0, 0.0, 10.0}
     assert [item["rank"] for item in result["candidate_comparison"]] == [1, 2, 3]
@@ -720,6 +735,15 @@ def test_plan_incision_case_recovers_failed_candidate_variant(monkeypatch):
     assert result["agent_react_plan"]["recovery_count"] == 1
     assert result["agent_react_plan"]["steps"][-1]["status"] == "completed_with_recovery"
     assert any("skipped" in issue for issue in result["agent_react_plan"]["steps"][-1]["issues"])
+    assert result["agent_execution_events"]["retry_event_count"] == 1
+    assert result["agent_execution_events"]["recovery_event_count"] == 1
+    recovery_event = next(
+        event
+        for event in result["agent_execution_events"]["events"]
+        if event["action"] == "recover_tool_failure"
+    )
+    assert recovery_event["status"] == "recovered"
+    assert "compare_direction_variants" in recovery_event["plan_step_ids"]
 
 
 def test_plan_incision_case_retries_transient_candidate_variant_failure(monkeypatch):
@@ -761,6 +785,8 @@ def test_plan_incision_case_retries_transient_candidate_variant_failure(monkeypa
     assert result["agent_react_plan"]["passed"] is True
     assert result["agent_react_plan"]["retry_count"] == 1
     assert result["agent_react_plan"]["steps"][-1]["status"] == "completed_after_retry"
+    assert result["agent_execution_events"]["retry_event_count"] == 1
+    assert result["agent_execution_events"]["recovery_event_count"] == 0
 
 
 def test_compare_candidate_records_ranks_high_guardrail_after_clean_candidate():
@@ -799,6 +825,33 @@ def test_agent_trace_gate_fails_when_required_tool_step_is_missing():
     assert gate["missing_actions"] == [
         {"key": "rstl_direction", "label": "RSTL direction", "actions": ["query_rstl_direction"]}
     ]
+
+
+def test_agent_execution_events_fail_when_trace_gate_or_plan_fails():
+    trace = [
+        {"action": "summarize_tumor_input_quality", "summary": "quality"},
+        {"action": "classify_region", "summary": "region"},
+    ]
+    gate = agent_trace_gate(trace, {"polyline": [[0, 0, 0], [1, 0, 0]]})
+    react_plan = {
+        "schema_version": "agent-react-plan/v0.1",
+        "mode": "single_turn_react_multi_candidate_with_deterministic_tools",
+        "passed": False,
+        "step_count": 2,
+        "completed_step_count": 1,
+        "failed_step_count": 1,
+        "steps": [
+            {"id": "inspect_tumor_input", "trace_indexes": [0]},
+            {"id": "localize_anatomy", "trace_indexes": [1], "status": "failed"},
+        ],
+    }
+    events = agent_execution_events(trace, trace_gate=gate, react_plan=react_plan)
+    assert events["schema_version"] == "agent-execution-events/v0.1"
+    assert events["passed"] is False
+    assert events["tool_event_count"] == 2
+    assert events["events"][1]["plan_step_ids"] == ["inspect_tumor_input"]
+    assert events["events"][-2]["status"] == "failed"
+    assert events["events"][-1]["failed_step_count"] == 1
 
 
 def test_clinical_rules_asset_has_region_provenance_and_required_fields():
@@ -842,12 +895,14 @@ def test_clinical_rules_asset_has_region_provenance_and_required_fields():
 
 def test_agent_tool_schema_and_privacy_doc_cover_review_export():
     schema = json.loads((ROOT / "assets" / "agentic_incision_tool_schema.json").read_text())
-    assert schema["version"] == "0.6-agentic-incision-tools"
+    assert schema["version"] == "0.7-agentic-incision-tools"
     assert schema["trace_gate"]["schema_version"] == "agent-trace-gate/v0.1"
     assert schema["trace_gate"]["blocks_confirmation"] is True
     assert ["query_rstl_direction"] in schema["trace_gate"]["required_actions"]
     assert schema["react_plan"]["schema_version"] == "agent-react-plan/v0.1"
     assert "compare_direction_variants" in schema["react_plan"]["steps"]
+    assert schema["execution_events"]["schema_version"] == "agent-execution-events/v0.1"
+    assert "execution_event" in schema["execution_events"]["sse_events"]
     assert "react_plan_passed" in schema["orchestration_audit"]["records"]
     assert schema["trace_audit_executor"]["schema_version"] == "agentic-incision-trace-audit/v0.1"
     assert schema["trace_audit_executor"]["tool"] == "tools/audit_agentic_incision_trace.py"

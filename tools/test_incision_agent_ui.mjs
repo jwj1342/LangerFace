@@ -21,7 +21,9 @@ assert.ok(html.includes('id="reviewNotes"'), "workbench exposes clinician review
 assert.ok(html.includes('id="guardrailDetails"'), "workbench exposes guardrail detail feedback");
 assert.ok(html.includes('id="directionSource"'), "workbench exposes direction source explanation");
 assert.ok(html.includes('id="agentGate"'), "workbench exposes agent trace gate feedback");
+assert.ok(html.includes('id="agentExecutionList"'), "workbench exposes Agent execution events list");
 assert.ok(html.includes('id="agentPlanList"'), "workbench exposes Agent ReAct plan list");
+assert.ok(html.includes("execution-event"), "workbench styles Agent execution events");
 assert.ok(html.includes("react-plan-step"), "workbench styles Agent ReAct plan steps");
 assert.ok(html.includes('id="agentComparison"'), "workbench exposes backend agent candidate comparison");
 assert.ok(html.includes('id="approveCandidateBtn"'), "workbench exposes candidate approval action");
@@ -52,6 +54,8 @@ assert.ok(js.includes("guardrail_summary"), "review records include guardrail su
 assert.ok(js.includes("review_gate"), "review records include review gate state");
 assert.ok(js.includes("agent_trace_gate"), "review records include agent trace gate state");
 assert.ok(js.includes("agent_react_plan"), "review records include Agent ReAct plan state");
+assert.ok(js.includes("agent_execution_events"), "review records include Agent execution events");
+assert.ok(js.includes("renderAgentExecutionEvents"), "workbench renders Agent execution events");
 assert.ok(js.includes("renderAgentReactPlan"), "workbench renders Agent ReAct plan steps");
 assert.ok(js.includes("observed_actions"), "ReAct plan UI shows observed tool actions");
 assert.ok(js.includes("trace indexes"), "ReAct plan UI shows linked trace indexes");
@@ -77,7 +81,9 @@ assert.ok(js.includes("live_overlay_ready"), "review gate records live overlay r
 assert.ok(js.includes("handleAgentStreamEvent"), "workbench consumes agent SSE trace events");
 assert.ok(js.includes("stream: true"), "workbench prefers streaming agent trace");
 assert.ok(js.includes('event === "trace_gate"'), "workbench consumes agent trace gate SSE events");
+assert.ok(js.includes('event === "execution_event"'), "workbench consumes Agent execution SSE events");
 assert.ok(js.includes('event === "react_plan"'), "workbench consumes Agent ReAct plan SSE events");
+assert.ok(js.includes("Agent 执行事件"), "markdown report includes Agent execution event status");
 assert.ok(js.includes("Agent 工具门控已通过"), "workbench reports successful SSE trace gate");
 assert.ok(js.includes("Agent ReAct 计划已通过"), "workbench reports successful ReAct plan SSE event");
 assert.ok(js.includes("SSE trace 不可用"), "workbench reports JSON fallback when streaming is unavailable");

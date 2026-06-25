@@ -65,6 +65,7 @@ def _review_record(plan: dict) -> dict:
         "trace": plan["trace"],
         "agent_trace_gate": plan["agent_trace_gate"],
         "agent_react_plan": plan["agent_react_plan"],
+        "agent_execution_events": plan["agent_execution_events"],
         "candidate_alternatives": plan["candidate_alternatives"],
         "candidate_comparison": plan["candidate_comparison"],
         "agent_orchestration_audit": plan["agent_orchestration_audit"],
@@ -84,6 +85,11 @@ def test_agentic_trace_audit_replays_valid_plan():
     assert audit["checks"]["react_plan_present"] is True
     assert audit["checks"]["react_plan_replayed_passed"] is True
     assert audit["checks"]["stored_react_plan_matches_replay"] is True
+    assert audit["checks"]["execution_events_present"] is True
+    assert audit["checks"]["execution_events_replayed_passed"] is True
+    assert audit["checks"]["stored_execution_events_matches_replay"] is True
+    assert audit["execution_events_replay"]["schema_version"] == "agent-execution-events/v0.1"
+    assert audit["execution_events_replay"]["tool_event_count"] == len(plan["trace"])
     assert audit["react_plan_replay"]["schema_version"] == "agent-react-plan/v0.1"
     assert audit["react_plan_replay"]["step_count"] == 6
     assert audit["checks"]["candidate_comparison_replay_passed"] is True
@@ -104,6 +110,7 @@ def test_agentic_trace_audit_detects_missing_required_tool():
     assert "trace_gate_replayed_passed" in audit["failures"]
     assert "stored_trace_gate_matches_replay" in audit["failures"]
     assert "stored_react_plan_matches_replay" in audit["failures"]
+    assert "stored_execution_events_matches_replay" in audit["failures"]
     assert audit["trace_gate_replay"]["missing_actions"][0]["key"] == "rstl_direction"
 
 
@@ -116,6 +123,16 @@ def test_agentic_trace_audit_detects_tampered_react_plan():
     assert audit["passed"] is False
     assert "stored_react_plan_matches_replay" in audit["failures"]
     assert audit["checks"]["react_plan_replayed_passed"] is True
+
+
+def test_agentic_trace_audit_detects_tampered_execution_events():
+    plan = _plan()
+    plan["agent_execution_events"]["events"][1]["action"] = "classify_region"
+    audit = audit_agentic_record(plan, source="tampered-execution-events")
+
+    assert audit["passed"] is False
+    assert "stored_execution_events_matches_replay" in audit["failures"]
+    assert audit["checks"]["execution_events_replayed_passed"] is True
 
 
 def test_agentic_trace_audit_reads_review_export_and_cli(tmp_path: Path):

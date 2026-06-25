@@ -115,6 +115,9 @@ def test_incision_agent_proxy_json_and_sse_contract():
         assert result["provider_config"]["api_key"] == "[redacted]"
         assert result["provider_config"]["base_url"] == "https://example.invalid/v1"
         assert result["agent_trace_gate"]["passed"] is True
+        assert result["agent_execution_events"]["schema_version"] == "agent-execution-events/v0.1"
+        assert result["agent_execution_events"]["passed"] is True
+        assert result["agent_execution_events"]["tool_event_count"] == len(result["trace"])
         assert result["agent_orchestration_audit"]["schema_version"] == "agent-orchestration-audit/v0.1"
         assert result["agent_orchestration_audit"]["candidate_count"] == 3
         assert len(result["candidate_alternatives"]) == 3
@@ -124,10 +127,16 @@ def test_incision_agent_proxy_json_and_sse_contract():
         events = _request_sse(f"http://127.0.0.1:{port}/api/agentic-incision/stream", payload)
         names = [event["event"] for event in events]
         assert names[0] == "provider"
+        assert "execution_event" in names
         assert "trace_gate" in names
         assert "react_plan" in names
         assert "result" in names
         assert names[-1] == "done"
+        execution_events = [event["data"] for event in events if event["event"] == "execution_event"]
+        assert execution_events[0]["event"] == "execution_started"
+        assert execution_events[1]["action"] == "summarize_tumor_input_quality"
+        assert execution_events[-2]["event"] == "trace_gate_evaluated"
+        assert execution_events[-1]["event"] == "react_plan_evaluated"
         trace_actions = [event["data"]["action"] for event in events if event["event"] == "trace"]
         assert "propose_direction_variants" in trace_actions
         assert trace_actions[-1] == "compare_candidates"
