@@ -467,6 +467,8 @@ def test_rstl_3dmm_review_packet_application_with_synthetic_decisions(tmp_path):
         "pending_count": 1,
         "applied_sample_count": 2,
         "completion_rate": 0.75,
+        "decision_source": "json_review_packet",
+        "csv_overlay": None,
         "reviewer_counts": {"Dr A": 2, "Dr B": 1},
         "corrected_sample_indices": [1],
         "rejected_sample_indices": [2],
@@ -489,3 +491,145 @@ def test_rstl_3dmm_review_packet_application_with_synthetic_decisions(tmp_path):
     assert reviewed["applied_reviews"][1]["vector_changed"] is True
     assert reviewed["applied_reviews"][2]["excluded"] is True
     assert "validated:false" in reviewed["clinical_boundary"]
+
+
+def test_rstl_3dmm_review_packet_application_accepts_clinician_csv(tmp_path):
+    prior = {
+        "schema_version": "rstl-3dmm-direction-prior/v0.1",
+        "system": "rstl",
+        "topologyId": "flame-2023",
+        "topologyVersion": "flame-2023-v1",
+        "validated": False,
+        "review_status": "draft_not_clinically_validated",
+        "samples": [
+            {"tri": 0, "point": [0, 0, 0], "vector": [1, 0, 0], "angle_deg": 0, "confidence": 0.9},
+            {"tri": 1, "point": [1, 0, 0], "vector": [0, 1, 0], "angle_deg": 90, "confidence": 0.2},
+            {"tri": 2, "point": [0, 1, 0], "vector": [0, 1, 0], "angle_deg": 90, "confidence": 0.7},
+        ],
+    }
+    packet = {
+        "schema_version": "rstl-3dmm-review-packet/v0.1",
+        "source_validated": False,
+        "review_status": "draft_not_clinically_validated",
+        "system": "rstl",
+        "topologyId": "flame-2023",
+        "topologyVersion": "flame-2023-v1",
+        "source_sample_count": 3,
+        "items": [
+            {
+                "review_id": "rstl3dmm-0001",
+                "source_sample_index": 0,
+                "tri": 0,
+                "clinician_review": {"decision": "pending"},
+            },
+            {
+                "review_id": "rstl3dmm-0002",
+                "source_sample_index": 1,
+                "tri": 1,
+                "clinician_review": {"decision": "pending"},
+            },
+            {
+                "review_id": "rstl3dmm-0003",
+                "source_sample_index": 2,
+                "tri": 2,
+                "clinician_review": {"decision": "pending"},
+            },
+        ],
+    }
+    prior_path = tmp_path / "rstl_flame_direction_prior.json"
+    packet_path = tmp_path / "rstl_3dmm_review_packet.json"
+    csv_path = tmp_path / "rstl_3dmm_review_packet.csv"
+    output_path = tmp_path / "rstl_3dmm_reviewed_direction_prior.json"
+    prior_path.write_text(json.dumps(prior))
+    packet_path.write_text(json.dumps(packet))
+    with csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "review_id",
+                "source_sample_index",
+                "tri",
+                "topologyId",
+                "topologyVersion",
+                "decision",
+                "reviewer",
+                "reviewed_at",
+                "region_label",
+                "direction_accepted",
+                "corrected_angle_deg",
+                "corrected_vector",
+                "notes",
+            ],
+        )
+        writer.writeheader()
+        writer.writerow({
+            "review_id": "rstl3dmm-0001",
+            "source_sample_index": 0,
+            "tri": 0,
+            "topologyId": "flame-2023",
+            "topologyVersion": "flame-2023-v1",
+            "decision": "accepted",
+            "reviewer": "Dr CSV",
+            "reviewed_at": "2026-06-25",
+            "region_label": "cheek",
+            "direction_accepted": "true",
+            "notes": "ok",
+        })
+        writer.writerow({
+            "review_id": "rstl3dmm-0002",
+            "source_sample_index": 1,
+            "tri": 1,
+            "topologyId": "flame-2023",
+            "topologyVersion": "flame-2023-v1",
+            "decision": "corrected",
+            "reviewer": "Dr CSV",
+            "reviewed_at": "2026-06-25",
+            "region_label": "lower_eyelid",
+            "direction_accepted": "false",
+            "corrected_vector": "[1, 1, 0]",
+            "notes": "rotate toward eyelid fold",
+        })
+        writer.writerow({
+            "review_id": "rstl3dmm-0003",
+            "source_sample_index": 2,
+            "tri": 2,
+            "topologyId": "flame-2023",
+            "topologyVersion": "flame-2023-v1",
+            "decision": "pending",
+            "direction_accepted": "",
+        })
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "tools/apply_rstl_3dmm_review_packet.py",
+            "--prior",
+            str(prior_path),
+            "--packet",
+            str(packet_path),
+            "--review-csv",
+            str(csv_path),
+            "--output",
+            str(output_path),
+            "--generated-at",
+            "2026-06-25",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    reviewed = json.loads(output_path.read_text())
+    assert reviewed["source_review_csv"].endswith("rstl_3dmm_review_packet.csv")
+    assert reviewed["review_application"]["decision_source"] == "clinician_csv_over_json_packet"
+    assert reviewed["review_application"]["csv_overlay"]["applied_row_count"] == 3
+    assert reviewed["review_application"]["csv_overlay"]["unmatched_packet_item_count"] == 0
+    assert reviewed["review_application"]["reviewed_count"] == 2
+    assert reviewed["review_application"]["accepted_count"] == 1
+    assert reviewed["review_application"]["corrected_count"] == 1
+    assert reviewed["review_application"]["pending_count"] == 1
+    assert reviewed["samples"][0]["clinician_review"]["reviewer"] == "Dr CSV"
+    assert reviewed["samples"][1]["review_correction_source"] == "corrected_vector"
+    assert reviewed["samples"][1]["review_applied"] is True
+    assert math.isclose(reviewed["samples"][1]["angle_deg"], 45.0, abs_tol=0.01)
+    assert "clinician_review" not in reviewed["samples"][2]

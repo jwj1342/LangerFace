@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import copy
+import csv
 import json
 import math
 from collections import Counter
@@ -13,6 +15,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PRIOR = ROOT / "assets" / "rstl_mediapipe_direction_prior.json"
 DEFAULT_PACKET = ROOT / "assets" / "flame" / "rstl_3dmm_review_packet.json"
+DEFAULT_REVIEW_CSV = ROOT / "assets" / "flame" / "rstl_3dmm_review_packet.csv"
 DEFAULT_OUTPUT = ROOT / "assets" / "flame" / "rstl_3dmm_reviewed_direction_prior.json"
 DIRECTION_PRIOR_SCHEMAS = {
     "rstl-direction-prior/v0.1",
@@ -42,6 +45,155 @@ def _unit_vector(values: Any) -> list[float]:
     if not math.isfinite(norm) or norm <= 1e-12:
         raise ValueError("corrected_vector must be non-zero and finite")
     return [round(value / norm, 6) for value in vector]
+
+
+def _blank_to_none(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        return text if text else None
+    return value
+
+
+def _parse_bool(value: Any) -> bool | None:
+    value = _blank_to_none(value)
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {"true", "1", "yes", "y", "accepted", "accept"}:
+        return True
+    if text in {"false", "0", "no", "n", "rejected", "reject", "corrected", "correction"}:
+        return False
+    raise ValueError(f"cannot parse boolean value: {value}")
+
+
+def _parse_float(value: Any) -> float | None:
+    value = _blank_to_none(value)
+    if value is None:
+        return None
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"numeric value must be finite: {value}")
+    return number
+
+
+def _parse_vector(value: Any) -> list[float] | None:
+    value = _blank_to_none(value)
+    if value is None:
+        return None
+    if isinstance(value, list | tuple):
+        return [float(item) for item in value]
+    text = str(value).strip()
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        parsed = [part for part in text.replace(";", ",").split(",") if part.strip()]
+    if not isinstance(parsed, list | tuple):
+        raise ValueError(f"corrected_vector must be a JSON array or comma-separated vector: {value}")
+    return [float(item) for item in parsed]
+
+
+def _csv_review_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "decision": str(_blank_to_none(row.get("decision")) or "pending").strip(),
+        "reviewer": str(_blank_to_none(row.get("reviewer")) or ""),
+        "reviewed_at": str(_blank_to_none(row.get("reviewed_at")) or ""),
+        "region_label": str(_blank_to_none(row.get("region_label")) or ""),
+        "direction_accepted": _parse_bool(row.get("direction_accepted")),
+        "corrected_angle_deg": _parse_float(row.get("corrected_angle_deg")),
+        "corrected_vector": _parse_vector(row.get("corrected_vector")),
+        "notes": str(_blank_to_none(row.get("notes")) or ""),
+    }
+
+
+def _csv_row_key(row: dict[str, Any]) -> tuple[str, str]:
+    review_id = str(_blank_to_none(row.get("review_id")) or "")
+    sample_index = str(_blank_to_none(row.get("source_sample_index")) or "")
+    if review_id:
+        return ("review_id", review_id)
+    if sample_index:
+        return ("source_sample_index", sample_index)
+    raise ValueError("review CSV row must include review_id or source_sample_index")
+
+
+def _packet_item_keys(item: dict[str, Any]) -> list[tuple[str, str]]:
+    keys: list[tuple[str, str]] = []
+    review_id = _blank_to_none(item.get("review_id"))
+    if review_id is not None:
+        keys.append(("review_id", str(review_id)))
+    sample_index = _blank_to_none(item.get("source_sample_index"))
+    if sample_index is not None:
+        keys.append(("source_sample_index", str(sample_index)))
+    return keys
+
+
+def _validate_csv_row_matches_item(row: dict[str, Any], item: dict[str, Any], packet: dict[str, Any]) -> None:
+    review_id = _blank_to_none(row.get("review_id"))
+    if review_id is not None and str(item.get("review_id")) != str(review_id):
+        raise ValueError(f"{review_id}: review_id does not match packet item")
+    source_sample_index = _blank_to_none(row.get("source_sample_index"))
+    if source_sample_index is not None and int(source_sample_index) != int(item.get("source_sample_index")):
+        raise ValueError(f"{item.get('review_id')}: source_sample_index does not match packet item")
+    tri = _blank_to_none(row.get("tri"))
+    if tri is not None and int(tri) != int(item.get("tri")):
+        raise ValueError(f"{item.get('review_id')}: tri does not match packet item")
+    topology_id = _blank_to_none(row.get("topologyId"))
+    if topology_id is not None and str(topology_id) != str(packet.get("topologyId")):
+        raise ValueError(f"{item.get('review_id')}: topologyId does not match packet")
+    topology_version = _blank_to_none(row.get("topologyVersion"))
+    if topology_version is not None and str(topology_version) != str(packet.get("topologyVersion")):
+        raise ValueError(f"{item.get('review_id')}: topologyVersion does not match packet")
+
+
+def overlay_review_csv(packet: dict[str, Any], csv_path: Path) -> dict[str, Any]:
+    """Overlay clinician spreadsheet decisions onto a JSON review packet."""
+
+    packet = copy.deepcopy(packet)
+    items = packet.get("items")
+    if not isinstance(items, list) or not items:
+        raise ValueError("review packet must contain review items before CSV overlay")
+    item_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError("review packet items must be objects")
+        for key in _packet_item_keys(item):
+            if key in item_by_key:
+                raise ValueError(f"duplicate packet item key for CSV overlay: {key}")
+            item_by_key[key] = item
+
+    applied_rows = 0
+    seen_keys: set[tuple[str, str]] = set()
+    with csv_path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        if not reader.fieldnames:
+            raise ValueError("review CSV must include a header row")
+        for row_number, row in enumerate(reader, start=2):
+            key = _csv_row_key(row)
+            if key in seen_keys:
+                raise ValueError(f"duplicate review CSV row key at line {row_number}: {key}")
+            seen_keys.add(key)
+            item = item_by_key.get(key)
+            if item is None and key[0] == "review_id":
+                sample_index = str(_blank_to_none(row.get("source_sample_index")) or "")
+                if sample_index:
+                    item = item_by_key.get(("source_sample_index", sample_index))
+            if item is None:
+                raise ValueError(f"review CSV row does not match packet item at line {row_number}: {key}")
+            _validate_csv_row_matches_item(row, item, packet)
+            item["clinician_review"] = _csv_review_from_row(row)
+            item["clinician_review"]["source"] = "clinician_csv"
+            applied_rows += 1
+
+    packet["review_csv_overlay"] = {
+        "source": _rel(csv_path),
+        "applied_row_count": applied_rows,
+        "unmatched_packet_item_count": max(0, len(items) - applied_rows),
+        "decision_source": "clinician_csv_over_json_packet",
+    }
+    return packet
 
 
 def _angle_deg(vector: list[float]) -> float:
@@ -125,9 +277,12 @@ def apply_review_packet(
     prior_path: Path,
     packet_path: Path,
     generated_at: str,
+    review_csv_path: Path | None = None,
 ) -> dict[str, Any]:
     prior = _load_json(prior_path)
     packet = _load_json(packet_path)
+    if review_csv_path is not None:
+        packet = overlay_review_csv(packet, review_csv_path)
     samples = prior.get("samples")
     items = packet.get("items")
     if prior.get("schema_version") not in DIRECTION_PRIOR_SCHEMAS:
@@ -229,6 +384,7 @@ def apply_review_packet(
         "source_prior_schema_version": prior.get("schema_version"),
         "source_review_packet": _rel(packet_path),
         "source_review_packet_schema_version": packet.get("schema_version"),
+        "source_review_csv": _rel(review_csv_path) if review_csv_path is not None else None,
         "source_sample_count": len(samples),
         "review_item_count": len(items),
         "review_application": {
@@ -239,6 +395,12 @@ def apply_review_packet(
             "pending_count": decisions["pending"],
             "applied_sample_count": decisions["accepted"] + decisions["corrected"],
             "completion_rate": round(reviewed_count / len(items), 6),
+            "decision_source": (
+                "clinician_csv_over_json_packet"
+                if review_csv_path is not None
+                else "json_review_packet"
+            ),
+            "csv_overlay": packet.get("review_csv_overlay"),
             "reviewer_counts": dict(sorted(reviewers.items())),
             "corrected_sample_indices": [
                 review["source_sample_index"]
@@ -269,6 +431,13 @@ def parse_args() -> argparse.Namespace:
         help="review packet JSON with clinician decisions",
     )
     parser.add_argument(
+        "--review-csv",
+        help=(
+            "optional clinician spreadsheet CSV decisions to overlay onto the JSON packet; "
+            f"use 'default' to read {_rel(DEFAULT_REVIEW_CSV)}"
+        ),
+    )
+    parser.add_argument(
         "--output",
         default=str(DEFAULT_OUTPUT),
         help="review-applied draft prior JSON output",
@@ -282,10 +451,14 @@ def main() -> int:
     generated_at = args.generated_at
     if generated_at == "now":
         generated_at = datetime.now(timezone.utc).date().isoformat()
+    review_csv_path = None
+    if args.review_csv:
+        review_csv_path = DEFAULT_REVIEW_CSV if args.review_csv == "default" else Path(args.review_csv)
     reviewed = apply_review_packet(
         prior_path=Path(args.prior),
         packet_path=Path(args.packet),
         generated_at=generated_at,
+        review_csv_path=review_csv_path,
     )
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)

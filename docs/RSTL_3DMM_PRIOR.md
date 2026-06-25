@@ -102,6 +102,23 @@ python tools/apply_rstl_3dmm_review_packet.py \
   --generated-at now
 ```
 
+如果医生是在表格里填写审阅结果，可以把上一步导出的 CSV 作为 decision overlay 输入；脚本会按
+`review_id` 或 `source_sample_index` 把 CSV 中的 `decision`、`reviewer`、`reviewed_at`、
+`region_label`、`direction_accepted`、`corrected_angle_deg`、`corrected_vector` 和 `notes`
+覆盖到 JSON 审阅包对应条目，然后继续走同一套拓扑、sample index、tri 和 review 状态校验：
+
+```bash
+python tools/apply_rstl_3dmm_review_packet.py \
+  --prior assets/flame/rstl_flame_direction_prior.json \
+  --packet assets/flame/rstl_3dmm_review_packet.json \
+  --review-csv default \
+  --generated-at now
+```
+
+CSV 只是医生审阅决策的表格输入层，不能单独替代 JSON 审阅包；输出会记录
+`source_review_csv`、`review_application.decision_source` 和 `review_application.csv_overlay`，方便追溯哪些
+行来自表格回灌。
+
 输出 schema 为 `rstl-3dmm-reviewed-direction-prior/v0.1`，并保留：
 
 - `review_application`：reviewed / accepted / corrected / rejected / pending 计数、reviewer 计数、校正和拒绝样本索引。
