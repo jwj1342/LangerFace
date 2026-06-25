@@ -285,7 +285,11 @@ export class Head3D {
     this.renderer.render(this.scene, this.camera);
   }
 
-  dispose() { this.clearIncisionOverlay(); this.renderer.dispose(); }
+  dispose() {
+    this.clearIncisionOverlay();
+    disposeObject(this.scene);
+    this.renderer.dispose();
+  }
 }
 
 export { vertexNormals, buildLineGeometry };

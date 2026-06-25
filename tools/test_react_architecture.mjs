@@ -19,11 +19,14 @@ const incisionBridge = read("src/hooks/useIncisionControllerBridge.ts");
 const incisionStatePanel = read("src/components/IncisionStatePanel.tsx");
 const incisionRoute = read("src/routes/IncisionRoute.tsx");
 const incisionWorkbench = read("src/routes/IncisionWorkbench.tsx");
+const surgeryRoute = read("src/routes/SurgeryRoute.tsx");
+const surgeryWorkbench = read("src/routes/SurgeryWorkbench.tsx");
 const threeRoute = read("src/routes/ThreePreviewRoute.tsx");
 const worker = read("src/workers/workflow.worker.ts");
 const workerClient = read("src/services/workflowWorkerClient.ts");
 const workerPanel = read("src/components/WorkerStatusPanel.tsx");
 const controller = read("incision_agent_main.js");
+const surgeryController = read("surgery_main.js");
 
 for (const dep of [
   "react",
@@ -55,6 +58,7 @@ assert.ok(vercel.includes('"destination": "/app/index.html"'), "Vercel routes SP
 
 assert.ok(app.includes("react-router-dom"), "React app is routed through React Router");
 assert.ok(app.includes('path="/incision"'), "React Router exposes the incision workbench route");
+assert.ok(app.includes('path="/surgery"'), "React Router exposes the surgery closure route");
 assert.ok(app.includes('path="/three-preview"'), "React Router exposes the R3F preview route");
 assert.ok(typedStore.includes("React/Zustand stores low-frequency UI"), "Zustand store documents low-frequency state ownership");
 assert.ok(typedStore.includes("per-frame arrays stay outside persisted stores"), "Zustand store forbids high-frequency renderer arrays");
@@ -114,5 +118,31 @@ assert.ok(controller.includes("main_thread_fallback"), "incision controller keep
 assert.ok(controller.includes("S.workflowWorker?.dispose"), "incision controller disposes the workflow worker on route teardown");
 assert.ok(controller.includes("react-incision-controller-snapshot/v0.1"), "incision controller publishes typed low-frequency snapshots to React");
 assert.ok(controller.includes("CustomEvent(INCISION_CONTROLLER_STATE_EVENT"), "incision controller emits state snapshots through a browser event");
+assert.ok(surgeryRoute.includes("__LANGERFACE_REACT_MANAGED__"), "React surgery route disables controller auto-mount");
+assert.ok(surgeryRoute.includes("mountSurgeryClosureDemo"), "React surgery route mounts the surgery controller explicitly");
+assert.ok(surgeryRoute.includes("disposeSurgeryClosureDemo"), "React surgery route can dispose the surgery controller");
+assert.ok(surgeryRoute.includes("<SurgeryWorkbench />"), "React surgery route renders the closure demo as TSX");
+assert.ok(!surgeryRoute.includes("DOMParser"), "React surgery route should not parse legacy HTML");
+assert.ok(!surgeryRoute.includes("innerHTML"), "React surgery route should not inject legacy HTML");
+for (const id of [
+  "surgeryCanvas",
+  "btnAlong",
+  "btnReset",
+  "showLines",
+  "sizeRange",
+  "tensionVal",
+  "verdict",
+]) {
+  assert.ok(surgeryWorkbench.includes(`id="${id}"`), `React surgery workbench exposes #${id}`);
+}
+assert.equal((surgeryWorkbench.match(/id="btnAlong"/g) || []).length, 1, "React surgery workbench has exactly one cut action");
+assert.ok(!surgeryWorkbench.includes("btnAcross"), "React surgery workbench does not expose inverse-RSTL action");
+assert.ok(surgeryController.includes("export function mountSurgeryClosureDemo"), "surgery controller exposes a mount lifecycle");
+assert.ok(surgeryController.includes("export function disposeSurgeryClosureDemo"), "surgery controller exposes a dispose lifecycle");
+assert.ok(surgeryController.includes("cancelAnimationFrame"), "surgery controller cancels its render loop on dispose");
+assert.ok(surgeryController.includes("S.resizeObserver?.disconnect"), "surgery controller disconnects ResizeObserver on dispose");
+assert.ok(surgeryController.includes("S.abortController?.abort"), "surgery controller aborts DOM listeners on dispose");
+assert.ok(surgeryController.includes("S.head?.dispose"), "surgery controller disposes WebGL resources on dispose");
+assert.ok(surgeryController.includes("!window.__LANGERFACE_REACT_MANAGED__"), "legacy surgery HTML still auto-mounts outside React");
 
 console.log("test_react_architecture: React SPA architecture boundaries passed");
