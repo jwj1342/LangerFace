@@ -21,3 +21,13 @@ export function summarizeTumorInputQuality(tumor: TumorInput): {
   author_present?: boolean;
   units?: string;
 };
+
+export function planIncisionWorkflow(request: {
+  tumor: TumorInput;
+  verts: Array<[number, number, number]>;
+  tris: Array<[number, number, number]>;
+  atlas: unknown;
+  normal?: [number, number, number];
+  angleOffsetsDeg?: number[];
+  rules?: unknown;
+}): Record<string, unknown>;

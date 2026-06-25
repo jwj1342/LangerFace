@@ -89,10 +89,16 @@ assert.ok(threeRoute.includes("OrbitControls"), "R3F preview uses drei OrbitCont
 assert.ok(threeRoute.includes("loadJsonAsset"), "R3F preview lazy-loads runtime assets");
 assert.ok(worker.includes("Comlink.expose"), "workflow worker exposes its API through Comlink");
 assert.ok(worker.includes("summarizeTumorInputQuality"), "workflow worker can run deterministic browser tools");
+assert.ok(worker.includes("planIncisionWorkflow"), "workflow worker can run deterministic incision planning");
+assert.ok(worker.includes("planIncision(request"), "workflow worker exposes incision planning through its API");
 assert.ok(worker.includes("handles_high_frequency_render_state: false"), "workflow worker explicitly avoids high-frequency renderer state");
 assert.ok(workerClient.includes("Comlink.wrap"), "React app wraps the workflow worker with Comlink");
 assert.ok(workerClient.includes("new Worker(new URL"), "workflow worker is loaded through Vite worker URL handling");
 assert.ok(workerClient.includes("worker.terminate"), "workflow worker client has an explicit dispose lifecycle");
 assert.ok(workerPanel.includes("createWorkflowWorkerClient"), "React dashboard probes the worker boundary");
+assert.ok(controller.includes("createWorkflowWorkerClient"), "incision controller uses the Comlink workflow worker client");
+assert.ok(controller.includes("worker.api.planIncision"), "incision candidate generation is delegated to the workflow worker");
+assert.ok(controller.includes("main_thread_fallback"), "incision controller keeps a deterministic fallback if worker startup fails");
+assert.ok(controller.includes("S.workflowWorker?.dispose"), "incision controller disposes the workflow worker on route teardown");
 
 console.log("test_react_architecture: React SPA architecture boundaries passed");

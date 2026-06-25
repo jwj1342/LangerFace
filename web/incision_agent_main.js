@@ -16,6 +16,7 @@ import {
   unitsPerMmFromVertices,
 } from "./incision_tools.js";
 import { normalizeProviderBaseUrl, testProviderConnection } from "./llm_provider.js";
+import { createWorkflowWorkerClient } from "./src/services/workflowWorkerClient.ts";
 import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.js";
 
 const $ = (root, id) => {
@@ -158,6 +159,8 @@ function createRuntimeState() {
     result: null,
     baseResult: null,
     secondaryCues: null,
+    workflowWorker: null,
+    workflowWorkerFailed: false,
     editTimeline: null,
     editCursor: 0,
     lastConsoleTraceSignature: "",
@@ -1735,15 +1738,70 @@ function stageLiveOverlay() {
 async function runAgent() {
   if (!S.verts) return;
   els.run.disabled = true;
-  els.stageStatus.textContent = "浏览器确定性 workflow 生成中…";
-  const tumor = tumorInput();
-  const result = planIncisionWorkflow({ tumor, verts: S.verts, tris: S.tris, atlas: S.atlas, normal: S.normals[S.lesion] });
-  S.baseResult = result;
-  resetEditControls();
-  resetEditTimeline();
-  resetReviewControls();
-  renderResult(result);
-  els.run.disabled = false;
+  els.stageStatus.textContent = "Worker 确定性 workflow 生成中…";
+  try {
+    const tumor = tumorInput();
+    const result = await planWorkflowForCurrentTumor(tumor);
+    S.baseResult = result;
+    resetEditControls();
+    resetEditTimeline();
+    resetReviewControls();
+    renderResult(result);
+  } finally {
+    els.run.disabled = false;
+  }
+}
+
+function workerRuntimeStatus(executor, error = null) {
+  return {
+    schema_version: "incision-workflow-runtime/v0.1",
+    executor,
+    worker: executor === "comlink_worker",
+    thread: executor === "comlink_worker" ? "web_worker" : "main_thread",
+    high_frequency_render_state: false,
+    error: error ? String(error.message || error) : null,
+  };
+}
+
+function ensureWorkflowWorker() {
+  if (S.workflowWorker || S.workflowWorkerFailed) return S.workflowWorker;
+  try {
+    S.workflowWorker = createWorkflowWorkerClient();
+  } catch (err) {
+    S.workflowWorkerFailed = true;
+    console.warn("[LangerFace] workflow worker unavailable; using main-thread fallback", err);
+  }
+  return S.workflowWorker;
+}
+
+async function planWorkflowForCurrentTumor(tumor) {
+  const request = {
+    tumor,
+    verts: S.verts,
+    tris: S.tris,
+    atlas: S.atlas,
+    normal: S.normals[S.lesion],
+  };
+  const worker = ensureWorkflowWorker();
+  if (worker) {
+    try {
+      const result = await worker.api.planIncision(request);
+      result.workflow_runtime = workerRuntimeStatus("comlink_worker");
+      return result;
+    } catch (err) {
+      S.workflowWorkerFailed = true;
+      worker.dispose?.();
+      S.workflowWorker = null;
+      console.warn("[LangerFace] workflow worker failed; using main-thread fallback", err);
+      els.stageStatus.textContent = "Worker workflow 失败，已退回主线程确定性工具。";
+      const result = planIncisionWorkflow(request);
+      result.workflow_runtime = workerRuntimeStatus("main_thread_fallback", err);
+      return result;
+    }
+  }
+  const result = planIncisionWorkflow(request);
+  result.workflow_runtime = workerRuntimeStatus("main_thread_fallback", new Error("workflow worker unavailable"));
+  return result;
 }
 
 function facePointFromEvent(e) {
@@ -1948,6 +2006,8 @@ export function disposeIncisionAgentWorkbench() {
   S.mounted = false;
   if (S.frameId) cancelAnimationFrame(S.frameId);
   S.resizeObserver?.disconnect?.();
+  S.workflowWorker?.dispose?.();
+  S.workflowWorker = null;
   S.head?.dispose?.();
 }
 
