@@ -608,7 +608,12 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     assert "propose_direction_variants" in actions
     assert actions.count("linear_subcutaneous_incision") == 3
     assert actions.count("evaluate_guardrails") == 3
+    assert actions.count("preview_incision_on_face") == 3
     assert actions[-1] == "compare_candidates"
+    assert result["preview"]["schema_version"] == "incision-preview-observation/v0.1"
+    assert result["preview"]["renderable"] is True
+    assert result["preview"]["raw_image_sent"] is False
+    assert result["preview"]["exported_raw_pixels"] is False
     assert result["tumor_quality"]["warning_count"] == 1
     assert result["tumor_quality"]["warnings"][0]["code"] == "missing_tumor_author"
     assert result["provider"]["mode"] == "deterministic_fallback"
@@ -618,9 +623,10 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     assert result["agent_trace_gate"]["missing_actions"] == []
     assert result["agent_trace_gate"]["deterministic_geometry_present"] is True
     assert "evaluate_guardrails" in result["agent_trace_gate"]["observed_actions"]
+    assert "preview_incision_on_face" in result["agent_trace_gate"]["observed_actions"]
     assert result["agent_react_plan"]["schema_version"] == "agent-react-plan/v0.1"
     assert result["agent_react_plan"]["passed"] is True
-    assert result["agent_react_plan"]["step_count"] == 6
+    assert result["agent_react_plan"]["step_count"] == 7
     assert result["agent_react_plan"]["failed_step_count"] == 0
     assert [step["id"] for step in result["agent_react_plan"]["steps"]] == [
         "inspect_tumor_input",
@@ -628,8 +634,11 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
         "query_direction",
         "generate_primary_candidate",
         "check_guardrails",
+        "preview_candidates",
         "compare_direction_variants",
     ]
+    assert result["agent_react_plan"]["steps"][-2]["status"] == "completed"
+    assert "preview_incision_on_face" in result["agent_react_plan"]["steps"][-2]["observed_actions"]
     assert result["agent_react_plan"]["steps"][-1]["status"] == "completed"
     assert "compare_candidates" in result["agent_react_plan"]["steps"][-1]["observed_actions"]
     assert result["agent_execution_events"]["schema_version"] == "agent-execution-events/v0.1"
@@ -643,6 +652,7 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     assert result["agent_execution_events"]["events"][-2]["event"] == "trace_gate_evaluated"
     assert result["agent_execution_events"]["events"][-1]["event"] == "react_plan_evaluated"
     assert len(result["candidate_alternatives"]) == 3
+    assert all(item["preview"]["renderable"] is True for item in result["candidate_alternatives"])
     assert {item["angle_offset_deg"] for item in result["candidate_alternatives"]} == {-10.0, 0.0, 10.0}
     assert [item["rank"] for item in result["candidate_comparison"]] == [1, 2, 3]
     assert result["candidate_comparison"][0]["clinical_boundary"].startswith("Engineering ranking")
@@ -650,9 +660,11 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
         "schema_version": "agent-orchestration-audit/v0.1",
         "mode": "single_turn_react_multi_candidate_with_deterministic_tools",
         "candidate_count": 3,
+        "preview_count": 3,
+        "preview_ready_count": 3,
         "comparison_ready": True,
         "react_plan_passed": True,
-        "react_plan_step_count": 6,
+        "react_plan_step_count": 7,
         "retry_count": 0,
         "retried_failures": [],
         "tool_failure_count": 0,
@@ -665,6 +677,7 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     }
     assert any(tool["name"] == "summarize_tumor_input_quality" for tool in result["tool_schemas"])
     assert any(tool["name"] == "evaluate_guardrails" for tool in result["tool_schemas"])
+    assert any(tool["name"] == "preview_incision_on_face" for tool in result["tool_schemas"])
     assert any(tool["name"] == "propose_direction_variants" for tool in result["tool_schemas"])
     assert any(tool["name"] == "retry_tool_failure" for tool in result["tool_schemas"])
     assert any(tool["name"] == "recover_tool_failure" for tool in result["tool_schemas"])
@@ -693,6 +706,7 @@ def test_plan_incision_case_recovers_failed_candidate_variant(monkeypatch):
     actions = [step["action"] for step in result["trace"]]
     assert actions.count("linear_subcutaneous_incision") == 2
     assert actions.count("evaluate_guardrails") == 2
+    assert actions.count("preview_incision_on_face") == 2
     assert actions.count("retry_tool_failure") == 1
     assert "recover_tool_failure" in actions
     assert actions[-1] == "compare_candidates"
@@ -705,6 +719,8 @@ def test_plan_incision_case_recovers_failed_candidate_variant(monkeypatch):
 
     audit = result["agent_orchestration_audit"]
     assert audit["candidate_count"] == 2
+    assert audit["preview_count"] == 2
+    assert audit["preview_ready_count"] == 2
     assert audit["comparison_ready"] is True
     assert audit["retry_count"] == 1
     assert audit["react_plan_passed"] is True
@@ -769,6 +785,7 @@ def test_plan_incision_case_retries_transient_candidate_variant_failure(monkeypa
     actions = [step["action"] for step in result["trace"]]
     assert actions.count("retry_tool_failure") == 1
     assert "recover_tool_failure" not in actions
+    assert actions.count("preview_incision_on_face") == 3
     assert len(result["candidate_alternatives"]) == 3
     assert {item["angle_offset_deg"] for item in result["candidate_alternatives"]} == {-10.0, 0.0, 10.0}
     assert [item["rank"] for item in result["candidate_comparison"]] == [1, 2, 3]
@@ -776,6 +793,8 @@ def test_plan_incision_case_retries_transient_candidate_variant_failure(monkeypa
 
     audit = result["agent_orchestration_audit"]
     assert audit["candidate_count"] == 3
+    assert audit["preview_count"] == 3
+    assert audit["preview_ready_count"] == 3
     assert audit["comparison_ready"] is True
     assert audit["react_plan_passed"] is True
     assert audit["retry_count"] == 1
@@ -816,6 +835,7 @@ def test_agent_trace_gate_fails_when_required_tool_step_is_missing():
         {"action": "classify_region"},
         {"action": "linear_subcutaneous_incision"},
         {"action": "evaluate_guardrails"},
+        {"action": "preview_incision_on_face"},
     ]
     gate = agent_trace_gate(trace, {"polyline": [[0, 0, 0], [1, 0, 0]]})
     assert gate["schema_version"] == "agent-trace-gate/v0.1"
@@ -895,11 +915,13 @@ def test_clinical_rules_asset_has_region_provenance_and_required_fields():
 
 def test_agent_tool_schema_and_privacy_doc_cover_review_export():
     schema = json.loads((ROOT / "assets" / "agentic_incision_tool_schema.json").read_text())
-    assert schema["version"] == "0.7-agentic-incision-tools"
+    assert schema["version"] == "0.8-agentic-incision-tools"
     assert schema["trace_gate"]["schema_version"] == "agent-trace-gate/v0.1"
     assert schema["trace_gate"]["blocks_confirmation"] is True
     assert ["query_rstl_direction"] in schema["trace_gate"]["required_actions"]
+    assert ["preview_incision_on_face"] in schema["trace_gate"]["required_actions"]
     assert schema["react_plan"]["schema_version"] == "agent-react-plan/v0.1"
+    assert "preview_candidates" in schema["react_plan"]["steps"]
     assert "compare_direction_variants" in schema["react_plan"]["steps"]
     assert schema["execution_events"]["schema_version"] == "agent-execution-events/v0.1"
     assert "execution_event" in schema["execution_events"]["sse_events"]
@@ -915,6 +937,7 @@ def test_agent_tool_schema_and_privacy_doc_cover_review_export():
         "linear_subcutaneous_incision",
         "fusiform_cutaneous_incision",
         "evaluate_guardrails",
+        "preview_incision_on_face",
         "propose_direction_variants",
         "retry_tool_failure",
         "recover_tool_failure",

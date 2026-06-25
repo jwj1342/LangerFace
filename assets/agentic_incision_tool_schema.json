@@ -1,5 +1,5 @@
 {
-  "version": "0.7-agentic-incision-tools",
+  "version": "0.8-agentic-incision-tools",
   "trace_mode": "single_turn_react_multi_candidate_with_deterministic_tools",
   "boundary": "The LLM may select, summarize, and request deterministic tools; it must not compute incision geometry or override guardrails.",
   "trace_gate": {
@@ -10,13 +10,14 @@
       ["classify_region"],
       ["query_rstl_direction"],
       ["linear_subcutaneous_incision", "fusiform_cutaneous_incision"],
-      ["evaluate_guardrails"]
+      ["evaluate_guardrails"],
+      ["preview_incision_on_face"]
     ],
-    "boundary": "Candidate confirmation requires deterministic tumor quality, anatomy, RSTL direction, incision generation, and guardrail observations."
+    "boundary": "Candidate confirmation requires deterministic tumor quality, anatomy, RSTL direction, incision generation, guardrail, and face preview observations."
   },
   "orchestration_audit": {
     "schema_version": "agent-orchestration-audit/v0.1",
-    "records": ["candidate_count", "comparison_ready", "react_plan_passed", "react_plan_step_count", "retry_count", "retried_failures", "tool_failure_count", "recovered_failures", "trace_gate_passed"],
+    "records": ["candidate_count", "preview_count", "preview_ready_count", "comparison_ready", "react_plan_passed", "react_plan_step_count", "retry_count", "retried_failures", "tool_failure_count", "recovered_failures", "trace_gate_passed"],
     "boundary": "Agent orchestration may compare deterministic candidates for review; it must not issue surgical instructions or bypass clinician confirmation."
   },
   "react_plan": {
@@ -28,6 +29,7 @@
       "query_direction",
       "generate_primary_candidate",
       "check_guardrails",
+      "preview_candidates",
       "compare_direction_variants"
     ],
     "records": ["required_action_groups", "observed_actions", "trace_indexes", "status", "issues"],
@@ -89,6 +91,11 @@
       "name": "evaluate_guardrails",
       "input": ["candidate", "anatomy", "rules"],
       "output": ["passed", "warnings", "suggested_overrides"]
+    },
+    {
+      "name": "preview_incision_on_face",
+      "input": ["candidate", "tumor", "anatomy", "guardrails"],
+      "output": ["renderable", "preview_space", "candidate_point_count", "tumor_boundary_point_count", "guardrails_passed", "clinician_review_required"]
     },
     {
       "name": "propose_direction_variants",

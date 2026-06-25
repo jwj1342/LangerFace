@@ -91,7 +91,8 @@ def test_agentic_trace_audit_replays_valid_plan():
     assert audit["execution_events_replay"]["schema_version"] == "agent-execution-events/v0.1"
     assert audit["execution_events_replay"]["tool_event_count"] == len(plan["trace"])
     assert audit["react_plan_replay"]["schema_version"] == "agent-react-plan/v0.1"
-    assert audit["react_plan_replay"]["step_count"] == 6
+    assert audit["react_plan_replay"]["step_count"] == 7
+    assert "preview_incision_on_face" in audit["trace_gate_replay"]["observed_actions"]
     assert audit["checks"]["candidate_comparison_replay_passed"] is True
     assert (
         audit["candidate_comparison_replay"]["expected_ranked_ids"]

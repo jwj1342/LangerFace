@@ -420,6 +420,7 @@ const AGENT_TRACE_GATE_REQUIRED = [
   { key: "rstl_direction", label: "RSTL 查询", actions: ["query_rstl_direction"] },
   { key: "candidate_generation", label: "确定性切口生成", actions: ["linear_subcutaneous_incision", "fusiform_cutaneous_incision"] },
   { key: "guardrails", label: "Guardrails", actions: ["evaluate_guardrails"] },
+  { key: "face_preview", label: "面部预览", actions: ["preview_incision_on_face"] },
 ];
 
 function agentTraceGate(result = S.result) {
@@ -448,7 +449,7 @@ function agentTraceGate(result = S.result) {
     missing_actions: missing.map((req) => ({ key: req.key, label: req.label, actions: req.actions })),
     order_ok: orderOk,
     deterministic_geometry_present: geometryPresent,
-    boundary: "LLM may summarize and explain only after deterministic tools provide geometry and guardrail observations.",
+    boundary: "LLM may summarize and explain only after deterministic tools provide geometry, preview, and guardrail observations.",
   };
 }
 

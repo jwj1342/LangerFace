@@ -75,6 +75,7 @@ const TOOL_SCHEMAS = [
   { name: "linear_subcutaneous_incision", input: ["tumor", "direction", "units_per_mm"], output: ["endpoints", "length_mm", "metrics"] },
   { name: "fusiform_cutaneous_incision", input: ["tumor", "direction", "units_per_mm"], output: ["outline", "length_mm", "width_mm", "metrics"] },
   { name: "evaluate_guardrails", input: ["candidate", "anatomy"], output: ["passed", "warnings", "suggested_overrides"] },
+  { name: "preview_incision_on_face", input: ["candidate", "tumor", "anatomy", "guardrails"], output: ["renderable", "preview_space", "candidate_point_count", "tumor_boundary_point_count", "guardrails_passed", "clinician_review_required"] },
   { name: "clinician_edit_candidate", input: ["edit"], output: ["candidate", "guardrails", "provenance"] },
   { name: "compare_candidates", input: ["review_records"], output: ["ranked_candidates", "score_breakdown", "clinical_boundary"] },
   { name: "save_review_record", input: ["candidate", "tumor", "trace", "privacy_audit", "reviewer", "review_status", "review_notes"], output: ["review_record_json", "report_markdown", "screenshot_png", "audit_events"] },
@@ -1143,6 +1144,33 @@ function fallbackSummary(tumor, candidate, guardrails) {
   return `已生成${kind}候选：长轴沿局部 RSTL，病灶直径 ${tumor.diameter_mm.toFixed(1)} mm，${status}。`;
 }
 
+function previewIncisionOnFace(tumor, candidate, anatomy, guardrails, variant = "baseline") {
+  const candidatePoints = candidate.polyline || candidate.outline || candidate.endpoints || [];
+  const pointCount = Array.isArray(candidatePoints) ? candidatePoints.length : 0;
+  const boundaryCount = Array.isArray(tumor.boundary) ? tumor.boundary.length : 0;
+  const renderable = pointCount >= 2 && Array.isArray(tumor.center) && tumor.center.length >= 3;
+  return {
+    schema_version: "incision-preview-observation/v0.1",
+    renderable,
+    reason: renderable ? "candidate_geometry_renderable" : "candidate_geometry_not_renderable",
+    preview_space: "standard_face_geometry",
+    variant,
+    candidate_id: candidate.id || "unknown",
+    candidate_type: candidate.type || "unknown",
+    face_region: anatomy.region || null,
+    subunit: anatomy.subunit || null,
+    candidate_point_count: pointCount,
+    tumor_center_present: true,
+    tumor_boundary_point_count: boundaryCount,
+    guardrails_passed: guardrails.passed === true,
+    clinician_review_required: true,
+    raw_image_sent: false,
+    raw_video_sent: false,
+    exported_raw_pixels: false,
+    clinical_boundary: "预览记录只说明确定性几何可渲染，医生确认前不能作为手术指令。",
+  };
+}
+
 export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atlas, normal = [0, 0, 1] }) {
   const tumor = validateTumor(tumorInput);
   const tumorQuality = summarizeTumorInputQuality(tumor);
@@ -1154,6 +1182,7 @@ export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atla
     : generateFusiformIncision(tumor, direction, unitsPerMm, normal);
   annotateCandidateSensitiveDistances(candidate, verts);
   const guardrails = evaluateGuardrails(candidate, anatomy);
+  const preview = previewIncisionOnFace(tumor, candidate, anatomy, guardrails);
   const trace = [
     {
       summary: "检查肿物输入来源、作者、单位、深度、切缘和边界完整性。",
@@ -1170,6 +1199,7 @@ export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atla
       observation: shortCandidate(candidate),
     },
     { summary: "评估敏感结构和置信度 guardrails。", action: "evaluate_guardrails", input: { candidate: shortCandidate(candidate), anatomy }, observation: guardrails },
+    { summary: "在标准脸上预览候选切口，确认几何可渲染后再进入医生审阅。", action: "preview_incision_on_face", input: { candidate: shortCandidate(candidate), tumor, anatomy }, observation: preview },
   ];
   return {
     schema_version: "agentic-incision-plan/v0.1",
@@ -1180,6 +1210,7 @@ export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atla
     anatomy,
     direction,
     candidate,
+    preview,
     guardrails,
     trace,
     llm: {
@@ -1309,6 +1340,7 @@ export const __incisionToolsForTests = {
   generateLinearIncision,
   generateFusiformIncision,
   evaluateGuardrails,
+  previewIncisionOnFace,
   planIncisionDeterministic,
   unitsPerMmFromVertices,
 };

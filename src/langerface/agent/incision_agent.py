@@ -78,6 +78,18 @@ TOOL_SCHEMAS = [
         "output": ["passed", "warnings", "suggested_overrides"],
     },
     {
+        "name": "preview_incision_on_face",
+        "input": ["candidate", "tumor", "anatomy", "guardrails"],
+        "output": [
+            "renderable",
+            "preview_space",
+            "candidate_point_count",
+            "tumor_boundary_point_count",
+            "guardrails_passed",
+            "clinician_review_required",
+        ],
+    },
+    {
         "name": "propose_direction_variants",
         "input": ["direction", "angle_offsets_deg"],
         "output": ["direction_variants"],
@@ -151,6 +163,11 @@ AGENT_TRACE_GATE_REQUIRED = [
         "label": "guardrails",
         "actions": ["evaluate_guardrails"],
     },
+    {
+        "key": "face_preview",
+        "label": "face preview",
+        "actions": ["preview_incision_on_face"],
+    },
 ]
 
 TRACE_GENERATION_ACTIONS = {"linear_subcutaneous_incision", "fusiform_cutaneous_incision"}
@@ -192,6 +209,13 @@ AGENT_REACT_PLAN_STEP_DEFINITIONS = [
         "optional_actions": [],
     },
     {
+        "id": "preview_candidates",
+        "label": "Preview candidates",
+        "intent": "Confirm generated geometry is renderable on the face before clinician review.",
+        "required_action_groups": [["preview_incision_on_face"]],
+        "optional_actions": [],
+    },
+    {
         "id": "compare_direction_variants",
         "label": "Compare direction variants",
         "intent": "Explore nearby deterministic direction offsets and recover bounded failures.",
@@ -200,6 +224,7 @@ AGENT_REACT_PLAN_STEP_DEFINITIONS = [
             "linear_subcutaneous_incision",
             "fusiform_cutaneous_incision",
             "evaluate_guardrails",
+            "preview_incision_on_face",
             "retry_tool_failure",
             "recover_tool_failure",
         ],
@@ -428,6 +453,48 @@ def _short_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
         "metrics",
     ]
     return {k: candidate[k] for k in keys if k in candidate}
+
+
+def _preview_incision_on_face(
+    tumor: TumorInput,
+    candidate: dict[str, Any],
+    anatomy: dict[str, Any],
+    guardrails: dict[str, Any],
+    *,
+    variant: str = "baseline",
+) -> dict[str, Any]:
+    candidate_points = (
+        candidate.get("polyline")
+        or candidate.get("outline")
+        or candidate.get("endpoints")
+        or []
+    )
+    point_count = len(candidate_points) if isinstance(candidate_points, list) else 0
+    boundary_count = len(tumor.boundary) if getattr(tumor, "boundary", None) else 0
+    renderable = point_count >= 2 and len(tumor.center) == 3
+    return {
+        "schema_version": "incision-preview-observation/v0.1",
+        "renderable": renderable,
+        "reason": "candidate_geometry_renderable" if renderable else "candidate_geometry_not_renderable",
+        "preview_space": "standard_face_geometry",
+        "variant": variant,
+        "candidate_id": candidate.get("id", "unknown"),
+        "candidate_type": candidate.get("type", "unknown"),
+        "face_region": anatomy.get("region") if isinstance(anatomy, dict) else None,
+        "subunit": anatomy.get("subunit") if isinstance(anatomy, dict) else None,
+        "candidate_point_count": point_count,
+        "tumor_center_present": True,
+        "tumor_boundary_point_count": boundary_count,
+        "guardrails_passed": guardrails.get("passed") is True,
+        "clinician_review_required": True,
+        "raw_image_sent": False,
+        "raw_video_sent": False,
+        "exported_raw_pixels": False,
+        "clinical_boundary": (
+            "Preview observation records deterministic render readiness only; "
+            "clinician review remains required before discussion or live overlay."
+        ),
+    }
 
 
 def _unit_vector(vector: Any) -> np.ndarray:
@@ -758,6 +825,13 @@ def plan_incision_case(
         guardrails,
         "Check sensitive regions and confidence before the candidate reaches clinician review.",
     ))
+    preview = _preview_incision_on_face(tumor, candidate, anatomy.to_dict(), guardrails)
+    trace.append(_trace(
+        "preview_incision_on_face",
+        {"candidate": _short_candidate(candidate), "tumor": tumor.to_dict(), "anatomy": anatomy.to_dict()},
+        preview,
+        "Preview deterministic candidate geometry on the face before it can enter clinician review.",
+    ))
 
     angle_offsets = [-10.0, 0.0, 10.0]
     direction_variants = [_direction_variant(direction_data, offset) for offset in angle_offsets]
@@ -791,6 +865,7 @@ def plan_incision_case(
         if abs(offset) < 1e-9:
             variant_candidate = candidate
             variant_guardrails = guardrails
+            variant_preview = preview
             variant_tool = tool_name
         else:
             try:
@@ -822,6 +897,24 @@ def plan_incision_case(
                     },
                     variant_guardrails,
                     "Re-run guardrails for the deterministic candidate variant.",
+                ))
+                variant_preview = _preview_incision_on_face(
+                    tumor,
+                    variant_candidate,
+                    anatomy.to_dict(),
+                    variant_guardrails,
+                    variant=variant_id,
+                )
+                trace.append(_trace(
+                    "preview_incision_on_face",
+                    {
+                        "candidate": _short_candidate(variant_candidate),
+                        "tumor": tumor.to_dict(),
+                        "anatomy": anatomy.to_dict(),
+                        "variant": variant_id,
+                    },
+                    variant_preview,
+                    "Preview deterministic candidate variant before comparison.",
                 ))
             except Exception as exc:  # noqa: BLE001
                 retry = {
@@ -872,6 +965,25 @@ def plan_incision_case(
                         variant_guardrails,
                         "Re-run guardrails for the retried deterministic candidate variant.",
                     ))
+                    variant_preview = _preview_incision_on_face(
+                        tumor,
+                        variant_candidate,
+                        anatomy.to_dict(),
+                        variant_guardrails,
+                        variant=variant_id,
+                    )
+                    trace.append(_trace(
+                        "preview_incision_on_face",
+                        {
+                            "candidate": _short_candidate(variant_candidate),
+                            "tumor": tumor.to_dict(),
+                            "anatomy": anatomy.to_dict(),
+                            "variant": variant_id,
+                            "retry_attempt": 1,
+                        },
+                        variant_preview,
+                        "Preview retried deterministic candidate variant before comparison.",
+                    ))
                 except Exception as retry_exc:  # noqa: BLE001
                     failure = {
                         "tool": tool_name,
@@ -895,6 +1007,7 @@ def plan_incision_case(
             "angle_offset_deg": offset,
             "candidate": variant_candidate,
             "guardrails": variant_guardrails,
+            "preview": variant_preview,
             "anatomy": anatomy.to_dict(),
             "review_status": "pending_clinician_confirmation",
         }
@@ -958,6 +1071,11 @@ def plan_incision_case(
         "schema_version": "agent-orchestration-audit/v0.1",
         "mode": "single_turn_react_multi_candidate_with_deterministic_tools",
         "candidate_count": len(candidate_records),
+        "preview_count": sum(1 for record in candidate_records if isinstance(record.get("preview"), dict)),
+        "preview_ready_count": sum(
+            1 for record in candidate_records
+            if isinstance(record.get("preview"), dict) and record["preview"].get("renderable") is True
+        ),
         "comparison_ready": bool(candidate_comparison),
         "react_plan_passed": react_plan["passed"],
         "react_plan_step_count": react_plan["step_count"],
@@ -980,6 +1098,7 @@ def plan_incision_case(
         "anatomy": anatomy.to_dict(),
         "direction": direction.to_dict(),
         "candidate": candidate,
+        "preview": preview,
         "candidate_alternatives": candidate_alternatives,
         "candidate_comparison": candidate_comparison,
         "guardrails": guardrails,

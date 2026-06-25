@@ -64,6 +64,7 @@ assert.ok(js.includes("AGENT_TRACE_GATE_REQUIRED"), "workbench defines required 
 assert.ok(js.includes("summarize_tumor_input_quality"), "agent gate requires tumor input quality tool");
 assert.ok(js.includes("linear_subcutaneous_incision"), "agent gate accepts linear incision generation tool");
 assert.ok(js.includes("fusiform_cutaneous_incision"), "agent gate accepts fusiform incision generation tool");
+assert.ok(js.includes("preview_incision_on_face"), "agent gate requires deterministic face preview before review");
 assert.ok(js.includes("Agent 工具 trace 未通过门控"), "approval is blocked when agent trace gate fails");
 assert.ok(js.includes("Agent 工具门控"), "markdown report includes agent trace gate status");
 assert.ok(js.includes("Agent ReAct 计划"), "markdown report includes Agent ReAct plan status");
