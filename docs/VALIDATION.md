@@ -71,7 +71,7 @@ Stage 2 涉及肿物模拟和候选切口，只能在医生审阅路径中评估
 | 敏感结构保护 | 警告召回率 | 下睑、唇红缘、鼻翼等风险区域 |
 | 医生审阅 | 接受率、修改次数、覆盖原因 | 系统建议不能绕过医生确认 |
 | 照片 / 视频 / 实时叠加 | overlay 注册质量 | 当前帧 landmarks 能否稳定映射 `incision-overlay/v0.1` surface refs；记录 mapped point count、候选线点数、退化三角形、出画面点、bbox diagonal / frame fraction |
-| 照片 / 视频 / 实时叠加 | overlay 抖动 RMS / P95 / max | 静止头部或暂停视频连续 landmarks 帧中，肿物中心、边界和候选线 surface refs 的帧间像素位移；当前工程门槛 RMS ≤ 2px、P95 ≤ 4px、max ≤ 8px |
+| 照片 / 视频 / 实时叠加 | overlay 抖动 RMS / P95 / max | 静止头部或暂停视频连续 landmarks 帧中，肿物中心、边界和候选线 surface refs 的帧间像素位移；当前工程门槛 RMS ≤ 2px、P95 ≤ 4px、max ≤ 8px。Web 实时 landmarks 使用 `MotionStabilizedOneEuro` 拆分整脸平移与局部形变，`tools/test_motion_stabilized_smoothing.mjs` 用快速整脸平移合成序列验证全局运动高频抖动相对逐点 One-Euro 明显下降 |
 | 照片 / 视频 / 实时叠加 | overlay 可见 QA 反馈 | 实时页“切口叠加 QA”按实际 pose gate / local region gate / registration / stability 结果显示等待画面、姿态需复核、局部需复核、已投射、投射需复核、抖动需复核或叠加稳定；低 presence、偏航过大、快速帧间运动、明显张口/眨眼或近共线退化三角会阻止候选叠加；视频/摄像头主 RSTL 线束也会在 pose gate 失败时暂停绘制，质量条显示“需复核”，眼眉/口周局部高形变会触发 `rstl-local-region-quality-gate/v0.1` 并降透明或断开局部线条，质量条显示“局部复核” |
 | 3D Beta 查看器 | overlay 3D 预览 | 已确认候选可在扫描重建头或 FLAME 示例头上显示肿物中心、边界和候选切口；diagnostics 记录 mapping mode 和 render summary，但这只是工程预览 |
 | 照片 / 视频 / 实时叠加 | preview 诊断导出 | `window.exportLangerfaceDiagnostics()` 的 `sections.incision_overlay_runtime` 保存 pose gate、local region gate、最近一帧 registration 与最近 8 帧滚动 stability 摘要；只含 QA 数值、阈值和失败原因，不含照片/视频帧、canvas 像素或 landmark 坐标 |

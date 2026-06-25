@@ -21,6 +21,14 @@ function syncPreviewControls() {
   els.restoreAtlas.classList.toggle("hidden", !previewIsActive);
 }
 
+function configureLandmarkSmoothing() {
+  renderState.smoother.minCutoff = 6.0 - 5.5 * renderState.smoothLevel;
+  renderState.smoother.beta = 0.02 + 0.06 * renderState.smoothLevel;
+  if (typeof renderState.smoother.configureForSmoothLevel === "function") {
+    renderState.smoother.configureForSmoothLevel(renderState.smoothLevel);
+  }
+}
+
 function applyStagedAtlas() {
   const atlas = dataSource.takePreviewAtlas();
   if (!atlas || !Array.isArray(atlas.lines)) return;
@@ -122,8 +130,7 @@ els.tmpl.onchange = (e) => { renderState.system = e.target.value; syncPreviewCon
 els.density.oninput = (e) => { renderState.densityFrac = e.target.value / 100; els.densityVal.textContent = e.target.value + "%"; refreshStaticImage(); };
 els.smooth.oninput = (e) => {
   const v = +e.target.value; renderState.smoothLevel = v / 100; els.smoothVal.textContent = smoothLabel(v);
-  renderState.smoother.minCutoff = 6.0 - 5.5 * renderState.smoothLevel;
-  renderState.smoother.beta = 0.02 + 0.06 * renderState.smoothLevel;
+  configureLandmarkSmoothing();
   refreshStaticImage();
 };
 els.opacity.oninput = (e) => { renderState.opacity = e.target.value / 100; els.opacityVal.textContent = e.target.value + "%"; refreshStaticImage(); };
@@ -193,8 +200,7 @@ els.mainWrap.addEventListener("pointerup", endImageDrag);
 els.mainWrap.addEventListener("pointercancel", endImageDrag);
 els.mainWrap.addEventListener("wheel", handleMainWheel, { passive: false });
 els.smoothVal.textContent = smoothLabel(+els.smooth.value);
-renderState.smoother.minCutoff = 6.0 - 5.5 * renderState.smoothLevel;
-renderState.smoother.beta = 0.02 + 0.06 * renderState.smoothLevel;
+configureLandmarkSmoothing();
 
 // 预加载模型并反馈状态
 ensureReady().then(() => {

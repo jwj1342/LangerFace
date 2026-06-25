@@ -171,7 +171,7 @@ P' = u * V0' + v * V1' + w * V2'
 
 ## 6. 核心算法二：One-Euro 时间平滑
 
-实时关键点会抖动。系统使用 One-Euro Filter 对每个关键点每个坐标独立平滑。实现位于 `src/langerface/detection/smoothing.py` 和 `web/geometry.js`。
+实时关键点会抖动。基础滤波器使用 One-Euro Filter 对每个关键点每个坐标独立平滑。实现位于 `src/langerface/detection/smoothing.py` 和 `web/geometry/smoothing.js`。
 
 低通滤波系数：
 
@@ -204,7 +204,7 @@ x_hat = alpha * x_t + (1 - alpha) * x_hat_{t-1}
 - 运动慢时 `|dx_hat|` 小，`cutoff` 低，平滑强，抖动小。
 - 运动快时 `|dx_hat|` 大，`cutoff` 高，平滑弱，延迟小。
 
-Web 端“平滑”滑杆会映射到相关参数，使用户可在稳定性和响应速度之间取舍。
+Web 端实时页在基础 One-Euro 外再包一层 `MotionStabilizedOneEuro`：先用 `RIGID3D` 锚点估计整脸平移中心并单独滤波，再把所有 landmarks 转成相对该中心的局部形状做原 One-Euro。这样快速整脸平移时，全局平移噪声不会被逐点速度项直接放大；局部表情、眼眉和口周形变仍交给局部滤波、pose gate 和 local region gate 处理。Web 端“平滑”滑杆会同时映射局部和全局滤波参数，使用户可在稳定性和响应速度之间取舍。
 
 ## 7. 核心算法三：背面剔除与口裂排除
 
