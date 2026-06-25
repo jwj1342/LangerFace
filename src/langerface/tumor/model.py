@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 TumorKind = Literal["subcutaneous", "cutaneous"]
+TUMOR_INPUT_SCHEMA = "tumor-input/v0.2"
 
 
 def _point3(value: object, field_name: str) -> tuple[float, float, float]:
@@ -140,3 +141,12 @@ def tumor_from_dict(data: dict[str, object]) -> TumorInput:
         author=str(data.get("author", "")),
         units=str(data.get("units", "mm")),
     )
+
+
+def tumor_from_payload(payload: dict[str, object]) -> TumorInput:
+    """Read either a raw tumor dict or a ``tumor-input/v0.2`` export payload."""
+
+    raw = payload.get("tumor", payload)
+    if not isinstance(raw, dict):
+        raise ValueError("tumor payload must contain a tumor object")
+    return tumor_from_dict(raw)

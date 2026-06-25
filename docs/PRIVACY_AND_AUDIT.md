@@ -107,6 +107,7 @@
 
 ```bash
 python tools/audit_export_privacy.py incision_review_*.json tumor_input_*.json
+python tools/audit_tumor_input.py tumor_input_*.json
 ```
 
 脚本输出 `export-privacy-audit/v0.1` 报告，默认发现违规即返回非 0。当前检查项包括：
@@ -119,5 +120,7 @@ python tools/audit_export_privacy.py incision_review_*.json tumor_input_*.json
 - `secondary_cues.used_for_geometry` 或 `secondary_cues.used_for_agent_prompt` 被置为 `true`。
 
 辅助线索当前只能作为医生审阅时的只读证据进入导出，不得自动改变肿物边界、候选切口或 LLM Agent 的 prompt；若后续要让受控 CV/LLM 模型参与几何生成，必须重新定义出域、访问控制和临床验证流程。
+
+`tools/audit_tumor_input.py` 输出 `tumor-input-audit/v0.1`，用于肿物输入导出前的结构化工程门禁：检查 `tumor-input/v0.2` schema、`tumor_quality` 对应的单位 / 作者 / 深度 / 切缘提示、导出边界 summary 与实际肿物轮廓点数是否一致，以及 `privacy_audit` 是否声明未包含原始影像。它只验证抽象几何和隐私边界，不判断病灶性质、切缘充分性或临床可用性。
 
 该脚本只是工程守门，不能替代机构合规审查。

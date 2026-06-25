@@ -37,9 +37,11 @@
 
 ```bash
 python tools/audit_export_privacy.py incision_review_*.json tumor_input_*.json
+python tools/audit_tumor_input.py tumor_input_*.json
 ```
 
 脚本会拦截原始媒体标记、未脱敏 provider secret、明显身份字段、疑似嵌入媒体 payload，以及辅助线索越界参与几何或 Agent prompt 的标记。
+肿物输入审计会额外检查 `tumor-input/v0.2` schema、输入质量提示、边界 summary 与肿物轮廓是否一致，以及肿物导出是否仍只包含抽象面部坐标。
 
 ## 仍需单独完成的合规工作
 
