@@ -1,4 +1,4 @@
-"""LLM provider abstraction for local Qwen and future remote endpoints."""
+"""LLM provider abstraction for OpenAI-compatible and vLLM endpoints."""
 from __future__ import annotations
 
 import json
@@ -21,16 +21,16 @@ class LLMResponse:
 class OpenAICompatibleProvider:
     """Small OpenAI-compatible chat client.
 
-    Works with Ollama, vLLM, and most hosted chat-completions endpoints by
-    changing base_url/model/api_key only.
+    Works with vLLM and hosted chat-completions endpoints by changing
+    base_url/model/api_key only.
     """
 
     def __init__(
         self,
         *,
-        base_url: str = "http://127.0.0.1:11434/v1",
-        model: str = "qwen3:8b",
-        api_key: str = "ollama",
+        base_url: str = "http://127.0.0.1:8000/v1",
+        model: str = "Qwen/Qwen3-14B",
+        api_key: str = "EMPTY",
         timeout_s: float = 20.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
@@ -41,9 +41,9 @@ class OpenAICompatibleProvider:
     @classmethod
     def from_env(cls) -> OpenAICompatibleProvider:
         return cls(
-            base_url=os.environ.get("LANGERFACE_LLM_BASE_URL", "http://127.0.0.1:11434/v1"),
-            model=os.environ.get("LANGERFACE_LLM_MODEL", "qwen3:8b"),
-            api_key=os.environ.get("LANGERFACE_LLM_API_KEY", "ollama"),
+            base_url=os.environ.get("LANGERFACE_LLM_BASE_URL", "http://127.0.0.1:8000/v1"),
+            model=os.environ.get("LANGERFACE_LLM_MODEL", "Qwen/Qwen3-14B"),
+            api_key=os.environ.get("LANGERFACE_LLM_API_KEY", "EMPTY"),
             timeout_s=float(os.environ.get("LANGERFACE_LLM_TIMEOUT_S", "20")),
         )
 
@@ -87,71 +87,7 @@ class OpenAICompatibleProvider:
         return LLMResponse(content=content.strip(), reasoning=reasoning, model=self.model, raw=data)
 
 
-class OllamaProvider(OpenAICompatibleProvider):
-    """Ollama native chat client.
-
-    Native Ollama supports ``think: false`` for Qwen3-style thinking models,
-    which is materially faster for this UI summary use case than the generic
-    OpenAI-compatible endpoint.
-    """
-
-    def __init__(
-        self,
-        *,
-        base_url: str = "http://127.0.0.1:11434",
-        model: str = "qwen3:8b",
-        api_key: str = "ollama",
-        timeout_s: float = 20.0,
-    ) -> None:
-        super().__init__(base_url=base_url, model=model, api_key=api_key, timeout_s=timeout_s)
-
-    @classmethod
-    def from_env(cls) -> OllamaProvider:
-        return cls(
-            base_url=os.environ.get("LANGERFACE_OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
-            model=os.environ.get("LANGERFACE_LLM_MODEL", "qwen3:8b"),
-            timeout_s=float(os.environ.get("LANGERFACE_LLM_TIMEOUT_S", "20")),
-        )
-
-    def chat(
-        self,
-        messages: list[dict[str, str]],
-        *,
-        temperature: float = 0.2,
-        max_tokens: int = 700,
-    ) -> LLMResponse:
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "stream": False,
-            "think": False,
-            "options": {
-                "temperature": temperature,
-                "num_predict": max_tokens,
-            },
-        }
-        req = urllib.request.Request(
-            f"{self.base_url}/api/chat",
-            data=json.dumps(payload).encode("utf-8"),
-            method="POST",
-            headers={"Content-Type": "application/json"},
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:  # noqa: S310
-                data = json.loads(resp.read().decode("utf-8"))
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-            raise RuntimeError(f"LLM provider request failed: {exc}") from exc
-
-        message = data.get("message", {})
-        content = str(message.get("content", ""))
-        reasoning = str(message.get("thinking", ""))
-        return LLMResponse(content=content.strip(), reasoning=reasoning.strip(), model=self.model, raw=data)
-
-
 def provider_from_env() -> OpenAICompatibleProvider:
-    provider = os.environ.get("LANGERFACE_LLM_PROVIDER", "ollama").strip().lower()
-    if provider == "ollama":
-        return OllamaProvider.from_env()
     return OpenAICompatibleProvider.from_env()
 
 
@@ -164,15 +100,8 @@ def provider_from_config(config: dict[str, Any] | None) -> OpenAICompatibleProvi
 
     if not config:
         return provider_from_env()
-    provider = str(config.get("provider", config.get("mode", "openai-compatible"))).strip().lower()
     timeout_s = float(config.get("timeout_s", os.environ.get("LANGERFACE_LLM_TIMEOUT_S", "20")))
-    model = str(config.get("model", os.environ.get("LANGERFACE_LLM_MODEL", "qwen3:8b")))
-    if provider == "ollama":
-        return OllamaProvider(
-            base_url=str(config.get("base_url", os.environ.get("LANGERFACE_OLLAMA_BASE_URL", "http://127.0.0.1:11434"))),
-            model=model,
-            timeout_s=timeout_s,
-        )
+    model = str(config.get("model", os.environ.get("LANGERFACE_LLM_MODEL", "Qwen/Qwen3-14B")))
     return OpenAICompatibleProvider(
         base_url=str(config.get("base_url", os.environ.get("LANGERFACE_LLM_BASE_URL", "http://127.0.0.1:8000/v1"))),
         model=model,

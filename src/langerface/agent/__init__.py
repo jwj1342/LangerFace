@@ -9,10 +9,9 @@ from .incision_agent import (
     plan_incision_case,
     plan_incision_session,
 )
-from .provider import OllamaProvider, OpenAICompatibleProvider, provider_from_config, provider_from_env
+from .provider import OpenAICompatibleProvider, provider_from_config, provider_from_env
 
 __all__ = [
-    "OllamaProvider",
     "OpenAICompatibleProvider",
     "agent_execution_events",
     "agent_trace_gate",

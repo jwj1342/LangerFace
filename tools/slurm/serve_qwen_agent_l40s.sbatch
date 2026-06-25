@@ -69,7 +69,6 @@ done
 
 curl -fsS "http://127.0.0.1:$VLLM_PORT/health" >/dev/null
 
-export LANGERFACE_LLM_PROVIDER=openai-compatible
 export LANGERFACE_LLM_BASE_URL="http://127.0.0.1:$VLLM_PORT/v1"
 export LANGERFACE_LLM_API_KEY="${LANGERFACE_LLM_API_KEY:-EMPTY}"
 

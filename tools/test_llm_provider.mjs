@@ -13,19 +13,14 @@ assert.equal(
   "stream endpoint is idempotent",
 );
 assert.equal(
-  T.providerTestEndpointFor({ provider: "ollama", base_url: "http://127.0.0.1:11434" }),
-  "http://127.0.0.1:11434/api/tags",
-  "Ollama native connectivity test uses /api/tags",
-);
-assert.equal(
-  T.providerTestEndpointFor({ provider: "ollama", base_url: "127.0.0.1:11434" }),
-  "http://127.0.0.1:11434/api/tags",
-  "Ollama native connectivity test adds http:// for localhost host:port input",
-);
-assert.equal(
   T.providerTestEndpointFor({ provider: "openai-compatible", base_url: "https://example.internal/v1/" }),
   "https://example.internal/v1/models",
   "OpenAI-compatible connectivity test uses /models",
+);
+assert.equal(
+  T.providerTestEndpointFor({ provider: "legacy-native", base_url: "https://example.internal/v1/" }),
+  "https://example.internal/v1/models",
+  "connectivity test always uses the single OpenAI-compatible /models contract",
 );
 
 const parsed = T.parseSseBlock("event: trace\ndata: {\"index\":0,\"action\":\"query_rstl_direction\"}");

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Local HTTP proxy for the incision-planning agent.
 
-Default provider is Ollama's OpenAI-compatible API:
-  LANGERFACE_LLM_BASE_URL=http://127.0.0.1:11434/v1
-  LANGERFACE_LLM_MODEL=qwen3:8b
+Default provider is an OpenAI-compatible/vLLM API:
+  LANGERFACE_LLM_BASE_URL=http://127.0.0.1:8000/v1
+  LANGERFACE_LLM_MODEL=Qwen/Qwen3-14B
 
 The endpoint falls back to deterministic planning if the LLM is unavailable.
 """

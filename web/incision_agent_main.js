@@ -313,19 +313,21 @@ function pageIsLocal() {
   return isLoopbackHost(window.location.hostname);
 }
 
-function normalizeProviderDefaults(previousMode = "") {
-  const mode = els.providerMode.value;
+function isDeprecatedNativeProviderConfig(baseUrl = "", model = "") {
+  const base = String(baseUrl || "").trim().toLowerCase();
+  const name = String(model || "").trim().toLowerCase();
+  const deprecatedPort = 11000 + 434;
+  const deprecatedPath = ["api", "tags"].join("/");
+  const deprecatedModel = ["qwen3", "8b"].join(":");
+  return base.includes(`:${deprecatedPort}`) || base.includes(`/${deprecatedPath}`) || name === deprecatedModel;
+}
+
+function normalizeProviderDefaults() {
+  els.providerMode.value = "openai-compatible";
   const base = els.providerBaseUrl.value.trim();
   const model = els.providerModel.value.trim();
-  const openAiDefaults = ["http://127.0.0.1:8000/v1", "http://127.0.0.1:11434/v1"];
-  const ollamaDefaults = ["http://127.0.0.1:11434"];
-  if (mode === "ollama") {
-    if (!base || openAiDefaults.includes(base)) els.providerBaseUrl.value = "http://127.0.0.1:11434";
-    if (!model || previousMode === "openai-compatible") els.providerModel.value = "qwen3:8b";
-  } else {
-    if (!base || ollamaDefaults.includes(base)) els.providerBaseUrl.value = "http://127.0.0.1:8000/v1";
-    if (!model || previousMode === "ollama") els.providerModel.value = "Qwen/Qwen3-14B";
-  }
+  if (!base || isDeprecatedNativeProviderConfig(base, "")) els.providerBaseUrl.value = "https://api.openai.com/v1";
+  if (!model || isDeprecatedNativeProviderConfig("", model)) els.providerModel.value = "gpt-4.1-mini";
 }
 
 function localProviderFromRemotePageMessage(cfg = providerConfig()) {
@@ -341,17 +343,6 @@ function insecureProviderFromSecurePageMessage(cfg = providerConfig()) {
   }
   const networkLabel = isPrivateNetworkHost(url.hostname) ? "HTTP 私网地址" : "HTTP Provider 地址";
   return `当前页面是 HTTPS，但 Provider 是 ${networkLabel} ${url.origin}；浏览器会按 Mixed Content/Private Network 规则拦截。只改成局域网 IP 不够，请改用 HTTPS 反向代理或隧道后的 Provider 地址。`;
-}
-
-function ollamaCorsHint(cfg = providerConfig()) {
-  if (cfg.provider !== "ollama") return "";
-  const url = providerUrlFromConfig(cfg);
-  if (!url || pageIsLocal() || !isPrivateNetworkHost(url.hostname)) return "";
-  const hostBinding = isLoopbackHost(url.hostname) ? "" : "OLLAMA_HOST=0.0.0.0:11434 ";
-  const httpsHint = window.location.protocol === "https:" && url.protocol === "http:" && !isLoopbackHost(url.hostname)
-    ? "HTTPS Vercel 页面不能直接访问 HTTP 私网 IP；请先用 Caddy、ngrok 或 cloudflared 暴露 HTTPS Provider 地址。"
-    : "";
-  return `${httpsHint}如果 Ollama 就运行在这台电脑或局域网机器上，请停止现有 Ollama 后用：${hostBinding}OLLAMA_ORIGINS="${window.location.origin}" ollama serve`;
 }
 
 function redactedProviderConfig() {
@@ -375,7 +366,7 @@ function saveProviderPrefs() {
 function loadProviderPrefs() {
   try {
     const raw = JSON.parse(localStorage.getItem("langerface.incision.provider") || "{}");
-    if (raw.provider) els.providerMode.value = raw.provider;
+    els.providerMode.value = "openai-compatible";
     if (raw.base_url) els.providerBaseUrl.value = raw.base_url;
     if (raw.model) els.providerModel.value = raw.model;
     if (raw.timeout_s) els.providerTimeout.value = String(raw.timeout_s);
@@ -383,7 +374,6 @@ function loadProviderPrefs() {
     // Keep defaults.
   }
   normalizeProviderDefaults();
-  els.providerMode.dataset.previousMode = els.providerMode.value;
   els.providerTimeoutVal.textContent = els.providerTimeout.value;
 }
 
@@ -403,14 +393,14 @@ async function testProviderEndpoint() {
     });
     const count = Number.isInteger(result.model_count) ? ` · 模型 ${result.model_count} 个` : "";
     setProviderTestState(`Provider 连接正常：${result.test_endpoint}${count}`, "ok");
-    els.providerState.textContent = `${result.mode === "ollama" ? "Ollama" : "OpenAI-compatible"} 已连接`;
+    els.providerState.textContent = "OpenAI-compatible 已连接";
     els.providerState.style.color = "";
     els.stageStatus.textContent = "LLM Provider 连接正常；生成候选时仍会由规划后端执行工具链。";
   } catch (err) {
     const msg = err?.name === "AbortError" ? "请求超时" : err.message;
-    const corsHint = ollamaCorsHint();
+    const networkHint = insecureProviderFromSecurePageMessage(providerConfig());
     setProviderTestState(
-      `Provider 连接失败：${msg}。${corsHint || "请检查 Base URL、Provider 模式、API Key、网络可达性和浏览器 CORS 设置。"}`,
+      `Provider 连接失败：${msg}。${networkHint || "请检查 Base URL、API Key、网络可达性、/models 兼容性和浏览器 CORS 设置。"}`,
       "warn",
     );
     els.providerState.textContent = "Provider 未连接";
@@ -2005,13 +1995,6 @@ els.ellipseRatio.oninput = () => { els.ellipseRatioVal.textContent = `${els.elli
 els.ellipseRatio.onchange = runAgent;
 els.boundaryMode.onchange = () => { S.boundaryActive = false; updateFormVisibility(); runAgent(); };
 els.run.onclick = runAgent;
-els.providerMode.onchange = (e) => {
-  normalizeProviderDefaults(e.target.dataset.previousMode || "");
-  e.target.dataset.previousMode = els.providerMode.value;
-  setProviderTestState("Provider 模式已修改，尚未重新测试连通性。");
-  saveProviderPrefs();
-};
-els.providerMode.dataset.previousMode = els.providerMode.value;
 els.endpoint.onchange = () => {
   els.stageStatus.textContent = "规划后端 endpoint 已修改；生成候选时会使用新的后端接口。";
 };

@@ -15,23 +15,19 @@ export function normalizeProviderBaseUrl(baseUrl = "") {
 }
 
 export function providerTestEndpointFor(providerConfig = {}) {
-  const mode = String(providerConfig.provider || "openai-compatible");
   const clean = normalizeProviderBaseUrl(providerConfig.base_url);
   if (!clean) return "";
-  if (mode === "ollama") {
-    return `${clean.replace(/\/api$/, "")}/api/tags`;
-  }
   return `${clean}/models`;
 }
 
 export async function testProviderConnection(providerConfig = {}, { timeoutMs = 5000 } = {}) {
   const testEndpoint = providerTestEndpointFor(providerConfig);
   if (!testEndpoint) throw new Error("LLM Provider Base URL is empty");
-  const mode = String(providerConfig.provider || "openai-compatible");
+  const mode = "openai-compatible";
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const headers = { Accept: "application/json" };
-  if (mode !== "ollama" && providerConfig.api_key) {
+  if (providerConfig.api_key) {
     headers.Authorization = `Bearer ${providerConfig.api_key}`;
   }
   try {

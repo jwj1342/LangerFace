@@ -22,8 +22,9 @@ assert.ok(html.includes('id="reviewDecision"'), "workbench exposes clinician rev
 assert.ok(html.includes('id="reviewNotes"'), "workbench exposes clinician review notes");
 assert.ok(html.includes('id="testProviderBtn"'), "workbench exposes LLM Provider connectivity test");
 assert.ok(html.includes('id="providerTestState"'), "workbench exposes LLM Provider connectivity status");
-assert.ok(html.includes('value="http://127.0.0.1:11434"'), "workbench keeps Ollama localhost as the default provider URL");
-assert.ok(html.includes('value="ollama" selected'), "workbench defaults to Ollama native provider mode");
+assert.ok(html.includes('id="providerMode" type="hidden" value="openai-compatible"'), "workbench fixes the only visible provider contract to OpenAI-compatible");
+assert.ok(!html.includes("native provider"), "workbench does not expose a native provider choice");
+assert.ok(html.includes('value="https://api.openai.com/v1"'), "workbench defaults to an HTTPS OpenAI-compatible provider URL");
 assert.ok(html.includes("高级：规划后端接口"), "workbench moves planning backend endpoint into advanced deployment settings");
 assert.ok(html.includes('value="/api/agentic-incision"'), "planning backend defaults to a same-origin API path for remote deployment");
 assert.ok(!html.includes('id="useAgentServer" checked'), "planning backend is opt-in so static previews do not auto-request missing API routes");
@@ -118,15 +119,13 @@ assert.ok(js.includes("highGuardrailWarnings"), "review workflow detects high gu
 assert.ok(js.includes("live_overlay_ready"), "review gate records live overlay readiness");
 assert.ok(js.includes("handleAgentStreamEvent"), "workbench consumes agent SSE trace events");
 assert.ok(js.includes("stream: true"), "workbench prefers streaming agent trace");
-assert.ok(js.includes("testProviderConnection"), "workbench can test Ollama/OpenAI-compatible provider connectivity without generating a candidate");
+assert.ok(js.includes("testProviderConnection"), "workbench can test OpenAI-compatible provider connectivity without generating a candidate");
 assert.ok(js.includes("normalizeProviderBaseUrl"), "workbench normalizes host:port provider input before fetch");
 assert.ok(js.includes("Provider 连接失败"), "workbench reports direct LLM Provider connectivity failures");
 assert.ok(js.includes("localProviderFromRemotePageMessage"), "workbench warns remote pages before direct localhost provider tests");
 assert.ok(js.includes("insecureProviderFromSecurePageMessage"), "workbench warns HTTPS previews before HTTP private provider tests");
 assert.ok(js.includes("Mixed Content/Private Network"), "workbench explains mixed-content private-network blocking");
 assert.ok(js.includes("仍将发送测试请求"), "workbench still sends provider test requests so DevTools can show the real network result");
-assert.ok(js.includes("OLLAMA_ORIGINS"), "workbench gives actionable Ollama CORS startup guidance");
-assert.ok(js.includes("OLLAMA_HOST=0.0.0.0:11434"), "workbench gives actionable Ollama LAN binding guidance");
 assert.ok(js.includes("Agent 代理不可用，已改用浏览器确定性工具"), "workbench explains deterministic browser fallback in Chinese");
 assert.ok(js.includes('event === "trace_gate"'), "workbench consumes agent trace gate SSE events");
 assert.ok(js.includes('event === "execution_event"'), "workbench consumes Agent execution SSE events");

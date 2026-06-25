@@ -21,8 +21,8 @@
 - 隐私审计：`docs/INCISION_PRIVACY_AUDIT.md` 记录不出域数据、可发送抽象字段和导出审计字段。
 - 导出守门：`tools/audit_export_privacy.py` 可在分享审阅、肿物或诊断 JSON 前拦截原始媒体标记、未脱敏 secret、明显身份字段和疑似嵌入媒体 payload。
 - 验证汇总：`tools/evaluate_stage2_validation.py` 可读取脱敏审阅 JSON，汇总候选类型、医生确认率、guardrail 分布、RSTL 偏角、梭形几何误差、敏感距离、`incision-overlay-registration/v0.1` runtime projection QA、`incision-overlay-stability/v0.1` 抖动 RMS/P95/max、`rstl-local-region-quality-gate/v0.1` 局部降可信 active region/action/source/reason、`incision-overlay-3d-view-diagnostics/v0.1` 3D 预览 rendered/failure 和映射模式、`incision-overlay-replay-qa/v0.1` 离线复放 QA 与通过率、失败模式和隐私审计计数；可选 `--csv-output` 会导出 reviewer 可读的扁平汇总表，不包含影像、视频帧、纹理或 landmark 坐标。
-- Provider 接口：默认支持 Ollama/Qwen，本地 Ollama Native 可直接用 `http://127.0.0.1:11434`，远端 vLLM 或托管服务可通过 OpenAI-compatible endpoint 切入。
-- 前端 Provider 配置：工作台主配置只暴露 LLM Provider mode、Base URL、model、API Key、timeout 和“测试 LLM Provider 连接”；默认是 Ollama Native + `http://127.0.0.1:11434`，Ollama Native 测试 `/api/tags`，OpenAI-compatible 测试 `/models`。如果用户只填写 `127.0.0.1:11434` 这类 host:port，前端会自动补成 `http://127.0.0.1:11434`，避免浏览器把它拼成 Vercel 相对路径。Vercel preview 访问本机 Ollama 时，Ollama 仍必须通过 `OLLAMA_ORIGINS="<preview-origin>" ollama serve` 放行当前 origin；如果改用局域网 IP，还需要 `OLLAMA_HOST=0.0.0.0:11434` 或绑定到对应 IP，并继续配置 `OLLAMA_ORIGINS`。但 Vercel preview 是 HTTPS 页面，浏览器不能直接访问 `http://192.168.*.*:11434` 这类 HTTP 私网 Provider；局域网 IP 只能解决“访问哪台机器”，不能绕过 Mixed Content / Private Network / CORS。远端 preview 调试应使用 HTTPS 反向代理或隧道后的 Provider URL。规划后端 endpoint 收在“高级：规划后端接口”里，默认同域 `/api/agentic-incision` 且默认不启用，API Key 导出记录中会脱敏。
+- Provider 接口：只保留 OpenAI-compatible / vLLM 契约；前端连通性测试固定请求 `${base_url}/models`，后端摘要固定调用 `${base_url}/chat/completions`。本地 L40S vLLM、远端 vLLM 或托管 OpenAI-compatible 服务都走同一个 provider 实现。
+- 前端 Provider 配置：工作台主配置只暴露一个固定 Provider 类型、Base URL、model、API Key、timeout 和“测试 LLM Provider 连接”；默认 Base URL 是 `https://api.openai.com/v1`，可改成任意从浏览器可达、允许当前 preview origin、兼容 `/models` 和 `/chat/completions` 的 HTTPS Provider。规划后端 endpoint 收在“高级：规划后端接口”里，默认同域 `/api/agentic-incision` 且默认不启用，API Key 导出记录中会脱敏。
 - Agent 代理接口：支持普通 JSON `POST /api/agentic-incision`、SSE trace `POST /api/agentic-incision/stream`、多轮 session JSON `POST /api/agentic-incision/session` 和多轮 session SSE `POST /api/agentic-incision/session/stream`；前端优先消费 `provider`、逐步 `execution_event`、逐步 `trace`、`trace_gate`、`react_plan`、`result` 和 `done` 事件，session 流额外消费 `session_round`、`session_evolution` 与 `session_audit`，流式不可用时自动退回普通 JSON 请求。`tests/test_incision_agent_server.py` 会启动本地 `--no-llm` 代理，真实请求 JSON/SSE 和 session JSON/SSE 路径，并检查 API key 脱敏、执行事件、trace gate、ReAct 计划事件、三方向候选比较、`agent-orchestration-audit/v0.1`、`agent-session-candidate-evolution/v0.1` 和 `agent-session-audit/v0.1`。
 
 ## 当前工程边界
@@ -35,7 +35,7 @@
 - 规则漂移守门：`tools/audit_clinical_rules.py` 会比较 `assets/clinical_rules_face_incision.json` 与 Python `default_clinical_rules()` 的关键字段，`tools/test_incision_tools.mjs` 会比较浏览器 `DEFAULT_RULES` 与同一 JSON 资产的长度/梭形参数、guardrail 阈值和 `protective_direction_hints`，避免三处默认规则静默漂移。
 - LLM Agentic：LLM 只做摘要和解释，工具 schema、trace、stream 契约、工具门控、`agent-react-plan/v0.1`、`agent-execution-events/v0.1`、`agentic-incision-session/v0.1`、后端方向备选、候选比较工具、有界重试、失败恢复审计和离线 trace audit 已固化，前端会实时展示工具 trace、Agent 执行事件、Agent 工具门控、ReAct 计划步骤状态和后端候选比较；`agent-trace-gate/v0.1` 由 Python agent 输出并通过 SSE `trace_gate` 事件暴露，会把缺失工具动作、顺序异常、确定性几何缺失或候选未预览写入审阅记录，并阻断未过门控的确认候选。`agent-react-plan/v0.1` 由同一条 trace 派生，记录每个计划步骤的 required action group、observed actions、trace indexes、status 和 issues；其中 `inspect_sensitive_structures` 步骤要求候选生成前记录敏感游离缘距离、draft 阈值和保护性方向例外，并要求每个成功候选生成后再记录候选几何到敏感游离缘的距离，`preview_candidates` 步骤要求至少一次 `preview_incision_on_face`，且每个成功候选记录 `incision-preview-observation/v0.1`，包含可渲染状态、预览空间、候选点数、肿物边界点数、guardrail 状态和不发送原始媒体标记。`agent-execution-events/v0.1` 同样由 trace、trace gate 和 ReAct plan 派生，记录 `execution_started`、逐条 `tool_observed`、`trace_gate_evaluated`、`react_plan_evaluated` 事件，并通过 SSE `execution_event` 逐条暴露；session 流会把医生反馈修正后的每一轮 plan 作为独立 deterministic round 暴露并输出 `agent-session-audit/v0.1`。当前已测试覆盖确定性候选变体失败后的 `retry_tool_failure`、`recover_tool_failure`、候选跳过和剩余候选继续比较，以及两轮医生反馈修正后的 session 重跑；`tools/audit_agentic_incision_trace.py` 也可离线重放 trace gate、ReAct 计划、执行事件、候选比较、每个方向备选的敏感结构复核、重试、预览、恢复失败计数和 session 内每轮 plan，并额外审计 `llm` / `provider` / `provider_config`，确保摘要保留医生复核边界、不泄露 provider secret、不夹带 raw provider payload、不出现“无需医生复核 / 可直接执行”类手术指令。但它仍不是开放式长程自主规划系统，后续跨阶段自动工具选择和复杂失败恢复仍必须受确定性工具、审计记录和医生确认约束。
 - 3D/AR 呈现：当前支持从标准脸工作台向 2D 实时页投射已确认候选，也支持在 3D Beta 查看器中把肿物中心、肿物边界和候选切口显示在扫描重建头或 FLAME 示例头上；overlay 校验会拒绝未达 `live_overlay_ready` 的 payload，并可用 runtime projection registration 指标检查 surface refs 是否在当前 landmarks 上可映射、是否出画面或落在退化三角形上，也可用 pose gate、local region gate、静态连续帧和实时滚动窗口 jitter 指标检查候选线与肿物标记是否稳定跟随 landmarks；前端合约测试覆盖照片/视频输入、摄像头入口、视频/摄像头连续帧调度、3D overlay 映射、主 canvas webm 录制导出、diagnostics 采样、脱敏 `incision_overlay_runtime` / `incision_overlay_3d_view` section、可见“切口叠加 QA”状态和“切口候选”放大窗；`tools/test_pose_quality.mjs` 覆盖低 presence、侧脸、快速运动、张口、眨眼和眼眉/口周局部降可信 gate。浏览器 diagnostics 会捕获 `runtime.error` / `runtime.unhandledrejection`，便于 preview 检查应用级错误。3D Beta overlay 是工程预览，患者个体化临床 AR 配准仍需额外验证。
-- L40S/vLLM 部署：`tools/slurm/serve_qwen_agent_l40s.sbatch` 负责把 Qwen/vLLM 放到 L40S 计算节点，当前由 `tools/test_slurm_qwen_agent.mjs` 静态锁定 GPU 申请、Qwen 默认模型、OpenAI-compatible vLLM 启动、health gate、Agent proxy provider 环境变量和端口转发提示。
+- L40S/vLLM 部署：`tools/slurm/serve_qwen_agent_l40s.sbatch` 负责把 Qwen/vLLM 放到 L40S 计算节点，当前由 `tools/test_slurm_qwen_agent.mjs` 静态锁定 GPU 申请、Qwen 默认模型、OpenAI-compatible vLLM 启动、health gate、Agent proxy Base URL 环境变量和端口转发提示。
 
 ## 临床与合规边界
 
@@ -79,39 +79,11 @@ ssh -N -L 8765:<compute-node>:8765 <login-node>
 
 远端部署时，前端默认请求同域 `/api/agentic-incision`。只有本地开发或 SSH 端口转发调试时，才需要在工作台“高级：规划后端接口”中把 endpoint 改成 `http://127.0.0.1:8765/api/agentic-incision`。
 
-## 本地 Ollama Native
-
-如果只是验证 LLM Provider 连通性和摘要能力，可以在登录节点或普通工作站跑 Ollama：
-
-```bash
-export OLLAMA_ORIGINS=https://<your-vercel-preview>.vercel.app
-ollama serve
-ollama pull qwen3:8b
-export LANGERFACE_LLM_PROVIDER=ollama
-export LANGERFACE_OLLAMA_BASE_URL=http://127.0.0.1:11434
-export LANGERFACE_LLM_MODEL=qwen3:8b
-export LANGERFACE_LLM_TIMEOUT_S=20
-python tools/serve_incision_agent.py
-```
-
-CPU-only 环境下 Qwen 可能超过 UI timeout；这时 agent 会返回确定性候选和 fallback 状态。最终 Qwen 性能测试应以 L40S/vLLM 作业为准。
-
-如果 Vercel preview 需要访问同一局域网里的 Ollama，不能把 Base URL 直接填成 `http://192.168.x.x:11434` 后期望浏览器放行；HTTPS 页面会触发 Mixed Content / Private Network 拦截。推荐在 Ollama 机器前加一个 HTTPS 反向代理或隧道，例如 Caddy、ngrok 或 cloudflared，然后把前端 Base URL 填成该 HTTPS 地址。Ollama 本身仍需允许当前 preview origin：
-
-```bash
-OLLAMA_HOST=0.0.0.0:11434 \
-OLLAMA_ORIGINS=https://<your-vercel-preview>.vercel.app \
-ollama serve
-```
-
-不要把未加鉴权的原生 Ollama 端口直接暴露到公网。
-
-## 远端 Provider 切换
+## Provider 配置
 
 后续切到远端 vLLM 或托管 OpenAI-compatible 服务时，不改切口规划代码，只改环境变量：
 
 ```bash
-export LANGERFACE_LLM_PROVIDER=openai-compatible
 export LANGERFACE_LLM_BASE_URL=https://example.internal/v1
 export LANGERFACE_LLM_MODEL=Qwen/Qwen3-14B
 export LANGERFACE_LLM_API_KEY=...
@@ -126,7 +98,7 @@ cd web
 npm run dev
 ```
 
-打开 `incision_agent.html`。页面默认不启用规划后端，先使用浏览器内确定性工具，避免静态预览自动请求不存在的 `/api/agentic-incision`。如果只是测试 Ollama/OpenAI-compatible 是否通，直接在 LLM Provider 区填写 Base URL / Model / API Key 后点击“测试 LLM Provider 连接”。默认 Ollama URL 指向打开浏览器这台电脑的 `127.0.0.1:11434`；如果 Ollama 已允许 Vercel preview origin 访问，可以直接在 Vercel 上测试。需要后端 trace/LLM 摘要时，再在“高级：规划后端接口”里启用后端 Agent 编排。
+打开 `incision_agent.html`。页面默认不启用规划后端，先使用浏览器内确定性工具，避免静态预览自动请求不存在的 `/api/agentic-incision`。如果只是测试 OpenAI-compatible Provider 是否通，直接在 LLM Provider 区填写 Base URL / Model / API Key 后点击“测试 LLM Provider 连接”；测试请求只检查 `/models`。需要后端 trace/LLM 摘要时，再在“高级：规划后端接口”里启用后端 Agent 编排。
 
 ## 验证
 
