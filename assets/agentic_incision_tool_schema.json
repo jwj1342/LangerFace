@@ -1,6 +1,6 @@
 {
-  "version": "0.3-agentic-incision-tools",
-  "trace_mode": "single_turn_react_with_deterministic_tools",
+  "version": "0.4-agentic-incision-tools",
+  "trace_mode": "single_turn_react_multi_candidate_with_deterministic_tools",
   "boundary": "The LLM may select, summarize, and request deterministic tools; it must not compute incision geometry or override guardrails.",
   "trace_gate": {
     "schema_version": "agent-trace-gate/v0.1",
@@ -13,6 +13,11 @@
       ["evaluate_guardrails"]
     ],
     "boundary": "Candidate confirmation requires deterministic tumor quality, anatomy, RSTL direction, incision generation, and guardrail observations."
+  },
+  "orchestration_audit": {
+    "schema_version": "agent-orchestration-audit/v0.1",
+    "records": ["candidate_count", "comparison_ready", "tool_failure_count", "recovered_failures", "trace_gate_passed"],
+    "boundary": "Agent orchestration may compare deterministic candidates for review; it must not issue surgical instructions or bypass clinician confirmation."
   },
   "tools": [
     {
@@ -44,6 +49,16 @@
       "name": "evaluate_guardrails",
       "input": ["candidate", "anatomy", "rules"],
       "output": ["passed", "warnings", "suggested_overrides"]
+    },
+    {
+      "name": "propose_direction_variants",
+      "input": ["direction", "angle_offsets_deg"],
+      "output": ["direction_variants", "boundary"]
+    },
+    {
+      "name": "recover_tool_failure",
+      "input": ["tool", "variant", "error"],
+      "output": ["recovery", "candidate_kept"]
     },
     {
       "name": "clinician_edit_candidate",

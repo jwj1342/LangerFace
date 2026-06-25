@@ -69,6 +69,7 @@ const els = {
   guardrailVal: $("guardrailVal"),
   directionSource: $("directionSource"),
   agentGate: $("agentGate"),
+  agentComparison: $("agentComparison"),
   guardrailDetails: $("guardrailDetails"),
   llmSummary: $("llmSummary"),
   nextStep: $("nextStep"),
@@ -834,6 +835,25 @@ function renderAgentGate(result) {
   els.agentGate.title = `observed_actions=${gate.observed_actions.join(", ")}`;
 }
 
+function renderAgentComparison(result) {
+  if (!els.agentComparison) return;
+  const comparison = Array.isArray(result.candidate_comparison) ? result.candidate_comparison : [];
+  const audit = result.agent_orchestration_audit || {};
+  if (!comparison.length) {
+    els.agentComparison.classList.add("warn");
+    els.agentComparison.textContent = "Agent 候选比较：未返回后端多候选比较；可手动保存候选后生成备选。";
+    return;
+  }
+  const top = comparison
+    .slice(0, 3)
+    .map((item) => `#${item.rank} ${item.label || item.id} ${fmt(item.score, 1)}分`)
+    .join("；");
+  const failures = audit.tool_failure_count ? `；恢复失败 ${audit.tool_failure_count} 个` : "";
+  els.agentComparison.classList.toggle("warn", Boolean(audit.tool_failure_count));
+  els.agentComparison.textContent =
+    `Agent 候选比较：${comparison.length} 个后端候选 · ${top}${failures}。工程排序不是临床推荐或手术指令。`;
+}
+
 function tumorQualityFor(result = S.result) {
   if (!result?.tumor) return { warnings: [], warning_count: 0, passed: true };
   return result.tumor_quality || summarizeTumorInputQuality(result.tumor);
@@ -865,6 +885,7 @@ function renderResult(result) {
   renderGuardrailDetails(result.guardrails);
   renderDirectionSource(result);
   renderAgentGate(result);
+  renderAgentComparison(result);
   const tumorQuality = tumorQualityFor(result);
   if (tumorQuality.warning_count) {
     els.guardrailDetails.textContent += `\n肿物输入：${tumorQuality.warnings.map((w) => `${w.code}(${w.severity})`).join(" · ")}`;
@@ -953,6 +974,9 @@ function reviewRecord(result = S.result, label = "候选") {
     guardrails: result.guardrails,
     trace: result.trace,
     agent_trace_gate: traceGate,
+    candidate_alternatives: result.candidate_alternatives || [],
+    candidate_comparison: result.candidate_comparison || [],
+    agent_orchestration_audit: result.agent_orchestration_audit || null,
     llm: result.llm,
     provider: result.provider,
     provider_config: redactedProviderConfig(),
@@ -1222,6 +1246,12 @@ function exportReport() {
       ? `- RSTL 低置信原因：${r.direction.confidence_reasons.join(", ")}`
       : null,
     `- Agent 工具门控：passed=${Boolean(r.agent_trace_gate?.passed)}；order_ok=${Boolean(r.agent_trace_gate?.order_ok)}；missing=${(r.agent_trace_gate?.missing_actions || []).map((item) => item.label || item.key).join(", ") || "无"}`,
+    r.agent_orchestration_audit
+      ? `- Agent 编排审计：候选 ${r.agent_orchestration_audit.candidate_count || 0} 个；比较 ${r.agent_orchestration_audit.comparison_ready ? "已生成" : "未生成"}；恢复失败 ${r.agent_orchestration_audit.tool_failure_count || 0} 个`
+      : null,
+    (r.candidate_comparison || []).length
+      ? `- Agent 后端候选比较：${r.candidate_comparison.map((c) => `#${c.rank} ${c.label || c.id} ${fmt(c.score, 1)}分`).join("；")}（不是临床推荐或手术指令）`
+      : null,
     `- 候选长度：${fmt(r.candidate.length_mm)} mm`,
     r.candidate.type === "fusiform"
       ? `- 梭形宽度 / 长宽比：${fmt(r.candidate.width_mm)} mm / ${fmt(r.candidate.metrics?.length_to_width_ratio, 2)}:1`

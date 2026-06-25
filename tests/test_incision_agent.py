@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from langerface.agent import agent_trace_gate, plan_incision_case
+from langerface.agent import agent_trace_gate, compare_candidate_records, plan_incision_case
 from langerface.anatomy import classify_region
 from langerface.clinical import default_clinical_rules
 from langerface.incision import (
@@ -591,26 +591,71 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
         use_llm=False,
     )
     assert result["candidate"]["type"] == "linear"
-    assert [step["action"] for step in result["trace"]] == [
+    actions = [step["action"] for step in result["trace"]]
+    assert actions[:5] == [
         "summarize_tumor_input_quality",
         "classify_region",
         "query_rstl_direction",
         "linear_subcutaneous_incision",
         "evaluate_guardrails",
     ]
+    assert "propose_direction_variants" in actions
+    assert actions.count("linear_subcutaneous_incision") == 3
+    assert actions.count("evaluate_guardrails") == 3
+    assert actions[-1] == "compare_candidates"
     assert result["tumor_quality"]["warning_count"] == 1
     assert result["tumor_quality"]["warnings"][0]["code"] == "missing_tumor_author"
     assert result["provider"]["mode"] == "deterministic_fallback"
-    assert result["agent_trace_mode"] == "single_turn_react_with_deterministic_tools"
+    assert result["agent_trace_mode"] == "single_turn_react_multi_candidate_with_deterministic_tools"
     assert result["agent_trace_gate"]["schema_version"] == "agent-trace-gate/v0.1"
     assert result["agent_trace_gate"]["passed"] is True
     assert result["agent_trace_gate"]["missing_actions"] == []
     assert result["agent_trace_gate"]["deterministic_geometry_present"] is True
     assert "evaluate_guardrails" in result["agent_trace_gate"]["observed_actions"]
+    assert len(result["candidate_alternatives"]) == 3
+    assert {item["angle_offset_deg"] for item in result["candidate_alternatives"]} == {-10.0, 0.0, 10.0}
+    assert [item["rank"] for item in result["candidate_comparison"]] == [1, 2, 3]
+    assert result["candidate_comparison"][0]["clinical_boundary"].startswith("Engineering ranking")
+    assert result["agent_orchestration_audit"] == {
+        "schema_version": "agent-orchestration-audit/v0.1",
+        "mode": "single_turn_react_multi_candidate_with_deterministic_tools",
+        "candidate_count": 3,
+        "comparison_ready": True,
+        "tool_failure_count": 0,
+        "recovered_failures": [],
+        "trace_gate_passed": True,
+        "clinical_boundary": (
+            "Agent orchestration may compare deterministic candidates for review; "
+            "it must not issue surgical instructions or bypass clinician confirmation."
+        ),
+    }
     assert any(tool["name"] == "summarize_tumor_input_quality" for tool in result["tool_schemas"])
     assert any(tool["name"] == "evaluate_guardrails" for tool in result["tool_schemas"])
+    assert any(tool["name"] == "propose_direction_variants" for tool in result["tool_schemas"])
+    assert any(tool["name"] == "recover_tool_failure" for tool in result["tool_schemas"])
     assert any(tool["name"] == "compare_candidates" for tool in result["tool_schemas"])
     assert any(tool["name"] == "save_review_record" for tool in result["tool_schemas"])
+
+
+def test_compare_candidate_records_ranks_high_guardrail_after_clean_candidate():
+    clean = {
+        "id": "clean",
+        "label": "Clean",
+        "candidate": {"type": "linear", "metrics": {"rstl_deviation_deg": 0}},
+        "guardrails": {"warnings": []},
+        "review_status": "pending_clinician_confirmation",
+    }
+    risky = {
+        "id": "risky",
+        "label": "Risky",
+        "candidate": {"type": "linear", "metrics": {"rstl_deviation_deg": 0}},
+        "guardrails": {"warnings": [{"severity": "high", "code": "near_sensitive_free_margin"}]},
+        "review_status": "pending_clinician_confirmation",
+    }
+    ranked = compare_candidate_records([risky, clean])
+    assert [item["id"] for item in ranked] == ["clean", "risky"]
+    assert ranked[0]["rank"] == 1
+    assert ranked[1]["score_breakdown"]["high_guardrails"] == 1
 
 
 def test_agent_trace_gate_fails_when_required_tool_step_is_missing():
@@ -682,10 +727,13 @@ def test_agent_tool_schema_and_privacy_doc_cover_review_export():
         "linear_subcutaneous_incision",
         "fusiform_cutaneous_incision",
         "evaluate_guardrails",
+        "propose_direction_variants",
+        "recover_tool_failure",
         "clinician_edit_candidate",
         "compare_candidates",
         "save_review_record",
     } <= names
+    assert schema["orchestration_audit"]["schema_version"] == "agent-orchestration-audit/v0.1"
     privacy = (ROOT / "docs" / "INCISION_PRIVACY_AUDIT.md").read_text()
     assert "原始照片、视频帧和摄像头画面不发送" in privacy
     assert "raw_image_sent=false" in privacy

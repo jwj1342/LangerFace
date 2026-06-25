@@ -21,6 +21,7 @@ assert.ok(html.includes('id="reviewNotes"'), "workbench exposes clinician review
 assert.ok(html.includes('id="guardrailDetails"'), "workbench exposes guardrail detail feedback");
 assert.ok(html.includes('id="directionSource"'), "workbench exposes direction source explanation");
 assert.ok(html.includes('id="agentGate"'), "workbench exposes agent trace gate feedback");
+assert.ok(html.includes('id="agentComparison"'), "workbench exposes backend agent candidate comparison");
 assert.ok(html.includes('id="approveCandidateBtn"'), "workbench exposes candidate approval action");
 assert.ok(html.includes('id="rejectCandidateBtn"'), "workbench exposes candidate rejection action");
 assert.ok(html.includes('id="candidateWidth"'), "workbench exposes fusiform width and ratio metric");
@@ -56,6 +57,9 @@ assert.ok(js.includes("fusiform_cutaneous_incision"), "agent gate accepts fusifo
 assert.ok(js.includes("Agent 工具 trace 未通过门控"), "approval is blocked when agent trace gate fails");
 assert.ok(js.includes("Agent 工具门控"), "markdown report includes agent trace gate status");
 assert.ok(js.includes("candidate_comparison"), "review export includes candidate comparison");
+assert.ok(js.includes("candidate_alternatives"), "review export includes backend candidate alternatives");
+assert.ok(js.includes("agent_orchestration_audit"), "review export includes backend orchestration audit");
+assert.ok(js.includes("renderAgentComparison"), "workbench renders backend candidate comparison");
 assert.ok(js.includes("不是临床推荐或手术指令"), "candidate comparison warns it is not clinical recommendation");
 assert.ok(js.includes("reviewReadiness"), "review workflow validates approval readiness");
 assert.ok(js.includes("highGuardrailWarnings"), "review workflow detects high guardrail warnings");
