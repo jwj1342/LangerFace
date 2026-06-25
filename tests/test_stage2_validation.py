@@ -351,12 +351,19 @@ def _export_payload() -> dict:
             candidate_type="fusiform",
             tumor_kind="cutaneous",
             guardrails_passed=False,
-            warnings=[{"code": "axis_coverage_deficit", "severity": "high"}],
+            warnings=[
+                {"code": "axis_coverage_deficit", "severity": "high"},
+                {"code": "fusiform_boundary_outside_envelope", "severity": "high"},
+            ],
             metrics={
                 "rstl_deviation_deg": 8.0,
                 "length_to_width_ratio": 3.0,
                 "tip_angle_error_deg": 1.5,
                 "axis_coverage_deficit_mm": 2.0,
+                "outline_area_mm2": 840.0,
+                "outline_symmetry_max_error_mm": 0.0,
+                "boundary_envelope_min_margin_mm": -0.6,
+                "boundary_envelope_outside_count": 2,
                 "sensitive_free_margin_min_distance_mm": 6.0,
                 "boundary_area_ratio_to_diameter_disk": 0.85,
             },
@@ -429,6 +436,10 @@ def _export_payload() -> dict:
                 "length_to_width_ratio": 2.5,
                 "tip_angle_error_deg": 4.0,
                 "axis_coverage_deficit_mm": 0.0,
+                "outline_area_mm2": 620.0,
+                "outline_symmetry_max_error_mm": 0.2,
+                "boundary_envelope_min_margin_mm": 0.4,
+                "boundary_envelope_outside_count": 0,
                 "boundary_area_ratio_to_diameter_disk": 0.2,
             },
         ),
@@ -462,6 +473,10 @@ def test_stage2_validation_summary_aggregates_review_export():
     assert summary["guardrails"]["warning_code_counts"]["axis_coverage_deficit"] == 1
     assert summary["metrics"]["rstl_deviation_deg"]["p90"] == 18.0
     assert summary["metrics"]["fusiform_tip_angle_error_deg"]["count"] == 2
+    assert summary["metrics"]["fusiform_outline_area_mm2"]["mean"] == 730.0
+    assert summary["metrics"]["fusiform_outline_symmetry_max_error_mm"]["max"] == 0.2
+    assert summary["metrics"]["fusiform_boundary_envelope_min_margin_mm"]["min"] == -0.6
+    assert summary["metrics"]["fusiform_boundary_envelope_outside_count"]["max"] == 2
     assert summary["metrics"]["incision_overlay_jitter_rms_px"]["count"] == 2
     assert summary["metrics"]["incision_overlay_jitter_rms_px"]["p90"] == 3.4
     assert summary["metrics"]["incision_overlay_jitter_p95_px"]["max"] == 5.1
@@ -587,6 +602,12 @@ def test_stage2_validation_summary_aggregates_review_export():
         row["section"] == "metrics"
         and row["metric"] == "incision_overlay_smoothing_global_min_cutoff"
         and row["min"] == 1.2
+        for row in csv_rows
+    )
+    assert any(
+        row["section"] == "metrics"
+        and row["metric"] == "fusiform_boundary_envelope_outside_count"
+        and row["max"] == 2
         for row in csv_rows
     )
     assert any(

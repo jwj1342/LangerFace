@@ -144,6 +144,86 @@ def _fusiform_profile(
     }
 
 
+def _project_to_axis_plane(
+    points: np.ndarray,
+    center: np.ndarray,
+    axis: np.ndarray,
+    perp: np.ndarray,
+) -> np.ndarray:
+    delta = points - center
+    return np.column_stack((delta @ axis, delta @ perp))
+
+
+def _outline_quality_metrics(
+    *,
+    upper: list[np.ndarray],
+    lower: list[np.ndarray],
+    outline: list[np.ndarray],
+    tumor: TumorInput,
+    center: np.ndarray,
+    axis: np.ndarray,
+    perp: np.ndarray,
+    units_per_mm: float,
+    boundary_used: bool,
+) -> dict[str, Any]:
+    if units_per_mm <= 0:
+        return {}
+
+    upper_projected = _project_to_axis_plane(np.asarray(upper), center, axis, perp)
+    lower_projected = _project_to_axis_plane(np.asarray(lower), center, axis, perp)
+    outline_projected = _project_to_axis_plane(np.asarray(outline), center, axis, perp)
+
+    upper_widths = np.abs(upper_projected[:, 1])
+    mid = len(upper_widths) // 2
+    eps = 1e-7
+    monotone_left = all(
+        upper_widths[i] <= upper_widths[i + 1] + eps
+        for i in range(0, max(mid, 0))
+    )
+    monotone_right = all(
+        upper_widths[i] >= upper_widths[i + 1] - eps
+        for i in range(mid, len(upper_widths) - 1)
+    )
+    symmetry_units = np.hypot(
+        upper_projected[:, 0] - lower_projected[:, 0],
+        upper_projected[:, 1] + lower_projected[:, 1],
+    )
+
+    envelope_min_margin_mm: float | None = None
+    envelope_outside_count = 0
+    if boundary_used and len(tumor.boundary) >= 3:
+        boundary_projected = _project_to_axis_plane(
+            np.asarray(tumor.boundary, dtype=np.float64),
+            center,
+            axis,
+            perp,
+        )
+        x_profile = upper_projected[:, 0]
+        y_profile = upper_widths
+        margins: list[float] = []
+        for x, y in boundary_projected:
+            if x < x_profile[0]:
+                margin_units = -(x_profile[0] - x)
+            elif x > x_profile[-1]:
+                margin_units = -(x - x_profile[-1])
+            else:
+                half_width = float(np.interp(x, x_profile, y_profile))
+                margin_units = half_width - abs(float(y))
+            margins.append(margin_units / units_per_mm)
+        if margins:
+            envelope_min_margin_mm = min(margins)
+            envelope_outside_count = sum(1 for margin in margins if margin < -1e-6)
+
+    return {
+        "outline_area_mm2": _polygon_area(outline_projected) / (units_per_mm * units_per_mm),
+        "outline_self_intersection": _polygon_self_intersects(outline_projected),
+        "outline_half_width_monotone": bool(monotone_left and monotone_right),
+        "outline_symmetry_max_error_mm": float(np.max(symmetry_units)) / units_per_mm,
+        "boundary_envelope_min_margin_mm": envelope_min_margin_mm,
+        "boundary_envelope_outside_count": envelope_outside_count,
+    }
+
+
 def fusiform_cutaneous_incision(
     tumor: TumorInput,
     direction: DirectionQueryResult | dict[str, Any],
@@ -187,6 +267,17 @@ def fusiform_cutaneous_incision(
         tip_angle_deg=float(cfg["tip_angle_deg"]),
     )
     outline = upper + list(reversed(lower[1:-1]))
+    outline_metrics = _outline_quality_metrics(
+        upper=upper,
+        lower=lower,
+        outline=outline,
+        tumor=tumor,
+        center=center,
+        axis=axis,
+        perp=perp,
+        units_per_mm=units_per_mm,
+        boundary_used=boundary is not None,
+    )
     confidence = (
         direction.confidence
         if isinstance(direction, DirectionQueryResult)
@@ -233,6 +324,7 @@ def fusiform_cutaneous_incision(
             ),
             "boundary_self_intersection": bool(boundary["self_intersection"]) if boundary else False,
             "boundary_center_shift_mm": float(boundary["center_shift_mm"]) if boundary else None,
+            **outline_metrics,
         },
         "provenance": {
             "generator": "fusiform_cutaneous_incision",

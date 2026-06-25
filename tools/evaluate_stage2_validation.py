@@ -38,6 +38,9 @@ WARNING_FAILURE_MODE_MAP = {
     "sensitive_region": "sensitive_structure_warning",
     "diameter_coverage_deficit": "incision_rule_violation",
     "axis_coverage_deficit": "incision_rule_violation",
+    "fusiform_outline_self_intersection": "incision_rule_violation",
+    "fusiform_outline_not_smoothly_tapered": "incision_rule_violation",
+    "fusiform_boundary_outside_envelope": "incision_rule_violation",
     "few_boundary_points": "tumor_boundary_input_quality",
     "boundary_self_intersection": "tumor_boundary_input_quality",
     "boundary_area_degenerate": "tumor_boundary_input_quality",
@@ -319,6 +322,10 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     fusiform_ratio: list[float] = []
     fusiform_tip_error: list[float] = []
     fusiform_axis_deficit: list[float] = []
+    fusiform_outline_area: list[float] = []
+    fusiform_outline_symmetry_error: list[float] = []
+    fusiform_boundary_envelope_margin: list[float] = []
+    fusiform_boundary_envelope_outside_count: list[float] = []
     sensitive_margin_distance: list[float] = []
     boundary_area_ratio: list[float] = []
     lesion_cue_iou: list[float] = []
@@ -436,6 +443,10 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
                 (fusiform_ratio, "length_to_width_ratio"),
                 (fusiform_tip_error, "tip_angle_error_deg"),
                 (fusiform_axis_deficit, "axis_coverage_deficit_mm"),
+                (fusiform_outline_area, "outline_area_mm2"),
+                (fusiform_outline_symmetry_error, "outline_symmetry_max_error_mm"),
+                (fusiform_boundary_envelope_margin, "boundary_envelope_min_margin_mm"),
+                (fusiform_boundary_envelope_outside_count, "boundary_envelope_outside_count"),
             ]:
                 value = _numeric(metrics.get(key))
                 if value is not None:
@@ -635,6 +646,16 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
             "fusiform_length_to_width_ratio": summarize_numbers(fusiform_ratio),
             "fusiform_tip_angle_error_deg": summarize_numbers(fusiform_tip_error),
             "fusiform_axis_coverage_deficit_mm": summarize_numbers(fusiform_axis_deficit),
+            "fusiform_outline_area_mm2": summarize_numbers(fusiform_outline_area),
+            "fusiform_outline_symmetry_max_error_mm": summarize_numbers(
+                fusiform_outline_symmetry_error,
+            ),
+            "fusiform_boundary_envelope_min_margin_mm": summarize_numbers(
+                fusiform_boundary_envelope_margin,
+            ),
+            "fusiform_boundary_envelope_outside_count": summarize_numbers(
+                fusiform_boundary_envelope_outside_count,
+            ),
             "sensitive_free_margin_min_distance_mm": summarize_numbers(sensitive_margin_distance),
             "boundary_area_ratio_to_diameter_disk": summarize_numbers(boundary_area_ratio),
             "incision_overlay_jitter_rms_px": summarize_numbers(overlay_jitter_rms),

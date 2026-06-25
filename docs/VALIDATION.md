@@ -109,7 +109,7 @@ python tools/evaluate_stage2_validation.py \
 - 候选数、肿物类型分布、切口类型分布。
 - 医生确认 / 否决状态计数和确认率。
 - guardrail 通过率、warning severity/code 分布。
-- `rstl_deviation_deg`、方向置信度、皮下直径覆盖缺口、梭形长宽比、尖端角误差、边界覆盖缺口、敏感游离缘距离和边界面积比的 count / mean / median / P90 / min / max。
+- `rstl_deviation_deg`、方向置信度、皮下直径覆盖缺口、梭形长宽比、尖端角误差、边界覆盖缺口、梭形 outline 面积、outline 对称误差、自由轮廓包络余量 / 出界点数、敏感游离缘距离和边界面积比的 count / mean / median / P90 / min / max。
 - `secondary_cues` 汇总：低置信辅助线索导入数、人工确认率、来源/置信标签分布、lesion/wrinkle precision/recall/IoU，以及 `used_for_geometry_count` / `used_for_agent_prompt_count`。后两项必须保持 0。
 - `incision-overlay-registration/v0.1`：可由 `measureIncisionOverlayRegistration` 对单帧 runtime landmarks 计算 surface refs 投射质量；脚本会汇总 `present_count`、`passed_count`、`failed_count`、`pass_rate`、`reason_counts`、`context_counts`，并把 mapped point count、candidate point count、invalid ref、missing landmark、degenerate triangle、out-of-frame、bbox diagonal 和 frame fraction 写入 `metrics`。该指标用于工程 QA，不代表患者个体化临床 AR 配准。
 - `incision-overlay-stability/v0.1`：可由 `measureIncisionOverlayJitter` 对连续 landmarks 帧计算候选切口和肿物叠加的 RMS / P95 / max 像素抖动；脚本会汇总 `present_count`、`passed_count`、`failed_count`、`pass_rate`、`reason_counts`、`context_counts`，并把 RMS / P95 / max、tracked point count 和 sample count 写入 `metrics`。该指标用于工程回归，不替代真实视频/摄像头目检和临床评审。

@@ -699,6 +699,65 @@ function fusiformProfile(center, axis, perp, halfL, halfW, samples, tipAngleDeg)
   };
 }
 
+function projectToAxisPlane(points, center, axis, perp) {
+  return points.map((p) => {
+    const d = sub(p, center);
+    return [dot(d, axis), dot(d, perp)];
+  });
+}
+
+function interpolateHalfWidth(x, profile) {
+  if (x < profile[0][0]) return -(profile[0][0] - x);
+  if (x > profile[profile.length - 1][0]) return -(x - profile[profile.length - 1][0]);
+  for (let i = 0; i < profile.length - 1; i++) {
+    const a = profile[i], b = profile[i + 1];
+    if (a[0] <= x && x <= b[0]) {
+      const span = b[0] - a[0];
+      const t = Math.abs(span) > 1e-12 ? (x - a[0]) / span : 0;
+      return Math.abs(a[1]) + (Math.abs(b[1]) - Math.abs(a[1])) * t;
+    }
+  }
+  return 0;
+}
+
+function outlineQualityMetrics({ upper, lower, outline, tumor, center, axis, perp, unitsPerMm, boundaryUsed }) {
+  if (!(unitsPerMm > 0)) return {};
+  const upperProjected = projectToAxisPlane(upper, center, axis, perp);
+  const lowerProjected = projectToAxisPlane(lower, center, axis, perp);
+  const outlineProjected = projectToAxisPlane(outline, center, axis, perp);
+  const widths = upperProjected.map((p) => Math.abs(p[1]));
+  const mid = Math.floor(widths.length / 2);
+  const eps = 1e-7;
+  let monotone = true;
+  for (let i = 0; i < mid; i++) if (widths[i] > widths[i + 1] + eps) monotone = false;
+  for (let i = mid; i < widths.length - 1; i++) if (widths[i] < widths[i + 1] - eps) monotone = false;
+  let symmetryMax = 0;
+  for (let i = 0; i < upperProjected.length; i++) {
+    symmetryMax = Math.max(
+      symmetryMax,
+      Math.hypot(upperProjected[i][0] - lowerProjected[i][0], upperProjected[i][1] + lowerProjected[i][1]),
+    );
+  }
+  let boundaryEnvelopeMinMarginMm = null;
+  let boundaryEnvelopeOutsideCount = 0;
+  if (boundaryUsed && Array.isArray(tumor.boundary) && tumor.boundary.length >= 3) {
+    const boundaryProjected = projectToAxisPlane(tumor.boundary, center, axis, perp);
+    const margins = boundaryProjected.map(([x, y]) => (interpolateHalfWidth(x, upperProjected) - Math.abs(y)) / unitsPerMm);
+    if (margins.length) {
+      boundaryEnvelopeMinMarginMm = Math.min(...margins);
+      boundaryEnvelopeOutsideCount = margins.filter((margin) => margin < -1e-6).length;
+    }
+  }
+  return {
+    outline_area_mm2: polygonArea(outlineProjected) / (unitsPerMm * unitsPerMm),
+    outline_self_intersection: polygonSelfIntersects(outlineProjected),
+    outline_half_width_monotone: monotone,
+    outline_symmetry_max_error_mm: symmetryMax / unitsPerMm,
+    boundary_envelope_min_margin_mm: boundaryEnvelopeMinMarginMm,
+    boundary_envelope_outside_count: boundaryEnvelopeOutsideCount,
+  };
+}
+
 export function summarizeTumorBoundary(tumorInput, axis = [1, 0, 0], normal = [0, 0, 1], unitsPerMm = 1) {
   const tumor = validateTumor(tumorInput);
   const a = norm(axis);
@@ -759,6 +818,17 @@ export function generateFusiformIncision(tumorInput, direction, unitsPerMm, norm
   const profile = fusiformProfile(center, axis, perp, halfL, halfW, samples, cfg.tip_angle_deg);
   const { upper, lower } = profile;
   const outline = upper.concat(lower.slice(1, -1).reverse());
+  const outlineMetrics = outlineQualityMetrics({
+    upper,
+    lower,
+    outline,
+    tumor,
+    center,
+    axis,
+    perp,
+    unitsPerMm,
+    boundaryUsed: Boolean(boundary),
+  });
   return {
     id: "fusiform_cutaneous_candidate",
     type: "fusiform",
@@ -795,6 +865,7 @@ export function generateFusiformIncision(tumorInput, direction, unitsPerMm, norm
       boundary_area_ratio_to_diameter_disk: boundary?.area_ratio_to_diameter_disk || null,
       boundary_self_intersection: Boolean(boundary?.self_intersection),
       boundary_center_shift_mm: boundary?.center_shift_mm || null,
+      ...outlineMetrics,
     },
     provenance: {
       generator: "generateFusiformIncision",
@@ -993,6 +1064,43 @@ export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
           reason: "Re-pick tumor center, redraw boundary, or record why the boundary is intentionally eccentric.",
         });
       }
+    }
+  }
+  if (candidate.type === "fusiform") {
+    if (candidate.metrics?.outline_self_intersection) {
+      warnings.push({
+        code: "fusiform_outline_self_intersection",
+        severity: "high",
+        message: "Fusiform candidate outline self-intersects; regenerate or edit the candidate.",
+      });
+      suggested_overrides.push({
+        kind: "fusiform_shape_review",
+        reason: "Self-intersecting fusiform outlines cannot be treated as valid candidates.",
+      });
+    }
+    if (candidate.metrics?.outline_half_width_monotone === false) {
+      warnings.push({
+        code: "fusiform_outline_not_smoothly_tapered",
+        severity: "high",
+        message: "Fusiform candidate does not taper smoothly from the widest point to both tips.",
+      });
+      suggested_overrides.push({
+        kind: "fusiform_shape_review",
+        reason: "Regenerate the candidate or adjust length/width/tip-angle before review.",
+      });
+    }
+    const outsideCount = Number(candidate.metrics?.boundary_envelope_outside_count || 0);
+    if (outsideCount > 0) {
+      const minMargin = candidate.metrics?.boundary_envelope_min_margin_mm;
+      warnings.push({
+        code: "fusiform_boundary_outside_envelope",
+        severity: "high",
+        message: `${outsideCount} cutaneous boundary point(s) fall outside the fusiform outline${minMargin != null ? ` (minimum envelope margin ${Number(minMargin).toFixed(1)} mm).` : "."}`,
+      });
+      suggested_overrides.push({
+        kind: "fusiform_boundary_envelope_review",
+        reason: "Increase candidate width/length, redraw boundary, or record an explicit clinician decision.",
+      });
     }
   }
   const axisCoverageDeficit = Number(candidate.metrics?.axis_coverage_deficit_mm || 0);

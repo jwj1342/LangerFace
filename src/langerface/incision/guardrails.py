@@ -369,6 +369,50 @@ def evaluate_guardrails(
                     ),
                 })
 
+    if candidate.get("type") == "fusiform":
+        if metrics.get("outline_self_intersection"):
+            warnings.append({
+                "code": "fusiform_outline_self_intersection",
+                "severity": "high",
+                "message": "Fusiform candidate outline self-intersects; regenerate or edit the candidate.",
+            })
+            suggested_overrides.append({
+                "kind": "fusiform_shape_review",
+                "reason": "Self-intersecting fusiform outlines cannot be treated as valid candidates.",
+            })
+        if metrics.get("outline_half_width_monotone") is False:
+            warnings.append({
+                "code": "fusiform_outline_not_smoothly_tapered",
+                "severity": "high",
+                "message": "Fusiform candidate does not taper smoothly from the widest point to both tips.",
+            })
+            suggested_overrides.append({
+                "kind": "fusiform_shape_review",
+                "reason": "Regenerate the candidate or adjust length/width/tip-angle before review.",
+            })
+        outside_count = int(metrics.get("boundary_envelope_outside_count") or 0)
+        if outside_count > 0:
+            min_margin = metrics.get("boundary_envelope_min_margin_mm")
+            warnings.append({
+                "code": "fusiform_boundary_outside_envelope",
+                "severity": "high",
+                "message": (
+                    f"{outside_count} cutaneous boundary point(s) fall outside the fusiform outline"
+                    + (
+                        f" (minimum envelope margin {float(min_margin):.1f} mm)."
+                        if min_margin is not None
+                        else "."
+                    )
+                ),
+            })
+            suggested_overrides.append({
+                "kind": "fusiform_boundary_envelope_review",
+                "reason": (
+                    "Increase candidate width/length, redraw boundary, or record an explicit "
+                    "clinician decision."
+                ),
+            })
+
     axis_coverage_deficit = float(metrics.get("axis_coverage_deficit_mm") or 0.0)
     if candidate.get("type") == "fusiform" and axis_coverage_deficit > 1e-6:
         required = metrics.get("axis_coverage_required_mm")

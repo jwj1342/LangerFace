@@ -783,7 +783,7 @@ tip_angle ≈ 30 degrees
 h(u) = (s - 2)u^3 + (3 - 2s)u^2 + su
 ```
 
-生成从端点 `h(0)=0` 到中点 `h(1)=1`、且中点切线水平 `h'(1)=0` 的平滑轮廓。为避免极端长宽比下曲线过冲，工程上会限制可用端点斜率并在 metrics 中记录 `tip_angle_target_deg`、`tip_angle_estimated_deg`、`tip_angle_error_deg` 和 `tip_angle_limited_by_ratio`。
+生成从端点 `h(0)=0` 到中点 `h(1)=1`、且中点切线水平 `h'(1)=0` 的平滑轮廓。为避免极端长宽比下曲线过冲，工程上会限制可用端点斜率并在 metrics 中记录 `tip_angle_target_deg`、`tip_angle_estimated_deg`、`tip_angle_error_deg` 和 `tip_angle_limited_by_ratio`。候选还会记录 `outline_area_mm2`、`outline_half_width_monotone`、`outline_symmetry_max_error_mm` 和 `outline_self_intersection`，用于 reviewer 判断生成曲线是否仍是单峰、对称、无自交的梭形轮廓。
 
 边界覆盖按长轴投影单独计算：
 
@@ -795,7 +795,7 @@ axis_coverage_deficit_mm = max(0, axis_coverage_required_mm - length_mm)
 
 如果 `length_mm` 因 `max_length_mm` 被截断而小于 `axis_coverage_required_mm`，guardrails 输出 `fusiform_axis_coverage_deficit` 高风险警告；医生需要增加长度、调整切缘或重新标注边界，不能把该候选静默当作已覆盖病灶。
 
-自由轮廓还会进入边界质量 guardrails：`boundary_point_count < min_freehand_boundary_points` 输出 medium 级 `cutaneous_boundary_too_few_points`；投影面积相对名义直径圆盘过小输出 high 级 `cutaneous_boundary_degenerate_area`；轮廓自交输出 high 级 `cutaneous_boundary_self_intersection`；`boundary_center_shift_mm` 超过 `diameter_mm * boundary_center_shift_diameter_multiplier` 输出 high 级 `cutaneous_boundary_center_shift`。这些规则用于防止误点、漏点、近共线轮廓、蝴蝶结式轮廓，或把中心点与轮廓标在不同病灶上。
+自由轮廓还会进入边界质量 guardrails：`boundary_point_count < min_freehand_boundary_points` 输出 medium 级 `cutaneous_boundary_too_few_points`；投影面积相对名义直径圆盘过小输出 high 级 `cutaneous_boundary_degenerate_area`；轮廓自交输出 high 级 `cutaneous_boundary_self_intersection`；`boundary_center_shift_mm` 超过 `diameter_mm * boundary_center_shift_diameter_multiplier` 输出 high 级 `cutaneous_boundary_center_shift`；如果自由轮廓点落在实际梭形 outline 的收窄包络之外，则记录 `boundary_envelope_min_margin_mm` / `boundary_envelope_outside_count` 并输出 high 级 `fusiform_boundary_outside_envelope`。这些规则用于防止误点、漏点、近共线轮廓、蝴蝶结式轮廓、中心点与轮廓标在不同病灶上，或候选梭形曲线没有真正包住医生标注的边界。
 
 敏感结构 guardrails 的距离计算使用标准脸归一化坐标。下睑、鼻翼和唇红缘除保留代表性锚点外，还加入简化游离缘线段；中心点或候选几何到这些锚点/线段的最短距离乘以成人脸高近似值，得到 `free_margin_distance_mm` 或 `sensitive_free_margin_min_distance_mm`。判定阈值由 `free_margin_distance_thresholds_mm` 按下睑、唇红缘、鼻翼、鼻尖、口角等结构选择，warning 文案会记录命中的阈值；这比单点锚更稳健，但仍是标准脸工程筛查，不能当作真实毫米级临床测量。
 

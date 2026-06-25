@@ -178,6 +178,12 @@ ok(near(fusiform.length_mm, 36), "fusiform length uses 3:1 default");
 ok(near(fusiform.tip_angle_deg, 30, 1e-9), "fusiform tip angle follows configured rule");
 ok(fusiform.metrics.profile === "cubic_hermite_tip_angle_constrained", "fusiform records constrained profile");
 ok(near(fusiform.metrics.tip_angle_error_deg, 0, 1e-9), "fusiform records near-zero tip angle error");
+ok(fusiform.metrics.outline_area_mm2 > 0, "fusiform records outline area");
+ok(fusiform.metrics.outline_self_intersection === false, "fusiform outline is simple");
+ok(fusiform.metrics.outline_half_width_monotone === true, "fusiform outline tapers monotonically");
+ok(fusiform.metrics.outline_symmetry_max_error_mm < 1e-9, "fusiform outline records symmetry error");
+ok(fusiform.metrics.boundary_envelope_min_margin_mm === null, "fusiform without boundary records no envelope margin");
+ok(fusiform.metrics.boundary_envelope_outside_count === 0, "fusiform without boundary records zero outside boundary points");
 ok(leftTipAngleDeg(fusiform) > 29 && leftTipAngleDeg(fusiform) < 32, "fusiform outline segment angle matches tip rule");
 ok(fusiform.outline.length > 20, "fusiform outline is renderable");
 
@@ -203,6 +209,33 @@ ok(boundaryFusiform.metrics.boundary_used === true, "fusiform candidate records 
 ok(boundaryFusiform.center[0] > 4, "fusiform candidate recenters to boundary centroid");
 ok(boundaryFusiform.length_mm >= boundaryFusiform.metrics.boundary_axis_diameter_mm + 2,
   "fusiform length covers freehand boundary plus margin");
+ok(boundaryFusiform.metrics.boundary_envelope_min_margin_mm >= 0,
+  "fusiform records non-negative boundary envelope margin for contained freehand boundary");
+ok(boundaryFusiform.metrics.boundary_envelope_outside_count === 0,
+  "fusiform records zero outside points for contained freehand boundary");
+
+const envelopeRules = structuredClone(T.DEFAULT_RULES);
+envelopeRules.fusiform_cutaneous.max_length_mm = 200;
+const rectangularBoundaryTumor = {
+  ...boundaryTumor,
+  center: [5, 2, 0],
+  boundary: [[0, 4, 0], [10, 4, 0], [10, 0, 0], [0, 0, 0]],
+};
+const envelopeFusiform = T.generateFusiformIncision(
+  rectangularBoundaryTumor,
+  { vector: [1, 0, 0], confidence: 0.9 },
+  0.1,
+  [0, 0, 1],
+  envelopeRules,
+);
+ok(envelopeFusiform.metrics.boundary_envelope_min_margin_mm < 0,
+  "fusiform records negative boundary envelope margin when contour falls outside tapered outline");
+ok(envelopeFusiform.metrics.boundary_envelope_outside_count === 4,
+  "fusiform counts boundary points outside tapered outline");
+const envelopeGuard = T.evaluateGuardrails(envelopeFusiform, { region: "cheek", confidence: 0.8 }, envelopeRules);
+ok(envelopeGuard.passed === false, "boundary outside fusiform envelope fails guardrails");
+ok(envelopeGuard.warnings.some((w) => w.code === "fusiform_boundary_outside_envelope"),
+  "guardrails flag boundary outside fusiform envelope");
 
 const coverageRules = structuredClone(T.DEFAULT_RULES);
 coverageRules.fusiform_cutaneous.max_length_mm = 40;

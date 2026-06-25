@@ -228,6 +228,12 @@ def test_fusiform_cutaneous_candidate_has_three_to_one_default_ratio():
     assert candidate["metrics"]["profile"] == "cubic_hermite_tip_angle_constrained"
     assert candidate["metrics"]["tip_angle_target_deg"] == 30.0
     assert candidate["metrics"]["tip_angle_error_deg"] < 1e-6
+    assert candidate["metrics"]["outline_area_mm2"] > 0
+    assert candidate["metrics"]["outline_self_intersection"] is False
+    assert candidate["metrics"]["outline_half_width_monotone"] is True
+    assert candidate["metrics"]["outline_symmetry_max_error_mm"] < 1e-9
+    assert candidate["metrics"]["boundary_envelope_min_margin_mm"] is None
+    assert candidate["metrics"]["boundary_envelope_outside_count"] == 0
     assert 29.0 < _left_tip_angle_deg(candidate) < 32.0
     assert len(candidate["outline"]) > 20
     assert candidate["provenance"]["candidate_version"] == 1
@@ -251,6 +257,8 @@ def test_fusiform_cutaneous_candidate_uses_freehand_boundary_extent():
     assert candidate["center"][0] > 4
     assert candidate["length_mm"] >= candidate["metrics"]["boundary_axis_diameter_mm"] + 2
     assert candidate["metrics"]["axis_coverage_deficit_mm"] == 0
+    assert candidate["metrics"]["boundary_envelope_min_margin_mm"] >= 0
+    assert candidate["metrics"]["boundary_envelope_outside_count"] == 0
     assert candidate["provenance"]["boundary_source"] == "manual_freehand"
 
 
@@ -274,6 +282,27 @@ def test_fusiform_guardrail_flags_boundary_axis_coverage_deficit():
     guardrails = evaluate_guardrails(candidate, {"region": "cheek", "confidence": 0.8})
     assert guardrails["passed"] is False
     assert any(w["code"] == "fusiform_axis_coverage_deficit" for w in guardrails["warnings"])
+
+
+def test_fusiform_guardrail_flags_boundary_outside_tapered_outline():
+    direction = {"vector": [1, 0, 0], "confidence": 0.9}
+    tumor = TumorInput(
+        kind="cutaneous",
+        center=(5, 2, 0),
+        diameter_mm=8,
+        margin_mm=1,
+        boundary=((0, 4, 0), (10, 4, 0), (10, 0, 0), (0, 0, 0)),
+        boundary_mode="freehand",
+        boundary_source="manual_freehand",
+    )
+    rules = default_clinical_rules()
+    rules["fusiform_cutaneous"]["max_length_mm"] = 200.0
+    candidate = fusiform_cutaneous_incision(tumor, direction, rules=rules, units_per_mm=0.1)
+    assert candidate["metrics"]["boundary_envelope_min_margin_mm"] < 0
+    assert candidate["metrics"]["boundary_envelope_outside_count"] == 4
+    guardrails = evaluate_guardrails(candidate, {"region": "cheek", "confidence": 0.8}, rules=rules)
+    assert guardrails["passed"] is False
+    assert any(w["code"] == "fusiform_boundary_outside_envelope" for w in guardrails["warnings"])
 
 
 def test_guardrails_warn_for_sparse_cutaneous_boundary():
