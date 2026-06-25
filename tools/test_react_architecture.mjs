@@ -20,6 +20,9 @@ const annotateStatePanel = read("src/components/AnnotateStatePanel.tsx");
 const incisionStore = read("src/stores/incisionStore.ts");
 const incisionBridge = read("src/hooks/useIncisionControllerBridge.ts");
 const incisionStatePanel = read("src/components/IncisionStatePanel.tsx");
+const liveStore = read("src/stores/liveStore.ts");
+const liveBridge = read("src/hooks/useLiveControllerBridge.ts");
+const liveStatePanel = read("src/components/LiveStatePanel.tsx");
 const annotateRoute = read("src/routes/AnnotateRoute.tsx");
 const annotateWorkbench = read("src/routes/AnnotateWorkbench.tsx");
 const incisionRoute = read("src/routes/IncisionRoute.tsx");
@@ -86,6 +89,16 @@ assert.ok(!annotateStore.includes("tris:"), "annotation store must not hold tria
 assert.ok(!annotateStore.includes("camera:"), "annotation store must not hold Three.js cameras");
 assert.ok(annotateBridge.includes("window.addEventListener(ANNOTATE_CONTROLLER_STATE_EVENT"), "React annotation hook listens for controller state events");
 assert.ok(annotateStatePanel.includes("useAnnotateStore"), "React annotation UI reads low-frequency state from Zustand");
+assert.ok(liveStore.includes("LiveControllerSnapshot"), "live Zustand store keeps typed controller snapshots");
+assert.ok(liveStore.includes("LIVE_CONTROLLER_STATE_EVENT"), "live Zustand store declares the controller bridge event");
+assert.ok(liveStore.includes("No MediaPipe task instances"), "live store documents MediaPipe object exclusion");
+assert.ok(!liveStore.includes("THREE."), "live store must not hold Three.js objects");
+assert.ok(!liveStore.includes("landmarks:"), "live store must not hold per-frame landmarks");
+assert.ok(!liveStore.includes("verts:"), "live store must not hold mesh vertex arrays");
+assert.ok(!liveStore.includes("tris:"), "live store must not hold triangle arrays");
+assert.ok(!liveStore.includes("fps:"), "live store must not hold frame counters");
+assert.ok(liveBridge.includes("window.addEventListener(LIVE_CONTROLLER_STATE_EVENT"), "React live hook listens for controller state events");
+assert.ok(liveStatePanel.includes("useLiveStore"), "React live UI reads low-frequency state from Zustand");
 assert.ok(incisionStore.includes("IncisionControllerSnapshot"), "incision Zustand store keeps typed controller snapshots");
 assert.ok(incisionStore.includes("INCISION_CONTROLLER_STATE_EVENT"), "incision Zustand store declares the controller bridge event");
 assert.ok(incisionStore.includes("No Three.js objects"), "incision store documents renderer object exclusion");
@@ -175,6 +188,7 @@ assert.ok(annotateController.includes('"/app/live"'), "annotation preview jumps 
 assert.ok(annotateController.includes("!window.__LANGERFACE_REACT_MANAGED__"), "legacy annotation HTML still auto-mounts outside React");
 assert.ok(annotateViewer.includes("dispose()"), "annotation viewer exposes a WebGL dispose lifecycle");
 assert.ok(liveRoute.includes("__LANGERFACE_REACT_MANAGED__"), "React live route disables controller auto-mount");
+assert.ok(liveRoute.includes("useLiveControllerBridge"), "live route mounts the Zustand/controller bridge");
 assert.ok(liveRoute.includes("mountLiveWorkbench"), "React live route mounts the live controller explicitly");
 assert.ok(liveRoute.includes("disposeLiveWorkbench"), "React live route can dispose the live controller");
 assert.ok(liveRoute.includes("<LiveWorkbench />"), "React live route renders the live UI as TSX");
@@ -192,12 +206,17 @@ for (const id of [
 ]) {
   assert.ok(liveWorkbench.includes(`id="${id}"`), `React live workbench exposes #${id}`);
 }
+assert.ok(liveWorkbench.includes("LiveStatePanel"), "React live workbench renders the controller state panel");
 assert.ok(liveWorkbench.includes('to="/annotate"'), "React live workbench links to the React annotation route");
 assert.ok(liveWorkbench.includes('to="/incision"'), "React live workbench links to the React incision route");
 assert.ok(dom.includes("export function bindDom"), "DOM module can rebind element references for SPA route mounts");
 assert.ok(dom.includes("export let ctx"), "DOM module exports a live canvas context binding");
 assert.ok(liveController.includes("export function mountLiveWorkbench"), "live controller exposes a mount lifecycle");
 assert.ok(liveController.includes("export function disposeLiveWorkbench"), "live controller exposes a dispose lifecycle");
+assert.ok(liveController.includes("LIVE_CONTROLLER_STATE_EVENT"), "live controller declares a React state bridge event");
+assert.ok(liveController.includes("react-live-controller-snapshot/v0.1"), "live controller publishes a typed React snapshot");
+assert.ok(liveController.includes("CustomEvent(LIVE_CONTROLLER_STATE_EVENT"), "live controller emits state snapshots through a browser event");
+assert.ok(liveController.includes("scheduleLiveState"), "live controller publishes low-frequency state snapshots from user actions");
 assert.ok(liveController.includes("bindDom(root)"), "live controller rebinds DOM references on mount");
 assert.ok(liveController.includes("abortController?.abort"), "live controller aborts DOM listeners on dispose");
 assert.ok(liveController.includes("resizeCleanup?.()"), "live controller disconnects resize observers on dispose");

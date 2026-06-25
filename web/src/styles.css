@@ -140,14 +140,16 @@
   }
 
   .incision-workbench .incision-state-grid,
-  .annotate-workbench .annotate-state-grid {
+  .annotate-workbench .annotate-state-grid,
+  .live-workbench .live-state-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
 
   .incision-workbench .incision-state-grid > div,
-  .annotate-workbench .annotate-state-grid > div {
+  .annotate-workbench .annotate-state-grid > div,
+  .live-workbench .live-state-grid > div {
     min-width: 0;
     border: 1px solid var(--line);
     border-radius: 10px;
@@ -156,7 +158,8 @@
   }
 
   .incision-workbench .incision-state-grid .k,
-  .annotate-workbench .annotate-state-grid .k {
+  .annotate-workbench .annotate-state-grid .k,
+  .live-workbench .live-state-grid .k {
     display: block;
     font-size: 10.5px;
     color: var(--muted);
@@ -164,7 +167,8 @@
   }
 
   .incision-workbench .incision-state-grid .v,
-  .annotate-workbench .annotate-state-grid .v {
+  .annotate-workbench .annotate-state-grid .v,
+  .live-workbench .live-state-grid .v {
     display: block;
     margin-top: 3px;
     color: var(--ink);

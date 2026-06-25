@@ -19,6 +19,97 @@ let resizeCleanup = null;
 let abortController = null;
 let mounted = false;
 let activeSession = 0;
+let liveStateTimer = 0;
+
+const LIVE_CONTROLLER_STATE_EVENT = "langerface:live-state";
+
+function textOf(el) {
+  return el?.textContent?.trim?.() || "";
+}
+
+function visibleTextOf(el) {
+  if (!el || el.classList?.contains("hidden")) return "";
+  return textOf(el);
+}
+
+function publishLiveState(reason = "state_update") {
+  if (!mounted || typeof window === "undefined" || !els.canvas) return;
+  window.dispatchEvent(new CustomEvent(LIVE_CONTROLLER_STATE_EVENT, {
+    detail: {
+      schema_version: "react-live-controller-snapshot/v0.1",
+      reason,
+      modelBadge: textOf(els.badge),
+      overlayMessage: visibleTextOf(els.msg),
+      source: {
+        kind: sourceState.sourceKind,
+        running: Boolean(sourceState.running),
+        paused: Boolean(sourceState.paused),
+        liveLabel: els.live?.dataset?.k || textOf(els.live) || "待机",
+      },
+      route: {
+        route: reconState.route,
+        mode3d: reconState.mode3d,
+        hint: textOf(els.routeModeHint),
+      },
+      render: {
+        system: renderState.system,
+        densityPct: Math.round(renderState.densityFrac * 100),
+        smoothLabel: textOf(els.smoothVal),
+        opacityPct: Math.round(renderState.opacity * 100),
+        mirror: Boolean(renderState.mirror),
+        zoom: Boolean(renderState.zoom),
+        meshPts: Boolean(renderState.meshPts),
+        bands: Boolean(renderState.bands),
+      },
+      recon: {
+        has3dModel: Boolean(reconState.reconVerts || reconState.flameFit || reconState.flameNeutral),
+        projectable: Boolean(reconState.reconProjectable),
+        scanActive: Boolean(reconState.scan?.active),
+        twinMode: reconState.twinMode,
+        twinTexture: Boolean(reconState.twinTexture),
+        status: textOf(els.reconStatus),
+      },
+      atlasPreview: {
+        active: Boolean(previewSystem && previewMeta && renderState.system === previewSystem),
+        source: previewMeta?.source || null,
+        validated: previewMeta ? previewMeta.validated === true : null,
+        count: Number.isFinite(previewMeta?.count) ? previewMeta.count : null,
+      },
+      incisionOverlay: {
+        loaded: Boolean(renderState.incisionOverlay),
+        qaLabel: textOf(els.incisionOverlayQaState) || null,
+      },
+      recording: Boolean(recordingState.recorder),
+      updatedAt: new Date().toISOString(),
+    },
+  }));
+}
+
+function scheduleLiveState(reason = "state_update") {
+  if (!mounted) return;
+  if (liveStateTimer) clearTimeout(liveStateTimer);
+  liveStateTimer = setTimeout(() => {
+    liveStateTimer = 0;
+    publishLiveState(reason);
+  }, 0);
+}
+
+function runLiveAction(reason, action) {
+  try {
+    const result = action();
+    scheduleLiveState(reason);
+    if (result?.then) {
+      result.then(
+        () => scheduleLiveState(`${reason}_done`),
+        () => scheduleLiveState(`${reason}_failed`),
+      );
+    }
+    return result;
+  } catch (err) {
+    scheduleLiveState(`${reason}_failed`);
+    throw err;
+  }
+}
 
 function syncPreviewControls() {
   const previewIsActive = Boolean(previewSystem && previewMeta && renderState.system === previewSystem);
@@ -46,6 +137,7 @@ function applyStagedAtlas() {
   els.tmpl.value = atlas.system;
   syncPreviewControls();
   if (!sourceState.running) setMsg("已载入标注预览图谱（未验证）。开启摄像头或上传照片即可在脸上查看。");
+  scheduleLiveState("staged_atlas");
 }
 
 function applyStagedIncisionOverlay() {
@@ -67,6 +159,7 @@ function applyStagedIncisionOverlay() {
   const reviewLabel = overlay.review?.status === "approved_for_discussion" ? "已确认候选草案" : "待复核候选";
   const riskText = highCodes.length ? `；高风险项 ${highCodes.join("、")}` : "";
   setMsg(`已载入切口候选叠加（${reviewLabel}${riskText}）。上传照片、视频或开启摄像头后，会随 RSTL 一起显示。`);
+  scheduleLiveState("staged_incision_overlay");
 }
 
 // ── UI 绑定 ───────────────────────────────────────────────────────────────────
@@ -181,6 +274,7 @@ function toggleRecording() {
         els.export.textContent = recording ? "■ 停止" : "⬇ 导出";
         if (recording) els.export.setAttribute("aria-pressed", "true");
         else els.export.removeAttribute("aria-pressed");
+        scheduleLiveState("recording_state");
       },
     });
   }
@@ -189,32 +283,32 @@ function toggleRecording() {
 
 function bindLiveEvents(signal) {
   els.upload.addEventListener("click", () => els.file.click(), { signal });
-  els.file.addEventListener("change", (e) => handleFile(e.target.files?.[0]), { signal });
-  els.cam.addEventListener("click", startCamera, { signal });
-  els.pause.addEventListener("click", handlePauseToggle, { signal });
-  els.tmpl.addEventListener("change", handleTemplateChange, { signal });
-  els.density.addEventListener("input", handleDensityInput, { signal });
-  els.smooth.addEventListener("input", handleSmoothInput, { signal });
-  els.opacity.addEventListener("input", handleOpacityInput, { signal });
-  els.clip.addEventListener("change", (e) => { renderState.clip = e.target.checked; refreshStaticImage(); }, { signal });
-  els.handOcc.addEventListener("change", handleHandOccChange, { signal });
-  els.mirror.addEventListener("change", handleMirrorChange, { signal });
-  els.bands.addEventListener("change", (e) => { renderState.bands = e.target.checked; refreshStaticImage(); }, { signal });
-  els.zoom.addEventListener("change", (e) => { renderState.zoom = e.target.checked; els.zoomStrip.classList.toggle("hidden", !renderState.zoom); refreshStaticImage(); }, { signal });
-  els.meshPts.addEventListener("change", (e) => { renderState.meshPts = e.target.checked; refreshStaticImage(); }, { signal });
-  els.restoreAtlas.addEventListener("click", restoreAtlasPreview, { signal });
-  els.export.addEventListener("click", toggleRecording, { signal });
+  els.file.addEventListener("change", (e) => runLiveAction("file_source", () => handleFile(e.target.files?.[0])), { signal });
+  els.cam.addEventListener("click", () => runLiveAction("camera_toggle", startCamera), { signal });
+  els.pause.addEventListener("click", () => runLiveAction("pause_toggle", handlePauseToggle), { signal });
+  els.tmpl.addEventListener("change", (e) => runLiveAction("template_change", () => handleTemplateChange(e)), { signal });
+  els.density.addEventListener("input", (e) => runLiveAction("density_input", () => handleDensityInput(e)), { signal });
+  els.smooth.addEventListener("input", (e) => runLiveAction("smooth_input", () => handleSmoothInput(e)), { signal });
+  els.opacity.addEventListener("input", (e) => runLiveAction("opacity_input", () => handleOpacityInput(e)), { signal });
+  els.clip.addEventListener("change", (e) => runLiveAction("clip_toggle", () => { renderState.clip = e.target.checked; refreshStaticImage(); }), { signal });
+  els.handOcc.addEventListener("change", (e) => runLiveAction("hand_occlusion_toggle", () => handleHandOccChange(e)), { signal });
+  els.mirror.addEventListener("change", (e) => runLiveAction("mirror_toggle", () => handleMirrorChange(e)), { signal });
+  els.bands.addEventListener("change", (e) => runLiveAction("bands_toggle", () => { renderState.bands = e.target.checked; refreshStaticImage(); }), { signal });
+  els.zoom.addEventListener("change", (e) => runLiveAction("zoom_toggle", () => { renderState.zoom = e.target.checked; els.zoomStrip.classList.toggle("hidden", !renderState.zoom); refreshStaticImage(); }), { signal });
+  els.meshPts.addEventListener("change", (e) => runLiveAction("mesh_points_toggle", () => { renderState.meshPts = e.target.checked; refreshStaticImage(); }), { signal });
+  els.restoreAtlas.addEventListener("click", () => runLiveAction("restore_atlas", restoreAtlasPreview), { signal });
+  els.export.addEventListener("click", () => runLiveAction("recording_toggle", toggleRecording), { signal });
 
   // 3D Beta 路线绑定
-  els.routeSel.addEventListener("change", (e) => enterRoute(e.target.value), { signal });
-  els.reconDemo.addEventListener("click", loadDemoRecon, { signal });
-  els.reconScan.addEventListener("click", startScan, { signal });
-  els.view3d.addEventListener("click", () => { if (reconState.reconVerts) setMode3d("view"); }, { signal });
-  els.project3d.addEventListener("click", () => { if (reconState.reconVerts && reconState.reconProjectable) setMode3d("project"); }, { signal });
-  els.reset3d.addEventListener("click", resetView3d, { signal });
-  els.cloudFitFlame.addEventListener("click", startTwin, { signal });
-  els.flameStd.addEventListener("change", toggleTwinHead, { signal });
-  els.twinTexture.addEventListener("change", toggleTwinTexture, { signal });
+  els.routeSel.addEventListener("change", (e) => runLiveAction("route_change", () => enterRoute(e.target.value)), { signal });
+  els.reconDemo.addEventListener("click", () => runLiveAction("load_demo_recon", loadDemoRecon), { signal });
+  els.reconScan.addEventListener("click", () => runLiveAction("start_scan", startScan), { signal });
+  els.view3d.addEventListener("click", () => runLiveAction("view_3d", () => { if (reconState.reconVerts) setMode3d("view"); }), { signal });
+  els.project3d.addEventListener("click", () => runLiveAction("project_3d", () => { if (reconState.reconVerts && reconState.reconProjectable) setMode3d("project"); }), { signal });
+  els.reset3d.addEventListener("click", () => runLiveAction("reset_3d", resetView3d), { signal });
+  els.cloudFitFlame.addEventListener("click", () => runLiveAction("start_twin", startTwin), { signal });
+  els.flameStd.addEventListener("change", () => runLiveAction("toggle_twin_head", toggleTwinHead), { signal });
+  els.twinTexture.addEventListener("change", () => runLiveAction("toggle_twin_texture", toggleTwinTexture), { signal });
 
   els.mainWrap.addEventListener("pointerdown", startImageDrag, { signal });
   els.mainWrap.addEventListener("pointermove", moveImageDrag, { signal });
@@ -230,6 +324,8 @@ function isActiveSession(session) {
 export function disposeLiveWorkbench() {
   mounted = false;
   activeSession += 1;
+  if (liveStateTimer) clearTimeout(liveStateTimer);
+  liveStateTimer = 0;
   abortController?.abort?.();
   abortController = null;
   resizeCleanup?.();
@@ -264,6 +360,7 @@ export function mountLiveWorkbench(root = document) {
   });
   els.smoothVal.textContent = smoothLabel(+els.smooth.value);
   configureLandmarkSmoothing();
+  scheduleLiveState("mounted");
 
   // 预加载模型并反馈状态
   const session = activeSession;
@@ -271,11 +368,13 @@ export function mountLiveWorkbench(root = document) {
     if (!isActiveSession(session)) return;
     applyStagedAtlas();
     applyStagedIncisionOverlay();
+    scheduleLiveState("model_ready");
   }).catch((e) => {
     if (!isActiveSession(session)) return;
     countMetric("bootstrap.loadFailure");
     els.badge.textContent = "模型加载失败";
     logError("启动时模型加载失败。", e);
+    scheduleLiveState("model_load_failed");
   });
   return disposeLiveWorkbench;
 }

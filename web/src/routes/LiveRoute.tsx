@@ -1,12 +1,14 @@
 import { useEffect, useRef } from "react";
 
 import { LiveWorkbench } from "./LiveWorkbench";
+import { useLiveControllerBridge } from "../hooks/useLiveControllerBridge";
 import { useAppStore } from "../stores/appStore";
 
 export function LiveRoute() {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const setActiveWorkspace = useAppStore((state) => state.setActiveWorkspace);
   const setRouteStatus = useAppStore((state) => state.setRouteStatus);
+  useLiveControllerBridge();
 
   useEffect(() => {
     let disposed = false;

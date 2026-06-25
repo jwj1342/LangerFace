@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 
+import { LiveStatePanel } from "../components/LiveStatePanel";
+
 export function LiveWorkbench() {
   return (
     <div className="app live-workbench">
@@ -65,6 +67,8 @@ export function LiveWorkbench() {
           </div>
           <Link className="btn btn-primary" to="/incision">打开切口 Agent 工作台</Link>
         </div>
+
+        <LiveStatePanel />
 
         <div className="card">
           <button className="btn btn-primary" id="uploadBtn" type="button">⬆&nbsp; 上传照片 / 视频</button>
