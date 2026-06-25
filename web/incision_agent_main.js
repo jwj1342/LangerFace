@@ -1382,8 +1382,56 @@ function saveReviewRecord() {
   saveCurrentCandidate("审阅候选");
 }
 
+function directionForAgentAlternative(baseDirection = {}, alternative = {}) {
+  const offset = Number(alternative.angle_offset_deg || 0);
+  const confidence = Math.max(0, Number(baseDirection.confidence || 0) - Math.abs(offset) / 180);
+  const reasons = [...new Set([
+    ...(Array.isArray(baseDirection.confidence_reasons) ? baseDirection.confidence_reasons : []),
+    ...(Math.abs(offset) > 1e-9 ? ["agent_direction_variant_requires_clinician_review"] : []),
+  ])];
+  return {
+    ...baseDirection,
+    confidence,
+    angle_offset_deg: offset,
+    variant_source: Math.abs(offset) > 1e-9 ? "agent_direction_variant" : "rstl_primary",
+    confidence_reasons: reasons,
+  };
+}
+
+function agentAlternativeResult(baseResult, alternative) {
+  return {
+    ...baseResult,
+    direction: directionForAgentAlternative(baseResult.direction, alternative),
+    candidate: alternative.candidate,
+    original_candidate: alternative.candidate,
+    guardrails: alternative.guardrails || baseResult.guardrails,
+    preview: alternative.preview || baseResult.preview,
+    anatomy: alternative.anatomy || baseResult.anatomy,
+    sensitive_structure_inspection:
+      alternative.sensitive_structure_inspection || baseResult.sensitive_structure_inspection,
+    review_status: alternative.review_status || "pending_clinician_confirmation",
+    llm: {
+      ...(baseResult.llm || {}),
+      summary: `已载入后端方向备选：${alternative.label || alternative.id || "候选"}；请复核 guardrails、敏感结构和候选比较。`,
+      next_step: "医生审阅、编辑或否决该后端候选。",
+    },
+  };
+}
+
 function makeVariantCandidates() {
   if (!S.baseResult) return;
+  const backendAlternatives = Array.isArray(S.result?.candidate_alternatives)
+    ? S.result.candidate_alternatives.filter((item) => item?.candidate)
+    : [];
+  if (backendAlternatives.length) {
+    for (const alternative of backendAlternatives) {
+      const result = agentAlternativeResult(S.result, alternative);
+      S.saved.push(reviewRecord(result, alternative.label || `后端备选 ${S.saved.length + 1}`));
+    }
+    renderSaved();
+    els.stageStatus.textContent = `已保存 ${backendAlternatives.length} 个后端方向备选，并保留各自 guardrails、敏感结构复核和工程排序`;
+    return;
+  }
   const variants = [
     { angle_offset_deg: -10, length_scale: 1, width_scale: 1, reason: "variant exploration: -10 deg" },
     { angle_offset_deg: 0, length_scale: 1, width_scale: 1, reason: "variant exploration: tool baseline" },
