@@ -238,6 +238,14 @@
     font-weight: 700;
   }
 
+  .incision-workbench .provider-state-ok {
+    color: var(--green-d);
+  }
+
+  .incision-workbench .provider-state-warn {
+    color: #b45309;
+  }
+
   .react-surgery-host {
     min-height: 100dvh;
   }

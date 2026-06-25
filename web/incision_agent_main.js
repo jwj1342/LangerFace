@@ -161,6 +161,7 @@ function createRuntimeState() {
     secondaryCues: null,
     workflowWorker: null,
     workflowWorkerFailed: false,
+    providerReactStateHandler: null,
     editTimeline: null,
     editCursor: 0,
     lastConsoleTraceSignature: "",
@@ -176,6 +177,7 @@ const REVIEW_LABELS = {
   rejected_by_clinician: "否决候选",
 };
 const INCISION_CONTROLLER_STATE_EVENT = "langerface:incision-state";
+const INCISION_PROVIDER_REACT_STATE_EVENT = "langerface:incision-provider-react-state";
 
 function numericControlValue(el) {
   if (!el) return null;
@@ -2012,10 +2014,15 @@ function bindWorkbenchEvents() {
   els.ellipseRatio.onchange = runAgent;
   els.boundaryMode.onchange = () => { S.boundaryActive = false; updateFormVisibility(); runAgent(); };
   els.run.onclick = runAgent;
-  els.testProvider.onclick = testProviderEndpoint;
-  els.providerBaseUrl.onchange = () => { setProviderTestState("Provider Base URL 已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
-  els.providerModel.onchange = () => { setProviderTestState("Provider 模型已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
-  els.providerTimeout.oninput = () => { els.providerTimeoutVal.textContent = els.providerTimeout.value; saveProviderPrefs(); };
+  if (window.__LANGERFACE_REACT_MANAGED__) {
+    S.providerReactStateHandler = () => publishIncisionState("provider_react_state");
+    window.addEventListener(INCISION_PROVIDER_REACT_STATE_EVENT, S.providerReactStateHandler);
+  } else {
+    els.testProvider.onclick = testProviderEndpoint;
+    els.providerBaseUrl.onchange = () => { setProviderTestState("Provider Base URL 已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
+    els.providerModel.onchange = () => { setProviderTestState("Provider 模型已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
+    els.providerTimeout.oninput = () => { els.providerTimeoutVal.textContent = els.providerTimeout.value; saveProviderPrefs(); };
+  }
   els.startBoundary.onclick = () => {
   S.boundaryActive = !S.boundaryActive;
   els.startBoundary.textContent = S.boundaryActive ? "结束轮廓" : "开始轮廓";
@@ -2089,6 +2096,10 @@ export function disposeIncisionAgentWorkbench() {
   S.resizeObserver?.disconnect?.();
   S.workflowWorker?.dispose?.();
   S.workflowWorker = null;
+  if (S.providerReactStateHandler) {
+    window.removeEventListener(INCISION_PROVIDER_REACT_STATE_EVENT, S.providerReactStateHandler);
+    S.providerReactStateHandler = null;
+  }
   S.head?.dispose?.();
 }
 

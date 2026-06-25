@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import { IncisionStatePanel } from "../components/IncisionStatePanel";
+import { ProviderConfigPanel } from "../components/ProviderConfigPanel";
 
 export function IncisionWorkbench() {
   return (
@@ -75,21 +76,7 @@ export function IncisionWorkbench() {
           <label className="check"><input type="checkbox" id="secondaryCueConfirmed" /> 已人工确认辅助线索</label>
         </div>
 
-        <div className="card agent-grid">
-          <div className="quality-top"><span>LLM Provider</span><span id="providerState">待运行</span></div>
-          <input id="providerMode" type="hidden" defaultValue="openai-compatible" />
-          <p className="agent-note">Provider 类型固定为 OpenAI-compatible / vLLM。测试会请求 Base URL 下的 /models。</p>
-          <input id="providerBaseUrl" className="text-input" defaultValue="https://api.openai.com/v1" placeholder="https://your-provider.example/v1" />
-          <input id="providerModel" className="text-input" defaultValue="gpt-4.1-mini" placeholder="模型名，如 gpt-4.1-mini 或 Qwen/Qwen3-14B" />
-          <input id="providerApiKey" className="text-input" type="password" placeholder="API Key（Provider 需要时填写；导出会脱敏）" />
-          <div>
-            <label className="field-label" htmlFor="providerTimeout">LLM timeout 秒 <span id="providerTimeoutVal" className="val">60</span></label>
-            <input id="providerTimeout" type="range" min="5" max="180" defaultValue="60" />
-          </div>
-          <button className="btn" id="testProviderBtn" type="button">测试 LLM Provider 连接</button>
-          <p className="agent-note" id="providerTestState">尚未测试 LLM Provider 连通性。Vercel 调试请填写可从浏览器访问、允许该 preview origin、并兼容 OpenAI /models 的 HTTPS Provider；候选生成不调用 Provider。</p>
-          <p className="agent-note">生成候选时只执行浏览器内确定性 workflow；Provider 连接测试暂不参与切口几何或工具 trace。</p>
-        </div>
+        <ProviderConfigPanel />
 
         <div className="card">
           <div className="quality-top"><span>候选结果</span><span id="candidateType">—</span></div>

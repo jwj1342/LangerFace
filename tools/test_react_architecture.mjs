@@ -20,6 +20,7 @@ const annotateStatePanel = read("src/components/AnnotateStatePanel.tsx");
 const incisionStore = read("src/stores/incisionStore.ts");
 const incisionBridge = read("src/hooks/useIncisionControllerBridge.ts");
 const incisionStatePanel = read("src/components/IncisionStatePanel.tsx");
+const providerPanel = read("src/components/ProviderConfigPanel.tsx");
 const liveStore = read("src/stores/liveStore.ts");
 const liveBridge = read("src/hooks/useLiveControllerBridge.ts");
 const liveStatePanel = read("src/components/LiveStatePanel.tsx");
@@ -118,7 +119,6 @@ assert.ok(!incisionRoute.includes("innerHTML"), "React incision route should not
 assert.ok(!incisionRoute.includes("incision_agent.html"), "React incision route should not fetch the legacy workbench HTML");
 for (const id of [
   "tumorKind",
-  "providerBaseUrl",
   "runAgentBtn",
   "agentCanvas",
   "candidateList",
@@ -127,10 +127,28 @@ for (const id of [
 ]) {
   assert.ok(incisionWorkbench.includes(`id="${id}"`), `React incision workbench exposes #${id}`);
 }
+for (const id of [
+  "providerMode",
+  "providerBaseUrl",
+  "providerModel",
+  "providerApiKey",
+  "providerTimeout",
+  "testProviderBtn",
+  "providerTestState",
+]) {
+  assert.ok(providerPanel.includes(`id="${id}"`), `React provider panel exposes #${id}`);
+}
+assert.ok(incisionWorkbench.includes("ProviderConfigPanel"), "React incision workbench renders the provider panel as a React component");
+assert.ok(providerPanel.includes("testProviderConnection"), "React provider panel owns the browser-side Provider connectivity test");
+assert.ok(providerPanel.includes("normalizeProviderBaseUrl"), "React provider panel normalizes provider Base URL");
+assert.ok(providerPanel.includes("PROVIDER_REACT_STATE_EVENT"), "React provider panel notifies the legacy controller to republish snapshots");
 assert.ok(incisionWorkbench.includes('to="/live"'), "React incision workbench returns to the React live route");
 assert.ok(incisionWorkbench.includes('to="/annotate"'), "React incision workbench links to the React 3D annotation route");
 assert.ok(controller.includes("export function mountIncisionAgentWorkbench"), "incision controller exposes a mount lifecycle");
 assert.ok(controller.includes("export function disposeIncisionAgentWorkbench"), "incision controller exposes a dispose lifecycle");
+assert.ok(controller.includes("INCISION_PROVIDER_REACT_STATE_EVENT"), "incision controller listens for React provider state changes");
+assert.ok(controller.includes("window.__LANGERFACE_REACT_MANAGED__"), "incision controller can branch between React and legacy provider handling");
+assert.ok(controller.includes("els.testProvider.onclick = testProviderEndpoint"), "legacy incision HTML still owns provider connectivity testing");
 assert.ok(controller.includes("cancelAnimationFrame"), "incision controller cancels its render loop on dispose");
 assert.ok(controller.includes("S.resizeObserver?.disconnect"), "incision controller disconnects ResizeObserver on dispose");
 assert.ok(controller.includes("S.head?.dispose"), "incision controller disposes WebGL resources on dispose");
