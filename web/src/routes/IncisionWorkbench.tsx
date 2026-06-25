@@ -1,3 +1,5 @@
+import { IncisionStatePanel } from "../components/IncisionStatePanel";
+
 export function IncisionWorkbench() {
   return (
     <div className="app incision-workbench">
@@ -9,6 +11,8 @@ export function IncisionWorkbench() {
           </div>
           <h1>切口 Agent 工作台</h1>
         </div>
+
+        <IncisionStatePanel />
 
         <div className="card agent-grid">
           <label className="field-label" htmlFor="tumorKind">肿物类型</label>

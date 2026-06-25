@@ -1,0 +1,73 @@
+import { create } from "zustand";
+
+export interface IncisionTumorState {
+  kind: "subcutaneous" | "cutaneous" | string;
+  diameterMm: number | null;
+  depthMm: number | null;
+  marginMm: number | null;
+  boundaryMode: string;
+}
+
+export interface IncisionProviderState {
+  provider: string;
+  baseUrl: string;
+  model: string;
+  timeoutS: number | null;
+  stateLabel: string;
+  testLabel: string;
+}
+
+export interface IncisionReviewState {
+  status: string;
+  reviewer: string;
+  notesPresent: boolean;
+}
+
+export interface IncisionCandidateSummary {
+  id: string | null;
+  type: string | null;
+  lengthMm: number | null;
+  widthMm: number | null;
+  guardrailsPassed: boolean | null;
+  directionConfidence: number | null;
+  edited: boolean;
+}
+
+export interface IncisionWorkflowRuntime {
+  executor: string;
+  worker: boolean;
+  thread: string;
+  error: string | null;
+}
+
+export interface IncisionControllerSnapshot {
+  schema_version: "react-incision-controller-snapshot/v0.1";
+  reason: string;
+  stageStatus: string;
+  tumor: IncisionTumorState;
+  provider: IncisionProviderState;
+  review: IncisionReviewState;
+  candidate: IncisionCandidateSummary | null;
+  workflowRuntime: IncisionWorkflowRuntime | null;
+  savedCount: number;
+  updatedAt: string;
+}
+
+interface IncisionStoreState {
+  snapshot: IncisionControllerSnapshot | null;
+  setControllerSnapshot: (snapshot: IncisionControllerSnapshot) => void;
+  clearControllerSnapshot: () => void;
+}
+
+export const INCISION_CONTROLLER_STATE_EVENT = "langerface:incision-state";
+
+export const INCISION_STORE_BOUNDARY_NOTE = [
+  "Zustand stores low-frequency incision workbench state only.",
+  "No Three.js objects, WebGL contexts, MediaPipe task instances, canonical vertices, triangles, or per-frame arrays belong here.",
+].join(" ");
+
+export const useIncisionStore = create<IncisionStoreState>((set) => ({
+  snapshot: null,
+  setControllerSnapshot: (snapshot) => set({ snapshot }),
+  clearControllerSnapshot: () => set({ snapshot: null }),
+}));

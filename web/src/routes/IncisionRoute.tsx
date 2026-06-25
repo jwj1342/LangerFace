@@ -1,12 +1,14 @@
 import { useEffect, useRef } from "react";
 
 import { IncisionWorkbench } from "./IncisionWorkbench";
+import { useIncisionControllerBridge } from "../hooks/useIncisionControllerBridge";
 import { useAppStore } from "../stores/appStore";
 
 export function IncisionRoute() {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const setActiveWorkspace = useAppStore((state) => state.setActiveWorkspace);
   const setRouteStatus = useAppStore((state) => state.setRouteStatus);
+  useIncisionControllerBridge();
 
   useEffect(() => {
     let disposed = false;

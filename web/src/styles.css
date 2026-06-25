@@ -92,6 +92,37 @@
     min-width: 0;
   }
 
+  .incision-workbench .incision-state-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .incision-workbench .incision-state-grid > div {
+    min-width: 0;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #f8f9f5;
+    padding: 8px 9px;
+  }
+
+  .incision-workbench .incision-state-grid .k {
+    display: block;
+    font-size: 10.5px;
+    color: var(--muted);
+    font-weight: 700;
+  }
+
+  .incision-workbench .incision-state-grid .v {
+    display: block;
+    margin-top: 3px;
+    color: var(--ink);
+    font-size: 12.5px;
+    font-weight: 750;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
   .incision-workbench .metric .k {
     display: block;
     font-size: 11px;

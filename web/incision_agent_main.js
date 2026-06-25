@@ -175,6 +175,75 @@ const REVIEW_LABELS = {
   needs_revision: "退回修改",
   rejected_by_clinician: "否决候选",
 };
+const INCISION_CONTROLLER_STATE_EVENT = "langerface:incision-state";
+
+function numericControlValue(el) {
+  if (!el) return null;
+  const value = Number(el.value);
+  return Number.isFinite(value) ? value : null;
+}
+
+function currentTumorFormSnapshot() {
+  return {
+    kind: els.tumorKind?.value || "subcutaneous",
+    diameterMm: numericControlValue(els.diameter),
+    depthMm: els.tumorKind?.value === "subcutaneous" ? numericControlValue(els.depth) : null,
+    marginMm: els.tumorKind?.value === "cutaneous" ? numericControlValue(els.margin) : 0,
+    boundaryMode: els.tumorKind?.value === "cutaneous" ? (els.boundaryMode?.value || "ellipse") : "center_diameter",
+  };
+}
+
+function currentProviderSnapshot() {
+  const cfg = redactedProviderConfig();
+  return {
+    provider: cfg.provider || "openai-compatible",
+    baseUrl: cfg.base_url || "",
+    model: cfg.model || "",
+    timeoutS: Number.isFinite(Number(cfg.timeout_s)) ? Number(cfg.timeout_s) : null,
+    stateLabel: els.providerState?.textContent || "待运行",
+    testLabel: els.providerTestState?.textContent || "",
+  };
+}
+
+function currentReviewSnapshot() {
+  return {
+    status: els.reviewDecision?.value || "pending_clinician_confirmation",
+    reviewer: els.reviewerName?.value?.trim?.() || "",
+    notesPresent: Boolean(els.reviewNotes?.value?.trim?.()),
+  };
+}
+
+function currentCandidateSnapshot(result = S.result) {
+  const candidate = result?.candidate;
+  if (!candidate) return null;
+  return {
+    id: candidate.id || null,
+    type: candidate.type || null,
+    lengthMm: Number.isFinite(Number(candidate.length_mm)) ? Number(candidate.length_mm) : null,
+    widthMm: Number.isFinite(Number(candidate.width_mm)) ? Number(candidate.width_mm) : null,
+    guardrailsPassed: result?.guardrails?.passed == null ? null : Boolean(result.guardrails.passed),
+    directionConfidence: Number.isFinite(Number(result?.direction?.confidence)) ? Number(result.direction.confidence) : null,
+    edited: Boolean(candidate.edited),
+  };
+}
+
+function publishIncisionState(reason = "state_update") {
+  if (!S.mounted || typeof window === "undefined" || !els.stageStatus) return;
+  window.dispatchEvent(new CustomEvent(INCISION_CONTROLLER_STATE_EVENT, {
+    detail: {
+      schema_version: "react-incision-controller-snapshot/v0.1",
+      reason,
+      stageStatus: els.stageStatus?.textContent || "",
+      tumor: currentTumorFormSnapshot(),
+      provider: currentProviderSnapshot(),
+      review: currentReviewSnapshot(),
+      candidate: currentCandidateSnapshot(),
+      workflowRuntime: S.result?.workflow_runtime || null,
+      savedCount: S.saved?.length || 0,
+      updatedAt: new Date().toISOString(),
+    },
+  }));
+}
 
 function formatAssetBytes(bytes) {
   const n = Number(bytes || 0);
@@ -318,6 +387,7 @@ function setProviderTestState(text, level = "") {
   els.providerTestState.textContent = text;
   els.providerTestState.classList.toggle("ok", level === "ok");
   els.providerTestState.classList.toggle("warn", level === "warn");
+  publishIncisionState("provider_state");
 }
 
 function normalizedHost(host = "") {
@@ -446,6 +516,7 @@ async function testProviderEndpoint() {
     els.stageStatus.textContent = `LLM Provider 连接失败：${msg}`;
   } finally {
     els.testProvider.disabled = false;
+    publishIncisionState("provider_test_result");
   }
 }
 
@@ -553,6 +624,7 @@ function updateReviewStateUI() {
   els.reviewState.classList.toggle("approved", status === "approved_for_discussion");
   els.reviewState.classList.toggle("rejected", status === "rejected_by_clinician");
   els.reviewState.classList.toggle("revision", status === "needs_revision");
+  publishIncisionState("review_state");
 }
 
 function currentReviewMetadata(at = new Date().toISOString()) {
@@ -1210,6 +1282,7 @@ function renderResult(result) {
     : `不上传原始影像；${audit.data_sent_to_agent.length} 类抽象字段只在浏览器确定性 workflow 内处理。Provider API Key 只用于手动连通性测试。${audit.secondary_cues_present ? " 辅助线索仅随审阅导出，不参与几何。" : ""}`;
   const edited = result.candidate.edited ? " · 已记录医生调整" : "";
   els.stageStatus.textContent = `浏览器确定性 workflow 已更新候选${edited}`;
+  publishIncisionState("candidate_result");
 }
 
 function guardrailSummary(guardrails = {}) {
@@ -1396,6 +1469,7 @@ function renderSaved() {
     row.append(top, meta, actions);
     els.candidateList.append(row);
   }
+  publishIncisionState("saved_candidates");
 }
 
 function saveCurrentCandidate(label = "医生候选") {
@@ -1919,6 +1993,13 @@ function bindWorkbenchEvents() {
   drag = null;
   });
   els.canvas.addEventListener("wheel", (e) => { e.preventDefault(); S.head.zoom(e.deltaY > 0 ? 1.1 : 0.9); }, { passive: false });
+  const stateRoot = els.canvas?.closest(".app");
+  stateRoot?.addEventListener("change", () => publishIncisionState("form_change"));
+  stateRoot?.addEventListener("input", (event) => {
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement) {
+      publishIncisionState("form_input");
+    }
+  });
 
   els.tumorKind.onchange = () => { updateFormVisibility(); runAgent(); };
   els.diameter.oninput = () => { els.diameterVal.textContent = els.diameter.value; updateTumorRing(); };

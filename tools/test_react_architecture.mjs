@@ -14,6 +14,9 @@ const vite = read("vite.config.js");
 const vercel = read("vercel.json");
 const app = read("src/App.tsx");
 const typedStore = read("src/stores/appStore.ts");
+const incisionStore = read("src/stores/incisionStore.ts");
+const incisionBridge = read("src/hooks/useIncisionControllerBridge.ts");
+const incisionStatePanel = read("src/components/IncisionStatePanel.tsx");
 const incisionRoute = read("src/routes/IncisionRoute.tsx");
 const incisionWorkbench = read("src/routes/IncisionWorkbench.tsx");
 const threeRoute = read("src/routes/ThreePreviewRoute.tsx");
@@ -56,6 +59,15 @@ assert.ok(app.includes('path="/three-preview"'), "React Router exposes the R3F p
 assert.ok(typedStore.includes("React/Zustand stores low-frequency UI"), "Zustand store documents low-frequency state ownership");
 assert.ok(typedStore.includes("per-frame arrays stay outside persisted stores"), "Zustand store forbids high-frequency renderer arrays");
 assert.ok(typedStore.includes("interface AppState"), "Zustand store is typed");
+assert.ok(incisionStore.includes("IncisionControllerSnapshot"), "incision Zustand store keeps typed controller snapshots");
+assert.ok(incisionStore.includes("INCISION_CONTROLLER_STATE_EVENT"), "incision Zustand store declares the controller bridge event");
+assert.ok(incisionStore.includes("No Three.js objects"), "incision store documents renderer object exclusion");
+assert.ok(!incisionStore.includes("THREE."), "incision store must not hold Three.js objects");
+assert.ok(!incisionStore.includes("verts:"), "incision store must not hold mesh vertex arrays");
+assert.ok(!incisionStore.includes("tris:"), "incision store must not hold triangle arrays");
+assert.ok(incisionBridge.includes("window.addEventListener(INCISION_CONTROLLER_STATE_EVENT"), "React hook listens for controller state events");
+assert.ok(incisionRoute.includes("useIncisionControllerBridge"), "incision route mounts the Zustand/controller bridge");
+assert.ok(incisionStatePanel.includes("useIncisionStore"), "React incision UI reads low-frequency state from Zustand");
 
 assert.ok(incisionRoute.includes("__LANGERFACE_REACT_MANAGED__"), "React incision route disables controller auto-mount");
 assert.ok(incisionRoute.includes("mountIncisionAgentWorkbench"), "React incision route mounts the existing controller explicitly");
@@ -100,5 +112,7 @@ assert.ok(controller.includes("createWorkflowWorkerClient"), "incision controlle
 assert.ok(controller.includes("worker.api.planIncision"), "incision candidate generation is delegated to the workflow worker");
 assert.ok(controller.includes("main_thread_fallback"), "incision controller keeps a deterministic fallback if worker startup fails");
 assert.ok(controller.includes("S.workflowWorker?.dispose"), "incision controller disposes the workflow worker on route teardown");
+assert.ok(controller.includes("react-incision-controller-snapshot/v0.1"), "incision controller publishes typed low-frequency snapshots to React");
+assert.ok(controller.includes("CustomEvent(INCISION_CONTROLLER_STATE_EVENT"), "incision controller emits state snapshots through a browser event");
 
 console.log("test_react_architecture: React SPA architecture boundaries passed");
