@@ -122,7 +122,11 @@ assert.ok(js.includes("testProviderConnection"), "workbench can test Ollama/Open
 assert.ok(js.includes("normalizeProviderBaseUrl"), "workbench normalizes host:port provider input before fetch");
 assert.ok(js.includes("Provider 连接失败"), "workbench reports direct LLM Provider connectivity failures");
 assert.ok(js.includes("localProviderFromRemotePageMessage"), "workbench warns remote pages before direct localhost provider tests");
+assert.ok(js.includes("insecureProviderFromSecurePageMessage"), "workbench warns HTTPS previews before HTTP private provider tests");
+assert.ok(js.includes("Mixed Content/Private Network"), "workbench explains mixed-content private-network blocking");
 assert.ok(js.includes("仍将发送测试请求"), "workbench still sends provider test requests so DevTools can show the real network result");
+assert.ok(js.includes("OLLAMA_ORIGINS"), "workbench gives actionable Ollama CORS startup guidance");
+assert.ok(js.includes("OLLAMA_HOST=0.0.0.0:11434"), "workbench gives actionable Ollama LAN binding guidance");
 assert.ok(js.includes("Agent 代理不可用，已改用浏览器确定性工具"), "workbench explains deterministic browser fallback in Chinese");
 assert.ok(js.includes('event === "trace_gate"'), "workbench consumes agent trace gate SSE events");
 assert.ok(js.includes('event === "execution_event"'), "workbench consumes Agent execution SSE events");

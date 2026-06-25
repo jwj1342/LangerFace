@@ -282,9 +282,35 @@ function setProviderTestState(text, level = "") {
   els.providerTestState.classList.toggle("warn", level === "warn");
 }
 
+function normalizedHost(host = "") {
+  return String(host || "").trim().toLowerCase().replace(/^\[|\]$/g, "");
+}
+
+function isLoopbackHost(host = "") {
+  const h = normalizedHost(host);
+  return h === "" || h === "localhost" || h === "0.0.0.0" || h === "::1" || /^127(?:\.\d{1,3}){3}$/.test(h);
+}
+
+function isPrivateNetworkHost(host = "") {
+  const h = normalizedHost(host);
+  if (isLoopbackHost(h)) return true;
+  if (h.endsWith(".local") || h.endsWith(".lan")) return true;
+  const parts = h.split(".").map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+  const [a, b] = parts;
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
+}
+
+function providerUrlFromConfig(cfg = providerConfig()) {
+  try {
+    return new URL(cfg.base_url);
+  } catch {
+    return null;
+  }
+}
+
 function pageIsLocal() {
-  const localHosts = new Set(["", "127.0.0.1", "localhost", "0.0.0.0", "::1"]);
-  return localHosts.has(window.location.hostname);
+  return isLoopbackHost(window.location.hostname);
 }
 
 function normalizeProviderDefaults(previousMode = "") {
@@ -303,15 +329,29 @@ function normalizeProviderDefaults(previousMode = "") {
 }
 
 function localProviderFromRemotePageMessage(cfg = providerConfig()) {
-  let url;
-  try {
-    url = new URL(cfg.base_url);
-  } catch {
+  const url = providerUrlFromConfig(cfg);
+  if (!url || pageIsLocal() || !isLoopbackHost(url.hostname)) return "";
+  return `当前页面来自 ${window.location.origin}，${url.host} 指的是打开浏览器这台机器，不是 Vercel 或远端 Provider。系统会继续发送测试请求；如果 DevTools 显示 CORS/Private Network 拦截，请改填一个允许该 origin 访问的 HTTPS Provider 地址。`;
+}
+
+function insecureProviderFromSecurePageMessage(cfg = providerConfig()) {
+  const url = providerUrlFromConfig(cfg);
+  if (!url || window.location.protocol !== "https:" || url.protocol !== "http:" || isLoopbackHost(url.hostname)) {
     return "";
   }
-  const localHosts = new Set(["127.0.0.1", "localhost", "0.0.0.0", "::1"]);
-  if (pageIsLocal() || !localHosts.has(url.hostname)) return "";
-  return `当前页面来自 ${window.location.origin}，${url.host} 指的是打开浏览器这台机器，不是 Vercel 或远端 Provider。系统会继续发送测试请求；如果 DevTools 显示 CORS/Private Network 拦截，请改填一个允许该 origin 访问的 HTTPS Provider 地址。`;
+  const networkLabel = isPrivateNetworkHost(url.hostname) ? "HTTP 私网地址" : "HTTP Provider 地址";
+  return `当前页面是 HTTPS，但 Provider 是 ${networkLabel} ${url.origin}；浏览器会按 Mixed Content/Private Network 规则拦截。只改成局域网 IP 不够，请改用 HTTPS 反向代理或隧道后的 Provider 地址。`;
+}
+
+function ollamaCorsHint(cfg = providerConfig()) {
+  if (cfg.provider !== "ollama") return "";
+  const url = providerUrlFromConfig(cfg);
+  if (!url || pageIsLocal() || !isPrivateNetworkHost(url.hostname)) return "";
+  const hostBinding = isLoopbackHost(url.hostname) ? "" : "OLLAMA_HOST=0.0.0.0:11434 ";
+  const httpsHint = window.location.protocol === "https:" && url.protocol === "http:" && !isLoopbackHost(url.hostname)
+    ? "HTTPS Vercel 页面不能直接访问 HTTP 私网 IP；请先用 Caddy、ngrok 或 cloudflared 暴露 HTTPS Provider 地址。"
+    : "";
+  return `${httpsHint}如果 Ollama 就运行在这台电脑或局域网机器上，请停止现有 Ollama 后用：${hostBinding}OLLAMA_ORIGINS="${window.location.origin}" ollama serve`;
 }
 
 function redactedProviderConfig() {
@@ -353,10 +393,10 @@ async function testProviderEndpoint() {
   setProviderTestState("正在测试 LLM Provider 连接…");
   try {
     const cfg = providerConfig();
-    const localRemoteMessage = localProviderFromRemotePageMessage(cfg);
-    if (localRemoteMessage) {
-      setProviderTestState(`${localRemoteMessage} 正在继续发送测试请求…`, "warn");
-      els.stageStatus.textContent = "检测到远端页面直连 localhost Provider；仍将发送测试请求，结果以浏览器网络面板为准。";
+    const warnings = [localProviderFromRemotePageMessage(cfg), insecureProviderFromSecurePageMessage(cfg)].filter(Boolean);
+    if (warnings.length) {
+      setProviderTestState(`${warnings.join(" ")} 正在继续发送测试请求…`, "warn");
+      els.stageStatus.textContent = "检测到远端页面直连本地或 HTTP Provider；仍将发送测试请求，结果以浏览器网络面板为准。";
     }
     const result = await testProviderConnection(cfg, {
       timeoutMs: Math.min(Number(els.providerTimeout.value) * 1000, 10000),
@@ -368,7 +408,11 @@ async function testProviderEndpoint() {
     els.stageStatus.textContent = "LLM Provider 连接正常；生成候选时仍会由规划后端执行工具链。";
   } catch (err) {
     const msg = err?.name === "AbortError" ? "请求超时" : err.message;
-    setProviderTestState(`Provider 连接失败：${msg}。请检查 Base URL、Provider 模式、API Key、网络可达性和浏览器 CORS 设置。`, "warn");
+    const corsHint = ollamaCorsHint();
+    setProviderTestState(
+      `Provider 连接失败：${msg}。${corsHint || "请检查 Base URL、Provider 模式、API Key、网络可达性和浏览器 CORS 设置。"}`,
+      "warn",
+    );
     els.providerState.textContent = "Provider 未连接";
     els.providerState.style.color = "#b45309";
     els.stageStatus.textContent = `LLM Provider 连接失败：${msg}`;
