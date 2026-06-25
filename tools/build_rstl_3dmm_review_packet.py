@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 from collections import Counter
 from datetime import date, datetime, timezone
@@ -12,8 +13,35 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PRIOR = ROOT / "assets" / "rstl_mediapipe_direction_prior.json"
 DEFAULT_OUTPUT = ROOT / "assets" / "flame" / "rstl_3dmm_review_packet.json"
+DEFAULT_CSV_OUTPUT = ROOT / "assets" / "flame" / "rstl_3dmm_review_packet.csv"
 PACKET_SCHEMA = "rstl-3dmm-review-packet/v0.1"
 DRAFT_REVIEW_STATUS = "draft_not_clinically_validated"
+CSV_FIELDS = [
+    "review_id",
+    "source_sample_index",
+    "tri",
+    "topologyId",
+    "topologyVersion",
+    "point_x",
+    "point_y",
+    "point_z",
+    "vector_x",
+    "vector_y",
+    "vector_z",
+    "angle_deg",
+    "confidence",
+    "angular_spread_deg",
+    "support_count",
+    "priority_reasons",
+    "decision",
+    "reviewer",
+    "reviewed_at",
+    "region_label",
+    "direction_accepted",
+    "corrected_angle_deg",
+    "corrected_vector",
+    "notes",
+]
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -194,10 +222,71 @@ def build_review_packet(
     }
 
 
+def _triple(values: Any) -> list[Any]:
+    if isinstance(values, list | tuple):
+        out = list(values[:3])
+    else:
+        out = []
+    return out + [""] * (3 - len(out))
+
+
+def review_packet_csv_rows(packet: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in packet.get("items", []):
+        if not isinstance(item, dict):
+            continue
+        review = item.get("clinician_review") if isinstance(item.get("clinician_review"), dict) else {}
+        point = _triple(item.get("point"))
+        vector = _triple(item.get("vector"))
+        corrected_vector = review.get("corrected_vector")
+        rows.append({
+            "review_id": item.get("review_id", ""),
+            "source_sample_index": item.get("source_sample_index", ""),
+            "tri": item.get("tri", ""),
+            "topologyId": packet.get("topologyId", ""),
+            "topologyVersion": packet.get("topologyVersion", ""),
+            "point_x": point[0],
+            "point_y": point[1],
+            "point_z": point[2],
+            "vector_x": vector[0],
+            "vector_y": vector[1],
+            "vector_z": vector[2],
+            "angle_deg": item.get("angle_deg", ""),
+            "confidence": item.get("confidence", ""),
+            "angular_spread_deg": item.get("angular_spread_deg", ""),
+            "support_count": item.get("support_count", ""),
+            "priority_reasons": ";".join(str(reason) for reason in item.get("priority_reasons", [])),
+            "decision": review.get("decision", "pending"),
+            "reviewer": review.get("reviewer", ""),
+            "reviewed_at": review.get("reviewed_at", ""),
+            "region_label": review.get("region_label", ""),
+            "direction_accepted": review.get("direction_accepted", ""),
+            "corrected_angle_deg": review.get("corrected_angle_deg", ""),
+            "corrected_vector": json.dumps(corrected_vector, ensure_ascii=False) if corrected_vector else "",
+            "notes": review.get("notes", ""),
+        })
+    return rows
+
+
+def write_review_packet_csv(packet: dict[str, Any], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=CSV_FIELDS)
+        writer.writeheader()
+        writer.writerows(review_packet_csv_rows(packet))
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--prior", default=str(DEFAULT_PRIOR), help="draft direction prior JSON")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="review packet JSON output")
+    parser.add_argument(
+        "--csv-output",
+        help=(
+            "optional clinician spreadsheet CSV output; use 'default' to write "
+            f"{_rel(DEFAULT_CSV_OUTPUT)}"
+        ),
+    )
     parser.add_argument("--generated-at", default=date.today().isoformat())
     parser.add_argument("--max-items", type=int, default=96)
     parser.add_argument("--low-confidence-threshold", type=float, default=0.35)
@@ -220,6 +309,11 @@ def main() -> int:
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(packet, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    csv_output = args.csv_output
+    if csv_output:
+        csv_path = DEFAULT_CSV_OUTPUT if csv_output == "default" else Path(csv_output)
+        write_review_packet_csv(packet, csv_path)
+        print(f"[ok] wrote clinician CSV {csv_path}")
     print(
         f"[ok] {output} {packet['review_item_count']} review items "
         f"from {packet['source_sample_count']} samples"

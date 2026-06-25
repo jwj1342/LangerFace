@@ -1,3 +1,4 @@
+import csv
 import json
 import math
 import subprocess
@@ -250,6 +251,7 @@ def test_rstl_3dmm_review_packet_builder_with_synthetic_prior(tmp_path):
     }
     prior_path = tmp_path / "rstl_flame_direction_prior.json"
     output_path = tmp_path / "rstl_3dmm_review_packet.json"
+    csv_path = tmp_path / "rstl_3dmm_review_packet.csv"
     prior_path.write_text(json.dumps(prior))
 
     result = subprocess.run(
@@ -260,6 +262,8 @@ def test_rstl_3dmm_review_packet_builder_with_synthetic_prior(tmp_path):
             str(prior_path),
             "--output",
             str(output_path),
+            "--csv-output",
+            str(csv_path),
             "--generated-at",
             "2026-06-24",
             "--max-items",
@@ -275,6 +279,7 @@ def test_rstl_3dmm_review_packet_builder_with_synthetic_prior(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert "[ok]" in result.stdout
+    assert "clinician CSV" in result.stdout
     packet = json.loads(output_path.read_text())
     assert packet["schema_version"] == "rstl-3dmm-review-packet/v0.1"
     assert packet["topologyId"] == "flame-2023"
@@ -293,6 +298,29 @@ def test_rstl_3dmm_review_packet_builder_with_synthetic_prior(tmp_path):
     assert "low_confidence" in low_conf["priority_reasons"]
     high_spread = next(item for item in packet["items"] if item["tri"] == 2)
     assert "high_angular_spread" in high_spread["priority_reasons"]
+    with csv_path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    assert len(rows) == 4
+    assert {
+        "review_id",
+        "source_sample_index",
+        "tri",
+        "topologyId",
+        "priority_reasons",
+        "decision",
+        "reviewer",
+        "reviewed_at",
+        "region_label",
+        "direction_accepted",
+        "corrected_angle_deg",
+        "corrected_vector",
+        "notes",
+    } <= set(rows[0])
+    assert {row["decision"] for row in rows} == {"pending"}
+    low_conf_row = next(row for row in rows if row["tri"] == "1")
+    assert "low_confidence" in low_conf_row["priority_reasons"]
+    high_spread_row = next(row for row in rows if row["tri"] == "2")
+    assert "high_angular_spread" in high_spread_row["priority_reasons"]
 
 
 def test_rstl_3dmm_review_packet_application_with_synthetic_decisions(tmp_path):

@@ -70,6 +70,7 @@ python tools/build_flame_rstl_direction_prior.py --generated-at now
 ```bash
 python tools/build_rstl_3dmm_review_packet.py \
   --prior assets/flame/rstl_flame_direction_prior.json \
+  --csv-output default \
   --generated-at now
 ```
 
@@ -78,6 +79,10 @@ python tools/build_rstl_3dmm_review_packet.py \
 - `tri` / `bary` / `point` / `vector` / `angle_deg` 等拓扑和方向字段。
 - `confidence`、`angular_spread_deg`、`support_count` 和 `priority_reasons`。
 - `clinician_review` 占位字段：`decision`、`reviewer`、`reviewed_at`、`region_label`、`direction_accepted`、`corrected_angle_deg`、`corrected_vector`、`notes`。
+
+可选 `--csv-output` 会同时写出可放进表格工具的审阅表，默认路径为 gitignored
+`assets/flame/rstl_3dmm_review_packet.csv`。CSV 保留 `review_id`、sample index、tri、point、vector、angle、confidence、
+priority reasons 和上述 clinician review 待填字段，方便医生逐项填写；JSON 审阅包仍是回填工具的审计输入，CSV 不会把任何资产置为 `validated:true`。
 
 这一步只把草案方向先验变成可分发、可抽查、可回填的医生审阅任务包。它不会把任何方向置为
 `validated:true`，也不能替代正式 FLAME/BFM 标准头逐线标注、医生审核和临床校验。
