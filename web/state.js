@@ -33,7 +33,6 @@ export const sourceState = {
 
 export const recordingState = {
   recorder: null,
-  chunks: [],
 };
 
 export const reconState = {

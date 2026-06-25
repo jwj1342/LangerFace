@@ -2,6 +2,7 @@
 import { els } from "./dom.js";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./canvas_fit.js";
 import { dataSource } from "./data_source.js";
+import { createCanvasRecordingController } from "./export_canvas.js";
 import { validateIncisionOverlay } from "./incision_overlay.js";
 import { countMetric, logError } from "./logger.js";
 import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.js";
@@ -12,6 +13,7 @@ import { setMsg, setProvenance, smoothLabel } from "./ui.js";
 
 let previewSystem = null;
 let previewMeta = null;
+let recordingController = null;
 
 function syncPreviewControls() {
   const previewIsActive = Boolean(previewSystem && previewMeta && renderState.system === previewSystem);
@@ -132,17 +134,19 @@ els.restoreAtlas.onclick = () => {
 
 // 导出：录制画布为 webm 下载
 els.export.onclick = () => {
-  if (recordingState.recorder) { recordingState.recorder.stop(); return; }
-  const stream = els.canvas.captureStream(30);
-  recordingState.chunks = []; recordingState.recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
-  recordingState.recorder.ondataavailable = (e) => e.data.size && recordingState.chunks.push(e.data);
-  recordingState.recorder.onstop = () => {
-    const blob = new Blob(recordingState.chunks, { type: "video/webm" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `langer_${renderState.system}_${Date.now()}.webm`; a.click();
-    recordingState.recorder = null; els.export.textContent = "⬇ 导出"; els.export.removeAttribute("aria-pressed");
-  };
-  recordingState.recorder.start(); els.export.textContent = "■ 停止"; els.export.setAttribute("aria-pressed", "true");
+  if (!recordingController) {
+    recordingController = createCanvasRecordingController({
+      canvas: els.canvas,
+      system: () => renderState.system,
+      onStateChange(recording) {
+        recordingState.recorder = recording ? recordingController : null;
+        els.export.textContent = recording ? "■ 停止" : "⬇ 导出";
+        if (recording) els.export.setAttribute("aria-pressed", "true");
+        else els.export.removeAttribute("aria-pressed");
+      },
+    });
+  }
+  recordingController.toggle();
 };
 
 // 3D Beta 路线绑定
