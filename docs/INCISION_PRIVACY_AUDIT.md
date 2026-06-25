@@ -43,7 +43,7 @@ python tools/audit_tumor_input.py tumor_input_*.json
 
 脚本会拦截原始媒体标记、未脱敏 provider secret、明显身份字段、疑似嵌入媒体 payload，以及辅助线索越界参与几何或 Agent prompt 的标记。
 审阅 gate 审计会额外检查 `review_gate` / `live_overlay_ready` 是否与审阅状态、审阅人、高风险备注和 Agent trace gate 自洽。
-肿物输入审计会额外检查 `tumor-input/v0.2` schema、输入质量提示、边界 summary 与肿物轮廓是否一致，以及肿物导出是否仍只包含抽象面部坐标。
+肿物输入审计会额外检查 `tumor-input/v0.2` schema、输入质量提示、边界 summary 与肿物轮廓是否一致，以及肿物导出是否仍只包含抽象面部坐标。新版前端导出的 `boundary_summary` 会包含 `units_per_mm`、`summary_axis` 和 `summary_normal`，审计器可复算边界中心、长短轴、面积、面积比、自交、中心偏移和长短轴比例；旧导出缺少比例字段时仍只核对基础字段。
 
 ## 仍需单独完成的合规工作
 

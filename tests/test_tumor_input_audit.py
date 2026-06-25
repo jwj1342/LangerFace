@@ -45,6 +45,17 @@ def _safe_cutaneous_payload() -> dict:
             "source": "manual_freehand",
             "point_count": len(boundary),
             "boundary_used": True,
+            "units_per_mm": 0.1,
+            "summary_axis": [1.0, 0.0, 0.0],
+            "summary_normal": [0.0, 0.0, 1.0],
+            "center": [4.083333333333333, 2.3333333333333335, 0.0],
+            "axis_diameter_mm": 21.66666666666666,
+            "perp_diameter_mm": 18.66666666666667,
+            "area_mm2": 207.49999999999997,
+            "area_ratio_to_diameter_disk": 4.1280813364460345,
+            "self_intersection": False,
+            "center_shift_mm": 3.4359213546813843,
+            "aspect_ratio": 1.1607142857142851,
         },
         "privacy_audit": {
             "raw_image_sent": False,
@@ -73,6 +84,8 @@ def test_tumor_input_audit_accepts_safe_frontend_export(tmp_path: Path):
     assert report["passed"] is True
     assert report["reports"][0]["tumor_quality"]["warning_count"] == 0
     assert report["reports"][0]["boundary_summary"]["point_count"] == 6
+    assert report["reports"][0]["boundary_summary"]["area_mm2"] == 207.49999999999997
+    assert report["reports"][0]["boundary_summary"]["self_intersection"] is False
 
 
 def test_tumor_input_audit_flags_non_mm_units():
@@ -100,6 +113,21 @@ def test_tumor_input_audit_flags_boundary_summary_mismatch():
     assert {issue["path"] for issue in mismatches} == {
         "boundary_summary.point_count",
         "boundary_summary.boundary_used",
+    }
+
+
+def test_tumor_input_audit_flags_boundary_geometry_mismatch():
+    payload = _safe_cutaneous_payload()
+    payload["boundary_summary"]["area_mm2"] = 99.0
+    payload["boundary_summary"]["self_intersection"] = True
+
+    report = audit_payload(payload, file="bad-geometry-summary.json")
+    mismatches = [issue for issue in report["issues"] if issue["code"] == "boundary_summary_mismatch"]
+
+    assert report["passed"] is False
+    assert {issue["path"] for issue in mismatches} >= {
+        "boundary_summary.area_mm2",
+        "boundary_summary.self_intersection",
     }
 
 

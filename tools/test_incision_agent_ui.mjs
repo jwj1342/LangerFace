@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 
 const html = fs.readFileSync("incision_agent.html", "utf8");
 const js = fs.readFileSync("incision_agent_main.js", "utf8");
+const tools = fs.readFileSync("incision_tools.js", "utf8");
 
 assert.ok(html.includes('id="boundaryStatus"'), "workbench exposes tumor boundary status");
 assert.ok(html.includes('id="anatomyPreview"'), "workbench exposes live anatomy preview for selected tumor center");
@@ -37,6 +38,9 @@ assert.ok(js.includes("exportTumorJson"), "workbench implements tumor JSON expor
 assert.ok(js.includes("importTumorFile"), "workbench implements tumor JSON import");
 assert.ok(js.includes("applyImportedTumor"), "workbench applies imported tumor payloads");
 assert.ok(js.includes("summarizeTumorBoundary"), "workbench renders deterministic boundary summaries");
+assert.ok(tools.includes("units_per_mm"), "tumor boundary summary exports coordinate-to-mm scale for audit");
+assert.ok(tools.includes("summary_axis"), "tumor boundary summary exports summary axis for audit");
+assert.ok(tools.includes("summary_normal"), "tumor boundary summary exports summary normal for audit");
 assert.ok(js.includes("summarizeTumorInputQuality"), "workbench renders tumor input quality summaries");
 assert.ok(js.includes("classifyRegion(S.verts[S.lesion]"), "workbench derives anatomy preview from selected tumor center");
 assert.ok(js.includes("当前点位分区"), "workbench labels live anatomy preview in Chinese");

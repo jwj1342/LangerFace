@@ -761,6 +761,7 @@ function outlineQualityMetrics({ upper, lower, outline, tumor, center, axis, per
 export function summarizeTumorBoundary(tumorInput, axis = [1, 0, 0], normal = [0, 0, 1], unitsPerMm = 1) {
   const tumor = validateTumor(tumorInput);
   const a = norm(axis);
+  const n = norm(normal);
   const perp = tangentPerp(a, normal);
   const profile = boundaryProfile(tumor, a, perp, unitsPerMm);
   const warnings = [];
@@ -785,6 +786,9 @@ export function summarizeTumorBoundary(tumorInput, axis = [1, 0, 0], normal = [0
     source: tumor.boundary_source,
     point_count: profile.point_count,
     boundary_used: true,
+    units_per_mm: unitsPerMm,
+    summary_axis: a,
+    summary_normal: n,
     center: profile.center,
     axis_diameter_mm: profile.axis_diameter_mm,
     perp_diameter_mm: profile.perp_diameter_mm,
