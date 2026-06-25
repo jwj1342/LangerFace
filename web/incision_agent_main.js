@@ -246,6 +246,7 @@ async function boot() {
 }
 
 function fitSize() {
+  if (!S.head || !els.wrap) return;
   const w = els.wrap.clientWidth || 900, h = els.wrap.clientHeight || 680;
   S.head.resize(w, h);
 }
@@ -296,6 +297,20 @@ function normalizeProviderDefaults(previousMode = "") {
   }
 }
 
+function localProviderFromRemotePageMessage(cfg = providerConfig()) {
+  let url;
+  try {
+    url = new URL(cfg.base_url);
+  } catch {
+    return "";
+  }
+  const localHosts = new Set(["127.0.0.1", "localhost", "0.0.0.0", "::1"]);
+  const pageHost = window.location.hostname;
+  const localPage = !pageHost || localHosts.has(pageHost);
+  if (localPage || !localHosts.has(url.hostname)) return "";
+  return `当前页面来自 ${window.location.origin}，浏览器直连 ${url.host} 会访问你本机的 Ollama/Provider，通常会被 CORS 或 Private Network 策略拦截。请改用本地前端页面测试，或把 Provider 暴露为允许该 origin 的 HTTPS/API 地址。`;
+}
+
 function redactedProviderConfig() {
   const cfg = providerConfig();
   return {
@@ -334,7 +349,16 @@ async function testProviderEndpoint() {
   els.testProvider.disabled = true;
   setProviderTestState("正在测试 LLM Provider 连接…");
   try {
-    const result = await testProviderConnection(providerConfig(), {
+    const cfg = providerConfig();
+    const localRemoteMessage = localProviderFromRemotePageMessage(cfg);
+    if (localRemoteMessage) {
+      setProviderTestState(localRemoteMessage, "warn");
+      els.providerState.textContent = "Provider 未连接";
+      els.providerState.style.color = "#b45309";
+      els.stageStatus.textContent = "远端页面不能默认直连本机 Ollama；请使用本地前端或配置允许 CORS 的 Provider 地址。";
+      return;
+    }
+    const result = await testProviderConnection(cfg, {
       timeoutMs: Math.min(Number(els.providerTimeout.value) * 1000, 10000),
     });
     const count = Number.isInteger(result.model_count) ? ` · 模型 ${result.model_count} 个` : "";

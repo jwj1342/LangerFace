@@ -24,6 +24,7 @@ assert.ok(html.includes('id="testProviderBtn"'), "workbench exposes LLM Provider
 assert.ok(html.includes('id="providerTestState"'), "workbench exposes LLM Provider connectivity status");
 assert.ok(html.includes("高级：规划后端接口"), "workbench moves planning backend endpoint into advanced deployment settings");
 assert.ok(html.includes('value="/api/agentic-incision"'), "planning backend defaults to a same-origin API path for remote deployment");
+assert.ok(!html.includes('id="useAgentServer" checked'), "planning backend is opt-in so static previews do not auto-request missing API routes");
 assert.ok(html.includes('id="guardrailDetails"'), "workbench exposes guardrail detail feedback");
 assert.ok(html.includes('id="directionSource"'), "workbench exposes direction source explanation");
 assert.ok(html.includes('id="agentGate"'), "workbench exposes agent trace gate feedback");
@@ -117,6 +118,7 @@ assert.ok(js.includes("handleAgentStreamEvent"), "workbench consumes agent SSE t
 assert.ok(js.includes("stream: true"), "workbench prefers streaming agent trace");
 assert.ok(js.includes("testProviderConnection"), "workbench can test Ollama/OpenAI-compatible provider connectivity without generating a candidate");
 assert.ok(js.includes("Provider 连接失败"), "workbench reports direct LLM Provider connectivity failures");
+assert.ok(js.includes("localProviderFromRemotePageMessage"), "workbench guards remote pages from direct localhost provider CORS failures");
 assert.ok(js.includes("Agent 代理不可用，已改用浏览器确定性工具"), "workbench explains deterministic browser fallback in Chinese");
 assert.ok(js.includes('event === "trace_gate"'), "workbench consumes agent trace gate SSE events");
 assert.ok(js.includes('event === "execution_event"'), "workbench consumes Agent execution SSE events");
@@ -129,6 +131,7 @@ assert.ok(js.includes("建议覆盖项"), "markdown report includes suggested ov
 assert.ok(js.includes("protective_direction"), "workbench displays protective direction guardrail suggestions");
 assert.ok(js.includes("directionSourceLabel"), "workbench labels RSTL direction source");
 assert.ok(js.includes("const center = candidate.center || S.result.tumor.center"), "endpoint dragging keeps the incision center anchored near the tumor");
+assert.ok(js.includes("if (!S.head || !els.wrap) return"), "ResizeObserver cannot call resize before the 3D head is initialized");
 assert.ok(js.includes("皱襞/边界辅助线索：只读审阅，不参与几何"), "workbench explains secondary cues do not drive direction geometry");
 assert.ok(js.includes("医生人工覆盖已记录"), "workbench exposes manual direction override state");
 assert.ok(js.includes("RSTL 来源"), "markdown report includes direction source provenance");
