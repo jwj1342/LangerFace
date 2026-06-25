@@ -1180,11 +1180,18 @@ function editedTraceStep(edit, candidate, guardrails) {
   };
 }
 
-function buildEditedFusiform(base, center, axis, normal, unitsPerMm, edit) {
+function buildEditedFusiform(base, center, axis, normal, unitsPerMm, edit, tumorInput = null) {
+  const tumor = tumorInput ? validateTumor(tumorInput) : null;
   const widthAxis = tangentPerp(axis, normal);
   const lengthMm = Math.max(1, Number(base.length_mm || 1) * Number(edit.length_scale || 1));
   const widthMm = Math.max(1, Number(base.width_mm || 1) * Number(edit.width_scale || 1));
-  const axisCoverageRequiredMm = Number(base.metrics?.axis_coverage_required_mm || 0);
+  const boundary = tumor ? boundaryProfile(tumor, axis, widthAxis, unitsPerMm) : null;
+  const tumorDiameterMm = Number(tumor?.diameter_mm ?? base.metrics?.diameter_mm ?? 0);
+  const tumorMarginMm = Number(tumor?.margin_mm ?? base.metrics?.margin_mm ?? 0);
+  const lesionAxisMm = Math.max(tumorDiameterMm, Number(boundary?.axis_diameter_mm ?? 0));
+  const axisCoverageRequiredMm = boundary
+    ? lesionAxisMm + 2 * tumorMarginMm
+    : Number(base.metrics?.axis_coverage_required_mm || 0);
   const axisCoverageDeficitMm = axisCoverageRequiredMm > 0 ? Math.max(0, axisCoverageRequiredMm - lengthMm) : 0;
   const halfL = lengthMm * unitsPerMm * 0.5;
   const halfW = widthMm * unitsPerMm * 0.5;
@@ -1193,6 +1200,17 @@ function buildEditedFusiform(base, center, axis, normal, unitsPerMm, edit) {
   const profile = fusiformProfile(center, axis, widthAxis, halfL, halfW, samples, targetTipAngle);
   const { upper, lower } = profile;
   const outline = upper.concat(lower.slice(1, -1).reverse());
+  const outlineMetrics = outlineQualityMetrics({
+    upper,
+    lower,
+    outline,
+    tumor: tumor || { boundary: [] },
+    center,
+    axis,
+    perp: widthAxis,
+    unitsPerMm,
+    boundaryUsed: Boolean(boundary),
+  });
   return {
     ...base,
     axis,
@@ -1211,7 +1229,18 @@ function buildEditedFusiform(base, center, axis, normal, unitsPerMm, edit) {
       rstl_deviation_deg: Math.abs(Number(edit.angle_offset_deg || 0)),
       length_to_width_ratio: lengthMm / widthMm,
       ...profile.metrics,
+      axis_coverage_required_mm: axisCoverageRequiredMm,
       axis_coverage_deficit_mm: axisCoverageDeficitMm,
+      boundary_used: Boolean(boundary),
+      boundary_point_count: boundary?.point_count ?? base.metrics?.boundary_point_count ?? 0,
+      boundary_axis_diameter_mm: boundary?.axis_diameter_mm ?? base.metrics?.boundary_axis_diameter_mm ?? null,
+      boundary_perp_diameter_mm: boundary?.perp_diameter_mm ?? base.metrics?.boundary_perp_diameter_mm ?? null,
+      boundary_area_mm2: boundary?.area_mm2 ?? base.metrics?.boundary_area_mm2 ?? null,
+      boundary_area_ratio_to_diameter_disk: boundary?.area_ratio_to_diameter_disk ??
+        base.metrics?.boundary_area_ratio_to_diameter_disk ?? null,
+      boundary_self_intersection: Boolean(boundary?.self_intersection ?? base.metrics?.boundary_self_intersection),
+      boundary_center_shift_mm: boundary?.center_shift_mm ?? base.metrics?.boundary_center_shift_mm ?? null,
+      ...outlineMetrics,
     },
   };
 }
@@ -1263,7 +1292,7 @@ export function applyCandidateEdit(plan, edit = {}, normal = [0, 0, 1], unitsPer
       },
     };
   } else {
-    candidate = buildEditedFusiform(base, center, axis, normal, unitsPerMm, editRecord);
+    candidate = buildEditedFusiform(base, center, axis, normal, unitsPerMm, editRecord, plan.tumor);
   }
 
   if (verts) annotateCandidateSensitiveDistances(candidate, verts);

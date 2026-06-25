@@ -213,6 +213,26 @@ ok(boundaryFusiform.metrics.boundary_envelope_min_margin_mm >= 0,
   "fusiform records non-negative boundary envelope margin for contained freehand boundary");
 ok(boundaryFusiform.metrics.boundary_envelope_outside_count === 0,
   "fusiform records zero outside points for contained freehand boundary");
+const editedBoundaryFusiform = T.applyCandidateEdit({
+  tumor: boundaryTumor,
+  candidate: boundaryFusiform,
+  anatomy: { region: "cheek", confidence: 0.8 },
+  guardrails: T.evaluateGuardrails(boundaryFusiform, { region: "cheek", confidence: 0.8 }),
+  trace: [],
+}, {
+  width_scale: 0.2,
+  reason: "manual narrow closure test",
+}, [0, 0, 1], 0.1);
+ok(editedBoundaryFusiform.candidate.metrics.outline_area_mm2 > 0,
+  "edited fusiform recomputes outline area");
+ok(editedBoundaryFusiform.candidate.metrics.outline_half_width_monotone === true,
+  "edited fusiform recomputes smooth taper metric");
+ok(editedBoundaryFusiform.candidate.metrics.boundary_envelope_min_margin_mm < 0,
+  "edited fusiform recomputes negative boundary envelope margin");
+ok(editedBoundaryFusiform.candidate.metrics.boundary_envelope_outside_count > 0,
+  "edited fusiform counts boundary points outside edited envelope");
+ok(editedBoundaryFusiform.guardrails.warnings.some((w) => w.code === "fusiform_boundary_outside_envelope"),
+  "edited fusiform boundary envelope warning is re-evaluated");
 
 const envelopeRules = structuredClone(T.DEFAULT_RULES);
 envelopeRules.fusiform_cutaneous.max_length_mm = 200;
