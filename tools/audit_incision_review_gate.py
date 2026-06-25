@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from langerface.tumor import tumor_from_payload
+from langerface.tumor import TumorInput, tumor_from_payload
 
 try:
     from tools.audit_tumor_input import (
@@ -172,21 +172,104 @@ def _candidate_axis(record: dict[str, Any]) -> tuple[float, float, float] | None
     return _point(candidate.get("axis"))
 
 
-def _tumor_boundary_summary_issues(record: dict[str, Any]) -> list[dict[str, str]]:
+def _record_tumor(record: dict[str, Any]) -> tuple[TumorInput | None, list[dict[str, str]]]:
     tumor_payload = record.get("tumor")
     if not isinstance(tumor_payload, dict):
-        return []
+        return None, []
 
     try:
-        tumor = tumor_from_payload(tumor_payload)
+        return tumor_from_payload(tumor_payload), []
     except Exception as exc:  # noqa: BLE001 - audit should report malformed exports instead of crashing.
-        return [
+        return None, [
             _issue(
                 "tumor_input_invalid",
                 f"Review record tumor payload cannot be parsed: {exc}",
                 path="tumor",
             )
         ]
+
+
+def _warning_signature(warnings: Any) -> list[tuple[str, str]]:
+    if not isinstance(warnings, list):
+        return []
+    return [
+        (
+            str(warning.get("code") or ""),
+            str(warning.get("severity") or "medium"),
+        )
+        for warning in warnings
+        if isinstance(warning, dict)
+    ]
+
+
+def _tumor_quality_issues(record: dict[str, Any], tumor: TumorInput | None) -> list[dict[str, str]]:
+    if tumor is None:
+        return []
+
+    exported = record.get("tumor_quality")
+    if exported is None:
+        return [
+            _issue(
+                "tumor_quality_missing",
+                "Review records with tumor input must export tumor_quality for pre-share audit.",
+                path="tumor_quality",
+            )
+        ]
+    if not isinstance(exported, dict):
+        return [
+            _issue(
+                "tumor_quality_invalid",
+                "tumor_quality must be an object.",
+                path="tumor_quality",
+            )
+        ]
+
+    issues: list[dict[str, str]] = []
+    observed = tumor.input_quality()
+    for key in ("passed", "warning_count", "source", "boundary_source", "author_present", "units"):
+        if exported.get(key) != observed.get(key):
+            issues.append(
+                _issue(
+                    "tumor_quality_mismatch",
+                    (
+                        f"tumor_quality.{key}={exported.get(key)!r} does not match "
+                        f"recomputed {observed.get(key)!r}."
+                    ),
+                    path=f"tumor_quality.{key}",
+                )
+            )
+
+    warnings = exported.get("warnings")
+    if not isinstance(warnings, list):
+        issues.append(
+            _issue(
+                "tumor_quality_invalid",
+                "tumor_quality.warnings must be a list.",
+                path="tumor_quality.warnings",
+            )
+        )
+    elif any(not isinstance(warning, dict) for warning in warnings):
+        issues.append(
+            _issue(
+                "tumor_quality_invalid",
+                "tumor_quality.warnings entries must be objects.",
+                path="tumor_quality.warnings",
+            )
+        )
+    elif _warning_signature(warnings) != _warning_signature(observed.get("warnings")):
+        issues.append(
+            _issue(
+                "tumor_quality_warnings_mismatch",
+                "tumor_quality.warnings code/severity list does not match recomputed tumor input quality.",
+                path="tumor_quality.warnings",
+            )
+        )
+    return issues
+
+
+def _tumor_boundary_summary_issues(record: dict[str, Any], tumor: TumorInput | None) -> list[dict[str, str]]:
+    if tumor is None:
+        return []
 
     boundary_expected = tumor.kind == "cutaneous" and len(tumor.boundary) >= 3
     exported = record.get("tumor_boundary_summary")
@@ -341,6 +424,9 @@ def audit_review_record(record: dict[str, Any], *, source: str = "<memory>") -> 
     gate = _stored_gate(record)
     expected = expected_review_gate(record)
     issues: list[dict[str, str]] = []
+    tumor, tumor_parse_issues = _record_tumor(record)
+    expected_tumor_quality = tumor.input_quality() if tumor is not None else None
+    issues.extend(tumor_parse_issues)
 
     if not gate:
         issues.append(
@@ -428,7 +514,8 @@ def audit_review_record(record: dict[str, Any], *, source: str = "<memory>") -> 
             )
         )
 
-    issues.extend(_tumor_boundary_summary_issues(record))
+    issues.extend(_tumor_quality_issues(record, tumor))
+    issues.extend(_tumor_boundary_summary_issues(record, tumor))
 
     high_issues = [issue for issue in issues if issue["severity"] == "high"]
     return {
@@ -443,6 +530,7 @@ def audit_review_record(record: dict[str, Any], *, source: str = "<memory>") -> 
         "review_status": status,
         "stored_review_gate": gate,
         "expected_review_gate": expected,
+        "expected_tumor_quality": expected_tumor_quality,
         "clinical_boundary": (
             "Review gate audit verifies export consistency for research overlay readiness only; "
             "it is not clinical validation or surgical clearance."

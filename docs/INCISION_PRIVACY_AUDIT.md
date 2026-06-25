@@ -24,6 +24,7 @@
 导出的 JSON / 报告草案必须包含：
 
 - `tumor`：结构化肿物输入。
+- `tumor_quality`：肿物输入质量摘要，包含来源、作者、单位、深度/切缘/边界完整性提示。
 - `candidate` / `original_candidate`：候选几何与医生调整前后的差异。
 - `guardrails`：警告、建议覆盖和是否通过。
 - `guardrail_summary` / `review_gate`：高风险 guardrail 汇总、审阅备注要求和实时叠加就绪状态。
@@ -43,7 +44,7 @@ python tools/audit_tumor_input.py tumor_input_*.json
 ```
 
 脚本会拦截原始媒体标记、未脱敏 provider secret、明显身份字段、疑似嵌入媒体 payload，以及辅助线索越界参与几何或 Agent prompt 的标记。
-审阅 gate 审计会额外检查 `review_gate` / `live_overlay_ready` 是否与审阅状态、审阅人、高风险备注和 Agent trace gate 自洽；对带皮表边界的审阅记录，还会重放 `tumor_boundary_summary`，检查其点数、长短轴、面积、自交、中心偏移是否与肿物边界和候选长轴一致，并核对梭形候选 metrics 中的边界字段是否同步。
+审阅 gate 审计会额外检查 `review_gate` / `live_overlay_ready` 是否与审阅状态、审阅人、高风险备注和 Agent trace gate 自洽；对带肿物输入的审阅记录，会重放 `tumor_quality`，检查来源、作者、单位和 warning code/severity 是否与原始肿物 payload 一致；对带皮表边界的审阅记录，还会重放 `tumor_boundary_summary`，检查其点数、长短轴、面积、自交、中心偏移是否与肿物边界和候选长轴一致，并核对梭形候选 metrics 中的边界字段是否同步。
 肿物输入审计会额外检查 `tumor-input/v0.2` schema、输入质量提示、边界 summary 与肿物轮廓是否一致，以及肿物导出是否仍只包含抽象面部坐标。新版前端导出的 `boundary_summary` 会包含 `units_per_mm`、`summary_axis` 和 `summary_normal`，审计器可复算边界中心、长短轴、面积、面积比、自交、中心偏移和长短轴比例；旧导出缺少比例字段时仍只核对基础字段。
 
 ## 仍需单独完成的合规工作

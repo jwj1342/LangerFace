@@ -87,6 +87,15 @@ def _cutaneous_record() -> dict:
         "author": "clinician",
         "units": "mm",
     }
+    record["tumor_quality"] = {
+        "passed": True,
+        "warning_count": 0,
+        "warnings": [],
+        "source": "manual_web_agent",
+        "boundary_source": "manual_freehand",
+        "author_present": True,
+        "units": "mm",
+    }
     record["candidate"] = {
         "type": "fusiform",
         "axis": [1.0, 0.0, 0.0],
@@ -136,6 +145,42 @@ def test_review_gate_audit_accepts_cutaneous_boundary_summary():
 
     assert report["passed"] is True
     assert report["issue_count"] == 0
+    assert report["expected_tumor_quality"]["passed"] is True
+
+
+def test_review_gate_audit_flags_missing_tumor_quality():
+    record = _cutaneous_record()
+    del record["tumor_quality"]
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "tumor_quality_missing" in codes
+
+
+def test_review_gate_audit_flags_stale_tumor_quality_summary():
+    record = _cutaneous_record()
+    record["tumor"]["units"] = "cm"
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "tumor_quality_mismatch" in codes
+    assert "tumor_quality_warnings_mismatch" in codes
+    assert report["expected_tumor_quality"]["passed"] is False
+
+
+def test_review_gate_audit_flags_invalid_tumor_quality_warnings():
+    record = _cutaneous_record()
+    record["tumor_quality"]["warnings"] = {"code": "not-a-list"}
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "tumor_quality_invalid" in codes
 
 
 def test_review_gate_audit_flags_missing_cutaneous_boundary_summary():
