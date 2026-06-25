@@ -1,7 +1,15 @@
 {
-  "version": "0.9-agentic-incision-tools",
-  "trace_mode": "single_or_multi_round_react_with_deterministic_tools",
-  "boundary": "The LLM may select, summarize, and request deterministic tools; it must not compute incision geometry or override guardrails.",
+  "version": "1.0-browser-incision-workflow",
+  "trace_mode": "single_turn_browser_deterministic_multi_candidate_workflow",
+  "boundary": "The browser workflow executes deterministic tools, visualizes their trace, and compares review candidates. It must not compute surgical instructions, bypass guardrails, or send raw media to a provider.",
+  "provider_connectivity": {
+    "provider_type": "openai_compatible_or_vllm",
+    "test_endpoint": "${base_url}/models",
+    "used_for_geometry": false,
+    "used_for_trace": false,
+    "requires_browser_reachable_cors_enabled_url": true,
+    "boundary": "Provider configuration is a browser-side connectivity contract only in this workflow; candidate geometry and guardrails come from deterministic local tools."
+  },
   "trace_gate": {
     "schema_version": "agent-trace-gate/v0.1",
     "blocks_confirmation": true,
@@ -16,11 +24,6 @@
     ],
     "boundary": "Candidate confirmation requires deterministic tumor quality, anatomy, RSTL direction, sensitive-structure inspection, incision generation, guardrail, and face preview observations."
   },
-  "orchestration_audit": {
-    "schema_version": "agent-orchestration-audit/v0.1",
-    "records": ["candidate_count", "preview_count", "preview_ready_count", "comparison_ready", "react_plan_passed", "react_plan_step_count", "retry_count", "retried_failures", "tool_failure_count", "recovered_failures", "trace_gate_passed"],
-    "boundary": "Agent orchestration may compare deterministic candidates for review; it must not issue surgical instructions or bypass clinician confirmation."
-  },
   "react_plan": {
     "schema_version": "agent-react-plan/v0.1",
     "mode": "single_turn_react_multi_candidate_with_deterministic_tools",
@@ -34,64 +37,79 @@
       "preview_candidates",
       "compare_direction_variants"
     ],
-    "records": ["required_action_groups", "observed_actions", "trace_indexes", "status", "issues"],
-    "boundary": "The ReAct plan is an audit scaffold over deterministic tool calls; it is not autonomous clinical reasoning or a surgical instruction."
+    "records": [
+      "required_action_groups",
+      "observed_actions",
+      "trace_indexes",
+      "status",
+      "issues"
+    ],
+    "boundary": "The ReAct plan is an audit scaffold derived from browser deterministic tool calls; it is not autonomous clinical reasoning or a surgical instruction."
   },
   "execution_events": {
     "schema_version": "agent-execution-events/v0.1",
     "mode": "single_turn_react_multi_candidate_with_deterministic_tools",
-    "records": ["events", "event_count", "tool_event_count", "retry_event_count", "recovery_event_count"],
-    "event_fields": ["event", "status", "trace_index", "action", "plan_step_ids", "message"],
-    "sse_events": ["execution_event"],
-    "boundary": "Execution events replay deterministic tool observations for UI feedback and offline audit; they are not autonomous clinical reasoning or surgical instructions."
-  },
-  "session": {
-    "schema_version": "agentic-incision-session/v0.1",
-    "mode": "multi_round_react_session_with_deterministic_tools",
-    "round_schema_version": "agentic-incision-session-round/v0.1",
-    "audit_schema_version": "agent-session-audit/v0.1",
-    "candidate_evolution_schema_version": "agent-session-candidate-evolution/v0.1",
-    "records": ["rounds", "final_candidate_id", "candidate_evolution", "agent_session_audit", "clinical_boundary"],
-    "round_records": ["round_index", "trigger", "clinician_feedback", "tumor_delta", "selected_candidate_id", "trace_gate_passed", "react_plan_passed", "plan"],
-    "candidate_evolution_records": ["rounds", "transitions", "length_delta_mm", "width_delta_mm", "comparison_score_delta", "changed_tumor_fields"],
-    "sse_events": ["session_round", "execution_event", "trace", "trace_gate", "react_plan", "session_evolution", "session_audit", "result", "done"],
-    "boundary": "A session may iterate structured tumor inputs and deterministic plans across clinician-feedback rounds; it must not bypass per-round trace gates, guardrails, or clinician review."
-  },
-  "trace_audit_executor": {
-    "schema_version": "agentic-incision-trace-audit/v0.1",
-    "tool": "tools/audit_agentic_incision_trace.py",
-    "inputs": ["agentic-incision-plan/v0.1", "agentic-incision-session/v0.1", "incision-review-record/v0.3", "incision-review-export/v0.3"],
-    "checks": [
-      "agent-trace-gate replay",
-      "stored trace gate consistency",
-      "agent-react-plan replay",
-      "stored react plan consistency",
-      "agent-execution-events replay",
-      "stored execution events consistency",
-      "candidate comparison replay",
-      "candidate alternative sensitive-structure inspection presence",
-      "candidate alternative sensitive-distance metric consistency",
-      "orchestration audit count consistency",
-      "retry_tool_failure trace consistency",
-      "recover_tool_failure trace consistency",
-      "LLM summary clinician-review boundary",
-      "LLM forbidden surgical directive scan",
-      "LLM raw provider payload exclusion",
-      "provider secret redaction",
-      "multi-round session plan expansion"
+    "records": [
+      "events",
+      "event_count",
+      "tool_event_count",
+      "retry_event_count",
+      "recovery_event_count"
     ],
-    "boundary": "Offline audit verifies deterministic Agentic trace contracts only; it is not clinical validation or a surgical instruction."
+    "event_fields": [
+      "event",
+      "status",
+      "trace_index",
+      "action",
+      "plan_step_ids",
+      "message"
+    ],
+    "boundary": "Execution events replay browser tool observations for UI feedback and review export; they are not autonomous clinical reasoning or surgical instructions."
+  },
+  "orchestration_audit": {
+    "schema_version": "agent-orchestration-audit/v0.1",
+    "records": [
+      "candidate_count",
+      "preview_count",
+      "preview_ready_count",
+      "comparison_ready",
+      "react_plan_passed",
+      "react_plan_step_count",
+      "retry_count",
+      "retried_failures",
+      "tool_failure_count",
+      "recovered_failures",
+      "trace_gate_passed"
+    ],
+    "boundary": "The browser workflow may compare deterministic candidates for review; it must not issue surgical instructions or bypass clinician confirmation."
+  },
+  "candidate_comparison": {
+    "tool": "compare_candidates",
+    "inputs": [
+      "candidate_alternatives",
+      "guardrails",
+      "rstl_angle_error",
+      "coverage_deficit",
+      "sensitive_distance",
+      "geometry_error"
+    ],
+    "output": [
+      "ranked_candidates",
+      "score_breakdown",
+      "clinical_boundary"
+    ],
+    "boundary": "Candidate comparison is an engineering ranking for reviewer triage, not a clinical recommendation."
   },
   "tools": [
-    {
-      "name": "classify_region",
-      "input": ["point"],
-      "output": ["region", "subunit", "confidence", "confidence_reasons", "region_boundary_margin_norm", "nearby_landmarks", "free_margin_distance_mm"]
-    },
     {
       "name": "summarize_tumor_input_quality",
       "input": ["tumor"],
       "output": ["passed", "warning_count", "warnings", "source", "boundary_source", "author_present", "units"]
+    },
+    {
+      "name": "classify_region",
+      "input": ["point"],
+      "output": ["region", "subunit", "confidence", "confidence_reasons", "region_boundary_margin_norm", "nearby_landmarks", "free_margin_distance_mm"]
     },
     {
       "name": "query_rstl_direction",
@@ -129,24 +147,14 @@
       "output": ["direction_variants", "boundary"]
     },
     {
-      "name": "recover_tool_failure",
-      "input": ["tool", "variant", "error"],
-      "output": ["recovery", "candidate_kept"]
-    },
-    {
-      "name": "retry_tool_failure",
-      "input": ["tool", "variant", "error", "attempt"],
-      "output": ["retry", "max_attempts", "recovery"]
+      "name": "compare_candidates",
+      "input": ["candidate_alternatives"],
+      "output": ["ranked_candidates", "score_breakdown", "clinical_boundary"]
     },
     {
       "name": "clinician_edit_candidate",
       "input": ["candidate", "angle_offset_deg", "length_scale", "width_scale", "shift_along_mm", "shift_perp_mm", "reason"],
       "output": ["edited_candidate", "guardrails", "provenance"]
-    },
-    {
-      "name": "compare_candidates",
-      "input": ["review_records"],
-      "output": ["ranked_candidates", "score_breakdown", "clinical_boundary"]
     },
     {
       "name": "save_review_record",

@@ -109,11 +109,10 @@
 
 ```bash
 python tools/audit_export_privacy.py incision_review_*.json tumor_input_*.json
-python tools/audit_incision_review_gate.py incision_review_*.json
-python tools/audit_tumor_input.py tumor_input_*.json
+cd web && node ../tools/test_incision_tools.mjs
 ```
 
-脚本输出 `export-privacy-audit/v0.1` 报告，默认发现违规即返回非 0。当前检查项包括：
+离线隐私脚本输出 `export-privacy-audit/v0.1` 报告，默认发现违规即返回非 0。浏览器 workflow 合约测试会额外覆盖肿物输入、边界摘要、trace gate、候选比较和导出前预检。当前检查项包括：
 
 - `privacy_audit.raw_image_sent`、`raw_video_sent` 或 `contains_face_image` 被置为 `true`。
 - `api_key`、`token`、`secret`、`authorization` 等字段未脱敏。
@@ -124,8 +123,6 @@ python tools/audit_tumor_input.py tumor_input_*.json
 
 辅助线索当前只能作为医生审阅时的只读证据进入导出，不得自动改变肿物边界、候选切口或 LLM Agent 的 prompt；若后续要让受控 CV/LLM 模型参与几何生成，必须重新定义出域、访问控制和临床验证流程。
 
-`tools/audit_tumor_input.py` 输出 `tumor-input-audit/v0.1`，用于肿物输入导出前的结构化工程门禁：检查 `tumor-input/v0.2` schema、`tumor_quality` 对应的单位 / 作者 / 深度 / 切缘提示、导出边界 summary 与实际肿物轮廓是否一致，以及 `privacy_audit` 是否声明未包含原始影像。新版前端导出的 `boundary_summary` 会包含 `units_per_mm`、`summary_axis` 和 `summary_normal`，审计器可据此复算边界中心、长短轴、面积、面积比、自交、中心偏移和长短轴比例；老导出缺少这些比例字段时仍只做基础字段核对。它只验证抽象几何和隐私边界，不判断病灶性质、切缘充分性或临床可用性。
-
-`tools/audit_incision_review_gate.py` 输出 `incision-review-gate-audit/v0.1`，用于审阅记录分享前的 workflow 门禁：检查 `approved_for_discussion` 是否有审阅人、高风险 guardrail 是否有备注或覆盖理由、`agent_trace_gate` 是否通过，以及 `live_overlay_ready` 是否只在这些条件同时满足时为 `true`。它只检查导出状态自洽，不替代医生签名或病例系统权限控制。
+肿物输入和审阅记录的结构化门禁已经迁到浏览器 workflow：导出中会保存 `tumor_quality`、`tumor_boundary_summary`、`sensitive_structure_inspection`、`agent_trace_gate`、`agent_react_plan`、`agent_execution_events` 和 `candidate_comparison`。前端 review gate 会检查 `approved_for_discussion` 是否有审阅人、高风险 guardrail 是否有备注或覆盖理由、`agent_trace_gate` 是否通过，以及 `live_overlay_ready` 是否只在这些条件同时满足时为 `true`。它只检查导出状态自洽，不替代医生签名或病例系统权限控制。
 
 该脚本只是工程守门，不能替代机构合规审查。

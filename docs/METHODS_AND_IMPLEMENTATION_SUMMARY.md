@@ -744,8 +744,8 @@ candidate = segment(center, axis, length)
 - `length_target_mm`、`length_target_deficit_mm`、`diameter_coverage_required_mm` 和 `diameter_coverage_deficit_mm`。
 - 与局部 RSTL 的角度偏差。
 - 是否命中敏感结构 guardrail。
-- `candidate_version`、`parent_candidate_id`、`edit_id` 和 `edit_history`；工具生成候选为 v1，医生参数编辑或端点拖拽后的候选至少为 v2，多步编辑会按提交顺序递增版本并写入 `candidate-edit-session/v0.1`，导出报告显示候选版本和编辑记录数，`tools/audit_incision_review_gate.py` 会核对 `guardrail_summary` 与原始 warning/override、session 与 provenance 的版本、步数、当前 edit_id 和每步 resulting version 是否一致，也会核对线性候选端点/中心/长度与梭形 outline/polyline/长短轴字段是否自洽。
-- `tumor_quality` 与 `tumor_boundary_summary`；审阅记录会保存肿物输入质量摘要，并按保存候选的长轴重新汇总肿物边界点数、长短轴、面积、自交和中心偏移，Markdown 报告同时显示“肿物输入提示”“肿物边界摘要”和“梭形包络”，`tools/audit_incision_review_gate.py` 会重放质量摘要和边界摘要，并核对梭形候选 metrics，避免 reviewer 只看到候选线而漏看输入质量或边界质量。
+- `candidate_version`、`parent_candidate_id`、`edit_id` 和 `edit_history`；工具生成候选为 v1，医生参数编辑或端点拖拽后的候选至少为 v2，多步编辑会按提交顺序递增版本并写入 `candidate-edit-session/v0.1`，导出报告显示候选版本和编辑记录数；浏览器 workflow 会在导出记录中保留 `guardrail_summary`、候选 provenance、线性候选端点/中心/长度与梭形 outline/polyline/长短轴字段，供 reviewer 核对。
+- `tumor_quality` 与 `tumor_boundary_summary`；审阅记录会保存肿物输入质量摘要，并按保存候选的长轴重新汇总肿物边界点数、长短轴、面积、自交和中心偏移，Markdown 报告同时显示“肿物输入提示”“肿物边界摘要”和“梭形包络”；JS workflow 测试覆盖质量摘要、边界摘要和梭形候选 metrics，避免 reviewer 只看到候选线而漏看输入质量或边界质量。
 
 如果最大长度规则使线性候选短于记录的超声直径，guardrails 输出 `linear_diameter_coverage_deficit` 高风险警告；医生需要增加长度、确认更小影像直径，或记录明确的人工 access decision。
 
@@ -831,11 +831,11 @@ axis_coverage_deficit_mm = max(0, axis_coverage_required_mm - length_mm)
 | 模块 | 计划位置 | 职责 |
 | --- | --- | --- |
 | 临床规则库 | `assets/clinical_rules_face_incision.json` | 区域规则、优先级、例外和审核状态 |
-| 面部分区 | `src/langerface/anatomy/`, `web/anatomy*.js` | 点位到临床区域和美学亚单位的映射，输出分区低置信原因 |
-| RSTL 方向服务 | `src/langerface/lines/direction.py` | 查询局部方向、置信度和依据 |
-| 肿物模型 | `src/langerface/tumor/`, `web/tumor*.js` | 表达皮下/皮表肿物约束 |
-| 切口生成 | `src/langerface/incision/` | 线性和梭形候选生成 |
-| guardrails | `src/langerface/incision/guardrails.py` | 敏感结构风险提示 |
+| 面部分区 | `web/incision_tools.js` | 点位到临床区域和美学亚单位的映射，输出分区低置信原因 |
+| RSTL 方向服务 | `web/incision_tools.js` | 查询局部方向、置信度和依据 |
+| 肿物模型 | `web/incision_tools.js`, `web/incision_agent*.js` | 表达皮下/皮表肿物约束 |
+| 切口生成 | `web/incision_tools.js` | 线性和梭形候选生成 |
+| guardrails | `web/incision_tools.js` | 敏感结构风险提示 |
 | 审阅 UI | `web/incision*.js` | 医生编辑、覆盖、确认和导出 |
 | 验证指标 | `docs/VALIDATION.md` | 角度误差、稳定性、医生接受率等 |
 

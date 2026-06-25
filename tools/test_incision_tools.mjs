@@ -484,6 +484,30 @@ ok(T.TOOL_SCHEMAS.some((s) => s.name === "clinician_edit_candidate"), "tool sche
 ok(T.TOOL_SCHEMAS.some((s) => s.name === "compare_candidates"), "tool schemas include candidate comparison");
 ok(T.TOOL_SCHEMAS.some((s) => s.name === "save_review_record"), "tool schemas include review record export");
 
+const workflow = T.planIncisionWorkflow({
+  tumor: { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 10, depth_mm: 5 },
+  verts,
+  tris,
+  atlas,
+});
+ok(workflow.agent_trace_mode === "single_turn_react_multi_candidate_with_deterministic_tools",
+  "browser workflow records the migrated multi-candidate trace mode");
+ok(workflow.trace.length > plan.trace.length, "browser workflow runs additional direction-variant tools");
+ok(workflow.trace.some((step) => step.action === "propose_direction_variants"),
+  "browser workflow proposes deterministic direction variants");
+ok(workflow.trace.at(-1).action === "compare_candidates", "browser workflow compares candidates after variant generation");
+ok(workflow.candidate_alternatives.length === 3, "browser workflow returns three direction candidates");
+ok(workflow.candidate_comparison.length === 3, "browser workflow returns deterministic candidate comparison");
+ok(workflow.agent_trace_gate.passed === true, "browser workflow trace gate passes");
+ok(workflow.agent_react_plan.passed === true, "browser workflow ReAct audit plan passes");
+ok(workflow.agent_execution_events.passed === true, "browser workflow execution events pass");
+ok(workflow.agent_execution_events.tool_event_count === workflow.trace.length,
+  "browser workflow execution events cover every trace step");
+ok(workflow.agent_orchestration_audit.candidate_count === 3,
+  "browser workflow orchestration audit counts candidate alternatives");
+ok(workflow.provider.mode === "browser_deterministic_workflow",
+  "browser workflow does not require a Python agent provider");
+
 const incompleteQuality = T.summarizeTumorInputQuality({
   kind: "subcutaneous",
   center: [4, 2, 0],

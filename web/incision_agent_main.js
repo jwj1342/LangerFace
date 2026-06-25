@@ -6,15 +6,16 @@ import { auditExportPayload } from "./export_privacy.js";
 import { compileIncisionOverlay } from "./incision_overlay.js";
 import {
   applyCandidateEdit,
+  agentTraceGate,
   classifyRegion,
   compareCandidateRecords,
   normalizeTumorInput,
-  planIncisionDeterministic,
+  planIncisionWorkflow,
   summarizeTumorBoundary,
   summarizeTumorInputQuality,
   unitsPerMmFromVertices,
 } from "./incision_tools.js";
-import { normalizeProviderBaseUrl, requestAgentPlan, testProviderConnection } from "./llm_provider.js";
+import { normalizeProviderBaseUrl, testProviderConnection } from "./llm_provider.js";
 import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.js";
 
 const $ = (id) => document.getElementById(id);
@@ -52,8 +53,6 @@ const els = {
   clearSecondaryCue: $("clearSecondaryCueBtn"),
   secondaryCueImportFile: $("secondaryCueImportFile"),
   secondaryCueConfirmed: $("secondaryCueConfirmed"),
-  useAgentServer: $("useAgentServer"),
-  endpoint: $("agentEndpoint"),
   testProvider: $("testProviderBtn"),
   providerTestState: $("providerTestState"),
   providerMode: $("providerMode"),
@@ -263,16 +262,11 @@ function providerConfig() {
 }
 
 function providerDisplayLabel(provider = {}) {
-  if (provider.mode === "browser_deterministic_fallback") {
-    return provider.error ? "浏览器确定性降级 · Agent 未连接" : "浏览器确定性工具";
+  if (provider.mode === "browser_deterministic_workflow" || provider.mode === "browser_deterministic_fallback") {
+    return provider.error ? "浏览器确定性 workflow · 需复核" : "浏览器确定性 workflow";
   }
   if (provider.model) return `${provider.mode || "Agent"} · ${provider.model}`;
   return provider.mode || "deterministic";
-}
-
-function agentFallbackMessage(error = "") {
-  const suffix = error ? `：${String(error).slice(0, 80)}` : "";
-  return `Agent 代理不可用，已改用浏览器确定性工具${suffix}`;
 }
 
 function setProviderTestState(text, level = "") {
@@ -395,7 +389,7 @@ async function testProviderEndpoint() {
     setProviderTestState(`Provider 连接正常：${result.test_endpoint}${count}`, "ok");
     els.providerState.textContent = "OpenAI-compatible 已连接";
     els.providerState.style.color = "";
-    els.stageStatus.textContent = "LLM Provider 连接正常；生成候选时仍会由规划后端执行工具链。";
+    els.stageStatus.textContent = "LLM Provider 连接正常；切口候选仍由浏览器确定性 workflow 生成。";
   } catch (err) {
     const msg = err?.name === "AbortError" ? "请求超时" : err.message;
     const networkHint = insecureProviderFromSecurePageMessage(providerConfig());
@@ -412,7 +406,6 @@ async function testProviderEndpoint() {
 }
 
 function privacyAudit(provider = {}) {
-  const remote = Boolean(providerConfig().base_url && els.useAgentServer.checked);
   return {
     raw_image_sent: false,
     raw_video_sent: false,
@@ -428,7 +421,8 @@ function privacyAudit(provider = {}) {
       "tool trace",
     ],
     provider: redactedProviderConfig(),
-    remote_provider_configured: remote,
+    remote_provider_configured: false,
+    browser_workflow_only: true,
     provider_state: provider,
     secondary_cues_present: Boolean(S.secondaryCues),
     secondary_cues_sent_to_agent: false,
@@ -539,46 +533,6 @@ function setReviewControls(review = {}) {
 
 function highGuardrailWarnings(result = S.result) {
   return (result?.guardrails?.warnings || []).filter((w) => w.severity === "high");
-}
-
-const AGENT_TRACE_GATE_REQUIRED = [
-  { key: "tumor_input_quality", label: "肿物输入质量", actions: ["summarize_tumor_input_quality"] },
-  { key: "face_region", label: "面部分区", actions: ["classify_region"] },
-  { key: "rstl_direction", label: "RSTL 查询", actions: ["query_rstl_direction"] },
-  { key: "sensitive_structures", label: "敏感结构检查", actions: ["inspect_sensitive_structures"] },
-  { key: "candidate_generation", label: "确定性切口生成", actions: ["linear_subcutaneous_incision", "fusiform_cutaneous_incision"] },
-  { key: "guardrails", label: "Guardrails", actions: ["evaluate_guardrails"] },
-  { key: "face_preview", label: "面部预览", actions: ["preview_incision_on_face"] },
-];
-
-function agentTraceGate(result = S.result) {
-  const actions = (result?.trace || []).map((step) => step?.action).filter(Boolean);
-  const observed = new Set(actions);
-  const required = AGENT_TRACE_GATE_REQUIRED.map((req) => ({
-    key: req.key,
-    label: req.label,
-    actions: req.actions,
-    observed: req.actions.some((action) => observed.has(action)),
-    first_index: Math.min(...req.actions.map((action) => {
-      const idx = actions.indexOf(action);
-      return idx < 0 ? Infinity : idx;
-    })),
-  }));
-  const missing = required.filter((req) => !req.observed);
-  const presentIndexes = required.filter((req) => req.observed).map((req) => req.first_index);
-  const orderOk = presentIndexes.every((idx, i) => i === 0 || idx >= presentIndexes[i - 1]);
-  const geometryPresent = Array.isArray(result?.candidate?.polyline) && result.candidate.polyline.length >= 2;
-  return {
-    schema_version: "agent-trace-gate/v0.1",
-    passed: missing.length === 0 && orderOk && geometryPresent,
-    mode: result?.agent_trace_mode || "unknown",
-    observed_actions: actions,
-    required_actions: required.map((req) => ({ key: req.key, label: req.label, actions: req.actions })),
-    missing_actions: missing.map((req) => ({ key: req.key, label: req.label, actions: req.actions })),
-    order_ok: orderOk,
-    deterministic_geometry_present: geometryPresent,
-    boundary: "LLM may summarize and explain only after deterministic tools provide sensitive-structure, geometry, preview, and guardrail observations.",
-  };
 }
 
 function reviewReadiness(status, result = S.result) {
@@ -1072,59 +1026,6 @@ function renderAgentExecutionEvents(execution) {
   }
 }
 
-function handleAgentStreamEvent(streamState, evt) {
-  const { event, data } = evt || {};
-  if (event === "provider") {
-    const provider = data || {};
-    els.providerState.textContent = providerDisplayLabel(provider);
-    els.providerState.style.color = provider.error ? "#b45309" : "";
-    els.stageStatus.textContent = "Agent 已连接，等待工具 trace…";
-    return;
-  }
-  if (event === "execution_event") {
-    const step = data || {};
-    const index = Number.isInteger(step.index) ? step.index : streamState.executionEvents.length;
-    streamState.executionEvents[index] = step;
-    const visibleEvents = streamState.executionEvents.filter(Boolean);
-    renderAgentExecutionEvents({
-      schema_version: "agent-execution-events/v0.1",
-      events: visibleEvents,
-    });
-    els.stageStatus.textContent = `Agent 执行事件 ${visibleEvents.length} 条${step.event ? `：${step.event}` : ""}`;
-    return;
-  }
-  if (event === "trace") {
-    const step = data || {};
-    const index = Number.isInteger(step.index) ? step.index : streamState.trace.length;
-    streamState.trace[index] = step;
-    const visibleTrace = streamState.trace.filter(Boolean);
-    renderTrace(visibleTrace);
-    els.stageStatus.textContent = `工具 trace ${visibleTrace.length} 步${step.action ? `：${step.action}` : ""}`;
-    return;
-  }
-  if (event === "trace_gate") {
-    const gate = data || {};
-    if (els.agentGate) {
-      els.agentGate.classList.toggle("warn", gate.passed !== true);
-      const missing = (gate.missing_actions || []).map((item) => item.label || item.key).join("、");
-      els.agentGate.textContent = `Agent 工具门控：${gate.passed ? "通过" : `未通过${missing ? `；缺 ${missing}` : ""}`} · SSE`;
-    }
-    els.stageStatus.textContent = gate.passed ? "Agent 工具门控已通过" : "Agent 工具门控未通过";
-    return;
-  }
-  if (event === "react_plan") {
-    const plan = data || {};
-    renderAgentReactPlan(plan);
-    els.stageStatus.textContent = plan.passed
-      ? `Agent ReAct 计划已通过：${plan.completed_step_count || 0}/${plan.step_count || 0} 步`
-      : `Agent ReAct 计划需复核：失败 ${plan.failed_step_count || 0} 步`;
-    return;
-  }
-  if (event === "fallback") {
-    els.stageStatus.textContent = agentFallbackMessage(data?.error || "");
-  }
-}
-
 function renderGuardrailDetails(guardrails) {
   const warnings = guardrails?.warnings || [];
   const overrides = guardrails?.suggested_overrides || [];
@@ -1239,7 +1140,7 @@ function renderAgentComparison(result) {
   const audit = result.agent_orchestration_audit || {};
   if (!comparison.length) {
     els.agentComparison.classList.add("warn");
-    els.agentComparison.textContent = "Agent 候选比较：未返回后端多候选比较；可手动保存候选后生成备选。";
+    els.agentComparison.textContent = "候选比较：浏览器 workflow 尚未生成多候选比较；可手动保存候选后生成备选。";
     return;
   }
   const top = comparison
@@ -1255,7 +1156,7 @@ function renderAgentComparison(result) {
     ? `recovered_failures=${formatRecoveredFailureSummary(audit, true)}`
     : "";
   els.agentComparison.textContent =
-    `Agent 候选比较：${comparison.length} 个后端候选 · ${top}${failures}。工程排序不是临床推荐或手术指令。`;
+    `候选比较：${comparison.length} 个浏览器确定性候选 · ${top}${failures}。工程排序不是临床推荐或手术指令。`;
 }
 
 function tumorQualityFor(result = S.result) {
@@ -1308,9 +1209,9 @@ function renderResult(result) {
   els.privacyState.textContent = audit.remote_provider_configured ? "抽象参数出域" : "浏览器本地";
   els.privacyAudit.textContent = audit.raw_image_sent
     ? "警告：检测到原始影像出域配置。"
-    : `不上传原始影像；发送给 Agent 的是 ${audit.data_sent_to_agent.length} 类抽象字段，API Key 仅在本次请求中传给代理。${audit.secondary_cues_present ? " 辅助线索仅随审阅导出，不发送给 Agent。" : ""}`;
+    : `不上传原始影像；${audit.data_sent_to_agent.length} 类抽象字段只在浏览器确定性 workflow 内处理。Provider API Key 只用于手动连通性测试。${audit.secondary_cues_present ? " 辅助线索仅随审阅导出，不参与几何。" : ""}`;
   const edited = result.candidate.edited ? " · 已记录医生调整" : "";
-  els.stageStatus.textContent = provider.error ? `${agentFallbackMessage(provider.error)}${edited}` : `候选已更新${edited}`;
+  els.stageStatus.textContent = `浏览器确定性 workflow 已更新候选${edited}`;
 }
 
 function guardrailSummary(guardrails = {}) {
@@ -1516,26 +1417,26 @@ function saveReviewRecord() {
   saveCurrentCandidate("审阅候选");
 }
 
-function directionForAgentAlternative(baseDirection = {}, alternative = {}) {
+function directionForWorkflowAlternative(baseDirection = {}, alternative = {}) {
   const offset = Number(alternative.angle_offset_deg || 0);
   const confidence = Math.max(0, Number(baseDirection.confidence || 0) - Math.abs(offset) / 180);
   const reasons = [...new Set([
     ...(Array.isArray(baseDirection.confidence_reasons) ? baseDirection.confidence_reasons : []),
-    ...(Math.abs(offset) > 1e-9 ? ["agent_direction_variant_requires_clinician_review"] : []),
+    ...(Math.abs(offset) > 1e-9 ? ["browser_direction_variant_requires_clinician_review"] : []),
   ])];
   return {
     ...baseDirection,
     confidence,
     angle_offset_deg: offset,
-    variant_source: Math.abs(offset) > 1e-9 ? "agent_direction_variant" : "rstl_primary",
+    variant_source: Math.abs(offset) > 1e-9 ? "browser_direction_variant" : "rstl_primary",
     confidence_reasons: reasons,
   };
 }
 
-function agentAlternativeResult(baseResult, alternative) {
+function workflowAlternativeResult(baseResult, alternative) {
   return {
     ...baseResult,
-    direction: directionForAgentAlternative(baseResult.direction, alternative),
+    direction: directionForWorkflowAlternative(baseResult.direction, alternative),
     candidate: alternative.candidate,
     original_candidate: alternative.candidate,
     guardrails: alternative.guardrails || baseResult.guardrails,
@@ -1546,24 +1447,24 @@ function agentAlternativeResult(baseResult, alternative) {
     review_status: alternative.review_status || "pending_clinician_confirmation",
     llm: {
       ...(baseResult.llm || {}),
-      summary: `已载入后端方向备选：${alternative.label || alternative.id || "候选"}；请复核 guardrails、敏感结构和候选比较。`,
-      next_step: "医生审阅、编辑或否决该后端候选。",
+      summary: `已载入浏览器方向备选：${alternative.label || alternative.id || "候选"}；请复核 guardrails、敏感结构和候选比较。`,
+      next_step: "医生审阅、编辑或否决该候选。",
     },
   };
 }
 
 function makeVariantCandidates() {
   if (!S.baseResult) return;
-  const backendAlternatives = Array.isArray(S.result?.candidate_alternatives)
+  const workflowAlternatives = Array.isArray(S.result?.candidate_alternatives)
     ? S.result.candidate_alternatives.filter((item) => item?.candidate)
     : [];
-  if (backendAlternatives.length) {
-    for (const alternative of backendAlternatives) {
-      const result = agentAlternativeResult(S.result, alternative);
-      S.saved.push(reviewRecord(result, alternative.label || `后端备选 ${S.saved.length + 1}`));
+  if (workflowAlternatives.length) {
+    for (const alternative of workflowAlternatives) {
+      const result = workflowAlternativeResult(S.result, alternative);
+      S.saved.push(reviewRecord(result, alternative.label || `浏览器备选 ${S.saved.length + 1}`));
     }
     renderSaved();
-    els.stageStatus.textContent = `已保存 ${backendAlternatives.length} 个后端方向备选，并保留各自 guardrails、敏感结构复核和工程排序`;
+    els.stageStatus.textContent = `已保存 ${workflowAlternatives.length} 个浏览器方向备选，并保留各自 guardrails、敏感结构复核和工程排序`;
     return;
   }
   const variants = [
@@ -1761,11 +1662,11 @@ function exportReport() {
       ? `- Agent 执行事件：passed=${Boolean(r.agent_execution_events.passed)}；事件 ${r.agent_execution_events.event_count || 0} 条；工具事件 ${r.agent_execution_events.tool_event_count || 0} 条；重试 ${r.agent_execution_events.retry_event_count || 0}；恢复 ${r.agent_execution_events.recovery_event_count || 0}`
       : null,
     r.agent_orchestration_audit
-      ? `- Agent 编排审计：候选 ${r.agent_orchestration_audit.candidate_count || 0} 个；比较 ${r.agent_orchestration_audit.comparison_ready ? "已生成" : "未生成"}；恢复失败 ${r.agent_orchestration_audit.tool_failure_count || 0} 个`
+      ? `- 浏览器 workflow 审计：候选 ${r.agent_orchestration_audit.candidate_count || 0} 个；比较 ${r.agent_orchestration_audit.comparison_ready ? "已生成" : "未生成"}；恢复失败 ${r.agent_orchestration_audit.tool_failure_count || 0} 个`
       : null,
     recoveredFailureDetails ? `- Agent 恢复详情：${recoveredFailureDetails}` : null,
     (r.candidate_comparison || []).length
-      ? `- Agent 后端候选比较：${r.candidate_comparison.map((c) => `#${c.rank} ${c.label || c.id} ${fmt(c.score, 1)}分`).join("；")}（不是临床推荐或手术指令）`
+      ? `- 浏览器候选比较：${r.candidate_comparison.map((c) => `#${c.rank} ${c.label || c.id} ${fmt(c.score, 1)}分`).join("；")}（不是临床推荐或手术指令）`
       : null,
     `- 候选长度：${fmt(r.candidate.length_mm)} mm`,
     r.candidate.type === "fusiform"
@@ -1839,26 +1740,9 @@ function stageLiveOverlay() {
 async function runAgent() {
   if (!S.verts) return;
   els.run.disabled = true;
-  els.stageStatus.textContent = "生成中…";
+  els.stageStatus.textContent = "浏览器确定性 workflow 生成中…";
   const tumor = tumorInput();
-  let result;
-  if (els.useAgentServer.checked) {
-    try {
-      const streamState = { trace: [], executionEvents: [] };
-      result = await requestAgentPlan(tumor, {
-        endpoint: els.endpoint.value.trim(),
-        timeoutMs: Number(els.providerTimeout.value) * 1000,
-        providerConfig: providerConfig(),
-        stream: true,
-        onStreamEvent: (evt) => handleAgentStreamEvent(streamState, evt),
-      });
-    } catch (err) {
-      result = planIncisionDeterministic({ tumor, verts: S.verts, tris: S.tris, atlas: S.atlas, normal: S.normals[S.lesion] });
-      result.provider = { mode: "browser_deterministic_fallback", model: null, error: err.message };
-    }
-  } else {
-    result = planIncisionDeterministic({ tumor, verts: S.verts, tris: S.tris, atlas: S.atlas, normal: S.normals[S.lesion] });
-  }
+  const result = planIncisionWorkflow({ tumor, verts: S.verts, tris: S.tris, atlas: S.atlas, normal: S.normals[S.lesion] });
   S.baseResult = result;
   resetEditControls();
   resetEditTimeline();
@@ -1995,9 +1879,6 @@ els.ellipseRatio.oninput = () => { els.ellipseRatioVal.textContent = `${els.elli
 els.ellipseRatio.onchange = runAgent;
 els.boundaryMode.onchange = () => { S.boundaryActive = false; updateFormVisibility(); runAgent(); };
 els.run.onclick = runAgent;
-els.endpoint.onchange = () => {
-  els.stageStatus.textContent = "规划后端 endpoint 已修改；生成候选时会使用新的后端接口。";
-};
 els.testProvider.onclick = testProviderEndpoint;
 els.providerBaseUrl.onchange = () => { setProviderTestState("Provider Base URL 已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
 els.providerModel.onchange = () => { setProviderTestState("Provider 模型已修改，尚未重新测试连通性。"); saveProviderPrefs(); };

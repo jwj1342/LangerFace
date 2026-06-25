@@ -54,8 +54,8 @@ LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它
 | 感知层 | 已实现 | 从图片、视频、摄像头中提取 478 个 3D 人脸关键点；网页端还检测手部遮挡 | `src/langerface/detection/`, `web/pipeline.js` |
 | 配准与几何层 | 已实现 | 2D 重心坐标贴合；3D Beta Umeyama 关键点网格重建与刚性配准；FLAME 关键点拟合实验；离线 HeadSpace 多视角加权 Sim3 配准 | `src/langerface/geometry/`, `src/langerface/registration/`, `src/langerface/flame.py`, `web/geometry/`, `web/projection3d.js`, `tools/reconstruct_3d.py`, `tools/headspace/` |
 | 面部标注 / 图谱层 | 已实现 | 生成、读取、校验和映射 RSTL/Langer 线条；网页 3D 标注只产出待复核草案，临床校验由 Python/评审流程完成 | `src/langerface/lines/`, `web/annotate*.js`, `tools/annotate_atlas.py`, `tools/digitize_from_diagram.py` |
-| 肿物模拟层 | Stage 2 功能切片（#14） | 表示脸部肿物的位置、大小、深度、安全切缘和与皮肤表面的关系；当前支持手动中心点、椭圆 / 自由轮廓、来源作者和 JSON 导入导出，自动分割与临床复核仍待补 | `src/langerface/tumor/`, `web/incision_agent*.js` |
-| 切口设计层 | Stage 2 工程闭环（#11-#22/#64/#83/#85） | 综合张力线方向、肿物约束、安全切缘、敏感结构、医生编辑、审阅导出和 2D 实时叠加，生成候选切口可视化；只做决策辅助，不输出手术指令 | `assets/clinical_rules_face_incision.json`, `src/langerface/incision/`, `src/langerface/agent/`, `web/incision*.js` |
+| 肿物模拟层 | Stage 2 功能切片（#14） | 表示脸部肿物的位置、大小、深度、安全切缘和与皮肤表面的关系；当前支持手动中心点、椭圆 / 自由轮廓、来源作者和 JSON 导入导出，自动分割与临床复核仍待补 | `web/incision_agent*.js`, `web/incision_tools.js` |
+| 切口设计层 | Stage 2 工程闭环（#11-#22/#64/#83/#85） | 综合张力线方向、肿物约束、安全切缘、敏感结构、医生编辑、审阅导出和 2D 实时叠加，生成候选切口可视化；只做决策辅助，不输出手术指令 | `assets/clinical_rules_face_incision.json`, `assets/agentic_incision_tool_schema.json`, `web/incision*.js` |
 | 渲染与交互层 | 已实现 / 扩展中 | 2D Canvas 叠加、3D 查看、遮挡、放大窗、录制导出和 UI 控制 | `src/langerface/rendering/`, `web/render.js`, `web/three3d.js`, `web/main.js` |
 | 实验演示层 | 已实现（研究演示） | FLAME 实时孪生；RSTL 切除 -> 闭合定性软体演示 | `web/flame_fit.js`, `web/mode3d.js`, `web/surgery.html`, `web/soft_body.js` |
 
@@ -136,7 +136,7 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 - 🧊 **3D 重建（Beta）**：转头扫描 → 多帧 468 点关键点网格对齐 / 取中位数 → 旋转查看 / 实时刚性投影；这是关键点网格演示，不是临床级稠密 3D 扫描。
 - 🧬 **FLAME 实时孪生（实验）**：浏览器加载紧凑 FLAME basis，本地拟合身份 / 表情 / 张嘴，右侧 FLAME 头随左侧真实人脸头姿和表情运动，可切标准 / 个体与贴脸纹理。
 - ✍️ **网页 3D 标注**：在浏览器里于标准脸 / 3D 头模表面手绘 RSTL/Langer 候选线，可导入 JSON/OBJ/PLY 头模和 3D Slicer `.mrk.json` 曲线，导出 `validated:false` 的图谱草案（`[tri,u,v]`）或 xyz 折线；临床复核与置 `validated:true` 仍走 Python/评审流程，见 [网页 3D 标注与图谱草案导出](docs/ARCHITECTURE.md#12-网页-3d-线标注与图谱草案导出)。
-- 🧭 **切口 Agent 工作台**：在标准脸上手动放置皮下 / 皮表肿物，支持椭圆 / 自由轮廓和肿物 JSON 导入导出，生成线性或梭形候选切口，显示 RSTL 方向、面部分区、guardrails、流式工具调用 trace 和 provider 状态；候选可记录审阅人、确认 / 退回 / 否决状态和备注，候选库会给出工程排序对比，导出审阅记录，也可发送到实时页叠加到上传照片、视频或摄像头画面。
+- 🧭 **切口 Agent 工作台**：在标准脸上手动放置皮下 / 皮表肿物，支持椭圆 / 自由轮廓和肿物 JSON 导入导出，生成线性或梭形候选切口，显示 RSTL 方向、面部分区、guardrails、浏览器 workflow 工具 trace 和 provider 连通性状态；候选可记录审阅人、确认 / 退回 / 否决状态和备注，候选库会给出工程排序对比，导出审阅记录，也可发送到实时页叠加到上传照片、视频或摄像头画面。
 - 🔬 **RSTL 切除 -> 闭合演示（Beta）**：作为 3D 标注上下文中的力学直觉演示，只展示沿 RSTL 的绿色切除闭合路径；不是 FEM、不是患者个体化建模，也不是正式候选生成模块。
 - 🎛️ **实时控制**：主界面暴露数据源、线密度、透明度、镜像和网格采样点；平滑、背面剔除、手部遮挡、分区着色和放大窗为底层支持或默认能力，部分调试开关当前隐藏。
 - 🔒 **全程本地运行**，不上传任何画面（隐私友好）。
@@ -349,7 +349,7 @@ Stage 2 的切口候选必须受以下边界约束：
 
 病人面部影像属敏感个人信息。本工具默认**本地运行，不上传任何数据**。Vite 前端默认用于本地研究演示；如需对外暴露，请自行加访问控制与合规审查（HIPAA / GDPR / 《个人信息保护法》）。
 
-Stage 2 切口 Agent 默认只把肿物参数、标准化坐标、候选切口、工具调用 trace 和审阅记录作为结构化 JSON 处理；导出 JSON / 报告草案不默认包含原始照片、视频帧、摄像头画面或纹理。自然皱襞 / 病灶辅助线索当前只允许以低置信摘要和 metrics 进入医生审阅，不自动改变切口几何，也不进入 LLM prompt。前端只保留 OpenAI-compatible / vLLM Provider 配置，可填写 Base URL、模型和访问密钥；密钥仅用于当前浏览器到本地代理/远端服务的请求，审阅记录与服务端返回会做脱敏，不写入公开仓库。详细边界见 [`docs/INCISION_PRIVACY_AUDIT.md`](docs/INCISION_PRIVACY_AUDIT.md)。
+Stage 2 切口 Agent 默认只把肿物参数、标准化坐标、候选切口、工具调用 trace 和审阅记录作为结构化 JSON 处理；导出 JSON / 报告草案不默认包含原始照片、视频帧、摄像头画面或纹理。自然皱襞 / 病灶辅助线索当前只允许以低置信摘要和 metrics 进入医生审阅，不自动改变切口几何，也不进入 LLM prompt。前端只保留 OpenAI-compatible / vLLM Provider 配置，可填写 Base URL、模型和访问密钥；密钥仅用于当前浏览器到用户提供 Provider 的连通性测试或后续摘要调用，审阅记录会做脱敏，不写入公开仓库。详细边界见 [`docs/INCISION_PRIVACY_AUDIT.md`](docs/INCISION_PRIVACY_AUDIT.md)。
 
 ---
 

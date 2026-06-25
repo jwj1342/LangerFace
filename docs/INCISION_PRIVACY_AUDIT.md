@@ -40,13 +40,11 @@
 
 ```bash
 python tools/audit_export_privacy.py incision_review_*.json tumor_input_*.json
-python tools/audit_incision_review_gate.py incision_review_*.json
-python tools/audit_tumor_input.py tumor_input_*.json
+cd web && node ../tools/test_incision_tools.mjs
 ```
 
 脚本会拦截原始媒体标记、未脱敏 provider secret、明显身份字段、疑似嵌入媒体 payload，以及辅助线索越界参与几何或 Agent prompt 的标记。
-审阅 gate 审计会额外检查 `review_gate` / `live_overlay_ready` 是否与审阅状态、审阅人、高风险备注和 Agent trace gate 自洽；会核对 `guardrail_summary` 是否忠实反映原始 `guardrails.warnings` 的 high/medium code、计数和 `suggested_overrides`；会核对 `candidate_edit_session` 与 `candidate.provenance` 的候选版本、编辑步数、当前 edit_id 和每步 `resulting_candidate_version` 是否一致；也会检查候选几何字段自洽性，包括线性候选端点/中心/轴向/长度、梭形候选端点/中心/长轴/短轴、outline 与闭合 polyline 是否互相一致；对带肿物输入的审阅记录，会重放 `tumor_quality`，检查来源、作者、单位和 warning code/severity 是否与原始肿物 payload 一致；对带皮表边界的审阅记录，还会重放 `tumor_boundary_summary`，检查其点数、长短轴、面积、自交、中心偏移是否与肿物边界和候选长轴一致，并核对梭形候选 metrics 中的边界字段是否同步。
-肿物输入审计会额外检查 `tumor-input/v0.2` schema、输入质量提示、边界 summary 与肿物轮廓是否一致，以及肿物导出是否仍只包含抽象面部坐标。新版前端导出的 `boundary_summary` 会包含 `units_per_mm`、`summary_axis` 和 `summary_normal`，审计器可复算边界中心、长短轴、面积、面积比、自交、中心偏移和长短轴比例；旧导出缺少比例字段时仍只核对基础字段。
+浏览器 workflow 会额外维护 `review_gate` / `live_overlay_ready` 与审阅状态、审阅人、高风险备注和 trace gate 的自洽性；导出记录也会保存 `guardrail_summary`、`candidate_edit_session`、线性/梭形候选几何字段、`tumor_quality`、`tumor_boundary_summary` 和候选边界 metrics，供 reviewer 检查。JS workflow 测试会覆盖 `tumor-input/v0.2`、输入质量提示、边界 summary、候选比较和导出前隐私预检。
 
 ## 仍需单独完成的合规工作
 
