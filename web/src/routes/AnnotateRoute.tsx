@@ -1,12 +1,14 @@
 import { useEffect, useRef } from "react";
 
 import { AnnotateWorkbench } from "./AnnotateWorkbench";
+import { useAnnotateControllerBridge } from "../hooks/useAnnotateControllerBridge";
 import { useAppStore } from "../stores/appStore";
 
 export function AnnotateRoute() {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const setActiveWorkspace = useAppStore((state) => state.setActiveWorkspace);
   const setRouteStatus = useAppStore((state) => state.setRouteStatus);
+  useAnnotateControllerBridge();
 
   useEffect(() => {
     let disposed = false;

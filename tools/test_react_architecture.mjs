@@ -14,6 +14,9 @@ const vite = read("vite.config.js");
 const vercel = read("vercel.json");
 const app = read("src/App.tsx");
 const typedStore = read("src/stores/appStore.ts");
+const annotateStore = read("src/stores/annotateStore.ts");
+const annotateBridge = read("src/hooks/useAnnotateControllerBridge.ts");
+const annotateStatePanel = read("src/components/AnnotateStatePanel.tsx");
 const incisionStore = read("src/stores/incisionStore.ts");
 const incisionBridge = read("src/hooks/useIncisionControllerBridge.ts");
 const incisionStatePanel = read("src/components/IncisionStatePanel.tsx");
@@ -74,6 +77,15 @@ assert.ok(app.includes('path="/three-preview"'), "React Router exposes the R3F p
 assert.ok(typedStore.includes("React/Zustand stores low-frequency UI"), "Zustand store documents low-frequency state ownership");
 assert.ok(typedStore.includes("per-frame arrays stay outside persisted stores"), "Zustand store forbids high-frequency renderer arrays");
 assert.ok(typedStore.includes("interface AppState"), "Zustand store is typed");
+assert.ok(annotateStore.includes("AnnotateControllerSnapshot"), "annotation Zustand store keeps typed controller snapshots");
+assert.ok(annotateStore.includes("ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation Zustand store declares the controller bridge event");
+assert.ok(annotateStore.includes("No Three.js objects"), "annotation store documents renderer object exclusion");
+assert.ok(!annotateStore.includes("THREE."), "annotation store must not hold Three.js objects");
+assert.ok(!annotateStore.includes("verts:"), "annotation store must not hold mesh vertex arrays");
+assert.ok(!annotateStore.includes("tris:"), "annotation store must not hold triangle arrays");
+assert.ok(!annotateStore.includes("camera:"), "annotation store must not hold Three.js cameras");
+assert.ok(annotateBridge.includes("window.addEventListener(ANNOTATE_CONTROLLER_STATE_EVENT"), "React annotation hook listens for controller state events");
+assert.ok(annotateStatePanel.includes("useAnnotateStore"), "React annotation UI reads low-frequency state from Zustand");
 assert.ok(incisionStore.includes("IncisionControllerSnapshot"), "incision Zustand store keeps typed controller snapshots");
 assert.ok(incisionStore.includes("INCISION_CONTROLLER_STATE_EVENT"), "incision Zustand store declares the controller bridge event");
 assert.ok(incisionStore.includes("No Three.js objects"), "incision store documents renderer object exclusion");
@@ -130,6 +142,7 @@ assert.ok(controller.includes("S.workflowWorker?.dispose"), "incision controller
 assert.ok(controller.includes("react-incision-controller-snapshot/v0.1"), "incision controller publishes typed low-frequency snapshots to React");
 assert.ok(controller.includes("CustomEvent(INCISION_CONTROLLER_STATE_EVENT"), "incision controller emits state snapshots through a browser event");
 assert.ok(annotateRoute.includes("__LANGERFACE_REACT_MANAGED__"), "React annotate route disables controller auto-mount");
+assert.ok(annotateRoute.includes("useAnnotateControllerBridge"), "annotation route mounts the Zustand/controller bridge");
 assert.ok(annotateRoute.includes("mountAnnotateWorkbench"), "React annotate route mounts the annotation controller explicitly");
 assert.ok(annotateRoute.includes("disposeAnnotateWorkbench"), "React annotate route can dispose the annotation controller");
 assert.ok(annotateRoute.includes("<AnnotateWorkbench />"), "React annotate route renders the annotation UI as TSX");
@@ -147,10 +160,14 @@ for (const id of [
 ]) {
   assert.ok(annotateWorkbench.includes(`id="${id}"`), `React annotate workbench exposes #${id}`);
 }
+assert.ok(annotateWorkbench.includes("AnnotateStatePanel"), "React annotate workbench renders the controller state panel");
 assert.ok(annotateWorkbench.includes('to="/surgery"'), "React annotation route links to the React surgery closure route");
 assert.ok(annotateWorkbench.includes('to="/live"'), "React annotation route returns to the React live route");
 assert.ok(annotateController.includes("export function mountAnnotateWorkbench"), "annotation controller exposes a mount lifecycle");
 assert.ok(annotateController.includes("export function disposeAnnotateWorkbench"), "annotation controller exposes a dispose lifecycle");
+assert.ok(annotateController.includes("ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation controller declares a React state bridge event");
+assert.ok(annotateController.includes("react-annotate-controller-snapshot/v0.1"), "annotation controller publishes a typed React snapshot");
+assert.ok(annotateController.includes("CustomEvent(ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation controller emits state snapshots through a browser event");
 assert.ok(annotateController.includes("cancelAnimationFrame"), "annotation controller cancels its render loop on dispose");
 assert.ok(annotateController.includes("abortController?.abort"), "annotation controller aborts DOM listeners on dispose");
 assert.ok(annotateController.includes("activeSession"), "annotation controller guards async loaders across SPA unmounts");

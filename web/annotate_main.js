@@ -53,7 +53,63 @@ let abortController = null;
 let activeSession = 0;
 
 const SYSTEM_LABELS = { rstl: "RSTL", langer: "Langer" };
+const ANNOTATE_CONTROLLER_STATE_EVENT = "langerface:annotate-state";
 let bundledFlameBasis = null;
+
+function currentDraftSnapshot() {
+  const line = model?.current || null;
+  const controls = controlsOf(line);
+  return {
+    active: Boolean(line),
+    name: line?.name || null,
+    region: line?.region || null,
+    controlCount: controls.length,
+    pathPointCount: line?.points?.length || 0,
+    fallback: Boolean(line?.fallback),
+  };
+}
+
+function savedSummarySnapshot() {
+  const lines = model?.lines || [];
+  return lines.reduce((acc, line) => {
+    const controls = controlsOf(line);
+    acc.count += 1;
+    acc.warningCount += line?.fallback ? 1 : 0;
+    acc.totalControlPoints += controls.length;
+    acc.totalPathPoints += line?.points?.length || 0;
+    return acc;
+  }, { count: 0, warningCount: 0, totalControlPoints: 0, totalPathPoints: 0 });
+}
+
+function publishAnnotateState(reason = "state_update") {
+  if (!mounted || typeof window === "undefined" || !els?.hint) return;
+  const canExportAtlas = Boolean(model?.lines?.length && onCanonical && model?.hasBarycentric?.());
+  const canExportXyz = Boolean(model?.lines?.length);
+  const canPreviewActiveAtlas = Boolean(model?.lines?.length && onCanonical && model?.topologyId === "mediapipe-468");
+  window.dispatchEvent(new CustomEvent(ANNOTATE_CONTROLLER_STATE_EVENT, {
+    detail: {
+      schema_version: "react-annotate-controller-snapshot/v0.1",
+      reason,
+      hint: els.hint?.textContent || "",
+      system: model?.system || els.system?.value || "rstl",
+      mesh: {
+        loaded: Boolean(viewer?.hasMesh?.()),
+        modeLabel: els.drawMode?.textContent || "",
+        onCanonical: Boolean(onCanonical),
+        topologyId: model?.topologyId || null,
+        topologyVersion: model?.topologyVersion || null,
+      },
+      draft: currentDraftSnapshot(),
+      saved: savedSummarySnapshot(),
+      export: {
+        canExportAtlas,
+        canExportXyz,
+        canPreviewActiveAtlas,
+      },
+      updatedAt: new Date().toISOString(),
+    },
+  }));
+}
 
 async function loadBundledFlameStandard() {
   if (!bundledFlameBasis) bundledFlameBasis = await loadFlameBasis(assetUrls.flameBasis);
@@ -415,7 +471,13 @@ function previewActiveAtlas() {
 }
 
 // ── UI 刷新 ───────────────────────────────────────────────────────────────────
-function setHint(t) { if (els?.hint) els.hint.textContent = t; }
+function setHint(t) {
+  if (els?.hint) {
+    els.hint.textContent = t;
+    publishAnnotateState("hint");
+  }
+}
+
 function refresh() {
   if (!model || !els?.status) return;
   const curPts = controlsOf(model.current).length;
@@ -473,6 +535,7 @@ function refresh() {
     row.appendChild(actions);
     els.list.appendChild(row);
   });
+  publishAnnotateState("refresh");
 }
 
 // ── 渲染循环 + 自适应 ─────────────────────────────────────────────────────────

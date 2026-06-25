@@ -139,13 +139,15 @@
     min-width: 0;
   }
 
-  .incision-workbench .incision-state-grid {
+  .incision-workbench .incision-state-grid,
+  .annotate-workbench .annotate-state-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
 
-  .incision-workbench .incision-state-grid > div {
+  .incision-workbench .incision-state-grid > div,
+  .annotate-workbench .annotate-state-grid > div {
     min-width: 0;
     border: 1px solid var(--line);
     border-radius: 10px;
@@ -153,14 +155,16 @@
     padding: 8px 9px;
   }
 
-  .incision-workbench .incision-state-grid .k {
+  .incision-workbench .incision-state-grid .k,
+  .annotate-workbench .annotate-state-grid .k {
     display: block;
     font-size: 10.5px;
     color: var(--muted);
     font-weight: 700;
   }
 
-  .incision-workbench .incision-state-grid .v {
+  .incision-workbench .incision-state-grid .v,
+  .annotate-workbench .annotate-state-grid .v {
     display: block;
     margin-top: 3px;
     color: var(--ink);
@@ -168,6 +172,11 @@
     font-weight: 750;
     line-height: 1.25;
     overflow-wrap: anywhere;
+  }
+
+  .annotate-workbench .annotate-state-warning {
+    color: #8a5a00;
+    font-weight: 700;
   }
 
   .incision-workbench .metric .k {

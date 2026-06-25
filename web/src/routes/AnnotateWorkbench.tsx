@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 
+import { AnnotateStatePanel } from "../components/AnnotateStatePanel";
+
 export function AnnotateWorkbench() {
   return (
     <div className="app annotate-workbench">
@@ -53,6 +55,8 @@ export function AnnotateWorkbench() {
             <button className="btn" id="btnFinish" type="button">保存当前线</button>
           </div>
         </div>
+
+        <AnnotateStatePanel />
 
         <div className="card">
           <div className="quality-top"><span>3. 已保存线</span><span id="annStatus">0 条</span></div>
