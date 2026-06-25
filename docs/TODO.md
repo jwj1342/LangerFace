@@ -26,7 +26,7 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候
 - [ ] RSTL 局部方向服务：为切口设计提供方向、置信度与可解释依据 — [#13](https://github.com/jwj1342/LangerFace/issues/13)
       · 本 PR 已支持 atlas weighted-nearest 查询、support count、无向轴角离散度、JS/Python 对拍和结构化 `confidence_reasons`；atlas 为空、最近支持点过远、支持点过少或邻域角度冲突会进入 trace、候选 provenance、前端方向依据、guardrail 文案和报告；前端会区分 RSTL atlas、敏感结构方向例外、辅助线索只读和医生人工覆盖；临床级 atlas 质量与个体头模一致性仍待医生校验
 - [ ] Borges RSTL 3DMM 拓扑先验：数字化经典图谱并注册到 FLAME/BFM 标准网格 — [#86](https://github.com/jwj1342/LangerFace/issues/86)
-      · 本 PR 已新增 `rstl_mediapipe_direction_prior.json`，作为 MediaPipe 标准脸高密度方向场草案；FLAME/BFM 注册仍待 #61 资产与医生标注
+      · 本 PR 已新增 `rstl_mediapipe_direction_prior.json`，作为 MediaPipe 标准脸高密度方向场草案，并新增 `tools/audit_rstl_3dmm_prior.py` 自动审计 manifest / direction prior 的拓扑、`validated:false`、样本数量、单位向量、置信度范围和 FLAME/BFM pending 边界；FLAME/BFM 注册仍待 #61 资产与医生标注
 
 ### 肿物与切口候选生成
 

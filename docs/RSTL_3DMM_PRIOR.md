@@ -69,3 +69,11 @@ FLAME 轨保持与 MediaPipe 轨独立：
 ## 与 #2 的临床校验闸
 
 任何图谱草案只有在医生逐线校验、修正、记录校验者和时间后，才允许置 `validated:true`。本 PR 不改变现有资产的校验状态；所有当前 RSTL/3DMM 先验仍是 `validated:false` 或 `draft_not_clinically_validated`。
+
+## 自动审计
+
+`tools/audit_rstl_3dmm_prior.py` 会检查 `assets/rstl_3dmm_prior_manifest.json` 与 `assets/rstl_mediapipe_direction_prior.json` 的拓扑、`validated:false`、`draft_not_clinically_validated`、样本数量、单位向量、置信度范围和 FLAME/BFM pending 边界。它的目标不是证明 #86 已经完成临床注册，而是防止草案方向场、MediaPipe atlas 与 FLAME/BFM pending 资产被误表达为已验证图谱。
+
+```bash
+python tools/audit_rstl_3dmm_prior.py --json
+```

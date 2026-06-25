@@ -72,3 +72,49 @@ def test_rstl_direction_prior_builder_reproduces_contract(tmp_path):
     assert built["coverage"] == committed["coverage"]
     assert built["samples"][0] == committed["samples"][0]
     assert built["samples"][-1] == committed["samples"][-1]
+
+
+def test_rstl_3dmm_prior_audit_passes_committed_assets():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "tools/audit_rstl_3dmm_prior.py",
+            "--json",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    summary = json.loads(result.stdout)
+    assert summary["ok"] is True
+    assert summary["review_status"] == "draft_not_clinically_validated"
+    assert summary["validated"] is False
+    assert summary["asset_count"] >= 4
+    assert {asset["id"] for asset in summary["assets"]} >= {
+        "mediapipe_rstl_direction_prior",
+        "flame_rstl_prior",
+    }
+
+
+def test_rstl_3dmm_prior_audit_rejects_accidental_validated_asset(tmp_path):
+    manifest = json.loads((ROOT / "assets" / "rstl_3dmm_prior_manifest.json").read_text())
+    manifest["assets"][0]["validated"] = True
+    bad_manifest = tmp_path / "rstl_3dmm_prior_manifest.json"
+    bad_manifest.write_text(json.dumps(manifest))
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "tools/audit_rstl_3dmm_prior.py",
+            "--manifest",
+            str(bad_manifest),
+            "--root",
+            str(ROOT),
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 1
+    assert "validated:false" in result.stderr
