@@ -12,6 +12,8 @@ const exporter = fs.readFileSync("export_canvas.js", "utf8");
 assert.ok(html.includes('accept="image/*,video/*"'), "live page accepts uploaded photos and videos");
 assert.ok(html.includes('id="camBtn"'), "live page exposes camera entry for realtime overlay");
 assert.ok(html.includes('id="exportBtn"'), "live page exposes export action");
+assert.ok(html.includes('id="incisionOverlayQa"'), "live page exposes visible incision overlay QA state");
+assert.ok(html.includes("切口叠加 QA"), "live page labels visible overlay QA as engineering state");
 assert.ok(source.includes('setSource(prepared.source, "image"'), "uploaded photos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "video"'), "uploaded videos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "camera"'), "camera frames enter the shared live render source");
@@ -19,6 +21,7 @@ assert.ok(loop.includes('sourceState.sourceKind !== "image"'), "video and camera
 assert.ok(main.includes("applyStagedIncisionOverlay"), "live page loads staged incision overlay payloads");
 assert.ok(main.includes("validateIncisionOverlay(overlay)"), "live page validates incision overlay payloads before rendering");
 assert.ok(main.includes("renderState.incisionOverlay = overlay"), "live page stores validated incision overlay in render state");
+assert.ok(main.includes("setIncisionOverlayQa"), "live page shows pending overlay QA feedback after loading a candidate");
 assert.ok(main.includes("上传照片、视频或开启摄像头后，会随 RSTL 一起显示"), "live page gives explicit overlay feedback");
 assert.ok(main.includes("buildZoomCards(refreshStaticImage)"), "live page rebuilds zoom cards after loading incision overlay");
 assert.ok(main.includes("createCanvasRecordingController"), "live page uses the tested canvas export controller");
@@ -35,6 +38,10 @@ assert.ok(render.includes("incisionOverlay.stability.rmsPx"), "renderer records 
 assert.ok(render.includes("incision-overlay-runtime-diagnostics/v0.1"), "renderer exports runtime overlay diagnostics section");
 assert.ok(render.includes('setDiagnosticSection("incision_overlay_runtime"'), "renderer publishes sanitized overlay diagnostics section");
 assert.ok(render.includes("exported_landmarks: false"), "overlay diagnostics do not export landmark coordinates");
+assert.ok(render.includes("updateIncisionOverlayQa(registration, stability)"), "renderer updates visible overlay QA from measured results");
+assert.ok(render.includes("投射需复核"), "renderer surfaces registration failure feedback");
+assert.ok(render.includes("抖动需复核"), "renderer surfaces stability failure feedback");
+assert.ok(render.includes("叠加稳定"), "renderer surfaces stable overlay feedback");
 assert.ok(render.includes("切口候选"), "zoom strip exposes a dedicated incision candidate detail card");
 assert.ok(render.includes("incisionOverlayBounds"), "renderer computes incision overlay bounds for detail zoom");
 assert.ok(render.includes("overlay.tumor?.center_ref"), "incision zoom includes tumor center");

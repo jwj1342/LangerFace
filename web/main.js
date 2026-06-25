@@ -9,7 +9,7 @@ import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin
 import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera } from "./pipeline.js";
 import { adjustFocusZoom, buildZoomCards } from "./render.js";
 import { recordingState, reconState, renderState, sourceState } from "./state.js";
-import { setMsg, setProvenance, smoothLabel } from "./ui.js";
+import { setIncisionOverlayQa, setMsg, setProvenance, smoothLabel } from "./ui.js";
 
 let previewSystem = null;
 let previewMeta = null;
@@ -40,10 +40,15 @@ function applyStagedIncisionOverlay() {
   if (!overlay) return;
   if (!validateIncisionOverlay(overlay)) {
     dataSource.clearIncisionOverlay();
+    setIncisionOverlayQa(null);
     setMsg("切口候选叠加数据无效，已清除。");
     return;
   }
   renderState.incisionOverlay = overlay;
+  setIncisionOverlayQa({
+    label: "等待画面",
+    detail: "上传照片、视频或开启摄像头后开始检查。",
+  });
   buildZoomCards(refreshStaticImage);
   const highCodes = overlay.guardrail_summary?.high_codes || overlay.review_gate?.high_guardrail_codes || [];
   const reviewLabel = overlay.review?.status === "approved_for_discussion" ? "已确认候选草案" : "待复核候选";

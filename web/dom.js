@@ -25,6 +25,8 @@ export const els = {
   badge: $("modelBadge"), live: $("livePill"), fps: $("fps"),
   qualityVal: $("qualityVal"), qualityBar: $("qualityBar"),
   statState: $("statState"), statFace: $("statFace"), statYaw: $("statYaw"), statLines: $("statLines"),
+  incisionOverlayQa: $("incisionOverlayQa"), incisionOverlayQaState: $("incisionOverlayQaState"),
+  incisionOverlayQaDetail: $("incisionOverlayQaDetail"),
 };
 
 export const ctx = els.canvas.getContext("2d");

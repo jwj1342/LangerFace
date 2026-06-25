@@ -5,7 +5,7 @@ import { innerMouthTriangles, mapAtlas, pointInHandMasks, visibleRuns, visibleTr
 import { mapSurfaceRefs, measureIncisionOverlayJitter, measureIncisionOverlayRegistration } from "./incision_overlay.js";
 import { countMetric, recordMetricSample, setDiagnosticSection } from "./logger.js";
 import { modelState, renderState, sourceState } from "./state.js";
-import { setLive } from "./ui.js";
+import { setIncisionOverlayQa, setLive } from "./ui.js";
 
 const focusScratch = document.createElement("canvas");
 const focusCtx = focusScratch.getContext("2d");
@@ -14,6 +14,15 @@ const INCISION_ZOOM_REGION = { kind: "incision_overlay" };
 const INCISION_OVERLAY_STABILITY_FRAMES = 8;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const overlayRuntimeDiagnostics = { key: null, landmarkFrames: [] };
+
+function fmtPx(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? `${n.toFixed(n >= 10 ? 0 : 1)}px` : "—";
+}
+
+function compactReason(reason) {
+  return String(reason || "unknown").replaceAll("_", " ");
+}
 
 export function faceBBox(lm) {
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
@@ -173,6 +182,30 @@ function updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stabilit
   });
 }
 
+function updateIncisionOverlayQa(registration, stability) {
+  if (!registration?.passed) {
+    setIncisionOverlayQa({
+      tone: "warn",
+      label: "投射需复核",
+      detail: `工程 QA：${compactReason(registration?.reason)}；映射点 ${registration?.mapped_point_count ?? 0}，出画面 ${registration?.out_of_frame_count ?? 0}。`,
+    });
+    return;
+  }
+  if (!stability) {
+    setIncisionOverlayQa({
+      label: "已投射",
+      detail: `工程 QA：映射点 ${registration.mapped_point_count}；等待连续帧稳定性。`,
+    });
+    return;
+  }
+  const detail = `工程 QA：映射点 ${registration.mapped_point_count}；RMS ${fmtPx(stability.overall?.rms_px)} / P95 ${fmtPx(stability.overall?.p95_px)} / max ${fmtPx(stability.overall?.max_px)}。`;
+  setIncisionOverlayQa({
+    tone: stability.passed ? "ok" : "warn",
+    label: stability.passed ? "叠加稳定" : "抖动需复核",
+    detail: stability.passed ? detail : `${detail} 原因：${compactReason(stability.reason)}。`,
+  });
+}
+
 function recordIncisionOverlayRegistration(overlay, lm, W, H) {
   const registration = measureIncisionOverlayRegistration(overlay, lm, modelState.triangles, {
     frameWidth: W,
@@ -247,11 +280,13 @@ function drawIncisionOverlay(lm, W, H, masks, vis, innerMouth) {
     overlayRuntimeDiagnostics.key = null;
     overlayRuntimeDiagnostics.landmarkFrames = [];
     setDiagnosticSection("incision_overlay_runtime", null);
+    setIncisionOverlayQa(null);
     return;
   }
   const registration = recordIncisionOverlayRegistration(overlay, lm, W, H);
   const stability = recordIncisionOverlayStability(overlay, lm);
   updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stability);
+  updateIncisionOverlayQa(registration, stability);
   ctx.save();
   ctx.globalAlpha = 0.98;
   const baseWidth = Math.max(2, W / 520);

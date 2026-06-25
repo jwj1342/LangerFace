@@ -72,6 +72,7 @@ Stage 2 涉及肿物模拟和候选切口，只能在医生审阅路径中评估
 | 医生审阅 | 接受率、修改次数、覆盖原因 | 系统建议不能绕过医生确认 |
 | 照片 / 视频 / 实时叠加 | overlay 注册质量 | 当前帧 landmarks 能否稳定映射 `incision-overlay/v0.1` surface refs；记录 mapped point count、候选线点数、退化三角形、出画面点、bbox diagonal / frame fraction |
 | 照片 / 视频 / 实时叠加 | overlay 抖动 RMS / P95 / max | 静止头部或暂停视频连续 landmarks 帧中，肿物中心、边界和候选线 surface refs 的帧间像素位移；当前工程门槛 RMS ≤ 2px、P95 ≤ 4px、max ≤ 8px |
+| 照片 / 视频 / 实时叠加 | overlay 可见 QA 反馈 | 实时页“切口叠加 QA”按实际 registration / stability 结果显示等待画面、已投射、投射需复核、抖动需复核或叠加稳定，避免用户只看到线条却不知道投射质量 |
 | 照片 / 视频 / 实时叠加 | preview 诊断导出 | `window.exportLangerfaceDiagnostics()` 的 `sections.incision_overlay_runtime` 保存最近一帧 registration 与最近 8 帧滚动 stability 摘要；只含 QA 数值、阈值和失败原因，不含照片/视频帧、canvas 像素或 landmark 坐标 |
 
 当前公开仓库只提供合成样例原型，见 [WRINKLE_LESION_CUES.md](WRINKLE_LESION_CUES.md) 和

@@ -25,6 +25,21 @@ export function setProvenance(meta) {
   els.prov.classList.remove("hidden");
 }
 
+export function setIncisionOverlayQa(state = null) {
+  if (!els.incisionOverlayQa) return;
+  if (!state) {
+    els.incisionOverlayQa.classList.add("hidden");
+    els.incisionOverlayQa.classList.remove("ok", "warn");
+    return;
+  }
+  const tone = state.tone || "pending";
+  els.incisionOverlayQa.classList.remove("hidden", "ok", "warn");
+  if (tone === "ok") els.incisionOverlayQa.classList.add("ok");
+  if (tone === "warn") els.incisionOverlayQa.classList.add("warn");
+  els.incisionOverlayQaState.textContent = state.label || "等待画面";
+  els.incisionOverlayQaDetail.textContent = state.detail || "上传照片、视频或开启摄像头后开始检查。";
+}
+
 export function smoothLabel(v) {
   return v === 0 ? "关" : v < 35 ? "弱" : v < 70 ? "中" : "强";
 }
