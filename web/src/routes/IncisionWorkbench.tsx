@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 
 import { IncisionStatePanel } from "../components/IncisionStatePanel";
 import { ProviderConfigPanel } from "../components/ProviderConfigPanel";
+import { ReviewControlsPanel } from "../components/ReviewControlsPanel";
 
 export function IncisionWorkbench() {
   return (
@@ -134,26 +135,7 @@ export function IncisionWorkbench() {
           <p className="agent-note">调整只改变候选草案并记录 provenance；真实切口仍需医生复核。</p>
         </div>
 
-        <div className="card agent-grid">
-          <div className="quality-top"><span>医生审阅</span><span className="review-state" id="reviewState">待医生确认</span></div>
-          <div>
-            <label className="field-label" htmlFor="reviewerName">审阅人</label>
-            <input id="reviewerName" className="text-input" placeholder="clinician reviewer" />
-          </div>
-          <select id="reviewDecision" className="select" defaultValue="pending_clinician_confirmation">
-            <option value="pending_clinician_confirmation">待医生确认</option>
-            <option value="approved_for_discussion">确认候选草案</option>
-            <option value="needs_revision">退回修改</option>
-            <option value="rejected_by_clinician">否决候选</option>
-          </select>
-          <textarea id="reviewNotes" className="text-area" placeholder="审阅备注、覆盖原因或需要回看的位置"></textarea>
-          <div className="btn-row two-cols">
-            <button className="btn" id="approveCandidateBtn" type="button">确认当前候选</button>
-            <button className="btn" id="rejectCandidateBtn" type="button">否决当前候选</button>
-          </div>
-          <button className="btn btn-primary" id="saveReviewBtn" type="button">保存审阅记录</button>
-          <p className="agent-note">确认只代表进入研究审阅记录，不是手术指令；候选几何一旦调整，审阅状态会回到待确认。</p>
-        </div>
+        <ReviewControlsPanel />
 
         <div className="card agent-grid">
           <div className="quality-top"><span>候选库</span><span id="savedCount">0</span></div>

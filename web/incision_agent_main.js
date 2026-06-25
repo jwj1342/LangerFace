@@ -162,6 +162,7 @@ function createRuntimeState() {
     workflowWorker: null,
     workflowWorkerFailed: false,
     providerReactStateHandler: null,
+    reviewReactCommandHandler: null,
     editTimeline: null,
     editCursor: 0,
     lastConsoleTraceSignature: "",
@@ -178,6 +179,7 @@ const REVIEW_LABELS = {
 };
 const INCISION_CONTROLLER_STATE_EVENT = "langerface:incision-state";
 const INCISION_PROVIDER_REACT_STATE_EVENT = "langerface:incision-provider-react-state";
+const INCISION_REVIEW_REACT_COMMAND_EVENT = "langerface:incision-review-react-command";
 
 function numericControlValue(el) {
   if (!el) return null;
@@ -1569,6 +1571,25 @@ function recordReviewDecision(status, label) {
   saveCurrentCandidate(label);
 }
 
+function handleReactReviewCommand(event) {
+  const command = event?.detail?.command;
+  if (command === "review_state_changed") {
+    updateReviewStateUI();
+    return;
+  }
+  if (command === "approve_candidate") {
+    recordReviewDecision("approved_for_discussion", "确认候选");
+    return;
+  }
+  if (command === "reject_candidate") {
+    recordReviewDecision("rejected_by_clinician", "否决候选");
+    return;
+  }
+  if (command === "save_review") {
+    saveReviewRecord();
+  }
+}
+
 function exportReviewJson() {
   if (!S.result && !S.saved.length) {
     els.stageStatus.textContent = "没有可导出的候选";
@@ -2062,10 +2083,15 @@ function bindWorkbenchEvents() {
   invalidateReviewAfterGeometryChange("已恢复工具建议，审阅状态已回到待医生确认。");
   renderResult(S.baseResult);
   };
-  els.reviewDecision.onchange = updateReviewStateUI;
-  els.approveCandidate.onclick = () => recordReviewDecision("approved_for_discussion", "确认候选");
-  els.rejectCandidate.onclick = () => recordReviewDecision("rejected_by_clinician", "否决候选");
-  els.saveReview.onclick = saveReviewRecord;
+  if (window.__LANGERFACE_REACT_MANAGED__) {
+    S.reviewReactCommandHandler = handleReactReviewCommand;
+    window.addEventListener(INCISION_REVIEW_REACT_COMMAND_EVENT, S.reviewReactCommandHandler);
+  } else {
+    els.reviewDecision.onchange = updateReviewStateUI;
+    els.approveCandidate.onclick = () => recordReviewDecision("approved_for_discussion", "确认候选");
+    els.rejectCandidate.onclick = () => recordReviewDecision("rejected_by_clinician", "否决候选");
+    els.saveReview.onclick = saveReviewRecord;
+  }
   els.saveCandidate.onclick = () => saveCurrentCandidate();
   els.makeVariants.onclick = makeVariantCandidates;
   els.clearSaved.onclick = () => { S.saved = []; renderSaved(); };
@@ -2099,6 +2125,10 @@ export function disposeIncisionAgentWorkbench() {
   if (S.providerReactStateHandler) {
     window.removeEventListener(INCISION_PROVIDER_REACT_STATE_EVENT, S.providerReactStateHandler);
     S.providerReactStateHandler = null;
+  }
+  if (S.reviewReactCommandHandler) {
+    window.removeEventListener(INCISION_REVIEW_REACT_COMMAND_EVENT, S.reviewReactCommandHandler);
+    S.reviewReactCommandHandler = null;
   }
   S.head?.dispose?.();
 }
