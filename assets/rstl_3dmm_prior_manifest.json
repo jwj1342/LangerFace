@@ -25,13 +25,21 @@
       "system": "rstl",
       "topologyId": "mediapipe-468",
       "topologyVersion": "mediapipe-canonical-468-v1",
-      "path": "assets/rstl_mediapipe_direction_prior.json",
+      "path": null,
+      "remote_filename": "rstl_mediapipe_direction_prior.json",
+      "local_cache_path": "local_outputs/rstl_mediapipe_direction_prior.json",
       "format": "triangle centroid direction samples with vector, confidence, and provenance",
       "generated_by": "tools/build_rstl_direction_prior.py",
-      "status": "available_draft_direction_field",
+      "status": "remote_or_generated_draft_direction_field",
       "validated": false,
       "uses": ["rstl_direction_service_prior_review", "stage2_incision_planning_review", "3dmm_prior_bridge_asset"],
-      "limitations": ["derived from the current MediaPipe RSTL draft atlas", "triangle-centroid samples are not a clinician-approved atlas", "requires #2 clinical review before validated use"]
+      "limitations": [
+        "large direction-prior JSON is intentionally not committed",
+        "host remote_filename behind the configured asset base or generate local_cache_path with tools/build_rstl_direction_prior.py",
+        "derived from the current MediaPipe RSTL draft atlas",
+        "triangle-centroid samples are not a clinician-approved atlas",
+        "requires #2 clinical review before validated use"
+      ]
     },
     {
       "id": "mediapipe_langer_contrast",
@@ -72,7 +80,7 @@
       "uses": ["flame_direction_prior_review", "flame_standard_head_annotation_qc", "flame_individual_transfer_qc"],
       "limitations": [
         "FLAME assets and generated direction fields are not redistributed",
-        "generated output is gitignored under assets/flame/rstl_flame_direction_prior.json",
+        "generated output is gitignored under local_outputs/rstl_flame_direction_prior.json",
         "nearest-neighbor MediaPipe-to-FLAME bridge is not clinical registration",
         "requires #61 workflow",
         "requires #2 clinical review before validated use"

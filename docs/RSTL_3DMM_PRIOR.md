@@ -14,14 +14,14 @@
 | 资产 | 拓扑 | 格式 | 状态 | 用途 |
 | --- | --- | --- | --- | --- |
 | `web/assets/atlas_rstl.json` | `mediapipe-468` | `lines[].points = [tri,u,v]` | `validated:false` | Stage 1/2 的标准脸 RSTL 草案和 #13 方向服务输入 |
-| `assets/rstl_mediapipe_direction_prior.json` | `mediapipe-468` | 每个三角面中心的方向向量 / 置信度 / provenance | `validated:false` | 高密度方向场审阅资产，供 #13 方向服务和 #86 3DMM 先验注册对照 |
+| `rstl_mediapipe_direction_prior.json`（远端资产或 `local_outputs/` 本地生成） | `mediapipe-468` | 每个三角面中心的方向向量 / 置信度 / provenance | `validated:false` | 高密度方向场审阅资产，供 #13 方向服务和 #86 3DMM 先验注册对照；大 JSON 不提交进仓库 |
 | `web/assets/atlas_langer.json` | `mediapipe-468` | `lines[].points = [tri,u,v]` | `validated:false` | Langer 对照 / 教学，不作为面部主切口方向 |
 | `assets/rstl_3dmm_prior_manifest.json` | 多拓扑 manifest | JSON | `draft_not_clinically_validated` | 记录来源、拓扑、生成脚本和临床校验闸 |
 | FLAME/BFM RSTL atlas | `flame-2023` / BFM | 待生成 `[tri,u,v]` | pending | #61 3DMM 标注/迁移轨后续资产 |
-| FLAME RSTL direction prior | `flame-2023` | dev-local triangle centroid direction field | pending / `validated:false` | `tools/build_flame_rstl_direction_prior.py` 可在本地 FLAME 资产就位后生成，产物位于 gitignored `assets/flame/rstl_flame_direction_prior.json` |
+| FLAME RSTL direction prior | `flame-2023` | dev-local triangle centroid direction field | pending / `validated:false` | `tools/build_flame_rstl_direction_prior.py` 可在本地 FLAME 资产就位后生成，产物位于 gitignored `local_outputs/rstl_flame_direction_prior.json` |
 | BFM/custom 3DMM RSTL direction prior | `bfm-local` / 自定义 3DMM | dev-local triangle centroid direction field | pending / `validated:false` | `tools/build_3dmm_rstl_direction_prior.py` 可读取授权本地拓扑和 neutral vertices，默认输出到 gitignored `local_outputs/rstl_3dmm_direction_prior.json` |
-| FLAME/BFM review packet | `flame-2023` / BFM | `rstl-3dmm-review-packet/v0.1` | `draft_not_clinically_validated` | `tools/build_rstl_3dmm_review_packet.py` 从方向先验抽样生成医生审阅包，产物位于 gitignored `assets/flame/rstl_3dmm_review_packet.json` |
-| FLAME/BFM review-applied prior | `flame-2023` / BFM | `rstl-3dmm-reviewed-direction-prior/v0.1` | `validated:false` | `tools/apply_rstl_3dmm_review_packet.py` 把医生审阅包回填到草案方向场，产物位于 gitignored `assets/flame/rstl_3dmm_reviewed_direction_prior.json` |
+| FLAME/BFM review packet | `flame-2023` / BFM | `rstl-3dmm-review-packet/v0.1` | `draft_not_clinically_validated` | `tools/build_rstl_3dmm_review_packet.py` 从方向先验抽样生成医生审阅包，产物位于 gitignored `local_outputs/rstl_3dmm_review_packet.json` |
+| FLAME/BFM review-applied prior | `flame-2023` / BFM | `rstl-3dmm-reviewed-direction-prior/v0.1` | `validated:false` | `tools/apply_rstl_3dmm_review_packet.py` 把医生审阅包回填到草案方向场，产物位于 gitignored `local_outputs/rstl_3dmm_reviewed_direction_prior.json` |
 
 ## Provenance 要求
 
@@ -37,7 +37,9 @@
 
 `tools/build_rstl_direction_prior.py` 会从当前 `assets/atlas_rstl.json` 读取 RSTL 流线，在
 `canonical_face_model.obj` 的每个三角面中心查询 weighted-nearest 局部方向，并输出
-`assets/rstl_mediapipe_direction_prior.json`。这份资产包含：
+`local_outputs/rstl_mediapipe_direction_prior.json`。这份资产是大 JSON，仓库只提交
+`assets/rstl_3dmm_prior_manifest.json` 中的 remote/generated 契约；需要浏览器或审阅流程消费时，应把同名
+`rstl_mediapipe_direction_prior.json` 上传到配置的资产 Base URL，或在本地运行脚本生成。资产包含：
 
 - `topologyId:"mediapipe-468"` 和 `topologyVersion:"mediapipe-canonical-468-v1"`。
 - `sample_kind:"triangle_centroid_direction"`，当前覆盖 898 个标准脸三角面。
@@ -51,9 +53,10 @@ provenance 和拓扑边界可对照。
 
 ## FLAME / 通用 3DMM 方向先验生成器
 
-`tools/build_flame_rstl_direction_prior.py` 会读取 `assets/rstl_mediapipe_direction_prior.json`、`web/assets/topology_flame_2023.json` 和 `web/assets/flame_neutral_vertices.json`，在 FLAME neutral mesh 的每个三角形质心上生成一个 dev-local 方向样本。默认输出是 `assets/flame/rstl_flame_direction_prior.json`，该路径被 gitignore，不会把 FLAME 衍生资产提交到仓库。
+`tools/build_flame_rstl_direction_prior.py` 会读取 `local_outputs/rstl_mediapipe_direction_prior.json`、`web/assets/topology_flame_2023.json` 和 `web/assets/flame_neutral_vertices.json`，在 FLAME neutral mesh 的每个三角形质心上生成一个 dev-local 方向样本。默认输出是 `local_outputs/rstl_flame_direction_prior.json`，该路径被 gitignore，不会把 FLAME 衍生资产提交到仓库。
 
 ```bash
+python tools/build_rstl_direction_prior.py --generated-at now
 python tools/export_flame_topology.py
 python tools/build_flame_rstl_direction_prior.py --generated-at now
 ```
@@ -77,13 +80,13 @@ python tools/build_3dmm_rstl_direction_prior.py \
 
 `tools/build_rstl_3dmm_review_packet.py` 会读取 `validated:false` 的方向先验，生成
 `rstl-3dmm-review-packet/v0.1` 审阅包。默认输入是
-`assets/rstl_mediapipe_direction_prior.json`，默认输出是 gitignored
-`assets/flame/rstl_3dmm_review_packet.json`；当本地 FLAME 方向先验可用时，也可以显式传入
-`assets/flame/rstl_flame_direction_prior.json`。
+`local_outputs/rstl_mediapipe_direction_prior.json`，默认输出是 gitignored
+`local_outputs/rstl_3dmm_review_packet.json`；当本地 FLAME 方向先验可用时，也可以显式传入
+`local_outputs/rstl_flame_direction_prior.json`。
 
 ```bash
 python tools/build_rstl_3dmm_review_packet.py \
-  --prior assets/flame/rstl_flame_direction_prior.json \
+  --prior local_outputs/rstl_flame_direction_prior.json \
   --csv-output default \
   --generated-at now
 ```
@@ -95,7 +98,7 @@ python tools/build_rstl_3dmm_review_packet.py \
 - `clinician_review` 占位字段：`decision`、`reviewer`、`reviewed_at`、`region_label`、`direction_accepted`、`corrected_angle_deg`、`corrected_vector`、`notes`。
 
 可选 `--csv-output` 会同时写出可放进表格工具的审阅表，默认路径为 gitignored
-`assets/flame/rstl_3dmm_review_packet.csv`。CSV 保留 `review_id`、sample index、tri、point、vector、angle、confidence、
+`local_outputs/rstl_3dmm_review_packet.csv`。CSV 保留 `review_id`、sample index、tri、point、vector、angle、confidence、
 priority reasons 和上述 clinician review 待填字段，方便医生逐项填写；JSON 审阅包仍是回填工具的审计输入，CSV 不会把任何资产置为 `validated:true`。
 
 这一步只把草案方向先验变成可分发、可抽查、可回填的医生审阅任务包。它不会把任何方向置为
@@ -106,13 +109,13 @@ priority reasons 和上述 clinician review 待填字段，方便医生逐项填
 医生在审阅包里填写 `clinician_review` 后，可以用
 `tools/apply_rstl_3dmm_review_packet.py` 把 `accepted`、`corrected`、`rejected` 和 `pending`
 决策应用到一个新的草案方向先验中。默认输入是 gitignored 的
-`assets/flame/rstl_3dmm_review_packet.json`，默认输出是 gitignored 的
-`assets/flame/rstl_3dmm_reviewed_direction_prior.json`：
+`local_outputs/rstl_3dmm_review_packet.json`，默认输出是 gitignored 的
+`local_outputs/rstl_3dmm_reviewed_direction_prior.json`：
 
 ```bash
 python tools/apply_rstl_3dmm_review_packet.py \
-  --prior assets/flame/rstl_flame_direction_prior.json \
-  --packet assets/flame/rstl_3dmm_review_packet.json \
+  --prior local_outputs/rstl_flame_direction_prior.json \
+  --packet local_outputs/rstl_3dmm_review_packet.json \
   --generated-at now
 ```
 
@@ -123,8 +126,8 @@ python tools/apply_rstl_3dmm_review_packet.py \
 
 ```bash
 python tools/apply_rstl_3dmm_review_packet.py \
-  --prior assets/flame/rstl_flame_direction_prior.json \
-  --packet assets/flame/rstl_3dmm_review_packet.json \
+  --prior local_outputs/rstl_flame_direction_prior.json \
+  --packet local_outputs/rstl_3dmm_review_packet.json \
   --review-csv default \
   --generated-at now
 ```
@@ -170,7 +173,7 @@ FLAME 轨保持与 MediaPipe 轨独立：
 
 ## 自动审计
 
-`tools/audit_rstl_3dmm_prior.py` 会检查 `assets/rstl_3dmm_prior_manifest.json` 与 `assets/rstl_mediapipe_direction_prior.json` 的拓扑、`validated:false`、`draft_not_clinically_validated`、样本数量、单位向量、置信度范围和 FLAME/BFM pending 边界。它的目标不是证明 #86 已经完成临床注册，而是防止草案方向场、MediaPipe atlas 与 FLAME/BFM pending 资产被误表达为已验证图谱。
+`tools/audit_rstl_3dmm_prior.py` 会检查 `assets/rstl_3dmm_prior_manifest.json` 的拓扑、`validated:false`、`draft_not_clinically_validated`、remote/generated 大资产边界和 FLAME/BFM pending 边界。它的目标不是证明 #86 已经完成临床注册，而是防止草案方向场、MediaPipe atlas 与 FLAME/BFM pending 资产被误表达为已验证图谱或误提交为仓库内置大 JSON。
 
 ```bash
 python tools/audit_rstl_3dmm_prior.py --json

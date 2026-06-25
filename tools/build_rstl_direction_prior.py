@@ -19,7 +19,7 @@ from langerface.lines import Atlas
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ATLAS = ROOT / "assets" / "atlas_rstl.json"
-DEFAULT_OUTPUT = ROOT / "assets" / "rstl_mediapipe_direction_prior.json"
+DEFAULT_OUTPUT = ROOT / "local_outputs" / "rstl_mediapipe_direction_prior.json"
 SCHEMA_VERSION = "rstl-direction-prior/v0.1"
 
 

@@ -6,15 +6,25 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PRIOR = ROOT / "assets" / "rstl_mediapipe_direction_prior.json"
 
 
-def _load_prior(path: Path = PRIOR) -> dict:
+def _load_prior(path: Path) -> dict:
     return json.loads(path.read_text())
 
 
-def test_rstl_direction_prior_asset_contract():
-    prior = _load_prior()
+def test_rstl_direction_prior_manifest_uses_remote_or_generated_asset():
+    manifest = _load_prior(ROOT / "assets" / "rstl_3dmm_prior_manifest.json")
+    assets = {asset["id"]: asset for asset in manifest["assets"]}
+    prior_asset = assets["mediapipe_rstl_direction_prior"]
+    assert prior_asset["path"] is None
+    assert prior_asset["remote_filename"] == "rstl_mediapipe_direction_prior.json"
+    assert prior_asset["local_cache_path"] == "local_outputs/rstl_mediapipe_direction_prior.json"
+    assert prior_asset["status"] == "remote_or_generated_draft_direction_field"
+    assert prior_asset["validated"] is False
+    assert "not committed" in " ".join(prior_asset["limitations"])
+
+
+def _assert_mediapipe_direction_prior_contract(prior: dict) -> None:
     assert prior["schema_version"] == "rstl-direction-prior/v0.1"
     assert prior["system"] == "rstl"
     assert prior["topologyId"] == "mediapipe-468"
@@ -67,12 +77,7 @@ def test_rstl_direction_prior_builder_reproduces_contract(tmp_path):
     assert result.returncode == 0, result.stderr
     assert "[ok]" in result.stdout
     built = _load_prior(output)
-    committed = _load_prior()
-    assert built["schema_version"] == committed["schema_version"]
-    assert built["topologyId"] == committed["topologyId"]
-    assert built["coverage"] == committed["coverage"]
-    assert built["samples"][0] == committed["samples"][0]
-    assert built["samples"][-1] == committed["samples"][-1]
+    _assert_mediapipe_direction_prior_contract(built)
 
 
 def test_rstl_3dmm_prior_audit_passes_committed_assets():

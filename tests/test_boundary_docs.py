@@ -29,8 +29,10 @@ def test_rstl_3dmm_prior_manifest_preserves_draft_status():
     assert ids["mediapipe_rstl_draft"]["topologyId"] == "mediapipe-468"
     assert ids["mediapipe_rstl_draft"]["validated"] is False
     assert ids["mediapipe_rstl_direction_prior"]["topologyId"] == "mediapipe-468"
-    assert ids["mediapipe_rstl_direction_prior"]["path"] == "assets/rstl_mediapipe_direction_prior.json"
-    assert ids["mediapipe_rstl_direction_prior"]["status"] == "available_draft_direction_field"
+    assert ids["mediapipe_rstl_direction_prior"]["path"] is None
+    assert ids["mediapipe_rstl_direction_prior"]["remote_filename"] == "rstl_mediapipe_direction_prior.json"
+    assert ids["mediapipe_rstl_direction_prior"]["local_cache_path"] == "local_outputs/rstl_mediapipe_direction_prior.json"
+    assert ids["mediapipe_rstl_direction_prior"]["status"] == "remote_or_generated_draft_direction_field"
     assert ids["mediapipe_rstl_direction_prior"]["validated"] is False
     assert ids["flame_rstl_prior"]["topologyId"] == "flame-2023"
     assert ids["flame_rstl_prior"]["status"] == "pending_doctor_annotation"

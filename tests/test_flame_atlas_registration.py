@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import numpy as np
 
-from langerface.config.constants import TOPOLOGY_ID_FLAME, TOPOLOGY_VERSION_FLAME
-from langerface.lines.atlas import Atlas
 from langerface.registration.flame_atlas import (
     closest_point_on_triangle,
     fit_polyharmonic_map,
-    load_flame_basis,
     project_to_surface,
 )
 
@@ -61,30 +57,9 @@ def test_project_to_surface_encodes_atlas_barycentric_contract():
     assert np.allclose(projection.points[0], [0.2, 0.3, 0.0])
 
 
-def test_committed_flame_rstl_atlas_matches_flame_topology():
-    atlas_path = ROOT / "assets" / "atlas_rstl_flame.json"
-    assert atlas_path.exists()
-
-    basis = load_flame_basis(ROOT / "web" / "api" / "flame_basis.npz")
-    atlas = Atlas.load(str(atlas_path))
-    assert atlas.topology_id == TOPOLOGY_ID_FLAME
-    assert atlas.topology_version == TOPOLOGY_VERSION_FLAME
-    assert atlas.validated is False
-    assert not atlas.validate(
-        int(basis.faces.shape[0]),
-        expected_topology_id=TOPOLOGY_ID_FLAME,
-        expected_topology_version=TOPOLOGY_VERSION_FLAME,
-    )
-
-    with atlas_path.open(encoding="utf-8") as f:
-        data = json.load(f)
-    reg = data["registration"]
-    assert reg["diagramSource"] == "RSTL/RSTL PRSgo.png"
-    assert "sourceAtlas" not in reg
-    assert reg["diagramExtraction"]["lineCount"] == len(atlas.lines)
-    assert 80 <= reg["diagramExtraction"]["lineCount"] <= 130
-    assert reg["diagramExtraction"]["pointCount"] == sum(len(line.points) for line in atlas.lines)
-    assert reg["diagramExtraction"]["pointCount"] >= 2400
-    assert reg["diagramExtraction"]["bridgeMaxGap"] > 0
-    assert data["registration"]["classicSourceBundle"]["path"] == "RSTL"
-    assert data["registration"]["classicSourceBundle"]["files"]
+def test_flame_rstl_atlas_is_generated_outside_committed_assets():
+    register_script = (ROOT / "tools" / "register_rstl_atlas_to_flame.py").read_text()
+    gitignore = (ROOT / ".gitignore").read_text()
+    assert 'DEFAULT_OUT = REPO / "local_outputs" / "atlas_rstl_flame.json"' in register_script
+    assert "assets/atlas_rstl_flame.json" in gitignore
+    assert not (ROOT / "assets" / "atlas_rstl_flame.json").exists()

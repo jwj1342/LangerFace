@@ -1,10 +1,21 @@
 import { resolve } from "node:path";
+import { cpSync } from "node:fs";
 
 import { defineConfig } from "vite";
 
 export default defineConfig({
   base: "./",
   assetsInclude: ["**/*.task"],
+  plugins: [{
+    name: "copy-runtime-assets",
+    writeBundle(options) {
+      cpSync(
+        resolve(import.meta.dirname, "assets"),
+        resolve(options.dir || "dist", "assets"),
+        { recursive: true },
+      );
+    },
+  }],
   build: {
     assetsInlineLimit: 0,
     rollupOptions: {

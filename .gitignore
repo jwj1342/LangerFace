@@ -19,6 +19,10 @@ local_archives/
 RSTL*/
 RSTL*.rar
 
+# Large generated RSTL/3DMM review assets are produced locally or hosted remotely.
+assets/rstl_mediapipe_direction_prior.json
+assets/atlas_rstl_flame.json
+
 # Local Claude Code settings
 .claude/settings.local.json
 

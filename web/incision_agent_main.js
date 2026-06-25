@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import { assetUrls } from "./assets.js";
+import { assetBaseUrl, loadJsonAsset } from "./assets.js";
 import { dataSource } from "./data_source.js";
 import { auditExportPayload } from "./export_privacy.js";
 import { compileIncisionOverlay } from "./incision_overlay.js";
@@ -22,6 +22,8 @@ const $ = (id) => document.getElementById(id);
 const els = {
   canvas: $("agentCanvas"),
   wrap: document.querySelector(".main-wrap"),
+  assetLoading: $("assetLoading"),
+  assetLoadingText: $("assetLoadingText"),
   tumorKind: $("tumorKind"),
   diameter: $("diameterMm"),
   diameterVal: $("diameterVal"),
@@ -154,7 +156,30 @@ const REVIEW_LABELS = {
   rejected_by_clinician: "否决候选",
 };
 
-async function loadJSON(url) { return (await fetch(url)).json(); }
+function formatAssetBytes(bytes) {
+  const n = Number(bytes || 0);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  if (n < 1024) return `${Math.round(n)} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function updateAssetLoading(evt = {}) {
+  const label = evt.label || evt.key || "资产";
+  const loaded = formatAssetBytes(evt.loaded);
+  const total = formatAssetBytes(evt.total);
+  const progress = loaded && total ? ` · ${loaded}/${total}` : loaded ? ` · ${loaded}` : "";
+  if (els.assetLoadingText) {
+    els.assetLoadingText.textContent = `${label}${evt.phase === "done" ? " 已加载" : " 加载中"}${progress}`;
+  }
+  if (els.stageStatus) {
+    els.stageStatus.textContent = `正在从 ${assetBaseUrl()} 加载 ${label}${progress}`;
+  }
+}
+
+function hideAssetLoading() {
+  els.assetLoading?.classList.add("hidden");
+}
 
 function meanEdge(verts, tris) {
   let e = 0, n = 0;
@@ -192,9 +217,9 @@ function nearestVertex(point) {
 
 async function boot() {
   const [verts, tris, atlas] = await Promise.all([
-    loadJSON(assetUrls.canonicalVertices),
-    loadJSON(assetUrls.triangles),
-    loadJSON(assetUrls.atlasRstl),
+    loadJsonAsset("canonicalVertices", { label: "标准脸顶点", onProgress: updateAssetLoading }),
+    loadJsonAsset("triangles", { label: "三角拓扑", onProgress: updateAssetLoading }),
+    loadJsonAsset("atlasRstl", { label: "RSTL 图谱", onProgress: updateAssetLoading }),
   ]);
   S.verts = verts; S.tris = tris; S.atlas = atlas;
   S.normals = vertexNormals(verts, tris);
@@ -239,6 +264,7 @@ async function boot() {
   fitSize();
   renderLoop();
   runAgent();
+  hideAssetLoading();
 }
 
 function fitSize() {
@@ -1900,5 +1926,8 @@ function renderLoop() {
 
 boot().catch((err) => {
   els.stageStatus.textContent = "加载失败：" + err.message;
+  if (els.assetLoadingText) {
+    els.assetLoadingText.textContent = `资产加载失败：${err.message}`;
+  }
   console.error(err);
 });

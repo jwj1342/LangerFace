@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_PRIOR = ROOT / "assets" / "rstl_mediapipe_direction_prior.json"
-DEFAULT_OUTPUT = ROOT / "assets" / "flame" / "rstl_3dmm_review_packet.json"
-DEFAULT_CSV_OUTPUT = ROOT / "assets" / "flame" / "rstl_3dmm_review_packet.csv"
+DEFAULT_PRIOR = ROOT / "local_outputs" / "rstl_mediapipe_direction_prior.json"
+DEFAULT_OUTPUT = ROOT / "local_outputs" / "rstl_3dmm_review_packet.json"
+DEFAULT_CSV_OUTPUT = ROOT / "local_outputs" / "rstl_3dmm_review_packet.csv"
 PACKET_SCHEMA = "rstl-3dmm-review-packet/v0.1"
 DRAFT_REVIEW_STATUS = "draft_not_clinically_validated"
 CSV_FIELDS = [

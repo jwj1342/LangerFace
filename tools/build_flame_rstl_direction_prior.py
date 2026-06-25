@@ -3,7 +3,7 @@
 
 This is a topology bridge generator for issue #86. It does not commit or
 redistribute FLAME/BFM/3DMM-derived outputs; the FLAME default output path
-lives under ``assets/flame/`` and is gitignored. The generated asset remains
+lives under ``local_outputs/`` and is gitignored. The generated asset remains
 ``validated:false`` and requires #2 clinical review.
 """
 
@@ -18,10 +18,10 @@ from typing import Any
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SOURCE_PRIOR = ROOT / "assets" / "rstl_mediapipe_direction_prior.json"
+DEFAULT_SOURCE_PRIOR = ROOT / "local_outputs" / "rstl_mediapipe_direction_prior.json"
 DEFAULT_TARGET_TOPOLOGY = ROOT / "web" / "assets" / "topology_flame_2023.json"
 DEFAULT_TARGET_VERTICES = ROOT / "web" / "assets" / "flame_neutral_vertices.json"
-DEFAULT_OUTPUT = ROOT / "assets" / "flame" / "rstl_flame_direction_prior.json"
+DEFAULT_OUTPUT = ROOT / "local_outputs" / "rstl_flame_direction_prior.json"
 SCHEMA_VERSION = "rstl-3dmm-direction-prior/v0.1"
 DRAFT_REVIEW_STATUS = "draft_not_clinically_validated"
 
@@ -335,8 +335,8 @@ def main() -> int:
             align_source_bbox=not args.no_align_source_bbox,
         )
     except FileNotFoundError as exc:
-        print(f"[skip] missing dev-local FLAME asset: {exc.filename}")
-        print("       Run tools/export_flame_topology.py after placing licensed FLAME assets locally.")
+        print(f"[skip] missing dev-local RSTL/FLAME asset: {exc.filename}")
+        print("       Run tools/build_rstl_direction_prior.py first; for FLAME topology, run tools/export_flame_topology.py after placing licensed FLAME assets locally.")
         return 0
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)

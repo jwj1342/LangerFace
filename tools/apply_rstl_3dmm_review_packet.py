@@ -13,10 +13,10 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_PRIOR = ROOT / "assets" / "rstl_mediapipe_direction_prior.json"
-DEFAULT_PACKET = ROOT / "assets" / "flame" / "rstl_3dmm_review_packet.json"
-DEFAULT_REVIEW_CSV = ROOT / "assets" / "flame" / "rstl_3dmm_review_packet.csv"
-DEFAULT_OUTPUT = ROOT / "assets" / "flame" / "rstl_3dmm_reviewed_direction_prior.json"
+DEFAULT_PRIOR = ROOT / "local_outputs" / "rstl_mediapipe_direction_prior.json"
+DEFAULT_PACKET = ROOT / "local_outputs" / "rstl_3dmm_review_packet.json"
+DEFAULT_REVIEW_CSV = ROOT / "local_outputs" / "rstl_3dmm_review_packet.csv"
+DEFAULT_OUTPUT = ROOT / "local_outputs" / "rstl_3dmm_reviewed_direction_prior.json"
 DIRECTION_PRIOR_SCHEMAS = {
     "rstl-direction-prior/v0.1",
     "rstl-3dmm-direction-prior/v0.1",

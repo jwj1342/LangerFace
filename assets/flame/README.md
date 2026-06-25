@@ -57,6 +57,6 @@ python tools/build_flame_rstl_direction_prior.py --generated-at now
 
 `register_rstl_atlas_to_flame.py` 会读取本地 `RSTL/RSTL PRSgo.png` 经典正面图谱，
 自动抽取 RSTL 线段，并把 `RSTL/` 资料清单写入 provenance，输出
-`assets/atlas_rstl_flame.json`。该资产是
+`local_outputs/atlas_rstl_flame.json`。该资产是
 `topologyId:"flame-2023"` 的几何注册草案，始终保持 `validated:false`，
 不得替代逐线临床复核。

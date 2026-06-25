@@ -162,16 +162,26 @@ def audit_manifest(manifest_path: Path, root: Path) -> dict[str, Any]:
             path_value = asset.get("path")
             status = str(asset.get("status", ""))
             if path_value is None:
+                is_remote_or_generated = status.startswith("remote_or_generated_")
                 _require(
-                    status.startswith("pending_"),
-                    f"{prefix}: null path must have pending status",
+                    status.startswith("pending_") or is_remote_or_generated,
+                    f"{prefix}: null path must have pending or remote_or_generated status",
                     errors,
                 )
-                _require(
-                    any("#61" in str(item) for item in asset.get("limitations", [])),
-                    f"{prefix}: pending 3DMM assets must reference #61 workflow",
-                    errors,
-                )
+                if is_remote_or_generated:
+                    _require(bool(asset.get("remote_filename")), f"{prefix}: remote filename is required", errors)
+                    _require(bool(asset.get("local_cache_path")), f"{prefix}: local cache path is required", errors)
+                    _require(
+                        any("not committed" in str(item) for item in asset.get("limitations", [])),
+                        f"{prefix}: limitations must state the large JSON is not committed",
+                        errors,
+                    )
+                else:
+                    _require(
+                        any("#61" in str(item) for item in asset.get("limitations", [])),
+                        f"{prefix}: pending 3DMM assets must reference #61 workflow",
+                        errors,
+                    )
             else:
                 asset_path = root / str(path_value)
                 _require(asset_path.exists(), f"{prefix}: path does not exist: {path_value}", errors)
