@@ -155,9 +155,9 @@
       <div class="quality-top"><span>LLM Provider</span><span id="providerState">待运行</span></div>
       <select id="providerMode" class="select">
         <option value="openai-compatible">OpenAI-compatible / vLLM</option>
-        <option value="ollama">Ollama native</option>
+        <option value="ollama" selected>Ollama native</option>
       </select>
-      <input id="providerBaseUrl" class="text-input" value="" placeholder="Vercel 调试请填可从浏览器访问的 HTTPS Provider；本地 Ollama 才填 http://127.0.0.1:11434" />
+      <input id="providerBaseUrl" class="text-input" value="http://127.0.0.1:11434" placeholder="Ollama: http://127.0.0.1:11434；也可只填 127.0.0.1:11434" />
       <input id="providerModel" class="text-input" value="qwen3:8b" placeholder="模型名，如 qwen3:8b 或 Qwen/Qwen3-14B" />
       <input id="providerApiKey" class="text-input" type="password" placeholder="API Key（Provider 需要时填写；导出会脱敏）" />
       <div>

@@ -4,9 +4,19 @@ export function streamEndpointFor(endpoint) {
   return clean.endsWith("/stream") ? clean : `${clean}/stream`;
 }
 
+export function normalizeProviderBaseUrl(baseUrl = "") {
+  const clean = String(baseUrl || "").trim().replace(/\/$/, "");
+  if (!clean) return "";
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(clean) || clean.startsWith("/")) return clean;
+  if (/^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[?::1\]?)(:\d+)?(\/|$)/i.test(clean)) {
+    return `http://${clean}`;
+  }
+  return `https://${clean}`;
+}
+
 export function providerTestEndpointFor(providerConfig = {}) {
   const mode = String(providerConfig.provider || "openai-compatible");
-  const clean = String(providerConfig.base_url || "").trim().replace(/\/$/, "");
+  const clean = normalizeProviderBaseUrl(providerConfig.base_url);
   if (!clean) return "";
   if (mode === "ollama") {
     return `${clean.replace(/\/api$/, "")}/api/tags`;
@@ -158,6 +168,7 @@ export async function requestAgentPlan(
 
 export const __llmProviderForTests = {
   drainSseBuffer,
+  normalizeProviderBaseUrl,
   parseSseBlock,
   providerTestEndpointFor,
   streamEndpointFor,

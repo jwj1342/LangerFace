@@ -14,7 +14,7 @@ import {
   summarizeTumorInputQuality,
   unitsPerMmFromVertices,
 } from "./incision_tools.js";
-import { requestAgentPlan, testProviderConnection } from "./llm_provider.js";
+import { normalizeProviderBaseUrl, requestAgentPlan, testProviderConnection } from "./llm_provider.js";
 import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.js";
 
 const $ = (id) => document.getElementById(id);
@@ -254,7 +254,7 @@ function fitSize() {
 function providerConfig() {
   const cfg = {
     provider: els.providerMode.value,
-    base_url: els.providerBaseUrl.value.trim(),
+    base_url: normalizeProviderBaseUrl(els.providerBaseUrl.value),
     model: els.providerModel.value.trim(),
     timeout_s: Number(els.providerTimeout.value),
   };
@@ -291,16 +291,13 @@ function normalizeProviderDefaults(previousMode = "") {
   const mode = els.providerMode.value;
   const base = els.providerBaseUrl.value.trim();
   const model = els.providerModel.value.trim();
-  const localPage = pageIsLocal();
   const openAiDefaults = ["http://127.0.0.1:8000/v1", "http://127.0.0.1:11434/v1"];
   const ollamaDefaults = ["http://127.0.0.1:11434"];
   if (mode === "ollama") {
-    if (localPage && (!base || openAiDefaults.includes(base))) els.providerBaseUrl.value = "http://127.0.0.1:11434";
-    if (!localPage && openAiDefaults.includes(base)) els.providerBaseUrl.value = "";
+    if (!base || openAiDefaults.includes(base)) els.providerBaseUrl.value = "http://127.0.0.1:11434";
     if (!model || previousMode === "openai-compatible") els.providerModel.value = "qwen3:8b";
   } else {
-    if (localPage && (!base || ollamaDefaults.includes(base))) els.providerBaseUrl.value = "http://127.0.0.1:8000/v1";
-    if (!localPage && ollamaDefaults.includes(base)) els.providerBaseUrl.value = "";
+    if (!base || ollamaDefaults.includes(base)) els.providerBaseUrl.value = "http://127.0.0.1:8000/v1";
     if (!model || previousMode === "ollama") els.providerModel.value = "Qwen/Qwen3-14B";
   }
 }
