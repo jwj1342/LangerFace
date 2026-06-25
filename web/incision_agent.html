@@ -43,6 +43,9 @@
   .agent-note{font-size:11px;color:var(--muted);line-height:1.55;margin:0;overflow-wrap:anywhere;word-break:break-word}
   .agent-note.ok{color:var(--green-d);font-weight:700}
   .agent-note.warn{color:#8a5a00;font-weight:700}
+  .advanced-config{border:1px solid var(--line);border-radius:10px;background:#f8f9f5;padding:9px 10px}
+  .advanced-config summary{cursor:pointer;font-size:12px;font-weight:750;color:var(--muted)}
+  .advanced-config[open]{display:grid;gap:9px}
   .edit-status{font-size:11px;font-weight:700;border-radius:999px;padding:4px 8px;background:#eef0ea;color:#44505d}
   .edit-status.active{background:#fff1c8;color:#8a5a00}
   .candidate-list{display:flex;flex-direction:column;gap:8px}
@@ -149,23 +152,27 @@
     </div>
 
     <div class="card agent-grid">
-      <label class="check"><input type="checkbox" id="useAgentServer" checked /> 使用 Agent 代理</label>
-      <input id="agentEndpoint" class="select" value="http://127.0.0.1:8765/api/agentic-incision" />
-      <button class="btn" id="testAgentBtn">测试 Agent API 连接</button>
-      <p class="agent-note" id="providerTestState">尚未测试 Agent API 连通性。</p>
+      <div class="quality-top"><span>LLM Provider</span><span id="providerState">待运行</span></div>
       <select id="providerMode" class="select">
         <option value="openai-compatible">OpenAI-compatible / vLLM</option>
         <option value="ollama">Ollama native</option>
       </select>
-      <input id="providerBaseUrl" class="text-input" value="http://127.0.0.1:8000/v1" />
-      <input id="providerModel" class="text-input" value="Qwen/Qwen3-14B" />
-      <input id="providerApiKey" class="text-input" type="password" placeholder="API Key（仅发送给本地 Agent 代理）" />
+      <input id="providerBaseUrl" class="text-input" value="http://127.0.0.1:11434" placeholder="Ollama: http://127.0.0.1:11434；OpenAI-compatible: https://.../v1" />
+      <input id="providerModel" class="text-input" value="qwen3:8b" placeholder="模型名，如 qwen3:8b 或 Qwen/Qwen3-14B" />
+      <input id="providerApiKey" class="text-input" type="password" placeholder="API Key（Provider 需要时填写；导出会脱敏）" />
       <div>
         <label class="field-label" for="providerTimeout">LLM timeout 秒 <span id="providerTimeoutVal" class="val">60</span></label>
         <input id="providerTimeout" type="range" min="5" max="180" value="60" />
       </div>
-      <p class="agent-note">Base URL、Model、API Key 会随请求发给 Agent 代理；代理不可用时自动使用浏览器内确定性工具。</p>
-      <div class="quality-top"><span>Provider</span><span id="providerState">待运行</span></div>
+      <button class="btn" id="testProviderBtn">测试 LLM Provider 连接</button>
+      <p class="agent-note" id="providerTestState">尚未测试 LLM Provider 连通性。Ollama Native 会请求 /api/tags；OpenAI-compatible 会请求 /models。</p>
+      <details class="advanced-config">
+        <summary>高级：规划后端接口</summary>
+        <label class="check"><input type="checkbox" id="useAgentServer" checked /> 使用后端 Agent 编排</label>
+        <input id="agentEndpoint" class="text-input" value="/api/agentic-incision" />
+        <p class="agent-note">远端部署默认使用同域 /api/agentic-incision；本地调试或端口转发时才改为 http://127.0.0.1:8765/api/agentic-incision。</p>
+      </details>
+      <p class="agent-note">生成候选时，肿物参数和 Provider 配置会交给规划后端；如果后端不可用，会自动使用浏览器确定性工具。</p>
     </div>
 
     <div class="card">

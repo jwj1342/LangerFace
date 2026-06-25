@@ -4,33 +4,41 @@ export function streamEndpointFor(endpoint) {
   return clean.endsWith("/stream") ? clean : `${clean}/stream`;
 }
 
-export function healthEndpointFor(endpoint) {
-  const clean = String(endpoint || "").trim().replace(/\/$/, "");
+export function providerTestEndpointFor(providerConfig = {}) {
+  const mode = String(providerConfig.provider || "openai-compatible");
+  const clean = String(providerConfig.base_url || "").trim().replace(/\/$/, "");
   if (!clean) return "";
-  if (clean.endsWith("/api/health")) return clean;
-  const marker = "/api/agentic-incision";
-  const markerIndex = clean.indexOf(marker);
-  if (markerIndex >= 0) return `${clean.slice(0, markerIndex)}/api/health`;
-  return `${clean}/api/health`;
+  if (mode === "ollama") {
+    return `${clean.replace(/\/api$/, "")}/api/tags`;
+  }
+  return `${clean}/models`;
 }
 
-export async function testAgentConnection({ endpoint, timeoutMs = 5000 } = {}) {
-  const healthEndpoint = healthEndpointFor(endpoint);
-  if (!healthEndpoint) throw new Error("agent endpoint is empty");
+export async function testProviderConnection(providerConfig = {}, { timeoutMs = 5000 } = {}) {
+  const testEndpoint = providerTestEndpointFor(providerConfig);
+  if (!testEndpoint) throw new Error("LLM Provider Base URL is empty");
+  const mode = String(providerConfig.provider || "openai-compatible");
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const headers = { Accept: "application/json" };
+  if (mode !== "ollama" && providerConfig.api_key) {
+    headers.Authorization = `Bearer ${providerConfig.api_key}`;
+  }
   try {
-    const resp = await fetch(healthEndpoint, {
+    const resp = await fetch(testEndpoint, {
       method: "GET",
-      headers: { Accept: "application/json" },
+      headers,
       signal: ctrl.signal,
     });
     const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(data.error || `agent health ${resp.status}`);
+    const error = typeof data.error === "string" ? data.error : data.error?.message;
+    if (!resp.ok) throw new Error(error || `provider ${resp.status}`);
     return {
       ok: true,
-      health_endpoint: healthEndpoint,
+      mode,
+      test_endpoint: testEndpoint,
       status: resp.status,
+      model_count: Array.isArray(data.models) ? data.models.length : undefined,
       ...data,
     };
   } finally {
@@ -117,7 +125,7 @@ async function requestAgentPlanStream(
 export async function requestAgentPlan(
   tumor,
   {
-    endpoint = "http://127.0.0.1:8765/api/agentic-incision",
+    endpoint = "/api/agentic-incision",
     timeoutMs = 22000,
     providerConfig = null,
     stream = false,
@@ -150,7 +158,7 @@ export async function requestAgentPlan(
 
 export const __llmProviderForTests = {
   drainSseBuffer,
-  healthEndpointFor,
   parseSseBlock,
+  providerTestEndpointFor,
   streamEndpointFor,
 };

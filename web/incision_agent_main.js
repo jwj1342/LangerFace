@@ -14,7 +14,7 @@ import {
   summarizeTumorInputQuality,
   unitsPerMmFromVertices,
 } from "./incision_tools.js";
-import { requestAgentPlan, testAgentConnection } from "./llm_provider.js";
+import { requestAgentPlan, testProviderConnection } from "./llm_provider.js";
 import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.js";
 
 const $ = (id) => document.getElementById(id);
@@ -54,7 +54,7 @@ const els = {
   secondaryCueConfirmed: $("secondaryCueConfirmed"),
   useAgentServer: $("useAgentServer"),
   endpoint: $("agentEndpoint"),
-  testAgent: $("testAgentBtn"),
+  testProvider: $("testProviderBtn"),
   providerTestState: $("providerTestState"),
   providerMode: $("providerMode"),
   providerBaseUrl: $("providerBaseUrl"),
@@ -281,6 +281,21 @@ function setProviderTestState(text, level = "") {
   els.providerTestState.classList.toggle("warn", level === "warn");
 }
 
+function normalizeProviderDefaults(previousMode = "") {
+  const mode = els.providerMode.value;
+  const base = els.providerBaseUrl.value.trim();
+  const model = els.providerModel.value.trim();
+  const openAiDefaults = ["http://127.0.0.1:8000/v1", "http://127.0.0.1:11434/v1"];
+  const ollamaDefaults = ["http://127.0.0.1:11434"];
+  if (mode === "ollama") {
+    if (!base || openAiDefaults.includes(base)) els.providerBaseUrl.value = "http://127.0.0.1:11434";
+    if (!model || previousMode === "openai-compatible") els.providerModel.value = "qwen3:8b";
+  } else {
+    if (!base || ollamaDefaults.includes(base)) els.providerBaseUrl.value = "http://127.0.0.1:8000/v1";
+    if (!model || previousMode === "ollama") els.providerModel.value = "Qwen/Qwen3-14B";
+  }
+}
+
 function redactedProviderConfig() {
   const cfg = providerConfig();
   return {
@@ -309,32 +324,32 @@ function loadProviderPrefs() {
   } catch {
     // Keep defaults.
   }
+  normalizeProviderDefaults();
+  els.providerMode.dataset.previousMode = els.providerMode.value;
   els.providerTimeoutVal.textContent = els.providerTimeout.value;
 }
 
-async function testAgentEndpoint() {
-  if (!els.testAgent) return;
-  els.testAgent.disabled = true;
-  setProviderTestState("正在测试 Agent API 连接…");
+async function testProviderEndpoint() {
+  if (!els.testProvider) return;
+  els.testProvider.disabled = true;
+  setProviderTestState("正在测试 LLM Provider 连接…");
   try {
-    const result = await testAgentConnection({
-      endpoint: els.endpoint.value.trim(),
-      timeoutMs: 5000,
+    const result = await testProviderConnection(providerConfig(), {
+      timeoutMs: Math.min(Number(els.providerTimeout.value) * 1000, 10000),
     });
-    const provider = result.provider?.model ? ` · ${result.provider.model}` : "";
-    const llm = result.llm_enabled ? "LLM 已启用" : "LLM 未启用（确定性代理）";
-    setProviderTestState(`连接正常：${result.health_endpoint} · ${llm}${provider}`, "ok");
-    els.providerState.textContent = result.provider?.model ? `Agent 已连接 · ${result.provider.model}` : "Agent 已连接";
+    const count = Number.isInteger(result.model_count) ? ` · 模型 ${result.model_count} 个` : "";
+    setProviderTestState(`Provider 连接正常：${result.test_endpoint}${count}`, "ok");
+    els.providerState.textContent = `${result.mode === "ollama" ? "Ollama" : "OpenAI-compatible"} 已连接`;
     els.providerState.style.color = "";
-    els.stageStatus.textContent = "Agent API 连接正常，可以生成带后端 trace 的候选。";
+    els.stageStatus.textContent = "LLM Provider 连接正常；生成候选时仍会由规划后端执行工具链。";
   } catch (err) {
     const msg = err?.name === "AbortError" ? "请求超时" : err.message;
-    setProviderTestState(`连接失败：${msg}。请启动 tools/serve_incision_agent.py，或确认 L40S 作业端口已转发到本机 8765。`, "warn");
-    els.providerState.textContent = "Agent 未连接";
+    setProviderTestState(`Provider 连接失败：${msg}。请检查 Base URL、Provider 模式、API Key、网络可达性和浏览器 CORS 设置。`, "warn");
+    els.providerState.textContent = "Provider 未连接";
     els.providerState.style.color = "#b45309";
-    els.stageStatus.textContent = agentFallbackMessage(msg);
+    els.stageStatus.textContent = `LLM Provider 连接失败：${msg}`;
   } finally {
-    els.testAgent.disabled = false;
+    els.testProvider.disabled = false;
   }
 }
 
@@ -1922,13 +1937,19 @@ els.ellipseRatio.oninput = () => { els.ellipseRatioVal.textContent = `${els.elli
 els.ellipseRatio.onchange = runAgent;
 els.boundaryMode.onchange = () => { S.boundaryActive = false; updateFormVisibility(); runAgent(); };
 els.run.onclick = runAgent;
-els.providerMode.onchange = saveProviderPrefs;
-els.endpoint.onchange = () => {
-  setProviderTestState("Agent endpoint 已修改，尚未重新测试连通性。");
+els.providerMode.onchange = (e) => {
+  normalizeProviderDefaults(e.target.dataset.previousMode || "");
+  e.target.dataset.previousMode = els.providerMode.value;
+  setProviderTestState("Provider 模式已修改，尚未重新测试连通性。");
+  saveProviderPrefs();
 };
-els.testAgent.onclick = testAgentEndpoint;
-els.providerBaseUrl.onchange = saveProviderPrefs;
-els.providerModel.onchange = saveProviderPrefs;
+els.providerMode.dataset.previousMode = els.providerMode.value;
+els.endpoint.onchange = () => {
+  els.stageStatus.textContent = "规划后端 endpoint 已修改；生成候选时会使用新的后端接口。";
+};
+els.testProvider.onclick = testProviderEndpoint;
+els.providerBaseUrl.onchange = () => { setProviderTestState("Provider Base URL 已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
+els.providerModel.onchange = () => { setProviderTestState("Provider 模型已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
 els.providerTimeout.oninput = () => { els.providerTimeoutVal.textContent = els.providerTimeout.value; saveProviderPrefs(); };
 els.startBoundary.onclick = () => {
   S.boundaryActive = !S.boundaryActive;

@@ -3,24 +3,24 @@ import assert from "node:assert/strict";
 import { __llmProviderForTests as T, streamEndpointFor } from "../web/llm_provider.js";
 
 assert.equal(
-  streamEndpointFor("http://127.0.0.1:8765/api/agentic-incision"),
-  "http://127.0.0.1:8765/api/agentic-incision/stream",
+  streamEndpointFor("/api/agentic-incision"),
+  "/api/agentic-incision/stream",
   "stream endpoint appends /stream",
 );
 assert.equal(
-  streamEndpointFor("http://127.0.0.1:8765/api/agentic-incision/stream"),
-  "http://127.0.0.1:8765/api/agentic-incision/stream",
+  streamEndpointFor("/api/agentic-incision/stream"),
+  "/api/agentic-incision/stream",
   "stream endpoint is idempotent",
 );
 assert.equal(
-  T.healthEndpointFor("http://127.0.0.1:8765/api/agentic-incision"),
-  "http://127.0.0.1:8765/api/health",
-  "health endpoint maps agent planning endpoint to /api/health",
+  T.providerTestEndpointFor({ provider: "ollama", base_url: "http://127.0.0.1:11434" }),
+  "http://127.0.0.1:11434/api/tags",
+  "Ollama native connectivity test uses /api/tags",
 );
 assert.equal(
-  T.healthEndpointFor("http://127.0.0.1:8765/api/agentic-incision/session/stream"),
-  "http://127.0.0.1:8765/api/health",
-  "health endpoint maps session stream endpoint to /api/health",
+  T.providerTestEndpointFor({ provider: "openai-compatible", base_url: "https://example.internal/v1/" }),
+  "https://example.internal/v1/models",
+  "OpenAI-compatible connectivity test uses /models",
 );
 
 const parsed = T.parseSseBlock("event: trace\ndata: {\"index\":0,\"action\":\"query_rstl_direction\"}");

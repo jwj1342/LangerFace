@@ -20,8 +20,10 @@ assert.ok(html.includes("低置信度线索"), "workbench labels secondary cues 
 assert.ok(html.includes('id="reviewerName"'), "workbench captures clinician reviewer identity");
 assert.ok(html.includes('id="reviewDecision"'), "workbench exposes clinician review decision");
 assert.ok(html.includes('id="reviewNotes"'), "workbench exposes clinician review notes");
-assert.ok(html.includes('id="testAgentBtn"'), "workbench exposes Agent API connectivity test");
-assert.ok(html.includes('id="providerTestState"'), "workbench exposes Agent API connectivity status");
+assert.ok(html.includes('id="testProviderBtn"'), "workbench exposes LLM Provider connectivity test");
+assert.ok(html.includes('id="providerTestState"'), "workbench exposes LLM Provider connectivity status");
+assert.ok(html.includes("高级：规划后端接口"), "workbench moves planning backend endpoint into advanced deployment settings");
+assert.ok(html.includes('value="/api/agentic-incision"'), "planning backend defaults to a same-origin API path for remote deployment");
 assert.ok(html.includes('id="guardrailDetails"'), "workbench exposes guardrail detail feedback");
 assert.ok(html.includes('id="directionSource"'), "workbench exposes direction source explanation");
 assert.ok(html.includes('id="agentGate"'), "workbench exposes agent trace gate feedback");
@@ -113,7 +115,8 @@ assert.ok(js.includes("highGuardrailWarnings"), "review workflow detects high gu
 assert.ok(js.includes("live_overlay_ready"), "review gate records live overlay readiness");
 assert.ok(js.includes("handleAgentStreamEvent"), "workbench consumes agent SSE trace events");
 assert.ok(js.includes("stream: true"), "workbench prefers streaming agent trace");
-assert.ok(js.includes("testAgentConnection"), "workbench can test Agent API connectivity without generating a candidate");
+assert.ok(js.includes("testProviderConnection"), "workbench can test Ollama/OpenAI-compatible provider connectivity without generating a candidate");
+assert.ok(js.includes("Provider 连接失败"), "workbench reports direct LLM Provider connectivity failures");
 assert.ok(js.includes("Agent 代理不可用，已改用浏览器确定性工具"), "workbench explains deterministic browser fallback in Chinese");
 assert.ok(js.includes('event === "trace_gate"'), "workbench consumes agent trace gate SSE events");
 assert.ok(js.includes('event === "execution_event"'), "workbench consumes Agent execution SSE events");

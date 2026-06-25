@@ -21,8 +21,8 @@
 - 隐私审计：`docs/INCISION_PRIVACY_AUDIT.md` 记录不出域数据、可发送抽象字段和导出审计字段。
 - 导出守门：`tools/audit_export_privacy.py` 可在分享审阅、肿物或诊断 JSON 前拦截原始媒体标记、未脱敏 secret、明显身份字段和疑似嵌入媒体 payload。
 - 验证汇总：`tools/evaluate_stage2_validation.py` 可读取脱敏审阅 JSON，汇总候选类型、医生确认率、guardrail 分布、RSTL 偏角、梭形几何误差、敏感距离、`incision-overlay-registration/v0.1` runtime projection QA、`incision-overlay-stability/v0.1` 抖动 RMS/P95/max、`rstl-local-region-quality-gate/v0.1` 局部降可信 active region/action/source/reason、`incision-overlay-3d-view-diagnostics/v0.1` 3D 预览 rendered/failure 和映射模式、`incision-overlay-replay-qa/v0.1` 离线复放 QA 与通过率、失败模式和隐私审计计数；可选 `--csv-output` 会导出 reviewer 可读的扁平汇总表，不包含影像、视频帧、纹理或 landmark 坐标。
-- Provider 接口：默认支持 Ollama/Qwen，本地或集群 vLLM 可通过 OpenAI-compatible endpoint 切入。
-- 前端 Provider 配置：工作台暴露 Agent endpoint、Base URL、model、API Key 和 timeout；API Key 只发送给本地 Agent 代理，导出记录中会脱敏。
+- Provider 接口：默认支持 Ollama/Qwen，本地 Ollama Native 可直接用 `http://127.0.0.1:11434`，远端 vLLM 或托管服务可通过 OpenAI-compatible endpoint 切入。
+- 前端 Provider 配置：工作台主配置只暴露 LLM Provider mode、Base URL、model、API Key、timeout 和“测试 LLM Provider 连接”；Ollama Native 测试 `/api/tags`，OpenAI-compatible 测试 `/models`。规划后端 endpoint 收在“高级：规划后端接口”里，默认同域 `/api/agentic-incision`，API Key 导出记录中会脱敏。
 - Agent 代理接口：支持普通 JSON `POST /api/agentic-incision`、SSE trace `POST /api/agentic-incision/stream`、多轮 session JSON `POST /api/agentic-incision/session` 和多轮 session SSE `POST /api/agentic-incision/session/stream`；前端优先消费 `provider`、逐步 `execution_event`、逐步 `trace`、`trace_gate`、`react_plan`、`result` 和 `done` 事件，session 流额外消费 `session_round`、`session_evolution` 与 `session_audit`，流式不可用时自动退回普通 JSON 请求。`tests/test_incision_agent_server.py` 会启动本地 `--no-llm` 代理，真实请求 JSON/SSE 和 session JSON/SSE 路径，并检查 API key 脱敏、执行事件、trace gate、ReAct 计划事件、三方向候选比较、`agent-orchestration-audit/v0.1`、`agent-session-candidate-evolution/v0.1` 和 `agent-session-audit/v0.1`。
 
 ## 当前工程边界
@@ -77,11 +77,11 @@ sbatch tools/slurm/serve_qwen_agent_l40s.sbatch
 ssh -N -L 8765:<compute-node>:8765 <login-node>
 ```
 
-前端 `web/incision_agent.html` 默认请求 `http://127.0.0.1:8765/api/agentic-incision`，因此端口转发后无需改前端代码。
+远端部署时，前端默认请求同域 `/api/agentic-incision`。只有本地开发或 SSH 端口转发调试时，才需要在工作台“高级：规划后端接口”中把 endpoint 改成 `http://127.0.0.1:8765/api/agentic-incision`。
 
-## 本地 Ollama 仅作降级开发
+## 本地 Ollama Native
 
-如果只是验证确定性工具链，可以在登录节点或普通工作站跑 Ollama：
+如果只是验证 LLM Provider 连通性和摘要能力，可以在登录节点或普通工作站跑 Ollama：
 
 ```bash
 ollama serve
@@ -115,7 +115,7 @@ cd web
 npm run dev
 ```
 
-打开 `incision_agent.html`。页面会优先请求 `http://127.0.0.1:8765/api/agentic-incision`；如果本地代理不可用，会退回浏览器内确定性工具，并在 provider 状态中标注 fallback。
+打开 `incision_agent.html`。页面默认使用同域 `/api/agentic-incision` 作为规划后端；如果只是测试 Ollama/OpenAI-compatible 是否通，直接在 LLM Provider 区填写 Base URL / Model / API Key 后点击“测试 LLM Provider 连接”。后端不可用时，候选生成会退回浏览器内确定性工具，并在 provider 状态中标注 fallback。
 
 ## 验证
 
