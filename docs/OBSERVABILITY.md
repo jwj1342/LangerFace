@@ -48,6 +48,12 @@ window.exportLangerfaceDiagnostics()
 - `faceLandmarker.gpuFallback`
 - `handLandmarker.loadFailure`
 - `faceLandmarker.noFaceFrame.camera`
+- `runtime.error`
+- `runtime.unhandledrejection`
+
+浏览器端会自动捕获 `window.error` 与 `unhandledrejection`，写入上述计数器和
+`runtime.error` / `runtime.unhandledrejection` 事件。事件 detail 只记录 message、
+文件名、行列号或 Error 摘要，不记录 canvas 像素、视频帧或人脸纹理。
 
 ## 指标样本
 

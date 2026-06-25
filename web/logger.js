@@ -13,6 +13,8 @@ export const diagnostics = {
   assetVersions: Object.create(null),
 };
 
+const installedErrorTargets = new WeakSet();
+
 function normalize(detail) {
   if (detail instanceof Error) {
     return { name: detail.name, message: detail.message, stack: detail.stack };
@@ -142,5 +144,39 @@ export function logError(message, detail) {
   console.error(message, detail ?? "");
 }
 
+function errorEventDetail(event) {
+  return {
+    message: event?.message || event?.error?.message || "runtime error",
+    filename: event?.filename || "",
+    lineno: event?.lineno ?? null,
+    colno: event?.colno ?? null,
+    error: normalize(event?.error),
+  };
+}
+
+function rejectionEventDetail(event) {
+  const reason = event?.reason;
+  return {
+    message: reason?.message || String(reason || "unhandled rejection"),
+    reason: normalize(reason),
+  };
+}
+
+export function installGlobalErrorHandlers(target = globalThis) {
+  if (!target || typeof target.addEventListener !== "function") return false;
+  if (installedErrorTargets.has(target)) return false;
+  installedErrorTargets.add(target);
+  target.addEventListener("error", (event) => {
+    countMetric("runtime.error");
+    record("error", "runtime.error", errorEventDetail(event));
+  });
+  target.addEventListener("unhandledrejection", (event) => {
+    countMetric("runtime.unhandledrejection");
+    record("error", "runtime.unhandledrejection", rejectionEventDetail(event));
+  });
+  return true;
+}
+
 globalThis.langerfaceDiagnostics = diagnostics;
 globalThis.exportLangerfaceDiagnostics = exportDiagnostics;
+installGlobalErrorHandlers();

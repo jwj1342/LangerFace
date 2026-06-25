@@ -4,6 +4,7 @@ import {
   countMetric,
   diagnostics,
   exportDiagnostics,
+  installGlobalErrorHandlers,
   logWarn,
   recordEvent,
   recordMetricSample,
@@ -58,5 +59,30 @@ const robust = JSON.parse(exportDiagnostics());
 assert.equal(robust.events.at(-2).detail.reason, "loop");
 assert.equal(robust.events.at(-2).detail.self, "[circular]");
 assert.equal(robust.events.at(-1).detail.error.message, "boom");
+
+resetDiagnostics();
+const listeners = {};
+const fakeWindow = {
+  addEventListener(type, handler) {
+    listeners[type] = handler;
+  },
+};
+assert.equal(installGlobalErrorHandlers(fakeWindow), true);
+assert.equal(installGlobalErrorHandlers(fakeWindow), false, "global error handlers install once per target");
+listeners.error({
+  message: "render failed",
+  filename: "main.js",
+  lineno: 12,
+  colno: 7,
+  error: new Error("render failed"),
+});
+listeners.unhandledrejection({ reason: new Error("stream failed") });
+const runtime = snapshotDiagnostics();
+assert.equal(runtime.counters["runtime.error"], 1);
+assert.equal(runtime.counters["runtime.unhandledrejection"], 1);
+assert.equal(runtime.events.at(-2).event, "runtime.error");
+assert.equal(runtime.events.at(-2).detail.filename, "main.js");
+assert.equal(runtime.events.at(-1).event, "runtime.unhandledrejection");
+assert.equal(runtime.events.at(-1).detail.reason.message, "stream failed");
 
 console.log("ok: browser diagnostics logger exports structured snapshots");
