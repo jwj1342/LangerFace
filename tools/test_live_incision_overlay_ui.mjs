@@ -27,9 +27,14 @@ assert.ok(exporter.includes("canvas.captureStream(fps)"), "export controller rec
 assert.ok(exporter.includes('mimeType: "video/webm"'), "export controller records playable webm output");
 assert.ok(render.includes("drawIncisionOverlay(lm"), "renderer draws incision overlay on every frame");
 assert.ok(render.includes("measureIncisionOverlayRegistration"), "renderer measures incision overlay projection registration");
+assert.ok(render.includes("measureIncisionOverlayJitter"), "renderer measures live incision overlay rolling jitter");
 assert.ok(render.includes("incisionOverlay.registration.pass"), "renderer records passing overlay registration diagnostics");
 assert.ok(render.includes("incisionOverlay.registration.fail"), "renderer records failing overlay registration diagnostics");
 assert.ok(render.includes("incisionOverlay.registration.bboxDiagonalPx"), "renderer records overlay registration bbox metric");
+assert.ok(render.includes("incisionOverlay.stability.rmsPx"), "renderer records overlay stability rms metric");
+assert.ok(render.includes("incision-overlay-runtime-diagnostics/v0.1"), "renderer exports runtime overlay diagnostics section");
+assert.ok(render.includes('setDiagnosticSection("incision_overlay_runtime"'), "renderer publishes sanitized overlay diagnostics section");
+assert.ok(render.includes("exported_landmarks: false"), "overlay diagnostics do not export landmark coordinates");
 assert.ok(render.includes("切口候选"), "zoom strip exposes a dedicated incision candidate detail card");
 assert.ok(render.includes("incisionOverlayBounds"), "renderer computes incision overlay bounds for detail zoom");
 assert.ok(render.includes("overlay.tumor?.center_ref"), "incision zoom includes tumor center");

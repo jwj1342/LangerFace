@@ -10,6 +10,7 @@ import {
   recordMetricSample,
   resetDiagnostics,
   setAssetVersions,
+  setDiagnosticSection,
   snapshotDiagnostics,
 } from "../web/logger.js";
 
@@ -22,6 +23,12 @@ setAssetVersions({
 countMetric("camera.openFailure.permission_denied");
 countMetric("camera.openFailure.permission_denied", 2);
 recordEvent("frame.summary", { phase: "frame", sourceKind: "camera" });
+setDiagnosticSection("incision_overlay_runtime", {
+  schema_version: "incision-overlay-runtime-diagnostics/v0.1",
+  exported_raw_pixels: false,
+  exported_landmarks: false,
+  registration: { passed: true },
+});
 const originalWarn = console.warn;
 console.warn = () => {};
 logWarn("camera degraded", new Error("permission denied"));
@@ -39,6 +46,8 @@ assert.equal(snap.metrics["frame.fps"].count, 130);
 assert.equal(snap.metrics["frame.fps"].latest, 149);
 assert.equal(snap.metrics["frame.fps"].samples.length, 120);
 assert.equal(snap.metrics["frame.fps"].samples[0].detail.seq, 10);
+assert.equal(snap.sections.incision_overlay_runtime.registration.passed, true);
+assert.equal(snap.sections.incision_overlay_runtime.exported_landmarks, false);
 assert.equal(snap.events.at(-1).detail.message, "permission denied");
 
 const exported = JSON.parse(exportDiagnostics());
@@ -48,6 +57,7 @@ assert.equal(typeof globalThis.exportLangerfaceDiagnostics, "function");
 resetDiagnostics();
 assert.deepEqual(snapshotDiagnostics().events, []);
 assert.equal(Object.keys(snapshotDiagnostics().counters).length, 0);
+assert.equal(Object.keys(snapshotDiagnostics().sections).length, 0);
 
 // 回归：对外导出入口绝不能因某条 detail 含循环引用而抛错；嵌套 Error 应被归一化为可读字段。
 const circular = { reason: "loop" };

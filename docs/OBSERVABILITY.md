@@ -20,11 +20,12 @@ window.exportLangerfaceDiagnostics()
   "assetVersions": {},
   "counters": {},
   "metrics": {},
+  "sections": {},
   "events": []
 }
 ```
 
-该快照只允许包含结构化事件、计数器、阶段耗时、fps、失败原因和资产版本；不得包含 canvas 像素、视频帧、人脸纹理、病例号或其他身份信息。
+该快照只允许包含结构化事件、计数器、阶段耗时、fps、失败原因、脱敏 QA 摘要和资产版本；不得包含 canvas 像素、视频帧、人脸纹理、landmark 坐标、病例号或其他身份信息。
 
 ## 事件字段
 
@@ -52,6 +53,8 @@ window.exportLangerfaceDiagnostics()
 - `runtime.unhandledrejection`
 - `incisionOverlay.registration.pass`
 - `incisionOverlay.registration.fail`
+- `incisionOverlay.stability.pass`
+- `incisionOverlay.stability.fail`
 
 浏览器端会自动捕获 `window.error` 与 `unhandledrejection`，写入上述计数器和
 `runtime.error` / `runtime.unhandledrejection` 事件。事件 detail 只记录 message、
@@ -82,10 +85,28 @@ window.exportLangerfaceDiagnostics()
 - `incisionOverlay.registration.mappedPointCount`
 - `incisionOverlay.registration.outOfFrameCount`
 - `incisionOverlay.registration.bboxDiagonalPx`
+- `incisionOverlay.stability.rmsPx`
+- `incisionOverlay.stability.p95Px`
+- `incisionOverlay.stability.maxPx`
 
-切口 overlay registration 指标只来自 landmarks、三角面索引和 surface refs，不包含照片、
-视频帧或 canvas 像素。它用于 preview/回归时判断 `incision-overlay/v0.1` 是否能在当前
-runtime landmarks 上投射，不代表患者个体化临床 AR 配准。
+切口 overlay registration / stability 指标只来自运行期 landmarks、三角面索引和
+surface refs；导出只保留计数、阈值、RMS/P95/max、bbox 和失败原因，不包含照片、
+视频帧、canvas 像素或 landmark 坐标。它用于 preview/回归时判断
+`incision-overlay/v0.1` 是否能在当前 runtime landmarks 上投射并稳定跟随，不代表患者
+个体化临床 AR 配准。
+
+## 脱敏诊断区
+
+`sections` 用于保存当前页面最小可复现状态摘要。当前实时切口叠加会写入：
+
+- `incision_overlay_runtime.schema_version = "incision-overlay-runtime-diagnostics/v0.1"`
+- `raw_image_sent=false`、`exported_raw_pixels=false`、`exported_landmarks=false`
+- 当前 overlay 的候选类型、肿物类型、审阅状态、guardrail 摘要和 `live_overlay_ready`
+- 最近一帧 `incision-overlay-registration/v0.1` 的脱敏结果
+- 最近 8 帧滚动窗口 `incision-overlay-stability/v0.1` 的脱敏结果
+
+该 section 只用于 PR preview、多人审阅和回归复现。候选切换或 overlay 被清除时，运行期
+section 会同步重置，避免导出旧候选的 QA 结果。
 
 ## 资产版本
 

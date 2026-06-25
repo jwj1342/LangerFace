@@ -72,6 +72,7 @@ Stage 2 涉及肿物模拟和候选切口，只能在医生审阅路径中评估
 | 医生审阅 | 接受率、修改次数、覆盖原因 | 系统建议不能绕过医生确认 |
 | 照片 / 视频 / 实时叠加 | overlay 注册质量 | 当前帧 landmarks 能否稳定映射 `incision-overlay/v0.1` surface refs；记录 mapped point count、候选线点数、退化三角形、出画面点、bbox diagonal / frame fraction |
 | 照片 / 视频 / 实时叠加 | overlay 抖动 RMS / P95 / max | 静止头部或暂停视频连续 landmarks 帧中，肿物中心、边界和候选线 surface refs 的帧间像素位移；当前工程门槛 RMS ≤ 2px、P95 ≤ 4px、max ≤ 8px |
+| 照片 / 视频 / 实时叠加 | preview 诊断导出 | `window.exportLangerfaceDiagnostics()` 的 `sections.incision_overlay_runtime` 保存最近一帧 registration 与最近 8 帧滚动 stability 摘要；只含 QA 数值、阈值和失败原因，不含照片/视频帧、canvas 像素或 landmark 坐标 |
 
 当前公开仓库只提供合成样例原型，见 [WRINKLE_LESION_CUES.md](WRINKLE_LESION_CUES.md) 和
 `tools/prototype_wrinkle_lesion_cues.py`。该脚本输出 `metrics.json`，字段包括：
@@ -104,6 +105,7 @@ python tools/evaluate_stage2_validation.py incision_review_*.json --output stage
 - `secondary_cues` 汇总：低置信辅助线索导入数、人工确认率、来源/置信标签分布、lesion/wrinkle precision/recall/IoU，以及 `used_for_geometry_count` / `used_for_agent_prompt_count`。后两项必须保持 0。
 - `incision-overlay-registration/v0.1`：可由 `measureIncisionOverlayRegistration` 对单帧 runtime landmarks 计算 surface refs 投射质量；脚本会汇总 `present_count`、`passed_count`、`failed_count`、`pass_rate`、`reason_counts`、`context_counts`，并把 mapped point count、candidate point count、invalid ref、missing landmark、degenerate triangle、out-of-frame、bbox diagonal 和 frame fraction 写入 `metrics`。该指标用于工程 QA，不代表患者个体化临床 AR 配准。
 - `incision-overlay-stability/v0.1`：可由 `measureIncisionOverlayJitter` 对连续 landmarks 帧计算候选切口和肿物叠加的 RMS / P95 / max 像素抖动；脚本会汇总 `present_count`、`passed_count`、`failed_count`、`pass_rate`、`reason_counts`、`context_counts`，并把 RMS / P95 / max、tracked point count 和 sample count 写入 `metrics`。该指标用于工程回归，不替代真实视频/摄像头目检和临床评审。
+- `incision-overlay-runtime-diagnostics/v0.1`：浏览器实时页在有候选 overlay 时写入 diagnostics `sections.incision_overlay_runtime`，包含候选摘要、最近一帧 registration、最近 8 帧滚动 stability、阈值、失败原因和 `exported_landmarks=false` / `exported_raw_pixels=false` 标记；候选切换或 overlay 清空时会重置该 section。它用于 PR preview 和问题复现，不进入长期病例记录。
 - `incision-overlay-replay-qa/v0.1`：可由 `tools/audit_incision_overlay_replay.mjs` 读取已脱敏的 `incision-overlay/v0.1`、三角拓扑和 runtime landmarks 帧数组，离线复算每帧 registration 与整体 jitter；脚本会汇总 `present_count`、`passed_count`、`failed_count`、`pass_rate`、`reason_counts`，并把复放帧数、registration 失败帧数和 registration pass rate 写入 `metrics`。输入不包含照片、视频帧、纹理或超声影像；该指标只是 #19 的工程复放 QA，不是临床 AR 验证。
 - 失败模式计数：脚本会读取人工 `failure_modes`，也会把高层 warning code 映射到 `direction_error`、`region_misclassification`、`sensitive_structure_warning`、`incision_rule_violation`、`tumor_boundary_input_quality` 等验证分类。
 - 隐私审计计数：`raw_media_sent_count` 和 `provider_secret_leak_count` 必须保持 0。

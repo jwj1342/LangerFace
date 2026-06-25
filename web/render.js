@@ -2,8 +2,8 @@
 import { SOLID, BAND, ZOOM_REGIONS } from "./constants.js";
 import { ctx, els } from "./dom.js";
 import { innerMouthTriangles, mapAtlas, pointInHandMasks, visibleRuns, visibleTriangles } from "./geometry.js";
-import { mapSurfaceRefs, measureIncisionOverlayRegistration } from "./incision_overlay.js";
-import { countMetric, recordMetricSample } from "./logger.js";
+import { mapSurfaceRefs, measureIncisionOverlayJitter, measureIncisionOverlayRegistration } from "./incision_overlay.js";
+import { countMetric, recordMetricSample, setDiagnosticSection } from "./logger.js";
 import { modelState, renderState, sourceState } from "./state.js";
 import { setLive } from "./ui.js";
 
@@ -11,7 +11,9 @@ const focusScratch = document.createElement("canvas");
 const focusCtx = focusScratch.getContext("2d");
 const focusZoomRange = { min: 1, max: 4.5 };
 const INCISION_ZOOM_REGION = { kind: "incision_overlay" };
+const INCISION_OVERLAY_STABILITY_FRAMES = 8;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const overlayRuntimeDiagnostics = { key: null, landmarkFrames: [] };
 
 export function faceBBox(lm) {
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
@@ -90,6 +92,87 @@ function strokeOverlayRefs(refs, lm, masks, vis, innerMouth, style) {
   ctx.setLineDash([]);
 }
 
+function overlayRuntimeKey(overlay) {
+  return [
+    overlay?.schema_version || "",
+    overlay?.created_at || "",
+    overlay?.label || "",
+    overlay?.candidate_type || "",
+    overlay?.candidate?.polyline_refs?.length || 0,
+    overlay?.tumor?.boundary_refs?.length || 0,
+  ].join("|");
+}
+
+function cloneLandmarkFrame(lm) {
+  return (lm || []).map((p) => {
+    const x = Number(p?.[0]);
+    const y = Number(p?.[1]);
+    const z = Number(p?.[2] ?? 0);
+    return Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z) ? [x, y, z] : null;
+  });
+}
+
+function compactRegistration(registration) {
+  if (!registration) return null;
+  return {
+    schema_version: registration.schema_version,
+    passed: registration.passed,
+    reason: registration.reason,
+    reasons: registration.reasons || [],
+    frame: registration.frame,
+    mapped_point_count: registration.mapped_point_count,
+    candidate_point_count: registration.candidate_point_count,
+    tumor_center_mapped: registration.tumor_center_mapped,
+    invalid_ref_count: registration.invalid_ref_count,
+    missing_landmark_count: registration.missing_landmark_count,
+    degenerate_triangle_count: registration.degenerate_triangle_count,
+    out_of_frame_count: registration.out_of_frame_count,
+    out_of_frame_fraction: registration.out_of_frame_fraction,
+    bbox_px: registration.bbox_px,
+    clinical_boundary: registration.clinical_boundary,
+  };
+}
+
+function compactStability(stability) {
+  if (!stability) return null;
+  return {
+    schema_version: stability.schema_version,
+    passed: stability.passed,
+    reason: stability.reason,
+    frame_count: stability.frame_count,
+    tracked_point_count: stability.tracked_point_count,
+    sample_count: stability.sample_count,
+    thresholds: stability.thresholds,
+    overall: stability.overall,
+    by_group: stability.by_group,
+  };
+}
+
+function updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stability) {
+  setDiagnosticSection("incision_overlay_runtime", {
+    schema_version: "incision-overlay-runtime-diagnostics/v0.1",
+    updated_at: new Date().toISOString(),
+    raw_image_sent: false,
+    exported_raw_pixels: false,
+    exported_landmarks: false,
+    rolling_window_frame_count: INCISION_OVERLAY_STABILITY_FRAMES,
+    rolling_frame_count: overlayRuntimeDiagnostics.landmarkFrames.length,
+    overlay: {
+      schema_version: overlay?.schema_version || "",
+      label: overlay?.label || "",
+      candidate_type: overlay?.candidate_type || "",
+      tumor_kind: overlay?.tumor_kind || "",
+      review_status: overlay?.review?.status || "",
+      guardrails_passed: overlay?.candidate?.guardrails_passed === true,
+      high_guardrail_codes: overlay?.candidate?.high_guardrail_codes || [],
+      live_overlay_ready: overlay?.review_gate?.live_overlay_ready === true,
+    },
+    registration: compactRegistration(registration),
+    stability: compactStability(stability),
+    clinical_boundary: "Runtime overlay diagnostics are engineering QA signals, not clinical AR registration.",
+  });
+}
+
 function recordIncisionOverlayRegistration(overlay, lm, W, H) {
   const registration = measureIncisionOverlayRegistration(overlay, lm, modelState.triangles, {
     frameWidth: W,
@@ -110,12 +193,65 @@ function recordIncisionOverlayRegistration(overlay, lm, W, H) {
       reason: registration.reason,
     });
   }
+  return registration;
+}
+
+function recordIncisionOverlayStability(overlay, lm) {
+  const key = overlayRuntimeKey(overlay);
+  if (overlayRuntimeDiagnostics.key !== key) {
+    overlayRuntimeDiagnostics.key = key;
+    overlayRuntimeDiagnostics.landmarkFrames = [];
+  }
+  overlayRuntimeDiagnostics.landmarkFrames.push(cloneLandmarkFrame(lm));
+  if (overlayRuntimeDiagnostics.landmarkFrames.length > INCISION_OVERLAY_STABILITY_FRAMES) {
+    overlayRuntimeDiagnostics.landmarkFrames.splice(
+      0,
+      overlayRuntimeDiagnostics.landmarkFrames.length - INCISION_OVERLAY_STABILITY_FRAMES,
+    );
+  }
+  if (overlayRuntimeDiagnostics.landmarkFrames.length < 2) return null;
+  const stability = measureIncisionOverlayJitter(
+    overlay,
+    overlayRuntimeDiagnostics.landmarkFrames,
+    modelState.triangles,
+    { context: "live_runtime_overlay_window" },
+  );
+  countMetric(stability.passed ? "incisionOverlay.stability.pass" : "incisionOverlay.stability.fail");
+  if (stability.overall?.rms_px != null) {
+    recordMetricSample("incisionOverlay.stability.rmsPx", stability.overall.rms_px, {
+      passed: stability.passed,
+      reason: stability.reason,
+      frameCount: stability.frame_count,
+    });
+  }
+  if (stability.overall?.p95_px != null) {
+    recordMetricSample("incisionOverlay.stability.p95Px", stability.overall.p95_px, {
+      passed: stability.passed,
+      reason: stability.reason,
+      frameCount: stability.frame_count,
+    });
+  }
+  if (stability.overall?.max_px != null) {
+    recordMetricSample("incisionOverlay.stability.maxPx", stability.overall.max_px, {
+      passed: stability.passed,
+      reason: stability.reason,
+      frameCount: stability.frame_count,
+    });
+  }
+  return stability;
 }
 
 function drawIncisionOverlay(lm, W, H, masks, vis, innerMouth) {
   const overlay = renderState.incisionOverlay;
-  if (!overlay) return;
-  recordIncisionOverlayRegistration(overlay, lm, W, H);
+  if (!overlay) {
+    overlayRuntimeDiagnostics.key = null;
+    overlayRuntimeDiagnostics.landmarkFrames = [];
+    setDiagnosticSection("incision_overlay_runtime", null);
+    return;
+  }
+  const registration = recordIncisionOverlayRegistration(overlay, lm, W, H);
+  const stability = recordIncisionOverlayStability(overlay, lm);
+  updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stability);
   ctx.save();
   ctx.globalAlpha = 0.98;
   const baseWidth = Math.max(2, W / 520);
