@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from ..texture import TextureWarpConfig, WrinkleFieldConfig
 from .assets import ATLAS_PATHS, CANONICAL_OBJ, FACE_LANDMARKER_TASK
 from .constants import (
     DEFAULT_FADE_FRAMES,
@@ -56,6 +57,10 @@ class Config:
     # 渲染
     styles: dict = field(default_factory=lambda: dict(DEFAULT_STYLES))
 
+    # 个性化纹理：患者图像 Hessian 皮纹方向场驱动的局部 warping，默认关闭以保持基线稳定。
+    texture_warp: TextureWarpConfig = field(default_factory=TextureWarpConfig)
+    wrinkle_field: WrinkleFieldConfig = field(default_factory=WrinkleFieldConfig)
+
     # 资产
     canonical_obj: str = CANONICAL_OBJ
     landmarker_task: str = FACE_LANDMARKER_TASK
@@ -76,6 +81,7 @@ def build_config(
     num_faces: int = 1,
     smoothing: bool = True,
     occlusion: bool = True,
+    texture_warp: bool = False,
 ) -> Config:
     """统一的 Config 构造工厂（cli / webcam / web 共用，消除三处重复构造）。"""
     Config.validate_system(system)
@@ -84,4 +90,5 @@ def build_config(
         num_faces=num_faces,
         smoothing=smoothing,
         occlusion=occlusion,
+        texture_warp=TextureWarpConfig(enabled=texture_warp),
     )

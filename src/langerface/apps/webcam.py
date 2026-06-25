@@ -24,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--system", choices=VALID_SYSTEMS, default="rstl")
     ap.add_argument("--camera", type=int, default=0, help="摄像头索引")
     ap.add_argument("--num-faces", type=int, default=1)
+    ap.add_argument("--texture-warp", action="store_true", help="enable patient wrinkle-guided local warping")
     return ap
 
 
@@ -38,7 +39,7 @@ def main() -> int:
         log.error("无法打开摄像头 %s", args.camera)
         return 1
 
-    cfg = build_config(args.system, args.num_faces)
+    cfg = build_config(args.system, args.num_faces, texture_warp=args.texture_warp)
     win = "Langer/RSTL projection (t:切换 o:遮挡 s:平滑 q:退出)"
     log.info("已启动。窗口热键： t 切换线系统 / o 遮挡 / s 平滑 / q 退出")
 
@@ -52,7 +53,10 @@ def main() -> int:
             ts = int((time.monotonic() - t0) * 1000)
             out = pipe.process(frame, timestamp_ms=ts)
 
-            label = f"{cfg.system.upper()}  smooth={cfg.smoothing}  occ={cfg.occlusion}"
+            label = (
+                f"{cfg.system.upper()}  smooth={cfg.smoothing}  "
+                f"occ={cfg.occlusion}  warp={cfg.texture_warp.enabled}"
+            )
             cv2.putText(out, label, (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             cv2.putText(out, "decision-support overlay - not a surgical instruction",
                         (12, out.shape[0] - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
@@ -67,6 +71,8 @@ def main() -> int:
                 pipe.set_occlusion(not cfg.occlusion)
             elif key == ord("s"):
                 pipe.set_smoothing(not cfg.smoothing)
+            elif key == ord("w"):
+                pipe.set_texture_warp(not cfg.texture_warp.enabled)
 
     cap.release()
     cv2.destroyAllWindows()
