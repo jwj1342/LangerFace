@@ -22,6 +22,7 @@ const incisionBridge = read("src/hooks/useIncisionControllerBridge.ts");
 const incisionStatePanel = read("src/components/IncisionStatePanel.tsx");
 const tumorPanel = read("src/components/TumorInputPanel.tsx");
 const providerPanel = read("src/components/ProviderConfigPanel.tsx");
+const editPanel = read("src/components/EditControlsPanel.tsx");
 const reviewPanel = read("src/components/ReviewControlsPanel.tsx");
 const liveStore = read("src/stores/liveStore.ts");
 const liveBridge = read("src/hooks/useLiveControllerBridge.ts");
@@ -165,6 +166,31 @@ assert.ok(providerPanel.includes("testProviderConnection"), "React provider pane
 assert.ok(providerPanel.includes("normalizeProviderBaseUrl"), "React provider panel normalizes provider Base URL");
 assert.ok(providerPanel.includes("PROVIDER_REACT_STATE_EVENT"), "React provider panel notifies the legacy controller to republish snapshots");
 for (const id of [
+  "editStatus",
+  "angleOffsetDeg",
+  "angleOffsetVal",
+  "lengthScale",
+  "lengthScaleVal",
+  "widthScaleWrap",
+  "widthScale",
+  "widthScaleVal",
+  "shiftAlongMm",
+  "shiftAlongVal",
+  "shiftPerpMm",
+  "shiftPerpVal",
+  "editReason",
+  "undoEditBtn",
+  "redoEditBtn",
+  "resetEditBtn",
+  "editHistoryState",
+]) {
+  assert.ok(editPanel.includes(`id="${id}"`), `React edit panel exposes #${id}`);
+}
+assert.ok(incisionStore.includes("IncisionEditState"), "incision Zustand store keeps typed edit state");
+assert.ok(incisionWorkbench.includes("EditControlsPanel"), "React incision workbench renders the edit controls as a React component");
+assert.ok(editPanel.includes("EDIT_REACT_COMMAND_EVENT"), "React edit panel dispatches edit commands to the controller boundary");
+assert.ok(editPanel.includes("useIncisionStore"), "React edit panel syncs low-frequency edit state from Zustand");
+for (const id of [
   "reviewState",
   "reviewerName",
   "reviewDecision",
@@ -187,8 +213,11 @@ assert.ok(controller.includes("handleReactTumorCommand"), "incision controller r
 assert.ok(controller.includes("INCISION_PROVIDER_REACT_STATE_EVENT"), "incision controller listens for React provider state changes");
 assert.ok(controller.includes("INCISION_REVIEW_REACT_COMMAND_EVENT"), "incision controller listens for React review commands");
 assert.ok(controller.includes("handleReactReviewCommand"), "incision controller routes React review commands to existing review workflow functions");
+assert.ok(controller.includes("INCISION_EDIT_REACT_COMMAND_EVENT"), "incision controller listens for React edit commands");
+assert.ok(controller.includes("handleReactEditCommand"), "incision controller routes React edit commands to existing edit workflow functions");
 assert.ok(controller.includes("window.__LANGERFACE_REACT_MANAGED__"), "incision controller can branch between React and legacy provider handling");
 assert.ok(controller.includes("els.tumorKind.onchange"), "legacy incision HTML still owns direct tumor input handlers");
+assert.ok(controller.includes("el.oninput = applyEditControls"), "legacy incision HTML still owns direct edit preview handlers");
 assert.ok(controller.includes("els.testProvider.onclick = testProviderEndpoint"), "legacy incision HTML still owns provider connectivity testing");
 assert.ok(controller.includes("els.approveCandidate.onclick"), "legacy incision HTML still owns direct review action handlers");
 assert.ok(controller.includes("cancelAnimationFrame"), "incision controller cancels its render loop on dispose");

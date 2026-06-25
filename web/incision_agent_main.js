@@ -163,6 +163,7 @@ function createRuntimeState() {
     workflowWorkerFailed: false,
     providerReactStateHandler: null,
     tumorReactCommandHandler: null,
+    editReactCommandHandler: null,
     reviewReactCommandHandler: null,
     editTimeline: null,
     editCursor: 0,
@@ -181,6 +182,7 @@ const REVIEW_LABELS = {
 const INCISION_CONTROLLER_STATE_EVENT = "langerface:incision-state";
 const INCISION_PROVIDER_REACT_STATE_EVENT = "langerface:incision-provider-react-state";
 const INCISION_TUMOR_REACT_COMMAND_EVENT = "langerface:incision-tumor-react-command";
+const INCISION_EDIT_REACT_COMMAND_EVENT = "langerface:incision-edit-react-command";
 const INCISION_REVIEW_REACT_COMMAND_EVENT = "langerface:incision-review-react-command";
 
 function numericControlValue(el) {
@@ -227,6 +229,24 @@ function currentReviewSnapshot() {
   };
 }
 
+function currentEditSnapshot() {
+  const edit = currentEditBase();
+  return {
+    angleOffsetDeg: Number.isFinite(edit.angle_offset_deg) ? edit.angle_offset_deg : 0,
+    lengthScalePct: Number.isFinite(edit.length_scale) ? Math.round(edit.length_scale * 100) : 100,
+    widthScalePct: Number.isFinite(edit.width_scale) ? Math.round(edit.width_scale * 100) : 100,
+    shiftAlongMm: Number.isFinite(edit.shift_along_mm) ? edit.shift_along_mm : 0,
+    shiftPerpMm: Number.isFinite(edit.shift_perp_mm) ? edit.shift_perp_mm : 0,
+    reason: edit.reason || "",
+    statusLabel: els.editStatus?.textContent || "工具建议",
+    active: Boolean(els.editStatus?.classList?.contains("active")) || editIsActive(edit),
+    widthScaleVisible: !els.widthScaleWrap?.classList?.contains("hidden"),
+    historyLabel: els.editHistoryState?.textContent || "编辑版本：v1 · 无已提交调整",
+    undoDisabled: Boolean(els.undoEdit?.disabled),
+    redoDisabled: Boolean(els.redoEdit?.disabled),
+  };
+}
+
 function currentCandidateSnapshot(result = S.result) {
   const candidate = result?.candidate;
   if (!candidate) return null;
@@ -251,6 +271,7 @@ function publishIncisionState(reason = "state_update") {
       tumor: currentTumorFormSnapshot(),
       provider: currentProviderSnapshot(),
       review: currentReviewSnapshot(),
+      edit: currentEditSnapshot(),
       candidate: currentCandidateSnapshot(),
       workflowRuntime: S.result?.workflow_runtime || null,
       savedCount: S.saved?.length || 0,
@@ -1100,6 +1121,7 @@ function renderEditHistoryState() {
     : `编辑版本：v1 · 无已提交调整${pending}`;
   if (els.undoEdit) els.undoEdit.disabled = S.editCursor <= 0;
   if (els.redoEdit) els.redoEdit.disabled = S.editCursor >= S.editTimeline.length - 1;
+  publishIncisionState("edit_state");
 }
 
 function commitEditSnapshot(interaction = "control_change") {
@@ -1148,6 +1170,42 @@ function redoEditSnapshot() {
   S.editCursor += 1;
   invalidateReviewAfterGeometryChange("已重做医生调整，审阅状态已回到待医生确认。");
   applyEditSnapshot(S.editTimeline[S.editCursor]);
+}
+
+function resetEditToToolSuggestion() {
+  if (!S.baseResult) return;
+  resetEditControls();
+  resetEditTimeline();
+  invalidateReviewAfterGeometryChange("已恢复工具建议，审阅状态已回到待医生确认。");
+  renderResult(S.baseResult);
+}
+
+function handleReactEditCommand(event) {
+  const command = event?.detail?.command;
+  if (command === "preview_edit") {
+    applyEditControls();
+    return;
+  }
+  if (command === "commit_edit") {
+    commitEditSnapshot("control_change");
+    return;
+  }
+  if (command === "commit_reason") {
+    applyEditControls();
+    commitEditSnapshot("reason_change");
+    return;
+  }
+  if (command === "undo_edit") {
+    undoEditSnapshot();
+    return;
+  }
+  if (command === "redo_edit") {
+    redoEditSnapshot();
+    return;
+  }
+  if (command === "reset_edit") {
+    resetEditToToolSuggestion();
+  }
 }
 
 function updateEditVisibility(result) {
@@ -2136,33 +2194,32 @@ function bindWorkbenchEvents() {
     els.providerModel.onchange = () => { setProviderTestState("Provider 模型已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
     els.providerTimeout.oninput = () => { els.providerTimeoutVal.textContent = els.providerTimeout.value; saveProviderPrefs(); };
   }
-  [
-  els.angleOffset,
-  els.lengthScale,
-  els.widthScale,
-  els.shiftAlong,
-  els.shiftPerp,
-  ].forEach((el) => { el.oninput = applyEditControls; });
-  [
-  els.angleOffset,
-  els.lengthScale,
-  els.widthScale,
-  els.shiftAlong,
-  els.shiftPerp,
-  ].forEach((el) => { el.onchange = () => commitEditSnapshot("control_change"); });
-  els.editReason.onchange = () => {
-  applyEditControls();
-  commitEditSnapshot("reason_change");
-  };
-  els.undoEdit.onclick = undoEditSnapshot;
-  els.redoEdit.onclick = redoEditSnapshot;
-  els.resetEdit.onclick = () => {
-  if (!S.baseResult) return;
-  resetEditControls();
-  resetEditTimeline();
-  invalidateReviewAfterGeometryChange("已恢复工具建议，审阅状态已回到待医生确认。");
-  renderResult(S.baseResult);
-  };
+  if (window.__LANGERFACE_REACT_MANAGED__) {
+    S.editReactCommandHandler = handleReactEditCommand;
+    window.addEventListener(INCISION_EDIT_REACT_COMMAND_EVENT, S.editReactCommandHandler);
+  } else {
+    [
+    els.angleOffset,
+    els.lengthScale,
+    els.widthScale,
+    els.shiftAlong,
+    els.shiftPerp,
+    ].forEach((el) => { el.oninput = applyEditControls; });
+    [
+    els.angleOffset,
+    els.lengthScale,
+    els.widthScale,
+    els.shiftAlong,
+    els.shiftPerp,
+    ].forEach((el) => { el.onchange = () => commitEditSnapshot("control_change"); });
+    els.editReason.onchange = () => {
+    applyEditControls();
+    commitEditSnapshot("reason_change");
+    };
+    els.undoEdit.onclick = undoEditSnapshot;
+    els.redoEdit.onclick = redoEditSnapshot;
+    els.resetEdit.onclick = resetEditToToolSuggestion;
+  }
   if (window.__LANGERFACE_REACT_MANAGED__) {
     S.reviewReactCommandHandler = handleReactReviewCommand;
     window.addEventListener(INCISION_REVIEW_REACT_COMMAND_EVENT, S.reviewReactCommandHandler);
@@ -2207,6 +2264,10 @@ export function disposeIncisionAgentWorkbench() {
   if (S.tumorReactCommandHandler) {
     window.removeEventListener(INCISION_TUMOR_REACT_COMMAND_EVENT, S.tumorReactCommandHandler);
     S.tumorReactCommandHandler = null;
+  }
+  if (S.editReactCommandHandler) {
+    window.removeEventListener(INCISION_EDIT_REACT_COMMAND_EVENT, S.editReactCommandHandler);
+    S.editReactCommandHandler = null;
   }
   if (S.reviewReactCommandHandler) {
     window.removeEventListener(INCISION_REVIEW_REACT_COMMAND_EVENT, S.reviewReactCommandHandler);

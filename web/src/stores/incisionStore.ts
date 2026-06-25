@@ -31,6 +31,21 @@ export interface IncisionReviewState {
   notesPresent: boolean;
 }
 
+export interface IncisionEditState {
+  angleOffsetDeg: number;
+  lengthScalePct: number;
+  widthScalePct: number;
+  shiftAlongMm: number;
+  shiftPerpMm: number;
+  reason: string;
+  statusLabel: string;
+  active: boolean;
+  widthScaleVisible: boolean;
+  historyLabel: string;
+  undoDisabled: boolean;
+  redoDisabled: boolean;
+}
+
 export interface IncisionCandidateSummary {
   id: string | null;
   type: string | null;
@@ -55,6 +70,7 @@ export interface IncisionControllerSnapshot {
   tumor: IncisionTumorState;
   provider: IncisionProviderState;
   review: IncisionReviewState;
+  edit: IncisionEditState;
   candidate: IncisionCandidateSummary | null;
   workflowRuntime: IncisionWorkflowRuntime | null;
   savedCount: number;

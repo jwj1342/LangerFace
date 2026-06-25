@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+import { EditControlsPanel } from "../components/EditControlsPanel";
 import { IncisionStatePanel } from "../components/IncisionStatePanel";
 import { ProviderConfigPanel } from "../components/ProviderConfigPanel";
 import { ReviewControlsPanel } from "../components/ReviewControlsPanel";
@@ -52,43 +53,7 @@ export function IncisionWorkbench() {
           <p className="guardrail-details" id="guardrailDetails">Guardrails 尚未运行。</p>
         </div>
 
-        <div className="card agent-grid">
-          <div className="quality-top"><span>医生调整</span><span className="edit-status" id="editStatus">工具建议</span></div>
-          <div>
-            <label className="field-label" htmlFor="angleOffsetDeg">方向偏移 deg <span id="angleOffsetVal" className="val">0</span></label>
-            <input id="angleOffsetDeg" type="range" min="-35" max="35" defaultValue="0" />
-          </div>
-          <div>
-            <label className="field-label" htmlFor="lengthScale">长度比例 <span id="lengthScaleVal" className="val">100%</span></label>
-            <input id="lengthScale" type="range" min="70" max="150" defaultValue="100" />
-          </div>
-          <div id="widthScaleWrap" className="hidden">
-            <label className="field-label" htmlFor="widthScale">宽度比例 <span id="widthScaleVal" className="val">100%</span></label>
-            <input id="widthScale" type="range" min="70" max="150" defaultValue="100" />
-          </div>
-          <div>
-            <label className="field-label" htmlFor="shiftAlongMm">沿长轴移动 mm <span id="shiftAlongVal" className="val">0</span></label>
-            <input id="shiftAlongMm" type="range" min="-12" max="12" defaultValue="0" />
-          </div>
-          <div>
-            <label className="field-label" htmlFor="shiftPerpMm">垂直长轴移动 mm <span id="shiftPerpVal" className="val">0</span></label>
-            <input id="shiftPerpMm" type="range" min="-12" max="12" defaultValue="0" />
-          </div>
-          <select id="editReason" className="select" defaultValue="">
-            <option value="">未选择覆盖原因</option>
-            <option value="manual scar camouflage">瘢痕隐蔽优先</option>
-            <option value="manual free-margin protection">游离缘保护优先</option>
-            <option value="manual subunit boundary alignment">贴合美学亚单位边界</option>
-            <option value="manual clinician preference">医生人工判断</option>
-          </select>
-          <div className="btn-row two-cols">
-            <button className="btn" id="undoEditBtn" type="button">撤销调整</button>
-            <button className="btn" id="redoEditBtn" type="button">重做调整</button>
-          </div>
-          <button className="btn" id="resetEditBtn" type="button">恢复工具建议</button>
-          <p className="agent-note" id="editHistoryState">编辑版本：v1 · 无已提交调整</p>
-          <p className="agent-note">调整只改变候选草案并记录 provenance；真实切口仍需医生复核。</p>
-        </div>
+        <EditControlsPanel />
 
         <ReviewControlsPanel />
 
