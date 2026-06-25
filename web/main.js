@@ -42,6 +42,7 @@ function applyStagedIncisionOverlay() {
     return;
   }
   renderState.incisionOverlay = overlay;
+  buildZoomCards(refreshStaticImage);
   const highCodes = overlay.guardrail_summary?.high_codes || overlay.review_gate?.high_guardrail_codes || [];
   const reviewLabel = overlay.review?.status === "approved_for_discussion" ? "已确认候选草案" : "待复核候选";
   const riskText = highCodes.length ? `；高风险项 ${highCodes.join("、")}` : "";

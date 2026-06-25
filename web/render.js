@@ -9,6 +9,7 @@ import { setLive } from "./ui.js";
 const focusScratch = document.createElement("canvas");
 const focusCtx = focusScratch.getContext("2d");
 const focusZoomRange = { min: 1, max: 4.5 };
+const INCISION_ZOOM_REGION = { kind: "incision_overlay" };
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 export function faceBBox(lm) {
@@ -119,7 +120,11 @@ function drawIncisionOverlay(lm, W, masks, vis, innerMouth) {
 // ── 细节放大窗 ────────────────────────────────────────────────────────────────
 export function buildZoomCards(onSelect = () => {}) {
   els.zoomStrip.innerHTML = "";
-  const zoomItems = [{ label: "全脸", region: null }, ...ZOOM_REGIONS.map((region) => ({ label: region.label, region }))];
+  const zoomItems = [
+    { label: "全脸", region: null },
+    ...(renderState.incisionOverlay ? [{ label: "切口候选", region: INCISION_ZOOM_REGION }] : []),
+    ...ZOOM_REGIONS.map((region) => ({ label: region.label, region })),
+  ];
   renderState.zoomCards = zoomItems.map((item) => {
     const card = document.createElement("div"); card.className = "zoom-card";
     card.tabIndex = 0;
@@ -174,7 +179,7 @@ export function drawZooms(lm, W) {
       drawFullFrameCard(g, dw, dh, W, els.canvas.height);
       continue;
     }
-    const box = regionBounds(lm, zc.region);
+    const box = zoomRegionBounds(lm, zc.region);
     if (!box) continue;
     const cx = (box.x0 + box.x1) / 2, cy = (box.y0 + box.y1) / 2;
     let s = Math.max(box.w, box.h) * 1.7;
@@ -191,14 +196,40 @@ function drawFullFrameCard(g, dw, dh, W, H) {
   g.drawImage(els.canvas, 0, 0, W, H, (dw - tw) / 2, (dh - th) / 2, tw, th);
 }
 
-function regionBounds(lm, region) {
+function boundsFromPoints(points) {
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-  for (const i of region.idx) {
-    const p = lm[i]; if (!p) continue;
+  for (const p of points || []) {
+    if (!p) continue;
     x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]);
   }
   if (x1 < x0) return null;
   return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 };
+}
+
+function regionBounds(lm, region) {
+  const pts = [];
+  for (const i of region.idx) {
+    const p = lm[i]; if (!p) continue;
+    pts.push(p);
+  }
+  return boundsFromPoints(pts);
+}
+
+function incisionOverlayBounds(lm) {
+  const overlay = renderState.incisionOverlay;
+  if (!overlay) return null;
+  const refs = [
+    overlay.tumor?.center_ref,
+    ...(overlay.tumor?.boundary_refs || []),
+    ...(overlay.candidate?.polyline_refs || []),
+  ].filter(Boolean);
+  if (!refs.length) return null;
+  return boundsFromPoints(mapSurfaceRefs(refs, lm, modelState.triangles).pts);
+}
+
+function zoomRegionBounds(lm, region) {
+  if (region?.kind === "incision_overlay") return incisionOverlayBounds(lm);
+  return regionBounds(lm, region);
 }
 
 export function drawFocusedRegion(lm, W, H) {
@@ -213,7 +244,7 @@ export function drawFocusedRegion(lm, W, H) {
 }
 
 function focusCropRect(lm, region, W, H) {
-  const box = regionBounds(lm, region);
+  const box = zoomRegionBounds(lm, region);
   if (!box) return null;
   const faceW = faceBBox(lm).w || W;
   const cx = (box.x0 + box.x1) / 2;
