@@ -13,6 +13,27 @@ import json
 from pathlib import Path
 from typing import Any
 
+from langerface.tumor import tumor_from_payload
+
+try:
+    from tools.audit_tumor_input import (
+        BOUNDARY_EXACT_FIELDS,
+        BOUNDARY_FLOAT_FIELDS,
+        _close_enough,
+        _finite_number,
+        _point,
+        tumor_boundary_summary,
+    )
+except ModuleNotFoundError:  # pragma: no cover - supports direct CLI execution.
+    from audit_tumor_input import (  # type: ignore
+        BOUNDARY_EXACT_FIELDS,
+        BOUNDARY_FLOAT_FIELDS,
+        _close_enough,
+        _finite_number,
+        _point,
+        tumor_boundary_summary,
+    )
+
 AUDIT_SCHEMA = "incision-review-gate-audit/v0.1"
 SUMMARY_SCHEMA = "incision-review-gate-audit-summary/v0.1"
 REVIEW_RECORD_SCHEMA = "incision-review-record/v0.3"
@@ -146,6 +167,174 @@ def _compare_gate_field(
         )
 
 
+def _candidate_axis(record: dict[str, Any]) -> tuple[float, float, float] | None:
+    candidate = record.get("candidate") if isinstance(record.get("candidate"), dict) else {}
+    return _point(candidate.get("axis"))
+
+
+def _tumor_boundary_summary_issues(record: dict[str, Any]) -> list[dict[str, str]]:
+    tumor_payload = record.get("tumor")
+    if not isinstance(tumor_payload, dict):
+        return []
+
+    try:
+        tumor = tumor_from_payload(tumor_payload)
+    except Exception as exc:  # noqa: BLE001 - audit should report malformed exports instead of crashing.
+        return [
+            _issue(
+                "tumor_input_invalid",
+                f"Review record tumor payload cannot be parsed: {exc}",
+                path="tumor",
+            )
+        ]
+
+    boundary_expected = tumor.kind == "cutaneous" and len(tumor.boundary) >= 3
+    exported = record.get("tumor_boundary_summary")
+    if not boundary_expected:
+        if exported is not None and not isinstance(exported, dict):
+            return [
+                _issue(
+                    "tumor_boundary_summary_invalid",
+                    "tumor_boundary_summary must be an object when present.",
+                    path="tumor_boundary_summary",
+                )
+            ]
+        return []
+    if exported is None:
+        return [
+            _issue(
+                "tumor_boundary_summary_missing",
+                "Cutaneous review records with a boundary must export tumor_boundary_summary.",
+                path="tumor_boundary_summary",
+            )
+        ]
+    if not isinstance(exported, dict):
+        return [
+            _issue(
+                "tumor_boundary_summary_invalid",
+                "tumor_boundary_summary must be an object.",
+                path="tumor_boundary_summary",
+            )
+        ]
+
+    issues: list[dict[str, str]] = []
+    units_per_mm = _finite_number(exported.get("units_per_mm"))
+    axis = _candidate_axis(record)
+    normal = _point(exported.get("summary_normal"))
+    if units_per_mm is None or units_per_mm <= 0:
+        issues.append(
+            _issue(
+                "tumor_boundary_summary_missing_scale",
+                "tumor_boundary_summary.units_per_mm must be present and positive for audit replay.",
+                path="tumor_boundary_summary.units_per_mm",
+            )
+        )
+    if axis is None:
+        issues.append(
+            _issue(
+                "tumor_boundary_summary_missing_candidate_axis",
+                "candidate.axis is required to replay tumor_boundary_summary against the saved candidate.",
+                path="candidate.axis",
+            )
+        )
+    if normal is None:
+        issues.append(
+            _issue(
+                "tumor_boundary_summary_missing_normal",
+                "tumor_boundary_summary.summary_normal must be present for audit replay.",
+                path="tumor_boundary_summary.summary_normal",
+            )
+        )
+    if issues:
+        return issues
+
+    observed = tumor_boundary_summary(
+        tumor,
+        units_per_mm=units_per_mm,
+        axis=axis,
+        normal=normal,
+    )
+    for key in ("point_count", "boundary_used", "mode", "source"):
+        if key in exported and exported[key] != observed.get(key):
+            issues.append(
+                _issue(
+                    "tumor_boundary_summary_mismatch",
+                    (
+                        f"tumor_boundary_summary.{key}={exported[key]!r} does not match "
+                        f"recomputed {observed.get(key)!r}."
+                    ),
+                    path=f"tumor_boundary_summary.{key}",
+                )
+            )
+    for key in (*BOUNDARY_FLOAT_FIELDS, "center", "summary_axis", "summary_normal"):
+        if key in exported and key in observed and not _close_enough(exported[key], observed[key]):
+            issues.append(
+                _issue(
+                    "tumor_boundary_summary_mismatch",
+                    (
+                        f"tumor_boundary_summary.{key}={exported[key]!r} does not match "
+                        f"recomputed {observed[key]!r}."
+                    ),
+                    path=f"tumor_boundary_summary.{key}",
+                )
+            )
+    for key in BOUNDARY_EXACT_FIELDS:
+        if key in exported and key in observed and exported[key] != observed[key]:
+            issues.append(
+                _issue(
+                    "tumor_boundary_summary_mismatch",
+                    (
+                        f"tumor_boundary_summary.{key}={exported[key]!r} does not match "
+                        f"recomputed {observed[key]!r}."
+                    ),
+                    path=f"tumor_boundary_summary.{key}",
+                )
+            )
+
+    candidate = record.get("candidate") if isinstance(record.get("candidate"), dict) else {}
+    metrics = candidate.get("metrics") if isinstance(candidate.get("metrics"), dict) else {}
+    if candidate.get("type") == "fusiform":
+        metric_pairs = {
+            "boundary_point_count": "point_count",
+            "boundary_axis_diameter_mm": "axis_diameter_mm",
+            "boundary_perp_diameter_mm": "perp_diameter_mm",
+            "boundary_area_mm2": "area_mm2",
+            "boundary_area_ratio_to_diameter_disk": "area_ratio_to_diameter_disk",
+            "boundary_center_shift_mm": "center_shift_mm",
+        }
+        for metric_key, summary_key in metric_pairs.items():
+            if (
+                metric_key in metrics
+                and summary_key in observed
+                and not _close_enough(metrics[metric_key], observed[summary_key])
+            ):
+                issues.append(
+                    _issue(
+                        "tumor_boundary_candidate_metric_mismatch",
+                        (
+                            f"candidate.metrics.{metric_key}={metrics[metric_key]!r} does not match "
+                            f"tumor_boundary_summary {observed[summary_key]!r}."
+                        ),
+                        path=f"candidate.metrics.{metric_key}",
+                    )
+                )
+        if (
+            "boundary_self_intersection" in metrics
+            and metrics["boundary_self_intersection"] != observed.get("self_intersection")
+        ):
+            issues.append(
+                _issue(
+                    "tumor_boundary_candidate_metric_mismatch",
+                    (
+                        "candidate.metrics.boundary_self_intersection does not match "
+                        "recomputed tumor_boundary_summary.self_intersection."
+                    ),
+                    path="candidate.metrics.boundary_self_intersection",
+                )
+            )
+    return issues
+
+
 def audit_review_record(record: dict[str, Any], *, source: str = "<memory>") -> dict[str, Any]:
     review = _review(record)
     status = _review_status(record)
@@ -238,6 +427,8 @@ def audit_review_record(record: dict[str, Any], *, source: str = "<memory>") -> 
                 path="agent_trace_gate.passed",
             )
         )
+
+    issues.extend(_tumor_boundary_summary_issues(record))
 
     high_issues = [issue for issue in issues if issue["severity"] == "high"]
     return {

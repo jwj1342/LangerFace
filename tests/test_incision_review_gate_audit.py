@@ -64,6 +64,64 @@ def _record(
     }
 
 
+def _cutaneous_record() -> dict:
+    boundary = [
+        [3.0, 2.0, 0.0],
+        [3.5, 2.8, 0.0],
+        [4.2, 3.1, 0.0],
+        [4.8, 2.7, 0.0],
+        [5.0, 2.0, 0.0],
+        [4.0, 1.4, 0.0],
+    ]
+    record = _record()
+    record["tumor"] = {
+        "kind": "cutaneous",
+        "center": [4.0, 2.0, 0.0],
+        "diameter_mm": 8.0,
+        "depth_mm": None,
+        "margin_mm": 2.0,
+        "boundary": boundary,
+        "boundary_mode": "freehand",
+        "boundary_source": "manual_freehand",
+        "source": "manual_web_agent",
+        "author": "clinician",
+        "units": "mm",
+    }
+    record["candidate"] = {
+        "type": "fusiform",
+        "axis": [1.0, 0.0, 0.0],
+        "polyline": [[-1, 0, 0], [1, 0, 0], [1, 1, 0], [-1, 1, 0]],
+        "metrics": {
+            "rstl_deviation_deg": 0,
+            "boundary_point_count": len(boundary),
+            "boundary_axis_diameter_mm": 21.66666666666666,
+            "boundary_perp_diameter_mm": 18.66666666666667,
+            "boundary_area_mm2": 207.49999999999997,
+            "boundary_area_ratio_to_diameter_disk": 4.1280813364460345,
+            "boundary_self_intersection": False,
+            "boundary_center_shift_mm": 3.4359213546813843,
+        },
+    }
+    record["tumor_boundary_summary"] = {
+        "mode": "freehand",
+        "source": "manual_freehand",
+        "point_count": len(boundary),
+        "boundary_used": True,
+        "units_per_mm": 0.1,
+        "summary_axis": [1.0, 0.0, 0.0],
+        "summary_normal": [0.0, 0.0, 1.0],
+        "center": [4.083333333333333, 2.3333333333333335, 0.0],
+        "axis_diameter_mm": 21.66666666666666,
+        "perp_diameter_mm": 18.66666666666667,
+        "area_mm2": 207.49999999999997,
+        "area_ratio_to_diameter_disk": 4.1280813364460345,
+        "self_intersection": False,
+        "center_shift_mm": 3.4359213546813843,
+        "aspect_ratio": 1.1607142857142851,
+    }
+    return record
+
+
 def test_review_gate_audit_accepts_ready_approved_record():
     report = audit_review_record(_record())
 
@@ -71,6 +129,46 @@ def test_review_gate_audit_accepts_ready_approved_record():
     assert report["passed"] is True
     assert report["issue_count"] == 0
     assert report["expected_review_gate"]["live_overlay_ready"] is True
+
+
+def test_review_gate_audit_accepts_cutaneous_boundary_summary():
+    report = audit_review_record(_cutaneous_record())
+
+    assert report["passed"] is True
+    assert report["issue_count"] == 0
+
+
+def test_review_gate_audit_flags_missing_cutaneous_boundary_summary():
+    record = _cutaneous_record()
+    del record["tumor_boundary_summary"]
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "tumor_boundary_summary_missing" in codes
+
+
+def test_review_gate_audit_flags_boundary_summary_mismatch():
+    record = _cutaneous_record()
+    record["tumor_boundary_summary"]["area_mm2"] = 99.0
+
+    report = audit_review_record(record)
+    mismatches = [issue for issue in report["issues"] if issue["code"] == "tumor_boundary_summary_mismatch"]
+
+    assert report["passed"] is False
+    assert {issue["path"] for issue in mismatches} >= {"tumor_boundary_summary.area_mm2"}
+
+
+def test_review_gate_audit_flags_boundary_candidate_metric_mismatch():
+    record = _cutaneous_record()
+    record["candidate"]["metrics"]["boundary_axis_diameter_mm"] = 10.0
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "tumor_boundary_candidate_metric_mismatch" in codes
 
 
 def test_review_gate_audit_flags_approved_record_without_reviewer():
