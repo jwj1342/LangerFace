@@ -15,6 +15,7 @@ const vercel = read("vercel.json");
 const app = read("src/App.tsx");
 const typedStore = read("src/stores/appStore.ts");
 const incisionRoute = read("src/routes/IncisionRoute.tsx");
+const incisionWorkbench = read("src/routes/IncisionWorkbench.tsx");
 const threeRoute = read("src/routes/ThreePreviewRoute.tsx");
 const worker = read("src/workers/workflow.worker.ts");
 const workerClient = read("src/services/workflowWorkerClient.ts");
@@ -59,6 +60,23 @@ assert.ok(typedStore.includes("interface AppState"), "Zustand store is typed");
 assert.ok(incisionRoute.includes("__LANGERFACE_REACT_MANAGED__"), "React incision route disables controller auto-mount");
 assert.ok(incisionRoute.includes("mountIncisionAgentWorkbench"), "React incision route mounts the existing controller explicitly");
 assert.ok(incisionRoute.includes("disposeIncisionAgentWorkbench"), "React incision route can dispose the existing controller");
+assert.ok(incisionRoute.includes("<IncisionWorkbench />"), "React incision route renders the workbench as TSX");
+assert.ok(!incisionRoute.includes("DOMParser"), "React incision route should not parse legacy HTML");
+assert.ok(!incisionRoute.includes("innerHTML"), "React incision route should not inject legacy HTML");
+assert.ok(!incisionRoute.includes("incision_agent.html"), "React incision route should not fetch the legacy workbench HTML");
+for (const id of [
+  "tumorKind",
+  "providerBaseUrl",
+  "runAgentBtn",
+  "agentCanvas",
+  "candidateList",
+  "reviewDecision",
+  "stageStatus",
+]) {
+  assert.ok(incisionWorkbench.includes(`id="${id}"`), `React incision workbench exposes #${id}`);
+}
+assert.ok(incisionWorkbench.includes('href="/index.html"'), "React incision workbench uses absolute links outside /app");
+assert.ok(incisionWorkbench.includes('href="/annotate.html"'), "React incision workbench links to 3D annotation from /app safely");
 assert.ok(controller.includes("export function mountIncisionAgentWorkbench"), "incision controller exposes a mount lifecycle");
 assert.ok(controller.includes("export function disposeIncisionAgentWorkbench"), "incision controller exposes a dispose lifecycle");
 assert.ok(controller.includes("cancelAnimationFrame"), "incision controller cancels its render loop on dispose");
