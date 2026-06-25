@@ -336,7 +336,10 @@ def main() -> int:
         )
     except FileNotFoundError as exc:
         print(f"[skip] missing dev-local RSTL/FLAME asset: {exc.filename}")
-        print("       Run tools/build_rstl_direction_prior.py first; for FLAME topology, run tools/export_flame_topology.py after placing licensed FLAME assets locally.")
+        print(
+            "       Run tools/build_rstl_direction_prior.py first; for FLAME topology, run "
+            "tools/export_flame_topology.py after placing licensed FLAME assets locally."
+        )
         return 0
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)

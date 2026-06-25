@@ -169,8 +169,16 @@ def audit_manifest(manifest_path: Path, root: Path) -> dict[str, Any]:
                     errors,
                 )
                 if is_remote_or_generated:
-                    _require(bool(asset.get("remote_filename")), f"{prefix}: remote filename is required", errors)
-                    _require(bool(asset.get("local_cache_path")), f"{prefix}: local cache path is required", errors)
+                    _require(
+                        bool(asset.get("remote_filename")),
+                        f"{prefix}: remote filename is required",
+                        errors,
+                    )
+                    _require(
+                        bool(asset.get("local_cache_path")),
+                        f"{prefix}: local cache path is required",
+                        errors,
+                    )
                     _require(
                         any("not committed" in str(item) for item in asset.get("limitations", [])),
                         f"{prefix}: limitations must state the large JSON is not committed",
