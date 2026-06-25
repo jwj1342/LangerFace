@@ -153,6 +153,8 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     warning_code_counts: Counter[str] = Counter()
     warning_severity_counts: Counter[str] = Counter()
     failure_mode_counts: Counter[str] = Counter()
+    secondary_cue_source_counts: Counter[str] = Counter()
+    secondary_cue_confidence_counts: Counter[str] = Counter()
 
     direction_confidence: list[float] = []
     rstl_deviation: list[float] = []
@@ -162,10 +164,19 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     fusiform_axis_deficit: list[float] = []
     sensitive_margin_distance: list[float] = []
     boundary_area_ratio: list[float] = []
+    lesion_cue_iou: list[float] = []
+    lesion_cue_precision: list[float] = []
+    lesion_cue_recall: list[float] = []
+    wrinkle_cue_precision: list[float] = []
+    wrinkle_cue_recall: list[float] = []
 
     passed_guardrails = 0
     raw_image_sent_count = 0
     secret_leak_count = 0
+    secondary_cue_present_count = 0
+    secondary_cue_manual_confirmed_count = 0
+    secondary_cue_used_for_geometry_count = 0
+    secondary_cue_used_for_agent_prompt_count = 0
 
     for record in records:
         candidate = record.get("candidate") or {}
@@ -219,6 +230,31 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
         if _has_secret_leak(record.get("provider_config") or {}):
             secret_leak_count += 1
 
+        secondary_cues = record.get("secondary_cues") or {}
+        if isinstance(secondary_cues, dict) and secondary_cues.get("present") is True:
+            secondary_cue_present_count += 1
+            if secondary_cues.get("manual_confirmed") is True:
+                secondary_cue_manual_confirmed_count += 1
+            if secondary_cues.get("used_for_geometry") is True:
+                secondary_cue_used_for_geometry_count += 1
+            if secondary_cues.get("used_for_agent_prompt") is True:
+                secondary_cue_used_for_agent_prompt_count += 1
+            secondary_cue_source_counts[str(secondary_cues.get("source") or "unknown")] += 1
+            secondary_cue_confidence_counts[str(secondary_cues.get("confidence_label") or "unknown")] += 1
+
+            lesion = secondary_cues.get("lesion") or {}
+            wrinkle = secondary_cues.get("wrinkle") or {}
+            for target, source, key in [
+                (lesion_cue_iou, lesion, "iou"),
+                (lesion_cue_precision, lesion, "precision"),
+                (lesion_cue_recall, lesion, "recall"),
+                (wrinkle_cue_precision, wrinkle, "precision"),
+                (wrinkle_cue_recall, wrinkle, "recall"),
+            ]:
+                value = _numeric(source.get(key) if isinstance(source, dict) else None)
+                if value is not None:
+                    target.append(value)
+
     record_count = len(records)
     approved = status_counts[STATUS_APPROVED]
     rejected = status_counts[STATUS_REJECTED]
@@ -256,6 +292,29 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
         "privacy_audit": {
             "raw_media_sent_count": raw_image_sent_count,
             "provider_secret_leak_count": secret_leak_count,
+        },
+        "secondary_cues": {
+            "present_count": secondary_cue_present_count,
+            "manual_confirmed_count": secondary_cue_manual_confirmed_count,
+            "manual_confirmation_rate": _ratio(
+                secondary_cue_manual_confirmed_count,
+                secondary_cue_present_count,
+            ),
+            "used_for_geometry_count": secondary_cue_used_for_geometry_count,
+            "used_for_agent_prompt_count": secondary_cue_used_for_agent_prompt_count,
+            "source_counts": dict(sorted(secondary_cue_source_counts.items())),
+            "confidence_label_counts": dict(sorted(secondary_cue_confidence_counts.items())),
+            "metrics": {
+                "lesion_iou": summarize_numbers(lesion_cue_iou),
+                "lesion_precision": summarize_numbers(lesion_cue_precision),
+                "lesion_recall": summarize_numbers(lesion_cue_recall),
+                "wrinkle_precision": summarize_numbers(wrinkle_cue_precision),
+                "wrinkle_recall": summarize_numbers(wrinkle_cue_recall),
+            },
+            "clinical_boundary": (
+                "Secondary cues are low-confidence review context only; "
+                "used_for_geometry_count and used_for_agent_prompt_count must remain 0."
+            ),
         },
         "clinical_boundary": (
             "Aggregated from sanitized review JSON only; this is a research validation summary, "

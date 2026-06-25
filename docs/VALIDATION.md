@@ -99,6 +99,7 @@ python tools/evaluate_stage2_validation.py incision_review_*.json --output stage
 - 医生确认 / 否决状态计数和确认率。
 - guardrail 通过率、warning severity/code 分布。
 - `rstl_deviation_deg`、方向置信度、皮下直径覆盖缺口、梭形长宽比、尖端角误差、边界覆盖缺口、敏感游离缘距离和边界面积比的 count / mean / median / P90 / min / max。
+- `secondary_cues` 汇总：低置信辅助线索导入数、人工确认率、来源/置信标签分布、lesion/wrinkle precision/recall/IoU，以及 `used_for_geometry_count` / `used_for_agent_prompt_count`。后两项必须保持 0。
 - 失败模式计数：脚本会读取人工 `failure_modes`，也会把高层 warning code 映射到 `direction_error`、`region_misclassification`、`sensitive_structure_warning`、`incision_rule_violation`、`tumor_boundary_input_quality` 等验证分类。
 - 隐私审计计数：`raw_media_sent_count` 和 `provider_secret_leak_count` 必须保持 0。
 
