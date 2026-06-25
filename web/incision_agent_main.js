@@ -282,17 +282,25 @@ function setProviderTestState(text, level = "") {
   els.providerTestState.classList.toggle("warn", level === "warn");
 }
 
+function pageIsLocal() {
+  const localHosts = new Set(["", "127.0.0.1", "localhost", "0.0.0.0", "::1"]);
+  return localHosts.has(window.location.hostname);
+}
+
 function normalizeProviderDefaults(previousMode = "") {
   const mode = els.providerMode.value;
   const base = els.providerBaseUrl.value.trim();
   const model = els.providerModel.value.trim();
+  const localPage = pageIsLocal();
   const openAiDefaults = ["http://127.0.0.1:8000/v1", "http://127.0.0.1:11434/v1"];
   const ollamaDefaults = ["http://127.0.0.1:11434"];
   if (mode === "ollama") {
-    if (!base || openAiDefaults.includes(base)) els.providerBaseUrl.value = "http://127.0.0.1:11434";
+    if (localPage && (!base || openAiDefaults.includes(base))) els.providerBaseUrl.value = "http://127.0.0.1:11434";
+    if (!localPage && openAiDefaults.includes(base)) els.providerBaseUrl.value = "";
     if (!model || previousMode === "openai-compatible") els.providerModel.value = "qwen3:8b";
   } else {
-    if (!base || ollamaDefaults.includes(base)) els.providerBaseUrl.value = "http://127.0.0.1:8000/v1";
+    if (localPage && (!base || ollamaDefaults.includes(base))) els.providerBaseUrl.value = "http://127.0.0.1:8000/v1";
+    if (!localPage && ollamaDefaults.includes(base)) els.providerBaseUrl.value = "";
     if (!model || previousMode === "ollama") els.providerModel.value = "Qwen/Qwen3-14B";
   }
 }
@@ -305,10 +313,8 @@ function localProviderFromRemotePageMessage(cfg = providerConfig()) {
     return "";
   }
   const localHosts = new Set(["127.0.0.1", "localhost", "0.0.0.0", "::1"]);
-  const pageHost = window.location.hostname;
-  const localPage = !pageHost || localHosts.has(pageHost);
-  if (localPage || !localHosts.has(url.hostname)) return "";
-  return `当前页面来自 ${window.location.origin}，浏览器直连 ${url.host} 会访问你本机的 Ollama/Provider，通常会被 CORS 或 Private Network 策略拦截。请改用本地前端页面测试，或把 Provider 暴露为允许该 origin 的 HTTPS/API 地址。`;
+  if (pageIsLocal() || !localHosts.has(url.hostname)) return "";
+  return `当前页面来自 ${window.location.origin}，${url.host} 指的是打开浏览器这台机器，不是 Vercel 或远端 Provider。系统会继续发送测试请求；如果 DevTools 显示 CORS/Private Network 拦截，请改填一个允许该 origin 访问的 HTTPS Provider 地址。`;
 }
 
 function redactedProviderConfig() {
@@ -352,11 +358,8 @@ async function testProviderEndpoint() {
     const cfg = providerConfig();
     const localRemoteMessage = localProviderFromRemotePageMessage(cfg);
     if (localRemoteMessage) {
-      setProviderTestState(localRemoteMessage, "warn");
-      els.providerState.textContent = "Provider 未连接";
-      els.providerState.style.color = "#b45309";
-      els.stageStatus.textContent = "远端页面不能默认直连本机 Ollama；请使用本地前端或配置允许 CORS 的 Provider 地址。";
-      return;
+      setProviderTestState(`${localRemoteMessage} 正在继续发送测试请求…`, "warn");
+      els.stageStatus.textContent = "检测到远端页面直连 localhost Provider；仍将发送测试请求，结果以浏览器网络面板为准。";
     }
     const result = await testProviderConnection(cfg, {
       timeoutMs: Math.min(Number(els.providerTimeout.value) * 1000, 10000),

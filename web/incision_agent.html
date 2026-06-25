@@ -157,7 +157,7 @@
         <option value="openai-compatible">OpenAI-compatible / vLLM</option>
         <option value="ollama">Ollama native</option>
       </select>
-      <input id="providerBaseUrl" class="text-input" value="http://127.0.0.1:11434" placeholder="Ollama: http://127.0.0.1:11434；OpenAI-compatible: https://.../v1" />
+      <input id="providerBaseUrl" class="text-input" value="" placeholder="Vercel 调试请填可从浏览器访问的 HTTPS Provider；本地 Ollama 才填 http://127.0.0.1:11434" />
       <input id="providerModel" class="text-input" value="qwen3:8b" placeholder="模型名，如 qwen3:8b 或 Qwen/Qwen3-14B" />
       <input id="providerApiKey" class="text-input" type="password" placeholder="API Key（Provider 需要时填写；导出会脱敏）" />
       <div>
@@ -165,7 +165,7 @@
         <input id="providerTimeout" type="range" min="5" max="180" value="60" />
       </div>
       <button class="btn" id="testProviderBtn">测试 LLM Provider 连接</button>
-      <p class="agent-note" id="providerTestState">尚未测试 LLM Provider 连通性。Ollama Native 会请求 /api/tags；OpenAI-compatible 会请求 /models。</p>
+      <p class="agent-note" id="providerTestState">尚未测试 LLM Provider 连通性。Vercel 调试请填写可从浏览器访问并允许该 preview origin 的 HTTPS Provider；Ollama Native 会请求 /api/tags，OpenAI-compatible 会请求 /models。</p>
       <details class="advanced-config">
         <summary>高级：规划后端接口</summary>
         <label class="check"><input type="checkbox" id="useAgentServer" /> 使用后端 Agent 编排</label>

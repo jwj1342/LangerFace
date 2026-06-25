@@ -118,7 +118,8 @@ assert.ok(js.includes("handleAgentStreamEvent"), "workbench consumes agent SSE t
 assert.ok(js.includes("stream: true"), "workbench prefers streaming agent trace");
 assert.ok(js.includes("testProviderConnection"), "workbench can test Ollama/OpenAI-compatible provider connectivity without generating a candidate");
 assert.ok(js.includes("Provider 连接失败"), "workbench reports direct LLM Provider connectivity failures");
-assert.ok(js.includes("localProviderFromRemotePageMessage"), "workbench guards remote pages from direct localhost provider CORS failures");
+assert.ok(js.includes("localProviderFromRemotePageMessage"), "workbench warns remote pages before direct localhost provider tests");
+assert.ok(js.includes("仍将发送测试请求"), "workbench still sends provider test requests so DevTools can show the real network result");
 assert.ok(js.includes("Agent 代理不可用，已改用浏览器确定性工具"), "workbench explains deterministic browser fallback in Chinese");
 assert.ok(js.includes('event === "trace_gate"'), "workbench consumes agent trace gate SSE events");
 assert.ok(js.includes('event === "execution_event"'), "workbench consumes Agent execution SSE events");
