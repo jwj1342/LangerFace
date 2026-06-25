@@ -21,6 +21,8 @@ assert.ok(html.includes('id="reviewNotes"'), "workbench exposes clinician review
 assert.ok(html.includes('id="guardrailDetails"'), "workbench exposes guardrail detail feedback");
 assert.ok(html.includes('id="directionSource"'), "workbench exposes direction source explanation");
 assert.ok(html.includes('id="agentGate"'), "workbench exposes agent trace gate feedback");
+assert.ok(html.includes('id="agentPlanList"'), "workbench exposes Agent ReAct plan list");
+assert.ok(html.includes("react-plan-step"), "workbench styles Agent ReAct plan steps");
 assert.ok(html.includes('id="agentComparison"'), "workbench exposes backend agent candidate comparison");
 assert.ok(html.includes('id="approveCandidateBtn"'), "workbench exposes candidate approval action");
 assert.ok(html.includes('id="rejectCandidateBtn"'), "workbench exposes candidate rejection action");
@@ -50,6 +52,9 @@ assert.ok(js.includes("guardrail_summary"), "review records include guardrail su
 assert.ok(js.includes("review_gate"), "review records include review gate state");
 assert.ok(js.includes("agent_trace_gate"), "review records include agent trace gate state");
 assert.ok(js.includes("agent_react_plan"), "review records include Agent ReAct plan state");
+assert.ok(js.includes("renderAgentReactPlan"), "workbench renders Agent ReAct plan steps");
+assert.ok(js.includes("observed_actions"), "ReAct plan UI shows observed tool actions");
+assert.ok(js.includes("trace indexes"), "ReAct plan UI shows linked trace indexes");
 assert.ok(js.includes("agent-trace-gate/v0.1"), "agent trace gate has an explicit schema");
 assert.ok(js.includes("AGENT_TRACE_GATE_REQUIRED"), "workbench defines required agent tool actions");
 assert.ok(js.includes("summarize_tumor_input_quality"), "agent gate requires tumor input quality tool");

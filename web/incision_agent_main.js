@@ -69,6 +69,7 @@ const els = {
   guardrailVal: $("guardrailVal"),
   directionSource: $("directionSource"),
   agentGate: $("agentGate"),
+  agentPlanList: $("agentPlanList"),
   agentComparison: $("agentComparison"),
   guardrailDetails: $("guardrailDetails"),
   llmSummary: $("llmSummary"),
@@ -774,6 +775,7 @@ function handleAgentStreamEvent(trace, evt) {
   }
   if (event === "react_plan") {
     const plan = data || {};
+    renderAgentReactPlan(plan);
     els.stageStatus.textContent = plan.passed
       ? `Agent ReAct 计划已通过：${plan.completed_step_count || 0}/${plan.step_count || 0} 步`
       : `Agent ReAct 计划需复核：失败 ${plan.failed_step_count || 0} 步`;
@@ -840,6 +842,41 @@ function renderAgentGate(result) {
   const status = gate.passed ? "通过" : `未通过${missing ? `；缺 ${missing}` : ""}`;
   els.agentGate.textContent = `Agent 工具门控：${status} · ${gate.observed_actions.length} 个 trace 动作 · ${gate.boundary}`;
   els.agentGate.title = `observed_actions=${gate.observed_actions.join(", ")}`;
+}
+
+function renderAgentReactPlan(plan) {
+  if (!els.agentPlanList) return;
+  els.agentPlanList.innerHTML = "";
+  const steps = Array.isArray(plan?.steps) ? plan.steps : [];
+  if (!steps.length) {
+    const div = document.createElement("div");
+    div.className = "react-plan-step warn";
+    div.textContent = "Agent ReAct 计划：尚未生成。";
+    els.agentPlanList.append(div);
+    return;
+  }
+  for (const [idx, step] of steps.entries()) {
+    const div = document.createElement("div");
+    const status = String(step.status || "unknown");
+    const warn = !status.startsWith("completed") || status.includes("retry") || status.includes("recovery");
+    div.className = `react-plan-step${warn ? " warn" : ""}`;
+    const top = document.createElement("div");
+    top.className = "top";
+    const title = document.createElement("strong");
+    title.textContent = `${idx + 1}. ${step.label || step.id || "计划步骤"}`;
+    const pill = document.createElement("span");
+    pill.className = `status-pill ${warn ? "warn" : "ok"}`;
+    pill.textContent = status;
+    top.append(title, pill);
+    const observed = (step.observed_actions || []).join(" · ") || "未观察到工具动作";
+    const issues = (step.issues || []).length ? `；问题：${step.issues.join("；")}` : "";
+    const meta = document.createElement("p");
+    meta.textContent = `${step.intent || ""}${step.intent ? " · " : ""}工具：${observed}${issues}`;
+    const indexes = document.createElement("p");
+    indexes.textContent = `trace indexes: ${(step.trace_indexes || []).join(", ") || "—"}`;
+    div.append(top, meta, indexes);
+    els.agentPlanList.append(div);
+  }
 }
 
 function formatRecoveredFailureSummary(audit, includeError = false) {
@@ -914,6 +951,7 @@ function renderResult(result) {
   renderGuardrailDetails(result.guardrails);
   renderDirectionSource(result);
   renderAgentGate(result);
+  renderAgentReactPlan(result.agent_react_plan);
   renderAgentComparison(result);
   const tumorQuality = tumorQualityFor(result);
   if (tumorQuality.warning_count) {

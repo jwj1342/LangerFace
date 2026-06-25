@@ -19,6 +19,12 @@
   .trace-step p{margin:7px 0 0;font-size:11.5px;color:var(--muted);line-height:1.45}
   .trace-step pre{white-space:pre-wrap;word-break:break-word;max-height:150px;overflow:auto;margin:8px 0 0;
     font-size:11px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px;color:#34404b}
+  .react-plan-list{display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:220px;overflow:auto}
+  .react-plan-step{border:1px solid var(--line);border-radius:8px;padding:8px;background:#fbfcf8}
+  .react-plan-step.warn{border-color:#f4c96b;background:#fff9e8}
+  .react-plan-step .top{display:flex;justify-content:space-between;gap:10px;align-items:center}
+  .react-plan-step strong{font-size:12px}
+  .react-plan-step p{margin:5px 0 0;font-size:11px;color:var(--muted);line-height:1.4}
   .status-pill{font-size:11px;font-weight:700;border-radius:999px;padding:4px 8px;background:#eef0ea;color:#44505d}
   .status-pill.ok{background:#d9f2e7;color:var(--green-d)}
   .status-pill.warn{background:#fff1c8;color:#8a5a00}
@@ -149,6 +155,7 @@
       <p class="hint" id="llmSummary">尚未生成。</p>
       <p class="guardrail-details" id="directionSource">方向依据：尚未生成。</p>
       <p class="guardrail-details" id="agentGate">Agent 工具门控：尚未生成。</p>
+      <div class="react-plan-list" id="agentPlanList" aria-label="Agent ReAct 计划步骤"></div>
       <p class="guardrail-details" id="agentComparison">Agent 候选比较：尚未生成。</p>
       <p class="hint" id="nextStep"></p>
       <p class="guardrail-details" id="guardrailDetails">Guardrails 尚未运行。</p>
