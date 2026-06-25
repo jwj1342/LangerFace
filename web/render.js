@@ -2,7 +2,8 @@
 import { SOLID, BAND, ZOOM_REGIONS } from "./constants.js";
 import { ctx, els } from "./dom.js";
 import { innerMouthTriangles, mapAtlas, pointInHandMasks, visibleRuns, visibleTriangles } from "./geometry.js";
-import { mapSurfaceRefs } from "./incision_overlay.js";
+import { mapSurfaceRefs, measureIncisionOverlayRegistration } from "./incision_overlay.js";
+import { countMetric, recordMetricSample } from "./logger.js";
 import { modelState, renderState, sourceState } from "./state.js";
 import { setLive } from "./ui.js";
 
@@ -58,7 +59,7 @@ export function draw(lm, W, H, masks = []) {
       ctx.beginPath(); ctx.arc(lm[i][0], lm[i][1], Math.max(1, W / 1100), 0, 6.283); ctx.fill();
     }
   }
-  drawIncisionOverlay(lm, W, masks, vis, innerMouth);
+  drawIncisionOverlay(lm, W, H, masks, vis, innerMouth);
   ctx.restore();
   return count;
 }
@@ -89,9 +90,32 @@ function strokeOverlayRefs(refs, lm, masks, vis, innerMouth, style) {
   ctx.setLineDash([]);
 }
 
-function drawIncisionOverlay(lm, W, masks, vis, innerMouth) {
+function recordIncisionOverlayRegistration(overlay, lm, W, H) {
+  const registration = measureIncisionOverlayRegistration(overlay, lm, modelState.triangles, {
+    frameWidth: W,
+    frameHeight: H,
+  });
+  countMetric(registration.passed ? "incisionOverlay.registration.pass" : "incisionOverlay.registration.fail");
+  recordMetricSample("incisionOverlay.registration.mappedPointCount", registration.mapped_point_count, {
+    passed: registration.passed,
+    reason: registration.reason,
+  });
+  recordMetricSample("incisionOverlay.registration.outOfFrameCount", registration.out_of_frame_count, {
+    passed: registration.passed,
+    reason: registration.reason,
+  });
+  if (registration.bbox_px?.diagonal_px != null) {
+    recordMetricSample("incisionOverlay.registration.bboxDiagonalPx", registration.bbox_px.diagonal_px, {
+      passed: registration.passed,
+      reason: registration.reason,
+    });
+  }
+}
+
+function drawIncisionOverlay(lm, W, H, masks, vis, innerMouth) {
   const overlay = renderState.incisionOverlay;
   if (!overlay) return;
+  recordIncisionOverlayRegistration(overlay, lm, W, H);
   ctx.save();
   ctx.globalAlpha = 0.98;
   const baseWidth = Math.max(2, W / 520);

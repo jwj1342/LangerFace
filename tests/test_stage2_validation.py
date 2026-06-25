@@ -19,6 +19,7 @@ def _record(
     metrics: dict,
     secondary_cues: dict | None = None,
     overlay_stability: dict | None = None,
+    overlay_registration: dict | None = None,
 ) -> dict:
     record = {
         "schema_version": "incision-review-record/v0.3",
@@ -52,6 +53,8 @@ def _record(
     }
     if overlay_stability is not None:
         record["incision_overlay_stability"] = overlay_stability
+    if overlay_registration is not None:
+        record["incision_overlay_registration"] = overlay_registration
     return record
 
 
@@ -83,6 +86,54 @@ def _overlay_stability(*, passed: bool, rms: float, p95: float, max_px: float, r
     }
 
 
+def _overlay_registration(
+    *,
+    passed: bool,
+    mapped: int,
+    out_of_frame_count: int,
+    degenerate_triangle_count: int,
+    reason: str,
+) -> dict:
+    return {
+        "schema_version": "incision-overlay-registration/v0.1",
+        "passed": passed,
+        "reason": reason,
+        "reasons": [reason],
+        "thresholds": {
+            "min_mapped_point_count": 3,
+            "min_candidate_point_count": 2,
+            "min_triangle_area_px2": 1,
+            "min_overlay_diagonal_px": 4,
+            "max_overlay_frame_fraction": 0.95,
+            "max_out_of_frame_fraction": 0,
+            "context": "runtime_landmark_surface_ref_projection",
+        },
+        "total_ref_count": 7,
+        "mapped_point_count": mapped,
+        "candidate_point_count": 2 if mapped >= 2 else mapped,
+        "tumor_center_mapped": mapped >= 1,
+        "invalid_ref_count": 0,
+        "missing_landmark_count": 0,
+        "degenerate_triangle_count": degenerate_triangle_count,
+        "out_of_frame_count": out_of_frame_count,
+        "out_of_frame_fraction": out_of_frame_count / mapped if mapped else None,
+        "bbox_px": {
+            "min_x": 20,
+            "min_y": 20,
+            "max_x": 80,
+            "max_y": 70,
+            "width": 60,
+            "height": 50,
+            "diagonal_px": 78.102,
+            "frame_fraction": 0.552,
+        },
+        "groups": {
+            "tumor_center": {"ref_count": 1, "mapped_count": 1 if mapped >= 1 else 0},
+            "candidate_polyline": {"ref_count": 2, "mapped_count": 2 if mapped >= 2 else mapped},
+        },
+    }
+
+
 def _export_payload() -> dict:
     current = _record(
         record_id="linear-ok",
@@ -98,6 +149,13 @@ def _export_payload() -> dict:
             p95=1.0,
             max_px=1.4,
             reason="within_static_overlay_jitter_thresholds",
+        ),
+        overlay_registration=_overlay_registration(
+            passed=True,
+            mapped=7,
+            out_of_frame_count=0,
+            degenerate_triangle_count=0,
+            reason="runtime_projection_registration_ready",
         ),
         secondary_cues={
             "present": True,
@@ -133,6 +191,13 @@ def _export_payload() -> dict:
                 p95=5.1,
                 max_px=9.0,
                 reason="jitter_threshold_exceeded",
+            ),
+            overlay_registration=_overlay_registration(
+                passed=False,
+                mapped=7,
+                out_of_frame_count=2,
+                degenerate_triangle_count=1,
+                reason="out_of_frame_projection",
             ),
         ),
         _record(
@@ -187,8 +252,24 @@ def test_stage2_validation_summary_aggregates_review_export():
         "within_static_overlay_jitter_thresholds": 1,
     }
     assert summary["incision_overlay_stability"]["context_counts"] == {"static_camera_or_paused_video": 2}
+    assert summary["metrics"]["incision_overlay_registration_mapped_point_count"]["count"] == 2
+    assert summary["metrics"]["incision_overlay_registration_out_of_frame_count"]["max"] == 2
+    assert summary["metrics"]["incision_overlay_registration_degenerate_triangle_count"]["max"] == 1
+    assert summary["metrics"]["incision_overlay_registration_bbox_diagonal_px"]["mean"] == 78.102
+    assert summary["incision_overlay_registration"]["present_count"] == 2
+    assert summary["incision_overlay_registration"]["passed_count"] == 1
+    assert summary["incision_overlay_registration"]["failed_count"] == 1
+    assert summary["incision_overlay_registration"]["pass_rate"] == 0.5
+    assert summary["incision_overlay_registration"]["reason_counts"] == {
+        "out_of_frame_projection": 1,
+        "runtime_projection_registration_ready": 1,
+    }
+    assert summary["incision_overlay_registration"]["context_counts"] == {
+        "runtime_landmark_surface_ref_projection": 2
+    }
     assert summary["failure_mode_counts"]["incision_rule_violation"] == 1
     assert summary["failure_mode_counts"]["overlay_instability"] == 1
+    assert summary["failure_mode_counts"]["overlay_registration_failure"] == 1
     assert summary["failure_mode_counts"]["tumor_boundary_input_quality"] == 1
     assert summary["failure_mode_counts"]["review_rejected"] == 1
     assert summary["privacy_audit"]["raw_media_sent_count"] == 0

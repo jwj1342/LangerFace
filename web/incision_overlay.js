@@ -181,15 +181,21 @@ export function mapSurfaceRefs(refs, landmarksPx, triangles) {
   return { pts, tris: triIds };
 }
 
+function overlayRefGroups(overlay) {
+  return [
+    ["tumor_center", [overlay?.tumor?.center_ref].filter(Boolean)],
+    ["tumor_boundary", overlay?.tumor?.boundary_refs || []],
+    ["candidate_polyline", overlay?.candidate?.polyline_refs || []],
+  ];
+}
+
 function overlayPointTracks(overlay, landmarksPx, triangles) {
   const tracks = [];
   const addTrack = (group, refs) => {
     const mapped = mapSurfaceRefs(refs, landmarksPx, triangles);
     mapped.pts.forEach((pt, i) => tracks.push({ group, index: i, pt }));
   };
-  addTrack("tumor_center", [overlay?.tumor?.center_ref].filter(Boolean));
-  addTrack("tumor_boundary", overlay?.tumor?.boundary_refs || []);
-  addTrack("candidate_polyline", overlay?.candidate?.polyline_refs || []);
+  for (const [group, refs] of overlayRefGroups(overlay)) addTrack(group, refs);
   return tracks;
 }
 
@@ -210,6 +216,176 @@ function displacementStats(values) {
 
 function roundMetric(value) {
   return value == null ? null : Math.round(value * 1000) / 1000;
+}
+
+function finitePoint(pt) {
+  return Array.isArray(pt) && pt.length >= 2 && Number.isFinite(Number(pt[0])) && Number.isFinite(Number(pt[1]));
+}
+
+function triangleAreaPx2(a, b, c) {
+  return Math.abs(
+    (Number(b[0]) - Number(a[0])) * (Number(c[1]) - Number(a[1]))
+    - (Number(c[0]) - Number(a[0])) * (Number(b[1]) - Number(a[1])),
+  ) / 2;
+}
+
+function mappedPointFromRef(ref, a, b, c) {
+  const u = Number(ref.u), v = Number(ref.v), w = Number(ref.w ?? (1 - u - v));
+  return [
+    u * Number(a[0]) + v * Number(b[0]) + w * Number(c[0]),
+    u * Number(a[1]) + v * Number(b[1]) + w * Number(c[1]),
+    u * Number(a[2] || 0) + v * Number(b[2] || 0) + w * Number(c[2] || 0),
+  ];
+}
+
+export function measureIncisionOverlayRegistration(
+  overlay,
+  landmarksPx,
+  triangles,
+  {
+    frameWidth = null,
+    frameHeight = null,
+    minMappedPointCount = 3,
+    minCandidatePointCount = 2,
+    minTriangleAreaPx2 = 1,
+    minOverlayDiagonalPx = 4,
+    maxOverlayFrameFraction = 0.95,
+    maxOutOfFrameFraction = 0,
+    context = "runtime_landmark_surface_ref_projection",
+  } = {},
+) {
+  const thresholds = {
+    min_mapped_point_count: minMappedPointCount,
+    min_candidate_point_count: minCandidatePointCount,
+    min_triangle_area_px2: minTriangleAreaPx2,
+    min_overlay_diagonal_px: minOverlayDiagonalPx,
+    max_overlay_frame_fraction: maxOverlayFrameFraction,
+    max_out_of_frame_fraction: maxOutOfFrameFraction,
+    context,
+  };
+  const frameKnown = Number.isFinite(Number(frameWidth)) && Number.isFinite(Number(frameHeight))
+    && Number(frameWidth) > 0 && Number(frameHeight) > 0;
+  if (!validateIncisionOverlay(overlay) || !Array.isArray(landmarksPx) || !Array.isArray(triangles)) {
+    return {
+      schema_version: "incision-overlay-registration/v0.1",
+      passed: false,
+      reason: "invalid_overlay_or_missing_runtime_geometry",
+      reasons: ["invalid_overlay_or_missing_runtime_geometry"],
+      thresholds,
+      frame: frameKnown ? { width: Number(frameWidth), height: Number(frameHeight) } : null,
+      total_ref_count: 0,
+      mapped_point_count: 0,
+      candidate_point_count: 0,
+      tumor_center_mapped: false,
+      invalid_ref_count: 0,
+      missing_landmark_count: 0,
+      degenerate_triangle_count: 0,
+      out_of_frame_count: 0,
+      out_of_frame_fraction: null,
+      bbox_px: null,
+      groups: {},
+      clinical_boundary: "Runtime projection registration is an engineering QA signal, not clinical AR registration.",
+    };
+  }
+
+  const groupCounts = {};
+  const mappedPoints = [];
+  let totalRefCount = 0;
+  let invalidRefCount = 0;
+  let missingLandmarkCount = 0;
+  let degenerateTriangleCount = 0;
+  let outOfFrameCount = 0;
+  for (const [group, refs] of overlayRefGroups(overlay)) {
+    groupCounts[group] ||= { ref_count: 0, mapped_count: 0 };
+    for (const ref of refs) {
+      totalRefCount += 1;
+      groupCounts[group].ref_count += 1;
+      const tri = triangles[ref?.tri];
+      if (!tri || tri.length < 3) {
+        invalidRefCount += 1;
+        continue;
+      }
+      const a = landmarksPx[tri[0]], b = landmarksPx[tri[1]], c = landmarksPx[tri[2]];
+      if (!finitePoint(a) || !finitePoint(b) || !finitePoint(c)) {
+        missingLandmarkCount += 1;
+        continue;
+      }
+      if (triangleAreaPx2(a, b, c) < minTriangleAreaPx2) degenerateTriangleCount += 1;
+      const pt = mappedPointFromRef(ref, a, b, c);
+      if (!finitePoint(pt)) {
+        invalidRefCount += 1;
+        continue;
+      }
+      mappedPoints.push({ group, pt });
+      groupCounts[group].mapped_count += 1;
+      if (
+        frameKnown
+        && (pt[0] < 0 || pt[0] > Number(frameWidth) || pt[1] < 0 || pt[1] > Number(frameHeight))
+      ) {
+        outOfFrameCount += 1;
+      }
+    }
+  }
+
+  let bbox = null;
+  if (mappedPoints.length) {
+    const xs = mappedPoints.map(({ pt }) => Number(pt[0]));
+    const ys = mappedPoints.map(({ pt }) => Number(pt[1]));
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const width = maxX - minX, height = maxY - minY;
+    const diagonal = Math.hypot(width, height);
+    const frameDiagonal = frameKnown ? Math.hypot(Number(frameWidth), Number(frameHeight)) : null;
+    bbox = {
+      min_x: roundMetric(minX),
+      min_y: roundMetric(minY),
+      max_x: roundMetric(maxX),
+      max_y: roundMetric(maxY),
+      width: roundMetric(width),
+      height: roundMetric(height),
+      diagonal_px: roundMetric(diagonal),
+      frame_fraction: frameDiagonal ? roundMetric(diagonal / frameDiagonal) : null,
+    };
+  }
+
+  const candidatePointCount = groupCounts.candidate_polyline?.mapped_count || 0;
+  const tumorCenterMapped = (groupCounts.tumor_center?.mapped_count || 0) >= 1;
+  const outOfFrameFraction = mappedPoints.length ? outOfFrameCount / mappedPoints.length : null;
+  const reasons = [];
+  if (invalidRefCount > 0) reasons.push("invalid_surface_ref");
+  if (missingLandmarkCount > 0) reasons.push("missing_runtime_landmark");
+  if (degenerateTriangleCount > 0) reasons.push("degenerate_runtime_triangle");
+  if (mappedPoints.length < minMappedPointCount || candidatePointCount < minCandidatePointCount || !tumorCenterMapped) {
+    reasons.push("insufficient_mapped_overlay_points");
+  }
+  if (bbox && bbox.diagonal_px < minOverlayDiagonalPx) reasons.push("overlay_bbox_too_small");
+  if (bbox?.frame_fraction != null && bbox.frame_fraction > maxOverlayFrameFraction) {
+    reasons.push("overlay_bbox_too_large_for_frame");
+  }
+  if (outOfFrameFraction != null && outOfFrameFraction > maxOutOfFrameFraction) {
+    reasons.push("out_of_frame_projection");
+  }
+  const passed = reasons.length === 0;
+  return {
+    schema_version: "incision-overlay-registration/v0.1",
+    passed,
+    reason: passed ? "runtime_projection_registration_ready" : reasons[0],
+    reasons: passed ? ["runtime_projection_registration_ready"] : reasons,
+    thresholds,
+    frame: frameKnown ? { width: Number(frameWidth), height: Number(frameHeight) } : null,
+    total_ref_count: totalRefCount,
+    mapped_point_count: mappedPoints.length,
+    candidate_point_count: candidatePointCount,
+    tumor_center_mapped: tumorCenterMapped,
+    invalid_ref_count: invalidRefCount,
+    missing_landmark_count: missingLandmarkCount,
+    degenerate_triangle_count: degenerateTriangleCount,
+    out_of_frame_count: outOfFrameCount,
+    out_of_frame_fraction: roundMetric(outOfFrameFraction),
+    bbox_px: bbox,
+    groups: groupCounts,
+    clinical_boundary: "Runtime projection registration is an engineering QA signal, not clinical AR registration.",
+  };
 }
 
 export function measureIncisionOverlayJitter(
@@ -317,6 +493,7 @@ export function clearIncisionOverlay() {
 export const __incisionOverlayForTests = {
   compileIncisionOverlay,
   mapSurfaceRefs,
+  measureIncisionOverlayRegistration,
   measureIncisionOverlayJitter,
   pointToSurfaceRef,
   validateIncisionOverlay,

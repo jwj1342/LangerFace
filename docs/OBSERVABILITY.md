@@ -50,6 +50,8 @@ window.exportLangerfaceDiagnostics()
 - `faceLandmarker.noFaceFrame.camera`
 - `runtime.error`
 - `runtime.unhandledrejection`
+- `incisionOverlay.registration.pass`
+- `incisionOverlay.registration.fail`
 
 浏览器端会自动捕获 `window.error` 与 `unhandledrejection`，写入上述计数器和
 `runtime.error` / `runtime.unhandledrejection` 事件。事件 detail 只记录 message、
@@ -77,6 +79,13 @@ window.exportLangerfaceDiagnostics()
 - `frame.fps`
 - `frame.durationMs`
 - `scan.durationMs`
+- `incisionOverlay.registration.mappedPointCount`
+- `incisionOverlay.registration.outOfFrameCount`
+- `incisionOverlay.registration.bboxDiagonalPx`
+
+切口 overlay registration 指标只来自 landmarks、三角面索引和 surface refs，不包含照片、
+视频帧或 canvas 像素。它用于 preview/回归时判断 `incision-overlay/v0.1` 是否能在当前
+runtime landmarks 上投射，不代表患者个体化临床 AR 配准。
 
 ## 资产版本
 

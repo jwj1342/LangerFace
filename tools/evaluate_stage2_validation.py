@@ -123,6 +123,9 @@ def _failure_modes(record: dict[str, Any]) -> list[str]:
     stability = _overlay_stability(record)
     if stability and stability.get("passed") is False:
         modes.append("overlay_instability")
+    registration = _overlay_registration(record)
+    if registration and registration.get("passed") is False:
+        modes.append("overlay_registration_failure")
     for warning in _warnings(record):
         code = str(warning.get("code") or "")
         mapped = WARNING_FAILURE_MODE_MAP.get(code)
@@ -142,6 +145,19 @@ def _overlay_stability(record: dict[str, Any]) -> dict[str, Any] | None:
     if stability.get("schema_version") != "incision-overlay-stability/v0.1":
         return None
     return stability
+
+
+def _overlay_registration(record: dict[str, Any]) -> dict[str, Any] | None:
+    registration = (
+        record.get("incision_overlay_registration")
+        or record.get("overlay_registration")
+        or (record.get("incision_overlay") or {}).get("registration")
+    )
+    if not isinstance(registration, dict):
+        return None
+    if registration.get("schema_version") != "incision-overlay-registration/v0.1":
+        return None
+    return registration
 
 
 def _has_secret_leak(value: Any, key_path: tuple[str, ...] = ()) -> bool:
@@ -190,6 +206,15 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     overlay_jitter_max: list[float] = []
     overlay_tracked_point_count: list[float] = []
     overlay_sample_count: list[float] = []
+    overlay_registration_mapped_point_count: list[float] = []
+    overlay_registration_candidate_point_count: list[float] = []
+    overlay_registration_invalid_ref_count: list[float] = []
+    overlay_registration_missing_landmark_count: list[float] = []
+    overlay_registration_degenerate_triangle_count: list[float] = []
+    overlay_registration_out_of_frame_count: list[float] = []
+    overlay_registration_out_of_frame_fraction: list[float] = []
+    overlay_registration_bbox_diagonal: list[float] = []
+    overlay_registration_bbox_frame_fraction: list[float] = []
 
     passed_guardrails = 0
     raw_image_sent_count = 0
@@ -203,6 +228,11 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     overlay_stability_failed_count = 0
     overlay_stability_reason_counts: Counter[str] = Counter()
     overlay_stability_context_counts: Counter[str] = Counter()
+    overlay_registration_present_count = 0
+    overlay_registration_passed_count = 0
+    overlay_registration_failed_count = 0
+    overlay_registration_reason_counts: Counter[str] = Counter()
+    overlay_registration_context_counts: Counter[str] = Counter()
 
     for record in records:
         candidate = record.get("candidate") or {}
@@ -267,6 +297,32 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
                 (overlay_jitter_max, overall, "max_px"),
                 (overlay_tracked_point_count, stability, "tracked_point_count"),
                 (overlay_sample_count, stability, "sample_count"),
+            ]:
+                value = _numeric(source.get(key) if isinstance(source, dict) else None)
+                if value is not None:
+                    target.append(value)
+
+        registration = _overlay_registration(record)
+        if registration:
+            overlay_registration_present_count += 1
+            if registration.get("passed") is True:
+                overlay_registration_passed_count += 1
+            elif registration.get("passed") is False:
+                overlay_registration_failed_count += 1
+            overlay_registration_reason_counts[str(registration.get("reason") or "unknown")] += 1
+            thresholds = registration.get("thresholds") or {}
+            overlay_registration_context_counts[str(thresholds.get("context") or "unknown")] += 1
+            bbox = registration.get("bbox_px") or {}
+            for target, source, key in [
+                (overlay_registration_mapped_point_count, registration, "mapped_point_count"),
+                (overlay_registration_candidate_point_count, registration, "candidate_point_count"),
+                (overlay_registration_invalid_ref_count, registration, "invalid_ref_count"),
+                (overlay_registration_missing_landmark_count, registration, "missing_landmark_count"),
+                (overlay_registration_degenerate_triangle_count, registration, "degenerate_triangle_count"),
+                (overlay_registration_out_of_frame_count, registration, "out_of_frame_count"),
+                (overlay_registration_out_of_frame_fraction, registration, "out_of_frame_fraction"),
+                (overlay_registration_bbox_diagonal, bbox, "diagonal_px"),
+                (overlay_registration_bbox_frame_fraction, bbox, "frame_fraction"),
             ]:
                 value = _numeric(source.get(key) if isinstance(source, dict) else None)
                 if value is not None:
@@ -340,6 +396,33 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
             "incision_overlay_jitter_max_px": summarize_numbers(overlay_jitter_max),
             "incision_overlay_tracked_point_count": summarize_numbers(overlay_tracked_point_count),
             "incision_overlay_sample_count": summarize_numbers(overlay_sample_count),
+            "incision_overlay_registration_mapped_point_count": summarize_numbers(
+                overlay_registration_mapped_point_count,
+            ),
+            "incision_overlay_registration_candidate_point_count": summarize_numbers(
+                overlay_registration_candidate_point_count,
+            ),
+            "incision_overlay_registration_invalid_ref_count": summarize_numbers(
+                overlay_registration_invalid_ref_count,
+            ),
+            "incision_overlay_registration_missing_landmark_count": summarize_numbers(
+                overlay_registration_missing_landmark_count,
+            ),
+            "incision_overlay_registration_degenerate_triangle_count": summarize_numbers(
+                overlay_registration_degenerate_triangle_count,
+            ),
+            "incision_overlay_registration_out_of_frame_count": summarize_numbers(
+                overlay_registration_out_of_frame_count,
+            ),
+            "incision_overlay_registration_out_of_frame_fraction": summarize_numbers(
+                overlay_registration_out_of_frame_fraction,
+            ),
+            "incision_overlay_registration_bbox_diagonal_px": summarize_numbers(
+                overlay_registration_bbox_diagonal,
+            ),
+            "incision_overlay_registration_bbox_frame_fraction": summarize_numbers(
+                overlay_registration_bbox_frame_fraction,
+            ),
         },
         "failure_mode_counts": dict(sorted(failure_mode_counts.items())),
         "incision_overlay_stability": {
@@ -352,6 +435,18 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
             "clinical_boundary": (
                 "Overlay stability is an engineering regression metric computed from sanitized "
                 "landmark-frame geometry; it is not a substitute for real video/camera review."
+            ),
+        },
+        "incision_overlay_registration": {
+            "present_count": overlay_registration_present_count,
+            "passed_count": overlay_registration_passed_count,
+            "failed_count": overlay_registration_failed_count,
+            "pass_rate": _ratio(overlay_registration_passed_count, overlay_registration_present_count),
+            "reason_counts": dict(sorted(overlay_registration_reason_counts.items())),
+            "context_counts": dict(sorted(overlay_registration_context_counts.items())),
+            "clinical_boundary": (
+                "Overlay registration is a runtime surface-ref projection QA signal computed from "
+                "sanitized landmark geometry; it is not patient-specific clinical AR registration."
             ),
         },
         "privacy_audit": {

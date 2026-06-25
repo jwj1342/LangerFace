@@ -61,11 +61,48 @@ assert.ok(Math.abs(mapped.pts[0][1] - 20) < 1e-6, "first endpoint y maps through
 assert.ok(Math.abs(mapped.pts[1][0] - 80) < 1e-6, "second endpoint x maps through barycentric ref");
 assert.ok(Math.abs(mapped.pts[1][1] - 20) < 1e-6, "second endpoint y maps through barycentric ref");
 
+const shiftedLandmarks = (dx, dy) => landmarks.map(([x, y, z]) => [x + dx, y + dy, z]);
+
+const registration = T.measureIncisionOverlayRegistration(
+  overlay,
+  landmarks,
+  tris,
+  { frameWidth: 100, frameHeight: 100 },
+);
+assert.equal(registration.schema_version, "incision-overlay-registration/v0.1");
+assert.equal(registration.passed, true, "mapped overlay refs pass runtime projection registration QA");
+assert.equal(registration.reason, "runtime_projection_registration_ready");
+assert.equal(registration.tumor_center_mapped, true, "registration QA requires tumor center projection");
+assert.equal(registration.candidate_point_count, 2, "registration QA counts candidate polyline points");
+assert.equal(registration.invalid_ref_count, 0, "registration QA reports invalid surface refs");
+assert.equal(registration.out_of_frame_count, 0, "registration QA reports out-of-frame projections");
+assert.ok(registration.bbox_px.diagonal_px > 40, "registration QA exposes overlay bounding box size");
+
+const offFrameRegistration = T.measureIncisionOverlayRegistration(
+  overlay,
+  shiftedLandmarks(80, 0),
+  tris,
+  { frameWidth: 100, frameHeight: 100 },
+);
+assert.equal(offFrameRegistration.passed, false, "out-of-frame projection fails registration QA");
+assert.ok(offFrameRegistration.reasons.includes("out_of_frame_projection"));
+assert.ok(offFrameRegistration.out_of_frame_count > 0, "out-of-frame count is reported");
+
+const collapsedLandmarks = landmarks.map(() => [20, 20, 0]);
+const degenerateRegistration = T.measureIncisionOverlayRegistration(
+  overlay,
+  collapsedLandmarks,
+  tris,
+  { frameWidth: 100, frameHeight: 100 },
+);
+assert.equal(degenerateRegistration.passed, false, "collapsed runtime triangles fail registration QA");
+assert.ok(degenerateRegistration.reasons.includes("degenerate_runtime_triangle"));
+assert.ok(degenerateRegistration.reasons.includes("overlay_bbox_too_small"));
+
 const near = T.pointToSurfaceRef([11, 5, 0], verts, tris);
 assert.equal(near.tri, 1, "off-surface point snaps to nearest surface triangle");
 assert.ok(near.distance > 0, "off-surface snap records distance");
 
-const shiftedLandmarks = (dx, dy) => landmarks.map(([x, y, z]) => [x + dx, y + dy, z]);
 const stableJitter = T.measureIncisionOverlayJitter(
   overlay,
   [shiftedLandmarks(0, 0), shiftedLandmarks(0.4, 0.2), shiftedLandmarks(0.1, -0.1)],
