@@ -38,6 +38,7 @@ assert.ok(js.includes("stream: true"), "workbench prefers streaming agent trace"
 assert.ok(js.includes("SSE trace 不可用"), "workbench reports JSON fallback when streaming is unavailable");
 assert.ok(js.includes("建议覆盖项"), "markdown report includes suggested override details");
 assert.ok(js.includes("最近敏感游离缘"), "markdown report includes sensitive free-margin distance");
+assert.ok(js.includes("候选版本"), "markdown report includes candidate version provenance");
 assert.ok(js.includes("发送到实时叠加前，请先确认当前候选草案"), "live overlay requires candidate approval");
 assert.ok(js.includes("当前候选有高风险 guardrail"), "high-risk approval requires review notes");
 

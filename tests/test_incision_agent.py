@@ -180,6 +180,8 @@ def test_linear_subcutaneous_candidate_uses_rstl_axis_and_length_rules():
     assert candidate["metrics"]["diameter_coverage_deficit_mm"] == 0
     assert np.allclose(candidate["endpoints"][0], [3.375, 2.0, 0.0])
     assert np.allclose(candidate["endpoints"][1], [4.625, 2.0, 0.0])
+    assert candidate["provenance"]["candidate_version"] == 1
+    assert candidate["provenance"]["edit_history"] == []
 
 
 def test_linear_candidate_preserves_rstl_confidence_reasons_in_provenance():
@@ -221,6 +223,8 @@ def test_fusiform_cutaneous_candidate_has_three_to_one_default_ratio():
     assert candidate["metrics"]["tip_angle_error_deg"] < 1e-6
     assert 29.0 < _left_tip_angle_deg(candidate) < 32.0
     assert len(candidate["outline"]) > 20
+    assert candidate["provenance"]["candidate_version"] == 1
+    assert candidate["provenance"]["edit_history"] == []
 
 
 def test_fusiform_cutaneous_candidate_uses_freehand_boundary_extent():

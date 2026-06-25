@@ -63,6 +63,8 @@ def linear_subcutaneous_incision(
         "provenance": {
             "generator": "linear_subcutaneous_incision",
             "rules_version": (rules or default_clinical_rules()).get("version"),
+            "candidate_version": 1,
+            "edit_history": [],
             **direction_provenance(direction),
         },
     }

@@ -349,6 +349,40 @@ function directionProvenance(direction = {}) {
   };
 }
 
+function editFingerprint(editRecord) {
+  const raw = [
+    editRecord.angle_offset_deg,
+    editRecord.length_scale,
+    editRecord.width_scale,
+    editRecord.shift_along_mm,
+    editRecord.shift_perp_mm,
+    editRecord.reason,
+  ].join("|");
+  let hash = 0;
+  for (let i = 0; i < raw.length; i++) hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
+  return Math.abs(hash).toString(36);
+}
+
+function versionedEditProvenance(base, editRecord) {
+  const baseProvenance = base.provenance || {};
+  const previousHistory = Array.isArray(baseProvenance.edit_history) ? baseProvenance.edit_history : [];
+  const candidateVersion = Number(baseProvenance.candidate_version || 1) + 1;
+  const editEntry = {
+    ...editRecord,
+    edit_id: `edit_v${candidateVersion}_${editFingerprint(editRecord)}`,
+    parent_candidate_id: base.id,
+    resulting_candidate_version: candidateVersion,
+  };
+  return {
+    ...baseProvenance,
+    source_candidate_id: base.id,
+    parent_candidate_id: base.id,
+    candidate_version: candidateVersion,
+    clinician_edit: editEntry,
+    edit_history: previousHistory.concat([editEntry]),
+  };
+}
+
 export function normalizeTumorInput(tumor) {
   if (!["subcutaneous", "cutaneous"].includes(tumor.kind)) throw new Error("tumor.kind must be subcutaneous or cutaneous");
   if (!Array.isArray(tumor.center) || tumor.center.length !== 3) throw new Error("tumor.center must be a 3D point");
@@ -412,6 +446,8 @@ export function generateLinearIncision(tumorInput, direction, unitsPerMm, rules 
     provenance: {
       generator: "generateLinearIncision",
       rules_version: rules.version,
+      candidate_version: 1,
+      edit_history: [],
       ...directionProvenance(direction),
     },
   };
@@ -633,6 +669,8 @@ export function generateFusiformIncision(tumorInput, direction, unitsPerMm, norm
       generator: "generateFusiformIncision",
       rules_version: rules.version,
       boundary_source: tumor.boundary_source,
+      candidate_version: 1,
+      edit_history: [],
       ...directionProvenance(direction),
     },
   };
@@ -929,11 +967,7 @@ export function applyCandidateEdit(plan, edit = {}, normal = [0, 0, 1], unitsPer
   }
 
   if (verts) annotateCandidateSensitiveDistances(candidate, verts);
-  candidate.provenance = {
-    ...(base.provenance || {}),
-    source_candidate_id: base.id,
-    clinician_edit: editRecord,
-  };
+  candidate.provenance = versionedEditProvenance(base, editRecord);
   candidate.edited = true;
 
   out.original_candidate = plan.original_candidate || plan.candidate;

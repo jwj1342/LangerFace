@@ -93,6 +93,8 @@ ok(near(linear.length_mm, 12.5), "linear length follows multiplier");
 ok(near(linear.metrics.length_target_mm, 12.5), "linear records target length");
 ok(near(linear.metrics.diameter_coverage_deficit_mm, 0), "linear records zero diameter coverage deficit");
 ok(near(linear.endpoints[0][0], 3.375) && near(linear.endpoints[1][0], 4.625), "linear endpoints centered on tumor");
+ok(linear.provenance.candidate_version === 1 && Array.isArray(linear.provenance.edit_history),
+  "linear candidate starts with versioned provenance");
 const lowDirectionLinear = T.generateLinearIncision(
   { kind: "subcutaneous", center: [10, 10, 0], diameter_mm: 10, depth_mm: 5 },
   farDirection,
@@ -348,6 +350,13 @@ ok(edited.candidate.edited === true, "edited candidate is marked");
 ok(near(edited.candidate.length_mm, 15), "edited linear length is recalculated");
 ok(near(edited.candidate.metrics.rstl_deviation_deg, 20), "edited candidate records RSTL deviation");
 ok(edited.candidate.provenance.clinician_edit.reason.includes("free-margin"), "edited candidate records override reason");
+ok(edited.candidate.provenance.candidate_version === 2, "edited candidate increments candidate version");
+ok(edited.candidate.provenance.parent_candidate_id === plan.candidate.id,
+  "edited candidate records parent candidate id");
+ok(edited.candidate.provenance.edit_history.length === 1,
+  "edited candidate records edit history entry");
+ok(edited.candidate.provenance.edit_history[0].edit_id.startsWith("edit_v2_"),
+  "edited candidate records stable edit id");
 ok(edited.trace.some((step) => step.action === "clinician_edit_candidate"), "edited plan adds trace step");
 ok(edited.guardrails.warnings.some((w) => w.code === "rstl_deviation_override"), "edited deviation triggers guardrail warning");
 

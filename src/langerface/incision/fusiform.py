@@ -238,6 +238,8 @@ def fusiform_cutaneous_incision(
             "generator": "fusiform_cutaneous_incision",
             "rules_version": (rules or default_clinical_rules()).get("version"),
             "boundary_source": tumor.boundary_source,
+            "candidate_version": 1,
+            "edit_history": [],
             **direction_provenance(direction),
         },
     }

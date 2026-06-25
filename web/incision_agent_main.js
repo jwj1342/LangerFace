@@ -956,6 +956,7 @@ function exportReport() {
     return [
     `## 候选 ${idx + 1}: ${r.label}`,
     `- 类型：${r.candidate.type === "linear" ? "皮下线性切口" : "皮表梭形切口"}`,
+    `- 候选版本：v${r.candidate.provenance?.candidate_version || 1}；编辑记录 ${(r.candidate.provenance?.edit_history || []).length} 条`,
     `- 肿物：${r.tumor.kind}，直径 ${fmt(r.tumor.diameter_mm)} mm，切缘 ${fmt(r.tumor.margin_mm)} mm`,
     `- 面部分区：${r.anatomy.region} / ${r.anatomy.subunit}`,
     (r.anatomy.confidence_reasons || []).length

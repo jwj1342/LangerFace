@@ -742,6 +742,7 @@ candidate = segment(center, axis, length)
 - `length_target_mm`、`length_target_deficit_mm`、`diameter_coverage_required_mm` 和 `diameter_coverage_deficit_mm`。
 - 与局部 RSTL 的角度偏差。
 - 是否命中敏感结构 guardrail。
+- `candidate_version`、`parent_candidate_id`、`edit_id` 和 `edit_history`；工具生成候选为 v1，医生编辑后的候选至少为 v2，导出报告显示候选版本和编辑记录数。
 
 如果最大长度规则使线性候选短于记录的超声直径，guardrails 输出 `linear_diameter_coverage_deficit` 高风险警告；医生需要增加长度、确认更小影像直径，或记录明确的人工 access decision。
 
