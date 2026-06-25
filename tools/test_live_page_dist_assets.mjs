@@ -124,6 +124,7 @@ try {
     [/^triangles.*\.json$/, "triangles JSON"],
     [/^recon_demo.*\.json$/, "3D reconstruction demo JSON"],
     [/^flame_basis.*\.bin$/, "FLAME basis binary"],
+    [/^workflow\.worker.*\.js$/, "React workflow Comlink worker"],
   ];
   for (const [pattern, label] of requiredAssets) {
     assert.ok(hasBuiltAsset(outDir, pattern), `built live page should include ${label}`);

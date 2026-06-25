@@ -1,8 +1,9 @@
 import { ArrowRight, Boxes, Route as RouteIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { Button } from "../components/ui/button.jsx";
-import { STATE_BOUNDARY_NOTE, useAppStore } from "../stores/appStore.js";
+import { WorkerStatusPanel } from "../components/WorkerStatusPanel";
+import { Button } from "../components/ui/button";
+import { STATE_BOUNDARY_NOTE, useAppStore } from "../stores/appStore";
 
 export function DashboardRoute() {
   const routeStatus = useAppStore((state) => state.routeStatus);
@@ -38,6 +39,8 @@ export function DashboardRoute() {
             <div className="quality-top"><span>状态边界</span><span>低频 UI</span></div>
             <p className="hint">{STATE_BOUNDARY_NOTE}</p>
           </div>
+
+          <WorkerStatusPanel />
         </aside>
 
         <main className="react-shell-main grid place-items-center p-6">

@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 
-import { useAppStore } from "../stores/appStore.js";
+import { useAppStore } from "../stores/appStore";
 
-function extractWorkbenchHtml(text) {
+function extractWorkbenchHtml(text: string) {
   const doc = new DOMParser().parseFromString(text, "text/html");
   doc.querySelectorAll("script").forEach((node) => node.remove());
   const styles = [...doc.querySelectorAll("style")].map((node) => node.textContent || "").join("\n");
@@ -13,7 +13,7 @@ function extractWorkbenchHtml(text) {
 }
 
 export function IncisionRoute() {
-  const hostRef = useRef(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
   const setActiveWorkspace = useAppStore((state) => state.setActiveWorkspace);
   const setRouteStatus = useAppStore((state) => state.setRouteStatus);
 

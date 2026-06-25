@@ -7,10 +7,25 @@ import * as THREE from "three";
 
 import { loadJsonAsset } from "../../assets.js";
 import { buildLineGeometry, vertexNormals } from "../../three3d.js";
-import { Button } from "../components/ui/button.jsx";
-import { useAppStore } from "../stores/appStore.js";
+import { Button } from "../components/ui/button";
+import { useAppStore } from "../stores/appStore";
 
-function bbox(verts) {
+type Vec3 = [number, number, number];
+type Triangle = [number, number, number];
+interface AtlasLine {
+  points?: Array<[number, number, number]>;
+  points3d?: Vec3[];
+}
+interface RstlAtlas {
+  lines: AtlasLine[];
+}
+interface PreviewAssets {
+  verts: Vec3[];
+  tris: Triangle[];
+  atlas: RstlAtlas;
+}
+
+function bbox(verts: Vec3[]) {
   const lo = [Infinity, Infinity, Infinity];
   const hi = [-Infinity, -Infinity, -Infinity];
   for (const v of verts) {
@@ -22,7 +37,7 @@ function bbox(verts) {
   return { lo, hi, center: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2] };
 }
 
-function FaceMesh({ assets }) {
+function FaceMesh({ assets }: { assets: PreviewAssets }) {
   const { verts, tris, atlas } = assets;
   const box = useMemo(() => bbox(verts), [verts]);
   const meshGeometry = useMemo(() => {
@@ -49,7 +64,7 @@ function FaceMesh({ assets }) {
   );
 }
 
-function R3FScene({ assets, loadingText }) {
+function R3FScene({ assets, loadingText }: { assets: PreviewAssets | null; loadingText: string }) {
   return (
     <Canvas camera={{ position: [0, 0, 2.8], fov: 35 }} dpr={[1, 2]}>
       <color attach="background" args={["#111820"]} />
@@ -72,7 +87,7 @@ function R3FScene({ assets, loadingText }) {
 }
 
 export function ThreePreviewRoute() {
-  const [assets, setAssets] = useState(null);
+  const [assets, setAssets] = useState<PreviewAssets | null>(null);
   const [loadingText, setLoadingText] = useState("正在加载标准脸资产");
   const setActiveWorkspace = useAppStore((state) => state.setActiveWorkspace);
   const setRouteStatus = useAppStore((state) => state.setRouteStatus);
@@ -84,9 +99,9 @@ export function ThreePreviewRoute() {
     setRouteStatus("R3F 预览加载中");
 
     Promise.all([
-      loadJsonAsset("canonicalVertices", { label: "标准脸顶点", onProgress: (evt) => setLoadingText(`${evt.label} 加载中`) }),
-      loadJsonAsset("triangles", { label: "三角拓扑", onProgress: (evt) => setLoadingText(`${evt.label} 加载中`) }),
-      loadJsonAsset("atlasRstl", { label: "RSTL 图谱", onProgress: (evt) => setLoadingText(`${evt.label} 加载中`) }),
+      loadJsonAsset<Vec3[]>("canonicalVertices", { label: "标准脸顶点", onProgress: (evt) => setLoadingText(`${evt.label} 加载中`) }),
+      loadJsonAsset<Triangle[]>("triangles", { label: "三角拓扑", onProgress: (evt) => setLoadingText(`${evt.label} 加载中`) }),
+      loadJsonAsset<RstlAtlas>("atlasRstl", { label: "RSTL 图谱", onProgress: (evt) => setLoadingText(`${evt.label} 加载中`) }),
     ]).then(([verts, tris, atlas]) => {
       if (disposed) return;
       setAssets({ verts, tris, atlas });

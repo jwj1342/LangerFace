@@ -1,10 +1,10 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
-import { DashboardRoute } from "./routes/DashboardRoute.jsx";
+import { DashboardRoute } from "./routes/DashboardRoute";
 
-const IncisionRoute = lazy(() => import("./routes/IncisionRoute.jsx").then((module) => ({ default: module.IncisionRoute })));
-const ThreePreviewRoute = lazy(() => import("./routes/ThreePreviewRoute.jsx").then((module) => ({ default: module.ThreePreviewRoute })));
+const IncisionRoute = lazy(() => import("./routes/IncisionRoute").then((module) => ({ default: module.IncisionRoute })));
+const ThreePreviewRoute = lazy(() => import("./routes/ThreePreviewRoute").then((module) => ({ default: module.ThreePreviewRoute })));
 
 function RouteFallback() {
   return (
