@@ -9,6 +9,8 @@ real clinical dataset remains in controlled storage.
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 import math
 from collections import Counter
@@ -41,6 +43,19 @@ WARNING_FAILURE_MODE_MAP = {
 
 SECRET_KEY_HINTS = ("api_key", "secret", "token", "authorization", "password")
 REDACTED_VALUES = {"", "[redacted]", "redacted", "***", "null", "none"}
+CSV_FIELDS = [
+    "section",
+    "metric",
+    "submetric",
+    "value",
+    "count",
+    "mean",
+    "median",
+    "p90",
+    "min",
+    "max",
+    "clinical_boundary",
+]
 
 
 def load_payload(path: str | Path) -> Any:
@@ -631,10 +646,172 @@ def evaluate_payloads(payloads: list[Any], input_files: list[str] | None = None)
     return evaluate_records(records, input_files=input_files)
 
 
+def _csv_row(
+    *,
+    section: str,
+    metric: str,
+    submetric: str = "",
+    value: Any = "",
+    count: Any = "",
+    mean_value: Any = "",
+    median_value: Any = "",
+    p90: Any = "",
+    min_value: Any = "",
+    max_value: Any = "",
+    clinical_boundary: str = "",
+) -> dict[str, Any]:
+    return {
+        "section": section,
+        "metric": metric,
+        "submetric": submetric,
+        "value": value,
+        "count": count,
+        "mean": mean_value,
+        "median": median_value,
+        "p90": p90,
+        "min": min_value,
+        "max": max_value,
+        "clinical_boundary": clinical_boundary,
+    }
+
+
+def _count_rows(section: str, metric: str, counts: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        _csv_row(section=section, metric=metric, submetric=str(key), value=value)
+        for key, value in sorted(counts.items())
+    ]
+
+
+def _number_summary_row(section: str, metric: str, summary: dict[str, Any]) -> dict[str, Any]:
+    return _csv_row(
+        section=section,
+        metric=metric,
+        count=summary.get("count", 0),
+        mean_value=summary.get("mean", ""),
+        median_value=summary.get("median", ""),
+        p90=summary.get("p90", ""),
+        min_value=summary.get("min", ""),
+        max_value=summary.get("max", ""),
+    )
+
+
+def validation_summary_csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten Stage 2 validation JSON into reviewer-readable CSV rows."""
+
+    rows: list[dict[str, Any]] = [
+        _csv_row(
+            section="overview",
+            metric="schema_version",
+            value=summary.get("schema_version", ""),
+            clinical_boundary=str(summary.get("clinical_boundary") or ""),
+        ),
+        _csv_row(section="overview", metric="record_count", value=summary.get("record_count", 0)),
+        _csv_row(section="overview", metric="input_file_count", value=len(summary.get("input_files", []))),
+    ]
+    for section, metric in [
+        ("counts", "candidate_type_counts"),
+        ("counts", "tumor_kind_counts"),
+        ("counts", "review_status_counts"),
+        ("failures", "failure_mode_counts"),
+    ]:
+        rows.extend(_count_rows(section, metric, summary.get(metric, {}) or {}))
+
+    clinician = summary.get("clinician_review") or {}
+    for metric in [
+        "approved_for_discussion_count",
+        "rejected_by_clinician_count",
+        "approval_rate",
+        "rejection_rate",
+    ]:
+        rows.append(_csv_row(section="clinician_review", metric=metric, value=clinician.get(metric, "")))
+
+    guardrails = summary.get("guardrails") or {}
+    for metric in ["passed_count", "needs_review_count", "pass_rate"]:
+        rows.append(_csv_row(section="guardrails", metric=metric, value=guardrails.get(metric, "")))
+    rows.extend(_count_rows(
+        "guardrails",
+        "warning_code_counts",
+        guardrails.get("warning_code_counts", {}) or {},
+    ))
+    rows.extend(_count_rows(
+        "guardrails",
+        "warning_severity_counts",
+        guardrails.get("warning_severity_counts", {}) or {},
+    ))
+
+    for metric, number_summary in sorted((summary.get("metrics") or {}).items()):
+        if isinstance(number_summary, dict):
+            rows.append(_number_summary_row("metrics", metric, number_summary))
+
+    for section in [
+        "incision_overlay_stability",
+        "incision_overlay_registration",
+        "incision_overlay_replay_qa",
+        "incision_overlay_3d_view",
+    ]:
+        data = summary.get(section) or {}
+        boundary = str(data.get("clinical_boundary") or "")
+        for metric in [
+            "present_count",
+            "passed_count",
+            "failed_count",
+            "pass_rate",
+            "rendered_count",
+            "rendered_rate",
+        ]:
+            if metric in data:
+                rows.append(_csv_row(
+                    section=section,
+                    metric=metric,
+                    value=data.get(metric, ""),
+                    clinical_boundary=boundary,
+                ))
+        for count_metric in ["reason_counts", "context_counts", "mapping_mode_counts"]:
+            rows.extend(_count_rows(section, count_metric, data.get(count_metric, {}) or {}))
+
+    privacy = summary.get("privacy_audit") or {}
+    for metric in ["raw_media_sent_count", "provider_secret_leak_count"]:
+        rows.append(_csv_row(section="privacy_audit", metric=metric, value=privacy.get(metric, "")))
+
+    secondary = summary.get("secondary_cues") or {}
+    for metric in [
+        "present_count",
+        "manual_confirmed_count",
+        "manual_confirmation_rate",
+        "used_for_geometry_count",
+        "used_for_agent_prompt_count",
+    ]:
+        rows.append(_csv_row(
+            section="secondary_cues",
+            metric=metric,
+            value=secondary.get(metric, ""),
+            clinical_boundary=str(secondary.get("clinical_boundary") or ""),
+        ))
+    rows.extend(_count_rows("secondary_cues", "source_counts", secondary.get("source_counts", {}) or {}))
+    rows.extend(_count_rows(
+        "secondary_cues",
+        "confidence_label_counts",
+        secondary.get("confidence_label_counts", {}) or {},
+    ))
+    for metric, number_summary in sorted((secondary.get("metrics") or {}).items()):
+        if isinstance(number_summary, dict):
+            rows.append(_number_summary_row("secondary_cues.metrics", metric, number_summary))
+    return rows
+
+
+def validation_summary_csv_text(summary: dict[str, Any]) -> str:
+    handle = io.StringIO()
+    writer = csv.DictWriter(handle, fieldnames=CSV_FIELDS)
+    writer.writeheader()
+    writer.writerows(validation_summary_csv_rows(summary))
+    return handle.getvalue()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("inputs", nargs="+", help="Sanitized incision review JSON files")
     parser.add_argument("--output", "-o", help="Write summary JSON to this path")
+    parser.add_argument("--csv-output", help="Write reviewer-readable summary CSV to this path")
     args = parser.parse_args(argv)
 
     paths = [Path(p) for p in args.inputs]
@@ -645,6 +822,8 @@ def main(argv: list[str] | None = None) -> int:
         Path(args.output).write_text(text + "\n", encoding="utf-8")
     else:
         print(text)
+    if args.csv_output:
+        Path(args.csv_output).write_text(validation_summary_csv_text(summary), encoding="utf-8")
     return 0
 
 

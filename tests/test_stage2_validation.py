@@ -1,9 +1,14 @@
+import csv
 import json
 import subprocess
 import sys
 from pathlib import Path
 
-from tools.evaluate_stage2_validation import evaluate_payloads, records_from_payload
+from tools.evaluate_stage2_validation import (
+    evaluate_payloads,
+    records_from_payload,
+    validation_summary_csv_rows,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -397,11 +402,29 @@ def test_stage2_validation_summary_aggregates_review_export():
     assert summary["secondary_cues"]["source_counts"] == {"synthetic": 1}
     assert summary["secondary_cues"]["metrics"]["lesion_iou"]["mean"] == 0.91
     assert summary["secondary_cues"]["metrics"]["wrinkle_recall"]["mean"] == 0.76
+    csv_rows = validation_summary_csv_rows(summary)
+    assert {
+        ("overview", "record_count", "", 3),
+        ("clinician_review", "approval_rate", "", 2 / 3),
+        ("incision_overlay_replay_qa", "pass_rate", "", 0.5),
+        ("privacy_audit", "raw_media_sent_count", "", 0),
+        ("secondary_cues", "used_for_agent_prompt_count", "", 0),
+    } <= {
+        (row["section"], row["metric"], row["submetric"], row["value"])
+        for row in csv_rows
+    }
+    assert any(
+        row["section"] == "metrics"
+        and row["metric"] == "incision_overlay_replay_registration_pass_rate"
+        and row["min"] == 2 / 3
+        for row in csv_rows
+    )
 
 
 def test_stage2_validation_cli_writes_summary(tmp_path: Path):
     input_path = tmp_path / "incision_review.json"
     output_path = tmp_path / "summary.json"
+    csv_output_path = tmp_path / "summary.csv"
     input_path.write_text(json.dumps(_export_payload()), encoding="utf-8")
 
     subprocess.run(
@@ -411,6 +434,8 @@ def test_stage2_validation_cli_writes_summary(tmp_path: Path):
             str(input_path),
             "--output",
             str(output_path),
+            "--csv-output",
+            str(csv_output_path),
         ],
         cwd=ROOT,
         check=True,
@@ -419,3 +444,20 @@ def test_stage2_validation_cli_writes_summary(tmp_path: Path):
     summary = json.loads(output_path.read_text(encoding="utf-8"))
     assert summary["schema_version"] == "stage2-validation-summary/v0.1"
     assert summary["record_count"] == 3
+    with csv_output_path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    assert rows[0]["section"] == "overview"
+    assert rows[0]["metric"] == "schema_version"
+    assert any(
+        row["section"] == "incision_overlay_replay_qa"
+        and row["metric"] == "reason_counts"
+        and row["submetric"] == "registration_frame_failure"
+        and row["value"] == "1"
+        for row in rows
+    )
+    assert any(
+        row["section"] == "metrics"
+        and row["metric"] == "incision_overlay_registration_out_of_frame_count"
+        and float(row["max"]) == 2
+        for row in rows
+    )

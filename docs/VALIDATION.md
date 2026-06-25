@@ -94,11 +94,16 @@ Stage 2 涉及肿物模拟和候选切口，只能在医生审阅路径中评估
 切口 Agent 工作台导出的 `incision-review-record/v0.3` 或 `incision-review-export/v0.3` 可用脚本汇总为脱敏指标：
 
 ```bash
-python tools/evaluate_stage2_validation.py incision_review_*.json --output stage2_validation_summary.json
+python tools/evaluate_stage2_validation.py \
+  incision_review_*.json \
+  --output stage2_validation_summary.json \
+  --csv-output stage2_validation_summary.csv
 ```
 
 脚本只读取审阅 JSON，不需要原始照片、视频帧、头模纹理或超声影像。输出 schema 为
-`stage2-validation-summary/v0.1`，包含：
+`stage2-validation-summary/v0.1`。可选 CSV 会把同一份 summary 展平成
+`section / metric / submetric / value / count / mean / median / p90 / min / max / clinical_boundary`
+表格，供 reviewer 快速检查计数、通过率、overlay QA、privacy gate 和 secondary cue 是否越界；CSV 不包含影像、视频帧、纹理或 landmark 坐标。JSON 包含：
 
 - 候选数、肿物类型分布、切口类型分布。
 - 医生确认 / 否决状态计数和确认率。
