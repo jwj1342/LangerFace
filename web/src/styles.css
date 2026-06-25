@@ -65,6 +65,32 @@
     min-height: 100dvh;
   }
 
+  .react-live-host {
+    min-height: 100dvh;
+  }
+
+  .live-workbench.app {
+    grid-template-columns: minmax(340px, 380px) 1fr;
+  }
+
+  .live-workbench .live-inline-top {
+    margin-top: 7px;
+  }
+
+  .live-workbench .live-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .live-workbench .live-two-col {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .live-workbench .live-hidden-inline {
+    display: none;
+  }
+
   .react-annotate-host {
     min-height: 100dvh;
   }

@@ -5,6 +5,7 @@ import { DashboardRoute } from "./routes/DashboardRoute";
 
 const AnnotateRoute = lazy(() => import("./routes/AnnotateRoute").then((module) => ({ default: module.AnnotateRoute })));
 const IncisionRoute = lazy(() => import("./routes/IncisionRoute").then((module) => ({ default: module.IncisionRoute })));
+const LiveRoute = lazy(() => import("./routes/LiveRoute").then((module) => ({ default: module.LiveRoute })));
 const SurgeryRoute = lazy(() => import("./routes/SurgeryRoute").then((module) => ({ default: module.SurgeryRoute })));
 const ThreePreviewRoute = lazy(() => import("./routes/ThreePreviewRoute").then((module) => ({ default: module.ThreePreviewRoute })));
 
@@ -26,6 +27,7 @@ export function App() {
         <Route path="/" element={<DashboardRoute />} />
         <Route path="/annotate" element={<AnnotateRoute />} />
         <Route path="/incision" element={<IncisionRoute />} />
+        <Route path="/live" element={<LiveRoute />} />
         <Route path="/surgery" element={<SurgeryRoute />} />
         <Route path="/three-preview" element={<ThreePreviewRoute />} />
         <Route path="*" element={<Navigate to="/" replace />} />

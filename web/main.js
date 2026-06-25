@@ -1,12 +1,12 @@
 // 入口：装配 UI 事件绑定并初始化。各功能模块见 pipeline/render/mode3d/ui/state。
-import { els } from "./dom.js";
+import { bindDom, els } from "./dom.js";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./canvas_fit.js";
 import { dataSource } from "./data_source.js";
 import { createCanvasRecordingController } from "./export_canvas.js";
 import { validateIncisionOverlay } from "./incision_overlay.js";
 import { countMetric, logError } from "./logger.js";
-import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.js";
-import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera } from "./pipeline.js";
+import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, stopTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.js";
+import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.js";
 import { adjustFocusZoom, buildZoomCards } from "./render.js";
 import { recordingState, reconState, renderState, sourceState } from "./state.js";
 import { setIncisionOverlayQa, setMsg, setProvenance, smoothLabel } from "./ui.js";
@@ -14,6 +14,11 @@ import { setIncisionOverlayQa, setMsg, setProvenance, smoothLabel } from "./ui.j
 let previewSystem = null;
 let previewMeta = null;
 let recordingController = null;
+let imageDrag = null;
+let resizeCleanup = null;
+let abortController = null;
+let mounted = false;
+let activeSession = 0;
 
 function syncPreviewControls() {
   const previewIsActive = Boolean(previewSystem && previewMeta && renderState.system === previewSystem);
@@ -85,8 +90,6 @@ function visibleRecordingCanvases() {
   return extras;
 }
 
-let imageDrag = null;
-
 function startImageDrag(e) {
   if (sourceState.sourceKind !== "image" || e.button !== 0) return;
   imageDrag = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
@@ -119,37 +122,43 @@ function handleMainWheel(e) {
   refreshStaticImage();
 }
 
-els.upload.onclick = () => els.file.click();
-els.file.onchange = (e) => handleFile(e.target.files[0]);
-els.cam.onclick = startCamera;
-els.pause.onclick = () => {
+function handlePauseToggle() {
   sourceState.paused = !sourceState.paused; els.pause.textContent = sourceState.paused ? "▶ 继续" : "⏸ 暂停";
   if (!sourceState.paused) requestFrame();
-};
-els.tmpl.onchange = (e) => { renderState.system = e.target.value; syncPreviewControls(); refreshStaticImage(); };
-els.density.oninput = (e) => { renderState.densityFrac = e.target.value / 100; els.densityVal.textContent = e.target.value + "%"; refreshStaticImage(); };
-els.smooth.oninput = (e) => {
+}
+
+function handleTemplateChange(e) {
+  renderState.system = e.target.value; syncPreviewControls(); refreshStaticImage();
+}
+
+function handleDensityInput(e) {
+  renderState.densityFrac = e.target.value / 100; els.densityVal.textContent = e.target.value + "%"; refreshStaticImage();
+}
+
+function handleSmoothInput(e) {
   const v = +e.target.value; renderState.smoothLevel = v / 100; els.smoothVal.textContent = smoothLabel(v);
   configureLandmarkSmoothing();
   refreshStaticImage();
-};
-els.opacity.oninput = (e) => { renderState.opacity = e.target.value / 100; els.opacityVal.textContent = e.target.value + "%"; refreshStaticImage(); };
-els.clip.onchange = (e) => { renderState.clip = e.target.checked; refreshStaticImage(); };
-els.handOcc.onchange = (e) => {
+}
+
+function handleOpacityInput(e) {
+  renderState.opacity = e.target.value / 100; els.opacityVal.textContent = e.target.value + "%"; refreshStaticImage();
+}
+
+function handleHandOccChange(e) {
   renderState.handOcc = e.target.checked;
   sourceState.imageHulls = null;
   refreshStaticImage();
-};
-els.mirror.onchange = (e) => {
+}
+
+function handleMirrorChange(e) {
   renderState.mirror = e.target.checked;
   els.canvas.classList.toggle("mirror", renderState.mirror);
   renderState.zoomCards.forEach((zc) => zc.canvas.classList.toggle("mirror", renderState.mirror));
   refreshStaticImage();
-};
-els.bands.onchange = (e) => { renderState.bands = e.target.checked; refreshStaticImage(); };
-els.zoom.onchange = (e) => { renderState.zoom = e.target.checked; els.zoomStrip.classList.toggle("hidden", !renderState.zoom); refreshStaticImage(); };
-els.meshPts.onchange = (e) => { renderState.meshPts = e.target.checked; refreshStaticImage(); };
-els.restoreAtlas.onclick = () => {
+}
+
+function restoreAtlasPreview() {
   if (!previewSystem) return;
   if (!restoreOfficialAtlas(previewSystem)) {
     setMsg("恢复官方图谱失败。");
@@ -158,10 +167,10 @@ els.restoreAtlas.onclick = () => {
   previewSystem = null; previewMeta = null;
   syncPreviewControls();
   setMsg(null);
-};
+}
 
 // 导出：录制画布为 webm 下载
-els.export.onclick = () => {
+function toggleRecording() {
   if (!recordingController) {
     recordingController = createCanvasRecordingController({
       canvas: els.canvas,
@@ -176,38 +185,101 @@ els.export.onclick = () => {
     });
   }
   recordingController.toggle();
-};
+}
 
-// 3D Beta 路线绑定
-els.routeSel.onchange = (e) => enterRoute(e.target.value);
-els.reconDemo.onclick = loadDemoRecon;
-els.reconScan.onclick = startScan;
-els.view3d.onclick = () => { if (reconState.reconVerts) setMode3d("view"); };
-els.project3d.onclick = () => { if (reconState.reconVerts && reconState.reconProjectable) setMode3d("project"); };
-els.reset3d.onclick = resetView3d;
-els.cloudFitFlame.onclick = startTwin;
-els.flameStd.onchange = toggleTwinHead;
-els.twinTexture.onchange = toggleTwinTexture;
+function bindLiveEvents(signal) {
+  els.upload.addEventListener("click", () => els.file.click(), { signal });
+  els.file.addEventListener("change", (e) => handleFile(e.target.files?.[0]), { signal });
+  els.cam.addEventListener("click", startCamera, { signal });
+  els.pause.addEventListener("click", handlePauseToggle, { signal });
+  els.tmpl.addEventListener("change", handleTemplateChange, { signal });
+  els.density.addEventListener("input", handleDensityInput, { signal });
+  els.smooth.addEventListener("input", handleSmoothInput, { signal });
+  els.opacity.addEventListener("input", handleOpacityInput, { signal });
+  els.clip.addEventListener("change", (e) => { renderState.clip = e.target.checked; refreshStaticImage(); }, { signal });
+  els.handOcc.addEventListener("change", handleHandOccChange, { signal });
+  els.mirror.addEventListener("change", handleMirrorChange, { signal });
+  els.bands.addEventListener("change", (e) => { renderState.bands = e.target.checked; refreshStaticImage(); }, { signal });
+  els.zoom.addEventListener("change", (e) => { renderState.zoom = e.target.checked; els.zoomStrip.classList.toggle("hidden", !renderState.zoom); refreshStaticImage(); }, { signal });
+  els.meshPts.addEventListener("change", (e) => { renderState.meshPts = e.target.checked; refreshStaticImage(); }, { signal });
+  els.restoreAtlas.addEventListener("click", restoreAtlasPreview, { signal });
+  els.export.addEventListener("click", toggleRecording, { signal });
 
-// ── 初始化 ────────────────────────────────────────────────────────────────────
-buildZoomCards(refreshStaticImage);
-observeCanvasStageResize(() => {
-  if (sourceState.sourceKind === "image") fitCanvasDisplayToStage();
-});
-els.mainWrap.addEventListener("pointerdown", startImageDrag);
-els.mainWrap.addEventListener("pointermove", moveImageDrag);
-els.mainWrap.addEventListener("pointerup", endImageDrag);
-els.mainWrap.addEventListener("pointercancel", endImageDrag);
-els.mainWrap.addEventListener("wheel", handleMainWheel, { passive: false });
-els.smoothVal.textContent = smoothLabel(+els.smooth.value);
-configureLandmarkSmoothing();
+  // 3D Beta 路线绑定
+  els.routeSel.addEventListener("change", (e) => enterRoute(e.target.value), { signal });
+  els.reconDemo.addEventListener("click", loadDemoRecon, { signal });
+  els.reconScan.addEventListener("click", startScan, { signal });
+  els.view3d.addEventListener("click", () => { if (reconState.reconVerts) setMode3d("view"); }, { signal });
+  els.project3d.addEventListener("click", () => { if (reconState.reconVerts && reconState.reconProjectable) setMode3d("project"); }, { signal });
+  els.reset3d.addEventListener("click", resetView3d, { signal });
+  els.cloudFitFlame.addEventListener("click", startTwin, { signal });
+  els.flameStd.addEventListener("change", toggleTwinHead, { signal });
+  els.twinTexture.addEventListener("change", toggleTwinTexture, { signal });
 
-// 预加载模型并反馈状态
-ensureReady().then(() => {
-  applyStagedAtlas();
-  applyStagedIncisionOverlay();
-}).catch((e) => {
-  countMetric("bootstrap.loadFailure");
-  els.badge.textContent = "模型加载失败";
-  logError("启动时模型加载失败。", e);
-});
+  els.mainWrap.addEventListener("pointerdown", startImageDrag, { signal });
+  els.mainWrap.addEventListener("pointermove", moveImageDrag, { signal });
+  els.mainWrap.addEventListener("pointerup", endImageDrag, { signal });
+  els.mainWrap.addEventListener("pointercancel", endImageDrag, { signal });
+  els.mainWrap.addEventListener("wheel", handleMainWheel, { passive: false, signal });
+}
+
+function isActiveSession(session) {
+  return mounted && session === activeSession;
+}
+
+export function disposeLiveWorkbench() {
+  mounted = false;
+  activeSession += 1;
+  abortController?.abort?.();
+  abortController = null;
+  resizeCleanup?.();
+  resizeCleanup = null;
+  recordingController?.stop?.();
+  recordingController = null;
+  recordingState.recorder = null;
+  stopTwin();
+  stopSource();
+  if (reconState.scan) reconState.scan.active = false;
+  cancelAnimationFrame(reconState.viewerRAF);
+  reconState.viewerRAF = null;
+  reconState.head3d?.dispose?.();
+  reconState.head3d = null;
+  imageDrag = null;
+}
+
+export function mountLiveWorkbench(root = document) {
+  disposeLiveWorkbench();
+  bindDom(root);
+  mounted = true;
+  activeSession += 1;
+  abortController = new AbortController();
+  previewSystem = null;
+  previewMeta = null;
+  recordingController = null;
+  imageDrag = null;
+  bindLiveEvents(abortController.signal);
+  buildZoomCards(refreshStaticImage);
+  resizeCleanup = observeCanvasStageResize(() => {
+    if (sourceState.sourceKind === "image") fitCanvasDisplayToStage();
+  });
+  els.smoothVal.textContent = smoothLabel(+els.smooth.value);
+  configureLandmarkSmoothing();
+
+  // 预加载模型并反馈状态
+  const session = activeSession;
+  ensureReady().then(() => {
+    if (!isActiveSession(session)) return;
+    applyStagedAtlas();
+    applyStagedIncisionOverlay();
+  }).catch((e) => {
+    if (!isActiveSession(session)) return;
+    countMetric("bootstrap.loadFailure");
+    els.badge.textContent = "模型加载失败";
+    logError("启动时模型加载失败。", e);
+  });
+  return disposeLiveWorkbench;
+}
+
+if (document.getElementById("canvas") && !window.__LANGERFACE_REACT_MANAGED__) {
+  mountLiveWorkbench();
+}

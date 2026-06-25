@@ -1,32 +1,85 @@
 // DOM 元素引用与 2D 画布上下文。
-// 脚本以 type=module 延迟执行，模块求值时 DOM 已就绪，可直接取元素。
-const $ = (id) => document.getElementById(id);
-
-export const els = {
-  video: $("video"), canvas: $("canvas"), msg: $("overlayMsg"), mainWrap: document.querySelector(".main-wrap"),
-  upload: $("uploadBtn"), file: $("fileInput"),
-  cam: $("camBtn"), pause: $("pauseBtn"), export: $("exportBtn"),
-  tmpl: $("templateSel"), density: $("density"), smooth: $("smooth"), opacity: $("opacity"),
-  prov: $("atlasProvenance"), restoreAtlas: $("restoreAtlasBtn"),
-  densityVal: $("densityVal"), smoothVal: $("smoothVal"), opacityVal: $("opacityVal"),
-  clip: $("clip"), handOcc: $("handOcc"), mirror: $("mirror"), bands: $("bands"),
-  zoom: $("zoom"), zoomStrip: $("zoomStrip"), meshPts: $("meshPts"),
-  routeSel: $("routeSel"), route3dPanel: $("route3dPanel"), reconDemo: $("reconDemoBtn"),
-  routeModeHint: $("routeModeHint"), threeDWorkflowCard: $("threeDWorkflowCard"),
-  incisionWorkflowCard: $("incisionWorkflowCard"),
-  reconScan: $("reconScanBtn"), view3d: $("view3dBtn"), project3d: $("project3dBtn"),
-  reset3d: $("reset3dBtn"), cloudFitFlame: $("cloudFitFlameBtn"),
-  flameStd: $("flameStdToggle"), flameHeadToggleWrap: $("flameHeadToggleWrap"),
-  twinTexture: $("twinTextureToggle"), twinTextureWrap: $("twinTextureWrap"),
-  scanPanel: $("scanPanel"), scanProgressVal: $("scanProgressVal"),
-  scanProgressBar: $("scanProgressBar"), scanYawVal: $("scanYawVal"),
-  scanYawLeft: $("scanYawLeft"), scanYawMid: $("scanYawMid"), scanYawRight: $("scanYawRight"),
-  scanToast: $("scanToast"), reconStatus: $("reconStatus"), three: $("three"),
-  badge: $("modelBadge"), live: $("livePill"), fps: $("fps"),
-  qualityVal: $("qualityVal"), qualityBar: $("qualityBar"),
-  statState: $("statState"), statFace: $("statFace"), statYaw: $("statYaw"), statLines: $("statLines"),
-  incisionOverlayQa: $("incisionOverlayQa"), incisionOverlayQaState: $("incisionOverlayQaState"),
-  incisionOverlayQaDetail: $("incisionOverlayQaDetail"),
+// React SPA 会反复挂载/卸载页面 DOM；保持 els 对象引用稳定，只替换其字段。
+const $ = (root, id) => {
+  if (root?.getElementById) return root.getElementById(id);
+  if (root?.querySelector) return root.querySelector(`#${id}`);
+  return document.getElementById(id);
 };
 
-export const ctx = els.canvas.getContext("2d");
+function collectElements(root = document) {
+  return {
+    video: $(root, "video"),
+    canvas: $(root, "canvas"),
+    msg: $(root, "overlayMsg"),
+    mainWrap: root.querySelector?.(".main-wrap") || document.querySelector(".main-wrap"),
+    upload: $(root, "uploadBtn"),
+    file: $(root, "fileInput"),
+    cam: $(root, "camBtn"),
+    pause: $(root, "pauseBtn"),
+    export: $(root, "exportBtn"),
+    tmpl: $(root, "templateSel"),
+    density: $(root, "density"),
+    smooth: $(root, "smooth"),
+    opacity: $(root, "opacity"),
+    prov: $(root, "atlasProvenance"),
+    restoreAtlas: $(root, "restoreAtlasBtn"),
+    densityVal: $(root, "densityVal"),
+    smoothVal: $(root, "smoothVal"),
+    opacityVal: $(root, "opacityVal"),
+    clip: $(root, "clip"),
+    handOcc: $(root, "handOcc"),
+    mirror: $(root, "mirror"),
+    bands: $(root, "bands"),
+    zoom: $(root, "zoom"),
+    zoomStrip: $(root, "zoomStrip"),
+    meshPts: $(root, "meshPts"),
+    routeSel: $(root, "routeSel"),
+    route3dPanel: $(root, "route3dPanel"),
+    reconDemo: $(root, "reconDemoBtn"),
+    routeModeHint: $(root, "routeModeHint"),
+    threeDWorkflowCard: $(root, "threeDWorkflowCard"),
+    incisionWorkflowCard: $(root, "incisionWorkflowCard"),
+    reconScan: $(root, "reconScanBtn"),
+    view3d: $(root, "view3dBtn"),
+    project3d: $(root, "project3dBtn"),
+    reset3d: $(root, "reset3dBtn"),
+    cloudFitFlame: $(root, "cloudFitFlameBtn"),
+    flameStd: $(root, "flameStdToggle"),
+    flameHeadToggleWrap: $(root, "flameHeadToggleWrap"),
+    twinTexture: $(root, "twinTextureToggle"),
+    twinTextureWrap: $(root, "twinTextureWrap"),
+    scanPanel: $(root, "scanPanel"),
+    scanProgressVal: $(root, "scanProgressVal"),
+    scanProgressBar: $(root, "scanProgressBar"),
+    scanYawVal: $(root, "scanYawVal"),
+    scanYawLeft: $(root, "scanYawLeft"),
+    scanYawMid: $(root, "scanYawMid"),
+    scanYawRight: $(root, "scanYawRight"),
+    scanToast: $(root, "scanToast"),
+    reconStatus: $(root, "reconStatus"),
+    three: $(root, "three"),
+    badge: $(root, "modelBadge"),
+    live: $(root, "livePill"),
+    fps: $(root, "fps"),
+    qualityVal: $(root, "qualityVal"),
+    qualityBar: $(root, "qualityBar"),
+    statState: $(root, "statState"),
+    statFace: $(root, "statFace"),
+    statYaw: $(root, "statYaw"),
+    statLines: $(root, "statLines"),
+    incisionOverlayQa: $(root, "incisionOverlayQa"),
+    incisionOverlayQaState: $(root, "incisionOverlayQaState"),
+    incisionOverlayQaDetail: $(root, "incisionOverlayQaDetail"),
+  };
+}
+
+export const els = {};
+export let ctx = null;
+
+export function bindDom(root = document) {
+  Object.assign(els, collectElements(root));
+  ctx = els.canvas?.getContext("2d") || null;
+  return els;
+}
+
+bindDom(document);

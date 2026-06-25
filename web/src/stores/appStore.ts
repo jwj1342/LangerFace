@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-type Workspace = "dashboard" | "annotate" | "incision" | "surgery" | "three-preview";
+type Workspace = "dashboard" | "annotate" | "incision" | "live" | "surgery" | "three-preview";
 
 interface AppState {
   activeWorkspace: Workspace;

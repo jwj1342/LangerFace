@@ -21,6 +21,8 @@ const annotateRoute = read("src/routes/AnnotateRoute.tsx");
 const annotateWorkbench = read("src/routes/AnnotateWorkbench.tsx");
 const incisionRoute = read("src/routes/IncisionRoute.tsx");
 const incisionWorkbench = read("src/routes/IncisionWorkbench.tsx");
+const liveRoute = read("src/routes/LiveRoute.tsx");
+const liveWorkbench = read("src/routes/LiveWorkbench.tsx");
 const surgeryRoute = read("src/routes/SurgeryRoute.tsx");
 const surgeryWorkbench = read("src/routes/SurgeryWorkbench.tsx");
 const threeRoute = read("src/routes/ThreePreviewRoute.tsx");
@@ -30,6 +32,8 @@ const workerPanel = read("src/components/WorkerStatusPanel.tsx");
 const annotateController = read("annotate_main.js");
 const annotateViewer = read("annotate_viewer.js");
 const controller = read("incision_agent_main.js");
+const dom = read("dom.js");
+const liveController = read("main.js");
 const surgeryController = read("surgery_main.js");
 
 for (const dep of [
@@ -63,6 +67,7 @@ assert.ok(vercel.includes('"destination": "/app/index.html"'), "Vercel routes SP
 assert.ok(app.includes("react-router-dom"), "React app is routed through React Router");
 assert.ok(app.includes('path="/annotate"'), "React Router exposes the 3D annotation route");
 assert.ok(app.includes('path="/incision"'), "React Router exposes the incision workbench route");
+assert.ok(app.includes('path="/live"'), "React Router exposes the live workbench route");
 assert.ok(app.includes('path="/surgery"'), "React Router exposes the surgery closure route");
 assert.ok(app.includes('path="/three-preview"'), "React Router exposes the R3F preview route");
 assert.ok(typedStore.includes("React/Zustand stores low-frequency UI"), "Zustand store documents low-frequency state ownership");
@@ -149,6 +154,36 @@ assert.ok(annotateController.includes("abortController?.abort"), "annotation con
 assert.ok(annotateController.includes("activeSession"), "annotation controller guards async loaders across SPA unmounts");
 assert.ok(annotateController.includes("!window.__LANGERFACE_REACT_MANAGED__"), "legacy annotation HTML still auto-mounts outside React");
 assert.ok(annotateViewer.includes("dispose()"), "annotation viewer exposes a WebGL dispose lifecycle");
+assert.ok(liveRoute.includes("__LANGERFACE_REACT_MANAGED__"), "React live route disables controller auto-mount");
+assert.ok(liveRoute.includes("mountLiveWorkbench"), "React live route mounts the live controller explicitly");
+assert.ok(liveRoute.includes("disposeLiveWorkbench"), "React live route can dispose the live controller");
+assert.ok(liveRoute.includes("<LiveWorkbench />"), "React live route renders the live UI as TSX");
+assert.ok(!liveRoute.includes("DOMParser"), "React live route should not parse legacy HTML");
+assert.ok(!liveRoute.includes("innerHTML"), "React live route should not inject legacy HTML");
+for (const id of [
+  "canvas",
+  "video",
+  "routeSel",
+  "uploadBtn",
+  "camBtn",
+  "templateSel",
+  "modelBadge",
+  "overlayMsg",
+]) {
+  assert.ok(liveWorkbench.includes(`id="${id}"`), `React live workbench exposes #${id}`);
+}
+assert.ok(liveWorkbench.includes('href="/app/annotate"'), "React live workbench links to the React annotation route");
+assert.ok(liveWorkbench.includes('href="/app/incision"'), "React live workbench links to the React incision route");
+assert.ok(dom.includes("export function bindDom"), "DOM module can rebind element references for SPA route mounts");
+assert.ok(dom.includes("export let ctx"), "DOM module exports a live canvas context binding");
+assert.ok(liveController.includes("export function mountLiveWorkbench"), "live controller exposes a mount lifecycle");
+assert.ok(liveController.includes("export function disposeLiveWorkbench"), "live controller exposes a dispose lifecycle");
+assert.ok(liveController.includes("bindDom(root)"), "live controller rebinds DOM references on mount");
+assert.ok(liveController.includes("abortController?.abort"), "live controller aborts DOM listeners on dispose");
+assert.ok(liveController.includes("resizeCleanup?.()"), "live controller disconnects resize observers on dispose");
+assert.ok(liveController.includes("stopSource()"), "live controller stops camera/media sources on dispose");
+assert.ok(liveController.includes("stopTwin()"), "live controller stops twin RAF on dispose");
+assert.ok(liveController.includes("!window.__LANGERFACE_REACT_MANAGED__"), "legacy live HTML still auto-mounts outside React");
 assert.ok(surgeryRoute.includes("__LANGERFACE_REACT_MANAGED__"), "React surgery route disables controller auto-mount");
 assert.ok(surgeryRoute.includes("mountSurgeryClosureDemo"), "React surgery route mounts the surgery controller explicitly");
 assert.ok(surgeryRoute.includes("disposeSurgeryClosureDemo"), "React surgery route can dispose the surgery controller");
