@@ -64,6 +64,7 @@ def _review_record(plan: dict) -> dict:
         "guardrails": plan["guardrails"],
         "trace": plan["trace"],
         "agent_trace_gate": plan["agent_trace_gate"],
+        "agent_react_plan": plan["agent_react_plan"],
         "candidate_alternatives": plan["candidate_alternatives"],
         "candidate_comparison": plan["candidate_comparison"],
         "agent_orchestration_audit": plan["agent_orchestration_audit"],
@@ -80,6 +81,11 @@ def test_agentic_trace_audit_replays_valid_plan():
     assert audit["failures"] == []
     assert audit["checks"]["trace_gate_replayed_passed"] is True
     assert audit["checks"]["stored_trace_gate_matches_replay"] is True
+    assert audit["checks"]["react_plan_present"] is True
+    assert audit["checks"]["react_plan_replayed_passed"] is True
+    assert audit["checks"]["stored_react_plan_matches_replay"] is True
+    assert audit["react_plan_replay"]["schema_version"] == "agent-react-plan/v0.1"
+    assert audit["react_plan_replay"]["step_count"] == 6
     assert audit["checks"]["candidate_comparison_replay_passed"] is True
     assert (
         audit["candidate_comparison_replay"]["expected_ranked_ids"]
@@ -97,7 +103,19 @@ def test_agentic_trace_audit_detects_missing_required_tool():
     assert audit["passed"] is False
     assert "trace_gate_replayed_passed" in audit["failures"]
     assert "stored_trace_gate_matches_replay" in audit["failures"]
+    assert "stored_react_plan_matches_replay" in audit["failures"]
     assert audit["trace_gate_replay"]["missing_actions"][0]["key"] == "rstl_direction"
+
+
+def test_agentic_trace_audit_detects_tampered_react_plan():
+    plan = _plan()
+    plan["agent_react_plan"]["steps"][-1]["status"] = "completed"
+    plan["agent_react_plan"]["steps"][-1]["trace_indexes"] = []
+    audit = audit_agentic_record(plan, source="tampered-react-plan")
+
+    assert audit["passed"] is False
+    assert "stored_react_plan_matches_replay" in audit["failures"]
+    assert audit["checks"]["react_plan_replayed_passed"] is True
 
 
 def test_agentic_trace_audit_reads_review_export_and_cli(tmp_path: Path):

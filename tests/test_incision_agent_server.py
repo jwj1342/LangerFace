@@ -125,6 +125,7 @@ def test_incision_agent_proxy_json_and_sse_contract():
         names = [event["event"] for event in events]
         assert names[0] == "provider"
         assert "trace_gate" in names
+        assert "react_plan" in names
         assert "result" in names
         assert names[-1] == "done"
         trace_actions = [event["data"]["action"] for event in events if event["event"] == "trace"]
@@ -132,6 +133,9 @@ def test_incision_agent_proxy_json_and_sse_contract():
         assert trace_actions[-1] == "compare_candidates"
         trace_gate = next(event["data"] for event in events if event["event"] == "trace_gate")
         assert trace_gate["passed"] is True
+        react_plan = next(event["data"] for event in events if event["event"] == "react_plan")
+        assert react_plan["schema_version"] == "agent-react-plan/v0.1"
+        assert react_plan["passed"] is True
         streamed_result = next(event["data"] for event in events if event["event"] == "result")
         assert streamed_result["provider_config"]["api_key"] == "[redacted]"
         assert streamed_result["agent_orchestration_audit"]["comparison_ready"] is True

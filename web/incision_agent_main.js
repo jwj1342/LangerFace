@@ -772,6 +772,13 @@ function handleAgentStreamEvent(trace, evt) {
     els.stageStatus.textContent = gate.passed ? "Agent 工具门控已通过" : "Agent 工具门控未通过";
     return;
   }
+  if (event === "react_plan") {
+    const plan = data || {};
+    els.stageStatus.textContent = plan.passed
+      ? `Agent ReAct 计划已通过：${plan.completed_step_count || 0}/${plan.step_count || 0} 步`
+      : `Agent ReAct 计划需复核：失败 ${plan.failed_step_count || 0} 步`;
+    return;
+  }
   if (event === "fallback") {
     const msg = data?.error ? `：${String(data.error).slice(0, 80)}` : "";
     els.stageStatus.textContent = `SSE trace 不可用，改用普通 Agent 请求${msg}`;
@@ -996,6 +1003,7 @@ function reviewRecord(result = S.result, label = "候选") {
     guardrails: result.guardrails,
     trace: result.trace,
     agent_trace_gate: traceGate,
+    agent_react_plan: result.agent_react_plan || null,
     candidate_alternatives: result.candidate_alternatives || [],
     candidate_comparison: result.candidate_comparison || [],
     agent_orchestration_audit: result.agent_orchestration_audit || null,
@@ -1269,6 +1277,9 @@ function exportReport() {
       ? `- RSTL 低置信原因：${r.direction.confidence_reasons.join(", ")}`
       : null,
     `- Agent 工具门控：passed=${Boolean(r.agent_trace_gate?.passed)}；order_ok=${Boolean(r.agent_trace_gate?.order_ok)}；missing=${(r.agent_trace_gate?.missing_actions || []).map((item) => item.label || item.key).join(", ") || "无"}`,
+    r.agent_react_plan
+      ? `- Agent ReAct 计划：passed=${Boolean(r.agent_react_plan.passed)}；步骤 ${r.agent_react_plan.completed_step_count || 0}/${r.agent_react_plan.step_count || 0}；失败 ${r.agent_react_plan.failed_step_count || 0}`
+      : null,
     r.agent_orchestration_audit
       ? `- Agent 编排审计：候选 ${r.agent_orchestration_audit.candidate_count || 0} 个；比较 ${r.agent_orchestration_audit.comparison_ready ? "已生成" : "未生成"}；恢复失败 ${r.agent_orchestration_audit.tool_failure_count || 0} 个`
       : null,

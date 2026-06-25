@@ -74,6 +74,7 @@ class AgentHandler(BaseHTTPRequestHandler):
         for index, step in enumerate(result.get("trace", [])):
             emit("trace", {"index": index, **step})
         emit("trace_gate", result.get("agent_trace_gate", {}))
+        emit("react_plan", result.get("agent_react_plan", {}))
         emit("result", result)
         emit("done", {"ok": True})
 

@@ -49,6 +49,7 @@ assert.ok(js.includes("audit_events"), "review records include audit events");
 assert.ok(js.includes("guardrail_summary"), "review records include guardrail summary");
 assert.ok(js.includes("review_gate"), "review records include review gate state");
 assert.ok(js.includes("agent_trace_gate"), "review records include agent trace gate state");
+assert.ok(js.includes("agent_react_plan"), "review records include Agent ReAct plan state");
 assert.ok(js.includes("agent-trace-gate/v0.1"), "agent trace gate has an explicit schema");
 assert.ok(js.includes("AGENT_TRACE_GATE_REQUIRED"), "workbench defines required agent tool actions");
 assert.ok(js.includes("summarize_tumor_input_quality"), "agent gate requires tumor input quality tool");
@@ -56,6 +57,7 @@ assert.ok(js.includes("linear_subcutaneous_incision"), "agent gate accepts linea
 assert.ok(js.includes("fusiform_cutaneous_incision"), "agent gate accepts fusiform incision generation tool");
 assert.ok(js.includes("Agent 工具 trace 未通过门控"), "approval is blocked when agent trace gate fails");
 assert.ok(js.includes("Agent 工具门控"), "markdown report includes agent trace gate status");
+assert.ok(js.includes("Agent ReAct 计划"), "markdown report includes Agent ReAct plan status");
 assert.ok(js.includes("candidate_comparison"), "review export includes candidate comparison");
 assert.ok(js.includes("candidate_alternatives"), "review export includes backend candidate alternatives");
 assert.ok(js.includes("agent_orchestration_audit"), "review export includes backend orchestration audit");
@@ -70,7 +72,9 @@ assert.ok(js.includes("live_overlay_ready"), "review gate records live overlay r
 assert.ok(js.includes("handleAgentStreamEvent"), "workbench consumes agent SSE trace events");
 assert.ok(js.includes("stream: true"), "workbench prefers streaming agent trace");
 assert.ok(js.includes('event === "trace_gate"'), "workbench consumes agent trace gate SSE events");
+assert.ok(js.includes('event === "react_plan"'), "workbench consumes Agent ReAct plan SSE events");
 assert.ok(js.includes("Agent 工具门控已通过"), "workbench reports successful SSE trace gate");
+assert.ok(js.includes("Agent ReAct 计划已通过"), "workbench reports successful ReAct plan SSE event");
 assert.ok(js.includes("SSE trace 不可用"), "workbench reports JSON fallback when streaming is unavailable");
 assert.ok(js.includes("建议覆盖项"), "markdown report includes suggested override details");
 assert.ok(js.includes("protective_direction"), "workbench displays protective direction guardrail suggestions");

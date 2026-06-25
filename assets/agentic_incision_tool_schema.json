@@ -1,5 +1,5 @@
 {
-  "version": "0.5-agentic-incision-tools",
+  "version": "0.6-agentic-incision-tools",
   "trace_mode": "single_turn_react_multi_candidate_with_deterministic_tools",
   "boundary": "The LLM may select, summarize, and request deterministic tools; it must not compute incision geometry or override guardrails.",
   "trace_gate": {
@@ -16,8 +16,22 @@
   },
   "orchestration_audit": {
     "schema_version": "agent-orchestration-audit/v0.1",
-    "records": ["candidate_count", "comparison_ready", "retry_count", "retried_failures", "tool_failure_count", "recovered_failures", "trace_gate_passed"],
+    "records": ["candidate_count", "comparison_ready", "react_plan_passed", "react_plan_step_count", "retry_count", "retried_failures", "tool_failure_count", "recovered_failures", "trace_gate_passed"],
     "boundary": "Agent orchestration may compare deterministic candidates for review; it must not issue surgical instructions or bypass clinician confirmation."
+  },
+  "react_plan": {
+    "schema_version": "agent-react-plan/v0.1",
+    "mode": "single_turn_react_multi_candidate_with_deterministic_tools",
+    "steps": [
+      "inspect_tumor_input",
+      "localize_anatomy",
+      "query_direction",
+      "generate_primary_candidate",
+      "check_guardrails",
+      "compare_direction_variants"
+    ],
+    "records": ["required_action_groups", "observed_actions", "trace_indexes", "status", "issues"],
+    "boundary": "The ReAct plan is an audit scaffold over deterministic tool calls; it is not autonomous clinical reasoning or a surgical instruction."
   },
   "trace_audit_executor": {
     "schema_version": "agentic-incision-trace-audit/v0.1",
@@ -26,6 +40,8 @@
     "checks": [
       "agent-trace-gate replay",
       "stored trace gate consistency",
+      "agent-react-plan replay",
+      "stored react plan consistency",
       "candidate comparison replay",
       "orchestration audit count consistency",
       "retry_tool_failure trace consistency",

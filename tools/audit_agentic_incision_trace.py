@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from langerface.agent import agent_trace_gate, compare_candidate_records
+from langerface.agent import agent_react_plan, agent_trace_gate, compare_candidate_records
 
 AUDIT_SCHEMA = "agentic-incision-trace-audit/v0.1"
 PLAN_SCHEMA = "agentic-incision-plan/v0.1"
@@ -125,6 +125,32 @@ def _comparison_replay(
     }
 
 
+def _react_plan_matches(stored: dict[str, Any], replayed: dict[str, Any]) -> bool:
+    if not stored:
+        return False
+    stored_steps = {str(step.get("id")): step for step in stored.get("steps", []) if isinstance(step, dict)}
+    replayed_steps = {
+        str(step.get("id")): step
+        for step in replayed.get("steps", [])
+        if isinstance(step, dict)
+    }
+    if stored_steps.keys() != replayed_steps.keys():
+        return False
+    for step_id, replayed_step in replayed_steps.items():
+        stored_step = stored_steps[step_id]
+        if stored_step.get("status") != replayed_step.get("status"):
+            return False
+        if stored_step.get("trace_indexes") != replayed_step.get("trace_indexes"):
+            return False
+    return (
+        stored.get("schema_version") == replayed.get("schema_version")
+        and stored.get("passed") == replayed.get("passed")
+        and stored.get("candidate_count") == replayed.get("candidate_count")
+        and stored.get("comparison_ready") == replayed.get("comparison_ready")
+        and stored.get("failed_step_count") == replayed.get("failed_step_count")
+    )
+
+
 def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") -> dict[str, Any]:
     trace = [step for step in record.get("trace", []) if isinstance(step, dict)]
     actions = _action_names(trace)
@@ -158,10 +184,27 @@ def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") ->
     generation_indexes = [idx for idx, action in enumerate(actions) if action in TRACE_GENERATION_ACTIONS]
     compare_indexes = [idx for idx, action in enumerate(actions) if action == "compare_candidates"]
     guardrail_indexes = [idx for idx, action in enumerate(actions) if action == "evaluate_guardrails"]
+    stored_react_plan = (
+        record.get("agent_react_plan")
+        if isinstance(record.get("agent_react_plan"), dict)
+        else {}
+    )
+    replayed_react_plan = agent_react_plan(
+        trace,
+        candidate_count=int(orchestration.get("candidate_count") or len(alternatives)),
+        comparison_ready=bool(orchestration.get("comparison_ready") if orchestration else comparison),
+        trace_gate=replayed_gate,
+        retried_failures=retried_failures,
+        recovered_failures=recovered_failures,
+        mode=str(orchestration.get("mode") or "single_turn_react_multi_candidate_with_deterministic_tools"),
+    )
 
     checks = {
         "trace_gate_replayed_passed": replayed_gate["passed"],
         "stored_trace_gate_matches_replay": _stored_gate_matches(stored_gate, replayed_gate),
+        "react_plan_present": bool(stored_react_plan),
+        "react_plan_replayed_passed": replayed_react_plan["passed"],
+        "stored_react_plan_matches_replay": _react_plan_matches(stored_react_plan, replayed_react_plan),
         "deterministic_generation_observed": bool(generation_indexes),
         "guardrails_observed_after_generation": bool(
             generation_indexes and guardrail_indexes and max(guardrail_indexes) > min(generation_indexes)
@@ -210,6 +253,8 @@ def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") ->
         },
         "trace_gate_replay": replayed_gate,
         "stored_trace_gate_present": bool(stored_gate),
+        "react_plan_replay": replayed_react_plan,
+        "stored_react_plan_present": bool(stored_react_plan),
         "candidate_comparison_replay": comparison_replay,
         "orchestration_audit": {
             "present": bool(orchestration),

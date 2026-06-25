@@ -153,6 +153,59 @@ AGENT_TRACE_GATE_REQUIRED = [
     },
 ]
 
+TRACE_GENERATION_ACTIONS = {"linear_subcutaneous_incision", "fusiform_cutaneous_incision"}
+
+AGENT_REACT_PLAN_STEP_DEFINITIONS = [
+    {
+        "id": "inspect_tumor_input",
+        "label": "Inspect tumor input",
+        "intent": "Validate structured lesion inputs before any geometry is generated.",
+        "required_action_groups": [["summarize_tumor_input_quality"]],
+        "optional_actions": [],
+    },
+    {
+        "id": "localize_anatomy",
+        "label": "Localize anatomy",
+        "intent": "Classify face region and nearby sensitive free margins.",
+        "required_action_groups": [["classify_region"]],
+        "optional_actions": [],
+    },
+    {
+        "id": "query_direction",
+        "label": "Query RSTL direction",
+        "intent": "Read local RSTL direction from deterministic atlas service.",
+        "required_action_groups": [["query_rstl_direction"]],
+        "optional_actions": [],
+    },
+    {
+        "id": "generate_primary_candidate",
+        "label": "Generate primary candidate",
+        "intent": "Generate baseline incision geometry with deterministic tools.",
+        "required_action_groups": [["linear_subcutaneous_incision", "fusiform_cutaneous_incision"]],
+        "optional_actions": [],
+    },
+    {
+        "id": "check_guardrails",
+        "label": "Check guardrails",
+        "intent": "Evaluate deterministic clinical guardrails before review.",
+        "required_action_groups": [["evaluate_guardrails"]],
+        "optional_actions": [],
+    },
+    {
+        "id": "compare_direction_variants",
+        "label": "Compare direction variants",
+        "intent": "Explore nearby deterministic direction offsets and recover bounded failures.",
+        "required_action_groups": [["propose_direction_variants"], ["compare_candidates"]],
+        "optional_actions": [
+            "linear_subcutaneous_incision",
+            "fusiform_cutaneous_incision",
+            "evaluate_guardrails",
+            "retry_tool_failure",
+            "recover_tool_failure",
+        ],
+    },
+]
+
 
 def _trace(
     action: str,
@@ -165,6 +218,94 @@ def _trace(
         "action": action,
         "input": tool_input,
         "observation": observation,
+    }
+
+
+def _trace_actions(trace: list[dict[str, Any]]) -> list[str]:
+    return [str(step.get("action", "")) for step in trace if step.get("action")]
+
+
+def _indexes_for_actions(actions: list[str], accepted: set[str]) -> list[int]:
+    return [index for index, action in enumerate(actions) if action in accepted]
+
+
+def agent_react_plan(
+    trace: list[dict[str, Any]],
+    *,
+    candidate_count: int,
+    comparison_ready: bool,
+    trace_gate: dict[str, Any],
+    retried_failures: list[dict[str, Any]] | None = None,
+    recovered_failures: list[dict[str, Any]] | None = None,
+    mode: str = "single_turn_react_multi_candidate_with_deterministic_tools",
+) -> dict[str, Any]:
+    """Build a structured ReAct execution plan from deterministic trace facts."""
+
+    actions = _trace_actions(trace)
+    retried_failures = retried_failures or []
+    recovered_failures = recovered_failures or []
+    steps: list[dict[str, Any]] = []
+    for definition in AGENT_REACT_PLAN_STEP_DEFINITIONS:
+        required_groups = [list(group) for group in definition["required_action_groups"]]
+        optional_actions = list(definition.get("optional_actions", []))
+        required_actions = {action for group in required_groups for action in group}
+        accepted = required_actions | set(optional_actions)
+        trace_indexes = _indexes_for_actions(actions, accepted)
+        missing_groups = [
+            group for group in required_groups
+            if not _indexes_for_actions(actions, set(group))
+        ]
+        status = "completed" if not missing_groups else "failed"
+        issues: list[str] = []
+        if missing_groups:
+            issues.extend(
+                "missing any of: " + ", ".join(group)
+                for group in missing_groups
+            )
+        if definition["id"] == "compare_direction_variants":
+            if recovered_failures:
+                status = "completed_with_recovery" if not missing_groups else "failed_with_recovery"
+                issues.append("one or more deterministic variants were skipped after bounded retry")
+            elif retried_failures:
+                status = "completed_after_retry" if not missing_groups else "failed_after_retry"
+                issues.append("one or more deterministic variants required bounded retry")
+            if not comparison_ready:
+                status = "failed"
+                issues.append("candidate comparison missing")
+            if candidate_count <= 0:
+                status = "failed"
+                issues.append("no candidate alternatives available for review")
+        steps.append({
+            "id": definition["id"],
+            "label": definition["label"],
+            "intent": definition["intent"],
+            "required_action_groups": required_groups,
+            "optional_actions": optional_actions,
+            "observed_actions": [actions[index] for index in trace_indexes],
+            "trace_indexes": trace_indexes,
+            "status": status,
+            "issues": issues,
+        })
+
+    failed_steps = [step for step in steps if str(step["status"]).startswith("failed")]
+    passed = bool(trace_gate.get("passed")) and comparison_ready and candidate_count > 0 and not failed_steps
+    return {
+        "schema_version": "agent-react-plan/v0.1",
+        "mode": mode,
+        "passed": passed,
+        "trace_gate_passed": bool(trace_gate.get("passed")),
+        "candidate_count": int(candidate_count),
+        "comparison_ready": bool(comparison_ready),
+        "step_count": len(steps),
+        "completed_step_count": sum(1 for step in steps if str(step["status"]).startswith("completed")),
+        "failed_step_count": len(failed_steps),
+        "retry_count": len(retried_failures),
+        "recovery_count": len(recovered_failures),
+        "steps": steps,
+        "clinical_boundary": (
+            "This ReAct plan is an audit scaffold over deterministic tool calls. "
+            "It is not autonomous clinical reasoning or a surgical instruction."
+        ),
     }
 
 
@@ -696,11 +837,21 @@ def plan_incision_case(
             }
 
     trace_gate = agent_trace_gate(trace, candidate)
+    react_plan = agent_react_plan(
+        trace,
+        candidate_count=len(candidate_records),
+        comparison_ready=bool(candidate_comparison),
+        trace_gate=trace_gate,
+        retried_failures=retried_failures,
+        recovered_failures=recovered_failures,
+    )
     orchestration_audit = {
         "schema_version": "agent-orchestration-audit/v0.1",
         "mode": "single_turn_react_multi_candidate_with_deterministic_tools",
         "candidate_count": len(candidate_records),
         "comparison_ready": bool(candidate_comparison),
+        "react_plan_passed": react_plan["passed"],
+        "react_plan_step_count": react_plan["step_count"],
         "retry_count": len(retried_failures),
         "retried_failures": retried_failures,
         "tool_failure_count": len(recovered_failures),
@@ -725,6 +876,7 @@ def plan_incision_case(
         "guardrails": guardrails,
         "trace": trace,
         "agent_trace_gate": trace_gate,
+        "agent_react_plan": react_plan,
         "agent_orchestration_audit": orchestration_audit,
         "llm": llm,
         "provider": provider_status,

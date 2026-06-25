@@ -613,6 +613,20 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     assert result["agent_trace_gate"]["missing_actions"] == []
     assert result["agent_trace_gate"]["deterministic_geometry_present"] is True
     assert "evaluate_guardrails" in result["agent_trace_gate"]["observed_actions"]
+    assert result["agent_react_plan"]["schema_version"] == "agent-react-plan/v0.1"
+    assert result["agent_react_plan"]["passed"] is True
+    assert result["agent_react_plan"]["step_count"] == 6
+    assert result["agent_react_plan"]["failed_step_count"] == 0
+    assert [step["id"] for step in result["agent_react_plan"]["steps"]] == [
+        "inspect_tumor_input",
+        "localize_anatomy",
+        "query_direction",
+        "generate_primary_candidate",
+        "check_guardrails",
+        "compare_direction_variants",
+    ]
+    assert result["agent_react_plan"]["steps"][-1]["status"] == "completed"
+    assert "compare_candidates" in result["agent_react_plan"]["steps"][-1]["observed_actions"]
     assert len(result["candidate_alternatives"]) == 3
     assert {item["angle_offset_deg"] for item in result["candidate_alternatives"]} == {-10.0, 0.0, 10.0}
     assert [item["rank"] for item in result["candidate_comparison"]] == [1, 2, 3]
@@ -622,6 +636,8 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
         "mode": "single_turn_react_multi_candidate_with_deterministic_tools",
         "candidate_count": 3,
         "comparison_ready": True,
+        "react_plan_passed": True,
+        "react_plan_step_count": 6,
         "retry_count": 0,
         "retried_failures": [],
         "tool_failure_count": 0,
@@ -676,6 +692,7 @@ def test_plan_incision_case_recovers_failed_candidate_variant(monkeypatch):
     assert audit["candidate_count"] == 2
     assert audit["comparison_ready"] is True
     assert audit["retry_count"] == 1
+    assert audit["react_plan_passed"] is True
     assert audit["retried_failures"] == [
         {
             "tool": "linear_subcutaneous_incision",
@@ -699,6 +716,10 @@ def test_plan_incision_case_recovers_failed_candidate_variant(monkeypatch):
             "recovery": "skipped_failed_variant_and_kept_other_candidates",
         }
     ]
+    assert result["agent_react_plan"]["passed"] is True
+    assert result["agent_react_plan"]["recovery_count"] == 1
+    assert result["agent_react_plan"]["steps"][-1]["status"] == "completed_with_recovery"
+    assert any("skipped" in issue for issue in result["agent_react_plan"]["steps"][-1]["issues"])
 
 
 def test_plan_incision_case_retries_transient_candidate_variant_failure(monkeypatch):
@@ -732,10 +753,14 @@ def test_plan_incision_case_retries_transient_candidate_variant_failure(monkeypa
     audit = result["agent_orchestration_audit"]
     assert audit["candidate_count"] == 3
     assert audit["comparison_ready"] is True
+    assert audit["react_plan_passed"] is True
     assert audit["retry_count"] == 1
     assert audit["tool_failure_count"] == 0
     assert audit["recovered_failures"] == []
     assert audit["retried_failures"][0]["error"] == "transient variant failure"
+    assert result["agent_react_plan"]["passed"] is True
+    assert result["agent_react_plan"]["retry_count"] == 1
+    assert result["agent_react_plan"]["steps"][-1]["status"] == "completed_after_retry"
 
 
 def test_compare_candidate_records_ranks_high_guardrail_after_clean_candidate():
@@ -817,11 +842,16 @@ def test_clinical_rules_asset_has_region_provenance_and_required_fields():
 
 def test_agent_tool_schema_and_privacy_doc_cover_review_export():
     schema = json.loads((ROOT / "assets" / "agentic_incision_tool_schema.json").read_text())
+    assert schema["version"] == "0.6-agentic-incision-tools"
     assert schema["trace_gate"]["schema_version"] == "agent-trace-gate/v0.1"
     assert schema["trace_gate"]["blocks_confirmation"] is True
     assert ["query_rstl_direction"] in schema["trace_gate"]["required_actions"]
+    assert schema["react_plan"]["schema_version"] == "agent-react-plan/v0.1"
+    assert "compare_direction_variants" in schema["react_plan"]["steps"]
+    assert "react_plan_passed" in schema["orchestration_audit"]["records"]
     assert schema["trace_audit_executor"]["schema_version"] == "agentic-incision-trace-audit/v0.1"
     assert schema["trace_audit_executor"]["tool"] == "tools/audit_agentic_incision_trace.py"
+    assert "agent-react-plan replay" in schema["trace_audit_executor"]["checks"]
     names = {tool["name"] for tool in schema["tools"]}
     assert {
         "classify_region",
