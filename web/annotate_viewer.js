@@ -19,6 +19,14 @@ function normalizedColors(colors, count) {
   return out;
 }
 
+function disposeObject(obj) {
+  obj.traverse((child) => {
+    child.geometry?.dispose?.();
+    if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose?.());
+    else child.material?.dispose?.();
+  });
+}
+
 const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -239,5 +247,10 @@ export class Annotator3D {
     this.camera.position.set(0, 0, this._dist);
     this.camera.lookAt(0, 0, 0);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  dispose() {
+    disposeObject(this.scene);
+    this.renderer.dispose();
   }
 }

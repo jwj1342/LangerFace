@@ -17,6 +17,8 @@ const typedStore = read("src/stores/appStore.ts");
 const incisionStore = read("src/stores/incisionStore.ts");
 const incisionBridge = read("src/hooks/useIncisionControllerBridge.ts");
 const incisionStatePanel = read("src/components/IncisionStatePanel.tsx");
+const annotateRoute = read("src/routes/AnnotateRoute.tsx");
+const annotateWorkbench = read("src/routes/AnnotateWorkbench.tsx");
 const incisionRoute = read("src/routes/IncisionRoute.tsx");
 const incisionWorkbench = read("src/routes/IncisionWorkbench.tsx");
 const surgeryRoute = read("src/routes/SurgeryRoute.tsx");
@@ -25,6 +27,8 @@ const threeRoute = read("src/routes/ThreePreviewRoute.tsx");
 const worker = read("src/workers/workflow.worker.ts");
 const workerClient = read("src/services/workflowWorkerClient.ts");
 const workerPanel = read("src/components/WorkerStatusPanel.tsx");
+const annotateController = read("annotate_main.js");
+const annotateViewer = read("annotate_viewer.js");
 const controller = read("incision_agent_main.js");
 const surgeryController = read("surgery_main.js");
 
@@ -57,6 +61,7 @@ assert.ok(vercel.includes('"source": "/app/(.*)"'), "Vercel rewrites nested SPA 
 assert.ok(vercel.includes('"destination": "/app/index.html"'), "Vercel routes SPA paths back to app/index.html");
 
 assert.ok(app.includes("react-router-dom"), "React app is routed through React Router");
+assert.ok(app.includes('path="/annotate"'), "React Router exposes the 3D annotation route");
 assert.ok(app.includes('path="/incision"'), "React Router exposes the incision workbench route");
 assert.ok(app.includes('path="/surgery"'), "React Router exposes the surgery closure route");
 assert.ok(app.includes('path="/three-preview"'), "React Router exposes the R3F preview route");
@@ -92,7 +97,7 @@ for (const id of [
   assert.ok(incisionWorkbench.includes(`id="${id}"`), `React incision workbench exposes #${id}`);
 }
 assert.ok(incisionWorkbench.includes('href="/index.html"'), "React incision workbench uses absolute links outside /app");
-assert.ok(incisionWorkbench.includes('href="/annotate.html"'), "React incision workbench links to 3D annotation from /app safely");
+assert.ok(incisionWorkbench.includes('href="/app/annotate"'), "React incision workbench links to the React 3D annotation route");
 assert.ok(controller.includes("export function mountIncisionAgentWorkbench"), "incision controller exposes a mount lifecycle");
 assert.ok(controller.includes("export function disposeIncisionAgentWorkbench"), "incision controller exposes a dispose lifecycle");
 assert.ok(controller.includes("cancelAnimationFrame"), "incision controller cancels its render loop on dispose");
@@ -118,6 +123,32 @@ assert.ok(controller.includes("main_thread_fallback"), "incision controller keep
 assert.ok(controller.includes("S.workflowWorker?.dispose"), "incision controller disposes the workflow worker on route teardown");
 assert.ok(controller.includes("react-incision-controller-snapshot/v0.1"), "incision controller publishes typed low-frequency snapshots to React");
 assert.ok(controller.includes("CustomEvent(INCISION_CONTROLLER_STATE_EVENT"), "incision controller emits state snapshots through a browser event");
+assert.ok(annotateRoute.includes("__LANGERFACE_REACT_MANAGED__"), "React annotate route disables controller auto-mount");
+assert.ok(annotateRoute.includes("mountAnnotateWorkbench"), "React annotate route mounts the annotation controller explicitly");
+assert.ok(annotateRoute.includes("disposeAnnotateWorkbench"), "React annotate route can dispose the annotation controller");
+assert.ok(annotateRoute.includes("<AnnotateWorkbench />"), "React annotate route renders the annotation UI as TSX");
+assert.ok(!annotateRoute.includes("DOMParser"), "React annotate route should not parse legacy HTML");
+assert.ok(!annotateRoute.includes("innerHTML"), "React annotate route should not inject legacy HTML");
+for (const id of [
+  "stage",
+  "btnLoadCanonical",
+  "btnCloudFit",
+  "meshFile",
+  "slicerFile",
+  "annSystem",
+  "btnExportAtlas",
+  "lineList",
+]) {
+  assert.ok(annotateWorkbench.includes(`id="${id}"`), `React annotate workbench exposes #${id}`);
+}
+assert.ok(annotateWorkbench.includes('to="/surgery"'), "React annotation route links to the React surgery closure route");
+assert.ok(annotateController.includes("export function mountAnnotateWorkbench"), "annotation controller exposes a mount lifecycle");
+assert.ok(annotateController.includes("export function disposeAnnotateWorkbench"), "annotation controller exposes a dispose lifecycle");
+assert.ok(annotateController.includes("cancelAnimationFrame"), "annotation controller cancels its render loop on dispose");
+assert.ok(annotateController.includes("abortController?.abort"), "annotation controller aborts DOM listeners on dispose");
+assert.ok(annotateController.includes("activeSession"), "annotation controller guards async loaders across SPA unmounts");
+assert.ok(annotateController.includes("!window.__LANGERFACE_REACT_MANAGED__"), "legacy annotation HTML still auto-mounts outside React");
+assert.ok(annotateViewer.includes("dispose()"), "annotation viewer exposes a WebGL dispose lifecycle");
 assert.ok(surgeryRoute.includes("__LANGERFACE_REACT_MANAGED__"), "React surgery route disables controller auto-mount");
 assert.ok(surgeryRoute.includes("mountSurgeryClosureDemo"), "React surgery route mounts the surgery controller explicitly");
 assert.ok(surgeryRoute.includes("disposeSurgeryClosureDemo"), "React surgery route can dispose the surgery controller");

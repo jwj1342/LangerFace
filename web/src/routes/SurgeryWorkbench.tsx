@@ -7,7 +7,7 @@ export function SurgeryWorkbench() {
         <div className="brand">
           <div className="brand-top">
             <span className="eyebrow">RSTL · CLOSURE DEMO</span>
-            <Link className="badge" to="/three-preview">返回 R3F 预览</Link>
+            <Link className="badge" to="/annotate">返回 3D 标注</Link>
           </div>
           <h1>沿 RSTL 闭合演示</h1>
         </div>
@@ -64,7 +64,7 @@ export function SurgeryWorkbench() {
           <span className="live on"><span className="dot" />沿 RSTL 闭合演示</span>
           <div className="stage-actions">
             <span className="fps">拖拽旋转 · 滚轮缩放 · 点击标记肿物</span>
-            <Link className="stage-link" to="/three-preview">返回 R3F 预览</Link>
+            <Link className="stage-link" to="/annotate">返回 3D 标注</Link>
           </div>
         </div>
         <div className="stage-body">

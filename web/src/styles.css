@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "../style.css";
+@import "../annotate.css";
 
 @layer base {
   #root {
@@ -62,6 +63,26 @@
 
   .react-incision-host {
     min-height: 100dvh;
+  }
+
+  .react-annotate-host {
+    min-height: 100dvh;
+  }
+
+  .annotate-workbench.app {
+    grid-template-columns: minmax(340px, 380px) 1fr;
+  }
+
+  .annotate-workbench .annotate-spacing-label {
+    margin-top: 10px;
+  }
+
+  .annotate-workbench .annotate-system-select {
+    margin-top: 7px;
+  }
+
+  .annotate-workbench .annotate-export-row {
+    grid-template-columns: 1fr 1fr;
   }
 
   .incision-workbench.app {

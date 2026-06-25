@@ -195,7 +195,7 @@ export function IncisionWorkbench() {
           <span className="live on"><span className="dot"></span>标准脸规划</span>
           <div className="stage-actions">
             <span className="fps" id="stageStatus">拖拽旋转 · 滚轮缩放 · 点击定位</span>
-            <a className="stage-link fps" href="/annotate.html">3D 标注与演示</a>
+            <a className="stage-link fps" href="/app/annotate">3D 标注与演示</a>
           </div>
         </div>
         <div className="stage-body">

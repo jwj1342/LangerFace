@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { DashboardRoute } from "./routes/DashboardRoute";
 
+const AnnotateRoute = lazy(() => import("./routes/AnnotateRoute").then((module) => ({ default: module.AnnotateRoute })));
 const IncisionRoute = lazy(() => import("./routes/IncisionRoute").then((module) => ({ default: module.IncisionRoute })));
 const SurgeryRoute = lazy(() => import("./routes/SurgeryRoute").then((module) => ({ default: module.SurgeryRoute })));
 const ThreePreviewRoute = lazy(() => import("./routes/ThreePreviewRoute").then((module) => ({ default: module.ThreePreviewRoute })));
@@ -23,6 +24,7 @@ export function App() {
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/" element={<DashboardRoute />} />
+        <Route path="/annotate" element={<AnnotateRoute />} />
         <Route path="/incision" element={<IncisionRoute />} />
         <Route path="/surgery" element={<SurgeryRoute />} />
         <Route path="/three-preview" element={<ThreePreviewRoute />} />

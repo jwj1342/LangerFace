@@ -1,4 +1,4 @@
-import { ArrowRight, Boxes, Route as RouteIcon, Scissors } from "lucide-react";
+import { ArrowRight, Boxes, PenLine, Route as RouteIcon, Scissors } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { WorkerStatusPanel } from "../components/WorkerStatusPanel";
@@ -24,6 +24,10 @@ export function DashboardRoute() {
             <Link className="react-nav-link" to="/incision">
               <span>切口 Agent 工作台</span>
               <ArrowRight size={16} />
+            </Link>
+            <Link className="react-nav-link" to="/annotate">
+              <span>3D 网页标注</span>
+              <PenLine size={16} />
             </Link>
             <Link className="react-nav-link" to="/three-preview">
               <span>R3F 标准脸预览</span>
@@ -54,7 +58,7 @@ export function DashboardRoute() {
             <p className="mt-4 text-sm leading-7 text-[#9aa3b2]">
               当前 PR 分支保留既有确定性 workflow，并把新工作台放入 React Router。
               切口功能先通过生命周期桥迁入，3D 标准脸预览使用 R3F / drei 验证渲染层边界；
-              沿 RSTL 闭合演示也开始由 React 路由接管页面 DOM 和 controller 生命周期。
+              3D 标注页和沿 RSTL 闭合演示也开始由 React 路由接管页面 DOM 和 controller 生命周期。
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Button asChild variant="primary">
@@ -62,6 +66,9 @@ export function DashboardRoute() {
               </Button>
               <Button asChild>
                 <Link to="/three-preview">查看 R3F 预览</Link>
+              </Button>
+              <Button asChild>
+                <Link to="/annotate">打开 3D 标注</Link>
               </Button>
               <Button asChild>
                 <Link to="/surgery">打开闭合演示</Link>
