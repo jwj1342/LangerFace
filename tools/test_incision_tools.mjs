@@ -1,4 +1,6 @@
 // Dependency-free tests for web/incision_tools.js.
+import fs from "node:fs";
+
 import { __incisionToolsForTests as T } from "../web/incision_tools.js";
 
 let passed = 0;
@@ -26,6 +28,43 @@ function leftTipAngleDeg(candidate) {
   const cos = Math.max(-1, Math.min(1, dot(upper, lower) / (norm(upper) * norm(lower))));
   return Math.acos(cos) * 180 / Math.PI;
 }
+
+function sameJson(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+const clinicalRules = JSON.parse(
+  fs.readFileSync(new URL("../assets/clinical_rules_face_incision.json", import.meta.url), "utf8"),
+);
+ok(T.DEFAULT_RULES.version === clinicalRules.version, "web clinical rules version matches asset");
+for (const [section, fields] of Object.entries({
+  linear_subcutaneous: ["length_multiplier", "min_length_mm", "max_length_mm"],
+  fusiform_cutaneous: ["length_to_width_ratio", "tip_angle_deg", "min_length_mm", "max_length_mm", "samples"],
+})) {
+  for (const field of fields) {
+    ok(T.DEFAULT_RULES[section][field] === clinicalRules[section][field],
+      `web ${section}.${field} matches clinical rules asset`);
+  }
+}
+for (const field of [
+  "low_direction_confidence",
+  "low_region_confidence",
+  "free_margin_distance_warn_mm",
+  "min_freehand_boundary_points",
+  "min_boundary_area_diameter_disk_fraction",
+  "boundary_center_shift_diameter_multiplier",
+]) {
+  ok(T.DEFAULT_RULES.guardrails[field] === clinicalRules.guardrails[field],
+    `web guardrails.${field} matches clinical rules asset`);
+}
+ok(sameJson(
+  T.DEFAULT_RULES.guardrails.free_margin_distance_thresholds_mm,
+  clinicalRules.guardrails.free_margin_distance_thresholds_mm,
+), "web free-margin thresholds match clinical rules asset");
+ok(sameJson(
+  T.DEFAULT_RULES.guardrails.protective_direction_hints,
+  clinicalRules.guardrails.protective_direction_hints,
+), "web protective direction hints match clinical rules asset");
 
 const verts = [
   [0, 0, 0],

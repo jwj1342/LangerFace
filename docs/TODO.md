@@ -21,6 +21,7 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候
 ### 临床知识与几何基础
 
 - [ ] 结构化面部皮纹线与切口设计原则，形成可版本管理的临床规则库 — [#11](https://github.com/jwj1342/LangerFace/issues/11)
+      · 本 PR 已提供 `assets/clinical_rules_face_incision.json`，包含 RSTL 首选、自然皱襞/美学亚单位次级、敏感游离缘例外、皮下/皮表策略、区域规则、provenance 和 `draft_not_clinically_validated` 状态；新增 `tools/audit_clinical_rules.py` 与前端 JS 对拍，守住资产、Python 默认规则和浏览器默认规则的版本、长度/梭形参数、guardrail 阈值与保护性方向 hint 不漂移
 - [ ] 面部分区与美学亚单位定位：把人脸点位映射到临床区域 — [#12](https://github.com/jwj1342/LangerFace/issues/12)
       · 本 PR 已覆盖额部、耳周、颞颊、上下睑、内眦、鼻背/鼻翼/鼻尖、鼻唇沟、颊部、唇红、上唇、口角、颏部和下颌缘，并输出 `confidence_reasons` 与 `region_boundary_margin_norm`；前端在肿物点位选择时会实时显示当前分区、亚单位、置信度和敏感游离缘/规则边界提示；真实 MediaPipe/FLAME 分区边界和侧脸/表情稳定性仍待后续临床校验
 - [ ] RSTL 局部方向服务：为切口设计提供方向、置信度与可解释依据 — [#13](https://github.com/jwj1342/LangerFace/issues/13)
@@ -37,7 +38,7 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候
 - [ ] 皮表肿物梭形切口生成器：长轴、比例、尖端角与平滑对称约束 — [#16](https://github.com/jwj1342/LangerFace/issues/16)
       · 本 PR 已支持边界投影覆盖、面积/自交质量指标、3:1 默认长宽比、cubic Hermite 轮廓、30° 默认尖端角目标和实际误差 metrics；真实病例曲线调参仍需医生 review
 - [ ] 敏感结构保护规则：下睑、唇红缘、鼻翼等游离边缘风险提示与方向例外 — [#17](https://github.com/jwj1342/LangerFace/issues/17)
-      · 本 PR 已支持敏感区提示、中心点和候选几何到敏感锚点/简化游离缘线段的距离筛查，并按下睑、唇红缘、鼻翼、鼻尖、口角使用 draft 阈值表；命中敏感结构时会输出 `protective_direction` 保护性方向建议并要求医生记录覆盖原因；真实解剖边界、阈值和保护性方向仍需临床确认
+      · 本 PR 已支持敏感区提示、中心点和候选几何到敏感锚点/简化游离缘线段的距离筛查，并按下睑、唇红缘、鼻翼、鼻尖、口角使用 draft 阈值表；命中敏感结构时会输出 `protective_direction` 保护性方向建议并要求医生记录覆盖原因；新增规则 drift 审计会比较 `free_margin_distance_thresholds_mm` 与 `protective_direction_hints`，防止 Python/前端实现和 JSON 资产不一致；真实解剖边界、阈值和保护性方向仍需临床确认
 
 ### 产品化与临床验证
 
