@@ -77,6 +77,30 @@
         "requires #61 workflow",
         "requires #2 clinical review before validated use"
       ]
+    },
+    {
+      "id": "bfm_rstl_direction_prior",
+      "system": "rstl",
+      "topologyId": "bfm-local",
+      "topologyVersion": "bfm-neutral-local-v1",
+      "path": null,
+      "format": "dev-local triangle centroid direction field generated from a licensed local BFM/custom 3DMM mesh",
+      "generated_by": "tools/build_3dmm_rstl_direction_prior.py",
+      "status": "pending_dev_local_generation",
+      "validated": false,
+      "uses": [
+        "bfm_direction_prior_review",
+        "bfm_standard_head_annotation_qc",
+        "bfm_individual_transfer_qc",
+        "generic_3dmm_direction_prior_review"
+      ],
+      "limitations": [
+        "BFM/custom 3DMM assets and generated direction fields are not redistributed",
+        "default generic output is gitignored under local_outputs/rstl_3dmm_direction_prior.json",
+        "nearest-neighbor MediaPipe-to-3DMM bridge is not clinical registration",
+        "requires #61 workflow",
+        "requires #2 clinical review before validated use"
+      ]
     }
   ]
 }

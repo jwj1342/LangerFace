@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build a dev-local FLAME RSTL direction prior from the MediaPipe draft prior.
+"""Build a dev-local 3DMM RSTL direction prior from the MediaPipe draft prior.
 
 This is a topology bridge generator for issue #86. It does not commit or
-redistribute FLAME-derived outputs; the default output path lives under
-``assets/flame/`` and is gitignored. The generated asset remains
+redistribute FLAME/BFM/3DMM-derived outputs; the FLAME default output path
+lives under ``assets/flame/`` and is gitignored. The generated asset remains
 ``validated:false`` and requires #2 clinical review.
 """
 
@@ -144,12 +144,14 @@ def _load_source_prior(path: Path) -> tuple[dict[str, Any], np.ndarray, np.ndarr
     return prior, points, vectors, np.clip(confidences, 0.0, 1.0), tris
 
 
-def build_flame_direction_prior(
+def build_3dmm_direction_prior(
     *,
     source_prior_path: Path,
     target_topology_path: Path,
     target_vertices_path: Path,
     generated_at: str,
+    target_model_name: str,
+    generated_by: str,
     k_nearest: int = 7,
     low_confidence_threshold: float = 0.35,
     align_source_bbox: bool = True,
@@ -209,15 +211,18 @@ def build_flame_direction_prior(
         "validated": False,
         "review_status": DRAFT_REVIEW_STATUS,
         "generated_at": generated_at,
-        "generated_by": "tools/build_flame_rstl_direction_prior.py",
+        "generated_by": generated_by,
+        "target_model_name": target_model_name,
+        "target_topology_path": _rel(target_topology_path),
+        "target_vertices_path": _rel(target_vertices_path),
         "source_direction_prior": _rel(source_prior_path),
         "source_schema_version": source_prior.get("schema_version"),
         "source_topologyId": source_prior.get("topologyId"),
         "source_topologyVersion": source_prior.get("topologyVersion"),
         "source_validated": source_prior.get("validated"),
         "coordinate_space": (
-            "target neutral 3DMM mesh coordinate space; bbox-aligned nearest-neighbor bridge "
-            "from MediaPipe canonical direction prior"
+            f"{target_model_name} neutral 3DMM mesh coordinate space; bbox-aligned "
+            "nearest-neighbor bridge from MediaPipe canonical direction prior"
         ),
         "sample_kind": "triangle_centroid_direction",
         "registration_method": "bbox_aligned_nearest_source_triangle_centroid_direction_transfer",
@@ -258,7 +263,7 @@ def build_flame_direction_prior(
                 "review scaffold, not clinical FLAME/BFM registration."
             ),
             (
-                "Generated FLAME/BFM outputs must stay outside git unless license "
+                "Generated FLAME/BFM/3DMM outputs must stay outside git unless license "
                 "and clinical review gates explicitly allow otherwise."
             ),
             "Issue #2 clinical review is required before any generated asset can be marked validated:true.",
@@ -267,11 +272,40 @@ def build_flame_direction_prior(
     }
 
 
+def build_flame_direction_prior(
+    *,
+    source_prior_path: Path,
+    target_topology_path: Path,
+    target_vertices_path: Path,
+    generated_at: str,
+    target_model_name: str = "flame",
+    k_nearest: int = 7,
+    low_confidence_threshold: float = 0.35,
+    align_source_bbox: bool = True,
+) -> dict[str, Any]:
+    return build_3dmm_direction_prior(
+        source_prior_path=source_prior_path,
+        target_topology_path=target_topology_path,
+        target_vertices_path=target_vertices_path,
+        generated_at=generated_at,
+        target_model_name=target_model_name,
+        generated_by="tools/build_flame_rstl_direction_prior.py",
+        k_nearest=k_nearest,
+        low_confidence_threshold=low_confidence_threshold,
+        align_source_bbox=align_source_bbox,
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-prior", default=str(DEFAULT_SOURCE_PRIOR))
     parser.add_argument("--target-topology", default=str(DEFAULT_TARGET_TOPOLOGY))
     parser.add_argument("--target-vertices", default=str(DEFAULT_TARGET_VERTICES))
+    parser.add_argument(
+        "--target-name",
+        default="flame",
+        help="human-readable target 3DMM name written to provenance",
+    )
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--generated-at", default=date.today().isoformat())
     parser.add_argument("--k-nearest", type=int, default=7)
@@ -295,6 +329,7 @@ def main() -> int:
             target_topology_path=Path(args.target_topology),
             target_vertices_path=Path(args.target_vertices),
             generated_at=generated_at,
+            target_model_name=args.target_name,
             k_nearest=args.k_nearest,
             low_confidence_threshold=args.low_confidence_threshold,
             align_source_bbox=not args.no_align_source_bbox,

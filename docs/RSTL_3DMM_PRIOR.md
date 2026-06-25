@@ -19,6 +19,7 @@
 | `assets/rstl_3dmm_prior_manifest.json` | 多拓扑 manifest | JSON | `draft_not_clinically_validated` | 记录来源、拓扑、生成脚本和临床校验闸 |
 | FLAME/BFM RSTL atlas | `flame-2023` / BFM | 待生成 `[tri,u,v]` | pending | #61 3DMM 标注/迁移轨后续资产 |
 | FLAME RSTL direction prior | `flame-2023` | dev-local triangle centroid direction field | pending / `validated:false` | `tools/build_flame_rstl_direction_prior.py` 可在本地 FLAME 资产就位后生成，产物位于 gitignored `assets/flame/rstl_flame_direction_prior.json` |
+| BFM/custom 3DMM RSTL direction prior | `bfm-local` / 自定义 3DMM | dev-local triangle centroid direction field | pending / `validated:false` | `tools/build_3dmm_rstl_direction_prior.py` 可读取授权本地拓扑和 neutral vertices，默认输出到 gitignored `local_outputs/rstl_3dmm_direction_prior.json` |
 | FLAME/BFM review packet | `flame-2023` / BFM | `rstl-3dmm-review-packet/v0.1` | `draft_not_clinically_validated` | `tools/build_rstl_3dmm_review_packet.py` 从方向先验抽样生成医生审阅包，产物位于 gitignored `assets/flame/rstl_3dmm_review_packet.json` |
 | FLAME/BFM review-applied prior | `flame-2023` / BFM | `rstl-3dmm-reviewed-direction-prior/v0.1` | `validated:false` | `tools/apply_rstl_3dmm_review_packet.py` 把医生审阅包回填到草案方向场，产物位于 gitignored `assets/flame/rstl_3dmm_reviewed_direction_prior.json` |
 
@@ -48,7 +49,7 @@
 confidence / support 语义对齐方向服务，#86 后续把同类结构注册到 FLAME/BFM 时也有明确的
 provenance 和拓扑边界可对照。
 
-## FLAME 方向先验生成器
+## FLAME / 通用 3DMM 方向先验生成器
 
 `tools/build_flame_rstl_direction_prior.py` 会读取 `assets/rstl_mediapipe_direction_prior.json`、`web/assets/topology_flame_2023.json` 和 `web/assets/flame_neutral_vertices.json`，在 FLAME neutral mesh 的每个三角形质心上生成一个 dev-local 方向样本。默认输出是 `assets/flame/rstl_flame_direction_prior.json`，该路径被 gitignore，不会把 FLAME 衍生资产提交到仓库。
 
@@ -58,6 +59,19 @@ python tools/build_flame_rstl_direction_prior.py --generated-at now
 ```
 
 该生成器只是 MediaPipe 草案方向场到 FLAME 拓扑的 bbox-aligned nearest-neighbor review scaffold，输出 schema 为 `rstl-3dmm-direction-prior/v0.1`，仍保持 `validated:false`。它不是 Borges 原图的正式 FLAME/BFM 注册，也不是临床可用 atlas；真实可关闭 #86 的 FLAME/BFM 图谱仍需要 #61 的本地资产流程、医生在 FLAME/BFM 标准头上的逐线审核，以及 #2 的临床校验出口。
+
+如果目标不是 FLAME，而是授权本地 BFM 或其他 3DMM neutral mesh，可以使用通用入口。该入口要求显式传入目标拓扑和顶点文件，并把 `target_model_name`、`target_topology_path`、`target_vertices_path` 写入 provenance：
+
+```bash
+python tools/build_3dmm_rstl_direction_prior.py \
+  --target-topology local_outputs/topology_bfm_local.json \
+  --target-vertices local_outputs/bfm_neutral_vertices.json \
+  --target-name bfm \
+  --output local_outputs/rstl_bfm_direction_prior.json \
+  --generated-at now
+```
+
+通用入口与 FLAME 入口共用同一套 `rstl-3dmm-direction-prior/v0.1` schema 和置信度规则。它只解决“本地授权 3DMM 拓扑可生成可审阅方向场”的工程接口问题，不解决临床注册、个体化迁移或医生校验问题；这些仍然归 #61、#2 和 #13 后续规则服务处理。
 
 ## FLAME/BFM 医生审阅包
 

@@ -96,6 +96,7 @@ def test_rstl_3dmm_prior_audit_passes_committed_assets():
         "mediapipe_rstl_direction_prior",
         "flame_rstl_prior",
         "flame_rstl_direction_prior",
+        "bfm_rstl_direction_prior",
     }
 
 
@@ -183,6 +184,9 @@ def test_flame_rstl_direction_prior_builder_with_synthetic_topology(tmp_path):
     assert prior["validated"] is False
     assert prior["review_status"] == "draft_not_clinically_validated"
     assert prior["generated_by"] == "tools/build_flame_rstl_direction_prior.py"
+    assert prior["target_model_name"] == "flame"
+    assert prior["target_topology_path"].endswith("topology_flame_2023.json")
+    assert prior["target_vertices_path"].endswith("flame_neutral_vertices.json")
     assert prior["source_topologyId"] == "mediapipe-468"
     assert prior["registration_method"] == "bbox_aligned_nearest_source_triangle_centroid_direction_transfer"
     assert prior["bridge_alignment"]["method"] == "bbox_center_uniform_scale"
@@ -194,6 +198,85 @@ def test_flame_rstl_direction_prior_builder_with_synthetic_topology(tmp_path):
         assert sample["source"] == "mediapipe_direction_prior_nearest_bridge"
         assert len(sample["point"]) == 3
         assert len(sample["vector"]) == 3
+        norm = math.sqrt(sum(float(v) * float(v) for v in sample["vector"]))
+        assert math.isclose(norm, 1.0, rel_tol=2e-4, abs_tol=2e-4)
+
+
+def test_generic_3dmm_rstl_direction_prior_builder_labels_bfm_topology(tmp_path):
+    source_prior = {
+        "schema_version": "rstl-direction-prior/v0.1",
+        "system": "rstl",
+        "topologyId": "mediapipe-468",
+        "topologyVersion": "mediapipe-canonical-468-v1",
+        "validated": False,
+        "review_status": "draft_not_clinically_validated",
+        "samples": [
+            {"tri": 0, "point": [0, 0, 0], "vector": [1, 0, 0], "confidence": 0.9},
+            {"tri": 1, "point": [2, 0, 0], "vector": [1, 0, 0], "confidence": 0.8},
+            {"tri": 2, "point": [0, 2, 0], "vector": [0, 1, 0], "confidence": 0.7},
+            {"tri": 3, "point": [2, 2, 0], "vector": [0, 1, 0], "confidence": 0.6},
+        ],
+    }
+    topology = {
+        "topologyId": "bfm-local",
+        "topologyVersion": "bfm-neutral-local-v1",
+        "vertexCount": 5,
+        "triangleCount": 3,
+        "triangles": [[0, 1, 2], [1, 3, 2], [1, 4, 3]],
+    }
+    vertices = [[0, 0, 0], [2, 0, 0], [0, 2, 0], [2, 2, 0], [2, 1, 1]]
+    source_path = tmp_path / "source_prior.json"
+    topology_path = tmp_path / "topology_bfm_local.json"
+    vertices_path = tmp_path / "bfm_neutral_vertices.json"
+    output_path = tmp_path / "rstl_bfm_direction_prior.json"
+    source_path.write_text(json.dumps(source_prior))
+    topology_path.write_text(json.dumps(topology))
+    vertices_path.write_text(json.dumps(vertices))
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "tools/build_3dmm_rstl_direction_prior.py",
+            "--source-prior",
+            str(source_path),
+            "--target-topology",
+            str(topology_path),
+            "--target-vertices",
+            str(vertices_path),
+            "--target-name",
+            "bfm",
+            "--output",
+            str(output_path),
+            "--generated-at",
+            "2026-06-25",
+            "--k-nearest",
+            "2",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "[ok]" in result.stdout
+    prior = json.loads(output_path.read_text())
+    assert prior["schema_version"] == "rstl-3dmm-direction-prior/v0.1"
+    assert prior["topologyId"] == "bfm-local"
+    assert prior["topologyVersion"] == "bfm-neutral-local-v1"
+    assert prior["validated"] is False
+    assert prior["review_status"] == "draft_not_clinically_validated"
+    assert prior["generated_by"] == "tools/build_3dmm_rstl_direction_prior.py"
+    assert prior["target_model_name"] == "bfm"
+    assert prior["target_topology_path"].endswith("topology_bfm_local.json")
+    assert prior["target_vertices_path"].endswith("bfm_neutral_vertices.json")
+    assert prior["source_topologyId"] == "mediapipe-468"
+    assert "bfm neutral 3DMM mesh coordinate space" in prior["coordinate_space"]
+    assert "not clinical FLAME/BFM registration" in " ".join(prior["limitations"])
+    assert prior["triangle_count"] == 3
+    assert prior["coverage"]["sample_count"] == 3
+    assert prior["coverage"]["regions_requiring_review"][-1] == "all_3dmm_bridge_samples"
+    for sample in prior["samples"]:
+        assert sample["source"] == "mediapipe_direction_prior_nearest_bridge"
+        assert 0.0 <= sample["confidence"] <= 1.0
         norm = math.sqrt(sum(float(v) * float(v) for v in sample["vector"]))
         assert math.isclose(norm, 1.0, rel_tol=2e-4, abs_tol=2e-4)
 
