@@ -46,7 +46,7 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候
 - [ ] 照片、视频与 AR 实时叠加：把肿物和切口候选稳定投射到患者脸上 — [#19](https://github.com/jwj1342/LangerFace/issues/19)
       · 本 PR 已支持把已确认候选以 `incision-overlay/v0.1` 暂存到实时页，按三角面重心坐标投射到照片/视频/摄像头 landmarks，并在 overlay 中保留 `review_gate`、`guardrail_summary`、审阅状态和 `raw_image_sent=false` 审计字段；实时页会在存在切口 overlay 时新增“切口候选”放大窗卡片，按肿物中心、边界和候选线联合包围盒裁剪，导出也会录制带 RSTL、肿物和切口的主 canvas；`measureIncisionOverlayJitter` 可对静止头部/暂停视频连续帧输出 RMS/P95/max 抖动指标，当前工程门槛为 RMS ≤ 2px、P95 ≤ 4px、max ≤ 8px；`tools/test_live_incision_overlay_ui.mjs` 锁定照片/视频/摄像头入口共用实时渲染路径，`tools/test_export_canvas.mjs` 真实验证主 canvas `captureStream(30)`、`MediaRecorder`、`video/webm` Blob 和下载文件名契约，`tools/test_live_page_dist_assets.mjs` 会构建实时页并用临时 HTTP server 验证首页、bundle、模型、图谱和 3D/FLAME 资产不 404；患者个体化 3D/AR 配准和真实摄像头稳定性评估仍属后续
 - [ ] 临床验证数据集与评估指标：从演示原型走向可验证研究系统 — [#20](https://github.com/jwj1342/LangerFace/issues/20)
-      · 本 PR 已补齐 Stage 1/2 指标、验证集格式、失败分类和 `tools/evaluate_stage2_validation.py`，可把脱敏 `incision-review-record/export` 汇总为候选类型、医生确认率、guardrail 分布、RSTL 偏角、梭形几何误差、敏感距离、失败模式和隐私审计计数；真实病例库和医生统计验证仍需受控临床流程
+      · 本 PR 已补齐 Stage 1/2 指标、验证集格式、失败分类和 `tools/evaluate_stage2_validation.py`，可把脱敏 `incision-review-record/export` 汇总为候选类型、医生确认率、guardrail 分布、RSTL 偏角、梭形几何误差、敏感距离、`incision-overlay-stability/v0.1` 抖动 RMS/P95/max 与通过率、失败模式和隐私审计计数；真实病例库和医生统计验证仍需受控临床流程
 - [ ] 隐私、合规与审计记录：限定临床研究使用边界 — [#21](https://github.com/jwj1342/LangerFace/issues/21)
       · 本 PR 已更新 README/隐私文档、导出字段边界、provider 配置脱敏、`privacy_audit` 字段和 `tools/audit_export_privacy.py`，可在分享审阅/肿物/诊断 JSON 前拦截原始媒体标记、未脱敏 secret、明显身份字段、疑似嵌入媒体 payload，以及辅助线索越界参与几何或 Agent prompt 的标记；真实临床访问控制、日志保留、签名和 DPA 仍需合规流程
 - [ ] AI 辅助识别自然皱襞、皱纹与肿物边界：作为 RSTL 之外的次级依据 — [#22](https://github.com/jwj1342/LangerFace/issues/22)

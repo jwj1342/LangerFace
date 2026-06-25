@@ -18,8 +18,9 @@ def _record(
     warnings: list[dict],
     metrics: dict,
     secondary_cues: dict | None = None,
+    overlay_stability: dict | None = None,
 ) -> dict:
-    return {
+    record = {
         "schema_version": "incision-review-record/v0.3",
         "id": record_id,
         "review_status": status,
@@ -49,6 +50,37 @@ def _record(
         "provider_config": {"api_key_present": True, "api_key": "[redacted]"},
         "privacy_audit": {"raw_image_sent": False, "raw_video_sent": False},
     }
+    if overlay_stability is not None:
+        record["incision_overlay_stability"] = overlay_stability
+    return record
+
+
+def _overlay_stability(*, passed: bool, rms: float, p95: float, max_px: float, reason: str) -> dict:
+    return {
+        "schema_version": "incision-overlay-stability/v0.1",
+        "passed": passed,
+        "reason": reason,
+        "frame_count": 3,
+        "tracked_point_count": 7,
+        "sample_count": 14,
+        "thresholds": {
+            "max_rms_px": 2,
+            "max_p95_px": 4,
+            "max_max_px": 8,
+            "context": "static_camera_or_paused_video",
+        },
+        "overall": {
+            "count": 14,
+            "mean_px": rms / 2,
+            "rms_px": rms,
+            "p95_px": p95,
+            "max_px": max_px,
+        },
+        "by_group": {
+            "candidate_polyline": {"count": 4, "rms_px": rms, "p95_px": p95, "max_px": max_px},
+            "tumor_center": {"count": 2, "rms_px": rms / 2, "p95_px": p95 / 2, "max_px": max_px / 2},
+        },
+    }
 
 
 def _export_payload() -> dict:
@@ -60,6 +92,13 @@ def _export_payload() -> dict:
         guardrails_passed=True,
         warnings=[],
         metrics={"rstl_deviation_deg": 3.0, "diameter_coverage_deficit_mm": 0.0},
+        overlay_stability=_overlay_stability(
+            passed=True,
+            rms=0.6,
+            p95=1.0,
+            max_px=1.4,
+            reason="within_static_overlay_jitter_thresholds",
+        ),
         secondary_cues={
             "present": True,
             "source": "synthetic",
@@ -88,6 +127,13 @@ def _export_payload() -> dict:
                 "sensitive_free_margin_min_distance_mm": 6.0,
                 "boundary_area_ratio_to_diameter_disk": 0.85,
             },
+            overlay_stability=_overlay_stability(
+                passed=False,
+                rms=3.4,
+                p95=5.1,
+                max_px=9.0,
+                reason="jitter_threshold_exceeded",
+            ),
         ),
         _record(
             record_id="fusiform-rejected",
@@ -127,7 +173,22 @@ def test_stage2_validation_summary_aggregates_review_export():
     assert summary["guardrails"]["warning_code_counts"]["axis_coverage_deficit"] == 1
     assert summary["metrics"]["rstl_deviation_deg"]["p90"] == 18.0
     assert summary["metrics"]["fusiform_tip_angle_error_deg"]["count"] == 2
+    assert summary["metrics"]["incision_overlay_jitter_rms_px"]["count"] == 2
+    assert summary["metrics"]["incision_overlay_jitter_rms_px"]["p90"] == 3.4
+    assert summary["metrics"]["incision_overlay_jitter_p95_px"]["max"] == 5.1
+    assert summary["metrics"]["incision_overlay_jitter_max_px"]["max"] == 9.0
+    assert summary["metrics"]["incision_overlay_tracked_point_count"]["mean"] == 7
+    assert summary["incision_overlay_stability"]["present_count"] == 2
+    assert summary["incision_overlay_stability"]["passed_count"] == 1
+    assert summary["incision_overlay_stability"]["failed_count"] == 1
+    assert summary["incision_overlay_stability"]["pass_rate"] == 0.5
+    assert summary["incision_overlay_stability"]["reason_counts"] == {
+        "jitter_threshold_exceeded": 1,
+        "within_static_overlay_jitter_thresholds": 1,
+    }
+    assert summary["incision_overlay_stability"]["context_counts"] == {"static_camera_or_paused_video": 2}
     assert summary["failure_mode_counts"]["incision_rule_violation"] == 1
+    assert summary["failure_mode_counts"]["overlay_instability"] == 1
     assert summary["failure_mode_counts"]["tumor_boundary_input_quality"] == 1
     assert summary["failure_mode_counts"]["review_rejected"] == 1
     assert summary["privacy_audit"]["raw_media_sent_count"] == 0

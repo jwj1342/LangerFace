@@ -120,12 +120,28 @@ def _failure_modes(record: dict[str, Any]) -> list[str]:
     modes = [str(mode) for mode in explicit if mode]
     if record.get("review_status") == STATUS_REJECTED:
         modes.append("review_rejected")
+    stability = _overlay_stability(record)
+    if stability and stability.get("passed") is False:
+        modes.append("overlay_instability")
     for warning in _warnings(record):
         code = str(warning.get("code") or "")
         mapped = WARNING_FAILURE_MODE_MAP.get(code)
         if mapped:
             modes.append(mapped)
     return sorted(set(modes))
+
+
+def _overlay_stability(record: dict[str, Any]) -> dict[str, Any] | None:
+    stability = (
+        record.get("incision_overlay_stability")
+        or record.get("overlay_stability")
+        or (record.get("incision_overlay") or {}).get("stability")
+    )
+    if not isinstance(stability, dict):
+        return None
+    if stability.get("schema_version") != "incision-overlay-stability/v0.1":
+        return None
+    return stability
 
 
 def _has_secret_leak(value: Any, key_path: tuple[str, ...] = ()) -> bool:
@@ -169,6 +185,11 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     lesion_cue_recall: list[float] = []
     wrinkle_cue_precision: list[float] = []
     wrinkle_cue_recall: list[float] = []
+    overlay_jitter_rms: list[float] = []
+    overlay_jitter_p95: list[float] = []
+    overlay_jitter_max: list[float] = []
+    overlay_tracked_point_count: list[float] = []
+    overlay_sample_count: list[float] = []
 
     passed_guardrails = 0
     raw_image_sent_count = 0
@@ -177,6 +198,11 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     secondary_cue_manual_confirmed_count = 0
     secondary_cue_used_for_geometry_count = 0
     secondary_cue_used_for_agent_prompt_count = 0
+    overlay_stability_present_count = 0
+    overlay_stability_passed_count = 0
+    overlay_stability_failed_count = 0
+    overlay_stability_reason_counts: Counter[str] = Counter()
+    overlay_stability_context_counts: Counter[str] = Counter()
 
     for record in records:
         candidate = record.get("candidate") or {}
@@ -221,6 +247,28 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
                 (fusiform_axis_deficit, "axis_coverage_deficit_mm"),
             ]:
                 value = _numeric(metrics.get(key))
+                if value is not None:
+                    target.append(value)
+
+        stability = _overlay_stability(record)
+        if stability:
+            overlay_stability_present_count += 1
+            if stability.get("passed") is True:
+                overlay_stability_passed_count += 1
+            elif stability.get("passed") is False:
+                overlay_stability_failed_count += 1
+            overlay_stability_reason_counts[str(stability.get("reason") or "unknown")] += 1
+            thresholds = stability.get("thresholds") or {}
+            overlay_stability_context_counts[str(thresholds.get("context") or "unknown")] += 1
+            overall = stability.get("overall") or {}
+            for target, source, key in [
+                (overlay_jitter_rms, overall, "rms_px"),
+                (overlay_jitter_p95, overall, "p95_px"),
+                (overlay_jitter_max, overall, "max_px"),
+                (overlay_tracked_point_count, stability, "tracked_point_count"),
+                (overlay_sample_count, stability, "sample_count"),
+            ]:
+                value = _numeric(source.get(key) if isinstance(source, dict) else None)
                 if value is not None:
                     target.append(value)
 
@@ -287,8 +335,25 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
             "fusiform_axis_coverage_deficit_mm": summarize_numbers(fusiform_axis_deficit),
             "sensitive_free_margin_min_distance_mm": summarize_numbers(sensitive_margin_distance),
             "boundary_area_ratio_to_diameter_disk": summarize_numbers(boundary_area_ratio),
+            "incision_overlay_jitter_rms_px": summarize_numbers(overlay_jitter_rms),
+            "incision_overlay_jitter_p95_px": summarize_numbers(overlay_jitter_p95),
+            "incision_overlay_jitter_max_px": summarize_numbers(overlay_jitter_max),
+            "incision_overlay_tracked_point_count": summarize_numbers(overlay_tracked_point_count),
+            "incision_overlay_sample_count": summarize_numbers(overlay_sample_count),
         },
         "failure_mode_counts": dict(sorted(failure_mode_counts.items())),
+        "incision_overlay_stability": {
+            "present_count": overlay_stability_present_count,
+            "passed_count": overlay_stability_passed_count,
+            "failed_count": overlay_stability_failed_count,
+            "pass_rate": _ratio(overlay_stability_passed_count, overlay_stability_present_count),
+            "reason_counts": dict(sorted(overlay_stability_reason_counts.items())),
+            "context_counts": dict(sorted(overlay_stability_context_counts.items())),
+            "clinical_boundary": (
+                "Overlay stability is an engineering regression metric computed from sanitized "
+                "landmark-frame geometry; it is not a substitute for real video/camera review."
+            ),
+        },
         "privacy_audit": {
             "raw_media_sent_count": raw_image_sent_count,
             "provider_secret_leak_count": secret_leak_count,

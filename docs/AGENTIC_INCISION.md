@@ -18,7 +18,7 @@
 - Agent 工具 schema：`assets/agentic_incision_tool_schema.json` 固化工具名、输入输出、`propose_direction_variants`、`compare_candidates`、`recover_tool_failure` 和 LLM 边界。
 - 隐私审计：`docs/INCISION_PRIVACY_AUDIT.md` 记录不出域数据、可发送抽象字段和导出审计字段。
 - 导出守门：`tools/audit_export_privacy.py` 可在分享审阅、肿物或诊断 JSON 前拦截原始媒体标记、未脱敏 secret、明显身份字段和疑似嵌入媒体 payload。
-- 验证汇总：`tools/evaluate_stage2_validation.py` 可读取脱敏审阅 JSON，汇总候选类型、医生确认率、guardrail 分布、RSTL 偏角、梭形几何误差、敏感距离、失败模式和隐私审计计数。
+- 验证汇总：`tools/evaluate_stage2_validation.py` 可读取脱敏审阅 JSON，汇总候选类型、医生确认率、guardrail 分布、RSTL 偏角、梭形几何误差、敏感距离、`incision-overlay-stability/v0.1` 抖动 RMS/P95/max 与通过率、失败模式和隐私审计计数。
 - Provider 接口：默认支持 Ollama/Qwen，本地或集群 vLLM 可通过 OpenAI-compatible endpoint 切入。
 - 前端 Provider 配置：工作台暴露 Agent endpoint、Base URL、model、API Key 和 timeout；API Key 只发送给本地 Agent 代理，导出记录中会脱敏。
 - Agent 代理接口：支持普通 JSON `POST /api/agentic-incision` 和 SSE trace `POST /api/agentic-incision/stream`；前端优先消费 `provider`、逐步 `trace`、`trace_gate`、`result` 和 `done` 事件，流式不可用时自动退回普通 JSON 请求。`tests/test_incision_agent_server.py` 会启动本地 `--no-llm` 代理，真实请求 JSON 与 SSE 两条路径，并检查 API key 脱敏、trace gate、三方向候选比较和 `agent-orchestration-audit/v0.1`。
