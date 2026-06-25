@@ -766,6 +766,8 @@ def test_agent_tool_schema_and_privacy_doc_cover_review_export():
     assert schema["trace_gate"]["schema_version"] == "agent-trace-gate/v0.1"
     assert schema["trace_gate"]["blocks_confirmation"] is True
     assert ["query_rstl_direction"] in schema["trace_gate"]["required_actions"]
+    assert schema["trace_audit_executor"]["schema_version"] == "agentic-incision-trace-audit/v0.1"
+    assert schema["trace_audit_executor"]["tool"] == "tools/audit_agentic_incision_trace.py"
     names = {tool["name"] for tool in schema["tools"]}
     assert {
         "classify_region",

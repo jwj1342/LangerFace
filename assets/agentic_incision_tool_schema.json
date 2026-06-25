@@ -19,6 +19,19 @@
     "records": ["candidate_count", "comparison_ready", "tool_failure_count", "recovered_failures", "trace_gate_passed"],
     "boundary": "Agent orchestration may compare deterministic candidates for review; it must not issue surgical instructions or bypass clinician confirmation."
   },
+  "trace_audit_executor": {
+    "schema_version": "agentic-incision-trace-audit/v0.1",
+    "tool": "tools/audit_agentic_incision_trace.py",
+    "inputs": ["agentic-incision-plan/v0.1", "incision-review-record/v0.3", "incision-review-export/v0.3"],
+    "checks": [
+      "agent-trace-gate replay",
+      "stored trace gate consistency",
+      "candidate comparison replay",
+      "orchestration audit count consistency",
+      "recover_tool_failure trace consistency"
+    ],
+    "boundary": "Offline audit verifies deterministic Agentic trace contracts only; it is not clinical validation or a surgical instruction."
+  },
   "tools": [
     {
       "name": "classify_region",
