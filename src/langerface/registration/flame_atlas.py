@@ -13,9 +13,9 @@ that template RSTL lines are patient-specific ground truth.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 
@@ -200,7 +200,11 @@ def diagram_lines_to_canonical_atlas(
     )
 
 
-def atlas_points_to_xyz(atlas: Atlas, vertices: np.ndarray, triangles: np.ndarray) -> tuple[np.ndarray, list[int]]:
+def atlas_points_to_xyz(
+    atlas: Atlas,
+    vertices: np.ndarray,
+    triangles: np.ndarray,
+) -> tuple[np.ndarray, list[int]]:
     line_lengths = [int(line.points.shape[0]) for line in atlas.lines]
     if not line_lengths:
         return np.empty((0, 3), dtype=np.float64), []
@@ -219,7 +223,11 @@ def sample_atlas_points(atlas_points: np.ndarray, vertices: np.ndarray, triangle
     return u[:, None] * verts[tris[:, 0]] + v[:, None] * verts[tris[:, 1]] + w[:, None] * verts[tris[:, 2]]
 
 
-def fit_flame_registration(canonical_vertices: np.ndarray, basis: FlameBasis, smoothing: float = 1e-6) -> PolyharmonicMap:
+def fit_flame_registration(
+    canonical_vertices: np.ndarray,
+    basis: FlameBasis,
+    smoothing: float = 1e-6,
+) -> PolyharmonicMap:
     src = np.asarray(canonical_vertices, dtype=np.float64)[basis.landmark_indices]
     dst = sample_bary(basis.vertices, basis.faces, basis.lmk_face_idx, basis.lmk_b_coords)
     return fit_polyharmonic_map(src, dst, smoothing=smoothing)
@@ -286,10 +294,19 @@ def project_to_surface(
         closest[i] = best_point
         bary[i] = best_bary
 
-    return SurfaceProjection(triangle_indices=tri_indices, barycentric=bary, points=closest, squared_distances=dist2)
+    return SurfaceProjection(
+        triangle_indices=tri_indices,
+        barycentric=bary,
+        points=closest,
+        squared_distances=dist2,
+    )
 
 
-def build_registered_atlas(source: Atlas, projection: SurfaceProjection, line_lengths: Iterable[int]) -> Atlas:
+def build_registered_atlas(
+    source: Atlas,
+    projection: SurfaceProjection,
+    line_lengths: Iterable[int],
+) -> Atlas:
     offset = 0
     lines: list[AtlasLine] = []
     for source_line, n in zip(source.lines, line_lengths, strict=True):
@@ -358,7 +375,12 @@ def closest_point_on_triangle(
     return a + ab * v + ac * w, np.array([1.0 - v - w, v, w])
 
 
-def _nearest_centroid_candidates(points: np.ndarray, centroids: np.ndarray, count: int, chunk_size: int) -> np.ndarray:
+def _nearest_centroid_candidates(
+    points: np.ndarray,
+    centroids: np.ndarray,
+    count: int,
+    chunk_size: int,
+) -> np.ndarray:
     try:
         from scipy.spatial import cKDTree  # type: ignore
     except Exception:
@@ -453,7 +475,13 @@ def _angle_deg(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.degrees(np.arccos(dot)))
 
 
-def _merge_lines_at_endpoints(a: np.ndarray, side_a: int, b: np.ndarray, side_b: int, step: float) -> np.ndarray:
+def _merge_lines_at_endpoints(
+    a: np.ndarray,
+    side_a: int,
+    b: np.ndarray,
+    side_b: int,
+    step: float,
+) -> np.ndarray:
     aa = a if side_a == 1 else a[::-1]
     bb = b if side_b == 0 else b[::-1]
     gap = float(np.linalg.norm(bb[0] - aa[-1]))
