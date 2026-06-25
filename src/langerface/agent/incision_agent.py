@@ -88,6 +88,11 @@ TOOL_SCHEMAS = [
         "output": ["recovery", "candidate_kept"],
     },
     {
+        "name": "retry_tool_failure",
+        "input": ["tool", "variant", "error", "attempt"],
+        "output": ["retry", "max_attempts", "recovery"],
+    },
+    {
         "name": "clinician_edit_candidate",
         "input": [
             "candidate",
@@ -533,6 +538,7 @@ def plan_incision_case(
     candidate_alternatives: list[dict[str, Any]] = []
     candidate_records: list[dict[str, Any]] = []
     recovered_failures: list[dict[str, Any]] = []
+    retried_failures: list[dict[str, Any]] = []
     for variant in direction_variants:
         offset = float(variant["angle_offset_deg"])
         variant_id = "baseline" if abs(offset) < 1e-9 else f"offset_{offset:+.0f}deg"
@@ -573,21 +579,71 @@ def plan_incision_case(
                     "Re-run guardrails for the deterministic candidate variant.",
                 ))
             except Exception as exc:  # noqa: BLE001
-                failure = {
+                retry = {
                     "tool": tool_name,
                     "variant": variant_id,
                     "angle_offset_deg": offset,
+                    "attempt": 1,
                     "error": str(exc),
-                    "recovery": "skipped_failed_variant_and_kept_other_candidates",
+                    "retry": "retry_same_deterministic_tool_once",
+                    "max_attempts": 1,
                 }
-                recovered_failures.append(failure)
+                retried_failures.append(retry)
                 trace.append(_trace(
-                    "recover_tool_failure",
-                    {"tool": tool_name, "variant": variant_id, "error": str(exc)},
-                    failure,
-                    "Record deterministic tool failure and continue with remaining candidate variants.",
+                    "retry_tool_failure",
+                    {"tool": tool_name, "variant": variant_id, "error": str(exc), "attempt": 1},
+                    retry,
+                    "Retry deterministic tool once before skipping the failed candidate variant.",
                 ))
-                continue
+                try:
+                    variant_tool, variant_candidate = _make_candidate_for_direction(
+                        tumor,
+                        variant,
+                        rules,
+                        units_per_mm,
+                        V,
+                    )
+                    trace.append(_trace(
+                        variant_tool,
+                        {
+                            "tumor": tumor.to_dict(),
+                            "direction": variant,
+                            "units_per_mm": units_per_mm,
+                            "variant": variant_id,
+                            "retry_attempt": 1,
+                        },
+                        _short_candidate(variant_candidate),
+                        "Generate a deterministic nearby direction candidate after bounded retry.",
+                    ))
+                    variant_guardrails = evaluate_guardrails(variant_candidate, anatomy, rules=rules)
+                    trace.append(_trace(
+                        "evaluate_guardrails",
+                        {
+                            "candidate": _short_candidate(variant_candidate),
+                            "anatomy": anatomy.to_dict(),
+                            "variant": variant_id,
+                            "retry_attempt": 1,
+                        },
+                        variant_guardrails,
+                        "Re-run guardrails for the retried deterministic candidate variant.",
+                    ))
+                except Exception as retry_exc:  # noqa: BLE001
+                    failure = {
+                        "tool": tool_name,
+                        "variant": variant_id,
+                        "angle_offset_deg": offset,
+                        "error": str(retry_exc),
+                        "previous_errors": [str(exc)],
+                        "recovery": "skipped_failed_variant_and_kept_other_candidates",
+                    }
+                    recovered_failures.append(failure)
+                    trace.append(_trace(
+                        "recover_tool_failure",
+                        {"tool": tool_name, "variant": variant_id, "error": str(retry_exc)},
+                        failure,
+                        "Record deterministic tool failure and continue with remaining candidate variants.",
+                    ))
+                    continue
         record = {
             "id": f"agent_{variant_id}",
             "label": label,
@@ -645,6 +701,8 @@ def plan_incision_case(
         "mode": "single_turn_react_multi_candidate_with_deterministic_tools",
         "candidate_count": len(candidate_records),
         "comparison_ready": bool(candidate_comparison),
+        "retry_count": len(retried_failures),
+        "retried_failures": retried_failures,
         "tool_failure_count": len(recovered_failures),
         "recovered_failures": recovered_failures,
         "trace_gate_passed": trace_gate["passed"],

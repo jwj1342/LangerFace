@@ -622,6 +622,8 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
         "mode": "single_turn_react_multi_candidate_with_deterministic_tools",
         "candidate_count": 3,
         "comparison_ready": True,
+        "retry_count": 0,
+        "retried_failures": [],
         "tool_failure_count": 0,
         "recovered_failures": [],
         "trace_gate_passed": True,
@@ -633,6 +635,7 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     assert any(tool["name"] == "summarize_tumor_input_quality" for tool in result["tool_schemas"])
     assert any(tool["name"] == "evaluate_guardrails" for tool in result["tool_schemas"])
     assert any(tool["name"] == "propose_direction_variants" for tool in result["tool_schemas"])
+    assert any(tool["name"] == "retry_tool_failure" for tool in result["tool_schemas"])
     assert any(tool["name"] == "recover_tool_failure" for tool in result["tool_schemas"])
     assert any(tool["name"] == "compare_candidates" for tool in result["tool_schemas"])
     assert any(tool["name"] == "save_review_record" for tool in result["tool_schemas"])
@@ -659,6 +662,7 @@ def test_plan_incision_case_recovers_failed_candidate_variant(monkeypatch):
     actions = [step["action"] for step in result["trace"]]
     assert actions.count("linear_subcutaneous_incision") == 2
     assert actions.count("evaluate_guardrails") == 2
+    assert actions.count("retry_tool_failure") == 1
     assert "recover_tool_failure" in actions
     assert actions[-1] == "compare_candidates"
     assert len(result["candidate_alternatives"]) == 2
@@ -671,6 +675,18 @@ def test_plan_incision_case_recovers_failed_candidate_variant(monkeypatch):
     audit = result["agent_orchestration_audit"]
     assert audit["candidate_count"] == 2
     assert audit["comparison_ready"] is True
+    assert audit["retry_count"] == 1
+    assert audit["retried_failures"] == [
+        {
+            "tool": "linear_subcutaneous_incision",
+            "variant": "offset_+10deg",
+            "angle_offset_deg": 10.0,
+            "attempt": 1,
+            "error": "synthetic variant failure",
+            "retry": "retry_same_deterministic_tool_once",
+            "max_attempts": 1,
+        }
+    ]
     assert audit["tool_failure_count"] == 1
     assert audit["trace_gate_passed"] is True
     assert audit["recovered_failures"] == [
@@ -679,9 +695,47 @@ def test_plan_incision_case_recovers_failed_candidate_variant(monkeypatch):
             "variant": "offset_+10deg",
             "angle_offset_deg": 10.0,
             "error": "synthetic variant failure",
+            "previous_errors": ["synthetic variant failure"],
             "recovery": "skipped_failed_variant_and_kept_other_candidates",
         }
     ]
+
+
+def test_plan_incision_case_retries_transient_candidate_variant_failure(monkeypatch):
+    original_make_candidate = incision_agent_module._make_candidate_for_direction
+    failed_once = {"done": False}
+
+    def transient_make_candidate(tumor, direction, rules, units_per_mm, vertices):
+        if float(direction.get("angle_offset_deg", 0.0)) == 10.0 and not failed_once["done"]:
+            failed_once["done"] = True
+            raise RuntimeError("transient variant failure")
+        return original_make_candidate(tumor, direction, rules, units_per_mm, vertices)
+
+    monkeypatch.setattr(incision_agent_module, "_make_candidate_for_direction", transient_make_candidate)
+    vertices, triangles, atlas = _simple_mesh_and_atlas()
+    result = plan_incision_case(
+        {"kind": "subcutaneous", "center": [4, 2, 0], "diameter_mm": 10, "depth_mm": 5},
+        vertices,
+        triangles,
+        atlas,
+        use_llm=False,
+    )
+
+    actions = [step["action"] for step in result["trace"]]
+    assert actions.count("retry_tool_failure") == 1
+    assert "recover_tool_failure" not in actions
+    assert len(result["candidate_alternatives"]) == 3
+    assert {item["angle_offset_deg"] for item in result["candidate_alternatives"]} == {-10.0, 0.0, 10.0}
+    assert [item["rank"] for item in result["candidate_comparison"]] == [1, 2, 3]
+    assert result["agent_trace_gate"]["passed"] is True
+
+    audit = result["agent_orchestration_audit"]
+    assert audit["candidate_count"] == 3
+    assert audit["comparison_ready"] is True
+    assert audit["retry_count"] == 1
+    assert audit["tool_failure_count"] == 0
+    assert audit["recovered_failures"] == []
+    assert audit["retried_failures"][0]["error"] == "transient variant failure"
 
 
 def test_compare_candidate_records_ranks_high_guardrail_after_clean_candidate():
@@ -777,6 +831,7 @@ def test_agent_tool_schema_and_privacy_doc_cover_review_export():
         "fusiform_cutaneous_incision",
         "evaluate_guardrails",
         "propose_direction_variants",
+        "retry_tool_failure",
         "recover_tool_failure",
         "clinician_edit_candidate",
         "compare_candidates",

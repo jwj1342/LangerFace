@@ -143,7 +143,13 @@ def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") ->
     comparison = [item for item in record.get("candidate_comparison", []) if isinstance(item, dict)]
     comparison_replay = _comparison_replay(alternatives, comparison)
 
+    retry_trace_count = actions.count("retry_tool_failure")
     recovery_trace_count = actions.count("recover_tool_failure")
+    retried_failures = (
+        orchestration.get("retried_failures", [])
+        if isinstance(orchestration.get("retried_failures"), list)
+        else []
+    )
     recovered_failures = (
         orchestration.get("recovered_failures", [])
         if isinstance(orchestration.get("recovered_failures"), list)
@@ -173,6 +179,11 @@ def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") ->
             not orchestration
             or orchestration.get("comparison_ready") in {None, bool(comparison)}
         ),
+        "retried_failure_count_matches_trace": (
+            int(orchestration.get("retry_count") or 0)
+            == retry_trace_count
+            == len(retried_failures)
+        ),
         "recovered_failure_count_matches_trace": (
             int(orchestration.get("tool_failure_count") or 0)
             == recovery_trace_count
@@ -194,6 +205,7 @@ def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") ->
         "trace": {
             "action_count": len(actions),
             "observed_actions": actions,
+            "retry_trace_count": retry_trace_count,
             "recovery_trace_count": recovery_trace_count,
         },
         "trace_gate_replay": replayed_gate,
@@ -203,6 +215,8 @@ def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") ->
             "present": bool(orchestration),
             "candidate_count": orchestration.get("candidate_count"),
             "comparison_ready": orchestration.get("comparison_ready"),
+            "retry_count": orchestration.get("retry_count", 0),
+            "retried_failure_count": len(retried_failures),
             "tool_failure_count": orchestration.get("tool_failure_count", 0),
             "recovered_failure_count": len(recovered_failures),
         },

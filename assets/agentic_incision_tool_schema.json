@@ -1,5 +1,5 @@
 {
-  "version": "0.4-agentic-incision-tools",
+  "version": "0.5-agentic-incision-tools",
   "trace_mode": "single_turn_react_multi_candidate_with_deterministic_tools",
   "boundary": "The LLM may select, summarize, and request deterministic tools; it must not compute incision geometry or override guardrails.",
   "trace_gate": {
@@ -16,7 +16,7 @@
   },
   "orchestration_audit": {
     "schema_version": "agent-orchestration-audit/v0.1",
-    "records": ["candidate_count", "comparison_ready", "tool_failure_count", "recovered_failures", "trace_gate_passed"],
+    "records": ["candidate_count", "comparison_ready", "retry_count", "retried_failures", "tool_failure_count", "recovered_failures", "trace_gate_passed"],
     "boundary": "Agent orchestration may compare deterministic candidates for review; it must not issue surgical instructions or bypass clinician confirmation."
   },
   "trace_audit_executor": {
@@ -28,6 +28,7 @@
       "stored trace gate consistency",
       "candidate comparison replay",
       "orchestration audit count consistency",
+      "retry_tool_failure trace consistency",
       "recover_tool_failure trace consistency"
     ],
     "boundary": "Offline audit verifies deterministic Agentic trace contracts only; it is not clinical validation or a surgical instruction."
@@ -72,6 +73,11 @@
       "name": "recover_tool_failure",
       "input": ["tool", "variant", "error"],
       "output": ["recovery", "candidate_kept"]
+    },
+    {
+      "name": "retry_tool_failure",
+      "input": ["tool", "variant", "error", "attempt"],
+      "output": ["retry", "max_attempts", "recovery"]
     },
     {
       "name": "clinician_edit_candidate",
