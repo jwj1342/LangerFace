@@ -16,6 +16,8 @@ logs/
 
 # Local archives / external bundles
 local_archives/
+RSTL*/
+RSTL*.rar
 
 # Local Claude Code settings
 .claude/settings.local.json
