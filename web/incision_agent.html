@@ -40,7 +40,9 @@
   .status-pill.ok{background:#d9f2e7;color:var(--green-d)}
   .status-pill.warn{background:#fff1c8;color:#8a5a00}
   .stage-actions{display:flex;align-items:center;gap:12px}
-  .agent-note{font-size:11px;color:var(--muted);line-height:1.55;margin:0}
+  .agent-note{font-size:11px;color:var(--muted);line-height:1.55;margin:0;overflow-wrap:anywhere;word-break:break-word}
+  .agent-note.ok{color:var(--green-d);font-weight:700}
+  .agent-note.warn{color:#8a5a00;font-weight:700}
   .edit-status{font-size:11px;font-weight:700;border-radius:999px;padding:4px 8px;background:#eef0ea;color:#44505d}
   .edit-status.active{background:#fff1c8;color:#8a5a00}
   .candidate-list{display:flex;flex-direction:column;gap:8px}
@@ -58,7 +60,8 @@
   .review-state.approved{background:#d9f2e7;color:var(--green-d)}
   .review-state.rejected{background:#fee2e2;color:#991b1b}
   .review-state.revision{background:#fff1c8;color:#8a5a00}
-  .guardrail-details{font-size:11px;line-height:1.55;color:var(--muted);margin:8px 0 0}
+  .hint{overflow-wrap:anywhere;word-break:break-word}
+  .guardrail-details{font-size:11px;line-height:1.55;color:var(--muted);margin:8px 0 0;overflow-wrap:anywhere;word-break:break-word}
   .guardrail-details.warn{color:#8a5a00;font-weight:700}
   .guardrail-details.danger{color:#991b1b;font-weight:700}
   .canvas-legend{position:absolute;left:16px;bottom:16px;z-index:2;display:flex;flex-wrap:wrap;gap:8px 12px;
@@ -148,6 +151,8 @@
     <div class="card agent-grid">
       <label class="check"><input type="checkbox" id="useAgentServer" checked /> 使用 Agent 代理</label>
       <input id="agentEndpoint" class="select" value="http://127.0.0.1:8765/api/agentic-incision" />
+      <button class="btn" id="testAgentBtn">测试 Agent API 连接</button>
+      <p class="agent-note" id="providerTestState">尚未测试 Agent API 连通性。</p>
       <select id="providerMode" class="select">
         <option value="openai-compatible">OpenAI-compatible / vLLM</option>
         <option value="ollama">Ollama native</option>

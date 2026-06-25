@@ -12,6 +12,16 @@ assert.equal(
   "http://127.0.0.1:8765/api/agentic-incision/stream",
   "stream endpoint is idempotent",
 );
+assert.equal(
+  T.healthEndpointFor("http://127.0.0.1:8765/api/agentic-incision"),
+  "http://127.0.0.1:8765/api/health",
+  "health endpoint maps agent planning endpoint to /api/health",
+);
+assert.equal(
+  T.healthEndpointFor("http://127.0.0.1:8765/api/agentic-incision/session/stream"),
+  "http://127.0.0.1:8765/api/health",
+  "health endpoint maps session stream endpoint to /api/health",
+);
 
 const parsed = T.parseSseBlock("event: trace\ndata: {\"index\":0,\"action\":\"query_rstl_direction\"}");
 assert.equal(parsed.event, "trace", "SSE parser reads event name");

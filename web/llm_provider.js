@@ -4,6 +4,40 @@ export function streamEndpointFor(endpoint) {
   return clean.endsWith("/stream") ? clean : `${clean}/stream`;
 }
 
+export function healthEndpointFor(endpoint) {
+  const clean = String(endpoint || "").trim().replace(/\/$/, "");
+  if (!clean) return "";
+  if (clean.endsWith("/api/health")) return clean;
+  const marker = "/api/agentic-incision";
+  const markerIndex = clean.indexOf(marker);
+  if (markerIndex >= 0) return `${clean.slice(0, markerIndex)}/api/health`;
+  return `${clean}/api/health`;
+}
+
+export async function testAgentConnection({ endpoint, timeoutMs = 5000 } = {}) {
+  const healthEndpoint = healthEndpointFor(endpoint);
+  if (!healthEndpoint) throw new Error("agent endpoint is empty");
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const resp = await fetch(healthEndpoint, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      signal: ctrl.signal,
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || `agent health ${resp.status}`);
+    return {
+      ok: true,
+      health_endpoint: healthEndpoint,
+      status: resp.status,
+      ...data,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function parseSseBlock(block) {
   const lines = String(block || "").split(/\r?\n/);
   let event = "message";
@@ -116,6 +150,7 @@ export async function requestAgentPlan(
 
 export const __llmProviderForTests = {
   drainSseBuffer,
+  healthEndpointFor,
   parseSseBlock,
   streamEndpointFor,
 };

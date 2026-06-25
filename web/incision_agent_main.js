@@ -14,7 +14,7 @@ import {
   summarizeTumorInputQuality,
   unitsPerMmFromVertices,
 } from "./incision_tools.js";
-import { requestAgentPlan } from "./llm_provider.js";
+import { requestAgentPlan, testAgentConnection } from "./llm_provider.js";
 import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.js";
 
 const $ = (id) => document.getElementById(id);
@@ -54,6 +54,8 @@ const els = {
   secondaryCueConfirmed: $("secondaryCueConfirmed"),
   useAgentServer: $("useAgentServer"),
   endpoint: $("agentEndpoint"),
+  testAgent: $("testAgentBtn"),
+  providerTestState: $("providerTestState"),
   providerMode: $("providerMode"),
   providerBaseUrl: $("providerBaseUrl"),
   providerModel: $("providerModel"),
@@ -259,6 +261,26 @@ function providerConfig() {
   return cfg;
 }
 
+function providerDisplayLabel(provider = {}) {
+  if (provider.mode === "browser_deterministic_fallback") {
+    return provider.error ? "浏览器确定性降级 · Agent 未连接" : "浏览器确定性工具";
+  }
+  if (provider.model) return `${provider.mode || "Agent"} · ${provider.model}`;
+  return provider.mode || "deterministic";
+}
+
+function agentFallbackMessage(error = "") {
+  const suffix = error ? `：${String(error).slice(0, 80)}` : "";
+  return `Agent 代理不可用，已改用浏览器确定性工具${suffix}`;
+}
+
+function setProviderTestState(text, level = "") {
+  if (!els.providerTestState) return;
+  els.providerTestState.textContent = text;
+  els.providerTestState.classList.toggle("ok", level === "ok");
+  els.providerTestState.classList.toggle("warn", level === "warn");
+}
+
 function redactedProviderConfig() {
   const cfg = providerConfig();
   return {
@@ -288,6 +310,32 @@ function loadProviderPrefs() {
     // Keep defaults.
   }
   els.providerTimeoutVal.textContent = els.providerTimeout.value;
+}
+
+async function testAgentEndpoint() {
+  if (!els.testAgent) return;
+  els.testAgent.disabled = true;
+  setProviderTestState("正在测试 Agent API 连接…");
+  try {
+    const result = await testAgentConnection({
+      endpoint: els.endpoint.value.trim(),
+      timeoutMs: 5000,
+    });
+    const provider = result.provider?.model ? ` · ${result.provider.model}` : "";
+    const llm = result.llm_enabled ? "LLM 已启用" : "LLM 未启用（确定性代理）";
+    setProviderTestState(`连接正常：${result.health_endpoint} · ${llm}${provider}`, "ok");
+    els.providerState.textContent = result.provider?.model ? `Agent 已连接 · ${result.provider.model}` : "Agent 已连接";
+    els.providerState.style.color = "";
+    els.stageStatus.textContent = "Agent API 连接正常，可以生成带后端 trace 的候选。";
+  } catch (err) {
+    const msg = err?.name === "AbortError" ? "请求超时" : err.message;
+    setProviderTestState(`连接失败：${msg}。请启动 tools/serve_incision_agent.py，或确认 L40S 作业端口已转发到本机 8765。`, "warn");
+    els.providerState.textContent = "Agent 未连接";
+    els.providerState.style.color = "#b45309";
+    els.stageStatus.textContent = agentFallbackMessage(msg);
+  } finally {
+    els.testAgent.disabled = false;
+  }
 }
 
 function privacyAudit(provider = {}) {
@@ -955,9 +1003,7 @@ function handleAgentStreamEvent(streamState, evt) {
   const { event, data } = evt || {};
   if (event === "provider") {
     const provider = data || {};
-    els.providerState.textContent = provider.model
-      ? `${provider.mode || "agent"} · ${provider.model}`
-      : provider.mode || "agent";
+    els.providerState.textContent = providerDisplayLabel(provider);
     els.providerState.style.color = provider.error ? "#b45309" : "";
     els.stageStatus.textContent = "Agent 已连接，等待工具 trace…";
     return;
@@ -1002,8 +1048,7 @@ function handleAgentStreamEvent(streamState, evt) {
     return;
   }
   if (event === "fallback") {
-    const msg = data?.error ? `：${String(data.error).slice(0, 80)}` : "";
-    els.stageStatus.textContent = `SSE trace 不可用，改用普通 Agent 请求${msg}`;
+    els.stageStatus.textContent = agentFallbackMessage(data?.error || "");
   }
 }
 
@@ -1183,7 +1228,7 @@ function renderResult(result) {
   renderTrace(result.trace);
   updateBoundaryStatus();
   const provider = result.provider || {};
-  els.providerState.textContent = provider.model ? `${provider.mode} · ${provider.model}` : provider.mode || "deterministic";
+  els.providerState.textContent = providerDisplayLabel(provider);
   els.providerState.style.color = provider.error ? "#b45309" : "";
   updateEditVisibility(result);
   const audit = privacyAudit(provider);
@@ -1192,7 +1237,7 @@ function renderResult(result) {
     ? "警告：检测到原始影像出域配置。"
     : `不上传原始影像；发送给 Agent 的是 ${audit.data_sent_to_agent.length} 类抽象字段，API Key 仅在本次请求中传给代理。${audit.secondary_cues_present ? " 辅助线索仅随审阅导出，不发送给 Agent。" : ""}`;
   const edited = result.candidate.edited ? " · 已记录医生调整" : "";
-  els.stageStatus.textContent = provider.error ? `LLM fallback: ${provider.error.slice(0, 80)}${edited}` : `候选已更新${edited}`;
+  els.stageStatus.textContent = provider.error ? `${agentFallbackMessage(provider.error)}${edited}` : `候选已更新${edited}`;
 }
 
 function guardrailSummary(guardrails = {}) {
@@ -1800,12 +1845,14 @@ function dragEndpointTo(e, idx) {
   if (!S.result?.candidate?.endpoints) return;
   const hit = facePointFromEvent(e);
   if (!hit) return;
-  const current = S.result.candidate.endpoints;
-  const p0 = idx === 0 ? hit.point : current[0];
-  const p1 = idx === 1 ? hit.point : current[1];
-  const center = mul(add(p0, p1), 0.5);
-  const axis = norm(sub(p1, p0));
-  const lengthMm = len(sub(p1, p0)) / S.unitsPerMm;
+  const candidate = S.result.candidate;
+  const current = candidate.endpoints;
+  const center = candidate.center || S.result.tumor.center;
+  const handleVector = sub(hit.point, center);
+  const axis = len(handleVector) > 1e-6
+    ? norm(idx === 0 ? mul(handleVector, -1) : handleVector)
+    : norm(candidate.axis || sub(current[1], current[0]));
+  const lengthMm = Math.max(1, len(handleVector) * 2 / S.unitsPerMm);
   setEditFromGeometry(center, axis, lengthMm);
 }
 
@@ -1876,6 +1923,10 @@ els.ellipseRatio.onchange = runAgent;
 els.boundaryMode.onchange = () => { S.boundaryActive = false; updateFormVisibility(); runAgent(); };
 els.run.onclick = runAgent;
 els.providerMode.onchange = saveProviderPrefs;
+els.endpoint.onchange = () => {
+  setProviderTestState("Agent endpoint 已修改，尚未重新测试连通性。");
+};
+els.testAgent.onclick = testAgentEndpoint;
 els.providerBaseUrl.onchange = saveProviderPrefs;
 els.providerModel.onchange = saveProviderPrefs;
 els.providerTimeout.oninput = () => { els.providerTimeoutVal.textContent = els.providerTimeout.value; saveProviderPrefs(); };
