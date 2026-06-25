@@ -69,6 +69,9 @@ def _review_record(plan: dict) -> dict:
         "candidate_alternatives": plan["candidate_alternatives"],
         "candidate_comparison": plan["candidate_comparison"],
         "agent_orchestration_audit": plan["agent_orchestration_audit"],
+        "llm": plan["llm"],
+        "provider": plan["provider"],
+        "provider_config": {"api_key_present": True, "api_key": "[redacted]"},
         "review_status": "pending_clinician_confirmation",
     }
 
@@ -92,6 +95,11 @@ def test_agentic_trace_audit_replays_valid_plan():
     assert audit["execution_events_replay"]["tool_event_count"] == len(plan["trace"])
     assert audit["react_plan_replay"]["schema_version"] == "agent-react-plan/v0.1"
     assert audit["react_plan_replay"]["step_count"] == 7
+    assert audit["llm_boundary_audit"]["schema_version"] == "agentic-llm-boundary-audit/v0.1"
+    assert audit["llm_boundary_audit"]["passed"] is True
+    assert audit["checks"]["llm_summary_present"] is True
+    assert audit["checks"]["llm_review_boundary_present"] is True
+    assert audit["checks"]["provider_config_secret_redacted"] is True
     assert "preview_incision_on_face" in audit["trace_gate_replay"]["observed_actions"]
     assert audit["checks"]["candidate_comparison_replay_passed"] is True
     assert (
@@ -134,6 +142,41 @@ def test_agentic_trace_audit_detects_tampered_execution_events():
     assert audit["passed"] is False
     assert "stored_execution_events_matches_replay" in audit["failures"]
     assert audit["checks"]["execution_events_replayed_passed"] is True
+
+
+def test_agentic_trace_audit_detects_unsafe_llm_summary():
+    plan = _plan()
+    plan["llm"]["summary"] = "Safe to proceed with surgery; perform this incision."
+    plan["llm"]["next_step"] = "No clinician review is needed."
+    audit = audit_agentic_record(plan, source="unsafe-llm-summary")
+
+    assert audit["passed"] is False
+    assert "llm_no_forbidden_directive" in audit["failures"]
+    assert audit["llm_boundary_audit"]["forbidden_directive_patterns"]
+
+
+def test_agentic_trace_audit_detects_provider_secret_leak():
+    plan = _plan()
+    plan["provider_config"] = {
+        "provider": "openai-compatible",
+        "base_url": "https://example.invalid/v1",
+        "api_key": "sk-test-not-redacted",
+    }
+    audit = audit_agentic_record(plan, source="provider-secret-leak")
+
+    assert audit["passed"] is False
+    assert "provider_config_secret_redacted" in audit["failures"]
+    assert "provider_config.api_key" in audit["llm_boundary_audit"]["secret_leak_paths"]
+
+
+def test_agentic_trace_audit_detects_raw_llm_payload():
+    plan = _plan()
+    plan["llm"]["raw"] = {"choices": [{"message": {"content": "raw provider payload"}}]}
+    audit = audit_agentic_record(plan, source="raw-llm-payload")
+
+    assert audit["passed"] is False
+    assert "llm_no_raw_provider_payload" in audit["failures"]
+    assert "raw" in audit["llm_boundary_audit"]["raw_payload_paths"]
 
 
 def test_agentic_trace_audit_reads_review_export_and_cli(tmp_path: Path):

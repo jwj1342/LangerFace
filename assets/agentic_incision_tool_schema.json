@@ -57,7 +57,11 @@
       "candidate comparison replay",
       "orchestration audit count consistency",
       "retry_tool_failure trace consistency",
-      "recover_tool_failure trace consistency"
+      "recover_tool_failure trace consistency",
+      "LLM summary clinician-review boundary",
+      "LLM forbidden surgical directive scan",
+      "LLM raw provider payload exclusion",
+      "provider secret redaction"
     ],
     "boundary": "Offline audit verifies deterministic Agentic trace contracts only; it is not clinical validation or a surgical instruction."
   },

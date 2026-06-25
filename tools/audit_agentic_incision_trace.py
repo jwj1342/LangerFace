@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,47 @@ REVIEW_RECORD_SCHEMA = "incision-review-record/v0.3"
 REVIEW_EXPORT_SCHEMA = "incision-review-export/v0.3"
 
 TRACE_GENERATION_ACTIONS = {"linear_subcutaneous_incision", "fusiform_cutaneous_incision"}
+SECRET_KEY_HINTS = ("api_key", "secret", "token", "authorization", "password", "private_key")
+REDACTED_VALUES = {"", "[redacted]", "redacted", "***", "null", "none"}
+LLM_TEXT_FIELDS = ("summary", "rationale", "next_step")
+LLM_REVIEW_BOUNDARY_TERMS = (
+    "clinician",
+    "doctor",
+    "physician",
+    "review",
+    "confirm",
+    "confirmation",
+    "not a surgical",
+    "医生",
+    "审阅",
+    "复核",
+    "确认",
+    "不是手术",
+    "不能作为手术",
+)
+LLM_RAW_PAYLOAD_KEYS = {
+    "raw",
+    "messages",
+    "prompt",
+    "request",
+    "response",
+    "choices",
+    "headers",
+    "authorization",
+}
+LLM_FORBIDDEN_DIRECTIVE_PATTERNS = (
+    re.compile(r"(?i)\bperform\s+this\s+incision\b"),
+    re.compile(r"(?i)\bproceed\s+(?:to|with)\s+(?:surgery|the\s+incision)\b"),
+    re.compile(r"(?i)\bsafe\s+to\s+(?:operate|proceed)\b"),
+    re.compile(r"(?i)\bno\s+(?:clinician|doctor|physician)\s+review\s+(?:is\s+)?(?:needed|required)\b"),
+    re.compile(r"可以直接(?:手术|切开|执行)"),
+    re.compile(r"无需(?:医生|临床|人工)(?:审阅|复核|确认)"),
+    re.compile(r"立即(?:切开|手术|执行)"),
+)
+SECRET_VALUE_PATTERNS = (
+    re.compile(r"(?i)\bsk-[A-Za-z0-9_-]{8,}\b"),
+    re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._-]{8,}\b"),
+)
 
 
 def load_payload(path: str | Path) -> Any:
@@ -68,6 +110,146 @@ def entries_from_payloads(payloads: list[Any], sources: list[str] | None = None)
 
 def _action_names(trace: list[dict[str, Any]]) -> list[str]:
     return [str(step.get("action") or "") for step in trace if isinstance(step, dict) and step.get("action")]
+
+
+def _path(parts: tuple[str, ...]) -> str:
+    return ".".join(parts) if parts else "$"
+
+
+def _nonempty_text(value: Any) -> str | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int | float):
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _is_redacted(value: Any) -> bool:
+    text = _nonempty_text(value)
+    return text is None or text.lower() in REDACTED_VALUES
+
+
+def _secret_leak_paths(value: Any, *, path: tuple[str, ...] = ()) -> list[str]:
+    leaks: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = (*path, str(key))
+            leaf = str(key).lower()
+            secret_key = any(hint in leaf for hint in SECRET_KEY_HINTS)
+            if secret_key and not leaf.endswith("_present") and not _is_redacted(child):
+                leaks.append(_path(child_path))
+            leaks.extend(_secret_leak_paths(child, path=child_path))
+        return leaks
+    if isinstance(value, list):
+        for index, child in enumerate(value):
+            leaks.extend(_secret_leak_paths(child, path=(*path, str(index))))
+        return leaks
+    text = _nonempty_text(value)
+    if text and any(pattern.search(text) for pattern in SECRET_VALUE_PATTERNS):
+        leaks.append(_path(path))
+    return leaks
+
+
+def _raw_payload_key_paths(value: Any, *, path: tuple[str, ...] = ()) -> list[str]:
+    paths: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = (*path, str(key))
+            if str(key).lower() in LLM_RAW_PAYLOAD_KEYS:
+                paths.append(_path(child_path))
+            paths.extend(_raw_payload_key_paths(child, path=child_path))
+        return paths
+    if isinstance(value, list):
+        for index, child in enumerate(value):
+            paths.extend(_raw_payload_key_paths(child, path=(*path, str(index))))
+    return paths
+
+
+def _combined_llm_text(llm: dict[str, Any]) -> str:
+    return "\n".join(
+        str(llm.get(field) or "").strip()
+        for field in LLM_TEXT_FIELDS
+        if str(llm.get(field) or "").strip()
+    )
+
+
+def _llm_boundary_audit(record: dict[str, Any], replayed_gate: dict[str, Any]) -> dict[str, Any]:
+    llm = record.get("llm") if isinstance(record.get("llm"), dict) else {}
+    provider = record.get("provider") if isinstance(record.get("provider"), dict) else {}
+    provider_config = (
+        record.get("provider_config")
+        if isinstance(record.get("provider_config"), dict)
+        else {}
+    )
+    privacy = record.get("privacy_audit") if isinstance(record.get("privacy_audit"), dict) else {}
+    privacy_provider = (
+        privacy.get("provider")
+        if isinstance(privacy.get("provider"), dict)
+        else {}
+    )
+    text = _combined_llm_text(llm)
+    text_lower = text.lower()
+    directive_matches = [
+        pattern.pattern for pattern in LLM_FORBIDDEN_DIRECTIVE_PATTERNS if pattern.search(text)
+    ]
+    review_boundary_present = any(term in text_lower for term in LLM_REVIEW_BOUNDARY_TERMS)
+    reasoning = str(llm.get("reasoning") or "")
+    secret_leaks: list[str] = []
+    for label, payload in (
+        ("llm", llm),
+        ("provider", provider),
+        ("provider_config", provider_config),
+        ("privacy_audit.provider", privacy_provider),
+    ):
+        secret_leaks.extend(
+            f"{label}.{path}" for path in _secret_leak_paths(payload) if path != "$"
+        )
+    provider_mode = str(provider.get("mode") or "")
+    provider_model = provider.get("model")
+    llm_model = llm.get("model")
+    provider_model_consistent = True
+    if provider_mode == "llm_summary":
+        provider_model_consistent = (
+            bool(llm_model)
+            and llm_model == provider_model
+            and not provider.get("error")
+        )
+    elif provider_model and llm_model:
+        provider_model_consistent = llm_model == provider_model
+
+    checks = {
+        "llm_summary_present": bool(llm.get("summary")),
+        "llm_next_step_present": bool(llm.get("next_step")),
+        "llm_review_boundary_present": review_boundary_present,
+        "llm_no_forbidden_directive": not directive_matches,
+        "llm_reasoning_sanitized": len(reasoning) <= 600 and "<think" not in reasoning.lower(),
+        "llm_no_raw_provider_payload": not _raw_payload_key_paths(llm),
+        "provider_config_secret_redacted": not secret_leaks,
+        "llm_provider_model_consistent": provider_model_consistent,
+        "llm_after_deterministic_gate": bool(replayed_gate.get("passed")),
+    }
+    return {
+        "schema_version": "agentic-llm-boundary-audit/v0.1",
+        "passed": all(checks.values()),
+        "checks": checks,
+        "llm_present": bool(llm),
+        "provider_mode": provider_mode or "unknown",
+        "provider_model": provider_model,
+        "llm_model": llm_model,
+        "review_boundary_terms": [
+            term for term in LLM_REVIEW_BOUNDARY_TERMS if term in text_lower
+        ],
+        "forbidden_directive_patterns": directive_matches,
+        "raw_payload_paths": _raw_payload_key_paths(llm),
+        "secret_leak_paths": secret_leaks,
+        "reasoning_char_count": len(reasoning),
+        "clinical_boundary": (
+            "LLM output is audited as a summary over deterministic tool results only; "
+            "it must preserve clinician review, redact provider secrets, and avoid "
+            "surgical instructions."
+        ),
+    }
 
 
 def _missing_keys(gate: dict[str, Any]) -> list[str]:
@@ -238,6 +420,7 @@ def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") ->
         react_plan=replayed_react_plan,
         mode=str(orchestration.get("mode") or "single_turn_react_multi_candidate_with_deterministic_tools"),
     )
+    llm_boundary = _llm_boundary_audit(record, replayed_gate)
 
     checks = {
         "trace_gate_replayed_passed": replayed_gate["passed"],
@@ -281,6 +464,7 @@ def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") ->
         "clinical_boundary_present": bool(
             orchestration.get("clinical_boundary") or comparison_replay["available"] is False
         ),
+        **llm_boundary["checks"],
     }
     failures = [key for key, passed in checks.items() if not passed]
     return {
@@ -303,6 +487,7 @@ def audit_agentic_record(record: dict[str, Any], *, source: str = "<memory>") ->
         "stored_react_plan_present": bool(stored_react_plan),
         "execution_events_replay": replayed_execution_events,
         "stored_execution_events_present": bool(stored_execution_events),
+        "llm_boundary_audit": llm_boundary,
         "candidate_comparison_replay": comparison_replay,
         "orchestration_audit": {
             "present": bool(orchestration),
