@@ -7,11 +7,16 @@
 <title>切口 Agent · 肿物与 RSTL 切口规划</title>
 <link rel="stylesheet" href="style.css" />
 <style>
+  .app{grid-template-columns:minmax(390px,420px) 1fr}
+  .sidebar{overflow-x:hidden}
   .agent-grid{display:grid;grid-template-columns:1fr;gap:12px}
-  .metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .metric{background:#f8f9f5;border:1px solid var(--line);border-radius:10px;padding:9px 10px}
+  .metric-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .metric{background:#f8f9f5;border:1px solid var(--line);border-radius:10px;padding:9px 10px;min-width:0}
   .metric .k{display:block;font-size:11px;color:var(--muted);font-weight:600}
-  .metric .v{display:block;margin-top:3px;font-size:15px;font-weight:750;font-variant-numeric:tabular-nums}
+  .metric .v{display:block;margin-top:3px;font-size:14px;line-height:1.25;font-weight:750;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;word-break:break-word}
+  .quality-top{min-width:0}
+  .quality-top span{min-width:0}
+  .quality-top span:last-child{max-width:62%;white-space:normal;overflow-wrap:anywhere;text-align:right;font-size:13px;line-height:1.25}
   .trace-list{display:flex;flex-direction:column;gap:8px}
   .trace-step{border:1px solid var(--line);background:#f8f9f5;border-radius:10px;padding:10px}
   .trace-step .top{display:flex;justify-content:space-between;gap:10px;align-items:center}
@@ -56,8 +61,18 @@
   .guardrail-details{font-size:11px;line-height:1.55;color:var(--muted);margin:8px 0 0}
   .guardrail-details.warn{color:#8a5a00;font-weight:700}
   .guardrail-details.danger{color:#991b1b;font-weight:700}
+  .canvas-legend{position:absolute;left:16px;bottom:16px;z-index:2;display:flex;flex-wrap:wrap;gap:8px 12px;
+    max-width:min(520px,calc(100% - 32px));padding:9px 11px;border:1px solid rgba(255,255,255,.12);
+    border-radius:10px;background:rgba(10,15,22,.72);backdrop-filter:blur(8px);color:#dbe4ee;
+    font-size:11.5px;font-weight:700;line-height:1.2;pointer-events:none}
+  .legend-item{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .legend-swatch{width:10px;height:10px;border-radius:999px;display:inline-block;border:1px solid rgba(255,255,255,.32)}
+  .legend-swatch.center{background:#f43f5e}
+  .legend-swatch.ring{background:transparent;border-color:#facc15}
+  .legend-swatch.line{width:18px;height:3px;border-radius:999px;background:#34d399;border:0}
+  .legend-swatch.handle{background:#34d399}
   #agentCanvas{position:absolute;inset:0;width:100%;height:100%;border-radius:14px;background:#111820}
-  @media(max-width:880px){#agentCanvas{position:static;min-height:420px}.metric-grid{grid-template-columns:1fr}}
+  @media(max-width:980px){.app{grid-template-columns:1fr;grid-template-rows:auto auto;height:auto;min-height:100dvh}#agentCanvas{position:static;min-height:420px}.metric-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -267,6 +282,12 @@
     <div class="stage-body">
       <div class="main-wrap">
         <canvas id="agentCanvas"></canvas>
+        <div class="canvas-legend" aria-label="3D 标注图例">
+          <span class="legend-item"><span class="legend-swatch center"></span>病灶中心</span>
+          <span class="legend-item"><span class="legend-swatch ring"></span>肿物范围</span>
+          <span class="legend-item"><span class="legend-swatch line"></span>候选切口</span>
+          <span class="legend-item"><span class="legend-swatch handle"></span>端点控制</span>
+        </div>
       </div>
     </div>
   </main>

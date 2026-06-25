@@ -208,8 +208,8 @@ async function boot() {
   S.head.resetView();
 
   S.marker = new THREE.Mesh(
-    new THREE.SphereGeometry(S.meanEdge * 0.48, 18, 12),
-    new THREE.MeshBasicMaterial({ color: 0xf43f5e, toneMapped: false }),
+    new THREE.SphereGeometry(S.meanEdge * 0.30, 18, 12),
+    new THREE.MeshBasicMaterial({ color: 0xf43f5e, transparent: true, opacity: 0.92, toneMapped: false }),
   );
   S.tumorRing = new THREE.Line(
     new THREE.BufferGeometry(),
@@ -225,8 +225,8 @@ async function boot() {
   );
   S.endpointHandles = [0, 1].map((idx) => {
     const h = new THREE.Mesh(
-      new THREE.SphereGeometry(S.meanEdge * 0.38, 16, 10),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
+      new THREE.SphereGeometry(S.meanEdge * 0.22, 16, 10),
+      new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.95, toneMapped: false }),
     );
     h.userData.handle = idx;
     h.renderOrder = 8;
@@ -638,7 +638,8 @@ function polylineGeometry(points, normal) {
 function setLesion(i) {
   S.lesion = i;
   const center = S.verts[i], normal = S.normals[i];
-  S.marker.position.set(center[0], center[1], center[2]);
+  const markerPoint = add(center, mul(normal, S.meanEdge * 0.34));
+  S.marker.position.set(markerPoint[0], markerPoint[1], markerPoint[2]);
   updateTumorRing();
   els.pickState.textContent = `当前点位：顶点 #${i}`;
   updateAnatomyPreview();
@@ -665,10 +666,14 @@ function drawCandidate(result) {
   old.dispose();
   S.candidateLine.material.color.set(result.candidate.type === "linear" ? 0x34d399 : 0x5eead4);
   const endpoints = result.candidate.endpoints || [];
+  const lift = S.meanEdge * 0.42;
   for (const [idx, h] of S.endpointHandles.entries()) {
     const p = endpoints[idx];
     h.visible = Boolean(p);
-    if (p) h.position.set(p[0], p[1], p[2]);
+    if (p) {
+      const hp = add(p, mul(S.normals[S.lesion], lift));
+      h.position.set(hp[0], hp[1], hp[2]);
+    }
   }
 }
 
