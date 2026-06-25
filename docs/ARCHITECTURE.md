@@ -308,7 +308,7 @@ Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部
 | 临床规则库 | `assets/clinical_rules_face_incision.json` | 结构化区域规则、优先级、例外、审核状态 | #11 |
 | 面部分区 / 亚单位 | `src/langerface/anatomy/`, `web/anatomy*.js` | 把点或肿物中心映射到临床区域 / 美学亚单位，并输出 bbox/边界/过渡区/敏感游离缘相关 `confidence_reasons` | #12 |
 | RSTL 方向服务 | `src/langerface/lines/direction.py`, `web/*direction*.js` | 查询局部方向、置信度和依据；离散度使用无向轴角，并输出 atlas 为空、支持点过远/过少、角度冲突等 `confidence_reasons` | #13 |
-| 肿物模型 | `src/langerface/tumor/`, `web/tumor*.js` | 表示皮下 / 皮表肿物输入与单位 | #14 |
+| 肿物模型 | `src/langerface/tumor/`, `web/tumor*.js` | 表示皮下 / 皮表肿物输入、单位与输入质量摘要 | #14 |
 | 皮下线性切口 | `src/langerface/incision/linear.py` | 基于超声直径和 RSTL 方向生成线性候选 | #15 |
 | 皮表梭形切口 | `src/langerface/incision/fusiform.py` | 生成梭形候选，约束比例、尖端角和平滑对称 | #16 |
 | 敏感结构 guardrails | `src/langerface/incision/guardrails.py` | 下睑、唇红缘、鼻翼、鼻尖、口角等风险提示、分结构 draft 距离阈值和方向例外 | #17 |
@@ -366,7 +366,7 @@ candidate = segment(center, axis, length)
 
 #### 皮表肿物
 
-皮表肿物生成梭形候选。医生给出的当前默认规则是：长轴平行 RSTL；长轴与类圆化后的肿物直径按 3:1 控制；两端尖角默认 30°；两侧弧线对称平滑，从最宽处向两端逐渐收窄至尖点。当前实现使用对称 cubic Hermite profile：端点切线由 `tip_angle_deg` 决定，中点达到最大宽度且切线水平，导出 `tip_angle_target_deg`、`tip_angle_estimated_deg` 和 `tip_angle_error_deg`。同时导出 `boundary_point_count`、`boundary_area_mm2`、`boundary_self_intersection`、`boundary_center_shift_mm`、`axis_coverage_required_mm` 与 `axis_coverage_deficit_mm`；当自由轮廓点数过少、面积退化、自交、边界中心明显偏离选中肿物中心，或最大长度规则导致候选短于边界加切缘覆盖需求时，guardrails 必须提示医生复核。
+皮表肿物生成梭形候选。医生给出的当前默认规则是：长轴平行 RSTL；长轴与类圆化后的肿物直径按 3:1 控制；两端尖角默认 30°；两侧弧线对称平滑，从最宽处向两端逐渐收窄至尖点。当前实现使用对称 cubic Hermite profile：端点切线由 `tip_angle_deg` 决定，中点达到最大宽度且切线水平，导出 `tip_angle_target_deg`、`tip_angle_estimated_deg` 和 `tip_angle_error_deg`。同时导出 `boundary_point_count`、`boundary_area_mm2`、`boundary_self_intersection`、`boundary_center_shift_mm`、`axis_coverage_required_mm` 与 `axis_coverage_deficit_mm`；当自由轮廓点数过少、面积退化、自交、边界中心明显偏离选中肿物中心，或最大长度规则导致候选短于边界加切缘覆盖需求时，guardrails 必须提示医生复核。肿物输入还会先经过 `summarize_tumor_input_quality`，把缺作者、非 mm 单位、缺皮下深度、缺皮表切缘或边界过稀记录到 trace、审阅 JSON 和报告中。
 
 实现时要把这些写成**参数化临床规则**，不要硬编码为不可变数学常量。原因是 3:1 与 30°在几何上并不总能同时严格成立；工程上应显示实际指标，让医生在比例、尖端角、邻近解剖结构和可直接拉拢缝合之间做判断。
 

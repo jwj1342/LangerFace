@@ -155,6 +155,10 @@ const boundaryTumor = {
 const boundarySummary = T.summarizeTumorBoundary(boundaryTumor, [1, 0, 0], [0, 0, 1], 0.1);
 ok(boundarySummary.boundary_used === true, "freehand boundary summary is used");
 ok(boundarySummary.axis_diameter_mm > 35, "freehand boundary records long-axis coverage");
+const boundaryQuality = T.summarizeTumorInputQuality(boundaryTumor);
+ok(boundaryQuality.passed === true, "sparse cutaneous boundary input remains reviewable");
+ok(boundaryQuality.warnings.some((w) => w.code === "sparse_cutaneous_boundary_input"),
+  "tumor input quality flags sparse freehand boundary");
 const boundaryFusiform = T.generateFusiformIncision(boundaryTumor, { vector: [1, 0, 0], confidence: 0.9 }, 0.1, [0, 0, 1]);
 ok(boundaryFusiform.metrics.boundary_used === true, "fusiform candidate records boundary use");
 ok(boundaryFusiform.center[0] > 4, "fusiform candidate recenters to boundary centroid");
@@ -332,12 +336,30 @@ const plan = T.planIncisionDeterministic({
   tris,
   atlas,
 });
-ok(plan.trace.length === 4, "deterministic plan records four tool calls");
+ok(plan.trace.length === 5, "deterministic plan records five tool calls");
+ok(plan.trace[0].action === "summarize_tumor_input_quality", "deterministic plan checks tumor input first");
 ok(plan.candidate.type === "linear", "deterministic plan returns candidate");
+ok(plan.tumor_quality.warning_count === 1, "deterministic plan returns tumor quality summary");
+ok(plan.tumor_quality.warnings[0].code === "missing_tumor_author", "tumor quality flags missing author");
 ok(plan.agent_trace_mode === "single_turn_react_with_deterministic_tools", "plan records trace mode");
+ok(T.TOOL_SCHEMAS.some((s) => s.name === "summarize_tumor_input_quality"),
+  "tool schemas include tumor input quality");
 ok(T.TOOL_SCHEMAS.some((s) => s.name === "clinician_edit_candidate"), "tool schemas include clinician edit");
 ok(T.TOOL_SCHEMAS.some((s) => s.name === "compare_candidates"), "tool schemas include candidate comparison");
 ok(T.TOOL_SCHEMAS.some((s) => s.name === "save_review_record"), "tool schemas include review record export");
+
+const incompleteQuality = T.summarizeTumorInputQuality({
+  kind: "subcutaneous",
+  center: [4, 2, 0],
+  diameter_mm: 8,
+  depth_mm: null,
+  units: "cm",
+});
+const incompleteCodes = new Set(incompleteQuality.warnings.map((w) => w.code));
+ok(incompleteQuality.passed === false, "non-mm tumor input fails quality gate");
+ok(incompleteCodes.has("missing_tumor_author"), "tumor input quality flags missing author");
+ok(incompleteCodes.has("non_mm_tumor_units"), "tumor input quality flags non-mm units");
+ok(incompleteCodes.has("missing_subcutaneous_depth"), "tumor input quality flags missing depth");
 
 const edited = T.applyCandidateEdit(plan, {
   angle_offset_deg: 20,

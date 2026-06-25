@@ -522,6 +522,42 @@ def test_tumor_input_preserves_boundary_metadata():
     assert data["units"] == "mm"
 
 
+def test_tumor_input_quality_flags_missing_source_context():
+    tumor = TumorInput(
+        kind="subcutaneous",
+        center=(4, 2, 0),
+        diameter_mm=8,
+        depth_mm=None,
+        author="",
+        units="cm",
+    )
+    quality = tumor.input_quality()
+    codes = {warning["code"] for warning in quality["warnings"]}
+    assert quality["passed"] is False
+    assert quality["warning_count"] == 3
+    assert quality["author_present"] is False
+    assert {"missing_tumor_author", "non_mm_tumor_units", "missing_subcutaneous_depth"} <= codes
+
+
+def test_cutaneous_tumor_input_quality_flags_sparse_boundary():
+    tumor = TumorInput(
+        kind="cutaneous",
+        center=(4, 2, 0),
+        diameter_mm=8,
+        margin_mm=2,
+        boundary=((3, 2, 0), (4, 3, 0), (5, 2, 0)),
+        boundary_mode="freehand",
+        boundary_source="manual_freehand",
+        author="clinician",
+        units="mm",
+    )
+    quality = tumor.input_quality()
+    assert quality["passed"] is True
+    assert quality["warning_count"] == 1
+    assert quality["author_present"] is True
+    assert quality["warnings"][0]["code"] == "sparse_cutaneous_boundary_input"
+
+
 def test_plan_incision_case_returns_trace_without_llm_provider():
     vertices, triangles, atlas = _simple_mesh_and_atlas()
     result = plan_incision_case(
@@ -533,13 +569,17 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     )
     assert result["candidate"]["type"] == "linear"
     assert [step["action"] for step in result["trace"]] == [
+        "summarize_tumor_input_quality",
         "classify_region",
         "query_rstl_direction",
         "linear_subcutaneous_incision",
         "evaluate_guardrails",
     ]
+    assert result["tumor_quality"]["warning_count"] == 1
+    assert result["tumor_quality"]["warnings"][0]["code"] == "missing_tumor_author"
     assert result["provider"]["mode"] == "deterministic_fallback"
     assert result["agent_trace_mode"] == "single_turn_react_with_deterministic_tools"
+    assert any(tool["name"] == "summarize_tumor_input_quality" for tool in result["tool_schemas"])
     assert any(tool["name"] == "evaluate_guardrails" for tool in result["tool_schemas"])
     assert any(tool["name"] == "compare_candidates" for tool in result["tool_schemas"])
     assert any(tool["name"] == "save_review_record" for tool in result["tool_schemas"])
@@ -589,6 +629,7 @@ def test_agent_tool_schema_and_privacy_doc_cover_review_export():
     names = {tool["name"] for tool in schema["tools"]}
     assert {
         "classify_region",
+        "summarize_tumor_input_quality",
         "query_rstl_direction",
         "linear_subcutaneous_incision",
         "fusiform_cutaneous_incision",

@@ -43,6 +43,7 @@ const DEFAULT_RULES = {
 
 const TOOL_SCHEMAS = [
   { name: "classify_region", input: ["point"], output: ["region", "subunit", "confidence", "confidence_reasons", "region_boundary_margin_norm", "free_margin_distance_mm"] },
+  { name: "summarize_tumor_input_quality", input: ["tumor"], output: ["passed", "warning_count", "warnings", "source", "boundary_source", "author_present", "units"] },
   { name: "query_rstl_direction", input: ["point", "source"], output: ["vector", "angle_deg", "confidence", "support_count", "angular_spread_deg", "confidence_reasons"] },
   { name: "linear_subcutaneous_incision", input: ["tumor", "direction", "units_per_mm"], output: ["endpoints", "length_mm", "metrics"] },
   { name: "fusiform_cutaneous_incision", input: ["tumor", "direction", "units_per_mm"], output: ["outline", "length_mm", "width_mm", "metrics"] },
@@ -409,6 +410,64 @@ export function normalizeTumorInput(tumor) {
 
 function validateTumor(tumor) {
   return normalizeTumorInput(tumor);
+}
+
+export function summarizeTumorInputQuality(tumorInput) {
+  const tumor = validateTumor(tumorInput);
+  const warnings = [];
+  if (!tumor.author) {
+    warnings.push({
+      code: "missing_tumor_author",
+      severity: "medium",
+      message: "Tumor input has no author/reviewer name recorded.",
+    });
+  }
+  if (tumor.units !== "mm") {
+    warnings.push({
+      code: "non_mm_tumor_units",
+      severity: "high",
+      message: "Tumor input units are not millimeters; deterministic incision rules assume mm.",
+    });
+  }
+  if (tumor.kind === "subcutaneous" && tumor.depth_mm == null) {
+    warnings.push({
+      code: "missing_subcutaneous_depth",
+      severity: "medium",
+      message: "Subcutaneous tumor depth is missing; confirm ultrasound/source depth before review.",
+    });
+  }
+  if (tumor.kind === "cutaneous") {
+    if (tumor.margin_mm <= 0) {
+      warnings.push({
+        code: "missing_cutaneous_margin",
+        severity: "medium",
+        message: "Cutaneous tumor margin is zero; confirm intended margin before review.",
+      });
+    }
+    if (tumor.boundary_mode === "freehand" && tumor.boundary.length < 6) {
+      warnings.push({
+        code: "sparse_cutaneous_boundary_input",
+        severity: "medium",
+        message: "Freehand cutaneous boundary has fewer than 6 points.",
+      });
+    }
+    if (tumor.boundary_mode !== "center_diameter" && tumor.boundary.length < 3) {
+      warnings.push({
+        code: "missing_cutaneous_boundary",
+        severity: "medium",
+        message: "Cutaneous boundary mode is selected but no usable boundary was provided.",
+      });
+    }
+  }
+  return {
+    passed: !warnings.some((w) => w.severity === "high"),
+    warning_count: warnings.length,
+    warnings,
+    source: tumor.source,
+    boundary_source: tumor.boundary_source,
+    author_present: Boolean(tumor.author),
+    units: tumor.units,
+  };
 }
 
 export function generateLinearIncision(tumorInput, direction, unitsPerMm, rules = DEFAULT_RULES) {
@@ -1005,6 +1064,7 @@ function fallbackSummary(tumor, candidate, guardrails) {
 
 export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atlas, normal = [0, 0, 1] }) {
   const tumor = validateTumor(tumorInput);
+  const tumorQuality = summarizeTumorInputQuality(tumor);
   const anatomy = classifyRegion(tumor.center, verts);
   const direction = queryDirection(tumor.center, verts, tris, atlas);
   const unitsPerMm = unitsPerMmFromVertices(verts);
@@ -1014,6 +1074,12 @@ export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atla
   annotateCandidateSensitiveDistances(candidate, verts);
   const guardrails = evaluateGuardrails(candidate, anatomy);
   const trace = [
+    {
+      summary: "检查肿物输入来源、作者、单位、深度、切缘和边界完整性。",
+      action: "summarize_tumor_input_quality",
+      input: { tumor },
+      observation: tumorQuality,
+    },
     { summary: "定位病灶所在面部分区。", action: "classify_region", input: { point: tumor.center }, observation: anatomy },
     { summary: "查询局部 RSTL 方向。", action: "query_rstl_direction", input: { point: tumor.center, source: "rstl_atlas" }, observation: direction },
     {
@@ -1029,6 +1095,7 @@ export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atla
     agent_trace_mode: "single_turn_react_with_deterministic_tools",
     tool_schemas: TOOL_SCHEMAS,
     tumor,
+    tumor_quality: tumorQuality,
     anatomy,
     direction,
     candidate,
@@ -1155,6 +1222,7 @@ export const __incisionToolsForTests = {
   classifyRegion,
   queryDirection,
   normalizeTumorInput,
+  summarizeTumorInputQuality,
   annotateCandidateSensitiveDistances,
   summarizeTumorBoundary,
   generateLinearIncision,

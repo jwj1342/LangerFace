@@ -9,6 +9,11 @@
       "output": ["region", "subunit", "confidence", "confidence_reasons", "region_boundary_margin_norm", "nearby_landmarks", "free_margin_distance_mm"]
     },
     {
+      "name": "summarize_tumor_input_quality",
+      "input": ["tumor"],
+      "output": ["passed", "warning_count", "warnings", "source", "boundary_source", "author_present", "units"]
+    },
+    {
       "name": "query_rstl_direction",
       "input": ["point", "source", "k_nearest"],
       "output": ["vector", "angle_deg", "confidence", "support_count", "angular_spread_deg", "confidence_reasons"]

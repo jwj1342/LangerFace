@@ -9,6 +9,7 @@ import {
   normalizeTumorInput,
   planIncisionDeterministic,
   summarizeTumorBoundary,
+  summarizeTumorInputQuality,
   unitsPerMmFromVertices,
 } from "./incision_tools.js";
 import { requestAgentPlan } from "./llm_provider.js";
@@ -630,6 +631,11 @@ function renderGuardrailDetails(guardrails) {
   els.guardrailDetails.textContent = `Guardrails：${warnings.map((w) => `${w.code}(${w.severity})`).join(" · ")}`;
 }
 
+function tumorQualityFor(result = S.result) {
+  if (!result?.tumor) return { warnings: [], warning_count: 0, passed: true };
+  return result.tumor_quality || summarizeTumorInputQuality(result.tumor);
+}
+
 function renderResult(result) {
   S.result = result;
   drawCandidate(result);
@@ -654,6 +660,10 @@ function renderResult(result) {
   els.guardrailVal.textContent = result.guardrails.passed ? "通过" : "复核";
   els.guardrailVal.style.color = result.guardrails.passed ? "" : "#b45309";
   renderGuardrailDetails(result.guardrails);
+  const tumorQuality = tumorQualityFor(result);
+  if (tumorQuality.warning_count) {
+    els.guardrailDetails.textContent += `\n肿物输入：${tumorQuality.warnings.map((w) => `${w.code}(${w.severity})`).join(" · ")}`;
+  }
   els.llmSummary.textContent = result.llm?.summary || "已生成候选。";
   els.nextStep.textContent = result.llm?.next_step || "";
   renderTrace(result.trace);
@@ -724,6 +734,7 @@ function reviewRecord(result = S.result, label = "候选") {
     label,
     created_at: createdAt,
     tumor: result.tumor,
+    tumor_quality: tumorQualityFor(result),
     anatomy: result.anatomy,
     direction: result.direction,
     candidate: result.candidate,
@@ -875,6 +886,7 @@ function exportTumorJson() {
     schema_version: "tumor-input/v0.2",
     exported_at: new Date().toISOString(),
     tumor,
+    tumor_quality: summarizeTumorInputQuality(tumor),
     boundary_summary: boundarySummaryFor(tumor),
     privacy_audit: {
       raw_image_sent: false,
@@ -958,6 +970,9 @@ function exportReport() {
     `- 类型：${r.candidate.type === "linear" ? "皮下线性切口" : "皮表梭形切口"}`,
     `- 候选版本：v${r.candidate.provenance?.candidate_version || 1}；编辑记录 ${(r.candidate.provenance?.edit_history || []).length} 条`,
     `- 肿物：${r.tumor.kind}，直径 ${fmt(r.tumor.diameter_mm)} mm，切缘 ${fmt(r.tumor.margin_mm)} mm`,
+    (r.tumor_quality?.warnings || []).length
+      ? `- 肿物输入提示：${r.tumor_quality.warnings.map((w) => `${w.code}(${w.severity})`).join("；")}`
+      : null,
     `- 面部分区：${r.anatomy.region} / ${r.anatomy.subunit}`,
     (r.anatomy.confidence_reasons || []).length
       ? `- 分区置信原因：${r.anatomy.confidence_reasons.join(", ")}`

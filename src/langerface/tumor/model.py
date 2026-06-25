@@ -55,6 +55,58 @@ class TumorInput:
 
         return self.diameter_mm + 2.0 * self.margin_mm
 
+    def input_quality(self) -> dict[str, object]:
+        warnings: list[dict[str, object]] = []
+        if not self.author:
+            warnings.append({
+                "code": "missing_tumor_author",
+                "severity": "medium",
+                "message": "Tumor input has no author/reviewer name recorded.",
+            })
+        if self.units != "mm":
+            warnings.append({
+                "code": "non_mm_tumor_units",
+                "severity": "high",
+                "message": "Tumor input units are not millimeters; deterministic incision rules assume mm.",
+            })
+        if self.kind == "subcutaneous" and self.depth_mm is None:
+            warnings.append({
+                "code": "missing_subcutaneous_depth",
+                "severity": "medium",
+                "message": (
+                    "Subcutaneous tumor depth is missing; confirm ultrasound/source depth "
+                    "before review."
+                ),
+            })
+        if self.kind == "cutaneous":
+            if self.margin_mm <= 0:
+                warnings.append({
+                    "code": "missing_cutaneous_margin",
+                    "severity": "medium",
+                    "message": "Cutaneous tumor margin is zero; confirm intended margin before review.",
+                })
+            if self.boundary_mode == "freehand" and len(self.boundary) < 6:
+                warnings.append({
+                    "code": "sparse_cutaneous_boundary_input",
+                    "severity": "medium",
+                    "message": "Freehand cutaneous boundary has fewer than 6 points.",
+                })
+            if self.boundary_mode != "center_diameter" and len(self.boundary) < 3:
+                warnings.append({
+                    "code": "missing_cutaneous_boundary",
+                    "severity": "medium",
+                    "message": "Cutaneous boundary mode is selected but no usable boundary was provided.",
+                })
+        return {
+            "passed": not any(w["severity"] == "high" for w in warnings),
+            "warning_count": len(warnings),
+            "warnings": warnings,
+            "source": self.source,
+            "boundary_source": self.boundary_source,
+            "author_present": bool(self.author),
+            "units": self.units,
+        }
+
     def to_dict(self) -> dict[str, object]:
         return {
             "kind": self.kind,

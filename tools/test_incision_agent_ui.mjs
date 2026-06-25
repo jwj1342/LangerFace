@@ -21,6 +21,9 @@ assert.ok(js.includes("exportTumorJson"), "workbench implements tumor JSON expor
 assert.ok(js.includes("importTumorFile"), "workbench implements tumor JSON import");
 assert.ok(js.includes("applyImportedTumor"), "workbench applies imported tumor payloads");
 assert.ok(js.includes("summarizeTumorBoundary"), "workbench renders deterministic boundary summaries");
+assert.ok(js.includes("summarizeTumorInputQuality"), "workbench renders tumor input quality summaries");
+assert.ok(js.includes("tumorQualityFor"), "workbench keeps tumor quality in review exports");
+assert.ok(js.includes("肿物输入提示"), "markdown report includes tumor input quality warnings");
 assert.ok(js.includes("tip_angle_error_deg"), "workbench renders fusiform tip angle error");
 assert.ok(js.includes("incision-review-record/v0.3"), "review records use explicit review workflow schema");
 assert.ok(js.includes("approved_for_discussion"), "review records support clinician approval");

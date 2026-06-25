@@ -38,6 +38,19 @@ TOOL_SCHEMAS = [
         ],
     },
     {
+        "name": "summarize_tumor_input_quality",
+        "input": ["tumor"],
+        "output": [
+            "passed",
+            "warning_count",
+            "warnings",
+            "source",
+            "boundary_source",
+            "author_present",
+            "units",
+        ],
+    },
+    {
         "name": "query_rstl_direction",
         "input": ["point", "source"],
         "output": [
@@ -202,6 +215,14 @@ def plan_incision_case(
     V = np.asarray(vertices, dtype=np.float64)
     T = np.asarray(triangles, dtype=np.int64)
     trace: list[dict[str, Any]] = []
+    tumor_quality = tumor.input_quality()
+    trace.append(_trace(
+        "summarize_tumor_input_quality",
+        {"tumor": tumor.to_dict()},
+        tumor_quality,
+        "Check whether manual tumor inputs include source, author, units, depth, "
+        "margin, and boundary metadata.",
+    ))
 
     anatomy = classify_region(tumor.center, V)
     trace.append(_trace(
@@ -273,6 +294,7 @@ def plan_incision_case(
         "agent_trace_mode": "single_turn_react_with_deterministic_tools",
         "tool_schemas": TOOL_SCHEMAS,
         "tumor": tumor.to_dict(),
+        "tumor_quality": tumor_quality,
         "anatomy": anatomy.to_dict(),
         "direction": direction.to_dict(),
         "candidate": candidate,
