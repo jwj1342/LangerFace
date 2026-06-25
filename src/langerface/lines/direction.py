@@ -18,6 +18,7 @@ class DirectionQueryResult:
     nearest_distance: float
     support_count: int = 0
     angular_spread_deg: float = 0.0
+    confidence_reasons: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -29,6 +30,7 @@ class DirectionQueryResult:
             "nearest_distance": self.nearest_distance,
             "support_count": self.support_count,
             "angular_spread_deg": self.angular_spread_deg,
+            "confidence_reasons": list(self.confidence_reasons),
         }
 
 
@@ -108,7 +110,15 @@ def query_direction(
     p = np.asarray(point, dtype=np.float64)
     pts, tans = _atlas_samples(V, T, atlas)
     if pts.shape[0] == 0:
-        return DirectionQueryResult(tuple(p), (1.0, 0.0, 0.0), 0.0, 0.0, "rstl_atlas_empty", float("inf"))
+        return DirectionQueryResult(
+            tuple(p),
+            (1.0, 0.0, 0.0),
+            0.0,
+            0.0,
+            "rstl_atlas_empty",
+            float("inf"),
+            confidence_reasons=("empty_atlas",),
+        )
 
     delta = pts - p
     dist2 = np.einsum("ij,ij->i", delta, delta)
@@ -127,8 +137,18 @@ def query_direction(
             signed_tans[i] *= -1.0
     vector = _norm(np.average(signed_tans, axis=0, weights=weights))
     angular_spread = _axial_angular_spread_deg(signed_tans, vector)
+    confidence_reasons: list[str] = []
+    if len(support_idx) < min(3, int(k_nearest)):
+        confidence_reasons.append("low_support_count")
+    if nearest_distance >= max_d:
+        confidence_reasons.append("nearest_atlas_support_far")
+    elif nearest_distance >= max_d * 0.6:
+        confidence_reasons.append("nearest_atlas_support_sparse")
     if angular_spread > 90.0:
+        confidence_reasons.append("high_angular_spread")
         confidence *= 0.75
+    if confidence < 0.35 and not confidence_reasons:
+        confidence_reasons.append("low_direction_confidence")
     angle = float(np.degrees(np.arctan2(vector[1], vector[0])))
     return DirectionQueryResult(
         point=tuple(float(x) for x in p),
@@ -139,4 +159,5 @@ def query_direction(
         nearest_distance=nearest_distance,
         support_count=int(len(support_idx)),
         angular_spread_deg=angular_spread,
+        confidence_reasons=tuple(confidence_reasons),
     )

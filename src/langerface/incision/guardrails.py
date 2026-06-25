@@ -147,10 +147,16 @@ def evaluate_guardrails(
 
     direction_conf = float(candidate.get("direction_confidence", 0.0))
     if direction_conf < float(cfg["low_direction_confidence"]):  # type: ignore[index]
+        direction_reasons = list(
+            (candidate.get("provenance") or {}).get("direction_confidence_reasons") or []
+        )
         warnings.append({
             "code": "low_rstl_confidence",
             "severity": "medium",
-            "message": "Local RSTL direction is low confidence; require manual confirmation.",
+            "message": (
+                "Local RSTL direction is low confidence; require manual confirmation"
+                + (f" ({', '.join(str(x) for x in direction_reasons)})." if direction_reasons else ".")
+            ),
         })
 
     if region_conf < float(cfg["low_region_confidence"]):  # type: ignore[index]

@@ -9,6 +9,7 @@ from ..clinical import default_clinical_rules
 from ..lines.direction import DirectionQueryResult
 from ..tumor import TumorInput
 from .geometry import clamp, normalize
+from .provenance import direction_provenance
 
 
 def linear_subcutaneous_incision(
@@ -62,5 +63,6 @@ def linear_subcutaneous_incision(
         "provenance": {
             "generator": "linear_subcutaneous_incision",
             "rules_version": (rules or default_clinical_rules()).get("version"),
+            **direction_provenance(direction),
         },
     }

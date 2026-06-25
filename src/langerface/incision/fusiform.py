@@ -9,6 +9,7 @@ from ..clinical import default_clinical_rules
 from ..lines.direction import DirectionQueryResult
 from ..tumor import TumorInput
 from .geometry import clamp, normalize, tangent_perp
+from .provenance import direction_provenance
 
 
 def _polygon_area(points: np.ndarray) -> float:
@@ -237,5 +238,6 @@ def fusiform_cutaneous_incision(
             "generator": "fusiform_cutaneous_incision",
             "rules_version": (rules or default_clinical_rules()).get("version"),
             "boundary_source": tumor.boundary_source,
+            **direction_provenance(direction),
         },
     }

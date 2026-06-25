@@ -758,7 +758,7 @@ axis_diff(theta_i, theta_ref) = |((theta_i - theta_ref + 90) mod 180) - 90|
 angular_spread = 2 * max_i axis_diff(theta_i, theta_ref)
 ```
 
-这样 `179°` 与 `-179°` 被视为约 `2°` 的轴向差异，而不是普通有向角 `max(theta)-min(theta)` 下的 `358°`。方向置信度因此只在真实邻域方向冲突时下降，不会在角度表示边界处误报低置信度。
+这样 `179°` 与 `-179°` 被视为约 `2°` 的轴向差异，而不是普通有向角 `max(theta)-min(theta)` 下的 `358°`。方向置信度因此只在真实邻域方向冲突时下降，不会在角度表示边界处误报低置信度。查询结果还会输出 `confidence_reasons`：`empty_atlas`、`nearest_atlas_support_far`、`nearest_atlas_support_sparse`、`low_support_count` 或 `high_angular_spread` 会进入候选 provenance、guardrail 文案和审阅报告，便于区分“没有图谱支持”和“邻域方向本身冲突”。
 
 ### 21.5 皮表肿物梭形切口
 

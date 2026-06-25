@@ -43,7 +43,7 @@ const DEFAULT_RULES = {
 
 const TOOL_SCHEMAS = [
   { name: "classify_region", input: ["point"], output: ["region", "subunit", "confidence", "free_margin_distance_mm"] },
-  { name: "query_rstl_direction", input: ["point", "source"], output: ["vector", "angle_deg", "confidence", "support_count"] },
+  { name: "query_rstl_direction", input: ["point", "source"], output: ["vector", "angle_deg", "confidence", "support_count", "angular_spread_deg", "confidence_reasons"] },
   { name: "linear_subcutaneous_incision", input: ["tumor", "direction", "units_per_mm"], output: ["endpoints", "length_mm", "metrics"] },
   { name: "fusiform_cutaneous_incision", input: ["tumor", "direction", "units_per_mm"], output: ["outline", "length_mm", "width_mm", "metrics"] },
   { name: "evaluate_guardrails", input: ["candidate", "anatomy"], output: ["passed", "warnings", "suggested_overrides"] },
@@ -231,7 +231,15 @@ function axialAngularSpreadDeg(vectors, reference) {
 export function queryDirection(point, verts, tris, atlas) {
   const { pts, tans } = atlasSamples(verts, tris, atlas);
   if (!pts.length) {
-    return { point, vector: [1, 0, 0], angle_deg: 0, confidence: 0, source: "rstl_atlas_empty", nearest_distance: Infinity };
+    return {
+      point,
+      vector: [1, 0, 0],
+      angle_deg: 0,
+      confidence: 0,
+      source: "rstl_atlas_empty",
+      nearest_distance: Infinity,
+      confidence_reasons: ["empty_atlas"],
+    };
   }
   let best = 0, bd = Infinity;
   const dist2 = [];
@@ -259,7 +267,13 @@ export function queryDirection(point, verts, tris, atlas) {
   }
   const vector = norm(mul(acc, 1 / Math.max(weightSum, 1e-9)));
   const spread = axialAngularSpreadDeg(signed, vector);
+  const confidenceReasons = [];
+  if (order.length < Math.min(3, 7)) confidenceReasons.push("low_support_count");
+  if (nearest >= maxDistance) confidenceReasons.push("nearest_atlas_support_far");
+  else if (nearest >= maxDistance * 0.6) confidenceReasons.push("nearest_atlas_support_sparse");
+  if (spread > 90) confidenceReasons.push("high_angular_spread");
   const confidence = clamp((1 - nearest / maxDistance) * (spread > 90 ? 0.75 : 1), 0, 1);
+  if (confidence < 0.35 && !confidenceReasons.length) confidenceReasons.push("low_direction_confidence");
   return {
     point,
     vector,
@@ -269,6 +283,17 @@ export function queryDirection(point, verts, tris, atlas) {
     nearest_distance: nearest,
     support_count: order.length,
     angular_spread_deg: spread,
+    confidence_reasons: confidenceReasons,
+  };
+}
+
+function directionProvenance(direction = {}) {
+  return {
+    direction_source: direction.source || null,
+    direction_nearest_distance: direction.nearest_distance ?? null,
+    direction_support_count: direction.support_count ?? null,
+    direction_angular_spread_deg: direction.angular_spread_deg ?? null,
+    direction_confidence_reasons: Array.isArray(direction.confidence_reasons) ? direction.confidence_reasons : [],
   };
 }
 
@@ -332,7 +357,11 @@ export function generateLinearIncision(tumorInput, direction, unitsPerMm, rules 
       length_clamped_by_max: targetLengthMm > cfg.max_length_mm,
       length_multiplier: lengthMm / tumor.diameter_mm,
     },
-    provenance: { generator: "generateLinearIncision", rules_version: rules.version },
+    provenance: {
+      generator: "generateLinearIncision",
+      rules_version: rules.version,
+      ...directionProvenance(direction),
+    },
   };
 }
 
@@ -552,6 +581,7 @@ export function generateFusiformIncision(tumorInput, direction, unitsPerMm, norm
       generator: "generateFusiformIncision",
       rules_version: rules.version,
       boundary_source: tumor.boundary_source,
+      ...directionProvenance(direction),
     },
   };
 }
@@ -595,7 +625,12 @@ export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
   const cfg = rules.guardrails;
   const warnings = [], suggested_overrides = [];
   if ((candidate.direction_confidence || 0) < cfg.low_direction_confidence) {
-    warnings.push({ code: "low_rstl_confidence", severity: "medium", message: "Local RSTL direction is low confidence; require manual confirmation." });
+    const reasons = candidate.provenance?.direction_confidence_reasons || [];
+    warnings.push({
+      code: "low_rstl_confidence",
+      severity: "medium",
+      message: `Local RSTL direction is low confidence; require manual confirmation${reasons.length ? ` (${reasons.join(", ")}).` : "."}`,
+    });
   }
   if ((anatomy.confidence || 0) < cfg.low_region_confidence) {
     warnings.push({ code: "low_region_confidence", severity: "medium", message: "Face region classification is low confidence; require clinician review." });

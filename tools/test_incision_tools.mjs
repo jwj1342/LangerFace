@@ -56,6 +56,11 @@ const repeatedAngles = Array.from({ length: 100 }, () => T.queryDirection([4, 2,
 ok(Math.max(...repeatedAngles) - Math.min(...repeatedAngles) < 1e-9, "queryDirection is stable across repeated static queries");
 const farDirection = T.queryDirection([10, 10, 0], verts, tris, atlas);
 ok(farDirection.confidence < 0.1, "queryDirection returns low confidence far from atlas support");
+ok(farDirection.confidence_reasons.includes("nearest_atlas_support_far"),
+  "queryDirection records far-atlas confidence reason");
+const emptyDirection = T.queryDirection([4, 2, 0], verts, tris, { system: "rstl", lines: [] });
+ok(emptyDirection.confidence === 0 && emptyDirection.confidence_reasons.includes("empty_atlas"),
+  "queryDirection records empty-atlas confidence reason");
 
 const wrapVerts = [
   [0.2, 0.0035, 0],
@@ -88,6 +93,16 @@ ok(near(linear.length_mm, 12.5), "linear length follows multiplier");
 ok(near(linear.metrics.length_target_mm, 12.5), "linear records target length");
 ok(near(linear.metrics.diameter_coverage_deficit_mm, 0), "linear records zero diameter coverage deficit");
 ok(near(linear.endpoints[0][0], 3.375) && near(linear.endpoints[1][0], 4.625), "linear endpoints centered on tumor");
+const lowDirectionLinear = T.generateLinearIncision(
+  { kind: "subcutaneous", center: [10, 10, 0], diameter_mm: 10, depth_mm: 5 },
+  farDirection,
+  0.1,
+);
+ok(lowDirectionLinear.provenance.direction_confidence_reasons.includes("nearest_atlas_support_far"),
+  "linear provenance keeps RSTL confidence reasons");
+const lowDirectionGuard = T.evaluateGuardrails(lowDirectionLinear, { region: "cheek", confidence: 0.8 });
+ok(lowDirectionGuard.warnings.some((w) => w.code === "low_rstl_confidence" && w.message.includes("nearest_atlas_support_far")),
+  "low RSTL guardrail reports confidence reason");
 
 const linearRules = structuredClone(T.DEFAULT_RULES);
 linearRules.linear_subcutaneous.max_length_mm = 30;

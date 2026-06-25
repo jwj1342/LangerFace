@@ -23,7 +23,7 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候
 - [ ] 结构化面部皮纹线与切口设计原则，形成可版本管理的临床规则库 — [#11](https://github.com/jwj1342/LangerFace/issues/11)
 - [ ] 面部分区与美学亚单位定位：把人脸点位映射到临床区域 — [#12](https://github.com/jwj1342/LangerFace/issues/12)
 - [ ] RSTL 局部方向服务：为切口设计提供方向、置信度与可解释依据 — [#13](https://github.com/jwj1342/LangerFace/issues/13)
-      · 本 PR 已支持 atlas weighted-nearest 查询、support count、低置信度提示、JS/Python 对拍和无向轴角离散度，避免 179°/-179° 边界误降置信度；临床级 atlas 质量与个体头模一致性仍待医生校验
+      · 本 PR 已支持 atlas weighted-nearest 查询、support count、无向轴角离散度、JS/Python 对拍和结构化 `confidence_reasons`；atlas 为空、最近支持点过远、支持点过少或邻域角度冲突会进入 trace、候选 provenance、guardrail 文案和报告；临床级 atlas 质量与个体头模一致性仍待医生校验
 - [ ] Borges RSTL 3DMM 拓扑先验：数字化经典图谱并注册到 FLAME/BFM 标准网格 — [#86](https://github.com/jwj1342/LangerFace/issues/86)
       · 本 PR 已新增 `rstl_mediapipe_direction_prior.json`，作为 MediaPipe 标准脸高密度方向场草案；FLAME/BFM 注册仍待 #61 资产与医生标注
 

@@ -645,7 +645,9 @@ function renderResult(result) {
     els.candidateWidth.textContent = "—";
     els.candidateTipAngle.textContent = "—";
   }
-  els.directionConf.textContent = `${Math.round((result.direction.confidence || 0) * 100)}%`;
+  const directionReasons = result.direction.confidence_reasons || [];
+  els.directionConf.textContent = `${Math.round((result.direction.confidence || 0) * 100)}%${directionReasons.length ? ` · ${directionReasons.join(", ")}` : ""}`;
+  els.directionConf.title = directionReasons.length ? `RSTL 低置信原因：${directionReasons.join(", ")}` : "";
   els.regionVal.textContent = result.anatomy.region;
   els.guardrailVal.textContent = result.guardrails.passed ? "通过" : "复核";
   els.guardrailVal.style.color = result.guardrails.passed ? "" : "#b45309";
@@ -955,6 +957,9 @@ function exportReport() {
     `- 肿物：${r.tumor.kind}，直径 ${fmt(r.tumor.diameter_mm)} mm，切缘 ${fmt(r.tumor.margin_mm)} mm`,
     `- 面部分区：${r.anatomy.region} / ${r.anatomy.subunit}`,
     `- RSTL 方向置信度：${Math.round((r.direction.confidence || 0) * 100)}%`,
+    (r.direction.confidence_reasons || []).length
+      ? `- RSTL 低置信原因：${r.direction.confidence_reasons.join(", ")}`
+      : null,
     `- 候选长度：${fmt(r.candidate.length_mm)} mm`,
     r.candidate.type === "fusiform"
       ? `- 梭形宽度 / 长宽比：${fmt(r.candidate.width_mm)} mm / ${fmt(r.candidate.metrics?.length_to_width_ratio, 2)}:1`

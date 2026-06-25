@@ -33,7 +33,14 @@ TOOL_SCHEMAS = [
     {
         "name": "query_rstl_direction",
         "input": ["point", "source"],
-        "output": ["vector", "angle_deg", "confidence", "support_count"],
+        "output": [
+            "vector",
+            "angle_deg",
+            "confidence",
+            "support_count",
+            "angular_spread_deg",
+            "confidence_reasons",
+        ],
     },
     {
         "name": "linear_subcutaneous_incision",

@@ -116,6 +116,15 @@ def test_query_direction_returns_low_confidence_far_from_atlas():
     result = query_direction([10.0, 10.0, 0.0], vertices, triangles, atlas)
     assert result.confidence < 0.1
     assert result.source == "rstl_atlas_weighted_nearest"
+    assert "nearest_atlas_support_far" in result.confidence_reasons
+
+
+def test_query_direction_records_empty_atlas_confidence_reason():
+    vertices, triangles, _ = _simple_mesh_and_atlas()
+    empty = Atlas(system="rstl", lines=[])
+    result = query_direction([4.0, 2.0, 0.0], vertices, triangles, empty)
+    assert result.confidence == 0.0
+    assert result.confidence_reasons == ("empty_atlas",)
 
 
 def test_query_direction_uses_axial_spread_across_angle_wrap():
@@ -158,6 +167,7 @@ def test_query_direction_js_python_parity_for_same_points():
     assert abs(js_result["confidence"] - py_result.confidence) < 1e-6
     assert js_result["source"] == py_result.source
     assert js_result["support_count"] == py_result.support_count
+    assert js_result["confidence_reasons"] == list(py_result.confidence_reasons)
 
 
 def test_linear_subcutaneous_candidate_uses_rstl_axis_and_length_rules():
@@ -170,6 +180,17 @@ def test_linear_subcutaneous_candidate_uses_rstl_axis_and_length_rules():
     assert candidate["metrics"]["diameter_coverage_deficit_mm"] == 0
     assert np.allclose(candidate["endpoints"][0], [3.375, 2.0, 0.0])
     assert np.allclose(candidate["endpoints"][1], [4.625, 2.0, 0.0])
+
+
+def test_linear_candidate_preserves_rstl_confidence_reasons_in_provenance():
+    vertices, triangles, atlas = _simple_mesh_and_atlas()
+    direction = query_direction([10.0, 10.0, 0.0], vertices, triangles, atlas)
+    tumor = TumorInput(kind="subcutaneous", center=(10, 10, 0), diameter_mm=10, depth_mm=5)
+    candidate = linear_subcutaneous_incision(tumor, direction, units_per_mm=0.1)
+    assert "nearest_atlas_support_far" in candidate["provenance"]["direction_confidence_reasons"]
+    guardrails = evaluate_guardrails(candidate, {"region": "cheek", "confidence": 0.8})
+    warning = next(w for w in guardrails["warnings"] if w["code"] == "low_rstl_confidence")
+    assert "nearest_atlas_support_far" in warning["message"]
 
 
 def test_linear_guardrail_flags_diameter_coverage_deficit():
