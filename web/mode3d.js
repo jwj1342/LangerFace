@@ -5,7 +5,7 @@ import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./cam
 import { ctx, els } from "./dom.js";
 import { applySim, toPixels, umeyama } from "./geometry.js";
 import { facesArray, fitExpression, fitShape, flameForward, loadFlameBasis } from "./flame_fit.js";
-import { countMetric, logWarn, recordEvent, recordMetricSample } from "./logger.js";
+import { countMetric, logWarn, recordEvent, recordMetricSample, setDiagnosticSection } from "./logger.js";
 import { ensureReady } from "./pipeline/models.js";
 import { showCameraPlaceholder, startCamera, stopSource } from "./pipeline/source.js";
 import { modelState, reconState, renderState, sourceState } from "./state.js";
@@ -22,6 +22,7 @@ const SCAN_TARGET_SECS = 9;
 const SCAN_TARGET_FRAMES = 40;
 const YAW_DISPLAY_SPAN = 0.5;
 let flameDemoLines = null;
+let flameDemoOverlayContext = null;
 
 async function fetchCanonicalRef() {
   if (canonicalRef) return canonicalRef;
@@ -65,9 +66,103 @@ async function buildViewer() {
     atlasLines,
     { showSurface: true, bands: renderState.bands, vertexColors: reconState.reconColors },
   );
+  applyIncisionOverlayToViewer(disp, faces);
   els.view3d.disabled = false; els.project3d.disabled = !reconState.reconProjectable;
   els.reset3d.disabled = false; els.cloudFitFlame.disabled = false;
   setMode3d("view");
+}
+
+function refsToCanonicalPoints(refs, canonical, triangles) {
+  return (refs || []).map((ref) => {
+    const tri = triangles?.[ref?.tri];
+    if (!tri || tri.length < 3) return null;
+    const A = canonical[tri[0]], B = canonical[tri[1]], C = canonical[tri[2]];
+    if (!A || !B || !C) return null;
+    const u = Number(ref.u), v = Number(ref.v), w = Number(ref.w ?? (1 - u - v));
+    if (![u, v, w].every(Number.isFinite)) return null;
+    return [
+      u * A[0] + v * B[0] + w * C[0],
+      u * A[1] + v * B[1] + w * C[1],
+      u * A[2] + v * B[2] + w * C[2],
+    ];
+  }).filter(Boolean);
+}
+
+function mediaPipeOverlayToFlamePoints(overlay, canonical, triangles, flameVerts, basis) {
+  const { src, dst } = sampleFlameLandmarkPairs(flameVerts, basis, canonical);
+  const sim = umeyama(src, dst);
+  const flameFaces = facesArray(basis);
+  const grid = buildTriangleGrid(flameVerts, flameFaces);
+  const transformRefs = (refs) => applySim(sim, refsToCanonicalPoints(refs, canonical, triangles))
+    .map((p) => snapPointToMesh(p, flameVerts, flameFaces, grid));
+  return {
+    schema_version: "incision-overlay-3d-points/v0.1",
+    candidate_type: overlay.candidate_type,
+    tumor_center_point: transformRefs([overlay.tumor?.center_ref])[0] || null,
+    tumor_boundary_points: transformRefs(overlay.tumor?.boundary_refs || []),
+    candidate_points: transformRefs(overlay.candidate?.polyline_refs || []),
+  };
+}
+
+function recordIncisionOverlay3dDiagnostics(summary, mappingMode) {
+  const overlay = renderState.incisionOverlay;
+  if (!summary || !overlay) {
+    setDiagnosticSection("incision_overlay_3d_view", null);
+    return;
+  }
+  setDiagnosticSection("incision_overlay_3d_view", {
+    schema_version: "incision-overlay-3d-view-diagnostics/v0.1",
+    updated_at: new Date().toISOString(),
+    raw_image_sent: false,
+    exported_raw_pixels: false,
+    mapping_mode: mappingMode,
+    recon_display_space: reconState.reconDisplaySpace,
+    recon_projectable: reconState.reconProjectable === true,
+    overlay: {
+      schema_version: overlay.schema_version,
+      label: overlay.label || "",
+      candidate_type: overlay.candidate_type || "",
+      tumor_kind: overlay.tumor_kind || "",
+      review_status: overlay.review?.status || "",
+      live_overlay_ready: overlay.review_gate?.live_overlay_ready === true,
+    },
+    viewer: summary,
+    clinical_boundary: "3D incision overlay is an engineering visualization, not patient-specific clinical AR registration.",
+  });
+}
+
+function applyIncisionOverlayToViewer(displayVerts, faces) {
+  const overlay = renderState.incisionOverlay;
+  if (!reconState.head3d) return null;
+  if (!overlay) {
+    reconState.head3d.clearIncisionOverlay?.();
+    setDiagnosticSection("incision_overlay_3d_view", null);
+    return null;
+  }
+  let summary;
+  let mappingMode = "mediapipe_468_surface_refs";
+  if (reconState.reconDisplaySpace === "screen") {
+    summary = reconState.head3d.setIncisionOverlay(overlay, displayVerts, faces);
+  } else if (reconState.reconDisplaySpace === "model" && reconState.flameBasis && flameDemoOverlayContext) {
+    mappingMode = "mediapipe_468_refs_to_flame_demo_nearest_surface";
+    const overlay3d = mediaPipeOverlayToFlamePoints(
+      overlay,
+      flameDemoOverlayContext.canonical,
+      flameDemoOverlayContext.triangles,
+      displayVerts,
+      reconState.flameBasis,
+    );
+    summary = reconState.head3d.setIncisionOverlayPoints(overlay3d);
+  } else {
+    summary = {
+      schema_version: "incision-overlay-3d-view/v0.1",
+      rendered: false,
+      reason: "unsupported_3d_overlay_mapping",
+    };
+    reconState.head3d.clearIncisionOverlay?.();
+  }
+  recordIncisionOverlay3dDiagnostics(summary, mappingMode);
+  return summary;
 }
 
 export function resetView3d() {
@@ -402,14 +497,15 @@ export async function loadDemoRecon() {
   const basis = reconState.flameBasis;
   reconState.reconVerts = flameForward(basis, ZERO_BETA, new Float64Array(basis.NE), 0);
   reconState.reconFaces = facesArray(basis);
-  if (!flameDemoLines) {
+  if (!flameDemoLines || !flameDemoOverlayContext) {
     const [canonical, topology, atlas] = await Promise.all([
       fetch(assetUrls.canonicalVertices).then((r) => r.json()),
       fetch(assetUrls.topology).then((r) => r.json()),
       fetch(assetUrls.atlasRstl).then((r) => r.json()),
     ]);
     const triangles = Array.isArray(topology) ? topology : topology.triangles;
-    flameDemoLines = mediaPipeAtlasToFlameLines(atlas, canonical, triangles, reconState.reconVerts, basis);
+    flameDemoOverlayContext = { canonical, triangles };
+    if (!flameDemoLines) flameDemoLines = mediaPipeAtlasToFlameLines(atlas, canonical, triangles, reconState.reconVerts, basis);
   }
   reconState.reconAtlasLines = flameDemoLines;
   reconState.reconColors = null;
