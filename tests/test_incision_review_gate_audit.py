@@ -21,6 +21,25 @@ def _record(
 ) -> dict:
     high_codes = high_codes or []
     warnings = [{"code": code, "severity": "high", "message": code} for code in high_codes]
+    sensitive_inspection = {
+        "schema_version": "sensitive-structure-inspection/v0.1",
+        "region": "cheek",
+        "subunit": "midface",
+        "sensitive_region": False,
+        "nearby_landmarks": [],
+        "center_free_margin_distance_mm": None,
+        "center_free_margin_threshold_mm": 18.0,
+        "center_within_threshold": False,
+        "candidate_free_margin_distance_mm": None,
+        "candidate_free_margin_nearest": None,
+        "candidate_free_margin_threshold_mm": None,
+        "candidate_within_threshold": False,
+        "warning_count": 0,
+        "warnings": [],
+        "protective_direction": None,
+        "clinician_review_required": True,
+        "clinical_boundary": "deterministic sensitive-structure inspection fixture",
+    }
     return {
         "schema_version": "incision-review-record/v0.3",
         "id": "candidate-review-gate-fixture",
@@ -58,6 +77,13 @@ def _record(
             "history": [],
         },
         "guardrails": {"passed": not high_codes, "warnings": warnings, "suggested_overrides": []},
+        "sensitive_structure_inspection": sensitive_inspection,
+        "trace": [
+            {
+                "action": "inspect_sensitive_structures",
+                "observation": copy.deepcopy(sensitive_inspection),
+            }
+        ],
         "guardrail_summary": {
             "passed": not high_codes,
             "high_count": len(high_codes),
@@ -350,6 +376,28 @@ def test_review_gate_audit_flags_guardrail_summary_override_mismatch():
 
     assert report["passed"] is False
     assert "guardrail_summary_overrides_mismatch" in codes
+
+
+def test_review_gate_audit_flags_missing_sensitive_structure_inspection_export():
+    record = _record()
+    del record["sensitive_structure_inspection"]
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "sensitive_structure_inspection_missing" in codes
+
+
+def test_review_gate_audit_flags_sensitive_structure_inspection_mismatch():
+    record = _record()
+    record["sensitive_structure_inspection"]["warning_count"] = 3
+
+    report = audit_review_record(record)
+    codes = {issue["code"] for issue in report["issues"]}
+
+    assert report["passed"] is False
+    assert "sensitive_structure_inspection_mismatch" in codes
 
 
 def test_review_gate_audit_accepts_multi_step_candidate_edit_session():

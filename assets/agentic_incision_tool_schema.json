@@ -9,11 +9,12 @@
       ["summarize_tumor_input_quality"],
       ["classify_region"],
       ["query_rstl_direction"],
+      ["inspect_sensitive_structures"],
       ["linear_subcutaneous_incision", "fusiform_cutaneous_incision"],
       ["evaluate_guardrails"],
       ["preview_incision_on_face"]
     ],
-    "boundary": "Candidate confirmation requires deterministic tumor quality, anatomy, RSTL direction, incision generation, guardrail, and face preview observations."
+    "boundary": "Candidate confirmation requires deterministic tumor quality, anatomy, RSTL direction, sensitive-structure inspection, incision generation, guardrail, and face preview observations."
   },
   "orchestration_audit": {
     "schema_version": "agent-orchestration-audit/v0.1",
@@ -27,6 +28,7 @@
       "inspect_tumor_input",
       "localize_anatomy",
       "query_direction",
+      "inspect_sensitive_structures",
       "generate_primary_candidate",
       "check_guardrails",
       "preview_candidates",
@@ -93,6 +95,11 @@
       "name": "query_rstl_direction",
       "input": ["point", "source", "k_nearest"],
       "output": ["vector", "angle_deg", "confidence", "support_count", "angular_spread_deg", "confidence_reasons"]
+    },
+    {
+      "name": "inspect_sensitive_structures",
+      "input": ["anatomy", "candidate"],
+      "output": ["region", "nearby_landmarks", "center_free_margin_distance_mm", "center_free_margin_threshold_mm", "candidate_free_margin_distance_mm", "warnings", "protective_direction", "clinician_review_required"]
     },
     {
       "name": "linear_subcutaneous_incision",

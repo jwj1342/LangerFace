@@ -168,6 +168,147 @@ def _append_protective_direction_override(
     })
 
 
+def _anatomy_fields(anatomy: AnatomyContext | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(anatomy, AnatomyContext):
+        return {
+            "region": anatomy.region,
+            "subunit": anatomy.subunit,
+            "sensitive": anatomy.sensitive,
+            "nearby_landmarks": list(anatomy.nearby_landmarks),
+            "free_margin_distance_mm": anatomy.free_margin_distance_mm,
+        }
+    return {
+        "region": str(anatomy.get("region", "unknown")),
+        "subunit": str(anatomy.get("subunit", "unknown")),
+        "sensitive": bool(anatomy.get("sensitive")),
+        "nearby_landmarks": _as_landmark_names(anatomy.get("nearby_landmarks", [])),
+        "free_margin_distance_mm": anatomy.get("free_margin_distance_mm"),
+    }
+
+
+def _protective_direction_summary(
+    cfg: dict[str, Any],
+    names: Any,
+    *,
+    fallback_region: str,
+    source: str,
+) -> dict[str, Any] | None:
+    match = _protective_direction_rule(names, cfg, fallback_region=fallback_region)
+    if match is None:
+        return None
+    structure, rule = match
+    return {
+        "structure": structure,
+        "source": source,
+        "direction_hint": rule.get("direction_hint", "manual_sensitive_margin_axis"),
+        "canonical_axis": rule.get("canonical_axis"),
+        "reason": rule.get("reason", "Protect sensitive free-margin anatomy before following local RSTL."),
+        "requires_clinician_override_reason": True,
+        "priority": "sensitive_margin_exception_before_rstl",
+    }
+
+
+def inspect_sensitive_structures(
+    anatomy: AnatomyContext | dict[str, Any],
+    candidate: dict[str, Any] | None = None,
+    *,
+    rules: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Summarize sensitive free-margin context before guardrail evaluation.
+
+    This is an explicit ReAct observation. It records what deterministic anatomy
+    tools know about nearby eyelid, vermilion, alar, nasal-tip, and commissure
+    structures before an agent can present a candidate for clinician review.
+    The hard pass/fail remains in ``evaluate_guardrails``.
+    """
+
+    cfg = (rules or default_clinical_rules())["guardrails"]  # type: ignore[index]
+    fields = _anatomy_fields(anatomy)
+    region = str(fields["region"])
+    nearby_landmarks = list(fields["nearby_landmarks"])
+    center_distance = fields["free_margin_distance_mm"]
+    center_threshold = _free_margin_distance_threshold_mm(
+        nearby_landmarks,
+        cfg,
+        fallback_region=region,
+    )
+    candidate_metrics = (candidate or {}).get("metrics") or {}
+    candidate_distance = candidate_metrics.get("sensitive_free_margin_min_distance_mm")
+    candidate_nearest = candidate_metrics.get("sensitive_free_margin_nearest")
+    candidate_threshold = _free_margin_distance_threshold_mm(
+        candidate_nearest or nearby_landmarks,
+        cfg,
+        fallback_region=region,
+    )
+
+    sensitive_rules = cfg.get("sensitive_regions") or {}
+    warnings: list[dict[str, Any]] = []
+    protective_names: Any = nearby_landmarks
+    protective_source = "nearby_sensitive_free_margin"
+    if region in sensitive_rules:
+        warnings.append({
+            "code": f"sensitive_region_{region}",
+            "severity": "high",
+            "message": sensitive_rules[region],
+        })
+        protective_names = region
+        protective_source = f"sensitive_region_{region}"
+    if center_distance is not None and float(center_distance) <= center_threshold:
+        warnings.append({
+            "code": "near_sensitive_free_margin",
+            "severity": "high",
+            "message": (
+                f"Candidate center is {float(center_distance):.1f} mm from sensitive "
+                f"free-margin structures (threshold {center_threshold:.1f} mm)."
+            ),
+        })
+        protective_source = "near_sensitive_free_margin"
+    if candidate_distance is not None and float(candidate_distance) <= candidate_threshold:
+        warnings.append({
+            "code": "candidate_near_sensitive_free_margin",
+            "severity": "high",
+            "message": (
+                f"Candidate geometry is {float(candidate_distance):.1f} mm from sensitive "
+                f"free-margin structures (threshold {candidate_threshold:.1f} mm)."
+            ),
+        })
+        protective_names = candidate_nearest or protective_names
+        protective_source = "candidate_near_sensitive_free_margin"
+
+    protective_direction = _protective_direction_summary(
+        cfg,
+        protective_names,
+        fallback_region=region,
+        source=protective_source,
+    )
+    return {
+        "schema_version": "sensitive-structure-inspection/v0.1",
+        "region": region,
+        "subunit": fields["subunit"],
+        "sensitive_region": bool(fields["sensitive"]) or region in sensitive_rules,
+        "nearby_landmarks": nearby_landmarks,
+        "center_free_margin_distance_mm": center_distance,
+        "center_free_margin_threshold_mm": center_threshold,
+        "center_within_threshold": (
+            center_distance is not None and float(center_distance) <= center_threshold
+        ),
+        "candidate_free_margin_distance_mm": candidate_distance,
+        "candidate_free_margin_nearest": candidate_nearest,
+        "candidate_free_margin_threshold_mm": candidate_threshold if candidate_distance is not None else None,
+        "candidate_within_threshold": (
+            candidate_distance is not None and float(candidate_distance) <= candidate_threshold
+        ),
+        "warning_count": len(warnings),
+        "warnings": warnings,
+        "protective_direction": protective_direction,
+        "clinician_review_required": True,
+        "clinical_boundary": (
+            "Sensitive-structure inspection is a deterministic screening observation; "
+            "clinician review and guardrails remain required."
+        ),
+    }
+
+
 def evaluate_guardrails(
     candidate: dict[str, Any],
     anatomy: AnatomyContext | dict[str, Any],

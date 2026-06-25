@@ -72,6 +72,7 @@ const TOOL_SCHEMAS = [
   { name: "classify_region", input: ["point"], output: ["region", "subunit", "confidence", "confidence_reasons", "region_boundary_margin_norm", "free_margin_distance_mm"] },
   { name: "summarize_tumor_input_quality", input: ["tumor"], output: ["passed", "warning_count", "warnings", "source", "boundary_source", "author_present", "units"] },
   { name: "query_rstl_direction", input: ["point", "source"], output: ["vector", "angle_deg", "confidence", "support_count", "angular_spread_deg", "confidence_reasons"] },
+  { name: "inspect_sensitive_structures", input: ["anatomy", "candidate"], output: ["region", "nearby_landmarks", "center_free_margin_distance_mm", "center_free_margin_threshold_mm", "candidate_free_margin_distance_mm", "warnings", "protective_direction", "clinician_review_required"] },
   { name: "linear_subcutaneous_incision", input: ["tumor", "direction", "units_per_mm"], output: ["endpoints", "length_mm", "metrics"] },
   { name: "fusiform_cutaneous_incision", input: ["tumor", "direction", "units_per_mm"], output: ["outline", "length_mm", "width_mm", "metrics"] },
   { name: "evaluate_guardrails", input: ["candidate", "anatomy"], output: ["passed", "warnings", "suggested_overrides"] },
@@ -931,6 +932,77 @@ function protectiveDirectionRule(names, cfg, fallbackRegion = "unknown") {
   return null;
 }
 
+function protectiveDirectionSummary(cfg, names, fallbackRegion, source) {
+  const match = protectiveDirectionRule(names, cfg, fallbackRegion);
+  if (!match) return null;
+  const [structure, rule] = match;
+  return {
+    structure,
+    source,
+    direction_hint: rule.direction_hint || "manual_sensitive_margin_axis",
+    canonical_axis: rule.canonical_axis || null,
+    reason: rule.reason || "Protect sensitive free-margin anatomy before following local RSTL.",
+    requires_clinician_override_reason: true,
+    priority: "sensitive_margin_exception_before_rstl",
+  };
+}
+
+export function inspectSensitiveStructures(anatomy, candidate = null, rules = DEFAULT_RULES) {
+  const cfg = rules.guardrails;
+  const region = anatomy?.region || "unknown";
+  const nearby = Array.isArray(anatomy?.nearby_landmarks) ? anatomy.nearby_landmarks : [];
+  const centerDistance = anatomy?.free_margin_distance_mm ?? null;
+  const centerThreshold = freeMarginDistanceThresholdMm(nearby, cfg, region);
+  const metrics = candidate?.metrics || {};
+  const candidateDistance = metrics.sensitive_free_margin_min_distance_mm ?? null;
+  const candidateNearest = metrics.sensitive_free_margin_nearest ?? null;
+  const candidateThreshold = freeMarginDistanceThresholdMm(candidateNearest || nearby, cfg, region);
+  const warnings = [];
+  let protectiveNames = nearby;
+  let protectiveSource = "nearby_sensitive_free_margin";
+  if (cfg.sensitive_regions[region]) {
+    warnings.push({ code: `sensitive_region_${region}`, severity: "high", message: cfg.sensitive_regions[region] });
+    protectiveNames = region;
+    protectiveSource = `sensitive_region_${region}`;
+  }
+  if (centerDistance != null && Number(centerDistance) <= centerThreshold) {
+    warnings.push({
+      code: "near_sensitive_free_margin",
+      severity: "high",
+      message: `Candidate center is ${Number(centerDistance).toFixed(1)} mm from sensitive free-margin structures (threshold ${centerThreshold.toFixed(1)} mm).`,
+    });
+    protectiveSource = "near_sensitive_free_margin";
+  }
+  if (candidateDistance != null && Number(candidateDistance) <= candidateThreshold) {
+    warnings.push({
+      code: "candidate_near_sensitive_free_margin",
+      severity: "high",
+      message: `Candidate geometry is ${Number(candidateDistance).toFixed(1)} mm from sensitive free-margin structures (threshold ${candidateThreshold.toFixed(1)} mm).`,
+    });
+    protectiveNames = candidateNearest || protectiveNames;
+    protectiveSource = "candidate_near_sensitive_free_margin";
+  }
+  return {
+    schema_version: "sensitive-structure-inspection/v0.1",
+    region,
+    subunit: anatomy?.subunit || "unknown",
+    sensitive_region: Boolean(anatomy?.sensitive) || Boolean(cfg.sensitive_regions[region]),
+    nearby_landmarks: nearby,
+    center_free_margin_distance_mm: centerDistance,
+    center_free_margin_threshold_mm: centerThreshold,
+    center_within_threshold: centerDistance != null && Number(centerDistance) <= centerThreshold,
+    candidate_free_margin_distance_mm: candidateDistance,
+    candidate_free_margin_nearest: candidateNearest,
+    candidate_free_margin_threshold_mm: candidateDistance != null ? candidateThreshold : null,
+    candidate_within_threshold: candidateDistance != null && Number(candidateDistance) <= candidateThreshold,
+    warning_count: warnings.length,
+    warnings,
+    protective_direction: protectiveDirectionSummary(cfg, protectiveNames, region, protectiveSource),
+    clinician_review_required: true,
+    clinical_boundary: "敏感结构检查只是确定性筛查观察；医生审阅和 guardrails 仍然必需。",
+  };
+}
+
 function appendProtectiveDirectionOverride(suggestedOverrides, cfg, names, fallbackRegion, sourceWarning) {
   const match = protectiveDirectionRule(names, cfg, fallbackRegion);
   if (!match) return;
@@ -1364,6 +1436,7 @@ export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atla
   const tumorQuality = summarizeTumorInputQuality(tumor);
   const anatomy = classifyRegion(tumor.center, verts);
   const direction = queryDirection(tumor.center, verts, tris, atlas);
+  const sensitiveInspection = inspectSensitiveStructures(anatomy);
   const unitsPerMm = unitsPerMmFromVertices(verts);
   const candidate = tumor.kind === "subcutaneous"
     ? generateLinearIncision(tumor, direction, unitsPerMm)
@@ -1380,6 +1453,7 @@ export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atla
     },
     { summary: "定位病灶所在面部分区。", action: "classify_region", input: { point: tumor.center }, observation: anatomy },
     { summary: "查询局部 RSTL 方向。", action: "query_rstl_direction", input: { point: tumor.center, source: "rstl_atlas" }, observation: direction },
+    { summary: "检查附近敏感游离缘和保护性方向例外。", action: "inspect_sensitive_structures", input: { anatomy }, observation: sensitiveInspection },
     {
       summary: "用确定性工具生成切口候选。",
       action: tumor.kind === "subcutaneous" ? "linear_subcutaneous_incision" : "fusiform_cutaneous_incision",
@@ -1397,6 +1471,7 @@ export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atla
     tumor_quality: tumorQuality,
     anatomy,
     direction,
+    sensitive_structure_inspection: sensitiveInspection,
     candidate,
     preview,
     guardrails,
@@ -1528,6 +1603,7 @@ export const __incisionToolsForTests = {
   generateLinearIncision,
   generateFusiformIncision,
   evaluateGuardrails,
+  inspectSensitiveStructures,
   previewIncisionOnFace,
   planIncisionDeterministic,
   unitsPerMmFromVertices,

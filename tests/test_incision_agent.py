@@ -628,13 +628,15 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     )
     assert result["candidate"]["type"] == "linear"
     actions = [step["action"] for step in result["trace"]]
-    assert actions[:5] == [
+    assert actions[:6] == [
         "summarize_tumor_input_quality",
         "classify_region",
         "query_rstl_direction",
+        "inspect_sensitive_structures",
         "linear_subcutaneous_incision",
         "evaluate_guardrails",
     ]
+    assert actions.count("inspect_sensitive_structures") == 1
     assert "propose_direction_variants" in actions
     assert actions.count("linear_subcutaneous_incision") == 3
     assert actions.count("evaluate_guardrails") == 3
@@ -646,6 +648,8 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     assert result["preview"]["exported_raw_pixels"] is False
     assert result["tumor_quality"]["warning_count"] == 1
     assert result["tumor_quality"]["warnings"][0]["code"] == "missing_tumor_author"
+    assert result["sensitive_structure_inspection"]["schema_version"] == "sensitive-structure-inspection/v0.1"
+    assert result["sensitive_structure_inspection"]["clinician_review_required"] is True
     assert result["provider"]["mode"] == "deterministic_fallback"
     assert result["agent_trace_mode"] == "single_turn_react_multi_candidate_with_deterministic_tools"
     assert result["agent_trace_gate"]["schema_version"] == "agent-trace-gate/v0.1"
@@ -653,15 +657,17 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
     assert result["agent_trace_gate"]["missing_actions"] == []
     assert result["agent_trace_gate"]["deterministic_geometry_present"] is True
     assert "evaluate_guardrails" in result["agent_trace_gate"]["observed_actions"]
+    assert "inspect_sensitive_structures" in result["agent_trace_gate"]["observed_actions"]
     assert "preview_incision_on_face" in result["agent_trace_gate"]["observed_actions"]
     assert result["agent_react_plan"]["schema_version"] == "agent-react-plan/v0.1"
     assert result["agent_react_plan"]["passed"] is True
-    assert result["agent_react_plan"]["step_count"] == 7
+    assert result["agent_react_plan"]["step_count"] == 8
     assert result["agent_react_plan"]["failed_step_count"] == 0
     assert [step["id"] for step in result["agent_react_plan"]["steps"]] == [
         "inspect_tumor_input",
         "localize_anatomy",
         "query_direction",
+        "inspect_sensitive_structures",
         "generate_primary_candidate",
         "check_guardrails",
         "preview_candidates",
@@ -694,7 +700,7 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
         "preview_ready_count": 3,
         "comparison_ready": True,
         "react_plan_passed": True,
-        "react_plan_step_count": 7,
+        "react_plan_step_count": 8,
         "retry_count": 0,
         "retried_failures": [],
         "tool_failure_count": 0,
@@ -706,6 +712,7 @@ def test_plan_incision_case_returns_trace_without_llm_provider():
         ),
     }
     assert any(tool["name"] == "summarize_tumor_input_quality" for tool in result["tool_schemas"])
+    assert any(tool["name"] == "inspect_sensitive_structures" for tool in result["tool_schemas"])
     assert any(tool["name"] == "evaluate_guardrails" for tool in result["tool_schemas"])
     assert any(tool["name"] == "preview_incision_on_face" for tool in result["tool_schemas"])
     assert any(tool["name"] == "propose_direction_variants" for tool in result["tool_schemas"])
@@ -945,7 +952,12 @@ def test_agent_trace_gate_fails_when_required_tool_step_is_missing():
     assert gate["order_ok"] is True
     assert gate["deterministic_geometry_present"] is True
     assert gate["missing_actions"] == [
-        {"key": "rstl_direction", "label": "RSTL direction", "actions": ["query_rstl_direction"]}
+        {"key": "rstl_direction", "label": "RSTL direction", "actions": ["query_rstl_direction"]},
+        {
+            "key": "sensitive_structures",
+            "label": "sensitive structures",
+            "actions": ["inspect_sensitive_structures"],
+        },
     ]
 
 
@@ -1021,9 +1033,11 @@ def test_agent_tool_schema_and_privacy_doc_cover_review_export():
     assert schema["trace_gate"]["schema_version"] == "agent-trace-gate/v0.1"
     assert schema["trace_gate"]["blocks_confirmation"] is True
     assert ["query_rstl_direction"] in schema["trace_gate"]["required_actions"]
+    assert ["inspect_sensitive_structures"] in schema["trace_gate"]["required_actions"]
     assert ["preview_incision_on_face"] in schema["trace_gate"]["required_actions"]
     assert schema["react_plan"]["schema_version"] == "agent-react-plan/v0.1"
     assert "preview_candidates" in schema["react_plan"]["steps"]
+    assert "inspect_sensitive_structures" in schema["react_plan"]["steps"]
     assert "compare_direction_variants" in schema["react_plan"]["steps"]
     assert schema["execution_events"]["schema_version"] == "agent-execution-events/v0.1"
     assert "execution_event" in schema["execution_events"]["sse_events"]

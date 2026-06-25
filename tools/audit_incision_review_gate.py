@@ -195,6 +195,54 @@ def _stable_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def _trace_observation(record: dict[str, Any], action: str) -> dict[str, Any] | None:
+    trace = record.get("trace")
+    if not isinstance(trace, list):
+        return None
+    for step in reversed(trace):
+        if not isinstance(step, dict) or step.get("action") != action:
+            continue
+        observation = step.get("observation")
+        return observation if isinstance(observation, dict) else None
+    return None
+
+
+def _sensitive_structure_inspection_issues(record: dict[str, Any]) -> list[dict[str, str]]:
+    observed = _trace_observation(record, "inspect_sensitive_structures")
+    if observed is None:
+        return []
+
+    exported = record.get("sensitive_structure_inspection")
+    if exported is None:
+        return [
+            _issue(
+                "sensitive_structure_inspection_missing",
+                "Review records must export sensitive_structure_inspection from the Agent trace.",
+                path="sensitive_structure_inspection",
+            )
+        ]
+    if not isinstance(exported, dict):
+        return [
+            _issue(
+                "sensitive_structure_inspection_invalid",
+                "sensitive_structure_inspection must be an object.",
+                path="sensitive_structure_inspection",
+            )
+        ]
+    if _stable_json(exported) != _stable_json(observed):
+        return [
+            _issue(
+                "sensitive_structure_inspection_mismatch",
+                (
+                    "sensitive_structure_inspection does not match the "
+                    "inspect_sensitive_structures trace observation."
+                ),
+                path="sensitive_structure_inspection",
+            )
+        ]
+    return []
+
+
 def _guardrail_summary_issues(record: dict[str, Any]) -> list[dict[str, str]]:
     summary = record.get("guardrail_summary")
     if summary is None:
@@ -1065,6 +1113,7 @@ def audit_review_record(record: dict[str, Any], *, source: str = "<memory>") -> 
     expected_tumor_quality = tumor.input_quality() if tumor is not None else None
     issues.extend(tumor_parse_issues)
     issues.extend(_guardrail_summary_issues(record))
+    issues.extend(_sensitive_structure_inspection_issues(record))
 
     if not gate:
         issues.append(

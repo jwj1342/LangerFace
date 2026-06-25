@@ -69,6 +69,7 @@ assert.ok(js.includes("undoEditSnapshot"), "workbench implements clinician edit 
 assert.ok(js.includes("redoEditSnapshot"), "workbench implements clinician edit redo");
 assert.ok(js.includes("commitEditSnapshot(\"endpoint_drag\")"), "endpoint dragging commits provenance history");
 assert.ok(js.includes("agent_trace_gate"), "review records include agent trace gate state");
+assert.ok(js.includes("sensitive_structure_inspection"), "review records include sensitive structure inspection");
 assert.ok(js.includes("agent_react_plan"), "review records include Agent ReAct plan state");
 assert.ok(js.includes("agent_execution_events"), "review records include Agent execution events");
 assert.ok(js.includes("renderAgentExecutionEvents"), "workbench renders Agent execution events");
@@ -78,6 +79,7 @@ assert.ok(js.includes("trace indexes"), "ReAct plan UI shows linked trace indexe
 assert.ok(js.includes("agent-trace-gate/v0.1"), "agent trace gate has an explicit schema");
 assert.ok(js.includes("AGENT_TRACE_GATE_REQUIRED"), "workbench defines required agent tool actions");
 assert.ok(js.includes("summarize_tumor_input_quality"), "agent gate requires tumor input quality tool");
+assert.ok(js.includes("inspect_sensitive_structures"), "agent gate requires sensitive structure inspection tool");
 assert.ok(js.includes("linear_subcutaneous_incision"), "agent gate accepts linear incision generation tool");
 assert.ok(js.includes("fusiform_cutaneous_incision"), "agent gate accepts fusiform incision generation tool");
 assert.ok(js.includes("preview_incision_on_face"), "agent gate requires deterministic face preview before review");

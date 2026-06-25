@@ -423,6 +423,7 @@ const AGENT_TRACE_GATE_REQUIRED = [
   { key: "tumor_input_quality", label: "肿物输入质量", actions: ["summarize_tumor_input_quality"] },
   { key: "face_region", label: "面部分区", actions: ["classify_region"] },
   { key: "rstl_direction", label: "RSTL 查询", actions: ["query_rstl_direction"] },
+  { key: "sensitive_structures", label: "敏感结构检查", actions: ["inspect_sensitive_structures"] },
   { key: "candidate_generation", label: "确定性切口生成", actions: ["linear_subcutaneous_incision", "fusiform_cutaneous_incision"] },
   { key: "guardrails", label: "Guardrails", actions: ["evaluate_guardrails"] },
   { key: "face_preview", label: "面部预览", actions: ["preview_incision_on_face"] },
@@ -454,7 +455,7 @@ function agentTraceGate(result = S.result) {
     missing_actions: missing.map((req) => ({ key: req.key, label: req.label, actions: req.actions })),
     order_ok: orderOk,
     deterministic_geometry_present: geometryPresent,
-    boundary: "LLM may summarize and explain only after deterministic tools provide geometry, preview, and guardrail observations.",
+    boundary: "LLM may summarize and explain only after deterministic tools provide sensitive-structure, geometry, preview, and guardrail observations.",
   };
 }
 
@@ -1249,6 +1250,16 @@ function candidateEditSession(result = S.result) {
   };
 }
 
+function sensitiveStructureInspectionFor(result = S.result) {
+  if (result?.sensitive_structure_inspection) return result.sensitive_structure_inspection;
+  const trace = Array.isArray(result?.trace) ? result.trace : [];
+  for (let i = trace.length - 1; i >= 0; i -= 1) {
+    const step = trace[i];
+    if (step?.action === "inspect_sensitive_structures" && step.observation) return step.observation;
+  }
+  return null;
+}
+
 function reviewRecord(result = S.result, label = "候选") {
   const createdAt = new Date().toISOString();
   const review = currentReviewMetadata(createdAt);
@@ -1266,6 +1277,7 @@ function reviewRecord(result = S.result, label = "候选") {
     tumor_boundary_summary: tumorBoundarySummary,
     secondary_cues: secondaryCueReviewSummary(),
     anatomy: result.anatomy,
+    sensitive_structure_inspection: sensitiveStructureInspectionFor(result),
     direction: result.direction,
     candidate: result.candidate,
     original_candidate: result.original_candidate || result.candidate,
@@ -1553,6 +1565,9 @@ function exportReport() {
     `- RSTL 方向置信度：${Math.round((r.direction.confidence || 0) * 100)}%`,
     (r.direction.confidence_reasons || []).length
       ? `- RSTL 低置信原因：${r.direction.confidence_reasons.join(", ")}`
+      : null,
+    r.sensitive_structure_inspection
+      ? `- 敏感结构检查：中心距 ${fmt(r.sensitive_structure_inspection.center_free_margin_distance_mm)} mm / 阈值 ${fmt(r.sensitive_structure_inspection.center_free_margin_threshold_mm)} mm；warning ${r.sensitive_structure_inspection.warning_count || 0} 个；保护方向 ${r.sensitive_structure_inspection.protective_direction?.direction_hint || "无"}`
       : null,
     `- Agent 工具门控：passed=${Boolean(r.agent_trace_gate?.passed)}；order_ok=${Boolean(r.agent_trace_gate?.order_ok)}；missing=${(r.agent_trace_gate?.missing_actions || []).map((item) => item.label || item.key).join(", ") || "无"}`,
     r.agent_react_plan

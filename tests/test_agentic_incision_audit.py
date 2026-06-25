@@ -94,7 +94,7 @@ def test_agentic_trace_audit_replays_valid_plan():
     assert audit["execution_events_replay"]["schema_version"] == "agent-execution-events/v0.1"
     assert audit["execution_events_replay"]["tool_event_count"] == len(plan["trace"])
     assert audit["react_plan_replay"]["schema_version"] == "agent-react-plan/v0.1"
-    assert audit["react_plan_replay"]["step_count"] == 7
+    assert audit["react_plan_replay"]["step_count"] == 8
     assert audit["llm_boundary_audit"]["schema_version"] == "agentic-llm-boundary-audit/v0.1"
     assert audit["llm_boundary_audit"]["passed"] is True
     assert audit["checks"]["llm_summary_present"] is True

@@ -16,6 +16,7 @@ from ..incision import (
     annotate_candidate_sensitive_distances,
     evaluate_guardrails,
     fusiform_cutaneous_incision,
+    inspect_sensitive_structures,
     linear_subcutaneous_incision,
 )
 from ..incision.geometry import units_per_mm_from_vertices
@@ -60,6 +61,20 @@ TOOL_SCHEMAS = [
             "support_count",
             "angular_spread_deg",
             "confidence_reasons",
+        ],
+    },
+    {
+        "name": "inspect_sensitive_structures",
+        "input": ["anatomy", "candidate"],
+        "output": [
+            "region",
+            "nearby_landmarks",
+            "center_free_margin_distance_mm",
+            "center_free_margin_threshold_mm",
+            "candidate_free_margin_distance_mm",
+            "warnings",
+            "protective_direction",
+            "clinician_review_required",
         ],
     },
     {
@@ -154,6 +169,11 @@ AGENT_TRACE_GATE_REQUIRED = [
         "actions": ["query_rstl_direction"],
     },
     {
+        "key": "sensitive_structures",
+        "label": "sensitive structures",
+        "actions": ["inspect_sensitive_structures"],
+    },
+    {
         "key": "candidate_generation",
         "label": "deterministic incision generation",
         "actions": ["linear_subcutaneous_incision", "fusiform_cutaneous_incision"],
@@ -192,6 +212,16 @@ AGENT_REACT_PLAN_STEP_DEFINITIONS = [
         "label": "Query RSTL direction",
         "intent": "Read local RSTL direction from deterministic atlas service.",
         "required_action_groups": [["query_rstl_direction"]],
+        "optional_actions": [],
+    },
+    {
+        "id": "inspect_sensitive_structures",
+        "label": "Inspect sensitive structures",
+        "intent": (
+            "Measure nearby free margins and protective direction exceptions "
+            "before geometry is accepted."
+        ),
+        "required_action_groups": [["inspect_sensitive_structures"]],
         "optional_actions": [],
     },
     {
@@ -974,7 +1004,7 @@ def agent_trace_gate(
         "deterministic_geometry_present": geometry_present,
         "boundary": (
             "LLM may summarize and explain only after deterministic tools provide "
-            "geometry and guardrail observations."
+            "sensitive-structure, geometry, guardrail, and preview observations."
         ),
     }
 
@@ -1065,6 +1095,17 @@ def plan_incision_case(
         {"point": list(tumor.center), "source": "rstl_atlas"},
         direction_data,
         "Read local RSTL direction from the validated-or-draft atlas; do not infer it with the LLM.",
+    ))
+
+    sensitive_inspection = inspect_sensitive_structures(anatomy, rules=rules)
+    trace.append(_trace(
+        "inspect_sensitive_structures",
+        {"anatomy": anatomy.to_dict()},
+        sensitive_inspection,
+        (
+            "Inspect nearby sensitive free margins and protective direction "
+            "exceptions before geometry generation."
+        ),
     ))
 
     units_per_mm = units_per_mm_from_vertices(V)
@@ -1361,6 +1402,7 @@ def plan_incision_case(
         "tumor_quality": tumor_quality,
         "anatomy": anatomy.to_dict(),
         "direction": direction.to_dict(),
+        "sensitive_structure_inspection": sensitive_inspection,
         "candidate": candidate,
         "preview": preview,
         "candidate_alternatives": candidate_alternatives,
