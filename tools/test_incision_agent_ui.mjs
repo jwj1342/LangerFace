@@ -35,10 +35,10 @@ assert.ok(html.includes('id="agentGate"'), "workbench exposes agent trace gate f
 assert.ok(html.includes('id="undoEditBtn"'), "workbench exposes clinician edit undo");
 assert.ok(html.includes('id="redoEditBtn"'), "workbench exposes clinician edit redo");
 assert.ok(html.includes('id="editHistoryState"'), "workbench exposes clinician edit history status");
-assert.ok(html.includes('id="agentExecutionList"'), "workbench exposes Agent execution events list");
-assert.ok(html.includes('id="agentPlanList"'), "workbench exposes Agent ReAct plan list");
-assert.ok(html.includes("execution-event"), "workbench styles Agent execution events");
-assert.ok(html.includes("react-plan-step"), "workbench styles Agent ReAct plan steps");
+assert.ok(!html.includes('id="agentExecutionList"'), "workbench keeps Agent execution events out of the sidebar");
+assert.ok(!html.includes('id="agentPlanList"'), "workbench keeps Agent ReAct plan details out of the sidebar");
+assert.ok(!html.includes('id="traceList"'), "workbench keeps workflow trace details out of the sidebar");
+assert.ok(!html.includes("工具调用轨迹"), "workbench does not render a sidebar trace dump");
 assert.ok(html.includes('id="agentComparison"'), "workbench exposes browser workflow candidate comparison");
 assert.ok(html.includes('id="approveCandidateBtn"'), "workbench exposes candidate approval action");
 assert.ok(html.includes('id="rejectCandidateBtn"'), "workbench exposes candidate rejection action");
@@ -90,10 +90,11 @@ assert.ok(js.includes("agent_trace_gate"), "review records include agent trace g
 assert.ok(js.includes("sensitive_structure_inspection"), "review records include sensitive structure inspection");
 assert.ok(js.includes("agent_react_plan"), "review records include Agent ReAct plan state");
 assert.ok(js.includes("agent_execution_events"), "review records include Agent execution events");
-assert.ok(js.includes("renderAgentExecutionEvents"), "workbench renders Agent execution events");
-assert.ok(js.includes("renderAgentReactPlan"), "workbench renders Agent ReAct plan steps");
+assert.ok(js.includes("logWorkflowTraceToConsole"), "workbench logs workflow trace details to DevTools console");
+assert.ok(js.includes("console.groupCollapsed"), "workflow trace uses a collapsed console group");
+assert.ok(js.includes("console.table"), "workflow trace emits a console table summary");
 assert.ok(js.includes("observed_actions"), "ReAct plan UI shows observed tool actions");
-assert.ok(js.includes("trace indexes"), "ReAct plan UI shows linked trace indexes");
+assert.ok(tools.includes("trace_indexes"), "ReAct plan keeps linked trace indexes in export/console data");
 assert.ok(tools.includes("agent-trace-gate/v0.1"), "agent trace gate has an explicit schema");
 assert.ok(tools.includes("AGENT_TRACE_GATE_REQUIRED"), "browser tools define required agent tool actions");
 assert.ok(tools.includes("summarize_tumor_input_quality"), "agent gate requires tumor input quality tool");
@@ -131,6 +132,7 @@ assert.ok(!js.includes('event === "trace_gate"'), "workbench does not consume tr
 assert.ok(!js.includes('event === "execution_event"'), "workbench does not consume execution SSE events");
 assert.ok(!js.includes('event === "react_plan"'), "workbench does not consume ReAct plan SSE events");
 assert.ok(js.includes("Agent 执行事件"), "markdown report includes Agent execution event status");
+assert.ok(js.includes("完整 workflow trace 已写入 DevTools Console"), "sidebar points reviewers to console for full workflow trace");
 assert.ok(js.includes("浏览器确定性 workflow 已更新候选"), "workbench reports browser workflow updates");
 assert.ok(!js.includes("agentFallbackMessage"), "workbench does not keep Python Agent fallback messaging");
 assert.ok(js.includes("建议覆盖项"), "markdown report includes suggested override details");

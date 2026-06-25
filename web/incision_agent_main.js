@@ -71,8 +71,6 @@ const els = {
   guardrailVal: $("guardrailVal"),
   directionSource: $("directionSource"),
   agentGate: $("agentGate"),
-  agentExecutionList: $("agentExecutionList"),
-  agentPlanList: $("agentPlanList"),
   agentComparison: $("agentComparison"),
   guardrailDetails: $("guardrailDetails"),
   llmSummary: $("llmSummary"),
@@ -112,8 +110,6 @@ const els = {
   savedCount: $("savedCount"),
   privacyState: $("privacyState"),
   privacyAudit: $("privacyAudit"),
-  traceList: $("traceList"),
-  traceCount: $("traceCount"),
   stageStatus: $("stageStatus"),
 };
 
@@ -148,6 +144,7 @@ const S = {
   secondaryCues: null,
   editTimeline: null,
   editCursor: 0,
+  lastConsoleTraceSignature: "",
 };
 
 const REVIEW_LABELS = {
@@ -967,63 +964,54 @@ function applyEditControls() {
   renderResult(result);
 }
 
-function renderTrace(trace) {
-  els.traceList.innerHTML = "";
-  els.traceCount.textContent = String(trace?.length || 0);
-  for (const [idx, step] of (trace || []).entries()) {
-    const div = document.createElement("div");
-    div.className = "trace-step";
-    const status = document.createElement("span");
-    status.className = "status-pill ok";
-    status.textContent = String(idx + 1).padStart(2, "0");
-    const top = document.createElement("div");
-    top.className = "top";
-    const code = document.createElement("code");
-    code.textContent = step.action;
-    top.append(code, status);
-    const p = document.createElement("p");
-    p.textContent = step.summary || "";
-    const pre = document.createElement("pre");
-    pre.textContent = JSON.stringify(step.observation, null, 2);
-    div.append(top, p, pre);
-    els.traceList.append(div);
-  }
+function workflowConsoleSignature(result = {}) {
+  const trace = Array.isArray(result.trace) ? result.trace : [];
+  const candidate = result.candidate || {};
+  return JSON.stringify({
+    candidate_id: candidate.id || null,
+    candidate_type: candidate.type || null,
+    candidate_version: candidate.provenance?.candidate_version || candidate.candidate_version || null,
+    edited: Boolean(candidate.edited),
+    trace: trace.map((step) => [step?.action || "", step?.summary || ""]),
+    comparison: (result.candidate_comparison || []).map((item) => [item.id, item.rank, item.score]),
+  });
 }
 
-function renderAgentExecutionEvents(execution) {
-  if (!els.agentExecutionList) return;
-  els.agentExecutionList.innerHTML = "";
-  const events = Array.isArray(execution?.events) ? execution.events : [];
-  if (!events.length) {
-    const div = document.createElement("div");
-    div.className = "execution-event warn";
-    div.textContent = "Agent 执行事件：尚未生成。";
-    els.agentExecutionList.append(div);
-    return;
+function logWorkflowTraceToConsole(result) {
+  if (!result || typeof console === "undefined") return;
+  const signature = workflowConsoleSignature(result);
+  if (S.lastConsoleTraceSignature === signature) return;
+  S.lastConsoleTraceSignature = signature;
+
+  const trace = Array.isArray(result.trace) ? result.trace : [];
+  const gate = result.agent_trace_gate || agentTraceGate(result);
+  const label = `[LangerFace] 浏览器切口 workflow trace · ${trace.length} 步 · gate=${gate.passed ? "passed" : "failed"}`;
+  const rows = trace.map((step, index) => ({
+    index: index + 1,
+    action: step?.action || "",
+    summary: step?.summary || "",
+  }));
+  const comparisonRows = (result.candidate_comparison || []).map((item) => ({
+    rank: item.rank,
+    id: item.id,
+    label: item.label,
+    score: item.score,
+  }));
+
+  if (typeof console.groupCollapsed === "function") console.groupCollapsed(label);
+  else console.log(label);
+  if (typeof console.table === "function") console.table(rows);
+  else console.log("trace summary", rows);
+  console.log("trace", trace);
+  console.log("trace_gate", gate);
+  if (result.agent_react_plan) console.log("react_plan", result.agent_react_plan);
+  if (result.agent_execution_events) console.log("execution_events", result.agent_execution_events);
+  if (comparisonRows.length) {
+    if (typeof console.table === "function") console.table(comparisonRows);
+    else console.log("candidate_comparison", comparisonRows);
   }
-  for (const event of events) {
-    const status = String(event.status || "unknown");
-    const warn = status === "failed" || status === "retrying" || status === "recovered";
-    const div = document.createElement("div");
-    div.className = `execution-event${warn ? " warn" : ""}`;
-    const top = document.createElement("div");
-    top.className = "top";
-    const title = document.createElement("strong");
-    const traceLabel = event.trace_index == null ? "system" : `trace #${Number(event.trace_index) + 1}`;
-    title.textContent = `${event.event || "execution_event"} · ${traceLabel}`;
-    const pill = document.createElement("span");
-    pill.className = `status-pill ${warn ? "warn" : "ok"}`;
-    pill.textContent = status;
-    top.append(title, pill);
-    const action = event.action ? `工具：${event.action}` : "工具：—";
-    const planSteps = (event.plan_step_ids || []).join(" · ") || "—";
-    const meta = document.createElement("p");
-    meta.textContent = `${action} · plan steps: ${planSteps}`;
-    const msg = document.createElement("p");
-    msg.textContent = event.message || "";
-    div.append(top, meta, msg);
-    els.agentExecutionList.append(div);
-  }
+  console.log("workflow_result", result);
+  if (typeof console.groupEnd === "function") console.groupEnd();
 }
 
 function renderGuardrailDetails(guardrails) {
@@ -1079,43 +1067,8 @@ function renderAgentGate(result) {
   els.agentGate.classList.toggle("warn", !gate.passed);
   const missing = gate.missing_actions.map((item) => item.label).join("、");
   const status = gate.passed ? "通过" : `未通过${missing ? `；缺 ${missing}` : ""}`;
-  els.agentGate.textContent = `Agent 工具门控：${status} · ${gate.observed_actions.length} 个 trace 动作 · ${gate.boundary}`;
+  els.agentGate.textContent = `Agent 工具门控：${status} · ${gate.observed_actions.length} 个动作；完整 workflow trace 已写入 DevTools Console。`;
   els.agentGate.title = `observed_actions=${gate.observed_actions.join(", ")}`;
-}
-
-function renderAgentReactPlan(plan) {
-  if (!els.agentPlanList) return;
-  els.agentPlanList.innerHTML = "";
-  const steps = Array.isArray(plan?.steps) ? plan.steps : [];
-  if (!steps.length) {
-    const div = document.createElement("div");
-    div.className = "react-plan-step warn";
-    div.textContent = "Agent ReAct 计划：尚未生成。";
-    els.agentPlanList.append(div);
-    return;
-  }
-  for (const [idx, step] of steps.entries()) {
-    const div = document.createElement("div");
-    const status = String(step.status || "unknown");
-    const warn = !status.startsWith("completed") || status.includes("retry") || status.includes("recovery");
-    div.className = `react-plan-step${warn ? " warn" : ""}`;
-    const top = document.createElement("div");
-    top.className = "top";
-    const title = document.createElement("strong");
-    title.textContent = `${idx + 1}. ${step.label || step.id || "计划步骤"}`;
-    const pill = document.createElement("span");
-    pill.className = `status-pill ${warn ? "warn" : "ok"}`;
-    pill.textContent = status;
-    top.append(title, pill);
-    const observed = (step.observed_actions || []).join(" · ") || "未观察到工具动作";
-    const issues = (step.issues || []).length ? `；问题：${step.issues.join("；")}` : "";
-    const meta = document.createElement("p");
-    meta.textContent = `${step.intent || ""}${step.intent ? " · " : ""}工具：${observed}${issues}`;
-    const indexes = document.createElement("p");
-    indexes.textContent = `trace indexes: ${(step.trace_indexes || []).join(", ") || "—"}`;
-    div.append(top, meta, indexes);
-    els.agentPlanList.append(div);
-  }
 }
 
 function formatRecoveredFailureSummary(audit, includeError = false) {
@@ -1190,8 +1143,6 @@ function renderResult(result) {
   renderGuardrailDetails(result.guardrails);
   renderDirectionSource(result);
   renderAgentGate(result);
-  renderAgentExecutionEvents(result.agent_execution_events);
-  renderAgentReactPlan(result.agent_react_plan);
   renderAgentComparison(result);
   const tumorQuality = tumorQualityFor(result);
   if (tumorQuality.warning_count) {
@@ -1199,7 +1150,7 @@ function renderResult(result) {
   }
   els.llmSummary.textContent = result.llm?.summary || "已生成候选。";
   els.nextStep.textContent = result.llm?.next_step || "";
-  renderTrace(result.trace);
+  logWorkflowTraceToConsole(result);
   updateBoundaryStatus();
   const provider = result.provider || {};
   els.providerState.textContent = providerDisplayLabel(provider);

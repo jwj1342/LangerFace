@@ -17,28 +17,6 @@
   .quality-top{min-width:0}
   .quality-top span{min-width:0}
   .quality-top span:last-child{max-width:62%;white-space:normal;overflow-wrap:anywhere;text-align:right;font-size:13px;line-height:1.25}
-  .trace-list{display:flex;flex-direction:column;gap:8px}
-  .trace-step{border:1px solid var(--line);background:#f8f9f5;border-radius:10px;padding:10px}
-  .trace-step .top{display:flex;justify-content:space-between;gap:10px;align-items:center}
-  .trace-step code{font-size:11px;background:#eef0ea;border:1px solid #e0e4dc;border-radius:6px;padding:2px 5px}
-  .trace-step p{margin:7px 0 0;font-size:11.5px;color:var(--muted);line-height:1.45}
-  .trace-step pre{white-space:pre-wrap;word-break:break-word;max-height:150px;overflow:auto;margin:8px 0 0;
-    font-size:11px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px;color:#34404b}
-  .react-plan-list{display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:220px;overflow:auto}
-  .react-plan-step{border:1px solid var(--line);border-radius:8px;padding:8px;background:#fbfcf8}
-  .react-plan-step.warn{border-color:#f4c96b;background:#fff9e8}
-  .react-plan-step .top{display:flex;justify-content:space-between;gap:10px;align-items:center}
-  .react-plan-step strong{font-size:12px}
-  .react-plan-step p{margin:5px 0 0;font-size:11px;color:var(--muted);line-height:1.4}
-  .execution-event-list{display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:180px;overflow:auto}
-  .execution-event{border:1px solid var(--line);border-radius:8px;padding:8px;background:#f8f9f5}
-  .execution-event.warn{border-color:#f4c96b;background:#fff9e8}
-  .execution-event .top{display:flex;justify-content:space-between;gap:10px;align-items:center}
-  .execution-event strong{font-size:12px}
-  .execution-event p{margin:5px 0 0;font-size:11px;color:var(--muted);line-height:1.4}
-  .status-pill{font-size:11px;font-weight:700;border-radius:999px;padding:4px 8px;background:#eef0ea;color:#44505d}
-  .status-pill.ok{background:#d9f2e7;color:var(--green-d)}
-  .status-pill.warn{background:#fff1c8;color:#8a5a00}
   .stage-actions{display:flex;align-items:center;gap:12px}
   .agent-note{font-size:11px;color:var(--muted);line-height:1.55;margin:0;overflow-wrap:anywhere;word-break:break-word}
   .agent-note.ok{color:var(--green-d);font-weight:700}
@@ -180,8 +158,6 @@
       <p class="hint" id="llmSummary">尚未生成。</p>
       <p class="guardrail-details" id="directionSource">方向依据：尚未生成。</p>
       <p class="guardrail-details" id="agentGate">Agent 工具门控：尚未生成。</p>
-      <div class="execution-event-list" id="agentExecutionList" aria-label="Agent 执行事件"></div>
-      <div class="react-plan-list" id="agentPlanList" aria-label="Agent ReAct 计划步骤"></div>
       <p class="guardrail-details" id="agentComparison">Agent 候选比较：尚未生成。</p>
       <p class="hint" id="nextStep"></p>
       <p class="guardrail-details" id="guardrailDetails">Guardrails 尚未运行。</p>
@@ -265,11 +241,6 @@
     <div class="card">
       <div class="quality-top"><span>隐私 / 审计</span><span id="privacyState">本地几何</span></div>
       <p class="hint" id="privacyAudit">不上传原始影像；Agent 只接收肿物参数、抽象坐标、规则和候选几何。</p>
-    </div>
-
-    <div class="card">
-      <div class="quality-top"><span>工具调用轨迹</span><span id="traceCount">0</span></div>
-      <div class="trace-list" id="traceList"></div>
     </div>
 
     <p class="disclaimer">⚠️ 研究原型：LLM 只做编排摘要，方向、几何和 guardrails 均由确定性工具输出。候选切口必须由医生审阅确认。</p>
