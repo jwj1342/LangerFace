@@ -24,7 +24,7 @@ function walkFiles(dir) {
 
 function normalizeLocalUrl(value) {
   if (!value || /^(?:data:|https?:|mailto:|#)/.test(value)) return null;
-  if (/[${}]/.test(value)) return null;
+  if (/[${}`+]/.test(value)) return null;
   const clean = value.split("#")[0].split("?")[0];
   if (!clean) return null;
   return clean.startsWith("/") ? clean : `/${clean}`;

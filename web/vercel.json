@@ -7,6 +7,10 @@
       "excludeFiles": "{node_modules/**,dist/**,assets/**,test/**,**/*.task}"
     }
   },
+  "rewrites": [
+    { "source": "/app", "destination": "/app/index.html" },
+    { "source": "/app/(.*)", "destination": "/app/index.html" }
+  ],
   "headers": [
     {
       "source": "/assets/(.*)",

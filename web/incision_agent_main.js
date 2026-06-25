@@ -18,102 +18,111 @@ import {
 import { normalizeProviderBaseUrl, testProviderConnection } from "./llm_provider.js";
 import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.js";
 
-const $ = (id) => document.getElementById(id);
-const els = {
-  canvas: $("agentCanvas"),
-  wrap: document.querySelector(".main-wrap"),
-  assetLoading: $("assetLoading"),
-  assetLoadingText: $("assetLoadingText"),
-  tumorKind: $("tumorKind"),
-  diameter: $("diameterMm"),
-  diameterVal: $("diameterVal"),
-  tumorAuthor: $("tumorAuthor"),
-  depth: $("depthMm"),
-  depthVal: $("depthVal"),
-  depthWrap: $("depthWrap"),
-  margin: $("marginMm"),
-  marginVal: $("marginVal"),
-  marginWrap: $("marginWrap"),
-  boundaryWrap: $("boundaryWrap"),
-  boundaryMode: $("boundaryMode"),
-  ellipseWrap: $("ellipseWrap"),
-  ellipseRatio: $("ellipseRatio"),
-  ellipseRatioVal: $("ellipseRatioVal"),
-  freehandControls: $("freehandControls"),
-  startBoundary: $("startBoundaryBtn"),
-  clearBoundary: $("clearBoundaryBtn"),
-  boundaryStatus: $("boundaryStatus"),
-  exportTumor: $("exportTumorBtn"),
-  importTumor: $("importTumorBtn"),
-  tumorImportFile: $("tumorImportFile"),
-  run: $("runAgentBtn"),
-  pickState: $("pickState"),
-  anatomyPreview: $("anatomyPreview"),
-  secondaryCueState: $("secondaryCueState"),
-  secondaryCueSummary: $("secondaryCueSummary"),
-  importSecondaryCue: $("importSecondaryCueBtn"),
-  clearSecondaryCue: $("clearSecondaryCueBtn"),
-  secondaryCueImportFile: $("secondaryCueImportFile"),
-  secondaryCueConfirmed: $("secondaryCueConfirmed"),
-  testProvider: $("testProviderBtn"),
-  providerTestState: $("providerTestState"),
-  providerMode: $("providerMode"),
-  providerBaseUrl: $("providerBaseUrl"),
-  providerModel: $("providerModel"),
-  providerApiKey: $("providerApiKey"),
-  providerTimeout: $("providerTimeout"),
-  providerTimeoutVal: $("providerTimeoutVal"),
-  providerState: $("providerState"),
-  candidateType: $("candidateType"),
-  candidateLength: $("candidateLength"),
-  candidateWidth: $("candidateWidth"),
-  candidateTipAngle: $("candidateTipAngle"),
-  directionConf: $("directionConf"),
-  regionVal: $("regionVal"),
-  guardrailVal: $("guardrailVal"),
-  directionSource: $("directionSource"),
-  agentGate: $("agentGate"),
-  agentComparison: $("agentComparison"),
-  guardrailDetails: $("guardrailDetails"),
-  llmSummary: $("llmSummary"),
-  nextStep: $("nextStep"),
-  editStatus: $("editStatus"),
-  angleOffset: $("angleOffsetDeg"),
-  angleOffsetVal: $("angleOffsetVal"),
-  lengthScale: $("lengthScale"),
-  lengthScaleVal: $("lengthScaleVal"),
-  widthScale: $("widthScale"),
-  widthScaleVal: $("widthScaleVal"),
-  widthScaleWrap: $("widthScaleWrap"),
-  shiftAlong: $("shiftAlongMm"),
-  shiftAlongVal: $("shiftAlongVal"),
-  shiftPerp: $("shiftPerpMm"),
-  shiftPerpVal: $("shiftPerpVal"),
-  editReason: $("editReason"),
-  undoEdit: $("undoEditBtn"),
-  redoEdit: $("redoEditBtn"),
-  resetEdit: $("resetEditBtn"),
-  editHistoryState: $("editHistoryState"),
-  reviewerName: $("reviewerName"),
-  reviewDecision: $("reviewDecision"),
-  reviewNotes: $("reviewNotes"),
-  reviewState: $("reviewState"),
-  approveCandidate: $("approveCandidateBtn"),
-  rejectCandidate: $("rejectCandidateBtn"),
-  saveReview: $("saveReviewBtn"),
-  saveCandidate: $("saveCandidateBtn"),
-  makeVariants: $("makeVariantsBtn"),
-  clearSaved: $("clearSavedBtn"),
-  exportJson: $("exportJsonBtn"),
-  exportReport: $("exportReportBtn"),
-  exportPng: $("exportPngBtn"),
-  stageLiveOverlay: $("stageLiveOverlayBtn"),
-  candidateList: $("candidateList"),
-  savedCount: $("savedCount"),
-  privacyState: $("privacyState"),
-  privacyAudit: $("privacyAudit"),
-  stageStatus: $("stageStatus"),
+const $ = (root, id) => {
+  if (root?.getElementById) return root.getElementById(id);
+  if (root?.querySelector) return root.querySelector(`#${id}`);
+  return document.getElementById(id);
 };
+
+function collectElements(root = document) {
+  return {
+    canvas: $(root, "agentCanvas"),
+    wrap: root.querySelector?.(".main-wrap") || document.querySelector(".main-wrap"),
+    assetLoading: $(root, "assetLoading"),
+    assetLoadingText: $(root, "assetLoadingText"),
+    tumorKind: $(root, "tumorKind"),
+    diameter: $(root, "diameterMm"),
+    diameterVal: $(root, "diameterVal"),
+    tumorAuthor: $(root, "tumorAuthor"),
+    depth: $(root, "depthMm"),
+    depthVal: $(root, "depthVal"),
+    depthWrap: $(root, "depthWrap"),
+    margin: $(root, "marginMm"),
+    marginVal: $(root, "marginVal"),
+    marginWrap: $(root, "marginWrap"),
+    boundaryWrap: $(root, "boundaryWrap"),
+    boundaryMode: $(root, "boundaryMode"),
+    ellipseWrap: $(root, "ellipseWrap"),
+    ellipseRatio: $(root, "ellipseRatio"),
+    ellipseRatioVal: $(root, "ellipseRatioVal"),
+    freehandControls: $(root, "freehandControls"),
+    startBoundary: $(root, "startBoundaryBtn"),
+    clearBoundary: $(root, "clearBoundaryBtn"),
+    boundaryStatus: $(root, "boundaryStatus"),
+    exportTumor: $(root, "exportTumorBtn"),
+    importTumor: $(root, "importTumorBtn"),
+    tumorImportFile: $(root, "tumorImportFile"),
+    run: $(root, "runAgentBtn"),
+    pickState: $(root, "pickState"),
+    anatomyPreview: $(root, "anatomyPreview"),
+    secondaryCueState: $(root, "secondaryCueState"),
+    secondaryCueSummary: $(root, "secondaryCueSummary"),
+    importSecondaryCue: $(root, "importSecondaryCueBtn"),
+    clearSecondaryCue: $(root, "clearSecondaryCueBtn"),
+    secondaryCueImportFile: $(root, "secondaryCueImportFile"),
+    secondaryCueConfirmed: $(root, "secondaryCueConfirmed"),
+    testProvider: $(root, "testProviderBtn"),
+    providerTestState: $(root, "providerTestState"),
+    providerMode: $(root, "providerMode"),
+    providerBaseUrl: $(root, "providerBaseUrl"),
+    providerModel: $(root, "providerModel"),
+    providerApiKey: $(root, "providerApiKey"),
+    providerTimeout: $(root, "providerTimeout"),
+    providerTimeoutVal: $(root, "providerTimeoutVal"),
+    providerState: $(root, "providerState"),
+    candidateType: $(root, "candidateType"),
+    candidateLength: $(root, "candidateLength"),
+    candidateWidth: $(root, "candidateWidth"),
+    candidateTipAngle: $(root, "candidateTipAngle"),
+    directionConf: $(root, "directionConf"),
+    regionVal: $(root, "regionVal"),
+    guardrailVal: $(root, "guardrailVal"),
+    directionSource: $(root, "directionSource"),
+    agentGate: $(root, "agentGate"),
+    agentComparison: $(root, "agentComparison"),
+    guardrailDetails: $(root, "guardrailDetails"),
+    llmSummary: $(root, "llmSummary"),
+    nextStep: $(root, "nextStep"),
+    editStatus: $(root, "editStatus"),
+    angleOffset: $(root, "angleOffsetDeg"),
+    angleOffsetVal: $(root, "angleOffsetVal"),
+    lengthScale: $(root, "lengthScale"),
+    lengthScaleVal: $(root, "lengthScaleVal"),
+    widthScale: $(root, "widthScale"),
+    widthScaleVal: $(root, "widthScaleVal"),
+    widthScaleWrap: $(root, "widthScaleWrap"),
+    shiftAlong: $(root, "shiftAlongMm"),
+    shiftAlongVal: $(root, "shiftAlongVal"),
+    shiftPerp: $(root, "shiftPerpMm"),
+    shiftPerpVal: $(root, "shiftPerpVal"),
+    editReason: $(root, "editReason"),
+    undoEdit: $(root, "undoEditBtn"),
+    redoEdit: $(root, "redoEditBtn"),
+    resetEdit: $(root, "resetEditBtn"),
+    editHistoryState: $(root, "editHistoryState"),
+    reviewerName: $(root, "reviewerName"),
+    reviewDecision: $(root, "reviewDecision"),
+    reviewNotes: $(root, "reviewNotes"),
+    reviewState: $(root, "reviewState"),
+    approveCandidate: $(root, "approveCandidateBtn"),
+    rejectCandidate: $(root, "rejectCandidateBtn"),
+    saveReview: $(root, "saveReviewBtn"),
+    saveCandidate: $(root, "saveCandidateBtn"),
+    makeVariants: $(root, "makeVariantsBtn"),
+    clearSaved: $(root, "clearSavedBtn"),
+    exportJson: $(root, "exportJsonBtn"),
+    exportReport: $(root, "exportReportBtn"),
+    exportPng: $(root, "exportPngBtn"),
+    stageLiveOverlay: $(root, "stageLiveOverlayBtn"),
+    candidateList: $(root, "candidateList"),
+    savedCount: $(root, "savedCount"),
+    privacyState: $(root, "privacyState"),
+    privacyAudit: $(root, "privacyAudit"),
+    stageStatus: $(root, "stageStatus"),
+  };
+}
+
+let els = {};
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -122,32 +131,40 @@ const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const len = (v) => Math.hypot(v[0], v[1], v[2]);
 const norm = (v) => { const l = len(v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-const S = {
-  verts: null,
-  tris: null,
-  atlas: null,
-  normals: null,
-  meanEdge: 1,
-  unitsPerMm: 1,
-  head: null,
-  marker: null,
-  tumorRing: null,
-  boundaryLine: null,
-  candidateLine: null,
-  endpointHandles: [],
-  raycaster: new THREE.Raycaster(),
-  lesion: 0,
-  boundaryPoints: [],
-  boundaryActive: false,
-  saved: [],
-  result: null,
-  baseResult: null,
-  secondaryCues: null,
-  editTimeline: null,
-  editCursor: 0,
-  lastConsoleTraceSignature: "",
-};
+function createRuntimeState() {
+  return {
+    mounted: false,
+    frameId: 0,
+    resizeObserver: null,
+    verts: null,
+    tris: null,
+    atlas: null,
+    normals: null,
+    meanEdge: 1,
+    unitsPerMm: 1,
+    head: null,
+    marker: null,
+    tumorRing: null,
+    boundaryLine: null,
+    candidateLine: null,
+    endpointHandles: [],
+    raycaster: new THREE.Raycaster(),
+    lesion: 0,
+    boundaryPoints: [],
+    boundaryActive: false,
+    saved: [],
+    result: null,
+    baseResult: null,
+    secondaryCues: null,
+    editTimeline: null,
+    editCursor: 0,
+    lastConsoleTraceSignature: "",
+  };
+}
+
+let S = createRuntimeState();
 
 const REVIEW_LABELS = {
   pending_clinician_confirmation: "待医生确认",
@@ -221,6 +238,7 @@ async function boot() {
     loadJsonAsset("triangles", { label: "三角拓扑", onProgress: updateAssetLoading }),
     loadJsonAsset("atlasRstl", { label: "RSTL 图谱", onProgress: updateAssetLoading }),
   ]);
+  if (!S.mounted) return;
   S.verts = verts; S.tris = tris; S.atlas = atlas;
   S.normals = vertexNormals(verts, tris);
   S.meanEdge = meanEdge(verts, tris);
@@ -1810,9 +1828,10 @@ function pick(e) {
   runAgent();
 }
 
-let drag = null;
-els.canvas.addEventListener("pointerdown", (e) => {
-  const handle = handleFromEvent(e);
+function bindWorkbenchEvents() {
+  let drag = null;
+  els.canvas.addEventListener("pointerdown", (e) => {
+    const handle = handleFromEvent(e);
   if (handle != null) {
     drag = { x: e.clientX, y: e.clientY, moved: 0, id: e.pointerId, handle };
     els.canvas.setPointerCapture(e.pointerId);
@@ -1820,8 +1839,8 @@ els.canvas.addEventListener("pointerdown", (e) => {
   }
   drag = { x: e.clientX, y: e.clientY, moved: 0, id: e.pointerId };
   els.canvas.setPointerCapture(e.pointerId);
-});
-els.canvas.addEventListener("pointermove", (e) => {
+  });
+  els.canvas.addEventListener("pointermove", (e) => {
   if (!drag || e.pointerId !== drag.id) return;
   if (drag.handle != null) {
     dragEndpointTo(e, drag.handle);
@@ -1833,101 +1852,122 @@ els.canvas.addEventListener("pointermove", (e) => {
   drag.moved += Math.abs(dx) + Math.abs(dy);
   S.head.setRotation(clamp(S.head.rotX + dy * 0.01, -1.2, 1.2), S.head.rotY + dx * 0.01);
   drag.x = e.clientX; drag.y = e.clientY;
-});
-els.canvas.addEventListener("pointerup", (e) => {
+  });
+  els.canvas.addEventListener("pointerup", (e) => {
   const endpointDrag = drag?.handle != null;
   const moved = drag?.moved || 0;
   if (drag && drag.moved < 6 && !endpointDrag) pick(e);
   if (endpointDrag && moved >= 1) commitEditSnapshot("endpoint_drag");
   drag = null;
-});
-els.canvas.addEventListener("wheel", (e) => { e.preventDefault(); S.head.zoom(e.deltaY > 0 ? 1.1 : 0.9); }, { passive: false });
+  });
+  els.canvas.addEventListener("wheel", (e) => { e.preventDefault(); S.head.zoom(e.deltaY > 0 ? 1.1 : 0.9); }, { passive: false });
 
-function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-
-els.tumorKind.onchange = () => { updateFormVisibility(); runAgent(); };
-els.diameter.oninput = () => { els.diameterVal.textContent = els.diameter.value; updateTumorRing(); };
-els.diameter.onchange = runAgent;
-els.depth.oninput = () => { els.depthVal.textContent = els.depth.value; };
-els.depth.onchange = runAgent;
-els.margin.oninput = () => { els.marginVal.textContent = els.margin.value; updateTumorRing(); };
-els.margin.onchange = runAgent;
-els.ellipseRatio.oninput = () => { els.ellipseRatioVal.textContent = `${els.ellipseRatio.value}%`; updateTumorRing(); };
-els.ellipseRatio.onchange = runAgent;
-els.boundaryMode.onchange = () => { S.boundaryActive = false; updateFormVisibility(); runAgent(); };
-els.run.onclick = runAgent;
-els.testProvider.onclick = testProviderEndpoint;
-els.providerBaseUrl.onchange = () => { setProviderTestState("Provider Base URL 已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
-els.providerModel.onchange = () => { setProviderTestState("Provider 模型已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
-els.providerTimeout.oninput = () => { els.providerTimeoutVal.textContent = els.providerTimeout.value; saveProviderPrefs(); };
-els.startBoundary.onclick = () => {
+  els.tumorKind.onchange = () => { updateFormVisibility(); runAgent(); };
+  els.diameter.oninput = () => { els.diameterVal.textContent = els.diameter.value; updateTumorRing(); };
+  els.diameter.onchange = runAgent;
+  els.depth.oninput = () => { els.depthVal.textContent = els.depth.value; };
+  els.depth.onchange = runAgent;
+  els.margin.oninput = () => { els.marginVal.textContent = els.margin.value; updateTumorRing(); };
+  els.margin.onchange = runAgent;
+  els.ellipseRatio.oninput = () => { els.ellipseRatioVal.textContent = `${els.ellipseRatio.value}%`; updateTumorRing(); };
+  els.ellipseRatio.onchange = runAgent;
+  els.boundaryMode.onchange = () => { S.boundaryActive = false; updateFormVisibility(); runAgent(); };
+  els.run.onclick = runAgent;
+  els.testProvider.onclick = testProviderEndpoint;
+  els.providerBaseUrl.onchange = () => { setProviderTestState("Provider Base URL 已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
+  els.providerModel.onchange = () => { setProviderTestState("Provider 模型已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
+  els.providerTimeout.oninput = () => { els.providerTimeoutVal.textContent = els.providerTimeout.value; saveProviderPrefs(); };
+  els.startBoundary.onclick = () => {
   S.boundaryActive = !S.boundaryActive;
   els.startBoundary.textContent = S.boundaryActive ? "结束轮廓" : "开始轮廓";
   els.pickState.textContent = S.boundaryActive ? "请在脸上连续点击皮表肿物边界点。" : `自由轮廓点：${S.boundaryPoints.length} 个`;
   if (!S.boundaryActive && S.boundaryPoints.length >= 3) runAgent();
-};
-els.clearBoundary.onclick = () => {
+  };
+  els.clearBoundary.onclick = () => {
   S.boundaryPoints = [];
   updateTumorRing();
   els.pickState.textContent = "自由轮廓已清空。";
   runAgent();
-};
-[
+  };
+  [
   els.angleOffset,
   els.lengthScale,
   els.widthScale,
   els.shiftAlong,
   els.shiftPerp,
-].forEach((el) => { el.oninput = applyEditControls; });
-[
+  ].forEach((el) => { el.oninput = applyEditControls; });
+  [
   els.angleOffset,
   els.lengthScale,
   els.widthScale,
   els.shiftAlong,
   els.shiftPerp,
-].forEach((el) => { el.onchange = () => commitEditSnapshot("control_change"); });
-els.editReason.onchange = () => {
+  ].forEach((el) => { el.onchange = () => commitEditSnapshot("control_change"); });
+  els.editReason.onchange = () => {
   applyEditControls();
   commitEditSnapshot("reason_change");
-};
-els.undoEdit.onclick = undoEditSnapshot;
-els.redoEdit.onclick = redoEditSnapshot;
-els.resetEdit.onclick = () => {
+  };
+  els.undoEdit.onclick = undoEditSnapshot;
+  els.redoEdit.onclick = redoEditSnapshot;
+  els.resetEdit.onclick = () => {
   if (!S.baseResult) return;
   resetEditControls();
   resetEditTimeline();
   invalidateReviewAfterGeometryChange("已恢复工具建议，审阅状态已回到待医生确认。");
   renderResult(S.baseResult);
-};
-els.reviewDecision.onchange = updateReviewStateUI;
-els.approveCandidate.onclick = () => recordReviewDecision("approved_for_discussion", "确认候选");
-els.rejectCandidate.onclick = () => recordReviewDecision("rejected_by_clinician", "否决候选");
-els.saveReview.onclick = saveReviewRecord;
-els.saveCandidate.onclick = () => saveCurrentCandidate();
-els.makeVariants.onclick = makeVariantCandidates;
-els.clearSaved.onclick = () => { S.saved = []; renderSaved(); };
-els.exportJson.onclick = exportReviewJson;
-els.exportTumor.onclick = exportTumorJson;
-els.importTumor.onclick = () => els.tumorImportFile.click();
-els.tumorImportFile.onchange = (e) => importTumorFile(e.target.files?.[0]);
-els.importSecondaryCue.onclick = () => els.secondaryCueImportFile.click();
-els.clearSecondaryCue.onclick = clearSecondaryCues;
-els.secondaryCueImportFile.onchange = (e) => importSecondaryCueFile(e.target.files?.[0]);
-els.secondaryCueConfirmed.onchange = renderSecondaryCuePanel;
-els.exportReport.onclick = exportReport;
-els.exportPng.onclick = exportScreenshot;
-els.stageLiveOverlay.onclick = stageLiveOverlay;
-new ResizeObserver(fitSize).observe(els.wrap);
-
-function renderLoop() {
-  S.head.render();
-  requestAnimationFrame(renderLoop);
+  };
+  els.reviewDecision.onchange = updateReviewStateUI;
+  els.approveCandidate.onclick = () => recordReviewDecision("approved_for_discussion", "确认候选");
+  els.rejectCandidate.onclick = () => recordReviewDecision("rejected_by_clinician", "否决候选");
+  els.saveReview.onclick = saveReviewRecord;
+  els.saveCandidate.onclick = () => saveCurrentCandidate();
+  els.makeVariants.onclick = makeVariantCandidates;
+  els.clearSaved.onclick = () => { S.saved = []; renderSaved(); };
+  els.exportJson.onclick = exportReviewJson;
+  els.exportTumor.onclick = exportTumorJson;
+  els.importTumor.onclick = () => els.tumorImportFile.click();
+  els.tumorImportFile.onchange = (e) => importTumorFile(e.target.files?.[0]);
+  els.importSecondaryCue.onclick = () => els.secondaryCueImportFile.click();
+  els.clearSecondaryCue.onclick = clearSecondaryCues;
+  els.secondaryCueImportFile.onchange = (e) => importSecondaryCueFile(e.target.files?.[0]);
+  els.secondaryCueConfirmed.onchange = renderSecondaryCuePanel;
+  els.exportReport.onclick = exportReport;
+  els.exportPng.onclick = exportScreenshot;
+  els.stageLiveOverlay.onclick = stageLiveOverlay;
+  S.resizeObserver = new ResizeObserver(fitSize);
+  S.resizeObserver.observe(els.wrap);
 }
 
-boot().catch((err) => {
-  els.stageStatus.textContent = "加载失败：" + err.message;
-  if (els.assetLoadingText) {
-    els.assetLoadingText.textContent = `资产加载失败：${err.message}`;
-  }
-  console.error(err);
-});
+function renderLoop() {
+  if (!S.mounted || !S.head) return;
+  S.head.render();
+  S.frameId = requestAnimationFrame(renderLoop);
+}
+
+export function disposeIncisionAgentWorkbench() {
+  S.mounted = false;
+  if (S.frameId) cancelAnimationFrame(S.frameId);
+  S.resizeObserver?.disconnect?.();
+  S.head?.dispose?.();
+}
+
+export function mountIncisionAgentWorkbench(root = document) {
+  disposeIncisionAgentWorkbench();
+  els = collectElements(root);
+  S = createRuntimeState();
+  S.mounted = true;
+  bindWorkbenchEvents();
+  boot().catch((err) => {
+    if (!S.mounted) return;
+    els.stageStatus.textContent = "加载失败：" + err.message;
+    if (els.assetLoadingText) {
+      els.assetLoadingText.textContent = `资产加载失败：${err.message}`;
+    }
+    console.error(err);
+  });
+  return disposeIncisionAgentWorkbench;
+}
+
+if (document.getElementById("agentCanvas") && !window.__LANGERFACE_REACT_MANAGED__) {
+  mountIncisionAgentWorkbench();
+}
