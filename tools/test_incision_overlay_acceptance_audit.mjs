@@ -43,6 +43,39 @@ function stability(context = "static_camera_or_paused_video") {
   };
 }
 
+function localRegionQuality({ passed = true, sourceKind = "camera", reason = "local_regions_passed" } = {}) {
+  return {
+    schema_version: "rstl-local-region-quality-gate/v0.1",
+    passed,
+    reason,
+    reasons: passed ? [] : [reason],
+    source_kind: sourceKind,
+    active_region_count: passed ? 0 : 1,
+    active_regions: passed ? [] : ["brow_eye"],
+    regions: passed
+      ? [
+          {
+            id: "brow_eye",
+            label: "眼眉区",
+            action: "normal",
+            opacity_scale: 1,
+            reasons: [],
+            motion_norm: 0.01,
+          },
+        ]
+      : [
+          {
+            id: "brow_eye",
+            label: "眼眉区",
+            action: "dim",
+            opacity_scale: 0.36,
+            reasons: [reason],
+            motion_norm: 0.032,
+          },
+        ],
+  };
+}
+
 const stableReplay = {
   schema_version: "incision-overlay-replay-qa/v0.1",
   passed: true,
@@ -65,6 +98,7 @@ const passingEvidence = {
         schema_version: "incision-overlay-runtime-diagnostics/v0.1",
         exported_raw_pixels: false,
         exported_landmarks: false,
+        local_region_quality: localRegionQuality({ sourceKind: "photo" }),
       },
     },
     {
@@ -76,6 +110,12 @@ const passingEvidence = {
       source_kind: "camera",
       registration: registration("camera_runtime"),
       stability: stability("static_camera_or_paused_video"),
+      runtime_diagnostics: {
+        schema_version: "incision-overlay-runtime-diagnostics/v0.1",
+        exported_raw_pixels: false,
+        exported_landmarks: false,
+        local_region_quality: localRegionQuality({ sourceKind: "camera" }),
+      },
     },
   ],
 };
@@ -96,6 +136,10 @@ assert.equal(passReport.checks.sanitized_evidence_only, true);
 assert.equal(passReport.evidence_counts.photo, 1);
 assert.equal(passReport.evidence_counts.video, 1);
 assert.equal(passReport.evidence_counts.camera, 1);
+assert.equal(passReport.local_region_quality.present_count, 2);
+assert.equal(passReport.local_region_quality.passed_count, 2);
+assert.equal(passReport.local_region_quality.failed_count, 0);
+assert.deepEqual(passReport.local_region_quality.source_kind_counts, { camera: 1, photo: 1 });
 
 const failingEvidence = {
   ...passingEvidence,
@@ -115,6 +159,16 @@ const failingEvidence = {
       source_kind: "camera",
       registration: registration("camera_runtime"),
       stability: { ...stability("static_camera_or_paused_video"), passed: false, reason: "jitter_threshold_exceeded" },
+      runtime_diagnostics: {
+        schema_version: "incision-overlay-runtime-diagnostics/v0.1",
+        exported_raw_pixels: false,
+        exported_landmarks: false,
+        local_region_quality: localRegionQuality({
+          passed: false,
+          sourceKind: "camera",
+          reason: "eye_blink_local_expression",
+        }),
+      },
     },
     {
       source_kind: "photo",
@@ -130,6 +184,9 @@ assert.ok(failReport.failures.includes("camera_overlay_stable"));
 assert.ok(failReport.failures.includes("runtime_error_free"));
 assert.ok(failReport.failures.includes("resources_available"));
 assert.ok(failReport.failures.includes("sanitized_evidence_only"));
+assert.equal(failReport.local_region_quality.failed_count, 1);
+assert.deepEqual(failReport.local_region_quality.active_region_counts, { brow_eye: 1 });
+assert.deepEqual(failReport.local_region_quality.action_counts, { dim: 1 });
 assert.ok(failReport.raw_media_leak_paths.includes("0.evidence.3.audit.raw_image_sent"));
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "incision-overlay-acceptance-"));

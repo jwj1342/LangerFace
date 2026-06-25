@@ -40,6 +40,28 @@ function stability(context = "static_camera_or_paused_video") {
   };
 }
 
+function localRegionQuality(kind) {
+  return {
+    schema_version: "rstl-local-region-quality-gate/v0.1",
+    passed: true,
+    reason: "local_regions_passed",
+    reasons: [],
+    source_kind: kind,
+    active_region_count: 0,
+    active_regions: [],
+    regions: [
+      {
+        id: "brow_eye",
+        label: "眼眉区",
+        action: "normal",
+        opacity_scale: 1,
+        reasons: [],
+        motion_norm: 0.01,
+      },
+    ],
+  };
+}
+
 function runtimeDiagnostics(kind) {
   return {
     schemaVersion: "0.1",
@@ -51,6 +73,7 @@ function runtimeDiagnostics(kind) {
         source_kind: kind,
         exported_raw_pixels: false,
         exported_landmarks: false,
+        local_region_quality: localRegionQuality(kind),
         registration: registration(`${kind}_runtime`),
         stability: kind === "photo" ? null : stability(`${kind}_runtime`),
       },
@@ -92,6 +115,9 @@ assert.deepEqual(audit.failures, []);
 assert.equal(audit.evidence_counts.photo, 1);
 assert.equal(audit.evidence_counts.video, 2);
 assert.equal(audit.evidence_counts.camera, 1);
+assert.equal(audit.local_region_quality.present_count, 2);
+assert.equal(audit.local_region_quality.passed_count, 2);
+assert.deepEqual(audit.local_region_quality.source_kind_counts, { camera: 1, photo: 1 });
 
 assert.throws(
   () => buildIncisionOverlayAcceptanceEvidence({

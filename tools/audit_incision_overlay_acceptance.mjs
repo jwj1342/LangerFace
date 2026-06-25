@@ -10,6 +10,7 @@ const RUNTIME_SCHEMA = "incision-overlay-runtime-diagnostics/v0.1";
 const REPLAY_SCHEMA = "incision-overlay-replay-qa/v0.1";
 const REGISTRATION_SCHEMA = "incision-overlay-registration/v0.1";
 const STABILITY_SCHEMA = "incision-overlay-stability/v0.1";
+const LOCAL_REGION_QUALITY_SCHEMA = "rstl-local-region-quality-gate/v0.1";
 
 function usage() {
   return [
@@ -54,7 +55,10 @@ function sourceKind(value) {
 
 function runtimeFromDiagnostics(payload) {
   if (payload?.schema_version === RUNTIME_SCHEMA) return payload;
-  return payload?.sections?.incision_overlay_runtime || payload?.incision_overlay_runtime || null;
+  return payload?.runtime_diagnostics
+    || payload?.sections?.incision_overlay_runtime
+    || payload?.incision_overlay_runtime
+    || null;
 }
 
 function replayFromEvidence(entry) {
@@ -70,6 +74,12 @@ function registrationFromEvidence(entry) {
 function stabilityFromEvidence(entry) {
   if (entry?.schema_version === STABILITY_SCHEMA) return entry;
   return entry?.stability || runtimeFromDiagnostics(entry)?.stability || replayFromEvidence(entry)?.stability || null;
+}
+
+function localRegionQualityFromEvidence(entry) {
+  if (entry?.schema_version === LOCAL_REGION_QUALITY_SCHEMA) return entry;
+  const localQuality = entry?.local_region_quality || runtimeFromDiagnostics(entry)?.local_region_quality || null;
+  return localQuality?.schema_version === LOCAL_REGION_QUALITY_SCHEMA ? localQuality : null;
 }
 
 function exportEvidence(entry) {
@@ -107,6 +117,37 @@ function stabilityReady(report) {
 
 function replayReady(report) {
   return Boolean(report && report.schema_version === REPLAY_SCHEMA && report.passed === true);
+}
+
+function countBy(items, keyFn) {
+  const counts = {};
+  for (const item of items) {
+    const key = keyFn(item);
+    if (!key) continue;
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return Object.fromEntries(Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)));
+}
+
+function localRegionQualitySummary(entries) {
+  const reports = entries.map(localRegionQualityFromEvidence).filter(Boolean);
+  const activeRegions = reports.flatMap((report) => report.active_regions || []);
+  const activeRegionRecords = reports.flatMap((report) => (
+    (report.regions || []).filter((region) => region && region.action && region.action !== "normal")
+  ));
+  return {
+    present_count: reports.length,
+    passed_count: reports.filter((report) => report.passed === true).length,
+    failed_count: reports.filter((report) => report.passed === false).length,
+    reason_counts: countBy(reports, (report) => report.reason || "unknown"),
+    active_region_counts: countBy(activeRegions, (regionId) => String(regionId || "unknown")),
+    action_counts: countBy(activeRegionRecords, (region) => region.action || "unknown"),
+    source_kind_counts: countBy(reports, (report) => report.source_kind || "unknown"),
+    clinical_boundary: (
+      "Local region quality is a review signal for eye/brow and mouth overlay confidence. "
+      + "It does not by itself prove or disprove clinical AR registration."
+    ),
+  };
 }
 
 function rawMediaFlags(value, pathParts = []) {
@@ -220,11 +261,14 @@ function entrySummary(entry) {
   const replay = replayFromEvidence(entry);
   const registration = registrationFromEvidence(entry);
   const stability = stabilityFromEvidence(entry);
+  const localRegionQuality = localRegionQualityFromEvidence(entry);
   return {
     source_kind: sourceKind(entry) || "unknown",
     registration_passed: registration?.passed === true,
     stability_passed: stability?.passed === true,
     replay_passed: replay?.passed === true,
+    local_region_quality_passed: localRegionQuality?.passed ?? null,
+    local_region_active_regions: localRegionQuality?.active_regions || [],
     export_playable: exportPlayable(entry),
   };
 }
@@ -247,6 +291,7 @@ export function buildIncisionOverlayAcceptanceAudit(payloads, options = {}) {
   const runtime = runtimeErrorFree(normalizedPayloads, entries);
   const resources = resourcesAvailable(normalizedPayloads, entries);
   const rawMediaLeaks = rawMediaFlags(normalizedPayloads);
+  const localRegionQuality = localRegionQualitySummary(entries);
   const checks = {
     photo_overlay_ready: photoReady,
     video_overlay_stable: videoStable,
@@ -276,6 +321,7 @@ export function buildIncisionOverlayAcceptanceAudit(payloads, options = {}) {
     },
     runtime_errors: runtime,
     raw_media_leak_paths: rawMediaLeaks,
+    local_region_quality: localRegionQuality,
     evidence_summary: entries.map(entrySummary),
     clinical_boundary: (
       "This audit verifies engineering evidence for photo/video/camera incision overlay behavior. "
