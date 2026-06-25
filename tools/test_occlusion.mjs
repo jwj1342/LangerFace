@@ -2,7 +2,7 @@
 //   node tools/test_occlusion.mjs
 import { convexHull, pointInConvex, buildHandMasks, pointInHandMasks,
          buildOccluderHulls, pointInHulls,
-         innerMouthTriangles, INNER_LIP } from "../web/geometry.js";
+         innerMouthTriangles, INNER_LIP, visibleTriangles } from "../web/geometry.js";
 
 let fail = 0;
 const ok = (c, m) => { if (!c) { console.error("FAIL:", m); fail++; } else console.log("ok:", m); };
@@ -62,6 +62,23 @@ ok(mask[0] === 1 && mask[2] === 1, "其余图谱点（含唇周）仍可见");
 
 // memoize：同一 triangles 引用返回同一 Set 实例（不每帧重算）
 ok(innerMouthTriangles(triangles) === innerMouth, "innerMouthTriangles 按引用 memoize");
+
+// 退化三角面过滤：近共线三角面不应因为 DEFAULT_OCCLUSION_THRESHOLD 略小于 0 而被当成可见面。
+const degenerateLm = [
+  [0, 0, 0],
+  [10, 0, 0],
+  [20, 0, 0],   // tri0 三点共线
+  [0, 10, 0],
+];
+const degenerateTris = [
+  [0, 1, 2],
+  [0, 2, 3],
+];
+const visDefault = visibleTriangles(degenerateLm, degenerateTris, []);
+const visAreaGated = visibleTriangles(degenerateLm, degenerateTris, [], undefined, { minTriangleAreaPx2: 1 });
+ok(visDefault[0] === 1, "默认背面剔除保持旧行为：阈值允许掠射/退化边缘");
+ok(visAreaGated[0] === 0, "★ 面积门槛会剔除近共线退化三角面");
+ok(visAreaGated[1] === 1, "面积门槛不会误删正常朝前三角面");
 
 console.log(fail === 0 ? "\n✅ 贴合手形遮挡 + 口裂排除正确" : `\n❌ ${fail} 项失败`);
 process.exit(fail ? 1 : 0);

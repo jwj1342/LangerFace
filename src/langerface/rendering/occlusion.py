@@ -15,10 +15,20 @@ from ..config.constants import DEFAULT_OCCLUSION_THRESHOLD, NOSE_TIP, inner_mout
 
 
 class BackfaceCuller:
-    def __init__(self, triangles: np.ndarray, threshold: float = DEFAULT_OCCLUSION_THRESHOLD):
-        """threshold: 朝向打分阈值（略小于 0，保留接近掠射的边缘三角面）。"""
+    def __init__(
+        self,
+        triangles: np.ndarray,
+        threshold: float = DEFAULT_OCCLUSION_THRESHOLD,
+        min_triangle_area_px2: float = 0.0,
+    ):
+        """threshold: 朝向打分阈值（略小于 0，保留接近掠射的边缘三角面）。
+
+        min_triangle_area_px2: 投影到屏幕后叉积 z 的绝对值阈值（约等于三角面
+        2 倍面积），用于剔除近共线 / 关键点坍缩造成的退化三角面。
+        """
         self.triangles = triangles
         self.threshold = float(threshold)
+        self.min_triangle_area_px2 = max(0.0, float(min_triangle_area_px2))
         # 预计算包含鼻尖的三角面（用于每帧符号标定）
         mask = np.any(triangles == NOSE_TIP, axis=1)
         self._nose_tris = np.where(mask)[0]
@@ -42,6 +52,8 @@ class BackfaceCuller:
         else:
             sign = 1.0
         vis = (sign * nz) >= self.threshold
+        if self.min_triangle_area_px2 > 0:
+            vis &= np.abs(nz) >= self.min_triangle_area_px2
         # 口裂三角面无论朝向如何一律排除（张嘴时线会落进口内 / 牙齿）
         if self._inner_mouth_tris.size:
             vis[self._inner_mouth_tris] = False

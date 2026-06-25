@@ -35,8 +35,12 @@ assert.ok(exporter.includes("createCompositeSource(extras)"), "export controller
 assert.ok(exporter.includes("drawContain(g, extra.canvas"), "export controller draws extra canvases into recording");
 assert.ok(exporter.includes('mimeType: "video/webm"'), "export controller records playable webm output");
 assert.ok(render.includes("drawIncisionOverlay(lm"), "renderer draws incision overlay on every frame");
+assert.ok(render.includes("estimateFacePoseQuality"), "renderer estimates pose quality before drawing incision overlay");
+assert.ok(render.includes("incision-overlay-pose-gate/v0.1"), "renderer exports a versioned incision overlay pose gate");
+assert.ok(render.includes("minTriangleAreaPx2"), "renderer filters degenerate projected triangles during live occlusion");
 assert.ok(render.includes("measureIncisionOverlayRegistration"), "renderer measures incision overlay projection registration");
 assert.ok(render.includes("measureIncisionOverlayJitter"), "renderer measures live incision overlay rolling jitter");
+assert.ok(render.includes("incisionOverlay.poseGate.blocked"), "renderer records blocked overlay pose gate diagnostics");
 assert.ok(render.includes("incisionOverlay.registration.pass"), "renderer records passing overlay registration diagnostics");
 assert.ok(render.includes("incisionOverlay.registration.fail"), "renderer records failing overlay registration diagnostics");
 assert.ok(render.includes("incisionOverlay.registration.bboxDiagonalPx"), "renderer records overlay registration bbox metric");
@@ -44,7 +48,9 @@ assert.ok(render.includes("incisionOverlay.stability.rmsPx"), "renderer records 
 assert.ok(render.includes("incision-overlay-runtime-diagnostics/v0.1"), "renderer exports runtime overlay diagnostics section");
 assert.ok(render.includes('setDiagnosticSection("incision_overlay_runtime"'), "renderer publishes sanitized overlay diagnostics section");
 assert.ok(render.includes("exported_landmarks: false"), "overlay diagnostics do not export landmark coordinates");
-assert.ok(render.includes("updateIncisionOverlayQa(registration, stability)"), "renderer updates visible overlay QA from measured results");
+assert.ok(render.includes("updateIncisionOverlayQa(registration, stability, poseGate)"), "renderer updates visible overlay QA from measured results");
+assert.ok(render.includes("pose_gate: compactPoseGate(poseGate)"), "runtime overlay diagnostics include sanitized pose gate state");
+assert.ok(render.includes("姿态需复核"), "renderer surfaces pose-gated overlay feedback");
 assert.ok(render.includes("投射需复核"), "renderer surfaces registration failure feedback");
 assert.ok(render.includes("抖动需复核"), "renderer surfaces stability failure feedback");
 assert.ok(render.includes("叠加稳定"), "renderer surfaces stable overlay feedback");

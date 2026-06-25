@@ -12,6 +12,12 @@ const focusCtx = focusScratch.getContext("2d");
 const focusZoomRange = { min: 1, max: 4.5 };
 const INCISION_ZOOM_REGION = { kind: "incision_overlay" };
 const INCISION_OVERLAY_STABILITY_FRAMES = 8;
+const LIVE_OCCLUSION_MIN_TRIANGLE_AREA_PX2 = 1;
+const INCISION_OVERLAY_POSE_GATE = {
+  schema_version: "incision-overlay-pose-gate/v0.1",
+  min_presence: 0.45,
+  max_abs_yaw_norm: 0.42,
+};
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const overlayRuntimeDiagnostics = { key: null, landmarkFrames: [] };
 
@@ -24,15 +30,76 @@ function compactReason(reason) {
   return String(reason || "unknown").replaceAll("_", " ");
 }
 
+function fmtRatio(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(2) : "—";
+}
+
+function fmtPercent(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? `${Math.round(n * 100)}%` : "—";
+}
+
 export function faceBBox(lm) {
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   for (const p of lm) { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); }
   return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 };
 }
 
+export function estimateFacePoseQuality(
+  lm,
+  W,
+  H,
+  { presence = sourceState.presence, sourceKind = sourceState.sourceKind } = {},
+) {
+  const thresholds = { ...INCISION_OVERLAY_POSE_GATE };
+  const reasons = [];
+  let yawNorm = null;
+  let absYawNorm = null;
+  let faceFrameFraction = null;
+  const presenceValue = Number(presence);
+  if (!Array.isArray(lm) || !lm[1] || !lm[234] || !lm[454]) {
+    reasons.push("missing_pose_landmarks");
+  } else {
+    const bb = faceBBox(lm);
+    if (Number.isFinite(W) && Number.isFinite(H) && W > 0 && H > 0) {
+      faceFrameFraction = (bb.w * bb.h) / (W * H);
+    }
+    const nose = lm[1], cheekL = lm[234], cheekR = lm[454];
+    const cx = (cheekL[0] + cheekR[0]) / 2;
+    const fw = Math.abs(cheekR[0] - cheekL[0]);
+    yawNorm = fw > 0 ? (nose[0] - cx) / fw : null;
+    absYawNorm = Number.isFinite(yawNorm) ? Math.abs(yawNorm) : null;
+    if (!Number.isFinite(absYawNorm)) reasons.push("invalid_pose_yaw");
+    else if (absYawNorm > thresholds.max_abs_yaw_norm) reasons.push("side_pose_yaw_too_large");
+  }
+  if (!Number.isFinite(presenceValue) || presenceValue < thresholds.min_presence) {
+    reasons.push("low_face_presence");
+  }
+  return {
+    schema_version: thresholds.schema_version,
+    passed: reasons.length === 0,
+    reason: reasons[0] || "pose_gate_passed",
+    reasons,
+    source_kind: sourceKind || "unknown",
+    presence: Number.isFinite(presenceValue) ? Number(presenceValue.toFixed(3)) : null,
+    yaw_norm: Number.isFinite(yawNorm) ? Number(yawNorm.toFixed(4)) : null,
+    abs_yaw_norm: Number.isFinite(absYawNorm) ? Number(absYawNorm.toFixed(4)) : null,
+    face_frame_fraction: Number.isFinite(faceFrameFraction) ? Number(faceFrameFraction.toFixed(5)) : null,
+    thresholds: {
+      min_presence: thresholds.min_presence,
+      max_abs_yaw_norm: thresholds.max_abs_yaw_norm,
+    },
+  };
+}
+
 export function draw(lm, W, H, masks = []) {
   const atlas = modelState.atlases[renderState.system];
-  const vis = renderState.clip ? visibleTriangles(lm, modelState.triangles, modelState.noseTris) : null;
+  const vis = renderState.clip
+    ? visibleTriangles(lm, modelState.triangles, modelState.noseTris, undefined, {
+      minTriangleAreaPx2: LIVE_OCCLUSION_MIN_TRIANGLE_AREA_PX2,
+    })
+    : null;
   const innerMouth = innerMouthTriangles(modelState.triangles); // 口裂三角面（张嘴会落进口内/牙齿），永久排除
   const mapped = mapAtlas(atlas, lm, modelState.triangles);
   const bb = faceBBox(lm);
@@ -157,7 +224,23 @@ function compactStability(stability) {
   };
 }
 
-function updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stability) {
+function compactPoseGate(poseGate) {
+  if (!poseGate) return null;
+  return {
+    schema_version: poseGate.schema_version,
+    passed: poseGate.passed,
+    reason: poseGate.reason,
+    reasons: poseGate.reasons || [],
+    source_kind: poseGate.source_kind,
+    presence: poseGate.presence,
+    yaw_norm: poseGate.yaw_norm,
+    abs_yaw_norm: poseGate.abs_yaw_norm,
+    face_frame_fraction: poseGate.face_frame_fraction,
+    thresholds: poseGate.thresholds,
+  };
+}
+
+function updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stability, poseGate) {
   setDiagnosticSection("incision_overlay_runtime", {
     schema_version: "incision-overlay-runtime-diagnostics/v0.1",
     updated_at: new Date().toISOString(),
@@ -176,13 +259,22 @@ function updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stabilit
       high_guardrail_codes: overlay?.candidate?.high_guardrail_codes || [],
       live_overlay_ready: overlay?.review_gate?.live_overlay_ready === true,
     },
+    pose_gate: compactPoseGate(poseGate),
     registration: compactRegistration(registration),
     stability: compactStability(stability),
     clinical_boundary: "Runtime overlay diagnostics are engineering QA signals, not clinical AR registration.",
   });
 }
 
-function updateIncisionOverlayQa(registration, stability) {
+function updateIncisionOverlayQa(registration, stability, poseGate) {
+  if (poseGate && !poseGate.passed) {
+    setIncisionOverlayQa({
+      tone: "warn",
+      label: "姿态需复核",
+      detail: `工程 QA：${compactReason(poseGate.reason)}；偏航 ${fmtRatio(poseGate.yaw_norm)} / 门槛 ±${fmtRatio(poseGate.thresholds?.max_abs_yaw_norm)}，检测 ${fmtPercent(poseGate.presence)}。暂不绘制候选叠加。`,
+    });
+    return;
+  }
   if (!registration?.passed) {
     setIncisionOverlayQa({
       tone: "warn",
@@ -274,6 +366,24 @@ function recordIncisionOverlayStability(overlay, lm) {
   return stability;
 }
 
+function recordIncisionOverlayPoseGate(poseGate) {
+  countMetric(poseGate.passed ? "incisionOverlay.poseGate.pass" : "incisionOverlay.poseGate.blocked");
+  if (poseGate.abs_yaw_norm != null) {
+    recordMetricSample("incisionOverlay.poseGate.absYawNorm", poseGate.abs_yaw_norm, {
+      passed: poseGate.passed,
+      reason: poseGate.reason,
+      sourceKind: poseGate.source_kind,
+    });
+  }
+  if (poseGate.presence != null) {
+    recordMetricSample("incisionOverlay.poseGate.presence", poseGate.presence, {
+      passed: poseGate.passed,
+      reason: poseGate.reason,
+      sourceKind: poseGate.source_kind,
+    });
+  }
+}
+
 function drawIncisionOverlay(lm, W, H, masks, vis, innerMouth) {
   const overlay = renderState.incisionOverlay;
   if (!overlay) {
@@ -283,10 +393,19 @@ function drawIncisionOverlay(lm, W, H, masks, vis, innerMouth) {
     setIncisionOverlayQa(null);
     return;
   }
+  const poseGate = estimateFacePoseQuality(lm, W, H);
+  recordIncisionOverlayPoseGate(poseGate);
   const registration = recordIncisionOverlayRegistration(overlay, lm, W, H);
-  const stability = recordIncisionOverlayStability(overlay, lm);
-  updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stability);
-  updateIncisionOverlayQa(registration, stability);
+  let stability = null;
+  if (poseGate.passed) {
+    stability = recordIncisionOverlayStability(overlay, lm);
+  } else {
+    overlayRuntimeDiagnostics.key = overlayRuntimeKey(overlay);
+    overlayRuntimeDiagnostics.landmarkFrames = [];
+  }
+  updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stability, poseGate);
+  updateIncisionOverlayQa(registration, stability, poseGate);
+  if (!poseGate.passed) return;
   ctx.save();
   ctx.globalAlpha = 0.98;
   const baseWidth = Math.max(2, W / 520);

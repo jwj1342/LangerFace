@@ -113,15 +113,29 @@ export function innerMouthTriangles(triangles) {
 
 // 背面剔除：返回 Uint8Array(每个三角面是否朝向相机)。移植自 Python rendering/occlusion.py BackfaceCuller。
 // threshold 默认值来自 constants.py 的 DEFAULT_OCCLUSION_THRESHOLD（生成，见 #30）。
-export function visibleTriangles(landmarksPx, triangles, noseTris, threshold = DEFAULT_OCCLUSION_THRESHOLD) {
+// minTriangleAreaPx2 是投影到屏幕后叉积 z 的绝对值阈值（约等于三角面 2 倍面积），
+// 用于实时画面中剔除近共线 / 关键点坍缩造成的退化三角面。
+export function visibleTriangles(
+  landmarksPx,
+  triangles,
+  noseTris,
+  threshold = DEFAULT_OCCLUSION_THRESHOLD,
+  { minTriangleAreaPx2 = 0 } = {},
+) {
   const M = triangles.length;
   const nz = new Float64Array(M);
+  const degenerate = minTriangleAreaPx2 > 0 ? new Uint8Array(M) : null;
   for (let i = 0; i < M; i++) {
     const t = triangles[i];
     const a = landmarksPx[t[0]], b = landmarksPx[t[1]], c = landmarksPx[t[2]];
+    if (!a || !b || !c) {
+      if (degenerate) degenerate[i] = 1;
+      continue;
+    }
     const e1x = b[0] - a[0], e1y = b[1] - a[1], e1z = b[2] - a[2];
     const e2x = c[0] - a[0], e2y = c[1] - a[1], e2z = c[2] - a[2];
     nz[i] = e1x * e2y - e1y * e2x; // cross(e1,e2).z
+    if (degenerate && Math.abs(nz[i]) < minTriangleAreaPx2) degenerate[i] = 1;
   }
   let ref = 0;
   if (noseTris.length) {
@@ -130,7 +144,9 @@ export function visibleTriangles(landmarksPx, triangles, noseTris, threshold = D
   }
   const sign = ref >= 0 ? 1 : -1;
   const vis = new Uint8Array(M);
-  for (let i = 0; i < M; i++) vis[i] = sign * nz[i] >= threshold ? 1 : 0;
+  for (let i = 0; i < M; i++) {
+    vis[i] = (!degenerate || !degenerate[i]) && sign * nz[i] >= threshold ? 1 : 0;
+  }
   return vis;
 }
 
