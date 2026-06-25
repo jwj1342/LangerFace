@@ -98,6 +98,7 @@ class AgentHandler(BaseHTTPRequestHandler):
                     "session_round_index": round_index,
                     **(plan.get("agent_react_plan") or {}),
                 })
+            emit("session_evolution", result.get("candidate_evolution", {}))
             emit("session_audit", result.get("agent_session_audit", {}))
         else:
             for event in (result.get("agent_execution_events") or {}).get("events", []):

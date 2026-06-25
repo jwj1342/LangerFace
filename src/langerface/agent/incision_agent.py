@@ -696,6 +696,107 @@ def _best_candidate_id(plan: dict[str, Any]) -> str | None:
     return str(candidate_id) if candidate_id else None
 
 
+def _first_comparison_score(plan: dict[str, Any]) -> float | None:
+    comparison = plan.get("candidate_comparison")
+    if not isinstance(comparison, list) or not comparison:
+        return None
+    score = comparison[0].get("score") if isinstance(comparison[0], dict) else None
+    try:
+        number = float(score)
+    except (TypeError, ValueError):
+        return None
+    return number if np.isfinite(number) else None
+
+
+def _session_candidate_row(round_result: dict[str, Any]) -> dict[str, Any]:
+    plan = round_result.get("plan") if isinstance(round_result.get("plan"), dict) else {}
+    candidate = plan.get("candidate") if isinstance(plan.get("candidate"), dict) else {}
+    metrics = candidate.get("metrics") if isinstance(candidate.get("metrics"), dict) else {}
+    severity = _severity_counts(plan.get("guardrails") if isinstance(plan.get("guardrails"), dict) else {})
+    feedback = (
+        round_result.get("clinician_feedback")
+        if isinstance(round_result.get("clinician_feedback"), dict)
+        else {}
+    )
+    return {
+        "round_index": int(round_result.get("round_index", 0)),
+        "round_id": str(round_result.get("round_id", "")),
+        "trigger": str(round_result.get("trigger", "")),
+        "selected_candidate_id": round_result.get("selected_candidate_id"),
+        "candidate_type": candidate.get("type", "unknown"),
+        "length_mm": _finite_or(candidate.get("length_mm"), 0.0),
+        "width_mm": (
+            _finite_or(candidate.get("width_mm"), 0.0)
+            if candidate.get("width_mm") is not None
+            else None
+        ),
+        "rstl_deviation_deg": _finite_or(metrics.get("rstl_deviation_deg"), 0.0),
+        "diameter_coverage_deficit_mm": _finite_or(
+            metrics.get("diameter_coverage_deficit_mm"), 0.0
+        ),
+        "axis_coverage_deficit_mm": _finite_or(metrics.get("axis_coverage_deficit_mm"), 0.0),
+        "tip_angle_error_deg": _finite_or(metrics.get("tip_angle_error_deg"), 0.0),
+        "high_guardrails": severity["high"],
+        "medium_guardrails": severity["medium"],
+        "low_guardrails": severity["low"],
+        "comparison_score": _first_comparison_score(plan),
+        "trace_gate_passed": bool(round_result.get("trace_gate_passed")),
+        "react_plan_passed": bool(round_result.get("react_plan_passed")),
+        "execution_events_passed": bool(round_result.get("execution_events_passed")),
+        "changed_tumor_fields": list(
+            (round_result.get("tumor_delta") or {}).get("changed_fields") or []
+        ),
+        "reviewer": str(feedback.get("reviewer") or ""),
+        "requested_change": str(feedback.get("requested_change") or feedback.get("note") or ""),
+    }
+
+
+def _nullable_delta(current: float | None, previous: float | None) -> float | None:
+    if current is None or previous is None:
+        return None
+    return round(float(current) - float(previous), 6)
+
+
+def _session_candidate_evolution(session_rounds: list[dict[str, Any]]) -> dict[str, Any]:
+    rows = [_session_candidate_row(item) for item in session_rounds]
+    transitions: list[dict[str, Any]] = []
+    for previous, current in zip(rows, rows[1:], strict=False):
+        transitions.append({
+            "from_round_index": previous["round_index"],
+            "to_round_index": current["round_index"],
+            "from_round_id": previous["round_id"],
+            "to_round_id": current["round_id"],
+            "selected_candidate_changed": (
+                previous["selected_candidate_id"] != current["selected_candidate_id"]
+            ),
+            "candidate_type_changed": previous["candidate_type"] != current["candidate_type"],
+            "changed_tumor_fields": current["changed_tumor_fields"],
+            "length_delta_mm": _nullable_delta(current["length_mm"], previous["length_mm"]),
+            "width_delta_mm": _nullable_delta(current["width_mm"], previous["width_mm"]),
+            "comparison_score_delta": _nullable_delta(
+                current["comparison_score"], previous["comparison_score"]
+            ),
+            "high_guardrail_delta": current["high_guardrails"] - previous["high_guardrails"],
+            "clinical_boundary": (
+                "Round-to-round deltas are deterministic engineering provenance for clinician "
+                "review; they are not an autonomous recommendation."
+            ),
+        })
+    return {
+        "schema_version": "agent-session-candidate-evolution/v0.1",
+        "round_count": len(rows),
+        "transition_count": len(transitions),
+        "rounds": rows,
+        "transitions": transitions,
+        "final_round_index": rows[-1]["round_index"] if rows else None,
+        "final_candidate_id": rows[-1]["selected_candidate_id"] if rows else None,
+        "clinical_boundary": (
+            "This summary records how structured clinician feedback changes deterministic "
+            "candidate geometry across rounds. It is provenance, not a surgical instruction."
+        ),
+    }
+
+
 def plan_incision_session(
     tumor_data: dict[str, Any],
     vertices: np.ndarray,
@@ -762,6 +863,7 @@ def plan_incision_session(
         previous_tumor = dict(current_tumor)
 
     final_round = session_rounds[-1]
+    candidate_evolution = _session_candidate_evolution(session_rounds)
     audit = {
         "schema_version": "agent-session-audit/v0.1",
         "mode": "multi_round_react_session_with_deterministic_tools",
@@ -778,6 +880,8 @@ def plan_incision_session(
             item["execution_events_passed"] for item in session_rounds
         ),
         "final_candidate_present": bool(final_round.get("selected_candidate_id")),
+        "candidate_evolution_present": bool(candidate_evolution.get("rounds")),
+        "candidate_evolution_transition_count": int(candidate_evolution.get("transition_count") or 0),
         "selected_candidate_ids": [
             item["selected_candidate_id"] for item in session_rounds if item.get("selected_candidate_id")
         ],
@@ -804,6 +908,7 @@ def plan_incision_session(
         "rounds": session_rounds,
         "final_round_index": int(final_round["round_index"]),
         "final_candidate_id": final_round.get("selected_candidate_id"),
+        "candidate_evolution": candidate_evolution,
         "tumor": final_round.get("tumor"),
         "provider": final_round.get("plan", {}).get("provider", {}),
         "agent_session_audit": audit,

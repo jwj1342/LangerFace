@@ -179,6 +179,10 @@ def test_incision_agent_proxy_json_and_sse_contract():
         assert session["passed"] is True
         assert session["round_count"] == 2
         assert session["agent_session_audit"]["all_round_trace_gates_passed"] is True
+        assert session["candidate_evolution"]["schema_version"] == (
+            "agent-session-candidate-evolution/v0.1"
+        )
+        assert session["candidate_evolution"]["transitions"][0]["length_delta_mm"] > 0
         assert session["rounds"][1]["clinician_feedback"]["reviewer"] == "server-test-reviewer"
         assert session["rounds"][1]["tumor_delta"]["changed_fields"] == ["diameter_mm"]
 
@@ -189,6 +193,7 @@ def test_incision_agent_proxy_json_and_sse_contract():
         session_names = [event["event"] for event in session_events]
         assert session_names[0] == "provider"
         assert session_names.count("session_round") == 2
+        assert "session_evolution" in session_names
         assert "session_audit" in session_names
         assert "result" in session_names
         assert session_names[-1] == "done"
@@ -208,6 +213,11 @@ def test_incision_agent_proxy_json_and_sse_contract():
         session_audit = next(event["data"] for event in session_events if event["event"] == "session_audit")
         assert session_audit["schema_version"] == "agent-session-audit/v0.1"
         assert session_audit["round_count"] == 2
+        session_evolution = next(
+            event["data"] for event in session_events if event["event"] == "session_evolution"
+        )
+        assert session_evolution["schema_version"] == "agent-session-candidate-evolution/v0.1"
+        assert session_evolution["transition_count"] == 1
     finally:
         proc.terminate()
         try:

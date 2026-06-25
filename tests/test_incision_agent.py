@@ -729,8 +729,20 @@ def test_plan_incision_session_records_multi_round_clinician_feedback():
     assert session["agent_session_audit"]["all_round_react_plans_passed"] is True
     assert session["agent_session_audit"]["all_round_execution_events_passed"] is True
     assert session["agent_session_audit"]["final_candidate_present"] is True
+    assert session["agent_session_audit"]["candidate_evolution_present"] is True
+    assert session["agent_session_audit"]["candidate_evolution_transition_count"] == 1
     assert session["agent_session_audit"]["raw_image_sent"] is False
     assert session["agent_session_audit"]["raw_video_sent"] is False
+    evolution = session["candidate_evolution"]
+    assert evolution["schema_version"] == "agent-session-candidate-evolution/v0.1"
+    assert evolution["round_count"] == 2
+    assert evolution["transition_count"] == 1
+    assert evolution["rounds"][0]["candidate_type"] == "linear"
+    assert evolution["rounds"][1]["changed_tumor_fields"] == ["diameter_mm"]
+    assert evolution["rounds"][1]["reviewer"] == "coded-reviewer-1"
+    assert evolution["transitions"][0]["length_delta_mm"] > 0
+    assert evolution["transitions"][0]["changed_tumor_fields"] == ["diameter_mm"]
+    assert "not a surgical instruction" in evolution["clinical_boundary"].lower()
     assert session["rounds"][0]["tumor_delta"]["changed"] is False
     assert session["rounds"][1]["tumor_delta"]["changed"] is True
     assert session["rounds"][1]["tumor_delta"]["changed_fields"] == ["diameter_mm"]
@@ -988,7 +1000,12 @@ def test_agent_tool_schema_and_privacy_doc_cover_review_export():
     assert "execution_event" in schema["execution_events"]["sse_events"]
     assert schema["session"]["schema_version"] == "agentic-incision-session/v0.1"
     assert schema["session"]["audit_schema_version"] == "agent-session-audit/v0.1"
+    assert (
+        schema["session"]["candidate_evolution_schema_version"]
+        == "agent-session-candidate-evolution/v0.1"
+    )
     assert "session_round" in schema["session"]["sse_events"]
+    assert "session_evolution" in schema["session"]["sse_events"]
     assert "session_audit" in schema["session"]["sse_events"]
     assert "react_plan_passed" in schema["orchestration_audit"]["records"]
     assert schema["trace_audit_executor"]["schema_version"] == "agentic-incision-trace-audit/v0.1"

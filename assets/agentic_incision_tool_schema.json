@@ -48,9 +48,11 @@
     "mode": "multi_round_react_session_with_deterministic_tools",
     "round_schema_version": "agentic-incision-session-round/v0.1",
     "audit_schema_version": "agent-session-audit/v0.1",
-    "records": ["rounds", "final_candidate_id", "agent_session_audit", "clinical_boundary"],
+    "candidate_evolution_schema_version": "agent-session-candidate-evolution/v0.1",
+    "records": ["rounds", "final_candidate_id", "candidate_evolution", "agent_session_audit", "clinical_boundary"],
     "round_records": ["round_index", "trigger", "clinician_feedback", "tumor_delta", "selected_candidate_id", "trace_gate_passed", "react_plan_passed", "plan"],
-    "sse_events": ["session_round", "execution_event", "trace", "trace_gate", "react_plan", "session_audit", "result", "done"],
+    "candidate_evolution_records": ["rounds", "transitions", "length_delta_mm", "width_delta_mm", "comparison_score_delta", "changed_tumor_fields"],
+    "sse_events": ["session_round", "execution_event", "trace", "trace_gate", "react_plan", "session_evolution", "session_audit", "result", "done"],
     "boundary": "A session may iterate structured tumor inputs and deterministic plans across clinician-feedback rounds; it must not bypass per-round trace gates, guardrails, or clinician review."
   },
   "trace_audit_executor": {
