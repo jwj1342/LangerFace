@@ -2,10 +2,18 @@ import { create } from "zustand";
 
 export interface IncisionTumorState {
   kind: "subcutaneous" | "cutaneous" | string;
+  author: string;
   diameterMm: number | null;
   depthMm: number | null;
   marginMm: number | null;
   boundaryMode: string;
+  boundaryActive: boolean;
+  boundaryPointCount: number;
+  boundaryStatus: string;
+  boundaryStatusWarn: boolean;
+  pickState: string;
+  anatomyPreview: string;
+  anatomyPreviewWarn: boolean;
 }
 
 export interface IncisionProviderState {

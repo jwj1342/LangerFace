@@ -20,6 +20,7 @@ const annotateStatePanel = read("src/components/AnnotateStatePanel.tsx");
 const incisionStore = read("src/stores/incisionStore.ts");
 const incisionBridge = read("src/hooks/useIncisionControllerBridge.ts");
 const incisionStatePanel = read("src/components/IncisionStatePanel.tsx");
+const tumorPanel = read("src/components/TumorInputPanel.tsx");
 const providerPanel = read("src/components/ProviderConfigPanel.tsx");
 const reviewPanel = read("src/components/ReviewControlsPanel.tsx");
 const liveStore = read("src/stores/liveStore.ts");
@@ -119,14 +120,35 @@ assert.ok(!incisionRoute.includes("DOMParser"), "React incision route should not
 assert.ok(!incisionRoute.includes("innerHTML"), "React incision route should not inject legacy HTML");
 assert.ok(!incisionRoute.includes("incision_agent.html"), "React incision route should not fetch the legacy workbench HTML");
 for (const id of [
-  "tumorKind",
-  "runAgentBtn",
   "agentCanvas",
   "candidateList",
   "stageStatus",
 ]) {
   assert.ok(incisionWorkbench.includes(`id="${id}"`), `React incision workbench exposes #${id}`);
 }
+for (const id of [
+  "tumorKind",
+  "diameterMm",
+  "tumorAuthor",
+  "depthMm",
+  "marginMm",
+  "boundaryMode",
+  "ellipseRatio",
+  "startBoundaryBtn",
+  "clearBoundaryBtn",
+  "exportTumorBtn",
+  "importTumorBtn",
+  "tumorImportFile",
+  "runAgentBtn",
+  "boundaryStatus",
+  "pickState",
+  "anatomyPreview",
+]) {
+  assert.ok(tumorPanel.includes(`id="${id}"`), `React tumor panel exposes #${id}`);
+}
+assert.ok(incisionWorkbench.includes("TumorInputPanel"), "React incision workbench renders the tumor input controls as a React component");
+assert.ok(tumorPanel.includes("TUMOR_REACT_COMMAND_EVENT"), "React tumor panel dispatches tumor commands to the controller boundary");
+assert.ok(tumorPanel.includes("useIncisionStore"), "React tumor panel syncs low-frequency tumor status from Zustand");
 for (const id of [
   "providerMode",
   "providerBaseUrl",
@@ -160,10 +182,13 @@ assert.ok(incisionWorkbench.includes('to="/live"'), "React incision workbench re
 assert.ok(incisionWorkbench.includes('to="/annotate"'), "React incision workbench links to the React 3D annotation route");
 assert.ok(controller.includes("export function mountIncisionAgentWorkbench"), "incision controller exposes a mount lifecycle");
 assert.ok(controller.includes("export function disposeIncisionAgentWorkbench"), "incision controller exposes a dispose lifecycle");
+assert.ok(controller.includes("INCISION_TUMOR_REACT_COMMAND_EVENT"), "incision controller listens for React tumor input commands");
+assert.ok(controller.includes("handleReactTumorCommand"), "incision controller routes React tumor commands to existing tumor workflow functions");
 assert.ok(controller.includes("INCISION_PROVIDER_REACT_STATE_EVENT"), "incision controller listens for React provider state changes");
 assert.ok(controller.includes("INCISION_REVIEW_REACT_COMMAND_EVENT"), "incision controller listens for React review commands");
 assert.ok(controller.includes("handleReactReviewCommand"), "incision controller routes React review commands to existing review workflow functions");
 assert.ok(controller.includes("window.__LANGERFACE_REACT_MANAGED__"), "incision controller can branch between React and legacy provider handling");
+assert.ok(controller.includes("els.tumorKind.onchange"), "legacy incision HTML still owns direct tumor input handlers");
 assert.ok(controller.includes("els.testProvider.onclick = testProviderEndpoint"), "legacy incision HTML still owns provider connectivity testing");
 assert.ok(controller.includes("els.approveCandidate.onclick"), "legacy incision HTML still owns direct review action handlers");
 assert.ok(controller.includes("cancelAnimationFrame"), "incision controller cancels its render loop on dispose");

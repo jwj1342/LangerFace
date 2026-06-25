@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { IncisionStatePanel } from "../components/IncisionStatePanel";
 import { ProviderConfigPanel } from "../components/ProviderConfigPanel";
 import { ReviewControlsPanel } from "../components/ReviewControlsPanel";
+import { TumorInputPanel } from "../components/TumorInputPanel";
 
 export function IncisionWorkbench() {
   return (
@@ -18,53 +19,7 @@ export function IncisionWorkbench() {
 
         <IncisionStatePanel />
 
-        <div className="card agent-grid">
-          <label className="field-label" htmlFor="tumorKind">肿物类型</label>
-          <select id="tumorKind" className="select" defaultValue="subcutaneous">
-            <option value="subcutaneous">皮下肿物 · 线性切口</option>
-            <option value="cutaneous">皮表肿物 · 梭形切口</option>
-          </select>
-          <div>
-            <label className="field-label" htmlFor="diameterMm">直径 mm <span id="diameterVal" className="val">12</span></label>
-            <input id="diameterMm" type="range" min="4" max="40" defaultValue="12" />
-          </div>
-          <div>
-            <label className="field-label" htmlFor="tumorAuthor">记录者</label>
-            <input id="tumorAuthor" className="text-input" defaultValue="clinician" />
-          </div>
-          <div id="depthWrap">
-            <label className="field-label" htmlFor="depthMm">深度 mm <span id="depthVal" className="val">6</span></label>
-            <input id="depthMm" type="range" min="0" max="35" defaultValue="6" />
-          </div>
-          <div id="marginWrap" className="hidden">
-            <label className="field-label" htmlFor="marginMm">安全切缘 mm <span id="marginVal" className="val">2</span></label>
-            <input id="marginMm" type="range" min="0" max="10" defaultValue="2" />
-          </div>
-          <div id="boundaryWrap" className="hidden">
-            <label className="field-label" htmlFor="boundaryMode">皮表边界</label>
-            <select id="boundaryMode" className="select" defaultValue="ellipse">
-              <option value="ellipse">椭圆近似</option>
-              <option value="freehand">自由轮廓点</option>
-            </select>
-          </div>
-          <div id="ellipseWrap" className="hidden">
-            <label className="field-label" htmlFor="ellipseRatio">椭圆短轴比例 <span id="ellipseRatioVal" className="val">70%</span></label>
-            <input id="ellipseRatio" type="range" min="40" max="100" defaultValue="70" />
-          </div>
-          <div className="btn-row hidden two-cols" id="freehandControls">
-            <button className="btn" id="startBoundaryBtn" type="button">开始轮廓</button>
-            <button className="btn" id="clearBoundaryBtn" type="button">清空轮廓</button>
-          </div>
-          <p className="boundary-status" id="boundaryStatus">皮表边界：中心直径</p>
-          <div className="btn-row two-cols">
-            <button className="btn" id="exportTumorBtn" type="button">导出肿物</button>
-            <button className="btn" id="importTumorBtn" type="button">导入肿物</button>
-          </div>
-          <input id="tumorImportFile" className="hidden" type="file" accept="application/json,.json" />
-          <button className="btn btn-primary" id="runAgentBtn" type="button">生成候选切口</button>
-          <p className="agent-note" id="pickState">当前点位：默认右颊。右侧标准脸可点击重选。</p>
-          <p className="anatomy-preview" id="anatomyPreview">当前点位分区：待加载</p>
-        </div>
+        <TumorInputPanel />
 
         <div className="card agent-grid">
           <div className="quality-top"><span>辅助线索</span><span id="secondaryCueState">未导入</span></div>

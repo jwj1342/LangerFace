@@ -162,6 +162,7 @@ function createRuntimeState() {
     workflowWorker: null,
     workflowWorkerFailed: false,
     providerReactStateHandler: null,
+    tumorReactCommandHandler: null,
     reviewReactCommandHandler: null,
     editTimeline: null,
     editCursor: 0,
@@ -179,6 +180,7 @@ const REVIEW_LABELS = {
 };
 const INCISION_CONTROLLER_STATE_EVENT = "langerface:incision-state";
 const INCISION_PROVIDER_REACT_STATE_EVENT = "langerface:incision-provider-react-state";
+const INCISION_TUMOR_REACT_COMMAND_EVENT = "langerface:incision-tumor-react-command";
 const INCISION_REVIEW_REACT_COMMAND_EVENT = "langerface:incision-review-react-command";
 
 function numericControlValue(el) {
@@ -190,10 +192,18 @@ function numericControlValue(el) {
 function currentTumorFormSnapshot() {
   return {
     kind: els.tumorKind?.value || "subcutaneous",
+    author: els.tumorAuthor?.value?.trim?.() || "",
     diameterMm: numericControlValue(els.diameter),
     depthMm: els.tumorKind?.value === "subcutaneous" ? numericControlValue(els.depth) : null,
     marginMm: els.tumorKind?.value === "cutaneous" ? numericControlValue(els.margin) : 0,
     boundaryMode: els.tumorKind?.value === "cutaneous" ? (els.boundaryMode?.value || "ellipse") : "center_diameter",
+    boundaryActive: Boolean(S.boundaryActive),
+    boundaryPointCount: S.boundaryPoints?.length || 0,
+    boundaryStatus: els.boundaryStatus?.textContent || "",
+    boundaryStatusWarn: Boolean(els.boundaryStatus?.classList?.contains("warn")),
+    pickState: els.pickState?.textContent || "",
+    anatomyPreview: els.anatomyPreview?.textContent || "",
+    anatomyPreviewWarn: Boolean(els.anatomyPreview?.classList?.contains("warn")),
   };
 }
 
@@ -881,6 +891,77 @@ function updateFormVisibility() {
   els.freehandControls.classList.toggle("hidden", !cutaneous || els.boundaryMode.value !== "freehand");
   updateTumorRing();
   updateAnatomyPreview();
+}
+
+function toggleBoundaryDrawing() {
+  S.boundaryActive = !S.boundaryActive;
+  els.startBoundary.textContent = S.boundaryActive ? "结束轮廓" : "开始轮廓";
+  els.pickState.textContent = S.boundaryActive ? "请在脸上连续点击皮表肿物边界点。" : `自由轮廓点：${S.boundaryPoints.length} 个`;
+  if (!S.boundaryActive && S.boundaryPoints.length >= 3) runAgent();
+  publishIncisionState("tumor_boundary_toggle");
+}
+
+function clearBoundaryPoints() {
+  S.boundaryPoints = [];
+  updateTumorRing();
+  els.pickState.textContent = "自由轮廓已清空。";
+  runAgent();
+  publishIncisionState("tumor_boundary_clear");
+}
+
+function handleReactTumorCommand(event) {
+  const command = event?.detail?.command;
+  if (command === "kind_changed") {
+    S.boundaryActive = false;
+    updateFormVisibility();
+    publishIncisionState("tumor_kind_changed");
+    runAgent();
+    return;
+  }
+  if (command === "diameter_input") {
+    updateTumorRing();
+    publishIncisionState("tumor_diameter_input");
+    return;
+  }
+  if (command === "depth_input" || command === "author_changed") {
+    publishIncisionState(command);
+    return;
+  }
+  if (command === "margin_input" || command === "ellipse_ratio_input") {
+    updateTumorRing();
+    publishIncisionState(command);
+    return;
+  }
+  if (command === "diameter_changed" || command === "depth_changed" || command === "margin_changed" || command === "ellipse_ratio_changed") {
+    runAgent();
+    return;
+  }
+  if (command === "boundary_mode_changed") {
+    S.boundaryActive = false;
+    updateFormVisibility();
+    publishIncisionState("tumor_boundary_mode_changed");
+    runAgent();
+    return;
+  }
+  if (command === "toggle_boundary") {
+    toggleBoundaryDrawing();
+    return;
+  }
+  if (command === "clear_boundary") {
+    clearBoundaryPoints();
+    return;
+  }
+  if (command === "export_tumor") {
+    exportTumorJson();
+    return;
+  }
+  if (command === "import_tumor") {
+    els.tumorImportFile.click();
+    return;
+  }
+  if (command === "run_agent") {
+    runAgent();
+  }
 }
 
 function fmt(x, digits = 1) {
@@ -1655,6 +1736,7 @@ function applyImportedTumor(payload) {
   els.pickState.textContent = tumor.boundary.length >= 3
     ? `已导入肿物：自由轮廓 ${tumor.boundary.length} 点`
     : "已导入肿物：中心点与直径";
+  publishIncisionState("tumor_imported");
   runAgent();
 }
 
@@ -1971,6 +2053,7 @@ function pick(e) {
     S.boundaryPoints.push(hit.point);
     updateTumorRing();
     els.pickState.textContent = `自由轮廓点：${S.boundaryPoints.length} 个`;
+    publishIncisionState("tumor_boundary_point");
     return;
   }
   const lp = hit.point;
@@ -2024,17 +2107,26 @@ function bindWorkbenchEvents() {
     }
   });
 
-  els.tumorKind.onchange = () => { updateFormVisibility(); runAgent(); };
-  els.diameter.oninput = () => { els.diameterVal.textContent = els.diameter.value; updateTumorRing(); };
-  els.diameter.onchange = runAgent;
-  els.depth.oninput = () => { els.depthVal.textContent = els.depth.value; };
-  els.depth.onchange = runAgent;
-  els.margin.oninput = () => { els.marginVal.textContent = els.margin.value; updateTumorRing(); };
-  els.margin.onchange = runAgent;
-  els.ellipseRatio.oninput = () => { els.ellipseRatioVal.textContent = `${els.ellipseRatio.value}%`; updateTumorRing(); };
-  els.ellipseRatio.onchange = runAgent;
-  els.boundaryMode.onchange = () => { S.boundaryActive = false; updateFormVisibility(); runAgent(); };
-  els.run.onclick = runAgent;
+  if (window.__LANGERFACE_REACT_MANAGED__) {
+    S.tumorReactCommandHandler = handleReactTumorCommand;
+    window.addEventListener(INCISION_TUMOR_REACT_COMMAND_EVENT, S.tumorReactCommandHandler);
+  } else {
+    els.tumorKind.onchange = () => { updateFormVisibility(); runAgent(); };
+    els.diameter.oninput = () => { els.diameterVal.textContent = els.diameter.value; updateTumorRing(); };
+    els.diameter.onchange = runAgent;
+    els.depth.oninput = () => { els.depthVal.textContent = els.depth.value; };
+    els.depth.onchange = runAgent;
+    els.margin.oninput = () => { els.marginVal.textContent = els.margin.value; updateTumorRing(); };
+    els.margin.onchange = runAgent;
+    els.ellipseRatio.oninput = () => { els.ellipseRatioVal.textContent = `${els.ellipseRatio.value}%`; updateTumorRing(); };
+    els.ellipseRatio.onchange = runAgent;
+    els.boundaryMode.onchange = () => { S.boundaryActive = false; updateFormVisibility(); runAgent(); };
+    els.run.onclick = runAgent;
+    els.startBoundary.onclick = toggleBoundaryDrawing;
+    els.clearBoundary.onclick = clearBoundaryPoints;
+    els.exportTumor.onclick = exportTumorJson;
+    els.importTumor.onclick = () => els.tumorImportFile.click();
+  }
   if (window.__LANGERFACE_REACT_MANAGED__) {
     S.providerReactStateHandler = () => publishIncisionState("provider_react_state");
     window.addEventListener(INCISION_PROVIDER_REACT_STATE_EVENT, S.providerReactStateHandler);
@@ -2044,18 +2136,6 @@ function bindWorkbenchEvents() {
     els.providerModel.onchange = () => { setProviderTestState("Provider 模型已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
     els.providerTimeout.oninput = () => { els.providerTimeoutVal.textContent = els.providerTimeout.value; saveProviderPrefs(); };
   }
-  els.startBoundary.onclick = () => {
-  S.boundaryActive = !S.boundaryActive;
-  els.startBoundary.textContent = S.boundaryActive ? "结束轮廓" : "开始轮廓";
-  els.pickState.textContent = S.boundaryActive ? "请在脸上连续点击皮表肿物边界点。" : `自由轮廓点：${S.boundaryPoints.length} 个`;
-  if (!S.boundaryActive && S.boundaryPoints.length >= 3) runAgent();
-  };
-  els.clearBoundary.onclick = () => {
-  S.boundaryPoints = [];
-  updateTumorRing();
-  els.pickState.textContent = "自由轮廓已清空。";
-  runAgent();
-  };
   [
   els.angleOffset,
   els.lengthScale,
@@ -2096,8 +2176,6 @@ function bindWorkbenchEvents() {
   els.makeVariants.onclick = makeVariantCandidates;
   els.clearSaved.onclick = () => { S.saved = []; renderSaved(); };
   els.exportJson.onclick = exportReviewJson;
-  els.exportTumor.onclick = exportTumorJson;
-  els.importTumor.onclick = () => els.tumorImportFile.click();
   els.tumorImportFile.onchange = (e) => importTumorFile(e.target.files?.[0]);
   els.importSecondaryCue.onclick = () => els.secondaryCueImportFile.click();
   els.clearSecondaryCue.onclick = clearSecondaryCues;
@@ -2125,6 +2203,10 @@ export function disposeIncisionAgentWorkbench() {
   if (S.providerReactStateHandler) {
     window.removeEventListener(INCISION_PROVIDER_REACT_STATE_EVENT, S.providerReactStateHandler);
     S.providerReactStateHandler = null;
+  }
+  if (S.tumorReactCommandHandler) {
+    window.removeEventListener(INCISION_TUMOR_REACT_COMMAND_EVENT, S.tumorReactCommandHandler);
+    S.tumorReactCommandHandler = null;
   }
   if (S.reviewReactCommandHandler) {
     window.removeEventListener(INCISION_REVIEW_REACT_COMMAND_EVENT, S.reviewReactCommandHandler);
