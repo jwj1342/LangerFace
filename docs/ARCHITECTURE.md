@@ -191,6 +191,8 @@ P = u·V0 + v·V1 + w·V2
   在 `disposeLiveWorkbench()` 中 `clearDomBinding()`，避免 SPA 长生命周期保留已卸载的 canvas、video 或 wrapper 引用。
 - `canvas_fit.js` 同样只保留为旧 JS 管线的兼容 re-export。图片模式的 canvas contain-fit、pan/zoom 和
   `ResizeObserver` 生命周期由 `src/services/liveCanvasFit.ts` 负责，并通过 `state.d.ts` 明确 `imageView` 状态边界。
+- `data_source.js` 只保留为旧 JS 兼容 re-export。标注、切口和实时页共享的浏览器数据源契约与
+  `sessionStorage` 本地实现由 `src/services/dataSource.ts` 负责，后续切换远端数据源时应替换该 service 实现。
 
 ---
 

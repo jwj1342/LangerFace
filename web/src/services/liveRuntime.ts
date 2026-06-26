@@ -1,7 +1,6 @@
 // Live workbench runtime: wires DOM events and model bootstrap under the React route adapter.
 import { bindDom, clearDomBinding, els } from "../../dom.js";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "../../canvas_fit.js";
-import { dataSource } from "../../data_source.js";
 import { createCanvasRecordingController } from "../../export_canvas.js";
 import { validateIncisionOverlay } from "../../incision_overlay.js";
 import { countMetric, logError } from "../../logger.js";
@@ -30,6 +29,7 @@ import {
   liveTextOf,
   visibleLiveTextOf,
 } from "./liveSnapshots";
+import { dataSource } from "./dataSource";
 import { recordingState, reconState, renderState, sourceState } from "../../state.js";
 import { setIncisionOverlayQa, setMsg, setProvenance, smoothLabel } from "../../ui.js";
 

@@ -151,6 +151,8 @@ const liveCanvasFitTypes = read("canvas_fit.d.ts");
 const liveCanvasFitFacade = read("canvas_fit.js");
 const liveCanvasFitService = read("src/services/liveCanvasFit.ts");
 const liveDataSourceTypes = read("data_source.d.ts");
+const liveDataSourceFacade = read("data_source.js");
+const liveDataSourceService = read("src/services/dataSource.ts");
 const liveExportCanvasTypes = read("export_canvas.d.ts");
 const liveRuntimeDependencyTypes = [
   "dom.d.ts",
@@ -2093,6 +2095,10 @@ assert.ok(liveCanvasFitService.includes("export function fitCanvasDisplayToStage
 assert.ok(liveCanvasFitService.includes("export function observeCanvasStageResize"), "TypeScript live canvas fit service owns resize cleanup");
 assert.ok(liveCanvasFitService.includes("export function clearCanvasDisplayFit"), "TypeScript live canvas fit service owns image fit cleanup");
 assert.ok(liveCanvasFitTypes.includes("./src/services/liveCanvasFit"), "canvas-fit declarations re-export the TypeScript implementation contract");
+assert.ok(liveDataSourceFacade.includes("./src/services/dataSource.ts"), "legacy data_source.js is only a compatibility facade over the TypeScript service");
+assert.ok(liveDataSourceService.includes("export interface BrowserDataSource"), "TypeScript data source service owns the shared browser data contract");
+assert.ok(liveDataSourceService.includes("export const LocalDataSource"), "TypeScript data source service owns the local sessionStorage implementation");
+assert.ok(liveDataSourceTypes.includes("./src/services/dataSource"), "data-source declarations re-export the TypeScript implementation contract");
 assert.ok(liveDataSourceTypes.includes("IncisionOverlayPayload"), "data source declarations type staged incision overlays");
 assert.ok(liveExportCanvasTypes.includes("CanvasRecordingController"), "export canvas declarations type recording lifecycle");
 assert.ok(liveDomTypes.includes("clearDomBinding"), "DOM binding declarations expose route unmount cleanup");

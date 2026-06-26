@@ -3,7 +3,6 @@
 import { AnnotationModel } from "../../annotate_model.js";
 import { Annotator3D } from "../../annotate_viewer.js";
 import { assetUrls } from "../../assets.js";
-import { dataSource } from "../../data_source.js";
 import { facesArray, flameForward, loadFlameBasis } from "../../flame_fit.js";
 import { parseMeshFile } from "../../mesh_io.js";
 import { parseSlicerCurveFile } from "../../slicer_curve.js";
@@ -31,6 +30,7 @@ import {
   buildAnnotateControllerSnapshot,
   controlsOf,
 } from "./annotateSnapshots";
+import { dataSource } from "./dataSource";
 import { topologyMeta } from "../../topology_registry.js";
 
 interface AnnotateDomElements {

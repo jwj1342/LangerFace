@@ -2,10 +2,29 @@
 //   node tools/test_atlas_roundtrip.mjs
 // 断言「医生在标注端画的点」经 toAtlasJSON() 序列化、再经实时端 mapAtlas() 还原后，
 // 与原始 3D 坐标逐点一致 —— 即闭环不丢、不漂。同时验证注入前的边界校验 validateAtlasLines。
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import ts from "../web/node_modules/typescript/lib/typescript.js";
+
 import { AnnotationModel, barycentric } from "../web/annotate_model.js";
 import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "../web/constants.js";
-import { dataSource } from "../web/data_source.js";
 import { mapAtlas, validateAtlasLines } from "../web/geometry.js";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+async function importTypeScriptModule(rel) {
+  const source = fs.readFileSync(path.join(root, rel), "utf8");
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+  });
+  return import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
+}
+
+const { dataSource } = await importTypeScriptModule("web/src/services/dataSource.ts");
 
 let fail = 0;
 const ok = (c, m) => { if (!c) { console.error("FAIL:", m); fail++; } else console.log("ok:", m); };
