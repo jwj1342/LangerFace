@@ -44,8 +44,8 @@ for (const fr of expected.frames) {
   }
 }
 
-// One-Euro 跨语言夹具：用 Python 端常量生成的固定输入序列，断言 JS OneEuro 逐位一致。
-// 同一夹具也被 tests/test_cross_lang_parity.py 断言 → Python==JS==golden 三方闭环。
+// One-Euro 跨语言夹具：用 Python 端常量生成的固定输入序列，断言 Web TypeScript OneEuro 逐位一致。
+// 同一夹具也被 tests/test_cross_lang_parity.py 断言 → Python==Web TypeScript==golden 三方闭环。
 const oeFix = expected.oneEuro;
 const oe = new OneEuro({
   minCutoff: oeFix.minCutoff, beta: oeFix.beta, dcutoff: oeFix.dcutoff,

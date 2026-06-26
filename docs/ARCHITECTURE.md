@@ -124,8 +124,8 @@ P = u·V0 + v·V1 + w·V2
 ## 7. Python ↔ 网页 的对拍验证基准
 
 1. `tools/dump_landmarks.py`：对示例视频若干帧跑 Python 管线，导出 关键点 + 映射结果 + 逐点可见性 → `web/test/expected.json`。
-2. `tools/test_web_mapping.ts`：用同一关键点在 JS 跑 `mapAtlas/visibleTriangles`，与 Python 结果逐点比对。
-3. 改动几何后务必重跑 1+2，保持 JS==Python。
+2. `tools/test_web_mapping.ts`：用同一关键点在 Web TypeScript 跑 `mapAtlas/visibleTriangles`，与 Python 结果逐点比对。
+3. 改动几何后务必重跑 1+2，保持 Web TypeScript==Python。
 
 ---
 

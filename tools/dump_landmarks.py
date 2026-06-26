@@ -66,7 +66,7 @@ def compute_frame_lines(atlas: Atlas, landmarks_px, triangles, culler: BackfaceC
 def build_one_euro_fixture():
     """确定性 One-Euro 跨语言夹具：固定时间戳 + 带抖动的小轨迹，及其 Python 端期望平滑输出。
 
-    用项目 One-Euro 常量（ONEEURO_*）。JS OneEuro 用同一组常量 → 逐位一致。
+    用项目 One-Euro 常量（ONEEURO_*）。Web TypeScript OneEuro 用同一组常量 → 逐位一致。
     输入/输出都进 expected.json，由 Python 与 .ts 双方断言。
     """
     # 两个点 (N=2)、三分量，沿时间做带抖动的平移轨迹（30fps 等间隔时间戳）
