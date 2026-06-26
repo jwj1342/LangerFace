@@ -81,10 +81,14 @@ function collectElements(root = document) {
 export const els = {};
 export let ctx = null;
 
+export function clearDomBinding() {
+  for (const key of Object.keys(els)) delete els[key];
+  ctx = null;
+}
+
 export function bindDom(root = document) {
+  clearDomBinding();
   Object.assign(els, collectElements(root));
   ctx = els.canvas?.getContext("2d") || null;
   return els;
 }
-
-bindDom(document);

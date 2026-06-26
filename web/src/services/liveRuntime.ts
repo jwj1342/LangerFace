@@ -1,5 +1,5 @@
 // Live workbench runtime: wires DOM events and model bootstrap under the React route adapter.
-import { bindDom, els } from "../../dom.js";
+import { bindDom, clearDomBinding, els } from "../../dom.js";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "../../canvas_fit.js";
 import { dataSource } from "../../data_source.js";
 import { createCanvasRecordingController } from "../../export_canvas.js";
@@ -75,6 +75,10 @@ function eventChecked(event: Event | CheckedControlEvent): boolean {
 
 function controllerEvent(event: Event): Event & { detail?: unknown } {
   return event as Event & { detail?: unknown };
+}
+
+function hasBoundLiveDom(): boolean {
+  return Boolean(els.video && els.canvas && els.mainWrap);
 }
 
 function publishLiveState(reason = "state_update"): void {
@@ -423,14 +427,17 @@ export function disposeLiveWorkbench() {
   recordingController?.stop?.();
   recordingController = null;
   recordingState.recorder = null;
-  stopTwin();
-  stopSource();
+  if (hasBoundLiveDom()) {
+    stopTwin();
+    stopSource();
+  }
   if (reconState.scan) reconState.scan.active = false;
   if (reconState.viewerRAF != null) cancelAnimationFrame(reconState.viewerRAF);
   reconState.viewerRAF = null;
   reconState.head3d?.dispose?.();
   reconState.head3d = null;
   imageDrag = null;
+  clearDomBinding();
 }
 
 export function mountLiveWorkbench(root: ParentNode | Document = document) {

@@ -2070,7 +2070,9 @@ assert.ok(liveSnapshotsService.includes("../lib/controllerSnapshotSchemas"), "sh
 assert.ok(liveRouteControlsPanel.includes('to="/annotate"'), "React live route controls link to the React annotation route");
 assert.ok(liveWorkbench.includes('to="/incision"'), "React live workbench links to the React incision route");
 assert.ok(dom.includes("export function bindDom"), "DOM module can rebind element references for SPA route mounts");
+assert.ok(dom.includes("export function clearDomBinding"), "DOM module can clear stale route element references on SPA unmount");
 assert.ok(dom.includes("export let ctx"), "DOM module exports a live canvas context binding");
+assert.ok(!dom.includes("bindDom(document);"), "DOM module must not bind global document elements at import time");
 for (const rel of liveRuntimeDependencyTypes) {
   assert.ok(fs.existsSync(path.join(web, rel)), `live runtime dependency boundary ${rel} should be typed`);
 }
@@ -2082,6 +2084,7 @@ assert.ok(liveStateTypes.includes("LiveRenderState"), "state declarations expose
 assert.ok(liveCanvasFitTypes.includes("observeCanvasStageResize"), "canvas-fit declarations expose resize cleanup contract");
 assert.ok(liveDataSourceTypes.includes("IncisionOverlayPayload"), "data source declarations type staged incision overlays");
 assert.ok(liveExportCanvasTypes.includes("CanvasRecordingController"), "export canvas declarations type recording lifecycle");
+assert.ok(liveDomTypes.includes("clearDomBinding"), "DOM binding declarations expose route unmount cleanup");
 assert.ok(liveController.includes("export function mountLiveWorkbench"), "live controller exposes a mount lifecycle");
 assert.ok(liveController.includes("export function disposeLiveWorkbench"), "live controller exposes a dispose lifecycle");
 assert.ok(liveController.includes("LIVE_CONTROLLER_STATE_EVENT"), "live controller declares a React state bridge event");
@@ -2107,6 +2110,8 @@ assert.ok(liveController.includes("dispatchControllerEvent(LIVE_CONTROLLER_STATE
 assert.ok(!liveController.includes("CustomEvent(LIVE_CONTROLLER_STATE_EVENT"), "live controller does not hand-roll state snapshot CustomEvent dispatch");
 assert.ok(liveController.includes("scheduleLiveState"), "live controller publishes low-frequency state snapshots from user actions");
 assert.ok(liveController.includes("bindDom(root)"), "live controller rebinds DOM references on mount");
+assert.ok(liveController.includes("clearDomBinding()"), "live controller clears DOM references on route teardown");
+assert.ok(liveController.includes("function hasBoundLiveDom"), "live controller guards first-mount disposal before DOM binding exists");
 assert.ok(liveController.includes("abortController?.abort"), "live controller aborts DOM listeners on dispose");
 assert.ok(liveController.includes("resizeCleanup?.()"), "live controller disconnects resize observers on dispose");
 assert.ok(liveController.includes("stopSource()"), "live controller stops camera/media sources on dispose");

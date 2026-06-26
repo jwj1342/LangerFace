@@ -66,3 +66,4 @@ export interface LiveDomElements {
 export const els: LiveDomElements;
 export let ctx: CanvasRenderingContext2D | null;
 export function bindDom(root?: ParentNode | Document): LiveDomElements;
+export function clearDomBinding(): void;

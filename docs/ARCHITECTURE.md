@@ -186,6 +186,8 @@ P = u·V0 + v·V1 + w·V2
 - React SPA 中仍由运行时服务接管的工作台必须只在 route host 内查询 DOM。`annotateRuntime.ts`、`incisionAgentRuntime.ts`
   通过 `src/lib/scopedDom.ts` 绑定元素，`dom.js` 的实时页绑定也不再回退到全局 `document.getElementById`，
   避免路由切换后误绑定旧页面或其它工作台的同名元素。
+- `dom.js` 不允许在模块 import 时绑定 `document`；实时页只能在 `mountLiveWorkbench(root)` 内 `bindDom(root)`，
+  在 `disposeLiveWorkbench()` 中 `clearDomBinding()`，避免 SPA 长生命周期保留已卸载的 canvas、video 或 wrapper 引用。
 
 ---
 
