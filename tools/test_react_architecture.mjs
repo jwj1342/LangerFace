@@ -601,14 +601,22 @@ for (const route of ["/incision", "/live", "/annotate", "/three-preview", "/surg
   assert.ok(dashboardRoute.includes(`to="${route}"`), `React dashboard links to ${route} through React Router`);
 }
 for (const [name, html, expected] of [
-  ["index.html", legacyLiveHtml, ["/app/annotate", "/app/incision"]],
-  ["annotate.html", legacyAnnotateHtml, ["/app/live", "/app/surgery"]],
-  ["incision_agent.html", legacyIncisionHtml, ["/app/live", "/app/annotate"]],
+  ["index.html", legacyLiveHtml, ["/app/live"]],
+  ["annotate.html", legacyAnnotateHtml, ["/app/annotate"]],
+  ["incision_agent.html", legacyIncisionHtml, ["/app/incision"]],
   ["surgery.html", legacySurgeryHtml, ["/app/surgery"]],
 ]) {
   for (const href of expected) {
     assert.ok(html.includes(`href="${href}"`), `${name} compatibility navigation points to ${href}`);
   }
+}
+for (const [name, html, legacyScript] of [
+  ["index.html", legacyLiveHtml, "main.js"],
+  ["annotate.html", legacyAnnotateHtml, "annotate_main.js"],
+  ["incision_agent.html", legacyIncisionHtml, "incision_agent_main.js"],
+  ["surgery.html", legacySurgeryHtml, "surgery_main.js"],
+]) {
+  assert.ok(!html.includes(legacyScript), `${name} compatibility page should not load ${legacyScript}`);
 }
 for (const [name, html, legacyHref] of [
   ["index.html", legacyLiveHtml, "annotate.html"],

@@ -11,7 +11,7 @@
 
 ## 手动验收清单
 
-1. 打开 `web/annotate.html`，选择 MediaPipe 标准脸或 FLAME 标准头。
+1. 打开 `/app/annotate`，选择 MediaPipe 标准脸或 FLAME 标准头。
 2. 在脸颊、额部、眼周连续点击 4-6 个点，观察当前线预览是否贴面连接，无明显跨脸直线。
 3. 点击“完成线”，确认线条颜色从当前线颜色切换为已完成线颜色，控制点标记位置不跳变。
 4. 导出 atlas JSON，确认 `validated:false`、`topologyId`、`topologyVersion` 存在，且导出点数与屏幕预览路径点一致。

@@ -57,7 +57,7 @@ LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它
 | 肿物模拟层 | Stage 2 功能切片（#14） | 表示脸部肿物的位置、大小、深度、安全切缘和与皮肤表面的关系；当前支持手动中心点、椭圆 / 自由轮廓、来源作者和 JSON 导入导出，自动分割与临床复核仍待补 | `web/incision_agent*.js`, `web/incision_tools.js` |
 | 切口设计层 | Stage 2 工程闭环（#11-#22/#64/#83/#85） | 综合张力线方向、肿物约束、安全切缘、敏感结构、医生编辑、审阅导出和 2D 实时叠加，生成候选切口可视化；只做决策辅助，不输出手术指令 | `assets/clinical_rules_face_incision.json`, `assets/agentic_incision_tool_schema.json`, `web/incision*.js` |
 | 渲染与交互层 | 已实现 / 扩展中 | 2D Canvas 叠加、3D 查看、遮挡、放大窗、录制导出和 UI 控制 | `src/langerface/rendering/`, `web/render.js`, `web/three3d.js`, `web/main.js` |
-| 实验演示层 | 已实现（研究演示） | FLAME 实时孪生；RSTL 切除 -> 闭合定性软体演示 | `web/flame_fit.js`, `web/mode3d.js`, `web/surgery.html`, `web/soft_body.js` |
+| 实验演示层 | 已实现（研究演示） | FLAME 实时孪生；RSTL 切除 -> 闭合定性软体演示 | `web/flame_fit.js`, `web/mode3d.js`, `web/src/routes/SurgeryRoute.tsx`, `web/soft_body.js` |
 
 整体数据流：
 
@@ -181,7 +181,7 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 3D 重建流程：每帧 478 关键点 → 用相似变换(Umeyama)对齐到统一参考系 → **各顶点取中位数**得到稳定中性脸 →
 图谱按重心坐标贴到该网格 → Three.js 渲染（可旋转）/ 每帧 Umeyama 刚性配准到活体脸投影（z 缓冲遮挡）。
 
-除上表两条入口外，当前前端还包含两个研究演示：FLAME 实时孪生（`web/flame_fit.js` / `web/mode3d.js`）和 RSTL 切除闭合定性演示（`web/surgery.html`）。它们用于展示 3D 拟合和张力直觉，不改变 Stage 2 仍处于规划中的边界。
+除上表两条入口外，当前前端还包含两个研究演示：FLAME 实时孪生（`web/flame_fit.js` / `web/mode3d.js`）和 RSTL 切除闭合定性演示（`/app/surgery`）。它们用于展示 3D 拟合和张力直觉，不改变 Stage 2 仍处于规划中的边界。
 
 ---
 
@@ -233,7 +233,7 @@ npm run dev                      # Vite dev server，默认 http://127.0.0.1:517
 - **滑杆**：线密度、透明度；平滑参数仍在运行时存在，但主界面调试控件当前隐藏。
 - **开关**：镜像、显示网格采样点；背面剔除、手部遮挡、分区着色和细节放大窗为底层支持或默认能力，部分控件当前隐藏。
 - **技术路线**：2D（默认）/ 3D 重建（Beta，含"用示例重建/转头扫描/旋转查看/投影到画面"）/ FLAME 实时孪生实验。
-- **实验页**：侧栏可打开 `/annotate.html` 标注器；也可打开 `/surgery.html` 查看 RSTL 切除 -> 闭合定性演示。
+- **实验页**：侧栏可打开 `/app/annotate` 标注器；也可打开 `/app/surgery` 查看 RSTL 切除 -> 闭合定性演示。旧 HTML 入口仅保留为 React SPA 兼容跳转页。
 - **统计**：追踪质量、状态、脸部占比、偏航估计、线束数量、fps。
 
 ### 命令行
@@ -343,7 +343,7 @@ Stage 2 的切口候选必须受以下边界约束：
 - **多张脸**：网页端 Face Landmarker 当前配置为单脸追踪；多人同框时只处理首个检测结果，快速进出画面时可能错配。
 - **3D Beta**：当前在线重建是 468 点关键点网格，不是稠密患者头模；刚性配准不随表情形变；在线扫描 / 实时投影需摄像头实测；尚未做非刚性配准与网格导出。
 - **FLAME 实验**：已支持浏览器内实时孪生和本地/兜底拟合 basis，但医生 FLAME 标准线渲染到个体 FLAME 头、Mode-B 3D 扫描配准等仍在 #61 后续工作中。
-- **切除闭合演示**：`/surgery.html` 是标准脸上的定性表面软体演示，入口归入 3D 标注上下文；它只解释沿 RSTL 闭合的张力直觉，不能替代真实软组织 FEM、患者个体化建模或 Stage 2 正式切口候选生成。
+- **切除闭合演示**：`/app/surgery` 是标准脸上的定性表面软体演示，入口归入 3D 标注上下文；它只解释沿 RSTL 闭合的张力直觉，不能替代真实软组织 FEM、患者个体化建模或 Stage 2 正式切口候选生成。
 
 ### 数据与隐私
 

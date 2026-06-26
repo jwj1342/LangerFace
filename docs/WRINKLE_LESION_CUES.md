@@ -49,7 +49,7 @@ pytest tests/test_wrinkle_lesion_cues.py
 
 ## 前端展示要求
 
-- `web/incision_agent.html` 支持导入 `metrics.json` 或等价 JSON，并只读展示“辅助线索 / 低置信度 / 需医生确认”摘要。
+- React 切口工作台 `/app/incision` 支持导入 `metrics.json` 或等价 JSON，并只读展示“辅助线索 / 低置信度 / 需医生确认”摘要。
 - 前端导入辅助线索不会触发候选重新生成，不会自动改变肿物边界、切口方向或 guardrails。
 - 导出审阅记录保留 `secondary_cues`，包括 `source=synthetic|manual|restricted_cv`、脚本/模型来源、导入时间、metrics、人工确认状态，以及 `used_for_geometry=false` / `used_for_agent_prompt=false`。
 - 公开 PR Preview 不加载真实患者图像或受限模型输出。

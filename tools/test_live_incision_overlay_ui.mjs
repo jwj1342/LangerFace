@@ -2,7 +2,12 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 
-const html = fs.readFileSync("index.html", "utf8");
+const compatibilityHtml = fs.readFileSync("index.html", "utf8");
+const liveUi = [
+  fs.readFileSync("src/routes/LiveWorkbench.tsx", "utf8"),
+  fs.readFileSync("src/components/LiveSourceControlsPanel.tsx", "utf8"),
+  fs.readFileSync("src/components/LiveQualityPanel.tsx", "utf8"),
+].join("\n");
 const main = fs.readFileSync("main.js", "utf8");
 const render = fs.readFileSync("render.js", "utf8");
 const mode3d = fs.readFileSync("mode3d.js", "utf8");
@@ -14,11 +19,13 @@ const poseQuality = fs.readFileSync("geometry/pose_quality.js", "utf8");
 const liveSnapshots = fs.readFileSync("src/services/liveSnapshots.ts", "utf8");
 const controllerSnapshotSchemas = fs.readFileSync("src/lib/controllerSnapshotSchemas.ts", "utf8");
 
-assert.ok(html.includes('accept="image/*,video/*"'), "live page accepts uploaded photos and videos");
-assert.ok(html.includes('id="camBtn"'), "live page exposes camera entry for realtime overlay");
-assert.ok(html.includes('id="exportBtn"'), "live page exposes export action");
-assert.ok(html.includes('id="incisionOverlayQa"'), "live page exposes visible incision overlay QA state");
-assert.ok(html.includes("切口叠加 QA"), "live page labels visible overlay QA as engineering state");
+assert.ok(compatibilityHtml.includes("/app/live"), "legacy live HTML redirects to the React live route");
+assert.ok(!compatibilityHtml.includes("main.js"), "legacy live HTML no longer mounts the live controller directly");
+assert.ok(liveUi.includes('accept="image/*,video/*"'), "React live page accepts uploaded photos and videos");
+assert.ok(liveUi.includes('id="camBtn"'), "React live page exposes camera entry for realtime overlay");
+assert.ok(liveUi.includes('id="exportBtn"'), "React live page exposes export action");
+assert.ok(liveUi.includes('id="incisionOverlayQa"'), "React live page exposes visible incision overlay QA state");
+assert.ok(liveUi.includes("切口叠加 QA"), "React live page labels visible overlay QA as engineering state");
 assert.ok(source.includes('setSource(prepared.source, "image"'), "uploaded photos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "video"'), "uploaded videos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "camera"'), "camera frames enter the shared live render source");

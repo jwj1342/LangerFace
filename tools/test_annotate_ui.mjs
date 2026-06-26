@@ -5,13 +5,19 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const html = readFileSync(join(root, "web", "annotate.html"), "utf8");
+const compatibilityHtml = readFileSync(join(root, "web", "annotate.html"), "utf8");
+const annotateUi = [
+  readFileSync(join(root, "web", "src", "components", "AnnotateDrawPanel.tsx"), "utf8"),
+  readFileSync(join(root, "web", "src", "components", "AnnotateLineLibraryPanel.tsx"), "utf8"),
+].join("\n");
 const js = readFileSync(join(root, "web", "annotate_main.js"), "utf8");
 const css = readFileSync(join(root, "web", "annotate.css"), "utf8");
 const annotateSnapshots = readFileSync(join(root, "web", "src", "services", "annotateSnapshots.ts"), "utf8");
 
-assert.ok(html.includes('id="currentState"'), "annotation page exposes current drawing state");
-assert.ok(html.includes('id="lineList"'), "annotation page exposes saved line list");
+assert.ok(compatibilityHtml.includes("/app/annotate"), "legacy annotation HTML redirects to the React annotation route");
+assert.ok(!compatibilityHtml.includes("annotate_main.js"), "legacy annotation HTML no longer mounts the annotation controller directly");
+assert.ok(annotateUi.includes('id="currentState"'), "React annotation page exposes current drawing state");
+assert.ok(annotateUi.includes('id="lineList"'), "React annotation page exposes saved line list");
 assert.ok(
   js.includes("贴面路由已退回直线，需复核可能穿面"),
   "current drawing state warns when surface routing falls back",

@@ -568,7 +568,7 @@ min_beta ||J * beta - (target - L0)||^2 + lambda * ||beta||^2
 
 ## 14. 网页 3D 标注器
 
-`web/annotate.html`、`web/annotate_model.js`、`web/annotate_viewer.js`、`web/annotate_main.js` 实现网页 3D 线标注工具。
+`/app/annotate` React 路由、`web/src/components/Annotate*.tsx`、`web/annotate_model.js`、`web/annotate_viewer.js`、`web/annotate_main.js` 共同实现网页 3D 线标注工具；`web/annotate.html` 仅保留兼容跳转。
 
 主要能力：
 
@@ -591,7 +591,7 @@ v2 = p - a
 
 ## 15. 手术模拟原型
 
-仓库包含 `web/surgery.html`、`web/surgery_main.js`、`web/soft_body.js`、`web/rstl_field.js`，用于演示沿 RSTL 梭形切除后的闭合新增张力。该部分是 demo 级软体模拟，不是临床级有限元模型，也不和切口 Agent 的候选生成混用。
+仓库包含 `/app/surgery` React 路由、`web/src/routes/SurgeryR3FScene.tsx`、`web/soft_body.js`、`web/rstl_field.js`，用于演示沿 RSTL 梭形切除后的闭合新增张力。该部分是 demo 级软体模拟，不是临床级有限元模型，也不和切口 Agent 的候选生成混用；`web/surgery.html` 仅保留兼容跳转。
 
 ### 15.1 RSTL 方向场采样
 
@@ -855,7 +855,7 @@ axis_coverage_deficit_mm = max(0, axis_coverage_required_mm - length_mm)
 
 ## 24. 推荐复现路径
 
-> 从零搭建环境、安装依赖与构建步骤见 [CONTRIBUTING.md «开发环境»](CONTRIBUTING.md#开发环境) 与 [ENVIRONMENT.md](ENVIRONMENT.md)；测试运行见 [CONTRIBUTING.md «运行测试»](CONTRIBUTING.md#运行测试)。体验路径：Web 首页摄像头实时叠加 → 上传图片看贴合/平滑/背面剔除 → 3D Beta（示例脸或扫描重建）→ `/annotate.html` 标注导出草案与沿 RSTL 闭合演示 → `incision_agent.html` 生成肿物切口候选；改几何代码后务必跑 `pytest` 和 `cd web && npm test` 确认对拍仍通过。
+> 从零搭建环境、安装依赖与构建步骤见 [CONTRIBUTING.md «开发环境»](CONTRIBUTING.md#开发环境) 与 [ENVIRONMENT.md](ENVIRONMENT.md)；测试运行见 [CONTRIBUTING.md «运行测试»](CONTRIBUTING.md#运行测试)。体验路径：React SPA `/app/live` 摄像头实时叠加 → 上传图片看贴合/平滑/背面剔除 → 3D Beta（示例脸或扫描重建）→ `/app/annotate` 标注导出草案与沿 RSTL 闭合演示 → `/app/incision` 生成肿物切口候选；改几何代码后务必跑 `pytest` 和 `cd web && npm test` 确认对拍仍通过。
 
 ## 25. 一句话总结
 

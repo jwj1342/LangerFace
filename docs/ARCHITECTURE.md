@@ -194,10 +194,10 @@ P = u·V0 + v·V1 + w·V2
 ```bash
 cd web
 npm run dev
-# 浏览器打开 Vite 地址下的 /annotate.html，例如 http://127.0.0.1:5173/annotate.html
+# 浏览器打开 Vite 地址下的 /app/annotate，例如 http://127.0.0.1:5173/app/annotate
 ```
 
-生产构建（Vercel）已把 `annotate.html` 纳入多页入口，配置见 [`web/vite.config.js`](../web/vite.config.js)。
+生产构建（Vercel）以 `/app/*` React SPA 为主入口；`annotate.html` 仅保留为 `/app/annotate` 的兼容跳转页，配置见 [`web/vite.config.js`](../web/vite.config.js)。
 
 ### 标注工作流
 
@@ -212,7 +212,7 @@ npm run dev
 ### 接入项目
 
 - **临床校验闭环（issue #2）**：网页标注器只生成候选图谱草案；评审通过后，再由 `tools/annotate_atlas.py` 或资产维护流程替换 `assets/atlas_rstl.json` / `assets/atlas_langer.json`，将 `validated` 置 `true`，并在 `provenance` 记录校验者。
-- **3D 头模标注**：HeadSpace 等头模经离线管线导出为 `{vertices, triangles}` JSON 后，可在 `/annotate.html` 上传加载；标注得到的 xyz 线可继续经 `langerface.geometry`（加权 Sim3）在头模与标准脸之间迁移。
+- **3D 头模标注**：HeadSpace 等头模经离线管线导出为 `{vertices, triangles}` JSON 后，可在 `/app/annotate` 上传加载；标注得到的 xyz 线可继续经 `langerface.geometry`（加权 Sim3）在头模与标准脸之间迁移。
 - **数据隐私**：真实头模（HeadSpace / FaceScape）不入库，仅本地使用；标注产物（图谱/xyz JSON，仅坐标）可入库评审。
 
 ### 实现文件
@@ -222,7 +222,8 @@ npm run dev
 | `web/annotate_model.js` | 纯数据模型：线/点管理、表面路径展开、重心坐标、导出图谱/xyz（node 可单测，见 `tools/test_annotate_model.mjs`） |
 | `web/annotate_viewer.js` | Three.js 场景：网格加载、射线表面拾取、线与控制点渲染 |
 | `web/annotate_main.js` | UI、模型、视图装配（指针拖拽/点击、导出、列表、快捷键） |
-| `web/annotate.html` / `web/annotate.css` | 标注页与样式 |
+| `web/app/index.html` / `web/src/routes/AnnotateRoute.tsx` / `web/src/components/Annotate*.tsx` | React 标注页入口与 UI |
+| `web/annotate.html` / `web/annotate.css` | 标注兼容跳转页与历史样式 |
 
 ---
 
@@ -274,7 +275,7 @@ tools/headspace/data/            # 本地，被 .gitignore 忽略
 
 `pip install -e ".[mediapipe]"` + `trimesh`；Blender 脚本另需 Blender 与 ffmpeg。脚本均为 argparse 驱动，原作者机器上的绝对路径默认值已移除（改为 `required`）。
 
-离线管线产出/配准 3D 头模与线；交互式标注/校验使用网页 `/annotate.html`。把头模导出为 `{vertices, triangles}` JSON 后上传到标注页，导出的标注线（xyz / 图谱）只含坐标，可入库评审。
+离线管线产出/配准 3D 头模与线；交互式标注/校验使用网页 `/app/annotate`。把头模导出为 `{vertices, triangles}` JSON 后上传到标注页，导出的标注线（xyz / 图谱）只含坐标，可入库评审。
 
 ---
 

@@ -89,7 +89,7 @@ Preview 人工验收清单：
 - 首页能打开，模型与图谱加载完成。
 - 上传照片 / 视频入口能正常进入检测流程。
 - 摄像头入口在 HTTPS Preview 中能请求权限。
-- `annotate.html` 能打开，标准脸能加载，不出现 `/assets/*.json` 404。
+- `/app/annotate` 能打开，标准脸能加载，不出现 `/assets/*.json` 404；旧 `annotate.html` 只需跳转到 React SPA。
 - 浏览器控制台没有新的应用级错误。MediaPipe 的 WebGL / XNNPACK 初始化日志通常是正常信息。
 
 注意：

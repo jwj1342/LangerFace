@@ -53,7 +53,7 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候
 - [ ] 隐私、合规与审计记录：限定临床研究使用边界 — [#21](https://github.com/jwj1342/LangerFace/issues/21)
       · 本 PR 已更新 README/隐私文档、导出字段边界、provider 配置脱敏、`privacy_audit` 字段、浏览器 `browser-export-privacy-preflight/v0.1` 和 `tools/audit_export_privacy.py`，可在导出或分享审阅/肿物/诊断 JSON 前拦截原始媒体标记、未脱敏 secret、明显身份字段、电话邮箱模式、疑似嵌入媒体 payload，以及辅助线索越界参与几何或 Agent prompt 的标记；前端 review gate 会阻止未确认、缺 reviewer、高风险无备注或 trace gate 未过的候选标成实时叠加就绪；真实临床访问控制、日志保留、签名和 DPA 仍需合规流程
 - [ ] AI 辅助识别自然皱襞、皱纹与肿物边界：作为 RSTL 之外的次级依据 — [#22](https://github.com/jwj1342/LangerFace/issues/22)
-      · 本 PR 已补齐调研记录、合成 CV 原型、mask/overlay/metrics 导出、precision/recall/IoU 测试，以及 `incision_agent.html` 低置信辅助线索只读导入/展示；辅助线索会进入审阅导出但 `used_for_geometry=false`、`used_for_agent_prompt=false`，不会自动改变肿物边界或候选切口
+      · 本 PR 已补齐调研记录、合成 CV 原型、mask/overlay/metrics 导出、precision/recall/IoU 测试，以及 `/app/incision` 低置信辅助线索只读导入/展示；辅助线索会进入审阅导出但 `used_for_geometry=false`、`used_for_agent_prompt=false`，不会自动改变肿物边界或候选切口
 - [ ] Epic：手术切口 Agentic 设计——肿物模拟 + RSTL 原则驱动的 LLM 切口规划 — [#64](https://github.com/jwj1342/LangerFace/issues/64)
       · 本 PR 已把 Agent planning 从 Python 后端迁到浏览器 deterministic workflow：`planIncisionWorkflow()` 固定执行肿物质量、面部分区、RSTL 查询、敏感结构检查、线性/梭形候选生成、guardrails、面部预览、`-10° / 0° / +10°` 方向备选和 `compare_candidates` 工程排序；前端展示工具 trace、`agent-trace-gate/v0.1`、`agent-react-plan/v0.1`、`agent-execution-events/v0.1`、`agent-orchestration-audit/v0.1` 和候选比较；Provider 配置只保留 OpenAI-compatible / vLLM 浏览器直连 `/models` 测试，当前不参与切口几何或工具 trace；Python Agent、SSE、session 后端、Slurm Agent 脚本和专项 Python 测试已移除。工具门控要求 trace 包含肿物输入质量、面部分区、RSTL 查询、敏感结构检查、确定性切口生成、guardrails 和面部预览，未通过时不能确认候选；开放式长程自主规划、LLM 摘要和跨阶段复杂失败恢复仍需后续架构拆分
 

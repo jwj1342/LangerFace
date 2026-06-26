@@ -2,7 +2,23 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 
-const html = fs.readFileSync("incision_agent.html", "utf8");
+const compatibilityHtml = fs.readFileSync("incision_agent.html", "utf8");
+function normalizeTsxContracts(source) {
+  return source.replace(/id:\s*"([^"]+)"/g, 'id="$1"');
+}
+
+const html = normalizeTsxContracts([
+  fs.readFileSync("src/routes/IncisionWorkbench.tsx", "utf8"),
+  fs.readFileSync("src/components/IncisionStagePanel.tsx", "utf8"),
+  fs.readFileSync("src/components/TumorInputPanel.tsx", "utf8"),
+  fs.readFileSync("src/components/SecondaryCuePanel.tsx", "utf8"),
+  fs.readFileSync("src/components/ProviderConfigPanel.tsx", "utf8"),
+  fs.readFileSync("src/components/CandidateResultPanel.tsx", "utf8"),
+  fs.readFileSync("src/components/EditControlsPanel.tsx", "utf8"),
+  fs.readFileSync("src/components/ReviewControlsPanel.tsx", "utf8"),
+  fs.readFileSync("src/components/CandidateLibraryPanel.tsx", "utf8"),
+  fs.readFileSync("src/components/PrivacyAuditPanel.tsx", "utf8"),
+].join("\n"));
 const js = fs.readFileSync("incision_agent_main.js", "utf8");
 const tools = fs.readFileSync("incision_tools.js", "utf8");
 const exportPrivacy = fs.readFileSync("export_privacy.js", "utf8");
@@ -11,6 +27,8 @@ const tumorInputService = fs.readFileSync("src/services/tumorInput.ts", "utf8");
 const incisionSnapshotsService = fs.readFileSync("src/services/incisionSnapshots.ts", "utf8");
 const controllerSnapshotSchemas = fs.readFileSync("src/lib/controllerSnapshotSchemas.ts", "utf8");
 
+assert.ok(compatibilityHtml.includes("/app/incision"), "legacy incision HTML redirects to the React incision route");
+assert.ok(!compatibilityHtml.includes("incision_agent_main.js"), "legacy incision HTML no longer mounts the incision controller directly");
 assert.ok(html.includes('id="boundaryStatus"'), "workbench exposes tumor boundary status");
 assert.ok(html.includes('id="anatomyPreview"'), "workbench exposes live anatomy preview for selected tumor center");
 assert.ok(html.includes('id="exportTumorBtn"'), "workbench exposes tumor export button");
@@ -26,9 +44,9 @@ assert.ok(html.includes('id="reviewDecision"'), "workbench exposes clinician rev
 assert.ok(html.includes('id="reviewNotes"'), "workbench exposes clinician review notes");
 assert.ok(html.includes('id="testProviderBtn"'), "workbench exposes LLM Provider connectivity test");
 assert.ok(html.includes('id="providerTestState"'), "workbench exposes LLM Provider connectivity status");
-assert.ok(html.includes('id="providerMode" type="hidden" value="openai-compatible"'), "workbench fixes the only visible provider contract to OpenAI-compatible");
+assert.ok(html.includes('id="providerMode"') && html.includes('value="openai-compatible"'), "workbench fixes the only visible provider contract to OpenAI-compatible");
 assert.ok(!html.includes("native provider"), "workbench does not expose a native provider choice");
-assert.ok(html.includes('value="https://api.openai.com/v1"'), "workbench defaults to an HTTPS OpenAI-compatible provider URL");
+assert.ok(providerConfig.includes('DEFAULT_PROVIDER_BASE_URL = "https://api.openai.com/v1"'), "workbench defaults to an HTTPS OpenAI-compatible provider URL");
 assert.ok(!html.includes("高级：规划后端接口"), "workbench removes the Python planning backend endpoint");
 assert.ok(!html.includes('id="useAgentServer"'), "workbench does not expose backend Agent orchestration");
 assert.ok(!html.includes('value="/api/agentic-incision"'), "workbench does not point static previews at a missing backend route");
