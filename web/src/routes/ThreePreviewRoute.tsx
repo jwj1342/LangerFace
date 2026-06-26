@@ -1,93 +1,12 @@
-import { Html, OrbitControls } from "@react-three/drei";
-import { Canvas } from "@react-three/fiber";
-import { ArrowLeft, RotateCcw } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import * as THREE from "three";
+import { useEffect, useState } from "react";
 
 import { loadJsonAsset } from "../../assets.js";
-import { buildLineGeometry, vertexNormals } from "../../three3d.js";
-import { Button } from "../components/ui/button";
+import { ThreePreviewScene, type PreviewRstlAtlas, type PreviewTriangle, type PreviewVec3, type ThreePreviewAssets } from "../components/ThreePreviewScene";
+import { ThreePreviewSidebar } from "../components/ThreePreviewSidebar";
 import { useAppStore } from "../stores/appStore";
 
-type Vec3 = [number, number, number];
-type Triangle = [number, number, number];
-interface AtlasLine {
-  points?: Array<[number, number, number]>;
-  points3d?: Vec3[];
-}
-interface RstlAtlas {
-  lines: AtlasLine[];
-}
-interface PreviewAssets {
-  verts: Vec3[];
-  tris: Triangle[];
-  atlas: RstlAtlas;
-}
-
-function bbox(verts: Vec3[]) {
-  const lo = [Infinity, Infinity, Infinity];
-  const hi = [-Infinity, -Infinity, -Infinity];
-  for (const v of verts) {
-    for (let k = 0; k < 3; k++) {
-      lo[k] = Math.min(lo[k], v[k]);
-      hi[k] = Math.max(hi[k], v[k]);
-    }
-  }
-  return { lo, hi, center: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2] };
-}
-
-function FaceMesh({ assets }: { assets: PreviewAssets }) {
-  const { verts, tris, atlas } = assets;
-  const box = useMemo(() => bbox(verts), [verts]);
-  const meshGeometry = useMemo(() => {
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.Float32BufferAttribute(verts.flat(), 3));
-    geometry.setIndex(tris.flat());
-    geometry.computeVertexNormals();
-    return geometry;
-  }, [verts, tris]);
-  const lineGeometry = useMemo(() => {
-    const normals = vertexNormals(verts, tris);
-    return buildLineGeometry(atlas.lines.filter((_, index) => index % 2 === 0), verts, tris, normals, false);
-  }, [atlas, verts, tris]);
-
-  return (
-    <group position={[-box.center[0], -box.center[1], -box.center[2]]}>
-      <mesh geometry={meshGeometry}>
-        <meshStandardMaterial color="#d8a98f" roughness={0.68} metalness={0.02} />
-      </mesh>
-      <lineSegments geometry={lineGeometry} renderOrder={2}>
-        <lineBasicMaterial vertexColors toneMapped={false} />
-      </lineSegments>
-    </group>
-  );
-}
-
-function R3FScene({ assets, loadingText }: { assets: PreviewAssets | null; loadingText: string }) {
-  return (
-    <Canvas camera={{ position: [0, 0, 2.8], fov: 35 }} dpr={[1, 2]}>
-      <color attach="background" args={["#111820"]} />
-      <ambientLight intensity={0.8} />
-      <directionalLight position={[2.5, 2.8, 3.5]} intensity={1.8} />
-      <directionalLight position={[-2, 1, 2]} intensity={0.7} />
-      <gridHelper args={[2, 12, "#334155", "#243041"]} position={[0, -0.72, 0]} />
-      {assets ? (
-        <FaceMesh assets={assets} />
-      ) : (
-        <Html center>
-          <div className="rounded-[10px] border border-white/10 bg-black/60 px-4 py-3 text-center text-sm font-bold text-[#dbe4ee]">
-            {loadingText}
-          </div>
-        </Html>
-      )}
-      <OrbitControls makeDefault enableDamping dampingFactor={0.08} />
-    </Canvas>
-  );
-}
-
 export function ThreePreviewRoute() {
-  const [assets, setAssets] = useState<PreviewAssets | null>(null);
+  const [assets, setAssets] = useState<ThreePreviewAssets | null>(null);
   const [loadingText, setLoadingText] = useState("正在加载标准脸资产");
   const setActiveWorkspace = useAppStore((state) => state.setActiveWorkspace);
   const setRouteStatus = useAppStore((state) => state.setRouteStatus);
@@ -99,9 +18,9 @@ export function ThreePreviewRoute() {
     setRouteStatus("R3F 预览加载中");
 
     Promise.all([
-      loadJsonAsset<Vec3[]>("canonicalVertices", { label: "标准脸顶点", onProgress: (evt) => setLoadingText(`${evt.label} 加载中`) }),
-      loadJsonAsset<Triangle[]>("triangles", { label: "三角拓扑", onProgress: (evt) => setLoadingText(`${evt.label} 加载中`) }),
-      loadJsonAsset<RstlAtlas>("atlasRstl", { label: "RSTL 图谱", onProgress: (evt) => setLoadingText(`${evt.label} 加载中`) }),
+      loadJsonAsset<PreviewVec3[]>("canonicalVertices", { label: "标准脸顶点", onProgress: (evt) => setLoadingText(`${evt.label} 加载中`) }),
+      loadJsonAsset<PreviewTriangle[]>("triangles", { label: "三角拓扑", onProgress: (evt) => setLoadingText(`${evt.label} 加载中`) }),
+      loadJsonAsset<PreviewRstlAtlas>("atlasRstl", { label: "RSTL 图谱", onProgress: (evt) => setLoadingText(`${evt.label} 加载中`) }),
     ]).then(([verts, tris, atlas]) => {
       if (disposed) return;
       setAssets({ verts, tris, atlas });
@@ -122,30 +41,9 @@ export function ThreePreviewRoute() {
   return (
     <div className="react-page">
       <div className="react-shell">
-        <aside className="react-shell-sidebar">
-          <div className="brand">
-            <div className="brand-top">
-              <span className="eyebrow">R3F RENDERER BOUNDARY</span>
-              <span className="react-route-status">{assets ? "ready" : "loading"}</span>
-            </div>
-            <h1>R3F 标准脸预览</h1>
-          </div>
-
-          <div className="card">
-            <p className="hint">
-              这里验证 React Three Fiber / drei 的渲染层接入。当前只承载低频资产加载和相机控制；
-              切口工作台的高频拾取与候选线编辑仍由独立 Three.js controller 管理。
-            </p>
-            <Button asChild>
-              <Link to="/"><ArrowLeft size={16} /> 返回 React 入口</Link>
-            </Button>
-            <Button type="button" onClick={() => window.location.reload()}>
-              <RotateCcw size={16} /> 重新加载资产
-            </Button>
-          </div>
-        </aside>
+        <ThreePreviewSidebar isReady={Boolean(assets)} onReload={() => window.location.reload()} />
         <main className="react-shell-main">
-          <R3FScene assets={assets} loadingText={loadingText} />
+          <ThreePreviewScene assets={assets} loadingText={loadingText} />
         </main>
       </div>
     </div>

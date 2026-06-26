@@ -56,6 +56,8 @@ const surgeryMetricsPanel = read("src/components/SurgeryMetricsPanel.tsx");
 const surgeryHelpPanel = read("src/components/SurgeryHelpPanel.tsx");
 const surgeryStagePanel = read("src/components/SurgeryStagePanel.tsx");
 const threeRoute = read("src/routes/ThreePreviewRoute.tsx");
+const threePreviewScene = read("src/components/ThreePreviewScene.tsx");
+const threePreviewSidebar = read("src/components/ThreePreviewSidebar.tsx");
 const worker = read("src/workers/workflow.worker.ts");
 const workerClient = read("src/services/workflowWorkerClient.ts");
 const workerPanel = read("src/components/WorkerStatusPanel.tsx");
@@ -321,10 +323,14 @@ assert.ok(controller.includes("cancelAnimationFrame"), "incision controller canc
 assert.ok(controller.includes("S.resizeObserver?.disconnect"), "incision controller disconnects ResizeObserver on dispose");
 assert.ok(controller.includes("S.head?.dispose"), "incision controller disposes WebGL resources on dispose");
 
-assert.ok(threeRoute.includes("@react-three/fiber"), "R3F preview uses @react-three/fiber");
-assert.ok(threeRoute.includes("@react-three/drei"), "R3F preview uses drei helpers");
-assert.ok(threeRoute.includes("OrbitControls"), "R3F preview uses drei OrbitControls");
 assert.ok(threeRoute.includes("loadJsonAsset"), "R3F preview lazy-loads runtime assets");
+assert.ok(threeRoute.includes("ThreePreviewScene"), "R3F preview route renders the scene through a React component");
+assert.ok(threeRoute.includes("ThreePreviewSidebar"), "R3F preview route renders the sidebar through a React component");
+assert.ok(threePreviewScene.includes("@react-three/fiber"), "R3F preview scene uses @react-three/fiber");
+assert.ok(threePreviewScene.includes("@react-three/drei"), "R3F preview scene uses drei helpers");
+assert.ok(threePreviewScene.includes("OrbitControls"), "R3F preview scene uses drei OrbitControls");
+assert.ok(threePreviewScene.includes("buildLineGeometry"), "R3F preview scene renders atlas line geometry");
+assert.ok(threePreviewSidebar.includes("R3F RENDERER BOUNDARY"), "R3F preview sidebar keeps the renderer boundary note");
 assert.ok(worker.includes("Comlink.expose"), "workflow worker exposes its API through Comlink");
 assert.ok(worker.includes("summarizeTumorInputQuality"), "workflow worker can run deterministic browser tools");
 assert.ok(worker.includes("planIncisionWorkflow"), "workflow worker can run deterministic incision planning");
