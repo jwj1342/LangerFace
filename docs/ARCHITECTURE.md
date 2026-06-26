@@ -195,6 +195,8 @@ P = u·V0 + v·V1 + w·V2
   `sessionStorage` 本地实现由 `src/services/dataSource.ts` 负责，后续切换远端数据源时应替换该 service 实现。
 - `llm_provider.js` 只保留为旧 JS 兼容 re-export。OpenAI-compatible / vLLM Provider 的 Base URL 规范化、
   `/models` 连通性测试和类型契约由 `src/services/llmProvider.ts` 负责，候选几何仍不依赖 Provider。
+- `export_canvas.js` 只保留为旧 JS 兼容 re-export。实时页的 canvas/WebM 录制、额外视图合成和下载生命周期
+  由 `src/services/canvasRecording.ts` 负责，并通过 `export_canvas.d.ts` 暴露兼容类型。
 
 ---
 

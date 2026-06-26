@@ -157,6 +157,8 @@ const liveDataSourceTypes = read("data_source.d.ts");
 const liveDataSourceFacade = read("data_source.js");
 const liveDataSourceService = read("src/services/dataSource.ts");
 const liveExportCanvasTypes = read("export_canvas.d.ts");
+const liveExportCanvasFacade = read("export_canvas.js");
+const liveExportCanvasService = read("src/services/canvasRecording.ts");
 const liveRuntimeDependencyTypes = [
   "dom.d.ts",
   "canvas_fit.d.ts",
@@ -2110,7 +2112,11 @@ assert.ok(liveDataSourceService.includes("export interface BrowserDataSource"), 
 assert.ok(liveDataSourceService.includes("export const LocalDataSource"), "TypeScript data source service owns the local sessionStorage implementation");
 assert.ok(liveDataSourceTypes.includes("./src/services/dataSource"), "data-source declarations re-export the TypeScript implementation contract");
 assert.ok(liveDataSourceTypes.includes("IncisionOverlayPayload"), "data source declarations type staged incision overlays");
+assert.ok(liveExportCanvasFacade.includes("./src/services/canvasRecording.ts"), "legacy export_canvas.js is only a compatibility facade over the TypeScript service");
+assert.ok(liveExportCanvasService.includes("export interface CanvasRecordingController"), "TypeScript canvas recording service owns the recording lifecycle contract");
+assert.ok(liveExportCanvasService.includes("export function createCanvasRecordingController"), "TypeScript canvas recording service owns canvas recording creation");
 assert.ok(liveExportCanvasTypes.includes("CanvasRecordingController"), "export canvas declarations type recording lifecycle");
+assert.ok(liveExportCanvasTypes.includes("./src/services/canvasRecording"), "export canvas declarations re-export the TypeScript implementation contract");
 assert.ok(liveDomTypes.includes("clearDomBinding"), "DOM binding declarations expose route unmount cleanup");
 assert.ok(liveController.includes("export function mountLiveWorkbench"), "live controller exposes a mount lifecycle");
 assert.ok(liveController.includes("export function disposeLiveWorkbench"), "live controller exposes a dispose lifecycle");
