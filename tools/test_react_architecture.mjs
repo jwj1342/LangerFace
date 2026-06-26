@@ -25,7 +25,7 @@ const legacyLiveHtml = read("index.html");
 const legacyAnnotateHtml = read("annotate.html");
 const legacyIncisionHtml = read("incision_agent.html");
 const legacySurgeryHtml = read("surgery.html");
-const vite = read("vite.config.js");
+const vite = read("vite.config.ts");
 const vercel = read("vercel.json");
 const vercelConfig = JSON.parse(vercel);
 const vercelIgnoreBuild = read("scripts/vercel-ignore-build.mjs");
@@ -143,8 +143,10 @@ const flameFitTypes = read("flame_fit.d.ts");
 const flameFitService = read("src/services/flameFit.ts");
 const annotateViewerService = read("src/services/annotateViewer.ts");
 const controller = read("src/services/incisionAgentRuntime.ts");
-const incisionOverlayTypes = read("incision_overlay.d.ts");
-const incisionToolsTypes = read("incision_tools.d.ts");
+const incisionOverlayService = read("src/services/incisionOverlay.ts");
+const incisionCandidateToolsService = read("src/services/incisionCandidateTools.ts");
+const incisionWorkflowToolsService = read("src/services/incisionWorkflowTools.ts");
+const incisionToolsBarrel = read("src/services/incisionTools.ts");
 const three3dTypes = read("three3d.d.ts");
 const three3dService = read("src/services/three3d.ts");
 const exportPrivacyTypes = read("export_privacy.d.ts");
@@ -181,7 +183,6 @@ const liveRuntimeDependencyTypes = [
   "data_source.d.ts",
   "export_canvas.d.ts",
   "image_source.d.ts",
-  "incision_overlay.d.ts",
   "logger.d.ts",
   "mode3d.d.ts",
   "pipeline.d.ts",
@@ -203,8 +204,6 @@ const incisionRuntimeDependencyTypes = [
   "assets.d.ts",
   "data_source.d.ts",
   "export_privacy.d.ts",
-  "incision_overlay.d.ts",
-  "incision_tools.d.ts",
   "llm_provider.d.ts",
   "soft_body.d.ts",
   "three3d.d.ts",
@@ -1613,9 +1612,10 @@ assert.ok(controller.includes("interface IncisionDomElements"), "incision runtim
 assert.ok(controller.includes("interface IncisionRuntimeState"), "incision runtime types its long-lived renderer/workflow state");
 assert.ok(controller.includes("interface PointerDragState"), "incision runtime types pointer drag state");
 assert.ok(controller.includes("function controllerEvent"), "incision runtime narrows browser command events before reading detail");
-assert.ok(incisionToolsTypes.includes("applyCandidateEdit"), "incision tools declarations expose candidate edit workflow helpers");
-assert.ok(incisionToolsTypes.includes("summarizeTumorBoundary"), "incision tools declarations expose tumor boundary summaries");
-assert.ok(incisionOverlayTypes.includes("compileIncisionOverlay"), "incision overlay declarations expose live overlay compilation");
+assert.ok(incisionWorkflowToolsService.includes("export function applyCandidateEdit"), "TypeScript incision workflow service exposes candidate edit workflow helpers");
+assert.ok(incisionCandidateToolsService.includes("export function summarizeTumorBoundary"), "TypeScript incision candidate service exposes tumor boundary summaries");
+assert.ok(incisionOverlayService.includes("export function compileIncisionOverlay"), "TypeScript incision overlay service exposes live overlay compilation");
+assert.ok(incisionToolsBarrel.includes("./incisionWorkflowTools.ts"), "TypeScript incision tools barrel re-exports workflow helpers");
 assert.ok(three3dTypes.includes("./src/services/three3d"), "Three.js declarations re-export the TypeScript implementation contract");
 assert.ok(three3dService.includes("export class Head3D"), "TypeScript Three.js service exposes the 3D head renderer contract");
 assert.ok(exportPrivacyTypes.includes("auditExportPayload"), "privacy audit declarations expose browser export preflight checks");
@@ -1731,7 +1731,8 @@ assert.ok(workerClient.includes("summarizeTumorInput"), "workflow worker probe e
 assert.ok(!workerClient.includes("planIncisionWorkflow"), "workflow worker client stays light for dashboard probes");
 assert.ok(workflowPlanner.includes("planIncisionWithWorkflowFallback"), "workflow planner centralizes worker planning and fallback");
 assert.ok(workflowPlanner.includes("client.api.planIncision"), "workflow planner delegates planning to the Comlink worker");
-assert.ok(workflowPlanner.includes("planIncisionWorkflow(request)"), "workflow planner keeps deterministic main-thread fallback");
+assert.ok(workflowPlanner.includes("deterministicWorkflowRequest(request)"), "workflow planner normalizes requests before deterministic main-thread fallback");
+assert.ok(workflowPlanner.includes("planIncisionWorkflow(deterministicWorkflowRequest(request))"), "workflow planner keeps deterministic main-thread fallback");
 assert.ok(workflowWorkerProbeHook.includes("createWorkflowWorkerClient"), "React workflow worker probe hook owns worker client creation");
 assert.ok(workflowWorkerProbeHook.includes("probeWorkflowWorkerClient"), "React workflow worker probe hook consumes the shared worker probe service");
 assert.ok(workflowWorkerProbeHook.includes("client.dispose()"), "React workflow worker probe hook disposes the worker on unmount");

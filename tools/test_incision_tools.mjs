@@ -1,7 +1,7 @@
-// Dependency-free tests for web/incision_tools.js.
+// Dependency-free tests for the TypeScript incision workflow services.
 import fs from "node:fs";
 
-import { __incisionToolsForTests as T } from "../web/incision_tools.js";
+import { __incisionToolsForTests as T } from "../web/src/services/incisionTools.ts";
 
 let passed = 0;
 function ok(cond, msg) {

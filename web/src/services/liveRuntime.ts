@@ -1,7 +1,7 @@
 // Live workbench runtime: wires DOM events and model bootstrap under the React route adapter.
 import { bindDom, clearDomBinding, els } from "../../dom.js";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "../../canvas_fit.js";
-import { validateIncisionOverlay } from "../../incision_overlay.js";
+import { validateIncisionOverlay } from "./incisionOverlay.ts";
 import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, stopTwin, toggleTwinHead, toggleTwinTexture } from "../../mode3d.js";
 import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "../../pipeline.js";
 import { adjustFocusZoom, buildZoomCards } from "../../render.js";

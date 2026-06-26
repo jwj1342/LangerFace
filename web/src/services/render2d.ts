@@ -12,8 +12,8 @@ import {
   visibleTriangles,
 } from "../../geometry.js";
 import type { HandMask, MappedAtlasLine, Point2, Triangle, Vec3 } from "../../geometry.js";
-import { mapSurfaceRefs, measureIncisionOverlayJitter, measureIncisionOverlayRegistration } from "../../incision_overlay.js";
-import type { SurfaceRef } from "../../incision_overlay.js";
+import { mapSurfaceRefs, measureIncisionOverlayJitter, measureIncisionOverlayRegistration } from "./incisionOverlay.ts";
+import type { SurfaceRef } from "./incisionOverlay.ts";
 import { countMetric, recordMetricSample, setDiagnosticSection } from "../../logger.js";
 import { modelState, renderState, sourceState } from "../../state.js";
 import { setIncisionOverlayQa, setLive } from "../../ui.js";

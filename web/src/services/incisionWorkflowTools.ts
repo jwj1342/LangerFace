@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   AGENT_REACT_PLAN_STEP_DEFINITIONS,
   AGENT_TRACE_GATE_REQUIRED,
@@ -6,6 +5,9 @@ import {
   TOOL_SCHEMAS,
 } from "./incisionToolRules.ts";
 import {
+  type AnyRecord,
+  type DirectionResult,
+  type Vec3,
   add,
   annotateCandidateSensitiveDistances,
   classifyRegion,
@@ -18,6 +20,9 @@ import {
   versionedEditProvenance,
 } from "./incisionToolCore.ts";
 import {
+  type IncisionCandidate,
+  type IncisionRules,
+  type TumorInput,
   boundaryProfile,
   evaluateGuardrails,
   freeMarginDistanceThresholdMm,
@@ -33,17 +38,17 @@ import {
   validateTumor,
 } from "./incisionCandidateTools.ts";
 
-export function rotateInPlane(axis, normal, angleDeg) {
+export function rotateInPlane(axis: Vec3, normal: Vec3, angleDeg: number): Vec3 {
   const a = angleDeg * Math.PI / 180;
   const p = tangentPerp(axis, normal);
   return norm(add(mul(axis, Math.cos(a)), mul(p, Math.sin(a))));
 }
 
-function clonePlan(plan) {
+function clonePlan<T>(plan: T): T {
   return JSON.parse(JSON.stringify(plan));
 }
 
-function editedTraceStep(edit, candidate, guardrails) {
+function editedTraceStep(edit: AnyRecord, candidate: IncisionCandidate, guardrails: AnyRecord): AnyRecord {
   return {
     summary: "医生调整候选参数，系统重新计算几何并复跑 guardrails。",
     action: "clinician_edit_candidate",
@@ -55,7 +60,15 @@ function editedTraceStep(edit, candidate, guardrails) {
   };
 }
 
-function buildEditedFusiform(base, center, axis, normal, unitsPerMm, edit, tumorInput = null) {
+function buildEditedFusiform(
+  base: IncisionCandidate,
+  center: Vec3,
+  axis: Vec3,
+  normal: Vec3,
+  unitsPerMm: number,
+  edit: AnyRecord,
+  tumorInput: TumorInput | null = null,
+): IncisionCandidate {
   const tumor = tumorInput ? validateTumor(tumorInput) : null;
   const widthAxis = tangentPerp(axis, normal);
   const lengthMm = Math.max(1, Number(base.length_mm || 1) * Number(edit.length_scale || 1));
@@ -120,7 +133,13 @@ function buildEditedFusiform(base, center, axis, normal, unitsPerMm, edit, tumor
   };
 }
 
-export function applyCandidateEdit(plan, edit = {}, normal = [0, 0, 1], unitsPerMm = 1, verts = null) {
+export function applyCandidateEdit(
+  plan: AnyRecord,
+  edit: AnyRecord = {},
+  normal: Vec3 = [0, 0, 1],
+  unitsPerMm = 1,
+  verts: Vec3[] | null = null,
+): AnyRecord {
   const out = clonePlan(plan);
   const base = clonePlan(plan.original_candidate || plan.candidate);
   const axis0 = norm(base.axis || [1, 0, 0]);
@@ -144,7 +163,7 @@ export function applyCandidateEdit(plan, edit = {}, normal = [0, 0, 1], unitsPer
   const sessionHasEdits = sessionHistory.some((entry) => editRecordIsActive(entry) || entry.interaction === "control_change");
   if (!editRecordIsActive(editRecord) && !sessionHasEdits) return out;
 
-  let candidate;
+  let candidate: IncisionCandidate;
   if (base.type === "linear") {
     const lengthMm = Math.max(1, Number(base.length_mm || 1) * editRecord.length_scale);
     const diameterCoverageRequiredMm = Number(base.metrics?.diameter_coverage_required_mm || plan.tumor?.diameter_mm || 0);
@@ -177,7 +196,7 @@ export function applyCandidateEdit(plan, edit = {}, normal = [0, 0, 1], unitsPer
   out.original_candidate = plan.original_candidate || plan.candidate;
   out.candidate = candidate;
   out.guardrails = evaluateGuardrails(candidate, out.anatomy);
-  out.trace = (out.trace || []).filter((step) => step.action !== "clinician_edit_candidate");
+  out.trace = (out.trace || []).filter((step: AnyRecord) => step.action !== "clinician_edit_candidate");
   if (
     editRecord.angle_offset_deg !== 0 ||
     editRecord.length_scale !== 1 ||
@@ -196,18 +215,24 @@ export function applyCandidateEdit(plan, edit = {}, normal = [0, 0, 1], unitsPer
   return attachWorkflowAudit(out);
 }
 
-function shortCandidate(candidate) {
+function shortCandidate(candidate: AnyRecord): AnyRecord {
   const keys = ["id", "type", "tumor_kind", "center", "axis", "endpoints", "length_mm", "width_mm", "tip_angle_deg", "direction_confidence", "metrics"];
   return Object.fromEntries(keys.filter((k) => k in candidate).map((k) => [k, candidate[k]]));
 }
 
-function fallbackSummary(tumor, candidate, guardrails) {
+function fallbackSummary(tumor: TumorInput, candidate: IncisionCandidate, guardrails: AnyRecord): string {
   const kind = candidate.type === "linear" ? "皮下线性切口" : "皮表梭形切口";
   const status = guardrails.passed ? "guardrails 通过" : "guardrails 需要医生复核";
   return `已生成${kind}候选：长轴沿局部 RSTL，病灶直径 ${tumor.diameter_mm.toFixed(1)} mm，${status}。`;
 }
 
-export function previewIncisionOnFace(tumor, candidate, anatomy, guardrails, variant = "baseline") {
+export function previewIncisionOnFace(
+  tumor: TumorInput,
+  candidate: IncisionCandidate,
+  anatomy: AnyRecord,
+  guardrails: AnyRecord,
+  variant = "baseline",
+): AnyRecord {
   const candidatePoints = candidate.polyline || candidate.outline || candidate.endpoints || [];
   const pointCount = Array.isArray(candidatePoints) ? candidatePoints.length : 0;
   const boundaryCount = Array.isArray(tumor.boundary) ? tumor.boundary.length : 0;
@@ -234,21 +259,25 @@ export function previewIncisionOnFace(tumor, candidate, anatomy, guardrails, var
   };
 }
 
-export function traceStep(action, input, observation, summary) {
+export function traceStep(action: string, input: AnyRecord, observation: unknown, summary: string): AnyRecord {
   return { summary, action, input, observation };
 }
 
-function traceActions(trace = []) {
+function traceActions(trace: AnyRecord[] = []): string[] {
   return (trace || []).map((step) => String(step?.action || "")).filter(Boolean);
 }
 
-function indexesForActions(actions = [], accepted = new Set()) {
+function indexesForActions(actions: string[] = [], accepted: Set<string> = new Set()): number[] {
   return actions
     .map((action, index) => (accepted.has(action) ? index : -1))
     .filter((index) => index >= 0);
 }
 
-export function agentTraceGate(resultOrTrace = {}, candidateArg = null, mode = "single_turn_react_with_deterministic_tools") {
+export function agentTraceGate(
+  resultOrTrace: AnyRecord | AnyRecord[] = {},
+  candidateArg: IncisionCandidate | null = null,
+  mode = "single_turn_react_with_deterministic_tools",
+): AnyRecord {
   const trace = Array.isArray(resultOrTrace) ? resultOrTrace : resultOrTrace?.trace || [];
   const candidate = candidateArg || (Array.isArray(resultOrTrace) ? null : resultOrTrace?.candidate);
   const actions = traceActions(trace);
@@ -284,7 +313,7 @@ export function agentTraceGate(resultOrTrace = {}, candidateArg = null, mode = "
 }
 
 export function agentReactPlan(
-  resultOrTrace = {},
+  resultOrTrace: AnyRecord | AnyRecord[] = {},
   {
     candidateCount = 0,
     comparisonReady = false,
@@ -292,6 +321,13 @@ export function agentReactPlan(
     retriedFailures = [],
     recoveredFailures = [],
     mode = "single_turn_react_multi_candidate_with_deterministic_tools",
+  }: {
+    candidateCount?: number;
+    comparisonReady?: boolean;
+    traceGate?: AnyRecord | null;
+    retriedFailures?: AnyRecord[];
+    recoveredFailures?: AnyRecord[];
+    mode?: string;
   } = {},
 ) {
   const trace = Array.isArray(resultOrTrace) ? resultOrTrace : resultOrTrace?.trace || [];
@@ -354,7 +390,7 @@ export function agentReactPlan(
   };
 }
 
-function reactPlanStepIdsByTraceIndex(reactPlan = {}) {
+function reactPlanStepIdsByTraceIndex(reactPlan: AnyRecord = {}): Map<number, string[]> {
   const byIndex = new Map();
   for (const step of reactPlan.steps || []) {
     if (!step?.id) continue;
@@ -368,18 +404,18 @@ function reactPlanStepIdsByTraceIndex(reactPlan = {}) {
 }
 
 export function agentExecutionEvents(
-  resultOrTrace = {},
+  resultOrTrace: AnyRecord | AnyRecord[] = {},
   {
     traceGate = null,
     reactPlan = null,
     mode = "single_turn_react_multi_candidate_with_deterministic_tools",
-  } = {},
-) {
+  }: { traceGate?: AnyRecord | null; reactPlan?: AnyRecord | null; mode?: string } = {},
+): AnyRecord {
   const trace = Array.isArray(resultOrTrace) ? resultOrTrace : resultOrTrace?.trace || [];
   const gate = traceGate || agentTraceGate(resultOrTrace);
   const plan = reactPlan || agentReactPlan(resultOrTrace, { traceGate: gate });
   const stepIdsByTraceIndex = reactPlanStepIdsByTraceIndex(plan);
-  const events = [{
+  const events: AnyRecord[] = [{
     index: 0,
     event: "execution_started",
     status: "started",
@@ -419,7 +455,7 @@ export function agentExecutionEvents(
     status: plan.passed ? "passed" : "failed",
     trace_index: null,
     action: "agent_react_plan",
-    plan_step_ids: (plan.steps || []).map((step) => step.id).filter(Boolean),
+    plan_step_ids: (plan.steps || []).map((step: AnyRecord) => step.id).filter(Boolean),
     message: `ReAct 审计计划已评估：${plan.completed_step_count || 0}/${plan.step_count || 0} 步完成。`,
     failed_step_count: Number(plan.failed_step_count || 0),
   });
@@ -436,7 +472,11 @@ export function agentExecutionEvents(
   };
 }
 
-export function rotateDirectionVariant(direction, angleOffsetDeg, normal = [0, 0, 1]) {
+export function rotateDirectionVariant(
+  direction: Partial<DirectionResult> & AnyRecord,
+  angleOffsetDeg: number,
+  normal: Vec3 = [0, 0, 1],
+): DirectionResult {
   const vector = rotateInPlane(norm(direction.vector || [1, 0, 0]), normal, Number(angleOffsetDeg || 0));
   const angle = Math.atan2(vector[1], vector[0]) * 180 / Math.PI;
   const reasons = [
@@ -455,7 +495,14 @@ export function rotateDirectionVariant(direction, angleOffsetDeg, normal = [0, 0
   };
 }
 
-export function candidateForDirection(tumor, direction, unitsPerMm, verts, normal = [0, 0, 1], rules = DEFAULT_RULES) {
+export function candidateForDirection(
+  tumor: TumorInput,
+  direction: DirectionResult,
+  unitsPerMm: number,
+  verts: Vec3[],
+  normal: Vec3 = [0, 0, 1],
+  rules: IncisionRules = DEFAULT_RULES,
+): { toolName: string; candidate: IncisionCandidate } {
   const toolName = tumor.kind === "subcutaneous" ? "linear_subcutaneous_incision" : "fusiform_cutaneous_incision";
   const candidate = tumor.kind === "subcutaneous"
     ? generateLinearIncision(tumor, direction, unitsPerMm, rules)
@@ -469,7 +516,10 @@ export function candidateForDirection(tumor, direction, unitsPerMm, verts, norma
   return { toolName, candidate };
 }
 
-export function workflowAudit(result, { retriedFailures = [], recoveredFailures = [] } = {}) {
+export function workflowAudit(
+  result: AnyRecord,
+  { retriedFailures = [], recoveredFailures = [] }: { retriedFailures?: AnyRecord[]; recoveredFailures?: AnyRecord[] } = {},
+): AnyRecord {
   const candidateRecords = Array.isArray(result.candidate_alternatives)
     ? result.candidate_alternatives.filter((record) => record?.candidate)
     : [];
@@ -506,7 +556,7 @@ export function workflowAudit(result, { retriedFailures = [], recoveredFailures 
   };
 }
 
-export function attachWorkflowAudit(result, opts = {}) {
+export function attachWorkflowAudit(result: AnyRecord, opts: { retriedFailures?: AnyRecord[]; recoveredFailures?: AnyRecord[] } = {}): AnyRecord {
   const audit = workflowAudit(result, opts);
   result.agent_trace_gate = audit.traceGate;
   result.agent_react_plan = audit.reactPlan;
@@ -515,7 +565,19 @@ export function attachWorkflowAudit(result, opts = {}) {
   return result;
 }
 
-export function planIncisionDeterministic({ tumor: tumorInput, verts, tris, atlas, normal = [0, 0, 1] }) {
+export function planIncisionDeterministic({
+  tumor: tumorInput,
+  verts,
+  tris,
+  atlas,
+  normal = [0, 0, 1],
+}: {
+  tumor: Partial<TumorInput> & AnyRecord;
+  verts: Vec3[];
+  tris: Vec3[];
+  atlas: AnyRecord;
+  normal?: Vec3;
+}): AnyRecord {
   const tumor = validateTumor(tumorInput);
   const tumorQuality = summarizeTumorInputQuality(tumor);
   const anatomy = classifyRegion(tumor.center, verts);
@@ -581,7 +643,18 @@ export function planIncisionWorkflow({
   normal = [0, 0, 1],
   angleOffsetsDeg = [-10, 0, 10],
   rules = DEFAULT_RULES,
-} = {}) {
+}: {
+  tumor?: Partial<TumorInput> & AnyRecord;
+  verts?: Vec3[];
+  tris?: Vec3[];
+  atlas?: AnyRecord;
+  normal?: Vec3;
+  angleOffsetsDeg?: number[];
+  rules?: IncisionRules;
+} = {}): AnyRecord {
+  if (!tumorInput || !verts || !tris || !atlas) {
+    throw new Error("planIncisionWorkflow requires tumor, verts, tris, and atlas");
+  }
   const result = planIncisionDeterministic({ tumor: tumorInput, verts, tris, atlas, normal });
   result.agent_trace_mode = "single_turn_react_multi_candidate_with_deterministic_tools";
   const tumor = result.tumor;
@@ -603,9 +676,9 @@ export function planIncisionWorkflow({
     "探索附近方向偏移，供审阅面板比较确定性候选。",
   ));
 
-  const candidateRecords = [];
-  const retriedFailures = [];
-  const recoveredFailures = [];
+  const candidateRecords: AnyRecord[] = [];
+  const retriedFailures: AnyRecord[] = [];
+  const recoveredFailures: AnyRecord[] = [];
   for (const variant of directionVariants) {
     const offset = Number(variant.angle_offset_deg || 0);
     const variantId = Math.abs(offset) < 1e-9 ? "baseline" : `offset_${offset > 0 ? "+" : ""}${Math.round(offset)}deg`;
@@ -656,14 +729,14 @@ export function planIncisionWorkflow({
           variant: variantId,
           angle_offset_deg: offset,
           attempt: 1,
-          error: err.message,
+          error: err instanceof Error ? err.message : String(err),
           retry: "retry_same_deterministic_tool_once",
           max_attempts: 1,
         };
         retriedFailures.push(retry);
         result.trace.push(traceStep(
           "retry_tool_failure",
-          { tool: retry.tool, variant: variantId, error: err.message, attempt: 1 },
+          { tool: retry.tool, variant: variantId, error: err instanceof Error ? err.message : String(err), attempt: 1 },
           retry,
           "确定性工具失败后重试一次，再决定是否跳过该备选。",
         ));
@@ -702,14 +775,14 @@ export function planIncisionWorkflow({
             tool: retry.tool,
             variant: variantId,
             angle_offset_deg: offset,
-            error: retryErr.message,
-            previous_errors: [err.message],
+            error: retryErr instanceof Error ? retryErr.message : String(retryErr),
+            previous_errors: [err instanceof Error ? err.message : String(err)],
             recovery: "skipped_failed_variant_and_kept_other_candidates",
           };
           recoveredFailures.push(failure);
           result.trace.push(traceStep(
             "recover_tool_failure",
-            { tool: retry.tool, variant: variantId, error: retryErr.message },
+            { tool: retry.tool, variant: variantId, error: retryErr instanceof Error ? retryErr.message : String(retryErr) },
             failure,
             "记录确定性工具失败并继续比较剩余候选。",
           ));
@@ -754,12 +827,12 @@ export function planIncisionWorkflow({
   return attachWorkflowAudit(result, { retriedFailures, recoveredFailures });
 }
 
-function finiteOr(value, fallback = 0) {
+function finiteOr(value: unknown, fallback = 0): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
 
-function warningSeverityCounts(guardrails = {}) {
+function warningSeverityCounts(guardrails: AnyRecord = {}): { high: number; medium: number; low: number } {
   const warnings = Array.isArray(guardrails.warnings) ? guardrails.warnings : [];
   return {
     high: warnings.filter((w) => w.severity === "high").length,
@@ -768,8 +841,22 @@ function warningSeverityCounts(guardrails = {}) {
   };
 }
 
-function comparisonReasons({ severity, metrics, reviewStatus, sensitiveDistance, sensitiveThreshold, candidateType }) {
-  const reasons = [];
+function comparisonReasons({
+  severity,
+  metrics,
+  reviewStatus,
+  sensitiveDistance,
+  sensitiveThreshold,
+  candidateType,
+}: {
+  severity: { high: number; medium: number; low: number };
+  metrics: AnyRecord;
+  reviewStatus: string;
+  sensitiveDistance: number;
+  sensitiveThreshold: number;
+  candidateType: string;
+}): string[] {
+  const reasons: string[] = [];
   if (reviewStatus === "rejected_by_clinician") reasons.push("医生已否决");
   if (severity.high) reasons.push(`${severity.high} 个 high guardrail`);
   if (severity.medium) reasons.push(`${severity.medium} 个 medium guardrail`);
@@ -789,7 +876,7 @@ function comparisonReasons({ severity, metrics, reviewStatus, sensitiveDistance,
   return reasons.length ? reasons : ["工程指标未见额外扣分"];
 }
 
-export function compareCandidateRecords(records = [], rules = DEFAULT_RULES) {
+export function compareCandidateRecords(records: AnyRecord[] = [], rules: IncisionRules = DEFAULT_RULES): AnyRecord[] {
   const cfg = rules?.guardrails || DEFAULT_RULES.guardrails;
   return (records || [])
     .filter(Boolean)

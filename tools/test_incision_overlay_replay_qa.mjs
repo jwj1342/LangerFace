@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildIncisionOverlayReplayQa, replayQaCsvRows } from "./audit_incision_overlay_replay.mjs";
-import { __incisionOverlayForTests as T } from "../web/incision_overlay.js";
+import { __incisionOverlayForTests as T } from "../web/src/services/incisionOverlay.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 

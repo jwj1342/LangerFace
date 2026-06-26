@@ -831,11 +831,11 @@ axis_coverage_deficit_mm = max(0, axis_coverage_required_mm - length_mm)
 | 模块 | 计划位置 | 职责 |
 | --- | --- | --- |
 | 临床规则库 | `assets/clinical_rules_face_incision.json` | 区域规则、优先级、例外和审核状态 |
-| 面部分区 | `web/incision_tools.js` | 点位到临床区域和美学亚单位的映射，输出分区低置信原因 |
-| RSTL 方向服务 | `web/incision_tools.js` | 查询局部方向、置信度和依据 |
-| 肿物模型 | `web/incision_tools.js`, `web/incision_agent*.js` | 表达皮下/皮表肿物约束 |
-| 切口生成 | `web/incision_tools.js` | 线性和梭形候选生成 |
-| guardrails | `web/incision_tools.js` | 敏感结构风险提示 |
+| 面部分区 | `web/src/services/incisionToolCore.ts` | 点位到临床区域和美学亚单位的映射，输出分区低置信原因 |
+| RSTL 方向服务 | `web/src/services/incisionToolCore.ts` | 查询局部方向、置信度和依据 |
+| 肿物模型 | `web/src/services/incisionCandidateTools.ts`, `web/src/services/tumorInput.ts` | 表达皮下/皮表肿物约束 |
+| 切口生成 | `web/src/services/incisionCandidateTools.ts` | 线性和梭形候选生成 |
+| guardrails | `web/src/services/incisionCandidateTools.ts` | 敏感结构风险提示 |
 | 审阅 UI | `web/incision*.js` | 医生编辑、覆盖、确认和导出 |
 | 验证指标 | `docs/VALIDATION.md` | 角度误差、稳定性、医生接受率等 |
 

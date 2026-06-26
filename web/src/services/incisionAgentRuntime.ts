@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import { compileIncisionOverlay } from "../../incision_overlay.js";
+import { compileIncisionOverlay } from "./incisionOverlay.ts";
 import {
   applyCandidateEdit,
   agentTraceGate,
@@ -9,8 +9,8 @@ import {
   summarizeTumorBoundary,
   summarizeTumorInputQuality,
   unitsPerMmFromVertices,
-} from "../../incision_tools.js";
-import type { TumorInput } from "../../incision_tools.js";
+} from "./incisionTools.ts";
+import type { TumorInput } from "./incisionCandidateTools.ts";
 import { normalizeProviderBaseUrl, testProviderConnection, type ProviderConfig } from "./llmProvider";
 import {
   INCISION_CONTROLLER_STATE_EVENT,
@@ -1539,7 +1539,7 @@ function renderAgentGate(result: DynamicRecord) {
   const gate = agentTraceGate(result);
   const observedActions = gate.observed_actions || [];
   els.agentGate.classList.toggle("warn", !gate.passed);
-  const missing = gate.missing_actions.map((item) => item.label).join("、");
+  const missing = gate.missing_actions.map((item: DynamicRecord) => item.label).join("、");
   const status = gate.passed ? "通过" : `未通过${missing ? `；缺 ${missing}` : ""}`;
   els.agentGate.textContent = `Agent 工具门控：${status} · ${observedActions.length} 个动作；完整 workflow trace 已写入 DevTools Console。`;
   els.agentGate.title = `observed_actions=${observedActions.join(", ")}`;

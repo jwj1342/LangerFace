@@ -7,7 +7,7 @@ import {
   measureIncisionOverlayJitter,
   measureIncisionOverlayRegistration,
   validateIncisionOverlay,
-} from "../web/incision_overlay.js";
+} from "../web/src/services/incisionOverlay.ts";
 
 const REPLAY_QA_SCHEMA = "incision-overlay-replay-qa/v0.1";
 

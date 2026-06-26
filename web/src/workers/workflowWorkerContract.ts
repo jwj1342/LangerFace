@@ -2,7 +2,7 @@ import type {
   planIncisionWorkflow,
   summarizeTumorInputQuality,
   TumorInput,
-} from "../../incision_tools.js";
+} from "../services/incisionTools.ts";
 
 export type WorkflowVec3 = [number, number, number];
 export type WorkflowTriangle = [number, number, number];

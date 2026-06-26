@@ -1,6 +1,6 @@
 // Dependency-free tests for canonical incision overlay projection.
 import assert from "node:assert/strict";
-import { __incisionOverlayForTests as T } from "../web/incision_overlay.js";
+import { __incisionOverlayForTests as T } from "../web/src/services/incisionOverlay.ts";
 
 const verts = [
   [0, 0, 0],

@@ -3,7 +3,8 @@ import * as Comlink from "comlink";
 import {
   planIncisionWorkflow,
   summarizeTumorInputQuality,
-} from "../../incision_tools.js";
+} from "../services/incisionTools.ts";
+import type { AnyRecord } from "../services/incisionToolCore.ts";
 import type { WorkflowWorkerApi } from "./workflowWorkerContract";
 
 const api: WorkflowWorkerApi = {
@@ -26,7 +27,7 @@ const api: WorkflowWorkerApi = {
       tumor: request.tumor,
       verts: request.verts,
       tris: request.tris,
-      atlas: request.atlas,
+      atlas: request.atlas as AnyRecord,
       normal: request.normal,
       angleOffsetsDeg: request.angleOffsetsDeg,
     });

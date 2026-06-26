@@ -220,7 +220,7 @@ npm run dev
 ```
 
 生产构建（Vercel）以 `/app/*` React SPA 为唯一应用入口；`annotate.html` 仅复制为 `/app/annotate` 的兼容跳转页，
-不参与 Rollup 多入口构建。配置见 [`web/vite.config.js`](../web/vite.config.js)。
+不参与 Rollup 多入口构建。配置见 [`web/vite.config.ts`](../web/vite.config.ts)。
 
 ### 标注工作流
 
@@ -330,12 +330,12 @@ Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部
 | 模块 | 计划位置 | 职责 | Issue |
 |---|---|---|---|
 | 临床规则库 | `assets/clinical_rules_face_incision.json` | 结构化区域规则、优先级、例外、审核状态 | #11 |
-| 面部分区 / 亚单位 | `web/incision_tools.js` | 把点或肿物中心映射到临床区域 / 美学亚单位，并输出 bbox/边界/过渡区/敏感游离缘相关 `confidence_reasons` | #12 |
-| RSTL 方向服务 | `web/incision_tools.js` | 查询局部方向、置信度和依据；离散度使用无向轴角，并输出 atlas 为空、支持点过远/过少、角度冲突等 `confidence_reasons` | #13 |
-| 肿物模型 | `web/incision_tools.js`, `web/incision_agent*.js` | 表示皮下 / 皮表肿物输入、单位与输入质量摘要 | #14 |
-| 皮下线性切口 | `web/incision_tools.js` | 基于超声直径和 RSTL 方向生成线性候选 | #15 |
-| 皮表梭形切口 | `web/incision_tools.js` | 生成梭形候选，约束比例、尖端角和平滑对称 | #16 |
-| 敏感结构 guardrails | `web/incision_tools.js` | 下睑、唇红缘、鼻翼、鼻尖、口角等风险提示、分结构 draft 距离阈值、`protective_direction` 保护性方向建议和方向例外 | #17 |
+| 面部分区 / 亚单位 | `web/src/services/incisionToolCore.ts` | 把点或肿物中心映射到临床区域 / 美学亚单位，并输出 bbox/边界/过渡区/敏感游离缘相关 `confidence_reasons` | #12 |
+| RSTL 方向服务 | `web/src/services/incisionToolCore.ts` | 查询局部方向、置信度和依据；离散度使用无向轴角，并输出 atlas 为空、支持点过远/过少、角度冲突等 `confidence_reasons` | #13 |
+| 肿物模型 | `web/src/services/incisionCandidateTools.ts`, `web/src/services/tumorInput.ts` | 表示皮下 / 皮表肿物输入、单位与输入质量摘要 | #14 |
+| 皮下线性切口 | `web/src/services/incisionCandidateTools.ts` | 基于超声直径和 RSTL 方向生成线性候选 | #15 |
+| 皮表梭形切口 | `web/src/services/incisionCandidateTools.ts` | 生成梭形候选，约束比例、尖端角和平滑对称 | #16 |
+| 敏感结构 guardrails | `web/src/services/incisionCandidateTools.ts` | 下睑、唇红缘、鼻翼、鼻尖、口角等风险提示、分结构 draft 距离阈值、`protective_direction` 保护性方向建议和方向例外 | #17 |
 | 医生审阅 UI | `web/incision*.js` | 候选解释、编辑、版本化 provenance、覆盖、导出 | #18 |
 | AR / 视频叠加 | `web/render.js`, `web/projection3d.js` | 把肿物和切口候选投射回照片、视频、实时视图 | #19 |
 | 验证指标 | `docs/VALIDATION.md` | 角度误差、稳定性、医生接受率、失败分类 | #20 |

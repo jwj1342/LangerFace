@@ -1,6 +1,9 @@
-// @ts-nocheck
 import { DEFAULT_RULES } from "./incisionToolRules.ts";
 import {
+  type AnyRecord,
+  type DirectionResult,
+  type Vec2,
+  type Vec3,
   add,
   annotateCandidateSensitiveDistances,
   clamp,
@@ -12,21 +15,40 @@ import {
   sub,
 } from "./incisionToolCore.ts";
 
-export function normalizeTumorInput(tumor) {
-  if (!["subcutaneous", "cutaneous"].includes(tumor.kind)) throw new Error("tumor.kind must be subcutaneous or cutaneous");
+export interface TumorInput extends AnyRecord {
+  kind: "subcutaneous" | "cutaneous";
+  center: Vec3;
+  diameter_mm: number;
+  depth_mm: number | null;
+  margin_mm: number;
+  boundary: Vec3[];
+  boundary_mode: string;
+  boundary_source: string;
+  source: string;
+  author: string;
+  units: string;
+}
+
+export type IncisionRules = AnyRecord;
+export type IncisionCandidate = AnyRecord;
+
+export function normalizeTumorInput(tumor: Partial<TumorInput> & AnyRecord): TumorInput {
+  const kind = tumor.kind;
+  if (kind !== "subcutaneous" && kind !== "cutaneous") throw new Error("tumor.kind must be subcutaneous or cutaneous");
   if (!Array.isArray(tumor.center) || tumor.center.length !== 3) throw new Error("tumor.center must be a 3D point");
-  if (!(tumor.diameter_mm > 0)) throw new Error("tumor.diameter_mm must be positive");
+  const diameterMm = Number(tumor.diameter_mm);
+  if (!(diameterMm > 0)) throw new Error("tumor.diameter_mm must be positive");
   return {
-    kind: tumor.kind,
-    center: tumor.center.map(Number),
-    diameter_mm: Number(tumor.diameter_mm),
+    kind,
+    center: tumor.center.map(Number) as Vec3,
+    diameter_mm: diameterMm,
     depth_mm: tumor.depth_mm == null ? null : Number(tumor.depth_mm),
     margin_mm: Number(tumor.margin_mm || 0),
     boundary: Array.isArray(tumor.boundary)
       ? tumor.boundary
-        .filter((p) => Array.isArray(p) && p.length === 3)
-        .map((p) => p.map(Number))
-        .filter((p) => p.every(Number.isFinite))
+        .filter((p: unknown) => Array.isArray(p) && p.length === 3)
+        .map((p: number[]) => p.map(Number) as Vec3)
+        .filter((p: Vec3) => p.every(Number.isFinite))
       : [],
     boundary_mode: tumor.boundary_mode || "center_diameter",
     boundary_source: tumor.boundary_source || "manual",
@@ -36,13 +58,13 @@ export function normalizeTumorInput(tumor) {
   };
 }
 
-export function validateTumor(tumor) {
+export function validateTumor(tumor: Partial<TumorInput> & AnyRecord): TumorInput {
   return normalizeTumorInput(tumor);
 }
 
-export function summarizeTumorInputQuality(tumorInput) {
+export function summarizeTumorInputQuality(tumorInput: Partial<TumorInput> & AnyRecord): AnyRecord {
   const tumor = validateTumor(tumorInput);
-  const warnings = [];
+  const warnings: AnyRecord[] = [];
   if (!tumor.author) {
     warnings.push({
       code: "missing_tumor_author",
@@ -98,11 +120,16 @@ export function summarizeTumorInputQuality(tumorInput) {
   };
 }
 
-export function generateLinearIncision(tumorInput, direction, unitsPerMm, rules = DEFAULT_RULES) {
+export function generateLinearIncision(
+  tumorInput: Partial<TumorInput> & AnyRecord,
+  direction: Partial<DirectionResult> & AnyRecord,
+  unitsPerMm: number,
+  rules: IncisionRules = DEFAULT_RULES,
+): IncisionCandidate {
   const tumor = validateTumor(tumorInput);
   if (tumor.kind !== "subcutaneous") throw new Error("linear incision requires subcutaneous tumor");
   const cfg = rules.linear_subcutaneous;
-  const axis = norm(direction.vector);
+  const axis = norm(direction.vector || [1, 0, 0]);
   const targetLengthMm = tumor.diameter_mm * cfg.length_multiplier;
   const lengthMm = clamp(targetLengthMm, cfg.min_length_mm, cfg.max_length_mm);
   const diameterCoverageDeficitMm = Math.max(0, tumor.diameter_mm - lengthMm);
@@ -140,14 +167,14 @@ export function generateLinearIncision(tumorInput, direction, unitsPerMm, rules 
   };
 }
 
-export function tangentPerp(axis, normal) {
+export function tangentPerp(axis: Vec3, normal: ArrayLike<number> | null | undefined): Vec3 {
   const n = norm(normal || [0, 0, 1]);
   let p = cross(n, axis);
   if (Math.hypot(p[0], p[1], p[2]) < 1e-9) p = [-axis[1], axis[0], 0];
   return norm(p);
 }
 
-export function polygonArea(points) {
+export function polygonArea(points: Vec2[]): number {
   if (points.length < 3) return 0;
   let s = 0;
   for (let i = 0; i < points.length; i++) {
@@ -157,11 +184,11 @@ export function polygonArea(points) {
   return Math.abs(s) * 0.5;
 }
 
-function orientation(a, b, c) {
+function orientation(a: Vec2, b: Vec2, c: Vec2): number {
   return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
 }
 
-function onSegment(a, b, c) {
+function onSegment(a: Vec2, b: Vec2, c: Vec2): boolean {
   const eps = 1e-9;
   return (
     Math.min(a[0], c[0]) - eps <= b[0] && b[0] <= Math.max(a[0], c[0]) + eps &&
@@ -170,7 +197,7 @@ function onSegment(a, b, c) {
   );
 }
 
-function segmentsIntersect(a, b, c, d) {
+function segmentsIntersect(a: Vec2, b: Vec2, c: Vec2, d: Vec2): boolean {
   const eps = 1e-9;
   const o1 = orientation(a, b, c);
   const o2 = orientation(a, b, d);
@@ -180,7 +207,7 @@ function segmentsIntersect(a, b, c, d) {
   return onSegment(a, c, b) || onSegment(a, d, b) || onSegment(c, a, d) || onSegment(c, b, d);
 }
 
-function polygonSelfIntersects(points) {
+function polygonSelfIntersects(points: Vec2[]): boolean {
   if (points.length < 4) return false;
   for (let i = 0; i < points.length; i++) {
     const a = points[i], b = points[(i + 1) % points.length];
@@ -193,15 +220,17 @@ function polygonSelfIntersects(points) {
   return false;
 }
 
-export function boundaryProfile(tumor, axis, perp, unitsPerMm) {
-  const boundary = (tumor.boundary || []).filter((p) => Array.isArray(p) && p.length === 3).map((p) => p.map(Number));
+export function boundaryProfile(tumor: TumorInput, axis: Vec3, perp: Vec3, unitsPerMm: number): AnyRecord | null {
+  const boundary = (tumor.boundary || [])
+    .filter((p: unknown) => Array.isArray(p) && p.length === 3)
+    .map((p: number[]) => p.map(Number) as Vec3);
   if (boundary.length < 3 || !(unitsPerMm > 0)) return null;
-  const center = boundary.reduce((acc, p) => add(acc, p), [0, 0, 0]).map((v) => v / boundary.length);
-  const projected = [];
+  const center = boundary.reduce((acc, p) => add(acc, p), [0, 0, 0] as Vec3).map((v) => v / boundary.length) as Vec3;
+  const projected: Vec2[] = [];
   let maxAxis = 0, maxPerp = 0;
   for (const p of boundary) {
     const d = sub(p, center);
-    const q = [dot(d, axis), dot(d, perp)];
+    const q: Vec2 = [dot(d, axis), dot(d, perp)];
     projected.push(q);
     maxAxis = Math.max(maxAxis, Math.abs(q[0]));
     maxPerp = Math.max(maxPerp, Math.abs(q[1]));
@@ -220,11 +249,19 @@ export function boundaryProfile(tumor, axis, perp, unitsPerMm) {
   };
 }
 
-function hermiteHalfWidth(u, tipSlope) {
+function hermiteHalfWidth(u: number, tipSlope: number): number {
   return (tipSlope - 2) * u ** 3 + (3 - 2 * tipSlope) * u ** 2 + tipSlope * u;
 }
 
-export function fusiformProfile(center, axis, perp, halfL, halfW, samples, tipAngleDeg) {
+export function fusiformProfile(
+  center: Vec3,
+  axis: Vec3,
+  perp: Vec3,
+  halfL: number,
+  halfW: number,
+  samples: number,
+  tipAngleDeg: number,
+): { upper: Vec3[]; lower: Vec3[]; metrics: AnyRecord } {
   if (!(halfL > 1e-9) || !(halfW > 1e-9)) throw new Error("fusiform profile requires positive length and width");
   const ratio = halfL / halfW;
   const targetAngle = clamp(Number(tipAngleDeg || 30), 8, 75);
@@ -233,7 +270,7 @@ export function fusiformProfile(center, axis, perp, halfL, halfW, samples, tipAn
   const shapeSlope = Math.min(requestedShapeSlope, 2.95);
   const actualSlope = shapeSlope / ratio;
   const actualAngle = Math.atan(actualSlope) * 2 * 180 / Math.PI;
-  const upper = [], lower = [];
+  const upper: Vec3[] = [], lower: Vec3[] = [];
   for (let i = 0; i <= samples; i++) {
     const t = i / samples;
     const x = (t - 0.5) * 2 * halfL;
@@ -255,14 +292,14 @@ export function fusiformProfile(center, axis, perp, halfL, halfW, samples, tipAn
   };
 }
 
-function projectToAxisPlane(points, center, axis, perp) {
+function projectToAxisPlane(points: Vec3[], center: Vec3, axis: Vec3, perp: Vec3): Vec2[] {
   return points.map((p) => {
     const d = sub(p, center);
     return [dot(d, axis), dot(d, perp)];
   });
 }
 
-function interpolateHalfWidth(x, profile) {
+function interpolateHalfWidth(x: number, profile: Vec2[]): number {
   if (x < profile[0][0]) return -(profile[0][0] - x);
   if (x > profile[profile.length - 1][0]) return -(x - profile[profile.length - 1][0]);
   for (let i = 0; i < profile.length - 1; i++) {
@@ -276,7 +313,27 @@ function interpolateHalfWidth(x, profile) {
   return 0;
 }
 
-export function outlineQualityMetrics({ upper, lower, outline, tumor, center, axis, perp, unitsPerMm, boundaryUsed }) {
+export function outlineQualityMetrics({
+  upper,
+  lower,
+  outline,
+  tumor,
+  center,
+  axis,
+  perp,
+  unitsPerMm,
+  boundaryUsed,
+}: {
+  upper: Vec3[];
+  lower: Vec3[];
+  outline: Vec3[];
+  tumor: Pick<TumorInput, "boundary"> & AnyRecord;
+  center: Vec3;
+  axis: Vec3;
+  perp: Vec3;
+  unitsPerMm: number;
+  boundaryUsed: boolean;
+}): AnyRecord {
   if (!(unitsPerMm > 0)) return {};
   const upperProjected = projectToAxisPlane(upper, center, axis, perp);
   const lowerProjected = projectToAxisPlane(lower, center, axis, perp);
@@ -314,7 +371,12 @@ export function outlineQualityMetrics({ upper, lower, outline, tumor, center, ax
   };
 }
 
-export function summarizeTumorBoundary(tumorInput, axis = [1, 0, 0], normal = [0, 0, 1], unitsPerMm = 1) {
+export function summarizeTumorBoundary(
+  tumorInput: Partial<TumorInput> & AnyRecord,
+  axis: Vec3 = [1, 0, 0],
+  normal: Vec3 = [0, 0, 1],
+  unitsPerMm = 1,
+): AnyRecord {
   const tumor = validateTumor(tumorInput);
   const a = norm(axis);
   const n = norm(normal);
@@ -357,11 +419,17 @@ export function summarizeTumorBoundary(tumorInput, axis = [1, 0, 0], normal = [0
   };
 }
 
-export function generateFusiformIncision(tumorInput, direction, unitsPerMm, normal = [0, 0, 1], rules = DEFAULT_RULES) {
+export function generateFusiformIncision(
+  tumorInput: Partial<TumorInput> & AnyRecord,
+  direction: Partial<DirectionResult> & AnyRecord,
+  unitsPerMm: number,
+  normal: Vec3 = [0, 0, 1],
+  rules: IncisionRules = DEFAULT_RULES,
+): IncisionCandidate {
   const tumor = validateTumor(tumorInput);
   if (tumor.kind !== "cutaneous") throw new Error("fusiform incision requires cutaneous tumor");
   const cfg = rules.fusiform_cutaneous;
-  const axis = norm(direction.vector);
+  const axis = norm(direction.vector || [1, 0, 0]);
   const perp = tangentPerp(axis, normal);
   const boundary = boundaryProfile(tumor, axis, perp, unitsPerMm);
   const center = boundary?.center || tumor.center;
@@ -438,14 +506,14 @@ export function generateFusiformIncision(tumorInput, direction, unitsPerMm, norm
   };
 }
 
-function asLandmarkNames(value) {
+function asLandmarkNames(value: unknown): string[] {
   if (value == null) return [];
   if (typeof value === "string") return [value];
   if (Array.isArray(value)) return value.map((item) => String(item)).filter(Boolean);
   return [String(value)];
 }
 
-export function freeMarginDistanceThresholdMm(landmarks, cfg, fallbackRegion = "unknown") {
+export function freeMarginDistanceThresholdMm(landmarks: unknown, cfg: AnyRecord, fallbackRegion = "unknown"): number {
   const fallback = Number(cfg?.free_margin_distance_warn_mm ?? 18);
   const thresholds = cfg?.free_margin_distance_thresholds_mm || {};
   const defaultThreshold = Number(thresholds.default ?? fallback);
@@ -473,21 +541,21 @@ export function freeMarginDistanceThresholdMm(landmarks, cfg, fallbackRegion = "
   return matched.length ? Math.max(...matched) : defaultThreshold;
 }
 
-function protectiveDirectionRule(names, cfg, fallbackRegion = "unknown") {
+function protectiveDirectionRule(names: unknown, cfg: AnyRecord, fallbackRegion = "unknown"): [string, AnyRecord] | null {
   const rules = cfg?.protective_direction_hints || {};
   const candidates = asLandmarkNames(names).concat([fallbackRegion]);
   for (const name of candidates) {
     const normalized = String(name).toLowerCase();
     if (rules[normalized]) return [normalized, rules[normalized]];
-    for (const [key, rule] of Object.entries(rules)) {
+    for (const [key, rule] of Object.entries(rules as AnyRecord)) {
       const normalizedKey = String(key).toLowerCase();
-      if (normalizedKey && normalized.includes(normalizedKey)) return [normalizedKey, rule];
+      if (normalizedKey && normalized.includes(normalizedKey)) return [normalizedKey, rule as AnyRecord];
     }
   }
   return null;
 }
 
-function protectiveDirectionSummary(cfg, names, fallbackRegion, source) {
+function protectiveDirectionSummary(cfg: AnyRecord, names: unknown, fallbackRegion: string, source: string): AnyRecord | null {
   const match = protectiveDirectionRule(names, cfg, fallbackRegion);
   if (!match) return null;
   const [structure, rule] = match;
@@ -502,7 +570,7 @@ function protectiveDirectionSummary(cfg, names, fallbackRegion, source) {
   };
 }
 
-export function inspectSensitiveStructures(anatomy, candidate = null, rules = DEFAULT_RULES) {
+export function inspectSensitiveStructures(anatomy: AnyRecord, candidate: IncisionCandidate | null = null, rules: IncisionRules = DEFAULT_RULES): AnyRecord {
   const cfg = rules.guardrails;
   const region = anatomy?.region || "unknown";
   const nearby = Array.isArray(anatomy?.nearby_landmarks) ? anatomy.nearby_landmarks : [];
@@ -512,7 +580,7 @@ export function inspectSensitiveStructures(anatomy, candidate = null, rules = DE
   const candidateDistance = metrics.sensitive_free_margin_min_distance_mm ?? null;
   const candidateNearest = metrics.sensitive_free_margin_nearest ?? null;
   const candidateThreshold = freeMarginDistanceThresholdMm(candidateNearest || nearby, cfg, region);
-  const warnings = [];
+  const warnings: AnyRecord[] = [];
   let protectiveNames = nearby;
   let protectiveSource = "nearby_sensitive_free_margin";
   if (cfg.sensitive_regions[region]) {
@@ -558,7 +626,13 @@ export function inspectSensitiveStructures(anatomy, candidate = null, rules = DE
   };
 }
 
-function appendProtectiveDirectionOverride(suggestedOverrides, cfg, names, fallbackRegion, sourceWarning) {
+function appendProtectiveDirectionOverride(
+  suggestedOverrides: AnyRecord[],
+  cfg: AnyRecord,
+  names: unknown,
+  fallbackRegion: string,
+  sourceWarning: string,
+): void {
   const match = protectiveDirectionRule(names, cfg, fallbackRegion);
   if (!match) return;
   const [structure, rule] = match;
@@ -577,9 +651,9 @@ function appendProtectiveDirectionOverride(suggestedOverrides, cfg, names, fallb
   });
 }
 
-export function evaluateGuardrails(candidate, anatomy, rules = DEFAULT_RULES) {
+export function evaluateGuardrails(candidate: IncisionCandidate, anatomy: AnyRecord, rules: IncisionRules = DEFAULT_RULES): AnyRecord {
   const cfg = rules.guardrails;
-  const warnings = [], suggested_overrides = [];
+  const warnings: AnyRecord[] = [], suggested_overrides: AnyRecord[] = [];
   if ((candidate.direction_confidence || 0) < cfg.low_direction_confidence) {
     const reasons = candidate.provenance?.direction_confidence_reasons || [];
     warnings.push({

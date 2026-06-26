@@ -1,4 +1,5 @@
-import { planIncisionWorkflow } from "../../incision_tools.js";
+import { planIncisionWorkflow } from "./incisionWorkflowTools.ts";
+import type { AnyRecord } from "./incisionToolCore.ts";
 import type {
   PlanIncisionRequest,
   WorkflowPlanResult,
@@ -34,6 +35,13 @@ export function workflowRuntimeStatus(executor: WorkflowPlanExecutor, error: unk
   };
 }
 
+function deterministicWorkflowRequest(request: PlanIncisionRequest) {
+  return {
+    ...request,
+    atlas: request.atlas as AnyRecord,
+  };
+}
+
 export async function planIncisionWithWorkflowFallback({
   client,
   request,
@@ -53,7 +61,7 @@ export async function planIncisionWithWorkflowFallback({
       };
     } catch (error) {
       client.dispose();
-      const result = planIncisionWorkflow(request);
+      const result = planIncisionWorkflow(deterministicWorkflowRequest(request));
       result.workflow_runtime = workflowRuntimeStatus("main_thread_fallback", error);
       return {
         result,
@@ -65,7 +73,7 @@ export async function planIncisionWithWorkflowFallback({
   }
 
   const error = new Error("workflow worker unavailable");
-  const result = planIncisionWorkflow(request);
+  const result = planIncisionWorkflow(deterministicWorkflowRequest(request));
   result.workflow_runtime = workflowRuntimeStatus("main_thread_fallback", error);
   return {
     result,

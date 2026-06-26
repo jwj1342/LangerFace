@@ -1,4 +1,4 @@
-import { normalizeTumorInput, type TumorInput } from "../../incision_tools.js";
+import { normalizeTumorInput, type TumorInput } from "./incisionCandidateTools.ts";
 
 export type Vec3 = [number, number, number];
 export type TumorKind = "subcutaneous" | "cutaneous";
