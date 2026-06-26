@@ -1,4 +1,5 @@
 import { StageActions, StageLink, StageMeta, StageShell, StageStatus, StageViewport } from "./StageShell";
+import { CanvasLegendItem, Legend } from "./ui/legend";
 import { useIncisionStore, type IncisionAssetLoadingState } from "../stores/incisionStore";
 
 const DEFAULT_ASSET_LOADING: IncisionAssetLoadingState = {
@@ -29,12 +30,12 @@ export function IncisionStagePanel() {
           <strong>正在加载切口规划资产</strong>
           <p id="assetLoadingText">{assetLoading.text}</p>
         </div>
-        <div className="canvas-legend" aria-label="3D 标注图例">
-          <span className="legend-item"><span className="legend-swatch center"></span>病灶中心</span>
-          <span className="legend-item"><span className="legend-swatch ring"></span>肿物范围</span>
-          <span className="legend-item"><span className="legend-swatch line"></span>候选切口</span>
-          <span className="legend-item"><span className="legend-swatch handle"></span>端点控制</span>
-        </div>
+        <Legend variant="canvas" aria-label="3D 标注图例">
+          <CanvasLegendItem swatchClassName="center">病灶中心</CanvasLegendItem>
+          <CanvasLegendItem swatchClassName="ring">肿物范围</CanvasLegendItem>
+          <CanvasLegendItem swatchClassName="line">候选切口</CanvasLegendItem>
+          <CanvasLegendItem swatchClassName="handle">端点控制</CanvasLegendItem>
+        </Legend>
       </StageViewport>
     </StageShell>
   );

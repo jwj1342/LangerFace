@@ -41,6 +41,7 @@ const uiCheckboxField = read("src/components/ui/checkbox-field.tsx");
 const uiHint = read("src/components/ui/hint.tsx");
 const uiInput = read("src/components/ui/input.tsx");
 const uiKeyValue = read("src/components/ui/key-value.tsx");
+const uiLegend = read("src/components/ui/legend.tsx");
 const uiLibraryList = read("src/components/ui/library-list.tsx");
 const uiLabel = read("src/components/ui/label.tsx");
 const uiProgress = read("src/components/ui/progress.tsx");
@@ -125,6 +126,10 @@ const libraryPanelSources = new Map([
   ["AnnotateLineLibraryPanel.tsx", annotateLineLibraryPanel],
   ["CandidateLibraryPanel.tsx", candidateLibraryPanel],
 ]);
+const legendConsumerSources = new Map([
+  ["IncisionStagePanel.tsx", incisionStagePanel],
+  ["SurgeryMetricsPanel.tsx", surgeryMetricsPanel],
+]);
 const reactUiConsumerSources = new Map([
   ["App.tsx", app],
   ...[...componentSources.entries()].filter(([name]) => !layoutPrimitiveNames.has(name)),
@@ -150,6 +155,17 @@ const stagePanelsWithRawClass = (className) => (
 );
 const libraryPanelsWithRawClass = (className) => (
   [...libraryPanelSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+      || source.includes(` ? "${className}`)
+      || source.includes(`: "${className}`)
+    ))
+    .map(([name]) => name)
+);
+const legendConsumersWithRawClass = (className) => (
+  [...legendConsumerSources.entries()]
     .filter(([, source]) => (
       source.includes(`className="${className}`)
       || source.includes(`className={\`${className}`)
@@ -367,6 +383,29 @@ assert.ok(uiKeyValue.includes('cn("metric"'), "shadcn-style MetricItem preserves
 assert.ok(uiKeyValue.includes('cn("stat-grid"'), "shadcn-style StatGrid preserves existing stat grid styling");
 assert.ok(uiKeyValue.includes('cn("stat"'), "shadcn-style StatItem preserves existing stat styling");
 for (const [componentName, className] of [
+  ["Legend", "legend"],
+  ["Legend", "canvas-legend"],
+  ["LegendSwatch", "legend-sw"],
+  ["CanvasLegendItem", "legend-item"],
+  ["CanvasLegendItem", "legend-swatch"],
+]) {
+  assert.ok(uiLegend.includes(componentName), `shadcn-style legend primitive exports ${componentName}`);
+  assert.ok(uiLegend.includes(className), `shadcn-style legend primitive preserves ${className} styling`);
+}
+for (const className of [
+  "legend",
+  "canvas-legend",
+  "legend-sw",
+  "legend-item",
+  "legend-swatch",
+]) {
+  assert.deepEqual(
+    legendConsumersWithRawClass(className),
+    [],
+    `React legend consumers should use shared legend primitives instead of hand-written ${className} class wrappers`,
+  );
+}
+for (const [componentName, className] of [
   ["CandidateList", "candidate-list"],
   ["CandidateRow", "candidate-row"],
   ["CandidateRowTop", "top"],
@@ -552,6 +591,8 @@ assert.ok(incisionStagePanel.includes("StageActions"), "React incision stage use
 assert.ok(incisionStagePanel.includes("StageLink"), "React incision stage uses the shared stage link primitive");
 assert.ok(incisionStagePanel.includes("StageStatus"), "React incision stage uses the shared stage status primitive");
 assert.ok(incisionStagePanel.includes("StageMeta"), "React incision stage uses the shared stage metadata primitive");
+assert.ok(incisionStagePanel.includes("Legend"), "React incision stage uses the shared legend primitive");
+assert.ok(incisionStagePanel.includes("CanvasLegendItem"), "React incision stage uses the shared canvas legend item primitive");
 for (const id of [
   "tumorKind",
   "diameterMm",
@@ -1267,6 +1308,8 @@ assert.ok(surgeryControlsPanel.includes("RangeInput"), "React surgery controls u
 assert.ok(surgeryControlsPanel.includes("<Card"), "React surgery controls use the shared shadcn-style card primitive");
 assert.ok(surgeryMetricsPanel.includes("<Card"), "React surgery metrics use the shared shadcn-style card primitive");
 assert.ok(surgeryMetricsPanel.includes("ProgressBar"), "React surgery metrics use the shared shadcn-style progress primitive");
+assert.ok(surgeryMetricsPanel.includes("Legend"), "React surgery metrics use the shared legend primitive");
+assert.ok(surgeryMetricsPanel.includes("LegendSwatch"), "React surgery metrics use the shared legend swatch primitive");
 assert.ok(surgeryHelpPanel.includes("这是在演示什么？"), "React surgery help panel keeps the closure explanation");
 assert.ok(surgeryHelpPanel.includes("<Card asChild"), "React surgery help panel preserves semantic details through the Card asChild primitive");
 assert.ok(surgeryHelpPanel.includes("<details open>"), "React surgery help panel keeps native disclosure semantics");
