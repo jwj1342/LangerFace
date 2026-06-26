@@ -48,6 +48,7 @@ const uiIncisionStatus = read("src/components/ui/incision-status.tsx");
 const uiInput = read("src/components/ui/input.tsx");
 const uiKeyValue = read("src/components/ui/key-value.tsx");
 const uiLegend = read("src/components/ui/legend.tsx");
+const uiLiveFeedback = read("src/components/ui/live-feedback.tsx");
 const uiLibraryList = read("src/components/ui/library-list.tsx");
 const uiLabel = read("src/components/ui/label.tsx");
 const uiLoadingOverlay = read("src/components/ui/loading-overlay.tsx");
@@ -172,6 +173,9 @@ const incisionFormVisibilityConsumerSources = new Map([
 const liveVisibilityConsumerSources = new Map([
   ["LiveRenderControlsPanel.tsx", liveRenderControlsPanel],
   ["LiveRouteControlsPanel.tsx", liveRouteControlsPanel],
+]);
+const liveQualityFeedbackConsumerSources = new Map([
+  ["LiveQualityPanel.tsx", liveQualityPanel],
 ]);
 const reactShellConsumerSources = new Map([
   ["App.tsx", app],
@@ -415,6 +419,17 @@ const liveVisibilityConsumersWithRawHidden = () => (
     ))
     .map(([name]) => name)
 );
+const liveQualityFeedbackConsumersWithRawClass = (className) => (
+  [...liveQualityFeedbackConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+      || source.includes(` ${className} `)
+      || source.includes(` ${className}"`)
+    ))
+    .map(([name]) => name)
+);
 
 for (const dep of [
   "react",
@@ -601,7 +616,17 @@ assert.ok(stageShell.includes('active && "on"'), "React StageStatus can preserve
 assert.ok(stageShell.includes("StageMeta"), "React StageShell exports a stage metadata primitive");
 assert.ok(stageShell.includes('cn("fps"'), "React StageMeta preserves the legacy fps metadata class");
 assert.ok(stageShell.includes('variant === "meta" && "fps"'), "React StageLink can preserve fps-styled stage links");
-for (const className of ["live", "dot", "fps"]) {
+assert.ok(stageShell.includes("StageCanvas"), "React StageShell exports a canvas primitive");
+assert.ok(stageShell.includes('mirror && "mirror"'), "React StageCanvas preserves mirror styling through a typed prop");
+assert.ok(stageShell.includes("visible?: boolean"), "React StageShell visibility primitives expose typed visible props");
+assert.ok(stageShell.includes('hiddenClassName = "hidden"'), "React StageShell visibility primitives default to the legacy hidden class");
+assert.ok(stageShell.includes("StageToast"), "React StageShell exports a scan toast primitive");
+assert.ok(stageShell.includes('cn("scan-toast"'), "React StageToast preserves the legacy scan toast class");
+assert.ok(stageShell.includes("StageOverlayMessage"), "React StageShell exports an overlay message primitive");
+assert.ok(stageShell.includes('cn("overlay-msg"'), "React StageOverlayMessage preserves the legacy overlay message class");
+assert.ok(stageShell.includes("StageZoomStrip"), "React StageShell exports a zoom strip primitive");
+assert.ok(stageShell.includes('cn("zoom-strip"'), "React StageZoomStrip preserves the legacy zoom strip class");
+for (const className of ["live", "dot", "fps", "hidden", "mirror", "scan-toast", "overlay-msg", "zoom-strip"]) {
   assert.deepEqual(
     stagePanelsWithRawClass(className),
     [],
@@ -772,10 +797,20 @@ assert.ok(uiStatusBadge.includes('cn("react-route-status"'), "shadcn-style Route
 assert.ok(uiStatusBadge.includes("@radix-ui/react-slot"), "shadcn-style StatusBadge supports asChild through Radix Slot");
 assert.ok(uiKeyValue.includes("KeyValueGrid"), "shadcn-style key/value primitives expose a neutral grid");
 assert.ok(uiKeyValue.includes("KeyValueItem"), "shadcn-style key/value primitives expose a neutral item");
+assert.ok(uiKeyValue.includes("visible?: boolean"), "shadcn-style key/value grids expose a typed visibility prop");
+assert.ok(uiKeyValue.includes('hiddenClassName = "hidden"'), "shadcn-style key/value grids default invisible content to the legacy hidden class");
+assert.ok(uiKeyValue.includes("!visible && hiddenClassName"), "shadcn-style key/value grids centralize hidden class application");
 assert.ok(uiKeyValue.includes('cn("metric-grid"'), "shadcn-style MetricGrid preserves existing metric grid styling");
 assert.ok(uiKeyValue.includes('cn("metric"'), "shadcn-style MetricItem preserves existing metric styling");
 assert.ok(uiKeyValue.includes('cn("stat-grid"'), "shadcn-style StatGrid preserves existing stat grid styling");
 assert.ok(uiKeyValue.includes('cn("stat"'), "shadcn-style StatItem preserves existing stat styling");
+assert.ok(uiLiveFeedback.includes("LiveOverlayQa"), "shadcn-style live feedback primitives export LiveOverlayQa");
+assert.ok(uiLiveFeedback.includes('cn("overlay-qa"'), "shadcn-style LiveOverlayQa preserves existing overlay QA styling");
+assert.ok(uiLiveFeedback.includes("tone !== \"neutral\" && tone"), "shadcn-style LiveOverlayQa preserves ok/warn tone classes");
+assert.ok(uiLiveFeedback.includes("visible?: boolean"), "shadcn-style LiveOverlayQa exposes a typed visibility prop");
+assert.ok(uiLiveFeedback.includes('hiddenClassName = "hidden"'), "shadcn-style LiveOverlayQa defaults invisible QA to the legacy hidden class");
+assert.ok(uiLiveFeedback.includes("LiveOverlayQaHeader"), "shadcn-style live feedback primitives export LiveOverlayQaHeader");
+assert.ok(uiLiveFeedback.includes('cn("overlay-qa-top"'), "shadcn-style LiveOverlayQaHeader preserves existing overlay QA header styling");
 for (const [componentName, className] of [
   ["Legend", "legend"],
   ["Legend", "canvas-legend"],
@@ -1630,6 +1665,30 @@ assert.ok(liveStagePanel.includes("StageShell"), "React live stage uses the shar
 assert.ok(liveStagePanel.includes("StageViewport"), "React live stage uses the shared stage viewport primitive");
 assert.ok(liveStagePanel.includes("StageStatus"), "React live stage uses the shared stage status primitive");
 assert.ok(liveStagePanel.includes("StageMeta"), "React live stage uses the shared stage metadata primitive");
+assert.ok(liveStagePanel.includes("StageCanvas"), "React live stage uses the shared stage canvas primitive");
+assert.ok(liveStagePanel.includes('<StageCanvas id="canvas" mirror'), "React live stage mirrors the 2D canvas through StageCanvas props");
+assert.ok(liveStagePanel.includes('<StageCanvas id="three" visible={false}'), "React live stage hides the 3D canvas through StageCanvas visible");
+assert.ok(liveStagePanel.includes("StageToast"), "React live stage uses the shared stage toast primitive");
+assert.ok(liveStagePanel.includes('<StageToast id="scanToast" visible={false}>'), "React live stage hides the scan toast through StageToast visible");
+assert.ok(liveStagePanel.includes("StageOverlayMessage"), "React live stage uses the shared stage overlay message primitive");
+assert.ok(liveStagePanel.includes("StageZoomStrip"), "React live stage uses the shared stage zoom strip primitive");
+assert.deepEqual(
+  ["hidden", "mirror", "scan-toast", "overlay-msg", "zoom-strip"]
+    .filter((className) => stagePanelsWithRawClass(className).includes("LiveStagePanel.tsx")),
+  [],
+  "React live stage should use StageShell primitives instead of hand-written stage element classes",
+);
+assert.ok(liveQualityPanel.includes("<StatGrid visible={false}>"), "React live quality panel hides frame-owned stats through StatGrid visible");
+assert.ok(liveQualityPanel.includes("LiveOverlayQa"), "React live quality panel uses shared live overlay QA primitive");
+assert.ok(liveQualityPanel.includes('<LiveOverlayQa id="incisionOverlayQa" visible={false}>'), "React live quality panel hides overlay QA through LiveOverlayQa visible");
+assert.ok(liveQualityPanel.includes("LiveOverlayQaHeader"), "React live quality panel uses shared live overlay QA header primitive");
+for (const className of ["hidden", "overlay-qa", "overlay-qa-top"]) {
+  assert.deepEqual(
+    liveQualityFeedbackConsumersWithRawClass(className),
+    [],
+    `React live quality panel should use live feedback primitives instead of hand-written ${className} class wrappers`,
+  );
+}
 assert.ok(liveRouteControlsPanel.includes("dispatchLiveRouteCommand"), "React live route controls use the typed route command helper");
 assert.ok(liveSourceControlsPanel.includes("dispatchLiveSourceCommand"), "React live source controls use the typed source command helper");
 assert.ok(liveRenderControlsPanel.includes("dispatchLiveRenderCommand"), "React live render controls use the typed render command helper");

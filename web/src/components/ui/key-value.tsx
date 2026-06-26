@@ -3,11 +3,14 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 import { cn } from "../../lib/cn";
 
-export type KeyValueGridProps = HTMLAttributes<HTMLDivElement>;
+export interface KeyValueGridProps extends HTMLAttributes<HTMLDivElement> {
+  hiddenClassName?: string;
+  visible?: boolean;
+}
 
 export const KeyValueGrid = forwardRef<HTMLDivElement, KeyValueGridProps>(
-  ({ className, ...props }, ref) => (
-    <div ref={ref} className={className} {...props} />
+  ({ className, hiddenClassName = "hidden", visible = true, ...props }, ref) => (
+    <div ref={ref} className={cn(!visible && hiddenClassName, className)} {...props} />
   ),
 );
 KeyValueGrid.displayName = "KeyValueGrid";
