@@ -6,6 +6,7 @@ const html = fs.readFileSync("incision_agent.html", "utf8");
 const js = fs.readFileSync("incision_agent_main.js", "utf8");
 const tools = fs.readFileSync("incision_tools.js", "utf8");
 const exportPrivacy = fs.readFileSync("export_privacy.js", "utf8");
+const providerConfig = fs.readFileSync("src/services/providerConfig.ts", "utf8");
 
 assert.ok(html.includes('id="boundaryStatus"'), "workbench exposes tumor boundary status");
 assert.ok(html.includes('id="anatomyPreview"'), "workbench exposes live anatomy preview for selected tumor center");
@@ -124,7 +125,8 @@ assert.ok(js.includes("normalizeProviderBaseUrl"), "workbench normalizes host:po
 assert.ok(js.includes("Provider 连接失败"), "workbench reports direct LLM Provider connectivity failures");
 assert.ok(js.includes("localProviderFromRemotePageMessage"), "workbench warns remote pages before direct localhost provider tests");
 assert.ok(js.includes("insecureProviderFromSecurePageMessage"), "workbench warns HTTPS previews before HTTP private provider tests");
-assert.ok(js.includes("Mixed Content/Private Network"), "workbench explains mixed-content private-network blocking");
+assert.ok(providerConfig.includes("Mixed Content/Private Network"), "shared provider config explains mixed-content private-network blocking");
+assert.ok(providerConfig.includes("继续发送测试请求"), "shared provider config keeps the direct provider test request warning");
 assert.ok(js.includes("仍将发送测试请求"), "workbench still sends provider test requests so DevTools can show the real network result");
 assert.ok(!js.includes("handleAgentStreamEvent"), "workbench does not consume Python Agent SSE trace events");
 assert.ok(!js.includes("stream: true"), "workbench no longer requests streaming agent trace");

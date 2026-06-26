@@ -16,6 +16,14 @@ import {
   unitsPerMmFromVertices,
 } from "./incision_tools.js";
 import { normalizeProviderBaseUrl, testProviderConnection } from "./llm_provider.js";
+import {
+  initialProviderState,
+  insecureProviderFromSecurePageMessage,
+  isDeprecatedNativeProviderConfig,
+  localProviderFromRemotePageMessage,
+  redactedProviderConfig as redactProviderConfig,
+  saveProviderPrefs as persistProviderPrefs,
+} from "./src/services/providerConfig.ts";
 import { createWorkflowWorkerClient } from "./src/services/workflowWorkerClient.ts";
 import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.js";
 
@@ -521,97 +529,30 @@ function setProviderTestState(text, level = "") {
   publishIncisionState("provider_state");
 }
 
-function normalizedHost(host = "") {
-  return String(host || "").trim().toLowerCase().replace(/^\[|\]$/g, "");
-}
-
-function isLoopbackHost(host = "") {
-  const h = normalizedHost(host);
-  return h === "" || h === "localhost" || h === "0.0.0.0" || h === "::1" || /^127(?:\.\d{1,3}){3}$/.test(h);
-}
-
-function isPrivateNetworkHost(host = "") {
-  const h = normalizedHost(host);
-  if (isLoopbackHost(h)) return true;
-  if (h.endsWith(".local") || h.endsWith(".lan")) return true;
-  const parts = h.split(".").map((part) => Number(part));
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
-  const [a, b] = parts;
-  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
-}
-
-function providerUrlFromConfig(cfg = providerConfig()) {
-  try {
-    return new URL(cfg.base_url);
-  } catch {
-    return null;
-  }
-}
-
-function pageIsLocal() {
-  return isLoopbackHost(window.location.hostname);
-}
-
-function isDeprecatedNativeProviderConfig(baseUrl = "", model = "") {
-  const base = String(baseUrl || "").trim().toLowerCase();
-  const name = String(model || "").trim().toLowerCase();
-  const deprecatedPort = 11000 + 434;
-  const deprecatedPath = ["api", "tags"].join("/");
-  const deprecatedModel = ["qwen3", "8b"].join(":");
-  return base.includes(`:${deprecatedPort}`) || base.includes(`/${deprecatedPath}`) || name === deprecatedModel;
-}
-
 function normalizeProviderDefaults() {
   els.providerMode.value = "openai-compatible";
+  const initial = initialProviderState();
   const base = els.providerBaseUrl.value.trim();
   const model = els.providerModel.value.trim();
-  if (!base || isDeprecatedNativeProviderConfig(base, "")) els.providerBaseUrl.value = "https://api.openai.com/v1";
-  if (!model || isDeprecatedNativeProviderConfig("", model)) els.providerModel.value = "gpt-4.1-mini";
-}
-
-function localProviderFromRemotePageMessage(cfg = providerConfig()) {
-  const url = providerUrlFromConfig(cfg);
-  if (!url || pageIsLocal() || !isLoopbackHost(url.hostname)) return "";
-  return `当前页面来自 ${window.location.origin}，${url.host} 指的是打开浏览器这台机器，不是 Vercel 或远端 Provider。系统会继续发送测试请求；如果 DevTools 显示 CORS/Private Network 拦截，请改填一个允许该 origin 访问的 HTTPS Provider 地址。`;
-}
-
-function insecureProviderFromSecurePageMessage(cfg = providerConfig()) {
-  const url = providerUrlFromConfig(cfg);
-  if (!url || window.location.protocol !== "https:" || url.protocol !== "http:" || isLoopbackHost(url.hostname)) {
-    return "";
-  }
-  const networkLabel = isPrivateNetworkHost(url.hostname) ? "HTTP 私网地址" : "HTTP Provider 地址";
-  return `当前页面是 HTTPS，但 Provider 是 ${networkLabel} ${url.origin}；浏览器会按 Mixed Content/Private Network 规则拦截。只改成局域网 IP 不够，请改用 HTTPS 反向代理或隧道后的 Provider 地址。`;
+  if (!base || isDeprecatedNativeProviderConfig(base, "")) els.providerBaseUrl.value = initial.baseUrl;
+  if (!model || isDeprecatedNativeProviderConfig("", model)) els.providerModel.value = initial.model;
+  if (!Number(els.providerTimeout.value)) els.providerTimeout.value = String(initial.timeoutS);
 }
 
 function redactedProviderConfig() {
-  const cfg = providerConfig();
-  return {
-    ...cfg,
-    api_key: cfg.api_key ? "[redacted]" : "",
-  };
+  return redactProviderConfig(providerConfig());
 }
 
 function saveProviderPrefs() {
-  const cfg = redactedProviderConfig();
-  localStorage.setItem("langerface.incision.provider", JSON.stringify({
-    provider: cfg.provider,
-    base_url: cfg.base_url,
-    model: cfg.model,
-    timeout_s: cfg.timeout_s,
-  }));
+  persistProviderPrefs(providerConfig());
 }
 
 function loadProviderPrefs() {
-  try {
-    const raw = JSON.parse(localStorage.getItem("langerface.incision.provider") || "{}");
-    els.providerMode.value = "openai-compatible";
-    if (raw.base_url) els.providerBaseUrl.value = raw.base_url;
-    if (raw.model) els.providerModel.value = raw.model;
-    if (raw.timeout_s) els.providerTimeout.value = String(raw.timeout_s);
-  } catch {
-    // Keep defaults.
-  }
+  const initial = initialProviderState();
+  els.providerMode.value = "openai-compatible";
+  els.providerBaseUrl.value = initial.baseUrl;
+  els.providerModel.value = initial.model;
+  els.providerTimeout.value = String(initial.timeoutS);
   normalizeProviderDefaults();
   els.providerTimeoutVal.textContent = els.providerTimeout.value;
 }

@@ -1,109 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { normalizeProviderBaseUrl, testProviderConnection, type ProviderConfig } from "../../llm_provider.js";
+import {
+  initialProviderState,
+  insecureProviderFromSecurePageMessage,
+  localProviderFromRemotePageMessage,
+  saveProviderPrefs,
+} from "../services/providerConfig";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { RangeInput } from "./ui/slider";
 import { dispatchControllerEvent } from "../lib/controllerCommand";
 
-const PROVIDER_STORAGE_KEY = "langerface.incision.provider";
 const PROVIDER_REACT_STATE_EVENT = "langerface:incision-provider-react-state";
 const DEFAULT_TEST_MESSAGE = "尚未测试 LLM Provider 连通性。Vercel 调试请填写可从浏览器访问、允许该 preview origin、并兼容 OpenAI /models 的 HTTPS Provider；候选生成不调用 Provider。";
 
 type TestLevel = "" | "ok" | "warn";
-
-interface StoredProviderConfig {
-  provider?: string;
-  base_url?: string;
-  model?: string;
-  timeout_s?: number;
-}
-
-function normalizeHost(host = "") {
-  return host.trim().toLowerCase().replace(/^\[|\]$/g, "");
-}
-
-function isLoopbackHost(host = "") {
-  const h = normalizeHost(host);
-  return h === "" || h === "localhost" || h === "0.0.0.0" || h === "::1" || /^127(?:\.\d{1,3}){3}$/.test(h);
-}
-
-function isPrivateNetworkHost(host = "") {
-  const h = normalizeHost(host);
-  if (isLoopbackHost(h)) return true;
-  if (h.endsWith(".local") || h.endsWith(".lan")) return true;
-  const parts = h.split(".").map((part) => Number(part));
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
-  const [a, b] = parts;
-  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
-}
-
-function providerUrlFromConfig(cfg: ProviderConfig) {
-  try {
-    return new URL(cfg.base_url || "");
-  } catch {
-    return null;
-  }
-}
-
-function pageIsLocal() {
-  return isLoopbackHost(window.location.hostname);
-}
-
-function localProviderFromRemotePageMessage(cfg: ProviderConfig) {
-  const url = providerUrlFromConfig(cfg);
-  if (!url || pageIsLocal() || !isLoopbackHost(url.hostname)) return "";
-  return `当前页面来自 ${window.location.origin}，${url.host} 指的是打开浏览器这台机器，不是 Vercel 或远端 Provider。系统会继续发送测试请求；如果 DevTools 显示 CORS/Private Network 拦截，请改填一个允许该 origin 访问的 HTTPS Provider 地址。`;
-}
-
-function insecureProviderFromSecurePageMessage(cfg: ProviderConfig) {
-  const url = providerUrlFromConfig(cfg);
-  if (!url || window.location.protocol !== "https:" || url.protocol !== "http:" || isLoopbackHost(url.hostname)) return "";
-  const networkLabel = isPrivateNetworkHost(url.hostname) ? "HTTP 私网地址" : "HTTP Provider 地址";
-  return `当前页面是 HTTPS，但 Provider 是 ${networkLabel} ${url.origin}；浏览器会按 Mixed Content/Private Network 规则拦截。只改成局域网 IP 不够，请改用 HTTPS 反向代理或隧道后的 Provider 地址。`;
-}
-
-function isDeprecatedNativeProviderConfig(baseUrl = "", model = "") {
-  const base = baseUrl.trim().toLowerCase();
-  const name = model.trim().toLowerCase();
-  const deprecatedPort = 11000 + 434;
-  const deprecatedPath = ["api", "tags"].join("/");
-  const deprecatedModel = ["qwen3", "8b"].join(":");
-  return base.includes(`:${deprecatedPort}`) || base.includes(`/${deprecatedPath}`) || name === deprecatedModel;
-}
-
-function readStoredProvider(): StoredProviderConfig {
-  try {
-    return JSON.parse(localStorage.getItem(PROVIDER_STORAGE_KEY) || "{}") as StoredProviderConfig;
-  } catch {
-    return {};
-  }
-}
-
-function initialProviderState() {
-  const stored = readStoredProvider();
-  const baseUrl = stored.base_url && !isDeprecatedNativeProviderConfig(stored.base_url, "")
-    ? stored.base_url
-    : "https://api.openai.com/v1";
-  const model = stored.model && !isDeprecatedNativeProviderConfig("", stored.model)
-    ? stored.model
-    : "gpt-4.1-mini";
-  return {
-    baseUrl,
-    model,
-    timeoutS: Number(stored.timeout_s) || 60,
-  };
-}
-
-function saveProviderPrefs(cfg: ProviderConfig) {
-  localStorage.setItem(PROVIDER_STORAGE_KEY, JSON.stringify({
-    provider: "openai-compatible",
-    base_url: normalizeProviderBaseUrl(cfg.base_url || ""),
-    model: cfg.model || "",
-    timeout_s: cfg.timeout_s || 60,
-  }));
-}
 
 function notifyController() {
   setTimeout(() => {
