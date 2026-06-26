@@ -19,16 +19,21 @@ export default defineConfig({
         );
       },
     },
+    {
+      name: "copy-compat-entrypoints",
+      writeBundle(options) {
+        const outDir = options.dir || "dist";
+        for (const page of ["index.html", "annotate.html", "surgery.html", "incision_agent.html"]) {
+          cpSync(resolve(import.meta.dirname, page), resolve(outDir, page));
+        }
+      },
+    },
   ],
   build: {
     assetsInlineLimit: 0,
     rollupOptions: {
       input: {
-        main: resolve(import.meta.dirname, "index.html"),
         app: resolve(import.meta.dirname, "app/index.html"),
-        annotate: resolve(import.meta.dirname, "annotate.html"),
-        surgery: resolve(import.meta.dirname, "surgery.html"),
-        incisionAgent: resolve(import.meta.dirname, "incision_agent.html"),
       },
     },
   },

@@ -557,6 +557,15 @@ assert.ok(tsconfig.compilerOptions?.strict, "TypeScript should run in strict mod
 assert.equal(tsconfig.compilerOptions?.jsx, "react-jsx", "TypeScript should use the React JSX transform");
 assert.ok(vite.includes("@tailwindcss/vite"), "Vite config loads the Tailwind plugin");
 assert.ok(vite.includes('app: resolve(import.meta.dirname, "app/index.html")'), "Vite builds the SPA app entry");
+assert.ok(vite.includes('"copy-compat-entrypoints"'), "Vite copies lightweight compatibility pages after building the SPA");
+for (const legacyEntry of [
+  'main: resolve(import.meta.dirname, "index.html")',
+  'annotate: resolve(import.meta.dirname, "annotate.html")',
+  'surgery: resolve(import.meta.dirname, "surgery.html")',
+  'incisionAgent: resolve(import.meta.dirname, "incision_agent.html")',
+]) {
+  assert.ok(!vite.includes(legacyEntry), `Vite should not build legacy HTML as a Rollup input: ${legacyEntry}`);
+}
 assert.deepEqual(
   vercelConfig.git?.deploymentEnabled,
   {

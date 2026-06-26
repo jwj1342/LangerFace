@@ -151,6 +151,8 @@ P = u·V0 + v·V1 + w·V2
 - 本地开发：`cd web && npm run dev`，Vite 默认监听 `http://127.0.0.1:5173`。
 - 生产构建：`cd web && npm ci && npm run build`，输出 `web/dist/`。
 - 生产预览：`cd web && npm run preview`，Vite 默认监听 `http://127.0.0.1:4173`。
+- Vite 的唯一应用入口是 `web/app/index.html`。`index.html`、`annotate.html`、`incision_agent.html`、`surgery.html`
+  只作为轻量兼容跳转页复制进 `dist/`，不再作为 Rollup 多入口应用构建。
 - `web/assets.js` 用 Vite `?url` 导入 `.task`、atlas JSON 与 3D 示例资产，构建后自动进入哈希化 `dist/assets/`。
 - `tools/serve_web.py` 仍可服务未打包的 `web/` 源文件，但正式前端开发与部署以 Vite 为准。
 - `getUserMedia`（摄像头）要求安全上下文：`http://localhost`/`127.0.0.1` 即可（无需 https）。
@@ -197,7 +199,8 @@ npm run dev
 # 浏览器打开 Vite 地址下的 /app/annotate，例如 http://127.0.0.1:5173/app/annotate
 ```
 
-生产构建（Vercel）以 `/app/*` React SPA 为主入口；`annotate.html` 仅保留为 `/app/annotate` 的兼容跳转页，配置见 [`web/vite.config.js`](../web/vite.config.js)。
+生产构建（Vercel）以 `/app/*` React SPA 为唯一应用入口；`annotate.html` 仅复制为 `/app/annotate` 的兼容跳转页，
+不参与 Rollup 多入口构建。配置见 [`web/vite.config.js`](../web/vite.config.js)。
 
 ### 标注工作流
 
