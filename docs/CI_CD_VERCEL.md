@@ -21,7 +21,7 @@ pull request / push
            └─ master: Production Deployment
 
 manual / temporary
-      └─ React-架构重构: 当前开发 Preview Deployment（按需刷新）
+      └─ react-architecture-refactor: 当前开发 Preview Deployment（按需刷新）
 ```
 
 这个方案把职责分开，并且把 Vercel 自动部署收敛到生产入口；开发 Preview 保留为一个按需刷新的验收入口：
@@ -43,14 +43,14 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 | 环境 | 分支 | 行为 |
 |---|---|---|
 | Production | `master` | 合并后自动发布生产站 |
-| 当前开发 Preview | `React-架构重构` | 当前重构 PR 的唯一 Preview 分支，默认不走 Git 自动部署；需要验收时手动刷新或临时开启 |
+| 当前开发 Preview | `react-architecture-refactor` | 当前重构 PR 的唯一 Preview 分支，默认不走 Git 自动部署；需要验收时手动刷新或临时开启 |
 
-[web/vercel.json](../web/vercel.json) 已将 `git.deploymentEnabled` 设置为 `* = false` 和 `** = false`，默认只对白名单生产分支 `master` 开放；当前开发分支 `React-架构重构` 显式设为 `false`，避免 Vercel 在长 PR 高频 push 时先创建 deployment / check、再进入限流。配置里仍保留 `github.autoJobCancelation`，用于后续临时打开 Preview 时取消同一 PR / 分支上的较旧构建。
+[web/vercel.json](../web/vercel.json) 已将 `git.deploymentEnabled` 设置为 `* = false` 和 `** = false`，默认只对白名单生产分支 `master` 开放；当前开发分支 `react-architecture-refactor` 显式设为 `false`，避免 Vercel 在长 PR 高频 push 时先创建 deployment / check、再进入限流。配置里仍保留 `github.autoJobCancelation`，用于后续临时打开 Preview 时取消同一 PR / 分支上的较旧构建。
 
 此外，`ignoreCommand` 会运行 [`web/scripts/vercel-ignore-build.mjs`](../web/scripts/vercel-ignore-build.mjs)。它主要用于维护者临时打开当前开发 Preview 时做二级保护：
 
 - 非白名单分支直接跳过 Vercel 构建。
-- 如果临时打开 `React-架构重构` 的 Preview，默认仍要求 commit message 包含 `[vercel]`、`[preview]` 或 `[deploy-preview]` 才会构建。需要临时恢复自动 Preview 时，在 Vercel 环境变量里设置 `VERCEL_PREVIEW_DEPLOY_MODE=auto`；遇到限流时可设为 `off` 暂停开发 Preview 构建；需要单次强制构建时设置 `VERCEL_FORCE_DEPLOY=1`。
+- 如果临时打开 `react-architecture-refactor` 的 Preview，默认仍要求 commit message 包含 `[vercel]`、`[preview]` 或 `[deploy-preview]` 才会构建。需要临时恢复自动 Preview 时，在 Vercel 环境变量里设置 `VERCEL_PREVIEW_DEPLOY_MODE=auto`；遇到限流时可设为 `off` 暂停开发 Preview 构建；需要单次强制构建时设置 `VERCEL_FORCE_DEPLOY=1`。
 - 即使当前分支允许构建，只要这次 push 相比上一次部署没有改动 Vercel Root Directory `web/`，仍会跳过实际构建。这样 docs / tools / issue 文案类改动仍会保留 GitHub Actions 质量门禁，但不会额外消耗 Vercel Preview 构建。
 
 如果后续当前开发 PR 换成别的分支，只改这个白名单，不要额外打开所有 feature 分支的自动 Preview。旧的 Deployment URL 属于 Vercel 的历史记录 / 回滚能力；它们可以在 Dashboard 里清理或保留，但仓库配置能控制的是“以后哪些分支继续产生新部署”。如果想让 Dashboard 只显示最新开发和生产两个可见版本，需要在 Vercel Dashboard 里清理旧 Deployment 或配置团队侧保留策略；不要用 GitHub Actions 再额外跑一套 Vercel CLI 自动部署。
@@ -82,7 +82,7 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 - `buildCommand`: `npm run build`
 - `ignoreCommand`: `node scripts/vercel-ignore-build.mjs`，作为临时打开开发 Preview 时的二级保护：只允许当前开发分支的显式触发构建，并且仅在 `web/` 有变化时构建
 - `outputDirectory`: `dist`
-- `git.deploymentEnabled`: 默认只允许 `master` 自动部署；当前开发分支 `React-架构重构` 显式关闭 Git 自动部署，避免长 PR 高频 push 触发 Vercel 限流
+- `git.deploymentEnabled`: 默认只允许 `master` 自动部署；当前开发分支 `react-architecture-refactor` 显式关闭 Git 自动部署，避免长 PR 高频 push 触发 Vercel 限流
 - `github.autoJobCancelation`: 同一 PR / 分支有新 commit 时取消较旧构建
 - `/assets/*` 长缓存，适合 `.task` 模型、atlas JSON、triangles 等哈希化静态资产
 - JS/MJS 的 `Content-Type`
@@ -93,8 +93,8 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 
 遇到 Vercel rate limit / build queue 被打满时，按这个顺序处理：
 
-1. 先确认 Vercel Project 的 Git 分支部署开关与 [web/vercel.json](../web/vercel.json) 一致：`master` 为 `true`，当前开发分支 `React-架构重构` 为 `false`，其他 PR / feature 分支也不要打开 Preview。
-2. 如果需要线上验收当前开发分支，由维护者在 Vercel Dashboard 临时打开 `React-架构重构` 的 Git 部署，或用团队约定的手动部署方式刷新一次 Preview。部署完成后把分支开关关回去。
+1. 先确认 Vercel Project 的 Git 分支部署开关与 [web/vercel.json](../web/vercel.json) 一致：`master` 为 `true`，当前开发分支 `react-architecture-refactor` 为 `false`，其他 PR / feature 分支也不要打开 Preview。
+2. 如果需要线上验收当前开发分支，由维护者在 Vercel Dashboard 临时打开 `react-architecture-refactor` 的 Git 部署，或用团队约定的手动部署方式刷新一次 Preview。部署完成后把分支开关关回去。
 3. 如果临时打开开发 Preview，仍建议把 `VERCEL_PREVIEW_DEPLOY_MODE` 保持为 `manual`，只在需要验收的 commit message 里加 `[vercel]`、`[preview]` 或 `[deploy-preview]`；遇到限流时设为 `off`。
 4. Dashboard 里看到的一长串旧 Deployment 是不可变历史记录 / 回滚点，不代表仍有一长串“活跃环境”。如果只想保留可见的当前开发和生产两个版本，需要在 Vercel Dashboard 里清理旧 Deployment；仓库配置只能阻止未来继续生成无关部署。
 

@@ -9,7 +9,7 @@
       "*": false,
       "**": false,
       "master": true,
-      "React-架构重构": false
+      "react-architecture-refactor": false
     }
   },
   "github": {

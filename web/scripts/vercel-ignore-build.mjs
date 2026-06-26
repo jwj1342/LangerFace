@@ -2,9 +2,9 @@
 
 import { execFileSync } from "node:child_process";
 
-const allowedBranches = new Set(["master", "React-架构重构"]);
+const allowedBranches = new Set(["master", "react-architecture-refactor"]);
 const productionBranches = new Set(["master"]);
-const previewBranches = new Set(["React-架构重构"]);
+const previewBranches = new Set(["react-architecture-refactor"]);
 const branch = process.env.VERCEL_GIT_COMMIT_REF || "";
 const previousSha = process.env.VERCEL_GIT_PREVIOUS_SHA || "HEAD^";
 const vercelEnv = process.env.VERCEL_ENV || "";

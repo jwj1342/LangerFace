@@ -600,7 +600,7 @@ assert.deepEqual(
     "*": false,
     "**": false,
     master: true,
-    "React-架构重构": false,
+    "react-architecture-refactor": false,
   },
   "Vercel should only auto-deploy production by default during long development PRs",
 );
@@ -612,7 +612,7 @@ assert.equal(
 );
 assert.ok(vercelIgnoreBuild.includes("VERCEL_GIT_COMMIT_REF"), "Vercel ignore script checks the Git branch");
 assert.ok(vercelIgnoreBuild.includes("VERCEL_GIT_PREVIOUS_SHA"), "Vercel ignore script compares against the previous deployment sha");
-assert.ok(vercelIgnoreBuild.includes('new Set(["master", "React-架构重构"])'), "Vercel ignore script mirrors the deployment branch whitelist");
+assert.ok(vercelIgnoreBuild.includes('new Set(["master", "react-architecture-refactor"])'), "Vercel ignore script mirrors the deployment branch whitelist");
 assert.ok(vercelIgnoreBuild.includes("VERCEL_PREVIEW_DEPLOY_MODE"), "Vercel ignore script supports explicit preview deployment mode");
 assert.ok(vercelIgnoreBuild.includes('previewMode === "off"'), "Vercel ignore script can disable preview builds during rate-limit windows");
 assert.ok(vercelIgnoreBuild.includes('vercelEnv === "production"'), "Vercel ignore script guards production deployments by branch");
