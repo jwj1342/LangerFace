@@ -5,8 +5,9 @@
   "git": {
     "deploymentEnabled": {
       "*": false,
+      "**": false,
       "master": true,
-      "React-架构重构": true
+      "codex/stage2-incision-workflow": true
     }
   },
   "github": {
