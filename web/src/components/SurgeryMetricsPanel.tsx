@@ -1,9 +1,9 @@
 import { Card, CardHeader } from "./ui/card";
-import { Hint } from "./ui/hint";
 import { Legend, LegendSwatch } from "./ui/legend";
 import { ProgressBar } from "./ui/progress";
+import { SurgeryVerdict, type SurgeryVerdictTone } from "./ui/surgery-feedback";
 
-export type SurgeryVerdictTone = "neutral" | "ok" | "warn";
+export type { SurgeryVerdictTone } from "./ui/surgery-feedback";
 
 interface SurgeryMetricsPanelProps {
   tensionScore: number | null;
@@ -20,7 +20,7 @@ export function SurgeryMetricsPanel({ tensionScore, verdict, verdictTone }: Surg
         <LegendSwatch className="surgery-legend-skin" />无新增（平和）
         <LegendSwatch className="surgery-legend-red" />闭合新增张力升高
       </Legend>
-      <Hint className={`surgery-verdict-${verdictTone}`} id="verdict">{verdict}</Hint>
+      <SurgeryVerdict tone={verdictTone} id="verdict">{verdict}</SurgeryVerdict>
     </Card>
   );
 }

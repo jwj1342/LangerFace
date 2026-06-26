@@ -57,6 +57,7 @@ const uiSectionTitle = read("src/components/ui/section-title.tsx");
 const uiSlider = read("src/components/ui/slider.tsx");
 const uiStatusBadge = read("src/components/ui/status-badge.tsx");
 const uiSurgeryAction = read("src/components/ui/surgery-action.tsx");
+const uiSurgeryFeedback = read("src/components/ui/surgery-feedback.tsx");
 const uiTextarea = read("src/components/ui/textarea.tsx");
 const annotateStore = read("src/stores/annotateStore.ts");
 const reactRouteLifecycleHook = read("src/hooks/useReactRouteLifecycle.ts");
@@ -150,6 +151,9 @@ const annotateStatusConsumerSources = new Map([
 ]);
 const surgeryActionConsumerSources = new Map([
   ["SurgeryControlsPanel.tsx", surgeryControlsPanel],
+]);
+const surgeryFeedbackConsumerSources = new Map([
+  ["SurgeryMetricsPanel.tsx", surgeryMetricsPanel],
 ]);
 const reactShellConsumerSources = new Map([
   ["App.tsx", app],
@@ -328,6 +332,17 @@ const annotateStatusConsumersWithRawClass = (className) => (
 );
 const surgeryActionConsumersWithRawClass = (className) => (
   [...surgeryActionConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+      || source.includes(` ? "${className}`)
+      || source.includes(`: "${className}`)
+    ))
+    .map(([name]) => name)
+);
+const surgeryFeedbackConsumersWithRawClass = (className) => (
+  [...surgeryFeedbackConsumerSources.entries()]
     .filter(([, source]) => (
       source.includes(`className="${className}`)
       || source.includes(`className={\`${className}`)
@@ -768,6 +783,15 @@ assert.deepEqual(
   "React surgery controls should use SurgeryCutButton instead of hand-written cut-along class wrappers",
 );
 assert.ok(surgeryControlsPanel.includes("SurgeryCutButton"), "React surgery controls use the shared surgery cut action primitive");
+assert.ok(uiSurgeryFeedback.includes("SurgeryVerdict"), "shadcn-style surgery feedback primitive exports SurgeryVerdict");
+assert.ok(uiSurgeryFeedback.includes('`surgery-verdict-${tone}`'), "surgery feedback primitive preserves verdict tone styling");
+assert.ok(uiSurgeryFeedback.includes('tone = "neutral"'), "surgery feedback primitive defaults to neutral verdict tone");
+assert.deepEqual(
+  surgeryFeedbackConsumersWithRawClass("surgery-verdict-"),
+  [],
+  "React surgery metrics should use SurgeryVerdict instead of hand-written surgery-verdict class wrappers",
+);
+assert.ok(surgeryMetricsPanel.includes("SurgeryVerdict"), "React surgery metrics use the shared verdict feedback primitive");
 for (const className of [
   "hint",
   "badge",
