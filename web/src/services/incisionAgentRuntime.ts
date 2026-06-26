@@ -35,6 +35,7 @@ import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
 import { assetBaseUrl, loadJsonAsset } from "./assetLoader";
 import { requireScopedElement, requireScopedQuery } from "../lib/scopedDom";
 import {
+  DEFAULT_PROVIDER_BASE_URL,
   initialProviderState,
   insecureProviderFromSecurePageMessage,
   isDeprecatedNativeProviderConfig,
@@ -644,6 +645,14 @@ function providerConfig(): ProviderConfig {
   return cfg;
 }
 
+function shouldUseAiSdkProviderSummary(config: ProviderConfig = {}): boolean {
+  const baseURL = normalizeProviderBaseUrl(config.base_url || "");
+  const model = String(config.model || "").trim();
+  if (!baseURL || !model) return false;
+  const defaultOpenAI = baseURL === normalizeProviderBaseUrl(DEFAULT_PROVIDER_BASE_URL);
+  return Boolean(config.api_key || !defaultOpenAI);
+}
+
 function providerDisplayLabel(provider: DynamicRecord = {}): string {
   if (provider.mode === "browser_deterministic_workflow" || provider.mode === "browser_deterministic_fallback") {
     return provider.error ? "浏览器确定性 workflow · 需复核" : "浏览器确定性 workflow";
@@ -724,6 +733,7 @@ async function testProviderEndpoint() {
 }
 
 function privacyAudit(provider: DynamicRecord = {}) {
+  const remoteProviderConfigured = provider.mode === "vercel_ai_sdk_openai_compatible_summary" || provider.ai_sdk_attempted === true;
   return {
     raw_image_sent: false,
     raw_video_sent: false,
@@ -739,8 +749,9 @@ function privacyAudit(provider: DynamicRecord = {}) {
       "tool trace",
     ],
     provider: redactedProviderConfig(),
-    remote_provider_configured: false,
-    browser_workflow_only: true,
+    remote_provider_configured: remoteProviderConfigured,
+    browser_workflow_only: !remoteProviderConfigured,
+    ai_sdk_summary_only: remoteProviderConfigured,
     provider_state: provider,
     secondary_cues_present: Boolean(S.secondaryCues),
     secondary_cues_sent_to_agent: false,
@@ -2290,7 +2301,36 @@ async function planWorkflowForCurrentTumor(tumor: TumorInput) {
     console.warn("[LangerFace] workflow worker failed; using main-thread fallback", execution.error);
     if (execution.statusMessage) els.stageStatus.textContent = execution.statusMessage;
   }
-  return execution.result;
+  return enrichWorkflowWithAiSdkSummary(execution.result);
+}
+
+async function enrichWorkflowWithAiSdkSummary(result: DynamicRecord) {
+  const cfg = providerConfig();
+  if (!shouldUseAiSdkProviderSummary(cfg)) return result;
+  els.stageStatus.textContent = "确定性 workflow 已完成，正在通过 Vercel AI SDK 生成审阅摘要…";
+  try {
+    const { summarizeIncisionPlanWithAiSdk } = await import("./aiSdkProvider");
+    const summary = await summarizeIncisionPlanWithAiSdk(result, cfg, {
+      timeoutMs: Math.min(Number(cfg.timeout_s || 60) * 1000, 60000),
+    });
+    result.llm = summary.llm;
+    result.provider = summary.provider;
+    return result;
+  } catch (error) {
+    result.provider = {
+      ...(result.provider || {}),
+      ai_sdk_attempted: true,
+      mode: result.provider?.mode || "browser_deterministic_workflow",
+      model: cfg.model || result.provider?.model || null,
+      sdk: "vercel_ai_sdk",
+      error: errorMessage(error),
+    };
+    result.llm = {
+      ...(result.llm || {}),
+      rationale: `${result.llm?.rationale || "浏览器确定性 workflow 已完成。"} Vercel AI SDK 摘要失败：${errorMessage(error)}。`,
+    };
+    return result;
+  }
 }
 
 function facePointFromEvent(e: PointerEvent) {

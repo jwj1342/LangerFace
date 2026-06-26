@@ -27,7 +27,17 @@ function normalizeLocalUrl(value) {
   if (/[${}`+]/.test(value)) return null;
   const clean = value.split("#")[0].split("?")[0];
   if (!clean) return null;
-  return clean.startsWith("/") ? clean : `/${clean}`;
+  const normalized = clean.startsWith("/") ? clean : `/${clean}`;
+  if (
+    normalized !== "/index.html" &&
+    normalized !== "/app" &&
+    !normalized.startsWith("/app/") &&
+    !normalized.startsWith("/assets/") &&
+    !/\.(?:html|js|css|json|task|bin)$/.test(normalized)
+  ) {
+    return null;
+  }
+  return normalized;
 }
 
 function collectLocalRefs(outDir) {
