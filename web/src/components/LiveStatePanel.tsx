@@ -1,6 +1,7 @@
 import { RadioTower } from "lucide-react";
 
 import { useLiveStore } from "../stores/liveStore";
+import { Card, CardHeader } from "./ui/card";
 
 function routeLabel(snapshot: ReturnType<typeof useLiveStore.getState>["snapshot"]) {
   if (!snapshot) return "待机";
@@ -12,11 +13,11 @@ export function LiveStatePanel() {
   const snapshot = useLiveStore((state) => state.snapshot);
 
   return (
-    <div className="card live-state-panel">
-      <div className="quality-top">
+    <Card className="live-state-panel">
+      <CardHeader>
         <span className="inline-flex items-center gap-2"><RadioTower size={14} /> 实时状态</span>
         <span>{routeLabel(snapshot)}</span>
-      </div>
+      </CardHeader>
       <div className="live-state-grid">
         <div>
           <span className="k">来源</span>
@@ -36,6 +37,6 @@ export function LiveStatePanel() {
         </div>
       </div>
       <p className="hint">{snapshot?.overlayMessage || snapshot?.modelBadge || "等待实时 controller 发布状态。"}</p>
-    </div>
+    </Card>
   );
 }

@@ -7,6 +7,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const web = path.join(root, "web");
 
 const read = (rel) => fs.readFileSync(path.join(web, rel), "utf8");
+const componentSources = new Map(
+  fs.readdirSync(path.join(web, "src/components"))
+    .filter((name) => name.endsWith(".tsx"))
+    .map((name) => [name, read(`src/components/${name}`)]),
+);
 const pkg = JSON.parse(read("package.json"));
 const tsconfig = JSON.parse(read("tsconfig.json"));
 const appHtml = read("app/index.html");
@@ -230,6 +235,13 @@ assert.ok(uiButton.includes("miniDanger"), "shadcn-style Button can preserve com
 assert.ok(uiCard.includes("CardHeader"), "shadcn-style Card exposes a header primitive");
 assert.ok(uiCard.includes("CardContent"), "shadcn-style Card exposes a content primitive");
 assert.ok(uiCard.includes('cn("card"'), "shadcn-style Card preserves existing card styling");
+assert.deepEqual(
+  [...componentSources.entries()]
+    .filter(([name, source]) => source.includes('className="card') && !["AnnotateHelpPanel.tsx", "SurgeryHelpPanel.tsx"].includes(name))
+    .map(([name]) => name),
+  [],
+  "ordinary React component panels should use the shared Card primitive; help details keep semantic <details>",
+);
 assert.ok(uiCheckbox.includes('type="checkbox"'), "shadcn-style Checkbox preserves native checkbox behavior");
 assert.ok(uiInput.includes('cn("text-input"'), "shadcn-style Input preserves existing text input styling");
 assert.ok(uiLabel.includes('cn("field-label"'), "shadcn-style Label preserves existing field label styling");
@@ -281,6 +293,7 @@ assert.ok(annotateBridge.includes("../lib/controllerSnapshotSchemas"), "React an
 assert.ok(!annotateBridge.includes("../services/annotateSnapshots"), "React annotation hook does not pull the full snapshot service at runtime");
 assert.ok(annotateBridge.includes("ANNOTATE_SNAPSHOT_SCHEMA_VERSION"), "React annotation hook guards snapshots with the shared schema version constant");
 assert.ok(annotateStatePanel.includes("useAnnotateStore"), "React annotation UI reads low-frequency state from Zustand");
+assert.ok(annotateStatePanel.includes("<Card"), "React annotation state panel uses the shared shadcn-style card primitive");
 assert.ok(liveStore.includes("LiveControllerSnapshot"), "live Zustand store keeps typed controller snapshots");
 assert.ok(liveStore.includes("LIVE_CONTROLLER_STATE_EVENT"), "live Zustand store declares the controller bridge event");
 assert.ok(liveStore.includes("../lib/controllerEvents"), "live Zustand store re-exports controller state event from the shared event module");
@@ -296,6 +309,7 @@ assert.ok(liveBridge.includes("../lib/controllerSnapshotSchemas"), "React live h
 assert.ok(!liveBridge.includes("../services/liveSnapshots"), "React live hook does not pull the full snapshot service at runtime");
 assert.ok(liveBridge.includes("LIVE_SNAPSHOT_SCHEMA_VERSION"), "React live hook guards snapshots with the shared schema version constant");
 assert.ok(liveStatePanel.includes("useLiveStore"), "React live UI reads low-frequency state from Zustand");
+assert.ok(liveStatePanel.includes("<Card"), "React live state panel uses the shared shadcn-style card primitive");
 assert.ok(incisionStore.includes("IncisionControllerSnapshot"), "incision Zustand store keeps typed controller snapshots");
 assert.ok(incisionStore.includes("INCISION_CONTROLLER_STATE_EVENT"), "incision Zustand store declares the controller bridge event");
 assert.ok(incisionStore.includes("../lib/controllerEvents"), "incision Zustand store re-exports controller state event from the shared event module");
@@ -700,11 +714,13 @@ assert.ok(annotateMeshSourcePanel.includes("Button"), "React annotate mesh sourc
 assert.ok(annotateMeshSourcePanel.includes("Button asChild"), "React annotate mesh source panel uses shared Button asChild for upload labels and Router links");
 assert.ok(annotateMeshSourcePanel.includes("Input"), "React annotate mesh source panel uses the shared shadcn-style input primitive");
 assert.ok(annotateMeshSourcePanel.includes("Label"), "React annotate mesh source panel uses the shared shadcn-style label primitive");
+assert.ok(annotateMeshSourcePanel.includes("<Card"), "React annotate mesh source panel uses the shared shadcn-style card primitive");
 assert.ok(annotateMeshSourcePanel.includes('variant="workbenchPrimary"'), "React annotate mesh source panel keeps primary workbench button styling through Button variants");
 assert.ok(annotateDrawPanel.includes("Button"), "React annotate draw panel uses the shared shadcn-style button primitive");
 assert.ok(annotateDrawPanel.includes("Input"), "React annotate draw panel uses the shared shadcn-style input primitive");
 assert.ok(annotateDrawPanel.includes("Label"), "React annotate draw panel uses the shared shadcn-style label primitive");
 assert.ok(annotateDrawPanel.includes("Select"), "React annotate draw panel uses the shared shadcn-style select primitive");
+assert.ok(annotateDrawPanel.includes("<Card"), "React annotate draw panel uses the shared shadcn-style card primitive");
 assert.ok(annotateDrawPanel.includes('variant="workbenchPrimary"'), "React annotate draw panel keeps primary workbench button styling through Button variants");
 assert.ok(annotateHelpPanel.includes("标注帮助"), "React annotate help panel keeps the user-facing annotation guide");
 assert.ok(annotateStagePanel.includes('to="/live"'), "React annotate stage returns to the React live route");
@@ -727,6 +743,7 @@ assert.ok(annotateLineLibraryPanel.includes("useState"), "React annotate line li
 assert.ok(annotateLineLibraryPanel.includes("confirmClear"), "React annotate line library renders a controlled clear confirmation state");
 assert.ok(!annotateLineLibraryPanel.includes("window.confirm"), "React annotate line library does not use browser-native confirm dialogs");
 assert.ok(annotateLineLibraryPanel.includes("Button"), "React annotate line library uses the shared shadcn-style button primitive");
+assert.ok(annotateLineLibraryPanel.includes("<Card"), "React annotate line library uses the shared shadcn-style card primitive");
 assert.ok(annotateLineLibraryPanel.includes('variant="miniDanger"'), "React annotate line library keeps compact destructive styling through Button variants");
 assert.ok(annotateSnapshotsService.includes("buildAnnotateControllerSnapshot"), "shared annotation snapshot service builds typed controller snapshots");
 assert.ok(annotateSnapshotsService.includes("buildAnnotateDraftSnapshot"), "shared annotation snapshot service builds current-line draft summaries");
@@ -863,6 +880,7 @@ for (const id of [
 }
 assert.ok(liveWorkbench.includes("LiveStatePanel"), "React live workbench renders the controller state panel");
 assert.ok(liveWorkbench.includes("WorkbenchBrand"), "React live workbench uses the shared workbench brand");
+assert.ok(liveWorkbench.includes("Card"), "React live workbench uses the shared shadcn-style card primitive");
 assert.ok(liveWorkbench.includes("LiveRouteControlsPanel"), "React live workbench renders route controls as a React component");
 assert.ok(liveWorkbench.includes("LiveSourceControlsPanel"), "React live workbench renders source controls as a React component");
 assert.ok(liveWorkbench.includes("LiveRenderControlsPanel"), "React live workbench renders render controls as a React component");
@@ -883,16 +901,20 @@ assert.ok(liveRouteControlsPanel.includes("Button"), "React live route controls 
 assert.ok(liveRouteControlsPanel.includes("Checkbox"), "React live route controls use the shared shadcn-style checkbox primitive");
 assert.ok(liveRouteControlsPanel.includes("Label"), "React live route controls use the shared shadcn-style label primitive");
 assert.ok(liveRouteControlsPanel.includes("Select"), "React live route controls use the shared shadcn-style select primitive");
+assert.ok(liveRouteControlsPanel.includes("<Card"), "React live route controls use the shared shadcn-style card primitive");
 assert.ok(liveRouteControlsPanel.includes("Button asChild"), "React live route controls use shared Button asChild for Router links");
 assert.ok(liveRouteControlsPanel.includes('variant="workbenchPrimary"'), "React live route controls keep primary workbench button styling through Button variants");
 assert.ok(liveSourceControlsPanel.includes("Button"), "React live source controls use the shared shadcn-style button primitive");
 assert.ok(liveSourceControlsPanel.includes("Input"), "React live source controls use the shared shadcn-style input primitive");
+assert.ok(liveSourceControlsPanel.includes("<Card"), "React live source controls use the shared shadcn-style card primitive");
 assert.ok(liveSourceControlsPanel.includes('variant="workbenchPrimary"'), "React live source controls keep primary workbench button styling through Button variants");
 assert.ok(liveRenderControlsPanel.includes("Button"), "React live render controls use the shared shadcn-style button primitive");
 assert.ok(liveRenderControlsPanel.includes("Checkbox"), "React live render controls use the shared shadcn-style checkbox primitive");
 assert.ok(liveRenderControlsPanel.includes("Label"), "React live render controls use the shared shadcn-style label primitive");
 assert.ok(liveRenderControlsPanel.includes("Select"), "React live render controls use the shared shadcn-style select primitive");
 assert.ok(liveRenderControlsPanel.includes("RangeInput"), "React live render controls use the shared shadcn-style range primitive");
+assert.ok(liveRenderControlsPanel.includes("<Card"), "React live render controls use the shared shadcn-style card primitive");
+assert.ok(liveQualityPanel.includes("<Card"), "React live quality panel uses the shared shadcn-style card primitive");
 assert.ok(liveQualityPanel.includes('data-frame-owned="true"'), "React live quality panel documents that frame-updated labels stay outside Zustand");
 assert.ok(!liveQualityPanel.includes("useLiveStore"), "live quality panel should not subscribe high-frequency quality updates through Zustand");
 assert.ok(liveSnapshotsService.includes("buildLiveControllerSnapshot"), "shared live snapshot service builds typed controller snapshots");
@@ -986,6 +1008,8 @@ assert.ok(surgeryControlsPanel.includes("Button asChild"), "React surgery contro
 assert.ok(surgeryControlsPanel.includes("Checkbox"), "React surgery controls use the shared shadcn-style checkbox primitive");
 assert.ok(surgeryControlsPanel.includes("Label"), "React surgery controls use the shared shadcn-style label primitive");
 assert.ok(surgeryControlsPanel.includes("RangeInput"), "React surgery controls use the shared shadcn-style range primitive");
+assert.ok(surgeryControlsPanel.includes("<Card"), "React surgery controls use the shared shadcn-style card primitive");
+assert.ok(surgeryMetricsPanel.includes("<Card"), "React surgery metrics use the shared shadcn-style card primitive");
 assert.ok(surgeryHelpPanel.includes("这是在演示什么？"), "React surgery help panel keeps the closure explanation");
 assert.ok(surgeryStagePanel.includes('to="/annotate"'), "React surgery stage returns to the React annotation route");
 assert.ok(surgeryController.includes("export function mountSurgeryClosureDemo"), "surgery controller exposes a mount lifecycle");

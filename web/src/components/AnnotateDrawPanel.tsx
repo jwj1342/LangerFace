@@ -1,6 +1,7 @@
 import { dispatchAnnotateDrawCommand } from "../lib/controllerCommand";
 import { useAnnotateStore } from "../stores/annotateStore";
 import { Button } from "./ui/button";
+import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
@@ -21,7 +22,7 @@ export function AnnotateDrawPanel() {
   const active = Boolean(draft?.active);
 
   return (
-    <div className="card">
+    <Card>
       <div className="section-title">
         <span>1. 选择线系统</span>
         <span id="drawMode">{snapshot?.mesh.modeLabel || "FLAME 标准脸"}</span>
@@ -50,6 +51,6 @@ export function AnnotateDrawPanel() {
         <Button variant="workbench" id="btnUndo" type="button" disabled={!active && !savedCount} onClick={() => dispatchAnnotateDrawCommand("undo_last")}>撤销上一个点</Button>
         <Button variant="workbench" id="btnFinish" type="button" disabled={!active} onClick={() => dispatchAnnotateDrawCommand("save_current_line")}>保存当前线</Button>
       </div>
-    </div>
+    </Card>
   );
 }

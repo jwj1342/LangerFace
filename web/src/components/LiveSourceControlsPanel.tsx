@@ -1,6 +1,7 @@
 import { dispatchLiveSourceCommand } from "../lib/controllerCommand";
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
+import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 
 export function LiveSourceControlsPanel() {
@@ -11,7 +12,7 @@ export function LiveSourceControlsPanel() {
   const hasSource = running || Boolean(snapshot?.source.kind);
 
   return (
-    <div className="card">
+    <Card>
       <Button variant="workbenchPrimary" id="uploadBtn" type="button" onClick={() => dispatchLiveSourceCommand("upload_source")}>⬆&nbsp; 上传照片 / 视频</Button>
       <Input type="file" id="fileInput" accept="image/*,video/*" hidden />
       <div className="btn-row">
@@ -19,6 +20,6 @@ export function LiveSourceControlsPanel() {
         <Button variant="workbench" id="pauseBtn" type="button" disabled={!running} onClick={() => dispatchLiveSourceCommand("pause_toggle")}>{paused ? "▶ 继续" : "⏸ 暂停"}</Button>
         <Button variant="workbench" id="exportBtn" type="button" disabled={!hasSource} aria-pressed={recording || undefined} onClick={() => dispatchLiveSourceCommand("recording_toggle")}>{recording ? "■ 停止" : "⬇ 导出"}</Button>
       </div>
-    </div>
+    </Card>
   );
 }

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { dispatchLiveRenderCommand } from "../lib/controllerCommand";
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
+import { Card } from "./ui/card";
 import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
@@ -19,7 +20,7 @@ export function LiveRenderControlsPanel() {
 
   return (
     <>
-      <div className="card">
+      <Card>
         <div>
           <Label htmlFor="templateSel">模板</Label>
           <Select
@@ -67,9 +68,9 @@ export function LiveRenderControlsPanel() {
             }}
           />
         </div>
-      </div>
+      </Card>
 
-      <div className="card">
+      <Card>
         <label className="check hidden"><Checkbox id="clip" defaultChecked /> 限制在面部轮廓内（背面剔除）</label>
         <label className="check hidden"><Checkbox id="handOcc" defaultChecked /> 前方手部遮挡（仅识别手部）</label>
         <label className="check">
@@ -80,7 +81,7 @@ export function LiveRenderControlsPanel() {
         <label className="check">
           <Checkbox id="meshPts" checked={meshPts} onChange={(event) => dispatchLiveRenderCommand("mesh_points_toggle", event.currentTarget.checked)} /> 显示网格采样点
         </label>
-      </div>
+      </Card>
     </>
   );
 }

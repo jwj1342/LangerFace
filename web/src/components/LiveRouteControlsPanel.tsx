@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { dispatchLiveRouteCommand } from "../lib/controllerCommand";
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
+import { Card } from "./ui/card";
 import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
@@ -20,7 +21,7 @@ export function LiveRouteControlsPanel() {
 
   return (
     <>
-      <div className="card">
+      <Card>
         <Label htmlFor="routeSel">技术路线</Label>
         <Select
           id="routeSel"
@@ -63,9 +64,9 @@ export function LiveRouteControlsPanel() {
             <Checkbox id="twinTextureToggle" checked={Boolean(recon?.twinTexture)} onChange={(event) => dispatchLiveRouteCommand("toggle_twin_texture", event.currentTarget.checked)} /> 贴真实人脸纹理
           </label>
         </div>
-      </div>
+      </Card>
 
-      <div className={`card${is3d ? "" : " hidden"}`} id="threeDWorkflowCard">
+      <Card className={is3d ? "" : "hidden"} id="threeDWorkflowCard">
         <div>
           <Label>3D 线标注与研究演示</Label>
           <p className="hint live-inline-top">在 3D 标准脸上绘制 RSTL 候选线，并从标注页进入沿 RSTL 闭合力学演示。</p>
@@ -73,7 +74,7 @@ export function LiveRouteControlsPanel() {
         <Button asChild variant="workbenchPrimary">
           <Link to="/annotate">打开 3D 线标注</Link>
         </Button>
-      </div>
+      </Card>
     </>
   );
 }

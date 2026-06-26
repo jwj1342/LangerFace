@@ -1,6 +1,7 @@
 import { MousePointer2 } from "lucide-react";
 
 import { useAnnotateStore } from "../stores/annotateStore";
+import { Card, CardHeader } from "./ui/card";
 
 function formatMesh(snapshot: ReturnType<typeof useAnnotateStore.getState>["snapshot"]) {
   if (!snapshot?.mesh.loaded) return "未加载";
@@ -13,11 +14,11 @@ export function AnnotateStatePanel() {
   const saved = snapshot?.saved;
 
   return (
-    <div className="card annotate-state-panel">
-      <div className="quality-top">
+    <Card className="annotate-state-panel">
+      <CardHeader>
         <span className="inline-flex items-center gap-2"><MousePointer2 size={14} /> 标注状态</span>
         <span>{formatMesh(snapshot)}</span>
-      </div>
+      </CardHeader>
       <div className="annotate-state-grid">
         <div>
           <span className="k">线系统</span>
@@ -39,6 +40,6 @@ export function AnnotateStatePanel() {
       <p className={`hint${(draft?.fallback || (saved?.warningCount || 0) > 0) ? " annotate-state-warning" : ""}`}>
         {snapshot?.hint || "正在等待 3D 标注 controller 发布状态。"}
       </p>
-    </div>
+    </Card>
   );
 }

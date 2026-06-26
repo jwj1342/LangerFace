@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { Button } from "./ui/button";
+import { Card, CardHeader } from "./ui/card";
 import { dispatchAnnotateLibraryCommand } from "../lib/controllerCommand";
 import { useAnnotateStore } from "../stores/annotateStore";
 
@@ -23,8 +24,8 @@ export function AnnotateLineLibraryPanel() {
   };
 
   return (
-    <div className="card">
-      <div className="quality-top"><span>3. 已保存线</span><span id="annStatus">{saved ? `${saved.count} 条` : "0 条"}</span></div>
+    <Card>
+      <CardHeader><span>3. 已保存线</span><span id="annStatus">{saved ? `${saved.count} 条` : "0 条"}</span></CardHeader>
       <div className="line-list" id="lineList">
         {lines.length ? lines.map((line) => (
           <div className={`line-row${line.fallback ? " has-warning" : ""}`} key={`${line.index}-${line.title}`}>
@@ -56,6 +57,6 @@ export function AnnotateLineLibraryPanel() {
           <p className="hint">将删除当前工作台保存的全部标注线。</p>
         </div>
       ) : null}
-    </div>
+    </Card>
   );
 }

@@ -1,3 +1,5 @@
+import { Card, CardHeader } from "./ui/card";
+
 export type SurgeryVerdictTone = "neutral" | "ok" | "warn";
 
 interface SurgeryMetricsPanelProps {
@@ -8,8 +10,8 @@ interface SurgeryMetricsPanelProps {
 
 export function SurgeryMetricsPanel({ tensionScore, verdict, verdictTone }: SurgeryMetricsPanelProps) {
   return (
-    <div className="card">
-      <div className="quality-top"><span>闭合新增张力</span><span><b id="tensionVal">{tensionScore ?? "—"}</b> / 100</span></div>
+    <Card>
+      <CardHeader><span>闭合新增张力</span><span><b id="tensionVal">{tensionScore ?? "—"}</b> / 100</span></CardHeader>
       <div className="bar">
         <div
           className="bar-fill surgery-tension-bar"
@@ -22,6 +24,6 @@ export function SurgeryMetricsPanel({ tensionScore, verdict, verdictTone }: Surg
         <span className="legend-sw surgery-legend-red" />闭合新增张力升高
       </div>
       <p className={`hint surgery-verdict-${verdictTone}`} id="verdict">{verdict}</p>
-    </div>
+    </Card>
   );
 }

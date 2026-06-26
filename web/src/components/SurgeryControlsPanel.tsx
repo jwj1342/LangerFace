@@ -1,4 +1,5 @@
 import { Button } from "./ui/button";
+import { Card } from "./ui/card";
 import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
 import { RangeInput } from "./ui/slider";
@@ -29,7 +30,7 @@ export function SurgeryControlsPanel({
   onSizeChange,
 }: SurgeryControlsPanelProps) {
   return (
-    <div className="card">
+    <Card>
       <p className="hint" id="hint">{hint}</p>
       <div className="section-title"><span>① 规划切口</span><span id="lesionState">{lesionState}</span></div>
       <p className="hint">
@@ -67,6 +68,6 @@ export function SurgeryControlsPanel({
           /> 显示 RSTL 张力线
         </label>
       </Button>
-    </div>
+    </Card>
   );
 }

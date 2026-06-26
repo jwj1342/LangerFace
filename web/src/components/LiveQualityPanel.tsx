@@ -1,13 +1,15 @@
 import { Activity } from "lucide-react";
 
+import { Card, CardHeader } from "./ui/card";
+
 export function LiveQualityPanel() {
   return (
-    <div className="card live-quality-panel" data-frame-owned="true">
+    <Card className="live-quality-panel" data-frame-owned="true">
       <div>
-        <div className="quality-top">
+        <CardHeader>
           <span className="inline-flex items-center gap-2"><Activity size={14} /> 追踪质量</span>
           <span id="qualityVal">未开始 0%</span>
-        </div>
+        </CardHeader>
         <div className="bar"><div className="bar-fill" id="qualityBar" /></div>
       </div>
       <div className="stat-grid hidden">
@@ -24,6 +26,6 @@ export function LiveQualityPanel() {
         <p id="incisionOverlayQaDetail">上传照片、视频或开启摄像头后开始检查。</p>
       </div>
       <p className="hint">姿态与光照自适应 · 全程本地运行，不上传任何画面</p>
-    </div>
+    </Card>
   );
 }
