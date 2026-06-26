@@ -30,7 +30,7 @@ import {
 import { dataSource } from "./dataSource";
 import { createCanvasRecordingController, type CanvasRecordingController, type RecordingExtraCanvas } from "./canvasRecording";
 import { recordingState, reconState, renderState, sourceState } from "../../state.js";
-import { setIncisionOverlayQa, setMsg, setProvenance, smoothLabel } from "../../ui.js";
+import { setIncisionOverlayQa, setMsg, setProvenance, smoothLabel } from "./liveUi";
 
 interface ImageDragState {
   pointerId: number;

@@ -199,6 +199,8 @@ P = u·V0 + v·V1 + w·V2
   由 `src/services/canvasRecording.ts` 负责，并通过 `export_canvas.d.ts` 暴露兼容类型。
 - `camera.js` 和 `image_source.js` 只保留为旧 JS 兼容 re-export。摄像头约束/错误归一化由
   `src/services/cameraSource.ts` 负责，上传图片工作尺寸控制由 `src/services/imageSource.ts` 负责。
+- `ui.js` 只保留为旧 JS 兼容 re-export。实时页的消息、状态灯、图谱 provenance、切口叠加 QA
+  与平滑档位文案由 `src/services/liveUi.ts` 负责，并依赖 `src/services/liveDom.ts` 的 route-scoped DOM 绑定。
 
 ---
 
