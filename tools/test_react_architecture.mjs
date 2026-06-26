@@ -50,6 +50,7 @@ const uiLibraryList = read("src/components/ui/library-list.tsx");
 const uiLabel = read("src/components/ui/label.tsx");
 const uiLoadingOverlay = read("src/components/ui/loading-overlay.tsx");
 const uiProgress = read("src/components/ui/progress.tsx");
+const uiR3FLoadingCard = read("src/components/ui/r3f-loading-card.tsx");
 const uiSelect = read("src/components/ui/select.tsx");
 const uiSectionTitle = read("src/components/ui/section-title.tsx");
 const uiSlider = read("src/components/ui/slider.tsx");
@@ -137,6 +138,10 @@ const legendConsumerSources = new Map([
 ]);
 const assetLoadingConsumerSources = new Map([
   ["IncisionStagePanel.tsx", incisionStagePanel],
+]);
+const r3fLoadingConsumerSources = new Map([
+  ["SurgeryR3FScene.tsx", surgeryR3FScene],
+  ["ThreePreviewScene.tsx", threePreviewScene],
 ]);
 const reactShellConsumerSources = new Map([
   ["App.tsx", app],
@@ -289,6 +294,16 @@ const assetLoadingConsumersWithRawClass = (className) => (
       || source.includes(`className={cn("${className}`)
       || source.includes(` ? "${className}`)
       || source.includes(`: "${className}`)
+    ))
+    .map(([name]) => name)
+);
+const r3fLoadingConsumersWithRawClass = (className) => (
+  [...r3fLoadingConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+      || source.includes(` ${className} `)
     ))
     .map(([name]) => name)
 );
@@ -687,6 +702,22 @@ for (const className of ["asset-loading", "asset-spinner"]) {
   );
 }
 assert.ok(incisionStagePanel.includes("AssetLoadingOverlay"), "React incision stage uses the shared asset loading overlay primitive");
+assert.ok(uiR3FLoadingCard.includes("R3FLoadingCard"), "R3F loading primitive exports R3FLoadingCard");
+assert.ok(uiR3FLoadingCard.includes("@react-three/drei"), "R3F loading primitive owns the Drei Html overlay");
+assert.ok(uiR3FLoadingCard.includes("<Html center>"), "R3F loading primitive centers loading content through Drei Html");
+assert.ok(uiR3FLoadingCard.includes("rounded-[10px]"), "R3F loading primitive preserves the existing loading card radius");
+assert.ok(uiR3FLoadingCard.includes("bg-black/60"), "R3F loading primitive preserves the existing loading card contrast");
+for (const className of ["rounded-[10px]", "bg-black/60", "text-[#dbe4ee]"]) {
+  assert.deepEqual(
+    r3fLoadingConsumersWithRawClass(className),
+    [],
+    `R3F scenes should use R3FLoadingCard instead of hand-written ${className} loading card classes`,
+  );
+}
+for (const [name, source] of r3fLoadingConsumerSources.entries()) {
+  assert.ok(source.includes("R3FLoadingCard"), `${name} should render loading state through the shared R3F loading primitive`);
+  assert.ok(!source.includes("<Html center>"), `${name} should not hand-write Drei Html loading overlays`);
+}
 for (const className of [
   "hint",
   "badge",

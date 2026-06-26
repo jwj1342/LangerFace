@@ -1,9 +1,10 @@
-import { Html, OrbitControls } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { useMemo } from "react";
 import * as THREE from "three";
 
 import { buildLineGeometry, vertexNormals } from "../../three3d.js";
+import { R3FLoadingCard } from "./ui/r3f-loading-card";
 
 export type PreviewVec3 = [number, number, number];
 export type PreviewTriangle = [number, number, number];
@@ -73,11 +74,7 @@ export function ThreePreviewScene({ assets, loadingText }: { assets: ThreePrevie
       {assets ? (
         <FaceMesh assets={assets} />
       ) : (
-        <Html center>
-          <div className="rounded-[10px] border border-white/10 bg-black/60 px-4 py-3 text-center text-sm font-bold text-[#dbe4ee]">
-            {loadingText}
-          </div>
-        </Html>
+        <R3FLoadingCard>{loadingText}</R3FLoadingCard>
       )}
       <OrbitControls makeDefault enableDamping dampingFactor={0.08} />
     </Canvas>

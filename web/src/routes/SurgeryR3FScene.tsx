@@ -1,8 +1,9 @@
-import { Html, OrbitControls } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { Canvas, type ThreeEvent, useFrame, useThree } from "@react-three/fiber";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
+import { R3FLoadingCard } from "../components/ui/r3f-loading-card";
 import type { RstlAtlas, RstlAtlasLine } from "../../rstl_field.js";
 import { rstlDirField } from "../../rstl_field.js";
 import type { SoftBody, Triangle, Vec3 } from "../../soft_body.js";
@@ -255,11 +256,7 @@ function LoadingScene({ loadingText }: { loadingText: string }) {
       <ambientLight intensity={0.8} />
       <directionalLight position={[2.5, 2.8, 3.5]} intensity={1.8} />
       <gridHelper args={[2, 12, "#334155", "#243041"]} position={[0, -0.72, 0]} />
-      <Html center>
-        <div className="rounded-[10px] border border-white/10 bg-black/60 px-4 py-3 text-center text-sm font-bold text-[#dbe4ee]">
-          {loadingText}
-        </div>
-      </Html>
+      <R3FLoadingCard>{loadingText}</R3FLoadingCard>
       <OrbitControls makeDefault enableDamping dampingFactor={0.08} />
     </>
   );
