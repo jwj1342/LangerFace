@@ -13,8 +13,7 @@ import {
   unitsPerMmFromVertices,
 } from "../../incision_tools.js";
 import type { TumorInput } from "../../incision_tools.js";
-import { normalizeProviderBaseUrl, testProviderConnection } from "../../llm_provider.js";
-import type { ProviderConfig } from "../../llm_provider.js";
+import { normalizeProviderBaseUrl, testProviderConnection, type ProviderConfig } from "./llmProvider";
 import {
   INCISION_CONTROLLER_STATE_EVENT,
   INCISION_EDIT_REACT_COMMAND_EVENT,

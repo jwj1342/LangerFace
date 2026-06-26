@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { normalizeProviderBaseUrl, testProviderConnection, type ProviderConfig } from "../../llm_provider.js";
+import { normalizeProviderBaseUrl, testProviderConnection, type ProviderConfig } from "../services/llmProvider";
 import {
   initialProviderState,
   insecureProviderFromSecurePageMessage,

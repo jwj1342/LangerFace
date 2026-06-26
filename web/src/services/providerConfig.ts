@@ -1,4 +1,4 @@
-import { normalizeProviderBaseUrl, type ProviderConfig } from "../../llm_provider.js";
+import { normalizeProviderBaseUrl, type ProviderConfig } from "./llmProvider";
 
 export const PROVIDER_STORAGE_KEY = "langerface.incision.provider";
 export const DEFAULT_PROVIDER_BASE_URL = "https://api.openai.com/v1";

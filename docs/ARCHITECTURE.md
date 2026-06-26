@@ -193,6 +193,8 @@ P = u·V0 + v·V1 + w·V2
   `ResizeObserver` 生命周期由 `src/services/liveCanvasFit.ts` 负责，并通过 `state.d.ts` 明确 `imageView` 状态边界。
 - `data_source.js` 只保留为旧 JS 兼容 re-export。标注、切口和实时页共享的浏览器数据源契约与
   `sessionStorage` 本地实现由 `src/services/dataSource.ts` 负责，后续切换远端数据源时应替换该 service 实现。
+- `llm_provider.js` 只保留为旧 JS 兼容 re-export。OpenAI-compatible / vLLM Provider 的 Base URL 规范化、
+  `/models` 连通性测试和类型契约由 `src/services/llmProvider.ts` 负责，候选几何仍不依赖 Provider。
 
 ---
 
