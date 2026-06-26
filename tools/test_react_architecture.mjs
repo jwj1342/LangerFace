@@ -38,6 +38,8 @@ const liveStatePanel = read("src/components/LiveStatePanel.tsx");
 const liveRouteControlsPanel = read("src/components/LiveRouteControlsPanel.tsx");
 const liveSourceControlsPanel = read("src/components/LiveSourceControlsPanel.tsx");
 const liveRenderControlsPanel = read("src/components/LiveRenderControlsPanel.tsx");
+const liveQualityPanel = read("src/components/LiveQualityPanel.tsx");
+const liveStagePanel = read("src/components/LiveStagePanel.tsx");
 const annotateRoute = read("src/routes/AnnotateRoute.tsx");
 const annotateWorkbench = read("src/routes/AnnotateWorkbench.tsx");
 const incisionRoute = read("src/routes/IncisionRoute.tsx");
@@ -424,7 +426,8 @@ for (const id of [
   "modelBadge",
   "overlayMsg",
 ]) {
-  assert.ok(liveWorkbench.includes(`id="${id}"`), `React live workbench exposes #${id}`);
+  const source = id === "modelBadge" ? liveWorkbench : liveStagePanel;
+  assert.ok(source.includes(`id="${id}"`), `React live surface exposes #${id}`);
 }
 for (const id of [
   "routeSel",
@@ -477,16 +480,45 @@ for (const id of [
 ]) {
   assert.ok(liveRenderControlsPanel.includes(`id="${id}"`), `React live render controls expose #${id}`);
 }
+for (const id of [
+  "qualityVal",
+  "qualityBar",
+  "statState",
+  "statFace",
+  "statYaw",
+  "statLines",
+  "incisionOverlayQa",
+  "incisionOverlayQaState",
+  "incisionOverlayQaDetail",
+]) {
+  assert.ok(liveQualityPanel.includes(`id="${id}"`), `React live quality panel exposes #${id}`);
+}
+for (const id of [
+  "livePill",
+  "fps",
+  "video",
+  "canvas",
+  "three",
+  "scanToast",
+  "overlayMsg",
+  "zoomStrip",
+]) {
+  assert.ok(liveStagePanel.includes(`id="${id}"`), `React live stage exposes #${id}`);
+}
 assert.ok(liveWorkbench.includes("LiveStatePanel"), "React live workbench renders the controller state panel");
 assert.ok(liveWorkbench.includes("LiveRouteControlsPanel"), "React live workbench renders route controls as a React component");
 assert.ok(liveWorkbench.includes("LiveSourceControlsPanel"), "React live workbench renders source controls as a React component");
 assert.ok(liveWorkbench.includes("LiveRenderControlsPanel"), "React live workbench renders render controls as a React component");
+assert.ok(liveWorkbench.includes("LiveQualityPanel"), "React live workbench renders quality and overlay QA as a React component");
+assert.ok(liveWorkbench.includes("LiveStagePanel"), "React live workbench renders the stage shell as a React component");
 assert.ok(liveRouteControlsPanel.includes("LIVE_ROUTE_REACT_COMMAND_EVENT"), "React live route controls dispatch 3D route commands to the controller boundary");
 assert.ok(liveSourceControlsPanel.includes("LIVE_SOURCE_REACT_COMMAND_EVENT"), "React live source controls dispatch source commands to the controller boundary");
 assert.ok(liveRenderControlsPanel.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "React live render controls dispatch render commands to the controller boundary");
 assert.ok(liveRouteControlsPanel.includes("useLiveStore"), "React live route controls read low-frequency route and recon state from Zustand");
 assert.ok(liveSourceControlsPanel.includes("useLiveStore"), "React live source controls read low-frequency source state from Zustand");
 assert.ok(liveRenderControlsPanel.includes("useLiveStore"), "React live render controls read low-frequency render state from Zustand");
+assert.ok(liveQualityPanel.includes('data-frame-owned="true"'), "React live quality panel documents that frame-updated labels stay outside Zustand");
+assert.ok(!liveQualityPanel.includes("useLiveStore"), "live quality panel should not subscribe high-frequency quality updates through Zustand");
 assert.ok(liveRouteControlsPanel.includes('to="/annotate"'), "React live route controls link to the React annotation route");
 assert.ok(liveWorkbench.includes('to="/incision"'), "React live workbench links to the React incision route");
 assert.ok(dom.includes("export function bindDom"), "DOM module can rebind element references for SPA route mounts");

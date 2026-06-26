@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { LiveRenderControlsPanel } from "../components/LiveRenderControlsPanel";
 import { LiveRouteControlsPanel } from "../components/LiveRouteControlsPanel";
 import { LiveSourceControlsPanel } from "../components/LiveSourceControlsPanel";
+import { LiveQualityPanel } from "../components/LiveQualityPanel";
+import { LiveStagePanel } from "../components/LiveStagePanel";
 import { LiveStatePanel } from "../components/LiveStatePanel";
 
 export function LiveWorkbench() {
@@ -33,26 +35,7 @@ export function LiveWorkbench() {
 
         <LiveRenderControlsPanel />
 
-        <div className="card">
-          <div>
-            <div className="quality-top"><span>追踪质量</span><span id="qualityVal">未开始 0%</span></div>
-            <div className="bar"><div className="bar-fill" id="qualityBar" /></div>
-          </div>
-          <div className="stat-grid hidden">
-            <div className="stat"><span className="k">状态</span><span className="v" id="statState">未开始</span></div>
-            <div className="stat"><span className="k">脸部占比</span><span className="v" id="statFace">—</span></div>
-            <div className="stat"><span className="k">偏航估计</span><span className="v" id="statYaw">—</span></div>
-            <div className="stat"><span className="k">线束数量</span><span className="v" id="statLines">—</span></div>
-          </div>
-          <div className="overlay-qa hidden" id="incisionOverlayQa">
-            <div className="overlay-qa-top">
-              <span>切口叠加 QA</span>
-              <span id="incisionOverlayQaState">等待画面</span>
-            </div>
-            <p id="incisionOverlayQaDetail">上传照片、视频或开启摄像头后开始检查。</p>
-          </div>
-          <p className="hint">姿态与光照自适应 · 全程本地运行，不上传任何画面</p>
-        </div>
+        <LiveQualityPanel />
 
         <p className="disclaimer">
           ⚠️ 内置图谱为示意性首版（未经临床验证），方向参考 Borges RSTL。
@@ -60,22 +43,7 @@ export function LiveWorkbench() {
         </p>
       </aside>
 
-      <main className="stage">
-        <div className="stage-top">
-          <span className="live" id="livePill"><span className="dot" />待机</span>
-          <span className="fps" id="fps">— fps</span>
-        </div>
-        <div className="stage-body">
-          <div className="main-wrap">
-            <video id="video" playsInline autoPlay muted />
-            <canvas id="canvas" className="mirror" width="1280" height="720" />
-            <canvas id="three" className="hidden" />
-            <div className="scan-toast hidden" id="scanToast">扫描中：请缓慢左右转头</div>
-            <div className="overlay-msg" id="overlayMsg">点击「摄像头」或「上传照片 / 视频」开始</div>
-          </div>
-          <div className="zoom-strip" id="zoomStrip" />
-        </div>
-      </main>
+      <LiveStagePanel />
     </div>
   );
 }
