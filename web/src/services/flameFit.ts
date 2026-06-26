@@ -1,4 +1,4 @@
-import { applySim, umeyama, type SimilarityTransform } from "../../geometry.js";
+import { applySim, umeyama, type SimilarityTransform } from "./geometryTransform.ts";
 import type { Triangle, Vec3 } from "./softBody";
 
 const NV = 5023;

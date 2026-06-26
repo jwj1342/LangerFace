@@ -1,4 +1,4 @@
-import { ATLAS_VERSION, TOPOLOGY_ID, TOPOLOGY_VERSION } from "../../constants.js";
+import { ATLAS_VERSION, TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.ts";
 import type { Triangle, Vec3 } from "./softBody";
 
 export interface AnnotationPoint {

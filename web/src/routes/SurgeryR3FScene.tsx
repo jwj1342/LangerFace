@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 import { R3FLoadingCard } from "../components/ui/r3f-loading-card";
-import { buildLineGeometry, vertexNormals } from "../../three3d.js";
+import { buildLineGeometry, vertexNormals } from "../services/three3d.ts";
 import type { RstlAtlas, RstlAtlasLine } from "../services/rstlField";
 import { rstlDirField } from "../services/rstlField";
 import type { SoftBody, Triangle, Vec3 } from "../services/softBody";

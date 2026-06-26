@@ -69,7 +69,7 @@ import { auditExportPayload } from "./exportPrivacy";
 import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
 import { createWorkflowWorkerClient } from "./workflowWorkerClient";
 import type { WorkflowWorkerClient } from "./workflowWorkerClient";
-import { Head3D, buildLineGeometry, vertexNormals } from "../../three3d.js";
+import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.ts";
 import type { Triangle, Vec3 } from "./softBody";
 
 type DynamicRecord = Record<string, any>;

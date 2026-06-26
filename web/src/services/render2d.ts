@@ -1,22 +1,25 @@
 // 2D 渲染：线条叠加、细节放大窗、统计面板。
-import { SOLID, BAND, ZOOM_REGIONS } from "../../constants.js";
-import type { ZoomRegion } from "../../constants.js";
-import { ctx as boundCtx, els } from "../../dom.js";
+import { SOLID, BAND, ZOOM_REGIONS } from "./constants.ts";
+import type { ZoomRegion } from "./constants.ts";
+import { ctx as boundCtx, els } from "./liveDom.ts";
 import {
   estimateFacePoseQuality,
   faceBBox,
+} from "./geometryPoseQuality.ts";
+import {
   innerMouthTriangles,
   mapAtlas,
-  pointInHandMasks,
   visibleRuns,
   visibleTriangles,
-} from "../../geometry.js";
-import type { HandMask, MappedAtlasLine, Point2, Triangle, Vec3 } from "../../geometry.js";
+  type MappedAtlasLine,
+} from "./geometryAtlas.ts";
+import { pointInHandMasks, type HandMask, type Point2 } from "./geometryOccluders.ts";
+import type { Triangle, Vec3 } from "./softBody.ts";
 import { mapSurfaceRefs, measureIncisionOverlayJitter, measureIncisionOverlayRegistration } from "./incisionOverlay.ts";
 import type { SurfaceRef } from "./incisionOverlay.ts";
-import { countMetric, recordMetricSample, setDiagnosticSection } from "../../logger.js";
-import { modelState, renderState, sourceState } from "../../state.js";
-import { setIncisionOverlayQa, setLive } from "../../ui.js";
+import { countMetric, recordMetricSample, setDiagnosticSection } from "./logger.ts";
+import { modelState, renderState, sourceState } from "./liveState.ts";
+import { setIncisionOverlayQa, setLive } from "./liveUi.ts";
 import type { IncisionOverlayPayload } from "./dataSource";
 
 type AnyRecord = Record<string, any>;
@@ -53,7 +56,7 @@ interface ZoomItem {
   region: RenderRegion;
 }
 
-interface RenderZoomCard {
+export interface LiveZoomCard {
   region: RenderRegion;
   card: HTMLDivElement;
   canvas: HTMLCanvasElement;
@@ -777,18 +780,18 @@ export function adjustFocusZoom(deltaY: number): boolean {
 }
 
 function syncFocusCards() {
-  (renderState.zoomCards as RenderZoomCard[]).forEach((zc) => zc.card.classList.toggle("active", zc.region === renderState.focusRegion));
+  (renderState.zoomCards as LiveZoomCard[]).forEach((zc) => zc.card.classList.toggle("active", zc.region === renderState.focusRegion));
 }
 
 export function clearZooms(): void {
-  for (const zc of renderState.zoomCards as RenderZoomCard[]) { zc.ctx.fillStyle = "#05070a"; zc.ctx.fillRect(0, 0, zc.canvas.width, zc.canvas.height); }
+  for (const zc of renderState.zoomCards as LiveZoomCard[]) { zc.ctx.fillStyle = "#05070a"; zc.ctx.fillRect(0, 0, zc.canvas.width, zc.canvas.height); }
 }
 
 // 从已叠加线条的主画布上裁剪关键区域并放大到各窗口（线条随之放大显示）
 export function drawZooms(lm: Vec3[], W: number): void {
   if (!renderState.zoom || !renderState.zoomCards.length) return;
   const faceW = faceBBox(lm).w || W;
-  for (const zc of renderState.zoomCards as RenderZoomCard[]) {
+  for (const zc of renderState.zoomCards as LiveZoomCard[]) {
     const g = zc.ctx, dw = zc.canvas.width, dh = zc.canvas.height;
     g.fillStyle = "#05070a"; g.fillRect(0, 0, dw, dh);
     if (!zc.region) {

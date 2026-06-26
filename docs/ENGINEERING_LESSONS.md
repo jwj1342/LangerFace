@@ -33,7 +33,7 @@ git 用这个 symlink 覆盖了本地真实的 `node_modules` 目录，导致本
 变成 `BEHIND` / `CONFLICTING`，CI 与合并全部受阻。
 
 **根因**：这些分支都是从「合并前的 master」拉的；伞状 PR 重写了它们也碰的文件（`atlas.py` / `test_atlas.py` /
-`pipeline.js` / `mode3d.js` / `package.json` 等），于是逐行冲突。
+前端 pipeline / 3D 模式入口 / `package.json` 等），于是逐行冲突。
 
 **处理**：
 - 逐个把 master **merge 进分支**（而非 rebase——本仓库 squash 合并，merge commit 最终会被压掉，且不改写他人分支历史），
@@ -42,7 +42,7 @@ git 用这个 symlink 覆盖了本地真实的 `node_modules` 目录，导致本
 - **语义冲突**比文本冲突更隐蔽：例如某测试 `import` 了伞状 PR 改过的常量，文本不冲突但合并后会跑挂——
   这正是分支保护「require branches up to date」(strict) 想拦的，别用 `--admin` 草率绕过它，除非你已确认文件互不相干。
 
-**预防**：互相会改同一文件的 PR（如都改 `tools/export_web_assets.py` 或 `web/geometry.js`）**串行**做——
+**预防**：互相会改同一文件的 PR（如都改 `tools/export_web_assets.py` 或 `web/src/services/geometryAtlas.ts`）**串行**做——
 一个合了再拉下一个，别并行，否则后合的那个必冲突。彼此文件不相交的 PR 才安全并行。
 
 ---
@@ -89,11 +89,10 @@ master 受保护：**1 个 approval + 5 个必需检查**（`lint` / `python-tes
 把「重构」做成可证明的 no-op，而不是「我觉得等价」：
 
 - **逐字搬运**：拆分文件时函数体**原样复制**，只动 import/export，不顺手「优化」逻辑。
-- **barrel re-export 保留导出面**：拆模块后保留原文件作 `export * from "./sub/..."` 的桶文件，
-  调用方与对拍脚本**零改动**（见 #49 拆 `geometry.js`、#45 拆 `pipeline.js`）。
+- **两步式拆分导出面**：大文件拆模块时可以先用临时 barrel re-export 稳住行为；完成调用方迁移后，应切到直接导入目标 TypeScript service 并删除旧 facade。
 - **靠现成测试兜底**：本仓库有几类强力测试——跨语言**对拍 fixture**（`one-euro fixture error 0.0` 之类逐位比对）、
   **import 无环检查**（`test_web_architecture.mjs`）、Umeyama/遮挡数值测试。重构后这些全绿，等价性才算证到。
-- **生成物要确定性 + CI 漂移门禁**：跨语言单一真源（如从 `constants.py` 生成 `web/constants_generated.js`，见 #30）——
+- **生成物要确定性 + CI 漂移门禁**：跨语言单一真源（如从 `constants.py` 生成 `web/src/services/constantsGenerated.ts`，见 #30）——
   生成器输出必须逐次字节一致，并在 CI 里 `git diff --exit-code` 生成物，改了源却忘了重生成即报错。
 
 ---

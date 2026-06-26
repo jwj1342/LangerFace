@@ -1,6 +1,6 @@
 // 网页 3D 标注入口：加载网格 → 在表面点击落点成线 → 导出图谱/xyz。
 // 拖拽旋转、滚轮缩放；点击（非拖拽）在网格表面拾取一个控制点。
-import { Annotator3D } from "../../annotate_viewer.js";
+import { Annotator3D } from "./annotateViewer.ts";
 import {
   ANNOTATE_CONTROLLER_STATE_EVENT,
   ANNOTATE_DRAW_REACT_COMMAND_EVENT,

@@ -1,5 +1,5 @@
-import { ATLAS_VERSION, TOPOLOGY_ID, TOPOLOGY_VERSION } from "../../constants.js";
-import { validateAtlasLines } from "../../geometry.js";
+import { ATLAS_VERSION, TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.ts";
+import { validateAtlasLines } from "./geometryAtlas.ts";
 import type { Triangle } from "./softBody";
 
 const BARY_EPS = 1e-3;

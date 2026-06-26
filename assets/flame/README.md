@@ -25,7 +25,7 @@
 
 | 文件 | 用途 |
 |---|---|
-| `web/assets/flame_basis.bin` | 浏览器端 FLAME 身份 + 表情 + jaw 紧凑 basis，供 `web/flame_fit.js` 使用。 |
+| `web/assets/flame_basis.bin` | 浏览器端 FLAME 身份 + 表情 + jaw 紧凑 basis，供 `web/src/services/flameFit.ts` 使用。 |
 | `web/api/flame_basis.npz` | `web/api/fit.py` 兜底拟合使用的身份 basis。 |
 | `web/api/flame_basis.NOTICE.md` | FLAME 2023 Open 署名和重新生成说明。 |
 

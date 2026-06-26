@@ -5,7 +5,7 @@
 环境变量 ``LANGERFACE_LOG_LEVEL`` 可覆盖默认级别（如 DEBUG / WARNING）。
 
 结构化诊断（issue #51）：业务路径用 ``logger.*(..., extra={...})`` 记录阶段耗时、
-检测失败原因、资产版本等。字段命名与 web 端（``web/logger.js`` /
+检测失败原因、资产版本等。字段命名与 web 端（``web/src/services/logger.ts`` /
 ``docs/OBSERVABILITY.md``）保持单一真源：``event`` / ``phase`` / ``durationMs`` /
 ``reason`` / ``assetVersions`` / ``langerfaceVersion``。``Phase`` 与
 ``DetectFailureReason`` 在此集中定义，避免失败原因散落成自由文本。
@@ -21,7 +21,7 @@ _CONFIGURED = False
 _DEFAULT_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 
 
-# ── 结构化诊断字段约定（与 web/logger.js 单一真源对齐）─────────────────────────
+# ── 结构化诊断字段约定（与 web/src/services/logger.ts 单一真源对齐）────────────
 class Phase:
     """阶段名常量（对应 OBSERVABILITY.md 的 ``detail.phase``）。"""
 

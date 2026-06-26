@@ -28,14 +28,14 @@ FACE_FRAME_ANCHORS = {"top": 10, "bottom": 152, "left": 234, "right": 454}
 # 内唇关键点集合（上唇下缘 + 下唇上缘 + 口角）。这些点构成口裂边界，
 # 三个顶点全在此集合内的三角面闭口时近乎退化、张嘴时横跨口腔空洞——
 # 图谱里落在这类三角面上的点张嘴会跳进口内 / 牙齿。渲染期据此排除（见 #38）。
-# 单一事实来源：web/geometry.js 的 INNER_LIP 与此一致。
+# 单一事实来源：web/src/services/geometryAtlas.ts 的 INNER_LIP 与此一致。
 INNER_LIP = frozenset({78, 80, 88, 95, 191, 308, 310, 318, 324, 415})
 
 
 def inner_mouth_triangles(triangles) -> set[int]:
     """返回「≥2 个顶点属于 INNER_LIP」的三角面索引集合（口裂三角面）。
 
-    triangles: (M, 3) 顶点索引数组 / 序列。与 web/geometry.js innerMouthTriangles 等价。
+    triangles: (M, 3) 顶点索引数组 / 序列。与 web/src/services/geometryAtlas.ts innerMouthTriangles 等价。
     """
     out: set[int] = set()
     for i, t in enumerate(triangles):

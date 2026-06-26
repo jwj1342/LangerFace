@@ -5,7 +5,7 @@
 鼻尖附近的三角面一定朝向相机，用它确定“朝前”的符号。
 
 注：MediaPipe 不提供外部遮挡（如手挡脸）的深度，故此处仅处理自遮挡（朝向）。
-（手部遮挡目前仅在 web 前端实现，见 web/geometry.js。）
+（手部遮挡目前仅在 web 前端实现，见 web/src/services/geometryOccluders.ts。）
 """
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
-# 跨语言一致性（Python ⇄ JS ⇄ 金标）
+# 跨语言一致性（Python ⇄ Web TypeScript ⇄ 金标）
 
-本文定义线条几何在 Python 与 JS 两套实现间的**逐点等价不变式**、活体对拍机制，以及金标的一键重生成流程，
+本文定义线条几何在 Python 与 Web TypeScript 两套实现间的**逐点等价不变式**、活体对拍机制，以及金标的一键重生成流程，
 确保单边改动不会静默漂移过 CI。配合 [ARCHITECTURE.md](ARCHITECTURE.md)（几何算法）阅读。
 
 ## 不变式
@@ -9,14 +9,14 @@
 
 - **Python**（生产）：`langerface.lines.map_atlas` + `langerface.rendering.BackfaceCuller`
   + `langerface.detection.LandmarkSmoother`
-- **JS**（生产 / 浏览器）：`web/geometry.js` 的 `mapAtlas` / `visibleTriangles`
+- **Web TypeScript**（生产 / 浏览器）：`web/src/services/geometryAtlas.ts` 的 `mapAtlas` / `visibleTriangles`
   / `innerMouthTriangles` / `OneEuro`
 - **金标**：`web/test/expected.json`（在若干真实帧上冻结的输入关键点 + 期望输出）
 
 不变式：
 
 ```
-Python(landmarks) == JS(landmarks) == golden
+Python(landmarks) == Web TypeScript(landmarks) == golden
 ```
 
 具体到三个量：
@@ -30,16 +30,16 @@ Python(landmarks) == JS(landmarks) == golden
 | 断言方 | 文件 | 覆盖 |
 |---|---|---|
 | Python（live） | `tests/test_cross_lang_parity.py` | 从金标嵌入的关键点重算 pts/vis，断言匹配金标；One-Euro 夹具匹配 |
-| JS（对拍） | `tools/test_web_mapping.mjs`（`npm test` 内） | `web/geometry.js` 输出对金标 pts/vis；One-Euro 夹具匹配 |
+| Web TypeScript（对拍） | `tools/test_web_mapping.mjs`（`npm test` 内） | `web/src/services/geometryAtlas.ts` 输出对金标 pts/vis；One-Euro 夹具匹配 |
 
 CI 现状（**无需改 `.github/workflows/ci.yml`**）：
 
 - `pytest` 已自动收集并运行 `tests/test_cross_lang_parity.py`（live Python 侧）。
-- `npm test` 已运行 `tools/test_web_mapping.mjs`（JS 侧）。
+- `npm test` 已运行 `tools/test_web_mapping.mjs`（Web TypeScript 侧）。
 
 历史缺口（#28）：CI 从不重跑 Python 生成金标，且旧 `.mjs` 的对拍路径**没有**应用口裂掩膜，
 于是单边的 Python 改动（如 #38 排除口裂三角面）会从 CI 旁漏过去、让金标静默漂移。
-现已通过「live Python 重算 + JS 对拍应用同一口裂掩膜」双向闭合。
+现已通过「live Python 重算 + Web TypeScript 对拍应用同一口裂掩膜」双向闭合。
 
 ## 一键复现金标（非私有，无 mediapipe / 无私有素材）
 

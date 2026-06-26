@@ -8,7 +8,7 @@ import {
   frameMotionNorm,
   normalizeFaceExpression,
   regionMotionNorm,
-} from "../web/geometry.js";
+} from "../web/src/services/geometryPoseQuality.ts";
 
 function makeFace({ noseX = 320, shiftX = 0 } = {}) {
   const lm = Array.from({ length: 478 }, () => [320 + shiftX, 240, 0]);

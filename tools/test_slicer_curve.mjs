@@ -1,6 +1,6 @@
-// Dependency-free tests for web/slicer_curve.js (Slicer .mrk.json import + resampling + hardening).
+// Dependency-free tests for the TypeScript Slicer curve importer.
 // Run: node tools/test_slicer_curve.mjs
-import { __slicerCurveForTests } from "../web/slicer_curve.js";
+import { __slicerCurveForTests } from "../web/src/services/slicerCurve.ts";
 
 const { parseSlicerMarkups, smoothAndResample } = __slicerCurveForTests;
 

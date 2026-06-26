@@ -28,7 +28,7 @@ manual / temporary
 
 | 部分 | 负责什么 |
 |---|---|
-| GitHub Actions | 代码质量、Python 测试、JS 几何对拍、Vite 构建能否通过 |
+| GitHub Actions | 代码质量、Python 测试、Web TypeScript 几何对拍、Vite 构建能否通过 |
 | Vercel | Production URL、按需刷新的当前开发 Preview URL、缓存头、域名 |
 | Cloudflare（将来） | Worker API、D1、R2、受限数据鉴权；不负责当前静态前端部署 |
 

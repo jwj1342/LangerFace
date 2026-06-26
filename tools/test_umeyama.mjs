@@ -1,6 +1,6 @@
 // 验证 Umeyama 相似变换：施加已知 (scale,rot,trans) 后能否恢复。
 //   node tools/test_umeyama.mjs
-import { umeyama, applySim } from "../web/geometry.js";
+import { umeyama, applySim } from "../web/src/services/geometryTransform.ts";
 
 let fail = 0;
 const ok = (c, m) => { if (!c) { console.error("FAIL:", m); fail++; } else console.log("ok:", m); };

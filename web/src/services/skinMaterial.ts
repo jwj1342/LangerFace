@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import { logWarn } from "../../logger.js";
+import { logWarn } from "./logger.ts";
 import type { Vec3 } from "./softBody";
 
 const DEFAULT_SKIN_COLOR = 0xd6aa8f;

@@ -3,7 +3,7 @@ import { Canvas } from "@react-three/fiber";
 import { useMemo } from "react";
 import * as THREE from "three";
 
-import { buildLineGeometry, vertexNormals } from "../../three3d.js";
+import { buildLineGeometry, vertexNormals } from "../services/three3d.ts";
 import { R3FLoadingCard } from "./ui/r3f-loading-card";
 
 export type PreviewVec3 = [number, number, number];

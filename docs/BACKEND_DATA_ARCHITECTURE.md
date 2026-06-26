@@ -241,7 +241,7 @@ bucket: langerface-assets   (私有)
 ## 前端数据源抽象（"缝"已埋最小面，完整接口待 Phase 1）
 
 目标形态：UI 不直接 `fetch("assets/...")` 或下载文件，统一通过数据源接口取存数据。React SPA 的真实实现位于
-`web/src/services/dataSource.ts`，`web/data_source.js` 只作为旧 JS 兼容 re-export；后端到位时**只换 service 实现、不改 UI**。
+`web/src/services/dataSource.ts`；后端到位时**只换 service 实现、不改 UI**。
 完整接口草案（前瞻规格，按 issue #48 推进）：
 
 ```js
@@ -256,7 +256,7 @@ bucket: langerface-assets   (私有)
 `stageIncisionOverlay(overlay)` / `loadIncisionOverlay()` / `clearIncisionOverlay()`（基于 sessionStorage 的跨工作台传递，不落盘、不发布）。
 完整数据接口（`listHeads/getHeadMesh/loadAtlas/saveAnnotation/listAnnotations`）目前仅为上方草案，**推迟到 Phase 1 接入 `ApiDataSource` 时补全**。
 
-在此之前，UI 主路径仍**直接静态 `fetch` 运行时资产**（如 `pipeline.js` 的 `ensureReady()`、`annotateRuntime.ts` 的 `loadCanonical()`、`mode3d.js` 的重建参考），其 URL 已统一收敛到 `web/assets.js`（`assetUrls` / `loadJsonAsset`，支持 `assetBase` 与 `VITE_LANGERFACE_ASSET_BASE_URL`）。这是 Phase 0 **已接受的现状**而非违例：数据源抽象按需增量引入，"所有取数都过接口"的不变式随 `ApiDataSource`（后端落地）一并达成，而非现在强制。
+在此之前，UI 主路径仍**直接静态 `fetch` 运行时资产**（如 `pipeline.ts` 的 `ensureReady()`、`annotateRuntime.ts` 的 `loadCanonical()`、`mode3d.ts` 的重建参考），其 URL 已统一收敛到 `web/src/services/assetLoader.ts`（`assetUrls` / `loadJsonAsset`，支持 `assetBase` 与 `VITE_LANGERFACE_ASSET_BASE_URL`）。这是 Phase 0 **已接受的现状**而非违例：数据源抽象按需增量引入，"所有取数都过接口"的不变式随 `ApiDataSource`（后端落地）一并达成，而非现在强制。
 
 ## 离线重计算
 

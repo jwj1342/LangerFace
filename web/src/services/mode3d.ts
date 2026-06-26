@@ -1,17 +1,18 @@
 // 3D 重建（Beta）：转头扫描/示例重建 → 旋转查看 → 相似变换投影回实时画面。
-import { RIGID3D } from "../../constants.js";
-import { assetUrls } from "../../assets.js";
-import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "../../camera.js";
-import { ctx as boundCtx, els } from "../../dom.js";
-import { applySim, toPixels, umeyama } from "../../geometry.js";
-import type { Triangle, Vec3 } from "../../geometry.js";
-import { facesArray, fitExpression, fitShape, flameForward, loadFlameBasis } from "../../flame_fit.js";
-import type { FlameBasis } from "../../flame_fit.js";
-import { countMetric, logWarn, recordEvent, recordMetricSample, setDiagnosticSection } from "../../logger.js";
-import { ensureReady } from "../../pipeline/models.js";
-import { showCameraPlaceholder, startCamera, stopSource } from "../../pipeline/source.js";
-import { modelState, reconState, renderState, sourceState } from "../../state.js";
-import { setLive, setMsg } from "../../ui.js";
+import { RIGID3D } from "./constants.ts";
+import { assetUrls } from "./assetLoader.ts";
+import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./cameraSource.ts";
+import { ctx as boundCtx, els } from "./liveDom.ts";
+import { toPixels } from "./geometryAtlas.ts";
+import { applySim, umeyama } from "./geometryTransform.ts";
+import type { Triangle, Vec3 } from "./softBody.ts";
+import { facesArray, fitExpression, fitShape, flameForward, loadFlameBasis } from "./flameFit.ts";
+import type { FlameBasis } from "./flameFit.ts";
+import { countMetric, logWarn, recordEvent, recordMetricSample, setDiagnosticSection } from "./logger.ts";
+import { ensureReady } from "./pipelineModels.ts";
+import { showCameraPlaceholder, startCamera, stopSource } from "./pipelineSource.ts";
+import { modelState, reconState, renderState, sourceState } from "./liveState.ts";
+import { setLive, setMsg } from "./liveUi.ts";
 
 type AnyRecord = Record<string, any>;
 type ColorFrame = Vec3[];
@@ -71,7 +72,7 @@ async function fetchCanonicalRef(): Promise<Vec3[]> {
 
 async function ensureHead3D(): Promise<void> {
   if (reconState.head3d) return;
-  const mod = await import("./three3d.js");
+  const mod = await import("./three3d.ts");
   reconState.head3d = new mod.Head3D(els.three);
   let drag = false, px = 0, py = 0;
   els.three.addEventListener("pointerdown", (e) => { drag = true; px = e.clientX; py = e.clientY; els.three.setPointerCapture(e.pointerId); });
@@ -217,7 +218,7 @@ export function resetView3d() {
 }
 
 // ── 实时孪生：左实时人脸 / 右 FLAME 头随头姿转 + 浏览器本地拟合（身份 + 表情 + 张嘴）──────
-// 头姿调参（这边看不到渲染，留旋钮；若「转反了」翻对应 sign）。jaw 调参见 flame_fit.js 的 JAW。
+// 头姿调参（这边看不到渲染，留旋钮；若「转反了」翻对应 sign）。jaw 调参见 flameFit.ts 的 JAW。
 const POSE = { yawSign: 1, pitchSign: 1, pitchClamp: 1.3 };
 const ZERO_BETA = new Float64Array(60);  // 标准头身份系数（全 0 = neutral 标准脸）
 const EXPR_AMPLIFY = 1.3;  // 表情放大（landmark-only 拟合偏淡，放大更明显；旋钮）

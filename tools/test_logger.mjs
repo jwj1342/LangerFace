@@ -12,7 +12,7 @@ import {
   setAssetVersions,
   setDiagnosticSection,
   snapshotDiagnostics,
-} from "../web/logger.js";
+} from "../web/src/services/logger.ts";
 
 resetDiagnostics();
 

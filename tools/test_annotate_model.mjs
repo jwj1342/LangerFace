@@ -1,6 +1,6 @@
 // 网页标注纯模型测试（无 Three.js / DOM）。  node tools/test_annotate_model.mjs
-import { AnnotationModel, barycentric } from "../web/annotate_model.js";
-import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "../web/constants.js";
+import { AnnotationModel, barycentric } from "../web/src/services/annotationModel.ts";
+import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "../web/src/services/constants.ts";
 
 let fail = 0;
 const ok = (c, m) => { if (!c) { console.error("FAIL:", m); fail++; } else console.log("ok:", m); };

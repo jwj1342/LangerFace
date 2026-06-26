@@ -1,10 +1,10 @@
 // Live workbench runtime: wires DOM events and model bootstrap under the React route adapter.
-import { bindDom, clearDomBinding, els } from "../../dom.js";
-import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "../../canvas_fit.js";
+import { bindDom, clearDomBinding, els } from "./liveDom.ts";
+import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./liveCanvasFit.ts";
 import { validateIncisionOverlay } from "./incisionOverlay.ts";
-import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, stopTwin, toggleTwinHead, toggleTwinTexture } from "../../mode3d.js";
-import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "../../pipeline.js";
-import { adjustFocusZoom, buildZoomCards } from "../../render.js";
+import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, stopTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.ts";
+import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.ts";
+import { adjustFocusZoom, buildZoomCards } from "./render2d.ts";
 import {
   LIVE_CONTROLLER_STATE_EVENT,
   LIVE_RENDER_REACT_COMMAND_EVENT,
@@ -19,7 +19,7 @@ import {
   dispatchControllerEvent,
   readControllerCommandDetail,
 } from "../lib/controllerCommand";
-import type { LiveZoomCard } from "../../render.js";
+import type { LiveZoomCard } from "./render2d.ts";
 import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
 import {
   buildLiveControllerSnapshot,

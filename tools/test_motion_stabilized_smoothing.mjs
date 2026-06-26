@@ -1,8 +1,8 @@
 // Contract checks for #39 whole-face motion stabilization.
 //   node tools/test_motion_stabilized_smoothing.mjs
 import assert from "node:assert/strict";
-import { RIGID3D } from "../web/constants_generated.js";
-import { MotionStabilizedOneEuro, OneEuro, __smoothingForTests } from "../web/geometry.js";
+import { RIGID3D } from "../web/src/services/constantsGenerated.ts";
+import { MotionStabilizedOneEuro, OneEuro, __smoothingForTests } from "../web/src/services/geometrySmoothing.ts";
 
 function makeFace(shiftX = 0, localEyeNoise = 0) {
   const landmarks = Array.from({ length: 478 }, (_, index) => [

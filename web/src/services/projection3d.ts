@@ -1,6 +1,7 @@
-import { RIGID3D } from "../../constants.js";
-import { applySim, type Vec3, umeyama } from "../../geometry.js";
-import { reconState } from "../../state.js";
+import { RIGID3D } from "./constants.ts";
+import { applySim, umeyama } from "./geometryTransform.ts";
+import type { Vec3 } from "./softBody.ts";
+import { reconState } from "./liveState.ts";
 
 export function projectVerts(lm: Vec3[]): Vec3[] {
   const reconVerts = reconState.reconVerts;

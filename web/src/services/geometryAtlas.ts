@@ -4,7 +4,7 @@ import {
   NOSE_TIP,
   TOPOLOGY_ID,
   TOPOLOGY_VERSION,
-} from "../../constants_generated.js";
+} from "./constantsGenerated.ts";
 import type { Triangle, Vec3 } from "./softBody";
 
 export { NOSE_TIP };

@@ -1,9 +1,11 @@
-import { ctx, els } from "../../dom.js";
-import { buildHandMasks, toPixels, type HandMask, type NormalizedLandmark, type Vec3 } from "../../geometry.js";
-import { countMetric, logWarn, recordMetricSample } from "../../logger.js";
-import { projectVerts } from "../../projection3d.js";
-import { clearZooms, draw, drawFocusedRegion, drawZooms, updateStats } from "../../render.js";
-import { modelState, renderState, sourceState } from "../../state.js";
+import { ctx, els } from "./liveDom.ts";
+import { toPixels, type NormalizedLandmark } from "./geometryAtlas.ts";
+import { buildHandMasks, type HandMask } from "./geometryOccluders.ts";
+import type { Vec3 } from "./softBody.ts";
+import { countMetric, logWarn, recordMetricSample } from "./logger.ts";
+import { projectVerts } from "./projection3d.ts";
+import { clearZooms, draw, drawFocusedRegion, drawZooms, updateStats } from "./render2d.ts";
+import { modelState, renderState, sourceState } from "./liveState.ts";
 
 interface VideoDetector {
   detectForVideo: (source: unknown, timeMs: number) => {

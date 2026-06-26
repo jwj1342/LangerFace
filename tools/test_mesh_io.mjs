@@ -1,6 +1,6 @@
-// Dependency-free tests for web/mesh_io.js (OBJ / PLY / JSON parsers + hardening).
+// Dependency-free tests for the TypeScript mesh parser (OBJ / PLY / JSON parsers + hardening).
 // Run: node tools/test_mesh_io.mjs
-import { __meshIoForTests } from "../web/mesh_io.js";
+import { __meshIoForTests } from "../web/src/services/meshIo.ts";
 
 const { parseJsonMesh, parseObjMesh, parsePlyMesh } = __meshIoForTests;
 

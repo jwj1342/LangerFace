@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createSkinMaterial, meshBounds } from "../web/skin_material.js";
+import { createSkinMaterial, meshBounds } from "../web/src/services/skinMaterial.ts";
 
 const verts = [
   [-2, -4, -1],

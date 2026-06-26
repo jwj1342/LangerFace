@@ -1,4 +1,4 @@
-import { ONEEURO_BETA, ONEEURO_DCUTOFF, ONEEURO_MIN_CUTOFF, RIGID3D } from "../../constants_generated.js";
+import { ONEEURO_BETA, ONEEURO_DCUTOFF, ONEEURO_MIN_CUTOFF, RIGID3D } from "./constantsGenerated.ts";
 import type { Vec3 } from "./softBody";
 
 export interface OneEuroOptions {

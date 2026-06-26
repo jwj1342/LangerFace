@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
-import { barycentric, type AnnotationLine, type AnnotationModel, type AnnotationPoint } from "../../annotate_model.js";
-import { addSkinLighting, configureSkinRenderer, createSkinMaterial } from "../../skin_material.js";
+import { barycentric, type AnnotationLine, type AnnotationModel, type AnnotationPoint } from "./annotationModel.ts";
+import { addSkinLighting, configureSkinRenderer, createSkinMaterial } from "./skinMaterial.ts";
 import type { Triangle, Vec3 } from "./softBody";
 
 type RGB = [number, number, number];

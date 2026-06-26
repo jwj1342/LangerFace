@@ -1,5 +1,5 @@
-import { MotionStabilizedOneEuro } from "../../geometry.js";
-import type { LiveZoomCard } from "../../render.js";
+import { MotionStabilizedOneEuro } from "./geometrySmoothing.ts";
+import type { LiveZoomCard } from "./render2d.ts";
 import type { CanvasRecordingController } from "./canvasRecording";
 import type { IncisionOverlayPayload } from "./dataSource";
 

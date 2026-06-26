@@ -1,11 +1,11 @@
-// 浏览器内 FLAME（web/flame_fit.js）的 Node 对拍：身份拟合(≈1.6mm) + 表情拟合(可恢复) + jaw 前向(张嘴动下半脸)。
+// 浏览器内 FLAME（web/src/services/flameFit.ts）的 Node 对拍：身份拟合(≈1.6mm) + 表情拟合(可恢复) + jaw 前向(张嘴动下半脸)。
 // 依赖 web/assets/flame_basis.bin（CC-BY-4.0，已入库）+ web/assets/canonical_vertices.json。
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { basisFromBuffer, fitExpression, fitShape, flameForward } from "../web/flame_fit.js";
+import { basisFromBuffer, fitExpression, fitShape, flameForward } from "../web/src/services/flameFit.ts";
 
 const web = join(dirname(fileURLToPath(import.meta.url)), "..", "web");
 const buf = readFileSync(join(web, "assets", "flame_basis.bin"));
@@ -47,4 +47,4 @@ const { psi, residual: rExpr } = fitExpression(obs, basis, beta);
 assert.equal(psi.length, 50);
 assert.ok(rExpr < 1e-2, `表情拟合残差 ${rExpr} 应很小`);
 
-console.log(`ok: flame_fit.js — 身份 ${(residual * 1000).toFixed(2)}mm · jaw 动 ${movedJaw} 顶点 · 表情拟合残差 ${(rExpr * 1000).toFixed(2)}mm`);
+console.log(`ok: flameFit.ts — 身份 ${(residual * 1000).toFixed(2)}mm · jaw 动 ${movedJaw} 顶点 · 表情拟合残差 ${(rExpr * 1000).toFixed(2)}mm`);

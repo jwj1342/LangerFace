@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { fitContainSize } from "../web/fit_math.js";
+import { fitContainSize } from "../web/src/services/fitMath.ts";
 
 {
   const fit = fitContainSize(1067, 1600, 920, 739);

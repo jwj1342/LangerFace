@@ -1,12 +1,12 @@
-import { clearCanvasDisplayFit, fitCanvasDisplayToStage } from "../../canvas_fit.js";
-import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "../../camera.js";
-import { ctx, els } from "../../dom.js";
-import { prepareImageSource } from "../../image_source.js";
-import { countMetric, logWarn } from "../../logger.js";
-import { renderState, sourceState } from "../../state.js";
-import { setLive, setMsg } from "../../ui.js";
-import { requestFrame } from "../../pipeline/loop.js";
-import { ensureReady } from "../../pipeline/models.js";
+import { clearCanvasDisplayFit, fitCanvasDisplayToStage } from "./liveCanvasFit.ts";
+import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./cameraSource.ts";
+import { ctx, els } from "./liveDom.ts";
+import { prepareImageSource } from "./imageSource.ts";
+import { countMetric, logWarn } from "./logger.ts";
+import { renderState, sourceState } from "./liveState.ts";
+import { setLive, setMsg } from "./liveUi.ts";
+import { requestFrame } from "./pipelineLoop.ts";
+import { ensureReady } from "./pipelineModels.ts";
 
 type SourceKind = "camera" | "video" | "image";
 

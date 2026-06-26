@@ -91,8 +91,6 @@ const candidateResultPanel = read("src/components/CandidateResultPanel.tsx");
 const candidateLibraryPanel = read("src/components/CandidateLibraryPanel.tsx");
 const privacyAuditPanel = read("src/components/PrivacyAuditPanel.tsx");
 const providerPanel = read("src/components/ProviderConfigPanel.tsx");
-const llmProviderTypes = read("llm_provider.d.ts");
-const llmProviderFacade = read("llm_provider.js");
 const llmProviderService = read("src/services/llmProvider.ts");
 const editPanel = read("src/components/EditControlsPanel.tsx");
 const reviewPanel = read("src/components/ReviewControlsPanel.tsx");
@@ -136,10 +134,7 @@ const annotateSnapshotsService = read("src/services/annotateSnapshots.ts");
 const liveSnapshotsService = read("src/services/liveSnapshots.ts");
 const incisionSnapshotsService = read("src/services/incisionSnapshots.ts");
 const annotateRuntime = read("src/services/annotateRuntime.ts");
-const annotateModelTypes = read("annotate_model.d.ts");
 const annotationModelService = read("src/services/annotationModel.ts");
-const annotateViewerTypes = read("annotate_viewer.d.ts");
-const flameFitTypes = read("flame_fit.d.ts");
 const flameFitService = read("src/services/flameFit.ts");
 const annotateViewerService = read("src/services/annotateViewer.ts");
 const controller = read("src/services/incisionAgentRuntime.ts");
@@ -147,66 +142,48 @@ const incisionOverlayService = read("src/services/incisionOverlay.ts");
 const incisionCandidateToolsService = read("src/services/incisionCandidateTools.ts");
 const incisionWorkflowToolsService = read("src/services/incisionWorkflowTools.ts");
 const incisionToolsBarrel = read("src/services/incisionTools.ts");
-const three3dTypes = read("three3d.d.ts");
 const three3dService = read("src/services/three3d.ts");
-const exportPrivacyTypes = read("export_privacy.d.ts");
-const exportPrivacyFacade = read("export_privacy.js");
 const exportPrivacyService = read("src/services/exportPrivacy.ts");
-const dom = read("dom.js");
 const liveController = read("src/services/liveRuntime.ts");
 const liveDomService = read("src/services/liveDom.ts");
-const liveDomTypes = read("dom.d.ts");
-const liveUiTypes = read("ui.d.ts");
-const liveUiFacade = read("ui.js");
 const liveUiService = read("src/services/liveUi.ts");
-const liveStateTypes = read("state.d.ts");
 const liveStateService = read("src/services/liveState.ts");
-const liveCanvasFitTypes = read("canvas_fit.d.ts");
-const liveCanvasFitFacade = read("canvas_fit.js");
 const liveCanvasFitService = read("src/services/liveCanvasFit.ts");
-const liveDataSourceTypes = read("data_source.d.ts");
-const liveDataSourceFacade = read("data_source.js");
 const liveDataSourceService = read("src/services/dataSource.ts");
-const liveExportCanvasTypes = read("export_canvas.d.ts");
-const liveExportCanvasFacade = read("export_canvas.js");
 const liveExportCanvasService = read("src/services/canvasRecording.ts");
-const liveCameraTypes = read("camera.d.ts");
-const liveCameraFacade = read("camera.js");
 const liveCameraService = read("src/services/cameraSource.ts");
-const liveImageSourceTypes = read("image_source.d.ts");
-const liveImageSourceFacade = read("image_source.js");
 const liveImageSourceService = read("src/services/imageSource.ts");
 const liveRuntimeDependencyTypes = [
-  "camera.d.ts",
-  "dom.d.ts",
-  "canvas_fit.d.ts",
-  "data_source.d.ts",
-  "export_canvas.d.ts",
-  "image_source.d.ts",
-  "logger.d.ts",
-  "mode3d.d.ts",
-  "pipeline.d.ts",
-  "render.d.ts",
-  "state.d.ts",
-  "ui.d.ts",
+  "src/services/cameraSource.ts",
+  "src/services/liveDom.ts",
+  "src/services/liveCanvasFit.ts",
+  "src/services/dataSource.ts",
+  "src/services/canvasRecording.ts",
+  "src/services/imageSource.ts",
+  "src/services/logger.ts",
+  "src/services/mode3d.ts",
+  "src/services/pipeline.ts",
+  "src/services/render2d.ts",
+  "src/services/liveState.ts",
+  "src/services/liveUi.ts",
 ];
 const annotateRuntimeDependencyTypes = [
-  "annotate_model.d.ts",
-  "annotate_viewer.d.ts",
-  "assets.d.ts",
-  "flame_fit.d.ts",
-  "mesh_io.d.ts",
-  "slicer_curve.d.ts",
-  "soft_body.d.ts",
-  "topology_registry.d.ts",
+  "src/services/annotationModel.ts",
+  "src/services/annotateViewer.ts",
+  "src/services/assetLoader.ts",
+  "src/services/flameFit.ts",
+  "src/services/meshIo.ts",
+  "src/services/slicerCurve.ts",
+  "src/services/softBody.ts",
+  "src/services/topologyRegistry.ts",
 ];
 const incisionRuntimeDependencyTypes = [
-  "assets.d.ts",
-  "data_source.d.ts",
-  "export_privacy.d.ts",
-  "llm_provider.d.ts",
-  "soft_body.d.ts",
-  "three3d.d.ts",
+  "src/services/assetLoader.ts",
+  "src/services/dataSource.ts",
+  "src/services/exportPrivacy.ts",
+  "src/services/llmProvider.ts",
+  "src/services/softBody.ts",
+  "src/services/three3d.ts",
 ];
 const layoutPrimitiveNames = new Set(["ReactShell.tsx", "StageShell.tsx", "WorkbenchLayout.tsx"]);
 const stagePanelSources = new Map([
@@ -1531,8 +1508,8 @@ assert.ok(providerConfigService.includes("localProviderFromRemotePageMessage"), 
 assert.ok(providerConfigService.includes("insecureProviderFromSecurePageMessage"), "Provider config service owns HTTPS-to-HTTP Provider warning text");
 assert.ok(providerConfigService.includes("redactedProviderConfig"), "Provider config service owns Provider export redaction");
 assert.ok(providerConfigService.includes("./llmProvider"), "Provider config service consumes the typed Provider connectivity contract");
-assert.ok(llmProviderFacade.includes("./src/services/llmProvider.ts"), "legacy llm_provider.js is only a compatibility facade over the TypeScript service");
-assert.ok(llmProviderTypes.includes("./src/services/llmProvider"), "LLM Provider declarations re-export the TypeScript implementation contract");
+assert.ok(!fs.existsSync(path.join(web, "llm_provider.js")), "legacy llm_provider.js facade has been removed after TypeScript service migration");
+assert.ok(!fs.existsSync(path.join(web, "llm_provider.d.ts")), "legacy LLM Provider declaration facade has been removed after TypeScript service migration");
 assert.ok(llmProviderService.includes("export interface ProviderConfig"), "TypeScript LLM Provider service owns ProviderConfig");
 assert.ok(llmProviderService.includes("export async function testProviderConnection"), "TypeScript LLM Provider service owns browser connectivity testing");
 assert.ok(llmProviderService.includes("Array.isArray(data.data)"), "TypeScript LLM Provider service counts OpenAI-compatible /models data arrays");
@@ -1616,11 +1593,11 @@ assert.ok(incisionWorkflowToolsService.includes("export function applyCandidateE
 assert.ok(incisionCandidateToolsService.includes("export function summarizeTumorBoundary"), "TypeScript incision candidate service exposes tumor boundary summaries");
 assert.ok(incisionOverlayService.includes("export function compileIncisionOverlay"), "TypeScript incision overlay service exposes live overlay compilation");
 assert.ok(incisionToolsBarrel.includes("./incisionWorkflowTools.ts"), "TypeScript incision tools barrel re-exports workflow helpers");
-assert.ok(three3dTypes.includes("./src/services/three3d"), "Three.js declarations re-export the TypeScript implementation contract");
+assert.ok(!fs.existsSync(path.join(web, "three3d.js")), "legacy three3d.js facade has been removed after TypeScript service migration");
+assert.ok(!fs.existsSync(path.join(web, "three3d.d.ts")), "legacy three3d declaration facade has been removed after TypeScript service migration");
 assert.ok(three3dService.includes("export class Head3D"), "TypeScript Three.js service exposes the 3D head renderer contract");
-assert.ok(exportPrivacyTypes.includes("auditExportPayload"), "privacy audit declarations expose browser export preflight checks");
-assert.ok(exportPrivacyFacade.includes("./src/services/exportPrivacy.ts"), "legacy export_privacy.js is only a compatibility facade over the TypeScript service");
-assert.ok(exportPrivacyTypes.includes("./src/services/exportPrivacy"), "privacy audit declarations re-export the TypeScript implementation contract");
+assert.ok(!fs.existsSync(path.join(web, "export_privacy.js")), "legacy export_privacy.js facade has been removed after TypeScript service migration");
+assert.ok(!fs.existsSync(path.join(web, "export_privacy.d.ts")), "legacy privacy audit declaration facade has been removed after TypeScript service migration");
 assert.ok(exportPrivacyService.includes("export function auditExportPayload"), "TypeScript export privacy service owns browser export preflight checks");
 assert.ok(controller.includes("./exportPrivacy"), "incision controller imports browser export privacy checks from the typed service");
 assert.ok(controller.includes("export function mountIncisionAgentWorkbench"), "incision controller exposes a mount lifecycle");
@@ -1874,16 +1851,15 @@ assert.ok(!annotateRuntime.includes("// @ts-nocheck"), "annotation runtime shoul
 assert.ok(annotateRuntime.includes("interface AnnotateDomElements"), "annotation runtime types its DOM binding surface");
 assert.ok(annotateRuntime.includes("interface DragState"), "annotation runtime types pointer drag state");
 assert.ok(annotateRuntime.includes("function controllerEvent"), "annotation runtime narrows browser command events before reading detail");
-assert.ok(
-  annotateModelTypes.includes("AnnotationModel") && annotationModelService.includes("class AnnotationModel"),
-  "annotation model declarations expose the typed line model contract",
-);
-assert.ok(annotateViewerTypes.includes("./src/services/annotateViewer"), "annotation viewer declarations re-export the TypeScript implementation contract");
+assert.ok(!fs.existsSync(path.join(web, "annotate_model.js")), "legacy annotate_model.js facade has been removed after TypeScript service migration");
+assert.ok(!fs.existsSync(path.join(web, "annotate_model.d.ts")), "legacy annotation model declaration facade has been removed after TypeScript service migration");
+assert.ok(annotationModelService.includes("class AnnotationModel"), "TypeScript annotation model service exposes the typed line model contract");
+assert.ok(!fs.existsSync(path.join(web, "annotate_viewer.js")), "legacy annotate_viewer.js facade has been removed after TypeScript service migration");
+assert.ok(!fs.existsSync(path.join(web, "annotate_viewer.d.ts")), "legacy annotation viewer declaration facade has been removed after TypeScript service migration");
 assert.ok(annotateViewerService.includes("export class Annotator3D"), "TypeScript annotation viewer service exposes the Three.js view contract");
-assert.ok(
-  flameFitTypes.includes("FlameBasis") && flameFitService.includes("interface FlameBasis"),
-  "FLAME declarations expose the typed browser fit basis contract",
-);
+assert.ok(!fs.existsSync(path.join(web, "flame_fit.js")), "legacy flame_fit.js facade has been removed after TypeScript service migration");
+assert.ok(!fs.existsSync(path.join(web, "flame_fit.d.ts")), "legacy FLAME declaration facade has been removed after TypeScript service migration");
+assert.ok(flameFitService.includes("interface FlameBasis"), "TypeScript FLAME service exposes the typed browser fit basis contract");
 assert.ok(annotateRuntime.includes("export function mountAnnotateWorkbench"), "annotation runtime exposes a mount lifecycle");
 assert.ok(annotateRuntime.includes("export function disposeAnnotateWorkbench"), "annotation runtime exposes a dispose lifecycle");
 assert.ok(annotateRuntime.includes("ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation runtime declares a React state bridge event");
@@ -2116,8 +2092,8 @@ assert.ok(liveSnapshotsService.includes("visibleLiveTextOf"), "shared live snaps
 assert.ok(liveSnapshotsService.includes("../lib/controllerSnapshotSchemas"), "shared live snapshot service re-exports the lightweight schema version");
 assert.ok(liveRouteControlsPanel.includes('to="/annotate"'), "React live route controls link to the React annotation route");
 assert.ok(liveWorkbench.includes('to="/incision"'), "React live workbench links to the React incision route");
-assert.ok(dom.includes("./src/services/liveDom.ts"), "legacy dom.js is only a compatibility facade over the TypeScript live DOM service");
-assert.ok(dom.includes("export { bindDom, clearDomBinding, ctx, els }"), "legacy dom.js re-exports the TypeScript live DOM contract");
+assert.ok(!fs.existsSync(path.join(web, "dom.js")), "legacy dom.js facade has been removed after TypeScript service migration");
+assert.ok(!fs.existsSync(path.join(web, "dom.d.ts")), "legacy DOM declaration facade has been removed after TypeScript service migration");
 assert.ok(liveDomService.includes("export function bindDom"), "TypeScript live DOM service can rebind element references for SPA route mounts");
 assert.ok(liveDomService.includes("export function clearDomBinding"), "TypeScript live DOM service can clear stale route element references on SPA unmount");
 assert.ok(liveDomService.includes("export let ctx"), "TypeScript live DOM service exports a live canvas context binding");
@@ -2128,40 +2104,39 @@ for (const rel of liveRuntimeDependencyTypes) {
 assert.ok(!liveController.includes("// @ts-nocheck"), "live runtime should run under strict TypeScript checking");
 assert.ok(liveController.includes("interface ImageDragState"), "live runtime types its route-local drag state");
 assert.ok(liveController.includes("function controllerEvent"), "live runtime narrows browser command events before reading detail");
-assert.ok(liveDomTypes.includes("LiveDomElements"), "DOM binding declarations expose typed live elements");
-assert.ok(liveDomTypes.includes("./src/services/liveDom"), "DOM binding declarations re-export the TypeScript implementation contract");
-assert.ok(liveStateTypes.includes("LiveRenderState"), "state declarations expose typed live render state");
-assert.ok(liveStateTypes.includes("./src/services/liveState"), "state declarations re-export the TypeScript implementation contract");
+assert.ok(liveDomService.includes("interface LiveDomElements"), "TypeScript live DOM service exposes typed live elements");
+assert.ok(!fs.existsSync(path.join(web, "state.js")), "legacy state.js facade has been removed after TypeScript service migration");
+assert.ok(!fs.existsSync(path.join(web, "state.d.ts")), "legacy state declaration facade has been removed after TypeScript service migration");
+assert.ok(liveStateService.includes("interface LiveRenderState"), "TypeScript live state service exposes typed live render state");
 assert.ok(liveStateService.includes("imageView"), "TypeScript live state service owns typed live image view state");
-assert.ok(liveCanvasFitFacade.includes("./src/services/liveCanvasFit.ts"), "legacy canvas_fit.js is only a compatibility facade over the TypeScript service");
+assert.ok(!fs.existsSync(path.join(web, "canvas_fit.js")), "legacy canvas_fit.js facade has been removed after TypeScript service migration");
+assert.ok(!fs.existsSync(path.join(web, "canvas_fit.d.ts")), "legacy canvas-fit declaration facade has been removed after TypeScript service migration");
 assert.ok(liveCanvasFitService.includes("export function fitCanvasDisplayToStage"), "TypeScript live canvas fit service owns stage fitting");
 assert.ok(liveCanvasFitService.includes("export function observeCanvasStageResize"), "TypeScript live canvas fit service owns resize cleanup");
 assert.ok(liveCanvasFitService.includes("export function clearCanvasDisplayFit"), "TypeScript live canvas fit service owns image fit cleanup");
-assert.ok(liveCanvasFitTypes.includes("./src/services/liveCanvasFit"), "canvas-fit declarations re-export the TypeScript implementation contract");
-assert.ok(liveDataSourceFacade.includes("./src/services/dataSource.ts"), "legacy data_source.js is only a compatibility facade over the TypeScript service");
+assert.ok(!fs.existsSync(path.join(web, "data_source.js")), "legacy data_source.js facade has been removed after TypeScript service migration");
+assert.ok(!fs.existsSync(path.join(web, "data_source.d.ts")), "legacy data-source declaration facade has been removed after TypeScript service migration");
 assert.ok(liveDataSourceService.includes("export interface BrowserDataSource"), "TypeScript data source service owns the shared browser data contract");
 assert.ok(liveDataSourceService.includes("export const LocalDataSource"), "TypeScript data source service owns the local sessionStorage implementation");
-assert.ok(liveDataSourceTypes.includes("./src/services/dataSource"), "data-source declarations re-export the TypeScript implementation contract");
-assert.ok(liveDataSourceTypes.includes("IncisionOverlayPayload"), "data source declarations type staged incision overlays");
-assert.ok(liveExportCanvasFacade.includes("./src/services/canvasRecording.ts"), "legacy export_canvas.js is only a compatibility facade over the TypeScript service");
+assert.ok(liveDataSourceService.includes("IncisionOverlayPayload"), "TypeScript data source service types staged incision overlays");
+assert.ok(!fs.existsSync(path.join(web, "export_canvas.js")), "legacy export_canvas.js facade has been removed after TypeScript service migration");
+assert.ok(!fs.existsSync(path.join(web, "export_canvas.d.ts")), "legacy export-canvas declaration facade has been removed after TypeScript service migration");
 assert.ok(liveExportCanvasService.includes("export interface CanvasRecordingController"), "TypeScript canvas recording service owns the recording lifecycle contract");
 assert.ok(liveExportCanvasService.includes("export function createCanvasRecordingController"), "TypeScript canvas recording service owns canvas recording creation");
-assert.ok(liveExportCanvasTypes.includes("CanvasRecordingController"), "export canvas declarations type recording lifecycle");
-assert.ok(liveExportCanvasTypes.includes("./src/services/canvasRecording"), "export canvas declarations re-export the TypeScript implementation contract");
-assert.ok(liveCameraFacade.includes("./src/services/cameraSource.ts"), "legacy camera.js is only a compatibility facade over the TypeScript service");
+assert.ok(!fs.existsSync(path.join(web, "camera.js")), "legacy camera.js facade has been removed after TypeScript service migration");
+assert.ok(!fs.existsSync(path.join(web, "camera.d.ts")), "legacy camera declaration facade has been removed after TypeScript service migration");
 assert.ok(liveCameraService.includes("export async function openCameraStream"), "TypeScript camera service owns camera acquisition");
 assert.ok(liveCameraService.includes("export function describeCameraError"), "TypeScript camera service owns actionable camera errors");
-assert.ok(liveCameraTypes.includes("./src/services/cameraSource"), "camera declarations re-export the TypeScript implementation contract");
-assert.ok(liveImageSourceFacade.includes("./src/services/imageSource.ts"), "legacy image_source.js is only a compatibility facade over the TypeScript service");
+assert.ok(!fs.existsSync(path.join(web, "image_source.js")), "legacy image_source.js facade has been removed after TypeScript service migration");
+assert.ok(!fs.existsSync(path.join(web, "image_source.d.ts")), "legacy image-source declaration facade has been removed after TypeScript service migration");
 assert.ok(liveImageSourceService.includes("export function prepareImageSource"), "TypeScript image source service owns uploaded image preparation");
 assert.ok(liveImageSourceService.includes("export function fitImageToMaxSide"), "TypeScript image source service owns image work-size fitting");
-assert.ok(liveImageSourceTypes.includes("./src/services/imageSource"), "image-source declarations re-export the TypeScript implementation contract");
-assert.ok(liveDomTypes.includes("clearDomBinding"), "DOM binding declarations expose route unmount cleanup");
-assert.ok(liveUiFacade.includes("./src/services/liveUi.ts"), "legacy ui.js is only a compatibility facade over the TypeScript service");
+assert.ok(liveDomService.includes("clearDomBinding"), "TypeScript DOM binding service exposes route unmount cleanup");
+assert.ok(!fs.existsSync(path.join(web, "ui.js")), "legacy ui.js facade has been removed after TypeScript service migration");
+assert.ok(!fs.existsSync(path.join(web, "ui.d.ts")), "legacy live UI declaration facade has been removed after TypeScript service migration");
 assert.ok(liveUiService.includes("export function setMsg"), "TypeScript live UI service owns transient message feedback");
 assert.ok(liveUiService.includes("export function setIncisionOverlayQa"), "TypeScript live UI service owns incision overlay QA feedback");
 assert.ok(liveUiService.includes("export function smoothLabel"), "TypeScript live UI service owns smoothing labels");
-assert.ok(liveUiTypes.includes("./src/services/liveUi"), "live UI declarations re-export the TypeScript implementation contract");
 assert.ok(liveController.includes("./liveUi"), "live runtime imports live UI helpers from the typed service");
 assert.ok(liveController.includes("export function mountLiveWorkbench"), "live controller exposes a mount lifecycle");
 assert.ok(liveController.includes("export function disposeLiveWorkbench"), "live controller exposes a dispose lifecycle");

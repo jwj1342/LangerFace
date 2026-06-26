@@ -1,12 +1,13 @@
 import { FaceLandmarker, FilesetResolver, HandLandmarker } from "@mediapipe/tasks-vision";
 
-import { validateAtlas } from "../../atlas_contract.js";
-import { assetUrls } from "../../assets.js";
-import { CDN, TOPOLOGY_ID, TOPOLOGY_VERSION } from "../../constants.js";
-import { els } from "../../dom.js";
-import { noseTriangles, type Triangle } from "../../geometry.js";
-import { countMetric, logInfo, logWarn, setAssetVersions } from "../../logger.js";
-import { modelState } from "../../state.js";
+import { validateAtlas } from "./atlasContract.ts";
+import { assetUrls } from "./assetLoader.ts";
+import { CDN, TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.ts";
+import { els } from "./liveDom.ts";
+import { noseTriangles } from "./geometryAtlas.ts";
+import type { Triangle } from "./softBody.ts";
+import { countMetric, logInfo, logWarn, setAssetVersions } from "./logger.ts";
+import { modelState } from "./liveState.ts";
 
 type Delegate = "GPU" | "CPU";
 type TopologyPayload = {

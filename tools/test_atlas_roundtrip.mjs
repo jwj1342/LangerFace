@@ -7,9 +7,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "../web/node_modules/typescript/lib/typescript.js";
 
-import { AnnotationModel, barycentric } from "../web/annotate_model.js";
-import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "../web/constants.js";
-import { mapAtlas, validateAtlasLines } from "../web/geometry.js";
+import { AnnotationModel, barycentric } from "../web/src/services/annotationModel.ts";
+import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "../web/src/services/constants.ts";
+import { mapAtlas, validateAtlasLines } from "../web/src/services/geometryAtlas.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 

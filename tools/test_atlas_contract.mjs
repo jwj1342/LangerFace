@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { ATLAS_VERSION, TOPOLOGY_ID, TOPOLOGY_VERSION } from "../web/constants.js";
-import { resolveAtlasForInjection, validateAtlas } from "../web/atlas_contract.js";
+import { ATLAS_VERSION, TOPOLOGY_ID, TOPOLOGY_VERSION } from "../web/src/services/constants.ts";
+import { resolveAtlasForInjection, validateAtlas } from "../web/src/services/atlasContract.ts";
 
 function atlas(overrides = {}) {
   return {
@@ -42,7 +42,7 @@ console.log("ok: atlas runtime contract validation");
 
 // ── 注入判定 resolveAtlasForInjection ──────────────────────────────────────────
 // 直接覆盖 setActiveAtlas 的运行时分支（对象/数组判别 + 走哪个校验器 + ok 契约 + 拓扑守卫），
-// 该路径因 pipeline.js 的 DOM 依赖无法在 Node 端经 setActiveAtlas 触达（见 #65 review）。
+// 该路径因浏览器 pipeline 的 DOM 依赖无法在 Node 端经 setActiveAtlas 触达（见 #65 review）。
 const TRIS2 = [[0, 1, 2], [0, 2, 3]];
 
 // 完整 atlas 对象、拓扑匹配 → 接受并返回 lineList

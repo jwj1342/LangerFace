@@ -1,8 +1,8 @@
 // 拓扑登记表测试（纯模块，无 DOM）。  node tools/test_topology_registry.mjs
 import assert from "node:assert/strict";
 
-import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "../web/constants.js";
-import { TOPOLOGIES, topologyMeta } from "../web/topology_registry.js";
+import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "../web/src/services/constants.ts";
+import { TOPOLOGIES, topologyMeta } from "../web/src/services/topologyRegistry.ts";
 
 assert.ok(TOPOLOGIES.length >= 2, "至少两套拓扑");
 

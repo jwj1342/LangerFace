@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import { addSkinLighting, configureSkinRenderer, createSkinMaterial } from "../../skin_material.js";
+import { addSkinLighting, configureSkinRenderer, createSkinMaterial } from "./skinMaterial.ts";
 import type { Triangle, Vec3 } from "./softBody";
 
 type RGB = [number, number, number];

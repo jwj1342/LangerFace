@@ -1,9 +1,10 @@
-// Node 对拍：验证 web/geometry.js 的映射/遮挡与 Python 端逐点一致。
+// Node 对拍：验证 TypeScript geometry services 的映射/遮挡与 Python 端逐点一致。
 //   node tools/test_web_mapping.mjs
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { mapAtlas, visibleTriangles, noseTriangles, innerMouthTriangles, OneEuro } from "../web/geometry.js";
+import { mapAtlas, visibleTriangles, noseTriangles, innerMouthTriangles } from "../web/src/services/geometryAtlas.ts";
+import { OneEuro } from "../web/src/services/geometrySmoothing.ts";
 
 const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const J = (p) => JSON.parse(fs.readFileSync(path.join(REPO, p), "utf8"));
@@ -66,5 +67,5 @@ console.log(`visibility mismatches: ${visMismatches}`);
 console.log(`one-euro fixture max error: ${oeErr.toExponential(3)}`);
 
 const ok = maxPosErr < 1e-2 && visMismatches === 0 && oeErr < 1e-9;
-console.log(ok ? "\n✅ JS 几何与 Python 一致" : "\n❌ 存在不一致");
+console.log(ok ? "\n✅ Web TypeScript 几何与 Python 一致" : "\n❌ 存在不一致");
 process.exit(ok ? 0 : 1);

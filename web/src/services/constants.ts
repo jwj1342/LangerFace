@@ -1,6 +1,6 @@
 // Static web constants. Python-shared topology/version constants remain generated
-// from constants.py through constants_generated.js.
-export { ATLAS_VERSION, RIGID3D, TOPOLOGY_ID, TOPOLOGY_VERSION } from "../../constants_generated.js";
+// from constants.py through constantsGenerated.ts.
+export { ATLAS_VERSION, RIGID3D, TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constantsGenerated.ts";
 
 export const CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35";
 

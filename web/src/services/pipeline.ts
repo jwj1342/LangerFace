@@ -1,13 +1,13 @@
-import { resolveAtlasForInjection } from "../../atlas_contract.js";
-import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "../../constants.js";
-import { logWarn } from "../../logger.js";
-import { loop } from "../../pipeline/loop.js";
-import { modelState, renderState, sourceState } from "../../state.js";
+import { resolveAtlasForInjection } from "./atlasContract.ts";
+import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.ts";
+import { logWarn } from "./logger.ts";
+import { loop } from "./pipelineLoop.ts";
+import { modelState, renderState, sourceState } from "./liveState.ts";
 import type { Triangle } from "./softBody";
 
-export { ensureReady } from "../../pipeline/models.js";
-export { handleFile, setSource, showCameraPlaceholder, startCamera, stopSource } from "../../pipeline/source.js";
-export { detectHands, loop, requestFrame } from "../../pipeline/loop.js";
+export { ensureReady } from "./pipelineModels.ts";
+export { handleFile, setSource, showCameraPlaceholder, startCamera, stopSource } from "./pipelineSource.ts";
+export { detectHands, loop, requestFrame } from "./pipelineLoop.ts";
 
 function requestRedraw(): void {
   if (sourceState.running && !sourceState.paused) requestAnimationFrame(loop);

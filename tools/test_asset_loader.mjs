@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 
-import { assetNames, assetUrl, loadJsonAsset, normalizeAssetBaseUrl } from "../web/assets.js";
+import { assetNames, assetUrl, loadJsonAsset, normalizeAssetBaseUrl } from "../web/src/services/assetLoader.ts";
 
 function createAssetServer() {
   return createServer((req, res) => {

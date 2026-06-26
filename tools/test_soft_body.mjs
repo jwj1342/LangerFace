@@ -7,8 +7,8 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { boundaryVerts, buildSoftBody, excise, stepSoftBody, vertexTension } from "../web/soft_body.js";
-import { rstlDirField } from "../web/rstl_field.js";
+import { boundaryVerts, buildSoftBody, excise, stepSoftBody, vertexTension } from "../web/src/services/softBody.ts";
+import { rstlDirField } from "../web/src/services/rstlField.ts";
 
 const web = join(dirname(fileURLToPath(import.meta.url)), "..", "web");
 const load = (f) => JSON.parse(readFileSync(join(web, "assets", f), "utf8"));
