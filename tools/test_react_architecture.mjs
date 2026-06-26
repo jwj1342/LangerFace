@@ -34,6 +34,7 @@ const controllerCommand = read("src/lib/controllerCommand.ts");
 const controllerEvents = read("src/lib/controllerEvents.ts");
 const controllerSnapshotSchemas = read("src/lib/controllerSnapshotSchemas.ts");
 const reactManagedWorkbench = read("src/lib/reactManagedWorkbench.ts");
+const uiAnnotateStatus = read("src/components/ui/annotate-status.tsx");
 const uiButton = read("src/components/ui/button.tsx");
 const uiButtonRow = read("src/components/ui/button-row.tsx");
 const uiCard = read("src/components/ui/card.tsx");
@@ -142,6 +143,9 @@ const assetLoadingConsumerSources = new Map([
 const r3fLoadingConsumerSources = new Map([
   ["SurgeryR3FScene.tsx", surgeryR3FScene],
   ["ThreePreviewScene.tsx", threePreviewScene],
+]);
+const annotateStatusConsumerSources = new Map([
+  ["AnnotateDrawPanel.tsx", annotateDrawPanel],
 ]);
 const reactShellConsumerSources = new Map([
   ["App.tsx", app],
@@ -304,6 +308,17 @@ const r3fLoadingConsumersWithRawClass = (className) => (
       || source.includes(`className={\`${className}`)
       || source.includes(`className={cn("${className}`)
       || source.includes(` ${className} `)
+    ))
+    .map(([name]) => name)
+);
+const annotateStatusConsumersWithRawClass = (className) => (
+  [...annotateStatusConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+      || source.includes(` ? "${className}`)
+      || source.includes(`: "${className}`)
     ))
     .map(([name]) => name)
 );
@@ -702,6 +717,16 @@ for (const className of ["asset-loading", "asset-spinner"]) {
   );
 }
 assert.ok(incisionStagePanel.includes("AssetLoadingOverlay"), "React incision stage uses the shared asset loading overlay primitive");
+assert.ok(uiAnnotateStatus.includes("CurrentLineStatus"), "shadcn-style annotation status primitive exports CurrentLineStatus");
+assert.ok(uiAnnotateStatus.includes('cn("current-state"'), "annotation status primitive preserves current-state styling");
+assert.ok(uiAnnotateStatus.includes('active && "active"'), "annotation status primitive preserves active styling");
+assert.ok(uiAnnotateStatus.includes('warn && "warning"'), "annotation status primitive preserves fallback warning styling");
+assert.deepEqual(
+  annotateStatusConsumersWithRawClass("current-state"),
+  [],
+  "React annotate draw panel should use CurrentLineStatus instead of hand-written current-state wrappers",
+);
+assert.ok(annotateDrawPanel.includes("CurrentLineStatus"), "React annotate draw panel uses the shared current line status primitive");
 assert.ok(uiR3FLoadingCard.includes("R3FLoadingCard"), "R3F loading primitive exports R3FLoadingCard");
 assert.ok(uiR3FLoadingCard.includes("@react-three/drei"), "R3F loading primitive owns the Drei Html overlay");
 assert.ok(uiR3FLoadingCard.includes("<Html center>"), "R3F loading primitive centers loading content through Drei Html");

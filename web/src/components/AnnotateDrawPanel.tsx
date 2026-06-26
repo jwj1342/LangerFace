@@ -2,6 +2,7 @@ import { dispatchAnnotateDrawCommand } from "../lib/controllerCommand";
 import { useAnnotateStore } from "../stores/annotateStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
+import { CurrentLineStatus } from "./ui/annotate-status";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -41,7 +42,9 @@ export function AnnotateDrawPanel() {
       <SectionTitle label="2. 填写当前线" value="可留空" />
       <Input id="annName" placeholder="线名，例如 forehead_h1" />
       <Input id="annRegion" placeholder="区域，例如 forehead / cheek / perioral" />
-      <div className={`current-state${active ? " active" : ""}${draft?.fallback ? " warning" : ""}`} id="currentState">{currentStateText(snapshot)}</div>
+      <CurrentLineStatus active={active} warn={Boolean(draft?.fallback)} id="currentState">
+        {currentStateText(snapshot)}
+      </CurrentLineStatus>
       <ButtonRow className="annotate-actions">
         <Button variant="workbenchPrimary" id="btnNew" type="button" disabled={active} onClick={() => dispatchAnnotateDrawCommand("start_line")}>开始一条线</Button>
         <Button variant="workbench" id="btnUndo" type="button" disabled={!active && !savedCount} onClick={() => dispatchAnnotateDrawCommand("undo_last")}>撤销上一个点</Button>
