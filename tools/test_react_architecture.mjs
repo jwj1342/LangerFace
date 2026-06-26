@@ -18,6 +18,7 @@ const tsconfig = JSON.parse(read("tsconfig.json"));
 const appHtml = read("app/index.html");
 const vite = read("vite.config.js");
 const vercel = read("vercel.json");
+const vercelConfig = JSON.parse(vercel);
 const app = read("src/App.tsx");
 const typedStore = read("src/stores/appStore.ts");
 const workbenchBrand = read("src/components/WorkbenchBrand.tsx");
@@ -127,6 +128,15 @@ assert.ok(tsconfig.compilerOptions?.strict, "TypeScript should run in strict mod
 assert.equal(tsconfig.compilerOptions?.jsx, "react-jsx", "TypeScript should use the React JSX transform");
 assert.ok(vite.includes("@tailwindcss/vite"), "Vite config loads the Tailwind plugin");
 assert.ok(vite.includes('app: resolve(import.meta.dirname, "app/index.html")'), "Vite builds the SPA app entry");
+assert.deepEqual(
+  vercelConfig.git?.deploymentEnabled,
+  {
+    "*": false,
+    master: true,
+    "React-架构重构": true,
+  },
+  "Vercel should only auto-deploy production and the active React refactor preview branch",
+);
 assert.ok(vercel.includes('"source": "/app/(.*)"'), "Vercel rewrites nested SPA routes");
 assert.ok(vercel.includes('"destination": "/app/index.html"'), "Vercel routes SPA paths back to app/index.html");
 
