@@ -141,7 +141,7 @@ const annotationModelService = read("src/services/annotationModel.ts");
 const annotateViewerTypes = read("annotate_viewer.d.ts");
 const flameFitTypes = read("flame_fit.d.ts");
 const flameFitService = read("src/services/flameFit.ts");
-const annotateViewer = read("annotate_viewer.js");
+const annotateViewerService = read("src/services/annotateViewer.ts");
 const controller = read("src/services/incisionAgentRuntime.ts");
 const incisionOverlayTypes = read("incision_overlay.d.ts");
 const incisionToolsTypes = read("incision_tools.d.ts");
@@ -1877,7 +1877,8 @@ assert.ok(
   annotateModelTypes.includes("AnnotationModel") && annotationModelService.includes("class AnnotationModel"),
   "annotation model declarations expose the typed line model contract",
 );
-assert.ok(annotateViewerTypes.includes("class Annotator3D"), "annotation viewer declarations expose the Three.js view contract");
+assert.ok(annotateViewerTypes.includes("./src/services/annotateViewer"), "annotation viewer declarations re-export the TypeScript implementation contract");
+assert.ok(annotateViewerService.includes("export class Annotator3D"), "TypeScript annotation viewer service exposes the Three.js view contract");
 assert.ok(
   flameFitTypes.includes("FlameBasis") && flameFitService.includes("interface FlameBasis"),
   "FLAME declarations expose the typed browser fit basis contract",
@@ -1915,7 +1916,7 @@ assert.ok(annotateRuntime.includes("abortController?.abort"), "annotation runtim
 assert.ok(annotateRuntime.includes("activeSession"), "annotation runtime guards async loaders across SPA unmounts");
 assert.ok(annotateRuntime.includes('"/app/live"'), "annotation preview jumps back to the React live route when managed by React");
 assert.ok(!annotateRuntime.includes('document.getElementById("stage")'), "annotation runtime no longer auto-mounts from legacy HTML");
-assert.ok(annotateViewer.includes("dispose()"), "annotation viewer exposes a WebGL dispose lifecycle");
+assert.ok(annotateViewerService.includes("dispose()"), "annotation viewer exposes a WebGL dispose lifecycle");
 assert.ok(liveRoute.includes("useLiveControllerBridge"), "live route mounts the Zustand/controller bridge");
 assert.ok(liveRoute.includes("ManagedWorkbenchRoute"), "React live route uses the shared managed route lifecycle");
 assert.ok(liveRoute.includes("liveLegacyController"), "React live route configures the live controller through the legacy adapter");
