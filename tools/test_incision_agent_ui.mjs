@@ -20,7 +20,12 @@ const html = normalizeTsxContracts([
   fs.readFileSync("src/components/PrivacyAuditPanel.tsx", "utf8"),
 ].join("\n"));
 const js = fs.readFileSync("src/services/incisionAgentRuntime.ts", "utf8");
-const tools = fs.readFileSync("incision_tools.js", "utf8");
+const tools = [
+  fs.readFileSync("src/services/incisionToolRules.ts", "utf8"),
+  fs.readFileSync("src/services/incisionToolCore.ts", "utf8"),
+  fs.readFileSync("src/services/incisionCandidateTools.ts", "utf8"),
+  fs.readFileSync("src/services/incisionWorkflowTools.ts", "utf8"),
+].join("\n");
 const exportPrivacy = fs.readFileSync("src/services/exportPrivacy.ts", "utf8");
 const providerConfig = fs.readFileSync("src/services/providerConfig.ts", "utf8");
 const tumorInputService = fs.readFileSync("src/services/tumorInput.ts", "utf8");
