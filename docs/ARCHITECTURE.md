@@ -221,7 +221,7 @@ npm run dev
 |---|---|
 | `web/annotate_model.js` | 纯数据模型：线/点管理、表面路径展开、重心坐标、导出图谱/xyz（node 可单测，见 `tools/test_annotate_model.mjs`） |
 | `web/annotate_viewer.js` | Three.js 场景：网格加载、射线表面拾取、线与控制点渲染 |
-| `web/annotate_main.js` | UI、模型、视图装配（指针拖拽/点击、导出、列表、快捷键） |
+| `web/src/services/annotateRuntime.ts` | 标注 runtime 装配（指针拖拽/点击、导出、列表、快捷键；临时 TypeScript 迁移边界） |
 | `web/app/index.html` / `web/src/routes/AnnotateRoute.tsx` / `web/src/components/Annotate*.tsx` | React 标注页入口与 UI |
 | `web/annotate.html` / `web/annotate.css` | 标注兼容跳转页与历史样式 |
 

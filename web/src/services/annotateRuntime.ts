@@ -1,18 +1,19 @@
+// @ts-nocheck
 // 网页 3D 标注入口：加载网格 → 在表面点击落点成线 → 导出图谱/xyz。
 // 拖拽旋转、滚轮缩放；点击（非拖拽）在网格表面拾取一个控制点。
-import { AnnotationModel } from "./annotate_model.js";
-import { Annotator3D } from "./annotate_viewer.js";
-import { assetUrls } from "./assets.js";
-import { dataSource } from "./data_source.js";
-import { facesArray, flameForward, loadFlameBasis } from "./flame_fit.js";
-import { parseMeshFile } from "./mesh_io.js";
-import { parseSlicerCurveFile } from "./slicer_curve.js";
+import { AnnotationModel } from "../../annotate_model.js";
+import { Annotator3D } from "../../annotate_viewer.js";
+import { assetUrls } from "../../assets.js";
+import { dataSource } from "../../data_source.js";
+import { facesArray, flameForward, loadFlameBasis } from "../../flame_fit.js";
+import { parseMeshFile } from "../../mesh_io.js";
+import { parseSlicerCurveFile } from "../../slicer_curve.js";
 import {
   ANNOTATE_CONTROLLER_STATE_EVENT,
   ANNOTATE_DRAW_REACT_COMMAND_EVENT,
   ANNOTATE_LIBRARY_REACT_COMMAND_EVENT,
   ANNOTATE_MESH_REACT_COMMAND_EVENT,
-} from "./src/lib/controllerEvents.ts";
+} from "../lib/controllerEvents";
 import {
   ANNOTATE_DRAW_COMMANDS,
   ANNOTATE_LIBRARY_COMMANDS,
@@ -20,14 +21,14 @@ import {
   bindWindowControllerEvents,
   dispatchControllerEvent,
   readControllerCommandDetail,
-} from "./src/lib/controllerCommand.ts";
-import { isReactManagedWorkbench } from "./src/lib/reactManagedWorkbench.ts";
+} from "../lib/controllerCommand";
+import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
 import {
   ANNOTATE_SYSTEM_LABELS as SYSTEM_LABELS,
   buildAnnotateControllerSnapshot,
   controlsOf,
-} from "./src/services/annotateSnapshots.ts";
-import { topologyMeta } from "./topology_registry.js";
+} from "./annotateSnapshots";
+import { topologyMeta } from "../../topology_registry.js";
 
 const $ = (root, id) => {
   if (root?.getElementById) return root.getElementById(id);
@@ -137,10 +138,10 @@ async function loadCanonical() {
 // FLAME 资产为 dev-local（gitignore）：用 import.meta.glob 在构建期按存在与否解析，
 // 缺失（CI / 生产构建）时 glob 为空 → FLAME 入口自动隐藏，绝不影响构建。
 const FLAME_URLS = import.meta.glob(
-  "./assets/{topology_flame_2023,flame_neutral_vertices,flame_fitted_vertices}.json",
+  "../../assets/{topology_flame_2023,flame_neutral_vertices,flame_fitted_vertices}.json",
   { query: "?url", import: "default", eager: true },
 );
-const flameUrl = (name) => FLAME_URLS[`./assets/${name}.json`] || null;
+const flameUrl = (name) => FLAME_URLS[`../../assets/${name}.json`] || null;
 const flameAvailable = () =>
   Boolean(flameUrl("topology_flame_2023") && flameUrl("flame_neutral_vertices"));
 // 个体（拟合后）FLAME 头：tools/fit_flame_to_landmarks.py 离线产出 flame_fitted_vertices.json。
@@ -614,7 +615,7 @@ export function disposeAnnotateWorkbench() {
   drag = null;
 }
 
-export function mountAnnotateWorkbench(root = document) {
+export function mountAnnotateWorkbench(root: ParentNode | Document = document) {
   disposeAnnotateWorkbench();
   els = collectElements(root);
   viewer = new Annotator3D(els.stage);
@@ -637,8 +638,4 @@ export function mountAnnotateWorkbench(root = document) {
   });
   frameId = requestAnimationFrame(tick);
   return disposeAnnotateWorkbench;
-}
-
-if (document.getElementById("stage") && !isReactManagedWorkbench()) {
-  mountAnnotateWorkbench();
 }

@@ -568,7 +568,7 @@ min_beta ||J * beta - (target - L0)||^2 + lambda * ||beta||^2
 
 ## 14. 网页 3D 标注器
 
-`/app/annotate` React 路由、`web/src/components/Annotate*.tsx`、`web/annotate_model.js`、`web/annotate_viewer.js`、`web/annotate_main.js` 共同实现网页 3D 线标注工具；`web/annotate.html` 仅保留兼容跳转。
+`/app/annotate` React 路由、`web/src/components/Annotate*.tsx`、`web/src/services/annotateRuntime.ts`、`web/annotate_model.js`、`web/annotate_viewer.js` 共同实现网页 3D 线标注工具；`web/annotate.html` 仅保留兼容跳转。
 
 主要能力：
 
