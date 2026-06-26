@@ -1,6 +1,6 @@
-"""跨语言对拍（live Python 侧）：保证 Python == JS == 金标三方一致。
+"""跨语言对拍（live Python 侧）：保证 Python == Web TypeScript == 金标三方一致。
 
-CI 的唯一跨语言护栏是 tools/test_web_mapping.mjs（JS 对 web/test/expected.json 金标），
+CI 的唯一跨语言护栏是 tools/test_web_mapping.ts（Web TypeScript 对 web/test/expected.json 金标），
 但 CI 从不重跑 Python，故单边的 Python 改动会从 CI 旁漏过去——这正是 #28。
 
 本测试在 Python 侧用**金标里已嵌入的关键点**重算 pts/vis，断言：
@@ -47,7 +47,7 @@ def web_triangles():
 
 def test_web_assets_match_src_copies(web_triangles):
     """web/assets 的 triangles / atlas 必须与 src 同一事实来源逐字一致，
-    否则 Python 重算用的拓扑/图谱会与 JS 用的漂移，对拍失效。"""
+    否则 Python 重算用的拓扑/图谱会与 Web TypeScript 用的漂移，对拍失效。"""
     canonical = CanonicalFaceModel.from_obj(CANONICAL_OBJ)
     assert np.array_equal(canonical.triangles, web_triangles)
 
@@ -105,7 +105,7 @@ def _iter_line_vis(frame, atlas_line):
 
 def test_one_euro_fixture_matches_golden(golden):
     """One-Euro 夹具：LandmarkSmoother(input, t) 必须逐位重现金标 expected。
-    JS OneEuro 用同一夹具断言（tools/test_web_mapping.mjs）→ Python==JS==金标。"""
+    Web TypeScript OneEuro 用同一夹具断言（tools/test_web_mapping.ts）→ Python==Web TypeScript==金标。"""
     fix = golden["oneEuro"]
     sm = LandmarkSmoother(
         min_cutoff=fix["minCutoff"], beta=fix["beta"], dcutoff=fix["dcutoff"],

@@ -2,7 +2,8 @@
 
 两份产物：web/api/flame_basis.npz（云函数·身份）+ web/assets/flame_basis.bin（浏览器·身份+表情+jaw）。
 
-浏览器 .bin 固定布局（小端），供 web/flame_fit.js 切 typed arrays / 实现 FLAME 前向（含表情 + jaw 蒙皮）：
+浏览器 .bin 固定布局（小端），供 web/src/services/flameFit.ts 切 typed arrays /
+实现 FLAME 前向（含表情 + jaw 蒙皮）：
   v_template f32(NV*3) · shapeDirs f32(NV*3*NS) · exprDirs f32(NV*3*NE) · faces i32(NF*3)
   · lmk_face_idx i32(NL) · lmk_b_coords f32(NL*3) · landmark_indices i32(NL)
   · jawReg f32(NV)   —— J_regressor 第 2 行（jaw 关节）· jawW f32(NV) —— weights[:,2]（jaw 蒙皮权重）

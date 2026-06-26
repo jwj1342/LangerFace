@@ -103,13 +103,13 @@
 
 ## 导出前自动审计
 
-`incision_agent.html` 在导出审阅 JSON 或肿物输入 JSON 前会先运行 `browser-export-privacy-preflight/v0.1`，阻断 raw media 标记、未脱敏 secret、直接身份字段 / 电话邮箱模式、疑似嵌入媒体 payload，以及辅助线索越界参与几何或 Agent prompt。这个浏览器预检用于减少误导出；正式分享前仍建议运行离线脚本。
+React 切口工作台 `/app/incision` 在导出审阅 JSON 或肿物输入 JSON 前会先运行 `browser-export-privacy-preflight/v0.1`，阻断 raw media 标记、未脱敏 secret、直接身份字段 / 电话邮箱模式、疑似嵌入媒体 payload，以及辅助线索越界参与几何或 Agent prompt。这个浏览器预检用于减少误导出；正式分享前仍建议运行离线脚本。
 
 分享审阅记录、肿物输入或诊断 JSON 前，可运行：
 
 ```bash
 python tools/audit_export_privacy.py incision_review_*.json tumor_input_*.json
-cd web && node ../tools/test_incision_tools.mjs
+cd web && node ../tools/test_incision_tools.ts
 ```
 
 离线隐私脚本输出 `export-privacy-audit/v0.1` 报告，默认发现违规即返回非 0。浏览器 workflow 合约测试会额外覆盖肿物输入、边界摘要、trace gate、候选比较和导出前预检。当前检查项包括：

@@ -36,7 +36,7 @@ cd ..
 
 ```bash
 pytest                       # Python 单元/集成测试
-cd web && npm test           # JS↔Python 几何对拍（多支 .mjs）
+cd web && npm test           # Web TypeScript↔Python 几何对拍（多支 .ts）
 ruff check .                 # 代码风格
 ```
 
@@ -44,7 +44,7 @@ ruff check .                 # 代码风格
 
 各测试覆盖（从 README 收口到此，作为测试事实来源）：
 
-- **JS ↔ Python 逐点对拍**（`cd web && npm test`）：先查 `web/*.js` 静态 import 无模块环，再用真实帧关键点对拍映射（误差 ~5×10⁻⁵px）/ 背面剔除（0 不一致）/ One-Euro fixture；并含 `test_occlusion`（贴合手形掩膜、指缝保留、无手不剔除）、`test_umeyama`（恢复已知相似变换 ~1e-13）、`topologyId`/`topologyVersion` 守卫与 atlas roundtrip 契约、FLAME basis 拟合 + jaw/表情前向、RSTL 切除闭合 soft-body 张力方向断言、`test_logger`（`window.exportLangerfaceDiagnostics()` 结构化 JSON 契约）。
+- **Web TypeScript ↔ Python 逐点对拍**（`cd web && npm test`）：先查 `web/src/**/*.ts(x)` 静态 import 无模块环并阻止旧根目录 JS runtime 回流，再用真实帧关键点对拍映射（误差 ~5×10⁻⁵px）/ 背面剔除（0 不一致）/ One-Euro fixture；并含 `test_occlusion`（贴合手形掩膜、指缝保留、无手不剔除）、`test_umeyama`（恢复已知相似变换 ~1e-13）、`topologyId`/`topologyVersion` 守卫与 atlas roundtrip 契约、FLAME basis 拟合 + jaw/表情前向、RSTL 切除闭合 soft-body 张力方向断言、`test_logger`（`window.exportLangerfaceDiagnostics()` 结构化 JSON 契约）。
 - **Python 单测**（`pytest`）：图谱完整性、标准脸解析、映射仿射不变性、平滑降抖动、端到端渲染、`assets/`↔`web/assets/` 同步门禁、结构化可观测性。
 - **目检脚本**：`tools/render_check.py`、`inspect_frames.py`、`montage.py`、`sample_output.py`、`debug_one.py`。
 - **浏览器实测**：UI/3D 查看通过截图核对；实时摄像头链路需在带摄像头的浏览器中确认。
@@ -79,15 +79,17 @@ PR 上应关注这些 checks：
 | `lint` | Python lint / import 排序 |
 | `python-tests (3.10/3.11/3.12)` | Python 测试矩阵 |
 | `js-tests` | Vite build + JS/Python 几何对拍 + 标注模型测试 |
-| `Vercel` | 该 PR 的网页 Preview 是否构建成功 |
-| `Vercel Preview Comments` | Vercel 在 PR 中发布 Preview 链接 |
+| `Vercel` | Production 或临时 Preview 的部署状态；当前长 PR 默认不为每次 push 生成 Preview |
+| `Vercel Preview Comments` | 临时打开 Preview 时，Vercel 在 PR 中发布 Preview 链接 |
+
+Vercel Preview 只在维护者按需打开时服务当前开发分支；当前策略见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#自动部署范围与限流控制)。普通短期 feature 分支仍跑 GitHub Actions 质量门禁，但不会自动创建 Vercel Preview；当前开发分支也默认关闭 Git 自动部署，避免长 PR 高频 push 打满 Vercel 限流。需要线上验收时，由维护者临时打开当前开发分支的 Vercel 部署，或使用团队约定的手动部署方式刷新一次 Preview；部署完成后再关回去。
 
 Preview 人工验收清单：
 
 - 首页能打开，模型与图谱加载完成。
 - 上传照片 / 视频入口能正常进入检测流程。
 - 摄像头入口在 HTTPS Preview 中能请求权限。
-- `annotate.html` 能打开，标准脸能加载，不出现 `/assets/*.json` 404。
+- `/app/annotate` 能打开，标准脸能加载，不出现 `/assets/*.json` 404；旧 `annotate.html` 只需跳转到 React SPA。
 - 浏览器控制台没有新的应用级错误。MediaPipe 的 WebGL / XNNPACK 初始化日志通常是正常信息。
 
 注意：

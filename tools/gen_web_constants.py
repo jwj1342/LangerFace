@@ -1,7 +1,7 @@
-"""从 src/langerface/config/constants.py 生成 web/constants_generated.js（跨语言单一真源，#30）。
+"""从 src/langerface/config/constants.py 生成 web/src/services/constantsGenerated.ts（跨语言单一真源，#30）。
 
 核心几何标量/索引此前在 Python 与 web 各写一遍字面量，靠人记得同步、CI 抓不到漂移。
-本脚本把 constants.py 作为唯一真源，生成 web 端可 import 的常量文件：
+本脚本把 constants.py 作为唯一真源，生成 web 端可 import 的 TypeScript 常量文件：
 
   python tools/gen_web_constants.py
 
@@ -16,7 +16,7 @@ import os
 from langerface.config import constants as C
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(REPO, "web", "constants_generated.js")
+OUT = os.path.join(REPO, "web", "src", "services", "constantsGenerated.ts")
 
 # (JS 名, Python 值)。这些是 Python↔JS 共享的标量/索引，唯一真源在 constants.py。
 SCALARS = [

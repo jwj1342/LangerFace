@@ -240,7 +240,9 @@ bucket: langerface-assets   (私有)
 
 ## 前端数据源抽象（"缝"已埋最小面，完整接口待 Phase 1）
 
-目标形态：UI 不直接 `fetch("assets/...")` 或下载文件，统一通过数据源接口 `web/data_source.js` 取存数据，后端到位时**只换实现、不改 UI**。完整接口草案（前瞻规格，按 issue #48 推进）：
+目标形态：UI 不直接 `fetch("assets/...")` 或下载文件，统一通过数据源接口取存数据。React SPA 的真实实现位于
+`web/src/services/dataSource.ts`；后端到位时**只换 service 实现、不改 UI**。
+完整接口草案（前瞻规格，按 issue #48 推进）：
 
 ```js
 // 完整接口（草案）：listHeads() · getHeadMesh(id) · loadAtlas(system) · saveAnnotation(payload) · listAnnotations(q)
@@ -249,9 +251,12 @@ bucket: langerface-assets   (私有)
 // 将来：ApiDataSource   —— 调用上面的 Worker API（仅切换实现，UI 不变）
 ```
 
-**当前落地状态（Phase 0，截至本节更新）**：`web/data_source.js` 已存在（PR #53 / M0 创建），但**只实现了"标注 → 实时"闭环所需的最小面**——`stagePreviewAtlas(atlas)` / `takePreviewAtlas()`（基于 sessionStorage 的一次性预览跨页传递，不落盘、不发布）。完整数据接口（`listHeads/getHeadMesh/loadAtlas/saveAnnotation/listAnnotations`）目前仅为上方草案，**推迟到 Phase 1 接入 `ApiDataSource` 时补全**。
+**当前落地状态（Phase 0，截至本节更新）**：`web/src/services/dataSource.ts` 已实现 React SPA 使用的数据源 service，
+但**只实现了"标注 → 实时 / 切口 → 实时"闭环所需的最小面**——`stagePreviewAtlas(atlas)` / `takePreviewAtlas()` 与
+`stageIncisionOverlay(overlay)` / `loadIncisionOverlay()` / `clearIncisionOverlay()`（基于 sessionStorage 的跨工作台传递，不落盘、不发布）。
+完整数据接口（`listHeads/getHeadMesh/loadAtlas/saveAnnotation/listAnnotations`）目前仅为上方草案，**推迟到 Phase 1 接入 `ApiDataSource` 时补全**。
 
-在此之前，UI 主路径仍**直接静态 `fetch` 运行时资产**（如 `pipeline.js` 的 `ensureReady()`、`annotate_main.js` 的 `loadCanonical()`、`mode3d.js` 的重建参考），其 URL 已统一收敛到 `web/assets.js`（`assetUrls` / `loadJsonAsset`，支持 `assetBase` 与 `VITE_LANGERFACE_ASSET_BASE_URL`）。这是 Phase 0 **已接受的现状**而非违例：数据源抽象按需增量引入，"所有取数都过接口"的不变式随 `ApiDataSource`（后端落地）一并达成，而非现在强制。
+在此之前，UI 主路径仍**直接静态 `fetch` 运行时资产**（如 `pipeline.ts` 的 `ensureReady()`、`annotateRuntime.ts` 的 `loadCanonical()`、`mode3d.ts` 的重建参考），其 URL 已统一收敛到 `web/src/services/assetLoader.ts`（`assetUrls` / `loadJsonAsset`，支持 `assetBase` 与 `VITE_LANGERFACE_ASSET_BASE_URL`）。这是 Phase 0 **已接受的现状**而非违例：数据源抽象按需增量引入，"所有取数都过接口"的不变式随 `ApiDataSource`（后端落地）一并达成，而非现在强制。
 
 ## 离线重计算
 
@@ -278,6 +283,6 @@ bucket: langerface-assets   (私有)
 
 ## 分阶段落地与触发条件
 
-- **Phase 0（现在）**：静态 Vercel + 网页标注**下载 JSON** → 评审 → 提交进仓库（issue #2 单图谱闭环，无需后端）。`web/data_source.js` 已以**最小面**埋下"缝"（M0 预览跨页 `stagePreviewAtlas`/`takePreviewAtlas`）；完整 `LocalDataSource` / `ApiDataSource` 接口随 Phase 1 落地（见上「前端数据源抽象」节、issue #48）。
+- **Phase 0（现在）**：静态 Vercel + 网页标注**下载 JSON** → 评审 → 提交进仓库（issue #2 单图谱闭环，无需后端）。`web/src/services/dataSource.ts` 已以**最小面**埋下"缝"（预览跨页 `stagePreviewAtlas`/`takePreviewAtlas` 与切口 overlay 暂存）；完整 `LocalDataSource` / `ApiDataSource` 接口随 Phase 1 落地（见上「前端数据源抽象」节、issue #48）。
 - **Phase 1（触发：多用户在线标注持久化 / 在线服务受限头模）**：起 Worker + D1 + R2，实现 `ApiDataSource`。
 - **Phase 2（触发：需要在线重计算）**：单独 Python 服务（另开设计文档）。

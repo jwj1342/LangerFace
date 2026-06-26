@@ -11,7 +11,7 @@
 
 ## 手动验收清单
 
-1. 打开 `web/annotate.html`，选择 MediaPipe 标准脸或 FLAME 标准头。
+1. 打开 `/app/annotate`，选择 MediaPipe 标准脸或 FLAME 标准头。
 2. 在脸颊、额部、眼周连续点击 4-6 个点，观察当前线预览是否贴面连接，无明显跨脸直线。
 3. 点击“完成线”，确认线条颜色从当前线颜色切换为已完成线颜色，控制点标记位置不跳变。
 4. 导出 atlas JSON，确认 `validated:false`、`topologyId`、`topologyVersion` 存在，且导出点数与屏幕预览路径点一致。
@@ -19,9 +19,9 @@
 
 ## 自动测试覆盖
 
-- `tools/test_annotate_model.mjs`：验证跨三角面控制点会展开为表面路径、导出使用同一组 `points`、断连网格 fallback 非静默。
-- `tools/test_annotate_ui.mjs`：验证 fallback 风险在当前线状态和已保存线列表中有可见提示。
-- `tools/test_slicer_curve.mjs`：验证导入 3D Slicer 曲线时会平滑重采样并限制输出点数，避免异常输入造成过密路径。
+- `tools/test_annotate_model.ts`：验证跨三角面控制点会展开为表面路径、导出使用同一组 `points`、断连网格 fallback 非静默。
+- `tools/test_annotate_ui.ts`：验证 fallback 风险在当前线状态和已保存线列表中有可见提示。
+- `tools/test_slicer_curve.ts`：验证导入 3D Slicer 曲线时会平滑重采样并限制输出点数，避免异常输入造成过密路径。
 - `npm test` 会运行以上测试，并同时检查标注预览图谱跨页注入的拓扑守卫。
 
 ## 仍需人工确认

@@ -12,14 +12,14 @@
 两套等价的几何实现，共享同一份图谱与三角拓扑：
 
 - **Python 库 `src/langerface/`**：分层核心库 + console scripts + **验证基准（ground truth）** + 3D 重建离线工具。
-- **浏览器客户端 `web/`**：Vite 8 + 原生 ES Modules + MediaPipe Tasks Vision + `geometry/`
-  （Python 几何的忠实移植，按 atlas / smoothing / occluders / transform 子系统分模块，`geometry.js` 为兼容 barrel re-export）
-  + `three3d.js`（3D Beta）。实时、本地、不上传。
-  前端状态在 `state.js` 中按 `modelState` / `renderState` / `sourceState` / `recordingState` / `reconState`
-  分片；`pipeline.js` 不依赖 `mode3d.js`，3D 实时投影通过无 DOM 的 `projection3d.js` 适配，避免模块环。
+- **浏览器客户端 `web/`**：Vite 8 + React + TypeScript + MediaPipe Tasks Vision + `web/src/services/geometry*.ts`
+  （Python 几何的忠实移植，按 atlas / smoothing / occluders / transform / pose-quality 子系统分模块）
+  + `web/src/services/three3d.ts` / R3F 组件（3D Beta）。实时、本地、不上传。
+  前端低频 UI 状态由 React/Zustand 管理，实时工作台状态在 `web/src/services/liveState.ts`
+  分片；`pipeline.ts` 不依赖 `mode3d.ts`，3D 实时投影通过无 DOM 的 `projection3d.ts` 适配，避免模块环。
 
-> 关键不变式：`web/geometry/` 的映射/遮挡/平滑必须与 Python 端**逐点一致**，由
-> `tools/test_web_mapping.mjs` 持续对拍保证（误差 < 1e-2 px、可见性 0 不一致）。
+> 关键不变式：`web/src/services/geometry*.ts` 的映射/遮挡/平滑必须与 Python 端**逐点一致**，由
+> `tools/test_web_mapping.ts` 持续对拍保证（误差 < 1e-2 px、可见性 0 不一致）。
 
 ---
 
@@ -42,31 +42,31 @@
 P = u·V0 + v·V1 + w·V2
 ```
 
-- 实现：[`src/langerface/lines/mapping.py`](../src/langerface/lines/mapping.py) 与 `web/geometry/atlas.js: mapAtlas`。
+- 实现：[`src/langerface/lines/mapping.py`](../src/langerface/lines/mapping.py) 与 `web/src/services/geometryAtlas.ts: mapAtlas`。
 - 性质：**对仿射变换不变**——人脸做任意仿射形变，线条随之等价形变。由 `tests/test_mapping.py` 证明。
 - 这等价于 AR"脸绘"的纹理贴合：线条天生贴在皮肤上、随姿态/表情/身份变化。
 
 ### 3.1 时间平滑（One-Euro）
-[`src/langerface/detection/smoothing.py`](../src/langerface/detection/smoothing.py) / `web/geometry/smoothing.js: OneEuro`。逐关键点逐坐标自适应低通：
+[`src/langerface/detection/smoothing.py`](../src/langerface/detection/smoothing.py) / `web/src/services/geometrySmoothing.ts: OneEuro`。逐关键点逐坐标自适应低通：
 低速重平滑（去抖），高速低滞后（跟手）。参数 `min_cutoff / beta / dcutoff`；网页"平滑"滑杆映射到 `min_cutoff/beta`。
 
 ### 3.2 背面剔除（自遮挡）
-[`src/langerface/rendering/occlusion.py`](../src/langerface/rendering/occlusion.py) / `web/geometry/atlas.js: visibleTriangles`。
+[`src/langerface/rendering/occlusion.py`](../src/langerface/rendering/occlusion.py) / `web/src/services/geometryAtlas.ts: visibleTriangles`。
 对每个三角面用检测到的 3D 顶点求法向，取 `nz`；**用鼻尖(索引1)所在三角面自标定"朝前"的符号**
 （避免依赖缠绕方向/手性），`sign·nz ≥ 阈值` 即可见。转头时背侧线条隐藏。
 
 ### 3.3 手部遮挡（外物，仅网页）
-`web/geometry/occluders.js: buildHandMasks / pointInHandMasks`。并行跑 MediaPipe **Hand Landmarker**（`hand_landmarker.task`，21 点/手）：
+`web/src/services/geometryOccluders.ts: buildHandMasks / pointInHandMasks`。并行跑 MediaPipe **Hand Landmarker**（`hand_landmarker.task`，21 点/手）：
 - 不用整手大凸包（会连指缝一起挡），而是**贴合手形掩膜** = 手掌点凸包 + 沿各指骨的"胶囊"（半径按掌宽自适应）。
 - 落在掌内或任一指骨胶囊内的脸部线点剔除；**张开手指间的缝隙保留**（脸继续显示）。
-- 由 `tools/test_occlusion.mjs` 验证（缝隙点不被挡，旧凸包会误挡）。
+- 由 `tools/test_occlusion.ts` 验证（缝隙点不被挡，旧凸包会误挡）。
 
 ### 3.4 渲染
-`web/render.js: draw` / [`src/langerface/rendering/overlay.py`](../src/langerface/rendering/overlay.py)：抗锯齿折线，被遮挡点处**断开**子段；
+`web/src/services/render2d.ts: draw` / [`src/langerface/rendering/overlay.py`](../src/langerface/rendering/overlay.py)：抗锯齿折线，被遮挡点处**断开**子段；
 按面部上/中/下三段分色（额=琥珀、中=蓝、下=绿）；alpha 由"透明度"控制 + 丢脸淡入淡出。
 
 ### 3.5 关键区域放大窗
-`web/render.js: drawZooms`。6 个区域（额·眉间/右眼周/左眼周/鼻·鼻唇沟/口周/颏部）各由一组关键点界定取景框，
+`web/src/services/render2d.ts: drawZooms`。6 个区域（额·眉间/右眼周/左眼周/鼻·鼻唇沟/口周/颏部）各由一组关键点界定取景框，
 直接从**已叠加线条的主画布**裁剪放大到小窗 → 线条/配色/遮挡自动带过去；随脸移动；与主画面同步镜像。
 
 ---
@@ -74,22 +74,22 @@ P = u·V0 + v·V1 + w·V2
 ## 4. 3D 路线（Beta）
 
 ### 4.1 重建个性化 3D 人头
-离线：[`tools/reconstruct_3d.py`](../tools/reconstruct_3d.py)；在线：`web/mode3d.js: startScan/finishScan`。
+离线：[`tools/reconstruct_3d.py`](../tools/reconstruct_3d.py)；在线：`web/src/services/mode3d.ts: startScan/finishScan`。
 - 每帧取 478→前 468 关键点；用 **Umeyama 相似变换**（scale+rot+trans）把该帧网格的**刚性锚点**
   （眼角、鼻梁、轮廓极值等 16 点 `RIGID3D`）对齐到统一参考系（标准脸翻到关键点手性）。
 - 对齐后的网格**逐顶点取中位数** → 稳定的个性化中性脸（中位数对表情/抖动/遮挡鲁棒）。
 - 坐标统一在**屏幕手性**（x 右 / y 下 / z 入屏），便于实时配准；查看时前端翻 y/z 成 y 上。
-- Umeyama 实现：`web/geometry/transform.js: umeyama/applySim`（3×3 对称特征分解 Jacobi → SVD → R, c, t），
-  由 `tools/test_umeyama.mjs` 验证（恢复已知变换误差 ~1e-13）。
+- Umeyama 实现：`web/src/services/geometryTransform.ts: umeyama/applySim`（3×3 对称特征分解 Jacobi → SVD → R, c, t），
+  由 `tools/test_umeyama.ts` 验证（恢复已知变换误差 ~1e-13）。
 
 ### 4.2 把线贴到 3D 头并查看
-[`web/three3d.js`](../web/three3d.js)（Three.js 0.184，由 Vite 打包，按需动态加载）：
+[`web/src/services/three3d.ts`](../web/src/services/three3d.ts)（Three.js 0.184，由 Vite 打包，按需动态加载）：
 - 头网格 = 重建顶点 + 898 三角面，皮肤材质 + 光照。
 - 线条 = 图谱重心坐标 → 重建顶点上的 3D 点，**沿插值法向微抬**避免 z-fighting，按高度分色。
 - `depthTest` + 头网格深度 → 旋转时背面线条被头自动遮挡。鼠标拖拽旋转。
 
 ### 4.3 实时配准投影
-`web/mode3d.js: projectVerts`（投影模式）：每帧用 `RIGID3D` 锚点做 `umeyama(重建网格 → 当前帧活体关键点)`，
+`web/src/services/mode3d.ts: projectVerts`（投影模式）：每帧用 `RIGID3D` 锚点做 `umeyama(重建网格 → 当前帧活体关键点)`，
 把整套重建顶点刚性变换到屏幕空间，再走 2D 的 `draw`（含背面剔除/手部遮挡）。
 线条来自**稳定的重建网格**，不随表情抖动。
 
@@ -124,8 +124,8 @@ P = u·V0 + v·V1 + w·V2
 ## 7. Python ↔ 网页 的对拍验证基准
 
 1. `tools/dump_landmarks.py`：对示例视频若干帧跑 Python 管线，导出 关键点 + 映射结果 + 逐点可见性 → `web/test/expected.json`。
-2. `tools/test_web_mapping.mjs`：用同一关键点在 JS 跑 `mapAtlas/visibleTriangles`，与 Python 结果逐点比对。
-3. 改动几何后务必重跑 1+2，保持 JS==Python。
+2. `tools/test_web_mapping.ts`：用同一关键点在 Web TypeScript 跑 `mapAtlas/visibleTriangles`，与 Python 结果逐点比对。
+3. 改动几何后务必重跑 1+2，保持 Web TypeScript==Python。
 
 ---
 
@@ -151,7 +151,9 @@ P = u·V0 + v·V1 + w·V2
 - 本地开发：`cd web && npm run dev`，Vite 默认监听 `http://127.0.0.1:5173`。
 - 生产构建：`cd web && npm ci && npm run build`，输出 `web/dist/`。
 - 生产预览：`cd web && npm run preview`，Vite 默认监听 `http://127.0.0.1:4173`。
-- `web/assets.js` 用 Vite `?url` 导入 `.task`、atlas JSON 与 3D 示例资产，构建后自动进入哈希化 `dist/assets/`。
+- Vite 的唯一应用入口是 `web/app/index.html`。`index.html`、`annotate.html`、`incision_agent.html`、`surgery.html`
+  只作为轻量兼容跳转页复制进 `dist/`，不再作为 Rollup 多入口应用构建。
+- `web/src/services/assetLoader.ts` 用 Vite `?url` 导入 `.task`、atlas JSON 与 3D 示例资产，构建后自动进入哈希化 `dist/assets/`。
 - `tools/serve_web.py` 仍可服务未打包的 `web/` 源文件，但正式前端开发与部署以 Vite 为准。
 - `getUserMedia`（摄像头）要求安全上下文：`http://localhost`/`127.0.0.1` 即可（无需 https）。
 - 首次加载从 CDN 拉取 MediaPipe wasm（数秒）；之后浏览器缓存。
@@ -178,9 +180,28 @@ P = u·V0 + v·V1 + w·V2
 
 ## 11. 前端鲁棒性约束
 
-- `tools/test_web_architecture.mjs` 会检查 `web/*.js` 的静态相对 import 图，禁止新增模块环。
-- `web/logger.js` 统一记录浏览器端关键故障、降级事件、帧指标和资产版本；调试时可在控制台查看 `window.langerfaceDiagnostics`，或调用 `window.exportLangerfaceDiagnostics()` 导出脱敏 JSON。字段约定见 [OBSERVABILITY.md](OBSERVABILITY.md)。
+- `tools/test_web_architecture.ts` 会检查 `web/src/**/*.ts(x)` 与 `vite.config.ts` 的静态相对 import 图，禁止新增模块环，并阻止旧根目录 JS 运行时文件回流。
+- `web/src/services/logger.ts` 统一记录浏览器端关键故障、降级事件、帧指标和资产版本；调试时可在控制台查看 `window.langerfaceDiagnostics`，或调用 `window.exportLangerfaceDiagnostics()` 导出脱敏 JSON。字段约定见 [OBSERVABILITY.md](OBSERVABILITY.md)。
 - `web/.npmrc` 启用 `engine-strict=true`，安装依赖时会严格执行 `package.json` 中的 Node/npm 版本要求。
+- React SPA 中仍由运行时服务接管的工作台必须只在 route host 内查询 DOM。`annotateRuntime.ts`、`incisionAgentRuntime.ts`
+  通过 `src/lib/scopedDom.ts` 绑定元素，实时页绑定由 `src/services/liveDom.ts` 负责，也不再回退到全局 `document.getElementById`，
+  避免路由切换后误绑定旧页面或其它工作台的同名元素。
+- 实时 DOM 绑定的真实实现位于 `src/services/liveDom.ts`，并受 TypeScript 严格检查。
+  它不允许在模块 import 时绑定 `document`；实时页只能在 `mountLiveWorkbench(root)` 内 `bindDom(root)`，
+  在 `disposeLiveWorkbench()` 中 `clearDomBinding()`，避免 SPA 长生命周期保留已卸载的 canvas、video 或 wrapper 引用。
+- 图片模式的 canvas contain-fit、pan/zoom 和 `ResizeObserver` 生命周期由 `src/services/liveCanvasFit.ts`
+  负责，并通过 `src/services/liveState.ts` 明确 `imageView` 状态边界。
+- 标注、切口和实时页共享的浏览器数据源契约与
+  `sessionStorage` 本地实现由 `src/services/dataSource.ts` 负责，后续切换远端数据源时应替换该 service 实现。
+- OpenAI-compatible / vLLM Provider 的 Base URL 规范化、
+  `/models` 连通性测试和类型契约由 `src/services/llmProvider.ts` 负责，候选几何仍不依赖 Provider。
+- 实时页的 canvas/WebM 录制、额外视图合成和下载生命周期由 `src/services/canvasRecording.ts` 负责。
+- 摄像头约束/错误归一化由
+  `src/services/cameraSource.ts` 负责，上传图片工作尺寸控制由 `src/services/imageSource.ts` 负责。
+- 实时页的消息、状态灯、图谱 provenance、切口叠加 QA
+  与平滑档位文案由 `src/services/liveUi.ts` 负责，并依赖 `src/services/liveDom.ts` 的 route-scoped DOM 绑定。
+- 浏览器审阅/肿物导出前的 secret、PII、
+  原始媒体和 secondary cue 越界检查由 `src/services/exportPrivacy.ts` 负责。
 
 ---
 
@@ -194,10 +215,11 @@ P = u·V0 + v·V1 + w·V2
 ```bash
 cd web
 npm run dev
-# 浏览器打开 Vite 地址下的 /annotate.html，例如 http://127.0.0.1:5173/annotate.html
+# 浏览器打开 Vite 地址下的 /app/annotate，例如 http://127.0.0.1:5173/app/annotate
 ```
 
-生产构建（Vercel）已把 `annotate.html` 纳入多页入口，配置见 [`web/vite.config.js`](../web/vite.config.js)。
+生产构建（Vercel）以 `/app/*` React SPA 为唯一应用入口；`annotate.html` 仅复制为 `/app/annotate` 的兼容跳转页，
+不参与 Rollup 多入口构建。配置见 [`web/vite.config.ts`](../web/vite.config.ts)。
 
 ### 标注工作流
 
@@ -212,17 +234,18 @@ npm run dev
 ### 接入项目
 
 - **临床校验闭环（issue #2）**：网页标注器只生成候选图谱草案；评审通过后，再由 `tools/annotate_atlas.py` 或资产维护流程替换 `assets/atlas_rstl.json` / `assets/atlas_langer.json`，将 `validated` 置 `true`，并在 `provenance` 记录校验者。
-- **3D 头模标注**：HeadSpace 等头模经离线管线导出为 `{vertices, triangles}` JSON 后，可在 `/annotate.html` 上传加载；标注得到的 xyz 线可继续经 `langerface.geometry`（加权 Sim3）在头模与标准脸之间迁移。
+- **3D 头模标注**：HeadSpace 等头模经离线管线导出为 `{vertices, triangles}` JSON 后，可在 `/app/annotate` 上传加载；标注得到的 xyz 线可继续经 `langerface.geometry`（加权 Sim3）在头模与标准脸之间迁移。
 - **数据隐私**：真实头模（HeadSpace / FaceScape）不入库，仅本地使用；标注产物（图谱/xyz JSON，仅坐标）可入库评审。
 
 ### 实现文件
 
 | 文件 | 职责 |
 |---|---|
-| `web/annotate_model.js` | 纯数据模型：线/点管理、表面路径展开、重心坐标、导出图谱/xyz（node 可单测，见 `tools/test_annotate_model.mjs`） |
-| `web/annotate_viewer.js` | Three.js 场景：网格加载、射线表面拾取、线与控制点渲染 |
-| `web/annotate_main.js` | UI、模型、视图装配（指针拖拽/点击、导出、列表、快捷键） |
-| `web/annotate.html` / `web/annotate.css` | 标注页与样式 |
+| `web/src/services/annotationModel.ts` | 纯数据模型：线/点管理、表面路径展开、重心坐标、导出图谱/xyz（node 可单测，见 `tools/test_annotate_model.ts`） |
+| `web/src/services/annotateViewer.ts` | Three.js 场景：网格加载、射线表面拾取、线与控制点渲染 |
+| `web/src/services/annotateRuntime.ts` | 标注 runtime 装配（指针拖拽/点击、导出、列表、快捷键；严格 TypeScript，直接依赖 TS service 模块） |
+| `web/app/index.html` / `web/src/routes/AnnotateRoute.tsx` / `web/src/components/Annotate*.tsx` | React 标注页入口与 UI |
+| `web/annotate.html` / `web/annotate.css` | 标注兼容跳转页与历史样式 |
 
 ---
 
@@ -274,7 +297,7 @@ tools/headspace/data/            # 本地，被 .gitignore 忽略
 
 `pip install -e ".[mediapipe]"` + `trimesh`；Blender 脚本另需 Blender 与 ffmpeg。脚本均为 argparse 驱动，原作者机器上的绝对路径默认值已移除（改为 `required`）。
 
-离线管线产出/配准 3D 头模与线；交互式标注/校验使用网页 `/annotate.html`。把头模导出为 `{vertices, triangles}` JSON 后上传到标注页，导出的标注线（xyz / 图谱）只含坐标，可入库评审。
+离线管线产出/配准 3D 头模与线；交互式标注/校验使用网页 `/app/annotate`。把头模导出为 `{vertices, triangles}` JSON 后上传到标注页，导出的标注线（xyz / 图谱）只含坐标，可入库评审。
 
 ---
 
@@ -306,14 +329,14 @@ Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部
 | 模块 | 计划位置 | 职责 | Issue |
 |---|---|---|---|
 | 临床规则库 | `assets/clinical_rules_face_incision.json` | 结构化区域规则、优先级、例外、审核状态 | #11 |
-| 面部分区 / 亚单位 | `web/incision_tools.js` | 把点或肿物中心映射到临床区域 / 美学亚单位，并输出 bbox/边界/过渡区/敏感游离缘相关 `confidence_reasons` | #12 |
-| RSTL 方向服务 | `web/incision_tools.js` | 查询局部方向、置信度和依据；离散度使用无向轴角，并输出 atlas 为空、支持点过远/过少、角度冲突等 `confidence_reasons` | #13 |
-| 肿物模型 | `web/incision_tools.js`, `web/incision_agent*.js` | 表示皮下 / 皮表肿物输入、单位与输入质量摘要 | #14 |
-| 皮下线性切口 | `web/incision_tools.js` | 基于超声直径和 RSTL 方向生成线性候选 | #15 |
-| 皮表梭形切口 | `web/incision_tools.js` | 生成梭形候选，约束比例、尖端角和平滑对称 | #16 |
-| 敏感结构 guardrails | `web/incision_tools.js` | 下睑、唇红缘、鼻翼、鼻尖、口角等风险提示、分结构 draft 距离阈值、`protective_direction` 保护性方向建议和方向例外 | #17 |
-| 医生审阅 UI | `web/incision*.js` | 候选解释、编辑、版本化 provenance、覆盖、导出 | #18 |
-| AR / 视频叠加 | `web/render.js`, `web/projection3d.js` | 把肿物和切口候选投射回照片、视频、实时视图 | #19 |
+| 面部分区 / 亚单位 | `web/src/services/incisionToolCore.ts` | 把点或肿物中心映射到临床区域 / 美学亚单位，并输出 bbox/边界/过渡区/敏感游离缘相关 `confidence_reasons` | #12 |
+| RSTL 方向服务 | `web/src/services/incisionToolCore.ts` | 查询局部方向、置信度和依据；离散度使用无向轴角，并输出 atlas 为空、支持点过远/过少、角度冲突等 `confidence_reasons` | #13 |
+| 肿物模型 | `web/src/services/incisionCandidateTools.ts`, `web/src/services/tumorInput.ts` | 表示皮下 / 皮表肿物输入、单位与输入质量摘要 | #14 |
+| 皮下线性切口 | `web/src/services/incisionCandidateTools.ts` | 基于超声直径和 RSTL 方向生成线性候选 | #15 |
+| 皮表梭形切口 | `web/src/services/incisionCandidateTools.ts` | 生成梭形候选，约束比例、尖端角和平滑对称 | #16 |
+| 敏感结构 guardrails | `web/src/services/incisionCandidateTools.ts` | 下睑、唇红缘、鼻翼、鼻尖、口角等风险提示、分结构 draft 距离阈值、`protective_direction` 保护性方向建议和方向例外 | #17 |
+| 医生审阅 UI | `web/src/services/incisionAgentRuntime.ts`, `web/src/components/*Review*.tsx` | 候选解释、编辑、版本化 provenance、覆盖、导出 | #18 |
+| AR / 视频叠加 | `web/src/services/render2d.ts`, `web/src/services/projection3d.ts` | 把肿物和切口候选投射回照片、视频、实时视图 | #19 |
 | 验证指标 | `docs/VALIDATION.md` | 角度误差、稳定性、医生接受率、失败分类 | #20 |
 | 隐私 / 审计 | `docs/PRIVACY_AND_AUDIT.md` | 敏感数据边界、审计记录、受限存储 | #21 |
 | AI 次级依据 | `tools/`, future model scripts | 皱襞/皱纹/肿物边界候选识别 | #22 |
