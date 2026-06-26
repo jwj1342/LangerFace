@@ -507,10 +507,11 @@ assert.deepEqual(
   vercelConfig.git?.deploymentEnabled,
   {
     "*": false,
+    "**": false,
     master: true,
-    "React-架构重构": true,
+    "codex/stage2-incision-workflow": true,
   },
-  "Vercel should only auto-deploy production and the active React refactor preview branch",
+  "Vercel should only auto-deploy production and the active development branch",
 );
 assert.ok(vercel.includes('"source": "/app/(.*)"'), "Vercel rewrites nested SPA routes");
 assert.ok(vercel.includes('"destination": "/app/index.html"'), "Vercel routes SPA paths back to app/index.html");
