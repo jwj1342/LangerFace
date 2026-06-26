@@ -41,6 +41,7 @@ const uiCheckbox = read("src/components/ui/checkbox.tsx");
 const uiCheckboxField = read("src/components/ui/checkbox-field.tsx");
 const uiHelpDisclosure = read("src/components/ui/help-disclosure.tsx");
 const uiHint = read("src/components/ui/hint.tsx");
+const uiIncisionFeedback = read("src/components/ui/incision-feedback.tsx");
 const uiInput = read("src/components/ui/input.tsx");
 const uiKeyValue = read("src/components/ui/key-value.tsx");
 const uiLegend = read("src/components/ui/legend.tsx");
@@ -155,6 +156,10 @@ const agentNoteConsumerSources = new Map([
   ["SecondaryCuePanel.tsx", secondaryCuePanel],
   ["TumorInputPanel.tsx", tumorPanel],
 ]);
+const incisionFeedbackConsumerSources = new Map([
+  ["CandidateResultPanel.tsx", candidateResultPanel],
+  ["TumorInputPanel.tsx", tumorPanel],
+]);
 const reactUiConsumerSources = new Map([
   ["App.tsx", app],
   ...[...componentSources.entries()].filter(([name]) => !layoutPrimitiveNames.has(name)),
@@ -235,6 +240,17 @@ const fieldValueConsumersWithRawClass = (className) => (
 );
 const agentNoteConsumersWithRawClass = (className) => (
   [...agentNoteConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+      || source.includes(` ? "${className}`)
+      || source.includes(`: "${className}`)
+    ))
+    .map(([name]) => name)
+);
+const incisionFeedbackConsumersWithRawClass = (className) => (
+  [...incisionFeedbackConsumerSources.entries()]
     .filter(([, source]) => (
       source.includes(`className="${className}`)
       || source.includes(`className={\`${className}`)
@@ -510,6 +526,26 @@ assert.deepEqual(
 for (const [name, source] of agentNoteConsumerSources.entries()) {
   assert.ok(source.includes("AgentNote"), `${name} should render incision explanatory notes through the shared AgentNote primitive`);
 }
+for (const [componentName, className] of [
+  ["BoundaryStatus", "boundary-status"],
+  ["AnatomyPreview", "anatomy-preview"],
+  ["GuardrailDetails", "guardrail-details"],
+]) {
+  assert.ok(uiIncisionFeedback.includes(componentName), `shadcn-style incision feedback primitive exports ${componentName}`);
+  assert.ok(uiIncisionFeedback.includes(className), `shadcn-style incision feedback primitive preserves ${className} styling`);
+}
+assert.ok(uiIncisionFeedback.includes('warn && "warn"'), "incision feedback text primitives preserve warn styling");
+assert.ok(uiIncisionFeedback.includes('tone !== "neutral" && tone'), "guardrail feedback text primitive preserves warn/danger tone styling");
+for (const className of ["boundary-status", "anatomy-preview", "guardrail-details"]) {
+  assert.deepEqual(
+    incisionFeedbackConsumersWithRawClass(className),
+    [],
+    `React incision feedback panels should use shared feedback primitives instead of hand-written ${className} wrappers`,
+  );
+}
+assert.ok(tumorPanel.includes("BoundaryStatus"), "React tumor panel uses the shared boundary status primitive");
+assert.ok(tumorPanel.includes("AnatomyPreview"), "React tumor panel uses the shared anatomy preview primitive");
+assert.ok(candidateResultPanel.includes("GuardrailDetails"), "React candidate result panel uses the shared guardrail details primitive");
 assert.ok(uiStatusBadge.includes('cn("badge"'), "shadcn-style StatusBadge preserves existing badge styling");
 assert.ok(uiStatusBadge.includes('cn("react-route-status"'), "shadcn-style RouteStatus preserves existing route status styling");
 assert.ok(uiStatusBadge.includes("@radix-ui/react-slot"), "shadcn-style StatusBadge supports asChild through Radix Slot");

@@ -1,6 +1,7 @@
 import { useIncisionStore, type IncisionResultViewState } from "../stores/incisionStore";
 import { Card, CardHeader } from "./ui/card";
 import { Hint } from "./ui/hint";
+import { GuardrailDetails } from "./ui/incision-feedback";
 import { MetricGrid, MetricItem } from "./ui/key-value";
 
 const DEFAULT_RESULT_VIEW: IncisionResultViewState = {
@@ -29,10 +30,10 @@ const DEFAULT_RESULT_VIEW: IncisionResultViewState = {
   guardrailDetailsDanger: false,
 };
 
-function detailTone(view: IncisionResultViewState) {
-  if (view.guardrailDetailsDanger) return " danger";
-  if (view.guardrailDetailsWarn) return " warn";
-  return "";
+function detailTone(view: IncisionResultViewState): "neutral" | "warn" | "danger" {
+  if (view.guardrailDetailsDanger) return "danger";
+  if (view.guardrailDetailsWarn) return "warn";
+  return "neutral";
 }
 
 export function CandidateResultPanel() {
@@ -58,13 +59,13 @@ export function CandidateResultPanel() {
         />
       </MetricGrid>
       <Hint id="llmSummary">{view.llmSummary}</Hint>
-      <p className={`guardrail-details${view.directionSourceWarn ? " warn" : ""}`} id="directionSource">{view.directionSource}</p>
-      <p className={`guardrail-details${view.agentGateWarn ? " warn" : ""}`} id="agentGate" title={view.agentGateTitle}>{view.agentGate}</p>
-      <p className={`guardrail-details${view.agentComparisonWarn ? " warn" : ""}`} id="agentComparison" title={view.agentComparisonTitle}>
+      <GuardrailDetails tone={view.directionSourceWarn ? "warn" : "neutral"} id="directionSource">{view.directionSource}</GuardrailDetails>
+      <GuardrailDetails tone={view.agentGateWarn ? "warn" : "neutral"} id="agentGate" title={view.agentGateTitle}>{view.agentGate}</GuardrailDetails>
+      <GuardrailDetails tone={view.agentComparisonWarn ? "warn" : "neutral"} id="agentComparison" title={view.agentComparisonTitle}>
         {view.agentComparison}
-      </p>
+      </GuardrailDetails>
       <Hint id="nextStep">{view.nextStep}</Hint>
-      <p className={`guardrail-details${detailTone(view)}`} id="guardrailDetails">{view.guardrailDetails}</p>
+      <GuardrailDetails tone={detailTone(view)} id="guardrailDetails">{view.guardrailDetails}</GuardrailDetails>
     </Card>
   );
 }
