@@ -1,5 +1,23 @@
 import assert from "node:assert/strict";
-import { describeCameraError } from "../web/camera.js";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import ts from "../web/node_modules/typescript/lib/typescript.js";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+async function importTypeScriptModule(rel) {
+  const source = fs.readFileSync(path.join(root, rel), "utf8");
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+  });
+  return import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
+}
+
+const { describeCameraError } = await importTypeScriptModule("web/src/services/cameraSource.ts");
 
 assert.deepEqual(describeCameraError({ name: "NotAllowedError" }), {
   reason: "permission_denied",

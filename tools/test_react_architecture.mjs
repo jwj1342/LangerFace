@@ -159,11 +159,19 @@ const liveDataSourceService = read("src/services/dataSource.ts");
 const liveExportCanvasTypes = read("export_canvas.d.ts");
 const liveExportCanvasFacade = read("export_canvas.js");
 const liveExportCanvasService = read("src/services/canvasRecording.ts");
+const liveCameraTypes = read("camera.d.ts");
+const liveCameraFacade = read("camera.js");
+const liveCameraService = read("src/services/cameraSource.ts");
+const liveImageSourceTypes = read("image_source.d.ts");
+const liveImageSourceFacade = read("image_source.js");
+const liveImageSourceService = read("src/services/imageSource.ts");
 const liveRuntimeDependencyTypes = [
+  "camera.d.ts",
   "dom.d.ts",
   "canvas_fit.d.ts",
   "data_source.d.ts",
   "export_canvas.d.ts",
+  "image_source.d.ts",
   "incision_overlay.d.ts",
   "logger.d.ts",
   "mode3d.d.ts",
@@ -2117,6 +2125,14 @@ assert.ok(liveExportCanvasService.includes("export interface CanvasRecordingCont
 assert.ok(liveExportCanvasService.includes("export function createCanvasRecordingController"), "TypeScript canvas recording service owns canvas recording creation");
 assert.ok(liveExportCanvasTypes.includes("CanvasRecordingController"), "export canvas declarations type recording lifecycle");
 assert.ok(liveExportCanvasTypes.includes("./src/services/canvasRecording"), "export canvas declarations re-export the TypeScript implementation contract");
+assert.ok(liveCameraFacade.includes("./src/services/cameraSource.ts"), "legacy camera.js is only a compatibility facade over the TypeScript service");
+assert.ok(liveCameraService.includes("export async function openCameraStream"), "TypeScript camera service owns camera acquisition");
+assert.ok(liveCameraService.includes("export function describeCameraError"), "TypeScript camera service owns actionable camera errors");
+assert.ok(liveCameraTypes.includes("./src/services/cameraSource"), "camera declarations re-export the TypeScript implementation contract");
+assert.ok(liveImageSourceFacade.includes("./src/services/imageSource.ts"), "legacy image_source.js is only a compatibility facade over the TypeScript service");
+assert.ok(liveImageSourceService.includes("export function prepareImageSource"), "TypeScript image source service owns uploaded image preparation");
+assert.ok(liveImageSourceService.includes("export function fitImageToMaxSide"), "TypeScript image source service owns image work-size fitting");
+assert.ok(liveImageSourceTypes.includes("./src/services/imageSource"), "image-source declarations re-export the TypeScript implementation contract");
 assert.ok(liveDomTypes.includes("clearDomBinding"), "DOM binding declarations expose route unmount cleanup");
 assert.ok(liveController.includes("export function mountLiveWorkbench"), "live controller exposes a mount lifecycle");
 assert.ok(liveController.includes("export function disposeLiveWorkbench"), "live controller exposes a dispose lifecycle");

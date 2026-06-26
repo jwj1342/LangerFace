@@ -197,6 +197,8 @@ P = u·V0 + v·V1 + w·V2
   `/models` 连通性测试和类型契约由 `src/services/llmProvider.ts` 负责，候选几何仍不依赖 Provider。
 - `export_canvas.js` 只保留为旧 JS 兼容 re-export。实时页的 canvas/WebM 录制、额外视图合成和下载生命周期
   由 `src/services/canvasRecording.ts` 负责，并通过 `export_canvas.d.ts` 暴露兼容类型。
+- `camera.js` 和 `image_source.js` 只保留为旧 JS 兼容 re-export。摄像头约束/错误归一化由
+  `src/services/cameraSource.ts` 负责，上传图片工作尺寸控制由 `src/services/imageSource.ts` 负责。
 
 ---
 
