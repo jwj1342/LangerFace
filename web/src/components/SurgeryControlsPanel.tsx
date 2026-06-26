@@ -1,3 +1,8 @@
+import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
+import { Label } from "./ui/label";
+import { RangeInput } from "./ui/slider";
+
 interface SurgeryControlsPanelProps {
   activeCut: "along" | null;
   hint: string;
@@ -31,10 +36,9 @@ export function SurgeryControlsPanel({
         在右侧脸上<b>点击</b>定位病灶；拖拽旋转、滚轮缩放。
         右图 <b className="surgery-green-copy">绿色</b>=沿 RSTL 的梭形切除轮廓，随下方滑块更新。
       </p>
-      <label className="field-label" htmlFor="sizeRange">切口大小 <span id="sizeVal">{sizePct}%</span></label>
-      <input
+      <Label htmlFor="sizeRange">切口大小 <span id="sizeVal">{sizePct}%</span></Label>
+      <RangeInput
         id="sizeRange"
-        type="range"
         min="80"
         max="200"
         value={sizePct}
@@ -42,25 +46,27 @@ export function SurgeryControlsPanel({
       />
       <div className="section-title"><span>② 执行切除并闭合</span></div>
       <div className="btn-row surgery-action-row">
-        <button
-          className={`btn cut-along${activeCut === "along" ? " active" : ""}`}
+        <Button
+          variant="workbench"
+          className={`cut-along${activeCut === "along" ? " active" : ""}`}
           id="btnAlong"
           type="button"
           disabled={!isReady}
           onClick={onExciseAlong}
         >
           沿 RSTL 切除
-        </button>
+        </Button>
       </div>
-      <button className="btn" id="btnReset" type="button" disabled={!isReady} onClick={onReset}>↺ 复位</button>
-      <label className="btn">
-        <input
-          type="checkbox"
-          id="showLines"
-          checked={showLines}
-          onChange={(event) => onShowLinesChange(event.currentTarget.checked)}
-        /> 显示 RSTL 张力线
-      </label>
+      <Button variant="workbench" id="btnReset" type="button" disabled={!isReady} onClick={onReset}>↺ 复位</Button>
+      <Button asChild variant="workbench">
+        <label>
+          <Checkbox
+            id="showLines"
+            checked={showLines}
+            onChange={(event) => onShowLinesChange(event.currentTarget.checked)}
+          /> 显示 RSTL 张力线
+        </label>
+      </Button>
     </div>
   );
 }

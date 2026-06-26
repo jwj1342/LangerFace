@@ -1,5 +1,9 @@
 import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useAnnotateStore } from "../stores/annotateStore";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Select } from "./ui/select";
 
 const ANNOTATE_DRAW_REACT_COMMAND_EVENT = "langerface:annotate-draw-react-command";
 
@@ -29,28 +33,28 @@ export function AnnotateDrawPanel() {
         <span id="drawMode">{snapshot?.mesh.modeLabel || "FLAME 标准脸"}</span>
       </div>
       <div>
-        <label className="field-label" htmlFor="annSystem">线系统</label>
-        <select
+        <Label htmlFor="annSystem">线系统</Label>
+        <Select
           id="annSystem"
-          className="select annotate-system-select"
+          className="annotate-system-select"
           defaultValue={snapshot?.system || "rstl"}
           onChange={(event) => dispatchDrawCommand("system_changed", event.currentTarget.value)}
         >
           <option value="rstl">RSTL（首选）</option>
           <option value="langer">Langer</option>
-        </select>
+        </Select>
       </div>
       <div className="section-title">
         <span>2. 填写当前线</span>
         <span>可留空</span>
       </div>
-      <input className="text-input" id="annName" placeholder="线名，例如 forehead_h1" />
-      <input className="text-input" id="annRegion" placeholder="区域，例如 forehead / cheek / perioral" />
+      <Input id="annName" placeholder="线名，例如 forehead_h1" />
+      <Input id="annRegion" placeholder="区域，例如 forehead / cheek / perioral" />
       <div className={`current-state${active ? " active" : ""}${draft?.fallback ? " warning" : ""}`} id="currentState">{currentStateText(snapshot)}</div>
       <div className="btn-row annotate-actions">
-        <button className="btn btn-primary" id="btnNew" type="button" disabled={active} onClick={() => dispatchDrawCommand("start_line")}>开始一条线</button>
-        <button className="btn" id="btnUndo" type="button" disabled={!active && !savedCount} onClick={() => dispatchDrawCommand("undo_last")}>撤销上一个点</button>
-        <button className="btn" id="btnFinish" type="button" disabled={!active} onClick={() => dispatchDrawCommand("save_current_line")}>保存当前线</button>
+        <Button variant="workbenchPrimary" id="btnNew" type="button" disabled={active} onClick={() => dispatchDrawCommand("start_line")}>开始一条线</Button>
+        <Button variant="workbench" id="btnUndo" type="button" disabled={!active && !savedCount} onClick={() => dispatchDrawCommand("undo_last")}>撤销上一个点</Button>
+        <Button variant="workbench" id="btnFinish" type="button" disabled={!active} onClick={() => dispatchDrawCommand("save_current_line")}>保存当前线</Button>
       </div>
     </div>
   );

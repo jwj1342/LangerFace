@@ -505,6 +505,16 @@ assert.ok(annotateMeshSourcePanel.includes("dispatchControllerCommand"), "React 
 assert.ok(annotateDrawPanel.includes("dispatchControllerCommand"), "React annotate draw panel uses the shared controller command helper");
 assert.ok(annotateMeshSourcePanel.includes("useAnnotateStore"), "React annotate mesh source panel reads low-frequency mesh state from Zustand");
 assert.ok(annotateDrawPanel.includes("useAnnotateStore"), "React annotate draw panel reads low-frequency draft state from Zustand");
+assert.ok(annotateMeshSourcePanel.includes("Button"), "React annotate mesh source panel uses the shared shadcn-style button primitive");
+assert.ok(annotateMeshSourcePanel.includes("Button asChild"), "React annotate mesh source panel uses shared Button asChild for upload labels and Router links");
+assert.ok(annotateMeshSourcePanel.includes("Input"), "React annotate mesh source panel uses the shared shadcn-style input primitive");
+assert.ok(annotateMeshSourcePanel.includes("Label"), "React annotate mesh source panel uses the shared shadcn-style label primitive");
+assert.ok(annotateMeshSourcePanel.includes('variant="workbenchPrimary"'), "React annotate mesh source panel keeps primary workbench button styling through Button variants");
+assert.ok(annotateDrawPanel.includes("Button"), "React annotate draw panel uses the shared shadcn-style button primitive");
+assert.ok(annotateDrawPanel.includes("Input"), "React annotate draw panel uses the shared shadcn-style input primitive");
+assert.ok(annotateDrawPanel.includes("Label"), "React annotate draw panel uses the shared shadcn-style label primitive");
+assert.ok(annotateDrawPanel.includes("Select"), "React annotate draw panel uses the shared shadcn-style select primitive");
+assert.ok(annotateDrawPanel.includes('variant="workbenchPrimary"'), "React annotate draw panel keeps primary workbench button styling through Button variants");
 assert.ok(annotateHelpPanel.includes("标注帮助"), "React annotate help panel keeps the user-facing annotation guide");
 assert.ok(annotateStagePanel.includes('to="/live"'), "React annotate stage returns to the React live route");
 for (const id of [
@@ -740,6 +750,11 @@ assert.ok(surgeryWorkbench.includes("SurgeryHelpPanel"), "React surgery workbenc
 assert.ok(surgeryWorkbench.includes("SurgeryStagePanel"), "React surgery workbench renders the R3F stage shell as a React component");
 assert.equal((surgeryControlsPanel.match(/id="btnAlong"/g) || []).length, 1, "React surgery controls have exactly one cut action");
 assert.ok(!surgeryControlsPanel.includes("btnAcross"), "React surgery controls do not expose inverse-RSTL action");
+assert.ok(surgeryControlsPanel.includes("Button"), "React surgery controls use the shared shadcn-style button primitive");
+assert.ok(surgeryControlsPanel.includes("Button asChild"), "React surgery controls use shared Button asChild for the checkbox label button");
+assert.ok(surgeryControlsPanel.includes("Checkbox"), "React surgery controls use the shared shadcn-style checkbox primitive");
+assert.ok(surgeryControlsPanel.includes("Label"), "React surgery controls use the shared shadcn-style label primitive");
+assert.ok(surgeryControlsPanel.includes("RangeInput"), "React surgery controls use the shared shadcn-style range primitive");
 assert.ok(surgeryHelpPanel.includes("这是在演示什么？"), "React surgery help panel keeps the closure explanation");
 assert.ok(surgeryStagePanel.includes('to="/annotate"'), "React surgery stage returns to the React annotation route");
 assert.ok(surgeryController.includes("export function mountSurgeryClosureDemo"), "surgery controller exposes a mount lifecycle");
