@@ -20,6 +20,8 @@ const annotateStatePanel = read("src/components/AnnotateStatePanel.tsx");
 const annotateMeshSourcePanel = read("src/components/AnnotateMeshSourcePanel.tsx");
 const annotateDrawPanel = read("src/components/AnnotateDrawPanel.tsx");
 const annotateLineLibraryPanel = read("src/components/AnnotateLineLibraryPanel.tsx");
+const annotateHelpPanel = read("src/components/AnnotateHelpPanel.tsx");
+const annotateStagePanel = read("src/components/AnnotateStagePanel.tsx");
 const incisionStore = read("src/stores/incisionStore.ts");
 const incisionBridge = read("src/hooks/useIncisionControllerBridge.ts");
 const incisionStatePanel = read("src/components/IncisionStatePanel.tsx");
@@ -344,7 +346,7 @@ assert.ok(!annotateRoute.includes("innerHTML"), "React annotate route should not
 for (const id of [
   "stage",
 ]) {
-  assert.ok(annotateWorkbench.includes(`id="${id}"`), `React annotate workbench exposes #${id}`);
+  assert.ok(annotateStagePanel.includes(`id="${id}"`), `React annotate stage exposes #${id}`);
 }
 assert.ok(annotateWorkbench.includes("AnnotateStatePanel"), "React annotate workbench renders the controller state panel");
 for (const id of [
@@ -374,10 +376,14 @@ for (const id of [
 assert.ok(annotateStore.includes("AnnotateMeshActionsState"), "annotation Zustand store keeps typed mesh source action state");
 assert.ok(annotateWorkbench.includes("AnnotateMeshSourcePanel"), "React annotate workbench renders the mesh source panel as a React component");
 assert.ok(annotateWorkbench.includes("AnnotateDrawPanel"), "React annotate workbench renders the current-line draw panel as a React component");
+assert.ok(annotateWorkbench.includes("AnnotateHelpPanel"), "React annotate workbench renders annotation help as a React component");
+assert.ok(annotateWorkbench.includes("AnnotateStagePanel"), "React annotate workbench renders the 3D stage shell as a React component");
 assert.ok(annotateMeshSourcePanel.includes("ANNOTATE_MESH_REACT_COMMAND_EVENT"), "React annotate mesh source panel dispatches mesh commands to the controller boundary");
 assert.ok(annotateDrawPanel.includes("ANNOTATE_DRAW_REACT_COMMAND_EVENT"), "React annotate draw panel dispatches current-line commands to the controller boundary");
 assert.ok(annotateMeshSourcePanel.includes("useAnnotateStore"), "React annotate mesh source panel reads low-frequency mesh state from Zustand");
 assert.ok(annotateDrawPanel.includes("useAnnotateStore"), "React annotate draw panel reads low-frequency draft state from Zustand");
+assert.ok(annotateHelpPanel.includes("标注帮助"), "React annotate help panel keeps the user-facing annotation guide");
+assert.ok(annotateStagePanel.includes('to="/live"'), "React annotate stage returns to the React live route");
 for (const id of [
   "annStatus",
   "lineList",
