@@ -136,6 +136,8 @@ assert.ok(controllerCommand.includes("dispatchControllerEvent"), "React controll
 assert.ok(controllerCommand.includes("dispatchControllerCommand"), "React controller command helper exposes command dispatch");
 assert.ok(controllerCommand.includes("CustomEvent<TDetail>"), "React controller command helper preserves typed CustomEvent details");
 assert.ok(controllerCommand.includes("window.dispatchEvent"), "React controller command helper centralizes browser event dispatch");
+assert.ok(controllerCommand.includes("readControllerCommandDetail"), "React controller command helper exposes runtime command detail parsing");
+assert.ok(controllerCommand.includes("commands.includes"), "React controller command helper validates incoming command names against runtime command sets");
 for (const helperName of [
   "dispatchLiveSourceCommand",
   "dispatchLiveRenderCommand",
@@ -166,6 +168,21 @@ for (const commandType of [
   "IncisionLibraryCommand",
 ]) {
   assert.ok(controllerCommand.includes(`export type ${commandType}`), `React controller command helper types ${commandType}`);
+}
+for (const commandSet of [
+  "LIVE_SOURCE_COMMANDS",
+  "LIVE_RENDER_COMMANDS",
+  "LIVE_ROUTE_COMMANDS",
+  "ANNOTATE_MESH_COMMANDS",
+  "ANNOTATE_DRAW_COMMANDS",
+  "ANNOTATE_LIBRARY_COMMANDS",
+  "INCISION_TUMOR_COMMANDS",
+  "INCISION_SECONDARY_CUE_COMMANDS",
+  "INCISION_EDIT_COMMANDS",
+  "INCISION_REVIEW_COMMANDS",
+  "INCISION_LIBRARY_COMMANDS",
+]) {
+  assert.ok(controllerCommand.includes(`export const ${commandSet}`), `React controller command helper exports runtime ${commandSet}`);
 }
 for (const eventName of [
   "LIVE_CONTROLLER_STATE_EVENT",
@@ -478,6 +495,13 @@ assert.ok(controller.includes("export function mountIncisionAgentWorkbench"), "i
 assert.ok(controller.includes("export function disposeIncisionAgentWorkbench"), "incision controller exposes a dispose lifecycle");
 assert.ok(controller.includes("INCISION_TUMOR_REACT_COMMAND_EVENT"), "incision controller listens for React tumor input commands");
 assert.ok(controller.includes("./src/lib/controllerEvents.ts"), "incision controller imports event names from the shared module");
+assert.ok(controller.includes("./src/lib/controllerCommand.ts"), "incision controller imports the shared command parsing module");
+assert.ok(controller.includes("readControllerCommandDetail(event, INCISION_TUMOR_COMMANDS)"), "incision tumor handler validates incoming command names");
+assert.ok(controller.includes("readControllerCommandDetail(event, INCISION_SECONDARY_CUE_COMMANDS)"), "incision secondary cue handler validates incoming command names");
+assert.ok(controller.includes("readControllerCommandDetail(event, INCISION_EDIT_COMMANDS)"), "incision edit handler validates incoming command names");
+assert.ok(controller.includes("readControllerCommandDetail(event, INCISION_REVIEW_COMMANDS)"), "incision review handler validates incoming command names");
+assert.ok(controller.includes("readControllerCommandDetail(event, INCISION_LIBRARY_COMMANDS)"), "incision library handler validates incoming command names");
+assert.ok(!controller.includes("event?.detail?.command"), "incision controller does not read raw command detail directly");
 assert.ok(controller.includes("handleReactTumorCommand"), "incision controller routes React tumor commands to existing tumor workflow functions");
 assert.ok(controller.includes("./src/services/tumorInput.ts"), "incision controller consumes the shared typed tumor input service");
 assert.ok(controller.includes("buildTumorInput({"), "incision controller delegates TumorInput construction to the shared service");
@@ -655,6 +679,11 @@ assert.ok(annotateController.includes("./src/lib/controllerEvents.ts"), "annotat
 assert.ok(annotateController.includes("ANNOTATE_MESH_REACT_COMMAND_EVENT"), "annotation controller declares a React mesh source command bridge event");
 assert.ok(annotateController.includes("ANNOTATE_DRAW_REACT_COMMAND_EVENT"), "annotation controller declares a React current-line command bridge event");
 assert.ok(annotateController.includes("ANNOTATE_LIBRARY_REACT_COMMAND_EVENT"), "annotation controller declares a React saved line command bridge event");
+assert.ok(annotateController.includes("./src/lib/controllerCommand.ts"), "annotation controller imports the shared command parsing module");
+assert.ok(annotateController.includes("readControllerCommandDetail(event, ANNOTATE_MESH_COMMANDS)"), "annotation mesh handler validates incoming command names");
+assert.ok(annotateController.includes("readControllerCommandDetail(event, ANNOTATE_DRAW_COMMANDS)"), "annotation draw handler validates incoming command names");
+assert.ok(annotateController.includes("readControllerCommandDetail(event, ANNOTATE_LIBRARY_COMMANDS)"), "annotation library handler validates incoming command names");
+assert.ok(!annotateController.includes("event.detail || {}"), "annotation controller does not read raw command detail directly");
 assert.ok(annotateController.includes("handleReactMeshCommand"), "annotation controller routes React mesh source commands to existing workflow functions");
 assert.ok(annotateController.includes("handleReactDrawCommand"), "annotation controller routes React current-line commands to existing workflow functions");
 assert.ok(annotateController.includes("handleReactLineLibraryCommand"), "annotation controller routes React saved line commands to existing workflow functions");
@@ -816,6 +845,11 @@ assert.ok(liveController.includes("./src/lib/controllerEvents.ts"), "live contro
 assert.ok(liveController.includes("LIVE_ROUTE_REACT_COMMAND_EVENT"), "live controller declares a React route command bridge event");
 assert.ok(liveController.includes("LIVE_SOURCE_REACT_COMMAND_EVENT"), "live controller declares a React source command bridge event");
 assert.ok(liveController.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "live controller declares a React render command bridge event");
+assert.ok(liveController.includes("./src/lib/controllerCommand.ts"), "live controller imports the shared command parsing module");
+assert.ok(liveController.includes("readControllerCommandDetail(event, LIVE_SOURCE_COMMANDS)"), "live source handler validates incoming command names");
+assert.ok(liveController.includes("readControllerCommandDetail(event, LIVE_RENDER_COMMANDS)"), "live render handler validates incoming command names");
+assert.ok(liveController.includes("readControllerCommandDetail(event, LIVE_ROUTE_COMMANDS)"), "live route handler validates incoming command names");
+assert.ok(!liveController.includes("event.detail || {}"), "live controller does not read raw command detail directly");
 assert.ok(liveController.includes("handleReactRouteCommand"), "live controller routes React route commands to existing 3D workflow functions");
 assert.ok(liveController.includes("handleReactSourceCommand"), "live controller routes React source commands to existing workflow functions");
 assert.ok(liveController.includes("handleReactRenderCommand"), "live controller routes React render commands to existing workflow functions");

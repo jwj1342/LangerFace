@@ -14,6 +14,12 @@ import {
   LIVE_ROUTE_REACT_COMMAND_EVENT,
   LIVE_SOURCE_REACT_COMMAND_EVENT,
 } from "./src/lib/controllerEvents.ts";
+import {
+  LIVE_RENDER_COMMANDS,
+  LIVE_ROUTE_COMMANDS,
+  LIVE_SOURCE_COMMANDS,
+  readControllerCommandDetail,
+} from "./src/lib/controllerCommand.ts";
 import { isReactManagedWorkbench } from "./src/lib/reactManagedWorkbench.ts";
 import {
   buildLiveControllerSnapshot,
@@ -275,7 +281,9 @@ function toggleRecording() {
 }
 
 function handleReactSourceCommand(event) {
-  const { command } = event.detail || {};
+  const detail = readControllerCommandDetail(event, LIVE_SOURCE_COMMANDS);
+  if (!detail) return;
+  const { command } = detail;
   if (command === "upload_source") {
     els.file.click();
     return;
@@ -286,7 +294,9 @@ function handleReactSourceCommand(event) {
 }
 
 function handleReactRenderCommand(event) {
-  const { command, value } = event.detail || {};
+  const detail = readControllerCommandDetail(event, LIVE_RENDER_COMMANDS);
+  if (!detail) return;
+  const { command, value } = detail;
   if (command === "template_change") runLiveAction("template_change", () => handleTemplateChange(valueEvent(value)));
   if (command === "density_input") runLiveAction("density_input", () => handleDensityInput(valueEvent(Number(value))));
   if (command === "opacity_input") runLiveAction("opacity_input", () => handleOpacityInput(valueEvent(Number(value))));
@@ -301,7 +311,9 @@ function handleReactRenderCommand(event) {
 }
 
 function handleReactRouteCommand(event) {
-  const { command, value } = event.detail || {};
+  const detail = readControllerCommandDetail(event, LIVE_ROUTE_COMMANDS);
+  if (!detail) return;
+  const { command, value } = detail;
   if (command === "route_change") runLiveAction("route_change", () => enterRoute(value === "3d" ? "3d" : "2d"));
   if (command === "load_demo_recon") runLiveAction("load_demo_recon", loadDemoRecon);
   if (command === "start_scan") runLiveAction("start_scan", startScan);

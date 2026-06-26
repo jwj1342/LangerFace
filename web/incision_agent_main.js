@@ -24,6 +24,14 @@ import {
   INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT,
   INCISION_TUMOR_REACT_COMMAND_EVENT,
 } from "./src/lib/controllerEvents.ts";
+import {
+  INCISION_EDIT_COMMANDS,
+  INCISION_LIBRARY_COMMANDS,
+  INCISION_REVIEW_COMMANDS,
+  INCISION_SECONDARY_CUE_COMMANDS,
+  INCISION_TUMOR_COMMANDS,
+  readControllerCommandDetail,
+} from "./src/lib/controllerCommand.ts";
 import { isReactManagedWorkbench } from "./src/lib/reactManagedWorkbench.ts";
 import {
   initialProviderState,
@@ -935,7 +943,9 @@ function clearBoundaryPoints() {
 }
 
 function handleReactTumorCommand(event) {
-  const command = event?.detail?.command;
+  const detail = readControllerCommandDetail(event, INCISION_TUMOR_COMMANDS);
+  if (!detail) return;
+  const { command } = detail;
   if (command === "kind_changed") {
     S.boundaryActive = false;
     updateFormVisibility();
@@ -990,7 +1000,9 @@ function handleReactTumorCommand(event) {
 }
 
 function handleReactSecondaryCueCommand(event) {
-  const command = event?.detail?.command;
+  const detail = readControllerCommandDetail(event, INCISION_SECONDARY_CUE_COMMANDS);
+  if (!detail) return;
+  const { command } = detail;
   if (command === "import_secondary_cue") {
     els.secondaryCueImportFile.click();
     return;
@@ -1200,7 +1212,9 @@ function resetEditToToolSuggestion() {
 }
 
 function handleReactEditCommand(event) {
-  const command = event?.detail?.command;
+  const detail = readControllerCommandDetail(event, INCISION_EDIT_COMMANDS);
+  if (!detail) return;
+  const { command } = detail;
   if (command === "preview_edit") {
     applyEditControls();
     return;
@@ -1755,7 +1769,9 @@ function recordReviewDecision(status, label) {
 }
 
 function handleReactReviewCommand(event) {
-  const command = event?.detail?.command;
+  const detail = readControllerCommandDetail(event, INCISION_REVIEW_COMMANDS);
+  if (!detail) return;
+  const { command } = detail;
   if (command === "review_state_changed") {
     updateReviewStateUI();
     return;
@@ -1774,7 +1790,9 @@ function handleReactReviewCommand(event) {
 }
 
 function handleReactLibraryCommand(event) {
-  const { command, id } = event?.detail || {};
+  const detail = readControllerCommandDetail(event, INCISION_LIBRARY_COMMANDS);
+  if (!detail) return;
+  const { command, id } = detail;
   if (command === "save_current") {
     saveCurrentCandidate();
     return;

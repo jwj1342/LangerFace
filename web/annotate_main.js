@@ -13,6 +13,12 @@ import {
   ANNOTATE_LIBRARY_REACT_COMMAND_EVENT,
   ANNOTATE_MESH_REACT_COMMAND_EVENT,
 } from "./src/lib/controllerEvents.ts";
+import {
+  ANNOTATE_DRAW_COMMANDS,
+  ANNOTATE_LIBRARY_COMMANDS,
+  ANNOTATE_MESH_COMMANDS,
+  readControllerCommandDetail,
+} from "./src/lib/controllerCommand.ts";
 import { isReactManagedWorkbench } from "./src/lib/reactManagedWorkbench.ts";
 import {
   ANNOTATE_SYSTEM_LABELS as SYSTEM_LABELS,
@@ -167,7 +173,9 @@ const loadFlame = () => loadFlameMesh("flame_neutral_vertices", topologyMeta("fl
 const loadFittedFlame = () => loadFlameMesh("flame_fitted_vertices", "FLAME 个体（拟合）");
 
 function handleReactMeshCommand(event) {
-  const { command } = event.detail || {};
+  const detail = readControllerCommandDetail(event, ANNOTATE_MESH_COMMANDS);
+  if (!detail) return;
+  const { command } = detail;
   if (command === "load_canonical") loadCanonical();
   if (command === "load_flame") loadFlame();
   if (command === "load_fitted_flame") loadFittedFlame();
@@ -368,7 +376,9 @@ function startLineFromInputs() {
 }
 
 function handleReactDrawCommand(event) {
-  const { command, value } = event.detail || {};
+  const detail = readControllerCommandDetail(event, ANNOTATE_DRAW_COMMANDS);
+  if (!detail) return;
+  const { command, value } = detail;
   if (command === "system_changed") {
     model.system = value === "langer" ? "langer" : "rstl";
     refresh();
@@ -442,7 +452,9 @@ function deleteLine(i) {
 }
 
 function handleReactLineLibraryCommand(event) {
-  const { command, index } = event.detail || {};
+  const detail = readControllerCommandDetail(event, ANNOTATE_LIBRARY_COMMANDS);
+  if (!detail) return;
+  const { command, index } = detail;
   if (command === "clear_lines") {
     clearLines();
     return;
