@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { SurgeryR3FScene, type SurgeryAssets, type SurgeryCommand, type SurgeryVerdictTone } from "./SurgeryR3FScene";
 import { SurgeryWorkbench } from "./SurgeryWorkbench";
+import { useReactRouteLifecycle } from "../hooks/useReactRouteLifecycle";
 import { loadStandardFaceAssets } from "../services/standardFaceAssets";
 import { useAppStore } from "../stores/appStore";
 
@@ -17,17 +18,20 @@ export function SurgeryRoute() {
   const [tensionScore, setTensionScore] = useState<number | null>(null);
   const [verdict, setVerdict] = useState("点击沿 RSTL 切除后，观察闭合区域新增张力如何局部集中。");
   const [verdictTone, setVerdictTone] = useState<SurgeryVerdictTone>("neutral");
-  const setActiveWorkspace = useAppStore((state) => state.setActiveWorkspace);
   const setAssetStatus = useAppStore((state) => state.setAssetStatus);
   const setRouteStatus = useAppStore((state) => state.setRouteStatus);
+  useReactRouteLifecycle({
+    workspace: "surgery",
+    mountedStatus: "加载 R3F 闭合演示资产",
+    unloadedStatus: "闭合演示已卸载",
+    reactManaged: true,
+  });
 
   useEffect(() => {
-    const previousManagedFlag = window.__LANGERFACE_REACT_MANAGED__;
     let disposed = false;
 
     async function loadSurgeryAssets() {
-      window.__LANGERFACE_REACT_MANAGED__ = true;
-      setActiveWorkspace("surgery");
+      setAssetStatus("闭合演示资产加载中");
       setRouteStatus("加载 R3F 闭合演示资产");
       const loadedAssets = await loadStandardFaceAssets({
         onProgress: (event) => setLoadingText(`${event.label || "标准脸资产"} 加载中`),
@@ -49,11 +53,8 @@ export function SurgeryRoute() {
 
     return () => {
       disposed = true;
-      if (previousManagedFlag === undefined) delete window.__LANGERFACE_REACT_MANAGED__;
-      else window.__LANGERFACE_REACT_MANAGED__ = previousManagedFlag;
-      setRouteStatus("闭合演示已卸载");
     };
-  }, [setActiveWorkspace, setAssetStatus, setRouteStatus]);
+  }, [setAssetStatus, setRouteStatus]);
 
   const issueCommand = useCallback((type: SurgeryCommand["type"]) => {
     setCommand((current) => ({ type, serial: (current?.serial || 0) + 1 }));

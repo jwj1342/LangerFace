@@ -4,10 +4,16 @@ import { Link } from "react-router-dom";
 import { WorkerStatusPanel } from "../components/WorkerStatusPanel";
 import { WorkbenchBrand } from "../components/WorkbenchBrand";
 import { Button } from "../components/ui/button";
+import { useReactRouteLifecycle } from "../hooks/useReactRouteLifecycle";
 import { STATE_BOUNDARY_NOTE, useAppStore } from "../stores/appStore";
 
 export function DashboardRoute() {
   const routeStatus = useAppStore((state) => state.routeStatus);
+  useReactRouteLifecycle({
+    workspace: "dashboard",
+    mountedStatus: "React 入口已就绪",
+    unloadedStatus: "React 入口已卸载",
+  });
 
   return (
     <div className="react-page">

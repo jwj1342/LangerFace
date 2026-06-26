@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { ThreePreviewScene, type ThreePreviewAssets } from "../components/ThreePreviewScene";
 import { ThreePreviewSidebar } from "../components/ThreePreviewSidebar";
+import { useReactRouteLifecycle } from "../hooks/useReactRouteLifecycle";
 import { loadStandardFaceAssets } from "../services/standardFaceAssets";
 import { useAppStore } from "../stores/appStore";
 
@@ -9,13 +10,16 @@ export function ThreePreviewRoute() {
   const [assets, setAssets] = useState<ThreePreviewAssets | null>(null);
   const [loadingText, setLoadingText] = useState("正在加载标准脸资产");
   const [reloadSerial, setReloadSerial] = useState(0);
-  const setActiveWorkspace = useAppStore((state) => state.setActiveWorkspace);
   const setRouteStatus = useAppStore((state) => state.setRouteStatus);
   const setAssetStatus = useAppStore((state) => state.setAssetStatus);
+  useReactRouteLifecycle({
+    workspace: "three-preview",
+    mountedStatus: "R3F 预览加载中",
+    unloadedStatus: "R3F 预览已卸载",
+  });
 
   useEffect(() => {
     let disposed = false;
-    setActiveWorkspace("three-preview");
     setAssets(null);
     setLoadingText("正在加载标准脸资产");
     setAssetStatus("R3F 标准脸资产加载中");
@@ -37,9 +41,8 @@ export function ThreePreviewRoute() {
 
     return () => {
       disposed = true;
-      setRouteStatus("R3F 预览已卸载");
     };
-  }, [reloadSerial, setActiveWorkspace, setAssetStatus, setRouteStatus]);
+  }, [reloadSerial, setAssetStatus, setRouteStatus]);
 
   return (
     <div className="react-page">
