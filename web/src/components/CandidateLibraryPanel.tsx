@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card, CardHeader } from "./ui/card";
 import { Hint } from "./ui/hint";
+import { CandidateList, CandidateRow, CandidateRowMeta, CandidateRowStatus, CandidateRowTop } from "./ui/library-list";
 import { dispatchIncisionLibraryCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 
@@ -58,21 +59,21 @@ export function CandidateLibraryPanel() {
         <Button variant="workbench" id="exportPngBtn" type="button" disabled={!hasCandidate} onClick={() => dispatchIncisionLibraryCommand("export_png")}>导出截图</Button>
       </ButtonRow>
       <Button variant="workbench" id="stageLiveOverlayBtn" type="button" disabled={!hasCandidate} onClick={() => dispatchIncisionLibraryCommand("stage_live_overlay")}>发送到实时叠加</Button>
-      <div className="candidate-list" id="candidateList">
+      <CandidateList id="candidateList">
         {saved.map((item) => (
-          <div className="candidate-row" key={item.id}>
-            <div className="top">
+          <CandidateRow key={item.id}>
+            <CandidateRowTop>
               <span>{item.title}</span>
-              <span className={item.statusDanger ? "danger-text" : ""}>{item.statusLabel}</span>
-            </div>
-            <div className="meta">{item.meta}</div>
+              <CandidateRowStatus danger={item.statusDanger}>{item.statusLabel}</CandidateRowStatus>
+            </CandidateRowTop>
+            <CandidateRowMeta>{item.meta}</CandidateRowMeta>
             <ButtonRow className="two-cols">
               <Button variant="workbench" type="button" onClick={() => dispatchIncisionLibraryCommand("load_candidate", item.id)}>载入</Button>
               <Button variant="workbench" type="button" onClick={() => dispatchIncisionLibraryCommand("remove_candidate", item.id)}>删除</Button>
             </ButtonRow>
-          </div>
+          </CandidateRow>
         ))}
-      </div>
+      </CandidateList>
     </Card>
   );
 }

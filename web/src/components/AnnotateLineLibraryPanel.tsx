@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card, CardHeader } from "./ui/card";
 import { Hint } from "./ui/hint";
+import { LineActions, LineEmpty, LineList, LineMain, LineMeta, LineRow, LineWarning } from "./ui/library-list";
 import { dispatchAnnotateLibraryCommand } from "../lib/controllerCommand";
 import { useAnnotateStore } from "../stores/annotateStore";
 
@@ -28,23 +29,23 @@ export function AnnotateLineLibraryPanel() {
   return (
     <Card>
       <CardHeader><span>3. 已保存线</span><span id="annStatus">{saved ? `${saved.count} 条` : "0 条"}</span></CardHeader>
-      <div className="line-list" id="lineList">
+      <LineList id="lineList">
         {lines.length ? lines.map((line) => (
-          <div className={`line-row${line.fallback ? " has-warning" : ""}`} key={`${line.index}-${line.title}`}>
-            <div className="line-main">
+          <LineRow warn={line.fallback} key={`${line.index}-${line.title}`}>
+            <LineMain>
               <strong>{line.title}</strong>
-              <span className="line-meta">{line.meta}</span>
-              {line.warning ? <span className="line-warning">{line.warning}</span> : null}
-            </div>
-            <div className="line-actions">
+              <LineMeta>{line.meta}</LineMeta>
+              {line.warning ? <LineWarning>{line.warning}</LineWarning> : null}
+            </LineMain>
+            <LineActions>
               <Button variant="mini" type="button" onClick={() => dispatchAnnotateLibraryCommand("restore_line", line.index)}>编辑</Button>
               <Button variant="miniDanger" type="button" onClick={() => dispatchAnnotateLibraryCommand("delete_line", line.index)}>删除</Button>
-            </div>
-          </div>
+            </LineActions>
+          </LineRow>
         )) : (
-          <div className="line-empty">还没有保存的线。</div>
+          <LineEmpty>还没有保存的线。</LineEmpty>
         )}
-      </div>
+      </LineList>
       <ButtonRow className="annotate-export-row">
         <Button variant="workbench" id="btnExportAtlas" type="button" disabled={!exportState?.canExportAtlas} onClick={() => dispatchAnnotateLibraryCommand("export_atlas")}>导出图谱</Button>
         <Button variant="workbench" id="btnExportXyz" type="button" disabled={!exportState?.canExportXyz} onClick={() => dispatchAnnotateLibraryCommand("export_xyz")}>导出 xyz</Button>

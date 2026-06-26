@@ -41,6 +41,7 @@ const uiCheckboxField = read("src/components/ui/checkbox-field.tsx");
 const uiHint = read("src/components/ui/hint.tsx");
 const uiInput = read("src/components/ui/input.tsx");
 const uiKeyValue = read("src/components/ui/key-value.tsx");
+const uiLibraryList = read("src/components/ui/library-list.tsx");
 const uiLabel = read("src/components/ui/label.tsx");
 const uiProgress = read("src/components/ui/progress.tsx");
 const uiSelect = read("src/components/ui/select.tsx");
@@ -120,6 +121,10 @@ const stagePanelSources = new Map([
   ["LiveStagePanel.tsx", liveStagePanel],
   ["SurgeryStagePanel.tsx", surgeryStagePanel],
 ]);
+const libraryPanelSources = new Map([
+  ["AnnotateLineLibraryPanel.tsx", annotateLineLibraryPanel],
+  ["CandidateLibraryPanel.tsx", candidateLibraryPanel],
+]);
 const reactUiConsumerSources = new Map([
   ["App.tsx", app],
   ...[...componentSources.entries()].filter(([name]) => !layoutPrimitiveNames.has(name)),
@@ -140,6 +145,17 @@ const stagePanelsWithRawClass = (className) => (
       source.includes(`className="${className}`)
       || source.includes(`className={\`${className}`)
       || source.includes(`className={cn("${className}`)
+    ))
+    .map(([name]) => name)
+);
+const libraryPanelsWithRawClass = (className) => (
+  [...libraryPanelSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+      || source.includes(` ? "${className}`)
+      || source.includes(`: "${className}`)
     ))
     .map(([name]) => name)
 );
@@ -350,6 +366,42 @@ assert.ok(uiKeyValue.includes('cn("metric-grid"'), "shadcn-style MetricGrid pres
 assert.ok(uiKeyValue.includes('cn("metric"'), "shadcn-style MetricItem preserves existing metric styling");
 assert.ok(uiKeyValue.includes('cn("stat-grid"'), "shadcn-style StatGrid preserves existing stat grid styling");
 assert.ok(uiKeyValue.includes('cn("stat"'), "shadcn-style StatItem preserves existing stat styling");
+for (const [componentName, className] of [
+  ["CandidateList", "candidate-list"],
+  ["CandidateRow", "candidate-row"],
+  ["CandidateRowTop", "top"],
+  ["CandidateRowMeta", "meta"],
+  ["CandidateRowStatus", "danger-text"],
+  ["LineList", "line-list"],
+  ["LineRow", "line-row"],
+  ["LineMain", "line-main"],
+  ["LineMeta", "line-meta"],
+  ["LineWarning", "line-warning"],
+  ["LineActions", "line-actions"],
+  ["LineEmpty", "line-empty"],
+]) {
+  assert.ok(uiLibraryList.includes(componentName), `shadcn-style library list primitive exports ${componentName}`);
+  assert.ok(uiLibraryList.includes(className), `shadcn-style library list primitive preserves ${className} styling`);
+}
+for (const className of [
+  "candidate-list",
+  "candidate-row",
+  "top",
+  "meta",
+  "line-list",
+  "line-row",
+  "line-main",
+  "line-meta",
+  "line-warning",
+  "line-actions",
+  "line-empty",
+]) {
+  assert.deepEqual(
+    libraryPanelsWithRawClass(className),
+    [],
+    `React library panels should use shared list primitives instead of hand-written ${className} class wrappers`,
+  );
+}
 assert.ok(uiProgress.includes('cn("bar"'), "shadcn-style ProgressBar preserves existing progress track styling");
 assert.ok(uiProgress.includes('cn("bar-fill"'), "shadcn-style ProgressBar preserves existing progress fill styling");
 assert.ok(uiProgress.includes("fillProps"), "shadcn-style ProgressBar can preserve controller-owned fill ids");
@@ -600,6 +652,11 @@ assert.ok(candidateLibraryPanel.includes("confirmClear"), "React candidate libra
 assert.ok(!candidateLibraryPanel.includes("window.confirm"), "React candidate library does not use browser-native confirm dialogs");
 assert.ok(candidateLibraryPanel.includes("Button"), "React candidate library uses the shared shadcn-style button primitive");
 assert.ok(candidateLibraryPanel.includes("ButtonRow"), "React candidate library uses the shared shadcn-style button row primitive");
+assert.ok(candidateLibraryPanel.includes("CandidateList"), "React candidate library uses the shared candidate list primitive");
+assert.ok(candidateLibraryPanel.includes("CandidateRow"), "React candidate library uses the shared candidate row primitive");
+assert.ok(candidateLibraryPanel.includes("CandidateRowTop"), "React candidate library uses the shared candidate row top primitive");
+assert.ok(candidateLibraryPanel.includes("CandidateRowMeta"), "React candidate library uses the shared candidate row metadata primitive");
+assert.ok(candidateLibraryPanel.includes("CandidateRowStatus"), "React candidate library uses the shared candidate row status primitive");
 assert.ok(candidateLibraryPanel.includes("<Card"), "React candidate library uses the shared shadcn-style card primitive");
 assert.ok(candidateLibraryPanel.includes('variant="workbenchPrimary"'), "React candidate library keeps primary workbench button styling through Button variants");
 for (const id of [
@@ -915,6 +972,13 @@ assert.ok(annotateLineLibraryPanel.includes("confirmClear"), "React annotate lin
 assert.ok(!annotateLineLibraryPanel.includes("window.confirm"), "React annotate line library does not use browser-native confirm dialogs");
 assert.ok(annotateLineLibraryPanel.includes("Button"), "React annotate line library uses the shared shadcn-style button primitive");
 assert.ok(annotateLineLibraryPanel.includes("ButtonRow"), "React annotate line library uses the shared shadcn-style button row primitive");
+assert.ok(annotateLineLibraryPanel.includes("LineList"), "React annotate line library uses the shared line list primitive");
+assert.ok(annotateLineLibraryPanel.includes("LineRow"), "React annotate line library uses the shared line row primitive");
+assert.ok(annotateLineLibraryPanel.includes("LineMain"), "React annotate line library uses the shared line main primitive");
+assert.ok(annotateLineLibraryPanel.includes("LineMeta"), "React annotate line library uses the shared line metadata primitive");
+assert.ok(annotateLineLibraryPanel.includes("LineWarning"), "React annotate line library uses the shared line warning primitive");
+assert.ok(annotateLineLibraryPanel.includes("LineActions"), "React annotate line library uses the shared line actions primitive");
+assert.ok(annotateLineLibraryPanel.includes("LineEmpty"), "React annotate line library uses the shared line empty-state primitive");
 assert.ok(annotateLineLibraryPanel.includes("<Card"), "React annotate line library uses the shared shadcn-style card primitive");
 assert.ok(annotateLineLibraryPanel.includes('variant="miniDanger"'), "React annotate line library keeps compact destructive styling through Button variants");
 assert.ok(annotateSnapshotsService.includes("buildAnnotateControllerSnapshot"), "shared annotation snapshot service builds typed controller snapshots");
