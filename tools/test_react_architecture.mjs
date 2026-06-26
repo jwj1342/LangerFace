@@ -132,6 +132,9 @@ const annotateSnapshotsService = read("src/services/annotateSnapshots.ts");
 const liveSnapshotsService = read("src/services/liveSnapshots.ts");
 const incisionSnapshotsService = read("src/services/incisionSnapshots.ts");
 const annotateRuntime = read("src/services/annotateRuntime.ts");
+const annotateModelTypes = read("annotate_model.d.ts");
+const annotateViewerTypes = read("annotate_viewer.d.ts");
+const flameFitTypes = read("flame_fit.d.ts");
 const annotateViewer = read("annotate_viewer.js");
 const controller = read("src/services/incisionAgentRuntime.ts");
 const dom = read("dom.js");
@@ -153,6 +156,16 @@ const liveRuntimeDependencyTypes = [
   "render.d.ts",
   "state.d.ts",
   "ui.d.ts",
+];
+const annotateRuntimeDependencyTypes = [
+  "annotate_model.d.ts",
+  "annotate_viewer.d.ts",
+  "assets.d.ts",
+  "flame_fit.d.ts",
+  "mesh_io.d.ts",
+  "slicer_curve.d.ts",
+  "soft_body.d.ts",
+  "topology_registry.d.ts",
 ];
 const layoutPrimitiveNames = new Set(["ReactShell.tsx", "StageShell.tsx", "WorkbenchLayout.tsx"]);
 const stagePanelSources = new Map([
@@ -1759,7 +1772,19 @@ assert.ok(annotateSnapshotsService.includes("buildAnnotateSavedSummary"), "share
 assert.ok(annotateSnapshotsService.includes("buildAnnotateExportState"), "shared annotation snapshot service builds export capability state");
 assert.ok(annotateMeshSourcePanel.includes('to="/surgery"'), "React annotation mesh source panel links to the React surgery closure route");
 assert.ok(annotateMeshSourcePanel.includes('to="/live"'), "React annotation mesh source panel returns to the React live route");
-assert.ok(annotateRuntime.includes("// @ts-nocheck"), "annotation runtime is explicitly marked as a temporary TypeScript migration boundary");
+for (const dependencyType of annotateRuntimeDependencyTypes) {
+  assert.ok(
+    fs.existsSync(path.join(web, dependencyType)),
+    `annotation runtime dependency boundary ${dependencyType} should be typed`,
+  );
+}
+assert.ok(!annotateRuntime.includes("// @ts-nocheck"), "annotation runtime should run under strict TypeScript checking");
+assert.ok(annotateRuntime.includes("interface AnnotateDomElements"), "annotation runtime types its DOM binding surface");
+assert.ok(annotateRuntime.includes("interface DragState"), "annotation runtime types pointer drag state");
+assert.ok(annotateRuntime.includes("function controllerEvent"), "annotation runtime narrows browser command events before reading detail");
+assert.ok(annotateModelTypes.includes("class AnnotationModel"), "annotation model declarations expose the line model contract");
+assert.ok(annotateViewerTypes.includes("class Annotator3D"), "annotation viewer declarations expose the Three.js view contract");
+assert.ok(flameFitTypes.includes("interface FlameBasis"), "FLAME declarations expose the browser fit basis contract");
 assert.ok(annotateRuntime.includes("export function mountAnnotateWorkbench"), "annotation runtime exposes a mount lifecycle");
 assert.ok(annotateRuntime.includes("export function disposeAnnotateWorkbench"), "annotation runtime exposes a dispose lifecycle");
 assert.ok(annotateRuntime.includes("ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation runtime declares a React state bridge event");
@@ -1770,9 +1795,9 @@ assert.ok(annotateRuntime.includes("ANNOTATE_LIBRARY_REACT_COMMAND_EVENT"), "ann
 assert.ok(annotateRuntime.includes("../lib/controllerCommand"), "annotation runtime imports the shared command parsing module");
 assert.ok(annotateRuntime.includes("bindWindowControllerEvents"), "annotation runtime binds React command events through the shared helper");
 assert.ok(!annotateRuntime.includes("window.addEventListener(ANNOTATE"), "annotation runtime does not register React command listeners one-by-one");
-assert.ok(annotateRuntime.includes("readControllerCommandDetail(event, ANNOTATE_MESH_COMMANDS)"), "annotation mesh handler validates incoming command names");
-assert.ok(annotateRuntime.includes("readControllerCommandDetail(event, ANNOTATE_DRAW_COMMANDS)"), "annotation draw handler validates incoming command names");
-assert.ok(annotateRuntime.includes("readControllerCommandDetail(event, ANNOTATE_LIBRARY_COMMANDS)"), "annotation library handler validates incoming command names");
+assert.ok(annotateRuntime.includes("readControllerCommandDetail(controllerEvent(event), ANNOTATE_MESH_COMMANDS)"), "annotation mesh handler validates incoming command names");
+assert.ok(annotateRuntime.includes("readControllerCommandDetail(controllerEvent(event), ANNOTATE_DRAW_COMMANDS)"), "annotation draw handler validates incoming command names");
+assert.ok(annotateRuntime.includes("readControllerCommandDetail(controllerEvent(event), ANNOTATE_LIBRARY_COMMANDS)"), "annotation library handler validates incoming command names");
 assert.ok(!annotateRuntime.includes("event.detail || {}"), "annotation runtime does not read raw command detail directly");
 assert.ok(annotateRuntime.includes("handleReactMeshCommand"), "annotation runtime routes React mesh source commands to existing workflow functions");
 assert.ok(annotateRuntime.includes("handleReactDrawCommand"), "annotation runtime routes React current-line commands to existing workflow functions");

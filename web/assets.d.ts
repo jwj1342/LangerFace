@@ -8,6 +8,15 @@ export interface AssetProgressEvent {
   ratio?: number | null;
 }
 
+export interface AssetUrls {
+  canonicalVertices: string;
+  topology: string;
+  flameBasis: string;
+  [key: string]: string;
+}
+
+export const assetUrls: AssetUrls;
+
 export function loadJsonAsset<T = unknown>(
   key: string,
   options?: {
