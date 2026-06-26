@@ -39,6 +39,7 @@ const uiButtonRow = read("src/components/ui/button-row.tsx");
 const uiCard = read("src/components/ui/card.tsx");
 const uiCheckbox = read("src/components/ui/checkbox.tsx");
 const uiCheckboxField = read("src/components/ui/checkbox-field.tsx");
+const uiHelpDisclosure = read("src/components/ui/help-disclosure.tsx");
 const uiHint = read("src/components/ui/hint.tsx");
 const uiInput = read("src/components/ui/input.tsx");
 const uiKeyValue = read("src/components/ui/key-value.tsx");
@@ -137,6 +138,10 @@ const reactShellConsumerSources = new Map([
   ["ThreePreviewRoute.tsx", threeRoute],
   ["ThreePreviewSidebar.tsx", threePreviewSidebar],
 ]);
+const helpDisclosureConsumerSources = new Map([
+  ["AnnotateHelpPanel.tsx", annotateHelpPanel],
+  ["SurgeryHelpPanel.tsx", surgeryHelpPanel],
+]);
 const reactUiConsumerSources = new Map([
   ["App.tsx", app],
   ...[...componentSources.entries()].filter(([name]) => !layoutPrimitiveNames.has(name)),
@@ -184,6 +189,17 @@ const legendConsumersWithRawClass = (className) => (
 );
 const reactShellConsumersWithRawClass = (className) => (
   [...reactShellConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+      || source.includes(` ? "${className}`)
+      || source.includes(`: "${className}`)
+    ))
+    .map(([name]) => name)
+);
+const helpDisclosureConsumersWithRawClass = (className) => (
+  [...helpDisclosureConsumerSources.entries()]
     .filter(([, source]) => (
       source.includes(`className="${className}`)
       || source.includes(`className={\`${className}`)
@@ -404,6 +420,24 @@ assert.deepEqual(
   "React component panels should use the shared Card primitive instead of raw card class wrappers",
 );
 assert.ok(uiCheckbox.includes('type="checkbox"'), "shadcn-style Checkbox preserves native checkbox behavior");
+assert.ok(uiHelpDisclosure.includes("HelpDisclosure"), "shadcn-style help disclosure primitive exports HelpDisclosure");
+assert.ok(uiHelpDisclosure.includes('cn("help-doc"'), "shadcn-style help disclosure primitive preserves existing help-doc styling");
+assert.ok(uiHelpDisclosure.includes("<Card asChild"), "shadcn-style help disclosure primitive preserves Card asChild semantics");
+assert.ok(uiHelpDisclosure.includes("<details"), "shadcn-style help disclosure primitive owns native details semantics");
+assert.ok(uiHelpDisclosure.includes("<summary>"), "shadcn-style help disclosure primitive owns native summary semantics");
+for (const className of ["help-doc"]) {
+  assert.deepEqual(
+    helpDisclosureConsumersWithRawClass(className),
+    [],
+    `React help panels should use HelpDisclosure instead of hand-written ${className} class wrappers`,
+  );
+}
+for (const [name, source] of helpDisclosureConsumerSources.entries()) {
+  assert.ok(source.includes("HelpDisclosure"), `${name} should render help through the shared HelpDisclosure primitive`);
+  assert.ok(!source.includes("<details"), `${name} should not hand-write native details wrappers`);
+  assert.ok(!source.includes("<summary"), `${name} should not hand-write native summary wrappers`);
+  assert.ok(!source.includes("<Card asChild"), `${name} should not hand-write card-backed disclosure wrappers`);
+}
 assert.ok(uiInput.includes('cn("text-input"'), "shadcn-style Input preserves existing text input styling");
 assert.ok(uiLabel.includes('cn("field-label"'), "shadcn-style Label preserves existing field label styling");
 assert.ok(uiSelect.includes('cn("select"'), "shadcn-style Select preserves existing select styling");
@@ -1038,8 +1072,7 @@ assert.ok(annotateDrawPanel.includes("Select"), "React annotate draw panel uses 
 assert.ok(annotateDrawPanel.includes("<Card"), "React annotate draw panel uses the shared shadcn-style card primitive");
 assert.ok(annotateDrawPanel.includes('variant="workbenchPrimary"'), "React annotate draw panel keeps primary workbench button styling through Button variants");
 assert.ok(annotateHelpPanel.includes("标注帮助"), "React annotate help panel keeps the user-facing annotation guide");
-assert.ok(annotateHelpPanel.includes("<Card asChild"), "React annotate help panel preserves semantic details through the Card asChild primitive");
-assert.ok(annotateHelpPanel.includes("<details open>"), "React annotate help panel keeps native disclosure semantics");
+assert.ok(annotateHelpPanel.includes("HelpDisclosure"), "React annotate help panel uses the shared help disclosure primitive");
 assert.ok(annotateStagePanel.includes('to="/live"'), "React annotate stage returns to the React live route");
 for (const id of [
   "annStatus",
@@ -1359,8 +1392,7 @@ assert.ok(surgeryMetricsPanel.includes("ProgressBar"), "React surgery metrics us
 assert.ok(surgeryMetricsPanel.includes("Legend"), "React surgery metrics use the shared legend primitive");
 assert.ok(surgeryMetricsPanel.includes("LegendSwatch"), "React surgery metrics use the shared legend swatch primitive");
 assert.ok(surgeryHelpPanel.includes("这是在演示什么？"), "React surgery help panel keeps the closure explanation");
-assert.ok(surgeryHelpPanel.includes("<Card asChild"), "React surgery help panel preserves semantic details through the Card asChild primitive");
-assert.ok(surgeryHelpPanel.includes("<details open>"), "React surgery help panel keeps native disclosure semantics");
+assert.ok(surgeryHelpPanel.includes("HelpDisclosure"), "React surgery help panel uses the shared help disclosure primitive");
 assert.ok(surgeryStagePanel.includes('to="/annotate"'), "React surgery stage returns to the React annotation route");
 assert.ok(surgeryController.includes("export function mountSurgeryClosureDemo"), "surgery controller exposes a mount lifecycle");
 assert.ok(surgeryController.includes("export function disposeSurgeryClosureDemo"), "surgery controller exposes a dispose lifecycle");
