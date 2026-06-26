@@ -48,6 +48,7 @@ const uiKeyValue = read("src/components/ui/key-value.tsx");
 const uiLegend = read("src/components/ui/legend.tsx");
 const uiLibraryList = read("src/components/ui/library-list.tsx");
 const uiLabel = read("src/components/ui/label.tsx");
+const uiLoadingOverlay = read("src/components/ui/loading-overlay.tsx");
 const uiProgress = read("src/components/ui/progress.tsx");
 const uiSelect = read("src/components/ui/select.tsx");
 const uiSectionTitle = read("src/components/ui/section-title.tsx");
@@ -133,6 +134,9 @@ const libraryPanelSources = new Map([
 const legendConsumerSources = new Map([
   ["IncisionStagePanel.tsx", incisionStagePanel],
   ["SurgeryMetricsPanel.tsx", surgeryMetricsPanel],
+]);
+const assetLoadingConsumerSources = new Map([
+  ["IncisionStagePanel.tsx", incisionStagePanel],
 ]);
 const reactShellConsumerSources = new Map([
   ["App.tsx", app],
@@ -268,6 +272,17 @@ const incisionFeedbackConsumersWithRawClass = (className) => (
 );
 const incisionStatusConsumersWithRawClass = (className) => (
   [...incisionStatusConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+      || source.includes(` ? "${className}`)
+      || source.includes(`: "${className}`)
+    ))
+    .map(([name]) => name)
+);
+const assetLoadingConsumersWithRawClass = (className) => (
+  [...assetLoadingConsumerSources.entries()]
     .filter(([, source]) => (
       source.includes(`className="${className}`)
       || source.includes(`className={\`${className}`)
@@ -660,6 +675,18 @@ assert.ok(uiProgress.includes('cn("bar"'), "shadcn-style ProgressBar preserves e
 assert.ok(uiProgress.includes('cn("bar-fill"'), "shadcn-style ProgressBar preserves existing progress fill styling");
 assert.ok(uiProgress.includes("fillProps"), "shadcn-style ProgressBar can preserve controller-owned fill ids");
 assert.ok(uiProgress.includes("clampPercent"), "shadcn-style ProgressBar clamps React-controlled percentage values");
+assert.ok(uiLoadingOverlay.includes("AssetLoadingOverlay"), "shadcn-style loading overlay primitive exports AssetLoadingOverlay");
+assert.ok(uiLoadingOverlay.includes('cn("asset-loading"'), "shadcn-style loading overlay preserves existing asset-loading styling");
+assert.ok(uiLoadingOverlay.includes('className="asset-spinner"'), "shadcn-style loading overlay preserves existing spinner styling");
+assert.ok(uiLoadingOverlay.includes('!visible && "hidden"'), "shadcn-style loading overlay preserves hidden state styling");
+for (const className of ["asset-loading", "asset-spinner"]) {
+  assert.deepEqual(
+    assetLoadingConsumersWithRawClass(className),
+    [],
+    `React asset loading consumers should use AssetLoadingOverlay instead of hand-written ${className} wrappers`,
+  );
+}
+assert.ok(incisionStagePanel.includes("AssetLoadingOverlay"), "React incision stage uses the shared asset loading overlay primitive");
 for (const className of [
   "hint",
   "badge",
@@ -793,7 +820,7 @@ for (const id of [
   "assetLoading",
   "assetLoadingText",
 ]) {
-  assert.ok(incisionStagePanel.includes(`id="${id}"`), `React incision stage exposes #${id}`);
+  assert.ok(exposesId(incisionStagePanel, id), `React incision stage exposes #${id}`);
 }
 assert.ok(incisionStore.includes("IncisionAssetLoadingState"), "incision Zustand store keeps typed asset loading state");
 assert.ok(incisionWorkbench.includes("IncisionStagePanel"), "React incision workbench renders the stage as a React component");

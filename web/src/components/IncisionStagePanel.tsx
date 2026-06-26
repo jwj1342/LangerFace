@@ -1,5 +1,6 @@
 import { StageActions, StageLink, StageMeta, StageShell, StageStatus, StageViewport } from "./StageShell";
 import { CanvasLegendItem, Legend } from "./ui/legend";
+import { AssetLoadingOverlay } from "./ui/loading-overlay";
 import { useIncisionStore, type IncisionAssetLoadingState } from "../stores/incisionStore";
 
 const DEFAULT_ASSET_LOADING: IncisionAssetLoadingState = {
@@ -25,11 +26,13 @@ export function IncisionStagePanel() {
     >
       <StageViewport>
         <canvas id="agentCanvas"></canvas>
-        <div className={`asset-loading${assetLoading.visible ? "" : " hidden"}`} id="assetLoading" role="status" aria-live="polite">
-          <div className="asset-spinner" aria-hidden="true"></div>
-          <strong>正在加载切口规划资产</strong>
-          <p id="assetLoadingText">{assetLoading.text}</p>
-        </div>
+        <AssetLoadingOverlay
+          id="assetLoading"
+          heading="正在加载切口规划资产"
+          text={assetLoading.text}
+          textProps={{ id: "assetLoadingText" }}
+          visible={assetLoading.visible}
+        />
         <Legend variant="canvas" aria-label="3D 标注图例">
           <CanvasLegendItem swatchClassName="center">病灶中心</CanvasLegendItem>
           <CanvasLegendItem swatchClassName="ring">肿物范围</CanvasLegendItem>
