@@ -9,6 +9,7 @@ import { CheckboxField } from "./ui/checkbox-field";
 import { FieldGroup } from "./ui/field-group";
 import { Hint } from "./ui/hint";
 import { Label } from "./ui/label";
+import { LiveScanPanel, LiveScanRow, LiveYawMeter } from "./ui/live-feedback";
 import { ProgressBar } from "./ui/progress";
 import { Select } from "./ui/select";
 
@@ -45,16 +46,16 @@ export function LiveRouteControlsPanel() {
             <Button variant="workbench" id="reconScanBtn" type="button" disabled={scanning} onClick={() => dispatchLiveRouteCommand("start_scan")}>转头扫描</Button>
           </ButtonRow>
           <Hint id="reconStatus">{recon?.status || "先重建你的 3D 人头 → 可旋转查看 → 再投影到实时画面。"}</Hint>
-          <FieldGroup className="scan-panel" id="scanPanel" visible={scanning}>
-            <div className="scan-row"><span>扫描进度</span><span id="scanProgressVal">0%</span></div>
+          <LiveScanPanel id="scanPanel" visible={scanning}>
+            <LiveScanRow><span>扫描进度</span><span id="scanProgressVal">0%</span></LiveScanRow>
             <ProgressBar fillProps={{ id: "scanProgressBar" }} />
-            <div className="scan-row"><span>角度覆盖</span><span id="scanYawVal">0.00</span></div>
-            <div className="yaw-meter">
+            <LiveScanRow><span>角度覆盖</span><span id="scanYawVal">0.00</span></LiveScanRow>
+            <LiveYawMeter>
               <span id="scanYawLeft" />
               <span id="scanYawMid" />
               <span id="scanYawRight" />
-            </div>
-          </FieldGroup>
+            </LiveYawMeter>
+          </LiveScanPanel>
           <ButtonRow className="live-two-col">
             <Button variant="workbench" id="view3dBtn" type="button" disabled={!hasModel} aria-pressed={mode3d === "view"} onClick={() => dispatchLiveRouteCommand("view_3d")}>旋转查看</Button>
             <Button variant="workbench" id="project3dBtn" type="button" disabled={!hasModel || !projectable} aria-pressed={mode3d === "project"} onClick={() => dispatchLiveRouteCommand("project_3d")}>投影到画面</Button>

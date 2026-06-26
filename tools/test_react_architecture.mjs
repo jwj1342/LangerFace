@@ -177,6 +177,9 @@ const liveVisibilityConsumerSources = new Map([
 const liveQualityFeedbackConsumerSources = new Map([
   ["LiveQualityPanel.tsx", liveQualityPanel],
 ]);
+const liveScanFeedbackConsumerSources = new Map([
+  ["LiveRouteControlsPanel.tsx", liveRouteControlsPanel],
+]);
 const reactShellConsumerSources = new Map([
   ["App.tsx", app],
   ["DashboardRoute.tsx", dashboardRoute],
@@ -421,6 +424,17 @@ const liveVisibilityConsumersWithRawHidden = () => (
 );
 const liveQualityFeedbackConsumersWithRawClass = (className) => (
   [...liveQualityFeedbackConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+      || source.includes(` ${className} `)
+      || source.includes(` ${className}"`)
+    ))
+    .map(([name]) => name)
+);
+const liveScanFeedbackConsumersWithRawClass = (className) => (
+  [...liveScanFeedbackConsumerSources.entries()]
     .filter(([, source]) => (
       source.includes(`className="${className}`)
       || source.includes(`className={\`${className}`)
@@ -811,6 +825,12 @@ assert.ok(uiLiveFeedback.includes("visible?: boolean"), "shadcn-style LiveOverla
 assert.ok(uiLiveFeedback.includes('hiddenClassName = "hidden"'), "shadcn-style LiveOverlayQa defaults invisible QA to the legacy hidden class");
 assert.ok(uiLiveFeedback.includes("LiveOverlayQaHeader"), "shadcn-style live feedback primitives export LiveOverlayQaHeader");
 assert.ok(uiLiveFeedback.includes('cn("overlay-qa-top"'), "shadcn-style LiveOverlayQaHeader preserves existing overlay QA header styling");
+assert.ok(uiLiveFeedback.includes("LiveScanPanel"), "shadcn-style live feedback primitives export LiveScanPanel");
+assert.ok(uiLiveFeedback.includes('cn("scan-panel"'), "shadcn-style LiveScanPanel preserves existing scan panel styling");
+assert.ok(uiLiveFeedback.includes("LiveScanRow"), "shadcn-style live feedback primitives export LiveScanRow");
+assert.ok(uiLiveFeedback.includes('cn("scan-row"'), "shadcn-style LiveScanRow preserves existing scan row styling");
+assert.ok(uiLiveFeedback.includes("LiveYawMeter"), "shadcn-style live feedback primitives export LiveYawMeter");
+assert.ok(uiLiveFeedback.includes('cn("yaw-meter"'), "shadcn-style LiveYawMeter preserves existing yaw meter styling");
 for (const [componentName, className] of [
   ["Legend", "legend"],
   ["Legend", "canvas-legend"],
@@ -1713,7 +1733,16 @@ assert.ok(liveRouteControlsPanel.includes("ProgressBar"), "React live route cont
 assert.ok(liveRouteControlsPanel.includes("Select"), "React live route controls use the shared shadcn-style select primitive");
 assert.ok(liveRouteControlsPanel.includes("<Card"), "React live route controls use the shared shadcn-style card primitive");
 assert.ok(liveRouteControlsPanel.includes('<FieldGroup id="route3dPanel" className="live-stack" visible={is3d}>'), "React live route controls show 3D route panel through FieldGroup visible");
-assert.ok(liveRouteControlsPanel.includes('<FieldGroup className="scan-panel" id="scanPanel" visible={scanning}>'), "React live route controls show scan progress through FieldGroup visible");
+assert.ok(liveRouteControlsPanel.includes('<LiveScanPanel id="scanPanel" visible={scanning}>'), "React live route controls show scan progress through LiveScanPanel visible");
+assert.ok(liveRouteControlsPanel.includes("LiveScanRow"), "React live route controls use shared scan row primitive");
+assert.ok(liveRouteControlsPanel.includes("LiveYawMeter"), "React live route controls use shared yaw meter primitive");
+for (const className of ["scan-panel", "scan-row", "yaw-meter"]) {
+  assert.deepEqual(
+    liveScanFeedbackConsumersWithRawClass(className),
+    [],
+    `React live route controls should use live feedback primitives instead of hand-written ${className} class wrappers`,
+  );
+}
 assert.ok(liveRouteControlsPanel.includes('hiddenClassName="live-hidden-inline"'), "React live route controls preserve inline twin option hiding through CheckboxField");
 assert.ok(liveRouteControlsPanel.includes('<Card id="threeDWorkflowCard" visible={is3d}>'), "React live route controls show 3D workflow card through Card visible");
 assert.ok(liveRouteControlsPanel.includes("Button asChild"), "React live route controls use shared Button asChild for Router links");
