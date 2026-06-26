@@ -9,7 +9,6 @@ import {
   agentTraceGate,
   classifyRegion,
   compareCandidateRecords,
-  planIncisionWorkflow,
   summarizeTumorBoundary,
   summarizeTumorInputQuality,
   unitsPerMmFromVertices,
@@ -64,6 +63,7 @@ import {
   importedTumorFormState,
   numericControlValue,
 } from "./src/services/tumorInput.ts";
+import { planIncisionWithWorkflowFallback } from "./src/services/workflowPlanner.ts";
 import { createWorkflowWorkerClient } from "./src/services/workflowWorkerClient.ts";
 import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.js";
 
@@ -2090,17 +2090,6 @@ async function runAgent() {
   }
 }
 
-function workerRuntimeStatus(executor, error = null) {
-  return {
-    schema_version: "incision-workflow-runtime/v0.1",
-    executor,
-    worker: executor === "comlink_worker",
-    thread: executor === "comlink_worker" ? "web_worker" : "main_thread",
-    high_frequency_render_state: false,
-    error: error ? String(error.message || error) : null,
-  };
-}
-
 function ensureWorkflowWorker() {
   if (S.workflowWorker || S.workflowWorkerFailed) return S.workflowWorker;
   try {
@@ -2121,25 +2110,14 @@ async function planWorkflowForCurrentTumor(tumor) {
     normal: S.normals[S.lesion],
   };
   const worker = ensureWorkflowWorker();
-  if (worker) {
-    try {
-      const result = await worker.api.planIncision(request);
-      result.workflow_runtime = workerRuntimeStatus("comlink_worker");
-      return result;
-    } catch (err) {
-      S.workflowWorkerFailed = true;
-      worker.dispose?.();
-      S.workflowWorker = null;
-      console.warn("[LangerFace] workflow worker failed; using main-thread fallback", err);
-      els.stageStatus.textContent = "Worker workflow 失败，已退回主线程确定性工具。";
-      const result = planIncisionWorkflow(request);
-      result.workflow_runtime = workerRuntimeStatus("main_thread_fallback", err);
-      return result;
-    }
+  const execution = await planIncisionWithWorkflowFallback({ client: worker, request });
+  if (execution.workerFailed) {
+    S.workflowWorkerFailed = true;
+    S.workflowWorker = null;
+    console.warn("[LangerFace] workflow worker failed; using main-thread fallback", execution.error);
+    if (execution.statusMessage) els.stageStatus.textContent = execution.statusMessage;
   }
-  const result = planIncisionWorkflow(request);
-  result.workflow_runtime = workerRuntimeStatus("main_thread_fallback", new Error("workflow worker unavailable"));
-  return result;
+  return execution.result;
 }
 
 function facePointFromEvent(e) {

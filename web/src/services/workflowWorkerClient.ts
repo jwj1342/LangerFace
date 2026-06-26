@@ -1,6 +1,6 @@
 import * as Comlink from "comlink";
 
-import type { WorkflowWorkerApi } from "../workers/workflow.worker";
+import type { WorkflowWorkerApi } from "../workers/workflowWorkerContract";
 
 export type WorkflowWorkerDiagnostics = Awaited<ReturnType<WorkflowWorkerApi["diagnostics"]>>;
 export type WorkflowWorkerTumorQuality = Awaited<ReturnType<WorkflowWorkerApi["summarizeTumorInput"]>>;
