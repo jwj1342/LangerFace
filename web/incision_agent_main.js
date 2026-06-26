@@ -31,6 +31,7 @@ import {
   INCISION_SECONDARY_CUE_COMMANDS,
   INCISION_TUMOR_COMMANDS,
   bindWindowControllerEvents,
+  dispatchControllerEvent,
   readControllerCommandDetail,
 } from "./src/lib/controllerCommand.ts";
 import { isReactManagedWorkbench } from "./src/lib/reactManagedWorkbench.ts";
@@ -326,23 +327,21 @@ function currentSavedCandidateSummaries() {
 
 function publishIncisionState(reason = "state_update") {
   if (!S.mounted || typeof window === "undefined" || !els.stageStatus) return;
-  window.dispatchEvent(new CustomEvent(INCISION_CONTROLLER_STATE_EVENT, {
-    detail: buildIncisionControllerSnapshot({
-      reason,
-      stageStatus: els.stageStatus?.textContent || "",
-      assetLoading: currentAssetLoadingSnapshot(),
-      tumor: currentTumorFormSnapshot(),
-      secondaryCue: currentSecondaryCueSnapshot(),
-      privacyAudit: currentPrivacyAuditSnapshot(),
-      provider: currentProviderSnapshot(),
-      review: currentReviewSnapshot(),
-      edit: currentEditSnapshot(),
-      candidate: currentCandidateSnapshot(),
-      resultView: currentResultViewSnapshot(),
-      savedCandidates: currentSavedCandidateSummaries(),
-      workflowRuntime: S.result?.workflow_runtime || null,
-      savedCount: S.saved?.length || 0,
-    }),
+  dispatchControllerEvent(INCISION_CONTROLLER_STATE_EVENT, buildIncisionControllerSnapshot({
+    reason,
+    stageStatus: els.stageStatus?.textContent || "",
+    assetLoading: currentAssetLoadingSnapshot(),
+    tumor: currentTumorFormSnapshot(),
+    secondaryCue: currentSecondaryCueSnapshot(),
+    privacyAudit: currentPrivacyAuditSnapshot(),
+    provider: currentProviderSnapshot(),
+    review: currentReviewSnapshot(),
+    edit: currentEditSnapshot(),
+    candidate: currentCandidateSnapshot(),
+    resultView: currentResultViewSnapshot(),
+    savedCandidates: currentSavedCandidateSummaries(),
+    workflowRuntime: S.result?.workflow_runtime || null,
+    savedCount: S.saved?.length || 0,
   }));
 }
 

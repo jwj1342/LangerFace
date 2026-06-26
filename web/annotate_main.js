@@ -18,6 +18,7 @@ import {
   ANNOTATE_LIBRARY_COMMANDS,
   ANNOTATE_MESH_COMMANDS,
   bindWindowControllerEvents,
+  dispatchControllerEvent,
   readControllerCommandDetail,
 } from "./src/lib/controllerCommand.ts";
 import { isReactManagedWorkbench } from "./src/lib/reactManagedWorkbench.ts";
@@ -75,18 +76,16 @@ let bundledFlameBasis = null;
 
 function publishAnnotateState(reason = "state_update") {
   if (!mounted || typeof window === "undefined" || !els?.hint) return;
-  window.dispatchEvent(new CustomEvent(ANNOTATE_CONTROLLER_STATE_EVENT, {
-    detail: buildAnnotateControllerSnapshot({
-      reason,
-      hint: els.hint?.textContent || "",
-      system: model?.system || els.system?.value || "rstl",
-      model,
-      meshLoaded: Boolean(viewer?.hasMesh?.()),
-      modeLabel: els.drawMode?.textContent || "",
-      onCanonical: Boolean(onCanonical),
-      canLoadFlame: flameAvailable(),
-      canLoadFittedFlame: fittedFlameAvailable(),
-    }),
+  dispatchControllerEvent(ANNOTATE_CONTROLLER_STATE_EVENT, buildAnnotateControllerSnapshot({
+    reason,
+    hint: els.hint?.textContent || "",
+    system: model?.system || els.system?.value || "rstl",
+    model,
+    meshLoaded: Boolean(viewer?.hasMesh?.()),
+    modeLabel: els.drawMode?.textContent || "",
+    onCanonical: Boolean(onCanonical),
+    canLoadFlame: flameAvailable(),
+    canLoadFittedFlame: fittedFlameAvailable(),
   }));
 }
 

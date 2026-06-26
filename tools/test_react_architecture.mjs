@@ -595,7 +595,8 @@ assert.ok(controller.includes("worker.api.planIncision"), "incision candidate ge
 assert.ok(controller.includes("main_thread_fallback"), "incision controller keeps a deterministic fallback if worker startup fails");
 assert.ok(controller.includes("S.workflowWorker?.dispose"), "incision controller disposes the workflow worker on route teardown");
 assert.ok(incisionSnapshotsService.includes("react-incision-controller-snapshot/v0.1"), "shared incision snapshot service publishes typed low-frequency snapshots to React");
-assert.ok(controller.includes("CustomEvent(INCISION_CONTROLLER_STATE_EVENT"), "incision controller emits state snapshots through a browser event");
+assert.ok(controller.includes("dispatchControllerEvent(INCISION_CONTROLLER_STATE_EVENT"), "incision controller emits state snapshots through the shared browser event helper");
+assert.ok(!controller.includes("CustomEvent(INCISION_CONTROLLER_STATE_EVENT"), "incision controller does not hand-roll state snapshot CustomEvent dispatch");
 assert.ok(annotateRoute.includes("useAnnotateControllerBridge"), "annotation route mounts the Zustand/controller bridge");
 assert.ok(annotateRoute.includes("useManagedWorkbenchController"), "React annotation route uses the shared managed controller lifecycle");
 assert.ok(annotateRoute.includes("mountAnnotateWorkbench"), "React annotation route configures the annotation controller mount function");
@@ -707,7 +708,8 @@ assert.ok(annotateController.includes("./src/lib/reactManagedWorkbench.ts"), "an
 assert.ok(annotateController.includes("!isReactManagedWorkbench()"), "legacy annotation HTML still owns direct saved line handlers outside React");
 assert.ok(!annotateController.includes("window.__LANGERFACE_REACT_MANAGED__"), "annotation controller does not touch the managed flag directly");
 assert.ok(annotateSnapshotsService.includes("react-annotate-controller-snapshot/v0.1"), "shared annotation snapshot service owns the typed React snapshot schema");
-assert.ok(annotateController.includes("CustomEvent(ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation controller emits state snapshots through a browser event");
+assert.ok(annotateController.includes("dispatchControllerEvent(ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation controller emits state snapshots through the shared browser event helper");
+assert.ok(!annotateController.includes("CustomEvent(ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation controller does not hand-roll state snapshot CustomEvent dispatch");
 assert.ok(annotateController.includes("cancelAnimationFrame"), "annotation controller cancels its render loop on dispose");
 assert.ok(annotateController.includes("abortController?.abort"), "annotation controller aborts DOM listeners on dispose");
 assert.ok(annotateController.includes("activeSession"), "annotation controller guards async loaders across SPA unmounts");
@@ -870,7 +872,8 @@ assert.ok(liveController.includes("./src/services/liveSnapshots.ts"), "live cont
 assert.ok(liveController.includes("buildLiveControllerSnapshot({"), "live controller delegates React snapshot construction to the shared service");
 assert.ok(!liveController.includes("function textOf"), "live controller no longer owns snapshot text normalization");
 assert.ok(!liveController.includes("function visibleTextOf"), "live controller no longer owns visible snapshot text normalization");
-assert.ok(liveController.includes("CustomEvent(LIVE_CONTROLLER_STATE_EVENT"), "live controller emits state snapshots through a browser event");
+assert.ok(liveController.includes("dispatchControllerEvent(LIVE_CONTROLLER_STATE_EVENT"), "live controller emits state snapshots through the shared browser event helper");
+assert.ok(!liveController.includes("CustomEvent(LIVE_CONTROLLER_STATE_EVENT"), "live controller does not hand-roll state snapshot CustomEvent dispatch");
 assert.ok(liveController.includes("scheduleLiveState"), "live controller publishes low-frequency state snapshots from user actions");
 assert.ok(liveController.includes("bindDom(root)"), "live controller rebinds DOM references on mount");
 assert.ok(liveController.includes("abortController?.abort"), "live controller aborts DOM listeners on dispose");
