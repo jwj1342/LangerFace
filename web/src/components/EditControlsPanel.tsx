@@ -5,7 +5,7 @@ import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card, CardHeader } from "./ui/card";
-import { Label } from "./ui/label";
+import { FieldValue, Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
 
@@ -66,7 +66,7 @@ export function EditControlsPanel() {
         <span className={`edit-status${active ? " active" : ""}`} id="editStatus">{statusLabel}</span>
       </CardHeader>
       <div>
-        <Label htmlFor="angleOffsetDeg">方向偏移 deg <span id="angleOffsetVal" className="val">{angleOffsetDeg}</span></Label>
+        <Label htmlFor="angleOffsetDeg">方向偏移 deg <FieldValue id="angleOffsetVal">{angleOffsetDeg}</FieldValue></Label>
         <RangeInput
           id="angleOffsetDeg"
           min="-35"
@@ -83,7 +83,7 @@ export function EditControlsPanel() {
         />
       </div>
       <div>
-        <Label htmlFor="lengthScale">长度比例 <span id="lengthScaleVal" className="val">{lengthScalePct}%</span></Label>
+        <Label htmlFor="lengthScale">长度比例 <FieldValue id="lengthScaleVal">{lengthScalePct}%</FieldValue></Label>
         <RangeInput
           id="lengthScale"
           min="70"
@@ -100,7 +100,7 @@ export function EditControlsPanel() {
         />
       </div>
       <div id="widthScaleWrap" className={widthScaleVisible ? "" : "hidden"}>
-        <Label htmlFor="widthScale">宽度比例 <span id="widthScaleVal" className="val">{widthScalePct}%</span></Label>
+        <Label htmlFor="widthScale">宽度比例 <FieldValue id="widthScaleVal">{widthScalePct}%</FieldValue></Label>
         <RangeInput
           id="widthScale"
           min="70"
@@ -117,7 +117,7 @@ export function EditControlsPanel() {
         />
       </div>
       <div>
-        <Label htmlFor="shiftAlongMm">沿长轴移动 mm <span id="shiftAlongVal" className="val">{shiftAlongMm}</span></Label>
+        <Label htmlFor="shiftAlongMm">沿长轴移动 mm <FieldValue id="shiftAlongVal">{shiftAlongMm}</FieldValue></Label>
         <RangeInput
           id="shiftAlongMm"
           min="-12"
@@ -134,7 +134,7 @@ export function EditControlsPanel() {
         />
       </div>
       <div>
-        <Label htmlFor="shiftPerpMm">垂直长轴移动 mm <span id="shiftPerpVal" className="val">{shiftPerpMm}</span></Label>
+        <Label htmlFor="shiftPerpMm">垂直长轴移动 mm <FieldValue id="shiftPerpVal">{shiftPerpMm}</FieldValue></Label>
         <RangeInput
           id="shiftPerpMm"
           min="-12"

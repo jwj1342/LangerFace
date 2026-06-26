@@ -142,6 +142,12 @@ const helpDisclosureConsumerSources = new Map([
   ["AnnotateHelpPanel.tsx", annotateHelpPanel],
   ["SurgeryHelpPanel.tsx", surgeryHelpPanel],
 ]);
+const fieldValueConsumerSources = new Map([
+  ["EditControlsPanel.tsx", editPanel],
+  ["LiveRenderControlsPanel.tsx", liveRenderControlsPanel],
+  ["ProviderConfigPanel.tsx", providerPanel],
+  ["TumorInputPanel.tsx", tumorPanel],
+]);
 const reactUiConsumerSources = new Map([
   ["App.tsx", app],
   ...[...componentSources.entries()].filter(([name]) => !layoutPrimitiveNames.has(name)),
@@ -200,6 +206,17 @@ const reactShellConsumersWithRawClass = (className) => (
 );
 const helpDisclosureConsumersWithRawClass = (className) => (
   [...helpDisclosureConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+      || source.includes(` ? "${className}`)
+      || source.includes(`: "${className}`)
+    ))
+    .map(([name]) => name)
+);
+const fieldValueConsumersWithRawClass = (className) => (
+  [...fieldValueConsumerSources.entries()]
     .filter(([, source]) => (
       source.includes(`className="${className}`)
       || source.includes(`className={\`${className}`)
@@ -440,6 +457,16 @@ for (const [name, source] of helpDisclosureConsumerSources.entries()) {
 }
 assert.ok(uiInput.includes('cn("text-input"'), "shadcn-style Input preserves existing text input styling");
 assert.ok(uiLabel.includes('cn("field-label"'), "shadcn-style Label preserves existing field label styling");
+assert.ok(uiLabel.includes("FieldValue"), "shadcn-style Label module exports a FieldValue primitive");
+assert.ok(uiLabel.includes('cn("val"'), "shadcn-style FieldValue preserves existing inline value styling");
+assert.deepEqual(
+  fieldValueConsumersWithRawClass("val"),
+  [],
+  "React form panels should use FieldValue instead of hand-written val spans",
+);
+for (const [name, source] of fieldValueConsumerSources.entries()) {
+  assert.ok(source.includes("FieldValue"), `${name} should render inline slider values through the shared FieldValue primitive`);
+}
 assert.ok(uiSelect.includes('cn("select"'), "shadcn-style Select preserves existing select styling");
 assert.ok(uiSlider.includes('type="range"'), "shadcn-style RangeInput preserves native range input behavior");
 assert.ok(uiTextarea.includes('cn("text-area"'), "shadcn-style Textarea preserves existing textarea styling");

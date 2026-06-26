@@ -11,7 +11,7 @@ import { dispatchIncisionProviderState } from "../lib/controllerCommand";
 import { Button } from "./ui/button";
 import { Card, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
-import { Label } from "./ui/label";
+import { FieldValue, Label } from "./ui/label";
 import { RangeInput } from "./ui/slider";
 
 const DEFAULT_TEST_MESSAGE = "尚未测试 LLM Provider 连通性。Vercel 调试请填写可从浏览器访问、允许该 preview origin、并兼容 OpenAI /models 的 HTTPS Provider；候选生成不调用 Provider。";
@@ -135,7 +135,7 @@ export function ProviderConfigPanel() {
         }}
       />
       <div>
-        <Label htmlFor="providerTimeout">LLM timeout 秒 <span id="providerTimeoutVal" className="val">{timeoutS}</span></Label>
+        <Label htmlFor="providerTimeout">LLM timeout 秒 <FieldValue id="providerTimeoutVal">{timeoutS}</FieldValue></Label>
         <RangeInput
           id="providerTimeout"
           min="5"

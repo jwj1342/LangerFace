@@ -6,7 +6,7 @@ import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
-import { Label } from "./ui/label";
+import { FieldValue, Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
 
@@ -76,7 +76,7 @@ export function TumorInputPanel() {
         <option value="cutaneous">皮表肿物 · 梭形切口</option>
       </Select>
       <div>
-        <Label htmlFor="diameterMm">直径 mm <span id="diameterVal" className="val">{diameter}</span></Label>
+        <Label htmlFor="diameterMm">直径 mm <FieldValue id="diameterVal">{diameter}</FieldValue></Label>
         <RangeInput
           id="diameterMm"
           min="4"
@@ -104,7 +104,7 @@ export function TumorInputPanel() {
         />
       </div>
       <div id="depthWrap" className={hiddenClass(cutaneous)}>
-        <Label htmlFor="depthMm">深度 mm <span id="depthVal" className="val">{depth}</span></Label>
+        <Label htmlFor="depthMm">深度 mm <FieldValue id="depthVal">{depth}</FieldValue></Label>
         <RangeInput
           id="depthMm"
           min="0"
@@ -121,7 +121,7 @@ export function TumorInputPanel() {
         />
       </div>
       <div id="marginWrap" className={hiddenClass(!cutaneous)}>
-        <Label htmlFor="marginMm">安全切缘 mm <span id="marginVal" className="val">{margin}</span></Label>
+        <Label htmlFor="marginMm">安全切缘 mm <FieldValue id="marginVal">{margin}</FieldValue></Label>
         <RangeInput
           id="marginMm"
           min="0"
@@ -153,7 +153,7 @@ export function TumorInputPanel() {
         </Select>
       </div>
       <div id="ellipseWrap" className={hiddenClass(!cutaneous || boundaryMode !== "ellipse")}>
-        <Label htmlFor="ellipseRatio">椭圆短轴比例 <span id="ellipseRatioVal" className="val">{ellipseRatio}%</span></Label>
+        <Label htmlFor="ellipseRatio">椭圆短轴比例 <FieldValue id="ellipseRatioVal">{ellipseRatio}%</FieldValue></Label>
         <RangeInput
           id="ellipseRatio"
           min="40"

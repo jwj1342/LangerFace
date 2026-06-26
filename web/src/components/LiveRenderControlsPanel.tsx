@@ -6,7 +6,7 @@ import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { CheckboxField } from "./ui/checkbox-field";
 import { Hint } from "./ui/hint";
-import { Label } from "./ui/label";
+import { FieldValue, Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
 
@@ -38,7 +38,7 @@ export function LiveRenderControlsPanel() {
           <Button variant="workbench" className={atlasPreview?.active ? "" : "hidden"} id="restoreAtlasBtn" type="button" onClick={() => dispatchLiveRenderCommand("restore_atlas")}>恢复官方图谱</Button>
         </div>
         <div>
-          <Label htmlFor="density">线密度 <span className="val" id="densityVal">{density}%</span></Label>
+          <Label htmlFor="density">线密度 <FieldValue id="densityVal">{density}%</FieldValue></Label>
           <RangeInput
             id="density"
             min="12"
@@ -52,11 +52,11 @@ export function LiveRenderControlsPanel() {
           />
         </div>
         <div className="hidden">
-          <Label htmlFor="smooth">平滑 <span className="val" id="smoothVal">{render?.smoothLabel || "中"}</span></Label>
+          <Label htmlFor="smooth">平滑 <FieldValue id="smoothVal">{render?.smoothLabel || "中"}</FieldValue></Label>
           <RangeInput id="smooth" min="0" max="100" defaultValue="60" />
         </div>
         <div>
-          <Label htmlFor="opacity">透明度 <span className="val" id="opacityVal">{opacity}%</span></Label>
+          <Label htmlFor="opacity">透明度 <FieldValue id="opacityVal">{opacity}%</FieldValue></Label>
           <RangeInput
             id="opacity"
             min="25"
