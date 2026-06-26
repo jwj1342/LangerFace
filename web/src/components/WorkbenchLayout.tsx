@@ -1,8 +1,9 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
 import { cn } from "../lib/cn";
+import type { Workspace } from "../stores/appStore";
 
-type WorkbenchLayoutWorkspace = "annotate" | "incision" | "live" | "surgery";
+type WorkbenchLayoutWorkspace = Extract<Workspace, "annotate" | "incision" | "live" | "surgery">;
 
 interface WorkbenchLayoutProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;

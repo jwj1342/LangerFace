@@ -3,8 +3,9 @@ import type { AnchorHTMLAttributes, HTMLAttributes } from "react";
 import { Link, type LinkProps } from "react-router-dom";
 
 import { cn } from "../lib/cn";
+import type { Workspace } from "../stores/appStore";
 
-type ReactRouteWorkspace = "annotate" | "incision" | "live" | "surgery";
+type ReactRouteWorkspace = Extract<Workspace, "annotate" | "incision" | "live" | "surgery">;
 
 interface ReactRouteHostProps extends HTMLAttributes<HTMLDivElement> {
   workspace: ReactRouteWorkspace;

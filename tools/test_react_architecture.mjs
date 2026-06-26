@@ -542,6 +542,8 @@ for (const [componentName, className] of [
   assert.ok(reactShell.includes(className), `React shell primitive preserves ${className} styling`);
 }
 assert.ok(reactShell.includes("react-router-dom"), "React shell primitive supports Router links");
+assert.ok(reactShell.includes('type { Workspace } from "../stores/appStore"'), "React shell workspace types derive from the Zustand app store");
+assert.ok(reactShell.includes("Extract<Workspace"), "React shell keeps a narrowed route workspace type from the shared Workspace union");
 for (const [name, source, workspace] of [
   ["AnnotateRoute.tsx", annotateRoute, "annotate"],
   ["IncisionRoute.tsx", incisionRoute, "incision"],
@@ -660,7 +662,9 @@ assert.ok(reactManagedWorkbench.includes("captureReactManagedWorkbench"), "share
 assert.ok(reactManagedWorkbench.includes("enableReactManagedWorkbench"), "shared React-managed flag module enables React-managed mode");
 assert.ok(reactManagedWorkbench.includes("restoreReactManagedWorkbench"), "shared React-managed flag module restores or deletes the previous flag value");
 assert.ok(workbenchLayout.includes('cn("app"'), "React WorkbenchLayout preserves the legacy app shell class");
+assert.ok(workbenchLayout.includes('type { Workspace } from "../stores/appStore"'), "React WorkbenchLayout workspace types derive from the Zustand app store");
 assert.ok(workbenchLayout.includes("type WorkbenchLayoutWorkspace"), "React WorkbenchLayout owns a typed workspace union");
+assert.ok(workbenchLayout.includes("Extract<Workspace"), "React WorkbenchLayout keeps a narrowed workbench workspace type from the shared Workspace union");
 assert.ok(workbenchLayout.includes("workspace: WorkbenchLayoutWorkspace"), "React WorkbenchLayout requires a typed workspace prop");
 assert.ok(workbenchLayout.includes("`${workspace}-workbench`"), "React WorkbenchLayout derives workspace shell classes centrally");
 assert.ok(workbenchLayout.includes('className="sidebar"'), "React WorkbenchLayout preserves the legacy sidebar class");
