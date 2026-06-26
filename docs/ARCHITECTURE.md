@@ -183,6 +183,9 @@ P = u·V0 + v·V1 + w·V2
 - `tools/test_web_architecture.mjs` 会检查 `web/*.js` 的静态相对 import 图，禁止新增模块环。
 - `web/logger.js` 统一记录浏览器端关键故障、降级事件、帧指标和资产版本；调试时可在控制台查看 `window.langerfaceDiagnostics`，或调用 `window.exportLangerfaceDiagnostics()` 导出脱敏 JSON。字段约定见 [OBSERVABILITY.md](OBSERVABILITY.md)。
 - `web/.npmrc` 启用 `engine-strict=true`，安装依赖时会严格执行 `package.json` 中的 Node/npm 版本要求。
+- React SPA 中仍由运行时服务接管的工作台必须只在 route host 内查询 DOM。`annotateRuntime.ts`、`incisionAgentRuntime.ts`
+  通过 `src/lib/scopedDom.ts` 绑定元素，`dom.js` 的实时页绑定也不再回退到全局 `document.getElementById`，
+  避免路由切换后误绑定旧页面或其它工作台的同名元素。
 
 ---
 

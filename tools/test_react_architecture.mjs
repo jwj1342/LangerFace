@@ -41,6 +41,7 @@ const controllerCommandsHook = read("src/hooks/useControllerCommands.ts");
 const controllerEvents = read("src/lib/controllerEvents.ts");
 const controllerSnapshotSchemas = read("src/lib/controllerSnapshotSchemas.ts");
 const reactManagedWorkbench = read("src/lib/reactManagedWorkbench.ts");
+const scopedDom = read("src/lib/scopedDom.ts");
 const legacyControllers = read("src/services/legacyControllers.ts");
 const uiAnnotateStatus = read("src/components/ui/annotate-status.tsx");
 const uiButton = read("src/components/ui/button.tsx");
@@ -1259,6 +1260,19 @@ assert.ok(controllerSnapshotBridgeHook.includes("bindWindowControllerEvents([[ev
 assert.ok(controllerSnapshotBridgeHook.includes("cleanup()"), "shared snapshot bridge runs shared listener cleanup on unmount");
 assert.ok(controllerSnapshotBridgeHook.includes("clearSnapshot()"), "shared snapshot bridge clears route snapshots on unmount");
 assert.ok(controllerSnapshotBridgeHook.includes("CustomEvent<unknown>"), "shared snapshot bridge treats browser event payloads as unknown before schema guards");
+assert.ok(scopedDom.includes("scopedElementById"), "React route controllers share scoped DOM lookup helpers");
+assert.ok(scopedDom.includes("requireScopedElement"), "React route controllers can fail fast when a host is missing an expected element");
+assert.ok(scopedDom.includes("requireScopedQuery"), "React route controllers can scope selector queries to the route host");
+for (const [name, source] of [
+  ["annotateRuntime.ts", annotateRuntime],
+  ["incisionAgentRuntime.ts", controller],
+]) {
+  assert.ok(source.includes("../lib/scopedDom"), `${name} uses route-host scoped DOM helpers`);
+  assert.ok(!source.includes("document.getElementById"), `${name} must not fall back to global document ids inside the SPA`);
+}
+assert.ok(!controller.includes('document.querySelector(".main-wrap")'), "incision runtime scopes the stage wrapper lookup to the React route host");
+assert.ok(!dom.includes("return document.getElementById(id)"), "live DOM binding does not fall back to global document ids inside the SPA");
+assert.ok(!dom.includes('document.querySelector(".main-wrap")'), "live DOM binding scopes the stage wrapper lookup to the React route host");
 assert.ok(annotateStore.includes("AnnotateControllerSnapshot"), "annotation Zustand store keeps typed controller snapshots");
 assert.ok(annotateStore.includes("ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation Zustand store declares the controller bridge event");
 assert.ok(annotateStore.includes("../lib/controllerEvents"), "annotation Zustand store re-exports controller state event from the shared event module");

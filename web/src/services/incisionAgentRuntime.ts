@@ -36,6 +36,7 @@ import {
   readControllerCommandDetail,
 } from "../lib/controllerCommand";
 import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
+import { requireScopedElement, requireScopedQuery } from "../lib/scopedDom";
 import {
   initialProviderState,
   insecureProviderFromSecurePageMessage,
@@ -236,16 +237,13 @@ function fileFromEvent(event: Event): File | undefined {
 }
 
 const $ = <T extends Element = HTMLElement>(root: ParentNode | Document, id: string): T => {
-  const found = "getElementById" in root
-    ? root.getElementById(id)
-    : root.querySelector?.(`#${id}`);
-  return (found ?? document.getElementById(id)) as T;
+  return requireScopedElement<T>(root, id);
 };
 
 function collectElements(root: ParentNode | Document = document): IncisionDomElements {
   return {
     canvas: $<HTMLCanvasElement>(root, "agentCanvas"),
-    wrap: (root.querySelector?.(".main-wrap") || document.querySelector(".main-wrap")) as HTMLElement,
+    wrap: requireScopedQuery<HTMLElement>(root, ".main-wrap"),
     assetLoading: $(root, "assetLoading"),
     assetLoadingText: $(root, "assetLoadingText"),
     tumorKind: $(root, "tumorKind"),

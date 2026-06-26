@@ -25,6 +25,7 @@ import type { AnnotationLine, AnnotationPoint } from "../../annotate_model.js";
 import type { FlameBasis } from "../../flame_fit.js";
 import type { Triangle, Vec3 } from "../../soft_body.js";
 import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
+import { requireScopedElement } from "../lib/scopedDom";
 import {
   ANNOTATE_SYSTEM_LABELS as SYSTEM_LABELS,
   buildAnnotateControllerSnapshot,
@@ -99,10 +100,7 @@ function controllerEvent(event: Event): Event & { detail?: unknown } {
 }
 
 const $ = <T extends Element>(root: ParentNode | Document, id: string): T => {
-  const found = "getElementById" in root
-    ? root.getElementById(id)
-    : root.querySelector?.(`#${id}`);
-  return (found ?? document.getElementById(id)) as T;
+  return requireScopedElement<T>(root, id);
 };
 
 function collectElements(root: ParentNode | Document = document): AnnotateDomElements {
@@ -133,7 +131,7 @@ function collectElements(root: ParentNode | Document = document): AnnotateDomEle
   };
 }
 
-let els = collectElements(document);
+let els = {} as AnnotateDomElements;
 let viewer = null as unknown as Annotator3DInstance;
 let model = null as unknown as AnnotationModelInstance;
 let onCanonical = false;   // 是否在标准脸拓扑上标注（决定能否导出图谱）

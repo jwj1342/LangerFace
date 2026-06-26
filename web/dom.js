@@ -3,7 +3,12 @@
 const $ = (root, id) => {
   if (root?.getElementById) return root.getElementById(id);
   if (root?.querySelector) return root.querySelector(`#${id}`);
-  return document.getElementById(id);
+  return null;
+};
+
+const scopedQuery = (root, selector) => {
+  if (root?.querySelector) return root.querySelector(selector);
+  return null;
 };
 
 function collectElements(root = document) {
@@ -11,7 +16,7 @@ function collectElements(root = document) {
     video: $(root, "video"),
     canvas: $(root, "canvas"),
     msg: $(root, "overlayMsg"),
-    mainWrap: root.querySelector?.(".main-wrap") || document.querySelector(".main-wrap"),
+    mainWrap: scopedQuery(root, ".main-wrap"),
     upload: $(root, "uploadBtn"),
     file: $(root, "fileInput"),
     cam: $(root, "camBtn"),
