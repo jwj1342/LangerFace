@@ -124,6 +124,7 @@ assert.ok(managedWorkbenchHook.includes("useManagedWorkbenchController"), "React
 assert.ok(managedWorkbenchHook.includes("__LANGERFACE_REACT_MANAGED__ = true"), "managed workbench hook disables legacy controller auto-mount");
 assert.ok(managedWorkbenchHook.includes("previousManagedFlag"), "managed workbench hook restores the previous React-managed flag on unmount");
 assert.ok(managedWorkbenchHook.includes("dispose?.(module)"), "managed workbench hook disposes late-loaded modules after route teardown");
+assert.ok(managedWorkbenchHook.includes(".catch((err) => {\n      if (disposed) return;"), "managed workbench hook ignores late async failures after route teardown");
 assert.ok(managedWorkbenchHook.includes("cleanup?.()"), "managed workbench hook runs controller cleanup on route teardown");
 assert.ok(managedWorkbenchHook.includes("setActiveWorkspace(workspace)"), "managed workbench hook publishes active workspace state");
 assert.ok(managedWorkbenchHook.includes("setRouteStatus"), "managed workbench hook owns route lifecycle status updates");
@@ -368,6 +369,7 @@ assert.ok(threePreviewScene.includes("@react-three/fiber"), "R3F preview scene u
 assert.ok(threePreviewScene.includes("@react-three/drei"), "R3F preview scene uses drei helpers");
 assert.ok(threePreviewScene.includes("OrbitControls"), "R3F preview scene uses drei OrbitControls");
 assert.ok(threePreviewScene.includes("buildLineGeometry"), "R3F preview scene renders atlas line geometry");
+assert.ok(threeRoute.includes(".catch((err) => {\n      if (disposed) return;"), "R3F preview route ignores late asset loader failures after route teardown");
 assert.ok(threePreviewSidebar.includes("R3F RENDERER BOUNDARY"), "R3F preview sidebar keeps the renderer boundary note");
 assert.ok(threePreviewSidebar.includes("WorkbenchBrand"), "R3F preview sidebar uses the shared workbench brand");
 assert.ok(worker.includes("Comlink.expose"), "workflow worker exposes its API through Comlink");

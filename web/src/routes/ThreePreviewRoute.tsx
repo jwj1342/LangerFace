@@ -27,6 +27,7 @@ export function ThreePreviewRoute() {
       setAssetStatus("R3F 标准脸资产已加载");
       setRouteStatus("R3F 预览已就绪");
     }).catch((err) => {
+      if (disposed) return;
       setLoadingText(`资产加载失败：${err.message}`);
       setRouteStatus("R3F 预览加载失败");
       console.error(err);

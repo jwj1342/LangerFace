@@ -49,6 +49,7 @@ export function useManagedWorkbenchController<TModule>({
     }
 
     mountController().catch((err) => {
+      if (disposed) return;
       setRouteStatus(failedStatus);
       console.error(err);
     });
