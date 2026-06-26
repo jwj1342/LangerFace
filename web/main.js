@@ -18,6 +18,7 @@ import {
   LIVE_RENDER_COMMANDS,
   LIVE_ROUTE_COMMANDS,
   LIVE_SOURCE_COMMANDS,
+  bindWindowControllerEvents,
   readControllerCommandDetail,
 } from "./src/lib/controllerCommand.ts";
 import { isReactManagedWorkbench } from "./src/lib/reactManagedWorkbench.ts";
@@ -328,9 +329,11 @@ function handleReactRouteCommand(event) {
 function bindLiveEvents(signal) {
   els.file.addEventListener("change", (e) => runLiveAction("file_source", () => handleFile(e.target.files?.[0])), { signal });
   if (isReactManagedWorkbench()) {
-    window.addEventListener(LIVE_SOURCE_REACT_COMMAND_EVENT, handleReactSourceCommand, { signal });
-    window.addEventListener(LIVE_RENDER_REACT_COMMAND_EVENT, handleReactRenderCommand, { signal });
-    window.addEventListener(LIVE_ROUTE_REACT_COMMAND_EVENT, handleReactRouteCommand, { signal });
+    bindWindowControllerEvents([
+      [LIVE_SOURCE_REACT_COMMAND_EVENT, handleReactSourceCommand],
+      [LIVE_RENDER_REACT_COMMAND_EVENT, handleReactRenderCommand],
+      [LIVE_ROUTE_REACT_COMMAND_EVENT, handleReactRouteCommand],
+    ], { signal });
   } else {
     els.upload.addEventListener("click", () => els.file.click(), { signal });
     els.cam.addEventListener("click", () => runLiveAction("camera_toggle", startCamera), { signal });

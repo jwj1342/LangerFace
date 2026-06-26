@@ -136,13 +136,14 @@ export type ControllerEventCleanup = () => void;
 
 export function bindWindowControllerEvents(
   bindings: readonly WindowControllerEventBinding[],
+  options?: AddEventListenerOptions,
 ): ControllerEventCleanup {
   for (const [eventName, listener] of bindings) {
-    window.addEventListener(eventName, listener);
+    window.addEventListener(eventName, listener, options);
   }
   return () => {
     for (const [eventName, listener] of [...bindings].reverse()) {
-      window.removeEventListener(eventName, listener);
+      window.removeEventListener(eventName, listener, options);
     }
   };
 }

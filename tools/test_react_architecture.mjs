@@ -139,6 +139,7 @@ assert.ok(controllerCommand.includes("window.dispatchEvent"), "React controller 
 assert.ok(controllerCommand.includes("readControllerCommandDetail"), "React controller command helper exposes runtime command detail parsing");
 assert.ok(controllerCommand.includes("commands.includes"), "React controller command helper validates incoming command names against runtime command sets");
 assert.ok(controllerCommand.includes("bindWindowControllerEvents"), "React controller command helper centralizes window event binding cleanup");
+assert.ok(controllerCommand.includes("AddEventListenerOptions"), "React controller command helper can receive AbortSignal-backed listener options");
 assert.ok(controllerCommand.includes("window.addEventListener"), "React controller command helper owns window listener registration");
 assert.ok(controllerCommand.includes("window.removeEventListener"), "React controller command helper owns window listener cleanup");
 for (const helperName of [
@@ -687,6 +688,8 @@ assert.ok(annotateController.includes("ANNOTATE_MESH_REACT_COMMAND_EVENT"), "ann
 assert.ok(annotateController.includes("ANNOTATE_DRAW_REACT_COMMAND_EVENT"), "annotation controller declares a React current-line command bridge event");
 assert.ok(annotateController.includes("ANNOTATE_LIBRARY_REACT_COMMAND_EVENT"), "annotation controller declares a React saved line command bridge event");
 assert.ok(annotateController.includes("./src/lib/controllerCommand.ts"), "annotation controller imports the shared command parsing module");
+assert.ok(annotateController.includes("bindWindowControllerEvents"), "annotation controller binds React command events through the shared helper");
+assert.ok(!annotateController.includes("window.addEventListener(ANNOTATE"), "annotation controller does not register React command listeners one-by-one");
 assert.ok(annotateController.includes("readControllerCommandDetail(event, ANNOTATE_MESH_COMMANDS)"), "annotation mesh handler validates incoming command names");
 assert.ok(annotateController.includes("readControllerCommandDetail(event, ANNOTATE_DRAW_COMMANDS)"), "annotation draw handler validates incoming command names");
 assert.ok(annotateController.includes("readControllerCommandDetail(event, ANNOTATE_LIBRARY_COMMANDS)"), "annotation library handler validates incoming command names");
@@ -853,6 +856,8 @@ assert.ok(liveController.includes("LIVE_ROUTE_REACT_COMMAND_EVENT"), "live contr
 assert.ok(liveController.includes("LIVE_SOURCE_REACT_COMMAND_EVENT"), "live controller declares a React source command bridge event");
 assert.ok(liveController.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "live controller declares a React render command bridge event");
 assert.ok(liveController.includes("./src/lib/controllerCommand.ts"), "live controller imports the shared command parsing module");
+assert.ok(liveController.includes("bindWindowControllerEvents"), "live controller binds React command events through the shared helper");
+assert.ok(!liveController.includes("window.addEventListener(LIVE"), "live controller does not register React command listeners one-by-one");
 assert.ok(liveController.includes("readControllerCommandDetail(event, LIVE_SOURCE_COMMANDS)"), "live source handler validates incoming command names");
 assert.ok(liveController.includes("readControllerCommandDetail(event, LIVE_RENDER_COMMANDS)"), "live render handler validates incoming command names");
 assert.ok(liveController.includes("readControllerCommandDetail(event, LIVE_ROUTE_COMMANDS)"), "live route handler validates incoming command names");

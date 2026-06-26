@@ -17,6 +17,7 @@ import {
   ANNOTATE_DRAW_COMMANDS,
   ANNOTATE_LIBRARY_COMMANDS,
   ANNOTATE_MESH_COMMANDS,
+  bindWindowControllerEvents,
   readControllerCommandDetail,
 } from "./src/lib/controllerCommand.ts";
 import { isReactManagedWorkbench } from "./src/lib/reactManagedWorkbench.ts";
@@ -311,9 +312,11 @@ function bindAnnotateEvents() {
   }, { passive: false, signal });
 
   if (isReactManagedWorkbench()) {
-    window.addEventListener(ANNOTATE_MESH_REACT_COMMAND_EVENT, handleReactMeshCommand, { signal });
-    window.addEventListener(ANNOTATE_DRAW_REACT_COMMAND_EVENT, handleReactDrawCommand, { signal });
-    window.addEventListener(ANNOTATE_LIBRARY_REACT_COMMAND_EVENT, handleReactLineLibraryCommand, { signal });
+    bindWindowControllerEvents([
+      [ANNOTATE_MESH_REACT_COMMAND_EVENT, handleReactMeshCommand],
+      [ANNOTATE_DRAW_REACT_COMMAND_EVENT, handleReactDrawCommand],
+      [ANNOTATE_LIBRARY_REACT_COMMAND_EVENT, handleReactLineLibraryCommand],
+    ], { signal });
   } else {
     els.system.addEventListener("change", () => { model.system = els.system.value; refresh(); }, { signal });
     els.btnNew.addEventListener("click", startLineFromInputs, { signal });
