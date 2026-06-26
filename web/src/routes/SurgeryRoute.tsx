@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { SurgeryR3FScene, type SurgeryAssets, type SurgeryCommand, type SurgeryVerdictTone } from "./SurgeryR3FScene";
 import { SurgeryWorkbench } from "./SurgeryWorkbench";
+import { ReactRouteHost } from "../components/ReactShell";
 import { useReactRouteLifecycle } from "../hooks/useReactRouteLifecycle";
 import { loadStandardFaceAssets } from "../services/standardFaceAssets";
 import { useAppStore } from "../stores/appStore";
@@ -77,7 +78,7 @@ export function SurgeryRoute() {
   }, [setRouteStatus]);
 
   return (
-    <div className="react-surgery-host">
+    <ReactRouteHost workspace="surgery">
       <SurgeryWorkbench
         activeCut={activeCut}
         hint={hint}
@@ -107,6 +108,6 @@ export function SurgeryRoute() {
         onShowLinesChange={setShowLines}
         onSizeChange={setSizePct}
       />
-    </div>
+    </ReactRouteHost>
   );
 }

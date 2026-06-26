@@ -4,6 +4,12 @@ import { Link, type LinkProps } from "react-router-dom";
 
 import { cn } from "../lib/cn";
 
+type ReactRouteWorkspace = "annotate" | "incision" | "live" | "surgery";
+
+interface ReactRouteHostProps extends HTMLAttributes<HTMLDivElement> {
+  workspace: ReactRouteWorkspace;
+}
+
 export const ReactPage = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div ref={ref} className={cn("react-page", className)} {...props} />
@@ -45,3 +51,10 @@ export const ReactShellExternalLink = forwardRef<HTMLAnchorElement, AnchorHTMLAt
   ),
 );
 ReactShellExternalLink.displayName = "ReactShellExternalLink";
+
+export const ReactRouteHost = forwardRef<HTMLDivElement, ReactRouteHostProps>(
+  ({ className, workspace, ...props }, ref) => (
+    <div ref={ref} className={cn(`react-${workspace}-host`, className)} {...props} />
+  ),
+);
+ReactRouteHost.displayName = "ReactRouteHost";

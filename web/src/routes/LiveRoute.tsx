@@ -1,6 +1,7 @@
 import { useRef } from "react";
 
 import { LiveWorkbench } from "./LiveWorkbench";
+import { ReactRouteHost } from "../components/ReactShell";
 import { useLiveControllerBridge } from "../hooks/useLiveControllerBridge";
 import { useManagedWorkbenchController } from "../hooks/useManagedWorkbenchController";
 
@@ -27,8 +28,8 @@ export function LiveRoute() {
   });
 
   return (
-    <div ref={hostRef} className="react-live-host">
+    <ReactRouteHost ref={hostRef} workspace="live">
       <LiveWorkbench />
-    </div>
+    </ReactRouteHost>
   );
 }

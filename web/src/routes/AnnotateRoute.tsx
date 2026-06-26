@@ -1,6 +1,7 @@
 import { useRef } from "react";
 
 import { AnnotateWorkbench } from "./AnnotateWorkbench";
+import { ReactRouteHost } from "../components/ReactShell";
 import { useAnnotateControllerBridge } from "../hooks/useAnnotateControllerBridge";
 import { useManagedWorkbenchController } from "../hooks/useManagedWorkbenchController";
 
@@ -27,8 +28,8 @@ export function AnnotateRoute() {
   });
 
   return (
-    <div ref={hostRef} className="react-annotate-host">
+    <ReactRouteHost ref={hostRef} workspace="annotate">
       <AnnotateWorkbench />
-    </div>
+    </ReactRouteHost>
   );
 }

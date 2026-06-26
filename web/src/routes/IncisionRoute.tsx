@@ -1,6 +1,7 @@
 import { useRef } from "react";
 
 import { IncisionWorkbench } from "./IncisionWorkbench";
+import { ReactRouteHost } from "../components/ReactShell";
 import { useIncisionControllerBridge } from "../hooks/useIncisionControllerBridge";
 import { useManagedWorkbenchController } from "../hooks/useManagedWorkbenchController";
 
@@ -27,8 +28,8 @@ export function IncisionRoute() {
   });
 
   return (
-    <div ref={hostRef} className="react-incision-host">
+    <ReactRouteHost ref={hostRef} workspace="incision">
       <IncisionWorkbench />
-    </div>
+    </ReactRouteHost>
   );
 }

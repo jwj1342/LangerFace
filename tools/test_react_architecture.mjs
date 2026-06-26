@@ -518,11 +518,22 @@ for (const [componentName, className] of [
   ["ReactShellMain", "react-shell-main"],
   ["ReactShellNavLink", "react-nav-link"],
   ["ReactShellExternalLink", "react-nav-link"],
+  ["ReactRouteHost", "react-${workspace}-host"],
 ]) {
   assert.ok(reactShell.includes(componentName), `React shell primitive exports ${componentName}`);
   assert.ok(reactShell.includes(className), `React shell primitive preserves ${className} styling`);
 }
 assert.ok(reactShell.includes("react-router-dom"), "React shell primitive supports Router links");
+for (const [name, source, workspace] of [
+  ["AnnotateRoute.tsx", annotateRoute, "annotate"],
+  ["IncisionRoute.tsx", incisionRoute, "incision"],
+  ["LiveRoute.tsx", liveRoute, "live"],
+  ["SurgeryRoute.tsx", surgeryRoute, "surgery"],
+]) {
+  assert.ok(source.includes("ReactRouteHost"), `${name} should render through the shared ReactRouteHost primitive`);
+  assert.ok(source.includes(`workspace="${workspace}"`), `${name} should declare its ReactRouteHost workspace`);
+  assert.ok(!source.includes(`className="react-${workspace}-host"`), `${name} should not hand-write its route host class`);
+}
 assert.ok(app.includes("ReactPage"), "React route fallback uses the shared React page primitive");
 assert.ok(dashboardRoute.includes("ReactShellNavLink"), "React dashboard uses shared shell nav links");
 assert.ok(dashboardRoute.includes("ReactShellExternalLink"), "React dashboard uses shared shell external nav links");
