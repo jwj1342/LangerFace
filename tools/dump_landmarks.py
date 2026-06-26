@@ -102,10 +102,11 @@ def build_one_euro_fixture():
     }
 
 
-def regen(path: str = OUT):
-    """从 expected.json 已嵌入的关键点重算 lines[].pts/.vis 与 One-Euro 夹具，并写回。
+def build_expected_from_embedded(path: str = OUT):
+    """从 expected.json 已嵌入的关键点重算完整 golden 数据，且不写文件。
 
-    纯路径：不触碰 mediapipe / cv2 / 私有素材。生产数学变更后用它一键刷新金标。
+    这是 #28 的 CI 契约核心：只依赖仓库内已提交的 landmarks / atlas / 拓扑，
+    不触碰 mediapipe、cv2 或私有素材。
     """
     canonical = CanonicalFaceModel.from_obj(CANONICAL_OBJ)
     tris = canonical.triangles
@@ -118,6 +119,15 @@ def regen(path: str = OUT):
     for fr in data["frames"]:
         fr["lines"] = compute_frame_lines(atlas, fr["landmarks"], tris, culler)
     data["oneEuro"] = build_one_euro_fixture()
+    return data
+
+
+def regen(path: str = OUT):
+    """从 expected.json 已嵌入的关键点重算 lines[].pts/.vis 与 One-Euro 夹具，并写回。
+
+    纯路径：不触碰 mediapipe / cv2 / 私有素材。生产数学变更后用它一键刷新金标。
+    """
+    data = build_expected_from_embedded(path)
 
     with open(path, "w") as f:
         json.dump(data, f)
