@@ -1119,6 +1119,8 @@ assert.ok(managedWorkbenchHook.includes("cleanup?.()"), "managed workbench hook 
 assert.ok(managedWorkbenchHook.includes("setActiveWorkspace(workspace)"), "managed workbench hook publishes active workspace state");
 assert.ok(managedWorkbenchHook.includes("setRouteStatus"), "managed workbench hook owns route lifecycle status updates");
 assert.ok(controllerSnapshotBridgeHook.includes("useControllerSnapshotBridge"), "React controller snapshots share a typed event bridge hook");
+assert.ok(controllerSnapshotBridgeHook.includes("hasControllerSnapshotSchema"), "React controller snapshot bridge centralizes schema-version guards");
+assert.ok(controllerSnapshotBridgeHook.includes("useVersionedControllerSnapshotBridge"), "React controller snapshots share a versioned bridge wrapper");
 assert.ok(controllerSnapshotBridgeHook.includes("../lib/controllerCommand"), "shared snapshot bridge imports the shared controller event binding helper");
 assert.ok(controllerSnapshotBridgeHook.includes("bindWindowControllerEvents([[eventName, handleStateEvent]]"), "shared snapshot bridge subscribes through the shared controller event binding helper");
 assert.ok(controllerSnapshotBridgeHook.includes("cleanup()"), "shared snapshot bridge runs shared listener cleanup on unmount");
@@ -1133,10 +1135,11 @@ assert.ok(!annotateStore.includes("THREE."), "annotation store must not hold Thr
 assert.ok(!annotateStore.includes("verts:"), "annotation store must not hold mesh vertex arrays");
 assert.ok(!annotateStore.includes("tris:"), "annotation store must not hold triangle arrays");
 assert.ok(!annotateStore.includes("camera:"), "annotation store must not hold Three.js cameras");
-assert.ok(annotateBridge.includes("useControllerSnapshotBridge"), "React annotation hook delegates event wiring to the shared snapshot bridge");
+assert.ok(annotateBridge.includes("useVersionedControllerSnapshotBridge"), "React annotation hook delegates schema guarding to the shared versioned snapshot bridge");
 assert.ok(annotateBridge.includes("../lib/controllerSnapshotSchemas"), "React annotation hook imports the lightweight shared snapshot schema version");
 assert.ok(!annotateBridge.includes("../services/annotateSnapshots"), "React annotation hook does not pull the full snapshot service at runtime");
 assert.ok(annotateBridge.includes("ANNOTATE_SNAPSHOT_SCHEMA_VERSION"), "React annotation hook guards snapshots with the shared schema version constant");
+assert.ok(!annotateBridge.includes("schema_version?: string"), "React annotation hook does not duplicate schema-version guard casts");
 assert.ok(annotateStatePanel.includes("useAnnotateStore"), "React annotation UI reads low-frequency state from Zustand");
 assert.ok(annotateStatePanel.includes("<Card"), "React annotation state panel uses the shared shadcn-style card primitive");
 assert.ok(liveStore.includes("LiveControllerSnapshot"), "live Zustand store keeps typed controller snapshots");
@@ -1149,10 +1152,11 @@ assert.ok(!liveStore.includes("landmarks:"), "live store must not hold per-frame
 assert.ok(!liveStore.includes("verts:"), "live store must not hold mesh vertex arrays");
 assert.ok(!liveStore.includes("tris:"), "live store must not hold triangle arrays");
 assert.ok(!liveStore.includes("fps:"), "live store must not hold frame counters");
-assert.ok(liveBridge.includes("useControllerSnapshotBridge"), "React live hook delegates event wiring to the shared snapshot bridge");
+assert.ok(liveBridge.includes("useVersionedControllerSnapshotBridge"), "React live hook delegates schema guarding to the shared versioned snapshot bridge");
 assert.ok(liveBridge.includes("../lib/controllerSnapshotSchemas"), "React live hook imports the lightweight shared snapshot schema version");
 assert.ok(!liveBridge.includes("../services/liveSnapshots"), "React live hook does not pull the full snapshot service at runtime");
 assert.ok(liveBridge.includes("LIVE_SNAPSHOT_SCHEMA_VERSION"), "React live hook guards snapshots with the shared schema version constant");
+assert.ok(!liveBridge.includes("schema_version?: string"), "React live hook does not duplicate schema-version guard casts");
 assert.ok(liveStatePanel.includes("useLiveStore"), "React live UI reads low-frequency state from Zustand");
 assert.ok(liveStatePanel.includes("<Card"), "React live state panel uses the shared shadcn-style card primitive");
 assert.ok(incisionStore.includes("IncisionControllerSnapshot"), "incision Zustand store keeps typed controller snapshots");
@@ -1163,10 +1167,11 @@ assert.ok(incisionStore.includes("../services/incisionSnapshots"), "incision Zus
 assert.ok(!incisionStore.includes("THREE."), "incision store must not hold Three.js objects");
 assert.ok(!incisionStore.includes("verts:"), "incision store must not hold mesh vertex arrays");
 assert.ok(!incisionStore.includes("tris:"), "incision store must not hold triangle arrays");
-assert.ok(incisionBridge.includes("useControllerSnapshotBridge"), "React incision hook delegates event wiring to the shared snapshot bridge");
+assert.ok(incisionBridge.includes("useVersionedControllerSnapshotBridge"), "React incision hook delegates schema guarding to the shared versioned snapshot bridge");
 assert.ok(incisionBridge.includes("../lib/controllerSnapshotSchemas"), "React incision hook imports the lightweight shared snapshot schema version");
 assert.ok(!incisionBridge.includes("../services/incisionSnapshots"), "React incision hook does not pull the full snapshot service at runtime");
 assert.ok(incisionBridge.includes("INCISION_SNAPSHOT_SCHEMA_VERSION"), "React incision hook guards snapshots with the shared schema version constant");
+assert.ok(!incisionBridge.includes("schema_version?: string"), "React incision hook does not duplicate schema-version guard casts");
 assert.ok(incisionRoute.includes("useIncisionControllerBridge"), "incision route mounts the Zustand/controller bridge");
 assert.ok(incisionStatePanel.includes("useIncisionStore"), "React incision UI reads low-frequency state from Zustand");
 assert.ok(incisionStatePanel.includes("<Card"), "React incision state panel uses the shared shadcn-style card primitive");
