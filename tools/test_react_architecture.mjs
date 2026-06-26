@@ -28,6 +28,7 @@ const legacySurgeryHtml = read("surgery.html");
 const vite = read("vite.config.js");
 const vercel = read("vercel.json");
 const vercelConfig = JSON.parse(vercel);
+const vercelIgnoreBuild = read("scripts/vercel-ignore-build.mjs");
 const app = read("src/App.tsx");
 const typedStore = read("src/stores/appStore.ts");
 const reactShell = read("src/components/ReactShell.tsx");
@@ -135,7 +136,6 @@ const annotateViewer = read("annotate_viewer.js");
 const controller = read("incision_agent_main.js");
 const dom = read("dom.js");
 const liveController = read("main.js");
-const surgeryController = read("surgery_main.js");
 const layoutPrimitiveNames = new Set(["ReactShell.tsx", "StageShell.tsx", "WorkbenchLayout.tsx"]);
 const stagePanelSources = new Map([
   ["AnnotateStagePanel.tsx", annotateStagePanel],
@@ -522,6 +522,15 @@ assert.deepEqual(
   },
   "Vercel should only auto-deploy production and the current active development branch",
 );
+assert.equal(
+  vercelConfig.ignoreCommand,
+  "node scripts/vercel-ignore-build.mjs",
+  "Vercel should skip allowed-branch builds when the web root did not change",
+);
+assert.ok(vercelIgnoreBuild.includes("VERCEL_GIT_COMMIT_REF"), "Vercel ignore script checks the Git branch");
+assert.ok(vercelIgnoreBuild.includes("VERCEL_GIT_PREVIOUS_SHA"), "Vercel ignore script compares against the previous deployment sha");
+assert.ok(vercelIgnoreBuild.includes('new Set(["master", "React-架构重构"])'), "Vercel ignore script mirrors the deployment branch whitelist");
+assert.ok(vercelIgnoreBuild.includes('["diff", "--quiet", previousSha, "HEAD", "--", "."]'), "Vercel ignore script only builds when the web root changed");
 assert.ok(vercel.includes('"source": "/app/(.*)"'), "Vercel rewrites nested SPA routes");
 assert.ok(vercel.includes('"destination": "/app/index.html"'), "Vercel routes SPA paths back to app/index.html");
 
@@ -595,7 +604,7 @@ for (const [name, html, expected] of [
   ["index.html", legacyLiveHtml, ["/app/annotate", "/app/incision"]],
   ["annotate.html", legacyAnnotateHtml, ["/app/live", "/app/surgery"]],
   ["incision_agent.html", legacyIncisionHtml, ["/app/live", "/app/annotate"]],
-  ["surgery.html", legacySurgeryHtml, ["/app/annotate"]],
+  ["surgery.html", legacySurgeryHtml, ["/app/surgery"]],
 ]) {
   for (const href of expected) {
     assert.ok(html.includes(`href="${href}"`), `${name} compatibility navigation points to ${href}`);
@@ -2048,14 +2057,8 @@ assert.ok(surgeryMetricsPanel.includes("LegendSwatch"), "React surgery metrics u
 assert.ok(surgeryHelpPanel.includes("这是在演示什么？"), "React surgery help panel keeps the closure explanation");
 assert.ok(surgeryHelpPanel.includes("HelpDisclosure"), "React surgery help panel uses the shared help disclosure primitive");
 assert.ok(surgeryStagePanel.includes('to="/annotate"'), "React surgery stage returns to the React annotation route");
-assert.ok(surgeryController.includes("export function mountSurgeryClosureDemo"), "surgery controller exposes a mount lifecycle");
-assert.ok(surgeryController.includes("export function disposeSurgeryClosureDemo"), "surgery controller exposes a dispose lifecycle");
-assert.ok(surgeryController.includes("cancelAnimationFrame"), "surgery controller cancels its render loop on dispose");
-assert.ok(surgeryController.includes("S.resizeObserver?.disconnect"), "surgery controller disconnects ResizeObserver on dispose");
-assert.ok(surgeryController.includes("S.abortController?.abort"), "surgery controller aborts DOM listeners on dispose");
-assert.ok(surgeryController.includes("S.head?.dispose"), "surgery controller disposes WebGL resources on dispose");
-assert.ok(surgeryController.includes("./src/lib/reactManagedWorkbench.ts"), "surgery controller imports the shared React-managed flag helper");
-assert.ok(surgeryController.includes("!isReactManagedWorkbench()"), "legacy surgery HTML still auto-mounts outside React");
-assert.ok(!surgeryController.includes("window.__LANGERFACE_REACT_MANAGED__"), "surgery controller does not touch the managed flag directly");
+assert.ok(legacySurgeryHtml.includes("/app/surgery"), "legacy surgery compatibility page redirects to the React surgery route");
+assert.ok(!legacySurgeryHtml.includes("surgery_main.js"), "legacy surgery compatibility page does not load the legacy surgery controller");
+assert.ok(!legacySurgeryHtml.includes('id="btnAlong"'), "legacy surgery compatibility page does not duplicate React surgery controls");
 
 console.log("test_react_architecture: React SPA architecture boundaries passed");
