@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { normalizeProviderBaseUrl, testProviderConnection, type ProviderConfig } from "../../llm_provider.js";
+import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { RangeInput } from "./ui/slider";
@@ -233,9 +234,9 @@ export function ProviderConfigPanel() {
           }}
         />
       </div>
-      <button className="btn" id="testProviderBtn" type="button" disabled={testing} onClick={testProvider}>
+      <Button variant="workbench" id="testProviderBtn" type="button" disabled={testing} onClick={testProvider}>
         {testing ? "正在测试…" : "测试 LLM Provider 连接"}
-      </button>
+      </Button>
       <p className={`agent-note${testTone ? ` ${testTone}` : ""}`} id="providerTestState">{testState}</p>
       <p className="agent-note">生成候选时只执行浏览器内确定性 workflow；Provider 连接测试暂不参与切口几何或工具 trace。</p>
     </div>

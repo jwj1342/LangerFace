@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
@@ -72,31 +73,31 @@ export function ReviewControlsPanel() {
         placeholder="审阅备注、覆盖原因或需要回看的位置"
       />
       <div className="btn-row two-cols">
-        <button
-          className="btn"
+        <Button
+          variant="workbench"
           id="approveCandidateBtn"
           type="button"
           onClick={() => dispatchReviewCommand("approve_candidate")}
         >
           确认当前候选
-        </button>
-        <button
-          className="btn"
+        </Button>
+        <Button
+          variant="workbench"
           id="rejectCandidateBtn"
           type="button"
           onClick={() => dispatchReviewCommand("reject_candidate")}
         >
           否决当前候选
-        </button>
+        </Button>
       </div>
-      <button
-        className="btn btn-primary"
+      <Button
+        variant="workbenchPrimary"
         id="saveReviewBtn"
         type="button"
         onClick={() => dispatchReviewCommand("save_review")}
       >
         保存审阅记录
-      </button>
+      </Button>
       <p className="agent-note">确认只代表进入研究审阅记录，不是手术指令；候选几何一旦调整，审阅状态会回到待确认。</p>
     </div>
   );

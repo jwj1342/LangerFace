@@ -130,6 +130,8 @@ assert.ok(controllerCommand.includes("CustomEvent<TDetail>"), "React controller 
 assert.ok(controllerCommand.includes("window.dispatchEvent"), "React controller command helper centralizes browser event dispatch");
 assert.ok(uiButton.includes("@radix-ui/react-slot"), "shadcn-style Button supports asChild through Radix Slot");
 assert.ok(uiButton.includes("class-variance-authority"), "shadcn-style Button uses variant composition");
+assert.ok(uiButton.includes("workbenchPrimary"), "shadcn-style Button can preserve legacy workbench button styling");
+assert.ok(uiButton.includes("miniDanger"), "shadcn-style Button can preserve compact destructive button styling");
 assert.ok(uiCard.includes("CardHeader"), "shadcn-style Card exposes a header primitive");
 assert.ok(uiCard.includes("CardContent"), "shadcn-style Card exposes a content primitive");
 assert.ok(uiCard.includes('cn("card"'), "shadcn-style Card preserves existing card styling");
@@ -318,6 +320,7 @@ assert.ok(providerPanel.includes("dispatchControllerEvent"), "React provider pan
 assert.ok(providerPanel.includes("Input"), "React provider panel uses the shared shadcn-style input primitive");
 assert.ok(providerPanel.includes("Label"), "React provider panel uses the shared shadcn-style label primitive");
 assert.ok(providerPanel.includes("RangeInput"), "React provider panel uses the shared shadcn-style range primitive");
+assert.ok(providerPanel.includes("Button"), "React provider panel uses the shared shadcn-style button primitive");
 for (const id of [
   "editStatus",
   "angleOffsetDeg",
@@ -363,6 +366,8 @@ assert.ok(reviewPanel.includes("Input"), "React review panel uses the shared sha
 assert.ok(reviewPanel.includes("Label"), "React review panel uses the shared shadcn-style label primitive");
 assert.ok(reviewPanel.includes("Select"), "React review panel uses the shared shadcn-style select primitive");
 assert.ok(reviewPanel.includes("Textarea"), "React review panel uses the shared shadcn-style textarea primitive");
+assert.ok(reviewPanel.includes("Button"), "React review panel uses the shared shadcn-style button primitive");
+assert.ok(reviewPanel.includes('variant="workbenchPrimary"'), "React review panel keeps primary workbench button styling through Button variants");
 assert.ok(incisionWorkbench.includes('to="/live"'), "React incision workbench returns to the React live route");
 assert.ok(incisionStagePanel.includes('to="/annotate"'), "React incision stage links to the React 3D annotation route");
 assert.ok(controller.includes("export function mountIncisionAgentWorkbench"), "incision controller exposes a mount lifecycle");

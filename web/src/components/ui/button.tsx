@@ -7,15 +7,19 @@ import type { ButtonHTMLAttributes } from "react";
 import { cn } from "../../lib/cn";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-[10px] border text-sm font-semibold transition disabled:pointer-events-none disabled:opacity-45",
+  "",
   {
     variants: {
       variant: {
-        default: "border-[#e6e8e1] bg-white text-[#1b2024] hover:bg-[#f3f4f0]",
-        primary: "border-[#0f9b6e] bg-[#0f9b6e] text-white hover:bg-[#0c8460]",
+        default: "inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#e6e8e1] bg-white px-3 text-sm font-semibold text-[#1b2024] transition hover:bg-[#f3f4f0] disabled:pointer-events-none disabled:opacity-45",
+        primary: "inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#0f9b6e] bg-[#0f9b6e] px-3 text-sm font-semibold text-white transition hover:bg-[#0c8460] disabled:pointer-events-none disabled:opacity-45",
+        workbench: "btn",
+        workbenchPrimary: "btn btn-primary",
+        mini: "mini",
+        miniDanger: "mini del",
       },
       size: {
-        default: "h-10 px-3",
+        default: "",
         sm: "h-8 px-2.5 text-xs",
       },
     },
