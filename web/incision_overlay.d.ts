@@ -1,10 +1,13 @@
-import type { IncisionOverlayPayload } from "./data_source.js";
-import type { Triangle, Vec3 } from "./soft_body.js";
-
-export function validateIncisionOverlay(overlay: unknown): overlay is IncisionOverlayPayload;
-
-export function compileIncisionOverlay(
-  record: Record<string, any>,
-  verts: Vec3[],
-  tris: Triangle[],
-): IncisionOverlayPayload | null;
+export type { ReviewGate, SurfaceRef } from "./src/services/incisionOverlay";
+export {
+  __incisionOverlayForTests,
+  clearIncisionOverlay,
+  compileIncisionOverlay,
+  loadIncisionOverlay,
+  mapSurfaceRefs,
+  measureIncisionOverlayJitter,
+  measureIncisionOverlayRegistration,
+  pointToSurfaceRef,
+  stageIncisionOverlay,
+  validateIncisionOverlay,
+} from "./src/services/incisionOverlay";
