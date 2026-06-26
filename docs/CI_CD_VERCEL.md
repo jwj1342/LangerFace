@@ -18,7 +18,7 @@ pull request / push
       │    └─ web: npm ci + npm run build + npm test
       │
       └─ Vercel Git Integration
-           ├─ PR / branch: Preview Deployment
+           ├─ React-架构重构: 当前开发 Preview Deployment
            └─ master: Production Deployment
 ```
 
@@ -31,6 +31,21 @@ pull request / push
 | Cloudflare（将来） | Worker API、D1、R2、受限数据鉴权；不负责当前静态前端部署 |
 
 不要同时启用“Vercel Git 自动部署”和“GitHub Actions 里用 Vercel CLI 自动部署”，否则同一个 commit 可能产生重复部署和重复状态检查。
+
+## 自动部署范围与限流控制
+
+Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 集成会在允许的分支上为每次 push 创建新的部署任务；如果短时间内连续 push、旧构建没有及时取消，或者多个历史分支仍允许 Preview，就可能触发并发、构建次数或平台侧限流。
+
+本项目默认只保留两个自动部署入口：
+
+| 环境 | 分支 | 行为 |
+|---|---|---|
+| Production | `master` | 合并后自动发布生产站 |
+| 当前开发 Preview | `React-架构重构` | 当前重构 PR 的唯一自动 Preview |
+
+[web/vercel.json](../web/vercel.json) 已将 `git.deploymentEnabled` 设置为 `* = false`，只对白名单分支开放 `master` 和 `React-架构重构`；同时显式开启 `github.autoJobCancelation`，让同一 PR / 分支上的较旧构建在新 commit 到来时自动取消。
+
+如果后续开发主分支更名，只改这个白名单，不要额外打开所有 feature 分支的自动 Preview。旧的 Deployment URL 属于 Vercel 的历史记录 / 回滚能力；它们可以在 Dashboard 里清理或保留，但仓库配置能控制的是“以后哪些分支继续产生新部署”。
 
 ## Vercel Project 设置
 
@@ -57,6 +72,8 @@ pull request / push
 本仓库已有 [web/vercel.json](../web/vercel.json)，里面声明了：
 - `buildCommand`: `npm run build`
 - `outputDirectory`: `dist`
+- `git.deploymentEnabled`: 只允许 `master` 和当前开发分支 `React-架构重构` 自动部署
+- `github.autoJobCancelation`: 同一 PR / 分支有新 commit 时取消较旧构建
 - `/assets/*` 长缓存，适合 `.task` 模型、atlas JSON、triangles 等哈希化静态资产
 - JS/MJS 的 `Content-Type`
 

@@ -9,6 +9,9 @@
       "React-架构重构": true
     }
   },
+  "github": {
+    "autoJobCancelation": true
+  },
   "functions": {
     "api/**/*.py": {
       "excludeFiles": "{node_modules/**,dist/**,assets/**,test/**,**/*.task}"

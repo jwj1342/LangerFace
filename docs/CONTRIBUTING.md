@@ -82,6 +82,8 @@ PR 上应关注这些 checks：
 | `Vercel` | 该 PR 的网页 Preview 是否构建成功 |
 | `Vercel Preview Comments` | Vercel 在 PR 中发布 Preview 链接 |
 
+Vercel 自动 Preview 只对白名单开发分支开启；当前白名单见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#自动部署范围与限流控制)。普通短期 feature 分支仍跑 GitHub Actions 质量门禁，但不会自动创建 Vercel Preview；需要线上验收时，先把白名单中的当前开发分支推进到对应 commit，或由维护者临时调整白名单。
+
 Preview 人工验收清单：
 
 - 首页能打开，模型与图谱加载完成。
