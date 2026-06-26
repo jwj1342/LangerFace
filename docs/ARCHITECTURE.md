@@ -184,9 +184,10 @@ P = u·V0 + v·V1 + w·V2
 - `web/logger.js` 统一记录浏览器端关键故障、降级事件、帧指标和资产版本；调试时可在控制台查看 `window.langerfaceDiagnostics`，或调用 `window.exportLangerfaceDiagnostics()` 导出脱敏 JSON。字段约定见 [OBSERVABILITY.md](OBSERVABILITY.md)。
 - `web/.npmrc` 启用 `engine-strict=true`，安装依赖时会严格执行 `package.json` 中的 Node/npm 版本要求。
 - React SPA 中仍由运行时服务接管的工作台必须只在 route host 内查询 DOM。`annotateRuntime.ts`、`incisionAgentRuntime.ts`
-  通过 `src/lib/scopedDom.ts` 绑定元素，`dom.js` 的实时页绑定也不再回退到全局 `document.getElementById`，
+  通过 `src/lib/scopedDom.ts` 绑定元素，实时页绑定由 `src/services/liveDom.ts` 负责，也不再回退到全局 `document.getElementById`，
   避免路由切换后误绑定旧页面或其它工作台的同名元素。
-- `dom.js` 不允许在模块 import 时绑定 `document`；实时页只能在 `mountLiveWorkbench(root)` 内 `bindDom(root)`，
+- `dom.js` 仅保留为旧 JS 管线的兼容 re-export，真实实现位于 `src/services/liveDom.ts`，并受 TypeScript 严格检查。
+  它不允许在模块 import 时绑定 `document`；实时页只能在 `mountLiveWorkbench(root)` 内 `bindDom(root)`，
   在 `disposeLiveWorkbench()` 中 `clearDomBinding()`，避免 SPA 长生命周期保留已卸载的 canvas、video 或 wrapper 引用。
 
 ---

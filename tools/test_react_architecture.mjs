@@ -144,6 +144,7 @@ const three3dTypes = read("three3d.d.ts");
 const exportPrivacyTypes = read("export_privacy.d.ts");
 const dom = read("dom.js");
 const liveController = read("src/services/liveRuntime.ts");
+const liveDomService = read("src/services/liveDom.ts");
 const liveDomTypes = read("dom.d.ts");
 const liveStateTypes = read("state.d.ts");
 const liveCanvasFitTypes = read("canvas_fit.d.ts");
@@ -1271,8 +1272,8 @@ for (const [name, source] of [
   assert.ok(!source.includes("document.getElementById"), `${name} must not fall back to global document ids inside the SPA`);
 }
 assert.ok(!controller.includes('document.querySelector(".main-wrap")'), "incision runtime scopes the stage wrapper lookup to the React route host");
-assert.ok(!dom.includes("return document.getElementById(id)"), "live DOM binding does not fall back to global document ids inside the SPA");
-assert.ok(!dom.includes('document.querySelector(".main-wrap")'), "live DOM binding scopes the stage wrapper lookup to the React route host");
+assert.ok(!liveDomService.includes("return document.getElementById(id)"), "live DOM binding does not fall back to global document ids inside the SPA");
+assert.ok(!liveDomService.includes('document.querySelector(".main-wrap")'), "live DOM binding scopes the stage wrapper lookup to the React route host");
 assert.ok(annotateStore.includes("AnnotateControllerSnapshot"), "annotation Zustand store keeps typed controller snapshots");
 assert.ok(annotateStore.includes("ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation Zustand store declares the controller bridge event");
 assert.ok(annotateStore.includes("../lib/controllerEvents"), "annotation Zustand store re-exports controller state event from the shared event module");
@@ -2069,10 +2070,12 @@ assert.ok(liveSnapshotsService.includes("visibleLiveTextOf"), "shared live snaps
 assert.ok(liveSnapshotsService.includes("../lib/controllerSnapshotSchemas"), "shared live snapshot service re-exports the lightweight schema version");
 assert.ok(liveRouteControlsPanel.includes('to="/annotate"'), "React live route controls link to the React annotation route");
 assert.ok(liveWorkbench.includes('to="/incision"'), "React live workbench links to the React incision route");
-assert.ok(dom.includes("export function bindDom"), "DOM module can rebind element references for SPA route mounts");
-assert.ok(dom.includes("export function clearDomBinding"), "DOM module can clear stale route element references on SPA unmount");
-assert.ok(dom.includes("export let ctx"), "DOM module exports a live canvas context binding");
-assert.ok(!dom.includes("bindDom(document);"), "DOM module must not bind global document elements at import time");
+assert.ok(dom.includes("./src/services/liveDom.ts"), "legacy dom.js is only a compatibility facade over the TypeScript live DOM service");
+assert.ok(dom.includes("export { bindDom, clearDomBinding, ctx, els }"), "legacy dom.js re-exports the TypeScript live DOM contract");
+assert.ok(liveDomService.includes("export function bindDom"), "TypeScript live DOM service can rebind element references for SPA route mounts");
+assert.ok(liveDomService.includes("export function clearDomBinding"), "TypeScript live DOM service can clear stale route element references on SPA unmount");
+assert.ok(liveDomService.includes("export let ctx"), "TypeScript live DOM service exports a live canvas context binding");
+assert.ok(!liveDomService.includes("bindDom(document);"), "live DOM service must not bind global document elements at import time");
 for (const rel of liveRuntimeDependencyTypes) {
   assert.ok(fs.existsSync(path.join(web, rel)), `live runtime dependency boundary ${rel} should be typed`);
 }
@@ -2080,6 +2083,7 @@ assert.ok(!liveController.includes("// @ts-nocheck"), "live runtime should run u
 assert.ok(liveController.includes("interface ImageDragState"), "live runtime types its route-local drag state");
 assert.ok(liveController.includes("function controllerEvent"), "live runtime narrows browser command events before reading detail");
 assert.ok(liveDomTypes.includes("LiveDomElements"), "DOM binding declarations expose typed live elements");
+assert.ok(liveDomTypes.includes("./src/services/liveDom"), "DOM binding declarations re-export the TypeScript implementation contract");
 assert.ok(liveStateTypes.includes("LiveRenderState"), "state declarations expose typed live render state");
 assert.ok(liveCanvasFitTypes.includes("observeCanvasStageResize"), "canvas-fit declarations expose resize cleanup contract");
 assert.ok(liveDataSourceTypes.includes("IncisionOverlayPayload"), "data source declarations type staged incision overlays");
