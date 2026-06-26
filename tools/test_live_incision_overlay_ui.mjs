@@ -11,7 +11,7 @@ const liveUi = [
 const main = fs.readFileSync("src/services/liveRuntime.ts", "utf8");
 const render = fs.readFileSync("render.js", "utf8");
 const mode3d = fs.readFileSync("mode3d.js", "utf8");
-const three3d = fs.readFileSync("three3d.js", "utf8");
+const three3d = fs.readFileSync("src/services/three3d.ts", "utf8");
 const source = fs.readFileSync("pipeline/source.js", "utf8");
 const loop = fs.readFileSync("pipeline/loop.js", "utf8");
 const exporter = fs.readFileSync("src/services/canvasRecording.ts", "utf8");
@@ -99,8 +99,8 @@ assert.ok(render.includes("overlay.tumor?.center_ref"), "incision zoom includes 
 assert.ok(render.includes("overlay.tumor?.boundary_refs"), "incision zoom includes tumor boundary");
 assert.ok(render.includes("overlay.candidate?.polyline_refs"), "incision zoom includes candidate incision line");
 assert.ok(render.includes("mapSurfaceRefs(refs, lm"), "incision zoom maps surface refs through runtime landmarks");
-assert.ok(three3d.includes("setIncisionOverlay(overlay, verts, tris)"), "3D viewer can render incision overlay surface refs");
-assert.ok(three3d.includes("setIncisionOverlayPoints(overlay3d)"), "3D viewer can render mapped overlay points");
+assert.ok(three3d.includes("setIncisionOverlay("), "3D viewer can render incision overlay surface refs");
+assert.ok(three3d.includes("setIncisionOverlayPoints("), "3D viewer can render mapped overlay points");
 assert.ok(three3d.includes("tumor_boundary_points"), "3D viewer renders tumor boundary points");
 assert.ok(three3d.includes("candidate_points"), "3D viewer renders candidate incision points");
 assert.ok(mode3d.includes("applyIncisionOverlayToViewer(disp, faces)"), "3D route applies incision overlay after building viewer geometry");

@@ -146,6 +146,7 @@ const controller = read("src/services/incisionAgentRuntime.ts");
 const incisionOverlayTypes = read("incision_overlay.d.ts");
 const incisionToolsTypes = read("incision_tools.d.ts");
 const three3dTypes = read("three3d.d.ts");
+const three3dService = read("src/services/three3d.ts");
 const exportPrivacyTypes = read("export_privacy.d.ts");
 const exportPrivacyFacade = read("export_privacy.js");
 const exportPrivacyService = read("src/services/exportPrivacy.ts");
@@ -1615,7 +1616,8 @@ assert.ok(controller.includes("function controllerEvent"), "incision runtime nar
 assert.ok(incisionToolsTypes.includes("applyCandidateEdit"), "incision tools declarations expose candidate edit workflow helpers");
 assert.ok(incisionToolsTypes.includes("summarizeTumorBoundary"), "incision tools declarations expose tumor boundary summaries");
 assert.ok(incisionOverlayTypes.includes("compileIncisionOverlay"), "incision overlay declarations expose live overlay compilation");
-assert.ok(three3dTypes.includes("class Head3D"), "Three.js declarations expose the 3D head renderer contract");
+assert.ok(three3dTypes.includes("./src/services/three3d"), "Three.js declarations re-export the TypeScript implementation contract");
+assert.ok(three3dService.includes("export class Head3D"), "TypeScript Three.js service exposes the 3D head renderer contract");
 assert.ok(exportPrivacyTypes.includes("auditExportPayload"), "privacy audit declarations expose browser export preflight checks");
 assert.ok(exportPrivacyFacade.includes("./src/services/exportPrivacy.ts"), "legacy export_privacy.js is only a compatibility facade over the TypeScript service");
 assert.ok(exportPrivacyTypes.includes("./src/services/exportPrivacy"), "privacy audit declarations re-export the TypeScript implementation contract");
