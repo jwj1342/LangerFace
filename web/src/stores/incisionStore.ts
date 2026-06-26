@@ -38,6 +38,11 @@ export interface IncisionPrivacyAuditState {
   blocked: boolean;
 }
 
+export interface IncisionAssetLoadingState {
+  visible: boolean;
+  text: string;
+}
+
 export interface IncisionReviewState {
   status: string;
   reviewer: string;
@@ -114,6 +119,7 @@ export interface IncisionControllerSnapshot {
   schema_version: "react-incision-controller-snapshot/v0.1";
   reason: string;
   stageStatus: string;
+  assetLoading: IncisionAssetLoadingState;
   tumor: IncisionTumorState;
   secondaryCue: IncisionSecondaryCueState;
   privacyAudit: IncisionPrivacyAuditState;

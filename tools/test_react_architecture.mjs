@@ -20,6 +20,7 @@ const annotateStatePanel = read("src/components/AnnotateStatePanel.tsx");
 const incisionStore = read("src/stores/incisionStore.ts");
 const incisionBridge = read("src/hooks/useIncisionControllerBridge.ts");
 const incisionStatePanel = read("src/components/IncisionStatePanel.tsx");
+const incisionStagePanel = read("src/components/IncisionStagePanel.tsx");
 const tumorPanel = read("src/components/TumorInputPanel.tsx");
 const secondaryCuePanel = read("src/components/SecondaryCuePanel.tsx");
 const candidateResultPanel = read("src/components/CandidateResultPanel.tsx");
@@ -127,9 +128,14 @@ assert.ok(!incisionRoute.includes("incision_agent.html"), "React incision route 
 for (const id of [
   "agentCanvas",
   "stageStatus",
+  "assetLoading",
+  "assetLoadingText",
 ]) {
-  assert.ok(incisionWorkbench.includes(`id="${id}"`), `React incision workbench exposes #${id}`);
+  assert.ok(incisionStagePanel.includes(`id="${id}"`), `React incision stage exposes #${id}`);
 }
+assert.ok(incisionStore.includes("IncisionAssetLoadingState"), "incision Zustand store keeps typed asset loading state");
+assert.ok(incisionWorkbench.includes("IncisionStagePanel"), "React incision workbench renders the stage as a React component");
+assert.ok(incisionStagePanel.includes("useIncisionStore"), "React incision stage reads low-frequency stage and asset loading state from Zustand");
 for (const id of [
   "tumorKind",
   "diameterMm",
@@ -268,7 +274,7 @@ assert.ok(incisionWorkbench.includes("ReviewControlsPanel"), "React incision wor
 assert.ok(reviewPanel.includes("REVIEW_REACT_COMMAND_EVENT"), "React review panel dispatches review commands to the controller boundary");
 assert.ok(reviewPanel.includes("useIncisionStore"), "React review panel syncs low-frequency review state from Zustand");
 assert.ok(incisionWorkbench.includes('to="/live"'), "React incision workbench returns to the React live route");
-assert.ok(incisionWorkbench.includes('to="/annotate"'), "React incision workbench links to the React 3D annotation route");
+assert.ok(incisionStagePanel.includes('to="/annotate"'), "React incision stage links to the React 3D annotation route");
 assert.ok(controller.includes("export function mountIncisionAgentWorkbench"), "incision controller exposes a mount lifecycle");
 assert.ok(controller.includes("export function disposeIncisionAgentWorkbench"), "incision controller exposes a dispose lifecycle");
 assert.ok(controller.includes("INCISION_TUMOR_REACT_COMMAND_EVENT"), "incision controller listens for React tumor input commands");
@@ -279,6 +285,10 @@ assert.ok(controller.includes("currentResultViewSnapshot"), "incision controller
 assert.ok(controller.includes("currentSavedCandidateSummaries"), "incision controller publishes saved candidate summaries for React rendering");
 assert.ok(controller.includes("currentPrivacyAuditSnapshot"), "incision controller publishes privacy audit state for React rendering");
 assert.ok(controller.includes('publishIncisionState("privacy_preflight_failed")'), "privacy preflight failures republish React audit state");
+assert.ok(controller.includes("currentAssetLoadingSnapshot"), "incision controller publishes asset loading state for React rendering");
+assert.ok(controller.includes('publishIncisionState("asset_loading")'), "asset loading progress republishes React stage state");
+assert.ok(controller.includes('publishIncisionState("asset_loaded")'), "asset load completion republishes React stage state");
+assert.ok(controller.includes('publishIncisionState("asset_load_failed")'), "asset load failures republish React stage state");
 assert.ok(controller.includes("INCISION_PROVIDER_REACT_STATE_EVENT"), "incision controller listens for React provider state changes");
 assert.ok(controller.includes("INCISION_REVIEW_REACT_COMMAND_EVENT"), "incision controller listens for React review commands");
 assert.ok(controller.includes("handleReactReviewCommand"), "incision controller routes React review commands to existing review workflow functions");

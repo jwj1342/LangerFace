@@ -244,6 +244,13 @@ function currentPrivacyAuditSnapshot() {
   };
 }
 
+function currentAssetLoadingSnapshot() {
+  return {
+    visible: !els.assetLoading?.classList?.contains("hidden"),
+    text: els.assetLoadingText?.textContent || "准备下载标准脸、拓扑和 RSTL 图谱。",
+  };
+}
+
 function currentReviewSnapshot() {
   return {
     status: els.reviewDecision?.value || "pending_clinician_confirmation",
@@ -350,6 +357,7 @@ function publishIncisionState(reason = "state_update") {
       schema_version: "react-incision-controller-snapshot/v0.1",
       reason,
       stageStatus: els.stageStatus?.textContent || "",
+      assetLoading: currentAssetLoadingSnapshot(),
       tumor: currentTumorFormSnapshot(),
       secondaryCue: currentSecondaryCueSnapshot(),
       privacyAudit: currentPrivacyAuditSnapshot(),
@@ -385,10 +393,12 @@ function updateAssetLoading(evt = {}) {
   if (els.stageStatus) {
     els.stageStatus.textContent = `正在从 ${assetBaseUrl()} 加载 ${label}${progress}`;
   }
+  publishIncisionState("asset_loading");
 }
 
 function hideAssetLoading() {
   els.assetLoading?.classList.add("hidden");
+  publishIncisionState("asset_loaded");
 }
 
 function meanEdge(verts, tris) {
@@ -2485,6 +2495,7 @@ export function mountIncisionAgentWorkbench(root = document) {
     if (els.assetLoadingText) {
       els.assetLoadingText.textContent = `资产加载失败：${err.message}`;
     }
+    publishIncisionState("asset_load_failed");
     console.error(err);
   });
   return disposeIncisionAgentWorkbench;
