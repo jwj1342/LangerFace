@@ -173,6 +173,44 @@ export interface IncisionComparisonLike {
   reasons?: string[];
 }
 
+export interface IncisionCandidateLike {
+  id?: string | null;
+  type?: string | null;
+  length_mm?: unknown;
+  width_mm?: unknown;
+  edited?: boolean;
+}
+
+export interface IncisionPlanResultLike {
+  candidate?: IncisionCandidateLike | null;
+  guardrails?: {
+    passed?: boolean | null;
+  } | null;
+  direction?: {
+    confidence?: unknown;
+  } | null;
+}
+
+export interface IncisionSavedCandidateRecordLike {
+  id: string;
+  label: string;
+  candidate?: {
+    type?: string | null;
+    length_mm?: unknown;
+  } | null;
+  review?: {
+    reviewer?: string;
+  } | null;
+  review_status?: string;
+  guardrails?: {
+    passed?: boolean | null;
+  } | null;
+  anatomy?: {
+    region?: string | null;
+  } | null;
+  created_at?: string;
+}
+
 export function incisionTextOf(el?: IncisionTextLike | null, fallback = "") {
   return el?.textContent || fallback;
 }
@@ -296,7 +334,7 @@ export function buildIncisionEditSnapshot({
   };
 }
 
-export function buildIncisionCandidateSnapshot(result: any): IncisionCandidateSummary | null {
+export function buildIncisionCandidateSnapshot(result?: IncisionPlanResultLike | null): IncisionCandidateSummary | null {
   const candidate = result?.candidate;
   if (!candidate) return null;
   return {
@@ -357,7 +395,7 @@ export function buildIncisionSavedCandidateSummaries({
   comparisons = [],
   reviewStatusLabel,
 }: {
-  records?: any[];
+  records?: IncisionSavedCandidateRecordLike[];
   comparisons?: IncisionComparisonLike[];
   reviewStatusLabel: (status?: string) => string;
 }): IncisionSavedCandidateSummary[] {

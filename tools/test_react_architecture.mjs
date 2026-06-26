@@ -547,6 +547,10 @@ assert.ok(controller.includes("redactProviderConfig(providerConfig())"), "incisi
 assert.ok(incisionSnapshotsService.includes("buildIncisionControllerSnapshot"), "shared incision snapshot service builds typed controller snapshots");
 assert.ok(incisionSnapshotsService.includes("buildIncisionResultViewSnapshot"), "shared incision snapshot service builds candidate result view snapshots");
 assert.ok(incisionSnapshotsService.includes("buildIncisionSavedCandidateSummaries"), "shared incision snapshot service builds saved candidate summaries");
+assert.ok(incisionSnapshotsService.includes("IncisionPlanResultLike"), "shared incision snapshot service types candidate result inputs");
+assert.ok(incisionSnapshotsService.includes("IncisionSavedCandidateRecordLike"), "shared incision snapshot service types saved candidate record inputs");
+assert.ok(!incisionSnapshotsService.includes("result: any"), "shared incision snapshot service does not accept untyped candidate results");
+assert.ok(!incisionSnapshotsService.includes("records?: any[]"), "shared incision snapshot service does not accept untyped saved candidate records");
 assert.ok(incisionSnapshotsService.includes("../lib/controllerSnapshotSchemas"), "shared incision snapshot service re-exports the lightweight schema version");
 assert.ok(controller.includes("./src/services/incisionSnapshots.ts"), "incision controller consumes the shared typed snapshot service");
 assert.ok(controller.includes("buildIncisionControllerSnapshot({"), "incision controller delegates React snapshot construction to the shared service");

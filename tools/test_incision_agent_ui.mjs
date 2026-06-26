@@ -58,6 +58,10 @@ assert.ok(js.includes("./src/services/tumorInput.ts"), "workbench consumes the s
 assert.ok(js.includes("importedTumorFormState(payload"), "workbench delegates imported tumor payloads to the shared service");
 assert.ok(incisionSnapshotsService.includes("buildIncisionControllerSnapshot"), "shared incision snapshot service owns React snapshot construction");
 assert.ok(incisionSnapshotsService.includes("buildIncisionSavedCandidateSummaries"), "shared incision snapshot service owns saved candidate summaries");
+assert.ok(incisionSnapshotsService.includes("IncisionPlanResultLike"), "shared incision snapshot service types candidate result inputs");
+assert.ok(incisionSnapshotsService.includes("IncisionSavedCandidateRecordLike"), "shared incision snapshot service types saved candidate record inputs");
+assert.ok(!incisionSnapshotsService.includes("result: any"), "shared incision snapshot service does not accept untyped candidate results");
+assert.ok(!incisionSnapshotsService.includes("records?: any[]"), "shared incision snapshot service does not accept untyped saved candidate records");
 assert.ok(incisionSnapshotsService.includes("../lib/controllerSnapshotSchemas"), "shared incision snapshot service reuses the lightweight React snapshot schema module");
 assert.ok(controllerSnapshotSchemas.includes("react-incision-controller-snapshot/v0.1"), "shared snapshot schema module owns the incision React snapshot schema");
 assert.ok(js.includes("./src/services/incisionSnapshots.ts"), "workbench consumes the shared typed incision snapshot service");
