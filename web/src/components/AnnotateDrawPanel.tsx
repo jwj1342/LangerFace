@@ -1,9 +1,11 @@
 import { dispatchAnnotateDrawCommand } from "../lib/controllerCommand";
 import { useAnnotateStore } from "../stores/annotateStore";
 import { Button } from "./ui/button";
+import { ButtonRow } from "./ui/button-row";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import { SectionTitle } from "./ui/section-title";
 import { Select } from "./ui/select";
 
 function currentStateText(snapshot: ReturnType<typeof useAnnotateStore.getState>["snapshot"]) {
@@ -23,10 +25,7 @@ export function AnnotateDrawPanel() {
 
   return (
     <Card>
-      <div className="section-title">
-        <span>1. 选择线系统</span>
-        <span id="drawMode">{snapshot?.mesh.modeLabel || "FLAME 标准脸"}</span>
-      </div>
+      <SectionTitle label="1. 选择线系统" value={snapshot?.mesh.modeLabel || "FLAME 标准脸"} valueProps={{ id: "drawMode" }} />
       <div>
         <Label htmlFor="annSystem">线系统</Label>
         <Select
@@ -39,18 +38,15 @@ export function AnnotateDrawPanel() {
           <option value="langer">Langer</option>
         </Select>
       </div>
-      <div className="section-title">
-        <span>2. 填写当前线</span>
-        <span>可留空</span>
-      </div>
+      <SectionTitle label="2. 填写当前线" value="可留空" />
       <Input id="annName" placeholder="线名，例如 forehead_h1" />
       <Input id="annRegion" placeholder="区域，例如 forehead / cheek / perioral" />
       <div className={`current-state${active ? " active" : ""}${draft?.fallback ? " warning" : ""}`} id="currentState">{currentStateText(snapshot)}</div>
-      <div className="btn-row annotate-actions">
+      <ButtonRow className="annotate-actions">
         <Button variant="workbenchPrimary" id="btnNew" type="button" disabled={active} onClick={() => dispatchAnnotateDrawCommand("start_line")}>开始一条线</Button>
         <Button variant="workbench" id="btnUndo" type="button" disabled={!active && !savedCount} onClick={() => dispatchAnnotateDrawCommand("undo_last")}>撤销上一个点</Button>
         <Button variant="workbench" id="btnFinish" type="button" disabled={!active} onClick={() => dispatchAnnotateDrawCommand("save_current_line")}>保存当前线</Button>
-      </div>
+      </ButtonRow>
     </Card>
   );
 }

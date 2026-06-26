@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { dispatchIncisionTumorCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
+import { ButtonRow } from "./ui/button-row";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -168,7 +169,7 @@ export function TumorInputPanel() {
           onChange={(event) => setEllipseRatio(event.currentTarget.value)}
         />
       </div>
-      <div className={`btn-row two-cols ${freehand ? "" : "hidden"}`} id="freehandControls">
+      <ButtonRow className={`two-cols ${freehand ? "" : "hidden"}`} id="freehandControls">
         <Button
           variant="workbench"
           id="startBoundaryBtn"
@@ -192,12 +193,12 @@ export function TumorInputPanel() {
         >
           清空轮廓
         </Button>
-      </div>
+      </ButtonRow>
       <p className={`boundary-status${boundaryStatusWarn ? " warn" : ""}`} id="boundaryStatus">{boundaryStatus}</p>
-      <div className="btn-row two-cols">
+      <ButtonRow className="two-cols">
         <Button variant="workbench" id="exportTumorBtn" type="button" onClick={() => dispatchIncisionTumorCommand("export_tumor")}>导出肿物</Button>
         <Button variant="workbench" id="importTumorBtn" type="button" onClick={() => dispatchIncisionTumorCommand("import_tumor")}>导入肿物</Button>
-      </div>
+      </ButtonRow>
       <Input id="tumorImportFile" className="hidden" type="file" accept="application/json,.json" />
       <Button variant="workbenchPrimary" id="runAgentBtn" type="button" onClick={() => dispatchIncisionTumorCommand("run_agent")}>生成候选切口</Button>
       <p className="agent-note" id="pickState">{freehand ? boundaryHint : pickState}</p>

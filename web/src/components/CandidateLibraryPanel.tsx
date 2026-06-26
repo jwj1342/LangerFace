@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "./ui/button";
+import { ButtonRow } from "./ui/button-row";
 import { Card, CardHeader } from "./ui/card";
 import { dispatchIncisionLibraryCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
@@ -38,23 +39,23 @@ export function CandidateLibraryPanel() {
       >
         保存当前候选
       </Button>
-      <div className="btn-row two-cols">
+      <ButtonRow className="two-cols">
         <Button variant="workbench" id="makeVariantsBtn" type="button" disabled={!hasCandidate} onClick={() => dispatchIncisionLibraryCommand("make_variants")}>生成备选</Button>
         <Button variant={confirmClear ? "miniDanger" : "workbench"} id="clearSavedBtn" type="button" disabled={!hasSaved} onClick={clearSaved}>
           {confirmClear ? "确认清空" : "清空候选库"}
         </Button>
-      </div>
+      </ButtonRow>
       {confirmClear ? (
-        <div className="btn-row two-cols">
+        <ButtonRow className="two-cols">
           <Button variant="workbench" type="button" onClick={() => setConfirmClear(false)}>取消</Button>
           <p className="hint">将删除当前工作台保存的全部候选草案。</p>
-        </div>
+        </ButtonRow>
       ) : null}
-      <div className="btn-row three-cols">
+      <ButtonRow className="three-cols">
         <Button variant="workbench" id="exportJsonBtn" type="button" disabled={!hasCandidate && !hasSaved} onClick={() => dispatchIncisionLibraryCommand("export_json")}>导出 JSON</Button>
         <Button variant="workbench" id="exportReportBtn" type="button" disabled={!hasCandidate && !hasSaved} onClick={() => dispatchIncisionLibraryCommand("export_report")}>导出报告</Button>
         <Button variant="workbench" id="exportPngBtn" type="button" disabled={!hasCandidate} onClick={() => dispatchIncisionLibraryCommand("export_png")}>导出截图</Button>
-      </div>
+      </ButtonRow>
       <Button variant="workbench" id="stageLiveOverlayBtn" type="button" disabled={!hasCandidate} onClick={() => dispatchIncisionLibraryCommand("stage_live_overlay")}>发送到实时叠加</Button>
       <div className="candidate-list" id="candidateList">
         {saved.map((item) => (
@@ -64,10 +65,10 @@ export function CandidateLibraryPanel() {
               <span className={item.statusDanger ? "danger-text" : ""}>{item.statusLabel}</span>
             </div>
             <div className="meta">{item.meta}</div>
-            <div className="btn-row two-cols">
+            <ButtonRow className="two-cols">
               <Button variant="workbench" type="button" onClick={() => dispatchIncisionLibraryCommand("load_candidate", item.id)}>载入</Button>
               <Button variant="workbench" type="button" onClick={() => dispatchIncisionLibraryCommand("remove_candidate", item.id)}>删除</Button>
-            </div>
+            </ButtonRow>
           </div>
         ))}
       </div>

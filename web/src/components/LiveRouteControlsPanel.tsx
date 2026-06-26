@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { dispatchLiveRouteCommand } from "../lib/controllerCommand";
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
+import { ButtonRow } from "./ui/button-row";
 import { Card } from "./ui/card";
 import { CheckboxField } from "./ui/checkbox-field";
 import { Label } from "./ui/label";
@@ -36,10 +37,10 @@ export function LiveRouteControlsPanel() {
           {snapshot?.route.hint || "当前是 2D 实时贴合模式，只显示稳定主流程。"}
         </p>
         <div id="route3dPanel" className={`${is3d ? "" : "hidden "}live-stack`}>
-          <div className="btn-row live-two-col">
+          <ButtonRow className="live-two-col">
             <Button variant="workbench" id="reconDemoBtn" type="button" disabled={scanning} onClick={() => dispatchLiveRouteCommand("load_demo_recon")}>用示例脸（无摄像头）</Button>
             <Button variant="workbench" id="reconScanBtn" type="button" disabled={scanning} onClick={() => dispatchLiveRouteCommand("start_scan")}>转头扫描</Button>
-          </div>
+          </ButtonRow>
           <p className="hint" id="reconStatus">{recon?.status || "先重建你的 3D 人头 → 可旋转查看 → 再投影到实时画面。"}</p>
           <div className={`scan-panel${scanning ? "" : " hidden"}`} id="scanPanel">
             <div className="scan-row"><span>扫描进度</span><span id="scanProgressVal">0%</span></div>
@@ -51,10 +52,10 @@ export function LiveRouteControlsPanel() {
               <span id="scanYawRight" />
             </div>
           </div>
-          <div className="btn-row live-two-col">
+          <ButtonRow className="live-two-col">
             <Button variant="workbench" id="view3dBtn" type="button" disabled={!hasModel} aria-pressed={mode3d === "view"} onClick={() => dispatchLiveRouteCommand("view_3d")}>旋转查看</Button>
             <Button variant="workbench" id="project3dBtn" type="button" disabled={!hasModel || !projectable} aria-pressed={mode3d === "project"} onClick={() => dispatchLiveRouteCommand("project_3d")}>投影到画面</Button>
-          </div>
+          </ButtonRow>
           <Button variant="workbench" id="reset3dBtn" type="button" disabled={!hasModel} onClick={() => dispatchLiveRouteCommand("reset_3d")}>复位视角</Button>
           <Button variant="workbenchPrimary" id="cloudFitFlameBtn" type="button" disabled={scanning} onClick={() => dispatchLiveRouteCommand("start_twin")}>▶ 实时孪生（左真脸 / 右 FLAME 随动）</Button>
           <CheckboxField

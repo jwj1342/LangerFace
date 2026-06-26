@@ -1,8 +1,10 @@
 import { Button } from "./ui/button";
+import { ButtonRow } from "./ui/button-row";
 import { Card } from "./ui/card";
 import { CheckboxField } from "./ui/checkbox-field";
 import { Label } from "./ui/label";
 import { RangeInput } from "./ui/slider";
+import { SectionTitle } from "./ui/section-title";
 
 interface SurgeryControlsPanelProps {
   activeCut: "along" | null;
@@ -32,7 +34,7 @@ export function SurgeryControlsPanel({
   return (
     <Card>
       <p className="hint" id="hint">{hint}</p>
-      <div className="section-title"><span>① 规划切口</span><span id="lesionState">{lesionState}</span></div>
+      <SectionTitle label="① 规划切口" value={lesionState} valueProps={{ id: "lesionState" }} />
       <p className="hint">
         在右侧脸上<b>点击</b>定位病灶；拖拽旋转、滚轮缩放。
         右图 <b className="surgery-green-copy">绿色</b>=沿 RSTL 的梭形切除轮廓，随下方滑块更新。
@@ -45,8 +47,8 @@ export function SurgeryControlsPanel({
         value={sizePct}
         onChange={(event) => onSizeChange(Number(event.currentTarget.value))}
       />
-      <div className="section-title"><span>② 执行切除并闭合</span></div>
-      <div className="btn-row surgery-action-row">
+      <SectionTitle label="② 执行切除并闭合" />
+      <ButtonRow className="surgery-action-row">
         <Button
           variant="workbench"
           className={`cut-along${activeCut === "along" ? " active" : ""}`}
@@ -57,7 +59,7 @@ export function SurgeryControlsPanel({
         >
           沿 RSTL 切除
         </Button>
-      </div>
+      </ButtonRow>
       <Button variant="workbench" id="btnReset" type="button" disabled={!isReady} onClick={onReset}>↺ 复位</Button>
       <Button asChild variant="workbench">
         <CheckboxField

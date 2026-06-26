@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { dispatchIncisionEditCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
+import { ButtonRow } from "./ui/button-row";
 import { Card, CardHeader } from "./ui/card";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
@@ -163,10 +164,10 @@ export function EditControlsPanel() {
         <option value="manual subunit boundary alignment">贴合美学亚单位边界</option>
         <option value="manual clinician preference">医生人工判断</option>
       </Select>
-      <div className="btn-row two-cols">
+      <ButtonRow className="two-cols">
         <Button variant="workbench" id="undoEditBtn" type="button" disabled={undoDisabled} onClick={() => dispatchIncisionEditCommand("undo_edit")}>撤销调整</Button>
         <Button variant="workbench" id="redoEditBtn" type="button" disabled={redoDisabled} onClick={() => dispatchIncisionEditCommand("redo_edit")}>重做调整</Button>
-      </div>
+      </ButtonRow>
       <Button variant="workbench" id="resetEditBtn" type="button" onClick={() => dispatchIncisionEditCommand("reset_edit")}>恢复工具建议</Button>
       <p className="agent-note" id="editHistoryState">{historyLabel}</p>
       <p className="agent-note">调整只改变候选草案并记录 provenance；真实切口仍需医生复核。</p>

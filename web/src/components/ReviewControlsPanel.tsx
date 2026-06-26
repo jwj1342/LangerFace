@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "./ui/button";
+import { ButtonRow } from "./ui/button-row";
 import { Card, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -67,7 +68,7 @@ export function ReviewControlsPanel() {
         id="reviewNotes"
         placeholder="审阅备注、覆盖原因或需要回看的位置"
       />
-      <div className="btn-row two-cols">
+      <ButtonRow className="two-cols">
         <Button
           variant="workbench"
           id="approveCandidateBtn"
@@ -84,7 +85,7 @@ export function ReviewControlsPanel() {
         >
           否决当前候选
         </Button>
-      </div>
+      </ButtonRow>
       <Button
         variant="workbenchPrimary"
         id="saveReviewBtn"

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { dispatchIncisionSecondaryCueCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
+import { ButtonRow } from "./ui/button-row";
 import { Card, CardHeader } from "./ui/card";
 import { CheckboxField } from "./ui/checkbox-field";
 import { Input } from "./ui/input";
@@ -25,10 +26,10 @@ export function SecondaryCuePanel() {
       <p className="agent-note" id="secondaryCueSummary">
         {cue?.summary || "仅展示自然皱襞、皱纹和皮表肿物边界的低置信度线索；不会自动改变肿物边界或候选切口。"}
       </p>
-      <div className="btn-row two-cols">
+      <ButtonRow className="two-cols">
         <Button variant="workbench" id="importSecondaryCueBtn" type="button" onClick={() => dispatchIncisionSecondaryCueCommand("import_secondary_cue")}>导入线索</Button>
         <Button variant="workbench" id="clearSecondaryCueBtn" type="button" disabled={!cue?.present} onClick={() => dispatchIncisionSecondaryCueCommand("clear_secondary_cue")}>清空线索</Button>
-      </div>
+      </ButtonRow>
       <Input id="secondaryCueImportFile" className="hidden" type="file" accept="application/json,.json" />
       <CheckboxField
         checkboxProps={{
