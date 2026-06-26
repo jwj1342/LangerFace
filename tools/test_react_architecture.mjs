@@ -169,6 +169,10 @@ const incisionFormVisibilityConsumerSources = new Map([
   ["SecondaryCuePanel.tsx", secondaryCuePanel],
   ["TumorInputPanel.tsx", tumorPanel],
 ]);
+const liveVisibilityConsumerSources = new Map([
+  ["LiveRenderControlsPanel.tsx", liveRenderControlsPanel],
+  ["LiveRouteControlsPanel.tsx", liveRouteControlsPanel],
+]);
 const reactShellConsumerSources = new Map([
   ["App.tsx", app],
   ["DashboardRoute.tsx", dashboardRoute],
@@ -398,6 +402,19 @@ const incisionFormVisibilityConsumersWithRawHidden = () => (
     ))
     .map(([name]) => name)
 );
+const liveVisibilityConsumersWithRawHidden = () => (
+  [...liveVisibilityConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes('className="hidden"')
+      || source.includes(' ? undefined : "hidden"')
+      || source.includes(' ? "" : "hidden"')
+      || source.includes(': "hidden"')
+      || source.includes('" hidden"')
+      || source.includes('`scan-panel${')
+      || source.includes('`two-cols ${')
+    ))
+    .map(([name]) => name)
+);
 
 for (const dep of [
   "react",
@@ -615,6 +632,9 @@ assert.ok(uiCard.includes("CardContent"), "shadcn-style Card exposes a content p
 assert.ok(uiCard.includes('cn("card"'), "shadcn-style Card preserves existing card styling");
 assert.ok(uiCard.includes("@radix-ui/react-slot"), "shadcn-style Card supports asChild through Radix Slot");
 assert.ok(uiCard.includes("asChild?: boolean"), "shadcn-style Card exposes an asChild prop for semantic containers");
+assert.ok(uiCard.includes("visible?: boolean"), "shadcn-style Card exposes a typed visibility prop");
+assert.ok(uiCard.includes('hiddenClassName = "hidden"'), "shadcn-style Card defaults invisible cards to the legacy hidden class");
+assert.ok(uiCard.includes("!visible && hiddenClassName"), "shadcn-style Card centralizes hidden class application");
 assert.deepEqual(
   [...componentSources.entries()]
     .filter(([, source]) => source.includes('className="card'))
@@ -623,6 +643,9 @@ assert.deepEqual(
   "React component panels should use the shared Card primitive instead of raw card class wrappers",
 );
 assert.ok(uiCheckbox.includes('type="checkbox"'), "shadcn-style Checkbox preserves native checkbox behavior");
+assert.ok(uiCheckboxField.includes("visible?: boolean"), "shadcn-style CheckboxField exposes a typed visibility prop");
+assert.ok(uiCheckboxField.includes('hiddenClassName = "hidden"'), "shadcn-style CheckboxField defaults invisible rows to the legacy hidden class");
+assert.ok(uiCheckboxField.includes("!visible && hiddenClassName"), "shadcn-style CheckboxField centralizes hidden class application");
 assert.ok(uiFieldGroup.includes("FieldGroup"), "shadcn-style form primitives export FieldGroup");
 assert.ok(uiFieldGroup.includes("visible?: boolean"), "shadcn-style FieldGroup exposes a typed visibility prop");
 assert.ok(uiFieldGroup.includes('hiddenClassName = "hidden"'), "shadcn-style FieldGroup defaults invisible groups to the legacy hidden class");
@@ -688,6 +711,9 @@ assert.ok(uiSectionTitle.includes("valueProps"), "shadcn-style SectionTitle can 
 assert.ok(uiHint.includes('cn("hint"'), "shadcn-style Hint preserves existing hint styling");
 assert.ok(uiHint.includes("AgentNote"), "shadcn-style Hint module exports an AgentNote primitive");
 assert.ok(uiHint.includes('cn("agent-note"'), "shadcn-style AgentNote preserves existing agent-note styling");
+assert.ok(uiHint.includes("visible?: boolean"), "shadcn-style Hint/AgentNote expose a typed visibility prop");
+assert.ok(uiHint.includes('hiddenClassName = "hidden"'), "shadcn-style Hint/AgentNote default invisible copy to the legacy hidden class");
+assert.ok(uiHint.includes("!visible && hiddenClassName"), "shadcn-style Hint/AgentNote centralize hidden class application");
 assert.deepEqual(
   agentNoteConsumersWithRawClass("agent-note"),
   [],
@@ -1610,6 +1636,11 @@ assert.ok(liveRenderControlsPanel.includes("dispatchLiveRenderCommand"), "React 
 assert.ok(!liveRouteControlsPanel.includes("../lib/controllerEvents"), "React live route controls do not import controller event names directly");
 assert.ok(!liveSourceControlsPanel.includes("../lib/controllerEvents"), "React live source controls do not import controller event names directly");
 assert.ok(!liveRenderControlsPanel.includes("../lib/controllerEvents"), "React live render controls do not import controller event names directly");
+assert.deepEqual(
+  liveVisibilityConsumersWithRawHidden(),
+  [],
+  "React live control panels should use visible props instead of hand-written hidden class toggles",
+);
 assert.ok(liveRouteControlsPanel.includes("useLiveStore"), "React live route controls read low-frequency route and recon state from Zustand");
 assert.ok(liveSourceControlsPanel.includes("useLiveStore"), "React live source controls read low-frequency source state from Zustand");
 assert.ok(liveRenderControlsPanel.includes("useLiveStore"), "React live render controls read low-frequency render state from Zustand");
@@ -1622,6 +1653,10 @@ assert.ok(liveRouteControlsPanel.includes("Label"), "React live route controls u
 assert.ok(liveRouteControlsPanel.includes("ProgressBar"), "React live route controls use the shared shadcn-style progress primitive");
 assert.ok(liveRouteControlsPanel.includes("Select"), "React live route controls use the shared shadcn-style select primitive");
 assert.ok(liveRouteControlsPanel.includes("<Card"), "React live route controls use the shared shadcn-style card primitive");
+assert.ok(liveRouteControlsPanel.includes('<FieldGroup id="route3dPanel" className="live-stack" visible={is3d}>'), "React live route controls show 3D route panel through FieldGroup visible");
+assert.ok(liveRouteControlsPanel.includes('<FieldGroup className="scan-panel" id="scanPanel" visible={scanning}>'), "React live route controls show scan progress through FieldGroup visible");
+assert.ok(liveRouteControlsPanel.includes('hiddenClassName="live-hidden-inline"'), "React live route controls preserve inline twin option hiding through CheckboxField");
+assert.ok(liveRouteControlsPanel.includes('<Card id="threeDWorkflowCard" visible={is3d}>'), "React live route controls show 3D workflow card through Card visible");
 assert.ok(liveRouteControlsPanel.includes("Button asChild"), "React live route controls use shared Button asChild for Router links");
 assert.ok(liveRouteControlsPanel.includes('variant="workbenchPrimary"'), "React live route controls keep primary workbench button styling through Button variants");
 assert.ok(liveSourceControlsPanel.includes("Button"), "React live source controls use the shared shadcn-style button primitive");
@@ -1631,10 +1666,14 @@ assert.ok(liveSourceControlsPanel.includes("<Card"), "React live source controls
 assert.ok(liveSourceControlsPanel.includes('variant="workbenchPrimary"'), "React live source controls keep primary workbench button styling through Button variants");
 assert.ok(liveRenderControlsPanel.includes("Button"), "React live render controls use the shared shadcn-style button primitive");
 assert.ok(liveRenderControlsPanel.includes("CheckboxField"), "React live render controls use the shared shadcn-style checkbox field primitive");
+assert.ok(liveRenderControlsPanel.includes("FieldGroup"), "React live render controls use FieldGroup for conditional render controls");
 assert.ok(liveRenderControlsPanel.includes("Label"), "React live render controls use the shared shadcn-style label primitive");
 assert.ok(liveRenderControlsPanel.includes("Select"), "React live render controls use the shared shadcn-style select primitive");
 assert.ok(liveRenderControlsPanel.includes("RangeInput"), "React live render controls use the shared shadcn-style range primitive");
 assert.ok(liveRenderControlsPanel.includes("<Card"), "React live render controls use the shared shadcn-style card primitive");
+assert.ok(liveRenderControlsPanel.includes('<Hint visible={Boolean(atlasPreview?.active)} id="atlasProvenance">'), "React live render controls show atlas provenance through Hint visible");
+assert.ok(liveRenderControlsPanel.includes("<FieldGroup visible={false}>"), "React live render controls keep hidden compatibility sliders through FieldGroup visible");
+assert.ok(liveRenderControlsPanel.includes('<CheckboxField visible={false} checkboxProps={{ id: "clip", defaultChecked: true }}>'), "React live render controls keep hidden compatibility checkboxes through CheckboxField visible");
 assert.ok(liveQualityPanel.includes("<Card"), "React live quality panel uses the shared shadcn-style card primitive");
 assert.ok(liveQualityPanel.includes("ProgressBar"), "React live quality panel uses the shared shadcn-style progress primitive");
 assert.ok(liveQualityPanel.includes('data-frame-owned="true"'), "React live quality panel documents that frame-updated labels stay outside Zustand");

@@ -3,16 +3,21 @@ import type { HTMLAttributes } from "react";
 
 import { cn } from "../../lib/cn";
 
-export const Hint = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLParagraphElement>>(
-  ({ className, ...props }, ref) => (
-    <p ref={ref} className={cn("hint", className)} {...props} />
+export interface HintProps extends HTMLAttributes<HTMLParagraphElement> {
+  hiddenClassName?: string;
+  visible?: boolean;
+}
+
+export const Hint = forwardRef<HTMLParagraphElement, HintProps>(
+  ({ className, hiddenClassName = "hidden", visible = true, ...props }, ref) => (
+    <p ref={ref} className={cn("hint", !visible && hiddenClassName, className)} {...props} />
   ),
 );
 Hint.displayName = "Hint";
 
-export const AgentNote = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLParagraphElement>>(
-  ({ className, ...props }, ref) => (
-    <p ref={ref} className={cn("agent-note", className)} {...props} />
+export const AgentNote = forwardRef<HTMLParagraphElement, HintProps>(
+  ({ className, hiddenClassName = "hidden", visible = true, ...props }, ref) => (
+    <p ref={ref} className={cn("agent-note", !visible && hiddenClassName, className)} {...props} />
   ),
 );
 AgentNote.displayName = "AgentNote";

@@ -6,6 +6,7 @@ import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card } from "./ui/card";
 import { CheckboxField } from "./ui/checkbox-field";
+import { FieldGroup } from "./ui/field-group";
 import { Hint } from "./ui/hint";
 import { Label } from "./ui/label";
 import { ProgressBar } from "./ui/progress";
@@ -38,13 +39,13 @@ export function LiveRouteControlsPanel() {
         <Hint className="live-inline-top" id="routeModeHint">
           {snapshot?.route.hint || "当前是 2D 实时贴合模式，只显示稳定主流程。"}
         </Hint>
-        <div id="route3dPanel" className={`${is3d ? "" : "hidden "}live-stack`}>
+        <FieldGroup id="route3dPanel" className="live-stack" visible={is3d}>
           <ButtonRow className="live-two-col">
             <Button variant="workbench" id="reconDemoBtn" type="button" disabled={scanning} onClick={() => dispatchLiveRouteCommand("load_demo_recon")}>用示例脸（无摄像头）</Button>
             <Button variant="workbench" id="reconScanBtn" type="button" disabled={scanning} onClick={() => dispatchLiveRouteCommand("start_scan")}>转头扫描</Button>
           </ButtonRow>
           <Hint id="reconStatus">{recon?.status || "先重建你的 3D 人头 → 可旋转查看 → 再投影到实时画面。"}</Hint>
-          <div className={`scan-panel${scanning ? "" : " hidden"}`} id="scanPanel">
+          <FieldGroup className="scan-panel" id="scanPanel" visible={scanning}>
             <div className="scan-row"><span>扫描进度</span><span id="scanProgressVal">0%</span></div>
             <ProgressBar fillProps={{ id: "scanProgressBar" }} />
             <div className="scan-row"><span>角度覆盖</span><span id="scanYawVal">0.00</span></div>
@@ -53,7 +54,7 @@ export function LiveRouteControlsPanel() {
               <span id="scanYawMid" />
               <span id="scanYawRight" />
             </div>
-          </div>
+          </FieldGroup>
           <ButtonRow className="live-two-col">
             <Button variant="workbench" id="view3dBtn" type="button" disabled={!hasModel} aria-pressed={mode3d === "view"} onClick={() => dispatchLiveRouteCommand("view_3d")}>旋转查看</Button>
             <Button variant="workbench" id="project3dBtn" type="button" disabled={!hasModel || !projectable} aria-pressed={mode3d === "project"} onClick={() => dispatchLiveRouteCommand("project_3d")}>投影到画面</Button>
@@ -62,7 +63,8 @@ export function LiveRouteControlsPanel() {
           <Button variant="workbenchPrimary" id="cloudFitFlameBtn" type="button" disabled={scanning} onClick={() => dispatchLiveRouteCommand("start_twin")}>▶ 实时孪生（左真脸 / 右 FLAME 随动）</Button>
           <CheckboxField
             id="flameHeadToggleWrap"
-            className={twinActive ? "" : "live-hidden-inline"}
+            hiddenClassName="live-hidden-inline"
+            visible={twinActive}
             checkboxProps={{
               id: "flameStdToggle",
               checked: recon?.twinMode === "standard",
@@ -73,7 +75,8 @@ export function LiveRouteControlsPanel() {
           </CheckboxField>
           <CheckboxField
             id="twinTextureWrap"
-            className={twinActive ? "" : "live-hidden-inline"}
+            hiddenClassName="live-hidden-inline"
+            visible={twinActive}
             checkboxProps={{
               id: "twinTextureToggle",
               checked: Boolean(recon?.twinTexture),
@@ -82,10 +85,10 @@ export function LiveRouteControlsPanel() {
           >
             贴真实人脸纹理
           </CheckboxField>
-        </div>
+        </FieldGroup>
       </Card>
 
-      <Card className={is3d ? "" : "hidden"} id="threeDWorkflowCard">
+      <Card id="threeDWorkflowCard" visible={is3d}>
         <div>
           <Label>3D 线标注与研究演示</Label>
           <Hint className="live-inline-top">在 3D 标准脸上绘制 RSTL 候选线，并从标注页进入沿 RSTL 闭合力学演示。</Hint>

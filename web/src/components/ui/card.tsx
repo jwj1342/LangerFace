@@ -6,12 +6,14 @@ import { cn } from "../../lib/cn";
 
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   asChild?: boolean;
+  hiddenClassName?: string;
+  visible?: boolean;
 }
 
 export const Card = forwardRef<HTMLDivElement, CardProps>(
-  ({ asChild = false, className, ...props }, ref) => {
+  ({ asChild = false, className, hiddenClassName = "hidden", visible = true, ...props }, ref) => {
     const Comp = asChild ? Slot : "div";
-    return <Comp ref={ref} className={cn("card", className)} {...props} />;
+    return <Comp ref={ref} className={cn("card", !visible && hiddenClassName, className)} {...props} />;
   },
 );
 Card.displayName = "Card";
