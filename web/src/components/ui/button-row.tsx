@@ -3,9 +3,14 @@ import type { HTMLAttributes } from "react";
 
 import { cn } from "../../lib/cn";
 
-export const ButtonRow = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("btn-row", className)} {...props} />
+export interface ButtonRowProps extends HTMLAttributes<HTMLDivElement> {
+  hiddenClassName?: string;
+  visible?: boolean;
+}
+
+export const ButtonRow = forwardRef<HTMLDivElement, ButtonRowProps>(
+  ({ className, hiddenClassName = "hidden", visible = true, ...props }, ref) => (
+    <div ref={ref} className={cn("btn-row", !visible && hiddenClassName, className)} {...props} />
   ),
 );
 ButtonRow.displayName = "ButtonRow";

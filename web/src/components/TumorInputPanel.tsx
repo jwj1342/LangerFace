@@ -5,16 +5,13 @@ import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card } from "./ui/card";
+import { FieldGroup } from "./ui/field-group";
 import { AgentNote } from "./ui/hint";
 import { AnatomyPreview, BoundaryStatus } from "./ui/incision-feedback";
 import { Input } from "./ui/input";
 import { FieldValue, Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
-
-function hiddenClass(hidden: boolean) {
-  return hidden ? "hidden" : "";
-}
 
 export function TumorInputPanel() {
   const snapshot = useIncisionStore((state) => state.snapshot);
@@ -77,7 +74,7 @@ export function TumorInputPanel() {
         <option value="subcutaneous">皮下肿物 · 线性切口</option>
         <option value="cutaneous">皮表肿物 · 梭形切口</option>
       </Select>
-      <div>
+      <FieldGroup>
         <Label htmlFor="diameterMm">直径 mm <FieldValue id="diameterVal">{diameter}</FieldValue></Label>
         <RangeInput
           id="diameterMm"
@@ -93,8 +90,8 @@ export function TumorInputPanel() {
           onBlur={() => dispatchIncisionTumorCommand("diameter_changed")}
           onChange={(event) => setDiameter(event.currentTarget.value)}
         />
-      </div>
-      <div>
+      </FieldGroup>
+      <FieldGroup>
         <Label htmlFor="tumorAuthor">记录者</Label>
         <Input
           id="tumorAuthor"
@@ -104,8 +101,8 @@ export function TumorInputPanel() {
             dispatchIncisionTumorCommand("author_changed");
           }}
         />
-      </div>
-      <div id="depthWrap" className={hiddenClass(cutaneous)}>
+      </FieldGroup>
+      <FieldGroup id="depthWrap" visible={!cutaneous}>
         <Label htmlFor="depthMm">深度 mm <FieldValue id="depthVal">{depth}</FieldValue></Label>
         <RangeInput
           id="depthMm"
@@ -121,8 +118,8 @@ export function TumorInputPanel() {
           onBlur={() => dispatchIncisionTumorCommand("depth_changed")}
           onChange={(event) => setDepth(event.currentTarget.value)}
         />
-      </div>
-      <div id="marginWrap" className={hiddenClass(!cutaneous)}>
+      </FieldGroup>
+      <FieldGroup id="marginWrap" visible={cutaneous}>
         <Label htmlFor="marginMm">安全切缘 mm <FieldValue id="marginVal">{margin}</FieldValue></Label>
         <RangeInput
           id="marginMm"
@@ -138,8 +135,8 @@ export function TumorInputPanel() {
           onBlur={() => dispatchIncisionTumorCommand("margin_changed")}
           onChange={(event) => setMargin(event.currentTarget.value)}
         />
-      </div>
-      <div id="boundaryWrap" className={hiddenClass(!cutaneous)}>
+      </FieldGroup>
+      <FieldGroup id="boundaryWrap" visible={cutaneous}>
         <Label htmlFor="boundaryMode">皮表边界</Label>
         <Select
           id="boundaryMode"
@@ -153,8 +150,8 @@ export function TumorInputPanel() {
           <option value="ellipse">椭圆近似</option>
           <option value="freehand">自由轮廓点</option>
         </Select>
-      </div>
-      <div id="ellipseWrap" className={hiddenClass(!cutaneous || boundaryMode !== "ellipse")}>
+      </FieldGroup>
+      <FieldGroup id="ellipseWrap" visible={cutaneous && boundaryMode === "ellipse"}>
         <Label htmlFor="ellipseRatio">椭圆短轴比例 <FieldValue id="ellipseRatioVal">{ellipseRatio}%</FieldValue></Label>
         <RangeInput
           id="ellipseRatio"
@@ -170,8 +167,8 @@ export function TumorInputPanel() {
           onBlur={() => dispatchIncisionTumorCommand("ellipse_ratio_changed")}
           onChange={(event) => setEllipseRatio(event.currentTarget.value)}
         />
-      </div>
-      <ButtonRow className={`two-cols ${freehand ? "" : "hidden"}`} id="freehandControls">
+      </FieldGroup>
+      <ButtonRow className="two-cols" id="freehandControls" visible={freehand}>
         <Button
           variant="workbench"
           id="startBoundaryBtn"
@@ -201,7 +198,7 @@ export function TumorInputPanel() {
         <Button variant="workbench" id="exportTumorBtn" type="button" onClick={() => dispatchIncisionTumorCommand("export_tumor")}>导出肿物</Button>
         <Button variant="workbench" id="importTumorBtn" type="button" onClick={() => dispatchIncisionTumorCommand("import_tumor")}>导入肿物</Button>
       </ButtonRow>
-      <Input id="tumorImportFile" className="hidden" type="file" accept="application/json,.json" />
+      <Input id="tumorImportFile" hidden type="file" accept="application/json,.json" />
       <Button variant="workbenchPrimary" id="runAgentBtn" type="button" onClick={() => dispatchIncisionTumorCommand("run_agent")}>生成候选切口</Button>
       <AgentNote id="pickState">{freehand ? boundaryHint : pickState}</AgentNote>
       <AnatomyPreview warn={anatomyPreviewWarn} id="anatomyPreview">{anatomyPreview}</AnatomyPreview>

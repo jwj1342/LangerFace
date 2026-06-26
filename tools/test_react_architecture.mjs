@@ -40,6 +40,7 @@ const uiButtonRow = read("src/components/ui/button-row.tsx");
 const uiCard = read("src/components/ui/card.tsx");
 const uiCheckbox = read("src/components/ui/checkbox.tsx");
 const uiCheckboxField = read("src/components/ui/checkbox-field.tsx");
+const uiFieldGroup = read("src/components/ui/field-group.tsx");
 const uiHelpDisclosure = read("src/components/ui/help-disclosure.tsx");
 const uiHint = read("src/components/ui/hint.tsx");
 const uiIncisionFeedback = read("src/components/ui/incision-feedback.tsx");
@@ -162,6 +163,11 @@ const privacyAuditConsumerSources = new Map([
 const buttonVisibilityConsumerSources = new Map([
   ["AnnotateMeshSourcePanel.tsx", annotateMeshSourcePanel],
   ["LiveRenderControlsPanel.tsx", liveRenderControlsPanel],
+]);
+const incisionFormVisibilityConsumerSources = new Map([
+  ["EditControlsPanel.tsx", editPanel],
+  ["SecondaryCuePanel.tsx", secondaryCuePanel],
+  ["TumorInputPanel.tsx", tumorPanel],
 ]);
 const reactShellConsumerSources = new Map([
   ["App.tsx", app],
@@ -380,6 +386,18 @@ const buttonVisibilityConsumersWithRawHidden = () => (
     ))
     .map(([name]) => name)
 );
+const incisionFormVisibilityConsumersWithRawHidden = () => (
+  [...incisionFormVisibilityConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes("function hiddenClass")
+      || source.includes("hiddenClass(")
+      || source.includes('className="hidden"')
+      || source.includes(' ? "" : "hidden"')
+      || source.includes(': "hidden"')
+      || source.includes('`two-cols ${')
+    ))
+    .map(([name]) => name)
+);
 
 for (const dep of [
   "react",
@@ -589,6 +607,9 @@ assert.ok(annotateMeshSourcePanel.includes("visible={showFlame}"), "React annota
 assert.ok(annotateMeshSourcePanel.includes("visible={showFittedFlame}"), "React annotation mesh source panel uses Button visible for optional fitted FLAME action");
 assert.ok(liveRenderControlsPanel.includes("visible={Boolean(atlasPreview?.active)}"), "React live render panel uses Button visible for restore atlas action");
 assert.ok(uiButtonRow.includes('cn("btn-row"'), "shadcn-style ButtonRow preserves existing button row styling");
+assert.ok(uiButtonRow.includes("visible?: boolean"), "shadcn-style ButtonRow exposes a typed visibility prop");
+assert.ok(uiButtonRow.includes('hiddenClassName = "hidden"'), "shadcn-style ButtonRow defaults invisible rows to the legacy hidden class");
+assert.ok(uiButtonRow.includes("!visible && hiddenClassName"), "shadcn-style ButtonRow centralizes hidden class application");
 assert.ok(uiCard.includes("CardHeader"), "shadcn-style Card exposes a header primitive");
 assert.ok(uiCard.includes("CardContent"), "shadcn-style Card exposes a content primitive");
 assert.ok(uiCard.includes('cn("card"'), "shadcn-style Card preserves existing card styling");
@@ -602,6 +623,24 @@ assert.deepEqual(
   "React component panels should use the shared Card primitive instead of raw card class wrappers",
 );
 assert.ok(uiCheckbox.includes('type="checkbox"'), "shadcn-style Checkbox preserves native checkbox behavior");
+assert.ok(uiFieldGroup.includes("FieldGroup"), "shadcn-style form primitives export FieldGroup");
+assert.ok(uiFieldGroup.includes("visible?: boolean"), "shadcn-style FieldGroup exposes a typed visibility prop");
+assert.ok(uiFieldGroup.includes('hiddenClassName = "hidden"'), "shadcn-style FieldGroup defaults invisible groups to the legacy hidden class");
+assert.ok(uiFieldGroup.includes("!visible && hiddenClassName"), "shadcn-style FieldGroup centralizes hidden class application");
+assert.deepEqual(
+  incisionFormVisibilityConsumersWithRawHidden(),
+  [],
+  "React incision form panels should use FieldGroup/ButtonRow visible and native hidden inputs instead of hand-written hidden classes",
+);
+assert.ok(tumorPanel.includes("FieldGroup"), "React tumor input panel uses FieldGroup for conditional tumor fields");
+assert.ok(tumorPanel.includes('id="depthWrap" visible={!cutaneous}'), "React tumor input panel shows depth only for subcutaneous lesions through FieldGroup visible");
+assert.ok(tumorPanel.includes('id="marginWrap" visible={cutaneous}'), "React tumor input panel shows cutaneous margin through FieldGroup visible");
+assert.ok(tumorPanel.includes('id="ellipseWrap" visible={cutaneous && boundaryMode === "ellipse"}'), "React tumor input panel shows ellipse controls through FieldGroup visible");
+assert.ok(tumorPanel.includes('id="freehandControls" visible={freehand}'), "React tumor input panel shows freehand controls through ButtonRow visible");
+assert.ok(tumorPanel.includes('<Input id="tumorImportFile" hidden'), "React tumor input panel uses native hidden file input semantics");
+assert.ok(editPanel.includes("FieldGroup"), "React edit controls panel uses FieldGroup for conditional edit controls");
+assert.ok(editPanel.includes('id="widthScaleWrap" visible={widthScaleVisible}'), "React edit controls panel shows width scale through FieldGroup visible");
+assert.ok(secondaryCuePanel.includes('<Input id="secondaryCueImportFile" hidden'), "React secondary cue panel uses native hidden file input semantics");
 assert.ok(uiHelpDisclosure.includes("HelpDisclosure"), "shadcn-style help disclosure primitive exports HelpDisclosure");
 assert.ok(uiHelpDisclosure.includes('cn("help-doc"'), "shadcn-style help disclosure primitive preserves existing help-doc styling");
 assert.ok(uiHelpDisclosure.includes("<Card asChild"), "shadcn-style help disclosure primitive preserves Card asChild semantics");

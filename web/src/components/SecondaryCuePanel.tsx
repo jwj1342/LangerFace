@@ -31,7 +31,7 @@ export function SecondaryCuePanel() {
         <Button variant="workbench" id="importSecondaryCueBtn" type="button" onClick={() => dispatchIncisionSecondaryCueCommand("import_secondary_cue")}>导入线索</Button>
         <Button variant="workbench" id="clearSecondaryCueBtn" type="button" disabled={!cue?.present} onClick={() => dispatchIncisionSecondaryCueCommand("clear_secondary_cue")}>清空线索</Button>
       </ButtonRow>
-      <Input id="secondaryCueImportFile" className="hidden" type="file" accept="application/json,.json" />
+      <Input id="secondaryCueImportFile" hidden type="file" accept="application/json,.json" />
       <CheckboxField
         checkboxProps={{
           id: "secondaryCueConfirmed",

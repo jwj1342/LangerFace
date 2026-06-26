@@ -5,6 +5,7 @@ import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card, CardHeader } from "./ui/card";
+import { FieldGroup } from "./ui/field-group";
 import { AgentNote } from "./ui/hint";
 import { EditStatus } from "./ui/incision-status";
 import { FieldValue, Label } from "./ui/label";
@@ -67,7 +68,7 @@ export function EditControlsPanel() {
         <span>医生调整</span>
         <EditStatus active={active} id="editStatus">{statusLabel}</EditStatus>
       </CardHeader>
-      <div>
+      <FieldGroup>
         <Label htmlFor="angleOffsetDeg">方向偏移 deg <FieldValue id="angleOffsetVal">{angleOffsetDeg}</FieldValue></Label>
         <RangeInput
           id="angleOffsetDeg"
@@ -83,8 +84,8 @@ export function EditControlsPanel() {
           onBlur={commit}
           onChange={(event) => setAngleOffsetDeg(event.currentTarget.value)}
         />
-      </div>
-      <div>
+      </FieldGroup>
+      <FieldGroup>
         <Label htmlFor="lengthScale">长度比例 <FieldValue id="lengthScaleVal">{lengthScalePct}%</FieldValue></Label>
         <RangeInput
           id="lengthScale"
@@ -100,8 +101,8 @@ export function EditControlsPanel() {
           onBlur={commit}
           onChange={(event) => setLengthScalePct(event.currentTarget.value)}
         />
-      </div>
-      <div id="widthScaleWrap" className={widthScaleVisible ? "" : "hidden"}>
+      </FieldGroup>
+      <FieldGroup id="widthScaleWrap" visible={widthScaleVisible}>
         <Label htmlFor="widthScale">宽度比例 <FieldValue id="widthScaleVal">{widthScalePct}%</FieldValue></Label>
         <RangeInput
           id="widthScale"
@@ -117,8 +118,8 @@ export function EditControlsPanel() {
           onBlur={commit}
           onChange={(event) => setWidthScalePct(event.currentTarget.value)}
         />
-      </div>
-      <div>
+      </FieldGroup>
+      <FieldGroup>
         <Label htmlFor="shiftAlongMm">沿长轴移动 mm <FieldValue id="shiftAlongVal">{shiftAlongMm}</FieldValue></Label>
         <RangeInput
           id="shiftAlongMm"
@@ -134,8 +135,8 @@ export function EditControlsPanel() {
           onBlur={commit}
           onChange={(event) => setShiftAlongMm(event.currentTarget.value)}
         />
-      </div>
-      <div>
+      </FieldGroup>
+      <FieldGroup>
         <Label htmlFor="shiftPerpMm">垂直长轴移动 mm <FieldValue id="shiftPerpVal">{shiftPerpMm}</FieldValue></Label>
         <RangeInput
           id="shiftPerpMm"
@@ -151,7 +152,7 @@ export function EditControlsPanel() {
           onBlur={commit}
           onChange={(event) => setShiftPerpMm(event.currentTarget.value)}
         />
-      </div>
+      </FieldGroup>
       <Select
         id="editReason"
         value={reason}
