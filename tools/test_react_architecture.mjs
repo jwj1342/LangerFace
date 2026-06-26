@@ -56,6 +56,7 @@ const uiSelect = read("src/components/ui/select.tsx");
 const uiSectionTitle = read("src/components/ui/section-title.tsx");
 const uiSlider = read("src/components/ui/slider.tsx");
 const uiStatusBadge = read("src/components/ui/status-badge.tsx");
+const uiSurgeryAction = read("src/components/ui/surgery-action.tsx");
 const uiTextarea = read("src/components/ui/textarea.tsx");
 const annotateStore = read("src/stores/annotateStore.ts");
 const reactRouteLifecycleHook = read("src/hooks/useReactRouteLifecycle.ts");
@@ -146,6 +147,9 @@ const r3fLoadingConsumerSources = new Map([
 ]);
 const annotateStatusConsumerSources = new Map([
   ["AnnotateDrawPanel.tsx", annotateDrawPanel],
+]);
+const surgeryActionConsumerSources = new Map([
+  ["SurgeryControlsPanel.tsx", surgeryControlsPanel],
 ]);
 const reactShellConsumerSources = new Map([
   ["App.tsx", app],
@@ -313,6 +317,17 @@ const r3fLoadingConsumersWithRawClass = (className) => (
 );
 const annotateStatusConsumersWithRawClass = (className) => (
   [...annotateStatusConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+      || source.includes(` ? "${className}`)
+      || source.includes(`: "${className}`)
+    ))
+    .map(([name]) => name)
+);
+const surgeryActionConsumersWithRawClass = (className) => (
+  [...surgeryActionConsumerSources.entries()]
     .filter(([, source]) => (
       source.includes(`className="${className}`)
       || source.includes(`className={\`${className}`)
@@ -743,6 +758,16 @@ for (const [name, source] of r3fLoadingConsumerSources.entries()) {
   assert.ok(source.includes("R3FLoadingCard"), `${name} should render loading state through the shared R3F loading primitive`);
   assert.ok(!source.includes("<Html center>"), `${name} should not hand-write Drei Html loading overlays`);
 }
+assert.ok(uiSurgeryAction.includes("SurgeryCutButton"), "shadcn-style surgery action primitive exports SurgeryCutButton");
+assert.ok(uiSurgeryAction.includes('cn("cut-along"'), "surgery action primitive preserves cut-along styling");
+assert.ok(uiSurgeryAction.includes('active && "active"'), "surgery action primitive preserves active cut styling");
+assert.ok(uiSurgeryAction.includes('variant = "workbench"'), "surgery action primitive defaults to workbench button styling");
+assert.deepEqual(
+  surgeryActionConsumersWithRawClass("cut-along"),
+  [],
+  "React surgery controls should use SurgeryCutButton instead of hand-written cut-along class wrappers",
+);
+assert.ok(surgeryControlsPanel.includes("SurgeryCutButton"), "React surgery controls use the shared surgery cut action primitive");
 for (const className of [
   "hint",
   "badge",

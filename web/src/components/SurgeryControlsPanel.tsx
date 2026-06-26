@@ -6,6 +6,7 @@ import { Hint } from "./ui/hint";
 import { Label } from "./ui/label";
 import { RangeInput } from "./ui/slider";
 import { SectionTitle } from "./ui/section-title";
+import { SurgeryCutButton } from "./ui/surgery-action";
 
 interface SurgeryControlsPanelProps {
   activeCut: "along" | null;
@@ -50,16 +51,15 @@ export function SurgeryControlsPanel({
       />
       <SectionTitle label="② 执行切除并闭合" />
       <ButtonRow className="surgery-action-row">
-        <Button
-          variant="workbench"
-          className={`cut-along${activeCut === "along" ? " active" : ""}`}
+        <SurgeryCutButton
+          active={activeCut === "along"}
           id="btnAlong"
           type="button"
           disabled={!isReady}
           onClick={onExciseAlong}
         >
           沿 RSTL 切除
-        </Button>
+        </SurgeryCutButton>
       </ButtonRow>
       <Button variant="workbench" id="btnReset" type="button" disabled={!isReady} onClick={onReset}>↺ 复位</Button>
       <Button asChild variant="workbench">
