@@ -65,9 +65,9 @@ ruff check .                 # 代码风格
    cd web && npm run build && npm test
    ```
 3. push 分支并创建 PR。可以先开 Draft PR。
-4. 等 GitHub Actions 和 Vercel Preview check 自动运行。
-5. 打开 PR 里的 Vercel Preview 链接做人工验收。
-6. checks 全绿、Preview 验收通过、且至少 1 个 reviewer approval 后，把 Draft PR 标记为 ready 并合并到 `master`。
+4. 等 GitHub Actions 自动运行；默认不要为每个 PR 自动创建 Vercel Preview。
+5. 如需线上人工验收，由维护者用 Vercel Dashboard 或 CLI 手动创建一次 Preview，再打开对应链接检查。
+6. checks 全绿、必要的 Preview 验收通过、且至少 1 个 reviewer approval 后，把 Draft PR 标记为 ready 并合并到 `master`。
 7. 合并到 `master` 后，Vercel 自动发布 Production。
 
 PR 描述必须保留“技术资料 / 临床依据”小节。凡涉及医学规则、CV/AI 算法、模型、数据集、部署平台或隐私边界的改动，应在 PR 中列出使用的资料链接、医生团队说明、关联 issue 和设计文档；若不适用，也要显式写“不适用”。这样 reviewer 不需要反向猜测实现依据。
@@ -79,10 +79,10 @@ PR 上应关注这些 checks：
 | `lint` | Python lint / import 排序 |
 | `python-tests (3.10/3.11/3.12)` | Python 测试矩阵 |
 | `js-tests` | Vite build + JS/Python 几何对拍 + 标注模型测试 |
-| `Vercel` | Production 或临时 Preview 的部署状态；当前长 PR 默认不为每次 push 生成 Preview |
-| `Vercel Preview Comments` | 临时打开 Preview 时，Vercel 在 PR 中发布 Preview 链接 |
+| `Vercel` | Production 部署状态；临时 Preview 只在维护者手动创建时出现 |
+| `Vercel Preview Comments` | 手动创建 Preview 时，Vercel 可能在 PR 中发布 Preview 链接 |
 
-Vercel Preview 只在维护者按需打开时服务当前开发分支；当前策略见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#自动部署范围与限流控制)。普通短期 feature 分支仍跑 GitHub Actions 质量门禁，但不会自动创建 Vercel Preview；当前开发分支也默认关闭 Git 自动部署，避免长 PR 高频 push 打满 Vercel 限流。需要线上验收时，由维护者临时打开当前开发分支的 Vercel 部署，或使用团队约定的手动部署方式刷新一次 Preview；部署完成后再关回去。
+Vercel Preview 只在维护者按需手动创建时服务当前开发分支；当前策略见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#自动部署范围与限流控制)。普通 feature / integration 分支仍跑 GitHub Actions 质量门禁，但不会自动创建 Vercel Preview，避免长 PR 高频 push 打满 Vercel 限流或继续累积 GitHub deployment records。
 
 Preview 人工验收清单：
 

@@ -8,8 +8,7 @@
     "deploymentEnabled": {
       "*": false,
       "**": false,
-      "master": true,
-      "react-architecture-refactor": false
+      "master": true
     }
   },
   "github": {

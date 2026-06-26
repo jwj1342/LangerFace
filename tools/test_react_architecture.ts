@@ -586,24 +586,23 @@ assert.deepEqual(
     "*": false,
     "**": false,
     master: true,
-    "react-architecture-refactor": false,
   },
-  "Vercel should only auto-deploy production by default during long development PRs",
+  "Vercel should only auto-deploy production from master",
 );
 assert.equal(vercelConfig.installCommand, "npm ci", "Vercel should install from the committed npm lockfile");
 assert.equal(
   vercelConfig.ignoreCommand,
   "node scripts/vercel-ignore-build.ts",
-  "Vercel should skip allowed-branch builds when the web root did not change",
+  "Vercel should skip production builds when the web root did not change",
 );
 assert.ok(vercelIgnoreBuild.includes("VERCEL_GIT_COMMIT_REF"), "Vercel ignore script checks the Git branch");
 assert.ok(vercelIgnoreBuild.includes("VERCEL_GIT_PREVIOUS_SHA"), "Vercel ignore script compares against the previous deployment sha");
-assert.ok(vercelIgnoreBuild.includes('new Set(["master", "react-architecture-refactor"])'), "Vercel ignore script mirrors the deployment branch whitelist");
-assert.ok(vercelIgnoreBuild.includes("VERCEL_PREVIEW_DEPLOY_MODE"), "Vercel ignore script supports explicit preview deployment mode");
-assert.ok(vercelIgnoreBuild.includes('previewMode === "off"'), "Vercel ignore script can disable preview builds during rate-limit windows");
+assert.ok(vercelIgnoreBuild.includes('new Set(["master"])'), "Vercel ignore script only allows the production branch");
+assert.ok(vercelIgnoreBuild.includes('!productionBranches.has(branch)'), "Vercel ignore script skips non-production branches");
 assert.ok(vercelIgnoreBuild.includes('vercelEnv === "production"'), "Vercel ignore script guards production deployments by branch");
-assert.ok(vercelIgnoreBuild.includes("VERCEL_FORCE_DEPLOY"), "Vercel ignore script supports one-off forced deployments");
-assert.ok(vercelIgnoreBuild.includes("previewDeployPattern"), "Vercel ignore script requires an explicit preview marker by default");
+assert.ok(!vercelIgnoreBuild.includes("VERCEL_PREVIEW_DEPLOY_MODE"), "Vercel ignore script should not maintain an automatic preview branch mode");
+assert.ok(!vercelIgnoreBuild.includes("VERCEL_FORCE_DEPLOY"), "Vercel ignore script should not force Git preview deployments from feature branches");
+assert.ok(!vercelIgnoreBuild.includes("previewDeployPattern"), "Vercel ignore script should not use commit-message markers to create preview deployments");
 assert.ok(vercelIgnoreBuild.includes('["diff", "--quiet", ref, "HEAD", "--", "."]'), "Vercel ignore script only builds when the web root changed");
 assert.ok(vercelIgnoreBuild.includes('["diff-tree", "--quiet", "--no-commit-id", "-r", "HEAD", "--", "."]'), "Vercel ignore script has a shallow-clone fallback for web root changes");
 assert.ok(vercel.includes('"source": "/app/(.*)"'), "Vercel rewrites nested SPA routes");
