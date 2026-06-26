@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { assetUrls } from "./assets.js";
 import { rstlDirField } from "./rstl_field.js";
 import { boundaryVerts, buildSoftBody, excise, stepSoftBody, vertexTension } from "./soft_body.js";
+import { isReactManagedWorkbench } from "./src/lib/reactManagedWorkbench.ts";
 import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.js";
 
 const $ = (root, id) => {
@@ -366,6 +367,6 @@ export function mountSurgeryClosureDemo(root = document) {
   return disposeSurgeryClosureDemo;
 }
 
-if (document.getElementById("surgeryCanvas") && !window.__LANGERFACE_REACT_MANAGED__) {
+if (document.getElementById("surgeryCanvas") && !isReactManagedWorkbench()) {
   mountSurgeryClosureDemo();
 }

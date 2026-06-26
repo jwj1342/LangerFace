@@ -24,6 +24,7 @@ import {
   INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT,
   INCISION_TUMOR_REACT_COMMAND_EVENT,
 } from "./src/lib/controllerEvents.ts";
+import { isReactManagedWorkbench } from "./src/lib/reactManagedWorkbench.ts";
 import {
   initialProviderState,
   insecureProviderFromSecurePageMessage,
@@ -1590,7 +1591,7 @@ function reviewRecord(result = S.result, label = "候选") {
 }
 
 function renderSaved() {
-  if (window.__LANGERFACE_REACT_MANAGED__) {
+  if (isReactManagedWorkbench()) {
     publishIncisionState("saved_candidates");
     return;
   }
@@ -2252,7 +2253,7 @@ function bindWorkbenchEvents() {
     }
   });
 
-  if (window.__LANGERFACE_REACT_MANAGED__) {
+  if (isReactManagedWorkbench()) {
     S.tumorReactCommandHandler = handleReactTumorCommand;
     window.addEventListener(INCISION_TUMOR_REACT_COMMAND_EVENT, S.tumorReactCommandHandler);
   } else {
@@ -2272,7 +2273,7 @@ function bindWorkbenchEvents() {
     els.exportTumor.onclick = exportTumorJson;
     els.importTumor.onclick = () => els.tumorImportFile.click();
   }
-  if (window.__LANGERFACE_REACT_MANAGED__) {
+  if (isReactManagedWorkbench()) {
     S.providerReactStateHandler = () => publishIncisionState("provider_react_state");
     window.addEventListener(INCISION_PROVIDER_REACT_STATE_EVENT, S.providerReactStateHandler);
   } else {
@@ -2281,7 +2282,7 @@ function bindWorkbenchEvents() {
     els.providerModel.onchange = () => { setProviderTestState("Provider 模型已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
     els.providerTimeout.oninput = () => { els.providerTimeoutVal.textContent = els.providerTimeout.value; saveProviderPrefs(); };
   }
-  if (window.__LANGERFACE_REACT_MANAGED__) {
+  if (isReactManagedWorkbench()) {
     S.secondaryCueReactCommandHandler = handleReactSecondaryCueCommand;
     window.addEventListener(INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT, S.secondaryCueReactCommandHandler);
   } else {
@@ -2289,7 +2290,7 @@ function bindWorkbenchEvents() {
     els.clearSecondaryCue.onclick = clearSecondaryCues;
     els.secondaryCueConfirmed.onchange = setSecondaryCueConfirmedFromControl;
   }
-  if (window.__LANGERFACE_REACT_MANAGED__) {
+  if (isReactManagedWorkbench()) {
     S.editReactCommandHandler = handleReactEditCommand;
     window.addEventListener(INCISION_EDIT_REACT_COMMAND_EVENT, S.editReactCommandHandler);
   } else {
@@ -2315,7 +2316,7 @@ function bindWorkbenchEvents() {
     els.redoEdit.onclick = redoEditSnapshot;
     els.resetEdit.onclick = resetEditToToolSuggestion;
   }
-  if (window.__LANGERFACE_REACT_MANAGED__) {
+  if (isReactManagedWorkbench()) {
     S.reviewReactCommandHandler = handleReactReviewCommand;
     window.addEventListener(INCISION_REVIEW_REACT_COMMAND_EVENT, S.reviewReactCommandHandler);
   } else {
@@ -2324,7 +2325,7 @@ function bindWorkbenchEvents() {
     els.rejectCandidate.onclick = () => recordReviewDecision("rejected_by_clinician", "否决候选");
     els.saveReview.onclick = saveReviewRecord;
   }
-  if (window.__LANGERFACE_REACT_MANAGED__) {
+  if (isReactManagedWorkbench()) {
     S.libraryReactCommandHandler = handleReactLibraryCommand;
     window.addEventListener(INCISION_LIBRARY_REACT_COMMAND_EVENT, S.libraryReactCommandHandler);
   } else {
@@ -2399,6 +2400,6 @@ export function mountIncisionAgentWorkbench(root = document) {
   return disposeIncisionAgentWorkbench;
 }
 
-if (document.getElementById("agentCanvas") && !window.__LANGERFACE_REACT_MANAGED__) {
+if (document.getElementById("agentCanvas") && !isReactManagedWorkbench()) {
   mountIncisionAgentWorkbench();
 }

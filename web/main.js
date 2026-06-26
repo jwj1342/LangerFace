@@ -14,6 +14,7 @@ import {
   LIVE_ROUTE_REACT_COMMAND_EVENT,
   LIVE_SOURCE_REACT_COMMAND_EVENT,
 } from "./src/lib/controllerEvents.ts";
+import { isReactManagedWorkbench } from "./src/lib/reactManagedWorkbench.ts";
 import {
   buildLiveControllerSnapshot,
   liveTextOf,
@@ -314,7 +315,7 @@ function handleReactRouteCommand(event) {
 
 function bindLiveEvents(signal) {
   els.file.addEventListener("change", (e) => runLiveAction("file_source", () => handleFile(e.target.files?.[0])), { signal });
-  if (window.__LANGERFACE_REACT_MANAGED__) {
+  if (isReactManagedWorkbench()) {
     window.addEventListener(LIVE_SOURCE_REACT_COMMAND_EVENT, handleReactSourceCommand, { signal });
     window.addEventListener(LIVE_RENDER_REACT_COMMAND_EVENT, handleReactRenderCommand, { signal });
     window.addEventListener(LIVE_ROUTE_REACT_COMMAND_EVENT, handleReactRouteCommand, { signal });
@@ -416,6 +417,6 @@ export function mountLiveWorkbench(root = document) {
   return disposeLiveWorkbench;
 }
 
-if (document.getElementById("canvas") && !window.__LANGERFACE_REACT_MANAGED__) {
+if (document.getElementById("canvas") && !isReactManagedWorkbench()) {
   mountLiveWorkbench();
 }

@@ -1,5 +1,10 @@
 import { useEffect } from "react";
 
+import {
+  captureReactManagedWorkbench,
+  enableReactManagedWorkbench,
+  restoreReactManagedWorkbench,
+} from "../lib/reactManagedWorkbench";
 import { type Workspace, useAppStore } from "../stores/appStore";
 
 interface ReactRouteLifecycleOptions {
@@ -19,16 +24,13 @@ export function useReactRouteLifecycle({
   const setRouteStatus = useAppStore((state) => state.setRouteStatus);
 
   useEffect(() => {
-    const previousManagedFlag = window.__LANGERFACE_REACT_MANAGED__;
+    const previousManagedFlag = captureReactManagedWorkbench();
     setActiveWorkspace(workspace);
-    if (reactManaged) window.__LANGERFACE_REACT_MANAGED__ = true;
+    if (reactManaged) enableReactManagedWorkbench();
     setRouteStatus(mountedStatus);
 
     return () => {
-      if (reactManaged) {
-        if (previousManagedFlag === undefined) delete window.__LANGERFACE_REACT_MANAGED__;
-        else window.__LANGERFACE_REACT_MANAGED__ = previousManagedFlag;
-      }
+      if (reactManaged) restoreReactManagedWorkbench(previousManagedFlag);
       setRouteStatus(unloadedStatus);
     };
   }, [mountedStatus, reactManaged, setActiveWorkspace, setRouteStatus, unloadedStatus, workspace]);

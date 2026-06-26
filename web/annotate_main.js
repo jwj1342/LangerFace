@@ -13,6 +13,7 @@ import {
   ANNOTATE_LIBRARY_REACT_COMMAND_EVENT,
   ANNOTATE_MESH_REACT_COMMAND_EVENT,
 } from "./src/lib/controllerEvents.ts";
+import { isReactManagedWorkbench } from "./src/lib/reactManagedWorkbench.ts";
 import {
   ANNOTATE_SYSTEM_LABELS as SYSTEM_LABELS,
   buildAnnotateControllerSnapshot,
@@ -301,7 +302,7 @@ function bindAnnotateEvents() {
   viewer.zoom(Math.exp(delta * 0.00055));
   }, { passive: false, signal });
 
-  if (window.__LANGERFACE_REACT_MANAGED__) {
+  if (isReactManagedWorkbench()) {
     window.addEventListener(ANNOTATE_MESH_REACT_COMMAND_EVENT, handleReactMeshCommand, { signal });
     window.addEventListener(ANNOTATE_DRAW_REACT_COMMAND_EVENT, handleReactDrawCommand, { signal });
     window.addEventListener(ANNOTATE_LIBRARY_REACT_COMMAND_EVENT, handleReactLineLibraryCommand, { signal });
@@ -496,7 +497,7 @@ function previewActiveAtlas() {
     setHint("预览失败：浏览器无法暂存图谱。请检查站点存储权限。");
     return;
   }
-  location.href = window.__LANGERFACE_REACT_MANAGED__ ? "/app/live" : "index.html";
+  location.href = isReactManagedWorkbench() ? "/app/live" : "index.html";
 }
 
 // ── UI 刷新 ───────────────────────────────────────────────────────────────────
@@ -554,7 +555,7 @@ function refresh() {
   if (!model || !els?.status) return;
   const curPts = controlsOf(model.current).length;
   const currentFallback = Boolean(model.current?.fallback);
-  if (!window.__LANGERFACE_REACT_MANAGED__) {
+  if (!isReactManagedWorkbench()) {
     els.current.classList.toggle("active", Boolean(model.current));
     els.current.classList.toggle("warning", currentFallback);
     els.current.textContent = model.current
@@ -610,7 +611,7 @@ export function mountAnnotateWorkbench(root = document) {
   activeSession += 1;
   abortController = new AbortController();
   bindAnnotateEvents();
-  if (!window.__LANGERFACE_REACT_MANAGED__) {
+  if (!isReactManagedWorkbench()) {
     if (!flameAvailable()) els.loadFlame.style.display = "none";
     if (!fittedFlameAvailable()) els.loadFittedFlame.style.display = "none";
   }
@@ -624,6 +625,6 @@ export function mountAnnotateWorkbench(root = document) {
   return disposeAnnotateWorkbench;
 }
 
-if (document.getElementById("stage") && !window.__LANGERFACE_REACT_MANAGED__) {
+if (document.getElementById("stage") && !isReactManagedWorkbench()) {
   mountAnnotateWorkbench();
 }

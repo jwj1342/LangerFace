@@ -1,5 +1,10 @@
 import { type RefObject, useEffect } from "react";
 
+import {
+  captureReactManagedWorkbench,
+  enableReactManagedWorkbench,
+  restoreReactManagedWorkbench,
+} from "../lib/reactManagedWorkbench";
 import { type Workspace, useAppStore } from "../stores/appStore";
 
 interface ManagedWorkbenchControllerOptions<TModule> {
@@ -31,14 +36,14 @@ export function useManagedWorkbenchController<TModule>({
   useEffect(() => {
     let disposed = false;
     let cleanup = () => {};
-    const previousManagedFlag = window.__LANGERFACE_REACT_MANAGED__;
+    const previousManagedFlag = captureReactManagedWorkbench();
 
     async function mountController() {
       setActiveWorkspace(workspace);
       setRouteStatus(loadingStatus);
       if (disposed || !hostRef.current) return;
 
-      window.__LANGERFACE_REACT_MANAGED__ = true;
+      enableReactManagedWorkbench();
       const module = await loadModule();
       if (disposed || !hostRef.current) {
         dispose?.(module);
@@ -57,8 +62,7 @@ export function useManagedWorkbenchController<TModule>({
     return () => {
       disposed = true;
       cleanup?.();
-      if (previousManagedFlag === undefined) delete window.__LANGERFACE_REACT_MANAGED__;
-      else window.__LANGERFACE_REACT_MANAGED__ = previousManagedFlag;
+      restoreReactManagedWorkbench(previousManagedFlag);
       setRouteStatus(unloadedStatus);
     };
   }, [
