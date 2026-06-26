@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
-import { Card, CardHeader } from "./ui/card";
+import { AgentCard, CardHeader } from "./ui/card";
 import { AgentNote } from "./ui/hint";
 import { ReviewStatus } from "./ui/incision-status";
 import { Input } from "./ui/input";
@@ -40,7 +40,7 @@ export function ReviewControlsPanel() {
   }, [snapshot?.review.status]);
 
   return (
-    <Card className="agent-grid">
+    <AgentCard>
       <CardHeader>
         <span>医生审阅</span>
         <ReviewStatus tone={reviewTone(status)} id="reviewState">{reviewLabel(status)}</ReviewStatus>
@@ -97,6 +97,6 @@ export function ReviewControlsPanel() {
         保存审阅记录
       </Button>
       <AgentNote>确认只代表进入研究审阅记录，不是手术指令；候选几何一旦调整，审阅状态会回到待确认。</AgentNote>
-    </Card>
+    </AgentCard>
   );
 }

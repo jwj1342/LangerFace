@@ -4,7 +4,7 @@ import { dispatchIncisionSecondaryCueCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
-import { Card, CardHeader } from "./ui/card";
+import { AgentCard, CardHeader } from "./ui/card";
 import { CheckboxField } from "./ui/checkbox-field";
 import { AgentNote } from "./ui/hint";
 import { Input } from "./ui/input";
@@ -19,7 +19,7 @@ export function SecondaryCuePanel() {
   }, [cue?.manualConfirmed]);
 
   return (
-    <Card className="agent-grid">
+    <AgentCard>
       <CardHeader>
         <span>辅助线索</span>
         <span id="secondaryCueState">{cue?.stateLabel || "未导入"}</span>
@@ -45,6 +45,6 @@ export function SecondaryCuePanel() {
       >
         已人工确认辅助线索
       </CheckboxField>
-    </Card>
+    </AgentCard>
   );
 }

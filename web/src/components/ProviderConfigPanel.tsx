@@ -9,7 +9,7 @@ import {
 } from "../services/providerConfig";
 import { dispatchIncisionProviderState } from "../lib/controllerCommand";
 import { Button } from "./ui/button";
-import { Card, CardHeader } from "./ui/card";
+import { AgentCard, CardHeader } from "./ui/card";
 import { AgentNote } from "./ui/hint";
 import { Input } from "./ui/input";
 import { ProviderConnectionStatus } from "./ui/incision-status";
@@ -101,7 +101,7 @@ export function ProviderConfigPanel() {
   }
 
   return (
-    <Card className="agent-grid">
+    <AgentCard>
       <CardHeader>
         <span>LLM Provider</span>
         <ProviderConnectionStatus id="providerState" tone={providerTone}>{providerState}</ProviderConnectionStatus>
@@ -154,6 +154,6 @@ export function ProviderConfigPanel() {
       </Button>
       <AgentNote className={testTone || undefined} id="providerTestState">{testState}</AgentNote>
       <AgentNote>生成候选时只执行浏览器内确定性 workflow；Provider 连接测试暂不参与切口几何或工具 trace。</AgentNote>
-    </Card>
+    </AgentCard>
   );
 }

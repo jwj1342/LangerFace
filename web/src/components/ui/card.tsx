@@ -18,6 +18,13 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
 );
 Card.displayName = "Card";
 
+export const AgentCard = forwardRef<HTMLDivElement, CardProps>(
+  ({ className, ...props }, ref) => (
+    <Card ref={ref} className={cn("agent-grid", className)} {...props} />
+  ),
+);
+AgentCard.displayName = "AgentCard";
+
 export const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div ref={ref} className={cn("quality-top", className)} {...props} />

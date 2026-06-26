@@ -187,6 +187,14 @@ const cardHeaderTitleConsumerSources = new Map([
   ["LiveStatePanel.tsx", liveStatePanel],
   ["WorkerStatusPanel.tsx", workerPanel],
 ]);
+const incisionAgentCardConsumerSources = new Map([
+  ["CandidateLibraryPanel.tsx", candidateLibraryPanel],
+  ["EditControlsPanel.tsx", editPanel],
+  ["ProviderConfigPanel.tsx", providerPanel],
+  ["ReviewControlsPanel.tsx", reviewPanel],
+  ["SecondaryCuePanel.tsx", secondaryCuePanel],
+  ["TumorInputPanel.tsx", tumorPanel],
+]);
 const reactShellConsumerSources = new Map([
   ["App.tsx", app],
   ["DashboardRoute.tsx", dashboardRoute],
@@ -460,6 +468,15 @@ const cardHeaderTitleConsumersWithRawClass = (className) => (
     ))
     .map(([name]) => name)
 );
+const incisionAgentCardConsumersWithRawClass = (className) => (
+  [...incisionAgentCardConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+    ))
+    .map(([name]) => name)
+);
 
 for (const dep of [
   "react",
@@ -697,7 +714,9 @@ assert.ok(uiCard.includes("CardHeader"), "shadcn-style Card exposes a header pri
 assert.ok(uiCard.includes("CardHeaderTitle"), "shadcn-style Card exposes a header title primitive");
 assert.ok(uiCard.includes('cn("inline-flex items-center gap-2"'), "shadcn-style CardHeaderTitle preserves compact icon-title alignment");
 assert.ok(uiCard.includes("CardContent"), "shadcn-style Card exposes a content primitive");
+assert.ok(uiCard.includes("AgentCard"), "shadcn-style Card exposes an incision agent card primitive");
 assert.ok(uiCard.includes('cn("card"'), "shadcn-style Card preserves existing card styling");
+assert.ok(uiCard.includes('cn("agent-grid"'), "shadcn-style AgentCard preserves existing agent-grid styling");
 assert.ok(uiCard.includes("@radix-ui/react-slot"), "shadcn-style Card supports asChild through Radix Slot");
 assert.ok(uiCard.includes("asChild?: boolean"), "shadcn-style Card exposes an asChild prop for semantic containers");
 assert.ok(uiCard.includes("visible?: boolean"), "shadcn-style Card exposes a typed visibility prop");
@@ -717,6 +736,14 @@ assert.deepEqual(
 );
 for (const [name, source] of cardHeaderTitleConsumerSources.entries()) {
   assert.ok(source.includes("CardHeaderTitle"), `${name} should render icon-title headers through CardHeaderTitle`);
+}
+assert.deepEqual(
+  incisionAgentCardConsumersWithRawClass("agent-grid"),
+  [],
+  "React incision agent panels should use AgentCard instead of hand-written agent-grid card wrappers",
+);
+for (const [name, source] of incisionAgentCardConsumerSources.entries()) {
+  assert.ok(source.includes("AgentCard"), `${name} should render through AgentCard`);
 }
 assert.ok(uiCheckbox.includes('type="checkbox"'), "shadcn-style Checkbox preserves native checkbox behavior");
 assert.ok(uiCheckboxField.includes("visible?: boolean"), "shadcn-style CheckboxField exposes a typed visibility prop");
@@ -1177,7 +1204,7 @@ assert.ok(tumorPanel.includes("Label"), "React tumor panel uses the shared shadc
 assert.ok(tumorPanel.includes("Select"), "React tumor panel uses the shared shadcn-style select primitive");
 assert.ok(tumorPanel.includes("RangeInput"), "React tumor panel uses the shared shadcn-style range primitive");
 assert.ok(tumorPanel.includes("ButtonRow"), "React tumor panel uses the shared shadcn-style button row primitive");
-assert.ok(tumorPanel.includes("<Card"), "React tumor panel uses the shared shadcn-style card primitive");
+assert.ok(tumorPanel.includes("AgentCard"), "React tumor panel uses the shared shadcn-style agent card primitive");
 assert.ok(tumorPanel.includes('variant="workbenchPrimary"'), "React tumor panel keeps primary workbench button styling through Button variants");
 assert.ok(tumorInputService.includes("buildTumorInput"), "shared tumor input service builds typed TumorInput payloads");
 assert.ok(tumorInputService.includes("buildTumorFormSnapshot"), "shared tumor input service builds React-safe tumor form snapshots");
@@ -1201,7 +1228,7 @@ assert.ok(secondaryCuePanel.includes("Button"), "React secondary cue panel uses 
 assert.ok(secondaryCuePanel.includes("ButtonRow"), "React secondary cue panel uses the shared shadcn-style button row primitive");
 assert.ok(secondaryCuePanel.includes("Input"), "React secondary cue panel uses the shared shadcn-style input primitive");
 assert.ok(secondaryCuePanel.includes("CheckboxField"), "React secondary cue panel uses the shared shadcn-style checkbox field primitive");
-assert.ok(secondaryCuePanel.includes("<Card"), "React secondary cue panel uses the shared shadcn-style card primitive");
+assert.ok(secondaryCuePanel.includes("AgentCard"), "React secondary cue panel uses the shared shadcn-style agent card primitive");
 for (const id of [
   "candidateType",
   "candidateLength",
@@ -1252,7 +1279,7 @@ assert.ok(candidateLibraryPanel.includes("CandidateRow"), "React candidate libra
 assert.ok(candidateLibraryPanel.includes("CandidateRowTop"), "React candidate library uses the shared candidate row top primitive");
 assert.ok(candidateLibraryPanel.includes("CandidateRowMeta"), "React candidate library uses the shared candidate row metadata primitive");
 assert.ok(candidateLibraryPanel.includes("CandidateRowStatus"), "React candidate library uses the shared candidate row status primitive");
-assert.ok(candidateLibraryPanel.includes("<Card"), "React candidate library uses the shared shadcn-style card primitive");
+assert.ok(candidateLibraryPanel.includes("AgentCard"), "React candidate library uses the shared shadcn-style agent card primitive");
 assert.ok(candidateLibraryPanel.includes('variant="workbenchPrimary"'), "React candidate library keeps primary workbench button styling through Button variants");
 for (const id of [
   "privacyState",
@@ -1296,7 +1323,7 @@ assert.ok(providerPanel.includes("Input"), "React provider panel uses the shared
 assert.ok(providerPanel.includes("Label"), "React provider panel uses the shared shadcn-style label primitive");
 assert.ok(providerPanel.includes("RangeInput"), "React provider panel uses the shared shadcn-style range primitive");
 assert.ok(providerPanel.includes("Button"), "React provider panel uses the shared shadcn-style button primitive");
-assert.ok(providerPanel.includes("<Card"), "React provider panel uses the shared shadcn-style card primitive");
+assert.ok(providerPanel.includes("AgentCard"), "React provider panel uses the shared shadcn-style agent card primitive");
 assert.ok(!providerPanel.includes("<input"), "React provider panel should route hidden and visible inputs through the shared input primitive");
 for (const id of [
   "editStatus",
@@ -1329,7 +1356,7 @@ assert.ok(editPanel.includes("Label"), "React edit panel uses the shared shadcn-
 assert.ok(editPanel.includes("Select"), "React edit panel uses the shared shadcn-style select primitive");
 assert.ok(editPanel.includes("RangeInput"), "React edit panel uses the shared shadcn-style range primitive");
 assert.ok(editPanel.includes("ButtonRow"), "React edit panel uses the shared shadcn-style button row primitive");
-assert.ok(editPanel.includes("<Card"), "React edit panel uses the shared shadcn-style card primitive");
+assert.ok(editPanel.includes("AgentCard"), "React edit panel uses the shared shadcn-style agent card primitive");
 for (const id of [
   "reviewState",
   "reviewerName",
@@ -1351,7 +1378,7 @@ assert.ok(reviewPanel.includes("Select"), "React review panel uses the shared sh
 assert.ok(reviewPanel.includes("Textarea"), "React review panel uses the shared shadcn-style textarea primitive");
 assert.ok(reviewPanel.includes("Button"), "React review panel uses the shared shadcn-style button primitive");
 assert.ok(reviewPanel.includes("ButtonRow"), "React review panel uses the shared shadcn-style button row primitive");
-assert.ok(reviewPanel.includes("<Card"), "React review panel uses the shared shadcn-style card primitive");
+assert.ok(reviewPanel.includes("AgentCard"), "React review panel uses the shared shadcn-style agent card primitive");
 assert.ok(reviewPanel.includes('variant="workbenchPrimary"'), "React review panel keeps primary workbench button styling through Button variants");
 assert.ok(incisionWorkbench.includes('to="/live"'), "React incision workbench returns to the React live route");
 assert.ok(incisionStagePanel.includes('to="/annotate"'), "React incision stage links to the React 3D annotation route");

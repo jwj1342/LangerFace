@@ -4,7 +4,7 @@ import { dispatchIncisionEditCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
-import { Card, CardHeader } from "./ui/card";
+import { AgentCard, CardHeader } from "./ui/card";
 import { FieldGroup } from "./ui/field-group";
 import { AgentNote } from "./ui/hint";
 import { EditStatus } from "./ui/incision-status";
@@ -63,7 +63,7 @@ export function EditControlsPanel() {
   const commit = () => dispatchIncisionEditCommand("commit_edit");
 
   return (
-    <Card className="agent-grid">
+    <AgentCard>
       <CardHeader>
         <span>医生调整</span>
         <EditStatus active={active} id="editStatus">{statusLabel}</EditStatus>
@@ -174,6 +174,6 @@ export function EditControlsPanel() {
       <Button variant="workbench" id="resetEditBtn" type="button" onClick={() => dispatchIncisionEditCommand("reset_edit")}>恢复工具建议</Button>
       <AgentNote id="editHistoryState">{historyLabel}</AgentNote>
       <AgentNote>调整只改变候选草案并记录 provenance；真实切口仍需医生复核。</AgentNote>
-    </Card>
+    </AgentCard>
   );
 }

@@ -4,7 +4,7 @@ import { dispatchIncisionTumorCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
-import { Card } from "./ui/card";
+import { AgentCard } from "./ui/card";
 import { FieldGroup } from "./ui/field-group";
 import { AgentNote } from "./ui/hint";
 import { AnatomyPreview, BoundaryStatus } from "./ui/incision-feedback";
@@ -60,7 +60,7 @@ export function TumorInputPanel() {
       : pickState;
 
   return (
-    <Card className="agent-grid">
+    <AgentCard>
       <Label htmlFor="tumorKind">肿物类型</Label>
       <Select
         id="tumorKind"
@@ -202,6 +202,6 @@ export function TumorInputPanel() {
       <Button variant="workbenchPrimary" id="runAgentBtn" type="button" onClick={() => dispatchIncisionTumorCommand("run_agent")}>生成候选切口</Button>
       <AgentNote id="pickState">{freehand ? boundaryHint : pickState}</AgentNote>
       <AnatomyPreview warn={anatomyPreviewWarn} id="anatomyPreview">{anatomyPreview}</AnatomyPreview>
-    </Card>
+    </AgentCard>
   );
 }
