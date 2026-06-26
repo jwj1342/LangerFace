@@ -18,7 +18,7 @@ pull request / push
       │    └─ web: npm ci + npm run build + npm test
       │
       └─ Vercel Git Integration
-           ├─ React-架构重构: 当前开发 Preview Deployment
+           ├─ React-架构重构: 当前开发 Preview Deployment（默认手动触发）
            └─ master: Production Deployment
 ```
 
@@ -41,11 +41,15 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 | 环境 | 分支 | 行为 |
 |---|---|---|
 | Production | `master` | 合并后自动发布生产站 |
-| 当前开发 Preview | `React-架构重构` | 当前重构 PR 的唯一自动 Preview |
+| 当前开发 Preview | `React-架构重构` | 当前重构 PR 的唯一 Preview 分支，默认需要显式触发 |
 
 [web/vercel.json](../web/vercel.json) 已将 `git.deploymentEnabled` 设置为 `* = false` 和 `** = false`，只对白名单分支开放 `master` 和 `React-架构重构`；同时显式开启 `github.autoJobCancelation`，让同一 PR / 分支上的较旧构建在新 commit 到来时自动取消。
 
-此外，`ignoreCommand` 会运行 [`web/scripts/vercel-ignore-build.mjs`](../web/scripts/vercel-ignore-build.mjs)：即使当前分支在白名单内，只要这次 push 相比上一次部署没有改动 Vercel Root Directory `web/`，就跳过实际构建。这样 docs / tools / issue 文案类改动仍会保留 GitHub Actions 质量门禁，但不会额外消耗 Vercel Preview 构建。
+此外，`ignoreCommand` 会运行 [`web/scripts/vercel-ignore-build.mjs`](../web/scripts/vercel-ignore-build.mjs)。脚本做三层收敛：
+
+- 非白名单分支直接跳过 Vercel 构建。
+- `React-架构重构` 的 Preview 默认是手动触发：commit message 需要包含 `[vercel]`、`[preview]` 或 `[deploy-preview]` 才会构建。需要临时恢复自动 Preview 时，在 Vercel 环境变量里设置 `VERCEL_PREVIEW_DEPLOY_MODE=auto`；需要单次强制构建时设置 `VERCEL_FORCE_DEPLOY=1`。
+- 即使当前分支允许构建，只要这次 push 相比上一次部署没有改动 Vercel Root Directory `web/`，仍会跳过实际构建。这样 docs / tools / issue 文案类改动仍会保留 GitHub Actions 质量门禁，但不会额外消耗 Vercel Preview 构建。
 
 如果后续当前开发 PR 换成别的分支，只改这个白名单，不要额外打开所有 feature 分支的自动 Preview。旧的 Deployment URL 属于 Vercel 的历史记录 / 回滚能力；它们可以在 Dashboard 里清理或保留，但仓库配置能控制的是“以后哪些分支继续产生新部署”。如果想让 Dashboard 只显示最新开发和生产两个可见版本，需要在 Vercel Dashboard 里清理旧 Deployment 或配置团队侧保留策略；不要用 GitHub Actions 再额外跑一套 Vercel CLI 自动部署。
 
@@ -73,7 +77,7 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 
 本仓库已有 [web/vercel.json](../web/vercel.json)，里面声明了：
 - `buildCommand`: `npm run build`
-- `ignoreCommand`: `node scripts/vercel-ignore-build.mjs`，允许分支上仅在 `web/` 有变化时构建
+- `ignoreCommand`: `node scripts/vercel-ignore-build.mjs`，把 Preview 收敛到当前开发分支的显式触发构建，并且仅在 `web/` 有变化时构建
 - `outputDirectory`: `dist`
 - `git.deploymentEnabled`: 只允许 `master` 和当前开发分支 `React-架构重构` 自动部署，其他分支默认不生成 Vercel Preview
 - `github.autoJobCancelation`: 同一 PR / 分支有新 commit 时取消较旧构建
