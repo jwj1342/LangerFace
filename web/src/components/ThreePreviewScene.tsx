@@ -14,7 +14,7 @@ interface PreviewAtlasLine {
 }
 
 export interface PreviewRstlAtlas {
-  lines: PreviewAtlasLine[];
+  lines?: PreviewAtlasLine[];
 }
 
 export interface ThreePreviewAssets {
@@ -47,7 +47,7 @@ function FaceMesh({ assets }: { assets: ThreePreviewAssets }) {
   }, [verts, tris]);
   const lineGeometry = useMemo(() => {
     const normals = vertexNormals(verts, tris);
-    return buildLineGeometry(atlas.lines.filter((_, index) => index % 2 === 0), verts, tris, normals, false);
+    return buildLineGeometry((atlas.lines || []).filter((_, index) => index % 2 === 0), verts, tris, normals, false);
   }, [atlas, verts, tris]);
 
   return (

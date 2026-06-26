@@ -63,6 +63,7 @@ const surgeryStagePanel = read("src/components/SurgeryStagePanel.tsx");
 const threeRoute = read("src/routes/ThreePreviewRoute.tsx");
 const threePreviewScene = read("src/components/ThreePreviewScene.tsx");
 const threePreviewSidebar = read("src/components/ThreePreviewSidebar.tsx");
+const standardFaceAssets = read("src/services/standardFaceAssets.ts");
 const worker = read("src/workers/workflow.worker.ts");
 const workerClient = read("src/services/workflowWorkerClient.ts");
 const workerPanel = read("src/components/WorkerStatusPanel.tsx");
@@ -362,7 +363,11 @@ assert.ok(controller.includes("cancelAnimationFrame"), "incision controller canc
 assert.ok(controller.includes("S.resizeObserver?.disconnect"), "incision controller disconnects ResizeObserver on dispose");
 assert.ok(controller.includes("S.head?.dispose"), "incision controller disposes WebGL resources on dispose");
 
-assert.ok(threeRoute.includes("loadJsonAsset"), "R3F preview lazy-loads runtime assets");
+assert.ok(standardFaceAssets.includes("loadStandardFaceAssets"), "standard face asset service exposes a shared lazy loader");
+assert.ok(standardFaceAssets.includes('"canonicalVertices"'), "standard face asset service loads canonical vertices");
+assert.ok(standardFaceAssets.includes('"triangles"'), "standard face asset service loads triangle topology");
+assert.ok(standardFaceAssets.includes('"atlasRstl"'), "standard face asset service loads the RSTL atlas");
+assert.ok(threeRoute.includes("loadStandardFaceAssets"), "R3F preview lazy-loads runtime assets through the shared service");
 assert.ok(threeRoute.includes("ThreePreviewScene"), "R3F preview route renders the scene through a React component");
 assert.ok(threeRoute.includes("ThreePreviewSidebar"), "R3F preview route renders the sidebar through a React component");
 assert.ok(threePreviewScene.includes("@react-three/fiber"), "R3F preview scene uses @react-three/fiber");
@@ -609,7 +614,7 @@ assert.ok(liveController.includes("stopSource()"), "live controller stops camera
 assert.ok(liveController.includes("stopTwin()"), "live controller stops twin RAF on dispose");
 assert.ok(liveController.includes("!window.__LANGERFACE_REACT_MANAGED__"), "legacy live HTML still auto-mounts outside React");
 assert.ok(surgeryRoute.includes("__LANGERFACE_REACT_MANAGED__"), "React surgery route disables controller auto-mount");
-assert.ok(surgeryRoute.includes("loadJsonAsset"), "React surgery route lazy-loads closure demo assets");
+assert.ok(surgeryRoute.includes("loadStandardFaceAssets"), "React surgery route lazy-loads closure demo assets through the shared service");
 assert.ok(surgeryRoute.includes("SurgeryR3FScene"), "React surgery route renders the R3F closure scene directly");
 assert.ok(!surgeryRoute.includes("surgery_main.js"), "React surgery route should not mount the legacy surgery controller");
 assert.ok(!surgeryRoute.includes("mountSurgeryClosureDemo"), "React surgery route should not call the legacy surgery controller");

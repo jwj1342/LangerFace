@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { loadJsonAsset } from "../../assets.js";
-import type { RstlAtlas } from "../../rstl_field.js";
-import type { Triangle, Vec3 } from "../../soft_body.js";
 import { SurgeryR3FScene, type SurgeryAssets, type SurgeryCommand, type SurgeryVerdictTone } from "./SurgeryR3FScene";
 import { SurgeryWorkbench } from "./SurgeryWorkbench";
+import { loadStandardFaceAssets } from "../services/standardFaceAssets";
 import { useAppStore } from "../stores/appStore";
 
 export function SurgeryRoute() {
@@ -31,22 +29,11 @@ export function SurgeryRoute() {
       window.__LANGERFACE_REACT_MANAGED__ = true;
       setActiveWorkspace("surgery");
       setRouteStatus("加载 R3F 闭合演示资产");
-      const [verts, tris, atlas] = await Promise.all([
-        loadJsonAsset<Vec3[]>("canonicalVertices", {
-          label: "标准脸顶点",
-          onProgress: (event) => setLoadingText(`${event.label || "标准脸顶点"} 加载中`),
-        }),
-        loadJsonAsset<Triangle[]>("triangles", {
-          label: "三角拓扑",
-          onProgress: (event) => setLoadingText(`${event.label || "三角拓扑"} 加载中`),
-        }),
-        loadJsonAsset<RstlAtlas>("atlasRstl", {
-          label: "RSTL 图谱",
-          onProgress: (event) => setLoadingText(`${event.label || "RSTL 图谱"} 加载中`),
-        }),
-      ]);
+      const loadedAssets = await loadStandardFaceAssets({
+        onProgress: (event) => setLoadingText(`${event.label || "标准脸资产"} 加载中`),
+      });
       if (disposed) return;
-      setAssets({ verts, tris, atlas });
+      setAssets(loadedAssets);
       setAssetStatus("闭合演示资产已加载");
       setRouteStatus("R3F 闭合演示已就绪");
       setLoadingText("闭合演示资产已加载");
