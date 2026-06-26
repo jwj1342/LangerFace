@@ -8,6 +8,7 @@ const tools = fs.readFileSync("incision_tools.js", "utf8");
 const exportPrivacy = fs.readFileSync("export_privacy.js", "utf8");
 const providerConfig = fs.readFileSync("src/services/providerConfig.ts", "utf8");
 const tumorInputService = fs.readFileSync("src/services/tumorInput.ts", "utf8");
+const incisionSnapshotsService = fs.readFileSync("src/services/incisionSnapshots.ts", "utf8");
 
 assert.ok(html.includes('id="boundaryStatus"'), "workbench exposes tumor boundary status");
 assert.ok(html.includes('id="anatomyPreview"'), "workbench exposes live anatomy preview for selected tumor center");
@@ -54,6 +55,11 @@ assert.ok(tumorInputService.includes("buildTumorFormSnapshot"), "shared tumor in
 assert.ok(tumorInputService.includes("importedTumorFormState"), "shared tumor input service owns imported tumor form normalization");
 assert.ok(js.includes("./src/services/tumorInput.ts"), "workbench consumes the shared typed tumor input service");
 assert.ok(js.includes("importedTumorFormState(payload"), "workbench delegates imported tumor payloads to the shared service");
+assert.ok(incisionSnapshotsService.includes("buildIncisionControllerSnapshot"), "shared incision snapshot service owns React snapshot construction");
+assert.ok(incisionSnapshotsService.includes("buildIncisionSavedCandidateSummaries"), "shared incision snapshot service owns saved candidate summaries");
+assert.ok(incisionSnapshotsService.includes("react-incision-controller-snapshot/v0.1"), "shared incision snapshot service owns the React snapshot schema");
+assert.ok(js.includes("./src/services/incisionSnapshots.ts"), "workbench consumes the shared typed incision snapshot service");
+assert.ok(js.includes("buildIncisionControllerSnapshot({"), "workbench delegates React snapshot payloads to the shared service");
 assert.ok(js.includes('from "./export_privacy.js"'), "workbench imports browser export privacy preflight");
 assert.ok(exportPrivacy.includes("browser-export-privacy-preflight/v0.1"), "browser export preflight has a schema");
 assert.ok(js.includes("exportPreflightPasses(payload"), "JSON exports run browser privacy preflight");

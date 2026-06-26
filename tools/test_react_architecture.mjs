@@ -80,6 +80,7 @@ const providerConfigService = read("src/services/providerConfig.ts");
 const tumorInputService = read("src/services/tumorInput.ts");
 const annotateSnapshotsService = read("src/services/annotateSnapshots.ts");
 const liveSnapshotsService = read("src/services/liveSnapshots.ts");
+const incisionSnapshotsService = read("src/services/incisionSnapshots.ts");
 const annotateController = read("annotate_main.js");
 const annotateViewer = read("annotate_viewer.js");
 const controller = read("incision_agent_main.js");
@@ -195,6 +196,7 @@ assert.ok(liveStatePanel.includes("useLiveStore"), "React live UI reads low-freq
 assert.ok(incisionStore.includes("IncisionControllerSnapshot"), "incision Zustand store keeps typed controller snapshots");
 assert.ok(incisionStore.includes("INCISION_CONTROLLER_STATE_EVENT"), "incision Zustand store declares the controller bridge event");
 assert.ok(incisionStore.includes("No Three.js objects"), "incision store documents renderer object exclusion");
+assert.ok(incisionStore.includes("../services/incisionSnapshots"), "incision Zustand store reuses the shared typed snapshot service types");
 assert.ok(!incisionStore.includes("THREE."), "incision store must not hold Three.js objects");
 assert.ok(!incisionStore.includes("verts:"), "incision store must not hold mesh vertex arrays");
 assert.ok(!incisionStore.includes("tris:"), "incision store must not hold triangle arrays");
@@ -426,6 +428,12 @@ assert.ok(controller.includes("INCISION_PROVIDER_REACT_STATE_EVENT"), "incision 
 assert.ok(controller.includes("./src/services/providerConfig.ts"), "incision controller consumes the shared typed Provider config service");
 assert.ok(controller.includes("persistProviderPrefs(providerConfig())"), "incision controller saves Provider config through the shared service");
 assert.ok(controller.includes("redactProviderConfig(providerConfig())"), "incision controller redacts Provider config through the shared service");
+assert.ok(incisionSnapshotsService.includes("buildIncisionControllerSnapshot"), "shared incision snapshot service builds typed controller snapshots");
+assert.ok(incisionSnapshotsService.includes("buildIncisionResultViewSnapshot"), "shared incision snapshot service builds candidate result view snapshots");
+assert.ok(incisionSnapshotsService.includes("buildIncisionSavedCandidateSummaries"), "shared incision snapshot service builds saved candidate summaries");
+assert.ok(incisionSnapshotsService.includes("react-incision-controller-snapshot/v0.1"), "shared incision snapshot service owns the typed React snapshot schema");
+assert.ok(controller.includes("./src/services/incisionSnapshots.ts"), "incision controller consumes the shared typed snapshot service");
+assert.ok(controller.includes("buildIncisionControllerSnapshot({"), "incision controller delegates React snapshot construction to the shared service");
 assert.ok(controller.includes("INCISION_REVIEW_REACT_COMMAND_EVENT"), "incision controller listens for React review commands");
 assert.ok(controller.includes("handleReactReviewCommand"), "incision controller routes React review commands to existing review workflow functions");
 assert.ok(controller.includes("INCISION_EDIT_REACT_COMMAND_EVENT"), "incision controller listens for React edit commands");
@@ -482,7 +490,7 @@ assert.ok(controller.includes("createWorkflowWorkerClient"), "incision controlle
 assert.ok(controller.includes("worker.api.planIncision"), "incision candidate generation is delegated to the workflow worker");
 assert.ok(controller.includes("main_thread_fallback"), "incision controller keeps a deterministic fallback if worker startup fails");
 assert.ok(controller.includes("S.workflowWorker?.dispose"), "incision controller disposes the workflow worker on route teardown");
-assert.ok(controller.includes("react-incision-controller-snapshot/v0.1"), "incision controller publishes typed low-frequency snapshots to React");
+assert.ok(incisionSnapshotsService.includes("react-incision-controller-snapshot/v0.1"), "shared incision snapshot service publishes typed low-frequency snapshots to React");
 assert.ok(controller.includes("CustomEvent(INCISION_CONTROLLER_STATE_EVENT"), "incision controller emits state snapshots through a browser event");
 assert.ok(annotateRoute.includes("useAnnotateControllerBridge"), "annotation route mounts the Zustand/controller bridge");
 assert.ok(annotateRoute.includes("useManagedWorkbenchController"), "React annotation route uses the shared managed controller lifecycle");

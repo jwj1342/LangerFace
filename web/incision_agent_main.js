@@ -24,6 +24,21 @@ import {
   saveProviderPrefs as persistProviderPrefs,
 } from "./src/services/providerConfig.ts";
 import {
+  buildIncisionAssetLoadingSnapshot,
+  buildIncisionCandidateSnapshot,
+  buildIncisionControllerSnapshot,
+  buildIncisionEditSnapshot,
+  buildIncisionPrivacyAuditSnapshot,
+  buildIncisionProviderSnapshot,
+  buildIncisionResultViewSnapshot,
+  buildIncisionReviewSnapshot,
+  buildIncisionSavedCandidateSummaries,
+  buildIncisionSecondaryCueSnapshot,
+  incisionHasClass as hasClass,
+  incisionTextOf as textOf,
+  incisionTitleOf as titleOf,
+} from "./src/services/incisionSnapshots.ts";
+import {
   buildTumorFormSnapshot,
   buildTumorInput,
   importedTumorFormState,
@@ -221,147 +236,92 @@ function currentTumorFormSnapshot() {
 }
 
 function currentProviderSnapshot() {
-  const cfg = redactedProviderConfig();
-  return {
-    provider: cfg.provider || "openai-compatible",
-    baseUrl: cfg.base_url || "",
-    model: cfg.model || "",
-    timeoutS: Number.isFinite(Number(cfg.timeout_s)) ? Number(cfg.timeout_s) : null,
-    stateLabel: els.providerState?.textContent || "待运行",
-    testLabel: els.providerTestState?.textContent || "",
-  };
+  return buildIncisionProviderSnapshot(
+    redactedProviderConfig(),
+    els.providerState?.textContent || "待运行",
+    els.providerTestState?.textContent || "",
+  );
 }
 
 function currentSecondaryCueSnapshot() {
-  return {
+  return buildIncisionSecondaryCueSnapshot({
     present: Boolean(S.secondaryCues),
     stateLabel: els.secondaryCueState?.textContent || "未导入",
     summary: els.secondaryCueSummary?.textContent || "仅展示自然皱襞、皱纹和皮表肿物边界的低置信度线索；不会自动改变肿物边界或候选切口。",
     manualConfirmed: Boolean(els.secondaryCueConfirmed?.checked),
-  };
+  });
 }
 
 function currentPrivacyAuditSnapshot() {
-  const stateLabel = els.privacyState?.textContent || "本地几何";
-  const message = els.privacyAudit?.textContent || "不上传原始影像；Agent 只接收肿物参数、抽象坐标、规则和候选几何。";
-  return {
-    stateLabel,
-    message,
-    blocked: /阻断|警告/.test(`${stateLabel} ${message}`),
-  };
+  return buildIncisionPrivacyAuditSnapshot({
+    stateLabel: els.privacyState?.textContent || "本地几何",
+    message: els.privacyAudit?.textContent || "不上传原始影像；Agent 只接收肿物参数、抽象坐标、规则和候选几何。",
+  });
 }
 
 function currentAssetLoadingSnapshot() {
-  return {
+  return buildIncisionAssetLoadingSnapshot({
     visible: !els.assetLoading?.classList?.contains("hidden"),
     text: els.assetLoadingText?.textContent || "准备下载标准脸、拓扑和 RSTL 图谱。",
-  };
+  });
 }
 
 function currentReviewSnapshot() {
-  return {
+  return buildIncisionReviewSnapshot({
     status: els.reviewDecision?.value || "pending_clinician_confirmation",
     reviewer: els.reviewerName?.value?.trim?.() || "",
     notesPresent: Boolean(els.reviewNotes?.value?.trim?.()),
-  };
+  });
 }
 
 function currentEditSnapshot() {
   const edit = currentEditBase();
-  return {
-    angleOffsetDeg: Number.isFinite(edit.angle_offset_deg) ? edit.angle_offset_deg : 0,
-    lengthScalePct: Number.isFinite(edit.length_scale) ? Math.round(edit.length_scale * 100) : 100,
-    widthScalePct: Number.isFinite(edit.width_scale) ? Math.round(edit.width_scale * 100) : 100,
-    shiftAlongMm: Number.isFinite(edit.shift_along_mm) ? edit.shift_along_mm : 0,
-    shiftPerpMm: Number.isFinite(edit.shift_perp_mm) ? edit.shift_perp_mm : 0,
-    reason: edit.reason || "",
+  return buildIncisionEditSnapshot({
+    edit,
     statusLabel: els.editStatus?.textContent || "工具建议",
-    active: Boolean(els.editStatus?.classList?.contains("active")) || editIsActive(edit),
+    statusActive: Boolean(els.editStatus?.classList?.contains("active")),
+    editActive: editIsActive(edit),
     widthScaleVisible: !els.widthScaleWrap?.classList?.contains("hidden"),
     historyLabel: els.editHistoryState?.textContent || "编辑版本：v1 · 无已提交调整",
     undoDisabled: Boolean(els.undoEdit?.disabled),
     redoDisabled: Boolean(els.redoEdit?.disabled),
-  };
+  });
 }
 
 function currentCandidateSnapshot(result = S.result) {
-  const candidate = result?.candidate;
-  if (!candidate) return null;
-  return {
-    id: candidate.id || null,
-    type: candidate.type || null,
-    lengthMm: Number.isFinite(Number(candidate.length_mm)) ? Number(candidate.length_mm) : null,
-    widthMm: Number.isFinite(Number(candidate.width_mm)) ? Number(candidate.width_mm) : null,
-    guardrailsPassed: result?.guardrails?.passed == null ? null : Boolean(result.guardrails.passed),
-    directionConfidence: Number.isFinite(Number(result?.direction?.confidence)) ? Number(result.direction.confidence) : null,
-    edited: Boolean(candidate.edited),
-  };
-}
-
-function textOf(el, fallback = "") {
-  return el?.textContent || fallback;
-}
-
-function titleOf(el) {
-  return el?.title || "";
-}
-
-function hasClass(el, className) {
-  return Boolean(el?.classList?.contains(className));
+  return buildIncisionCandidateSnapshot(result);
 }
 
 function currentResultViewSnapshot() {
-  return {
-    candidateType: textOf(els.candidateType, "—"),
-    candidateLength: textOf(els.candidateLength, "—"),
-    candidateWidth: textOf(els.candidateWidth, "—"),
-    candidateTipAngle: textOf(els.candidateTipAngle, "—"),
-    directionConfidence: textOf(els.directionConf, "—"),
-    directionTitle: titleOf(els.directionConf),
-    region: textOf(els.regionVal, "—"),
-    regionTitle: titleOf(els.regionVal),
-    guardrailLabel: textOf(els.guardrailVal, "—"),
-    guardrailWarn: Boolean(els.guardrailVal?.style?.color),
-    llmSummary: textOf(els.llmSummary, "尚未生成。"),
-    directionSource: textOf(els.directionSource, "方向依据：尚未生成。"),
-    directionSourceWarn: hasClass(els.directionSource, "warn"),
-    agentGate: textOf(els.agentGate, "Agent 工具门控：尚未生成。"),
-    agentGateWarn: hasClass(els.agentGate, "warn"),
-    agentGateTitle: titleOf(els.agentGate),
-    agentComparison: textOf(els.agentComparison, "Agent 候选比较：尚未生成。"),
-    agentComparisonWarn: hasClass(els.agentComparison, "warn"),
-    agentComparisonTitle: titleOf(els.agentComparison),
-    nextStep: textOf(els.nextStep, ""),
-    guardrailDetails: textOf(els.guardrailDetails, "Guardrails 尚未运行。"),
-    guardrailDetailsWarn: hasClass(els.guardrailDetails, "warn"),
-    guardrailDetailsDanger: hasClass(els.guardrailDetails, "danger"),
-  };
+  return buildIncisionResultViewSnapshot({
+    candidateType: els.candidateType,
+    candidateLength: els.candidateLength,
+    candidateWidth: els.candidateWidth,
+    candidateTipAngle: els.candidateTipAngle,
+    directionConfidence: els.directionConf,
+    region: els.regionVal,
+    guardrail: els.guardrailVal,
+    llmSummary: els.llmSummary,
+    directionSource: els.directionSource,
+    agentGate: els.agentGate,
+    agentComparison: els.agentComparison,
+    nextStep: els.nextStep,
+    guardrailDetails: els.guardrailDetails,
+  });
 }
 
 function currentSavedCandidateSummaries() {
-  const comparisonById = new Map(compareCandidateRecords(S.saved || []).map((c) => [c.id, c]));
-  return (S.saved || []).map((rec) => {
-    const comparison = comparisonById.get(rec.id);
-    const reviewer = rec.review?.reviewer ? ` · 审阅人 ${rec.review.reviewer}` : "";
-    const guardrails = rec.guardrails?.passed ? "guardrails 通过" : "guardrails 需复核";
-    const rank = comparison
-      ? `工程排序 #${comparison.rank} · 分 ${fmt(comparison.score, 1)} · ${comparison.reasons.slice(0, 2).join("；")} · `
-      : "";
-    return {
-      id: rec.id,
-      title: `${rec.label} · ${rec.candidate?.type === "linear" ? "线性" : "梭形"}`,
-      statusLabel: reviewStatusLabel(rec.review_status),
-      statusDanger: rec.review_status === "rejected_by_clinician" || !rec.guardrails?.passed,
-      meta: `${rank}长度 ${fmt(rec.candidate?.length_mm)} mm · 区域 ${rec.anatomy?.region || "—"} · ${guardrails}${reviewer} · ${rec.created_at}`,
-    };
+  return buildIncisionSavedCandidateSummaries({
+    records: S.saved || [],
+    comparisons: compareCandidateRecords(S.saved || []),
+    reviewStatusLabel,
   });
 }
 
 function publishIncisionState(reason = "state_update") {
   if (!S.mounted || typeof window === "undefined" || !els.stageStatus) return;
   window.dispatchEvent(new CustomEvent(INCISION_CONTROLLER_STATE_EVENT, {
-    detail: {
-      schema_version: "react-incision-controller-snapshot/v0.1",
+    detail: buildIncisionControllerSnapshot({
       reason,
       stageStatus: els.stageStatus?.textContent || "",
       assetLoading: currentAssetLoadingSnapshot(),
@@ -376,8 +336,7 @@ function publishIncisionState(reason = "state_update") {
       savedCandidates: currentSavedCandidateSummaries(),
       workflowRuntime: S.result?.workflow_runtime || null,
       savedCount: S.saved?.length || 0,
-      updatedAt: new Date().toISOString(),
-    },
+    }),
   }));
 }
 
