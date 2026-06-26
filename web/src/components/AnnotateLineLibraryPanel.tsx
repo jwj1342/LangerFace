@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { Button } from "./ui/button";
 import { dispatchAnnotateLibraryCommand } from "../lib/controllerCommand";
 import { useAnnotateStore } from "../stores/annotateStore";
@@ -8,10 +10,16 @@ export function AnnotateLineLibraryPanel() {
   const lines = saved?.lines || [];
   const exportState = snapshot?.export;
   const hasLines = lines.length > 0;
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const clearLines = () => {
     if (!hasLines) return;
-    if (window.confirm("清空所有线？")) dispatchAnnotateLibraryCommand("clear_lines");
+    if (!confirmClear) {
+      setConfirmClear(true);
+      return;
+    }
+    dispatchAnnotateLibraryCommand("clear_lines");
+    setConfirmClear(false);
   };
 
   return (
@@ -39,7 +47,15 @@ export function AnnotateLineLibraryPanel() {
         <Button variant="workbench" id="btnExportXyz" type="button" disabled={!exportState?.canExportXyz} onClick={() => dispatchAnnotateLibraryCommand("export_xyz")}>导出 xyz</Button>
       </div>
       <Button variant="workbenchPrimary" id="btnSetActiveAtlas" type="button" disabled={!exportState?.canPreviewActiveAtlas} onClick={() => dispatchAnnotateLibraryCommand("set_active_atlas")}>设为活动图谱并预览</Button>
-      <Button variant="workbench" id="btnClear" type="button" disabled={!hasLines} onClick={clearLines}>清空</Button>
+      <Button variant={confirmClear ? "miniDanger" : "workbench"} id="btnClear" type="button" disabled={!hasLines} onClick={clearLines}>
+        {confirmClear ? "确认清空" : "清空"}
+      </Button>
+      {confirmClear ? (
+        <div className="btn-row annotate-clear-confirm">
+          <Button variant="workbench" type="button" onClick={() => setConfirmClear(false)}>取消</Button>
+          <p className="hint">将删除当前工作台保存的全部标注线。</p>
+        </div>
+      ) : null}
     </div>
   );
 }

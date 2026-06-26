@@ -692,6 +692,9 @@ assert.ok(annotateWorkbench.includes("AnnotateLineLibraryPanel"), "React annotat
 assert.ok(annotateLineLibraryPanel.includes("dispatchAnnotateLibraryCommand"), "React annotate line library uses the typed library command helper");
 assert.ok(!annotateLineLibraryPanel.includes("../lib/controllerEvents"), "React annotate line library does not import controller event names directly");
 assert.ok(annotateLineLibraryPanel.includes("useAnnotateStore"), "React annotate line library reads saved line state from Zustand");
+assert.ok(annotateLineLibraryPanel.includes("useState"), "React annotate line library owns short-lived clear confirmation state in React");
+assert.ok(annotateLineLibraryPanel.includes("confirmClear"), "React annotate line library renders a controlled clear confirmation state");
+assert.ok(!annotateLineLibraryPanel.includes("window.confirm"), "React annotate line library does not use browser-native confirm dialogs");
 assert.ok(annotateLineLibraryPanel.includes("Button"), "React annotate line library uses the shared shadcn-style button primitive");
 assert.ok(annotateLineLibraryPanel.includes('variant="miniDanger"'), "React annotate line library keeps compact destructive styling through Button variants");
 assert.ok(annotateSnapshotsService.includes("buildAnnotateControllerSnapshot"), "shared annotation snapshot service builds typed controller snapshots");
