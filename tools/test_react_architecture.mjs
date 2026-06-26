@@ -137,6 +137,10 @@ const annotateViewerTypes = read("annotate_viewer.d.ts");
 const flameFitTypes = read("flame_fit.d.ts");
 const annotateViewer = read("annotate_viewer.js");
 const controller = read("src/services/incisionAgentRuntime.ts");
+const incisionOverlayTypes = read("incision_overlay.d.ts");
+const incisionToolsTypes = read("incision_tools.d.ts");
+const three3dTypes = read("three3d.d.ts");
+const exportPrivacyTypes = read("export_privacy.d.ts");
 const dom = read("dom.js");
 const liveController = read("src/services/liveRuntime.ts");
 const liveDomTypes = read("dom.d.ts");
@@ -166,6 +170,16 @@ const annotateRuntimeDependencyTypes = [
   "slicer_curve.d.ts",
   "soft_body.d.ts",
   "topology_registry.d.ts",
+];
+const incisionRuntimeDependencyTypes = [
+  "assets.d.ts",
+  "data_source.d.ts",
+  "export_privacy.d.ts",
+  "incision_overlay.d.ts",
+  "incision_tools.d.ts",
+  "llm_provider.d.ts",
+  "soft_body.d.ts",
+  "three3d.d.ts",
 ];
 const layoutPrimitiveNames = new Set(["ReactShell.tsx", "StageShell.tsx", "WorkbenchLayout.tsx"]);
 const stagePanelSources = new Map([
@@ -1531,7 +1545,22 @@ assert.ok(reviewPanel.includes("AgentCard"), "React review panel uses the shared
 assert.ok(reviewPanel.includes('variant="workbenchPrimary"'), "React review panel keeps primary workbench button styling through Button variants");
 assert.ok(incisionWorkbench.includes('to="/live"'), "React incision workbench returns to the React live route");
 assert.ok(incisionStagePanel.includes('to="/annotate"'), "React incision stage links to the React 3D annotation route");
-assert.ok(controller.includes("// @ts-nocheck"), "incision runtime is explicitly marked as a temporary TypeScript migration boundary");
+for (const dependencyType of incisionRuntimeDependencyTypes) {
+  assert.ok(
+    fs.existsSync(path.join(web, dependencyType)),
+    `incision runtime dependency boundary ${dependencyType} should be typed`,
+  );
+}
+assert.ok(!controller.includes("// @ts-nocheck"), "incision runtime should run under strict TypeScript checking");
+assert.ok(controller.includes("interface IncisionDomElements"), "incision runtime types its DOM binding surface");
+assert.ok(controller.includes("interface IncisionRuntimeState"), "incision runtime types its long-lived renderer/workflow state");
+assert.ok(controller.includes("interface PointerDragState"), "incision runtime types pointer drag state");
+assert.ok(controller.includes("function controllerEvent"), "incision runtime narrows browser command events before reading detail");
+assert.ok(incisionToolsTypes.includes("applyCandidateEdit"), "incision tools declarations expose candidate edit workflow helpers");
+assert.ok(incisionToolsTypes.includes("summarizeTumorBoundary"), "incision tools declarations expose tumor boundary summaries");
+assert.ok(incisionOverlayTypes.includes("compileIncisionOverlay"), "incision overlay declarations expose live overlay compilation");
+assert.ok(three3dTypes.includes("class Head3D"), "Three.js declarations expose the 3D head renderer contract");
+assert.ok(exportPrivacyTypes.includes("auditExportPayload"), "privacy audit declarations expose browser export preflight checks");
 assert.ok(controller.includes("export function mountIncisionAgentWorkbench"), "incision controller exposes a mount lifecycle");
 assert.ok(controller.includes("export function disposeIncisionAgentWorkbench"), "incision controller exposes a dispose lifecycle");
 assert.ok(controller.includes("INCISION_TUMOR_REACT_COMMAND_EVENT"), "incision controller listens for React tumor input commands");
@@ -1540,12 +1569,12 @@ assert.ok(controller.includes("../lib/controllerCommand"), "incision controller 
 assert.ok(controller.includes("bindWindowControllerEvents"), "incision controller binds React command events through the shared helper");
 assert.ok(controller.includes("reactCommandCleanup"), "incision controller stores a single React command cleanup handle");
 assert.ok(!controller.includes("window.addEventListener(INCISION"), "incision controller does not register React command listeners one-by-one");
+assert.ok(controller.includes("readControllerCommandDetail(controllerEvent(event), INCISION_TUMOR_COMMANDS)"), "incision tumor handler validates incoming command names");
+assert.ok(controller.includes("readControllerCommandDetail(controllerEvent(event), INCISION_SECONDARY_CUE_COMMANDS)"), "incision secondary cue handler validates incoming command names");
+assert.ok(controller.includes("readControllerCommandDetail(controllerEvent(event), INCISION_EDIT_COMMANDS)"), "incision edit handler validates incoming command names");
+assert.ok(controller.includes("readControllerCommandDetail(controllerEvent(event), INCISION_REVIEW_COMMANDS)"), "incision review handler validates incoming command names");
+assert.ok(controller.includes("readControllerCommandDetail(controllerEvent(event), INCISION_LIBRARY_COMMANDS)"), "incision library handler validates incoming command names");
 assert.ok(!controller.includes("window.removeEventListener(INCISION"), "incision controller does not remove React command listeners one-by-one");
-assert.ok(controller.includes("readControllerCommandDetail(event, INCISION_TUMOR_COMMANDS)"), "incision tumor handler validates incoming command names");
-assert.ok(controller.includes("readControllerCommandDetail(event, INCISION_SECONDARY_CUE_COMMANDS)"), "incision secondary cue handler validates incoming command names");
-assert.ok(controller.includes("readControllerCommandDetail(event, INCISION_EDIT_COMMANDS)"), "incision edit handler validates incoming command names");
-assert.ok(controller.includes("readControllerCommandDetail(event, INCISION_REVIEW_COMMANDS)"), "incision review handler validates incoming command names");
-assert.ok(controller.includes("readControllerCommandDetail(event, INCISION_LIBRARY_COMMANDS)"), "incision library handler validates incoming command names");
 assert.ok(!controller.includes("event?.detail?.command"), "incision controller does not read raw command detail directly");
 assert.ok(controller.includes("handleReactTumorCommand"), "incision controller routes React tumor commands to existing tumor workflow functions");
 assert.ok(controller.includes("./tumorInput"), "incision controller consumes the shared typed tumor input service");
