@@ -1,4 +1,6 @@
-export const INCISION_SNAPSHOT_SCHEMA_VERSION = "react-incision-controller-snapshot/v0.1";
+import { INCISION_SNAPSHOT_SCHEMA_VERSION } from "../lib/controllerSnapshotSchemas";
+
+export { INCISION_SNAPSHOT_SCHEMA_VERSION };
 
 export interface IncisionTextLike {
   textContent?: string | null;

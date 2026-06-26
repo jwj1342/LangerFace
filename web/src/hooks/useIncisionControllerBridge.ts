@@ -4,7 +4,7 @@ import {
   type IncisionControllerSnapshot,
   useIncisionStore,
 } from "../stores/incisionStore";
-import { INCISION_SNAPSHOT_SCHEMA_VERSION } from "../services/incisionSnapshots";
+import { INCISION_SNAPSHOT_SCHEMA_VERSION } from "../lib/controllerSnapshotSchemas";
 
 function isControllerSnapshot(value: unknown): value is IncisionControllerSnapshot {
   return Boolean(

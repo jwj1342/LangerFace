@@ -1,4 +1,6 @@
-export const LIVE_SNAPSHOT_SCHEMA_VERSION = "react-live-controller-snapshot/v0.1";
+import { LIVE_SNAPSHOT_SCHEMA_VERSION } from "../lib/controllerSnapshotSchemas";
+
+export { LIVE_SNAPSHOT_SCHEMA_VERSION };
 
 export interface LiveTextLike {
   textContent?: string | null;

@@ -17,6 +17,7 @@ const typedStore = read("src/stores/appStore.ts");
 const workbenchBrand = read("src/components/WorkbenchBrand.tsx");
 const controllerCommand = read("src/lib/controllerCommand.ts");
 const controllerEvents = read("src/lib/controllerEvents.ts");
+const controllerSnapshotSchemas = read("src/lib/controllerSnapshotSchemas.ts");
 const reactManagedWorkbench = read("src/lib/reactManagedWorkbench.ts");
 const uiButton = read("src/components/ui/button.tsx");
 const uiCard = read("src/components/ui/card.tsx");
@@ -207,6 +208,13 @@ for (const eventName of [
 ]) {
   assert.ok(controllerEvents.includes(`export const ${eventName}`), `shared controller event module exports ${eventName}`);
 }
+for (const schemaName of [
+  "LIVE_SNAPSHOT_SCHEMA_VERSION",
+  "ANNOTATE_SNAPSHOT_SCHEMA_VERSION",
+  "INCISION_SNAPSHOT_SCHEMA_VERSION",
+]) {
+  assert.ok(controllerSnapshotSchemas.includes(`export const ${schemaName}`), `shared snapshot schema module exports ${schemaName}`);
+}
 assert.ok(reactManagedWorkbench.includes("REACT_MANAGED_WORKBENCH_FLAG"), "shared React-managed flag module exports the global flag name");
 assert.ok(reactManagedWorkbench.includes('"__LANGERFACE_REACT_MANAGED__"'), "shared React-managed flag module owns the legacy global flag string");
 assert.ok(reactManagedWorkbench.includes("isReactManagedWorkbench"), "shared React-managed flag module exposes a read helper");
@@ -267,7 +275,8 @@ assert.ok(!annotateStore.includes("verts:"), "annotation store must not hold mes
 assert.ok(!annotateStore.includes("tris:"), "annotation store must not hold triangle arrays");
 assert.ok(!annotateStore.includes("camera:"), "annotation store must not hold Three.js cameras");
 assert.ok(annotateBridge.includes("useControllerSnapshotBridge"), "React annotation hook delegates event wiring to the shared snapshot bridge");
-assert.ok(annotateBridge.includes("../services/annotateSnapshots"), "React annotation hook imports the shared snapshot schema version");
+assert.ok(annotateBridge.includes("../lib/controllerSnapshotSchemas"), "React annotation hook imports the lightweight shared snapshot schema version");
+assert.ok(!annotateBridge.includes("../services/annotateSnapshots"), "React annotation hook does not pull the full snapshot service at runtime");
 assert.ok(annotateBridge.includes("ANNOTATE_SNAPSHOT_SCHEMA_VERSION"), "React annotation hook guards snapshots with the shared schema version constant");
 assert.ok(annotateStatePanel.includes("useAnnotateStore"), "React annotation UI reads low-frequency state from Zustand");
 assert.ok(liveStore.includes("LiveControllerSnapshot"), "live Zustand store keeps typed controller snapshots");
@@ -281,7 +290,8 @@ assert.ok(!liveStore.includes("verts:"), "live store must not hold mesh vertex a
 assert.ok(!liveStore.includes("tris:"), "live store must not hold triangle arrays");
 assert.ok(!liveStore.includes("fps:"), "live store must not hold frame counters");
 assert.ok(liveBridge.includes("useControllerSnapshotBridge"), "React live hook delegates event wiring to the shared snapshot bridge");
-assert.ok(liveBridge.includes("../services/liveSnapshots"), "React live hook imports the shared snapshot schema version");
+assert.ok(liveBridge.includes("../lib/controllerSnapshotSchemas"), "React live hook imports the lightweight shared snapshot schema version");
+assert.ok(!liveBridge.includes("../services/liveSnapshots"), "React live hook does not pull the full snapshot service at runtime");
 assert.ok(liveBridge.includes("LIVE_SNAPSHOT_SCHEMA_VERSION"), "React live hook guards snapshots with the shared schema version constant");
 assert.ok(liveStatePanel.includes("useLiveStore"), "React live UI reads low-frequency state from Zustand");
 assert.ok(incisionStore.includes("IncisionControllerSnapshot"), "incision Zustand store keeps typed controller snapshots");
@@ -293,7 +303,8 @@ assert.ok(!incisionStore.includes("THREE."), "incision store must not hold Three
 assert.ok(!incisionStore.includes("verts:"), "incision store must not hold mesh vertex arrays");
 assert.ok(!incisionStore.includes("tris:"), "incision store must not hold triangle arrays");
 assert.ok(incisionBridge.includes("useControllerSnapshotBridge"), "React incision hook delegates event wiring to the shared snapshot bridge");
-assert.ok(incisionBridge.includes("../services/incisionSnapshots"), "React incision hook imports the shared snapshot schema version");
+assert.ok(incisionBridge.includes("../lib/controllerSnapshotSchemas"), "React incision hook imports the lightweight shared snapshot schema version");
+assert.ok(!incisionBridge.includes("../services/incisionSnapshots"), "React incision hook does not pull the full snapshot service at runtime");
 assert.ok(incisionBridge.includes("INCISION_SNAPSHOT_SCHEMA_VERSION"), "React incision hook guards snapshots with the shared schema version constant");
 assert.ok(incisionRoute.includes("useIncisionControllerBridge"), "incision route mounts the Zustand/controller bridge");
 assert.ok(incisionStatePanel.includes("useIncisionStore"), "React incision UI reads low-frequency state from Zustand");
@@ -536,7 +547,7 @@ assert.ok(controller.includes("redactProviderConfig(providerConfig())"), "incisi
 assert.ok(incisionSnapshotsService.includes("buildIncisionControllerSnapshot"), "shared incision snapshot service builds typed controller snapshots");
 assert.ok(incisionSnapshotsService.includes("buildIncisionResultViewSnapshot"), "shared incision snapshot service builds candidate result view snapshots");
 assert.ok(incisionSnapshotsService.includes("buildIncisionSavedCandidateSummaries"), "shared incision snapshot service builds saved candidate summaries");
-assert.ok(incisionSnapshotsService.includes("react-incision-controller-snapshot/v0.1"), "shared incision snapshot service owns the typed React snapshot schema");
+assert.ok(incisionSnapshotsService.includes("../lib/controllerSnapshotSchemas"), "shared incision snapshot service re-exports the lightweight schema version");
 assert.ok(controller.includes("./src/services/incisionSnapshots.ts"), "incision controller consumes the shared typed snapshot service");
 assert.ok(controller.includes("buildIncisionControllerSnapshot({"), "incision controller delegates React snapshot construction to the shared service");
 assert.ok(controller.includes("INCISION_REVIEW_REACT_COMMAND_EVENT"), "incision controller listens for React review commands");
@@ -597,7 +608,7 @@ assert.ok(controller.includes("createWorkflowWorkerClient"), "incision controlle
 assert.ok(controller.includes("worker.api.planIncision"), "incision candidate generation is delegated to the workflow worker");
 assert.ok(controller.includes("main_thread_fallback"), "incision controller keeps a deterministic fallback if worker startup fails");
 assert.ok(controller.includes("S.workflowWorker?.dispose"), "incision controller disposes the workflow worker on route teardown");
-assert.ok(incisionSnapshotsService.includes("react-incision-controller-snapshot/v0.1"), "shared incision snapshot service publishes typed low-frequency snapshots to React");
+assert.ok(incisionSnapshotsService.includes("INCISION_SNAPSHOT_SCHEMA_VERSION"), "shared incision snapshot service publishes typed low-frequency snapshots to React");
 assert.ok(controller.includes("dispatchControllerEvent(INCISION_CONTROLLER_STATE_EVENT"), "incision controller emits state snapshots through the shared browser event helper");
 assert.ok(!controller.includes("CustomEvent(INCISION_CONTROLLER_STATE_EVENT"), "incision controller does not hand-roll state snapshot CustomEvent dispatch");
 assert.ok(annotateRoute.includes("useAnnotateControllerBridge"), "annotation route mounts the Zustand/controller bridge");
@@ -710,7 +721,7 @@ assert.ok(annotateController.includes("renderLegacyLineList"), "annotation contr
 assert.ok(annotateController.includes("./src/lib/reactManagedWorkbench.ts"), "annotation controller imports the shared React-managed flag helper");
 assert.ok(annotateController.includes("!isReactManagedWorkbench()"), "legacy annotation HTML still owns direct saved line handlers outside React");
 assert.ok(!annotateController.includes("window.__LANGERFACE_REACT_MANAGED__"), "annotation controller does not touch the managed flag directly");
-assert.ok(annotateSnapshotsService.includes("react-annotate-controller-snapshot/v0.1"), "shared annotation snapshot service owns the typed React snapshot schema");
+assert.ok(annotateSnapshotsService.includes("../lib/controllerSnapshotSchemas"), "shared annotation snapshot service re-exports the lightweight schema version");
 assert.ok(annotateController.includes("dispatchControllerEvent(ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation controller emits state snapshots through the shared browser event helper");
 assert.ok(!annotateController.includes("CustomEvent(ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation controller does not hand-roll state snapshot CustomEvent dispatch");
 assert.ok(annotateController.includes("cancelAnimationFrame"), "annotation controller cancels its render loop on dispose");
@@ -849,7 +860,7 @@ assert.ok(!liveQualityPanel.includes("useLiveStore"), "live quality panel should
 assert.ok(liveSnapshotsService.includes("buildLiveControllerSnapshot"), "shared live snapshot service builds typed controller snapshots");
 assert.ok(liveSnapshotsService.includes("liveTextOf"), "shared live snapshot service owns text normalization helpers");
 assert.ok(liveSnapshotsService.includes("visibleLiveTextOf"), "shared live snapshot service owns visible text normalization helpers");
-assert.ok(liveSnapshotsService.includes("react-live-controller-snapshot/v0.1"), "shared live snapshot service owns the typed React snapshot schema");
+assert.ok(liveSnapshotsService.includes("../lib/controllerSnapshotSchemas"), "shared live snapshot service re-exports the lightweight schema version");
 assert.ok(liveRouteControlsPanel.includes('to="/annotate"'), "React live route controls link to the React annotation route");
 assert.ok(liveWorkbench.includes('to="/incision"'), "React live workbench links to the React incision route");
 assert.ok(dom.includes("export function bindDom"), "DOM module can rebind element references for SPA route mounts");

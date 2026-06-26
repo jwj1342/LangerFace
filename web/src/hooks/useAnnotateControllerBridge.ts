@@ -4,7 +4,7 @@ import {
   type AnnotateControllerSnapshot,
   useAnnotateStore,
 } from "../stores/annotateStore";
-import { ANNOTATE_SNAPSHOT_SCHEMA_VERSION } from "../services/annotateSnapshots";
+import { ANNOTATE_SNAPSHOT_SCHEMA_VERSION } from "../lib/controllerSnapshotSchemas";
 
 function isControllerSnapshot(value: unknown): value is AnnotateControllerSnapshot {
   return Boolean(

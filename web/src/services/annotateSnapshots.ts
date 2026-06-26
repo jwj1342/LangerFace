@@ -1,4 +1,6 @@
-export const ANNOTATE_SNAPSHOT_SCHEMA_VERSION = "react-annotate-controller-snapshot/v0.1";
+import { ANNOTATE_SNAPSHOT_SCHEMA_VERSION } from "../lib/controllerSnapshotSchemas";
+
+export { ANNOTATE_SNAPSHOT_SCHEMA_VERSION };
 
 export const ANNOTATE_SYSTEM_LABELS: Record<string, string> = {
   rstl: "RSTL",

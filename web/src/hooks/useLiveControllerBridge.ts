@@ -4,7 +4,7 @@ import {
   type LiveControllerSnapshot,
   useLiveStore,
 } from "../stores/liveStore";
-import { LIVE_SNAPSHOT_SCHEMA_VERSION } from "../services/liveSnapshots";
+import { LIVE_SNAPSHOT_SCHEMA_VERSION } from "../lib/controllerSnapshotSchemas";
 
 function isControllerSnapshot(value: unknown): value is LiveControllerSnapshot {
   return Boolean(

@@ -12,6 +12,7 @@ const loop = fs.readFileSync("pipeline/loop.js", "utf8");
 const exporter = fs.readFileSync("export_canvas.js", "utf8");
 const poseQuality = fs.readFileSync("geometry/pose_quality.js", "utf8");
 const liveSnapshots = fs.readFileSync("src/services/liveSnapshots.ts", "utf8");
+const controllerSnapshotSchemas = fs.readFileSync("src/lib/controllerSnapshotSchemas.ts", "utf8");
 
 assert.ok(html.includes('accept="image/*,video/*"'), "live page accepts uploaded photos and videos");
 assert.ok(html.includes('id="camBtn"'), "live page exposes camera entry for realtime overlay");
@@ -30,7 +31,8 @@ assert.ok(main.includes("validateIncisionOverlay(overlay)"), "live page validate
 assert.ok(main.includes("renderState.incisionOverlay = overlay"), "live page stores validated incision overlay in render state");
 assert.ok(main.includes("./src/services/liveSnapshots.ts"), "live page consumes the shared live snapshot service");
 assert.ok(main.includes("buildLiveControllerSnapshot({"), "live page delegates React snapshot construction to the shared service");
-assert.ok(liveSnapshots.includes("react-live-controller-snapshot/v0.1"), "shared live snapshot service owns the React snapshot schema");
+assert.ok(liveSnapshots.includes("../lib/controllerSnapshotSchemas"), "shared live snapshot service reuses the lightweight React snapshot schema module");
+assert.ok(controllerSnapshotSchemas.includes("react-live-controller-snapshot/v0.1"), "shared snapshot schema module owns the live React snapshot schema");
 assert.ok(liveSnapshots.includes("buildLiveControllerSnapshot"), "shared live snapshot service builds low-frequency live controller snapshots");
 assert.ok(main.includes("setIncisionOverlayQa"), "live page shows pending overlay QA feedback after loading a candidate");
 assert.ok(main.includes("上传照片、视频或开启摄像头后，会随 RSTL 一起显示"), "live page gives explicit overlay feedback");
