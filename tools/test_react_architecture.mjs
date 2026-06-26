@@ -16,6 +16,8 @@ const app = read("src/App.tsx");
 const typedStore = read("src/stores/appStore.ts");
 const workbenchBrand = read("src/components/WorkbenchBrand.tsx");
 const controllerCommand = read("src/lib/controllerCommand.ts");
+const uiButton = read("src/components/ui/button.tsx");
+const uiCard = read("src/components/ui/card.tsx");
 const annotateStore = read("src/stores/annotateStore.ts");
 const reactRouteLifecycleHook = read("src/hooks/useReactRouteLifecycle.ts");
 const controllerSnapshotBridgeHook = read("src/hooks/useControllerSnapshotBridge.ts");
@@ -112,6 +114,7 @@ assert.ok(app.includes('path="/three-preview"'), "React Router exposes the R3F p
 assert.ok(dashboardRoute.includes("useReactRouteLifecycle"), "React dashboard uses the shared pure route lifecycle hook");
 assert.ok(dashboardRoute.includes('workspace: "dashboard"'), "React dashboard publishes its active workspace");
 assert.ok(dashboardRoute.includes("WorkbenchBrand"), "React dashboard uses the shared workbench brand");
+assert.ok(dashboardRoute.includes("Card"), "React dashboard uses the shared shadcn-style card component");
 assert.ok(workbenchBrand.includes('className="brand"'), "React shell uses a shared workbench brand component");
 assert.ok(workbenchBrand.includes('className="brand-top"'), "shared workbench brand keeps the existing brand-top structure");
 assert.ok(workbenchBrand.includes("{action}"), "shared workbench brand supports page-specific status/actions");
@@ -120,6 +123,11 @@ assert.ok(controllerCommand.includes("dispatchControllerEvent"), "React controll
 assert.ok(controllerCommand.includes("dispatchControllerCommand"), "React controller command helper exposes command dispatch");
 assert.ok(controllerCommand.includes("CustomEvent<TDetail>"), "React controller command helper preserves typed CustomEvent details");
 assert.ok(controllerCommand.includes("window.dispatchEvent"), "React controller command helper centralizes browser event dispatch");
+assert.ok(uiButton.includes("@radix-ui/react-slot"), "shadcn-style Button supports asChild through Radix Slot");
+assert.ok(uiButton.includes("class-variance-authority"), "shadcn-style Button uses variant composition");
+assert.ok(uiCard.includes("CardHeader"), "shadcn-style Card exposes a header primitive");
+assert.ok(uiCard.includes("CardContent"), "shadcn-style Card exposes a content primitive");
+assert.ok(uiCard.includes('cn("card"'), "shadcn-style Card preserves existing card styling");
 assert.ok(typedStore.includes("React/Zustand stores low-frequency UI"), "Zustand store documents low-frequency state ownership");
 assert.ok(typedStore.includes("per-frame arrays stay outside persisted stores"), "Zustand store forbids high-frequency renderer arrays");
 assert.ok(typedStore.includes("interface AppState"), "Zustand store is typed");
@@ -391,6 +399,7 @@ assert.ok(threePreviewScene.includes("buildLineGeometry"), "R3F preview scene re
 assert.ok(threeRoute.includes(".catch((err) => {\n      if (disposed) return;"), "R3F preview route ignores late asset loader failures after route teardown");
 assert.ok(threePreviewSidebar.includes("R3F RENDERER BOUNDARY"), "R3F preview sidebar keeps the renderer boundary note");
 assert.ok(threePreviewSidebar.includes("WorkbenchBrand"), "R3F preview sidebar uses the shared workbench brand");
+assert.ok(threePreviewSidebar.includes("Card"), "R3F preview sidebar uses the shared shadcn-style card component");
 assert.ok(worker.includes("Comlink.expose"), "workflow worker exposes its API through Comlink");
 assert.ok(worker.includes("summarizeTumorInputQuality"), "workflow worker can run deterministic browser tools");
 assert.ok(worker.includes("planIncisionWorkflow"), "workflow worker can run deterministic incision planning");
@@ -400,6 +409,7 @@ assert.ok(workerClient.includes("Comlink.wrap"), "React app wraps the workflow w
 assert.ok(workerClient.includes("new Worker(new URL"), "workflow worker is loaded through Vite worker URL handling");
 assert.ok(workerClient.includes("worker.terminate"), "workflow worker client has an explicit dispose lifecycle");
 assert.ok(workerPanel.includes("createWorkflowWorkerClient"), "React dashboard probes the worker boundary");
+assert.ok(workerPanel.includes("CardHeader"), "React worker status panel uses the shared shadcn-style card primitives");
 assert.ok(controller.includes("createWorkflowWorkerClient"), "incision controller uses the Comlink workflow worker client");
 assert.ok(controller.includes("worker.api.planIncision"), "incision candidate generation is delegated to the workflow worker");
 assert.ok(controller.includes("main_thread_fallback"), "incision controller keeps a deterministic fallback if worker startup fails");

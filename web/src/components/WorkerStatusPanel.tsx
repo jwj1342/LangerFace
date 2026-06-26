@@ -1,6 +1,7 @@
 import { Cpu } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { Card, CardContent, CardHeader } from "./ui/card";
 import { createWorkflowWorkerClient } from "../services/workflowWorkerClient";
 import { useAppStore } from "../stores/appStore";
 
@@ -52,15 +53,17 @@ export function WorkerStatusPanel() {
   }, [setWorkerStatus]);
 
   return (
-    <div className="card">
-      <div className="quality-top">
+    <Card>
+      <CardHeader>
         <span className="inline-flex items-center gap-2"><Cpu size={14} /> Workflow Worker</span>
         <span>{workerStatus}</span>
-      </div>
-      <p className="hint">{detail}</p>
-      <p className="hint">
-        Comlink 只封装低频工具调用；逐帧 landmarks、mesh vertices、WebGL context 不进入 Worker API 或 Zustand store。
-      </p>
-    </div>
+      </CardHeader>
+      <CardContent>
+        <p className="hint">{detail}</p>
+        <p className="hint">
+          Comlink 只封装低频工具调用；逐帧 landmarks、mesh vertices、WebGL context 不进入 Worker API 或 Zustand store。
+        </p>
+      </CardContent>
+    </Card>
   );
 }

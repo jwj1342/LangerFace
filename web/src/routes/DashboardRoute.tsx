@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { WorkerStatusPanel } from "../components/WorkerStatusPanel";
 import { WorkbenchBrand } from "../components/WorkbenchBrand";
 import { Button } from "../components/ui/button";
+import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { useReactRouteLifecycle } from "../hooks/useReactRouteLifecycle";
 import { STATE_BOUNDARY_NOTE, useAppStore } from "../stores/appStore";
 
@@ -25,7 +26,7 @@ export function DashboardRoute() {
             action={<span className="react-route-status">{routeStatus}</span>}
           />
 
-          <div className="card">
+          <Card>
             <Link className="react-nav-link" to="/incision">
               <span>切口 Agent 工作台</span>
               <ArrowRight size={16} />
@@ -50,12 +51,14 @@ export function DashboardRoute() {
               <span>旧 HTML 实时入口</span>
               <ExternalLink size={16} />
             </a>
-          </div>
+          </Card>
 
-          <div className="card">
-            <div className="quality-top"><span>状态边界</span><span>低频 UI</span></div>
-            <p className="hint">{STATE_BOUNDARY_NOTE}</p>
-          </div>
+          <Card>
+            <CardHeader><span>状态边界</span><span>低频 UI</span></CardHeader>
+            <CardContent>
+              <p className="hint">{STATE_BOUNDARY_NOTE}</p>
+            </CardContent>
+          </Card>
 
           <WorkerStatusPanel />
         </aside>
