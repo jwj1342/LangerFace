@@ -26,6 +26,7 @@ const vercel = read("vercel.json");
 const vercelConfig = JSON.parse(vercel);
 const app = read("src/App.tsx");
 const typedStore = read("src/stores/appStore.ts");
+const reactShell = read("src/components/ReactShell.tsx");
 const stageShell = read("src/components/StageShell.tsx");
 const workbenchLayout = read("src/components/WorkbenchLayout.tsx");
 const workbenchBrand = read("src/components/WorkbenchBrand.tsx");
@@ -115,7 +116,7 @@ const controller = read("incision_agent_main.js");
 const dom = read("dom.js");
 const liveController = read("main.js");
 const surgeryController = read("surgery_main.js");
-const layoutPrimitiveNames = new Set(["StageShell.tsx", "WorkbenchLayout.tsx"]);
+const layoutPrimitiveNames = new Set(["ReactShell.tsx", "StageShell.tsx", "WorkbenchLayout.tsx"]);
 const stagePanelSources = new Map([
   ["AnnotateStagePanel.tsx", annotateStagePanel],
   ["IncisionStagePanel.tsx", incisionStagePanel],
@@ -129,6 +130,12 @@ const libraryPanelSources = new Map([
 const legendConsumerSources = new Map([
   ["IncisionStagePanel.tsx", incisionStagePanel],
   ["SurgeryMetricsPanel.tsx", surgeryMetricsPanel],
+]);
+const reactShellConsumerSources = new Map([
+  ["App.tsx", app],
+  ["DashboardRoute.tsx", dashboardRoute],
+  ["ThreePreviewRoute.tsx", threeRoute],
+  ["ThreePreviewSidebar.tsx", threePreviewSidebar],
 ]);
 const reactUiConsumerSources = new Map([
   ["App.tsx", app],
@@ -166,6 +173,17 @@ const libraryPanelsWithRawClass = (className) => (
 );
 const legendConsumersWithRawClass = (className) => (
   [...legendConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+      || source.includes(` ? "${className}`)
+      || source.includes(`: "${className}`)
+    ))
+    .map(([name]) => name)
+);
+const reactShellConsumersWithRawClass = (className) => (
+  [...reactShellConsumerSources.entries()]
     .filter(([, source]) => (
       source.includes(`className="${className}`)
       || source.includes(`className={\`${className}`)
@@ -226,6 +244,36 @@ assert.ok(dashboardRoute.includes("Card"), "React dashboard uses the shared shad
 assert.ok(workbenchBrand.includes('className="brand"'), "React shell uses a shared workbench brand component");
 assert.ok(workbenchBrand.includes('className="brand-top"'), "shared workbench brand keeps the existing brand-top structure");
 assert.ok(workbenchBrand.includes("{action}"), "shared workbench brand supports page-specific status/actions");
+for (const [componentName, className] of [
+  ["ReactPage", "react-page"],
+  ["ReactShell", "react-shell"],
+  ["ReactShellSidebar", "react-shell-sidebar"],
+  ["ReactShellMain", "react-shell-main"],
+  ["ReactShellNavLink", "react-nav-link"],
+  ["ReactShellExternalLink", "react-nav-link"],
+]) {
+  assert.ok(reactShell.includes(componentName), `React shell primitive exports ${componentName}`);
+  assert.ok(reactShell.includes(className), `React shell primitive preserves ${className} styling`);
+}
+assert.ok(reactShell.includes("react-router-dom"), "React shell primitive supports Router links");
+assert.ok(app.includes("ReactPage"), "React route fallback uses the shared React page primitive");
+assert.ok(dashboardRoute.includes("ReactShellNavLink"), "React dashboard uses shared shell nav links");
+assert.ok(dashboardRoute.includes("ReactShellExternalLink"), "React dashboard uses shared shell external nav links");
+assert.ok(threeRoute.includes("ReactShellMain"), "R3F preview route uses the shared shell main primitive");
+assert.ok(threePreviewSidebar.includes("ReactShellSidebar"), "R3F preview sidebar uses the shared shell sidebar primitive");
+for (const className of [
+  "react-page",
+  "react-shell",
+  "react-shell-sidebar",
+  "react-shell-main",
+  "react-nav-link",
+]) {
+  assert.deepEqual(
+    reactShellConsumersWithRawClass(className),
+    [],
+    `React shell consumers should use shared shell primitives instead of hand-written ${className} class wrappers`,
+  );
+}
 assert.ok(controllerCommand.includes("ControllerCommandDetail"), "React controller command helper keeps command payloads typed");
 assert.ok(controllerCommand.includes("dispatchControllerEvent"), "React controller command helper exposes generic controller events");
 assert.ok(controllerCommand.includes("dispatchControllerCommand"), "React controller command helper exposes command dispatch");

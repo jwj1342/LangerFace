@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
+import { ReactPage } from "./components/ReactShell";
 import { Card, CardHeader } from "./components/ui/card";
 import { Hint } from "./components/ui/hint";
 import { DashboardRoute } from "./routes/DashboardRoute";
@@ -13,12 +14,12 @@ const ThreePreviewRoute = lazy(() => import("./routes/ThreePreviewRoute").then((
 
 function RouteFallback() {
   return (
-    <div className="react-page grid place-items-center p-6">
+    <ReactPage className="grid place-items-center p-6">
       <Card className="max-w-[420px]">
         <CardHeader><span>正在加载</span><span>route</span></CardHeader>
         <Hint>正在加载当前工作台模块。</Hint>
       </Card>
-    </div>
+    </ReactPage>
   );
 }
 

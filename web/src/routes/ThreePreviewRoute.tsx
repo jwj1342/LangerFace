@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { ReactPage, ReactShell, ReactShellMain } from "../components/ReactShell";
 import { ThreePreviewScene, type ThreePreviewAssets } from "../components/ThreePreviewScene";
 import { ThreePreviewSidebar } from "../components/ThreePreviewSidebar";
 import { useReactRouteLifecycle } from "../hooks/useReactRouteLifecycle";
@@ -45,13 +46,13 @@ export function ThreePreviewRoute() {
   }, [reloadSerial, setAssetStatus, setRouteStatus]);
 
   return (
-    <div className="react-page">
-      <div className="react-shell">
+    <ReactPage>
+      <ReactShell>
         <ThreePreviewSidebar isReady={Boolean(assets)} onReload={() => setReloadSerial((serial) => serial + 1)} />
-        <main className="react-shell-main">
+        <ReactShellMain>
           <ThreePreviewScene assets={assets} loadingText={loadingText} />
-        </main>
-      </div>
-    </div>
+        </ReactShellMain>
+      </ReactShell>
+    </ReactPage>
   );
 }

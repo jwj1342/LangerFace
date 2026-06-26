@@ -1,6 +1,14 @@
 import { ArrowRight, Boxes, Camera, ExternalLink, PenLine, Scissors } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import {
+  ReactPage,
+  ReactShell,
+  ReactShellExternalLink,
+  ReactShellMain,
+  ReactShellNavLink,
+  ReactShellSidebar,
+} from "../components/ReactShell";
 import { WorkerStatusPanel } from "../components/WorkerStatusPanel";
 import { WorkbenchBrand } from "../components/WorkbenchBrand";
 import { Button } from "../components/ui/button";
@@ -19,9 +27,9 @@ export function DashboardRoute() {
   });
 
   return (
-    <div className="react-page">
-      <div className="react-shell">
-        <aside className="react-shell-sidebar">
+    <ReactPage>
+      <ReactShell>
+        <ReactShellSidebar>
           <WorkbenchBrand
             eyebrow="REACT ARCHITECTURE"
             title="React 工作台"
@@ -29,30 +37,30 @@ export function DashboardRoute() {
           />
 
           <Card>
-            <Link className="react-nav-link" to="/incision">
+            <ReactShellNavLink to="/incision">
               <span>切口 Agent 工作台</span>
               <ArrowRight size={16} />
-            </Link>
-            <Link className="react-nav-link" to="/live">
+            </ReactShellNavLink>
+            <ReactShellNavLink to="/live">
               <span>实时 Langer 线显示</span>
               <Camera size={16} />
-            </Link>
-            <Link className="react-nav-link" to="/annotate">
+            </ReactShellNavLink>
+            <ReactShellNavLink to="/annotate">
               <span>3D 网页标注</span>
               <PenLine size={16} />
-            </Link>
-            <Link className="react-nav-link" to="/three-preview">
+            </ReactShellNavLink>
+            <ReactShellNavLink to="/three-preview">
               <span>R3F 标准脸预览</span>
               <Boxes size={16} />
-            </Link>
-            <Link className="react-nav-link" to="/surgery">
+            </ReactShellNavLink>
+            <ReactShellNavLink to="/surgery">
               <span>沿 RSTL 闭合演示</span>
               <Scissors size={16} />
-            </Link>
-            <a className="react-nav-link" href="/index.html">
+            </ReactShellNavLink>
+            <ReactShellExternalLink href="/index.html">
               <span>旧 HTML 实时入口</span>
               <ExternalLink size={16} />
-            </a>
+            </ReactShellExternalLink>
           </Card>
 
           <Card>
@@ -63,9 +71,9 @@ export function DashboardRoute() {
           </Card>
 
           <WorkerStatusPanel />
-        </aside>
+        </ReactShellSidebar>
 
-        <main className="react-shell-main grid place-items-center p-6">
+        <ReactShellMain className="grid place-items-center p-6">
           <div className="max-w-[680px] text-[#dbe4ee]">
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#7dd3fc]">SPA Shell</p>
             <h2 className="mt-3 text-3xl font-bold">浏览器端架构重构入口</h2>
@@ -92,8 +100,8 @@ export function DashboardRoute() {
               </Button>
             </div>
           </div>
-        </main>
-      </div>
-    </div>
+        </ReactShellMain>
+      </ReactShell>
+    </ReactPage>
   );
 }

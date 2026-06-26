@@ -1,6 +1,7 @@
 import { ArrowLeft, RotateCcw } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { ReactShellSidebar } from "./ReactShell";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import { Hint } from "./ui/hint";
@@ -14,7 +15,7 @@ interface ThreePreviewSidebarProps {
 
 export function ThreePreviewSidebar({ isReady, onReload }: ThreePreviewSidebarProps) {
   return (
-    <aside className="react-shell-sidebar">
+    <ReactShellSidebar>
       <WorkbenchBrand
         eyebrow="R3F RENDERER BOUNDARY"
         title="R3F 标准脸预览"
@@ -35,6 +36,6 @@ export function ThreePreviewSidebar({ isReady, onReload }: ThreePreviewSidebarPr
           </Button>
         </CardContent>
       </Card>
-    </aside>
+    </ReactShellSidebar>
   );
 }
