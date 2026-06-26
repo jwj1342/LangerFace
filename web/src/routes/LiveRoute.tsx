@@ -1,45 +1,30 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { LiveWorkbench } from "./LiveWorkbench";
 import { useLiveControllerBridge } from "../hooks/useLiveControllerBridge";
-import { useAppStore } from "../stores/appStore";
+import { useManagedWorkbenchController } from "../hooks/useManagedWorkbenchController";
+
+type LiveControllerModule = typeof import("../../main.js");
+
+const loadLiveController = () => import("../../main.js");
+const mountLiveController = (module: LiveControllerModule, root: HTMLElement) => module.mountLiveWorkbench(root);
+const disposeLiveController = (module: LiveControllerModule) => module.disposeLiveWorkbench?.();
 
 export function LiveRoute() {
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const setActiveWorkspace = useAppStore((state) => state.setActiveWorkspace);
-  const setRouteStatus = useAppStore((state) => state.setRouteStatus);
   useLiveControllerBridge();
 
-  useEffect(() => {
-    let disposed = false;
-    let cleanup = () => {};
-
-    async function mountLiveController() {
-      setActiveWorkspace("live");
-      setRouteStatus("加载实时显示");
-      if (disposed || !hostRef.current) return;
-
-      window.__LANGERFACE_REACT_MANAGED__ = true;
-      const module = await import("../../main.js");
-      if (disposed || !hostRef.current) {
-        module.disposeLiveWorkbench?.();
-        return;
-      }
-      cleanup = module.mountLiveWorkbench(hostRef.current);
-      setRouteStatus("实时显示已挂载");
-    }
-
-    mountLiveController().catch((err) => {
-      setRouteStatus("实时显示加载失败");
-      console.error(err);
-    });
-
-    return () => {
-      disposed = true;
-      cleanup?.();
-      setRouteStatus("实时显示已卸载");
-    };
-  }, [setActiveWorkspace, setRouteStatus]);
+  useManagedWorkbenchController({
+    hostRef,
+    workspace: "live",
+    loadingStatus: "加载实时显示",
+    mountedStatus: "实时显示已挂载",
+    failedStatus: "实时显示加载失败",
+    unloadedStatus: "实时显示已卸载",
+    loadModule: loadLiveController,
+    mount: mountLiveController,
+    dispose: disposeLiveController,
+  });
 
   return (
     <div ref={hostRef} className="react-live-host">

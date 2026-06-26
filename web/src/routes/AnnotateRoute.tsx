@@ -1,45 +1,30 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { AnnotateWorkbench } from "./AnnotateWorkbench";
 import { useAnnotateControllerBridge } from "../hooks/useAnnotateControllerBridge";
-import { useAppStore } from "../stores/appStore";
+import { useManagedWorkbenchController } from "../hooks/useManagedWorkbenchController";
+
+type AnnotateControllerModule = typeof import("../../annotate_main.js");
+
+const loadAnnotateController = () => import("../../annotate_main.js");
+const mountAnnotateController = (module: AnnotateControllerModule, root: HTMLElement) => module.mountAnnotateWorkbench(root);
+const disposeAnnotateController = (module: AnnotateControllerModule) => module.disposeAnnotateWorkbench?.();
 
 export function AnnotateRoute() {
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const setActiveWorkspace = useAppStore((state) => state.setActiveWorkspace);
-  const setRouteStatus = useAppStore((state) => state.setRouteStatus);
   useAnnotateControllerBridge();
 
-  useEffect(() => {
-    let disposed = false;
-    let cleanup = () => {};
-
-    async function mountAnnotateController() {
-      setActiveWorkspace("annotate");
-      setRouteStatus("加载 3D 标注");
-      if (disposed || !hostRef.current) return;
-
-      window.__LANGERFACE_REACT_MANAGED__ = true;
-      const module = await import("../../annotate_main.js");
-      if (disposed || !hostRef.current) {
-        module.disposeAnnotateWorkbench?.();
-        return;
-      }
-      cleanup = module.mountAnnotateWorkbench(hostRef.current);
-      setRouteStatus("3D 标注已挂载");
-    }
-
-    mountAnnotateController().catch((err) => {
-      setRouteStatus("3D 标注加载失败");
-      console.error(err);
-    });
-
-    return () => {
-      disposed = true;
-      cleanup?.();
-      setRouteStatus("3D 标注已卸载");
-    };
-  }, [setActiveWorkspace, setRouteStatus]);
+  useManagedWorkbenchController({
+    hostRef,
+    workspace: "annotate",
+    loadingStatus: "加载 3D 标注",
+    mountedStatus: "3D 标注已挂载",
+    failedStatus: "3D 标注加载失败",
+    unloadedStatus: "3D 标注已卸载",
+    loadModule: loadAnnotateController,
+    mount: mountAnnotateController,
+    dispose: disposeAnnotateController,
+  });
 
   return (
     <div ref={hostRef} className="react-annotate-host">
