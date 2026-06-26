@@ -452,6 +452,11 @@ assert.ok(providerPanel.includes("../services/providerConfig"), "React provider 
 assert.ok(providerConfigService.includes("PROVIDER_STORAGE_KEY"), "Provider config service owns browser storage keying");
 assert.ok(providerConfigService.includes("initialProviderState"), "Provider config service owns stored/default Provider initialization");
 assert.ok(providerConfigService.includes("isDeprecatedNativeProviderConfig"), "Provider config service owns deprecated native Provider cleanup");
+assert.ok(providerConfigService.includes("browserProviderStorage"), "Provider config service centralizes browser storage access");
+assert.ok(providerConfigService.includes("browserProviderLocation"), "Provider config service centralizes browser location access");
+assert.ok(providerConfigService.includes('typeof window === "undefined"'), "Provider config service guards non-browser imports");
+assert.ok(!providerConfigService.includes("= window.localStorage"), "Provider config service does not bind window.localStorage in function defaults");
+assert.ok(!providerConfigService.includes("= window.location"), "Provider config service does not bind window.location in function defaults");
 assert.ok(providerConfigService.includes("localProviderFromRemotePageMessage"), "Provider config service owns loopback Provider browser warning text");
 assert.ok(providerConfigService.includes("insecureProviderFromSecurePageMessage"), "Provider config service owns HTTPS-to-HTTP Provider warning text");
 assert.ok(providerConfigService.includes("redactedProviderConfig"), "Provider config service owns Provider export redaction");
