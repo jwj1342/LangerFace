@@ -1,7 +1,7 @@
 import { RadioTower } from "lucide-react";
 
 import { useLiveStore } from "../stores/liveStore";
-import { Card, CardHeader } from "./ui/card";
+import { Card, CardHeader, CardHeaderTitle } from "./ui/card";
 import { Hint } from "./ui/hint";
 import { KeyValueGrid, KeyValueItem } from "./ui/key-value";
 
@@ -17,7 +17,7 @@ export function LiveStatePanel() {
   return (
     <Card className="live-state-panel">
       <CardHeader>
-        <span className="inline-flex items-center gap-2"><RadioTower size={14} /> 实时状态</span>
+        <CardHeaderTitle><RadioTower size={14} /> 实时状态</CardHeaderTitle>
         <span>{routeLabel(snapshot)}</span>
       </CardHeader>
       <KeyValueGrid className="live-state-grid">

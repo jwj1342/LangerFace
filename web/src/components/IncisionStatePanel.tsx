@@ -1,7 +1,7 @@
 import { Activity } from "lucide-react";
 
 import { useIncisionStore } from "../stores/incisionStore";
-import { Card, CardHeader } from "./ui/card";
+import { Card, CardHeader, CardHeaderTitle } from "./ui/card";
 import { Hint } from "./ui/hint";
 import { KeyValueGrid, KeyValueItem } from "./ui/key-value";
 
@@ -18,7 +18,7 @@ export function IncisionStatePanel() {
   return (
     <Card className="incision-state-panel">
       <CardHeader>
-        <span className="inline-flex items-center gap-2"><Activity size={14} /> 工作台状态</span>
+        <CardHeaderTitle><Activity size={14} /> 工作台状态</CardHeaderTitle>
         <span>{formatRuntime(snapshot)}</span>
       </CardHeader>
       <KeyValueGrid className="incision-state-grid">

@@ -180,6 +180,13 @@ const liveQualityFeedbackConsumerSources = new Map([
 const liveScanFeedbackConsumerSources = new Map([
   ["LiveRouteControlsPanel.tsx", liveRouteControlsPanel],
 ]);
+const cardHeaderTitleConsumerSources = new Map([
+  ["AnnotateStatePanel.tsx", annotateStatePanel],
+  ["IncisionStatePanel.tsx", incisionStatePanel],
+  ["LiveQualityPanel.tsx", liveQualityPanel],
+  ["LiveStatePanel.tsx", liveStatePanel],
+  ["WorkerStatusPanel.tsx", workerPanel],
+]);
 const reactShellConsumerSources = new Map([
   ["App.tsx", app],
   ["DashboardRoute.tsx", dashboardRoute],
@@ -444,6 +451,15 @@ const liveScanFeedbackConsumersWithRawClass = (className) => (
     ))
     .map(([name]) => name)
 );
+const cardHeaderTitleConsumersWithRawClass = (className) => (
+  [...cardHeaderTitleConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+    ))
+    .map(([name]) => name)
+);
 
 for (const dep of [
   "react",
@@ -667,6 +683,8 @@ assert.ok(uiButtonRow.includes("visible?: boolean"), "shadcn-style ButtonRow exp
 assert.ok(uiButtonRow.includes('hiddenClassName = "hidden"'), "shadcn-style ButtonRow defaults invisible rows to the legacy hidden class");
 assert.ok(uiButtonRow.includes("!visible && hiddenClassName"), "shadcn-style ButtonRow centralizes hidden class application");
 assert.ok(uiCard.includes("CardHeader"), "shadcn-style Card exposes a header primitive");
+assert.ok(uiCard.includes("CardHeaderTitle"), "shadcn-style Card exposes a header title primitive");
+assert.ok(uiCard.includes('cn("inline-flex items-center gap-2"'), "shadcn-style CardHeaderTitle preserves compact icon-title alignment");
 assert.ok(uiCard.includes("CardContent"), "shadcn-style Card exposes a content primitive");
 assert.ok(uiCard.includes('cn("card"'), "shadcn-style Card preserves existing card styling");
 assert.ok(uiCard.includes("@radix-ui/react-slot"), "shadcn-style Card supports asChild through Radix Slot");
@@ -681,6 +699,14 @@ assert.deepEqual(
   [],
   "React component panels should use the shared Card primitive instead of raw card class wrappers",
 );
+assert.deepEqual(
+  cardHeaderTitleConsumersWithRawClass("inline-flex items-center gap-2"),
+  [],
+  "React state panels should use CardHeaderTitle instead of hand-written icon-title class wrappers",
+);
+for (const [name, source] of cardHeaderTitleConsumerSources.entries()) {
+  assert.ok(source.includes("CardHeaderTitle"), `${name} should render icon-title headers through CardHeaderTitle`);
+}
 assert.ok(uiCheckbox.includes('type="checkbox"'), "shadcn-style Checkbox preserves native checkbox behavior");
 assert.ok(uiCheckboxField.includes("visible?: boolean"), "shadcn-style CheckboxField exposes a typed visibility prop");
 assert.ok(uiCheckboxField.includes('hiddenClassName = "hidden"'), "shadcn-style CheckboxField defaults invisible rows to the legacy hidden class");

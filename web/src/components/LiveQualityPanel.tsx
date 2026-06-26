@@ -1,6 +1,6 @@
 import { Activity } from "lucide-react";
 
-import { Card, CardHeader } from "./ui/card";
+import { Card, CardHeader, CardHeaderTitle } from "./ui/card";
 import { Hint } from "./ui/hint";
 import { StatGrid, StatItem } from "./ui/key-value";
 import { LiveOverlayQa, LiveOverlayQaHeader } from "./ui/live-feedback";
@@ -11,7 +11,7 @@ export function LiveQualityPanel() {
     <Card className="live-quality-panel" data-frame-owned="true">
       <div>
         <CardHeader>
-          <span className="inline-flex items-center gap-2"><Activity size={14} /> 追踪质量</span>
+          <CardHeaderTitle><Activity size={14} /> 追踪质量</CardHeaderTitle>
           <span id="qualityVal">未开始 0%</span>
         </CardHeader>
         <ProgressBar fillProps={{ id: "qualityBar" }} />

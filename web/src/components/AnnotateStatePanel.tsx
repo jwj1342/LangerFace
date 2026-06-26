@@ -1,7 +1,7 @@
 import { MousePointer2 } from "lucide-react";
 
 import { useAnnotateStore } from "../stores/annotateStore";
-import { Card, CardHeader } from "./ui/card";
+import { Card, CardHeader, CardHeaderTitle } from "./ui/card";
 import { Hint } from "./ui/hint";
 import { KeyValueGrid, KeyValueItem } from "./ui/key-value";
 
@@ -18,7 +18,7 @@ export function AnnotateStatePanel() {
   return (
     <Card className="annotate-state-panel">
       <CardHeader>
-        <span className="inline-flex items-center gap-2"><MousePointer2 size={14} /> 标注状态</span>
+        <CardHeaderTitle><MousePointer2 size={14} /> 标注状态</CardHeaderTitle>
         <span>{formatMesh(snapshot)}</span>
       </CardHeader>
       <KeyValueGrid className="annotate-state-grid">

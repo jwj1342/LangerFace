@@ -1,7 +1,7 @@
 import { Cpu } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { Card, CardContent, CardHeader } from "./ui/card";
+import { Card, CardContent, CardHeader, CardHeaderTitle } from "./ui/card";
 import { Hint } from "./ui/hint";
 import { createWorkflowWorkerClient, probeWorkflowWorkerClient } from "../services/workflowWorkerClient";
 import { useAppStore } from "../stores/appStore";
@@ -39,7 +39,7 @@ export function WorkerStatusPanel() {
   return (
     <Card>
       <CardHeader>
-        <span className="inline-flex items-center gap-2"><Cpu size={14} /> Workflow Worker</span>
+        <CardHeaderTitle><Cpu size={14} /> Workflow Worker</CardHeaderTitle>
         <span>{workerStatus}</span>
       </CardHeader>
       <CardContent>
