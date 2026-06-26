@@ -1,6 +1,8 @@
 export interface LiveZoomCard {
   canvas: HTMLCanvasElement;
-  card?: HTMLElement | null;
+  card: HTMLElement;
+  ctx: CanvasRenderingContext2D;
+  region?: unknown;
 }
 
 export function adjustFocusZoom(deltaY: number): boolean;
