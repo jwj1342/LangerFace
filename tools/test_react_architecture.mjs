@@ -2068,5 +2068,6 @@ assert.ok(surgeryStagePanel.includes('to="/annotate"'), "React surgery stage ret
 assert.ok(legacySurgeryHtml.includes("/app/surgery"), "legacy surgery compatibility page redirects to the React surgery route");
 assert.ok(!legacySurgeryHtml.includes("surgery_main.js"), "legacy surgery compatibility page does not load the legacy surgery controller");
 assert.ok(!legacySurgeryHtml.includes('id="btnAlong"'), "legacy surgery compatibility page does not duplicate React surgery controls");
+assert.ok(!fs.existsSync(path.join(web, "surgery_main.js")), "legacy surgery controller file has been removed after the R3F route migration");
 
 console.log("test_react_architecture: React SPA architecture boundaries passed");
