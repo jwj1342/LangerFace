@@ -34,12 +34,14 @@ export interface ButtonProps
   extends ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  hiddenClassName?: string;
+  visible?: boolean;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, hiddenClassName = "hidden", variant, size, asChild = false, visible = true, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
-    return <Comp ref={ref} className={cn(buttonVariants({ variant, size }), className)} {...props} />;
+    return <Comp ref={ref} className={cn(buttonVariants({ variant, size }), !visible && hiddenClassName, className)} {...props} />;
   },
 );
 Button.displayName = "Button";

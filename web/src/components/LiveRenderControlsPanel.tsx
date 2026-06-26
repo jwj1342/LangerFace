@@ -35,7 +35,7 @@ export function LiveRenderControlsPanel() {
           <Hint className={atlasPreview?.active ? undefined : "hidden"} id="atlasProvenance">
             {atlasPreview?.active ? `${atlasPreview.source || "标注会话"} · ${atlasPreview.count ?? 0} 条线` : ""}
           </Hint>
-          <Button variant="workbench" className={atlasPreview?.active ? "" : "hidden"} id="restoreAtlasBtn" type="button" onClick={() => dispatchLiveRenderCommand("restore_atlas")}>恢复官方图谱</Button>
+          <Button variant="workbench" visible={Boolean(atlasPreview?.active)} id="restoreAtlasBtn" type="button" onClick={() => dispatchLiveRenderCommand("restore_atlas")}>恢复官方图谱</Button>
         </div>
         <div>
           <Label htmlFor="density">线密度 <FieldValue id="densityVal">{density}%</FieldValue></Label>

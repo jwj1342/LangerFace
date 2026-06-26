@@ -159,6 +159,10 @@ const surgeryFeedbackConsumerSources = new Map([
 const privacyAuditConsumerSources = new Map([
   ["PrivacyAuditPanel.tsx", privacyAuditPanel],
 ]);
+const buttonVisibilityConsumerSources = new Map([
+  ["AnnotateMeshSourcePanel.tsx", annotateMeshSourcePanel],
+  ["LiveRenderControlsPanel.tsx", liveRenderControlsPanel],
+]);
 const reactShellConsumerSources = new Map([
   ["App.tsx", app],
   ["DashboardRoute.tsx", dashboardRoute],
@@ -367,6 +371,15 @@ const privacyAuditConsumersWithRawClass = (className) => (
     ))
     .map(([name]) => name)
 );
+const buttonVisibilityConsumersWithRawHidden = () => (
+  [...buttonVisibilityConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes('className={showFlame ? "" : "hidden"}')
+      || source.includes('className={showFittedFlame ? "" : "hidden"}')
+      || source.includes('className={atlasPreview?.active ? "" : "hidden"}')
+    ))
+    .map(([name]) => name)
+);
 
 for (const dep of [
   "react",
@@ -564,6 +577,17 @@ assert.ok(uiButton.includes("@radix-ui/react-slot"), "shadcn-style Button suppor
 assert.ok(uiButton.includes("class-variance-authority"), "shadcn-style Button uses variant composition");
 assert.ok(uiButton.includes("workbenchPrimary"), "shadcn-style Button can preserve legacy workbench button styling");
 assert.ok(uiButton.includes("miniDanger"), "shadcn-style Button can preserve compact destructive button styling");
+assert.ok(uiButton.includes("visible?: boolean"), "shadcn-style Button exposes a typed visibility prop");
+assert.ok(uiButton.includes('hiddenClassName = "hidden"'), "shadcn-style Button defaults invisible buttons to the legacy hidden class");
+assert.ok(uiButton.includes("!visible && hiddenClassName"), "shadcn-style Button centralizes hidden class application");
+assert.deepEqual(
+  buttonVisibilityConsumersWithRawHidden(),
+  [],
+  "React button consumers should use Button visible instead of hand-written hidden class toggles",
+);
+assert.ok(annotateMeshSourcePanel.includes("visible={showFlame}"), "React annotation mesh source panel uses Button visible for optional FLAME action");
+assert.ok(annotateMeshSourcePanel.includes("visible={showFittedFlame}"), "React annotation mesh source panel uses Button visible for optional fitted FLAME action");
+assert.ok(liveRenderControlsPanel.includes("visible={Boolean(atlasPreview?.active)}"), "React live render panel uses Button visible for restore atlas action");
 assert.ok(uiButtonRow.includes('cn("btn-row"'), "shadcn-style ButtonRow preserves existing button row styling");
 assert.ok(uiCard.includes("CardHeader"), "shadcn-style Card exposes a header primitive");
 assert.ok(uiCard.includes("CardContent"), "shadcn-style Card exposes a content primitive");

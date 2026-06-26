@@ -18,8 +18,8 @@ export function AnnotateMeshSourcePanel() {
     <Card>
       <Hint id="hint">{snapshot?.hint || "加载网格后开始标注。"}</Hint>
       <Button variant="workbenchPrimary" id="btnLoadCanonical" type="button" onClick={() => dispatchAnnotateMeshCommand("load_canonical")}>加载 FLAME 标准脸</Button>
-      <Button variant="workbench" className={showFlame ? "" : "hidden"} id="btnLoadFlame" type="button" onClick={() => dispatchAnnotateMeshCommand("load_flame")}>加载 FLAME 头模</Button>
-      <Button variant="workbench" className={showFittedFlame ? "" : "hidden"} id="btnLoadFittedFlame" type="button" onClick={() => dispatchAnnotateMeshCommand("load_fitted_flame")}>加载个体 FLAME（拟合）</Button>
+      <Button variant="workbench" visible={showFlame} id="btnLoadFlame" type="button" onClick={() => dispatchAnnotateMeshCommand("load_flame")}>加载 FLAME 头模</Button>
+      <Button variant="workbench" visible={showFittedFlame} id="btnLoadFittedFlame" type="button" onClick={() => dispatchAnnotateMeshCommand("load_fitted_flame")}>加载个体 FLAME（拟合）</Button>
       <Button variant="workbenchPrimary" id="btnCloudFit" type="button" onClick={() => dispatchAnnotateMeshCommand("cloud_fit_flame")}>☁ 云端拟合 FLAME（演示）</Button>
       <Button asChild variant="workbench">
         <label htmlFor="meshFile">上传头模（JSON / OBJ / PLY）</label>
