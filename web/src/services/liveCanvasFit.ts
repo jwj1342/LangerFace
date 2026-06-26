@@ -1,6 +1,6 @@
-import { renderState } from "../../state.js";
 import { fitContainSize, type FitContainResult } from "./fitMath";
 import { els } from "./liveDom";
+import { renderState } from "./liveState";
 
 export { fitContainSize };
 export type CanvasFitResult = FitContainResult;

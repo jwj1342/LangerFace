@@ -157,6 +157,7 @@ const liveUiTypes = read("ui.d.ts");
 const liveUiFacade = read("ui.js");
 const liveUiService = read("src/services/liveUi.ts");
 const liveStateTypes = read("state.d.ts");
+const liveStateService = read("src/services/liveState.ts");
 const liveCanvasFitTypes = read("canvas_fit.d.ts");
 const liveCanvasFitFacade = read("canvas_fit.js");
 const liveCanvasFitService = read("src/services/liveCanvasFit.ts");
@@ -2126,7 +2127,8 @@ assert.ok(liveController.includes("function controllerEvent"), "live runtime nar
 assert.ok(liveDomTypes.includes("LiveDomElements"), "DOM binding declarations expose typed live elements");
 assert.ok(liveDomTypes.includes("./src/services/liveDom"), "DOM binding declarations re-export the TypeScript implementation contract");
 assert.ok(liveStateTypes.includes("LiveRenderState"), "state declarations expose typed live render state");
-assert.ok(liveStateTypes.includes("imageView"), "state declarations expose typed live image view state");
+assert.ok(liveStateTypes.includes("./src/services/liveState"), "state declarations re-export the TypeScript implementation contract");
+assert.ok(liveStateService.includes("imageView"), "TypeScript live state service owns typed live image view state");
 assert.ok(liveCanvasFitFacade.includes("./src/services/liveCanvasFit.ts"), "legacy canvas_fit.js is only a compatibility facade over the TypeScript service");
 assert.ok(liveCanvasFitService.includes("export function fitCanvasDisplayToStage"), "TypeScript live canvas fit service owns stage fitting");
 assert.ok(liveCanvasFitService.includes("export function observeCanvasStageResize"), "TypeScript live canvas fit service owns resize cleanup");

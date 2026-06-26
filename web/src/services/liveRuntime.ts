@@ -29,7 +29,7 @@ import {
 import { dataSource } from "./dataSource";
 import { countMetric, logError } from "./logger";
 import { createCanvasRecordingController, type CanvasRecordingController, type RecordingExtraCanvas } from "./canvasRecording";
-import { recordingState, reconState, renderState, sourceState } from "../../state.js";
+import { recordingState, reconState, renderState, sourceState } from "./liveState";
 import { setIncisionOverlayQa, setMsg, setProvenance, smoothLabel } from "./liveUi";
 
 interface ImageDragState {
