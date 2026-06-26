@@ -1,17 +1,12 @@
 import { useEffect, useState } from "react";
 
-import { dispatchControllerCommand } from "../lib/controllerCommand";
-import { INCISION_TUMOR_REACT_COMMAND_EVENT } from "../lib/controllerEvents";
+import { dispatchIncisionTumorCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
-
-function dispatchTumorCommand(command: string) {
-  dispatchControllerCommand(INCISION_TUMOR_REACT_COMMAND_EVENT, { command });
-}
 
 function hiddenClass(hidden: boolean) {
   return hidden ? "hidden" : "";
@@ -72,7 +67,7 @@ export function TumorInputPanel() {
         onChange={(event) => {
           setKind(event.currentTarget.value);
           setBoundaryActive(false);
-          dispatchTumorCommand("kind_changed");
+          dispatchIncisionTumorCommand("kind_changed");
         }}
       >
         <option value="subcutaneous">皮下肿物 · 线性切口</option>
@@ -87,11 +82,11 @@ export function TumorInputPanel() {
           value={diameter}
           onInput={(event) => {
             setDiameter(event.currentTarget.value);
-            dispatchTumorCommand("diameter_input");
+            dispatchIncisionTumorCommand("diameter_input");
           }}
-          onPointerUp={() => dispatchTumorCommand("diameter_changed")}
-          onKeyUp={() => dispatchTumorCommand("diameter_changed")}
-          onBlur={() => dispatchTumorCommand("diameter_changed")}
+          onPointerUp={() => dispatchIncisionTumorCommand("diameter_changed")}
+          onKeyUp={() => dispatchIncisionTumorCommand("diameter_changed")}
+          onBlur={() => dispatchIncisionTumorCommand("diameter_changed")}
           onChange={(event) => setDiameter(event.currentTarget.value)}
         />
       </div>
@@ -102,7 +97,7 @@ export function TumorInputPanel() {
           value={author}
           onChange={(event) => {
             setAuthor(event.currentTarget.value);
-            dispatchTumorCommand("author_changed");
+            dispatchIncisionTumorCommand("author_changed");
           }}
         />
       </div>
@@ -115,11 +110,11 @@ export function TumorInputPanel() {
           value={depth}
           onInput={(event) => {
             setDepth(event.currentTarget.value);
-            dispatchTumorCommand("depth_input");
+            dispatchIncisionTumorCommand("depth_input");
           }}
-          onPointerUp={() => dispatchTumorCommand("depth_changed")}
-          onKeyUp={() => dispatchTumorCommand("depth_changed")}
-          onBlur={() => dispatchTumorCommand("depth_changed")}
+          onPointerUp={() => dispatchIncisionTumorCommand("depth_changed")}
+          onKeyUp={() => dispatchIncisionTumorCommand("depth_changed")}
+          onBlur={() => dispatchIncisionTumorCommand("depth_changed")}
           onChange={(event) => setDepth(event.currentTarget.value)}
         />
       </div>
@@ -132,11 +127,11 @@ export function TumorInputPanel() {
           value={margin}
           onInput={(event) => {
             setMargin(event.currentTarget.value);
-            dispatchTumorCommand("margin_input");
+            dispatchIncisionTumorCommand("margin_input");
           }}
-          onPointerUp={() => dispatchTumorCommand("margin_changed")}
-          onKeyUp={() => dispatchTumorCommand("margin_changed")}
-          onBlur={() => dispatchTumorCommand("margin_changed")}
+          onPointerUp={() => dispatchIncisionTumorCommand("margin_changed")}
+          onKeyUp={() => dispatchIncisionTumorCommand("margin_changed")}
+          onBlur={() => dispatchIncisionTumorCommand("margin_changed")}
           onChange={(event) => setMargin(event.currentTarget.value)}
         />
       </div>
@@ -148,7 +143,7 @@ export function TumorInputPanel() {
           onChange={(event) => {
             setBoundaryMode(event.currentTarget.value);
             setBoundaryActive(false);
-            dispatchTumorCommand("boundary_mode_changed");
+            dispatchIncisionTumorCommand("boundary_mode_changed");
           }}
         >
           <option value="ellipse">椭圆近似</option>
@@ -164,11 +159,11 @@ export function TumorInputPanel() {
           value={ellipseRatio}
           onInput={(event) => {
             setEllipseRatio(event.currentTarget.value);
-            dispatchTumorCommand("ellipse_ratio_input");
+            dispatchIncisionTumorCommand("ellipse_ratio_input");
           }}
-          onPointerUp={() => dispatchTumorCommand("ellipse_ratio_changed")}
-          onKeyUp={() => dispatchTumorCommand("ellipse_ratio_changed")}
-          onBlur={() => dispatchTumorCommand("ellipse_ratio_changed")}
+          onPointerUp={() => dispatchIncisionTumorCommand("ellipse_ratio_changed")}
+          onKeyUp={() => dispatchIncisionTumorCommand("ellipse_ratio_changed")}
+          onBlur={() => dispatchIncisionTumorCommand("ellipse_ratio_changed")}
           onChange={(event) => setEllipseRatio(event.currentTarget.value)}
         />
       </div>
@@ -179,7 +174,7 @@ export function TumorInputPanel() {
           type="button"
           onClick={() => {
             setBoundaryActive((value) => !value);
-            dispatchTumorCommand("toggle_boundary");
+            dispatchIncisionTumorCommand("toggle_boundary");
           }}
         >
           {boundaryButtonLabel}
@@ -191,7 +186,7 @@ export function TumorInputPanel() {
           onClick={() => {
             setBoundaryActive(false);
             setBoundaryPointCount(0);
-            dispatchTumorCommand("clear_boundary");
+            dispatchIncisionTumorCommand("clear_boundary");
           }}
         >
           清空轮廓
@@ -199,11 +194,11 @@ export function TumorInputPanel() {
       </div>
       <p className={`boundary-status${boundaryStatusWarn ? " warn" : ""}`} id="boundaryStatus">{boundaryStatus}</p>
       <div className="btn-row two-cols">
-        <Button variant="workbench" id="exportTumorBtn" type="button" onClick={() => dispatchTumorCommand("export_tumor")}>导出肿物</Button>
-        <Button variant="workbench" id="importTumorBtn" type="button" onClick={() => dispatchTumorCommand("import_tumor")}>导入肿物</Button>
+        <Button variant="workbench" id="exportTumorBtn" type="button" onClick={() => dispatchIncisionTumorCommand("export_tumor")}>导出肿物</Button>
+        <Button variant="workbench" id="importTumorBtn" type="button" onClick={() => dispatchIncisionTumorCommand("import_tumor")}>导入肿物</Button>
       </div>
       <Input id="tumorImportFile" className="hidden" type="file" accept="application/json,.json" />
-      <Button variant="workbenchPrimary" id="runAgentBtn" type="button" onClick={() => dispatchTumorCommand("run_agent")}>生成候选切口</Button>
+      <Button variant="workbenchPrimary" id="runAgentBtn" type="button" onClick={() => dispatchIncisionTumorCommand("run_agent")}>生成候选切口</Button>
       <p className="agent-note" id="pickState">{freehand ? boundaryHint : pickState}</p>
       <p className={`anatomy-preview${anatomyPreviewWarn ? " warn" : ""}`} id="anatomyPreview">{anatomyPreview}</p>
     </div>

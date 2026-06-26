@@ -1,15 +1,10 @@
 import { Link } from "react-router-dom";
 
-import { dispatchControllerCommand } from "../lib/controllerCommand";
-import { ANNOTATE_MESH_REACT_COMMAND_EVENT } from "../lib/controllerEvents";
+import { dispatchAnnotateMeshCommand } from "../lib/controllerCommand";
 import { useAnnotateStore } from "../stores/annotateStore";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-
-function dispatchMeshCommand(command: string) {
-  dispatchControllerCommand(ANNOTATE_MESH_REACT_COMMAND_EVENT, { command });
-}
 
 export function AnnotateMeshSourcePanel() {
   const snapshot = useAnnotateStore((state) => state.snapshot);
@@ -20,10 +15,10 @@ export function AnnotateMeshSourcePanel() {
   return (
     <div className="card">
       <p className="hint" id="hint">{snapshot?.hint || "加载网格后开始标注。"}</p>
-      <Button variant="workbenchPrimary" id="btnLoadCanonical" type="button" onClick={() => dispatchMeshCommand("load_canonical")}>加载 FLAME 标准脸</Button>
-      <Button variant="workbench" className={showFlame ? "" : "hidden"} id="btnLoadFlame" type="button" onClick={() => dispatchMeshCommand("load_flame")}>加载 FLAME 头模</Button>
-      <Button variant="workbench" className={showFittedFlame ? "" : "hidden"} id="btnLoadFittedFlame" type="button" onClick={() => dispatchMeshCommand("load_fitted_flame")}>加载个体 FLAME（拟合）</Button>
-      <Button variant="workbenchPrimary" id="btnCloudFit" type="button" onClick={() => dispatchMeshCommand("cloud_fit_flame")}>☁ 云端拟合 FLAME（演示）</Button>
+      <Button variant="workbenchPrimary" id="btnLoadCanonical" type="button" onClick={() => dispatchAnnotateMeshCommand("load_canonical")}>加载 FLAME 标准脸</Button>
+      <Button variant="workbench" className={showFlame ? "" : "hidden"} id="btnLoadFlame" type="button" onClick={() => dispatchAnnotateMeshCommand("load_flame")}>加载 FLAME 头模</Button>
+      <Button variant="workbench" className={showFittedFlame ? "" : "hidden"} id="btnLoadFittedFlame" type="button" onClick={() => dispatchAnnotateMeshCommand("load_fitted_flame")}>加载个体 FLAME（拟合）</Button>
+      <Button variant="workbenchPrimary" id="btnCloudFit" type="button" onClick={() => dispatchAnnotateMeshCommand("cloud_fit_flame")}>☁ 云端拟合 FLAME（演示）</Button>
       <Button asChild variant="workbench">
         <label htmlFor="meshFile">上传头模（JSON / OBJ / PLY）</label>
       </Button>

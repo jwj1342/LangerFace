@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { dispatchControllerCommand } from "../lib/controllerCommand";
-import { INCISION_EDIT_REACT_COMMAND_EVENT } from "../lib/controllerEvents";
+import { dispatchIncisionEditCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
@@ -22,10 +21,6 @@ const DEFAULT_EDIT_STATE = {
   undoDisabled: true,
   redoDisabled: true,
 };
-
-function dispatchEditCommand(command: string) {
-  dispatchControllerCommand(INCISION_EDIT_REACT_COMMAND_EVENT, { command });
-}
 
 export function EditControlsPanel() {
   const snapshot = useIncisionStore((state) => state.snapshot);
@@ -59,8 +54,8 @@ export function EditControlsPanel() {
     setRedoDisabled(Boolean(edit.redoDisabled));
   }, [snapshot?.edit]);
 
-  const preview = () => dispatchEditCommand("preview_edit");
-  const commit = () => dispatchEditCommand("commit_edit");
+  const preview = () => dispatchIncisionEditCommand("preview_edit");
+  const commit = () => dispatchIncisionEditCommand("commit_edit");
 
   return (
     <div className="card agent-grid">
@@ -158,7 +153,7 @@ export function EditControlsPanel() {
         value={reason}
         onChange={(event) => {
           setReason(event.currentTarget.value);
-          dispatchEditCommand("commit_reason");
+          dispatchIncisionEditCommand("commit_reason");
         }}
       >
         <option value="">未选择覆盖原因</option>
@@ -168,10 +163,10 @@ export function EditControlsPanel() {
         <option value="manual clinician preference">医生人工判断</option>
       </Select>
       <div className="btn-row two-cols">
-        <Button variant="workbench" id="undoEditBtn" type="button" disabled={undoDisabled} onClick={() => dispatchEditCommand("undo_edit")}>撤销调整</Button>
-        <Button variant="workbench" id="redoEditBtn" type="button" disabled={redoDisabled} onClick={() => dispatchEditCommand("redo_edit")}>重做调整</Button>
+        <Button variant="workbench" id="undoEditBtn" type="button" disabled={undoDisabled} onClick={() => dispatchIncisionEditCommand("undo_edit")}>撤销调整</Button>
+        <Button variant="workbench" id="redoEditBtn" type="button" disabled={redoDisabled} onClick={() => dispatchIncisionEditCommand("redo_edit")}>重做调整</Button>
       </div>
-      <Button variant="workbench" id="resetEditBtn" type="button" onClick={() => dispatchEditCommand("reset_edit")}>恢复工具建议</Button>
+      <Button variant="workbench" id="resetEditBtn" type="button" onClick={() => dispatchIncisionEditCommand("reset_edit")}>恢复工具建议</Button>
       <p className="agent-note" id="editHistoryState">{historyLabel}</p>
       <p className="agent-note">调整只改变候选草案并记录 provenance；真实切口仍需医生复核。</p>
     </div>

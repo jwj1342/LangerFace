@@ -1,12 +1,7 @@
-import { dispatchControllerCommand } from "../lib/controllerCommand";
-import { LIVE_SOURCE_REACT_COMMAND_EVENT } from "../lib/controllerEvents";
+import { dispatchLiveSourceCommand } from "../lib/controllerCommand";
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-
-function dispatchSourceCommand(command: string) {
-  dispatchControllerCommand(LIVE_SOURCE_REACT_COMMAND_EVENT, { command });
-}
 
 export function LiveSourceControlsPanel() {
   const snapshot = useLiveStore((state) => state.snapshot);
@@ -17,12 +12,12 @@ export function LiveSourceControlsPanel() {
 
   return (
     <div className="card">
-      <Button variant="workbenchPrimary" id="uploadBtn" type="button" onClick={() => dispatchSourceCommand("upload_source")}>⬆&nbsp; 上传照片 / 视频</Button>
+      <Button variant="workbenchPrimary" id="uploadBtn" type="button" onClick={() => dispatchLiveSourceCommand("upload_source")}>⬆&nbsp; 上传照片 / 视频</Button>
       <Input type="file" id="fileInput" accept="image/*,video/*" hidden />
       <div className="btn-row">
-        <Button variant="workbench" id="camBtn" type="button" aria-pressed={running && snapshot?.source.kind === "camera"} onClick={() => dispatchSourceCommand("camera_toggle")}>◉ 摄像头</Button>
-        <Button variant="workbench" id="pauseBtn" type="button" disabled={!running} onClick={() => dispatchSourceCommand("pause_toggle")}>{paused ? "▶ 继续" : "⏸ 暂停"}</Button>
-        <Button variant="workbench" id="exportBtn" type="button" disabled={!hasSource} aria-pressed={recording || undefined} onClick={() => dispatchSourceCommand("recording_toggle")}>{recording ? "■ 停止" : "⬇ 导出"}</Button>
+        <Button variant="workbench" id="camBtn" type="button" aria-pressed={running && snapshot?.source.kind === "camera"} onClick={() => dispatchLiveSourceCommand("camera_toggle")}>◉ 摄像头</Button>
+        <Button variant="workbench" id="pauseBtn" type="button" disabled={!running} onClick={() => dispatchLiveSourceCommand("pause_toggle")}>{paused ? "▶ 继续" : "⏸ 暂停"}</Button>
+        <Button variant="workbench" id="exportBtn" type="button" disabled={!hasSource} aria-pressed={recording || undefined} onClick={() => dispatchLiveSourceCommand("recording_toggle")}>{recording ? "■ 停止" : "⬇ 导出"}</Button>
       </div>
     </div>
   );

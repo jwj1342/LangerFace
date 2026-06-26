@@ -5,8 +5,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { Textarea } from "./ui/textarea";
-import { dispatchControllerCommand } from "../lib/controllerCommand";
-import { INCISION_REVIEW_REACT_COMMAND_EVENT } from "../lib/controllerEvents";
+import { dispatchIncisionReviewCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 
 const REVIEW_LABELS: Record<string, string> = {
@@ -25,10 +24,6 @@ function reviewTone(status: string) {
   if (status === "rejected_by_clinician") return "rejected";
   if (status === "needs_revision") return "revision";
   return "";
-}
-
-function dispatchReviewCommand(command: string) {
-  dispatchControllerCommand(INCISION_REVIEW_REACT_COMMAND_EVENT, { command });
 }
 
 export function ReviewControlsPanel() {
@@ -59,7 +54,7 @@ export function ReviewControlsPanel() {
         defaultValue="pending_clinician_confirmation"
         onChange={(event) => {
           setStatus(event.currentTarget.value);
-          dispatchReviewCommand("review_state_changed");
+          dispatchIncisionReviewCommand("review_state_changed");
         }}
       >
         <option value="pending_clinician_confirmation">待医生确认</option>
@@ -76,7 +71,7 @@ export function ReviewControlsPanel() {
           variant="workbench"
           id="approveCandidateBtn"
           type="button"
-          onClick={() => dispatchReviewCommand("approve_candidate")}
+          onClick={() => dispatchIncisionReviewCommand("approve_candidate")}
         >
           确认当前候选
         </Button>
@@ -84,7 +79,7 @@ export function ReviewControlsPanel() {
           variant="workbench"
           id="rejectCandidateBtn"
           type="button"
-          onClick={() => dispatchReviewCommand("reject_candidate")}
+          onClick={() => dispatchIncisionReviewCommand("reject_candidate")}
         >
           否决当前候选
         </Button>
@@ -93,7 +88,7 @@ export function ReviewControlsPanel() {
         variant="workbenchPrimary"
         id="saveReviewBtn"
         type="button"
-        onClick={() => dispatchReviewCommand("save_review")}
+        onClick={() => dispatchIncisionReviewCommand("save_review")}
       >
         保存审阅记录
       </Button>

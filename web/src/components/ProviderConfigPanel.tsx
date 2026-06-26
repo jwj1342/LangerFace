@@ -7,8 +7,7 @@ import {
   localProviderFromRemotePageMessage,
   saveProviderPrefs,
 } from "../services/providerConfig";
-import { dispatchControllerEvent } from "../lib/controllerCommand";
-import { INCISION_PROVIDER_REACT_STATE_EVENT } from "../lib/controllerEvents";
+import { dispatchIncisionProviderState } from "../lib/controllerCommand";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -20,7 +19,7 @@ type TestLevel = "" | "ok" | "warn";
 
 function notifyController() {
   setTimeout(() => {
-    dispatchControllerEvent(INCISION_PROVIDER_REACT_STATE_EVENT, { source: "react_provider_panel" });
+    dispatchIncisionProviderState();
   }, 0);
 }
 
