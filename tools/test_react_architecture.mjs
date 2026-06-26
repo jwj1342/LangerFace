@@ -50,6 +50,7 @@ const uiLegend = read("src/components/ui/legend.tsx");
 const uiLibraryList = read("src/components/ui/library-list.tsx");
 const uiLabel = read("src/components/ui/label.tsx");
 const uiLoadingOverlay = read("src/components/ui/loading-overlay.tsx");
+const uiPrivacyAudit = read("src/components/ui/privacy-audit.tsx");
 const uiProgress = read("src/components/ui/progress.tsx");
 const uiR3FLoadingCard = read("src/components/ui/r3f-loading-card.tsx");
 const uiSelect = read("src/components/ui/select.tsx");
@@ -154,6 +155,9 @@ const surgeryActionConsumerSources = new Map([
 ]);
 const surgeryFeedbackConsumerSources = new Map([
   ["SurgeryMetricsPanel.tsx", surgeryMetricsPanel],
+]);
+const privacyAuditConsumerSources = new Map([
+  ["PrivacyAuditPanel.tsx", privacyAuditPanel],
 ]);
 const reactShellConsumerSources = new Map([
   ["App.tsx", app],
@@ -343,6 +347,17 @@ const surgeryActionConsumersWithRawClass = (className) => (
 );
 const surgeryFeedbackConsumersWithRawClass = (className) => (
   [...surgeryFeedbackConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+      || source.includes(` ? "${className}`)
+      || source.includes(`: "${className}`)
+    ))
+    .map(([name]) => name)
+);
+const privacyAuditConsumersWithRawClass = (className) => (
+  [...privacyAuditConsumerSources.entries()]
     .filter(([, source]) => (
       source.includes(`className="${className}`)
       || source.includes(`className={\`${className}`)
@@ -792,6 +807,17 @@ assert.deepEqual(
   "React surgery metrics should use SurgeryVerdict instead of hand-written surgery-verdict class wrappers",
 );
 assert.ok(surgeryMetricsPanel.includes("SurgeryVerdict"), "React surgery metrics use the shared verdict feedback primitive");
+assert.ok(uiPrivacyAudit.includes("PrivacyStateText"), "shadcn-style privacy audit primitive exports PrivacyStateText");
+assert.ok(uiPrivacyAudit.includes("PrivacyAuditMessage"), "shadcn-style privacy audit primitive exports PrivacyAuditMessage");
+assert.ok(uiPrivacyAudit.includes('blocked && "danger-text"'), "privacy audit primitive preserves blocked danger styling");
+assert.ok(uiPrivacyAudit.includes("<Hint"), "privacy audit message primitive preserves shared Hint semantics");
+assert.deepEqual(
+  privacyAuditConsumersWithRawClass("danger-text"),
+  [],
+  "React privacy audit panel should use privacy audit primitives instead of hand-written danger-text class wrappers",
+);
+assert.ok(privacyAuditPanel.includes("PrivacyStateText"), "React privacy audit panel uses the shared privacy state primitive");
+assert.ok(privacyAuditPanel.includes("PrivacyAuditMessage"), "React privacy audit panel uses the shared privacy message primitive");
 for (const className of [
   "hint",
   "badge",
