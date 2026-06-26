@@ -1,6 +1,5 @@
 // 网页 3D 标注入口：加载网格 → 在表面点击落点成线 → 导出图谱/xyz。
 // 拖拽旋转、滚轮缩放；点击（非拖拽）在网格表面拾取一个控制点。
-import { AnnotationModel } from "../../annotate_model.js";
 import { Annotator3D } from "../../annotate_viewer.js";
 import {
   ANNOTATE_CONTROLLER_STATE_EVENT,
@@ -16,7 +15,7 @@ import {
   dispatchControllerEvent,
   readControllerCommandDetail,
 } from "../lib/controllerCommand";
-import type { AnnotationLine, AnnotationPoint } from "../../annotate_model.js";
+import { AnnotationModel, type AnnotationLine, type AnnotationPoint } from "./annotationModel";
 import type { Triangle, Vec3 } from "./softBody";
 import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
 import { requireScopedElement } from "../lib/scopedDom";
@@ -590,7 +589,7 @@ function previewActiveAtlas(): void {
     setHint("预览失败：" + errorMessage(err));
     return;
   }
-  if (!dataSource.stagePreviewAtlas(atlas as Parameters<typeof dataSource.stagePreviewAtlas>[0])) {
+  if (!dataSource.stagePreviewAtlas(atlas as unknown as Parameters<typeof dataSource.stagePreviewAtlas>[0])) {
     setHint("预览失败：浏览器无法暂存图谱。请检查站点存储权限。");
     return;
   }

@@ -137,6 +137,7 @@ const liveSnapshotsService = read("src/services/liveSnapshots.ts");
 const incisionSnapshotsService = read("src/services/incisionSnapshots.ts");
 const annotateRuntime = read("src/services/annotateRuntime.ts");
 const annotateModelTypes = read("annotate_model.d.ts");
+const annotationModelService = read("src/services/annotationModel.ts");
 const annotateViewerTypes = read("annotate_viewer.d.ts");
 const flameFitTypes = read("flame_fit.d.ts");
 const flameFitService = read("src/services/flameFit.ts");
@@ -1869,7 +1870,10 @@ assert.ok(!annotateRuntime.includes("// @ts-nocheck"), "annotation runtime shoul
 assert.ok(annotateRuntime.includes("interface AnnotateDomElements"), "annotation runtime types its DOM binding surface");
 assert.ok(annotateRuntime.includes("interface DragState"), "annotation runtime types pointer drag state");
 assert.ok(annotateRuntime.includes("function controllerEvent"), "annotation runtime narrows browser command events before reading detail");
-assert.ok(annotateModelTypes.includes("class AnnotationModel"), "annotation model declarations expose the line model contract");
+assert.ok(
+  annotateModelTypes.includes("AnnotationModel") && annotationModelService.includes("class AnnotationModel"),
+  "annotation model declarations expose the typed line model contract",
+);
 assert.ok(annotateViewerTypes.includes("class Annotator3D"), "annotation viewer declarations expose the Three.js view contract");
 assert.ok(
   flameFitTypes.includes("FlameBasis") && flameFitService.includes("interface FlameBasis"),
