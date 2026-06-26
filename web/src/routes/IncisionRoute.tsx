@@ -1,9 +1,6 @@
-import { useRef } from "react";
-
 import { IncisionWorkbench } from "./IncisionWorkbench";
-import { ReactRouteHost } from "../components/ReactShell";
+import { ManagedWorkbenchRoute } from "../components/ManagedWorkbenchRoute";
 import { useIncisionControllerBridge } from "../hooks/useIncisionControllerBridge";
-import { useManagedWorkbenchController } from "../hooks/useManagedWorkbenchController";
 
 type IncisionControllerModule = typeof import("../../incision_agent_main.js");
 
@@ -12,24 +9,20 @@ const mountIncisionController = (module: IncisionControllerModule, root: HTMLEle
 const disposeIncisionController = (module: IncisionControllerModule) => module.disposeIncisionAgentWorkbench?.();
 
 export function IncisionRoute() {
-  const hostRef = useRef<HTMLDivElement | null>(null);
   useIncisionControllerBridge();
 
-  useManagedWorkbenchController({
-    hostRef,
-    workspace: "incision",
-    loadingStatus: "加载切口工作台",
-    mountedStatus: "切口工作台已挂载",
-    failedStatus: "切口工作台加载失败",
-    unloadedStatus: "切口工作台已卸载",
-    loadModule: loadIncisionController,
-    mount: mountIncisionController,
-    dispose: disposeIncisionController,
-  });
-
   return (
-    <ReactRouteHost ref={hostRef} workspace="incision">
+    <ManagedWorkbenchRoute
+      dispose={disposeIncisionController}
+      failedStatus="切口工作台加载失败"
+      loadingStatus="加载切口工作台"
+      loadModule={loadIncisionController}
+      mount={mountIncisionController}
+      mountedStatus="切口工作台已挂载"
+      unloadedStatus="切口工作台已卸载"
+      workspace="incision"
+    >
       <IncisionWorkbench />
-    </ReactRouteHost>
+    </ManagedWorkbenchRoute>
   );
 }

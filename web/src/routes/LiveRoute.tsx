@@ -1,9 +1,6 @@
-import { useRef } from "react";
-
 import { LiveWorkbench } from "./LiveWorkbench";
-import { ReactRouteHost } from "../components/ReactShell";
+import { ManagedWorkbenchRoute } from "../components/ManagedWorkbenchRoute";
 import { useLiveControllerBridge } from "../hooks/useLiveControllerBridge";
-import { useManagedWorkbenchController } from "../hooks/useManagedWorkbenchController";
 
 type LiveControllerModule = typeof import("../../main.js");
 
@@ -12,24 +9,20 @@ const mountLiveController = (module: LiveControllerModule, root: HTMLElement) =>
 const disposeLiveController = (module: LiveControllerModule) => module.disposeLiveWorkbench?.();
 
 export function LiveRoute() {
-  const hostRef = useRef<HTMLDivElement | null>(null);
   useLiveControllerBridge();
 
-  useManagedWorkbenchController({
-    hostRef,
-    workspace: "live",
-    loadingStatus: "加载实时显示",
-    mountedStatus: "实时显示已挂载",
-    failedStatus: "实时显示加载失败",
-    unloadedStatus: "实时显示已卸载",
-    loadModule: loadLiveController,
-    mount: mountLiveController,
-    dispose: disposeLiveController,
-  });
-
   return (
-    <ReactRouteHost ref={hostRef} workspace="live">
+    <ManagedWorkbenchRoute
+      dispose={disposeLiveController}
+      failedStatus="实时显示加载失败"
+      loadingStatus="加载实时显示"
+      loadModule={loadLiveController}
+      mount={mountLiveController}
+      mountedStatus="实时显示已挂载"
+      unloadedStatus="实时显示已卸载"
+      workspace="live"
+    >
       <LiveWorkbench />
-    </ReactRouteHost>
+    </ManagedWorkbenchRoute>
   );
 }

@@ -27,6 +27,7 @@ const vercelConfig = JSON.parse(vercel);
 const app = read("src/App.tsx");
 const typedStore = read("src/stores/appStore.ts");
 const reactShell = read("src/components/ReactShell.tsx");
+const managedWorkbenchRoute = read("src/components/ManagedWorkbenchRoute.tsx");
 const stageShell = read("src/components/StageShell.tsx");
 const workbenchLayout = read("src/components/WorkbenchLayout.tsx");
 const workbenchBrand = read("src/components/WorkbenchBrand.tsx");
@@ -544,16 +545,25 @@ for (const [componentName, className] of [
 assert.ok(reactShell.includes("react-router-dom"), "React shell primitive supports Router links");
 assert.ok(reactShell.includes('type { Workspace } from "../stores/appStore"'), "React shell workspace types derive from the Zustand app store");
 assert.ok(reactShell.includes("Extract<Workspace"), "React shell keeps a narrowed route workspace type from the shared Workspace union");
+assert.ok(managedWorkbenchRoute.includes("useRef<HTMLDivElement | null>(null)"), "managed workbench route owns the legacy host ref");
+assert.ok(managedWorkbenchRoute.includes("useManagedWorkbenchController"), "managed workbench route owns legacy controller lifecycle wiring");
+assert.ok(managedWorkbenchRoute.includes("ReactRouteHost"), "managed workbench route renders through the shared ReactRouteHost primitive");
+assert.ok(managedWorkbenchRoute.includes("Extract<Workspace"), "managed workbench route narrows workspace type from the shared Workspace union");
 for (const [name, source, workspace] of [
   ["AnnotateRoute.tsx", annotateRoute, "annotate"],
   ["IncisionRoute.tsx", incisionRoute, "incision"],
   ["LiveRoute.tsx", liveRoute, "live"],
-  ["SurgeryRoute.tsx", surgeryRoute, "surgery"],
 ]) {
-  assert.ok(source.includes("ReactRouteHost"), `${name} should render through the shared ReactRouteHost primitive`);
-  assert.ok(source.includes(`workspace="${workspace}"`), `${name} should declare its ReactRouteHost workspace`);
+  assert.ok(source.includes("ManagedWorkbenchRoute"), `${name} should render through the shared managed workbench route primitive`);
+  assert.ok(source.includes(`workspace="${workspace}"`), `${name} should declare its managed workbench workspace`);
+  assert.ok(!source.includes("ReactRouteHost"), `${name} should not duplicate the route host wrapper`);
+  assert.ok(!source.includes("useManagedWorkbenchController"), `${name} should not duplicate managed controller lifecycle wiring`);
+  assert.ok(!source.includes("useRef<HTMLDivElement"), `${name} should not own the legacy host ref`);
   assert.ok(!source.includes(`className="react-${workspace}-host"`), `${name} should not hand-write its route host class`);
 }
+assert.ok(surgeryRoute.includes("ReactRouteHost"), "SurgeryRoute should render through the shared ReactRouteHost primitive");
+assert.ok(surgeryRoute.includes('workspace="surgery"'), "SurgeryRoute should declare its ReactRouteHost workspace");
+assert.ok(!surgeryRoute.includes('className="react-surgery-host"'), "SurgeryRoute should not hand-write its route host class");
 assert.ok(app.includes("ReactPage"), "React route fallback uses the shared React page primitive");
 assert.ok(dashboardRoute.includes("ReactShellNavLink"), "React dashboard uses shared shell nav links");
 assert.ok(dashboardRoute.includes("ReactShellExternalLink"), "React dashboard uses shared shell external nav links");
@@ -1161,7 +1171,7 @@ assert.ok(incisionRoute.includes("useIncisionControllerBridge"), "incision route
 assert.ok(incisionStatePanel.includes("useIncisionStore"), "React incision UI reads low-frequency state from Zustand");
 assert.ok(incisionStatePanel.includes("<Card"), "React incision state panel uses the shared shadcn-style card primitive");
 
-assert.ok(incisionRoute.includes("useManagedWorkbenchController"), "React incision route uses the shared managed controller lifecycle");
+assert.ok(incisionRoute.includes("ManagedWorkbenchRoute"), "React incision route uses the shared managed route lifecycle");
 assert.ok(incisionRoute.includes("mountIncisionAgentWorkbench"), "React incision route configures the existing controller mount function");
 assert.ok(incisionRoute.includes("disposeIncisionAgentWorkbench"), "React incision route configures the existing controller dispose function");
 assert.ok(!incisionRoute.includes("window.__LANGERFACE_REACT_MANAGED__ = true"), "React incision route does not duplicate managed flag logic");
@@ -1516,7 +1526,7 @@ assert.ok(incisionSnapshotsService.includes("INCISION_SNAPSHOT_SCHEMA_VERSION"),
 assert.ok(controller.includes("dispatchControllerEvent(INCISION_CONTROLLER_STATE_EVENT"), "incision controller emits state snapshots through the shared browser event helper");
 assert.ok(!controller.includes("CustomEvent(INCISION_CONTROLLER_STATE_EVENT"), "incision controller does not hand-roll state snapshot CustomEvent dispatch");
 assert.ok(annotateRoute.includes("useAnnotateControllerBridge"), "annotation route mounts the Zustand/controller bridge");
-assert.ok(annotateRoute.includes("useManagedWorkbenchController"), "React annotation route uses the shared managed controller lifecycle");
+assert.ok(annotateRoute.includes("ManagedWorkbenchRoute"), "React annotation route uses the shared managed route lifecycle");
 assert.ok(annotateRoute.includes("mountAnnotateWorkbench"), "React annotation route configures the annotation controller mount function");
 assert.ok(annotateRoute.includes("disposeAnnotateWorkbench"), "React annotation route configures the annotation controller dispose function");
 assert.ok(!annotateRoute.includes("window.__LANGERFACE_REACT_MANAGED__ = true"), "React annotation route does not duplicate managed flag logic");
@@ -1660,7 +1670,7 @@ assert.ok(annotateController.includes('"/app/live"'), "annotation preview jumps 
 assert.ok(annotateController.includes("!isReactManagedWorkbench()"), "legacy annotation HTML still auto-mounts outside React");
 assert.ok(annotateViewer.includes("dispose()"), "annotation viewer exposes a WebGL dispose lifecycle");
 assert.ok(liveRoute.includes("useLiveControllerBridge"), "live route mounts the Zustand/controller bridge");
-assert.ok(liveRoute.includes("useManagedWorkbenchController"), "React live route uses the shared managed controller lifecycle");
+assert.ok(liveRoute.includes("ManagedWorkbenchRoute"), "React live route uses the shared managed route lifecycle");
 assert.ok(liveRoute.includes("mountLiveWorkbench"), "React live route configures the live controller mount function");
 assert.ok(liveRoute.includes("disposeLiveWorkbench"), "React live route configures the live controller dispose function");
 assert.ok(!liveRoute.includes("window.__LANGERFACE_REACT_MANAGED__ = true"), "React live route does not duplicate managed flag logic");
