@@ -6,18 +6,17 @@ import { LiveSourceControlsPanel } from "../components/LiveSourceControlsPanel";
 import { LiveQualityPanel } from "../components/LiveQualityPanel";
 import { LiveStagePanel } from "../components/LiveStagePanel";
 import { LiveStatePanel } from "../components/LiveStatePanel";
+import { WorkbenchBrand } from "../components/WorkbenchBrand";
 
 export function LiveWorkbench() {
   return (
     <div className="app live-workbench">
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-top">
-            <span className="eyebrow">COMPUTER VISION PROTOTYPE</span>
-            <span className="badge loading" id="modelBadge">模型加载中...</span>
-          </div>
-          <h1>面部朗格线迁移</h1>
-        </div>
+        <WorkbenchBrand
+          eyebrow="COMPUTER VISION PROTOTYPE"
+          title="面部朗格线迁移"
+          action={<span className="badge loading" id="modelBadge">模型加载中...</span>}
+        />
 
         <LiveRouteControlsPanel />
 

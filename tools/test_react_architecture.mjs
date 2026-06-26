@@ -14,6 +14,7 @@ const vite = read("vite.config.js");
 const vercel = read("vercel.json");
 const app = read("src/App.tsx");
 const typedStore = read("src/stores/appStore.ts");
+const workbenchBrand = read("src/components/WorkbenchBrand.tsx");
 const annotateStore = read("src/stores/annotateStore.ts");
 const controllerSnapshotBridgeHook = read("src/hooks/useControllerSnapshotBridge.ts");
 const annotateBridge = read("src/hooks/useAnnotateControllerBridge.ts");
@@ -44,6 +45,7 @@ const liveSourceControlsPanel = read("src/components/LiveSourceControlsPanel.tsx
 const liveRenderControlsPanel = read("src/components/LiveRenderControlsPanel.tsx");
 const liveQualityPanel = read("src/components/LiveQualityPanel.tsx");
 const liveStagePanel = read("src/components/LiveStagePanel.tsx");
+const dashboardRoute = read("src/routes/DashboardRoute.tsx");
 const annotateRoute = read("src/routes/AnnotateRoute.tsx");
 const annotateWorkbench = read("src/routes/AnnotateWorkbench.tsx");
 const incisionRoute = read("src/routes/IncisionRoute.tsx");
@@ -104,6 +106,10 @@ assert.ok(app.includes('path="/incision"'), "React Router exposes the incision w
 assert.ok(app.includes('path="/live"'), "React Router exposes the live workbench route");
 assert.ok(app.includes('path="/surgery"'), "React Router exposes the surgery closure route");
 assert.ok(app.includes('path="/three-preview"'), "React Router exposes the R3F preview route");
+assert.ok(dashboardRoute.includes("WorkbenchBrand"), "React dashboard uses the shared workbench brand");
+assert.ok(workbenchBrand.includes('className="brand"'), "React shell uses a shared workbench brand component");
+assert.ok(workbenchBrand.includes('className="brand-top"'), "shared workbench brand keeps the existing brand-top structure");
+assert.ok(workbenchBrand.includes("{action}"), "shared workbench brand supports page-specific status/actions");
 assert.ok(typedStore.includes("React/Zustand stores low-frequency UI"), "Zustand store documents low-frequency state ownership");
 assert.ok(typedStore.includes("per-frame arrays stay outside persisted stores"), "Zustand store forbids high-frequency renderer arrays");
 assert.ok(typedStore.includes("interface AppState"), "Zustand store is typed");
@@ -157,6 +163,7 @@ assert.ok(incisionRoute.includes("mountIncisionAgentWorkbench"), "React incision
 assert.ok(incisionRoute.includes("disposeIncisionAgentWorkbench"), "React incision route configures the existing controller dispose function");
 assert.ok(!incisionRoute.includes("window.__LANGERFACE_REACT_MANAGED__ = true"), "React incision route does not duplicate managed flag logic");
 assert.ok(incisionRoute.includes("<IncisionWorkbench />"), "React incision route renders the workbench as TSX");
+assert.ok(incisionWorkbench.includes("WorkbenchBrand"), "React incision workbench uses the shared workbench brand");
 assert.ok(!incisionRoute.includes("DOMParser"), "React incision route should not parse legacy HTML");
 assert.ok(!incisionRoute.includes("innerHTML"), "React incision route should not inject legacy HTML");
 assert.ok(!incisionRoute.includes("incision_agent.html"), "React incision route should not fetch the legacy workbench HTML");
@@ -350,6 +357,7 @@ assert.ok(threePreviewScene.includes("@react-three/drei"), "R3F preview scene us
 assert.ok(threePreviewScene.includes("OrbitControls"), "R3F preview scene uses drei OrbitControls");
 assert.ok(threePreviewScene.includes("buildLineGeometry"), "R3F preview scene renders atlas line geometry");
 assert.ok(threePreviewSidebar.includes("R3F RENDERER BOUNDARY"), "R3F preview sidebar keeps the renderer boundary note");
+assert.ok(threePreviewSidebar.includes("WorkbenchBrand"), "R3F preview sidebar uses the shared workbench brand");
 assert.ok(worker.includes("Comlink.expose"), "workflow worker exposes its API through Comlink");
 assert.ok(worker.includes("summarizeTumorInputQuality"), "workflow worker can run deterministic browser tools");
 assert.ok(worker.includes("planIncisionWorkflow"), "workflow worker can run deterministic incision planning");
@@ -379,6 +387,7 @@ for (const id of [
   assert.ok(annotateStagePanel.includes(`id="${id}"`), `React annotate stage exposes #${id}`);
 }
 assert.ok(annotateWorkbench.includes("AnnotateStatePanel"), "React annotate workbench renders the controller state panel");
+assert.ok(annotateWorkbench.includes("WorkbenchBrand"), "React annotate workbench uses the shared workbench brand");
 for (const id of [
   "hint",
   "btnLoadCanonical",
@@ -543,6 +552,7 @@ for (const id of [
   assert.ok(liveStagePanel.includes(`id="${id}"`), `React live stage exposes #${id}`);
 }
 assert.ok(liveWorkbench.includes("LiveStatePanel"), "React live workbench renders the controller state panel");
+assert.ok(liveWorkbench.includes("WorkbenchBrand"), "React live workbench uses the shared workbench brand");
 assert.ok(liveWorkbench.includes("LiveRouteControlsPanel"), "React live workbench renders route controls as a React component");
 assert.ok(liveWorkbench.includes("LiveSourceControlsPanel"), "React live workbench renders source controls as a React component");
 assert.ok(liveWorkbench.includes("LiveRenderControlsPanel"), "React live workbench renders render controls as a React component");
@@ -615,6 +625,7 @@ for (const id of [
   assert.ok(surgeryMetricsPanel.includes(`id="${id}"`), `React surgery metrics expose #${id}`);
 }
 assert.ok(surgeryWorkbench.includes("SurgeryControlsPanel"), "React surgery workbench renders closure controls as a React component");
+assert.ok(surgeryWorkbench.includes("WorkbenchBrand"), "React surgery workbench uses the shared workbench brand");
 assert.ok(surgeryWorkbench.includes("SurgeryMetricsPanel"), "React surgery workbench renders closure metrics as a React component");
 assert.ok(surgeryWorkbench.includes("SurgeryHelpPanel"), "React surgery workbench renders closure help as a React component");
 assert.ok(surgeryWorkbench.includes("SurgeryStagePanel"), "React surgery workbench renders the R3F stage shell as a React component");

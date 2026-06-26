@@ -5,6 +5,7 @@ import { SurgeryControlsPanel } from "../components/SurgeryControlsPanel";
 import { SurgeryHelpPanel } from "../components/SurgeryHelpPanel";
 import { SurgeryMetricsPanel, type SurgeryVerdictTone } from "../components/SurgeryMetricsPanel";
 import { SurgeryStagePanel } from "../components/SurgeryStagePanel";
+import { WorkbenchBrand } from "../components/WorkbenchBrand";
 
 interface SurgeryWorkbenchProps {
   activeCut: "along" | null;
@@ -42,13 +43,11 @@ export function SurgeryWorkbench({
   return (
     <div className="app surgery-workbench">
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-top">
-            <span className="eyebrow">RSTL · CLOSURE DEMO</span>
-            <Link className="badge" to="/annotate">返回 3D 标注</Link>
-          </div>
-          <h1>沿 RSTL 闭合演示</h1>
-        </div>
+        <WorkbenchBrand
+          eyebrow="RSTL · CLOSURE DEMO"
+          title="沿 RSTL 闭合演示"
+          action={<Link className="badge" to="/annotate">返回 3D 标注</Link>}
+        />
 
         <SurgeryControlsPanel
           activeCut={activeCut}

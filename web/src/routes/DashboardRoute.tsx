@@ -2,6 +2,7 @@ import { ArrowRight, Boxes, Camera, ExternalLink, PenLine, Scissors } from "luci
 import { Link } from "react-router-dom";
 
 import { WorkerStatusPanel } from "../components/WorkerStatusPanel";
+import { WorkbenchBrand } from "../components/WorkbenchBrand";
 import { Button } from "../components/ui/button";
 import { STATE_BOUNDARY_NOTE, useAppStore } from "../stores/appStore";
 
@@ -12,13 +13,11 @@ export function DashboardRoute() {
     <div className="react-page">
       <div className="react-shell">
         <aside className="react-shell-sidebar">
-          <div className="brand">
-            <div className="brand-top">
-              <span className="eyebrow">REACT ARCHITECTURE</span>
-              <span className="react-route-status">{routeStatus}</span>
-            </div>
-            <h1>React 工作台</h1>
-          </div>
+          <WorkbenchBrand
+            eyebrow="REACT ARCHITECTURE"
+            title="React 工作台"
+            action={<span className="react-route-status">{routeStatus}</span>}
+          />
 
           <div className="card">
             <Link className="react-nav-link" to="/incision">

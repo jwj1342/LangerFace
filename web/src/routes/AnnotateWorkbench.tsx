@@ -6,18 +6,17 @@ import { AnnotateLineLibraryPanel } from "../components/AnnotateLineLibraryPanel
 import { AnnotateMeshSourcePanel } from "../components/AnnotateMeshSourcePanel";
 import { AnnotateStagePanel } from "../components/AnnotateStagePanel";
 import { AnnotateStatePanel } from "../components/AnnotateStatePanel";
+import { WorkbenchBrand } from "../components/WorkbenchBrand";
 
 export function AnnotateWorkbench() {
   return (
     <div className="app annotate-workbench">
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-top">
-            <span className="eyebrow">3D LINE ANNOTATION</span>
-            <Link className="badge" to="/live">返回实时显示</Link>
-          </div>
-          <h1>3D 网页标注</h1>
-        </div>
+        <WorkbenchBrand
+          eyebrow="3D LINE ANNOTATION"
+          title="3D 网页标注"
+          action={<Link className="badge" to="/live">返回实时显示</Link>}
+        />
 
         <AnnotateMeshSourcePanel />
 

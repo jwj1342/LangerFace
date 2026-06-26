@@ -2,6 +2,7 @@ import { ArrowLeft, RotateCcw } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Button } from "./ui/button";
+import { WorkbenchBrand } from "./WorkbenchBrand";
 
 interface ThreePreviewSidebarProps {
   isReady: boolean;
@@ -11,13 +12,11 @@ interface ThreePreviewSidebarProps {
 export function ThreePreviewSidebar({ isReady, onReload }: ThreePreviewSidebarProps) {
   return (
     <aside className="react-shell-sidebar">
-      <div className="brand">
-        <div className="brand-top">
-          <span className="eyebrow">R3F RENDERER BOUNDARY</span>
-          <span className="react-route-status">{isReady ? "ready" : "loading"}</span>
-        </div>
-        <h1>R3F 标准脸预览</h1>
-      </div>
+      <WorkbenchBrand
+        eyebrow="R3F RENDERER BOUNDARY"
+        title="R3F 标准脸预览"
+        action={<span className="react-route-status">{isReady ? "ready" : "loading"}</span>}
+      />
 
       <div className="card">
         <p className="hint">

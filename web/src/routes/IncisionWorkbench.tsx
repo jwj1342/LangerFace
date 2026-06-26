@@ -10,18 +10,17 @@ import { ProviderConfigPanel } from "../components/ProviderConfigPanel";
 import { ReviewControlsPanel } from "../components/ReviewControlsPanel";
 import { SecondaryCuePanel } from "../components/SecondaryCuePanel";
 import { TumorInputPanel } from "../components/TumorInputPanel";
+import { WorkbenchBrand } from "../components/WorkbenchBrand";
 
 export function IncisionWorkbench() {
   return (
     <div className="app incision-workbench">
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-top">
-            <span className="eyebrow">STAGE 2 · AGENTIC INCISION</span>
-            <Link className="badge" to="/live">返回实时显示</Link>
-          </div>
-          <h1>切口 Agent 工作台</h1>
-        </div>
+        <WorkbenchBrand
+          eyebrow="STAGE 2 · AGENTIC INCISION"
+          title="切口 Agent 工作台"
+          action={<Link className="badge" to="/live">返回实时显示</Link>}
+        />
 
         <IncisionStatePanel />
 
