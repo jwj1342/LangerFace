@@ -292,6 +292,8 @@ assert.ok(incisionWorkbench.includes("CandidateLibraryPanel"), "React incision w
 assert.ok(candidateLibraryPanel.includes("LIBRARY_REACT_COMMAND_EVENT"), "React candidate library dispatches library commands to the controller boundary");
 assert.ok(candidateLibraryPanel.includes("dispatchControllerCommand"), "React candidate library uses the shared controller command helper");
 assert.ok(candidateLibraryPanel.includes("useIncisionStore"), "React candidate library reads saved candidate summaries from Zustand");
+assert.ok(candidateLibraryPanel.includes("Button"), "React candidate library uses the shared shadcn-style button primitive");
+assert.ok(candidateLibraryPanel.includes('variant="workbenchPrimary"'), "React candidate library keeps primary workbench button styling through Button variants");
 for (const id of [
   "privacyState",
   "privacyAudit",
@@ -505,6 +507,8 @@ assert.ok(annotateWorkbench.includes("AnnotateLineLibraryPanel"), "React annotat
 assert.ok(annotateLineLibraryPanel.includes("ANNOTATE_LIBRARY_REACT_COMMAND_EVENT"), "React annotate line library dispatches saved line commands to the controller boundary");
 assert.ok(annotateLineLibraryPanel.includes("dispatchControllerCommand"), "React annotate line library uses the shared controller command helper");
 assert.ok(annotateLineLibraryPanel.includes("useAnnotateStore"), "React annotate line library reads saved line state from Zustand");
+assert.ok(annotateLineLibraryPanel.includes("Button"), "React annotate line library uses the shared shadcn-style button primitive");
+assert.ok(annotateLineLibraryPanel.includes('variant="miniDanger"'), "React annotate line library keeps compact destructive styling through Button variants");
 assert.ok(annotateMeshSourcePanel.includes('to="/surgery"'), "React annotation mesh source panel links to the React surgery closure route");
 assert.ok(annotateMeshSourcePanel.includes('to="/live"'), "React annotation mesh source panel returns to the React live route");
 assert.ok(annotateController.includes("export function mountAnnotateWorkbench"), "annotation controller exposes a mount lifecycle");

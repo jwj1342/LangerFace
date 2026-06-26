@@ -1,3 +1,4 @@
+import { Button } from "./ui/button";
 import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 
@@ -16,25 +17,25 @@ export function CandidateLibraryPanel() {
   return (
     <div className="card agent-grid">
       <div className="quality-top"><span>候选库</span><span id="savedCount">{saved.length}</span></div>
-      <button
-        className="btn btn-primary"
+      <Button
+        variant="workbenchPrimary"
         id="saveCandidateBtn"
         type="button"
         disabled={!hasCandidate}
         onClick={() => dispatchLibraryCommand("save_current")}
       >
         保存当前候选
-      </button>
+      </Button>
       <div className="btn-row two-cols">
-        <button className="btn" id="makeVariantsBtn" type="button" disabled={!hasCandidate} onClick={() => dispatchLibraryCommand("make_variants")}>生成备选</button>
-        <button className="btn" id="clearSavedBtn" type="button" disabled={!hasSaved} onClick={() => dispatchLibraryCommand("clear_saved")}>清空候选库</button>
+        <Button variant="workbench" id="makeVariantsBtn" type="button" disabled={!hasCandidate} onClick={() => dispatchLibraryCommand("make_variants")}>生成备选</Button>
+        <Button variant="workbench" id="clearSavedBtn" type="button" disabled={!hasSaved} onClick={() => dispatchLibraryCommand("clear_saved")}>清空候选库</Button>
       </div>
       <div className="btn-row three-cols">
-        <button className="btn" id="exportJsonBtn" type="button" disabled={!hasCandidate && !hasSaved} onClick={() => dispatchLibraryCommand("export_json")}>导出 JSON</button>
-        <button className="btn" id="exportReportBtn" type="button" disabled={!hasCandidate && !hasSaved} onClick={() => dispatchLibraryCommand("export_report")}>导出报告</button>
-        <button className="btn" id="exportPngBtn" type="button" disabled={!hasCandidate} onClick={() => dispatchLibraryCommand("export_png")}>导出截图</button>
+        <Button variant="workbench" id="exportJsonBtn" type="button" disabled={!hasCandidate && !hasSaved} onClick={() => dispatchLibraryCommand("export_json")}>导出 JSON</Button>
+        <Button variant="workbench" id="exportReportBtn" type="button" disabled={!hasCandidate && !hasSaved} onClick={() => dispatchLibraryCommand("export_report")}>导出报告</Button>
+        <Button variant="workbench" id="exportPngBtn" type="button" disabled={!hasCandidate} onClick={() => dispatchLibraryCommand("export_png")}>导出截图</Button>
       </div>
-      <button className="btn" id="stageLiveOverlayBtn" type="button" disabled={!hasCandidate} onClick={() => dispatchLibraryCommand("stage_live_overlay")}>发送到实时叠加</button>
+      <Button variant="workbench" id="stageLiveOverlayBtn" type="button" disabled={!hasCandidate} onClick={() => dispatchLibraryCommand("stage_live_overlay")}>发送到实时叠加</Button>
       <div className="candidate-list" id="candidateList">
         {saved.map((item) => (
           <div className="candidate-row" key={item.id}>
@@ -44,8 +45,8 @@ export function CandidateLibraryPanel() {
             </div>
             <div className="meta">{item.meta}</div>
             <div className="btn-row two-cols">
-              <button className="btn" type="button" onClick={() => dispatchLibraryCommand("load_candidate", item.id)}>载入</button>
-              <button className="btn" type="button" onClick={() => dispatchLibraryCommand("remove_candidate", item.id)}>删除</button>
+              <Button variant="workbench" type="button" onClick={() => dispatchLibraryCommand("load_candidate", item.id)}>载入</Button>
+              <Button variant="workbench" type="button" onClick={() => dispatchLibraryCommand("remove_candidate", item.id)}>删除</Button>
             </div>
           </div>
         ))}

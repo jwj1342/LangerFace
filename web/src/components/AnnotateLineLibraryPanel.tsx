@@ -1,3 +1,4 @@
+import { Button } from "./ui/button";
 import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useAnnotateStore } from "../stores/annotateStore";
 
@@ -31,8 +32,8 @@ export function AnnotateLineLibraryPanel() {
               {line.warning ? <span className="line-warning">{line.warning}</span> : null}
             </div>
             <div className="line-actions">
-              <button className="mini" type="button" onClick={() => dispatchLibraryCommand("restore_line", line.index)}>编辑</button>
-              <button className="mini del" type="button" onClick={() => dispatchLibraryCommand("delete_line", line.index)}>删除</button>
+              <Button variant="mini" type="button" onClick={() => dispatchLibraryCommand("restore_line", line.index)}>编辑</Button>
+              <Button variant="miniDanger" type="button" onClick={() => dispatchLibraryCommand("delete_line", line.index)}>删除</Button>
             </div>
           </div>
         )) : (
@@ -40,11 +41,11 @@ export function AnnotateLineLibraryPanel() {
         )}
       </div>
       <div className="btn-row annotate-export-row">
-        <button className="btn" id="btnExportAtlas" type="button" disabled={!exportState?.canExportAtlas} onClick={() => dispatchLibraryCommand("export_atlas")}>导出图谱</button>
-        <button className="btn" id="btnExportXyz" type="button" disabled={!exportState?.canExportXyz} onClick={() => dispatchLibraryCommand("export_xyz")}>导出 xyz</button>
+        <Button variant="workbench" id="btnExportAtlas" type="button" disabled={!exportState?.canExportAtlas} onClick={() => dispatchLibraryCommand("export_atlas")}>导出图谱</Button>
+        <Button variant="workbench" id="btnExportXyz" type="button" disabled={!exportState?.canExportXyz} onClick={() => dispatchLibraryCommand("export_xyz")}>导出 xyz</Button>
       </div>
-      <button className="btn btn-primary" id="btnSetActiveAtlas" type="button" disabled={!exportState?.canPreviewActiveAtlas} onClick={() => dispatchLibraryCommand("set_active_atlas")}>设为活动图谱并预览</button>
-      <button className="btn" id="btnClear" type="button" disabled={!hasLines} onClick={clearLines}>清空</button>
+      <Button variant="workbenchPrimary" id="btnSetActiveAtlas" type="button" disabled={!exportState?.canPreviewActiveAtlas} onClick={() => dispatchLibraryCommand("set_active_atlas")}>设为活动图谱并预览</Button>
+      <Button variant="workbench" id="btnClear" type="button" disabled={!hasLines} onClick={clearLines}>清空</Button>
     </div>
   );
 }
