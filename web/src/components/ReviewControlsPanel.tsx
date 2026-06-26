@@ -9,7 +9,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { Textarea } from "./ui/textarea";
-import { dispatchIncisionReviewCommand } from "../lib/controllerCommand";
+import { useIncisionControllerCommands } from "../hooks/useControllerCommands";
 import { useIncisionStore } from "../stores/incisionStore";
 
 const REVIEW_LABELS: Record<string, string> = {
@@ -31,6 +31,7 @@ function reviewTone(status: string): "" | "approved" | "rejected" | "revision" {
 }
 
 export function ReviewControlsPanel() {
+  const commands = useIncisionControllerCommands();
   const snapshot = useIncisionStore((state) => state.snapshot);
   const [status, setStatus] = useState("pending_clinician_confirmation");
 
@@ -58,7 +59,7 @@ export function ReviewControlsPanel() {
         defaultValue="pending_clinician_confirmation"
         onChange={(event) => {
           setStatus(event.currentTarget.value);
-          dispatchIncisionReviewCommand("review_state_changed");
+          commands.review("review_state_changed");
         }}
       >
         <option value="pending_clinician_confirmation">待医生确认</option>
@@ -75,7 +76,7 @@ export function ReviewControlsPanel() {
           variant="workbench"
           id="approveCandidateBtn"
           type="button"
-          onClick={() => dispatchIncisionReviewCommand("approve_candidate")}
+          onClick={() => commands.review("approve_candidate")}
         >
           确认当前候选
         </Button>
@@ -83,7 +84,7 @@ export function ReviewControlsPanel() {
           variant="workbench"
           id="rejectCandidateBtn"
           type="button"
-          onClick={() => dispatchIncisionReviewCommand("reject_candidate")}
+          onClick={() => commands.review("reject_candidate")}
         >
           否决当前候选
         </Button>
@@ -92,7 +93,7 @@ export function ReviewControlsPanel() {
         variant="workbenchPrimary"
         id="saveReviewBtn"
         type="button"
-        onClick={() => dispatchIncisionReviewCommand("save_review")}
+        onClick={() => commands.review("save_review")}
       >
         保存审阅记录
       </Button>

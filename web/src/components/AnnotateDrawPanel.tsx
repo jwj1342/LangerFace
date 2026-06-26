@@ -1,4 +1,4 @@
-import { dispatchAnnotateDrawCommand } from "../lib/controllerCommand";
+import { useAnnotateControllerCommands } from "../hooks/useControllerCommands";
 import { useAnnotateStore } from "../stores/annotateStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
@@ -19,6 +19,7 @@ function currentStateText(snapshot: ReturnType<typeof useAnnotateStore.getState>
 }
 
 export function AnnotateDrawPanel() {
+  const commands = useAnnotateControllerCommands();
   const snapshot = useAnnotateStore((state) => state.snapshot);
   const draft = snapshot?.draft;
   const savedCount = snapshot?.saved.count || 0;
@@ -33,7 +34,7 @@ export function AnnotateDrawPanel() {
           id="annSystem"
           className="annotate-system-select"
           defaultValue={snapshot?.system || "rstl"}
-          onChange={(event) => dispatchAnnotateDrawCommand("system_changed", event.currentTarget.value)}
+          onChange={(event) => commands.draw("system_changed", event.currentTarget.value)}
         >
           <option value="rstl">RSTL（首选）</option>
           <option value="langer">Langer</option>
@@ -46,9 +47,9 @@ export function AnnotateDrawPanel() {
         {currentStateText(snapshot)}
       </CurrentLineStatus>
       <ButtonRow className="annotate-actions">
-        <Button variant="workbenchPrimary" id="btnNew" type="button" disabled={active} onClick={() => dispatchAnnotateDrawCommand("start_line")}>开始一条线</Button>
-        <Button variant="workbench" id="btnUndo" type="button" disabled={!active && !savedCount} onClick={() => dispatchAnnotateDrawCommand("undo_last")}>撤销上一个点</Button>
-        <Button variant="workbench" id="btnFinish" type="button" disabled={!active} onClick={() => dispatchAnnotateDrawCommand("save_current_line")}>保存当前线</Button>
+        <Button variant="workbenchPrimary" id="btnNew" type="button" disabled={active} onClick={() => commands.draw("start_line")}>开始一条线</Button>
+        <Button variant="workbench" id="btnUndo" type="button" disabled={!active && !savedCount} onClick={() => commands.draw("undo_last")}>撤销上一个点</Button>
+        <Button variant="workbench" id="btnFinish" type="button" disabled={!active} onClick={() => commands.draw("save_current_line")}>保存当前线</Button>
       </ButtonRow>
     </Card>
   );

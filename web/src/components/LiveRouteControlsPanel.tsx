@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import { dispatchLiveRouteCommand } from "../lib/controllerCommand";
+import { useLiveControllerCommands } from "../hooks/useControllerCommands";
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
@@ -14,6 +14,7 @@ import { ProgressBar } from "./ui/progress";
 import { Select } from "./ui/select";
 
 export function LiveRouteControlsPanel() {
+  const commands = useLiveControllerCommands();
   const snapshot = useLiveStore((state) => state.snapshot);
   const route = snapshot?.route.route || "2d";
   const mode3d = snapshot?.route.mode3d || "view";
@@ -32,7 +33,7 @@ export function LiveRouteControlsPanel() {
           id="routeSel"
           className="live-inline-top"
           value={route}
-          onChange={(event) => dispatchLiveRouteCommand("route_change", event.currentTarget.value)}
+          onChange={(event) => commands.route("route_change", event.currentTarget.value)}
         >
           <option value="2d">2D 贴合（默认，稳定）</option>
           <option value="3d">3D 重建（Beta）</option>
@@ -42,8 +43,8 @@ export function LiveRouteControlsPanel() {
         </Hint>
         <FieldGroup id="route3dPanel" className="live-stack" visible={is3d}>
           <ButtonRow className="live-two-col">
-            <Button variant="workbench" id="reconDemoBtn" type="button" disabled={scanning} onClick={() => dispatchLiveRouteCommand("load_demo_recon")}>用示例脸（无摄像头）</Button>
-            <Button variant="workbench" id="reconScanBtn" type="button" disabled={scanning} onClick={() => dispatchLiveRouteCommand("start_scan")}>转头扫描</Button>
+            <Button variant="workbench" id="reconDemoBtn" type="button" disabled={scanning} onClick={() => commands.route("load_demo_recon")}>用示例脸（无摄像头）</Button>
+            <Button variant="workbench" id="reconScanBtn" type="button" disabled={scanning} onClick={() => commands.route("start_scan")}>转头扫描</Button>
           </ButtonRow>
           <Hint id="reconStatus">{recon?.status || "先重建你的 3D 人头 → 可旋转查看 → 再投影到实时画面。"}</Hint>
           <LiveScanPanel id="scanPanel" visible={scanning}>
@@ -57,11 +58,11 @@ export function LiveRouteControlsPanel() {
             </LiveYawMeter>
           </LiveScanPanel>
           <ButtonRow className="live-two-col">
-            <Button variant="workbench" id="view3dBtn" type="button" disabled={!hasModel} aria-pressed={mode3d === "view"} onClick={() => dispatchLiveRouteCommand("view_3d")}>旋转查看</Button>
-            <Button variant="workbench" id="project3dBtn" type="button" disabled={!hasModel || !projectable} aria-pressed={mode3d === "project"} onClick={() => dispatchLiveRouteCommand("project_3d")}>投影到画面</Button>
+            <Button variant="workbench" id="view3dBtn" type="button" disabled={!hasModel} aria-pressed={mode3d === "view"} onClick={() => commands.route("view_3d")}>旋转查看</Button>
+            <Button variant="workbench" id="project3dBtn" type="button" disabled={!hasModel || !projectable} aria-pressed={mode3d === "project"} onClick={() => commands.route("project_3d")}>投影到画面</Button>
           </ButtonRow>
-          <Button variant="workbench" id="reset3dBtn" type="button" disabled={!hasModel} onClick={() => dispatchLiveRouteCommand("reset_3d")}>复位视角</Button>
-          <Button variant="workbenchPrimary" id="cloudFitFlameBtn" type="button" disabled={scanning} onClick={() => dispatchLiveRouteCommand("start_twin")}>▶ 实时孪生（左真脸 / 右 FLAME 随动）</Button>
+          <Button variant="workbench" id="reset3dBtn" type="button" disabled={!hasModel} onClick={() => commands.route("reset_3d")}>复位视角</Button>
+          <Button variant="workbenchPrimary" id="cloudFitFlameBtn" type="button" disabled={scanning} onClick={() => commands.route("start_twin")}>▶ 实时孪生（左真脸 / 右 FLAME 随动）</Button>
           <CheckboxField
             id="flameHeadToggleWrap"
             hiddenClassName="live-hidden-inline"
@@ -69,7 +70,7 @@ export function LiveRouteControlsPanel() {
             checkboxProps={{
               id: "flameStdToggle",
               checked: recon?.twinMode === "standard",
-              onChange: (event) => dispatchLiveRouteCommand("toggle_twin_head", event.currentTarget.checked),
+              onChange: (event) => commands.route("toggle_twin_head", event.currentTarget.checked),
             }}
           >
             显示标准头（取消勾选 = 个体）
@@ -81,7 +82,7 @@ export function LiveRouteControlsPanel() {
             checkboxProps={{
               id: "twinTextureToggle",
               checked: Boolean(recon?.twinTexture),
-              onChange: (event) => dispatchLiveRouteCommand("toggle_twin_texture", event.currentTarget.checked),
+              onChange: (event) => commands.route("toggle_twin_texture", event.currentTarget.checked),
             }}
           >
             贴真实人脸纹理

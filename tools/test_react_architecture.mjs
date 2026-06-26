@@ -32,6 +32,7 @@ const stageShell = read("src/components/StageShell.tsx");
 const workbenchLayout = read("src/components/WorkbenchLayout.tsx");
 const workbenchBrand = read("src/components/WorkbenchBrand.tsx");
 const controllerCommand = read("src/lib/controllerCommand.ts");
+const controllerCommandsHook = read("src/hooks/useControllerCommands.ts");
 const controllerEvents = read("src/lib/controllerEvents.ts");
 const controllerSnapshotSchemas = read("src/lib/controllerSnapshotSchemas.ts");
 const reactManagedWorkbench = read("src/lib/reactManagedWorkbench.ts");
@@ -512,9 +513,9 @@ assert.deepEqual(
     "*": false,
     "**": false,
     master: true,
-    "codex/stage2-incision-workflow": true,
+    "React-架构重构": true,
   },
-  "Vercel should only auto-deploy production and the active development branch",
+  "Vercel should only auto-deploy production and the current active development branch",
 );
 assert.ok(vercel.includes('"source": "/app/(.*)"'), "Vercel rewrites nested SPA routes");
 assert.ok(vercel.includes('"destination": "/app/index.html"'), "Vercel routes SPA paths back to app/index.html");
@@ -610,7 +611,12 @@ for (const helperName of [
   "dispatchIncisionLibraryCommand",
 ]) {
   assert.ok(controllerCommand.includes(`export function ${helperName}`), `React controller command helper exports ${helperName}`);
+  assert.ok(controllerCommandsHook.includes(helperName), `React controller command hook wraps ${helperName}`);
 }
+assert.ok(controllerCommandsHook.includes("useLiveControllerCommands"), "React controller command hook exposes live command callbacks");
+assert.ok(controllerCommandsHook.includes("useAnnotateControllerCommands"), "React controller command hook exposes annotation command callbacks");
+assert.ok(controllerCommandsHook.includes("useIncisionControllerCommands"), "React controller command hook exposes incision command callbacks");
+assert.ok(controllerCommandsHook.includes("useCallback"), "React controller command hook returns stable command callbacks");
 for (const commandType of [
   "LiveSourceCommand",
   "LiveRenderCommand",
@@ -1231,7 +1237,8 @@ for (const id of [
   assert.ok(tumorPanel.includes(`id="${id}"`), `React tumor panel exposes #${id}`);
 }
 assert.ok(incisionWorkbench.includes("TumorInputPanel"), "React incision workbench renders the tumor input controls as a React component");
-assert.ok(tumorPanel.includes("dispatchIncisionTumorCommand"), "React tumor panel uses the typed incision tumor command helper");
+assert.ok(tumorPanel.includes("useIncisionControllerCommands"), "React tumor panel uses typed incision command callbacks");
+assert.ok(!tumorPanel.includes("dispatchIncisionTumorCommand"), "React tumor panel does not import low-level command dispatch helpers directly");
 assert.ok(!tumorPanel.includes("../lib/controllerEvents"), "React tumor panel does not import controller event names directly");
 assert.ok(tumorPanel.includes("useIncisionStore"), "React tumor panel syncs low-frequency tumor status from Zustand");
 assert.ok(tumorPanel.includes("Button"), "React tumor panel uses the shared shadcn-style button primitive");
@@ -1257,7 +1264,8 @@ for (const id of [
 }
 assert.ok(incisionStore.includes("IncisionSecondaryCueState"), "incision Zustand store keeps typed secondary cue state");
 assert.ok(incisionWorkbench.includes("SecondaryCuePanel"), "React incision workbench renders the secondary cue controls as a React component");
-assert.ok(secondaryCuePanel.includes("dispatchIncisionSecondaryCueCommand"), "React secondary cue panel uses the typed incision secondary cue command helper");
+assert.ok(secondaryCuePanel.includes("useIncisionControllerCommands"), "React secondary cue panel uses typed incision command callbacks");
+assert.ok(!secondaryCuePanel.includes("dispatchIncisionSecondaryCueCommand"), "React secondary cue panel does not import low-level command dispatch helpers directly");
 assert.ok(!secondaryCuePanel.includes("../lib/controllerEvents"), "React secondary cue panel does not import controller event names directly");
 assert.ok(secondaryCuePanel.includes("useIncisionStore"), "React secondary cue panel syncs low-frequency cue state from Zustand");
 assert.ok(secondaryCuePanel.includes("Button"), "React secondary cue panel uses the shared shadcn-style button primitive");
@@ -1302,7 +1310,8 @@ for (const id of [
 }
 assert.ok(incisionStore.includes("IncisionSavedCandidateSummary"), "incision Zustand store keeps typed saved candidate summaries");
 assert.ok(incisionWorkbench.includes("CandidateLibraryPanel"), "React incision workbench renders the candidate library as a React component");
-assert.ok(candidateLibraryPanel.includes("dispatchIncisionLibraryCommand"), "React candidate library uses the typed incision library command helper");
+assert.ok(candidateLibraryPanel.includes("useIncisionControllerCommands"), "React candidate library uses typed incision command callbacks");
+assert.ok(!candidateLibraryPanel.includes("dispatchIncisionLibraryCommand"), "React candidate library does not import low-level command dispatch helpers directly");
 assert.ok(!candidateLibraryPanel.includes("../lib/controllerEvents"), "React candidate library does not import controller event names directly");
 assert.ok(candidateLibraryPanel.includes("useIncisionStore"), "React candidate library reads saved candidate summaries from Zustand");
 assert.ok(candidateLibraryPanel.includes("useState"), "React candidate library owns short-lived clear confirmation state in React");
@@ -1341,7 +1350,8 @@ for (const id of [
 assert.ok(incisionWorkbench.includes("ProviderConfigPanel"), "React incision workbench renders the provider panel as a React component");
 assert.ok(providerPanel.includes("testProviderConnection"), "React provider panel owns the browser-side Provider connectivity test");
 assert.ok(providerPanel.includes("normalizeProviderBaseUrl"), "React provider panel normalizes provider Base URL");
-assert.ok(providerPanel.includes("dispatchIncisionProviderState"), "React provider panel uses the typed incision provider state helper");
+assert.ok(providerPanel.includes("useIncisionControllerCommands"), "React provider panel uses typed incision command callbacks");
+assert.ok(!providerPanel.includes("dispatchIncisionProviderState"), "React provider panel does not import low-level provider state dispatch directly");
 assert.ok(!providerPanel.includes("../lib/controllerEvents"), "React provider panel does not import controller event names directly");
 assert.ok(providerPanel.includes("../services/providerConfig"), "React provider panel consumes the shared typed Provider config service");
 assert.ok(providerConfigService.includes("PROVIDER_STORAGE_KEY"), "Provider config service owns browser storage keying");
@@ -1384,7 +1394,8 @@ for (const id of [
 }
 assert.ok(incisionStore.includes("IncisionEditState"), "incision Zustand store keeps typed edit state");
 assert.ok(incisionWorkbench.includes("EditControlsPanel"), "React incision workbench renders the edit controls as a React component");
-assert.ok(editPanel.includes("dispatchIncisionEditCommand"), "React edit panel uses the typed incision edit command helper");
+assert.ok(editPanel.includes("useIncisionControllerCommands"), "React edit panel uses typed incision command callbacks");
+assert.ok(!editPanel.includes("dispatchIncisionEditCommand"), "React edit panel does not import low-level command dispatch helpers directly");
 assert.ok(!editPanel.includes("../lib/controllerEvents"), "React edit panel does not import controller event names directly");
 assert.ok(editPanel.includes("useIncisionStore"), "React edit panel syncs low-frequency edit state from Zustand");
 assert.ok(editPanel.includes("Button"), "React edit panel uses the shared shadcn-style button primitive");
@@ -1405,7 +1416,8 @@ for (const id of [
   assert.ok(reviewPanel.includes(`id="${id}"`), `React review panel exposes #${id}`);
 }
 assert.ok(incisionWorkbench.includes("ReviewControlsPanel"), "React incision workbench renders the review controls as a React component");
-assert.ok(reviewPanel.includes("dispatchIncisionReviewCommand"), "React review panel uses the typed incision review command helper");
+assert.ok(reviewPanel.includes("useIncisionControllerCommands"), "React review panel uses typed incision command callbacks");
+assert.ok(!reviewPanel.includes("dispatchIncisionReviewCommand"), "React review panel does not import low-level command dispatch helpers directly");
 assert.ok(!reviewPanel.includes("../lib/controllerEvents"), "React review panel does not import controller event names directly");
 assert.ok(reviewPanel.includes("useIncisionStore"), "React review panel syncs low-frequency review state from Zustand");
 assert.ok(reviewPanel.includes("Input"), "React review panel uses the shared shadcn-style input primitive");
@@ -1595,8 +1607,10 @@ assert.ok(annotateStagePanel.includes("StageActions"), "React annotate stage use
 assert.ok(annotateStagePanel.includes("StageLink"), "React annotate stage uses the shared stage link primitive");
 assert.ok(annotateStagePanel.includes("StageStatus"), "React annotate stage uses the shared stage status primitive");
 assert.ok(annotateStagePanel.includes("StageMeta"), "React annotate stage uses the shared stage metadata primitive");
-assert.ok(annotateMeshSourcePanel.includes("dispatchAnnotateMeshCommand"), "React annotate mesh source panel uses the typed mesh command helper");
-assert.ok(annotateDrawPanel.includes("dispatchAnnotateDrawCommand"), "React annotate draw panel uses the typed draw command helper");
+assert.ok(annotateMeshSourcePanel.includes("useAnnotateControllerCommands"), "React annotate mesh source panel uses typed annotation command callbacks");
+assert.ok(annotateDrawPanel.includes("useAnnotateControllerCommands"), "React annotate draw panel uses typed annotation command callbacks");
+assert.ok(!annotateMeshSourcePanel.includes("dispatchAnnotateMeshCommand"), "React annotate mesh source panel does not import low-level command dispatch helpers directly");
+assert.ok(!annotateDrawPanel.includes("dispatchAnnotateDrawCommand"), "React annotate draw panel does not import low-level command dispatch helpers directly");
 assert.ok(!annotateMeshSourcePanel.includes("../lib/controllerEvents"), "React annotate mesh source panel does not import controller event names directly");
 assert.ok(!annotateDrawPanel.includes("../lib/controllerEvents"), "React annotate draw panel does not import controller event names directly");
 assert.ok(annotateMeshSourcePanel.includes("useAnnotateStore"), "React annotate mesh source panel reads low-frequency mesh state from Zustand");
@@ -1630,7 +1644,8 @@ for (const id of [
 }
 assert.ok(annotateStore.includes("AnnotateSavedLineSummary"), "annotation Zustand store keeps typed saved line summaries");
 assert.ok(annotateWorkbench.includes("AnnotateLineLibraryPanel"), "React annotate workbench renders the saved line library as a React component");
-assert.ok(annotateLineLibraryPanel.includes("dispatchAnnotateLibraryCommand"), "React annotate line library uses the typed library command helper");
+assert.ok(annotateLineLibraryPanel.includes("useAnnotateControllerCommands"), "React annotate line library uses typed annotation command callbacks");
+assert.ok(!annotateLineLibraryPanel.includes("dispatchAnnotateLibraryCommand"), "React annotate line library does not import low-level command dispatch helpers directly");
 assert.ok(!annotateLineLibraryPanel.includes("../lib/controllerEvents"), "React annotate line library does not import controller event names directly");
 assert.ok(annotateLineLibraryPanel.includes("useAnnotateStore"), "React annotate line library reads saved line state from Zustand");
 assert.ok(annotateLineLibraryPanel.includes("useState"), "React annotate line library owns short-lived clear confirmation state in React");
@@ -1818,9 +1833,12 @@ for (const className of ["hidden", "overlay-qa", "overlay-qa-top"]) {
     `React live quality panel should use live feedback primitives instead of hand-written ${className} class wrappers`,
   );
 }
-assert.ok(liveRouteControlsPanel.includes("dispatchLiveRouteCommand"), "React live route controls use the typed route command helper");
-assert.ok(liveSourceControlsPanel.includes("dispatchLiveSourceCommand"), "React live source controls use the typed source command helper");
-assert.ok(liveRenderControlsPanel.includes("dispatchLiveRenderCommand"), "React live render controls use the typed render command helper");
+assert.ok(liveRouteControlsPanel.includes("useLiveControllerCommands"), "React live route controls use typed live command callbacks");
+assert.ok(liveSourceControlsPanel.includes("useLiveControllerCommands"), "React live source controls use typed live command callbacks");
+assert.ok(liveRenderControlsPanel.includes("useLiveControllerCommands"), "React live render controls use typed live command callbacks");
+assert.ok(!liveRouteControlsPanel.includes("dispatchLiveRouteCommand"), "React live route controls do not import low-level command dispatch helpers directly");
+assert.ok(!liveSourceControlsPanel.includes("dispatchLiveSourceCommand"), "React live source controls do not import low-level command dispatch helpers directly");
+assert.ok(!liveRenderControlsPanel.includes("dispatchLiveRenderCommand"), "React live render controls do not import low-level command dispatch helpers directly");
 assert.ok(!liveRouteControlsPanel.includes("../lib/controllerEvents"), "React live route controls do not import controller event names directly");
 assert.ok(!liveSourceControlsPanel.includes("../lib/controllerEvents"), "React live source controls do not import controller event names directly");
 assert.ok(!liveRenderControlsPanel.includes("../lib/controllerEvents"), "React live render controls do not import controller event names directly");

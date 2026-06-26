@@ -7,7 +7,7 @@
       "*": false,
       "**": false,
       "master": true,
-      "codex/stage2-incision-workflow": true
+      "React-架构重构": true
     }
   },
   "github": {

@@ -7,7 +7,7 @@ import {
   localProviderFromRemotePageMessage,
   saveProviderPrefs,
 } from "../services/providerConfig";
-import { dispatchIncisionProviderState } from "../lib/controllerCommand";
+import { useIncisionControllerCommands } from "../hooks/useControllerCommands";
 import { Button } from "./ui/button";
 import { AgentCard, CardHeader } from "./ui/card";
 import { AgentNote } from "./ui/hint";
@@ -20,13 +20,8 @@ const DEFAULT_TEST_MESSAGE = "尚未测试 LLM Provider 连通性。Vercel 调�
 
 type TestLevel = "" | "ok" | "warn";
 
-function notifyController() {
-  setTimeout(() => {
-    dispatchIncisionProviderState();
-  }, 0);
-}
-
 export function ProviderConfigPanel() {
+  const commands = useIncisionControllerCommands();
   const initial = useMemo(initialProviderState, []);
   const [baseUrl, setBaseUrl] = useState(initial.baseUrl);
   const [model, setModel] = useState(initial.model);
@@ -49,10 +44,16 @@ export function ProviderConfigPanel() {
     return cfg;
   }, [apiKey, baseUrl, model, timeoutS]);
 
+  const notifyController = useCallback(() => {
+    setTimeout(() => {
+      commands.providerState();
+    }, 0);
+  }, [commands]);
+
   useEffect(() => {
     saveProviderPrefs(providerConfig());
     notifyController();
-  }, [providerConfig]);
+  }, [notifyController, providerConfig]);
 
   function markChanged(message: string) {
     setProviderState("待运行");

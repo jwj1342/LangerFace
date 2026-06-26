@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { dispatchLiveRenderCommand } from "../lib/controllerCommand";
+import { useLiveControllerCommands } from "../hooks/useControllerCommands";
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
@@ -12,6 +12,7 @@ import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
 
 export function LiveRenderControlsPanel() {
+  const commands = useLiveControllerCommands();
   const snapshot = useLiveStore((state) => state.snapshot);
   const render = snapshot?.render;
   const atlasPreview = snapshot?.atlasPreview;
@@ -29,14 +30,14 @@ export function LiveRenderControlsPanel() {
             id="templateSel"
             className="live-inline-top"
             defaultValue={render?.system || "rstl"}
-            onChange={(event) => dispatchLiveRenderCommand("template_change", event.currentTarget.value)}
+            onChange={(event) => commands.render("template_change", event.currentTarget.value)}
           >
             <option value="rstl">面部 RSTL 指南（首选）</option>
           </Select>
           <Hint visible={Boolean(atlasPreview?.active)} id="atlasProvenance">
             {atlasPreview?.active ? `${atlasPreview.source || "标注会话"} · ${atlasPreview.count ?? 0} 条线` : ""}
           </Hint>
-          <Button variant="workbench" visible={Boolean(atlasPreview?.active)} id="restoreAtlasBtn" type="button" onClick={() => dispatchLiveRenderCommand("restore_atlas")}>恢复官方图谱</Button>
+          <Button variant="workbench" visible={Boolean(atlasPreview?.active)} id="restoreAtlasBtn" type="button" onClick={() => commands.render("restore_atlas")}>恢复官方图谱</Button>
         </FieldGroup>
         <FieldGroup>
           <Label htmlFor="density">线密度 <FieldValue id="densityVal">{density}%</FieldValue></Label>
@@ -48,7 +49,7 @@ export function LiveRenderControlsPanel() {
             onChange={(event) => {
               const value = Number(event.currentTarget.value);
               setDensity(value);
-              dispatchLiveRenderCommand("density_input", value);
+              commands.render("density_input", value);
             }}
           />
         </FieldGroup>
@@ -66,7 +67,7 @@ export function LiveRenderControlsPanel() {
             onChange={(event) => {
               const value = Number(event.currentTarget.value);
               setOpacity(value);
-              dispatchLiveRenderCommand("opacity_input", value);
+              commands.render("opacity_input", value);
             }}
           />
         </FieldGroup>
@@ -79,7 +80,7 @@ export function LiveRenderControlsPanel() {
           checkboxProps={{
             id: "mirror",
             checked: mirror,
-            onChange: (event) => dispatchLiveRenderCommand("mirror_toggle", event.currentTarget.checked),
+            onChange: (event) => commands.render("mirror_toggle", event.currentTarget.checked),
           }}
         >
           镜像（自拍视角）
@@ -90,7 +91,7 @@ export function LiveRenderControlsPanel() {
           checkboxProps={{
             id: "meshPts",
             checked: meshPts,
-            onChange: (event) => dispatchLiveRenderCommand("mesh_points_toggle", event.currentTarget.checked),
+            onChange: (event) => commands.render("mesh_points_toggle", event.currentTarget.checked),
           }}
         >
           显示网格采样点

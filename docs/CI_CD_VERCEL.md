@@ -1,6 +1,6 @@
 # CI/CD 与 Vercel 部署指南
 
-本文记录当前推荐的部署方式：**GitHub Actions 做质量门禁，Vercel Git 集成做 Preview / Production 部署**。
+本文记录当前推荐的部署方式：**GitHub Actions 做质量门禁，Vercel Git 集成只做当前开发 Preview / Production 部署**。
 
 官方背景：
 - [Vercel GitHub 集成](https://vercel.com/kb/guide/how-can-i-use-github-actions-with-vercel)会自动生成 Preview Deployment URL，并在生产分支更新时部署生产环境。
@@ -22,12 +22,12 @@ pull request / push
            └─ master: Production Deployment
 ```
 
-这个方案把职责分开：
+这个方案把职责分开，并且把 Vercel 自动部署收敛到两个入口：
 
 | 部分 | 负责什么 |
 |---|---|
 | GitHub Actions | 代码质量、Python 测试、JS 几何对拍、Vite 构建能否通过 |
-| Vercel | 静态前端构建、Preview URL、Production URL、缓存头、域名 |
+| Vercel | 当前开发 Preview URL、Production URL、缓存头、域名 |
 | Cloudflare（将来） | Worker API、D1、R2、受限数据鉴权；不负责当前静态前端部署 |
 
 不要同时启用“Vercel Git 自动部署”和“GitHub Actions 里用 Vercel CLI 自动部署”，否则同一个 commit 可能产生重复部署和重复状态检查。
@@ -36,16 +36,16 @@ pull request / push
 
 Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 集成会在允许的分支上为每次 push 创建新的部署任务；如果短时间内连续 push、旧构建没有及时取消，或者多个历史分支仍允许 Preview，就可能触发并发、构建次数或平台侧限流。
 
-本项目默认只保留两个自动部署入口：
+本项目默认只保留两个自动部署入口。Vercel 的 Deployment 是不可变历史记录，所以 Dashboard 里可能仍能看到旧部署；仓库配置控制的是以后哪些分支还能继续产生新部署。
 
 | 环境 | 分支 | 行为 |
 |---|---|---|
 | Production | `master` | 合并后自动发布生产站 |
 | 当前开发 Preview | `React-架构重构` | 当前重构 PR 的唯一自动 Preview |
 
-[web/vercel.json](../web/vercel.json) 已将 `git.deploymentEnabled` 设置为 `* = false`，只对白名单分支开放 `master` 和 `React-架构重构`；同时显式开启 `github.autoJobCancelation`，让同一 PR / 分支上的较旧构建在新 commit 到来时自动取消。
+[web/vercel.json](../web/vercel.json) 已将 `git.deploymentEnabled` 设置为 `* = false` 和 `** = false`，只对白名单分支开放 `master` 和 `React-架构重构`；同时显式开启 `github.autoJobCancelation`，让同一 PR / 分支上的较旧构建在新 commit 到来时自动取消。
 
-如果后续开发主分支更名，只改这个白名单，不要额外打开所有 feature 分支的自动 Preview。旧的 Deployment URL 属于 Vercel 的历史记录 / 回滚能力；它们可以在 Dashboard 里清理或保留，但仓库配置能控制的是“以后哪些分支继续产生新部署”。
+如果后续当前开发 PR 换成别的分支，只改这个白名单，不要额外打开所有 feature 分支的自动 Preview。旧的 Deployment URL 属于 Vercel 的历史记录 / 回滚能力；它们可以在 Dashboard 里清理或保留，但仓库配置能控制的是“以后哪些分支继续产生新部署”。如果想让 Dashboard 只显示最新开发和生产两个可见版本，需要在 Vercel Dashboard 里清理旧 Deployment 或配置团队侧保留策略；不要用 GitHub Actions 再额外跑一套 Vercel CLI 自动部署。
 
 ## Vercel Project 设置
 
@@ -72,7 +72,7 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 本仓库已有 [web/vercel.json](../web/vercel.json)，里面声明了：
 - `buildCommand`: `npm run build`
 - `outputDirectory`: `dist`
-- `git.deploymentEnabled`: 只允许 `master` 和当前开发分支 `React-架构重构` 自动部署
+- `git.deploymentEnabled`: 只允许 `master` 和当前开发分支 `React-架构重构` 自动部署，其他分支默认不生成 Vercel Preview
 - `github.autoJobCancelation`: 同一 PR / 分支有新 commit 时取消较旧构建
 - `/assets/*` 长缓存，适合 `.task` 模型、atlas JSON、triangles 等哈希化静态资产
 - JS/MJS 的 `Content-Type`

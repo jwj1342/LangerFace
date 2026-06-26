@@ -5,10 +5,11 @@ import { ButtonRow } from "./ui/button-row";
 import { Card, CardHeader } from "./ui/card";
 import { Hint } from "./ui/hint";
 import { LineActions, LineEmpty, LineList, LineMain, LineMeta, LineRow, LineWarning } from "./ui/library-list";
-import { dispatchAnnotateLibraryCommand } from "../lib/controllerCommand";
+import { useAnnotateControllerCommands } from "../hooks/useControllerCommands";
 import { useAnnotateStore } from "../stores/annotateStore";
 
 export function AnnotateLineLibraryPanel() {
+  const commands = useAnnotateControllerCommands();
   const snapshot = useAnnotateStore((state) => state.snapshot);
   const saved = snapshot?.saved;
   const lines = saved?.lines || [];
@@ -22,7 +23,7 @@ export function AnnotateLineLibraryPanel() {
       setConfirmClear(true);
       return;
     }
-    dispatchAnnotateLibraryCommand("clear_lines");
+    commands.library("clear_lines");
     setConfirmClear(false);
   };
 
@@ -38,8 +39,8 @@ export function AnnotateLineLibraryPanel() {
               {line.warning ? <LineWarning>{line.warning}</LineWarning> : null}
             </LineMain>
             <LineActions>
-              <Button variant="mini" type="button" onClick={() => dispatchAnnotateLibraryCommand("restore_line", line.index)}>编辑</Button>
-              <Button variant="miniDanger" type="button" onClick={() => dispatchAnnotateLibraryCommand("delete_line", line.index)}>删除</Button>
+              <Button variant="mini" type="button" onClick={() => commands.library("restore_line", line.index)}>编辑</Button>
+              <Button variant="miniDanger" type="button" onClick={() => commands.library("delete_line", line.index)}>删除</Button>
             </LineActions>
           </LineRow>
         )) : (
@@ -47,10 +48,10 @@ export function AnnotateLineLibraryPanel() {
         )}
       </LineList>
       <ButtonRow className="annotate-export-row">
-        <Button variant="workbench" id="btnExportAtlas" type="button" disabled={!exportState?.canExportAtlas} onClick={() => dispatchAnnotateLibraryCommand("export_atlas")}>导出图谱</Button>
-        <Button variant="workbench" id="btnExportXyz" type="button" disabled={!exportState?.canExportXyz} onClick={() => dispatchAnnotateLibraryCommand("export_xyz")}>导出 xyz</Button>
+        <Button variant="workbench" id="btnExportAtlas" type="button" disabled={!exportState?.canExportAtlas} onClick={() => commands.library("export_atlas")}>导出图谱</Button>
+        <Button variant="workbench" id="btnExportXyz" type="button" disabled={!exportState?.canExportXyz} onClick={() => commands.library("export_xyz")}>导出 xyz</Button>
       </ButtonRow>
-      <Button variant="workbenchPrimary" id="btnSetActiveAtlas" type="button" disabled={!exportState?.canPreviewActiveAtlas} onClick={() => dispatchAnnotateLibraryCommand("set_active_atlas")}>设为活动图谱并预览</Button>
+      <Button variant="workbenchPrimary" id="btnSetActiveAtlas" type="button" disabled={!exportState?.canPreviewActiveAtlas} onClick={() => commands.library("set_active_atlas")}>设为活动图谱并预览</Button>
       <Button variant={confirmClear ? "miniDanger" : "workbench"} id="btnClear" type="button" disabled={!hasLines} onClick={clearLines}>
         {confirmClear ? "确认清空" : "清空"}
       </Button>

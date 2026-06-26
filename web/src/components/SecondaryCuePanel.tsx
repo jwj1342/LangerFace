@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { dispatchIncisionSecondaryCueCommand } from "../lib/controllerCommand";
+import { useIncisionControllerCommands } from "../hooks/useControllerCommands";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
@@ -10,6 +10,7 @@ import { AgentNote } from "./ui/hint";
 import { Input } from "./ui/input";
 
 export function SecondaryCuePanel() {
+  const commands = useIncisionControllerCommands();
   const snapshot = useIncisionStore((state) => state.snapshot);
   const cue = snapshot?.secondaryCue;
   const [manualConfirmed, setManualConfirmed] = useState(false);
@@ -28,8 +29,8 @@ export function SecondaryCuePanel() {
         {cue?.summary || "仅展示自然皱襞、皱纹和皮表肿物边界的低置信度线索；不会自动改变肿物边界或候选切口。"}
       </AgentNote>
       <ButtonRow className="two-cols">
-        <Button variant="workbench" id="importSecondaryCueBtn" type="button" onClick={() => dispatchIncisionSecondaryCueCommand("import_secondary_cue")}>导入线索</Button>
-        <Button variant="workbench" id="clearSecondaryCueBtn" type="button" disabled={!cue?.present} onClick={() => dispatchIncisionSecondaryCueCommand("clear_secondary_cue")}>清空线索</Button>
+        <Button variant="workbench" id="importSecondaryCueBtn" type="button" onClick={() => commands.secondaryCue("import_secondary_cue")}>导入线索</Button>
+        <Button variant="workbench" id="clearSecondaryCueBtn" type="button" disabled={!cue?.present} onClick={() => commands.secondaryCue("clear_secondary_cue")}>清空线索</Button>
       </ButtonRow>
       <Input id="secondaryCueImportFile" hidden type="file" accept="application/json,.json" />
       <CheckboxField
@@ -39,7 +40,7 @@ export function SecondaryCuePanel() {
           disabled: !cue?.present,
           onChange: (event) => {
             setManualConfirmed(event.currentTarget.checked);
-            dispatchIncisionSecondaryCueCommand("secondary_cue_confirmed");
+            commands.secondaryCue("secondary_cue_confirmed");
           },
         }}
       >
