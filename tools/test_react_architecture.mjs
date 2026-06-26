@@ -235,12 +235,14 @@ assert.ok(uiButton.includes("miniDanger"), "shadcn-style Button can preserve com
 assert.ok(uiCard.includes("CardHeader"), "shadcn-style Card exposes a header primitive");
 assert.ok(uiCard.includes("CardContent"), "shadcn-style Card exposes a content primitive");
 assert.ok(uiCard.includes('cn("card"'), "shadcn-style Card preserves existing card styling");
+assert.ok(uiCard.includes("@radix-ui/react-slot"), "shadcn-style Card supports asChild through Radix Slot");
+assert.ok(uiCard.includes("asChild?: boolean"), "shadcn-style Card exposes an asChild prop for semantic containers");
 assert.deepEqual(
   [...componentSources.entries()]
-    .filter(([name, source]) => source.includes('className="card') && !["AnnotateHelpPanel.tsx", "SurgeryHelpPanel.tsx"].includes(name))
+    .filter(([, source]) => source.includes('className="card'))
     .map(([name]) => name),
   [],
-  "ordinary React component panels should use the shared Card primitive; help details keep semantic <details>",
+  "React component panels should use the shared Card primitive instead of raw card class wrappers",
 );
 assert.ok(uiCheckbox.includes('type="checkbox"'), "shadcn-style Checkbox preserves native checkbox behavior");
 assert.ok(uiInput.includes('cn("text-input"'), "shadcn-style Input preserves existing text input styling");
@@ -723,6 +725,8 @@ assert.ok(annotateDrawPanel.includes("Select"), "React annotate draw panel uses 
 assert.ok(annotateDrawPanel.includes("<Card"), "React annotate draw panel uses the shared shadcn-style card primitive");
 assert.ok(annotateDrawPanel.includes('variant="workbenchPrimary"'), "React annotate draw panel keeps primary workbench button styling through Button variants");
 assert.ok(annotateHelpPanel.includes("标注帮助"), "React annotate help panel keeps the user-facing annotation guide");
+assert.ok(annotateHelpPanel.includes("<Card asChild"), "React annotate help panel preserves semantic details through the Card asChild primitive");
+assert.ok(annotateHelpPanel.includes("<details open>"), "React annotate help panel keeps native disclosure semantics");
 assert.ok(annotateStagePanel.includes('to="/live"'), "React annotate stage returns to the React live route");
 for (const id of [
   "annStatus",
@@ -1011,6 +1015,8 @@ assert.ok(surgeryControlsPanel.includes("RangeInput"), "React surgery controls u
 assert.ok(surgeryControlsPanel.includes("<Card"), "React surgery controls use the shared shadcn-style card primitive");
 assert.ok(surgeryMetricsPanel.includes("<Card"), "React surgery metrics use the shared shadcn-style card primitive");
 assert.ok(surgeryHelpPanel.includes("这是在演示什么？"), "React surgery help panel keeps the closure explanation");
+assert.ok(surgeryHelpPanel.includes("<Card asChild"), "React surgery help panel preserves semantic details through the Card asChild primitive");
+assert.ok(surgeryHelpPanel.includes("<details open>"), "React surgery help panel keeps native disclosure semantics");
 assert.ok(surgeryStagePanel.includes('to="/annotate"'), "React surgery stage returns to the React annotation route");
 assert.ok(surgeryController.includes("export function mountSurgeryClosureDemo"), "surgery controller exposes a mount lifecycle");
 assert.ok(surgeryController.includes("export function disposeSurgeryClosureDemo"), "surgery controller exposes a dispose lifecycle");
