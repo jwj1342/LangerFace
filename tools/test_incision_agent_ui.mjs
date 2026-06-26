@@ -19,7 +19,7 @@ const html = normalizeTsxContracts([
   fs.readFileSync("src/components/CandidateLibraryPanel.tsx", "utf8"),
   fs.readFileSync("src/components/PrivacyAuditPanel.tsx", "utf8"),
 ].join("\n"));
-const js = fs.readFileSync("incision_agent_main.js", "utf8");
+const js = fs.readFileSync("src/services/incisionAgentRuntime.ts", "utf8");
 const tools = fs.readFileSync("incision_tools.js", "utf8");
 const exportPrivacy = fs.readFileSync("export_privacy.js", "utf8");
 const providerConfig = fs.readFileSync("src/services/providerConfig.ts", "utf8");
@@ -72,7 +72,7 @@ assert.ok(js.includes("applyImportedTumor"), "workbench applies imported tumor p
 assert.ok(tumorInputService.includes("buildTumorInput"), "shared tumor input service owns TumorInput construction");
 assert.ok(tumorInputService.includes("buildTumorFormSnapshot"), "shared tumor input service owns tumor snapshot normalization");
 assert.ok(tumorInputService.includes("importedTumorFormState"), "shared tumor input service owns imported tumor form normalization");
-assert.ok(js.includes("./src/services/tumorInput.ts"), "workbench consumes the shared typed tumor input service");
+assert.ok(js.includes("./tumorInput"), "workbench consumes the shared typed tumor input service");
 assert.ok(js.includes("importedTumorFormState(payload"), "workbench delegates imported tumor payloads to the shared service");
 assert.ok(incisionSnapshotsService.includes("buildIncisionControllerSnapshot"), "shared incision snapshot service owns React snapshot construction");
 assert.ok(incisionSnapshotsService.includes("buildIncisionSavedCandidateSummaries"), "shared incision snapshot service owns saved candidate summaries");
@@ -82,9 +82,9 @@ assert.ok(!incisionSnapshotsService.includes("result: any"), "shared incision sn
 assert.ok(!incisionSnapshotsService.includes("records?: any[]"), "shared incision snapshot service does not accept untyped saved candidate records");
 assert.ok(incisionSnapshotsService.includes("../lib/controllerSnapshotSchemas"), "shared incision snapshot service reuses the lightweight React snapshot schema module");
 assert.ok(controllerSnapshotSchemas.includes("react-incision-controller-snapshot/v0.1"), "shared snapshot schema module owns the incision React snapshot schema");
-assert.ok(js.includes("./src/services/incisionSnapshots.ts"), "workbench consumes the shared typed incision snapshot service");
+assert.ok(js.includes("./incisionSnapshots"), "workbench consumes the shared typed incision snapshot service");
 assert.ok(js.includes("buildIncisionControllerSnapshot({"), "workbench delegates React snapshot payloads to the shared service");
-assert.ok(js.includes('from "./export_privacy.js"'), "workbench imports browser export privacy preflight");
+assert.ok(js.includes('from "../../export_privacy.js"'), "workbench imports browser export privacy preflight");
 assert.ok(exportPrivacy.includes("browser-export-privacy-preflight/v0.1"), "browser export preflight has a schema");
 assert.ok(js.includes("exportPreflightPasses(payload"), "JSON exports run browser privacy preflight");
 assert.ok(js.includes("导出隐私预检未通过"), "browser preflight blocks unsafe exports with feedback");

@@ -1,9 +1,10 @@
+// @ts-nocheck
 import * as THREE from "three";
 
-import { assetBaseUrl, loadJsonAsset } from "./assets.js";
-import { dataSource } from "./data_source.js";
-import { auditExportPayload } from "./export_privacy.js";
-import { compileIncisionOverlay } from "./incision_overlay.js";
+import { assetBaseUrl, loadJsonAsset } from "../../assets.js";
+import { dataSource } from "../../data_source.js";
+import { auditExportPayload } from "../../export_privacy.js";
+import { compileIncisionOverlay } from "../../incision_overlay.js";
 import {
   applyCandidateEdit,
   agentTraceGate,
@@ -12,8 +13,8 @@ import {
   summarizeTumorBoundary,
   summarizeTumorInputQuality,
   unitsPerMmFromVertices,
-} from "./incision_tools.js";
-import { normalizeProviderBaseUrl, testProviderConnection } from "./llm_provider.js";
+} from "../../incision_tools.js";
+import { normalizeProviderBaseUrl, testProviderConnection } from "../../llm_provider.js";
 import {
   INCISION_CONTROLLER_STATE_EVENT,
   INCISION_EDIT_REACT_COMMAND_EVENT,
@@ -22,7 +23,7 @@ import {
   INCISION_REVIEW_REACT_COMMAND_EVENT,
   INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT,
   INCISION_TUMOR_REACT_COMMAND_EVENT,
-} from "./src/lib/controllerEvents.ts";
+} from "../lib/controllerEvents";
 import {
   INCISION_EDIT_COMMANDS,
   INCISION_LIBRARY_COMMANDS,
@@ -32,8 +33,8 @@ import {
   bindWindowControllerEvents,
   dispatchControllerEvent,
   readControllerCommandDetail,
-} from "./src/lib/controllerCommand.ts";
-import { isReactManagedWorkbench } from "./src/lib/reactManagedWorkbench.ts";
+} from "../lib/controllerCommand";
+import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
 import {
   initialProviderState,
   insecureProviderFromSecurePageMessage,
@@ -41,7 +42,7 @@ import {
   localProviderFromRemotePageMessage,
   redactedProviderConfig as redactProviderConfig,
   saveProviderPrefs as persistProviderPrefs,
-} from "./src/services/providerConfig.ts";
+} from "./providerConfig";
 import {
   buildIncisionAssetLoadingSnapshot,
   buildIncisionCandidateSnapshot,
@@ -56,16 +57,16 @@ import {
   incisionHasClass as hasClass,
   incisionTextOf as textOf,
   incisionTitleOf as titleOf,
-} from "./src/services/incisionSnapshots.ts";
+} from "./incisionSnapshots";
 import {
   buildTumorFormSnapshot,
   buildTumorInput,
   importedTumorFormState,
   numericControlValue,
-} from "./src/services/tumorInput.ts";
-import { planIncisionWithWorkflowFallback } from "./src/services/workflowPlanner.ts";
-import { createWorkflowWorkerClient } from "./src/services/workflowWorkerClient.ts";
-import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.js";
+} from "./tumorInput";
+import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
+import { createWorkflowWorkerClient } from "./workflowWorkerClient";
+import { Head3D, buildLineGeometry, vertexNormals } from "../../three3d.js";
 
 const $ = (root, id) => {
   if (root?.getElementById) return root.getElementById(id);
@@ -2347,7 +2348,7 @@ export function disposeIncisionAgentWorkbench() {
   S.head?.dispose?.();
 }
 
-export function mountIncisionAgentWorkbench(root = document) {
+export function mountIncisionAgentWorkbench(root: ParentNode | Document = document) {
   disposeIncisionAgentWorkbench();
   els = collectElements(root);
   S = createRuntimeState();
@@ -2363,8 +2364,4 @@ export function mountIncisionAgentWorkbench(root = document) {
     console.error(err);
   });
   return disposeIncisionAgentWorkbench;
-}
-
-if (document.getElementById("agentCanvas") && !isReactManagedWorkbench()) {
-  mountIncisionAgentWorkbench();
 }

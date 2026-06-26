@@ -133,7 +133,7 @@ const liveSnapshotsService = read("src/services/liveSnapshots.ts");
 const incisionSnapshotsService = read("src/services/incisionSnapshots.ts");
 const annotateRuntime = read("src/services/annotateRuntime.ts");
 const annotateViewer = read("annotate_viewer.js");
-const controller = read("incision_agent_main.js");
+const controller = read("src/services/incisionAgentRuntime.ts");
 const dom = read("dom.js");
 const liveController = read("src/services/liveRuntime.ts");
 const layoutPrimitiveNames = new Set(["ReactShell.tsx", "StageShell.tsx", "WorkbenchLayout.tsx"]);
@@ -573,10 +573,11 @@ assert.ok(managedWorkbenchRoute.includes("controller.mount"), "managed workbench
 assert.ok(managedWorkbenchRoute.includes("ReactRouteHost"), "managed workbench route renders through the shared ReactRouteHost primitive");
 assert.ok(managedWorkbenchRoute.includes("Extract<Workspace"), "managed workbench route narrows workspace type from the shared Workspace union");
 assert.ok(legacyControllers.includes("ManagedWorkbenchControllerAdapter"), "legacy controller service owns typed controller adapter objects");
-for (const legacyEntry of ["annotateRuntime", "incision_agent_main.js", "liveRuntime"]) {
+for (const legacyEntry of ["annotateRuntime", "incisionAgentRuntime", "liveRuntime"]) {
   assert.ok(legacyControllers.includes(legacyEntry), `legacy controller service owns ${legacyEntry} import boundary`);
 }
 assert.ok(!fs.existsSync(path.join(web, "annotate_main.js")), "legacy annotation runtime file has moved into the React TypeScript service layer");
+assert.ok(!fs.existsSync(path.join(web, "incision_agent_main.js")), "legacy incision runtime file has moved into the React TypeScript service layer");
 assert.ok(!fs.existsSync(path.join(web, "main.js")), "legacy live runtime file has moved into the React TypeScript service layer");
 for (const [name, source, workspace] of [
   ["AnnotateRoute.tsx", annotateRoute, "annotate"],
@@ -1496,11 +1497,12 @@ assert.ok(reviewPanel.includes("AgentCard"), "React review panel uses the shared
 assert.ok(reviewPanel.includes('variant="workbenchPrimary"'), "React review panel keeps primary workbench button styling through Button variants");
 assert.ok(incisionWorkbench.includes('to="/live"'), "React incision workbench returns to the React live route");
 assert.ok(incisionStagePanel.includes('to="/annotate"'), "React incision stage links to the React 3D annotation route");
+assert.ok(controller.includes("// @ts-nocheck"), "incision runtime is explicitly marked as a temporary TypeScript migration boundary");
 assert.ok(controller.includes("export function mountIncisionAgentWorkbench"), "incision controller exposes a mount lifecycle");
 assert.ok(controller.includes("export function disposeIncisionAgentWorkbench"), "incision controller exposes a dispose lifecycle");
 assert.ok(controller.includes("INCISION_TUMOR_REACT_COMMAND_EVENT"), "incision controller listens for React tumor input commands");
-assert.ok(controller.includes("./src/lib/controllerEvents.ts"), "incision controller imports event names from the shared module");
-assert.ok(controller.includes("./src/lib/controllerCommand.ts"), "incision controller imports the shared command parsing module");
+assert.ok(controller.includes("../lib/controllerEvents"), "incision controller imports event names from the shared module");
+assert.ok(controller.includes("../lib/controllerCommand"), "incision controller imports the shared command parsing module");
 assert.ok(controller.includes("bindWindowControllerEvents"), "incision controller binds React command events through the shared helper");
 assert.ok(controller.includes("reactCommandCleanup"), "incision controller stores a single React command cleanup handle");
 assert.ok(!controller.includes("window.addEventListener(INCISION"), "incision controller does not register React command listeners one-by-one");
@@ -1512,7 +1514,7 @@ assert.ok(controller.includes("readControllerCommandDetail(event, INCISION_REVIE
 assert.ok(controller.includes("readControllerCommandDetail(event, INCISION_LIBRARY_COMMANDS)"), "incision library handler validates incoming command names");
 assert.ok(!controller.includes("event?.detail?.command"), "incision controller does not read raw command detail directly");
 assert.ok(controller.includes("handleReactTumorCommand"), "incision controller routes React tumor commands to existing tumor workflow functions");
-assert.ok(controller.includes("./src/services/tumorInput.ts"), "incision controller consumes the shared typed tumor input service");
+assert.ok(controller.includes("./tumorInput"), "incision controller consumes the shared typed tumor input service");
 assert.ok(controller.includes("buildTumorInput({"), "incision controller delegates TumorInput construction to the shared service");
 assert.ok(controller.includes("buildTumorFormSnapshot({"), "incision controller delegates tumor snapshot normalization to the shared service");
 assert.ok(controller.includes("importedTumorFormState(payload"), "incision controller delegates imported tumor normalization to the shared service");
@@ -1527,7 +1529,7 @@ assert.ok(controller.includes('publishIncisionState("asset_loading")'), "asset l
 assert.ok(controller.includes('publishIncisionState("asset_loaded")'), "asset load completion republishes React stage state");
 assert.ok(controller.includes('publishIncisionState("asset_load_failed")'), "asset load failures republish React stage state");
 assert.ok(controller.includes("INCISION_PROVIDER_REACT_STATE_EVENT"), "incision controller listens for React provider state changes");
-assert.ok(controller.includes("./src/services/providerConfig.ts"), "incision controller consumes the shared typed Provider config service");
+assert.ok(controller.includes("./providerConfig"), "incision controller consumes the shared typed Provider config service");
 assert.ok(controller.includes("persistProviderPrefs(providerConfig())"), "incision controller saves Provider config through the shared service");
 assert.ok(controller.includes("redactProviderConfig(providerConfig())"), "incision controller redacts Provider config through the shared service");
 assert.ok(incisionSnapshotsService.includes("buildIncisionControllerSnapshot"), "shared incision snapshot service builds typed controller snapshots");
@@ -1538,7 +1540,7 @@ assert.ok(incisionSnapshotsService.includes("IncisionSavedCandidateRecordLike"),
 assert.ok(!incisionSnapshotsService.includes("result: any"), "shared incision snapshot service does not accept untyped candidate results");
 assert.ok(!incisionSnapshotsService.includes("records?: any[]"), "shared incision snapshot service does not accept untyped saved candidate records");
 assert.ok(incisionSnapshotsService.includes("../lib/controllerSnapshotSchemas"), "shared incision snapshot service re-exports the lightweight schema version");
-assert.ok(controller.includes("./src/services/incisionSnapshots.ts"), "incision controller consumes the shared typed snapshot service");
+assert.ok(controller.includes("./incisionSnapshots"), "incision controller consumes the shared typed snapshot service");
 assert.ok(controller.includes("buildIncisionControllerSnapshot({"), "incision controller delegates React snapshot construction to the shared service");
 assert.ok(controller.includes("INCISION_REVIEW_REACT_COMMAND_EVENT"), "incision controller listens for React review commands");
 assert.ok(controller.includes("handleReactReviewCommand"), "incision controller routes React review commands to existing review workflow functions");
@@ -1546,9 +1548,10 @@ assert.ok(controller.includes("INCISION_EDIT_REACT_COMMAND_EVENT"), "incision co
 assert.ok(controller.includes("handleReactEditCommand"), "incision controller routes React edit commands to existing edit workflow functions");
 assert.ok(controller.includes("INCISION_LIBRARY_REACT_COMMAND_EVENT"), "incision controller listens for React candidate library commands");
 assert.ok(controller.includes("handleReactLibraryCommand"), "incision controller routes React library commands to existing save/export workflow functions");
-assert.ok(controller.includes("./src/lib/reactManagedWorkbench.ts"), "incision controller imports the shared React-managed flag helper");
+assert.ok(controller.includes("../lib/reactManagedWorkbench"), "incision controller imports the shared React-managed flag helper");
 assert.ok(controller.includes("isReactManagedWorkbench()"), "incision controller can branch between React and legacy provider handling");
 assert.ok(!controller.includes("window.__LANGERFACE_REACT_MANAGED__"), "incision controller does not touch the managed flag directly");
+assert.ok(!controller.includes('document.getElementById("agentCanvas")'), "incision runtime no longer auto-mounts from legacy HTML");
 assert.ok(controller.includes("els.tumorKind.onchange"), "legacy incision HTML still owns direct tumor input handlers");
 assert.ok(controller.includes("els.importSecondaryCue.onclick"), "legacy incision HTML still owns direct secondary cue handlers");
 assert.ok(controller.includes("el.oninput = applyEditControls"), "legacy incision HTML still owns direct edit preview handlers");
