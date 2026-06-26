@@ -2,10 +2,6 @@
 // 拖拽旋转、滚轮缩放；点击（非拖拽）在网格表面拾取一个控制点。
 import { AnnotationModel } from "../../annotate_model.js";
 import { Annotator3D } from "../../annotate_viewer.js";
-import { assetUrls } from "../../assets.js";
-import { facesArray, flameForward, loadFlameBasis } from "../../flame_fit.js";
-import { parseMeshFile } from "../../mesh_io.js";
-import { parseSlicerCurveFile } from "../../slicer_curve.js";
 import {
   ANNOTATE_CONTROLLER_STATE_EVENT,
   ANNOTATE_DRAW_REACT_COMMAND_EVENT,
@@ -21,8 +17,7 @@ import {
   readControllerCommandDetail,
 } from "../lib/controllerCommand";
 import type { AnnotationLine, AnnotationPoint } from "../../annotate_model.js";
-import type { FlameBasis } from "../../flame_fit.js";
-import type { Triangle, Vec3 } from "../../soft_body.js";
+import type { Triangle, Vec3 } from "./softBody";
 import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
 import { requireScopedElement } from "../lib/scopedDom";
 import {
@@ -30,8 +25,12 @@ import {
   buildAnnotateControllerSnapshot,
   controlsOf,
 } from "./annotateSnapshots";
+import { assetUrls } from "./assetLoader";
 import { dataSource } from "./dataSource";
-import { topologyMeta } from "../../topology_registry.js";
+import { facesArray, flameForward, loadFlameBasis, type FlameBasis } from "./flameFit";
+import { parseMeshFile } from "./meshIo";
+import { parseSlicerCurveFile } from "./slicerCurve";
+import { topologyMeta } from "./topologyRegistry";
 
 interface AnnotateDomElements {
   stage: HTMLCanvasElement;
@@ -202,6 +201,7 @@ async function loadCanonical(): Promise<void> {
   }
   if (!isActiveSession(session)) return;
   const meta = topologyMeta("flame-2023");
+  if (!meta) throw new Error("缺少 FLAME 拓扑登记");
   model.setTopology({ topologyId: meta.id, topologyVersion: meta.version });
   viewer.setMesh(mesh.verts, mesh.tris, { showSurface: true });
   onCanonical = true;
@@ -238,6 +238,7 @@ async function loadFlameMesh(vertsName: string, label: string): Promise<void> {
   ]);
   if (!isActiveSession(session)) return;
   const meta = topologyMeta("flame-2023");
+  if (!meta) throw new Error("缺少 FLAME 拓扑登记");
   model.setTopology({ topologyId: meta.id, topologyVersion: meta.version });
   viewer.setMesh(verts, topology.triangles, { showSurface: true });
   onCanonical = true;
@@ -245,7 +246,7 @@ async function loadFlameMesh(vertsName: string, label: string): Promise<void> {
   setHint(`在 ${label} 上点击落点（${topology.vertexCount} 顶点）；导出得 flame-2023 图谱(tri,u,v)。`);
   refresh();
 }
-const loadFlame = () => loadFlameMesh("flame_neutral_vertices", topologyMeta("flame-2023").label);
+const loadFlame = () => loadFlameMesh("flame_neutral_vertices", topologyMeta("flame-2023")?.label ?? "FLAME 头模 (5023)");
 const loadFittedFlame = () => loadFlameMesh("flame_fitted_vertices", "FLAME 个体（拟合）");
 
 function handleReactMeshCommand(event: Event): void {

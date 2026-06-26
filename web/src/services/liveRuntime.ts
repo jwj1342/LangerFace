@@ -2,7 +2,6 @@
 import { bindDom, clearDomBinding, els } from "../../dom.js";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "../../canvas_fit.js";
 import { validateIncisionOverlay } from "../../incision_overlay.js";
-import { countMetric, logError } from "../../logger.js";
 import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, stopTwin, toggleTwinHead, toggleTwinTexture } from "../../mode3d.js";
 import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "../../pipeline.js";
 import { adjustFocusZoom, buildZoomCards } from "../../render.js";
@@ -28,6 +27,7 @@ import {
   visibleLiveTextOf,
 } from "./liveSnapshots";
 import { dataSource } from "./dataSource";
+import { countMetric, logError } from "./logger";
 import { createCanvasRecordingController, type CanvasRecordingController, type RecordingExtraCanvas } from "./canvasRecording";
 import { recordingState, reconState, renderState, sourceState } from "../../state.js";
 import { setIncisionOverlayQa, setMsg, setProvenance, smoothLabel } from "./liveUi";

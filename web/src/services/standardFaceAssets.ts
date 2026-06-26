@@ -1,6 +1,6 @@
-import { loadJsonAsset, type AssetProgressEvent } from "../../assets.js";
-import type { RstlAtlas } from "../../rstl_field.js";
-import type { Triangle, Vec3 } from "../../soft_body.js";
+import { loadJsonAsset, type AssetProgressEvent } from "./assetLoader";
+import type { RstlAtlas } from "./rstlField";
+import type { Triangle, Vec3 } from "./softBody";
 
 export interface StandardFaceAssets {
   verts: Vec3[];

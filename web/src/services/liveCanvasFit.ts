@@ -1,5 +1,5 @@
-import { fitContainSize, type FitContainResult } from "../../fit_math.js";
 import { renderState } from "../../state.js";
+import { fitContainSize, type FitContainResult } from "./fitMath";
 import { els } from "./liveDom";
 
 export { fitContainSize };

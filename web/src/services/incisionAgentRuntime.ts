@@ -1,6 +1,5 @@
 import * as THREE from "three";
 
-import { assetBaseUrl, loadJsonAsset } from "../../assets.js";
 import { compileIncisionOverlay } from "../../incision_overlay.js";
 import {
   applyCandidateEdit,
@@ -33,6 +32,7 @@ import {
   readControllerCommandDetail,
 } from "../lib/controllerCommand";
 import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
+import { assetBaseUrl, loadJsonAsset } from "./assetLoader";
 import { requireScopedElement, requireScopedQuery } from "../lib/scopedDom";
 import {
   initialProviderState,
@@ -69,7 +69,7 @@ import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
 import { createWorkflowWorkerClient } from "./workflowWorkerClient";
 import type { WorkflowWorkerClient } from "./workflowWorkerClient";
 import { Head3D, buildLineGeometry, vertexNormals } from "../../three3d.js";
-import type { Triangle, Vec3 } from "../../soft_body.js";
+import type { Triangle, Vec3 } from "./softBody";
 
 type DynamicRecord = Record<string, any>;
 type VectorLike = ArrayLike<number>;

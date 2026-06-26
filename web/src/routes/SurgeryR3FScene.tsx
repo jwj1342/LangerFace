@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 import { R3FLoadingCard } from "../components/ui/r3f-loading-card";
-import type { RstlAtlas, RstlAtlasLine } from "../../rstl_field.js";
-import { rstlDirField } from "../../rstl_field.js";
-import type { SoftBody, Triangle, Vec3 } from "../../soft_body.js";
-import { boundaryVerts, buildSoftBody, excise, stepSoftBody, vertexTension } from "../../soft_body.js";
 import { buildLineGeometry, vertexNormals } from "../../three3d.js";
+import type { RstlAtlas, RstlAtlasLine } from "../services/rstlField";
+import { rstlDirField } from "../services/rstlField";
+import type { SoftBody, Triangle, Vec3 } from "../services/softBody";
+import { boundaryVerts, buildSoftBody, excise, stepSoftBody, vertexTension } from "../services/softBody";
 
 export interface SurgeryAssets {
   verts: Vec3[];

@@ -139,6 +139,7 @@ const annotateRuntime = read("src/services/annotateRuntime.ts");
 const annotateModelTypes = read("annotate_model.d.ts");
 const annotateViewerTypes = read("annotate_viewer.d.ts");
 const flameFitTypes = read("flame_fit.d.ts");
+const flameFitService = read("src/services/flameFit.ts");
 const annotateViewer = read("annotate_viewer.js");
 const controller = read("src/services/incisionAgentRuntime.ts");
 const incisionOverlayTypes = read("incision_overlay.d.ts");
@@ -1870,7 +1871,10 @@ assert.ok(annotateRuntime.includes("interface DragState"), "annotation runtime t
 assert.ok(annotateRuntime.includes("function controllerEvent"), "annotation runtime narrows browser command events before reading detail");
 assert.ok(annotateModelTypes.includes("class AnnotationModel"), "annotation model declarations expose the line model contract");
 assert.ok(annotateViewerTypes.includes("class Annotator3D"), "annotation viewer declarations expose the Three.js view contract");
-assert.ok(flameFitTypes.includes("interface FlameBasis"), "FLAME declarations expose the browser fit basis contract");
+assert.ok(
+  flameFitTypes.includes("FlameBasis") && flameFitService.includes("interface FlameBasis"),
+  "FLAME declarations expose the typed browser fit basis contract",
+);
 assert.ok(annotateRuntime.includes("export function mountAnnotateWorkbench"), "annotation runtime exposes a mount lifecycle");
 assert.ok(annotateRuntime.includes("export function disposeAnnotateWorkbench"), "annotation runtime exposes a dispose lifecycle");
 assert.ok(annotateRuntime.includes("ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation runtime declares a React state bridge event");

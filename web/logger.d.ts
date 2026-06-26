@@ -1,2 +1,25 @@
-export function countMetric(name: string, by?: number): void;
-export function logError(message: string, detail?: unknown): void;
+export type {
+  DiagnosticEvent,
+  DiagnosticLevel,
+  DiagnosticMetricBucket,
+  DiagnosticMetricSample,
+  DiagnosticSnapshot,
+  DiagnosticSnapshotMetric,
+  DiagnosticsState,
+} from "./src/services/logger";
+export {
+  DIAGNOSTIC_SCHEMA_VERSION,
+  countMetric,
+  diagnostics,
+  exportDiagnostics,
+  installGlobalErrorHandlers,
+  logError,
+  logInfo,
+  logWarn,
+  recordEvent,
+  recordMetricSample,
+  resetDiagnostics,
+  setAssetVersions,
+  setDiagnosticSection,
+  snapshotDiagnostics,
+} from "./src/services/logger";
