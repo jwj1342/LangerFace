@@ -267,7 +267,8 @@ assert.ok(!annotateStore.includes("verts:"), "annotation store must not hold mes
 assert.ok(!annotateStore.includes("tris:"), "annotation store must not hold triangle arrays");
 assert.ok(!annotateStore.includes("camera:"), "annotation store must not hold Three.js cameras");
 assert.ok(annotateBridge.includes("useControllerSnapshotBridge"), "React annotation hook delegates event wiring to the shared snapshot bridge");
-assert.ok(annotateBridge.includes("react-annotate-controller-snapshot/v0.1"), "React annotation hook keeps a schema guard for controller snapshots");
+assert.ok(annotateBridge.includes("../services/annotateSnapshots"), "React annotation hook imports the shared snapshot schema version");
+assert.ok(annotateBridge.includes("ANNOTATE_SNAPSHOT_SCHEMA_VERSION"), "React annotation hook guards snapshots with the shared schema version constant");
 assert.ok(annotateStatePanel.includes("useAnnotateStore"), "React annotation UI reads low-frequency state from Zustand");
 assert.ok(liveStore.includes("LiveControllerSnapshot"), "live Zustand store keeps typed controller snapshots");
 assert.ok(liveStore.includes("LIVE_CONTROLLER_STATE_EVENT"), "live Zustand store declares the controller bridge event");
@@ -280,7 +281,8 @@ assert.ok(!liveStore.includes("verts:"), "live store must not hold mesh vertex a
 assert.ok(!liveStore.includes("tris:"), "live store must not hold triangle arrays");
 assert.ok(!liveStore.includes("fps:"), "live store must not hold frame counters");
 assert.ok(liveBridge.includes("useControllerSnapshotBridge"), "React live hook delegates event wiring to the shared snapshot bridge");
-assert.ok(liveBridge.includes("react-live-controller-snapshot/v0.1"), "React live hook keeps a schema guard for controller snapshots");
+assert.ok(liveBridge.includes("../services/liveSnapshots"), "React live hook imports the shared snapshot schema version");
+assert.ok(liveBridge.includes("LIVE_SNAPSHOT_SCHEMA_VERSION"), "React live hook guards snapshots with the shared schema version constant");
 assert.ok(liveStatePanel.includes("useLiveStore"), "React live UI reads low-frequency state from Zustand");
 assert.ok(incisionStore.includes("IncisionControllerSnapshot"), "incision Zustand store keeps typed controller snapshots");
 assert.ok(incisionStore.includes("INCISION_CONTROLLER_STATE_EVENT"), "incision Zustand store declares the controller bridge event");
@@ -291,7 +293,8 @@ assert.ok(!incisionStore.includes("THREE."), "incision store must not hold Three
 assert.ok(!incisionStore.includes("verts:"), "incision store must not hold mesh vertex arrays");
 assert.ok(!incisionStore.includes("tris:"), "incision store must not hold triangle arrays");
 assert.ok(incisionBridge.includes("useControllerSnapshotBridge"), "React incision hook delegates event wiring to the shared snapshot bridge");
-assert.ok(incisionBridge.includes("react-incision-controller-snapshot/v0.1"), "React incision hook keeps a schema guard for controller snapshots");
+assert.ok(incisionBridge.includes("../services/incisionSnapshots"), "React incision hook imports the shared snapshot schema version");
+assert.ok(incisionBridge.includes("INCISION_SNAPSHOT_SCHEMA_VERSION"), "React incision hook guards snapshots with the shared schema version constant");
 assert.ok(incisionRoute.includes("useIncisionControllerBridge"), "incision route mounts the Zustand/controller bridge");
 assert.ok(incisionStatePanel.includes("useIncisionStore"), "React incision UI reads low-frequency state from Zustand");
 

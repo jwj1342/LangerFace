@@ -4,12 +4,13 @@ import {
   type AnnotateControllerSnapshot,
   useAnnotateStore,
 } from "../stores/annotateStore";
+import { ANNOTATE_SNAPSHOT_SCHEMA_VERSION } from "../services/annotateSnapshots";
 
 function isControllerSnapshot(value: unknown): value is AnnotateControllerSnapshot {
   return Boolean(
     value &&
       typeof value === "object" &&
-      (value as { schema_version?: string }).schema_version === "react-annotate-controller-snapshot/v0.1",
+      (value as { schema_version?: string }).schema_version === ANNOTATE_SNAPSHOT_SCHEMA_VERSION,
   );
 }
 

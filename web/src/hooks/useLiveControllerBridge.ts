@@ -4,12 +4,13 @@ import {
   type LiveControllerSnapshot,
   useLiveStore,
 } from "../stores/liveStore";
+import { LIVE_SNAPSHOT_SCHEMA_VERSION } from "../services/liveSnapshots";
 
 function isControllerSnapshot(value: unknown): value is LiveControllerSnapshot {
   return Boolean(
     value &&
       typeof value === "object" &&
-      (value as { schema_version?: string }).schema_version === "react-live-controller-snapshot/v0.1",
+      (value as { schema_version?: string }).schema_version === LIVE_SNAPSHOT_SCHEMA_VERSION,
   );
 }
 
