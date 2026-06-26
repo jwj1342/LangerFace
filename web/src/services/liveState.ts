@@ -3,14 +3,16 @@ import type { LiveZoomCard } from "../../render.js";
 import type { CanvasRecordingController } from "./canvasRecording";
 import type { IncisionOverlayPayload } from "./dataSource";
 
+type AnyRecord = Record<string, any>;
+
 export interface LiveModelState {
-  landmarker: unknown;
-  handLandmarker: unknown;
-  topology: unknown;
-  triangles: unknown;
-  noseTris: unknown;
-  atlases: Record<string, unknown>;
-  officialAtlases: Record<string, unknown>;
+  landmarker: any;
+  handLandmarker: any;
+  topology: any;
+  triangles: any;
+  noseTris: any;
+  atlases: Record<string, any>;
+  officialAtlases: Record<string, any>;
   [key: string]: unknown;
 }
 
@@ -46,19 +48,19 @@ export interface LiveRenderState {
 }
 
 export interface LiveSourceState {
-  source: unknown;
+  source: any;
   sourceKind: "camera" | "video" | "image" | null;
   running: boolean;
   paused: boolean;
   presence: number;
-  lastLM: unknown;
-  imageCacheLM: unknown;
-  imageHulls: unknown;
+  lastLM: any;
+  imageCacheLM: any;
+  imageHulls: any;
   jawOpen: number;
   eyeBlinkLeft: number;
   eyeBlinkRight: number;
-  qualityGate: unknown;
-  localRegionQuality: unknown;
+  qualityGate: any;
+  localRegionQuality: any;
   [key: string]: unknown;
 }
 
@@ -68,21 +70,21 @@ export interface LiveRecordingState {
 
 export interface LiveReconState {
   route: "2d" | "3d";
-  head3d: { dispose?: () => void } | null;
-  reconVerts: unknown;
-  reconFaces: unknown;
-  reconAtlasLines: unknown;
-  reconColors: unknown;
+  head3d: AnyRecord | null;
+  reconVerts: any;
+  reconFaces: any;
+  reconAtlasLines: any;
+  reconColors: any;
   reconProjectable: boolean;
   reconDisplaySpace: string;
   mode3d: string;
   viewerRAF: number | null;
   rot: { x: number; y: number };
-  scan: { active?: boolean; [key: string]: unknown } | null;
-  flameFit: unknown;
-  flameNeutral: unknown;
-  flameBasis: unknown;
-  flameBeta: unknown;
+  scan: AnyRecord | null;
+  flameFit: any;
+  flameNeutral: any;
+  flameBasis: any;
+  flameBeta: any;
   twinMode: string;
   twinTexture: boolean;
   [key: string]: unknown;

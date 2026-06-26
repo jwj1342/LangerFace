@@ -10,7 +10,7 @@ const liveUi = [
 ].join("\n");
 const main = fs.readFileSync("src/services/liveRuntime.ts", "utf8");
 const render = fs.readFileSync("src/services/render2d.ts", "utf8");
-const mode3d = fs.readFileSync("mode3d.js", "utf8");
+const mode3d = fs.readFileSync("src/services/mode3d.ts", "utf8");
 const three3d = fs.readFileSync("src/services/three3d.ts", "utf8");
 const source = fs.readFileSync("src/services/pipelineSource.ts", "utf8");
 const loop = fs.readFileSync("src/services/pipelineLoop.ts", "utf8");

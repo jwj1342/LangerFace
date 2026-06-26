@@ -15,6 +15,9 @@ export interface IncisionOverlayPayload {
   };
   review_gate?: {
     high_guardrail_codes?: string[];
+    approval_ready?: boolean;
+    live_overlay_ready?: boolean;
+    [key: string]: unknown;
   };
   review?: {
     status?: string;
