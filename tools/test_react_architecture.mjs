@@ -334,6 +334,7 @@ assert.ok(providerPanel.includes("Input"), "React provider panel uses the shared
 assert.ok(providerPanel.includes("Label"), "React provider panel uses the shared shadcn-style label primitive");
 assert.ok(providerPanel.includes("RangeInput"), "React provider panel uses the shared shadcn-style range primitive");
 assert.ok(providerPanel.includes("Button"), "React provider panel uses the shared shadcn-style button primitive");
+assert.ok(!providerPanel.includes("<input"), "React provider panel should route hidden and visible inputs through the shared input primitive");
 for (const id of [
   "editStatus",
   "angleOffsetDeg",
@@ -447,7 +448,12 @@ assert.ok(worker.includes("handles_high_frequency_render_state: false"), "workfl
 assert.ok(workerClient.includes("Comlink.wrap"), "React app wraps the workflow worker with Comlink");
 assert.ok(workerClient.includes("new Worker(new URL"), "workflow worker is loaded through Vite worker URL handling");
 assert.ok(workerClient.includes("worker.terminate"), "workflow worker client has an explicit dispose lifecycle");
+assert.ok(workerClient.includes("WorkflowWorkerProbeResult"), "workflow worker client exposes a typed low-frequency probe result");
+assert.ok(workerClient.includes("probeWorkflowWorkerClient"), "workflow worker client centralizes dashboard worker health checks");
+assert.ok(workerClient.includes("summarizeTumorInput"), "workflow worker probe exercises a deterministic tool through Comlink");
 assert.ok(workerPanel.includes("createWorkflowWorkerClient"), "React dashboard probes the worker boundary");
+assert.ok(workerPanel.includes("probeWorkflowWorkerClient"), "React worker status panel consumes the shared worker probe service");
+assert.ok(!workerPanel.includes("client.api.diagnostics"), "React worker status panel does not inline Comlink API probing");
 assert.ok(workerPanel.includes("CardHeader"), "React worker status panel uses the shared shadcn-style card primitives");
 assert.ok(controller.includes("createWorkflowWorkerClient"), "incision controller uses the Comlink workflow worker client");
 assert.ok(controller.includes("worker.api.planIncision"), "incision candidate generation is delegated to the workflow worker");

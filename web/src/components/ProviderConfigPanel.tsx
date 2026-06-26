@@ -191,7 +191,7 @@ export function ProviderConfigPanel() {
         <span>LLM Provider</span>
         <span id="providerState" className={`provider-state-${providerTone}`}>{providerState}</span>
       </div>
-      <input id="providerMode" type="hidden" value="openai-compatible" readOnly />
+      <Input id="providerMode" type="hidden" value="openai-compatible" readOnly />
       <p className="agent-note">Provider 类型固定为 OpenAI-compatible / vLLM。测试会请求 Base URL 下的 /models。</p>
       <Input
         id="providerBaseUrl"

@@ -2,7 +2,7 @@ import { Cpu } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Card, CardContent, CardHeader } from "./ui/card";
-import { createWorkflowWorkerClient } from "../services/workflowWorkerClient";
+import { createWorkflowWorkerClient, probeWorkflowWorkerClient } from "../services/workflowWorkerClient";
 import { useAppStore } from "../stores/appStore";
 
 export function WorkerStatusPanel() {
@@ -16,27 +16,10 @@ export function WorkerStatusPanel() {
     setWorkerStatus("正在连接");
 
     async function probeWorker() {
-      const diagnostics = await client.api.diagnostics();
-      const tumorQuality = await client.api.summarizeTumorInput({
-        kind: "subcutaneous",
-        center: [0, 0, 0],
-        diameter_mm: 12,
-        depth_mm: 6,
-        margin_mm: 0,
-        boundary: [],
-        boundary_mode: "center_diameter",
-        boundary_source: "worker_probe",
-        source: "react_worker_probe",
-        author: "system",
-        units: "mm",
-      });
+      const probe = await probeWorkflowWorkerClient(client);
       if (disposed) return;
       setWorkerStatus("已连接");
-      setDetail(
-        `${diagnostics.thread} · ${diagnostics.supported_tools.join(", ")} · 肿物输入检查 ${
-          tumorQuality.passed ? "通过" : "需复核"
-        }`,
-      );
+      setDetail(probe.detail);
     }
 
     probeWorker().catch((err) => {
