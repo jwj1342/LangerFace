@@ -1,5 +1,4 @@
-import { Link } from "react-router-dom";
-
+import { StageActions, StageLink, StageShell, StageViewport } from "./StageShell";
 import { useIncisionStore, type IncisionAssetLoadingState } from "../stores/incisionStore";
 
 const DEFAULT_ASSET_LOADING: IncisionAssetLoadingState = {
@@ -12,30 +11,31 @@ export function IncisionStagePanel() {
   const assetLoading = snapshot?.assetLoading || DEFAULT_ASSET_LOADING;
 
   return (
-    <main className="stage">
-      <div className="stage-top">
-        <span className="live on"><span className="dot"></span>标准脸规划</span>
-        <div className="stage-actions">
-          <span className="fps" id="stageStatus">{snapshot?.stageStatus || "拖拽旋转 · 滚轮缩放 · 点击定位"}</span>
-          <Link className="stage-link fps" to="/annotate">3D 标注与演示</Link>
+    <StageShell
+      top={(
+        <>
+          <span className="live on"><span className="dot"></span>标准脸规划</span>
+          <StageActions>
+            <span className="fps" id="stageStatus">{snapshot?.stageStatus || "拖拽旋转 · 滚轮缩放 · 点击定位"}</span>
+            <StageLink className="fps" to="/annotate">3D 标注与演示</StageLink>
+          </StageActions>
+        </>
+      )}
+    >
+      <StageViewport>
+        <canvas id="agentCanvas"></canvas>
+        <div className={`asset-loading${assetLoading.visible ? "" : " hidden"}`} id="assetLoading" role="status" aria-live="polite">
+          <div className="asset-spinner" aria-hidden="true"></div>
+          <strong>正在加载切口规划资产</strong>
+          <p id="assetLoadingText">{assetLoading.text}</p>
         </div>
-      </div>
-      <div className="stage-body">
-        <div className="main-wrap">
-          <canvas id="agentCanvas"></canvas>
-          <div className={`asset-loading${assetLoading.visible ? "" : " hidden"}`} id="assetLoading" role="status" aria-live="polite">
-            <div className="asset-spinner" aria-hidden="true"></div>
-            <strong>正在加载切口规划资产</strong>
-            <p id="assetLoadingText">{assetLoading.text}</p>
-          </div>
-          <div className="canvas-legend" aria-label="3D 标注图例">
-            <span className="legend-item"><span className="legend-swatch center"></span>病灶中心</span>
-            <span className="legend-item"><span className="legend-swatch ring"></span>肿物范围</span>
-            <span className="legend-item"><span className="legend-swatch line"></span>候选切口</span>
-            <span className="legend-item"><span className="legend-swatch handle"></span>端点控制</span>
-          </div>
+        <div className="canvas-legend" aria-label="3D 标注图例">
+          <span className="legend-item"><span className="legend-swatch center"></span>病灶中心</span>
+          <span className="legend-item"><span className="legend-swatch ring"></span>肿物范围</span>
+          <span className="legend-item"><span className="legend-swatch line"></span>候选切口</span>
+          <span className="legend-item"><span className="legend-swatch handle"></span>端点控制</span>
         </div>
-      </div>
-    </main>
+      </StageViewport>
+    </StageShell>
   );
 }

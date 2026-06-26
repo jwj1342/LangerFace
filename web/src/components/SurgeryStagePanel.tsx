@@ -1,5 +1,6 @@
-import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
+
+import { StageActions, StageLink, StageShell, StageViewport } from "./StageShell";
 
 interface SurgeryStagePanelProps {
   stage: ReactNode;
@@ -7,19 +8,20 @@ interface SurgeryStagePanelProps {
 
 export function SurgeryStagePanel({ stage }: SurgeryStagePanelProps) {
   return (
-    <main className="stage">
-      <div className="stage-top">
-        <span className="live on"><span className="dot" />沿 RSTL 闭合演示</span>
-        <div className="stage-actions">
-          <span className="fps">拖拽旋转 · 滚轮缩放 · 点击标记肿物</span>
-          <Link className="stage-link" to="/annotate">返回 3D 标注</Link>
-        </div>
-      </div>
-      <div className="stage-body">
-        <div className="main-wrap">
-          {stage}
-        </div>
-      </div>
-    </main>
+    <StageShell
+      top={(
+        <>
+          <span className="live on"><span className="dot" />沿 RSTL 闭合演示</span>
+          <StageActions>
+            <span className="fps">拖拽旋转 · 滚轮缩放 · 点击标记肿物</span>
+            <StageLink to="/annotate">返回 3D 标注</StageLink>
+          </StageActions>
+        </>
+      )}
+    >
+      <StageViewport>
+        {stage}
+      </StageViewport>
+    </StageShell>
   );
 }

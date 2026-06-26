@@ -10,41 +10,41 @@ import { ProviderConfigPanel } from "../components/ProviderConfigPanel";
 import { ReviewControlsPanel } from "../components/ReviewControlsPanel";
 import { SecondaryCuePanel } from "../components/SecondaryCuePanel";
 import { TumorInputPanel } from "../components/TumorInputPanel";
+import { Disclaimer, WorkbenchLayout } from "../components/WorkbenchLayout";
 import { WorkbenchBrand } from "../components/WorkbenchBrand";
 import { StatusBadge } from "../components/ui/status-badge";
 
 export function IncisionWorkbench() {
   return (
-    <div className="app incision-workbench">
-      <aside className="sidebar">
-        <WorkbenchBrand
-          eyebrow="STAGE 2 · AGENTIC INCISION"
-          title="切口 Agent 工作台"
-          action={<StatusBadge asChild><Link to="/live">返回实时显示</Link></StatusBadge>}
-        />
+    <WorkbenchLayout
+      className="incision-workbench"
+      stage={<IncisionStagePanel />}
+    >
+      <WorkbenchBrand
+        eyebrow="STAGE 2 · AGENTIC INCISION"
+        title="切口 Agent 工作台"
+        action={<StatusBadge asChild><Link to="/live">返回实时显示</Link></StatusBadge>}
+      />
 
-        <IncisionStatePanel />
+      <IncisionStatePanel />
 
-        <TumorInputPanel />
+      <TumorInputPanel />
 
-        <SecondaryCuePanel />
+      <SecondaryCuePanel />
 
-        <ProviderConfigPanel />
+      <ProviderConfigPanel />
 
-        <CandidateResultPanel />
+      <CandidateResultPanel />
 
-        <EditControlsPanel />
+      <EditControlsPanel />
 
-        <ReviewControlsPanel />
+      <ReviewControlsPanel />
 
-        <CandidateLibraryPanel />
+      <CandidateLibraryPanel />
 
-        <PrivacyAuditPanel />
+      <PrivacyAuditPanel />
 
-        <p className="disclaimer">⚠️ 研究原型：LLM 只做编排摘要，方向、几何和 guardrails 均由确定性工具输出。候选切口必须由医生审阅确认。</p>
-      </aside>
-
-      <IncisionStagePanel />
-    </div>
+      <Disclaimer>⚠️ 研究原型：LLM 只做编排摘要，方向、几何和 guardrails 均由确定性工具输出。候选切口必须由医生审阅确认。</Disclaimer>
+    </WorkbenchLayout>
   );
 }

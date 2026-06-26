@@ -26,6 +26,8 @@ const vercel = read("vercel.json");
 const vercelConfig = JSON.parse(vercel);
 const app = read("src/App.tsx");
 const typedStore = read("src/stores/appStore.ts");
+const stageShell = read("src/components/StageShell.tsx");
+const workbenchLayout = read("src/components/WorkbenchLayout.tsx");
 const workbenchBrand = read("src/components/WorkbenchBrand.tsx");
 const controllerCommand = read("src/lib/controllerCommand.ts");
 const controllerEvents = read("src/lib/controllerEvents.ts");
@@ -111,9 +113,10 @@ const controller = read("incision_agent_main.js");
 const dom = read("dom.js");
 const liveController = read("main.js");
 const surgeryController = read("surgery_main.js");
+const layoutPrimitiveNames = new Set(["StageShell.tsx", "WorkbenchLayout.tsx"]);
 const reactUiConsumerSources = new Map([
   ["App.tsx", app],
-  ...componentSources,
+  ...[...componentSources.entries()].filter(([name]) => !layoutPrimitiveNames.has(name)),
   ...routeSources,
 ]);
 const consumersWithRawClass = (className) => (
@@ -265,6 +268,15 @@ assert.ok(reactManagedWorkbench.includes("isReactManagedWorkbench"), "shared Rea
 assert.ok(reactManagedWorkbench.includes("captureReactManagedWorkbench"), "shared React-managed flag module captures the previous flag value");
 assert.ok(reactManagedWorkbench.includes("enableReactManagedWorkbench"), "shared React-managed flag module enables React-managed mode");
 assert.ok(reactManagedWorkbench.includes("restoreReactManagedWorkbench"), "shared React-managed flag module restores or deletes the previous flag value");
+assert.ok(workbenchLayout.includes('cn("app"'), "React WorkbenchLayout preserves the legacy app shell class");
+assert.ok(workbenchLayout.includes('className="sidebar"'), "React WorkbenchLayout preserves the legacy sidebar class");
+assert.ok(workbenchLayout.includes('cn("disclaimer"'), "React Disclaimer preserves the legacy disclaimer class");
+assert.ok(stageShell.includes('cn("stage"'), "React StageShell preserves the legacy stage class");
+assert.ok(stageShell.includes('className="stage-top"'), "React StageShell preserves the legacy stage top class");
+assert.ok(stageShell.includes('cn("stage-body"'), "React StageShell preserves the legacy stage body class");
+assert.ok(stageShell.includes('cn("stage-actions"'), "React StageActions preserves the legacy stage actions class");
+assert.ok(stageShell.includes('cn("main-wrap"'), "React StageViewport preserves the legacy main-wrap class");
+assert.ok(stageShell.includes('cn("stage-link"'), "React StageLink preserves the legacy stage link class");
 assert.ok(uiButton.includes("@radix-ui/react-slot"), "shadcn-style Button supports asChild through Radix Slot");
 assert.ok(uiButton.includes("class-variance-authority"), "shadcn-style Button uses variant composition");
 assert.ok(uiButton.includes("workbenchPrimary"), "shadcn-style Button can preserve legacy workbench button styling");
@@ -323,6 +335,15 @@ for (const className of [
   "stat",
   "bar",
   "bar-fill",
+  "app",
+  "sidebar",
+  "disclaimer",
+  "stage",
+  "stage-top",
+  "stage-body",
+  "stage-actions",
+  "main-wrap",
+  "stage-link",
 ]) {
   assert.deepEqual(
     consumersWithRawClass(className),
@@ -441,7 +462,13 @@ for (const id of [
 }
 assert.ok(incisionStore.includes("IncisionAssetLoadingState"), "incision Zustand store keeps typed asset loading state");
 assert.ok(incisionWorkbench.includes("IncisionStagePanel"), "React incision workbench renders the stage as a React component");
+assert.ok(incisionWorkbench.includes("WorkbenchLayout"), "React incision workbench uses the shared workbench layout shell");
+assert.ok(incisionWorkbench.includes("Disclaimer"), "React incision workbench uses the shared disclaimer primitive");
 assert.ok(incisionStagePanel.includes("useIncisionStore"), "React incision stage reads low-frequency stage and asset loading state from Zustand");
+assert.ok(incisionStagePanel.includes("StageShell"), "React incision stage uses the shared stage shell primitive");
+assert.ok(incisionStagePanel.includes("StageViewport"), "React incision stage uses the shared stage viewport primitive");
+assert.ok(incisionStagePanel.includes("StageActions"), "React incision stage uses the shared stage actions primitive");
+assert.ok(incisionStagePanel.includes("StageLink"), "React incision stage uses the shared stage link primitive");
 for (const id of [
   "tumorKind",
   "diameterMm",
@@ -805,6 +832,12 @@ assert.ok(annotateWorkbench.includes("AnnotateMeshSourcePanel"), "React annotate
 assert.ok(annotateWorkbench.includes("AnnotateDrawPanel"), "React annotate workbench renders the current-line draw panel as a React component");
 assert.ok(annotateWorkbench.includes("AnnotateHelpPanel"), "React annotate workbench renders annotation help as a React component");
 assert.ok(annotateWorkbench.includes("AnnotateStagePanel"), "React annotate workbench renders the 3D stage shell as a React component");
+assert.ok(annotateWorkbench.includes("WorkbenchLayout"), "React annotate workbench uses the shared workbench layout shell");
+assert.ok(annotateWorkbench.includes("Disclaimer"), "React annotate workbench uses the shared disclaimer primitive");
+assert.ok(annotateStagePanel.includes("StageShell"), "React annotate stage uses the shared stage shell primitive");
+assert.ok(annotateStagePanel.includes("StageViewport"), "React annotate stage uses the shared stage viewport primitive");
+assert.ok(annotateStagePanel.includes("StageActions"), "React annotate stage uses the shared stage actions primitive");
+assert.ok(annotateStagePanel.includes("StageLink"), "React annotate stage uses the shared stage link primitive");
 assert.ok(annotateMeshSourcePanel.includes("dispatchAnnotateMeshCommand"), "React annotate mesh source panel uses the typed mesh command helper");
 assert.ok(annotateDrawPanel.includes("dispatchAnnotateDrawCommand"), "React annotate draw panel uses the typed draw command helper");
 assert.ok(!annotateMeshSourcePanel.includes("../lib/controllerEvents"), "React annotate mesh source panel does not import controller event names directly");
@@ -992,6 +1025,10 @@ assert.ok(liveWorkbench.includes("LiveSourceControlsPanel"), "React live workben
 assert.ok(liveWorkbench.includes("LiveRenderControlsPanel"), "React live workbench renders render controls as a React component");
 assert.ok(liveWorkbench.includes("LiveQualityPanel"), "React live workbench renders quality and overlay QA as a React component");
 assert.ok(liveWorkbench.includes("LiveStagePanel"), "React live workbench renders the stage shell as a React component");
+assert.ok(liveWorkbench.includes("WorkbenchLayout"), "React live workbench uses the shared workbench layout shell");
+assert.ok(liveWorkbench.includes("Disclaimer"), "React live workbench uses the shared disclaimer primitive");
+assert.ok(liveStagePanel.includes("StageShell"), "React live stage uses the shared stage shell primitive");
+assert.ok(liveStagePanel.includes("StageViewport"), "React live stage uses the shared stage viewport primitive");
 assert.ok(liveRouteControlsPanel.includes("dispatchLiveRouteCommand"), "React live route controls use the typed route command helper");
 assert.ok(liveSourceControlsPanel.includes("dispatchLiveSourceCommand"), "React live source controls use the typed source command helper");
 assert.ok(liveRenderControlsPanel.includes("dispatchLiveRenderCommand"), "React live render controls use the typed render command helper");
@@ -1111,6 +1148,12 @@ assert.ok(surgeryWorkbench.includes("WorkbenchBrand"), "React surgery workbench 
 assert.ok(surgeryWorkbench.includes("SurgeryMetricsPanel"), "React surgery workbench renders closure metrics as a React component");
 assert.ok(surgeryWorkbench.includes("SurgeryHelpPanel"), "React surgery workbench renders closure help as a React component");
 assert.ok(surgeryWorkbench.includes("SurgeryStagePanel"), "React surgery workbench renders the R3F stage shell as a React component");
+assert.ok(surgeryWorkbench.includes("WorkbenchLayout"), "React surgery workbench uses the shared workbench layout shell");
+assert.ok(surgeryWorkbench.includes("Disclaimer"), "React surgery workbench uses the shared disclaimer primitive");
+assert.ok(surgeryStagePanel.includes("StageShell"), "React surgery stage uses the shared stage shell primitive");
+assert.ok(surgeryStagePanel.includes("StageViewport"), "React surgery stage uses the shared stage viewport primitive");
+assert.ok(surgeryStagePanel.includes("StageActions"), "React surgery stage uses the shared stage actions primitive");
+assert.ok(surgeryStagePanel.includes("StageLink"), "React surgery stage uses the shared stage link primitive");
 assert.equal((surgeryControlsPanel.match(/id="btnAlong"/g) || []).length, 1, "React surgery controls have exactly one cut action");
 assert.ok(!surgeryControlsPanel.includes("btnAcross"), "React surgery controls do not expose inverse-RSTL action");
 assert.ok(surgeryControlsPanel.includes("Button"), "React surgery controls use the shared shadcn-style button primitive");
