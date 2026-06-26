@@ -48,7 +48,7 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 此外，`ignoreCommand` 会运行 [`web/scripts/vercel-ignore-build.mjs`](../web/scripts/vercel-ignore-build.mjs)。脚本做三层收敛：
 
 - 非白名单分支直接跳过 Vercel 构建。
-- `React-架构重构` 的 Preview 默认是手动触发：commit message 需要包含 `[vercel]`、`[preview]` 或 `[deploy-preview]` 才会构建。需要临时恢复自动 Preview 时，在 Vercel 环境变量里设置 `VERCEL_PREVIEW_DEPLOY_MODE=auto`；需要单次强制构建时设置 `VERCEL_FORCE_DEPLOY=1`。
+- `React-架构重构` 的 Preview 默认是手动触发：commit message 需要包含 `[vercel]`、`[preview]` 或 `[deploy-preview]` 才会构建。需要临时恢复自动 Preview 时，在 Vercel 环境变量里设置 `VERCEL_PREVIEW_DEPLOY_MODE=auto`；遇到限流时可设为 `off` 暂停开发 Preview 构建；需要单次强制构建时设置 `VERCEL_FORCE_DEPLOY=1`。
 - 即使当前分支允许构建，只要这次 push 相比上一次部署没有改动 Vercel Root Directory `web/`，仍会跳过实际构建。这样 docs / tools / issue 文案类改动仍会保留 GitHub Actions 质量门禁，但不会额外消耗 Vercel Preview 构建。
 
 如果后续当前开发 PR 换成别的分支，只改这个白名单，不要额外打开所有 feature 分支的自动 Preview。旧的 Deployment URL 属于 Vercel 的历史记录 / 回滚能力；它们可以在 Dashboard 里清理或保留，但仓库配置能控制的是“以后哪些分支继续产生新部署”。如果想让 Dashboard 只显示最新开发和生产两个可见版本，需要在 Vercel Dashboard 里清理旧 Deployment 或配置团队侧保留策略；不要用 GitHub Actions 再额外跑一套 Vercel CLI 自动部署。
@@ -76,6 +76,7 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 其余文档只引用本节，避免 Vercel 自动生成域名和人工别名在多处漂移。
 
 本仓库已有 [web/vercel.json](../web/vercel.json)，里面声明了：
+- `installCommand`: `npm ci`
 - `buildCommand`: `npm run build`
 - `ignoreCommand`: `node scripts/vercel-ignore-build.mjs`，把 Preview 收敛到当前开发分支的显式触发构建，并且仅在 `web/` 有变化时构建
 - `outputDirectory`: `dist`
@@ -85,6 +86,15 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 - JS/MJS 的 `Content-Type`
 
 如果 Dashboard 与 `web/vercel.json` 同时配置同一项，保持它们一致，避免不同环境行为不一致。
+
+### 限流时的处理顺序
+
+遇到 Vercel rate limit / build queue 被打满时，按这个顺序处理：
+
+1. 先确认 Vercel Project 的 Git 分支部署开关与 [web/vercel.json](../web/vercel.json) 一致：只允许 `master` 和当前开发分支 `React-架构重构`。不要重新打开所有 PR / feature 分支的 Preview。
+2. 如果当前长 PR 还在高频提交，把 Vercel 环境变量 `VERCEL_PREVIEW_DEPLOY_MODE` 临时设为 `off`。这样开发 Preview 分支也会跳过构建；需要单次验收时，再临时设 `VERCEL_FORCE_DEPLOY=1` 触发一次。
+3. 需要恢复正常 Preview 时，把 `VERCEL_PREVIEW_DEPLOY_MODE` 改回 `manual`，然后只在需要线上验收的 commit message 里加 `[vercel]`、`[preview]` 或 `[deploy-preview]`。
+4. Dashboard 里看到的一长串旧 Deployment 是不可变历史记录 / 回滚点，不代表仍有一长串“活跃环境”。如果只想保留可见的当前开发和生产两个版本，需要在 Vercel Dashboard 里清理旧 Deployment；仓库配置只能阻止未来继续生成无关部署。
 
 ## GitHub Branch Protection
 

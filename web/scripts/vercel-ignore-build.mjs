@@ -76,6 +76,14 @@ if (!allowedBranches.has(branch)) {
   skip(`branch "${branch || "unknown"}" is not in the deployment whitelist`);
 }
 
+if (vercelEnv === "production" && !productionBranches.has(branch)) {
+  skip(`production deployment is only allowed from ${[...productionBranches].join(", ")}`);
+}
+
+if (previewBranches.has(branch) && vercelEnv !== "production" && previewMode === "off" && !forceDeploy) {
+  skip(`preview branch "${branch}" is disabled by VERCEL_PREVIEW_DEPLOY_MODE=off`);
+}
+
 if (previewBranches.has(branch) && vercelEnv !== "production" && previewMode !== "auto" && !forceDeploy) {
   const commitMessage = getCommitMessage();
   if (!previewDeployPattern.test(commitMessage)) {

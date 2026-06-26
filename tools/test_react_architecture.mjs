@@ -540,6 +540,7 @@ assert.deepEqual(
   },
   "Vercel should only auto-deploy production and the current active development branch",
 );
+assert.equal(vercelConfig.installCommand, "npm ci", "Vercel should install from the committed npm lockfile");
 assert.equal(
   vercelConfig.ignoreCommand,
   "node scripts/vercel-ignore-build.mjs",
@@ -549,6 +550,8 @@ assert.ok(vercelIgnoreBuild.includes("VERCEL_GIT_COMMIT_REF"), "Vercel ignore sc
 assert.ok(vercelIgnoreBuild.includes("VERCEL_GIT_PREVIOUS_SHA"), "Vercel ignore script compares against the previous deployment sha");
 assert.ok(vercelIgnoreBuild.includes('new Set(["master", "React-架构重构"])'), "Vercel ignore script mirrors the deployment branch whitelist");
 assert.ok(vercelIgnoreBuild.includes("VERCEL_PREVIEW_DEPLOY_MODE"), "Vercel ignore script supports explicit preview deployment mode");
+assert.ok(vercelIgnoreBuild.includes('previewMode === "off"'), "Vercel ignore script can disable preview builds during rate-limit windows");
+assert.ok(vercelIgnoreBuild.includes('vercelEnv === "production"'), "Vercel ignore script guards production deployments by branch");
 assert.ok(vercelIgnoreBuild.includes("VERCEL_FORCE_DEPLOY"), "Vercel ignore script supports one-off forced deployments");
 assert.ok(vercelIgnoreBuild.includes("previewDeployPattern"), "Vercel ignore script requires an explicit preview marker by default");
 assert.ok(vercelIgnoreBuild.includes('["diff", "--quiet", ref, "HEAD", "--", "."]'), "Vercel ignore script only builds when the web root changed");

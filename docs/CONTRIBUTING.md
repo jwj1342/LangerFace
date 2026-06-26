@@ -82,7 +82,7 @@ PR 上应关注这些 checks：
 | `Vercel` | 该 PR 的网页 Preview 是否构建成功 |
 | `Vercel Preview Comments` | Vercel 在 PR 中发布 Preview 链接 |
 
-Vercel Preview 只对白名单开发分支开放；当前白名单见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#自动部署范围与限流控制)。普通短期 feature 分支仍跑 GitHub Actions 质量门禁，但不会自动创建 Vercel Preview；当前开发分支也默认不为每个 commit 构建 Preview。需要线上验收时，在 commit message 里加入 `[vercel]`、`[preview]` 或 `[deploy-preview]` 触发一次 Preview，或由维护者临时在 Vercel 设置 `VERCEL_PREVIEW_DEPLOY_MODE=auto`。
+Vercel Preview 只对白名单开发分支开放；当前白名单见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#自动部署范围与限流控制)。普通短期 feature 分支仍跑 GitHub Actions 质量门禁，但不会自动创建 Vercel Preview；当前开发分支也默认不为每个 commit 构建 Preview。需要线上验收时，在 commit message 里加入 `[vercel]`、`[preview]` 或 `[deploy-preview]` 触发一次 Preview，或由维护者临时在 Vercel 设置 `VERCEL_PREVIEW_DEPLOY_MODE=auto`。如果 Vercel 限流，先把 `VERCEL_PREVIEW_DEPLOY_MODE` 设为 `off` 暂停开发 Preview，再用 `VERCEL_FORCE_DEPLOY=1` 做单次验收构建。
 
 Preview 人工验收清单：
 
