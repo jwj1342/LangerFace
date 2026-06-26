@@ -2,6 +2,10 @@ import { Link } from "react-router-dom";
 
 import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useLiveStore } from "../stores/liveStore";
+import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
+import { Label } from "./ui/label";
+import { Select } from "./ui/select";
 
 const LIVE_ROUTE_REACT_COMMAND_EVENT = "langerface:live-route-react-command";
 
@@ -23,23 +27,23 @@ export function LiveRouteControlsPanel() {
   return (
     <>
       <div className="card">
-        <label className="field-label" htmlFor="routeSel">技术路线</label>
-        <select
+        <Label htmlFor="routeSel">技术路线</Label>
+        <Select
           id="routeSel"
-          className="select live-inline-top"
+          className="live-inline-top"
           value={route}
           onChange={(event) => dispatchRouteCommand("route_change", event.currentTarget.value)}
         >
           <option value="2d">2D 贴合（默认，稳定）</option>
           <option value="3d">3D 重建（Beta）</option>
-        </select>
+        </Select>
         <p className="hint live-inline-top" id="routeModeHint">
           {snapshot?.route.hint || "当前是 2D 实时贴合模式，只显示稳定主流程。"}
         </p>
         <div id="route3dPanel" className={`${is3d ? "" : "hidden "}live-stack`}>
           <div className="btn-row live-two-col">
-            <button className="btn" id="reconDemoBtn" type="button" disabled={scanning} onClick={() => dispatchRouteCommand("load_demo_recon")}>用示例脸（无摄像头）</button>
-            <button className="btn" id="reconScanBtn" type="button" disabled={scanning} onClick={() => dispatchRouteCommand("start_scan")}>转头扫描</button>
+            <Button variant="workbench" id="reconDemoBtn" type="button" disabled={scanning} onClick={() => dispatchRouteCommand("load_demo_recon")}>用示例脸（无摄像头）</Button>
+            <Button variant="workbench" id="reconScanBtn" type="button" disabled={scanning} onClick={() => dispatchRouteCommand("start_scan")}>转头扫描</Button>
           </div>
           <p className="hint" id="reconStatus">{recon?.status || "先重建你的 3D 人头 → 可旋转查看 → 再投影到实时画面。"}</p>
           <div className={`scan-panel${scanning ? "" : " hidden"}`} id="scanPanel">
@@ -53,26 +57,28 @@ export function LiveRouteControlsPanel() {
             </div>
           </div>
           <div className="btn-row live-two-col">
-            <button className="btn" id="view3dBtn" type="button" disabled={!hasModel} aria-pressed={mode3d === "view"} onClick={() => dispatchRouteCommand("view_3d")}>旋转查看</button>
-            <button className="btn" id="project3dBtn" type="button" disabled={!hasModel || !projectable} aria-pressed={mode3d === "project"} onClick={() => dispatchRouteCommand("project_3d")}>投影到画面</button>
+            <Button variant="workbench" id="view3dBtn" type="button" disabled={!hasModel} aria-pressed={mode3d === "view"} onClick={() => dispatchRouteCommand("view_3d")}>旋转查看</Button>
+            <Button variant="workbench" id="project3dBtn" type="button" disabled={!hasModel || !projectable} aria-pressed={mode3d === "project"} onClick={() => dispatchRouteCommand("project_3d")}>投影到画面</Button>
           </div>
-          <button className="btn" id="reset3dBtn" type="button" disabled={!hasModel} onClick={() => dispatchRouteCommand("reset_3d")}>复位视角</button>
-          <button className="btn btn-primary" id="cloudFitFlameBtn" type="button" disabled={scanning} onClick={() => dispatchRouteCommand("start_twin")}>▶ 实时孪生（左真脸 / 右 FLAME 随动）</button>
+          <Button variant="workbench" id="reset3dBtn" type="button" disabled={!hasModel} onClick={() => dispatchRouteCommand("reset_3d")}>复位视角</Button>
+          <Button variant="workbenchPrimary" id="cloudFitFlameBtn" type="button" disabled={scanning} onClick={() => dispatchRouteCommand("start_twin")}>▶ 实时孪生（左真脸 / 右 FLAME 随动）</Button>
           <label className={`check${twinActive ? "" : " live-hidden-inline"}`} id="flameHeadToggleWrap">
-            <input type="checkbox" id="flameStdToggle" checked={recon?.twinMode === "standard"} onChange={(event) => dispatchRouteCommand("toggle_twin_head", event.currentTarget.checked)} /> 显示标准头（取消勾选 = 个体）
+            <Checkbox id="flameStdToggle" checked={recon?.twinMode === "standard"} onChange={(event) => dispatchRouteCommand("toggle_twin_head", event.currentTarget.checked)} /> 显示标准头（取消勾选 = 个体）
           </label>
           <label className={`check${twinActive ? "" : " live-hidden-inline"}`} id="twinTextureWrap">
-            <input type="checkbox" id="twinTextureToggle" checked={Boolean(recon?.twinTexture)} onChange={(event) => dispatchRouteCommand("toggle_twin_texture", event.currentTarget.checked)} /> 贴真实人脸纹理
+            <Checkbox id="twinTextureToggle" checked={Boolean(recon?.twinTexture)} onChange={(event) => dispatchRouteCommand("toggle_twin_texture", event.currentTarget.checked)} /> 贴真实人脸纹理
           </label>
         </div>
       </div>
 
       <div className={`card${is3d ? "" : " hidden"}`} id="threeDWorkflowCard">
         <div>
-          <label className="field-label">3D 线标注与研究演示</label>
+          <Label>3D 线标注与研究演示</Label>
           <p className="hint live-inline-top">在 3D 标准脸上绘制 RSTL 候选线，并从标注页进入沿 RSTL 闭合力学演示。</p>
         </div>
-        <Link className="btn btn-primary" to="/annotate">打开 3D 线标注</Link>
+        <Button asChild variant="workbenchPrimary">
+          <Link to="/annotate">打开 3D 线标注</Link>
+        </Button>
       </div>
     </>
   );

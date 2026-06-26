@@ -7,6 +7,8 @@ import { LiveQualityPanel } from "../components/LiveQualityPanel";
 import { LiveStagePanel } from "../components/LiveStagePanel";
 import { LiveStatePanel } from "../components/LiveStatePanel";
 import { WorkbenchBrand } from "../components/WorkbenchBrand";
+import { Button } from "../components/ui/button";
+import { Label } from "../components/ui/label";
 
 export function LiveWorkbench() {
   return (
@@ -22,10 +24,12 @@ export function LiveWorkbench() {
 
         <div className="card" id="incisionWorkflowCard">
           <div>
-            <label className="field-label">肿物切口候选设计</label>
+            <Label>肿物切口候选设计</Label>
             <p className="hint live-inline-top">手动放置皮下 / 皮表肿物，生成线性或梭形候选切口，并查看规则、trace、隐私审计和医生调整记录。</p>
           </div>
-          <Link className="btn btn-primary" to="/incision">打开切口 Agent 工作台</Link>
+          <Button asChild variant="workbenchPrimary">
+            <Link to="/incision">打开切口 Agent 工作台</Link>
+          </Button>
         </div>
 
         <LiveStatePanel />
