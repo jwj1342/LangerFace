@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import { Button } from "./ui/button";
 import { dispatchIncisionLibraryCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
@@ -7,6 +9,21 @@ export function CandidateLibraryPanel() {
   const saved = snapshot?.savedCandidates || [];
   const hasCandidate = Boolean(snapshot?.candidate);
   const hasSaved = saved.length > 0;
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  useEffect(() => {
+    if (!hasSaved) setConfirmClear(false);
+  }, [hasSaved]);
+
+  const clearSaved = () => {
+    if (!hasSaved) return;
+    if (!confirmClear) {
+      setConfirmClear(true);
+      return;
+    }
+    dispatchIncisionLibraryCommand("clear_saved");
+    setConfirmClear(false);
+  };
 
   return (
     <div className="card agent-grid">
@@ -22,8 +39,16 @@ export function CandidateLibraryPanel() {
       </Button>
       <div className="btn-row two-cols">
         <Button variant="workbench" id="makeVariantsBtn" type="button" disabled={!hasCandidate} onClick={() => dispatchIncisionLibraryCommand("make_variants")}>生成备选</Button>
-        <Button variant="workbench" id="clearSavedBtn" type="button" disabled={!hasSaved} onClick={() => dispatchIncisionLibraryCommand("clear_saved")}>清空候选库</Button>
+        <Button variant={confirmClear ? "miniDanger" : "workbench"} id="clearSavedBtn" type="button" disabled={!hasSaved} onClick={clearSaved}>
+          {confirmClear ? "确认清空" : "清空候选库"}
+        </Button>
       </div>
+      {confirmClear ? (
+        <div className="btn-row two-cols">
+          <Button variant="workbench" type="button" onClick={() => setConfirmClear(false)}>取消</Button>
+          <p className="hint">将删除当前工作台保存的全部候选草案。</p>
+        </div>
+      ) : null}
       <div className="btn-row three-cols">
         <Button variant="workbench" id="exportJsonBtn" type="button" disabled={!hasCandidate && !hasSaved} onClick={() => dispatchIncisionLibraryCommand("export_json")}>导出 JSON</Button>
         <Button variant="workbench" id="exportReportBtn" type="button" disabled={!hasCandidate && !hasSaved} onClick={() => dispatchIncisionLibraryCommand("export_report")}>导出报告</Button>

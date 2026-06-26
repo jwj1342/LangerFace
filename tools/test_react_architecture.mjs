@@ -418,6 +418,9 @@ assert.ok(incisionWorkbench.includes("CandidateLibraryPanel"), "React incision w
 assert.ok(candidateLibraryPanel.includes("dispatchIncisionLibraryCommand"), "React candidate library uses the typed incision library command helper");
 assert.ok(!candidateLibraryPanel.includes("../lib/controllerEvents"), "React candidate library does not import controller event names directly");
 assert.ok(candidateLibraryPanel.includes("useIncisionStore"), "React candidate library reads saved candidate summaries from Zustand");
+assert.ok(candidateLibraryPanel.includes("useState"), "React candidate library owns short-lived clear confirmation state in React");
+assert.ok(candidateLibraryPanel.includes("confirmClear"), "React candidate library renders a controlled clear confirmation state");
+assert.ok(!candidateLibraryPanel.includes("window.confirm"), "React candidate library does not use browser-native confirm dialogs");
 assert.ok(candidateLibraryPanel.includes("Button"), "React candidate library uses the shared shadcn-style button primitive");
 assert.ok(candidateLibraryPanel.includes('variant="workbenchPrimary"'), "React candidate library keeps primary workbench button styling through Button variants");
 for (const id of [
