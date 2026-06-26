@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 
 import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
+import { Button } from "./ui/button";
+import { Label } from "./ui/label";
+import { Select } from "./ui/select";
+import { RangeInput } from "./ui/slider";
 
 const EDIT_REACT_COMMAND_EVENT = "langerface:incision-edit-react-command";
 
@@ -66,10 +70,9 @@ export function EditControlsPanel() {
         <span className={`edit-status${active ? " active" : ""}`} id="editStatus">{statusLabel}</span>
       </div>
       <div>
-        <label className="field-label" htmlFor="angleOffsetDeg">方向偏移 deg <span id="angleOffsetVal" className="val">{angleOffsetDeg}</span></label>
-        <input
+        <Label htmlFor="angleOffsetDeg">方向偏移 deg <span id="angleOffsetVal" className="val">{angleOffsetDeg}</span></Label>
+        <RangeInput
           id="angleOffsetDeg"
-          type="range"
           min="-35"
           max="35"
           value={angleOffsetDeg}
@@ -84,10 +87,9 @@ export function EditControlsPanel() {
         />
       </div>
       <div>
-        <label className="field-label" htmlFor="lengthScale">长度比例 <span id="lengthScaleVal" className="val">{lengthScalePct}%</span></label>
-        <input
+        <Label htmlFor="lengthScale">长度比例 <span id="lengthScaleVal" className="val">{lengthScalePct}%</span></Label>
+        <RangeInput
           id="lengthScale"
-          type="range"
           min="70"
           max="150"
           value={lengthScalePct}
@@ -102,10 +104,9 @@ export function EditControlsPanel() {
         />
       </div>
       <div id="widthScaleWrap" className={widthScaleVisible ? "" : "hidden"}>
-        <label className="field-label" htmlFor="widthScale">宽度比例 <span id="widthScaleVal" className="val">{widthScalePct}%</span></label>
-        <input
+        <Label htmlFor="widthScale">宽度比例 <span id="widthScaleVal" className="val">{widthScalePct}%</span></Label>
+        <RangeInput
           id="widthScale"
-          type="range"
           min="70"
           max="150"
           value={widthScalePct}
@@ -120,10 +121,9 @@ export function EditControlsPanel() {
         />
       </div>
       <div>
-        <label className="field-label" htmlFor="shiftAlongMm">沿长轴移动 mm <span id="shiftAlongVal" className="val">{shiftAlongMm}</span></label>
-        <input
+        <Label htmlFor="shiftAlongMm">沿长轴移动 mm <span id="shiftAlongVal" className="val">{shiftAlongMm}</span></Label>
+        <RangeInput
           id="shiftAlongMm"
-          type="range"
           min="-12"
           max="12"
           value={shiftAlongMm}
@@ -138,10 +138,9 @@ export function EditControlsPanel() {
         />
       </div>
       <div>
-        <label className="field-label" htmlFor="shiftPerpMm">垂直长轴移动 mm <span id="shiftPerpVal" className="val">{shiftPerpMm}</span></label>
-        <input
+        <Label htmlFor="shiftPerpMm">垂直长轴移动 mm <span id="shiftPerpVal" className="val">{shiftPerpMm}</span></Label>
+        <RangeInput
           id="shiftPerpMm"
-          type="range"
           min="-12"
           max="12"
           value={shiftPerpMm}
@@ -155,9 +154,8 @@ export function EditControlsPanel() {
           onChange={(event) => setShiftPerpMm(event.currentTarget.value)}
         />
       </div>
-      <select
+      <Select
         id="editReason"
-        className="select"
         value={reason}
         onChange={(event) => {
           setReason(event.currentTarget.value);
@@ -169,12 +167,12 @@ export function EditControlsPanel() {
         <option value="manual free-margin protection">游离缘保护优先</option>
         <option value="manual subunit boundary alignment">贴合美学亚单位边界</option>
         <option value="manual clinician preference">医生人工判断</option>
-      </select>
+      </Select>
       <div className="btn-row two-cols">
-        <button className="btn" id="undoEditBtn" type="button" disabled={undoDisabled} onClick={() => dispatchEditCommand("undo_edit")}>撤销调整</button>
-        <button className="btn" id="redoEditBtn" type="button" disabled={redoDisabled} onClick={() => dispatchEditCommand("redo_edit")}>重做调整</button>
+        <Button variant="workbench" id="undoEditBtn" type="button" disabled={undoDisabled} onClick={() => dispatchEditCommand("undo_edit")}>撤销调整</Button>
+        <Button variant="workbench" id="redoEditBtn" type="button" disabled={redoDisabled} onClick={() => dispatchEditCommand("redo_edit")}>重做调整</Button>
       </div>
-      <button className="btn" id="resetEditBtn" type="button" onClick={() => dispatchEditCommand("reset_edit")}>恢复工具建议</button>
+      <Button variant="workbench" id="resetEditBtn" type="button" onClick={() => dispatchEditCommand("reset_edit")}>恢复工具建议</Button>
       <p className="agent-note" id="editHistoryState">{historyLabel}</p>
       <p className="agent-note">调整只改变候选草案并记录 provenance；真实切口仍需医生复核。</p>
     </div>

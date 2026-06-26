@@ -18,6 +18,7 @@ const workbenchBrand = read("src/components/WorkbenchBrand.tsx");
 const controllerCommand = read("src/lib/controllerCommand.ts");
 const uiButton = read("src/components/ui/button.tsx");
 const uiCard = read("src/components/ui/card.tsx");
+const uiCheckbox = read("src/components/ui/checkbox.tsx");
 const uiInput = read("src/components/ui/input.tsx");
 const uiLabel = read("src/components/ui/label.tsx");
 const uiSelect = read("src/components/ui/select.tsx");
@@ -135,6 +136,7 @@ assert.ok(uiButton.includes("miniDanger"), "shadcn-style Button can preserve com
 assert.ok(uiCard.includes("CardHeader"), "shadcn-style Card exposes a header primitive");
 assert.ok(uiCard.includes("CardContent"), "shadcn-style Card exposes a content primitive");
 assert.ok(uiCard.includes('cn("card"'), "shadcn-style Card preserves existing card styling");
+assert.ok(uiCheckbox.includes('type="checkbox"'), "shadcn-style Checkbox preserves native checkbox behavior");
 assert.ok(uiInput.includes('cn("text-input"'), "shadcn-style Input preserves existing text input styling");
 assert.ok(uiLabel.includes('cn("field-label"'), "shadcn-style Label preserves existing field label styling");
 assert.ok(uiSelect.includes('cn("select"'), "shadcn-style Select preserves existing select styling");
@@ -239,6 +241,12 @@ assert.ok(incisionWorkbench.includes("TumorInputPanel"), "React incision workben
 assert.ok(tumorPanel.includes("TUMOR_REACT_COMMAND_EVENT"), "React tumor panel dispatches tumor commands to the controller boundary");
 assert.ok(tumorPanel.includes("dispatchControllerCommand"), "React tumor panel uses the shared controller command helper");
 assert.ok(tumorPanel.includes("useIncisionStore"), "React tumor panel syncs low-frequency tumor status from Zustand");
+assert.ok(tumorPanel.includes("Button"), "React tumor panel uses the shared shadcn-style button primitive");
+assert.ok(tumorPanel.includes("Input"), "React tumor panel uses the shared shadcn-style input primitive");
+assert.ok(tumorPanel.includes("Label"), "React tumor panel uses the shared shadcn-style label primitive");
+assert.ok(tumorPanel.includes("Select"), "React tumor panel uses the shared shadcn-style select primitive");
+assert.ok(tumorPanel.includes("RangeInput"), "React tumor panel uses the shared shadcn-style range primitive");
+assert.ok(tumorPanel.includes('variant="workbenchPrimary"'), "React tumor panel keeps primary workbench button styling through Button variants");
 for (const id of [
   "secondaryCueState",
   "secondaryCueSummary",
@@ -254,6 +262,9 @@ assert.ok(incisionWorkbench.includes("SecondaryCuePanel"), "React incision workb
 assert.ok(secondaryCuePanel.includes("SECONDARY_CUE_REACT_COMMAND_EVENT"), "React secondary cue panel dispatches cue commands to the controller boundary");
 assert.ok(secondaryCuePanel.includes("dispatchControllerCommand"), "React secondary cue panel uses the shared controller command helper");
 assert.ok(secondaryCuePanel.includes("useIncisionStore"), "React secondary cue panel syncs low-frequency cue state from Zustand");
+assert.ok(secondaryCuePanel.includes("Button"), "React secondary cue panel uses the shared shadcn-style button primitive");
+assert.ok(secondaryCuePanel.includes("Input"), "React secondary cue panel uses the shared shadcn-style input primitive");
+assert.ok(secondaryCuePanel.includes("Checkbox"), "React secondary cue panel uses the shared shadcn-style checkbox primitive");
 for (const id of [
   "candidateType",
   "candidateLength",
@@ -349,6 +360,10 @@ assert.ok(incisionWorkbench.includes("EditControlsPanel"), "React incision workb
 assert.ok(editPanel.includes("EDIT_REACT_COMMAND_EVENT"), "React edit panel dispatches edit commands to the controller boundary");
 assert.ok(editPanel.includes("dispatchControllerCommand"), "React edit panel uses the shared controller command helper");
 assert.ok(editPanel.includes("useIncisionStore"), "React edit panel syncs low-frequency edit state from Zustand");
+assert.ok(editPanel.includes("Button"), "React edit panel uses the shared shadcn-style button primitive");
+assert.ok(editPanel.includes("Label"), "React edit panel uses the shared shadcn-style label primitive");
+assert.ok(editPanel.includes("Select"), "React edit panel uses the shared shadcn-style select primitive");
+assert.ok(editPanel.includes("RangeInput"), "React edit panel uses the shared shadcn-style range primitive");
 for (const id of [
   "reviewState",
   "reviewerName",

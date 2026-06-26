@@ -2,6 +2,11 @@ import { useEffect, useState } from "react";
 
 import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Select } from "./ui/select";
+import { RangeInput } from "./ui/slider";
 
 const TUMOR_REACT_COMMAND_EVENT = "langerface:incision-tumor-react-command";
 
@@ -61,10 +66,9 @@ export function TumorInputPanel() {
 
   return (
     <div className="card agent-grid">
-      <label className="field-label" htmlFor="tumorKind">肿物类型</label>
-      <select
+      <Label htmlFor="tumorKind">肿物类型</Label>
+      <Select
         id="tumorKind"
-        className="select"
         value={kind}
         onChange={(event) => {
           setKind(event.currentTarget.value);
@@ -74,12 +78,11 @@ export function TumorInputPanel() {
       >
         <option value="subcutaneous">皮下肿物 · 线性切口</option>
         <option value="cutaneous">皮表肿物 · 梭形切口</option>
-      </select>
+      </Select>
       <div>
-        <label className="field-label" htmlFor="diameterMm">直径 mm <span id="diameterVal" className="val">{diameter}</span></label>
-        <input
+        <Label htmlFor="diameterMm">直径 mm <span id="diameterVal" className="val">{diameter}</span></Label>
+        <RangeInput
           id="diameterMm"
-          type="range"
           min="4"
           max="40"
           value={diameter}
@@ -94,10 +97,9 @@ export function TumorInputPanel() {
         />
       </div>
       <div>
-        <label className="field-label" htmlFor="tumorAuthor">记录者</label>
-        <input
+        <Label htmlFor="tumorAuthor">记录者</Label>
+        <Input
           id="tumorAuthor"
-          className="text-input"
           value={author}
           onChange={(event) => {
             setAuthor(event.currentTarget.value);
@@ -106,10 +108,9 @@ export function TumorInputPanel() {
         />
       </div>
       <div id="depthWrap" className={hiddenClass(cutaneous)}>
-        <label className="field-label" htmlFor="depthMm">深度 mm <span id="depthVal" className="val">{depth}</span></label>
-        <input
+        <Label htmlFor="depthMm">深度 mm <span id="depthVal" className="val">{depth}</span></Label>
+        <RangeInput
           id="depthMm"
-          type="range"
           min="0"
           max="35"
           value={depth}
@@ -124,10 +125,9 @@ export function TumorInputPanel() {
         />
       </div>
       <div id="marginWrap" className={hiddenClass(!cutaneous)}>
-        <label className="field-label" htmlFor="marginMm">安全切缘 mm <span id="marginVal" className="val">{margin}</span></label>
-        <input
+        <Label htmlFor="marginMm">安全切缘 mm <span id="marginVal" className="val">{margin}</span></Label>
+        <RangeInput
           id="marginMm"
-          type="range"
           min="0"
           max="10"
           value={margin}
@@ -142,10 +142,9 @@ export function TumorInputPanel() {
         />
       </div>
       <div id="boundaryWrap" className={hiddenClass(!cutaneous)}>
-        <label className="field-label" htmlFor="boundaryMode">皮表边界</label>
-        <select
+        <Label htmlFor="boundaryMode">皮表边界</Label>
+        <Select
           id="boundaryMode"
-          className="select"
           value={boundaryMode}
           onChange={(event) => {
             setBoundaryMode(event.currentTarget.value);
@@ -155,13 +154,12 @@ export function TumorInputPanel() {
         >
           <option value="ellipse">椭圆近似</option>
           <option value="freehand">自由轮廓点</option>
-        </select>
+        </Select>
       </div>
       <div id="ellipseWrap" className={hiddenClass(!cutaneous || boundaryMode !== "ellipse")}>
-        <label className="field-label" htmlFor="ellipseRatio">椭圆短轴比例 <span id="ellipseRatioVal" className="val">{ellipseRatio}%</span></label>
-        <input
+        <Label htmlFor="ellipseRatio">椭圆短轴比例 <span id="ellipseRatioVal" className="val">{ellipseRatio}%</span></Label>
+        <RangeInput
           id="ellipseRatio"
-          type="range"
           min="40"
           max="100"
           value={ellipseRatio}
@@ -176,8 +174,8 @@ export function TumorInputPanel() {
         />
       </div>
       <div className={`btn-row two-cols ${freehand ? "" : "hidden"}`} id="freehandControls">
-        <button
-          className="btn"
+        <Button
+          variant="workbench"
           id="startBoundaryBtn"
           type="button"
           onClick={() => {
@@ -186,9 +184,9 @@ export function TumorInputPanel() {
           }}
         >
           {boundaryButtonLabel}
-        </button>
-        <button
-          className="btn"
+        </Button>
+        <Button
+          variant="workbench"
           id="clearBoundaryBtn"
           type="button"
           onClick={() => {
@@ -198,15 +196,15 @@ export function TumorInputPanel() {
           }}
         >
           清空轮廓
-        </button>
+        </Button>
       </div>
       <p className={`boundary-status${boundaryStatusWarn ? " warn" : ""}`} id="boundaryStatus">{boundaryStatus}</p>
       <div className="btn-row two-cols">
-        <button className="btn" id="exportTumorBtn" type="button" onClick={() => dispatchTumorCommand("export_tumor")}>导出肿物</button>
-        <button className="btn" id="importTumorBtn" type="button" onClick={() => dispatchTumorCommand("import_tumor")}>导入肿物</button>
+        <Button variant="workbench" id="exportTumorBtn" type="button" onClick={() => dispatchTumorCommand("export_tumor")}>导出肿物</Button>
+        <Button variant="workbench" id="importTumorBtn" type="button" onClick={() => dispatchTumorCommand("import_tumor")}>导入肿物</Button>
       </div>
-      <input id="tumorImportFile" className="hidden" type="file" accept="application/json,.json" />
-      <button className="btn btn-primary" id="runAgentBtn" type="button" onClick={() => dispatchTumorCommand("run_agent")}>生成候选切口</button>
+      <Input id="tumorImportFile" className="hidden" type="file" accept="application/json,.json" />
+      <Button variant="workbenchPrimary" id="runAgentBtn" type="button" onClick={() => dispatchTumorCommand("run_agent")}>生成候选切口</Button>
       <p className="agent-note" id="pickState">{freehand ? boundaryHint : pickState}</p>
       <p className={`anatomy-preview${anatomyPreviewWarn ? " warn" : ""}`} id="anatomyPreview">{anatomyPreview}</p>
     </div>

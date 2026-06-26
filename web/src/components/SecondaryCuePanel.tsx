@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 
 import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
+import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
+import { Input } from "./ui/input";
 
 const SECONDARY_CUE_REACT_COMMAND_EVENT = "langerface:incision-secondary-cue-react-command";
 
@@ -28,13 +31,12 @@ export function SecondaryCuePanel() {
         {cue?.summary || "仅展示自然皱襞、皱纹和皮表肿物边界的低置信度线索；不会自动改变肿物边界或候选切口。"}
       </p>
       <div className="btn-row two-cols">
-        <button className="btn" id="importSecondaryCueBtn" type="button" onClick={() => dispatchSecondaryCueCommand("import_secondary_cue")}>导入线索</button>
-        <button className="btn" id="clearSecondaryCueBtn" type="button" disabled={!cue?.present} onClick={() => dispatchSecondaryCueCommand("clear_secondary_cue")}>清空线索</button>
+        <Button variant="workbench" id="importSecondaryCueBtn" type="button" onClick={() => dispatchSecondaryCueCommand("import_secondary_cue")}>导入线索</Button>
+        <Button variant="workbench" id="clearSecondaryCueBtn" type="button" disabled={!cue?.present} onClick={() => dispatchSecondaryCueCommand("clear_secondary_cue")}>清空线索</Button>
       </div>
-      <input id="secondaryCueImportFile" className="hidden" type="file" accept="application/json,.json" />
+      <Input id="secondaryCueImportFile" className="hidden" type="file" accept="application/json,.json" />
       <label className="check">
-        <input
-          type="checkbox"
+        <Checkbox
           id="secondaryCueConfirmed"
           checked={manualConfirmed}
           disabled={!cue?.present}
