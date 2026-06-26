@@ -67,6 +67,35 @@ export function buildHandMasks(handsPx: Point2[][], scaleR?: number, margin?: nu
 export function pointInHandMasks(point: Point2, masks: HandMask[]): boolean;
 export function buildOccluderHulls(occludersPx: Point2[][], margin: number): Point2[][];
 
+export const INCISION_OVERLAY_POSE_GATE: Record<string, unknown>;
+export const POSE_MOTION_ANCHORS: number[];
+export const LOCAL_REGION_QUALITY_GATE: Record<string, unknown>;
+export const LOCAL_REGION_QUALITY_REGIONS: Array<Record<string, unknown>>;
+export function faceBBox(landmarks: number[][] | null | undefined): Record<string, number>;
+export function frameMotionNorm(
+  landmarks: number[][] | null | undefined,
+  previousLandmarks: number[][] | null | undefined,
+  anchors?: number[],
+): number | null;
+export function regionMotionNorm(
+  landmarks: number[][] | null | undefined,
+  previousLandmarks: number[][] | null | undefined,
+  landmarkIndices: number[],
+): number | null;
+export function normalizeFaceExpression(expression?: Record<string, unknown>): Record<string, unknown>;
+export function estimateLocalRegionQuality(
+  landmarks: number[][],
+  width: number,
+  height: number,
+  options?: Record<string, unknown>,
+): Record<string, unknown>;
+export function estimateFacePoseQuality(
+  landmarks: number[][],
+  width: number,
+  height: number,
+  options?: Record<string, unknown>,
+): Record<string, unknown>;
+
 export function umeyama(sourcePts: Vec3[], targetPts: Vec3[]): SimilarityTransform;
 export function applySim(transform: SimilarityTransform, points: Vec3[]): Vec3[];
 

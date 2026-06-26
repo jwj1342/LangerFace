@@ -15,7 +15,7 @@ const three3d = fs.readFileSync("src/services/three3d.ts", "utf8");
 const source = fs.readFileSync("pipeline/source.js", "utf8");
 const loop = fs.readFileSync("pipeline/loop.js", "utf8");
 const exporter = fs.readFileSync("src/services/canvasRecording.ts", "utf8");
-const poseQuality = fs.readFileSync("geometry/pose_quality.js", "utf8");
+const poseQuality = fs.readFileSync("src/services/geometryPoseQuality.ts", "utf8");
 const liveSnapshots = fs.readFileSync("src/services/liveSnapshots.ts", "utf8");
 const controllerSnapshotSchemas = fs.readFileSync("src/lib/controllerSnapshotSchemas.ts", "utf8");
 
