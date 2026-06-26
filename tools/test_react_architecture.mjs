@@ -252,8 +252,9 @@ assert.ok(managedWorkbenchHook.includes("cleanup?.()"), "managed workbench hook 
 assert.ok(managedWorkbenchHook.includes("setActiveWorkspace(workspace)"), "managed workbench hook publishes active workspace state");
 assert.ok(managedWorkbenchHook.includes("setRouteStatus"), "managed workbench hook owns route lifecycle status updates");
 assert.ok(controllerSnapshotBridgeHook.includes("useControllerSnapshotBridge"), "React controller snapshots share a typed event bridge hook");
-assert.ok(controllerSnapshotBridgeHook.includes("window.addEventListener(eventName"), "shared snapshot bridge subscribes to controller events");
-assert.ok(controllerSnapshotBridgeHook.includes("window.removeEventListener(eventName"), "shared snapshot bridge unsubscribes from controller events");
+assert.ok(controllerSnapshotBridgeHook.includes("../lib/controllerCommand"), "shared snapshot bridge imports the shared controller event binding helper");
+assert.ok(controllerSnapshotBridgeHook.includes("bindWindowControllerEvents([[eventName, handleStateEvent]]"), "shared snapshot bridge subscribes through the shared controller event binding helper");
+assert.ok(controllerSnapshotBridgeHook.includes("cleanup()"), "shared snapshot bridge runs shared listener cleanup on unmount");
 assert.ok(controllerSnapshotBridgeHook.includes("clearSnapshot()"), "shared snapshot bridge clears route snapshots on unmount");
 assert.ok(controllerSnapshotBridgeHook.includes("CustomEvent<unknown>"), "shared snapshot bridge treats browser event payloads as unknown before schema guards");
 assert.ok(annotateStore.includes("AnnotateControllerSnapshot"), "annotation Zustand store keeps typed controller snapshots");

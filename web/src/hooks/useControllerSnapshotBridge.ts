@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 
+import { bindWindowControllerEvents } from "../lib/controllerCommand";
+
 interface ControllerSnapshotBridgeOptions<TSnapshot> {
   eventName: string;
   isSnapshot: (value: unknown) => value is TSnapshot;
@@ -19,9 +21,9 @@ export function useControllerSnapshotBridge<TSnapshot>({
       if (isSnapshot(detail)) setSnapshot(detail);
     }
 
-    window.addEventListener(eventName, handleStateEvent);
+    const cleanup = bindWindowControllerEvents([[eventName, handleStateEvent]]);
     return () => {
-      window.removeEventListener(eventName, handleStateEvent);
+      cleanup();
       clearSnapshot();
     };
   }, [clearSnapshot, eventName, isSnapshot, setSnapshot]);
