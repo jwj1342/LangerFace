@@ -38,12 +38,14 @@
 - `validated`、`provenance`、`topologyId`、`topologyVersion`、`atlasVersion` 等版本字段。
 - 诊断事件、计数器、阶段耗时、fps、失败原因枚举。
 - 审阅记录中的医生编号或角色编码。
+- 低置信辅助线索的结构化摘要、metrics、来源和人工确认状态；若包含 mask / overlay，只能保存文件名或受控对象引用，不得内嵌像素。
 
 默认导出不应包含：
 
 - 原始图像像素、视频帧、头模纹理。
 - 未脱敏病历、超声图像或病理文本。
 - 可识别个人身份的自由文本。
+- 辅助线索的 base64 mask、overlay、DICOM、视频帧或任何可还原人脸/病灶影像的 payload。
 
 ## 审计记录最小字段
 
@@ -98,3 +100,29 @@
 - `events[].detail` 中没有姓名、病例号或自由文本身份信息。
 - `assetVersions` 不含私有下载 URL 或 secret。
 - 诊断文件只用于调试、验证汇总或 PR 说明，不作为临床病历系统替代品。
+
+## 导出前自动审计
+
+`incision_agent.html` 在导出审阅 JSON 或肿物输入 JSON 前会先运行 `browser-export-privacy-preflight/v0.1`，阻断 raw media 标记、未脱敏 secret、直接身份字段 / 电话邮箱模式、疑似嵌入媒体 payload，以及辅助线索越界参与几何或 Agent prompt。这个浏览器预检用于减少误导出；正式分享前仍建议运行离线脚本。
+
+分享审阅记录、肿物输入或诊断 JSON 前，可运行：
+
+```bash
+python tools/audit_export_privacy.py incision_review_*.json tumor_input_*.json
+cd web && node ../tools/test_incision_tools.mjs
+```
+
+离线隐私脚本输出 `export-privacy-audit/v0.1` 报告，默认发现违规即返回非 0。浏览器 workflow 合约测试会额外覆盖肿物输入、边界摘要、trace gate、候选比较和导出前预检。当前检查项包括：
+
+- `privacy_audit.raw_image_sent`、`raw_video_sent` 或 `contains_face_image` 被置为 `true`。
+- `api_key`、`token`、`secret`、`authorization` 等字段未脱敏。
+- `patient_name`、`mrn`、`phone`、`email`、`date_of_birth` 等身份字段被填充。
+- 自由文本中出现 email 或电话样式字符串。
+- 媒体相关字段中疑似嵌入 base64 图像 / 视频 / DICOM payload。
+- `secondary_cues.used_for_geometry` 或 `secondary_cues.used_for_agent_prompt` 被置为 `true`。
+
+辅助线索当前只能作为医生审阅时的只读证据进入导出，不得自动改变肿物边界、候选切口或 LLM Agent 的 prompt；若后续要让受控 CV/LLM 模型参与几何生成，必须重新定义出域、访问控制和临床验证流程。
+
+肿物输入和审阅记录的结构化门禁已经迁到浏览器 workflow：导出中会保存 `tumor_quality`、`tumor_boundary_summary`、`sensitive_structure_inspection`、`agent_trace_gate`、`agent_react_plan`、`agent_execution_events` 和 `candidate_comparison`。前端 review gate 会检查 `approved_for_discussion` 是否有审阅人、高风险 guardrail 是否有备注或覆盖理由、`agent_trace_gate` 是否通过，以及 `live_overlay_ready` 是否只在这些条件同时满足时为 `true`。它只检查导出状态自洽，不替代医生签名或病例系统权限控制。
+
+该脚本只是工程守门，不能替代机构合规审查。

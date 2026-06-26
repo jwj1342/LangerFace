@@ -299,18 +299,20 @@ Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部
 - 规则命中、角度偏差、长宽/尖端角/平滑指标、敏感结构警告。
 - 医生编辑后的确认版本和 provenance。
 
+高风险 guardrail 候选进入“确认候选草案”前必须记录审阅备注或覆盖原因；实时叠加入口只接受已确认候选草案，避免把未审阅草案误当成可用方案。
+
 ### 14.2 模块拆分
 
 | 模块 | 计划位置 | 职责 | Issue |
 |---|---|---|---|
 | 临床规则库 | `assets/clinical_rules_face_incision.json` | 结构化区域规则、优先级、例外、审核状态 | #11 |
-| 面部分区 / 亚单位 | `src/langerface/anatomy/`, `web/anatomy*.js` | 把点或肿物中心映射到临床区域 / 美学亚单位 | #12 |
-| RSTL 方向服务 | `src/langerface/lines/direction.py`, `web/*direction*.js` | 查询局部方向、置信度和依据 | #13 |
-| 肿物模型 | `src/langerface/tumor/`, `web/tumor*.js` | 表示皮下 / 皮表肿物输入与单位 | #14 |
-| 皮下线性切口 | `src/langerface/incision/linear.py` | 基于超声直径和 RSTL 方向生成线性候选 | #15 |
-| 皮表梭形切口 | `src/langerface/incision/fusiform.py` | 生成梭形候选，约束比例、尖端角和平滑对称 | #16 |
-| 敏感结构 guardrails | `src/langerface/incision/guardrails.py` | 下睑、唇红缘、鼻翼等风险提示和方向例外 | #17 |
-| 医生审阅 UI | `web/incision*.js` | 候选解释、编辑、覆盖、导出 | #18 |
+| 面部分区 / 亚单位 | `web/incision_tools.js` | 把点或肿物中心映射到临床区域 / 美学亚单位，并输出 bbox/边界/过渡区/敏感游离缘相关 `confidence_reasons` | #12 |
+| RSTL 方向服务 | `web/incision_tools.js` | 查询局部方向、置信度和依据；离散度使用无向轴角，并输出 atlas 为空、支持点过远/过少、角度冲突等 `confidence_reasons` | #13 |
+| 肿物模型 | `web/incision_tools.js`, `web/incision_agent*.js` | 表示皮下 / 皮表肿物输入、单位与输入质量摘要 | #14 |
+| 皮下线性切口 | `web/incision_tools.js` | 基于超声直径和 RSTL 方向生成线性候选 | #15 |
+| 皮表梭形切口 | `web/incision_tools.js` | 生成梭形候选，约束比例、尖端角和平滑对称 | #16 |
+| 敏感结构 guardrails | `web/incision_tools.js` | 下睑、唇红缘、鼻翼、鼻尖、口角等风险提示、分结构 draft 距离阈值、`protective_direction` 保护性方向建议和方向例外 | #17 |
+| 医生审阅 UI | `web/incision*.js` | 候选解释、编辑、版本化 provenance、覆盖、导出 | #18 |
 | AR / 视频叠加 | `web/render.js`, `web/projection3d.js` | 把肿物和切口候选投射回照片、视频、实时视图 | #19 |
 | 验证指标 | `docs/VALIDATION.md` | 角度误差、稳定性、医生接受率、失败分类 | #20 |
 | 隐私 / 审计 | `docs/PRIVACY_AND_AUDIT.md` | 敏感数据边界、审计记录、受限存储 | #21 |
@@ -358,12 +360,13 @@ candidate = segment(center, axis, length)
 
 - 超声直径与单位来源。
 - 切口长度规则。
+- `length_target_mm`、`diameter_coverage_required_mm` 与 `diameter_coverage_deficit_mm`；如果最大长度规则导致线性候选短于记录直径，guardrails 必须提示医生复核。
 - 与局部 RSTL 的角度偏差。
 - 是否命中敏感结构 guardrail。
 
 #### 皮表肿物
 
-皮表肿物生成梭形候选。医生给出的当前默认规则是：长轴平行 RSTL；长轴与类圆化后的肿物直径按 3:1 控制；两端尖角默认 30°；两侧弧线对称平滑，从最宽处向两端逐渐收窄至尖点。
+皮表肿物生成梭形候选。医生给出的当前默认规则是：长轴平行 RSTL；长轴与类圆化后的肿物直径按 3:1 控制；两端尖角默认 30°；两侧弧线对称平滑，从最宽处向两端逐渐收窄至尖点。当前实现使用对称 cubic Hermite profile：端点切线由 `tip_angle_deg` 决定，中点达到最大宽度且切线水平，导出 `tip_angle_target_deg`、`tip_angle_estimated_deg` 和 `tip_angle_error_deg`。同时导出 `boundary_point_count`、`boundary_area_mm2`、`boundary_self_intersection`、`boundary_center_shift_mm`、`axis_coverage_required_mm`、`axis_coverage_deficit_mm`、`outline_area_mm2`、`outline_half_width_monotone`、`outline_symmetry_max_error_mm`、`outline_self_intersection`、`boundary_envelope_min_margin_mm` 与 `boundary_envelope_outside_count`；当自由轮廓点数过少、面积退化、自交、边界中心明显偏离选中肿物中心、候选 outline 自交 / 非单调收窄、自由轮廓点落在实际梭形包络之外，或最大长度规则导致候选短于边界加切缘覆盖需求时，guardrails 必须提示医生复核。肿物输入还会先经过 `summarize_tumor_input_quality`，把缺作者、非 mm 单位、缺皮下深度、缺皮表切缘或边界过稀记录到 trace、审阅 JSON 和报告中。
 
 实现时要把这些写成**参数化临床规则**，不要硬编码为不可变数学常量。原因是 3:1 与 30°在几何上并不总能同时严格成立；工程上应显示实际指标，让医生在比例、尖端角、邻近解剖结构和可直接拉拢缝合之间做判断。
 
@@ -415,7 +418,7 @@ Stage 2 必须先定义验证指标，再谈临床可用：
 - 敏感结构安全：敏感区警告召回率和误报率。
 - 医生接受率：候选被直接接受、轻微修改、重大修改、否决的比例。
 
-失败模式必须显式记录：检测失败、面部分区错分、方向低置信度、图谱未 validated、皮肤松弛度不足、病变性质/切缘未输入、敏感结构漏警、用户把系统输出误认为手术指令等。
+失败模式必须显式记录：检测失败、面部分区错分、方向低置信度、图谱未 validated、皮肤松弛度不足、病变性质/切缘未输入、敏感结构漏警、用户把系统输出误认为手术指令等。当前敏感游离缘距离是标准脸归一化锚点与下睑/鼻翼/唇红缘简化线段的工程筛查，并用 draft 分结构阈值触发提示，不是临床测量。
 
 ### 14.7 参考依据
 

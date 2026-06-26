@@ -1,0 +1,165 @@
+{
+  "version": "1.0-browser-incision-workflow",
+  "trace_mode": "single_turn_browser_deterministic_multi_candidate_workflow",
+  "boundary": "The browser workflow executes deterministic tools, visualizes their trace, and compares review candidates. It must not compute surgical instructions, bypass guardrails, or send raw media to a provider.",
+  "provider_connectivity": {
+    "provider_type": "openai_compatible_or_vllm",
+    "test_endpoint": "${base_url}/models",
+    "used_for_geometry": false,
+    "used_for_trace": false,
+    "requires_browser_reachable_cors_enabled_url": true,
+    "boundary": "Provider configuration is a browser-side connectivity contract only in this workflow; candidate geometry and guardrails come from deterministic local tools."
+  },
+  "trace_gate": {
+    "schema_version": "agent-trace-gate/v0.1",
+    "blocks_confirmation": true,
+    "required_actions": [
+      ["summarize_tumor_input_quality"],
+      ["classify_region"],
+      ["query_rstl_direction"],
+      ["inspect_sensitive_structures"],
+      ["linear_subcutaneous_incision", "fusiform_cutaneous_incision"],
+      ["evaluate_guardrails"],
+      ["preview_incision_on_face"]
+    ],
+    "boundary": "Candidate confirmation requires deterministic tumor quality, anatomy, RSTL direction, sensitive-structure inspection, incision generation, guardrail, and face preview observations."
+  },
+  "react_plan": {
+    "schema_version": "agent-react-plan/v0.1",
+    "mode": "single_turn_react_multi_candidate_with_deterministic_tools",
+    "steps": [
+      "inspect_tumor_input",
+      "localize_anatomy",
+      "query_direction",
+      "inspect_sensitive_structures",
+      "generate_primary_candidate",
+      "check_guardrails",
+      "preview_candidates",
+      "compare_direction_variants"
+    ],
+    "records": [
+      "required_action_groups",
+      "observed_actions",
+      "trace_indexes",
+      "status",
+      "issues"
+    ],
+    "boundary": "The ReAct plan is an audit scaffold derived from browser deterministic tool calls; it is not autonomous clinical reasoning or a surgical instruction."
+  },
+  "execution_events": {
+    "schema_version": "agent-execution-events/v0.1",
+    "mode": "single_turn_react_multi_candidate_with_deterministic_tools",
+    "records": [
+      "events",
+      "event_count",
+      "tool_event_count",
+      "retry_event_count",
+      "recovery_event_count"
+    ],
+    "event_fields": [
+      "event",
+      "status",
+      "trace_index",
+      "action",
+      "plan_step_ids",
+      "message"
+    ],
+    "boundary": "Execution events replay browser tool observations for UI feedback and review export; they are not autonomous clinical reasoning or surgical instructions."
+  },
+  "orchestration_audit": {
+    "schema_version": "agent-orchestration-audit/v0.1",
+    "records": [
+      "candidate_count",
+      "preview_count",
+      "preview_ready_count",
+      "comparison_ready",
+      "react_plan_passed",
+      "react_plan_step_count",
+      "retry_count",
+      "retried_failures",
+      "tool_failure_count",
+      "recovered_failures",
+      "trace_gate_passed"
+    ],
+    "boundary": "The browser workflow may compare deterministic candidates for review; it must not issue surgical instructions or bypass clinician confirmation."
+  },
+  "candidate_comparison": {
+    "tool": "compare_candidates",
+    "inputs": [
+      "candidate_alternatives",
+      "guardrails",
+      "rstl_angle_error",
+      "coverage_deficit",
+      "sensitive_distance",
+      "geometry_error"
+    ],
+    "output": [
+      "ranked_candidates",
+      "score_breakdown",
+      "clinical_boundary"
+    ],
+    "boundary": "Candidate comparison is an engineering ranking for reviewer triage, not a clinical recommendation."
+  },
+  "tools": [
+    {
+      "name": "summarize_tumor_input_quality",
+      "input": ["tumor"],
+      "output": ["passed", "warning_count", "warnings", "source", "boundary_source", "author_present", "units"]
+    },
+    {
+      "name": "classify_region",
+      "input": ["point"],
+      "output": ["region", "subunit", "confidence", "confidence_reasons", "region_boundary_margin_norm", "nearby_landmarks", "free_margin_distance_mm"]
+    },
+    {
+      "name": "query_rstl_direction",
+      "input": ["point", "source", "k_nearest"],
+      "output": ["vector", "angle_deg", "confidence", "support_count", "angular_spread_deg", "confidence_reasons"]
+    },
+    {
+      "name": "inspect_sensitive_structures",
+      "input": ["anatomy", "candidate"],
+      "output": ["region", "nearby_landmarks", "center_free_margin_distance_mm", "center_free_margin_threshold_mm", "candidate_free_margin_distance_mm", "warnings", "protective_direction", "clinician_review_required"]
+    },
+    {
+      "name": "linear_subcutaneous_incision",
+      "input": ["tumor", "direction", "units_per_mm", "rules"],
+      "output": ["endpoints", "polyline", "length_mm", "metrics", "provenance"]
+    },
+    {
+      "name": "fusiform_cutaneous_incision",
+      "input": ["tumor", "direction", "normal", "units_per_mm", "rules"],
+      "output": ["outline", "polyline", "length_mm", "width_mm", "metrics", "provenance"]
+    },
+    {
+      "name": "evaluate_guardrails",
+      "input": ["candidate", "anatomy", "rules"],
+      "output": ["passed", "warnings", "suggested_overrides"]
+    },
+    {
+      "name": "preview_incision_on_face",
+      "input": ["candidate", "tumor", "anatomy", "guardrails"],
+      "output": ["renderable", "preview_space", "candidate_point_count", "tumor_boundary_point_count", "guardrails_passed", "clinician_review_required"]
+    },
+    {
+      "name": "propose_direction_variants",
+      "input": ["direction", "angle_offsets_deg"],
+      "output": ["direction_variants", "boundary"]
+    },
+    {
+      "name": "compare_candidates",
+      "input": ["candidate_alternatives"],
+      "output": ["ranked_candidates", "score_breakdown", "clinical_boundary"]
+    },
+    {
+      "name": "clinician_edit_candidate",
+      "input": ["candidate", "angle_offset_deg", "length_scale", "width_scale", "shift_along_mm", "shift_perp_mm", "reason"],
+      "output": ["edited_candidate", "guardrails", "provenance"]
+    },
+    {
+      "name": "save_review_record",
+      "input": ["candidate", "tumor", "trace", "privacy_audit", "reviewer", "review_status", "review_notes"],
+      "output": ["review_record_json", "report_markdown", "screenshot_png", "guardrail_summary", "review_gate", "audit_events"]
+    }
+  ]
+}

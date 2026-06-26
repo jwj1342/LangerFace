@@ -24,6 +24,7 @@
         <option value="2d">2D 贴合（默认，稳定）</option>
         <option value="3d">3D 重建（Beta）</option>
       </select>
+      <p class="hint" id="routeModeHint" style="margin-top:7px">当前是 2D 实时贴合模式，只显示稳定主流程。</p>
       <div id="route3dPanel" class="hidden" style="display:flex;flex-direction:column;gap:10px">
         <div class="btn-row" style="grid-template-columns:1fr 1fr">
           <button class="btn" id="reconDemoBtn">用示例脸（无摄像头）</button>
@@ -51,16 +52,20 @@
       </div>
     </div>
 
-    <div class="card hidden" id="rstlMigrationPanel">
+    <div class="card hidden" id="threeDWorkflowCard">
       <div>
-        <label class="field-label">RSTL 线迁移</label>
-        <p class="hint" style="margin-top:7px">在 3D 标准脸上绘制待复核的 RSTL 线，导出 validated:false 的迁移图谱草案。</p>
+        <label class="field-label">3D 线标注与研究演示</label>
+        <p class="hint" style="margin-top:7px">在 3D 标准脸上绘制 RSTL 候选线，并从标注页进入沿 RSTL 闭合力学演示。</p>
       </div>
       <a class="btn btn-primary" href="annotate.html" style="text-decoration:none">打开 3D 线标注</a>
     </div>
 
-    <div class="card">
-      <a class="btn" href="surgery.html" style="text-decoration:none">🔬 切除→闭合演示（Beta）</a>
+    <div class="card" id="incisionWorkflowCard">
+      <div>
+        <label class="field-label">肿物切口候选设计</label>
+        <p class="hint" style="margin-top:7px">手动放置皮下 / 皮表肿物，生成线性或梭形候选切口，并查看规则、trace、隐私审计和医生调整记录。</p>
+      </div>
+      <a class="btn btn-primary" href="incision_agent.html" style="text-decoration:none">打开切口 Agent 工作台</a>
     </div>
 
     <div class="card">
@@ -115,6 +120,13 @@
         <div class="stat"><span class="k">脸部占比</span><span class="v" id="statFace">—</span></div>
         <div class="stat"><span class="k">偏航估计</span><span class="v" id="statYaw">—</span></div>
         <div class="stat"><span class="k">线束数量</span><span class="v" id="statLines">—</span></div>
+      </div>
+      <div class="overlay-qa hidden" id="incisionOverlayQa">
+        <div class="overlay-qa-top">
+          <span>切口叠加 QA</span>
+          <span id="incisionOverlayQaState">等待画面</span>
+        </div>
+        <p id="incisionOverlayQaDetail">上传照片、视频或开启摄像头后开始检查。</p>
       </div>
       <p class="hint">姿态与光照自适应 · 全程本地运行，不上传任何画面</p>
     </div>

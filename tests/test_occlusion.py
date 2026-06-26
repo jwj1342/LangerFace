@@ -47,3 +47,19 @@ def test_backface_culled_when_flipped_in_depth():
     vis = culler.visible_triangles(flipped)
     assert vis.shape == (2,)
     assert vis.dtype == bool
+
+
+def test_degenerate_projected_triangle_culled_when_area_gate_enabled():
+    """启用面积门槛后，屏幕投影近共线的退化三角面不可见。"""
+    verts = np.zeros((max(NOSE_TIP + 1, 4), 3), dtype=float)
+    verts[0] = [0, 0, 0]
+    verts[1] = [10, 0, 0]   # NOSE_TIP
+    verts[2] = [20, 0, 0]   # tri0 三点共线
+    verts[3] = [0, 10, 0]
+    tris = np.array([[0, 1, 2], [0, 2, 3]])
+
+    default_culler = BackfaceCuller(tris)
+    gated_culler = BackfaceCuller(tris, min_triangle_area_px2=1.0)
+
+    assert default_culler.visible_triangles(verts).tolist() == [True, True]
+    assert gated_culler.visible_triangles(verts).tolist() == [False, True]

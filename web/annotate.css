@@ -20,6 +20,7 @@ a.badge { text-decoration: none; }
   color: var(--muted); font-size: 12.5px; line-height: 1.45; padding: 9px 11px;
 }
 .current-state.active { color: #805800; background: #fff7db; border-color: #f1d991; }
+.current-state.warning { color: #8a3a11; background: #fff3e8; border-color: #efb27b; }
 
 .annotate-actions { grid-template-columns: 1fr; }
 .annotate-actions .btn { min-height: 38px; font-size: 13.5px; padding: 9px 10px; }
@@ -33,9 +34,11 @@ a.badge { text-decoration: none; }
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   background: #f8f9f5; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; font-size: 13px;
 }
+.line-row.has-warning { background: #fff8ed; border-color: #efb27b; }
 .line-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .line-main strong { color: var(--ink); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .line-meta { color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.line-warning { color: #9a3412; font-size: 11.5px; font-weight: 700; }
 .line-row em { color: var(--muted); font-style: normal; font-variant-numeric: tabular-nums; }
 .line-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 .line-row .mini {

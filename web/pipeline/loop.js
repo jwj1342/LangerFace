@@ -22,6 +22,22 @@ let drawFailureLogged = false;
 let frameScheduled = false;
 let frameMetricsSeen = 0;
 
+function blendshapeScore(categories, names) {
+  if (!Array.isArray(categories)) return 0;
+  for (const name of names) {
+    const hit = categories.find((c) => c.categoryName === name);
+    if (hit && Number.isFinite(hit.score)) return hit.score;
+  }
+  return 0;
+}
+
+function updateFaceExpression(faceBlendshapes = []) {
+  const categories = faceBlendshapes[0]?.categories || [];
+  sourceState.jawOpen = blendshapeScore(categories, ["jawOpen"]);
+  sourceState.eyeBlinkLeft = blendshapeScore(categories, ["eyeBlinkLeft", "eyeBlink_L"]);
+  sourceState.eyeBlinkRight = blendshapeScore(categories, ["eyeBlinkRight", "eyeBlink_R"]);
+}
+
 export function requestFrame() {
   if (!sourceState.running || sourceState.paused || frameScheduled) return;
   frameScheduled = true;
@@ -40,6 +56,7 @@ export function loop() {
     if (!sourceState.imageCacheLM) {
       const res = modelState.landmarker.detectForVideo(sourceState.source, t);
       sourceState.imageCacheLM = (res.faceLandmarks && res.faceLandmarks[0]) ? toPixels(res.faceLandmarks[0], W, H) : null;
+      updateFaceExpression(res.faceBlendshapes);
       sourceState.imageHulls = detectHands(t, W, H);
     } else if (renderState.handOcc && sourceState.imageHulls === null) {
       sourceState.imageHulls = detectHands(t, W, H);
@@ -48,10 +65,7 @@ export function loop() {
     sourceState.presence = lm ? 1 : 0;
   } else if (sourceState.source.currentTime !== undefined) {
     const res = modelState.landmarker.detectForVideo(sourceState.source, t);
-    if (res.faceBlendshapes && res.faceBlendshapes.length) {
-      const jo = res.faceBlendshapes[0].categories.find((c) => c.categoryName === "jawOpen");
-      sourceState.jawOpen = jo ? jo.score : 0;
-    }
+    updateFaceExpression(res.faceBlendshapes);
     if (res.faceLandmarks && res.faceLandmarks.length) {
       lm = toPixels(res.faceLandmarks[0], W, H);
       if (renderState.smoothLevel > 0) lm = renderState.smoother.filter(lm, t / 1000);

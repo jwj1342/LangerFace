@@ -171,7 +171,7 @@ P' = u * V0' + v * V1' + w * V2'
 
 ## 6. 核心算法二：One-Euro 时间平滑
 
-实时关键点会抖动。系统使用 One-Euro Filter 对每个关键点每个坐标独立平滑。实现位于 `src/langerface/detection/smoothing.py` 和 `web/geometry.js`。
+实时关键点会抖动。基础滤波器使用 One-Euro Filter 对每个关键点每个坐标独立平滑。实现位于 `src/langerface/detection/smoothing.py` 和 `web/geometry/smoothing.js`。
 
 低通滤波系数：
 
@@ -204,7 +204,7 @@ x_hat = alpha * x_t + (1 - alpha) * x_hat_{t-1}
 - 运动慢时 `|dx_hat|` 小，`cutoff` 低，平滑强，抖动小。
 - 运动快时 `|dx_hat|` 大，`cutoff` 高，平滑弱，延迟小。
 
-Web 端“平滑”滑杆会映射到相关参数，使用户可在稳定性和响应速度之间取舍。
+Web 端实时页在基础 One-Euro 外再包一层 `MotionStabilizedOneEuro`：先用 `RIGID3D` 锚点估计整脸平移中心并单独滤波，再把所有 landmarks 转成相对该中心的局部形状做原 One-Euro。这样快速整脸平移时，全局平移噪声不会被逐点速度项直接放大；局部表情、眼眉和口周形变仍交给局部滤波、pose gate 和 local region gate 处理。Web 端“平滑”滑杆会同时映射局部和全局滤波参数，使用户可在稳定性和响应速度之间取舍。
 
 ## 7. 核心算法三：背面剔除与口裂排除
 
@@ -591,7 +591,7 @@ v2 = p - a
 
 ## 15. 手术模拟原型
 
-仓库包含 `web/surgery.html`、`web/surgery_main.js`、`web/soft_body.js`、`web/rstl_field.js`，用于演示“顺 RSTL 切除”和“逆 RSTL 切除”在闭合张力上的差异。该部分是 demo 级软体模拟，不是临床级有限元模型。
+仓库包含 `web/surgery.html`、`web/surgery_main.js`、`web/soft_body.js`、`web/rstl_field.js`，用于演示沿 RSTL 梭形切除后的闭合新增张力。该部分是 demo 级软体模拟，不是临床级有限元模型，也不和切口 Agent 的候选生成混用。
 
 ### 15.1 RSTL 方向场采样
 
@@ -636,11 +636,11 @@ k = 1 + (ANISO - 1) * align
 F = stiffness * k * (L - rest)
 ```
 
-这表达了一个演示级假设：沿 RSTL 方向更不易拉伸，垂直 RSTL 方向更容易被拉拢。因此切口长轴平行 RSTL 时，闭合方向垂直 RSTL，新增闭合张力较低；切口长轴逆 RSTL 时，闭合需要拉动沿 RSTL 的较硬方向，新增张力较高。
+这表达了一个演示级假设：沿 RSTL 方向更不易拉伸，垂直 RSTL 方向更容易被拉拢。因此切口长轴平行 RSTL 时，闭合方向垂直 RSTL，新增闭合张力较低。当前 UI 只保留沿 RSTL 的绿色演示路径，避免把“好 / 坏”二元对比混入正式切口候选设计。
 
 ### 15.3 梭形切除与闭合
 
-用户点击肿物点后，系统生成沿 RSTL 和逆 RSTL 的梭形切除预览。椭圆切除判定：
+用户点击肿物点后，系统生成沿 RSTL 的梭形切除预览。椭圆切除判定：
 
 ```text
 along = dot(P - center, axis)
@@ -704,6 +704,8 @@ Stage 2 目标是在当前张力线迁移基础上，加入肿物输入、临床
 | 肿物约束 | 医生标注、术前超声、病理判断 | 中心、直径、边界、深度、安全切缘等 |
 | 临床规则 | 医生团队规则库 | RSTL、自然皱襞、美学亚单位、敏感结构例外 |
 
+肿物约束会先经过 `summarize_tumor_input_quality`。该步骤不改变几何，只把缺作者、非 mm 单位、缺皮下深度、缺皮表切缘、自由轮廓点数过稀等输入风险写入工具 trace、`tumor_quality`、审阅 JSON 和 Markdown 报告，避免医生把不完整输入误读为已充分建模的肿物边界。
+
 ### 21.2 输出
 
 - RSTL / Langer 线叠加。
@@ -722,6 +724,8 @@ Stage 2 目标是在当前张力线迁移基础上，加入肿物输入、临床
 3. 美学亚单位边界：眉缘、唇红缘、发际线、鼻翼沟、耳前皱襞等。
 4. 敏感结构例外：下睑、唇红缘、鼻翼等区域需要优先保护形态和功能。
 
+当前面部分区仍是标准脸 bbox 启发式，但分区输出会携带 `confidence_reasons` 和 `region_boundary_margin_norm`。`bbox_heuristic_region_classifier`、`near_region_rule_boundary`、`near_canonical_face_edge`、`near_sensitive_free_margin`、`heuristic_region_low_confidence` 以及耳周、鼻尖、口角、下颌缘等过渡区标签会进入工具 trace、guardrail 文案和审阅报告，帮助医生区分“规则边界附近”与“明确敏感结构附近”。这些解释不是临床级分区验证。
+
 ### 21.4 皮下肿物线性切口
 
 皮下肿物默认生成线性切口：
@@ -737,8 +741,13 @@ candidate = segment(center, axis, length)
 
 - 超声直径和单位来源。
 - 切口长度规则。
+- `length_target_mm`、`length_target_deficit_mm`、`diameter_coverage_required_mm` 和 `diameter_coverage_deficit_mm`。
 - 与局部 RSTL 的角度偏差。
 - 是否命中敏感结构 guardrail。
+- `candidate_version`、`parent_candidate_id`、`edit_id` 和 `edit_history`；工具生成候选为 v1，医生参数编辑或端点拖拽后的候选至少为 v2，多步编辑会按提交顺序递增版本并写入 `candidate-edit-session/v0.1`，导出报告显示候选版本和编辑记录数；浏览器 workflow 会在导出记录中保留 `guardrail_summary`、候选 provenance、线性候选端点/中心/长度与梭形 outline/polyline/长短轴字段，供 reviewer 核对。
+- `tumor_quality` 与 `tumor_boundary_summary`；审阅记录会保存肿物输入质量摘要，并按保存候选的长轴重新汇总肿物边界点数、长短轴、面积、自交和中心偏移，Markdown 报告同时显示“肿物输入提示”“肿物边界摘要”和“梭形包络”；JS workflow 测试覆盖质量摘要、边界摘要和梭形候选 metrics，避免 reviewer 只看到候选线而漏看输入质量或边界质量。
+
+如果最大长度规则使线性候选短于记录的超声直径，guardrails 输出 `linear_diameter_coverage_deficit` 高风险警告；医生需要增加长度、确认更小影像直径，或记录明确的人工 access decision。
 
 角度偏差可用：
 
@@ -747,6 +756,15 @@ angle_error = arccos(|dot(axis_candidate, axis_rstl)|)
 ```
 
 取绝对值是因为切口轴线无方向，`theta` 和 `theta + pi` 等价。
+
+局部 RSTL 方向服务同样按无向切线轴统计邻域离散度。对候选邻域切线角 `theta_i` 和加权平均轴 `theta_ref`，使用：
+
+```text
+axis_diff(theta_i, theta_ref) = |((theta_i - theta_ref + 90) mod 180) - 90|
+angular_spread = 2 * max_i axis_diff(theta_i, theta_ref)
+```
+
+这样 `179°` 与 `-179°` 被视为约 `2°` 的轴向差异，而不是普通有向角 `max(theta)-min(theta)` 下的 `358°`。方向置信度因此只在真实邻域方向冲突时下降，不会在角度表示边界处误报低置信度。查询结果还会输出 `confidence_reasons`：`empty_atlas`、`nearest_atlas_support_far`、`nearest_atlas_support_sparse`、`low_support_count` 或 `high_angular_spread` 会进入候选 provenance、guardrail 文案和审阅报告，便于区分“没有图谱支持”和“邻域方向本身冲突”。
 
 ### 21.5 皮表肿物梭形切口
 
@@ -760,6 +778,28 @@ tip_angle ≈ 30 degrees
 
 但工程实现应参数化这些值，因为 3:1 长宽比和 30 度尖端角在不同几何条件下不一定能同时严格满足。系统应输出实际指标，而不是隐瞒偏差。
 
+当前梭形候选轮廓使用对称 cubic Hermite profile。设 `u` 为从端点到中点的归一化距离，`R = half_length / half_width`，目标尖端半角斜率 `m = tan(tip_angle / 2)`，则半轮廓端点斜率为 `s = R * m`，并用：
+
+```text
+h(u) = (s - 2)u^3 + (3 - 2s)u^2 + su
+```
+
+生成从端点 `h(0)=0` 到中点 `h(1)=1`、且中点切线水平 `h'(1)=0` 的平滑轮廓。为避免极端长宽比下曲线过冲，工程上会限制可用端点斜率并在 metrics 中记录 `tip_angle_target_deg`、`tip_angle_estimated_deg`、`tip_angle_error_deg` 和 `tip_angle_limited_by_ratio`。候选还会记录 `outline_area_mm2`、`outline_half_width_monotone`、`outline_symmetry_max_error_mm` 和 `outline_self_intersection`，用于 reviewer 判断生成曲线是否仍是单峰、对称、无自交的梭形轮廓。
+
+边界覆盖按长轴投影单独计算：
+
+```text
+axis_coverage_required_mm = lesion_axis_diameter_mm + 2 * margin_mm
+length_target_mm = max(width_mm * length_to_width_ratio, axis_coverage_required_mm)
+axis_coverage_deficit_mm = max(0, axis_coverage_required_mm - length_mm)
+```
+
+如果 `length_mm` 因 `max_length_mm` 被截断而小于 `axis_coverage_required_mm`，guardrails 输出 `fusiform_axis_coverage_deficit` 高风险警告；医生需要增加长度、调整切缘或重新标注边界，不能把该候选静默当作已覆盖病灶。
+
+自由轮廓还会进入边界质量 guardrails：`boundary_point_count < min_freehand_boundary_points` 输出 medium 级 `cutaneous_boundary_too_few_points`；投影面积相对名义直径圆盘过小输出 high 级 `cutaneous_boundary_degenerate_area`；轮廓自交输出 high 级 `cutaneous_boundary_self_intersection`；`boundary_center_shift_mm` 超过 `diameter_mm * boundary_center_shift_diameter_multiplier` 输出 high 级 `cutaneous_boundary_center_shift`；如果自由轮廓点落在实际梭形 outline 的收窄包络之外，则记录 `boundary_envelope_min_margin_mm` / `boundary_envelope_outside_count` 并输出 high 级 `fusiform_boundary_outside_envelope`。这些规则用于防止误点、漏点、近共线轮廓、蝴蝶结式轮廓、中心点与轮廓标在不同病灶上，或候选梭形曲线没有真正包住医生标注的边界。医生在前端调窄、拉长、旋转或平移梭形候选后，系统会基于最新中心、轴向、宽度和肿物边界重新计算 outline 面积、单峰性、对称性、边界包络余量和出界点数，并用新的 metrics 复跑 guardrails；审阅导出的 high risk 不是初始候选的陈旧判断。
+
+敏感结构 guardrails 的距离计算使用标准脸归一化坐标。下睑、鼻翼和唇红缘除保留代表性锚点外，还加入简化游离缘线段；中心点或候选几何到这些锚点/线段的最短距离乘以成人脸高近似值，得到 `free_margin_distance_mm` 或 `sensitive_free_margin_min_distance_mm`。判定阈值由 `free_margin_distance_thresholds_mm` 按下睑、唇红缘、鼻翼、鼻尖、口角等结构选择，warning 文案会记录命中的阈值；这比单点锚更稳健，但仍是标准脸工程筛查，不能当作真实毫米级临床测量。
+
 候选结构建议：
 
 ```json
@@ -772,6 +812,14 @@ tip_angle ≈ 30 degrees
   "width_mm": 6.0,
   "target_ratio": 3.0,
   "tip_angle_deg": 30.0,
+  "metrics": {
+    "profile": "cubic_hermite_tip_angle_constrained",
+    "tip_angle_target_deg": 30.0,
+    "tip_angle_estimated_deg": 30.0,
+    "tip_angle_error_deg": 0.0,
+    "axis_coverage_required_mm": 18.0,
+    "axis_coverage_deficit_mm": 0.0
+  },
   "curve": [[0.1, 0.2], [0.2, 0.25]],
   "warnings": [],
   "overrides": []
@@ -783,11 +831,11 @@ tip_angle ≈ 30 degrees
 | 模块 | 计划位置 | 职责 |
 | --- | --- | --- |
 | 临床规则库 | `assets/clinical_rules_face_incision.json` | 区域规则、优先级、例外和审核状态 |
-| 面部分区 | `src/langerface/anatomy/`, `web/anatomy*.js` | 点位到临床区域和美学亚单位的映射 |
-| RSTL 方向服务 | `src/langerface/lines/direction.py` | 查询局部方向、置信度和依据 |
-| 肿物模型 | `src/langerface/tumor/`, `web/tumor*.js` | 表达皮下/皮表肿物约束 |
-| 切口生成 | `src/langerface/incision/` | 线性和梭形候选生成 |
-| guardrails | `src/langerface/incision/guardrails.py` | 敏感结构风险提示 |
+| 面部分区 | `web/incision_tools.js` | 点位到临床区域和美学亚单位的映射，输出分区低置信原因 |
+| RSTL 方向服务 | `web/incision_tools.js` | 查询局部方向、置信度和依据 |
+| 肿物模型 | `web/incision_tools.js`, `web/incision_agent*.js` | 表达皮下/皮表肿物约束 |
+| 切口生成 | `web/incision_tools.js` | 线性和梭形候选生成 |
+| guardrails | `web/incision_tools.js` | 敏感结构风险提示 |
 | 审阅 UI | `web/incision*.js` | 医生编辑、覆盖、确认和导出 |
 | 验证指标 | `docs/VALIDATION.md` | 角度误差、稳定性、医生接受率等 |
 
@@ -807,7 +855,7 @@ tip_angle ≈ 30 degrees
 
 ## 24. 推荐复现路径
 
-> 从零搭建环境、安装依赖与构建步骤见 [CONTRIBUTING.md «开发环境»](CONTRIBUTING.md#开发环境) 与 [ENVIRONMENT.md](ENVIRONMENT.md)；测试运行见 [CONTRIBUTING.md «运行测试»](CONTRIBUTING.md#运行测试)。体验路径：Web 首页摄像头实时叠加 → 上传图片看贴合/平滑/背面剔除 → 3D Beta（示例脸或扫描重建）→ `/annotate.html` 标注导出草案 → `surgery.html` 顺/逆 RSTL 切除对比；改几何代码后务必跑 `pytest` 和 `cd web && npm test` 确认对拍仍通过。
+> 从零搭建环境、安装依赖与构建步骤见 [CONTRIBUTING.md «开发环境»](CONTRIBUTING.md#开发环境) 与 [ENVIRONMENT.md](ENVIRONMENT.md)；测试运行见 [CONTRIBUTING.md «运行测试»](CONTRIBUTING.md#运行测试)。体验路径：Web 首页摄像头实时叠加 → 上传图片看贴合/平滑/背面剔除 → 3D Beta（示例脸或扫描重建）→ `/annotate.html` 标注导出草案与沿 RSTL 闭合演示 → `incision_agent.html` 生成肿物切口候选；改几何代码后务必跑 `pytest` 和 `cd web && npm test` 确认对拍仍通过。
 
 ## 25. 一句话总结
 

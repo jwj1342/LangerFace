@@ -1,5 +1,5 @@
 // 运行期状态按职责分片，避免所有模块共享一个无边界的可变对象。
-import { OneEuro } from "./geometry.js";
+import { MotionStabilizedOneEuro } from "./geometry.js";
 
 export const modelState = {
   landmarker: null,
@@ -21,18 +21,21 @@ export const renderState = {
     offsetX: 0, offsetY: 0,
   },
   densityFrac: 1, smoothLevel: 0.6, opacity: 0.92,
-  smoother: new OneEuro({ minCutoff: 1.5, beta: 0.05 }),
+  smoother: new MotionStabilizedOneEuro({ minCutoff: 1.5, beta: 0.05 }),
+  incisionOverlay: null,
 };
 
 export const sourceState = {
   source: null, sourceKind: null,      // 'camera' | 'video' | 'image'
   running: false, paused: false, presence: 0,
-  lastLM: null, imageCacheLM: null, imageHulls: null, jawOpen: 0,
+  lastLM: null, imageCacheLM: null, imageHulls: null,
+  jawOpen: 0, eyeBlinkLeft: 0, eyeBlinkRight: 0,
+  qualityGate: null,
+  localRegionQuality: null,
 };
 
 export const recordingState = {
   recorder: null,
-  chunks: [],
 };
 
 export const reconState = {

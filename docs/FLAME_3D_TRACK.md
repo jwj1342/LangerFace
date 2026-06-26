@@ -72,7 +72,7 @@ bary 迁移保证线条落在解剖对应位置、方向随曲面形变。但「
 - **Sprint 2 ✅**：在 FLAME 上标注 → 导出 `topologyId:"flame-2023"` 独立图谱；「设为活动图谱并预览」（2D 实时入口）按拓扑闸到 mediapipe-468。
 - **Sprint 3 ✅（模式 A 关键点）**：`langerface.flame` 纯 numpy 线性形状拟合（FLAME 线性基最小二乘 + 项目 Umeyama，CPU 离线，**无需 PyTorch/GPU**）；`tools/fit_flame_to_landmarks.py` 用官方 `mediapipe_landmark_embedding.npz`（105 点）把 FLAME 拟合到 MediaPipe 关键点 → 个体 FLAME。真模型实测：5023 顶点、105 关键点、残差 ~1.6mm。合成单测验证 β 恢复 + `transfer_points` 线随形变迁移。
 - **Sprint 4 ✅（个体可视化·初版）**：标注器「加载个体 FLAME（拟合）」加载 `flame_fitted_vertices.json`，可视化拟合后的个体脸。
-- **Sprint 5 ✅（#86 经典 RSTL 图谱→FLAME 草案注册）**：`tools/register_rstl_atlas_to_flame.py` 默认从本地 `RSTL/RSTL PRSgo.png` 经典正面图谱抽取 RSTL 线段，再使用 `web/api/flame_basis.npz` 中的 FLAME neutral、三角面与官方 MediaPipe embedding 注册为 `assets/atlas_rstl_flame.json`（`topologyId:"flame-2023"`）。本地 `RSTL/` 经典图谱资料作为 provenance bundle 记录；输出仍为 `validated:false`，需要 #2 临床复核。
+- **Sprint 5 ✅（#86 经典 RSTL 图谱→FLAME 草案注册）**：`tools/register_rstl_atlas_to_flame.py` 默认从本地 `RSTL/RSTL PRSgo.png` 经典正面图谱抽取 RSTL 线段，再使用 `web/api/flame_basis.npz` 中的 FLAME neutral、三角面与官方 MediaPipe embedding 注册为 gitignored `local_outputs/atlas_rstl_flame.json`（`topologyId:"flame-2023"`）。本地 `RSTL/` 经典图谱资料作为 provenance bundle 记录；输出仍为 `validated:false`，需要 #2 临床复核。
 - **Sprint 6（剩余）**：把医生复核后的 flame-2023 标准线**渲染到个体脸上**（载入已存图谱 + 在个体网格 `transfer_points` 重心采样）；**模式 B 3D 扫描配准**后端；眼周放射线/贴面平滑验收 fixture；`snapToSurface` 空间索引（5023 顶点）。
 
 ## 10. 端到端怎么跑（本地，dev-only）

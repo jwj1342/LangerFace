@@ -251,7 +251,7 @@ bucket: langerface-assets   (私有)
 
 **当前落地状态（Phase 0，截至本节更新）**：`web/data_source.js` 已存在（PR #53 / M0 创建），但**只实现了"标注 → 实时"闭环所需的最小面**——`stagePreviewAtlas(atlas)` / `takePreviewAtlas()`（基于 sessionStorage 的一次性预览跨页传递，不落盘、不发布）。完整数据接口（`listHeads/getHeadMesh/loadAtlas/saveAnnotation/listAnnotations`）目前仅为上方草案，**推迟到 Phase 1 接入 `ApiDataSource` 时补全**。
 
-在此之前，UI 主路径仍**直接静态 `fetch` 内置资产**（如 `pipeline.js` 的 `ensureReady()`、`annotate_main.js` 的 `loadCanonical()`、`mode3d.js` 的重建参考），其 URL 已统一收敛到 `web/assets.js`（`assetUrls`，经 Vite `?url` 注入）。这是 Phase 0 **已接受的现状**而非违例：数据源抽象按需增量引入，"所有取数都过接口"的不变式随 `ApiDataSource`（后端落地）一并达成，而非现在强制。
+在此之前，UI 主路径仍**直接静态 `fetch` 运行时资产**（如 `pipeline.js` 的 `ensureReady()`、`annotate_main.js` 的 `loadCanonical()`、`mode3d.js` 的重建参考），其 URL 已统一收敛到 `web/assets.js`（`assetUrls` / `loadJsonAsset`，支持 `assetBase` 与 `VITE_LANGERFACE_ASSET_BASE_URL`）。这是 Phase 0 **已接受的现状**而非违例：数据源抽象按需增量引入，"所有取数都过接口"的不变式随 `ApiDataSource`（后端落地）一并达成，而非现在强制。
 
 ## 离线重计算
 

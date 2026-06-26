@@ -46,6 +46,9 @@ python tools/fit_flame_to_landmarks.py [landmarks.json]
 # 从 RSTL/RSTL PRSgo.png 经典图谱抽线，生成 RSTL-on-FLAME 草案图谱；
 # 读取随仓库分发的 flame_basis.npz，不需要原始 pkl
 python tools/register_rstl_atlas_to_flame.py
+
+# 生成 dev-local FLAME RSTL 方向先验（产物 gitignore，validated:false）
+python tools/build_flame_rstl_direction_prior.py --generated-at now
 ```
 
 资产缺失时这些脚本会安全跳过并打印获取指引，CI / 他人 checkout 不受影响。
@@ -54,6 +57,6 @@ python tools/register_rstl_atlas_to_flame.py
 
 `register_rstl_atlas_to_flame.py` 会读取本地 `RSTL/RSTL PRSgo.png` 经典正面图谱，
 自动抽取 RSTL 线段，并把 `RSTL/` 资料清单写入 provenance，输出
-`assets/atlas_rstl_flame.json`。该资产是
+`local_outputs/atlas_rstl_flame.json`。该资产是
 `topologyId:"flame-2023"` 的几何注册草案，始终保持 `validated:false`，
 不得替代逐线临床复核。

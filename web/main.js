@@ -2,20 +2,31 @@
 import { els } from "./dom.js";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./canvas_fit.js";
 import { dataSource } from "./data_source.js";
+import { createCanvasRecordingController } from "./export_canvas.js";
+import { validateIncisionOverlay } from "./incision_overlay.js";
 import { countMetric, logError } from "./logger.js";
 import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.js";
 import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera } from "./pipeline.js";
 import { adjustFocusZoom, buildZoomCards } from "./render.js";
 import { recordingState, reconState, renderState, sourceState } from "./state.js";
-import { setMsg, setProvenance, smoothLabel } from "./ui.js";
+import { setIncisionOverlayQa, setMsg, setProvenance, smoothLabel } from "./ui.js";
 
 let previewSystem = null;
 let previewMeta = null;
+let recordingController = null;
 
 function syncPreviewControls() {
   const previewIsActive = Boolean(previewSystem && previewMeta && renderState.system === previewSystem);
   setProvenance(previewIsActive ? previewMeta : null);
   els.restoreAtlas.classList.toggle("hidden", !previewIsActive);
+}
+
+function configureLandmarkSmoothing() {
+  renderState.smoother.minCutoff = 6.0 - 5.5 * renderState.smoothLevel;
+  renderState.smoother.beta = 0.02 + 0.06 * renderState.smoothLevel;
+  if (typeof renderState.smoother.configureForSmoothLevel === "function") {
+    renderState.smoother.configureForSmoothLevel(renderState.smoothLevel);
+  }
 }
 
 function applyStagedAtlas() {
@@ -32,9 +43,46 @@ function applyStagedAtlas() {
   if (!sourceState.running) setMsg("已载入标注预览图谱（未验证）。开启摄像头或上传照片即可在脸上查看。");
 }
 
+function applyStagedIncisionOverlay() {
+  const overlay = dataSource.loadIncisionOverlay();
+  if (!overlay) return;
+  if (!validateIncisionOverlay(overlay)) {
+    dataSource.clearIncisionOverlay();
+    setIncisionOverlayQa(null);
+    setMsg("切口候选叠加数据无效，已清除。");
+    return;
+  }
+  renderState.incisionOverlay = overlay;
+  setIncisionOverlayQa({
+    label: "等待画面",
+    detail: "上传照片、视频或开启摄像头后开始检查。",
+  });
+  buildZoomCards(refreshStaticImage);
+  const highCodes = overlay.guardrail_summary?.high_codes || overlay.review_gate?.high_guardrail_codes || [];
+  const reviewLabel = overlay.review?.status === "approved_for_discussion" ? "已确认候选草案" : "待复核候选";
+  const riskText = highCodes.length ? `；高风险项 ${highCodes.join("、")}` : "";
+  setMsg(`已载入切口候选叠加（${reviewLabel}${riskText}）。上传照片、视频或开启摄像头后，会随 RSTL 一起显示。`);
+}
+
 // ── UI 绑定 ───────────────────────────────────────────────────────────────────
 function refreshStaticImage() {
   if (sourceState.sourceKind === "image") requestFrame();
+}
+
+function visibleRecordingCanvases() {
+  const extras = [];
+  if (renderState.zoom && !els.zoomStrip.classList.contains("hidden")) {
+    renderState.zoomCards.forEach((zc) => {
+      if (!zc?.canvas || !zc.canvas.width || !zc.canvas.height) return;
+      if (zc.card?.offsetParent === null) return;
+      const label = zc.card?.querySelector(".tag")?.textContent || "细节放大窗";
+      extras.push({ label, canvas: zc.canvas });
+    });
+  }
+  if (els.three && !els.three.classList.contains("hidden") && els.three.width && els.three.height) {
+    extras.push({ label: "3D 视图", canvas: els.three });
+  }
+  return extras;
 }
 
 let imageDrag = null;
@@ -82,8 +130,7 @@ els.tmpl.onchange = (e) => { renderState.system = e.target.value; syncPreviewCon
 els.density.oninput = (e) => { renderState.densityFrac = e.target.value / 100; els.densityVal.textContent = e.target.value + "%"; refreshStaticImage(); };
 els.smooth.oninput = (e) => {
   const v = +e.target.value; renderState.smoothLevel = v / 100; els.smoothVal.textContent = smoothLabel(v);
-  renderState.smoother.minCutoff = 6.0 - 5.5 * renderState.smoothLevel;
-  renderState.smoother.beta = 0.02 + 0.06 * renderState.smoothLevel;
+  configureLandmarkSmoothing();
   refreshStaticImage();
 };
 els.opacity.oninput = (e) => { renderState.opacity = e.target.value / 100; els.opacityVal.textContent = e.target.value + "%"; refreshStaticImage(); };
@@ -115,17 +162,20 @@ els.restoreAtlas.onclick = () => {
 
 // 导出：录制画布为 webm 下载
 els.export.onclick = () => {
-  if (recordingState.recorder) { recordingState.recorder.stop(); return; }
-  const stream = els.canvas.captureStream(30);
-  recordingState.chunks = []; recordingState.recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
-  recordingState.recorder.ondataavailable = (e) => e.data.size && recordingState.chunks.push(e.data);
-  recordingState.recorder.onstop = () => {
-    const blob = new Blob(recordingState.chunks, { type: "video/webm" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `langer_${renderState.system}_${Date.now()}.webm`; a.click();
-    recordingState.recorder = null; els.export.textContent = "⬇ 导出"; els.export.removeAttribute("aria-pressed");
-  };
-  recordingState.recorder.start(); els.export.textContent = "■ 停止"; els.export.setAttribute("aria-pressed", "true");
+  if (!recordingController) {
+    recordingController = createCanvasRecordingController({
+      canvas: els.canvas,
+      getExtraCanvases: visibleRecordingCanvases,
+      system: () => renderState.system,
+      onStateChange(recording) {
+        recordingState.recorder = recording ? recordingController : null;
+        els.export.textContent = recording ? "■ 停止" : "⬇ 导出";
+        if (recording) els.export.setAttribute("aria-pressed", "true");
+        else els.export.removeAttribute("aria-pressed");
+      },
+    });
+  }
+  recordingController.toggle();
 };
 
 // 3D Beta 路线绑定
@@ -150,11 +200,13 @@ els.mainWrap.addEventListener("pointerup", endImageDrag);
 els.mainWrap.addEventListener("pointercancel", endImageDrag);
 els.mainWrap.addEventListener("wheel", handleMainWheel, { passive: false });
 els.smoothVal.textContent = smoothLabel(+els.smooth.value);
-renderState.smoother.minCutoff = 6.0 - 5.5 * renderState.smoothLevel;
-renderState.smoother.beta = 0.02 + 0.06 * renderState.smoothLevel;
+configureLandmarkSmoothing();
 
 // 预加载模型并反馈状态
-ensureReady().then(applyStagedAtlas).catch((e) => {
+ensureReady().then(() => {
+  applyStagedAtlas();
+  applyStagedIncisionOverlay();
+}).catch((e) => {
   countMetric("bootstrap.loadFailure");
   els.badge.textContent = "模型加载失败";
   logError("启动时模型加载失败。", e);

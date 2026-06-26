@@ -20,11 +20,12 @@ window.exportLangerfaceDiagnostics()
   "assetVersions": {},
   "counters": {},
   "metrics": {},
+  "sections": {},
   "events": []
 }
 ```
 
-该快照只允许包含结构化事件、计数器、阶段耗时、fps、失败原因和资产版本；不得包含 canvas 像素、视频帧、人脸纹理、病例号或其他身份信息。
+该快照只允许包含结构化事件、计数器、阶段耗时、fps、失败原因、脱敏 QA 摘要和资产版本；不得包含 canvas 像素、视频帧、人脸纹理、landmark 坐标、病例号或其他身份信息。
 
 ## 事件字段
 
@@ -48,6 +49,16 @@ window.exportLangerfaceDiagnostics()
 - `faceLandmarker.gpuFallback`
 - `handLandmarker.loadFailure`
 - `faceLandmarker.noFaceFrame.camera`
+- `runtime.error`
+- `runtime.unhandledrejection`
+- `incisionOverlay.registration.pass`
+- `incisionOverlay.registration.fail`
+- `incisionOverlay.stability.pass`
+- `incisionOverlay.stability.fail`
+
+浏览器端会自动捕获 `window.error` 与 `unhandledrejection`，写入上述计数器和
+`runtime.error` / `runtime.unhandledrejection` 事件。事件 detail 只记录 message、
+文件名、行列号或 Error 摘要，不记录 canvas 像素、视频帧或人脸纹理。
 
 ## 指标样本
 
@@ -71,6 +82,42 @@ window.exportLangerfaceDiagnostics()
 - `frame.fps`
 - `frame.durationMs`
 - `scan.durationMs`
+- `incisionOverlay.registration.mappedPointCount`
+- `incisionOverlay.registration.outOfFrameCount`
+- `incisionOverlay.registration.bboxDiagonalPx`
+- `incisionOverlay.stability.rmsPx`
+- `incisionOverlay.stability.p95Px`
+- `incisionOverlay.stability.maxPx`
+
+切口 overlay registration / stability 指标只来自运行期 landmarks、三角面索引和
+surface refs；导出只保留计数、阈值、RMS/P95/max、bbox 和失败原因，不包含照片、
+视频帧、canvas 像素或 landmark 坐标。它用于 preview/回归时判断
+`incision-overlay/v0.1` 是否能在当前 runtime landmarks 上投射并稳定跟随，不代表患者
+个体化临床 AR 配准。
+
+## 脱敏诊断区
+
+`sections` 用于保存当前页面最小可复现状态摘要。当前实时切口叠加会写入：
+
+- `incision_overlay_runtime.schema_version = "incision-overlay-runtime-diagnostics/v0.1"`
+- `raw_image_sent=false`、`exported_raw_pixels=false`、`exported_landmarks=false`
+- 当前 overlay 的候选类型、肿物类型、审阅状态、guardrail 摘要和 `live_overlay_ready`
+- 最近一帧 `incision-overlay-registration/v0.1` 的脱敏结果
+- 最近 8 帧滚动窗口 `incision-overlay-stability/v0.1` 的脱敏结果
+
+该 section 只用于 PR preview、多人审阅和回归复现。候选切换或 overlay 被清除时，运行期
+section 会同步重置，避免导出旧候选的 QA 结果。
+
+3D Beta 查看器还会在存在候选 overlay 且重建头可用时写入：
+
+- `incision_overlay_3d_view.schema_version = "incision-overlay-3d-view-diagnostics/v0.1"`
+- `raw_image_sent=false`、`exported_raw_pixels=false`
+- `mapping_mode`：`mediapipe_468_surface_refs` 或 `mediapipe_468_refs_to_flame_demo_nearest_surface`
+- 当前 overlay 的候选类型、肿物类型、审阅状态和 `live_overlay_ready`
+- viewer render summary：是否渲染、候选线点数、肿物边界点数、肿物中心是否渲染
+
+FLAME 示例头上的切口 overlay 只是把 MediaPipe surface refs 映射到示例 FLAME 头的工程预览，
+不是患者个体化临床 AR 配准。
 
 ## 资产版本
 

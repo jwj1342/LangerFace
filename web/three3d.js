@@ -4,6 +4,11 @@ import * as THREE from "three";
 import { addSkinLighting, configureSkinRenderer, createSkinMaterial } from "./skin_material.js";
 
 const BAND = { top: [0.94, 0.76, 0.29], mid: [0.34, 0.74, 0.95], low: [0.25, 0.83, 0.62] };
+const INCISION_COLORS = {
+  tumor: 0xfacc15,
+  linear: 0x22c55e,
+  fusiform: 0x5eead4,
+};
 
 // 每顶点法向（用于把线条沿法向轻微抬离表面，避免与网格 z-fighting）
 function vertexNormals(verts, tris) {
@@ -62,6 +67,49 @@ function buildLineGeometry(atlasLines, verts, tris, normals, bands) {
   return g;
 }
 
+function disposeObject(obj) {
+  obj.traverse((child) => {
+    child.geometry?.dispose?.();
+    if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose?.());
+    else child.material?.dispose?.();
+  });
+}
+
+function mapSurfaceRef3d(ref, verts, tris, normals, eps) {
+  const tri = tris?.[ref?.tri];
+  if (!tri || tri.length < 3) return null;
+  const A = verts[tri[0]], B = verts[tri[1]], C = verts[tri[2]];
+  const nA = normals[tri[0]], nB = normals[tri[1]], nC = normals[tri[2]];
+  if (!A || !B || !C || !nA || !nB || !nC) return null;
+  const u = Number(ref.u), v = Number(ref.v), w = Number(ref.w ?? (1 - u - v));
+  if (![u, v, w].every(Number.isFinite)) return null;
+  const nx = u * nA[0] + v * nB[0] + w * nC[0];
+  const ny = u * nA[1] + v * nB[1] + w * nC[1];
+  const nz = u * nA[2] + v * nB[2] + w * nC[2];
+  const nl = Math.hypot(nx, ny, nz) || 1;
+  return [
+    u * A[0] + v * B[0] + w * C[0] + (nx / nl) * eps,
+    u * A[1] + v * B[1] + w * C[1] + (ny / nl) * eps,
+    u * A[2] + v * B[2] + w * C[2] + (nz / nl) * eps,
+  ];
+}
+
+function buildOverlayLine(points, color, closed = false) {
+  if (!Array.isArray(points) || points.length < 2) return null;
+  const pts = closed ? [...points, points[0]] : points;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pts.flat(), 3));
+  const mat = new THREE.LineBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.98,
+    toneMapped: false,
+  });
+  const obj = new THREE.Line(g, mat);
+  obj.renderOrder = 5;
+  return obj;
+}
+
 export class Head3D {
   constructor(canvas) {
     this.canvas = canvas;
@@ -78,7 +126,7 @@ export class Head3D {
     this.grid.position.y = -0.72;
     this.grid.material.transparent = true; this.grid.material.opacity = 0.38;
     this.scene.add(this.grid);
-    this.mesh = null; this.lines = null;
+    this.mesh = null; this.lines = null; this.incisionOverlay = null;
     this.rotX = 0; this.rotY = 0; this._dist = 3;
     this._minDist = 0.8; this._maxDist = 8;
   }
@@ -91,6 +139,7 @@ export class Head3D {
       this.mesh = null;
     }
     if (this.lines) { this.group.remove(this.lines); this.lines.geometry.dispose(); this.lines = null; }
+    this.clearIncisionOverlay();
     const normals = vertexNormals(verts, tris);
     const bb = bbox(verts);
     const center = [(bb.lo[0] + bb.hi[0]) / 2, (bb.lo[1] + bb.hi[1]) / 2, (bb.lo[2] + bb.hi[2]) / 2];
@@ -122,6 +171,79 @@ export class Head3D {
     this._maxDist = Math.max(this._minDist * 1.5, bb.size * 3.5);
     this.grid.scale.setScalar(Math.max(0.7, bb.size * 0.75));
     this.grid.position.y = -Math.max(0.45, bb.size * 0.38);
+  }
+
+  clearIncisionOverlay() {
+    if (!this.incisionOverlay) return;
+    this.group.remove(this.incisionOverlay);
+    disposeObject(this.incisionOverlay);
+    this.incisionOverlay = null;
+  }
+
+  setIncisionOverlay(overlay, verts, tris) {
+    if (!overlay) {
+      this.clearIncisionOverlay();
+      return { rendered: false, reason: "missing_overlay" };
+    }
+    const normals = vertexNormals(verts, tris);
+    const bb = bbox(verts);
+    const eps = bb.size * 0.008;
+    const mapRefs = (refs) => (refs || []).map((ref) => mapSurfaceRef3d(ref, verts, tris, normals, eps)).filter(Boolean);
+    return this.setIncisionOverlayPoints({
+      schema_version: "incision-overlay-3d-points/v0.1",
+      candidate_type: overlay.candidate_type,
+      tumor_center_point: mapRefs([overlay.tumor?.center_ref])[0] || null,
+      tumor_boundary_points: mapRefs(overlay.tumor?.boundary_refs || []),
+      candidate_points: mapRefs(overlay.candidate?.polyline_refs || []),
+    });
+  }
+
+  setIncisionOverlayPoints(overlay3d) {
+    this.clearIncisionOverlay();
+    const group = new THREE.Group();
+    const boundary = overlay3d?.tumor_boundary_points || [];
+    const candidate = overlay3d?.candidate_points || [];
+    const center = overlay3d?.tumor_center_point || null;
+    const boundaryLine = buildOverlayLine(boundary, INCISION_COLORS.tumor, boundary.length > 2);
+    if (boundaryLine) group.add(boundaryLine);
+    const candidateLine = buildOverlayLine(
+      candidate,
+      overlay3d?.candidate_type === "linear" ? INCISION_COLORS.linear : INCISION_COLORS.fusiform,
+      false,
+    );
+    if (candidateLine) group.add(candidateLine);
+    if (Array.isArray(center) && center.length >= 3) {
+      const radius = Math.max(0.005, (this._maxDist || 1) * 0.006);
+      const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(radius, 16, 8),
+        new THREE.MeshBasicMaterial({ color: INCISION_COLORS.tumor, toneMapped: false }),
+      );
+      sphere.position.set(center[0], center[1], center[2]);
+      sphere.renderOrder = 6;
+      group.add(sphere);
+    }
+    if (!group.children.length) {
+      disposeObject(group);
+      return {
+        schema_version: "incision-overlay-3d-view/v0.1",
+        rendered: false,
+        reason: "no_renderable_overlay_points",
+        candidate_point_count: candidate.length,
+        boundary_point_count: boundary.length,
+        tumor_center_rendered: Boolean(center),
+      };
+    }
+    this.incisionOverlay = group;
+    this.group.add(group);
+    return {
+      schema_version: "incision-overlay-3d-view/v0.1",
+      rendered: true,
+      reason: "incision_overlay_rendered_on_3d_head",
+      candidate_point_count: candidate.length,
+      boundary_point_count: boundary.length,
+      tumor_center_rendered: Boolean(center),
+      clinical_boundary: "3D incision overlay is an engineering visualization, not clinical AR registration.",
+    };
   }
 
   // 原地更新顶点（+ 可选每顶点色）——供实时孪生每帧刷新表情 / 张嘴 / 贴脸纹理，不重建网格。
@@ -163,7 +285,7 @@ export class Head3D {
     this.renderer.render(this.scene, this.camera);
   }
 
-  dispose() { this.renderer.dispose(); }
+  dispose() { this.clearIncisionOverlay(); this.renderer.dispose(); }
 }
 
 export { vertexNormals, buildLineGeometry };

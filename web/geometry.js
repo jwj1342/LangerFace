@@ -5,8 +5,10 @@
 //   smoothing.js — One-Euro 时间平滑（对应 Python smoothing）
 //   occluders.js — 手/器械凸包掩膜（外物遮挡剔除）
 //   transform.js — Jacobi/SVD/Umeyama 相似变换（仅 3D Beta 重建路线）
+//   pose_quality.js — 实时叠加姿态/表情/运动质量门控（纯函数）
 
 export * from "./geometry/atlas.js";
 export * from "./geometry/smoothing.js";
 export * from "./geometry/occluders.js";
 export * from "./geometry/transform.js";
+export * from "./geometry/pose_quality.js";

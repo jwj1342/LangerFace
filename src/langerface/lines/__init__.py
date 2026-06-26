@@ -9,4 +9,10 @@ from .atlas import Atlas, AtlasLine
 from .build import atlas_line_from_points2d
 from .mapping import MappedLine, map_atlas
 
-__all__ = ["Atlas", "AtlasLine", "MappedLine", "atlas_line_from_points2d", "map_atlas"]
+__all__ = [
+    "Atlas",
+    "AtlasLine",
+    "MappedLine",
+    "atlas_line_from_points2d",
+    "map_atlas",
+]

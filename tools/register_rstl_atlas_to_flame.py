@@ -35,7 +35,7 @@ DEFAULT_CANONICAL_VERTICES = REPO / "web" / "assets" / "canonical_vertices.json"
 DEFAULT_TRIANGLES = REPO / "web" / "assets" / "triangles.json"
 DEFAULT_FLAME_BASIS = REPO / "web" / "api" / "flame_basis.npz"
 DEFAULT_RSTL_SOURCES = REPO / "RSTL"
-DEFAULT_OUT = REPO / "assets" / "atlas_rstl_flame.json"
+DEFAULT_OUT = REPO / "local_outputs" / "atlas_rstl_flame.json"
 
 
 def main() -> int:

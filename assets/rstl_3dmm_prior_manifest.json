@@ -1,0 +1,114 @@
+{
+  "version": "0.1-rstl-3dmm-prior-manifest",
+  "review_status": "draft_not_clinically_validated",
+  "validated": false,
+  "last_reviewed_at": "2026-06-24",
+  "medical_boundary": "Research decision-support visualization only; not a surgical instruction.",
+  "source_summary": "Borges RSTL direction principles encoded as topology-bound draft assets; original clinical figures are not redistributed.",
+  "clinical_validation_gate": "Issue #2 must be completed before any asset is marked validated:true.",
+  "assets": [
+    {
+      "id": "mediapipe_rstl_draft",
+      "system": "rstl",
+      "topologyId": "mediapipe-468",
+      "topologyVersion": "mediapipe-canonical-468-v1",
+      "path": "web/assets/atlas_rstl.json",
+      "format": "atlas lines with points [tri,u,v]",
+      "generated_by": "tools/build_field_atlas.py",
+      "status": "available_draft",
+      "validated": false,
+      "uses": ["rstl_direction_service", "stage2_incision_planning", "2d_realtime_overlay"],
+      "limitations": ["geometry is approximate", "requires clinician line-by-line review", "forehead and ear regions require manual confirmation"]
+    },
+    {
+      "id": "mediapipe_rstl_direction_prior",
+      "system": "rstl",
+      "topologyId": "mediapipe-468",
+      "topologyVersion": "mediapipe-canonical-468-v1",
+      "path": null,
+      "remote_filename": "rstl_mediapipe_direction_prior.json",
+      "local_cache_path": "local_outputs/rstl_mediapipe_direction_prior.json",
+      "format": "triangle centroid direction samples with vector, confidence, and provenance",
+      "generated_by": "tools/build_rstl_direction_prior.py",
+      "status": "remote_or_generated_draft_direction_field",
+      "validated": false,
+      "uses": ["rstl_direction_service_prior_review", "stage2_incision_planning_review", "3dmm_prior_bridge_asset"],
+      "limitations": [
+        "large direction-prior JSON is intentionally not committed",
+        "host remote_filename behind the configured asset base or generate local_cache_path with tools/build_rstl_direction_prior.py",
+        "derived from the current MediaPipe RSTL draft atlas",
+        "triangle-centroid samples are not a clinician-approved atlas",
+        "requires #2 clinical review before validated use"
+      ]
+    },
+    {
+      "id": "mediapipe_langer_contrast",
+      "system": "langer",
+      "topologyId": "mediapipe-468",
+      "topologyVersion": "mediapipe-canonical-468-v1",
+      "path": "web/assets/atlas_langer.json",
+      "format": "atlas lines with points [tri,u,v]",
+      "generated_by": "tools/build_field_atlas.py",
+      "status": "available_draft_contrast",
+      "validated": false,
+      "uses": ["teaching_contrast", "legacy_comparison"],
+      "limitations": ["not the default face incision guide", "requires clinician review"]
+    },
+    {
+      "id": "flame_rstl_prior",
+      "system": "rstl",
+      "topologyId": "flame-2023",
+      "topologyVersion": "flame-2023-v1",
+      "path": null,
+      "format": "planned atlas lines with points [tri,u,v]",
+      "generated_by": "web 3D annotator and FLAME offline pipeline",
+      "status": "pending_doctor_annotation",
+      "validated": false,
+      "uses": ["flame_standard_head_annotation", "flame_individual_transfer"],
+      "limitations": ["FLAME assets are not redistributed", "requires #61 workflow", "requires #2 clinical review before validated use"]
+    },
+    {
+      "id": "flame_rstl_direction_prior",
+      "system": "rstl",
+      "topologyId": "flame-2023",
+      "topologyVersion": "flame-2023-v1",
+      "path": null,
+      "format": "dev-local triangle centroid direction field generated under assets/flame/",
+      "generated_by": "tools/build_flame_rstl_direction_prior.py",
+      "status": "pending_dev_local_generation",
+      "validated": false,
+      "uses": ["flame_direction_prior_review", "flame_standard_head_annotation_qc", "flame_individual_transfer_qc"],
+      "limitations": [
+        "FLAME assets and generated direction fields are not redistributed",
+        "generated output is gitignored under local_outputs/rstl_flame_direction_prior.json",
+        "nearest-neighbor MediaPipe-to-FLAME bridge is not clinical registration",
+        "requires #61 workflow",
+        "requires #2 clinical review before validated use"
+      ]
+    },
+    {
+      "id": "bfm_rstl_direction_prior",
+      "system": "rstl",
+      "topologyId": "bfm-local",
+      "topologyVersion": "bfm-neutral-local-v1",
+      "path": null,
+      "format": "dev-local triangle centroid direction field generated from a licensed local BFM/custom 3DMM mesh",
+      "generated_by": "tools/build_3dmm_rstl_direction_prior.py",
+      "status": "pending_dev_local_generation",
+      "validated": false,
+      "uses": [
+        "bfm_direction_prior_review",
+        "bfm_standard_head_annotation_qc",
+        "bfm_individual_transfer_qc",
+        "generic_3dmm_direction_prior_review"
+      ],
+      "limitations": [
+        "BFM/custom 3DMM assets and generated direction fields are not redistributed",
+        "default generic output is gitignored under local_outputs/rstl_3dmm_direction_prior.json",
+        "nearest-neighbor MediaPipe-to-3DMM bridge is not clinical registration",
+        "requires #61 workflow",
+        "requires #2 clinical review before validated use"
+      ]
+    }
+  ]
+}

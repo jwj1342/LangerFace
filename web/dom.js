@@ -11,7 +11,9 @@ export const els = {
   densityVal: $("densityVal"), smoothVal: $("smoothVal"), opacityVal: $("opacityVal"),
   clip: $("clip"), handOcc: $("handOcc"), mirror: $("mirror"), bands: $("bands"),
   zoom: $("zoom"), zoomStrip: $("zoomStrip"), meshPts: $("meshPts"),
-  routeSel: $("routeSel"), route3dPanel: $("route3dPanel"), rstlMigrationPanel: $("rstlMigrationPanel"), reconDemo: $("reconDemoBtn"),
+  routeSel: $("routeSel"), route3dPanel: $("route3dPanel"), reconDemo: $("reconDemoBtn"),
+  routeModeHint: $("routeModeHint"), threeDWorkflowCard: $("threeDWorkflowCard"),
+  incisionWorkflowCard: $("incisionWorkflowCard"),
   reconScan: $("reconScanBtn"), view3d: $("view3dBtn"), project3d: $("project3dBtn"),
   reset3d: $("reset3dBtn"), cloudFitFlame: $("cloudFitFlameBtn"),
   flameStd: $("flameStdToggle"), flameHeadToggleWrap: $("flameHeadToggleWrap"),
@@ -23,6 +25,8 @@ export const els = {
   badge: $("modelBadge"), live: $("livePill"), fps: $("fps"),
   qualityVal: $("qualityVal"), qualityBar: $("qualityBar"),
   statState: $("statState"), statFace: $("statFace"), statYaw: $("statYaw"), statLines: $("statLines"),
+  incisionOverlayQa: $("incisionOverlayQa"), incisionOverlayQaState: $("incisionOverlayQaState"),
+  incisionOverlayQaDetail: $("incisionOverlayQaDetail"),
 };
 
 export const ctx = els.canvas.getContext("2d");

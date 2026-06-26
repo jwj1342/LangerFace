@@ -377,10 +377,12 @@ function previewActiveAtlas() {
 function setHint(t) { els.hint.textContent = t; }
 function refresh() {
   const curPts = controlsOf(model.current).length;
+  const currentFallback = Boolean(model.current?.fallback);
   els.status.textContent = `${model.lines.length} 条`;
   els.current.classList.toggle("active", Boolean(model.current));
+  els.current.classList.toggle("warning", currentFallback);
   els.current.textContent = model.current
-    ? `正在绘制：${model.current.name} · ${SYSTEM_LABELS[model.system]} · ${curPts} 点${curPts < 2 ? "（至少 2 点可保存）" : ""}`
+    ? `正在绘制：${model.current.name} · ${SYSTEM_LABELS[model.system]} · ${curPts} 点${curPts < 2 ? "（至少 2 点可保存）" : ""}${currentFallback ? " · 贴面路由已退回直线，需复核可能穿面" : ""}`
     : "当前没有正在绘制的线。点击“开始一条线”，或直接在脸表面点击开始。";
   els.btnNew.disabled = Boolean(model.current);
   els.btnFinish.disabled = !model.current;
@@ -399,15 +401,22 @@ function refresh() {
   model.lines.forEach((ln, i) => {
     const row = document.createElement("div");
     row.className = "line-row";
+    row.classList.toggle("has-warning", Boolean(ln.fallback));
     const main = document.createElement("div");
     main.className = "line-main";
     const title = document.createElement("strong");
     title.textContent = `${i + 1}. ${ln.name}`;
     const meta = document.createElement("span");
     meta.className = "line-meta";
-    meta.textContent = `${SYSTEM_LABELS[model.system]}${ln.region ? " · " + ln.region : ""} · ${controlsOf(ln).length} 控制点 · ${ln.points.length} 路径点`;
+    meta.textContent = `${SYSTEM_LABELS[model.system]}${ln.region ? " · " + ln.region : ""} · ${controlsOf(ln).length} 控制点 · ${ln.points.length} 路径点${ln.fallback ? " · 贴面 fallback" : ""}`;
     main.appendChild(title);
     main.appendChild(meta);
+    if (ln.fallback) {
+      const warning = document.createElement("span");
+      warning.className = "line-warning";
+      warning.textContent = "需复核：该线存在退回直线连接，可能穿面";
+      main.appendChild(warning);
+    }
     const actions = document.createElement("div");
     actions.className = "line-actions";
     const edit = document.createElement("button");

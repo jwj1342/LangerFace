@@ -10,8 +10,11 @@ export const diagnostics = {
   events: [],
   counters: Object.create(null),
   metrics: Object.create(null),
+  sections: Object.create(null),
   assetVersions: Object.create(null),
 };
+
+const installedErrorTargets = new WeakSet();
 
 function normalize(detail) {
   if (detail instanceof Error) {
@@ -93,6 +96,16 @@ export function setAssetVersions(versions) {
   Object.assign(diagnostics.assetVersions, clonePlain(versions));
 }
 
+export function setDiagnosticSection(name, value) {
+  if (!name || typeof name !== "string") return false;
+  if (value == null) {
+    delete diagnostics.sections[name];
+  } else {
+    diagnostics.sections[name] = clonePlain(value);
+  }
+  return true;
+}
+
 export function snapshotDiagnostics() {
   const metrics = {};
   for (const [name, metric] of Object.entries(diagnostics.metrics)) {
@@ -112,6 +125,7 @@ export function snapshotDiagnostics() {
     assetVersions: clonePlain(diagnostics.assetVersions),
     counters: clonePlain(diagnostics.counters),
     metrics,
+    sections: clonePlain(diagnostics.sections),
     events: diagnostics.events.map(clonePlain),
   };
 }
@@ -124,6 +138,7 @@ export function resetDiagnostics() {
   diagnostics.events.length = 0;
   diagnostics.counters = Object.create(null);
   diagnostics.metrics = Object.create(null);
+  diagnostics.sections = Object.create(null);
   diagnostics.assetVersions = Object.create(null);
 }
 
@@ -142,5 +157,39 @@ export function logError(message, detail) {
   console.error(message, detail ?? "");
 }
 
+function errorEventDetail(event) {
+  return {
+    message: event?.message || event?.error?.message || "runtime error",
+    filename: event?.filename || "",
+    lineno: event?.lineno ?? null,
+    colno: event?.colno ?? null,
+    error: normalize(event?.error),
+  };
+}
+
+function rejectionEventDetail(event) {
+  const reason = event?.reason;
+  return {
+    message: reason?.message || String(reason || "unhandled rejection"),
+    reason: normalize(reason),
+  };
+}
+
+export function installGlobalErrorHandlers(target = globalThis) {
+  if (!target || typeof target.addEventListener !== "function") return false;
+  if (installedErrorTargets.has(target)) return false;
+  installedErrorTargets.add(target);
+  target.addEventListener("error", (event) => {
+    countMetric("runtime.error");
+    record("error", "runtime.error", errorEventDetail(event));
+  });
+  target.addEventListener("unhandledrejection", (event) => {
+    countMetric("runtime.unhandledrejection");
+    record("error", "runtime.unhandledrejection", rejectionEventDetail(event));
+  });
+  return true;
+}
+
 globalThis.langerfaceDiagnostics = diagnostics;
 globalThis.exportLangerfaceDiagnostics = exportDiagnostics;
+installGlobalErrorHandlers();

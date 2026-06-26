@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>切口 Agent · 肿物与 RSTL 切口规划</title>
+<link rel="stylesheet" href="style.css" />
+<style>
+  .app{grid-template-columns:minmax(390px,420px) 1fr}
+  .sidebar{overflow-x:hidden}
+  .agent-grid{display:grid;grid-template-columns:1fr;gap:12px}
+  .metric-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .metric{background:#f8f9f5;border:1px solid var(--line);border-radius:10px;padding:9px 10px;min-width:0}
+  .metric .k{display:block;font-size:11px;color:var(--muted);font-weight:600}
+  .metric .v{display:block;margin-top:3px;font-size:14px;line-height:1.25;font-weight:750;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;word-break:break-word}
+  .quality-top{min-width:0}
+  .quality-top span{min-width:0}
+  .quality-top span:last-child{max-width:62%;white-space:normal;overflow-wrap:anywhere;text-align:right;font-size:13px;line-height:1.25}
+  .stage-actions{display:flex;align-items:center;gap:12px}
+  .agent-note{font-size:11px;color:var(--muted);line-height:1.55;margin:0;overflow-wrap:anywhere;word-break:break-word}
+  .agent-note.ok{color:var(--green-d);font-weight:700}
+  .agent-note.warn{color:#8a5a00;font-weight:700}
+  .advanced-config{border:1px solid var(--line);border-radius:10px;background:#f8f9f5;padding:9px 10px}
+  .advanced-config summary{cursor:pointer;font-size:12px;font-weight:750;color:var(--muted)}
+  .advanced-config[open]{display:grid;gap:9px}
+  .edit-status{font-size:11px;font-weight:700;border-radius:999px;padding:4px 8px;background:#eef0ea;color:#44505d}
+  .edit-status.active{background:#fff1c8;color:#8a5a00}
+  .candidate-list{display:flex;flex-direction:column;gap:8px}
+  .candidate-row{border:1px solid var(--line);border-radius:10px;background:#f8f9f5;padding:9px;display:grid;gap:6px}
+  .candidate-row .top{display:flex;justify-content:space-between;gap:8px;font-size:12px;font-weight:700}
+  .candidate-row .meta{font-size:11px;color:var(--muted);line-height:1.45}
+  .danger-text{color:#b45309}
+  .text-input{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:13px;color:var(--ink)}
+  .text-area{width:100%;min-height:74px;resize:vertical;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:13px;color:var(--ink);font-family:inherit;line-height:1.45}
+  .boundary-status{font-size:11px;color:var(--muted);line-height:1.55;margin:0}
+  .boundary-status.warn{color:#8a5a00;font-weight:700}
+  .anatomy-preview{font-size:11px;color:var(--muted);line-height:1.55;margin:0}
+  .anatomy-preview.warn{color:#8a5a00;font-weight:700}
+  .review-state{font-size:11px;font-weight:700;border-radius:999px;padding:4px 8px;background:#eef0ea;color:#44505d}
+  .review-state.approved{background:#d9f2e7;color:var(--green-d)}
+  .review-state.rejected{background:#fee2e2;color:#991b1b}
+  .review-state.revision{background:#fff1c8;color:#8a5a00}
+  .hint{overflow-wrap:anywhere;word-break:break-word}
+  .guardrail-details{font-size:11px;line-height:1.55;color:var(--muted);margin:8px 0 0;overflow-wrap:anywhere;word-break:break-word}
+  .guardrail-details.warn{color:#8a5a00;font-weight:700}
+  .guardrail-details.danger{color:#991b1b;font-weight:700}
+  .canvas-legend{position:absolute;left:16px;bottom:16px;z-index:2;display:flex;flex-wrap:wrap;gap:8px 12px;
+    max-width:min(520px,calc(100% - 32px));padding:9px 11px;border:1px solid rgba(255,255,255,.12);
+    border-radius:10px;background:rgba(10,15,22,.72);backdrop-filter:blur(8px);color:#dbe4ee;
+    font-size:11.5px;font-weight:700;line-height:1.2;pointer-events:none}
+  .asset-loading{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:11px;border-radius:14px;background:rgba(12,15,20,.82);backdrop-filter:blur(8px);color:#eef7f3;text-align:center;padding:24px}
+  .asset-loading.hidden{display:none}
+  .asset-loading strong{font-size:15px}
+  .asset-loading p{margin:0;max-width:360px;font-size:12px;line-height:1.55;color:#b9c5d0}
+  .asset-spinner{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.18);
+    border-top-color:#34d399;animation:asset-spin .9s linear infinite}
+  @keyframes asset-spin{to{transform:rotate(360deg)}}
+  .legend-item{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .legend-swatch{width:10px;height:10px;border-radius:999px;display:inline-block;border:1px solid rgba(255,255,255,.32)}
+  .legend-swatch.center{background:#f43f5e}
+  .legend-swatch.ring{background:transparent;border-color:#facc15}
+  .legend-swatch.line{width:18px;height:3px;border-radius:999px;background:#34d399;border:0}
+  .legend-swatch.handle{background:#34d399}
+  #agentCanvas{position:absolute;inset:0;width:100%;height:100%;border-radius:14px;background:#111820}
+  @media(max-width:980px){.app{grid-template-columns:1fr;grid-template-rows:auto auto;height:auto;min-height:100dvh}#agentCanvas{position:static;min-height:420px}.metric-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-top">
+        <span class="eyebrow">STAGE 2 · AGENTIC INCISION</span>
+        <a class="badge" href="index.html">返回实时显示</a>
+      </div>
+      <h1>切口 Agent 工作台</h1>
+    </div>
+
+    <div class="card agent-grid">
+      <label class="field-label" for="tumorKind">肿物类型</label>
+      <select id="tumorKind" class="select">
+        <option value="subcutaneous">皮下肿物 · 线性切口</option>
+        <option value="cutaneous">皮表肿物 · 梭形切口</option>
+      </select>
+      <div>
+        <label class="field-label" for="diameterMm">直径 mm <span id="diameterVal" class="val">12</span></label>
+        <input id="diameterMm" type="range" min="4" max="40" value="12" />
+      </div>
+      <div>
+        <label class="field-label" for="tumorAuthor">记录者</label>
+        <input id="tumorAuthor" class="text-input" value="clinician" />
+      </div>
+      <div id="depthWrap">
+        <label class="field-label" for="depthMm">深度 mm <span id="depthVal" class="val">6</span></label>
+        <input id="depthMm" type="range" min="0" max="35" value="6" />
+      </div>
+      <div id="marginWrap" class="hidden">
+        <label class="field-label" for="marginMm">安全切缘 mm <span id="marginVal" class="val">2</span></label>
+        <input id="marginMm" type="range" min="0" max="10" value="2" />
+      </div>
+      <div id="boundaryWrap" class="hidden">
+        <label class="field-label" for="boundaryMode">皮表边界</label>
+        <select id="boundaryMode" class="select">
+          <option value="ellipse">椭圆近似</option>
+          <option value="freehand">自由轮廓点</option>
+        </select>
+      </div>
+      <div id="ellipseWrap" class="hidden">
+        <label class="field-label" for="ellipseRatio">椭圆短轴比例 <span id="ellipseRatioVal" class="val">70%</span></label>
+        <input id="ellipseRatio" type="range" min="40" max="100" value="70" />
+      </div>
+      <div class="btn-row hidden" id="freehandControls" style="grid-template-columns:1fr 1fr">
+        <button class="btn" id="startBoundaryBtn">开始轮廓</button>
+        <button class="btn" id="clearBoundaryBtn">清空轮廓</button>
+      </div>
+      <p class="boundary-status" id="boundaryStatus">皮表边界：中心直径</p>
+      <div class="btn-row" style="grid-template-columns:1fr 1fr">
+        <button class="btn" id="exportTumorBtn">导出肿物</button>
+        <button class="btn" id="importTumorBtn">导入肿物</button>
+      </div>
+      <input id="tumorImportFile" class="hidden" type="file" accept="application/json,.json" />
+      <button class="btn btn-primary" id="runAgentBtn">生成候选切口</button>
+      <p class="agent-note" id="pickState">当前点位：默认右颊。右侧标准脸可点击重选。</p>
+      <p class="anatomy-preview" id="anatomyPreview">当前点位分区：待加载</p>
+    </div>
+
+    <div class="card agent-grid">
+      <div class="quality-top"><span>辅助线索</span><span id="secondaryCueState">未导入</span></div>
+      <p class="agent-note" id="secondaryCueSummary">仅展示自然皱襞、皱纹和皮表肿物边界的低置信度线索；不会自动改变肿物边界或候选切口。</p>
+      <div class="btn-row" style="grid-template-columns:1fr 1fr">
+        <button class="btn" id="importSecondaryCueBtn">导入线索</button>
+        <button class="btn" id="clearSecondaryCueBtn">清空线索</button>
+      </div>
+      <input id="secondaryCueImportFile" class="hidden" type="file" accept="application/json,.json" />
+      <label class="check"><input type="checkbox" id="secondaryCueConfirmed" /> 已人工确认辅助线索</label>
+    </div>
+
+    <div class="card agent-grid">
+      <div class="quality-top"><span>LLM Provider</span><span id="providerState">待运行</span></div>
+      <input id="providerMode" type="hidden" value="openai-compatible" />
+      <p class="agent-note">Provider 类型固定为 OpenAI-compatible / vLLM。测试会请求 Base URL 下的 /models。</p>
+      <input id="providerBaseUrl" class="text-input" value="https://api.openai.com/v1" placeholder="https://your-provider.example/v1" />
+      <input id="providerModel" class="text-input" value="gpt-4.1-mini" placeholder="模型名，如 gpt-4.1-mini 或 Qwen/Qwen3-14B" />
+      <input id="providerApiKey" class="text-input" type="password" placeholder="API Key（Provider 需要时填写；导出会脱敏）" />
+      <div>
+        <label class="field-label" for="providerTimeout">LLM timeout 秒 <span id="providerTimeoutVal" class="val">60</span></label>
+        <input id="providerTimeout" type="range" min="5" max="180" value="60" />
+      </div>
+      <button class="btn" id="testProviderBtn">测试 LLM Provider 连接</button>
+      <p class="agent-note" id="providerTestState">尚未测试 LLM Provider 连通性。Vercel 调试请填写可从浏览器访问、允许该 preview origin、并兼容 OpenAI /models 的 HTTPS Provider；候选生成不调用 Provider。</p>
+      <p class="agent-note">生成候选时只执行浏览器内确定性 workflow；Provider 连接测试暂不参与切口几何或工具 trace。</p>
+    </div>
+
+    <div class="card">
+      <div class="quality-top"><span>候选结果</span><span id="candidateType">—</span></div>
+      <div class="metric-grid">
+        <div class="metric"><span class="k">长度</span><span class="v" id="candidateLength">—</span></div>
+        <div class="metric"><span class="k">宽度 / 比例</span><span class="v" id="candidateWidth">—</span></div>
+        <div class="metric"><span class="k">尖端角</span><span class="v" id="candidateTipAngle">—</span></div>
+        <div class="metric"><span class="k">RSTL 置信度</span><span class="v" id="directionConf">—</span></div>
+        <div class="metric"><span class="k">面部分区</span><span class="v" id="regionVal">—</span></div>
+        <div class="metric"><span class="k">Guardrails</span><span class="v" id="guardrailVal">—</span></div>
+      </div>
+      <p class="hint" id="llmSummary">尚未生成。</p>
+      <p class="guardrail-details" id="directionSource">方向依据：尚未生成。</p>
+      <p class="guardrail-details" id="agentGate">Agent 工具门控：尚未生成。</p>
+      <p class="guardrail-details" id="agentComparison">Agent 候选比较：尚未生成。</p>
+      <p class="hint" id="nextStep"></p>
+      <p class="guardrail-details" id="guardrailDetails">Guardrails 尚未运行。</p>
+    </div>
+
+    <div class="card agent-grid">
+      <div class="quality-top"><span>医生调整</span><span class="edit-status" id="editStatus">工具建议</span></div>
+      <div>
+        <label class="field-label" for="angleOffsetDeg">方向偏移 deg <span id="angleOffsetVal" class="val">0</span></label>
+        <input id="angleOffsetDeg" type="range" min="-35" max="35" value="0" />
+      </div>
+      <div>
+        <label class="field-label" for="lengthScale">长度比例 <span id="lengthScaleVal" class="val">100%</span></label>
+        <input id="lengthScale" type="range" min="70" max="150" value="100" />
+      </div>
+      <div id="widthScaleWrap" class="hidden">
+        <label class="field-label" for="widthScale">宽度比例 <span id="widthScaleVal" class="val">100%</span></label>
+        <input id="widthScale" type="range" min="70" max="150" value="100" />
+      </div>
+      <div>
+        <label class="field-label" for="shiftAlongMm">沿长轴移动 mm <span id="shiftAlongVal" class="val">0</span></label>
+        <input id="shiftAlongMm" type="range" min="-12" max="12" value="0" />
+      </div>
+      <div>
+        <label class="field-label" for="shiftPerpMm">垂直长轴移动 mm <span id="shiftPerpVal" class="val">0</span></label>
+        <input id="shiftPerpMm" type="range" min="-12" max="12" value="0" />
+      </div>
+      <select id="editReason" class="select">
+        <option value="">未选择覆盖原因</option>
+        <option value="manual scar camouflage">瘢痕隐蔽优先</option>
+        <option value="manual free-margin protection">游离缘保护优先</option>
+        <option value="manual subunit boundary alignment">贴合美学亚单位边界</option>
+        <option value="manual clinician preference">医生人工判断</option>
+      </select>
+      <div class="btn-row" style="grid-template-columns:1fr 1fr">
+        <button class="btn" id="undoEditBtn">撤销调整</button>
+        <button class="btn" id="redoEditBtn">重做调整</button>
+      </div>
+      <button class="btn" id="resetEditBtn">恢复工具建议</button>
+      <p class="agent-note" id="editHistoryState">编辑版本：v1 · 无已提交调整</p>
+      <p class="agent-note">调整只改变候选草案并记录 provenance；真实切口仍需医生复核。</p>
+    </div>
+
+    <div class="card agent-grid">
+      <div class="quality-top"><span>医生审阅</span><span class="review-state" id="reviewState">待医生确认</span></div>
+      <div>
+        <label class="field-label" for="reviewerName">审阅人</label>
+        <input id="reviewerName" class="text-input" placeholder="clinician reviewer" />
+      </div>
+      <select id="reviewDecision" class="select">
+        <option value="pending_clinician_confirmation">待医生确认</option>
+        <option value="approved_for_discussion">确认候选草案</option>
+        <option value="needs_revision">退回修改</option>
+        <option value="rejected_by_clinician">否决候选</option>
+      </select>
+      <textarea id="reviewNotes" class="text-area" placeholder="审阅备注、覆盖原因或需要回看的位置"></textarea>
+      <div class="btn-row" style="grid-template-columns:1fr 1fr">
+        <button class="btn" id="approveCandidateBtn">确认当前候选</button>
+        <button class="btn" id="rejectCandidateBtn">否决当前候选</button>
+      </div>
+      <button class="btn btn-primary" id="saveReviewBtn">保存审阅记录</button>
+      <p class="agent-note">确认只代表进入研究审阅记录，不是手术指令；候选几何一旦调整，审阅状态会回到待确认。</p>
+    </div>
+
+    <div class="card agent-grid">
+      <div class="quality-top"><span>候选库</span><span id="savedCount">0</span></div>
+      <button class="btn btn-primary" id="saveCandidateBtn">保存当前候选</button>
+      <div class="btn-row" style="grid-template-columns:1fr 1fr">
+        <button class="btn" id="makeVariantsBtn">生成备选</button>
+        <button class="btn" id="clearSavedBtn">清空候选库</button>
+      </div>
+      <div class="btn-row" style="grid-template-columns:1fr 1fr 1fr">
+        <button class="btn" id="exportJsonBtn">导出 JSON</button>
+        <button class="btn" id="exportReportBtn">导出报告</button>
+        <button class="btn" id="exportPngBtn">导出截图</button>
+      </div>
+      <button class="btn" id="stageLiveOverlayBtn">发送到实时叠加</button>
+      <div class="candidate-list" id="candidateList"></div>
+    </div>
+
+    <div class="card">
+      <div class="quality-top"><span>隐私 / 审计</span><span id="privacyState">本地几何</span></div>
+      <p class="hint" id="privacyAudit">不上传原始影像；Agent 只接收肿物参数、抽象坐标、规则和候选几何。</p>
+    </div>
+
+    <p class="disclaimer">⚠️ 研究原型：LLM 只做编排摘要，方向、几何和 guardrails 均由确定性工具输出。候选切口必须由医生审阅确认。</p>
+  </aside>
+
+  <main class="stage">
+    <div class="stage-top">
+      <span class="live on"><span class="dot"></span>标准脸规划</span>
+      <div class="stage-actions">
+        <span class="fps" id="stageStatus">拖拽旋转 · 滚轮缩放 · 点击定位</span>
+        <a class="stage-link fps" href="annotate.html">3D 标注与演示</a>
+      </div>
+    </div>
+    <div class="stage-body">
+      <div class="main-wrap">
+        <canvas id="agentCanvas"></canvas>
+        <div class="asset-loading" id="assetLoading" role="status" aria-live="polite">
+          <div class="asset-spinner" aria-hidden="true"></div>
+          <strong>正在加载切口规划资产</strong>
+          <p id="assetLoadingText">准备下载标准脸、拓扑和 RSTL 图谱。</p>
+        </div>
+        <div class="canvas-legend" aria-label="3D 标注图例">
+          <span class="legend-item"><span class="legend-swatch center"></span>病灶中心</span>
+          <span class="legend-item"><span class="legend-swatch ring"></span>肿物范围</span>
+          <span class="legend-item"><span class="legend-swatch line"></span>候选切口</span>
+          <span class="legend-item"><span class="legend-swatch handle"></span>端点控制</span>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script type="module" src="incision_agent_main.js"></script>
+</body>
+</html>
