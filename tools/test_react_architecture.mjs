@@ -660,8 +660,20 @@ assert.ok(reactManagedWorkbench.includes("captureReactManagedWorkbench"), "share
 assert.ok(reactManagedWorkbench.includes("enableReactManagedWorkbench"), "shared React-managed flag module enables React-managed mode");
 assert.ok(reactManagedWorkbench.includes("restoreReactManagedWorkbench"), "shared React-managed flag module restores or deletes the previous flag value");
 assert.ok(workbenchLayout.includes('cn("app"'), "React WorkbenchLayout preserves the legacy app shell class");
+assert.ok(workbenchLayout.includes("type WorkbenchLayoutWorkspace"), "React WorkbenchLayout owns a typed workspace union");
+assert.ok(workbenchLayout.includes("workspace: WorkbenchLayoutWorkspace"), "React WorkbenchLayout requires a typed workspace prop");
+assert.ok(workbenchLayout.includes("`${workspace}-workbench`"), "React WorkbenchLayout derives workspace shell classes centrally");
 assert.ok(workbenchLayout.includes('className="sidebar"'), "React WorkbenchLayout preserves the legacy sidebar class");
 assert.ok(workbenchLayout.includes('cn("disclaimer"'), "React Disclaimer preserves the legacy disclaimer class");
+for (const [name, source, workspace] of [
+  ["AnnotateWorkbench.tsx", annotateWorkbench, "annotate"],
+  ["IncisionWorkbench.tsx", incisionWorkbench, "incision"],
+  ["LiveWorkbench.tsx", liveWorkbench, "live"],
+  ["SurgeryWorkbench.tsx", surgeryWorkbench, "surgery"],
+]) {
+  assert.ok(source.includes(`workspace="${workspace}"`), `${name} should declare its shared WorkbenchLayout workspace`);
+  assert.ok(!source.includes(`className="${workspace}-workbench"`), `${name} should not hand-write its workbench shell class`);
+}
 assert.ok(stageShell.includes('cn("stage"'), "React StageShell preserves the legacy stage class");
 assert.ok(stageShell.includes('className="stage-top"'), "React StageShell preserves the legacy stage top class");
 assert.ok(stageShell.includes('cn("stage-body"'), "React StageShell preserves the legacy stage body class");

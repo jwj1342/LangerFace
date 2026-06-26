@@ -17,8 +17,8 @@ import { StatusBadge } from "../components/ui/status-badge";
 export function IncisionWorkbench() {
   return (
     <WorkbenchLayout
-      className="incision-workbench"
       stage={<IncisionStagePanel />}
+      workspace="incision"
     >
       <WorkbenchBrand
         eyebrow="STAGE 2 · AGENTIC INCISION"

@@ -17,8 +17,8 @@ import { StatusBadge } from "../components/ui/status-badge";
 export function LiveWorkbench() {
   return (
     <WorkbenchLayout
-      className="live-workbench"
       stage={<LiveStagePanel />}
+      workspace="live"
     >
       <WorkbenchBrand
         eyebrow="COMPUTER VISION PROTOTYPE"

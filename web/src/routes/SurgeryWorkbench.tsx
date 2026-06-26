@@ -44,8 +44,8 @@ export function SurgeryWorkbench({
 }: SurgeryWorkbenchProps) {
   return (
     <WorkbenchLayout
-      className="surgery-workbench"
       stage={<SurgeryStagePanel stage={stage} />}
+      workspace="surgery"
     >
       <WorkbenchBrand
         eyebrow="RSTL · CLOSURE DEMO"

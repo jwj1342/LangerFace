@@ -13,8 +13,8 @@ import { StatusBadge } from "../components/ui/status-badge";
 export function AnnotateWorkbench() {
   return (
     <WorkbenchLayout
-      className="annotate-workbench"
       stage={<AnnotateStagePanel />}
+      workspace="annotate"
     >
       <WorkbenchBrand
         eyebrow="3D LINE ANNOTATION"
