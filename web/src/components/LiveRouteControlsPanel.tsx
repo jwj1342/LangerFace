@@ -8,6 +8,7 @@ import { Card } from "./ui/card";
 import { CheckboxField } from "./ui/checkbox-field";
 import { Hint } from "./ui/hint";
 import { Label } from "./ui/label";
+import { ProgressBar } from "./ui/progress";
 import { Select } from "./ui/select";
 
 export function LiveRouteControlsPanel() {
@@ -45,7 +46,7 @@ export function LiveRouteControlsPanel() {
           <Hint id="reconStatus">{recon?.status || "先重建你的 3D 人头 → 可旋转查看 → 再投影到实时画面。"}</Hint>
           <div className={`scan-panel${scanning ? "" : " hidden"}`} id="scanPanel">
             <div className="scan-row"><span>扫描进度</span><span id="scanProgressVal">0%</span></div>
-            <div className="bar"><div className="bar-fill" id="scanProgressBar" /></div>
+            <ProgressBar fillProps={{ id: "scanProgressBar" }} />
             <div className="scan-row"><span>角度覆盖</span><span id="scanYawVal">0.00</span></div>
             <div className="yaw-meter">
               <span id="scanYawLeft" />

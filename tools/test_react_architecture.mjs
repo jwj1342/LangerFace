@@ -40,6 +40,7 @@ const uiHint = read("src/components/ui/hint.tsx");
 const uiInput = read("src/components/ui/input.tsx");
 const uiKeyValue = read("src/components/ui/key-value.tsx");
 const uiLabel = read("src/components/ui/label.tsx");
+const uiProgress = read("src/components/ui/progress.tsx");
 const uiSelect = read("src/components/ui/select.tsx");
 const uiSectionTitle = read("src/components/ui/section-title.tsx");
 const uiSlider = read("src/components/ui/slider.tsx");
@@ -308,6 +309,10 @@ assert.ok(uiKeyValue.includes('cn("metric-grid"'), "shadcn-style MetricGrid pres
 assert.ok(uiKeyValue.includes('cn("metric"'), "shadcn-style MetricItem preserves existing metric styling");
 assert.ok(uiKeyValue.includes('cn("stat-grid"'), "shadcn-style StatGrid preserves existing stat grid styling");
 assert.ok(uiKeyValue.includes('cn("stat"'), "shadcn-style StatItem preserves existing stat styling");
+assert.ok(uiProgress.includes('cn("bar"'), "shadcn-style ProgressBar preserves existing progress track styling");
+assert.ok(uiProgress.includes('cn("bar-fill"'), "shadcn-style ProgressBar preserves existing progress fill styling");
+assert.ok(uiProgress.includes("fillProps"), "shadcn-style ProgressBar can preserve controller-owned fill ids");
+assert.ok(uiProgress.includes("clampPercent"), "shadcn-style ProgressBar clamps React-controlled percentage values");
 for (const className of [
   "hint",
   "badge",
@@ -316,6 +321,8 @@ for (const className of [
   "metric",
   "stat-grid",
   "stat",
+  "bar",
+  "bar-fill",
 ]) {
   assert.deepEqual(
     consumersWithRawClass(className),
@@ -1000,6 +1007,7 @@ assert.ok(liveRouteControlsPanel.includes("Button"), "React live route controls 
 assert.ok(liveRouteControlsPanel.includes("ButtonRow"), "React live route controls use the shared shadcn-style button row primitive");
 assert.ok(liveRouteControlsPanel.includes("CheckboxField"), "React live route controls use the shared shadcn-style checkbox field primitive");
 assert.ok(liveRouteControlsPanel.includes("Label"), "React live route controls use the shared shadcn-style label primitive");
+assert.ok(liveRouteControlsPanel.includes("ProgressBar"), "React live route controls use the shared shadcn-style progress primitive");
 assert.ok(liveRouteControlsPanel.includes("Select"), "React live route controls use the shared shadcn-style select primitive");
 assert.ok(liveRouteControlsPanel.includes("<Card"), "React live route controls use the shared shadcn-style card primitive");
 assert.ok(liveRouteControlsPanel.includes("Button asChild"), "React live route controls use shared Button asChild for Router links");
@@ -1016,6 +1024,7 @@ assert.ok(liveRenderControlsPanel.includes("Select"), "React live render control
 assert.ok(liveRenderControlsPanel.includes("RangeInput"), "React live render controls use the shared shadcn-style range primitive");
 assert.ok(liveRenderControlsPanel.includes("<Card"), "React live render controls use the shared shadcn-style card primitive");
 assert.ok(liveQualityPanel.includes("<Card"), "React live quality panel uses the shared shadcn-style card primitive");
+assert.ok(liveQualityPanel.includes("ProgressBar"), "React live quality panel uses the shared shadcn-style progress primitive");
 assert.ok(liveQualityPanel.includes('data-frame-owned="true"'), "React live quality panel documents that frame-updated labels stay outside Zustand");
 assert.ok(!liveQualityPanel.includes("useLiveStore"), "live quality panel should not subscribe high-frequency quality updates through Zustand");
 assert.ok(liveSnapshotsService.includes("buildLiveControllerSnapshot"), "shared live snapshot service builds typed controller snapshots");
@@ -1095,7 +1104,7 @@ for (const id of [
   "tensionBar",
   "verdict",
 ]) {
-  assert.ok(surgeryMetricsPanel.includes(`id="${id}"`), `React surgery metrics expose #${id}`);
+  assert.ok(exposesId(surgeryMetricsPanel, id), `React surgery metrics expose #${id}`);
 }
 assert.ok(surgeryWorkbench.includes("SurgeryControlsPanel"), "React surgery workbench renders closure controls as a React component");
 assert.ok(surgeryWorkbench.includes("WorkbenchBrand"), "React surgery workbench uses the shared workbench brand");
@@ -1113,6 +1122,7 @@ assert.ok(surgeryControlsPanel.includes("Label"), "React surgery controls use th
 assert.ok(surgeryControlsPanel.includes("RangeInput"), "React surgery controls use the shared shadcn-style range primitive");
 assert.ok(surgeryControlsPanel.includes("<Card"), "React surgery controls use the shared shadcn-style card primitive");
 assert.ok(surgeryMetricsPanel.includes("<Card"), "React surgery metrics use the shared shadcn-style card primitive");
+assert.ok(surgeryMetricsPanel.includes("ProgressBar"), "React surgery metrics use the shared shadcn-style progress primitive");
 assert.ok(surgeryHelpPanel.includes("这是在演示什么？"), "React surgery help panel keeps the closure explanation");
 assert.ok(surgeryHelpPanel.includes("<Card asChild"), "React surgery help panel preserves semantic details through the Card asChild primitive");
 assert.ok(surgeryHelpPanel.includes("<details open>"), "React surgery help panel keeps native disclosure semantics");

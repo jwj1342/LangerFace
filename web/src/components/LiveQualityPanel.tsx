@@ -3,6 +3,7 @@ import { Activity } from "lucide-react";
 import { Card, CardHeader } from "./ui/card";
 import { Hint } from "./ui/hint";
 import { StatGrid, StatItem } from "./ui/key-value";
+import { ProgressBar } from "./ui/progress";
 
 export function LiveQualityPanel() {
   return (
@@ -12,7 +13,7 @@ export function LiveQualityPanel() {
           <span className="inline-flex items-center gap-2"><Activity size={14} /> 追踪质量</span>
           <span id="qualityVal">未开始 0%</span>
         </CardHeader>
-        <div className="bar"><div className="bar-fill" id="qualityBar" /></div>
+        <ProgressBar fillProps={{ id: "qualityBar" }} />
       </div>
       <StatGrid className="hidden">
         <StatItem label="状态" value="未开始" valueProps={{ id: "statState" }} />
