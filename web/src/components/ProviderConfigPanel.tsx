@@ -9,6 +9,7 @@ import {
 } from "../services/providerConfig";
 import { dispatchIncisionProviderState } from "../lib/controllerCommand";
 import { Button } from "./ui/button";
+import { Card, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { RangeInput } from "./ui/slider";
@@ -98,11 +99,11 @@ export function ProviderConfigPanel() {
   }
 
   return (
-    <div className="card agent-grid">
-      <div className="quality-top">
+    <Card className="agent-grid">
+      <CardHeader>
         <span>LLM Provider</span>
         <span id="providerState" className={`provider-state-${providerTone}`}>{providerState}</span>
-      </div>
+      </CardHeader>
       <Input id="providerMode" type="hidden" value="openai-compatible" readOnly />
       <p className="agent-note">Provider 类型固定为 OpenAI-compatible / vLLM。测试会请求 Base URL 下的 /models。</p>
       <Input
@@ -151,6 +152,6 @@ export function ProviderConfigPanel() {
       </Button>
       <p className={`agent-note${testTone ? ` ${testTone}` : ""}`} id="providerTestState">{testState}</p>
       <p className="agent-note">生成候选时只执行浏览器内确定性 workflow；Provider 连接测试暂不参与切口几何或工具 trace。</p>
-    </div>
+    </Card>
   );
 }

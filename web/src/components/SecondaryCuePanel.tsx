@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { dispatchIncisionSecondaryCueCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
+import { Card, CardHeader } from "./ui/card";
 import { Checkbox } from "./ui/checkbox";
 import { Input } from "./ui/input";
 
@@ -16,11 +17,11 @@ export function SecondaryCuePanel() {
   }, [cue?.manualConfirmed]);
 
   return (
-    <div className="card agent-grid">
-      <div className="quality-top">
+    <Card className="agent-grid">
+      <CardHeader>
         <span>辅助线索</span>
         <span id="secondaryCueState">{cue?.stateLabel || "未导入"}</span>
-      </div>
+      </CardHeader>
       <p className="agent-note" id="secondaryCueSummary">
         {cue?.summary || "仅展示自然皱襞、皱纹和皮表肿物边界的低置信度线索；不会自动改变肿物边界或候选切口。"}
       </p>
@@ -40,6 +41,6 @@ export function SecondaryCuePanel() {
           }}
         /> 已人工确认辅助线索
       </label>
-    </div>
+    </Card>
   );
 }

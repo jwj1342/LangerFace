@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "./ui/button";
+import { Card, CardHeader } from "./ui/card";
 import { dispatchIncisionLibraryCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 
@@ -26,8 +27,8 @@ export function CandidateLibraryPanel() {
   };
 
   return (
-    <div className="card agent-grid">
-      <div className="quality-top"><span>候选库</span><span id="savedCount">{saved.length}</span></div>
+    <Card className="agent-grid">
+      <CardHeader><span>候选库</span><span id="savedCount">{saved.length}</span></CardHeader>
       <Button
         variant="workbenchPrimary"
         id="saveCandidateBtn"
@@ -70,6 +71,6 @@ export function CandidateLibraryPanel() {
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }

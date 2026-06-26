@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "./ui/button";
+import { Card, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
@@ -36,11 +37,11 @@ export function ReviewControlsPanel() {
   }, [snapshot?.review.status]);
 
   return (
-    <div className="card agent-grid">
-      <div className="quality-top">
+    <Card className="agent-grid">
+      <CardHeader>
         <span>医生审阅</span>
         <span className={`review-state ${reviewTone(status)}`} id="reviewState">{reviewLabel(status)}</span>
-      </div>
+      </CardHeader>
       <div>
         <Label htmlFor="reviewerName">审阅人</Label>
         <Input
@@ -93,6 +94,6 @@ export function ReviewControlsPanel() {
         保存审阅记录
       </Button>
       <p className="agent-note">确认只代表进入研究审阅记录，不是手术指令；候选几何一旦调整，审阅状态会回到待确认。</p>
-    </div>
+    </Card>
   );
 }

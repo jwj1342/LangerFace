@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { dispatchIncisionEditCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
+import { Card, CardHeader } from "./ui/card";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
@@ -58,11 +59,11 @@ export function EditControlsPanel() {
   const commit = () => dispatchIncisionEditCommand("commit_edit");
 
   return (
-    <div className="card agent-grid">
-      <div className="quality-top">
+    <Card className="agent-grid">
+      <CardHeader>
         <span>医生调整</span>
         <span className={`edit-status${active ? " active" : ""}`} id="editStatus">{statusLabel}</span>
-      </div>
+      </CardHeader>
       <div>
         <Label htmlFor="angleOffsetDeg">方向偏移 deg <span id="angleOffsetVal" className="val">{angleOffsetDeg}</span></Label>
         <RangeInput
@@ -169,6 +170,6 @@ export function EditControlsPanel() {
       <Button variant="workbench" id="resetEditBtn" type="button" onClick={() => dispatchIncisionEditCommand("reset_edit")}>恢复工具建议</Button>
       <p className="agent-note" id="editHistoryState">{historyLabel}</p>
       <p className="agent-note">调整只改变候选草案并记录 provenance；真实切口仍需医生复核。</p>
-    </div>
+    </Card>
   );
 }

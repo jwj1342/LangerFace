@@ -1,6 +1,7 @@
 import { Activity } from "lucide-react";
 
 import { useIncisionStore } from "../stores/incisionStore";
+import { Card, CardHeader } from "./ui/card";
 
 function formatRuntime(snapshot: ReturnType<typeof useIncisionStore.getState>["snapshot"]) {
   if (!snapshot?.workflowRuntime) return "未运行";
@@ -13,11 +14,11 @@ export function IncisionStatePanel() {
   const candidate = snapshot?.candidate;
 
   return (
-    <div className="card incision-state-panel">
-      <div className="quality-top">
+    <Card className="incision-state-panel">
+      <CardHeader>
         <span className="inline-flex items-center gap-2"><Activity size={14} /> 工作台状态</span>
         <span>{formatRuntime(snapshot)}</span>
-      </div>
+      </CardHeader>
       <div className="incision-state-grid">
         <div>
           <span className="k">肿物</span>
@@ -37,6 +38,6 @@ export function IncisionStatePanel() {
         </div>
       </div>
       <p className="hint">{snapshot?.stageStatus || "正在等待 controller 发布状态。"}</p>
-    </div>
+    </Card>
   );
 }

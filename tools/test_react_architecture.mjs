@@ -310,6 +310,7 @@ assert.ok(!incisionBridge.includes("../services/incisionSnapshots"), "React inci
 assert.ok(incisionBridge.includes("INCISION_SNAPSHOT_SCHEMA_VERSION"), "React incision hook guards snapshots with the shared schema version constant");
 assert.ok(incisionRoute.includes("useIncisionControllerBridge"), "incision route mounts the Zustand/controller bridge");
 assert.ok(incisionStatePanel.includes("useIncisionStore"), "React incision UI reads low-frequency state from Zustand");
+assert.ok(incisionStatePanel.includes("<Card"), "React incision state panel uses the shared shadcn-style card primitive");
 
 assert.ok(incisionRoute.includes("useManagedWorkbenchController"), "React incision route uses the shared managed controller lifecycle");
 assert.ok(incisionRoute.includes("mountIncisionAgentWorkbench"), "React incision route configures the existing controller mount function");
@@ -360,6 +361,7 @@ assert.ok(tumorPanel.includes("Input"), "React tumor panel uses the shared shadc
 assert.ok(tumorPanel.includes("Label"), "React tumor panel uses the shared shadcn-style label primitive");
 assert.ok(tumorPanel.includes("Select"), "React tumor panel uses the shared shadcn-style select primitive");
 assert.ok(tumorPanel.includes("RangeInput"), "React tumor panel uses the shared shadcn-style range primitive");
+assert.ok(tumorPanel.includes("<Card"), "React tumor panel uses the shared shadcn-style card primitive");
 assert.ok(tumorPanel.includes('variant="workbenchPrimary"'), "React tumor panel keeps primary workbench button styling through Button variants");
 assert.ok(tumorInputService.includes("buildTumorInput"), "shared tumor input service builds typed TumorInput payloads");
 assert.ok(tumorInputService.includes("buildTumorFormSnapshot"), "shared tumor input service builds React-safe tumor form snapshots");
@@ -382,6 +384,7 @@ assert.ok(secondaryCuePanel.includes("useIncisionStore"), "React secondary cue p
 assert.ok(secondaryCuePanel.includes("Button"), "React secondary cue panel uses the shared shadcn-style button primitive");
 assert.ok(secondaryCuePanel.includes("Input"), "React secondary cue panel uses the shared shadcn-style input primitive");
 assert.ok(secondaryCuePanel.includes("Checkbox"), "React secondary cue panel uses the shared shadcn-style checkbox primitive");
+assert.ok(secondaryCuePanel.includes("<Card"), "React secondary cue panel uses the shared shadcn-style card primitive");
 for (const id of [
   "candidateType",
   "candidateLength",
@@ -402,6 +405,8 @@ for (const id of [
 assert.ok(incisionStore.includes("IncisionResultViewState"), "incision Zustand store keeps typed candidate result view state");
 assert.ok(incisionWorkbench.includes("CandidateResultPanel"), "React incision workbench renders the candidate result as a React component");
 assert.ok(candidateResultPanel.includes("useIncisionStore"), "React candidate result panel reads low-frequency result view state from Zustand");
+assert.ok(candidateResultPanel.includes("<Card"), "React candidate result panel uses the shared shadcn-style card primitive");
+assert.ok(candidateResultPanel.includes("CardHeader"), "React candidate result panel uses the shared shadcn-style card header primitive");
 for (const id of [
   "savedCount",
   "saveCandidateBtn",
@@ -424,6 +429,7 @@ assert.ok(candidateLibraryPanel.includes("useState"), "React candidate library o
 assert.ok(candidateLibraryPanel.includes("confirmClear"), "React candidate library renders a controlled clear confirmation state");
 assert.ok(!candidateLibraryPanel.includes("window.confirm"), "React candidate library does not use browser-native confirm dialogs");
 assert.ok(candidateLibraryPanel.includes("Button"), "React candidate library uses the shared shadcn-style button primitive");
+assert.ok(candidateLibraryPanel.includes("<Card"), "React candidate library uses the shared shadcn-style card primitive");
 assert.ok(candidateLibraryPanel.includes('variant="workbenchPrimary"'), "React candidate library keeps primary workbench button styling through Button variants");
 for (const id of [
   "privacyState",
@@ -434,6 +440,7 @@ for (const id of [
 assert.ok(incisionStore.includes("IncisionPrivacyAuditState"), "incision Zustand store keeps typed privacy audit state");
 assert.ok(incisionWorkbench.includes("PrivacyAuditPanel"), "React incision workbench renders the privacy audit panel as a React component");
 assert.ok(privacyAuditPanel.includes("useIncisionStore"), "React privacy audit panel reads low-frequency audit state from Zustand");
+assert.ok(privacyAuditPanel.includes("<Card"), "React privacy audit panel uses the shared shadcn-style card primitive");
 for (const id of [
   "providerMode",
   "providerBaseUrl",
@@ -466,6 +473,7 @@ assert.ok(providerPanel.includes("Input"), "React provider panel uses the shared
 assert.ok(providerPanel.includes("Label"), "React provider panel uses the shared shadcn-style label primitive");
 assert.ok(providerPanel.includes("RangeInput"), "React provider panel uses the shared shadcn-style range primitive");
 assert.ok(providerPanel.includes("Button"), "React provider panel uses the shared shadcn-style button primitive");
+assert.ok(providerPanel.includes("<Card"), "React provider panel uses the shared shadcn-style card primitive");
 assert.ok(!providerPanel.includes("<input"), "React provider panel should route hidden and visible inputs through the shared input primitive");
 for (const id of [
   "editStatus",
@@ -497,6 +505,7 @@ assert.ok(editPanel.includes("Button"), "React edit panel uses the shared shadcn
 assert.ok(editPanel.includes("Label"), "React edit panel uses the shared shadcn-style label primitive");
 assert.ok(editPanel.includes("Select"), "React edit panel uses the shared shadcn-style select primitive");
 assert.ok(editPanel.includes("RangeInput"), "React edit panel uses the shared shadcn-style range primitive");
+assert.ok(editPanel.includes("<Card"), "React edit panel uses the shared shadcn-style card primitive");
 for (const id of [
   "reviewState",
   "reviewerName",
@@ -517,6 +526,7 @@ assert.ok(reviewPanel.includes("Label"), "React review panel uses the shared sha
 assert.ok(reviewPanel.includes("Select"), "React review panel uses the shared shadcn-style select primitive");
 assert.ok(reviewPanel.includes("Textarea"), "React review panel uses the shared shadcn-style textarea primitive");
 assert.ok(reviewPanel.includes("Button"), "React review panel uses the shared shadcn-style button primitive");
+assert.ok(reviewPanel.includes("<Card"), "React review panel uses the shared shadcn-style card primitive");
 assert.ok(reviewPanel.includes('variant="workbenchPrimary"'), "React review panel keeps primary workbench button styling through Button variants");
 assert.ok(incisionWorkbench.includes('to="/live"'), "React incision workbench returns to the React live route");
 assert.ok(incisionStagePanel.includes('to="/annotate"'), "React incision stage links to the React 3D annotation route");

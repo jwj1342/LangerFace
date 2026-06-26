@@ -1,4 +1,5 @@
 import { useIncisionStore, type IncisionResultViewState } from "../stores/incisionStore";
+import { Card, CardHeader } from "./ui/card";
 
 const DEFAULT_RESULT_VIEW: IncisionResultViewState = {
   candidateType: "—",
@@ -36,8 +37,8 @@ export function CandidateResultPanel() {
   const view = useIncisionStore((state) => state.snapshot?.resultView) || DEFAULT_RESULT_VIEW;
 
   return (
-    <div className="card">
-      <div className="quality-top"><span>候选结果</span><span id="candidateType">{view.candidateType}</span></div>
+    <Card>
+      <CardHeader><span>候选结果</span><span id="candidateType">{view.candidateType}</span></CardHeader>
       <div className="metric-grid">
         <div className="metric"><span className="k">长度</span><span className="v" id="candidateLength">{view.candidateLength}</span></div>
         <div className="metric"><span className="k">宽度 / 比例</span><span className="v" id="candidateWidth">{view.candidateWidth}</span></div>
@@ -63,6 +64,6 @@ export function CandidateResultPanel() {
       </p>
       <p className="hint" id="nextStep">{view.nextStep}</p>
       <p className={`guardrail-details${detailTone(view)}`} id="guardrailDetails">{view.guardrailDetails}</p>
-    </div>
+    </Card>
   );
 }

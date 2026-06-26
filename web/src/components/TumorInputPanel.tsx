@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { dispatchIncisionTumorCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
+import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
@@ -59,7 +60,7 @@ export function TumorInputPanel() {
       : pickState;
 
   return (
-    <div className="card agent-grid">
+    <Card className="agent-grid">
       <Label htmlFor="tumorKind">肿物类型</Label>
       <Select
         id="tumorKind"
@@ -201,6 +202,6 @@ export function TumorInputPanel() {
       <Button variant="workbenchPrimary" id="runAgentBtn" type="button" onClick={() => dispatchIncisionTumorCommand("run_agent")}>生成候选切口</Button>
       <p className="agent-note" id="pickState">{freehand ? boundaryHint : pickState}</p>
       <p className={`anatomy-preview${anatomyPreviewWarn ? " warn" : ""}`} id="anatomyPreview">{anatomyPreview}</p>
-    </div>
+    </Card>
   );
 }

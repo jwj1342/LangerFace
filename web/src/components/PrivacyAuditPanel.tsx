@@ -1,4 +1,5 @@
 import { useIncisionStore, type IncisionPrivacyAuditState } from "../stores/incisionStore";
+import { Card, CardHeader } from "./ui/card";
 
 const DEFAULT_PRIVACY_AUDIT: IncisionPrivacyAuditState = {
   stateLabel: "本地几何",
@@ -10,12 +11,12 @@ export function PrivacyAuditPanel() {
   const privacy = useIncisionStore((state) => state.snapshot?.privacyAudit) || DEFAULT_PRIVACY_AUDIT;
 
   return (
-    <div className="card">
-      <div className="quality-top">
+    <Card>
+      <CardHeader>
         <span>隐私 / 审计</span>
         <span id="privacyState" className={privacy.blocked ? "danger-text" : undefined}>{privacy.stateLabel}</span>
-      </div>
+      </CardHeader>
       <p className={`hint${privacy.blocked ? " danger-text" : ""}`} id="privacyAudit">{privacy.message}</p>
-    </div>
+    </Card>
   );
 }
