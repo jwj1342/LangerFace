@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card, CardHeader } from "./ui/card";
 import { AgentNote } from "./ui/hint";
+import { ReviewStatus } from "./ui/incision-status";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
@@ -22,7 +23,7 @@ function reviewLabel(status: string) {
   return REVIEW_LABELS[status] || REVIEW_LABELS.pending_clinician_confirmation;
 }
 
-function reviewTone(status: string) {
+function reviewTone(status: string): "" | "approved" | "rejected" | "revision" {
   if (status === "approved_for_discussion") return "approved";
   if (status === "rejected_by_clinician") return "rejected";
   if (status === "needs_revision") return "revision";
@@ -42,7 +43,7 @@ export function ReviewControlsPanel() {
     <Card className="agent-grid">
       <CardHeader>
         <span>医生审阅</span>
-        <span className={`review-state ${reviewTone(status)}`} id="reviewState">{reviewLabel(status)}</span>
+        <ReviewStatus tone={reviewTone(status)} id="reviewState">{reviewLabel(status)}</ReviewStatus>
       </CardHeader>
       <div>
         <Label htmlFor="reviewerName">审阅人</Label>

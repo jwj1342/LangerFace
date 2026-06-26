@@ -12,6 +12,7 @@ import { Button } from "./ui/button";
 import { Card, CardHeader } from "./ui/card";
 import { AgentNote } from "./ui/hint";
 import { Input } from "./ui/input";
+import { ProviderConnectionStatus } from "./ui/incision-status";
 import { FieldValue, Label } from "./ui/label";
 import { RangeInput } from "./ui/slider";
 
@@ -103,7 +104,7 @@ export function ProviderConfigPanel() {
     <Card className="agent-grid">
       <CardHeader>
         <span>LLM Provider</span>
-        <span id="providerState" className={`provider-state-${providerTone}`}>{providerState}</span>
+        <ProviderConnectionStatus id="providerState" tone={providerTone}>{providerState}</ProviderConnectionStatus>
       </CardHeader>
       <Input id="providerMode" type="hidden" value="openai-compatible" readOnly />
       <AgentNote>Provider 类型固定为 OpenAI-compatible / vLLM。测试会请求 Base URL 下的 /models。</AgentNote>

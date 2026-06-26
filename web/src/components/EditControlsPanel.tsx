@@ -6,6 +6,7 @@ import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card, CardHeader } from "./ui/card";
 import { AgentNote } from "./ui/hint";
+import { EditStatus } from "./ui/incision-status";
 import { FieldValue, Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
@@ -64,7 +65,7 @@ export function EditControlsPanel() {
     <Card className="agent-grid">
       <CardHeader>
         <span>医生调整</span>
-        <span className={`edit-status${active ? " active" : ""}`} id="editStatus">{statusLabel}</span>
+        <EditStatus active={active} id="editStatus">{statusLabel}</EditStatus>
       </CardHeader>
       <div>
         <Label htmlFor="angleOffsetDeg">方向偏移 deg <FieldValue id="angleOffsetVal">{angleOffsetDeg}</FieldValue></Label>
