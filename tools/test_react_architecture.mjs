@@ -136,6 +136,24 @@ const annotateViewer = read("annotate_viewer.js");
 const controller = read("src/services/incisionAgentRuntime.ts");
 const dom = read("dom.js");
 const liveController = read("src/services/liveRuntime.ts");
+const liveDomTypes = read("dom.d.ts");
+const liveStateTypes = read("state.d.ts");
+const liveCanvasFitTypes = read("canvas_fit.d.ts");
+const liveDataSourceTypes = read("data_source.d.ts");
+const liveExportCanvasTypes = read("export_canvas.d.ts");
+const liveRuntimeDependencyTypes = [
+  "dom.d.ts",
+  "canvas_fit.d.ts",
+  "data_source.d.ts",
+  "export_canvas.d.ts",
+  "incision_overlay.d.ts",
+  "logger.d.ts",
+  "mode3d.d.ts",
+  "pipeline.d.ts",
+  "render.d.ts",
+  "state.d.ts",
+  "ui.d.ts",
+];
 const layoutPrimitiveNames = new Set(["ReactShell.tsx", "StageShell.tsx", "WorkbenchLayout.tsx"]);
 const stagePanelSources = new Map([
   ["AnnotateStagePanel.tsx", annotateStagePanel],
@@ -1973,7 +1991,17 @@ assert.ok(liveRouteControlsPanel.includes('to="/annotate"'), "React live route c
 assert.ok(liveWorkbench.includes('to="/incision"'), "React live workbench links to the React incision route");
 assert.ok(dom.includes("export function bindDom"), "DOM module can rebind element references for SPA route mounts");
 assert.ok(dom.includes("export let ctx"), "DOM module exports a live canvas context binding");
-assert.ok(liveController.includes("// @ts-nocheck"), "live runtime is explicitly marked as a temporary TypeScript migration boundary");
+for (const rel of liveRuntimeDependencyTypes) {
+  assert.ok(fs.existsSync(path.join(web, rel)), `live runtime dependency boundary ${rel} should be typed`);
+}
+assert.ok(!liveController.includes("// @ts-nocheck"), "live runtime should run under strict TypeScript checking");
+assert.ok(liveController.includes("interface ImageDragState"), "live runtime types its route-local drag state");
+assert.ok(liveController.includes("function controllerEvent"), "live runtime narrows browser command events before reading detail");
+assert.ok(liveDomTypes.includes("LiveDomElements"), "DOM binding declarations expose typed live elements");
+assert.ok(liveStateTypes.includes("LiveRenderState"), "state declarations expose typed live render state");
+assert.ok(liveCanvasFitTypes.includes("observeCanvasStageResize"), "canvas-fit declarations expose resize cleanup contract");
+assert.ok(liveDataSourceTypes.includes("IncisionOverlayPayload"), "data source declarations type staged incision overlays");
+assert.ok(liveExportCanvasTypes.includes("CanvasRecordingController"), "export canvas declarations type recording lifecycle");
 assert.ok(liveController.includes("export function mountLiveWorkbench"), "live controller exposes a mount lifecycle");
 assert.ok(liveController.includes("export function disposeLiveWorkbench"), "live controller exposes a dispose lifecycle");
 assert.ok(liveController.includes("LIVE_CONTROLLER_STATE_EVENT"), "live controller declares a React state bridge event");
@@ -1984,9 +2012,9 @@ assert.ok(liveController.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "live cont
 assert.ok(liveController.includes("../lib/controllerCommand"), "live controller imports the shared command parsing module");
 assert.ok(liveController.includes("bindWindowControllerEvents"), "live controller binds React command events through the shared helper");
 assert.ok(!liveController.includes("window.addEventListener(LIVE"), "live controller does not register React command listeners one-by-one");
-assert.ok(liveController.includes("readControllerCommandDetail(event, LIVE_SOURCE_COMMANDS)"), "live source handler validates incoming command names");
-assert.ok(liveController.includes("readControllerCommandDetail(event, LIVE_RENDER_COMMANDS)"), "live render handler validates incoming command names");
-assert.ok(liveController.includes("readControllerCommandDetail(event, LIVE_ROUTE_COMMANDS)"), "live route handler validates incoming command names");
+assert.ok(liveController.includes("readControllerCommandDetail(controllerEvent(event), LIVE_SOURCE_COMMANDS)"), "live source handler validates incoming command names");
+assert.ok(liveController.includes("readControllerCommandDetail(controllerEvent(event), LIVE_RENDER_COMMANDS)"), "live render handler validates incoming command names");
+assert.ok(liveController.includes("readControllerCommandDetail(controllerEvent(event), LIVE_ROUTE_COMMANDS)"), "live route handler validates incoming command names");
 assert.ok(!liveController.includes("event.detail || {}"), "live controller does not read raw command detail directly");
 assert.ok(liveController.includes("handleReactRouteCommand"), "live controller routes React route commands to existing 3D workflow functions");
 assert.ok(liveController.includes("handleReactSourceCommand"), "live controller routes React source commands to existing workflow functions");

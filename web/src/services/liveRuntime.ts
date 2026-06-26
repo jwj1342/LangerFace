@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Live workbench runtime: wires DOM events and model bootstrap under the React route adapter.
 import { bindDom, els } from "../../dom.js";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "../../canvas_fit.js";
@@ -23,6 +22,8 @@ import {
   dispatchControllerEvent,
   readControllerCommandDetail,
 } from "../lib/controllerCommand";
+import type { CanvasRecordingController, RecordingExtraCanvas } from "../../export_canvas.js";
+import type { LiveZoomCard } from "../../render.js";
 import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
 import {
   buildLiveControllerSnapshot,
@@ -32,17 +33,51 @@ import {
 import { recordingState, reconState, renderState, sourceState } from "../../state.js";
 import { setIncisionOverlayQa, setMsg, setProvenance, smoothLabel } from "../../ui.js";
 
-let previewSystem = null;
-let previewMeta = null;
-let recordingController = null;
-let imageDrag = null;
-let resizeCleanup = null;
-let abortController = null;
+interface ImageDragState {
+  pointerId: number;
+  x: number;
+  y: number;
+}
+
+interface ValueControlEvent {
+  target: {
+    value: unknown;
+  };
+}
+
+interface CheckedControlEvent {
+  target: {
+    checked: boolean;
+  };
+}
+
+let previewSystem: string | null = null;
+let previewMeta: { source: string; validated: boolean; count: number } | null = null;
+let recordingController: CanvasRecordingController | null = null;
+let imageDrag: ImageDragState | null = null;
+let resizeCleanup: (() => void) | null = null;
+let abortController: AbortController | null = null;
 let mounted = false;
 let activeSession = 0;
-let liveStateTimer = 0;
+let liveStateTimer: ReturnType<typeof setTimeout> | 0 = 0;
 
-function publishLiveState(reason = "state_update") {
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return typeof value === "object" && value !== null && "then" in value && typeof value.then === "function";
+}
+
+function eventValue(event: Event | ValueControlEvent): unknown {
+  return (event.target as { value?: unknown } | null)?.value;
+}
+
+function eventChecked(event: Event | CheckedControlEvent): boolean {
+  return Boolean((event.target as { checked?: boolean } | null)?.checked);
+}
+
+function controllerEvent(event: Event): Event & { detail?: unknown } {
+  return event as Event & { detail?: unknown };
+}
+
+function publishLiveState(reason = "state_update"): void {
   if (!mounted || typeof window === "undefined" || !els.canvas) return;
   dispatchControllerEvent(LIVE_CONTROLLER_STATE_EVENT, buildLiveControllerSnapshot({
     reason,
@@ -77,7 +112,7 @@ function publishLiveState(reason = "state_update") {
   }));
 }
 
-function scheduleLiveState(reason = "state_update") {
+function scheduleLiveState(reason = "state_update"): void {
   if (!mounted) return;
   if (liveStateTimer) clearTimeout(liveStateTimer);
   liveStateTimer = setTimeout(() => {
@@ -86,11 +121,11 @@ function scheduleLiveState(reason = "state_update") {
   }, 0);
 }
 
-function runLiveAction(reason, action) {
+function runLiveAction(reason: string, action: () => unknown): unknown {
   try {
     const result = action();
     scheduleLiveState(reason);
-    if (result?.then) {
+    if (isThenable(result)) {
       result.then(
         () => scheduleLiveState(`${reason}_done`),
         () => scheduleLiveState(`${reason}_failed`),
@@ -103,13 +138,13 @@ function runLiveAction(reason, action) {
   }
 }
 
-function syncPreviewControls() {
+function syncPreviewControls(): void {
   const previewIsActive = Boolean(previewSystem && previewMeta && renderState.system === previewSystem);
   setProvenance(previewIsActive ? previewMeta : null);
   els.restoreAtlas.classList.toggle("hidden", !previewIsActive);
 }
 
-function configureLandmarkSmoothing() {
+function configureLandmarkSmoothing(): void {
   renderState.smoother.minCutoff = 6.0 - 5.5 * renderState.smoothLevel;
   renderState.smoother.beta = 0.02 + 0.06 * renderState.smoothLevel;
   if (typeof renderState.smoother.configureForSmoothLevel === "function") {
@@ -117,7 +152,7 @@ function configureLandmarkSmoothing() {
   }
 }
 
-function applyStagedAtlas() {
+function applyStagedAtlas(): void {
   const atlas = dataSource.takePreviewAtlas();
   if (!atlas || !Array.isArray(atlas.lines)) return;
   if (!setActiveAtlas(atlas.system, atlas)) {
@@ -132,7 +167,7 @@ function applyStagedAtlas() {
   scheduleLiveState("staged_atlas");
 }
 
-function applyStagedIncisionOverlay() {
+function applyStagedIncisionOverlay(): void {
   const overlay = dataSource.loadIncisionOverlay();
   if (!overlay) return;
   if (!validateIncisionOverlay(overlay)) {
@@ -155,14 +190,14 @@ function applyStagedIncisionOverlay() {
 }
 
 // ── UI 绑定 ───────────────────────────────────────────────────────────────────
-function refreshStaticImage() {
+function refreshStaticImage(): void {
   if (sourceState.sourceKind === "image") requestFrame();
 }
 
-function visibleRecordingCanvases() {
-  const extras = [];
+function visibleRecordingCanvases(): RecordingExtraCanvas[] {
+  const extras: RecordingExtraCanvas[] = [];
   if (renderState.zoom && !els.zoomStrip.classList.contains("hidden")) {
-    renderState.zoomCards.forEach((zc) => {
+    renderState.zoomCards.forEach((zc: LiveZoomCard) => {
       if (!zc?.canvas || !zc.canvas.width || !zc.canvas.height) return;
       if (zc.card?.offsetParent === null) return;
       const label = zc.card?.querySelector(".tag")?.textContent || "细节放大窗";
@@ -175,14 +210,14 @@ function visibleRecordingCanvases() {
   return extras;
 }
 
-function startImageDrag(e) {
+function startImageDrag(e: PointerEvent): void {
   if (sourceState.sourceKind !== "image" || e.button !== 0) return;
   imageDrag = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
   els.mainWrap.classList.add("dragging");
   els.mainWrap.setPointerCapture(e.pointerId);
 }
 
-function moveImageDrag(e) {
+function moveImageDrag(e: PointerEvent): void {
   if (!imageDrag || e.pointerId !== imageDrag.pointerId) return;
   panImageViewBy(e.clientX - imageDrag.x, e.clientY - imageDrag.y);
   imageDrag.x = e.clientX;
@@ -190,14 +225,14 @@ function moveImageDrag(e) {
   e.preventDefault();
 }
 
-function endImageDrag(e) {
+function endImageDrag(e: PointerEvent): void {
   if (!imageDrag || e.pointerId !== imageDrag.pointerId) return;
   imageDrag = null;
   els.mainWrap.classList.remove("dragging");
   if (els.mainWrap.hasPointerCapture(e.pointerId)) els.mainWrap.releasePointerCapture(e.pointerId);
 }
 
-function handleMainWheel(e) {
+function handleMainWheel(e: WheelEvent): void {
   if (sourceState.sourceKind === "image") {
     if (zoomImageViewAt(e.clientX, e.clientY, e.deltaY)) e.preventDefault();
     return;
@@ -207,51 +242,53 @@ function handleMainWheel(e) {
   refreshStaticImage();
 }
 
-function handlePauseToggle() {
+function handlePauseToggle(): void {
   sourceState.paused = !sourceState.paused; els.pause.textContent = sourceState.paused ? "▶ 继续" : "⏸ 暂停";
   if (!sourceState.paused) requestFrame();
 }
 
-function handleTemplateChange(e) {
-  renderState.system = e.target.value; syncPreviewControls(); refreshStaticImage();
+function handleTemplateChange(e: Event | ValueControlEvent): void {
+  renderState.system = String(eventValue(e) ?? ""); syncPreviewControls(); refreshStaticImage();
 }
 
-function handleDensityInput(e) {
-  renderState.densityFrac = e.target.value / 100; els.densityVal.textContent = e.target.value + "%"; refreshStaticImage();
+function handleDensityInput(e: Event | ValueControlEvent): void {
+  const value = Number(eventValue(e) ?? 0);
+  renderState.densityFrac = value / 100; els.densityVal.textContent = value + "%"; refreshStaticImage();
 }
 
-function handleSmoothInput(e) {
-  const v = +e.target.value; renderState.smoothLevel = v / 100; els.smoothVal.textContent = smoothLabel(v);
+function handleSmoothInput(e: Event | ValueControlEvent): void {
+  const v = Number(eventValue(e) ?? 0); renderState.smoothLevel = v / 100; els.smoothVal.textContent = smoothLabel(v);
   configureLandmarkSmoothing();
   refreshStaticImage();
 }
 
-function handleOpacityInput(e) {
-  renderState.opacity = e.target.value / 100; els.opacityVal.textContent = e.target.value + "%"; refreshStaticImage();
+function handleOpacityInput(e: Event | ValueControlEvent): void {
+  const value = Number(eventValue(e) ?? 0);
+  renderState.opacity = value / 100; els.opacityVal.textContent = value + "%"; refreshStaticImage();
 }
 
-function valueEvent(value) {
+function valueEvent(value: unknown): ValueControlEvent {
   return { target: { value } };
 }
 
-function checkedEvent(checked) {
+function checkedEvent(checked: boolean): CheckedControlEvent {
   return { target: { checked } };
 }
 
-function handleHandOccChange(e) {
-  renderState.handOcc = e.target.checked;
+function handleHandOccChange(e: Event | CheckedControlEvent): void {
+  renderState.handOcc = eventChecked(e);
   sourceState.imageHulls = null;
   refreshStaticImage();
 }
 
-function handleMirrorChange(e) {
-  renderState.mirror = e.target.checked;
+function handleMirrorChange(e: Event | CheckedControlEvent): void {
+  renderState.mirror = eventChecked(e);
   els.canvas.classList.toggle("mirror", renderState.mirror);
-  renderState.zoomCards.forEach((zc) => zc.canvas.classList.toggle("mirror", renderState.mirror));
+  renderState.zoomCards.forEach((zc: LiveZoomCard) => zc.canvas.classList.toggle("mirror", renderState.mirror));
   refreshStaticImage();
 }
 
-function restoreAtlasPreview() {
+function restoreAtlasPreview(): void {
   if (!previewSystem) return;
   if (!restoreOfficialAtlas(previewSystem)) {
     setMsg("恢复官方图谱失败。");
@@ -263,13 +300,13 @@ function restoreAtlasPreview() {
 }
 
 // 导出：录制画布为 webm 下载
-function toggleRecording() {
+function toggleRecording(): void {
   if (!recordingController) {
     recordingController = createCanvasRecordingController({
       canvas: els.canvas,
       getExtraCanvases: visibleRecordingCanvases,
       system: () => renderState.system,
-      onStateChange(recording) {
+      onStateChange(recording: boolean) {
         recordingState.recorder = recording ? recordingController : null;
         els.export.textContent = recording ? "■ 停止" : "⬇ 导出";
         if (recording) els.export.setAttribute("aria-pressed", "true");
@@ -281,8 +318,8 @@ function toggleRecording() {
   recordingController.toggle();
 }
 
-function handleReactSourceCommand(event) {
-  const detail = readControllerCommandDetail(event, LIVE_SOURCE_COMMANDS);
+function handleReactSourceCommand(event: Event): void {
+  const detail = readControllerCommandDetail(controllerEvent(event), LIVE_SOURCE_COMMANDS);
   if (!detail) return;
   const { command } = detail;
   if (command === "upload_source") {
@@ -294,8 +331,8 @@ function handleReactSourceCommand(event) {
   if (command === "recording_toggle") runLiveAction("recording_toggle", toggleRecording);
 }
 
-function handleReactRenderCommand(event) {
-  const detail = readControllerCommandDetail(event, LIVE_RENDER_COMMANDS);
+function handleReactRenderCommand(event: Event): void {
+  const detail = readControllerCommandDetail(controllerEvent(event), LIVE_RENDER_COMMANDS);
   if (!detail) return;
   const { command, value } = detail;
   if (command === "template_change") runLiveAction("template_change", () => handleTemplateChange(valueEvent(value)));
@@ -311,8 +348,8 @@ function handleReactRenderCommand(event) {
   if (command === "restore_atlas") runLiveAction("restore_atlas", restoreAtlasPreview);
 }
 
-function handleReactRouteCommand(event) {
-  const detail = readControllerCommandDetail(event, LIVE_ROUTE_COMMANDS);
+function handleReactRouteCommand(event: Event): void {
+  const detail = readControllerCommandDetail(controllerEvent(event), LIVE_ROUTE_COMMANDS);
   if (!detail) return;
   const { command, value } = detail;
   if (command === "route_change") runLiveAction("route_change", () => enterRoute(value === "3d" ? "3d" : "2d"));
@@ -326,8 +363,8 @@ function handleReactRouteCommand(event) {
   if (command === "toggle_twin_texture") runLiveAction("toggle_twin_texture", toggleTwinTexture);
 }
 
-function bindLiveEvents(signal) {
-  els.file.addEventListener("change", (e) => runLiveAction("file_source", () => handleFile(e.target.files?.[0])), { signal });
+function bindLiveEvents(signal: AbortSignal): void {
+  els.file.addEventListener("change", (e) => runLiveAction("file_source", () => handleFile((e.target as HTMLInputElement | null)?.files?.[0])), { signal });
   if (isReactManagedWorkbench()) {
     bindWindowControllerEvents([
       [LIVE_SOURCE_REACT_COMMAND_EVENT, handleReactSourceCommand],
@@ -342,17 +379,17 @@ function bindLiveEvents(signal) {
     els.density.addEventListener("input", (e) => runLiveAction("density_input", () => handleDensityInput(e)), { signal });
     els.smooth.addEventListener("input", (e) => runLiveAction("smooth_input", () => handleSmoothInput(e)), { signal });
     els.opacity.addEventListener("input", (e) => runLiveAction("opacity_input", () => handleOpacityInput(e)), { signal });
-    els.clip.addEventListener("change", (e) => runLiveAction("clip_toggle", () => { renderState.clip = e.target.checked; refreshStaticImage(); }), { signal });
+    els.clip.addEventListener("change", (e) => runLiveAction("clip_toggle", () => { renderState.clip = eventChecked(e); refreshStaticImage(); }), { signal });
     els.handOcc.addEventListener("change", (e) => runLiveAction("hand_occlusion_toggle", () => handleHandOccChange(e)), { signal });
     els.mirror.addEventListener("change", (e) => runLiveAction("mirror_toggle", () => handleMirrorChange(e)), { signal });
-    els.bands.addEventListener("change", (e) => runLiveAction("bands_toggle", () => { renderState.bands = e.target.checked; refreshStaticImage(); }), { signal });
-    els.zoom.addEventListener("change", (e) => runLiveAction("zoom_toggle", () => { renderState.zoom = e.target.checked; els.zoomStrip.classList.toggle("hidden", !renderState.zoom); refreshStaticImage(); }), { signal });
-    els.meshPts.addEventListener("change", (e) => runLiveAction("mesh_points_toggle", () => { renderState.meshPts = e.target.checked; refreshStaticImage(); }), { signal });
+    els.bands.addEventListener("change", (e) => runLiveAction("bands_toggle", () => { renderState.bands = eventChecked(e); refreshStaticImage(); }), { signal });
+    els.zoom.addEventListener("change", (e) => runLiveAction("zoom_toggle", () => { renderState.zoom = eventChecked(e); els.zoomStrip.classList.toggle("hidden", !renderState.zoom); refreshStaticImage(); }), { signal });
+    els.meshPts.addEventListener("change", (e) => runLiveAction("mesh_points_toggle", () => { renderState.meshPts = eventChecked(e); refreshStaticImage(); }), { signal });
     els.restoreAtlas.addEventListener("click", () => runLiveAction("restore_atlas", restoreAtlasPreview), { signal });
     els.export.addEventListener("click", () => runLiveAction("recording_toggle", toggleRecording), { signal });
 
     // 3D Beta 路线绑定
-    els.routeSel.addEventListener("change", (e) => runLiveAction("route_change", () => enterRoute(e.target.value)), { signal });
+    els.routeSel.addEventListener("change", (e) => runLiveAction("route_change", () => enterRoute(String(eventValue(e)) === "3d" ? "3d" : "2d")), { signal });
     els.reconDemo.addEventListener("click", () => runLiveAction("load_demo_recon", loadDemoRecon), { signal });
     els.reconScan.addEventListener("click", () => runLiveAction("start_scan", startScan), { signal });
     els.view3d.addEventListener("click", () => runLiveAction("view_3d", () => { if (reconState.reconVerts) setMode3d("view"); }), { signal });
@@ -370,7 +407,7 @@ function bindLiveEvents(signal) {
   els.mainWrap.addEventListener("wheel", handleMainWheel, { passive: false, signal });
 }
 
-function isActiveSession(session) {
+function isActiveSession(session: number): boolean {
   return mounted && session === activeSession;
 }
 
@@ -389,7 +426,7 @@ export function disposeLiveWorkbench() {
   stopTwin();
   stopSource();
   if (reconState.scan) reconState.scan.active = false;
-  cancelAnimationFrame(reconState.viewerRAF);
+  if (reconState.viewerRAF != null) cancelAnimationFrame(reconState.viewerRAF);
   reconState.viewerRAF = null;
   reconState.head3d?.dispose?.();
   reconState.head3d = null;
