@@ -148,6 +148,8 @@ const liveDomService = read("src/services/liveDom.ts");
 const liveDomTypes = read("dom.d.ts");
 const liveStateTypes = read("state.d.ts");
 const liveCanvasFitTypes = read("canvas_fit.d.ts");
+const liveCanvasFitFacade = read("canvas_fit.js");
+const liveCanvasFitService = read("src/services/liveCanvasFit.ts");
 const liveDataSourceTypes = read("data_source.d.ts");
 const liveExportCanvasTypes = read("export_canvas.d.ts");
 const liveRuntimeDependencyTypes = [
@@ -2085,7 +2087,12 @@ assert.ok(liveController.includes("function controllerEvent"), "live runtime nar
 assert.ok(liveDomTypes.includes("LiveDomElements"), "DOM binding declarations expose typed live elements");
 assert.ok(liveDomTypes.includes("./src/services/liveDom"), "DOM binding declarations re-export the TypeScript implementation contract");
 assert.ok(liveStateTypes.includes("LiveRenderState"), "state declarations expose typed live render state");
-assert.ok(liveCanvasFitTypes.includes("observeCanvasStageResize"), "canvas-fit declarations expose resize cleanup contract");
+assert.ok(liveStateTypes.includes("imageView"), "state declarations expose typed live image view state");
+assert.ok(liveCanvasFitFacade.includes("./src/services/liveCanvasFit.ts"), "legacy canvas_fit.js is only a compatibility facade over the TypeScript service");
+assert.ok(liveCanvasFitService.includes("export function fitCanvasDisplayToStage"), "TypeScript live canvas fit service owns stage fitting");
+assert.ok(liveCanvasFitService.includes("export function observeCanvasStageResize"), "TypeScript live canvas fit service owns resize cleanup");
+assert.ok(liveCanvasFitService.includes("export function clearCanvasDisplayFit"), "TypeScript live canvas fit service owns image fit cleanup");
+assert.ok(liveCanvasFitTypes.includes("./src/services/liveCanvasFit"), "canvas-fit declarations re-export the TypeScript implementation contract");
 assert.ok(liveDataSourceTypes.includes("IncisionOverlayPayload"), "data source declarations type staged incision overlays");
 assert.ok(liveExportCanvasTypes.includes("CanvasRecordingController"), "export canvas declarations type recording lifecycle");
 assert.ok(liveDomTypes.includes("clearDomBinding"), "DOM binding declarations expose route unmount cleanup");

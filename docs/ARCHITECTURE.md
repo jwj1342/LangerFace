@@ -189,6 +189,8 @@ P = u·V0 + v·V1 + w·V2
 - `dom.js` 仅保留为旧 JS 管线的兼容 re-export，真实实现位于 `src/services/liveDom.ts`，并受 TypeScript 严格检查。
   它不允许在模块 import 时绑定 `document`；实时页只能在 `mountLiveWorkbench(root)` 内 `bindDom(root)`，
   在 `disposeLiveWorkbench()` 中 `clearDomBinding()`，避免 SPA 长生命周期保留已卸载的 canvas、video 或 wrapper 引用。
+- `canvas_fit.js` 同样只保留为旧 JS 管线的兼容 re-export。图片模式的 canvas contain-fit、pan/zoom 和
+  `ResizeObserver` 生命周期由 `src/services/liveCanvasFit.ts` 负责，并通过 `state.d.ts` 明确 `imageView` 状态边界。
 
 ---
 

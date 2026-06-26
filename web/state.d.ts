@@ -11,6 +11,16 @@ export interface LiveRenderState {
   zoom: boolean;
   meshPts: boolean;
   zoomCards: LiveZoomCard[];
+  imageView: {
+    baseWidth: number;
+    baseHeight: number;
+    fitScale: number;
+    zoom: number;
+    offsetX: number;
+    offsetY: number;
+    minZoom: number;
+    maxZoom: number;
+  };
   densityFrac: number;
   smoothLevel: number;
   opacity: number;
