@@ -7,6 +7,11 @@ import { dataSource } from "./data_source.js";
 import { facesArray, flameForward, loadFlameBasis } from "./flame_fit.js";
 import { parseMeshFile } from "./mesh_io.js";
 import { parseSlicerCurveFile } from "./slicer_curve.js";
+import {
+  ANNOTATE_SYSTEM_LABELS as SYSTEM_LABELS,
+  buildAnnotateControllerSnapshot,
+  controlsOf,
+} from "./src/services/annotateSnapshots.ts";
 import { topologyMeta } from "./topology_registry.js";
 
 const $ = (root, id) => {
@@ -52,76 +57,26 @@ let frameId = 0;
 let abortController = null;
 let activeSession = 0;
 
-const SYSTEM_LABELS = { rstl: "RSTL", langer: "Langer" };
 const ANNOTATE_CONTROLLER_STATE_EVENT = "langerface:annotate-state";
 const ANNOTATE_MESH_REACT_COMMAND_EVENT = "langerface:annotate-mesh-react-command";
 const ANNOTATE_DRAW_REACT_COMMAND_EVENT = "langerface:annotate-draw-react-command";
 const ANNOTATE_LIBRARY_REACT_COMMAND_EVENT = "langerface:annotate-library-react-command";
 let bundledFlameBasis = null;
 
-function currentDraftSnapshot() {
-  const line = model?.current || null;
-  const controls = controlsOf(line);
-  return {
-    active: Boolean(line),
-    name: line?.name || null,
-    region: line?.region || null,
-    controlCount: controls.length,
-    pathPointCount: line?.points?.length || 0,
-    fallback: Boolean(line?.fallback),
-  };
-}
-
-function savedSummarySnapshot() {
-  const lines = model?.lines || [];
-  return lines.reduce((acc, line, index) => {
-    const controls = controlsOf(line);
-    acc.count += 1;
-    acc.warningCount += line?.fallback ? 1 : 0;
-    acc.totalControlPoints += controls.length;
-    acc.totalPathPoints += line?.points?.length || 0;
-    acc.lines.push({
-      index,
-      title: `${index + 1}. ${line.name}`,
-      meta: `${SYSTEM_LABELS[model.system]}${line.region ? " · " + line.region : ""} · ${controls.length} 控制点 · ${line.points?.length || 0} 路径点${line.fallback ? " · 贴面 fallback" : ""}`,
-      fallback: Boolean(line?.fallback),
-      warning: line?.fallback ? "需复核：该线存在退回直线连接，可能穿面" : null,
-    });
-    return acc;
-  }, { count: 0, warningCount: 0, totalControlPoints: 0, totalPathPoints: 0, lines: [] });
-}
-
 function publishAnnotateState(reason = "state_update") {
   if (!mounted || typeof window === "undefined" || !els?.hint) return;
-  const canExportAtlas = Boolean(model?.lines?.length && onCanonical && model?.hasBarycentric?.());
-  const canExportXyz = Boolean(model?.lines?.length);
-  const canPreviewActiveAtlas = Boolean(model?.lines?.length && onCanonical && model?.topologyId === "mediapipe-468");
   window.dispatchEvent(new CustomEvent(ANNOTATE_CONTROLLER_STATE_EVENT, {
-    detail: {
-      schema_version: "react-annotate-controller-snapshot/v0.1",
+    detail: buildAnnotateControllerSnapshot({
       reason,
       hint: els.hint?.textContent || "",
       system: model?.system || els.system?.value || "rstl",
-      mesh: {
-        loaded: Boolean(viewer?.hasMesh?.()),
-        modeLabel: els.drawMode?.textContent || "",
-        onCanonical: Boolean(onCanonical),
-        topologyId: model?.topologyId || null,
-        topologyVersion: model?.topologyVersion || null,
-      },
-      meshActions: {
-        canLoadFlame: flameAvailable(),
-        canLoadFittedFlame: fittedFlameAvailable(),
-      },
-      draft: currentDraftSnapshot(),
-      saved: savedSummarySnapshot(),
-      export: {
-        canExportAtlas,
-        canExportXyz,
-        canPreviewActiveAtlas,
-      },
-      updatedAt: new Date().toISOString(),
-    },
+      model,
+      meshLoaded: Boolean(viewer?.hasMesh?.()),
+      modeLabel: els.drawMode?.textContent || "",
+      onCanonical: Boolean(onCanonical),
+      canLoadFlame: flameAvailable(),
+      canLoadFittedFlame: fittedFlameAvailable(),
+    }),
   }));
 }
 
@@ -514,10 +469,6 @@ function syncInputsFromLine(line) {
 
 function isTextControl(el) {
   return el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
-}
-
-function controlsOf(line) {
-  return line ? (line.controls || line.points || []) : [];
 }
 
 function exportJSON(build, filename) {

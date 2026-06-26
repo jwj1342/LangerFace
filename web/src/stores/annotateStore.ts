@@ -1,61 +1,16 @@
 import { create } from "zustand";
 
-export interface AnnotateMeshState {
-  loaded: boolean;
-  modeLabel: string;
-  onCanonical: boolean;
-  topologyId: string | null;
-  topologyVersion: string | null;
-}
+import type { AnnotateControllerSnapshot } from "../services/annotateSnapshots";
 
-export interface AnnotateMeshActionsState {
-  canLoadFlame: boolean;
-  canLoadFittedFlame: boolean;
-}
-
-export interface AnnotateDraftState {
-  active: boolean;
-  name: string | null;
-  region: string | null;
-  controlCount: number;
-  pathPointCount: number;
-  fallback: boolean;
-}
-
-export interface AnnotateSavedSummary {
-  count: number;
-  warningCount: number;
-  totalControlPoints: number;
-  totalPathPoints: number;
-  lines: AnnotateSavedLineSummary[];
-}
-
-export interface AnnotateSavedLineSummary {
-  index: number;
-  title: string;
-  meta: string;
-  fallback: boolean;
-  warning: string | null;
-}
-
-export interface AnnotateExportState {
-  canExportAtlas: boolean;
-  canExportXyz: boolean;
-  canPreviewActiveAtlas: boolean;
-}
-
-export interface AnnotateControllerSnapshot {
-  schema_version: "react-annotate-controller-snapshot/v0.1";
-  reason: string;
-  hint: string;
-  system: string;
-  mesh: AnnotateMeshState;
-  meshActions: AnnotateMeshActionsState;
-  draft: AnnotateDraftState;
-  saved: AnnotateSavedSummary;
-  export: AnnotateExportState;
-  updatedAt: string;
-}
+export type {
+  AnnotateControllerSnapshot,
+  AnnotateDraftState,
+  AnnotateExportState,
+  AnnotateMeshActionsState,
+  AnnotateMeshState,
+  AnnotateSavedLineSummary,
+  AnnotateSavedSummary,
+} from "../services/annotateSnapshots";
 
 interface AnnotateStoreState {
   snapshot: AnnotateControllerSnapshot | null;
