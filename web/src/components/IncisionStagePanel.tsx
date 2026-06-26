@@ -1,4 +1,4 @@
-import { StageActions, StageLink, StageShell, StageViewport } from "./StageShell";
+import { StageActions, StageLink, StageMeta, StageShell, StageStatus, StageViewport } from "./StageShell";
 import { useIncisionStore, type IncisionAssetLoadingState } from "../stores/incisionStore";
 
 const DEFAULT_ASSET_LOADING: IncisionAssetLoadingState = {
@@ -14,10 +14,10 @@ export function IncisionStagePanel() {
     <StageShell
       top={(
         <>
-          <span className="live on"><span className="dot"></span>标准脸规划</span>
+          <StageStatus active>标准脸规划</StageStatus>
           <StageActions>
-            <span className="fps" id="stageStatus">{snapshot?.stageStatus || "拖拽旋转 · 滚轮缩放 · 点击定位"}</span>
-            <StageLink className="fps" to="/annotate">3D 标注与演示</StageLink>
+            <StageMeta id="stageStatus">{snapshot?.stageStatus || "拖拽旋转 · 滚轮缩放 · 点击定位"}</StageMeta>
+            <StageLink variant="meta" to="/annotate">3D 标注与演示</StageLink>
           </StageActions>
         </>
       )}

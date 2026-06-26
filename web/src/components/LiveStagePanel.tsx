@@ -1,12 +1,12 @@
-import { StageShell, StageViewport } from "./StageShell";
+import { StageMeta, StageShell, StageStatus, StageViewport } from "./StageShell";
 
 export function LiveStagePanel() {
   return (
     <StageShell
       top={(
         <>
-          <span className="live" id="livePill"><span className="dot" />待机</span>
-          <span className="fps" id="fps">— fps</span>
+          <StageStatus id="livePill">待机</StageStatus>
+          <StageMeta id="fps">— fps</StageMeta>
         </>
       )}
     >
