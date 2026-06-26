@@ -1,10 +1,9 @@
-import { ArrowRight, Boxes, Camera, ExternalLink, PenLine, Scissors } from "lucide-react";
+import { ArrowRight, Boxes, Camera, PenLine, Scissors } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import {
   ReactPage,
   ReactShell,
-  ReactShellExternalLink,
   ReactShellMain,
   ReactShellNavLink,
   ReactShellSidebar,
@@ -57,10 +56,6 @@ export function DashboardRoute() {
               <span>沿 RSTL 闭合演示</span>
               <Scissors size={16} />
             </ReactShellNavLink>
-            <ReactShellExternalLink href="/index.html">
-              <span>旧 HTML 实时入口</span>
-              <ExternalLink size={16} />
-            </ReactShellExternalLink>
           </Card>
 
           <Card>

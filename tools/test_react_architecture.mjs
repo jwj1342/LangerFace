@@ -21,6 +21,10 @@ const routeSources = new Map(
 const pkg = JSON.parse(read("package.json"));
 const tsconfig = JSON.parse(read("tsconfig.json"));
 const appHtml = read("app/index.html");
+const legacyLiveHtml = read("index.html");
+const legacyAnnotateHtml = read("annotate.html");
+const legacyIncisionHtml = read("incision_agent.html");
+const legacySurgeryHtml = read("surgery.html");
 const vite = read("vite.config.js");
 const vercel = read("vercel.json");
 const vercelConfig = JSON.parse(vercel);
@@ -540,7 +544,6 @@ for (const [componentName, className] of [
   ["ReactShellSidebar", "react-shell-sidebar"],
   ["ReactShellMain", "react-shell-main"],
   ["ReactShellNavLink", "react-nav-link"],
-  ["ReactShellExternalLink", "react-nav-link"],
   ["ReactRouteHost", "react-${workspace}-host"],
 ]) {
   assert.ok(reactShell.includes(componentName), `React shell primitive exports ${componentName}`);
@@ -583,7 +586,32 @@ assert.ok(surgeryRoute.includes('workspace="surgery"'), "SurgeryRoute should dec
 assert.ok(!surgeryRoute.includes('className="react-surgery-host"'), "SurgeryRoute should not hand-write its route host class");
 assert.ok(app.includes("ReactPage"), "React route fallback uses the shared React page primitive");
 assert.ok(dashboardRoute.includes("ReactShellNavLink"), "React dashboard uses shared shell nav links");
-assert.ok(dashboardRoute.includes("ReactShellExternalLink"), "React dashboard uses shared shell external nav links");
+assert.ok(!dashboardRoute.includes("ReactShellExternalLink"), "React dashboard should not send users back to legacy HTML entrypoints");
+assert.ok(!dashboardRoute.includes("/index.html"), "React dashboard should not link to the legacy live HTML entrypoint");
+for (const route of ["/incision", "/live", "/annotate", "/three-preview", "/surgery"]) {
+  assert.ok(dashboardRoute.includes(`to="${route}"`), `React dashboard links to ${route} through React Router`);
+}
+for (const [name, html, expected] of [
+  ["index.html", legacyLiveHtml, ["/app/annotate", "/app/incision"]],
+  ["annotate.html", legacyAnnotateHtml, ["/app/live", "/app/surgery"]],
+  ["incision_agent.html", legacyIncisionHtml, ["/app/live", "/app/annotate"]],
+  ["surgery.html", legacySurgeryHtml, ["/app/annotate"]],
+]) {
+  for (const href of expected) {
+    assert.ok(html.includes(`href="${href}"`), `${name} compatibility navigation points to ${href}`);
+  }
+}
+for (const [name, html, legacyHref] of [
+  ["index.html", legacyLiveHtml, "annotate.html"],
+  ["index.html", legacyLiveHtml, "incision_agent.html"],
+  ["annotate.html", legacyAnnotateHtml, "index.html"],
+  ["annotate.html", legacyAnnotateHtml, "surgery.html"],
+  ["incision_agent.html", legacyIncisionHtml, "index.html"],
+  ["incision_agent.html", legacyIncisionHtml, "annotate.html"],
+  ["surgery.html", legacySurgeryHtml, "annotate.html"],
+]) {
+  assert.ok(!html.includes(`href="${legacyHref}"`), `${name} compatibility navigation should not route users back to ${legacyHref}`);
+}
 assert.ok(threeRoute.includes("ReactShellMain"), "R3F preview route uses the shared shell main primitive");
 assert.ok(threePreviewSidebar.includes("ReactShellSidebar"), "R3F preview sidebar uses the shared shell sidebar primitive");
 for (const className of [

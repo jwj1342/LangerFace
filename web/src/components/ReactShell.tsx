@@ -1,5 +1,5 @@
 import { forwardRef } from "react";
-import type { AnchorHTMLAttributes, HTMLAttributes } from "react";
+import type { HTMLAttributes } from "react";
 import { Link, type LinkProps } from "react-router-dom";
 
 import { cn } from "../lib/cn";
@@ -45,13 +45,6 @@ export const ReactShellNavLink = forwardRef<HTMLAnchorElement, LinkProps>(
   ),
 );
 ReactShellNavLink.displayName = "ReactShellNavLink";
-
-export const ReactShellExternalLink = forwardRef<HTMLAnchorElement, AnchorHTMLAttributes<HTMLAnchorElement>>(
-  ({ className, ...props }, ref) => (
-    <a ref={ref} className={cn("react-nav-link", className)} {...props} />
-  ),
-);
-ReactShellExternalLink.displayName = "ReactShellExternalLink";
 
 export const ReactRouteHost = forwardRef<HTMLDivElement, ReactRouteHostProps>(
   ({ className, workspace, ...props }, ref) => (

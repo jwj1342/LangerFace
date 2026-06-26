@@ -72,11 +72,14 @@ function createStaticServer(root) {
   return createServer((req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
     const rel = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
-    const file = path.resolve(root, rel.slice(1));
+    let file = path.resolve(root, rel.slice(1));
     if (!file.startsWith(root)) {
       res.writeHead(403);
       res.end("forbidden");
       return;
+    }
+    if ((!fs.existsSync(file) || !fs.statSync(file).isFile()) && (rel === "/app" || rel.startsWith("/app/"))) {
+      file = path.resolve(root, "app/index.html");
     }
     if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
       res.writeHead(404);
