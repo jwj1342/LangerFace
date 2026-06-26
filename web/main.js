@@ -22,6 +22,8 @@ let activeSession = 0;
 let liveStateTimer = 0;
 
 const LIVE_CONTROLLER_STATE_EVENT = "langerface:live-state";
+const LIVE_SOURCE_REACT_COMMAND_EVENT = "langerface:live-source-react-command";
+const LIVE_RENDER_REACT_COMMAND_EVENT = "langerface:live-render-react-command";
 
 function textOf(el) {
   return el?.textContent?.trim?.() || "";
@@ -238,6 +240,14 @@ function handleOpacityInput(e) {
   renderState.opacity = e.target.value / 100; els.opacityVal.textContent = e.target.value + "%"; refreshStaticImage();
 }
 
+function valueEvent(value) {
+  return { target: { value } };
+}
+
+function checkedEvent(checked) {
+  return { target: { checked } };
+}
+
 function handleHandOccChange(e) {
   renderState.handOcc = e.target.checked;
   sourceState.imageHulls = null;
@@ -281,23 +291,54 @@ function toggleRecording() {
   recordingController.toggle();
 }
 
+function handleReactSourceCommand(event) {
+  const { command } = event.detail || {};
+  if (command === "upload_source") {
+    els.file.click();
+    return;
+  }
+  if (command === "camera_toggle") runLiveAction("camera_toggle", startCamera);
+  if (command === "pause_toggle") runLiveAction("pause_toggle", handlePauseToggle);
+  if (command === "recording_toggle") runLiveAction("recording_toggle", toggleRecording);
+}
+
+function handleReactRenderCommand(event) {
+  const { command, value } = event.detail || {};
+  if (command === "template_change") runLiveAction("template_change", () => handleTemplateChange(valueEvent(value)));
+  if (command === "density_input") runLiveAction("density_input", () => handleDensityInput(valueEvent(Number(value))));
+  if (command === "opacity_input") runLiveAction("opacity_input", () => handleOpacityInput(valueEvent(Number(value))));
+  if (command === "mirror_toggle") runLiveAction("mirror_toggle", () => handleMirrorChange(checkedEvent(Boolean(value))));
+  if (command === "mesh_points_toggle") {
+    runLiveAction("mesh_points_toggle", () => {
+      renderState.meshPts = Boolean(value);
+      refreshStaticImage();
+    });
+  }
+  if (command === "restore_atlas") runLiveAction("restore_atlas", restoreAtlasPreview);
+}
+
 function bindLiveEvents(signal) {
-  els.upload.addEventListener("click", () => els.file.click(), { signal });
   els.file.addEventListener("change", (e) => runLiveAction("file_source", () => handleFile(e.target.files?.[0])), { signal });
-  els.cam.addEventListener("click", () => runLiveAction("camera_toggle", startCamera), { signal });
-  els.pause.addEventListener("click", () => runLiveAction("pause_toggle", handlePauseToggle), { signal });
-  els.tmpl.addEventListener("change", (e) => runLiveAction("template_change", () => handleTemplateChange(e)), { signal });
-  els.density.addEventListener("input", (e) => runLiveAction("density_input", () => handleDensityInput(e)), { signal });
-  els.smooth.addEventListener("input", (e) => runLiveAction("smooth_input", () => handleSmoothInput(e)), { signal });
-  els.opacity.addEventListener("input", (e) => runLiveAction("opacity_input", () => handleOpacityInput(e)), { signal });
-  els.clip.addEventListener("change", (e) => runLiveAction("clip_toggle", () => { renderState.clip = e.target.checked; refreshStaticImage(); }), { signal });
-  els.handOcc.addEventListener("change", (e) => runLiveAction("hand_occlusion_toggle", () => handleHandOccChange(e)), { signal });
-  els.mirror.addEventListener("change", (e) => runLiveAction("mirror_toggle", () => handleMirrorChange(e)), { signal });
-  els.bands.addEventListener("change", (e) => runLiveAction("bands_toggle", () => { renderState.bands = e.target.checked; refreshStaticImage(); }), { signal });
-  els.zoom.addEventListener("change", (e) => runLiveAction("zoom_toggle", () => { renderState.zoom = e.target.checked; els.zoomStrip.classList.toggle("hidden", !renderState.zoom); refreshStaticImage(); }), { signal });
-  els.meshPts.addEventListener("change", (e) => runLiveAction("mesh_points_toggle", () => { renderState.meshPts = e.target.checked; refreshStaticImage(); }), { signal });
-  els.restoreAtlas.addEventListener("click", () => runLiveAction("restore_atlas", restoreAtlasPreview), { signal });
-  els.export.addEventListener("click", () => runLiveAction("recording_toggle", toggleRecording), { signal });
+  if (window.__LANGERFACE_REACT_MANAGED__) {
+    window.addEventListener(LIVE_SOURCE_REACT_COMMAND_EVENT, handleReactSourceCommand, { signal });
+    window.addEventListener(LIVE_RENDER_REACT_COMMAND_EVENT, handleReactRenderCommand, { signal });
+  } else {
+    els.upload.addEventListener("click", () => els.file.click(), { signal });
+    els.cam.addEventListener("click", () => runLiveAction("camera_toggle", startCamera), { signal });
+    els.pause.addEventListener("click", () => runLiveAction("pause_toggle", handlePauseToggle), { signal });
+    els.tmpl.addEventListener("change", (e) => runLiveAction("template_change", () => handleTemplateChange(e)), { signal });
+    els.density.addEventListener("input", (e) => runLiveAction("density_input", () => handleDensityInput(e)), { signal });
+    els.smooth.addEventListener("input", (e) => runLiveAction("smooth_input", () => handleSmoothInput(e)), { signal });
+    els.opacity.addEventListener("input", (e) => runLiveAction("opacity_input", () => handleOpacityInput(e)), { signal });
+    els.clip.addEventListener("change", (e) => runLiveAction("clip_toggle", () => { renderState.clip = e.target.checked; refreshStaticImage(); }), { signal });
+    els.handOcc.addEventListener("change", (e) => runLiveAction("hand_occlusion_toggle", () => handleHandOccChange(e)), { signal });
+    els.mirror.addEventListener("change", (e) => runLiveAction("mirror_toggle", () => handleMirrorChange(e)), { signal });
+    els.bands.addEventListener("change", (e) => runLiveAction("bands_toggle", () => { renderState.bands = e.target.checked; refreshStaticImage(); }), { signal });
+    els.zoom.addEventListener("change", (e) => runLiveAction("zoom_toggle", () => { renderState.zoom = e.target.checked; els.zoomStrip.classList.toggle("hidden", !renderState.zoom); refreshStaticImage(); }), { signal });
+    els.meshPts.addEventListener("change", (e) => runLiveAction("mesh_points_toggle", () => { renderState.meshPts = e.target.checked; refreshStaticImage(); }), { signal });
+    els.restoreAtlas.addEventListener("click", () => runLiveAction("restore_atlas", restoreAtlasPreview), { signal });
+    els.export.addEventListener("click", () => runLiveAction("recording_toggle", toggleRecording), { signal });
+  }
 
   // 3D Beta 路线绑定
   els.routeSel.addEventListener("change", (e) => runLiveAction("route_change", () => enterRoute(e.target.value)), { signal });

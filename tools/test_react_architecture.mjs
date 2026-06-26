@@ -35,6 +35,8 @@ const reviewPanel = read("src/components/ReviewControlsPanel.tsx");
 const liveStore = read("src/stores/liveStore.ts");
 const liveBridge = read("src/hooks/useLiveControllerBridge.ts");
 const liveStatePanel = read("src/components/LiveStatePanel.tsx");
+const liveSourceControlsPanel = read("src/components/LiveSourceControlsPanel.tsx");
+const liveRenderControlsPanel = read("src/components/LiveRenderControlsPanel.tsx");
 const annotateRoute = read("src/routes/AnnotateRoute.tsx");
 const annotateWorkbench = read("src/routes/AnnotateWorkbench.tsx");
 const incisionRoute = read("src/routes/IncisionRoute.tsx");
@@ -419,15 +421,46 @@ for (const id of [
   "canvas",
   "video",
   "routeSel",
-  "uploadBtn",
-  "camBtn",
-  "templateSel",
   "modelBadge",
   "overlayMsg",
 ]) {
   assert.ok(liveWorkbench.includes(`id="${id}"`), `React live workbench exposes #${id}`);
 }
+for (const id of [
+  "uploadBtn",
+  "fileInput",
+  "camBtn",
+  "pauseBtn",
+  "exportBtn",
+]) {
+  assert.ok(liveSourceControlsPanel.includes(`id="${id}"`), `React live source controls expose #${id}`);
+}
+for (const id of [
+  "templateSel",
+  "atlasProvenance",
+  "restoreAtlasBtn",
+  "density",
+  "densityVal",
+  "smooth",
+  "smoothVal",
+  "opacity",
+  "opacityVal",
+  "clip",
+  "handOcc",
+  "mirror",
+  "bands",
+  "zoom",
+  "meshPts",
+]) {
+  assert.ok(liveRenderControlsPanel.includes(`id="${id}"`), `React live render controls expose #${id}`);
+}
 assert.ok(liveWorkbench.includes("LiveStatePanel"), "React live workbench renders the controller state panel");
+assert.ok(liveWorkbench.includes("LiveSourceControlsPanel"), "React live workbench renders source controls as a React component");
+assert.ok(liveWorkbench.includes("LiveRenderControlsPanel"), "React live workbench renders render controls as a React component");
+assert.ok(liveSourceControlsPanel.includes("LIVE_SOURCE_REACT_COMMAND_EVENT"), "React live source controls dispatch source commands to the controller boundary");
+assert.ok(liveRenderControlsPanel.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "React live render controls dispatch render commands to the controller boundary");
+assert.ok(liveSourceControlsPanel.includes("useLiveStore"), "React live source controls read low-frequency source state from Zustand");
+assert.ok(liveRenderControlsPanel.includes("useLiveStore"), "React live render controls read low-frequency render state from Zustand");
 assert.ok(liveWorkbench.includes('to="/annotate"'), "React live workbench links to the React annotation route");
 assert.ok(liveWorkbench.includes('to="/incision"'), "React live workbench links to the React incision route");
 assert.ok(dom.includes("export function bindDom"), "DOM module can rebind element references for SPA route mounts");
@@ -435,6 +468,10 @@ assert.ok(dom.includes("export let ctx"), "DOM module exports a live canvas cont
 assert.ok(liveController.includes("export function mountLiveWorkbench"), "live controller exposes a mount lifecycle");
 assert.ok(liveController.includes("export function disposeLiveWorkbench"), "live controller exposes a dispose lifecycle");
 assert.ok(liveController.includes("LIVE_CONTROLLER_STATE_EVENT"), "live controller declares a React state bridge event");
+assert.ok(liveController.includes("LIVE_SOURCE_REACT_COMMAND_EVENT"), "live controller declares a React source command bridge event");
+assert.ok(liveController.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "live controller declares a React render command bridge event");
+assert.ok(liveController.includes("handleReactSourceCommand"), "live controller routes React source commands to existing workflow functions");
+assert.ok(liveController.includes("handleReactRenderCommand"), "live controller routes React render commands to existing workflow functions");
 assert.ok(liveController.includes("react-live-controller-snapshot/v0.1"), "live controller publishes a typed React snapshot");
 assert.ok(liveController.includes("CustomEvent(LIVE_CONTROLLER_STATE_EVENT"), "live controller emits state snapshots through a browser event");
 assert.ok(liveController.includes("scheduleLiveState"), "live controller publishes low-frequency state snapshots from user actions");

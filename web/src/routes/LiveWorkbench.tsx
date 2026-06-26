@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 
+import { LiveRenderControlsPanel } from "../components/LiveRenderControlsPanel";
+import { LiveSourceControlsPanel } from "../components/LiveSourceControlsPanel";
 import { LiveStatePanel } from "../components/LiveStatePanel";
 
 export function LiveWorkbench() {
@@ -70,47 +72,9 @@ export function LiveWorkbench() {
 
         <LiveStatePanel />
 
-        <div className="card">
-          <button className="btn btn-primary" id="uploadBtn" type="button">⬆&nbsp; 上传照片 / 视频</button>
-          <input type="file" id="fileInput" accept="image/*,video/*" hidden />
-          <div className="btn-row">
-            <button className="btn" id="camBtn" type="button" aria-pressed="false">◉ 摄像头</button>
-            <button className="btn" id="pauseBtn" type="button" disabled>⏸ 暂停</button>
-            <button className="btn" id="exportBtn" type="button" disabled>⬇ 导出</button>
-          </div>
-        </div>
+        <LiveSourceControlsPanel />
 
-        <div className="card">
-          <div>
-            <label className="field-label" htmlFor="templateSel">模板</label>
-            <select id="templateSel" className="select live-inline-top" defaultValue="rstl">
-              <option value="rstl">面部 RSTL 指南（首选）</option>
-            </select>
-            <p className="hint hidden" id="atlasProvenance" />
-            <button className="btn hidden" id="restoreAtlasBtn" type="button">恢复官方图谱</button>
-          </div>
-          <div>
-            <label className="field-label">线密度 <span className="val" id="densityVal">100%</span></label>
-            <input type="range" id="density" min="12" max="100" defaultValue="100" />
-          </div>
-          <div className="hidden">
-            <label className="field-label">平滑 <span className="val" id="smoothVal">中</span></label>
-            <input type="range" id="smooth" min="0" max="100" defaultValue="60" />
-          </div>
-          <div>
-            <label className="field-label">透明度 <span className="val" id="opacityVal">92%</span></label>
-            <input type="range" id="opacity" min="25" max="100" defaultValue="92" />
-          </div>
-        </div>
-
-        <div className="card">
-          <label className="check hidden"><input type="checkbox" id="clip" defaultChecked /> 限制在面部轮廓内（背面剔除）</label>
-          <label className="check hidden"><input type="checkbox" id="handOcc" defaultChecked /> 前方手部遮挡（仅识别手部）</label>
-          <label className="check"><input type="checkbox" id="mirror" defaultChecked /> 镜像（自拍视角）</label>
-          <label className="check hidden"><input type="checkbox" id="bands" /> 按面部分区着色</label>
-          <label className="check hidden"><input type="checkbox" id="zoom" defaultChecked /> 细节放大窗（关键区域）</label>
-          <label className="check"><input type="checkbox" id="meshPts" /> 显示网格采样点</label>
-        </div>
+        <LiveRenderControlsPanel />
 
         <div className="card">
           <div>
