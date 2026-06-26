@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 
+import { Input } from "./ui/input";
+import { Select } from "./ui/select";
+import { Textarea } from "./ui/textarea";
 import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 
@@ -44,16 +47,14 @@ export function ReviewControlsPanel() {
       </div>
       <div>
         <label className="field-label" htmlFor="reviewerName">审阅人</label>
-        <input
+        <Input
           id="reviewerName"
-          className="text-input"
           placeholder="clinician reviewer"
           defaultValue={snapshot?.review.reviewer || ""}
         />
       </div>
-      <select
+      <Select
         id="reviewDecision"
-        className="select"
         defaultValue="pending_clinician_confirmation"
         onChange={(event) => {
           setStatus(event.currentTarget.value);
@@ -64,10 +65,9 @@ export function ReviewControlsPanel() {
         <option value="approved_for_discussion">确认候选草案</option>
         <option value="needs_revision">退回修改</option>
         <option value="rejected_by_clinician">否决候选</option>
-      </select>
-      <textarea
+      </Select>
+      <Textarea
         id="reviewNotes"
-        className="text-area"
         placeholder="审阅备注、覆盖原因或需要回看的位置"
       />
       <div className="btn-row two-cols">

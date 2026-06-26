@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { normalizeProviderBaseUrl, testProviderConnection, type ProviderConfig } from "../../llm_provider.js";
+import { Input } from "./ui/input";
 import { dispatchControllerEvent } from "../lib/controllerCommand";
 
 const PROVIDER_STORAGE_KEY = "langerface.incision.provider";
@@ -189,9 +190,8 @@ export function ProviderConfigPanel() {
       </div>
       <input id="providerMode" type="hidden" value="openai-compatible" readOnly />
       <p className="agent-note">Provider 类型固定为 OpenAI-compatible / vLLM。测试会请求 Base URL 下的 /models。</p>
-      <input
+      <Input
         id="providerBaseUrl"
-        className="text-input"
         value={baseUrl}
         placeholder="https://your-provider.example/v1"
         onChange={(event) => {
@@ -199,9 +199,8 @@ export function ProviderConfigPanel() {
           markChanged("Provider Base URL 已修改，尚未重新测试连通性。");
         }}
       />
-      <input
+      <Input
         id="providerModel"
-        className="text-input"
         value={model}
         placeholder="模型名，如 gpt-4.1-mini 或 Qwen/Qwen3-14B"
         onChange={(event) => {
@@ -209,9 +208,8 @@ export function ProviderConfigPanel() {
           markChanged("Provider 模型已修改，尚未重新测试连通性。");
         }}
       />
-      <input
+      <Input
         id="providerApiKey"
-        className="text-input"
         type="password"
         value={apiKey}
         placeholder="API Key（Provider 需要时填写；导出会脱敏）"
