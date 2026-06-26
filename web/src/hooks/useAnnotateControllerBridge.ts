@@ -1,5 +1,4 @@
-import { useEffect } from "react";
-
+import { useControllerSnapshotBridge } from "./useControllerSnapshotBridge";
 import {
   ANNOTATE_CONTROLLER_STATE_EVENT,
   type AnnotateControllerSnapshot,
@@ -18,16 +17,10 @@ export function useAnnotateControllerBridge() {
   const setControllerSnapshot = useAnnotateStore((state) => state.setControllerSnapshot);
   const clearControllerSnapshot = useAnnotateStore((state) => state.clearControllerSnapshot);
 
-  useEffect(() => {
-    function handleStateEvent(event: Event) {
-      const detail = (event as CustomEvent<unknown>).detail;
-      if (isControllerSnapshot(detail)) setControllerSnapshot(detail);
-    }
-
-    window.addEventListener(ANNOTATE_CONTROLLER_STATE_EVENT, handleStateEvent);
-    return () => {
-      window.removeEventListener(ANNOTATE_CONTROLLER_STATE_EVENT, handleStateEvent);
-      clearControllerSnapshot();
-    };
-  }, [clearControllerSnapshot, setControllerSnapshot]);
+  useControllerSnapshotBridge({
+    eventName: ANNOTATE_CONTROLLER_STATE_EVENT,
+    isSnapshot: isControllerSnapshot,
+    setSnapshot: setControllerSnapshot,
+    clearSnapshot: clearControllerSnapshot,
+  });
 }

@@ -1,5 +1,4 @@
-import { useEffect } from "react";
-
+import { useControllerSnapshotBridge } from "./useControllerSnapshotBridge";
 import {
   INCISION_CONTROLLER_STATE_EVENT,
   type IncisionControllerSnapshot,
@@ -18,16 +17,10 @@ export function useIncisionControllerBridge() {
   const setControllerSnapshot = useIncisionStore((state) => state.setControllerSnapshot);
   const clearControllerSnapshot = useIncisionStore((state) => state.clearControllerSnapshot);
 
-  useEffect(() => {
-    function handleStateEvent(event: Event) {
-      const detail = (event as CustomEvent<unknown>).detail;
-      if (isControllerSnapshot(detail)) setControllerSnapshot(detail);
-    }
-
-    window.addEventListener(INCISION_CONTROLLER_STATE_EVENT, handleStateEvent);
-    return () => {
-      window.removeEventListener(INCISION_CONTROLLER_STATE_EVENT, handleStateEvent);
-      clearControllerSnapshot();
-    };
-  }, [clearControllerSnapshot, setControllerSnapshot]);
+  useControllerSnapshotBridge({
+    eventName: INCISION_CONTROLLER_STATE_EVENT,
+    isSnapshot: isControllerSnapshot,
+    setSnapshot: setControllerSnapshot,
+    clearSnapshot: clearControllerSnapshot,
+  });
 }
