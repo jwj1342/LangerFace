@@ -11,6 +11,7 @@ import { ReviewControlsPanel } from "../components/ReviewControlsPanel";
 import { SecondaryCuePanel } from "../components/SecondaryCuePanel";
 import { TumorInputPanel } from "../components/TumorInputPanel";
 import { WorkbenchBrand } from "../components/WorkbenchBrand";
+import { StatusBadge } from "../components/ui/status-badge";
 
 export function IncisionWorkbench() {
   return (
@@ -19,7 +20,7 @@ export function IncisionWorkbench() {
         <WorkbenchBrand
           eyebrow="STAGE 2 · AGENTIC INCISION"
           title="切口 Agent 工作台"
-          action={<Link className="badge" to="/live">返回实时显示</Link>}
+          action={<StatusBadge asChild><Link to="/live">返回实时显示</Link></StatusBadge>}
         />
 
         <IncisionStatePanel />

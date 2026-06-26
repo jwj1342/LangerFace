@@ -5,6 +5,8 @@ import { WorkerStatusPanel } from "../components/WorkerStatusPanel";
 import { WorkbenchBrand } from "../components/WorkbenchBrand";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
+import { Hint } from "../components/ui/hint";
+import { RouteStatus } from "../components/ui/status-badge";
 import { useReactRouteLifecycle } from "../hooks/useReactRouteLifecycle";
 import { STATE_BOUNDARY_NOTE, useAppStore } from "../stores/appStore";
 
@@ -23,7 +25,7 @@ export function DashboardRoute() {
           <WorkbenchBrand
             eyebrow="REACT ARCHITECTURE"
             title="React 工作台"
-            action={<span className="react-route-status">{routeStatus}</span>}
+            action={<RouteStatus>{routeStatus}</RouteStatus>}
           />
 
           <Card>
@@ -56,7 +58,7 @@ export function DashboardRoute() {
           <Card>
             <CardHeader><span>状态边界</span><span>低频 UI</span></CardHeader>
             <CardContent>
-              <p className="hint">{STATE_BOUNDARY_NOTE}</p>
+              <Hint>{STATE_BOUNDARY_NOTE}</Hint>
             </CardContent>
           </Card>
 

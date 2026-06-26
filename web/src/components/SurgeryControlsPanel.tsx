@@ -2,6 +2,7 @@ import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card } from "./ui/card";
 import { CheckboxField } from "./ui/checkbox-field";
+import { Hint } from "./ui/hint";
 import { Label } from "./ui/label";
 import { RangeInput } from "./ui/slider";
 import { SectionTitle } from "./ui/section-title";
@@ -33,12 +34,12 @@ export function SurgeryControlsPanel({
 }: SurgeryControlsPanelProps) {
   return (
     <Card>
-      <p className="hint" id="hint">{hint}</p>
+      <Hint id="hint">{hint}</Hint>
       <SectionTitle label="① 规划切口" value={lesionState} valueProps={{ id: "lesionState" }} />
-      <p className="hint">
+      <Hint>
         在右侧脸上<b>点击</b>定位病灶；拖拽旋转、滚轮缩放。
         右图 <b className="surgery-green-copy">绿色</b>=沿 RSTL 的梭形切除轮廓，随下方滑块更新。
-      </p>
+      </Hint>
       <Label htmlFor="sizeRange">切口大小 <span id="sizeVal">{sizePct}%</span></Label>
       <RangeInput
         id="sizeRange"

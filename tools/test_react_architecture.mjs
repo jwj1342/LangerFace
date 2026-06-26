@@ -13,6 +13,11 @@ const componentSources = new Map(
     .filter((name) => name.endsWith(".tsx"))
     .map((name) => [name, read(`src/components/${name}`)]),
 );
+const routeSources = new Map(
+  fs.readdirSync(path.join(web, "src/routes"))
+    .filter((name) => name.endsWith(".tsx"))
+    .map((name) => [name, read(`src/routes/${name}`)]),
+);
 const pkg = JSON.parse(read("package.json"));
 const tsconfig = JSON.parse(read("tsconfig.json"));
 const appHtml = read("app/index.html");
@@ -31,11 +36,14 @@ const uiButtonRow = read("src/components/ui/button-row.tsx");
 const uiCard = read("src/components/ui/card.tsx");
 const uiCheckbox = read("src/components/ui/checkbox.tsx");
 const uiCheckboxField = read("src/components/ui/checkbox-field.tsx");
+const uiHint = read("src/components/ui/hint.tsx");
 const uiInput = read("src/components/ui/input.tsx");
+const uiKeyValue = read("src/components/ui/key-value.tsx");
 const uiLabel = read("src/components/ui/label.tsx");
 const uiSelect = read("src/components/ui/select.tsx");
 const uiSectionTitle = read("src/components/ui/section-title.tsx");
 const uiSlider = read("src/components/ui/slider.tsx");
+const uiStatusBadge = read("src/components/ui/status-badge.tsx");
 const uiTextarea = read("src/components/ui/textarea.tsx");
 const annotateStore = read("src/stores/annotateStore.ts");
 const reactRouteLifecycleHook = read("src/hooks/useReactRouteLifecycle.ts");
@@ -102,6 +110,20 @@ const controller = read("incision_agent_main.js");
 const dom = read("dom.js");
 const liveController = read("main.js");
 const surgeryController = read("surgery_main.js");
+const reactUiConsumerSources = new Map([
+  ["App.tsx", app],
+  ...componentSources,
+  ...routeSources,
+]);
+const consumersWithRawClass = (className) => (
+  [...reactUiConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+    ))
+    .map(([name]) => name)
+);
 
 for (const dep of [
   "react",
@@ -276,6 +298,31 @@ assert.deepEqual(
 );
 assert.ok(uiSectionTitle.includes('cn("section-title"'), "shadcn-style SectionTitle preserves existing section title styling");
 assert.ok(uiSectionTitle.includes("valueProps"), "shadcn-style SectionTitle can preserve value span ids");
+assert.ok(uiHint.includes('cn("hint"'), "shadcn-style Hint preserves existing hint styling");
+assert.ok(uiStatusBadge.includes('cn("badge"'), "shadcn-style StatusBadge preserves existing badge styling");
+assert.ok(uiStatusBadge.includes('cn("react-route-status"'), "shadcn-style RouteStatus preserves existing route status styling");
+assert.ok(uiStatusBadge.includes("@radix-ui/react-slot"), "shadcn-style StatusBadge supports asChild through Radix Slot");
+assert.ok(uiKeyValue.includes("KeyValueGrid"), "shadcn-style key/value primitives expose a neutral grid");
+assert.ok(uiKeyValue.includes("KeyValueItem"), "shadcn-style key/value primitives expose a neutral item");
+assert.ok(uiKeyValue.includes('cn("metric-grid"'), "shadcn-style MetricGrid preserves existing metric grid styling");
+assert.ok(uiKeyValue.includes('cn("metric"'), "shadcn-style MetricItem preserves existing metric styling");
+assert.ok(uiKeyValue.includes('cn("stat-grid"'), "shadcn-style StatGrid preserves existing stat grid styling");
+assert.ok(uiKeyValue.includes('cn("stat"'), "shadcn-style StatItem preserves existing stat styling");
+for (const className of [
+  "hint",
+  "badge",
+  "react-route-status",
+  "metric-grid",
+  "metric",
+  "stat-grid",
+  "stat",
+]) {
+  assert.deepEqual(
+    consumersWithRawClass(className),
+    [],
+    `React UI consumers should use shared primitives instead of hand-written ${className} class wrappers`,
+  );
+}
 assert.deepEqual(
   [...componentSources.entries()]
     .filter(([, source]) => source.includes('className="btn-row') || source.includes("className={`btn-row"))
@@ -458,7 +505,7 @@ for (const id of [
   "nextStep",
   "guardrailDetails",
 ]) {
-  assert.ok(candidateResultPanel.includes(`id="${id}"`), `React candidate result panel exposes #${id}`);
+  assert.ok(exposesId(candidateResultPanel, id), `React candidate result panel exposes #${id}`);
 }
 assert.ok(incisionStore.includes("IncisionResultViewState"), "incision Zustand store keeps typed candidate result view state");
 assert.ok(incisionWorkbench.includes("CandidateResultPanel"), "React incision workbench renders the candidate result as a React component");
@@ -916,7 +963,7 @@ for (const id of [
   "incisionOverlayQaState",
   "incisionOverlayQaDetail",
 ]) {
-  assert.ok(liveQualityPanel.includes(`id="${id}"`), `React live quality panel exposes #${id}`);
+  assert.ok(exposesId(liveQualityPanel, id), `React live quality panel exposes #${id}`);
 }
 for (const id of [
   "livePill",

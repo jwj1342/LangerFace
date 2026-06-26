@@ -2,6 +2,7 @@ import { Cpu } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Card, CardContent, CardHeader } from "./ui/card";
+import { Hint } from "./ui/hint";
 import { createWorkflowWorkerClient, probeWorkflowWorkerClient } from "../services/workflowWorkerClient";
 import { useAppStore } from "../stores/appStore";
 
@@ -42,10 +43,10 @@ export function WorkerStatusPanel() {
         <span>{workerStatus}</span>
       </CardHeader>
       <CardContent>
-        <p className="hint">{detail}</p>
-        <p className="hint">
+        <Hint>{detail}</Hint>
+        <Hint>
           Comlink 只封装低频工具调用；逐帧 landmarks、mesh vertices、WebGL context 不进入 Worker API 或 Zustand store。
-        </p>
+        </Hint>
       </CardContent>
     </Card>
   );

@@ -5,6 +5,7 @@ import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { CheckboxField } from "./ui/checkbox-field";
+import { Hint } from "./ui/hint";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
@@ -31,9 +32,9 @@ export function LiveRenderControlsPanel() {
           >
             <option value="rstl">面部 RSTL 指南（首选）</option>
           </Select>
-          <p className={`hint${atlasPreview?.active ? "" : " hidden"}`} id="atlasProvenance">
+          <Hint className={atlasPreview?.active ? undefined : "hidden"} id="atlasProvenance">
             {atlasPreview?.active ? `${atlasPreview.source || "标注会话"} · ${atlasPreview.count ?? 0} 条线` : ""}
-          </p>
+          </Hint>
           <Button variant="workbench" className={atlasPreview?.active ? "" : "hidden"} id="restoreAtlasBtn" type="button" onClick={() => dispatchLiveRenderCommand("restore_atlas")}>恢复官方图谱</Button>
         </div>
         <div>

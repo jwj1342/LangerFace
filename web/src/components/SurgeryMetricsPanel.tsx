@@ -1,4 +1,5 @@
 import { Card, CardHeader } from "./ui/card";
+import { Hint } from "./ui/hint";
 
 export type SurgeryVerdictTone = "neutral" | "ok" | "warn";
 
@@ -23,7 +24,7 @@ export function SurgeryMetricsPanel({ tensionScore, verdict, verdictTone }: Surg
         <span className="legend-sw surgery-legend-skin" />无新增（平和）
         <span className="legend-sw surgery-legend-red" />闭合新增张力升高
       </div>
-      <p className={`hint surgery-verdict-${verdictTone}`} id="verdict">{verdict}</p>
+      <Hint className={`surgery-verdict-${verdictTone}`} id="verdict">{verdict}</Hint>
     </Card>
   );
 }

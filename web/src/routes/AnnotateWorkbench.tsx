@@ -7,6 +7,7 @@ import { AnnotateMeshSourcePanel } from "../components/AnnotateMeshSourcePanel";
 import { AnnotateStagePanel } from "../components/AnnotateStagePanel";
 import { AnnotateStatePanel } from "../components/AnnotateStatePanel";
 import { WorkbenchBrand } from "../components/WorkbenchBrand";
+import { StatusBadge } from "../components/ui/status-badge";
 
 export function AnnotateWorkbench() {
   return (
@@ -15,7 +16,7 @@ export function AnnotateWorkbench() {
         <WorkbenchBrand
           eyebrow="3D LINE ANNOTATION"
           title="3D 网页标注"
-          action={<Link className="badge" to="/live">返回实时显示</Link>}
+          action={<StatusBadge asChild><Link to="/live">返回实时显示</Link></StatusBadge>}
         />
 
         <AnnotateMeshSourcePanel />

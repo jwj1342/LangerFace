@@ -9,7 +9,9 @@ import { LiveStatePanel } from "../components/LiveStatePanel";
 import { WorkbenchBrand } from "../components/WorkbenchBrand";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
+import { Hint } from "../components/ui/hint";
 import { Label } from "../components/ui/label";
+import { StatusBadge } from "../components/ui/status-badge";
 
 export function LiveWorkbench() {
   return (
@@ -18,7 +20,7 @@ export function LiveWorkbench() {
         <WorkbenchBrand
           eyebrow="COMPUTER VISION PROTOTYPE"
           title="面部朗格线迁移"
-          action={<span className="badge loading" id="modelBadge">模型加载中...</span>}
+          action={<StatusBadge className="loading" id="modelBadge">模型加载中...</StatusBadge>}
         />
 
         <LiveRouteControlsPanel />
@@ -26,7 +28,7 @@ export function LiveWorkbench() {
         <Card id="incisionWorkflowCard">
           <div>
             <Label>肿物切口候选设计</Label>
-            <p className="hint live-inline-top">手动放置皮下 / 皮表肿物，生成线性或梭形候选切口，并查看规则、trace、隐私审计和医生调整记录。</p>
+            <Hint className="live-inline-top">手动放置皮下 / 皮表肿物，生成线性或梭形候选切口，并查看规则、trace、隐私审计和医生调整记录。</Hint>
           </div>
           <Button asChild variant="workbenchPrimary">
             <Link to="/incision">打开切口 Agent 工作台</Link>

@@ -2,6 +2,8 @@ import { RadioTower } from "lucide-react";
 
 import { useLiveStore } from "../stores/liveStore";
 import { Card, CardHeader } from "./ui/card";
+import { Hint } from "./ui/hint";
+import { KeyValueGrid, KeyValueItem } from "./ui/key-value";
 
 function routeLabel(snapshot: ReturnType<typeof useLiveStore.getState>["snapshot"]) {
   if (!snapshot) return "待机";
@@ -18,25 +20,13 @@ export function LiveStatePanel() {
         <span className="inline-flex items-center gap-2"><RadioTower size={14} /> 实时状态</span>
         <span>{routeLabel(snapshot)}</span>
       </CardHeader>
-      <div className="live-state-grid">
-        <div>
-          <span className="k">来源</span>
-          <span className="v">{snapshot?.source.kind || (snapshot?.source.running ? "运行中" : "未开始")}</span>
-        </div>
-        <div>
-          <span className="k">图谱</span>
-          <span className="v">{snapshot ? `${snapshot.render.system.toUpperCase()} · ${snapshot.render.densityPct}%` : "—"}</span>
-        </div>
-        <div>
-          <span className="k">3D</span>
-          <span className="v">{snapshot?.recon.has3dModel ? (snapshot.recon.projectable ? "可投影" : "可查看") : "未生成"}</span>
-        </div>
-        <div>
-          <span className="k">叠加</span>
-          <span className="v">{snapshot?.incisionOverlay.loaded ? snapshot.incisionOverlay.qaLabel || "已载入" : "无切口叠加"}</span>
-        </div>
-      </div>
-      <p className="hint">{snapshot?.overlayMessage || snapshot?.modelBadge || "等待实时 controller 发布状态。"}</p>
+      <KeyValueGrid className="live-state-grid">
+        <KeyValueItem label="来源" value={snapshot?.source.kind || (snapshot?.source.running ? "运行中" : "未开始")} />
+        <KeyValueItem label="图谱" value={snapshot ? `${snapshot.render.system.toUpperCase()} · ${snapshot.render.densityPct}%` : "—"} />
+        <KeyValueItem label="3D" value={snapshot?.recon.has3dModel ? (snapshot.recon.projectable ? "可投影" : "可查看") : "未生成"} />
+        <KeyValueItem label="叠加" value={snapshot?.incisionOverlay.loaded ? snapshot.incisionOverlay.qaLabel || "已载入" : "无切口叠加"} />
+      </KeyValueGrid>
+      <Hint>{snapshot?.overlayMessage || snapshot?.modelBadge || "等待实时 controller 发布状态。"}</Hint>
     </Card>
   );
 }

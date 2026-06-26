@@ -6,6 +6,7 @@ import { SurgeryHelpPanel } from "../components/SurgeryHelpPanel";
 import { SurgeryMetricsPanel, type SurgeryVerdictTone } from "../components/SurgeryMetricsPanel";
 import { SurgeryStagePanel } from "../components/SurgeryStagePanel";
 import { WorkbenchBrand } from "../components/WorkbenchBrand";
+import { StatusBadge } from "../components/ui/status-badge";
 
 interface SurgeryWorkbenchProps {
   activeCut: "along" | null;
@@ -46,7 +47,7 @@ export function SurgeryWorkbench({
         <WorkbenchBrand
           eyebrow="RSTL · CLOSURE DEMO"
           title="沿 RSTL 闭合演示"
-          action={<Link className="badge" to="/annotate">返回 3D 标注</Link>}
+          action={<StatusBadge asChild><Link to="/annotate">返回 3D 标注</Link></StatusBadge>}
         />
 
         <SurgeryControlsPanel

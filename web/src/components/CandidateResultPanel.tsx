@@ -1,5 +1,7 @@
 import { useIncisionStore, type IncisionResultViewState } from "../stores/incisionStore";
 import { Card, CardHeader } from "./ui/card";
+import { Hint } from "./ui/hint";
+import { MetricGrid, MetricItem } from "./ui/key-value";
 
 const DEFAULT_RESULT_VIEW: IncisionResultViewState = {
   candidateType: "—",
@@ -39,30 +41,29 @@ export function CandidateResultPanel() {
   return (
     <Card>
       <CardHeader><span>候选结果</span><span id="candidateType">{view.candidateType}</span></CardHeader>
-      <div className="metric-grid">
-        <div className="metric"><span className="k">长度</span><span className="v" id="candidateLength">{view.candidateLength}</span></div>
-        <div className="metric"><span className="k">宽度 / 比例</span><span className="v" id="candidateWidth">{view.candidateWidth}</span></div>
-        <div className="metric"><span className="k">尖端角</span><span className="v" id="candidateTipAngle">{view.candidateTipAngle}</span></div>
-        <div className="metric">
-          <span className="k">RSTL 置信度</span>
-          <span className="v" id="directionConf" title={view.directionTitle}>{view.directionConfidence}</span>
-        </div>
-        <div className="metric">
-          <span className="k">面部分区</span>
-          <span className="v" id="regionVal" title={view.regionTitle}>{view.region}</span>
-        </div>
-        <div className="metric">
-          <span className="k">Guardrails</span>
-          <span className="v" id="guardrailVal" style={{ color: view.guardrailWarn ? "#b45309" : undefined }}>{view.guardrailLabel}</span>
-        </div>
-      </div>
-      <p className="hint" id="llmSummary">{view.llmSummary}</p>
+      <MetricGrid>
+        <MetricItem label="长度" value={view.candidateLength} valueProps={{ id: "candidateLength" }} />
+        <MetricItem label="宽度 / 比例" value={view.candidateWidth} valueProps={{ id: "candidateWidth" }} />
+        <MetricItem label="尖端角" value={view.candidateTipAngle} valueProps={{ id: "candidateTipAngle" }} />
+        <MetricItem
+          label="RSTL 置信度"
+          value={view.directionConfidence}
+          valueProps={{ id: "directionConf", title: view.directionTitle }}
+        />
+        <MetricItem label="面部分区" value={view.region} valueProps={{ id: "regionVal", title: view.regionTitle }} />
+        <MetricItem
+          label="Guardrails"
+          value={view.guardrailLabel}
+          valueProps={{ id: "guardrailVal", style: { color: view.guardrailWarn ? "#b45309" : undefined } }}
+        />
+      </MetricGrid>
+      <Hint id="llmSummary">{view.llmSummary}</Hint>
       <p className={`guardrail-details${view.directionSourceWarn ? " warn" : ""}`} id="directionSource">{view.directionSource}</p>
       <p className={`guardrail-details${view.agentGateWarn ? " warn" : ""}`} id="agentGate" title={view.agentGateTitle}>{view.agentGate}</p>
       <p className={`guardrail-details${view.agentComparisonWarn ? " warn" : ""}`} id="agentComparison" title={view.agentComparisonTitle}>
         {view.agentComparison}
       </p>
-      <p className="hint" id="nextStep">{view.nextStep}</p>
+      <Hint id="nextStep">{view.nextStep}</Hint>
       <p className={`guardrail-details${detailTone(view)}`} id="guardrailDetails">{view.guardrailDetails}</p>
     </Card>
   );

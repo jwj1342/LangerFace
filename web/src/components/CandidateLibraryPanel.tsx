@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card, CardHeader } from "./ui/card";
+import { Hint } from "./ui/hint";
 import { dispatchIncisionLibraryCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 
@@ -48,7 +49,7 @@ export function CandidateLibraryPanel() {
       {confirmClear ? (
         <ButtonRow className="two-cols">
           <Button variant="workbench" type="button" onClick={() => setConfirmClear(false)}>取消</Button>
-          <p className="hint">将删除当前工作台保存的全部候选草案。</p>
+          <Hint>将删除当前工作台保存的全部候选草案。</Hint>
         </ButtonRow>
       ) : null}
       <ButtonRow className="three-cols">

@@ -1,6 +1,8 @@
 import { Activity } from "lucide-react";
 
 import { Card, CardHeader } from "./ui/card";
+import { Hint } from "./ui/hint";
+import { StatGrid, StatItem } from "./ui/key-value";
 
 export function LiveQualityPanel() {
   return (
@@ -12,12 +14,12 @@ export function LiveQualityPanel() {
         </CardHeader>
         <div className="bar"><div className="bar-fill" id="qualityBar" /></div>
       </div>
-      <div className="stat-grid hidden">
-        <div className="stat"><span className="k">状态</span><span className="v" id="statState">未开始</span></div>
-        <div className="stat"><span className="k">脸部占比</span><span className="v" id="statFace">—</span></div>
-        <div className="stat"><span className="k">偏航估计</span><span className="v" id="statYaw">—</span></div>
-        <div className="stat"><span className="k">线束数量</span><span className="v" id="statLines">—</span></div>
-      </div>
+      <StatGrid className="hidden">
+        <StatItem label="状态" value="未开始" valueProps={{ id: "statState" }} />
+        <StatItem label="脸部占比" value="—" valueProps={{ id: "statFace" }} />
+        <StatItem label="偏航估计" value="—" valueProps={{ id: "statYaw" }} />
+        <StatItem label="线束数量" value="—" valueProps={{ id: "statLines" }} />
+      </StatGrid>
       <div className="overlay-qa hidden" id="incisionOverlayQa">
         <div className="overlay-qa-top">
           <span>切口叠加 QA</span>
@@ -25,7 +27,7 @@ export function LiveQualityPanel() {
         </div>
         <p id="incisionOverlayQaDetail">上传照片、视频或开启摄像头后开始检查。</p>
       </div>
-      <p className="hint">姿态与光照自适应 · 全程本地运行，不上传任何画面</p>
+      <Hint>姿态与光照自适应 · 全程本地运行，不上传任何画面</Hint>
     </Card>
   );
 }

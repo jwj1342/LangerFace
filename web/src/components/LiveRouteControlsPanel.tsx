@@ -6,6 +6,7 @@ import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card } from "./ui/card";
 import { CheckboxField } from "./ui/checkbox-field";
+import { Hint } from "./ui/hint";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
 
@@ -33,15 +34,15 @@ export function LiveRouteControlsPanel() {
           <option value="2d">2D 贴合（默认，稳定）</option>
           <option value="3d">3D 重建（Beta）</option>
         </Select>
-        <p className="hint live-inline-top" id="routeModeHint">
+        <Hint className="live-inline-top" id="routeModeHint">
           {snapshot?.route.hint || "当前是 2D 实时贴合模式，只显示稳定主流程。"}
-        </p>
+        </Hint>
         <div id="route3dPanel" className={`${is3d ? "" : "hidden "}live-stack`}>
           <ButtonRow className="live-two-col">
             <Button variant="workbench" id="reconDemoBtn" type="button" disabled={scanning} onClick={() => dispatchLiveRouteCommand("load_demo_recon")}>用示例脸（无摄像头）</Button>
             <Button variant="workbench" id="reconScanBtn" type="button" disabled={scanning} onClick={() => dispatchLiveRouteCommand("start_scan")}>转头扫描</Button>
           </ButtonRow>
-          <p className="hint" id="reconStatus">{recon?.status || "先重建你的 3D 人头 → 可旋转查看 → 再投影到实时画面。"}</p>
+          <Hint id="reconStatus">{recon?.status || "先重建你的 3D 人头 → 可旋转查看 → 再投影到实时画面。"}</Hint>
           <div className={`scan-panel${scanning ? "" : " hidden"}`} id="scanPanel">
             <div className="scan-row"><span>扫描进度</span><span id="scanProgressVal">0%</span></div>
             <div className="bar"><div className="bar-fill" id="scanProgressBar" /></div>
@@ -86,7 +87,7 @@ export function LiveRouteControlsPanel() {
       <Card className={is3d ? "" : "hidden"} id="threeDWorkflowCard">
         <div>
           <Label>3D 线标注与研究演示</Label>
-          <p className="hint live-inline-top">在 3D 标准脸上绘制 RSTL 候选线，并从标注页进入沿 RSTL 闭合力学演示。</p>
+          <Hint className="live-inline-top">在 3D 标准脸上绘制 RSTL 候选线，并从标注页进入沿 RSTL 闭合力学演示。</Hint>
         </div>
         <Button asChild variant="workbenchPrimary">
           <Link to="/annotate">打开 3D 线标注</Link>

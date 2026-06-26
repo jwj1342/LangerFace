@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
+import { Hint } from "./ui/hint";
+import { RouteStatus } from "./ui/status-badge";
 import { WorkbenchBrand } from "./WorkbenchBrand";
 
 interface ThreePreviewSidebarProps {
@@ -16,14 +18,14 @@ export function ThreePreviewSidebar({ isReady, onReload }: ThreePreviewSidebarPr
       <WorkbenchBrand
         eyebrow="R3F RENDERER BOUNDARY"
         title="R3F 标准脸预览"
-        action={<span className="react-route-status">{isReady ? "ready" : "loading"}</span>}
+        action={<RouteStatus>{isReady ? "ready" : "loading"}</RouteStatus>}
       />
 
       <Card>
-        <p className="hint">
+        <Hint>
           这里验证 React Three Fiber / drei 的渲染层接入。当前只承载低频资产加载和相机控制；
           切口工作台的高频拾取与候选线编辑仍由独立 Three.js controller 管理。
-        </p>
+        </Hint>
         <CardContent>
           <Button asChild>
             <Link to="/"><ArrowLeft size={16} /> 返回 React 入口</Link>

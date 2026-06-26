@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card, CardHeader } from "./ui/card";
+import { Hint } from "./ui/hint";
 import { dispatchAnnotateLibraryCommand } from "../lib/controllerCommand";
 import { useAnnotateStore } from "../stores/annotateStore";
 
@@ -55,7 +56,7 @@ export function AnnotateLineLibraryPanel() {
       {confirmClear ? (
         <ButtonRow className="annotate-clear-confirm">
           <Button variant="workbench" type="button" onClick={() => setConfirmClear(false)}>取消</Button>
-          <p className="hint">将删除当前工作台保存的全部标注线。</p>
+          <Hint>将删除当前工作台保存的全部标注线。</Hint>
         </ButtonRow>
       ) : null}
     </Card>
