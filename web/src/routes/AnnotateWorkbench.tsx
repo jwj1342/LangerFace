@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+import { AnnotateLineLibraryPanel } from "../components/AnnotateLineLibraryPanel";
 import { AnnotateStatePanel } from "../components/AnnotateStatePanel";
 
 export function AnnotateWorkbench() {
@@ -58,16 +59,7 @@ export function AnnotateWorkbench() {
 
         <AnnotateStatePanel />
 
-        <div className="card">
-          <div className="quality-top"><span>3. 已保存线</span><span id="annStatus">0 条</span></div>
-          <div className="line-list" id="lineList" />
-          <div className="btn-row annotate-export-row">
-            <button className="btn" id="btnExportAtlas" type="button" disabled>导出图谱</button>
-            <button className="btn" id="btnExportXyz" type="button" disabled>导出 xyz</button>
-          </div>
-          <button className="btn btn-primary" id="btnSetActiveAtlas" type="button" disabled>设为活动图谱并预览</button>
-          <button className="btn" id="btnClear" type="button">清空</button>
-        </div>
+        <AnnotateLineLibraryPanel />
 
         <details className="card help-doc" open>
           <summary>标注帮助</summary>

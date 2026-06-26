@@ -17,6 +17,7 @@ const typedStore = read("src/stores/appStore.ts");
 const annotateStore = read("src/stores/annotateStore.ts");
 const annotateBridge = read("src/hooks/useAnnotateControllerBridge.ts");
 const annotateStatePanel = read("src/components/AnnotateStatePanel.tsx");
+const annotateLineLibraryPanel = read("src/components/AnnotateLineLibraryPanel.tsx");
 const incisionStore = read("src/stores/incisionStore.ts");
 const incisionBridge = read("src/hooks/useIncisionControllerBridge.ts");
 const incisionStatePanel = read("src/components/IncisionStatePanel.tsx");
@@ -340,17 +341,33 @@ for (const id of [
   "meshFile",
   "slicerFile",
   "annSystem",
-  "btnExportAtlas",
-  "lineList",
 ]) {
   assert.ok(annotateWorkbench.includes(`id="${id}"`), `React annotate workbench exposes #${id}`);
 }
 assert.ok(annotateWorkbench.includes("AnnotateStatePanel"), "React annotate workbench renders the controller state panel");
+for (const id of [
+  "annStatus",
+  "lineList",
+  "btnExportAtlas",
+  "btnExportXyz",
+  "btnSetActiveAtlas",
+  "btnClear",
+]) {
+  assert.ok(annotateLineLibraryPanel.includes(`id="${id}"`), `React annotate line library exposes #${id}`);
+}
+assert.ok(annotateStore.includes("AnnotateSavedLineSummary"), "annotation Zustand store keeps typed saved line summaries");
+assert.ok(annotateWorkbench.includes("AnnotateLineLibraryPanel"), "React annotate workbench renders the saved line library as a React component");
+assert.ok(annotateLineLibraryPanel.includes("ANNOTATE_LIBRARY_REACT_COMMAND_EVENT"), "React annotate line library dispatches saved line commands to the controller boundary");
+assert.ok(annotateLineLibraryPanel.includes("useAnnotateStore"), "React annotate line library reads saved line state from Zustand");
 assert.ok(annotateWorkbench.includes('to="/surgery"'), "React annotation route links to the React surgery closure route");
 assert.ok(annotateWorkbench.includes('to="/live"'), "React annotation route returns to the React live route");
 assert.ok(annotateController.includes("export function mountAnnotateWorkbench"), "annotation controller exposes a mount lifecycle");
 assert.ok(annotateController.includes("export function disposeAnnotateWorkbench"), "annotation controller exposes a dispose lifecycle");
 assert.ok(annotateController.includes("ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation controller declares a React state bridge event");
+assert.ok(annotateController.includes("ANNOTATE_LIBRARY_REACT_COMMAND_EVENT"), "annotation controller declares a React saved line command bridge event");
+assert.ok(annotateController.includes("handleReactLineLibraryCommand"), "annotation controller routes React saved line commands to existing workflow functions");
+assert.ok(annotateController.includes("renderLegacyLineList"), "annotation controller keeps legacy saved line DOM rendering isolated");
+assert.ok(annotateController.includes("!window.__LANGERFACE_REACT_MANAGED__"), "legacy annotation HTML still owns direct saved line handlers outside React");
 assert.ok(annotateController.includes("react-annotate-controller-snapshot/v0.1"), "annotation controller publishes a typed React snapshot");
 assert.ok(annotateController.includes("CustomEvent(ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation controller emits state snapshots through a browser event");
 assert.ok(annotateController.includes("cancelAnimationFrame"), "annotation controller cancels its render loop on dispose");

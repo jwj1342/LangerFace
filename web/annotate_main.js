@@ -54,6 +54,7 @@ let activeSession = 0;
 
 const SYSTEM_LABELS = { rstl: "RSTL", langer: "Langer" };
 const ANNOTATE_CONTROLLER_STATE_EVENT = "langerface:annotate-state";
+const ANNOTATE_LIBRARY_REACT_COMMAND_EVENT = "langerface:annotate-library-react-command";
 let bundledFlameBasis = null;
 
 function currentDraftSnapshot() {
@@ -71,14 +72,21 @@ function currentDraftSnapshot() {
 
 function savedSummarySnapshot() {
   const lines = model?.lines || [];
-  return lines.reduce((acc, line) => {
+  return lines.reduce((acc, line, index) => {
     const controls = controlsOf(line);
     acc.count += 1;
     acc.warningCount += line?.fallback ? 1 : 0;
     acc.totalControlPoints += controls.length;
     acc.totalPathPoints += line?.points?.length || 0;
+    acc.lines.push({
+      index,
+      title: `${index + 1}. ${line.name}`,
+      meta: `${SYSTEM_LABELS[model.system]}${line.region ? " · " + line.region : ""} · ${controls.length} 控制点 · ${line.points?.length || 0} 路径点${line.fallback ? " · 贴面 fallback" : ""}`,
+      fallback: Boolean(line?.fallback),
+      warning: line?.fallback ? "需复核：该线存在退回直线连接，可能穿面" : null,
+    });
     return acc;
-  }, { count: 0, warningCount: 0, totalControlPoints: 0, totalPathPoints: 0 });
+  }, { count: 0, warningCount: 0, totalControlPoints: 0, totalPathPoints: 0, lines: [] });
 }
 
 function publishAnnotateState(reason = "state_update") {
@@ -326,10 +334,14 @@ function bindAnnotateEvents() {
   els.btnNew.addEventListener("click", startLineFromInputs, { signal });
   els.btnUndo.addEventListener("click", undoLast, { signal });
   els.btnFinish.addEventListener("click", saveCurrentLine, { signal });
-  els.btnClear.addEventListener("click", () => { if (confirm("清空所有线？")) { model.clear(); viewer.rebuildLines(); refresh(); } }, { signal });
-  els.exAtlas.addEventListener("click", () => exportJSON(() => model.toAtlasJSON(), `atlas_${model.system}_annotated.json`), { signal });
-  els.exXyz.addEventListener("click", () => exportJSON(() => model.toXyzJSON(), `lines_${model.system}_xyz.json`), { signal });
-  els.setActive.addEventListener("click", previewActiveAtlas, { signal });
+  if (window.__LANGERFACE_REACT_MANAGED__) {
+    window.addEventListener(ANNOTATE_LIBRARY_REACT_COMMAND_EVENT, handleReactLineLibraryCommand, { signal });
+  } else {
+    els.btnClear.addEventListener("click", () => { if (confirm("清空所有线？")) clearLines(); }, { signal });
+    els.exAtlas.addEventListener("click", () => exportJSON(() => model.toAtlasJSON(), `atlas_${model.system}_annotated.json`), { signal });
+    els.exXyz.addEventListener("click", () => exportJSON(() => model.toXyzJSON(), `lines_${model.system}_xyz.json`), { signal });
+    els.setActive.addEventListener("click", previewActiveAtlas, { signal });
+  }
   els.loadCanonical.addEventListener("click", loadCanonical, { signal });
   els.loadFlame.addEventListener("click", loadFlame, { signal });
   els.loadFittedFlame.addEventListener("click", loadFittedFlame, { signal });
@@ -431,6 +443,42 @@ function restoreLine(i) {
   refresh();
 }
 
+function clearLines() {
+  model.clear();
+  viewer.rebuildLines();
+  refresh();
+}
+
+function deleteLine(i) {
+  model.deleteLine(i);
+  viewer.rebuildLines();
+  refresh();
+}
+
+function handleReactLineLibraryCommand(event) {
+  const { command, index } = event.detail || {};
+  if (command === "clear_lines") {
+    clearLines();
+    return;
+  }
+  if (command === "export_atlas") {
+    exportJSON(() => model.toAtlasJSON(), `atlas_${model.system}_annotated.json`);
+    return;
+  }
+  if (command === "export_xyz") {
+    exportJSON(() => model.toXyzJSON(), `lines_${model.system}_xyz.json`);
+    return;
+  }
+  if (command === "set_active_atlas") {
+    previewActiveAtlas();
+    return;
+  }
+  const lineIndex = Number(index);
+  if (!Number.isInteger(lineIndex)) return;
+  if (command === "restore_line") restoreLine(lineIndex);
+  if (command === "delete_line") deleteLine(lineIndex);
+}
+
 function syncInputsFromLine(line) {
   els.name.value = line?.name || "";
   els.region.value = line?.region || "";
@@ -478,23 +526,7 @@ function setHint(t) {
   }
 }
 
-function refresh() {
-  if (!model || !els?.status) return;
-  const curPts = controlsOf(model.current).length;
-  const currentFallback = Boolean(model.current?.fallback);
-  els.status.textContent = `${model.lines.length} 条`;
-  els.current.classList.toggle("active", Boolean(model.current));
-  els.current.classList.toggle("warning", currentFallback);
-  els.current.textContent = model.current
-    ? `正在绘制：${model.current.name} · ${SYSTEM_LABELS[model.system]} · ${curPts} 点${curPts < 2 ? "（至少 2 点可保存）" : ""}${currentFallback ? " · 贴面路由已退回直线，需复核可能穿面" : ""}`
-    : "当前没有正在绘制的线。点击“开始一条线”，或直接在脸表面点击开始。";
-  els.btnNew.disabled = Boolean(model.current);
-  els.btnFinish.disabled = !model.current;
-  els.btnUndo.disabled = !(model.current || model.lines.length);
-  els.exAtlas.disabled = !(model.lines.length && onCanonical);
-  // 「设为活动图谱并预览」是 2D MediaPipe 实时轨入口；FLAME 图谱（独立 3D 轨）不走 2D 预览。
-  els.setActive.disabled = !(model.lines.length && onCanonical && model.topologyId === "mediapipe-468");
-  els.exXyz.disabled = !model.lines.length;
+function renderLegacyLineList() {
   els.list.innerHTML = "";
   if (!model.lines.length) {
     const empty = document.createElement("div");
@@ -528,13 +560,35 @@ function refresh() {
     edit.onclick = () => restoreLine(i);
     const del = document.createElement("button");
     del.textContent = "删除"; del.className = "mini del";
-    del.onclick = () => { model.deleteLine(i); viewer.rebuildLines(); refresh(); };
+    del.onclick = () => deleteLine(i);
     actions.appendChild(edit);
     actions.appendChild(del);
     row.appendChild(main);
     row.appendChild(actions);
     els.list.appendChild(row);
   });
+}
+
+function refresh() {
+  if (!model || !els?.status) return;
+  const curPts = controlsOf(model.current).length;
+  const currentFallback = Boolean(model.current?.fallback);
+  els.current.classList.toggle("active", Boolean(model.current));
+  els.current.classList.toggle("warning", currentFallback);
+  els.current.textContent = model.current
+    ? `正在绘制：${model.current.name} · ${SYSTEM_LABELS[model.system]} · ${curPts} 点${curPts < 2 ? "（至少 2 点可保存）" : ""}${currentFallback ? " · 贴面路由已退回直线，需复核可能穿面" : ""}`
+    : "当前没有正在绘制的线。点击“开始一条线”，或直接在脸表面点击开始。";
+  els.btnNew.disabled = Boolean(model.current);
+  els.btnFinish.disabled = !model.current;
+  els.btnUndo.disabled = !(model.current || model.lines.length);
+  if (!window.__LANGERFACE_REACT_MANAGED__) {
+    els.status.textContent = `${model.lines.length} 条`;
+    els.exAtlas.disabled = !(model.lines.length && onCanonical);
+    // 「设为活动图谱并预览」是 2D MediaPipe 实时轨入口；FLAME 图谱（独立 3D 轨）不走 2D 预览。
+    els.setActive.disabled = !(model.lines.length && onCanonical && model.topologyId === "mediapipe-468");
+    els.exXyz.disabled = !model.lines.length;
+    renderLegacyLineList();
+  }
   publishAnnotateState("refresh");
 }
 

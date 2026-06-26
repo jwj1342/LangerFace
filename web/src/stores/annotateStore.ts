@@ -22,6 +22,15 @@ export interface AnnotateSavedSummary {
   warningCount: number;
   totalControlPoints: number;
   totalPathPoints: number;
+  lines: AnnotateSavedLineSummary[];
+}
+
+export interface AnnotateSavedLineSummary {
+  index: number;
+  title: string;
+  meta: string;
+  fallback: boolean;
+  warning: string | null;
 }
 
 export interface AnnotateExportState {
