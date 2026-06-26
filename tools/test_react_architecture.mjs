@@ -368,6 +368,9 @@ assert.ok(standardFaceAssets.includes('"canonicalVertices"'), "standard face ass
 assert.ok(standardFaceAssets.includes('"triangles"'), "standard face asset service loads triangle topology");
 assert.ok(standardFaceAssets.includes('"atlasRstl"'), "standard face asset service loads the RSTL atlas");
 assert.ok(threeRoute.includes("loadStandardFaceAssets"), "R3F preview lazy-loads runtime assets through the shared service");
+assert.ok(threeRoute.includes("reloadSerial"), "R3F preview reload is driven by React route state");
+assert.ok(threeRoute.includes("setAssets(null)"), "R3F preview clears stale assets before a route-local reload");
+assert.ok(!threeRoute.includes("window.location.reload"), "R3F preview should not reload the whole SPA");
 assert.ok(threeRoute.includes("ThreePreviewScene"), "R3F preview route renders the scene through a React component");
 assert.ok(threeRoute.includes("ThreePreviewSidebar"), "R3F preview route renders the sidebar through a React component");
 assert.ok(threePreviewScene.includes("@react-three/fiber"), "R3F preview scene uses @react-three/fiber");

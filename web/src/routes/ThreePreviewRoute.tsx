@@ -8,6 +8,7 @@ import { useAppStore } from "../stores/appStore";
 export function ThreePreviewRoute() {
   const [assets, setAssets] = useState<ThreePreviewAssets | null>(null);
   const [loadingText, setLoadingText] = useState("正在加载标准脸资产");
+  const [reloadSerial, setReloadSerial] = useState(0);
   const setActiveWorkspace = useAppStore((state) => state.setActiveWorkspace);
   const setRouteStatus = useAppStore((state) => state.setRouteStatus);
   const setAssetStatus = useAppStore((state) => state.setAssetStatus);
@@ -15,6 +16,9 @@ export function ThreePreviewRoute() {
   useEffect(() => {
     let disposed = false;
     setActiveWorkspace("three-preview");
+    setAssets(null);
+    setLoadingText("正在加载标准脸资产");
+    setAssetStatus("R3F 标准脸资产加载中");
     setRouteStatus("R3F 预览加载中");
 
     loadStandardFaceAssets({
@@ -35,12 +39,12 @@ export function ThreePreviewRoute() {
       disposed = true;
       setRouteStatus("R3F 预览已卸载");
     };
-  }, [setActiveWorkspace, setAssetStatus, setRouteStatus]);
+  }, [reloadSerial, setActiveWorkspace, setAssetStatus, setRouteStatus]);
 
   return (
     <div className="react-page">
       <div className="react-shell">
-        <ThreePreviewSidebar isReady={Boolean(assets)} onReload={() => window.location.reload()} />
+        <ThreePreviewSidebar isReady={Boolean(assets)} onReload={() => setReloadSerial((serial) => serial + 1)} />
         <main className="react-shell-main">
           <ThreePreviewScene assets={assets} loadingText={loadingText} />
         </main>
