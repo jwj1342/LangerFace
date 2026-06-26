@@ -1,11 +1,12 @@
 import { useState } from "react";
 
+import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useLiveStore } from "../stores/liveStore";
 
 const LIVE_RENDER_REACT_COMMAND_EVENT = "langerface:live-render-react-command";
 
 function dispatchRenderCommand(command: string, value?: string | number | boolean) {
-  window.dispatchEvent(new CustomEvent(LIVE_RENDER_REACT_COMMAND_EVENT, { detail: { command, value } }));
+  dispatchControllerCommand(LIVE_RENDER_REACT_COMMAND_EVENT, { command, value });
 }
 
 export function LiveRenderControlsPanel() {

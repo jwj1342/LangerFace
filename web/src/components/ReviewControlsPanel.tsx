@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 
 const REVIEW_REACT_COMMAND_EVENT = "langerface:incision-review-react-command";
@@ -23,7 +24,7 @@ function reviewTone(status: string) {
 }
 
 function dispatchReviewCommand(command: string) {
-  window.dispatchEvent(new CustomEvent(REVIEW_REACT_COMMAND_EVENT, { detail: { command } }));
+  dispatchControllerCommand(REVIEW_REACT_COMMAND_EVENT, { command });
 }
 
 export function ReviewControlsPanel() {

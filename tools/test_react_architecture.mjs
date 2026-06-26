@@ -15,6 +15,7 @@ const vercel = read("vercel.json");
 const app = read("src/App.tsx");
 const typedStore = read("src/stores/appStore.ts");
 const workbenchBrand = read("src/components/WorkbenchBrand.tsx");
+const controllerCommand = read("src/lib/controllerCommand.ts");
 const annotateStore = read("src/stores/annotateStore.ts");
 const controllerSnapshotBridgeHook = read("src/hooks/useControllerSnapshotBridge.ts");
 const annotateBridge = read("src/hooks/useAnnotateControllerBridge.ts");
@@ -110,6 +111,11 @@ assert.ok(dashboardRoute.includes("WorkbenchBrand"), "React dashboard uses the s
 assert.ok(workbenchBrand.includes('className="brand"'), "React shell uses a shared workbench brand component");
 assert.ok(workbenchBrand.includes('className="brand-top"'), "shared workbench brand keeps the existing brand-top structure");
 assert.ok(workbenchBrand.includes("{action}"), "shared workbench brand supports page-specific status/actions");
+assert.ok(controllerCommand.includes("ControllerCommandDetail"), "React controller command helper keeps command payloads typed");
+assert.ok(controllerCommand.includes("dispatchControllerEvent"), "React controller command helper exposes generic controller events");
+assert.ok(controllerCommand.includes("dispatchControllerCommand"), "React controller command helper exposes command dispatch");
+assert.ok(controllerCommand.includes("CustomEvent<TDetail>"), "React controller command helper preserves typed CustomEvent details");
+assert.ok(controllerCommand.includes("window.dispatchEvent"), "React controller command helper centralizes browser event dispatch");
 assert.ok(typedStore.includes("React/Zustand stores low-frequency UI"), "Zustand store documents low-frequency state ownership");
 assert.ok(typedStore.includes("per-frame arrays stay outside persisted stores"), "Zustand store forbids high-frequency renderer arrays");
 assert.ok(typedStore.includes("interface AppState"), "Zustand store is typed");
@@ -200,6 +206,7 @@ for (const id of [
 }
 assert.ok(incisionWorkbench.includes("TumorInputPanel"), "React incision workbench renders the tumor input controls as a React component");
 assert.ok(tumorPanel.includes("TUMOR_REACT_COMMAND_EVENT"), "React tumor panel dispatches tumor commands to the controller boundary");
+assert.ok(tumorPanel.includes("dispatchControllerCommand"), "React tumor panel uses the shared controller command helper");
 assert.ok(tumorPanel.includes("useIncisionStore"), "React tumor panel syncs low-frequency tumor status from Zustand");
 for (const id of [
   "secondaryCueState",
@@ -214,6 +221,7 @@ for (const id of [
 assert.ok(incisionStore.includes("IncisionSecondaryCueState"), "incision Zustand store keeps typed secondary cue state");
 assert.ok(incisionWorkbench.includes("SecondaryCuePanel"), "React incision workbench renders the secondary cue controls as a React component");
 assert.ok(secondaryCuePanel.includes("SECONDARY_CUE_REACT_COMMAND_EVENT"), "React secondary cue panel dispatches cue commands to the controller boundary");
+assert.ok(secondaryCuePanel.includes("dispatchControllerCommand"), "React secondary cue panel uses the shared controller command helper");
 assert.ok(secondaryCuePanel.includes("useIncisionStore"), "React secondary cue panel syncs low-frequency cue state from Zustand");
 for (const id of [
   "candidateType",
@@ -251,6 +259,7 @@ for (const id of [
 assert.ok(incisionStore.includes("IncisionSavedCandidateSummary"), "incision Zustand store keeps typed saved candidate summaries");
 assert.ok(incisionWorkbench.includes("CandidateLibraryPanel"), "React incision workbench renders the candidate library as a React component");
 assert.ok(candidateLibraryPanel.includes("LIBRARY_REACT_COMMAND_EVENT"), "React candidate library dispatches library commands to the controller boundary");
+assert.ok(candidateLibraryPanel.includes("dispatchControllerCommand"), "React candidate library uses the shared controller command helper");
 assert.ok(candidateLibraryPanel.includes("useIncisionStore"), "React candidate library reads saved candidate summaries from Zustand");
 for (const id of [
   "privacyState",
@@ -276,6 +285,7 @@ assert.ok(incisionWorkbench.includes("ProviderConfigPanel"), "React incision wor
 assert.ok(providerPanel.includes("testProviderConnection"), "React provider panel owns the browser-side Provider connectivity test");
 assert.ok(providerPanel.includes("normalizeProviderBaseUrl"), "React provider panel normalizes provider Base URL");
 assert.ok(providerPanel.includes("PROVIDER_REACT_STATE_EVENT"), "React provider panel notifies the legacy controller to republish snapshots");
+assert.ok(providerPanel.includes("dispatchControllerEvent"), "React provider panel uses the shared controller event helper");
 for (const id of [
   "editStatus",
   "angleOffsetDeg",
@@ -300,6 +310,7 @@ for (const id of [
 assert.ok(incisionStore.includes("IncisionEditState"), "incision Zustand store keeps typed edit state");
 assert.ok(incisionWorkbench.includes("EditControlsPanel"), "React incision workbench renders the edit controls as a React component");
 assert.ok(editPanel.includes("EDIT_REACT_COMMAND_EVENT"), "React edit panel dispatches edit commands to the controller boundary");
+assert.ok(editPanel.includes("dispatchControllerCommand"), "React edit panel uses the shared controller command helper");
 assert.ok(editPanel.includes("useIncisionStore"), "React edit panel syncs low-frequency edit state from Zustand");
 for (const id of [
   "reviewState",
@@ -314,6 +325,7 @@ for (const id of [
 }
 assert.ok(incisionWorkbench.includes("ReviewControlsPanel"), "React incision workbench renders the review controls as a React component");
 assert.ok(reviewPanel.includes("REVIEW_REACT_COMMAND_EVENT"), "React review panel dispatches review commands to the controller boundary");
+assert.ok(reviewPanel.includes("dispatchControllerCommand"), "React review panel uses the shared controller command helper");
 assert.ok(reviewPanel.includes("useIncisionStore"), "React review panel syncs low-frequency review state from Zustand");
 assert.ok(incisionWorkbench.includes('to="/live"'), "React incision workbench returns to the React live route");
 assert.ok(incisionStagePanel.includes('to="/annotate"'), "React incision stage links to the React 3D annotation route");
@@ -419,6 +431,8 @@ assert.ok(annotateWorkbench.includes("AnnotateHelpPanel"), "React annotate workb
 assert.ok(annotateWorkbench.includes("AnnotateStagePanel"), "React annotate workbench renders the 3D stage shell as a React component");
 assert.ok(annotateMeshSourcePanel.includes("ANNOTATE_MESH_REACT_COMMAND_EVENT"), "React annotate mesh source panel dispatches mesh commands to the controller boundary");
 assert.ok(annotateDrawPanel.includes("ANNOTATE_DRAW_REACT_COMMAND_EVENT"), "React annotate draw panel dispatches current-line commands to the controller boundary");
+assert.ok(annotateMeshSourcePanel.includes("dispatchControllerCommand"), "React annotate mesh source panel uses the shared controller command helper");
+assert.ok(annotateDrawPanel.includes("dispatchControllerCommand"), "React annotate draw panel uses the shared controller command helper");
 assert.ok(annotateMeshSourcePanel.includes("useAnnotateStore"), "React annotate mesh source panel reads low-frequency mesh state from Zustand");
 assert.ok(annotateDrawPanel.includes("useAnnotateStore"), "React annotate draw panel reads low-frequency draft state from Zustand");
 assert.ok(annotateHelpPanel.includes("标注帮助"), "React annotate help panel keeps the user-facing annotation guide");
@@ -436,6 +450,7 @@ for (const id of [
 assert.ok(annotateStore.includes("AnnotateSavedLineSummary"), "annotation Zustand store keeps typed saved line summaries");
 assert.ok(annotateWorkbench.includes("AnnotateLineLibraryPanel"), "React annotate workbench renders the saved line library as a React component");
 assert.ok(annotateLineLibraryPanel.includes("ANNOTATE_LIBRARY_REACT_COMMAND_EVENT"), "React annotate line library dispatches saved line commands to the controller boundary");
+assert.ok(annotateLineLibraryPanel.includes("dispatchControllerCommand"), "React annotate line library uses the shared controller command helper");
 assert.ok(annotateLineLibraryPanel.includes("useAnnotateStore"), "React annotate line library reads saved line state from Zustand");
 assert.ok(annotateMeshSourcePanel.includes('to="/surgery"'), "React annotation mesh source panel links to the React surgery closure route");
 assert.ok(annotateMeshSourcePanel.includes('to="/live"'), "React annotation mesh source panel returns to the React live route");
@@ -561,6 +576,9 @@ assert.ok(liveWorkbench.includes("LiveStagePanel"), "React live workbench render
 assert.ok(liveRouteControlsPanel.includes("LIVE_ROUTE_REACT_COMMAND_EVENT"), "React live route controls dispatch 3D route commands to the controller boundary");
 assert.ok(liveSourceControlsPanel.includes("LIVE_SOURCE_REACT_COMMAND_EVENT"), "React live source controls dispatch source commands to the controller boundary");
 assert.ok(liveRenderControlsPanel.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "React live render controls dispatch render commands to the controller boundary");
+assert.ok(liveRouteControlsPanel.includes("dispatchControllerCommand"), "React live route controls use the shared controller command helper");
+assert.ok(liveSourceControlsPanel.includes("dispatchControllerCommand"), "React live source controls use the shared controller command helper");
+assert.ok(liveRenderControlsPanel.includes("dispatchControllerCommand"), "React live render controls use the shared controller command helper");
 assert.ok(liveRouteControlsPanel.includes("useLiveStore"), "React live route controls read low-frequency route and recon state from Zustand");
 assert.ok(liveSourceControlsPanel.includes("useLiveStore"), "React live source controls read low-frequency source state from Zustand");
 assert.ok(liveRenderControlsPanel.includes("useLiveStore"), "React live render controls read low-frequency render state from Zustand");

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 
+import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 
 const TUMOR_REACT_COMMAND_EVENT = "langerface:incision-tumor-react-command";
 
 function dispatchTumorCommand(command: string) {
-  window.dispatchEvent(new CustomEvent(TUMOR_REACT_COMMAND_EVENT, { detail: { command } }));
+  dispatchControllerCommand(TUMOR_REACT_COMMAND_EVENT, { command });
 }
 
 function hiddenClass(hidden: boolean) {

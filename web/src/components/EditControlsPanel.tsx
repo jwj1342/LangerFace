@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 
 const EDIT_REACT_COMMAND_EVENT = "langerface:incision-edit-react-command";
@@ -20,7 +21,7 @@ const DEFAULT_EDIT_STATE = {
 };
 
 function dispatchEditCommand(command: string) {
-  window.dispatchEvent(new CustomEvent(EDIT_REACT_COMMAND_EVENT, { detail: { command } }));
+  dispatchControllerCommand(EDIT_REACT_COMMAND_EVENT, { command });
 }
 
 export function EditControlsPanel() {

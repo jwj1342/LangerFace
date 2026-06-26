@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 
+import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 
 const SECONDARY_CUE_REACT_COMMAND_EVENT = "langerface:incision-secondary-cue-react-command";
 
 function dispatchSecondaryCueCommand(command: string) {
-  window.dispatchEvent(new CustomEvent(SECONDARY_CUE_REACT_COMMAND_EVENT, { detail: { command } }));
+  dispatchControllerCommand(SECONDARY_CUE_REACT_COMMAND_EVENT, { command });
 }
 
 export function SecondaryCuePanel() {

@@ -1,9 +1,10 @@
+import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useLiveStore } from "../stores/liveStore";
 
 const LIVE_SOURCE_REACT_COMMAND_EVENT = "langerface:live-source-react-command";
 
 function dispatchSourceCommand(command: string) {
-  window.dispatchEvent(new CustomEvent(LIVE_SOURCE_REACT_COMMAND_EVENT, { detail: { command } }));
+  dispatchControllerCommand(LIVE_SOURCE_REACT_COMMAND_EVENT, { command });
 }
 
 export function LiveSourceControlsPanel() {

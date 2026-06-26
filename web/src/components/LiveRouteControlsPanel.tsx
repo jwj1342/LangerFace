@@ -1,11 +1,12 @@
 import { Link } from "react-router-dom";
 
+import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useLiveStore } from "../stores/liveStore";
 
 const LIVE_ROUTE_REACT_COMMAND_EVENT = "langerface:live-route-react-command";
 
 function dispatchRouteCommand(command: string, value?: string | boolean) {
-  window.dispatchEvent(new CustomEvent(LIVE_ROUTE_REACT_COMMAND_EVENT, { detail: { command, value } }));
+  dispatchControllerCommand(LIVE_ROUTE_REACT_COMMAND_EVENT, { command, value });
 }
 
 export function LiveRouteControlsPanel() {

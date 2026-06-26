@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { normalizeProviderBaseUrl, testProviderConnection, type ProviderConfig } from "../../llm_provider.js";
+import { dispatchControllerEvent } from "../lib/controllerCommand";
 
 const PROVIDER_STORAGE_KEY = "langerface.incision.provider";
 const PROVIDER_REACT_STATE_EVENT = "langerface:incision-provider-react-state";
@@ -102,7 +103,7 @@ function saveProviderPrefs(cfg: ProviderConfig) {
 
 function notifyController() {
   setTimeout(() => {
-    window.dispatchEvent(new CustomEvent(PROVIDER_REACT_STATE_EVENT, { detail: { source: "react_provider_panel" } }));
+    dispatchControllerEvent(PROVIDER_REACT_STATE_EVENT, { source: "react_provider_panel" });
   }, 0);
 }
 

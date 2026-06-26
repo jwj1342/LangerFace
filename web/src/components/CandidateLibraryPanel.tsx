@@ -1,9 +1,10 @@
+import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 
 const LIBRARY_REACT_COMMAND_EVENT = "langerface:incision-library-react-command";
 
 function dispatchLibraryCommand(command: string, id?: string) {
-  window.dispatchEvent(new CustomEvent(LIBRARY_REACT_COMMAND_EVENT, { detail: { command, id } }));
+  dispatchControllerCommand(LIBRARY_REACT_COMMAND_EVENT, { command, id });
 }
 
 export function CandidateLibraryPanel() {

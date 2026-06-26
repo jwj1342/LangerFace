@@ -1,9 +1,10 @@
+import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useAnnotateStore } from "../stores/annotateStore";
 
 const ANNOTATE_DRAW_REACT_COMMAND_EVENT = "langerface:annotate-draw-react-command";
 
 function dispatchDrawCommand(command: string, value?: string) {
-  window.dispatchEvent(new CustomEvent(ANNOTATE_DRAW_REACT_COMMAND_EVENT, { detail: { command, value } }));
+  dispatchControllerCommand(ANNOTATE_DRAW_REACT_COMMAND_EVENT, { command, value });
 }
 
 function currentStateText(snapshot: ReturnType<typeof useAnnotateStore.getState>["snapshot"]) {

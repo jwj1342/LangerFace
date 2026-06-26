@@ -1,9 +1,10 @@
+import { dispatchControllerCommand } from "../lib/controllerCommand";
 import { useAnnotateStore } from "../stores/annotateStore";
 
 const ANNOTATE_LIBRARY_REACT_COMMAND_EVENT = "langerface:annotate-library-react-command";
 
 function dispatchLibraryCommand(command: string, index?: number) {
-  window.dispatchEvent(new CustomEvent(ANNOTATE_LIBRARY_REACT_COMMAND_EVENT, { detail: { command, index } }));
+  dispatchControllerCommand(ANNOTATE_LIBRARY_REACT_COMMAND_EVENT, { command, index });
 }
 
 export function AnnotateLineLibraryPanel() {
