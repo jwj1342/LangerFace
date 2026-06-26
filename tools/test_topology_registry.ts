@@ -1,4 +1,4 @@
-// 拓扑登记表测试（纯模块，无 DOM）。  node tools/test_topology_registry.mjs
+// 拓扑登记表测试（纯模块，无 DOM）。  node tools/test_topology_registry.ts
 import assert from "node:assert/strict";
 
 import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "../web/src/services/constants.ts";

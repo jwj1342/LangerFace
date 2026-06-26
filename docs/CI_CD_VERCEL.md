@@ -47,7 +47,7 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 
 [web/vercel.json](../web/vercel.json) 已将 `git.deploymentEnabled` 设置为 `* = false` 和 `** = false`，默认只对白名单生产分支 `master` 开放；当前开发分支 `react-architecture-refactor` 显式设为 `false`，避免 Vercel 在长 PR 高频 push 时先创建 deployment / check、再进入限流。配置里仍保留 `github.autoJobCancelation`，用于后续临时打开 Preview 时取消同一 PR / 分支上的较旧构建。
 
-此外，`ignoreCommand` 会运行 [`web/scripts/vercel-ignore-build.mjs`](../web/scripts/vercel-ignore-build.mjs)。它主要用于维护者临时打开当前开发 Preview 时做二级保护：
+此外，`ignoreCommand` 会运行 [`web/scripts/vercel-ignore-build.ts`](../web/scripts/vercel-ignore-build.ts)。它主要用于维护者临时打开当前开发 Preview 时做二级保护：
 
 - 非白名单分支直接跳过 Vercel 构建。
 - 如果临时打开 `react-architecture-refactor` 的 Preview，默认仍要求 commit message 包含 `[vercel]`、`[preview]` 或 `[deploy-preview]` 才会构建。需要临时恢复自动 Preview 时，在 Vercel 环境变量里设置 `VERCEL_PREVIEW_DEPLOY_MODE=auto`；遇到限流时可设为 `off` 暂停开发 Preview 构建；需要单次强制构建时设置 `VERCEL_FORCE_DEPLOY=1`。
@@ -80,7 +80,7 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 本仓库已有 [web/vercel.json](../web/vercel.json)，里面声明了：
 - `installCommand`: `npm ci`
 - `buildCommand`: `npm run build`
-- `ignoreCommand`: `node scripts/vercel-ignore-build.mjs`，作为临时打开开发 Preview 时的二级保护：只允许当前开发分支的显式触发构建，并且仅在 `web/` 有变化时构建
+- `ignoreCommand`: `node scripts/vercel-ignore-build.ts`，作为临时打开开发 Preview 时的二级保护：只允许当前开发分支的显式触发构建，并且仅在 `web/` 有变化时构建
 - `outputDirectory`: `dist`
 - `git.deploymentEnabled`: 默认只允许 `master` 自动部署；当前开发分支 `react-architecture-refactor` 显式关闭 Git 自动部署，避免长 PR 高频 push 触发 Vercel 限流
 - `github.autoJobCancelation`: 同一 PR / 分支有新 commit 时取消较旧构建

@@ -1,5 +1,5 @@
 // 验证遮挡几何：贴合手形掩膜（手掌+指胶囊）只挡住手本身，张开手指间的缝隙保留。
-//   node tools/test_occlusion.mjs
+//   node tools/test_occlusion.ts
 import {
   buildHandMasks,
   buildOccluderHulls,

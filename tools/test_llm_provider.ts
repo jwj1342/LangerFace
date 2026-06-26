@@ -1,25 +1,7 @@
 // Dependency-free tests for browser-side OpenAI-compatible provider helpers.
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import ts from "../web/node_modules/typescript/lib/typescript.js";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-
-async function importTypeScriptModule(rel) {
-  const source = fs.readFileSync(path.join(root, rel), "utf8");
-  const { outputText } = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.ESNext,
-      target: ts.ScriptTarget.ES2022,
-    },
-  });
-  return import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
-}
-
-const providerModule = await importTypeScriptModule("web/src/services/llmProvider.ts");
-const T = providerModule.__llmProviderForTests;
+import { __llmProviderForTests as T, testProviderConnection } from "../web/src/services/llmProvider.ts";
 
 assert.equal(
   T.normalizeProviderBaseUrl("example.internal/v1/"),
@@ -56,7 +38,7 @@ globalThis.fetch = async (url, init) => {
   };
 };
 
-const result = await providerModule.testProviderConnection({
+const result = await testProviderConnection({
   provider: "openai-compatible",
   base_url: "example.internal/v1/",
   api_key: "sk-test",

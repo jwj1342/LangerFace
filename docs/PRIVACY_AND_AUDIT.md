@@ -109,7 +109,7 @@ React 切口工作台 `/app/incision` 在导出审阅 JSON 或肿物输入 JSON 
 
 ```bash
 python tools/audit_export_privacy.py incision_review_*.json tumor_input_*.json
-cd web && node ../tools/test_incision_tools.mjs
+cd web && node ../tools/test_incision_tools.ts
 ```
 
 离线隐私脚本输出 `export-privacy-audit/v0.1` 报告，默认发现违规即返回非 0。浏览器 workflow 合约测试会额外覆盖肿物输入、边界摘要、trace gate、候选比较和导出前预检。当前检查项包括：

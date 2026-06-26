@@ -1,5 +1,5 @@
 // Pure contract checks for runtime face pose / expression quality gates.
-//   node tools/test_pose_quality.mjs
+//   node tools/test_pose_quality.ts
 import assert from "node:assert/strict";
 import {
   estimateFacePoseQuality,

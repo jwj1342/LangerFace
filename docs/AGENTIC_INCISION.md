@@ -58,9 +58,9 @@
 
 ```bash
 cd web
-node ../tools/test_incision_tools.mjs
-node ../tools/test_incision_agent_ui.mjs
-node ../tools/test_llm_provider.mjs
+node ../tools/test_incision_tools.ts
+node ../tools/test_incision_agent_ui.ts
+node ../tools/test_llm_provider.ts
 npm test
 npm run build
 ```

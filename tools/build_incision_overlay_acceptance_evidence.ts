@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { buildIncisionOverlayAcceptanceAudit } from "./audit_incision_overlay_acceptance.mjs";
+import { buildIncisionOverlayAcceptanceAudit } from "./audit_incision_overlay_acceptance.ts";
 
 const EVIDENCE_SCHEMA = "incision-overlay-acceptance-evidence/v0.1";
 const RUNTIME_SCHEMA = "incision-overlay-runtime-diagnostics/v0.1";
@@ -13,7 +13,7 @@ const STABILITY_SCHEMA = "incision-overlay-stability/v0.1";
 
 function usage() {
   return [
-    "Usage: node tools/build_incision_overlay_acceptance_evidence.mjs [options]",
+    "Usage: node tools/build_incision_overlay_acceptance_evidence.ts [options]",
     "",
     "Required in normal CLI use:",
     "  --output evidence.json",
@@ -404,7 +404,7 @@ export function buildIncisionOverlayAcceptanceEvidence(sources = {}, options = {
   const evidence = {
     schema_version: EVIDENCE_SCHEMA,
     generated_at: options.generatedAt || new Date().toISOString(),
-    generated_by: "tools/build_incision_overlay_acceptance_evidence.mjs",
+    generated_by: "tools/build_incision_overlay_acceptance_evidence.ts",
     evidence_sources: sourceCounts,
     evidence: accumulator.evidence,
     privacy: {

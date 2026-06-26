@@ -14,7 +14,7 @@ const LOCAL_REGION_QUALITY_SCHEMA = "rstl-local-region-quality-gate/v0.1";
 
 function usage() {
   return [
-    "Usage: node tools/audit_incision_overlay_acceptance.mjs --input evidence.json [--output audit.json]",
+    "Usage: node tools/audit_incision_overlay_acceptance.ts --input evidence.json [--output audit.json]",
     "",
     "Input is sanitized evidence only. It may contain:",
     "  { schema_version: \"incision-overlay-acceptance-evidence/v0.1\", evidence: [...] }",
@@ -305,7 +305,7 @@ export function buildIncisionOverlayAcceptanceAudit(payloads, options = {}) {
   return {
     schema_version: ACCEPTANCE_SCHEMA,
     generated_at: options.generatedAt || new Date().toISOString(),
-    generated_by: "tools/audit_incision_overlay_acceptance.mjs",
+    generated_by: "tools/audit_incision_overlay_acceptance.ts",
     input_schema_versions: normalizedPayloads
       .map((payload) => payload?.schema_version)
       .filter(Boolean),

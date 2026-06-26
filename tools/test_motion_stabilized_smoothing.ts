@@ -1,5 +1,5 @@
 // Contract checks for #39 whole-face motion stabilization.
-//   node tools/test_motion_stabilized_smoothing.mjs
+//   node tools/test_motion_stabilized_smoothing.ts
 import assert from "node:assert/strict";
 import { RIGID3D } from "../web/src/services/constantsGenerated.ts";
 import { MotionStabilizedOneEuro, OneEuro, __smoothingForTests } from "../web/src/services/geometrySmoothing.ts";

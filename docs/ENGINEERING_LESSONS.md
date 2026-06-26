@@ -91,7 +91,7 @@ master 受保护：**1 个 approval + 5 个必需检查**（`lint` / `python-tes
 - **逐字搬运**：拆分文件时函数体**原样复制**，只动 import/export，不顺手「优化」逻辑。
 - **两步式拆分导出面**：大文件拆模块时可以先用临时 barrel re-export 稳住行为；完成调用方迁移后，应切到直接导入目标 TypeScript service 并删除旧 facade。
 - **靠现成测试兜底**：本仓库有几类强力测试——跨语言**对拍 fixture**（`one-euro fixture error 0.0` 之类逐位比对）、
-  **import 无环检查**（`test_web_architecture.mjs`）、Umeyama/遮挡数值测试。重构后这些全绿，等价性才算证到。
+  **import 无环检查**（`test_web_architecture.ts`）、Umeyama/遮挡数值测试。重构后这些全绿，等价性才算证到。
 - **生成物要确定性 + CI 漂移门禁**：跨语言单一真源（如从 `constants.py` 生成 `web/src/services/constantsGenerated.ts`，见 #30）——
   生成器输出必须逐次字节一致，并在 CI 里 `git diff --exit-code` 生成物，改了源却忘了重生成即报错。
 

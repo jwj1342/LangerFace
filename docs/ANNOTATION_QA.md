@@ -19,9 +19,9 @@
 
 ## 自动测试覆盖
 
-- `tools/test_annotate_model.mjs`：验证跨三角面控制点会展开为表面路径、导出使用同一组 `points`、断连网格 fallback 非静默。
-- `tools/test_annotate_ui.mjs`：验证 fallback 风险在当前线状态和已保存线列表中有可见提示。
-- `tools/test_slicer_curve.mjs`：验证导入 3D Slicer 曲线时会平滑重采样并限制输出点数，避免异常输入造成过密路径。
+- `tools/test_annotate_model.ts`：验证跨三角面控制点会展开为表面路径、导出使用同一组 `points`、断连网格 fallback 非静默。
+- `tools/test_annotate_ui.ts`：验证 fallback 风险在当前线状态和已保存线列表中有可见提示。
+- `tools/test_slicer_curve.ts`：验证导入 3D Slicer 曲线时会平滑重采样并限制输出点数，避免异常输入造成过密路径。
 - `npm test` 会运行以上测试，并同时检查标注预览图谱跨页注入的拓扑守卫。
 
 ## 仍需人工确认

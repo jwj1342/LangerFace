@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildIncisionOverlayAcceptanceAudit } from "./audit_incision_overlay_acceptance.mjs";
+import { buildIncisionOverlayAcceptanceAudit } from "./audit_incision_overlay_acceptance.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -196,7 +196,7 @@ fs.writeFileSync(inputPath, JSON.stringify(passingEvidence), "utf8");
 const cli = spawnSync(
   process.execPath,
   [
-    "tools/audit_incision_overlay_acceptance.mjs",
+    "tools/audit_incision_overlay_acceptance.ts",
     "--input",
     inputPath,
     "--output",
@@ -215,7 +215,7 @@ const failingInputPath = path.join(tmpDir, "acceptance_fail.json");
 fs.writeFileSync(failingInputPath, JSON.stringify(failingEvidence), "utf8");
 const failingCli = spawnSync(
   process.execPath,
-  ["tools/audit_incision_overlay_acceptance.mjs", "--input", failingInputPath],
+  ["tools/audit_incision_overlay_acceptance.ts", "--input", failingInputPath],
   { cwd: ROOT, text: true, encoding: "utf8" },
 );
 assert.equal(failingCli.status, 1, "CLI exits nonzero on failed #19 acceptance evidence");

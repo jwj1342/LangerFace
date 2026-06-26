@@ -19,7 +19,7 @@
   分片；`pipeline.ts` 不依赖 `mode3d.ts`，3D 实时投影通过无 DOM 的 `projection3d.ts` 适配，避免模块环。
 
 > 关键不变式：`web/src/services/geometry*.ts` 的映射/遮挡/平滑必须与 Python 端**逐点一致**，由
-> `tools/test_web_mapping.mjs` 持续对拍保证（误差 < 1e-2 px、可见性 0 不一致）。
+> `tools/test_web_mapping.ts` 持续对拍保证（误差 < 1e-2 px、可见性 0 不一致）。
 
 ---
 
@@ -59,7 +59,7 @@ P = u·V0 + v·V1 + w·V2
 `web/src/services/geometryOccluders.ts: buildHandMasks / pointInHandMasks`。并行跑 MediaPipe **Hand Landmarker**（`hand_landmarker.task`，21 点/手）：
 - 不用整手大凸包（会连指缝一起挡），而是**贴合手形掩膜** = 手掌点凸包 + 沿各指骨的"胶囊"（半径按掌宽自适应）。
 - 落在掌内或任一指骨胶囊内的脸部线点剔除；**张开手指间的缝隙保留**（脸继续显示）。
-- 由 `tools/test_occlusion.mjs` 验证（缝隙点不被挡，旧凸包会误挡）。
+- 由 `tools/test_occlusion.ts` 验证（缝隙点不被挡，旧凸包会误挡）。
 
 ### 3.4 渲染
 `web/src/services/render2d.ts: draw` / [`src/langerface/rendering/overlay.py`](../src/langerface/rendering/overlay.py)：抗锯齿折线，被遮挡点处**断开**子段；
@@ -80,7 +80,7 @@ P = u·V0 + v·V1 + w·V2
 - 对齐后的网格**逐顶点取中位数** → 稳定的个性化中性脸（中位数对表情/抖动/遮挡鲁棒）。
 - 坐标统一在**屏幕手性**（x 右 / y 下 / z 入屏），便于实时配准；查看时前端翻 y/z 成 y 上。
 - Umeyama 实现：`web/src/services/geometryTransform.ts: umeyama/applySim`（3×3 对称特征分解 Jacobi → SVD → R, c, t），
-  由 `tools/test_umeyama.mjs` 验证（恢复已知变换误差 ~1e-13）。
+  由 `tools/test_umeyama.ts` 验证（恢复已知变换误差 ~1e-13）。
 
 ### 4.2 把线贴到 3D 头并查看
 [`web/src/services/three3d.ts`](../web/src/services/three3d.ts)（Three.js 0.184，由 Vite 打包，按需动态加载）：
@@ -124,7 +124,7 @@ P = u·V0 + v·V1 + w·V2
 ## 7. Python ↔ 网页 的对拍验证基准
 
 1. `tools/dump_landmarks.py`：对示例视频若干帧跑 Python 管线，导出 关键点 + 映射结果 + 逐点可见性 → `web/test/expected.json`。
-2. `tools/test_web_mapping.mjs`：用同一关键点在 JS 跑 `mapAtlas/visibleTriangles`，与 Python 结果逐点比对。
+2. `tools/test_web_mapping.ts`：用同一关键点在 JS 跑 `mapAtlas/visibleTriangles`，与 Python 结果逐点比对。
 3. 改动几何后务必重跑 1+2，保持 JS==Python。
 
 ---
@@ -180,7 +180,7 @@ P = u·V0 + v·V1 + w·V2
 
 ## 11. 前端鲁棒性约束
 
-- `tools/test_web_architecture.mjs` 会检查 `web/src/**/*.ts(x)` 与 `vite.config.ts` 的静态相对 import 图，禁止新增模块环，并阻止旧根目录 JS 运行时文件回流。
+- `tools/test_web_architecture.ts` 会检查 `web/src/**/*.ts(x)` 与 `vite.config.ts` 的静态相对 import 图，禁止新增模块环，并阻止旧根目录 JS 运行时文件回流。
 - `web/src/services/logger.ts` 统一记录浏览器端关键故障、降级事件、帧指标和资产版本；调试时可在控制台查看 `window.langerfaceDiagnostics`，或调用 `window.exportLangerfaceDiagnostics()` 导出脱敏 JSON。字段约定见 [OBSERVABILITY.md](OBSERVABILITY.md)。
 - `web/.npmrc` 启用 `engine-strict=true`，安装依赖时会严格执行 `package.json` 中的 Node/npm 版本要求。
 - React SPA 中仍由运行时服务接管的工作台必须只在 route host 内查询 DOM。`annotateRuntime.ts`、`incisionAgentRuntime.ts`
@@ -241,7 +241,7 @@ npm run dev
 
 | 文件 | 职责 |
 |---|---|
-| `web/src/services/annotationModel.ts` | 纯数据模型：线/点管理、表面路径展开、重心坐标、导出图谱/xyz（node 可单测，见 `tools/test_annotate_model.mjs`） |
+| `web/src/services/annotationModel.ts` | 纯数据模型：线/点管理、表面路径展开、重心坐标、导出图谱/xyz（node 可单测，见 `tools/test_annotate_model.ts`） |
 | `web/src/services/annotateViewer.ts` | Three.js 场景：网格加载、射线表面拾取、线与控制点渲染 |
 | `web/src/services/annotateRuntime.ts` | 标注 runtime 装配（指针拖拽/点击、导出、列表、快捷键；严格 TypeScript，直接依赖 TS service 模块） |
 | `web/app/index.html` / `web/src/routes/AnnotateRoute.tsx` / `web/src/components/Annotate*.tsx` | React 标注页入口与 UI |

@@ -1,5 +1,5 @@
 // Dependency-free tests for the TypeScript Slicer curve importer.
-// Run: node tools/test_slicer_curve.mjs
+// Run: node tools/test_slicer_curve.ts
 import { __slicerCurveForTests } from "../web/src/services/slicerCurve.ts";
 
 const { parseSlicerMarkups, smoothAndResample } = __slicerCurveForTests;

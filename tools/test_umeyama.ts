@@ -1,5 +1,5 @@
 // 验证 Umeyama 相似变换：施加已知 (scale,rot,trans) 后能否恢复。
-//   node tools/test_umeyama.mjs
+//   node tools/test_umeyama.ts
 import { umeyama, applySim } from "../web/src/services/geometryTransform.ts";
 
 let fail = 0;

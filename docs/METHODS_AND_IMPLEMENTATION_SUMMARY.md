@@ -261,7 +261,7 @@ d = ||P-Q||
 
 若 `d <= radius`，则认为被该指骨遮挡。
 
-这样张开的指缝不会被误判为整块遮挡区域，脸部线条可以从指缝中保留出来。对应测试在 `tools/test_occlusion.mjs`。
+这样张开的指缝不会被误判为整块遮挡区域，脸部线条可以从指缝中保留出来。对应测试在 `tools/test_occlusion.ts`。
 
 ## 9. 核心算法五：渲染与可见线段切分
 
@@ -491,7 +491,7 @@ s = trace(D * S) / sum_i w_i * ||X_i||^2
 t = mu_y - s * R * mu_x
 ```
 
-Python 实现在 `src/langerface/geometry/alignment.py`，Web 实现在 `web/src/services/geometryTransform.ts`。测试 `tools/test_umeyama.mjs` 验证已知变换可被恢复。
+Python 实现在 `src/langerface/geometry/alignment.py`，Web 实现在 `web/src/services/geometryTransform.ts`。测试 `tools/test_umeyama.ts` 验证已知变换可被恢复。
 
 ### 12.2 多帧中位数重建
 

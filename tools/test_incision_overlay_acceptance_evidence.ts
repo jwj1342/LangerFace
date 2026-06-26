@@ -5,8 +5,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildIncisionOverlayAcceptanceAudit } from "./audit_incision_overlay_acceptance.mjs";
-import { buildIncisionOverlayAcceptanceEvidence } from "./build_incision_overlay_acceptance_evidence.mjs";
+import { buildIncisionOverlayAcceptanceAudit } from "./audit_incision_overlay_acceptance.ts";
+import { buildIncisionOverlayAcceptanceEvidence } from "./build_incision_overlay_acceptance_evidence.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -143,7 +143,7 @@ fs.writeFileSync(resourcePath, JSON.stringify({ passed: true, checked_count: 31,
 const cli = spawnSync(
   process.execPath,
   [
-    "tools/build_incision_overlay_acceptance_evidence.mjs",
+    "tools/build_incision_overlay_acceptance_evidence.ts",
     "--photo-diagnostics",
     photoPath,
     "--video-replay",

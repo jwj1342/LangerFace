@@ -36,7 +36,7 @@ cd ..
 
 ```bash
 pytest                       # Python 单元/集成测试
-cd web && npm test           # Web TypeScript↔Python 几何对拍（多支 .mjs）
+cd web && npm test           # Web TypeScript↔Python 几何对拍（多支 .ts）
 ruff check .                 # 代码风格
 ```
 

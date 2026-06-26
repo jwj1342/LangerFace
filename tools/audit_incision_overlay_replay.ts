@@ -13,7 +13,7 @@ const REPLAY_QA_SCHEMA = "incision-overlay-replay-qa/v0.1";
 
 function usage() {
   return [
-    "Usage: node tools/audit_incision_overlay_replay.mjs --input replay.json [--output qa.json] [--csv-output qa.csv]",
+    "Usage: node tools/audit_incision_overlay_replay.ts --input replay.json [--output qa.json] [--csv-output qa.csv]",
     "",
     "Input JSON:",
     "  {",
@@ -167,7 +167,7 @@ export function buildIncisionOverlayReplayQa(payload, options = {}) {
   return {
     schema_version: REPLAY_QA_SCHEMA,
     generated_at: options.generatedAt || new Date().toISOString(),
-    generated_by: "tools/audit_incision_overlay_replay.mjs",
+    generated_by: "tools/audit_incision_overlay_replay.ts",
     source_schema_version: normalized.source_schema_version,
     passed,
     reason,

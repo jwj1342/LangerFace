@@ -19,7 +19,7 @@ class Handler(SimpleHTTPRequestHandler):
     extensions_map = {
         **SimpleHTTPRequestHandler.extensions_map,
         ".js": "text/javascript",
-        ".mjs": "text/javascript",
+        ".ts": "text/javascript",
         ".json": "application/json",
         ".task": "application/octet-stream",
     }

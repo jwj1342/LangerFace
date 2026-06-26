@@ -20,6 +20,7 @@ const routeSources = new Map(
 );
 const pkg = JSON.parse(read("package.json"));
 const tsconfig = JSON.parse(read("tsconfig.json"));
+const toolsTsconfig = JSON.parse(fs.readFileSync(path.join(root, "tsconfig.tools.json"), "utf8"));
 const appHtml = read("app/index.html");
 const legacyLiveHtml = read("index.html");
 const legacyAnnotateHtml = read("annotate.html");
@@ -28,7 +29,7 @@ const legacySurgeryHtml = read("surgery.html");
 const vite = read("vite.config.ts");
 const vercel = read("vercel.json");
 const vercelConfig = JSON.parse(vercel);
-const vercelIgnoreBuild = read("scripts/vercel-ignore-build.mjs");
+const vercelIgnoreBuild = read("scripts/vercel-ignore-build.ts");
 const app = read("src/App.tsx");
 const typedStore = read("src/stores/appStore.ts");
 const reactShell = read("src/components/ReactShell.tsx");
@@ -552,6 +553,7 @@ for (const dep of [
 assert.ok(pkg.devDependencies?.typescript, "TypeScript should be installed");
 assert.ok(pkg.devDependencies?.["@types/react"], "React TypeScript types should be installed");
 assert.ok(pkg.scripts?.typecheck?.includes("tsc --noEmit"), "package should expose a TypeScript typecheck script");
+assert.ok(pkg.scripts?.typecheck?.includes("../tsconfig.tools.json"), "package typecheck should cover tool/test TypeScript scripts");
 assert.ok(pkg.devDependencies?.tailwindcss, "Tailwind should be installed for React UI workbench styling");
 assert.ok(pkg.devDependencies?.["@tailwindcss/vite"], "Tailwind Vite plugin should be installed");
 
@@ -559,6 +561,14 @@ assert.ok(appHtml.includes('id="root"'), "React app HTML exposes a root mount no
 assert.ok(appHtml.includes("../src/main.tsx"), "React app HTML loads the TypeScript React entrypoint");
 assert.ok(tsconfig.compilerOptions?.strict, "TypeScript should run in strict mode");
 assert.equal(tsconfig.compilerOptions?.jsx, "react-jsx", "TypeScript should use the React JSX transform");
+assert.equal(toolsTsconfig.compilerOptions?.allowJs, undefined, "tool scripts should not rely on JavaScript sources");
+assert.equal(toolsTsconfig.compilerOptions?.noEmit, true, "tool scripts should be typechecked without emitting build artifacts");
+assert.equal(toolsTsconfig.compilerOptions?.noCheck, true, "tool scripts should use syntax/module TS migration before strict semantic tightening");
+assert.deepEqual(
+  toolsTsconfig.include,
+  ["tools/**/*.ts", "web/scripts/**/*.ts"],
+  "tool TypeScript config should cover Node tests and web deployment scripts",
+);
 assert.ok(vite.includes("@tailwindcss/vite"), "Vite config loads the Tailwind plugin");
 assert.ok(vite.includes('app: resolve(import.meta.dirname, "app/index.html")'), "Vite builds the SPA app entry");
 assert.ok(vite.includes('"copy-compat-entrypoints"'), "Vite copies lightweight compatibility pages after building the SPA");
@@ -583,7 +593,7 @@ assert.deepEqual(
 assert.equal(vercelConfig.installCommand, "npm ci", "Vercel should install from the committed npm lockfile");
 assert.equal(
   vercelConfig.ignoreCommand,
-  "node scripts/vercel-ignore-build.mjs",
+  "node scripts/vercel-ignore-build.ts",
   "Vercel should skip allowed-branch builds when the web root did not change",
 );
 assert.ok(vercelIgnoreBuild.includes("VERCEL_GIT_COMMIT_REF"), "Vercel ignore script checks the Git branch");

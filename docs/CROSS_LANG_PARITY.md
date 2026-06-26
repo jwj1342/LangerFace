@@ -30,14 +30,14 @@ Python(landmarks) == Web TypeScript(landmarks) == golden
 | 断言方 | 文件 | 覆盖 |
 |---|---|---|
 | Python（live） | `tests/test_cross_lang_parity.py` | 从金标嵌入的关键点重算 pts/vis，断言匹配金标；One-Euro 夹具匹配 |
-| Web TypeScript（对拍） | `tools/test_web_mapping.mjs`（`npm test` 内） | `web/src/services/geometryAtlas.ts` 输出对金标 pts/vis；One-Euro 夹具匹配 |
+| Web TypeScript（对拍） | `tools/test_web_mapping.ts`（`npm test` 内） | `web/src/services/geometryAtlas.ts` 输出对金标 pts/vis；One-Euro 夹具匹配 |
 
 CI 现状（**无需改 `.github/workflows/ci.yml`**）：
 
 - `pytest` 已自动收集并运行 `tests/test_cross_lang_parity.py`（live Python 侧）。
-- `npm test` 已运行 `tools/test_web_mapping.mjs`（Web TypeScript 侧）。
+- `npm test` 已运行 `tools/test_web_mapping.ts`（Web TypeScript 侧）。
 
-历史缺口（#28）：CI 从不重跑 Python 生成金标，且旧 `.mjs` 的对拍路径**没有**应用口裂掩膜，
+历史缺口（#28）：CI 从不重跑 Python 生成金标，且旧 JS 对拍路径**没有**应用口裂掩膜，
 于是单边的 Python 改动（如 #38 排除口裂三角面）会从 CI 旁漏过去、让金标静默漂移。
 现已通过「live Python 重算 + Web TypeScript 对拍应用同一口裂掩膜」双向闭合。
 

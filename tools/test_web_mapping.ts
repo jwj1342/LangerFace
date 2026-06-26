@@ -1,5 +1,5 @@
 // Node 对拍：验证 TypeScript geometry services 的映射/遮挡与 Python 端逐点一致。
-//   node tools/test_web_mapping.mjs
+//   node tools/test_web_mapping.ts
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

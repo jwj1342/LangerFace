@@ -1,4 +1,4 @@
-// 网页标注纯模型测试（无 Three.js / DOM）。  node tools/test_annotate_model.mjs
+// 网页标注纯模型测试（无 Three.js / DOM）。  node tools/test_annotate_model.ts
 import { AnnotationModel, barycentric } from "../web/src/services/annotationModel.ts";
 import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "../web/src/services/constants.ts";
 
