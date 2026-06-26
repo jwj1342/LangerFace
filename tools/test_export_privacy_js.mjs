@@ -1,6 +1,23 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import ts from "../web/node_modules/typescript/lib/typescript.js";
 
-import { auditExportPayload } from "../web/export_privacy.js";
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+async function importTypeScriptModule(rel) {
+  const source = fs.readFileSync(path.join(root, rel), "utf8");
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+  });
+  return import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
+}
+
+const { auditExportPayload } = await importTypeScriptModule("web/src/services/exportPrivacy.ts");
 
 function safeReviewExport() {
   return {
@@ -55,4 +72,3 @@ report = auditExportPayload(timestampOnly);
 assert.equal(report.passed, true, "timestamp fields should not be mistaken for phone numbers");
 
 console.log("test_export_privacy_js: browser export privacy preflight assertions passed");
-

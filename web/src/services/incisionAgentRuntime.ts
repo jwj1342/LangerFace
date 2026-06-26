@@ -1,7 +1,6 @@
 import * as THREE from "three";
 
 import { assetBaseUrl, loadJsonAsset } from "../../assets.js";
-import { auditExportPayload } from "../../export_privacy.js";
 import { compileIncisionOverlay } from "../../incision_overlay.js";
 import {
   applyCandidateEdit,
@@ -65,6 +64,7 @@ import {
   numericControlValue,
 } from "./tumorInput";
 import { dataSource } from "./dataSource";
+import { auditExportPayload } from "./exportPrivacy";
 import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
 import { createWorkflowWorkerClient } from "./workflowWorkerClient";
 import type { WorkflowWorkerClient } from "./workflowWorkerClient";

@@ -21,7 +21,7 @@ const html = normalizeTsxContracts([
 ].join("\n"));
 const js = fs.readFileSync("src/services/incisionAgentRuntime.ts", "utf8");
 const tools = fs.readFileSync("incision_tools.js", "utf8");
-const exportPrivacy = fs.readFileSync("export_privacy.js", "utf8");
+const exportPrivacy = fs.readFileSync("src/services/exportPrivacy.ts", "utf8");
 const providerConfig = fs.readFileSync("src/services/providerConfig.ts", "utf8");
 const tumorInputService = fs.readFileSync("src/services/tumorInput.ts", "utf8");
 const incisionSnapshotsService = fs.readFileSync("src/services/incisionSnapshots.ts", "utf8");
@@ -84,7 +84,7 @@ assert.ok(incisionSnapshotsService.includes("../lib/controllerSnapshotSchemas"),
 assert.ok(controllerSnapshotSchemas.includes("react-incision-controller-snapshot/v0.1"), "shared snapshot schema module owns the incision React snapshot schema");
 assert.ok(js.includes("./incisionSnapshots"), "workbench consumes the shared typed incision snapshot service");
 assert.ok(js.includes("buildIncisionControllerSnapshot({"), "workbench delegates React snapshot payloads to the shared service");
-assert.ok(js.includes('from "../../export_privacy.js"'), "workbench imports browser export privacy preflight");
+assert.ok(js.includes('from "./exportPrivacy"'), "workbench imports browser export privacy preflight from the typed service");
 assert.ok(exportPrivacy.includes("browser-export-privacy-preflight/v0.1"), "browser export preflight has a schema");
 assert.ok(js.includes("exportPreflightPasses(payload"), "JSON exports run browser privacy preflight");
 assert.ok(js.includes("导出隐私预检未通过"), "browser preflight blocks unsafe exports with feedback");

@@ -201,6 +201,8 @@ P = u·V0 + v·V1 + w·V2
   `src/services/cameraSource.ts` 负责，上传图片工作尺寸控制由 `src/services/imageSource.ts` 负责。
 - `ui.js` 只保留为旧 JS 兼容 re-export。实时页的消息、状态灯、图谱 provenance、切口叠加 QA
   与平滑档位文案由 `src/services/liveUi.ts` 负责，并依赖 `src/services/liveDom.ts` 的 route-scoped DOM 绑定。
+- `export_privacy.js` 只保留为旧 JS 兼容 re-export。浏览器审阅/肿物导出前的 secret、PII、
+  原始媒体和 secondary cue 越界检查由 `src/services/exportPrivacy.ts` 负责。
 
 ---
 
