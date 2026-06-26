@@ -35,6 +35,7 @@ const reviewPanel = read("src/components/ReviewControlsPanel.tsx");
 const liveStore = read("src/stores/liveStore.ts");
 const liveBridge = read("src/hooks/useLiveControllerBridge.ts");
 const liveStatePanel = read("src/components/LiveStatePanel.tsx");
+const liveRouteControlsPanel = read("src/components/LiveRouteControlsPanel.tsx");
 const liveSourceControlsPanel = read("src/components/LiveSourceControlsPanel.tsx");
 const liveRenderControlsPanel = read("src/components/LiveRenderControlsPanel.tsx");
 const annotateRoute = read("src/routes/AnnotateRoute.tsx");
@@ -420,11 +421,33 @@ assert.ok(!liveRoute.includes("innerHTML"), "React live route should not inject 
 for (const id of [
   "canvas",
   "video",
-  "routeSel",
   "modelBadge",
   "overlayMsg",
 ]) {
   assert.ok(liveWorkbench.includes(`id="${id}"`), `React live workbench exposes #${id}`);
+}
+for (const id of [
+  "routeSel",
+  "routeModeHint",
+  "route3dPanel",
+  "reconDemoBtn",
+  "reconScanBtn",
+  "reconStatus",
+  "scanPanel",
+  "scanProgressVal",
+  "scanProgressBar",
+  "scanYawVal",
+  "view3dBtn",
+  "project3dBtn",
+  "reset3dBtn",
+  "cloudFitFlameBtn",
+  "flameHeadToggleWrap",
+  "flameStdToggle",
+  "twinTextureWrap",
+  "twinTextureToggle",
+  "threeDWorkflowCard",
+]) {
+  assert.ok(liveRouteControlsPanel.includes(`id="${id}"`), `React live route controls expose #${id}`);
 }
 for (const id of [
   "uploadBtn",
@@ -455,21 +478,26 @@ for (const id of [
   assert.ok(liveRenderControlsPanel.includes(`id="${id}"`), `React live render controls expose #${id}`);
 }
 assert.ok(liveWorkbench.includes("LiveStatePanel"), "React live workbench renders the controller state panel");
+assert.ok(liveWorkbench.includes("LiveRouteControlsPanel"), "React live workbench renders route controls as a React component");
 assert.ok(liveWorkbench.includes("LiveSourceControlsPanel"), "React live workbench renders source controls as a React component");
 assert.ok(liveWorkbench.includes("LiveRenderControlsPanel"), "React live workbench renders render controls as a React component");
+assert.ok(liveRouteControlsPanel.includes("LIVE_ROUTE_REACT_COMMAND_EVENT"), "React live route controls dispatch 3D route commands to the controller boundary");
 assert.ok(liveSourceControlsPanel.includes("LIVE_SOURCE_REACT_COMMAND_EVENT"), "React live source controls dispatch source commands to the controller boundary");
 assert.ok(liveRenderControlsPanel.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "React live render controls dispatch render commands to the controller boundary");
+assert.ok(liveRouteControlsPanel.includes("useLiveStore"), "React live route controls read low-frequency route and recon state from Zustand");
 assert.ok(liveSourceControlsPanel.includes("useLiveStore"), "React live source controls read low-frequency source state from Zustand");
 assert.ok(liveRenderControlsPanel.includes("useLiveStore"), "React live render controls read low-frequency render state from Zustand");
-assert.ok(liveWorkbench.includes('to="/annotate"'), "React live workbench links to the React annotation route");
+assert.ok(liveRouteControlsPanel.includes('to="/annotate"'), "React live route controls link to the React annotation route");
 assert.ok(liveWorkbench.includes('to="/incision"'), "React live workbench links to the React incision route");
 assert.ok(dom.includes("export function bindDom"), "DOM module can rebind element references for SPA route mounts");
 assert.ok(dom.includes("export let ctx"), "DOM module exports a live canvas context binding");
 assert.ok(liveController.includes("export function mountLiveWorkbench"), "live controller exposes a mount lifecycle");
 assert.ok(liveController.includes("export function disposeLiveWorkbench"), "live controller exposes a dispose lifecycle");
 assert.ok(liveController.includes("LIVE_CONTROLLER_STATE_EVENT"), "live controller declares a React state bridge event");
+assert.ok(liveController.includes("LIVE_ROUTE_REACT_COMMAND_EVENT"), "live controller declares a React route command bridge event");
 assert.ok(liveController.includes("LIVE_SOURCE_REACT_COMMAND_EVENT"), "live controller declares a React source command bridge event");
 assert.ok(liveController.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "live controller declares a React render command bridge event");
+assert.ok(liveController.includes("handleReactRouteCommand"), "live controller routes React route commands to existing 3D workflow functions");
 assert.ok(liveController.includes("handleReactSourceCommand"), "live controller routes React source commands to existing workflow functions");
 assert.ok(liveController.includes("handleReactRenderCommand"), "live controller routes React render commands to existing workflow functions");
 assert.ok(liveController.includes("react-live-controller-snapshot/v0.1"), "live controller publishes a typed React snapshot");
