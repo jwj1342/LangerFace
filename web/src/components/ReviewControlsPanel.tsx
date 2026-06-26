@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card, CardHeader } from "./ui/card";
+import { AgentNote } from "./ui/hint";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
@@ -94,7 +95,7 @@ export function ReviewControlsPanel() {
       >
         保存审阅记录
       </Button>
-      <p className="agent-note">确认只代表进入研究审阅记录，不是手术指令；候选几何一旦调整，审阅状态会回到待确认。</p>
+      <AgentNote>确认只代表进入研究审阅记录，不是手术指令；候选几何一旦调整，审阅状态会回到待确认。</AgentNote>
     </Card>
   );
 }

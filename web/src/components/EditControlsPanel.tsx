@@ -5,6 +5,7 @@ import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card, CardHeader } from "./ui/card";
+import { AgentNote } from "./ui/hint";
 import { FieldValue, Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
@@ -169,8 +170,8 @@ export function EditControlsPanel() {
         <Button variant="workbench" id="redoEditBtn" type="button" disabled={redoDisabled} onClick={() => dispatchIncisionEditCommand("redo_edit")}>重做调整</Button>
       </ButtonRow>
       <Button variant="workbench" id="resetEditBtn" type="button" onClick={() => dispatchIncisionEditCommand("reset_edit")}>恢复工具建议</Button>
-      <p className="agent-note" id="editHistoryState">{historyLabel}</p>
-      <p className="agent-note">调整只改变候选草案并记录 provenance；真实切口仍需医生复核。</p>
+      <AgentNote id="editHistoryState">{historyLabel}</AgentNote>
+      <AgentNote>调整只改变候选草案并记录 provenance；真实切口仍需医生复核。</AgentNote>
     </Card>
   );
 }

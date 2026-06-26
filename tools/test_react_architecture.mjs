@@ -148,6 +148,13 @@ const fieldValueConsumerSources = new Map([
   ["ProviderConfigPanel.tsx", providerPanel],
   ["TumorInputPanel.tsx", tumorPanel],
 ]);
+const agentNoteConsumerSources = new Map([
+  ["EditControlsPanel.tsx", editPanel],
+  ["ProviderConfigPanel.tsx", providerPanel],
+  ["ReviewControlsPanel.tsx", reviewPanel],
+  ["SecondaryCuePanel.tsx", secondaryCuePanel],
+  ["TumorInputPanel.tsx", tumorPanel],
+]);
 const reactUiConsumerSources = new Map([
   ["App.tsx", app],
   ...[...componentSources.entries()].filter(([name]) => !layoutPrimitiveNames.has(name)),
@@ -217,6 +224,17 @@ const helpDisclosureConsumersWithRawClass = (className) => (
 );
 const fieldValueConsumersWithRawClass = (className) => (
   [...fieldValueConsumerSources.entries()]
+    .filter(([, source]) => (
+      source.includes(`className="${className}`)
+      || source.includes(`className={\`${className}`)
+      || source.includes(`className={cn("${className}`)
+      || source.includes(` ? "${className}`)
+      || source.includes(`: "${className}`)
+    ))
+    .map(([name]) => name)
+);
+const agentNoteConsumersWithRawClass = (className) => (
+  [...agentNoteConsumerSources.entries()]
     .filter(([, source]) => (
       source.includes(`className="${className}`)
       || source.includes(`className={\`${className}`)
@@ -482,6 +500,16 @@ assert.deepEqual(
 assert.ok(uiSectionTitle.includes('cn("section-title"'), "shadcn-style SectionTitle preserves existing section title styling");
 assert.ok(uiSectionTitle.includes("valueProps"), "shadcn-style SectionTitle can preserve value span ids");
 assert.ok(uiHint.includes('cn("hint"'), "shadcn-style Hint preserves existing hint styling");
+assert.ok(uiHint.includes("AgentNote"), "shadcn-style Hint module exports an AgentNote primitive");
+assert.ok(uiHint.includes('cn("agent-note"'), "shadcn-style AgentNote preserves existing agent-note styling");
+assert.deepEqual(
+  agentNoteConsumersWithRawClass("agent-note"),
+  [],
+  "React incision note panels should use AgentNote instead of hand-written agent-note paragraphs",
+);
+for (const [name, source] of agentNoteConsumerSources.entries()) {
+  assert.ok(source.includes("AgentNote"), `${name} should render incision explanatory notes through the shared AgentNote primitive`);
+}
 assert.ok(uiStatusBadge.includes('cn("badge"'), "shadcn-style StatusBadge preserves existing badge styling");
 assert.ok(uiStatusBadge.includes('cn("react-route-status"'), "shadcn-style RouteStatus preserves existing route status styling");
 assert.ok(uiStatusBadge.includes("@radix-ui/react-slot"), "shadcn-style StatusBadge supports asChild through Radix Slot");

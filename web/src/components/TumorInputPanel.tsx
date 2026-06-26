@@ -5,6 +5,7 @@ import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card } from "./ui/card";
+import { AgentNote } from "./ui/hint";
 import { Input } from "./ui/input";
 import { FieldValue, Label } from "./ui/label";
 import { Select } from "./ui/select";
@@ -201,7 +202,7 @@ export function TumorInputPanel() {
       </ButtonRow>
       <Input id="tumorImportFile" className="hidden" type="file" accept="application/json,.json" />
       <Button variant="workbenchPrimary" id="runAgentBtn" type="button" onClick={() => dispatchIncisionTumorCommand("run_agent")}>生成候选切口</Button>
-      <p className="agent-note" id="pickState">{freehand ? boundaryHint : pickState}</p>
+      <AgentNote id="pickState">{freehand ? boundaryHint : pickState}</AgentNote>
       <p className={`anatomy-preview${anatomyPreviewWarn ? " warn" : ""}`} id="anatomyPreview">{anatomyPreview}</p>
     </Card>
   );
