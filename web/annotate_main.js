@@ -54,6 +54,8 @@ let activeSession = 0;
 
 const SYSTEM_LABELS = { rstl: "RSTL", langer: "Langer" };
 const ANNOTATE_CONTROLLER_STATE_EVENT = "langerface:annotate-state";
+const ANNOTATE_MESH_REACT_COMMAND_EVENT = "langerface:annotate-mesh-react-command";
+const ANNOTATE_DRAW_REACT_COMMAND_EVENT = "langerface:annotate-draw-react-command";
 const ANNOTATE_LIBRARY_REACT_COMMAND_EVENT = "langerface:annotate-library-react-command";
 let bundledFlameBasis = null;
 
@@ -106,6 +108,10 @@ function publishAnnotateState(reason = "state_update") {
         onCanonical: Boolean(onCanonical),
         topologyId: model?.topologyId || null,
         topologyVersion: model?.topologyVersion || null,
+      },
+      meshActions: {
+        canLoadFlame: flameAvailable(),
+        canLoadFittedFlame: fittedFlameAvailable(),
       },
       draft: currentDraftSnapshot(),
       saved: savedSummarySnapshot(),
@@ -201,6 +207,14 @@ async function loadFlameMesh(vertsName, label) {
 }
 const loadFlame = () => loadFlameMesh("flame_neutral_vertices", topologyMeta("flame-2023").label);
 const loadFittedFlame = () => loadFlameMesh("flame_fitted_vertices", "FLAME 个体（拟合）");
+
+function handleReactMeshCommand(event) {
+  const { command } = event.detail || {};
+  if (command === "load_canonical") loadCanonical();
+  if (command === "load_flame") loadFlame();
+  if (command === "load_fitted_flame") loadFittedFlame();
+  if (command === "cloud_fit_flame") cloudFitFlame();
+}
 
 // 云端拟合演示：把标准脸关键点 POST 到 /api/fit（Vercel Python 云函数）→ 拿回个体 FLAME 网格渲染。
 // 全程云端、无需本地资产，可直接在 PR 预览里用。
@@ -330,22 +344,24 @@ function bindAnnotateEvents() {
   viewer.zoom(Math.exp(delta * 0.00055));
   }, { passive: false, signal });
 
-  els.system.addEventListener("change", () => { model.system = els.system.value; refresh(); }, { signal });
-  els.btnNew.addEventListener("click", startLineFromInputs, { signal });
-  els.btnUndo.addEventListener("click", undoLast, { signal });
-  els.btnFinish.addEventListener("click", saveCurrentLine, { signal });
   if (window.__LANGERFACE_REACT_MANAGED__) {
+    window.addEventListener(ANNOTATE_MESH_REACT_COMMAND_EVENT, handleReactMeshCommand, { signal });
+    window.addEventListener(ANNOTATE_DRAW_REACT_COMMAND_EVENT, handleReactDrawCommand, { signal });
     window.addEventListener(ANNOTATE_LIBRARY_REACT_COMMAND_EVENT, handleReactLineLibraryCommand, { signal });
   } else {
+    els.system.addEventListener("change", () => { model.system = els.system.value; refresh(); }, { signal });
+    els.btnNew.addEventListener("click", startLineFromInputs, { signal });
+    els.btnUndo.addEventListener("click", undoLast, { signal });
+    els.btnFinish.addEventListener("click", saveCurrentLine, { signal });
     els.btnClear.addEventListener("click", () => { if (confirm("清空所有线？")) clearLines(); }, { signal });
     els.exAtlas.addEventListener("click", () => exportJSON(() => model.toAtlasJSON(), `atlas_${model.system}_annotated.json`), { signal });
     els.exXyz.addEventListener("click", () => exportJSON(() => model.toXyzJSON(), `lines_${model.system}_xyz.json`), { signal });
     els.setActive.addEventListener("click", previewActiveAtlas, { signal });
+    els.loadCanonical.addEventListener("click", loadCanonical, { signal });
+    els.loadFlame.addEventListener("click", loadFlame, { signal });
+    els.loadFittedFlame.addEventListener("click", loadFittedFlame, { signal });
+    els.cloudFit.addEventListener("click", cloudFitFlame, { signal });
   }
-  els.loadCanonical.addEventListener("click", loadCanonical, { signal });
-  els.loadFlame.addEventListener("click", loadFlame, { signal });
-  els.loadFittedFlame.addEventListener("click", loadFittedFlame, { signal });
-  els.cloudFit.addEventListener("click", cloudFitFlame, { signal });
   els.meshFile.addEventListener("change", (e) => loadMeshFile(e.target.files?.[0]), { signal });
   els.slicerFile.addEventListener("change", (e) => loadSlicerFile(e.target.files?.[0]), { signal });
 
@@ -391,6 +407,18 @@ function startLineFromInputs() {
   setHint(`正在绘制 ${draft.name}：在 3D 脸表面点击添加点，至少 2 个点后保存。`);
   refresh();
   return true;
+}
+
+function handleReactDrawCommand(event) {
+  const { command, value } = event.detail || {};
+  if (command === "system_changed") {
+    model.system = value === "langer" ? "langer" : "rstl";
+    refresh();
+    return;
+  }
+  if (command === "start_line") startLineFromInputs();
+  if (command === "undo_last") undoLast();
+  if (command === "save_current_line") saveCurrentLine();
 }
 
 function saveCurrentLine() {
@@ -573,15 +601,15 @@ function refresh() {
   if (!model || !els?.status) return;
   const curPts = controlsOf(model.current).length;
   const currentFallback = Boolean(model.current?.fallback);
-  els.current.classList.toggle("active", Boolean(model.current));
-  els.current.classList.toggle("warning", currentFallback);
-  els.current.textContent = model.current
-    ? `正在绘制：${model.current.name} · ${SYSTEM_LABELS[model.system]} · ${curPts} 点${curPts < 2 ? "（至少 2 点可保存）" : ""}${currentFallback ? " · 贴面路由已退回直线，需复核可能穿面" : ""}`
-    : "当前没有正在绘制的线。点击“开始一条线”，或直接在脸表面点击开始。";
-  els.btnNew.disabled = Boolean(model.current);
-  els.btnFinish.disabled = !model.current;
-  els.btnUndo.disabled = !(model.current || model.lines.length);
   if (!window.__LANGERFACE_REACT_MANAGED__) {
+    els.current.classList.toggle("active", Boolean(model.current));
+    els.current.classList.toggle("warning", currentFallback);
+    els.current.textContent = model.current
+      ? `正在绘制：${model.current.name} · ${SYSTEM_LABELS[model.system]} · ${curPts} 点${curPts < 2 ? "（至少 2 点可保存）" : ""}${currentFallback ? " · 贴面路由已退回直线，需复核可能穿面" : ""}`
+      : "当前没有正在绘制的线。点击“开始一条线”，或直接在脸表面点击开始。";
+    els.btnNew.disabled = Boolean(model.current);
+    els.btnFinish.disabled = !model.current;
+    els.btnUndo.disabled = !(model.current || model.lines.length);
     els.status.textContent = `${model.lines.length} 条`;
     els.exAtlas.disabled = !(model.lines.length && onCanonical);
     // 「设为活动图谱并预览」是 2D MediaPipe 实时轨入口；FLAME 图谱（独立 3D 轨）不走 2D 预览。
@@ -629,8 +657,10 @@ export function mountAnnotateWorkbench(root = document) {
   activeSession += 1;
   abortController = new AbortController();
   bindAnnotateEvents();
-  if (!flameAvailable()) els.loadFlame.style.display = "none";
-  if (!fittedFlameAvailable()) els.loadFittedFlame.style.display = "none";
+  if (!window.__LANGERFACE_REACT_MANAGED__) {
+    if (!flameAvailable()) els.loadFlame.style.display = "none";
+    if (!fittedFlameAvailable()) els.loadFittedFlame.style.display = "none";
+  }
   refresh();
   setHint("点「加载 FLAME 标准脸」开始，或上传头模 JSON / OBJ / PLY。");
   const bootSession = activeSession;

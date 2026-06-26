@@ -8,6 +8,11 @@ export interface AnnotateMeshState {
   topologyVersion: string | null;
 }
 
+export interface AnnotateMeshActionsState {
+  canLoadFlame: boolean;
+  canLoadFittedFlame: boolean;
+}
+
 export interface AnnotateDraftState {
   active: boolean;
   name: string | null;
@@ -45,6 +50,7 @@ export interface AnnotateControllerSnapshot {
   hint: string;
   system: string;
   mesh: AnnotateMeshState;
+  meshActions: AnnotateMeshActionsState;
   draft: AnnotateDraftState;
   saved: AnnotateSavedSummary;
   export: AnnotateExportState;

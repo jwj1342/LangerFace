@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 
+import { AnnotateDrawPanel } from "../components/AnnotateDrawPanel";
 import { AnnotateLineLibraryPanel } from "../components/AnnotateLineLibraryPanel";
+import { AnnotateMeshSourcePanel } from "../components/AnnotateMeshSourcePanel";
 import { AnnotateStatePanel } from "../components/AnnotateStatePanel";
 
 export function AnnotateWorkbench() {
@@ -15,47 +17,9 @@ export function AnnotateWorkbench() {
           <h1>3D 网页标注</h1>
         </div>
 
-        <div className="card">
-          <p className="hint" id="hint">加载网格后开始标注。</p>
-          <button className="btn btn-primary" id="btnLoadCanonical" type="button">加载 FLAME 标准脸</button>
-          <button className="btn" id="btnLoadFlame" type="button">加载 FLAME 头模</button>
-          <button className="btn" id="btnLoadFittedFlame" type="button">加载个体 FLAME（拟合）</button>
-          <button className="btn btn-primary" id="btnCloudFit" type="button">☁ 云端拟合 FLAME（演示）</button>
-          <label className="btn" htmlFor="meshFile">上传头模（JSON / OBJ / PLY）</label>
-          <input type="file" id="meshFile" accept="application/json,.json,.obj,.ply,model/obj,model/ply" hidden />
-          <label className="field-label annotate-spacing-label" htmlFor="resampleSpacing">Slicer 曲线重采样间距</label>
-          <input className="text-input" id="resampleSpacing" type="number" min="0.2" step="0.2" defaultValue="2" />
-          <label className="btn" htmlFor="slicerFile">导入 Slicer 曲线（.mrk.json）</label>
-          <input type="file" id="slicerFile" accept=".mrk.json,application/json,.json" hidden />
-          <Link className="btn" to="/surgery">沿 RSTL 闭合演示</Link>
-          <Link className="btn" to="/live">返回实时 Langer 线显示</Link>
-        </div>
+        <AnnotateMeshSourcePanel />
 
-        <div className="card">
-          <div className="section-title">
-            <span>1. 选择线系统</span>
-            <span id="drawMode">FLAME 标准脸</span>
-          </div>
-          <div>
-            <label className="field-label" htmlFor="annSystem">线系统</label>
-            <select id="annSystem" className="select annotate-system-select" defaultValue="rstl">
-              <option value="rstl">RSTL（首选）</option>
-              <option value="langer">Langer</option>
-            </select>
-          </div>
-          <div className="section-title">
-            <span>2. 填写当前线</span>
-            <span>可留空</span>
-          </div>
-          <input className="text-input" id="annName" placeholder="线名，例如 forehead_h1" />
-          <input className="text-input" id="annRegion" placeholder="区域，例如 forehead / cheek / perioral" />
-          <div className="current-state" id="currentState">当前没有正在绘制的线。</div>
-          <div className="btn-row annotate-actions">
-            <button className="btn btn-primary" id="btnNew" type="button">开始一条线</button>
-            <button className="btn" id="btnUndo" type="button">撤销上一个点</button>
-            <button className="btn" id="btnFinish" type="button">保存当前线</button>
-          </div>
-        </div>
+        <AnnotateDrawPanel />
 
         <AnnotateStatePanel />
 
