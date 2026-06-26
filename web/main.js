@@ -9,6 +9,12 @@ import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin
 import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.js";
 import { adjustFocusZoom, buildZoomCards } from "./render.js";
 import {
+  LIVE_CONTROLLER_STATE_EVENT,
+  LIVE_RENDER_REACT_COMMAND_EVENT,
+  LIVE_ROUTE_REACT_COMMAND_EVENT,
+  LIVE_SOURCE_REACT_COMMAND_EVENT,
+} from "./src/lib/controllerEvents.ts";
+import {
   buildLiveControllerSnapshot,
   liveTextOf,
   visibleLiveTextOf,
@@ -25,11 +31,6 @@ let abortController = null;
 let mounted = false;
 let activeSession = 0;
 let liveStateTimer = 0;
-
-const LIVE_CONTROLLER_STATE_EVENT = "langerface:live-state";
-const LIVE_SOURCE_REACT_COMMAND_EVENT = "langerface:live-source-react-command";
-const LIVE_RENDER_REACT_COMMAND_EVENT = "langerface:live-render-react-command";
-const LIVE_ROUTE_REACT_COMMAND_EVENT = "langerface:live-route-react-command";
 
 function publishLiveState(reason = "state_update") {
   if (!mounted || typeof window === "undefined" || !els.canvas) return;

@@ -1,8 +1,7 @@
 import { Button } from "./ui/button";
 import { dispatchControllerCommand } from "../lib/controllerCommand";
+import { ANNOTATE_LIBRARY_REACT_COMMAND_EVENT } from "../lib/controllerEvents";
 import { useAnnotateStore } from "../stores/annotateStore";
-
-const ANNOTATE_LIBRARY_REACT_COMMAND_EVENT = "langerface:annotate-library-react-command";
 
 function dispatchLibraryCommand(command: string, index?: number) {
   dispatchControllerCommand(ANNOTATE_LIBRARY_REACT_COMMAND_EVENT, { command, index });

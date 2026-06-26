@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+export { ANNOTATE_CONTROLLER_STATE_EVENT } from "../lib/controllerEvents";
+
 import type { AnnotateControllerSnapshot } from "../services/annotateSnapshots";
 
 export type {
@@ -17,8 +19,6 @@ interface AnnotateStoreState {
   setControllerSnapshot: (snapshot: AnnotateControllerSnapshot) => void;
   clearControllerSnapshot: () => void;
 }
-
-export const ANNOTATE_CONTROLLER_STATE_EVENT = "langerface:annotate-state";
 
 export const ANNOTATE_STORE_BOUNDARY_NOTE = [
   "Zustand stores low-frequency 3D annotation workbench state only.",

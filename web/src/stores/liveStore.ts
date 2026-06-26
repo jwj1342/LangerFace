@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+export { LIVE_CONTROLLER_STATE_EVENT } from "../lib/controllerEvents";
+
 import type { LiveControllerSnapshot } from "../services/liveSnapshots";
 
 export type {
@@ -17,8 +19,6 @@ interface LiveStoreState {
   setControllerSnapshot: (snapshot: LiveControllerSnapshot) => void;
   clearControllerSnapshot: () => void;
 }
-
-export const LIVE_CONTROLLER_STATE_EVENT = "langerface:live-state";
 
 export const LIVE_STORE_BOUNDARY_NOTE = [
   "Zustand stores low-frequency live workbench state only.",

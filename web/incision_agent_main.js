@@ -16,6 +16,15 @@ import {
 } from "./incision_tools.js";
 import { normalizeProviderBaseUrl, testProviderConnection } from "./llm_provider.js";
 import {
+  INCISION_CONTROLLER_STATE_EVENT,
+  INCISION_EDIT_REACT_COMMAND_EVENT,
+  INCISION_LIBRARY_REACT_COMMAND_EVENT,
+  INCISION_PROVIDER_REACT_STATE_EVENT,
+  INCISION_REVIEW_REACT_COMMAND_EVENT,
+  INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT,
+  INCISION_TUMOR_REACT_COMMAND_EVENT,
+} from "./src/lib/controllerEvents.ts";
+import {
   initialProviderState,
   insecureProviderFromSecurePageMessage,
   isDeprecatedNativeProviderConfig,
@@ -209,14 +218,6 @@ const REVIEW_LABELS = {
   needs_revision: "退回修改",
   rejected_by_clinician: "否决候选",
 };
-const INCISION_CONTROLLER_STATE_EVENT = "langerface:incision-state";
-const INCISION_PROVIDER_REACT_STATE_EVENT = "langerface:incision-provider-react-state";
-const INCISION_TUMOR_REACT_COMMAND_EVENT = "langerface:incision-tumor-react-command";
-const INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT = "langerface:incision-secondary-cue-react-command";
-const INCISION_EDIT_REACT_COMMAND_EVENT = "langerface:incision-edit-react-command";
-const INCISION_REVIEW_REACT_COMMAND_EVENT = "langerface:incision-review-react-command";
-const INCISION_LIBRARY_REACT_COMMAND_EVENT = "langerface:incision-library-react-command";
-
 function currentTumorFormSnapshot() {
   return buildTumorFormSnapshot({
     kind: els.tumorKind?.value,

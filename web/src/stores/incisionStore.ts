@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+export { INCISION_CONTROLLER_STATE_EVENT } from "../lib/controllerEvents";
+
 import type { IncisionControllerSnapshot } from "../services/incisionSnapshots";
 
 export type {
@@ -22,8 +24,6 @@ interface IncisionStoreState {
   setControllerSnapshot: (snapshot: IncisionControllerSnapshot) => void;
   clearControllerSnapshot: () => void;
 }
-
-export const INCISION_CONTROLLER_STATE_EVENT = "langerface:incision-state";
 
 export const INCISION_STORE_BOUNDARY_NOTE = [
   "Zustand stores low-frequency incision workbench state only.",

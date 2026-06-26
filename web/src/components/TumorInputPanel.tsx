@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { dispatchControllerCommand } from "../lib/controllerCommand";
+import { INCISION_TUMOR_REACT_COMMAND_EVENT } from "../lib/controllerEvents";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -8,10 +9,8 @@ import { Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
 
-const TUMOR_REACT_COMMAND_EVENT = "langerface:incision-tumor-react-command";
-
 function dispatchTumorCommand(command: string) {
-  dispatchControllerCommand(TUMOR_REACT_COMMAND_EVENT, { command });
+  dispatchControllerCommand(INCISION_TUMOR_REACT_COMMAND_EVENT, { command });
 }
 
 function hiddenClass(hidden: boolean) {

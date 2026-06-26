@@ -1,9 +1,8 @@
 import { dispatchControllerCommand } from "../lib/controllerCommand";
+import { LIVE_SOURCE_REACT_COMMAND_EVENT } from "../lib/controllerEvents";
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-
-const LIVE_SOURCE_REACT_COMMAND_EVENT = "langerface:live-source-react-command";
 
 function dispatchSourceCommand(command: string) {
   dispatchControllerCommand(LIVE_SOURCE_REACT_COMMAND_EVENT, { command });

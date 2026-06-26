@@ -7,20 +7,20 @@ import {
   localProviderFromRemotePageMessage,
   saveProviderPrefs,
 } from "../services/providerConfig";
+import { dispatchControllerEvent } from "../lib/controllerCommand";
+import { INCISION_PROVIDER_REACT_STATE_EVENT } from "../lib/controllerEvents";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { RangeInput } from "./ui/slider";
-import { dispatchControllerEvent } from "../lib/controllerCommand";
 
-const PROVIDER_REACT_STATE_EVENT = "langerface:incision-provider-react-state";
 const DEFAULT_TEST_MESSAGE = "尚未测试 LLM Provider 连通性。Vercel 调试请填写可从浏览器访问、允许该 preview origin、并兼容 OpenAI /models 的 HTTPS Provider；候选生成不调用 Provider。";
 
 type TestLevel = "" | "ok" | "warn";
 
 function notifyController() {
   setTimeout(() => {
-    dispatchControllerEvent(PROVIDER_REACT_STATE_EVENT, { source: "react_provider_panel" });
+    dispatchControllerEvent(INCISION_PROVIDER_REACT_STATE_EVENT, { source: "react_provider_panel" });
   }, 0);
 }
 

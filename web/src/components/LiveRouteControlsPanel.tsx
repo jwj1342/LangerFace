@@ -1,13 +1,12 @@
 import { Link } from "react-router-dom";
 
 import { dispatchControllerCommand } from "../lib/controllerCommand";
+import { LIVE_ROUTE_REACT_COMMAND_EVENT } from "../lib/controllerEvents";
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
-
-const LIVE_ROUTE_REACT_COMMAND_EVENT = "langerface:live-route-react-command";
 
 function dispatchRouteCommand(command: string, value?: string | boolean) {
   dispatchControllerCommand(LIVE_ROUTE_REACT_COMMAND_EVENT, { command, value });

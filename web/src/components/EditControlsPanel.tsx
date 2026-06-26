@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 
 import { dispatchControllerCommand } from "../lib/controllerCommand";
+import { INCISION_EDIT_REACT_COMMAND_EVENT } from "../lib/controllerEvents";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
-
-const EDIT_REACT_COMMAND_EVENT = "langerface:incision-edit-react-command";
 
 const DEFAULT_EDIT_STATE = {
   angleOffsetDeg: 0,
@@ -25,7 +24,7 @@ const DEFAULT_EDIT_STATE = {
 };
 
 function dispatchEditCommand(command: string) {
-  dispatchControllerCommand(EDIT_REACT_COMMAND_EVENT, { command });
+  dispatchControllerCommand(INCISION_EDIT_REACT_COMMAND_EVENT, { command });
 }
 
 export function EditControlsPanel() {

@@ -6,9 +6,8 @@ import { Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { Textarea } from "./ui/textarea";
 import { dispatchControllerCommand } from "../lib/controllerCommand";
+import { INCISION_REVIEW_REACT_COMMAND_EVENT } from "../lib/controllerEvents";
 import { useIncisionStore } from "../stores/incisionStore";
-
-const REVIEW_REACT_COMMAND_EVENT = "langerface:incision-review-react-command";
 
 const REVIEW_LABELS: Record<string, string> = {
   pending_clinician_confirmation: "待医生确认",
@@ -29,7 +28,7 @@ function reviewTone(status: string) {
 }
 
 function dispatchReviewCommand(command: string) {
-  dispatchControllerCommand(REVIEW_REACT_COMMAND_EVENT, { command });
+  dispatchControllerCommand(INCISION_REVIEW_REACT_COMMAND_EVENT, { command });
 }
 
 export function ReviewControlsPanel() {

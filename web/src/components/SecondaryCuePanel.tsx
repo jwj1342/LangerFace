@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
 
 import { dispatchControllerCommand } from "../lib/controllerCommand";
+import { INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT } from "../lib/controllerEvents";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import { Input } from "./ui/input";
 
-const SECONDARY_CUE_REACT_COMMAND_EVENT = "langerface:incision-secondary-cue-react-command";
-
 function dispatchSecondaryCueCommand(command: string) {
-  dispatchControllerCommand(SECONDARY_CUE_REACT_COMMAND_EVENT, { command });
+  dispatchControllerCommand(INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT, { command });
 }
 
 export function SecondaryCuePanel() {

@@ -1,11 +1,10 @@
 import { Button } from "./ui/button";
 import { dispatchControllerCommand } from "../lib/controllerCommand";
+import { INCISION_LIBRARY_REACT_COMMAND_EVENT } from "../lib/controllerEvents";
 import { useIncisionStore } from "../stores/incisionStore";
 
-const LIBRARY_REACT_COMMAND_EVENT = "langerface:incision-library-react-command";
-
 function dispatchLibraryCommand(command: string, id?: string) {
-  dispatchControllerCommand(LIBRARY_REACT_COMMAND_EVENT, { command, id });
+  dispatchControllerCommand(INCISION_LIBRARY_REACT_COMMAND_EVENT, { command, id });
 }
 
 export function CandidateLibraryPanel() {

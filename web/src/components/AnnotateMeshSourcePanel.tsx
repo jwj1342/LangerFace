@@ -1,12 +1,11 @@
 import { Link } from "react-router-dom";
 
 import { dispatchControllerCommand } from "../lib/controllerCommand";
+import { ANNOTATE_MESH_REACT_COMMAND_EVENT } from "../lib/controllerEvents";
 import { useAnnotateStore } from "../stores/annotateStore";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-
-const ANNOTATE_MESH_REACT_COMMAND_EVENT = "langerface:annotate-mesh-react-command";
 
 function dispatchMeshCommand(command: string) {
   dispatchControllerCommand(ANNOTATE_MESH_REACT_COMMAND_EVENT, { command });

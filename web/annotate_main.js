@@ -8,6 +8,12 @@ import { facesArray, flameForward, loadFlameBasis } from "./flame_fit.js";
 import { parseMeshFile } from "./mesh_io.js";
 import { parseSlicerCurveFile } from "./slicer_curve.js";
 import {
+  ANNOTATE_CONTROLLER_STATE_EVENT,
+  ANNOTATE_DRAW_REACT_COMMAND_EVENT,
+  ANNOTATE_LIBRARY_REACT_COMMAND_EVENT,
+  ANNOTATE_MESH_REACT_COMMAND_EVENT,
+} from "./src/lib/controllerEvents.ts";
+import {
   ANNOTATE_SYSTEM_LABELS as SYSTEM_LABELS,
   buildAnnotateControllerSnapshot,
   controlsOf,
@@ -57,10 +63,6 @@ let frameId = 0;
 let abortController = null;
 let activeSession = 0;
 
-const ANNOTATE_CONTROLLER_STATE_EVENT = "langerface:annotate-state";
-const ANNOTATE_MESH_REACT_COMMAND_EVENT = "langerface:annotate-mesh-react-command";
-const ANNOTATE_DRAW_REACT_COMMAND_EVENT = "langerface:annotate-draw-react-command";
-const ANNOTATE_LIBRARY_REACT_COMMAND_EVENT = "langerface:annotate-library-react-command";
 let bundledFlameBasis = null;
 
 function publishAnnotateState(reason = "state_update") {

@@ -1,14 +1,13 @@
 import { useState } from "react";
 
 import { dispatchControllerCommand } from "../lib/controllerCommand";
+import { LIVE_RENDER_REACT_COMMAND_EVENT } from "../lib/controllerEvents";
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
-
-const LIVE_RENDER_REACT_COMMAND_EVENT = "langerface:live-render-react-command";
 
 function dispatchRenderCommand(command: string, value?: string | number | boolean) {
   dispatchControllerCommand(LIVE_RENDER_REACT_COMMAND_EVENT, { command, value });

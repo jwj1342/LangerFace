@@ -1,11 +1,10 @@
 import { dispatchControllerCommand } from "../lib/controllerCommand";
+import { ANNOTATE_DRAW_REACT_COMMAND_EVENT } from "../lib/controllerEvents";
 import { useAnnotateStore } from "../stores/annotateStore";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
-
-const ANNOTATE_DRAW_REACT_COMMAND_EVENT = "langerface:annotate-draw-react-command";
 
 function dispatchDrawCommand(command: string, value?: string) {
   dispatchControllerCommand(ANNOTATE_DRAW_REACT_COMMAND_EVENT, { command, value });

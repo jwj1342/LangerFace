@@ -16,6 +16,7 @@ const app = read("src/App.tsx");
 const typedStore = read("src/stores/appStore.ts");
 const workbenchBrand = read("src/components/WorkbenchBrand.tsx");
 const controllerCommand = read("src/lib/controllerCommand.ts");
+const controllerEvents = read("src/lib/controllerEvents.ts");
 const uiButton = read("src/components/ui/button.tsx");
 const uiCard = read("src/components/ui/card.tsx");
 const uiCheckbox = read("src/components/ui/checkbox.tsx");
@@ -134,6 +135,25 @@ assert.ok(controllerCommand.includes("dispatchControllerEvent"), "React controll
 assert.ok(controllerCommand.includes("dispatchControllerCommand"), "React controller command helper exposes command dispatch");
 assert.ok(controllerCommand.includes("CustomEvent<TDetail>"), "React controller command helper preserves typed CustomEvent details");
 assert.ok(controllerCommand.includes("window.dispatchEvent"), "React controller command helper centralizes browser event dispatch");
+for (const eventName of [
+  "LIVE_CONTROLLER_STATE_EVENT",
+  "LIVE_SOURCE_REACT_COMMAND_EVENT",
+  "LIVE_RENDER_REACT_COMMAND_EVENT",
+  "LIVE_ROUTE_REACT_COMMAND_EVENT",
+  "ANNOTATE_CONTROLLER_STATE_EVENT",
+  "ANNOTATE_MESH_REACT_COMMAND_EVENT",
+  "ANNOTATE_DRAW_REACT_COMMAND_EVENT",
+  "ANNOTATE_LIBRARY_REACT_COMMAND_EVENT",
+  "INCISION_CONTROLLER_STATE_EVENT",
+  "INCISION_PROVIDER_REACT_STATE_EVENT",
+  "INCISION_TUMOR_REACT_COMMAND_EVENT",
+  "INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT",
+  "INCISION_EDIT_REACT_COMMAND_EVENT",
+  "INCISION_REVIEW_REACT_COMMAND_EVENT",
+  "INCISION_LIBRARY_REACT_COMMAND_EVENT",
+]) {
+  assert.ok(controllerEvents.includes(`export const ${eventName}`), `shared controller event module exports ${eventName}`);
+}
 assert.ok(uiButton.includes("@radix-ui/react-slot"), "shadcn-style Button supports asChild through Radix Slot");
 assert.ok(uiButton.includes("class-variance-authority"), "shadcn-style Button uses variant composition");
 assert.ok(uiButton.includes("workbenchPrimary"), "shadcn-style Button can preserve legacy workbench button styling");
@@ -172,6 +192,7 @@ assert.ok(controllerSnapshotBridgeHook.includes("clearSnapshot()"), "shared snap
 assert.ok(controllerSnapshotBridgeHook.includes("CustomEvent<unknown>"), "shared snapshot bridge treats browser event payloads as unknown before schema guards");
 assert.ok(annotateStore.includes("AnnotateControllerSnapshot"), "annotation Zustand store keeps typed controller snapshots");
 assert.ok(annotateStore.includes("ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation Zustand store declares the controller bridge event");
+assert.ok(annotateStore.includes("../lib/controllerEvents"), "annotation Zustand store re-exports controller state event from the shared event module");
 assert.ok(annotateStore.includes("No Three.js objects"), "annotation store documents renderer object exclusion");
 assert.ok(annotateStore.includes("../services/annotateSnapshots"), "annotation Zustand store reuses the shared typed snapshot service types");
 assert.ok(!annotateStore.includes("THREE."), "annotation store must not hold Three.js objects");
@@ -183,6 +204,7 @@ assert.ok(annotateBridge.includes("react-annotate-controller-snapshot/v0.1"), "R
 assert.ok(annotateStatePanel.includes("useAnnotateStore"), "React annotation UI reads low-frequency state from Zustand");
 assert.ok(liveStore.includes("LiveControllerSnapshot"), "live Zustand store keeps typed controller snapshots");
 assert.ok(liveStore.includes("LIVE_CONTROLLER_STATE_EVENT"), "live Zustand store declares the controller bridge event");
+assert.ok(liveStore.includes("../lib/controllerEvents"), "live Zustand store re-exports controller state event from the shared event module");
 assert.ok(liveStore.includes("No MediaPipe task instances"), "live store documents MediaPipe object exclusion");
 assert.ok(liveStore.includes("../services/liveSnapshots"), "live Zustand store reuses the shared typed snapshot service types");
 assert.ok(!liveStore.includes("THREE."), "live store must not hold Three.js objects");
@@ -195,6 +217,7 @@ assert.ok(liveBridge.includes("react-live-controller-snapshot/v0.1"), "React liv
 assert.ok(liveStatePanel.includes("useLiveStore"), "React live UI reads low-frequency state from Zustand");
 assert.ok(incisionStore.includes("IncisionControllerSnapshot"), "incision Zustand store keeps typed controller snapshots");
 assert.ok(incisionStore.includes("INCISION_CONTROLLER_STATE_EVENT"), "incision Zustand store declares the controller bridge event");
+assert.ok(incisionStore.includes("../lib/controllerEvents"), "incision Zustand store re-exports controller state event from the shared event module");
 assert.ok(incisionStore.includes("No Three.js objects"), "incision store documents renderer object exclusion");
 assert.ok(incisionStore.includes("../services/incisionSnapshots"), "incision Zustand store reuses the shared typed snapshot service types");
 assert.ok(!incisionStore.includes("THREE."), "incision store must not hold Three.js objects");
@@ -247,6 +270,7 @@ for (const id of [
 }
 assert.ok(incisionWorkbench.includes("TumorInputPanel"), "React incision workbench renders the tumor input controls as a React component");
 assert.ok(tumorPanel.includes("TUMOR_REACT_COMMAND_EVENT"), "React tumor panel dispatches tumor commands to the controller boundary");
+assert.ok(tumorPanel.includes("../lib/controllerEvents"), "React tumor panel imports controller events from the shared module");
 assert.ok(tumorPanel.includes("dispatchControllerCommand"), "React tumor panel uses the shared controller command helper");
 assert.ok(tumorPanel.includes("useIncisionStore"), "React tumor panel syncs low-frequency tumor status from Zustand");
 assert.ok(tumorPanel.includes("Button"), "React tumor panel uses the shared shadcn-style button primitive");
@@ -271,6 +295,7 @@ for (const id of [
 assert.ok(incisionStore.includes("IncisionSecondaryCueState"), "incision Zustand store keeps typed secondary cue state");
 assert.ok(incisionWorkbench.includes("SecondaryCuePanel"), "React incision workbench renders the secondary cue controls as a React component");
 assert.ok(secondaryCuePanel.includes("SECONDARY_CUE_REACT_COMMAND_EVENT"), "React secondary cue panel dispatches cue commands to the controller boundary");
+assert.ok(secondaryCuePanel.includes("../lib/controllerEvents"), "React secondary cue panel imports controller events from the shared module");
 assert.ok(secondaryCuePanel.includes("dispatchControllerCommand"), "React secondary cue panel uses the shared controller command helper");
 assert.ok(secondaryCuePanel.includes("useIncisionStore"), "React secondary cue panel syncs low-frequency cue state from Zustand");
 assert.ok(secondaryCuePanel.includes("Button"), "React secondary cue panel uses the shared shadcn-style button primitive");
@@ -312,6 +337,7 @@ for (const id of [
 assert.ok(incisionStore.includes("IncisionSavedCandidateSummary"), "incision Zustand store keeps typed saved candidate summaries");
 assert.ok(incisionWorkbench.includes("CandidateLibraryPanel"), "React incision workbench renders the candidate library as a React component");
 assert.ok(candidateLibraryPanel.includes("LIBRARY_REACT_COMMAND_EVENT"), "React candidate library dispatches library commands to the controller boundary");
+assert.ok(candidateLibraryPanel.includes("../lib/controllerEvents"), "React candidate library imports controller events from the shared module");
 assert.ok(candidateLibraryPanel.includes("dispatchControllerCommand"), "React candidate library uses the shared controller command helper");
 assert.ok(candidateLibraryPanel.includes("useIncisionStore"), "React candidate library reads saved candidate summaries from Zustand");
 assert.ok(candidateLibraryPanel.includes("Button"), "React candidate library uses the shared shadcn-style button primitive");
@@ -340,6 +366,7 @@ assert.ok(incisionWorkbench.includes("ProviderConfigPanel"), "React incision wor
 assert.ok(providerPanel.includes("testProviderConnection"), "React provider panel owns the browser-side Provider connectivity test");
 assert.ok(providerPanel.includes("normalizeProviderBaseUrl"), "React provider panel normalizes provider Base URL");
 assert.ok(providerPanel.includes("PROVIDER_REACT_STATE_EVENT"), "React provider panel notifies the legacy controller to republish snapshots");
+assert.ok(providerPanel.includes("../lib/controllerEvents"), "React provider panel imports controller events from the shared module");
 assert.ok(providerPanel.includes("dispatchControllerEvent"), "React provider panel uses the shared controller event helper");
 assert.ok(providerPanel.includes("../services/providerConfig"), "React provider panel consumes the shared typed Provider config service");
 assert.ok(providerConfigService.includes("PROVIDER_STORAGE_KEY"), "Provider config service owns browser storage keying");
@@ -377,6 +404,7 @@ for (const id of [
 assert.ok(incisionStore.includes("IncisionEditState"), "incision Zustand store keeps typed edit state");
 assert.ok(incisionWorkbench.includes("EditControlsPanel"), "React incision workbench renders the edit controls as a React component");
 assert.ok(editPanel.includes("EDIT_REACT_COMMAND_EVENT"), "React edit panel dispatches edit commands to the controller boundary");
+assert.ok(editPanel.includes("../lib/controllerEvents"), "React edit panel imports controller events from the shared module");
 assert.ok(editPanel.includes("dispatchControllerCommand"), "React edit panel uses the shared controller command helper");
 assert.ok(editPanel.includes("useIncisionStore"), "React edit panel syncs low-frequency edit state from Zustand");
 assert.ok(editPanel.includes("Button"), "React edit panel uses the shared shadcn-style button primitive");
@@ -396,6 +424,7 @@ for (const id of [
 }
 assert.ok(incisionWorkbench.includes("ReviewControlsPanel"), "React incision workbench renders the review controls as a React component");
 assert.ok(reviewPanel.includes("REVIEW_REACT_COMMAND_EVENT"), "React review panel dispatches review commands to the controller boundary");
+assert.ok(reviewPanel.includes("../lib/controllerEvents"), "React review panel imports controller events from the shared module");
 assert.ok(reviewPanel.includes("dispatchControllerCommand"), "React review panel uses the shared controller command helper");
 assert.ok(reviewPanel.includes("useIncisionStore"), "React review panel syncs low-frequency review state from Zustand");
 assert.ok(reviewPanel.includes("Input"), "React review panel uses the shared shadcn-style input primitive");
@@ -409,6 +438,7 @@ assert.ok(incisionStagePanel.includes('to="/annotate"'), "React incision stage l
 assert.ok(controller.includes("export function mountIncisionAgentWorkbench"), "incision controller exposes a mount lifecycle");
 assert.ok(controller.includes("export function disposeIncisionAgentWorkbench"), "incision controller exposes a dispose lifecycle");
 assert.ok(controller.includes("INCISION_TUMOR_REACT_COMMAND_EVENT"), "incision controller listens for React tumor input commands");
+assert.ok(controller.includes("./src/lib/controllerEvents.ts"), "incision controller imports event names from the shared module");
 assert.ok(controller.includes("handleReactTumorCommand"), "incision controller routes React tumor commands to existing tumor workflow functions");
 assert.ok(controller.includes("./src/services/tumorInput.ts"), "incision controller consumes the shared typed tumor input service");
 assert.ok(controller.includes("buildTumorInput({"), "incision controller delegates TumorInput construction to the shared service");
@@ -538,6 +568,8 @@ assert.ok(annotateWorkbench.includes("AnnotateHelpPanel"), "React annotate workb
 assert.ok(annotateWorkbench.includes("AnnotateStagePanel"), "React annotate workbench renders the 3D stage shell as a React component");
 assert.ok(annotateMeshSourcePanel.includes("ANNOTATE_MESH_REACT_COMMAND_EVENT"), "React annotate mesh source panel dispatches mesh commands to the controller boundary");
 assert.ok(annotateDrawPanel.includes("ANNOTATE_DRAW_REACT_COMMAND_EVENT"), "React annotate draw panel dispatches current-line commands to the controller boundary");
+assert.ok(annotateMeshSourcePanel.includes("../lib/controllerEvents"), "React annotate mesh source panel imports controller events from the shared module");
+assert.ok(annotateDrawPanel.includes("../lib/controllerEvents"), "React annotate draw panel imports controller events from the shared module");
 assert.ok(annotateMeshSourcePanel.includes("dispatchControllerCommand"), "React annotate mesh source panel uses the shared controller command helper");
 assert.ok(annotateDrawPanel.includes("dispatchControllerCommand"), "React annotate draw panel uses the shared controller command helper");
 assert.ok(annotateMeshSourcePanel.includes("useAnnotateStore"), "React annotate mesh source panel reads low-frequency mesh state from Zustand");
@@ -567,6 +599,7 @@ for (const id of [
 assert.ok(annotateStore.includes("AnnotateSavedLineSummary"), "annotation Zustand store keeps typed saved line summaries");
 assert.ok(annotateWorkbench.includes("AnnotateLineLibraryPanel"), "React annotate workbench renders the saved line library as a React component");
 assert.ok(annotateLineLibraryPanel.includes("ANNOTATE_LIBRARY_REACT_COMMAND_EVENT"), "React annotate line library dispatches saved line commands to the controller boundary");
+assert.ok(annotateLineLibraryPanel.includes("../lib/controllerEvents"), "React annotate line library imports controller events from the shared module");
 assert.ok(annotateLineLibraryPanel.includes("dispatchControllerCommand"), "React annotate line library uses the shared controller command helper");
 assert.ok(annotateLineLibraryPanel.includes("useAnnotateStore"), "React annotate line library reads saved line state from Zustand");
 assert.ok(annotateLineLibraryPanel.includes("Button"), "React annotate line library uses the shared shadcn-style button primitive");
@@ -580,6 +613,7 @@ assert.ok(annotateMeshSourcePanel.includes('to="/live"'), "React annotation mesh
 assert.ok(annotateController.includes("export function mountAnnotateWorkbench"), "annotation controller exposes a mount lifecycle");
 assert.ok(annotateController.includes("export function disposeAnnotateWorkbench"), "annotation controller exposes a dispose lifecycle");
 assert.ok(annotateController.includes("ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation controller declares a React state bridge event");
+assert.ok(annotateController.includes("./src/lib/controllerEvents.ts"), "annotation controller imports event names from the shared module");
 assert.ok(annotateController.includes("ANNOTATE_MESH_REACT_COMMAND_EVENT"), "annotation controller declares a React mesh source command bridge event");
 assert.ok(annotateController.includes("ANNOTATE_DRAW_REACT_COMMAND_EVENT"), "annotation controller declares a React current-line command bridge event");
 assert.ok(annotateController.includes("ANNOTATE_LIBRARY_REACT_COMMAND_EVENT"), "annotation controller declares a React saved line command bridge event");
@@ -703,6 +737,9 @@ assert.ok(liveWorkbench.includes("LiveStagePanel"), "React live workbench render
 assert.ok(liveRouteControlsPanel.includes("LIVE_ROUTE_REACT_COMMAND_EVENT"), "React live route controls dispatch 3D route commands to the controller boundary");
 assert.ok(liveSourceControlsPanel.includes("LIVE_SOURCE_REACT_COMMAND_EVENT"), "React live source controls dispatch source commands to the controller boundary");
 assert.ok(liveRenderControlsPanel.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "React live render controls dispatch render commands to the controller boundary");
+assert.ok(liveRouteControlsPanel.includes("../lib/controllerEvents"), "React live route controls import controller events from the shared module");
+assert.ok(liveSourceControlsPanel.includes("../lib/controllerEvents"), "React live source controls import controller events from the shared module");
+assert.ok(liveRenderControlsPanel.includes("../lib/controllerEvents"), "React live render controls import controller events from the shared module");
 assert.ok(liveRouteControlsPanel.includes("dispatchControllerCommand"), "React live route controls use the shared controller command helper");
 assert.ok(liveSourceControlsPanel.includes("dispatchControllerCommand"), "React live source controls use the shared controller command helper");
 assert.ok(liveRenderControlsPanel.includes("dispatchControllerCommand"), "React live render controls use the shared controller command helper");
@@ -738,6 +775,7 @@ assert.ok(dom.includes("export let ctx"), "DOM module exports a live canvas cont
 assert.ok(liveController.includes("export function mountLiveWorkbench"), "live controller exposes a mount lifecycle");
 assert.ok(liveController.includes("export function disposeLiveWorkbench"), "live controller exposes a dispose lifecycle");
 assert.ok(liveController.includes("LIVE_CONTROLLER_STATE_EVENT"), "live controller declares a React state bridge event");
+assert.ok(liveController.includes("./src/lib/controllerEvents.ts"), "live controller imports event names from the shared module");
 assert.ok(liveController.includes("LIVE_ROUTE_REACT_COMMAND_EVENT"), "live controller declares a React route command bridge event");
 assert.ok(liveController.includes("LIVE_SOURCE_REACT_COMMAND_EVENT"), "live controller declares a React source command bridge event");
 assert.ok(liveController.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "live controller declares a React render command bridge event");
