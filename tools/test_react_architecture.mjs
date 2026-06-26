@@ -79,6 +79,7 @@ const workerPanel = read("src/components/WorkerStatusPanel.tsx");
 const providerConfigService = read("src/services/providerConfig.ts");
 const tumorInputService = read("src/services/tumorInput.ts");
 const annotateSnapshotsService = read("src/services/annotateSnapshots.ts");
+const liveSnapshotsService = read("src/services/liveSnapshots.ts");
 const annotateController = read("annotate_main.js");
 const annotateViewer = read("annotate_viewer.js");
 const controller = read("incision_agent_main.js");
@@ -182,6 +183,7 @@ assert.ok(annotateStatePanel.includes("useAnnotateStore"), "React annotation UI 
 assert.ok(liveStore.includes("LiveControllerSnapshot"), "live Zustand store keeps typed controller snapshots");
 assert.ok(liveStore.includes("LIVE_CONTROLLER_STATE_EVENT"), "live Zustand store declares the controller bridge event");
 assert.ok(liveStore.includes("No MediaPipe task instances"), "live store documents MediaPipe object exclusion");
+assert.ok(liveStore.includes("../services/liveSnapshots"), "live Zustand store reuses the shared typed snapshot service types");
 assert.ok(!liveStore.includes("THREE."), "live store must not hold Three.js objects");
 assert.ok(!liveStore.includes("landmarks:"), "live store must not hold per-frame landmarks");
 assert.ok(!liveStore.includes("verts:"), "live store must not hold mesh vertex arrays");
@@ -717,6 +719,10 @@ assert.ok(liveRenderControlsPanel.includes("Select"), "React live render control
 assert.ok(liveRenderControlsPanel.includes("RangeInput"), "React live render controls use the shared shadcn-style range primitive");
 assert.ok(liveQualityPanel.includes('data-frame-owned="true"'), "React live quality panel documents that frame-updated labels stay outside Zustand");
 assert.ok(!liveQualityPanel.includes("useLiveStore"), "live quality panel should not subscribe high-frequency quality updates through Zustand");
+assert.ok(liveSnapshotsService.includes("buildLiveControllerSnapshot"), "shared live snapshot service builds typed controller snapshots");
+assert.ok(liveSnapshotsService.includes("liveTextOf"), "shared live snapshot service owns text normalization helpers");
+assert.ok(liveSnapshotsService.includes("visibleLiveTextOf"), "shared live snapshot service owns visible text normalization helpers");
+assert.ok(liveSnapshotsService.includes("react-live-controller-snapshot/v0.1"), "shared live snapshot service owns the typed React snapshot schema");
 assert.ok(liveRouteControlsPanel.includes('to="/annotate"'), "React live route controls link to the React annotation route");
 assert.ok(liveWorkbench.includes('to="/incision"'), "React live workbench links to the React incision route");
 assert.ok(dom.includes("export function bindDom"), "DOM module can rebind element references for SPA route mounts");
@@ -730,7 +736,10 @@ assert.ok(liveController.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "live cont
 assert.ok(liveController.includes("handleReactRouteCommand"), "live controller routes React route commands to existing 3D workflow functions");
 assert.ok(liveController.includes("handleReactSourceCommand"), "live controller routes React source commands to existing workflow functions");
 assert.ok(liveController.includes("handleReactRenderCommand"), "live controller routes React render commands to existing workflow functions");
-assert.ok(liveController.includes("react-live-controller-snapshot/v0.1"), "live controller publishes a typed React snapshot");
+assert.ok(liveController.includes("./src/services/liveSnapshots.ts"), "live controller consumes the shared typed snapshot service");
+assert.ok(liveController.includes("buildLiveControllerSnapshot({"), "live controller delegates React snapshot construction to the shared service");
+assert.ok(!liveController.includes("function textOf"), "live controller no longer owns snapshot text normalization");
+assert.ok(!liveController.includes("function visibleTextOf"), "live controller no longer owns visible snapshot text normalization");
 assert.ok(liveController.includes("CustomEvent(LIVE_CONTROLLER_STATE_EVENT"), "live controller emits state snapshots through a browser event");
 assert.ok(liveController.includes("scheduleLiveState"), "live controller publishes low-frequency state snapshots from user actions");
 assert.ok(liveController.includes("bindDom(root)"), "live controller rebinds DOM references on mount");

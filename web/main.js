@@ -8,6 +8,11 @@ import { countMetric, logError } from "./logger.js";
 import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, stopTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.js";
 import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.js";
 import { adjustFocusZoom, buildZoomCards } from "./render.js";
+import {
+  buildLiveControllerSnapshot,
+  liveTextOf,
+  visibleLiveTextOf,
+} from "./src/services/liveSnapshots.ts";
 import { recordingState, reconState, renderState, sourceState } from "./state.js";
 import { setIncisionOverlayQa, setMsg, setProvenance, smoothLabel } from "./ui.js";
 
@@ -26,65 +31,40 @@ const LIVE_SOURCE_REACT_COMMAND_EVENT = "langerface:live-source-react-command";
 const LIVE_RENDER_REACT_COMMAND_EVENT = "langerface:live-render-react-command";
 const LIVE_ROUTE_REACT_COMMAND_EVENT = "langerface:live-route-react-command";
 
-function textOf(el) {
-  return el?.textContent?.trim?.() || "";
-}
-
-function visibleTextOf(el) {
-  if (!el || el.classList?.contains("hidden")) return "";
-  return textOf(el);
-}
-
 function publishLiveState(reason = "state_update") {
   if (!mounted || typeof window === "undefined" || !els.canvas) return;
   window.dispatchEvent(new CustomEvent(LIVE_CONTROLLER_STATE_EVENT, {
-    detail: {
-      schema_version: "react-live-controller-snapshot/v0.1",
+    detail: buildLiveControllerSnapshot({
       reason,
-      modelBadge: textOf(els.badge),
-      overlayMessage: visibleTextOf(els.msg),
-      source: {
-        kind: sourceState.sourceKind,
-        running: Boolean(sourceState.running),
-        paused: Boolean(sourceState.paused),
-        liveLabel: els.live?.dataset?.k || textOf(els.live) || "待机",
-      },
-      route: {
-        route: reconState.route,
-        mode3d: reconState.mode3d,
-        hint: textOf(els.routeModeHint),
-      },
-      render: {
-        system: renderState.system,
-        densityPct: Math.round(renderState.densityFrac * 100),
-        smoothLabel: textOf(els.smoothVal),
-        opacityPct: Math.round(renderState.opacity * 100),
-        mirror: Boolean(renderState.mirror),
-        zoom: Boolean(renderState.zoom),
-        meshPts: Boolean(renderState.meshPts),
-        bands: Boolean(renderState.bands),
-      },
-      recon: {
-        has3dModel: Boolean(reconState.reconVerts || reconState.flameFit || reconState.flameNeutral),
-        projectable: Boolean(reconState.reconProjectable),
-        scanActive: Boolean(reconState.scan?.active),
-        twinMode: reconState.twinMode,
-        twinTexture: Boolean(reconState.twinTexture),
-        status: textOf(els.reconStatus),
-      },
-      atlasPreview: {
-        active: Boolean(previewSystem && previewMeta && renderState.system === previewSystem),
-        source: previewMeta?.source || null,
-        validated: previewMeta ? previewMeta.validated === true : null,
-        count: Number.isFinite(previewMeta?.count) ? previewMeta.count : null,
-      },
-      incisionOverlay: {
-        loaded: Boolean(renderState.incisionOverlay),
-        qaLabel: textOf(els.incisionOverlayQaState) || null,
-      },
+      modelBadge: liveTextOf(els.badge),
+      overlayMessage: visibleLiveTextOf(els.msg),
+      sourceKind: sourceState.sourceKind,
+      sourceRunning: sourceState.running,
+      sourcePaused: sourceState.paused,
+      liveLabel: els.live?.dataset?.k || liveTextOf(els.live) || "待机",
+      route: reconState.route,
+      mode3d: reconState.mode3d,
+      routeHint: liveTextOf(els.routeModeHint),
+      renderSystem: renderState.system,
+      densityFrac: renderState.densityFrac,
+      smoothLabel: liveTextOf(els.smoothVal),
+      opacity: renderState.opacity,
+      mirror: renderState.mirror,
+      zoom: renderState.zoom,
+      meshPts: renderState.meshPts,
+      bands: renderState.bands,
+      has3dModel: Boolean(reconState.reconVerts || reconState.flameFit || reconState.flameNeutral),
+      projectable: reconState.reconProjectable,
+      scanActive: reconState.scan?.active,
+      twinMode: reconState.twinMode,
+      twinTexture: reconState.twinTexture,
+      reconStatus: liveTextOf(els.reconStatus),
+      previewSystem,
+      previewMeta,
+      incisionOverlayLoaded: Boolean(renderState.incisionOverlay),
+      incisionOverlayQaLabel: liveTextOf(els.incisionOverlayQaState) || null,
       recording: Boolean(recordingState.recorder),
-      updatedAt: new Date().toISOString(),
-    },
+    }),
   }));
 }
 
