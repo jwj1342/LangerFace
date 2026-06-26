@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { Textarea } from "./ui/textarea";
 import { dispatchControllerCommand } from "../lib/controllerCommand";
@@ -46,7 +47,7 @@ export function ReviewControlsPanel() {
         <span className={`review-state ${reviewTone(status)}`} id="reviewState">{reviewLabel(status)}</span>
       </div>
       <div>
-        <label className="field-label" htmlFor="reviewerName">审阅人</label>
+        <Label htmlFor="reviewerName">审阅人</Label>
         <Input
           id="reviewerName"
           placeholder="clinician reviewer"

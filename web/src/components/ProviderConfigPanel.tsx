@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { normalizeProviderBaseUrl, testProviderConnection, type ProviderConfig } from "../../llm_provider.js";
 import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { RangeInput } from "./ui/slider";
 import { dispatchControllerEvent } from "../lib/controllerCommand";
 
 const PROVIDER_STORAGE_KEY = "langerface.incision.provider";
@@ -219,10 +221,9 @@ export function ProviderConfigPanel() {
         }}
       />
       <div>
-        <label className="field-label" htmlFor="providerTimeout">LLM timeout 秒 <span id="providerTimeoutVal" className="val">{timeoutS}</span></label>
-        <input
+        <Label htmlFor="providerTimeout">LLM timeout 秒 <span id="providerTimeoutVal" className="val">{timeoutS}</span></Label>
+        <RangeInput
           id="providerTimeout"
-          type="range"
           min="5"
           max="180"
           value={timeoutS}

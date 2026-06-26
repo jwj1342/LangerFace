@@ -19,7 +19,9 @@ const controllerCommand = read("src/lib/controllerCommand.ts");
 const uiButton = read("src/components/ui/button.tsx");
 const uiCard = read("src/components/ui/card.tsx");
 const uiInput = read("src/components/ui/input.tsx");
+const uiLabel = read("src/components/ui/label.tsx");
 const uiSelect = read("src/components/ui/select.tsx");
+const uiSlider = read("src/components/ui/slider.tsx");
 const uiTextarea = read("src/components/ui/textarea.tsx");
 const annotateStore = read("src/stores/annotateStore.ts");
 const reactRouteLifecycleHook = read("src/hooks/useReactRouteLifecycle.ts");
@@ -132,7 +134,9 @@ assert.ok(uiCard.includes("CardHeader"), "shadcn-style Card exposes a header pri
 assert.ok(uiCard.includes("CardContent"), "shadcn-style Card exposes a content primitive");
 assert.ok(uiCard.includes('cn("card"'), "shadcn-style Card preserves existing card styling");
 assert.ok(uiInput.includes('cn("text-input"'), "shadcn-style Input preserves existing text input styling");
+assert.ok(uiLabel.includes('cn("field-label"'), "shadcn-style Label preserves existing field label styling");
 assert.ok(uiSelect.includes('cn("select"'), "shadcn-style Select preserves existing select styling");
+assert.ok(uiSlider.includes('type="range"'), "shadcn-style RangeInput preserves native range input behavior");
 assert.ok(uiTextarea.includes('cn("text-area"'), "shadcn-style Textarea preserves existing textarea styling");
 assert.ok(typedStore.includes("React/Zustand stores low-frequency UI"), "Zustand store documents low-frequency state ownership");
 assert.ok(typedStore.includes("per-frame arrays stay outside persisted stores"), "Zustand store forbids high-frequency renderer arrays");
@@ -312,6 +316,8 @@ assert.ok(providerPanel.includes("normalizeProviderBaseUrl"), "React provider pa
 assert.ok(providerPanel.includes("PROVIDER_REACT_STATE_EVENT"), "React provider panel notifies the legacy controller to republish snapshots");
 assert.ok(providerPanel.includes("dispatchControllerEvent"), "React provider panel uses the shared controller event helper");
 assert.ok(providerPanel.includes("Input"), "React provider panel uses the shared shadcn-style input primitive");
+assert.ok(providerPanel.includes("Label"), "React provider panel uses the shared shadcn-style label primitive");
+assert.ok(providerPanel.includes("RangeInput"), "React provider panel uses the shared shadcn-style range primitive");
 for (const id of [
   "editStatus",
   "angleOffsetDeg",
@@ -354,6 +360,7 @@ assert.ok(reviewPanel.includes("REVIEW_REACT_COMMAND_EVENT"), "React review pane
 assert.ok(reviewPanel.includes("dispatchControllerCommand"), "React review panel uses the shared controller command helper");
 assert.ok(reviewPanel.includes("useIncisionStore"), "React review panel syncs low-frequency review state from Zustand");
 assert.ok(reviewPanel.includes("Input"), "React review panel uses the shared shadcn-style input primitive");
+assert.ok(reviewPanel.includes("Label"), "React review panel uses the shared shadcn-style label primitive");
 assert.ok(reviewPanel.includes("Select"), "React review panel uses the shared shadcn-style select primitive");
 assert.ok(reviewPanel.includes("Textarea"), "React review panel uses the shared shadcn-style textarea primitive");
 assert.ok(incisionWorkbench.includes('to="/live"'), "React incision workbench returns to the React live route");
