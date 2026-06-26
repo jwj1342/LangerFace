@@ -1,40 +1,11 @@
 import { Cpu } from "lucide-react";
-import { useEffect, useState } from "react";
 
 import { Card, CardContent, CardHeader, CardHeaderTitle } from "./ui/card";
 import { Hint } from "./ui/hint";
-import { createWorkflowWorkerClient, probeWorkflowWorkerClient } from "../services/workflowWorkerClient";
-import { useAppStore } from "../stores/appStore";
+import { useWorkflowWorkerProbe } from "../hooks/useWorkflowWorkerProbe";
 
 export function WorkerStatusPanel() {
-  const [detail, setDetail] = useState("Worker 尚未连接。");
-  const workerStatus = useAppStore((state) => state.workerStatus);
-  const setWorkerStatus = useAppStore((state) => state.setWorkerStatus);
-
-  useEffect(() => {
-    let disposed = false;
-    const client = createWorkflowWorkerClient();
-    setWorkerStatus("正在连接");
-
-    async function probeWorker() {
-      const probe = await probeWorkflowWorkerClient(client);
-      if (disposed) return;
-      setWorkerStatus("已连接");
-      setDetail(probe.detail);
-    }
-
-    probeWorker().catch((err) => {
-      if (disposed) return;
-      setWorkerStatus("连接失败");
-      setDetail(`Worker 连接失败：${err instanceof Error ? err.message : String(err)}`);
-    });
-
-    return () => {
-      disposed = true;
-      client.dispose();
-      setWorkerStatus("已卸载");
-    };
-  }, [setWorkerStatus]);
+  const { detail, workerStatus } = useWorkflowWorkerProbe();
 
   return (
     <Card>

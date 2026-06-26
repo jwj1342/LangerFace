@@ -1,16 +1,17 @@
 import { create } from "zustand";
 
 export type Workspace = "dashboard" | "annotate" | "incision" | "live" | "surgery" | "three-preview";
+export type WorkerStatus = "未连接" | "正在连接" | "已连接" | "连接失败" | "已卸载";
 
 interface AppState {
   activeWorkspace: Workspace;
   routeStatus: string;
   assetStatus: string;
-  workerStatus: string;
+  workerStatus: WorkerStatus;
   setActiveWorkspace: (activeWorkspace: Workspace) => void;
   setRouteStatus: (routeStatus: string) => void;
   setAssetStatus: (assetStatus: string) => void;
-  setWorkerStatus: (workerStatus: string) => void;
+  setWorkerStatus: (workerStatus: WorkerStatus) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
