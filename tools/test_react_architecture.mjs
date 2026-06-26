@@ -138,6 +138,9 @@ assert.ok(controllerCommand.includes("CustomEvent<TDetail>"), "React controller 
 assert.ok(controllerCommand.includes("window.dispatchEvent"), "React controller command helper centralizes browser event dispatch");
 assert.ok(controllerCommand.includes("readControllerCommandDetail"), "React controller command helper exposes runtime command detail parsing");
 assert.ok(controllerCommand.includes("commands.includes"), "React controller command helper validates incoming command names against runtime command sets");
+assert.ok(controllerCommand.includes("bindWindowControllerEvents"), "React controller command helper centralizes window event binding cleanup");
+assert.ok(controllerCommand.includes("window.addEventListener"), "React controller command helper owns window listener registration");
+assert.ok(controllerCommand.includes("window.removeEventListener"), "React controller command helper owns window listener cleanup");
 for (const helperName of [
   "dispatchLiveSourceCommand",
   "dispatchLiveRenderCommand",
@@ -496,6 +499,10 @@ assert.ok(controller.includes("export function disposeIncisionAgentWorkbench"), 
 assert.ok(controller.includes("INCISION_TUMOR_REACT_COMMAND_EVENT"), "incision controller listens for React tumor input commands");
 assert.ok(controller.includes("./src/lib/controllerEvents.ts"), "incision controller imports event names from the shared module");
 assert.ok(controller.includes("./src/lib/controllerCommand.ts"), "incision controller imports the shared command parsing module");
+assert.ok(controller.includes("bindWindowControllerEvents"), "incision controller binds React command events through the shared helper");
+assert.ok(controller.includes("reactCommandCleanup"), "incision controller stores a single React command cleanup handle");
+assert.ok(!controller.includes("window.addEventListener(INCISION"), "incision controller does not register React command listeners one-by-one");
+assert.ok(!controller.includes("window.removeEventListener(INCISION"), "incision controller does not remove React command listeners one-by-one");
 assert.ok(controller.includes("readControllerCommandDetail(event, INCISION_TUMOR_COMMANDS)"), "incision tumor handler validates incoming command names");
 assert.ok(controller.includes("readControllerCommandDetail(event, INCISION_SECONDARY_CUE_COMMANDS)"), "incision secondary cue handler validates incoming command names");
 assert.ok(controller.includes("readControllerCommandDetail(event, INCISION_EDIT_COMMANDS)"), "incision edit handler validates incoming command names");

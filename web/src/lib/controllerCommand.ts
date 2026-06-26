@@ -131,6 +131,22 @@ export function readControllerCommandDetail<TCommand extends string>(
     : null;
 }
 
+export type WindowControllerEventBinding = readonly [eventName: string, listener: EventListener];
+export type ControllerEventCleanup = () => void;
+
+export function bindWindowControllerEvents(
+  bindings: readonly WindowControllerEventBinding[],
+): ControllerEventCleanup {
+  for (const [eventName, listener] of bindings) {
+    window.addEventListener(eventName, listener);
+  }
+  return () => {
+    for (const [eventName, listener] of [...bindings].reverse()) {
+      window.removeEventListener(eventName, listener);
+    }
+  };
+}
+
 export function dispatchControllerEvent<TDetail>(eventName: string, detail: TDetail) {
   window.dispatchEvent(new CustomEvent<TDetail>(eventName, { detail }));
 }

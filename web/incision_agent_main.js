@@ -30,6 +30,7 @@ import {
   INCISION_REVIEW_COMMANDS,
   INCISION_SECONDARY_CUE_COMMANDS,
   INCISION_TUMOR_COMMANDS,
+  bindWindowControllerEvents,
   readControllerCommandDetail,
 } from "./src/lib/controllerCommand.ts";
 import { isReactManagedWorkbench } from "./src/lib/reactManagedWorkbench.ts";
@@ -207,12 +208,7 @@ function createRuntimeState() {
     secondaryCues: null,
     workflowWorker: null,
     workflowWorkerFailed: false,
-    providerReactStateHandler: null,
-    tumorReactCommandHandler: null,
-    secondaryCueReactCommandHandler: null,
-    editReactCommandHandler: null,
-    reviewReactCommandHandler: null,
-    libraryReactCommandHandler: null,
+    reactCommandCleanup: null,
     editTimeline: null,
     editCursor: 0,
     lastConsoleTraceSignature: "",
@@ -2271,10 +2267,10 @@ function bindWorkbenchEvents() {
     }
   });
 
-  if (isReactManagedWorkbench()) {
-    S.tumorReactCommandHandler = handleReactTumorCommand;
-    window.addEventListener(INCISION_TUMOR_REACT_COMMAND_EVENT, S.tumorReactCommandHandler);
-  } else {
+  const reactManaged = isReactManagedWorkbench();
+  if (reactManaged) bindReactWorkbenchCommands();
+
+  if (!reactManaged) {
     els.tumorKind.onchange = () => { updateFormVisibility(); runAgent(); };
     els.diameter.oninput = () => { els.diameterVal.textContent = els.diameter.value; updateTumorRing(); };
     els.diameter.onchange = runAgent;
@@ -2291,27 +2287,18 @@ function bindWorkbenchEvents() {
     els.exportTumor.onclick = exportTumorJson;
     els.importTumor.onclick = () => els.tumorImportFile.click();
   }
-  if (isReactManagedWorkbench()) {
-    S.providerReactStateHandler = () => publishIncisionState("provider_react_state");
-    window.addEventListener(INCISION_PROVIDER_REACT_STATE_EVENT, S.providerReactStateHandler);
-  } else {
+  if (!reactManaged) {
     els.testProvider.onclick = testProviderEndpoint;
     els.providerBaseUrl.onchange = () => { setProviderTestState("Provider Base URL 已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
     els.providerModel.onchange = () => { setProviderTestState("Provider 模型已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
     els.providerTimeout.oninput = () => { els.providerTimeoutVal.textContent = els.providerTimeout.value; saveProviderPrefs(); };
   }
-  if (isReactManagedWorkbench()) {
-    S.secondaryCueReactCommandHandler = handleReactSecondaryCueCommand;
-    window.addEventListener(INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT, S.secondaryCueReactCommandHandler);
-  } else {
+  if (!reactManaged) {
     els.importSecondaryCue.onclick = () => els.secondaryCueImportFile.click();
     els.clearSecondaryCue.onclick = clearSecondaryCues;
     els.secondaryCueConfirmed.onchange = setSecondaryCueConfirmedFromControl;
   }
-  if (isReactManagedWorkbench()) {
-    S.editReactCommandHandler = handleReactEditCommand;
-    window.addEventListener(INCISION_EDIT_REACT_COMMAND_EVENT, S.editReactCommandHandler);
-  } else {
+  if (!reactManaged) {
     [
     els.angleOffset,
     els.lengthScale,
@@ -2334,19 +2321,13 @@ function bindWorkbenchEvents() {
     els.redoEdit.onclick = redoEditSnapshot;
     els.resetEdit.onclick = resetEditToToolSuggestion;
   }
-  if (isReactManagedWorkbench()) {
-    S.reviewReactCommandHandler = handleReactReviewCommand;
-    window.addEventListener(INCISION_REVIEW_REACT_COMMAND_EVENT, S.reviewReactCommandHandler);
-  } else {
+  if (!reactManaged) {
     els.reviewDecision.onchange = updateReviewStateUI;
     els.approveCandidate.onclick = () => recordReviewDecision("approved_for_discussion", "确认候选");
     els.rejectCandidate.onclick = () => recordReviewDecision("rejected_by_clinician", "否决候选");
     els.saveReview.onclick = saveReviewRecord;
   }
-  if (isReactManagedWorkbench()) {
-    S.libraryReactCommandHandler = handleReactLibraryCommand;
-    window.addEventListener(INCISION_LIBRARY_REACT_COMMAND_EVENT, S.libraryReactCommandHandler);
-  } else {
+  if (!reactManaged) {
     els.saveCandidate.onclick = () => saveCurrentCandidate();
     els.makeVariants.onclick = makeVariantCandidates;
     els.clearSaved.onclick = clearSavedCandidates;
@@ -2367,36 +2348,25 @@ function renderLoop() {
   S.frameId = requestAnimationFrame(renderLoop);
 }
 
+function bindReactWorkbenchCommands() {
+  S.reactCommandCleanup = bindWindowControllerEvents([
+    [INCISION_TUMOR_REACT_COMMAND_EVENT, handleReactTumorCommand],
+    [INCISION_PROVIDER_REACT_STATE_EVENT, () => publishIncisionState("provider_react_state")],
+    [INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT, handleReactSecondaryCueCommand],
+    [INCISION_EDIT_REACT_COMMAND_EVENT, handleReactEditCommand],
+    [INCISION_REVIEW_REACT_COMMAND_EVENT, handleReactReviewCommand],
+    [INCISION_LIBRARY_REACT_COMMAND_EVENT, handleReactLibraryCommand],
+  ]);
+}
+
 export function disposeIncisionAgentWorkbench() {
   S.mounted = false;
   if (S.frameId) cancelAnimationFrame(S.frameId);
   S.resizeObserver?.disconnect?.();
   S.workflowWorker?.dispose?.();
   S.workflowWorker = null;
-  if (S.providerReactStateHandler) {
-    window.removeEventListener(INCISION_PROVIDER_REACT_STATE_EVENT, S.providerReactStateHandler);
-    S.providerReactStateHandler = null;
-  }
-  if (S.tumorReactCommandHandler) {
-    window.removeEventListener(INCISION_TUMOR_REACT_COMMAND_EVENT, S.tumorReactCommandHandler);
-    S.tumorReactCommandHandler = null;
-  }
-  if (S.secondaryCueReactCommandHandler) {
-    window.removeEventListener(INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT, S.secondaryCueReactCommandHandler);
-    S.secondaryCueReactCommandHandler = null;
-  }
-  if (S.editReactCommandHandler) {
-    window.removeEventListener(INCISION_EDIT_REACT_COMMAND_EVENT, S.editReactCommandHandler);
-    S.editReactCommandHandler = null;
-  }
-  if (S.reviewReactCommandHandler) {
-    window.removeEventListener(INCISION_REVIEW_REACT_COMMAND_EVENT, S.reviewReactCommandHandler);
-    S.reviewReactCommandHandler = null;
-  }
-  if (S.libraryReactCommandHandler) {
-    window.removeEventListener(INCISION_LIBRARY_REACT_COMMAND_EVENT, S.libraryReactCommandHandler);
-    S.libraryReactCommandHandler = null;
-  }
+  S.reactCommandCleanup?.();
+  S.reactCommandCleanup = null;
   S.head?.dispose?.();
 }
 
