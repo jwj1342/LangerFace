@@ -4,7 +4,7 @@ import { dispatchIncisionSecondaryCueCommand } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { Card, CardHeader } from "./ui/card";
-import { Checkbox } from "./ui/checkbox";
+import { CheckboxField } from "./ui/checkbox-field";
 import { Input } from "./ui/input";
 
 export function SecondaryCuePanel() {
@@ -30,17 +30,19 @@ export function SecondaryCuePanel() {
         <Button variant="workbench" id="clearSecondaryCueBtn" type="button" disabled={!cue?.present} onClick={() => dispatchIncisionSecondaryCueCommand("clear_secondary_cue")}>清空线索</Button>
       </div>
       <Input id="secondaryCueImportFile" className="hidden" type="file" accept="application/json,.json" />
-      <label className="check">
-        <Checkbox
-          id="secondaryCueConfirmed"
-          checked={manualConfirmed}
-          disabled={!cue?.present}
-          onChange={(event) => {
+      <CheckboxField
+        checkboxProps={{
+          id: "secondaryCueConfirmed",
+          checked: manualConfirmed,
+          disabled: !cue?.present,
+          onChange: (event) => {
             setManualConfirmed(event.currentTarget.checked);
             dispatchIncisionSecondaryCueCommand("secondary_cue_confirmed");
-          }}
-        /> 已人工确认辅助线索
-      </label>
+          },
+        }}
+      >
+        已人工确认辅助线索
+      </CheckboxField>
     </Card>
   );
 }

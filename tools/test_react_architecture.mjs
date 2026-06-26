@@ -7,6 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const web = path.join(root, "web");
 
 const read = (rel) => fs.readFileSync(path.join(web, rel), "utf8");
+const exposesId = (source, id) => source.includes(`id="${id}"`) || source.includes(`id: "${id}"`);
 const componentSources = new Map(
   fs.readdirSync(path.join(web, "src/components"))
     .filter((name) => name.endsWith(".tsx"))
@@ -27,6 +28,7 @@ const reactManagedWorkbench = read("src/lib/reactManagedWorkbench.ts");
 const uiButton = read("src/components/ui/button.tsx");
 const uiCard = read("src/components/ui/card.tsx");
 const uiCheckbox = read("src/components/ui/checkbox.tsx");
+const uiCheckboxField = read("src/components/ui/checkbox-field.tsx");
 const uiInput = read("src/components/ui/input.tsx");
 const uiLabel = read("src/components/ui/label.tsx");
 const uiSelect = read("src/components/ui/select.tsx");
@@ -250,6 +252,15 @@ assert.ok(uiLabel.includes('cn("field-label"'), "shadcn-style Label preserves ex
 assert.ok(uiSelect.includes('cn("select"'), "shadcn-style Select preserves existing select styling");
 assert.ok(uiSlider.includes('type="range"'), "shadcn-style RangeInput preserves native range input behavior");
 assert.ok(uiTextarea.includes('cn("text-area"'), "shadcn-style Textarea preserves existing textarea styling");
+assert.ok(uiCheckboxField.includes('cn("check"'), "shadcn-style CheckboxField preserves existing checkbox row styling");
+assert.ok(uiCheckboxField.includes("CheckboxProps"), "shadcn-style CheckboxField forwards typed native checkbox props");
+assert.deepEqual(
+  [...componentSources.entries()]
+    .filter(([, source]) => source.includes('className="check') || source.includes("className={`check"))
+    .map(([name]) => name),
+  [],
+  "React component checkbox rows should use CheckboxField instead of hand-written label.check wrappers",
+);
 assert.ok(typedStore.includes("React/Zustand stores low-frequency UI"), "Zustand store documents low-frequency state ownership");
 assert.ok(typedStore.includes("per-frame arrays stay outside persisted stores"), "Zustand store forbids high-frequency renderer arrays");
 assert.ok(typedStore.includes("interface AppState"), "Zustand store is typed");
@@ -390,7 +401,7 @@ for (const id of [
   "secondaryCueImportFile",
   "secondaryCueConfirmed",
 ]) {
-  assert.ok(secondaryCuePanel.includes(`id="${id}"`), `React secondary cue panel exposes #${id}`);
+  assert.ok(exposesId(secondaryCuePanel, id), `React secondary cue panel exposes #${id}`);
 }
 assert.ok(incisionStore.includes("IncisionSecondaryCueState"), "incision Zustand store keeps typed secondary cue state");
 assert.ok(incisionWorkbench.includes("SecondaryCuePanel"), "React incision workbench renders the secondary cue controls as a React component");
@@ -399,7 +410,7 @@ assert.ok(!secondaryCuePanel.includes("../lib/controllerEvents"), "React seconda
 assert.ok(secondaryCuePanel.includes("useIncisionStore"), "React secondary cue panel syncs low-frequency cue state from Zustand");
 assert.ok(secondaryCuePanel.includes("Button"), "React secondary cue panel uses the shared shadcn-style button primitive");
 assert.ok(secondaryCuePanel.includes("Input"), "React secondary cue panel uses the shared shadcn-style input primitive");
-assert.ok(secondaryCuePanel.includes("Checkbox"), "React secondary cue panel uses the shared shadcn-style checkbox primitive");
+assert.ok(secondaryCuePanel.includes("CheckboxField"), "React secondary cue panel uses the shared shadcn-style checkbox field primitive");
 assert.ok(secondaryCuePanel.includes("<Card"), "React secondary cue panel uses the shared shadcn-style card primitive");
 for (const id of [
   "candidateType",
@@ -827,7 +838,7 @@ for (const id of [
   "twinTextureToggle",
   "threeDWorkflowCard",
 ]) {
-  assert.ok(liveRouteControlsPanel.includes(`id="${id}"`), `React live route controls expose #${id}`);
+  assert.ok(exposesId(liveRouteControlsPanel, id), `React live route controls expose #${id}`);
 }
 for (const id of [
   "uploadBtn",
@@ -855,7 +866,7 @@ for (const id of [
   "zoom",
   "meshPts",
 ]) {
-  assert.ok(liveRenderControlsPanel.includes(`id="${id}"`), `React live render controls expose #${id}`);
+  assert.ok(exposesId(liveRenderControlsPanel, id), `React live render controls expose #${id}`);
 }
 for (const id of [
   "qualityVal",
@@ -902,7 +913,7 @@ assert.ok(liveRenderControlsPanel.includes("useLiveStore"), "React live render c
 assert.ok(liveWorkbench.includes("Button asChild"), "React live workbench uses shared Button asChild for Router links");
 assert.ok(liveWorkbench.includes("Label"), "React live workbench uses the shared shadcn-style label primitive");
 assert.ok(liveRouteControlsPanel.includes("Button"), "React live route controls use the shared shadcn-style button primitive");
-assert.ok(liveRouteControlsPanel.includes("Checkbox"), "React live route controls use the shared shadcn-style checkbox primitive");
+assert.ok(liveRouteControlsPanel.includes("CheckboxField"), "React live route controls use the shared shadcn-style checkbox field primitive");
 assert.ok(liveRouteControlsPanel.includes("Label"), "React live route controls use the shared shadcn-style label primitive");
 assert.ok(liveRouteControlsPanel.includes("Select"), "React live route controls use the shared shadcn-style select primitive");
 assert.ok(liveRouteControlsPanel.includes("<Card"), "React live route controls use the shared shadcn-style card primitive");
@@ -913,7 +924,7 @@ assert.ok(liveSourceControlsPanel.includes("Input"), "React live source controls
 assert.ok(liveSourceControlsPanel.includes("<Card"), "React live source controls use the shared shadcn-style card primitive");
 assert.ok(liveSourceControlsPanel.includes('variant="workbenchPrimary"'), "React live source controls keep primary workbench button styling through Button variants");
 assert.ok(liveRenderControlsPanel.includes("Button"), "React live render controls use the shared shadcn-style button primitive");
-assert.ok(liveRenderControlsPanel.includes("Checkbox"), "React live render controls use the shared shadcn-style checkbox primitive");
+assert.ok(liveRenderControlsPanel.includes("CheckboxField"), "React live render controls use the shared shadcn-style checkbox field primitive");
 assert.ok(liveRenderControlsPanel.includes("Label"), "React live render controls use the shared shadcn-style label primitive");
 assert.ok(liveRenderControlsPanel.includes("Select"), "React live render controls use the shared shadcn-style select primitive");
 assert.ok(liveRenderControlsPanel.includes("RangeInput"), "React live render controls use the shared shadcn-style range primitive");
@@ -991,7 +1002,7 @@ for (const id of [
   "showLines",
   "sizeRange",
 ]) {
-  assert.ok(surgeryControlsPanel.includes(`id="${id}"`), `React surgery controls expose #${id}`);
+  assert.ok(exposesId(surgeryControlsPanel, id), `React surgery controls expose #${id}`);
 }
 for (const id of [
   "tensionVal",
@@ -1009,7 +1020,7 @@ assert.equal((surgeryControlsPanel.match(/id="btnAlong"/g) || []).length, 1, "Re
 assert.ok(!surgeryControlsPanel.includes("btnAcross"), "React surgery controls do not expose inverse-RSTL action");
 assert.ok(surgeryControlsPanel.includes("Button"), "React surgery controls use the shared shadcn-style button primitive");
 assert.ok(surgeryControlsPanel.includes("Button asChild"), "React surgery controls use shared Button asChild for the checkbox label button");
-assert.ok(surgeryControlsPanel.includes("Checkbox"), "React surgery controls use the shared shadcn-style checkbox primitive");
+assert.ok(surgeryControlsPanel.includes("CheckboxField"), "React surgery controls use the shared shadcn-style checkbox field primitive");
 assert.ok(surgeryControlsPanel.includes("Label"), "React surgery controls use the shared shadcn-style label primitive");
 assert.ok(surgeryControlsPanel.includes("RangeInput"), "React surgery controls use the shared shadcn-style range primitive");
 assert.ok(surgeryControlsPanel.includes("<Card"), "React surgery controls use the shared shadcn-style card primitive");

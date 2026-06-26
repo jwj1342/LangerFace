@@ -4,7 +4,7 @@ import { dispatchLiveRenderCommand } from "../lib/controllerCommand";
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { Checkbox } from "./ui/checkbox";
+import { CheckboxField } from "./ui/checkbox-field";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
@@ -71,16 +71,28 @@ export function LiveRenderControlsPanel() {
       </Card>
 
       <Card>
-        <label className="check hidden"><Checkbox id="clip" defaultChecked /> 限制在面部轮廓内（背面剔除）</label>
-        <label className="check hidden"><Checkbox id="handOcc" defaultChecked /> 前方手部遮挡（仅识别手部）</label>
-        <label className="check">
-          <Checkbox id="mirror" checked={mirror} onChange={(event) => dispatchLiveRenderCommand("mirror_toggle", event.currentTarget.checked)} /> 镜像（自拍视角）
-        </label>
-        <label className="check hidden"><Checkbox id="bands" /> 按面部分区着色</label>
-        <label className="check hidden"><Checkbox id="zoom" defaultChecked /> 细节放大窗（关键区域）</label>
-        <label className="check">
-          <Checkbox id="meshPts" checked={meshPts} onChange={(event) => dispatchLiveRenderCommand("mesh_points_toggle", event.currentTarget.checked)} /> 显示网格采样点
-        </label>
+        <CheckboxField className="hidden" checkboxProps={{ id: "clip", defaultChecked: true }}>限制在面部轮廓内（背面剔除）</CheckboxField>
+        <CheckboxField className="hidden" checkboxProps={{ id: "handOcc", defaultChecked: true }}>前方手部遮挡（仅识别手部）</CheckboxField>
+        <CheckboxField
+          checkboxProps={{
+            id: "mirror",
+            checked: mirror,
+            onChange: (event) => dispatchLiveRenderCommand("mirror_toggle", event.currentTarget.checked),
+          }}
+        >
+          镜像（自拍视角）
+        </CheckboxField>
+        <CheckboxField className="hidden" checkboxProps={{ id: "bands" }}>按面部分区着色</CheckboxField>
+        <CheckboxField className="hidden" checkboxProps={{ id: "zoom", defaultChecked: true }}>细节放大窗（关键区域）</CheckboxField>
+        <CheckboxField
+          checkboxProps={{
+            id: "meshPts",
+            checked: meshPts,
+            onChange: (event) => dispatchLiveRenderCommand("mesh_points_toggle", event.currentTarget.checked),
+          }}
+        >
+          显示网格采样点
+        </CheckboxField>
       </Card>
     </>
   );

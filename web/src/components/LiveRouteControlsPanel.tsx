@@ -4,7 +4,7 @@ import { dispatchLiveRouteCommand } from "../lib/controllerCommand";
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { Checkbox } from "./ui/checkbox";
+import { CheckboxField } from "./ui/checkbox-field";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
 
@@ -57,12 +57,28 @@ export function LiveRouteControlsPanel() {
           </div>
           <Button variant="workbench" id="reset3dBtn" type="button" disabled={!hasModel} onClick={() => dispatchLiveRouteCommand("reset_3d")}>复位视角</Button>
           <Button variant="workbenchPrimary" id="cloudFitFlameBtn" type="button" disabled={scanning} onClick={() => dispatchLiveRouteCommand("start_twin")}>▶ 实时孪生（左真脸 / 右 FLAME 随动）</Button>
-          <label className={`check${twinActive ? "" : " live-hidden-inline"}`} id="flameHeadToggleWrap">
-            <Checkbox id="flameStdToggle" checked={recon?.twinMode === "standard"} onChange={(event) => dispatchLiveRouteCommand("toggle_twin_head", event.currentTarget.checked)} /> 显示标准头（取消勾选 = 个体）
-          </label>
-          <label className={`check${twinActive ? "" : " live-hidden-inline"}`} id="twinTextureWrap">
-            <Checkbox id="twinTextureToggle" checked={Boolean(recon?.twinTexture)} onChange={(event) => dispatchLiveRouteCommand("toggle_twin_texture", event.currentTarget.checked)} /> 贴真实人脸纹理
-          </label>
+          <CheckboxField
+            id="flameHeadToggleWrap"
+            className={twinActive ? "" : "live-hidden-inline"}
+            checkboxProps={{
+              id: "flameStdToggle",
+              checked: recon?.twinMode === "standard",
+              onChange: (event) => dispatchLiveRouteCommand("toggle_twin_head", event.currentTarget.checked),
+            }}
+          >
+            显示标准头（取消勾选 = 个体）
+          </CheckboxField>
+          <CheckboxField
+            id="twinTextureWrap"
+            className={twinActive ? "" : "live-hidden-inline"}
+            checkboxProps={{
+              id: "twinTextureToggle",
+              checked: Boolean(recon?.twinTexture),
+              onChange: (event) => dispatchLiveRouteCommand("toggle_twin_texture", event.currentTarget.checked),
+            }}
+          >
+            贴真实人脸纹理
+          </CheckboxField>
         </div>
       </Card>
 

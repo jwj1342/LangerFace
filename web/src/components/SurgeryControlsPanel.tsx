@@ -1,6 +1,6 @@
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { Checkbox } from "./ui/checkbox";
+import { CheckboxField } from "./ui/checkbox-field";
 import { Label } from "./ui/label";
 import { RangeInput } from "./ui/slider";
 
@@ -60,13 +60,15 @@ export function SurgeryControlsPanel({
       </div>
       <Button variant="workbench" id="btnReset" type="button" disabled={!isReady} onClick={onReset}>↺ 复位</Button>
       <Button asChild variant="workbench">
-        <label>
-          <Checkbox
-            id="showLines"
-            checked={showLines}
-            onChange={(event) => onShowLinesChange(event.currentTarget.checked)}
-          /> 显示 RSTL 张力线
-        </label>
+        <CheckboxField
+          checkboxProps={{
+            id: "showLines",
+            checked: showLines,
+            onChange: (event) => onShowLinesChange(event.currentTarget.checked),
+          }}
+        >
+          显示 RSTL 张力线
+        </CheckboxField>
       </Button>
     </Card>
   );
