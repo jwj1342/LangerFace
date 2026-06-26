@@ -51,6 +51,10 @@ const liveWorkbench = read("src/routes/LiveWorkbench.tsx");
 const surgeryRoute = read("src/routes/SurgeryRoute.tsx");
 const surgeryR3FScene = read("src/routes/SurgeryR3FScene.tsx");
 const surgeryWorkbench = read("src/routes/SurgeryWorkbench.tsx");
+const surgeryControlsPanel = read("src/components/SurgeryControlsPanel.tsx");
+const surgeryMetricsPanel = read("src/components/SurgeryMetricsPanel.tsx");
+const surgeryHelpPanel = read("src/components/SurgeryHelpPanel.tsx");
+const surgeryStagePanel = read("src/components/SurgeryStagePanel.tsx");
 const threeRoute = read("src/routes/ThreePreviewRoute.tsx");
 const worker = read("src/workers/workflow.worker.ts");
 const workerClient = read("src/services/workflowWorkerClient.ts");
@@ -573,13 +577,24 @@ for (const id of [
   "btnReset",
   "showLines",
   "sizeRange",
+]) {
+  assert.ok(surgeryControlsPanel.includes(`id="${id}"`), `React surgery controls expose #${id}`);
+}
+for (const id of [
   "tensionVal",
+  "tensionBar",
   "verdict",
 ]) {
-  assert.ok(surgeryWorkbench.includes(`id="${id}"`), `React surgery workbench exposes #${id}`);
+  assert.ok(surgeryMetricsPanel.includes(`id="${id}"`), `React surgery metrics expose #${id}`);
 }
-assert.equal((surgeryWorkbench.match(/id="btnAlong"/g) || []).length, 1, "React surgery workbench has exactly one cut action");
-assert.ok(!surgeryWorkbench.includes("btnAcross"), "React surgery workbench does not expose inverse-RSTL action");
+assert.ok(surgeryWorkbench.includes("SurgeryControlsPanel"), "React surgery workbench renders closure controls as a React component");
+assert.ok(surgeryWorkbench.includes("SurgeryMetricsPanel"), "React surgery workbench renders closure metrics as a React component");
+assert.ok(surgeryWorkbench.includes("SurgeryHelpPanel"), "React surgery workbench renders closure help as a React component");
+assert.ok(surgeryWorkbench.includes("SurgeryStagePanel"), "React surgery workbench renders the R3F stage shell as a React component");
+assert.equal((surgeryControlsPanel.match(/id="btnAlong"/g) || []).length, 1, "React surgery controls have exactly one cut action");
+assert.ok(!surgeryControlsPanel.includes("btnAcross"), "React surgery controls do not expose inverse-RSTL action");
+assert.ok(surgeryHelpPanel.includes("这是在演示什么？"), "React surgery help panel keeps the closure explanation");
+assert.ok(surgeryStagePanel.includes('to="/annotate"'), "React surgery stage returns to the React annotation route");
 assert.ok(surgeryController.includes("export function mountSurgeryClosureDemo"), "surgery controller exposes a mount lifecycle");
 assert.ok(surgeryController.includes("export function disposeSurgeryClosureDemo"), "surgery controller exposes a dispose lifecycle");
 assert.ok(surgeryController.includes("cancelAnimationFrame"), "surgery controller cancels its render loop on dispose");
