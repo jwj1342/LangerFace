@@ -536,9 +536,9 @@ assert.deepEqual(
     "*": false,
     "**": false,
     master: true,
-    "React-架构重构": true,
+    "React-架构重构": false,
   },
-  "Vercel should only auto-deploy production and the current active development branch",
+  "Vercel should only auto-deploy production by default during long development PRs",
 );
 assert.equal(vercelConfig.installCommand, "npm ci", "Vercel should install from the committed npm lockfile");
 assert.equal(
