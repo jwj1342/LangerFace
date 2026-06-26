@@ -7,6 +7,7 @@ const js = fs.readFileSync("incision_agent_main.js", "utf8");
 const tools = fs.readFileSync("incision_tools.js", "utf8");
 const exportPrivacy = fs.readFileSync("export_privacy.js", "utf8");
 const providerConfig = fs.readFileSync("src/services/providerConfig.ts", "utf8");
+const tumorInputService = fs.readFileSync("src/services/tumorInput.ts", "utf8");
 
 assert.ok(html.includes('id="boundaryStatus"'), "workbench exposes tumor boundary status");
 assert.ok(html.includes('id="anatomyPreview"'), "workbench exposes live anatomy preview for selected tumor center");
@@ -48,6 +49,11 @@ assert.ok(html.includes('id="candidateTipAngle"'), "workbench exposes fusiform t
 assert.ok(js.includes("exportTumorJson"), "workbench implements tumor JSON export");
 assert.ok(js.includes("importTumorFile"), "workbench implements tumor JSON import");
 assert.ok(js.includes("applyImportedTumor"), "workbench applies imported tumor payloads");
+assert.ok(tumorInputService.includes("buildTumorInput"), "shared tumor input service owns TumorInput construction");
+assert.ok(tumorInputService.includes("buildTumorFormSnapshot"), "shared tumor input service owns tumor snapshot normalization");
+assert.ok(tumorInputService.includes("importedTumorFormState"), "shared tumor input service owns imported tumor form normalization");
+assert.ok(js.includes("./src/services/tumorInput.ts"), "workbench consumes the shared typed tumor input service");
+assert.ok(js.includes("importedTumorFormState(payload"), "workbench delegates imported tumor payloads to the shared service");
 assert.ok(js.includes('from "./export_privacy.js"'), "workbench imports browser export privacy preflight");
 assert.ok(exportPrivacy.includes("browser-export-privacy-preflight/v0.1"), "browser export preflight has a schema");
 assert.ok(js.includes("exportPreflightPasses(payload"), "JSON exports run browser privacy preflight");

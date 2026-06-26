@@ -77,6 +77,7 @@ const worker = read("src/workers/workflow.worker.ts");
 const workerClient = read("src/services/workflowWorkerClient.ts");
 const workerPanel = read("src/components/WorkerStatusPanel.tsx");
 const providerConfigService = read("src/services/providerConfig.ts");
+const tumorInputService = read("src/services/tumorInput.ts");
 const annotateController = read("annotate_main.js");
 const annotateViewer = read("annotate_viewer.js");
 const controller = read("incision_agent_main.js");
@@ -248,6 +249,9 @@ assert.ok(tumorPanel.includes("Label"), "React tumor panel uses the shared shadc
 assert.ok(tumorPanel.includes("Select"), "React tumor panel uses the shared shadcn-style select primitive");
 assert.ok(tumorPanel.includes("RangeInput"), "React tumor panel uses the shared shadcn-style range primitive");
 assert.ok(tumorPanel.includes('variant="workbenchPrimary"'), "React tumor panel keeps primary workbench button styling through Button variants");
+assert.ok(tumorInputService.includes("buildTumorInput"), "shared tumor input service builds typed TumorInput payloads");
+assert.ok(tumorInputService.includes("buildTumorFormSnapshot"), "shared tumor input service builds React-safe tumor form snapshots");
+assert.ok(tumorInputService.includes("importedTumorFormState"), "shared tumor input service normalizes imported tumor payloads for form controls");
 for (const id of [
   "secondaryCueState",
   "secondaryCueSummary",
@@ -400,6 +404,10 @@ assert.ok(controller.includes("export function mountIncisionAgentWorkbench"), "i
 assert.ok(controller.includes("export function disposeIncisionAgentWorkbench"), "incision controller exposes a dispose lifecycle");
 assert.ok(controller.includes("INCISION_TUMOR_REACT_COMMAND_EVENT"), "incision controller listens for React tumor input commands");
 assert.ok(controller.includes("handleReactTumorCommand"), "incision controller routes React tumor commands to existing tumor workflow functions");
+assert.ok(controller.includes("./src/services/tumorInput.ts"), "incision controller consumes the shared typed tumor input service");
+assert.ok(controller.includes("buildTumorInput({"), "incision controller delegates TumorInput construction to the shared service");
+assert.ok(controller.includes("buildTumorFormSnapshot({"), "incision controller delegates tumor snapshot normalization to the shared service");
+assert.ok(controller.includes("importedTumorFormState(payload"), "incision controller delegates imported tumor normalization to the shared service");
 assert.ok(controller.includes("INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT"), "incision controller listens for React secondary cue commands");
 assert.ok(controller.includes("handleReactSecondaryCueCommand"), "incision controller routes React secondary cue commands to existing cue workflow functions");
 assert.ok(controller.includes("currentResultViewSnapshot"), "incision controller publishes candidate result view state for React rendering");

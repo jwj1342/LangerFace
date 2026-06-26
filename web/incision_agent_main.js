@@ -9,7 +9,6 @@ import {
   agentTraceGate,
   classifyRegion,
   compareCandidateRecords,
-  normalizeTumorInput,
   planIncisionWorkflow,
   summarizeTumorBoundary,
   summarizeTumorInputQuality,
@@ -24,6 +23,12 @@ import {
   redactedProviderConfig as redactProviderConfig,
   saveProviderPrefs as persistProviderPrefs,
 } from "./src/services/providerConfig.ts";
+import {
+  buildTumorFormSnapshot,
+  buildTumorInput,
+  importedTumorFormState,
+  numericControlValue,
+} from "./src/services/tumorInput.ts";
 import { createWorkflowWorkerClient } from "./src/services/workflowWorkerClient.ts";
 import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.js";
 
@@ -197,20 +202,14 @@ const INCISION_EDIT_REACT_COMMAND_EVENT = "langerface:incision-edit-react-comman
 const INCISION_REVIEW_REACT_COMMAND_EVENT = "langerface:incision-review-react-command";
 const INCISION_LIBRARY_REACT_COMMAND_EVENT = "langerface:incision-library-react-command";
 
-function numericControlValue(el) {
-  if (!el) return null;
-  const value = Number(el.value);
-  return Number.isFinite(value) ? value : null;
-}
-
 function currentTumorFormSnapshot() {
-  return {
-    kind: els.tumorKind?.value || "subcutaneous",
-    author: els.tumorAuthor?.value?.trim?.() || "",
+  return buildTumorFormSnapshot({
+    kind: els.tumorKind?.value,
+    author: els.tumorAuthor?.value,
     diameterMm: numericControlValue(els.diameter),
-    depthMm: els.tumorKind?.value === "subcutaneous" ? numericControlValue(els.depth) : null,
-    marginMm: els.tumorKind?.value === "cutaneous" ? numericControlValue(els.margin) : 0,
-    boundaryMode: els.tumorKind?.value === "cutaneous" ? (els.boundaryMode?.value || "ellipse") : "center_diameter",
+    depthMm: numericControlValue(els.depth),
+    marginMm: numericControlValue(els.margin),
+    boundaryMode: els.boundaryMode?.value,
     boundaryActive: Boolean(S.boundaryActive),
     boundaryPointCount: S.boundaryPoints?.length || 0,
     boundaryStatus: els.boundaryStatus?.textContent || "",
@@ -218,7 +217,7 @@ function currentTumorFormSnapshot() {
     pickState: els.pickState?.textContent || "",
     anatomyPreview: els.anatomyPreview?.textContent || "",
     anatomyPreviewWarn: Boolean(els.anatomyPreview?.classList?.contains("warn")),
-  };
+  });
 }
 
 function currentProviderSnapshot() {
@@ -781,20 +780,16 @@ function exportPreflightPasses(payload, label) {
 }
 
 function tumorInput() {
-  const boundary = tumorBoundaryPoints();
-  return {
+  return buildTumorInput({
     kind: els.tumorKind.value,
     center: S.verts[S.lesion],
-    diameter_mm: Number(els.diameter.value),
-    depth_mm: els.tumorKind.value === "subcutaneous" ? Number(els.depth.value) : null,
-    margin_mm: els.tumorKind.value === "cutaneous" ? Number(els.margin.value) : 0,
-    boundary,
-    boundary_mode: els.tumorKind.value === "cutaneous" ? els.boundaryMode.value : "center_diameter",
-    boundary_source: els.tumorKind.value === "cutaneous" ? `manual_${els.boundaryMode.value}` : "ultrasound_diameter",
-    source: "manual_web_agent",
-    author: els.tumorAuthor.value.trim(),
-    units: "mm",
-  };
+    diameterMm: numericControlValue(els.diameter),
+    depthMm: numericControlValue(els.depth),
+    marginMm: numericControlValue(els.margin),
+    boundary: tumorBoundaryPoints(),
+    boundaryMode: els.boundaryMode.value,
+    author: els.tumorAuthor.value,
+  });
 }
 
 function boundarySummaryFor(tumor = tumorInput(), result = S.result) {
@@ -1897,30 +1892,32 @@ function exportTumorJson() {
 }
 
 function applyImportedTumor(payload) {
-  const raw = payload?.tumor || payload;
-  const tumor = normalizeTumorInput(raw);
-  els.tumorKind.value = tumor.kind;
-  els.diameter.value = String(clamp(Math.round(tumor.diameter_mm), Number(els.diameter.min), Number(els.diameter.max)));
-  els.diameterVal.textContent = els.diameter.value;
-  els.depth.value = String(clamp(Math.round(tumor.depth_mm ?? Number(els.depth.value)), Number(els.depth.min), Number(els.depth.max)));
-  els.depthVal.textContent = els.depth.value;
-  els.margin.value = String(clamp(Math.round(tumor.margin_mm), Number(els.margin.min), Number(els.margin.max)));
-  els.marginVal.textContent = els.margin.value;
-  els.tumorAuthor.value = tumor.author || els.tumorAuthor.value;
-  S.boundaryPoints = [];
-  if (tumor.kind === "cutaneous" && tumor.boundary.length >= 3) {
-    els.boundaryMode.value = "freehand";
-    S.boundaryPoints = tumor.boundary.map((p) => p.map(Number));
-  } else if (tumor.kind === "cutaneous") {
-    els.boundaryMode.value = tumor.boundary_mode === "freehand" ? "freehand" : "ellipse";
-  }
+  const imported = importedTumorFormState(payload, {
+    diameterMin: Number(els.diameter.min),
+    diameterMax: Number(els.diameter.max),
+    depthMin: Number(els.depth.min),
+    depthMax: Number(els.depth.max),
+    depthFallback: Number(els.depth.value),
+    marginMin: Number(els.margin.min),
+    marginMax: Number(els.margin.max),
+    authorFallback: els.tumorAuthor.value,
+  });
+  const tumor = imported.tumor;
+  els.tumorKind.value = imported.kind;
+  els.diameter.value = imported.diameterValue;
+  els.diameterVal.textContent = imported.diameterValue;
+  els.depth.value = imported.depthValue;
+  els.depthVal.textContent = imported.depthValue;
+  els.margin.value = imported.marginValue;
+  els.marginVal.textContent = imported.marginValue;
+  els.tumorAuthor.value = imported.author;
+  S.boundaryPoints = imported.boundaryPoints;
+  if (tumor.kind === "cutaneous") els.boundaryMode.value = imported.boundaryMode;
   S.boundaryActive = false;
   els.startBoundary.textContent = "开始轮廓";
   setLesion(nearestVertex(tumor.center));
   updateFormVisibility();
-  els.pickState.textContent = tumor.boundary.length >= 3
-    ? `已导入肿物：自由轮廓 ${tumor.boundary.length} 点`
-    : "已导入肿物：中心点与直径";
+  els.pickState.textContent = imported.pickState;
   publishIncisionState("tumor_imported");
   runAgent();
 }

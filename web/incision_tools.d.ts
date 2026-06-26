@@ -12,6 +12,20 @@ export interface TumorInput {
   units?: string;
 }
 
+export function normalizeTumorInput(tumor: TumorInput): TumorInput & {
+  kind: "subcutaneous" | "cutaneous";
+  center: [number, number, number];
+  diameter_mm: number;
+  depth_mm: number | null;
+  margin_mm: number;
+  boundary: Array<[number, number, number]>;
+  boundary_mode: string;
+  boundary_source: string;
+  source: string;
+  author: string;
+  units: string;
+};
+
 export function summarizeTumorInputQuality(tumor: TumorInput): {
   passed: boolean;
   warning_count: number;
