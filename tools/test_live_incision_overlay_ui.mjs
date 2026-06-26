@@ -8,7 +8,7 @@ const liveUi = [
   fs.readFileSync("src/components/LiveSourceControlsPanel.tsx", "utf8"),
   fs.readFileSync("src/components/LiveQualityPanel.tsx", "utf8"),
 ].join("\n");
-const main = fs.readFileSync("main.js", "utf8");
+const main = fs.readFileSync("src/services/liveRuntime.ts", "utf8");
 const render = fs.readFileSync("render.js", "utf8");
 const mode3d = fs.readFileSync("mode3d.js", "utf8");
 const three3d = fs.readFileSync("three3d.js", "utf8");
@@ -36,7 +36,7 @@ assert.ok(loop.includes("jawOpen"), "pipeline extracts jaw-open blendshape for o
 assert.ok(main.includes("applyStagedIncisionOverlay"), "live page loads staged incision overlay payloads");
 assert.ok(main.includes("validateIncisionOverlay(overlay)"), "live page validates incision overlay payloads before rendering");
 assert.ok(main.includes("renderState.incisionOverlay = overlay"), "live page stores validated incision overlay in render state");
-assert.ok(main.includes("./src/services/liveSnapshots.ts"), "live page consumes the shared live snapshot service");
+assert.ok(main.includes("./liveSnapshots"), "live page consumes the shared live snapshot service");
 assert.ok(main.includes("buildLiveControllerSnapshot({"), "live page delegates React snapshot construction to the shared service");
 assert.ok(liveSnapshots.includes("../lib/controllerSnapshotSchemas"), "shared live snapshot service reuses the lightweight React snapshot schema module");
 assert.ok(controllerSnapshotSchemas.includes("react-live-controller-snapshot/v0.1"), "shared snapshot schema module owns the live React snapshot schema");

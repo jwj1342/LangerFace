@@ -135,7 +135,7 @@ const annotateRuntime = read("src/services/annotateRuntime.ts");
 const annotateViewer = read("annotate_viewer.js");
 const controller = read("incision_agent_main.js");
 const dom = read("dom.js");
-const liveController = read("main.js");
+const liveController = read("src/services/liveRuntime.ts");
 const layoutPrimitiveNames = new Set(["ReactShell.tsx", "StageShell.tsx", "WorkbenchLayout.tsx"]);
 const stagePanelSources = new Map([
   ["AnnotateStagePanel.tsx", annotateStagePanel],
@@ -573,10 +573,11 @@ assert.ok(managedWorkbenchRoute.includes("controller.mount"), "managed workbench
 assert.ok(managedWorkbenchRoute.includes("ReactRouteHost"), "managed workbench route renders through the shared ReactRouteHost primitive");
 assert.ok(managedWorkbenchRoute.includes("Extract<Workspace"), "managed workbench route narrows workspace type from the shared Workspace union");
 assert.ok(legacyControllers.includes("ManagedWorkbenchControllerAdapter"), "legacy controller service owns typed controller adapter objects");
-for (const legacyEntry of ["annotateRuntime", "incision_agent_main.js", "main.js"]) {
+for (const legacyEntry of ["annotateRuntime", "incision_agent_main.js", "liveRuntime"]) {
   assert.ok(legacyControllers.includes(legacyEntry), `legacy controller service owns ${legacyEntry} import boundary`);
 }
 assert.ok(!fs.existsSync(path.join(web, "annotate_main.js")), "legacy annotation runtime file has moved into the React TypeScript service layer");
+assert.ok(!fs.existsSync(path.join(web, "main.js")), "legacy live runtime file has moved into the React TypeScript service layer");
 for (const [name, source, workspace] of [
   ["AnnotateRoute.tsx", annotateRoute, "annotate"],
   ["IncisionRoute.tsx", incisionRoute, "incision"],
@@ -1969,14 +1970,15 @@ assert.ok(liveRouteControlsPanel.includes('to="/annotate"'), "React live route c
 assert.ok(liveWorkbench.includes('to="/incision"'), "React live workbench links to the React incision route");
 assert.ok(dom.includes("export function bindDom"), "DOM module can rebind element references for SPA route mounts");
 assert.ok(dom.includes("export let ctx"), "DOM module exports a live canvas context binding");
+assert.ok(liveController.includes("// @ts-nocheck"), "live runtime is explicitly marked as a temporary TypeScript migration boundary");
 assert.ok(liveController.includes("export function mountLiveWorkbench"), "live controller exposes a mount lifecycle");
 assert.ok(liveController.includes("export function disposeLiveWorkbench"), "live controller exposes a dispose lifecycle");
 assert.ok(liveController.includes("LIVE_CONTROLLER_STATE_EVENT"), "live controller declares a React state bridge event");
-assert.ok(liveController.includes("./src/lib/controllerEvents.ts"), "live controller imports event names from the shared module");
+assert.ok(liveController.includes("../lib/controllerEvents"), "live controller imports event names from the shared module");
 assert.ok(liveController.includes("LIVE_ROUTE_REACT_COMMAND_EVENT"), "live controller declares a React route command bridge event");
 assert.ok(liveController.includes("LIVE_SOURCE_REACT_COMMAND_EVENT"), "live controller declares a React source command bridge event");
 assert.ok(liveController.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "live controller declares a React render command bridge event");
-assert.ok(liveController.includes("./src/lib/controllerCommand.ts"), "live controller imports the shared command parsing module");
+assert.ok(liveController.includes("../lib/controllerCommand"), "live controller imports the shared command parsing module");
 assert.ok(liveController.includes("bindWindowControllerEvents"), "live controller binds React command events through the shared helper");
 assert.ok(!liveController.includes("window.addEventListener(LIVE"), "live controller does not register React command listeners one-by-one");
 assert.ok(liveController.includes("readControllerCommandDetail(event, LIVE_SOURCE_COMMANDS)"), "live source handler validates incoming command names");
@@ -1986,7 +1988,7 @@ assert.ok(!liveController.includes("event.detail || {}"), "live controller does 
 assert.ok(liveController.includes("handleReactRouteCommand"), "live controller routes React route commands to existing 3D workflow functions");
 assert.ok(liveController.includes("handleReactSourceCommand"), "live controller routes React source commands to existing workflow functions");
 assert.ok(liveController.includes("handleReactRenderCommand"), "live controller routes React render commands to existing workflow functions");
-assert.ok(liveController.includes("./src/services/liveSnapshots.ts"), "live controller consumes the shared typed snapshot service");
+assert.ok(liveController.includes("./liveSnapshots"), "live controller consumes the shared typed snapshot service");
 assert.ok(liveController.includes("buildLiveControllerSnapshot({"), "live controller delegates React snapshot construction to the shared service");
 assert.ok(!liveController.includes("function textOf"), "live controller no longer owns snapshot text normalization");
 assert.ok(!liveController.includes("function visibleTextOf"), "live controller no longer owns visible snapshot text normalization");
@@ -1998,8 +2000,8 @@ assert.ok(liveController.includes("abortController?.abort"), "live controller ab
 assert.ok(liveController.includes("resizeCleanup?.()"), "live controller disconnects resize observers on dispose");
 assert.ok(liveController.includes("stopSource()"), "live controller stops camera/media sources on dispose");
 assert.ok(liveController.includes("stopTwin()"), "live controller stops twin RAF on dispose");
-assert.ok(liveController.includes("./src/lib/reactManagedWorkbench.ts"), "live controller imports the shared React-managed flag helper");
-assert.ok(liveController.includes("!isReactManagedWorkbench()"), "legacy live HTML still auto-mounts outside React");
+assert.ok(liveController.includes("../lib/reactManagedWorkbench"), "live controller imports the shared React-managed flag helper");
+assert.ok(!liveController.includes('document.getElementById("canvas")'), "live runtime no longer auto-mounts from legacy HTML");
 assert.ok(!liveController.includes("window.__LANGERFACE_REACT_MANAGED__"), "live controller does not touch the managed flag directly");
 assert.ok(surgeryRoute.includes("useReactRouteLifecycle"), "React surgery route uses the shared pure route lifecycle hook");
 assert.ok(surgeryRoute.includes('workspace: "surgery"'), "React surgery route publishes its active workspace through the lifecycle hook");

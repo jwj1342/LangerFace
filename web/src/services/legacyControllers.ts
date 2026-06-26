@@ -2,7 +2,7 @@ import type { ManagedWorkbenchControllerAdapter } from "../components/ManagedWor
 
 export type AnnotateControllerModule = typeof import("./annotateRuntime");
 export type IncisionControllerModule = typeof import("../../incision_agent_main.js");
-export type LiveControllerModule = typeof import("../../main.js");
+export type LiveControllerModule = typeof import("./liveRuntime");
 
 export const annotateLegacyController: ManagedWorkbenchControllerAdapter<AnnotateControllerModule> = {
   loadModule: () => import("./annotateRuntime"),
@@ -17,7 +17,7 @@ export const incisionLegacyController: ManagedWorkbenchControllerAdapter<Incisio
 };
 
 export const liveLegacyController: ManagedWorkbenchControllerAdapter<LiveControllerModule> = {
-  loadModule: () => import("../../main.js"),
+  loadModule: () => import("./liveRuntime"),
   mount: (module, root) => module.mountLiveWorkbench(root),
   dispose: (module) => module.disposeLiveWorkbench?.(),
 };

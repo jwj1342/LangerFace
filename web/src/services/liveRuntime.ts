@@ -1,19 +1,20 @@
-// 入口：装配 UI 事件绑定并初始化。各功能模块见 pipeline/render/mode3d/ui/state。
-import { bindDom, els } from "./dom.js";
-import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./canvas_fit.js";
-import { dataSource } from "./data_source.js";
-import { createCanvasRecordingController } from "./export_canvas.js";
-import { validateIncisionOverlay } from "./incision_overlay.js";
-import { countMetric, logError } from "./logger.js";
-import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, stopTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.js";
-import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.js";
-import { adjustFocusZoom, buildZoomCards } from "./render.js";
+// @ts-nocheck
+// Live workbench runtime: wires DOM events and model bootstrap under the React route adapter.
+import { bindDom, els } from "../../dom.js";
+import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "../../canvas_fit.js";
+import { dataSource } from "../../data_source.js";
+import { createCanvasRecordingController } from "../../export_canvas.js";
+import { validateIncisionOverlay } from "../../incision_overlay.js";
+import { countMetric, logError } from "../../logger.js";
+import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, stopTwin, toggleTwinHead, toggleTwinTexture } from "../../mode3d.js";
+import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "../../pipeline.js";
+import { adjustFocusZoom, buildZoomCards } from "../../render.js";
 import {
   LIVE_CONTROLLER_STATE_EVENT,
   LIVE_RENDER_REACT_COMMAND_EVENT,
   LIVE_ROUTE_REACT_COMMAND_EVENT,
   LIVE_SOURCE_REACT_COMMAND_EVENT,
-} from "./src/lib/controllerEvents.ts";
+} from "../lib/controllerEvents";
 import {
   LIVE_RENDER_COMMANDS,
   LIVE_ROUTE_COMMANDS,
@@ -21,15 +22,15 @@ import {
   bindWindowControllerEvents,
   dispatchControllerEvent,
   readControllerCommandDetail,
-} from "./src/lib/controllerCommand.ts";
-import { isReactManagedWorkbench } from "./src/lib/reactManagedWorkbench.ts";
+} from "../lib/controllerCommand";
+import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
 import {
   buildLiveControllerSnapshot,
   liveTextOf,
   visibleLiveTextOf,
-} from "./src/services/liveSnapshots.ts";
-import { recordingState, reconState, renderState, sourceState } from "./state.js";
-import { setIncisionOverlayQa, setMsg, setProvenance, smoothLabel } from "./ui.js";
+} from "./liveSnapshots";
+import { recordingState, reconState, renderState, sourceState } from "../../state.js";
+import { setIncisionOverlayQa, setMsg, setProvenance, smoothLabel } from "../../ui.js";
 
 let previewSystem = null;
 let previewMeta = null;
@@ -395,7 +396,7 @@ export function disposeLiveWorkbench() {
   imageDrag = null;
 }
 
-export function mountLiveWorkbench(root = document) {
+export function mountLiveWorkbench(root: ParentNode | Document = document) {
   disposeLiveWorkbench();
   bindDom(root);
   mounted = true;
@@ -429,8 +430,4 @@ export function mountLiveWorkbench(root = document) {
     scheduleLiveState("model_load_failed");
   });
   return disposeLiveWorkbench;
-}
-
-if (document.getElementById("canvas") && !isReactManagedWorkbench()) {
-  mountLiveWorkbench();
 }

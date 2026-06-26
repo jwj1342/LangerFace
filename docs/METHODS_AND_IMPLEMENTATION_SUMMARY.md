@@ -323,7 +323,7 @@ langerface --video clip.mp4 --system langer -o out.mp4
 langerface-webcam --system rstl
 ```
 
-Web 端入口由 `web/pipeline.js`、`web/main.js`、`web/render.js`、`web/state.js` 等模块组成，支持摄像头、上传图片和上传视频。
+Web 端入口由 React SPA、`web/src/services/liveRuntime.ts`、`web/pipeline.js`、`web/render.js`、`web/state.js` 等模块组成，支持摄像头、上传图片和上传视频。
 
 ## 11. 图谱生成方法
 

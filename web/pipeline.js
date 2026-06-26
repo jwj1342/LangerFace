@@ -6,7 +6,7 @@
 //   - ./pipeline/source.js —— 数据源管理（startCamera/handleFile/setSource/stopSource/showCameraPlaceholder）。
 //   - ./pipeline/loop.js   —— 主循环 + 渲染调度 + FPS + 手部遮挡检测（loop/requestFrame/detectHands）。
 // 这里仅保留「图谱注入」职责（setActiveAtlas/restoreOfficialAtlas），并把上述模块的公开 API
-// 原样再导出，使所有 importer（main.js / mode3d.js …）无需改动其 import 路径。
+// 原样再导出，使所有 importer（liveRuntime / mode3d …）无需改动其 import 路径。
 //
 // 后续（本 PR 之外、留给评审）：state.js 的裸可变单例改为受控接口（setter / 不变量保护），
 // 以及彻底打破 mode3d → 源控制 的反向依赖（mode3d 已可改为直接依赖 ./pipeline/source.js）。
