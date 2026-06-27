@@ -1,4 +1,5 @@
-import { loadJsonAsset, type AssetProgressEvent } from "./assetLoader";
+import type { AssetProgressEvent } from "./assetLoader";
+import { dataSource } from "./dataSource";
 import type { RstlAtlas } from "./rstlField";
 import type { Triangle, Vec3 } from "./softBody";
 
@@ -16,17 +17,11 @@ export function loadStandardFaceAssets({
   onProgress,
 }: LoadStandardFaceAssetsOptions = {}): Promise<StandardFaceAssets> {
   return Promise.all([
-    loadJsonAsset<Vec3[]>("canonicalVertices", {
-      label: "标准脸顶点",
-      onProgress,
-    }),
-    loadJsonAsset<Triangle[]>("triangles", {
-      label: "三角拓扑",
-      onProgress,
-    }),
-    loadJsonAsset<RstlAtlas>("atlasRstl", {
-      label: "RSTL 图谱",
-      onProgress,
-    }),
-  ]).then(([verts, tris, atlas]) => ({ verts, tris, atlas }));
+    dataSource.getHeadMesh("mediapipe-468", { onProgress }),
+    dataSource.loadAtlas("rstl", { onProgress }),
+  ]).then(([head, atlas]) => ({
+    verts: head.vertices as Vec3[],
+    tris: head.triangles as Triangle[],
+    atlas: atlas as RstlAtlas,
+  }));
 }

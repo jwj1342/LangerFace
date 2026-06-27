@@ -1674,9 +1674,10 @@ assert.ok(controller.includes("S.resizeObserver?.disconnect"), "incision control
 assert.ok(controller.includes("S.head?.dispose"), "incision controller disposes WebGL resources on dispose");
 
 assert.ok(standardFaceAssets.includes("loadStandardFaceAssets"), "standard face asset service exposes a shared lazy loader");
-assert.ok(standardFaceAssets.includes('"canonicalVertices"'), "standard face asset service loads canonical vertices");
-assert.ok(standardFaceAssets.includes('"triangles"'), "standard face asset service loads triangle topology");
-assert.ok(standardFaceAssets.includes('"atlasRstl"'), "standard face asset service loads the RSTL atlas");
+assert.ok(standardFaceAssets.includes("../services/dataSource") || standardFaceAssets.includes("./dataSource"),
+  "standard face asset service uses the shared data source boundary");
+assert.ok(standardFaceAssets.includes("dataSource.getHeadMesh"), "standard face asset service loads canonical mesh through dataSource");
+assert.ok(standardFaceAssets.includes("dataSource.loadAtlas"), "standard face asset service loads the RSTL atlas through dataSource");
 assert.ok(standardFaceAssetsHook.includes("loadStandardFaceAssets"), "R3F routes lazy-load runtime assets through the shared standard face hook");
 assert.ok(standardFaceAssetsHook.includes("setAssets(null)"), "standard face asset hook clears stale assets before route-local reloads");
 assert.ok(standardFaceAssetsHook.includes("reloadSerial"), "standard face asset hook owns route-local reload state");
@@ -2126,6 +2127,9 @@ assert.ok(liveCanvasFitService.includes("export function clearCanvasDisplayFit")
 assert.ok(!fs.existsSync(path.join(web, "data_source.js")), "legacy data_source.js facade has been removed after TypeScript service migration");
 assert.ok(!fs.existsSync(path.join(web, "data_source.d.ts")), "legacy data-source declaration facade has been removed after TypeScript service migration");
 assert.ok(liveDataSourceService.includes("export interface BrowserDataSource"), "TypeScript data source service owns the shared browser data contract");
+assert.ok(liveDataSourceService.includes("getHeadMesh"), "TypeScript data source service exposes canonical head mesh loading");
+assert.ok(liveDataSourceService.includes("loadAtlas"), "TypeScript data source service exposes atlas loading");
+assert.ok(liveDataSourceService.includes("saveAnnotation"), "TypeScript data source service exposes local annotation saving");
 assert.ok(liveDataSourceService.includes("export const LocalDataSource"), "TypeScript data source service owns the local sessionStorage implementation");
 assert.ok(liveDataSourceService.includes("IncisionOverlayPayload"), "TypeScript data source service types staged incision overlays");
 assert.ok(!fs.existsSync(path.join(web, "export_canvas.js")), "legacy export_canvas.js facade has been removed after TypeScript service migration");
