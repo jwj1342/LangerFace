@@ -288,5 +288,5 @@ bucket: langerface-assets   (私有)
 ## 分阶段落地与触发条件
 
 - **Phase 0（现在）**：静态 Vercel + 网页标注**下载 JSON** → 评审 → 提交进仓库（issue #2 单图谱闭环，无需后端）。`web/src/services/dataSource.ts` 已落地 `LocalDataSource`，覆盖标准头 / 拓扑 / atlas 读取、localStorage 标注草稿、sessionStorage 跨页预览与切口 overlay；后端到位时增加同接口的 `ApiDataSource`。
-- **Phase 1（触发：多用户在线标注持久化 / 在线服务受限头模）**：起 Worker + D1 + R2，实现 `ApiDataSource`。
+- **Phase 1（触发：多用户在线标注持久化 / 在线服务受限头模）**：起 Worker + D1 + R2，实现 `ApiDataSource`；落地步骤、GitHub Actions 接入、Cloudflare token 权限和验收清单见 [CLOUDFLARE_BACKEND_ROLLOUT.md](CLOUDFLARE_BACKEND_ROLLOUT.md)。
 - **Phase 2（触发：需要在线重计算）**：单独 Python 服务（另开设计文档）。

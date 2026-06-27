@@ -62,6 +62,8 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候
 
 ## 维护 / 部署
 
+- [ ] Cloudflare Worker/D1/R2 后端基础设施：先落地本地验证、少量云端资源创建、GitHub Actions 部署和 `ApiDataSource` 接口
+      · 目标是支持病例保存、划线保存、候选切口保存、医生审阅和 provenance；Worker 只做瘦 API、鉴权、CORS、D1/R2 访问和状态流转，不承载 MediaPipe/FLAME/OpenCV/Blender 等重计算。落地流程见 [CLOUDFLARE_BACKEND_ROLLOUT.md](CLOUDFLARE_BACKEND_ROLLOUT.md)。
 - [ ] 清理 Vercel 历史 Deployment，保持 GitHub / Vercel UI 只突出 `master` production 和当前远端 branch head
       · 2026-06-26 已完成 GitHub Deployments records 清理：从 309 条降到 44 条，保留 37 条 Production 和 7 条当前远端 branch HEAD Preview。Vercel 侧已确认实际项目为 team `team_hKrCHY2HEmfQcq5Jfs8sYznn`、project `prj_IZ6vLQva5NQtCU3DfYNNaOWRzZM2`（本地 `web/.vercel/project.json` 里的旧 `orgId/projectId` 不匹配当前 token 可访问项目）。Vercel 初始 dry-run 为 311 条，计划保留 37 条 production + 7 条 branch-head preview，删除 267 条旧 preview/canceled deployment；第一轮已删除 203 条，1 条已提前删除，随后触发 `now-rm` 429 限流（约 10 分钟 / 200 次 remove），第二轮在用户要求暂停时中断。下次继续前不要复用旧删除列表，先重新 list deployments、重新按 production + branch-head 规则 dry-run，再删除剩余旧 preview。不要把 Vercel 删除动作放进 CI；清理完成后撤销本次暴露过的 Vercel token。
 
