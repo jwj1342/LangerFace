@@ -2,6 +2,8 @@
 
 本文记录 Phase 1 后端能力的落地流程：用 Cloudflare Workers 承载瘦 API，用 D1 保存结构化病例与审阅状态，用 R2 保存受限大对象，并通过 GitHub Actions 做验证和部署。架构边界见 [BACKEND_DATA_ARCHITECTURE.md](BACKEND_DATA_ARCHITECTURE.md)；本文只回答“怎么开始做、怎么验证、怎么上线”。
 
+当前仓库已新增第一版 `workers/api`：它包含 Worker 路由、D1 migration、wrangler 配置、fake D1 合约测试和 CI `worker-tests`。云端 D1/R2 资源、正式 database id / bucket name、前端 `ApiDataSource` 切换和生产 secret 配置仍按本文后续步骤推进。
+
 ## 目标
 
 - 让病例、肿物输入、划线、候选切口、医生审阅和 provenance 可以跨浏览器会话保存。
@@ -15,9 +17,9 @@
 - 不在第一版实现电子签名、医院 HIS/EMR 对接、正式临床权限系统或 HIPAA/等保级合规闭环。
 - 不把 Cloudflare token、R2 密钥或任何生产 secret 暴露到前端 `VITE_*` 环境变量。
 
-## 推荐工程结构
+## 当前工程结构
 
-新增一个独立 Worker 工程：
+仓库内的 Worker 工程结构如下：
 
 ```text
 workers/api/
@@ -25,28 +27,29 @@ workers/api/
   wrangler.jsonc
   src/
     index.ts
-    routes/
-    db/
-    schemas/
-    auth/
+    db.ts
+    http.ts
+    types.ts
+    validation.ts
   migrations/
     0001_initial.sql
   test/
+    worker.test.ts
 ```
 
-建议从最小可验证 API 开始：
+第一版已实现的最小可验证 API：
 
-| 路径 | 目的 |
-|---|---|
-| `GET /health` | CI、部署和人工排障用健康检查 |
-| `POST /api/cases` | 创建脱敏病例工作区 |
-| `GET /api/cases/:id` | 获取病例、肿物、标注、候选和审阅摘要 |
-| `PUT /api/cases/:id` | 更新病例状态或前置参数 |
-| `POST /api/cases/:id/tumors` | 保存肿物输入 |
-| `POST /api/cases/:id/annotations` | 保存医生划线或图谱标注 |
-| `POST /api/cases/:id/incision-candidates` | 保存候选切口、规则 trace、警告和 provenance |
-| `POST /api/incision-candidates/:id/review` | 保存医生接受、退回、否决、备注和覆盖原因 |
-| `GET /api/cases/:id/export` | 导出结构化审阅包或报告草案 |
+| 路径 | 目的 | 状态 |
+|---|---|---|
+| `GET /health` | CI、部署和人工排障用健康检查 | 已实现 |
+| `POST /api/cases` | 创建脱敏病例工作区 | 已实现；拒绝明显身份字段 |
+| `GET /api/cases/:id` | 获取病例、肿物、标注、候选和审阅摘要 | 已实现 |
+| `PUT /api/cases/:id` | 更新病例状态或前置参数 | 已实现；拒绝明显身份字段 |
+| `POST /api/cases/:id/tumors` | 保存肿物输入 | 已实现；先确认病例存在 |
+| `POST /api/cases/:id/annotations` | 保存医生划线或图谱标注 | 已实现；先确认病例存在 |
+| `POST /api/cases/:id/incision-candidates` | 保存候选切口、规则 trace、警告和 provenance | 已实现；先确认病例存在 |
+| `POST /api/incision-candidates/:id/review` | 保存医生接受、退回、否决、备注和覆盖原因 | 已实现；高风险确认必须带备注或覆盖原因 |
+| `GET /api/cases/:id/export` | 导出结构化审阅包或报告草案 | 已实现；显式 `raw_media_included:false` |
 
 ## 本地验证流程
 
@@ -60,6 +63,8 @@ npm test
 npx wrangler dev
 npx wrangler d1 migrations apply langerface-dev --local
 ```
+
+当前 `npm test` 使用 fake D1 覆盖核心请求链，不需要真实 Cloudflare token；`wrangler dev` 和 D1 migration 用于人工联调。
 
 本地测试至少覆盖：
 
@@ -140,7 +145,7 @@ worker-tests:
       run: npm test
 ```
 
-`master` 合并后再部署 Worker：
+当前 CI 已加入 `worker-tests`。`master` 合并后再部署 Worker；如果 `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_D1_DATABASE_ID` 或 `CLOUDFLARE_R2_BUCKET` 尚未配置，部署步骤会跳过，不应影响 Python/Web/Worker 的质量门禁。生产部署前 CI 会用 secrets 临时渲染 `wrangler.jsonc` 里的 D1/R2 绑定，仓库里只保留占位值：
 
 ```yaml
 deploy-worker:
@@ -214,6 +219,6 @@ web/src/services/dataSource.ts
 - `workers/api` 可以本地启动，`GET /health` 返回稳定 JSON。
 - D1 migration 在本地空库上可执行。
 - PR CI 新增 Worker typecheck/test，不影响现有 Python 和 Web 测试。
-- 生产部署 job 只在 `master` 运行。
+- 生产部署 job 只在 `master` 运行；缺少 Cloudflare secrets 时跳过部署而不是阻断主分支。
 - GitHub Secrets 和前端 `VITE_API_BASE_URL` 的边界清楚。
 - 文档明确 Worker 不承载重计算，不保存未授权真实临床影像。
