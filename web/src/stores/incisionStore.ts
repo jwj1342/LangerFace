@@ -9,6 +9,7 @@ export type {
   IncisionCandidateSummary,
   IncisionControllerSnapshot,
   IncisionEditState,
+  IncisionHeadAssetState,
   IncisionProviderState,
   IncisionPrivacyAuditState,
   IncisionResultViewState,

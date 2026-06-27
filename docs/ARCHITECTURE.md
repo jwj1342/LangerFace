@@ -346,6 +346,12 @@ Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部
 | 隐私 / 审计 | `docs/PRIVACY_AND_AUDIT.md` | 敏感数据边界、审计记录、受限存储 | #21 |
 | AI 次级依据 | `tools/`, future model scripts | 皱襞/皱纹/肿物边界候选识别 | #22 |
 
+切口工作台的 3D 头模资产走 `dataSource.getHeadMesh()`：默认优先 `flame-2023`
+（由 `web/assets/flame_basis.bin` 生成 neutral mesh），失败时回退 `mediapipe-468`。
+MediaPipe RSTL 草案不会以 `[tri,u,v]` 形式直接套用到 FLAME 三角面；当前只生成
+`points3d` 预览线并保持 `validated:false`。FLAME 候选不会直接进入实时 MediaPipe
+叠加，相关核验点和非目标见 [INCISION_FLAME_ASSET_STRATEGY.md](INCISION_FLAME_ASSET_STRATEGY.md)。
+
 这些模块应与 `lines/`、`rendering/` 同级接入：`lines/` 仍只负责张力线图谱，`tumor/` 负责病灶几何输入，`incision/` 负责候选曲线生成与规则解释。
 
 ### 14.3 规则优先级

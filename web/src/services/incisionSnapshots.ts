@@ -66,6 +66,21 @@ export interface IncisionAssetLoadingState {
   text: string;
 }
 
+export interface IncisionHeadAssetState {
+  id: string;
+  label: string;
+  topologyId: string;
+  topologyVersion: string;
+  vertexCount: number;
+  triangleCount: number;
+  atlasTopologyId: string | null;
+  atlasLineCount: number;
+  mode: "flame_preview" | "mediapipe_fallback" | "unknown";
+  statusLabel: string;
+  warnings: string[];
+  liveOverlaySupported: boolean;
+}
+
 export interface IncisionReviewState {
   status: string;
   reviewer: string;
@@ -143,6 +158,7 @@ export interface IncisionControllerSnapshot {
   reason: string;
   stageStatus: string;
   assetLoading: IncisionAssetLoadingState;
+  headAsset: IncisionHeadAssetState;
   tumor: IncisionTumorState;
   secondaryCue: IncisionSecondaryCueState;
   privacyAudit: IncisionPrivacyAuditState;
@@ -421,6 +437,7 @@ export function buildIncisionControllerSnapshot({
   reason = "state_update",
   stageStatus = "",
   assetLoading,
+  headAsset,
   tumor,
   secondaryCue,
   privacyAudit,
@@ -439,6 +456,7 @@ export function buildIncisionControllerSnapshot({
     reason,
     stageStatus,
     assetLoading,
+    headAsset,
     tumor,
     secondaryCue,
     privacyAudit,

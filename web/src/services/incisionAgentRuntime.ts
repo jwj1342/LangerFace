@@ -32,7 +32,7 @@ import {
   readControllerCommandDetail,
 } from "../lib/controllerCommand";
 import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
-import { assetBaseUrl, loadJsonAsset } from "./assetLoader";
+import { assetBaseUrl } from "./assetLoader";
 import { requireScopedElement, requireScopedQuery } from "../lib/scopedDom";
 import {
   DEFAULT_PROVIDER_BASE_URL,
@@ -54,6 +54,7 @@ import {
   buildIncisionReviewSnapshot,
   buildIncisionSavedCandidateSummaries,
   buildIncisionSecondaryCueSnapshot,
+  type IncisionHeadAssetState,
   incisionHasClass as hasClass,
   incisionTextOf as textOf,
   incisionTitleOf as titleOf,
@@ -65,7 +66,9 @@ import {
   numericControlValue,
 } from "./tumorInput";
 import { dataSource } from "./dataSource";
+import type { AtlasPayload, HeadMeshPayload } from "./dataSource";
 import { auditExportPayload } from "./exportPrivacy";
+import { loadFlameBasisAsset, mediaPipeAtlasToFlamePreviewAtlas } from "./flameHeadAssets";
 import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
 import { createWorkflowWorkerClient } from "./workflowWorkerClient";
 import type { WorkflowWorkerClient } from "./workflowWorkerClient";
@@ -181,6 +184,8 @@ interface IncisionRuntimeState {
   verts: Vec3[];
   tris: Triangle[];
   atlas: DynamicRecord | null;
+  headAsset: IncisionHeadAssetState | null;
+  assetWarnings: string[];
   normals: Vec3[];
   meanEdge: number;
   unitsPerMm: number;
@@ -357,6 +362,8 @@ function createRuntimeState(): IncisionRuntimeState {
     verts: [],
     tris: [],
     atlas: null,
+    headAsset: null,
+    assetWarnings: [],
     normals: [],
     meanEdge: 1,
     unitsPerMm: 1,
@@ -436,8 +443,25 @@ function currentPrivacyAuditSnapshot() {
 function currentAssetLoadingSnapshot() {
   return buildIncisionAssetLoadingSnapshot({
     visible: !els.assetLoading?.classList?.contains("hidden"),
-    text: els.assetLoadingText?.textContent || "准备下载标准脸、拓扑和 RSTL 图谱。",
+    text: els.assetLoadingText?.textContent || "准备下载 FLAME/MediaPipe 头模、拓扑和 RSTL 图谱。",
   });
+}
+
+function currentHeadAssetSnapshot(): IncisionHeadAssetState {
+  return S.headAsset || {
+    id: "pending",
+    label: "头模资产加载中",
+    topologyId: "unknown",
+    topologyVersion: "unknown",
+    vertexCount: 0,
+    triangleCount: 0,
+    atlasTopologyId: null,
+    atlasLineCount: 0,
+    mode: "unknown",
+    statusLabel: "资产加载中",
+    warnings: [],
+    liveOverlaySupported: false,
+  };
 }
 
 function currentReviewSnapshot() {
@@ -498,6 +522,7 @@ function publishIncisionState(reason = "state_update") {
     reason,
     stageStatus: els.stageStatus?.textContent || "",
     assetLoading: currentAssetLoadingSnapshot(),
+    headAsset: currentHeadAssetSnapshot(),
     tumor: currentTumorFormSnapshot(),
     secondaryCue: currentSecondaryCueSnapshot(),
     privacyAudit: currentPrivacyAuditSnapshot(),
@@ -573,20 +598,107 @@ function nearestVertex(point: unknown): number {
   return best;
 }
 
-async function boot() {
-  const [verts, tris, atlas] = await Promise.all([
-    loadJsonAsset<Vec3[]>("canonicalVertices", { label: "标准脸顶点", onProgress: updateAssetLoading }),
-    loadJsonAsset<Triangle[]>("triangles", { label: "三角拓扑", onProgress: updateAssetLoading }),
-    loadJsonAsset<DynamicRecord>("atlasRstl", { label: "RSTL 图谱", onProgress: updateAssetLoading }),
+function headAssetSnapshot({
+  head,
+  atlas,
+  mode,
+  statusLabel,
+  warnings,
+  liveOverlaySupported,
+}: {
+  head: HeadMeshPayload;
+  atlas: DynamicRecord;
+  mode: IncisionHeadAssetState["mode"];
+  statusLabel: string;
+  warnings: string[];
+  liveOverlaySupported: boolean;
+}): IncisionHeadAssetState {
+  return {
+    id: head.id,
+    label: head.label,
+    topologyId: head.topologyId,
+    topologyVersion: head.topologyVersion,
+    vertexCount: head.vertices.length,
+    triangleCount: head.triangles.length,
+    atlasTopologyId: typeof atlas?.topologyId === "string" ? atlas.topologyId : null,
+    atlasLineCount: Array.isArray(atlas?.lines) ? atlas.lines.length : 0,
+    mode,
+    statusLabel,
+    warnings,
+    liveOverlaySupported,
+  };
+}
+
+async function loadMediaPipeIncisionAssets(atlas?: AtlasPayload, warnings: string[] = []) {
+  const [head, resolvedAtlas] = await Promise.all([
+    dataSource.getHeadMesh("mediapipe-468", { onProgress: updateAssetLoading }),
+    atlas ? Promise.resolve(atlas) : dataSource.loadAtlas("rstl", { onProgress: updateAssetLoading }),
   ]);
+  return {
+    head,
+    atlas: resolvedAtlas as DynamicRecord,
+    headAsset: headAssetSnapshot({
+      head,
+      atlas: resolvedAtlas as DynamicRecord,
+      mode: "mediapipe_fallback",
+      statusLabel: warnings.length
+        ? "MediaPipe 468 回退 · FLAME 资产未就绪"
+        : "MediaPipe 468 标准脸",
+      warnings,
+      liveOverlaySupported: true,
+    }),
+  };
+}
+
+async function loadPreferredIncisionAssets() {
+  const rstlAtlas = await dataSource.loadAtlas("rstl", { onProgress: updateAssetLoading });
+  const warnings: string[] = [];
+  try {
+    const [mediaPipeHead, flameHead, basis] = await Promise.all([
+      dataSource.getHeadMesh("mediapipe-468", { onProgress: updateAssetLoading }),
+      dataSource.getHeadMesh("flame-2023", { onProgress: updateAssetLoading }),
+      loadFlameBasisAsset({ label: "FLAME basis", onProgress: updateAssetLoading }),
+    ]);
+    const flameAtlas = mediaPipeAtlasToFlamePreviewAtlas({
+      atlas: rstlAtlas,
+      mediaPipeHead,
+      flameHead,
+      basis,
+    });
+    warnings.push("FLAME RSTL 线为 MediaPipe 草案转换预览，validated:false；发送到实时 MediaPipe 叠加前必须另做 topology 映射。");
+    return {
+      head: flameHead,
+      atlas: flameAtlas as DynamicRecord,
+      headAsset: headAssetSnapshot({
+        head: flameHead,
+        atlas: flameAtlas as DynamicRecord,
+        mode: "flame_preview",
+        statusLabel: "FLAME neutral 头模 · RSTL 预览",
+        warnings,
+        liveOverlaySupported: false,
+      }),
+    };
+  } catch (error) {
+    warnings.push(`FLAME 资产加载或转换失败：${errorMessage(error)}`);
+    return loadMediaPipeIncisionAssets(rstlAtlas, warnings);
+  }
+}
+
+async function boot() {
+  const { head, atlas, headAsset } = await loadPreferredIncisionAssets();
   if (!S.mounted) return;
-  S.verts = verts; S.tris = tris; S.atlas = atlas;
-  S.normals = vertexNormals(verts, tris);
-  S.meanEdge = meanEdge(verts, tris);
-  S.unitsPerMm = unitsPerMmFromVertices(verts);
+  S.verts = head.vertices; S.tris = head.triangles; S.atlas = atlas; S.headAsset = headAsset; S.assetWarnings = headAsset.warnings;
+  S.normals = vertexNormals(S.verts, S.tris);
+  S.meanEdge = meanEdge(S.verts, S.tris);
+  S.unitsPerMm = unitsPerMmFromVertices(S.verts);
 
   S.head = new Head3D(els.canvas);
-  S.head.setGeometry(verts, tris, (atlas.lines || []).filter((_: unknown, i: number) => i % 2 === 0), { showSurface: true, bands: false });
+  S.head.setGeometry(
+    S.verts,
+    S.tris,
+    (atlas.lines || []).filter((_: unknown, i: number) => i % 2 === 0),
+    { showSurface: true, bands: false },
+  );
   S.head.resetView();
 
   S.marker = new THREE.Mesh(
@@ -1636,7 +1748,8 @@ function renderResult(result: DynamicRecord) {
     ? "警告：检测到原始影像出域配置。"
     : `不上传原始影像；${audit.data_sent_to_agent.length} 类抽象字段只在浏览器确定性 workflow 内处理。Provider API Key 只用于手动连通性测试。${audit.secondary_cues_present ? " 辅助线索仅随审阅导出，不参与几何。" : ""}`;
   const edited = result.candidate.edited ? " · 已记录医生调整" : "";
-  els.stageStatus.textContent = `浏览器确定性 workflow 已更新候选${edited}`;
+  const headLabel = S.headAsset?.statusLabel ? ` · ${S.headAsset.statusLabel}` : "";
+  els.stageStatus.textContent = `浏览器确定性 workflow 已更新候选${edited}${headLabel}`;
   publishIncisionState("candidate_result");
 }
 
@@ -1670,6 +1783,8 @@ function reviewGate(review: DynamicRecord, result: DynamicRecord) {
     traceGate.passed &&
     (!reviewerRequired || reviewerPresent) &&
     (!notesRequired || notesPresent);
+  const liveOverlaySupported = S.headAsset?.liveOverlaySupported !== false;
+  const liveOverlayReady = approvalReady && liveOverlaySupported;
   return {
     reviewer_required: reviewerRequired,
     reviewer_present: reviewerPresent,
@@ -1679,10 +1794,15 @@ function reviewGate(review: DynamicRecord, result: DynamicRecord) {
     agent_trace_gate_passed: traceGate.passed,
     agent_trace_gate_missing: traceGate.missing_actions.map((item: DynamicRecord) => item.key),
     approval_ready: approvalReady,
-    live_overlay_ready: approvalReady,
-    reason: approvalReady
+    live_overlay_ready: liveOverlayReady,
+    live_overlay_blocked_reason: liveOverlaySupported ? null : "active_head_topology_not_supported_by_mediapipe_live_overlay",
+    active_topology_id: S.headAsset?.topologyId || null,
+    active_topology_version: S.headAsset?.topologyVersion || null,
+    reason: liveOverlayReady
       ? "approved_candidate_ready_for_research_overlay"
-      : traceGate.passed ? "pending_clinician_confirmation_or_missing_required_review_context" : "agent_trace_gate_failed",
+      : approvalReady && !liveOverlaySupported
+        ? "approved_candidate_on_flame_preview_requires_explicit_topology_mapping_before_live_overlay"
+        : traceGate.passed ? "pending_clinician_confirmation_or_missing_required_review_context" : "agent_trace_gate_failed",
   };
 }
 
@@ -1736,6 +1856,7 @@ function reviewRecord(result: DynamicRecord = S.result, label = "候选") {
     tumor: result.tumor,
     tumor_quality: tumorQualityFor(result),
     tumor_boundary_summary: tumorBoundarySummary,
+    head_asset: currentHeadAssetSnapshot(),
     secondary_cues: secondaryCueReviewSummary(),
     anatomy: result.anatomy,
     sensitive_structure_inspection: sensitiveStructureInspectionFor(result),
@@ -1768,6 +1889,8 @@ function reviewRecord(result: DynamicRecord = S.result, label = "候选") {
         approval_ready: gate.approval_ready,
         live_overlay_ready: gate.live_overlay_ready,
         agent_trace_gate_passed: traceGate.passed,
+        active_topology_id: S.headAsset?.topologyId || null,
+        active_topology_version: S.headAsset?.topologyVersion || null,
       },
       ...(review.status === "pending_clinician_confirmation"
         ? []
@@ -2149,6 +2272,12 @@ function exportReport() {
     `## 候选 ${idx + 1}: ${r.label}`,
     `- 类型：${r.candidate.type === "linear" ? "皮下线性切口" : "皮表梭形切口"}`,
     `- 候选版本：v${r.candidate.provenance?.candidate_version || 1}；编辑记录 ${(r.candidate.provenance?.edit_history || []).length} 条`,
+    r.head_asset
+      ? `- 头模资产：${r.head_asset.label}；topology=${r.head_asset.topologyId}@${r.head_asset.topologyVersion}；顶点 ${r.head_asset.vertexCount} / 三角面 ${r.head_asset.triangleCount}；状态 ${r.head_asset.statusLabel}`
+      : null,
+    (r.head_asset?.warnings || []).length
+      ? `- 头模资产提示：${r.head_asset.warnings.join("；")}`
+      : null,
     r.candidate_edit_session?.edit_count
       ? `- 编辑时间线：${r.candidate_edit_session.edit_count} 步；当前 edit_id ${r.candidate_edit_session.current_edit_id || "—"}`
       : null,
@@ -2242,6 +2371,11 @@ function stageLiveOverlay() {
   }
   if (els.reviewDecision.value !== "approved_for_discussion") {
     els.stageStatus.textContent = "发送到实时叠加前，请先确认当前候选草案。";
+    return;
+  }
+  if (S.headAsset?.liveOverlaySupported === false) {
+    els.stageStatus.textContent = "当前候选基于 FLAME 头模预览生成；实时 MediaPipe 叠加需要单独的 topology 映射，已阻止发送。";
+    publishIncisionState("live_overlay_blocked_by_topology");
     return;
   }
   const readiness = reviewReadiness("approved_for_discussion");
