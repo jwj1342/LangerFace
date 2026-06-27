@@ -14,8 +14,12 @@ venv/
 logs/
 *.log
 
+# JavaScript / TypeScript dependencies
+node_modules/
+
 # Local archives / external bundles
 local_archives/
+LocalArchives/
 RSTL*/
 RSTL*.rar
 
