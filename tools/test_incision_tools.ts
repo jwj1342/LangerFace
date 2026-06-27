@@ -100,6 +100,18 @@ ok(farDirection.confidence_reasons.includes("nearest_atlas_support_far"),
 const emptyDirection = T.queryDirection([4, 2, 0], verts, tris, { system: "rstl", lines: [] });
 ok(emptyDirection.confidence === 0 && emptyDirection.confidence_reasons.includes("empty_atlas"),
   "queryDirection records empty-atlas confidence reason");
+const point3dAtlas = {
+  system: "rstl",
+  topologyId: "flame-2023",
+  lines: [{
+    name: "flame_points3d_horizontal",
+    points3d: [[1, 1, 0], [4, 1, 0], [7, 1, 0]],
+    points: [[9999, 0, 0]],
+  }],
+};
+const point3dDirection = T.queryDirection([4, 1, 0], verts, tris, point3dAtlas);
+ok(point3dDirection.confidence > 0.8, "queryDirection consumes FLAME preview points3d atlas samples");
+ok(Math.abs(point3dDirection.vector[0]) > 0.95, "points3d atlas tangent drives the RSTL direction");
 
 const wrapVerts = [
   [0.2, 0.0035, 0],

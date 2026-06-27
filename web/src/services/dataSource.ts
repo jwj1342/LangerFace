@@ -4,6 +4,7 @@
 
 import { loadJsonAsset, type AssetLoadOptions } from "./assetLoader.ts";
 import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.ts";
+import { flameHeadMeshFromBasis, loadFlameBasisAsset } from "./flameHeadAssets.ts";
 import type { Triangle, Vec3 } from "./softBody.ts";
 
 export interface PreviewAtlasPayload {
@@ -34,11 +35,15 @@ export interface HeadDescriptor {
   label: string;
   topologyId: string;
   topologyVersion: string;
+  bundled?: boolean;
+  assetStatus?: "bundled" | "optional" | "generated";
+  clinicalStatus?: string;
 }
 
 interface LocalHeadDescriptor extends HeadDescriptor {
-  vertexAsset: string;
-  topologyAsset: string;
+  kind: "json" | "flameBasis";
+  vertexAsset?: string;
+  topologyAsset?: string;
 }
 
 export interface MeshTopologyPayload {
@@ -103,8 +108,22 @@ const HEADS: LocalHeadDescriptor[] = [
     label: "MediaPipe 标准脸",
     topologyId: TOPOLOGY_ID,
     topologyVersion: TOPOLOGY_VERSION,
+    bundled: true,
+    assetStatus: "bundled",
+    clinicalStatus: "draft_not_clinically_validated",
+    kind: "json",
     vertexAsset: "canonicalVertices",
     topologyAsset: "topology",
+  },
+  {
+    id: "flame-2023",
+    label: "FLAME neutral 头模",
+    topologyId: "flame-2023",
+    topologyVersion: "flame-2023-v1",
+    bundled: true,
+    assetStatus: "generated",
+    clinicalStatus: "research_preview_not_clinically_validated",
+    kind: "flameBasis",
   },
 ];
 
@@ -184,6 +203,16 @@ async function loadHeadTopology(
   { onProgress }: DataSourceLoadOptions = {},
 ): Promise<MeshTopologyPayload> {
   const head = headById(id);
+  if (head.kind === "flameBasis") {
+    const basis = await loadFlameBasisAsset({ label: `${head.label} basis`, onProgress });
+    const mesh = flameHeadMeshFromBasis(basis);
+    return {
+      ...mesh.topology,
+      topologyId: head.topologyId,
+      topologyVersion: head.topologyVersion,
+    };
+  }
+  if (!head.topologyAsset) throw new Error(`头模缺少拓扑资产：${id}`);
   const topology = await loadJsonAsset<MeshTopologyPayload | Triangle[]>(head.topologyAsset, {
     label: `${head.label}拓扑`,
     onProgress,
@@ -200,7 +229,15 @@ async function loadHeadTopology(
 
 export const LocalDataSource: BrowserDataSource = {
   async listHeads() {
-    return HEADS.map(({ id, label, topologyId, topologyVersion }) => ({ id, label, topologyId, topologyVersion }));
+    return HEADS.map(({ id, label, topologyId, topologyVersion, bundled, assetStatus, clinicalStatus }) => ({
+      id,
+      label,
+      topologyId,
+      topologyVersion,
+      bundled,
+      assetStatus,
+      clinicalStatus,
+    }));
   },
 
   async loadTopology(id = "mediapipe-468", options = {}) {
@@ -209,6 +246,23 @@ export const LocalDataSource: BrowserDataSource = {
 
   async getHeadMesh(id = "mediapipe-468", { onProgress }: DataSourceLoadOptions = {}) {
     const head = headById(id);
+    if (head.kind === "flameBasis") {
+      const basis = await loadFlameBasisAsset({ label: `${head.label} basis`, onProgress });
+      const mesh = flameHeadMeshFromBasis(basis);
+      return {
+        id: head.id,
+        label: head.label,
+        topologyId: head.topologyId,
+        topologyVersion: head.topologyVersion,
+        ...mesh,
+        topology: {
+          ...mesh.topology,
+          topologyId: head.topologyId,
+          topologyVersion: head.topologyVersion,
+        },
+      };
+    }
+    if (!head.vertexAsset) throw new Error(`头模缺少顶点资产：${id}`);
     const [vertices, topology] = await Promise.all([
       loadJsonAsset<Vec3[]>(head.vertexAsset, { label: `${head.label}顶点`, onProgress }),
       loadHeadTopology(id, { onProgress }),

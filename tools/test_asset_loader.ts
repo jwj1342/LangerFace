@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import { assetNames, assetUrl, loadJsonAsset, normalizeAssetBaseUrl } from "../web/src/services/assetLoader.ts";
 import { dataSource } from "../web/src/services/dataSource.ts";
 
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
 function createAssetServer() {
   return createServer((req, res) => {
     if (req.url === "/assets/canonical_vertices.json") {
@@ -27,6 +29,15 @@ function createAssetServer() {
     if (req.url === "/assets/atlas_langer.json") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end('{"system":"langer","version":"test","lines":[]}');
+      return;
+    }
+    if (req.url === "/assets/flame_basis.bin") {
+      const flameBasis = readFileSync(join(root, "web/assets/flame_basis.bin"));
+      res.writeHead(200, {
+        "Content-Type": "application/octet-stream",
+        "Content-Length": String(flameBasis.byteLength),
+      });
+      res.end(flameBasis);
       return;
     }
     res.writeHead(404, { "Content-Type": "text/plain" });
@@ -119,6 +130,13 @@ await withAssetBase(createAssetServer(), async () => {
   const head = await dataSource.getHeadMesh("mediapipe-468");
   assert.equal(head.topologyId, "mediapipe-468", "data source returns topology metadata with head mesh");
   assert.deepEqual(head.triangles, [[0, 1, 2]], "data source returns canonical mesh triangles");
+  const heads = await dataSource.listHeads();
+  assert.ok(heads.some((item) => item.id === "flame-2023" && item.topologyId === "flame-2023"),
+    "data source advertises the FLAME head asset");
+  const flameHead = await dataSource.getHeadMesh("flame-2023");
+  assert.equal(flameHead.topologyId, "flame-2023", "data source can build the FLAME head from the bundled basis");
+  assert.equal(flameHead.vertices.length, 5023, "FLAME head exposes neutral vertices from flame_basis.bin");
+  assert.equal(flameHead.triangles.length, 9976, "FLAME head exposes topology faces from flame_basis.bin");
   const rstl = await dataSource.loadAtlas("rstl");
   assert.equal(rstl.system, "rstl", "data source loads RSTL atlas by system");
   const saved = dataSource.saveAnnotation({ system: "rstl", topologyId: "mediapipe-468", lines: rstl.lines });
@@ -139,7 +157,6 @@ await withAssetBase(createHtmlFallbackAssetServer(), async () => {
   );
 });
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 for (const rel of [
   "web/src/services/pipelineModels.ts",
   "web/src/services/mode3d.ts",

@@ -12,7 +12,7 @@ export type Triangle = [number, number, number];
 export type AnyRecord = Record<string, any>;
 
 type AtlasPoint = [number, number, number];
-type AtlasLine = { points?: AtlasPoint[] };
+type AtlasLine = { points?: AtlasPoint[]; points3d?: Vec3[] };
 type AtlasPayload = { lines?: AtlasLine[] };
 type RegionConfidenceInput = {
   region: string;
@@ -196,16 +196,22 @@ function atlasSamples(verts: ArrayLike<number>[], tris: Triangle[], atlas: Atlas
   const pts: Vec3[] = [], tans: Vec3[] = [];
   for (const line of atlas.lines || []) {
     const P: Vec3[] = [];
-    for (const raw of line.points || []) {
-      const [tri, u, v] = raw;
-      const t = tris[Math.round(tri)];
-      if (!t) continue;
-      const w = 1 - u - v, A = verts[t[0]], B = verts[t[1]], C = verts[t[2]];
-      P.push([
-        u * A[0] + v * B[0] + w * C[0],
-        u * A[1] + v * B[1] + w * C[1],
-        u * A[2] + v * B[2] + w * C[2],
-      ]);
+    if (Array.isArray(line.points3d) && line.points3d.length) {
+      for (const point of line.points3d) {
+        if (Array.isArray(point) && point.length >= 3 && point.every(Number.isFinite)) P.push([point[0], point[1], point[2]]);
+      }
+    } else {
+      for (const raw of line.points || []) {
+        const [tri, u, v] = raw;
+        const t = tris[Math.round(tri)];
+        if (!t) continue;
+        const w = 1 - u - v, A = verts[t[0]], B = verts[t[1]], C = verts[t[2]];
+        P.push([
+          u * A[0] + v * B[0] + w * C[0],
+          u * A[1] + v * B[1] + w * C[1],
+          u * A[2] + v * B[2] + w * C[2],
+        ]);
+      }
     }
     if (P.length < 2) continue;
     for (let i = 0; i < P.length; i++) {
