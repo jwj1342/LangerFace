@@ -82,6 +82,61 @@ export interface AnnotationQuery {
   topologyId?: string;
 }
 
+export type ClinicalCaseStep = "evaluate" | "plan" | "review";
+export type ClinicalCaseStatus = "draft" | "needs_review" | "confirmed" | "exported";
+export type LesionLayer = "subcutaneous" | "cutaneous";
+export type MarginStrategy = "complete_excision" | "expanded_margin";
+
+export interface ClinicalCaseRecord {
+  id: string;
+  title: string;
+  status: ClinicalCaseStatus;
+  currentStep: ClinicalCaseStep;
+  createdAt: string;
+  updatedAt: string;
+  patientContext: {
+    ageYears: number | null;
+    ageBand: "child_tight" | "adult_standard" | "older_lax" | "unknown";
+    ageBandLabel: string;
+    parameterHint: string;
+  };
+  lesion: {
+    layer: LesionLayer;
+    layerLabel: string;
+    diameterMm: number | null;
+    depthMm: number | null;
+    marginStrategy: MarginStrategy;
+    safetyMarginMm: number | null;
+  };
+  acquisition: {
+    source: "upload" | "photo" | "scan3d" | "realtime";
+    sourceLabel: string;
+  };
+  layers: {
+    rstl: boolean;
+    personalizedWrinkles: boolean;
+    blendedField: boolean;
+    incisionDesign: boolean;
+  };
+  saveState?: "saved" | "dirty" | "save_failed";
+  lastError?: string;
+}
+
+export interface ClinicalCaseDraft {
+  id?: string;
+  title?: string;
+  status?: ClinicalCaseStatus;
+  currentStep?: ClinicalCaseStep;
+  createdAt?: string;
+  updatedAt?: string;
+  patientContext?: Partial<ClinicalCaseRecord["patientContext"]>;
+  lesion?: Partial<ClinicalCaseRecord["lesion"]>;
+  acquisition?: Partial<ClinicalCaseRecord["acquisition"]>;
+  layers?: Partial<ClinicalCaseRecord["layers"]>;
+  saveState?: ClinicalCaseRecord["saveState"];
+  lastError?: string;
+}
+
 export type DataSourceLoadOptions = AssetLoadOptions;
 
 export interface BrowserDataSource {
@@ -91,6 +146,9 @@ export interface BrowserDataSource {
   loadAtlas(system: string, options?: DataSourceLoadOptions): Promise<AtlasPayload>;
   saveAnnotation(payload: Record<string, unknown>): AnnotationRecord | null;
   listAnnotations(query?: AnnotationQuery): AnnotationRecord[];
+  saveCase(payload: ClinicalCaseDraft): ClinicalCaseRecord | null;
+  listCases(): ClinicalCaseRecord[];
+  getCase(id: string): ClinicalCaseRecord | null;
   stagePreviewAtlas(atlas: PreviewAtlasPayload): boolean;
   takePreviewAtlas(): PreviewAtlasPayload | null;
   stageIncisionOverlay(overlay: IncisionOverlayPayload): boolean;
@@ -101,6 +159,7 @@ export interface BrowserDataSource {
 const PREVIEW_ATLAS_KEY = "langerface.previewAtlas";
 const INCISION_OVERLAY_KEY = "langerface.incisionOverlay";
 const ANNOTATIONS_KEY = "langerface.annotations";
+const CASES_KEY = "langerface.cases";
 
 const HEADS: LocalHeadDescriptor[] = [
   {
@@ -196,6 +255,101 @@ function writeLocalJson(key: string, value: unknown): boolean {
   } catch {
     return false;
   }
+}
+
+function createId(prefix: string): string {
+  const randomId = globalThis.crypto?.randomUUID?.();
+  if (randomId) return `${prefix}_${randomId}`;
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function classifyCaseAge(ageYears: number | null | undefined): ClinicalCaseRecord["patientContext"] {
+  if (typeof ageYears !== "number" || !Number.isFinite(ageYears) || ageYears < 0) {
+    return {
+      ageYears: null,
+      ageBand: "unknown",
+      ageBandLabel: "未填写年龄",
+      parameterHint: "填写年龄后，系统会显示对应的梭形夹角和长轴:短轴参数提示。",
+    };
+  }
+  const roundedAge = Math.round(ageYears);
+  if (roundedAge <= 17) {
+    return {
+      ageYears: roundedAge,
+      ageBand: "child_tight",
+      ageBandLabel: "儿童 / 紧致",
+      parameterHint: "提示缩小梭形切口夹角；长轴:短轴建议为 3.5:1。",
+    };
+  }
+  if (roundedAge >= 60) {
+    return {
+      ageYears: roundedAge,
+      ageBand: "older_lax",
+      ageBandLabel: "老年 / 松弛",
+      parameterHint: "提示适当增加梭形切口夹角；长轴:短轴建议为 2.5:1。",
+    };
+  }
+  return {
+    ageYears: roundedAge,
+    ageBand: "adult_standard",
+    ageBandLabel: "中青年 / 普通",
+    parameterHint: "维持基础参数；当前对应 30° 尖端角和 3:1 长轴:短轴。",
+  };
+}
+
+function lesionLayerLabel(layer: LesionLayer): string {
+  return layer === "subcutaneous" ? "皮下肿物 · 线性切口模式" : "皮表肿物 · 梭形切口模式";
+}
+
+function acquisitionLabel(source: ClinicalCaseRecord["acquisition"]["source"]): string {
+  if (source === "photo") return "标准位拍照";
+  if (source === "scan3d") return "3D 扫描";
+  if (source === "realtime") return "实时 AR 跟踪";
+  return "上传照片 / 视频";
+}
+
+function normalizeCaseRecord(payload: ClinicalCaseDraft, now = new Date().toISOString()): ClinicalCaseRecord {
+  const layer: LesionLayer = payload.lesion?.layer === "cutaneous" ? "cutaneous" : "subcutaneous";
+  const marginStrategy: MarginStrategy = payload.lesion?.marginStrategy === "expanded_margin"
+    ? "expanded_margin"
+    : "complete_excision";
+  const source = payload.acquisition?.source === "photo"
+    || payload.acquisition?.source === "scan3d"
+    || payload.acquisition?.source === "realtime"
+    ? payload.acquisition.source
+    : "upload";
+  const patientContext = classifyCaseAge(payload.patientContext?.ageYears);
+
+  return {
+    id: typeof payload.id === "string" ? payload.id : createId("case"),
+    title: typeof payload.title === "string" && payload.title.trim()
+      ? payload.title.trim()
+      : "未命名面部评估",
+    status: payload.status ?? "draft",
+    currentStep: payload.currentStep ?? "evaluate",
+    createdAt: typeof payload.createdAt === "string" ? payload.createdAt : now,
+    updatedAt: now,
+    patientContext,
+    lesion: {
+      layer,
+      layerLabel: lesionLayerLabel(layer),
+      diameterMm: typeof payload.lesion?.diameterMm === "number" ? payload.lesion.diameterMm : null,
+      depthMm: typeof payload.lesion?.depthMm === "number" ? payload.lesion.depthMm : null,
+      marginStrategy,
+      safetyMarginMm: typeof payload.lesion?.safetyMarginMm === "number" ? payload.lesion.safetyMarginMm : null,
+    },
+    acquisition: {
+      source,
+      sourceLabel: acquisitionLabel(source),
+    },
+    layers: {
+      rstl: payload.layers?.rstl ?? true,
+      personalizedWrinkles: payload.layers?.personalizedWrinkles ?? true,
+      blendedField: payload.layers?.blendedField ?? false,
+      incisionDesign: payload.layers?.incisionDesign ?? true,
+    },
+    saveState: "saved",
+  };
 }
 
 async function loadHeadTopology(
@@ -312,6 +466,36 @@ export const LocalDataSource: BrowserDataSource = {
       if (query.topologyId && item?.topologyId !== query.topologyId) return false;
       return true;
     });
+  },
+
+  saveCase(payload) {
+    const existing = readLocalJson<ClinicalCaseRecord[]>(CASES_KEY, []);
+    const previous = typeof payload.id === "string"
+      ? existing.find((item) => item.id === payload.id)
+      : undefined;
+    const record = normalizeCaseRecord({
+      ...previous,
+      ...payload,
+      patientContext: { ...previous?.patientContext, ...payload.patientContext },
+      lesion: { ...previous?.lesion, ...payload.lesion },
+      acquisition: { ...previous?.acquisition, ...payload.acquisition },
+      layers: { ...previous?.layers, ...payload.layers },
+      createdAt: previous?.createdAt ?? payload.createdAt,
+    });
+    const next = existing.filter((item) => item.id !== record.id);
+    next.unshift(record);
+    return writeLocalJson(CASES_KEY, next) ? record : null;
+  },
+
+  listCases() {
+    return readLocalJson<ClinicalCaseRecord[]>(CASES_KEY, [])
+      .map((item) => normalizeCaseRecord(item, item.updatedAt))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  },
+
+  getCase(id) {
+    const record = readLocalJson<ClinicalCaseRecord[]>(CASES_KEY, []).find((item) => item.id === id);
+    return record ? normalizeCaseRecord(record, record.updatedAt) : null;
   },
 
   stagePreviewAtlas(atlas) {
