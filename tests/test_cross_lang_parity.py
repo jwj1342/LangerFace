@@ -12,6 +12,7 @@ CI 的唯一跨语言护栏是 tools/test_web_mapping.ts（Web TypeScript 对 we
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 
@@ -113,3 +114,20 @@ def test_one_euro_fixture_matches_golden(golden):
     for frame_in, t, exp in zip(fix["inputs"], fix["times"], fix["expected"]):
         out = sm.filter(np.asarray(frame_in, dtype=np.float64), t)
         np.testing.assert_allclose(out, np.asarray(exp, dtype=np.float64), atol=1e-12, rtol=0)
+
+
+def test_pure_regen_path_rebuilds_current_golden(golden):
+    """#28 护栏：纯重算路径必须能从已提交 landmarks 重建当前 golden。
+
+    这个断言不 import mediapipe/cv2、不读 local_media，能在 CI 证明 golden 不是无人维护的冻结快照。
+    """
+    spec = importlib.util.spec_from_file_location(
+        "dump_landmarks",
+        os.path.join(REPO, "tools", "dump_landmarks.py"),
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    rebuilt = module.build_expected_from_embedded(EXPECTED)
+    assert rebuilt == golden

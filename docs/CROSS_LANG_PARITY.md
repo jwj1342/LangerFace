@@ -29,12 +29,12 @@ Python(landmarks) == Web TypeScript(landmarks) == golden
 
 | 断言方 | 文件 | 覆盖 |
 |---|---|---|
-| Python（live） | `tests/test_cross_lang_parity.py` | 从金标嵌入的关键点重算 pts/vis，断言匹配金标；One-Euro 夹具匹配 |
+| Python（live） | `tests/test_cross_lang_parity.py` | 从金标嵌入的关键点重算 pts/vis，断言匹配金标；One-Euro 夹具匹配；纯重算 helper 可重建当前 golden |
 | Web TypeScript（对拍） | `tools/test_web_mapping.ts`（`npm test` 内） | `web/src/services/geometryAtlas.ts` 输出对金标 pts/vis；One-Euro 夹具匹配 |
 
 CI 现状（**无需改 `.github/workflows/ci.yml`**）：
 
-- `pytest` 已自动收集并运行 `tests/test_cross_lang_parity.py`（live Python 侧）。
+- `pytest` 已自动收集并运行 `tests/test_cross_lang_parity.py`（live Python 侧），其中包含 `tools/dump_landmarks.py` 纯重算路径的完整 golden 重建断言。
 - `npm test` 已运行 `tools/test_web_mapping.ts`（Web TypeScript 侧）。
 
 历史缺口（#28）：CI 从不重跑 Python 生成金标，且旧 JS 对拍路径**没有**应用口裂掩膜，
@@ -51,7 +51,8 @@ PYTHONPATH=src python3 tools/dump_landmarks.py --regen
 ```
 
 它重算每帧 `lines[].pts` / `lines[].vis`（含 #38 口裂排除，与生产渲染一致）并刷新
-`oneEuro` 夹具，写回 `web/test/expected.json`。该路径在 CI 与本地均可复现。
+`oneEuro` 夹具，写回 `web/test/expected.json`。同一纯逻辑也暴露为 `build_expected_from_embedded()`；
+CI 会断言它重建出的数据与当前 `web/test/expected.json` 完全一致。
 
 ## 何时、如何更新金标
 
