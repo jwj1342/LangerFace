@@ -7,6 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const web = path.join(root, "web");
 
 const read = (rel) => fs.readFileSync(path.join(web, rel), "utf8");
+const readRoot = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
 const exposesId = (source, id) => source.includes(`id="${id}"`) || source.includes(`id: "${id}"`);
 const componentSources = new Map(
   fs.readdirSync(path.join(web, "src/components"))
@@ -30,6 +31,9 @@ const vite = read("vite.config.ts");
 const vercel = read("vercel.json");
 const vercelConfig = JSON.parse(vercel);
 const vercelIgnoreBuild = read("scripts/vercel-ignore-build.ts");
+const architectureDoc = readRoot("docs/ARCHITECTURE.md");
+const ciCdVercelDoc = readRoot("docs/CI_CD_VERCEL.md");
+const contributingDoc = readRoot("docs/CONTRIBUTING.md");
 const app = read("src/App.tsx");
 const typedStore = read("src/stores/appStore.ts");
 const reactShell = read("src/components/ReactShell.tsx");
@@ -154,6 +158,7 @@ const liveDataSourceService = read("src/services/dataSource.ts");
 const liveExportCanvasService = read("src/services/canvasRecording.ts");
 const liveCameraService = read("src/services/cameraSource.ts");
 const liveImageSourceService = read("src/services/imageSource.ts");
+const assetLoaderService = read("src/services/assetLoader.ts");
 const liveRuntimeDependencyTypes = [
   "src/services/cameraSource.ts",
   "src/services/liveDom.ts",
@@ -571,6 +576,7 @@ assert.deepEqual(
 );
 assert.ok(vite.includes("@tailwindcss/vite"), "Vite config loads the Tailwind plugin");
 assert.ok(vite.includes('app: resolve(import.meta.dirname, "app/index.html")'), "Vite builds the SPA app entry");
+assert.ok(vite.includes('"copy-runtime-assets"'), "Vite copies runtime assets into dist/assets");
 assert.ok(vite.includes('"copy-compat-entrypoints"'), "Vite copies lightweight compatibility pages after building the SPA");
 for (const legacyEntry of [
   'main: resolve(import.meta.dirname, "index.html")',
@@ -607,6 +613,16 @@ assert.ok(vercelIgnoreBuild.includes('["diff", "--quiet", ref, "HEAD", "--", "."
 assert.ok(vercelIgnoreBuild.includes('["diff-tree", "--quiet", "--no-commit-id", "-r", "HEAD", "--", "."]'), "Vercel ignore script has a shallow-clone fallback for web root changes");
 assert.ok(vercel.includes('"source": "/app/(.*)"'), "Vercel rewrites nested SPA routes");
 assert.ok(vercel.includes('"destination": "/app/index.html"'), "Vercel routes SPA paths back to app/index.html");
+assert.ok(vercel.includes('"source": "/assets/(.*)"'), "Vercel declares root runtime asset handling");
+assert.ok(assetLoaderService.includes('return normalizeAssetBaseUrl("/assets/")'), "asset loader defaults to the root /assets/ base");
+assert.ok(assetLoaderService.includes("SPA 路由回退"), "asset loader reports HTML SPA fallback responses as asset path errors");
+assert.ok(architectureDoc.includes("copy-runtime-assets") && architectureDoc.includes("站点根 `/assets/`"),
+  "architecture docs describe runtime assets as copied files loaded from root /assets/");
+assert.ok(!architectureDoc.includes("assetLoader.ts` 用 Vite `?url` 导入 `.task`"),
+  "architecture docs must not claim the asset loader imports all runtime assets through Vite ?url");
+assert.ok(ciCdVercelDoc.includes("不能写成 document-relative 的 `assets/`"), "Vercel docs capture the nested SPA asset-path lesson");
+assert.ok(ciCdVercelDoc.includes("`/app/assets/...`"), "Vercel docs explain the failure mode for nested SPA asset URLs");
+assert.ok(contributingDoc.includes("不能请求 `/app/assets/...`"), "PR checklist guards against nested SPA asset URL regressions");
 
 assert.ok(app.includes("react-router-dom"), "React app is routed through React Router");
 assert.ok(app.includes('path="/annotate"'), "React Router exposes the 3D annotation route");

@@ -90,6 +90,8 @@ Preview 人工验收清单：
 - 上传照片 / 视频入口能正常进入检测流程。
 - 摄像头入口在 HTTPS Preview 中能请求权限。
 - `/app/annotate` 能打开，标准脸能加载，不出现 `/assets/*.json` 404；旧 `annotate.html` 只需跳转到 React SPA。
+- `/app/incision` 能打开，切口工作台标准脸 / RSTL 资产能加载；Network 面板里的运行时资产应请求 `/assets/...`，不能请求 `/app/assets/...`。
+- 如果控制台出现 `Unexpected token '<'` 或 `<!DOCTYPE` JSON 解析错误，优先检查资产 URL 是否被嵌套 SPA 路由错误解析。
 - 浏览器控制台没有新的应用级错误。MediaPipe 的 WebGL / XNNPACK 初始化日志通常是正常信息。
 
 注意：
