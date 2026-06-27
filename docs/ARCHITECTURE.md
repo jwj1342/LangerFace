@@ -153,14 +153,19 @@ P = u·V0 + v·V1 + w·V2
 - 生产预览：`cd web && npm run preview`，Vite 默认监听 `http://127.0.0.1:4173`。
 - Vite 的唯一应用入口是 `web/app/index.html`。`index.html`、`annotate.html`、`incision_agent.html`、`surgery.html`
   只作为轻量兼容跳转页复制进 `dist/`，不再作为 Rollup 多入口应用构建。
-- `web/src/services/assetLoader.ts` 用 Vite `?url` 导入 `.task`、atlas JSON 与 3D 示例资产，构建后自动进入哈希化 `dist/assets/`。
+- `web/vite.config.ts` 的 `copy-runtime-assets` 会把 `web/assets/` 复制到 `dist/assets/`；`web/src/services/assetLoader.ts`
+  通过稳定文件名清单从站点根 `/assets/` 读取 `.task`、atlas JSON、拓扑、标准脸和 3D 示例资产。React SPA 运行在
+  `/app/*` 下，运行时代码不能写 document-relative `assets/...`，否则 `/app/incision` 这类嵌套路由会解析成
+  `/app/assets/...` 并被 Vercel SPA rewrite 回退成 HTML。需要外置资产时只通过 `?assetBase=` 或
+  `VITE_LANGERFACE_ASSET_BASE_URL` 覆盖。
 - `tools/serve_web.py` 仍可服务未打包的 `web/` 源文件，但正式前端开发与部署以 Vite 为准。
 - `getUserMedia`（摄像头）要求安全上下文：`http://localhost`/`127.0.0.1` 即可（无需 https）。
 - 首次加载从 CDN 拉取 MediaPipe wasm（数秒）；之后浏览器缓存。
 
 ### 部署（Vercel，纯静态）
 - Vercel 使用 [`web/vercel.json`](../web/vercel.json) 运行 `npm run build`，输出目录为 `dist/`。
-- [`web/vercel.json`](../web/vercel.json)：`/assets/*` 设 `Cache-Control: immutable` 长缓存（~11MB 模型只下一次）。
+- [`web/vercel.json`](../web/vercel.json)：`/app/*` 回退到 React SPA，`/assets/*` 保留为站点根运行时资产路径并设置缓存头。
+  排查 `Unexpected token '<'` / `<!DOCTYPE` JSON 解析错误时，先看 Network 面板失败 URL 是否误落到 `/app/assets/...`。
 - [`web/.vercelignore`](../web/.vercelignore)：排除本地测试/构建缓存。
 - Vercel 自动 HTTPS → 线上摄像头（getUserMedia，安全上下文）可用。
 - 线上：见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#production-url) 中的 Production URL。

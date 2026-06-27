@@ -40,15 +40,18 @@ function documentBase(): string {
 export function normalizeAssetBaseUrl(baseUrl = ""): string {
   const clean = String(baseUrl || "").trim();
   if (!clean) return "";
-  const firstSegment = clean.split(/[/?#]/)[0];
+  const rootedLocal = /^[a-z0-9_-]+(?:\/|$)/i.test(clean) && !clean.includes(":")
+    ? `/${clean.replace(/^\/+/, "")}`
+    : clean;
+  const firstSegment = rootedLocal.split(/[/?#]/)[0];
   const hostLike = firstSegment.includes(".") || firstSegment.includes(":");
-  const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(clean)
-    || clean.startsWith("/")
-    || clean.startsWith("./")
-    || clean.startsWith("../")
+  const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(rootedLocal)
+    || rootedLocal.startsWith("/")
+    || rootedLocal.startsWith("./")
+    || rootedLocal.startsWith("../")
     || !hostLike
-    ? clean
-    : `https://${clean}`;
+    ? rootedLocal
+    : `https://${rootedLocal}`;
   const url = new URL(withProtocol, documentBase());
   if (!url.pathname.endsWith("/")) url.pathname += "/";
   return url.href;
@@ -75,7 +78,7 @@ function configuredAssetBaseUrl(): string {
   }
   const envBase = import.meta.env?.VITE_LANGERFACE_ASSET_BASE_URL || "";
   if (envBase) return normalizeAssetBaseUrl(envBase);
-  return normalizeAssetBaseUrl("assets/");
+  return normalizeAssetBaseUrl("/assets/");
 }
 
 export function assetBaseUrl(): string {
@@ -175,7 +178,18 @@ async function fetchAsset<T>(
     const text = await readTextWithProgress(resp, (evt) => (
       onProgress?.({ key, label, url, phase: "progress", ...evt })
     ));
-    const data = JSON.parse(text) as T;
+    let data: T;
+    try {
+      data = JSON.parse(text) as T;
+    } catch (err) {
+      const contentType = resp.headers.get("content-type") || "unknown";
+      const looksLikeHtml = /^\s*</.test(text);
+      throw new Error(
+        `资产解析失败：${label} 不是有效 JSON（url=${url}，content-type=${contentType}` +
+        `${looksLikeHtml ? "，响应看起来是 HTML，通常是 SPA 路由回退或资产路径配置错误" : ""}）`,
+        { cause: err },
+      );
+    }
     onProgress?.({ key, label, url, phase: "done", loaded: text.length, total: text.length, ratio: 1 });
     return data;
   })();

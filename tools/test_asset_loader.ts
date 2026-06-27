@@ -13,6 +13,15 @@ function createAssetServer() {
       res.end("[1,2,3]");
       return;
     }
+    if (req.url === "/assets/atlas_rstl.json") {
+      const html = "<!DOCTYPE html><html><body>SPA fallback</body></html>";
+      res.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": String(html.length),
+      });
+      res.end(html);
+      return;
+    }
     res.writeHead(404, { "Content-Type": "text/plain" });
     res.end("missing");
   });
@@ -43,8 +52,26 @@ assert.equal(assetNames.atlasRstl, "atlas_rstl.json", "asset names expose RSTL a
 assert.equal(assetNames.canonicalVertices, "canonical_vertices.json", "asset names expose canonical vertices filename");
 
 const relative = normalizeAssetBaseUrl("assets/");
-assert.ok(relative.endsWith("/assets/"), "relative asset base remains a local assets path");
-assert.ok(!relative.startsWith("https://assets/"), "relative assets path is not treated as a hostname");
+assert.ok(relative.endsWith("/assets/"), "bare local asset base resolves under root /assets/");
+assert.ok(!relative.startsWith("https://assets/"), "bare assets path is not treated as a hostname");
+
+const originalDocument = globalThis.document;
+globalThis.document = { baseURI: "https://example.test/app/incision" };
+try {
+  assert.equal(
+    normalizeAssetBaseUrl("assets/"),
+    "https://example.test/assets/",
+    "bare local asset base does not resolve under nested SPA routes",
+  );
+  assert.equal(
+    normalizeAssetBaseUrl("/assets/"),
+    "https://example.test/assets/",
+    "root asset base remains stable under nested SPA routes",
+  );
+} finally {
+  if (originalDocument === undefined) delete globalThis.document;
+  else globalThis.document = originalDocument;
+}
 
 assert.equal(
   normalizeAssetBaseUrl("cdn.example.com/langerface-assets"),
@@ -67,6 +94,11 @@ await withAssetBase(createAssetServer(), async () => {
     () => loadJsonAsset("triangles", { label: "三角拓扑" }),
     /资产加载失败：三角拓扑 HTTP 404/,
     "missing lazy-loaded assets fail loudly with the HTTP status",
+  );
+  await assert.rejects(
+    () => loadJsonAsset("atlasRstl", { label: "RSTL 图谱" }),
+    /资产解析失败：RSTL 图谱 不是有效 JSON.*响应看起来是 HTML/,
+    "HTML SPA fallbacks fail with an actionable JSON asset error",
   );
 });
 

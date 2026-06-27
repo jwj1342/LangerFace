@@ -85,10 +85,25 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 - `outputDirectory`: `dist`
 - `git.deploymentEnabled`: 默认只允许 `master` 自动部署，避免长 PR / feature branch 高频 push 触发 Vercel 限流和 GitHub deployment record 噪声
 - `github.autoJobCancelation`: 同一 PR / 分支有新 commit 时取消较旧构建
-- `/assets/*` 长缓存，适合 `.task` 模型、atlas JSON、triangles 等哈希化静态资产
+- `/assets/*` 是运行时资产根路径，承载 `.task` 模型、atlas JSON、triangles、标准脸等由 `copy-runtime-assets` 复制的文件
 - JS/MJS 的 `Content-Type`
 
 如果 Dashboard 与 `web/vercel.json` 同时配置同一项，保持它们一致，避免不同环境行为不一致。
+
+### SPA 路由与运行时资产路径
+
+React SPA 的线上入口是 `/app/*`，Vercel 会把 `/app` 和 `/app/(.*)` rewrite 到 `/app/index.html`。因此运行时资产必须从站点根
+`/assets/` 读取，不能写成 document-relative 的 `assets/` 或 `assets/foo.json`。在 `/app/incision`、`/app/annotate` 等嵌套路由下，
+相对路径会被浏览器解析为 `/app/assets/foo.json`；这类 URL 会命中 SPA rewrite，返回 HTML，而不是 JSON。浏览器控制台常见表现是：
+`SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON`。
+
+当前约束如下：
+
+- `web/vite.config.ts` 的 `copy-runtime-assets` 把 `web/assets/` 原样复制到 `dist/assets/`。
+- `web/src/services/assetLoader.ts` 的默认 asset base 是 `/assets/`，并把裸 `assets/` 归一到站点根 `/assets/`。
+- 只有显式远端资产源才通过 `?assetBase=` 或 `VITE_LANGERFACE_ASSET_BASE_URL` 覆盖；覆盖值必须是浏览器可访问的 HTTPS/API 地址或明确的根路径。
+- 排障时看 Network 面板：运行时 JSON/task/bin 请求应为 `/assets/...` 或配置的远端 asset base，不应出现 `/app/assets/...`。
+- 回归测试在 `tools/test_asset_loader.ts`，会模拟 `https://example.test/app/incision`，防止嵌套路由再次污染资产 URL。
 
 ### 限流时的处理顺序
 
