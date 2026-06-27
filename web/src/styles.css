@@ -1,0 +1,682 @@
+@import "tailwindcss";
+@import "../style.css";
+@import "../annotate.css";
+
+@layer base {
+  #root {
+    min-height: 100dvh;
+  }
+}
+
+@layer components {
+  .react-page {
+    min-height: 100dvh;
+    background: #eef0ea;
+    color: #1b2024;
+  }
+
+  .react-shell {
+    display: grid;
+    grid-template-columns: minmax(280px, 360px) 1fr;
+    min-height: 100dvh;
+  }
+
+  .react-shell-sidebar {
+    border-right: 1px solid #e6e8e1;
+    background: #f6f7f3;
+    padding: 22px 20px;
+  }
+
+  .react-shell-main {
+    min-width: 0;
+    min-height: 0;
+    background: #0c0f14;
+  }
+
+  .react-nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid #e6e8e1;
+    border-radius: 10px;
+    background: #fff;
+    padding: 10px 12px;
+    color: #1b2024;
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .react-nav-link:hover {
+    background: #f3f4f0;
+  }
+
+  .react-route-status {
+    border-radius: 999px;
+    background: #d9f2e7;
+    color: #0c8460;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .react-incision-host {
+    min-height: 100dvh;
+  }
+
+  .react-live-host {
+    min-height: 100dvh;
+  }
+
+  .live-workbench.app {
+    grid-template-columns: minmax(340px, 380px) 1fr;
+  }
+
+  .live-workbench .live-inline-top {
+    margin-top: 7px;
+  }
+
+  .live-workbench .live-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .live-workbench .live-two-col {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .live-workbench .live-hidden-inline {
+    display: none;
+  }
+
+  .react-annotate-host {
+    min-height: 100dvh;
+  }
+
+  .annotate-workbench.app {
+    grid-template-columns: minmax(340px, 380px) 1fr;
+  }
+
+  .annotate-workbench .annotate-spacing-label {
+    margin-top: 10px;
+  }
+
+  .annotate-workbench .annotate-system-select {
+    margin-top: 7px;
+  }
+
+  .annotate-workbench .annotate-export-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .incision-workbench.app {
+    grid-template-columns: minmax(390px, 420px) 1fr;
+  }
+
+  .incision-workbench .sidebar {
+    overflow-x: hidden;
+  }
+
+  .incision-workbench .agent-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .incision-workbench .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .incision-workbench .metric {
+    background: #f8f9f5;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 10px;
+    min-width: 0;
+  }
+
+  .incision-workbench .incision-state-grid,
+  .annotate-workbench .annotate-state-grid,
+  .live-workbench .live-state-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .incision-workbench .incision-state-grid > div,
+  .annotate-workbench .annotate-state-grid > div,
+  .live-workbench .live-state-grid > div {
+    min-width: 0;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #f8f9f5;
+    padding: 8px 9px;
+  }
+
+  .incision-workbench .incision-state-grid .k,
+  .annotate-workbench .annotate-state-grid .k,
+  .live-workbench .live-state-grid .k {
+    display: block;
+    font-size: 10.5px;
+    color: var(--muted);
+    font-weight: 700;
+  }
+
+  .incision-workbench .incision-state-grid .v,
+  .annotate-workbench .annotate-state-grid .v,
+  .live-workbench .live-state-grid .v {
+    display: block;
+    margin-top: 3px;
+    color: var(--ink);
+    font-size: 12.5px;
+    font-weight: 750;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .annotate-workbench .annotate-state-warning {
+    color: #8a5a00;
+    font-weight: 700;
+  }
+
+  .incision-workbench .metric .k {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .incision-workbench .metric .v {
+    display: block;
+    margin-top: 3px;
+    font-size: 14px;
+    line-height: 1.25;
+    font-weight: 750;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .incision-workbench .quality-top {
+    min-width: 0;
+  }
+
+  .incision-workbench .quality-top span {
+    min-width: 0;
+  }
+
+  .incision-workbench .quality-top span:last-child {
+    max-width: 62%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: right;
+    font-size: 13px;
+    line-height: 1.25;
+  }
+
+  .incision-workbench .stage-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .incision-workbench .agent-note {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.55;
+    margin: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .incision-workbench .agent-note.ok {
+    color: var(--green-d);
+    font-weight: 700;
+  }
+
+  .incision-workbench .provider-state-ok {
+    color: var(--green-d);
+  }
+
+  .incision-workbench .provider-state-warn {
+    color: #b45309;
+  }
+
+  .react-surgery-host {
+    min-height: 100dvh;
+  }
+
+  .surgery-workbench.app {
+    grid-template-columns: minmax(340px, 380px) 1fr;
+  }
+
+  .surgery-workbench .section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .surgery-workbench .section-title span:last-child {
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+
+  .surgery-workbench .btn.cut-along {
+    border-color: var(--green);
+    color: var(--green-d);
+    background: var(--green-soft);
+  }
+
+  .surgery-workbench .btn.cut-along:hover {
+    background: #c7ecdb;
+  }
+
+  .surgery-workbench .btn.cut-along.active {
+    border-color: var(--green-d);
+    background: var(--green);
+    color: #fff;
+    box-shadow: 0 0 0 3px rgba(15, 155, 110, .3);
+  }
+
+  .surgery-workbench .surgery-action-row {
+    grid-template-columns: 1fr;
+  }
+
+  .surgery-workbench .surgery-green-copy {
+    color: #18c08a;
+  }
+
+  .surgery-workbench .surgery-tension-bar {
+    background: linear-gradient(90deg, #34d399, #fbbf24, #f87171);
+  }
+
+  .surgery-workbench .legend {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 7px;
+  }
+
+  .surgery-workbench .legend-sw {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    vertical-align: middle;
+  }
+
+  .surgery-workbench .surgery-legend-skin {
+    background: #d6aa8f;
+  }
+
+  .surgery-workbench .surgery-legend-red {
+    background: #d65b4a;
+    margin-left: 10px;
+  }
+
+  .surgery-workbench .help-doc {
+    display: block;
+  }
+
+  .surgery-workbench .help-doc summary {
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .surgery-workbench .help-doc ol {
+    margin: 2px 0 0 18px;
+    padding: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .surgery-workbench .help-doc li {
+    margin: 4px 0;
+  }
+
+  .surgery-workbench .stage-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .surgery-workbench .stage-link {
+    border: 1px solid #264439;
+    border-radius: 999px;
+    background: rgba(52, 227, 164, .08);
+    color: #d6f5e7;
+    padding: 6px 12px;
+    text-decoration: none;
+    font-size: 12.5px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .surgery-workbench .stage-link:hover {
+    background: rgba(52, 227, 164, .14);
+  }
+
+  .surgery-workbench #surgeryCanvas {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 14px;
+    display: block;
+    background: radial-gradient(circle at 50% 38%, #222b35 0%, #121821 52%, #0b0f15 100%);
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .surgery-workbench .surgery-verdict-ok {
+    color: #0c8460;
+  }
+
+  .surgery-workbench .surgery-verdict-warn {
+    color: #b45309;
+  }
+
+  .surgery-workbench .surgery-verdict-neutral {
+    color: var(--muted);
+  }
+
+  .incision-workbench .agent-note.warn {
+    color: #8a5a00;
+    font-weight: 700;
+  }
+
+  .incision-workbench .edit-status {
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 4px 8px;
+    background: #eef0ea;
+    color: #44505d;
+  }
+
+  .incision-workbench .edit-status.active {
+    background: #fff1c8;
+    color: #8a5a00;
+  }
+
+  .incision-workbench .candidate-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .incision-workbench .candidate-row {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #f8f9f5;
+    padding: 9px;
+    display: grid;
+    gap: 6px;
+  }
+
+  .incision-workbench .candidate-row .top {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .incision-workbench .candidate-row .meta {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+
+  .incision-workbench .text-input {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    font-size: 13px;
+    color: var(--ink);
+  }
+
+  .incision-workbench .text-area {
+    width: 100%;
+    min-height: 74px;
+    resize: vertical;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    font-size: 13px;
+    color: var(--ink);
+    font-family: inherit;
+    line-height: 1.45;
+  }
+
+  .incision-workbench .boundary-status,
+  .incision-workbench .anatomy-preview {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  .incision-workbench .boundary-status.warn,
+  .incision-workbench .anatomy-preview.warn {
+    color: #8a5a00;
+    font-weight: 700;
+  }
+
+  .incision-workbench .review-state {
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 4px 8px;
+    background: #eef0ea;
+    color: #44505d;
+  }
+
+  .incision-workbench .review-state.approved {
+    background: #d9f2e7;
+    color: var(--green-d);
+  }
+
+  .incision-workbench .review-state.rejected {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  .incision-workbench .review-state.revision {
+    background: #fff1c8;
+    color: #8a5a00;
+  }
+
+  .incision-workbench .hint {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .incision-workbench .guardrail-details {
+    font-size: 11px;
+    line-height: 1.55;
+    color: var(--muted);
+    margin: 8px 0 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .incision-workbench .guardrail-details.warn {
+    color: #8a5a00;
+    font-weight: 700;
+  }
+
+  .incision-workbench .guardrail-details.danger {
+    color: #991b1b;
+    font-weight: 700;
+  }
+
+  .incision-workbench .canvas-legend {
+    position: absolute;
+    left: 16px;
+    bottom: 16px;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    max-width: min(520px, calc(100% - 32px));
+    padding: 9px 11px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    background: rgba(10, 15, 22, 0.72);
+    backdrop-filter: blur(8px);
+    color: #dbe4ee;
+    font-size: 11.5px;
+    font-weight: 700;
+    line-height: 1.2;
+    pointer-events: none;
+  }
+
+  .incision-workbench .asset-loading {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 11px;
+    border-radius: 14px;
+    background: rgba(12, 15, 20, 0.82);
+    backdrop-filter: blur(8px);
+    color: #eef7f3;
+    text-align: center;
+    padding: 24px;
+  }
+
+  .incision-workbench .asset-loading.hidden {
+    display: none;
+  }
+
+  .incision-workbench .asset-loading strong {
+    font-size: 15px;
+  }
+
+  .incision-workbench .asset-loading p {
+    margin: 0;
+    max-width: 360px;
+    font-size: 12px;
+    line-height: 1.55;
+    color: #b9c5d0;
+  }
+
+  .incision-workbench .asset-spinner {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.18);
+    border-top-color: #34d399;
+    animation: asset-spin 0.9s linear infinite;
+  }
+
+  .incision-workbench .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .incision-workbench .legend-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    display: inline-block;
+    border: 1px solid rgba(255, 255, 255, 0.32);
+  }
+
+  .incision-workbench .legend-swatch.center {
+    background: #f43f5e;
+  }
+
+  .incision-workbench .legend-swatch.ring {
+    background: transparent;
+    border-color: #facc15;
+  }
+
+  .incision-workbench .legend-swatch.line {
+    width: 18px;
+    height: 3px;
+    border-radius: 999px;
+    background: #34d399;
+    border: 0;
+  }
+
+  .incision-workbench .legend-swatch.handle {
+    background: #34d399;
+  }
+
+  .incision-workbench .btn-row.two-cols {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .incision-workbench .btn-row.three-cols {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .incision-workbench #agentCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 14px;
+    background: #111820;
+  }
+}
+
+@keyframes asset-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 880px) {
+  .react-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .react-shell-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid #e6e8e1;
+  }
+}
+
+@media (max-width: 980px) {
+  .incision-workbench.app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .incision-workbench #agentCanvas {
+    position: static;
+    min-height: 420px;
+  }
+
+  .incision-workbench .metric-grid {
+    grid-template-columns: 1fr;
+  }
+}

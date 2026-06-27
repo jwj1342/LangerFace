@@ -20,7 +20,7 @@
 | `enhancement` | 新功能或改进请求。 |
 | `documentation` | 仅文档（README / docs / 注释）改动。 |
 | `tech-debt` | 技术债 / 可维护性（重构、解耦、单一真源），无直接用户可见行为变化。 |
-| `testing` | 测试覆盖 / JS↔Python 对拍 / CI 测试基础设施。 |
+| `testing` | 测试覆盖 / Web↔Python 对拍 / CI 测试基础设施。 |
 | `epic` | 跨多个子任务的追踪 / 史诗 issue。 |
 | `question` | 需要进一步信息 / 讨论，尚未定性。 |
 

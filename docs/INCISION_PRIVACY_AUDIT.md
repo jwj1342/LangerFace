@@ -40,7 +40,7 @@
 
 ```bash
 python tools/audit_export_privacy.py incision_review_*.json tumor_input_*.json
-cd web && node ../tools/test_incision_tools.mjs
+cd web && node ../tools/test_incision_tools.ts
 ```
 
 脚本会拦截原始媒体标记、未脱敏 provider secret、明显身份字段、疑似嵌入媒体 payload，以及辅助线索越界参与几何或 Agent prompt 的标记。

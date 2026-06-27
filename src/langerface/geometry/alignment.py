@@ -1,7 +1,7 @@
 """刚性 + 尺度对齐（Sim3 / Umeyama）——3D 配准的公共基元。
 
 整合自多视角 HeadSpace 标定管线（tools/headspace 的加权多视角预对齐）与
-tools/reconstruct_3d.py 的相似变换，统一到此处，并与 web/geometry.js 的 umeyama
+tools/reconstruct_3d.py 的相似变换，统一到此处，并与 web/src/services/geometryTransform.ts 的 umeyama
 算法保持一致。纯 numpy，可单测。
 """
 from __future__ import annotations

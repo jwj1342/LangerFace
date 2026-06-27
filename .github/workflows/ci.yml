@@ -37,13 +37,13 @@ jobs:
       # so canonical/render/pipeline tests run rather than skip.
       - run: pip install -e ".[dev]"
       - run: pytest
-      # #30 跨语言单一真源：web/constants_generated.js 必须与 constants.py 同步
+      # #30 跨语言单一真源：web/src/services/constantsGenerated.ts 必须与 constants.py 同步
       # （改了 constants.py 却忘了重跑生成器即报错）。
       - name: web 常量与 constants.py 同步校验
         run: |
           python tools/gen_web_constants.py
-          git diff --exit-code web/constants_generated.js \
-            || (echo '::error::web/constants_generated.js 与 constants.py 不同步，请运行  python tools/gen_web_constants.py' && exit 1)
+          git diff --exit-code web/src/services/constantsGenerated.ts \
+            || (echo '::error::web/src/services/constantsGenerated.ts 与 constants.py 不同步，请运行  python tools/gen_web_constants.py' && exit 1)
 
   js-tests:
     runs-on: ubuntu-latest
@@ -58,7 +58,7 @@ jobs:
         run: npm ci
       - working-directory: web
         run: npm run build
-      # Pure-node parity tests pin web/geometry.js against the Python reference
-      # (web/test/expected.json).
+      # Pure-node parity tests pin Web TypeScript geometry services against the
+      # Python reference (web/test/expected.json).
       - working-directory: web
         run: npm test

@@ -18,7 +18,7 @@ def test_annotation_qa_documents_surface_path_and_export_consistency():
     assert "贴面" in text
     assert "导出点数与屏幕预览路径点一致" in text
     assert "validated:false" in text
-    assert "tools/test_annotate_model.mjs" in text
+    assert "tools/test_annotate_model.ts" in text
 
 
 def test_rstl_3dmm_prior_manifest_preserves_draft_status():

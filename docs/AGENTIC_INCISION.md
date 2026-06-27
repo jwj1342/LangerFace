@@ -6,9 +6,9 @@
 
 ## 当前架构
 
-- `web/incision_tools.js` 是切口候选生成的唯一运行时编排位置，`planIncisionWorkflow()` 会顺序执行确定性工具并生成 trace、ReAct plan、execution events、候选备选和审计结果。
-- `web/incision_agent_main.js` 直接调用浏览器 workflow，不再请求 `/api/agentic-incision`、`/stream` 或 session 接口。
-- `web/llm_provider.js` 只保留 OpenAI-compatible / vLLM Provider 的 Base URL 规范化和 `/models` 连通性测试；Provider 暂不参与候选几何、工具 trace 或 guardrails。
+- `web/src/services/incisionWorkflowTools.ts` 是切口候选生成的唯一运行时编排位置，`planIncisionWorkflow()` 会顺序执行确定性工具并生成 trace、ReAct plan、execution events、候选备选和审计结果。
+- `web/src/services/incisionAgentRuntime.ts` 直接调用浏览器 workflow，不再请求 `/api/agentic-incision`、`/stream` 或 session 接口。
+- `web/src/services/llmProvider.ts` 只保留 OpenAI-compatible / vLLM Provider 的 Base URL 规范化和 `/models` 连通性测试。Provider 暂不参与候选几何、工具 trace 或 guardrails。
 - `assets/agentic_incision_tool_schema.json` 只描述浏览器 workflow 工具、trace gate、候选比较和导出审阅契约。
 
 ## Workflow 步骤
@@ -58,9 +58,9 @@
 
 ```bash
 cd web
-node ../tools/test_incision_tools.mjs
-node ../tools/test_incision_agent_ui.mjs
-node ../tools/test_llm_provider.mjs
+node ../tools/test_incision_tools.ts
+node ../tools/test_incision_agent_ui.ts
+node ../tools/test_llm_provider.ts
 npm test
 npm run build
 ```
