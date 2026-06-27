@@ -3,6 +3,7 @@ import { FaceLandmarker, FilesetResolver, HandLandmarker } from "@mediapipe/task
 import { validateAtlas } from "./atlasContract.ts";
 import { assetUrls } from "./assetLoader.ts";
 import { CDN, TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.ts";
+import { dataSource } from "./dataSource.ts";
 import { els } from "./liveDom.ts";
 import { noseTriangles } from "./geometryAtlas.ts";
 import type { Triangle } from "./softBody.ts";
@@ -23,9 +24,9 @@ type AtlasPayload = {
 export async function ensureReady(): Promise<void> {
   if (modelState.landmarker) return;
   const [topologyRaw, rstlRaw, langerRaw] = await Promise.all([
-    fetch(assetUrls.topology).then((response) => response.json()),
-    fetch(assetUrls.atlasRstl).then((response) => response.json()),
-    fetch(assetUrls.atlasLanger).then((response) => response.json()),
+    dataSource.loadTopology("mediapipe-468"),
+    dataSource.loadAtlas("rstl"),
+    dataSource.loadAtlas("langer"),
   ]);
   const topology = topologyRaw as TopologyPayload | Triangle[];
   const rstl = rstlRaw as AtlasPayload;

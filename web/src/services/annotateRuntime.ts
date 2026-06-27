@@ -184,14 +184,10 @@ async function loadCanonical(): Promise<void> {
   } catch (err) {
     if (!isActiveSession(session)) return;
     setHint("FLAME 标准脸加载失败，回退到 MediaPipe 标准脸：" + errorMessage(err));
-    const [verts, topology] = await Promise.all([
-      fetchJSON<Vec3[]>(assetUrls.canonicalVertices, "MediaPipe 标准脸顶点"),
-      fetchJSON<MeshTopologyPayload | Triangle[]>(assetUrls.topology, "MediaPipe 标准脸拓扑"),
-    ]);
+    const head = await dataSource.getHeadMesh("mediapipe-468");
     if (!isActiveSession(session)) return;
-    const tris = Array.isArray(topology) ? topology : topology.triangles;
-    model.setTopology(Array.isArray(topology) ? undefined : topology);
-    viewer.setMesh(verts, tris, { showSurface: true });
+    model.setTopology(head.topology);
+    viewer.setMesh(head.vertices, head.triangles, { showSurface: true });
     onCanonical = true;
     els.drawMode.textContent = "MediaPipe 标准图谱";
     setHint("已回退到 MediaPipe 标准脸；可导出 mediapipe-468 图谱(tri,u,v)。");
@@ -265,7 +261,7 @@ async function cloudFitFlame(): Promise<void> {
   setHint("云端拟合 FLAME 中…（首次冷启动约 1–2 秒）");
   let observed: Vec3[];
   try {
-    observed = await fetchJSON(assetUrls.canonicalVertices, "标准脸顶点");
+    observed = (await dataSource.getHeadMesh("mediapipe-468")).vertices;
   } catch (err) {
     setHint("加载 MediaPipe 参考点失败：" + errorMessage(err));
     return;

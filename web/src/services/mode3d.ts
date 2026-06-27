@@ -2,6 +2,7 @@
 import { RIGID3D } from "./constants.ts";
 import { assetUrls } from "./assetLoader.ts";
 import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./cameraSource.ts";
+import { dataSource } from "./dataSource.ts";
 import { ctx as boundCtx, els } from "./liveDom.ts";
 import { toPixels } from "./geometryAtlas.ts";
 import { applySim, umeyama } from "./geometryTransform.ts";
@@ -65,7 +66,7 @@ let flameDemoOverlayContext: FlameOverlayContext | null = null;
 
 async function fetchCanonicalRef(): Promise<Vec3[]> {
   if (canonicalRef) return canonicalRef;
-  const cv = await fetch(assetUrls.canonicalVertices).then((r) => r.json()) as number[][];
+  const cv = (await dataSource.getHeadMesh("mediapipe-468")).vertices;
   canonicalRef = cv.map((p: number[]) => [p[0], -p[1], -p[2]]);  // 翻到屏幕手性 (y下,z入屏)
   return canonicalRef;
 }
@@ -564,14 +565,14 @@ export async function loadDemoRecon(): Promise<void> {
   reconState.reconVerts = flameForward(basis, ZERO_BETA, new Float64Array(basis.NE), 0);
   reconState.reconFaces = facesArray(basis);
   if (!flameDemoLines || !flameDemoOverlayContext) {
-    const [canonical, topology, atlas] = await Promise.all([
-      fetch(assetUrls.canonicalVertices).then((r) => r.json()) as Promise<Vec3[]>,
-      fetch(assetUrls.topology).then((r) => r.json()) as Promise<AnyRecord | Triangle[]>,
-      fetch(assetUrls.atlasRstl).then((r) => r.json()),
+    const [head, atlas] = await Promise.all([
+      dataSource.getHeadMesh("mediapipe-468"),
+      dataSource.loadAtlas("rstl"),
     ]);
-    const triangles = Array.isArray(topology) ? topology as Triangle[] : asTriangles(topology.triangles);
-    flameDemoOverlayContext = { canonical, triangles };
-    if (!flameDemoLines) flameDemoLines = mediaPipeAtlasToFlameLines(atlas, canonical, triangles, reconState.reconVerts, basis);
+    flameDemoOverlayContext = { canonical: head.vertices, triangles: head.triangles };
+    if (!flameDemoLines) {
+      flameDemoLines = mediaPipeAtlasToFlameLines(atlas, head.vertices, head.triangles, reconState.reconVerts, basis);
+    }
   }
   reconState.reconAtlasLines = flameDemoLines;
   reconState.reconColors = null;
