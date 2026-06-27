@@ -29,6 +29,13 @@ function createAssetServer() {
       res.end('{"system":"langer","version":"test","lines":[]}');
       return;
     }
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.end("missing");
+  });
+}
+
+function createHtmlFallbackAssetServer() {
+  return createServer((req, res) => {
     if (req.url === "/assets/atlas_rstl.json") {
       const html = "<!DOCTYPE html><html><body>SPA fallback</body></html>";
       res.writeHead(200, {
@@ -38,8 +45,8 @@ function createAssetServer() {
       res.end(html);
       return;
     }
-    res.writeHead(404, { "Content-Type": "text/plain" });
-    res.end("missing");
+    res.writeHead(404, { "Content-Type": "text/html; charset=utf-8" });
+    res.end("<!DOCTYPE html><html><body>not found</body></html>");
   });
 }
 
@@ -122,6 +129,9 @@ await withAssetBase(createAssetServer(), async () => {
     /资产加载失败：三角拓扑 HTTP 404/,
     "missing lazy-loaded assets fail loudly with the HTTP status",
   );
+});
+
+await withAssetBase(createHtmlFallbackAssetServer(), async () => {
   await assert.rejects(
     () => loadJsonAsset("atlasRstl", { label: "RSTL 图谱" }),
     /资产解析失败：RSTL 图谱 不是有效 JSON.*响应看起来是 HTML/,
