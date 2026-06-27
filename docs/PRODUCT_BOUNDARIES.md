@@ -9,6 +9,7 @@
 - 候选切口设计：皮下线性切口、皮表梭形切口、敏感结构 guardrails、医生审阅导出。
 - 低置信度辅助线索：自然皱襞、皱纹、皮表肿物边界候选，只作为 secondary cue。
 - 临床验证闭环：指标、失败分类、审阅记录、隐私与审计边界。
+- UI 产品化：医生主流程应转向病例向导式体验，现有标注器、Provider 配置、技术预览和工程 trace 进入设置、审计或开发者区域，详见 [CLINICAL_CASE_WORKFLOW_UI.md](CLINICAL_CASE_WORKFLOW_UI.md)。
 
 ## 当前暂缓
 
