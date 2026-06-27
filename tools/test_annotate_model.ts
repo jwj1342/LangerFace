@@ -121,7 +121,14 @@ ok(c0.fallback === false && c1.fallback === false, "单连通网格：跨三角�
 ok(conn.current.points.length > 2, "单连通网格：路由路径点 > 2（沿面而非直线）");
 const onMesh = (q) => connVerts.some((v) => close(v[0], q[0]) && close(v[1], q[1]) && close(v[2], q[2]));
 const middle = conn.current.points.slice(1, -1);
-ok(middle.length > 0 && middle.every((p) => onMesh(p.xyz)), "单连通网格：中间路径点全部落在网格顶点上（沿面）");
+const validSurfaceRef = (point) => (
+  Number.isInteger(point.tri)
+  && Array.isArray(point.bary)
+  && point.bary.every((value) => Number.isFinite(value) && value >= -1e-6 && value <= 1 + 1e-6)
+  && close(point.bary[0] + point.bary[1] + point.bary[2], 1, 1e-6)
+);
+ok(middle.length > 0 && middle.every(validSurfaceRef), "单连通网格：中间平滑点全部带表面 tri/bary 引用");
+ok(middle.some((point) => !onMesh(point.xyz)), "单连通网格：贴面路径经过平滑，不只输出折线顶点");
 
 // ── 无重心时拒绝导出图谱 ─────────────────────────────────────────────────────
 const m2 = new AnnotationModel();

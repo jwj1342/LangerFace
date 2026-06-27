@@ -1961,6 +1961,7 @@ for (const id of [
   assert.ok(exposesId(liveRouteControlsPanel, id), `React live route controls expose #${id}`);
 }
 for (const id of [
+  "liveInputCard",
   "uploadBtn",
   "fileInput",
   "camBtn",
@@ -2068,6 +2069,10 @@ assert.deepEqual(
 assert.ok(liveRouteControlsPanel.includes("useLiveStore"), "React live route controls read low-frequency route and recon state from Zustand");
 assert.ok(liveSourceControlsPanel.includes("useLiveStore"), "React live source controls read low-frequency source state from Zustand");
 assert.ok(liveRenderControlsPanel.includes("useLiveStore"), "React live render controls read low-frequency render state from Zustand");
+assert.ok(liveRouteControlsPanel.includes("扫描人脸重建"), "React 3D route exposes scanning as the primary reconstruction entry");
+assert.ok(liveRouteControlsPanel.includes('projectionLabel = mode3d === "project" ? "返回 3D 模型" : "投影到画面"'), "React 3D route projection button toggles back to model view");
+assert.ok(!liveRouteControlsPanel.includes("用示例脸"), "React 3D route no longer advertises the sample face entry");
+assert.ok(liveSourceControlsPanel.includes('visible={route !== "3d"}'), "React live source card hides during the 3D route");
 assert.ok(liveWorkbench.includes("Button asChild"), "React live workbench uses shared Button asChild for Router links");
 assert.ok(liveWorkbench.includes("Label"), "React live workbench uses the shared shadcn-style label primitive");
 assert.ok(liveRouteControlsPanel.includes("Button"), "React live route controls use the shared shadcn-style button primitive");

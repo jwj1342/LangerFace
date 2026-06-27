@@ -87,6 +87,11 @@
     grid-template-columns: 1fr 1fr;
   }
 
+  .live-workbench .mode-actions .btn {
+    min-height: 42px;
+    font-size: 13.5px;
+  }
+
   .live-workbench .live-hidden-inline {
     display: none;
   }
