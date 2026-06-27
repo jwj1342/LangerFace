@@ -24,6 +24,8 @@ export function LiveRouteControlsPanel() {
   const projectable = Boolean(recon?.projectable);
   const scanning = Boolean(recon?.scanActive);
   const twinActive = mode3d === "twin";
+  const projectionLabel = mode3d === "project" ? "返回 3D 模型" : "投影到画面";
+  const projectionDisabled = !hasModel || (!projectable && mode3d !== "project");
 
   return (
     <>
@@ -42,11 +44,21 @@ export function LiveRouteControlsPanel() {
           {snapshot?.route.hint || "当前是 2D 实时贴合模式，只显示稳定主流程。"}
         </Hint>
         <FieldGroup id="route3dPanel" className="live-stack" visible={is3d}>
-          <ButtonRow className="live-two-col">
-            <Button variant="workbench" id="reconDemoBtn" type="button" disabled={scanning} onClick={() => commands.route("load_demo_recon")}>用示例脸（无摄像头）</Button>
-            <Button variant="workbench" id="reconScanBtn" type="button" disabled={scanning} onClick={() => commands.route("start_scan")}>转头扫描</Button>
+          <Button
+            variant="workbench"
+            id="reconDemoBtn"
+            type="button"
+            hidden
+            aria-hidden="true"
+            tabIndex={-1}
+            disabled
+            onClick={() => commands.route("load_demo_recon")}
+          />
+          <ButtonRow className="live-two-col mode-actions">
+            <Button variant="workbenchPrimary" id="reconScanBtn" type="button" disabled={scanning} onClick={() => commands.route("start_scan")}>扫描人脸重建</Button>
+            <Button variant="workbench" id="project3dBtn" type="button" disabled={projectionDisabled} aria-pressed={mode3d === "project"} onClick={() => commands.route("project_3d")}>{projectionLabel}</Button>
           </ButtonRow>
-          <Hint id="reconStatus">{recon?.status || "先重建你的 3D 人头 → 可旋转查看 → 再投影到实时画面。"}</Hint>
+          <Hint id="reconStatus">{recon?.status || "请缓慢左右转头完成 3D 重建；完成后可旋转查看，或投影回实时画面。"}</Hint>
           <LiveScanPanel id="scanPanel" visible={scanning}>
             <LiveScanRow><span>扫描进度</span><span id="scanProgressVal">0%</span></LiveScanRow>
             <ProgressBar fillProps={{ id: "scanProgressBar" }} />
@@ -57,12 +69,11 @@ export function LiveRouteControlsPanel() {
               <span id="scanYawRight" />
             </LiveYawMeter>
           </LiveScanPanel>
-          <ButtonRow className="live-two-col">
+          <ButtonRow className="live-two-col" visible={false}>
             <Button variant="workbench" id="view3dBtn" type="button" disabled={!hasModel} aria-pressed={mode3d === "view"} onClick={() => commands.route("view_3d")}>旋转查看</Button>
-            <Button variant="workbench" id="project3dBtn" type="button" disabled={!hasModel || !projectable} aria-pressed={mode3d === "project"} onClick={() => commands.route("project_3d")}>投影到画面</Button>
           </ButtonRow>
-          <Button variant="workbench" id="reset3dBtn" type="button" disabled={!hasModel} onClick={() => commands.route("reset_3d")}>复位视角</Button>
-          <Button variant="workbenchPrimary" id="cloudFitFlameBtn" type="button" disabled={scanning} onClick={() => commands.route("start_twin")}>▶ 实时孪生（左真脸 / 右 FLAME 随动）</Button>
+          <Button variant="workbench" id="reset3dBtn" type="button" visible={false} disabled={!hasModel} onClick={() => commands.route("reset_3d")}>复位视角</Button>
+          <Button variant="workbenchPrimary" id="cloudFitFlameBtn" type="button" visible={false} disabled={scanning} onClick={() => commands.route("start_twin")}>▶ 实时孪生（左真脸 / 右 FLAME 随动）</Button>
           <CheckboxField
             id="flameHeadToggleWrap"
             hiddenClassName="live-hidden-inline"

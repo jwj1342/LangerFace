@@ -94,6 +94,16 @@ export function barycentric(p: Vec3, a: Vec3, b: Vec3, c: Vec3): [number, number
 
 const round6 = (value: number) => Math.round(value * 1e6) / 1e6;
 const dist3 = (a: Vec3, b: Vec3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+const dot3 = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const sub3 = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const add3 = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const scale3 = (a: Vec3, scale: number): Vec3 => [a[0] * scale, a[1] * scale, a[2] * scale];
+const lerp3 = (a: Vec3, b: Vec3, t: number): Vec3 => [
+  a[0] + (b[0] - a[0]) * t,
+  a[1] + (b[1] - a[1]) * t,
+  a[2] + (b[2] - a[2]) * t,
+];
+const SURFACE_SMOOTH_MAX_POINTS = 160;
 
 function vertexPoint(surface: SurfaceGraph, vertexIndex: number, exportable: boolean): AnnotationPoint {
   const ref = surface.vertexRefs[vertexIndex];
@@ -103,6 +113,89 @@ function vertexPoint(surface: SurfaceGraph, vertexIndex: number, exportable: boo
     bary: ref?.bary ?? null,
     exportable,
   };
+}
+
+function closestPointOnTriangle(p: Vec3, a: Vec3, b: Vec3, c: Vec3): Vec3 {
+  const ab = sub3(b, a);
+  const ac = sub3(c, a);
+  const ap = sub3(p, a);
+  const d1 = dot3(ab, ap);
+  const d2 = dot3(ac, ap);
+  if (d1 <= 0 && d2 <= 0) return a.slice() as Vec3;
+
+  const bp = sub3(p, b);
+  const d3 = dot3(ab, bp);
+  const d4 = dot3(ac, bp);
+  if (d3 >= 0 && d4 <= d3) return b.slice() as Vec3;
+
+  const vc = d1 * d4 - d3 * d2;
+  if (vc <= 0 && d1 >= 0 && d3 <= 0) return add3(a, scale3(ab, d1 / (d1 - d3)));
+
+  const cp = sub3(p, c);
+  const d5 = dot3(ab, cp);
+  const d6 = dot3(ac, cp);
+  if (d6 >= 0 && d5 <= d6) return c.slice() as Vec3;
+
+  const vb = d5 * d2 - d1 * d6;
+  if (vb <= 0 && d2 >= 0 && d6 <= 0) return add3(a, scale3(ac, d2 / (d2 - d6)));
+
+  const va = d3 * d6 - d5 * d4;
+  if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0) {
+    return add3(b, scale3(sub3(c, b), (d4 - d3) / ((d4 - d3) + (d5 - d6))));
+  }
+
+  const denom = 1 / (va + vb + vc);
+  const v = vb * denom;
+  const w = vc * denom;
+  return add3(a, add3(scale3(ab, v), scale3(ac, w)));
+}
+
+function projectSurfacePoint(surface: SurfaceGraph, xyz: Vec3, exportable: boolean): AnnotationPoint | null {
+  let best: { tri: number; xyz: Vec3; distance: number } | null = null;
+  for (let tri = 0; tri < surface.tris.length; tri++) {
+    const triangle = surface.tris[tri];
+    const projected = closestPointOnTriangle(
+      xyz,
+      surface.verts[triangle[0]],
+      surface.verts[triangle[1]],
+      surface.verts[triangle[2]],
+    );
+    const distance = dist3(xyz, projected);
+    if (!best || distance < best.distance) best = { tri, xyz: projected, distance };
+  }
+  if (!best) return null;
+  const triangle = surface.tris[best.tri];
+  return {
+    xyz: best.xyz,
+    tri: best.tri,
+    bary: barycentric(best.xyz, surface.verts[triangle[0]], surface.verts[triangle[1]], surface.verts[triangle[2]]),
+    exportable,
+  };
+}
+
+function smoothSurfacePolyline(surface: SurfaceGraph, points: AnnotationPoint[]): AnnotationPoint[] {
+  if (points.length < 4 || points.length > SURFACE_SMOOTH_MAX_POINTS) return points;
+  const exportable = points.every((point) => point.exportable !== false);
+  const iterations = points.length > SURFACE_SMOOTH_MAX_POINTS / 2 ? 1 : 2;
+  let current = points;
+  for (let iter = 0; iter < iterations; iter++) {
+    const next: AnnotationPoint[] = [current[0]];
+    for (let index = 0; index + 1 < current.length; index++) {
+      const a = current[index];
+      const b = current[index + 1];
+      const q = projectSurfacePoint(surface, lerp3(a.xyz, b.xyz, 0.25), exportable);
+      const r = projectSurfacePoint(surface, lerp3(a.xyz, b.xyz, 0.75), exportable);
+      if (!q || !r) return points;
+      if (dist3(next[next.length - 1].xyz, q.xyz) > 1e-9) next.push(q);
+      if (dist3(next[next.length - 1].xyz, r.xyz) > 1e-9) next.push(r);
+    }
+    if (dist3(next[next.length - 1].xyz, current[current.length - 1].xyz) > 1e-9) {
+      next.push(current[current.length - 1]);
+    }
+    current = next;
+    if (current.length > SURFACE_SMOOTH_MAX_POINTS * 2) return points;
+  }
+  return current;
 }
 
 function buildSurface(verts: Vec3[], tris: Triangle[]): SurfaceGraph {
@@ -231,7 +324,7 @@ function nearestSurfacePath(
     if (dist3(out[out.length - 1].xyz, point.xyz) > 1e-9 && dist3(point.xyz, b.xyz) > 1e-9) out.push(point);
   }
   if (dist3(out[out.length - 1].xyz, b.xyz) > 1e-9) out.push(b);
-  return { points: out, fallback: false };
+  return { points: smoothSurfacePolyline(surface, out), fallback: false };
 }
 
 function controlsOf(line: AnnotationLine): AnnotationPoint[] {

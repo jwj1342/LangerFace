@@ -12,9 +12,10 @@ export function LiveSourceControlsPanel() {
   const paused = Boolean(snapshot?.source.paused);
   const recording = Boolean(snapshot?.recording);
   const hasSource = running || Boolean(snapshot?.source.kind);
+  const route = snapshot?.route.route || "2d";
 
   return (
-    <Card>
+    <Card id="liveInputCard" visible={route !== "3d"}>
       <Button variant="workbenchPrimary" id="uploadBtn" type="button" onClick={() => commands.source("upload_source")}>⬆&nbsp; 上传照片 / 视频</Button>
       <Input type="file" id="fileInput" accept="image/*,video/*" hidden />
       <ButtonRow>

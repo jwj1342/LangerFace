@@ -359,7 +359,13 @@ function handleReactRouteCommand(event: Event): void {
   if (command === "load_demo_recon") runLiveAction("load_demo_recon", loadDemoRecon);
   if (command === "start_scan") runLiveAction("start_scan", startScan);
   if (command === "view_3d") runLiveAction("view_3d", () => { if (reconState.reconVerts) setMode3d("view"); });
-  if (command === "project_3d") runLiveAction("project_3d", () => { if (reconState.reconVerts && reconState.reconProjectable) setMode3d("project"); });
+  if (command === "project_3d") {
+    runLiveAction("project_3d", () => {
+      if (!reconState.reconVerts) return;
+      if (reconState.mode3d === "project") setMode3d("view");
+      else if (reconState.reconProjectable) setMode3d("project");
+    });
+  }
   if (command === "reset_3d") runLiveAction("reset_3d", resetView3d);
   if (command === "start_twin") runLiveAction("start_twin", startTwin);
   if (command === "toggle_twin_head") runLiveAction("toggle_twin_head", toggleTwinHead);
@@ -396,7 +402,13 @@ function bindLiveEvents(signal: AbortSignal): void {
     els.reconDemo.addEventListener("click", () => runLiveAction("load_demo_recon", loadDemoRecon), { signal });
     els.reconScan.addEventListener("click", () => runLiveAction("start_scan", startScan), { signal });
     els.view3d.addEventListener("click", () => runLiveAction("view_3d", () => { if (reconState.reconVerts) setMode3d("view"); }), { signal });
-    els.project3d.addEventListener("click", () => runLiveAction("project_3d", () => { if (reconState.reconVerts && reconState.reconProjectable) setMode3d("project"); }), { signal });
+    els.project3d.addEventListener("click", () => {
+      runLiveAction("project_3d", () => {
+        if (!reconState.reconVerts) return;
+        if (reconState.mode3d === "project") setMode3d("view");
+        else if (reconState.reconProjectable) setMode3d("project");
+      });
+    }, { signal });
     els.reset3d.addEventListener("click", () => runLiveAction("reset_3d", resetView3d), { signal });
     els.cloudFitFlame.addEventListener("click", () => runLiveAction("start_twin", startTwin), { signal });
     els.flameStd.addEventListener("change", () => runLiveAction("toggle_twin_head", toggleTwinHead), { signal });

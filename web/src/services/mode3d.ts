@@ -535,6 +535,7 @@ export function setMode3d(m: string): void {
   reconState.mode3d = m;
   els.view3d.setAttribute("aria-pressed", String(m === "view"));
   els.project3d.setAttribute("aria-pressed", String(m === "project"));
+  els.project3d.textContent = m === "project" ? "返回 3D 模型" : "投影到画面";
   els.scanPanel.classList.add("hidden"); els.scanToast.classList.add("hidden");
   if (m === "view") {
     stopSource(); sourceState.running = false;
@@ -545,6 +546,7 @@ export function setMode3d(m: string): void {
   } else {
     if (reconState.viewerRAF != null) cancelAnimationFrame(reconState.viewerRAF);
     els.three.classList.add("hidden"); els.canvas.classList.remove("hidden");
+    els.project3d.disabled = false;
     startCamera();  // 复用主循环；projectVerts 注入重建配准
   }
 }
@@ -739,8 +741,8 @@ function finishScan(
   }
   recordEvent("scan.finished", scanDetail);
   els.reconStatus.textContent = lowDepthConfidence
-    ? `重建完成（深度置信度低：偏航跨度 ${(ymax - ymin).toFixed(2)} < ${YAW_SPAN_MIN}，缺侧脸视角，深度不可靠）：${N} 帧。可旋转查看 / 投影。`
-    : `重建完成：${N} 帧，偏航 ${ymin.toFixed(2)}~${ymax.toFixed(2)}。可旋转查看 / 投影。`;
+    ? `重建完成（深度置信度低：偏航跨度 ${(ymax - ymin).toFixed(2)} < ${YAW_SPAN_MIN}，缺侧脸视角，深度不可靠）：${N} 帧。可旋转查看，或投影到画面。`
+    : `重建完成：${N} 帧，偏航 ${ymin.toFixed(2)}~${ymax.toFixed(2)}。可旋转查看，或投影到画面。`;
   buildViewer();
 }
 
@@ -754,7 +756,7 @@ export function enterRoute(route: "2d" | "3d"): void {
     if (els.routeModeHint) els.routeModeHint.textContent = "当前是 3D 重建 / 标注上下文，可进入 3D 线标注和沿 RSTL 闭合演示。";
     sourceState.running = false; stopSource();
     els.zoomStrip.classList.add("hidden"); els.canvas.classList.add("hidden");
-    setMsg(reconState.reconVerts ? null : "3D Beta：请先「用示例脸」或「转头扫描」"); setLive(false, "3D Beta");
+    setMsg(reconState.reconVerts ? null : "3D Beta：请先扫描人脸重建"); setLive(false, "3D Beta");
     if (reconState.reconVerts) buildViewer();
   } else {
     reconState.scan = null;
