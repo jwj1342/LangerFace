@@ -1087,6 +1087,50 @@
     line-height: 1.45;
   }
 
+  .case-review-output {
+    display: grid;
+    gap: 12px;
+  }
+
+  .case-export-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .case-export-actions .btn {
+    min-height: 42px;
+  }
+
+  .case-export-privacy {
+    display: grid;
+    gap: 1px;
+    border: 1px solid rgb(255 255 255 / 0.1);
+    background: rgb(255 255 255 / 0.1);
+  }
+
+  .case-export-privacy p {
+    display: grid;
+    grid-template-columns: 86px minmax(0, 1fr);
+    gap: 10px;
+    margin: 0;
+    background: #0f141b;
+    padding: 8px 10px;
+  }
+
+  .case-export-privacy b {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .case-export-privacy span {
+    color: var(--clinical-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
   .case-section h2 {
     margin: 0;
     color: var(--clinical-text-primary);
@@ -3061,7 +3105,8 @@
 .case-workflow-page .case-candidate-rationale,
 .case-workflow-page .case-closure-metrics > div,
 .case-workflow-page .case-layer-toggle,
-.case-workflow-page .case-layer-control {
+.case-workflow-page .case-layer-control,
+.case-workflow-page .case-export-privacy p {
   border-color: var(--clinical-dark-border);
   background: var(--clinical-dark-panel-2);
   color: var(--clinical-text-primary);
@@ -3171,9 +3216,11 @@
   .case-rationale-grid,
   .case-rule-grid,
   .case-candidate-metrics,
+  .case-export-actions,
   .case-handoff-list p,
   .case-rationale-audit p,
   .case-candidate-rationale,
+  .case-export-privacy p,
   .settings-boundary-list p {
     grid-template-columns: 1fr;
   }

@@ -1,4 +1,4 @@
-import { Activity, ArrowLeft, ArrowRight, CheckCircle2, FileText, Layers3, ListChecks, Save, ShieldAlert, SlidersHorizontal } from "lucide-react";
+import { Activity, ArrowLeft, ArrowRight, CheckCircle2, Download, FileText, Layers3, ListChecks, Save, ShieldAlert, SlidersHorizontal } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -27,6 +27,12 @@ const STEP_LABELS: Record<ClinicalCaseStep, string> = {
   plan: "切口规划",
   review: "方案确认",
 };
+
+const CLINICAL_COMPLIANCE_NOTES = [
+  "本系统为临床辅助设计工具，不替代医生的专业判断，所有手术方案需由执业医师结合临床查体最终确认。",
+  "系统默认适应证为可直接拉拢缝合的皮肤 / 皮下肿物；需皮瓣 / 植皮修复的病例，仅作切口方向参考。",
+  "恶性病灶的安全切缘需以病理检查结果为最终标准。",
+] as const;
 
 function parseOptionalNumber(value: string) {
   if (!value.trim()) return null;
@@ -162,6 +168,125 @@ function candidateStatusLabel(status: CaseIncisionCandidateRecord["status"]) {
 
 function formatCandidateMetric(value: number | null, unit = "mm") {
   return value == null ? "待定" : `${value.toFixed(1)} ${unit}`;
+}
+
+function safeExportFilePart(value: string) {
+  const normalized = value.replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "");
+  return normalized.slice(0, 64) || "case";
+}
+
+function downloadTextFile(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type });
+  const href = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(href);
+}
+
+function buildCaseReviewExport(
+  activeCase: ClinicalCaseRecord,
+  selectedCandidate: CaseIncisionCandidateRecord | null,
+) {
+  return {
+    schema: "langerface-case-review-export/v0.1",
+    exportedAt: new Date().toISOString(),
+    privacy: {
+      rawImageIncluded: false,
+      rawVideoIncluded: false,
+      canvasPixelsIncluded: false,
+      providerSecretIncluded: false,
+      note: "仅包含结构化病例参数、候选摘要、规则记录和合规提示。",
+    },
+    case: {
+      id: activeCase.id,
+      title: activeCase.title,
+      status: activeCase.status,
+      createdAt: activeCase.createdAt,
+      updatedAt: activeCase.updatedAt,
+      patientContext: activeCase.patientContext,
+      acquisition: activeCase.acquisition,
+      lesion: activeCase.lesion,
+      layers: activeCase.layers,
+      closureSimulation: activeCase.closureSimulation,
+      selectedCandidateId: activeCase.selectedCandidateId,
+      selectedCandidate,
+      incisionCandidates: activeCase.incisionCandidates,
+    },
+    clinicalCompliance: [...CLINICAL_COMPLIANCE_NOTES],
+  };
+}
+
+function buildCaseReportDraft(
+  activeCase: ClinicalCaseRecord,
+  selectedCandidate: CaseIncisionCandidateRecord | null,
+) {
+  const lesionMargin = activeCase.lesion.marginStrategy === "expanded_margin"
+    ? `扩大安全切缘 ${activeCase.lesion.safetyMarginMm ?? "未填"} mm`
+    : "常规完整切除";
+  const candidateMetrics = selectedCandidate
+    ? [
+        `- 候选：${selectedCandidate.label} · ${candidateKindLabel(selectedCandidate.kind)}`,
+        `- 长度：${formatCandidateMetric(selectedCandidate.lengthMm)}`,
+        `- 宽度 / 比例：${selectedCandidate.widthMm == null ? "线性切口" : `${selectedCandidate.widthMm.toFixed(1)} mm / ${selectedCandidate.ratio?.toFixed(1) ?? "待定"}:1`}`,
+        `- 尖端角：${selectedCandidate.tipAngleDeg == null ? "不适用" : `${selectedCandidate.tipAngleDeg}°`}`,
+        `- 复核提示：${selectedCandidate.guardrailSummary}`,
+      ].join("\n")
+    : "- 当前尚未保存候选方案。";
+  const ruleTrace = selectedCandidate?.provenance.ruleTrace.length
+    ? selectedCandidate.provenance.ruleTrace.map((item) => `- ${item}`).join("\n")
+    : "- 规则记录待补充。";
+  const compliance = CLINICAL_COMPLIANCE_NOTES.map((item) => `- ${item}`).join("\n");
+
+  return [
+    "# 面部松弛皮肤张力线智能切口设计系统 - 报告草案",
+    "",
+    `- 导出时间：${new Date().toISOString()}`,
+    `- 病例编号：${activeCase.id}`,
+    `- 病例标题：${activeCase.title}`,
+    `- 当前状态：${activeCase.status}`,
+    "",
+    "## 病例前置参数",
+    "",
+    `- 年龄分档：${activeCase.patientContext.ageBandLabel}`,
+    `- 采集方式：${activeCase.acquisition.sourceLabel}`,
+    `- 病灶层次：${activeCase.lesion.layerLabel}`,
+    `- 病灶直径：${activeCase.lesion.diameterMm ?? "未填"} mm`,
+    `- 病灶深度：${activeCase.lesion.depthMm ?? "未填"} mm`,
+    `- 切缘策略：${lesionMargin}`,
+    "",
+    "## 图层状态",
+    "",
+    `- RSTL：${activeCase.layers.rstl ? `${rstlDensityLabel(activeCase.layers.rstlDensity)} / ${percentLabel(activeCase.layers.rstlOpacity)}` : "关闭"}`,
+    `- 个性化皮纹：${activeCase.layers.personalizedWrinkles ? percentLabel(activeCase.layers.wrinkleOpacity) : "关闭"}`,
+    `- 混合场：${activeCase.layers.blendedField ? "开启" : "关闭"}`,
+    `- 切口设计：${activeCase.layers.incisionDesign ? "开启" : "关闭"}`,
+    "",
+    "## 当前候选",
+    "",
+    candidateMetrics,
+    "",
+    "## 规则记录",
+    "",
+    ruleTrace,
+    "",
+    "## 张力闭合模拟",
+    "",
+    `- 状态：${closureStatusLabel(activeCase.closureSimulation.status)}`,
+    `- 评分：${activeCase.closureSimulation.score == null ? "未运行" : `${activeCase.closureSimulation.score} / 100`}`,
+    `- 结论：${activeCase.closureSimulation.label}`,
+    `- 摘要：${activeCase.closureSimulation.summary}`,
+    "",
+    "## 临床合规提示",
+    "",
+    compliance,
+    "",
+    "> 本报告为前端本地生成的草案，不等于正式病历保存或最终手术方案。",
+    "",
+  ].join("\n");
 }
 
 function buildCaseCandidate(activeCase: ClinicalCaseRecord): CaseIncisionCandidateRecord | null {
@@ -1010,6 +1135,24 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
 function ReviewStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   const updateActiveCase = useCaseStore((state) => state.updateActiveCase);
   const selectedCandidate = activeCase.incisionCandidates.find((candidate) => candidate.id === activeCase.selectedCandidateId) ?? null;
+  const exportedCase: ClinicalCaseRecord = { ...activeCase, status: "exported", currentStep: "review" };
+  const exportStem = safeExportFilePart(activeCase.id);
+  const exportReviewJson = () => {
+    downloadTextFile(
+      `${exportStem}-review-export.json`,
+      JSON.stringify(buildCaseReviewExport(exportedCase, selectedCandidate), null, 2),
+      "application/json;charset=utf-8",
+    );
+    updateActiveCase({ status: "exported", currentStep: "review" });
+  };
+  const exportReportDraft = () => {
+    downloadTextFile(
+      `${exportStem}-report-draft.md`,
+      buildCaseReportDraft(exportedCase, selectedCandidate),
+      "text/markdown;charset=utf-8",
+    );
+    updateActiveCase({ status: "exported", currentStep: "review" });
+  };
 
   return (
     <div className="case-workflow-stack" id="caseReviewStep">
@@ -1045,8 +1188,20 @@ function ReviewStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
 
         <Card>
           <CardHeader><span>保存与导出</span><Save size={16} /></CardHeader>
-          <CardContent>
+          <CardContent className="case-review-output">
             <Hint>当前病例草稿会自动保存到本设备。后续接入院内或云端病例库后，可沿用同一入口恢复结构化病例记录。</Hint>
+            <div className="case-export-actions" aria-label="本地导出">
+              <Button type="button" variant="workbenchPrimary" onClick={exportReportDraft}>
+                <FileText size={16} />下载报告草案
+              </Button>
+              <Button type="button" variant="workbench" onClick={exportReviewJson}>
+                <Download size={16} />导出脱敏 JSON
+              </Button>
+            </div>
+            <div className="case-export-privacy">
+              <p><b>导出内容</b><span>病例参数、候选摘要、规则记录、闭合模拟和合规提示。</span></p>
+              <p><b>隐私边界</b><span>不包含原始照片、视频帧、画布像素、3D 纹理或 Provider 密钥。</span></p>
+            </div>
             <CaseHandoffPanel
               eyebrow="受控导出入口"
               title="候选方案审阅与导出"

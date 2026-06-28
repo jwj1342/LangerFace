@@ -94,6 +94,12 @@ assert.ok(caseRoute.includes("设为当前候选"), "case planning lets clinicia
 assert.ok(caseRoute.includes("候选方案队列"), "case workflow exposes saved candidates as a queue");
 assert.ok(caseRoute.includes("当前候选"), "case review summarizes the selected candidate");
 assert.ok(caseRoute.includes("规则记录"), "case candidates expose clinician-readable rule provenance");
+assert.ok(caseRoute.includes("buildCaseReviewExport"), "case review can build a sanitized structured export");
+assert.ok(caseRoute.includes("buildCaseReportDraft"), "case review can build a local report draft");
+assert.ok(caseRoute.includes("导出脱敏 JSON"), "case review exposes a sanitized JSON export action");
+assert.ok(caseRoute.includes("下载报告草案"), "case review exposes a report draft export action");
+assert.ok(caseRoute.includes("rawImageIncluded: false"), "case review export explicitly excludes raw images");
+assert.ok(caseRoute.includes("providerSecretIncluded: false"), "case review export explicitly excludes provider secrets");
 assert.ok(caseRoute.includes("3.5:1"), "case workflow exposes the child/tight long-axis ratio in planning rationale");
 assert.ok(caseRoute.includes("30° / 3:1"), "case workflow exposes the adult baseline angle and ratio in planning rationale");
 assert.ok(caseRoute.includes("2.5:1"), "case workflow exposes the older/lax long-axis ratio in planning rationale");
@@ -239,6 +245,9 @@ assert.ok(styles.includes(".case-rationale-audit"), "styles implement dense plan
 assert.ok(styles.includes(".case-candidate-panel"), "styles implement the case candidate panel");
 assert.ok(styles.includes(".case-candidate-metrics"), "styles implement dense candidate metrics");
 assert.ok(styles.includes(".case-candidate-rationale"), "styles implement candidate provenance rows");
+assert.ok(styles.includes(".case-review-output"), "styles implement the review output surface");
+assert.ok(styles.includes(".case-export-actions"), "styles implement compact case export actions");
+assert.ok(styles.includes(".case-export-privacy"), "styles implement privacy boundary rows for export");
 assert.ok(styles.includes(".case-closure-grid"), "styles implement the embedded closure simulation panel");
 assert.ok(styles.includes(".case-closure-meter"), "styles implement closure simulation score feedback");
 assert.ok(styles.includes(".case-step-stage-grid"), "styles prioritize a viewport-plus-command step layout");
