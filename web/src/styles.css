@@ -896,6 +896,11 @@
     height: 100% !important;
   }
 
+  .case-lobby-stage .case-face-asset-frame {
+    height: clamp(240px, 30vh, 360px);
+    min-height: 240px;
+  }
+
   .case-face-clinical-overlay {
     position: absolute;
     inset: 0;

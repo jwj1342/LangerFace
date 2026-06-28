@@ -26,6 +26,7 @@ const dataSource = fs.readFileSync("src/services/dataSource.ts", "utf8");
 const caseStore = fs.readFileSync("src/stores/caseStore.ts", "utf8");
 const styles = fs.readFileSync("src/styles.css", "utf8");
 const visualCapture = fs.readFileSync("../tools/capture_case_workflow_visual.ts", "utf8");
+const interactionCapture = fs.readFileSync("../tools/capture_case_workflow_interactions.ts", "utf8");
 
 assert.ok(app.includes('path="/cases"'), "React Router exposes the clinical case lobby");
 assert.ok(app.includes('path="/case/:caseId/evaluate"'), "React Router exposes the case evaluation step");
@@ -44,7 +45,10 @@ assert.ok(dashboard.includes("病例大厅"), "case lobby replaces the technical
 assert.ok(dashboard.includes("工作台大厅"), "case lobby includes a product landing surface");
 assert.ok(dashboard.includes("case-lobby-landing"), "case lobby renders a dedicated landing section");
 assert.ok(dashboard.includes("case-lobby-stage"), "case lobby includes a dark clinical viewport preview");
-assert.ok(dashboard.includes("ClinicalFacePreview"), "case lobby reuses the high-fidelity clinical face preview component");
+assert.ok(dashboard.includes("CaseLobbyStagePreview"), "case lobby owns a dedicated high-fidelity preview component");
+assert.ok(dashboard.includes("ThreePreviewScene"), "case lobby renders the real standard face asset scene");
+assert.ok(dashboard.includes("useStandardFaceAssets"), "case lobby lazy-loads the standard face preview assets");
+assert.ok(dashboard.includes("case-lobby-asset-frame"), "case lobby wraps the loaded 3D preview in a stable viewport frame");
 assert.ok(dashboard.includes("case-workflow-roadmap"), "case lobby shows the clinical workflow roadmap");
 assert.ok(dashboard.includes('to="/case/new"'), "case lobby routes new cases through the preflight setup page");
 assert.ok(!dashboard.includes("const createCase"), "case lobby does not bypass preflight setup by creating a case directly");
@@ -319,6 +323,7 @@ assert.ok(styles.includes(".case-clinical-workspace"), "styles implement the two
 assert.ok(styles.includes(".case-workspace-canvas"), "styles give the face viewport primary workspace ownership");
 assert.ok(styles.includes(".case-workspace-panel"), "styles make parameter panels internally scrollable");
 assert.ok(styles.includes(".case-face-asset-frame"), "styles size the real standard face asset canvas in the clinical workspace");
+assert.ok(styles.includes(".case-lobby-stage .case-face-asset-frame"), "styles keep the case lobby 3D preview in a stable viewport frame");
 assert.ok(styles.includes(".case-face-clinical-overlay"), "styles keep clinical overlays above the loaded 3D face model");
 assert.ok(styles.includes(".case-workspace-canvas .case-face-asset-frame"), "styles keep the 3D face asset expanded inside the workspace");
 assert.ok(styles.includes(".case-viewport-mode-switch"), "styles implement compact 2D/3D/live viewport mode controls");
@@ -376,6 +381,7 @@ assert.ok(styles.includes(".surgery-highlight-copy"), "styles avoid green-as-pri
 assert.ok(!styles.includes(".surgery-green-copy"), "styles remove the legacy green closure copy class");
 
 assert.ok(visualCapture.includes("incisionCandidates"), "Playwright visual case seed includes saved candidates");
+assert.ok(visualCapture.includes(".case-lobby-stage .case-face-asset-frame[data-loaded='true']"), "Playwright visual case smoke test waits for the lobby 3D preview asset");
 assert.ok(visualCapture.includes("/app/case/new"), "Playwright visual case smoke test captures the new-case setup page");
 assert.ok(visualCapture.includes("02-new-case.png"), "Playwright visual case smoke test writes a new-case setup screenshot");
 assert.ok(!visualCapture.includes("--full-page"), "Playwright visual case smoke test captures viewport screenshots instead of long full-page screenshots");
@@ -392,5 +398,11 @@ assert.ok(visualCapture.includes("wrinkleOpacity: 0.7"), "Playwright visual case
 assert.ok(visualCapture.includes("图层状态：RSTL 高密度 78%，皮纹 70%"), "Playwright visual case seed exposes layer state in candidate provenance");
 assert.ok(visualCapture.includes("reviewRecord"), "Playwright visual case seed includes a structured review record");
 assert.ok(visualCapture.includes("示例医生"), "Playwright visual case seed exercises the reviewer field");
+assert.ok(interactionCapture.includes("waitForLobbyPreview"), "interactive visual flow waits for the lobby 3D preview asset");
+assert.ok(interactionCapture.includes("13-compact-plan-1280x720"), "interactive visual flow captures compact planning viewport");
+assert.ok(interactionCapture.includes("14-compact-review-1280x720"), "interactive visual flow captures compact review viewport");
+assert.ok(interactionCapture.includes("expectNoBrowserScroll"), "interactive visual flow asserts browser-level scrolling remains locked");
+assert.ok(interactionCapture.includes("切换实时叠加"), "interactive visual flow verifies live overlay stays inside the case workflow");
+assert.ok(!interactionCapture.includes("fullPage: true"), "interactive visual flow captures viewport screenshots instead of full-page screenshots");
 
 console.log("test_case_workflow_ui: clinical case workflow contracts passed");

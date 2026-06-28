@@ -87,6 +87,11 @@ async function waitForFaceViewport(page) {
   await page.waitForTimeout(900);
 }
 
+async function waitForLobbyPreview(page) {
+  await expect(page.locator(".case-lobby-stage .case-face-asset-frame[data-loaded='true']")).toBeVisible({ timeout: 20000 });
+  await page.waitForTimeout(900);
+}
+
 async function expectNoBrowserScroll(page) {
   const metrics = await page.evaluate(() => {
     window.scrollTo(0, 80);
@@ -114,6 +119,7 @@ test("clinical case workflow click path", async ({ page }) => {
 
   await page.goto(\`\${baseUrl}/app/cases\`);
   await expect(page.locator("#caseDashboard")).toBeVisible();
+  await waitForLobbyPreview(page);
   await expectNoBrowserScroll(page);
   await shot(page, "01-dashboard-empty");
 

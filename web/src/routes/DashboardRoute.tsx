@@ -13,26 +13,57 @@ import {
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 
-import {
-  ReactPage,
-  ReactShell,
-  ReactShellMain,
-  ReactShellNavLink,
-  ReactShellSidebar,
-} from "../components/ReactShell";
-import { ClinicalFacePreview } from "../components/ClinicalFacePreview";
+import { ReactPage, ReactShell, ReactShellMain, ReactShellNavLink, ReactShellSidebar } from "../components/ReactShell";
+import { ThreePreviewScene } from "../components/ThreePreviewScene";
 import { WorkbenchBrand } from "../components/WorkbenchBrand";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { Hint } from "../components/ui/hint";
 import { RouteStatus } from "../components/ui/status-badge";
 import { useReactRouteLifecycle } from "../hooks/useReactRouteLifecycle";
+import { useStandardFaceAssets } from "../hooks/useStandardFaceAssets";
 import { type ClinicalCaseStep } from "../services/dataSource";
 import { useAppStore } from "../stores/appStore";
 import { useCaseStore } from "../stores/caseStore";
 
 function caseStepPath(caseId: string, step: ClinicalCaseStep) {
   return `/case/${caseId}/${step}`;
+}
+
+function CaseLobbyStagePreview() {
+  const { assets, loadingText } = useStandardFaceAssets({
+    failedRouteStatus: "病例大厅三维预览加载失败",
+    initialLoadingText: "正在加载病例大厅三维预览",
+    loadedAssetStatus: "病例大厅三维预览已加载",
+    loadedRouteStatus: "病例大厅已就绪",
+    loadingAssetStatus: "病例大厅三维预览加载中",
+    loadingRouteStatus: "病例大厅预览加载中",
+    progressFallbackLabel: "病例大厅三维预览",
+  });
+
+  return (
+    <div className="case-lobby-stage" aria-label="临床画布预览">
+      <div className="case-stage-topline">
+        <span>3D 面部重建</span>
+        <b>{assets ? "预览就绪" : "加载中"}</b>
+      </div>
+      <div className="case-face-asset-frame case-lobby-asset-frame" data-loaded={assets ? "true" : "false"}>
+        <ThreePreviewScene assets={assets} loadingText={loadingText} />
+        <div className="case-face-clinical-overlay" aria-hidden="true">
+          <span className="case-face-overlay-label">病例大厅三维预览</span>
+          <span className="case-face-overlay-lesion" />
+          <span className="case-face-overlay-incision" />
+          <span className="case-face-ruler"><b>10 mm</b></span>
+          <span className="case-face-coordinate">R12 / Z05</span>
+        </div>
+      </div>
+      <div className="case-stage-metrics">
+        <div><span>RSTL</span><b>就绪</b></div>
+        <div><span>皮纹</span><b>待追踪</b></div>
+        <div><span>切口</span><b>未生成</b></div>
+      </div>
+    </div>
+  );
 }
 
 export function DashboardRoute() {
@@ -130,18 +161,7 @@ export function DashboardRoute() {
                 <div><span>流程阶段</span><b>评估 / 规划 / 确认</b></div>
                 <div><span>保存反馈</span><b>本地草稿</b></div>
               </div>
-              <div className="case-lobby-stage" aria-label="临床画布预览">
-                <div className="case-stage-topline">
-                  <span>3D 面部重建</span>
-                  <b>待输入</b>
-                </div>
-                <ClinicalFacePreview />
-                <div className="case-stage-metrics">
-                  <div><span>RSTL</span><b>就绪</b></div>
-                  <div><span>皮纹</span><b>待追踪</b></div>
-                  <div><span>切口</span><b>未生成</b></div>
-                </div>
-              </div>
+              <CaseLobbyStagePreview />
             </section>
 
             <section className="case-workflow-roadmap" aria-label="临床流程">

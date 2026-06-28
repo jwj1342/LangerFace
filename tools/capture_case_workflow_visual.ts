@@ -231,7 +231,7 @@ async function main(): Promise<void> {
   const server = startVite();
   try {
     await waitForServer();
-    await screenshot("/app/cases", "#caseDashboard", "01-dashboard.png");
+    await screenshot("/app/cases", ".case-lobby-stage .case-face-asset-frame[data-loaded='true']", "01-dashboard.png");
     await screenshot("/app/case/new", "#caseNewSetup", "02-new-case.png");
     await screenshot("/app/case/visual-case/evaluate", ".case-face-asset-frame[data-loaded='true']", "03-evaluate.png");
     await screenshot("/app/case/visual-case/plan", ".case-face-asset-frame[data-loaded='true']", "04-plan.png");
