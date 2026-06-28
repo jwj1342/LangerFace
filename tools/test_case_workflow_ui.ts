@@ -46,6 +46,8 @@ assert.ok(dashboard.includes("case-lobby-landing"), "case lobby renders a dedica
 assert.ok(dashboard.includes("case-lobby-stage"), "case lobby includes a dark clinical viewport preview");
 assert.ok(dashboard.includes("ClinicalFacePreview"), "case lobby reuses the high-fidelity clinical face preview component");
 assert.ok(dashboard.includes("case-workflow-roadmap"), "case lobby shows the clinical workflow roadmap");
+assert.ok(dashboard.includes('to="/case/new"'), "case lobby routes new cases through the preflight setup page");
+assert.ok(!dashboard.includes("const createCase"), "case lobby does not bypass preflight setup by creating a case directly");
 assert.ok(dashboard.includes("系统设置"), "case lobby keeps maintenance entry points in system settings");
 assert.ok(!dashboard.includes("兼容 / 研发工具"), "case lobby no longer exposes compatibility tools in the doctor sidebar");
 assert.ok(!dashboard.includes("开发 / 诊断信息"), "case lobby no longer exposes developer diagnostics in the doctor sidebar");
@@ -69,6 +71,14 @@ assert.ok(settingsRoute.includes("不进入医生的病例规划主流程"), "se
 assert.ok(settingsRoute.includes("不应重新出现在医生主导航"), "developer settings explains compatibility tools stay hidden from main navigation");
 
 assert.ok(caseRoute.includes("患者年龄"), "case workflow collects patient age");
+assert.ok(caseRoute.includes("CaseNewSetupRoute"), "case workflow renders a dedicated new-case setup route");
+assert.ok(caseRoute.includes("caseNewSetup"), "new-case setup route exposes a stable visual/test anchor");
+assert.ok(caseRoute.includes("新建病例：前置参数"), "new-case route collects preflight parameters before evaluation");
+assert.ok(caseRoute.includes("先录入前置参数，再进入面部评估"), "new-case route explains parameter-first workflow");
+assert.ok(caseRoute.includes("创建病例草稿"), "new-case route creates the case only after preflight review");
+assert.ok(caseRoute.includes("patientContext: { ageYears }"), "new-case route persists age into the created case");
+assert.ok(caseRoute.includes("acquisition: { source }"), "new-case route persists acquisition pathway into the created case");
+assert.ok(caseRoute.includes("marginStrategy"), "new-case route persists the lesion margin strategy");
 assert.ok(caseRoute.includes("儿童 / 紧致"), "case workflow exposes the child/tight age band");
 assert.ok(caseRoute.includes("老年 / 松弛"), "case workflow exposes the older/lax age band");
 assert.ok(caseRoute.includes("皮下肿物 · 线性切口模式"), "case workflow exposes subcutaneous linear mode");
@@ -93,7 +103,7 @@ assert.ok(caseRoute.includes("曝光可读"), "case workflow records exposure qu
 assert.ok(caseRoute.includes("姿态覆盖"), "case workflow records pose coverage quality");
 assert.ok(caseRoute.includes("跟踪稳定"), "case workflow records scan or live tracking quality");
 assert.ok(caseRoute.includes("该状态不会锁死医生流程"), "case workflow keeps acquisition quality as a reviewable gate instead of a locked wizard");
-assert.ok(caseRoute.includes("带复核状态继续：标记病灶"), "case workflow allows clinicians to continue with a visible review state");
+assert.ok(caseRoute.includes("继续并标记复核"), "case workflow allows clinicians to continue with a visible review state");
 assert.ok(caseRoute.includes("病灶边界记录"), "case workflow records lesion boundary inside the case planning step");
 assert.ok(caseRoute.includes("LesionBoundaryPanel"), "case workflow renders a structured lesion boundary panel");
 assert.ok(caseRoute.includes("lesionBoundaryTrace"), "case workflow derives lesion boundary provenance for candidates and reports");
@@ -154,17 +164,19 @@ assert.ok(caseRoute.includes("case-viewport-mode-switch"), "case workflow expose
 for (const viewportMode of ["2D 图像", "3D 重建", "实时叠加"]) {
   assert.ok(caseRoute.includes(viewportMode), `case workflow exposes the ${viewportMode} viewport mode`);
 }
-assert.ok(caseRoute.includes("CaseTaskStrip"), "case workflow renders clinical subtask strips inside each major step");
-assert.ok(caseRoute.includes("CaseHandoffPanel"), "case workflow wraps legacy work surfaces as controlled clinical handoffs");
-assert.ok(caseRoute.includes("受控评估入口"), "evaluation route presents the live canvas as a controlled handoff");
-assert.ok(caseRoute.includes("受控规划入口"), "planning route presents the incision canvas as a controlled handoff");
+assert.ok(caseRoute.includes("case-clinical-workspace"), "case workflow uses a fixed clinical workspace instead of a stacked form");
+assert.ok(caseRoute.includes("case-workspace-canvas"), "case workflow gives the face viewport a dedicated primary canvas area");
+assert.ok(caseRoute.includes("case-workspace-panel"), "case workflow keeps parameters in an internal side panel");
+assert.ok(caseRoute.includes("打开实时采集"), "evaluation route keeps live capture as a secondary side-panel action");
+assert.ok(caseRoute.includes("打开候选画布"), "planning route keeps the legacy incision canvas as a secondary explainability action");
+assert.ok(caseRoute.includes("CaseHandoffPanel"), "case workflow still wraps review/export compatibility surfaces as controlled handoffs");
 assert.ok(caseRoute.includes("受控导出入口"), "review route presents export as a controlled handoff");
 for (const subtask of ["标记病灶", "生成候选", "闭合模拟"]) {
   assert.ok(caseRoute.includes(subtask), `case workflow exposes the ${subtask} clinical subtask`);
 }
-assert.ok(caseRoute.includes("case-step-stage-grid"), "case workflow pairs the viewport with the step command panel");
-assert.ok(caseRoute.indexOf("图层看板") < caseRoute.indexOf("进入评估采集画布"), "evaluation work surface appears after patient/acquisition/layer parameters");
-assert.ok(caseRoute.indexOf("规划依据") < caseRoute.indexOf("进入候选规划画布"), "planning work surface appears after lesion and margin parameters");
+assert.ok(!caseRoute.includes("case-next-rail"), "case workflow avoids duplicate bottom navigation that creates extra scrolling");
+assert.ok(caseRoute.indexOf('CaseClinicalViewport activeCase={activeCase} step="evaluate"') < caseRoute.indexOf("图层看板"), "evaluation viewport appears before side-panel layer controls");
+assert.ok(caseRoute.indexOf('CaseClinicalViewport activeCase={activeCase} step="plan"') < caseRoute.indexOf("病灶参数"), "planning viewport appears before lesion side-panel controls");
 assert.ok(!caseRoute.includes("打开评估画布"), "case workflow avoids raw tool-style evaluation copy");
 assert.ok(!caseRoute.includes("打开规划画布"), "case workflow avoids raw tool-style planning copy");
 assert.ok(!caseRoute.includes("打开候选方案导出面板"), "case workflow avoids raw tool-style export copy");
@@ -288,10 +300,18 @@ assert.ok(styles.includes("--clinical-dark-bg"), "styles expose a dark immersive
 assert.ok(styles.includes(".clinical-number"), "styles define tabular clinical numbers");
 assert.ok(styles.includes(".case-workflow-page .btn-primary"), "styles override legacy green primary buttons inside the case workflow");
 assert.ok(styles.includes(".case-workflow-page .react-shell-sidebar"), "styles darken the case workflow sidebar");
+assert.ok(styles.includes("body:has(.case-workflow-page)"), "styles lock browser-level scrolling while the case workbench is mounted");
+assert.ok(styles.includes("height: 100dvh"), "styles use a full-viewport clinical workbench layout");
+assert.ok(styles.includes("overflow: hidden"), "styles constrain global overflow instead of using page scrolling");
+assert.ok(styles.includes("border-radius: 2px"), "styles use minimal clinical radii instead of SaaS-style rounded cards");
 assert.ok(styles.includes(".case-lobby-landing"), "styles implement the case lobby landing page");
 assert.ok(styles.includes(".case-lobby-stage"), "styles implement the case lobby viewport preview");
 assert.ok(styles.includes(".case-workflow-roadmap"), "styles implement the clinical workflow roadmap");
 assert.ok(styles.includes(".case-clinical-viewport"), "styles implement the PACS-like clinical viewport");
+assert.ok(styles.includes(".case-clinical-workspace"), "styles implement the two-pane clinical workspace");
+assert.ok(styles.includes(".case-workspace-canvas"), "styles give the face viewport primary workspace ownership");
+assert.ok(styles.includes(".case-workspace-panel"), "styles make parameter panels internally scrollable");
+assert.ok(styles.includes(".case-workspace-canvas .case-face-preview-large"), "styles keep the large face preview expanded inside the workspace");
 assert.ok(styles.includes(".case-viewport-mode-switch"), "styles implement compact 2D/3D/live viewport mode controls");
 assert.ok(styles.includes(".case-layer-controls"), "styles implement compact layer parameter controls");
 assert.ok(styles.includes(".case-acquisition-gate"), "styles implement the acquisition quality gate");
@@ -347,6 +367,9 @@ assert.ok(styles.includes(".surgery-highlight-copy"), "styles avoid green-as-pri
 assert.ok(!styles.includes(".surgery-green-copy"), "styles remove the legacy green closure copy class");
 
 assert.ok(visualCapture.includes("incisionCandidates"), "Playwright visual case seed includes saved candidates");
+assert.ok(visualCapture.includes("/app/case/new"), "Playwright visual case smoke test captures the new-case setup page");
+assert.ok(visualCapture.includes("02-new-case.png"), "Playwright visual case smoke test writes a new-case setup screenshot");
+assert.ok(!visualCapture.includes("--full-page"), "Playwright visual case smoke test captures viewport screenshots instead of long full-page screenshots");
 assert.ok(visualCapture.includes("visual-candidate-1"), "Playwright visual case seed includes a selected candidate");
 assert.ok(visualCapture.includes("boundary:"), "Playwright visual case seed includes lesion boundary records");
 assert.ok(visualCapture.includes("axisDiameterMm"), "Playwright visual case seed exercises lesion boundary axis measurements");

@@ -3541,6 +3541,361 @@
   color: #d0e2ff;
 }
 
+html:has(.case-workflow-page),
+body:has(.case-workflow-page) {
+  height: 100%;
+  overflow: hidden;
+}
+
+.case-workflow-page {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.case-workflow-page .react-shell {
+  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.case-workflow-page .react-shell-sidebar {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 12px;
+}
+
+.case-workflow-page .case-workflow-main {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px;
+}
+
+.case-workflow-page .case-workflow-stack {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+  gap: 10px;
+  overflow: auto;
+}
+
+.case-workflow-page .case-workflow-stage-stack {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.case-workflow-page .case-step-command {
+  display: grid;
+  min-height: 0;
+  gap: 10px;
+  justify-content: start;
+  align-content: start;
+  align-items: stretch;
+}
+
+.case-workflow-page .case-step-stage-grid {
+  align-items: start;
+}
+
+.case-workflow-page .case-workspace-header {
+  flex: 0 0 auto;
+  min-height: 30px;
+}
+
+.case-workflow-page .card {
+  border-radius: 2px;
+  padding: 0;
+  box-shadow: none !important;
+}
+
+.case-workflow-page .card > .quality-top {
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.case-workflow-page .card > .space-y-3 {
+  margin: 0;
+  padding: 10px;
+}
+
+.case-workflow-page .react-nav-link,
+.case-workflow-page .btn,
+.case-workflow-page .badge,
+.case-workflow-page .react-route-status,
+.case-workflow-page input,
+.case-workflow-page select,
+.case-workflow-page textarea,
+.case-workflow-page .case-step-state {
+  border-radius: 2px;
+  box-shadow: none !important;
+}
+
+.case-workflow-page .btn {
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+.case-workflow-page .case-mini-grid,
+.case-workflow-page .case-form-grid,
+.case-workflow-page .case-layer-grid,
+.case-workflow-page .case-rationale-grid,
+.case-workflow-page .case-rule-grid,
+.case-workflow-page .case-capture-grid,
+.case-workflow-page .case-quality-grid,
+.case-workflow-page .case-boundary-grid,
+.case-workflow-page .case-boundary-metrics,
+.case-workflow-page .case-closure-metrics,
+.case-workflow-page .case-candidate-list {
+  gap: 6px;
+}
+
+.case-workflow-page .case-list-item,
+.case-workflow-page .case-mini-grid > div,
+.case-workflow-page .case-rationale-grid > div,
+.case-workflow-page .case-rule-card,
+.case-workflow-page .case-rationale-audit p,
+.case-workflow-page .case-candidate-row,
+.case-workflow-page .case-candidate-metrics > div,
+.case-workflow-page .case-candidate-rationale,
+.case-workflow-page .case-closure-metrics > div,
+.case-workflow-page .case-layer-toggle,
+.case-workflow-page .case-layer-control,
+.case-workflow-page .case-acquisition-path-card,
+.case-workflow-page .case-acquisition-summary,
+.case-workflow-page .case-capture-toggle,
+.case-workflow-page .case-quality-control,
+.case-workflow-page .case-boundary-summary,
+.case-workflow-page .case-boundary-control,
+.case-workflow-page .case-boundary-metrics label,
+.case-workflow-page .case-boundary-metrics > div,
+.case-workflow-page .case-export-privacy p,
+.case-workflow-page .case-handoff-panel,
+.case-workflow-page .case-disclosure,
+.case-workflow-page .case-empty-state {
+  border-radius: 2px;
+  box-shadow: none !important;
+}
+
+.case-clinical-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+  flex: 1 1 auto;
+  gap: 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.case-workspace-canvas,
+.case-workspace-panel {
+  min-width: 0;
+  min-height: 0;
+}
+
+.case-workspace-canvas {
+  display: grid;
+}
+
+.case-workspace-canvas .case-clinical-viewport {
+  height: 100%;
+  min-height: 0;
+  padding: 10px;
+}
+
+.case-workspace-canvas .case-viewport-body {
+  position: relative;
+  display: block;
+  min-height: 0;
+  margin-top: 8px;
+}
+
+.case-workspace-canvas .case-face-preview-large {
+  height: 100%;
+  min-height: 0;
+}
+
+.case-workspace-canvas .case-viewport-readout {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  background: rgb(8 12 18 / 0.86);
+  border-color: rgb(120 169 255 / 0.24);
+}
+
+.case-workspace-canvas .case-viewport-readout > div {
+  background: rgb(14 20 28 / 0.92);
+  padding: 7px 8px;
+}
+
+.case-workspace-canvas .case-viewport-layer-strip {
+  margin-top: 8px;
+}
+
+.case-workspace-canvas .case-viewport-layer-strip span {
+  border-radius: 2px;
+  padding: 5px 7px;
+}
+
+.case-workspace-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.case-workspace-panel .case-section {
+  padding: 10px;
+}
+
+.case-workspace-panel .case-step-command {
+  min-height: 0;
+}
+
+.case-workspace-panel .case-panel-priority {
+  display: grid;
+  align-content: start;
+  border-color: rgb(120 169 255 / 0.28);
+  background: #101720;
+  gap: 8px;
+  min-height: 118px;
+}
+
+.case-workspace-panel .case-panel-priority > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.case-workspace-panel .case-panel-priority h2 {
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.case-workspace-panel .case-panel-priority p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.case-workspace-panel .case-panel-priority .case-panel-action-row {
+  display: grid;
+}
+
+.case-panel-action-row,
+.case-workspace-panel .case-inline-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.case-panel-action-row .btn:last-child:nth-child(3) {
+  grid-column: 1 / -1;
+}
+
+.case-panel-action-row-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.case-panel-action-row-three .btn:last-child:nth-child(3) {
+  grid-column: auto;
+}
+
+.case-workspace-panel .case-two-column,
+.case-workspace-panel .case-panel-two-column,
+.case-workspace-panel .case-acquisition-path-grid,
+.case-workspace-panel .case-closure-grid {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.case-workspace-panel .case-form-grid,
+.case-workspace-panel .case-layer-grid,
+.case-workspace-panel .case-boundary-grid,
+.case-workspace-panel .case-boundary-metrics,
+.case-workspace-panel .case-candidate-metrics,
+.case-workspace-panel .case-closure-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.case-workspace-panel .case-layer-controls {
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.case-workspace-panel .case-acquisition-path-card {
+  grid-template-columns: 28px minmax(0, 1fr);
+  min-height: 0;
+  padding: 8px;
+}
+
+.case-workspace-panel .case-acquisition-path-icon {
+  width: 26px;
+}
+
+.case-workspace-panel .case-acquisition-path-meta {
+  display: none;
+}
+
+.case-workspace-panel .case-acquisition-path-copy small {
+  display: none;
+}
+
+.case-workspace-panel .case-acquisition-path-state {
+  top: 8px;
+  right: 8px;
+  border-radius: 2px;
+}
+
+.case-workspace-panel .case-layer-toggle,
+.case-workspace-panel .case-layer-control,
+.case-workspace-panel .case-boundary-control,
+.case-workspace-panel .case-boundary-metrics label,
+.case-workspace-panel .case-boundary-metrics > div,
+.case-workspace-panel .case-capture-toggle,
+.case-workspace-panel .case-quality-control,
+.case-workspace-panel .case-candidate-row,
+.case-workspace-panel .case-closure-metrics > div {
+  padding: 8px;
+}
+
+.case-workspace-panel .case-rule-card {
+  min-height: 0;
+  padding: 8px;
+}
+
+.case-workspace-panel .case-closure-visual {
+  min-height: 140px;
+}
+
+.case-clinical-disclosure {
+  background: #101720;
+}
+
+.case-clinical-disclosure .case-disclosure-body {
+  padding: 8px;
+}
+
+.case-clinical-disclosure .card {
+  border: 0;
+  background: transparent;
+}
+
+.case-clinical-disclosure .card > .quality-top {
+  padding: 0 0 8px;
+}
+
+.case-clinical-disclosure .card > .space-y-3 {
+  padding: 0;
+}
+
 @keyframes asset-spin {
   to {
     transform: rotate(360deg);

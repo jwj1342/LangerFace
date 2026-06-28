@@ -211,7 +211,6 @@ async function screenshot(pathname: string, selector: string, filename: string):
     "1440,1000",
     "--color-scheme",
     "dark",
-    "--full-page",
     "--timeout",
     "20000",
     "--load-storage",
@@ -231,11 +230,12 @@ async function main(): Promise<void> {
   try {
     await waitForServer();
     await screenshot("/app/cases", "#caseDashboard", "01-dashboard.png");
-    await screenshot("/app/case/visual-case/evaluate", "#caseStepper", "02-evaluate.png");
-    await screenshot("/app/case/visual-case/plan", "#caseClosureSimulation", "03-plan.png");
-    await screenshot("/app/case/visual-case/review", "#caseStepper", "04-review.png");
-    await screenshot("/app/settings/atlas", "#settingsAtlas", "05-settings-atlas.png");
-    await screenshot("/app/settings/developer", "#settingsDeveloper", "06-settings-developer.png");
+    await screenshot("/app/case/new", "#caseNewSetup", "02-new-case.png");
+    await screenshot("/app/case/visual-case/evaluate", "#caseStepper", "03-evaluate.png");
+    await screenshot("/app/case/visual-case/plan", "#caseClosureSimulation", "04-plan.png");
+    await screenshot("/app/case/visual-case/review", "#caseStepper", "05-review.png");
+    await screenshot("/app/settings/atlas", "#settingsAtlas", "06-settings-atlas.png");
+    await screenshot("/app/settings/developer", "#settingsDeveloper", "07-settings-developer.png");
     console.log(`case workflow screenshots written to ${outDir}`);
     console.log("If Chinese text is missing in Linux screenshots, install a CJK font such as Noto Sans CJK SC on the screenshot host.");
   } finally {

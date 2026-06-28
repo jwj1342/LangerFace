@@ -1,6 +1,6 @@
-import { Activity, ArrowLeft, ArrowRight, Camera, CheckCircle2, Download, FileText, Layers3, ListChecks, Save, ScanFace, ShieldAlert, SlidersHorizontal, Upload, Video } from "lucide-react";
+import { Activity, ArrowLeft, ArrowRight, Camera, CheckCircle2, Download, FileText, Layers3, ListChecks, Plus, Save, ScanFace, ShieldAlert, SlidersHorizontal, Upload, Video } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { ClinicalFacePreview } from "../components/ClinicalFacePreview";
@@ -16,6 +16,7 @@ import { Select } from "../components/ui/select";
 import { RouteStatus, StatusBadge } from "../components/ui/status-badge";
 import { useReactRouteLifecycle } from "../hooks/useReactRouteLifecycle";
 import {
+  classifyCaseAge,
   deriveLesionBoundary,
   lesionLayerLabel,
   type AcquisitionQualityCheck,
@@ -49,12 +50,6 @@ function parseOptionalNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function nextStep(step: ClinicalCaseStep): ClinicalCaseStep {
-  if (step === "evaluate") return "plan";
-  if (step === "plan") return "review";
-  return "review";
-}
-
 function stepHref(caseId: string, step: ClinicalCaseStep) {
   return `/case/${caseId}/${step}`;
 }
@@ -73,12 +68,6 @@ function rstlDensityLabel(density: ClinicalCaseRecord["layers"]["rstlDensity"]) 
 
 function percentLabel(value: number) {
   return `${Math.round(value * 100)}%`;
-}
-
-function nextStepRailLabel(step: ClinicalCaseStep) {
-  if (step === "evaluate") return "继续到病灶标记";
-  if (step === "plan") return "继续到方案确认";
-  return "继续";
 }
 
 function closureStatusLabel(status: ClinicalCaseRecord["closureSimulation"]["status"]) {
@@ -1226,166 +1215,147 @@ function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   const updateActiveCase = useCaseStore((state) => state.updateActiveCase);
 
   return (
-    <div className="case-workflow-stack" id="caseEvaluateStep">
-      <div className="case-page-header">
+    <div className="case-workflow-stack case-workflow-stage-stack" id="caseEvaluateStep">
+      <div className="case-page-header case-workspace-header">
         <Link to="/cases" className="case-back-link"><ArrowLeft size={16} />病例大厅</Link>
         <StatusBadge>步骤一：面部评估与布线</StatusBadge>
       </div>
 
-      <div className="case-step-stage-grid">
-        <CaseClinicalViewport activeCase={activeCase} step="evaluate" />
-        <section className="case-section case-step-command">
-          <div>
-            <h2>面部评估与张力线映射</h2>
-            <p>先确认患者年龄、采集方式和图层状态，再进入评估画布或病灶标记。医生可随时返回本步骤微调图层。</p>
-          </div>
-          <CaseTaskStrip
-            items={[
-              { index: "01", title: "确认前置参数", description: "年龄分档、采集方式和病例草稿状态先完成。" },
-              { index: "02", title: "映射张力线", description: "进入采集画布确认基础张力线和个性化皮纹。" },
-              { index: "03", title: "进入病灶标记", description: "保留图层设置后进入切口规划阶段。" },
-            ]}
-          />
-        </section>
-      </div>
+      <div className="case-clinical-workspace case-clinical-workspace-evaluate">
+        <div className="case-workspace-canvas">
+          <CaseClinicalViewport activeCase={activeCase} step="evaluate" />
+        </div>
 
-      <div className="case-two-column">
-        <Card>
-          <CardHeader><span>患者年龄</span><span>{activeCase.patientContext.ageBandLabel}</span></CardHeader>
-          <CardContent>
-            <Label htmlFor="caseAge">年龄</Label>
-            <Input
-              id="caseAge"
-              className="clinical-number"
-              inputMode="numeric"
-              min={0}
-              type="number"
-              value={activeCase.patientContext.ageYears ?? ""}
-              onChange={(event) => updateActiveCase({ patientContext: { ageYears: parseOptionalNumber(event.target.value) } })}
-            />
-            <Hint id="ageBandHint">{activeCase.patientContext.parameterHint}</Hint>
-          </CardContent>
-        </Card>
+        <aside className="case-workspace-panel" aria-label="面部评估参数">
+          <section className="case-section case-step-command case-panel-priority">
+            <div>
+              <h2>面部评估与张力线映射</h2>
+              <p>在同一画布中调整采集方式、RSTL、个性化皮纹和透明度；参数变化应直接反馈到左侧面部模型。</p>
+            </div>
+            <div className="case-panel-action-row">
+              <Button asChild variant="workbench">
+                <Link to="/live">打开实时采集</Link>
+              </Button>
+              <Button variant="workbenchPrimary" onClick={() => {
+                updateActiveCase({ currentStep: "plan" });
+                navigate(stepHref(activeCase.id, "plan"));
+              }}>
+                {activeCase.acquisition.quality.status === "ready" ? "下一步：标记病灶" : "继续并标记复核"}
+              </Button>
+            </div>
+          </section>
 
-        <Card>
-          <CardHeader><span>年龄分档规则</span><span>参数提示</span></CardHeader>
-          <CardContent className="case-summary-list">
-            <p><b>0-17 岁</b><span>儿童 / 紧致：缩小夹角，长轴:短轴 3.5:1。</span></p>
-            <p><b>18-59 岁</b><span>中青年 / 普通：基础 30° 和 3:1。</span></p>
-            <p><b>60 岁及以上</b><span>老年 / 松弛：增加夹角，长轴:短轴 2.5:1。</span></p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="case-two-column case-acquisition-row">
-        <AcquisitionPathwayPanel activeCase={activeCase} />
-        <AcquisitionQualityGate activeCase={activeCase} />
-      </div>
-
-      <Card className="case-layer-board">
-        <CardHeader><span>图层看板</span><span>开关与参数</span></CardHeader>
-        <CardContent className="case-layer-board-content">
-          <div className="case-layer-grid">
-            {[
-              ["rstl", "RSTL", "密度和透明度会同步影响病例画布"],
-              ["personalizedWrinkles", "个性化皮纹", "额纹、鱼尾纹、鼻唇沟、睑缘纹等"],
-              ["blendedField", "混合场", "RSTL + 个性化纹路调优"],
-              ["incisionDesign", "切口设计", "候选线、梭形轮廓和控制点"],
-            ].map(([key, label, hint]) => (
-              <label key={key} className="case-layer-toggle">
-                <Checkbox
-                  checked={Boolean(activeCase.layers[key as keyof ClinicalCaseRecord["layers"]])}
-                  onChange={(event) => updateActiveCase({
-                    layers: { [key]: event.currentTarget.checked } as Partial<ClinicalCaseRecord["layers"]>,
-                  })}
-                />
-                <span>
-                  <b>{label}</b>
-                  <small>{hint}</small>
-                </span>
-              </label>
-            ))}
-          </div>
-          <div className="case-layer-controls" aria-label="图层参数">
-            <label className="case-layer-control">
-              <span>
-                <b>RSTL 密度</b>
-                <small>调整基础张力线在画布上的走行数量。</small>
-              </span>
-              <Select
-                value={activeCase.layers.rstlDensity}
-                onChange={(event) => updateActiveCase({
-                  layers: { rstlDensity: event.target.value as ClinicalCaseRecord["layers"]["rstlDensity"] },
-                })}
-              >
-                <option value="low">低密度</option>
-                <option value="standard">标准密度</option>
-                <option value="high">高密度</option>
-              </Select>
-            </label>
-            <label className="case-layer-control">
-              <span>
-                <b>RSTL 透明度</b>
-                <small className="clinical-number">{percentLabel(activeCase.layers.rstlOpacity)}</small>
-              </span>
-              <input
-                className="case-layer-range"
-                disabled={!activeCase.layers.rstl}
-                max="1"
-                min="0.2"
-                step="0.05"
-                type="range"
-                value={activeCase.layers.rstlOpacity}
-                onChange={(event) => updateActiveCase({
-                  layers: { rstlOpacity: Number(event.currentTarget.value) },
-                })}
+          <Card>
+            <CardHeader><span>患者年龄</span><span>{activeCase.patientContext.ageBandLabel}</span></CardHeader>
+            <CardContent>
+              <Label htmlFor="caseAge">年龄</Label>
+              <Input
+                id="caseAge"
+                className="clinical-number"
+                inputMode="numeric"
+                min={0}
+                type="number"
+                value={activeCase.patientContext.ageYears ?? ""}
+                onChange={(event) => updateActiveCase({ patientContext: { ageYears: parseOptionalNumber(event.target.value) } })}
               />
-            </label>
-            <label className="case-layer-control">
-              <span>
-                <b>皮纹透明度</b>
-                <small className="clinical-number">{percentLabel(activeCase.layers.wrinkleOpacity)}</small>
-              </span>
-              <input
-                className="case-layer-range"
-                disabled={!activeCase.layers.personalizedWrinkles}
-                max="1"
-                min="0.2"
-                step="0.05"
-                type="range"
-                value={activeCase.layers.wrinkleOpacity}
-                onChange={(event) => updateActiveCase({
-                  layers: { wrinkleOpacity: Number(event.currentTarget.value) },
-                })}
-              />
-            </label>
-          </div>
-        </CardContent>
-      </Card>
+              <Hint id="ageBandHint">{activeCase.patientContext.parameterHint}</Hint>
+            </CardContent>
+          </Card>
 
-      <CaseHandoffPanel
-        eyebrow="受控评估入口"
-        title="面部评估采集画布"
-        description="需要实时追踪、上传序列或调整线密度时进入该画布；完成后返回本病例，继续标记病灶和规划切口。"
-        to="/live"
-        actionLabel="进入评估采集画布"
-        items={[
-          { label: "进入前", value: "确认年龄、采集方式和图层开关" },
-          { label: "返回后", value: "病例草稿保留，继续病灶标记" },
-          { label: "边界", value: "该入口服务当前病例评估，不作为独立工具主流程" },
-        ]}
-      />
+          <AcquisitionPathwayPanel activeCase={activeCase} />
 
-      <div className="case-actions">
-        {activeCase.acquisition.quality.status !== "ready" ? (
-          <Hint>当前采集质量为“{acquisitionStatusLabel(activeCase.acquisition.quality.status)}”。可以继续，但后续候选和导出会标记为需医生复核。</Hint>
-        ) : null}
-        <Button variant="workbenchPrimary" onClick={() => {
-          updateActiveCase({ currentStep: "plan" });
-          navigate(stepHref(activeCase.id, "plan"));
-        }}>
-          {activeCase.acquisition.quality.status === "ready" ? "下一步：标记病灶" : "带复核状态继续：标记病灶"}
-        </Button>
+          <Card className="case-layer-board">
+            <CardHeader><span>图层看板</span><span>实时反馈</span></CardHeader>
+            <CardContent className="case-layer-board-content">
+              <div className="case-layer-grid">
+                {[
+                  ["rstl", "RSTL", "基础张力线投射"],
+                  ["personalizedWrinkles", "个性化皮纹", "自然褶皱和凹陷"],
+                  ["blendedField", "混合场", "方向融合调优"],
+                  ["incisionDesign", "切口设计", "候选线和控制点"],
+                ].map(([key, label, hint]) => (
+                  <label key={key} className="case-layer-toggle">
+                    <Checkbox
+                      checked={Boolean(activeCase.layers[key as keyof ClinicalCaseRecord["layers"]])}
+                      onChange={(event) => updateActiveCase({
+                        layers: { [key]: event.currentTarget.checked } as Partial<ClinicalCaseRecord["layers"]>,
+                      })}
+                    />
+                    <span>
+                      <b>{label}</b>
+                      <small>{hint}</small>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <div className="case-layer-controls" aria-label="图层参数">
+                <label className="case-layer-control">
+                  <span>
+                    <b>RSTL 密度</b>
+                    <small>线数量</small>
+                  </span>
+                  <Select
+                    value={activeCase.layers.rstlDensity}
+                    onChange={(event) => updateActiveCase({
+                      layers: { rstlDensity: event.target.value as ClinicalCaseRecord["layers"]["rstlDensity"] },
+                    })}
+                  >
+                    <option value="low">低密度</option>
+                    <option value="standard">标准密度</option>
+                    <option value="high">高密度</option>
+                  </Select>
+                </label>
+                <label className="case-layer-control">
+                  <span>
+                    <b>RSTL 透明度</b>
+                    <small className="clinical-number">{percentLabel(activeCase.layers.rstlOpacity)}</small>
+                  </span>
+                  <input
+                    className="case-layer-range"
+                    disabled={!activeCase.layers.rstl}
+                    max="1"
+                    min="0.2"
+                    step="0.05"
+                    type="range"
+                    value={activeCase.layers.rstlOpacity}
+                    onChange={(event) => updateActiveCase({
+                      layers: { rstlOpacity: Number(event.currentTarget.value) },
+                    })}
+                  />
+                </label>
+                <label className="case-layer-control">
+                  <span>
+                    <b>皮纹透明度</b>
+                    <small className="clinical-number">{percentLabel(activeCase.layers.wrinkleOpacity)}</small>
+                  </span>
+                  <input
+                    className="case-layer-range"
+                    disabled={!activeCase.layers.personalizedWrinkles}
+                    max="1"
+                    min="0.2"
+                    step="0.05"
+                    type="range"
+                    value={activeCase.layers.wrinkleOpacity}
+                    onChange={(event) => updateActiveCase({
+                      layers: { wrinkleOpacity: Number(event.currentTarget.value) },
+                    })}
+                  />
+                </label>
+              </div>
+            </CardContent>
+          </Card>
+
+          <details className="case-disclosure case-clinical-disclosure">
+            <summary>采集质量复核 · {acquisitionStatusLabel(activeCase.acquisition.quality.status)}</summary>
+            <div className="case-disclosure-body">
+              <AcquisitionQualityGate activeCase={activeCase} />
+            </div>
+          </details>
+
+          {activeCase.acquisition.quality.status !== "ready" ? (
+            <Hint>当前采集质量为“{acquisitionStatusLabel(activeCase.acquisition.quality.status)}”。可以继续，但后续候选和导出会标记为需医生复核。</Hint>
+          ) : null}
+        </aside>
       </div>
     </div>
   );
@@ -1441,159 +1411,156 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   };
 
   return (
-    <div className="case-workflow-stack" id="casePlanStep">
-      <div className="case-page-header">
+    <div className="case-workflow-stack case-workflow-stage-stack" id="casePlanStep">
+      <div className="case-page-header case-workspace-header">
         <Link to={stepHref(activeCase.id, "evaluate")} className="case-back-link"><ArrowLeft size={16} />返回面部评估</Link>
         <StatusBadge>步骤二：病灶定位与切口规划</StatusBadge>
       </div>
 
-      <div className="case-step-stage-grid">
-        <CaseClinicalViewport activeCase={activeCase} step="plan" />
-        <section className="case-section case-step-command">
-          <div>
-            <h2>病灶定位与切口规划</h2>
-            <p>先记录解剖层次、病灶边界、来源、直径、深度和切缘策略，再进入规划画布生成候选。</p>
-          </div>
-          <CaseTaskStrip
-            items={[
-              { index: "01", title: "标记病灶", description: "记录层次、边界模式、来源、直径、深度和切缘。" },
-              { index: "02", title: "生成候选", description: "根据病灶边界和局部方向生成线性或梭形候选。" },
-              { index: "03", title: "闭合模拟", description: "在本病例内查看张力闭合趋势并保存结论。" },
-            ]}
-          />
-        </section>
-      </div>
+      <div className="case-clinical-workspace case-clinical-workspace-plan">
+        <div className="case-workspace-canvas">
+          <CaseClinicalViewport activeCase={activeCase} step="plan" />
+        </div>
 
-      <div className="case-two-column">
-        <Card>
-          <CardHeader><span>病灶参数</span><span>{activeCase.lesion.layerLabel}</span></CardHeader>
-          <CardContent>
-            <Label htmlFor="lesionLayer">解剖层次</Label>
-            <Select
-              id="lesionLayer"
-              value={activeCase.lesion.layer}
-              onChange={(event) => updateLesion({ layer: event.target.value as ClinicalCaseRecord["lesion"]["layer"] })}
-            >
-              <option value="subcutaneous">皮下肿物 · 线性切口模式</option>
-              <option value="cutaneous">皮表肿物 · 梭形切口模式</option>
-            </Select>
-
-            <div className="case-form-grid">
-              <label>
-                <span>直径 mm</span>
-                <Input
-                  className="clinical-number"
-                  inputMode="decimal"
-                  type="number"
-                  value={activeCase.lesion.diameterMm ?? ""}
-                  onChange={(event) => updateLesion({ diameterMm: parseOptionalNumber(event.target.value) })}
-                />
-              </label>
-              <label>
-                <span>深度 mm</span>
-                <Input
-                  className="clinical-number"
-                  inputMode="decimal"
-                  type="number"
-                  value={activeCase.lesion.depthMm ?? ""}
-                  onChange={(event) => updateLesion({ depthMm: parseOptionalNumber(event.target.value) })}
-                />
-              </label>
+        <aside className="case-workspace-panel" aria-label="切口规划参数">
+          <section className="case-section case-step-command case-panel-priority">
+            <div>
+              <h2>病灶定位与切口规划</h2>
+              <p>在同一工作区记录病灶边界、切缘策略、候选切口和张力闭合趋势，避免医生在表单和画布之间跳转。</p>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader><span>切缘策略</span><span>{activeCase.lesion.marginStrategy === "expanded_margin" ? "需扩大" : "常规"}</span></CardHeader>
-          <CardContent>
-            <Label htmlFor="marginStrategy">策略</Label>
-            <Select
-              id="marginStrategy"
-              value={activeCase.lesion.marginStrategy}
-              onChange={(event) => updateLesion({ marginStrategy: event.target.value as ClinicalCaseRecord["lesion"]["marginStrategy"] })}
-            >
-              <option value="complete_excision">常规完整切除</option>
-              <option value="expanded_margin">需扩大安全切缘</option>
-            </Select>
-            <Label htmlFor="safetyMargin">安全切缘 mm</Label>
-            <Input
-              id="safetyMargin"
-              className="clinical-number"
-              disabled={activeCase.lesion.marginStrategy !== "expanded_margin"}
-              inputMode="decimal"
-              type="number"
-              value={activeCase.lesion.safetyMarginMm ?? ""}
-              onChange={(event) => updateLesion({ safetyMarginMm: parseOptionalNumber(event.target.value) })}
-            />
-            <Hint>良恶性由医生判断；系统只记录切缘策略并影响规则提示。</Hint>
-          </CardContent>
-        </Card>
-      </div>
-
-      <LesionBoundaryPanel activeCase={activeCase} />
-
-      <PlanningRationalePanel activeCase={activeCase} />
-
-      <CaseCandidateQueue
-        activeCase={activeCase}
-        onGenerate={saveCandidateDraft}
-        onSelect={selectCandidate}
-      />
-
-      <Card className="case-closure-simulation" id="caseClosureSimulation">
-        <CardHeader>
-          <span>张力闭合模拟</span>
-          <RouteStatus className={`case-closure-status case-closure-status-${closure.status}`}>{closureStatusLabel(closure.status)}</RouteStatus>
-        </CardHeader>
-        <CardContent className="case-closure-grid">
-          <div className="case-closure-visual" aria-hidden="true">
-            <span className="case-closure-face" />
-            <span className="case-closure-rstl" />
-            <span className="case-closure-cut" />
-            <span className="case-closure-pull case-closure-pull-left" />
-            <span className="case-closure-pull case-closure-pull-right" />
-          </div>
-          <div className="case-closure-copy">
-            <div className="case-closure-metrics">
-              <div><span>闭合评分</span><b className="clinical-number">{closure.score == null ? "未运行" : `${closure.score} / 100`}</b></div>
-              <div><span>当前结论</span><b>{closure.label}</b></div>
-              <div><span>输入宽度</span><b className="clinical-number">{effectiveLesionDiameter(activeCase) ?? "未填"} mm</b></div>
-              <div><span>更新</span><b className="clinical-number">{closure.lastRunAt ? new Date(closure.lastRunAt).toLocaleString() : "未运行"}</b></div>
-            </div>
-            <div className="case-closure-meter" style={closureStyle} aria-label="闭合评分">
-              <span />
-            </div>
-            <Hint>{closure.summary}</Hint>
-            <Hint>模拟结果保存在当前病例草稿中；它是闭合趋势提示，不替代医生对皮肤松弛度、张力和修复方式的判断。</Hint>
-            <div className="case-inline-actions">
-              <Button variant="workbenchPrimary" type="button" onClick={runClosureSimulation}>
-                <Activity size={16} />运行闭合模拟
+            <div className="case-panel-action-row case-panel-action-row-three">
+              <Button type="button" variant="workbench" onClick={saveCandidateDraft}>
+                保存候选
+              </Button>
+              <Button type="button" variant="workbench" onClick={runClosureSimulation}>
+                <Activity size={16} />张力模拟
+              </Button>
+              <Button variant="workbenchPrimary" onClick={() => {
+                updateActiveCase({ currentStep: "review", status: "needs_review" });
+                navigate(stepHref(activeCase.id, "review"));
+              }}>
+                方案确认
               </Button>
             </div>
+          </section>
+
+          <div className="case-two-column case-panel-two-column">
+            <Card>
+              <CardHeader><span>病灶参数</span><span>{activeCase.lesion.layerLabel}</span></CardHeader>
+              <CardContent>
+                <Label htmlFor="lesionLayer">解剖层次</Label>
+                <Select
+                  id="lesionLayer"
+                  value={activeCase.lesion.layer}
+                  onChange={(event) => updateLesion({ layer: event.target.value as ClinicalCaseRecord["lesion"]["layer"] })}
+                >
+                  <option value="subcutaneous">皮下肿物 · 线性切口模式</option>
+                  <option value="cutaneous">皮表肿物 · 梭形切口模式</option>
+                </Select>
+
+                <div className="case-form-grid">
+                  <label>
+                    <span>直径 mm</span>
+                    <Input
+                      className="clinical-number"
+                      inputMode="decimal"
+                      type="number"
+                      value={activeCase.lesion.diameterMm ?? ""}
+                      onChange={(event) => updateLesion({ diameterMm: parseOptionalNumber(event.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    <span>深度 mm</span>
+                    <Input
+                      className="clinical-number"
+                      inputMode="decimal"
+                      type="number"
+                      value={activeCase.lesion.depthMm ?? ""}
+                      onChange={(event) => updateLesion({ depthMm: parseOptionalNumber(event.target.value) })}
+                    />
+                  </label>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><span>切缘策略</span><span>{activeCase.lesion.marginStrategy === "expanded_margin" ? "需扩大" : "常规"}</span></CardHeader>
+              <CardContent>
+                <Label htmlFor="marginStrategy">策略</Label>
+                <Select
+                  id="marginStrategy"
+                  value={activeCase.lesion.marginStrategy}
+                  onChange={(event) => updateLesion({ marginStrategy: event.target.value as ClinicalCaseRecord["lesion"]["marginStrategy"] })}
+                >
+                  <option value="complete_excision">常规完整切除</option>
+                  <option value="expanded_margin">需扩大安全切缘</option>
+                </Select>
+                <Label htmlFor="safetyMargin">安全切缘 mm</Label>
+                <Input
+                  id="safetyMargin"
+                  className="clinical-number"
+                  disabled={activeCase.lesion.marginStrategy !== "expanded_margin"}
+                  inputMode="decimal"
+                  type="number"
+                  value={activeCase.lesion.safetyMarginMm ?? ""}
+                  onChange={(event) => updateLesion({ safetyMarginMm: parseOptionalNumber(event.target.value) })}
+                />
+                <Hint>良恶性由医生判断；系统只记录切缘策略并影响规则提示。</Hint>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
 
-      <CaseHandoffPanel
-        eyebrow="受控规划入口"
-        title="候选切口规划画布"
-        description="需要在面部画布上圈定范围、微调角度或保存多个候选时进入该画布；候选结果应回到本病例中审阅和导出。"
-        to="/incision"
-        actionLabel="进入候选规划画布"
-        items={[
-          { label: "进入前", value: "确认病灶层次、边界记录、直径、深度和切缘策略" },
-          { label: "返回后", value: "候选方案进入当前病例的审阅步骤" },
-          { label: "闭合模拟", value: "已嵌入本页，不再跳转到独立演示页" },
-        ]}
-      />
+          <LesionBoundaryPanel activeCase={activeCase} />
 
-      <div className="case-actions">
-        <Button variant="workbenchPrimary" onClick={() => {
-          updateActiveCase({ currentStep: "review", status: "needs_review" });
-          navigate(stepHref(activeCase.id, "review"));
-        }}>
-          确认方案并生成报告
-        </Button>
+          <CaseCandidateQueue
+            activeCase={activeCase}
+            onGenerate={saveCandidateDraft}
+            onSelect={selectCandidate}
+          />
+
+          <Card className="case-closure-simulation" id="caseClosureSimulation">
+            <CardHeader>
+              <span>张力闭合模拟</span>
+              <RouteStatus className={`case-closure-status case-closure-status-${closure.status}`}>{closureStatusLabel(closure.status)}</RouteStatus>
+            </CardHeader>
+            <CardContent className="case-closure-grid">
+              <div className="case-closure-visual" aria-hidden="true">
+                <span className="case-closure-face" />
+                <span className="case-closure-rstl" />
+                <span className="case-closure-cut" />
+                <span className="case-closure-pull case-closure-pull-left" />
+                <span className="case-closure-pull case-closure-pull-right" />
+              </div>
+              <div className="case-closure-copy">
+                <div className="case-closure-metrics">
+                  <div><span>闭合评分</span><b className="clinical-number">{closure.score == null ? "未运行" : `${closure.score} / 100`}</b></div>
+                  <div><span>当前结论</span><b>{closure.label}</b></div>
+                  <div><span>输入宽度</span><b className="clinical-number">{effectiveLesionDiameter(activeCase) ?? "未填"} mm</b></div>
+                  <div><span>更新</span><b className="clinical-number">{closure.lastRunAt ? new Date(closure.lastRunAt).toLocaleString() : "未运行"}</b></div>
+                </div>
+                <div className="case-closure-meter" style={closureStyle} aria-label="闭合评分">
+                  <span />
+                </div>
+                <Hint>{closure.summary}</Hint>
+                <div className="case-inline-actions">
+                  <Button variant="workbenchPrimary" type="button" onClick={runClosureSimulation}>
+                    <Activity size={16} />运行闭合模拟
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <details className="case-disclosure case-clinical-disclosure">
+            <summary>推荐依据与审计记录</summary>
+            <div className="case-disclosure-body">
+              <PlanningRationalePanel activeCase={activeCase} />
+              <Button asChild variant="workbench">
+                <Link to="/incision">打开候选画布</Link>
+              </Button>
+            </div>
+          </details>
+        </aside>
       </div>
     </div>
   );
@@ -1798,11 +1765,207 @@ function MissingCase() {
   );
 }
 
-export function CaseWorkflowRoute({ step = "evaluate" }: CaseWorkflowRouteProps) {
+function CaseNewSetupRoute() {
   const navigate = useNavigate();
+  const createCase = useCaseStore((state) => state.createCase);
+  const [title, setTitle] = useState("新建面部评估");
+  const [ageYears, setAgeYears] = useState<number | null>(null);
+  const [source, setSource] = useState<ClinicalCaseRecord["acquisition"]["source"]>("upload");
+  const [layer, setLayer] = useState<ClinicalCaseRecord["lesion"]["layer"]>("subcutaneous");
+  const [marginStrategy, setMarginStrategy] = useState<ClinicalCaseRecord["lesion"]["marginStrategy"]>("complete_excision");
+  const [safetyMarginMm, setSafetyMarginMm] = useState<number | null>(5);
+  const ageContext = classifyCaseAge(ageYears);
+  const selectedPathway = acquisitionPathwayItems().find((item) => item.source === source);
+  const createCaseDraft = () => {
+    const record = createCase({
+      title: title.trim() || "新建面部评估",
+      currentStep: "evaluate",
+      patientContext: { ageYears },
+      lesion: {
+        layer,
+        marginStrategy,
+        safetyMarginMm: marginStrategy === "expanded_margin" ? safetyMarginMm : null,
+      },
+      acquisition: { source },
+    });
+    if (record) navigate(stepHref(record.id, "evaluate"), { replace: true });
+  };
+
+  return (
+    <ReactPage className="case-workflow-page">
+      <ReactShell>
+        <ReactShellSidebar>
+          <WorkbenchBrand
+            eyebrow="病例工作台"
+            title="面部松弛皮肤张力线智能切口设计系统"
+            action={<RouteStatus>新建</RouteStatus>}
+          />
+          <Card>
+            <CardHeader><span>创建前确认</span><span>前置参数</span></CardHeader>
+            <CardContent className="case-summary-list">
+              <p><b>年龄</b><span>{ageContext.ageBandLabel}</span></p>
+              <p><b>采集</b><span>{selectedPathway?.title ?? "上传"} · {selectedPathway?.subtitle ?? "高清照片 / 视频"}</span></p>
+              <p><b>病灶</b><span>{lesionLayerLabel(layer)}</span></p>
+              <p><b>切缘</b><span>{marginStrategy === "expanded_margin" ? `扩大 ${safetyMarginMm ?? "未填"} mm` : "常规完整切除"}</span></p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><span>系统入口</span><span>设置</span></CardHeader>
+            <CardContent>
+              <ReactShellNavLink to="/cases"><span>返回病例大厅</span><ArrowLeft size={16} /></ReactShellNavLink>
+              <ReactShellNavLink to="/settings/atlas"><span>图谱库管理</span><Layers3 size={16} /></ReactShellNavLink>
+            </CardContent>
+          </Card>
+        </ReactShellSidebar>
+
+        <ReactShellMain className="case-workflow-main">
+          <div className="case-workflow-stack case-new-setup" id="caseNewSetup">
+            <div className="case-page-header">
+              <Link to="/cases" className="case-back-link"><ArrowLeft size={16} />病例大厅</Link>
+              <StatusBadge>新建病例：前置参数</StatusBadge>
+            </div>
+
+            <section className="case-section case-step-command">
+              <div>
+                <h2>先录入前置参数，再进入面部评估</h2>
+                <p>这里收集会影响评估和切口规划的低频病例参数。创建后仍可返回微调，系统会保留本地草稿。</p>
+              </div>
+              <CaseTaskStrip
+                items={[
+                  { index: "01", title: "病例上下文", description: "记录匿名标题和年龄分档。" },
+                  { index: "02", title: "采集路径", description: "选择上传、拍照、3D 扫描或实时跟踪。" },
+                  { index: "03", title: "规划前提", description: "确认病灶层次、切缘策略和合规边界。" },
+                ]}
+              />
+            </section>
+
+            <div className="case-two-column">
+              <Card>
+                <CardHeader><span>病例上下文</span><span>{ageContext.ageBandLabel}</span></CardHeader>
+                <CardContent>
+                  <Label htmlFor="newCaseTitle">病例标题</Label>
+                  <Input
+                    id="newCaseTitle"
+                    value={title}
+                    onChange={(event) => setTitle(event.currentTarget.value)}
+                    placeholder="匿名病例标题"
+                  />
+                  <Label htmlFor="newCaseAge">患者年龄</Label>
+                  <Input
+                    id="newCaseAge"
+                    className="clinical-number"
+                    inputMode="numeric"
+                    min={0}
+                    type="number"
+                    value={ageYears ?? ""}
+                    onChange={(event) => setAgeYears(parseOptionalNumber(event.currentTarget.value))}
+                  />
+                  <Hint>{ageContext.parameterHint}</Hint>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><span>病灶与切缘前提</span><span>{lesionLayerLabel(layer)}</span></CardHeader>
+                <CardContent>
+                  <Label htmlFor="newCaseLesionLayer">解剖层次</Label>
+                  <Select
+                    id="newCaseLesionLayer"
+                    value={layer}
+                    onChange={(event) => setLayer(event.currentTarget.value as ClinicalCaseRecord["lesion"]["layer"])}
+                  >
+                    <option value="subcutaneous">皮下肿物 · 线性切口模式</option>
+                    <option value="cutaneous">皮表肿物 · 梭形切口模式</option>
+                  </Select>
+                  <Label htmlFor="newCaseMarginStrategy">切缘策略</Label>
+                  <Select
+                    id="newCaseMarginStrategy"
+                    value={marginStrategy}
+                    onChange={(event) => setMarginStrategy(event.currentTarget.value as ClinicalCaseRecord["lesion"]["marginStrategy"])}
+                  >
+                    <option value="complete_excision">常规完整切除</option>
+                    <option value="expanded_margin">需扩大安全切缘</option>
+                  </Select>
+                  <Label htmlFor="newCaseSafetyMargin">安全切缘 mm</Label>
+                  <Input
+                    id="newCaseSafetyMargin"
+                    className="clinical-number"
+                    disabled={marginStrategy !== "expanded_margin"}
+                    inputMode="decimal"
+                    type="number"
+                    value={marginStrategy === "expanded_margin" ? safetyMarginMm ?? "" : ""}
+                    onChange={(event) => setSafetyMarginMm(parseOptionalNumber(event.currentTarget.value))}
+                  />
+                  <Hint>良恶性由医生判断；系统只记录切缘策略并影响后续规则提示。</Hint>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="case-acquisition-path-panel">
+              <CardHeader><span>采集路径</span><span>{selectedPathway?.title ?? "上传"}</span></CardHeader>
+              <CardContent>
+                <div className="case-acquisition-path-grid" role="list" aria-label="新建病例采集路径">
+                  {acquisitionPathwayItems().map((item) => {
+                    const isActive = source === item.source;
+                    const Icon = item.Icon;
+                    return (
+                      <button
+                        key={item.source}
+                        type="button"
+                        className={`case-acquisition-path-card${isActive ? " is-active" : ""}`}
+                        aria-pressed={isActive}
+                        onClick={() => setSource(item.source)}
+                      >
+                        <span className="case-acquisition-path-icon" aria-hidden="true"><Icon size={17} /></span>
+                        <span className="case-acquisition-path-copy">
+                          <b>{item.title}</b>
+                          <strong>{item.subtitle}</strong>
+                          <small>{item.description}</small>
+                        </span>
+                        <span className="case-acquisition-path-meta">
+                          <span><b>必要视角</b><em>{item.views}</em></span>
+                          <span><b>权限</b><em>{item.permission}</em></span>
+                          <span><b>输出</b><em>{item.output}</em></span>
+                        </span>
+                        <span className={`case-acquisition-path-state${isActive ? " is-active" : ""}`}>
+                          {isActive ? "已选择" : "可选择"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="case-dashboard-grid">
+              <Card>
+                <CardHeader><span>创建后流程</span><ArrowRight size={16} /></CardHeader>
+                <CardContent className="case-summary-list">
+                  <p><b>进入评估</b><span>根据采集路径进入面部评估与张力线映射。</span></p>
+                  <p><b>返回微调</b><span>年龄、采集路径、图层和病灶参数都可在病例内继续修改。</span></p>
+                  <p><b>保存边界</b><span>当前只建立本地草稿，不写入正式院内病例库。</span></p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><span>临床边界</span><ShieldAlert size={16} /></CardHeader>
+                <CardContent>
+                  <Hint>本系统为临床辅助设计工具，不替代医生的专业判断。</Hint>
+                  <Hint>真实照片、视频、3D 纹理和超声文件不会进入普通审阅 JSON。</Hint>
+                  <Button type="button" variant="workbenchPrimary" onClick={createCaseDraft}>
+                    <Plus size={16} />创建病例草稿
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </ReactShellMain>
+      </ReactShell>
+    </ReactPage>
+  );
+}
+
+export function CaseWorkflowRoute({ step = "evaluate" }: CaseWorkflowRouteProps) {
   const { caseId } = useParams();
   const activeCase = useCaseStore((state) => state.activeCase);
-  const createCase = useCaseStore((state) => state.createCase);
   const selectCase = useCaseStore((state) => state.selectCase);
   const setStep = useCaseStore((state) => state.setStep);
 
@@ -1813,29 +1976,15 @@ export function CaseWorkflowRoute({ step = "evaluate" }: CaseWorkflowRouteProps)
   });
 
   useEffect(() => {
-    if (step === "new") {
-      const record = createCase();
-      if (record) navigate(stepHref(record.id, "evaluate"), { replace: true });
-      return;
-    }
-    if (caseId) selectCase(caseId);
-  }, [caseId, createCase, navigate, selectCase, step]);
+    if (step !== "new" && caseId) selectCase(caseId);
+  }, [caseId, selectCase, step]);
 
   useEffect(() => {
     if (step !== "new" && activeCase && activeCase.currentStep !== step) setStep(step);
   }, [activeCase, setStep, step]);
 
   if (step === "new") {
-    return (
-      <ReactPage className="grid place-items-center p-6">
-        <Card className="max-w-[420px]">
-          <CardHeader><span>正在创建病例</span><span>草稿</span></CardHeader>
-          <CardContent>
-            <Hint>正在建立本地病例工作区。</Hint>
-          </CardContent>
-        </Card>
-      </ReactPage>
-    );
+    return <CaseNewSetupRoute />;
   }
   if (!activeCase || (caseId && activeCase.id !== caseId)) return <MissingCase />;
 
@@ -1845,13 +1994,6 @@ export function CaseWorkflowRoute({ step = "evaluate" }: CaseWorkflowRouteProps)
       {currentStep === "evaluate" ? <EvaluateStep activeCase={activeCase} /> : null}
       {currentStep === "plan" ? <PlanStep activeCase={activeCase} /> : null}
       {currentStep === "review" ? <ReviewStep activeCase={activeCase} /> : null}
-      {currentStep !== "review" ? (
-        <div className="case-next-rail">
-          <Button asChild variant="workbench">
-            <Link to={stepHref(activeCase.id, nextStep(currentStep))}>{nextStepRailLabel(currentStep)}</Link>
-          </Button>
-        </div>
-      ) : null}
     </CaseWorkflowShell>
   );
 }

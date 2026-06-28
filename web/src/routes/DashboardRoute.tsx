@@ -11,7 +11,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import {
   ReactPage,
@@ -36,10 +36,8 @@ function caseStepPath(caseId: string, step: ClinicalCaseStep) {
 }
 
 export function DashboardRoute() {
-  const navigate = useNavigate();
   const routeStatus = useAppStore((state) => state.routeStatus);
   const cases = useCaseStore((state) => state.cases);
-  const createCase = useCaseStore((state) => state.createCase);
   const loadCases = useCaseStore((state) => state.loadCases);
 
   useReactRouteLifecycle({
@@ -52,10 +50,6 @@ export function DashboardRoute() {
     loadCases();
   }, [loadCases]);
 
-  const handleCreateCase = () => {
-    const record = createCase();
-    if (record) navigate(caseStepPath(record.id, "evaluate"));
-  };
   const latestCase = cases[0] ?? null;
 
   return (
@@ -71,8 +65,8 @@ export function DashboardRoute() {
           <Card className="case-primary-action-card">
             <CardHeader><span>快速开始</span><ClipboardCheck size={16} /></CardHeader>
             <CardContent>
-              <Button variant="workbenchPrimary" onClick={handleCreateCase}>
-                <Plus size={16} />新建面部评估
+              <Button asChild variant="workbenchPrimary">
+                <Link to="/case/new"><Plus size={16} />新建面部评估</Link>
               </Button>
               {latestCase ? (
                 <Button asChild variant="workbench">
@@ -119,8 +113,8 @@ export function DashboardRoute() {
                 <h2 id="caseLobbyTitle">从病例开始完成面部评估、病灶定位和切口方案确认</h2>
                 <p>医生日常入口围绕病例草稿组织；图谱维护、模型配置和系统诊断统一收进系统设置，避免主流程被工具列表打断。</p>
                 <div className="case-lobby-actions">
-                  <Button variant="workbenchPrimary" onClick={handleCreateCase}>
-                    <Plus size={16} />新建病例
+                  <Button asChild variant="workbenchPrimary">
+                    <Link to="/case/new"><Plus size={16} />新建病例</Link>
                   </Button>
                   {latestCase ? (
                     <Button asChild variant="workbench">
