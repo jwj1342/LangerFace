@@ -132,6 +132,63 @@ function CaseWorkflowShell({
   );
 }
 
+function CaseClinicalViewport({
+  activeCase,
+  step,
+}: {
+  activeCase: ClinicalCaseRecord;
+  step: ClinicalCaseStep;
+}) {
+  const stepLabel = STEP_LABELS[step];
+  const marginLabel = activeCase.lesion.marginStrategy === "expanded_margin"
+    ? `${activeCase.lesion.safetyMarginMm ?? "未填"} mm`
+    : "常规";
+  const layerItems = [
+    ["RSTL", activeCase.layers.rstl],
+    ["皮纹", activeCase.layers.personalizedWrinkles],
+    ["混合场", activeCase.layers.blendedField],
+    ["切口", activeCase.layers.incisionDesign],
+  ] as const;
+
+  return (
+    <section className={`case-clinical-viewport case-clinical-viewport-${step}`} aria-label={`${stepLabel}临床画布`}>
+      <div className="case-viewport-toolbar">
+        <div>
+          <span>病例画布</span>
+          <b>{stepLabel}</b>
+        </div>
+        <RouteStatus className="case-viewport-status">本地草稿</RouteStatus>
+      </div>
+      <div className="case-viewport-body">
+        <div className="case-face-preview case-face-preview-large" aria-hidden="true">
+          <span className="case-face-outline" />
+          <span className="case-face-midline" />
+          <span className="case-face-rstl case-face-rstl-a" />
+          <span className="case-face-rstl case-face-rstl-b" />
+          <span className="case-face-rstl case-face-rstl-c" />
+          <span className="case-face-lesion" />
+          <span className="case-face-incision" />
+          <span className="case-face-zone case-face-zone-eye" />
+          <span className="case-face-zone case-face-zone-mouth" />
+        </div>
+        <div className="case-viewport-readout">
+          <div><span>年龄分档</span><b>{activeCase.patientContext.ageBandLabel}</b></div>
+          <div><span>病灶层次</span><b>{activeCase.lesion.layerLabel}</b></div>
+          <div><span>直径</span><b className="clinical-number">{activeCase.lesion.diameterMm ?? "未填"} mm</b></div>
+          <div><span>切缘</span><b className="clinical-number">{marginLabel}</b></div>
+        </div>
+      </div>
+      <div className="case-viewport-layer-strip" aria-label="图层状态">
+        {layerItems.map(([label, enabled]) => (
+          <span key={label} className={enabled ? "is-on" : undefined}>
+            {label}
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   const navigate = useNavigate();
   const updateActiveCase = useCaseStore((state) => state.updateActiveCase);
@@ -143,13 +200,16 @@ function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
         <StatusBadge>步骤一：面部评估与布线</StatusBadge>
       </div>
 
-      <section className="case-section">
-        <div>
-          <h2>面部评估与张力线映射</h2>
-          <p>先确认患者年龄、采集方式和图层状态，再进入病灶标记。医生可随时返回本步骤微调图层。</p>
-        </div>
-        <Button asChild variant="workbenchPrimary"><Link to="/live">打开评估画布</Link></Button>
-      </section>
+      <div className="case-step-stage-grid">
+        <CaseClinicalViewport activeCase={activeCase} step="evaluate" />
+        <section className="case-section case-step-command">
+          <div>
+            <h2>面部评估与张力线映射</h2>
+            <p>先确认患者年龄、采集方式和图层状态，再进入病灶标记。医生可随时返回本步骤微调图层。</p>
+          </div>
+          <Button asChild variant="workbenchPrimary"><Link to="/live">打开评估画布</Link></Button>
+        </section>
+      </div>
 
       <div className="case-two-column">
         <Card>
@@ -247,13 +307,16 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
         <StatusBadge>步骤二：病灶定位与切口规划</StatusBadge>
       </div>
 
-      <section className="case-section">
-        <div>
-          <h2>病灶定位与切口规划</h2>
-          <p>先记录解剖层次、直径、深度和切缘策略，再进入切口工作台生成候选。</p>
-        </div>
-        <Button asChild variant="workbenchPrimary"><Link to="/incision">打开规划画布</Link></Button>
-      </section>
+      <div className="case-step-stage-grid">
+        <CaseClinicalViewport activeCase={activeCase} step="plan" />
+        <section className="case-section case-step-command">
+          <div>
+            <h2>病灶定位与切口规划</h2>
+            <p>先记录解剖层次、直径、深度和切缘策略，再进入切口工作台生成候选。</p>
+          </div>
+          <Button asChild variant="workbenchPrimary"><Link to="/incision">打开规划画布</Link></Button>
+        </section>
+      </div>
 
       <div className="case-two-column">
         <Card>
@@ -354,15 +417,18 @@ function ReviewStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
         <StatusBadge>步骤三：方案确认与输出</StatusBadge>
       </div>
 
-      <section className="case-section">
-        <div>
-          <h2>方案确认与输出</h2>
-          <p>确认页展示最终参数、审计边界、导出入口和临床合规提示。导出不等于正式病例保存。</p>
-        </div>
-        <Button variant="workbenchPrimary" onClick={() => updateActiveCase({ status: "confirmed", currentStep: "review" })}>
-          标记为已确认
-        </Button>
-      </section>
+      <div className="case-step-stage-grid">
+        <CaseClinicalViewport activeCase={activeCase} step="review" />
+        <section className="case-section case-step-command">
+          <div>
+            <h2>方案确认与输出</h2>
+            <p>确认页展示最终参数、审计边界、导出入口和临床合规提示。导出不等于正式病例保存。</p>
+          </div>
+          <Button variant="workbenchPrimary" onClick={() => updateActiveCase({ status: "confirmed", currentStep: "review" })}>
+            标记为已确认
+          </Button>
+        </section>
+      </div>
 
       <div className="case-two-column">
         <Card>

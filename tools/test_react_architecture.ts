@@ -694,7 +694,7 @@ for (const route of ["/incision", "/live", "/annotate", "/three-preview", "/surg
   assert.ok(dashboardRoute.includes(`to="${route}"`), `React dashboard links to ${route} through React Router`);
 }
 for (const [name, html, expected] of [
-  ["index.html", legacyLiveHtml, ["/app/live"]],
+  ["index.html", legacyLiveHtml, ["/app/"]],
   ["annotate.html", legacyAnnotateHtml, ["/app/annotate"]],
   ["incision_agent.html", legacyIncisionHtml, ["/app/incision"]],
   ["surgery.html", legacySurgeryHtml, ["/app/surgery"]],

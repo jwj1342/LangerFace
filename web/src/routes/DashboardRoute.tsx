@@ -172,6 +172,26 @@ export function DashboardRoute() {
                 <div><span>流程阶段</span><b>评估 / 规划 / 确认</b></div>
                 <div><span>保存反馈</span><b>本地草稿</b></div>
               </div>
+              <div className="case-lobby-stage" aria-label="临床画布预览">
+                <div className="case-stage-topline">
+                  <span>3D 面部重建</span>
+                  <b>待输入</b>
+                </div>
+                <div className="case-face-preview" aria-hidden="true">
+                  <span className="case-face-outline" />
+                  <span className="case-face-midline" />
+                  <span className="case-face-rstl case-face-rstl-a" />
+                  <span className="case-face-rstl case-face-rstl-b" />
+                  <span className="case-face-rstl case-face-rstl-c" />
+                  <span className="case-face-lesion" />
+                  <span className="case-face-incision" />
+                </div>
+                <div className="case-stage-metrics">
+                  <div><span>RSTL</span><b>就绪</b></div>
+                  <div><span>皮纹</span><b>待追踪</b></div>
+                  <div><span>切口</span><b>未生成</b></div>
+                </div>
+              </div>
             </section>
 
             <section className="case-workflow-roadmap" aria-label="临床流程">
