@@ -58,6 +58,7 @@ export function SurgeryRoute() {
 
   return (
     <ReactRouteHost workspace="surgery">
+      <div className="react-legacy-banner">闭合模拟演示：正式方案应从病例流程的切口规划步骤进入。</div>
       <SurgeryWorkbench
         activeCut={activeCut}
         hint={hint}

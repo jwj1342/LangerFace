@@ -1,4 +1,17 @@
-import { ArrowRight, Boxes, Camera, Database, FileText, PenLine, Plus, Scissors, Settings } from "lucide-react";
+import {
+  ArrowRight,
+  Boxes,
+  Camera,
+  ClipboardCheck,
+  FileText,
+  FolderOpen,
+  History,
+  PenLine,
+  Plus,
+  Scissors,
+  Settings,
+  ShieldCheck,
+} from "lucide-react";
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -45,6 +58,7 @@ export function DashboardRoute() {
     const record = createCase();
     if (record) navigate(caseStepPath(record.id, "evaluate"));
   };
+  const latestCase = cases[0] ?? null;
 
   return (
     <ReactPage className="case-workflow-page">
@@ -56,17 +70,34 @@ export function DashboardRoute() {
             action={<RouteStatus>{routeStatus}</RouteStatus>}
           />
 
-          <Card>
-            <CardHeader><span>快速开始</span><Database size={16} /></CardHeader>
+          <Card className="case-primary-action-card">
+            <CardHeader><span>快速开始</span><ClipboardCheck size={16} /></CardHeader>
             <CardContent>
               <Button variant="workbenchPrimary" onClick={handleCreateCase}>
                 <Plus size={16} />新建面部评估
               </Button>
-              <Hint>从病例开始，按“面部评估 - 标记病灶 - 切口规划 - 方案确认”推进；每一步都会保留本地草稿。</Hint>
+              {latestCase ? (
+                <Button asChild variant="workbench">
+                  <Link to={caseStepPath(latestCase.id, latestCase.currentStep)}>
+                    <History size={16} />继续最近病例
+                  </Link>
+                </Button>
+              ) : null}
+              <Hint>从病例开始，按“面部评估 - 标记病灶 - 切口规划 - 方案确认”推进；每一步都会保留草稿。</Hint>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="case-sidebar-status-card">
+            <CardHeader><span>工作区状态</span><FolderOpen size={16} /></CardHeader>
+            <CardContent className="case-mini-grid">
+              <div><span>草稿</span><b className="clinical-number">{cases.length}</b></div>
+              <div><span>主流程</span><b>3 步</b></div>
+              <div><span>保存</span><b>本地</b></div>
+              <div><span>旧工具</span><b>已收起</b></div>
+            </CardContent>
+          </Card>
+
+          <Card className="case-settings-card">
             <CardHeader><span>系统设置</span><Settings size={16} /></CardHeader>
             <CardContent>
               <ReactShellNavLink to="/settings/atlas">
@@ -80,53 +111,82 @@ export function DashboardRoute() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader><span>兼容工具入口</span><span>隐藏主流程</span></CardHeader>
-            <CardContent>
+          <details className="case-disclosure case-legacy-tools">
+            <summary>兼容 / 研发工具</summary>
+            <div className="case-disclosure-body">
               <ReactShellNavLink to="/incision">
-                <span>切口 Agent 工作台</span>
+                <span>切口规划旧工作台</span>
                 <ArrowRight size={16} />
               </ReactShellNavLink>
               <ReactShellNavLink to="/live">
-                <span>实时 Langer 线显示</span>
+                <span>实时张力线旧入口</span>
                 <Camera size={16} />
               </ReactShellNavLink>
               <ReactShellNavLink to="/annotate">
-                <span>3D 网页标注</span>
+                <span>图谱标注工具</span>
                 <PenLine size={16} />
               </ReactShellNavLink>
               <ReactShellNavLink to="/three-preview">
-                <span>R3F 标准脸预览</span>
+                <span>标准脸预览</span>
                 <Boxes size={16} />
               </ReactShellNavLink>
               <ReactShellNavLink to="/surgery">
-                <span>沿 RSTL 闭合演示</span>
+                <span>闭合模拟演示</span>
                 <Scissors size={16} />
               </ReactShellNavLink>
-            </CardContent>
-          </Card>
+            </div>
+          </details>
 
-          <Card>
-            <CardHeader><span>状态边界</span><span>低频 UI</span></CardHeader>
-            <CardContent>
+          <details className="case-disclosure case-developer-notes">
+            <summary>开发 / 诊断信息</summary>
+            <div className="case-disclosure-body">
               <Hint>{STATE_BOUNDARY_NOTE}</Hint>
               <Hint>{CASE_STORE_BOUNDARY_NOTE}</Hint>
-            </CardContent>
-          </Card>
-
-          <WorkerStatusPanel />
+              <WorkerStatusPanel />
+            </div>
+          </details>
         </ReactShellSidebar>
 
         <ReactShellMain className="case-workflow-main">
           <div className="case-workflow-stack" id="caseDashboard">
-            <section className="case-section">
-              <div>
-                <h2>病例大厅</h2>
-                <p>这里是医生主入口。技术工具被收进设置区，日常使用围绕病例草稿、评估、定位、规划和确认推进。</p>
+            <section className="case-lobby-landing" aria-labelledby="caseLobbyTitle">
+              <div className="case-lobby-copy">
+                <span className="case-lobby-kicker">工作台大厅</span>
+                <h2 id="caseLobbyTitle">从病例开始完成面部评估、病灶定位和切口方案确认</h2>
+                <p>医生日常入口围绕病例草稿组织；图谱、旧工作台和开发诊断收进设置与兼容区，避免主流程被工具列表打断。</p>
+                <div className="case-lobby-actions">
+                  <Button variant="workbenchPrimary" onClick={handleCreateCase}>
+                    <Plus size={16} />新建病例
+                  </Button>
+                  {latestCase ? (
+                    <Button asChild variant="workbench">
+                      <Link to={caseStepPath(latestCase.id, latestCase.currentStep)}>
+                        <History size={16} />继续最近病例
+                      </Link>
+                    </Button>
+                  ) : null}
+                </div>
               </div>
-              <Button variant="workbenchPrimary" onClick={handleCreateCase}>
-                <Plus size={16} />新建病例
-              </Button>
+              <div className="case-lobby-readiness" aria-label="工作台状态">
+                <div><span>病例草稿</span><b className="clinical-number">{cases.length}</b></div>
+                <div><span>流程阶段</span><b>评估 / 规划 / 确认</b></div>
+                <div><span>保存反馈</span><b>本地草稿</b></div>
+              </div>
+            </section>
+
+            <section className="case-workflow-roadmap" aria-label="临床流程">
+              {[
+                ["01", "面部评估与布线", "上传、拍照、3D 扫描或实时跟踪，并调整张力线图层。"],
+                ["02", "标记病灶参数", "记录年龄分档、病灶层次、直径、深度和切缘策略。"],
+                ["03", "切口规划与闭合模拟", "生成候选切口，查看规划依据和张力闭合提示。"],
+                ["04", "方案确认与输出", "确认医生审阅状态，导出报告草案和结构化记录。"],
+              ].map(([index, title, copy]) => (
+                <article key={index} className="case-roadmap-item">
+                  <span className="clinical-number">{index}</span>
+                  <b>{title}</b>
+                  <p>{copy}</p>
+                </article>
+              ))}
             </section>
 
             <Card>
@@ -151,16 +211,16 @@ export function DashboardRoute() {
 
             <div className="case-dashboard-grid">
               <Card>
-                <CardHeader><span>流程</span><ArrowRight size={16} /></CardHeader>
+                <CardHeader><span>任务入口</span><ArrowRight size={16} /></CardHeader>
                 <CardContent className="case-summary-list">
-                  <p><b>1. 面部评估</b><span>上传 / 拍照 / 3D 扫描 / 实时 AR，并控制 RSTL 与个性化皮纹图层。</span></p>
-                  <p><b>2. 切口规划</b><span>记录肿物层次、直径、切缘策略，进入切口候选工作台。</span></p>
-                  <p><b>3. 方案确认</b><span>查看参数、风险、审计和临床合规提示，再导出报告。</span></p>
+                  <p><b>新建病例</b><span>先录入前置参数，再进入面部评估。</span></p>
+                  <p><b>恢复草稿</b><span>从病例列表回到上次保存的步骤。</span></p>
+                  <p><b>全局设置</b><span>管理图谱库、模型配置和研发诊断入口。</span></p>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader><span>临床边界</span><span>辅助设计</span></CardHeader>
+                <CardHeader><span>临床边界</span><ShieldCheck size={16} /></CardHeader>
                 <CardContent>
                   <Hint>系统不判断良恶性，不输出自动手术指令。候选方案必须由执业医师结合查体确认。</Hint>
                   <Hint>病例草稿默认本地保存；真实影像、3D 纹理、超声等敏感资产不进入普通审阅 JSON。</Hint>

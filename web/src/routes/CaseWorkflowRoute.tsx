@@ -52,7 +52,7 @@ function SaveStatusBadge() {
       : saveStatus === "save_failed"
         ? "保存失败"
         : "已保存";
-  return <RouteStatus className="clinical-number">{label}</RouteStatus>;
+  return <RouteStatus className={`case-save-status case-save-status-${saveStatus} clinical-number`}>{label}</RouteStatus>;
 }
 
 function CaseStepper({ activeCase, step }: { activeCase: ClinicalCaseRecord; step: ClinicalCaseStep }) {
@@ -66,7 +66,10 @@ function CaseStepper({ activeCase, step }: { activeCase: ClinicalCaseRecord; ste
             className={item === step ? "case-step-active" : undefined}
             to={stepHref(activeCase.id, item)}
           >
-            <span>{index + 1}. {STEP_LABELS[item]}</span>
+            <span className="case-step-label">
+              <b>{index + 1}. {STEP_LABELS[item]}</b>
+              <small>{item === step ? "当前步骤，可保存后继续" : "可返回微调，草稿保留"}</small>
+            </span>
             {item === step ? <CheckCircle2 size={16} /> : <ArrowRight size={16} />}
           </ReactShellNavLink>
         ))}
@@ -145,7 +148,7 @@ function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
           <h2>面部评估与张力线映射</h2>
           <p>先确认患者年龄、采集方式和图层状态，再进入病灶标记。医生可随时返回本步骤微调图层。</p>
         </div>
-        <Button asChild variant="workbenchPrimary"><Link to="/live">打开实时面部评估</Link></Button>
+        <Button asChild variant="workbenchPrimary"><Link to="/live">打开评估画布</Link></Button>
       </section>
 
       <div className="case-two-column">
@@ -249,7 +252,7 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
           <h2>病灶定位与切口规划</h2>
           <p>先记录解剖层次、直径、深度和切缘策略，再进入切口工作台生成候选。</p>
         </div>
-        <Button asChild variant="workbenchPrimary"><Link to="/incision">打开切口规划工作台</Link></Button>
+        <Button asChild variant="workbenchPrimary"><Link to="/incision">打开规划画布</Link></Button>
       </section>
 
       <div className="case-two-column">
@@ -329,7 +332,7 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
       </Card>
 
       <div className="case-actions">
-        <Button asChild variant="workbench"><Link to="/surgery">张力闭合模拟</Link></Button>
+        <Button asChild variant="workbench"><Link to="/surgery">在当前病例中查看闭合模拟</Link></Button>
         <Button variant="workbenchPrimary" onClick={() => {
           updateActiveCase({ currentStep: "review", status: "needs_review" });
           navigate(stepHref(activeCase.id, "review"));
@@ -376,7 +379,7 @@ function ReviewStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
           <CardHeader><span>保存与导出</span><Save size={16} /></CardHeader>
           <CardContent>
             <Hint>当前病例草稿已通过 `CaseDataSource` 保存到本地。接入 Worker API 后，同一组件边界可切换为远端结构化病例保存。</Hint>
-            <Button asChild variant="workbench"><Link to="/incision">回到候选库导出 JSON / Markdown / PNG</Link></Button>
+            <Button asChild variant="workbench"><Link to="/incision">打开候选方案导出面板</Link></Button>
           </CardContent>
         </Card>
       </div>
