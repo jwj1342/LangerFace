@@ -189,9 +189,20 @@ test("clinical case workflow click path", async ({ page }) => {
   await expectNoBrowserScroll(page);
   await shot(page, "12-return-to-plan-from-stepper");
 
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await waitForFaceViewport(page);
+  await expectNoBrowserScroll(page);
+  await shot(page, "13-compact-plan-1280x720");
+
+  await page.getByRole("button", { name: /^方案确认$/ }).click();
+  await expect(page.locator("#caseReviewStep")).toBeVisible();
+  await waitForFaceViewport(page);
+  await expectNoBrowserScroll(page);
+  await shot(page, "14-compact-review-1280x720");
+
   await page.getByRole("link", { name: /^系统诊断$/ }).click();
   await expect(page.locator("#settingsDeveloper")).toBeVisible();
-  await shot(page, "13-settings-developer-controlled-tools");
+  await shot(page, "15-settings-developer-controlled-tools");
 
   const seriousErrors = consoleErrors.filter((message) => !/THREE\\.Clock/.test(message));
   expect(seriousErrors, seriousErrors.join("\\n")).toEqual([]);
