@@ -96,7 +96,10 @@ function writeStorageState(): void {
     },
     layers: {
       rstl: true,
+      rstlDensity: "high",
+      rstlOpacity: 0.78,
       personalizedWrinkles: true,
+      wrinkleOpacity: 0.7,
       blendedField: true,
       incisionDesign: true,
     },
@@ -133,6 +136,7 @@ function writeStorageState(): void {
             "年龄分档：老年 / 松弛",
             "病灶层次：皮表肿物 · 梭形切口模式",
             "安全切缘：5 mm",
+            "图层状态：RSTL 高密度 78%，皮纹 70%",
             "梭形参数：36° / 2.5:1",
           ],
         },

@@ -89,6 +89,7 @@ export type MarginStrategy = "complete_excision" | "expanded_margin";
 export type ClosureSimulationStatus = "not_run" | "stable" | "needs_review";
 export type CaseIncisionCandidateKind = "linear" | "fusiform";
 export type CaseIncisionCandidateStatus = "draft" | "needs_review" | "selected";
+export type RstlLayerDensity = "low" | "standard" | "high";
 
 export interface CaseIncisionCandidateRecord {
   id: string;
@@ -142,7 +143,10 @@ export interface ClinicalCaseRecord {
   };
   layers: {
     rstl: boolean;
+    rstlDensity: RstlLayerDensity;
+    rstlOpacity: number;
     personalizedWrinkles: boolean;
+    wrinkleOpacity: number;
     blendedField: boolean;
     incisionDesign: boolean;
   };
@@ -367,6 +371,16 @@ function normalizeCandidateStatus(value: unknown): CaseIncisionCandidateStatus {
   return "draft";
 }
 
+function normalizeRstlLayerDensity(value: unknown): RstlLayerDensity {
+  if (value === "low" || value === "high" || value === "standard") return value;
+  return "standard";
+}
+
+function normalizeOpacity(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.max(0.2, Math.min(1, value));
+}
+
 function normalizeIncisionCandidate(
   value: unknown,
   index: number,
@@ -467,7 +481,10 @@ function normalizeCaseRecord(payload: ClinicalCaseDraft, now = new Date().toISOS
     },
     layers: {
       rstl: payload.layers?.rstl ?? true,
+      rstlDensity: normalizeRstlLayerDensity(payload.layers?.rstlDensity),
+      rstlOpacity: normalizeOpacity(payload.layers?.rstlOpacity, 0.72),
       personalizedWrinkles: payload.layers?.personalizedWrinkles ?? true,
+      wrinkleOpacity: normalizeOpacity(payload.layers?.wrinkleOpacity, 0.68),
       blendedField: payload.layers?.blendedField ?? false,
       incisionDesign: payload.layers?.incisionDesign ?? true,
     },

@@ -75,6 +75,10 @@ assert.ok(caseRoute.includes("皮下肿物 · 线性切口模式"), "case workfl
 assert.ok(caseRoute.includes("皮表肿物 · 梭形切口模式"), "case workflow exposes cutaneous fusiform mode");
 assert.ok(caseRoute.includes("需扩大安全切缘"), "case workflow exposes expanded safety margin strategy");
 assert.ok(caseRoute.includes("图层看板"), "case workflow exposes the clinical layer board");
+assert.ok(caseRoute.includes("RSTL 密度"), "case workflow lets clinicians tune RSTL line density");
+assert.ok(caseRoute.includes("RSTL 透明度"), "case workflow lets clinicians tune RSTL opacity");
+assert.ok(caseRoute.includes("皮纹透明度"), "case workflow lets clinicians tune personalized wrinkle opacity");
+assert.ok(caseRoute.includes("rstlDensityLabel"), "case workflow derives clinician-facing RSTL density labels");
 assert.ok(caseRoute.includes("规划依据"), "case workflow keeps explainability visible");
 assert.ok(caseRoute.includes("PlanningRationalePanel"), "case workflow renders a dedicated planning rationale panel");
 assert.ok(caseRoute.includes("规划依据与风险提示"), "case workflow labels planning rationale and risk together");
@@ -131,8 +135,14 @@ assert.ok(caseRoute.includes("可返回微调，草稿保留"), "case workflow s
 assert.ok(caseRoute.includes("本设备"), "case workflow explains local draft saving in clinician-facing language");
 assert.ok(caseRoute.includes("院内或云端病例库"), "case workflow explains future remote case storage without implementation jargon");
 assert.ok(!caseRoute.includes("localStorage"), "case workflow components do not write localStorage directly");
-assert.ok(caseRoute.includes("<ClinicalFacePreview large showZones />"), "case workflow reserves a high-contrast face planning viewport");
+assert.ok(caseRoute.includes("layers={activeCase.layers}"), "case workflow binds the visible layer board into the planning viewport");
+assert.ok(caseRoute.includes("mode={activeMode}"), "case workflow binds acquisition mode into the planning viewport");
 assert.ok(clinicalFacePreview.includes("case-face-preview-large"), "clinical face preview supports a large planning viewport");
+assert.ok(clinicalFacePreview.includes("ClinicalFacePreviewLayers"), "clinical face preview owns a typed layer contract");
+assert.ok(clinicalFacePreview.includes("rstlLineKeys"), "clinical face preview changes RSTL line count by density");
+assert.ok(clinicalFacePreview.includes("case-face-wrinkle"), "clinical face preview renders personalized wrinkle overlays");
+assert.ok(clinicalFacePreview.includes("case-face-blended-field"), "clinical face preview renders a mixed field overlay");
+assert.ok(clinicalFacePreview.includes("resolvedLayers.incisionDesign"), "clinical face preview can hide incision overlays from layer state");
 assert.ok(clinicalFacePreview.includes("case-face-ruler"), "clinical face preview renders a measurement ruler");
 assert.ok(clinicalFacePreview.includes("case-face-eye"), "clinical face preview renders anatomical eye references");
 assert.ok(clinicalFacePreview.includes("case-face-nose"), "clinical face preview renders an anatomical nose reference");
@@ -190,6 +200,10 @@ assert.ok(dataSource.includes("CaseIncisionCandidateRecord"), "dataSource owns t
 assert.ok(dataSource.includes("incisionCandidates"), "dataSource persists incision candidates inside the case record");
 assert.ok(dataSource.includes("selectedCandidateId"), "dataSource persists the selected candidate pointer");
 assert.ok(dataSource.includes("normalizeIncisionCandidate"), "dataSource normalizes saved candidate records for draft recovery");
+assert.ok(dataSource.includes("RstlLayerDensity"), "dataSource persists typed RSTL layer density");
+assert.ok(dataSource.includes("rstlOpacity"), "dataSource persists RSTL opacity with the case draft");
+assert.ok(dataSource.includes("wrinkleOpacity"), "dataSource persists personalized wrinkle opacity with the case draft");
+assert.ok(dataSource.includes("normalizeOpacity"), "dataSource clamps persisted layer opacity values");
 assert.ok(dataSource.includes("saveCase(payload"), "dataSource exposes a case save method");
 assert.ok(dataSource.includes("listCases()"), "dataSource exposes case listing");
 assert.ok(dataSource.includes("getCase(id"), "dataSource exposes case recovery");
@@ -214,6 +228,12 @@ assert.ok(styles.includes(".case-lobby-stage"), "styles implement the case lobby
 assert.ok(styles.includes(".case-workflow-roadmap"), "styles implement the clinical workflow roadmap");
 assert.ok(styles.includes(".case-clinical-viewport"), "styles implement the PACS-like clinical viewport");
 assert.ok(styles.includes(".case-viewport-mode-switch"), "styles implement compact 2D/3D/live viewport mode controls");
+assert.ok(styles.includes(".case-layer-controls"), "styles implement compact layer parameter controls");
+assert.ok(styles.includes(".case-face-density-high"), "styles implement high-density RSTL overlays");
+assert.ok(styles.includes("--case-rstl-opacity"), "styles bind RSTL opacity into the face viewport");
+assert.ok(styles.includes("--case-wrinkle-opacity"), "styles bind personalized wrinkle opacity into the face viewport");
+assert.ok(styles.includes(".case-face-blended-field"), "styles implement the mixed-field overlay");
+assert.ok(styles.includes(".case-face-wrinkle"), "styles implement personalized wrinkle overlays");
 assert.ok(styles.includes(".case-rule-grid"), "styles implement structured planning rule cards");
 assert.ok(styles.includes(".case-rationale-audit"), "styles implement dense planning audit rows");
 assert.ok(styles.includes(".case-candidate-panel"), "styles implement the case candidate panel");
@@ -245,5 +265,9 @@ assert.ok(!styles.includes(".surgery-green-copy"), "styles remove the legacy gre
 
 assert.ok(visualCapture.includes("incisionCandidates"), "Playwright visual case seed includes saved candidates");
 assert.ok(visualCapture.includes("visual-candidate-1"), "Playwright visual case seed includes a selected candidate");
+assert.ok(visualCapture.includes('rstlDensity: "high"'), "Playwright visual case seed exercises high-density RSTL controls");
+assert.ok(visualCapture.includes("rstlOpacity: 0.78"), "Playwright visual case seed exercises persisted RSTL opacity");
+assert.ok(visualCapture.includes("wrinkleOpacity: 0.7"), "Playwright visual case seed exercises persisted wrinkle opacity");
+assert.ok(visualCapture.includes("图层状态：RSTL 高密度 78%，皮纹 70%"), "Playwright visual case seed exposes layer state in candidate provenance");
 
 console.log("test_case_workflow_ui: clinical case workflow contracts passed");

@@ -50,6 +50,16 @@ function viewportMode(source: ClinicalCaseRecord["acquisition"]["source"]) {
   return "2d";
 }
 
+function rstlDensityLabel(density: ClinicalCaseRecord["layers"]["rstlDensity"]) {
+  if (density === "low") return "低密度";
+  if (density === "high") return "高密度";
+  return "标准密度";
+}
+
+function percentLabel(value: number) {
+  return `${Math.round(value * 100)}%`;
+}
+
 function nextStepRailLabel(step: ClinicalCaseStep) {
   if (step === "evaluate") return "继续到病灶标记";
   if (step === "plan") return "继续到方案确认";
@@ -180,6 +190,7 @@ function buildCaseCandidate(activeCase: ClinicalCaseRecord): CaseIncisionCandida
     activeCase.lesion.marginStrategy === "expanded_margin"
       ? `安全切缘：${margin} mm`
       : "切缘策略：常规完整切除",
+    `图层状态：RSTL ${activeCase.layers.rstl ? `${rstlDensityLabel(activeCase.layers.rstlDensity)} ${percentLabel(activeCase.layers.rstlOpacity)}` : "关闭"}，皮纹 ${activeCase.layers.personalizedWrinkles ? percentLabel(activeCase.layers.wrinkleOpacity) : "关闭"}`,
     kind === "fusiform"
       ? `梭形参数：${tipAngleDeg}° / ${ratio}:1`
       : "线性参数：沿局部 RSTL 方向",
@@ -385,10 +396,10 @@ function CaseClinicalViewport({
     ? `${activeCase.lesion.safetyMarginMm ?? "未填"} mm`
     : "常规";
   const layerItems = [
-    ["RSTL", activeCase.layers.rstl],
-    ["皮纹", activeCase.layers.personalizedWrinkles],
-    ["混合场", activeCase.layers.blendedField],
-    ["切口", activeCase.layers.incisionDesign],
+    ["RSTL", activeCase.layers.rstl, `${rstlDensityLabel(activeCase.layers.rstlDensity)} · ${percentLabel(activeCase.layers.rstlOpacity)}`],
+    ["皮纹", activeCase.layers.personalizedWrinkles, percentLabel(activeCase.layers.wrinkleOpacity)],
+    ["混合场", activeCase.layers.blendedField, "融合调优"],
+    ["切口", activeCase.layers.incisionDesign, "候选显示"],
   ] as const;
   const activeMode = viewportMode(activeCase.acquisition.source);
 
@@ -407,7 +418,7 @@ function CaseClinicalViewport({
         <RouteStatus className="case-viewport-status">本地草稿</RouteStatus>
       </div>
       <div className="case-viewport-body">
-        <ClinicalFacePreview large showZones />
+        <ClinicalFacePreview large showZones layers={activeCase.layers} mode={activeMode} />
         <div className="case-viewport-readout">
           <div><span>年龄分档</span><b>{activeCase.patientContext.ageBandLabel}</b></div>
           <div><span>病灶层次</span><b>{activeCase.lesion.layerLabel}</b></div>
@@ -416,9 +427,10 @@ function CaseClinicalViewport({
         </div>
       </div>
       <div className="case-viewport-layer-strip" aria-label="图层状态">
-        {layerItems.map(([label, enabled]) => (
+        {layerItems.map(([label, enabled, detail]) => (
           <span key={label} className={enabled ? "is-on" : undefined}>
-            {label}
+            <b>{label}</b>
+            <small>{enabled ? detail : "关闭"}</small>
           </span>
         ))}
       </div>
@@ -695,28 +707,84 @@ function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader><span>图层看板</span><span>一键开关</span></CardHeader>
-        <CardContent className="case-layer-grid">
-          {[
-            ["rstl", "RSTL", "密度和透明度由评估画布控制"],
-            ["personalizedWrinkles", "个性化皮纹", "额纹、鱼尾纹、鼻唇沟、睑缘纹等"],
-            ["blendedField", "混合场", "RSTL + 个性化纹路调优"],
-            ["incisionDesign", "切口设计", "候选线、梭形轮廓和控制点"],
-          ].map(([key, label, hint]) => (
-            <label key={key} className="case-layer-toggle">
-              <Checkbox
-                checked={Boolean(activeCase.layers[key as keyof ClinicalCaseRecord["layers"]])}
+      <Card className="case-layer-board">
+        <CardHeader><span>图层看板</span><span>开关与参数</span></CardHeader>
+        <CardContent className="case-layer-board-content">
+          <div className="case-layer-grid">
+            {[
+              ["rstl", "RSTL", "密度和透明度会同步影响病例画布"],
+              ["personalizedWrinkles", "个性化皮纹", "额纹、鱼尾纹、鼻唇沟、睑缘纹等"],
+              ["blendedField", "混合场", "RSTL + 个性化纹路调优"],
+              ["incisionDesign", "切口设计", "候选线、梭形轮廓和控制点"],
+            ].map(([key, label, hint]) => (
+              <label key={key} className="case-layer-toggle">
+                <Checkbox
+                  checked={Boolean(activeCase.layers[key as keyof ClinicalCaseRecord["layers"]])}
+                  onChange={(event) => updateActiveCase({
+                    layers: { [key]: event.currentTarget.checked } as Partial<ClinicalCaseRecord["layers"]>,
+                  })}
+                />
+                <span>
+                  <b>{label}</b>
+                  <small>{hint}</small>
+                </span>
+              </label>
+            ))}
+          </div>
+          <div className="case-layer-controls" aria-label="图层参数">
+            <label className="case-layer-control">
+              <span>
+                <b>RSTL 密度</b>
+                <small>调整基础张力线在画布上的走行数量。</small>
+              </span>
+              <Select
+                value={activeCase.layers.rstlDensity}
                 onChange={(event) => updateActiveCase({
-                  layers: { [key]: event.currentTarget.checked } as Partial<ClinicalCaseRecord["layers"]>,
+                  layers: { rstlDensity: event.target.value as ClinicalCaseRecord["layers"]["rstlDensity"] },
+                })}
+              >
+                <option value="low">低密度</option>
+                <option value="standard">标准密度</option>
+                <option value="high">高密度</option>
+              </Select>
+            </label>
+            <label className="case-layer-control">
+              <span>
+                <b>RSTL 透明度</b>
+                <small className="clinical-number">{percentLabel(activeCase.layers.rstlOpacity)}</small>
+              </span>
+              <input
+                className="case-layer-range"
+                disabled={!activeCase.layers.rstl}
+                max="1"
+                min="0.2"
+                step="0.05"
+                type="range"
+                value={activeCase.layers.rstlOpacity}
+                onChange={(event) => updateActiveCase({
+                  layers: { rstlOpacity: Number(event.currentTarget.value) },
                 })}
               />
-              <span>
-                <b>{label}</b>
-                <small>{hint}</small>
-              </span>
             </label>
-          ))}
+            <label className="case-layer-control">
+              <span>
+                <b>皮纹透明度</b>
+                <small className="clinical-number">{percentLabel(activeCase.layers.wrinkleOpacity)}</small>
+              </span>
+              <input
+                className="case-layer-range"
+                disabled={!activeCase.layers.personalizedWrinkles}
+                max="1"
+                min="0.2"
+                step="0.05"
+                type="range"
+                value={activeCase.layers.wrinkleOpacity}
+                onChange={(event) => updateActiveCase({
+                  layers: { wrinkleOpacity: Number(event.currentTarget.value) },
+                })}
+              />
+            </label>
+          </div>
         </CardContent>
       </Card>
 
