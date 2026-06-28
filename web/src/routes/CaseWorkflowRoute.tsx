@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+import { ClinicalFacePreview } from "../components/ClinicalFacePreview";
 import { ReactPage, ReactShell, ReactShellMain, ReactShellNavLink, ReactShellSidebar } from "../components/ReactShell";
 import { WorkbenchBrand } from "../components/WorkbenchBrand";
 import { Button } from "../components/ui/button";
@@ -41,6 +42,12 @@ function nextStep(step: ClinicalCaseStep): ClinicalCaseStep {
 
 function stepHref(caseId: string, step: ClinicalCaseStep) {
   return `/case/${caseId}/${step}`;
+}
+
+function viewportMode(source: ClinicalCaseRecord["acquisition"]["source"]) {
+  if (source === "scan3d") return "3d";
+  if (source === "realtime") return "live";
+  return "2d";
 }
 
 function nextStepRailLabel(step: ClinicalCaseStep) {
@@ -232,6 +239,7 @@ function CaseClinicalViewport({
     ["混合场", activeCase.layers.blendedField],
     ["切口", activeCase.layers.incisionDesign],
   ] as const;
+  const activeMode = viewportMode(activeCase.acquisition.source);
 
   return (
     <section className={`case-clinical-viewport case-clinical-viewport-${step}`} aria-label={`${stepLabel}临床画布`}>
@@ -240,20 +248,15 @@ function CaseClinicalViewport({
           <span>病例画布</span>
           <b>{stepLabel}</b>
         </div>
+        <div className="case-viewport-mode-switch" aria-label="视图模式">
+          <span className={activeMode === "2d" ? "is-active" : undefined}>2D 图像</span>
+          <span className={activeMode === "3d" ? "is-active" : undefined}>3D 重建</span>
+          <span className={activeMode === "live" ? "is-active" : undefined}>实时叠加</span>
+        </div>
         <RouteStatus className="case-viewport-status">本地草稿</RouteStatus>
       </div>
       <div className="case-viewport-body">
-        <div className="case-face-preview case-face-preview-large" aria-hidden="true">
-          <span className="case-face-outline" />
-          <span className="case-face-midline" />
-          <span className="case-face-rstl case-face-rstl-a" />
-          <span className="case-face-rstl case-face-rstl-b" />
-          <span className="case-face-rstl case-face-rstl-c" />
-          <span className="case-face-lesion" />
-          <span className="case-face-incision" />
-          <span className="case-face-zone case-face-zone-eye" />
-          <span className="case-face-zone case-face-zone-mouth" />
-        </div>
+        <ClinicalFacePreview large showZones />
         <div className="case-viewport-readout">
           <div><span>年龄分档</span><b>{activeCase.patientContext.ageBandLabel}</b></div>
           <div><span>病灶层次</span><b>{activeCase.lesion.layerLabel}</b></div>

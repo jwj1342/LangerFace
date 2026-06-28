@@ -20,6 +20,7 @@ import {
   ReactShellNavLink,
   ReactShellSidebar,
 } from "../components/ReactShell";
+import { ClinicalFacePreview } from "../components/ClinicalFacePreview";
 import { WorkbenchBrand } from "../components/WorkbenchBrand";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
@@ -140,15 +141,7 @@ export function DashboardRoute() {
                   <span>3D 面部重建</span>
                   <b>待输入</b>
                 </div>
-                <div className="case-face-preview" aria-hidden="true">
-                  <span className="case-face-outline" />
-                  <span className="case-face-midline" />
-                  <span className="case-face-rstl case-face-rstl-a" />
-                  <span className="case-face-rstl case-face-rstl-b" />
-                  <span className="case-face-rstl case-face-rstl-c" />
-                  <span className="case-face-lesion" />
-                  <span className="case-face-incision" />
-                </div>
+                <ClinicalFacePreview />
                 <div className="case-stage-metrics">
                   <div><span>RSTL</span><b>就绪</b></div>
                   <div><span>皮纹</span><b>待追踪</b></div>

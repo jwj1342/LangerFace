@@ -5,6 +5,7 @@ const app = fs.readFileSync("src/App.tsx", "utf8");
 const dashboard = fs.readFileSync("src/routes/DashboardRoute.tsx", "utf8");
 const caseRoute = fs.readFileSync("src/routes/CaseWorkflowRoute.tsx", "utf8");
 const settingsRoute = fs.readFileSync("src/routes/SettingsRoute.tsx", "utf8");
+const clinicalFacePreview = fs.readFileSync("src/components/ClinicalFacePreview.tsx", "utf8");
 const managedRoute = fs.readFileSync("src/components/ManagedWorkbenchRoute.tsx", "utf8");
 const incisionRoute = fs.readFileSync("src/routes/IncisionRoute.tsx", "utf8");
 const liveRoute = fs.readFileSync("src/routes/LiveRoute.tsx", "utf8");
@@ -42,6 +43,7 @@ assert.ok(dashboard.includes("病例大厅"), "case lobby replaces the technical
 assert.ok(dashboard.includes("工作台大厅"), "case lobby includes a product landing surface");
 assert.ok(dashboard.includes("case-lobby-landing"), "case lobby renders a dedicated landing section");
 assert.ok(dashboard.includes("case-lobby-stage"), "case lobby includes a dark clinical viewport preview");
+assert.ok(dashboard.includes("ClinicalFacePreview"), "case lobby reuses the high-fidelity clinical face preview component");
 assert.ok(dashboard.includes("case-workflow-roadmap"), "case lobby shows the clinical workflow roadmap");
 assert.ok(dashboard.includes("系统设置"), "case lobby keeps maintenance entry points in system settings");
 assert.ok(!dashboard.includes("兼容 / 研发工具"), "case lobby no longer exposes compatibility tools in the doctor sidebar");
@@ -79,6 +81,11 @@ assert.ok(caseRoute.includes("运行闭合模拟"), "case planning step gives do
 assert.ok(caseRoute.includes("estimateClosureSimulation"), "case planning step derives a persisted closure simulation summary");
 assert.ok(caseRoute.includes("临床合规提示"), "case workflow includes clinical compliance copy");
 assert.ok(caseRoute.includes("CaseClinicalViewport"), "case workflow renders a clinical viewport focus area for each step");
+assert.ok(caseRoute.includes("ClinicalFacePreview"), "case workflow uses the shared high-fidelity clinical face preview component");
+assert.ok(caseRoute.includes("case-viewport-mode-switch"), "case workflow exposes 2D/3D/live viewport mode context");
+for (const viewportMode of ["2D 图像", "3D 重建", "实时叠加"]) {
+  assert.ok(caseRoute.includes(viewportMode), `case workflow exposes the ${viewportMode} viewport mode`);
+}
 assert.ok(caseRoute.includes("CaseTaskStrip"), "case workflow renders clinical subtask strips inside each major step");
 assert.ok(caseRoute.includes("CaseHandoffPanel"), "case workflow wraps legacy work surfaces as controlled clinical handoffs");
 assert.ok(caseRoute.includes("受控评估入口"), "evaluation route presents the live canvas as a controlled handoff");
@@ -88,7 +95,6 @@ for (const subtask of ["标记病灶", "生成候选", "闭合模拟"]) {
   assert.ok(caseRoute.includes(subtask), `case workflow exposes the ${subtask} clinical subtask`);
 }
 assert.ok(caseRoute.includes("case-step-stage-grid"), "case workflow pairs the viewport with the step command panel");
-assert.ok(caseRoute.includes("case-face-preview-large"), "case workflow reserves a high-contrast face planning viewport");
 assert.ok(caseRoute.indexOf("图层看板") < caseRoute.indexOf("进入评估采集画布"), "evaluation work surface appears after patient/acquisition/layer parameters");
 assert.ok(caseRoute.indexOf("规划依据") < caseRoute.indexOf("进入候选规划画布"), "planning work surface appears after lesion and margin parameters");
 assert.ok(!caseRoute.includes("打开评估画布"), "case workflow avoids raw tool-style evaluation copy");
@@ -105,6 +111,13 @@ assert.ok(caseRoute.includes("可返回微调，草稿保留"), "case workflow s
 assert.ok(caseRoute.includes("本设备"), "case workflow explains local draft saving in clinician-facing language");
 assert.ok(caseRoute.includes("院内或云端病例库"), "case workflow explains future remote case storage without implementation jargon");
 assert.ok(!caseRoute.includes("localStorage"), "case workflow components do not write localStorage directly");
+assert.ok(caseRoute.includes("<ClinicalFacePreview large showZones />"), "case workflow reserves a high-contrast face planning viewport");
+assert.ok(clinicalFacePreview.includes("case-face-preview-large"), "clinical face preview supports a large planning viewport");
+assert.ok(clinicalFacePreview.includes("case-face-ruler"), "clinical face preview renders a measurement ruler");
+assert.ok(clinicalFacePreview.includes("case-face-eye"), "clinical face preview renders anatomical eye references");
+assert.ok(clinicalFacePreview.includes("case-face-nose"), "clinical face preview renders an anatomical nose reference");
+assert.ok(clinicalFacePreview.includes("case-face-mouth"), "clinical face preview renders an anatomical mouth reference");
+assert.ok(clinicalFacePreview.includes("case-face-coordinate"), "clinical face preview renders stable viewport coordinates");
 for (const hiddenClinicalCopy of [
   "CaseDataSource",
   "Worker API",
@@ -175,6 +188,7 @@ assert.ok(styles.includes(".case-lobby-landing"), "styles implement the case lob
 assert.ok(styles.includes(".case-lobby-stage"), "styles implement the case lobby viewport preview");
 assert.ok(styles.includes(".case-workflow-roadmap"), "styles implement the clinical workflow roadmap");
 assert.ok(styles.includes(".case-clinical-viewport"), "styles implement the PACS-like clinical viewport");
+assert.ok(styles.includes(".case-viewport-mode-switch"), "styles implement compact 2D/3D/live viewport mode controls");
 assert.ok(styles.includes(".case-closure-grid"), "styles implement the embedded closure simulation panel");
 assert.ok(styles.includes(".case-closure-meter"), "styles implement closure simulation score feedback");
 assert.ok(styles.includes(".case-step-stage-grid"), "styles prioritize a viewport-plus-command step layout");
@@ -182,6 +196,8 @@ assert.ok(styles.includes(".case-task-strip"), "styles implement compact clinica
 assert.ok(styles.includes(".case-handoff-panel"), "styles implement controlled handoff panels");
 assert.ok(styles.includes(".case-step-state"), "styles implement compact per-step state badges");
 assert.ok(styles.includes(".case-face-preview"), "styles implement the high-contrast face planning surface");
+assert.ok(styles.includes(".case-face-ruler"), "styles implement a clinical measurement ruler inside the face viewport");
+assert.ok(styles.includes(".case-face-depth"), "styles implement depth reference contours inside the face viewport");
 assert.ok(styles.includes(".case-disclosure"), "styles implement collapsed compatibility and developer sections");
 assert.ok(styles.includes(".react-legacy-banner"), "styles render legacy route notices");
 assert.ok(styles.includes(".case-workflow-main"), "styles define the case workflow surface");
