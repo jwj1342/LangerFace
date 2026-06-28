@@ -77,6 +77,14 @@ assert.ok(caseRoute.includes("需扩大安全切缘"), "case workflow exposes ex
 assert.ok(caseRoute.includes("图层看板"), "case workflow exposes the clinical layer board");
 assert.ok(caseRoute.includes("采集质量门禁"), "case workflow exposes an acquisition quality gate in the clinical flow");
 assert.ok(caseRoute.includes("AcquisitionQualityGate"), "case workflow renders a structured acquisition quality gate");
+assert.ok(caseRoute.includes("AcquisitionPathwayPanel"), "case workflow renders a structured acquisition pathway panel");
+assert.ok(caseRoute.includes("case-acquisition-path-grid"), "case workflow exposes acquisition pathways as clinical task cards");
+assert.ok(caseRoute.includes("高清照片 / 视频"), "case workflow exposes the upload pathway");
+assert.ok(caseRoute.includes("标准位取材"), "case workflow exposes the standard photo pathway");
+assert.ok(caseRoute.includes("引导式三维重建"), "case workflow exposes the guided 3D scan pathway");
+assert.ok(caseRoute.includes("AR 动态跟踪"), "case workflow exposes the realtime AR pathway");
+assert.ok(caseRoute.includes("设备权限在评估采集画布中申请"), "case workflow explains device permission boundaries without blocking the case page");
+assert.ok(caseRoute.includes("避免把原始影像写入普通审阅导出"), "case workflow keeps acquisition media privacy visible at the case boundary");
 assert.ok(caseRoute.includes("captureViewItems"), "case workflow derives required capture views from acquisition mode");
 assert.ok(caseRoute.includes("正位"), "case workflow records frontal capture completeness");
 assert.ok(caseRoute.includes("左斜位"), "case workflow records oblique capture completeness");
@@ -287,6 +295,9 @@ assert.ok(styles.includes(".case-clinical-viewport"), "styles implement the PACS
 assert.ok(styles.includes(".case-viewport-mode-switch"), "styles implement compact 2D/3D/live viewport mode controls");
 assert.ok(styles.includes(".case-layer-controls"), "styles implement compact layer parameter controls");
 assert.ok(styles.includes(".case-acquisition-gate"), "styles implement the acquisition quality gate");
+assert.ok(styles.includes(".case-acquisition-path-panel"), "styles implement the acquisition pathway panel");
+assert.ok(styles.includes(".case-acquisition-path-card"), "styles implement acquisition pathway cards");
+assert.ok(styles.includes(".case-acquisition-path-meta"), "styles implement dense acquisition pathway metadata");
 assert.ok(styles.includes(".case-capture-grid"), "styles implement compact capture completeness controls");
 assert.ok(styles.includes(".case-quality-grid"), "styles implement compact acquisition quality controls");
 assert.ok(styles.includes(".case-acquisition-status-ready"), "styles implement acquisition quality status feedback");

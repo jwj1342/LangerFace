@@ -1,4 +1,4 @@
-import { Activity, ArrowLeft, ArrowRight, CheckCircle2, Download, FileText, Layers3, ListChecks, Save, ShieldAlert, SlidersHorizontal } from "lucide-react";
+import { Activity, ArrowLeft, ArrowRight, Camera, CheckCircle2, Download, FileText, Layers3, ListChecks, Save, ScanFace, ShieldAlert, SlidersHorizontal, Upload, Video } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -156,6 +156,59 @@ function captureViewItems(source: ClinicalCaseRecord["acquisition"]["source"]) {
     },
   ] as const;
   return common;
+}
+
+function acquisitionPathwayItems() {
+  return [
+    {
+      source: "upload",
+      title: "上传",
+      subtitle: "高清照片 / 视频",
+      description: "上传正位、斜位、侧位或视频序列，适合已有术前资料进入病例草稿。",
+      views: "正位 + 左右斜位",
+      permission: "无需设备权限",
+      output: "2D 图像 / 视频序列",
+      Icon: Upload,
+    },
+    {
+      source: "photo",
+      title: "拍照",
+      subtitle: "标准位取材",
+      description: "按正位、侧位、斜位完成设备拍照，适合门诊快速建立评估输入。",
+      views: "正位 + 左右斜位",
+      permission: "进入采集画布后申请相机权限",
+      output: "标准位照片组",
+      Icon: Camera,
+    },
+    {
+      source: "scan3d",
+      title: "3D 扫描",
+      subtitle: "引导式三维重建",
+      description: "补充深度或视频序列，优先用于需要三维面部重建和局部精度复核的病例。",
+      views: "正位 + 左右斜位 + 深度序列",
+      permission: "进入采集画布后申请相机权限",
+      output: "3D 面部重建输入",
+      Icon: ScanFace,
+    },
+    {
+      source: "realtime",
+      title: "实时",
+      subtitle: "AR 动态跟踪",
+      description: "用于实时录制、动态追踪和术前叠加预览，适合需要反复观察表情或姿态的场景。",
+      views: "正位 + 实时视频",
+      permission: "进入采集画布后申请相机权限",
+      output: "实时叠加输入",
+      Icon: Video,
+    },
+  ] as const;
+}
+
+function acquisitionPathwayStateLabel(
+  activeCase: ClinicalCaseRecord,
+  source: ClinicalCaseRecord["acquisition"]["source"],
+) {
+  if (activeCase.acquisition.source !== source) return "可切换";
+  return acquisitionStatusLabel(activeCase.acquisition.quality.status);
 }
 
 function agePlanningRule(activeCase: ClinicalCaseRecord) {
@@ -1112,6 +1165,62 @@ function LesionBoundaryPanel({ activeCase }: { activeCase: ClinicalCaseRecord })
   );
 }
 
+function AcquisitionPathwayPanel({ activeCase }: { activeCase: ClinicalCaseRecord }) {
+  const updateActiveCase = useCaseStore((state) => state.updateActiveCase);
+  const selectSource = (source: ClinicalCaseRecord["acquisition"]["source"]) => {
+    updateActiveCase({
+      acquisition: {
+        source,
+        quality: { lastCheckedAt: new Date().toISOString() },
+      },
+    });
+  };
+
+  return (
+    <Card className="case-acquisition-path-panel" id="caseAcquisitionPathPanel">
+      <CardHeader>
+        <span>图像与视频流采集</span>
+        <RouteStatus className={`case-acquisition-status-${activeCase.acquisition.quality.status}`}>
+          {activeCase.acquisition.sourceLabel}
+        </RouteStatus>
+      </CardHeader>
+      <CardContent>
+        <div className="case-acquisition-path-grid" role="list" aria-label="采集路径">
+          {acquisitionPathwayItems().map((item) => {
+            const isActive = activeCase.acquisition.source === item.source;
+            const Icon = item.Icon;
+            return (
+              <button
+                key={item.source}
+                type="button"
+                className={`case-acquisition-path-card${isActive ? " is-active" : ""}`}
+                aria-pressed={isActive}
+                onClick={() => selectSource(item.source)}
+              >
+                <span className="case-acquisition-path-icon" aria-hidden="true"><Icon size={17} /></span>
+                <span className="case-acquisition-path-copy">
+                  <b>{item.title}</b>
+                  <strong>{item.subtitle}</strong>
+                  <small>{item.description}</small>
+                </span>
+                <span className="case-acquisition-path-meta">
+                  <span><b>必要视角</b><em>{item.views}</em></span>
+                  <span><b>权限</b><em>{item.permission}</em></span>
+                  <span><b>输出</b><em>{item.output}</em></span>
+                </span>
+                <span className={`case-acquisition-path-state${isActive ? " is-active" : ""}`}>
+                  {acquisitionPathwayStateLabel(activeCase, item.source)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <Hint>设备权限在评估采集画布中申请；病例页只记录采集路径、视角完整性和质量状态，避免把原始影像写入普通审阅导出。</Hint>
+      </CardContent>
+    </Card>
+  );
+}
+
 function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   const navigate = useNavigate();
   const updateActiveCase = useCaseStore((state) => state.updateActiveCase);
@@ -1169,23 +1278,7 @@ function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
       </div>
 
       <div className="case-two-column case-acquisition-row">
-        <Card>
-          <CardHeader><span>图像采集</span><span>{activeCase.acquisition.sourceLabel}</span></CardHeader>
-          <CardContent>
-            <Label htmlFor="caseAcquisition">采集方式</Label>
-            <Select
-              id="caseAcquisition"
-              value={activeCase.acquisition.source}
-              onChange={(event) => updateActiveCase({ acquisition: { source: event.target.value as ClinicalCaseRecord["acquisition"]["source"] } })}
-            >
-              <option value="upload">上传照片 / 视频</option>
-              <option value="photo">标准位拍照</option>
-              <option value="scan3d">3D 扫描</option>
-              <option value="realtime">实时 AR 跟踪</option>
-            </Select>
-            <Hint>多角度序列、标准位拍照、3D 扫描和实时跟踪都应进入同一病例上下文。</Hint>
-          </CardContent>
-        </Card>
+        <AcquisitionPathwayPanel activeCase={activeCase} />
         <AcquisitionQualityGate activeCase={activeCase} />
       </div>
 

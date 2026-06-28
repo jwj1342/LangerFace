@@ -1695,6 +1695,132 @@
     align-items: start;
   }
 
+  .case-acquisition-path-panel .card-content {
+    display: grid;
+    gap: 12px;
+  }
+
+  .case-acquisition-path-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .case-acquisition-path-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 10px;
+    min-width: 0;
+    min-height: 164px;
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: var(--clinical-surface-muted);
+    color: var(--clinical-text-secondary);
+    padding: 11px;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color .14s ease, background .14s ease;
+  }
+
+  .case-acquisition-path-card:hover {
+    border-color: var(--clinical-border-strong);
+    background: #151d27;
+  }
+
+  .case-acquisition-path-card.is-active {
+    border-color: rgb(120 169 255 / 0.74);
+    background: rgb(15 98 254 / 0.12);
+  }
+
+  .case-acquisition-path-icon {
+    display: grid;
+    width: 30px;
+    aspect-ratio: 1;
+    place-items: center;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    border-radius: 4px;
+    background: #0f141b;
+    color: #a6c8ff;
+  }
+
+  .case-acquisition-path-copy {
+    display: grid;
+    align-content: start;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .case-acquisition-path-copy b {
+    color: var(--clinical-text-primary);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .case-acquisition-path-copy strong {
+    color: #a6c8ff;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .case-acquisition-path-copy small {
+    color: var(--clinical-text-tertiary);
+    font-size: 11.5px;
+    line-height: 1.42;
+  }
+
+  .case-acquisition-path-meta {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    align-self: end;
+    padding-top: 8px;
+    border-top: 1px solid rgb(255 255 255 / 0.08);
+  }
+
+  .case-acquisition-path-meta span {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .case-acquisition-path-meta b {
+    color: var(--clinical-text-tertiary);
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .case-acquisition-path-meta em {
+    color: var(--clinical-text-secondary);
+    font-size: 11px;
+    font-style: normal;
+    line-height: 1.25;
+  }
+
+  .case-acquisition-path-state {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    border: 1px solid rgb(255 255 255 / 0.13);
+    border-radius: 999px;
+    background: #0f141b;
+    color: var(--clinical-text-tertiary);
+    padding: 3px 7px;
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .case-acquisition-path-state.is-active {
+    border-color: rgb(120 169 255 / 0.42);
+    background: rgb(15 98 254 / 0.18);
+    color: #d0e2ff;
+  }
+
   .case-acquisition-summary {
     display: grid;
     gap: 4px;
@@ -3385,6 +3511,7 @@
 .case-workflow-page .case-closure-metrics > div,
 .case-workflow-page .case-layer-toggle,
 .case-workflow-page .case-layer-control,
+.case-workflow-page .case-acquisition-path-card,
 .case-workflow-page .case-acquisition-summary,
 .case-workflow-page .case-capture-toggle,
 .case-workflow-page .case-quality-control,
@@ -3401,6 +3528,11 @@
 .case-workflow-page .case-list-item:hover {
   border-color: var(--clinical-dark-border-strong);
   background: #1d2733;
+}
+
+.case-workflow-page .case-acquisition-path-card.is-active {
+  border-color: rgb(120 169 255 / 0.74);
+  background: rgb(15 98 254 / 0.12);
 }
 
 .case-workflow-page .case-step-active {
@@ -3498,6 +3630,8 @@
   .case-form-grid,
   .case-layer-grid,
   .case-layer-controls,
+  .case-acquisition-path-grid,
+  .case-acquisition-path-meta,
   .case-capture-grid,
   .case-quality-grid,
   .case-quality-control,
