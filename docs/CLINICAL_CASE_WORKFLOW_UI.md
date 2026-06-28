@@ -42,10 +42,10 @@
 | `/app/case/:id/evaluate` | 面部评估与张力线映射 |
 | `/app/case/:id/plan` | 病灶定位、候选切口规划和闭合模拟 |
 | `/app/case/:id/review` | 方案确认、报告导出和实时叠加输出 |
-| `/app/settings/atlas` | 图谱库管理，承载当前 3D 标注工具 |
-| `/app/settings/developer` | Provider、资产、诊断和隐藏技术预览 |
+| `/app/settings/atlas` | 图谱库管理，承载当前 3D 标注工具的受控入口 |
+| `/app/settings/developer` | AI 服务配置、资产诊断和隐藏技术预览的受控入口 |
 
-现有 `/app/live`、`/app/incision`、`/app/annotate`、`/app/surgery` 可以先保留为兼容入口或 redirect，不需要在第一轮重构中删除。
+现有 `/app/live`、`/app/incision`、`/app/annotate`、`/app/surgery` 可以先保留为兼容入口，不需要在第一轮重构中删除；但 `/app/settings/atlas` 和 `/app/settings/developer` 不应再直接 redirect 到旧工具页，而应先呈现设置壳、说明边界，再提供受控入口。
 
 ## 病例向导流程
 
@@ -116,6 +116,8 @@
 
 - `/app/case/:id/plan` 已提供病例内嵌“张力闭合模拟”面板，运行后把模拟状态、闭合评分、结论、摘要和更新时间保存到病例草稿。
 - 病例规划页不再把医生直接跳转到 `/app/surgery`；旧 `/app/surgery` 路由仅保留为兼容 / 研究演示入口。
+- `/app/settings/atlas` 已成为图谱库管理壳，旧 `/app/annotate` 只作为图谱维护卡片中的受控入口。
+- `/app/settings/developer` 已成为开发者诊断壳，AI 摘要服务连接测试、三维模型预览和兼容工作台入口集中在设置中，不再直接暴露在医生主流程里。
 
 边界要求：
 
@@ -541,8 +543,8 @@ html {
 - 年龄分档、病灶层次、切缘策略、图层看板和临床合规提示覆盖医生简易操作手册。
 - 候选切口旁有可展开的规划依据 / 风险提示，不把 AI 或规则判断做成黑盒。
 - 数值字段、角度、张力分数和候选 metrics 使用等宽数字或 `tabular-nums`。
-- 现有 `/app/live`、`/app/incision`、`/app/annotate`、`/app/surgery` 路由在过渡期仍可回归测试。
-- 视觉冒烟检查可用 `cd web && npm run visual:case` 启动本地 Vite，并用 Playwright 截取病例大厅、评估、规划和确认页；截图输出到 `local_outputs/case-workflow-visual/`，不提交到仓库。若运行环境缺少 Chromium 依赖，应在 PR 中记录失败日志和人工预览链接；若 Linux 截图中文字缺失，需要在截图主机安装 Noto Sans CJK SC 等中文字体后再做设计截图复核。
+- 现有 `/app/live`、`/app/incision`、`/app/annotate`、`/app/surgery` 路由在过渡期仍可回归测试；`/app/annotate` 和 `/app/three-preview` 只能从设置或兼容区进入。
+- 视觉冒烟检查可用 `cd web && npm run visual:case` 启动本地 Vite，并用 Playwright 截取病例大厅、评估、规划、确认、图谱库管理和开发者诊断页；截图输出到 `local_outputs/case-workflow-visual/`，不提交到仓库。若运行环境缺少 Chromium 依赖，应在 PR 中记录失败日志和人工预览链接；若 Linux 截图中文字缺失，需要在截图主机安装 Noto Sans CJK SC 等中文字体后再做设计截图复核。
 
 ## 非目标
 

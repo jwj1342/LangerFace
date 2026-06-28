@@ -10,6 +10,7 @@ const AnnotateRoute = lazy(() => import("./routes/AnnotateRoute").then((module) 
 const CaseWorkflowRoute = lazy(() => import("./routes/CaseWorkflowRoute").then((module) => ({ default: module.CaseWorkflowRoute })));
 const IncisionRoute = lazy(() => import("./routes/IncisionRoute").then((module) => ({ default: module.IncisionRoute })));
 const LiveRoute = lazy(() => import("./routes/LiveRoute").then((module) => ({ default: module.LiveRoute })));
+const SettingsRoute = lazy(() => import("./routes/SettingsRoute").then((module) => ({ default: module.SettingsRoute })));
 const SurgeryRoute = lazy(() => import("./routes/SurgeryRoute").then((module) => ({ default: module.SurgeryRoute })));
 const ThreePreviewRoute = lazy(() => import("./routes/ThreePreviewRoute").then((module) => ({ default: module.ThreePreviewRoute })));
 
@@ -34,8 +35,8 @@ export function App() {
         <Route path="/case/:caseId/evaluate" element={<CaseWorkflowRoute step="evaluate" />} />
         <Route path="/case/:caseId/plan" element={<CaseWorkflowRoute step="plan" />} />
         <Route path="/case/:caseId/review" element={<CaseWorkflowRoute step="review" />} />
-        <Route path="/settings/atlas" element={<Navigate to="/annotate" replace />} />
-        <Route path="/settings/developer" element={<Navigate to="/three-preview" replace />} />
+        <Route path="/settings/atlas" element={<SettingsRoute section="atlas" />} />
+        <Route path="/settings/developer" element={<SettingsRoute section="developer" />} />
         <Route path="/annotate" element={<AnnotateRoute />} />
         <Route path="/incision" element={<IncisionRoute />} />
         <Route path="/live" element={<LiveRoute />} />

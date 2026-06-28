@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const app = fs.readFileSync("src/App.tsx", "utf8");
 const dashboard = fs.readFileSync("src/routes/DashboardRoute.tsx", "utf8");
 const caseRoute = fs.readFileSync("src/routes/CaseWorkflowRoute.tsx", "utf8");
+const settingsRoute = fs.readFileSync("src/routes/SettingsRoute.tsx", "utf8");
 const managedRoute = fs.readFileSync("src/components/ManagedWorkbenchRoute.tsx", "utf8");
 const incisionRoute = fs.readFileSync("src/routes/IncisionRoute.tsx", "utf8");
 const liveRoute = fs.readFileSync("src/routes/LiveRoute.tsx", "utf8");
@@ -28,8 +29,13 @@ assert.ok(app.includes('path="/cases"'), "React Router exposes the clinical case
 assert.ok(app.includes('path="/case/:caseId/evaluate"'), "React Router exposes the case evaluation step");
 assert.ok(app.includes('path="/case/:caseId/plan"'), "React Router exposes the case planning step");
 assert.ok(app.includes('path="/case/:caseId/review"'), "React Router exposes the case review step");
-assert.ok(app.includes('path="/settings/atlas"'), "React Router exposes atlas settings redirect");
-assert.ok(app.includes('path="/settings/developer"'), "React Router exposes developer settings redirect");
+assert.ok(app.includes('path="/settings/atlas"'), "React Router exposes atlas settings route");
+assert.ok(app.includes('path="/settings/developer"'), "React Router exposes developer settings route");
+assert.ok(app.includes("SettingsRoute"), "React Router loads the dedicated settings route");
+assert.ok(app.includes('<SettingsRoute section="atlas"'), "atlas settings renders the settings route instead of redirecting");
+assert.ok(app.includes('<SettingsRoute section="developer"'), "developer settings renders the settings route instead of redirecting");
+assert.ok(!app.includes('to="/annotate" replace'), "atlas settings must not immediately redirect to the 3D annotation tool");
+assert.ok(!app.includes('to="/three-preview" replace'), "developer settings must not immediately redirect to the R3F preview");
 
 assert.ok(dashboard.includes("面部松弛皮肤张力线智能切口设计系统"), "case lobby uses the clinician-facing product name");
 assert.ok(dashboard.includes("病例大厅"), "case lobby replaces the technical landing copy");
@@ -43,6 +49,18 @@ for (const route of ["/incision", "/live", "/annotate", "/three-preview", "/surg
   assert.ok(dashboard.includes(`to="${route}"`), `case lobby keeps ${route} as a React Router compatibility link`);
 }
 assert.ok(dashboard.includes("CASE_STORE_BOUNDARY_NOTE"), "case lobby surfaces the case store state boundary");
+
+assert.ok(settingsRoute.includes("图谱库管理"), "settings route exposes atlas library management");
+assert.ok(settingsRoute.includes("开发者诊断"), "settings route exposes developer diagnostics");
+assert.ok(settingsRoute.includes("面部松弛皮肤张力线智能切口设计系统"), "settings route keeps the clinician-facing system name");
+assert.ok(settingsRoute.includes("SettingsSidebar"), "settings route owns a dedicated settings navigation shell");
+assert.ok(settingsRoute.includes("SettingsHero"), "settings route owns a dedicated settings landing surface");
+assert.ok(settingsRoute.includes("ProviderConfigPanel"), "developer settings contains the AI service connection panel");
+assert.ok(settingsRoute.includes('to="/annotate"'), "atlas settings keeps the annotation tool as a controlled entry");
+assert.ok(settingsRoute.includes('to="/three-preview"'), "developer settings keeps the 3D preview as a controlled entry");
+assert.ok(settingsRoute.includes('workspace: "settings"'), "settings route publishes settings workspace lifecycle state");
+assert.ok(settingsRoute.includes("不进入医生的病例规划主流程"), "settings route explains atlas work is outside the doctor workflow");
+assert.ok(settingsRoute.includes("不应重新出现在医生主导航"), "developer settings explains compatibility tools stay hidden from main navigation");
 
 assert.ok(caseRoute.includes("患者年龄"), "case workflow collects patient age");
 assert.ok(caseRoute.includes("儿童 / 紧致"), "case workflow exposes the child/tight age band");
@@ -149,6 +167,11 @@ assert.ok(styles.includes(".case-face-preview"), "styles implement the high-cont
 assert.ok(styles.includes(".case-disclosure"), "styles implement collapsed compatibility and developer sections");
 assert.ok(styles.includes(".react-legacy-banner"), "styles render legacy route notices");
 assert.ok(styles.includes(".case-workflow-main"), "styles define the case workflow surface");
+assert.ok(styles.includes(".settings-workbench-page"), "styles scope the settings workbench inside the clinical shell");
+assert.ok(styles.includes(".settings-hero"), "styles implement the settings landing surface");
+assert.ok(styles.includes(".settings-panel-grid"), "styles implement the settings panel grid");
+assert.ok(styles.includes(".settings-provider-panel"), "styles frame provider diagnostics inside settings");
+assert.ok(styles.includes(".settings-boundary-list"), "styles implement dense settings boundary copy");
 assert.ok(styles.includes(".clinical-compat-workbench"), "styles apply the dark clinical shell to legacy workbenches");
 assert.ok(styles.includes(".clinical-compat-workbench .sidebar"), "styles darken legacy workbench sidebars");
 assert.ok(styles.includes(".clinical-compat-workbench .stage"), "styles darken legacy workbench stages");

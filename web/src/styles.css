@@ -1019,6 +1019,128 @@
     color: #fddc69;
   }
 
+  .settings-workbench-stack {
+    width: min(1120px, 100%);
+  }
+
+  .settings-workbench-page .react-shell {
+    grid-template-columns: minmax(320px, 384px) 1fr;
+  }
+
+  .settings-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 340px);
+    gap: 18px;
+    align-items: stretch;
+    border: 1px solid rgb(255 255 255 / 0.16);
+    border-radius: 4px;
+    background: #111821;
+    padding: 22px;
+  }
+
+  .settings-hero h2 {
+    max-width: 780px;
+    margin: 12px 0 0;
+    color: var(--clinical-text-primary);
+    font-size: 26px;
+    font-weight: 600;
+    line-height: 1.18;
+    letter-spacing: 0;
+  }
+
+  .settings-hero p {
+    max-width: 760px;
+    margin: 10px 0 0;
+    color: var(--clinical-text-secondary);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .settings-hero-readiness,
+  .settings-mini-grid,
+  .settings-action-list,
+  .settings-checklist,
+  .settings-boundary-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .settings-hero-readiness > div {
+    border: 1px solid rgb(255 255 255 / 0.14);
+    border-radius: 4px;
+    background: #151d27;
+    padding: 12px;
+  }
+
+  .settings-hero-readiness span,
+  .settings-mini-grid span {
+    display: block;
+    color: var(--clinical-text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .settings-hero-readiness b,
+  .settings-mini-grid b {
+    display: block;
+    margin-top: 5px;
+    color: var(--clinical-text-primary);
+    font-size: 14px;
+    line-height: 1.25;
+  }
+
+  .settings-panel-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .settings-panel-grid-wide {
+    grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr);
+  }
+
+  .settings-provider-panel {
+    min-width: 0;
+    grid-row: span 3;
+  }
+
+  .settings-provider-panel .agent-grid {
+    display: grid;
+    gap: 12px;
+    height: 100%;
+    border: 1px solid var(--clinical-dark-border);
+    border-radius: 4px;
+    background: var(--clinical-dark-panel);
+    color: var(--clinical-text-primary);
+    padding: 14px;
+    box-shadow: none;
+  }
+
+  .settings-boundary-list p {
+    display: grid;
+    grid-template-columns: minmax(88px, 120px) minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    margin: 0;
+    border: 1px solid rgb(255 255 255 / 0.08);
+    border-radius: 4px;
+    background: var(--clinical-dark-panel-2);
+    padding: 10px;
+  }
+
+  .settings-boundary-list b {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .settings-boundary-list span {
+    color: var(--clinical-dark-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
   .case-inline-actions {
     display: flex;
     flex-wrap: wrap;
@@ -2104,6 +2226,9 @@
 /* Critical, unlayered overrides: legacy style.css is unlayered and would
    otherwise win over the clinical case workflow theme defined in @layer. */
 .case-workflow-page {
+  --green: var(--clinical-accent);
+  --green-d: #a6c8ff;
+  --green-soft: rgb(15 98 254 / 0.14);
   background: var(--clinical-dark-bg);
   color: var(--clinical-text-primary);
   font-family: var(--font-clinical-sans);
@@ -2200,6 +2325,12 @@
   color: var(--clinical-text-primary);
 }
 
+.case-workflow-page input[type=range],
+.case-workflow-page input[type=checkbox],
+.case-workflow-page .check input {
+  accent-color: var(--clinical-accent);
+}
+
 .case-workflow-page .case-list-item,
 .case-workflow-page .case-mini-grid > div,
 .case-workflow-page .case-rationale-grid > div,
@@ -2245,7 +2376,10 @@
   .case-step-stage-grid,
   .case-closure-grid,
   .case-dashboard-grid,
-  .case-two-column {
+  .case-two-column,
+  .settings-hero,
+  .settings-panel-grid,
+  .settings-panel-grid-wide {
     grid-template-columns: 1fr;
   }
 
@@ -2307,7 +2441,8 @@
   .case-form-grid,
   .case-layer-grid,
   .case-closure-metrics,
-  .case-rationale-grid {
+  .case-rationale-grid,
+  .settings-boundary-list p {
     grid-template-columns: 1fr;
   }
 

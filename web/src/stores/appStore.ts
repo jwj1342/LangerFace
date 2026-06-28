@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type Workspace = "dashboard" | "annotate" | "incision" | "live" | "surgery" | "three-preview";
+export type Workspace = "dashboard" | "annotate" | "incision" | "live" | "settings" | "surgery" | "three-preview";
 export type WorkerStatus = "未连接" | "正在连接" | "已连接" | "连接失败" | "已卸载";
 
 interface AppState {
