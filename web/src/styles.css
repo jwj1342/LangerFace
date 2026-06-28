@@ -630,6 +630,117 @@
     min-height: 476px;
   }
 
+  .case-task-strip {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1px;
+    border: 1px solid rgb(255 255 255 / 0.14);
+    background: rgb(255 255 255 / 0.12);
+  }
+
+  .case-task-strip-item {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 4px 10px;
+    align-items: start;
+    background: #111821;
+    padding: 11px;
+  }
+
+  .case-task-strip-item > span {
+    grid-row: span 2;
+    width: 30px;
+    border: 1px solid rgb(120 169 255 / 0.38);
+    border-radius: 4px;
+    color: #a6c8ff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 6px 0;
+    text-align: center;
+  }
+
+  .case-task-strip-item b {
+    color: var(--clinical-text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .case-task-strip-item small {
+    color: var(--clinical-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .case-handoff-panel {
+    display: grid;
+    gap: 12px;
+    border: 1px solid rgb(120 169 255 / 0.24);
+    border-radius: 4px;
+    background: #101720;
+    padding: 14px;
+  }
+
+  .case-handoff-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: #a6c8ff;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .case-handoff-copy {
+    display: grid;
+    gap: 5px;
+  }
+
+  .case-handoff-copy h3 {
+    margin: 0;
+    color: var(--clinical-text-primary);
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .case-handoff-copy p {
+    margin: 0;
+    color: var(--clinical-text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .case-handoff-list {
+    display: grid;
+    gap: 1px;
+    border: 1px solid rgb(255 255 255 / 0.1);
+    background: rgb(255 255 255 / 0.1);
+  }
+
+  .case-handoff-list p {
+    display: grid;
+    grid-template-columns: 86px minmax(0, 1fr);
+    gap: 10px;
+    margin: 0;
+    background: #0f141b;
+    padding: 8px 10px;
+  }
+
+  .case-handoff-list b {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .case-handoff-list span {
+    color: var(--clinical-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
   .case-section h2 {
     margin: 0;
     color: var(--clinical-text-primary);
@@ -2450,6 +2561,7 @@
   .case-layer-grid,
   .case-closure-metrics,
   .case-rationale-grid,
+  .case-handoff-list p,
   .settings-boundary-list p {
     grid-template-columns: 1fr;
   }

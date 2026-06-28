@@ -79,10 +79,21 @@ assert.ok(caseRoute.includes("运行闭合模拟"), "case planning step gives do
 assert.ok(caseRoute.includes("estimateClosureSimulation"), "case planning step derives a persisted closure simulation summary");
 assert.ok(caseRoute.includes("临床合规提示"), "case workflow includes clinical compliance copy");
 assert.ok(caseRoute.includes("CaseClinicalViewport"), "case workflow renders a clinical viewport focus area for each step");
+assert.ok(caseRoute.includes("CaseTaskStrip"), "case workflow renders clinical subtask strips inside each major step");
+assert.ok(caseRoute.includes("CaseHandoffPanel"), "case workflow wraps legacy work surfaces as controlled clinical handoffs");
+assert.ok(caseRoute.includes("受控评估入口"), "evaluation route presents the live canvas as a controlled handoff");
+assert.ok(caseRoute.includes("受控规划入口"), "planning route presents the incision canvas as a controlled handoff");
+assert.ok(caseRoute.includes("受控导出入口"), "review route presents export as a controlled handoff");
+for (const subtask of ["标记病灶", "生成候选", "闭合模拟"]) {
+  assert.ok(caseRoute.includes(subtask), `case workflow exposes the ${subtask} clinical subtask`);
+}
 assert.ok(caseRoute.includes("case-step-stage-grid"), "case workflow pairs the viewport with the step command panel");
 assert.ok(caseRoute.includes("case-face-preview-large"), "case workflow reserves a high-contrast face planning viewport");
-assert.ok(caseRoute.indexOf("图层看板") < caseRoute.indexOf("打开评估画布"), "evaluation tooling appears after patient/acquisition/layer parameters");
-assert.ok(caseRoute.indexOf("规划依据") < caseRoute.indexOf("打开规划画布"), "planning tooling appears after lesion and margin parameters");
+assert.ok(caseRoute.indexOf("图层看板") < caseRoute.indexOf("进入评估采集画布"), "evaluation work surface appears after patient/acquisition/layer parameters");
+assert.ok(caseRoute.indexOf("规划依据") < caseRoute.indexOf("进入候选规划画布"), "planning work surface appears after lesion and margin parameters");
+assert.ok(!caseRoute.includes("打开评估画布"), "case workflow avoids raw tool-style evaluation copy");
+assert.ok(!caseRoute.includes("打开规划画布"), "case workflow avoids raw tool-style planning copy");
+assert.ok(!caseRoute.includes("打开候选方案导出面板"), "case workflow avoids raw tool-style export copy");
 assert.ok(!caseRoute.includes('to="/surgery"'), "case workflow must not send doctors to the standalone closure demo from planning");
 assert.ok(caseRoute.includes("case-save-status"), "case workflow exposes visible save status states");
 assert.ok(caseRoute.includes("caseStepStateLabel"), "case workflow derives per-step state labels");
@@ -167,6 +178,8 @@ assert.ok(styles.includes(".case-clinical-viewport"), "styles implement the PACS
 assert.ok(styles.includes(".case-closure-grid"), "styles implement the embedded closure simulation panel");
 assert.ok(styles.includes(".case-closure-meter"), "styles implement closure simulation score feedback");
 assert.ok(styles.includes(".case-step-stage-grid"), "styles prioritize a viewport-plus-command step layout");
+assert.ok(styles.includes(".case-task-strip"), "styles implement compact clinical subtask strips");
+assert.ok(styles.includes(".case-handoff-panel"), "styles implement controlled handoff panels");
 assert.ok(styles.includes(".case-step-state"), "styles implement compact per-step state badges");
 assert.ok(styles.includes(".case-face-preview"), "styles implement the high-contrast face planning surface");
 assert.ok(styles.includes(".case-disclosure"), "styles implement collapsed compatibility and developer sections");

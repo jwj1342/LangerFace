@@ -43,6 +43,12 @@ function stepHref(caseId: string, step: ClinicalCaseStep) {
   return `/case/${caseId}/${step}`;
 }
 
+function nextStepRailLabel(step: ClinicalCaseStep) {
+  if (step === "evaluate") return "继续到病灶标记";
+  if (step === "plan") return "继续到方案确认";
+  return "继续";
+}
+
 function closureStatusLabel(status: ClinicalCaseRecord["closureSimulation"]["status"]) {
   if (status === "stable") return "闭合可行";
   if (status === "needs_review") return "需复核";
@@ -196,7 +202,7 @@ function CaseWorkflowShell({
             <CardHeader><span>系统入口</span><span>设置</span></CardHeader>
             <CardContent>
               <ReactShellNavLink to="/settings/atlas"><span>图谱库管理</span><Layers3 size={16} /></ReactShellNavLink>
-              <ReactShellNavLink to="/settings/developer"><span>开发者诊断</span><SlidersHorizontal size={16} /></ReactShellNavLink>
+              <ReactShellNavLink to="/settings/developer"><span>系统诊断</span><SlidersHorizontal size={16} /></ReactShellNavLink>
             </CardContent>
           </Card>
         </ReactShellSidebar>
@@ -266,6 +272,61 @@ function CaseClinicalViewport({
   );
 }
 
+function CaseTaskStrip({
+  items,
+}: {
+  items: Array<{ index: string; title: string; description: string }>;
+}) {
+  return (
+    <div className="case-task-strip" aria-label="当前阶段任务">
+      {items.map((item) => (
+        <div key={item.index} className="case-task-strip-item">
+          <span className="clinical-number">{item.index}</span>
+          <b>{item.title}</b>
+          <small>{item.description}</small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CaseHandoffPanel({
+  eyebrow,
+  title,
+  description,
+  to,
+  actionLabel,
+  items,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  to: string;
+  actionLabel: string;
+  items: Array<{ label: string; value: string }>;
+}) {
+  return (
+    <section className="case-handoff-panel">
+      <div className="case-handoff-header"><span>{eyebrow}</span><ArrowRight size={16} /></div>
+      <div className="case-handoff-copy">
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+      <div className="case-handoff-list">
+        {items.map((item) => (
+          <p key={item.label}>
+            <b>{item.label}</b>
+            <span>{item.value}</span>
+          </p>
+        ))}
+      </div>
+      <Button asChild variant="workbench">
+        <Link to={to}>{actionLabel}</Link>
+      </Button>
+    </section>
+  );
+}
+
 function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   const navigate = useNavigate();
   const updateActiveCase = useCaseStore((state) => state.updateActiveCase);
@@ -284,6 +345,13 @@ function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
             <h2>面部评估与张力线映射</h2>
             <p>先确认患者年龄、采集方式和图层状态，再进入评估画布或病灶标记。医生可随时返回本步骤微调图层。</p>
           </div>
+          <CaseTaskStrip
+            items={[
+              { index: "01", title: "确认前置参数", description: "年龄分档、采集方式和病例草稿状态先完成。" },
+              { index: "02", title: "映射张力线", description: "进入采集画布确认基础张力线和个性化皮纹。" },
+              { index: "03", title: "进入病灶标记", description: "保留图层设置后进入切口规划阶段。" },
+            ]}
+          />
         </section>
       </div>
 
@@ -339,7 +407,7 @@ function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
         <CardHeader><span>图层看板</span><span>一键开关</span></CardHeader>
         <CardContent className="case-layer-grid">
           {[
-            ["rstl", "RSTL", "密度和透明度由评估工具控制"],
+            ["rstl", "RSTL", "密度和透明度由评估画布控制"],
             ["personalizedWrinkles", "个性化皮纹", "额纹、鱼尾纹、鼻唇沟、睑缘纹等"],
             ["blendedField", "混合场", "RSTL + 个性化纹路调优"],
             ["incisionDesign", "切口设计", "候选线、梭形轮廓和控制点"],
@@ -360,8 +428,20 @@ function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
         </CardContent>
       </Card>
 
+      <CaseHandoffPanel
+        eyebrow="受控评估入口"
+        title="面部评估采集画布"
+        description="需要实时追踪、上传序列或调整线密度时进入该画布；完成后返回本病例，继续标记病灶和规划切口。"
+        to="/live"
+        actionLabel="进入评估采集画布"
+        items={[
+          { label: "进入前", value: "确认年龄、采集方式和图层开关" },
+          { label: "返回后", value: "病例草稿保留，继续病灶标记" },
+          { label: "边界", value: "该入口服务当前病例评估，不作为独立工具主流程" },
+        ]}
+      />
+
       <div className="case-actions">
-        <Button asChild variant="workbench"><Link to="/live">打开评估画布</Link></Button>
         <Button variant="workbenchPrimary" onClick={() => {
           updateActiveCase({ currentStep: "plan" });
           navigate(stepHref(activeCase.id, "plan"));
@@ -397,6 +477,13 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
             <h2>病灶定位与切口规划</h2>
             <p>先记录解剖层次、直径、深度和切缘策略，再进入规划画布生成候选。</p>
           </div>
+          <CaseTaskStrip
+            items={[
+              { index: "01", title: "标记病灶", description: "记录层次、直径、深度、切缘和来源。" },
+              { index: "02", title: "生成候选", description: "根据病灶边界和局部方向生成线性或梭形候选。" },
+              { index: "03", title: "闭合模拟", description: "在本病例内查看张力闭合趋势并保存结论。" },
+            ]}
+          />
         </section>
       </div>
 
@@ -510,8 +597,20 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
         </CardContent>
       </Card>
 
+      <CaseHandoffPanel
+        eyebrow="受控规划入口"
+        title="候选切口规划画布"
+        description="需要在面部画布上圈定范围、微调角度或保存多个候选时进入该画布；候选结果应回到本病例中审阅和导出。"
+        to="/incision"
+        actionLabel="进入候选规划画布"
+        items={[
+          { label: "进入前", value: "确认病灶层次、直径、深度和切缘策略" },
+          { label: "返回后", value: "候选方案进入当前病例的审阅步骤" },
+          { label: "闭合模拟", value: "已嵌入本页，不再跳转到独立演示页" },
+        ]}
+      />
+
       <div className="case-actions">
-        <Button asChild variant="workbench"><Link to="/incision">打开规划画布</Link></Button>
         <Button variant="workbenchPrimary" onClick={() => {
           updateActiveCase({ currentStep: "review", status: "needs_review" });
           navigate(stepHref(activeCase.id, "review"));
@@ -561,7 +660,17 @@ function ReviewStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
           <CardHeader><span>保存与导出</span><Save size={16} /></CardHeader>
           <CardContent>
             <Hint>当前病例草稿会自动保存到本设备。后续接入院内或云端病例库后，可沿用同一入口恢复结构化病例记录。</Hint>
-            <Button asChild variant="workbench"><Link to="/incision">打开候选方案导出面板</Link></Button>
+            <CaseHandoffPanel
+              eyebrow="受控导出入口"
+              title="候选方案审阅与导出"
+              description="导出前先确认病例摘要、风险提示和合规声明；需要回到候选画布时，从这里进入审阅与截图导出。"
+              to="/incision"
+              actionLabel="打开候选审阅与导出"
+              items={[
+                { label: "导出前", value: "确认参数、截图和医生备注" },
+                { label: "导出后", value: "报告只是输出文件，不替代正式病例保存" },
+              ]}
+            />
           </CardContent>
         </Card>
       </div>
@@ -642,7 +751,7 @@ export function CaseWorkflowRoute({ step = "evaluate" }: CaseWorkflowRouteProps)
       {currentStep !== "review" ? (
         <div className="case-next-rail">
           <Button asChild variant="workbench">
-            <Link to={stepHref(activeCase.id, nextStep(currentStep))}>跳到下一步</Link>
+            <Link to={stepHref(activeCase.id, nextStep(currentStep))}>{nextStepRailLabel(currentStep)}</Link>
           </Button>
         </div>
       ) : null}

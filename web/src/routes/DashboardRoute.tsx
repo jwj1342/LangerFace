@@ -102,7 +102,7 @@ export function DashboardRoute() {
                 <PenLine size={16} />
               </ReactShellNavLink>
               <ReactShellNavLink to="/settings/developer">
-                <span>开发者诊断</span>
+                <span>系统诊断</span>
                 <Boxes size={16} />
               </ReactShellNavLink>
             </CardContent>
@@ -116,7 +116,7 @@ export function DashboardRoute() {
               <div className="case-lobby-copy">
                 <span className="case-lobby-kicker">工作台大厅</span>
                 <h2 id="caseLobbyTitle">从病例开始完成面部评估、病灶定位和切口方案确认</h2>
-                <p>医生日常入口围绕病例草稿组织；图谱维护、模型配置和开发诊断统一收进系统设置，避免主流程被工具列表打断。</p>
+                <p>医生日常入口围绕病例草稿组织；图谱维护、模型配置和系统诊断统一收进系统设置，避免主流程被工具列表打断。</p>
                 <div className="case-lobby-actions">
                   <Button variant="workbenchPrimary" onClick={handleCreateCase}>
                     <Plus size={16} />新建病例
@@ -198,7 +198,7 @@ export function DashboardRoute() {
                 <CardContent className="case-summary-list">
                   <p><b>新建病例</b><span>先录入前置参数，再进入面部评估。</span></p>
                   <p><b>恢复草稿</b><span>从病例列表回到上次保存的步骤。</span></p>
-                  <p><b>全局设置</b><span>管理图谱库、模型配置和研发诊断入口。</span></p>
+                  <p><b>全局设置</b><span>管理图谱库、模型配置和系统诊断入口。</span></p>
                 </CardContent>
               </Card>
 
