@@ -87,6 +87,33 @@ export type ClinicalCaseStatus = "draft" | "needs_review" | "confirmed" | "expor
 export type LesionLayer = "subcutaneous" | "cutaneous";
 export type MarginStrategy = "complete_excision" | "expanded_margin";
 export type ClosureSimulationStatus = "not_run" | "stable" | "needs_review";
+export type CaseIncisionCandidateKind = "linear" | "fusiform";
+export type CaseIncisionCandidateStatus = "draft" | "needs_review" | "selected";
+
+export interface CaseIncisionCandidateRecord {
+  id: string;
+  version: number;
+  label: string;
+  kind: CaseIncisionCandidateKind;
+  status: CaseIncisionCandidateStatus;
+  lengthMm: number | null;
+  widthMm: number | null;
+  tipAngleDeg: number | null;
+  ratio: number | null;
+  safetyMarginMm: number;
+  ruleSummary: string;
+  guardrailSummary: string;
+  createdAt: string;
+  updatedAt: string;
+  provenance: {
+    source: string;
+    author: string;
+    ageBand: ClinicalCaseRecord["patientContext"]["ageBand"];
+    lesionLayer: LesionLayer;
+    marginStrategy: MarginStrategy;
+    ruleTrace: string[];
+  };
+}
 
 export interface ClinicalCaseRecord {
   id: string;
@@ -126,6 +153,8 @@ export interface ClinicalCaseRecord {
     summary: string;
     lastRunAt: string | null;
   };
+  incisionCandidates: CaseIncisionCandidateRecord[];
+  selectedCandidateId: string | null;
   saveState?: "saved" | "dirty" | "save_failed";
   lastError?: string;
 }
@@ -142,6 +171,8 @@ export interface ClinicalCaseDraft {
   acquisition?: Partial<ClinicalCaseRecord["acquisition"]>;
   layers?: Partial<ClinicalCaseRecord["layers"]>;
   closureSimulation?: Partial<ClinicalCaseRecord["closureSimulation"]>;
+  incisionCandidates?: CaseIncisionCandidateRecord[];
+  selectedCandidateId?: string | null;
   saveState?: ClinicalCaseRecord["saveState"];
   lastError?: string;
 }
@@ -317,6 +348,82 @@ function acquisitionLabel(source: ClinicalCaseRecord["acquisition"]["source"]): 
   return "上传照片 / 视频";
 }
 
+function finiteNumberOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function normalizeCandidateKind(value: unknown): CaseIncisionCandidateKind {
+  return value === "linear" ? "linear" : "fusiform";
+}
+
+function normalizeCandidateStatus(value: unknown): CaseIncisionCandidateStatus {
+  if (value === "selected" || value === "needs_review") return value;
+  return "draft";
+}
+
+function normalizeIncisionCandidate(
+  value: unknown,
+  index: number,
+  now: string,
+): CaseIncisionCandidateRecord | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<CaseIncisionCandidateRecord>;
+  const id = typeof candidate.id === "string" && candidate.id.trim()
+    ? candidate.id
+    : createId("candidate");
+  const kind = normalizeCandidateKind(candidate.kind);
+  const status = normalizeCandidateStatus(candidate.status);
+  const provenance = candidate.provenance && typeof candidate.provenance === "object"
+    ? candidate.provenance
+    : null;
+  const lesionLayer: LesionLayer = provenance?.lesionLayer === "cutaneous" ? "cutaneous" : "subcutaneous";
+  const marginStrategy: MarginStrategy = provenance?.marginStrategy === "expanded_margin"
+    ? "expanded_margin"
+    : "complete_excision";
+
+  return {
+    id,
+    version: typeof candidate.version === "number" && Number.isFinite(candidate.version)
+      ? Math.max(1, Math.round(candidate.version))
+      : index + 1,
+    label: typeof candidate.label === "string" && candidate.label.trim()
+      ? candidate.label.trim()
+      : `候选 ${index + 1}`,
+    kind,
+    status,
+    lengthMm: finiteNumberOrNull(candidate.lengthMm),
+    widthMm: finiteNumberOrNull(candidate.widthMm),
+    tipAngleDeg: finiteNumberOrNull(candidate.tipAngleDeg),
+    ratio: finiteNumberOrNull(candidate.ratio),
+    safetyMarginMm: typeof candidate.safetyMarginMm === "number" && Number.isFinite(candidate.safetyMarginMm)
+      ? Math.max(0, candidate.safetyMarginMm)
+      : 0,
+    ruleSummary: typeof candidate.ruleSummary === "string" ? candidate.ruleSummary : "规则摘要待补充。",
+    guardrailSummary: typeof candidate.guardrailSummary === "string" ? candidate.guardrailSummary : "需医生复核。",
+    createdAt: typeof candidate.createdAt === "string" ? candidate.createdAt : now,
+    updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : now,
+    provenance: {
+      source: typeof provenance?.source === "string" ? provenance.source : "病例规划页",
+      author: typeof provenance?.author === "string" ? provenance.author : "本地病例草稿",
+      ageBand: provenance?.ageBand === "child_tight"
+        || provenance?.ageBand === "adult_standard"
+        || provenance?.ageBand === "older_lax"
+        || provenance?.ageBand === "unknown"
+        ? provenance.ageBand
+        : "unknown",
+      lesionLayer,
+      marginStrategy,
+      ruleTrace: stringArray(provenance?.ruleTrace),
+    },
+  };
+}
+
 function normalizeCaseRecord(payload: ClinicalCaseDraft, now = new Date().toISOString()): ClinicalCaseRecord {
   const layer: LesionLayer = payload.lesion?.layer === "cutaneous" ? "cutaneous" : "subcutaneous";
   const marginStrategy: MarginStrategy = payload.lesion?.marginStrategy === "expanded_margin"
@@ -328,6 +435,13 @@ function normalizeCaseRecord(payload: ClinicalCaseDraft, now = new Date().toISOS
     ? payload.acquisition.source
     : "upload";
   const patientContext = classifyCaseAge(payload.patientContext?.ageYears);
+  const incisionCandidates = (Array.isArray(payload.incisionCandidates) ? payload.incisionCandidates : [])
+    .map((item, index) => normalizeIncisionCandidate(item, index, now))
+    .filter((item): item is CaseIncisionCandidateRecord => item !== null);
+  const selectedCandidateId = typeof payload.selectedCandidateId === "string"
+    && incisionCandidates.some((item) => item.id === payload.selectedCandidateId)
+    ? payload.selectedCandidateId
+    : incisionCandidates.find((item) => item.status === "selected")?.id ?? incisionCandidates[0]?.id ?? null;
 
   return {
     id: typeof payload.id === "string" ? payload.id : createId("case"),
@@ -366,6 +480,8 @@ function normalizeCaseRecord(payload: ClinicalCaseDraft, now = new Date().toISOS
         : "生成候选切口后，可在本步骤内运行张力闭合模拟。",
       lastRunAt: typeof payload.closureSimulation?.lastRunAt === "string" ? payload.closureSimulation.lastRunAt : null,
     },
+    incisionCandidates,
+    selectedCandidateId,
     saveState: "saved",
   };
 }

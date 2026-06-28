@@ -1,4 +1,4 @@
-import { Activity, ArrowLeft, ArrowRight, CheckCircle2, FileText, Layers3, Save, ShieldAlert, SlidersHorizontal } from "lucide-react";
+import { Activity, ArrowLeft, ArrowRight, CheckCircle2, FileText, Layers3, ListChecks, Save, ShieldAlert, SlidersHorizontal } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -15,7 +15,7 @@ import { Label } from "../components/ui/label";
 import { Select } from "../components/ui/select";
 import { RouteStatus, StatusBadge } from "../components/ui/status-badge";
 import { useReactRouteLifecycle } from "../hooks/useReactRouteLifecycle";
-import { type ClinicalCaseRecord, type ClinicalCaseStep } from "../services/dataSource";
+import { type CaseIncisionCandidateRecord, type ClinicalCaseRecord, type ClinicalCaseStep } from "../services/dataSource";
 import { CASE_STORE_BOUNDARY_NOTE, useCaseStore, type CaseSaveStatus } from "../stores/caseStore";
 
 interface CaseWorkflowRouteProps {
@@ -125,6 +125,91 @@ function marginPlanningRule(activeCase: ClinicalCaseRecord) {
     title: "常规完整切除",
     metric: "贴近病变",
     description: "默认切缘贴近病变，以完整切除为准；系统不判断良恶性。",
+  };
+}
+
+function candidateRatioForAge(activeCase: ClinicalCaseRecord) {
+  if (activeCase.patientContext.ageBand === "child_tight") return 3.5;
+  if (activeCase.patientContext.ageBand === "older_lax") return 2.5;
+  return 3;
+}
+
+function candidateTipAngleForAge(activeCase: ClinicalCaseRecord) {
+  if (activeCase.patientContext.ageBand === "child_tight") return 24;
+  if (activeCase.patientContext.ageBand === "older_lax") return 36;
+  return 30;
+}
+
+function candidateKindLabel(kind: CaseIncisionCandidateRecord["kind"]) {
+  return kind === "linear" ? "线性切口" : "梭形切口";
+}
+
+function candidateStatusLabel(status: CaseIncisionCandidateRecord["status"]) {
+  if (status === "selected") return "当前选中";
+  if (status === "needs_review") return "待审阅";
+  return "草稿";
+}
+
+function formatCandidateMetric(value: number | null, unit = "mm") {
+  return value == null ? "待定" : `${value.toFixed(1)} ${unit}`;
+}
+
+function buildCaseCandidate(activeCase: ClinicalCaseRecord): CaseIncisionCandidateRecord | null {
+  const diameter = activeCase.lesion.diameterMm;
+  if (diameter == null || diameter <= 0) return null;
+  const now = new Date().toISOString();
+  const margin = activeCase.lesion.marginStrategy === "expanded_margin"
+    ? Math.max(0, activeCase.lesion.safetyMarginMm ?? 0)
+    : 0;
+  const excisionWidth = diameter + margin * 2;
+  const version = activeCase.incisionCandidates.length + 1;
+  const kind = activeCase.lesion.layer === "cutaneous" ? "fusiform" : "linear";
+  const ratio = kind === "fusiform" ? candidateRatioForAge(activeCase) : null;
+  const tipAngleDeg = kind === "fusiform" ? candidateTipAngleForAge(activeCase) : null;
+  const lengthMm = kind === "fusiform"
+    ? excisionWidth * (ratio ?? 3)
+    : Math.max(excisionWidth, diameter * 1.2);
+  const widthMm = kind === "fusiform" ? excisionWidth : null;
+  const needsReview = activeCase.patientContext.ageBand === "unknown" || margin >= 10 || excisionWidth >= 30;
+  const guardrailSummary = needsReview
+    ? "参数接近复核阈值，需医生结合查体确认。"
+    : "基础规则未触发高风险提示，仍需医生确认。";
+  const ruleTrace = [
+    `年龄分档：${activeCase.patientContext.ageBandLabel}`,
+    `病灶层次：${activeCase.lesion.layerLabel}`,
+    activeCase.lesion.marginStrategy === "expanded_margin"
+      ? `安全切缘：${margin} mm`
+      : "切缘策略：常规完整切除",
+    kind === "fusiform"
+      ? `梭形参数：${tipAngleDeg}° / ${ratio}:1`
+      : "线性参数：沿局部 RSTL 方向",
+  ];
+
+  return {
+    id: `candidate_${Date.now().toString(36)}_${version}`,
+    version,
+    label: `候选 ${version}`,
+    kind,
+    status: "needs_review",
+    lengthMm,
+    widthMm,
+    tipAngleDeg,
+    ratio,
+    safetyMarginMm: margin,
+    ruleSummary: kind === "fusiform"
+      ? `估算切除宽度 ${excisionWidth.toFixed(1)} mm，长轴约 ${lengthMm.toFixed(1)} mm。`
+      : `估算线性切口长度 ${lengthMm.toFixed(1)} mm；无需设计梭形。`,
+    guardrailSummary,
+    createdAt: now,
+    updatedAt: now,
+    provenance: {
+      source: "病例规划页确定性规则",
+      author: "本地病例草稿",
+      ageBand: activeCase.patientContext.ageBand,
+      lesionLayer: activeCase.lesion.layer,
+      marginStrategy: activeCase.lesion.marginStrategy,
+      ruleTrace,
+    },
   };
 }
 
@@ -439,10 +524,96 @@ function PlanningRationalePanel({ activeCase }: { activeCase: ClinicalCaseRecord
           ))}
         </div>
         <div className="case-rationale-audit" aria-label="审计记录边界">
-          <p><b>规则 trace</b><span>候选生成应记录年龄分档、病灶层次、切缘策略、图层状态和医生修改。</span></p>
+          <p><b>规则记录</b><span>候选生成应记录年龄分档、病灶层次、切缘策略、图层状态和医生修改。</span></p>
           <p><b>临床边界</b><span>系统只生成辅助草案，不判断良恶性，不输出自动手术指令。</span></p>
           <p><b>保存边界</b><span>当前为本地病例草稿；正式审阅记录后续进入院内或云端病例库。</span></p>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CaseCandidateQueue({
+  activeCase,
+  onGenerate,
+  onSelect,
+  readonly = false,
+}: {
+  activeCase: ClinicalCaseRecord;
+  onGenerate?: () => void;
+  onSelect?: (candidateId: string) => void;
+  readonly?: boolean;
+}) {
+  const candidates = activeCase.incisionCandidates;
+  const selectedId = activeCase.selectedCandidateId;
+  const canGenerate = activeCase.lesion.diameterMm != null && activeCase.lesion.diameterMm > 0;
+
+  return (
+    <Card className="case-candidate-panel" id="caseCandidatePanel">
+      <CardHeader>
+        <span>候选方案队列</span>
+        <span className="clinical-number">{candidates.length}</span>
+      </CardHeader>
+      <CardContent>
+        <div className="case-candidate-header">
+          <div>
+            <b>病例内候选草稿</b>
+            <p>候选摘要保存在当前病例草稿中，用于回退微调、审阅和导出前确认。</p>
+          </div>
+          {!readonly ? (
+            <Button
+              disabled={!canGenerate}
+              type="button"
+              variant="workbenchPrimary"
+              onClick={onGenerate}
+            >
+              <ListChecks size={16} />保存候选草案
+            </Button>
+          ) : null}
+        </div>
+        {!canGenerate && !readonly ? (
+          <Hint>请先填写病灶直径，再保存候选草案。</Hint>
+        ) : null}
+        {candidates.length ? (
+          <div className="case-candidate-list" aria-label="候选方案队列">
+            {candidates.map((candidate) => {
+              const selected = candidate.id === selectedId;
+              return (
+                <article key={candidate.id} className={`case-candidate-row${selected ? " is-selected" : ""}`}>
+                  <div className="case-candidate-row-top">
+                    <div>
+                      <span>v{candidate.version}</span>
+                      <b>{candidate.label} · {candidateKindLabel(candidate.kind)}</b>
+                    </div>
+                    <RouteStatus className="case-candidate-state">{selected ? "当前选中" : candidateStatusLabel(candidate.status)}</RouteStatus>
+                  </div>
+                  <div className="case-candidate-metrics">
+                    <div><span>长度</span><b className="clinical-number">{formatCandidateMetric(candidate.lengthMm)}</b></div>
+                    <div><span>宽度 / 比例</span><b className="clinical-number">{candidate.widthMm == null ? "线性" : `${candidate.widthMm.toFixed(1)} mm / ${candidate.ratio?.toFixed(1) ?? "—"}:1`}</b></div>
+                    <div><span>尖端角</span><b className="clinical-number">{candidate.tipAngleDeg == null ? "—" : `${candidate.tipAngleDeg}°`}</b></div>
+                    <div><span>复核提示</span><b>{candidate.guardrailSummary}</b></div>
+                  </div>
+                  <div className="case-candidate-rationale">
+                    <b>规则记录</b>
+                    <span>{candidate.provenance.ruleTrace.join("；") || candidate.ruleSummary}</span>
+                  </div>
+                  {!readonly && !selected ? (
+                    <div className="case-inline-actions">
+                      <Button type="button" variant="workbench" onClick={() => onSelect?.(candidate.id)}>
+                        设为当前候选
+                      </Button>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="case-empty-state case-candidate-empty">
+            <FileText size={22} />
+            <p>暂无候选草案。保存候选后，方案确认页会显示版本、指标和规则记录。</p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -583,6 +754,33 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   const runClosureSimulation = () => {
     updateActiveCase({ closureSimulation: estimateClosureSimulation(activeCase) });
   };
+  const saveCandidateDraft = () => {
+    const candidate = buildCaseCandidate(activeCase);
+    if (!candidate) return;
+    updateActiveCase({
+      incisionCandidates: [
+        {
+          ...candidate,
+          status: "selected",
+        },
+        ...activeCase.incisionCandidates.map((item) => (
+          item.id === activeCase.selectedCandidateId ? { ...item, status: "needs_review" as const } : item
+        )),
+      ],
+      selectedCandidateId: candidate.id,
+      status: "needs_review",
+    });
+  };
+  const selectCandidate = (candidateId: string) => {
+    updateActiveCase({
+      incisionCandidates: activeCase.incisionCandidates.map((candidate) => ({
+        ...candidate,
+        status: candidate.id === candidateId ? "selected" : "needs_review",
+      })),
+      selectedCandidateId: candidateId,
+      status: "needs_review",
+    });
+  };
 
   return (
     <div className="case-workflow-stack" id="casePlanStep">
@@ -676,6 +874,12 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
 
       <PlanningRationalePanel activeCase={activeCase} />
 
+      <CaseCandidateQueue
+        activeCase={activeCase}
+        onGenerate={saveCandidateDraft}
+        onSelect={selectCandidate}
+      />
+
       <Card className="case-closure-simulation" id="caseClosureSimulation">
         <CardHeader>
           <span>张力闭合模拟</span>
@@ -737,6 +941,7 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
 
 function ReviewStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   const updateActiveCase = useCaseStore((state) => state.updateActiveCase);
+  const selectedCandidate = activeCase.incisionCandidates.find((candidate) => candidate.id === activeCase.selectedCandidateId) ?? null;
 
   return (
     <div className="case-workflow-stack" id="caseReviewStep">
@@ -766,6 +971,7 @@ function ReviewStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
             <p><b>病灶层次</b><span>{activeCase.lesion.layerLabel}</span></p>
             <p><b>采集方式</b><span>{activeCase.acquisition.sourceLabel}</span></p>
             <p><b>切缘策略</b><span>{activeCase.lesion.marginStrategy === "expanded_margin" ? `扩大 ${activeCase.lesion.safetyMarginMm ?? "未填"} mm` : "常规完整切除"}</span></p>
+            <p><b>当前候选</b><span>{selectedCandidate ? `${selectedCandidate.label} · ${candidateKindLabel(selectedCandidate.kind)}` : "尚未保存候选"}</span></p>
           </CardContent>
         </Card>
 
@@ -787,6 +993,8 @@ function ReviewStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
           </CardContent>
         </Card>
       </div>
+
+      <CaseCandidateQueue activeCase={activeCase} readonly />
 
       <Card>
         <CardHeader><span>临床合规提示</span><ShieldAlert size={16} /></CardHeader>

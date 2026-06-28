@@ -118,7 +118,8 @@
 - `/app/case/:id/evaluate` 和 `/app/case/:id/plan` 已在步骤内部加入紧凑子任务条，把“确认前置参数 / 映射张力线 / 标记病灶 / 生成候选 / 闭合模拟”呈现为临床任务，而不是工具清单。
 - `/app/live`、`/app/incision` 和候选导出能力在病例步骤中以“受控评估入口 / 受控规划入口 / 受控导出入口”出现，入口旁说明进入前条件、返回后状态和临床边界。
 - 病例大厅和病例步骤页共用 `ClinicalFacePreview`，在深色病例画布中显示 2D 图像 / 3D 重建 / 实时叠加模式、测量标尺、面部深度参考、解剖参考点、RSTL、病灶和切口 overlay，避免主流程停留在低保真线框脸。
-- `/app/case/:id/plan` 已把“规划依据 / 风险提示 / 审计记录”落实为 `PlanningRationalePanel`，用结构化规则卡展示年龄分档、切口模式、切缘策略、警惕区和规则 trace，而不是只给最终候选线。
+- `/app/case/:id/plan` 已把“规划依据 / 风险提示 / 审计记录”落实为 `PlanningRationalePanel`，用结构化规则卡展示年龄分档、切口模式、切缘策略、警惕区和规则记录，而不是只给最终候选线。
+- `/app/case/:id/plan` 和 `/app/case/:id/review` 已增加病例内候选方案队列，候选摘要随病例草稿保存，包含版本、线性/梭形类型、长度、宽度 / 比例、尖端角、复核提示和规则记录；完整几何细调仍通过受控规划入口进入 `/app/incision`。
 - 病例规划页不再把医生直接跳转到 `/app/surgery`；旧 `/app/surgery` 路由仅保留为兼容 / 研究演示入口。
 - `/app/settings/atlas` 已成为图谱库管理壳，旧 `/app/annotate` 只作为图谱维护卡片中的受控入口。
 - `/app/settings/developer` 已成为系统诊断壳，AI 摘要服务连接测试、三维模型预览和兼容工作台入口集中在设置中，不再直接暴露在医生主流程里。
@@ -278,6 +279,8 @@ UI 应先收集会影响规划的病例和病灶前提，再展示工具。
 - `annotation_lines`：医生画的 RSTL、皮纹或病灶边界线，含坐标系、单位、作者、时间和版本。
 - `incision_candidate`：线性或梭形候选几何、metrics、规则依据、guardrails、候选排序和生成版本。
 - `review_record`：医生确认、退回、否决、备注、覆盖原因、截图/报告导出引用和审计摘要。
+
+当前 PR 的病例草稿已先落地轻量 `incisionCandidates` 摘要队列和 `selectedCandidateId` 指针，用于 UI 层保存候选版本、当前选中候选、规则记录和导出前审阅状态。它不是完整几何数据模型，后续接入 `/app/incision` 的候选几何和远端 API 时，应继续沿用同一字段语义扩展。
 
 ### 对 UI 重构的要求
 
@@ -546,8 +549,9 @@ html {
 - 主流程文案不出现 R3F、FLAME、MediaPipe、Agent trace、topology。
 - 导出和审计仍保留技术 provenance，不丢失可追溯性。
 - 病例大厅、步骤条和候选列表都围绕 `case_id`、保存状态和候选版本组织。
+- 病例规划页和方案确认页必须能显示病例内候选方案队列，候选至少包含版本、当前选中状态、长度 / 宽度 / 比例 / 尖端角、复核提示和规则记录。
 - 年龄分档、病灶层次、切缘策略、图层看板和临床合规提示覆盖医生简易操作手册。
-- 候选切口旁有结构化规划依据 / 风险提示 / 审计记录，至少展示年龄参数、病灶层次、切缘策略、警惕区和规则 trace，不把 AI 或规则判断做成黑盒。
+- 候选切口旁有结构化规划依据 / 风险提示 / 审计记录，至少展示年龄参数、病灶层次、切缘策略、警惕区和规则记录，不把 AI 或规则判断做成黑盒。
 - 数值字段、角度、张力分数和候选 metrics 使用等宽数字或 `tabular-nums`。
 - 现有 `/app/live`、`/app/incision`、`/app/annotate`、`/app/surgery` 路由在过渡期仍可回归测试；`/app/annotate` 和 `/app/three-preview` 只能从设置或兼容区进入。
 - 视觉冒烟检查可用 `cd web && npm run visual:case` 启动本地 Vite，并用 Playwright 截取病例大厅、评估、规划、确认、图谱库管理和系统诊断页；截图输出到 `local_outputs/case-workflow-visual/`，不提交到仓库。若运行环境缺少 Chromium 依赖，应在 PR 中记录失败日志和人工预览链接；若 Linux 截图中文字缺失，需要在截图主机安装 Noto Sans CJK SC 等中文字体后再做设计截图复核。

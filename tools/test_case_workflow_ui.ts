@@ -25,6 +25,7 @@ const legacyWorkbenchCopy = [
 const dataSource = fs.readFileSync("src/services/dataSource.ts", "utf8");
 const caseStore = fs.readFileSync("src/stores/caseStore.ts", "utf8");
 const styles = fs.readFileSync("src/styles.css", "utf8");
+const visualCapture = fs.readFileSync("../tools/capture_case_workflow_visual.ts", "utf8");
 
 assert.ok(app.includes('path="/cases"'), "React Router exposes the clinical case lobby");
 assert.ok(app.includes('path="/case/:caseId/evaluate"'), "React Router exposes the case evaluation step");
@@ -82,11 +83,18 @@ assert.ok(caseRoute.includes("case-rationale-audit"), "case workflow renders a s
 assert.ok(caseRoute.includes("agePlanningRule"), "case workflow derives age-based planning rule copy");
 assert.ok(caseRoute.includes("lesionPlanningRule"), "case workflow derives lesion-layer planning rule copy");
 assert.ok(caseRoute.includes("marginPlanningRule"), "case workflow derives margin planning rule copy");
+assert.ok(caseRoute.includes("CaseCandidateQueue"), "case workflow renders a case-level candidate queue");
+assert.ok(caseRoute.includes("buildCaseCandidate"), "case workflow can create a deterministic candidate summary inside the case");
+assert.ok(caseRoute.includes("保存候选草案"), "case planning lets clinicians save a candidate draft into the case");
+assert.ok(caseRoute.includes("设为当前候选"), "case planning lets clinicians select a saved candidate");
+assert.ok(caseRoute.includes("候选方案队列"), "case workflow exposes saved candidates as a queue");
+assert.ok(caseRoute.includes("当前候选"), "case review summarizes the selected candidate");
+assert.ok(caseRoute.includes("规则记录"), "case candidates expose clinician-readable rule provenance");
 assert.ok(caseRoute.includes("3.5:1"), "case workflow exposes the child/tight long-axis ratio in planning rationale");
 assert.ok(caseRoute.includes("30° / 3:1"), "case workflow exposes the adult baseline angle and ratio in planning rationale");
 assert.ok(caseRoute.includes("2.5:1"), "case workflow exposes the older/lax long-axis ratio in planning rationale");
 assert.ok(caseRoute.includes("估算切除宽度"), "case workflow explains expanded-margin width in planning rationale");
-assert.ok(caseRoute.includes("规则 trace"), "case workflow keeps rule trace visible as clinical audit context");
+assert.ok(caseRoute.includes("规则记录"), "case workflow keeps rule provenance visible as clinical audit context");
 assert.ok(caseRoute.includes("caseClosureSimulation"), "case planning step embeds closure simulation inside the case workflow");
 assert.ok(caseRoute.includes("张力闭合模拟"), "case planning step exposes closure simulation as a planning control");
 assert.ok(caseRoute.includes("运行闭合模拟"), "case planning step gives doctors direct simulation feedback without leaving the workflow");
@@ -178,6 +186,10 @@ for (const hiddenCopy of [
 assert.ok(dataSource.includes("interface ClinicalCaseRecord"), "dataSource owns the structured case record contract");
 assert.ok(dataSource.includes("closureSimulation"), "dataSource persists closure simulation state inside the case record");
 assert.ok(dataSource.includes("ClosureSimulationStatus"), "dataSource gives closure simulation a typed status");
+assert.ok(dataSource.includes("CaseIncisionCandidateRecord"), "dataSource owns the structured case candidate record contract");
+assert.ok(dataSource.includes("incisionCandidates"), "dataSource persists incision candidates inside the case record");
+assert.ok(dataSource.includes("selectedCandidateId"), "dataSource persists the selected candidate pointer");
+assert.ok(dataSource.includes("normalizeIncisionCandidate"), "dataSource normalizes saved candidate records for draft recovery");
 assert.ok(dataSource.includes("saveCase(payload"), "dataSource exposes a case save method");
 assert.ok(dataSource.includes("listCases()"), "dataSource exposes case listing");
 assert.ok(dataSource.includes("getCase(id"), "dataSource exposes case recovery");
@@ -188,6 +200,7 @@ assert.ok(dataSource.includes("2.5:1"), "dataSource preserves the older/lax rati
 assert.ok(caseStore.includes("CASE_STORE_BOUNDARY_NOTE"), "case store documents low-frequency state ownership");
 assert.ok(caseStore.includes("dataSource.saveCase"), "case store persists through the BrowserDataSource contract");
 assert.ok(caseStore.includes("closureSimulation"), "case store merges closure simulation updates through the case data boundary");
+assert.ok(caseStore.includes("...draft"), "case store preserves top-level candidate queue updates through the case data boundary");
 assert.ok(!caseStore.includes("localStorage"), "case store does not bypass the dataSource boundary");
 
 assert.ok(styles.includes("--font-clinical-sans"), "styles expose the clinical font token");
@@ -203,6 +216,9 @@ assert.ok(styles.includes(".case-clinical-viewport"), "styles implement the PACS
 assert.ok(styles.includes(".case-viewport-mode-switch"), "styles implement compact 2D/3D/live viewport mode controls");
 assert.ok(styles.includes(".case-rule-grid"), "styles implement structured planning rule cards");
 assert.ok(styles.includes(".case-rationale-audit"), "styles implement dense planning audit rows");
+assert.ok(styles.includes(".case-candidate-panel"), "styles implement the case candidate panel");
+assert.ok(styles.includes(".case-candidate-metrics"), "styles implement dense candidate metrics");
+assert.ok(styles.includes(".case-candidate-rationale"), "styles implement candidate provenance rows");
 assert.ok(styles.includes(".case-closure-grid"), "styles implement the embedded closure simulation panel");
 assert.ok(styles.includes(".case-closure-meter"), "styles implement closure simulation score feedback");
 assert.ok(styles.includes(".case-step-stage-grid"), "styles prioritize a viewport-plus-command step layout");
@@ -226,5 +242,8 @@ assert.ok(styles.includes(".clinical-compat-workbench .stage"), "styles darken l
 assert.ok(styles.includes(".clinical-developer-disclosure"), "styles collapse developer/provider configuration");
 assert.ok(styles.includes(".surgery-highlight-copy"), "styles avoid green-as-primary copy in closure controls");
 assert.ok(!styles.includes(".surgery-green-copy"), "styles remove the legacy green closure copy class");
+
+assert.ok(visualCapture.includes("incisionCandidates"), "Playwright visual case seed includes saved candidates");
+assert.ok(visualCapture.includes("visual-candidate-1"), "Playwright visual case seed includes a selected candidate");
 
 console.log("test_case_workflow_ui: clinical case workflow contracts passed");
