@@ -890,6 +890,10 @@ assert.ok(uiButton.includes("miniDanger"), "shadcn-style Button can preserve com
 assert.ok(uiButton.includes("visible?: boolean"), "shadcn-style Button exposes a typed visibility prop");
 assert.ok(uiButton.includes('hiddenClassName = "hidden"'), "shadcn-style Button defaults invisible buttons to the legacy hidden class");
 assert.ok(uiButton.includes("!visible && hiddenClassName"), "shadcn-style Button centralizes hidden class application");
+assert.ok(uiButton.includes("#0f62fe"), "shared Button primary style uses the clinical blue action color");
+for (const staleButtonToken of ["#0f9b6e", "#0c8460", "border-[#e6e8e1]", "rounded-[10px]", "bg-white px-3"]) {
+  assert.ok(!uiButton.includes(staleButtonToken), `shared Button should not retain stale light/green token ${staleButtonToken}`);
+}
 assert.deepEqual(
   buttonVisibilityConsumersWithRawHidden(),
   [],
@@ -1175,9 +1179,9 @@ assert.ok(annotateDrawPanel.includes("CurrentLineStatus"), "React annotate draw 
 assert.ok(uiR3FLoadingCard.includes("R3FLoadingCard"), "R3F loading primitive exports R3FLoadingCard");
 assert.ok(uiR3FLoadingCard.includes("@react-three/drei"), "R3F loading primitive owns the Drei Html overlay");
 assert.ok(uiR3FLoadingCard.includes("<Html center>"), "R3F loading primitive centers loading content through Drei Html");
-assert.ok(uiR3FLoadingCard.includes("rounded-[10px]"), "R3F loading primitive preserves the existing loading card radius");
+assert.ok(uiR3FLoadingCard.includes("rounded-[4px]"), "R3F loading primitive uses the compact clinical loading card radius");
 assert.ok(uiR3FLoadingCard.includes("bg-black/60"), "R3F loading primitive preserves the existing loading card contrast");
-for (const className of ["rounded-[10px]", "bg-black/60", "text-[#dbe4ee]"]) {
+for (const className of ["rounded-[4px]", "bg-black/60", "text-[#dbe4ee]"]) {
   assert.deepEqual(
     r3fLoadingConsumersWithRawClass(className),
     [],

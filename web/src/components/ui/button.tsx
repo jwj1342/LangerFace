@@ -11,8 +11,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#e6e8e1] bg-white px-3 text-sm font-semibold text-[#1b2024] transition hover:bg-[#f3f4f0] disabled:pointer-events-none disabled:opacity-45",
-        primary: "inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#0f9b6e] bg-[#0f9b6e] px-3 text-sm font-semibold text-white transition hover:bg-[#0c8460] disabled:pointer-events-none disabled:opacity-45",
+        default: "inline-flex h-10 items-center justify-center gap-2 rounded-[4px] border border-[#3e4b59] bg-[#151b23] px-3 text-sm font-semibold text-[#e5eaf0] transition hover:border-[#5b6b7a] hover:bg-[#1c2530] disabled:pointer-events-none disabled:opacity-45",
+        primary: "inline-flex h-10 items-center justify-center gap-2 rounded-[4px] border border-[#0f62fe] bg-[#0f62fe] px-3 text-sm font-semibold text-[#f4f7fb] transition hover:border-[#0043ce] hover:bg-[#0043ce] disabled:pointer-events-none disabled:opacity-45",
         workbench: "btn",
         workbenchPrimary: "btn btn-primary",
         mini: "mini",
