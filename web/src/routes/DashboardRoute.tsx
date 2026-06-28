@@ -1,14 +1,12 @@
 import {
   ArrowRight,
   Boxes,
-  Camera,
   ClipboardCheck,
   FileText,
   FolderOpen,
   History,
   PenLine,
   Plus,
-  Scissors,
   Settings,
   ShieldCheck,
 } from "lucide-react";
@@ -22,7 +20,6 @@ import {
   ReactShellNavLink,
   ReactShellSidebar,
 } from "../components/ReactShell";
-import { WorkerStatusPanel } from "../components/WorkerStatusPanel";
 import { WorkbenchBrand } from "../components/WorkbenchBrand";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
@@ -30,8 +27,8 @@ import { Hint } from "../components/ui/hint";
 import { RouteStatus } from "../components/ui/status-badge";
 import { useReactRouteLifecycle } from "../hooks/useReactRouteLifecycle";
 import { type ClinicalCaseStep } from "../services/dataSource";
-import { STATE_BOUNDARY_NOTE, useAppStore } from "../stores/appStore";
-import { CASE_STORE_BOUNDARY_NOTE, useCaseStore } from "../stores/caseStore";
+import { useAppStore } from "../stores/appStore";
+import { useCaseStore } from "../stores/caseStore";
 
 function caseStepPath(caseId: string, step: ClinicalCaseStep) {
   return `/case/${caseId}/${step}`;
@@ -93,7 +90,7 @@ export function DashboardRoute() {
               <div><span>草稿</span><b className="clinical-number">{cases.length}</b></div>
               <div><span>主流程</span><b>3 步</b></div>
               <div><span>保存</span><b>本地</b></div>
-              <div><span>旧工具</span><b>已收起</b></div>
+              <div><span>维护入口</span><b>设置</b></div>
             </CardContent>
           </Card>
 
@@ -111,40 +108,6 @@ export function DashboardRoute() {
             </CardContent>
           </Card>
 
-          <details className="case-disclosure case-legacy-tools">
-            <summary>兼容 / 研发工具</summary>
-            <div className="case-disclosure-body">
-              <ReactShellNavLink to="/incision">
-                <span>切口规划旧工作台</span>
-                <ArrowRight size={16} />
-              </ReactShellNavLink>
-              <ReactShellNavLink to="/live">
-                <span>实时张力线旧入口</span>
-                <Camera size={16} />
-              </ReactShellNavLink>
-              <ReactShellNavLink to="/annotate">
-                <span>图谱标注工具</span>
-                <PenLine size={16} />
-              </ReactShellNavLink>
-              <ReactShellNavLink to="/three-preview">
-                <span>标准脸预览</span>
-                <Boxes size={16} />
-              </ReactShellNavLink>
-              <ReactShellNavLink to="/surgery">
-                <span>闭合模拟演示</span>
-                <Scissors size={16} />
-              </ReactShellNavLink>
-            </div>
-          </details>
-
-          <details className="case-disclosure case-developer-notes">
-            <summary>开发 / 诊断信息</summary>
-            <div className="case-disclosure-body">
-              <Hint>{STATE_BOUNDARY_NOTE}</Hint>
-              <Hint>{CASE_STORE_BOUNDARY_NOTE}</Hint>
-              <WorkerStatusPanel />
-            </div>
-          </details>
         </ReactShellSidebar>
 
         <ReactShellMain className="case-workflow-main">
@@ -153,7 +116,7 @@ export function DashboardRoute() {
               <div className="case-lobby-copy">
                 <span className="case-lobby-kicker">工作台大厅</span>
                 <h2 id="caseLobbyTitle">从病例开始完成面部评估、病灶定位和切口方案确认</h2>
-                <p>医生日常入口围绕病例草稿组织；图谱、旧工作台和开发诊断收进设置与兼容区，避免主流程被工具列表打断。</p>
+                <p>医生日常入口围绕病例草稿组织；图谱维护、模型配置和开发诊断统一收进系统设置，避免主流程被工具列表打断。</p>
                 <div className="case-lobby-actions">
                   <Button variant="workbenchPrimary" onClick={handleCreateCase}>
                     <Plus size={16} />新建病例

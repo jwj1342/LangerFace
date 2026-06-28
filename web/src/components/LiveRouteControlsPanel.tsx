@@ -103,11 +103,11 @@ export function LiveRouteControlsPanel() {
 
       <Card id="threeDWorkflowCard" visible={is3d}>
         <div>
-        <Label>图谱标注与闭合模拟</Label>
-        <Hint className="live-inline-top">在 3D 标准脸上绘制 RSTL 候选线，并从标注页进入闭合张力模拟。</Hint>
+        <Label>图谱库维护</Label>
+        <Hint className="live-inline-top">图谱标注属于维护流程；正式张力闭合模拟请回到病例规划步骤运行。</Hint>
         </div>
         <Button asChild variant="workbenchPrimary">
-          <Link to="/annotate">打开 3D 线标注</Link>
+          <Link to="/settings/atlas">进入图谱库管理</Link>
         </Button>
       </Card>
     </>

@@ -43,12 +43,13 @@ assert.ok(dashboard.includes("工作台大厅"), "case lobby includes a product 
 assert.ok(dashboard.includes("case-lobby-landing"), "case lobby renders a dedicated landing section");
 assert.ok(dashboard.includes("case-lobby-stage"), "case lobby includes a dark clinical viewport preview");
 assert.ok(dashboard.includes("case-workflow-roadmap"), "case lobby shows the clinical workflow roadmap");
-assert.ok(dashboard.includes("兼容 / 研发工具"), "technical tools are retained behind a compatibility disclosure");
-assert.ok(dashboard.includes("旧工作台"), "legacy tools are explicitly downgraded from the main clinical path");
+assert.ok(dashboard.includes("系统设置"), "case lobby keeps maintenance entry points in system settings");
+assert.ok(!dashboard.includes("兼容 / 研发工具"), "case lobby no longer exposes compatibility tools in the doctor sidebar");
+assert.ok(!dashboard.includes("开发 / 诊断信息"), "case lobby no longer exposes developer diagnostics in the doctor sidebar");
 for (const route of ["/incision", "/live", "/annotate", "/three-preview", "/surgery"]) {
-  assert.ok(dashboard.includes(`to="${route}"`), `case lobby keeps ${route} as a React Router compatibility link`);
+  assert.ok(!dashboard.includes(`to="${route}"`), `case lobby must not link directly to compatibility route ${route}`);
 }
-assert.ok(dashboard.includes("CASE_STORE_BOUNDARY_NOTE"), "case lobby surfaces the case store state boundary");
+assert.ok(!dashboard.includes("CASE_STORE_BOUNDARY_NOTE"), "case lobby keeps implementation state boundary notes out of the doctor sidebar");
 
 assert.ok(settingsRoute.includes("图谱库管理"), "settings route exposes atlas library management");
 assert.ok(settingsRoute.includes("开发者诊断"), "settings route exposes developer diagnostics");
@@ -56,8 +57,10 @@ assert.ok(settingsRoute.includes("面部松弛皮肤张力线智能切口设计�
 assert.ok(settingsRoute.includes("SettingsSidebar"), "settings route owns a dedicated settings navigation shell");
 assert.ok(settingsRoute.includes("SettingsHero"), "settings route owns a dedicated settings landing surface");
 assert.ok(settingsRoute.includes("ProviderConfigPanel"), "developer settings contains the AI service connection panel");
+assert.ok(settingsRoute.includes("WorkerStatusPanel"), "developer settings contains worker diagnostics after removing them from the doctor lobby");
 assert.ok(settingsRoute.includes('to="/annotate"'), "atlas settings keeps the annotation tool as a controlled entry");
 assert.ok(settingsRoute.includes('to="/three-preview"'), "developer settings keeps the 3D preview as a controlled entry");
+assert.ok(settingsRoute.includes('to="/surgery"'), "developer settings keeps the standalone closure demo as a controlled entry");
 assert.ok(settingsRoute.includes('workspace: "settings"'), "settings route publishes settings workspace lifecycle state");
 assert.ok(settingsRoute.includes("不进入医生的病例规划主流程"), "settings route explains atlas work is outside the doctor workflow");
 assert.ok(settingsRoute.includes("不应重新出现在医生主导航"), "developer settings explains compatibility tools stay hidden from main navigation");
@@ -112,6 +115,8 @@ assert.ok(incisionRoute.includes("正式临床流程请从病例大厅进入"), 
 assert.ok(liveRoute.includes("正式临床流程请从病例大厅进入"), "live route warns that it is not the main clinical flow");
 assert.ok(annotateRoute.includes("不属于医生病例主流程"), "annotate route is framed as atlas management");
 assert.ok(surgeryRoute.includes("正式方案应从病例流程"), "surgery demo is framed as a case workflow tool");
+assert.ok(legacyWorkbenchCopy.includes('to="/settings/atlas"'), "legacy workbenches route atlas maintenance through settings");
+assert.ok(!legacyWorkbenchCopy.includes('to="/annotate">图谱库管理'), "legacy workbenches do not bypass atlas settings for atlas maintenance");
 
 assert.ok(workbenchLayout.includes("clinical-compat-workbench"), "legacy workbench routes share the clinical compatibility shell");
 assert.ok(legacyWorkbenchCopy.includes("切口规划与候选审阅"), "incision workbench uses clinician-facing planning copy");

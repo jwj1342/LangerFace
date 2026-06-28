@@ -1105,6 +1105,14 @@
     grid-row: span 3;
   }
 
+  .settings-worker-panel {
+    min-width: 0;
+  }
+
+  .settings-worker-panel .card {
+    height: 100%;
+  }
+
   .settings-provider-panel .agent-grid {
     display: grid;
     gap: 12px;

@@ -702,7 +702,7 @@ assert.ok(dashboardRoute.includes("ReactShellNavLink"), "React dashboard uses sh
 assert.ok(!dashboardRoute.includes("ReactShellExternalLink"), "React dashboard should not send users back to legacy HTML entrypoints");
 assert.ok(!dashboardRoute.includes("/index.html"), "React dashboard should not link to the legacy live HTML entrypoint");
 for (const route of ["/incision", "/live", "/annotate", "/three-preview", "/surgery"]) {
-  assert.ok(dashboardRoute.includes(`to="${route}"`), `React dashboard links to ${route} through React Router`);
+  assert.ok(!dashboardRoute.includes(`to="${route}"`), `React dashboard should not expose compatibility route ${route} in the doctor lobby`);
 }
 for (const [name, html, expected] of [
   ["index.html", legacyLiveHtml, ["/app/"]],
@@ -1618,7 +1618,8 @@ assert.ok(reviewPanel.includes("ButtonRow"), "React review panel uses the shared
 assert.ok(reviewPanel.includes("AgentCard"), "React review panel uses the shared shadcn-style agent card primitive");
 assert.ok(reviewPanel.includes('variant="workbenchPrimary"'), "React review panel keeps primary workbench button styling through Button variants");
 assert.ok(incisionWorkbench.includes('to="/cases"'), "React incision workbench returns to the clinical case lobby");
-assert.ok(incisionStagePanel.includes('to="/annotate"'), "React incision stage links to the React 3D annotation route");
+assert.ok(incisionStagePanel.includes('to="/settings/atlas"'), "React incision stage routes atlas maintenance through settings");
+assert.ok(!incisionStagePanel.includes('to="/annotate"'), "React incision stage should not bypass atlas settings");
 for (const dependencyType of incisionRuntimeDependencyTypes) {
   assert.ok(
     fs.existsSync(path.join(web, dependencyType)),
@@ -1733,6 +1734,7 @@ assert.ok(settingsRoute.includes('workspace: "settings"'), "settings route uses 
 assert.ok(settingsRoute.includes("ProviderConfigPanel"), "developer settings owns the AI service configuration entry");
 assert.ok(settingsRoute.includes('to="/annotate"'), "settings route keeps the annotation tool as a controlled atlas entry");
 assert.ok(settingsRoute.includes('to="/three-preview"'), "settings route keeps the R3F preview as a controlled developer entry");
+assert.ok(settingsRoute.includes('to="/surgery"'), "settings route keeps the standalone closure demo as a controlled developer entry");
 assert.ok(threePreviewSidebar.includes("WorkbenchBrand"), "R3F preview sidebar uses the shared workbench brand");
 assert.ok(threePreviewSidebar.includes("Card"), "R3F preview sidebar uses the shared shadcn-style card component");
 assert.ok(worker.includes("Comlink.expose"), "workflow worker exposes its API through Comlink");
@@ -2142,7 +2144,8 @@ assert.ok(liveSnapshotsService.includes("buildLiveControllerSnapshot"), "shared 
 assert.ok(liveSnapshotsService.includes("liveTextOf"), "shared live snapshot service owns text normalization helpers");
 assert.ok(liveSnapshotsService.includes("visibleLiveTextOf"), "shared live snapshot service owns visible text normalization helpers");
 assert.ok(liveSnapshotsService.includes("../lib/controllerSnapshotSchemas"), "shared live snapshot service re-exports the lightweight schema version");
-assert.ok(liveRouteControlsPanel.includes('to="/annotate"'), "React live route controls link to the React annotation route");
+assert.ok(liveRouteControlsPanel.includes('to="/settings/atlas"'), "React live route controls route atlas maintenance through settings");
+assert.ok(!liveRouteControlsPanel.includes('to="/annotate"'), "React live route controls should not bypass atlas settings");
 assert.ok(liveWorkbench.includes('to="/incision"'), "React live workbench links to the React incision route");
 assert.ok(!fs.existsSync(path.join(web, "dom.js")), "legacy dom.js facade has been removed after TypeScript service migration");
 assert.ok(!fs.existsSync(path.join(web, "dom.d.ts")), "legacy DOM declaration facade has been removed after TypeScript service migration");

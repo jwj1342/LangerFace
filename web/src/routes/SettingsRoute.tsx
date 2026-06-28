@@ -7,6 +7,7 @@ import {
   FileCode2,
   Layers3,
   PenLine,
+  Scissors,
   ServerCog,
   ShieldCheck,
   SlidersHorizontal,
@@ -22,6 +23,7 @@ import {
   ReactShellNavLink,
   ReactShellSidebar,
 } from "../components/ReactShell";
+import { WorkerStatusPanel } from "../components/WorkerStatusPanel";
 import { WorkbenchBrand } from "../components/WorkbenchBrand";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
@@ -218,8 +220,13 @@ function DeveloperSettings() {
           <CardContent className="settings-action-list">
             <ReactShellNavLink to="/live"><span>实时张力线旧入口</span><Activity size={16} /></ReactShellNavLink>
             <ReactShellNavLink to="/incision"><span>切口规划旧工作台</span><FileCode2 size={16} /></ReactShellNavLink>
+            <ReactShellNavLink to="/surgery"><span>闭合模拟兼容演示</span><Scissors size={16} /></ReactShellNavLink>
           </CardContent>
         </Card>
+
+        <div className="settings-worker-panel">
+          <WorkerStatusPanel />
+        </div>
 
         <Card>
           <CardHeader><span>诊断边界</span><ShieldCheck size={16} /></CardHeader>

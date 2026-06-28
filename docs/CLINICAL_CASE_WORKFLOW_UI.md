@@ -534,7 +534,7 @@ html {
 
 - 医生从病例大厅进入，不再直接面对技术路线列表。
 - 主流程用步骤条串联：面部评估 -> 标记病灶 -> 切口规划 -> 方案确认。
-- `/app/annotate` 和 `/app/three-preview` 不出现在医生主导航中。
+- `/app/live`、`/app/incision`、`/app/surgery`、`/app/annotate` 和 `/app/three-preview` 不出现在医生首页主导航中；旧工具只能从病例步骤上下文或系统设置中的受控入口进入。
 - Provider 配置不出现在切口规划主侧栏。
 - 闭合模拟在切口规划上下文中打开，并显示定性模拟边界。
 - 主流程文案不出现 R3F、FLAME、MediaPipe、Agent trace、topology。
