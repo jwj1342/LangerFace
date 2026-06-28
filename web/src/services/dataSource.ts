@@ -91,6 +91,26 @@ export type CaseIncisionCandidateKind = "linear" | "fusiform";
 export type CaseIncisionCandidateStatus = "draft" | "needs_review" | "selected";
 export type RstlLayerDensity = "low" | "standard" | "high";
 export type ClinicalCaseReviewDecision = "pending" | "approved" | "needs_revision" | "rejected";
+export type AcquisitionQualityStatus = "not_started" | "needs_attention" | "ready";
+export type AcquisitionQualityCheck = "unchecked" | "pass" | "review";
+
+export interface ClinicalCaseCaptureSet {
+  frontal: boolean;
+  leftOblique: boolean;
+  rightOblique: boolean;
+  profile: boolean;
+  depthOrVideo: boolean;
+}
+
+export interface ClinicalCaseAcquisitionQuality {
+  status: AcquisitionQualityStatus;
+  focus: AcquisitionQualityCheck;
+  exposure: AcquisitionQualityCheck;
+  poseCoverage: AcquisitionQualityCheck;
+  tracking: AcquisitionQualityCheck;
+  summary: string;
+  lastCheckedAt: string | null;
+}
 
 export interface ClinicalCaseReviewRecord {
   reviewerName: string;
@@ -150,6 +170,8 @@ export interface ClinicalCaseRecord {
   acquisition: {
     source: "upload" | "photo" | "scan3d" | "realtime";
     sourceLabel: string;
+    captureSet: ClinicalCaseCaptureSet;
+    quality: ClinicalCaseAcquisitionQuality;
   };
   layers: {
     rstl: boolean;
@@ -174,6 +196,11 @@ export interface ClinicalCaseRecord {
   lastError?: string;
 }
 
+type ClinicalCaseAcquisitionDraft = Partial<Omit<ClinicalCaseRecord["acquisition"], "captureSet" | "quality">> & {
+  captureSet?: Partial<ClinicalCaseCaptureSet>;
+  quality?: Partial<ClinicalCaseAcquisitionQuality>;
+};
+
 export interface ClinicalCaseDraft {
   id?: string;
   title?: string;
@@ -183,7 +210,7 @@ export interface ClinicalCaseDraft {
   updatedAt?: string;
   patientContext?: Partial<ClinicalCaseRecord["patientContext"]>;
   lesion?: Partial<ClinicalCaseRecord["lesion"]>;
-  acquisition?: Partial<ClinicalCaseRecord["acquisition"]>;
+  acquisition?: ClinicalCaseAcquisitionDraft;
   layers?: Partial<ClinicalCaseRecord["layers"]>;
   closureSimulation?: Partial<ClinicalCaseRecord["closureSimulation"]>;
   incisionCandidates?: CaseIncisionCandidateRecord[];
@@ -364,6 +391,79 @@ function acquisitionLabel(source: ClinicalCaseRecord["acquisition"]["source"]): 
   return "上传照片 / 视频";
 }
 
+function defaultCaptureSet(): ClinicalCaseCaptureSet {
+  return {
+    frontal: false,
+    leftOblique: false,
+    rightOblique: false,
+    profile: false,
+    depthOrVideo: false,
+  };
+}
+
+function normalizeCaptureSet(value: unknown): ClinicalCaseCaptureSet {
+  const source = value && typeof value === "object" ? value as Partial<ClinicalCaseCaptureSet> : {};
+  return {
+    frontal: source.frontal === true,
+    leftOblique: source.leftOblique === true,
+    rightOblique: source.rightOblique === true,
+    profile: source.profile === true,
+    depthOrVideo: source.depthOrVideo === true,
+  };
+}
+
+function normalizeQualityCheck(value: unknown): AcquisitionQualityCheck {
+  if (value === "pass" || value === "review") return value;
+  return "unchecked";
+}
+
+function requiredCaptureViews(
+  source: ClinicalCaseRecord["acquisition"]["source"],
+): Array<keyof ClinicalCaseCaptureSet> {
+  if (source === "scan3d") return ["frontal", "leftOblique", "rightOblique", "depthOrVideo"];
+  if (source === "realtime") return ["frontal", "depthOrVideo"];
+  return ["frontal", "leftOblique", "rightOblique"];
+}
+
+function deriveAcquisitionQuality(
+  source: ClinicalCaseRecord["acquisition"]["source"],
+  captureSet: ClinicalCaseCaptureSet,
+  quality: Partial<ClinicalCaseAcquisitionQuality> | undefined,
+): ClinicalCaseAcquisitionQuality {
+  const focus = normalizeQualityCheck(quality?.focus);
+  const exposure = normalizeQualityCheck(quality?.exposure);
+  const poseCoverage = normalizeQualityCheck(quality?.poseCoverage);
+  const tracking = normalizeQualityCheck(quality?.tracking);
+  const requiredViews = requiredCaptureViews(source);
+  const hasAnyCapture = Object.values(captureSet).some(Boolean);
+  const hasRequiredViews = requiredViews.every((key) => captureSet[key]);
+  const requiredChecks: AcquisitionQualityCheck[] = source === "realtime" || source === "scan3d"
+    ? [focus, exposure, poseCoverage, tracking]
+    : [focus, exposure, poseCoverage];
+  const hasReviewFlag = requiredChecks.includes("review");
+  const hasUnchecked = requiredChecks.includes("unchecked");
+  const status: AcquisitionQualityStatus = !hasAnyCapture
+    ? "not_started"
+    : hasRequiredViews && !hasReviewFlag && !hasUnchecked
+      ? "ready"
+      : "needs_attention";
+  const summary = status === "ready"
+    ? "采集视角和质量检查满足当前病例规划要求，可继续进入病灶标记。"
+    : status === "not_started"
+      ? "尚未记录有效采集视角；可以先保存草稿，但继续规划时需医生复核输入质量。"
+      : "采集视角或质量检查仍需复核；医生可继续操作，但系统会把该状态写入候选和导出记录。";
+
+  return {
+    status,
+    focus,
+    exposure,
+    poseCoverage,
+    tracking,
+    summary,
+    lastCheckedAt: typeof quality?.lastCheckedAt === "string" ? quality.lastCheckedAt : null,
+  };
+}
+
 function finiteNumberOrNull(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
@@ -483,6 +583,7 @@ function normalizeCaseRecord(payload: ClinicalCaseDraft, now = new Date().toISOS
     ? payload.acquisition.source
     : "upload";
   const patientContext = classifyCaseAge(payload.patientContext?.ageYears);
+  const captureSet = normalizeCaptureSet(payload.acquisition?.captureSet ?? defaultCaptureSet());
   const incisionCandidates = (Array.isArray(payload.incisionCandidates) ? payload.incisionCandidates : [])
     .map((item, index) => normalizeIncisionCandidate(item, index, now))
     .filter((item): item is CaseIncisionCandidateRecord => item !== null);
@@ -512,6 +613,12 @@ function normalizeCaseRecord(payload: ClinicalCaseDraft, now = new Date().toISOS
     acquisition: {
       source,
       sourceLabel: acquisitionLabel(source),
+      captureSet,
+      quality: deriveAcquisitionQuality(
+        source,
+        captureSet,
+        payload.acquisition?.quality,
+      ),
     },
     layers: {
       rstl: payload.layers?.rstl ?? true,

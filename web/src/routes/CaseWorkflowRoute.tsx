@@ -15,7 +15,12 @@ import { Label } from "../components/ui/label";
 import { Select } from "../components/ui/select";
 import { RouteStatus, StatusBadge } from "../components/ui/status-badge";
 import { useReactRouteLifecycle } from "../hooks/useReactRouteLifecycle";
-import { type CaseIncisionCandidateRecord, type ClinicalCaseRecord, type ClinicalCaseStep } from "../services/dataSource";
+import {
+  type AcquisitionQualityCheck,
+  type CaseIncisionCandidateRecord,
+  type ClinicalCaseRecord,
+  type ClinicalCaseStep,
+} from "../services/dataSource";
 import { CASE_STORE_BOUNDARY_NOTE, useCaseStore, type CaseSaveStatus } from "../stores/caseStore";
 
 interface CaseWorkflowRouteProps {
@@ -76,6 +81,34 @@ function closureStatusLabel(status: ClinicalCaseRecord["closureSimulation"]["sta
   if (status === "stable") return "闭合可行";
   if (status === "needs_review") return "需复核";
   return "待运行";
+}
+
+function acquisitionStatusLabel(status: ClinicalCaseRecord["acquisition"]["quality"]["status"]) {
+  if (status === "ready") return "采集可用";
+  if (status === "needs_attention") return "需复核";
+  return "未采集";
+}
+
+function qualityCheckLabel(check: AcquisitionQualityCheck) {
+  if (check === "pass") return "通过";
+  if (check === "review") return "需复核";
+  return "未检查";
+}
+
+function captureViewItems(source: ClinicalCaseRecord["acquisition"]["source"]) {
+  const common = [
+    { key: "frontal", label: "正位", required: true, hint: "面部中线与标尺可读" },
+    { key: "leftOblique", label: "左斜位", required: source !== "realtime", hint: "补充左侧面颊和眶周" },
+    { key: "rightOblique", label: "右斜位", required: source !== "realtime", hint: "补充右侧面颊和鼻唇沟" },
+    { key: "profile", label: "侧位", required: false, hint: "必要时补充侧脸轮廓" },
+    {
+      key: "depthOrVideo",
+      label: source === "scan3d" ? "深度序列" : source === "realtime" ? "实时片段" : "视频 / 深度",
+      required: source === "scan3d" || source === "realtime",
+      hint: source === "scan3d" ? "用于三维重建稳定性" : "用于动态追踪或补充取材",
+    },
+  ] as const;
+  return common;
 }
 
 function agePlanningRule(activeCase: ClinicalCaseRecord) {
@@ -261,6 +294,7 @@ function buildCaseReportDraft(
     "",
     `- 年龄分档：${activeCase.patientContext.ageBandLabel}`,
     `- 采集方式：${activeCase.acquisition.sourceLabel}`,
+    `- 采集质量：${acquisitionStatusLabel(activeCase.acquisition.quality.status)}；${activeCase.acquisition.quality.summary}`,
     `- 病灶层次：${activeCase.lesion.layerLabel}`,
     `- 病灶直径：${activeCase.lesion.diameterMm ?? "未填"} mm`,
     `- 病灶深度：${activeCase.lesion.depthMm ?? "未填"} mm`,
@@ -272,6 +306,16 @@ function buildCaseReportDraft(
     `- 个性化皮纹：${activeCase.layers.personalizedWrinkles ? percentLabel(activeCase.layers.wrinkleOpacity) : "关闭"}`,
     `- 混合场：${activeCase.layers.blendedField ? "开启" : "关闭"}`,
     `- 切口设计：${activeCase.layers.incisionDesign ? "开启" : "关闭"}`,
+    "",
+    "## 采集质量",
+    "",
+    `- 完整性状态：${acquisitionStatusLabel(activeCase.acquisition.quality.status)}`,
+    `- 已记录视角：${captureViewItems(activeCase.acquisition.source).filter((item) => activeCase.acquisition.captureSet[item.key]).map((item) => item.label).join("、") || "未记录"}`,
+    `- 对焦：${qualityCheckLabel(activeCase.acquisition.quality.focus)}`,
+    `- 曝光：${qualityCheckLabel(activeCase.acquisition.quality.exposure)}`,
+    `- 姿态覆盖：${qualityCheckLabel(activeCase.acquisition.quality.poseCoverage)}`,
+    `- 跟踪稳定：${qualityCheckLabel(activeCase.acquisition.quality.tracking)}`,
+    `- 摘要：${activeCase.acquisition.quality.summary}`,
     "",
     "## 当前候选",
     "",
@@ -335,6 +379,7 @@ function buildCaseCandidate(activeCase: ClinicalCaseRecord): CaseIncisionCandida
     kind === "fusiform"
       ? `梭形参数：${tipAngleDeg}° / ${ratio}:1`
       : "线性参数：沿局部 RSTL 方向",
+    `采集质量：${acquisitionStatusLabel(activeCase.acquisition.quality.status)}`,
   ];
 
   return {
@@ -418,6 +463,8 @@ function caseStepStateLabel(
     if (saveStatus === "save_failed") return "保存失败";
   }
   if (item === "evaluate") {
+    if (activeCase.acquisition.quality.status === "not_started") return "待采集";
+    if (activeCase.acquisition.quality.status === "needs_attention") return "需复核";
     return activeCase.patientContext.ageYears == null ? "待完善" : "已保存";
   }
   if (item === "plan") {
@@ -501,6 +548,8 @@ function CaseWorkflowShell({
                 <div><span>分档</span><b>{activeCase.patientContext.ageBandLabel}</b></div>
                 <div><span>病灶</span><b>{activeCase.lesion.layer === "cutaneous" ? "皮表" : "皮下"}</b></div>
                 <div><span>切缘</span><b>{activeCase.lesion.marginStrategy === "expanded_margin" ? "扩大" : "常规"}</b></div>
+                <div><span>采集</span><b>{activeCase.acquisition.sourceLabel}</b></div>
+                <div><span>质量</span><b>{acquisitionStatusLabel(activeCase.acquisition.quality.status)}</b></div>
               </div>
               {lastError ? <Hint className="danger-text">{lastError}</Hint> : null}
             </CardContent>
@@ -556,7 +605,9 @@ function CaseClinicalViewport({
           <span className={activeMode === "3d" ? "is-active" : undefined}>3D 重建</span>
           <span className={activeMode === "live" ? "is-active" : undefined}>实时叠加</span>
         </div>
-        <RouteStatus className="case-viewport-status">本地草稿</RouteStatus>
+        <RouteStatus className={`case-viewport-status case-acquisition-status-${activeCase.acquisition.quality.status}`}>
+          {acquisitionStatusLabel(activeCase.acquisition.quality.status)}
+        </RouteStatus>
       </div>
       <div className="case-viewport-body">
         <ClinicalFacePreview large showZones layers={activeCase.layers} mode={activeMode} />
@@ -565,6 +616,7 @@ function CaseClinicalViewport({
           <div><span>病灶层次</span><b>{activeCase.lesion.layerLabel}</b></div>
           <div><span>直径</span><b className="clinical-number">{activeCase.lesion.diameterMm ?? "未填"} mm</b></div>
           <div><span>切缘</span><b className="clinical-number">{marginLabel}</b></div>
+          <div><span>输入质量</span><b>{acquisitionStatusLabel(activeCase.acquisition.quality.status)}</b></div>
         </div>
       </div>
       <div className="case-viewport-layer-strip" aria-label="图层状态">
@@ -772,6 +824,89 @@ function CaseCandidateQueue({
   );
 }
 
+function AcquisitionQualityGate({ activeCase }: { activeCase: ClinicalCaseRecord }) {
+  const updateActiveCase = useCaseStore((state) => state.updateActiveCase);
+  const statusLabel = acquisitionStatusLabel(activeCase.acquisition.quality.status);
+  const qualityChecks = [
+    ["focus", "对焦清晰", "病灶边界和面部纹理可辨"],
+    ["exposure", "曝光可读", "不过曝、不欠曝，肤色层次可见"],
+    ["poseCoverage", "姿态覆盖", "正斜位或动态范围覆盖目标区域"],
+    ["tracking", "跟踪稳定", "3D 扫描或实时模式下无明显漂移"],
+  ] as const;
+  const updateCaptureSet = (
+    key: keyof ClinicalCaseRecord["acquisition"]["captureSet"],
+    checked: boolean,
+  ) => updateActiveCase({
+    acquisition: {
+      captureSet: { [key]: checked } as Partial<ClinicalCaseRecord["acquisition"]["captureSet"]>,
+      quality: { lastCheckedAt: new Date().toISOString() },
+    },
+  });
+  const updateQualityCheck = (
+    key: keyof Pick<ClinicalCaseRecord["acquisition"]["quality"], "focus" | "exposure" | "poseCoverage" | "tracking">,
+    value: AcquisitionQualityCheck,
+  ) => updateActiveCase({
+    acquisition: {
+      quality: {
+        [key]: value,
+        lastCheckedAt: new Date().toISOString(),
+      },
+    },
+  });
+
+  return (
+    <Card className="case-acquisition-gate" id="caseAcquisitionGate">
+      <CardHeader>
+        <span>采集质量门禁</span>
+        <RouteStatus className={`case-acquisition-status-${activeCase.acquisition.quality.status}`}>{statusLabel}</RouteStatus>
+      </CardHeader>
+      <CardContent>
+        <div className="case-acquisition-summary">
+          <b>{statusLabel}</b>
+          <p>{activeCase.acquisition.quality.summary}</p>
+        </div>
+        <div className="case-capture-grid" aria-label="采集视角完整性">
+          {captureViewItems(activeCase.acquisition.source).map((item) => (
+            <label key={item.key} className={`case-capture-toggle${item.required ? " is-required" : ""}`}>
+              <Checkbox
+                checked={activeCase.acquisition.captureSet[item.key]}
+                onChange={(event) => updateCaptureSet(item.key, event.currentTarget.checked)}
+              />
+              <span>
+                <b>{item.label}</b>
+                <small>{item.required ? "必要" : "可选"} · {item.hint}</small>
+              </span>
+            </label>
+          ))}
+        </div>
+        <div className="case-quality-grid" aria-label="采集质量检查">
+          {qualityChecks.map(([key, label, hint]) => {
+            const disabled = key === "tracking" && activeCase.acquisition.source !== "scan3d" && activeCase.acquisition.source !== "realtime";
+            return (
+              <label key={key} className="case-quality-control">
+                <span>
+                  <b>{label}</b>
+                  <small>{disabled ? "用于 3D 扫描 / 实时模式" : hint}</small>
+                </span>
+                <Select
+                  disabled={disabled}
+                  value={activeCase.acquisition.quality[key]}
+                  onChange={(event) => updateQualityCheck(key, event.target.value as AcquisitionQualityCheck)}
+                >
+                  <option value="unchecked">未检查</option>
+                  <option value="pass">通过</option>
+                  <option value="review">需复核</option>
+                </Select>
+              </label>
+            );
+          })}
+        </div>
+        <Hint>该状态不会锁死医生流程；如果继续操作，候选规则记录、方案确认和导出会保留当前采集质量状态。</Hint>
+      </CardContent>
+    </Card>
+  );
+}
+
 function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   const navigate = useNavigate();
   const updateActiveCase = useCaseStore((state) => state.updateActiveCase);
@@ -828,7 +963,7 @@ function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
         </Card>
       </div>
 
-      <div className="case-two-column">
+      <div className="case-two-column case-acquisition-row">
         <Card>
           <CardHeader><span>图像采集</span><span>{activeCase.acquisition.sourceLabel}</span></CardHeader>
           <CardContent>
@@ -846,6 +981,7 @@ function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
             <Hint>多角度序列、标准位拍照、3D 扫描和实时跟踪都应进入同一病例上下文。</Hint>
           </CardContent>
         </Card>
+        <AcquisitionQualityGate activeCase={activeCase} />
       </div>
 
       <Card className="case-layer-board">
@@ -943,11 +1079,14 @@ function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
       />
 
       <div className="case-actions">
+        {activeCase.acquisition.quality.status !== "ready" ? (
+          <Hint>当前采集质量为“{acquisitionStatusLabel(activeCase.acquisition.quality.status)}”。可以继续，但后续候选和导出会标记为需医生复核。</Hint>
+        ) : null}
         <Button variant="workbenchPrimary" onClick={() => {
           updateActiveCase({ currentStep: "plan" });
           navigate(stepHref(activeCase.id, "plan"));
         }}>
-          下一步：标记病灶
+          {activeCase.acquisition.quality.status === "ready" ? "下一步：标记病灶" : "带复核状态继续：标记病灶"}
         </Button>
       </div>
     </div>

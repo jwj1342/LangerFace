@@ -75,6 +75,17 @@ assert.ok(caseRoute.includes("皮下肿物 · 线性切口模式"), "case workfl
 assert.ok(caseRoute.includes("皮表肿物 · 梭形切口模式"), "case workflow exposes cutaneous fusiform mode");
 assert.ok(caseRoute.includes("需扩大安全切缘"), "case workflow exposes expanded safety margin strategy");
 assert.ok(caseRoute.includes("图层看板"), "case workflow exposes the clinical layer board");
+assert.ok(caseRoute.includes("采集质量门禁"), "case workflow exposes an acquisition quality gate in the clinical flow");
+assert.ok(caseRoute.includes("AcquisitionQualityGate"), "case workflow renders a structured acquisition quality gate");
+assert.ok(caseRoute.includes("captureViewItems"), "case workflow derives required capture views from acquisition mode");
+assert.ok(caseRoute.includes("正位"), "case workflow records frontal capture completeness");
+assert.ok(caseRoute.includes("左斜位"), "case workflow records oblique capture completeness");
+assert.ok(caseRoute.includes("对焦清晰"), "case workflow records focus quality");
+assert.ok(caseRoute.includes("曝光可读"), "case workflow records exposure quality");
+assert.ok(caseRoute.includes("姿态覆盖"), "case workflow records pose coverage quality");
+assert.ok(caseRoute.includes("跟踪稳定"), "case workflow records scan or live tracking quality");
+assert.ok(caseRoute.includes("该状态不会锁死医生流程"), "case workflow keeps acquisition quality as a reviewable gate instead of a locked wizard");
+assert.ok(caseRoute.includes("带复核状态继续：标记病灶"), "case workflow allows clinicians to continue with a visible review state");
 assert.ok(caseRoute.includes("RSTL 密度"), "case workflow lets clinicians tune RSTL line density");
 assert.ok(caseRoute.includes("RSTL 透明度"), "case workflow lets clinicians tune RSTL opacity");
 assert.ok(caseRoute.includes("皮纹透明度"), "case workflow lets clinicians tune personalized wrinkle opacity");
@@ -139,7 +150,7 @@ assert.ok(!caseRoute.includes('to="/surgery"'), "case workflow must not send doc
 assert.ok(caseRoute.includes("case-save-status"), "case workflow exposes visible save status states");
 assert.ok(caseRoute.includes("caseStepStateLabel"), "case workflow derives per-step state labels");
 assert.ok(caseRoute.includes("case-step-state"), "case workflow renders visible per-step state badges");
-for (const stepState of ["待完善", "待审阅", "已确认", "保存失败"]) {
+for (const stepState of ["待完善", "待采集", "需复核", "待审阅", "已确认", "保存失败"]) {
   assert.ok(caseRoute.includes(stepState), `case workflow exposes ${stepState} state feedback`);
 }
 assert.ok(caseRoute.includes("可返回微调，草稿保留"), "case workflow stepper avoids a locked one-way wizard");
@@ -218,6 +229,11 @@ assert.ok(dataSource.includes("normalizeOpacity"), "dataSource clamps persisted 
 assert.ok(dataSource.includes("ClinicalCaseReviewRecord"), "dataSource owns the structured case review record contract");
 assert.ok(dataSource.includes("ClinicalCaseReviewDecision"), "dataSource owns typed review decisions");
 assert.ok(dataSource.includes("normalizeReviewRecord"), "dataSource normalizes review records for draft recovery");
+assert.ok(dataSource.includes("ClinicalCaseCaptureSet"), "dataSource owns structured acquisition capture views");
+assert.ok(dataSource.includes("ClinicalCaseAcquisitionQuality"), "dataSource owns structured acquisition quality checks");
+assert.ok(dataSource.includes("deriveAcquisitionQuality"), "dataSource derives acquisition quality status from required views and checks");
+assert.ok(dataSource.includes("requiredCaptureViews"), "dataSource derives required capture views from source mode");
+assert.ok(dataSource.includes("normalizeQualityCheck"), "dataSource normalizes acquisition quality checks for draft recovery");
 assert.ok(dataSource.includes("saveCase(payload"), "dataSource exposes a case save method");
 assert.ok(dataSource.includes("listCases()"), "dataSource exposes case listing");
 assert.ok(dataSource.includes("getCase(id"), "dataSource exposes case recovery");
@@ -230,6 +246,8 @@ assert.ok(caseStore.includes("dataSource.saveCase"), "case store persists throug
 assert.ok(caseStore.includes("closureSimulation"), "case store merges closure simulation updates through the case data boundary");
 assert.ok(caseStore.includes("...draft"), "case store preserves top-level candidate queue updates through the case data boundary");
 assert.ok(caseStore.includes("reviewRecord"), "case store merges structured review records through the case data boundary");
+assert.ok(caseStore.includes("captureSet"), "case store merges nested acquisition capture updates through the case data boundary");
+assert.ok(caseStore.includes("quality"), "case store merges nested acquisition quality updates through the case data boundary");
 assert.ok(!caseStore.includes("localStorage"), "case store does not bypass the dataSource boundary");
 
 assert.ok(styles.includes("--font-clinical-sans"), "styles expose the clinical font token");
@@ -244,6 +262,10 @@ assert.ok(styles.includes(".case-workflow-roadmap"), "styles implement the clini
 assert.ok(styles.includes(".case-clinical-viewport"), "styles implement the PACS-like clinical viewport");
 assert.ok(styles.includes(".case-viewport-mode-switch"), "styles implement compact 2D/3D/live viewport mode controls");
 assert.ok(styles.includes(".case-layer-controls"), "styles implement compact layer parameter controls");
+assert.ok(styles.includes(".case-acquisition-gate"), "styles implement the acquisition quality gate");
+assert.ok(styles.includes(".case-capture-grid"), "styles implement compact capture completeness controls");
+assert.ok(styles.includes(".case-quality-grid"), "styles implement compact acquisition quality controls");
+assert.ok(styles.includes(".case-acquisition-status-ready"), "styles implement acquisition quality status feedback");
 assert.ok(styles.includes(".case-face-density-high"), "styles implement high-density RSTL overlays");
 assert.ok(styles.includes("--case-rstl-opacity"), "styles bind RSTL opacity into the face viewport");
 assert.ok(styles.includes("--case-wrinkle-opacity"), "styles bind personalized wrinkle opacity into the face viewport");
@@ -285,6 +307,9 @@ assert.ok(!styles.includes(".surgery-green-copy"), "styles remove the legacy gre
 
 assert.ok(visualCapture.includes("incisionCandidates"), "Playwright visual case seed includes saved candidates");
 assert.ok(visualCapture.includes("visual-candidate-1"), "Playwright visual case seed includes a selected candidate");
+assert.ok(visualCapture.includes("captureSet"), "Playwright visual case seed includes capture completeness");
+assert.ok(visualCapture.includes("quality"), "Playwright visual case seed includes acquisition quality checks");
+assert.ok(visualCapture.includes("采集质量：采集可用"), "Playwright visual case seed includes acquisition quality provenance");
 assert.ok(visualCapture.includes('rstlDensity: "high"'), "Playwright visual case seed exercises high-density RSTL controls");
 assert.ok(visualCapture.includes("rstlOpacity: 0.78"), "Playwright visual case seed exercises persisted RSTL opacity");
 assert.ok(visualCapture.includes("wrinkleOpacity: 0.7"), "Playwright visual case seed exercises persisted wrinkle opacity");

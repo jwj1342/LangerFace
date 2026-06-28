@@ -93,6 +93,22 @@ function writeStorageState(): void {
     acquisition: {
       source: "scan3d",
       sourceLabel: "3D 扫描",
+      captureSet: {
+        frontal: true,
+        leftOblique: true,
+        rightOblique: true,
+        profile: false,
+        depthOrVideo: true,
+      },
+      quality: {
+        status: "ready",
+        focus: "pass",
+        exposure: "pass",
+        poseCoverage: "pass",
+        tracking: "pass",
+        summary: "采集视角和质量检查满足当前病例规划要求，可继续进入病灶标记。",
+        lastCheckedAt: now,
+      },
     },
     layers: {
       rstl: true,
@@ -138,6 +154,7 @@ function writeStorageState(): void {
             "安全切缘：5 mm",
             "图层状态：RSTL 高密度 78%，皮纹 70%",
             "梭形参数：36° / 2.5:1",
+            "采集质量：采集可用",
           ],
         },
       },

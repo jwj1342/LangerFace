@@ -90,7 +90,12 @@ export const useCaseStore = create<CaseStoreState>((set, get) => ({
       id: current.id,
       patientContext: { ...current.patientContext, ...draft.patientContext },
       lesion: { ...current.lesion, ...draft.lesion },
-      acquisition: { ...current.acquisition, ...draft.acquisition },
+      acquisition: {
+        ...current.acquisition,
+        ...draft.acquisition,
+        captureSet: { ...current.acquisition.captureSet, ...draft.acquisition?.captureSet },
+        quality: { ...current.acquisition.quality, ...draft.acquisition?.quality },
+      },
       layers: { ...current.layers, ...draft.layers },
       closureSimulation: { ...current.closureSimulation, ...draft.closureSimulation },
       reviewRecord: { ...current.reviewRecord, ...draft.reviewRecord },
