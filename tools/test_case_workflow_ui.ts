@@ -52,12 +52,17 @@ assert.ok(caseRoute.includes("皮表肿物 · 梭形切口模式"), "case workfl
 assert.ok(caseRoute.includes("需扩大安全切缘"), "case workflow exposes expanded safety margin strategy");
 assert.ok(caseRoute.includes("图层看板"), "case workflow exposes the clinical layer board");
 assert.ok(caseRoute.includes("规划依据"), "case workflow keeps explainability visible");
+assert.ok(caseRoute.includes("caseClosureSimulation"), "case planning step embeds closure simulation inside the case workflow");
+assert.ok(caseRoute.includes("张力闭合模拟"), "case planning step exposes closure simulation as a planning control");
+assert.ok(caseRoute.includes("运行闭合模拟"), "case planning step gives doctors direct simulation feedback without leaving the workflow");
+assert.ok(caseRoute.includes("estimateClosureSimulation"), "case planning step derives a persisted closure simulation summary");
 assert.ok(caseRoute.includes("临床合规提示"), "case workflow includes clinical compliance copy");
 assert.ok(caseRoute.includes("CaseClinicalViewport"), "case workflow renders a clinical viewport focus area for each step");
 assert.ok(caseRoute.includes("case-step-stage-grid"), "case workflow pairs the viewport with the step command panel");
 assert.ok(caseRoute.includes("case-face-preview-large"), "case workflow reserves a high-contrast face planning viewport");
 assert.ok(caseRoute.indexOf("图层看板") < caseRoute.indexOf("打开评估画布"), "evaluation tooling appears after patient/acquisition/layer parameters");
 assert.ok(caseRoute.indexOf("规划依据") < caseRoute.indexOf("打开规划画布"), "planning tooling appears after lesion and margin parameters");
+assert.ok(!caseRoute.includes('to="/surgery"'), "case workflow must not send doctors to the standalone closure demo from planning");
 assert.ok(caseRoute.includes("case-save-status"), "case workflow exposes visible save status states");
 assert.ok(caseRoute.includes("caseStepStateLabel"), "case workflow derives per-step state labels");
 assert.ok(caseRoute.includes("case-step-state"), "case workflow renders visible per-step state badges");
@@ -112,6 +117,8 @@ for (const hiddenCopy of [
 }
 
 assert.ok(dataSource.includes("interface ClinicalCaseRecord"), "dataSource owns the structured case record contract");
+assert.ok(dataSource.includes("closureSimulation"), "dataSource persists closure simulation state inside the case record");
+assert.ok(dataSource.includes("ClosureSimulationStatus"), "dataSource gives closure simulation a typed status");
 assert.ok(dataSource.includes("saveCase(payload"), "dataSource exposes a case save method");
 assert.ok(dataSource.includes("listCases()"), "dataSource exposes case listing");
 assert.ok(dataSource.includes("getCase(id"), "dataSource exposes case recovery");
@@ -121,6 +128,7 @@ assert.ok(dataSource.includes("2.5:1"), "dataSource preserves the older/lax rati
 
 assert.ok(caseStore.includes("CASE_STORE_BOUNDARY_NOTE"), "case store documents low-frequency state ownership");
 assert.ok(caseStore.includes("dataSource.saveCase"), "case store persists through the BrowserDataSource contract");
+assert.ok(caseStore.includes("closureSimulation"), "case store merges closure simulation updates through the case data boundary");
 assert.ok(!caseStore.includes("localStorage"), "case store does not bypass the dataSource boundary");
 
 assert.ok(styles.includes("--font-clinical-sans"), "styles expose the clinical font token");
@@ -133,6 +141,8 @@ assert.ok(styles.includes(".case-lobby-landing"), "styles implement the case lob
 assert.ok(styles.includes(".case-lobby-stage"), "styles implement the case lobby viewport preview");
 assert.ok(styles.includes(".case-workflow-roadmap"), "styles implement the clinical workflow roadmap");
 assert.ok(styles.includes(".case-clinical-viewport"), "styles implement the PACS-like clinical viewport");
+assert.ok(styles.includes(".case-closure-grid"), "styles implement the embedded closure simulation panel");
+assert.ok(styles.includes(".case-closure-meter"), "styles implement closure simulation score feedback");
 assert.ok(styles.includes(".case-step-stage-grid"), "styles prioritize a viewport-plus-command step layout");
 assert.ok(styles.includes(".case-step-state"), "styles implement compact per-step state badges");
 assert.ok(styles.includes(".case-face-preview"), "styles implement the high-contrast face planning surface");

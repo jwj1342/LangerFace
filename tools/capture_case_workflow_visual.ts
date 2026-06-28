@@ -100,6 +100,13 @@ function writeStorageState(): void {
       blendedField: true,
       incisionDesign: true,
     },
+    closureSimulation: {
+      status: "stable",
+      score: 72,
+      label: "可直接拉拢",
+      summary: "估算切除宽度 22.0 mm；当前参数支持在规划页内继续查看闭合方向和张力提示，最终仍需医生结合查体确认。",
+      lastRunAt: now,
+    },
     saveState: "saved",
     lastError: "",
   };
@@ -152,7 +159,7 @@ async function main(): Promise<void> {
     await waitForServer();
     await screenshot("/app/cases", "#caseDashboard", "01-dashboard.png");
     await screenshot("/app/case/visual-case/evaluate", "#caseStepper", "02-evaluate.png");
-    await screenshot("/app/case/visual-case/plan", "#caseStepper", "03-plan.png");
+    await screenshot("/app/case/visual-case/plan", "#caseClosureSimulation", "03-plan.png");
     await screenshot("/app/case/visual-case/review", "#caseStepper", "04-review.png");
     console.log(`case workflow screenshots written to ${outDir}`);
     console.log("If Chinese text is missing in Linux screenshots, install a CJK font such as Noto Sans CJK SC on the screenshot host.");

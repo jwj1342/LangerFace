@@ -1,5 +1,5 @@
-import { ArrowLeft, ArrowRight, CheckCircle2, FileText, Layers3, Save, ShieldAlert, SlidersHorizontal } from "lucide-react";
-import type { ReactNode } from "react";
+import { Activity, ArrowLeft, ArrowRight, CheckCircle2, FileText, Layers3, Save, ShieldAlert, SlidersHorizontal } from "lucide-react";
+import type { CSSProperties, ReactNode } from "react";
 import { useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -41,6 +41,53 @@ function nextStep(step: ClinicalCaseStep): ClinicalCaseStep {
 
 function stepHref(caseId: string, step: ClinicalCaseStep) {
   return `/case/${caseId}/${step}`;
+}
+
+function closureStatusLabel(status: ClinicalCaseRecord["closureSimulation"]["status"]) {
+  if (status === "stable") return "闭合可行";
+  if (status === "needs_review") return "需复核";
+  return "待运行";
+}
+
+function estimateClosureSimulation(activeCase: ClinicalCaseRecord): ClinicalCaseRecord["closureSimulation"] {
+  const now = new Date().toISOString();
+  const diameter = activeCase.lesion.diameterMm;
+  if (diameter == null || diameter <= 0) {
+    return {
+      status: "needs_review",
+      score: null,
+      label: "资料不足",
+      summary: "请先填写病灶直径和切缘策略，再运行本步骤内的张力闭合模拟。",
+      lastRunAt: now,
+    };
+  }
+
+  const safetyMargin = activeCase.lesion.marginStrategy === "expanded_margin"
+    ? Math.max(0, activeCase.lesion.safetyMarginMm ?? 0)
+    : 0;
+  const excisionWidth = diameter + safetyMargin * 2;
+  const ageAdjustment = activeCase.patientContext.ageBand === "older_lax"
+    ? 10
+    : activeCase.patientContext.ageBand === "child_tight"
+      ? -10
+      : 0;
+  const layerAdjustment = activeCase.lesion.layer === "subcutaneous" ? 6 : -2;
+  const sizePenalty = Math.max(0, excisionWidth - 8) * 1.25;
+  const marginPenalty = safetyMargin >= 10 ? 10 : safetyMargin >= 5 ? 5 : 0;
+  const score = Math.max(30, Math.min(96, Math.round(84 + ageAdjustment + layerAdjustment - sizePenalty - marginPenalty)));
+  const needsReview = score < 68 || safetyMargin >= 10 || excisionWidth >= 30;
+  const label = needsReview ? "需医生复核" : "可直接拉拢";
+  const summary = needsReview
+    ? `估算切除宽度 ${excisionWidth.toFixed(1)} mm；当前参数可能超过简单拉拢缝合舒适区，建议复核皮肤松弛度、张力方向和是否需要皮瓣 / 植皮方案。`
+    : `估算切除宽度 ${excisionWidth.toFixed(1)} mm；当前参数支持在规划页内继续查看闭合方向和张力提示，最终仍需医生结合查体确认。`;
+
+  return {
+    status: needsReview ? "needs_review" : "stable",
+    score,
+    label,
+    summary,
+    lastRunAt: now,
+  };
 }
 
 function caseStepStateLabel(
@@ -329,6 +376,12 @@ function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
 function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   const navigate = useNavigate();
   const updateActiveCase = useCaseStore((state) => state.updateActiveCase);
+  const closure = activeCase.closureSimulation;
+  const closureScore = closure.score ?? 0;
+  const closureStyle = { "--case-closure-score": `${closureScore}%` } as CSSProperties;
+  const runClosureSimulation = () => {
+    updateActiveCase({ closureSimulation: estimateClosureSimulation(activeCase) });
+  };
 
   return (
     <div className="case-workflow-stack" id="casePlanStep">
@@ -423,9 +476,42 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
         </CardContent>
       </Card>
 
+      <Card className="case-closure-simulation" id="caseClosureSimulation">
+        <CardHeader>
+          <span>张力闭合模拟</span>
+          <RouteStatus className={`case-closure-status case-closure-status-${closure.status}`}>{closureStatusLabel(closure.status)}</RouteStatus>
+        </CardHeader>
+        <CardContent className="case-closure-grid">
+          <div className="case-closure-visual" aria-hidden="true">
+            <span className="case-closure-face" />
+            <span className="case-closure-rstl" />
+            <span className="case-closure-cut" />
+            <span className="case-closure-pull case-closure-pull-left" />
+            <span className="case-closure-pull case-closure-pull-right" />
+          </div>
+          <div className="case-closure-copy">
+            <div className="case-closure-metrics">
+              <div><span>闭合评分</span><b className="clinical-number">{closure.score == null ? "未运行" : `${closure.score} / 100`}</b></div>
+              <div><span>当前结论</span><b>{closure.label}</b></div>
+              <div><span>输入宽度</span><b className="clinical-number">{activeCase.lesion.diameterMm ?? "未填"} mm</b></div>
+              <div><span>更新</span><b className="clinical-number">{closure.lastRunAt ? new Date(closure.lastRunAt).toLocaleString() : "未运行"}</b></div>
+            </div>
+            <div className="case-closure-meter" style={closureStyle} aria-label="闭合评分">
+              <span />
+            </div>
+            <Hint>{closure.summary}</Hint>
+            <Hint>模拟结果保存在当前病例草稿中；它是闭合趋势提示，不替代医生对皮肤松弛度、张力和修复方式的判断。</Hint>
+            <div className="case-inline-actions">
+              <Button variant="workbenchPrimary" type="button" onClick={runClosureSimulation}>
+                <Activity size={16} />运行闭合模拟
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="case-actions">
         <Button asChild variant="workbench"><Link to="/incision">打开规划画布</Link></Button>
-        <Button asChild variant="workbench"><Link to="/surgery">在当前病例中查看闭合模拟</Link></Button>
         <Button variant="workbenchPrimary" onClick={() => {
           updateActiveCase({ currentStep: "review", status: "needs_review" });
           navigate(stepHref(activeCase.id, "review"));

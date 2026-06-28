@@ -92,6 +92,7 @@ export const useCaseStore = create<CaseStoreState>((set, get) => ({
       lesion: { ...current.lesion, ...draft.lesion },
       acquisition: { ...current.acquisition, ...draft.acquisition },
       layers: { ...current.layers, ...draft.layers },
+      closureSimulation: { ...current.closureSimulation, ...draft.closureSimulation },
     });
     if (!record) {
       set({ saveStatus: "save_failed", lastError: "病例草稿保存失败" });

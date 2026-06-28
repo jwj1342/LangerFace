@@ -86,6 +86,7 @@ export type ClinicalCaseStep = "evaluate" | "plan" | "review";
 export type ClinicalCaseStatus = "draft" | "needs_review" | "confirmed" | "exported";
 export type LesionLayer = "subcutaneous" | "cutaneous";
 export type MarginStrategy = "complete_excision" | "expanded_margin";
+export type ClosureSimulationStatus = "not_run" | "stable" | "needs_review";
 
 export interface ClinicalCaseRecord {
   id: string;
@@ -118,6 +119,13 @@ export interface ClinicalCaseRecord {
     blendedField: boolean;
     incisionDesign: boolean;
   };
+  closureSimulation: {
+    status: ClosureSimulationStatus;
+    score: number | null;
+    label: string;
+    summary: string;
+    lastRunAt: string | null;
+  };
   saveState?: "saved" | "dirty" | "save_failed";
   lastError?: string;
 }
@@ -133,6 +141,7 @@ export interface ClinicalCaseDraft {
   lesion?: Partial<ClinicalCaseRecord["lesion"]>;
   acquisition?: Partial<ClinicalCaseRecord["acquisition"]>;
   layers?: Partial<ClinicalCaseRecord["layers"]>;
+  closureSimulation?: Partial<ClinicalCaseRecord["closureSimulation"]>;
   saveState?: ClinicalCaseRecord["saveState"];
   lastError?: string;
 }
@@ -348,6 +357,15 @@ function normalizeCaseRecord(payload: ClinicalCaseDraft, now = new Date().toISOS
       blendedField: payload.layers?.blendedField ?? false,
       incisionDesign: payload.layers?.incisionDesign ?? true,
     },
+    closureSimulation: {
+      status: payload.closureSimulation?.status ?? "not_run",
+      score: typeof payload.closureSimulation?.score === "number" ? payload.closureSimulation.score : null,
+      label: typeof payload.closureSimulation?.label === "string" ? payload.closureSimulation.label : "待运行",
+      summary: typeof payload.closureSimulation?.summary === "string"
+        ? payload.closureSimulation.summary
+        : "生成候选切口后，可在本步骤内运行张力闭合模拟。",
+      lastRunAt: typeof payload.closureSimulation?.lastRunAt === "string" ? payload.closureSimulation.lastRunAt : null,
+    },
     saveState: "saved",
   };
 }
@@ -480,6 +498,7 @@ export const LocalDataSource: BrowserDataSource = {
       lesion: { ...previous?.lesion, ...payload.lesion },
       acquisition: { ...previous?.acquisition, ...payload.acquisition },
       layers: { ...previous?.layers, ...payload.layers },
+      closureSimulation: { ...previous?.closureSimulation, ...payload.closureSimulation },
       createdAt: previous?.createdAt ?? payload.createdAt,
     });
     const next = existing.filter((item) => item.id !== record.id);

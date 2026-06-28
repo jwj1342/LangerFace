@@ -863,6 +863,168 @@
     text-align: right;
   }
 
+  .case-closure-grid {
+    display: grid;
+    grid-template-columns: minmax(220px, .76fr) minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .case-closure-visual {
+    position: relative;
+    min-height: 240px;
+    overflow: hidden;
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background:
+      linear-gradient(rgb(120 169 255 / 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(120 169 255 / 0.08) 1px, transparent 1px),
+      radial-gradient(circle at 50% 42%, rgb(15 98 254 / 0.14), transparent 44%),
+      #090d12;
+    background-size: 24px 24px, 24px 24px, auto, auto;
+  }
+
+  .case-closure-face {
+    position: absolute;
+    inset: 26px 58px 20px;
+    border: 1px solid rgb(229 234 240 / 0.38);
+    border-radius: 48% 48% 44% 44%;
+    background: rgb(229 234 240 / 0.03);
+  }
+
+  .case-closure-rstl,
+  .case-closure-cut,
+  .case-closure-pull {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform-origin: center;
+  }
+
+  .case-closure-rstl {
+    width: 162px;
+    height: 1px;
+    margin-left: -81px;
+    margin-top: -24px;
+    transform: rotate(-8deg);
+    background: #78a9ff;
+    box-shadow: 0 18px 0 rgb(120 169 255 / 0.72), 0 -18px 0 rgb(120 169 255 / 0.54);
+  }
+
+  .case-closure-cut {
+    width: 116px;
+    height: 16px;
+    margin-left: -58px;
+    margin-top: -8px;
+    border: 1px solid #ff8389;
+    border-radius: 999px;
+    background: rgb(218 30 40 / 0.14);
+  }
+
+  .case-closure-pull {
+    width: 52px;
+    height: 1px;
+    background: #fddc69;
+  }
+
+  .case-closure-pull::after {
+    position: absolute;
+    top: -4px;
+    right: -1px;
+    width: 8px;
+    height: 8px;
+    border-top: 1px solid #fddc69;
+    border-right: 1px solid #fddc69;
+    content: "";
+    transform: rotate(45deg);
+  }
+
+  .case-closure-pull-left {
+    margin-left: -112px;
+    margin-top: 24px;
+    transform: rotate(180deg);
+  }
+
+  .case-closure-pull-right {
+    margin-left: 60px;
+    margin-top: 24px;
+  }
+
+  .case-closure-copy {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .case-closure-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .case-closure-metrics > div {
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: var(--clinical-surface-muted);
+    padding: 10px;
+    min-width: 0;
+  }
+
+  .case-closure-metrics span {
+    display: block;
+    color: var(--clinical-muted);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .case-closure-metrics b {
+    display: block;
+    margin-top: 4px;
+    color: var(--clinical-text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .case-closure-meter {
+    height: 10px;
+    overflow: hidden;
+    border: 1px solid var(--clinical-border);
+    border-radius: 999px;
+    background: #090d12;
+  }
+
+  .case-closure-meter span {
+    display: block;
+    width: var(--case-closure-score, 0%);
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #ff8389, #f1c21b 48%, #42be65);
+    transition: width .18s ease-out;
+  }
+
+  .case-closure-status {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  .case-closure-status-stable {
+    border-color: rgb(66 190 101 / 0.45);
+    background: rgb(66 190 101 / 0.1);
+    color: #42be65;
+  }
+
+  .case-closure-status-needs_review {
+    border-color: rgb(241 194 27 / 0.5);
+    background: rgb(241 194 27 / 0.12);
+    color: #fddc69;
+  }
+
+  .case-inline-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
   .case-primary-action-card .space-y-3,
   .case-settings-card .space-y-3,
   .case-disclosure-body {
@@ -2041,6 +2203,7 @@
 .case-workflow-page .case-list-item,
 .case-workflow-page .case-mini-grid > div,
 .case-workflow-page .case-rationale-grid > div,
+.case-workflow-page .case-closure-metrics > div,
 .case-workflow-page .case-layer-toggle {
   border-color: var(--clinical-dark-border);
   background: var(--clinical-dark-panel-2);
@@ -2080,6 +2243,7 @@
 
   .case-lobby-landing,
   .case-step-stage-grid,
+  .case-closure-grid,
   .case-dashboard-grid,
   .case-two-column {
     grid-template-columns: 1fr;
@@ -2142,6 +2306,7 @@
   .case-mini-grid,
   .case-form-grid,
   .case-layer-grid,
+  .case-closure-metrics,
   .case-rationale-grid {
     grid-template-columns: 1fr;
   }
