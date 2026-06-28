@@ -16,10 +16,14 @@ import { Select } from "../components/ui/select";
 import { RouteStatus, StatusBadge } from "../components/ui/status-badge";
 import { useReactRouteLifecycle } from "../hooks/useReactRouteLifecycle";
 import {
+  deriveLesionBoundary,
+  lesionLayerLabel,
   type AcquisitionQualityCheck,
   type CaseIncisionCandidateRecord,
   type ClinicalCaseRecord,
   type ClinicalCaseStep,
+  type LesionBoundaryMode,
+  type LesionBoundarySource,
 } from "../services/dataSource";
 import { CASE_STORE_BOUNDARY_NOTE, useCaseStore, type CaseSaveStatus } from "../stores/caseStore";
 
@@ -95,6 +99,49 @@ function qualityCheckLabel(check: AcquisitionQualityCheck) {
   return "未检查";
 }
 
+function lesionBoundaryStatusLabel(status: ClinicalCaseRecord["lesion"]["boundary"]["status"]) {
+  if (status === "ready") return "边界可用";
+  if (status === "needs_review") return "需复核";
+  return "未记录";
+}
+
+function lesionBoundaryModeLabel(mode: LesionBoundaryMode) {
+  if (mode === "ellipse") return "椭圆边界";
+  if (mode === "freehand") return "自由轮廓";
+  return "中心点 + 直径";
+}
+
+function lesionBoundarySourceLabel(source: LesionBoundarySource) {
+  if (source === "photo_trace") return "照片描记";
+  if (source === "ultrasound") return "术前超声";
+  if (source === "imported") return "导入记录";
+  return "临床查体";
+}
+
+function effectiveLesionDiameter(activeCase: ClinicalCaseRecord) {
+  const diameter = activeCase.lesion.diameterMm ?? null;
+  const boundary = activeCase.lesion.boundary;
+  const axis = boundary.axisDiameterMm ?? null;
+  if (activeCase.lesion.layer === "cutaneous" && boundary.mode !== "center_diameter" && axis != null && axis > 0) {
+    return diameter == null ? axis : Math.max(diameter, axis);
+  }
+  return diameter;
+}
+
+function lesionBoundaryTrace(activeCase: ClinicalCaseRecord) {
+  const boundary = activeCase.lesion.boundary;
+  const axis = boundary.axisDiameterMm == null ? "未填" : `${boundary.axisDiameterMm} mm`;
+  const perpendicular = boundary.perpendicularDiameterMm == null ? "未填" : `${boundary.perpendicularDiameterMm} mm`;
+  return [
+    `${lesionBoundaryModeLabel(boundary.mode)} / ${lesionBoundarySourceLabel(boundary.source)}`,
+    `状态：${lesionBoundaryStatusLabel(boundary.status)}`,
+    boundary.mode === "freehand"
+      ? `点数：${boundary.pointCount}`
+      : `长轴：${axis}，短轴：${perpendicular}`,
+    boundary.author ? `记录者：${boundary.author}` : "记录者：未填写",
+  ].join("；");
+}
+
 function captureViewItems(source: ClinicalCaseRecord["acquisition"]["source"]) {
   const common = [
     { key: "frontal", label: "正位", required: true, hint: "面部中线与标尺可读" },
@@ -155,11 +202,20 @@ function lesionPlanningRule(activeCase: ClinicalCaseRecord) {
   };
 }
 
+function lesionBoundaryPlanningRule(activeCase: ClinicalCaseRecord) {
+  const boundary = activeCase.lesion.boundary;
+  return {
+    title: lesionBoundaryModeLabel(boundary.mode),
+    metric: lesionBoundaryStatusLabel(boundary.status),
+    description: boundary.summary,
+  };
+}
+
 function marginPlanningRule(activeCase: ClinicalCaseRecord) {
   const margin = activeCase.lesion.marginStrategy === "expanded_margin"
     ? Math.max(0, activeCase.lesion.safetyMarginMm ?? 0)
     : 0;
-  const diameter = activeCase.lesion.diameterMm ?? null;
+  const diameter = effectiveLesionDiameter(activeCase);
   const width = diameter == null ? null : diameter + margin * 2;
   if (activeCase.lesion.marginStrategy === "expanded_margin") {
     return {
@@ -298,6 +354,7 @@ function buildCaseReportDraft(
     `- 病灶层次：${activeCase.lesion.layerLabel}`,
     `- 病灶直径：${activeCase.lesion.diameterMm ?? "未填"} mm`,
     `- 病灶深度：${activeCase.lesion.depthMm ?? "未填"} mm`,
+    `- 病灶边界：${lesionBoundaryStatusLabel(activeCase.lesion.boundary.status)}；${lesionBoundaryTrace(activeCase)}`,
     `- 切缘策略：${lesionMargin}`,
     "",
     "## 图层状态",
@@ -316,6 +373,17 @@ function buildCaseReportDraft(
     `- 姿态覆盖：${qualityCheckLabel(activeCase.acquisition.quality.poseCoverage)}`,
     `- 跟踪稳定：${qualityCheckLabel(activeCase.acquisition.quality.tracking)}`,
     `- 摘要：${activeCase.acquisition.quality.summary}`,
+    "",
+    "## 病灶边界",
+    "",
+    `- 边界模式：${lesionBoundaryModeLabel(activeCase.lesion.boundary.mode)}`,
+    `- 来源：${lesionBoundarySourceLabel(activeCase.lesion.boundary.source)}`,
+    `- 记录者：${activeCase.lesion.boundary.author || "未填写"}`,
+    `- 边界状态：${lesionBoundaryStatusLabel(activeCase.lesion.boundary.status)}`,
+    `- 长轴：${activeCase.lesion.boundary.axisDiameterMm ?? "未填"} mm`,
+    `- 短轴：${activeCase.lesion.boundary.perpendicularDiameterMm ?? "未填"} mm`,
+    `- 自由轮廓点数：${activeCase.lesion.boundary.pointCount}`,
+    `- 摘要：${activeCase.lesion.boundary.summary}`,
     "",
     "## 当前候选",
     "",
@@ -350,7 +418,7 @@ function buildCaseReportDraft(
 }
 
 function buildCaseCandidate(activeCase: ClinicalCaseRecord): CaseIncisionCandidateRecord | null {
-  const diameter = activeCase.lesion.diameterMm;
+  const diameter = effectiveLesionDiameter(activeCase);
   if (diameter == null || diameter <= 0) return null;
   const now = new Date().toISOString();
   const margin = activeCase.lesion.marginStrategy === "expanded_margin"
@@ -372,6 +440,7 @@ function buildCaseCandidate(activeCase: ClinicalCaseRecord): CaseIncisionCandida
   const ruleTrace = [
     `年龄分档：${activeCase.patientContext.ageBandLabel}`,
     `病灶层次：${activeCase.lesion.layerLabel}`,
+    `病灶边界：${lesionBoundaryTrace(activeCase)}`,
     activeCase.lesion.marginStrategy === "expanded_margin"
       ? `安全切缘：${margin} mm`
       : "切缘策略：常规完整切除",
@@ -412,7 +481,7 @@ function buildCaseCandidate(activeCase: ClinicalCaseRecord): CaseIncisionCandida
 
 function estimateClosureSimulation(activeCase: ClinicalCaseRecord): ClinicalCaseRecord["closureSimulation"] {
   const now = new Date().toISOString();
-  const diameter = activeCase.lesion.diameterMm;
+  const diameter = effectiveLesionDiameter(activeCase);
   if (diameter == null || diameter <= 0) {
     return {
       status: "needs_review",
@@ -610,13 +679,20 @@ function CaseClinicalViewport({
         </RouteStatus>
       </div>
       <div className="case-viewport-body">
-        <ClinicalFacePreview large showZones layers={activeCase.layers} mode={activeMode} />
+        <ClinicalFacePreview
+          large
+          showZones
+          layers={activeCase.layers}
+          lesionBoundaryMode={activeCase.lesion.boundary.mode}
+          mode={activeMode}
+        />
         <div className="case-viewport-readout">
           <div><span>年龄分档</span><b>{activeCase.patientContext.ageBandLabel}</b></div>
           <div><span>病灶层次</span><b>{activeCase.lesion.layerLabel}</b></div>
           <div><span>直径</span><b className="clinical-number">{activeCase.lesion.diameterMm ?? "未填"} mm</b></div>
           <div><span>切缘</span><b className="clinical-number">{marginLabel}</b></div>
           <div><span>输入质量</span><b>{acquisitionStatusLabel(activeCase.acquisition.quality.status)}</b></div>
+          <div><span>病灶边界</span><b>{lesionBoundaryStatusLabel(activeCase.lesion.boundary.status)}</b></div>
         </div>
       </div>
       <div className="case-viewport-layer-strip" aria-label="图层状态">
@@ -689,6 +765,7 @@ function CaseHandoffPanel({
 function PlanningRationalePanel({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   const ageRule = agePlanningRule(activeCase);
   const lesionRule = lesionPlanningRule(activeCase);
+  const boundaryRule = lesionBoundaryPlanningRule(activeCase);
   const marginRule = marginPlanningRule(activeCase);
   const rules = [
     {
@@ -698,6 +775,10 @@ function PlanningRationalePanel({ activeCase }: { activeCase: ClinicalCaseRecord
     {
       label: "切口模式",
       ...lesionRule,
+    },
+    {
+      label: "病灶边界",
+      ...boundaryRule,
     },
     {
       label: "切缘策略",
@@ -729,7 +810,7 @@ function PlanningRationalePanel({ activeCase }: { activeCase: ClinicalCaseRecord
           ))}
         </div>
         <div className="case-rationale-audit" aria-label="审计记录边界">
-          <p><b>规则记录</b><span>候选生成应记录年龄分档、病灶层次、切缘策略、图层状态和医生修改。</span></p>
+          <p><b>规则记录</b><span>候选生成应记录年龄分档、病灶层次、病灶边界、切缘策略、图层状态和医生修改。</span></p>
           <p><b>临床边界</b><span>系统只生成辅助草案，不判断良恶性，不输出自动手术指令。</span></p>
           <p><b>保存边界</b><span>当前为本地病例草稿；正式审阅记录后续进入院内或云端病例库。</span></p>
         </div>
@@ -751,7 +832,8 @@ function CaseCandidateQueue({
 }) {
   const candidates = activeCase.incisionCandidates;
   const selectedId = activeCase.selectedCandidateId;
-  const canGenerate = activeCase.lesion.diameterMm != null && activeCase.lesion.diameterMm > 0;
+  const effectiveDiameter = effectiveLesionDiameter(activeCase);
+  const canGenerate = effectiveDiameter != null && effectiveDiameter > 0;
 
   return (
     <Card className="case-candidate-panel" id="caseCandidatePanel">
@@ -902,6 +984,129 @@ function AcquisitionQualityGate({ activeCase }: { activeCase: ClinicalCaseRecord
           })}
         </div>
         <Hint>该状态不会锁死医生流程；如果继续操作，候选规则记录、方案确认和导出会保留当前采集质量状态。</Hint>
+      </CardContent>
+    </Card>
+  );
+}
+
+function LesionBoundaryPanel({ activeCase }: { activeCase: ClinicalCaseRecord }) {
+  const updateActiveCase = useCaseStore((state) => state.updateActiveCase);
+  const boundary = activeCase.lesion.boundary;
+  const updateBoundary = (boundaryDraft: Partial<ClinicalCaseRecord["lesion"]["boundary"]>) => {
+    const nextBoundary = deriveLesionBoundary(activeCase.lesion.layer, activeCase.lesion.diameterMm, {
+      ...boundary,
+      ...boundaryDraft,
+      updatedAt: new Date().toISOString(),
+    });
+    updateActiveCase({
+      lesion: {
+        boundary: nextBoundary,
+      },
+    });
+  };
+  const axesDisabled = boundary.mode === "center_diameter";
+  const freehandDisabled = boundary.mode !== "freehand";
+
+  return (
+    <Card className="case-lesion-boundary-panel" id="caseLesionBoundaryPanel">
+      <CardHeader>
+        <span>病灶边界记录</span>
+        <RouteStatus className={`case-lesion-boundary-status-${boundary.status}`}>{lesionBoundaryStatusLabel(boundary.status)}</RouteStatus>
+      </CardHeader>
+      <CardContent>
+        <div className="case-boundary-summary">
+          <b>{lesionBoundaryModeLabel(boundary.mode)} · {lesionBoundarySourceLabel(boundary.source)}</b>
+          <p>{boundary.summary}</p>
+        </div>
+        <div className="case-boundary-grid">
+          <label className="case-boundary-control">
+            <span>
+              <b>边界模式</b>
+              <small>{activeCase.lesion.layer === "cutaneous" ? "皮表病灶建议记录椭圆或自由轮廓。" : "皮下病灶记录表面投影类圆直径。"}</small>
+            </span>
+            <Select
+              id="lesionBoundaryMode"
+              value={boundary.mode}
+              onChange={(event) => updateBoundary({ mode: event.target.value as LesionBoundaryMode })}
+            >
+              <option value="center_diameter">中心点 + 直径</option>
+              <option value="ellipse">椭圆边界</option>
+              <option value="freehand">自由轮廓点</option>
+            </Select>
+          </label>
+          <label className="case-boundary-control">
+            <span>
+              <b>来源</b>
+              <small>记录病灶尺寸和边界的来源。</small>
+            </span>
+            <Select
+              id="lesionBoundarySource"
+              value={boundary.source}
+              onChange={(event) => updateBoundary({ source: event.target.value as LesionBoundarySource })}
+            >
+              <option value="clinical_exam">临床查体</option>
+              <option value="photo_trace">照片描记</option>
+              <option value="ultrasound">术前超声</option>
+              <option value="imported">导入记录</option>
+            </Select>
+          </label>
+          <label className="case-boundary-control">
+            <span>
+              <b>记录者</b>
+              <small>用于审阅和导出追溯。</small>
+            </span>
+            <Input
+              id="lesionBoundaryAuthor"
+              value={boundary.author}
+              onChange={(event) => updateBoundary({ author: event.target.value })}
+              placeholder="记录医生 / 操作者"
+            />
+          </label>
+          <label className="case-boundary-control">
+            <span>
+              <b>自由轮廓点</b>
+              <small>自由描记建议不少于 6 个点。</small>
+            </span>
+            <Input
+              className="clinical-number"
+              disabled={freehandDisabled}
+              inputMode="numeric"
+              min={0}
+              type="number"
+              value={boundary.pointCount || ""}
+              onChange={(event) => updateBoundary({ pointCount: parseOptionalNumber(event.target.value) ?? 0 })}
+            />
+          </label>
+        </div>
+        <div className="case-boundary-metrics">
+          <label>
+            <span>边界长轴 mm</span>
+            <Input
+              className="clinical-number"
+              disabled={axesDisabled}
+              inputMode="decimal"
+              type="number"
+              value={boundary.axisDiameterMm ?? ""}
+              onChange={(event) => updateBoundary({ axisDiameterMm: parseOptionalNumber(event.target.value) })}
+            />
+          </label>
+          <label>
+            <span>边界短轴 mm</span>
+            <Input
+              className="clinical-number"
+              disabled={axesDisabled}
+              inputMode="decimal"
+              type="number"
+              value={boundary.perpendicularDiameterMm ?? ""}
+              onChange={(event) => updateBoundary({ perpendicularDiameterMm: parseOptionalNumber(event.target.value) })}
+            />
+          </label>
+          <div>
+            <span>有效宽度</span>
+            <b className="clinical-number">{effectiveLesionDiameter(activeCase) ?? "未填"} mm</b>
+          </div>
+        </div>
+        <Hint>完整自由绘图仍可从受控规划入口进入；病例页先保存边界摘要，保证候选、审阅和导出可追溯。</Hint>
       </CardContent>
     </Card>
   );
@@ -1099,6 +1304,18 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   const closure = activeCase.closureSimulation;
   const closureScore = closure.score ?? 0;
   const closureStyle = { "--case-closure-score": `${closureScore}%` } as CSSProperties;
+  const updateLesion = (lesionDraft: Partial<ClinicalCaseRecord["lesion"]>) => {
+    const nextLayer = lesionDraft.layer ?? activeCase.lesion.layer;
+    const hasDiameterDraft = Object.prototype.hasOwnProperty.call(lesionDraft, "diameterMm");
+    const nextDiameter = hasDiameterDraft ? lesionDraft.diameterMm ?? null : activeCase.lesion.diameterMm;
+    updateActiveCase({
+      lesion: {
+        ...lesionDraft,
+        layerLabel: lesionLayerLabel(nextLayer),
+        boundary: deriveLesionBoundary(nextLayer, nextDiameter, activeCase.lesion.boundary),
+      },
+    });
+  };
   const runClosureSimulation = () => {
     updateActiveCase({ closureSimulation: estimateClosureSimulation(activeCase) });
   };
@@ -1142,11 +1359,11 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
         <section className="case-section case-step-command">
           <div>
             <h2>病灶定位与切口规划</h2>
-            <p>先记录解剖层次、直径、深度和切缘策略，再进入规划画布生成候选。</p>
+            <p>先记录解剖层次、病灶边界、来源、直径、深度和切缘策略，再进入规划画布生成候选。</p>
           </div>
           <CaseTaskStrip
             items={[
-              { index: "01", title: "标记病灶", description: "记录层次、直径、深度、切缘和来源。" },
+              { index: "01", title: "标记病灶", description: "记录层次、边界模式、来源、直径、深度和切缘。" },
               { index: "02", title: "生成候选", description: "根据病灶边界和局部方向生成线性或梭形候选。" },
               { index: "03", title: "闭合模拟", description: "在本病例内查看张力闭合趋势并保存结论。" },
             ]}
@@ -1162,7 +1379,7 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
             <Select
               id="lesionLayer"
               value={activeCase.lesion.layer}
-              onChange={(event) => updateActiveCase({ lesion: { layer: event.target.value as ClinicalCaseRecord["lesion"]["layer"] } })}
+              onChange={(event) => updateLesion({ layer: event.target.value as ClinicalCaseRecord["lesion"]["layer"] })}
             >
               <option value="subcutaneous">皮下肿物 · 线性切口模式</option>
               <option value="cutaneous">皮表肿物 · 梭形切口模式</option>
@@ -1176,7 +1393,7 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
                   inputMode="decimal"
                   type="number"
                   value={activeCase.lesion.diameterMm ?? ""}
-                  onChange={(event) => updateActiveCase({ lesion: { diameterMm: parseOptionalNumber(event.target.value) } })}
+                  onChange={(event) => updateLesion({ diameterMm: parseOptionalNumber(event.target.value) })}
                 />
               </label>
               <label>
@@ -1186,7 +1403,7 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
                   inputMode="decimal"
                   type="number"
                   value={activeCase.lesion.depthMm ?? ""}
-                  onChange={(event) => updateActiveCase({ lesion: { depthMm: parseOptionalNumber(event.target.value) } })}
+                  onChange={(event) => updateLesion({ depthMm: parseOptionalNumber(event.target.value) })}
                 />
               </label>
             </div>
@@ -1200,7 +1417,7 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
             <Select
               id="marginStrategy"
               value={activeCase.lesion.marginStrategy}
-              onChange={(event) => updateActiveCase({ lesion: { marginStrategy: event.target.value as ClinicalCaseRecord["lesion"]["marginStrategy"] } })}
+              onChange={(event) => updateLesion({ marginStrategy: event.target.value as ClinicalCaseRecord["lesion"]["marginStrategy"] })}
             >
               <option value="complete_excision">常规完整切除</option>
               <option value="expanded_margin">需扩大安全切缘</option>
@@ -1213,12 +1430,14 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
               inputMode="decimal"
               type="number"
               value={activeCase.lesion.safetyMarginMm ?? ""}
-              onChange={(event) => updateActiveCase({ lesion: { safetyMarginMm: parseOptionalNumber(event.target.value) } })}
+              onChange={(event) => updateLesion({ safetyMarginMm: parseOptionalNumber(event.target.value) })}
             />
             <Hint>良恶性由医生判断；系统只记录切缘策略并影响规则提示。</Hint>
           </CardContent>
         </Card>
       </div>
+
+      <LesionBoundaryPanel activeCase={activeCase} />
 
       <PlanningRationalePanel activeCase={activeCase} />
 
@@ -1245,7 +1464,7 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
             <div className="case-closure-metrics">
               <div><span>闭合评分</span><b className="clinical-number">{closure.score == null ? "未运行" : `${closure.score} / 100`}</b></div>
               <div><span>当前结论</span><b>{closure.label}</b></div>
-              <div><span>输入宽度</span><b className="clinical-number">{activeCase.lesion.diameterMm ?? "未填"} mm</b></div>
+              <div><span>输入宽度</span><b className="clinical-number">{effectiveLesionDiameter(activeCase) ?? "未填"} mm</b></div>
               <div><span>更新</span><b className="clinical-number">{closure.lastRunAt ? new Date(closure.lastRunAt).toLocaleString() : "未运行"}</b></div>
             </div>
             <div className="case-closure-meter" style={closureStyle} aria-label="闭合评分">
@@ -1269,7 +1488,7 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
         to="/incision"
         actionLabel="进入候选规划画布"
         items={[
-          { label: "进入前", value: "确认病灶层次、直径、深度和切缘策略" },
+          { label: "进入前", value: "确认病灶层次、边界记录、直径、深度和切缘策略" },
           { label: "返回后", value: "候选方案进入当前病例的审阅步骤" },
           { label: "闭合模拟", value: "已嵌入本页，不再跳转到独立演示页" },
         ]}
@@ -1363,6 +1582,7 @@ function ReviewStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
           <CardContent className="case-summary-list">
             <p><b>年龄分档</b><span>{activeCase.patientContext.ageBandLabel}</span></p>
             <p><b>病灶层次</b><span>{activeCase.lesion.layerLabel}</span></p>
+            <p><b>病灶边界</b><span>{lesionBoundaryStatusLabel(activeCase.lesion.boundary.status)} · {lesionBoundaryModeLabel(activeCase.lesion.boundary.mode)}</span></p>
             <p><b>采集方式</b><span>{activeCase.acquisition.sourceLabel}</span></p>
             <p><b>切缘策略</b><span>{activeCase.lesion.marginStrategy === "expanded_margin" ? `扩大 ${activeCase.lesion.safetyMarginMm ?? "未填"} mm` : "常规完整切除"}</span></p>
             <p><b>当前候选</b><span>{selectedCandidate ? `${selectedCandidate.label} · ${candidateKindLabel(selectedCandidate.kind)}` : "尚未保存候选"}</span></p>

@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 
 export type ClinicalFacePreviewMode = "2d" | "3d" | "live";
 export type ClinicalFaceRstlDensity = "low" | "standard" | "high";
+export type ClinicalFaceLesionBoundaryMode = "center_diameter" | "ellipse" | "freehand";
 
 export interface ClinicalFacePreviewLayers {
   rstl: boolean;
@@ -17,6 +18,7 @@ export interface ClinicalFacePreviewProps {
   large?: boolean;
   layers?: Partial<ClinicalFacePreviewLayers>;
   mode?: ClinicalFacePreviewMode;
+  lesionBoundaryMode?: ClinicalFaceLesionBoundaryMode;
   showZones?: boolean;
 }
 
@@ -45,6 +47,7 @@ export function ClinicalFacePreview({
   large = false,
   layers,
   mode = "2d",
+  lesionBoundaryMode = "center_diameter",
   showZones = false,
 }: ClinicalFacePreviewProps) {
   const resolvedLayers: ClinicalFacePreviewLayers = {
@@ -64,6 +67,7 @@ export function ClinicalFacePreview({
     large ? "case-face-preview-large" : "",
     `case-face-mode-${mode}`,
     `case-face-density-${resolvedLayers.rstlDensity}`,
+    `case-face-boundary-${lesionBoundaryMode}`,
     resolvedLayers.blendedField ? "case-face-has-blended-field" : "",
   ].filter(Boolean).join(" ");
 
@@ -97,6 +101,19 @@ export function ClinicalFacePreview({
         <span key={key} className={`case-face-rstl case-face-rstl-${key}`} />
       )) : null}
       <span className="case-face-lesion" />
+      {lesionBoundaryMode !== "center_diameter" ? (
+        <>
+          <span className="case-face-lesion-boundary" />
+          {lesionBoundaryMode === "freehand" ? (
+            <>
+              <span className="case-face-boundary-point case-face-boundary-point-a" />
+              <span className="case-face-boundary-point case-face-boundary-point-b" />
+              <span className="case-face-boundary-point case-face-boundary-point-c" />
+              <span className="case-face-boundary-point case-face-boundary-point-d" />
+            </>
+          ) : null}
+        </>
+      ) : null}
       {resolvedLayers.incisionDesign ? <span className="case-face-incision" /> : null}
       {showZones ? (
         <>

@@ -89,7 +89,11 @@ export const useCaseStore = create<CaseStoreState>((set, get) => ({
       ...draft,
       id: current.id,
       patientContext: { ...current.patientContext, ...draft.patientContext },
-      lesion: { ...current.lesion, ...draft.lesion },
+      lesion: {
+        ...current.lesion,
+        ...draft.lesion,
+        boundary: { ...current.lesion.boundary, ...draft.lesion?.boundary },
+      },
       acquisition: {
         ...current.acquisition,
         ...draft.acquisition,

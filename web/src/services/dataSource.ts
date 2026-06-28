@@ -93,6 +93,9 @@ export type RstlLayerDensity = "low" | "standard" | "high";
 export type ClinicalCaseReviewDecision = "pending" | "approved" | "needs_revision" | "rejected";
 export type AcquisitionQualityStatus = "not_started" | "needs_attention" | "ready";
 export type AcquisitionQualityCheck = "unchecked" | "pass" | "review";
+export type LesionBoundaryMode = "center_diameter" | "ellipse" | "freehand";
+export type LesionBoundarySource = "clinical_exam" | "photo_trace" | "ultrasound" | "imported";
+export type LesionBoundaryStatus = "not_started" | "needs_review" | "ready";
 
 export interface ClinicalCaseCaptureSet {
   frontal: boolean;
@@ -110,6 +113,18 @@ export interface ClinicalCaseAcquisitionQuality {
   tracking: AcquisitionQualityCheck;
   summary: string;
   lastCheckedAt: string | null;
+}
+
+export interface ClinicalCaseLesionBoundary {
+  mode: LesionBoundaryMode;
+  source: LesionBoundarySource;
+  author: string;
+  pointCount: number;
+  axisDiameterMm: number | null;
+  perpendicularDiameterMm: number | null;
+  status: LesionBoundaryStatus;
+  summary: string;
+  updatedAt: string | null;
 }
 
 export interface ClinicalCaseReviewRecord {
@@ -166,6 +181,7 @@ export interface ClinicalCaseRecord {
     depthMm: number | null;
     marginStrategy: MarginStrategy;
     safetyMarginMm: number | null;
+    boundary: ClinicalCaseLesionBoundary;
   };
   acquisition: {
     source: "upload" | "photo" | "scan3d" | "realtime";
@@ -201,6 +217,10 @@ type ClinicalCaseAcquisitionDraft = Partial<Omit<ClinicalCaseRecord["acquisition
   quality?: Partial<ClinicalCaseAcquisitionQuality>;
 };
 
+type ClinicalCaseLesionDraft = Partial<Omit<ClinicalCaseRecord["lesion"], "boundary">> & {
+  boundary?: Partial<ClinicalCaseLesionBoundary>;
+};
+
 export interface ClinicalCaseDraft {
   id?: string;
   title?: string;
@@ -209,7 +229,7 @@ export interface ClinicalCaseDraft {
   createdAt?: string;
   updatedAt?: string;
   patientContext?: Partial<ClinicalCaseRecord["patientContext"]>;
-  lesion?: Partial<ClinicalCaseRecord["lesion"]>;
+  lesion?: ClinicalCaseLesionDraft;
   acquisition?: ClinicalCaseAcquisitionDraft;
   layers?: Partial<ClinicalCaseRecord["layers"]>;
   closureSimulation?: Partial<ClinicalCaseRecord["closureSimulation"]>;
@@ -380,7 +400,7 @@ export function classifyCaseAge(ageYears: number | null | undefined): ClinicalCa
   };
 }
 
-function lesionLayerLabel(layer: LesionLayer): string {
+export function lesionLayerLabel(layer: LesionLayer): string {
   return layer === "subcutaneous" ? "皮下肿物 · 线性切口模式" : "皮表肿物 · 梭形切口模式";
 }
 
@@ -389,6 +409,83 @@ function acquisitionLabel(source: ClinicalCaseRecord["acquisition"]["source"]): 
   if (source === "scan3d") return "3D 扫描";
   if (source === "realtime") return "实时 AR 跟踪";
   return "上传照片 / 视频";
+}
+
+export function normalizeBoundaryMode(value: unknown): LesionBoundaryMode {
+  if (value === "ellipse" || value === "freehand") return value;
+  return "center_diameter";
+}
+
+export function normalizeBoundarySource(value: unknown): LesionBoundarySource {
+  if (value === "photo_trace" || value === "ultrasound" || value === "imported") return value;
+  return "clinical_exam";
+}
+
+function normalizeBoundaryAuthor(value: unknown): string {
+  return typeof value === "string" ? value.trim().slice(0, 80) : "";
+}
+
+export function normalizeBoundaryPointCount(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.round(value));
+}
+
+export function boundaryModeLabel(mode: LesionBoundaryMode): string {
+  if (mode === "ellipse") return "椭圆边界";
+  if (mode === "freehand") return "自由轮廓";
+  return "中心点 + 直径";
+}
+
+export function boundarySourceLabel(source: LesionBoundarySource): string {
+  if (source === "photo_trace") return "照片描记";
+  if (source === "ultrasound") return "术前超声";
+  if (source === "imported") return "导入记录";
+  return "临床查体";
+}
+
+export function deriveLesionBoundary(
+  layer: LesionLayer,
+  diameterMm: number | null,
+  value: Partial<ClinicalCaseLesionBoundary> | undefined,
+): ClinicalCaseLesionBoundary {
+  const mode = normalizeBoundaryMode(value?.mode);
+  const source = normalizeBoundarySource(value?.source);
+  const author = normalizeBoundaryAuthor(value?.author);
+  const pointCount = normalizeBoundaryPointCount(value?.pointCount);
+  const axisDiameterMm = finiteNumberOrNull(value?.axisDiameterMm);
+  const perpendicularDiameterMm = finiteNumberOrNull(value?.perpendicularDiameterMm);
+  const hasDiameter = typeof diameterMm === "number" && Number.isFinite(diameterMm) && diameterMm > 0;
+  const hasEllipseAxes = axisDiameterMm != null && axisDiameterMm > 0 && perpendicularDiameterMm != null && perpendicularDiameterMm > 0;
+  const hasMetricWidth = hasDiameter || (axisDiameterMm != null && axisDiameterMm > 0);
+  const hasFreehandPoints = pointCount >= 6;
+  const status: LesionBoundaryStatus = !hasMetricWidth && pointCount === 0
+    ? "not_started"
+    : layer === "subcutaneous"
+      ? hasDiameter ? "ready" : "needs_review"
+      : mode === "ellipse" && hasEllipseAxes
+        ? "ready"
+        : mode === "freehand" && hasFreehandPoints && hasMetricWidth
+          ? "ready"
+          : "needs_review";
+  const summary = status === "not_started"
+    ? "尚未记录病灶直径；无法形成可审阅的病灶边界摘要。"
+    : layer === "subcutaneous"
+      ? `皮下肿物按 ${boundarySourceLabel(source)} 的表面投影类圆直径记录，适合线性切口模式。`
+      : status === "ready"
+        ? `皮表肿物已按${boundaryModeLabel(mode)}记录边界，可用于梭形候选的宽度和包络提示。`
+        : "皮表肿物仍缺少可审阅边界；系统可继续生成草案，但候选和导出会标记为需复核。";
+
+  return {
+    mode,
+    source,
+    author,
+    pointCount,
+    axisDiameterMm,
+    perpendicularDiameterMm,
+    status,
+    summary,
+    updatedAt: typeof value?.updatedAt === "string" ? value.updatedAt : null,
+  };
 }
 
 function defaultCaptureSet(): ClinicalCaseCaptureSet {
@@ -584,6 +681,7 @@ function normalizeCaseRecord(payload: ClinicalCaseDraft, now = new Date().toISOS
     : "upload";
   const patientContext = classifyCaseAge(payload.patientContext?.ageYears);
   const captureSet = normalizeCaptureSet(payload.acquisition?.captureSet ?? defaultCaptureSet());
+  const diameterMm = typeof payload.lesion?.diameterMm === "number" ? payload.lesion.diameterMm : null;
   const incisionCandidates = (Array.isArray(payload.incisionCandidates) ? payload.incisionCandidates : [])
     .map((item, index) => normalizeIncisionCandidate(item, index, now))
     .filter((item): item is CaseIncisionCandidateRecord => item !== null);
@@ -605,10 +703,11 @@ function normalizeCaseRecord(payload: ClinicalCaseDraft, now = new Date().toISOS
     lesion: {
       layer,
       layerLabel: lesionLayerLabel(layer),
-      diameterMm: typeof payload.lesion?.diameterMm === "number" ? payload.lesion.diameterMm : null,
+      diameterMm,
       depthMm: typeof payload.lesion?.depthMm === "number" ? payload.lesion.depthMm : null,
       marginStrategy,
       safetyMarginMm: typeof payload.lesion?.safetyMarginMm === "number" ? payload.lesion.safetyMarginMm : null,
+      boundary: deriveLesionBoundary(layer, diameterMm, payload.lesion?.boundary),
     },
     acquisition: {
       source,

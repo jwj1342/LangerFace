@@ -86,6 +86,17 @@ assert.ok(caseRoute.includes("姿态覆盖"), "case workflow records pose covera
 assert.ok(caseRoute.includes("跟踪稳定"), "case workflow records scan or live tracking quality");
 assert.ok(caseRoute.includes("该状态不会锁死医生流程"), "case workflow keeps acquisition quality as a reviewable gate instead of a locked wizard");
 assert.ok(caseRoute.includes("带复核状态继续：标记病灶"), "case workflow allows clinicians to continue with a visible review state");
+assert.ok(caseRoute.includes("病灶边界记录"), "case workflow records lesion boundary inside the case planning step");
+assert.ok(caseRoute.includes("LesionBoundaryPanel"), "case workflow renders a structured lesion boundary panel");
+assert.ok(caseRoute.includes("lesionBoundaryTrace"), "case workflow derives lesion boundary provenance for candidates and reports");
+assert.ok(caseRoute.includes("effectiveLesionDiameter"), "case workflow uses lesion boundary width when deriving candidate and closure inputs");
+assert.ok(caseRoute.includes("边界模式"), "case workflow lets clinicians choose a lesion boundary mode");
+assert.ok(caseRoute.includes("来源"), "case workflow records the lesion boundary source");
+assert.ok(caseRoute.includes("记录者"), "case workflow records the lesion boundary author");
+assert.ok(caseRoute.includes("自由轮廓点"), "case workflow records freehand lesion boundary point count");
+assert.ok(caseRoute.includes("边界长轴 mm"), "case workflow records ellipse or freehand long-axis measurement");
+assert.ok(caseRoute.includes("边界短轴 mm"), "case workflow records ellipse or freehand short-axis measurement");
+assert.ok(caseRoute.includes("完整自由绘图仍可从受控规划入口进入"), "case workflow keeps full freehand drawing as a controlled planning handoff");
 assert.ok(caseRoute.includes("RSTL 密度"), "case workflow lets clinicians tune RSTL line density");
 assert.ok(caseRoute.includes("RSTL 透明度"), "case workflow lets clinicians tune RSTL opacity");
 assert.ok(caseRoute.includes("皮纹透明度"), "case workflow lets clinicians tune personalized wrinkle opacity");
@@ -97,6 +108,7 @@ assert.ok(caseRoute.includes("case-rule-grid"), "case workflow renders structure
 assert.ok(caseRoute.includes("case-rationale-audit"), "case workflow renders a structured audit boundary");
 assert.ok(caseRoute.includes("agePlanningRule"), "case workflow derives age-based planning rule copy");
 assert.ok(caseRoute.includes("lesionPlanningRule"), "case workflow derives lesion-layer planning rule copy");
+assert.ok(caseRoute.includes("lesionBoundaryPlanningRule"), "case workflow derives lesion-boundary planning rule copy");
 assert.ok(caseRoute.includes("marginPlanningRule"), "case workflow derives margin planning rule copy");
 assert.ok(caseRoute.includes("CaseCandidateQueue"), "case workflow renders a case-level candidate queue");
 assert.ok(caseRoute.includes("buildCaseCandidate"), "case workflow can create a deterministic candidate summary inside the case");
@@ -109,6 +121,7 @@ assert.ok(caseRoute.includes("buildCaseReviewExport"), "case review can build a 
 assert.ok(caseRoute.includes("buildCaseReportDraft"), "case review can build a local report draft");
 assert.ok(caseRoute.includes("导出脱敏 JSON"), "case review exposes a sanitized JSON export action");
 assert.ok(caseRoute.includes("下载报告草案"), "case review exposes a report draft export action");
+assert.ok(caseRoute.includes("## 病灶边界"), "case report draft includes a dedicated lesion boundary section");
 assert.ok(caseRoute.includes("医生审阅记录"), "case review exposes a structured clinician review record");
 assert.ok(caseRoute.includes("审阅医生"), "case review requires a reviewer field");
 assert.ok(caseRoute.includes("覆盖 / 退回原因"), "case review captures override or revision reasons");
@@ -121,6 +134,7 @@ assert.ok(caseRoute.includes("30° / 3:1"), "case workflow exposes the adult bas
 assert.ok(caseRoute.includes("2.5:1"), "case workflow exposes the older/lax long-axis ratio in planning rationale");
 assert.ok(caseRoute.includes("估算切除宽度"), "case workflow explains expanded-margin width in planning rationale");
 assert.ok(caseRoute.includes("规则记录"), "case workflow keeps rule provenance visible as clinical audit context");
+assert.ok(caseRoute.includes("病灶边界："), "case workflow includes lesion boundary provenance in candidate rule traces");
 assert.ok(caseRoute.includes("caseClosureSimulation"), "case planning step embeds closure simulation inside the case workflow");
 assert.ok(caseRoute.includes("张力闭合模拟"), "case planning step exposes closure simulation as a planning control");
 assert.ok(caseRoute.includes("运行闭合模拟"), "case planning step gives doctors direct simulation feedback without leaving the workflow");
@@ -161,6 +175,9 @@ assert.ok(caseRoute.includes("layers={activeCase.layers}"), "case workflow binds
 assert.ok(caseRoute.includes("mode={activeMode}"), "case workflow binds acquisition mode into the planning viewport");
 assert.ok(clinicalFacePreview.includes("case-face-preview-large"), "clinical face preview supports a large planning viewport");
 assert.ok(clinicalFacePreview.includes("ClinicalFacePreviewLayers"), "clinical face preview owns a typed layer contract");
+assert.ok(clinicalFacePreview.includes("ClinicalFaceLesionBoundaryMode"), "clinical face preview owns a typed lesion boundary overlay contract");
+assert.ok(clinicalFacePreview.includes("lesionBoundaryMode"), "clinical face preview accepts the lesion boundary mode from the case");
+assert.ok(clinicalFacePreview.includes("case-face-lesion-boundary"), "clinical face preview renders a lesion boundary overlay");
 assert.ok(clinicalFacePreview.includes("rstlLineKeys"), "clinical face preview changes RSTL line count by density");
 assert.ok(clinicalFacePreview.includes("case-face-wrinkle"), "clinical face preview renders personalized wrinkle overlays");
 assert.ok(clinicalFacePreview.includes("case-face-blended-field"), "clinical face preview renders a mixed field overlay");
@@ -231,6 +248,12 @@ assert.ok(dataSource.includes("ClinicalCaseReviewDecision"), "dataSource owns ty
 assert.ok(dataSource.includes("normalizeReviewRecord"), "dataSource normalizes review records for draft recovery");
 assert.ok(dataSource.includes("ClinicalCaseCaptureSet"), "dataSource owns structured acquisition capture views");
 assert.ok(dataSource.includes("ClinicalCaseAcquisitionQuality"), "dataSource owns structured acquisition quality checks");
+assert.ok(dataSource.includes("ClinicalCaseLesionBoundary"), "dataSource owns structured lesion boundary records");
+assert.ok(dataSource.includes("LesionBoundaryMode"), "dataSource owns typed lesion boundary modes");
+assert.ok(dataSource.includes("LesionBoundarySource"), "dataSource owns typed lesion boundary sources");
+assert.ok(dataSource.includes("deriveLesionBoundary"), "dataSource derives lesion boundary status and summary from case inputs");
+assert.ok(dataSource.includes("normalizeBoundaryMode"), "dataSource normalizes saved lesion boundary mode values");
+assert.ok(dataSource.includes("normalizeBoundaryPointCount"), "dataSource normalizes freehand lesion boundary point counts");
 assert.ok(dataSource.includes("deriveAcquisitionQuality"), "dataSource derives acquisition quality status from required views and checks");
 assert.ok(dataSource.includes("requiredCaptureViews"), "dataSource derives required capture views from source mode");
 assert.ok(dataSource.includes("normalizeQualityCheck"), "dataSource normalizes acquisition quality checks for draft recovery");
@@ -248,6 +271,7 @@ assert.ok(caseStore.includes("...draft"), "case store preserves top-level candid
 assert.ok(caseStore.includes("reviewRecord"), "case store merges structured review records through the case data boundary");
 assert.ok(caseStore.includes("captureSet"), "case store merges nested acquisition capture updates through the case data boundary");
 assert.ok(caseStore.includes("quality"), "case store merges nested acquisition quality updates through the case data boundary");
+assert.ok(caseStore.includes("boundary: { ...current.lesion.boundary"), "case store merges nested lesion boundary updates through the case data boundary");
 assert.ok(!caseStore.includes("localStorage"), "case store does not bypass the dataSource boundary");
 
 assert.ok(styles.includes("--font-clinical-sans"), "styles expose the clinical font token");
@@ -266,6 +290,12 @@ assert.ok(styles.includes(".case-acquisition-gate"), "styles implement the acqui
 assert.ok(styles.includes(".case-capture-grid"), "styles implement compact capture completeness controls");
 assert.ok(styles.includes(".case-quality-grid"), "styles implement compact acquisition quality controls");
 assert.ok(styles.includes(".case-acquisition-status-ready"), "styles implement acquisition quality status feedback");
+assert.ok(styles.includes(".case-lesion-boundary-panel"), "styles implement the lesion boundary planning panel");
+assert.ok(styles.includes(".case-boundary-grid"), "styles implement compact lesion boundary controls");
+assert.ok(styles.includes(".case-boundary-metrics"), "styles implement lesion boundary measurements");
+assert.ok(styles.includes(".case-lesion-boundary-status-ready"), "styles implement lesion boundary status feedback");
+assert.ok(styles.includes(".case-face-lesion-boundary"), "styles implement the lesion boundary overlay");
+assert.ok(styles.includes(".case-face-boundary-point"), "styles implement freehand boundary point markers");
 assert.ok(styles.includes(".case-face-density-high"), "styles implement high-density RSTL overlays");
 assert.ok(styles.includes("--case-rstl-opacity"), "styles bind RSTL opacity into the face viewport");
 assert.ok(styles.includes("--case-wrinkle-opacity"), "styles bind personalized wrinkle opacity into the face viewport");
@@ -307,6 +337,9 @@ assert.ok(!styles.includes(".surgery-green-copy"), "styles remove the legacy gre
 
 assert.ok(visualCapture.includes("incisionCandidates"), "Playwright visual case seed includes saved candidates");
 assert.ok(visualCapture.includes("visual-candidate-1"), "Playwright visual case seed includes a selected candidate");
+assert.ok(visualCapture.includes("boundary:"), "Playwright visual case seed includes lesion boundary records");
+assert.ok(visualCapture.includes("axisDiameterMm"), "Playwright visual case seed exercises lesion boundary axis measurements");
+assert.ok(visualCapture.includes("病灶边界：椭圆边界"), "Playwright visual case seed exposes lesion boundary provenance");
 assert.ok(visualCapture.includes("captureSet"), "Playwright visual case seed includes capture completeness");
 assert.ok(visualCapture.includes("quality"), "Playwright visual case seed includes acquisition quality checks");
 assert.ok(visualCapture.includes("采集质量：采集可用"), "Playwright visual case seed includes acquisition quality provenance");
