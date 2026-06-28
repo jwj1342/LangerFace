@@ -30,7 +30,7 @@ export function LiveRouteControlsPanel() {
   return (
     <>
       <Card>
-        <Label htmlFor="routeSel">技术路线</Label>
+        <Label htmlFor="routeSel">显示模式</Label>
         <Select
           id="routeSel"
           className="live-inline-top"
@@ -38,7 +38,7 @@ export function LiveRouteControlsPanel() {
           onChange={(event) => commands.route("route_change", event.currentTarget.value)}
         >
           <option value="2d">2D 贴合（默认，稳定）</option>
-          <option value="3d">3D 重建（Beta）</option>
+          <option value="3d">3D 面部重建</option>
         </Select>
         <Hint className="live-inline-top" id="routeModeHint">
           {snapshot?.route.hint || "当前是 2D 实时贴合模式，只显示稳定主流程。"}
@@ -73,7 +73,7 @@ export function LiveRouteControlsPanel() {
             <Button variant="workbench" id="view3dBtn" type="button" disabled={!hasModel} aria-pressed={mode3d === "view"} onClick={() => commands.route("view_3d")}>旋转查看</Button>
           </ButtonRow>
           <Button variant="workbench" id="reset3dBtn" type="button" visible={false} disabled={!hasModel} onClick={() => commands.route("reset_3d")}>复位视角</Button>
-          <Button variant="workbenchPrimary" id="cloudFitFlameBtn" type="button" visible={false} disabled={scanning} onClick={() => commands.route("start_twin")}>▶ 实时孪生（左真脸 / 右 FLAME 随动）</Button>
+          <Button variant="workbenchPrimary" id="cloudFitFlameBtn" type="button" visible={false} disabled={scanning} onClick={() => commands.route("start_twin")}>实时 3D 随动</Button>
           <CheckboxField
             id="flameHeadToggleWrap"
             hiddenClassName="live-hidden-inline"
@@ -103,8 +103,8 @@ export function LiveRouteControlsPanel() {
 
       <Card id="threeDWorkflowCard" visible={is3d}>
         <div>
-          <Label>3D 线标注与研究演示</Label>
-          <Hint className="live-inline-top">在 3D 标准脸上绘制 RSTL 候选线，并从标注页进入沿 RSTL 闭合力学演示。</Hint>
+        <Label>图谱标注与闭合模拟</Label>
+        <Hint className="live-inline-top">在 3D 标准脸上绘制 RSTL 候选线，并从标注页进入闭合张力模拟。</Hint>
         </div>
         <Button asChild variant="workbenchPrimary">
           <Link to="/annotate">打开 3D 线标注</Link>

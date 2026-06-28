@@ -16,7 +16,7 @@ import { ProviderConnectionStatus } from "./ui/incision-status";
 import { FieldValue, Label } from "./ui/label";
 import { RangeInput } from "./ui/slider";
 
-const DEFAULT_TEST_MESSAGE = "尚未测试 LLM Provider 连通性。Vercel 调试请填写可从浏览器访问、允许该 preview origin、并兼容 OpenAI /models 的 HTTPS Provider；候选生成不调用 Provider。";
+const DEFAULT_TEST_MESSAGE = "尚未测试 AI 摘要服务连通性。Vercel 调试请填写可从浏览器访问、允许该 preview origin、并兼容 OpenAI /models 的 HTTPS 地址；候选生成不调用该服务。";
 
 type TestLevel = "" | "ok" | "warn";
 
@@ -67,7 +67,7 @@ export function ProviderConfigPanel() {
     setTesting(true);
     setProviderState("测试中");
     setProviderTone("");
-    setTestState("正在测试 LLM Provider 连接…");
+    setTestState("正在测试 AI 摘要服务连接…");
     setTestTone("");
     notifyController();
     try {
@@ -104,11 +104,11 @@ export function ProviderConfigPanel() {
   return (
     <AgentCard>
       <CardHeader>
-        <span>LLM Provider</span>
+        <span>AI 摘要服务配置</span>
         <ProviderConnectionStatus id="providerState" tone={providerTone}>{providerState}</ProviderConnectionStatus>
       </CardHeader>
       <Input id="providerMode" type="hidden" value="openai-compatible" readOnly />
-      <AgentNote>Provider 类型固定为 OpenAI-compatible / vLLM。测试会请求 Base URL 下的 /models。</AgentNote>
+      <AgentNote>服务类型固定为 OpenAI-compatible / vLLM。测试会请求 Base URL 下的 /models。</AgentNote>
       <Input
         id="providerBaseUrl"
         value={baseUrl}
@@ -151,7 +151,7 @@ export function ProviderConfigPanel() {
         />
       </div>
       <Button variant="workbench" id="testProviderBtn" type="button" disabled={testing} onClick={testProvider}>
-        {testing ? "正在测试…" : "测试 LLM Provider 连接"}
+        {testing ? "正在测试…" : "测试 AI 服务连接"}
       </Button>
       <AgentNote className={testTone || undefined} id="providerTestState">{testState}</AgentNote>
       <AgentNote>生成候选时只执行浏览器内确定性 workflow；Provider 连接测试暂不参与切口几何或工具 trace。</AgentNote>

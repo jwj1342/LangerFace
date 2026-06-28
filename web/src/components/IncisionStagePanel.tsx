@@ -19,7 +19,7 @@ export function IncisionStagePanel() {
           <StageStatus active>{snapshot?.headAsset.statusLabel || "头模规划"}</StageStatus>
           <StageActions>
             <StageMeta id="stageStatus">{snapshot?.stageStatus || "拖拽旋转 · 滚轮缩放 · 点击定位"}</StageMeta>
-            <StageLink variant="meta" to="/annotate">3D 标注与演示</StageLink>
+            <StageLink variant="meta" to="/annotate">图谱库管理</StageLink>
           </StageActions>
         </>
       )}

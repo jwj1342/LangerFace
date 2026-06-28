@@ -21,9 +21,9 @@ export function IncisionWorkbench() {
       workspace="incision"
     >
       <WorkbenchBrand
-        eyebrow="STAGE 2 · AGENTIC INCISION"
-        title="切口 Agent 工作台"
-        action={<StatusBadge asChild><Link to="/live">返回实时显示</Link></StatusBadge>}
+        eyebrow="病例步骤二 · 切口规划"
+        title="切口规划与候选审阅"
+        action={<StatusBadge asChild><Link to="/cases">返回病例大厅</Link></StatusBadge>}
       />
 
       <IncisionStatePanel />
@@ -32,7 +32,10 @@ export function IncisionWorkbench() {
 
       <SecondaryCuePanel />
 
-      <ProviderConfigPanel />
+      <details className="clinical-developer-disclosure">
+        <summary>开发者配置</summary>
+        <ProviderConfigPanel />
+      </details>
 
       <CandidateResultPanel />
 
@@ -44,7 +47,7 @@ export function IncisionWorkbench() {
 
       <PrivacyAuditPanel />
 
-      <Disclaimer>⚠️ 研究原型：LLM 只做编排摘要，方向、几何和 guardrails 均由确定性工具输出。候选切口必须由医生审阅确认。</Disclaimer>
+      <Disclaimer>临床辅助设计：候选切口由规则工具生成，仅供执业医师结合查体审阅确认；不替代最终手术决策。</Disclaimer>
     </WorkbenchLayout>
   );
 }

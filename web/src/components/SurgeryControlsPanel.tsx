@@ -39,7 +39,7 @@ export function SurgeryControlsPanel({
       <SectionTitle label="① 规划切口" value={lesionState} valueProps={{ id: "lesionState" }} />
       <Hint>
         在右侧脸上<b>点击</b>定位病灶；拖拽旋转、滚轮缩放。
-        右图 <b className="surgery-green-copy">绿色</b>=沿 RSTL 的梭形切除轮廓，随下方滑块更新。
+        右图 <b className="surgery-highlight-copy">高亮轮廓</b>=沿 RSTL 的梭形切除范围，随下方滑块更新。
       </Hint>
       <Label htmlFor="sizeRange">切口大小 <span id="sizeVal">{sizePct}%</span></Label>
       <RangeInput
@@ -58,7 +58,7 @@ export function SurgeryControlsPanel({
           disabled={!isReady}
           onClick={onExciseAlong}
         >
-          沿 RSTL 切除
+          执行闭合模拟
         </SurgeryCutButton>
       </ButtonRow>
       <Button variant="workbench" id="btnReset" type="button" disabled={!isReady} onClick={onReset}>↺ 复位</Button>

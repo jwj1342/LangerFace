@@ -1601,7 +1601,7 @@ assert.ok(reviewPanel.includes("Button"), "React review panel uses the shared sh
 assert.ok(reviewPanel.includes("ButtonRow"), "React review panel uses the shared shadcn-style button row primitive");
 assert.ok(reviewPanel.includes("AgentCard"), "React review panel uses the shared shadcn-style agent card primitive");
 assert.ok(reviewPanel.includes('variant="workbenchPrimary"'), "React review panel keeps primary workbench button styling through Button variants");
-assert.ok(incisionWorkbench.includes('to="/live"'), "React incision workbench returns to the React live route");
+assert.ok(incisionWorkbench.includes('to="/cases"'), "React incision workbench returns to the clinical case lobby");
 assert.ok(incisionStagePanel.includes('to="/annotate"'), "React incision stage links to the React 3D annotation route");
 for (const dependencyType of incisionRuntimeDependencyTypes) {
   assert.ok(
@@ -1830,7 +1830,7 @@ assert.ok(annotateDrawPanel.includes("<Card"), "React annotate draw panel uses t
 assert.ok(annotateDrawPanel.includes('variant="workbenchPrimary"'), "React annotate draw panel keeps primary workbench button styling through Button variants");
 assert.ok(annotateHelpPanel.includes("标注帮助"), "React annotate help panel keeps the user-facing annotation guide");
 assert.ok(annotateHelpPanel.includes("HelpDisclosure"), "React annotate help panel uses the shared help disclosure primitive");
-assert.ok(annotateStagePanel.includes('to="/live"'), "React annotate stage returns to the React live route");
+assert.ok(annotateStagePanel.includes('to="/cases"'), "React annotate stage returns to the clinical case lobby");
 for (const id of [
   "annStatus",
   "lineList",
@@ -1866,7 +1866,7 @@ assert.ok(annotateSnapshotsService.includes("buildAnnotateDraftSnapshot"), "shar
 assert.ok(annotateSnapshotsService.includes("buildAnnotateSavedSummary"), "shared annotation snapshot service builds saved line summaries");
 assert.ok(annotateSnapshotsService.includes("buildAnnotateExportState"), "shared annotation snapshot service builds export capability state");
 assert.ok(annotateMeshSourcePanel.includes('to="/surgery"'), "React annotation mesh source panel links to the React surgery closure route");
-assert.ok(annotateMeshSourcePanel.includes('to="/live"'), "React annotation mesh source panel returns to the React live route");
+assert.ok(annotateMeshSourcePanel.includes('to="/cases"'), "React annotation mesh source panel returns to the clinical case lobby");
 for (const dependencyType of annotateRuntimeDependencyTypes) {
   assert.ok(
     fs.existsSync(path.join(web, dependencyType)),
@@ -2275,7 +2275,7 @@ assert.ok(surgeryMetricsPanel.includes("Legend"), "React surgery metrics use the
 assert.ok(surgeryMetricsPanel.includes("LegendSwatch"), "React surgery metrics use the shared legend swatch primitive");
 assert.ok(surgeryHelpPanel.includes("这是在演示什么？"), "React surgery help panel keeps the closure explanation");
 assert.ok(surgeryHelpPanel.includes("HelpDisclosure"), "React surgery help panel uses the shared help disclosure primitive");
-assert.ok(surgeryStagePanel.includes('to="/annotate"'), "React surgery stage returns to the React annotation route");
+assert.ok(surgeryStagePanel.includes('to="/incision"'), "React surgery stage returns to the React incision planning route");
 assert.ok(legacySurgeryHtml.includes("/app/surgery"), "legacy surgery compatibility page redirects to the React surgery route");
 assert.ok(!legacySurgeryHtml.includes("surgery_main.js"), "legacy surgery compatibility page does not load the legacy surgery controller");
 assert.ok(!legacySurgeryHtml.includes('id="btnAlong"'), "legacy surgery compatibility page does not duplicate React surgery controls");

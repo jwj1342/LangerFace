@@ -9,6 +9,17 @@ const incisionRoute = fs.readFileSync("src/routes/IncisionRoute.tsx", "utf8");
 const liveRoute = fs.readFileSync("src/routes/LiveRoute.tsx", "utf8");
 const annotateRoute = fs.readFileSync("src/routes/AnnotateRoute.tsx", "utf8");
 const surgeryRoute = fs.readFileSync("src/routes/SurgeryRoute.tsx", "utf8");
+const workbenchLayout = fs.readFileSync("src/components/WorkbenchLayout.tsx", "utf8");
+const legacyWorkbenchCopy = [
+  fs.readFileSync("src/routes/IncisionWorkbench.tsx", "utf8"),
+  fs.readFileSync("src/routes/LiveWorkbench.tsx", "utf8"),
+  fs.readFileSync("src/routes/SurgeryWorkbench.tsx", "utf8"),
+  fs.readFileSync("src/routes/AnnotateWorkbench.tsx", "utf8"),
+  fs.readFileSync("src/components/IncisionStagePanel.tsx", "utf8"),
+  fs.readFileSync("src/components/SurgeryStagePanel.tsx", "utf8"),
+  fs.readFileSync("src/components/AnnotateStagePanel.tsx", "utf8"),
+  fs.readFileSync("src/components/ProviderConfigPanel.tsx", "utf8"),
+].join("\n");
 const dataSource = fs.readFileSync("src/services/dataSource.ts", "utf8");
 const caseStore = fs.readFileSync("src/stores/caseStore.ts", "utf8");
 const styles = fs.readFileSync("src/styles.css", "utf8");
@@ -57,6 +68,27 @@ assert.ok(liveRoute.includes("正式临床流程请从病例大厅进入"), "liv
 assert.ok(annotateRoute.includes("不属于医生病例主流程"), "annotate route is framed as atlas management");
 assert.ok(surgeryRoute.includes("正式方案应从病例流程"), "surgery demo is framed as a case workflow tool");
 
+assert.ok(workbenchLayout.includes("clinical-compat-workbench"), "legacy workbench routes share the clinical compatibility shell");
+assert.ok(legacyWorkbenchCopy.includes("切口规划与候选审阅"), "incision workbench uses clinician-facing planning copy");
+assert.ok(legacyWorkbenchCopy.includes("面部评估与张力线映射"), "live workbench uses clinician-facing evaluation copy");
+assert.ok(legacyWorkbenchCopy.includes("张力闭合模拟"), "surgery workbench is named as a planning simulation, not a standalone demo");
+assert.ok(legacyWorkbenchCopy.includes("3D 张力线图谱标注"), "annotate workbench is framed as atlas management");
+assert.ok(legacyWorkbenchCopy.includes("clinical-developer-disclosure"), "developer/provider settings are folded out of the clinical sidebar");
+assert.ok(legacyWorkbenchCopy.includes("AI 摘要服务配置"), "provider settings use clinician-facing AI service copy");
+for (const hiddenCopy of [
+  "切口 Agent 工作台",
+  "COMPUTER VISION PROTOTYPE",
+  "STAGE 2 · AGENTIC INCISION",
+  "RSTL · CLOSURE DEMO",
+  "3D LINE ANNOTATION",
+  "面部朗格线迁移",
+  "返回 3D 标注",
+  "LLM Provider</span>",
+  "Provider 类型固定",
+]) {
+  assert.ok(!legacyWorkbenchCopy.includes(hiddenCopy), `legacy workbench no longer exposes technical/prototype copy: ${hiddenCopy}`);
+}
+
 assert.ok(dataSource.includes("interface ClinicalCaseRecord"), "dataSource owns the structured case record contract");
 assert.ok(dataSource.includes("saveCase(payload"), "dataSource exposes a case save method");
 assert.ok(dataSource.includes("listCases()"), "dataSource exposes case listing");
@@ -84,5 +116,11 @@ assert.ok(styles.includes(".case-face-preview"), "styles implement the high-cont
 assert.ok(styles.includes(".case-disclosure"), "styles implement collapsed compatibility and developer sections");
 assert.ok(styles.includes(".react-legacy-banner"), "styles render legacy route notices");
 assert.ok(styles.includes(".case-workflow-main"), "styles define the case workflow surface");
+assert.ok(styles.includes(".clinical-compat-workbench"), "styles apply the dark clinical shell to legacy workbenches");
+assert.ok(styles.includes(".clinical-compat-workbench .sidebar"), "styles darken legacy workbench sidebars");
+assert.ok(styles.includes(".clinical-compat-workbench .stage"), "styles darken legacy workbench stages");
+assert.ok(styles.includes(".clinical-developer-disclosure"), "styles collapse developer/provider configuration");
+assert.ok(styles.includes(".surgery-highlight-copy"), "styles avoid green-as-primary copy in closure controls");
+assert.ok(!styles.includes(".surgery-green-copy"), "styles remove the legacy green closure copy class");
 
 console.log("test_case_workflow_ui: clinical case workflow contracts passed");
