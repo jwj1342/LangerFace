@@ -443,7 +443,7 @@ function currentPrivacyAuditSnapshot() {
 function currentAssetLoadingSnapshot() {
   return buildIncisionAssetLoadingSnapshot({
     visible: !els.assetLoading?.classList?.contains("hidden"),
-    text: els.assetLoadingText?.textContent || "准备下载 FLAME/MediaPipe 头模、拓扑和 RSTL 图谱。",
+    text: els.assetLoadingText?.textContent || "准备下载标准三维面部模型、张力线图谱和切口规划资产。",
   });
 }
 
@@ -642,8 +642,8 @@ async function loadMediaPipeIncisionAssets(atlas?: AtlasPayload, warnings: strin
       atlas: resolvedAtlas as DynamicRecord,
       mode: "mediapipe_fallback",
       statusLabel: warnings.length
-        ? "MediaPipe 468 回退 · FLAME 资产未就绪"
-        : "MediaPipe 468 标准脸",
+        ? "标准三维模型回退 · 高精度头模资产未就绪"
+        : "标准三维面部模型",
       warnings,
       liveOverlaySupported: true,
     }),
@@ -657,7 +657,7 @@ async function loadPreferredIncisionAssets() {
     const [mediaPipeHead, flameHead, basis] = await Promise.all([
       dataSource.getHeadMesh("mediapipe-468", { onProgress: updateAssetLoading }),
       dataSource.getHeadMesh("flame-2023", { onProgress: updateAssetLoading }),
-      loadFlameBasisAsset({ label: "FLAME basis", onProgress: updateAssetLoading }),
+      loadFlameBasisAsset({ label: "高精度头模基底", onProgress: updateAssetLoading }),
     ]);
     const flameAtlas = mediaPipeAtlasToFlamePreviewAtlas({
       atlas: rstlAtlas,
@@ -665,7 +665,7 @@ async function loadPreferredIncisionAssets() {
       flameHead,
       basis,
     });
-    warnings.push("FLAME RSTL 线为 MediaPipe 草案转换预览，validated:false；发送到实时 MediaPipe 叠加前必须另做 topology 映射。");
+    warnings.push("当前高精度头模上的 RSTL 线为研究预览；发送到实时叠加前必须完成单独映射复核。");
     return {
       head: flameHead,
       atlas: flameAtlas as DynamicRecord,
@@ -673,13 +673,13 @@ async function loadPreferredIncisionAssets() {
         head: flameHead,
         atlas: flameAtlas as DynamicRecord,
         mode: "flame_preview",
-        statusLabel: "FLAME neutral 头模 · RSTL 预览",
+        statusLabel: "高精度三维头模 · RSTL 预览",
         warnings,
         liveOverlaySupported: false,
       }),
     };
   } catch (error) {
-    warnings.push(`FLAME 资产加载或转换失败：${errorMessage(error)}`);
+    warnings.push(`高精度头模资产加载或转换失败：${errorMessage(error)}`);
     return loadMediaPipeIncisionAssets(rstlAtlas, warnings);
   }
 }
@@ -2374,7 +2374,7 @@ function stageLiveOverlay() {
     return;
   }
   if (S.headAsset?.liveOverlaySupported === false) {
-    els.stageStatus.textContent = "当前候选基于 FLAME 头模预览生成；实时 MediaPipe 叠加需要单独的 topology 映射，已阻止发送。";
+    els.stageStatus.textContent = "当前候选基于高精度三维头模预览生成；发送到实时叠加前需要单独映射复核，已阻止发送。";
     publishIncisionState("live_overlay_blocked_by_topology");
     return;
   }

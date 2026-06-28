@@ -73,7 +73,7 @@ assert.ok(!html.includes("工具调用轨迹"), "workbench does not render a sid
 assert.ok(html.includes('id="agentComparison"'), "workbench exposes browser workflow candidate comparison");
 assert.ok(html.includes("snapshot?.headAsset.statusLabel"), "workbench stage shows the active head asset status");
 assert.ok(html.includes('label="头模"'), "workbench state panel exposes the active head asset");
-assert.ok(html.includes('label="拓扑"'), "workbench state panel exposes the active topology");
+assert.ok(html.includes('label="模型版本"'), "workbench state panel exposes the active model version without topology jargon");
 assert.ok(html.includes('id="approveCandidateBtn"'), "workbench exposes candidate approval action");
 assert.ok(html.includes('id="rejectCandidateBtn"'), "workbench exposes candidate rejection action");
 assert.ok(html.includes('id="candidateWidth"'), "workbench exposes fusiform width and ratio metric");

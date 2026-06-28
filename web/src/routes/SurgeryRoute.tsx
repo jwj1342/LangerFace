@@ -23,15 +23,15 @@ export function SurgeryRoute() {
     failedRouteStatus: "闭合演示加载失败",
     initialLoadingText: "正在加载标准脸资产",
     loadedAssetStatus: "闭合演示资产已加载",
-    loadedRouteStatus: "R3F 闭合演示已就绪",
+    loadedRouteStatus: "闭合模拟已就绪",
     loadedText: "闭合演示资产已加载",
     loadingAssetStatus: "闭合演示资产加载中",
-    loadingRouteStatus: "加载 R3F 闭合演示资产",
+    loadingRouteStatus: "加载闭合模拟资产",
     onFailure: handleAssetFailure,
   });
   useReactRouteLifecycle({
     workspace: "surgery",
-    mountedStatus: "加载 R3F 闭合演示资产",
+    mountedStatus: "加载闭合模拟资产",
     unloadedStatus: "闭合演示已卸载",
     reactManaged: true,
   });

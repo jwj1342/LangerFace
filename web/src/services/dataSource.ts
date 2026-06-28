@@ -164,7 +164,7 @@ const CASES_KEY = "langerface.cases";
 const HEADS: LocalHeadDescriptor[] = [
   {
     id: "mediapipe-468",
-    label: "MediaPipe 标准脸",
+    label: "标准三维面部模型",
     topologyId: TOPOLOGY_ID,
     topologyVersion: TOPOLOGY_VERSION,
     bundled: true,
@@ -176,7 +176,7 @@ const HEADS: LocalHeadDescriptor[] = [
   },
   {
     id: "flame-2023",
-    label: "FLAME neutral 头模",
+    label: "高精度三维头模",
     topologyId: "flame-2023",
     topologyVersion: "flame-2023-v1",
     bundled: true,

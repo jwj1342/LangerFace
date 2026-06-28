@@ -5,7 +5,7 @@ import { useIncisionStore, type IncisionAssetLoadingState } from "../stores/inci
 
 const DEFAULT_ASSET_LOADING: IncisionAssetLoadingState = {
   visible: true,
-  text: "准备下载 FLAME/MediaPipe 头模、拓扑和 RSTL 图谱。",
+  text: "准备下载标准三维面部模型、张力线图谱和切口规划资产。",
 };
 
 export function IncisionStagePanel() {

@@ -537,6 +537,7 @@ html {
 - 候选切口旁有可展开的规划依据 / 风险提示，不把 AI 或规则判断做成黑盒。
 - 数值字段、角度、张力分数和候选 metrics 使用等宽数字或 `tabular-nums`。
 - 现有 `/app/live`、`/app/incision`、`/app/annotate`、`/app/surgery` 路由在过渡期仍可回归测试。
+- 视觉冒烟检查可用 `cd web && npm run visual:case` 启动本地 Vite，并用 Playwright 截取病例大厅、评估、规划和确认页；截图输出到 `local_outputs/case-workflow-visual/`，不提交到仓库。若运行环境缺少 Chromium 依赖，应在 PR 中记录失败日志和人工预览链接；若 Linux 截图中文字缺失，需要在截图主机安装 Noto Sans CJK SC 等中文字体后再做设计截图复核。
 
 ## 非目标
 

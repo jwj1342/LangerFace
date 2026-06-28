@@ -153,10 +153,11 @@ P = u·V0 + v·V1 + w·V2
 - 生产预览：`cd web && npm run preview`，Vite 默认监听 `http://127.0.0.1:4173`。
 - Vite 的唯一应用入口是 `web/app/index.html`。`index.html`、`annotate.html`、`incision_agent.html`、`surgery.html`
   只作为轻量兼容跳转页复制进 `dist/`，不再作为 Rollup 多入口应用构建。
-- `web/vite.config.ts` 的 `copy-runtime-assets` 会把 `web/assets/` 复制到 `dist/assets/`；`web/src/services/assetLoader.ts`
+- `web/vite.config.ts` 使用 `base: "/"`，让 SPA shell 的 JS/CSS 在深链接下仍从站点根 `/assets/...` 读取；`copy-runtime-assets`
+  会把 `web/assets/` 复制到 `dist/assets/`；`web/src/services/assetLoader.ts`
   通过稳定文件名清单从站点根 `/assets/` 读取 `.task`、atlas JSON、拓扑、标准脸和 3D 示例资产。React SPA 运行在
-  `/app/*` 下，运行时代码不能写 document-relative `assets/...`，否则 `/app/incision` 这类嵌套路由会解析成
-  `/app/assets/...` 并被 Vercel SPA rewrite 回退成 HTML。需要外置资产时只通过 `?assetBase=` 或
+  `/app/*` 下，运行时代码不能写 document-relative `../assets/...` 或 `assets/...`，否则 `/app/incision`、`/app/case/:id/plan`
+  这类嵌套路由会解析成 `/app/assets/...` 或 `/app/case/assets/...` 并被 Vercel SPA rewrite 回退成 HTML。需要外置资产时只通过 `?assetBase=` 或
   `VITE_LANGERFACE_ASSET_BASE_URL` 覆盖。
 - `tools/serve_web.py` 仍可服务未打包的 `web/` 源文件，但正式前端开发与部署以 Vite 为准。
 - `getUserMedia`（摄像头）要求安全上下文：`http://localhost`/`127.0.0.1` 即可（无需 https）。

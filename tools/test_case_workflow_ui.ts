@@ -56,10 +56,32 @@ assert.ok(caseRoute.includes("临床合规提示"), "case workflow includes clin
 assert.ok(caseRoute.includes("CaseClinicalViewport"), "case workflow renders a clinical viewport focus area for each step");
 assert.ok(caseRoute.includes("case-step-stage-grid"), "case workflow pairs the viewport with the step command panel");
 assert.ok(caseRoute.includes("case-face-preview-large"), "case workflow reserves a high-contrast face planning viewport");
+assert.ok(caseRoute.indexOf("图层看板") < caseRoute.indexOf("打开评估画布"), "evaluation tooling appears after patient/acquisition/layer parameters");
+assert.ok(caseRoute.indexOf("规划依据") < caseRoute.indexOf("打开规划画布"), "planning tooling appears after lesion and margin parameters");
 assert.ok(caseRoute.includes("case-save-status"), "case workflow exposes visible save status states");
+assert.ok(caseRoute.includes("caseStepStateLabel"), "case workflow derives per-step state labels");
+assert.ok(caseRoute.includes("case-step-state"), "case workflow renders visible per-step state badges");
+for (const stepState of ["待完善", "待审阅", "已确认", "保存失败"]) {
+  assert.ok(caseRoute.includes(stepState), `case workflow exposes ${stepState} state feedback`);
+}
 assert.ok(caseRoute.includes("可返回微调，草稿保留"), "case workflow stepper avoids a locked one-way wizard");
-assert.ok(caseRoute.includes("CaseDataSource"), "case workflow copy explains the DataSource save boundary");
+assert.ok(caseRoute.includes("本设备"), "case workflow explains local draft saving in clinician-facing language");
+assert.ok(caseRoute.includes("院内或云端病例库"), "case workflow explains future remote case storage without implementation jargon");
 assert.ok(!caseRoute.includes("localStorage"), "case workflow components do not write localStorage directly");
+for (const hiddenClinicalCopy of [
+  "CaseDataSource",
+  "Worker API",
+  "Agent trace",
+  "topology",
+  "FLAME",
+  "MediaPipe",
+  "R3F",
+  "OpenAI-compatible",
+  "vLLM",
+  "LLM Provider",
+]) {
+  assert.ok(!caseRoute.includes(hiddenClinicalCopy), `case workflow does not expose implementation jargon: ${hiddenClinicalCopy}`);
+}
 
 assert.ok(managedRoute.includes("legacyNotice"), "managed legacy routes can display compatibility notices");
 assert.ok(managedRoute.includes("react-legacy-banner"), "managed legacy routes render a visible compatibility banner");
@@ -112,6 +134,7 @@ assert.ok(styles.includes(".case-lobby-stage"), "styles implement the case lobby
 assert.ok(styles.includes(".case-workflow-roadmap"), "styles implement the clinical workflow roadmap");
 assert.ok(styles.includes(".case-clinical-viewport"), "styles implement the PACS-like clinical viewport");
 assert.ok(styles.includes(".case-step-stage-grid"), "styles prioritize a viewport-plus-command step layout");
+assert.ok(styles.includes(".case-step-state"), "styles implement compact per-step state badges");
 assert.ok(styles.includes(".case-face-preview"), "styles implement the high-contrast face planning surface");
 assert.ok(styles.includes(".case-disclosure"), "styles implement collapsed compatibility and developer sections");
 assert.ok(styles.includes(".react-legacy-banner"), "styles render legacy route notices");

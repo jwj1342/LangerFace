@@ -563,7 +563,7 @@ assert.ok(pkg.devDependencies?.tailwindcss, "Tailwind should be installed for Re
 assert.ok(pkg.devDependencies?.["@tailwindcss/vite"], "Tailwind Vite plugin should be installed");
 
 assert.ok(appHtml.includes('id="root"'), "React app HTML exposes a root mount node");
-assert.ok(appHtml.includes("../src/main.tsx"), "React app HTML loads the TypeScript React entrypoint");
+assert.ok(appHtml.includes("/src/main.tsx"), "React app HTML loads the TypeScript React entrypoint from a deep-link-safe root path");
 assert.ok(tsconfig.compilerOptions?.strict, "TypeScript should run in strict mode");
 assert.equal(tsconfig.compilerOptions?.jsx, "react-jsx", "TypeScript should use the React JSX transform");
 assert.equal(toolsTsconfig.compilerOptions?.allowJs, undefined, "tool scripts should not rely on JavaScript sources");
@@ -575,7 +575,11 @@ assert.deepEqual(
   "tool TypeScript config should cover Node tests and web deployment scripts",
 );
 assert.ok(vite.includes("@tailwindcss/vite"), "Vite config loads the Tailwind plugin");
+assert.ok(vite.includes('base: "/"'), "Vite emits SPA shell JS/CSS from root /assets for /app deep links");
 assert.ok(vite.includes('app: resolve(import.meta.dirname, "app/index.html")'), "Vite builds the SPA app entry");
+assert.ok(vite.includes("shouldServeSpaIndex"), "Vite config owns a local SPA history fallback helper for /app deep links");
+assert.ok(vite.includes('"app-spa-history-fallback"'), "Vite dev and preview serve /app/* deep links from app/index.html");
+assert.ok(vite.includes('pathname.startsWith("/app/assets/")'), "Vite SPA fallback keeps /app/assets/* from swallowing asset requests");
 assert.ok(vite.includes('"copy-runtime-assets"'), "Vite copies runtime assets into dist/assets");
 assert.ok(vite.includes('"copy-compat-entrypoints"'), "Vite copies lightweight compatibility pages after building the SPA");
 for (const legacyEntry of [
@@ -620,8 +624,9 @@ assert.ok(architectureDoc.includes("copy-runtime-assets") && architectureDoc.inc
   "architecture docs describe runtime assets as copied files loaded from root /assets/");
 assert.ok(!architectureDoc.includes("assetLoader.ts` 用 Vite `?url` 导入 `.task`"),
   "architecture docs must not claim the asset loader imports all runtime assets through Vite ?url");
-assert.ok(ciCdVercelDoc.includes("不能写成 document-relative 的 `assets/`"), "Vercel docs capture the nested SPA asset-path lesson");
+assert.ok(ciCdVercelDoc.includes("`../assets/`") && ciCdVercelDoc.includes("`assets/`"), "Vercel docs capture the nested SPA asset-path lesson");
 assert.ok(ciCdVercelDoc.includes("`/app/assets/...`"), "Vercel docs explain the failure mode for nested SPA asset URLs");
+assert.ok(ciCdVercelDoc.includes("`/app/case/assets/...`"), "Vercel docs explain the failure mode for nested case-route SPA asset URLs");
 assert.ok(contributingDoc.includes("不能请求 `/app/assets/...`"), "PR checklist guards against nested SPA asset URL regressions");
 
 assert.ok(app.includes("react-router-dom"), "React app is routed through React Router");
@@ -1711,7 +1716,7 @@ assert.ok(threePreviewScene.includes("@react-three/fiber"), "R3F preview scene u
 assert.ok(threePreviewScene.includes("@react-three/drei"), "R3F preview scene uses drei helpers");
 assert.ok(threePreviewScene.includes("OrbitControls"), "R3F preview scene uses drei OrbitControls");
 assert.ok(threePreviewScene.includes("buildLineGeometry"), "R3F preview scene renders atlas line geometry");
-assert.ok(threePreviewSidebar.includes("R3F RENDERER BOUNDARY"), "R3F preview sidebar keeps the renderer boundary note");
+assert.ok(threePreviewSidebar.includes("标准三维面部模型预览"), "R3F preview sidebar presents a clinical maintenance label");
 assert.ok(threePreviewSidebar.includes("WorkbenchBrand"), "R3F preview sidebar uses the shared workbench brand");
 assert.ok(threePreviewSidebar.includes("Card"), "R3F preview sidebar uses the shared shadcn-style card component");
 assert.ok(worker.includes("Comlink.expose"), "workflow worker exposes its API through Comlink");
