@@ -54,7 +54,7 @@ function FaceMesh({ assets }: { assets: ThreePreviewAssets }) {
   return (
     <group position={[-box.center[0], -box.center[1], -box.center[2]]}>
       <mesh geometry={meshGeometry}>
-        <meshStandardMaterial color="#d8a98f" roughness={0.68} metalness={0.02} />
+        <meshStandardMaterial color="#d8a98f" roughness={0.68} metalness={0.02} side={THREE.DoubleSide} />
       </mesh>
       <lineSegments geometry={lineGeometry} renderOrder={2}>
         <lineBasicMaterial vertexColors toneMapped={false} />
@@ -65,12 +65,12 @@ function FaceMesh({ assets }: { assets: ThreePreviewAssets }) {
 
 export function ThreePreviewScene({ assets, loadingText }: { assets: ThreePreviewAssets | null; loadingText: string }) {
   return (
-    <Canvas camera={{ position: [0, 0, 2.8], fov: 35 }} dpr={[1, 2]}>
+    <Canvas camera={{ position: [0, 0, 58], fov: 34 }} dpr={[1, 2]}>
       <color attach="background" args={["#111820"]} />
       <ambientLight intensity={0.8} />
-      <directionalLight position={[2.5, 2.8, 3.5]} intensity={1.8} />
-      <directionalLight position={[-2, 1, 2]} intensity={0.7} />
-      <gridHelper args={[2, 12, "#334155", "#243041"]} position={[0, -0.72, 0]} />
+      <directionalLight position={[8, 10, 18]} intensity={1.8} />
+      <directionalLight position={[-8, 3, 12]} intensity={0.7} />
+      <gridHelper args={[24, 16, "#334155", "#243041"]} position={[0, -9.2, 0]} />
       {assets ? (
         <FaceMesh assets={assets} />
       ) : (

@@ -217,6 +217,8 @@ async function screenshot(pathname: string, selector: string, filename: string):
     storageStatePath,
     "--wait-for-selector",
     selector,
+    "--wait-for-timeout",
+    "900",
     `${baseUrl}${pathname}`,
     join(outDir, filename),
   ], { cwd: webDir });
@@ -231,9 +233,9 @@ async function main(): Promise<void> {
     await waitForServer();
     await screenshot("/app/cases", "#caseDashboard", "01-dashboard.png");
     await screenshot("/app/case/new", "#caseNewSetup", "02-new-case.png");
-    await screenshot("/app/case/visual-case/evaluate", "#caseStepper", "03-evaluate.png");
-    await screenshot("/app/case/visual-case/plan", "#caseClosureSimulation", "04-plan.png");
-    await screenshot("/app/case/visual-case/review", "#caseStepper", "05-review.png");
+    await screenshot("/app/case/visual-case/evaluate", ".case-face-asset-frame[data-loaded='true']", "03-evaluate.png");
+    await screenshot("/app/case/visual-case/plan", ".case-face-asset-frame[data-loaded='true']", "04-plan.png");
+    await screenshot("/app/case/visual-case/review", ".case-face-asset-frame[data-loaded='true']", "05-review.png");
     await screenshot("/app/settings/atlas", "#settingsAtlas", "06-settings-atlas.png");
     await screenshot("/app/settings/developer", "#settingsDeveloper", "07-settings-developer.png");
     console.log(`case workflow screenshots written to ${outDir}`);

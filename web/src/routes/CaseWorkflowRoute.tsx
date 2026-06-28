@@ -3,8 +3,8 @@ import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { ClinicalFacePreview } from "../components/ClinicalFacePreview";
 import { ReactPage, ReactShell, ReactShellMain, ReactShellNavLink, ReactShellSidebar } from "../components/ReactShell";
+import { ThreePreviewScene } from "../components/ThreePreviewScene";
 import { WorkbenchBrand } from "../components/WorkbenchBrand";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
@@ -15,6 +15,7 @@ import { Label } from "../components/ui/label";
 import { Select } from "../components/ui/select";
 import { RouteStatus, StatusBadge } from "../components/ui/status-badge";
 import { useReactRouteLifecycle } from "../hooks/useReactRouteLifecycle";
+import { useStandardFaceAssets } from "../hooks/useStandardFaceAssets";
 import {
   classifyCaseAge,
   deriveLesionBoundary,
@@ -692,6 +693,15 @@ function CaseClinicalViewport({
   activeCase: ClinicalCaseRecord;
   step: ClinicalCaseStep;
 }) {
+  const { assets, loadingText } = useStandardFaceAssets({
+    failedRouteStatus: "病例三维面部模型加载失败",
+    initialLoadingText: "正在加载标准三维面部模型",
+    loadedAssetStatus: "病例三维面部模型已加载",
+    loadedRouteStatus: "病例画布已就绪",
+    loadingAssetStatus: "病例三维面部模型加载中",
+    loadingRouteStatus: "病例画布加载中",
+    progressFallbackLabel: "病例三维面部模型",
+  });
   const stepLabel = STEP_LABELS[step];
   const marginLabel = activeCase.lesion.marginStrategy === "expanded_margin"
     ? `${activeCase.lesion.safetyMarginMm ?? "未填"} mm`
@@ -721,13 +731,18 @@ function CaseClinicalViewport({
         </RouteStatus>
       </div>
       <div className="case-viewport-body">
-        <ClinicalFacePreview
-          large
-          showZones
-          layers={activeCase.layers}
-          lesionBoundaryMode={activeCase.lesion.boundary.mode}
-          mode={activeMode}
-        />
+        <div className="case-face-asset-frame" data-loaded={assets ? "true" : "false"}>
+          <ThreePreviewScene assets={assets} loadingText={loadingText} />
+          <div className="case-face-clinical-overlay" aria-hidden="true">
+            <span className="case-face-overlay-label">病例内标准三维面部模型</span>
+            <span className={`case-face-overlay-lesion case-face-overlay-lesion-${activeCase.lesion.boundary.mode}`} />
+            {activeCase.layers.incisionDesign ? <span className="case-face-overlay-incision" /> : null}
+            <span className="case-face-overlay-zone case-face-overlay-zone-eye" />
+            <span className="case-face-overlay-zone case-face-overlay-zone-mouth" />
+            <span className="case-face-ruler"><b>10 mm</b></span>
+            <span className="case-face-coordinate">R12 / Z05</span>
+          </div>
+        </div>
         <div className="case-viewport-readout">
           <div><span>年龄分档</span><b>{activeCase.patientContext.ageBandLabel}</b></div>
           <div><span>病灶层次</span><b>{activeCase.lesion.layerLabel}</b></div>
@@ -778,8 +793,8 @@ function CaseHandoffPanel({
   eyebrow: string;
   title: string;
   description: string;
-  to: string;
-  actionLabel: string;
+  to?: string;
+  actionLabel?: string;
   items: Array<{ label: string; value: string }>;
 }) {
   return (
@@ -797,9 +812,11 @@ function CaseHandoffPanel({
           </p>
         ))}
       </div>
-      <Button asChild variant="workbench">
-        <Link to={to}>{actionLabel}</Link>
-      </Button>
+      {to && actionLabel ? (
+        <Button asChild variant="workbench">
+          <Link to={to}>{actionLabel}</Link>
+        </Button>
+      ) : null}
     </section>
   );
 }
@@ -1233,8 +1250,18 @@ function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
               <p>在同一画布中调整采集方式、RSTL、个性化皮纹和透明度；参数变化应直接反馈到左侧面部模型。</p>
             </div>
             <div className="case-panel-action-row">
-              <Button asChild variant="workbench">
-                <Link to="/live">打开实时采集</Link>
+              <Button
+                type="button"
+                variant="workbench"
+                onClick={() => updateActiveCase({
+                  acquisition: {
+                    source: "realtime",
+                    captureSet: { frontal: true, depthOrVideo: true },
+                    quality: { lastCheckedAt: new Date().toISOString() },
+                  },
+                })}
+              >
+                切换实时叠加
               </Button>
               <Button variant="workbenchPrimary" onClick={() => {
                 updateActiveCase({ currentStep: "plan" });
@@ -1555,9 +1582,7 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
             <summary>推荐依据与审计记录</summary>
             <div className="case-disclosure-body">
               <PlanningRationalePanel activeCase={activeCase} />
-              <Button asChild variant="workbench">
-                <Link to="/incision">打开候选画布</Link>
-              </Button>
+              <Hint>完整几何细调后续应接入当前病例画布；旧切口规划工作台只从“系统设置 - 开发者诊断”进入，避免主流程跳回旧设计模式。</Hint>
             </div>
           </details>
         </aside>
@@ -1617,136 +1642,142 @@ function ReviewStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   };
 
   return (
-    <div className="case-workflow-stack" id="caseReviewStep">
-      <div className="case-page-header">
+    <div className="case-workflow-stack case-workflow-stage-stack" id="caseReviewStep">
+      <div className="case-page-header case-workspace-header">
         <Link to={stepHref(activeCase.id, "plan")} className="case-back-link"><ArrowLeft size={16} />返回切口规划</Link>
         <StatusBadge>步骤三：方案确认与输出</StatusBadge>
       </div>
 
-      <div className="case-step-stage-grid">
-        <CaseClinicalViewport activeCase={activeCase} step="review" />
-        <section className="case-section case-step-command">
-          <div>
-            <h2>方案确认与输出</h2>
-            <p>确认页展示最终参数、审计边界、导出入口和临床合规提示。导出不等于正式病例保存。</p>
-          </div>
-          <Button variant="workbenchPrimary" onClick={() => markReviewDecision("approved")}>
-            标记为已确认
-          </Button>
-        </section>
-      </div>
+      <div className="case-clinical-workspace case-clinical-workspace-review">
+        <div className="case-workspace-canvas">
+          <CaseClinicalViewport activeCase={activeCase} step="review" />
+        </div>
 
-      <div className="case-two-column">
-        <Card>
-          <CardHeader><span>病例摘要</span><FileText size={16} /></CardHeader>
-          <CardContent className="case-summary-list">
-            <p><b>年龄分档</b><span>{activeCase.patientContext.ageBandLabel}</span></p>
-            <p><b>病灶层次</b><span>{activeCase.lesion.layerLabel}</span></p>
-            <p><b>病灶边界</b><span>{lesionBoundaryStatusLabel(activeCase.lesion.boundary.status)} · {lesionBoundaryModeLabel(activeCase.lesion.boundary.mode)}</span></p>
-            <p><b>采集方式</b><span>{activeCase.acquisition.sourceLabel}</span></p>
-            <p><b>切缘策略</b><span>{activeCase.lesion.marginStrategy === "expanded_margin" ? `扩大 ${activeCase.lesion.safetyMarginMm ?? "未填"} mm` : "常规完整切除"}</span></p>
-            <p><b>当前候选</b><span>{selectedCandidate ? `${selectedCandidate.label} · ${candidateKindLabel(selectedCandidate.kind)}` : "尚未保存候选"}</span></p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader><span>医生审阅记录</span><RouteStatus>{reviewDecisionLabel(reviewRecord.decision)}</RouteStatus></CardHeader>
-          <CardContent className="case-review-record">
-            <Label htmlFor="caseReviewerName">审阅医生</Label>
-            <Input
-              id="caseReviewerName"
-              value={reviewRecord.reviewerName}
-              onChange={(event) => updateReviewRecord({ reviewerName: event.currentTarget.value })}
-              placeholder="填写执业医师或审阅人"
-            />
-            <Label htmlFor="caseReviewDecision">审阅结论</Label>
-            <Select
-              id="caseReviewDecision"
-              value={reviewRecord.decision}
-              onChange={(event) => updateReviewRecord({
-                decision: event.currentTarget.value as ClinicalCaseRecord["reviewRecord"]["decision"],
-              })}
-            >
-              <option value="pending">待审阅</option>
-              <option value="approved">确认采用</option>
-              <option value="needs_revision">退回修改</option>
-              <option value="rejected">不采用</option>
-            </Select>
-            <label className="case-review-textarea">
-              <span>审阅备注</span>
-              <textarea
-                value={reviewRecord.note}
-                onChange={(event) => updateReviewRecord({ note: event.currentTarget.value })}
-                placeholder="记录查体、图像质量、候选取舍或医生补充意见。"
-              />
-            </label>
-            <label className="case-review-textarea">
-              <span>覆盖 / 退回原因</span>
-              <textarea
-                value={reviewRecord.overrideReason}
-                onChange={(event) => updateReviewRecord({ overrideReason: event.currentTarget.value })}
-                placeholder="高风险提示、扩大切缘、退回修改或人工覆盖时填写原因。"
-              />
-            </label>
-            <div className="case-export-actions" aria-label="审阅结论">
+        <aside className="case-workspace-panel" aria-label="方案确认与输出">
+          <section className="case-section case-step-command case-panel-priority">
+            <div>
+              <h2>方案确认与输出</h2>
+              <p>确认最终参数、审计边界、导出入口和临床合规提示。导出不等于正式病例保存。</p>
+            </div>
+            <div className="case-panel-action-row">
               <Button type="button" variant="workbenchPrimary" onClick={() => markReviewDecision("approved")}>
-                确认采用
+                标记为已确认
               </Button>
-              <Button type="button" variant="workbench" onClick={() => markReviewDecision("needs_revision")}>
-                退回修改
-              </Button>
-              <Button type="button" variant="workbench" onClick={() => markReviewDecision("rejected")}>
-                标记不采用
+              <Button type="button" variant="workbench" onClick={exportReportDraft}>
+                <FileText size={16} />下载报告草案
               </Button>
             </div>
-            <div className="case-export-privacy">
-              <p><b>审阅时间</b><span className="clinical-number">{reviewRecord.reviewedAt ? new Date(reviewRecord.reviewedAt).toLocaleString() : "未确认"}</span></p>
-              <p><b>输出时间</b><span className="clinical-number">{reviewRecord.exportedAt ? new Date(reviewRecord.exportedAt).toLocaleString() : "未导出"}</span></p>
-            </div>
-          </CardContent>
-        </Card>
+          </section>
+
+          <Card>
+            <CardHeader><span>病例摘要</span><FileText size={16} /></CardHeader>
+            <CardContent className="case-summary-list">
+              <p><b>年龄分档</b><span>{activeCase.patientContext.ageBandLabel}</span></p>
+              <p><b>病灶层次</b><span>{activeCase.lesion.layerLabel}</span></p>
+              <p><b>病灶边界</b><span>{lesionBoundaryStatusLabel(activeCase.lesion.boundary.status)} · {lesionBoundaryModeLabel(activeCase.lesion.boundary.mode)}</span></p>
+              <p><b>采集方式</b><span>{activeCase.acquisition.sourceLabel}</span></p>
+              <p><b>切缘策略</b><span>{activeCase.lesion.marginStrategy === "expanded_margin" ? `扩大 ${activeCase.lesion.safetyMarginMm ?? "未填"} mm` : "常规完整切除"}</span></p>
+              <p><b>当前候选</b><span>{selectedCandidate ? `${selectedCandidate.label} · ${candidateKindLabel(selectedCandidate.kind)}` : "尚未保存候选"}</span></p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><span>医生审阅记录</span><RouteStatus>{reviewDecisionLabel(reviewRecord.decision)}</RouteStatus></CardHeader>
+            <CardContent className="case-review-record">
+              <Label htmlFor="caseReviewerName">审阅医生</Label>
+              <Input
+                id="caseReviewerName"
+                value={reviewRecord.reviewerName}
+                onChange={(event) => updateReviewRecord({ reviewerName: event.currentTarget.value })}
+                placeholder="填写执业医师或审阅人"
+              />
+              <Label htmlFor="caseReviewDecision">审阅结论</Label>
+              <Select
+                id="caseReviewDecision"
+                value={reviewRecord.decision}
+                onChange={(event) => updateReviewRecord({
+                  decision: event.currentTarget.value as ClinicalCaseRecord["reviewRecord"]["decision"],
+                })}
+              >
+                <option value="pending">待审阅</option>
+                <option value="approved">确认采用</option>
+                <option value="needs_revision">退回修改</option>
+                <option value="rejected">不采用</option>
+              </Select>
+              <label className="case-review-textarea">
+                <span>审阅备注</span>
+                <textarea
+                  value={reviewRecord.note}
+                  onChange={(event) => updateReviewRecord({ note: event.currentTarget.value })}
+                  placeholder="记录查体、图像质量、候选取舍或医生补充意见。"
+                />
+              </label>
+              <label className="case-review-textarea">
+                <span>覆盖 / 退回原因</span>
+                <textarea
+                  value={reviewRecord.overrideReason}
+                  onChange={(event) => updateReviewRecord({ overrideReason: event.currentTarget.value })}
+                  placeholder="高风险提示、扩大切缘、退回修改或人工覆盖时填写原因。"
+                />
+              </label>
+              <div className="case-export-actions" aria-label="审阅结论">
+                <Button type="button" variant="workbenchPrimary" onClick={() => markReviewDecision("approved")}>
+                  确认采用
+                </Button>
+                <Button type="button" variant="workbench" onClick={() => markReviewDecision("needs_revision")}>
+                  退回修改
+                </Button>
+                <Button type="button" variant="workbench" onClick={() => markReviewDecision("rejected")}>
+                  标记不采用
+                </Button>
+              </div>
+              <div className="case-export-privacy">
+                <p><b>审阅时间</b><span className="clinical-number">{reviewRecord.reviewedAt ? new Date(reviewRecord.reviewedAt).toLocaleString() : "未确认"}</span></p>
+                <p><b>输出时间</b><span className="clinical-number">{reviewRecord.exportedAt ? new Date(reviewRecord.exportedAt).toLocaleString() : "未导出"}</span></p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><span>保存与导出</span><Save size={16} /></CardHeader>
+            <CardContent className="case-review-output">
+              <Hint>当前病例草稿会自动保存到本设备。后续接入院内或云端病例库后，可沿用同一入口恢复结构化病例记录。</Hint>
+              <div className="case-export-actions" aria-label="本地导出">
+                <Button type="button" variant="workbenchPrimary" onClick={exportReportDraft}>
+                  <FileText size={16} />下载报告草案
+                </Button>
+                <Button type="button" variant="workbench" onClick={exportReviewJson}>
+                  <Download size={16} />导出脱敏 JSON
+                </Button>
+              </div>
+              <div className="case-export-privacy">
+                <p><b>导出内容</b><span>病例参数、候选摘要、审阅记录、规则记录、闭合模拟和合规提示。</span></p>
+                <p><b>隐私边界</b><span>不包含原始照片、视频帧、画布像素、3D 纹理或 Provider 密钥。</span></p>
+              </div>
+              <CaseHandoffPanel
+                eyebrow="受控导出入口"
+                title="候选方案审阅与导出"
+                description="导出前先确认病例摘要、风险提示、审阅记录和合规声明。旧候选工作台不再从医生确认页直跳，避免审阅阶段回到上一代工具界面。"
+                items={[
+                  { label: "导出前", value: "确认参数、截图、医生备注和覆盖原因" },
+                  { label: "导出后", value: "报告只是输出文件，不替代正式病例保存" },
+                ]}
+              />
+            </CardContent>
+          </Card>
+
+          <CaseCandidateQueue activeCase={activeCase} readonly />
+
+          <Card>
+            <CardHeader><span>临床合规提示</span><ShieldAlert size={16} /></CardHeader>
+            <CardContent>
+              <Hint>本系统为临床辅助设计工具，不替代医生的专业判断，所有手术方案需由执业医师结合临床查体最终确认。</Hint>
+              <Hint>系统默认适应证为可直接拉拢缝合的皮肤 / 皮下肿物；需皮瓣 / 植皮修复的病例，仅作切口方向参考。</Hint>
+              <Hint>恶性病灶的安全切缘需以病理检查结果为最终标准。</Hint>
+            </CardContent>
+          </Card>
+        </aside>
       </div>
-
-      <Card>
-        <CardHeader><span>保存与导出</span><Save size={16} /></CardHeader>
-        <CardContent className="case-review-output">
-          <Hint>当前病例草稿会自动保存到本设备。后续接入院内或云端病例库后，可沿用同一入口恢复结构化病例记录。</Hint>
-          <div className="case-export-actions" aria-label="本地导出">
-            <Button type="button" variant="workbenchPrimary" onClick={exportReportDraft}>
-              <FileText size={16} />下载报告草案
-            </Button>
-            <Button type="button" variant="workbench" onClick={exportReviewJson}>
-              <Download size={16} />导出脱敏 JSON
-            </Button>
-          </div>
-          <div className="case-export-privacy">
-            <p><b>导出内容</b><span>病例参数、候选摘要、审阅记录、规则记录、闭合模拟和合规提示。</span></p>
-            <p><b>隐私边界</b><span>不包含原始照片、视频帧、画布像素、3D 纹理或 Provider 密钥。</span></p>
-          </div>
-          <CaseHandoffPanel
-            eyebrow="受控导出入口"
-            title="候选方案审阅与导出"
-            description="导出前先确认病例摘要、风险提示、审阅记录和合规声明；需要回到候选画布时，从这里进入审阅与截图导出。"
-            to="/incision"
-            actionLabel="打开候选审阅与导出"
-            items={[
-              { label: "导出前", value: "确认参数、截图、医生备注和覆盖原因" },
-              { label: "导出后", value: "报告只是输出文件，不替代正式病例保存" },
-            ]}
-          />
-        </CardContent>
-      </Card>
-
-      <CaseCandidateQueue activeCase={activeCase} readonly />
-
-      <Card>
-        <CardHeader><span>临床合规提示</span><ShieldAlert size={16} /></CardHeader>
-        <CardContent>
-          <Hint>本系统为临床辅助设计工具，不替代医生的专业判断，所有手术方案需由执业医师结合临床查体最终确认。</Hint>
-          <Hint>系统默认适应证为可直接拉拢缝合的皮肤 / 皮下肿物；需皮瓣 / 植皮修复的病例，仅作切口方向参考。</Hint>
-          <Hint>恶性病灶的安全切缘需以病理检查结果为最终标准。</Hint>
-        </CardContent>
-      </Card>
     </div>
   );
 }

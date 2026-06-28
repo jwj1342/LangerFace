@@ -159,7 +159,9 @@ assert.ok(caseRoute.includes("运行闭合模拟"), "case planning step gives do
 assert.ok(caseRoute.includes("estimateClosureSimulation"), "case planning step derives a persisted closure simulation summary");
 assert.ok(caseRoute.includes("临床合规提示"), "case workflow includes clinical compliance copy");
 assert.ok(caseRoute.includes("CaseClinicalViewport"), "case workflow renders a clinical viewport focus area for each step");
-assert.ok(caseRoute.includes("ClinicalFacePreview"), "case workflow uses the shared high-fidelity clinical face preview component");
+assert.ok(caseRoute.includes("ThreePreviewScene"), "case workflow renders the real standard face asset scene instead of a CSS-only placeholder");
+assert.ok(caseRoute.includes("useStandardFaceAssets"), "case workflow lazy-loads the standard face mesh and RSTL atlas assets");
+assert.ok(caseRoute.includes("case-face-asset-frame"), "case workflow wraps the loaded 3D face model in a stable clinical viewport frame");
 assert.ok(caseRoute.includes("case-viewport-mode-switch"), "case workflow exposes 2D/3D/live viewport mode context");
 for (const viewportMode of ["2D 图像", "3D 重建", "实时叠加"]) {
   assert.ok(caseRoute.includes(viewportMode), `case workflow exposes the ${viewportMode} viewport mode`);
@@ -167,8 +169,11 @@ for (const viewportMode of ["2D 图像", "3D 重建", "实时叠加"]) {
 assert.ok(caseRoute.includes("case-clinical-workspace"), "case workflow uses a fixed clinical workspace instead of a stacked form");
 assert.ok(caseRoute.includes("case-workspace-canvas"), "case workflow gives the face viewport a dedicated primary canvas area");
 assert.ok(caseRoute.includes("case-workspace-panel"), "case workflow keeps parameters in an internal side panel");
-assert.ok(caseRoute.includes("打开实时采集"), "evaluation route keeps live capture as a secondary side-panel action");
-assert.ok(caseRoute.includes("打开候选画布"), "planning route keeps the legacy incision canvas as a secondary explainability action");
+assert.ok(caseRoute.includes("case-clinical-workspace-review"), "case review uses the same canvas-first workspace as evaluation and planning");
+assert.ok(caseRoute.includes("切换实时叠加"), "evaluation route switches live capture inside the case viewport");
+assert.ok(!caseRoute.includes('<Link to="/live">'), "case workflow must not send doctors to the legacy live workbench from evaluation");
+assert.ok(!caseRoute.includes('<Link to="/incision">'), "case workflow must not send doctors to the legacy incision workbench from planning or review");
+assert.ok(caseRoute.includes("旧切口规划工作台只从“系统设置 - 开发者诊断”进入"), "case workflow explains legacy incision tools are outside the doctor flow");
 assert.ok(caseRoute.includes("CaseHandoffPanel"), "case workflow still wraps review/export compatibility surfaces as controlled handoffs");
 assert.ok(caseRoute.includes("受控导出入口"), "review route presents export as a controlled handoff");
 for (const subtask of ["标记病灶", "生成候选", "闭合模拟"]) {
@@ -177,6 +182,7 @@ for (const subtask of ["标记病灶", "生成候选", "闭合模拟"]) {
 assert.ok(!caseRoute.includes("case-next-rail"), "case workflow avoids duplicate bottom navigation that creates extra scrolling");
 assert.ok(caseRoute.indexOf('CaseClinicalViewport activeCase={activeCase} step="evaluate"') < caseRoute.indexOf("图层看板"), "evaluation viewport appears before side-panel layer controls");
 assert.ok(caseRoute.indexOf('CaseClinicalViewport activeCase={activeCase} step="plan"') < caseRoute.indexOf("病灶参数"), "planning viewport appears before lesion side-panel controls");
+assert.ok(caseRoute.indexOf('CaseClinicalViewport activeCase={activeCase} step="review"') < caseRoute.indexOf("<CardHeader><span>医生审阅记录"), "review viewport remains primary before review form controls");
 assert.ok(!caseRoute.includes("打开评估画布"), "case workflow avoids raw tool-style evaluation copy");
 assert.ok(!caseRoute.includes("打开规划画布"), "case workflow avoids raw tool-style planning copy");
 assert.ok(!caseRoute.includes("打开候选方案导出面板"), "case workflow avoids raw tool-style export copy");
@@ -191,8 +197,9 @@ assert.ok(caseRoute.includes("可返回微调，草稿保留"), "case workflow s
 assert.ok(caseRoute.includes("本设备"), "case workflow explains local draft saving in clinician-facing language");
 assert.ok(caseRoute.includes("院内或云端病例库"), "case workflow explains future remote case storage without implementation jargon");
 assert.ok(!caseRoute.includes("localStorage"), "case workflow components do not write localStorage directly");
-assert.ok(caseRoute.includes("layers={activeCase.layers}"), "case workflow binds the visible layer board into the planning viewport");
-assert.ok(caseRoute.includes("mode={activeMode}"), "case workflow binds acquisition mode into the planning viewport");
+assert.ok(caseRoute.includes("data-loaded={assets ? \"true\" : \"false\"}"), "case workflow exposes loaded state for the 3D face viewport");
+assert.ok(caseRoute.includes("case-face-overlay-lesion"), "case workflow overlays lesion state on the loaded standard face scene");
+assert.ok(caseRoute.includes("case-face-overlay-incision"), "case workflow overlays incision state on the loaded standard face scene");
 assert.ok(clinicalFacePreview.includes("case-face-preview-large"), "clinical face preview supports a large planning viewport");
 assert.ok(clinicalFacePreview.includes("ClinicalFacePreviewLayers"), "clinical face preview owns a typed layer contract");
 assert.ok(clinicalFacePreview.includes("ClinicalFaceLesionBoundaryMode"), "clinical face preview owns a typed lesion boundary overlay contract");
@@ -311,7 +318,9 @@ assert.ok(styles.includes(".case-clinical-viewport"), "styles implement the PACS
 assert.ok(styles.includes(".case-clinical-workspace"), "styles implement the two-pane clinical workspace");
 assert.ok(styles.includes(".case-workspace-canvas"), "styles give the face viewport primary workspace ownership");
 assert.ok(styles.includes(".case-workspace-panel"), "styles make parameter panels internally scrollable");
-assert.ok(styles.includes(".case-workspace-canvas .case-face-preview-large"), "styles keep the large face preview expanded inside the workspace");
+assert.ok(styles.includes(".case-face-asset-frame"), "styles size the real standard face asset canvas in the clinical workspace");
+assert.ok(styles.includes(".case-face-clinical-overlay"), "styles keep clinical overlays above the loaded 3D face model");
+assert.ok(styles.includes(".case-workspace-canvas .case-face-asset-frame"), "styles keep the 3D face asset expanded inside the workspace");
 assert.ok(styles.includes(".case-viewport-mode-switch"), "styles implement compact 2D/3D/live viewport mode controls");
 assert.ok(styles.includes(".case-layer-controls"), "styles implement compact layer parameter controls");
 assert.ok(styles.includes(".case-acquisition-gate"), "styles implement the acquisition quality gate");

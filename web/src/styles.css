@@ -6,9 +6,9 @@
   :root {
     --font-clinical-sans: "IBM Plex Sans", Inter, Roboto, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
     --font-clinical-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-    --clinical-text-primary: rgb(229 234 240 / 0.88);
-    --clinical-text-secondary: rgb(229 234 240 / 0.66);
-    --clinical-text-tertiary: rgb(229 234 240 / 0.48);
+    --clinical-text-primary: rgb(229 234 240 / 0.94);
+    --clinical-text-secondary: rgb(229 234 240 / 0.78);
+    --clinical-text-tertiary: rgb(229 234 240 / 0.66);
     --clinical-bg: #f4f4f4;
     --clinical-surface: #ffffff;
     --clinical-surface-muted: #f8f8f8;
@@ -876,6 +876,101 @@
     font-weight: 700;
     line-height: 1;
     padding: 5px 6px;
+  }
+
+  .case-face-asset-frame {
+    position: relative;
+    height: 100%;
+    min-height: 360px;
+    overflow: hidden;
+    border: 1px solid rgb(120 169 255 / 0.20);
+    background:
+      linear-gradient(180deg, rgb(120 169 255 / 0.055), transparent 24%, rgb(0 0 0 / 0.24)),
+      #06090d;
+  }
+
+  .case-face-asset-frame > div:first-child,
+  .case-face-asset-frame canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  .case-face-clinical-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .case-face-overlay-label {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    border: 1px solid rgb(120 169 255 / 0.30);
+    background: rgb(8 12 18 / 0.78);
+    color: var(--clinical-text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 6px 8px;
+  }
+
+  .case-face-overlay-lesion {
+    position: absolute;
+    top: 47%;
+    left: 57%;
+    width: 34px;
+    aspect-ratio: 1;
+    border: 2px solid #f1c21b;
+    border-radius: 999px;
+    background: rgb(241 194 27 / 0.13);
+  }
+
+  .case-face-overlay-lesion-ellipse,
+  .case-face-overlay-lesion-freehand {
+    top: 44%;
+    left: 55%;
+    width: 72px;
+    height: 42px;
+    border-style: dashed;
+    transform: rotate(-18deg);
+  }
+
+  .case-face-overlay-lesion-freehand {
+    border-style: solid;
+    border-radius: 42% 58% 45% 55%;
+    clip-path: polygon(12% 58%, 30% 18%, 66% 12%, 91% 45%, 78% 82%, 35% 88%);
+  }
+
+  .case-face-overlay-incision {
+    position: absolute;
+    top: 50%;
+    left: 49%;
+    width: 30%;
+    height: 44px;
+    border-top: 2px solid #ff8389;
+    border-radius: 50%;
+    transform: rotate(-23deg);
+  }
+
+  .case-face-overlay-zone {
+    position: absolute;
+    border: 1px solid rgb(255 131 137 / 0.48);
+    background: rgb(255 131 137 / 0.07);
+  }
+
+  .case-face-overlay-zone-eye {
+    top: 31%;
+    left: 35%;
+    width: 30%;
+    height: 9%;
+  }
+
+  .case-face-overlay-zone-mouth {
+    top: 64%;
+    left: 40%;
+    width: 20%;
+    height: 7%;
   }
 
   .case-clinical-viewport {
@@ -3710,11 +3805,13 @@ body:has(.case-workflow-page) {
 .case-workspace-canvas .case-viewport-body {
   position: relative;
   display: block;
+  height: 100%;
   min-height: 0;
   margin-top: 8px;
 }
 
-.case-workspace-canvas .case-face-preview-large {
+.case-workspace-canvas .case-face-preview-large,
+.case-workspace-canvas .case-face-asset-frame {
   height: 100%;
   min-height: 0;
 }
