@@ -166,6 +166,13 @@ function candidateStatusLabel(status: CaseIncisionCandidateRecord["status"]) {
   return "草稿";
 }
 
+function reviewDecisionLabel(decision: ClinicalCaseRecord["reviewRecord"]["decision"]) {
+  if (decision === "approved") return "已确认";
+  if (decision === "needs_revision") return "退回修改";
+  if (decision === "rejected") return "不采用";
+  return "待审阅";
+}
+
 function formatCandidateMetric(value: number | null, unit = "mm") {
   return value == null ? "待定" : `${value.toFixed(1)} ${unit}`;
 }
@@ -215,6 +222,7 @@ function buildCaseReviewExport(
       selectedCandidateId: activeCase.selectedCandidateId,
       selectedCandidate,
       incisionCandidates: activeCase.incisionCandidates,
+      reviewRecord: activeCase.reviewRecord,
     },
     clinicalCompliance: [...CLINICAL_COMPLIANCE_NOTES],
   };
@@ -279,6 +287,14 @@ function buildCaseReportDraft(
     `- 评分：${activeCase.closureSimulation.score == null ? "未运行" : `${activeCase.closureSimulation.score} / 100`}`,
     `- 结论：${activeCase.closureSimulation.label}`,
     `- 摘要：${activeCase.closureSimulation.summary}`,
+    "",
+    "## 医生审阅记录",
+    "",
+    `- 审阅医生：${activeCase.reviewRecord.reviewerName || "未填写"}`,
+    `- 审阅结论：${reviewDecisionLabel(activeCase.reviewRecord.decision)}`,
+    `- 审阅时间：${activeCase.reviewRecord.reviewedAt || "未确认"}`,
+    `- 审阅备注：${activeCase.reviewRecord.note || "无"}`,
+    `- 覆盖 / 退回原因：${activeCase.reviewRecord.overrideReason || "无"}`,
     "",
     "## 临床合规提示",
     "",
@@ -1135,23 +1151,51 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
 function ReviewStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   const updateActiveCase = useCaseStore((state) => state.updateActiveCase);
   const selectedCandidate = activeCase.incisionCandidates.find((candidate) => candidate.id === activeCase.selectedCandidateId) ?? null;
-  const exportedCase: ClinicalCaseRecord = { ...activeCase, status: "exported", currentStep: "review" };
   const exportStem = safeExportFilePart(activeCase.id);
+  const reviewRecord = activeCase.reviewRecord;
+  const buildExportedCase = () => {
+    const exportedAt = new Date().toISOString();
+    return {
+      exportedAt,
+      record: {
+        ...activeCase,
+        status: "exported" as const,
+        currentStep: "review" as const,
+        reviewRecord: {
+          ...activeCase.reviewRecord,
+          exportedAt,
+        },
+      },
+    };
+  };
+  const updateReviewRecord = (reviewDraft: Partial<ClinicalCaseRecord["reviewRecord"]>) => {
+    updateActiveCase({ reviewRecord: reviewDraft });
+  };
+  const markReviewDecision = (decision: ClinicalCaseRecord["reviewRecord"]["decision"]) => {
+    const reviewedAt = new Date().toISOString();
+    updateActiveCase({
+      status: decision === "approved" ? "confirmed" : "needs_review",
+      currentStep: "review",
+      reviewRecord: { decision, reviewedAt },
+    });
+  };
   const exportReviewJson = () => {
+    const exported = buildExportedCase();
     downloadTextFile(
       `${exportStem}-review-export.json`,
-      JSON.stringify(buildCaseReviewExport(exportedCase, selectedCandidate), null, 2),
+      JSON.stringify(buildCaseReviewExport(exported.record, selectedCandidate), null, 2),
       "application/json;charset=utf-8",
     );
-    updateActiveCase({ status: "exported", currentStep: "review" });
+    updateActiveCase({ status: "exported", currentStep: "review", reviewRecord: { exportedAt: exported.exportedAt } });
   };
   const exportReportDraft = () => {
+    const exported = buildExportedCase();
     downloadTextFile(
       `${exportStem}-report-draft.md`,
-      buildCaseReportDraft(exportedCase, selectedCandidate),
+      buildCaseReportDraft(exported.record, selectedCandidate),
       "text/markdown;charset=utf-8",
     );
-    updateActiveCase({ status: "exported", currentStep: "review" });
+    updateActiveCase({ status: "exported", currentStep: "review", reviewRecord: { exportedAt: exported.exportedAt } });
   };
 
   return (
@@ -1168,7 +1212,7 @@ function ReviewStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
             <h2>方案确认与输出</h2>
             <p>确认页展示最终参数、审计边界、导出入口和临床合规提示。导出不等于正式病例保存。</p>
           </div>
-          <Button variant="workbenchPrimary" onClick={() => updateActiveCase({ status: "confirmed", currentStep: "review" })}>
+          <Button variant="workbenchPrimary" onClick={() => markReviewDecision("approved")}>
             标记为已确认
           </Button>
         </section>
@@ -1187,35 +1231,92 @@ function ReviewStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
         </Card>
 
         <Card>
-          <CardHeader><span>保存与导出</span><Save size={16} /></CardHeader>
-          <CardContent className="case-review-output">
-            <Hint>当前病例草稿会自动保存到本设备。后续接入院内或云端病例库后，可沿用同一入口恢复结构化病例记录。</Hint>
-            <div className="case-export-actions" aria-label="本地导出">
-              <Button type="button" variant="workbenchPrimary" onClick={exportReportDraft}>
-                <FileText size={16} />下载报告草案
+          <CardHeader><span>医生审阅记录</span><RouteStatus>{reviewDecisionLabel(reviewRecord.decision)}</RouteStatus></CardHeader>
+          <CardContent className="case-review-record">
+            <Label htmlFor="caseReviewerName">审阅医生</Label>
+            <Input
+              id="caseReviewerName"
+              value={reviewRecord.reviewerName}
+              onChange={(event) => updateReviewRecord({ reviewerName: event.currentTarget.value })}
+              placeholder="填写执业医师或审阅人"
+            />
+            <Label htmlFor="caseReviewDecision">审阅结论</Label>
+            <Select
+              id="caseReviewDecision"
+              value={reviewRecord.decision}
+              onChange={(event) => updateReviewRecord({
+                decision: event.currentTarget.value as ClinicalCaseRecord["reviewRecord"]["decision"],
+              })}
+            >
+              <option value="pending">待审阅</option>
+              <option value="approved">确认采用</option>
+              <option value="needs_revision">退回修改</option>
+              <option value="rejected">不采用</option>
+            </Select>
+            <label className="case-review-textarea">
+              <span>审阅备注</span>
+              <textarea
+                value={reviewRecord.note}
+                onChange={(event) => updateReviewRecord({ note: event.currentTarget.value })}
+                placeholder="记录查体、图像质量、候选取舍或医生补充意见。"
+              />
+            </label>
+            <label className="case-review-textarea">
+              <span>覆盖 / 退回原因</span>
+              <textarea
+                value={reviewRecord.overrideReason}
+                onChange={(event) => updateReviewRecord({ overrideReason: event.currentTarget.value })}
+                placeholder="高风险提示、扩大切缘、退回修改或人工覆盖时填写原因。"
+              />
+            </label>
+            <div className="case-export-actions" aria-label="审阅结论">
+              <Button type="button" variant="workbenchPrimary" onClick={() => markReviewDecision("approved")}>
+                确认采用
               </Button>
-              <Button type="button" variant="workbench" onClick={exportReviewJson}>
-                <Download size={16} />导出脱敏 JSON
+              <Button type="button" variant="workbench" onClick={() => markReviewDecision("needs_revision")}>
+                退回修改
+              </Button>
+              <Button type="button" variant="workbench" onClick={() => markReviewDecision("rejected")}>
+                标记不采用
               </Button>
             </div>
             <div className="case-export-privacy">
-              <p><b>导出内容</b><span>病例参数、候选摘要、规则记录、闭合模拟和合规提示。</span></p>
-              <p><b>隐私边界</b><span>不包含原始照片、视频帧、画布像素、3D 纹理或 Provider 密钥。</span></p>
+              <p><b>审阅时间</b><span className="clinical-number">{reviewRecord.reviewedAt ? new Date(reviewRecord.reviewedAt).toLocaleString() : "未确认"}</span></p>
+              <p><b>输出时间</b><span className="clinical-number">{reviewRecord.exportedAt ? new Date(reviewRecord.exportedAt).toLocaleString() : "未导出"}</span></p>
             </div>
-            <CaseHandoffPanel
-              eyebrow="受控导出入口"
-              title="候选方案审阅与导出"
-              description="导出前先确认病例摘要、风险提示和合规声明；需要回到候选画布时，从这里进入审阅与截图导出。"
-              to="/incision"
-              actionLabel="打开候选审阅与导出"
-              items={[
-                { label: "导出前", value: "确认参数、截图和医生备注" },
-                { label: "导出后", value: "报告只是输出文件，不替代正式病例保存" },
-              ]}
-            />
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader><span>保存与导出</span><Save size={16} /></CardHeader>
+        <CardContent className="case-review-output">
+          <Hint>当前病例草稿会自动保存到本设备。后续接入院内或云端病例库后，可沿用同一入口恢复结构化病例记录。</Hint>
+          <div className="case-export-actions" aria-label="本地导出">
+            <Button type="button" variant="workbenchPrimary" onClick={exportReportDraft}>
+              <FileText size={16} />下载报告草案
+            </Button>
+            <Button type="button" variant="workbench" onClick={exportReviewJson}>
+              <Download size={16} />导出脱敏 JSON
+            </Button>
+          </div>
+          <div className="case-export-privacy">
+            <p><b>导出内容</b><span>病例参数、候选摘要、审阅记录、规则记录、闭合模拟和合规提示。</span></p>
+            <p><b>隐私边界</b><span>不包含原始照片、视频帧、画布像素、3D 纹理或 Provider 密钥。</span></p>
+          </div>
+          <CaseHandoffPanel
+            eyebrow="受控导出入口"
+            title="候选方案审阅与导出"
+            description="导出前先确认病例摘要、风险提示、审阅记录和合规声明；需要回到候选画布时，从这里进入审阅与截图导出。"
+            to="/incision"
+            actionLabel="打开候选审阅与导出"
+            items={[
+              { label: "导出前", value: "确认参数、截图、医生备注和覆盖原因" },
+              { label: "导出后", value: "报告只是输出文件，不替代正式病例保存" },
+            ]}
+          />
+        </CardContent>
+      </Card>
 
       <CaseCandidateQueue activeCase={activeCase} readonly />
 

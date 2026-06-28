@@ -1092,6 +1092,43 @@
     gap: 12px;
   }
 
+  .case-review-record {
+    display: grid;
+    gap: 10px;
+  }
+
+  .case-review-textarea {
+    display: grid;
+    gap: 6px;
+  }
+
+  .case-review-textarea span {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .case-review-textarea textarea {
+    min-height: 74px;
+    resize: vertical;
+    border: 1px solid var(--clinical-dark-border);
+    border-radius: 4px;
+    background: #090d13;
+    color: var(--clinical-text-primary);
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.45;
+    padding: 10px;
+  }
+
+  .case-review-textarea textarea::placeholder {
+    color: var(--clinical-text-tertiary);
+  }
+
+  .case-review-record .case-export-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .case-export-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3217,6 +3254,7 @@
   .case-rule-grid,
   .case-candidate-metrics,
   .case-export-actions,
+  .case-review-record .case-export-actions,
   .case-handoff-list p,
   .case-rationale-audit p,
   .case-candidate-rationale,

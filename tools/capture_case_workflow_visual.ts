@@ -72,7 +72,7 @@ function writeStorageState(): void {
   const caseRecord = {
     id: "visual-case",
     title: "视觉检查病例",
-    status: "needs_review",
+    status: "confirmed",
     currentStep: "evaluate",
     createdAt: now,
     updatedAt: now,
@@ -143,6 +143,14 @@ function writeStorageState(): void {
       },
     ],
     selectedCandidateId: "visual-candidate-1",
+    reviewRecord: {
+      reviewerName: "示例医生",
+      decision: "approved",
+      note: "候选方向与局部 RSTL 走行一致，需结合术前查体确认皮肤松弛度。",
+      overrideReason: "扩大切缘病例已记录 5 mm 安全切缘；最终以病理切缘阴性为标准。",
+      reviewedAt: now,
+      exportedAt: null,
+    },
     saveState: "saved",
     lastError: "",
   };

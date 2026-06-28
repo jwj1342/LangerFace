@@ -90,6 +90,16 @@ export type ClosureSimulationStatus = "not_run" | "stable" | "needs_review";
 export type CaseIncisionCandidateKind = "linear" | "fusiform";
 export type CaseIncisionCandidateStatus = "draft" | "needs_review" | "selected";
 export type RstlLayerDensity = "low" | "standard" | "high";
+export type ClinicalCaseReviewDecision = "pending" | "approved" | "needs_revision" | "rejected";
+
+export interface ClinicalCaseReviewRecord {
+  reviewerName: string;
+  decision: ClinicalCaseReviewDecision;
+  note: string;
+  overrideReason: string;
+  reviewedAt: string | null;
+  exportedAt: string | null;
+}
 
 export interface CaseIncisionCandidateRecord {
   id: string;
@@ -159,6 +169,7 @@ export interface ClinicalCaseRecord {
   };
   incisionCandidates: CaseIncisionCandidateRecord[];
   selectedCandidateId: string | null;
+  reviewRecord: ClinicalCaseReviewRecord;
   saveState?: "saved" | "dirty" | "save_failed";
   lastError?: string;
 }
@@ -177,6 +188,7 @@ export interface ClinicalCaseDraft {
   closureSimulation?: Partial<ClinicalCaseRecord["closureSimulation"]>;
   incisionCandidates?: CaseIncisionCandidateRecord[];
   selectedCandidateId?: string | null;
+  reviewRecord?: Partial<ClinicalCaseReviewRecord>;
   saveState?: ClinicalCaseRecord["saveState"];
   lastError?: string;
 }
@@ -381,6 +393,28 @@ function normalizeOpacity(value: unknown, fallback: number): number {
   return Math.max(0.2, Math.min(1, value));
 }
 
+function normalizeReviewDecision(value: unknown): ClinicalCaseReviewDecision {
+  if (value === "approved" || value === "needs_revision" || value === "rejected") return value;
+  return "pending";
+}
+
+function normalizeReviewText(value: unknown): string {
+  return typeof value === "string" ? value.trim().slice(0, 1200) : "";
+}
+
+function normalizeReviewRecord(
+  value: ClinicalCaseDraft["reviewRecord"] | undefined,
+): ClinicalCaseReviewRecord {
+  return {
+    reviewerName: normalizeReviewText(value?.reviewerName),
+    decision: normalizeReviewDecision(value?.decision),
+    note: normalizeReviewText(value?.note),
+    overrideReason: normalizeReviewText(value?.overrideReason),
+    reviewedAt: typeof value?.reviewedAt === "string" ? value.reviewedAt : null,
+    exportedAt: typeof value?.exportedAt === "string" ? value.exportedAt : null,
+  };
+}
+
 function normalizeIncisionCandidate(
   value: unknown,
   index: number,
@@ -499,6 +533,7 @@ function normalizeCaseRecord(payload: ClinicalCaseDraft, now = new Date().toISOS
     },
     incisionCandidates,
     selectedCandidateId,
+    reviewRecord: normalizeReviewRecord(payload.reviewRecord),
     saveState: "saved",
   };
 }
@@ -632,6 +667,7 @@ export const LocalDataSource: BrowserDataSource = {
       acquisition: { ...previous?.acquisition, ...payload.acquisition },
       layers: { ...previous?.layers, ...payload.layers },
       closureSimulation: { ...previous?.closureSimulation, ...payload.closureSimulation },
+      reviewRecord: { ...previous?.reviewRecord, ...payload.reviewRecord },
       createdAt: previous?.createdAt ?? payload.createdAt,
     });
     const next = existing.filter((item) => item.id !== record.id);

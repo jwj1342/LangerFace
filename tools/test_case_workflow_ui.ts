@@ -98,6 +98,11 @@ assert.ok(caseRoute.includes("buildCaseReviewExport"), "case review can build a 
 assert.ok(caseRoute.includes("buildCaseReportDraft"), "case review can build a local report draft");
 assert.ok(caseRoute.includes("导出脱敏 JSON"), "case review exposes a sanitized JSON export action");
 assert.ok(caseRoute.includes("下载报告草案"), "case review exposes a report draft export action");
+assert.ok(caseRoute.includes("医生审阅记录"), "case review exposes a structured clinician review record");
+assert.ok(caseRoute.includes("审阅医生"), "case review requires a reviewer field");
+assert.ok(caseRoute.includes("覆盖 / 退回原因"), "case review captures override or revision reasons");
+assert.ok(caseRoute.includes("markReviewDecision"), "case review writes a timestamped review decision");
+assert.ok(caseRoute.includes("reviewRecord"), "case review includes review records in local exports");
 assert.ok(caseRoute.includes("rawImageIncluded: false"), "case review export explicitly excludes raw images");
 assert.ok(caseRoute.includes("providerSecretIncluded: false"), "case review export explicitly excludes provider secrets");
 assert.ok(caseRoute.includes("3.5:1"), "case workflow exposes the child/tight long-axis ratio in planning rationale");
@@ -210,6 +215,9 @@ assert.ok(dataSource.includes("RstlLayerDensity"), "dataSource persists typed RS
 assert.ok(dataSource.includes("rstlOpacity"), "dataSource persists RSTL opacity with the case draft");
 assert.ok(dataSource.includes("wrinkleOpacity"), "dataSource persists personalized wrinkle opacity with the case draft");
 assert.ok(dataSource.includes("normalizeOpacity"), "dataSource clamps persisted layer opacity values");
+assert.ok(dataSource.includes("ClinicalCaseReviewRecord"), "dataSource owns the structured case review record contract");
+assert.ok(dataSource.includes("ClinicalCaseReviewDecision"), "dataSource owns typed review decisions");
+assert.ok(dataSource.includes("normalizeReviewRecord"), "dataSource normalizes review records for draft recovery");
 assert.ok(dataSource.includes("saveCase(payload"), "dataSource exposes a case save method");
 assert.ok(dataSource.includes("listCases()"), "dataSource exposes case listing");
 assert.ok(dataSource.includes("getCase(id"), "dataSource exposes case recovery");
@@ -221,6 +229,7 @@ assert.ok(caseStore.includes("CASE_STORE_BOUNDARY_NOTE"), "case store documents 
 assert.ok(caseStore.includes("dataSource.saveCase"), "case store persists through the BrowserDataSource contract");
 assert.ok(caseStore.includes("closureSimulation"), "case store merges closure simulation updates through the case data boundary");
 assert.ok(caseStore.includes("...draft"), "case store preserves top-level candidate queue updates through the case data boundary");
+assert.ok(caseStore.includes("reviewRecord"), "case store merges structured review records through the case data boundary");
 assert.ok(!caseStore.includes("localStorage"), "case store does not bypass the dataSource boundary");
 
 assert.ok(styles.includes("--font-clinical-sans"), "styles expose the clinical font token");
@@ -246,6 +255,8 @@ assert.ok(styles.includes(".case-candidate-panel"), "styles implement the case c
 assert.ok(styles.includes(".case-candidate-metrics"), "styles implement dense candidate metrics");
 assert.ok(styles.includes(".case-candidate-rationale"), "styles implement candidate provenance rows");
 assert.ok(styles.includes(".case-review-output"), "styles implement the review output surface");
+assert.ok(styles.includes(".case-review-record"), "styles implement the clinician review record form");
+assert.ok(styles.includes(".case-review-textarea"), "styles implement dense review note fields");
 assert.ok(styles.includes(".case-export-actions"), "styles implement compact case export actions");
 assert.ok(styles.includes(".case-export-privacy"), "styles implement privacy boundary rows for export");
 assert.ok(styles.includes(".case-closure-grid"), "styles implement the embedded closure simulation panel");
@@ -278,5 +289,7 @@ assert.ok(visualCapture.includes('rstlDensity: "high"'), "Playwright visual case
 assert.ok(visualCapture.includes("rstlOpacity: 0.78"), "Playwright visual case seed exercises persisted RSTL opacity");
 assert.ok(visualCapture.includes("wrinkleOpacity: 0.7"), "Playwright visual case seed exercises persisted wrinkle opacity");
 assert.ok(visualCapture.includes("图层状态：RSTL 高密度 78%，皮纹 70%"), "Playwright visual case seed exposes layer state in candidate provenance");
+assert.ok(visualCapture.includes("reviewRecord"), "Playwright visual case seed includes a structured review record");
+assert.ok(visualCapture.includes("示例医生"), "Playwright visual case seed exercises the reviewer field");
 
 console.log("test_case_workflow_ui: clinical case workflow contracts passed");
