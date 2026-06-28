@@ -62,6 +62,72 @@ function closureStatusLabel(status: ClinicalCaseRecord["closureSimulation"]["sta
   return "待运行";
 }
 
+function agePlanningRule(activeCase: ClinicalCaseRecord) {
+  if (activeCase.patientContext.ageBand === "child_tight") {
+    return {
+      title: "儿童 / 紧致",
+      metric: "3.5:1",
+      description: "提示缩小梭形切口夹角，用更长的长轴分散高张力。",
+    };
+  }
+  if (activeCase.patientContext.ageBand === "older_lax") {
+    return {
+      title: "老年 / 松弛",
+      metric: "2.5:1",
+      description: "提示适当增加梭形切口夹角，利用皮肤松弛度代偿。",
+    };
+  }
+  if (activeCase.patientContext.ageBand === "adult_standard") {
+    return {
+      title: "中青年 / 普通",
+      metric: "30° / 3:1",
+      description: "维持基础尖端角和长轴:短轴比例。",
+    };
+  }
+  return {
+    title: "待填写年龄",
+    metric: "待定",
+    description: "填写年龄后，系统显示对应的尖端角和长轴:短轴建议。",
+  };
+}
+
+function lesionPlanningRule(activeCase: ClinicalCaseRecord) {
+  if (activeCase.lesion.layer === "cutaneous") {
+    return {
+      title: "皮表肿物",
+      metric: "梭形",
+      description: "结合皮表边界、类圆化直径、安全切缘和局部 RSTL 方向生成候选。",
+    };
+  }
+  return {
+    title: "皮下肿物",
+    metric: "线性",
+    description: "根据医生在皮肤表面描记的肿物轮廓类圆直径生成线性切口，无需梭形。",
+  };
+}
+
+function marginPlanningRule(activeCase: ClinicalCaseRecord) {
+  const margin = activeCase.lesion.marginStrategy === "expanded_margin"
+    ? Math.max(0, activeCase.lesion.safetyMarginMm ?? 0)
+    : 0;
+  const diameter = activeCase.lesion.diameterMm ?? null;
+  const width = diameter == null ? null : diameter + margin * 2;
+  if (activeCase.lesion.marginStrategy === "expanded_margin") {
+    return {
+      title: "需扩大安全切缘",
+      metric: `${margin || "未填"} mm`,
+      description: width == null
+        ? "医生手动输入扩大范围；最终以病理切缘阴性为标准。"
+        : `估算切除宽度 ${width.toFixed(1)} mm；最终以病理切缘阴性为标准。`,
+    };
+  }
+  return {
+    title: "常规完整切除",
+    metric: "贴近病变",
+    description: "默认切缘贴近病变，以完整切除为准；系统不判断良恶性。",
+  };
+}
+
 function estimateClosureSimulation(activeCase: ClinicalCaseRecord): ClinicalCaseRecord["closureSimulation"] {
   const now = new Date().toISOString();
   const diameter = activeCase.lesion.diameterMm;
@@ -330,6 +396,58 @@ function CaseHandoffPanel({
   );
 }
 
+function PlanningRationalePanel({ activeCase }: { activeCase: ClinicalCaseRecord }) {
+  const ageRule = agePlanningRule(activeCase);
+  const lesionRule = lesionPlanningRule(activeCase);
+  const marginRule = marginPlanningRule(activeCase);
+  const rules = [
+    {
+      label: "年龄规则",
+      ...ageRule,
+    },
+    {
+      label: "切口模式",
+      ...lesionRule,
+    },
+    {
+      label: "切缘策略",
+      ...marginRule,
+    },
+    {
+      label: "警惕区",
+      title: "眼睑 / 口唇 / 鼻翼",
+      metric: "需复核",
+      description: "接近警惕区时，候选只作为方向参考，建议结合专科医生个性化设计。",
+    },
+  ];
+
+  return (
+    <Card className="case-planning-rationale">
+      <CardHeader>
+        <span>规划依据与风险提示</span>
+        <ShieldAlert size={16} />
+      </CardHeader>
+      <CardContent>
+        <div className="case-rule-grid" aria-label="规划依据">
+          {rules.map((rule) => (
+            <article key={rule.label} className="case-rule-card">
+              <span>{rule.label}</span>
+              <b>{rule.title}</b>
+              <strong className="clinical-number">{rule.metric}</strong>
+              <p>{rule.description}</p>
+            </article>
+          ))}
+        </div>
+        <div className="case-rationale-audit" aria-label="审计记录边界">
+          <p><b>规则 trace</b><span>候选生成应记录年龄分档、病灶层次、切缘策略、图层状态和医生修改。</span></p>
+          <p><b>临床边界</b><span>系统只生成辅助草案，不判断良恶性，不输出自动手术指令。</span></p>
+          <p><b>保存边界</b><span>当前为本地病例草稿；正式审阅记录后续进入院内或云端病例库。</span></p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   const navigate = useNavigate();
   const updateActiveCase = useCaseStore((state) => state.updateActiveCase);
@@ -556,15 +674,7 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader><span>规划依据</span><ShieldAlert size={16} /></CardHeader>
-        <CardContent className="case-rationale-grid">
-          <div><b>年龄参数</b><span>{activeCase.patientContext.parameterHint}</span></div>
-          <div><b>切口模式</b><span>{activeCase.lesion.layerLabel}</span></div>
-          <div><b>敏感结构提示</b><span>接近眼睑、口唇、鼻翼等警惕区时，需专科医生个性化设计。</span></div>
-          <div><b>规则边界</b><span>候选线是临床辅助草案，不是自动手术指令。</span></div>
-        </CardContent>
-      </Card>
+      <PlanningRationalePanel activeCase={activeCase} />
 
       <Card className="case-closure-simulation" id="caseClosureSimulation">
         <CardHeader>

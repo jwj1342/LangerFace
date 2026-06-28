@@ -75,6 +75,18 @@ assert.ok(caseRoute.includes("皮表肿物 · 梭形切口模式"), "case workfl
 assert.ok(caseRoute.includes("需扩大安全切缘"), "case workflow exposes expanded safety margin strategy");
 assert.ok(caseRoute.includes("图层看板"), "case workflow exposes the clinical layer board");
 assert.ok(caseRoute.includes("规划依据"), "case workflow keeps explainability visible");
+assert.ok(caseRoute.includes("PlanningRationalePanel"), "case workflow renders a dedicated planning rationale panel");
+assert.ok(caseRoute.includes("规划依据与风险提示"), "case workflow labels planning rationale and risk together");
+assert.ok(caseRoute.includes("case-rule-grid"), "case workflow renders structured clinical rule cards");
+assert.ok(caseRoute.includes("case-rationale-audit"), "case workflow renders a structured audit boundary");
+assert.ok(caseRoute.includes("agePlanningRule"), "case workflow derives age-based planning rule copy");
+assert.ok(caseRoute.includes("lesionPlanningRule"), "case workflow derives lesion-layer planning rule copy");
+assert.ok(caseRoute.includes("marginPlanningRule"), "case workflow derives margin planning rule copy");
+assert.ok(caseRoute.includes("3.5:1"), "case workflow exposes the child/tight long-axis ratio in planning rationale");
+assert.ok(caseRoute.includes("30° / 3:1"), "case workflow exposes the adult baseline angle and ratio in planning rationale");
+assert.ok(caseRoute.includes("2.5:1"), "case workflow exposes the older/lax long-axis ratio in planning rationale");
+assert.ok(caseRoute.includes("估算切除宽度"), "case workflow explains expanded-margin width in planning rationale");
+assert.ok(caseRoute.includes("规则 trace"), "case workflow keeps rule trace visible as clinical audit context");
 assert.ok(caseRoute.includes("caseClosureSimulation"), "case planning step embeds closure simulation inside the case workflow");
 assert.ok(caseRoute.includes("张力闭合模拟"), "case planning step exposes closure simulation as a planning control");
 assert.ok(caseRoute.includes("运行闭合模拟"), "case planning step gives doctors direct simulation feedback without leaving the workflow");
@@ -189,6 +201,8 @@ assert.ok(styles.includes(".case-lobby-stage"), "styles implement the case lobby
 assert.ok(styles.includes(".case-workflow-roadmap"), "styles implement the clinical workflow roadmap");
 assert.ok(styles.includes(".case-clinical-viewport"), "styles implement the PACS-like clinical viewport");
 assert.ok(styles.includes(".case-viewport-mode-switch"), "styles implement compact 2D/3D/live viewport mode controls");
+assert.ok(styles.includes(".case-rule-grid"), "styles implement structured planning rule cards");
+assert.ok(styles.includes(".case-rationale-audit"), "styles implement dense planning audit rows");
 assert.ok(styles.includes(".case-closure-grid"), "styles implement the embedded closure simulation panel");
 assert.ok(styles.includes(".case-closure-meter"), "styles implement closure simulation score feedback");
 assert.ok(styles.includes(".case-step-stage-grid"), "styles prioritize a viewport-plus-command step layout");

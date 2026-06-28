@@ -118,6 +118,7 @@
 - `/app/case/:id/evaluate` 和 `/app/case/:id/plan` 已在步骤内部加入紧凑子任务条，把“确认前置参数 / 映射张力线 / 标记病灶 / 生成候选 / 闭合模拟”呈现为临床任务，而不是工具清单。
 - `/app/live`、`/app/incision` 和候选导出能力在病例步骤中以“受控评估入口 / 受控规划入口 / 受控导出入口”出现，入口旁说明进入前条件、返回后状态和临床边界。
 - 病例大厅和病例步骤页共用 `ClinicalFacePreview`，在深色病例画布中显示 2D 图像 / 3D 重建 / 实时叠加模式、测量标尺、面部深度参考、解剖参考点、RSTL、病灶和切口 overlay，避免主流程停留在低保真线框脸。
+- `/app/case/:id/plan` 已把“规划依据 / 风险提示 / 审计记录”落实为 `PlanningRationalePanel`，用结构化规则卡展示年龄分档、切口模式、切缘策略、警惕区和规则 trace，而不是只给最终候选线。
 - 病例规划页不再把医生直接跳转到 `/app/surgery`；旧 `/app/surgery` 路由仅保留为兼容 / 研究演示入口。
 - `/app/settings/atlas` 已成为图谱库管理壳，旧 `/app/annotate` 只作为图谱维护卡片中的受控入口。
 - `/app/settings/developer` 已成为系统诊断壳，AI 摘要服务连接测试、三维模型预览和兼容工作台入口集中在设置中，不再直接暴露在医生主流程里。
@@ -546,7 +547,7 @@ html {
 - 导出和审计仍保留技术 provenance，不丢失可追溯性。
 - 病例大厅、步骤条和候选列表都围绕 `case_id`、保存状态和候选版本组织。
 - 年龄分档、病灶层次、切缘策略、图层看板和临床合规提示覆盖医生简易操作手册。
-- 候选切口旁有可展开的规划依据 / 风险提示，不把 AI 或规则判断做成黑盒。
+- 候选切口旁有结构化规划依据 / 风险提示 / 审计记录，至少展示年龄参数、病灶层次、切缘策略、警惕区和规则 trace，不把 AI 或规则判断做成黑盒。
 - 数值字段、角度、张力分数和候选 metrics 使用等宽数字或 `tabular-nums`。
 - 现有 `/app/live`、`/app/incision`、`/app/annotate`、`/app/surgery` 路由在过渡期仍可回归测试；`/app/annotate` 和 `/app/three-preview` 只能从设置或兼容区进入。
 - 视觉冒烟检查可用 `cd web && npm run visual:case` 启动本地 Vite，并用 Playwright 截取病例大厅、评估、规划、确认、图谱库管理和系统诊断页；截图输出到 `local_outputs/case-workflow-visual/`，不提交到仓库。若运行环境缺少 Chromium 依赖，应在 PR 中记录失败日志和人工预览链接；若 Linux 截图中文字缺失，需要在截图主机安装 Noto Sans CJK SC 等中文字体后再做设计截图复核。

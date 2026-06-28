@@ -1110,14 +1110,16 @@
   .case-mini-grid,
   .case-form-grid,
   .case-layer-grid,
-  .case-rationale-grid {
+  .case-rationale-grid,
+  .case-rule-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
   }
 
   .case-mini-grid > div,
-  .case-rationale-grid > div {
+  .case-rationale-grid > div,
+  .case-rule-card {
     border: 1px solid var(--clinical-border);
     border-radius: 4px;
     background: var(--clinical-surface-muted);
@@ -1140,6 +1142,80 @@
     color: var(--clinical-text-primary);
     font-size: 12.5px;
     line-height: 1.3;
+  }
+
+  .case-planning-rationale .card-content {
+    display: grid;
+    gap: 12px;
+  }
+
+  .case-rule-card {
+    display: grid;
+    gap: 6px;
+    min-height: 142px;
+  }
+
+  .case-rule-card > span {
+    color: #a6c8ff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .case-rule-card b {
+    color: var(--clinical-text-primary);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .case-rule-card strong {
+    align-self: start;
+    justify-self: start;
+    border: 1px solid rgb(120 169 255 / 0.28);
+    border-radius: 4px;
+    background: rgb(15 98 254 / 0.14);
+    color: #d0e2ff;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 6px 8px;
+  }
+
+  .case-rule-card p {
+    margin: 0;
+    color: var(--clinical-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .case-rationale-audit {
+    display: grid;
+    gap: 1px;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    background: rgb(255 255 255 / 0.12);
+  }
+
+  .case-rationale-audit p {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 12px;
+    margin: 0;
+    background: #0f141b;
+    padding: 9px 10px;
+  }
+
+  .case-rationale-audit b {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .case-rationale-audit span {
+    color: var(--clinical-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
   }
 
   .case-form-grid label {
@@ -2664,6 +2740,8 @@
 .case-workflow-page .case-list-item,
 .case-workflow-page .case-mini-grid > div,
 .case-workflow-page .case-rationale-grid > div,
+.case-workflow-page .case-rule-card,
+.case-workflow-page .case-rationale-audit p,
 .case-workflow-page .case-closure-metrics > div,
 .case-workflow-page .case-layer-toggle {
   border-color: var(--clinical-dark-border);
@@ -2772,7 +2850,9 @@
   .case-layer-grid,
   .case-closure-metrics,
   .case-rationale-grid,
+  .case-rule-grid,
   .case-handoff-list p,
+  .case-rationale-audit p,
   .settings-boundary-list p {
     grid-template-columns: 1fr;
   }
