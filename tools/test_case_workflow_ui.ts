@@ -7,6 +7,7 @@ const caseRoute = fs.readFileSync("src/routes/CaseWorkflowRoute.tsx", "utf8");
 const settingsRoute = fs.readFileSync("src/routes/SettingsRoute.tsx", "utf8");
 const clinicalFacePreview = fs.readFileSync("src/components/ClinicalFacePreview.tsx", "utf8");
 const managedRoute = fs.readFileSync("src/components/ManagedWorkbenchRoute.tsx", "utf8");
+const threePreviewScene = fs.readFileSync("src/components/ThreePreviewScene.tsx", "utf8");
 const incisionRoute = fs.readFileSync("src/routes/IncisionRoute.tsx", "utf8");
 const liveRoute = fs.readFileSync("src/routes/LiveRoute.tsx", "utf8");
 const annotateRoute = fs.readFileSync("src/routes/AnnotateRoute.tsx", "utf8");
@@ -204,6 +205,7 @@ assert.ok(!caseRoute.includes("localStorage"), "case workflow components do not 
 assert.ok(caseRoute.includes("data-loaded={assets ? \"true\" : \"false\"}"), "case workflow exposes loaded state for the 3D face viewport");
 assert.ok(caseRoute.includes("case-face-overlay-lesion"), "case workflow overlays lesion state on the loaded standard face scene");
 assert.ok(caseRoute.includes("case-face-overlay-incision"), "case workflow overlays incision state on the loaded standard face scene");
+assert.ok(threePreviewScene.includes("preserveDrawingBuffer: true"), "3D preview canvas keeps a readable drawing buffer for visual QA");
 assert.ok(clinicalFacePreview.includes("case-face-preview-large"), "clinical face preview supports a large planning viewport");
 assert.ok(clinicalFacePreview.includes("ClinicalFacePreviewLayers"), "clinical face preview owns a typed layer contract");
 assert.ok(clinicalFacePreview.includes("ClinicalFaceLesionBoundaryMode"), "clinical face preview owns a typed lesion boundary overlay contract");
@@ -399,6 +401,8 @@ assert.ok(visualCapture.includes("图层状态：RSTL 高密度 78%，皮纹 70%
 assert.ok(visualCapture.includes("reviewRecord"), "Playwright visual case seed includes a structured review record");
 assert.ok(visualCapture.includes("示例医生"), "Playwright visual case seed exercises the reviewer field");
 assert.ok(interactionCapture.includes("waitForLobbyPreview"), "interactive visual flow waits for the lobby 3D preview asset");
+assert.ok(interactionCapture.includes("expectRenderedFaceCanvas"), "interactive visual flow verifies the 3D canvas contains rendered pixels");
+assert.ok(interactionCapture.includes("gl.readPixels"), "interactive visual flow samples WebGL pixels instead of trusting DOM loaded state only");
 assert.ok(interactionCapture.includes("13-compact-plan-1280x720"), "interactive visual flow captures compact planning viewport");
 assert.ok(interactionCapture.includes("14-compact-review-1280x720"), "interactive visual flow captures compact review viewport");
 assert.ok(interactionCapture.includes("expectNoBrowserScroll"), "interactive visual flow asserts browser-level scrolling remains locked");

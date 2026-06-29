@@ -85,11 +85,60 @@ async function shot(page, name) {
 async function waitForFaceViewport(page) {
   await expect(page.locator(".case-face-asset-frame[data-loaded='true']")).toBeVisible({ timeout: 20000 });
   await page.waitForTimeout(900);
+  await expectRenderedFaceCanvas(page, ".case-face-asset-frame[data-loaded='true']");
 }
 
 async function waitForLobbyPreview(page) {
   await expect(page.locator(".case-lobby-stage .case-face-asset-frame[data-loaded='true']")).toBeVisible({ timeout: 20000 });
   await page.waitForTimeout(900);
+  await expectRenderedFaceCanvas(page, ".case-lobby-stage .case-face-asset-frame[data-loaded='true']");
+}
+
+async function expectRenderedFaceCanvas(page, frameSelector) {
+  const metrics = await page.locator(frameSelector).first().locator("canvas").evaluate((canvas) => {
+    const htmlCanvas = canvas;
+    const gl = htmlCanvas.getContext("webgl2") || htmlCanvas.getContext("webgl");
+    if (!gl) return { ok: false, reason: "missing-webgl-context" };
+    const width = gl.drawingBufferWidth;
+    const height = gl.drawingBufferHeight;
+    if (width < 32 || height < 32) return { ok: false, reason: "small-drawing-buffer", width, height };
+    const sampleWidth = Math.min(width, 96);
+    const sampleHeight = Math.min(height, 96);
+    const x = Math.max(0, Math.floor((width - sampleWidth) / 2));
+    const y = Math.max(0, Math.floor((height - sampleHeight) / 2));
+    const pixels = new Uint8Array(sampleWidth * sampleHeight * 4);
+    gl.readPixels(x, y, sampleWidth, sampleHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    let nonDark = 0;
+    let skinOrLine = 0;
+    let colorVariance = 0;
+    let previous = -1;
+    for (let index = 0; index < pixels.length; index += 4) {
+      const r = pixels[index];
+      const g = pixels[index + 1];
+      const b = pixels[index + 2];
+      const a = pixels[index + 3];
+      const luma = r * 0.2126 + g * 0.7152 + b * 0.0722;
+      if (a > 0 && luma > 35) nonDark += 1;
+      if ((r > 120 && g > 70 && b > 50) || (r > 150 && b > 130 && g < 140)) skinOrLine += 1;
+      const packed = (r << 16) | (g << 8) | b;
+      if (previous !== -1) colorVariance += Math.abs((packed & 255) - (previous & 255));
+      previous = packed;
+    }
+    const total = sampleWidth * sampleHeight;
+    return {
+      ok: nonDark > total * 0.12 && skinOrLine > total * 0.04 && colorVariance > total * 2,
+      reason: "sampled",
+      width,
+      height,
+      sampleWidth,
+      sampleHeight,
+      nonDark,
+      skinOrLine,
+      total,
+      colorVariance,
+    };
+  });
+  expect(metrics.ok, JSON.stringify(metrics)).toBe(true);
 }
 
 async function expectNoBrowserScroll(page) {

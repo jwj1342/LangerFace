@@ -65,7 +65,7 @@ function FaceMesh({ assets }: { assets: ThreePreviewAssets }) {
 
 export function ThreePreviewScene({ assets, loadingText }: { assets: ThreePreviewAssets | null; loadingText: string }) {
   return (
-    <Canvas camera={{ position: [0, 0, 58], fov: 34 }} dpr={[1, 2]}>
+    <Canvas camera={{ position: [0, 0, 58], fov: 34 }} dpr={[1, 2]} gl={{ preserveDrawingBuffer: true }}>
       <color attach="background" args={["#111820"]} />
       <ambientLight intensity={0.8} />
       <directionalLight position={[8, 10, 18]} intensity={1.8} />
