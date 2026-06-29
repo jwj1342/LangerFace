@@ -28,6 +28,7 @@ const caseStore = fs.readFileSync("src/stores/caseStore.ts", "utf8");
 const styles = fs.readFileSync("src/styles.css", "utf8");
 const visualCapture = fs.readFileSync("../tools/capture_case_workflow_visual.ts", "utf8");
 const interactionCapture = fs.readFileSync("../tools/capture_case_workflow_interactions.ts", "utf8");
+const workflowDoc = fs.readFileSync("../docs/CLINICAL_CASE_WORKFLOW_UI.md", "utf8");
 
 assert.ok(app.includes('path="/cases"'), "React Router exposes the clinical case lobby");
 assert.ok(app.includes('path="/case/:caseId/evaluate"'), "React Router exposes the case evaluation step");
@@ -40,6 +41,21 @@ assert.ok(app.includes('<SettingsRoute section="atlas"'), "atlas settings render
 assert.ok(app.includes('<SettingsRoute section="developer"'), "developer settings renders the settings route instead of redirecting");
 assert.ok(!app.includes('to="/annotate" replace'), "atlas settings must not immediately redirect to the 3D annotation tool");
 assert.ok(!app.includes('to="/three-preview" replace'), "developer settings must not immediately redirect to the R3F preview");
+
+assert.ok(workflowDoc.includes("## 用户动线流程图"), "clinical workflow doc includes a user journey flowchart section");
+assert.ok(workflowDoc.includes("flowchart TD"), "clinical workflow doc includes a Mermaid flowchart for product/UI review");
+assert.ok(workflowDoc.includes('Lobby["病例大厅 /app/cases"]'), "workflow diagram starts from the case lobby");
+assert.ok(workflowDoc.includes('NewCase["前置参数 /app/case/new"]'), "workflow diagram routes new cases through preflight setup");
+assert.ok(workflowDoc.includes('Evaluate["面部评估与布线 /app/case/:id/evaluate"]'), "workflow diagram names the evaluation step");
+assert.ok(workflowDoc.includes('Plan["病灶定位与切口规划 /app/case/:id/plan"]'), "workflow diagram names the planning step");
+assert.ok(workflowDoc.includes('Review["方案确认与输出 /app/case/:id/review"]'), "workflow diagram names the review step");
+assert.ok(workflowDoc.includes('Evaluate -- "切换实时叠加" --> Evaluate'), "workflow diagram keeps live overlay inside the evaluation step");
+assert.ok(workflowDoc.includes('Plan -- "张力模拟" --> Plan'), "workflow diagram keeps closure simulation inside the planning step");
+assert.ok(workflowDoc.includes('Review -- "返回切口规划 / 步骤条 2" --> Plan'), "workflow diagram documents reversible stepper navigation");
+assert.ok(workflowDoc.includes("### 主按钮与跳转语义"), "clinical workflow doc includes button transition semantics");
+assert.ok(workflowDoc.includes("不再把医生送回旧 `/app/live` 设计模式"), "button map prevents live capture from falling back to the legacy route");
+assert.ok(workflowDoc.includes("闭合演示嵌入规划页，不跳 `/app/surgery`"), "button map prevents closure simulation from jumping to the standalone demo");
+assert.ok(workflowDoc.includes("设置页里的兼容入口必须有边界说明"), "workflow doc keeps compatibility tools out of the doctor flow");
 
 assert.ok(dashboard.includes("面部松弛皮肤张力线智能切口设计系统"), "case lobby uses the clinician-facing product name");
 assert.ok(dashboard.includes("病例大厅"), "case lobby replaces the technical landing copy");

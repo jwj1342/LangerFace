@@ -47,6 +47,85 @@
 
 现有 `/app/live`、`/app/incision`、`/app/annotate`、`/app/surgery` 可以先保留为兼容入口，不需要在第一轮重构中删除；但 `/app/settings/atlas` 和 `/app/settings/developer` 不应再直接 redirect 到旧工具页，而应先呈现设置壳、说明边界，再提供受控入口。
 
+## 用户动线流程图
+
+下面这张图描述当前 PR 期望交付给医生的主路径。它不是研发工具导航图，而是病例级工作区的操作图：医生从病例大厅进入，先录入前置参数，再在同一个病例上下文里完成评估、规划、闭合模拟和确认。旧工具只从系统设置或受控入口进入。
+
+```mermaid
+flowchart TD
+  Lobby["病例大厅 /app/cases"]
+  NewCase["前置参数 /app/case/new"]
+  Evaluate["面部评估与布线 /app/case/:id/evaluate"]
+  Plan["病灶定位与切口规划 /app/case/:id/plan"]
+  Review["方案确认与输出 /app/case/:id/review"]
+  AtlasSettings["图谱库管理 /app/settings/atlas"]
+  DeveloperSettings["系统诊断 /app/settings/developer"]
+  LegacyLive["兼容实时工作台 /app/live"]
+  LegacyIncision["兼容切口工作台 /app/incision"]
+  LegacySurgery["兼容闭合演示 /app/surgery"]
+  LegacyAnnotate["3D 图谱标注 /app/annotate"]
+  ThreePreview["3D 资产预览 /app/three-preview"]
+
+  Lobby -- "新建面部评估 / 新建病例" --> NewCase
+  Lobby -- "继续最近病例 / 草稿列表" --> Evaluate
+  Lobby -- "图谱库管理" --> AtlasSettings
+  Lobby -- "系统诊断" --> DeveloperSettings
+
+  NewCase -- "创建病例草稿" --> Evaluate
+  NewCase -- "返回病例大厅" --> Lobby
+
+  Evaluate -- "切换实时叠加" --> Evaluate
+  Evaluate -- "图层开关 / 密度 / 透明度" --> Evaluate
+  Evaluate -- "下一步：标记病灶 / 继续并标记复核" --> Plan
+  Evaluate -- "病例大厅" --> Lobby
+
+  Plan -- "保存候选" --> Plan
+  Plan -- "张力模拟" --> Plan
+  Plan -- "方案确认" --> Review
+  Plan -- "返回面部评估 / 步骤条 1" --> Evaluate
+
+  Review -- "标记为已确认" --> Review
+  Review -- "下载报告草案 / 导出脱敏 JSON" --> Review
+  Review -- "返回切口规划 / 步骤条 2" --> Plan
+  Review -- "病例大厅" --> Lobby
+
+  AtlasSettings -- "打开 3D 张力线图谱标注" --> LegacyAnnotate
+  DeveloperSettings -- "AI 摘要服务配置" --> DeveloperSettings
+  DeveloperSettings -- "3D 资产预览" --> ThreePreview
+  DeveloperSettings -- "兼容实时工作台" --> LegacyLive
+  DeveloperSettings -- "兼容切口工作台" --> LegacyIncision
+  DeveloperSettings -- "兼容闭合演示" --> LegacySurgery
+```
+
+### 主按钮与跳转语义
+
+| 所在页面 | 医生可见动作 | 跳转 / 状态结果 | 设计意图 |
+| --- | --- | --- | --- |
+| 病例大厅 | 新建面部评估 / 新建病例 | 进入 `/app/case/new` | 不直接打开画布，先收集年龄、采集路径、病灶层次和切缘策略 |
+| 病例大厅 | 继续最近病例 / 草稿列表 | 进入该病例的当前步骤，通常是 `/evaluate`、`/plan` 或 `/review` | 草稿恢复围绕 `case_id`，不是围绕工具页面 |
+| 病例大厅 | 图谱库管理 | 进入 `/app/settings/atlas` | 科研/管理入口从医生主路径移出 |
+| 病例大厅 | 系统诊断 | 进入 `/app/settings/developer` | Provider、资产预览和兼容工作台集中在诊断区 |
+| 前置参数 | 创建病例草稿 | 保存本地病例草稿并进入 `/app/case/:id/evaluate` | 参数前置，后续候选和报告有来源 |
+| 前置参数 | 返回病例大厅 | 回到 `/app/cases` | 未创建病例时不留下伪草稿 |
+| 面部评估 | 切换实时叠加 | 停留在 `/evaluate`，只切换病例画布模式 | 不再把医生送回旧 `/app/live` 设计模式 |
+| 面部评估 | 图层开关 / RSTL 密度 / 透明度 | 停留在 `/evaluate`，更新画布和病例草稿 | 参数调节必须与同屏画布联动 |
+| 面部评估 | 下一步：标记病灶 / 继续并标记复核 | 进入 `/app/case/:id/plan` | 质量门禁提示复核但不锁死医生 |
+| 切口规划 | 保存候选 | 停留在 `/plan`，候选进入病例内队列 | 支持多候选和返回微调 |
+| 切口规划 | 张力模拟 | 停留在 `/plan`，写入闭合模拟摘要 | 闭合演示嵌入规划页，不跳 `/app/surgery` |
+| 切口规划 | 方案确认 | 进入 `/app/case/:id/review` | 进入确认和输出，不等于自动临床采用 |
+| 方案确认 | 标记为已确认 / 退回修改 / 不采用 | 停留在 `/review`，写入结构化审阅记录 | 审阅是病例记录的一部分 |
+| 方案确认 | 下载报告草案 / 导出脱敏 JSON | 停留在 `/review`，生成本地输出 | 导出不是正式远端保存，也不包含原始影像 |
+| 步骤条 | 返回面部评估 / 返回切口规划 | 在同一 `case_id` 下回到对应步骤 | 向导可回溯，不是单向锁死 |
+| 系统设置 | 打开兼容实时 / 切口 / 闭合 / 标注工具 | 从设置中的受控入口进入旧路由 | 保留研发回归路径，但不污染医生主流程 |
+
+### 设计交付时的动线约束
+
+- 任何从病例主流程触发的“实时叠加”“张力模拟”“保存候选”都应留在当前病例上下文，不能突然切回独立工具页。
+- 医生可通过步骤条回到上一步微调；回退不应丢失候选、闭合模拟、审阅记录或保存状态。
+- 设置页里的兼容入口必须有边界说明，明确它们是图谱维护、系统诊断或研发回归入口。
+- 主流程每个页面只能有一个最强主操作：前置参数是“创建病例草稿”，评估是“下一步：标记病灶”，规划是“方案确认”，确认页是“标记为已确认”或导出动作。
+- 导出、兼容工具和诊断都不能替代病例保存；正式远端保存仍应通过后续 `DataSource` / Worker API 接入。
+
 ## 病例向导流程
 
 ### 阶段 0：病例大厅
