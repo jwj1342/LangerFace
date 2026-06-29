@@ -146,12 +146,18 @@ includesAll(mode3d, [
   "startTwin",
   "toggleTwinHead",
   "toggleTwinTexture",
+  "projectColors",
+  "sampleFrameColors",
+  "mergeVertexColors",
+  "reconState.twinTexture",
 ], "3D reconstruction runtime");
 
 includesAll(sharedThree3d, [
   "preserveDrawingBuffer: true",
   "configureSkinRenderer",
   "incisionOverlay",
+  "vertexColors",
+  "Float32BufferAttribute",
 ], "shared Three.js viewer visual QA support");
 
 includesAll(controllerCommand, [
