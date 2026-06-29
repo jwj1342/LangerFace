@@ -3784,7 +3784,7 @@ body:has(.case-workflow-page) {
 
 .case-clinical-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 360px);
   flex: 1 1 auto;
   gap: 10px;
   min-height: 0;

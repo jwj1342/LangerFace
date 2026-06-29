@@ -174,6 +174,77 @@ async function expectNoDoctorJargon(page) {
   expect(leaked, \`doctor workflow leaked implementation jargon: \${leaked.join(", ")}\`).toEqual([]);
 }
 
+async function expectClinicalVisualDiscipline(page) {
+  const violations = await page.locator(".case-workflow-page").evaluate((root) => {
+    const selectors = [
+      ".card",
+      ".btn",
+      ".react-nav-link",
+      ".badge",
+      ".react-route-status",
+      "input",
+      "select",
+      "textarea",
+      ".case-list-item",
+      ".case-acquisition-path-card",
+      ".case-candidate-row",
+      ".case-layer-toggle",
+      ".case-boundary-control",
+      ".case-disclosure",
+      ".case-empty-state",
+    ];
+    const issues = [];
+    const seen = new Set();
+    for (const selector of selectors) {
+      for (const element of root.querySelectorAll(selector)) {
+        if (seen.has(element)) continue;
+        seen.add(element);
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) continue;
+        const style = getComputedStyle(element);
+        const radius = [
+          style.borderTopLeftRadius,
+          style.borderTopRightRadius,
+          style.borderBottomRightRadius,
+          style.borderBottomLeftRadius,
+        ].map((value) => Number.parseFloat(value) || 0);
+        const maxRadius = Math.max(...radius);
+        const hasShadow = style.boxShadow && style.boxShadow !== "none";
+        const pureWhiteText = style.color === "rgb(255, 255, 255)" || style.color === "rgba(255, 255, 255, 1)";
+        if (maxRadius > 4) {
+          issues.push(\`\${selector}: radius \${maxRadius}px on "\${element.textContent?.trim().slice(0, 28) ?? ""}"\`);
+        }
+        if (hasShadow) {
+          issues.push(\`\${selector}: box-shadow \${style.boxShadow}\`);
+        }
+        if (pureWhiteText) {
+          issues.push(\`\${selector}: pure-white text on "\${element.textContent?.trim().slice(0, 28) ?? ""}"\`);
+        }
+      }
+    }
+    return issues;
+  });
+  expect(violations, \`clinical visual discipline violations:\\n\${violations.join("\\n")}\`).toEqual([]);
+}
+
+async function expectCanvasDominatesWorkspace(page) {
+  const metrics = await page.locator(".case-clinical-workspace").first().evaluate((workspace) => {
+    const canvas = workspace.querySelector(".case-workspace-canvas");
+    const panel = workspace.querySelector(".case-workspace-panel");
+    const workspaceRect = workspace.getBoundingClientRect();
+    const canvasRect = canvas?.getBoundingClientRect();
+    const panelRect = panel?.getBoundingClientRect();
+    return {
+      workspaceWidth: workspaceRect.width,
+      canvasWidth: canvasRect?.width ?? 0,
+      panelWidth: panelRect?.width ?? 0,
+      canvasRatio: canvasRect ? canvasRect.width / workspaceRect.width : 0,
+    };
+  });
+  expect(metrics.canvasRatio, JSON.stringify(metrics)).toBeGreaterThanOrEqual(0.6);
+  expect(metrics.canvasWidth, JSON.stringify(metrics)).toBeGreaterThan(metrics.panelWidth);
+}
+
 test("clinical case workflow click path", async ({ page }) => {
   test.setTimeout(120000);
   const consoleErrors = [];
@@ -189,12 +260,14 @@ test("clinical case workflow click path", async ({ page }) => {
   await waitForLobbyPreview(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
   await shot(page, "01-dashboard-empty");
 
   await page.getByRole("link", { name: /新建面部评估|新建病例/ }).first().click();
   await expect(page.locator("#caseNewSetup")).toBeVisible();
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
   await shot(page, "02-new-case-initial");
 
   await page.locator("#newCaseAge").fill("64");
@@ -204,6 +277,7 @@ test("clinical case workflow click path", async ({ page }) => {
   await page.locator("#caseNewSetup").getByRole("button", { name: /3D 扫描/ }).click();
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
   await shot(page, "03-new-case-filled");
 
   await page.getByRole("button", { name: /创建病例草稿/ }).click();
@@ -211,6 +285,8 @@ test("clinical case workflow click path", async ({ page }) => {
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
+  await expectCanvasDominatesWorkspace(page);
   await shot(page, "04-evaluate-3d-loaded");
 
   await page.getByRole("button", { name: /切换实时叠加/ }).click();
@@ -218,12 +294,16 @@ test("clinical case workflow click path", async ({ page }) => {
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
+  await expectCanvasDominatesWorkspace(page);
   await shot(page, "05-evaluate-after-live-toggle");
 
   await page.locator("label").filter({ hasText: "RSTL 密度" }).locator("select").selectOption("high");
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
+  await expectCanvasDominatesWorkspace(page);
   await shot(page, "06-evaluate-layer-density");
 
   await page.getByRole("button", { name: /下一步：标记病灶|继续并标记复核/ }).click();
@@ -232,6 +312,8 @@ test("clinical case workflow click path", async ({ page }) => {
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
+  await expectCanvasDominatesWorkspace(page);
   await shot(page, "07-plan-initial");
 
   await page.locator("#lesionLayer").selectOption("cutaneous");
@@ -244,6 +326,8 @@ test("clinical case workflow click path", async ({ page }) => {
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
+  await expectCanvasDominatesWorkspace(page);
   await shot(page, "08-plan-after-save-candidate");
 
   await page.getByRole("button", { name: /张力模拟/ }).first().click();
@@ -251,6 +335,8 @@ test("clinical case workflow click path", async ({ page }) => {
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
+  await expectCanvasDominatesWorkspace(page);
   await shot(page, "09-plan-after-closure");
 
   await page.getByRole("button", { name: /^方案确认$/ }).click();
@@ -258,6 +344,8 @@ test("clinical case workflow click path", async ({ page }) => {
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
+  await expectCanvasDominatesWorkspace(page);
   await shot(page, "10-review-initial");
 
   await page.locator("#caseReviewerName").fill("示例医生");
@@ -266,6 +354,8 @@ test("clinical case workflow click path", async ({ page }) => {
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
+  await expectCanvasDominatesWorkspace(page);
   await shot(page, "11-review-approved");
 
   await page.getByRole("link", { name: /2\\. 切口规划/ }).click();
@@ -274,6 +364,8 @@ test("clinical case workflow click path", async ({ page }) => {
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
+  await expectCanvasDominatesWorkspace(page);
   await shot(page, "12-return-to-plan-from-stepper");
 
   await page.setViewportSize({ width: 1280, height: 720 });
@@ -281,6 +373,8 @@ test("clinical case workflow click path", async ({ page }) => {
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
+  await expectCanvasDominatesWorkspace(page);
   await shot(page, "13-compact-plan-1280x720");
 
   await page.getByRole("button", { name: /^方案确认$/ }).click();
@@ -288,6 +382,8 @@ test("clinical case workflow click path", async ({ page }) => {
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
+  await expectCanvasDominatesWorkspace(page);
   await shot(page, "14-compact-review-1280x720");
 
   await page.getByRole("link", { name: /^系统诊断$/ }).click();
