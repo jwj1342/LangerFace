@@ -50,6 +50,9 @@ assert.ok(html.includes('id="reviewDecision"'), "workbench exposes clinician rev
 assert.ok(html.includes('id="reviewNotes"'), "workbench exposes clinician review notes");
 assert.ok(html.includes('id="testProviderBtn"'), "workbench exposes LLM Provider connectivity test");
 assert.ok(html.includes('id="providerTestState"'), "workbench exposes LLM Provider connectivity status");
+assert.ok(html.includes("clinical-developer-disclosure"), "workbench folds provider connectivity into developer settings");
+assert.ok(html.includes("AI 摘要服务配置"), "workbench labels provider connectivity as AI summary service configuration");
+assert.ok(!html.includes("LLM Provider</span>"), "workbench does not expose LLM Provider as a clinician-facing panel title");
 assert.ok(html.includes('id="providerMode"') && html.includes('value="openai-compatible"'), "workbench fixes the only visible provider contract to OpenAI-compatible");
 assert.ok(!html.includes("native provider"), "workbench does not expose a native provider choice");
 assert.ok(providerConfig.includes('DEFAULT_PROVIDER_BASE_URL = "https://api.openai.com/v1"'), "workbench defaults to an HTTPS OpenAI-compatible provider URL");
@@ -70,7 +73,7 @@ assert.ok(!html.includes("工具调用轨迹"), "workbench does not render a sid
 assert.ok(html.includes('id="agentComparison"'), "workbench exposes browser workflow candidate comparison");
 assert.ok(html.includes("snapshot?.headAsset.statusLabel"), "workbench stage shows the active head asset status");
 assert.ok(html.includes('label="头模"'), "workbench state panel exposes the active head asset");
-assert.ok(html.includes('label="拓扑"'), "workbench state panel exposes the active topology");
+assert.ok(html.includes('label="模型版本"'), "workbench state panel exposes the active model version without topology jargon");
 assert.ok(html.includes('id="approveCandidateBtn"'), "workbench exposes candidate approval action");
 assert.ok(html.includes('id="rejectCandidateBtn"'), "workbench exposes candidate rejection action");
 assert.ok(html.includes('id="candidateWidth"'), "workbench exposes fusiform width and ratio metric");

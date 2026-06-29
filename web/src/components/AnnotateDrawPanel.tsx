@@ -27,7 +27,7 @@ export function AnnotateDrawPanel() {
 
   return (
     <Card>
-      <SectionTitle label="1. 选择线系统" value={snapshot?.mesh.modeLabel || "FLAME 标准脸"} valueProps={{ id: "drawMode" }} />
+      <SectionTitle label="1. 选择线系统" value={snapshot?.mesh.modeLabel || "标准三维面部模型"} valueProps={{ id: "drawMode" }} />
       <div>
         <Label htmlFor="annSystem">线系统</Label>
         <Select

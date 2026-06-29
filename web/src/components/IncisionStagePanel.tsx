@@ -5,7 +5,7 @@ import { useIncisionStore, type IncisionAssetLoadingState } from "../stores/inci
 
 const DEFAULT_ASSET_LOADING: IncisionAssetLoadingState = {
   visible: true,
-  text: "准备下载 FLAME/MediaPipe 头模、拓扑和 RSTL 图谱。",
+  text: "准备下载标准三维面部模型、张力线图谱和切口规划资产。",
 };
 
 export function IncisionStagePanel() {
@@ -19,7 +19,7 @@ export function IncisionStagePanel() {
           <StageStatus active>{snapshot?.headAsset.statusLabel || "头模规划"}</StageStatus>
           <StageActions>
             <StageMeta id="stageStatus">{snapshot?.stageStatus || "拖拽旋转 · 滚轮缩放 · 点击定位"}</StageMeta>
-            <StageLink variant="meta" to="/annotate">3D 标注与演示</StageLink>
+            <StageLink variant="meta" to="/settings/atlas">图谱库管理</StageLink>
           </StageActions>
         </>
       )}

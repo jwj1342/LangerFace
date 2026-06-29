@@ -19,7 +19,7 @@ const poseQuality = fs.readFileSync("src/services/geometryPoseQuality.ts", "utf8
 const liveSnapshots = fs.readFileSync("src/services/liveSnapshots.ts", "utf8");
 const controllerSnapshotSchemas = fs.readFileSync("src/lib/controllerSnapshotSchemas.ts", "utf8");
 
-assert.ok(compatibilityHtml.includes("/app/live"), "legacy live HTML redirects to the React live route");
+assert.ok(compatibilityHtml.includes("/app/"), "root compatibility HTML redirects to the React case lobby");
 assert.ok(!compatibilityHtml.includes("main.js"), "legacy live HTML no longer mounts the live controller directly");
 assert.ok(liveUi.includes('accept="image/*,video/*"'), "React live page accepts uploaded photos and videos");
 assert.ok(liveUi.includes('id="camBtn"'), "React live page exposes camera entry for realtime overlay");
