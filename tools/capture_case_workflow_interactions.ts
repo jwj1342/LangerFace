@@ -174,6 +174,24 @@ async function expectNoDoctorJargon(page) {
   expect(leaked, \`doctor workflow leaked implementation jargon: \${leaked.join(", ")}\`).toEqual([]);
 }
 
+async function expectLobbyPreviewIsPrimary(page) {
+  const metrics = await page.locator(".case-lobby-landing").evaluate((landing) => {
+    const stage = landing.querySelector(".case-lobby-stage");
+    const frame = landing.querySelector(".case-lobby-stage .case-face-asset-frame");
+    const landingRect = landing.getBoundingClientRect();
+    const stageRect = stage?.getBoundingClientRect();
+    const frameRect = frame?.getBoundingClientRect();
+    return {
+      landingWidth: landingRect.width,
+      stageWidth: stageRect?.width ?? 0,
+      frameHeight: frameRect?.height ?? 0,
+      stageRatio: stageRect ? stageRect.width / landingRect.width : 0,
+    };
+  });
+  expect(metrics.stageRatio, JSON.stringify(metrics)).toBeGreaterThanOrEqual(0.38);
+  expect(metrics.frameHeight, JSON.stringify(metrics)).toBeGreaterThanOrEqual(320);
+}
+
 async function expectClinicalVisualDiscipline(page) {
   const violations = await page.locator(".case-workflow-page").evaluate((root) => {
     const selectors = [
@@ -260,6 +278,7 @@ test("clinical case workflow click path", async ({ page }) => {
   await waitForLobbyPreview(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
+  await expectLobbyPreviewIsPrimary(page);
   await expectClinicalVisualDiscipline(page);
   await shot(page, "01-dashboard-empty");
 

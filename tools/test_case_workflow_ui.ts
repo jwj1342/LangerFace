@@ -428,6 +428,8 @@ assert.ok(visualCapture.includes("示例医生"), "Playwright visual case seed e
 assert.ok(interactionCapture.includes("waitForLobbyPreview"), "interactive visual flow waits for the lobby 3D preview asset");
 assert.ok(interactionCapture.includes("expectRenderedFaceCanvas"), "interactive visual flow verifies the 3D canvas contains rendered pixels");
 assert.ok(interactionCapture.includes("gl.readPixels"), "interactive visual flow samples WebGL pixels instead of trusting DOM loaded state only");
+assert.ok(interactionCapture.includes("expectLobbyPreviewIsPrimary"), "interactive visual flow verifies the case lobby 3D preview is a primary first-screen element");
+assert.ok(interactionCapture.includes("stageRatio"), "interactive visual flow records the lobby preview width ratio");
 assert.ok(interactionCapture.includes(".case-rationale-summary"), "interactive visual flow verifies the planning rationale summary is visible");
 assert.ok(interactionCapture.includes("13-compact-plan-1280x720"), "interactive visual flow captures compact planning viewport");
 assert.ok(interactionCapture.includes("14-compact-review-1280x720"), "interactive visual flow captures compact review viewport");
