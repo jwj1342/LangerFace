@@ -686,6 +686,16 @@ html {
 - 现有 `/app/live`、`/app/incision`、`/app/annotate`、`/app/surgery` 路由在过渡期仍可回归测试；`/app/annotate` 和 `/app/three-preview` 只能从设置或兼容区进入。
 - 视觉冒烟检查可用 `cd web && npm run visual:case` 启动本地 Vite，并用 Playwright 截取病例大厅、新建病例、评估、规划、确认、图谱库管理和系统诊断页；截图按视口尺寸输出到 `local_outputs/case-workflow-visual/`，不使用 full-page 长截图，也不提交到仓库。若运行环境缺少 Chromium 依赖，应在 PR 中记录失败日志和人工预览链接；若 Linux 截图中文字缺失，需要在截图主机安装 Noto Sans CJK SC 等中文字体后再做设计截图复核。
 
+### 主功能一致性回归
+
+这次 UI 重构的关键边界是“医生主流程隐藏旧工具入口，但不能删除或断开旧能力”。后续任何病例工作流改动都必须确认下面这些能力仍可从受控入口或对应病例步骤访问：
+
+- 实时采集：`/app/live` 仍保留摄像头、照片 / 视频上传、暂停、导出、RSTL 密度 / 透明度、切口候选实时叠加 QA，以及 3D 重建的扫描、旋转查看、投影、标准头 / 个体头模和真实纹理切换。
+- 切口工作台：`/app/incision` 仍保留肿物类型、直径、深度、安全切缘、皮表边界、导入 / 导出肿物、候选生成、候选库、医生审阅、JSON / 报告 / 截图导出和发送到实时叠加。
+- 3D 图谱与标准脸：`/app/annotate` 仍保留标准脸、FLAME 头模、拟合头模、云端拟合、头模上传、Slicer 曲线导入、画线、撤销、保存、导出图谱和设为活动图谱；`/app/three-preview` 仍加载 R3F 标准脸预览。
+- 病例主流程：`/app/case/:id/evaluate` 必须有真实文件选择上传、3D 扫描状态动作和图层反馈；`/app/case/:id/plan` 必须有肿物模拟、皮表边界描记、候选保存和病例内张力闭合模拟。
+- 回归命令：`cd web && npx -y node@24 ../tools/test_main_feature_parity.ts`；完整门禁仍用 `cd web && npm test`，该命令已经包含主功能一致性检查。
+
 ## 非目标
 
 - 不在本轮重写几何 kernel、切口候选算法或 RSTL 方向服务。
