@@ -878,6 +878,36 @@ function PlanningRationalePanel({ activeCase }: { activeCase: ClinicalCaseRecord
   );
 }
 
+function PlanningRationaleSummary({ activeCase }: { activeCase: ClinicalCaseRecord }) {
+  const ageRule = agePlanningRule(activeCase);
+  const lesionRule = lesionPlanningRule(activeCase);
+  const marginRule = marginPlanningRule(activeCase);
+  const items = [
+    { label: "年龄", title: ageRule.title, metric: ageRule.metric },
+    { label: "模式", title: lesionRule.title, metric: lesionRule.metric },
+    { label: "切缘", title: marginRule.title, metric: marginRule.metric },
+    { label: "警惕区", title: "眼睑 / 口唇 / 鼻翼", metric: "需复核" },
+  ];
+
+  return (
+    <div className="case-rationale-summary" aria-label="规划依据摘要">
+      <div className="case-rationale-summary-head">
+        <span>规划依据摘要</span>
+        <small>候选生成前可见，完整记录在下方审计区</small>
+      </div>
+      <div className="case-rationale-summary-grid">
+        {items.map((item) => (
+          <span key={item.label}>
+            <b>{item.label}</b>
+            <strong className="clinical-number">{item.metric}</strong>
+            <small>{item.title}</small>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CaseCandidateQueue({
   activeCase,
   onGenerate,
@@ -1469,6 +1499,7 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
                 方案确认
               </Button>
             </div>
+            <PlanningRationaleSummary activeCase={activeCase} />
           </section>
 
           <div className="case-two-column case-panel-two-column">

@@ -56,6 +56,8 @@ assert.ok(workflowDoc.includes("### 主按钮与跳转语义"), "clinical workfl
 assert.ok(workflowDoc.includes("不再把医生送回旧 `/app/live` 设计模式"), "button map prevents live capture from falling back to the legacy route");
 assert.ok(workflowDoc.includes("闭合演示嵌入规划页，不跳 `/app/surgery`"), "button map prevents closure simulation from jumping to the standalone demo");
 assert.ok(workflowDoc.includes("设置页里的兼容入口必须有边界说明"), "workflow doc keeps compatibility tools out of the doctor flow");
+assert.ok(workflowDoc.includes("常驻规划依据摘要"), "workflow doc requires visible planning rationale in the planning command area");
+assert.ok(!workflowDoc.includes("例如“打开实时采集”“打开候选画布”"), "workflow doc no longer describes legacy live/incision as in-flow secondary jumps");
 
 assert.ok(dashboard.includes("面部松弛皮肤张力线智能切口设计系统"), "case lobby uses the clinician-facing product name");
 assert.ok(dashboard.includes("病例大厅"), "case lobby replaces the technical landing copy");
@@ -141,6 +143,8 @@ assert.ok(caseRoute.includes("RSTL 透明度"), "case workflow lets clinicians t
 assert.ok(caseRoute.includes("皮纹透明度"), "case workflow lets clinicians tune personalized wrinkle opacity");
 assert.ok(caseRoute.includes("rstlDensityLabel"), "case workflow derives clinician-facing RSTL density labels");
 assert.ok(caseRoute.includes("规划依据"), "case workflow keeps explainability visible");
+assert.ok(caseRoute.includes("PlanningRationaleSummary"), "case planning exposes a first-screen planning rationale summary");
+assert.ok(caseRoute.includes("候选生成前可见，完整记录在下方审计区"), "case planning explains where concise and full rationale live");
 assert.ok(caseRoute.includes("PlanningRationalePanel"), "case workflow renders a dedicated planning rationale panel");
 assert.ok(caseRoute.includes("规划依据与风险提示"), "case workflow labels planning rationale and risk together");
 assert.ok(caseRoute.includes("case-rule-grid"), "case workflow renders structured clinical rule cards");
@@ -365,6 +369,8 @@ assert.ok(styles.includes("--case-wrinkle-opacity"), "styles bind personalized w
 assert.ok(styles.includes(".case-face-blended-field"), "styles implement the mixed-field overlay");
 assert.ok(styles.includes(".case-face-wrinkle"), "styles implement personalized wrinkle overlays");
 assert.ok(styles.includes(".case-rule-grid"), "styles implement structured planning rule cards");
+assert.ok(styles.includes(".case-rationale-summary"), "styles implement a compact always-visible planning rationale summary");
+assert.ok(styles.includes(".case-rationale-summary-grid"), "styles implement dense planning rationale summary cells");
 assert.ok(styles.includes(".case-rationale-audit"), "styles implement dense planning audit rows");
 assert.ok(styles.includes(".case-candidate-panel"), "styles implement the case candidate panel");
 assert.ok(styles.includes(".case-candidate-metrics"), "styles implement dense candidate metrics");
@@ -419,6 +425,7 @@ assert.ok(visualCapture.includes("示例医生"), "Playwright visual case seed e
 assert.ok(interactionCapture.includes("waitForLobbyPreview"), "interactive visual flow waits for the lobby 3D preview asset");
 assert.ok(interactionCapture.includes("expectRenderedFaceCanvas"), "interactive visual flow verifies the 3D canvas contains rendered pixels");
 assert.ok(interactionCapture.includes("gl.readPixels"), "interactive visual flow samples WebGL pixels instead of trusting DOM loaded state only");
+assert.ok(interactionCapture.includes(".case-rationale-summary"), "interactive visual flow verifies the planning rationale summary is visible");
 assert.ok(interactionCapture.includes("13-compact-plan-1280x720"), "interactive visual flow captures compact planning viewport");
 assert.ok(interactionCapture.includes("14-compact-review-1280x720"), "interactive visual flow captures compact review viewport");
 assert.ok(interactionCapture.includes("expectNoBrowserScroll"), "interactive visual flow asserts browser-level scrolling remains locked");

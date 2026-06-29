@@ -3870,6 +3870,10 @@ body:has(.case-workflow-page) {
   min-height: 118px;
 }
 
+.case-clinical-workspace-plan .case-workspace-panel .case-panel-priority {
+  min-height: 204px;
+}
+
 .case-workspace-panel .case-panel-priority > div:first-child {
   display: grid;
   gap: 4px;
@@ -3888,6 +3892,74 @@ body:has(.case-workflow-page) {
 
 .case-workspace-panel .case-panel-priority .case-panel-action-row {
   display: grid;
+}
+
+.case-rationale-summary {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid rgb(120 169 255 / 0.18);
+  padding-top: 8px;
+}
+
+.case-rationale-summary-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.case-rationale-summary-head span {
+  color: #e7edf5;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.case-rationale-summary-head small {
+  color: #8fa2b5;
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.case-rationale-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.case-rationale-summary-grid > span {
+  display: grid;
+  min-width: 0;
+  border: 1px solid #273440;
+  border-radius: 2px;
+  background: #0b1118;
+  padding: 6px;
+}
+
+.case-rationale-summary-grid b {
+  color: #8fa2b5;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.case-rationale-summary-grid strong {
+  overflow: hidden;
+  color: #f4f7fb;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-rationale-summary-grid small {
+  overflow: hidden;
+  color: #b8c5d2;
+  font-size: 10px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .case-panel-action-row,

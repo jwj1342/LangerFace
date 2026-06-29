@@ -204,6 +204,7 @@ test("clinical case workflow click path", async ({ page }) => {
 
   await page.getByRole("button", { name: /下一步：标记病灶|继续并标记复核/ }).click();
   await expect(page.locator("#casePlanStep")).toBeVisible();
+  await expect(page.locator(".case-rationale-summary")).toBeVisible();
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await shot(page, "07-plan-initial");
@@ -240,11 +241,13 @@ test("clinical case workflow click path", async ({ page }) => {
 
   await page.getByRole("link", { name: /2\\. 切口规划/ }).click();
   await expect(page.locator("#casePlanStep")).toBeVisible();
+  await expect(page.locator(".case-rationale-summary")).toBeVisible();
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await shot(page, "12-return-to-plan-from-stepper");
 
   await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(page.locator(".case-rationale-summary")).toBeVisible();
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await shot(page, "13-compact-plan-1280x720");
