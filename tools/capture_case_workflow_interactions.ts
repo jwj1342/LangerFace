@@ -156,6 +156,24 @@ async function expectNoBrowserScroll(page) {
   expect([metrics.htmlOverflowY, metrics.bodyOverflowY], JSON.stringify(metrics)).toContain("hidden");
 }
 
+async function expectNoDoctorJargon(page) {
+  const text = await page.locator(".case-workflow-page").innerText();
+  const forbiddenTerms = [
+    "R3F",
+    "FLAME",
+    "MediaPipe",
+    "Agent trace",
+    "Agent 工具",
+    "LLM Provider",
+    "OpenAI-compatible",
+    "vLLM",
+    "Worker API",
+    "topology",
+  ];
+  const leaked = forbiddenTerms.filter((term) => text.includes(term));
+  expect(leaked, \`doctor workflow leaked implementation jargon: \${leaked.join(", ")}\`).toEqual([]);
+}
+
 test("clinical case workflow click path", async ({ page }) => {
   test.setTimeout(120000);
   const consoleErrors = [];
@@ -170,11 +188,13 @@ test("clinical case workflow click path", async ({ page }) => {
   await expect(page.locator("#caseDashboard")).toBeVisible();
   await waitForLobbyPreview(page);
   await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
   await shot(page, "01-dashboard-empty");
 
   await page.getByRole("link", { name: /新建面部评估|新建病例/ }).first().click();
   await expect(page.locator("#caseNewSetup")).toBeVisible();
   await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
   await shot(page, "02-new-case-initial");
 
   await page.locator("#newCaseAge").fill("64");
@@ -183,23 +203,27 @@ test("clinical case workflow click path", async ({ page }) => {
   await page.locator("#newCaseSafetyMargin").fill("5");
   await page.locator("#caseNewSetup").getByRole("button", { name: /3D 扫描/ }).click();
   await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
   await shot(page, "03-new-case-filled");
 
   await page.getByRole("button", { name: /创建病例草稿/ }).click();
   await expect(page.locator("#caseEvaluateStep")).toBeVisible();
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
   await shot(page, "04-evaluate-3d-loaded");
 
   await page.getByRole("button", { name: /切换实时叠加/ }).click();
   await expect(page).toHaveURL(/\\/app\\/case\\/[^/]+\\/evaluate$/);
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
   await shot(page, "05-evaluate-after-live-toggle");
 
   await page.locator("label").filter({ hasText: "RSTL 密度" }).locator("select").selectOption("high");
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
   await shot(page, "06-evaluate-layer-density");
 
   await page.getByRole("button", { name: /下一步：标记病灶|继续并标记复核/ }).click();
@@ -207,6 +231,7 @@ test("clinical case workflow click path", async ({ page }) => {
   await expect(page.locator(".case-rationale-summary")).toBeVisible();
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
   await shot(page, "07-plan-initial");
 
   await page.locator("#lesionLayer").selectOption("cutaneous");
@@ -218,18 +243,21 @@ test("clinical case workflow click path", async ({ page }) => {
   await expect(page.getByText(/候选 1/)).toBeVisible();
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
   await shot(page, "08-plan-after-save-candidate");
 
   await page.getByRole("button", { name: /张力模拟/ }).first().click();
   await expect(page.locator("#caseClosureSimulation")).toContainText(/闭合评分|当前结论/);
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
   await shot(page, "09-plan-after-closure");
 
   await page.getByRole("button", { name: /^方案确认$/ }).click();
   await expect(page.locator("#caseReviewStep")).toBeVisible();
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
   await shot(page, "10-review-initial");
 
   await page.locator("#caseReviewerName").fill("示例医生");
@@ -237,6 +265,7 @@ test("clinical case workflow click path", async ({ page }) => {
   await expect(page.getByText("已确认").first()).toBeVisible();
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
   await shot(page, "11-review-approved");
 
   await page.getByRole("link", { name: /2\\. 切口规划/ }).click();
@@ -244,18 +273,21 @@ test("clinical case workflow click path", async ({ page }) => {
   await expect(page.locator(".case-rationale-summary")).toBeVisible();
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
   await shot(page, "12-return-to-plan-from-stepper");
 
   await page.setViewportSize({ width: 1280, height: 720 });
   await expect(page.locator(".case-rationale-summary")).toBeVisible();
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
   await shot(page, "13-compact-plan-1280x720");
 
   await page.getByRole("button", { name: /^方案确认$/ }).click();
   await expect(page.locator("#caseReviewStep")).toBeVisible();
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
   await shot(page, "14-compact-review-1280x720");
 
   await page.getByRole("link", { name: /^系统诊断$/ }).click();

@@ -429,6 +429,9 @@ assert.ok(interactionCapture.includes(".case-rationale-summary"), "interactive v
 assert.ok(interactionCapture.includes("13-compact-plan-1280x720"), "interactive visual flow captures compact planning viewport");
 assert.ok(interactionCapture.includes("14-compact-review-1280x720"), "interactive visual flow captures compact review viewport");
 assert.ok(interactionCapture.includes("expectNoBrowserScroll"), "interactive visual flow asserts browser-level scrolling remains locked");
+assert.ok(interactionCapture.includes("expectNoDoctorJargon"), "interactive visual flow rejects implementation jargon in doctor-facing workflow pages");
+assert.ok(interactionCapture.includes("doctor workflow leaked implementation jargon"), "interactive visual flow reports leaked doctor-facing jargon explicitly");
+assert.ok(interactionCapture.includes('"OpenAI-compatible"'), "interactive visual flow treats provider protocol names as developer-only jargon");
 assert.ok(interactionCapture.includes("切换实时叠加"), "interactive visual flow verifies live overlay stays inside the case workflow");
 assert.ok(!interactionCapture.includes("fullPage: true"), "interactive visual flow captures viewport screenshots instead of full-page screenshots");
 
