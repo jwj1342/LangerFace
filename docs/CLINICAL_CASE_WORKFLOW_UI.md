@@ -695,6 +695,7 @@ html {
 - 3D 图谱与标准脸：`/app/annotate` 仍保留标准脸、FLAME 头模、拟合头模、云端拟合、头模上传、Slicer 曲线导入、画线、撤销、保存、导出图谱和设为活动图谱；`/app/three-preview` 仍加载 R3F 标准脸预览。
 - 病例主流程：`/app/case/:id/evaluate` 必须有真实文件选择上传、3D 扫描状态动作和图层反馈；`/app/case/:id/plan` 必须有肿物模拟、皮表边界描记、候选保存和病例内张力闭合模拟。
 - 回归命令：`cd web && npx -y node@24 ../tools/test_main_feature_parity.ts`；完整门禁仍用 `cd web && npm test`，该命令已经包含主功能一致性检查。
+- 浏览器运行时冒烟：`cd web && npm run visual:compat:parity` 会启动 Vite 并用 Playwright 打开 `/app/live`、`/app/incision`、`/app/annotate`、`/app/three-preview`，检查标准脸 canvas、3D 标注 canvas、切口候选生成、照片上传、摄像头入口、3D 重建控件、标准头切换和真实纹理切换仍可访问；截图写入 gitignored `local_outputs/compat-feature-parity/`。
 
 ## 非目标
 

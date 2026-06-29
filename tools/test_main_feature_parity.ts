@@ -23,6 +23,7 @@ const liveRuntime = read("src/services/liveRuntime.ts");
 const pipelineSource = read("src/services/pipelineSource.ts");
 const controllerCommand = read("src/lib/controllerCommand.ts");
 const mode3d = read("src/services/mode3d.ts");
+const sharedThree3d = read("src/services/three3d.ts");
 const render2d = read("src/services/render2d.ts");
 const cameraSource = read("src/services/cameraSource.ts");
 const skinMaterial = read("src/services/skinMaterial.ts");
@@ -39,6 +40,7 @@ const annotateMeshSource = read("src/components/AnnotateMeshSourcePanel.tsx");
 const annotateDraw = read("src/components/AnnotateDrawPanel.tsx");
 const annotateLineLibrary = read("src/components/AnnotateLineLibraryPanel.tsx");
 const annotateRuntime = read("src/services/annotateRuntime.ts");
+const annotateViewer = read("src/services/annotateViewer.ts");
 const threePreviewScene = read("src/components/ThreePreviewScene.tsx");
 const standardFaceAssets = read("src/services/standardFaceAssets.ts");
 const caseRoute = read("src/routes/CaseWorkflowRoute.tsx");
@@ -145,6 +147,12 @@ includesAll(mode3d, [
   "toggleTwinHead",
   "toggleTwinTexture",
 ], "3D reconstruction runtime");
+
+includesAll(sharedThree3d, [
+  "preserveDrawingBuffer: true",
+  "configureSkinRenderer",
+  "incisionOverlay",
+], "shared Three.js viewer visual QA support");
 
 includesAll(controllerCommand, [
   '"load_demo_recon"',
@@ -295,6 +303,13 @@ includesAll(annotateRuntime, [
   "export_atlas",
   "set_active_atlas",
 ], "3D annotation runtime");
+
+includesAll(annotateViewer, [
+  "preserveDrawingBuffer: true",
+  "configureSkinRenderer",
+  "setMesh",
+  "raycast",
+], "3D annotation viewer visual QA support");
 
 includesAll(threePreviewScene, [
   "@react-three/fiber",
