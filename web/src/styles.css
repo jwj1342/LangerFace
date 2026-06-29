@@ -1235,6 +1235,32 @@
     gap: 12px;
   }
 
+  .case-review-compliance-strip {
+    display: grid;
+    gap: 1px;
+    border: 1px solid rgb(241 194 27 / 0.28);
+    background: rgb(241 194 27 / 0.12);
+  }
+
+  .case-review-compliance-strip p {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr);
+    gap: 7px;
+    align-items: start;
+    margin: 0;
+    background: #121820;
+    color: #f3d986;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.35;
+    padding: 7px 8px;
+  }
+
+  .case-review-compliance-strip svg {
+    margin-top: 1px;
+    color: #f1c21b;
+  }
+
   .case-review-record {
     display: grid;
     gap: 10px;

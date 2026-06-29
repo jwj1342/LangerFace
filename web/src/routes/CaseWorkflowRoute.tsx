@@ -1700,6 +1700,12 @@ function ReviewStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
             </div>
           </section>
 
+          <section className="case-review-compliance-strip" aria-label="确认页合规提示">
+            <p><ShieldAlert size={13} /><span>辅助设计，不替代执业医师结合查体确认。</span></p>
+            <p><ShieldAlert size={13} /><span>需确认可直接拉拢缝合；皮瓣 / 植皮病例仅作方向参考。</span></p>
+            <p><ShieldAlert size={13} /><span>恶性病灶安全切缘以病理阴性为最终标准。</span></p>
+          </section>
+
           <Card>
             <CardHeader><span>病例摘要</span><FileText size={16} /></CardHeader>
             <CardContent className="case-summary-list">

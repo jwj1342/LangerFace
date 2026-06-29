@@ -167,6 +167,8 @@ assert.ok(caseRoute.includes("buildCaseReportDraft"), "case review can build a l
 assert.ok(caseRoute.includes("导出脱敏 JSON"), "case review exposes a sanitized JSON export action");
 assert.ok(caseRoute.includes("下载报告草案"), "case review exposes a report draft export action");
 assert.ok(caseRoute.includes("## 病灶边界"), "case report draft includes a dedicated lesion boundary section");
+assert.ok(caseRoute.includes("case-review-compliance-strip"), "case review keeps a compact compliance warning visible in the priority panel");
+assert.ok(caseRoute.includes("确认页合规提示"), "case review exposes an accessible compliance strip before export");
 assert.ok(caseRoute.includes("医生审阅记录"), "case review exposes a structured clinician review record");
 assert.ok(caseRoute.includes("审阅医生"), "case review requires a reviewer field");
 assert.ok(caseRoute.includes("覆盖 / 退回原因"), "case review captures override or revision reasons");
@@ -379,6 +381,7 @@ assert.ok(styles.includes(".case-candidate-panel"), "styles implement the case c
 assert.ok(styles.includes(".case-candidate-metrics"), "styles implement dense candidate metrics");
 assert.ok(styles.includes(".case-candidate-rationale"), "styles implement candidate provenance rows");
 assert.ok(styles.includes(".case-review-output"), "styles implement the review output surface");
+assert.ok(styles.includes(".case-review-compliance-strip"), "styles implement a first-screen compliance strip on review");
 assert.ok(styles.includes(".case-review-record"), "styles implement the clinician review record form");
 assert.ok(styles.includes(".case-review-textarea"), "styles implement dense review note fields");
 assert.ok(styles.includes(".case-export-actions"), "styles implement compact case export actions");
@@ -441,6 +444,8 @@ assert.ok(interactionCapture.includes("expectClinicalVisualDiscipline"), "intera
 assert.ok(interactionCapture.includes("clinical visual discipline violations"), "interactive visual flow reports clinical visual discipline regressions explicitly");
 assert.ok(interactionCapture.includes("expectCanvasDominatesWorkspace"), "interactive visual flow verifies the face canvas dominates the side panel");
 assert.ok(interactionCapture.includes("canvasRatio"), "interactive visual flow records the workspace canvas width ratio");
+assert.ok(interactionCapture.includes(".case-review-compliance-strip"), "interactive visual flow verifies review compliance copy is visible before export");
+assert.ok(interactionCapture.includes("expectReviewComplianceInViewport"), "interactive visual flow verifies review compliance copy is inside the first viewport");
 assert.ok(interactionCapture.includes("切换实时叠加"), "interactive visual flow verifies live overlay stays inside the case workflow");
 assert.ok(!interactionCapture.includes("fullPage: true"), "interactive visual flow captures viewport screenshots instead of full-page screenshots");
 

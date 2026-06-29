@@ -208,6 +208,7 @@ async function expectClinicalVisualDiscipline(page) {
       ".case-candidate-row",
       ".case-layer-toggle",
       ".case-boundary-control",
+      ".case-review-compliance-strip",
       ".case-disclosure",
       ".case-empty-state",
     ];
@@ -261,6 +262,21 @@ async function expectCanvasDominatesWorkspace(page) {
   });
   expect(metrics.canvasRatio, JSON.stringify(metrics)).toBeGreaterThanOrEqual(0.6);
   expect(metrics.canvasWidth, JSON.stringify(metrics)).toBeGreaterThan(metrics.panelWidth);
+}
+
+async function expectReviewComplianceInViewport(page) {
+  const metrics = await page.locator(".case-review-compliance-strip").first().evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      top: rect.top,
+      bottom: rect.bottom,
+      height: rect.height,
+      viewportHeight: window.innerHeight,
+    };
+  });
+  expect(metrics.height, JSON.stringify(metrics)).toBeGreaterThanOrEqual(48);
+  expect(metrics.top, JSON.stringify(metrics)).toBeGreaterThanOrEqual(0);
+  expect(metrics.bottom, JSON.stringify(metrics)).toBeLessThanOrEqual(metrics.viewportHeight);
 }
 
 test("clinical case workflow click path", async ({ page }) => {
@@ -360,6 +376,8 @@ test("clinical case workflow click path", async ({ page }) => {
 
   await page.getByRole("button", { name: /^方案确认$/ }).click();
   await expect(page.locator("#caseReviewStep")).toBeVisible();
+  await expect(page.locator(".case-review-compliance-strip")).toBeVisible();
+  await expectReviewComplianceInViewport(page);
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
@@ -398,6 +416,8 @@ test("clinical case workflow click path", async ({ page }) => {
 
   await page.getByRole("button", { name: /^方案确认$/ }).click();
   await expect(page.locator("#caseReviewStep")).toBeVisible();
+  await expect(page.locator(".case-review-compliance-strip")).toBeVisible();
+  await expectReviewComplianceInViewport(page);
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
