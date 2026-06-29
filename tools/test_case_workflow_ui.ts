@@ -8,6 +8,7 @@ const settingsRoute = fs.readFileSync("src/routes/SettingsRoute.tsx", "utf8");
 const clinicalFacePreview = fs.readFileSync("src/components/ClinicalFacePreview.tsx", "utf8");
 const managedRoute = fs.readFileSync("src/components/ManagedWorkbenchRoute.tsx", "utf8");
 const threePreviewScene = fs.readFileSync("src/components/ThreePreviewScene.tsx", "utf8");
+const standardFaceAssets = fs.readFileSync("src/services/standardFaceAssets.ts", "utf8");
 const incisionRoute = fs.readFileSync("src/routes/IncisionRoute.tsx", "utf8");
 const liveRoute = fs.readFileSync("src/routes/LiveRoute.tsx", "utf8");
 const annotateRoute = fs.readFileSync("src/routes/AnnotateRoute.tsx", "utf8");
@@ -73,6 +74,8 @@ assert.ok(dashboard.includes("case-lobby-asset-frame"), "case lobby wraps the lo
 assert.ok(dashboard.includes("case-workflow-roadmap"), "case lobby shows the clinical workflow roadmap");
 assert.ok(dashboard.includes('to="/case/new"'), "case lobby routes new cases through the preflight setup page");
 assert.ok(!dashboard.includes("const createCase"), "case lobby does not bypass preflight setup by creating a case directly");
+assert.ok(!dashboard.includes("任务入口"), "case lobby no longer renders the redundant bottom task-entry card");
+assert.ok(!dashboard.includes("<span>临床边界</span><ShieldCheck"), "case lobby no longer renders the redundant bottom clinical-boundary card");
 assert.ok(dashboard.includes("系统设置"), "case lobby keeps maintenance entry points in system settings");
 assert.ok(!dashboard.includes("兼容 / 研发工具"), "case lobby no longer exposes compatibility tools in the doctor sidebar");
 assert.ok(!dashboard.includes("开发 / 诊断信息"), "case lobby no longer exposes developer diagnostics in the doctor sidebar");
@@ -114,6 +117,15 @@ assert.ok(caseRoute.includes("采集质量门禁"), "case workflow exposes an ac
 assert.ok(caseRoute.includes("AcquisitionQualityGate"), "case workflow renders a structured acquisition quality gate");
 assert.ok(caseRoute.includes("AcquisitionPathwayPanel"), "case workflow renders a structured acquisition pathway panel");
 assert.ok(caseRoute.includes("case-acquisition-path-grid"), "case workflow exposes acquisition pathways as clinical task cards");
+assert.ok(caseRoute.includes("case-acquisition-action-panel"), "case workflow gives the selected acquisition pathway direct actions");
+assert.ok(caseRoute.includes("case-hidden-file-input"), "case workflow exposes an actual file input for uploaded photos and videos");
+assert.ok(caseRoute.includes('type="file"'), "case workflow upload action opens a browser file chooser");
+assert.ok(caseRoute.includes("onUploadFiles"), "case workflow stores upload file summaries after file selection");
+assert.ok(caseRoute.includes("mediaAssetSummary"), "case workflow gives clinicians visible feedback for selected upload files");
+assert.ok(caseRoute.includes("scanReconstructionStatusLabel"), "case workflow gives clinicians visible 3D reconstruction state");
+assert.ok(caseRoute.includes("准备 3D 扫描"), "case workflow provides a direct guided 3D scan action");
+assert.ok(caseRoute.includes("标记重建完成"), "case workflow provides a direct 3D reconstruction completion action");
+assert.ok(caseRoute.includes("准备实时采集"), "case workflow keeps realtime acquisition as an in-case action");
 assert.ok(caseRoute.includes("高清照片 / 视频"), "case workflow exposes the upload pathway");
 assert.ok(caseRoute.includes("标准位取材"), "case workflow exposes the standard photo pathway");
 assert.ok(caseRoute.includes("引导式三维重建"), "case workflow exposes the guided 3D scan pathway");
@@ -140,6 +152,12 @@ assert.ok(caseRoute.includes("自由轮廓点"), "case workflow records freehand
 assert.ok(caseRoute.includes("边界长轴 mm"), "case workflow records ellipse or freehand long-axis measurement");
 assert.ok(caseRoute.includes("边界短轴 mm"), "case workflow records ellipse or freehand short-axis measurement");
 assert.ok(caseRoute.includes("完整自由绘图仍可从受控规划入口进入"), "case workflow keeps full freehand drawing as a controlled planning handoff");
+assert.ok(caseRoute.includes("模拟肿物"), "case planning provides a direct tumor simulation action");
+assert.ok(caseRoute.includes("simulateTumorInput"), "case planning writes simulated tumor input into the case record");
+assert.ok(caseRoute.includes("描记皮表边界"), "case planning provides a direct lesion-boundary tracing action");
+assert.ok(caseRoute.includes("traceFreehandBoundary"), "case planning writes a freehand-style lesion boundary into the case record");
+assert.ok(caseRoute.includes("case-lesion-simulation-status"), "case planning gives feedback after tumor simulation actions");
+assert.ok(caseRoute.includes("...lesionDraft.boundary"), "case planning accepts partial lesion boundary drafts instead of discarding tool updates");
 assert.ok(caseRoute.includes("RSTL 密度"), "case workflow lets clinicians tune RSTL line density");
 assert.ok(caseRoute.includes("RSTL 透明度"), "case workflow lets clinicians tune RSTL opacity");
 assert.ok(caseRoute.includes("皮纹透明度"), "case workflow lets clinicians tune personalized wrinkle opacity");
@@ -190,6 +208,8 @@ assert.ok(caseRoute.includes("临床合规提示"), "case workflow includes clin
 assert.ok(caseRoute.includes("CaseClinicalViewport"), "case workflow renders a clinical viewport focus area for each step");
 assert.ok(caseRoute.includes("ThreePreviewScene"), "case workflow renders the real standard face asset scene instead of a CSS-only placeholder");
 assert.ok(caseRoute.includes("useStandardFaceAssets"), "case workflow lazy-loads the standard face mesh and RSTL atlas assets");
+assert.ok(caseRoute.includes("showLesionOverlay"), "case workflow only shows lesion overlays after lesion input exists");
+assert.ok(caseRoute.includes("showIncisionOverlay"), "case workflow only shows incision overlays after a candidate exists");
 assert.ok(caseRoute.includes("case-face-asset-frame"), "case workflow wraps the loaded 3D face model in a stable clinical viewport frame");
 assert.ok(caseRoute.includes("case-viewport-mode-switch"), "case workflow exposes 2D/3D/live viewport mode context");
 for (const viewportMode of ["2D 图像", "3D 重建", "实时叠加"]) {
@@ -305,6 +325,12 @@ assert.ok(dataSource.includes("ClinicalCaseReviewDecision"), "dataSource owns ty
 assert.ok(dataSource.includes("normalizeReviewRecord"), "dataSource normalizes review records for draft recovery");
 assert.ok(dataSource.includes("ClinicalCaseCaptureSet"), "dataSource owns structured acquisition capture views");
 assert.ok(dataSource.includes("ClinicalCaseAcquisitionQuality"), "dataSource owns structured acquisition quality checks");
+assert.ok(dataSource.includes("ClinicalCaseMediaAsset"), "dataSource owns sanitized acquisition media summaries");
+assert.ok(dataSource.includes("ClinicalCaseScanReconstruction"), "dataSource owns 3D reconstruction state inside the case record");
+assert.ok(dataSource.includes("mediaAssets"), "dataSource persists sanitized upload file summaries inside the case record");
+assert.ok(dataSource.includes("scanReconstruction"), "dataSource persists scan reconstruction state inside the case record");
+assert.ok(dataSource.includes("normalizeMediaAssets"), "dataSource normalizes saved media summaries for draft recovery");
+assert.ok(dataSource.includes("normalizeScanReconstruction"), "dataSource normalizes saved scan reconstruction state for draft recovery");
 assert.ok(dataSource.includes("ClinicalCaseLesionBoundary"), "dataSource owns structured lesion boundary records");
 assert.ok(dataSource.includes("LesionBoundaryMode"), "dataSource owns typed lesion boundary modes");
 assert.ok(dataSource.includes("LesionBoundarySource"), "dataSource owns typed lesion boundary sources");
@@ -328,6 +354,7 @@ assert.ok(caseStore.includes("...draft"), "case store preserves top-level candid
 assert.ok(caseStore.includes("reviewRecord"), "case store merges structured review records through the case data boundary");
 assert.ok(caseStore.includes("captureSet"), "case store merges nested acquisition capture updates through the case data boundary");
 assert.ok(caseStore.includes("quality"), "case store merges nested acquisition quality updates through the case data boundary");
+assert.ok(caseStore.includes("scanReconstruction"), "case store merges nested scan reconstruction updates through the case data boundary");
 assert.ok(caseStore.includes("boundary: { ...current.lesion.boundary"), "case store merges nested lesion boundary updates through the case data boundary");
 assert.ok(!caseStore.includes("localStorage"), "case store does not bypass the dataSource boundary");
 
@@ -359,6 +386,9 @@ assert.ok(styles.includes(".case-acquisition-gate"), "styles implement the acqui
 assert.ok(styles.includes(".case-acquisition-path-panel"), "styles implement the acquisition pathway panel");
 assert.ok(styles.includes(".case-acquisition-path-card"), "styles implement acquisition pathway cards");
 assert.ok(styles.includes(".case-acquisition-path-meta"), "styles implement dense acquisition pathway metadata");
+assert.ok(styles.includes(".case-acquisition-action-panel"), "styles implement the active acquisition action panel");
+assert.ok(styles.includes(".case-acquisition-action-row"), "styles implement compact acquisition action buttons");
+assert.ok(styles.includes(".case-hidden-file-input"), "styles hide the native file input while keeping the upload action operable");
 assert.ok(styles.includes(".case-capture-grid"), "styles implement compact capture completeness controls");
 assert.ok(styles.includes(".case-quality-grid"), "styles implement compact acquisition quality controls");
 assert.ok(styles.includes(".case-acquisition-status-ready"), "styles implement acquisition quality status feedback");
@@ -366,6 +396,8 @@ assert.ok(styles.includes(".case-lesion-boundary-panel"), "styles implement the 
 assert.ok(styles.includes(".case-boundary-grid"), "styles implement compact lesion boundary controls");
 assert.ok(styles.includes(".case-boundary-metrics"), "styles implement lesion boundary measurements");
 assert.ok(styles.includes(".case-lesion-boundary-status-ready"), "styles implement lesion boundary status feedback");
+assert.ok(styles.includes(".case-lesion-tool-row"), "styles implement compact tumor simulation actions");
+assert.ok(styles.includes(".case-lesion-simulation-status"), "styles implement tumor simulation feedback");
 assert.ok(styles.includes(".case-face-lesion-boundary"), "styles implement the lesion boundary overlay");
 assert.ok(styles.includes(".case-face-boundary-point"), "styles implement freehand boundary point markers");
 assert.ok(styles.includes(".case-face-density-high"), "styles implement high-density RSTL overlays");
@@ -431,11 +463,18 @@ assert.ok(visualCapture.includes("示例医生"), "Playwright visual case seed e
 assert.ok(interactionCapture.includes("waitForLobbyPreview"), "interactive visual flow waits for the lobby 3D preview asset");
 assert.ok(interactionCapture.includes("expectRenderedFaceCanvas"), "interactive visual flow verifies the 3D canvas contains rendered pixels");
 assert.ok(interactionCapture.includes("gl.readPixels"), "interactive visual flow samples WebGL pixels instead of trusting DOM loaded state only");
+assert.ok(interactionCapture.includes("setInputFiles"), "interactive visual flow verifies the upload action opens and records real file input selections");
+assert.ok(interactionCapture.includes("准备 3D 扫描"), "interactive visual flow verifies guided 3D scan preparation");
+assert.ok(interactionCapture.includes("标记重建完成"), "interactive visual flow verifies 3D reconstruction state feedback");
+assert.ok(interactionCapture.includes("expectNoPrematureClinicalMarkers"), "interactive visual flow rejects fake lesion/incision markers before input exists");
+assert.ok(interactionCapture.includes("expectClinicalMarkerState"), "interactive visual flow verifies lesion and incision overlays follow case state");
+assert.ok(interactionCapture.includes("模拟肿物"), "interactive visual flow verifies tumor simulation before candidate saving");
+assert.ok(interactionCapture.includes("描记皮表边界"), "interactive visual flow verifies lesion boundary tracing before candidate saving");
 assert.ok(interactionCapture.includes("expectLobbyPreviewIsPrimary"), "interactive visual flow verifies the case lobby 3D preview is a primary first-screen element");
 assert.ok(interactionCapture.includes("stageRatio"), "interactive visual flow records the lobby preview width ratio");
 assert.ok(interactionCapture.includes(".case-rationale-summary"), "interactive visual flow verifies the planning rationale summary is visible");
-assert.ok(interactionCapture.includes("13-compact-plan-1280x720"), "interactive visual flow captures compact planning viewport");
-assert.ok(interactionCapture.includes("14-compact-review-1280x720"), "interactive visual flow captures compact review viewport");
+assert.ok(interactionCapture.includes("16-compact-plan-1280x720"), "interactive visual flow captures compact planning viewport");
+assert.ok(interactionCapture.includes("17-compact-review-1280x720"), "interactive visual flow captures compact review viewport");
 assert.ok(interactionCapture.includes("expectNoBrowserScroll"), "interactive visual flow asserts browser-level scrolling remains locked");
 assert.ok(interactionCapture.includes("expectNoDoctorJargon"), "interactive visual flow rejects implementation jargon in doctor-facing workflow pages");
 assert.ok(interactionCapture.includes("doctor workflow leaked implementation jargon"), "interactive visual flow reports leaked doctor-facing jargon explicitly");
@@ -448,5 +487,11 @@ assert.ok(interactionCapture.includes(".case-review-compliance-strip"), "interac
 assert.ok(interactionCapture.includes("expectReviewComplianceInViewport"), "interactive visual flow verifies review compliance copy is inside the first viewport");
 assert.ok(interactionCapture.includes("切换实时叠加"), "interactive visual flow verifies live overlay stays inside the case workflow");
 assert.ok(!interactionCapture.includes("fullPage: true"), "interactive visual flow captures viewport screenshots instead of full-page screenshots");
+
+assert.ok(standardFaceAssets.includes('getHeadMesh("flame-2023"'), "standard face preview loads the high-fidelity head asset first");
+assert.ok(standardFaceAssets.includes("mediaPipeAtlasToFlamePreviewAtlas"), "standard face preview maps RSTL preview lines onto the high-fidelity head asset");
+assert.ok(threePreviewScene.includes("previewScale"), "3D preview normalizes head asset scale instead of assuming MediaPipe canonical dimensions");
+assert.ok(!dashboard.includes("case-face-overlay-lesion"), "case lobby does not show a fake lesion marker before a case has lesion input");
+assert.ok(!dashboard.includes("case-face-overlay-incision"), "case lobby does not show a fake incision marker before a case has candidates");
 
 console.log("test_case_workflow_ui: clinical case workflow contracts passed");

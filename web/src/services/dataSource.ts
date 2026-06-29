@@ -96,6 +96,8 @@ export type AcquisitionQualityCheck = "unchecked" | "pass" | "review";
 export type LesionBoundaryMode = "center_diameter" | "ellipse" | "freehand";
 export type LesionBoundarySource = "clinical_exam" | "photo_trace" | "ultrasound" | "imported";
 export type LesionBoundaryStatus = "not_started" | "needs_review" | "ready";
+export type ClinicalCaseMediaAssetKind = "image" | "video" | "depth_or_3d" | "other";
+export type ScanReconstructionStatus = "not_started" | "input_ready" | "reconstructed" | "needs_review";
 
 export interface ClinicalCaseCaptureSet {
   frontal: boolean;
@@ -113,6 +115,21 @@ export interface ClinicalCaseAcquisitionQuality {
   tracking: AcquisitionQualityCheck;
   summary: string;
   lastCheckedAt: string | null;
+}
+
+export interface ClinicalCaseMediaAsset {
+  id: string;
+  name: string;
+  type: string;
+  sizeBytes: number;
+  kind: ClinicalCaseMediaAssetKind;
+  addedAt: string;
+}
+
+export interface ClinicalCaseScanReconstruction {
+  status: ScanReconstructionStatus;
+  summary: string;
+  updatedAt: string | null;
 }
 
 export interface ClinicalCaseLesionBoundary {
@@ -186,6 +203,8 @@ export interface ClinicalCaseRecord {
   acquisition: {
     source: "upload" | "photo" | "scan3d" | "realtime";
     sourceLabel: string;
+    mediaAssets: ClinicalCaseMediaAsset[];
+    scanReconstruction: ClinicalCaseScanReconstruction;
     captureSet: ClinicalCaseCaptureSet;
     quality: ClinicalCaseAcquisitionQuality;
   };
@@ -212,9 +231,11 @@ export interface ClinicalCaseRecord {
   lastError?: string;
 }
 
-type ClinicalCaseAcquisitionDraft = Partial<Omit<ClinicalCaseRecord["acquisition"], "captureSet" | "quality">> & {
+type ClinicalCaseAcquisitionDraft = Partial<Omit<ClinicalCaseRecord["acquisition"], "captureSet" | "quality" | "scanReconstruction">> & {
   captureSet?: Partial<ClinicalCaseCaptureSet>;
   quality?: Partial<ClinicalCaseAcquisitionQuality>;
+  mediaAssets?: ClinicalCaseMediaAsset[];
+  scanReconstruction?: Partial<ClinicalCaseScanReconstruction>;
 };
 
 type ClinicalCaseLesionDraft = Partial<Omit<ClinicalCaseRecord["lesion"], "boundary">> & {
@@ -561,6 +582,61 @@ function deriveAcquisitionQuality(
   };
 }
 
+function normalizeMediaAssetKind(value: unknown, type = ""): ClinicalCaseMediaAssetKind {
+  if (value === "image" || value === "video" || value === "depth_or_3d" || value === "other") return value;
+  if (type.startsWith("image/")) return "image";
+  if (type.startsWith("video/")) return "video";
+  if (/depth|ply|obj|gltf|glb|stl|zip/i.test(type)) return "depth_or_3d";
+  return "other";
+}
+
+function normalizeMediaAssets(value: unknown, now: string): ClinicalCaseMediaAsset[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 16).map((item, index): ClinicalCaseMediaAsset | null => {
+    if (!item || typeof item !== "object") return null;
+    const asset = item as Partial<ClinicalCaseMediaAsset>;
+    const name = typeof asset.name === "string" && asset.name.trim()
+      ? asset.name.trim().slice(0, 160)
+      : `采集文件 ${index + 1}`;
+    const type = typeof asset.type === "string" ? asset.type.trim().slice(0, 120) : "";
+    return {
+      id: typeof asset.id === "string" && asset.id.trim() ? asset.id.trim().slice(0, 96) : createId("media"),
+      name,
+      type,
+      sizeBytes: typeof asset.sizeBytes === "number" && Number.isFinite(asset.sizeBytes)
+        ? Math.max(0, Math.round(asset.sizeBytes))
+        : 0,
+      kind: normalizeMediaAssetKind(asset.kind, type || name),
+      addedAt: typeof asset.addedAt === "string" ? asset.addedAt : now,
+    };
+  }).filter((item): item is ClinicalCaseMediaAsset => item !== null);
+}
+
+function normalizeScanStatus(value: unknown): ScanReconstructionStatus {
+  if (value === "input_ready" || value === "reconstructed" || value === "needs_review") return value;
+  return "not_started";
+}
+
+function scanReconstructionSummary(status: ScanReconstructionStatus): string {
+  if (status === "input_ready") return "已记录 3D 扫描输入，等待重建或质量复核。";
+  if (status === "reconstructed") return "已记录 3D 重建完成状态；方案仍需医生结合查体确认。";
+  if (status === "needs_review") return "3D 重建或输入质量需要复核，后续候选和导出会保留该提示。";
+  return "尚未开始 3D 扫描重建。";
+}
+
+function normalizeScanReconstruction(
+  value: Partial<ClinicalCaseScanReconstruction> | undefined,
+): ClinicalCaseScanReconstruction {
+  const status = normalizeScanStatus(value?.status);
+  return {
+    status,
+    summary: typeof value?.summary === "string" && value.summary.trim()
+      ? value.summary.trim().slice(0, 240)
+      : scanReconstructionSummary(status),
+    updatedAt: typeof value?.updatedAt === "string" ? value.updatedAt : null,
+  };
+}
+
 function finiteNumberOrNull(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
@@ -712,6 +788,8 @@ function normalizeCaseRecord(payload: ClinicalCaseDraft, now = new Date().toISOS
     acquisition: {
       source,
       sourceLabel: acquisitionLabel(source),
+      mediaAssets: normalizeMediaAssets(payload.acquisition?.mediaAssets, now),
+      scanReconstruction: normalizeScanReconstruction(payload.acquisition?.scanReconstruction),
       captureSet,
       quality: deriveAcquisitionQuality(
         source,

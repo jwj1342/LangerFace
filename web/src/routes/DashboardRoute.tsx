@@ -1,5 +1,4 @@
 import {
-  ArrowRight,
   Boxes,
   ClipboardCheck,
   FileText,
@@ -8,7 +7,6 @@ import {
   PenLine,
   Plus,
   Settings,
-  ShieldCheck,
 } from "lucide-react";
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
@@ -51,8 +49,6 @@ function CaseLobbyStagePreview() {
         <ThreePreviewScene assets={assets} loadingText={loadingText} />
         <div className="case-face-clinical-overlay" aria-hidden="true">
           <span className="case-face-overlay-label">病例大厅三维预览</span>
-          <span className="case-face-overlay-lesion" />
-          <span className="case-face-overlay-incision" />
           <span className="case-face-ruler"><b>10 mm</b></span>
           <span className="case-face-coordinate">R12 / Z05</span>
         </div>
@@ -199,24 +195,6 @@ export function DashboardRoute() {
               </CardContent>
             </Card>
 
-            <div className="case-dashboard-grid">
-              <Card>
-                <CardHeader><span>任务入口</span><ArrowRight size={16} /></CardHeader>
-                <CardContent className="case-summary-list">
-                  <p><b>新建病例</b><span>先录入前置参数，再进入面部评估。</span></p>
-                  <p><b>恢复草稿</b><span>从病例列表回到上次保存的步骤。</span></p>
-                  <p><b>全局设置</b><span>管理图谱库、模型配置和系统诊断入口。</span></p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader><span>临床边界</span><ShieldCheck size={16} /></CardHeader>
-                <CardContent>
-                  <Hint>系统不判断良恶性，不输出自动手术指令。候选方案必须由执业医师结合查体确认。</Hint>
-                  <Hint>病例草稿默认本地保存；真实影像、3D 纹理、超声等敏感资产不进入普通审阅 JSON。</Hint>
-                </CardContent>
-              </Card>
-            </div>
           </div>
         </ReactShellMain>
       </ReactShell>

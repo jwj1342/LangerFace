@@ -1,6 +1,6 @@
 import { Activity, ArrowLeft, ArrowRight, Camera, CheckCircle2, Download, FileText, Layers3, ListChecks, Plus, Save, ScanFace, ShieldAlert, SlidersHorizontal, Upload, Video } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { ReactPage, ReactShell, ReactShellMain, ReactShellNavLink, ReactShellSidebar } from "../components/ReactShell";
@@ -201,6 +201,42 @@ function acquisitionPathwayStateLabel(
   return acquisitionStatusLabel(activeCase.acquisition.quality.status);
 }
 
+function mediaKindForFile(file: File): ClinicalCaseRecord["acquisition"]["mediaAssets"][number]["kind"] {
+  if (file.type.startsWith("image/")) return "image";
+  if (file.type.startsWith("video/")) return "video";
+  if (/\.(ply|obj|gltf|glb|stl|zip)$/i.test(file.name)) return "depth_or_3d";
+  return "other";
+}
+
+function formatBytes(value: number) {
+  if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+  return `${value} B`;
+}
+
+function mediaAssetSummary(activeCase: ClinicalCaseRecord) {
+  const files = activeCase.acquisition.mediaAssets;
+  if (!files.length) return "尚未选择文件";
+  const imageCount = files.filter((item) => item.kind === "image").length;
+  const videoCount = files.filter((item) => item.kind === "video").length;
+  const depthCount = files.filter((item) => item.kind === "depth_or_3d").length;
+  const totalBytes = files.reduce((sum, item) => sum + item.sizeBytes, 0);
+  return [
+    `${files.length} 个文件`,
+    imageCount ? `${imageCount} 张图像` : "",
+    videoCount ? `${videoCount} 段视频` : "",
+    depthCount ? `${depthCount} 个三维 / 深度文件` : "",
+    formatBytes(totalBytes),
+  ].filter(Boolean).join(" · ");
+}
+
+function scanReconstructionStatusLabel(status: ClinicalCaseRecord["acquisition"]["scanReconstruction"]["status"]) {
+  if (status === "input_ready") return "输入已就绪";
+  if (status === "reconstructed") return "重建已记录";
+  if (status === "needs_review") return "重建需复核";
+  return "未开始";
+}
+
 function agePlanningRule(activeCase: ClinicalCaseRecord) {
   if (activeCase.patientContext.ageBand === "child_tight") {
     return {
@@ -393,6 +429,8 @@ function buildCaseReportDraft(
     "",
     `- 年龄分档：${activeCase.patientContext.ageBandLabel}`,
     `- 采集方式：${activeCase.acquisition.sourceLabel}`,
+    `- 采集文件摘要：${mediaAssetSummary(activeCase)}`,
+    `- 三维重建状态：${scanReconstructionStatusLabel(activeCase.acquisition.scanReconstruction.status)}；${activeCase.acquisition.scanReconstruction.summary}`,
     `- 采集质量：${acquisitionStatusLabel(activeCase.acquisition.quality.status)}；${activeCase.acquisition.quality.summary}`,
     `- 病灶层次：${activeCase.lesion.layerLabel}`,
     `- 病灶直径：${activeCase.lesion.diameterMm ?? "未填"} mm`,
@@ -713,6 +751,10 @@ function CaseClinicalViewport({
     ["切口", activeCase.layers.incisionDesign, "候选显示"],
   ] as const;
   const activeMode = viewportMode(activeCase.acquisition.source);
+  const showLesionOverlay = step !== "evaluate" && (
+    effectiveLesionDiameter(activeCase) != null || activeCase.lesion.boundary.status !== "not_started"
+  );
+  const showIncisionOverlay = activeCase.layers.incisionDesign && activeCase.incisionCandidates.length > 0;
 
   return (
     <section className={`case-clinical-viewport case-clinical-viewport-${step}`} aria-label={`${stepLabel}临床画布`}>
@@ -734,11 +776,11 @@ function CaseClinicalViewport({
         <div className="case-face-asset-frame" data-loaded={assets ? "true" : "false"}>
           <ThreePreviewScene assets={assets} loadingText={loadingText} />
           <div className="case-face-clinical-overlay" aria-hidden="true">
-            <span className="case-face-overlay-label">病例内标准三维面部模型</span>
-            <span className={`case-face-overlay-lesion case-face-overlay-lesion-${activeCase.lesion.boundary.mode}`} />
-            {activeCase.layers.incisionDesign ? <span className="case-face-overlay-incision" /> : null}
-            <span className="case-face-overlay-zone case-face-overlay-zone-eye" />
-            <span className="case-face-overlay-zone case-face-overlay-zone-mouth" />
+            <span className="case-face-overlay-label">病例内高精度三维面部模型</span>
+            {showLesionOverlay ? (
+              <span className={`case-face-overlay-lesion case-face-overlay-lesion-${activeCase.lesion.boundary.mode}`} />
+            ) : null}
+            {showIncisionOverlay ? <span className="case-face-overlay-incision" /> : null}
             <span className="case-face-ruler"><b>10 mm</b></span>
             <span className="case-face-coordinate">R12 / Z05</span>
           </div>
@@ -1203,11 +1245,69 @@ function LesionBoundaryPanel({ activeCase }: { activeCase: ClinicalCaseRecord })
 
 function AcquisitionPathwayPanel({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   const updateActiveCase = useCaseStore((state) => state.updateActiveCase);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const selectSource = (source: ClinicalCaseRecord["acquisition"]["source"]) => {
     updateActiveCase({
       acquisition: {
         source,
         quality: { lastCheckedAt: new Date().toISOString() },
+      },
+    });
+  };
+  const recordCapture = (
+    source: ClinicalCaseRecord["acquisition"]["source"],
+    captureSet: Partial<ClinicalCaseRecord["acquisition"]["captureSet"]>,
+    scanStatus?: ClinicalCaseRecord["acquisition"]["scanReconstruction"]["status"],
+  ) => {
+    const now = new Date().toISOString();
+    updateActiveCase({
+      acquisition: {
+        source,
+        captureSet,
+        scanReconstruction: scanStatus ? {
+          status: scanStatus,
+          summary: scanStatus === "reconstructed"
+            ? "已记录三维重建完成状态；请在画布上复核面部贴合、局部精度和病灶覆盖。"
+            : "已记录三维扫描输入；请继续补齐正斜位和深度 / 视频序列。",
+          updatedAt: now,
+        } : undefined,
+        quality: {
+          focus: "pass",
+          exposure: "pass",
+          poseCoverage: "pass",
+          tracking: source === "scan3d" || source === "realtime" ? "pass" : activeCase.acquisition.quality.tracking,
+          lastCheckedAt: now,
+        },
+      },
+    });
+  };
+  const onUploadFiles = (files: FileList | null) => {
+    const selectedFiles = Array.from(files || []);
+    if (!selectedFiles.length) return;
+    const now = new Date().toISOString();
+    const nextAssets = selectedFiles.map((file, index) => ({
+      id: `media_${Date.now().toString(36)}_${index}`,
+      name: file.name,
+      type: file.type || "application/octet-stream",
+      sizeBytes: file.size,
+      kind: mediaKindForFile(file),
+      addedAt: now,
+    }));
+    const hasImage = nextAssets.some((item) => item.kind === "image");
+    const hasVideoOrDepth = nextAssets.some((item) => item.kind === "video" || item.kind === "depth_or_3d");
+    updateActiveCase({
+      acquisition: {
+        source: "upload",
+        mediaAssets: [...nextAssets, ...activeCase.acquisition.mediaAssets].slice(0, 16),
+        captureSet: {
+          frontal: hasImage || activeCase.acquisition.captureSet.frontal,
+          leftOblique: hasImage || activeCase.acquisition.captureSet.leftOblique,
+          rightOblique: hasImage || activeCase.acquisition.captureSet.rightOblique,
+          depthOrVideo: hasVideoOrDepth || activeCase.acquisition.captureSet.depthOrVideo,
+        },
+        quality: {
+          lastCheckedAt: now,
+        },
       },
     });
   };
@@ -1250,6 +1350,68 @@ function AcquisitionPathwayPanel({ activeCase }: { activeCase: ClinicalCaseRecor
               </button>
             );
           })}
+        </div>
+        <div className="case-acquisition-action-panel" aria-label="当前采集操作">
+          <div className="case-acquisition-action-copy">
+            <b>{activeCase.acquisition.sourceLabel}</b>
+            <span>{mediaAssetSummary(activeCase)}</span>
+            {activeCase.acquisition.source === "scan3d" ? (
+              <small>{scanReconstructionStatusLabel(activeCase.acquisition.scanReconstruction.status)} · {activeCase.acquisition.scanReconstruction.summary}</small>
+            ) : (
+              <small>原始影像只在浏览器会话中由医生选择；病例草稿仅记录脱敏文件摘要。</small>
+            )}
+          </div>
+          <div className="case-acquisition-action-row">
+            <input
+              ref={uploadInputRef}
+              className="case-hidden-file-input"
+              type="file"
+              accept="image/*,video/*,.ply,.obj,.gltf,.glb,.stl,.zip"
+              multiple
+              onChange={(event) => onUploadFiles(event.currentTarget.files)}
+            />
+            <Button type="button" variant="workbenchPrimary" onClick={() => uploadInputRef.current?.click()}>
+              <Upload size={16} />上传照片 / 视频
+            </Button>
+            <Button
+              type="button"
+              variant="workbench"
+              onClick={() => recordCapture("photo", { frontal: true, leftOblique: true, rightOblique: true })}
+            >
+              <Camera size={16} />记录标准位拍照
+            </Button>
+            <Button
+              type="button"
+              variant="workbench"
+              onClick={() => recordCapture("scan3d", {
+                frontal: true,
+                leftOblique: true,
+                rightOblique: true,
+                depthOrVideo: true,
+              }, "input_ready")}
+            >
+              <ScanFace size={16} />准备 3D 扫描
+            </Button>
+            <Button
+              type="button"
+              variant="workbench"
+              onClick={() => recordCapture("scan3d", {
+                frontal: true,
+                leftOblique: true,
+                rightOblique: true,
+                depthOrVideo: true,
+              }, "reconstructed")}
+            >
+              <ScanFace size={16} />标记重建完成
+            </Button>
+            <Button
+              type="button"
+              variant="workbench"
+              onClick={() => recordCapture("realtime", { frontal: true, depthOrVideo: true })}
+            >
+              <Video size={16} />准备实时采集
+            </Button>
+          </div>
         </div>
         <Hint>设备权限在评估采集画布中申请；病例页只记录采集路径、视角完整性和质量状态，避免把原始影像写入普通审阅导出。</Hint>
       </CardContent>
@@ -1421,23 +1583,72 @@ function EvaluateStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
 function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
   const navigate = useNavigate();
   const updateActiveCase = useCaseStore((state) => state.updateActiveCase);
+  const [lesionToolFeedback, setLesionToolFeedback] = useState("尚未在本步骤内模拟肿物。");
   const closure = activeCase.closureSimulation;
   const closureScore = closure.score ?? 0;
   const closureStyle = { "--case-closure-score": `${closureScore}%` } as CSSProperties;
-  const updateLesion = (lesionDraft: Partial<ClinicalCaseRecord["lesion"]>) => {
+  const updateLesion = (
+    lesionDraft: Partial<Omit<ClinicalCaseRecord["lesion"], "boundary">> & {
+      boundary?: Partial<ClinicalCaseRecord["lesion"]["boundary"]>;
+    },
+  ) => {
     const nextLayer = lesionDraft.layer ?? activeCase.lesion.layer;
     const hasDiameterDraft = Object.prototype.hasOwnProperty.call(lesionDraft, "diameterMm");
     const nextDiameter = hasDiameterDraft ? lesionDraft.diameterMm ?? null : activeCase.lesion.diameterMm;
+    const nextBoundaryDraft = {
+      ...activeCase.lesion.boundary,
+      ...lesionDraft.boundary,
+    };
     updateActiveCase({
       lesion: {
         ...lesionDraft,
         layerLabel: lesionLayerLabel(nextLayer),
-        boundary: deriveLesionBoundary(nextLayer, nextDiameter, activeCase.lesion.boundary),
+        boundary: deriveLesionBoundary(nextLayer, nextDiameter, nextBoundaryDraft),
       },
     });
   };
   const runClosureSimulation = () => {
     updateActiveCase({ closureSimulation: estimateClosureSimulation(activeCase) });
+  };
+  const simulateTumorInput = () => {
+    const diameter = activeCase.lesion.diameterMm ?? 12;
+    const now = new Date().toISOString();
+    const isCutaneous = activeCase.lesion.layer === "cutaneous";
+    updateLesion({
+      diameterMm: diameter,
+      depthMm: activeCase.lesion.depthMm ?? (isCutaneous ? 2 : 8),
+      boundary: {
+        mode: isCutaneous ? "ellipse" : "center_diameter",
+        source: isCutaneous ? "photo_trace" : "clinical_exam",
+        author: activeCase.lesion.boundary.author || "病例规划页",
+        pointCount: isCutaneous ? 8 : 1,
+        axisDiameterMm: diameter,
+        perpendicularDiameterMm: isCutaneous ? Math.max(4, Math.round(diameter * 0.72 * 10) / 10) : diameter,
+        updatedAt: now,
+      },
+    });
+    setLesionToolFeedback(isCutaneous
+      ? "已在当前病例画布上模拟皮表肿物椭圆边界，可继续保存梭形候选。"
+      : "已在当前病例画布上模拟皮下肿物表面投影，可继续保存线性切口候选。");
+  };
+  const traceFreehandBoundary = () => {
+    const diameter = activeCase.lesion.diameterMm ?? 12;
+    const now = new Date().toISOString();
+    updateLesion({
+      layer: "cutaneous",
+      diameterMm: diameter,
+      depthMm: activeCase.lesion.depthMm ?? 2,
+      boundary: {
+        mode: "freehand",
+        source: "photo_trace",
+        author: activeCase.lesion.boundary.author || "病例规划页",
+        pointCount: Math.max(activeCase.lesion.boundary.pointCount, 8),
+        axisDiameterMm: activeCase.lesion.boundary.axisDiameterMm ?? diameter,
+        perpendicularDiameterMm: activeCase.lesion.boundary.perpendicularDiameterMm ?? Math.max(4, Math.round(diameter * 0.7 * 10) / 10),
+        updatedAt: now,
+      },
+    });
+    setLesionToolFeedback("已模拟皮表肿物自由轮廓描记，候选会按梭形切口模式重新计算。");
   };
   const saveCandidateDraft = () => {
     const candidate = buildCaseCandidate(activeCase);
@@ -1484,6 +1695,18 @@ function PlanStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
             <div>
               <h2>病灶定位与切口规划</h2>
               <p>在同一工作区记录病灶边界、切缘策略、候选切口和张力闭合趋势，避免医生在表单和画布之间跳转。</p>
+            </div>
+            <div className="case-lesion-tool-row" aria-label="肿物模拟操作">
+              <Button type="button" variant="workbenchPrimary" onClick={simulateTumorInput}>
+                <Activity size={16} />模拟肿物
+              </Button>
+              <Button type="button" variant="workbench" onClick={traceFreehandBoundary}>
+                <ListChecks size={16} />描记皮表边界
+              </Button>
+            </div>
+            <div className="case-lesion-simulation-status" aria-live="polite">
+              <b>当前肿物状态</b>
+              <span>{lesionToolFeedback}</span>
             </div>
             <div className="case-panel-action-row case-panel-action-row-three">
               <Button type="button" variant="workbench" onClick={saveCandidateDraft}>
@@ -1713,6 +1936,8 @@ function ReviewStep({ activeCase }: { activeCase: ClinicalCaseRecord }) {
               <p><b>病灶层次</b><span>{activeCase.lesion.layerLabel}</span></p>
               <p><b>病灶边界</b><span>{lesionBoundaryStatusLabel(activeCase.lesion.boundary.status)} · {lesionBoundaryModeLabel(activeCase.lesion.boundary.mode)}</span></p>
               <p><b>采集方式</b><span>{activeCase.acquisition.sourceLabel}</span></p>
+              <p><b>采集文件</b><span>{mediaAssetSummary(activeCase)}</span></p>
+              <p><b>三维重建</b><span>{scanReconstructionStatusLabel(activeCase.acquisition.scanReconstruction.status)}</span></p>
               <p><b>切缘策略</b><span>{activeCase.lesion.marginStrategy === "expanded_margin" ? `扩大 ${activeCase.lesion.safetyMarginMm ?? "未填"} mm` : "常规完整切除"}</span></p>
               <p><b>当前候选</b><span>{selectedCandidate ? `${selectedCandidate.label} · ${candidateKindLabel(selectedCandidate.kind)}` : "尚未保存候选"}</span></p>
             </CardContent>

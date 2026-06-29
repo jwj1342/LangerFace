@@ -99,6 +99,10 @@ export const useCaseStore = create<CaseStoreState>((set, get) => ({
         ...draft.acquisition,
         captureSet: { ...current.acquisition.captureSet, ...draft.acquisition?.captureSet },
         quality: { ...current.acquisition.quality, ...draft.acquisition?.quality },
+        scanReconstruction: {
+          ...current.acquisition.scanReconstruction,
+          ...draft.acquisition?.scanReconstruction,
+        },
       },
       layers: { ...current.layers, ...draft.layers },
       closureSimulation: { ...current.closureSimulation, ...draft.closureSimulation },

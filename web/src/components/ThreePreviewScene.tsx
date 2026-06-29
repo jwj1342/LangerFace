@@ -33,12 +33,14 @@ function bbox(verts: PreviewVec3[]) {
       hi[k] = Math.max(hi[k], v[k]);
     }
   }
-  return { center: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2] };
+  const size = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) || 1;
+  return { center: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], size };
 }
 
 function FaceMesh({ assets }: { assets: ThreePreviewAssets }) {
   const { verts, tris, atlas } = assets;
   const box = useMemo(() => bbox(verts), [verts]);
+  const previewScale = useMemo(() => 24 / box.size, [box.size]);
   const meshGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(verts.flat(), 3));
@@ -52,7 +54,7 @@ function FaceMesh({ assets }: { assets: ThreePreviewAssets }) {
   }, [atlas, verts, tris]);
 
   return (
-    <group position={[-box.center[0], -box.center[1], -box.center[2]]}>
+    <group position={[-box.center[0] * previewScale, -box.center[1] * previewScale, -box.center[2] * previewScale]} scale={previewScale}>
       <mesh geometry={meshGeometry}>
         <meshStandardMaterial color="#d8a98f" roughness={0.68} metalness={0.02} side={THREE.DoubleSide} />
       </mesh>

@@ -205,9 +205,11 @@ async function expectClinicalVisualDiscipline(page) {
       "textarea",
       ".case-list-item",
       ".case-acquisition-path-card",
+      ".case-acquisition-action-panel",
       ".case-candidate-row",
       ".case-layer-toggle",
       ".case-boundary-control",
+      ".case-lesion-simulation-status",
       ".case-review-compliance-strip",
       ".case-disclosure",
       ".case-empty-state",
@@ -279,6 +281,26 @@ async function expectReviewComplianceInViewport(page) {
   expect(metrics.bottom, JSON.stringify(metrics)).toBeLessThanOrEqual(metrics.viewportHeight);
 }
 
+async function expectNoPrematureClinicalMarkers(page) {
+  const counts = await page.locator(".case-face-clinical-overlay").first().evaluate((overlay) => ({
+    lesions: overlay.querySelectorAll(".case-face-overlay-lesion").length,
+    incisions: overlay.querySelectorAll(".case-face-overlay-incision").length,
+    zones: overlay.querySelectorAll(".case-face-overlay-zone").length,
+  }));
+  expect(counts, JSON.stringify(counts)).toEqual({ lesions: 0, incisions: 0, zones: 0 });
+}
+
+async function expectClinicalMarkerState(page, expected) {
+  const counts = await page.locator(".case-face-clinical-overlay").first().evaluate((overlay) => ({
+    lesions: overlay.querySelectorAll(".case-face-overlay-lesion").length,
+    incisions: overlay.querySelectorAll(".case-face-overlay-incision").length,
+    zones: overlay.querySelectorAll(".case-face-overlay-zone").length,
+  }));
+  expect(counts.zones, JSON.stringify(counts)).toBe(0);
+  expect(counts.lesions, JSON.stringify(counts)).toBe(expected.lesion ? 1 : 0);
+  expect(counts.incisions, JSON.stringify(counts)).toBe(expected.incision ? 1 : 0);
+}
+
 test("clinical case workflow click path", async ({ page }) => {
   test.setTimeout(120000);
   const consoleErrors = [];
@@ -318,116 +340,166 @@ test("clinical case workflow click path", async ({ page }) => {
   await page.getByRole("button", { name: /创建病例草稿/ }).click();
   await expect(page.locator("#caseEvaluateStep")).toBeVisible();
   await waitForFaceViewport(page);
+  await expectNoPrematureClinicalMarkers(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
   await expectClinicalVisualDiscipline(page);
   await expectCanvasDominatesWorkspace(page);
   await shot(page, "04-evaluate-3d-loaded");
 
+  await page.locator(".case-hidden-file-input").setInputFiles([
+    { name: "preop-frontal.jpg", mimeType: "image/jpeg", buffer: Buffer.from("case-workflow-image") },
+    { name: "preop-dynamic.mp4", mimeType: "video/mp4", buffer: Buffer.from("case-workflow-video") },
+  ]);
+  await expect(page.locator(".case-acquisition-action-panel")).toContainText("2 个文件");
+  await expect(page.locator(".case-acquisition-action-panel")).toContainText("1 张图像");
+  await expect(page.locator(".case-acquisition-action-panel")).toContainText("1 段视频");
+  await waitForFaceViewport(page);
+  await expectNoPrematureClinicalMarkers(page);
+  await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
+  await expectCanvasDominatesWorkspace(page);
+  await shot(page, "05-evaluate-after-upload");
+
+  await page.getByRole("button", { name: /准备 3D 扫描/ }).click();
+  await expect(page.locator(".case-acquisition-action-panel")).toContainText("输入已就绪");
+  await page.getByRole("button", { name: /标记重建完成/ }).click();
+  await expect(page.locator(".case-acquisition-action-panel")).toContainText("重建已记录");
+  await waitForFaceViewport(page);
+  await expectNoPrematureClinicalMarkers(page);
+  await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
+  await expectCanvasDominatesWorkspace(page);
+  await shot(page, "06-evaluate-after-3d-reconstruction");
+
   await page.getByRole("button", { name: /切换实时叠加/ }).click();
   await expect(page).toHaveURL(/\\/app\\/case\\/[^/]+\\/evaluate$/);
   await waitForFaceViewport(page);
+  await expectNoPrematureClinicalMarkers(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
   await expectClinicalVisualDiscipline(page);
   await expectCanvasDominatesWorkspace(page);
-  await shot(page, "05-evaluate-after-live-toggle");
+  await shot(page, "07-evaluate-after-live-toggle");
 
   await page.locator("label").filter({ hasText: "RSTL 密度" }).locator("select").selectOption("high");
   await waitForFaceViewport(page);
+  await expectNoPrematureClinicalMarkers(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
   await expectClinicalVisualDiscipline(page);
   await expectCanvasDominatesWorkspace(page);
-  await shot(page, "06-evaluate-layer-density");
+  await shot(page, "08-evaluate-layer-density");
 
   await page.getByRole("button", { name: /下一步：标记病灶|继续并标记复核/ }).click();
   await expect(page.locator("#casePlanStep")).toBeVisible();
   await expect(page.locator(".case-rationale-summary")).toBeVisible();
   await waitForFaceViewport(page);
+  await expectNoPrematureClinicalMarkers(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
   await expectClinicalVisualDiscipline(page);
   await expectCanvasDominatesWorkspace(page);
-  await shot(page, "07-plan-initial");
+  await shot(page, "09-plan-initial");
 
   await page.locator("#lesionLayer").selectOption("cutaneous");
-  await page.locator("label").filter({ hasText: "直径 mm" }).locator("input").fill("12");
+  await page.getByRole("button", { name: /模拟肿物/ }).click();
+  await expect(page.locator(".case-lesion-simulation-status")).toContainText("已在当前病例画布上模拟皮表肿物");
+  await expectClinicalMarkerState(page, { lesion: true, incision: false });
+  await page.getByRole("button", { name: /描记皮表边界/ }).click();
+  await expect(page.locator("#caseLesionBoundaryPanel")).toContainText("自由轮廓");
+  await expectClinicalMarkerState(page, { lesion: true, incision: false });
+  await waitForFaceViewport(page);
+  await expectNoBrowserScroll(page);
+  await expectNoDoctorJargon(page);
+  await expectClinicalVisualDiscipline(page);
+  await expectCanvasDominatesWorkspace(page);
+  await shot(page, "10-plan-after-tumor-simulation");
+
   await page.locator("label").filter({ hasText: "深度 mm" }).locator("input").fill("2");
   await page.locator("#marginStrategy").selectOption("expanded_margin");
   await page.locator("#safetyMargin").fill("5");
   await page.getByRole("button", { name: /^保存候选$/ }).click();
   await expect(page.getByText(/候选 1/)).toBeVisible();
+  await expectClinicalMarkerState(page, { lesion: true, incision: true });
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
   await expectClinicalVisualDiscipline(page);
   await expectCanvasDominatesWorkspace(page);
-  await shot(page, "08-plan-after-save-candidate");
+  await shot(page, "11-plan-after-save-candidate");
 
   await page.getByRole("button", { name: /张力模拟/ }).first().click();
   await expect(page.locator("#caseClosureSimulation")).toContainText(/闭合评分|当前结论/);
+  await expectClinicalMarkerState(page, { lesion: true, incision: true });
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
   await expectClinicalVisualDiscipline(page);
   await expectCanvasDominatesWorkspace(page);
-  await shot(page, "09-plan-after-closure");
+  await shot(page, "12-plan-after-closure");
 
   await page.getByRole("button", { name: /^方案确认$/ }).click();
   await expect(page.locator("#caseReviewStep")).toBeVisible();
   await expect(page.locator(".case-review-compliance-strip")).toBeVisible();
   await expectReviewComplianceInViewport(page);
+  await expectClinicalMarkerState(page, { lesion: true, incision: true });
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
   await expectClinicalVisualDiscipline(page);
   await expectCanvasDominatesWorkspace(page);
-  await shot(page, "10-review-initial");
+  await shot(page, "13-review-initial");
 
   await page.locator("#caseReviewerName").fill("示例医生");
   await page.getByRole("button", { name: /^确认采用$/ }).click();
   await expect(page.getByText("已确认").first()).toBeVisible();
+  await expectClinicalMarkerState(page, { lesion: true, incision: true });
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
   await expectClinicalVisualDiscipline(page);
   await expectCanvasDominatesWorkspace(page);
-  await shot(page, "11-review-approved");
+  await shot(page, "14-review-approved");
 
   await page.getByRole("link", { name: /2\\. 切口规划/ }).click();
   await expect(page.locator("#casePlanStep")).toBeVisible();
   await expect(page.locator(".case-rationale-summary")).toBeVisible();
+  await expectClinicalMarkerState(page, { lesion: true, incision: true });
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
   await expectClinicalVisualDiscipline(page);
   await expectCanvasDominatesWorkspace(page);
-  await shot(page, "12-return-to-plan-from-stepper");
+  await shot(page, "15-return-to-plan-from-stepper");
 
   await page.setViewportSize({ width: 1280, height: 720 });
   await expect(page.locator(".case-rationale-summary")).toBeVisible();
+  await expectClinicalMarkerState(page, { lesion: true, incision: true });
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
   await expectClinicalVisualDiscipline(page);
   await expectCanvasDominatesWorkspace(page);
-  await shot(page, "13-compact-plan-1280x720");
+  await shot(page, "16-compact-plan-1280x720");
 
   await page.getByRole("button", { name: /^方案确认$/ }).click();
   await expect(page.locator("#caseReviewStep")).toBeVisible();
   await expect(page.locator(".case-review-compliance-strip")).toBeVisible();
   await expectReviewComplianceInViewport(page);
+  await expectClinicalMarkerState(page, { lesion: true, incision: true });
   await waitForFaceViewport(page);
   await expectNoBrowserScroll(page);
   await expectNoDoctorJargon(page);
   await expectClinicalVisualDiscipline(page);
   await expectCanvasDominatesWorkspace(page);
-  await shot(page, "14-compact-review-1280x720");
+  await shot(page, "17-compact-review-1280x720");
 
   await page.getByRole("link", { name: /^系统诊断$/ }).click();
   await expect(page.locator("#settingsDeveloper")).toBeVisible();
-  await shot(page, "15-settings-developer-controlled-tools");
+  await shot(page, "18-settings-developer-controlled-tools");
 
   const seriousErrors = consoleErrors.filter((message) => !/THREE\\.Clock/.test(message));
   expect(seriousErrors, seriousErrors.join("\\n")).toEqual([]);
