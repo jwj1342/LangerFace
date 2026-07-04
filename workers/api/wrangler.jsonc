@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "langerface-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173",
+    "ALLOW_VERCEL_PREVIEW_ORIGINS": "true"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "langerface-preview",
+      "database_id": "replace-with-cloudflare-d1-preview-id",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ASSETS",
+      "bucket_name": "langerface-assets-preview"
+    }
+  ]
+}
