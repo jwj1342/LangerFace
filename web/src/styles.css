@@ -3,16 +3,65 @@
 @import "../annotate.css";
 
 @layer base {
+  :root {
+    --font-clinical-sans: "IBM Plex Sans", Inter, Roboto, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+    --font-clinical-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    --clinical-text-primary: rgb(229 234 240 / 0.94);
+    --clinical-text-secondary: rgb(229 234 240 / 0.78);
+    --clinical-text-tertiary: rgb(229 234 240 / 0.66);
+    --clinical-bg: #f4f4f4;
+    --clinical-surface: #ffffff;
+    --clinical-surface-muted: #f8f8f8;
+    --clinical-border: #d7dce2;
+    --clinical-border-strong: #aeb6c2;
+    --clinical-ink: #161616;
+    --clinical-muted: #52565c;
+    --clinical-muted-2: #697077;
+    --clinical-accent: #0f62fe;
+    --clinical-accent-hover: #0043ce;
+    --clinical-accent-soft: #edf5ff;
+    --clinical-warning: #b28600;
+    --clinical-warning-soft: #fff4ce;
+    --clinical-danger: #da1e28;
+    --clinical-danger-soft: #fff1f1;
+    --clinical-dark-bg: #090b0f;
+    --clinical-dark-sidebar: #0d1117;
+    --clinical-dark-panel: #121820;
+    --clinical-dark-panel-2: #171e27;
+    --clinical-dark-border: #2a3440;
+    --clinical-dark-border-strong: #3e4b59;
+    --clinical-dark-muted: rgb(229 234 240 / 0.64);
+    --clinical-dark-faint: rgb(229 234 240 / 0.42);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: geometricPrecision;
+  }
+
   #root {
     min-height: 100dvh;
   }
 }
 
 @layer components {
+  .clinical-number {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+
+  .clinical-number-strong {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+    font-weight: 600;
+  }
+
   .react-page {
     min-height: 100dvh;
-    background: #eef0ea;
-    color: #1b2024;
+    background: var(--clinical-bg);
+    color: var(--clinical-ink);
+    font-family: var(--font-clinical-sans);
   }
 
   .react-shell {
@@ -22,8 +71,8 @@
   }
 
   .react-shell-sidebar {
-    border-right: 1px solid #e6e8e1;
-    background: #f6f7f3;
+    border-right: 1px solid var(--clinical-border);
+    background: var(--clinical-bg);
     padding: 22px 20px;
   }
 
@@ -38,27 +87,2525 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    border: 1px solid #e6e8e1;
-    border-radius: 10px;
-    background: #fff;
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: var(--clinical-surface);
     padding: 10px 12px;
-    color: #1b2024;
+    color: var(--clinical-ink);
     font-size: 14px;
     font-weight: 700;
     text-decoration: none;
   }
 
   .react-nav-link:hover {
-    background: #f3f4f0;
+    border-color: var(--clinical-border-strong);
+    background: #eef2f6;
   }
 
   .react-route-status {
-    border-radius: 999px;
-    background: #d9f2e7;
-    color: #0c8460;
+    border: 1px solid var(--clinical-border-strong);
+    border-radius: 4px;
+    background: #edf2f7;
+    color: #393f46;
     padding: 4px 10px;
     font-size: 11px;
     font-weight: 800;
+  }
+
+  .case-workflow-page .react-shell {
+    grid-template-columns: minmax(320px, 384px) 1fr;
+  }
+
+  .case-workflow-page {
+    --clinical-bg: var(--clinical-dark-bg);
+    --clinical-surface: var(--clinical-dark-panel);
+    --clinical-surface-muted: var(--clinical-dark-panel-2);
+    --clinical-border: var(--clinical-dark-border);
+    --clinical-border-strong: var(--clinical-dark-border-strong);
+    --clinical-ink: var(--clinical-text-primary);
+    --clinical-muted: var(--clinical-dark-muted);
+    --clinical-muted-2: var(--clinical-dark-faint);
+    background: var(--clinical-dark-bg);
+  }
+
+  .case-workflow-page .react-shell-sidebar {
+    background: var(--clinical-dark-sidebar);
+    border-right-color: var(--clinical-dark-border);
+    overflow-y: auto;
+  }
+
+  .case-workflow-page .react-nav-link {
+    background: #111821;
+    color: var(--clinical-text-primary);
+  }
+
+  .case-workflow-page .react-nav-link:hover {
+    border-color: var(--clinical-dark-border-strong);
+    background: #182230;
+  }
+
+  .case-workflow-page .react-route-status {
+    border-color: var(--clinical-dark-border-strong);
+    background: #111821;
+    color: #a6c8ff;
+  }
+
+  .case-workflow-page .badge {
+    border: 1px solid var(--clinical-dark-border-strong);
+    border-radius: 4px;
+    background: #111821;
+    color: #d0e2ff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 5px 8px;
+  }
+
+  .case-workflow-page .brand {
+    border-bottom: 1px solid var(--clinical-dark-border);
+    padding-bottom: 16px;
+  }
+
+  .case-workflow-page .brand .eyebrow {
+    color: var(--clinical-muted-2);
+    letter-spacing: .08em;
+  }
+
+  .case-workflow-page .brand h1 {
+    color: var(--clinical-text-primary);
+    font-size: 21px;
+    line-height: 1.22;
+    letter-spacing: 0;
+  }
+
+  .case-workflow-page .card {
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: var(--clinical-dark-panel);
+    box-shadow: none;
+  }
+
+  .case-workflow-page .quality-top {
+    align-items: center;
+    border-bottom: 1px solid rgb(255 255 255 / 0.07);
+    color: var(--clinical-dark-muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.25;
+    padding-bottom: 8px;
+  }
+
+  .case-workflow-page .quality-top span:last-child {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: normal;
+  }
+
+  .case-workflow-page .hint {
+    color: var(--clinical-dark-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .case-workflow-page .btn {
+    border-color: var(--clinical-border);
+    border-radius: 4px;
+    background: #151b23;
+    color: var(--clinical-text-primary);
+    box-shadow: none;
+  }
+
+  .case-workflow-page .btn:hover {
+    border-color: var(--clinical-border-strong);
+    background: #1c2530;
+  }
+
+  .case-workflow-page .btn-primary {
+    border-color: var(--clinical-accent);
+    background: var(--clinical-accent);
+    color: #f4f7fb;
+  }
+
+  .case-workflow-page .btn-primary:hover {
+    border-color: var(--clinical-accent-hover);
+    background: var(--clinical-accent-hover);
+  }
+
+  .case-workflow-page input,
+  .case-workflow-page select,
+  .case-workflow-page textarea {
+    border-color: var(--clinical-border);
+    border-radius: 4px;
+    background: #0f141b;
+    color: var(--clinical-text-primary);
+  }
+
+  .case-workflow-page input:focus,
+  .case-workflow-page select:focus,
+  .case-workflow-page textarea:focus {
+    border-color: var(--clinical-accent);
+    box-shadow: 0 0 0 2px rgb(15 98 254 / 0.16);
+    outline: none;
+  }
+
+  .case-workflow-page input[type=range],
+  .case-workflow-page input[type=checkbox],
+  .case-workflow-page .check input {
+    accent-color: var(--clinical-accent);
+  }
+
+  .case-workflow-main {
+    min-width: 0;
+    min-height: 100dvh;
+    background: var(--clinical-dark-bg);
+    color: var(--clinical-text-primary);
+    padding: 24px;
+  }
+
+  .case-workflow-stack {
+    display: flex;
+    width: min(1180px, 100%);
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .case-step-stage-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(280px, .85fr);
+    gap: 14px;
+    align-items: stretch;
+  }
+
+  .case-lobby-landing {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(420px, 520px);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 12px 14px;
+    align-items: stretch;
+    border: 1px solid rgb(255 255 255 / 0.16);
+    background: #111821;
+    min-height: min(560px, calc(100dvh - 240px));
+    padding: 14px;
+  }
+
+  .case-lobby-kicker {
+    display: inline-flex;
+    width: fit-content;
+    border: 1px solid rgb(255 255 255 / 0.18);
+    border-radius: 4px;
+    color: var(--clinical-text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    padding: 4px 8px;
+  }
+
+  .case-lobby-copy {
+    display: grid;
+    align-content: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .case-lobby-copy h2 {
+    max-width: 680px;
+    margin: 0;
+    color: var(--clinical-text-primary);
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 1.18;
+    letter-spacing: 0;
+  }
+
+  .case-lobby-copy p {
+    max-width: 640px;
+    margin: 0;
+    color: var(--clinical-text-secondary);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .case-lobby-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 2px;
+  }
+
+  .case-lobby-readiness {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    align-content: end;
+    border: 1px solid rgb(255 255 255 / 0.14);
+    background: rgb(255 255 255 / 0.12);
+  }
+
+  .case-lobby-readiness > div {
+    border: 0;
+    background: #151d27;
+    padding: 10px 11px;
+  }
+
+  .case-lobby-readiness span {
+    display: block;
+    color: var(--clinical-text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .case-lobby-readiness b {
+    display: block;
+    margin-top: 5px;
+    color: var(--clinical-text-primary);
+    font-size: 15px;
+    line-height: 1.25;
+  }
+
+  .case-lobby-stage,
+  .case-clinical-viewport {
+    border: 1px solid rgb(255 255 255 / 0.14);
+    background: #0b0f15;
+  }
+
+  .case-lobby-stage {
+    display: grid;
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .case-stage-topline,
+  .case-viewport-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--clinical-text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .case-viewport-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .case-stage-topline b,
+  .case-viewport-toolbar b {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .case-viewport-mode-switch {
+    display: inline-flex;
+    gap: 1px;
+    overflow: hidden;
+    border: 1px solid rgb(255 255 255 / 0.14);
+    background: rgb(255 255 255 / 0.10);
+  }
+
+  .case-viewport-mode-switch span {
+    background: #101720;
+    color: var(--clinical-text-tertiary);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 7px 9px;
+    white-space: nowrap;
+  }
+
+  .case-viewport-mode-switch span.is-active {
+    background: rgb(15 98 254 / 0.20);
+    color: #d0e2ff;
+  }
+
+  .case-stage-metrics,
+  .case-viewport-readout {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    background: rgb(255 255 255 / 0.10);
+    border: 1px solid rgb(255 255 255 / 0.10);
+  }
+
+  .case-stage-metrics > div,
+  .case-viewport-readout > div {
+    min-width: 0;
+    background: #121820;
+    padding: 9px;
+  }
+
+  .case-stage-metrics span,
+  .case-viewport-readout span {
+    display: block;
+    color: var(--clinical-text-tertiary);
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+
+  .case-stage-metrics b,
+  .case-viewport-readout b {
+    display: block;
+    margin-top: 4px;
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .case-face-preview {
+    --case-rstl-opacity: .72;
+    --case-wrinkle-opacity: .68;
+    position: relative;
+    min-height: 220px;
+    overflow: hidden;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 18%, transparent 76%, rgb(0 0 0 / 0.22)),
+      linear-gradient(rgb(166 200 255 / 0.055) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(166 200 255 / 0.055) 1px, transparent 1px),
+      #06090d;
+    background-size: auto, 24px 24px, 24px 24px, auto;
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35);
+  }
+
+  .case-face-preview-large {
+    min-height: 360px;
+  }
+
+  .case-face-mode-3d {
+    background-size: auto, 28px 28px, 28px 28px, auto;
+  }
+
+  .case-face-mode-live {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.035), transparent 20%, transparent 78%, rgb(0 0 0 / 0.2)),
+      linear-gradient(rgb(120 169 255 / 0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(120 169 255 / 0.045) 1px, transparent 1px),
+      #05080c;
+    background-size: auto, 18px 18px, 18px 18px, auto;
+  }
+
+  .case-face-scan-glow {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(100deg, transparent 0 18%, rgb(120 169 255 / 0.05) 36%, transparent 58%),
+      repeating-linear-gradient(180deg, transparent 0 13px, rgb(255 255 255 / 0.025) 14px);
+    opacity: .86;
+    pointer-events: none;
+  }
+
+  .case-face-blended-field {
+    position: absolute;
+    inset: 16% 24% 12%;
+    background:
+      radial-gradient(circle at 60% 48%, rgb(241 194 27 / 0.12), transparent 18%),
+      repeating-linear-gradient(112deg, transparent 0 17px, rgb(120 169 255 / 0.055) 18px, transparent 20px);
+    border: 1px solid rgb(120 169 255 / 0.18);
+    border-radius: 48% 48% 44% 44%;
+    pointer-events: none;
+  }
+
+  .case-face-outline {
+    position: absolute;
+    inset: 12% 28% 10%;
+    border: 1px solid rgb(229 234 240 / 0.42);
+    border-radius: 48% 48% 44% 44%;
+    background:
+      linear-gradient(90deg, transparent, rgb(229 234 240 / 0.035) 48%, transparent),
+      linear-gradient(180deg, rgb(229 234 240 / 0.07), transparent 68%),
+      #0c1118;
+    box-shadow:
+      inset 18px 0 26px rgb(120 169 255 / 0.035),
+      inset -18px 0 26px rgb(255 255 255 / 0.025);
+  }
+
+  .case-face-depth,
+  .case-face-eye,
+  .case-face-nose,
+  .case-face-mouth,
+  .case-face-cheek {
+    position: absolute;
+    border-color: rgb(229 234 240 / 0.24);
+    pointer-events: none;
+  }
+
+  .case-face-depth {
+    top: 24%;
+    width: 16%;
+    height: 48%;
+    border-top: 1px solid;
+    border-bottom: 1px solid;
+    border-radius: 48%;
+  }
+
+  .case-face-depth-left {
+    left: 34%;
+    border-left: 1px solid;
+    transform: rotate(4deg);
+  }
+
+  .case-face-depth-right {
+    right: 34%;
+    border-right: 1px solid;
+    transform: rotate(-4deg);
+  }
+
+  .case-face-midline {
+    position: absolute;
+    top: 15%;
+    bottom: 14%;
+    left: 50%;
+    border-left: 1px dashed rgb(229 234 240 / 0.22);
+  }
+
+  .case-face-crosshair {
+    position: absolute;
+    opacity: .62;
+  }
+
+  .case-face-crosshair-h {
+    top: 50%;
+    left: 24%;
+    width: 52%;
+    border-top: 1px dashed rgb(229 234 240 / 0.14);
+  }
+
+  .case-face-crosshair-v {
+    top: 18%;
+    bottom: 14%;
+    left: 50%;
+    border-left: 1px dashed rgb(120 169 255 / 0.18);
+  }
+
+  .case-face-eye {
+    top: 38%;
+    width: 10%;
+    height: 4%;
+    border-top: 1px solid;
+    border-radius: 50%;
+  }
+
+  .case-face-eye-left {
+    left: 40%;
+    transform: rotate(5deg);
+  }
+
+  .case-face-eye-right {
+    right: 40%;
+    transform: rotate(-5deg);
+  }
+
+  .case-face-nose {
+    top: 45%;
+    left: 50%;
+    width: 7%;
+    height: 18%;
+    border-left: 1px solid;
+    border-bottom: 1px solid;
+    transform: translateX(-18%) rotate(7deg);
+  }
+
+  .case-face-mouth {
+    top: 64%;
+    left: 43%;
+    width: 14%;
+    height: 5%;
+    border-bottom: 1px solid;
+    border-radius: 0 0 50% 50%;
+  }
+
+  .case-face-cheek {
+    top: 49%;
+    width: 16%;
+    height: 12%;
+    border-top: 1px solid;
+    border-radius: 50%;
+  }
+
+  .case-face-cheek-left {
+    left: 35%;
+    transform: rotate(-16deg);
+  }
+
+  .case-face-cheek-right {
+    right: 35%;
+    transform: rotate(16deg);
+  }
+
+  .case-face-rstl,
+  .case-face-incision {
+    position: absolute;
+    left: 30%;
+    width: 40%;
+    height: 34px;
+    border-top: 2px solid #78a9ff;
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .case-face-rstl {
+    opacity: var(--case-rstl-opacity);
+  }
+
+  .case-face-density-low .case-face-rstl {
+    border-top-width: 2px;
+  }
+
+  .case-face-density-high .case-face-rstl {
+    border-top-width: 1px;
+  }
+
+  .case-face-rstl-a {
+    top: 30%;
+    transform: rotate(-8deg);
+  }
+
+  .case-face-rstl-b {
+    top: 43%;
+    transform: rotate(5deg);
+  }
+
+  .case-face-rstl-c {
+    top: 57%;
+    transform: rotate(-4deg);
+  }
+
+  .case-face-rstl-d {
+    top: 69%;
+    width: 28%;
+    left: 36%;
+    border-top-color: rgb(120 169 255 / 0.58);
+    transform: rotate(2deg);
+  }
+
+  .case-face-rstl-e {
+    top: 36%;
+    left: 34%;
+    width: 32%;
+    border-top-color: rgb(120 169 255 / 0.42);
+    transform: rotate(12deg);
+  }
+
+  .case-face-rstl-f {
+    top: 63%;
+    left: 33%;
+    width: 34%;
+    border-top-color: rgb(120 169 255 / 0.4);
+    transform: rotate(-12deg);
+  }
+
+  .case-face-wrinkle {
+    position: absolute;
+    border-top: 1px solid rgb(255 255 255 / 0.46);
+    border-radius: 50%;
+    opacity: var(--case-wrinkle-opacity);
+    pointer-events: none;
+  }
+
+  .case-face-wrinkle-forehead {
+    top: 27%;
+    left: 42%;
+    width: 16%;
+    height: 16px;
+    transform: rotate(-2deg);
+  }
+
+  .case-face-wrinkle-crows-left {
+    top: 39%;
+    left: 34%;
+    width: 9%;
+    height: 16px;
+    transform: rotate(-16deg);
+  }
+
+  .case-face-wrinkle-crows-right {
+    top: 39%;
+    right: 34%;
+    width: 9%;
+    height: 16px;
+    transform: rotate(16deg);
+  }
+
+  .case-face-wrinkle-nasolabial-left {
+    top: 51%;
+    left: 42%;
+    width: 9%;
+    height: 54px;
+    border-top: 0;
+    border-left: 1px solid rgb(255 255 255 / 0.42);
+    transform: rotate(15deg);
+  }
+
+  .case-face-wrinkle-nasolabial-right {
+    top: 51%;
+    right: 42%;
+    width: 9%;
+    height: 54px;
+    border-top: 0;
+    border-right: 1px solid rgb(255 255 255 / 0.42);
+    transform: rotate(-15deg);
+  }
+
+  .case-face-wrinkle-chin {
+    top: 72%;
+    left: 45%;
+    width: 10%;
+    height: 14px;
+    transform: rotate(1deg);
+  }
+
+  .case-face-lesion {
+    position: absolute;
+    top: 47%;
+    left: 58%;
+    width: 30px;
+    aspect-ratio: 1;
+    border: 2px solid #f1c21b;
+    border-radius: 999px;
+    background: rgb(241 194 27 / 0.12);
+  }
+
+  .case-face-lesion-boundary {
+    position: absolute;
+    top: 43%;
+    left: 55%;
+    width: 64px;
+    height: 38px;
+    border: 1px dashed rgb(241 194 27 / 0.84);
+    border-radius: 52% 48% 50% 50%;
+    background: rgb(241 194 27 / 0.055);
+    transform: rotate(-18deg);
+    pointer-events: none;
+  }
+
+  .case-face-boundary-freehand .case-face-lesion-boundary {
+    border-style: solid;
+    border-radius: 42% 58% 45% 55%;
+    clip-path: polygon(12% 58%, 30% 18%, 66% 12%, 91% 45%, 78% 82%, 35% 88%);
+  }
+
+  .case-face-boundary-point {
+    position: absolute;
+    width: 6px;
+    aspect-ratio: 1;
+    border: 1px solid #f1c21b;
+    border-radius: 999px;
+    background: #06090d;
+    box-shadow: 0 0 0 2px rgb(241 194 27 / 0.12);
+    pointer-events: none;
+  }
+
+  .case-face-boundary-point-a { top: 46%; left: 56%; }
+  .case-face-boundary-point-b { top: 43%; left: 61%; }
+  .case-face-boundary-point-c { top: 47%; left: 66%; }
+  .case-face-boundary-point-d { top: 52%; left: 60%; }
+
+  .case-face-incision {
+    top: 50%;
+    left: 50%;
+    width: 28%;
+    height: 38px;
+    border-top-color: #ff8389;
+    opacity: .92;
+    transform: rotate(-23deg);
+  }
+
+  .case-face-zone {
+    position: absolute;
+    border: 1px solid rgb(255 131 137 / 0.42);
+    background: rgb(255 131 137 / 0.05);
+  }
+
+  .case-face-zone-eye {
+    top: 32%;
+    left: 35%;
+    width: 30%;
+    height: 8%;
+  }
+
+  .case-face-zone-mouth {
+    top: 64%;
+    left: 40%;
+    width: 20%;
+    height: 6%;
+  }
+
+  .case-face-ruler {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    width: 86px;
+    height: 18px;
+    border-bottom: 1px solid rgb(229 234 240 / 0.55);
+    color: var(--clinical-text-secondary);
+    font-size: 10px;
+    font-weight: 700;
+    text-align: right;
+  }
+
+  .case-face-ruler::before,
+  .case-face-ruler::after {
+    position: absolute;
+    bottom: -1px;
+    width: 1px;
+    height: 8px;
+    background: rgb(229 234 240 / 0.55);
+    content: "";
+  }
+
+  .case-face-ruler::before {
+    left: 0;
+  }
+
+  .case-face-ruler::after {
+    right: 0;
+  }
+
+  .case-face-ruler b {
+    position: absolute;
+    right: 0;
+    bottom: 8px;
+    font-weight: 700;
+  }
+
+  .case-face-coordinate {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    background: rgb(0 0 0 / 0.26);
+    color: var(--clinical-text-tertiary);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 5px 6px;
+  }
+
+  .case-face-asset-frame {
+    position: relative;
+    height: 100%;
+    min-height: 360px;
+    overflow: hidden;
+    border: 1px solid rgb(120 169 255 / 0.20);
+    background:
+      linear-gradient(180deg, rgb(120 169 255 / 0.055), transparent 24%, rgb(0 0 0 / 0.24)),
+      #06090d;
+  }
+
+  .case-face-asset-frame > div:first-child,
+  .case-face-asset-frame canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  .case-lobby-stage .case-face-asset-frame {
+    height: clamp(320px, 42vh, 500px);
+    min-height: 320px;
+  }
+
+  .case-face-clinical-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .case-face-overlay-label {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    border: 1px solid rgb(120 169 255 / 0.30);
+    background: rgb(8 12 18 / 0.78);
+    color: var(--clinical-text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 6px 8px;
+  }
+
+  .case-face-overlay-lesion {
+    position: absolute;
+    top: 47%;
+    left: 57%;
+    width: 34px;
+    aspect-ratio: 1;
+    border: 2px solid #f1c21b;
+    border-radius: 999px;
+    background: rgb(241 194 27 / 0.13);
+  }
+
+  .case-face-overlay-lesion-ellipse,
+  .case-face-overlay-lesion-freehand {
+    top: 44%;
+    left: 55%;
+    width: 72px;
+    height: 42px;
+    border-style: dashed;
+    transform: rotate(-18deg);
+  }
+
+  .case-face-overlay-lesion-freehand {
+    border-style: solid;
+    border-radius: 42% 58% 45% 55%;
+    clip-path: polygon(12% 58%, 30% 18%, 66% 12%, 91% 45%, 78% 82%, 35% 88%);
+  }
+
+  .case-face-overlay-incision {
+    position: absolute;
+    top: 50%;
+    left: 49%;
+    width: 30%;
+    height: 44px;
+    border-top: 2px solid #ff8389;
+    border-radius: 50%;
+    transform: rotate(-23deg);
+  }
+
+  .case-face-overlay-zone {
+    position: absolute;
+    border: 1px solid rgb(255 131 137 / 0.48);
+    background: rgb(255 131 137 / 0.07);
+  }
+
+  .case-face-overlay-zone-eye {
+    top: 31%;
+    left: 35%;
+    width: 30%;
+    height: 9%;
+  }
+
+  .case-face-overlay-zone-mouth {
+    top: 64%;
+    left: 40%;
+    width: 20%;
+    height: 7%;
+  }
+
+  .case-clinical-viewport {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    min-height: 476px;
+    padding: 12px;
+  }
+
+  .case-viewport-toolbar > div:first-child {
+    display: grid;
+    gap: 3px;
+  }
+
+  .case-viewport-toolbar > .case-viewport-mode-switch {
+    display: inline-flex;
+  }
+
+  .case-viewport-status {
+    white-space: nowrap;
+  }
+
+  .case-viewport-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 180px;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .case-viewport-readout {
+    align-content: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .case-viewport-layer-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 10px;
+  }
+
+  .case-viewport-layer-strip span {
+    display: grid;
+    gap: 3px;
+    border: 1px solid rgb(255 255 255 / 0.14);
+    background: #111821;
+    color: var(--clinical-text-tertiary);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.1;
+    padding: 6px 8px;
+  }
+
+  .case-viewport-layer-strip span.is-on {
+    border-color: rgb(120 169 255 / 0.72);
+    background: rgb(15 98 254 / 0.16);
+    color: #d0e2ff;
+  }
+
+  .case-viewport-layer-strip b,
+  .case-viewport-layer-strip small {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .case-viewport-layer-strip small {
+    color: var(--clinical-text-tertiary);
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .case-viewport-layer-strip span.is-on small {
+    color: #a6c8ff;
+  }
+
+  .case-workflow-roadmap {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    border: 1px solid rgb(255 255 255 / 0.14);
+    background: rgb(255 255 255 / 0.14);
+  }
+
+  .case-roadmap-item {
+    display: grid;
+    align-content: start;
+    gap: 7px;
+    min-height: 148px;
+    background: #18212b;
+    padding: 14px;
+  }
+
+  .case-roadmap-item > span {
+    color: #a6c8ff;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .case-roadmap-item b {
+    color: var(--clinical-text-primary);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .case-roadmap-item p {
+    margin: 0;
+    color: var(--clinical-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .case-page-header,
+  .case-section,
+  .case-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .case-section {
+    border: 1px solid rgb(255 255 255 / 0.12);
+    background: rgb(255 255 255 / 0.04);
+    padding: 18px;
+  }
+
+  .case-step-command {
+    align-content: space-between;
+    align-items: stretch;
+    flex-direction: column;
+    min-height: 476px;
+  }
+
+  .case-task-strip {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1px;
+    border: 1px solid rgb(255 255 255 / 0.14);
+    background: rgb(255 255 255 / 0.12);
+  }
+
+  .case-task-strip-item {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 4px 10px;
+    align-items: start;
+    background: #111821;
+    padding: 11px;
+  }
+
+  .case-task-strip-item > span {
+    grid-row: span 2;
+    width: 30px;
+    border: 1px solid rgb(120 169 255 / 0.38);
+    border-radius: 4px;
+    color: #a6c8ff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 6px 0;
+    text-align: center;
+  }
+
+  .case-task-strip-item b {
+    color: var(--clinical-text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .case-task-strip-item small {
+    color: var(--clinical-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .case-handoff-panel {
+    display: grid;
+    gap: 12px;
+    border: 1px solid rgb(120 169 255 / 0.24);
+    border-radius: 4px;
+    background: #101720;
+    padding: 14px;
+  }
+
+  .case-handoff-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: #a6c8ff;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .case-handoff-copy {
+    display: grid;
+    gap: 5px;
+  }
+
+  .case-handoff-copy h3 {
+    margin: 0;
+    color: var(--clinical-text-primary);
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .case-handoff-copy p {
+    margin: 0;
+    color: var(--clinical-text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .case-handoff-list {
+    display: grid;
+    gap: 1px;
+    border: 1px solid rgb(255 255 255 / 0.1);
+    background: rgb(255 255 255 / 0.1);
+  }
+
+  .case-handoff-list p {
+    display: grid;
+    grid-template-columns: 86px minmax(0, 1fr);
+    gap: 10px;
+    margin: 0;
+    background: #0f141b;
+    padding: 8px 10px;
+  }
+
+  .case-handoff-list b {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .case-handoff-list span {
+    color: var(--clinical-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .case-review-output {
+    display: grid;
+    gap: 12px;
+  }
+
+  .case-review-compliance-strip {
+    display: grid;
+    gap: 1px;
+    border: 1px solid rgb(241 194 27 / 0.28);
+    background: rgb(241 194 27 / 0.12);
+  }
+
+  .case-review-compliance-strip p {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr);
+    gap: 7px;
+    align-items: start;
+    margin: 0;
+    background: #121820;
+    color: #f3d986;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.35;
+    padding: 7px 8px;
+  }
+
+  .case-review-compliance-strip svg {
+    margin-top: 1px;
+    color: #f1c21b;
+  }
+
+  .case-review-record {
+    display: grid;
+    gap: 10px;
+  }
+
+  .case-review-textarea {
+    display: grid;
+    gap: 6px;
+  }
+
+  .case-review-textarea span {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .case-review-textarea textarea {
+    min-height: 74px;
+    resize: vertical;
+    border: 1px solid var(--clinical-dark-border);
+    border-radius: 4px;
+    background: #090d13;
+    color: var(--clinical-text-primary);
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.45;
+    padding: 10px;
+  }
+
+  .case-review-textarea textarea::placeholder {
+    color: var(--clinical-text-tertiary);
+  }
+
+  .case-review-record .case-export-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .case-export-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .case-export-actions .btn {
+    min-height: 42px;
+  }
+
+  .case-export-privacy {
+    display: grid;
+    gap: 1px;
+    border: 1px solid rgb(255 255 255 / 0.1);
+    background: rgb(255 255 255 / 0.1);
+  }
+
+  .case-export-privacy p {
+    display: grid;
+    grid-template-columns: 86px minmax(0, 1fr);
+    gap: 10px;
+    margin: 0;
+    background: #0f141b;
+    padding: 8px 10px;
+  }
+
+  .case-export-privacy b {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .case-export-privacy span {
+    color: var(--clinical-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .case-section h2 {
+    margin: 0;
+    color: var(--clinical-text-primary);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+
+  .case-section p,
+  .case-page-header,
+  .case-summary-list span,
+  .case-rationale-grid span {
+    color: var(--clinical-text-secondary);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .case-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #a6d4ff;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .case-back-link:hover {
+    color: #d8edff;
+  }
+
+  .case-dashboard-grid,
+  .case-two-column {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .case-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .case-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: var(--clinical-surface-muted);
+    color: var(--clinical-ink);
+    padding: 12px;
+    text-decoration: none;
+  }
+
+  .case-list-item:hover {
+    border-color: var(--clinical-border-strong);
+    background: #1d2733;
+  }
+
+  .case-list-item b,
+  .case-layer-toggle b {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .case-list-item small,
+  .case-layer-toggle small {
+    display: block;
+    margin-top: 3px;
+    color: var(--clinical-muted);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .case-empty-state {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px dashed var(--clinical-border);
+    border-radius: 4px;
+    padding: 14px;
+    color: var(--clinical-muted);
+    font-size: 13px;
+  }
+
+  .case-stepper .space-y-3,
+  .case-stepper .case-stepper {
+    gap: 8px;
+  }
+
+  .case-step-active {
+    border-color: var(--clinical-accent);
+    background: rgb(15 98 254 / 0.18);
+    color: #d0e2ff;
+  }
+
+  .case-step-label {
+    display: grid;
+    gap: 3px;
+  }
+
+  .case-step-label b {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .case-step-label small {
+    color: var(--clinical-dark-muted);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.35;
+  }
+
+  .case-step-state {
+    border: 1px solid var(--clinical-dark-border-strong);
+    border-radius: 4px;
+    background: #0f141b;
+    color: var(--clinical-dark-muted);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 5px 7px;
+    white-space: nowrap;
+  }
+
+  .case-step-state-已保存,
+  .case-step-state-已完成,
+  .case-step-state-已确认,
+  .case-step-state-已导出 {
+    border-color: rgb(66 190 101 / 0.45);
+    background: rgb(66 190 101 / 0.1);
+    color: #42be65;
+  }
+
+  .case-step-state-待完善,
+  .case-step-state-待采集,
+  .case-step-state-待审阅,
+  .case-step-state-未保存,
+  .case-step-state-保存中,
+  .case-step-state-未开始 {
+    border-color: rgb(241 194 27 / 0.42);
+    background: rgb(241 194 27 / 0.1);
+    color: #f1c21b;
+  }
+
+  .case-step-state-需复核,
+  .case-acquisition-status-needs_attention {
+    border-color: rgb(255 131 43 / 0.52);
+    background: rgb(255 131 43 / 0.14);
+    color: #ffb784;
+  }
+
+  .case-acquisition-status-ready {
+    border-color: rgb(66 190 101 / 0.42);
+    background: rgb(36 161 72 / 0.13);
+    color: #8ee6a5;
+  }
+
+  .case-acquisition-status-not_started {
+    border-color: rgb(241 194 27 / 0.42);
+    background: rgb(241 194 27 / 0.1);
+    color: #f1c21b;
+  }
+
+  .case-step-state-保存失败 {
+    border-color: rgb(255 131 137 / 0.6);
+    background: rgb(218 30 40 / 0.14);
+    color: #ffb3b8;
+  }
+
+  .case-mini-grid,
+  .case-form-grid,
+  .case-layer-grid,
+  .case-rationale-grid,
+  .case-rule-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .case-mini-grid > div,
+  .case-rationale-grid > div,
+  .case-rule-card {
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: var(--clinical-surface-muted);
+    padding: 9px;
+    min-width: 0;
+  }
+
+  .case-mini-grid span,
+  .case-form-grid span {
+    display: block;
+    color: var(--clinical-muted);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .case-mini-grid b,
+  .case-rationale-grid b {
+    display: block;
+    margin-top: 3px;
+    color: var(--clinical-text-primary);
+    font-size: 12.5px;
+    line-height: 1.3;
+  }
+
+  .case-planning-rationale .card-content {
+    display: grid;
+    gap: 12px;
+  }
+
+  .case-rule-card {
+    display: grid;
+    gap: 6px;
+    min-height: 142px;
+  }
+
+  .case-rule-card > span {
+    color: #a6c8ff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .case-rule-card b {
+    color: var(--clinical-text-primary);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .case-rule-card strong {
+    align-self: start;
+    justify-self: start;
+    border: 1px solid rgb(120 169 255 / 0.28);
+    border-radius: 4px;
+    background: rgb(15 98 254 / 0.14);
+    color: #d0e2ff;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 6px 8px;
+  }
+
+  .case-rule-card p {
+    margin: 0;
+    color: var(--clinical-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .case-rationale-audit {
+    display: grid;
+    gap: 1px;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    background: rgb(255 255 255 / 0.12);
+  }
+
+  .case-rationale-audit p {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 12px;
+    margin: 0;
+    background: #0f141b;
+    padding: 9px 10px;
+  }
+
+  .case-rationale-audit b {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .case-rationale-audit span {
+    color: var(--clinical-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .case-candidate-panel .card-content {
+    display: grid;
+    gap: 12px;
+  }
+
+  .case-candidate-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+  }
+
+  .case-candidate-header b {
+    display: block;
+    color: var(--clinical-text-primary);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .case-candidate-header p {
+    margin: 4px 0 0;
+    color: var(--clinical-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .case-candidate-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .case-candidate-row {
+    display: grid;
+    gap: 10px;
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: var(--clinical-surface-muted);
+    padding: 12px;
+  }
+
+  .case-candidate-row.is-selected {
+    border-color: rgb(120 169 255 / 0.62);
+    background: rgb(15 98 254 / 0.11);
+  }
+
+  .case-candidate-row-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .case-candidate-row-top > div {
+    display: grid;
+    gap: 4px;
+  }
+
+  .case-candidate-row-top span {
+    color: #a6c8ff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .case-candidate-row-top b {
+    color: var(--clinical-text-primary);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .case-candidate-state {
+    white-space: nowrap;
+  }
+
+  .case-candidate-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    background: rgb(255 255 255 / 0.12);
+  }
+
+  .case-candidate-metrics > div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    background: #0f141b;
+    padding: 9px;
+  }
+
+  .case-candidate-metrics span,
+  .case-candidate-rationale b {
+    color: var(--clinical-text-tertiary);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .case-candidate-metrics b {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .case-candidate-rationale {
+    display: grid;
+    grid-template-columns: 82px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    border: 1px solid rgb(255 255 255 / 0.10);
+    background: #0f141b;
+    padding: 9px;
+  }
+
+  .case-candidate-rationale span {
+    color: var(--clinical-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .case-candidate-empty {
+    border: 1px solid rgb(255 255 255 / 0.12);
+    border-radius: 4px;
+    background: #0f141b;
+  }
+
+  .case-form-grid label {
+    display: block;
+  }
+
+  .case-layer-toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: var(--clinical-surface-muted);
+    padding: 10px;
+  }
+
+  .case-layer-toggle input {
+    margin-top: 3px;
+  }
+
+  .case-layer-board-content {
+    display: grid;
+    gap: 12px;
+  }
+
+  .case-layer-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .case-layer-control {
+    display: grid;
+    align-content: space-between;
+    gap: 10px;
+    min-width: 0;
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: var(--clinical-surface-muted);
+    padding: 10px;
+  }
+
+  .case-layer-control > span {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .case-layer-control b {
+    color: var(--clinical-text-primary);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .case-layer-control small {
+    color: var(--clinical-text-tertiary);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .case-layer-range {
+    width: 100%;
+    min-height: 28px;
+  }
+
+  .case-layer-range:disabled {
+    opacity: .38;
+  }
+
+  .case-acquisition-gate .card-content {
+    display: grid;
+    gap: 12px;
+  }
+
+  .case-acquisition-row {
+    align-items: start;
+  }
+
+  .case-acquisition-path-panel .card-content {
+    display: grid;
+    gap: 12px;
+  }
+
+  .case-acquisition-path-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .case-acquisition-path-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 10px;
+    min-width: 0;
+    min-height: 164px;
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: var(--clinical-surface-muted);
+    color: var(--clinical-text-secondary);
+    padding: 11px;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color .14s ease, background .14s ease;
+  }
+
+  .case-acquisition-path-card:hover {
+    border-color: var(--clinical-border-strong);
+    background: #151d27;
+  }
+
+  .case-acquisition-path-card.is-active {
+    border-color: rgb(120 169 255 / 0.74);
+    background: rgb(15 98 254 / 0.12);
+  }
+
+  .case-acquisition-path-icon {
+    display: grid;
+    width: 30px;
+    aspect-ratio: 1;
+    place-items: center;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    border-radius: 4px;
+    background: #0f141b;
+    color: #a6c8ff;
+  }
+
+  .case-acquisition-path-copy {
+    display: grid;
+    align-content: start;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .case-acquisition-path-copy b {
+    color: var(--clinical-text-primary);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .case-acquisition-path-copy strong {
+    color: #a6c8ff;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .case-acquisition-path-copy small {
+    color: var(--clinical-text-tertiary);
+    font-size: 11.5px;
+    line-height: 1.42;
+  }
+
+  .case-acquisition-path-meta {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    align-self: end;
+    padding-top: 8px;
+    border-top: 1px solid rgb(255 255 255 / 0.08);
+  }
+
+  .case-acquisition-path-meta span {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .case-acquisition-path-meta b {
+    color: var(--clinical-text-tertiary);
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .case-acquisition-path-meta em {
+    color: var(--clinical-text-secondary);
+    font-size: 11px;
+    font-style: normal;
+    line-height: 1.25;
+  }
+
+  .case-acquisition-path-state {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    border: 1px solid rgb(255 255 255 / 0.13);
+    border-radius: 999px;
+    background: #0f141b;
+    color: var(--clinical-text-tertiary);
+    padding: 3px 7px;
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .case-acquisition-path-state.is-active {
+    border-color: rgb(120 169 255 / 0.42);
+    background: rgb(15 98 254 / 0.18);
+    color: #d0e2ff;
+  }
+
+  .case-acquisition-action-panel {
+    display: grid;
+    gap: 9px;
+    border: 1px solid rgb(120 169 255 / 0.18);
+    border-radius: 2px;
+    background: #0f141b;
+    padding: 10px;
+  }
+
+  .case-acquisition-action-copy {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .case-acquisition-action-copy b {
+    color: var(--clinical-text-primary);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .case-acquisition-action-copy span {
+    color: #d0e2ff;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .case-acquisition-action-copy small {
+    color: var(--clinical-text-tertiary);
+    font-size: 11.5px;
+    line-height: 1.4;
+  }
+
+  .case-acquisition-action-row,
+  .case-lesion-tool-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .case-hidden-file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .case-acquisition-summary {
+    display: grid;
+    gap: 4px;
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: #0f141b;
+    padding: 10px;
+  }
+
+  .case-acquisition-summary b {
+    color: var(--clinical-text-primary);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .case-acquisition-summary p {
+    margin: 0;
+    color: var(--clinical-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .case-capture-grid,
+  .case-quality-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .case-capture-toggle,
+  .case-quality-control {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: var(--clinical-surface-muted);
+    padding: 10px;
+  }
+
+  .case-capture-toggle.is-required {
+    border-color: rgb(120 169 255 / 0.34);
+  }
+
+  .case-capture-toggle input {
+    margin-top: 3px;
+  }
+
+  .case-capture-toggle span,
+  .case-quality-control span {
+    min-width: 0;
+  }
+
+  .case-capture-toggle b,
+  .case-quality-control b {
+    display: block;
+    color: var(--clinical-text-primary);
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .case-capture-toggle small,
+  .case-quality-control small {
+    display: block;
+    margin-top: 3px;
+    color: var(--clinical-text-tertiary);
+    font-size: 11.5px;
+    line-height: 1.35;
+  }
+
+  .case-quality-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 118px;
+    align-items: center;
+  }
+
+  .case-quality-control select:disabled {
+    opacity: .42;
+  }
+
+  .case-lesion-boundary-panel .card-content {
+    display: grid;
+    gap: 12px;
+  }
+
+  .case-boundary-summary {
+    display: grid;
+    gap: 4px;
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: #0f141b;
+    padding: 10px;
+  }
+
+  .case-boundary-summary b {
+    color: var(--clinical-text-primary);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .case-boundary-summary p {
+    margin: 0;
+    color: var(--clinical-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .case-boundary-grid,
+  .case-boundary-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .case-boundary-control,
+  .case-boundary-metrics label,
+  .case-boundary-metrics > div {
+    display: grid;
+    align-content: space-between;
+    gap: 8px;
+    min-width: 0;
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: var(--clinical-surface-muted);
+    padding: 10px;
+  }
+
+  .case-boundary-control > span {
+    display: block;
+    min-width: 0;
+  }
+
+  .case-boundary-control b,
+  .case-boundary-metrics b {
+    display: block;
+    color: var(--clinical-text-primary);
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .case-boundary-control small {
+    display: block;
+    margin-top: 3px;
+    color: var(--clinical-text-tertiary);
+    font-size: 11.5px;
+    line-height: 1.35;
+  }
+
+  .case-boundary-metrics span {
+    color: var(--clinical-text-tertiary);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .case-lesion-boundary-status-ready {
+    border-color: rgb(66 190 101 / 0.42);
+    background: rgb(36 161 72 / 0.13);
+    color: #8ee6a5;
+  }
+
+  .case-lesion-boundary-status-needs_review {
+    border-color: rgb(255 131 43 / 0.52);
+    background: rgb(255 131 43 / 0.14);
+    color: #ffb784;
+  }
+
+  .case-lesion-boundary-status-not_started {
+    border-color: rgb(241 194 27 / 0.42);
+    background: rgb(241 194 27 / 0.1);
+    color: #f1c21b;
+  }
+
+  .case-lesion-simulation-status {
+    display: grid;
+    gap: 3px;
+    border: 1px solid rgb(120 169 255 / 0.18);
+    border-radius: 2px;
+    background: #0b1118;
+    padding: 8px;
+  }
+
+  .case-lesion-simulation-status b {
+    color: #d0e2ff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .case-lesion-simulation-status span {
+    color: var(--clinical-text-secondary);
+    font-size: 11.5px;
+    line-height: 1.35;
+  }
+
+  .case-summary-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .case-summary-list p {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0;
+    border-bottom: 1px solid rgb(255 255 255 / 0.08);
+    padding-bottom: 8px;
+  }
+
+  .case-summary-list b {
+    color: var(--clinical-text-primary);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .case-summary-list span {
+    color: var(--clinical-muted);
+    text-align: right;
+  }
+
+  .case-closure-grid {
+    display: grid;
+    grid-template-columns: minmax(220px, .76fr) minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .case-closure-visual {
+    position: relative;
+    min-height: 240px;
+    overflow: hidden;
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background:
+      linear-gradient(rgb(120 169 255 / 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(120 169 255 / 0.08) 1px, transparent 1px),
+      radial-gradient(circle at 50% 42%, rgb(15 98 254 / 0.14), transparent 44%),
+      #090d12;
+    background-size: 24px 24px, 24px 24px, auto, auto;
+  }
+
+  .case-closure-face {
+    position: absolute;
+    inset: 26px 58px 20px;
+    border: 1px solid rgb(229 234 240 / 0.38);
+    border-radius: 48% 48% 44% 44%;
+    background: rgb(229 234 240 / 0.03);
+  }
+
+  .case-closure-rstl,
+  .case-closure-cut,
+  .case-closure-pull {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform-origin: center;
+  }
+
+  .case-closure-rstl {
+    width: 162px;
+    height: 1px;
+    margin-left: -81px;
+    margin-top: -24px;
+    transform: rotate(-8deg);
+    background: #78a9ff;
+    box-shadow: 0 18px 0 rgb(120 169 255 / 0.72), 0 -18px 0 rgb(120 169 255 / 0.54);
+  }
+
+  .case-closure-cut {
+    width: 116px;
+    height: 16px;
+    margin-left: -58px;
+    margin-top: -8px;
+    border: 1px solid #ff8389;
+    border-radius: 999px;
+    background: rgb(218 30 40 / 0.14);
+  }
+
+  .case-closure-pull {
+    width: 52px;
+    height: 1px;
+    background: #fddc69;
+  }
+
+  .case-closure-pull::after {
+    position: absolute;
+    top: -4px;
+    right: -1px;
+    width: 8px;
+    height: 8px;
+    border-top: 1px solid #fddc69;
+    border-right: 1px solid #fddc69;
+    content: "";
+    transform: rotate(45deg);
+  }
+
+  .case-closure-pull-left {
+    margin-left: -112px;
+    margin-top: 24px;
+    transform: rotate(180deg);
+  }
+
+  .case-closure-pull-right {
+    margin-left: 60px;
+    margin-top: 24px;
+  }
+
+  .case-closure-copy {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .case-closure-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .case-closure-metrics > div {
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: var(--clinical-surface-muted);
+    padding: 10px;
+    min-width: 0;
+  }
+
+  .case-closure-metrics span {
+    display: block;
+    color: var(--clinical-muted);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .case-closure-metrics b {
+    display: block;
+    margin-top: 4px;
+    color: var(--clinical-text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .case-closure-meter {
+    height: 10px;
+    overflow: hidden;
+    border: 1px solid var(--clinical-border);
+    border-radius: 999px;
+    background: #090d12;
+  }
+
+  .case-closure-meter span {
+    display: block;
+    width: var(--case-closure-score, 0%);
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #ff8389, #f1c21b 48%, #42be65);
+    transition: width .18s ease-out;
+  }
+
+  .case-closure-status {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  .case-closure-status-stable {
+    border-color: rgb(66 190 101 / 0.45);
+    background: rgb(66 190 101 / 0.1);
+    color: #42be65;
+  }
+
+  .case-closure-status-needs_review {
+    border-color: rgb(241 194 27 / 0.5);
+    background: rgb(241 194 27 / 0.12);
+    color: #fddc69;
+  }
+
+  .settings-workbench-stack {
+    width: min(1120px, 100%);
+  }
+
+  .settings-workbench-page .react-shell {
+    grid-template-columns: minmax(320px, 384px) 1fr;
+  }
+
+  .settings-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 340px);
+    gap: 18px;
+    align-items: stretch;
+    border: 1px solid rgb(255 255 255 / 0.16);
+    border-radius: 4px;
+    background: #111821;
+    padding: 22px;
+  }
+
+  .settings-hero h2 {
+    max-width: 780px;
+    margin: 12px 0 0;
+    color: var(--clinical-text-primary);
+    font-size: 26px;
+    font-weight: 600;
+    line-height: 1.18;
+    letter-spacing: 0;
+  }
+
+  .settings-hero p {
+    max-width: 760px;
+    margin: 10px 0 0;
+    color: var(--clinical-text-secondary);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .settings-hero-readiness,
+  .settings-mini-grid,
+  .settings-action-list,
+  .settings-checklist,
+  .settings-boundary-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .settings-hero-readiness > div {
+    border: 1px solid rgb(255 255 255 / 0.14);
+    border-radius: 4px;
+    background: #151d27;
+    padding: 12px;
+  }
+
+  .settings-hero-readiness span,
+  .settings-mini-grid span {
+    display: block;
+    color: var(--clinical-text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .settings-hero-readiness b,
+  .settings-mini-grid b {
+    display: block;
+    margin-top: 5px;
+    color: var(--clinical-text-primary);
+    font-size: 14px;
+    line-height: 1.25;
+  }
+
+  .settings-panel-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .settings-panel-grid-wide {
+    grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr);
+  }
+
+  .settings-provider-panel {
+    min-width: 0;
+    grid-row: span 3;
+  }
+
+  .settings-worker-panel {
+    min-width: 0;
+  }
+
+  .settings-worker-panel .card {
+    height: 100%;
+  }
+
+  .settings-provider-panel .agent-grid {
+    display: grid;
+    gap: 12px;
+    height: 100%;
+    border: 1px solid var(--clinical-dark-border);
+    border-radius: 4px;
+    background: var(--clinical-dark-panel);
+    color: var(--clinical-text-primary);
+    padding: 14px;
+    box-shadow: none;
+  }
+
+  .settings-boundary-list p {
+    display: grid;
+    grid-template-columns: minmax(88px, 120px) minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    margin: 0;
+    border: 1px solid rgb(255 255 255 / 0.08);
+    border-radius: 4px;
+    background: var(--clinical-dark-panel-2);
+    padding: 10px;
+  }
+
+  .settings-boundary-list b {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .settings-boundary-list span {
+    color: var(--clinical-dark-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .case-inline-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .case-primary-action-card .space-y-3,
+  .case-settings-card .space-y-3,
+  .case-disclosure-body {
+    display: grid;
+    gap: 10px;
+  }
+
+  .case-disclosure {
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: var(--clinical-surface);
+    color: var(--clinical-ink);
+  }
+
+  .case-disclosure summary {
+    cursor: pointer;
+    padding: 11px 12px;
+    color: var(--clinical-muted);
+    font-size: 12px;
+    font-weight: 700;
+    list-style-position: inside;
+  }
+
+  .case-disclosure[open] summary {
+    border-bottom: 1px solid rgb(255 255 255 / 0.07);
+    color: var(--clinical-text-primary);
+  }
+
+  .case-disclosure-body {
+    padding: 12px;
+  }
+
+  .case-legacy-tools {
+    opacity: .82;
+  }
+
+  .case-developer-notes {
+    opacity: .72;
+  }
+
+  .case-save-status-saved {
+    border-color: #8d99ae;
+    background: #111821;
+    color: #c6ccd4;
+  }
+
+  .case-save-status-saving,
+  .case-save-status-dirty {
+    border-color: #f1c21b;
+    background: rgb(241 194 27 / 0.14);
+    color: #fddc69;
+  }
+
+  .case-save-status-save_failed {
+    border-color: rgb(255 131 137 / 0.7);
+    background: rgb(218 30 40 / 0.14);
+    color: #ffb3b8;
+  }
+
+  .react-legacy-banner {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    z-index: 50;
+    transform: translateX(-50%);
+    max-width: min(860px, calc(100vw - 32px));
+    border: 1px solid #8d99ae;
+    border-radius: 4px;
+    background: rgb(244 244 244 / 0.96);
+    color: #343a40;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    padding: 8px 12px;
+    pointer-events: none;
+  }
+
+  .case-next-rail {
+    display: flex;
+    justify-content: flex-end;
+    width: min(1180px, 100%);
+    margin-top: 14px;
   }
 
   .react-incision-host {
@@ -276,28 +2823,28 @@
   }
 
   .surgery-workbench .btn.cut-along {
-    border-color: var(--green);
-    color: var(--green-d);
-    background: var(--green-soft);
+    border-color: var(--clinical-accent);
+    color: #d0e2ff;
+    background: rgb(15 98 254 / 0.14);
   }
 
   .surgery-workbench .btn.cut-along:hover {
-    background: #c7ecdb;
+    background: rgb(15 98 254 / 0.22);
   }
 
   .surgery-workbench .btn.cut-along.active {
-    border-color: var(--green-d);
-    background: var(--green);
+    border-color: #78a9ff;
+    background: var(--clinical-accent);
     color: #fff;
-    box-shadow: 0 0 0 3px rgba(15, 155, 110, .3);
+    box-shadow: none;
   }
 
   .surgery-workbench .surgery-action-row {
     grid-template-columns: 1fr;
   }
 
-  .surgery-workbench .surgery-green-copy {
-    color: #18c08a;
+  .surgery-workbench .surgery-highlight-copy {
+    color: #78a9ff;
   }
 
   .surgery-workbench .surgery-tension-bar {
@@ -649,6 +3196,992 @@
     border-radius: 14px;
     background: #111820;
   }
+
+  .clinical-compat-workbench {
+    --bg: var(--clinical-dark-bg);
+    --side: var(--clinical-dark-sidebar);
+    --card: var(--clinical-dark-panel);
+    --line: var(--clinical-dark-border);
+    --ink: var(--clinical-text-primary);
+    --muted: var(--clinical-dark-muted);
+    --green: var(--clinical-accent);
+    --green-d: #a6c8ff;
+    --green-soft: rgb(15 98 254 / 0.14);
+    --stage: #070a0f;
+    --stage-bar: #0d1117;
+    background: var(--clinical-dark-bg);
+    color: var(--clinical-text-primary);
+    font-family: var(--font-clinical-sans);
+  }
+
+  .clinical-compat-workbench .sidebar {
+    border-right-color: var(--clinical-dark-border);
+    background: var(--clinical-dark-sidebar);
+    gap: 12px;
+    padding-top: 44px;
+  }
+
+  .clinical-compat-workbench .brand {
+    border-bottom: 1px solid var(--clinical-dark-border);
+    padding-bottom: 15px;
+  }
+
+  .clinical-compat-workbench .brand .eyebrow {
+    color: var(--clinical-dark-faint);
+    letter-spacing: .08em;
+  }
+
+  .clinical-compat-workbench .brand h1 {
+    color: var(--clinical-text-primary);
+    font-size: 21px;
+    line-height: 1.22;
+    letter-spacing: 0;
+  }
+
+  .clinical-compat-workbench .card,
+  .clinical-compat-workbench .agent-grid,
+  .clinical-compat-workbench .scan-panel,
+  .clinical-compat-workbench .overlay-qa,
+  .clinical-compat-workbench .candidate-row,
+  .clinical-compat-workbench .metric,
+  .clinical-compat-workbench .incision-state-grid > div,
+  .clinical-compat-workbench .annotate-state-grid > div,
+  .clinical-compat-workbench .live-state-grid > div,
+  .clinical-compat-workbench .annotate-line-row {
+    border: 1px solid var(--clinical-dark-border);
+    border-radius: 4px;
+    background: var(--clinical-dark-panel);
+    box-shadow: none;
+  }
+
+  .clinical-compat-workbench .quality-top {
+    align-items: center;
+    border-bottom: 1px solid rgb(255 255 255 / 0.07);
+    color: var(--clinical-dark-muted);
+    font-size: 12px;
+    line-height: 1.25;
+    padding-bottom: 8px;
+  }
+
+  .clinical-compat-workbench .quality-top span:last-child {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: normal;
+  }
+
+  .clinical-compat-workbench .badge {
+    border: 1px solid var(--clinical-dark-border-strong);
+    border-radius: 4px;
+    background: #111821;
+    color: #d0e2ff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 8px;
+  }
+
+  .clinical-compat-workbench .badge.loading {
+    border-color: rgb(178 134 0 / 0.55);
+    background: rgb(178 134 0 / 0.14);
+    color: #f1c21b;
+  }
+
+  .clinical-compat-workbench .btn {
+    border-color: var(--clinical-dark-border);
+    border-radius: 4px;
+    background: #151b23;
+    color: var(--clinical-text-primary);
+    box-shadow: none;
+  }
+
+  .clinical-compat-workbench .btn:hover {
+    border-color: var(--clinical-dark-border-strong);
+    background: #1c2530;
+  }
+
+  .clinical-compat-workbench .btn-primary {
+    border-color: var(--clinical-accent);
+    background: var(--clinical-accent);
+    color: #f4f7fb;
+  }
+
+  .clinical-compat-workbench .btn-primary:hover {
+    border-color: var(--clinical-accent-hover);
+    background: var(--clinical-accent-hover);
+  }
+
+  .clinical-compat-workbench .btn[aria-pressed="true"] {
+    border-color: #78a9ff;
+    background: rgb(15 98 254 / 0.16);
+    color: #d0e2ff;
+  }
+
+  .clinical-compat-workbench input,
+  .clinical-compat-workbench select,
+  .clinical-compat-workbench textarea,
+  .clinical-compat-workbench .select,
+  .clinical-compat-workbench .text-input,
+  .clinical-compat-workbench .text-area {
+    border-color: var(--clinical-dark-border);
+    border-radius: 4px;
+    background-color: #0f141b;
+    color: var(--clinical-text-primary);
+  }
+
+  .clinical-compat-workbench input:focus,
+  .clinical-compat-workbench select:focus,
+  .clinical-compat-workbench textarea:focus,
+  .clinical-compat-workbench .select:focus,
+  .clinical-compat-workbench .text-input:focus,
+  .clinical-compat-workbench .text-area:focus {
+    border-color: var(--clinical-accent);
+    box-shadow: 0 0 0 2px rgb(15 98 254 / 0.16);
+    outline: none;
+  }
+
+  .clinical-compat-workbench input[type=range],
+  .clinical-compat-workbench input[type=checkbox],
+  .clinical-compat-workbench .check input {
+    accent-color: var(--clinical-accent);
+  }
+
+  .clinical-compat-workbench .field-label,
+  .clinical-compat-workbench .hint,
+  .clinical-compat-workbench .agent-note,
+  .clinical-compat-workbench .disclaimer,
+  .clinical-compat-workbench .candidate-row .meta,
+  .clinical-compat-workbench .guardrail-details,
+  .clinical-compat-workbench .boundary-status,
+  .clinical-compat-workbench .anatomy-preview,
+  .clinical-compat-workbench .help-doc ol,
+  .clinical-compat-workbench .help-doc p,
+  .clinical-compat-workbench .legend,
+  .clinical-compat-workbench .scan-row,
+  .clinical-compat-workbench .overlay-qa p,
+  .clinical-compat-workbench .annotate-state-grid .k,
+  .clinical-compat-workbench .incision-state-grid .k,
+  .clinical-compat-workbench .live-state-grid .k,
+  .clinical-compat-workbench .metric .k {
+    color: var(--clinical-dark-muted);
+  }
+
+  .clinical-compat-workbench .field-label .val,
+  .clinical-compat-workbench .scan-row span:last-child,
+  .clinical-compat-workbench .section-title,
+  .clinical-compat-workbench .help-doc summary,
+  .clinical-compat-workbench .candidate-row .top,
+  .clinical-compat-workbench .annotate-state-grid .v,
+  .clinical-compat-workbench .incision-state-grid .v,
+  .clinical-compat-workbench .live-state-grid .v,
+  .clinical-compat-workbench .metric .v {
+    color: var(--clinical-text-primary);
+  }
+
+  .clinical-compat-workbench .disclaimer {
+    border-top: 1px solid var(--clinical-dark-border);
+    padding-top: 10px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .clinical-compat-workbench .stage {
+    background: #070a0f;
+  }
+
+  .clinical-compat-workbench .stage-top {
+    border-bottom-color: var(--clinical-dark-border);
+    background: var(--clinical-dark-sidebar);
+  }
+
+  .clinical-compat-workbench .stage-body {
+    background:
+      linear-gradient(180deg, rgb(15 98 254 / 0.05), transparent 240px),
+      #070a0f;
+  }
+
+  .clinical-compat-workbench .main-wrap,
+  .clinical-compat-workbench #agentCanvas,
+  .clinical-compat-workbench #surgeryCanvas,
+  .clinical-compat-workbench #stage,
+  .clinical-compat-workbench #three,
+  .clinical-compat-workbench #canvas {
+    border-radius: 4px;
+  }
+
+  .clinical-compat-workbench .live {
+    border: 1px solid var(--clinical-dark-border);
+    border-radius: 4px;
+    background: #111821;
+    color: var(--clinical-dark-muted);
+  }
+
+  .clinical-compat-workbench .live.on {
+    border-color: rgb(120 169 255 / 0.45);
+    color: #d0e2ff;
+  }
+
+  .clinical-compat-workbench .live.on .dot {
+    background: var(--clinical-accent);
+    box-shadow: 0 0 0 4px rgb(15 98 254 / 0.16);
+  }
+
+  .clinical-compat-workbench .fps,
+  .clinical-compat-workbench .stage-link {
+    color: #a6c8ff;
+  }
+
+  .clinical-compat-workbench .stage-link {
+    border: 1px solid var(--clinical-dark-border-strong);
+    border-radius: 4px;
+    background: rgb(15 98 254 / 0.12);
+    padding: 6px 10px;
+    text-decoration: none;
+  }
+
+  .clinical-compat-workbench .stage-link:hover {
+    background: rgb(15 98 254 / 0.2);
+  }
+
+  .clinical-compat-workbench .bar {
+    background: #1b242f;
+  }
+
+  .clinical-compat-workbench .bar-fill {
+    background: linear-gradient(90deg, #78a9ff, var(--clinical-accent));
+  }
+
+  .clinical-compat-workbench .yaw-meter span {
+    border-color: var(--clinical-dark-border);
+    border-radius: 4px;
+    background: #111821;
+  }
+
+  .clinical-compat-workbench .yaw-meter span.active {
+    border-color: #78a9ff;
+    background: rgb(15 98 254 / 0.22);
+    box-shadow: none;
+  }
+
+  .clinical-compat-workbench .overlay-qa.ok {
+    border-color: rgb(66 190 101 / 0.45);
+    background: rgb(66 190 101 / 0.08);
+  }
+
+  .clinical-compat-workbench .overlay-qa.warn,
+  .clinical-compat-workbench .boundary-status.warn,
+  .clinical-compat-workbench .anatomy-preview.warn,
+  .clinical-compat-workbench .agent-note.warn,
+  .clinical-compat-workbench .guardrail-details.warn,
+  .clinical-compat-workbench .provider-state-warn,
+  .clinical-compat-workbench .annotate-state-warning,
+  .clinical-compat-workbench .edit-status.active,
+  .clinical-compat-workbench .review-state.revision {
+    color: #f1c21b;
+  }
+
+  .clinical-compat-workbench .guardrail-details.danger,
+  .clinical-compat-workbench .review-state.rejected {
+    color: #ff8389;
+  }
+
+  .clinical-compat-workbench .agent-note.ok,
+  .clinical-compat-workbench .provider-state-ok,
+  .clinical-compat-workbench .review-state.approved,
+  .clinical-compat-workbench .surgery-verdict-ok {
+    color: #42be65;
+  }
+
+  .clinical-compat-workbench .review-state,
+  .clinical-compat-workbench .edit-status {
+    border: 1px solid var(--clinical-dark-border);
+    border-radius: 4px;
+    background: #111821;
+    color: var(--clinical-text-primary);
+  }
+
+  .clinical-compat-workbench .candidate-list {
+    gap: 8px;
+  }
+
+  .clinical-compat-workbench .canvas-legend {
+    border-color: var(--clinical-dark-border-strong);
+    border-radius: 4px;
+    background: rgb(7 10 15 / 0.86);
+    backdrop-filter: none;
+    color: var(--clinical-text-primary);
+  }
+
+  .clinical-compat-workbench .asset-loading {
+    border-radius: 4px;
+    background: rgb(7 10 15 / 0.9);
+    backdrop-filter: none;
+  }
+
+  .clinical-compat-workbench .asset-spinner {
+    border-color: rgb(255 255 255 / 0.18);
+    border-top-color: #78a9ff;
+  }
+
+  .clinical-compat-workbench .legend-swatch.line,
+  .clinical-compat-workbench .legend-swatch.handle {
+    background: #78a9ff;
+  }
+
+  .clinical-compat-workbench .surgery-highlight-copy {
+    color: #78a9ff;
+  }
+
+  .clinical-compat-workbench .surgery-tension-bar {
+    background: linear-gradient(90deg, #78a9ff, #f1c21b, #ff8389);
+  }
+
+  .clinical-compat-workbench .surgery-workbench .btn.cut-along,
+  .surgery-workbench.clinical-compat-workbench .btn.cut-along {
+    border-color: var(--clinical-accent);
+    background: rgb(15 98 254 / 0.14);
+    color: #d0e2ff;
+  }
+
+  .clinical-compat-workbench .surgery-workbench .btn.cut-along:hover,
+  .surgery-workbench.clinical-compat-workbench .btn.cut-along:hover {
+    background: rgb(15 98 254 / 0.22);
+  }
+
+  .clinical-compat-workbench .surgery-workbench .btn.cut-along.active,
+  .surgery-workbench.clinical-compat-workbench .btn.cut-along.active {
+    border-color: #78a9ff;
+    background: var(--clinical-accent);
+    color: #f4f7fb;
+    box-shadow: none;
+  }
+
+  .clinical-compat-workbench #surgeryCanvas,
+  .clinical-compat-workbench #agentCanvas {
+    background: radial-gradient(circle at 50% 38%, #1b2531 0%, #101820 52%, #070a0f 100%);
+  }
+
+  .clinical-developer-disclosure {
+    border: 1px solid var(--clinical-dark-border);
+    border-radius: 4px;
+    background: #0f141b;
+  }
+
+  .clinical-developer-disclosure summary {
+    cursor: pointer;
+    color: var(--clinical-dark-muted);
+    font-size: 12px;
+    font-weight: 700;
+    list-style: none;
+    padding: 10px 12px;
+  }
+
+  .clinical-developer-disclosure summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .clinical-developer-disclosure summary::after {
+    content: "展开";
+    float: right;
+    color: var(--clinical-dark-faint);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .clinical-developer-disclosure[open] summary::after {
+    content: "收起";
+  }
+
+  .clinical-developer-disclosure .card,
+  .clinical-developer-disclosure .agent-grid {
+    border-width: 1px 0 0;
+    border-radius: 0;
+    background: transparent;
+  }
+}
+
+/* Critical, unlayered overrides: legacy style.css is unlayered and would
+   otherwise win over the clinical case workflow theme defined in @layer. */
+.case-workflow-page {
+  --green: var(--clinical-accent);
+  --green-d: #a6c8ff;
+  --green-soft: rgb(15 98 254 / 0.14);
+  background: var(--clinical-dark-bg);
+  color: var(--clinical-text-primary);
+  font-family: var(--font-clinical-sans);
+}
+
+.case-workflow-page .react-shell-sidebar {
+  border-right-color: var(--clinical-dark-border);
+  background: var(--clinical-dark-sidebar);
+}
+
+.case-workflow-page .case-workflow-main {
+  background: var(--clinical-dark-bg);
+  color: var(--clinical-text-primary);
+}
+
+.case-workflow-page .case-workflow-stack {
+  background: transparent;
+}
+
+.case-workflow-page .brand {
+  border-bottom: 1px solid var(--clinical-dark-border);
+}
+
+.case-workflow-page .brand .eyebrow {
+  color: var(--clinical-dark-faint);
+}
+
+.case-workflow-page .brand h1 {
+  color: var(--clinical-text-primary);
+}
+
+.case-workflow-page .card {
+  border: 1px solid var(--clinical-dark-border);
+  border-radius: 4px;
+  background: var(--clinical-dark-panel);
+  color: var(--clinical-text-primary);
+  box-shadow: none;
+}
+
+.case-workflow-page .quality-top {
+  border-bottom: 1px solid rgb(255 255 255 / 0.07);
+  color: var(--clinical-dark-muted);
+}
+
+.case-workflow-page .quality-top span,
+.case-workflow-page .quality-top b,
+.case-workflow-page .quality-top svg {
+  color: inherit;
+}
+
+.case-workflow-page .quality-top span:last-child {
+  color: var(--clinical-text-primary);
+}
+
+.case-workflow-page .hint,
+.case-workflow-page p,
+.case-workflow-page small,
+.case-workflow-page label {
+  color: var(--clinical-dark-muted);
+}
+
+.case-workflow-page .react-nav-link,
+.case-workflow-page .btn {
+  border-color: var(--clinical-dark-border);
+  border-radius: 4px;
+  background: #151b23;
+  color: var(--clinical-text-primary);
+  box-shadow: none;
+}
+
+.case-workflow-page .react-nav-link:hover,
+.case-workflow-page .btn:hover {
+  border-color: var(--clinical-dark-border-strong);
+  background: #1c2530;
+}
+
+.case-workflow-page .btn-primary {
+  border-color: var(--clinical-accent);
+  background: var(--clinical-accent);
+  color: #f4f7fb;
+}
+
+.case-workflow-page .btn-primary:hover {
+  border-color: var(--clinical-accent-hover);
+  background: var(--clinical-accent-hover);
+}
+
+.case-workflow-page input,
+.case-workflow-page select,
+.case-workflow-page textarea {
+  border-color: var(--clinical-dark-border);
+  border-radius: 4px;
+  background: #0f141b;
+  color: var(--clinical-text-primary);
+}
+
+.case-workflow-page input[type=range],
+.case-workflow-page input[type=checkbox],
+.case-workflow-page .check input {
+  accent-color: var(--clinical-accent);
+}
+
+.case-workflow-page .case-list-item,
+.case-workflow-page .case-mini-grid > div,
+.case-workflow-page .case-rationale-grid > div,
+.case-workflow-page .case-rule-card,
+.case-workflow-page .case-rationale-audit p,
+.case-workflow-page .case-candidate-row,
+.case-workflow-page .case-candidate-metrics > div,
+.case-workflow-page .case-candidate-rationale,
+.case-workflow-page .case-closure-metrics > div,
+.case-workflow-page .case-layer-toggle,
+.case-workflow-page .case-layer-control,
+.case-workflow-page .case-acquisition-path-card,
+.case-workflow-page .case-acquisition-summary,
+.case-workflow-page .case-capture-toggle,
+.case-workflow-page .case-quality-control,
+.case-workflow-page .case-boundary-summary,
+.case-workflow-page .case-boundary-control,
+.case-workflow-page .case-boundary-metrics label,
+.case-workflow-page .case-boundary-metrics > div,
+.case-workflow-page .case-export-privacy p {
+  border-color: var(--clinical-dark-border);
+  background: var(--clinical-dark-panel-2);
+  color: var(--clinical-text-primary);
+}
+
+.case-workflow-page .case-list-item:hover {
+  border-color: var(--clinical-dark-border-strong);
+  background: #1d2733;
+}
+
+.case-workflow-page .case-acquisition-path-card.is-active {
+  border-color: rgb(120 169 255 / 0.74);
+  background: rgb(15 98 254 / 0.12);
+}
+
+.case-workflow-page .case-step-active {
+  border-color: var(--clinical-accent);
+  background: rgb(15 98 254 / 0.18);
+  color: #d0e2ff;
+}
+
+html:has(.case-workflow-page),
+body:has(.case-workflow-page) {
+  height: 100%;
+  overflow: hidden;
+}
+
+.case-workflow-page {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.case-workflow-page .react-shell {
+  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.case-workflow-page .react-shell-sidebar {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 12px;
+}
+
+.case-workflow-page .case-workflow-main {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px;
+}
+
+.case-workflow-page .case-workflow-stack {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+  gap: 10px;
+  overflow: auto;
+}
+
+.case-workflow-page .case-workflow-stage-stack {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.case-workflow-page .case-step-command {
+  display: grid;
+  min-height: 0;
+  gap: 10px;
+  justify-content: start;
+  align-content: start;
+  align-items: stretch;
+}
+
+.case-workflow-page .case-step-stage-grid {
+  align-items: start;
+}
+
+.case-workflow-page .case-workspace-header {
+  flex: 0 0 auto;
+  min-height: 30px;
+}
+
+.case-workflow-page .card {
+  border-radius: 2px;
+  padding: 0;
+  box-shadow: none !important;
+}
+
+.case-workflow-page .card > .quality-top {
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.case-workflow-page .card > .space-y-3 {
+  margin: 0;
+  padding: 10px;
+}
+
+.case-workflow-page .react-nav-link,
+.case-workflow-page .btn,
+.case-workflow-page .badge,
+.case-workflow-page .react-route-status,
+.case-workflow-page input,
+.case-workflow-page select,
+.case-workflow-page textarea,
+.case-workflow-page .case-step-state {
+  border-radius: 2px;
+  box-shadow: none !important;
+}
+
+.case-workflow-page .btn {
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+.case-workflow-page .case-mini-grid,
+.case-workflow-page .case-form-grid,
+.case-workflow-page .case-layer-grid,
+.case-workflow-page .case-rationale-grid,
+.case-workflow-page .case-rule-grid,
+.case-workflow-page .case-capture-grid,
+.case-workflow-page .case-quality-grid,
+.case-workflow-page .case-boundary-grid,
+.case-workflow-page .case-boundary-metrics,
+.case-workflow-page .case-closure-metrics,
+.case-workflow-page .case-candidate-list {
+  gap: 6px;
+}
+
+.case-workflow-page .case-list-item,
+.case-workflow-page .case-mini-grid > div,
+.case-workflow-page .case-rationale-grid > div,
+.case-workflow-page .case-rule-card,
+.case-workflow-page .case-rationale-audit p,
+.case-workflow-page .case-candidate-row,
+.case-workflow-page .case-candidate-metrics > div,
+.case-workflow-page .case-candidate-rationale,
+.case-workflow-page .case-closure-metrics > div,
+.case-workflow-page .case-layer-toggle,
+.case-workflow-page .case-layer-control,
+.case-workflow-page .case-acquisition-path-card,
+.case-workflow-page .case-acquisition-summary,
+.case-workflow-page .case-capture-toggle,
+.case-workflow-page .case-quality-control,
+.case-workflow-page .case-boundary-summary,
+.case-workflow-page .case-boundary-control,
+.case-workflow-page .case-boundary-metrics label,
+.case-workflow-page .case-boundary-metrics > div,
+.case-workflow-page .case-export-privacy p,
+.case-workflow-page .case-handoff-panel,
+.case-workflow-page .case-disclosure,
+.case-workflow-page .case-empty-state {
+  border-radius: 2px;
+  box-shadow: none !important;
+}
+
+.case-clinical-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 360px);
+  flex: 1 1 auto;
+  gap: 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.case-workspace-canvas,
+.case-workspace-panel {
+  min-width: 0;
+  min-height: 0;
+}
+
+.case-workspace-canvas {
+  display: grid;
+}
+
+.case-workspace-canvas .case-clinical-viewport {
+  height: 100%;
+  min-height: 0;
+  padding: 10px;
+}
+
+.case-workspace-canvas .case-viewport-body {
+  position: relative;
+  display: block;
+  height: 100%;
+  min-height: 0;
+  margin-top: 8px;
+}
+
+.case-workspace-canvas .case-face-preview-large,
+.case-workspace-canvas .case-face-asset-frame {
+  height: 100%;
+  min-height: 0;
+}
+
+.case-workspace-canvas .case-viewport-readout {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  background: rgb(8 12 18 / 0.86);
+  border-color: rgb(120 169 255 / 0.24);
+}
+
+.case-workspace-canvas .case-viewport-readout > div {
+  background: rgb(14 20 28 / 0.92);
+  padding: 7px 8px;
+}
+
+.case-workspace-canvas .case-viewport-layer-strip {
+  margin-top: 8px;
+}
+
+.case-workspace-canvas .case-viewport-layer-strip span {
+  border-radius: 2px;
+  padding: 5px 7px;
+}
+
+.case-workspace-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.case-workspace-panel .case-section {
+  padding: 10px;
+}
+
+.case-workspace-panel .case-step-command {
+  align-content: start;
+  align-items: stretch;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.case-workspace-panel .case-panel-priority {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-content: start;
+  align-items: stretch;
+  border-color: rgb(120 169 255 / 0.28);
+  background: #101720;
+  gap: 8px;
+  min-height: 118px;
+}
+
+.case-clinical-workspace-plan .case-workspace-panel .case-panel-priority {
+  min-height: 344px;
+}
+
+.case-workspace-panel .case-panel-priority > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.case-workspace-panel .case-panel-priority h2 {
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.case-workspace-panel .case-panel-priority p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.case-workspace-panel .case-panel-priority .case-panel-action-row {
+  display: grid;
+}
+
+.case-rationale-summary {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid rgb(120 169 255 / 0.18);
+  padding-top: 8px;
+}
+
+.case-rationale-summary-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.case-rationale-summary-head span {
+  color: #e7edf5;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.case-rationale-summary-head small {
+  color: #8fa2b5;
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.case-rationale-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.case-rationale-summary-grid > span {
+  display: grid;
+  min-width: 0;
+  border: 1px solid #273440;
+  border-radius: 2px;
+  background: #0b1118;
+  padding: 6px;
+}
+
+.case-rationale-summary-grid b {
+  color: #8fa2b5;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.case-rationale-summary-grid strong {
+  overflow: hidden;
+  color: #f4f7fb;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-rationale-summary-grid small {
+  overflow: hidden;
+  color: #b8c5d2;
+  font-size: 10px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-panel-action-row,
+.case-workspace-panel .case-inline-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.case-panel-action-row .btn:last-child:nth-child(3) {
+  grid-column: 1 / -1;
+}
+
+.case-panel-action-row-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.case-panel-action-row-three .btn:last-child:nth-child(3) {
+  grid-column: auto;
+}
+
+.case-workspace-panel .case-two-column,
+.case-workspace-panel .case-panel-two-column,
+.case-workspace-panel .case-acquisition-path-grid,
+.case-workspace-panel .case-closure-grid {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.case-workspace-panel .case-form-grid,
+.case-workspace-panel .case-layer-grid,
+.case-workspace-panel .case-boundary-grid,
+.case-workspace-panel .case-boundary-metrics,
+.case-workspace-panel .case-candidate-metrics,
+.case-workspace-panel .case-closure-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.case-workspace-panel .case-layer-controls {
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.case-workspace-panel .case-acquisition-path-card {
+  grid-template-columns: 28px minmax(0, 1fr);
+  min-height: 0;
+  padding: 8px;
+}
+
+.case-workspace-panel .case-acquisition-path-icon {
+  width: 26px;
+}
+
+.case-workspace-panel .case-acquisition-path-meta {
+  display: none;
+}
+
+.case-workspace-panel .case-acquisition-path-copy small {
+  display: none;
+}
+
+.case-workspace-panel .case-acquisition-path-state {
+  top: 8px;
+  right: 8px;
+  border-radius: 2px;
+}
+
+.case-workspace-panel .case-layer-toggle,
+.case-workspace-panel .case-layer-control,
+.case-workspace-panel .case-boundary-control,
+.case-workspace-panel .case-boundary-metrics label,
+.case-workspace-panel .case-boundary-metrics > div,
+.case-workspace-panel .case-capture-toggle,
+.case-workspace-panel .case-quality-control,
+.case-workspace-panel .case-candidate-row,
+.case-workspace-panel .case-closure-metrics > div {
+  padding: 8px;
+}
+
+.case-workspace-panel .case-rule-card {
+  min-height: 0;
+  padding: 8px;
+}
+
+.case-workspace-panel .case-closure-visual {
+  min-height: 140px;
+}
+
+.case-clinical-disclosure {
+  background: #101720;
+}
+
+.case-clinical-disclosure .case-disclosure-body {
+  padding: 8px;
+}
+
+.case-clinical-disclosure .card {
+  border: 0;
+  background: transparent;
+}
+
+.case-clinical-disclosure .card > .quality-top {
+  padding: 0 0 8px;
+}
+
+.case-clinical-disclosure .card > .space-y-3 {
+  padding: 0;
 }
 
 @keyframes asset-spin {
@@ -664,7 +4197,54 @@
 
   .react-shell-sidebar {
     border-right: 0;
-    border-bottom: 1px solid #e6e8e1;
+    border-bottom: 1px solid var(--clinical-border);
+  }
+
+  .case-workflow-page .react-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .case-lobby-landing,
+  .case-step-stage-grid,
+  .case-closure-grid,
+  .case-dashboard-grid,
+  .case-two-column,
+  .settings-hero,
+  .settings-panel-grid,
+  .settings-panel-grid-wide {
+    grid-template-columns: 1fr;
+  }
+
+  .case-lobby-copy {
+    grid-row: auto;
+  }
+
+  .case-lobby-stage {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .case-lobby-readiness {
+    grid-template-columns: 1fr;
+  }
+
+  .case-step-command {
+    min-height: auto;
+  }
+
+  .case-viewport-body {
+    grid-template-columns: 1fr;
+  }
+
+  .case-workflow-roadmap {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .case-page-header,
+  .case-section,
+  .case-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 
@@ -683,5 +4263,64 @@
 
   .incision-workbench .metric-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .case-workflow-main {
+    padding: 14px;
+  }
+
+  .case-lobby-copy h2 {
+    font-size: 22px;
+  }
+
+  .case-workflow-roadmap,
+  .case-stage-metrics,
+  .case-viewport-readout,
+  .case-mini-grid,
+  .case-form-grid,
+  .case-layer-grid,
+  .case-layer-controls,
+  .case-acquisition-path-grid,
+  .case-acquisition-path-meta,
+  .case-capture-grid,
+  .case-quality-grid,
+  .case-quality-control,
+  .case-boundary-grid,
+  .case-boundary-metrics,
+  .case-closure-metrics,
+  .case-rationale-grid,
+  .case-rule-grid,
+  .case-candidate-metrics,
+  .case-export-actions,
+  .case-review-record .case-export-actions,
+  .case-handoff-list p,
+  .case-rationale-audit p,
+  .case-candidate-rationale,
+  .case-export-privacy p,
+  .settings-boundary-list p {
+    grid-template-columns: 1fr;
+  }
+
+  .case-candidate-header,
+  .case-candidate-row-top {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .case-face-preview,
+  .case-face-preview-large {
+    min-height: 300px;
+  }
+
+  .case-list-item,
+  .case-summary-list p {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .case-summary-list span {
+    text-align: left;
   }
 }

@@ -10,13 +10,13 @@ export function WorkerStatusPanel() {
   return (
     <Card>
       <CardHeader>
-        <CardHeaderTitle><Cpu size={14} /> Workflow Worker</CardHeaderTitle>
+        <CardHeaderTitle><Cpu size={14} /> 后台任务状态</CardHeaderTitle>
         <span>{workerStatus}</span>
       </CardHeader>
       <CardContent>
         <Hint>{detail}</Hint>
         <Hint>
-          Comlink 只封装低频工具调用；逐帧 landmarks、mesh vertices、WebGL context 不进入 Worker API 或 Zustand store。
+          后台任务只处理低频规划辅助；实时画布、摄像头帧和三维模型数据由独立渲染层管理。
         </Hint>
       </CardContent>
     </Card>

@@ -21,8 +21,8 @@ export function LiveWorkbench() {
       workspace="live"
     >
       <WorkbenchBrand
-        eyebrow="COMPUTER VISION PROTOTYPE"
-        title="面部朗格线迁移"
+        eyebrow="病例步骤一 · 面部评估"
+        title="面部评估与张力线映射"
         action={<StatusBadge className="loading" id="modelBadge">模型加载中...</StatusBadge>}
       />
 
@@ -30,11 +30,11 @@ export function LiveWorkbench() {
 
       <Card id="incisionWorkflowCard">
         <div>
-          <Label>肿物切口候选设计</Label>
-          <Hint className="live-inline-top">手动放置皮下 / 皮表肿物，生成线性或梭形候选切口，并查看规则、trace、隐私审计和医生调整记录。</Hint>
+          <Label>病灶与切口规划</Label>
+          <Hint className="live-inline-top">记录皮下 / 皮表病灶，生成线性或梭形候选切口，并查看规划依据、审阅记录和导出状态。</Hint>
         </div>
         <Button asChild variant="workbenchPrimary">
-          <Link to="/incision">打开切口 Agent 工作台</Link>
+          <Link to="/incision">进入切口规划</Link>
         </Button>
       </Card>
 
@@ -47,7 +47,7 @@ export function LiveWorkbench() {
       <LiveQualityPanel />
 
       <Disclaimer>
-        ⚠️ 内置图谱为示意性首版（未经临床验证），方向参考 Borges RSTL。
+        内置图谱为示意性首版（未经临床验证），方向参考 Borges RSTL。
         决策辅助可视化，非手术指令、非医疗器械；最终切口由主刀医生负责。
       </Disclaimer>
     </WorkbenchLayout>

@@ -11,7 +11,7 @@ interface R3FLoadingCardProps {
 export function R3FLoadingCard({ children, className }: R3FLoadingCardProps) {
   return (
     <Html center>
-      <div className={cn("rounded-[10px] border border-white/10 bg-black/60 px-4 py-3 text-center text-sm font-bold text-[#dbe4ee]", className)}>
+      <div className={cn("rounded-[4px] border border-white/10 bg-black/60 px-4 py-3 text-center text-sm font-bold text-[#dbe4ee]", className)}>
         {children}
       </div>
     </Html>

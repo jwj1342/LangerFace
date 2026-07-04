@@ -7,17 +7,17 @@ import { useStandardFaceAssets } from "../hooks/useStandardFaceAssets";
 export function ThreePreviewRoute() {
   useReactRouteLifecycle({
     workspace: "three-preview",
-    mountedStatus: "R3F 预览加载中",
-    unloadedStatus: "R3F 预览已卸载",
+    mountedStatus: "三维模型预览加载中",
+    unloadedStatus: "三维模型预览已卸载",
   });
 
   const { assets, loadingText, reload } = useStandardFaceAssets({
-    failedRouteStatus: "R3F 预览加载失败",
+    failedRouteStatus: "三维模型预览加载失败",
     initialLoadingText: "正在加载标准脸资产",
-    loadedAssetStatus: "R3F 标准脸资产已加载",
-    loadedRouteStatus: "R3F 预览已就绪",
-    loadingAssetStatus: "R3F 标准脸资产加载中",
-    loadingRouteStatus: "R3F 预览加载中",
+    loadedAssetStatus: "标准三维模型资产已加载",
+    loadedRouteStatus: "三维模型预览已就绪",
+    loadingAssetStatus: "标准三维模型资产加载中",
+    loadingRouteStatus: "三维模型预览加载中",
   });
 
   return (

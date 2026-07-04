@@ -16,6 +16,7 @@ interface ManagedWorkbenchRouteProps<TModule> {
   children: ReactNode;
   controller: ManagedWorkbenchControllerAdapter<TModule>;
   failedStatus: string;
+  legacyNotice?: string;
   loadingStatus: string;
   mountedStatus: string;
   unloadedStatus: string;
@@ -26,6 +27,7 @@ export function ManagedWorkbenchRoute<TModule>({
   children,
   controller,
   failedStatus,
+  legacyNotice,
   loadingStatus,
   mountedStatus,
   unloadedStatus,
@@ -47,6 +49,7 @@ export function ManagedWorkbenchRoute<TModule>({
 
   return (
     <ReactRouteHost ref={hostRef} workspace={workspace}>
+      {legacyNotice ? <div className="react-legacy-banner">{legacyNotice}</div> : null}
       {children}
     </ReactRouteHost>
   );

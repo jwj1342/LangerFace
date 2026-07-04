@@ -17,15 +17,14 @@ export function ThreePreviewSidebar({ isReady, onReload }: ThreePreviewSidebarPr
   return (
     <ReactShellSidebar>
       <WorkbenchBrand
-        eyebrow="R3F RENDERER BOUNDARY"
-        title="R3F 标准脸预览"
+        eyebrow="系统诊断"
+        title="标准三维面部模型预览"
         action={<RouteStatus>{isReady ? "ready" : "loading"}</RouteStatus>}
       />
 
       <Card>
         <Hint>
-          这里验证 React Three Fiber / drei 的渲染层接入。当前只承载低频资产加载和相机控制；
-          切口工作台的高频拾取与候选线编辑仍由独立 Three.js controller 管理。
+          这里用于验证三维模型资产、相机控制和基础渲染是否可用。医生病例主流程不需要进入本页。
         </Hint>
         <CardContent>
           <Button asChild>

@@ -177,20 +177,20 @@ async function loadBundledFlameStandard(): Promise<FlameMesh> {
 // ── 网格加载 ──────────────────────────────────────────────────────────────────
 async function loadCanonical(): Promise<void> {
   const session = activeSession;
-  setHint("加载 FLAME 标准脸…");
+  setHint("加载标准三维面部模型…");
   let mesh: FlameMesh;
   try {
     mesh = await loadBundledFlameStandard();
   } catch (err) {
     if (!isActiveSession(session)) return;
-    setHint("FLAME 标准脸加载失败，回退到 MediaPipe 标准脸：" + errorMessage(err));
+    setHint("标准三维面部模型加载失败，回退到基础标准脸：" + errorMessage(err));
     const head = await dataSource.getHeadMesh("mediapipe-468");
     if (!isActiveSession(session)) return;
     model.setTopology(head.topology);
     viewer.setMesh(head.vertices, head.triangles, { showSurface: true });
     onCanonical = true;
-    els.drawMode.textContent = "MediaPipe 标准图谱";
-    setHint("已回退到 MediaPipe 标准脸；可导出 mediapipe-468 图谱(tri,u,v)。");
+    els.drawMode.textContent = "基础标准图谱";
+    setHint("已回退到基础标准脸；可导出待复核图谱草案。");
     refresh();
     return;
   }
@@ -200,8 +200,8 @@ async function loadCanonical(): Promise<void> {
   model.setTopology({ topologyId: meta.id, topologyVersion: meta.version });
   viewer.setMesh(mesh.verts, mesh.tris, { showSurface: true });
   onCanonical = true;
-  els.drawMode.textContent = "FLAME 标准图谱";
-  setHint(`在 FLAME 标准脸上点击落点（${mesh.verts.length} 顶点）；导出可得 flame-2023 图谱(tri,u,v)。`);
+  els.drawMode.textContent = "高精度标准图谱";
+  setHint(`在标准三维面部模型上点击落点（${mesh.verts.length} 个采样点）；导出可得待复核图谱草案。`);
   refresh();
 }
 
@@ -241,7 +241,7 @@ async function loadFlameMesh(vertsName: string, label: string): Promise<void> {
   setHint(`在 ${label} 上点击落点（${topology.vertexCount} 顶点）；导出得 flame-2023 图谱(tri,u,v)。`);
   refresh();
 }
-const loadFlame = () => loadFlameMesh("flame_neutral_vertices", topologyMeta("flame-2023")?.label ?? "FLAME 头模 (5023)");
+const loadFlame = () => loadFlameMesh("flame_neutral_vertices", topologyMeta("flame-2023")?.label ?? "高精度三维头模");
 const loadFittedFlame = () => loadFlameMesh("flame_fitted_vertices", "FLAME 个体（拟合）");
 
 function handleReactMeshCommand(event: Event): void {
@@ -323,7 +323,7 @@ async function loadSlicerFile(file?: File): Promise<void> {
   if (!file) return;
   const session = activeSession;
   if (!viewer.hasMesh()) {
-    setHint("请先加载 FLAME 标准脸或上传头模，再导入 Slicer 曲线。");
+    setHint("请先加载标准脸或上传头模，再导入 Slicer 曲线。");
     return;
   }
   const spacing = Number(els.resampleSpacing.value) || 2;
@@ -708,7 +708,7 @@ export function mountAnnotateWorkbench(root: ParentNode | Document = document) {
     if (!fittedFlameAvailable()) els.loadFittedFlame.style.display = "none";
   }
   refresh();
-  setHint("点「加载 FLAME 标准脸」开始，或上传头模 JSON / OBJ / PLY。");
+  setHint("点「加载标准脸」开始，或上传头模 JSON / OBJ / PLY。");
   const bootSession = activeSession;
   loadCanonical().catch((e) => {
     if (isActiveSession(bootSession)) setHint("标准脸加载失败：" + errorMessage(e));

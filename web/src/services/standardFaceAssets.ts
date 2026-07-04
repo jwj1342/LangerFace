@@ -1,5 +1,6 @@
 import type { AssetProgressEvent } from "./assetLoader";
 import { dataSource } from "./dataSource";
+import { loadFlameBasisAsset, mediaPipeAtlasToFlamePreviewAtlas } from "./flameHeadAssets";
 import type { RstlAtlas } from "./rstlField";
 import type { Triangle, Vec3 } from "./softBody";
 
@@ -18,10 +19,17 @@ export function loadStandardFaceAssets({
 }: LoadStandardFaceAssetsOptions = {}): Promise<StandardFaceAssets> {
   return Promise.all([
     dataSource.getHeadMesh("mediapipe-468", { onProgress }),
+    dataSource.getHeadMesh("flame-2023", { onProgress }),
     dataSource.loadAtlas("rstl", { onProgress }),
-  ]).then(([head, atlas]) => ({
-    verts: head.vertices as Vec3[],
-    tris: head.triangles as Triangle[],
-    atlas: atlas as RstlAtlas,
+    loadFlameBasisAsset({ label: "高精度三维头模基底", onProgress }),
+  ]).then(([mediaPipeHead, flameHead, atlas, basis]) => ({
+    verts: flameHead.vertices as Vec3[],
+    tris: flameHead.triangles as Triangle[],
+    atlas: mediaPipeAtlasToFlamePreviewAtlas({
+      atlas,
+      mediaPipeHead,
+      flameHead,
+      basis,
+    }) as RstlAtlas,
   }));
 }

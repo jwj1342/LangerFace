@@ -19,7 +19,7 @@ export function WorkbenchLayout({
   ...props
 }: WorkbenchLayoutProps) {
   return (
-    <div className={cn("app", `${workspace}-workbench`, className)} {...props}>
+    <div className={cn("app", "clinical-compat-workbench", `${workspace}-workbench`, className)} {...props}>
       <aside className="sidebar">
         {children}
       </aside>

@@ -48,9 +48,9 @@ export function SurgeryWorkbench({
       workspace="surgery"
     >
       <WorkbenchBrand
-        eyebrow="RSTL · CLOSURE DEMO"
-        title="沿 RSTL 闭合演示"
-        action={<StatusBadge asChild><Link to="/annotate">返回 3D 标注</Link></StatusBadge>}
+        eyebrow="病例步骤二 · 闭合模拟"
+        title="张力闭合模拟"
+        action={<StatusBadge asChild><Link to="/incision">返回切口规划</Link></StatusBadge>}
       />
 
       <SurgeryControlsPanel
@@ -71,7 +71,7 @@ export function SurgeryWorkbench({
       <SurgeryHelpPanel />
 
       <Disclaimer>
-        ⚠️ 表面质点-弹簧软体的<b>定性</b>模型，非有限元、非患者个体化建模，<b>不是手术指令、非医疗器械</b>。
+        本页提供闭合张力的定性辅助观察，非有限元、非患者个体化建模，<b>不是手术指令、非医疗器械</b>。
         真实软组织力学需体网格 FEM + 影像，本工具只为直观呈现 RSTL 与闭合张力的关系。
       </Disclaimer>
     </WorkbenchLayout>
