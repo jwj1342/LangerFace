@@ -20,6 +20,9 @@
     }
   },
   "rewrites": [
+    { "source": "/", "destination": "/current/index.html" },
+    { "source": "/personalized", "destination": "/current/personalized.html" },
+    { "source": "/personalized.html", "destination": "/current/personalized.html" },
     { "source": "/app", "destination": "/app/index.html" },
     { "source": "/app/(.*)", "destination": "/app/index.html" }
   ],

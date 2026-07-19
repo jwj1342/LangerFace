@@ -70,6 +70,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         app: resolve(import.meta.dirname, "app/index.html"),
+        current: resolve(import.meta.dirname, "current/index.html"),
+        personalized: resolve(import.meta.dirname, "current/personalized.html"),
       },
     },
   },

@@ -11,6 +11,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
+    "test:current-personalized": "node ../tools/test_refine2d_math.mjs && node ../tools/test_bottom_up_personalization.mjs && node ../tools/test_prstl_personalization_v2.mjs && node ../tools/test_prstl_pipeline.mjs",
     "visual:case": "node ../tools/capture_case_workflow_visual.ts",
     "visual:case:flow": "node ../tools/capture_case_workflow_interactions.ts",
     "visual:compat:parity": "node ../tools/capture_compat_feature_parity.ts",
