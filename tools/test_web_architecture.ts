@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../web");
 const srcRoot = path.join(root, "src");
+const currentCompatibilityRoot = path.join(root, "current");
 
 function walk(dir, predicate, out = []) {
   for (const name of fs.readdirSync(dir)) {
@@ -17,7 +18,10 @@ function walk(dir, predicate, out = []) {
 
 const legacyRuntimeJs = walk(root, (file) => file.endsWith(".js"))
   .filter((file) => !file.includes(`${path.sep}node_modules${path.sep}`))
-  .filter((file) => !file.includes(`${path.sep}dist${path.sep}`));
+  .filter((file) => !file.includes(`${path.sep}dist${path.sep}`))
+  // The deployed camera/personalization demo is intentionally isolated from
+  // the React runtime and is validated by test:current-personalized.
+  .filter((file) => !file.startsWith(`${currentCompatibilityRoot}${path.sep}`));
 if (legacyRuntimeJs.length) {
   console.error("FAIL legacy root JS runtime files remain:");
   for (const file of legacyRuntimeJs) console.error(`  - ${path.relative(root, file)}`);
