@@ -8,8 +8,12 @@ const web = new URL("../web/", import.meta.url);
 const runtime = new URL("../web/compat/personalized/", import.meta.url);
 const source = await readFile(new URL("personalized.js", runtime), "utf8");
 const page = await readFile(new URL("personalized.html", web), "utf8");
+const currentPage = await readFile(new URL("current/index.html", web), "utf8");
+const currentMain = await readFile(new URL("current/main.js", web), "utf8");
+const currentRender = await readFile(new URL("current/render.js", web), "utf8");
 const liveSource = await readFile(new URL("src/services/liveRuntime.ts", web), "utf8");
 const dataSource = await readFile(new URL("src/services/dataSource.ts", web), "utf8");
+const vercelConfig = JSON.parse(await readFile(new URL("vercel.json", web), "utf8"));
 const atlas = JSON.parse(await readFile(new URL("assets/atlas_rstl.json", web), "utf8"));
 
 assert.equal(atlas.lines.length, 116, "the capture flow must use the latest v8.1.55 atlas");
@@ -61,7 +65,9 @@ assert.match(source, /stream\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(
   "the capture camera must be released before the live workspace starts");
 assert.match(dataSource, /const PREVIEW_ATLAS_KEY = "langerface\.previewAtlas"/,
   "the capture and React live UI must share the local preview-atlas session key");
-assert.match(liveSource, /typeof provenance\?\.source === "string" \? provenance\.source : "标注会话"/,
+assert.match(liveSource, /provenanceText\.includes\("local-yolo"\)/,
+  "the live UI must recognize the string provenance emitted by the browser V6 pipeline");
+assert.match(liveSource, /\? "个性化 V6"/,
   "the live UI must preserve personalized provenance instead of labeling every preview as annotation");
 assert.match(source, /expandForehead: false/,
   "personalized canonical mapping must not apply the legacy forehead expansion twice");
@@ -76,6 +82,17 @@ assert.match(page, /id="wrinkleMaskDownloadBtn"/);
 assert.match(page, /id="wrinkleSemanticCanvas"/);
 assert.match(page, /id="wrinkleSemanticDownloadBtn"/);
 assert.match(page, /每个表情采集一次/);
+assert.deepEqual(vercelConfig.rewrites[0], { source: "/", destination: "/current/index.html" },
+  "the latest live workbench must be the deployed main page");
+for (const id of ["uploadBtn", "camBtn", "pauseBtn", "exportBtn", "refine2dBtn", "density", "routeSel"]) {
+  assert.match(currentPage, new RegExp(`id=["']${id}["']`), `current main page must expose ${id}`);
+}
+assert.match(currentPage, /href="\/personalized"/,
+  "the main page must open the V6 personalized workflow");
+assert.match(currentMain, /String\(atlas\.provenance \|\| ""\)\.includes\("local-yolo"\)/,
+  "the current main page must identify a staged V6 atlas");
+assert.match(currentRender, /lineIndicesForDensity/,
+  "the current main page must keep symmetric line-density selection");
 
 const modelParts = [0, 1, 2, 3].map((index) =>
   new URL(`model/wrinkle-yolov8s-seg-640.onnx.part${String(index).padStart(2, "0")}`, runtime));

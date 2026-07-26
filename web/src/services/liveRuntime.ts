@@ -166,14 +166,24 @@ function applyStagedAtlas(): void {
   const provenance = atlas.provenance && typeof atlas.provenance === "object"
     ? atlas.provenance as Record<string, unknown>
     : null;
+  const provenanceText = typeof atlas.provenance === "string" ? atlas.provenance : "";
+  const provenanceSource = typeof provenance?.source === "string"
+    ? provenance.source
+    : provenanceText.includes("local-yolo")
+      ? "个性化 V6"
+      : "标注会话";
   previewMeta = {
-    source: typeof provenance?.source === "string" ? provenance.source : "标注会话",
+    source: provenanceSource,
     validated: atlas.validated === true,
     count: atlas.lines.length,
   };
   els.tmpl.value = atlas.system;
   syncPreviewControls();
-  if (!sourceState.running) setMsg("已载入标注预览图谱（未验证）。开启摄像头或上传照片即可在脸上查看。");
+  if (!sourceState.running) {
+    setMsg(provenanceSource === "个性化 V6"
+      ? "已载入本次个性化 V6 RSTL。开启摄像头或上传照片即可实时查看。"
+      : "已载入标注预览图谱（未验证）。开启摄像头或上传照片即可在脸上查看。");
+  }
   scheduleLiveState("staged_atlas");
 }
 

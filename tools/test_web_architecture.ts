@@ -18,6 +18,7 @@ function walk(dir, predicate, out = []) {
 const legacyRuntimeJs = walk(root, (file) => file.endsWith(".js"))
   .filter((file) => !file.includes(`${path.sep}node_modules${path.sep}`))
   .filter((file) => !file.includes(`${path.sep}dist${path.sep}`))
+  .filter((file) => !file.includes(`${path.sep}current${path.sep}`))
   .filter((file) => !file.includes(`${path.sep}compat${path.sep}personalized${path.sep}`));
 if (legacyRuntimeJs.length) {
   console.error("FAIL legacy JS runtime files remain outside the explicit browser compatibility boundary:");
