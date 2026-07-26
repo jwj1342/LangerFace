@@ -30,6 +30,14 @@ export function LiveRouteControlsPanel() {
   return (
     <>
       <Card>
+        <Label>个性化 RSTL</Label>
+        <Hint className="live-inline-top">完成多表情采集后，在本机运行 YOLO 0.07 严格并集与 V6 微调，并将结果带回实时 2D 页面。</Hint>
+        <Button asChild variant="workbenchPrimary">
+          <a href="/personalized">开始个性化表情采集</a>
+        </Button>
+      </Card>
+
+      <Card>
         <Label htmlFor="routeSel">显示模式</Label>
         <Select
           id="routeSel"

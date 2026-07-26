@@ -17,9 +17,10 @@ function walk(dir, predicate, out = []) {
 
 const legacyRuntimeJs = walk(root, (file) => file.endsWith(".js"))
   .filter((file) => !file.includes(`${path.sep}node_modules${path.sep}`))
-  .filter((file) => !file.includes(`${path.sep}dist${path.sep}`));
+  .filter((file) => !file.includes(`${path.sep}dist${path.sep}`))
+  .filter((file) => !file.includes(`${path.sep}compat${path.sep}personalized${path.sep}`));
 if (legacyRuntimeJs.length) {
-  console.error("FAIL legacy root JS runtime files remain:");
+  console.error("FAIL legacy JS runtime files remain outside the explicit browser compatibility boundary:");
   for (const file of legacyRuntimeJs) console.error(`  - ${path.relative(root, file)}`);
   process.exit(1);
 }

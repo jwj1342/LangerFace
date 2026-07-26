@@ -20,6 +20,8 @@
     }
   },
   "rewrites": [
+    { "source": "/personalized", "destination": "/personalized.html" },
+    { "source": "/v6-review", "destination": "/v6_review.html" },
     { "source": "/app", "destination": "/app/index.html" },
     { "source": "/app/(.*)", "destination": "/app/index.html" }
   ],

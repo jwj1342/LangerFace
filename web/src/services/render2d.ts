@@ -18,6 +18,7 @@ import type { Triangle, Vec3 } from "./softBody.ts";
 import { mapSurfaceRefs, measureIncisionOverlayJitter, measureIncisionOverlayRegistration } from "./incisionOverlay.ts";
 import type { SurfaceRef } from "./incisionOverlay.ts";
 import { countMetric, recordMetricSample, setDiagnosticSection } from "./logger.ts";
+import { lineIndicesForDensity } from "./lineDensity.ts";
 import { modelState, renderState, sourceState } from "./liveState.ts";
 import { setIncisionOverlayQa, setLive } from "./liveUi.ts";
 import type { IncisionOverlayPayload } from "./dataSource";
@@ -156,7 +157,7 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   const innerMouth = innerMouthTriangles(modelTriangles()); // 口裂三角面（张嘴会落进口内/牙齿），永久排除
   const mapped = mapAtlas(atlas, lm, modelTriangles());
   const bb = faceBBox(lm);
-  const stride = Math.max(1, Math.round(100 / (renderState.densityFrac * 100)));
+  const visibleLineIndices = lineIndicesForDensity(atlas?.lines || [], renderState.densityFrac);
   const hasMasks = masks.length > 0;
   const frameQualityGate = estimateRenderQualityGate(lm, W, H);
   const canDrawAtlas = sourceState.sourceKind === "image" || frameQualityGate.passed;
@@ -169,7 +170,7 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   let count = 0;
   if (canDrawAtlas) {
     for (let li = 0; li < mapped.length; li++) {
-      if (li % stride !== 0) continue;
+      if (!visibleLineIndices.has(li)) continue;
       const ln = mapped[li];
       if (renderState.bands) {
         let my = 0; for (const p of ln.pts) my += p[1]; my = (my / ln.pts.length - bb.y0) / (bb.h || 1);

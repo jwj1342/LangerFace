@@ -163,7 +163,14 @@ function applyStagedAtlas(): void {
     return;
   }
   previewSystem = atlas.system;
-  previewMeta = { source: "标注会话", validated: atlas.validated === true, count: atlas.lines.length };
+  const provenance = atlas.provenance && typeof atlas.provenance === "object"
+    ? atlas.provenance as Record<string, unknown>
+    : null;
+  previewMeta = {
+    source: typeof provenance?.source === "string" ? provenance.source : "标注会话",
+    validated: atlas.validated === true,
+    count: atlas.lines.length,
+  };
   els.tmpl.value = atlas.system;
   syncPreviewControls();
   if (!sourceState.running) setMsg("已载入标注预览图谱（未验证）。开启摄像头或上传照片即可在脸上查看。");

@@ -6,8 +6,9 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const web = path.join(root, "web");
 
-const read = (rel) => fs.readFileSync(path.join(web, rel), "utf8");
-const readRoot = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
+const normalizeText = (value) => value.replace(/\r\n/g, "\n");
+const read = (rel) => normalizeText(fs.readFileSync(path.join(web, rel), "utf8"));
+const readRoot = (rel) => normalizeText(fs.readFileSync(path.join(root, rel), "utf8"));
 const exposesId = (source, id) => source.includes(`id="${id}"`) || source.includes(`id: "${id}"`);
 const componentSources = new Map(
   fs.readdirSync(path.join(web, "src/components"))
