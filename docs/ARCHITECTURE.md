@@ -197,8 +197,8 @@ P = u·V0 + v·V1 + w·V2
   在 `disposeLiveWorkbench()` 中 `clearDomBinding()`，避免 SPA 长生命周期保留已卸载的 canvas、video 或 wrapper 引用。
 - 图片模式的 canvas contain-fit、pan/zoom 和 `ResizeObserver` 生命周期由 `src/services/liveCanvasFit.ts`
   负责，并通过 `src/services/liveState.ts` 明确 `imageView` 状态边界。
-- 标注、切口和实时页共享的浏览器数据源契约与
-  `sessionStorage` 本地实现由 `src/services/dataSource.ts` 负责，后续切换远端数据源时应替换该 service 实现。
+- 标注、切口和实时页共享的资产读取与短期跨工具预览契约由 `src/services/dataSource.ts` 负责。
+  跨页 payload 只进入当前标签页的 `sessionStorage`；该 service 不提供患者/病例记录、本地长期保存或远端病例数据源接口。
 - OpenAI-compatible / vLLM Provider 的 Base URL 规范化、
   `/models` 连通性测试和类型契约由 `src/services/llmProvider.ts` 负责，候选几何仍不依赖 Provider。
 - 实时页的 canvas/WebM 录制、额外视图合成和下载生命周期由 `src/services/canvasRecording.ts` 负责。

@@ -1,6 +1,5 @@
-// Browser data source boundary for transient cross-workbench payloads.
-// The current implementation is local-only; callers should depend on the
-// BrowserDataSource contract so a remote source can replace it later.
+// Browser boundary for immutable assets and transient cross-workbench payloads.
+// It intentionally exposes no patient/case record persistence API.
 
 import { loadJsonAsset, type AssetLoadOptions } from "./assetLoader.ts";
 import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.ts";
@@ -68,20 +67,6 @@ export interface AtlasPayload {
   [key: string]: unknown;
 }
 
-export interface AnnotationRecord {
-  id: string;
-  createdAt: string;
-  updatedAt: string;
-  system?: string;
-  topologyId?: string;
-  [key: string]: unknown;
-}
-
-export interface AnnotationQuery {
-  system?: string;
-  topologyId?: string;
-}
-
 export type DataSourceLoadOptions = AssetLoadOptions;
 
 export interface BrowserDataSource {
@@ -89,8 +74,6 @@ export interface BrowserDataSource {
   getHeadMesh(id?: string, options?: DataSourceLoadOptions): Promise<HeadMeshPayload>;
   loadTopology(id?: string, options?: DataSourceLoadOptions): Promise<MeshTopologyPayload>;
   loadAtlas(system: string, options?: DataSourceLoadOptions): Promise<AtlasPayload>;
-  saveAnnotation(payload: Record<string, unknown>): AnnotationRecord | null;
-  listAnnotations(query?: AnnotationQuery): AnnotationRecord[];
   stagePreviewAtlas(atlas: PreviewAtlasPayload): boolean;
   takePreviewAtlas(): PreviewAtlasPayload | null;
   stageIncisionOverlay(overlay: IncisionOverlayPayload): boolean;
@@ -100,7 +83,6 @@ export interface BrowserDataSource {
 
 const PREVIEW_ATLAS_KEY = "langerface.previewAtlas";
 const INCISION_OVERLAY_KEY = "langerface.incisionOverlay";
-const ANNOTATIONS_KEY = "langerface.annotations";
 
 const HEADS: LocalHeadDescriptor[] = [
   {
@@ -135,14 +117,6 @@ function hasSessionStorage(): boolean {
   }
 }
 
-function hasLocalStorage(): boolean {
-  try {
-    return typeof localStorage !== "undefined" && localStorage !== null;
-  } catch {
-    return false;
-  }
-}
-
 function headById(id = "mediapipe-468"): LocalHeadDescriptor {
   const head = HEADS.find((item) => item.id === id);
   if (!head) throw new Error(`未知头模数据源：${id}`);
@@ -171,27 +145,6 @@ function writeSessionJson(key: string, value: unknown): boolean {
   if (!hasSessionStorage()) return false;
   try {
     sessionStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function readLocalJson<T>(key: string, fallback: T): T {
-  if (!hasLocalStorage()) return fallback;
-  const raw = localStorage.getItem(key);
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeLocalJson(key: string, value: unknown): boolean {
-  if (!hasLocalStorage()) return false;
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
     return true;
   } catch {
     return false;
@@ -284,33 +237,6 @@ export const LocalDataSource: BrowserDataSource = {
     return loadJsonAsset<AtlasPayload>(atlasAsset(system), {
       label: `${system.toUpperCase()} 图谱`,
       ...options,
-    });
-  },
-
-  saveAnnotation(payload) {
-    if (!payload || typeof payload !== "object") return null;
-    const now = new Date().toISOString();
-    const existing = readLocalJson<AnnotationRecord[]>(ANNOTATIONS_KEY, []);
-    const record: AnnotationRecord = {
-      ...payload,
-      id: typeof payload.id === "string"
-        ? payload.id
-        : `ann_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
-      createdAt: typeof payload.createdAt === "string" ? payload.createdAt : now,
-      updatedAt: now,
-      system: typeof payload.system === "string" ? payload.system : undefined,
-      topologyId: typeof payload.topologyId === "string" ? payload.topologyId : undefined,
-    };
-    const next = existing.filter((item) => item?.id !== record.id);
-    next.push(record);
-    return writeLocalJson(ANNOTATIONS_KEY, next) ? record : null;
-  },
-
-  listAnnotations(query = {}) {
-    return readLocalJson<AnnotationRecord[]>(ANNOTATIONS_KEY, []).filter((item) => {
-      if (query.system && item?.system !== query.system) return false;
-      if (query.topologyId && item?.topologyId !== query.topologyId) return false;
-      return true;
     });
   },
 

@@ -30,7 +30,6 @@ manual / temporary
 |---|---|
 | GitHub Actions | 代码质量、Python 测试、Web TypeScript 几何对拍、Vite 构建能否通过 |
 | Vercel | Production URL、必要时手动创建的 Preview URL、缓存头、域名 |
-| Cloudflare（将来） | Worker API、D1、R2、受限数据鉴权；不负责当前静态前端部署 |
 
 不要同时启用“Vercel Git 自动部署”和“GitHub Actions 里用 Vercel CLI 自动部署”，否则同一个 commit 可能产生重复部署和重复状态检查。
 
@@ -160,15 +159,8 @@ Vercel [Deployment Protection](https://vercel.com/docs/deployment-protection) �
 ## 环境变量
 
 当前纯静态前端不需要 Vercel 环境变量。
-
-将来接 Cloudflare Worker API 时，建议新增：
-
-| 变量 | 示例 | 用途 |
-|---|---|---|
-| `VITE_API_BASE_URL` | `https://api.langerface.example.com` | 前端访问 Worker API |
-| `VITE_APP_ENV` | `preview` / `production` | 可选，用于诊断面板或日志标记 |
-
-Vite 只会把 `VITE_` 前缀变量注入浏览器端。不要把私钥、R2 token、Cloudflare token、Vercel token 放进 `VITE_*`。
+当前产品边界不包含病例后端、Worker API、D1/R2 数据库或远端病例数据源。若仅为诊断面板增加公开配置，仍要记住 Vite 会把
+`VITE_` 前缀变量注入浏览器端，任何私钥或平台 token 都不能放进 `VITE_*`。
 
 ## 什么时候改用 GitHub Actions 部署到 Vercel
 

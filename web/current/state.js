@@ -25,7 +25,6 @@ export const renderState = {
     liveTransport: null,
     selected: null,
     dirty: false,
-    savedAt: null,
     undoStack: [],
   },
   zoomCards: [],

@@ -12,7 +12,6 @@ import {
   isRefineActive,
   moveRefinePointer,
   resetRefineToAuto,
-  saveRefine,
   setAxisVisible,
   setRefineMode,
   setSymmetryEnabled,
@@ -146,7 +145,6 @@ els.refineView.onclick = () => setRefineMode("view");
 els.refineDrag.onclick = () => setRefineMode("drag");
 els.refineErase.onclick = () => setRefineMode("erase");
 els.refineUndo.onclick = undoRefine;
-els.refineSave.onclick = saveRefine;
 els.refineExport.onclick = exportRefine;
 els.refineSymmetry.onchange = (e) => setSymmetryEnabled(e.target.checked);
 els.refineAxis.onchange = (e) => setAxisVisible(e.target.checked);

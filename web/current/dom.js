@@ -8,7 +8,7 @@ export const els = {
   cam: $("camBtn"), pause: $("pauseBtn"), export: $("exportBtn"),
   refine2d: $("refine2dBtn"), refine2dPanel: $("refine2dPanel"), refine2dStatus: $("refine2dStatus"),
   refineView: $("refineViewBtn"), refineDrag: $("refineDragBtn"), refineErase: $("refineEraseBtn"),
-  refineUndo: $("refineUndoBtn"), refineSave: $("refineSaveBtn"), refineExport: $("refineExportBtn"),
+  refineUndo: $("refineUndoBtn"), refineExport: $("refineExportBtn"),
   refineSymmetry: $("refineSymmetryToggle"), refineAxis: $("refineAxisToggle"),
   refineReset: $("refineResetBtn"), refine2dHint: $("refine2dHint"),
   tmpl: $("templateSel"), density: $("density"), smooth: $("smooth"), opacity: $("opacity"),

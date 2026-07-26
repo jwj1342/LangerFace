@@ -7,7 +7,6 @@ import {
 } from "./refine2d_math.js";
 import { renderState, sourceState } from "./state.js";
 
-const STORAGE_KEY = "langerface-refined-2d-result";
 const HISTORY_LIMIT = 20;
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
 const cloneLines = (lines) => (lines || []).map((line) => ({
@@ -161,7 +160,6 @@ export function resetRefineForNewSource() {
   s.liveTransport = null;
   s.selected = null;
   s.dirty = false;
-  s.savedAt = null;
   s.undoStack = [];
   s.drag = null;
   updateRefineUi();
@@ -176,7 +174,7 @@ export function updateRefineUi() {
   els.mainWrap.classList.toggle("refining", s.active);
   els.refine2dStatus.textContent = !s.active
     ? "未开始"
-    : s.dirty ? "未保存" : s.savedAt ? "已保存" : "查看中";
+    : s.dirty ? "已修改" : "查看中";
   for (const [button, mode] of [
     [els.refineView, "view"],
     [els.refineDrag, "drag"],
@@ -185,7 +183,6 @@ export function updateRefineUi() {
     button.setAttribute("aria-pressed", String(s.mode === mode));
   }
   els.refineUndo.disabled = !s.undoStack.length;
-  els.refineSave.disabled = !s.active || !s.lines?.length || !s.dirty;
   els.refineExport.disabled = !s.active || !s.lines?.length;
   els.refineReset.disabled = !s.active || !s.latestAutoLines?.length;
   els.refineSymmetry.checked = s.symmetry;
@@ -455,17 +452,6 @@ export function resetRefineToAuto() {
   requestRefineFrame();
 }
 
-export function saveRefine() {
-  const s = state();
-  if (!s.lines) return;
-  const payload = buildExportPayload();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  s.dirty = false;
-  s.savedAt = payload.savedAt;
-  els.refine2dHint.textContent = "医生微调结果已保存到浏览器本地存储。";
-  updateRefineUi();
-}
-
 export function exportRefine() {
   const payload = buildExportPayload();
   const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
@@ -483,7 +469,7 @@ function buildExportPayload() {
   return {
     schemaVersion: 1,
     source: "web/index.html 2d-fit doctor refinement",
-    savedAt: new Date().toISOString(),
+    generatedAt: new Date().toISOString(),
     imageSize: { width: els.canvas.width, height: els.canvas.height },
     mirroredView: renderState.mirror,
     system: renderState.system,

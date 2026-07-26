@@ -2178,7 +2178,8 @@ assert.ok(!fs.existsSync(path.join(web, "data_source.d.ts")), "legacy data-sourc
 assert.ok(liveDataSourceService.includes("export interface BrowserDataSource"), "TypeScript data source service owns the shared browser data contract");
 assert.ok(liveDataSourceService.includes("getHeadMesh"), "TypeScript data source service exposes canonical head mesh loading");
 assert.ok(liveDataSourceService.includes("loadAtlas"), "TypeScript data source service exposes atlas loading");
-assert.ok(liveDataSourceService.includes("saveAnnotation"), "TypeScript data source service exposes local annotation saving");
+assert.ok(!liveDataSourceService.includes("saveAnnotation"), "TypeScript data source service does not persist annotation records");
+assert.ok(!liveDataSourceService.includes("localStorage"), "TypeScript data source service keeps cross-tool payloads session-scoped");
 assert.ok(liveDataSourceService.includes("export const LocalDataSource"), "TypeScript data source service owns the local sessionStorage implementation");
 assert.ok(liveDataSourceService.includes("IncisionOverlayPayload"), "TypeScript data source service types staged incision overlays");
 assert.ok(!fs.existsSync(path.join(web, "export_canvas.js")), "legacy export_canvas.js facade has been removed after TypeScript service migration");
