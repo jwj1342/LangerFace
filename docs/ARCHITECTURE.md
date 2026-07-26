@@ -156,8 +156,8 @@ P = u·V0 + v·V1 + w·V2
 - `web/vite.config.ts` 使用 `base: "/"`，让 SPA shell 的 JS/CSS 在深链接下仍从站点根 `/assets/...` 读取；`copy-runtime-assets`
   会把 `web/assets/` 复制到 `dist/assets/`；`web/src/services/assetLoader.ts`
   通过稳定文件名清单从站点根 `/assets/` 读取 `.task`、atlas JSON、拓扑、标准脸和 3D 示例资产。React SPA 运行在
-  `/app/*` 下，运行时代码不能写 document-relative `../assets/...` 或 `assets/...`，否则 `/app/incision`、`/app/case/:id/plan`
-  这类嵌套路由会解析成 `/app/assets/...` 或 `/app/case/assets/...` 并被 Vercel SPA rewrite 回退成 HTML。需要外置资产时只通过 `?assetBase=` 或
+  `/app/*` 下，运行时代码不能写 document-relative `../assets/...` 或 `assets/...`，否则 `/app/incision`、`/app/settings/atlas`
+  这类嵌套路由会解析成 `/app/assets/...` 或 `/app/settings/assets/...` 并被 Vercel SPA rewrite 回退成 HTML。需要外置资产时只通过 `?assetBase=` 或
   `VITE_LANGERFACE_ASSET_BASE_URL` 覆盖。
 - `tools/serve_web.py` 仍可服务未打包的 `web/` 源文件，但正式前端开发与部署以 Vite 为准。
 - `getUserMedia`（摄像头）要求安全上下文：`http://localhost`/`127.0.0.1` 即可（无需 https）。

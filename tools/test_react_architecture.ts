@@ -628,7 +628,7 @@ assert.ok(!architectureDoc.includes("assetLoader.ts` 用 Vite `?url` 导入 `.ta
   "architecture docs must not claim the asset loader imports all runtime assets through Vite ?url");
 assert.ok(ciCdVercelDoc.includes("`../assets/`") && ciCdVercelDoc.includes("`assets/`"), "Vercel docs capture the nested SPA asset-path lesson");
 assert.ok(ciCdVercelDoc.includes("`/app/assets/...`"), "Vercel docs explain the failure mode for nested SPA asset URLs");
-assert.ok(ciCdVercelDoc.includes("`/app/case/assets/...`"), "Vercel docs explain the failure mode for nested case-route SPA asset URLs");
+assert.ok(ciCdVercelDoc.includes("`/app/settings/assets/...`"), "Vercel docs explain the failure mode for nested settings-route SPA asset URLs");
 assert.ok(contributingDoc.includes("不能请求 `/app/assets/...`"), "PR checklist guards against nested SPA asset URL regressions");
 
 assert.ok(app.includes("react-router-dom"), "React app is routed through React Router");
@@ -702,9 +702,12 @@ assert.ok(app.includes("ReactPage"), "React route fallback uses the shared React
 assert.ok(dashboardRoute.includes("ReactShellNavLink"), "React dashboard uses shared shell nav links");
 assert.ok(!dashboardRoute.includes("ReactShellExternalLink"), "React dashboard should not send users back to legacy HTML entrypoints");
 assert.ok(!dashboardRoute.includes("/index.html"), "React dashboard should not link to the legacy live HTML entrypoint");
-for (const route of ["/incision", "/live", "/annotate", "/three-preview", "/surgery"]) {
-  assert.ok(!dashboardRoute.includes(`to="${route}"`), `React dashboard should not expose compatibility route ${route} in the doctor lobby`);
+for (const route of ["/live", "/incision", "/three-preview"]) {
+  assert.ok(dashboardRoute.includes(`to: "${route}"`), `React dashboard exposes stateless tool route ${route}`);
 }
+assert.ok(dashboardRoute.includes('href: "/personalized"'), "React dashboard exposes the personalized browser tool");
+assert.ok(!dashboardRoute.includes("/cases"), "React dashboard does not expose a case lobby");
+assert.ok(dashboardRoute.includes("不创建、恢复或保存病例"), "React dashboard states the no-case-storage boundary");
 for (const [name, html, expected] of [
   ["index.html", legacyLiveHtml, ["/app/"]],
   ["annotate.html", legacyAnnotateHtml, ["/app/annotate"]],
@@ -1618,7 +1621,7 @@ assert.ok(reviewPanel.includes("Button"), "React review panel uses the shared sh
 assert.ok(reviewPanel.includes("ButtonRow"), "React review panel uses the shared shadcn-style button row primitive");
 assert.ok(reviewPanel.includes("AgentCard"), "React review panel uses the shared shadcn-style agent card primitive");
 assert.ok(reviewPanel.includes('variant="workbenchPrimary"'), "React review panel keeps primary workbench button styling through Button variants");
-assert.ok(incisionWorkbench.includes('to="/cases"'), "React incision workbench returns to the clinical case lobby");
+assert.ok(incisionWorkbench.includes('to="/"'), "React incision workbench returns to the stateless tool launcher");
 assert.ok(incisionStagePanel.includes('to="/settings/atlas"'), "React incision stage routes atlas maintenance through settings");
 assert.ok(!incisionStagePanel.includes('to="/annotate"'), "React incision stage should not bypass atlas settings");
 for (const dependencyType of incisionRuntimeDependencyTypes) {
@@ -1854,7 +1857,7 @@ assert.ok(annotateDrawPanel.includes("<Card"), "React annotate draw panel uses t
 assert.ok(annotateDrawPanel.includes('variant="workbenchPrimary"'), "React annotate draw panel keeps primary workbench button styling through Button variants");
 assert.ok(annotateHelpPanel.includes("标注帮助"), "React annotate help panel keeps the user-facing annotation guide");
 assert.ok(annotateHelpPanel.includes("HelpDisclosure"), "React annotate help panel uses the shared help disclosure primitive");
-assert.ok(annotateStagePanel.includes('to="/cases"'), "React annotate stage returns to the clinical case lobby");
+assert.ok(annotateStagePanel.includes('to="/"'), "React annotate stage returns to the stateless tool launcher");
 for (const id of [
   "annStatus",
   "lineList",
@@ -1890,7 +1893,7 @@ assert.ok(annotateSnapshotsService.includes("buildAnnotateDraftSnapshot"), "shar
 assert.ok(annotateSnapshotsService.includes("buildAnnotateSavedSummary"), "shared annotation snapshot service builds saved line summaries");
 assert.ok(annotateSnapshotsService.includes("buildAnnotateExportState"), "shared annotation snapshot service builds export capability state");
 assert.ok(annotateMeshSourcePanel.includes('to="/surgery"'), "React annotation mesh source panel links to the React surgery closure route");
-assert.ok(annotateMeshSourcePanel.includes('to="/cases"'), "React annotation mesh source panel returns to the clinical case lobby");
+assert.ok(annotateMeshSourcePanel.includes('to="/"'), "React annotation mesh source panel returns to the stateless tool launcher");
 for (const dependencyType of annotateRuntimeDependencyTypes) {
   assert.ok(
     fs.existsSync(path.join(web, dependencyType)),

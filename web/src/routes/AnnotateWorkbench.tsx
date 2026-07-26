@@ -19,7 +19,7 @@ export function AnnotateWorkbench() {
       <WorkbenchBrand
         eyebrow="图谱库管理"
         title="3D 张力线图谱标注"
-        action={<StatusBadge asChild><Link to="/cases">返回病例大厅</Link></StatusBadge>}
+        action={<StatusBadge asChild><Link to="/">返回工具入口</Link></StatusBadge>}
       />
 
       <AnnotateMeshSourcePanel />

@@ -43,16 +43,10 @@ const annotateRuntime = read("src/services/annotateRuntime.ts");
 const annotateViewer = read("src/services/annotateViewer.ts");
 const threePreviewScene = read("src/components/ThreePreviewScene.tsx");
 const standardFaceAssets = read("src/services/standardFaceAssets.ts");
-const caseRoute = read("src/routes/CaseWorkflowRoute.tsx");
+const dashboardRoute = read("src/routes/DashboardRoute.tsx");
 const dataSource = read("src/services/dataSource.ts");
-const caseStore = read("src/stores/caseStore.ts");
 
 includesAll(app, [
-  'path="/cases"',
-  'path="/case/new"',
-  'path="/case/:caseId/evaluate"',
-  'path="/case/:caseId/plan"',
-  'path="/case/:caseId/review"',
   'path="/settings/atlas"',
   'path="/settings/developer"',
   'path="/live"',
@@ -68,8 +62,9 @@ includesAll(settingsRoute, [
   'to="/surgery"',
   "ProviderConfigPanel",
   "WorkerStatusPanel",
-  "不进入医生的病例规划主流程",
-  "不应重新出现在医生主导航",
+  "病例存储",
+  "不提供",
+  "不保存患者或病例信息",
 ], "controlled settings entry points");
 
 includesAll(liveStage, [
@@ -334,42 +329,30 @@ includesAll(standardFaceAssets, [
   "mediaPipeAtlasToFlamePreviewAtlas",
 ], "standard face asset loader");
 
-includesAll(caseRoute, [
-  "CaseClinicalViewport",
-  "ThreePreviewScene",
-  "useStandardFaceAssets",
-  "showLesionOverlay",
-  "showIncisionOverlay",
-  "case-hidden-file-input",
-  'type="file"',
-  "onUploadFiles",
-  "mediaAssetSummary",
-  "准备 3D 扫描",
-  "标记重建完成",
-  "模拟肿物",
-  "simulateTumorInput",
-  "描记皮表边界",
-  "traceFreehandBoundary",
-  "case-lesion-simulation-status",
-  "张力闭合模拟",
-  "estimateClosureSimulation",
-], "case workflow restored clinical inputs");
+includesAll(dashboardRoute, [
+  'to: "/live"',
+  'href: "/personalized"',
+  'to: "/incision"',
+  "不创建、恢复或保存病例",
+  "不维护病例大厅、患者档案、历史记录或云端病例库",
+], "stateless tool launcher");
 
-includesAll(dataSource, [
-  "ClinicalCaseMediaAsset",
-  "ClinicalCaseScanReconstruction",
-  "normalizeMediaAssets",
-  "normalizeScanReconstruction",
-  "mediaAssets",
-  "scanReconstruction",
-], "case persistence model");
+for (const forbidden of [
+  "CaseWorkflowRoute",
+  'path="/cases"',
+  'path="/case/',
+]) {
+  assert.ok(!app.includes(forbidden), `router should not expose case workflow: ${forbidden}`);
+}
 
-includesAll(caseStore, [
-  "...draft.acquisition",
-  "captureSet",
-  "quality",
-  "scanReconstruction",
-  "...current.acquisition.scanReconstruction",
-], "case store nested acquisition merge");
+for (const forbidden of [
+  "ClinicalCase",
+  "langerface.cases",
+  "saveCase(",
+  "listCases(",
+  "getCase(",
+]) {
+  assert.ok(!dataSource.includes(forbidden), `data source should not persist cases: ${forbidden}`);
+}
 
 console.log("Main feature parity checks passed.");

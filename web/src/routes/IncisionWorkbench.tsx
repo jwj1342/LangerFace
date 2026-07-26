@@ -21,9 +21,9 @@ export function IncisionWorkbench() {
       workspace="incision"
     >
       <WorkbenchBrand
-        eyebrow="病例步骤二 · 切口规划"
+        eyebrow="独立切口研究工具"
         title="切口规划与候选审阅"
-        action={<StatusBadge asChild><Link to="/cases">返回病例大厅</Link></StatusBadge>}
+        action={<StatusBadge asChild><Link to="/">返回工具入口</Link></StatusBadge>}
       />
 
       <IncisionStatePanel />

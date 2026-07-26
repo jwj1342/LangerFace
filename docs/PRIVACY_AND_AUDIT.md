@@ -52,7 +52,7 @@
 ```json
 {
   "auditId": "audit-0001",
-  "caseId": "coded-case-id",
+  "sessionId": "ephemeral-session-id",
   "createdAt": "2026-06-24T00:00:00Z",
   "actor": {
     "id": "coded-user-id",

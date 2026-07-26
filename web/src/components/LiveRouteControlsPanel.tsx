@@ -112,7 +112,7 @@ export function LiveRouteControlsPanel() {
       <Card id="threeDWorkflowCard" visible={is3d}>
         <div>
         <Label>图谱库维护</Label>
-        <Hint className="live-inline-top">图谱标注属于维护流程；正式张力闭合模拟请回到病例规划步骤运行。</Hint>
+        <Hint className="live-inline-top">图谱标注和闭合模拟是独立研究工具，不与当前会话共享病例状态。</Hint>
         </div>
         <Button asChild variant="workbenchPrimary">
           <Link to="/settings/atlas">进入图谱库管理</Link>

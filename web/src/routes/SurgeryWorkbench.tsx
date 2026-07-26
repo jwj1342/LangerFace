@@ -48,7 +48,7 @@ export function SurgeryWorkbench({
       workspace="surgery"
     >
       <WorkbenchBrand
-        eyebrow="病例步骤二 · 闭合模拟"
+        eyebrow="闭合张力研究演示"
         title="张力闭合模拟"
         action={<StatusBadge asChild><Link to="/incision">返回切口规划</Link></StatusBadge>}
       />

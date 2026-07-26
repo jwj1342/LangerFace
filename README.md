@@ -40,7 +40,7 @@ LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它
 2. **核心算法层**：`src/langerface/` 与 `web/src/services/geometry*.ts` 实现关键点输入、重心坐标映射、平滑、遮挡、渲染与 3D 配准。
 3. **用户界面层**：`web/` 提供唯一正式前端；`src/langerface/apps/` 只保留 CLI 和 OpenCV webcam 入口。
 
-当前主线是 **Stage 1：稳定显示面部 RSTL 皮肤张力线**。Stage 2 已进入受限工程闭环：围绕医生手动输入的面部皮肤肿物，按结构化临床规则生成可解释、可编辑、可审阅的候选切口线，并可把候选暂存到照片 / 视频 / 摄像头实时叠加层。完整 Stage 2 仍需真实肿物边界标注、正式电子签名 / 病例系统绑定、3D/AR 个体化叠加与临床验证。项目不训练自定义医学模型，不上传用户图像，也不声称自动给出手术方案。
+当前主线是 **Stage 1：稳定显示面部 RSTL 皮肤张力线**。Stage 2 已进入受限工程闭环：围绕医生手动输入的面部皮肤肿物，按结构化临床规则生成可解释、可编辑、可审阅的候选切口线，并可把候选短期传递到照片 / 视频 / 摄像头实时叠加层。当前明确不实现病例大厅、患者档案、历史记录、病例级本地持久化或云端病例系统；完整 Stage 2 仍需真实肿物边界标注、3D/AR 个体化叠加与临床验证。项目不训练自定义医学模型，不上传用户图像，也不声称自动给出手术方案。
 
 ---
 
@@ -136,9 +136,9 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 - 🧊 **3D 重建（Beta）**：转头扫描 → 多帧 468 点关键点网格对齐 / 取中位数 → 旋转查看 / 实时刚性投影；这是关键点网格演示，不是临床级稠密 3D 扫描。
 - 🧬 **FLAME 实时孪生（实验）**：浏览器加载紧凑 FLAME basis，本地拟合身份 / 表情 / 张嘴，右侧 FLAME 头随左侧真实人脸头姿和表情运动，可切标准 / 个体与贴脸纹理。
 - ✍️ **网页 3D 标注**：在浏览器里于标准脸 / 3D 头模表面手绘 RSTL/Langer 候选线，可导入 JSON/OBJ/PLY 头模和 3D Slicer `.mrk.json` 曲线，导出 `validated:false` 的图谱草案（`[tri,u,v]`）或 xyz 折线；临床复核与置 `validated:true` 仍走 Python/评审流程，见 [网页 3D 标注与图谱草案导出](docs/ARCHITECTURE.md#12-网页-3d-线标注与图谱草案导出)。
-- 🏥 **病例向导式切口工作台**：`/app/cases` 是医生主入口，按“面部评估 -> 病灶定位与切口规划 -> 方案确认”组织病例草稿、年龄分档、采集方式、病灶层次、切缘策略、规划依据、闭合模拟和导出边界。
+- 🧰 **无状态研究工具入口**：`/app` 只负责进入实时 2D、个性化 2D、切口候选和图谱维护等独立工具，不创建、恢复或保存病例。
 - 🧭 **切口 Agent 工作台**：在标准脸上手动放置皮下 / 皮表肿物，支持椭圆 / 自由轮廓和肿物 JSON 导入导出，生成线性或梭形候选切口，显示 RSTL 方向、面部分区、guardrails、浏览器 workflow 工具 trace 和 provider 连通性状态；候选可记录审阅人、确认 / 退回 / 否决状态和备注，候选库会给出工程排序对比，导出审阅记录，也可发送到实时页叠加到上传照片、视频或摄像头画面。
-- 🔬 **RSTL 切除 -> 闭合演示（Beta）**：医生主路径已在病例规划页内嵌张力闭合模拟；`/app/surgery` 仅作为兼容研究演示保留，用于解释沿 RSTL 闭合的张力直觉，不是 FEM、不是患者个体化建模，也不是自动候选生成模块。
+- 🔬 **RSTL 切除 -> 闭合演示（Beta）**：`/app/surgery` 作为独立研究演示保留，用于解释沿 RSTL 闭合的张力直觉，不是 FEM、不是患者个体化建模，也不是自动候选生成模块。
 - 🎛️ **实时控制**：主界面暴露数据源、线密度、透明度、镜像和网格采样点；平滑、背面剔除、手部遮挡、分区着色和放大窗为底层支持或默认能力，部分调试开关当前隐藏。
 - 🔒 **全程本地运行**，不上传任何画面（隐私友好）。
 
@@ -234,7 +234,7 @@ npm run dev                      # Vite dev server，默认 http://127.0.0.1:517
 - **滑杆**：线密度、透明度；平滑参数仍在运行时存在，但主界面调试控件当前隐藏。
 - **开关**：镜像、显示网格采样点；背面剔除、手部遮挡、分区着色和细节放大窗为底层支持或默认能力，部分控件当前隐藏。
 - **技术路线**：2D（默认）/ 3D 重建（Beta，含"用示例重建/转头扫描/旋转查看/投影到画面"）/ FLAME 实时孪生实验。
-- **病例工作台**：进入 `/app/cases` 新建或恢复病例；医生主流程在病例内完成评估、病灶参数、切口规划、闭合模拟和方案确认。
+- **研究工具入口**：进入 `/app` 选择独立工具；当前不提供病例新建、恢复、历史记录或云端病例库。
 - **系统设置 / 实验页**：`/app/settings/atlas` 提供图谱库管理壳，并把 `/app/annotate` 作为受控维护入口；`/app/settings/developer` 集中 AI 服务连接测试、三维模型预览和兼容工作台入口。`/app/surgery` 仍可查看 RSTL 切除 -> 闭合定性演示，但它只是兼容研究入口。旧 HTML 入口仅保留为 React SPA 兼容跳转页。
 - **统计**：追踪质量、状态、脸部占比、偏航估计、线束数量、fps。
 
@@ -376,8 +376,6 @@ Stage 2 切口 Agent 默认只把肿物参数、标准化坐标、候选切口�
 | **架构 / 数据** | |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 核心算法、坐标系、2D/3D 路线、网页 3D 标注、HeadSpace 离线管线、Stage 2 路线、资产与部署 |
 | [METHODS_AND_IMPLEMENTATION_SUMMARY.md](docs/METHODS_AND_IMPLEMENTATION_SUMMARY.md) | 各核心算法的**数学公式与推导**集中参考（重心映射 / One-Euro / 遮挡 / 流线生成 / Umeyama / FLAME / 软体 / 切口几何）；模块契约见 ARCHITECTURE，测试见 CONTRIBUTING |
-| [BACKEND_DATA_ARCHITECTURE.md](docs/BACKEND_DATA_ARCHITECTURE.md) | 后端数据层、Cloudflare Worker/D1/R2、重计算边界与阶段落地 |
-| [CLOUDFLARE_BACKEND_ROLLOUT.md](docs/CLOUDFLARE_BACKEND_ROLLOUT.md) | Cloudflare Worker/D1/R2 后端的本地验证、云端资源、GitHub Actions 部署和验收流程 |
 | [FLAME_3D_TRACK.md](docs/FLAME_3D_TRACK.md) | 3D FLAME 配准 / 标注轨的设计与技术选型（issue #61）|
 | [INCISION_FLAME_ASSET_STRATEGY.md](docs/INCISION_FLAME_ASSET_STRATEGY.md) | 切口工作台使用 FLAME 头模资产的核验点、设计边界、回退策略和验收重点 |
 | [RSTL_3DMM_PRIOR.md](docs/RSTL_3DMM_PRIOR.md) | Borges RSTL 来源、3DMM 拓扑先验 manifest、与 #2/#13/#61 的衔接 |
@@ -392,7 +390,6 @@ Stage 2 切口 Agent 默认只把肿物参数、标准化坐标、候选切口�
 | [VALIDATION.md](docs/VALIDATION.md) | 临床验证数据集、Stage 1/2 指标、失败分类、人工评审表（issue #20）|
 | [PRIVACY_AND_AUDIT.md](docs/PRIVACY_AND_AUDIT.md) | 敏感数据边界、禁止提交项、导出约束、审计字段（issue #21）|
 | [PRODUCT_BOUNDARIES.md](docs/PRODUCT_BOUNDARIES.md) | 近期聚焦表皮 RSTL 与病灶处理，暂缓肌肉骨骼实时孪生（issue #87） |
-| [CLINICAL_CASE_WORKFLOW_UI.md](docs/CLINICAL_CASE_WORKFLOW_UI.md) | UI 产品化重构方案：从工具工作台转向病例向导式临床流程 |
 | [WRINKLE_LESION_CUES.md](docs/WRINKLE_LESION_CUES.md) | 自然皱襞、皱纹与皮表肿物边界辅助线索调研和合成原型（issue #22）|
 | **规划** | |
 | [TODO.md](docs/TODO.md) | 路线图与待办（与 GitHub Issues 同步）|
