@@ -18,6 +18,7 @@ export function toPixels(landmarks, W, H) {
 // 图谱 → 图像空间（分片仿射 / 重心插值变形）。与 Python map_atlas 一致。
 // lines: [{name, points:[[tri,u,v],...]}], landmarksPx:[[x,y,z]...], triangles:[[i0,i1,i2]...]
 const FOREHEAD_LOWER_LONG_ARC_REGION = "forehead_lower_long_arc_v13";
+const FOREHEAD_BRIDGE_ARC_REGION = "forehead_bridge_arc_v15";
 
 // Compatibility transform for the historical official atlas. Personalized
 // V6 atlases opt out because their v13 curves are already complete.
@@ -73,9 +74,100 @@ function extendForeheadLowerLongArc(points, landmarksPx) {
   return out;
 }
 
+function foreheadBridgeRanks(lines, landmarksPx, triangles) {
+  const bridgeLines = lines.filter((line) => line.region === FOREHEAD_BRIDGE_ARC_REGION);
+  if (bridgeLines.length === 0) return new Map();
+  if (landmarksPx.length > 10) {
+    const anchor = landmarksPx[9], top = landmarksPx[10];
+    const axisX = top[0] - anchor[0], axisY = top[1] - anchor[1];
+    const axisNorm = Math.hypot(axisX, axisY);
+    if (axisNorm > 1e-9) {
+      const unitX = axisX / axisNorm, unitY = axisY / axisNorm;
+      const meanHeight = (line) => {
+        let total = 0, count = 0;
+        for (const [tri, u, v] of line.points || []) {
+          const t = triangles[tri];
+          if (!t) continue;
+          const a = landmarksPx[t[0]], b = landmarksPx[t[1]], c = landmarksPx[t[2]];
+          if (!a || !b || !c) continue;
+          const w = 1 - u - v;
+          const x = u * a[0] + v * b[0] + w * c[0];
+          const y = u * a[1] + v * b[1] + w * c[1];
+          total += (x - anchor[0]) * unitX + (y - anchor[1]) * unitY;
+          count++;
+        }
+        return count > 0 ? total / count : 0;
+      };
+      bridgeLines.sort((left, right) => meanHeight(right) - meanHeight(left));
+    }
+  }
+  const denominator = Math.max(bridgeLines.length - 1, 1);
+  return new Map(bridgeLines.map((line, index) => [line, index / denominator]));
+}
+
+function extendForeheadBridge(points, landmarksPx, layerRank) {
+  if (points.length === 0 || landmarksPx.length <= 10) return points;
+  const anchor = landmarksPx[9], top = landmarksPx[10];
+  const axisX = top[0] - anchor[0], axisY = top[1] - anchor[1];
+  const axisNorm = Math.hypot(axisX, axisY);
+  if (axisNorm <= 1e-9) return points;
+  const unitX = axisX / axisNorm, unitY = axisY / axisNorm;
+  const lateralX = -unitY, lateralY = unitX;
+  const out = points.map((point) => point.slice());
+  const lateral = out.map((point) => (
+    (point[0] - anchor[0]) * lateralX + (point[1] - anchor[1]) * lateralY
+  ));
+
+  for (const point of out) {
+    const parallel = (point[0] - anchor[0]) * unitX + (point[1] - anchor[1]) * unitY;
+    point[0] += 0.86 * parallel * unitX;
+    point[1] += 0.86 * parallel * unitY;
+  }
+  const currentHalfWidth = Math.max(...lateral.map((value) => Math.abs(value)));
+  const landmarkXs = landmarksPx.map((point) => point[0]);
+  const faceWidth = Math.max(...landmarkXs) - Math.min(...landmarkXs);
+  if (currentHalfWidth > 1e-9 && faceWidth > 1e-9) {
+    const widthFactor = 0.82 * faceWidth / currentHalfWidth;
+    for (let i = 0; i < out.length; i++) {
+      out[i][0] += (widthFactor - 1) * lateral[i] * lateralX;
+      out[i][1] += (widthFactor - 1) * lateral[i] * lateralY;
+    }
+  }
+  for (let iteration = 0; iteration < 5; iteration++) {
+    const smoothed = out.map((point) => point.slice());
+    for (let i = 1; i < out.length - 1; i++) {
+      smoothed[i][0] = 0.25 * out[i - 1][0] + 0.5 * out[i][0] + 0.25 * out[i + 1][0];
+      smoothed[i][1] = 0.25 * out[i - 1][1] + 0.5 * out[i][1] + 0.25 * out[i + 1][1];
+    }
+    for (let i = 0; i < out.length; i++) out[i] = smoothed[i];
+  }
+  const smoothedLateral = out.map((point) => (
+    (point[0] - anchor[0]) * lateralX + (point[1] - anchor[1]) * lateralY
+  ));
+  const halfWidth = Math.max(...smoothedLateral.map((value) => Math.abs(value)));
+  const landmarkYs = landmarksPx.map((point) => point[1]);
+  const faceHeight = Math.max(...landmarkYs) - Math.min(...landmarkYs);
+  if (halfWidth > 1e-9 && faceHeight > 1e-9) {
+    for (let i = 0; i < out.length; i++) {
+      const normalized = Math.min(1, Math.abs(smoothedLateral[i]) / halfWidth);
+      const arch = 0.140 * faceHeight * (1 - normalized ** 2.0);
+      out[i][0] += arch * unitX;
+      out[i][1] += arch * unitY;
+    }
+  }
+  if (faceHeight > 1e-9) {
+    for (const point of out) {
+      point[0] -= 0.100 * layerRank * faceHeight * unitX;
+      point[1] -= 0.100 * layerRank * faceHeight * unitY;
+    }
+  }
+  return out;
+}
+
 export function mapAtlas(lines, landmarksPx, triangles, options = {}) {
   const result = [];
   if (!Array.isArray(lines)) return result;   // 注入空/坏图谱时不让 for...of 抛错崩掉整帧
+  const bridgeRanks = foreheadBridgeRanks(lines, landmarksPx, triangles);
   for (const ln of lines) {
     const pts = [];
     const tris = [];
@@ -94,9 +186,14 @@ export function mapAtlas(lines, landmarksPx, triangles, options = {}) {
     }
     const useLegacyForeheadExpansion = options.expandForehead !== false &&
       ln.region === FOREHEAD_LOWER_LONG_ARC_REGION && ln.disableRuntimeExpansion !== true;
-    const mappedPoints = useLegacyForeheadExpansion
-      ? extendForeheadLowerLongArc(pts, landmarksPx)
-      : pts;
+    const useBridgeExpansion = options.expandForehead !== false &&
+      ln.region === FOREHEAD_BRIDGE_ARC_REGION && ln.disableRuntimeExpansion !== true;
+    let mappedPoints = pts;
+    if (useLegacyForeheadExpansion) {
+      mappedPoints = extendForeheadLowerLongArc(pts, landmarksPx);
+    } else if (useBridgeExpansion) {
+      mappedPoints = extendForeheadBridge(pts, landmarksPx, bridgeRanks.get(ln) ?? 0);
+    }
     result.push({
       name: ln.name,
       region: ln.region || "",
