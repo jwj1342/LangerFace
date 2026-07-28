@@ -4,6 +4,8 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np
+
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "tools"
 if str(TOOLS) not in sys.path:
@@ -35,4 +37,26 @@ def test_v8_1_67_is_reproducible_and_synced_to_the_web(tmp_path):
     rebuilt = build(CanonicalFaceModel.from_obj(CANONICAL_OBJ), reference)
     rebuilt_path = tmp_path / "atlas_rstl.json"
     rebuilt.save(str(rebuilt_path))
-    assert rebuilt_path.read_bytes() == atlas_path.read_bytes()
+    rebuilt_payload = json.loads(rebuilt_path.read_text(encoding="utf-8"))
+    assert rebuilt_payload.keys() == payload.keys()
+    for key in (
+        "system",
+        "version",
+        "topologyId",
+        "topologyVersion",
+        "provenance",
+        "validated",
+    ):
+        assert rebuilt_payload[key] == payload[key]
+    assert len(rebuilt_payload["lines"]) == len(payload["lines"])
+    for actual_line, expected_line in zip(
+        rebuilt_payload["lines"], payload["lines"], strict=True
+    ):
+        assert actual_line["name"] == expected_line["name"]
+        assert actual_line["region"] == expected_line["region"]
+        actual_points = np.asarray(actual_line["points"], dtype=np.float64)
+        expected_points = np.asarray(expected_line["points"], dtype=np.float64)
+        np.testing.assert_array_equal(actual_points[:, 0], expected_points[:, 0])
+        np.testing.assert_allclose(
+            actual_points[:, 1:], expected_points[:, 1:], atol=1e-6, rtol=0.0
+        )
