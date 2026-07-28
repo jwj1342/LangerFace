@@ -2,7 +2,6 @@ import {
   Activity,
   Boxes,
   PenLine,
-  ScanFace,
   Scissors,
   Settings,
   Sparkles,
@@ -42,12 +41,6 @@ const TOOLS = [
     description: "独立运行的候选生成、编辑和审阅原型；不保存病例记录。",
     to: "/incision",
     icon: Scissors,
-  },
-  {
-    title: "三维资产预览",
-    description: "检查标准模型、相机控制与基础渲染链路。",
-    to: "/three-preview",
-    icon: ScanFace,
   },
 ] as const;
 

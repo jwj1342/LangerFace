@@ -46,7 +46,6 @@ export function LiveRouteControlsPanel() {
           onChange={(event) => commands.route("route_change", event.currentTarget.value)}
         >
           <option value="2d">2D 贴合（默认，稳定）</option>
-          <option value="3d">3D 面部重建</option>
         </Select>
         <Hint className="live-inline-top" id="routeModeHint">
           {snapshot?.route.hint || "当前是 2D 实时贴合模式，只显示稳定主流程。"}

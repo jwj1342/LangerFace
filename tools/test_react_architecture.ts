@@ -637,7 +637,8 @@ assert.ok(app.includes('path="/annotate"'), "React Router exposes the 3D annotat
 assert.ok(app.includes('path="/incision"'), "React Router exposes the incision workbench route");
 assert.ok(app.includes('path="/live"'), "React Router exposes the live workbench route");
 assert.ok(app.includes('path="/surgery"'), "React Router exposes the surgery closure route");
-assert.ok(app.includes('path="/three-preview"'), "React Router exposes the R3F preview route");
+assert.ok(!app.includes('path="/three-preview"'), "React Router should not expose the public R3F preview route");
+assert.ok(!app.includes('path="/app/three-preview"'), "React Router should not preserve the legacy R3F preview route");
 assert.ok(app.includes('path="/app/live"'), "React Router preserves legacy /app live links");
 assert.ok(app.includes('path="/app/incision"'), "React Router preserves legacy /app incision links");
 assert.ok(app.includes('path="/settings/atlas"'), "React Router exposes atlas settings route");
@@ -705,9 +706,10 @@ assert.ok(app.includes("ReactPage"), "React route fallback uses the shared React
 assert.ok(dashboardRoute.includes("ReactShellNavLink"), "React dashboard uses shared shell nav links");
 assert.ok(!dashboardRoute.includes("ReactShellExternalLink"), "React dashboard should not send users back to legacy HTML entrypoints");
 assert.ok(!dashboardRoute.includes("/index.html"), "React dashboard should not link to the legacy live HTML entrypoint");
-for (const route of ["/live", "/incision", "/three-preview"]) {
+for (const route of ["/live", "/incision"]) {
   assert.ok(dashboardRoute.includes(`to: "${route}"`), `React dashboard exposes stateless tool route ${route}`);
 }
+assert.ok(!dashboardRoute.includes('to: "/three-preview"'), "React dashboard should not expose the public R3F preview card");
 assert.ok(dashboardRoute.includes('href: "/personalized"'), "React dashboard exposes the personalized browser tool");
 assert.ok(!dashboardRoute.includes("/cases"), "React dashboard does not expose a case lobby");
 assert.ok(dashboardRoute.includes("不创建、恢复或保存病例"), "React dashboard states the no-case-storage boundary");
@@ -1739,7 +1741,7 @@ assert.ok(settingsRoute.includes("useReactRouteLifecycle"), "settings route publ
 assert.ok(settingsRoute.includes('workspace: "settings"'), "settings route uses the settings workspace");
 assert.ok(settingsRoute.includes("ProviderConfigPanel"), "developer settings owns the AI service configuration entry");
 assert.ok(settingsRoute.includes('to="/annotate"'), "settings route keeps the annotation tool as a controlled atlas entry");
-assert.ok(settingsRoute.includes('to="/three-preview"'), "settings route keeps the R3F preview as a controlled developer entry");
+assert.ok(!settingsRoute.includes('to="/three-preview"'), "settings route should not expose the public R3F preview developer entry");
 assert.ok(settingsRoute.includes('to="/surgery"'), "settings route keeps the standalone closure demo as a controlled developer entry");
 assert.ok(threePreviewSidebar.includes("WorkbenchBrand"), "R3F preview sidebar uses the shared workbench brand");
 assert.ok(threePreviewSidebar.includes("Card"), "R3F preview sidebar uses the shared shadcn-style card component");

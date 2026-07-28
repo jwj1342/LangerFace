@@ -27,7 +27,6 @@
     { "source": "/incision", "destination": "/index.html" },
     { "source": "/annotate", "destination": "/index.html" },
     { "source": "/surgery", "destination": "/index.html" },
-    { "source": "/three-preview", "destination": "/index.html" },
     { "source": "/settings/(.*)", "destination": "/index.html" },
     { "source": "/app", "destination": "/index.html" },
     { "source": "/app/(.*)", "destination": "/index.html" }

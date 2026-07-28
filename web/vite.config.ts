@@ -16,7 +16,6 @@ function shouldServeSpaIndex(url = "") {
     || pathname === "/incision"
     || pathname === "/annotate"
     || pathname === "/surgery"
-    || pathname === "/three-preview"
     || pathname.startsWith("/settings/")
   ) {
     return true;
