@@ -82,8 +82,8 @@ assert.match(page, /id="wrinkleMaskDownloadBtn"/);
 assert.match(page, /id="wrinkleSemanticCanvas"/);
 assert.match(page, /id="wrinkleSemanticDownloadBtn"/);
 assert.match(page, /每个表情采集一次/);
-assert.deepEqual(vercelConfig.rewrites[0], { source: "/", destination: "/current/index.html" },
-  "the latest live workbench must be the deployed main page");
+assert.deepEqual(vercelConfig.rewrites[0], { source: "/", destination: "/index.html" },
+  "the React tool launcher must be the deployed main page");
 for (const id of ["uploadBtn", "camBtn", "pauseBtn", "exportBtn", "refine2dBtn", "density", "routeSel"]) {
   assert.match(currentPage, new RegExp(`id=["']${id}["']`), `current main page must expose ${id}`);
 }

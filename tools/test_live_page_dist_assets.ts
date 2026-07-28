@@ -89,7 +89,7 @@ function createStaticServer(root) {
       return;
     }
     if ((!fs.existsSync(file) || !fs.statSync(file).isFile()) && (rel === "/app" || rel.startsWith("/app/"))) {
-      file = path.resolve(root, "app/index.html");
+      file = path.resolve(root, "index.html");
     }
     if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
       res.writeHead(404);

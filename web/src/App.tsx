@@ -29,6 +29,7 @@ export function App() {
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/" element={<DashboardRoute />} />
+        <Route path="/app" element={<DashboardRoute />} />
         <Route path="/settings/atlas" element={<SettingsRoute section="atlas" />} />
         <Route path="/settings/developer" element={<SettingsRoute section="developer" />} />
         <Route path="/annotate" element={<AnnotateRoute />} />
@@ -36,6 +37,13 @@ export function App() {
         <Route path="/live" element={<LiveRoute />} />
         <Route path="/surgery" element={<SurgeryRoute />} />
         <Route path="/three-preview" element={<ThreePreviewRoute />} />
+        <Route path="/app/settings/atlas" element={<SettingsRoute section="atlas" />} />
+        <Route path="/app/settings/developer" element={<SettingsRoute section="developer" />} />
+        <Route path="/app/annotate" element={<AnnotateRoute />} />
+        <Route path="/app/incision" element={<IncisionRoute />} />
+        <Route path="/app/live" element={<LiveRoute />} />
+        <Route path="/app/surgery" element={<SurgeryRoute />} />
+        <Route path="/app/three-preview" element={<ThreePreviewRoute />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
