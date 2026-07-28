@@ -9,6 +9,10 @@ import {
   pointInHulls,
 } from "../web/src/services/geometryOccluders.ts";
 import { INNER_LIP, innerMouthTriangles, visibleTriangles } from "../web/src/services/geometryAtlas.ts";
+import {
+  skinColorMatchesReferences,
+  stabilizeForeheadMask,
+} from "../web/current/forehead_visibility.js";
 
 let fail = 0;
 const ok = (c, m) => { if (!c) { console.error("FAIL:", m); fail++; } else console.log("ok:", m); };
@@ -85,6 +89,37 @@ const visAreaGated = visibleTriangles(degenerateLm, degenerateTris, [], undefine
 ok(visDefault[0] === 1, "默认背面剔除保持旧行为：阈值允许掠射/退化边缘");
 ok(visAreaGated[0] === 0, "★ 面积门槛会剔除近共线退化三角面");
 ok(visAreaGated[1] === 1, "面积门槛不会误删正常朝前三角面");
+
+// 额头皮肤/头发遮挡：保留光照变化下的肤色，拒绝深色和灰白低色度头发。
+const skinReferences = [[190, 132, 105], [145, 92, 72], [220, 170, 138]];
+ok(skinColorMatchesReferences([180, 120, 96], skinReferences), "额头肤色在光照变化下保持可见");
+ok(!skinColorMatchesReferences([35, 25, 20], skinReferences), "深色头发不被误判为额头皮肤");
+ok(!skinColorMatchesReferences([185, 180, 177], skinReferences), "灰白低色度头发不被误判为额头皮肤");
+
+const stableForehead = stabilizeForeheadMask([
+  0, 0,
+  1, 1, 1, 1, 1,
+  0, 0,
+  1, 1, 1, 1, 1,
+  0, 0, 0,
+  1,
+  0, 0, 0,
+]);
+ok(stableForehead.slice(7, 9).every(Boolean), "额头皮肤掩膜闭合小缺口，避免裸露皮肤上的碎断线");
+ok(!stableForehead[17], "额头皮肤掩膜移除头发上的孤立短伪段");
+ok(
+  stabilizeForeheadMask([0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).every((value) => !value),
+  "额头皮肤掩膜移除头发上缺乏连续皮肤支持的悬空短弧",
+);
+const longestForeheadRun = stabilizeForeheadMask([
+  0,
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  0, 0, 0, 0,
+  1, 1, 1, 1, 1, 1,
+  0,
+]);
+ok(longestForeheadRun.slice(1, 13).every(Boolean), "额头皮肤掩膜保留每条弧的最长连续皮肤段");
+ok(longestForeheadRun.slice(17, 23).every((value) => !value), "额头皮肤掩膜删除与主段分离的次要短弧");
 
 console.log(fail === 0 ? "\n✅ 贴合手形遮挡 + 口裂排除正确" : `\n❌ ${fail} 项失败`);
 process.exit(fail ? 1 : 0);

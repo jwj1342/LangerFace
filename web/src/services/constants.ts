@@ -4,7 +4,7 @@ export { ATLAS_VERSION, RIGID3D, TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constan
 
 export const CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35";
 
-export const SOLID = { rstl: "#c026d3", langer: "#06b6d4" } as const;
+export const SOLID = { rstl: "#c800c8", langer: "#06b6d4" } as const;
 export const BAND = { top: "#f0c24b", mid: "#56bdf2", low: "#3fd39c" } as const;
 
 export interface ZoomRegion {

@@ -17,7 +17,7 @@ export function LiveRenderControlsPanel() {
   const render = snapshot?.render;
   const atlasPreview = snapshot?.atlasPreview;
   const [density, setDensity] = useState(render?.densityPct || 100);
-  const [opacity, setOpacity] = useState(render?.opacityPct || 92);
+  const [opacity, setOpacity] = useState(render?.opacityPct || 60);
   const mirror = render?.mirror ?? true;
   const meshPts = render?.meshPts ?? false;
 

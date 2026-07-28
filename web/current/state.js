@@ -34,7 +34,7 @@ export const renderState = {
     zoom: 1, minZoom: 1, maxZoom: 5,
     offsetX: 0, offsetY: 0,
   },
-  densityFrac: 1, smoothLevel: 0.6, opacity: 0.92,
+  densityFrac: 1, smoothLevel: 0.6, opacity: 0.60,
   smoother: new OneEuro({ minCutoff: 1.5, beta: 0.05 }),
 };
 

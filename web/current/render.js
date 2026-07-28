@@ -5,6 +5,11 @@ import { innerMouthTriangles, mapAtlas, mouthOcclusionPolygon, pointInHandMasks,
 import { modelState, renderState, sourceState } from "./state.js";
 import { lineIndicesForDensity } from "./line_density.js";
 import {
+  buildForeheadSkinVisibility,
+  buildHeadVisibility,
+  stabilizeForeheadMask,
+} from "./forehead_visibility.js";
+import {
   getDisplayLines,
   isRefineActive,
   selectedLineIndex,
@@ -21,7 +26,10 @@ const focusScratch = document.createElement("canvas");
 const focusCtx = focusScratch.getContext("2d");
 const focusZoomRange = { min: 1, max: 4.5 };
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const EXTENDED_FOREHEAD_REGION = "forehead_lower_long_arc_v13";
+const EXTENDED_FOREHEAD_REGIONS = new Set([
+  "forehead_lower_long_arc_v13",
+  "forehead_bridge_arc_v15",
+]);
 
 function strokeVisibleRuns(pts, mask, exclusionPolygon = []) {
   for (const run of visibleRunsOutsidePolygon(pts, mask, exclusionPolygon)) {
@@ -31,74 +39,26 @@ function strokeVisibleRuns(pts, mask, exclusionPolygon = []) {
   }
 }
 
-function visibilityMaskForLine(ln, vis, innerMouth, faceOval, hasMasks, masks, skinVisible = () => true) {
+function visibilityMaskForLine(
+  ln,
+  vis,
+  innerMouth,
+  faceOval,
+  hasMasks,
+  masks,
+  skinVisible = () => true,
+  headVisible = () => true,
+) {
+  const extendedForehead = EXTENDED_FOREHEAD_REGIONS.has(ln.region);
+  let onVisibleSkin = ln.pts.map((p) => extendedForehead
+    ? headVisible(p) && skinVisible(p)
+    : pointInPolygon(p, faceOval) && skinVisible(p));
+  if (extendedForehead) onVisibleSkin = stabilizeForeheadMask(onVisibleSkin);
   return ln.pts.map((p, i) => {
     const v = vis ? vis[ln.tris[i]] : 1;
     if (innerMouth.has(ln.tris[i])) return 0;
-    const onVisibleSkin = ln.region === EXTENDED_FOREHEAD_REGION
-      ? skinVisible(p)
-      : pointInPolygon(p, faceOval) && skinVisible(p);
-    return v && onVisibleSkin && !(hasMasks && pointInHandMasks(p, masks)) ? 1 : 0;
+    return v && onVisibleSkin[i] && !(hasMasks && pointInHandMasks(p, masks)) ? 1 : 0;
   });
-}
-
-function meanPatch(image, W, H, x, y, radius = 2) {
-  const cx = Math.round(x), cy = Math.round(y);
-  let r = 0, g = 0, b = 0, n = 0;
-  for (let yy = cy - radius; yy <= cy + radius; yy++) {
-    if (yy < 0 || yy >= H) continue;
-    for (let xx = cx - radius; xx <= cx + radius; xx++) {
-      if (xx < 0 || xx >= W) continue;
-      const k = (yy * W + xx) * 4;
-      r += image.data[k]; g += image.data[k + 1]; b += image.data[k + 2]; n++;
-    }
-  }
-  return n ? [r / n, g / n, b / n] : null;
-}
-
-function colorDistance(a, b) {
-  if (!a || !b) return 0;
-  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-}
-
-function luma(c) {
-  return c ? 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2] : 0;
-}
-
-function buildSkinVisibility(lm, W, H) {
-  if (!lm || W <= 0 || H <= 0) return () => true;
-  let image = null;
-  try {
-    image = ctx.getImageData(0, 0, W, H);
-  } catch {
-    return () => true;
-  }
-  const refs = [1, 4, 5, 195, 197, 205, 425, 152]
-    .map((i) => lm[i])
-    .filter(Boolean)
-    .map((p) => meanPatch(image, W, H, p[0], p[1], 3))
-    .filter(Boolean);
-  if (!refs.length) return () => true;
-  const skin = refs.reduce((acc, c) => [acc[0] + c[0], acc[1] + c[1], acc[2] + c[2]], [0, 0, 0])
-    .map((v) => v / refs.length);
-  const skinY = luma(skin);
-  const browY = [9, 8, 107, 336].map((i) => lm[i]?.[1]).filter(Number.isFinite);
-  const browLine = browY.length ? browY.reduce((a, b) => a + b, 0) / browY.length : H * 0.38;
-  const foreheadFloor = browLine + Math.max(8, H * 0.018);
-
-  return (p) => {
-    if (!p) return false;
-    // Keep the stricter skin test in the forehead, brow-top and temple zone,
-    // where hair/bangs most often cover predicted MediaPipe skin points.
-    if (p[1] > foreheadFloor) return true;
-    const c = meanPatch(image, W, H, p[0], p[1], 2);
-    if (!c) return false;
-    const y = luma(c);
-    const dist = colorDistance(c, skin);
-    const tooDark = y < Math.max(24, skinY * 0.58) && dist > 36;
-    const strongOutlier = dist > Math.max(72, skinY * 0.62);
-    return !(tooDark || strongOutlier);
-  };
 }
 
 export function faceBBox(lm) {
@@ -118,7 +78,14 @@ export function draw(lm, W, H, masks = []) {
   const mouthPolygon = useFlame ? [] : mouthOcclusionPolygon(lm);
   const mapped = flameFrame?.mapped || mapAtlas(atlas, lm, modelState.triangles);
   const faceOval = FACE_OVAL.map((index) => lm[index]).filter(Boolean);
-  const skinVisible = buildSkinVisibility(lm, W, H);
+  let foreheadImage = null;
+  try {
+    foreheadImage = ctx.getImageData(0, 0, W, H);
+  } catch {
+    // Cross-origin sources are rejected earlier, but keep rendering if canvas readback fails.
+  }
+  const skinVisible = buildForeheadSkinVisibility(foreheadImage, W, H, lm);
+  const headVisible = buildHeadVisibility(lm);
   const hasMasks = masks.length > 0;
   if (sourceState.sourceKind === "image" || sourceState.paused) setLatestAutoLines(mapped);
   const refineActive = isRefineActive();
@@ -130,7 +97,7 @@ export function draw(lm, W, H, masks = []) {
   const densityIndices = refineActive ? null : lineIndicesForDensity(displayLines, renderState.densityFrac);
 
   ctx.save();
-  ctx.globalAlpha = renderState.opacity; ctx.lineWidth = Math.max(1, W / 1300);
+  ctx.globalAlpha = renderState.opacity; ctx.lineWidth = Math.max(2, W / 1300);
   ctx.lineJoin = "round"; ctx.lineCap = "round";
   let count = 0;
   for (let li = 0; li < displayLines.length; li++) {
@@ -151,10 +118,19 @@ export function draw(lm, W, H, masks = []) {
       ctx.lineWidth = Math.max(2, W / 680);
       ctx.setLineDash([8, 6]);
     } else {
-      ctx.lineWidth = Math.max(1, W / 1300);
+      ctx.lineWidth = Math.max(2, W / 1300);
     }
     // 每点可见性 = 朝向相机(背面剔除) 且 不属于口裂三角面 且 不在前方手部凸包内
-    const mask = visibilityMaskForLine(ln, vis, innerMouth, faceOval, hasMasks, masks, skinVisible);
+    const mask = visibilityMaskForLine(
+      ln,
+      vis,
+      innerMouth,
+      faceOval,
+      hasMasks,
+      masks,
+      skinVisible,
+      headVisible,
+    );
     strokeVisibleRuns(ln.pts, mask, mouthPolygon);
     if (isPartner) ctx.setLineDash([]);
     count++;

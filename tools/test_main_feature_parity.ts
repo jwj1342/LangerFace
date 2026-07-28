@@ -25,6 +25,15 @@ const controllerCommand = read("src/lib/controllerCommand.ts");
 const mode3d = read("src/services/mode3d.ts");
 const sharedThree3d = read("src/services/three3d.ts");
 const render2d = read("src/services/render2d.ts");
+const typedConstants = read("src/services/constants.ts");
+const liveState = read("src/services/liveState.ts");
+const liveRenderControls = read("src/components/LiveRenderControlsPanel.tsx");
+const currentConstants = read("current/constants.js");
+const currentRender = read("current/render.js");
+const currentState = read("current/state.js");
+const currentHtml = read("current/index.html");
+const foreheadVisibility = read("current/forehead_visibility.js");
+const personalizedConstants = read("compat/personalized/constants.js");
 const cameraSource = read("src/services/cameraSource.ts");
 const skinMaterial = read("src/services/skinMaterial.ts");
 const incisionStage = read("src/components/IncisionStagePanel.tsx");
@@ -171,6 +180,50 @@ includesAll(render2d, [
   "incisionOverlay",
   "renderState",
 ], "2D render overlay support");
+
+for (const [label, source] of [
+  ["typed live constants", typedConstants],
+  ["current live constants", currentConstants],
+  ["personalized compatibility constants", personalizedConstants],
+]) {
+  assert.ok(source.includes('rstl: "#c800c8"'), `${label} must use the v8.1.67 reference magenta`);
+}
+assert.ok(
+  render2d.includes("Math.max(2, W / 1300)"),
+  "typed live RSTL strokes must use the two-pixel reference minimum",
+);
+assert.ok(
+  currentRender.includes("Math.max(2, W / 1300)"),
+  "current live RSTL strokes must use the two-pixel reference minimum",
+);
+assert.ok(
+  currentRender.includes('"forehead_bridge_arc_v15"'),
+  "current live must not clip v8.1.67 bridge arcs to the MediaPipe face oval",
+);
+includesAll(currentRender, [
+  "buildForeheadSkinVisibility",
+  "buildHeadVisibility",
+  "stabilizeForeheadMask",
+  "headVisible(p) && skinVisible(p)",
+], "current live v8.1.67 forehead visibility integration");
+includesAll(foreheadVisibility, [
+  "skinColorMatchesReferences",
+  "distance <= 26",
+  "achromaticHair",
+  "0.54 * faceWidth",
+  "0.46 * faceHeight",
+  "maxGap",
+  "minRun",
+  "minVisibleSpan",
+  "longestRun.start",
+], "current live hair-aware forehead visibility");
+assert.ok(liveState.includes("opacity: 0.60"), "typed live RSTL opacity must match the 60% reference");
+assert.ok(currentState.includes("opacity: 0.60"), "current live RSTL opacity must match the 60% reference");
+includesAll(currentHtml, ['id="opacityVal">60%</span>', 'id="opacity" min="25" max="100" value="60"'], "current live reference opacity controls");
+assert.ok(
+  liveRenderControls.includes("render?.opacityPct || 60"),
+  "React live opacity control must default to the 60% reference",
+);
 
 includesAll(cameraSource, [
   "navigator.mediaDevices.getUserMedia",

@@ -165,7 +165,7 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   const localRegionMasks = buildLocalRegionMasks(lm, localRegionQuality);
 
   ctx.save();
-  ctx.globalAlpha = renderState.opacity; ctx.lineWidth = Math.max(1, W / 1300);
+  ctx.globalAlpha = renderState.opacity; ctx.lineWidth = Math.max(2, W / 1300);
   ctx.lineJoin = "round"; ctx.lineCap = "round";
   let count = 0;
   if (canDrawAtlas) {

@@ -13,7 +13,7 @@ export const FACE_OVAL = [
 ];
 
 // 单色（按模板）；开启分区着色时按面部上/中/下分色
-export const SOLID = { rstl: "#e31b23", langer: "#06b6d4" };
+export const SOLID = { rstl: "#c800c8", langer: "#06b6d4" };
 export const BAND = { top: "#f0c24b", mid: "#56bdf2", low: "#3fd39c" };
 
 // 细节放大窗：关键手术参考区域（用 MediaPipe 关键点索引界定）
