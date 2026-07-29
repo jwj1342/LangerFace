@@ -340,7 +340,7 @@ export function normalizeEditHistoryEntry(base: AnyRecord, raw: AnyRecord, index
     shift_along_mm: Number(raw.shift_along_mm || 0),
     shift_perp_mm: Number(raw.shift_perp_mm || 0),
     reason: String(raw.reason || ""),
-    source: raw.source || "web/incision_agent",
+    source: raw.source || "web/incision_workflow",
     interaction: raw.interaction || "committed_control_edit",
     committed_at: raw.committed_at || null,
     history_index: Number(raw.history_index || index + 1),

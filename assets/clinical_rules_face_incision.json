@@ -1,5 +1,5 @@
 {
-  "version": "0.2-agentic-incision",
+  "version": "0.3-deterministic-incision-workflow",
   "review_status": "draft_not_clinically_validated",
   "last_reviewed_at": "2026-06-24",
   "source": "Stage 2 clinical planning notes and clinician-provided rules; requires formal clinical review before validated use.",

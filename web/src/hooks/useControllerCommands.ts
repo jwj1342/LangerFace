@@ -17,7 +17,6 @@ import {
   dispatchAnnotateMeshCommand,
   dispatchIncisionEditCommand,
   dispatchIncisionLibraryCommand,
-  dispatchIncisionProviderState,
   dispatchIncisionReviewCommand,
   dispatchIncisionSecondaryCueCommand,
   dispatchIncisionTumorCommand,
@@ -58,9 +57,6 @@ export function useIncisionControllerCommands() {
   const tumor = useCallback((command: IncisionTumorCommand) => {
     dispatchIncisionTumorCommand(command);
   }, []);
-  const providerState = useCallback((source?: string) => {
-    dispatchIncisionProviderState(source);
-  }, []);
   const secondaryCue = useCallback((command: IncisionSecondaryCueCommand) => {
     dispatchIncisionSecondaryCueCommand(command);
   }, []);
@@ -75,7 +71,7 @@ export function useIncisionControllerCommands() {
   }, []);
 
   return useMemo(
-    () => ({ edit, library, providerState, review, secondaryCue, tumor }),
-    [edit, library, providerState, review, secondaryCue, tumor],
+    () => ({ edit, library, review, secondaryCue, tumor }),
+    [edit, library, review, secondaryCue, tumor],
   );
 }

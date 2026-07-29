@@ -170,7 +170,7 @@ P = u·V0 + v·V1 + w·V2
 - 生产预览：`cd web && npm run preview`，Vite 默认监听 `http://127.0.0.1:4173`。
 - Vite 有 **4 个 Rollup 入口**：`web/index.html`（React SPA，挂在站点根，`/app/*` 仍作为旧地址兼容）、
   `web/current/index.html`（`/current/` 纯 JS 实时页）、`web/personalized.html`（`/personalized`）、
-  `web/compat/personalized/v6_review.html`（`/v6-review`）。`annotate.html`、`incision_agent.html`、`surgery.html`
+  `web/compat/personalized/v6_review.html`（`/v6-review`）。`annotate.html`、`incision_workflow.html`、`surgery.html`
   只作为轻量兼容跳转页复制进 `dist/`，不再作为 Rollup 多入口应用构建。
 - `web/vite.config.ts` 使用 `base: "/"`，让 SPA shell 的 JS/CSS 在深链接下仍从站点根 `/assets/...` 读取；`copy-runtime-assets`
   会把 `web/assets/` 复制到 `dist/assets/`；`web/src/services/assetLoader.ts`
@@ -210,7 +210,7 @@ P = u·V0 + v·V1 + w·V2
 - `tools/test_web_architecture.ts` 会检查 `web/src/**/*.ts(x)` 与 `vite.config.ts` 的静态相对 import 图，禁止新增模块环，并阻止旧根目录 JS 运行时文件回流。
 - `web/src/services/logger.ts` 统一记录浏览器端关键故障、降级事件、帧指标和资产版本；调试时可在控制台查看 `window.langerfaceDiagnostics`，或调用 `window.exportLangerfaceDiagnostics()` 导出脱敏 JSON。字段约定见 [OBSERVABILITY.md](../quality/OBSERVABILITY.md)。
 - `web/.npmrc` 启用 `engine-strict=true`，安装依赖时会严格执行 `package.json` 中的 Node/npm 版本要求。
-- React SPA 中仍由运行时服务接管的工作台必须只在 route host 内查询 DOM。`annotateRuntime.ts`、`incisionAgentRuntime.ts`
+- React SPA 中仍由运行时服务接管的工作台必须只在 route host 内查询 DOM。`annotateRuntime.ts`、`incisionRuntime.ts`
   通过 `src/lib/scopedDom.ts` 绑定元素，实时页绑定由 `src/services/liveDom.ts` 负责，也不再回退到全局 `document.getElementById`，
   避免路由切换后误绑定旧页面或其它工作台的同名元素。
 - 实时 DOM 绑定的真实实现位于 `src/services/liveDom.ts`，并受 TypeScript 严格检查。
@@ -220,8 +220,9 @@ P = u·V0 + v·V1 + w·V2
   负责，并通过 `src/services/liveState.ts` 明确 `imageView` 状态边界。
 - 标注、切口和实时页共享的资产读取与短期跨工具预览契约由 `src/services/dataSource.ts` 负责。
   跨页 payload 只进入当前标签页的 `sessionStorage`；该 service 不提供患者/病例记录、本地长期保存或远端病例数据源接口。
-- OpenAI-compatible / vLLM Provider 的 Base URL 规范化、
-  `/models` 连通性测试和类型契约由 `src/services/llmProvider.ts` 负责，候选几何仍不依赖 Provider。
+- 切口候选由 `src/services/incisionWorkflowTools.ts` 中的本地确定性 workflow 生成；
+  `workflow.worker.ts` 通过 Comlink 执行，`workflowPlanner.ts` 在 Worker 不可用时回退到主线程执行相同函数。
+  运行时不包含远程模型或模型密钥配置。
 - 实时页的 canvas/WebM 录制、额外视图合成和下载生命周期由 `src/services/canvasRecording.ts` 负责。
 - 摄像头约束/错误归一化由
   `src/services/cameraSource.ts` 负责，上传图片工作尺寸控制由 `src/services/imageSource.ts` 负责。
@@ -362,7 +363,7 @@ Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部
 | 皮下线性切口 | `web/src/services/incisionCandidateTools.ts` | 基于超声直径和 RSTL 方向生成线性候选 | #15 |
 | 皮表梭形切口 | `web/src/services/incisionCandidateTools.ts` | 生成梭形候选，约束比例、尖端角和平滑对称 | #16 |
 | 敏感结构 guardrails | `web/src/services/incisionCandidateTools.ts` | 下睑、唇红缘、鼻翼、鼻尖、口角等风险提示、分结构 draft 距离阈值、`protective_direction` 保护性方向建议和方向例外 | #17 |
-| 医生审阅 UI | `web/src/services/incisionAgentRuntime.ts`, `web/src/components/*Review*.tsx` | 候选解释、编辑、版本化 provenance、覆盖、导出 | #18 |
+| 医生审阅 UI | `web/src/services/incisionRuntime.ts`, `web/src/components/*Review*.tsx` | 候选解释、编辑、版本化 provenance、覆盖、导出 | #18 |
 | AR / 视频叠加 | `web/src/services/render2d.ts`, `web/src/services/projection3d.ts` | 把肿物和切口候选投射回照片、视频、实时视图 | #19 |
 | 验证指标 | `docs/quality/VALIDATION.md` | 角度误差、稳定性、医生接受率、失败分类 | #20 |
 | 隐私 / 审计 | `docs/clinical/PRIVACY_AND_AUDIT.md` | 敏感数据边界、审计记录、受限存储 | #21 |

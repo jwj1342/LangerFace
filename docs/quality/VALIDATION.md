@@ -92,7 +92,7 @@ Stage 2 涉及肿物模拟和候选切口，只能在医生审阅路径中评估
 
 ## Stage 2 审阅导出汇总
 
-切口 Agent 工作台导出的 `incision-review-record/v0.3` 或 `incision-review-export/v0.3` 可用脚本汇总为脱敏指标：
+切口 workflow 工作台导出的 `incision-review-record/v0.3` 或 `incision-review-export/v0.3` 可用脚本汇总为脱敏指标：
 
 ```bash
 python tools/evaluate_stage2_validation.py \
@@ -110,7 +110,7 @@ python tools/evaluate_stage2_validation.py \
 - 医生确认 / 否决状态计数和确认率。
 - guardrail 通过率、warning severity/code 分布。
 - `rstl_deviation_deg`、方向置信度、皮下直径覆盖缺口、梭形长宽比、尖端角误差、边界覆盖缺口、梭形 outline 面积、outline 对称误差、自由轮廓包络余量 / 出界点数、敏感游离缘距离和边界面积比的 count / mean / median / P90 / min / max。
-- `secondary_cues` 汇总：低置信辅助线索导入数、人工确认率、来源/置信标签分布、lesion/wrinkle precision/recall/IoU，以及 `used_for_geometry_count` / `used_for_agent_prompt_count`。后两项必须保持 0。
+- `secondary_cues` 汇总：低置信辅助线索导入数、人工确认率、来源/置信标签分布、lesion/wrinkle precision/recall/IoU，以及 `used_for_geometry_count`。该项必须保持 0。
 - `incision-overlay-registration/v0.1`：可由 `measureIncisionOverlayRegistration` 对单帧 runtime landmarks 计算 surface refs 投射质量；脚本会汇总 `present_count`、`passed_count`、`failed_count`、`pass_rate`、`reason_counts`、`context_counts`，并把 mapped point count、candidate point count、invalid ref、missing landmark、degenerate triangle、out-of-frame、bbox diagonal 和 frame fraction 写入 `metrics`。该指标用于工程 QA，不代表患者个体化临床 AR 配准。
 - `incision-overlay-stability/v0.1`：可由 `measureIncisionOverlayJitter` 对连续 landmarks 帧计算候选切口和肿物叠加的 RMS / P95 / max 像素抖动；脚本会汇总 `present_count`、`passed_count`、`failed_count`、`pass_rate`、`reason_counts`、`context_counts`，并把 RMS / P95 / max、tracked point count 和 sample count 写入 `metrics`。该指标用于工程回归，不替代真实视频/摄像头目检和临床评审。
 - `incision-overlay-runtime-diagnostics/v0.1`：浏览器实时页在有候选 overlay 时写入 diagnostics `sections.incision_overlay_runtime`，包含候选摘要、`incision-overlay-pose-gate/v0.2` 姿态/运动/表情门禁、`rstl-local-region-quality-gate/v0.1` 眼眉/口周局部降可信门禁、`landmark-motion-stabilized-smoothing/v0.1` 平滑参数摘要、最近一帧 registration、最近 8 帧滚动 stability、阈值、失败原因和 `exported_landmarks=false` / `exported_raw_pixels=false` 标记；候选切换或 overlay 清空时会重置该 section。`tools/evaluate_stage2_validation.py` 会把 `local_region_quality` 汇总为 `incision_overlay_local_region_quality` 的 present/pass/fail/pass_rate、reason/action/source/active region 分布，并把 active region count、局部 motion norm 和 expression value 写入 `metrics`；也会把 `landmark_smoothing` 汇总为 `incision_overlay_landmark_smoothing` 的 present/enabled/method 分布，并把 smooth level、local/global cutoff/beta/dcutoff 和 global anchor count 写入 `metrics`。该汇总用于 reviewer 复盘局部降可信触发频率和平滑参数配置，不进入长期病例记录。
@@ -119,7 +119,7 @@ python tools/evaluate_stage2_validation.py \
 - `incision-overlay-acceptance-evidence/v0.1`：可由 `tools/build_incision_overlay_acceptance_evidence.ts` 从脱敏照片/视频/摄像头 diagnostics、`incision-overlay-replay-qa/v0.1`、webm 导出契约、资源 QA 和浏览器 diagnostics 生成。builder 会拒绝 `landmark_frames`、raw image/video/canvas/pixel payload、`data:image/*` / `data:video/*` 以及 raw media 标记为 true 的输入，避免 reviewer 为了跑验收而拼接原始影像或 landmark 坐标。
 - `incision-overlay-acceptance-audit/v0.1`：可由 `tools/audit_incision_overlay_acceptance.ts --input acceptance_evidence.json --output acceptance_audit.json` 汇总脱敏 evidence，统一回答 #19 的工程验收问题：照片 source 是否有通过 registration 的肿物/切口叠加，视频 source 是否有通过 replay 或 stability 且导出为可播放 webm，摄像头 source 是否有通过 registration + stability，浏览器 diagnostics 是否没有 `runtime.error` / `runtime.unhandledrejection`，构建资源 QA 是否无 404，以及 evidence 是否没有 raw image/video/canvas/landmark payload。该 audit 也会汇总 `local_region_quality` present/pass/fail、active region、action 和 source kind，作为 reviewer 判断是否需要重录或降级展示的软信号。该脚本只验证工程证据完整性，不证明真实患者 AR 配准或临床安全。
 - 失败模式计数：脚本会读取人工 `failure_modes`，也会把高层 warning code 映射到 `direction_error`、`region_misclassification`、`sensitive_structure_warning`、`incision_rule_violation`、`tumor_boundary_input_quality` 等验证分类。
-- 隐私审计计数：`raw_media_sent_count` 和 `provider_secret_leak_count` 必须保持 0。
+- 隐私审计计数：`raw_media_sent_count` 和 `secret_leak_count` 必须保持 0。
 
 这个汇总只能证明工程记录可复现，不能证明临床安全性。正式研究仍需受控病例库、医生标注和统计计划。
 

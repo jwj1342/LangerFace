@@ -23,7 +23,7 @@
 
 ## `tracks/` — 技术轨与功能专题
 
-**这个目录回答「某条技术路线当初为什么这么选、现在到哪一步了」。** 每篇对应一条相对独立、可以单独推进或搁置的轨：[FLAME_3D_TRACK.md](tracks/FLAME_3D_TRACK.md) 是 3D FLAME 配准/标注轨的选型与逐 sprint 状态，也是 FLAME 资产 license 边界的说明处（Sprint 0–5 已落地、Sprint 6 未开工，网页入口已关闭）；[INCISION_FLAME_ASSET_STRATEGY.md](tracks/INCISION_FLAME_ASSET_STRATEGY.md) 讲切口工作台如何使用 FLAME 头模资产及其回退策略；[RSTL_3DMM_PRIOR.md](tracks/RSTL_3DMM_PRIOR.md) 记录 Borges RSTL 的来源与 3DMM 拓扑先验 manifest；[PERSONALIZED_RSTL.md](tracks/PERSONALIZED_RSTL.md) 是 `/personalized` 浏览器个性化流程的单一可审计说明（采集输入、每个阈值的依据、逐层失败降级、隐私边界、图谱契约）；[PERSONALIZED_TEXTURE_WARP.md](tracks/PERSONALIZED_TEXTURE_WARP.md) 是它的 Python 兄弟（纹理/皱纹场 warp）；[AGENTIC_INCISION.md](tracks/AGENTIC_INCISION.md) 记录切口设计 workflow 的 11 步 tool trace 契约与 provider 边界——它也是理解 issue #111 的必读件。
+**这个目录回答「某条技术路线当初为什么这么选、现在到哪一步了」。** 每篇对应一条相对独立、可以单独推进或搁置的轨：[FLAME_3D_TRACK.md](tracks/FLAME_3D_TRACK.md) 是 3D FLAME 配准/标注轨的选型与逐 sprint 状态，也是 FLAME 资产 license 边界的说明处（Sprint 0–5 已落地、Sprint 6 未开工，网页入口已关闭）；[INCISION_FLAME_ASSET_STRATEGY.md](tracks/INCISION_FLAME_ASSET_STRATEGY.md) 讲切口工作台如何使用 FLAME 头模资产及其回退策略；[RSTL_3DMM_PRIOR.md](tracks/RSTL_3DMM_PRIOR.md) 记录 Borges RSTL 的来源与 3DMM 拓扑先验 manifest；[PERSONALIZED_RSTL.md](tracks/PERSONALIZED_RSTL.md) 是 `/personalized` 浏览器个性化流程的单一可审计说明（采集输入、每个阈值的依据、逐层失败降级、隐私边界、图谱契约）；[PERSONALIZED_TEXTURE_WARP.md](tracks/PERSONALIZED_TEXTURE_WARP.md) 是它的 Python 兄弟（纹理/皱纹场 warp）；[INCISION_WORKFLOW.md](tracks/INCISION_WORKFLOW.md) 记录浏览器本地确定性切口 workflow、worker 回退、tool trace 与审阅边界。
 
 ## `quality/` — 质量与运维
 
@@ -31,7 +31,7 @@
 
 ## `clinical/` — 临床边界与合规
 
-**这个目录回答「这套东西在医学上能声称什么、不能声称什么，以及哪些数据绝对不能出域」——它约束的是承诺而不是实现，改动前请谨慎。** [PRIVACY_AND_AUDIT.md](clinical/PRIVACY_AND_AUDIT.md) 是敏感数据边界、禁止提交项、导出约束与审计字段的总纲；[INCISION_PRIVACY_AUDIT.md](clinical/INCISION_PRIVACY_AUDIT.md) 是切口流程的专项边界（浏览器 ↔ 用户自备 LLM provider 的两方边界，中间不再有任何服务端执行点）；[PRODUCT_BOUNDARIES.md](clinical/PRODUCT_BOUNDARIES.md) 记录当前聚焦表皮 RSTL 与病灶处理、暂缓肌肉骨骼实时孪生的产品决策及其重启条件；[WRINKLE_LESION_CUES.md](clinical/WRINKLE_LESION_CUES.md) 讲自然皱襞/皱纹/病灶边界作为 RSTL 之外**次级依据**的调研与边界（允许在 `/personalized` 有界微调，不允许影响 `/incision` 几何）。
+**这个目录回答「这套东西在医学上能声称什么、不能声称什么，以及哪些数据绝对不能出域」——它约束的是承诺而不是实现，改动前请谨慎。** [PRIVACY_AND_AUDIT.md](clinical/PRIVACY_AND_AUDIT.md) 是敏感数据边界、禁止提交项、导出约束与审计字段的总纲；[PRODUCT_BOUNDARIES.md](clinical/PRODUCT_BOUNDARIES.md) 记录当前聚焦表皮 RSTL 与病灶处理、暂缓肌肉骨骼实时孪生的产品决策及其重启条件；[WRINKLE_LESION_CUES.md](clinical/WRINKLE_LESION_CUES.md) 讲自然皱襞/皱纹/病灶边界作为 RSTL 之外**次级依据**的调研与边界（允许在 `/personalized` 有界微调，不允许影响 `/incision` 几何）。
 
 ## `planning/` — 路线图
 
@@ -52,7 +52,6 @@
 
 读到以下内容时请知道它们已被记录为缺陷，不要照着做决定：
 
-- **#111** —— `/incision` 每次生成候选都会把 tool trace 与 API Key 发给已配置的 LLM provider，而运行时文案、React Provider 面板与 `assets/agentic_incision_tool_schema.json` 三处都仍声称 Key 只用于连通性测试。`clinical/INCISION_PRIVACY_AUDIT.md` 描述的是**应有**边界。
 - **#112** —— `web/src/services/geometryAtlas.ts` 未遵守 `disableRuntimeExpansion`，导致 `/personalized` 的额头拱线在 React 实时页被二次形变；`architecture/METHODS_AND_IMPLEMENTATION_SUMMARY.md` §5 也尚未记录这段非重心变换。
 - **#113** —— 9 组仍可合并的重复文档、`planning/TODO.md` 与 issue 状态双向失同步、`quality/OBSERVABILITY.md` 缺 pose-gate 一族指标、`atlasVersion` 字段无法判别图谱版本。
-- **#114** —— 工程实践债（`incisionAgentRuntime.ts` 单文件 2,713 行、Provider 配置双 owner 等）。
+- **#114** —— 工程实践债（`incisionRuntime.ts` 仍是较大的运行时文件，需要继续按交互、导出和渲染职责拆分）。

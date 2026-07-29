@@ -2,7 +2,7 @@
 """Aggregate Stage 2 incision-review exports into validation metrics.
 
 The input is intentionally limited to sanitized review JSON exported by
-`web/incision_agent.html`: no images, video frames, textures, or raw clinical
+`web/incision_workflow.html`: no images, video frames, textures, or raw clinical
 files are needed. This gives issue #20 an executable metric contract while the
 real clinical dataset remains in controlled storage.
 """
@@ -370,7 +370,6 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     secondary_cue_present_count = 0
     secondary_cue_manual_confirmed_count = 0
     secondary_cue_used_for_geometry_count = 0
-    secondary_cue_used_for_agent_prompt_count = 0
     overlay_stability_present_count = 0
     overlay_stability_passed_count = 0
     overlay_stability_failed_count = 0
@@ -588,7 +587,7 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
         privacy = record.get("privacy_audit") or {}
         if privacy.get("raw_image_sent") is True or privacy.get("raw_video_sent") is True:
             raw_image_sent_count += 1
-        if _has_secret_leak(record.get("provider_config") or {}):
+        if _has_secret_leak(record.get("credentials") or {}):
             secret_leak_count += 1
 
         secondary_cues = record.get("secondary_cues") or {}
@@ -598,8 +597,6 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
                 secondary_cue_manual_confirmed_count += 1
             if secondary_cues.get("used_for_geometry") is True:
                 secondary_cue_used_for_geometry_count += 1
-            if secondary_cues.get("used_for_agent_prompt") is True:
-                secondary_cue_used_for_agent_prompt_count += 1
             secondary_cue_source_counts[str(secondary_cues.get("source") or "unknown")] += 1
             secondary_cue_confidence_counts[str(secondary_cues.get("confidence_label") or "unknown")] += 1
 
@@ -812,7 +809,7 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
         },
         "privacy_audit": {
             "raw_media_sent_count": raw_image_sent_count,
-            "provider_secret_leak_count": secret_leak_count,
+            "secret_leak_count": secret_leak_count,
         },
         "secondary_cues": {
             "present_count": secondary_cue_present_count,
@@ -822,7 +819,6 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
                 secondary_cue_present_count,
             ),
             "used_for_geometry_count": secondary_cue_used_for_geometry_count,
-            "used_for_agent_prompt_count": secondary_cue_used_for_agent_prompt_count,
             "source_counts": dict(sorted(secondary_cue_source_counts.items())),
             "confidence_label_counts": dict(sorted(secondary_cue_confidence_counts.items())),
             "metrics": {
@@ -834,7 +830,7 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
             },
             "clinical_boundary": (
                 "Secondary cues are low-confidence review context only; "
-                "used_for_geometry_count and used_for_agent_prompt_count must remain 0."
+                "used_for_geometry_count must remain 0."
             ),
         },
         "clinical_boundary": (
@@ -988,7 +984,7 @@ def validation_summary_csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]
             rows.extend(_count_rows(section, count_metric, data.get(count_metric, {}) or {}))
 
     privacy = summary.get("privacy_audit") or {}
-    for metric in ["raw_media_sent_count", "provider_secret_leak_count"]:
+    for metric in ["raw_media_sent_count", "secret_leak_count"]:
         rows.append(_csv_row(section="privacy_audit", metric=metric, value=privacy.get(metric, "")))
 
     secondary = summary.get("secondary_cues") or {}
@@ -997,7 +993,6 @@ def validation_summary_csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]
         "manual_confirmed_count",
         "manual_confirmation_rate",
         "used_for_geometry_count",
-        "used_for_agent_prompt_count",
     ]:
         rows.append(_csv_row(
             section="secondary_cues",

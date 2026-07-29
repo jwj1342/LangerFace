@@ -15,15 +15,15 @@ const DEFAULT_RESULT_VIEW: IncisionResultViewState = {
   regionTitle: "",
   guardrailLabel: "—",
   guardrailWarn: false,
-  llmSummary: "尚未生成。",
+  workflowSummary: "尚未生成。",
   directionSource: "方向依据：尚未生成。",
   directionSourceWarn: false,
-  agentGate: "Agent 工具门控：尚未生成。",
-  agentGateWarn: false,
-  agentGateTitle: "",
-  agentComparison: "Agent 候选比较：尚未生成。",
-  agentComparisonWarn: false,
-  agentComparisonTitle: "",
+  workflowGate: "工作流工具门控：尚未生成。",
+  workflowGateWarn: false,
+  workflowGateTitle: "",
+  workflowComparison: "工作流候选比较：尚未生成。",
+  workflowComparisonWarn: false,
+  workflowComparisonTitle: "",
   nextStep: "",
   guardrailDetails: "Guardrails 尚未运行。",
   guardrailDetailsWarn: false,
@@ -58,11 +58,11 @@ export function CandidateResultPanel() {
           valueProps={{ id: "guardrailVal", style: { color: view.guardrailWarn ? "#b45309" : undefined } }}
         />
       </MetricGrid>
-      <Hint id="llmSummary">{view.llmSummary}</Hint>
+      <Hint id="workflowSummary">{view.workflowSummary}</Hint>
       <GuardrailDetails tone={view.directionSourceWarn ? "warn" : "neutral"} id="directionSource">{view.directionSource}</GuardrailDetails>
-      <GuardrailDetails tone={view.agentGateWarn ? "warn" : "neutral"} id="agentGate" title={view.agentGateTitle}>{view.agentGate}</GuardrailDetails>
-      <GuardrailDetails tone={view.agentComparisonWarn ? "warn" : "neutral"} id="agentComparison" title={view.agentComparisonTitle}>
-        {view.agentComparison}
+      <GuardrailDetails tone={view.workflowGateWarn ? "warn" : "neutral"} id="workflowGate" title={view.workflowGateTitle}>{view.workflowGate}</GuardrailDetails>
+      <GuardrailDetails tone={view.workflowComparisonWarn ? "warn" : "neutral"} id="workflowComparison" title={view.workflowComparisonTitle}>
+        {view.workflowComparison}
       </GuardrailDetails>
       <Hint id="nextStep">{view.nextStep}</Hint>
       <GuardrailDetails tone={detailTone(view)} id="guardrailDetails">{view.guardrailDetails}</GuardrailDetails>

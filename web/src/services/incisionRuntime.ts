@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { compileIncisionOverlay } from "./incisionOverlay.ts";
 import {
   applyCandidateEdit,
-  agentTraceGate,
+  workflowTraceGate,
   classifyRegion,
   compareCandidateRecords,
   summarizeTumorBoundary,
@@ -11,12 +11,10 @@ import {
   unitsPerMmFromVertices,
 } from "./incisionTools.ts";
 import type { TumorInput } from "./incisionCandidateTools.ts";
-import { normalizeProviderBaseUrl, testProviderConnection, type ProviderConfig } from "./llmProvider";
 import {
   INCISION_CONTROLLER_STATE_EVENT,
   INCISION_EDIT_REACT_COMMAND_EVENT,
   INCISION_LIBRARY_REACT_COMMAND_EVENT,
-  INCISION_PROVIDER_REACT_STATE_EVENT,
   INCISION_REVIEW_REACT_COMMAND_EVENT,
   INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT,
   INCISION_TUMOR_REACT_COMMAND_EVENT,
@@ -35,21 +33,11 @@ import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
 import { assetBaseUrl } from "./assetLoader";
 import { requireScopedElement, requireScopedQuery } from "../lib/scopedDom";
 import {
-  DEFAULT_PROVIDER_BASE_URL,
-  initialProviderState,
-  insecureProviderFromSecurePageMessage,
-  isDeprecatedNativeProviderConfig,
-  localProviderFromRemotePageMessage,
-  redactedProviderConfig as redactProviderConfig,
-  saveProviderPrefs as persistProviderPrefs,
-} from "./providerConfig";
-import {
   buildIncisionAssetLoadingSnapshot,
   buildIncisionCandidateSnapshot,
   buildIncisionControllerSnapshot,
   buildIncisionEditSnapshot,
   buildIncisionPrivacyAuditSnapshot,
-  buildIncisionProviderSnapshot,
   buildIncisionResultViewSnapshot,
   buildIncisionReviewSnapshot,
   buildIncisionSavedCandidateSummaries,
@@ -117,15 +105,6 @@ interface IncisionDomElements extends Record<string, any> {
   clearSecondaryCue: HTMLButtonElement;
   secondaryCueImportFile: HTMLInputElement;
   secondaryCueConfirmed: HTMLInputElement;
-  testProvider: HTMLButtonElement;
-  providerTestState: HTMLElement;
-  providerMode: HTMLSelectElement;
-  providerBaseUrl: HTMLInputElement;
-  providerModel: HTMLInputElement;
-  providerApiKey: HTMLInputElement;
-  providerTimeout: HTMLInputElement;
-  providerTimeoutVal: HTMLElement;
-  providerState: HTMLElement;
   candidateType: HTMLElement;
   candidateLength: HTMLElement;
   candidateWidth: HTMLElement;
@@ -134,10 +113,10 @@ interface IncisionDomElements extends Record<string, any> {
   regionVal: HTMLElement;
   guardrailVal: HTMLElement;
   directionSource: HTMLElement;
-  agentGate: HTMLElement;
-  agentComparison: HTMLElement;
+  workflowGate: HTMLElement;
+  workflowComparison: HTMLElement;
   guardrailDetails: HTMLElement;
-  llmSummary: HTMLElement;
+  workflowSummary: HTMLElement;
   nextStep: HTMLElement;
   editStatus: HTMLElement;
   angleOffset: HTMLInputElement;
@@ -247,7 +226,7 @@ const $ = <T extends Element = HTMLElement>(root: ParentNode | Document, id: str
 
 function collectElements(root: ParentNode | Document = document): IncisionDomElements {
   return {
-    canvas: $<HTMLCanvasElement>(root, "agentCanvas"),
+    canvas: $<HTMLCanvasElement>(root, "incisionCanvas"),
     wrap: requireScopedQuery<HTMLElement>(root, ".main-wrap"),
     assetLoading: $(root, "assetLoading"),
     assetLoadingText: $(root, "assetLoadingText"),
@@ -273,7 +252,7 @@ function collectElements(root: ParentNode | Document = document): IncisionDomEle
     exportTumor: $(root, "exportTumorBtn"),
     importTumor: $(root, "importTumorBtn"),
     tumorImportFile: $(root, "tumorImportFile"),
-    run: $(root, "runAgentBtn"),
+    run: $(root, "runWorkflowBtn"),
     pickState: $(root, "pickState"),
     anatomyPreview: $(root, "anatomyPreview"),
     secondaryCueState: $(root, "secondaryCueState"),
@@ -282,15 +261,6 @@ function collectElements(root: ParentNode | Document = document): IncisionDomEle
     clearSecondaryCue: $(root, "clearSecondaryCueBtn"),
     secondaryCueImportFile: $(root, "secondaryCueImportFile"),
     secondaryCueConfirmed: $(root, "secondaryCueConfirmed"),
-    testProvider: $(root, "testProviderBtn"),
-    providerTestState: $(root, "providerTestState"),
-    providerMode: $(root, "providerMode"),
-    providerBaseUrl: $(root, "providerBaseUrl"),
-    providerModel: $(root, "providerModel"),
-    providerApiKey: $(root, "providerApiKey"),
-    providerTimeout: $(root, "providerTimeout"),
-    providerTimeoutVal: $(root, "providerTimeoutVal"),
-    providerState: $(root, "providerState"),
     candidateType: $(root, "candidateType"),
     candidateLength: $(root, "candidateLength"),
     candidateWidth: $(root, "candidateWidth"),
@@ -299,10 +269,10 @@ function collectElements(root: ParentNode | Document = document): IncisionDomEle
     regionVal: $(root, "regionVal"),
     guardrailVal: $(root, "guardrailVal"),
     directionSource: $(root, "directionSource"),
-    agentGate: $(root, "agentGate"),
-    agentComparison: $(root, "agentComparison"),
+    workflowGate: $(root, "workflowGate"),
+    workflowComparison: $(root, "workflowComparison"),
     guardrailDetails: $(root, "guardrailDetails"),
-    llmSummary: $(root, "llmSummary"),
+    workflowSummary: $(root, "workflowSummary"),
     nextStep: $(root, "nextStep"),
     editStatus: $(root, "editStatus"),
     angleOffset: $(root, "angleOffsetDeg"),
@@ -416,14 +386,6 @@ function currentTumorFormSnapshot() {
   });
 }
 
-function currentProviderSnapshot() {
-  return buildIncisionProviderSnapshot(
-    redactedProviderConfig(),
-    els.providerState?.textContent || "待运行",
-    els.providerTestState?.textContent || "",
-  );
-}
-
 function currentSecondaryCueSnapshot() {
   return buildIncisionSecondaryCueSnapshot({
     present: Boolean(S.secondaryCues),
@@ -436,7 +398,7 @@ function currentSecondaryCueSnapshot() {
 function currentPrivacyAuditSnapshot() {
   return buildIncisionPrivacyAuditSnapshot({
     stateLabel: els.privacyState?.textContent || "本地几何",
-    message: els.privacyAudit?.textContent || "不上传原始影像；Agent 只接收肿物参数、抽象坐标、规则和候选几何。",
+    message: els.privacyAudit?.textContent || "所有切口 workflow 均在浏览器本地执行，不配置或调用远程模型。",
   });
 }
 
@@ -499,10 +461,10 @@ function currentResultViewSnapshot() {
     directionConfidence: els.directionConf,
     region: els.regionVal,
     guardrail: els.guardrailVal,
-    llmSummary: els.llmSummary,
+    workflowSummary: els.workflowSummary,
     directionSource: els.directionSource,
-    agentGate: els.agentGate,
-    agentComparison: els.agentComparison,
+    workflowGate: els.workflowGate,
+    workflowComparison: els.workflowComparison,
     nextStep: els.nextStep,
     guardrailDetails: els.guardrailDetails,
   });
@@ -526,7 +488,6 @@ function publishIncisionState(reason = "state_update") {
     tumor: currentTumorFormSnapshot(),
     secondaryCue: currentSecondaryCueSnapshot(),
     privacyAudit: currentPrivacyAuditSnapshot(),
-    provider: currentProviderSnapshot(),
     review: currentReviewSnapshot(),
     edit: currentEditSnapshot(),
     candidate: currentCandidateSnapshot(),
@@ -731,12 +692,11 @@ async function boot() {
     S.head.group.add(S.marker, S.tumorRing, S.boundaryLine, S.candidateLine, ...S.endpointHandles);
   }
 
-  loadProviderPrefs();
   renderSecondaryCuePanel();
   setLesion(defaultLesion());
   fitSize();
   renderLoop();
-  runAgent();
+  runWorkflow();
   hideAssetLoading();
 }
 
@@ -746,110 +706,11 @@ function fitSize() {
   S.head.resize(w, h);
 }
 
-function providerConfig(): ProviderConfig {
-  const cfg: ProviderConfig = {
-    provider: els.providerMode.value,
-    base_url: normalizeProviderBaseUrl(els.providerBaseUrl.value),
-    model: els.providerModel.value.trim(),
-    timeout_s: Number(els.providerTimeout.value),
-  };
-  if (els.providerApiKey.value) cfg.api_key = els.providerApiKey.value;
-  return cfg;
-}
-
-function shouldUseAiSdkProviderSummary(config: ProviderConfig = {}): boolean {
-  const baseURL = normalizeProviderBaseUrl(config.base_url || "");
-  const model = String(config.model || "").trim();
-  if (!baseURL || !model) return false;
-  const defaultOpenAI = baseURL === normalizeProviderBaseUrl(DEFAULT_PROVIDER_BASE_URL);
-  return Boolean(config.api_key || !defaultOpenAI);
-}
-
-function providerDisplayLabel(provider: DynamicRecord = {}): string {
-  if (provider.mode === "browser_deterministic_workflow" || provider.mode === "browser_deterministic_fallback") {
-    return provider.error ? "浏览器确定性 workflow · 需复核" : "浏览器确定性 workflow";
-  }
-  if (provider.model) return `${provider.mode || "Agent"} · ${provider.model}`;
-  return provider.mode || "deterministic";
-}
-
-function setProviderTestState(text: string, level = ""): void {
-  if (!els.providerTestState) return;
-  els.providerTestState.textContent = text;
-  els.providerTestState.classList.toggle("ok", level === "ok");
-  els.providerTestState.classList.toggle("warn", level === "warn");
-  publishIncisionState("provider_state");
-}
-
-function normalizeProviderDefaults() {
-  els.providerMode.value = "openai-compatible";
-  const initial = initialProviderState();
-  const base = els.providerBaseUrl.value.trim();
-  const model = els.providerModel.value.trim();
-  if (!base || isDeprecatedNativeProviderConfig(base, "")) els.providerBaseUrl.value = initial.baseUrl;
-  if (!model || isDeprecatedNativeProviderConfig("", model)) els.providerModel.value = initial.model;
-  if (!Number(els.providerTimeout.value)) els.providerTimeout.value = String(initial.timeoutS);
-}
-
-function redactedProviderConfig() {
-  return redactProviderConfig(providerConfig());
-}
-
-function saveProviderPrefs() {
-  persistProviderPrefs(providerConfig());
-}
-
-function loadProviderPrefs() {
-  const initial = initialProviderState();
-  els.providerMode.value = "openai-compatible";
-  els.providerBaseUrl.value = initial.baseUrl;
-  els.providerModel.value = initial.model;
-  els.providerTimeout.value = String(initial.timeoutS);
-  normalizeProviderDefaults();
-  els.providerTimeoutVal.textContent = els.providerTimeout.value;
-}
-
-async function testProviderEndpoint() {
-  if (!els.testProvider) return;
-  els.testProvider.disabled = true;
-  setProviderTestState("正在测试 LLM Provider 连接…");
-  try {
-    const cfg = providerConfig();
-    const warnings = [localProviderFromRemotePageMessage(cfg), insecureProviderFromSecurePageMessage(cfg)].filter(Boolean);
-    if (warnings.length) {
-      setProviderTestState(`${warnings.join(" ")} 正在继续发送测试请求…`, "warn");
-      els.stageStatus.textContent = "检测到远端页面直连本地或 HTTP Provider；仍将发送测试请求，结果以浏览器网络面板为准。";
-    }
-    const result = await testProviderConnection(cfg, {
-      timeoutMs: Math.min(Number(els.providerTimeout.value) * 1000, 10000),
-    });
-    const count = Number.isInteger(result.model_count) ? ` · 模型 ${result.model_count} 个` : "";
-    setProviderTestState(`Provider 连接正常：${result.test_endpoint}${count}`, "ok");
-    els.providerState.textContent = "OpenAI-compatible 已连接";
-    els.providerState.style.color = "";
-    els.stageStatus.textContent = "LLM Provider 连接正常；切口候选仍由浏览器确定性 workflow 生成。";
-  } catch (err) {
-    const msg = err instanceof DOMException && err.name === "AbortError" ? "请求超时" : errorMessage(err);
-    const networkHint = insecureProviderFromSecurePageMessage(providerConfig());
-    setProviderTestState(
-      `Provider 连接失败：${msg}。${networkHint || "请检查 Base URL、API Key、网络可达性、/models 兼容性和浏览器 CORS 设置。"}`,
-      "warn",
-    );
-    els.providerState.textContent = "Provider 未连接";
-    els.providerState.style.color = "#b45309";
-    els.stageStatus.textContent = `LLM Provider 连接失败：${msg}`;
-  } finally {
-    els.testProvider.disabled = false;
-    publishIncisionState("provider_test_result");
-  }
-}
-
-function privacyAudit(provider: DynamicRecord = {}) {
-  const remoteProviderConfigured = provider.mode === "vercel_ai_sdk_openai_compatible_summary" || provider.ai_sdk_attempted === true;
+function privacyAudit() {
   return {
     raw_image_sent: false,
     raw_video_sent: false,
-    data_sent_to_agent: [
+    local_workflow_fields: [
       "tumor.kind",
       "tumor.center",
       "tumor.diameter_mm",
@@ -860,13 +721,8 @@ function privacyAudit(provider: DynamicRecord = {}) {
       "candidate geometry",
       "tool trace",
     ],
-    provider: redactedProviderConfig(),
-    remote_provider_configured: remoteProviderConfigured,
-    browser_workflow_only: !remoteProviderConfigured,
-    ai_sdk_summary_only: remoteProviderConfigured,
-    provider_state: provider,
+    browser_workflow_only: true,
     secondary_cues_present: Boolean(S.secondaryCues),
-    secondary_cues_sent_to_agent: false,
   };
 }
 
@@ -893,7 +749,6 @@ function normalizeSecondaryCuePayload(payload: DynamicRecord = {}) {
     confidence_label: metrics.confidence_label || "low_confidence_cv_cue_requires_manual_confirmation",
     manual_confirmation_required: true,
     used_for_geometry: false,
-    used_for_agent_prompt: false,
     clinical_boundary: "辅助线索 / 低置信度 / 需医生确认；不自动改变肿物边界或候选切口。",
     lesion: metricSummary(metrics.lesion || {}),
     wrinkle: metricSummary(metrics.wrinkle || {}),
@@ -911,7 +766,6 @@ function secondaryCueReviewSummary() {
       present: false,
       manual_confirmed: false,
       used_for_geometry: false,
-      used_for_agent_prompt: false,
     };
   }
   return {
@@ -937,7 +791,7 @@ function renderSecondaryCuePanel() {
     `标签：${S.secondaryCues.confidence_label}`,
     `皮表边界 IoU ${fmt(lesion.iou, 2)} / precision ${fmt(lesion.precision, 2)} / recall ${fmt(lesion.recall, 2)}`,
     `皱纹 recall ${fmt(wrinkle.recall, 2)} / precision ${fmt(wrinkle.precision, 2)}`,
-    "只读展示：不进入几何生成，不发送给 Agent prompt。",
+    "只读展示：不进入几何生成，不发送给 远程模型输入。",
   ].join("\n");
   publishIncisionState("secondary_cue_state");
 }
@@ -990,9 +844,9 @@ function highGuardrailWarnings(result = S.result) {
 function reviewReadiness(status: string, result = S.result) {
   if (!result) return { ok: false, message: "没有可审阅的候选" };
   if (status === "approved_for_discussion") {
-    const traceGate = agentTraceGate(result);
+    const traceGate = workflowTraceGate(result);
     if (!traceGate.passed) {
-      return { ok: false, message: "Agent 工具 trace 未通过门控；缺少必要工具动作或顺序异常，不能确认候选。" };
+      return { ok: false, message: "工作流工具 trace 未通过门控；缺少必要工具动作或顺序异常，不能确认候选。" };
     }
     if (!els.reviewerName.value.trim()) return { ok: false, message: "确认候选前请填写审阅人。" };
     if (highGuardrailWarnings(result).length && !els.reviewNotes.value.trim()) {
@@ -1220,7 +1074,7 @@ function toggleBoundaryDrawing() {
   S.boundaryActive = !S.boundaryActive;
   els.startBoundary.textContent = S.boundaryActive ? "结束轮廓" : "开始轮廓";
   els.pickState.textContent = S.boundaryActive ? "请在脸上连续点击皮表肿物边界点。" : `自由轮廓点：${S.boundaryPoints.length} 个`;
-  if (!S.boundaryActive && S.boundaryPoints.length >= 3) runAgent();
+  if (!S.boundaryActive && S.boundaryPoints.length >= 3) runWorkflow();
   publishIncisionState("tumor_boundary_toggle");
 }
 
@@ -1228,7 +1082,7 @@ function clearBoundaryPoints() {
   S.boundaryPoints = [];
   updateTumorRing();
   els.pickState.textContent = "自由轮廓已清空。";
-  runAgent();
+  runWorkflow();
   publishIncisionState("tumor_boundary_clear");
 }
 
@@ -1240,7 +1094,7 @@ function handleReactTumorCommand(event: Event) {
     S.boundaryActive = false;
     updateFormVisibility();
     publishIncisionState("tumor_kind_changed");
-    runAgent();
+    runWorkflow();
     return;
   }
   if (command === "diameter_input") {
@@ -1258,14 +1112,14 @@ function handleReactTumorCommand(event: Event) {
     return;
   }
   if (command === "diameter_changed" || command === "depth_changed" || command === "margin_changed" || command === "ellipse_ratio_changed") {
-    runAgent();
+    runWorkflow();
     return;
   }
   if (command === "boundary_mode_changed") {
     S.boundaryActive = false;
     updateFormVisibility();
     publishIncisionState("tumor_boundary_mode_changed");
-    runAgent();
+    runWorkflow();
     return;
   }
   if (command === "toggle_boundary") {
@@ -1284,8 +1138,8 @@ function handleReactTumorCommand(event: Event) {
     els.tumorImportFile.click();
     return;
   }
-  if (command === "run_agent") {
-    runAgent();
+  if (command === "run_workflow") {
+    runWorkflow();
   }
 }
 
@@ -1376,7 +1230,7 @@ function editHistoryEntriesForCurrent(edit: DynamicRecord = currentEditBase()): 
     : rawCommitted.filter((entry) => editIsActive(entry));
   const committed = committedSource.map((entry: DynamicRecord, idx: number) => ({
       ...cloneEdit(entry),
-      source: "web/incision_agent",
+      source: "web/incision_workflow",
       interaction: entry.interaction || "committed_control_edit",
       history_index: idx + 1,
     }));
@@ -1384,7 +1238,7 @@ function editHistoryEntriesForCurrent(edit: DynamicRecord = currentEditBase()): 
   if (!editsEqual(edit, cursorEdit) && editIsActive(edit)) {
     committed.push({
       ...cloneEdit(edit),
-      source: "web/incision_agent",
+      source: "web/incision_workflow",
       interaction: "live_preview_uncommitted_edit",
       history_index: committed.length + 1,
     });
@@ -1569,7 +1423,7 @@ function logWorkflowTraceToConsole(result: DynamicRecord) {
   S.lastConsoleTraceSignature = signature;
 
   const trace = Array.isArray(result.trace) ? result.trace : [];
-  const gate = result.agent_trace_gate || agentTraceGate(result);
+  const gate = result.workflow_trace_gate || workflowTraceGate(result);
   const label = `[LangerFace] 浏览器切口 workflow trace · ${trace.length} 步 · gate=${gate.passed ? "passed" : "failed"}`;
   const rows = trace.map((step: DynamicRecord, index: number) => ({
     index: index + 1,
@@ -1589,8 +1443,8 @@ function logWorkflowTraceToConsole(result: DynamicRecord) {
   else console.log("trace summary", rows);
   console.log("trace", trace);
   console.log("trace_gate", gate);
-  if (result.agent_react_plan) console.log("react_plan", result.agent_react_plan);
-  if (result.agent_execution_events) console.log("execution_events", result.agent_execution_events);
+  if (result.workflow_plan_audit) console.log("workflow_plan", result.workflow_plan_audit);
+  if (result.workflow_execution_events) console.log("execution_events", result.workflow_execution_events);
   if (comparisonRows.length) {
     if (typeof console.table === "function") console.table(comparisonRows);
     else console.log("candidate_comparison", comparisonRows);
@@ -1646,15 +1500,15 @@ function renderDirectionSource(result: DynamicRecord) {
   els.directionSource.classList.toggle("warn", direction.confidence < 0.35 || overrides.length > 0 || Boolean(result.candidate?.edited));
 }
 
-function renderAgentGate(result: DynamicRecord) {
-  if (!els.agentGate) return;
-  const gate = agentTraceGate(result);
+function renderWorkflowGate(result: DynamicRecord) {
+  if (!els.workflowGate) return;
+  const gate = workflowTraceGate(result);
   const observedActions = gate.observed_actions || [];
-  els.agentGate.classList.toggle("warn", !gate.passed);
+  els.workflowGate.classList.toggle("warn", !gate.passed);
   const missing = gate.missing_actions.map((item: DynamicRecord) => item.label).join("、");
   const status = gate.passed ? "通过" : `未通过${missing ? `；缺 ${missing}` : ""}`;
-  els.agentGate.textContent = `Agent 工具门控：${status} · ${observedActions.length} 个动作；完整 workflow trace 已写入 DevTools Console。`;
-  els.agentGate.title = `observed_actions=${observedActions.join(", ")}`;
+  els.workflowGate.textContent = `工作流工具门控：${status} · ${observedActions.length} 个动作；完整 workflow trace 已写入 DevTools Console。`;
+  els.workflowGate.title = `observed_actions=${observedActions.join(", ")}`;
 }
 
 function formatRecoveredFailureSummary(audit: DynamicRecord, includeError = false): string {
@@ -1673,13 +1527,13 @@ function formatRecoveredFailureSummary(audit: DynamicRecord, includeError = fals
     .join("；");
 }
 
-function renderAgentComparison(result: DynamicRecord) {
-  if (!els.agentComparison) return;
+function renderWorkflowComparison(result: DynamicRecord) {
+  if (!els.workflowComparison) return;
   const comparison = Array.isArray(result.candidate_comparison) ? result.candidate_comparison : [];
-  const audit = result.agent_orchestration_audit || {};
+  const audit = result.workflow_audit || {};
   if (!comparison.length) {
-    els.agentComparison.classList.add("warn");
-    els.agentComparison.textContent = "候选比较：浏览器 workflow 尚未生成多候选比较；可手动保存候选后生成备选。";
+    els.workflowComparison.classList.add("warn");
+    els.workflowComparison.textContent = "候选比较：浏览器 workflow 尚未生成多候选比较；可手动保存候选后生成备选。";
     return;
   }
   const top = comparison
@@ -1690,11 +1544,11 @@ function renderAgentComparison(result: DynamicRecord) {
   const failures = audit.tool_failure_count
     ? `；恢复失败 ${audit.tool_failure_count} 个${failureSummary ? `（${failureSummary}）` : ""}`
     : "";
-  els.agentComparison.classList.toggle("warn", Boolean(audit.tool_failure_count));
-  els.agentComparison.title = failureSummary
+  els.workflowComparison.classList.toggle("warn", Boolean(audit.tool_failure_count));
+  els.workflowComparison.title = failureSummary
     ? `recovered_failures=${formatRecoveredFailureSummary(audit, true)}`
     : "";
-  els.agentComparison.textContent =
+  els.workflowComparison.textContent =
     `候选比较：${comparison.length} 个浏览器确定性候选 · ${top}${failures}。工程排序不是临床推荐或手术指令。`;
 }
 
@@ -1728,25 +1582,21 @@ function renderResult(result: DynamicRecord) {
   els.guardrailVal.style.color = result.guardrails.passed ? "" : "#b45309";
   renderGuardrailDetails(result.guardrails);
   renderDirectionSource(result);
-  renderAgentGate(result);
-  renderAgentComparison(result);
+  renderWorkflowGate(result);
+  renderWorkflowComparison(result);
   const tumorQuality = tumorQualityFor(result);
   if (tumorQuality.warning_count) {
     els.guardrailDetails.textContent += `\n肿物输入：${tumorQuality.warnings.map((w: DynamicRecord) => `${w.code}(${w.severity})`).join(" · ")}`;
   }
-  els.llmSummary.textContent = result.llm?.summary || "已生成候选。";
-  els.nextStep.textContent = result.llm?.next_step || "";
+  els.workflowSummary.textContent = result.summary || "已生成候选。";
+  els.nextStep.textContent = result.next_step || "医生审阅、编辑或拒绝该候选。";
   logWorkflowTraceToConsole(result);
   updateBoundaryStatus();
-  const provider = result.provider || {};
-  els.providerState.textContent = providerDisplayLabel(provider);
-  els.providerState.style.color = provider.error ? "#b45309" : "";
   updateEditVisibility(result);
-  const audit = privacyAudit(provider);
-  els.privacyState.textContent = audit.remote_provider_configured ? "抽象参数出域" : "浏览器本地";
-  els.privacyAudit.textContent = audit.raw_image_sent
-    ? "警告：检测到原始影像出域配置。"
-    : `不上传原始影像；${audit.data_sent_to_agent.length} 类抽象字段只在浏览器确定性 workflow 内处理。Provider API Key 只用于手动连通性测试。${audit.secondary_cues_present ? " 辅助线索仅随审阅导出，不参与几何。" : ""}`;
+  const audit = privacyAudit();
+  els.privacyState.textContent = "浏览器本地";
+  els.privacyAudit.textContent =
+    `不上传原始影像；${audit.local_workflow_fields.length} 类抽象字段只在浏览器确定性 workflow 内处理，不配置或调用远程模型。${audit.secondary_cues_present ? " 辅助线索仅随审阅导出，不参与几何。" : ""}`;
   const edited = result.candidate.edited ? " · 已记录医生调整" : "";
   const headLabel = S.headAsset?.statusLabel ? ` · ${S.headAsset.statusLabel}` : "";
   els.stageStatus.textContent = `浏览器确定性 workflow 已更新候选${edited}${headLabel}`;
@@ -1774,7 +1624,7 @@ function guardrailSummary(guardrails: DynamicRecord = {}) {
 
 function reviewGate(review: DynamicRecord, result: DynamicRecord) {
   const summary = guardrailSummary(result.guardrails);
-  const traceGate = agentTraceGate(result);
+  const traceGate = workflowTraceGate(result);
   const reviewerRequired = review.status === "approved_for_discussion";
   const notesRequired = reviewerRequired && summary.high_count > 0;
   const reviewerPresent = Boolean(review.reviewer);
@@ -1791,8 +1641,8 @@ function reviewGate(review: DynamicRecord, result: DynamicRecord) {
     notes_required_for_high_guardrails: notesRequired,
     notes_present: notesPresent,
     high_guardrail_codes: summary.high_codes,
-    agent_trace_gate_passed: traceGate.passed,
-    agent_trace_gate_missing: traceGate.missing_actions.map((item: DynamicRecord) => item.key),
+    workflow_trace_gate_passed: traceGate.passed,
+    workflow_trace_gate_missing: traceGate.missing_actions.map((item: DynamicRecord) => item.key),
     approval_ready: approvalReady,
     live_overlay_ready: liveOverlayReady,
     live_overlay_blocked_reason: liveOverlaySupported ? null : "active_head_topology_not_supported_by_mediapipe_live_overlay",
@@ -1802,7 +1652,7 @@ function reviewGate(review: DynamicRecord, result: DynamicRecord) {
       ? "approved_candidate_ready_for_research_overlay"
       : approvalReady && !liveOverlaySupported
         ? "approved_candidate_on_flame_preview_requires_explicit_topology_mapping_before_live_overlay"
-        : traceGate.passed ? "pending_clinician_confirmation_or_missing_required_review_context" : "agent_trace_gate_failed",
+        : traceGate.passed ? "pending_clinician_confirmation_or_missing_required_review_context" : "workflow_trace_gate_failed",
   };
 }
 
@@ -1816,7 +1666,7 @@ function candidateEditSession(result: DynamicRecord = S.result) {
     current_edit_id: provenance.clinician_edit?.edit_id || null,
     undo_available: Boolean(els.undoEdit && !els.undoEdit.disabled),
     redo_available: Boolean(els.redoEdit && !els.redoEdit.disabled),
-    source: "web/incision_agent",
+    source: "web/incision_workflow",
     history: history.map((entry: DynamicRecord) => ({
       edit_id: entry.edit_id,
       resulting_candidate_version: entry.resulting_candidate_version,
@@ -1846,7 +1696,7 @@ function reviewRecord(result: DynamicRecord = S.result, label = "候选") {
   const review = currentReviewMetadata(createdAt);
   const actor = review.reviewer || result.tumor?.author || "unknown";
   const gate = reviewGate(review, result);
-  const traceGate = agentTraceGate(result);
+  const traceGate = workflowTraceGate(result);
   const tumorBoundarySummary = boundarySummaryFor(result.tumor, result);
   return {
     schema_version: "incision-review-record/v0.3",
@@ -1866,16 +1716,15 @@ function reviewRecord(result: DynamicRecord = S.result, label = "候选") {
     candidate_edit_session: candidateEditSession(result),
     guardrails: result.guardrails,
     trace: result.trace,
-    agent_trace_gate: traceGate,
-    agent_react_plan: result.agent_react_plan || null,
-    agent_execution_events: result.agent_execution_events || null,
+    workflow_trace_gate: traceGate,
+    workflow_plan_audit: result.workflow_plan_audit || null,
+    workflow_execution_events: result.workflow_execution_events || null,
     candidate_alternatives: result.candidate_alternatives || [],
     candidate_comparison: result.candidate_comparison || [],
-    agent_orchestration_audit: result.agent_orchestration_audit || null,
-    llm: result.llm,
-    provider: result.provider,
-    provider_config: redactedProviderConfig(),
-    privacy_audit: privacyAudit(result.provider),
+    workflow_audit: result.workflow_audit || null,
+    summary: result.summary || null,
+    next_step: result.next_step || null,
+    privacy_audit: privacyAudit(),
     review_status: review.status,
     review,
     review_gate: gate,
@@ -1888,7 +1737,7 @@ function reviewRecord(result: DynamicRecord = S.result, label = "候选") {
         status: review.status,
         approval_ready: gate.approval_ready,
         live_overlay_ready: gate.live_overlay_ready,
-        agent_trace_gate_passed: traceGate.passed,
+        workflow_trace_gate_passed: traceGate.passed,
         active_topology_id: S.headAsset?.topologyId || null,
         active_topology_version: S.headAsset?.topologyVersion || null,
       },
@@ -2020,11 +1869,8 @@ function workflowAlternativeResult(baseResult: DynamicRecord, alternative: Dynam
     sensitive_structure_inspection:
       alternative.sensitive_structure_inspection || baseResult.sensitive_structure_inspection,
     review_status: alternative.review_status || "pending_clinician_confirmation",
-    llm: {
-      ...(baseResult.llm || {}),
-      summary: `已载入浏览器方向备选：${alternative.label || alternative.id || "候选"}；请复核 guardrails、敏感结构和候选比较。`,
-      next_step: "医生审阅、编辑或否决该候选。",
-    },
+    summary: `已载入浏览器方向备选：${alternative.label || alternative.id || "候选"}；请复核 guardrails、敏感结构和候选比较。`,
+    next_step: "医生审阅、编辑或否决该候选。",
   };
 }
 
@@ -2200,7 +2046,7 @@ function applyImportedTumor(payload: unknown) {
   updateFormVisibility();
   els.pickState.textContent = imported.pickState;
   publishIncisionState("tumor_imported");
-  runAgent();
+  runWorkflow();
 }
 
 async function importTumorFile(file?: File) {
@@ -2267,7 +2113,7 @@ function exportReport() {
     const overrideLines = (r.guardrails.suggested_overrides || [])
       .map((o: DynamicRecord) => `  - ${o.kind}: ${o.reason || ""}`)
       .join("\n") || "  - 无";
-    const recoveredFailureDetails = formatRecoveredFailureSummary(r.agent_orchestration_audit, true);
+    const recoveredFailureDetails = formatRecoveredFailureSummary(r.workflow_audit, true);
     return [
     `## 候选 ${idx + 1}: ${r.label}`,
     `- 类型：${r.candidate.type === "linear" ? "皮下线性切口" : "皮表梭形切口"}`,
@@ -2303,17 +2149,17 @@ function exportReport() {
     r.sensitive_structure_inspection
       ? `- 敏感结构检查：中心距 ${fmt(r.sensitive_structure_inspection.center_free_margin_distance_mm)} mm / 阈值 ${fmt(r.sensitive_structure_inspection.center_free_margin_threshold_mm)} mm；候选几何距 ${fmt(r.sensitive_structure_inspection.candidate_free_margin_distance_mm)} mm / 阈值 ${fmt(r.sensitive_structure_inspection.candidate_free_margin_threshold_mm)} mm；warning ${r.sensitive_structure_inspection.warning_count || 0} 个；保护方向 ${r.sensitive_structure_inspection.protective_direction?.direction_hint || "无"}`
       : null,
-    `- Agent 工具门控：passed=${Boolean(r.agent_trace_gate?.passed)}；order_ok=${Boolean(r.agent_trace_gate?.order_ok)}；missing=${(r.agent_trace_gate?.missing_actions || []).map((item: DynamicRecord) => item.label || item.key).join(", ") || "无"}`,
-    r.agent_react_plan
-      ? `- Agent ReAct 计划：passed=${Boolean(r.agent_react_plan.passed)}；步骤 ${r.agent_react_plan.completed_step_count || 0}/${r.agent_react_plan.step_count || 0}；失败 ${r.agent_react_plan.failed_step_count || 0}`
+    `- 工作流工具门控：passed=${Boolean(r.workflow_trace_gate?.passed)}；order_ok=${Boolean(r.workflow_trace_gate?.order_ok)}；missing=${(r.workflow_trace_gate?.missing_actions || []).map((item: DynamicRecord) => item.label || item.key).join(", ") || "无"}`,
+    r.workflow_plan_audit
+      ? `- 工作流计划：passed=${Boolean(r.workflow_plan_audit.passed)}；步骤 ${r.workflow_plan_audit.completed_step_count || 0}/${r.workflow_plan_audit.step_count || 0}；失败 ${r.workflow_plan_audit.failed_step_count || 0}`
       : null,
-    r.agent_execution_events
-      ? `- Agent 执行事件：passed=${Boolean(r.agent_execution_events.passed)}；事件 ${r.agent_execution_events.event_count || 0} 条；工具事件 ${r.agent_execution_events.tool_event_count || 0} 条；重试 ${r.agent_execution_events.retry_event_count || 0}；恢复 ${r.agent_execution_events.recovery_event_count || 0}`
+    r.workflow_execution_events
+      ? `- 工作流执行事件：passed=${Boolean(r.workflow_execution_events.passed)}；事件 ${r.workflow_execution_events.event_count || 0} 条；工具事件 ${r.workflow_execution_events.tool_event_count || 0} 条；重试 ${r.workflow_execution_events.retry_event_count || 0}；恢复 ${r.workflow_execution_events.recovery_event_count || 0}`
       : null,
-    r.agent_orchestration_audit
-      ? `- 浏览器 workflow 审计：候选 ${r.agent_orchestration_audit.candidate_count || 0} 个；比较 ${r.agent_orchestration_audit.comparison_ready ? "已生成" : "未生成"}；恢复失败 ${r.agent_orchestration_audit.tool_failure_count || 0} 个`
+    r.workflow_audit
+      ? `- 浏览器 workflow 审计：候选 ${r.workflow_audit.candidate_count || 0} 个；比较 ${r.workflow_audit.comparison_ready ? "已生成" : "未生成"}；恢复失败 ${r.workflow_audit.tool_failure_count || 0} 个`
       : null,
-    recoveredFailureDetails ? `- Agent 恢复详情：${recoveredFailureDetails}` : null,
+    recoveredFailureDetails ? `- 工作流恢复详情：${recoveredFailureDetails}` : null,
     (r.candidate_comparison || []).length
       ? `- 浏览器候选比较：${r.candidate_comparison.map((c: DynamicRecord) => `#${c.rank} ${c.label || c.id} ${fmt(c.score, 1)}分`).join("；")}（不是临床推荐或手术指令）`
       : null,
@@ -2336,7 +2182,7 @@ function exportReport() {
     `- Guardrails：${r.guardrails.passed ? "通过" : "需医生复核"}`,
     `- 警告：\n${warningLines}`,
     `- 建议覆盖项：\n${overrideLines}`,
-    `- 审阅门槛：approval_ready=${Boolean(r.review_gate?.approval_ready)}；live_overlay_ready=${Boolean(r.review_gate?.live_overlay_ready)}；agent_trace_gate=${Boolean(r.review_gate?.agent_trace_gate_passed)}；high=${(r.review_gate?.high_guardrail_codes || []).join(", ") || "无"}`,
+    `- 审阅门槛：approval_ready=${Boolean(r.review_gate?.approval_ready)}；live_overlay_ready=${Boolean(r.review_gate?.live_overlay_ready)}；workflow_trace_gate=${Boolean(r.review_gate?.workflow_trace_gate_passed)}；high=${(r.review_gate?.high_guardrail_codes || []).join(", ") || "无"}`,
     `- 审阅状态：${reviewStatusLabel(r.review_status)}；审阅人：${r.review?.reviewer || "未填写"}`,
     `- 审阅备注：${r.review?.notes || "无"}`,
     `- 审阅边界：研究候选记录，非手术指令。`,
@@ -2391,7 +2237,7 @@ function stageLiveOverlay() {
   els.stageStatus.textContent = "已发送到实时叠加；返回实时显示后上传照片、视频或开启摄像头查看。";
 }
 
-async function runAgent() {
+async function runWorkflow() {
   if (!S.verts) return;
   els.run.disabled = true;
   els.stageStatus.textContent = "Worker 确定性 workflow 生成中…";
@@ -2435,36 +2281,7 @@ async function planWorkflowForCurrentTumor(tumor: TumorInput) {
     console.warn("[LangerFace] workflow worker failed; using main-thread fallback", execution.error);
     if (execution.statusMessage) els.stageStatus.textContent = execution.statusMessage;
   }
-  return enrichWorkflowWithAiSdkSummary(execution.result);
-}
-
-async function enrichWorkflowWithAiSdkSummary(result: DynamicRecord) {
-  const cfg = providerConfig();
-  if (!shouldUseAiSdkProviderSummary(cfg)) return result;
-  els.stageStatus.textContent = "确定性 workflow 已完成，正在通过 Vercel AI SDK 生成审阅摘要…";
-  try {
-    const { summarizeIncisionPlanWithAiSdk } = await import("./aiSdkProvider");
-    const summary = await summarizeIncisionPlanWithAiSdk(result, cfg, {
-      timeoutMs: Math.min(Number(cfg.timeout_s || 60) * 1000, 60000),
-    });
-    result.llm = summary.llm;
-    result.provider = summary.provider;
-    return result;
-  } catch (error) {
-    result.provider = {
-      ...(result.provider || {}),
-      ai_sdk_attempted: true,
-      mode: result.provider?.mode || "browser_deterministic_workflow",
-      model: cfg.model || result.provider?.model || null,
-      sdk: "vercel_ai_sdk",
-      error: errorMessage(error),
-    };
-    result.llm = {
-      ...(result.llm || {}),
-      rationale: `${result.llm?.rationale || "浏览器确定性 workflow 已完成。"} Vercel AI SDK 摘要失败：${errorMessage(error)}。`,
-    };
-    return result;
-  }
+  return execution.result;
 }
 
 function facePointFromEvent(e: PointerEvent) {
@@ -2547,7 +2364,7 @@ function pick(e: PointerEvent) {
     if (d < bd) { bd = d; best = vi; }
   }
   setLesion(best);
-  runAgent();
+  runWorkflow();
 }
 
 function bindWorkbenchEvents() {
@@ -2595,27 +2412,21 @@ function bindWorkbenchEvents() {
   if (reactManaged) bindReactWorkbenchCommands();
 
   if (!reactManaged) {
-    els.tumorKind.onchange = () => { updateFormVisibility(); runAgent(); };
+    els.tumorKind.onchange = () => { updateFormVisibility(); runWorkflow(); };
     els.diameter.oninput = () => { els.diameterVal.textContent = els.diameter.value; updateTumorRing(); };
-    els.diameter.onchange = runAgent;
+    els.diameter.onchange = runWorkflow;
     els.depth.oninput = () => { els.depthVal.textContent = els.depth.value; };
-    els.depth.onchange = runAgent;
+    els.depth.onchange = runWorkflow;
     els.margin.oninput = () => { els.marginVal.textContent = els.margin.value; updateTumorRing(); };
-    els.margin.onchange = runAgent;
+    els.margin.onchange = runWorkflow;
     els.ellipseRatio.oninput = () => { els.ellipseRatioVal.textContent = `${els.ellipseRatio.value}%`; updateTumorRing(); };
-    els.ellipseRatio.onchange = runAgent;
-    els.boundaryMode.onchange = () => { S.boundaryActive = false; updateFormVisibility(); runAgent(); };
-    els.run.onclick = runAgent;
+    els.ellipseRatio.onchange = runWorkflow;
+    els.boundaryMode.onchange = () => { S.boundaryActive = false; updateFormVisibility(); runWorkflow(); };
+    els.run.onclick = runWorkflow;
     els.startBoundary.onclick = toggleBoundaryDrawing;
     els.clearBoundary.onclick = clearBoundaryPoints;
     els.exportTumor.onclick = exportTumorJson;
     els.importTumor.onclick = () => els.tumorImportFile.click();
-  }
-  if (!reactManaged) {
-    els.testProvider.onclick = testProviderEndpoint;
-    els.providerBaseUrl.onchange = () => { setProviderTestState("Provider Base URL 已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
-    els.providerModel.onchange = () => { setProviderTestState("Provider 模型已修改，尚未重新测试连通性。"); saveProviderPrefs(); };
-    els.providerTimeout.oninput = () => { els.providerTimeoutVal.textContent = els.providerTimeout.value; saveProviderPrefs(); };
   }
   if (!reactManaged) {
     els.importSecondaryCue.onclick = () => els.secondaryCueImportFile.click();
@@ -2675,7 +2486,6 @@ function renderLoop() {
 function bindReactWorkbenchCommands() {
   S.reactCommandCleanup = bindWindowControllerEvents([
     [INCISION_TUMOR_REACT_COMMAND_EVENT, handleReactTumorCommand],
-    [INCISION_PROVIDER_REACT_STATE_EVENT, () => publishIncisionState("provider_react_state")],
     [INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT, handleReactSecondaryCueCommand],
     [INCISION_EDIT_REACT_COMMAND_EVENT, handleReactEditCommand],
     [INCISION_REVIEW_REACT_COMMAND_EVENT, handleReactReviewCommand],
@@ -2683,7 +2493,7 @@ function bindReactWorkbenchCommands() {
   ]);
 }
 
-export function disposeIncisionAgentWorkbench() {
+export function disposeIncisionWorkbench() {
   S.mounted = false;
   if (S.frameId) cancelAnimationFrame(S.frameId);
   S.resizeObserver?.disconnect?.();
@@ -2694,8 +2504,8 @@ export function disposeIncisionAgentWorkbench() {
   S.head?.dispose?.();
 }
 
-export function mountIncisionAgentWorkbench(root: ParentNode | Document = document) {
-  disposeIncisionAgentWorkbench();
+export function mountIncisionWorkbench(root: ParentNode | Document = document) {
+  disposeIncisionWorkbench();
   els = collectElements(root);
   S = createRuntimeState();
   S.mounted = true;
@@ -2709,5 +2519,5 @@ export function mountIncisionAgentWorkbench(root: ParentNode | Document = docume
     publishIncisionState("asset_load_failed");
     console.error(err);
   });
-  return disposeIncisionAgentWorkbench;
+  return disposeIncisionWorkbench;
 }

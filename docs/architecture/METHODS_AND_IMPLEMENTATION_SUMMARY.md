@@ -599,7 +599,7 @@ v2 = p - a
 
 ## 15. 手术模拟原型
 
-仓库包含 `/app/surgery` React 路由、`web/src/routes/SurgeryR3FScene.tsx`、`web/src/services/softBody.ts`、`web/src/services/rstlField.ts`，用于演示沿 RSTL 梭形切除后的闭合新增张力。该部分是 demo 级软体模拟，不是临床级有限元模型，也不和切口 Agent 的候选生成混用；`web/surgery.html` 仅保留兼容跳转。
+仓库包含 `/app/surgery` React 路由、`web/src/routes/SurgeryR3FScene.tsx`、`web/src/services/softBody.ts`、`web/src/services/rstlField.ts`，用于演示沿 RSTL 梭形切除后的闭合新增张力。该部分是 demo 级软体模拟，不是临床级有限元模型，也不和本地确定性切口 workflow 的候选生成混用；`web/surgery.html` 仅保留兼容跳转。
 
 ### 15.1 RSTL 方向场采样
 
@@ -844,7 +844,7 @@ axis_coverage_deficit_mm = max(0, axis_coverage_required_mm - length_mm)
 | 肿物模型 | `web/src/services/incisionCandidateTools.ts`, `web/src/services/tumorInput.ts` | 表达皮下/皮表肿物约束 |
 | 切口生成 | `web/src/services/incisionCandidateTools.ts` | 线性和梭形候选生成 |
 | guardrails | `web/src/services/incisionCandidateTools.ts` | 敏感结构风险提示 |
-| 审阅 UI | `web/src/services/incisionAgentRuntime.ts`, `web/src/components/*Review*.tsx` | 医生编辑、覆盖、确认和导出 |
+| 审阅 UI | `web/src/services/incisionRuntime.ts`, `web/src/components/*Review*.tsx` | 医生编辑、覆盖、确认和导出 |
 | 验证指标 | `docs/quality/VALIDATION.md` | 角度误差、稳定性、医生接受率等 |
 
 ## 22. 已实现功能清单

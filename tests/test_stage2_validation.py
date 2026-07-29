@@ -55,7 +55,7 @@ def _record(
         },
         "secondary_cues": secondary_cues or {"present": False},
         "review_gate": {"approval_ready": status == "approved_for_discussion", "live_overlay_ready": False},
-        "provider_config": {"api_key_present": True, "api_key": "[redacted]"},
+        "credentials": {"token_present": True, "token": "[redacted]"},
         "privacy_audit": {"raw_image_sent": False, "raw_video_sent": False},
     }
     if overlay_stability is not None:
@@ -332,7 +332,6 @@ def _export_payload() -> dict:
             "confidence_label": "low_confidence_cv_cue_requires_manual_confirmation",
             "manual_confirmed": True,
             "used_for_geometry": False,
-            "used_for_agent_prompt": False,
             "lesion": {"iou": 0.91, "precision": 0.94, "recall": 0.90},
             "wrinkle": {"precision": 0.78, "recall": 0.76},
         },
@@ -571,11 +570,10 @@ def test_stage2_validation_summary_aggregates_review_export():
     assert summary["failure_mode_counts"]["tumor_boundary_input_quality"] == 1
     assert summary["failure_mode_counts"]["review_rejected"] == 1
     assert summary["privacy_audit"]["raw_media_sent_count"] == 0
-    assert summary["privacy_audit"]["provider_secret_leak_count"] == 0
+    assert summary["privacy_audit"]["secret_leak_count"] == 0
     assert summary["secondary_cues"]["present_count"] == 1
     assert summary["secondary_cues"]["manual_confirmation_rate"] == 1.0
     assert summary["secondary_cues"]["used_for_geometry_count"] == 0
-    assert summary["secondary_cues"]["used_for_agent_prompt_count"] == 0
     assert summary["secondary_cues"]["source_counts"] == {"synthetic": 1}
     assert summary["secondary_cues"]["metrics"]["lesion_iou"]["mean"] == 0.91
     assert summary["secondary_cues"]["metrics"]["wrinkle_recall"]["mean"] == 0.76
@@ -587,7 +585,6 @@ def test_stage2_validation_summary_aggregates_review_export():
         ("incision_overlay_landmark_smoothing", "enabled_rate", "", 1.0),
         ("incision_overlay_replay_qa", "pass_rate", "", 0.5),
         ("privacy_audit", "raw_media_sent_count", "", 0),
-        ("secondary_cues", "used_for_agent_prompt_count", "", 0),
     } <= {
         (row["section"], row["metric"], row["submetric"], row["value"])
         for row in csv_rows

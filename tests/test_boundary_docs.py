@@ -8,7 +8,7 @@ def test_product_boundary_docs_keep_stage2_scope_clear():
     text = (ROOT / "docs" / "clinical" / "PRODUCT_BOUNDARIES.md").read_text()
     assert "肌肉骨骼实时孪生" in text
     assert "不属于当前阶段目标" in text
-    assert "#64 Stage 2 agentic 切口规划" in text
+    assert "本地确定性候选可视化 + 医生复核" in text
     readme = (ROOT / "README.md").read_text()
     assert "PRODUCT_BOUNDARIES.md" in readme
 

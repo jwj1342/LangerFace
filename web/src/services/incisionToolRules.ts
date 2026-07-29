@@ -1,5 +1,5 @@
 export const DEFAULT_RULES = {
-  version: "0.2-agentic-incision",
+  version: "0.3-deterministic-incision-workflow",
   linear_subcutaneous: {
     length_multiplier: 1.25,
     min_length_mm: 8,
@@ -82,7 +82,7 @@ export const TOOL_SCHEMAS = [
   { name: "save_review_record", input: ["candidate", "tumor", "trace", "privacy_audit", "reviewer", "review_status", "review_notes"], output: ["review_record_json", "report_markdown", "screenshot_png", "audit_events"] },
 ];
 
-export const AGENT_TRACE_GATE_REQUIRED = [
+export const WORKFLOW_TRACE_GATE_REQUIRED = [
   { key: "tumor_input_quality", label: "肿物输入质量", actions: ["summarize_tumor_input_quality"] },
   { key: "face_region", label: "面部分区", actions: ["classify_region"] },
   { key: "rstl_direction", label: "RSTL 查询", actions: ["query_rstl_direction"] },
@@ -92,7 +92,7 @@ export const AGENT_TRACE_GATE_REQUIRED = [
   { key: "face_preview", label: "面部预览", actions: ["preview_incision_on_face"] },
 ];
 
-export const AGENT_REACT_PLAN_STEP_DEFINITIONS = [
+export const WORKFLOW_PLAN_STEP_DEFINITIONS = [
   {
     id: "inspect_tumor_input",
     label: "检查肿物输入",

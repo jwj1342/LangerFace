@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
-import { AgentCard, CardHeader } from "./ui/card";
+import { WorkbenchCard, CardHeader } from "./ui/card";
 import { Hint } from "./ui/hint";
 import { CandidateList, CandidateRow, CandidateRowMeta, CandidateRowStatus, CandidateRowTop } from "./ui/library-list";
 import { useIncisionControllerCommands } from "../hooks/useControllerCommands";
@@ -31,7 +31,7 @@ export function CandidateLibraryPanel() {
   };
 
   return (
-    <AgentCard>
+    <WorkbenchCard>
       <CardHeader><span>候选库</span><span id="savedCount">{saved.length}</span></CardHeader>
       <Button
         variant="workbenchPrimary"
@@ -75,6 +75,6 @@ export function CandidateLibraryPanel() {
           </CandidateRow>
         ))}
       </CandidateList>
-    </AgentCard>
+    </WorkbenchCard>
   );
 }

@@ -19,7 +19,7 @@
   - 加载并缓存 FLAME basis。
   - 生成 neutral 顶点和 faces。
   - 把 MediaPipe RSTL 草案投到 FLAME neutral 表面，生成仅用于研究预览的 `points3d` atlas。
-- `incisionAgentRuntime.ts` 负责工作台编排：
+- `incisionRuntime.ts` 负责工作台编排：
   - 默认优先 `flame-2023`。
   - 失败时回退 `mediapipe-468`。
   - 发布 React snapshot 中的 `headAsset` 状态。
@@ -43,7 +43,7 @@
 ## 相关 issue
 
 - #61：FLAME 3D 配准 / 标注主线，仍负责标准 FLAME 头标注、个体拟合和张力线随形变迁移。
-- #64：切口 Agentic 设计主 epic，本 PR 只补齐工作台头模资产和 topology gate，不实现完整多轮 ReAct。
+- 切口 workflow 保留固定步骤的本地确定性候选生成；本轨只补齐工作台头模资产和 topology gate。
 - #13：RSTL 局部方向服务。当前 FLAME 方向来自预览 `points3d`，后续应接入正式 `flame-2023` 方向服务。
 - #19：照片、视频与 AR 实时叠加。FLAME 候选暂不直接进入 MediaPipe live overlay。
 - #86：Borges RSTL 3DMM 拓扑先验已经关闭，但其临床校验仍受 #2 约束。

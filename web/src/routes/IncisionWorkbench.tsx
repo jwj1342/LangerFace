@@ -6,7 +6,6 @@ import { EditControlsPanel } from "../components/EditControlsPanel";
 import { IncisionStatePanel } from "../components/IncisionStatePanel";
 import { IncisionStagePanel } from "../components/IncisionStagePanel";
 import { PrivacyAuditPanel } from "../components/PrivacyAuditPanel";
-import { ProviderConfigPanel } from "../components/ProviderConfigPanel";
 import { ReviewControlsPanel } from "../components/ReviewControlsPanel";
 import { SecondaryCuePanel } from "../components/SecondaryCuePanel";
 import { TumorInputPanel } from "../components/TumorInputPanel";
@@ -31,11 +30,6 @@ export function IncisionWorkbench() {
       <TumorInputPanel />
 
       <SecondaryCuePanel />
-
-      <details className="clinical-developer-disclosure">
-        <summary>开发者配置</summary>
-        <ProviderConfigPanel />
-      </details>
 
       <CandidateResultPanel />
 

@@ -33,7 +33,7 @@ export function IncisionStatePanel() {
         <KeyValueItem label="模型版本" value={formatModelVersion(snapshot)} />
         <KeyValueItem label="肿物" value={snapshot ? `${snapshot.tumor.kind} · ${snapshot.tumor.diameterMm ?? "—"} mm` : "—"} />
         <KeyValueItem label="候选" value={candidate ? `${candidate.type ?? "—"} · ${candidate.lengthMm?.toFixed(1) ?? "—"} mm` : "—"} />
-        <KeyValueItem label="AI 服务" value={snapshot?.provider.stateLabel || "待运行"} />
+        <KeyValueItem label="执行模式" value="本地确定性 workflow" />
         <KeyValueItem label="审阅" value={snapshot?.review.status || "待医生确认"} />
       </KeyValueGrid>
       {snapshot?.headAsset.warnings.length ? (
