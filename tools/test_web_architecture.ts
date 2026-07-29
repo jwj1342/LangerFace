@@ -81,6 +81,44 @@ if (staleAllowlistEntries.length) {
 }
 console.log(`ok: 兼容运行时豁免为冻结清单（${LEGACY_RUNTIME_ALLOWLIST.size} 个文件，owner #95）`);
 
+// 兼容运行时被豁免于 TypeScript 检查，所以它的 import 图此前只由打包器兜底：把
+// web/compat/shared/ 的共享模块 import 路径写错，全部单测仍会通过，只有 npm run
+// build 才炸。这里补上相对 import 解析，让路径错误在测试层就暴露。
+let legacyImportFail = 0;
+for (const rel of LEGACY_RUNTIME_ALLOWLIST) {
+  const file = path.join(root, rel);
+  const code = fs.readFileSync(file, "utf8");
+  const importRe = /(?:from\s+["']|import\s*\(\s*["'])(\.[^"']+)["']/g;
+  for (const match of code.matchAll(importRe)) {
+    const specifier = match[1];
+    if (!specifier.endsWith(".js")) continue;   // ?url 资产 import 由打包器解析
+    const target = path.resolve(path.dirname(file), specifier);
+    if (!fs.existsSync(target)) {
+      console.error(`FAIL legacy runtime import does not resolve: ${rel} -> ${specifier}`);
+      legacyImportFail++;
+    }
+  }
+}
+if (legacyImportFail) process.exit(1);
+console.log("ok: 兼容运行时的相对 import 全部可解析");
+
+// #110：静态前端不得再出现 serverless 函数。web/api/fit.py 曾是线上无鉴权、
+// CORS *、无请求体上限的公开算力端点，删除后需要围栏，避免它无声回流。
+const forbiddenBackendPaths = ["api", "requirements.txt"];
+const resurrected = forbiddenBackendPaths.filter((rel) => fs.existsSync(path.join(root, rel)));
+if (resurrected.length) {
+  console.error("FAIL the static frontend must not ship a serverless backend again:");
+  for (const rel of resurrected) console.error(`  - web/${rel}`);
+  console.error("  见 docs/FLAME_3D_TRACK.md「生产侧零后端、零 GPU」；离线拟合走 tools/fit_flame_to_landmarks.py。");
+  process.exit(1);
+}
+const vercelConfig = JSON.parse(fs.readFileSync(path.join(root, "vercel.json"), "utf8"));
+if (vercelConfig.functions) {
+  console.error("FAIL web/vercel.json declares a functions block; the frontend must stay purely static.");
+  process.exit(1);
+}
+console.log("ok: 前端保持零 serverless 函数（无 web/api、无 requirements.txt、vercel.json 无 functions）");
+
 const files = walk(srcRoot, (file) => file.endsWith(".ts") || file.endsWith(".tsx"))
   .concat([path.join(root, "vite.config.ts")]);
 
