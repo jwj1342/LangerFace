@@ -652,7 +652,9 @@ export class YoloWrinkleOnnx {
     this.maskThreshold = options.maskThreshold ?? 0.5;
     this.executionProviders = options.executionProviders || ["wasm"];
     this.wasmPaths = options.wasmPaths;
-    this.verifySha256 = options.verifySha256 === true;
+    // 生产默认校验内容哈希，而不是只比总字节数：分片拼接错位或资产被替换时
+    // 必须直接失败。仅测试可显式传 false 跳过。
+    this.verifySha256 = options.verifySha256 !== false;
     this.fetchImpl = options.fetchImpl;
     this.runtime = options.runtime || null;
     this.session = options.session || null;
