@@ -77,13 +77,6 @@ interface MeshTopologyPayload {
   vertexCount?: number;
 }
 
-interface CloudFitResponse {
-  verts?: Vec3[];
-  faces?: Triangle[];
-  error?: string;
-  residual?: number | null;
-  nLandmarks?: number;
-}
 
 type AnnotationModelInstance = InstanceType<typeof AnnotationModel>;
 type Annotator3DInstance = InstanceType<typeof Annotator3D>;

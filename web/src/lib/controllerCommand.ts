@@ -43,7 +43,6 @@ export const ANNOTATE_MESH_COMMANDS = [
   "load_canonical",
   "load_flame",
   "load_fitted_flame",
-  "cloud_fit_flame",
 ] as const;
 export const ANNOTATE_DRAW_COMMANDS = ["system_changed", "start_line", "undo_last", "save_current_line"] as const;
 export const ANNOTATE_LIBRARY_COMMANDS = [

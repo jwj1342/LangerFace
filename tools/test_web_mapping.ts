@@ -38,8 +38,8 @@ for (const fr of expected.frames) {
   }
   for (let li = 0; li < mapped.length; li++) {
     const js = mapped[li], py = fr.lines[li];
-    const current = mappedCompat[li], personalized = mappedCompat[li];
-    if (current.pts.length !== js.pts.length || personalized.pts.length !== js.pts.length) {
+    const compat = mappedCompat[li];
+    if (compat.pts.length !== js.pts.length) {
       console.error(`FAIL frame ${fr.idx}, line ${li}: mapped point count mismatch`);
       process.exit(1);
     }
@@ -50,10 +50,8 @@ for (const fr of expected.frames) {
       maxPosErr = Math.max(maxPosErr, dx, dy);
       maxRuntimeParityErr = Math.max(
         maxRuntimeParityErr,
-        Math.abs(js.pts[i][0] - current.pts[i][0]),
-        Math.abs(js.pts[i][1] - current.pts[i][1]),
-        Math.abs(js.pts[i][0] - personalized.pts[i][0]),
-        Math.abs(js.pts[i][1] - personalized.pts[i][1]),
+        Math.abs(js.pts[i][0] - compat.pts[i][0]),
+        Math.abs(js.pts[i][1] - compat.pts[i][1]),
       );
       const tri = js.tris[i];
       const jsVis = (vis[tri] && !innerMouth.has(tri)) ? 1 : 0;
