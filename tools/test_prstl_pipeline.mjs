@@ -878,5 +878,26 @@ const source = readFileSync(new URL("../web/compat/personalized/personalized.js"
   ok(source.includes('mode: "single_capture_quality_gate"'), "单轮采集使用质量门控而非重复轮次验证");
 }
 
+// #110 review（RongNianXin）：动作专用门控的 minPeakFrames 曾写 3，而 aggregateCycleEvidence()
+// 用 pickBestFrames(..., 4) 硬性选 4 帧且不足即抛错，门控值低于 4 永不生效。锁住这个一致性，
+// 避免两处再次分叉。
+{
+  const runtimeSrc = readFileSync(new URL("../web/compat/personalized/personalized.js", import.meta.url), "utf8");
+  const selected = runtimeSrc.match(/pickBestFrames\(\s*sess\.neutralGrayHi,\s*frames,\s*selectionMask,\s*(\d+)/);
+  ok(Boolean(selected), "aggregateCycleEvidence 必须经 pickBestFrames 选帧");
+  const aggregationFrames = Number(selected?.[1] ?? 0);
+  ok(
+    new RegExp(`if \\(best\\.length < ${aggregationFrames}\\) throw`).test(runtimeSrc),
+    `聚合阶段必须拒绝少于自身选帧数（${aggregationFrames}）的轮次`,
+  );
+  const gateValues = [...runtimeSrc.matchAll(/minPeakFrames:\s*(\d+)/g)].map((m) => Number(m[1]));
+  ok(gateValues.length > 0, "应能找到门控的 minPeakFrames 配置");
+  ok(
+    gateValues.every((v) => v === aggregationFrames),
+    `每个 minPeakFrames 必须等于聚合选帧数 ${aggregationFrames}（实际 ${gateValues.join("/")}），否则是永不生效的死配置`,
+  );
+  ok(true, `门控 minPeakFrames 与聚合选帧数一致（${aggregationFrames}）`);
+}
+
 console.log(fail === 0 ? "\n✅ prstl_pipeline 测试通过" : `\n❌ ${fail} 项失败`);
 process.exit(fail ? 1 : 0);

@@ -78,9 +78,14 @@ P = u·V0 + v·V1 + w·V2
 
 ## 4. 3D 路线（Beta，**网页入口已关闭**）
 
-> PR #108 关闭了 3D / FLAME 的全部用户可见入口；本节描述的 runtime 代码仍保留在
-> `web/src/services/mode3d.ts` / `projection3d.ts` / `three3d.ts`，但没有界面可以进入。
+> PR #108 关闭的是**本节描述的这条实时 3D 路线**的用户入口：实时页的「3D 面部重建」下拉项、
+> FLAME 实时孪生、以及三维资产预览页（`/three-preview`，已在 PR #110 删除）。这些 runtime 代码仍保留在
+> `web/src/services/mode3d.ts` / `projection3d.ts` / `three3d.ts`，但没有界面能进入。
 > 去留取决于 #61 与 #40，见 [FLAME_3D_TRACK.md](FLAME_3D_TRACK.md)。
+>
+> **仍保留且可从界面进入的 3D 功能**：标准图谱生产 / 复核用的 3D 标注工具 `/annotate`
+> （路径：首页「图谱库管理」→ `/settings/atlas` → 打开图谱标注工具；`/app/annotate` 为兼容地址），
+> 见 §12；以及 `/surgery` 的 R3F 闭合演示。两者都不属于本节的实时重建路线。
 
 ### 4.1 重建个性化 3D 人头
 离线：[`tools/reconstruct_3d.py`](../tools/reconstruct_3d.py)；在线：`web/src/services/mode3d.ts: startScan/finishScan`。
@@ -196,7 +201,8 @@ P = u·V0 + v·V1 + w·V2
    → 需要 Langer 对照时再跑 `build_field_atlas.py`，并注意它会覆盖 RSTL 图谱 → `export_web_assets.py`。
 3.（可选）`reconstruct_3d.py` 生成 3D 示例。
 4. `pytest` + `cd web && npm test` 全绿；`cd web && npm run build` 可生产构建。
-5. `cd web && npm run dev` → 浏览器打开 Vite 地址，验证 2D 实时（3D / FLAME 的用户入口已由 #108 关闭，见 §4）。
+5. `cd web && npm run dev` → 浏览器打开 Vite 地址，验证 2D 实时；实时 3D 重建 / FLAME 孪生入口已由 #108 关闭，
+   但 `/annotate` 的 3D 标注工具与 `/surgery` 闭合演示仍可从界面进入（见 §4 与 §12）。
 6. 临床校验图谱（`annotate_atlas.py`）后置 `validated:true` 方可作正式参考。
 
 ## 11. 前端鲁棒性约束
