@@ -1,7 +1,6 @@
 import {
   Activity,
   ArrowLeft,
-  Boxes,
   ClipboardCheck,
   Database,
   FileCode2,
@@ -50,8 +49,8 @@ const SETTINGS_COPY = {
     label: "开发者诊断",
     eyebrow: "系统设置",
     status: "诊断维护",
-    title: "AI 摘要服务、三维资产和运行时诊断",
-    summary: "这里集中放置服务连接测试、模型资产预览和独立研究工具入口。",
+    title: "AI 摘要服务和运行时诊断",
+    summary: "这里集中放置服务连接测试、后台任务状态和独立研究工具入口。",
   },
 } satisfies Record<SettingsRouteProps["section"], {
   eyebrow: string;
@@ -206,16 +205,6 @@ function DeveloperSettings() {
         </div>
 
         <Card>
-          <CardHeader><span>三维资产诊断</span><Boxes size={16} /></CardHeader>
-          <CardContent>
-            <Hint>用于确认标准三维面部模型、图谱资产和浏览器渲染链路是否可用。</Hint>
-            <Button asChild variant="workbench">
-              <Link to="/three-preview"><Boxes size={16} />打开三维模型预览</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
           <CardHeader><span>兼容工作台</span><Activity size={16} /></CardHeader>
           <CardContent className="settings-action-list">
             <ReactShellNavLink to="/live"><span>实时张力线旧入口</span><Activity size={16} /></ReactShellNavLink>
@@ -232,7 +221,7 @@ function DeveloperSettings() {
           <CardHeader><span>诊断边界</span><ShieldCheck size={16} /></CardHeader>
           <CardContent className="settings-boundary-list">
             <p><b>AI 服务</b><span>只测试浏览器到 OpenAI-compatible / vLLM 服务的连接，不参与确定性切口几何。</span></p>
-            <p><b>资产预览</b><span>用于排查模型加载、图谱懒加载和渲染兼容性。</span></p>
+            <p><b>运行时诊断</b><span>用于排查服务连接、后台任务状态和浏览器兼容性。</span></p>
             <p><b>独立入口</b><span>工具不共享病例状态，也不建立历史档案。</span></p>
           </CardContent>
         </Card>

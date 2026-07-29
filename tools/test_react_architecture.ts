@@ -578,9 +578,9 @@ assert.deepEqual(
 );
 assert.ok(vite.includes("@tailwindcss/vite"), "Vite config loads the Tailwind plugin");
 assert.ok(vite.includes('base: "/"'), "Vite emits SPA shell JS/CSS from root /assets for /app deep links");
-assert.ok(vite.includes('app: resolve(import.meta.dirname, "app/index.html")'), "Vite builds the SPA app entry");
+assert.ok(vite.includes('app: resolve(import.meta.dirname, "index.html")'), "Vite builds the root React app entry");
 assert.ok(vite.includes("shouldServeSpaIndex"), "Vite config owns a local SPA history fallback helper for /app deep links");
-assert.ok(vite.includes('"app-spa-history-fallback"'), "Vite dev and preview serve /app/* deep links from app/index.html");
+assert.ok(vite.includes('"app-spa-history-fallback"'), "Vite dev and preview serve React deep links from index.html");
 assert.ok(vite.includes('pathname.startsWith("/app/assets/")'), "Vite SPA fallback keeps /app/assets/* from swallowing asset requests");
 assert.ok(vite.includes('"copy-runtime-assets"'), "Vite copies runtime assets into dist/assets");
 assert.ok(vite.includes('"copy-compat-entrypoints"'), "Vite copies lightweight compatibility pages after building the SPA");
@@ -618,7 +618,8 @@ assert.ok(!vercelIgnoreBuild.includes("previewDeployPattern"), "Vercel ignore sc
 assert.ok(vercelIgnoreBuild.includes('["diff", "--quiet", ref, "HEAD", "--", "."]'), "Vercel ignore script only builds when the web root changed");
 assert.ok(vercelIgnoreBuild.includes('["diff-tree", "--quiet", "--no-commit-id", "-r", "HEAD", "--", "."]'), "Vercel ignore script has a shallow-clone fallback for web root changes");
 assert.ok(vercel.includes('"source": "/app/(.*)"'), "Vercel rewrites nested SPA routes");
-assert.ok(vercel.includes('"destination": "/app/index.html"'), "Vercel routes SPA paths back to app/index.html");
+assert.ok(vercel.includes('"source": "/"') && vercel.includes('"destination": "/index.html"'), "Vercel routes the root path to the React entry");
+assert.ok(vercel.includes('"destination": "/index.html"'), "Vercel routes SPA paths back to index.html");
 assert.ok(vercel.includes('"source": "/assets/(.*)"'), "Vercel declares root runtime asset handling");
 assert.ok(assetLoaderService.includes('return normalizeAssetBaseUrl("/assets/")'), "asset loader defaults to the root /assets/ base");
 assert.ok(assetLoaderService.includes("SPA 路由回退"), "asset loader reports HTML SPA fallback responses as asset path errors");
@@ -636,7 +637,10 @@ assert.ok(app.includes('path="/annotate"'), "React Router exposes the 3D annotat
 assert.ok(app.includes('path="/incision"'), "React Router exposes the incision workbench route");
 assert.ok(app.includes('path="/live"'), "React Router exposes the live workbench route");
 assert.ok(app.includes('path="/surgery"'), "React Router exposes the surgery closure route");
-assert.ok(app.includes('path="/three-preview"'), "React Router exposes the R3F preview route");
+assert.ok(!app.includes('path="/three-preview"'), "React Router should not expose the public R3F preview route");
+assert.ok(!app.includes('path="/app/three-preview"'), "React Router should not preserve the legacy R3F preview route");
+assert.ok(app.includes('path="/app/live"'), "React Router preserves legacy /app live links");
+assert.ok(app.includes('path="/app/incision"'), "React Router preserves legacy /app incision links");
 assert.ok(app.includes('path="/settings/atlas"'), "React Router exposes atlas settings route");
 assert.ok(app.includes('path="/settings/developer"'), "React Router exposes developer settings route");
 assert.ok(app.includes("SettingsRoute"), "React Router exposes a dedicated settings route");
@@ -702,14 +706,14 @@ assert.ok(app.includes("ReactPage"), "React route fallback uses the shared React
 assert.ok(dashboardRoute.includes("ReactShellNavLink"), "React dashboard uses shared shell nav links");
 assert.ok(!dashboardRoute.includes("ReactShellExternalLink"), "React dashboard should not send users back to legacy HTML entrypoints");
 assert.ok(!dashboardRoute.includes("/index.html"), "React dashboard should not link to the legacy live HTML entrypoint");
-for (const route of ["/live", "/incision", "/three-preview"]) {
+for (const route of ["/live", "/incision"]) {
   assert.ok(dashboardRoute.includes(`to: "${route}"`), `React dashboard exposes stateless tool route ${route}`);
 }
+assert.ok(!dashboardRoute.includes('to: "/three-preview"'), "React dashboard should not expose the public R3F preview card");
 assert.ok(dashboardRoute.includes('href: "/personalized"'), "React dashboard exposes the personalized browser tool");
 assert.ok(!dashboardRoute.includes("/cases"), "React dashboard does not expose a case lobby");
 assert.ok(dashboardRoute.includes("不创建、恢复或保存病例"), "React dashboard states the no-case-storage boundary");
 for (const [name, html, expected] of [
-  ["index.html", legacyLiveHtml, ["/app/"]],
   ["annotate.html", legacyAnnotateHtml, ["/app/annotate"]],
   ["incision_agent.html", legacyIncisionHtml, ["/app/incision"]],
   ["surgery.html", legacySurgeryHtml, ["/app/surgery"]],
@@ -1737,7 +1741,7 @@ assert.ok(settingsRoute.includes("useReactRouteLifecycle"), "settings route publ
 assert.ok(settingsRoute.includes('workspace: "settings"'), "settings route uses the settings workspace");
 assert.ok(settingsRoute.includes("ProviderConfigPanel"), "developer settings owns the AI service configuration entry");
 assert.ok(settingsRoute.includes('to="/annotate"'), "settings route keeps the annotation tool as a controlled atlas entry");
-assert.ok(settingsRoute.includes('to="/three-preview"'), "settings route keeps the R3F preview as a controlled developer entry");
+assert.ok(!settingsRoute.includes('to="/three-preview"'), "settings route should not expose the public R3F preview developer entry");
 assert.ok(settingsRoute.includes('to="/surgery"'), "settings route keeps the standalone closure demo as a controlled developer entry");
 assert.ok(threePreviewSidebar.includes("WorkbenchBrand"), "R3F preview sidebar uses the shared workbench brand");
 assert.ok(threePreviewSidebar.includes("Card"), "R3F preview sidebar uses the shared shadcn-style card component");

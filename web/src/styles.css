@@ -1436,7 +1436,7 @@
 }
 
 /* Critical, unlayered overrides: legacy style.css is unlayered and would
-   otherwise win over the clinical case workflow theme defined in @layer. */
+   otherwise win over the clinical workbench theme defined in @layer. */
 .dark-workbench-page {
   --green: var(--clinical-accent);
   --green-d: #a6c8ff;

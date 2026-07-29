@@ -11,7 +11,6 @@ const IncisionRoute = lazy(() => import("./routes/IncisionRoute").then((module) 
 const LiveRoute = lazy(() => import("./routes/LiveRoute").then((module) => ({ default: module.LiveRoute })));
 const SettingsRoute = lazy(() => import("./routes/SettingsRoute").then((module) => ({ default: module.SettingsRoute })));
 const SurgeryRoute = lazy(() => import("./routes/SurgeryRoute").then((module) => ({ default: module.SurgeryRoute })));
-const ThreePreviewRoute = lazy(() => import("./routes/ThreePreviewRoute").then((module) => ({ default: module.ThreePreviewRoute })));
 
 function RouteFallback() {
   return (
@@ -29,13 +28,19 @@ export function App() {
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/" element={<DashboardRoute />} />
+        <Route path="/app" element={<DashboardRoute />} />
         <Route path="/settings/atlas" element={<SettingsRoute section="atlas" />} />
         <Route path="/settings/developer" element={<SettingsRoute section="developer" />} />
         <Route path="/annotate" element={<AnnotateRoute />} />
         <Route path="/incision" element={<IncisionRoute />} />
         <Route path="/live" element={<LiveRoute />} />
         <Route path="/surgery" element={<SurgeryRoute />} />
-        <Route path="/three-preview" element={<ThreePreviewRoute />} />
+        <Route path="/app/settings/atlas" element={<SettingsRoute section="atlas" />} />
+        <Route path="/app/settings/developer" element={<SettingsRoute section="developer" />} />
+        <Route path="/app/annotate" element={<AnnotateRoute />} />
+        <Route path="/app/incision" element={<IncisionRoute />} />
+        <Route path="/app/live" element={<LiveRoute />} />
+        <Route path="/app/surgery" element={<SurgeryRoute />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

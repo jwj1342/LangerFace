@@ -62,12 +62,12 @@ includesAll(app, [
   'path="/incision"',
   'path="/annotate"',
   'path="/surgery"',
-  'path="/three-preview"',
 ], "router");
+assert.ok(!app.includes('path="/three-preview"'), "router should not expose the public 3D preview route");
+assert.ok(!app.includes('path="/app/three-preview"'), "router should not preserve the legacy 3D preview route");
 
 includesAll(settingsRoute, [
   'to="/annotate"',
-  'to="/three-preview"',
   'to="/surgery"',
   "ProviderConfigPanel",
   "WorkerStatusPanel",
@@ -75,6 +75,7 @@ includesAll(settingsRoute, [
   "不提供",
   "不保存患者或病例信息",
 ], "controlled settings entry points");
+assert.ok(!settingsRoute.includes('to="/three-preview"'), "developer settings should not expose the public 3D preview entry");
 
 includesAll(liveStage, [
   'id="video"',
@@ -113,7 +114,8 @@ includesAll(liveRouteControls, [
   'commands.route("toggle_twin_head"',
   'id: "twinTextureToggle"',
   'commands.route("toggle_twin_texture"',
-], "live 3D reconstruction controls");
+], "retained live 3D compatibility controls");
+assert.ok(!liveRouteControls.includes('<option value="3d">'), "live mode selector should not expose the 3D reconstruction mode");
 
 includesAll(liveRuntime, [
   "mountLiveWorkbench",
@@ -389,6 +391,7 @@ includesAll(dashboardRoute, [
   "不创建、恢复或保存病例",
   "不维护病例大厅、患者档案、历史记录或云端病例库",
 ], "stateless tool launcher");
+assert.ok(!dashboardRoute.includes('to: "/three-preview"'), "dashboard should not expose the public 3D preview card");
 
 for (const forbidden of [
   "CaseWorkflowRoute",

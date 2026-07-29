@@ -1,5 +1,5 @@
 // Runtime smoke check for compatibility workbenches that must stay functional
-// while the doctor-facing case workflow hides them from the main path.
+// while the main tool launcher hides them from the primary path.
 // Run from web/: npm run visual:compat:parity
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
