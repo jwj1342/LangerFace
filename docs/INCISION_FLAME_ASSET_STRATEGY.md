@@ -31,8 +31,9 @@
 
 ## 验收重点
 
-- 访问 `/app/incision` 后，工作台状态显示 `FLAME neutral 头模 · RSTL 预览`，并显示 `flame-2023` topology。
-- 若 `flame_basis.bin` 缺失或解析失败，页面仍可使用，并显示 `MediaPipe 468 回退`。
+- 访问 `/incision`（`/app/incision` 为兼容地址）后，工作台状态显示 `高精度三维头模 · RSTL 预览`。
+  PR #108 起界面不再出现 FLAME / MediaPipe 品牌词与原始 topology id，`flame-2023` 只出现在审阅导出里。
+- 若 `flame_basis.bin` 缺失或解析失败，页面仍可使用，并显示 `标准三维模型回退 · 高精度头模资产未就绪`。
 - 候选生成、端点编辑、候选保存、JSON/Markdown 导出仍可运行。
 - 基于 FLAME 的候选点击“发送到实时叠加”时应被阻断，并提示需要单独 topology 映射。
 - `cd web && npm run typecheck` 通过。

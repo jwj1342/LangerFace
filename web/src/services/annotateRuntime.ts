@@ -46,7 +46,6 @@ interface AnnotateDomElements {
   loadCanonical: HTMLButtonElement;
   loadFlame: HTMLButtonElement;
   loadFittedFlame: HTMLButtonElement;
-  cloudFit: HTMLButtonElement;
   meshFile: HTMLInputElement;
   slicerFile: HTMLInputElement;
   resampleSpacing: HTMLInputElement;
@@ -78,13 +77,6 @@ interface MeshTopologyPayload {
   vertexCount?: number;
 }
 
-interface CloudFitResponse {
-  verts?: Vec3[];
-  faces?: Triangle[];
-  error?: string;
-  residual?: number | null;
-  nLandmarks?: number;
-}
 
 type AnnotationModelInstance = InstanceType<typeof AnnotationModel>;
 type Annotator3DInstance = InstanceType<typeof Annotator3D>;
@@ -117,7 +109,6 @@ function collectElements(root: ParentNode | Document = document): AnnotateDomEle
     loadCanonical: $<HTMLButtonElement>(root, "btnLoadCanonical"),
     loadFlame: $<HTMLButtonElement>(root, "btnLoadFlame"),
     loadFittedFlame: $<HTMLButtonElement>(root, "btnLoadFittedFlame"),
-    cloudFit: $<HTMLButtonElement>(root, "btnCloudFit"),
     meshFile: $<HTMLInputElement>(root, "meshFile"),
     slicerFile: $<HTMLInputElement>(root, "slicerFile"),
     resampleSpacing: $<HTMLInputElement>(root, "resampleSpacing"),
@@ -251,47 +242,6 @@ function handleReactMeshCommand(event: Event): void {
   if (command === "load_canonical") loadCanonical();
   if (command === "load_flame") loadFlame();
   if (command === "load_fitted_flame") loadFittedFlame();
-  if (command === "cloud_fit_flame") cloudFitFlame();
-}
-
-// 云端拟合演示：把标准脸关键点 POST 到 /api/fit（Vercel Python 云函数）→ 拿回个体 FLAME 网格渲染。
-// 全程云端、无需本地资产，可直接在 PR 预览里用。
-async function cloudFitFlame(): Promise<void> {
-  const session = activeSession;
-  setHint("云端拟合 FLAME 中…（首次冷启动约 1–2 秒）");
-  let observed: Vec3[];
-  try {
-    observed = (await dataSource.getHeadMesh("mediapipe-468")).vertices;
-  } catch (err) {
-    setHint("加载 MediaPipe 参考点失败：" + errorMessage(err));
-    return;
-  }
-  if (!isActiveSession(session)) return;
-  let res: CloudFitResponse;
-  try {
-    const r = await fetch("/api/fit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ landmarks: observed }),
-    });
-    res = await r.json().catch(() => ({} as CloudFitResponse));
-    if (!r.ok || res.error) throw new Error(res.error || `HTTP ${r.status}`);
-  } catch (err) {
-    setHint("云端拟合失败：" + errorMessage(err));
-    return;
-  }
-  if (!isActiveSession(session)) return;
-  model.setTopology({ topologyId: "flame-2023", topologyVersion: "flame-2023-v1" });
-  if (!res.verts || !res.faces) {
-    setHint("云端拟合失败：响应缺少 FLAME 网格。");
-    return;
-  }
-  viewer.setMesh(res.verts, res.faces, { showSurface: true });
-  onCanonical = false;
-  els.drawMode.textContent = "FLAME 个体（云端拟合）";
-  const mm = res.residual != null ? (res.residual * 1000).toFixed(1) : "?";
-  setHint(`云端拟合完成：${res.verts.length} 顶点 · ${res.nLandmarks ?? "?"} 关键点 · 残差 ${mm}mm。`);
-  refresh();
 }
 
 async function fetchJSON<T = unknown>(url: string, label: string): Promise<T> {
@@ -405,7 +355,6 @@ function bindAnnotateEvents(): void {
     els.loadCanonical.addEventListener("click", loadCanonical, { signal });
     els.loadFlame.addEventListener("click", loadFlame, { signal });
     els.loadFittedFlame.addEventListener("click", loadFittedFlame, { signal });
-    els.cloudFit.addEventListener("click", cloudFitFlame, { signal });
   }
   els.meshFile.addEventListener("change", (e) => loadMeshFile(fileFromEvent(e)), { signal });
   els.slicerFile.addEventListener("change", (e) => loadSlicerFile(fileFromEvent(e)), { signal });

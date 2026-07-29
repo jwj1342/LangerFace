@@ -18,7 +18,11 @@ python -m pip install -U pip
 python -m pip install -e ".[all]"
 
 python tools/download_assets.py
-python tools/build_field_atlas.py
+python3 tools/build_field_atlas_standard_v1.py \
+        assets/rstl_standard_reference_v8_1_67.json assets/atlas_rstl.json
+#   ⚠️ 不要裸跑 tools/build_field_atlas.py：它会同时重写 assets/atlas_rstl.json 与
+#      assets/atlas_langer.json，把上面这份正式 v8.1.67 图谱覆盖成 61 条流线的旧首版，
+#      并让 tests/test_rstl_standard_v8_1_67.py 失败。只在需要重造 Langer 对照时才跑它。
 python tools/export_web_assets.py
 
 cd web

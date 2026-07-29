@@ -21,7 +21,6 @@ export function AnnotateMeshSourcePanel() {
       <Button variant="workbenchPrimary" id="btnLoadCanonical" type="button" onClick={() => commands.mesh("load_canonical")}>加载标准脸</Button>
       <Button variant="workbench" visible={showFlame} id="btnLoadFlame" type="button" onClick={() => commands.mesh("load_flame")}>加载头模资产</Button>
       <Button variant="workbench" visible={showFittedFlame} id="btnLoadFittedFlame" type="button" onClick={() => commands.mesh("load_fitted_flame")}>加载个体头模（拟合）</Button>
-      <Button variant="workbenchPrimary" id="btnCloudFit" type="button" onClick={() => commands.mesh("cloud_fit_flame")}>云端拟合头模</Button>
       <Button asChild variant="workbench">
         <label htmlFor="meshFile">上传头模（JSON / OBJ / PLY）</label>
       </Button>

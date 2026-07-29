@@ -1,7 +1,7 @@
 // 2D 渲染：线条叠加、细节放大窗、统计面板。
-import { SOLID, BAND, FACE_OVAL, ZOOM_REGIONS } from "./constants.js";
+import { SOLID, BAND, FACE_OVAL, ZOOM_REGIONS } from "../compat/shared/constants.js";
 import { ctx, els } from "./dom.js";
-import { innerMouthTriangles, mapAtlas, mouthOcclusionPolygon, pointInHandMasks, pointInPolygon, visibleRunsOutsidePolygon, visibleTriangles } from "./geometry.js";
+import { innerMouthTriangles, mapAtlas, mouthOcclusionPolygon, pointInHandMasks, pointInPolygon, visibleRunsOutsidePolygon, visibleTriangles } from "../compat/shared/geometry.js";
 import { modelState, renderState, sourceState } from "./state.js";
 import { lineIndicesForDensity } from "./line_density.js";
 import {
@@ -69,14 +69,12 @@ export function faceBBox(lm) {
 
 export function draw(lm, W, H, masks = []) {
   const atlas = modelState.atlases[renderState.system];
-  const useFlame = renderState.system === "rstl" && modelState.useFlameRstl && modelState.flameRstlOverlay;
-  const flameFrame = useFlame ? modelState.flameRstlOverlay.project(lm, sourceState.jawOpen || 0) : null;
   const vis = renderState.clip
-    ? (flameFrame?.visible || visibleTriangles(lm, modelState.triangles, modelState.noseTris))
+    ? visibleTriangles(lm, modelState.triangles, modelState.noseTris)
     : null;
-  const innerMouth = useFlame ? new Set() : innerMouthTriangles(modelState.triangles);
-  const mouthPolygon = useFlame ? [] : mouthOcclusionPolygon(lm);
-  const mapped = flameFrame?.mapped || mapAtlas(atlas, lm, modelState.triangles);
+  const innerMouth = innerMouthTriangles(modelState.triangles);
+  const mouthPolygon = mouthOcclusionPolygon(lm);
+  const mapped = mapAtlas(atlas, lm, modelState.triangles);
   const faceOval = FACE_OVAL.map((index) => lm[index]).filter(Boolean);
   let foreheadImage = null;
   try {

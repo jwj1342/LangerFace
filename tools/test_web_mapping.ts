@@ -5,8 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { mapAtlas, visibleTriangles, noseTriangles, innerMouthTriangles } from "../web/src/services/geometryAtlas.ts";
 import { OneEuro } from "../web/src/services/geometrySmoothing.ts";
-import { mapAtlas as mapCurrentAtlas } from "../web/current/geometry.js";
-import { mapAtlas as mapPersonalizedAtlas } from "../web/compat/personalized/geometry.js";
+import { mapAtlas as mapCompatAtlas } from "../web/compat/shared/geometry.js";
 
 const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const J = (p) => JSON.parse(fs.readFileSync(path.join(REPO, p), "utf8"));
@@ -27,25 +26,20 @@ let nPts = 0;
 for (const fr of expected.frames) {
   const lm = fr.landmarks; // [[x,y,z]...478]
   const mapped = mapAtlas(atlas, lm, triangles);
-  const mappedCurrent = mapCurrentAtlas(atlas, lm, triangles);
-  const mappedPersonalized = mapPersonalizedAtlas(atlas, lm, triangles);
+  const mappedCompat = mapCompatAtlas(atlas, lm, triangles);
   const vis = visibleTriangles(lm, triangles, noseTris);
 
-  if (
-    mapped.length !== fr.lines.length ||
-    mappedCurrent.length !== mapped.length ||
-    mappedPersonalized.length !== mapped.length
-  ) {
+  if (mapped.length !== fr.lines.length || mappedCompat.length !== mapped.length) {
     console.error(
-      `FAIL frame ${fr.idx}: line counts ts=${mapped.length}, current=${mappedCurrent.length}, ` +
-      `personalized=${mappedPersonalized.length}, python=${fr.lines.length}`,
+      `FAIL frame ${fr.idx}: line counts ts=${mapped.length}, compat=${mappedCompat.length}, ` +
+      `python=${fr.lines.length}`,
     );
     process.exit(1);
   }
   for (let li = 0; li < mapped.length; li++) {
     const js = mapped[li], py = fr.lines[li];
-    const current = mappedCurrent[li], personalized = mappedPersonalized[li];
-    if (current.pts.length !== js.pts.length || personalized.pts.length !== js.pts.length) {
+    const compat = mappedCompat[li];
+    if (compat.pts.length !== js.pts.length) {
       console.error(`FAIL frame ${fr.idx}, line ${li}: mapped point count mismatch`);
       process.exit(1);
     }
@@ -56,10 +50,8 @@ for (const fr of expected.frames) {
       maxPosErr = Math.max(maxPosErr, dx, dy);
       maxRuntimeParityErr = Math.max(
         maxRuntimeParityErr,
-        Math.abs(js.pts[i][0] - current.pts[i][0]),
-        Math.abs(js.pts[i][1] - current.pts[i][1]),
-        Math.abs(js.pts[i][0] - personalized.pts[i][0]),
-        Math.abs(js.pts[i][1] - personalized.pts[i][1]),
+        Math.abs(js.pts[i][0] - compat.pts[i][0]),
+        Math.abs(js.pts[i][1] - compat.pts[i][1]),
       );
       const tri = js.tris[i];
       const jsVis = (vis[tri] && !innerMouth.has(tri)) ? 1 : 0;

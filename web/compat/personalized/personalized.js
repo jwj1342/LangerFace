@@ -18,7 +18,7 @@ import { FaceLandmarker, FilesetResolver }
   from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18";
 import {
   toPixels, OneEuro, mapAtlas,
-} from "./geometry.js";
+} from "../shared/geometry.js";
 import {
   SIZE, TEXTURE_SIZE, ACTION_ORDER, ACTION_LABELS, ACTION_REGION_WEIGHT, THRESHOLDS, QUALITY_THRESHOLDS, REFINE_CONF, TIMED_ACTIONS,
   CANONICAL_REGISTRATION_ANCHORS,
@@ -40,7 +40,7 @@ import {
   validateHessianTemplateWithAction,
 } from "./bottom_up_personalization.js";
 import { smoothProjectedCurveV2 } from "./prstl_personalization_v2.js";
-import { dataSource } from "./data_source.js";
+import { dataSource } from "../shared/data_source.js";
 import { WrinkleYoloOnnx, fuseStrictUnion } from "./yolo_wrinkle_onnx.js";
 import { refineV6 } from "./v6_rstl_refinement.js";
 import personalizedAtlasUrl from "../../assets/atlas_rstl.json?url";
@@ -80,7 +80,9 @@ const SQUINT_QUALITY_THRESHOLDS = Object.freeze({
   ...QUALITY_THRESHOLDS,
   tracking: 0.50,
   illumination: 0.40,
-  minPeakFrames: 3,
+  // 与 aggregateCycleEvidence() 的硬性选帧一致：pickBestFrames(..., 4) 最多取 4 帧，
+  // 不足 4 帧直接抛错，因此进入本门控时 validPeakFrames 恒为 4。写 3 只会是永不生效的死配置。
+  minPeakFrames: 4,
 });
 // 皱眉会改变眉间与眼周的几何形状，手机端 FaceLandmarker 的跟踪和
 // 光照评分也更容易在这个动作期间下降。仍保留有效帧门槛，但不要让
@@ -89,7 +91,8 @@ const FROWN_QUALITY_THRESHOLDS = Object.freeze({
   ...QUALITY_THRESHOLDS,
   tracking: 0.50,
   illumination: 0.45,
-  minPeakFrames: 3,
+  // 同上：有效帧数由 aggregateCycleEvidence() 固定为 4。
+  minPeakFrames: 4,
 });
 const YOLO_CONFIDENCE = 0.07;
 const REGISTRATION_RESIDUAL_LIMIT_FACE_RATIO = 0.018;

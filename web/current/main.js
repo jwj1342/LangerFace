@@ -1,9 +1,8 @@
-// 入口：装配 UI 事件绑定并初始化。各功能模块见 pipeline/render/mode3d/ui/state。
+// 入口：装配 UI 事件绑定并初始化。各功能模块见 pipeline/render/refine2d/ui/state。
 import { els } from "./dom.js";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./canvas_fit.js";
-import { dataSource } from "./data_source.js";
+import { dataSource } from "../compat/shared/data_source.js";
 import { countMetric, logError } from "./logger.js";
-import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.js";
 import { ensureReady, handleFile, redrawPausedFrame, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, toggleSourcePause } from "./pipeline.js";
 import {
   beginRefinePointer,
@@ -20,7 +19,7 @@ import {
   updateRefineUi,
 } from "./refine2d.js";
 import { adjustFocusZoom, buildZoomCards } from "./render.js";
-import { recordingState, reconState, renderState, sourceState } from "./state.js";
+import { recordingState, renderState, sourceState } from "./state.js";
 import { setMsg, setProvenance, smoothLabel } from "./ui.js";
 
 let previewSystem = null;
@@ -174,17 +173,6 @@ els.export.onclick = () => {
   };
   recordingState.recorder.start(); els.export.textContent = "■ 停止"; els.export.setAttribute("aria-pressed", "true");
 };
-
-// 3D Beta 路线绑定
-els.routeSel.onchange = (e) => enterRoute(e.target.value);
-els.reconDemo.onclick = loadDemoRecon;
-els.reconScan.onclick = startScan;
-els.view3d.onclick = () => { if (reconState.reconVerts) setMode3d("view"); };
-els.project3d.onclick = () => { if (reconState.reconVerts) setMode3d("project"); };
-els.reset3d.onclick = resetView3d;
-els.cloudFitFlame.onclick = startTwin;
-els.flameStd.onchange = toggleTwinHead;
-els.twinTexture.onchange = toggleTwinTexture;
 
 // ── 初始化 ────────────────────────────────────────────────────────────────────
 buildZoomCards(refreshStaticImage);

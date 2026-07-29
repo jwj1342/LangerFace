@@ -23,7 +23,6 @@ const routeSources = new Map(
 const pkg = JSON.parse(read("package.json"));
 const tsconfig = JSON.parse(read("tsconfig.json"));
 const toolsTsconfig = JSON.parse(fs.readFileSync(path.join(root, "tsconfig.tools.json"), "utf8"));
-const appHtml = read("app/index.html");
 const legacyLiveHtml = read("index.html");
 const legacyAnnotateHtml = read("annotate.html");
 const legacyIncisionHtml = read("incision_agent.html");
@@ -125,9 +124,6 @@ const surgeryMetricsPanel = read("src/components/SurgeryMetricsPanel.tsx");
 const surgeryHelpPanel = read("src/components/SurgeryHelpPanel.tsx");
 const surgeryStagePanel = read("src/components/SurgeryStagePanel.tsx");
 const settingsRoute = read("src/routes/SettingsRoute.tsx");
-const threeRoute = read("src/routes/ThreePreviewRoute.tsx");
-const threePreviewScene = read("src/components/ThreePreviewScene.tsx");
-const threePreviewSidebar = read("src/components/ThreePreviewSidebar.tsx");
 const standardFaceAssets = read("src/services/standardFaceAssets.ts");
 const standardFaceAssetsHook = read("src/hooks/useStandardFaceAssets.ts");
 const worker = read("src/workers/workflow.worker.ts");
@@ -213,7 +209,6 @@ const assetLoadingConsumerSources = new Map([
 ]);
 const r3fLoadingConsumerSources = new Map([
   ["SurgeryR3FScene.tsx", surgeryR3FScene],
-  ["ThreePreviewScene.tsx", threePreviewScene],
 ]);
 const annotateStatusConsumerSources = new Map([
   ["AnnotateDrawPanel.tsx", annotateDrawPanel],
@@ -264,8 +259,6 @@ const incisionAgentCardConsumerSources = new Map([
 const reactShellConsumerSources = new Map([
   ["App.tsx", app],
   ["DashboardRoute.tsx", dashboardRoute],
-  ["ThreePreviewRoute.tsx", threeRoute],
-  ["ThreePreviewSidebar.tsx", threePreviewSidebar],
 ]);
 const helpDisclosureConsumerSources = new Map([
   ["AnnotateHelpPanel.tsx", annotateHelpPanel],
@@ -564,8 +557,6 @@ assert.ok(pkg.scripts?.typecheck?.includes("../tsconfig.tools.json"), "package t
 assert.ok(pkg.devDependencies?.tailwindcss, "Tailwind should be installed for React UI workbench styling");
 assert.ok(pkg.devDependencies?.["@tailwindcss/vite"], "Tailwind Vite plugin should be installed");
 
-assert.ok(appHtml.includes('id="root"'), "React app HTML exposes a root mount node");
-assert.ok(appHtml.includes("/src/main.tsx"), "React app HTML loads the TypeScript React entrypoint from a deep-link-safe root path");
 assert.ok(tsconfig.compilerOptions?.strict, "TypeScript should run in strict mode");
 assert.equal(tsconfig.compilerOptions?.jsx, "react-jsx", "TypeScript should use the React JSX transform");
 assert.equal(toolsTsconfig.compilerOptions?.allowJs, undefined, "tool scripts should not rely on JavaScript sources");
@@ -741,8 +732,6 @@ for (const [name, html, legacyHref] of [
 ]) {
   assert.ok(!html.includes(`href="${legacyHref}"`), `${name} compatibility navigation should not route users back to ${legacyHref}`);
 }
-assert.ok(threeRoute.includes("ReactShellMain"), "R3F preview route uses the shared shell main primitive");
-assert.ok(threePreviewSidebar.includes("ReactShellSidebar"), "R3F preview sidebar uses the shared shell sidebar primitive");
 for (const className of [
   "react-page",
   "react-shell",
@@ -1724,27 +1713,12 @@ assert.ok(standardFaceAssetsHook.includes("setAssets(null)"), "standard face ass
 assert.ok(standardFaceAssetsHook.includes("reloadSerial"), "standard face asset hook owns route-local reload state");
 assert.ok(standardFaceAssetsHook.includes(".catch((error) => {\n      if (disposed) return;"), "standard face asset hook ignores late loader failures after route teardown");
 assert.ok(standardFaceAssetsHook.includes("setAssetStatus"), "standard face asset hook publishes low-frequency asset status through Zustand");
-assert.ok(threeRoute.includes("useStandardFaceAssets"), "R3F preview route uses the shared standard face asset hook");
-assert.ok(threeRoute.includes("useReactRouteLifecycle"), "R3F preview route uses the shared pure route lifecycle hook");
-assert.ok(threeRoute.includes('workspace: "three-preview"'), "R3F preview route publishes its active workspace through the lifecycle hook");
-assert.ok(!threeRoute.includes("loadStandardFaceAssets"), "R3F preview route should not duplicate standard face loader wiring");
-assert.ok(!threeRoute.includes("setAssets(null)"), "R3F preview route should not duplicate stale asset cleanup");
-assert.ok(!threeRoute.includes("window.location.reload"), "R3F preview should not reload the whole SPA");
-assert.ok(threeRoute.includes("ThreePreviewScene"), "R3F preview route renders the scene through a React component");
-assert.ok(threeRoute.includes("ThreePreviewSidebar"), "R3F preview route renders the sidebar through a React component");
-assert.ok(threePreviewScene.includes("@react-three/fiber"), "R3F preview scene uses @react-three/fiber");
-assert.ok(threePreviewScene.includes("@react-three/drei"), "R3F preview scene uses drei helpers");
-assert.ok(threePreviewScene.includes("OrbitControls"), "R3F preview scene uses drei OrbitControls");
-assert.ok(threePreviewScene.includes("buildLineGeometry"), "R3F preview scene renders atlas line geometry");
-assert.ok(threePreviewSidebar.includes("标准三维面部模型预览"), "R3F preview sidebar presents a clinical maintenance label");
 assert.ok(settingsRoute.includes("useReactRouteLifecycle"), "settings route publishes route lifecycle state");
 assert.ok(settingsRoute.includes('workspace: "settings"'), "settings route uses the settings workspace");
 assert.ok(settingsRoute.includes("ProviderConfigPanel"), "developer settings owns the AI service configuration entry");
 assert.ok(settingsRoute.includes('to="/annotate"'), "settings route keeps the annotation tool as a controlled atlas entry");
 assert.ok(!settingsRoute.includes('to="/three-preview"'), "settings route should not expose the public R3F preview developer entry");
 assert.ok(settingsRoute.includes('to="/surgery"'), "settings route keeps the standalone closure demo as a controlled developer entry");
-assert.ok(threePreviewSidebar.includes("WorkbenchBrand"), "R3F preview sidebar uses the shared workbench brand");
-assert.ok(threePreviewSidebar.includes("Card"), "R3F preview sidebar uses the shared shadcn-style card component");
 assert.ok(worker.includes("Comlink.expose"), "workflow worker exposes its API through Comlink");
 assert.ok(worker.includes("summarizeTumorInputQuality"), "workflow worker can run deterministic browser tools");
 assert.ok(worker.includes("planIncisionWorkflow"), "workflow worker can run deterministic incision planning");
@@ -1805,7 +1779,6 @@ for (const id of [
   "btnLoadCanonical",
   "btnLoadFlame",
   "btnLoadFittedFlame",
-  "btnCloudFit",
   "meshFile",
   "resampleSpacing",
   "slicerFile",

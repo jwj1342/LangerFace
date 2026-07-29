@@ -6,14 +6,11 @@ import { resolveAtlasForInjection, validateAtlas } from "./atlas_contract.js";
 import { assetUrls } from "./assets.js";
 import { clearCanvasDisplayFit, fitCanvasDisplayToStage } from "./canvas_fit.js";
 import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./camera.js";
-import { CDN, TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.js";
+import { CDN, TOPOLOGY_ID, TOPOLOGY_VERSION } from "../compat/shared/constants.js";
 import { ctx, els } from "./dom.js";
-import { buildHandMasks, noseTriangles, toPixels } from "./geometry.js";
-import { FlameCameraOverlay } from "./flame_camera_overlay.js";
-import { loadFlameBasis } from "./flame_fit.js";
+import { buildHandMasks, noseTriangles, toPixels } from "../compat/shared/geometry.js";
 import { prepareImageSource } from "./image_source.js";
 import { countMetric, logInfo, logWarn, recordMetricSample, setAssetVersions } from "./logger.js";
-import { projectVerts } from "./projection3d.js";
 import { commitRefineForLive, resetRefineForNewSource, setRefineAvailability } from "./refine2d.js";
 import { clearZooms, draw, drawFocusedRegion, drawZooms, updateStats } from "./render.js";
 import { modelState, renderState, sourceState } from "./state.js";
@@ -22,10 +19,9 @@ import { setLive, setMsg } from "./ui.js";
 // ── 资产 / 模型加载 ───────────────────────────────────────────────────────────
 export async function ensureReady() {
   if (modelState.landmarker) return;
-  const [topology, rstl, langer] = await Promise.all([
+  const [topology, rstl] = await Promise.all([
     fetch(assetUrls.topology).then((r) => r.json()),
     fetch(assetUrls.atlasRstl).then((r) => r.json()),
-    fetch(assetUrls.atlasLanger).then((r) => r.json()),
   ]);
   const tri = Array.isArray(topology) ? topology : topology.triangles;
   const topologyId = topology?.topologyId ?? TOPOLOGY_ID;
@@ -45,27 +41,19 @@ export async function ensureReady() {
   modelState.topology = { ...topology, topologyId, topologyVersion, triangles: tri };
   modelState.triangles = tri; modelState.noseTris = noseTriangles(tri);
   modelState.atlases.rstl = loadAtlas("rstl", rstl);
-  modelState.atlases.langer = loadAtlas("langer", langer);
   modelState.officialAtlases.rstl = modelState.atlases.rstl;
-  modelState.officialAtlases.langer = modelState.atlases.langer;
-  // Default camera/template rendering must stay on the boss-provided old
-  // MediaPipe-468 RSTL atlas: the FLAME overlay is built lazily by
-  // ensureFlameRstlOverlay() for the 3D / calibration entries only, and never
-  // silently replaces the template lines in the live view.
-  modelState.useFlameRstl = false;
   setAssetVersions({
     topology: topologyId,
     topologyVersion,
     triangles: tri.length,
     rstlAtlasVersion: rstl.version ?? "unknown",
-    langerAtlasVersion: langer.version ?? "unknown",
     faceLandmarker: "mediapipe/tasks-vision@0.10.35",
     handLandmarker: "mediapipe/tasks-vision@0.10.35",
   });
   const resolver = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
   const build = (delegate) => FaceLandmarker.createFromOptions(resolver, {
     baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
-    runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: true,  // jawOpen 等驱动实时孪生表情/张嘴
+    runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: true,  // 表情通道供 RSTL 表情适配使用
     minFaceDetectionConfidence: 0.5, minFacePresenceConfidence: 0.5, minTrackingConfidence: 0.5,
   });
   try { modelState.landmarker = await build("GPU"); }
@@ -96,41 +84,8 @@ export async function ensureReady() {
   logInfo("模型与图谱加载完成。", {
     triangles: tri.length,
     rstlLines: modelState.atlases.rstl.length,
-    langerLines: modelState.atlases.langer.length,
     handOcclusionReady: Boolean(modelState.handLandmarker),
   });
-}
-
-// FLAME 资产（约 6.9 MB basis + flame-2023 拓扑图谱）只服务 3D / 校准入口。
-// 默认 2D 路径不加载它们：任一 FLAME 资产失败都不得阻断纯 2D 启动。
-let flameRstlOverlayPromise = null;
-
-export function ensureFlameRstlOverlay() {
-  if (modelState.flameRstlOverlay) return Promise.resolve(modelState.flameRstlOverlay);
-  if (!flameRstlOverlayPromise) {
-    flameRstlOverlayPromise = (async () => {
-      const [flameRstl, flameBasis] = await Promise.all([
-        fetch(assetUrls.atlasRstlFlameFrom2dRedline).then((r) => r.json()),
-        loadFlameBasis(assetUrls.flameBasis),
-      ]);
-      const issues = validateAtlas(flameRstl, flameBasis.NF, {
-        expectedSystem: "rstl",
-        expectedVersion: "0.2",
-        expectedTopologyId: "flame-2023",
-        expectedTopologyVersion: "flame-2023-v1",
-      });
-      if (issues.length) throw new Error(`FLAME RSTL atlas validation failed: ${issues.join(", ")}`);
-      modelState.flameRstlOverlay = new FlameCameraOverlay(flameRstl, flameBasis);
-      logInfo("FLAME 资产按需加载完成。", { flameLines: flameRstl.lines.length, faces: flameBasis.NF });
-      return modelState.flameRstlOverlay;
-    })().catch((err) => {
-      flameRstlOverlayPromise = null;   // 允许下次进入 3D 入口时重试
-      countMetric("flameRstlOverlay.loadFailure");
-      logWarn("FLAME 资产加载失败：3D / 校准入口不可用，纯 2D 路径不受影响。", err);
-      throw err;
-    });
-  }
-  return flameRstlOverlayPromise;
 }
 
 function requestRedraw() {
@@ -138,7 +93,7 @@ function requestRedraw() {
 }
 
 function isSupportedAtlasSystem(system) {
-  return system === "rstl" || system === "langer";
+  return system === "rstl";
 }
 
 export function setActiveAtlas(system, atlasOrLines) {
@@ -158,7 +113,6 @@ export function setActiveAtlas(system, atlasOrLines) {
     return false;
   }
   modelState.atlases[system] = res.lineList;
-  if (system === "rstl") modelState.useFlameRstl = false;
   renderState.system = system;
   requestRedraw();
   return true;
@@ -170,7 +124,6 @@ export function restoreOfficialAtlas(system) {
     return false;
   }
   modelState.atlases[system] = modelState.officialAtlases[system];
-  if (system === "rstl") modelState.useFlameRstl = false;
   requestRedraw();
   return true;
 }
@@ -251,7 +204,6 @@ export function setSource(src, kind, w, h) {
     clearCanvasDisplayFit();
   }
   renderState.smoother.reset();
-  modelState.flameRstlOverlay?.reset();
   resetRefineForNewSource();
   sourceState.presence = 0; sourceState.lastLM = null; sourceState.imageCacheLM = null; sourceState.imageHulls = null;
   sourceState.frozenFrame = null; sourceState.lastHulls = [];
@@ -275,7 +227,6 @@ export function stopSource() {
   clearCanvasDisplayFit();
   sourceState.imageCacheLM = null; sourceState.imageHulls = null; sourceState.lastLM = null;
   sourceState.blend = null; sourceState.rawBlend = null;
-  modelState.flameRstlOverlay?.reset();
   resetRefineForNewSource();
   els.pause.disabled = true;
   els.pause.textContent = "📷 定格微调";
@@ -291,11 +242,10 @@ let frameMetricsSeen = 0;
 function renderOverlayFrame(lm, hulls, W, H) {
   let lineCount = 0;
   if (lm && sourceState.presence > 0) {
-    const dlm = projectVerts(lm);
     try {
-      lineCount = draw(dlm, W, H, hulls);
-      drawZooms(dlm, W);
-      drawFocusedRegion(dlm, W, H);
+      lineCount = draw(lm, W, H, hulls);
+      drawZooms(lm, W);
+      drawFocusedRegion(lm, W, H);
       drawFailureLogged = false;
     } catch (e) {
       if (!drawFailureLogged) logWarn("渲染图谱失败，本帧已跳过。", e);
@@ -376,7 +326,7 @@ export function loop() {
   } else if (sourceState.source.currentTime !== undefined) {
     const res = modelState.landmarker.detectForVideo(sourceState.source, t);
     if (res.faceBlendshapes && res.faceBlendshapes.length) {
-      // 全部 blendshape 存成 {类目名: 分数}，供 FLAME(jawOpen) 与 RSTL 表情适配共用。
+      // 全部 blendshape 存成 {类目名: 分数}，供 RSTL 表情适配使用。
       const blend = {};
       for (const c of res.faceBlendshapes[0].categories) blend[c.categoryName] = c.score;
       sourceState.rawBlend = blend;

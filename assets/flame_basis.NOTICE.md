@@ -1,6 +1,6 @@
 # 署名 / Attribution — `flame_basis.npz`
 
-`api/flame_basis.npz`（云函数 `api/fit.py` 用）与 `assets/flame_basis.bin`（浏览器内
+`assets/flame_basis.npz`（离线工具用）与 `assets/flame_basis.bin`（浏览器内
 `web/src/services/flameFit.ts` 用）都是从 **FLAME 2023 Open** 模型抽出的同一紧凑基（neutral 顶点 + 前 60 维
 身份 shapedirs + 三角面 + 官方 MediaPipe landmark embedding）。
 

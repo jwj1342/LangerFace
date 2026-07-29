@@ -17,7 +17,7 @@ function walk(dir, predicate, out = []) {
 
 // ── 兼容运行时豁免边界（PR #106 review 第 4 点）─────────────────────────────
 //
-// web/current/ 与 web/compat/personalized/ 是绕过 TypeScript import/cycle 检查的
+// web/current/、web/compat/personalized/ 与 web/compat/shared/ 是绕过 TypeScript import/cycle 检查的
 // 纯 JS 运行时。豁免不是无边界的：下面是**冻结清单**，新增文件会让本测试失败，
 // 必须显式改清单才能进来——避免"兼容目录"变成永久免检区。
 //
@@ -28,9 +28,6 @@ function walk(dir, predicate, out = []) {
 const LEGACY_RUNTIME_ALLOWLIST = new Set([
   "compat/personalized/bottom_up_personalization.js",
   "compat/personalized/camera_adaptive.js",
-  "compat/personalized/constants.js",
-  "compat/personalized/data_source.js",
-  "compat/personalized/geometry.js",
   "compat/personalized/personalized.js",
   "compat/personalized/prstl_personalization_v2.js",
   "compat/personalized/prstl_pipeline.js",
@@ -40,31 +37,25 @@ const LEGACY_RUNTIME_ALLOWLIST = new Set([
   "compat/personalized/v6_rstl_refinement.js",
   "compat/personalized/wrinkle_extraction.js",
   "compat/personalized/yolo_wrinkle_onnx.js",
+  "compat/shared/constants.js",
+  "compat/shared/data_source.js",
+  "compat/shared/geometry.js",
   "current/assets.js",
   "current/atlas_contract.js",
   "current/camera.js",
   "current/canvas_fit.js",
-  "current/constants.js",
-  "current/data_source.js",
   "current/dom.js",
   "current/fit_math.js",
-  "current/flame_camera_overlay.js",
-  "current/flame_fit.js",
   "current/forehead_visibility.js",
-  "current/geometry.js",
   "current/image_source.js",
   "current/line_density.js",
   "current/logger.js",
   "current/main.js",
-  "current/mode3d.js",
   "current/pipeline.js",
-  "current/projection3d.js",
   "current/refine2d.js",
   "current/refine2d_math.js",
   "current/render.js",
-  "current/skin_material.js",
   "current/state.js",
-  "current/three3d.js",
   "current/ui.js",
 ]);
 
@@ -89,6 +80,44 @@ if (staleAllowlistEntries.length) {
   process.exit(1);
 }
 console.log(`ok: 兼容运行时豁免为冻结清单（${LEGACY_RUNTIME_ALLOWLIST.size} 个文件，owner #95）`);
+
+// 兼容运行时被豁免于 TypeScript 检查，所以它的 import 图此前只由打包器兜底：把
+// web/compat/shared/ 的共享模块 import 路径写错，全部单测仍会通过，只有 npm run
+// build 才炸。这里补上相对 import 解析，让路径错误在测试层就暴露。
+let legacyImportFail = 0;
+for (const rel of LEGACY_RUNTIME_ALLOWLIST) {
+  const file = path.join(root, rel);
+  const code = fs.readFileSync(file, "utf8");
+  const importRe = /(?:from\s+["']|import\s*\(\s*["'])(\.[^"']+)["']/g;
+  for (const match of code.matchAll(importRe)) {
+    const specifier = match[1];
+    if (!specifier.endsWith(".js")) continue;   // ?url 资产 import 由打包器解析
+    const target = path.resolve(path.dirname(file), specifier);
+    if (!fs.existsSync(target)) {
+      console.error(`FAIL legacy runtime import does not resolve: ${rel} -> ${specifier}`);
+      legacyImportFail++;
+    }
+  }
+}
+if (legacyImportFail) process.exit(1);
+console.log("ok: 兼容运行时的相对 import 全部可解析");
+
+// #110：静态前端不得再出现 serverless 函数。web/api/fit.py 曾是线上无鉴权、
+// CORS *、无请求体上限的公开算力端点，删除后需要围栏，避免它无声回流。
+const forbiddenBackendPaths = ["api", "requirements.txt"];
+const resurrected = forbiddenBackendPaths.filter((rel) => fs.existsSync(path.join(root, rel)));
+if (resurrected.length) {
+  console.error("FAIL the static frontend must not ship a serverless backend again:");
+  for (const rel of resurrected) console.error(`  - web/${rel}`);
+  console.error("  见 docs/FLAME_3D_TRACK.md「生产侧零后端、零 GPU」；离线拟合走 tools/fit_flame_to_landmarks.py。");
+  process.exit(1);
+}
+const vercelConfig = JSON.parse(fs.readFileSync(path.join(root, "vercel.json"), "utf8"));
+if (vercelConfig.functions) {
+  console.error("FAIL web/vercel.json declares a functions block; the frontend must stay purely static.");
+  process.exit(1);
+}
+console.log("ok: 前端保持零 serverless 函数（无 web/api、无 requirements.txt、vercel.json 无 functions）");
 
 const files = walk(srcRoot, (file) => file.endsWith(".ts") || file.endsWith(".tsx"))
   .concat([path.join(root, "vite.config.ts")]);

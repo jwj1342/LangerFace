@@ -33,7 +33,7 @@ REPO = Path(__file__).resolve().parents[1]
 DEFAULT_DIAGRAM = REPO / "RSTL" / "RSTL PRSgo.png"
 DEFAULT_CANONICAL_VERTICES = REPO / "web" / "assets" / "canonical_vertices.json"
 DEFAULT_TRIANGLES = REPO / "web" / "assets" / "triangles.json"
-DEFAULT_FLAME_BASIS = REPO / "web" / "api" / "flame_basis.npz"
+DEFAULT_FLAME_BASIS = REPO / "assets" / "flame_basis.npz"
 DEFAULT_RSTL_SOURCES = REPO / "RSTL"
 DEFAULT_OUT = REPO / "local_outputs" / "atlas_rstl_flame.json"
 

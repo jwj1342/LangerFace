@@ -1,14 +1,23 @@
 # 切口 Agent 隐私与审计边界
 
-本阶段功能只处理抽象几何与结构化肿物参数。前端、Agent 代理和 LLM provider 的边界如下。
+本阶段功能只处理抽象几何与结构化肿物参数。**边界现在只有两方：浏览器前端 ↔ 用户自备的 LLM provider。**
+原先居中的「LLM provider」（Python 云函数 / Cloudflare Worker）已分别在 PR #106 与 PR #110 中删除，
+所以不存在服务端执行点来兜住下面的约束——唯一的审计点是浏览器里构造 prompt 的那一处代码
+（`web/src/services/aiSdkProvider.ts` 的 prompt 构造与 `web/src/services/exportPrivacy.ts` 的导出前检查）。
+provider 侧的日志保留与 DPA 属于填入 Base URL 的使用者自己的责任。
+
+> ⚠️ 已知不一致（见 issue #111）：`/incision` 每次生成候选都会在返回路径上调用
+> `enrichWorkflowWithAiSdkSummary`，把脱敏后的 tool trace 与 API Key 发往已配置的 provider；
+> 而界面文案与 `assets/agentic_incision_tool_schema.json` 仍声称 Key 只用于连通性测试、trace 不出域。
+> 本文描述的是**应有**边界，代码与文案的收口在 #111 跟踪。
 
 ## 不出域数据
 
-- 原始照片、视频帧和摄像头画面不发送给 Agent 代理或 LLM provider。
-- MediaPipe 原始检测帧不发送给 Agent 代理或 LLM provider。
+- 原始照片、视频帧和摄像头画面不发送给 LLM provider。
+- MediaPipe 原始检测帧不发送给 LLM provider。
 - API Key 不写入导出的审阅记录；导出时只保留 `[redacted]`。
 
-## 可发送给 Agent 代理的数据
+## 可发送给 LLM provider 的数据
 
 - 肿物类型：`subcutaneous` / `cutaneous`。
 - 肿物中心：标准脸或重建脸上的抽象 3D 坐标。

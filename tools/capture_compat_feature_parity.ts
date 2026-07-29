@@ -165,21 +165,15 @@ async function expectCanvasHasPixels(page, selector, label) {
   expect(metrics.ok, JSON.stringify(metrics)).toBe(true);
 }
 
-test("compat routes preserve live, incision, annotate, standard-head, and texture controls", async ({ page, context }) => {
+test("compat routes preserve live, incision, annotate, and texture controls", async ({ page, context }) => {
   const errors = collectErrors(page);
   await context.grantPermissions(["camera"], { origin: baseUrl });
-
-  await page.goto(\`\${baseUrl}/app/three-preview\`);
-  await expect(page.locator("canvas")).toBeVisible({ timeout: 30000 });
-  await expectCanvasHasPixels(page, "canvas", "R3F standard face preview");
-  await shot(page, "01-three-preview.png");
 
   await page.goto(\`\${baseUrl}/app/annotate\`);
   await expect(page.locator("#stage")).toBeVisible({ timeout: 30000 });
   await expect(page.locator("#btnLoadCanonical")).toBeVisible();
   await expect(page.locator("#btnLoadFlame")).toBeAttached();
   await expect(page.locator("#btnLoadFittedFlame")).toBeAttached();
-  await expect(page.locator("#btnCloudFit")).toBeVisible();
   await expect(page.locator("#meshFile")).toBeAttached();
   await expect(page.locator("#slicerFile")).toBeAttached();
   await page.locator("#btnLoadCanonical").click();

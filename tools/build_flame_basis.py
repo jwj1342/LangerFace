@@ -1,6 +1,6 @@
 """从 FLAME 2023 Open .pkl 抽出紧凑基。
 
-两份产物：web/api/flame_basis.npz（云函数·身份）+ web/assets/flame_basis.bin（浏览器·身份+表情+jaw）。
+两份产物：assets/flame_basis.npz（离线工具·身份）+ web/assets/flame_basis.bin（浏览器·身份+表情+jaw）。
 
 浏览器 .bin 固定布局（小端），供 web/src/services/flameFit.ts 切 typed arrays /
 实现 FLAME 前向（含表情 + jaw 蒙皮）：
@@ -9,7 +9,7 @@
   · jawReg f32(NV)   —— J_regressor 第 2 行（jaw 关节）· jawW f32(NV) —— weights[:,2]（jaw 蒙皮权重）
 计数固定：NV=5023 NF=9976 NL=105 NS=60 NE=50（FLAME 2023 Open + 官方 embedding）。
 
-License：FLAME 2023 Open = CC-BY-4.0，衍生基可随仓库分发（署名见 web/api/flame_basis.NOTICE.md）。
+License：FLAME 2023 Open = CC-BY-4.0，衍生基可随仓库分发（署名见 assets/flame_basis.NOTICE.md）。
 读 .pkl 需 scipy；以 `PYTHONPATH=src` 运行。
 """
 import os
@@ -26,7 +26,7 @@ JAW_JOINT = 2            # FLAME 关节：0 global · 1 neck · 2 jaw · 3/4 eye
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PKL = os.path.join(REPO, "assets", "flame", "flame2023_Open.pkl")
 NPZ_EMB = os.path.join(REPO, "assets", "flame", "mediapipe_landmark_embedding.npz")
-OUT = os.path.join(REPO, "web", "api", "flame_basis.npz")
+OUT = os.path.join(REPO, "assets", "flame_basis.npz")
 WEB_BIN = os.path.join(REPO, "web", "assets", "flame_basis.bin")
 
 

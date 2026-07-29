@@ -3,7 +3,7 @@
 本目录用于本地存放 **FLAME 2023 Open** 原始模型和官方 MediaPipe landmark embedding，供 3D FLAME 轨（见 issue #61）的拓扑导出、basis 构建和离线拟合使用。
 
 > ⚠️ **本目录除本 README 外全部 gitignore。** 不要提交原始 `.pkl`、embedding、neutral OBJ、纹理模型或本地生成的完整顶点 JSON。
-> 当前仓库只提交了一组从 **FLAME 2023 Open (CC-BY-4.0)** 抽出的紧凑运行时 basis，用于浏览器实时孪生和兜底拟合；署名见 `web/api/flame_basis.NOTICE.md`。
+> 当前仓库只提交了一组从 **FLAME 2023 Open (CC-BY-4.0)** 抽出的紧凑运行时 basis，用于浏览器实时孪生和兜底拟合；署名见 `assets/flame_basis.NOTICE.md`。
 
 ## License
 
@@ -21,13 +21,13 @@
 | `flame_neutral.obj` | 可选 fallback neutral 头模 OBJ；仅用于 `tools/export_flame_topology.py` 在没有 `.pkl` 时导出拓扑。 |
 | `generic_model.pkl` / `FLAME2023/` | 旧版或本地解包目录；仅用于本地研究，不要提交。 |
 
-仓库中允许提交的精简产物在 `web/` 下：
+仓库中允许提交的精简产物：
 
 | 文件 | 用途 |
 |---|---|
 | `web/assets/flame_basis.bin` | 浏览器端 FLAME 身份 + 表情 + jaw 紧凑 basis，供 `web/src/services/flameFit.ts` 使用。 |
-| `web/api/flame_basis.npz` | `web/api/fit.py` 兜底拟合使用的身份 basis。 |
-| `web/api/flame_basis.NOTICE.md` | FLAME 2023 Open 署名和重新生成说明。 |
+| `assets/flame_basis.npz` | 离线工具使用的身份 basis：由 `tools/build_flame_basis.py` 生成，`tools/register_rstl_atlas_to_flame.py` 读取。不下发浏览器、不参与部署。 |
+| `assets/flame_basis.NOTICE.md` | FLAME 2023 Open 署名和重新生成说明。 |
 
 本地生成但不提交的 FLAME 顶点 / 拓扑产物包括 `web/assets/topology_flame_2023.json`、`web/assets/flame_neutral_vertices.json`、`web/assets/flame_fitted_vertices.json`。
 

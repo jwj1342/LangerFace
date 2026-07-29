@@ -91,7 +91,7 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 
 ### SPA 路由与运行时资产路径
 
-React SPA 的线上入口是 `/app/*`，Vercel 会把 `/app` 和 `/app/(.*)` rewrite 到 `/app/index.html`。因此 SPA shell 的 JS/CSS
+React SPA 的线上入口是站点根 `/`，Vercel 会把 `/`、`/live`、`/incision`、`/annotate`、`/surgery`、`/settings/(.*)` 以及兼容地址 `/app`、`/app/(.*)` 全部 rewrite 到 `/index.html`。因此 SPA shell 的 JS/CSS
 和运行时资产都必须从站点根 `/assets/` 读取，不能写成 document-relative 的 `../assets/`、`assets/` 或 `assets/foo.json`。
 在 `/app/incision`、`/app/settings/atlas` 等嵌套路由下，相对路径会被浏览器解析为 `/app/assets/foo.json`、`/app/settings/assets/foo.js`
 等错误 URL；这类 URL 会命中 SPA rewrite，返回 HTML，而不是 JSON/JS。浏览器控制台常见表现是：

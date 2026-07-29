@@ -17,7 +17,7 @@
 - [临床目标与 Stage 2 路线](#临床目标与-stage-2-路线)
 - [它能做什么](#它能做什么)
 - [核心原理（为什么稳，而非"图一乐"）](#核心原理)
-- [两条技术路线](#两条技术路线)
+- [技术路线](#技术路线)
 - [快速开始 / 复现](#快速开始--复现)
 - [使用方式](#使用方式)
 - [线条图谱（数据）](#线条图谱数据)
@@ -57,7 +57,7 @@ LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它
 | 肿物模拟层 | Stage 2 功能切片（#14） | 表示脸部肿物的位置、大小、深度、安全切缘和与皮肤表面的关系；当前支持手动中心点、椭圆 / 自由轮廓、来源作者和 JSON 导入导出，自动分割与临床复核仍待补 | `web/src/services/incisionCandidateTools.ts`, `web/src/services/tumorInput.ts`, `web/src/services/incisionAgentRuntime.ts` |
 | 切口设计层 | Stage 2 工程闭环（#11-#22/#64/#83/#85） | 综合张力线方向、肿物约束、安全切缘、敏感结构、医生编辑、审阅导出和 2D 实时叠加，生成候选切口可视化；只做决策辅助，不输出手术指令 | `assets/clinical_rules_face_incision.json`, `assets/agentic_incision_tool_schema.json`, `web/src/services/incision*.ts` |
 | 渲染与交互层 | 已实现 / 扩展中 | 2D Canvas 叠加、3D 查看、遮挡、放大窗、录制导出和 UI 控制 | `src/langerface/rendering/`, `web/src/services/liveRuntime.ts`, `web/src/services/render2d.ts`, `web/src/services/three3d.ts` |
-| 实验演示层 | 已实现（研究演示） | FLAME 实时孪生；RSTL 切除 -> 闭合定性软体演示 | `web/src/services/flameFit.ts`, `web/src/services/mode3d.ts`, `web/src/routes/SurgeryRoute.tsx`, `web/src/services/softBody.ts` |
+| 实验演示层 | 入口已关闭 / 保留代码 | FLAME 实时孪生（无网页入口）；RSTL 切除 -> 闭合定性软体演示（`/surgery`） | `web/src/services/flameFit.ts`, `web/src/services/mode3d.ts`, `web/src/routes/SurgeryRoute.tsx`, `web/src/services/softBody.ts` |
 
 整体数据流：
 
@@ -133,12 +133,11 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 - 🔬 **RSTL 主流程 + Langer 对照资产**：网页主 demo 当前只暴露 RSTL；Langer 图谱仍保留在资产、CLI 和标注器中用于对照 / 教学。
 - 🖐️ **遮挡处理**：转头时背面线条隐藏；**手挡在脸前时，手覆盖处不画线**（贴合手形掩膜，指缝保留）。
 - 🔍 **关键区域放大窗**：主画面下方 6 个放大窗（额·眉间 / 双眼周 / 鼻·鼻唇沟 / 口周 / 颏部）同屏显示细节。
-- 🧊 **3D 重建（Beta）**：转头扫描 → 多帧 468 点关键点网格对齐 / 取中位数 → 旋转查看 / 实时刚性投影；这是关键点网格演示，不是临床级稠密 3D 扫描。
-- 🧬 **FLAME 实时孪生（实验）**：浏览器加载紧凑 FLAME basis，本地拟合身份 / 表情 / 张嘴，右侧 FLAME 头随左侧真实人脸头姿和表情运动，可切标准 / 个体与贴脸纹理。
+- 🚫 **3D / FLAME 网页入口已关闭**：3D 关键点重建、FLAME 实时孪生和三维资产预览的用户入口已下线（#108 第一阶段）；底层 runtime 仍保留在 `web/src/services/mode3d.ts` / `flameFit.ts`，标注器仍可加载头模资产，离线 FLAME 拟合走 `tools/fit_flame_to_landmarks.py`。3D 轨的去向见 #61 / #40。
 - ✍️ **网页 3D 标注**：在浏览器里于标准脸 / 3D 头模表面手绘 RSTL/Langer 候选线，可导入 JSON/OBJ/PLY 头模和 3D Slicer `.mrk.json` 曲线，导出 `validated:false` 的图谱草案（`[tri,u,v]`）或 xyz 折线；临床复核与置 `validated:true` 仍走 Python/评审流程，见 [网页 3D 标注与图谱草案导出](docs/ARCHITECTURE.md#12-网页-3d-线标注与图谱草案导出)。
-- 🧰 **无状态研究工具入口**：`/app` 只负责进入实时 2D、个性化 2D、切口候选和图谱维护等独立工具，不创建、恢复或保存病例。
+- 🧰 **无状态研究工具入口**：站点根 `/` 是 React 工具入口（`/app` 保留为兼容地址），只负责进入实时 2D、个性化 2D、切口候选和图谱维护等独立工具，不创建、恢复或保存病例。
 - 🧭 **切口 Agent 工作台**：在标准脸上手动放置皮下 / 皮表肿物，支持椭圆 / 自由轮廓和肿物 JSON 导入导出，生成线性或梭形候选切口，显示 RSTL 方向、面部分区、guardrails、浏览器 workflow 工具 trace 和 provider 连通性状态；候选可记录审阅人、确认 / 退回 / 否决状态和备注，候选库会给出工程排序对比，导出审阅记录，也可发送到实时页叠加到上传照片、视频或摄像头画面。
-- 🔬 **RSTL 切除 -> 闭合演示（Beta）**：`/app/surgery` 作为独立研究演示保留，用于解释沿 RSTL 闭合的张力直觉，不是 FEM、不是患者个体化建模，也不是自动候选生成模块。
+- 🔬 **RSTL 切除 -> 闭合演示（Beta）**：`/surgery` 作为独立研究演示保留，用于解释沿 RSTL 闭合的张力直觉，不是 FEM、不是患者个体化建模，也不是自动候选生成模块。
 - 🎛️ **实时控制**：主界面暴露数据源、线密度、透明度、镜像和网格采样点；平滑、背面剔除、手部遮挡、分区着色和放大窗为底层支持或默认能力，部分调试开关当前隐藏。
 - 🔒 **全程本地运行**，不上传任何画面（隐私友好）。
 
@@ -166,9 +165,9 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 
 ---
 
-## 两条技术路线
+## 技术路线
 
-网页左上「技术路线」可切换；**默认 2D（稳定）**，3D 为 Beta。
+用户可见的只有 **2D 贴合**一条；下表第二列保留 3D 关键点重建的设计记录，其网页入口已关闭，仅作为内部 runtime 与离线轨存在。
 
 | | **2D 贴合（默认）** | **3D 关键点网格重建（Beta）** |
 |---|---|---|
@@ -182,7 +181,7 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 3D 重建流程：每帧 478 关键点 → 用相似变换(Umeyama)对齐到统一参考系 → **各顶点取中位数**得到稳定中性脸 →
 图谱按重心坐标贴到该网格 → Three.js 渲染（可旋转）/ 每帧 Umeyama 刚性配准到活体脸投影（z 缓冲遮挡）。
 
-除上表两条入口外，当前前端还包含两个研究演示：FLAME 实时孪生（`web/src/services/flameFit.ts` / `web/src/services/mode3d.ts`）和 RSTL 切除闭合定性演示（`/app/surgery`）。它们用于展示 3D 拟合和张力直觉，不改变 Stage 2 仍处于规划中的边界。
+FLAME 实时孪生（`web/src/services/flameFit.ts` / `web/src/services/mode3d.ts`）的入口已关闭，代码保留待 #61 决策；RSTL 切除闭合定性演示仍可从 `/surgery` 打开。它们不改变 Stage 2 仍处于规划中的边界。
 
 ---
 
@@ -198,8 +197,14 @@ pip install -e ".[all]"
 # 2) 下载 MediaPipe 资产到 assets/（标准脸 obj + 人脸/手部关键点模型，单一权威源）
 python3 tools/download_assets.py
 
-# 3) 生成线条图谱（稠密方向场流线，RSTL + Langer）
-python3 tools/build_field_atlas.py 0.014        # 数字越小越密
+# 3) 生成正式 RSTL 图谱（v8.1.67，确定性生成器 + 结构化参考输入；需要 OpenCV/cv2）
+#    两个参数都必须显式给出：脚本内置默认值指向一份未随仓库分发的旧参考文件。
+python3 tools/build_field_atlas_standard_v1.py \
+        assets/rstl_standard_reference_v8_1_67.json assets/atlas_rstl.json
+#    ⚠️ 旧的方向场流线生成器 tools/build_field_atlas.py 会同时重写 assets/atlas_rstl.json
+#       和 assets/atlas_langer.json（默认 d_sep=0.030），即**覆盖上面这份正式 RSTL 图谱**并让
+#       tests/test_rstl_standard_v8_1_67.py 失败。只在需要重造 Langer 对照图谱时才跑它，跑完
+#       务必用上面的命令重新生成 RSTL。
 
 # 4) 导出网页端资产（triangles / atlas / canonical_vertices / 复制人脸+手部模型）
 #    MediaPipe/atlas/topology 资产由此从 assets/ 派生；改了图谱/几何务必重跑此步（CI 有一致性门禁）
@@ -233,9 +238,8 @@ npm run dev                      # Vite dev server，默认 http://127.0.0.1:517
 - **模板**：主 demo 只暴露 RSTL（首选）；Langer 对照图谱保留在资产、CLI 和标注器中。
 - **滑杆**：线密度、透明度；平滑参数仍在运行时存在，但主界面调试控件当前隐藏。
 - **开关**：镜像、显示网格采样点；背面剔除、手部遮挡、分区着色和细节放大窗为底层支持或默认能力，部分控件当前隐藏。
-- **技术路线**：2D（默认）/ 3D 重建（Beta，含"用示例重建/转头扫描/旋转查看/投影到画面"）/ FLAME 实时孪生实验。
-- **研究工具入口**：进入 `/app` 选择独立工具；当前不提供病例新建、恢复、历史记录或云端病例库。
-- **系统设置 / 实验页**：`/app/settings/atlas` 提供图谱库管理壳，并把 `/app/annotate` 作为受控维护入口；`/app/settings/developer` 集中 AI 服务连接测试、三维模型预览和兼容工作台入口。`/app/surgery` 仍可查看 RSTL 切除 -> 闭合定性演示，但它只是兼容研究入口。旧 HTML 入口仅保留为 React SPA 兼容跳转页。
+- **研究工具入口**：进入站点根 `/`（`/app` 为兼容地址）选择独立工具；当前不提供病例新建、恢复、历史记录或云端病例库。
+- **系统设置 / 实验页**：`/settings/atlas` 提供图谱库管理壳，并把 `/annotate` 作为受控维护入口；`/settings/developer` 集中 AI 服务连接测试和兼容工作台入口（三维模型预览入口已随 3D 网页入口一并移除）。`/surgery` 仍可查看 RSTL 切除 -> 闭合定性演示，但它只是兼容研究入口。旧 HTML 入口仅保留为 React SPA 兼容跳转页。
 - **统计**：追踪质量、状态、脸部占比、偏航估计、线束数量、fps。
 
 ### 命令行
@@ -256,7 +260,7 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 
 ## 线条图谱（数据）
 
-线图谱是 JSON：信封带 `topologyId` / `topologyVersion`，每条线为 `[三角面id, u, v]` 重心坐标点序列（`w = 1−u−v`），网页注入时校验拓扑身份。由 [`tools/build_field_atlas.py`](tools/build_field_atlas.py) 用张力线**方向场 + 等间距流线**生成，当前 RSTL **132 条**、Langer **110 条**；方向遵循 **Borges RSTL** 走向、几何为近似、`validated: false`，临床医生经 `annotate_atlas.py` / `digitize_from_diagram.py` 修正后置 `validated: true`。
+线图谱是 JSON：信封带 `topologyId` / `topologyVersion`，每条线为 `[三角面id, u, v]` 重心坐标点序列（`w = 1−u−v`），网页注入时校验拓扑身份。正式 RSTL 图谱为 **v8.1.67：133 条 / 14,315 点**（其中 14 条属 `forehead_bridge_arc_v15` 额头拱线，按参考输入里的 `doctorConstraints` 生成；该资产仍为 `validated: false`，未经临床复核），由 [`tools/build_field_atlas_standard_v1.py`](tools/build_field_atlas_standard_v1.py) 从结构化参考输入 [`assets/rstl_standard_reference_v8_1_67.json`](assets/rstl_standard_reference_v8_1_67.json) 确定性生成；Langer 对照图谱仍由 [`tools/build_field_atlas.py`](tools/build_field_atlas.py) 的方向场 + 等间距流线生成。方向遵循 **Borges RSTL** 走向、几何为近似、`validated: false`，临床医生经 `annotate_atlas.py` / `digitize_from_diagram.py` 修正后置 `validated: true`。
 
 > 数据格式、方向场算法与生成流程的完整说明见 [ARCHITECTURE.md «6. 图谱（数据）生成与格式»](docs/ARCHITECTURE.md)。
 
@@ -273,7 +277,8 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 | `src/langerface/` | Python 核心库，按 `config/geometry/detection/lines/rendering/pipeline/media/apps` 分层。 |
 | `tests/` | pytest 测试，覆盖图谱、标准脸、映射、稳定性、渲染和 pipeline 行为。 |
 | `tools/` | 资产下载、图谱生成、web 资产导出、3D 重建、临床标注、目检和对拍脚本。 |
-| `web/` | Vite 8 + React + TypeScript 前端；Canvas 2D + MediaPipe Tasks + Three.js / R3F 3D Beta。 |
+| `web/` | Vite 8 + React + TypeScript 前端（唯一应用入口 `web/index.html`）；Canvas 2D + MediaPipe Tasks + Three.js / R3F。 |
+| `web/current/`, `web/compat/` | 纯 JS 兼容运行时：`current/` 是 `/current/` 实时页，`compat/personalized/` 是 `/personalized` 个性化流程，`compat/shared/` 是两者共用的几何 / 常量 / 数据源模块。范围与退出条件由 `tools/test_web_architecture.ts` 的冻结清单守住（owner #95）。 |
 | `web/src/services/geometry*.ts` | Web TypeScript 几何子系统：atlas 映射 / 平滑 / 遮挡 / Umeyama。 |
 | `web/assets/` | 浏览器端静态资产：MediaPipe/atlas/topology 由 `tools/export_web_assets.py` 从 `assets/` 派生（勿手改，CI 有一致性门禁，见 #47）；紧凑 FLAME basis 由 `tools/build_flame_basis.py` 生成并带署名 notice。 |
 | `web/test/` | Web/Python 几何对拍用 ground truth 和本地测试图像；真实图片被忽略。 |
@@ -324,7 +329,7 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 
 ### 图谱校验状态
 
-⚠️ 内置图谱为**示意性首版（`validated: false`）**：由 `tools/build_field_atlas.py` 按 Borges RSTL 总体走向程序化生成，几何为近似，**尚未经临床验证，不得直接用于真实临床决策**。校验流程见上文[临床校验图谱](#临床校验图谱关键)，完成后图谱 `validated` 置 `true` 并在 `provenance` 记录校验者。
+⚠️ 内置图谱为**示意性首版（`validated: false`）**：由 `tools/build_field_atlas_standard_v1.py` 按 Borges RSTL 总体走向确定性生成，几何为近似，**尚未经临床验证，不得直接用于真实临床决策**。校验流程见上文[临床校验图谱](#临床校验图谱关键)，完成后图谱 `validated` 置 `true` 并在 `provenance` 记录校验者。
 
 ### 切口设计临床边界
 

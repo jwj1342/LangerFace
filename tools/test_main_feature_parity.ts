@@ -28,12 +28,11 @@ const render2d = read("src/services/render2d.ts");
 const typedConstants = read("src/services/constants.ts");
 const liveState = read("src/services/liveState.ts");
 const liveRenderControls = read("src/components/LiveRenderControlsPanel.tsx");
-const currentConstants = read("current/constants.js");
+const compatConstants = read("compat/shared/constants.js");
 const currentRender = read("current/render.js");
 const currentState = read("current/state.js");
 const currentHtml = read("current/index.html");
 const foreheadVisibility = read("current/forehead_visibility.js");
-const personalizedConstants = read("compat/personalized/constants.js");
 const cameraSource = read("src/services/cameraSource.ts");
 const skinMaterial = read("src/services/skinMaterial.ts");
 const incisionStage = read("src/components/IncisionStagePanel.tsx");
@@ -50,7 +49,6 @@ const annotateDraw = read("src/components/AnnotateDrawPanel.tsx");
 const annotateLineLibrary = read("src/components/AnnotateLineLibraryPanel.tsx");
 const annotateRuntime = read("src/services/annotateRuntime.ts");
 const annotateViewer = read("src/services/annotateViewer.ts");
-const threePreviewScene = read("src/components/ThreePreviewScene.tsx");
 const standardFaceAssets = read("src/services/standardFaceAssets.ts");
 const dashboardRoute = read("src/routes/DashboardRoute.tsx");
 const dataSource = read("src/services/dataSource.ts");
@@ -185,8 +183,7 @@ includesAll(render2d, [
 
 for (const [label, source] of [
   ["typed live constants", typedConstants],
-  ["current live constants", currentConstants],
-  ["personalized compatibility constants", personalizedConstants],
+  ["shared compatibility constants", compatConstants],
 ]) {
   assert.ok(source.includes('rstl: "#c800c8"'), `${label} must use the v8.1.67 reference magenta`);
 }
@@ -328,7 +325,6 @@ includesAll(annotateMeshSource, [
   'id="btnLoadCanonical"',
   'id="btnLoadFlame"',
   'id="btnLoadFittedFlame"',
-  'id="btnCloudFit"',
   'id="meshFile"',
   'id="slicerFile"',
 ], "3D annotation mesh controls");
@@ -366,16 +362,6 @@ includesAll(annotateViewer, [
   "setMesh",
   "raycast",
 ], "3D annotation viewer visual QA support");
-
-includesAll(threePreviewScene, [
-  "@react-three/fiber",
-  "@react-three/drei",
-  "Canvas",
-  "OrbitControls",
-  "buildLineGeometry",
-  "previewScale",
-  "preserveDrawingBuffer: true",
-], "R3F standard face preview");
 
 includesAll(standardFaceAssets, [
   'getHeadMesh("mediapipe-468"',

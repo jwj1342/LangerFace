@@ -327,7 +327,15 @@ Web 端入口由 React SPA、`web/src/services/liveRuntime.ts`、`web/src/servic
 
 ## 11. 图谱生成方法
 
-当前内置图谱由 `tools/build_field_atlas.py` 生成，是“方向场流线”首版。
+**本节推导的是 Langer 对照图谱的生成方法，不是当前正式 RSTL 图谱的生成方法。**
+
+- **正式 RSTL 图谱**（`assets/atlas_rstl.json`，v8.1.67 / 133 条 / 14,315 点）由
+  `tools/build_field_atlas_standard_v1.py` 从结构化参考输入 `assets/rstl_standard_reference_v8_1_67.json`
+  确定性生成（医生给定约束 + 精确镜像 + 中线拼接）；其 provenance 字段写的是
+  `Doctor-standard RSTL v1 traced from ... standard_1.png`，与下面的方向场流线法无关。
+- **Langer 对照图谱**（`assets/atlas_langer.json`）由 `tools/build_field_atlas.py` 按下面的方向场 + 等间距流线生成。
+  ⚠️ 该脚本一次写出两份图谱，裸跑会把正式 RSTL 图谱覆盖成 61 条流线的旧首版并让
+  `tests/test_rstl_standard_v8_1_67.py` 失败。
 
 ### 11.1 人脸归一化平面
 
