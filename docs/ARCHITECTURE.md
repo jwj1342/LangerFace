@@ -9,7 +9,7 @@
 
 ## 1. 总体架构
 
-两套等价的几何实现，共享同一份图谱与三角拓扑：
+两套等价的几何实现，共享同一份图谱与三角拓扑；此外还有一层被冻结的纯 JS 兼容运行时：
 
 - **Python 库 `src/langerface/`**：分层核心库 + console scripts + **验证基准（ground truth）** + 3D 重建离线工具。
 - **浏览器客户端 `web/`**：Vite 8 + React + TypeScript + MediaPipe Tasks Vision + `web/src/services/geometry*.ts`
@@ -17,6 +17,11 @@
   + `web/src/services/three3d.ts` / R3F 组件（3D Beta）。实时、本地、不上传。
   前端低频 UI 状态由 React/Zustand 管理，实时工作台状态在 `web/src/services/liveState.ts`
   分片；`pipeline.ts` 不依赖 `mode3d.ts`，3D 实时投影通过无 DOM 的 `projection3d.ts` 适配，避免模块环。
+
+- **纯 JS 兼容运行时**：`web/current/`（`/current/` 实时页）、`web/compat/personalized/`（`/personalized` 个性化流程）与
+  `web/compat/shared/`（两者共用的几何 / 常量 / 数据源）。它们**不进 TypeScript 类型检查**，由
+  `tools/test_web_architecture.ts` 的**冻结清单**限定范围（owner #95，含退出条件），新增文件或清单腐烂都会让测试失败；
+  其相对 import 也在该测试里解析。设计说明见 [PERSONALIZED_RSTL.md](PERSONALIZED_RSTL.md)。
 
 > 关键不变式：`web/src/services/geometry*.ts` 的映射/遮挡/平滑必须与 Python 端**逐点一致**，由
 > `tools/test_web_mapping.ts` 持续对拍保证（误差 < 1e-2 px、可见性 0 不一致）。
@@ -71,7 +76,11 @@ P = u·V0 + v·V1 + w·V2
 
 ---
 
-## 4. 3D 路线（Beta）
+## 4. 3D 路线（Beta，**网页入口已关闭**）
+
+> PR #108 关闭了 3D / FLAME 的全部用户可见入口；本节描述的 runtime 代码仍保留在
+> `web/src/services/mode3d.ts` / `projection3d.ts` / `three3d.ts`，但没有界面可以进入。
+> 去留取决于 #61 与 #40，见 [FLAME_3D_TRACK.md](FLAME_3D_TRACK.md)。
 
 ### 4.1 重建个性化 3D 人头
 离线：[`tools/reconstruct_3d.py`](../tools/reconstruct_3d.py)；在线：`web/src/services/mode3d.ts: startScan/finishScan`。
@@ -115,7 +124,10 @@ P = u·V0 + v·V1 + w·V2
   ```
 - 方向场流线生成 [`tools/build_field_atlas.py`](../tools/build_field_atlas.py)：
   1. 在归一化人脸框内定义朝向场 θ(x,y)：用 `(cos2θ,sin2θ)` 加权平均融合各区走向（前额横/鼻竖/眼周同心/口周放射/颊斜）。
-  2. Jobard–Lefèvre 等间距流线追踪（`d_sep` 控密度，越小越密；当前 0.014）。
+  2. Jobard–Lefèvre 等间距流线追踪（`d_sep` 控密度，越小越密；脚本默认 **0.030**）。
+  > ⚠️ 该脚本一次写出 RSTL 与 Langer 两份图谱，会**覆盖** `assets/atlas_rstl.json` 里的正式 v8.1.67 图谱。
+  > 正式 RSTL 图谱由 [`tools/build_field_atlas_standard_v1.py`](../tools/build_field_atlas_standard_v1.py)
+  > 从 `assets/rstl_standard_reference_v8_1_67.json` 生成（两个路径参数都要显式传）。
   3. 椭圆掩膜裁剪在脸内、挖去眼/口；每点投影到最近三角面 → `(tri,u,v)`。
 - 旧的稀疏示意版见 `tools/build_initial_atlas.py`（保留备用）。
 
@@ -151,7 +163,9 @@ P = u·V0 + v·V1 + w·V2
 - 本地开发：`cd web && npm run dev`，Vite 默认监听 `http://127.0.0.1:5173`。
 - 生产构建：`cd web && npm ci && npm run build`，输出 `web/dist/`。
 - 生产预览：`cd web && npm run preview`，Vite 默认监听 `http://127.0.0.1:4173`。
-- Vite 的唯一应用入口是 `web/index.html`（React SPA 挂在站点根，`/app/*` 仍作为旧地址兼容）。`annotate.html`、`incision_agent.html`、`surgery.html`
+- Vite 有 **4 个 Rollup 入口**：`web/index.html`（React SPA，挂在站点根，`/app/*` 仍作为旧地址兼容）、
+  `web/current/index.html`（`/current/` 纯 JS 实时页）、`web/personalized.html`（`/personalized`）、
+  `web/compat/personalized/v6_review.html`（`/v6-review`）。`annotate.html`、`incision_agent.html`、`surgery.html`
   只作为轻量兼容跳转页复制进 `dist/`，不再作为 Rollup 多入口应用构建。
 - `web/vite.config.ts` 使用 `base: "/"`，让 SPA shell 的 JS/CSS 在深链接下仍从站点根 `/assets/...` 读取；`copy-runtime-assets`
   会把 `web/assets/` 复制到 `dist/assets/`；`web/src/services/assetLoader.ts`
@@ -178,10 +192,11 @@ P = u·V0 + v·V1 + w·V2
 ## 10. 从零复现要点（清单）
 
 1. Python 3.10–3.12 + `pip install -e ".[all]"`；Node 24.15+ / npm 11+。
-2. `download_assets.py` + 手部模型 → `build_field_atlas.py` → `export_web_assets.py`。
+2. `download_assets.py` + 手部模型 → `build_field_atlas_standard_v1.py`（正式 RSTL，显式传参考与输出路径）
+   → 需要 Langer 对照时再跑 `build_field_atlas.py`，并注意它会覆盖 RSTL 图谱 → `export_web_assets.py`。
 3.（可选）`reconstruct_3d.py` 生成 3D 示例。
 4. `pytest` + `cd web && npm test` 全绿；`cd web && npm run build` 可生产构建。
-5. `cd web && npm run dev` → 浏览器打开 Vite 地址，验证 2D 实时与 3D 查看。
+5. `cd web && npm run dev` → 浏览器打开 Vite 地址，验证 2D 实时（3D / FLAME 的用户入口已由 #108 关闭，见 §4）。
 6. 临床校验图谱（`annotate_atlas.py`）后置 `validated:true` 方可作正式参考。
 
 ## 11. 前端鲁棒性约束

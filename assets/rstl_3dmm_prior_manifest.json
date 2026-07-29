@@ -14,7 +14,7 @@
       "topologyVersion": "mediapipe-canonical-468-v1",
       "path": "web/assets/atlas_rstl.json",
       "format": "atlas lines with points [tri,u,v]",
-      "generated_by": "tools/build_field_atlas.py",
+      "generated_by": "tools/build_field_atlas_standard_v1.py",
       "status": "available_draft",
       "validated": false,
       "uses": ["rstl_direction_service", "stage2_incision_planning", "2d_realtime_overlay"],

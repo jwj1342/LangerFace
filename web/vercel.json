@@ -17,7 +17,7 @@
   "rewrites": [
     { "source": "/", "destination": "/index.html" },
     { "source": "/personalized", "destination": "/personalized.html" },
-    { "source": "/v6-review", "destination": "/v6_review.html" },
+    { "source": "/v6-review", "destination": "/compat/personalized/v6_review.html" },
     { "source": "/live", "destination": "/index.html" },
     { "source": "/incision", "destination": "/index.html" },
     { "source": "/annotate", "destination": "/index.html" },

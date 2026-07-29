@@ -197,9 +197,14 @@ pip install -e ".[all]"
 # 2) 下载 MediaPipe 资产到 assets/（标准脸 obj + 人脸/手部关键点模型，单一权威源）
 python3 tools/download_assets.py
 
-# 3) 生成正式 RSTL 图谱（v8.1.67，确定性生成器 + 结构化参考输入）
-python3 tools/build_field_atlas_standard_v1.py
-#    旧的方向场流线生成器仍保留：python3 tools/build_field_atlas.py 0.014（数字越小越密，含 Langer 对照）
+# 3) 生成正式 RSTL 图谱（v8.1.67，确定性生成器 + 结构化参考输入；需要 OpenCV/cv2）
+#    两个参数都必须显式给出：脚本内置默认值指向一份未随仓库分发的旧参考文件。
+python3 tools/build_field_atlas_standard_v1.py \
+        assets/rstl_standard_reference_v8_1_67.json assets/atlas_rstl.json
+#    ⚠️ 旧的方向场流线生成器 tools/build_field_atlas.py 会同时重写 assets/atlas_rstl.json
+#       和 assets/atlas_langer.json（默认 d_sep=0.030），即**覆盖上面这份正式 RSTL 图谱**并让
+#       tests/test_rstl_standard_v8_1_67.py 失败。只在需要重造 Langer 对照图谱时才跑它，跑完
+#       务必用上面的命令重新生成 RSTL。
 
 # 4) 导出网页端资产（triangles / atlas / canonical_vertices / 复制人脸+手部模型）
 #    MediaPipe/atlas/topology 资产由此从 assets/ 派生；改了图谱/几何务必重跑此步（CI 有一致性门禁）
