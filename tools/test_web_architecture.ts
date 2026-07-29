@@ -15,16 +15,80 @@ function walk(dir, predicate, out = []) {
   return out;
 }
 
-const legacyRuntimeJs = walk(root, (file) => file.endsWith(".js"))
+// ── 兼容运行时豁免边界（PR #106 review 第 4 点）─────────────────────────────
+//
+// web/current/ 与 web/compat/personalized/ 是绕过 TypeScript import/cycle 检查的
+// 纯 JS 运行时。豁免不是无边界的：下面是**冻结清单**，新增文件会让本测试失败，
+// 必须显式改清单才能进来——避免"兼容目录"变成永久免检区。
+//
+//   owner：#95（Phase 2 消化 Legacy Runtime）
+//   允许范围：只允许清单内文件；只允许修 bug 与移植，不允许在此新建功能模块
+//   退出条件：#95 把这两个目录收敛进 web/src 的 TypeScript service 层后，
+//             删除本清单与整段豁免，让 legacyRuntimeJs 恢复为"一个都不许有"
+const LEGACY_RUNTIME_ALLOWLIST = new Set([
+  "compat/personalized/bottom_up_personalization.js",
+  "compat/personalized/camera_adaptive.js",
+  "compat/personalized/constants.js",
+  "compat/personalized/data_source.js",
+  "compat/personalized/geometry.js",
+  "compat/personalized/personalized.js",
+  "compat/personalized/prstl_personalization_v2.js",
+  "compat/personalized/prstl_pipeline.js",
+  "compat/personalized/v6_demo_manifest.js",
+  "compat/personalized/v6_review.js",
+  "compat/personalized/v6_review_model.js",
+  "compat/personalized/v6_rstl_refinement.js",
+  "compat/personalized/wrinkle_extraction.js",
+  "compat/personalized/yolo_wrinkle_onnx.js",
+  "current/assets.js",
+  "current/atlas_contract.js",
+  "current/camera.js",
+  "current/canvas_fit.js",
+  "current/constants.js",
+  "current/data_source.js",
+  "current/dom.js",
+  "current/fit_math.js",
+  "current/flame_camera_overlay.js",
+  "current/flame_fit.js",
+  "current/forehead_visibility.js",
+  "current/geometry.js",
+  "current/image_source.js",
+  "current/line_density.js",
+  "current/logger.js",
+  "current/main.js",
+  "current/mode3d.js",
+  "current/pipeline.js",
+  "current/projection3d.js",
+  "current/refine2d.js",
+  "current/refine2d_math.js",
+  "current/render.js",
+  "current/skin_material.js",
+  "current/state.js",
+  "current/three3d.js",
+  "current/ui.js",
+]);
+
+const allLegacyJs = walk(root, (file) => file.endsWith(".js"))
   .filter((file) => !file.includes(`${path.sep}node_modules${path.sep}`))
   .filter((file) => !file.includes(`${path.sep}dist${path.sep}`))
-  .filter((file) => !file.includes(`${path.sep}current${path.sep}`))
-  .filter((file) => !file.includes(`${path.sep}compat${path.sep}personalized${path.sep}`));
+  .map((file) => path.relative(root, file).split(path.sep).join("/"));
+
+const legacyRuntimeJs = allLegacyJs.filter((file) => !LEGACY_RUNTIME_ALLOWLIST.has(file));
 if (legacyRuntimeJs.length) {
-  console.error("FAIL legacy JS runtime files remain outside the explicit browser compatibility boundary:");
-  for (const file of legacyRuntimeJs) console.error(`  - ${path.relative(root, file)}`);
+  console.error("FAIL legacy JS runtime files outside the frozen compatibility allowlist:");
+  for (const file of legacyRuntimeJs) console.error(`  - ${file}`);
+  console.error("  新增兼容运行时文件必须显式加进 tools/test_web_architecture.ts 的 LEGACY_RUNTIME_ALLOWLIST，");
+  console.error("  并说明为什么不能写在 web/src 的 TypeScript service 层（见 #95）。");
   process.exit(1);
 }
+
+const staleAllowlistEntries = [...LEGACY_RUNTIME_ALLOWLIST].filter((file) => !allLegacyJs.includes(file));
+if (staleAllowlistEntries.length) {
+  console.error("FAIL compatibility allowlist lists files that no longer exist (收敛后请同步删除):");
+  for (const file of staleAllowlistEntries) console.error(`  - ${file}`);
+  process.exit(1);
+}
+console.log(`ok: 兼容运行时豁免为冻结清单（${LEGACY_RUNTIME_ALLOWLIST.size} 个文件，owner #95）`);
 
 const files = walk(srcRoot, (file) => file.endsWith(".ts") || file.endsWith(".tsx"))
   .concat([path.join(root, "vite.config.ts")]);
