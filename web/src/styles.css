@@ -1528,6 +1528,18 @@
   color: var(--clinical-text-primary);
 }
 
+.live-workbench .select,
+.incision-workbench .select,
+.incision-workbench .text-input {
+  background-color: #0f141b;
+  color: var(--clinical-text-primary);
+}
+
+.incision-workbench .text-input::placeholder {
+  color: var(--clinical-dark-muted);
+  opacity: 1;
+}
+
 .dark-workbench-page input[type=range],
 .dark-workbench-page input[type=checkbox],
 .dark-workbench-page .check input {
