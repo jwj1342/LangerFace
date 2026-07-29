@@ -14,11 +14,6 @@
   "github": {
     "autoJobCancelation": true
   },
-  "functions": {
-    "api/**/*.py": {
-      "excludeFiles": "{node_modules/**,dist/**,assets/**,test/**,**/*.task}"
-    }
-  },
   "rewrites": [
     { "source": "/", "destination": "/index.html" },
     { "source": "/personalized", "destination": "/personalized.html" },
