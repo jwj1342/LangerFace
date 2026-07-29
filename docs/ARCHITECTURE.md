@@ -151,7 +151,7 @@ P = u·V0 + v·V1 + w·V2
 - 本地开发：`cd web && npm run dev`，Vite 默认监听 `http://127.0.0.1:5173`。
 - 生产构建：`cd web && npm ci && npm run build`，输出 `web/dist/`。
 - 生产预览：`cd web && npm run preview`，Vite 默认监听 `http://127.0.0.1:4173`。
-- Vite 的唯一应用入口是 `web/app/index.html`。`index.html`、`annotate.html`、`incision_agent.html`、`surgery.html`
+- Vite 的唯一应用入口是 `web/index.html`（React SPA 挂在站点根，`/app/*` 仍作为旧地址兼容）。`annotate.html`、`incision_agent.html`、`surgery.html`
   只作为轻量兼容跳转页复制进 `dist/`，不再作为 Rollup 多入口应用构建。
 - `web/vite.config.ts` 使用 `base: "/"`，让 SPA shell 的 JS/CSS 在深链接下仍从站点根 `/assets/...` 读取；`copy-runtime-assets`
   会把 `web/assets/` 复制到 `dist/assets/`；`web/src/services/assetLoader.ts`
@@ -250,7 +250,7 @@ npm run dev
 | `web/src/services/annotationModel.ts` | 纯数据模型：线/点管理、表面路径展开、重心坐标、导出图谱/xyz（node 可单测，见 `tools/test_annotate_model.ts`） |
 | `web/src/services/annotateViewer.ts` | Three.js 场景：网格加载、射线表面拾取、线与控制点渲染 |
 | `web/src/services/annotateRuntime.ts` | 标注 runtime 装配（指针拖拽/点击、导出、列表、快捷键；严格 TypeScript，直接依赖 TS service 模块） |
-| `web/app/index.html` / `web/src/routes/AnnotateRoute.tsx` / `web/src/components/Annotate*.tsx` | React 标注页入口与 UI |
+| `web/index.html` / `web/src/routes/AnnotateRoute.tsx` / `web/src/components/Annotate*.tsx` | React 标注页入口与 UI |
 | `web/annotate.html` / `web/annotate.css` | 标注兼容跳转页与历史样式 |
 
 ---
