@@ -84,11 +84,13 @@ assert.match(page, /id="wrinkleSemanticDownloadBtn"/);
 assert.match(page, /每个表情采集一次/);
 assert.deepEqual(vercelConfig.rewrites[0], { source: "/", destination: "/index.html" },
   "the React tool launcher must be the deployed main page");
-for (const id of ["uploadBtn", "camBtn", "pauseBtn", "exportBtn", "refine2dBtn", "density", "routeSel"]) {
+for (const id of ["uploadBtn", "camBtn", "pauseBtn", "exportBtn", "refine2dBtn", "density"]) {
   assert.match(currentPage, new RegExp(`id=["']${id}["']`), `current main page must expose ${id}`);
 }
 assert.match(currentPage, /href="\/personalized"/,
   "the main page must open the V6 personalized workflow");
+assert.doesNotMatch(currentPage, /id="routeSel"/,
+  "the compat live page must not expose the closed 3D/FLAME route selector");
 assert.match(currentMain, /String\(atlas\.provenance \|\| ""\)\.includes\("local-yolo"\)/,
   "the current main page must identify a staged V6 atlas");
 assert.match(currentRender, /lineIndicesForDensity/,

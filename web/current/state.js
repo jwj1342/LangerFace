@@ -1,5 +1,5 @@
 // 运行期状态按职责分片，避免所有模块共享一个无边界的可变对象。
-import { OneEuro } from "./geometry.js";
+import { OneEuro } from "../compat/shared/geometry.js";
 
 export const modelState = {
   landmarker: null,
@@ -9,8 +9,6 @@ export const modelState = {
   noseTris: null,
   atlases: {},
   officialAtlases: {},
-  flameRstlOverlay: null,
-  useFlameRstl: false,
 };
 
 export const renderState = {
@@ -48,16 +46,4 @@ export const sourceState = {
 export const recordingState = {
   recorder: null,
   chunks: [],
-};
-
-export const reconState = {
-  route: "2d", head3d: null, reconVerts: null, reconFaces: null, reconAtlasLines: null,
-  reconProjectVerts: null, reconColors: null, reconProjectable: false, reconDisplaySpace: "screen", mode3d: "view",
-  viewerRAF: null, rot: { x: 0, y: 0 }, scan: null,
-  flameFit: null,      // 云端拟合出的个体 FLAME {verts, faces}
-  flameNeutral: null,  // 标准 FLAME neutral {verts, faces}（缓存）
-  flameBasis: null,    // 浏览器本地拟合基（flame_fit.js，一次加载）
-  flameBeta: null,     // 实时孪生：身份系数（首帧拟合一次后固定）
-  twinMode: "individual",  // 实时孪生右侧头：individual | standard
-  twinTexture: false,      // 实时孪生：贴真实人脸纹理开关
 };

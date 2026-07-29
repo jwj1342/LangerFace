@@ -18,39 +18,6 @@
       <h1>面部朗格线迁移</h1>
     </div>
 
-    <div class="card route-card">
-      <label class="field-label" for="routeSel">技术路线</label>
-      <select id="routeSel" class="select" style="margin-top:7px">
-        <option value="2d">2D 贴合（默认，稳定）</option>
-        <option value="3d">FLAME / 3D（Beta）</option>
-      </select>
-      <div id="route3dPanel" class="hidden" style="display:flex;flex-direction:column;gap:10px">
-        <div class="btn-row" style="grid-template-columns:1fr 1fr">
-          <button class="btn" id="reconDemoBtn">用 FLAME 头模（无摄像头）</button>
-          <button class="btn" id="reconScanBtn">转头扫描</button>
-        </div>
-        <p class="hint" id="reconStatus">可先加载 FLAME 标准头模旋转查看；实时投影请使用转头扫描。</p>
-        <div class="scan-panel hidden" id="scanPanel">
-          <div class="scan-row"><span>扫描进度</span><span id="scanProgressVal">0%</span></div>
-          <div class="bar"><div class="bar-fill" id="scanProgressBar"></div></div>
-          <div class="scan-row"><span>角度覆盖</span><span id="scanYawVal">0.00</span></div>
-          <div class="yaw-meter">
-            <span id="scanYawLeft"></span>
-            <span id="scanYawMid"></span>
-            <span id="scanYawRight"></span>
-          </div>
-        </div>
-        <div class="btn-row" style="grid-template-columns:1fr 1fr">
-          <button class="btn" id="view3dBtn" disabled aria-pressed="true">查看 3D 模型</button>
-          <button class="btn" id="project3dBtn" disabled>扫描后可投影</button>
-        </div>
-        <button class="btn" id="reset3dBtn" disabled>复位视角</button>
-        <button class="btn btn-primary" id="cloudFitFlameBtn">▶ 实时孪生（左真脸 / 右 FLAME 随动）</button>
-        <label class="check" id="flameHeadToggleWrap" style="display:none"><input type="checkbox" id="flameStdToggle"> 显示标准头（取消勾选 = 个体）</label>
-        <label class="check" id="twinTextureWrap" style="display:none"><input type="checkbox" id="twinTextureToggle"> 贴真实人脸纹理</label>
-      </div>
-    </div>
-
     <div class="card atlas-tools-card">
       <div>
         <label class="field-label">候选图谱草案</label>
@@ -59,7 +26,7 @@
       <a class="btn btn-primary" href="/v6-review" style="text-decoration:none">查看 RSTL V6 微调结果</a>
       <a class="btn btn-primary" href="/personalized" style="text-decoration:none">打开个性化采集 Demo</a>
       <a class="btn btn-primary" href="/app/annotate" style="text-decoration:none">打开 3D 线标注（可选）</a>
-      <a class="btn btn-primary" href="/app/settings/atlas" style="text-decoration:none">打开 FLAME-RSTL 校准台</a>
+      <a class="btn btn-primary" href="/app/settings/atlas" style="text-decoration:none">打开图谱库管理</a>
       <a class="btn" href="/app/surgery" style="text-decoration:none">🔬 切除→闭合演示（Beta）</a>
     </div>
 
@@ -95,7 +62,6 @@
         <label class="field-label" for="templateSel">初始线模板</label>
         <select id="templateSel" class="select" style="margin-top:7px">
           <option value="rstl">RSTL 初始线（langer线-cc 基准）</option>
-          <option value="langer">Langer 初始线（对照）</option>
         </select>
         <p class="hint hidden" id="atlasProvenance"></p>
         <button class="btn hidden" id="restoreAtlasBtn">恢复官方图谱</button>
@@ -150,8 +116,6 @@
       <div class="main-wrap">
         <video id="video" playsinline autoplay muted></video>
         <canvas id="canvas" class="mirror" width="1280" height="720"></canvas>
-        <canvas id="three" class="hidden"></canvas>
-        <div class="scan-toast hidden" id="scanToast">扫描中：请缓慢左右转头</div>
         <div class="overlay-msg" id="overlayMsg">点击「摄像头」或「上传照片 / 视频」开始</div>
       </div>
       <div class="zoom-strip" id="zoomStrip"></div>
