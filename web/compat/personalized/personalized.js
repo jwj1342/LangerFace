@@ -110,6 +110,7 @@ const ACTIVE_TOPOLOGY_VERSION = "mediapipe-canonical-468-v1";
 const els = {
   start: $("startBtn"), stop: $("stopBtn"), skip: $("skipBtn"), confirm: $("confirmBtn"), debug: $("debugBtn"),
   recordDebugMedia: $("recordDebugMedia"), debugMediaStatus: $("debugMediaStatus"), debugMediaExports: $("debugMediaExports"),
+  discardDebugMedia: $("discardDebugMediaBtn"),
   msg: $("msg"), badge: $("badge"), live: $("live"), fps: $("fps"),
   guideTitle: $("guideTitle"), guideSub: $("guideSub"),
   scoreVal: $("scoreVal"), scoreFill: $("scoreFill"),
@@ -838,6 +839,35 @@ function releaseMediaUrls() {
   retainedMediaUrls = [];
 }
 
+// 人脸视频调试录制默认关闭；勾选后仍需一次显式同意，明确用途、留存位置和生命周期。
+function consentToDebugRecording() {
+  if (!els.recordDebugMedia?.checked) return false;
+  const agreed = typeof confirm !== "function" || confirm(
+    "将录制静息及每个表情每轮的人脸视频与同步关键点。\n\n"
+    + "用途：仅用于本机算法调试。\n"
+    + "留存：只在当前标签页内存中，不上传服务器、不写入本地存储。\n"
+    + "生命周期：刷新、关闭页面、重新开始采集或点「丢弃调试录制」即清除。\n\n"
+    + "确认开启人脸视频录制？",
+  );
+  if (!agreed) {
+    els.recordDebugMedia.checked = false;
+    return false;
+  }
+  return true;
+}
+
+// 让使用者可以在导出后立刻抹掉内存中的人脸视频，而不必依赖刷新页面。
+function discardDebugRecording() {
+  releaseMediaUrls();
+  if (sess) {
+    sess.recordedClips = [];
+    sess.activeRecording = null;
+  }
+  if (els.debugMediaExports) els.debugMediaExports.innerHTML = "";
+  if (els.debugMediaStatus) els.debugMediaStatus.textContent = "调试录制已丢弃，内存中不再保留人脸视频";
+  if (els.discardDebugMedia) els.discardDebugMedia.disabled = true;
+}
+
 function renderDebugMediaExports() {
   if (!els.debugMediaStatus || !els.debugMediaExports) return;
   const clips = sess?.recordedClips || [];
@@ -848,6 +878,7 @@ function renderDebugMediaExports() {
     : clips.length
       ? `已保存 ${clips.length} 段 · ${(bytes / 1024 / 1024).toFixed(1)} MB；刷新页面前请下载`
       : sess?.recordingEnabled ? "视频调试已启用，等待采集" : "视频调试未启用，仅保留聚合诊断";
+  if (els.discardDebugMedia) els.discardDebugMedia.disabled = !clips.length && !active;
   els.debugMediaExports.innerHTML = clips.map((clip) => {
     if (!clip.blob) return `<span class="hint">${clip.actionLabel}：仅数据（无视频）</span>`;
     if (!clip.downloadUrl) {
@@ -2683,7 +2714,7 @@ async function startCapture() {
     setLocalPipelineStatus("采集完成后将在本机运行 YOLO 0.07 与 V6。", 0);
     releaseMediaUrls();
     if (els.debugMediaExports) els.debugMediaExports.innerHTML = "";
-    sess.recordingEnabled = !!els.recordDebugMedia?.checked;
+    sess.recordingEnabled = consentToDebugRecording();
     if (els.recordDebugMedia) els.recordDebugMedia.disabled = true;
     const cameraSettings = stream.getVideoTracks?.()[0]?.getSettings?.() || {};
     sess.captureSettings = {
@@ -2811,6 +2842,9 @@ els.stop.addEventListener("click", stopCapture);
 els.skip.addEventListener("click", skipStep);
 if (els.confirm) els.confirm.addEventListener("click", confirmCurrentStep);
 if (els.debug) els.debug.addEventListener("click", downloadDebugPayload);
+if (els.discardDebugMedia) els.discardDebugMedia.addEventListener("click", discardDebugRecording);
+// 页面卸载时主动回收 Blob URL，避免录制的人脸视频比标签页活得更久。
+window.addEventListener("pagehide", releaseMediaUrls);
 if (els.wrinkleMaskDownload) els.wrinkleMaskDownload.addEventListener("click", () => {
   if (!els.wrinkleMaskCanvas) return;
   const link = document.createElement("a");

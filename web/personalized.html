@@ -137,13 +137,15 @@
         <button class="btn" id="stopBtn" disabled>结束导出</button>
       </div>
       <label class="debug-opt">
-        <input id="recordDebugMedia" type="checkbox" checked>
-        <span>记录静息及每个表情每轮的视频与同步关键点数据</span>
+        <input id="recordDebugMedia" type="checkbox">
+        <span>记录静息及每个表情每轮的视频与同步关键点数据（默认关闭）</span>
       </label>
+      <div class="privacy-note">默认只保留聚合诊断，不录制人脸视频。勾选后需再次确认：录制用途仅为算法调试，视频与关键点只留在当前标签页内存中，不上传服务器、不写入本地存储；刷新、关闭页面或点「丢弃调试录制」即清除，需要留存请自行下载。</div>
       <div class="privacy-note">人脸图像、YOLO 推理和 V6 微调全部在当前浏览器本地完成，不上传服务器；刷新或关闭页面后即丢失，请及时下载。</div>
       <button class="btn" id="debugBtn" disabled>导出采集数据 JSON（含关键点）</button>
       <div id="debugMediaStatus" class="hint">尚未开始调试录制</div>
       <div id="debugMediaExports" class="exports"></div>
+      <button class="btn" id="discardDebugMediaBtn" disabled>丢弃调试录制（清除内存中的视频）</button>
     </div>
 
     <div class="card">
