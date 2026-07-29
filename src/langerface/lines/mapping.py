@@ -13,6 +13,85 @@ import numpy as np
 
 from .atlas import Atlas
 
+FOREHEAD_BRIDGE_ARC_REGION = "forehead_bridge_arc_v15"
+
+
+def _extend_forehead_bridge(
+    points: np.ndarray,
+    landmarks_px: np.ndarray,
+    layer_rank: float,
+) -> np.ndarray:
+    """Map a canonical v15 bridge arc onto the visible forehead/scalp area."""
+    if len(points) == 0 or len(landmarks_px) <= 10:
+        return points
+    anchor = landmarks_px[9, :2]
+    axis = landmarks_px[10, :2] - anchor
+    axis_norm = float(np.linalg.norm(axis))
+    if axis_norm <= 1e-9:
+        return points
+    axis /= axis_norm
+    lateral_axis = np.array([-axis[1], axis[0]], dtype=np.float64)
+
+    out = points.copy()
+    relative = out[:, :2] - anchor
+    parallel = relative @ axis
+    lateral = relative @ lateral_axis
+    out[:, :2] += (0.86 * parallel)[:, None] * axis
+
+    current_half_width = float(np.max(np.abs(lateral)))
+    face_width = float(np.ptp(landmarks_px[:, 0]))
+    if current_half_width > 1e-9 and face_width > 1e-9:
+        width_factor = 0.82 * face_width / current_half_width
+        out[:, :2] += ((width_factor - 1.0) * lateral)[:, None] * lateral_axis
+
+    for _ in range(5):
+        smoothed = out.copy()
+        smoothed[1:-1, :2] = (
+            0.25 * out[:-2, :2] + 0.5 * out[1:-1, :2] + 0.25 * out[2:, :2]
+        )
+        out = smoothed
+
+    smoothed_lateral = (out[:, :2] - anchor) @ lateral_axis
+    half_width = float(np.max(np.abs(smoothed_lateral)))
+    face_height = float(np.ptp(landmarks_px[:, 1]))
+    if half_width > 1e-9 and face_height > 1e-9:
+        normalized = np.clip(np.abs(smoothed_lateral) / half_width, 0.0, 1.0)
+        arch = 0.140 * face_height * (1.0 - normalized**2.0)
+        out[:, :2] += arch[:, None] * axis
+    if face_height > 1e-9:
+        out[:, :2] -= 0.100 * layer_rank * face_height * axis
+    return out
+
+
+def _forehead_bridge_ranks(
+    atlas: Atlas,
+    landmarks_px: np.ndarray,
+    triangles: np.ndarray,
+) -> dict[str, float]:
+    bridge_lines = [line for line in atlas.lines if line.region == FOREHEAD_BRIDGE_ARC_REGION]
+    if not bridge_lines:
+        return {}
+    if len(landmarks_px) > 10:
+        anchor = landmarks_px[9, :2]
+        axis = landmarks_px[10, :2] - anchor
+        axis_norm = float(np.linalg.norm(axis))
+        if axis_norm > 1e-9:
+            axis /= axis_norm
+
+            def mean_height(line) -> float:
+                vertices = triangles[line.tris()]
+                bary = line.bary()
+                raw = (
+                    bary[:, 0:1] * landmarks_px[vertices[:, 0]]
+                    + bary[:, 1:2] * landmarks_px[vertices[:, 1]]
+                    + bary[:, 2:3] * landmarks_px[vertices[:, 2]]
+                )
+                return float(np.mean((raw[:, :2] - anchor) @ axis))
+
+            bridge_lines = sorted(bridge_lines, key=mean_height, reverse=True)
+    denominator = max(len(bridge_lines) - 1, 1)
+    return {line.name: index / denominator for index, line in enumerate(bridge_lines)}
+
 
 @dataclass
 class MappedLine:
@@ -29,6 +108,7 @@ def map_atlas(atlas: Atlas, landmarks_px: np.ndarray, triangles: np.ndarray) -> 
     triangles:    (M, 3) 三角拓扑（来自标准模型）。
     """
     out: list[MappedLine] = []
+    forehead_bridge_ranks = _forehead_bridge_ranks(atlas, landmarks_px, triangles)
     for ln in atlas.lines:
         tris = ln.tris()                      # (N,)
         bary = ln.bary()                      # (N, 3)
@@ -36,6 +116,12 @@ def map_atlas(atlas: Atlas, landmarks_px: np.ndarray, triangles: np.ndarray) -> 
         v0 = landmarks_px[tri_v[:, 0]]        # (N, 3)
         v1 = landmarks_px[tri_v[:, 1]]
         v2 = landmarks_px[tri_v[:, 2]]
-        pts = (bary[:, 0:1] * v0 + bary[:, 1:2] * v1 + bary[:, 2:3] * v2)
+        pts = bary[:, 0:1] * v0 + bary[:, 1:2] * v1 + bary[:, 2:3] * v2
+        if ln.region == FOREHEAD_BRIDGE_ARC_REGION:
+            pts = _extend_forehead_bridge(
+                pts,
+                landmarks_px,
+                forehead_bridge_ranks.get(ln.name, 0.0),
+            )
         out.append(MappedLine(name=ln.name, region=ln.region, pts=pts, tris=tris))
     return out

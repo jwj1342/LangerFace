@@ -43,8 +43,8 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候
 
 ### 产品化与临床验证
 
-- [ ] UI 产品化重构：从工具工作台转向病例向导式临床流程
-      · 下一轮 UI 层重构应先按 [CLINICAL_CASE_WORKFLOW_UI.md](CLINICAL_CASE_WORKFLOW_UI.md) 落地病例大厅、步骤条、面部评估、病灶定位、切口规划、闭合模拟和方案确认；`/app/annotate`、`/app/three-preview`、Provider 配置、资产诊断和 workflow trace 从医生主流程隐藏到设置/审计/开发者区域。第一轮只重组路由、文案和 UI 壳，复用现有 live/incision/surgery runtime，不同时重写几何 kernel 或切口算法。设计验收需覆盖医生简易操作手册、年龄分档与切缘策略、病例级保存状态、DataSource 边界、临床级字体/Tailwind token、可解释性面板和向导流程的返回微调。
+- [x] 移除病例向导与病例存储
+      · 当前 `/app` 是无状态研究工具入口，不实现病例大厅、患者档案、病例草稿、历史恢复、本地病例持久化或 Cloudflare 病例 API。实时 2D、个性化 2D、切口候选、图谱标注与闭合演示继续作为独立工具保留。
 - [ ] 医生审阅与交互编辑工作流：候选切口必须可解释、可修改、可导出 — [#18](https://github.com/jwj1342/LangerFace/issues/18)
       · 本 PR 已支持候选保存、方向备选、工程排序比较、端点拖拽/参数编辑、撤销/重做、编辑时间线状态、候选版本 provenance、`candidate-edit-session/v0.1`、多步 `edit_history`、审阅人、确认/退回/否决、备注、JSON/Markdown/PNG 导出、审计事件、高风险确认备注约束和实时叠加确认门槛；前端“生成备选”会保存浏览器 workflow 生成的 `candidate_alternatives`，保留每个方向备选自己的 guardrails、preview、敏感结构复核和候选比较上下文；编辑后的线性/梭形候选都会重新计算几何、覆盖缺口、梭形包络和 guardrails，审阅状态回到待确认；每条审阅记录会保存 `tumor_quality`、`tumor_boundary_summary`、`sensitive_structure_inspection`、`agent_trace_gate`、`agent_react_plan`、`agent_execution_events` 和 `candidate_comparison`，报告会显示肿物输入提示、肿物边界摘要、中心点/候选几何敏感结构检查和梭形包络指标，减少 reviewer 只看候选线而漏看输入边界质量或敏感结构观察的风险；正式电子签名、病例系统绑定、权限与锁定仍属临床系统集成
 - [ ] 照片、视频与 AR 实时叠加：把肿物和切口候选稳定投射到患者脸上 — [#19](https://github.com/jwj1342/LangerFace/issues/19)
@@ -64,8 +64,6 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候
 
 ## 维护 / 部署
 
-- [ ] Cloudflare Worker/D1/R2 后端基础设施：先落地本地验证、少量云端资源创建、GitHub Actions 部署和 `ApiDataSource` 接口
-      · 本 PR 已新增 `workers/api` 第一版 Worker：包含病例、肿物、标注、候选切口、医生审阅和脱敏导出的 D1 schema/API、CORS、明显身份字段拦截、高风险审阅备注约束、fake D1 合约测试和 CI `worker-tests`；Worker 只做瘦 API、鉴权、CORS、D1/R2 访问和状态流转，不承载 MediaPipe/FLAME/OpenCV/Blender 等重计算。仍待创建/绑定正式 Cloudflare D1/R2 资源、配置 GitHub Secrets / Vercel `VITE_API_BASE_URL`，并在前端新增可切换的 `ApiDataSource`。落地流程见 [CLOUDFLARE_BACKEND_ROLLOUT.md](CLOUDFLARE_BACKEND_ROLLOUT.md)。
 - [ ] 清理 Vercel 历史 Deployment，保持 GitHub / Vercel UI 只突出 `master` production 和当前远端 branch head
       · 2026-06-26 已完成 GitHub Deployments records 清理：从 309 条降到 44 条，保留 37 条 Production 和 7 条当前远端 branch HEAD Preview。Vercel 侧已确认实际项目为 team `team_hKrCHY2HEmfQcq5Jfs8sYznn`、project `prj_IZ6vLQva5NQtCU3DfYNNaOWRzZM2`（本地 `web/.vercel/project.json` 里的旧 `orgId/projectId` 不匹配当前 token 可访问项目）。Vercel 初始 dry-run 为 311 条，计划保留 37 条 production + 7 条 branch-head preview，删除 267 条旧 preview/canceled deployment；第一轮已删除 203 条，1 条已提前删除，随后触发 `now-rm` 429 限流（约 10 分钟 / 200 次 remove），第二轮在用户要求暂停时中断。下次继续前不要复用旧删除列表，先重新 list deployments、重新按 production + branch-head 规则 dry-run，再删除剩余旧 preview。不要把 Vercel 删除动作放进 CI；清理完成后撤销本次暴露过的 Vercel token。
 

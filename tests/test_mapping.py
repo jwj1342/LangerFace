@@ -46,3 +46,35 @@ def test_affine_invariance():
     expected2 = mapped1.copy()
     expected2[:, :2] = mapped1[:, :2] @ A.T + t
     assert np.allclose(mapped2, expected2, atol=1e-9)
+
+
+def test_forehead_bridge_v15_has_the_reviewed_arch_and_even_layer_offsets():
+    landmarks = np.full((11, 3), [50.0, 50.0, 0.0], dtype=float)
+    landmarks[0] = [30.0, 40.0, 0.0]
+    landmarks[2] = [50.0, 40.0, 0.0]
+    landmarks[4] = [70.0, 40.0, 0.0]
+    landmarks[9] = [50.0, 50.0, 0.0]
+    landmarks[10] = [50.0, 30.0, 0.0]
+    triangles = np.array([[0, 2, 4]])
+    points = np.array(
+        [
+            [0.0, 1.0, 0.0],
+            [0.0, 0.5, 0.5],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 0.5],
+            [0.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    upper = AtlasLine("upper", "forehead_bridge_arc_v15", points)
+    lower = AtlasLine("lower", "forehead_bridge_arc_v15", points.copy())
+
+    mapped = map_atlas(Atlas(system="rstl", lines=[upper, lower]), landmarks, triangles)
+    mapped_by_name = {line.name: line.pts for line in mapped}
+
+    assert np.allclose(mapped_by_name["upper"][:, 0], [17.2, 33.6, 50.0, 66.4, 82.8])
+    assert np.allclose(mapped_by_name["upper"][[0, 2, 4], 1], [31.4, 28.6, 31.4])
+    assert np.allclose(
+        mapped_by_name["lower"][:, 1] - mapped_by_name["upper"][:, 1],
+        2.0,
+    )

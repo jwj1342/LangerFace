@@ -30,6 +30,14 @@ export function LiveRouteControlsPanel() {
   return (
     <>
       <Card>
+        <Label>个性化 RSTL</Label>
+        <Hint className="live-inline-top">完成多表情采集后，在本机运行 YOLO 0.07 严格并集与 V6 微调，并将结果带回实时 2D 页面。</Hint>
+        <Button asChild variant="workbenchPrimary">
+          <a href="/personalized">开始个性化表情采集</a>
+        </Button>
+      </Card>
+
+      <Card>
         <Label htmlFor="routeSel">显示模式</Label>
         <Select
           id="routeSel"
@@ -38,7 +46,6 @@ export function LiveRouteControlsPanel() {
           onChange={(event) => commands.route("route_change", event.currentTarget.value)}
         >
           <option value="2d">2D 贴合（默认，稳定）</option>
-          <option value="3d">3D 面部重建</option>
         </Select>
         <Hint className="live-inline-top" id="routeModeHint">
           {snapshot?.route.hint || "当前是 2D 实时贴合模式，只显示稳定主流程。"}
@@ -104,7 +111,7 @@ export function LiveRouteControlsPanel() {
       <Card id="threeDWorkflowCard" visible={is3d}>
         <div>
         <Label>图谱库维护</Label>
-        <Hint className="live-inline-top">图谱标注属于维护流程；正式张力闭合模拟请回到病例规划步骤运行。</Hint>
+        <Hint className="live-inline-top">图谱标注和闭合模拟是独立研究工具，不与当前会话共享病例状态。</Hint>
         </div>
         <Button asChild variant="workbenchPrimary">
           <Link to="/settings/atlas">进入图谱库管理</Link>

@@ -123,7 +123,7 @@ export const renderState: LiveRenderState = {
   },
   densityFrac: 1,
   smoothLevel: 0.6,
-  opacity: 0.92,
+  opacity: 0.60,
   smoother: new MotionStabilizedOneEuro({ minCutoff: 1.5, beta: 0.05 }),
   incisionOverlay: null,
 };

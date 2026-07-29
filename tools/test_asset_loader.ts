@@ -139,9 +139,6 @@ await withAssetBase(createAssetServer(), async () => {
   assert.equal(flameHead.triangles.length, 9976, "FLAME head exposes topology faces from flame_basis.bin");
   const rstl = await dataSource.loadAtlas("rstl");
   assert.equal(rstl.system, "rstl", "data source loads RSTL atlas by system");
-  const saved = dataSource.saveAnnotation({ system: "rstl", topologyId: "mediapipe-468", lines: rstl.lines });
-  assert.ok(saved?.id, "data source saves local annotation records");
-  assert.equal(dataSource.listAnnotations({ system: "rstl" }).length, 1, "data source lists local annotations by system");
   await assert.rejects(
     () => loadJsonAsset("triangles", { label: "三角拓扑" }),
     /资产加载失败：三角拓扑 HTTP 404/,

@@ -10,7 +10,7 @@ export function IncisionRoute() {
     <ManagedWorkbenchRoute
       controller={incisionLegacyController}
       failedStatus="切口工作台加载失败"
-      legacyNotice="兼容工具：正式临床流程请从病例大厅进入，本页用于候选切口细调与导出。"
+      legacyNotice="独立研究工具：用于候选切口细调与导出，不创建或保存病例。"
       loadingStatus="加载切口工作台"
       mountedStatus="切口工作台已挂载"
       unloadedStatus="切口工作台已卸载"

@@ -6,10 +6,21 @@ import { defineConfig } from "vite";
 
 function shouldServeSpaIndex(url = "") {
   const pathname = url.split("?")[0] || "";
+  if (pathname === "/") return true;
+  if (pathname.startsWith("/assets/")) return false;
   if (pathname === "/app") return true;
-  if (!pathname.startsWith("/app/")) return false;
   if (pathname.startsWith("/app/assets/")) return false;
-  return !/\.[^/]+$/.test(pathname);
+  if (pathname.startsWith("/app/")) return !/\.[^/]+$/.test(pathname);
+  if (
+    pathname === "/live"
+    || pathname === "/incision"
+    || pathname === "/annotate"
+    || pathname === "/surgery"
+    || pathname.startsWith("/settings/")
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export default defineConfig({
@@ -25,8 +36,8 @@ export default defineConfig({
             next();
             return;
           }
-          const html = readFileSync(resolve(import.meta.dirname, "app/index.html"), "utf8");
-          const transformed = await server.transformIndexHtml(req.url || "/app/", html);
+          const html = readFileSync(resolve(import.meta.dirname, "index.html"), "utf8");
+          const transformed = await server.transformIndexHtml(req.url || "/", html);
           res.statusCode = 200;
           res.setHeader("Content-Type", "text/html; charset=utf-8");
           res.end(transformed);
@@ -38,7 +49,7 @@ export default defineConfig({
             next();
             return;
           }
-          const html = readFileSync(resolve(import.meta.dirname, "dist/app/index.html"), "utf8");
+          const html = readFileSync(resolve(import.meta.dirname, "dist/index.html"), "utf8");
           res.statusCode = 200;
           res.setHeader("Content-Type", "text/html; charset=utf-8");
           res.end(html);
@@ -59,7 +70,7 @@ export default defineConfig({
       name: "copy-compat-entrypoints",
       writeBundle(options) {
         const outDir = options.dir || "dist";
-        for (const page of ["index.html", "annotate.html", "surgery.html", "incision_agent.html"]) {
+        for (const page of ["annotate.html", "surgery.html", "incision_agent.html"]) {
           cpSync(resolve(import.meta.dirname, page), resolve(outDir, page));
         }
       },
@@ -69,7 +80,10 @@ export default defineConfig({
     assetsInlineLimit: 0,
     rollupOptions: {
       input: {
-        app: resolve(import.meta.dirname, "app/index.html"),
+        app: resolve(import.meta.dirname, "index.html"),
+        current: resolve(import.meta.dirname, "current/index.html"),
+        personalized: resolve(import.meta.dirname, "personalized.html"),
+        v6Review: resolve(import.meta.dirname, "compat/personalized/v6_review.html"),
       },
     },
   },

@@ -25,6 +25,15 @@ const controllerCommand = read("src/lib/controllerCommand.ts");
 const mode3d = read("src/services/mode3d.ts");
 const sharedThree3d = read("src/services/three3d.ts");
 const render2d = read("src/services/render2d.ts");
+const typedConstants = read("src/services/constants.ts");
+const liveState = read("src/services/liveState.ts");
+const liveRenderControls = read("src/components/LiveRenderControlsPanel.tsx");
+const currentConstants = read("current/constants.js");
+const currentRender = read("current/render.js");
+const currentState = read("current/state.js");
+const currentHtml = read("current/index.html");
+const foreheadVisibility = read("current/forehead_visibility.js");
+const personalizedConstants = read("compat/personalized/constants.js");
 const cameraSource = read("src/services/cameraSource.ts");
 const skinMaterial = read("src/services/skinMaterial.ts");
 const incisionStage = read("src/components/IncisionStagePanel.tsx");
@@ -43,34 +52,30 @@ const annotateRuntime = read("src/services/annotateRuntime.ts");
 const annotateViewer = read("src/services/annotateViewer.ts");
 const threePreviewScene = read("src/components/ThreePreviewScene.tsx");
 const standardFaceAssets = read("src/services/standardFaceAssets.ts");
-const caseRoute = read("src/routes/CaseWorkflowRoute.tsx");
+const dashboardRoute = read("src/routes/DashboardRoute.tsx");
 const dataSource = read("src/services/dataSource.ts");
-const caseStore = read("src/stores/caseStore.ts");
 
 includesAll(app, [
-  'path="/cases"',
-  'path="/case/new"',
-  'path="/case/:caseId/evaluate"',
-  'path="/case/:caseId/plan"',
-  'path="/case/:caseId/review"',
   'path="/settings/atlas"',
   'path="/settings/developer"',
   'path="/live"',
   'path="/incision"',
   'path="/annotate"',
   'path="/surgery"',
-  'path="/three-preview"',
 ], "router");
+assert.ok(!app.includes('path="/three-preview"'), "router should not expose the public 3D preview route");
+assert.ok(!app.includes('path="/app/three-preview"'), "router should not preserve the legacy 3D preview route");
 
 includesAll(settingsRoute, [
   'to="/annotate"',
-  'to="/three-preview"',
   'to="/surgery"',
   "ProviderConfigPanel",
   "WorkerStatusPanel",
-  "不进入医生的病例规划主流程",
-  "不应重新出现在医生主导航",
+  "病例存储",
+  "不提供",
+  "不保存患者或病例信息",
 ], "controlled settings entry points");
+assert.ok(!settingsRoute.includes('to="/three-preview"'), "developer settings should not expose the public 3D preview entry");
 
 includesAll(liveStage, [
   'id="video"',
@@ -109,7 +114,8 @@ includesAll(liveRouteControls, [
   'commands.route("toggle_twin_head"',
   'id: "twinTextureToggle"',
   'commands.route("toggle_twin_texture"',
-], "live 3D reconstruction controls");
+], "retained live 3D compatibility controls");
+assert.ok(!liveRouteControls.includes('<option value="3d">'), "live mode selector should not expose the 3D reconstruction mode");
 
 includesAll(liveRuntime, [
   "mountLiveWorkbench",
@@ -176,6 +182,50 @@ includesAll(render2d, [
   "incisionOverlay",
   "renderState",
 ], "2D render overlay support");
+
+for (const [label, source] of [
+  ["typed live constants", typedConstants],
+  ["current live constants", currentConstants],
+  ["personalized compatibility constants", personalizedConstants],
+]) {
+  assert.ok(source.includes('rstl: "#c800c8"'), `${label} must use the v8.1.67 reference magenta`);
+}
+assert.ok(
+  render2d.includes("Math.max(2, W / 1300)"),
+  "typed live RSTL strokes must use the two-pixel reference minimum",
+);
+assert.ok(
+  currentRender.includes("Math.max(2, W / 1300)"),
+  "current live RSTL strokes must use the two-pixel reference minimum",
+);
+assert.ok(
+  currentRender.includes('"forehead_bridge_arc_v15"'),
+  "current live must not clip v8.1.67 bridge arcs to the MediaPipe face oval",
+);
+includesAll(currentRender, [
+  "buildForeheadSkinVisibility",
+  "buildHeadVisibility",
+  "stabilizeForeheadMask",
+  "headVisible(p) && skinVisible(p)",
+], "current live v8.1.67 forehead visibility integration");
+includesAll(foreheadVisibility, [
+  "skinColorMatchesReferences",
+  "distance <= 26",
+  "achromaticHair",
+  "0.54 * faceWidth",
+  "0.46 * faceHeight",
+  "maxGap",
+  "minRun",
+  "minVisibleSpan",
+  "longestRun.start",
+], "current live hair-aware forehead visibility");
+assert.ok(liveState.includes("opacity: 0.60"), "typed live RSTL opacity must match the 60% reference");
+assert.ok(currentState.includes("opacity: 0.60"), "current live RSTL opacity must match the 60% reference");
+includesAll(currentHtml, ['id="opacityVal">60%</span>', 'id="opacity" min="25" max="100" value="60"'], "current live reference opacity controls");
+assert.ok(
+  liveRenderControls.includes("render?.opacityPct || 60"),
+  "React live opacity control must default to the 60% reference",
+);
 
 includesAll(cameraSource, [
   "navigator.mediaDevices.getUserMedia",
@@ -334,42 +384,31 @@ includesAll(standardFaceAssets, [
   "mediaPipeAtlasToFlamePreviewAtlas",
 ], "standard face asset loader");
 
-includesAll(caseRoute, [
-  "CaseClinicalViewport",
-  "ThreePreviewScene",
-  "useStandardFaceAssets",
-  "showLesionOverlay",
-  "showIncisionOverlay",
-  "case-hidden-file-input",
-  'type="file"',
-  "onUploadFiles",
-  "mediaAssetSummary",
-  "准备 3D 扫描",
-  "标记重建完成",
-  "模拟肿物",
-  "simulateTumorInput",
-  "描记皮表边界",
-  "traceFreehandBoundary",
-  "case-lesion-simulation-status",
-  "张力闭合模拟",
-  "estimateClosureSimulation",
-], "case workflow restored clinical inputs");
+includesAll(dashboardRoute, [
+  'to: "/live"',
+  'href: "/personalized"',
+  'to: "/incision"',
+  "不创建、恢复或保存病例",
+  "不维护病例大厅、患者档案、历史记录或云端病例库",
+], "stateless tool launcher");
+assert.ok(!dashboardRoute.includes('to: "/three-preview"'), "dashboard should not expose the public 3D preview card");
 
-includesAll(dataSource, [
-  "ClinicalCaseMediaAsset",
-  "ClinicalCaseScanReconstruction",
-  "normalizeMediaAssets",
-  "normalizeScanReconstruction",
-  "mediaAssets",
-  "scanReconstruction",
-], "case persistence model");
+for (const forbidden of [
+  "CaseWorkflowRoute",
+  'path="/cases"',
+  'path="/case/',
+]) {
+  assert.ok(!app.includes(forbidden), `router should not expose case workflow: ${forbidden}`);
+}
 
-includesAll(caseStore, [
-  "...draft.acquisition",
-  "captureSet",
-  "quality",
-  "scanReconstruction",
-  "...current.acquisition.scanReconstruction",
-], "case store nested acquisition merge");
+for (const forbidden of [
+  "ClinicalCase",
+  "langerface.cases",
+  "saveCase(",
+  "listCases(",
+  "getCase(",
+]) {
+  assert.ok(!dataSource.includes(forbidden), `data source should not persist cases: ${forbidden}`);
+}
 
 console.log("Main feature parity checks passed.");

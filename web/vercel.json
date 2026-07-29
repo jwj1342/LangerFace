@@ -20,8 +20,16 @@
     }
   },
   "rewrites": [
-    { "source": "/app", "destination": "/app/index.html" },
-    { "source": "/app/(.*)", "destination": "/app/index.html" }
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/personalized", "destination": "/personalized.html" },
+    { "source": "/v6-review", "destination": "/v6_review.html" },
+    { "source": "/live", "destination": "/index.html" },
+    { "source": "/incision", "destination": "/index.html" },
+    { "source": "/annotate", "destination": "/index.html" },
+    { "source": "/surgery", "destination": "/index.html" },
+    { "source": "/settings/(.*)", "destination": "/index.html" },
+    { "source": "/app", "destination": "/index.html" },
+    { "source": "/app/(.*)", "destination": "/index.html" }
   ],
   "headers": [
     {

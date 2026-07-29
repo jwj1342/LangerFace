@@ -58,7 +58,7 @@ export function SurgeryRoute() {
 
   return (
     <ReactRouteHost workspace="surgery">
-      <div className="react-legacy-banner">闭合模拟演示：正式方案应从病例流程的切口规划步骤进入。</div>
+      <div className="react-legacy-banner">闭合模拟研究演示：仅用于观察标准脸上的定性张力变化，不保存病例。</div>
       <SurgeryWorkbench
         activeCut={activeCut}
         hint={hint}

@@ -6,8 +6,9 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const web = path.join(root, "web");
 
-const read = (rel) => fs.readFileSync(path.join(web, rel), "utf8");
-const readRoot = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
+const normalizeText = (value) => value.replace(/\r\n/g, "\n");
+const read = (rel) => normalizeText(fs.readFileSync(path.join(web, rel), "utf8"));
+const readRoot = (rel) => normalizeText(fs.readFileSync(path.join(root, rel), "utf8"));
 const exposesId = (source, id) => source.includes(`id="${id}"`) || source.includes(`id: "${id}"`);
 const componentSources = new Map(
   fs.readdirSync(path.join(web, "src/components"))
@@ -577,9 +578,9 @@ assert.deepEqual(
 );
 assert.ok(vite.includes("@tailwindcss/vite"), "Vite config loads the Tailwind plugin");
 assert.ok(vite.includes('base: "/"'), "Vite emits SPA shell JS/CSS from root /assets for /app deep links");
-assert.ok(vite.includes('app: resolve(import.meta.dirname, "app/index.html")'), "Vite builds the SPA app entry");
+assert.ok(vite.includes('app: resolve(import.meta.dirname, "index.html")'), "Vite builds the root React app entry");
 assert.ok(vite.includes("shouldServeSpaIndex"), "Vite config owns a local SPA history fallback helper for /app deep links");
-assert.ok(vite.includes('"app-spa-history-fallback"'), "Vite dev and preview serve /app/* deep links from app/index.html");
+assert.ok(vite.includes('"app-spa-history-fallback"'), "Vite dev and preview serve React deep links from index.html");
 assert.ok(vite.includes('pathname.startsWith("/app/assets/")'), "Vite SPA fallback keeps /app/assets/* from swallowing asset requests");
 assert.ok(vite.includes('"copy-runtime-assets"'), "Vite copies runtime assets into dist/assets");
 assert.ok(vite.includes('"copy-compat-entrypoints"'), "Vite copies lightweight compatibility pages after building the SPA");
@@ -617,7 +618,8 @@ assert.ok(!vercelIgnoreBuild.includes("previewDeployPattern"), "Vercel ignore sc
 assert.ok(vercelIgnoreBuild.includes('["diff", "--quiet", ref, "HEAD", "--", "."]'), "Vercel ignore script only builds when the web root changed");
 assert.ok(vercelIgnoreBuild.includes('["diff-tree", "--quiet", "--no-commit-id", "-r", "HEAD", "--", "."]'), "Vercel ignore script has a shallow-clone fallback for web root changes");
 assert.ok(vercel.includes('"source": "/app/(.*)"'), "Vercel rewrites nested SPA routes");
-assert.ok(vercel.includes('"destination": "/app/index.html"'), "Vercel routes SPA paths back to app/index.html");
+assert.ok(vercel.includes('"source": "/"') && vercel.includes('"destination": "/index.html"'), "Vercel routes the root path to the React entry");
+assert.ok(vercel.includes('"destination": "/index.html"'), "Vercel routes SPA paths back to index.html");
 assert.ok(vercel.includes('"source": "/assets/(.*)"'), "Vercel declares root runtime asset handling");
 assert.ok(assetLoaderService.includes('return normalizeAssetBaseUrl("/assets/")'), "asset loader defaults to the root /assets/ base");
 assert.ok(assetLoaderService.includes("SPA 路由回退"), "asset loader reports HTML SPA fallback responses as asset path errors");
@@ -627,7 +629,7 @@ assert.ok(!architectureDoc.includes("assetLoader.ts` 用 Vite `?url` 导入 `.ta
   "architecture docs must not claim the asset loader imports all runtime assets through Vite ?url");
 assert.ok(ciCdVercelDoc.includes("`../assets/`") && ciCdVercelDoc.includes("`assets/`"), "Vercel docs capture the nested SPA asset-path lesson");
 assert.ok(ciCdVercelDoc.includes("`/app/assets/...`"), "Vercel docs explain the failure mode for nested SPA asset URLs");
-assert.ok(ciCdVercelDoc.includes("`/app/case/assets/...`"), "Vercel docs explain the failure mode for nested case-route SPA asset URLs");
+assert.ok(ciCdVercelDoc.includes("`/app/settings/assets/...`"), "Vercel docs explain the failure mode for nested settings-route SPA asset URLs");
 assert.ok(contributingDoc.includes("不能请求 `/app/assets/...`"), "PR checklist guards against nested SPA asset URL regressions");
 
 assert.ok(app.includes("react-router-dom"), "React app is routed through React Router");
@@ -635,7 +637,10 @@ assert.ok(app.includes('path="/annotate"'), "React Router exposes the 3D annotat
 assert.ok(app.includes('path="/incision"'), "React Router exposes the incision workbench route");
 assert.ok(app.includes('path="/live"'), "React Router exposes the live workbench route");
 assert.ok(app.includes('path="/surgery"'), "React Router exposes the surgery closure route");
-assert.ok(app.includes('path="/three-preview"'), "React Router exposes the R3F preview route");
+assert.ok(!app.includes('path="/three-preview"'), "React Router should not expose the public R3F preview route");
+assert.ok(!app.includes('path="/app/three-preview"'), "React Router should not preserve the legacy R3F preview route");
+assert.ok(app.includes('path="/app/live"'), "React Router preserves legacy /app live links");
+assert.ok(app.includes('path="/app/incision"'), "React Router preserves legacy /app incision links");
 assert.ok(app.includes('path="/settings/atlas"'), "React Router exposes atlas settings route");
 assert.ok(app.includes('path="/settings/developer"'), "React Router exposes developer settings route");
 assert.ok(app.includes("SettingsRoute"), "React Router exposes a dedicated settings route");
@@ -701,11 +706,14 @@ assert.ok(app.includes("ReactPage"), "React route fallback uses the shared React
 assert.ok(dashboardRoute.includes("ReactShellNavLink"), "React dashboard uses shared shell nav links");
 assert.ok(!dashboardRoute.includes("ReactShellExternalLink"), "React dashboard should not send users back to legacy HTML entrypoints");
 assert.ok(!dashboardRoute.includes("/index.html"), "React dashboard should not link to the legacy live HTML entrypoint");
-for (const route of ["/incision", "/live", "/annotate", "/three-preview", "/surgery"]) {
-  assert.ok(!dashboardRoute.includes(`to="${route}"`), `React dashboard should not expose compatibility route ${route} in the doctor lobby`);
+for (const route of ["/live", "/incision"]) {
+  assert.ok(dashboardRoute.includes(`to: "${route}"`), `React dashboard exposes stateless tool route ${route}`);
 }
+assert.ok(!dashboardRoute.includes('to: "/three-preview"'), "React dashboard should not expose the public R3F preview card");
+assert.ok(dashboardRoute.includes('href: "/personalized"'), "React dashboard exposes the personalized browser tool");
+assert.ok(!dashboardRoute.includes("/cases"), "React dashboard does not expose a case lobby");
+assert.ok(dashboardRoute.includes("不创建、恢复或保存病例"), "React dashboard states the no-case-storage boundary");
 for (const [name, html, expected] of [
-  ["index.html", legacyLiveHtml, ["/app/"]],
   ["annotate.html", legacyAnnotateHtml, ["/app/annotate"]],
   ["incision_agent.html", legacyIncisionHtml, ["/app/incision"]],
   ["surgery.html", legacySurgeryHtml, ["/app/surgery"]],
@@ -1617,7 +1625,7 @@ assert.ok(reviewPanel.includes("Button"), "React review panel uses the shared sh
 assert.ok(reviewPanel.includes("ButtonRow"), "React review panel uses the shared shadcn-style button row primitive");
 assert.ok(reviewPanel.includes("AgentCard"), "React review panel uses the shared shadcn-style agent card primitive");
 assert.ok(reviewPanel.includes('variant="workbenchPrimary"'), "React review panel keeps primary workbench button styling through Button variants");
-assert.ok(incisionWorkbench.includes('to="/cases"'), "React incision workbench returns to the clinical case lobby");
+assert.ok(incisionWorkbench.includes('to="/"'), "React incision workbench returns to the stateless tool launcher");
 assert.ok(incisionStagePanel.includes('to="/settings/atlas"'), "React incision stage routes atlas maintenance through settings");
 assert.ok(!incisionStagePanel.includes('to="/annotate"'), "React incision stage should not bypass atlas settings");
 for (const dependencyType of incisionRuntimeDependencyTypes) {
@@ -1733,7 +1741,7 @@ assert.ok(settingsRoute.includes("useReactRouteLifecycle"), "settings route publ
 assert.ok(settingsRoute.includes('workspace: "settings"'), "settings route uses the settings workspace");
 assert.ok(settingsRoute.includes("ProviderConfigPanel"), "developer settings owns the AI service configuration entry");
 assert.ok(settingsRoute.includes('to="/annotate"'), "settings route keeps the annotation tool as a controlled atlas entry");
-assert.ok(settingsRoute.includes('to="/three-preview"'), "settings route keeps the R3F preview as a controlled developer entry");
+assert.ok(!settingsRoute.includes('to="/three-preview"'), "settings route should not expose the public R3F preview developer entry");
 assert.ok(settingsRoute.includes('to="/surgery"'), "settings route keeps the standalone closure demo as a controlled developer entry");
 assert.ok(threePreviewSidebar.includes("WorkbenchBrand"), "R3F preview sidebar uses the shared workbench brand");
 assert.ok(threePreviewSidebar.includes("Card"), "R3F preview sidebar uses the shared shadcn-style card component");
@@ -1853,7 +1861,7 @@ assert.ok(annotateDrawPanel.includes("<Card"), "React annotate draw panel uses t
 assert.ok(annotateDrawPanel.includes('variant="workbenchPrimary"'), "React annotate draw panel keeps primary workbench button styling through Button variants");
 assert.ok(annotateHelpPanel.includes("标注帮助"), "React annotate help panel keeps the user-facing annotation guide");
 assert.ok(annotateHelpPanel.includes("HelpDisclosure"), "React annotate help panel uses the shared help disclosure primitive");
-assert.ok(annotateStagePanel.includes('to="/cases"'), "React annotate stage returns to the clinical case lobby");
+assert.ok(annotateStagePanel.includes('to="/"'), "React annotate stage returns to the stateless tool launcher");
 for (const id of [
   "annStatus",
   "lineList",
@@ -1889,7 +1897,7 @@ assert.ok(annotateSnapshotsService.includes("buildAnnotateDraftSnapshot"), "shar
 assert.ok(annotateSnapshotsService.includes("buildAnnotateSavedSummary"), "shared annotation snapshot service builds saved line summaries");
 assert.ok(annotateSnapshotsService.includes("buildAnnotateExportState"), "shared annotation snapshot service builds export capability state");
 assert.ok(annotateMeshSourcePanel.includes('to="/surgery"'), "React annotation mesh source panel links to the React surgery closure route");
-assert.ok(annotateMeshSourcePanel.includes('to="/cases"'), "React annotation mesh source panel returns to the clinical case lobby");
+assert.ok(annotateMeshSourcePanel.includes('to="/"'), "React annotation mesh source panel returns to the stateless tool launcher");
 for (const dependencyType of annotateRuntimeDependencyTypes) {
   assert.ok(
     fs.existsSync(path.join(web, dependencyType)),
@@ -2174,7 +2182,8 @@ assert.ok(!fs.existsSync(path.join(web, "data_source.d.ts")), "legacy data-sourc
 assert.ok(liveDataSourceService.includes("export interface BrowserDataSource"), "TypeScript data source service owns the shared browser data contract");
 assert.ok(liveDataSourceService.includes("getHeadMesh"), "TypeScript data source service exposes canonical head mesh loading");
 assert.ok(liveDataSourceService.includes("loadAtlas"), "TypeScript data source service exposes atlas loading");
-assert.ok(liveDataSourceService.includes("saveAnnotation"), "TypeScript data source service exposes local annotation saving");
+assert.ok(!liveDataSourceService.includes("saveAnnotation"), "TypeScript data source service does not persist annotation records");
+assert.ok(!liveDataSourceService.includes("localStorage"), "TypeScript data source service keeps cross-tool payloads session-scoped");
 assert.ok(liveDataSourceService.includes("export const LocalDataSource"), "TypeScript data source service owns the local sessionStorage implementation");
 assert.ok(liveDataSourceService.includes("IncisionOverlayPayload"), "TypeScript data source service types staged incision overlays");
 assert.ok(!fs.existsSync(path.join(web, "export_canvas.js")), "legacy export_canvas.js facade has been removed after TypeScript service migration");

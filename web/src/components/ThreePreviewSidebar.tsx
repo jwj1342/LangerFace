@@ -24,7 +24,7 @@ export function ThreePreviewSidebar({ isReady, onReload }: ThreePreviewSidebarPr
 
       <Card>
         <Hint>
-          这里用于验证三维模型资产、相机控制和基础渲染是否可用。医生病例主流程不需要进入本页。
+          这里用于验证三维模型资产、相机控制和基础渲染是否可用；本页不保存病例数据。
         </Hint>
         <CardContent>
           <Button asChild>

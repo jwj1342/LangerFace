@@ -1,0 +1,420 @@
+// 浏览器实时管线：摄像头/上传 → MediaPipe FaceLandmarker(客户端) → 平滑 →
+// 图谱映射 → 背面剔除 + 手部遮挡 → 画布叠加。
+import { FaceLandmarker, HandLandmarker, FilesetResolver }
+  from "@mediapipe/tasks-vision";
+import { resolveAtlasForInjection, validateAtlas } from "./atlas_contract.js";
+import { assetUrls } from "./assets.js";
+import { clearCanvasDisplayFit, fitCanvasDisplayToStage } from "./canvas_fit.js";
+import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./camera.js";
+import { CDN, TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.js";
+import { ctx, els } from "./dom.js";
+import { buildHandMasks, noseTriangles, toPixels } from "./geometry.js";
+import { FlameCameraOverlay } from "./flame_camera_overlay.js";
+import { loadFlameBasis } from "./flame_fit.js";
+import { prepareImageSource } from "./image_source.js";
+import { countMetric, logInfo, logWarn, recordMetricSample, setAssetVersions } from "./logger.js";
+import { projectVerts } from "./projection3d.js";
+import { commitRefineForLive, resetRefineForNewSource, setRefineAvailability } from "./refine2d.js";
+import { clearZooms, draw, drawFocusedRegion, drawZooms, updateStats } from "./render.js";
+import { modelState, renderState, sourceState } from "./state.js";
+import { setLive, setMsg } from "./ui.js";
+
+// ── 资产 / 模型加载 ───────────────────────────────────────────────────────────
+export async function ensureReady() {
+  if (modelState.landmarker) return;
+  const [topology, rstl, langer] = await Promise.all([
+    fetch(assetUrls.topology).then((r) => r.json()),
+    fetch(assetUrls.atlasRstl).then((r) => r.json()),
+    fetch(assetUrls.atlasLanger).then((r) => r.json()),
+  ]);
+  const tri = Array.isArray(topology) ? topology : topology.triangles;
+  const topologyId = topology?.topologyId ?? TOPOLOGY_ID;
+  const topologyVersion = topology?.topologyVersion ?? TOPOLOGY_VERSION;
+  const loadAtlas = (system, atlas) => {
+    const issues = validateAtlas(
+      atlas,
+      tri.length,
+      { expectedSystem: system, expectedTopologyId: topologyId, expectedTopologyVersion: topologyVersion },
+    );
+    if (issues.length) {
+      logWarn(`图谱 ${system} 校验失败。`, { issues });
+      throw new Error(`图谱 ${system} 校验失败：${issues.join("；")}`);
+    }
+    return atlas.lines;
+  };
+  modelState.topology = { ...topology, topologyId, topologyVersion, triangles: tri };
+  modelState.triangles = tri; modelState.noseTris = noseTriangles(tri);
+  modelState.atlases.rstl = loadAtlas("rstl", rstl);
+  modelState.atlases.langer = loadAtlas("langer", langer);
+  modelState.officialAtlases.rstl = modelState.atlases.rstl;
+  modelState.officialAtlases.langer = modelState.atlases.langer;
+  // Default camera/template rendering must stay on the boss-provided old
+  // MediaPipe-468 RSTL atlas: the FLAME overlay is built lazily by
+  // ensureFlameRstlOverlay() for the 3D / calibration entries only, and never
+  // silently replaces the template lines in the live view.
+  modelState.useFlameRstl = false;
+  setAssetVersions({
+    topology: topologyId,
+    topologyVersion,
+    triangles: tri.length,
+    rstlAtlasVersion: rstl.version ?? "unknown",
+    langerAtlasVersion: langer.version ?? "unknown",
+    faceLandmarker: "mediapipe/tasks-vision@0.10.35",
+    handLandmarker: "mediapipe/tasks-vision@0.10.35",
+  });
+  const resolver = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
+  const build = (delegate) => FaceLandmarker.createFromOptions(resolver, {
+    baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
+    runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: true,  // jawOpen 等驱动实时孪生表情/张嘴
+    minFaceDetectionConfidence: 0.5, minFacePresenceConfidence: 0.5, minTrackingConfidence: 0.5,
+  });
+  try { modelState.landmarker = await build("GPU"); }
+  catch (e) {
+    countMetric("faceLandmarker.gpuFallback");
+    logWarn("Face Landmarker GPU 初始化失败，回退到 CPU。", e);
+    modelState.landmarker = await build("CPU");
+  }
+
+  // 手部检测器（用于前方手部遮挡）。失败不阻塞主流程。
+  const buildHand = (delegate) => HandLandmarker.createFromOptions(resolver, {
+    baseOptions: { modelAssetPath: assetUrls.handLandmarkerTask, delegate },
+    runningMode: "VIDEO", numHands: 2,
+    minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5, minTrackingConfidence: 0.5,
+  });
+  try { modelState.handLandmarker = await buildHand("GPU"); }
+  catch (e) {
+    countMetric("handLandmarker.gpuFallback");
+    logWarn("Hand Landmarker GPU 初始化失败，回退到 CPU。", e);
+    try { modelState.handLandmarker = await buildHand("CPU"); }
+    catch (err) {
+      countMetric("handLandmarker.loadFailure");
+      logWarn("手部模型加载失败，手部遮挡功能将暂不可用。", err);
+    }
+  }
+
+  els.badge.textContent = "模型就绪"; els.badge.classList.remove("loading");
+  logInfo("模型与图谱加载完成。", {
+    triangles: tri.length,
+    rstlLines: modelState.atlases.rstl.length,
+    langerLines: modelState.atlases.langer.length,
+    handOcclusionReady: Boolean(modelState.handLandmarker),
+  });
+}
+
+// FLAME 资产（约 6.9 MB basis + flame-2023 拓扑图谱）只服务 3D / 校准入口。
+// 默认 2D 路径不加载它们：任一 FLAME 资产失败都不得阻断纯 2D 启动。
+let flameRstlOverlayPromise = null;
+
+export function ensureFlameRstlOverlay() {
+  if (modelState.flameRstlOverlay) return Promise.resolve(modelState.flameRstlOverlay);
+  if (!flameRstlOverlayPromise) {
+    flameRstlOverlayPromise = (async () => {
+      const [flameRstl, flameBasis] = await Promise.all([
+        fetch(assetUrls.atlasRstlFlameFrom2dRedline).then((r) => r.json()),
+        loadFlameBasis(assetUrls.flameBasis),
+      ]);
+      const issues = validateAtlas(flameRstl, flameBasis.NF, {
+        expectedSystem: "rstl",
+        expectedVersion: "0.2",
+        expectedTopologyId: "flame-2023",
+        expectedTopologyVersion: "flame-2023-v1",
+      });
+      if (issues.length) throw new Error(`FLAME RSTL atlas validation failed: ${issues.join(", ")}`);
+      modelState.flameRstlOverlay = new FlameCameraOverlay(flameRstl, flameBasis);
+      logInfo("FLAME 资产按需加载完成。", { flameLines: flameRstl.lines.length, faces: flameBasis.NF });
+      return modelState.flameRstlOverlay;
+    })().catch((err) => {
+      flameRstlOverlayPromise = null;   // 允许下次进入 3D 入口时重试
+      countMetric("flameRstlOverlay.loadFailure");
+      logWarn("FLAME 资产加载失败：3D / 校准入口不可用，纯 2D 路径不受影响。", err);
+      throw err;
+    });
+  }
+  return flameRstlOverlayPromise;
+}
+
+function requestRedraw() {
+  if (sourceState.running && !sourceState.paused) requestAnimationFrame(loop);
+}
+
+function isSupportedAtlasSystem(system) {
+  return system === "rstl" || system === "langer";
+}
+
+export function setActiveAtlas(system, atlasOrLines) {
+  if (!isSupportedAtlasSystem(system)) {
+    logWarn("拒绝注入未知图谱系统。", { system });
+    return false;
+  }
+  const expectedTopologyId = modelState.topology?.topologyId ?? TOPOLOGY_ID;
+  const expectedTopologyVersion = modelState.topology?.topologyVersion ?? TOPOLOGY_VERSION;
+  const res = resolveAtlasForInjection(atlasOrLines, modelState.triangles, {
+    expectedSystem: system,
+    expectedTopologyId,
+    expectedTopologyVersion,
+  });
+  if (!res.ok) {
+    logWarn("拒绝注入无效图谱。", { system, reason: res.reason, issues: res.issues });
+    return false;
+  }
+  modelState.atlases[system] = res.lineList;
+  if (system === "rstl") modelState.useFlameRstl = false;
+  renderState.system = system;
+  requestRedraw();
+  return true;
+}
+
+export function restoreOfficialAtlas(system) {
+  if (!isSupportedAtlasSystem(system) || !modelState.officialAtlases[system]) {
+    logWarn("无法恢复官方图谱。", { system });
+    return false;
+  }
+  modelState.atlases[system] = modelState.officialAtlases[system];
+  if (system === "rstl") modelState.useFlameRstl = false;
+  requestRedraw();
+  return true;
+}
+
+// 检测手部 → 凸包列表（图像空间），落在其中的脸部线点将被剔除
+export function detectHands(t, W, H) {
+  if (!renderState.handOcc || !modelState.handLandmarker) return [];
+  const hr = modelState.handLandmarker.detectForVideo(sourceState.source, t);
+  if (!hr.landmarks || !hr.landmarks.length) return [];
+  const margin = Math.max(5, W * 0.006);
+  return buildHandMasks(hr.landmarks.map((h) => toPixels(h, W, H)), 0.16, margin);
+}
+
+// ── 数据源 ────────────────────────────────────────────────────────────────────
+export async function startCamera() {
+  if (sourceState.sourceKind === "camera") { stopSource(); setLive(false, "待机"); els.cam.setAttribute("aria-pressed","false"); return; }
+  setMsg("加载模型…");
+  try {
+    await ensureReady();
+    setMsg("请求摄像头权限…");
+    const stream = await openCameraStream(CAMERA_CONSTRAINTS);
+    stopSource();
+    els.video.srcObject = stream; await els.video.play();
+    setSource(els.video, "camera", els.video.videoWidth, els.video.videoHeight);
+    els.cam.setAttribute("aria-pressed", "true");
+  } catch (e) {
+    const detail = describeCameraError(e);
+    countMetric(`camera.openFailure.${detail.reason}`);
+    logWarn("无法开启摄像头。", { reason: detail.reason, error: e });
+    els.cam.setAttribute("aria-pressed", "false");
+    if (!sourceState.source) {
+      showCameraPlaceholder(detail.message);
+      setLive(false, "待机");
+    }
+    setMsg(detail.message);
+  }
+}
+
+export function showCameraPlaceholder(message) {
+  const W = els.canvas.width || 1280, H = els.canvas.height || 720;
+  els.canvas.width = W; els.canvas.height = H;
+  ctx.save();
+  ctx.fillStyle = "#07111f"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(255,255,255,.84)";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = `${Math.max(18, Math.round(W / 46))}px system-ui, sans-serif`;
+  ctx.fillText(message, W / 2, H / 2);
+  ctx.restore();
+}
+
+export async function handleFile(file) {
+  if (!file) return;
+  setMsg("加载模型…"); await ensureReady();
+  stopSource();
+  const url = URL.createObjectURL(file);
+  if (file.type.startsWith("image/")) {
+    const img = new Image(); img.src = url; await img.decode();
+    const prepared = prepareImageSource(img);
+    setSource(prepared.source, "image", prepared.width, prepared.height);
+    URL.revokeObjectURL(url);
+    if (prepared.scaled) setMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
+  } else {
+    els.video.srcObject = null; els.video.src = url; els.video.loop = true; await els.video.play();
+    setSource(els.video, "video", els.video.videoWidth, els.video.videoHeight);
+  }
+  els.cam.setAttribute("aria-pressed", "false");
+}
+
+export function setSource(src, kind, w, h) {
+  sourceState.source = src; sourceState.sourceKind = kind;
+  els.canvas.width = w || 1280; els.canvas.height = h || 720;
+  els.mainWrap.classList.toggle("image-viewer", kind === "image");
+  els.canvas.classList.toggle("image-source", kind === "image");
+  if (kind === "image") {
+    fitCanvasDisplayToStage({ resetView: true });
+    requestAnimationFrame(() => fitCanvasDisplayToStage({ resetView: true }));
+  } else {
+    clearCanvasDisplayFit();
+  }
+  renderState.smoother.reset();
+  modelState.flameRstlOverlay?.reset();
+  resetRefineForNewSource();
+  sourceState.presence = 0; sourceState.lastLM = null; sourceState.imageCacheLM = null; sourceState.imageHulls = null;
+  sourceState.frozenFrame = null; sourceState.lastHulls = [];
+  sourceState.blend = null; sourceState.rawBlend = null;
+  sourceState.running = true; sourceState.paused = false;
+  els.pause.disabled = kind === "image"; els.export.disabled = false;
+  els.pause.textContent = kind === "camera" ? "📷 定格微调" : "⏸ 暂停";
+  els.pause.setAttribute("aria-pressed", "false");
+  setMsg(null); setLive(true, kind === "camera" ? "实时摄像头" : kind === "video" ? "视频" : "照片");
+  requestFrame();
+}
+
+export function stopSource() {
+  const ms = els.video.srcObject;
+  if (ms) ms.getTracks().forEach((t) => t.stop());
+  els.video.srcObject = null; els.video.removeAttribute("src");
+  sourceState.source = null; sourceState.sourceKind = null; sourceState.running = false;
+  sourceState.paused = false; sourceState.frozenFrame = null; sourceState.lastHulls = [];
+  els.mainWrap.classList.remove("image-viewer");
+  els.canvas.classList.remove("image-source");
+  clearCanvasDisplayFit();
+  sourceState.imageCacheLM = null; sourceState.imageHulls = null; sourceState.lastLM = null;
+  sourceState.blend = null; sourceState.rawBlend = null;
+  modelState.flameRstlOverlay?.reset();
+  resetRefineForNewSource();
+  els.pause.disabled = true;
+  els.pause.textContent = "📷 定格微调";
+  els.pause.setAttribute("aria-pressed", "false");
+}
+
+// ── 主循环 ────────────────────────────────────────────────────────────────────
+let fpsEMA = 0, lastT = performance.now();
+let drawFailureLogged = false;
+let frameScheduled = false;
+let frameMetricsSeen = 0;
+
+function renderOverlayFrame(lm, hulls, W, H) {
+  let lineCount = 0;
+  if (lm && sourceState.presence > 0) {
+    const dlm = projectVerts(lm);
+    try {
+      lineCount = draw(dlm, W, H, hulls);
+      drawZooms(dlm, W);
+      drawFocusedRegion(dlm, W, H);
+      drawFailureLogged = false;
+    } catch (e) {
+      if (!drawFailureLogged) logWarn("渲染图谱失败，本帧已跳过。", e);
+      drawFailureLogged = true;
+      clearZooms();
+    }
+  } else clearZooms();
+  updateStats(lm, W, H, lineCount);
+  return lineCount;
+}
+
+export function redrawPausedFrame() {
+  if (!sourceState.running || !sourceState.paused || !sourceState.frozenFrame) return false;
+  const W = els.canvas.width, H = els.canvas.height;
+  ctx.drawImage(sourceState.frozenFrame, 0, 0, W, H);
+  renderOverlayFrame(sourceState.lastLM, sourceState.lastHulls || [], W, H);
+  return true;
+}
+
+export function toggleSourcePause() {
+  if (!sourceState.running || sourceState.sourceKind === "image") return "unchanged";
+  if (!sourceState.paused) {
+    const lm = sourceState.lastLM;
+    if (!lm || sourceState.presence <= 0) {
+      setMsg("尚未获得稳定人脸，请正对摄像头后再定格。");
+      return "unavailable";
+    }
+    const frozen = document.createElement("canvas");
+    frozen.width = els.canvas.width; frozen.height = els.canvas.height;
+    const frozenCtx = frozen.getContext("2d");
+    frozenCtx.drawImage(sourceState.source, 0, 0, frozen.width, frozen.height);
+    sourceState.frozenFrame = frozen;
+    sourceState.paused = true;
+    els.pause.textContent = "▶ 继续实时";
+    els.pause.setAttribute("aria-pressed", "true");
+    setLive(false, "已定格 · 可微调");
+    setMsg("已定格当前帧。可拖动、擦除或对称调整曲线；继续实时后微调结果会自动跟随人脸。");
+    redrawPausedFrame();
+    setRefineAvailability();
+    return "paused";
+  }
+
+  sourceState.paused = false;
+  sourceState.frozenFrame = null;
+  const refinementCommitted = commitRefineForLive();
+  els.pause.textContent = sourceState.sourceKind === "camera" ? "📷 定格微调" : "⏸ 暂停";
+  els.pause.setAttribute("aria-pressed", "false");
+  setMsg(refinementCommitted ? "已返回实时画面，当前微调曲线会继续跟随人脸。" : null);
+  setLive(true, sourceState.sourceKind === "camera" ? "实时摄像头" : "视频");
+  requestFrame();
+  return "resumed";
+}
+
+export function requestFrame() {
+  if (!sourceState.running || sourceState.paused || frameScheduled) return;
+  frameScheduled = true;
+  requestAnimationFrame(loop);
+}
+
+export function loop() {
+  frameScheduled = false;
+  if (!sourceState.running || sourceState.paused) return;
+  const W = els.canvas.width, H = els.canvas.height;
+  ctx.drawImage(sourceState.source, 0, 0, W, H);
+  const t = performance.now();
+
+  let lm = null, hulls = [];
+  if (sourceState.sourceKind === "image") {
+    if (!sourceState.imageCacheLM) {
+      const res = modelState.landmarker.detectForVideo(sourceState.source, t);
+      sourceState.imageCacheLM = (res.faceLandmarks && res.faceLandmarks[0]) ? toPixels(res.faceLandmarks[0], W, H) : null;
+      sourceState.imageHulls = detectHands(t, W, H);
+    } else if (renderState.handOcc && sourceState.imageHulls === null) {
+      sourceState.imageHulls = detectHands(t, W, H);
+    }
+    lm = sourceState.imageCacheLM; hulls = renderState.handOcc ? sourceState.imageHulls || [] : [];
+    sourceState.presence = lm ? 1 : 0;
+  } else if (sourceState.source.currentTime !== undefined) {
+    const res = modelState.landmarker.detectForVideo(sourceState.source, t);
+    if (res.faceBlendshapes && res.faceBlendshapes.length) {
+      // 全部 blendshape 存成 {类目名: 分数}，供 FLAME(jawOpen) 与 RSTL 表情适配共用。
+      const blend = {};
+      for (const c of res.faceBlendshapes[0].categories) blend[c.categoryName] = c.score;
+      sourceState.rawBlend = blend;
+      sourceState.blend = blend;
+      sourceState.jawOpen = blend.jawOpen || 0;
+    }
+    if (res.faceLandmarks && res.faceLandmarks.length) {
+      lm = toPixels(res.faceLandmarks[0], W, H);
+      if (renderState.smoothLevel > 0) lm = renderState.smoother.filter(lm, t / 1000);
+      sourceState.lastLM = lm; sourceState.presence = Math.min(1, sourceState.presence + 0.34);
+    } else {
+      sourceState.presence = Math.max(0, sourceState.presence - 0.16);
+      if (sourceState.presence <= 0) { renderState.smoother.reset(); sourceState.lastLM = null; }
+      lm = sourceState.lastLM;
+    }
+    hulls = detectHands(t, W, H);
+  }
+
+  if (lm) sourceState.lastLM = lm;
+  sourceState.lastHulls = hulls || [];
+  const lineCount = renderOverlayFrame(lm, hulls, W, H);
+
+  const now = performance.now();
+  fpsEMA = fpsEMA ? fpsEMA * 0.9 + (1000 / Math.max(1, now - lastT)) * 0.1 : 30;
+  frameMetricsSeen += 1;
+  if (sourceState.sourceKind !== "image" && frameMetricsSeen % 30 === 0) {
+    const detail = {
+      phase: "frame",
+      sourceKind: sourceState.sourceKind,
+      facePresent: Boolean(lm && sourceState.presence > 0),
+      lineCount,
+      canvasWidth: W,
+      canvasHeight: H,
+    };
+    recordMetricSample("frame.fps", Number(fpsEMA.toFixed(2)), detail);
+    recordMetricSample("frame.durationMs", Number((now - t).toFixed(2)), detail);
+    if (!detail.facePresent) countMetric(`faceLandmarker.noFaceFrame.${sourceState.sourceKind || "unknown"}`);
+  }
+  lastT = now; els.fps.textContent = fpsEMA.toFixed(0) + " fps";
+  if (sourceState.sourceKind !== "image") requestFrame();
+}

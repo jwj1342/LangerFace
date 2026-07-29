@@ -1,7 +1,6 @@
 import {
   Activity,
   ArrowLeft,
-  Boxes,
   ClipboardCheck,
   Database,
   FileCode2,
@@ -43,15 +42,15 @@ const SETTINGS_COPY = {
     eyebrow: "系统设置",
     status: "图谱维护",
     title: "标准张力线图谱的生产、复核与导出",
-    summary: "这里承载 3D 线标注和图谱校验入口。它服务于科研人员和管理员，不进入医生的病例规划主流程。",
+    summary: "这里承载 3D 线标注和图谱校验入口，服务于标准图谱的生产与复核。",
   },
   developer: {
     id: "settingsDeveloper",
     label: "开发者诊断",
     eyebrow: "系统设置",
     status: "诊断维护",
-    title: "AI 摘要服务、三维资产和运行时诊断",
-    summary: "这里集中放置服务连接测试、模型资产预览和兼容工作台入口。医生病例流程只显示临床任务，不直接暴露这些研发工具。",
+    title: "AI 摘要服务和运行时诊断",
+    summary: "这里集中放置服务连接测试、后台任务状态和独立研究工具入口。",
   },
 } satisfies Record<SettingsRouteProps["section"], {
   eyebrow: string;
@@ -91,8 +90,8 @@ function SettingsSidebar({ section }: SettingsRouteProps) {
       <Card>
         <CardHeader><span>设置导航</span><SlidersHorizontal size={16} /></CardHeader>
         <CardContent>
-          <ReactShellNavLink to="/cases">
-            <span>返回病例大厅</span>
+          <ReactShellNavLink to="/">
+            <span>返回工具入口</span>
             <ArrowLeft size={16} />
           </ReactShellNavLink>
           <ReactShellNavLink to="/settings/atlas">
@@ -107,21 +106,21 @@ function SettingsSidebar({ section }: SettingsRouteProps) {
       </Card>
 
       <Card>
-        <CardHeader><span>主流程边界</span><ShieldCheck size={16} /></CardHeader>
+        <CardHeader><span>功能边界</span><ShieldCheck size={16} /></CardHeader>
         <CardContent>
-          <Hint>医生日常路径保持为“病例大厅 - 面部评估 - 切口规划 - 方案确认”。图谱生产、模型预览和服务诊断只从系统设置进入。</Hint>
-          <div className="case-mini-grid settings-mini-grid">
-            <SettingMetric label="临床主流程" value="病例" />
+          <Hint>当前阶段不建立病例工作流或患者档案。各研究工具独立运行，只通过短期会话数据连接预览结果。</Hint>
+          <div className="settings-mini-grid">
+            <SettingMetric label="病例存储" value="不提供" />
             <SettingMetric label="图谱维护" value="设置" />
             <SettingMetric label="服务配置" value="设置" />
-            <SettingMetric label="兼容工具" value="受控" />
+            <SettingMetric label="研究工具" value="独立" />
           </div>
         </CardContent>
       </Card>
 
-      <details className="case-disclosure case-developer-notes">
+      <details className="settings-disclosure">
         <summary>状态边界说明</summary>
-        <div className="case-disclosure-body">
+        <div className="settings-disclosure-body">
           <Hint>{STATE_BOUNDARY_NOTE}</Hint>
         </div>
       </details>
@@ -135,13 +134,13 @@ function SettingsHero({ section }: SettingsRouteProps) {
   return (
     <section className="settings-hero" id={copy.id} aria-labelledby={`${copy.id}Title`}>
       <div>
-        <span className="case-lobby-kicker">{copy.label}</span>
+        <span className="settings-kicker">{copy.label}</span>
         <h2 id={`${copy.id}Title`}>{copy.title}</h2>
         <p>{copy.summary}</p>
       </div>
       <div className="settings-hero-readiness" aria-label="设置页状态">
         <SettingMetric label="入口归属" value="系统设置" />
-        <SettingMetric label="医生主流程" value="不显示" />
+        <SettingMetric label="病例功能" value="未启用" />
         <SettingMetric label="路由状态" value={copy.status} />
       </div>
     </section>
@@ -166,9 +165,9 @@ function AtlasSettings() {
         <Card>
           <CardHeader><span>图谱状态</span><ClipboardCheck size={16} /></CardHeader>
           <CardContent className="settings-boundary-list">
-            <p><b>当前定位</b><span>生产和复核标准图谱，不直接参与医生病例规划。</span></p>
+            <p><b>当前定位</b><span>生产和复核标准图谱，不保存患者或病例信息。</span></p>
             <p><b>校验要求</b><span>正式图谱需要记录校验者、拓扑版本、来源和 validated 状态。</span></p>
-            <p><b>数据边界</b><span>图谱维护不应混入患者照片、视频或病例报告内容。</span></p>
+            <p><b>数据边界</b><span>图谱维护不应混入患者照片、视频或任何身份信息。</span></p>
           </CardContent>
         </Card>
 
@@ -183,11 +182,11 @@ function AtlasSettings() {
         </Card>
 
         <Card>
-          <CardHeader><span>临床入口保护</span><ShieldCheck size={16} /></CardHeader>
+          <CardHeader><span>工具入口</span><ShieldCheck size={16} /></CardHeader>
           <CardContent>
-            <Hint>病例大厅和病例步骤条不直接展示图谱标注工具。需要维护图谱时，从“系统设置 - 图谱库管理”进入，退出后回到病例大厅。</Hint>
+            <Hint>图谱标注是独立维护工具。完成后返回工具入口，不生成病例或患者档案。</Hint>
             <Button asChild variant="workbench">
-              <Link to="/cases"><ArrowLeft size={16} />返回病例大厅</Link>
+              <Link to="/"><ArrowLeft size={16} />返回工具入口</Link>
             </Button>
           </CardContent>
         </Card>
@@ -206,16 +205,6 @@ function DeveloperSettings() {
         </div>
 
         <Card>
-          <CardHeader><span>三维资产诊断</span><Boxes size={16} /></CardHeader>
-          <CardContent>
-            <Hint>用于确认标准三维面部模型、图谱资产和浏览器渲染链路是否可用。该入口不作为医生病例规划页面。</Hint>
-            <Button asChild variant="workbench">
-              <Link to="/three-preview"><Boxes size={16} />打开三维模型预览</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
           <CardHeader><span>兼容工作台</span><Activity size={16} /></CardHeader>
           <CardContent className="settings-action-list">
             <ReactShellNavLink to="/live"><span>实时张力线旧入口</span><Activity size={16} /></ReactShellNavLink>
@@ -232,8 +221,8 @@ function DeveloperSettings() {
           <CardHeader><span>诊断边界</span><ShieldCheck size={16} /></CardHeader>
           <CardContent className="settings-boundary-list">
             <p><b>AI 服务</b><span>只测试浏览器到 OpenAI-compatible / vLLM 服务的连接，不参与确定性切口几何。</span></p>
-            <p><b>资产预览</b><span>用于排查模型加载、图谱懒加载和渲染兼容性，不替代病例画布。</span></p>
-            <p><b>兼容入口</b><span>保留回归测试价值，但不应重新出现在医生主导航。</span></p>
+            <p><b>运行时诊断</b><span>用于排查服务连接、后台任务状态和浏览器兼容性。</span></p>
+            <p><b>独立入口</b><span>工具不共享病例状态，也不建立历史档案。</span></p>
           </CardContent>
         </Card>
       </section>
@@ -249,11 +238,11 @@ export function SettingsRoute({ section }: SettingsRouteProps) {
   });
 
   return (
-    <ReactPage className="case-workflow-page settings-workbench-page">
+    <ReactPage className="dark-workbench-page settings-workbench-page">
       <ReactShell>
         <SettingsSidebar section={section} />
-        <ReactShellMain className="case-workflow-main">
-          <div className="case-workflow-stack settings-workbench-stack">
+        <ReactShellMain className="settings-workbench-main">
+          <div className="settings-workbench-stack">
             {section === "atlas" ? <AtlasSettings /> : <DeveloperSettings />}
           </div>
         </ReactShellMain>

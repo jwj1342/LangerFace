@@ -30,7 +30,6 @@ manual / temporary
 |---|---|
 | GitHub Actions | 代码质量、Python 测试、Web TypeScript 几何对拍、Vite 构建能否通过 |
 | Vercel | Production URL、必要时手动创建的 Preview URL、缓存头、域名 |
-| Cloudflare（将来） | Worker API、D1、R2、受限数据鉴权；不负责当前静态前端部署 |
 
 不要同时启用“Vercel Git 自动部署”和“GitHub Actions 里用 Vercel CLI 自动部署”，否则同一个 commit 可能产生重复部署和重复状态检查。
 
@@ -94,7 +93,7 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 
 React SPA 的线上入口是 `/app/*`，Vercel 会把 `/app` 和 `/app/(.*)` rewrite 到 `/app/index.html`。因此 SPA shell 的 JS/CSS
 和运行时资产都必须从站点根 `/assets/` 读取，不能写成 document-relative 的 `../assets/`、`assets/` 或 `assets/foo.json`。
-在 `/app/incision`、`/app/case/:id/plan` 等嵌套路由下，相对路径会被浏览器解析为 `/app/assets/foo.json`、`/app/case/assets/foo.js`
+在 `/app/incision`、`/app/settings/atlas` 等嵌套路由下，相对路径会被浏览器解析为 `/app/assets/foo.json`、`/app/settings/assets/foo.js`
 等错误 URL；这类 URL 会命中 SPA rewrite，返回 HTML，而不是 JSON/JS。浏览器控制台常见表现是：
 `SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON`。
 
@@ -104,7 +103,7 @@ React SPA 的线上入口是 `/app/*`，Vercel 会把 `/app` 和 `/app/(.*)` rew
 - `web/vite.config.ts` 的 `base: "/"` 让构建产物中的 SPA JS/CSS 使用 `/assets/...`，避免深链接下解析成 `/app/**/assets/...`。
 - `web/src/services/assetLoader.ts` 的默认 asset base 是 `/assets/`，并把裸 `assets/` 归一到站点根 `/assets/`。
 - 只有显式远端资产源才通过 `?assetBase=` 或 `VITE_LANGERFACE_ASSET_BASE_URL` 覆盖；覆盖值必须是浏览器可访问的 HTTPS/API 地址或明确的根路径。
-- 排障时看 Network 面板：SPA JS/CSS 和运行时 JSON/task/bin 请求应为 `/assets/...` 或配置的远端 asset base，不应出现 `/app/assets/...` 或 `/app/case/assets/...`。
+- 排障时看 Network 面板：SPA JS/CSS 和运行时 JSON/task/bin 请求应为 `/assets/...` 或配置的远端 asset base，不应出现 `/app/assets/...` 或 `/app/settings/assets/...`。
 - 回归测试在 `tools/test_asset_loader.ts`，会模拟 `https://example.test/app/incision`，防止嵌套路由再次污染资产 URL。
 
 ### 限流时的处理顺序
@@ -160,15 +159,8 @@ Vercel [Deployment Protection](https://vercel.com/docs/deployment-protection) �
 ## 环境变量
 
 当前纯静态前端不需要 Vercel 环境变量。
-
-将来接 Cloudflare Worker API 时，建议新增：
-
-| 变量 | 示例 | 用途 |
-|---|---|---|
-| `VITE_API_BASE_URL` | `https://api.langerface.example.com` | 前端访问 Worker API |
-| `VITE_APP_ENV` | `preview` / `production` | 可选，用于诊断面板或日志标记 |
-
-Vite 只会把 `VITE_` 前缀变量注入浏览器端。不要把私钥、R2 token、Cloudflare token、Vercel token 放进 `VITE_*`。
+当前产品边界不包含病例后端、Worker API、D1/R2 数据库或远端病例数据源。若仅为诊断面板增加公开配置，仍要记住 Vite 会把
+`VITE_` 前缀变量注入浏览器端，任何私钥或平台 token 都不能放进 `VITE_*`。
 
 ## 什么时候改用 GitHub Actions 部署到 Vercel
 

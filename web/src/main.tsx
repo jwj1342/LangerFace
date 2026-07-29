@@ -8,7 +8,7 @@ const root = document.getElementById("root");
 if (!root) throw new Error("React root element #root was not found");
 
 createRoot(root).render(
-  <BrowserRouter basename="/app">
+  <BrowserRouter>
     <App />
   </BrowserRouter>,
 );

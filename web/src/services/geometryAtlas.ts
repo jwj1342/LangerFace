@@ -19,6 +19,7 @@ export type AtlasPoint = [number, number, number];
 
 export interface AtlasLine {
   name?: string;
+  region?: string;
   points?: AtlasPoint[];
 }
 
@@ -38,6 +39,115 @@ export interface VisibleTriangleOptions {
   minTriangleAreaPx2?: number;
 }
 
+const FOREHEAD_BRIDGE_ARC_REGION = "forehead_bridge_arc_v15";
+
+function foreheadBridgeRanks(
+  lines: AtlasLine[],
+  landmarksPx: Vec3[],
+  triangles: Triangle[],
+): Map<AtlasLine, number> {
+  const bridgeLines = lines.filter((line) => line.region === FOREHEAD_BRIDGE_ARC_REGION);
+  if (bridgeLines.length === 0) return new Map();
+  if (landmarksPx.length > 10) {
+    const anchor = landmarksPx[9];
+    const top = landmarksPx[10];
+    const axisX = top[0] - anchor[0];
+    const axisY = top[1] - anchor[1];
+    const axisNorm = Math.hypot(axisX, axisY);
+    if (axisNorm > 1e-9) {
+      const unitX = axisX / axisNorm;
+      const unitY = axisY / axisNorm;
+      const meanHeight = (line: AtlasLine): number => {
+        let total = 0;
+        let count = 0;
+        for (const [tri, u, v] of line.points || []) {
+          const triangle = triangles[tri];
+          if (!triangle) continue;
+          const a = landmarksPx[triangle[0]];
+          const b = landmarksPx[triangle[1]];
+          const c = landmarksPx[triangle[2]];
+          if (!a || !b || !c) continue;
+          const w = 1 - u - v;
+          const x = u * a[0] + v * b[0] + w * c[0];
+          const y = u * a[1] + v * b[1] + w * c[1];
+          total += (x - anchor[0]) * unitX + (y - anchor[1]) * unitY;
+          count++;
+        }
+        return count > 0 ? total / count : 0;
+      };
+      bridgeLines.sort((left, right) => meanHeight(right) - meanHeight(left));
+    }
+  }
+  const denominator = Math.max(bridgeLines.length - 1, 1);
+  return new Map(bridgeLines.map((line, index) => [line, index / denominator]));
+}
+
+function extendForeheadBridge(points: Vec3[], landmarksPx: Vec3[], layerRank: number): Vec3[] {
+  if (points.length === 0 || landmarksPx.length <= 10) return points;
+  const anchor = landmarksPx[9];
+  const top = landmarksPx[10];
+  const axisX = top[0] - anchor[0];
+  const axisY = top[1] - anchor[1];
+  const axisNorm = Math.hypot(axisX, axisY);
+  if (axisNorm <= 1e-9) return points;
+  const unitX = axisX / axisNorm;
+  const unitY = axisY / axisNorm;
+  const lateralX = -unitY;
+  const lateralY = unitX;
+  const out = points.map((point) => [...point] as Vec3);
+  const lateral = out.map((point) => (
+    (point[0] - anchor[0]) * lateralX + (point[1] - anchor[1]) * lateralY
+  ));
+
+  for (const point of out) {
+    const parallel = (point[0] - anchor[0]) * unitX + (point[1] - anchor[1]) * unitY;
+    point[0] += 0.86 * parallel * unitX;
+    point[1] += 0.86 * parallel * unitY;
+  }
+
+  const currentHalfWidth = Math.max(...lateral.map((value) => Math.abs(value)));
+  const landmarkXs = landmarksPx.map((point) => point[0]);
+  const faceWidth = Math.max(...landmarkXs) - Math.min(...landmarkXs);
+  if (currentHalfWidth > 1e-9 && faceWidth > 1e-9) {
+    const widthFactor = 0.82 * faceWidth / currentHalfWidth;
+    for (let index = 0; index < out.length; index++) {
+      out[index][0] += (widthFactor - 1) * lateral[index] * lateralX;
+      out[index][1] += (widthFactor - 1) * lateral[index] * lateralY;
+    }
+  }
+
+  for (let iteration = 0; iteration < 5; iteration++) {
+    const smoothed = out.map((point) => [...point] as Vec3);
+    for (let index = 1; index < out.length - 1; index++) {
+      smoothed[index][0] = 0.25 * out[index - 1][0] + 0.5 * out[index][0] + 0.25 * out[index + 1][0];
+      smoothed[index][1] = 0.25 * out[index - 1][1] + 0.5 * out[index][1] + 0.25 * out[index + 1][1];
+    }
+    for (let index = 0; index < out.length; index++) out[index] = smoothed[index];
+  }
+
+  const smoothedLateral = out.map((point) => (
+    (point[0] - anchor[0]) * lateralX + (point[1] - anchor[1]) * lateralY
+  ));
+  const halfWidth = Math.max(...smoothedLateral.map((value) => Math.abs(value)));
+  const landmarkYs = landmarksPx.map((point) => point[1]);
+  const faceHeight = Math.max(...landmarkYs) - Math.min(...landmarkYs);
+  if (halfWidth > 1e-9 && faceHeight > 1e-9) {
+    for (let index = 0; index < out.length; index++) {
+      const normalized = Math.min(1, Math.abs(smoothedLateral[index]) / halfWidth);
+      const arch = 0.140 * faceHeight * (1 - normalized ** 2.0);
+      out[index][0] += arch * unitX;
+      out[index][1] += arch * unitY;
+    }
+  }
+  if (faceHeight > 1e-9) {
+    for (const point of out) {
+      point[0] -= 0.100 * layerRank * faceHeight * unitX;
+      point[1] -= 0.100 * layerRank * faceHeight * unitY;
+    }
+  }
+  return out;
+}
+
 export function toPixels(landmarks: NormalizedLandmark[], width: number, height: number): Vec3[] {
   const out = new Array<Vec3>(landmarks.length);
   for (let i = 0; i < landmarks.length; i++) {
@@ -50,6 +160,7 @@ export function toPixels(landmarks: NormalizedLandmark[], width: number, height:
 export function mapAtlas(lines: AtlasLine[] | unknown, landmarksPx: Vec3[], triangles: Triangle[]): MappedAtlasLine[] {
   const result: MappedAtlasLine[] = [];
   if (!Array.isArray(lines)) return result;
+  const bridgeRanks = foreheadBridgeRanks(lines, landmarksPx, triangles);
   for (const line of lines) {
     const pts: Vec3[] = [];
     const tris: number[] = [];
@@ -71,7 +182,10 @@ export function mapAtlas(lines: AtlasLine[] | unknown, landmarksPx: Vec3[], tria
       ]);
       tris.push(tri);
     }
-    result.push({ name: line.name, pts, tris });
+    const mappedPoints = line.region === FOREHEAD_BRIDGE_ARC_REGION
+      ? extendForeheadBridge(pts, landmarksPx, bridgeRanks.get(line) ?? 0)
+      : pts;
+    result.push({ name: line.name, pts: mappedPoints, tris });
   }
   return result;
 }

@@ -156,8 +156,8 @@ P = u·V0 + v·V1 + w·V2
 - `web/vite.config.ts` 使用 `base: "/"`，让 SPA shell 的 JS/CSS 在深链接下仍从站点根 `/assets/...` 读取；`copy-runtime-assets`
   会把 `web/assets/` 复制到 `dist/assets/`；`web/src/services/assetLoader.ts`
   通过稳定文件名清单从站点根 `/assets/` 读取 `.task`、atlas JSON、拓扑、标准脸和 3D 示例资产。React SPA 运行在
-  `/app/*` 下，运行时代码不能写 document-relative `../assets/...` 或 `assets/...`，否则 `/app/incision`、`/app/case/:id/plan`
-  这类嵌套路由会解析成 `/app/assets/...` 或 `/app/case/assets/...` 并被 Vercel SPA rewrite 回退成 HTML。需要外置资产时只通过 `?assetBase=` 或
+  `/app/*` 下，运行时代码不能写 document-relative `../assets/...` 或 `assets/...`，否则 `/app/incision`、`/app/settings/atlas`
+  这类嵌套路由会解析成 `/app/assets/...` 或 `/app/settings/assets/...` 并被 Vercel SPA rewrite 回退成 HTML。需要外置资产时只通过 `?assetBase=` 或
   `VITE_LANGERFACE_ASSET_BASE_URL` 覆盖。
 - `tools/serve_web.py` 仍可服务未打包的 `web/` 源文件，但正式前端开发与部署以 Vite 为准。
 - `getUserMedia`（摄像头）要求安全上下文：`http://localhost`/`127.0.0.1` 即可（无需 https）。
@@ -197,8 +197,8 @@ P = u·V0 + v·V1 + w·V2
   在 `disposeLiveWorkbench()` 中 `clearDomBinding()`，避免 SPA 长生命周期保留已卸载的 canvas、video 或 wrapper 引用。
 - 图片模式的 canvas contain-fit、pan/zoom 和 `ResizeObserver` 生命周期由 `src/services/liveCanvasFit.ts`
   负责，并通过 `src/services/liveState.ts` 明确 `imageView` 状态边界。
-- 标注、切口和实时页共享的浏览器数据源契约与
-  `sessionStorage` 本地实现由 `src/services/dataSource.ts` 负责，后续切换远端数据源时应替换该 service 实现。
+- 标注、切口和实时页共享的资产读取与短期跨工具预览契约由 `src/services/dataSource.ts` 负责。
+  跨页 payload 只进入当前标签页的 `sessionStorage`；该 service 不提供患者/病例记录、本地长期保存或远端病例数据源接口。
 - OpenAI-compatible / vLLM Provider 的 Base URL 规范化、
   `/models` 连通性测试和类型契约由 `src/services/llmProvider.ts` 负责，候选几何仍不依赖 Provider。
 - 实时页的 canvas/WebM 录制、额外视图合成和下载生命周期由 `src/services/canvasRecording.ts` 负责。

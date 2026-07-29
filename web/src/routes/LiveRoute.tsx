@@ -10,7 +10,7 @@ export function LiveRoute() {
     <ManagedWorkbenchRoute
       controller={liveLegacyController}
       failedStatus="实时显示加载失败"
-      legacyNotice="兼容工具：正式临床流程请从病例大厅进入，本页用于实时张力线评估。"
+      legacyNotice="实时张力线研究工具：在当前浏览器会话中处理摄像头、照片或视频。"
       loadingStatus="加载实时显示"
       mountedStatus="实时显示已挂载"
       unloadedStatus="实时显示已卸载"

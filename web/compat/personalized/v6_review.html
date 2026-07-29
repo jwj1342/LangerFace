@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="基于多表情皱纹严格并集的 V6 个性化 2D RSTL 结果展示与本地审核。">
+  <title>RSTL V6 · 个性化微调审核</title>
+  <link rel="stylesheet" href="/compat/personalized/v6_review.css">
+</head>
+<body>
+  <header class="v6-shell v6-header">
+    <a class="brand" href="./"><span class="brand-mark" aria-hidden="true"></span><span>LangerFace</span></a>
+    <nav class="top-nav" aria-label="页面导航">
+      <a href="#results">实验结果</a>
+      <a href="#review">本地审核</a>
+      <a href="/personalized">个性化采集 Demo</a>
+      <a href="./">返回主界面</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="v6-shell hero">
+      <div>
+        <div class="eyebrow">Personalized RSTL · Baseline V6</div>
+        <h1>皱纹走势引导的<br>局部 RSTL 微调</h1>
+        <p class="lead">9 个表情以严格并集汇总个体皱纹证据，在中性脸坐标系内仅沿法向微调原始 216 条曲线。曲线数量、点序与连接关系保持不变。</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#results">查看 5 例完整结果</a>
+          <a class="button" href="#review">审核本地 V6 文件</a>
+        </div>
+      </div>
+      <aside class="hero-card" aria-label="V6 流程">
+        <div class="flow">
+          <div class="flow-row"><span class="flow-n">1</span><span>YOLOv8 皱纹检测，confidence = 0.07</span></div><div class="flow-arrow"></div>
+          <div class="flow-row"><span class="flow-n">2</span><span>9 表情配准后严格并集，不取交集</span></div><div class="flow-arrow"></div>
+          <div class="flow-row"><span class="flow-n">3</span><span>0.013 × face width 软连接与统一方向窗口</span></div><div class="flow-arrow"></div>
+          <div class="flow-row"><span class="flow-n">4</span><span>连续折线投影、真实证据弧长与覆盖率筛选</span></div><div class="flow-arrow"></div>
+          <div class="flow-row"><span class="flow-n">5</span><span>曲线局部区间级 0.007 × face width P90 保护</span></div><div class="flow-arrow"></div>
+          <div class="flow-row"><span class="flow-n">6</span><span>交叉、折角、位移与拓扑检查后导出</span></div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="section" id="results">
+      <div class="v6-shell">
+        <div class="section-head">
+          <div><div class="eyebrow">Verified experiment</div><h2>V6 完整可视化结果</h2></div>
+          <p class="section-copy">绿色为皱纹证据，灰色为初始 RSTL，洋红为微调后 RSTL，青色为位移。下列结果均来自 confidence 0.07 与 216 曲线图谱。</p>
+        </div>
+        <div class="subject-tabs" id="subjectTabs" role="tablist" aria-label="受试者"></div>
+        <div class="view-tabs" id="viewTabs" role="tablist" aria-label="结果视图" style="margin-top:10px"></div>
+        <div class="example-grid">
+          <div class="image-panel"><img id="exampleImage" alt="V6 实验结果"></div>
+          <aside class="metrics" id="exampleMetrics" aria-live="polite"></aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="review">
+      <div class="v6-shell">
+        <div class="section-head">
+          <div><div class="eyebrow">Local-only reviewer</div><h2>审核你自己的 V6 输出</h2></div>
+          <p class="section-copy">一次选择 `personalized_rstl.json`、中性脸图像和可选的 `wrinkle_mask.png`。文件只在当前浏览器中读取，不上传服务器。</p>
+        </div>
+        <div class="review-grid">
+          <aside class="control-panel">
+            <label class="drop-zone" id="dropZone" for="fileInput">
+              <strong>选择或拖入 V6 文件</strong>
+              <span>JSON + 中性脸图像 + 可选 wrinkle mask</span>
+            </label>
+            <input id="fileInput" type="file" accept=".json,image/*" multiple hidden>
+
+            <div class="control-group">
+              <span class="control-title">显示图层</span>
+              <label class="check"><span><i class="swatch" style="background:#929aaa"></i>初始 RSTL</span><input id="showPrior" type="checkbox" checked></label>
+              <label class="check"><span><i class="swatch" style="background:#ff4fd8"></i>个性化 RSTL</span><input id="showFinal" type="checkbox" checked></label>
+              <label class="check"><span><i class="swatch" style="background:#35e99b"></i>皱纹 mask</span><input id="showMask" type="checkbox" checked></label>
+              <label class="check"><span><i class="swatch" style="background:#43d9ff"></i>法向位移箭头</span><input id="showArrows" type="checkbox" checked></label>
+            </div>
+
+            <div class="control-group">
+              <span class="control-title">背景不透明度</span>
+              <input id="backgroundOpacity" type="range" min="0" max="100" value="86" style="width:100%">
+            </div>
+
+            <div id="reviewStatus" class="review-status">尚未加载 V6 结果。</div>
+            <div id="reviewMetrics" class="review-metrics" hidden></div>
+            <button class="button" id="exportButton" type="button" disabled style="width:100%;margin-top:14px">导出当前对比 PNG</button>
+            <p class="privacy">在线页用于结果展示与复核，不在浏览器内运行 YOLO。完整检测与微调仍由本地 V6 一键流程完成。</p>
+          </aside>
+
+          <div class="canvas-panel">
+            <div class="canvas-head"><span id="canvasTitle">V6 微调前后叠加</span><span>灰 / 洋红 / 绿 / 青</span></div>
+            <div class="canvas-wrap"><canvas id="reviewCanvas" width="768" height="768" aria-label="V6 RSTL 审核画布"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="v6-shell">
+        <div class="section-head"><div><div class="eyebrow">What changed in V6</div><h2>证据组织升级，不放大位移</h2></div></div>
+        <div class="method-grid">
+          <article class="method-card"><b>区间级 P90</b><p>每条 RSTL 的每个受影响区间独立执行 0.007 × face width 限制，避免少数异常位移压缩其他区域。</p></article>
+          <article class="method-card"><b>归一化软连接</b><p>以 0.013 × face width 连接方向相容的短皱纹段；软连接只改善趋势估计，不增加直接证据。</p></article>
+          <article class="method-card"><b>曲线区间证据门槛</b><p>以真实弧长、覆盖率与平均置信度决定是否微调，直接点数仅作为辅助条件。</p></article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="v6-shell footer"><span>V6 experimental baseline · 仅用于研究与可视化审核</span><span>216 curves · topology preserved</span></footer>
+  <script type="module" src="/compat/personalized/v6_review.js"></script>
+</body>
+</html>

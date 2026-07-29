@@ -21,7 +21,7 @@ export function LiveWorkbench() {
       workspace="live"
     >
       <WorkbenchBrand
-        eyebrow="病例步骤一 · 面部评估"
+        eyebrow="实时 2D 研究工具"
         title="面部评估与张力线映射"
         action={<StatusBadge className="loading" id="modelBadge">模型加载中...</StatusBadge>}
       />

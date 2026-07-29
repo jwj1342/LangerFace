@@ -5,6 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { mapAtlas, visibleTriangles, noseTriangles, innerMouthTriangles } from "../web/src/services/geometryAtlas.ts";
 import { OneEuro } from "../web/src/services/geometrySmoothing.ts";
+import { mapAtlas as mapCurrentAtlas } from "../web/current/geometry.js";
+import { mapAtlas as mapPersonalizedAtlas } from "../web/compat/personalized/geometry.js";
 
 const REPO = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const J = (p) => JSON.parse(fs.readFileSync(path.join(REPO, p), "utf8"));
@@ -18,25 +20,47 @@ const noseTris = noseTriangles(triangles);
 const innerMouth = innerMouthTriangles(triangles);
 
 let maxPosErr = 0;
+let maxRuntimeParityErr = 0;
 let visMismatches = 0;
 let nPts = 0;
 
 for (const fr of expected.frames) {
   const lm = fr.landmarks; // [[x,y,z]...478]
   const mapped = mapAtlas(atlas, lm, triangles);
+  const mappedCurrent = mapCurrentAtlas(atlas, lm, triangles);
+  const mappedPersonalized = mapPersonalizedAtlas(atlas, lm, triangles);
   const vis = visibleTriangles(lm, triangles, noseTris);
 
-  if (mapped.length !== fr.lines.length) {
-    console.error(`FAIL frame ${fr.idx}: line count ${mapped.length} != ${fr.lines.length}`);
+  if (
+    mapped.length !== fr.lines.length ||
+    mappedCurrent.length !== mapped.length ||
+    mappedPersonalized.length !== mapped.length
+  ) {
+    console.error(
+      `FAIL frame ${fr.idx}: line counts ts=${mapped.length}, current=${mappedCurrent.length}, ` +
+      `personalized=${mappedPersonalized.length}, python=${fr.lines.length}`,
+    );
     process.exit(1);
   }
   for (let li = 0; li < mapped.length; li++) {
     const js = mapped[li], py = fr.lines[li];
+    const current = mappedCurrent[li], personalized = mappedPersonalized[li];
+    if (current.pts.length !== js.pts.length || personalized.pts.length !== js.pts.length) {
+      console.error(`FAIL frame ${fr.idx}, line ${li}: mapped point count mismatch`);
+      process.exit(1);
+    }
     for (let i = 0; i < js.pts.length; i++) {
       nPts++;
       const dx = Math.abs(js.pts[i][0] - py.pts[i][0]);
       const dy = Math.abs(js.pts[i][1] - py.pts[i][1]);
       maxPosErr = Math.max(maxPosErr, dx, dy);
+      maxRuntimeParityErr = Math.max(
+        maxRuntimeParityErr,
+        Math.abs(js.pts[i][0] - current.pts[i][0]),
+        Math.abs(js.pts[i][1] - current.pts[i][1]),
+        Math.abs(js.pts[i][0] - personalized.pts[i][0]),
+        Math.abs(js.pts[i][1] - personalized.pts[i][1]),
+      );
       const tri = js.tris[i];
       const jsVis = (vis[tri] && !innerMouth.has(tri)) ? 1 : 0;
       if (jsVis !== py.vis[i]) visMismatches++;
@@ -63,9 +87,10 @@ for (let f = 0; f < oeFix.inputs.length; f++) {
 
 console.log(`points compared: ${nPts}`);
 console.log(`max position error (px): ${maxPosErr.toExponential(3)}`);
+console.log(`max browser-runtime parity error (px): ${maxRuntimeParityErr.toExponential(3)}`);
 console.log(`visibility mismatches: ${visMismatches}`);
 console.log(`one-euro fixture max error: ${oeErr.toExponential(3)}`);
 
-const ok = maxPosErr < 1e-2 && visMismatches === 0 && oeErr < 1e-9;
+const ok = maxPosErr < 1e-2 && maxRuntimeParityErr < 1e-9 && visMismatches === 0 && oeErr < 1e-9;
 console.log(ok ? "\n✅ Web TypeScript 几何与 Python 一致" : "\n❌ 存在不一致");
 process.exit(ok ? 0 : 1);
