@@ -51,7 +51,19 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 - 非 `master` 分支直接跳过 Vercel 构建，即使 Dashboard 误开了分支部署也不会继续消耗构建资源。
 - 即使当前分支允许构建，只要这次 push 相比上一次部署没有改动 Vercel Root Directory `web/`，仍会跳过实际构建。这样 docs / tools / issue 文案类改动仍会保留 GitHub Actions 质量门禁，但不会额外消耗 Vercel Preview 构建。
 
-如果后续需要验收某个开发分支，不要把该分支加入 Git 自动部署白名单；用 Vercel Dashboard 或 Vercel CLI 手动创建一次 Preview 即可。旧的 Deployment URL 属于 Vercel 的历史记录 / 回滚能力；它们可以在 Dashboard 里清理或保留，但仓库配置能控制的是“以后哪些分支继续产生新部署”。如果想让 Dashboard 或 GitHub 仓库主页只显示更少的历史记录，需要在 Vercel Dashboard 清理旧 Deployment，或用 GitHub Deployments API 清理 GitHub 侧 deployment records；这不会退回已经消耗过的 Vercel 构建资源，也不要放进 CI 自动执行。
+如果后续需要验收某个开发分支，首选用 Vercel Dashboard 或 Vercel CLI 手动创建一次 Preview，而不是把该分支加入 Git 自动部署白名单。
+
+> ⚠️ **实测修正（2026-07-29）**：上面这条「手动创建一次 Preview 即可」在当前实现下**不成立**。
+> Dashboard 手动创建的部署确实会被创建并拉取代码（`git.deploymentEnabled` 不拦它），但紧接着
+> `scripts/vercel-ignore-build.ts` 会无条件跳过所有非 `master` 分支，于是部署以 `CANCELED` 结束、
+> 连 `npm ci` 都不会跑，那个 Preview URL 背后没有任何站点。日志特征：
+> `Vercel build skipped: branch "..." is not the production deployment branch`。
+>
+> 因此想验收开发分支，当前只有两条路：(1) 在 Vercel Project Settings 里临时把 Ignored Build Step
+> 改成 `Automatic` 再手动部署；(2) 像 PR #117 那样把该分支**显式登记**进
+> `web/vercel.json` 的 `git.deploymentEnabled` 与 `vercel-ignore-build.ts` 的
+> `temporaryPreviewBranches`，验收完成后在合并前撤销。长期更干净的做法是给 ignore 脚本一个显式的
+> 手动放行开关（例如维护者在该次部署上设一个环境变量），这样文档承诺的手动通道才真正可用。旧的 Deployment URL 属于 Vercel 的历史记录 / 回滚能力；它们可以在 Dashboard 里清理或保留，但仓库配置能控制的是“以后哪些分支继续产生新部署”。如果想让 Dashboard 或 GitHub 仓库主页只显示更少的历史记录，需要在 Vercel Dashboard 清理旧 Deployment，或用 GitHub Deployments API 清理 GitHub 侧 deployment records；这不会退回已经消耗过的 Vercel 构建资源，也不要放进 CI 自动执行。
 
 截至 2026-06-26，GitHub Deployments API 中这个仓库已有 309 条历史记录，其中 272 条是 Preview、37 条是 Production。这类计数是历史 records，不代表仍有 309 个活跃环境；真正会继续消耗 Vercel 额度的是未来新触发的构建/部署任务。
 

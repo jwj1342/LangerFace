@@ -589,8 +589,12 @@ assert.deepEqual(
     "*": false,
     "**": false,
     master: true,
+    // ⚠️ 临时例外（PR #117）：为验证运行时资产缓存响应头而开放本分支的 Preview 自动构建。
+    // 合并前删掉这一行、删掉 web/vercel.json 里对应的键、以及 vercel-ignore-build.ts 的
+    // temporaryPreviewBranches。此断言仍然拒绝任何未在此登记的分支。
+    "hotfix/runtime-asset-cache": true,
   },
-  "Vercel should only auto-deploy production from master",
+  "Vercel should only auto-deploy production from master (plus explicitly registered temporary preview branches)",
 );
 assert.equal(vercelConfig.installCommand, "npm ci", "Vercel should install from the committed npm lockfile");
 assert.equal(
