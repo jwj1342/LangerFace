@@ -22,12 +22,10 @@ import { setLive, setMsg } from "./ui.js";
 // ── 资产 / 模型加载 ───────────────────────────────────────────────────────────
 export async function ensureReady() {
   if (modelState.landmarker) return;
-  const [topology, rstl, langer, flameRstl, flameBasis] = await Promise.all([
+  const [topology, rstl, langer] = await Promise.all([
     fetch(assetUrls.topology).then((r) => r.json()),
     fetch(assetUrls.atlasRstl).then((r) => r.json()),
     fetch(assetUrls.atlasLanger).then((r) => r.json()),
-    fetch(assetUrls.atlasRstlFlameFrom2dRedline).then((r) => r.json()),
-    loadFlameBasis(assetUrls.flameBasis),
   ]);
   const tri = Array.isArray(topology) ? topology : topology.triangles;
   const topologyId = topology?.topologyId ?? TOPOLOGY_ID;
@@ -50,17 +48,10 @@ export async function ensureReady() {
   modelState.atlases.langer = loadAtlas("langer", langer);
   modelState.officialAtlases.rstl = modelState.atlases.rstl;
   modelState.officialAtlases.langer = modelState.atlases.langer;
-  const flameIssues = validateAtlas(flameRstl, flameBasis.NF, {
-    expectedSystem: "rstl",
-    expectedVersion: "0.2",
-    expectedTopologyId: "flame-2023",
-    expectedTopologyVersion: "flame-2023-v1",
-  });
-  if (flameIssues.length) throw new Error(`FLAME RSTL atlas validation failed: ${flameIssues.join(", ")}`);
-  modelState.flameRstlOverlay = new FlameCameraOverlay(flameRstl, flameBasis);
   // Default camera/template rendering must stay on the boss-provided old
-  // MediaPipe-468 RSTL atlas. Keep the FLAME overlay loaded for calibration
-  // tools, but do not silently replace the template lines in the live view.
+  // MediaPipe-468 RSTL atlas: the FLAME overlay is built lazily by
+  // ensureFlameRstlOverlay() for the 3D / calibration entries only, and never
+  // silently replaces the template lines in the live view.
   modelState.useFlameRstl = false;
   setAssetVersions({
     topology: topologyId,
@@ -104,10 +95,42 @@ export async function ensureReady() {
   els.badge.textContent = "模型就绪"; els.badge.classList.remove("loading");
   logInfo("模型与图谱加载完成。", {
     triangles: tri.length,
-    rstlLines: flameRstl.lines.length,
-    langerLines: langer.lines.length,
+    rstlLines: modelState.atlases.rstl.length,
+    langerLines: modelState.atlases.langer.length,
     handOcclusionReady: Boolean(modelState.handLandmarker),
   });
+}
+
+// FLAME 资产（约 6.9 MB basis + flame-2023 拓扑图谱）只服务 3D / 校准入口。
+// 默认 2D 路径不加载它们：任一 FLAME 资产失败都不得阻断纯 2D 启动。
+let flameRstlOverlayPromise = null;
+
+export function ensureFlameRstlOverlay() {
+  if (modelState.flameRstlOverlay) return Promise.resolve(modelState.flameRstlOverlay);
+  if (!flameRstlOverlayPromise) {
+    flameRstlOverlayPromise = (async () => {
+      const [flameRstl, flameBasis] = await Promise.all([
+        fetch(assetUrls.atlasRstlFlameFrom2dRedline).then((r) => r.json()),
+        loadFlameBasis(assetUrls.flameBasis),
+      ]);
+      const issues = validateAtlas(flameRstl, flameBasis.NF, {
+        expectedSystem: "rstl",
+        expectedVersion: "0.2",
+        expectedTopologyId: "flame-2023",
+        expectedTopologyVersion: "flame-2023-v1",
+      });
+      if (issues.length) throw new Error(`FLAME RSTL atlas validation failed: ${issues.join(", ")}`);
+      modelState.flameRstlOverlay = new FlameCameraOverlay(flameRstl, flameBasis);
+      logInfo("FLAME 资产按需加载完成。", { flameLines: flameRstl.lines.length, faces: flameBasis.NF });
+      return modelState.flameRstlOverlay;
+    })().catch((err) => {
+      flameRstlOverlayPromise = null;   // 允许下次进入 3D 入口时重试
+      countMetric("flameRstlOverlay.loadFailure");
+      logWarn("FLAME 资产加载失败：3D / 校准入口不可用，纯 2D 路径不受影响。", err);
+      throw err;
+    });
+  }
+  return flameRstlOverlayPromise;
 }
 
 function requestRedraw() {

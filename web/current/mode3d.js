@@ -6,7 +6,7 @@ import { ctx, els } from "./dom.js";
 import { applySim, toPixels, umeyama } from "./geometry.js";
 import { facesArray, fitExpression, fitShape, flameForward, loadFlameBasis } from "./flame_fit.js";
 import { countMetric, logWarn, recordEvent, recordMetricSample } from "./logger.js";
-import { ensureReady, showCameraPlaceholder, startCamera, stopSource } from "./pipeline.js";
+import { ensureFlameRstlOverlay, ensureReady, showCameraPlaceholder, startCamera, stopSource } from "./pipeline.js";
 import { modelState, reconState, renderState, sourceState } from "./state.js";
 import { setLive, setMsg } from "./ui.js";
 
@@ -245,7 +245,8 @@ export async function loadDemoRecon() {
   try {
     await ensureReady();
     if (!reconState.flameBasis) {
-      reconState.flameBasis = modelState.flameRstlOverlay?.basis || await loadFlameBasis(assetUrls.flameBasis);
+      const overlay = await ensureFlameRstlOverlay().catch(() => null);
+      reconState.flameBasis = overlay?.basis || await loadFlameBasis(assetUrls.flameBasis);
     }
   } catch (err) {
     els.reconStatus.textContent = "FLAME 示例脸加载失败：" + err.message;
@@ -265,6 +266,9 @@ export async function loadDemoRecon() {
 
 export async function startScan() {
   els.reconStatus.textContent = "加载模型…"; await ensureReady();
+  // 扫描结束时 finishScan 需要 FLAME basis 与 flame-2023 图谱线；在开始扫描前
+  // 按需取一次（失败只丢 FLAME 拟合，回退 468 扫描壳，不影响扫描本身）。
+  await ensureFlameRstlOverlay().catch(() => null);
   const ref = await fetchCanonicalRef(); const refRigid = RIGID3D.map((i) => ref[i]);
   try {
     const stream = await openCameraStream(CAMERA_CONSTRAINTS);
