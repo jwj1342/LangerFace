@@ -166,7 +166,11 @@ async function fetchAsset<T>(
   if (assetCache.has(cacheKey)) return assetCache.get(cacheKey) as Promise<T>;
   const promise = (async () => {
     onProgress?.({ key, label, url, phase: "start", loaded: 0, total: null, ratio: null });
-    const resp = await fetch(url, { cache: "force-cache" });
+    // 不要用 force-cache：运行时资产（atlas / topology / .task / .bin）文件名固定，
+    // 强制吃本地副本会让图谱更新后回访用户被长期钉在旧版本上（真实事故：浏览器仍在跑
+    // 132 条的旧图谱，而生产已是 v8.1.67 的 133 条）。交给 Cache-Control + ETag：
+    // 未变更时只是一次廉价的 304。
+    const resp = await fetch(url);
     if (!resp.ok) throw new Error(`资产加载失败：${label} HTTP ${resp.status}`);
     if (kind === "arrayBuffer") {
       const buf = await readBufferWithProgress(resp, (evt) => (

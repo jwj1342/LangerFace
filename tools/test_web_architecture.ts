@@ -119,6 +119,57 @@ if (vercelConfig.functions) {
 }
 console.log("ok: 前端保持零 serverless 函数（无 web/api、无 requirements.txt、vercel.json 无 functions）");
 
+// 运行时资产（atlas / topology / triangles / .task / .bin）文件名固定，绝不能被
+// immutable 长缓存钉住：否则图谱更新后回访用户会长期停在旧版本而毫无提示。
+// 真实事故：测试者浏览器仍在跑 132 条的旧图谱，而生产已是 v8.1.67 的 133 条。
+{
+  const stableRuntimeAssets = fs.readdirSync(path.join(root, "assets"))
+    .filter((name) => /\.(json|task|bin|obj|wasm)$/.test(name));
+  if (!stableRuntimeAssets.length) {
+    console.error("FAIL web/assets 下没有找到运行时资产，守卫失去意义");
+    process.exit(1);
+  }
+  const rules = (vercelConfig.headers || []).filter((rule) =>
+    (rule.headers || []).some((header) =>
+      String(header.key).toLowerCase() === "cache-control"
+      && /immutable/.test(String(header.value))));
+  for (const rule of rules) {
+    const pattern = new RegExp(`^${String(rule.source)}$`);
+    for (const name of stableRuntimeAssets) {
+      if (pattern.test(`/assets/${name}`)) {
+        console.error(`FAIL immutable 缓存不能覆盖文件名固定的运行时资产：${rule.source} 命中 /assets/${name}`);
+        console.error("  内容哈希过的 bundle 才可以 immutable；固定名资产必须回源验证（见 docs/CI_CD_VERCEL.md）。");
+        process.exit(1);
+      }
+    }
+  }
+  const revalidates = (vercelConfig.headers || []).some((rule) => {
+    const pattern = new RegExp(`^${String(rule.source)}$`);
+    const value = (rule.headers || []).find((header) =>
+      String(header.key).toLowerCase() === "cache-control")?.value || "";
+    return stableRuntimeAssets.some((name) => pattern.test(`/assets/${name}`))
+      && /max-age=0|no-cache|must-revalidate/.test(String(value));
+  });
+  if (!revalidates) {
+    console.error("FAIL 固定名运行时资产缺少回源验证的 Cache-Control 规则");
+    process.exit(1);
+  }
+  console.log(`ok: ${stableRuntimeAssets.length} 个固定名运行时资产会回源验证，immutable 只覆盖哈希 bundle`);
+}
+
+// 同理：代码侧也不能用 force-cache 抵消上面的头
+{
+  const loader = fs.readFileSync(path.join(root, "src/services/assetLoader.ts"), "utf8")
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))   // 注释里提到它是允许的，只看真实代码
+    .join("\n");
+  if (/cache:\s*["']force-cache["']/.test(loader)) {
+    console.error("FAIL assetLoader 不应使用 force-cache：它会让浏览器跳过回源验证，抵消 Cache-Control");
+    process.exit(1);
+  }
+  console.log("ok: assetLoader 不再强制使用本地缓存副本");
+}
+
 const files = walk(srcRoot, (file) => file.endsWith(".ts") || file.endsWith(".tsx"))
   .concat([path.join(root, "vite.config.ts")]);
 
