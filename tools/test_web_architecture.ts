@@ -17,7 +17,7 @@ function walk(dir, predicate, out = []) {
 
 // ── 兼容运行时豁免边界（PR #106 review 第 4 点）─────────────────────────────
 //
-// web/current/ 与 web/compat/personalized/ 是绕过 TypeScript import/cycle 检查的
+// web/current/、web/compat/personalized/ 与 web/compat/shared/ 是绕过 TypeScript import/cycle 检查的
 // 纯 JS 运行时。豁免不是无边界的：下面是**冻结清单**，新增文件会让本测试失败，
 // 必须显式改清单才能进来——避免"兼容目录"变成永久免检区。
 //
@@ -28,9 +28,6 @@ function walk(dir, predicate, out = []) {
 const LEGACY_RUNTIME_ALLOWLIST = new Set([
   "compat/personalized/bottom_up_personalization.js",
   "compat/personalized/camera_adaptive.js",
-  "compat/personalized/constants.js",
-  "compat/personalized/data_source.js",
-  "compat/personalized/geometry.js",
   "compat/personalized/personalized.js",
   "compat/personalized/prstl_personalization_v2.js",
   "compat/personalized/prstl_pipeline.js",
@@ -40,31 +37,25 @@ const LEGACY_RUNTIME_ALLOWLIST = new Set([
   "compat/personalized/v6_rstl_refinement.js",
   "compat/personalized/wrinkle_extraction.js",
   "compat/personalized/yolo_wrinkle_onnx.js",
+  "compat/shared/constants.js",
+  "compat/shared/data_source.js",
+  "compat/shared/geometry.js",
   "current/assets.js",
   "current/atlas_contract.js",
   "current/camera.js",
   "current/canvas_fit.js",
-  "current/constants.js",
-  "current/data_source.js",
   "current/dom.js",
   "current/fit_math.js",
-  "current/flame_camera_overlay.js",
-  "current/flame_fit.js",
   "current/forehead_visibility.js",
-  "current/geometry.js",
   "current/image_source.js",
   "current/line_density.js",
   "current/logger.js",
   "current/main.js",
-  "current/mode3d.js",
   "current/pipeline.js",
-  "current/projection3d.js",
   "current/refine2d.js",
   "current/refine2d_math.js",
   "current/render.js",
-  "current/skin_material.js",
   "current/state.js",
-  "current/three3d.js",
   "current/ui.js",
 ]);
 

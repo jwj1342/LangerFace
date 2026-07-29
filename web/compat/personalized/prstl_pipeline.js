@@ -6,7 +6,7 @@
  *
  * 管线：个人基线 → 结构张量 + 块匹配光流 → 保守融合 q0 → 先验锚定重追
  */
-import { mapAtlas, umeyama, applySim } from "./geometry.js";
+import { mapAtlas, umeyama, applySim } from "../shared/geometry.js";
 
 export const SIZE = 320;
 export const TEXTURE_SIZE = 640;

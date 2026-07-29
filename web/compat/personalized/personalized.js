@@ -18,7 +18,7 @@ import { FaceLandmarker, FilesetResolver }
   from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18";
 import {
   toPixels, OneEuro, mapAtlas,
-} from "./geometry.js";
+} from "../shared/geometry.js";
 import {
   SIZE, TEXTURE_SIZE, ACTION_ORDER, ACTION_LABELS, ACTION_REGION_WEIGHT, THRESHOLDS, QUALITY_THRESHOLDS, REFINE_CONF, TIMED_ACTIONS,
   CANONICAL_REGISTRATION_ANCHORS,
@@ -40,7 +40,7 @@ import {
   validateHessianTemplateWithAction,
 } from "./bottom_up_personalization.js";
 import { smoothProjectedCurveV2 } from "./prstl_personalization_v2.js";
-import { dataSource } from "./data_source.js";
+import { dataSource } from "../shared/data_source.js";
 import { WrinkleYoloOnnx, fuseStrictUnion } from "./yolo_wrinkle_onnx.js";
 import { refineV6 } from "./v6_rstl_refinement.js";
 import personalizedAtlasUrl from "../../assets/atlas_rstl.json?url";
