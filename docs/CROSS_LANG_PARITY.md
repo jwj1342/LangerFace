@@ -1,16 +1,19 @@
 # 跨语言一致性（Python ⇄ Web TypeScript ⇄ 金标）
 
-本文定义线条几何在 Python 与 Web TypeScript 两套实现间的**逐点等价不变式**、活体对拍机制，以及金标的一键重生成流程，
-确保单边改动不会静默漂移过 CI。配合 [ARCHITECTURE.md](ARCHITECTURE.md)（几何算法）阅读。
+本文定义线条几何在 **Python、Web TypeScript、纯 JS 兼容运行时**三套实现间的**逐点等价不变式**、活体对拍机制，
+以及金标的一键重生成流程，确保单边改动不会静默漂移过 CI。配合 [ARCHITECTURE.md](ARCHITECTURE.md)（几何算法）阅读。
 
 ## 不变式
 
-线条几何在两套实现里必须逐点等价：
+线条几何在三套实现里必须逐点等价：
 
 - **Python**（生产）：`langerface.lines.map_atlas` + `langerface.rendering.BackfaceCuller`
   + `langerface.detection.LandmarkSmoother`
 - **Web TypeScript**（生产 / 浏览器）：`web/src/services/geometryAtlas.ts` 的 `mapAtlas` / `visibleTriangles`
-  / `innerMouthTriangles` / `OneEuro`
+  / `innerMouthTriangles`，以及 `web/src/services/geometrySmoothing.ts` 的 `OneEuro`
+- **纯 JS 兼容运行时**（生产 / `/current/` 与 `/personalized`）：`web/compat/shared/geometry.js` 的 `mapAtlas`。
+  它是 `web/current/` 与 `web/compat/personalized/` 共用的那一份（PR #110 把原先逐字节重复的两份合并到此），
+  因此这条对拍守的是**真正跑在那两个页面上的几何**，不是它的 TypeScript 孪生
 - **金标**：`web/test/expected.json`（在若干真实帧上冻结的输入关键点 + 期望输出）
 
 不变式：
@@ -21,9 +24,14 @@ Python(landmarks) == Web TypeScript(landmarks) == golden
 
 具体到三个量：
 
-1. **pts** —— 图谱分片仿射映射结果，`np.round(..., 4)`。三方在 `1e-2 px` 内一致。
+1. **pts** —— 图谱分片仿射映射结果，`np.round(..., 4)`。
+   - Web TypeScript ↔ 金标（Python）：`1e-2 px` 内一致（金标只存 4 位小数，故公差受限于舍入）。
+   - Web TypeScript ↔ 纯 JS 兼容运行时：**`1e-9 px`**（同一算法的两份实现，不经金标舍入，故可严三个量级）。
+     实测当前为 `0.000e+0`。
 2. **vis** —— 背面剔除 **且** 排除 #38 口裂（内唇）三角面后的逐三角面可见性。三方**逐位精确**相等。
-3. **oneEuro** —— 一段确定性输入序列经 One-Euro 平滑的逐位输出（紧公差 `1e-12`）。
+3. **oneEuro** —— 一段确定性输入序列经 One-Euro 平滑的逐位输出。Python 侧公差 `1e-12`
+   （`tests/test_cross_lang_parity.py`），Web TypeScript 侧公差 `1e-9`（`tools/test_web_mapping.ts`）；
+   实测两侧当前均为 `0.000e+0`，若要统一收紧到 `1e-12` 今天即可通过。
 
 ## 谁断言什么
 
@@ -31,6 +39,7 @@ Python(landmarks) == Web TypeScript(landmarks) == golden
 |---|---|---|
 | Python（live） | `tests/test_cross_lang_parity.py` | 从金标嵌入的关键点重算 pts/vis，断言匹配金标；One-Euro 夹具匹配；纯重算 helper 可重建当前 golden |
 | Web TypeScript（对拍） | `tools/test_web_mapping.ts`（`npm test` 内） | `web/src/services/geometryAtlas.ts` 输出对金标 pts/vis；One-Euro 夹具匹配 |
+| 纯 JS 兼容运行时（对拍） | 同上，`mapCompatAtlas` | `web/compat/shared/geometry.js` 的 `mapAtlas` 对 TypeScript 输出，公差 `1e-9 px`；扰动验证：改坏该文件的 `mapAtlas` 会让本测试报出 `3.512 px` 并失败 |
 
 CI 现状（**无需改 `.github/workflows/ci.yml`**）：
 

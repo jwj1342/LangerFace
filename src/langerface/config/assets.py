@@ -35,7 +35,9 @@ def require_asset(path: str, what: str = "资产") -> str:
     if not os.path.exists(path):
         raise FileNotFoundError(
             f"找不到{what} {path}。\n"
-            f"请先运行  python tools/download_assets.py  下载资产，"
-            f"并运行  python tools/build_field_atlas.py  生成图谱。"
+            f"请先运行  python tools/download_assets.py  下载资产，并运行\n"
+            f"  python tools/build_field_atlas_standard_v1.py "
+            f"assets/rstl_standard_reference_v8_1_67.json assets/atlas_rstl.json\n"
+            f"生成正式 RSTL 图谱（勿裸跑 build_field_atlas.py，它会覆盖该图谱）。"
         )
     return path
