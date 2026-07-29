@@ -53,7 +53,7 @@ ruff check .                 # 代码风格
 - **目检脚本**：`tools/render_check.py`、`inspect_frames.py`、`montage.py`、`sample_output.py`、`debug_one.py`。
 - **浏览器实测**：UI/3D 查看通过截图核对；实时摄像头链路需在带摄像头的浏览器中确认。
 
-跨语言对拍的不变式与金标重生成见 [CROSS_LANG_PARITY.md](CROSS_LANG_PARITY.md)。
+跨语言对拍的不变式与金标重生成见 [CROSS_LANG_PARITY.md](../quality/CROSS_LANG_PARITY.md)。
 
 ## PR / Preview 工作流
 
@@ -86,7 +86,7 @@ PR 上应关注这些 checks：
 | `Vercel` | Production 部署状态；临时 Preview 只在维护者手动创建时出现 |
 | `Vercel Preview Comments` | 手动创建 Preview 时，Vercel 可能在 PR 中发布 Preview 链接 |
 
-Vercel Preview 只在维护者按需手动创建时服务当前开发分支；当前策略见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#自动部署范围与限流控制)。普通 feature / integration 分支仍跑 GitHub Actions 质量门禁，但不会自动创建 Vercel Preview，避免长 PR 高频 push 打满 Vercel 限流或继续累积 GitHub deployment records。
+Vercel Preview 只在维护者按需手动创建时服务当前开发分支；当前策略见 [CI/CD 与 Vercel 部署指南](../quality/CI_CD_VERCEL.md#自动部署范围与限流控制)。普通 feature / integration 分支仍跑 GitHub Actions 质量门禁，但不会自动创建 Vercel Preview，避免长 PR 高频 push 打满 Vercel 限流或继续累积 GitHub deployment records。
 
 Preview 人工验收清单：
 
@@ -105,9 +105,9 @@ Preview 人工验收清单：
   - 外部临床评审：由维护者在 Vercel 生成 Shareable Link，或临时开启 Password Protection 并单独发送密码。
   - 自动化测试：只使用 Vercel Protection Bypass for Automation，secret 放在 GitHub Secrets；不要把 bypass token 当作人工分享链接。
   - 只有确认 Preview 不含受限头模、真实人脸影像或未公开数据时，才考虑关闭 Preview protection。
-- PR Preview 和生产站不是同一个地址。验证分支改动时不要只看 Production URL（见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#production-url)）；那是 `master` 的生产环境。
+- PR Preview 和生产站不是同一个地址。验证分支改动时不要只看 Production URL（见 [CI/CD 与 Vercel 部署指南](../quality/CI_CD_VERCEL.md#production-url)）；那是 `master` 的生产环境。
 - `master` 受 GitHub Branch Protection 保护：PR 合并前必须通过必需 checks，并至少获得 1 个 approving review。
-- 详细的 Vercel 项目设置、branch protection 和排障信息见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md)。
+- 详细的 Vercel 项目设置、branch protection 和排障信息见 [CI/CD 与 Vercel 部署指南](../quality/CI_CD_VERCEL.md)。
 
 ## 架构与扩展点
 

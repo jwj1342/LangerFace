@@ -56,6 +56,6 @@ pytest tests/test_wrinkle_lesion_cues.py
 
 ## 下一步
 
-1. 用医生手工边界建立受控小样本验证集，格式见 [VALIDATION.md](VALIDATION.md)。
+1. 用医生手工边界建立受控小样本验证集，格式见 [VALIDATION.md](../quality/VALIDATION.md)。
 2. 把医生修正后的边界与候选 mask 做 IoU / 边界距离统计。
 3. 若引入远端模型，必须先完成 [PRIVACY_AND_AUDIT.md](PRIVACY_AND_AUDIT.md) 和 [INCISION_PRIVACY_AUDIT.md](INCISION_PRIVACY_AUDIT.md) 的出域审计。
