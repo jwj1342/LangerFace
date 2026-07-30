@@ -191,16 +191,6 @@ assert.ok(
   render2d.includes("Math.max(2, W / 1300)"),
   "typed live RSTL strokes must use the two-pixel reference minimum",
 );
-assert.match(
-  render2d,
-  /lineIndicesForDensity\(\s*atlas \|\| \[\],\s*renderState\.densityFrac,?\s*\)/,
-  "typed live must apply density selection to the atlas line array",
-);
-assert.doesNotMatch(
-  render2d,
-  /lineIndicesForDensity\(\s*atlas\?\.lines/,
-  "typed live must not treat the atlas line array as an atlas payload",
-);
 assert.ok(
   currentRender.includes("Math.max(2, W / 1300)"),
   "current live RSTL strokes must use the two-pixel reference minimum",

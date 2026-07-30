@@ -3,11 +3,6 @@
 import { execFileSync } from "node:child_process";
 
 const productionBranches = new Set(["master"]);
-// ⚠️ 临时：只为 PR #117 验证运行时资产的缓存响应头而放行 Preview 自动构建。
-// 合并前必须删掉这个 Set 及下面用到它的分支，并把 web/vercel.json 的
-// git.deploymentEnabled 恢复成只有 master。策略本身没变：不在这个清单里的分支
-// 依然不会自动产生 Preview，生产判定仍然只认 productionBranches。
-const temporaryPreviewBranches = new Set(["hotfix/runtime-asset-cache"]);
 const branch = process.env.VERCEL_GIT_COMMIT_REF || "";
 const previousSha = process.env.VERCEL_GIT_PREVIOUS_SHA || "HEAD^";
 const vercelEnv = process.env.VERCEL_ENV || "";
@@ -57,7 +52,7 @@ function hasChangesInHeadCommit() {
   }
 }
 
-if (!productionBranches.has(branch) && !temporaryPreviewBranches.has(branch)) {
+if (!productionBranches.has(branch)) {
   skip(`branch "${branch || "unknown"}" is not the production deployment branch`);
 }
 

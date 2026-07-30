@@ -157,17 +157,18 @@ console.log("ok: 前端保持零 serverless 函数（无 web/api、无 requireme
   console.log(`ok: ${stableRuntimeAssets.length} 个固定名运行时资产会回源验证，immutable 只覆盖哈希 bundle`);
 }
 
-// 同理：代码侧也不能用 force-cache 抵消上面的头
+// 同理：代码侧必须显式 no-cache，才能让已经保存了旧 immutable 响应头的浏览器
+// 对 fresh 命中也发条件请求；仅删除 force-cache、退回 default 不足以迁移这些用户。
 {
   const loader = fs.readFileSync(path.join(root, "src/services/assetLoader.ts"), "utf8")
     .split(/\r?\n/)
     .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))   // 注释里提到它是允许的，只看真实代码
     .join("\n");
-  if (/cache:\s*["']force-cache["']/.test(loader)) {
-    console.error("FAIL assetLoader 不应使用 force-cache：它会让浏览器跳过回源验证，抵消 Cache-Control");
+  if (!/fetch\(\s*url\s*,\s*\{\s*cache:\s*["']no-cache["']\s*\}\s*\)/.test(loader)) {
+    console.error("FAIL assetLoader 必须用 cache: no-cache：旧 immutable fresh 条目也需要条件验证");
     process.exit(1);
   }
-  console.log("ok: assetLoader 不再强制使用本地缓存副本");
+  console.log("ok: assetLoader 强制旧 immutable 条目回源验证");
 }
 
 const files = walk(srcRoot, (file) => file.endsWith(".ts") || file.endsWith(".tsx"))

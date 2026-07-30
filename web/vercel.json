@@ -8,8 +8,7 @@
     "deploymentEnabled": {
       "*": false,
       "**": false,
-      "master": true,
-      "hotfix/runtime-asset-cache": true
+      "master": true
     }
   },
   "github": {

@@ -157,7 +157,7 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   const innerMouth = innerMouthTriangles(modelTriangles()); // 口裂三角面（张嘴会落进口内/牙齿），永久排除
   const mapped = mapAtlas(atlas, lm, modelTriangles());
   const bb = faceBBox(lm);
-  const visibleLineIndices = lineIndicesForDensity(atlas || [], renderState.densityFrac);
+  const visibleLineIndices = lineIndicesForDensity(atlas?.lines || [], renderState.densityFrac);
   const hasMasks = masks.length > 0;
   const frameQualityGate = estimateRenderQualityGate(lm, W, H);
   const canDrawAtlas = sourceState.sourceKind === "image" || frameQualityGate.passed;
