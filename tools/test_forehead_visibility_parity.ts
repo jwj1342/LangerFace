@@ -14,28 +14,57 @@ let checks = 0;
 const same = (a, b, message) => { assert.deepEqual(a, b, message); checks++; };
 
 // ---- 1. 肤色判定：Lab 距离、过暗、低色度三条拒绝路径 ----
-const skinReferences = [[205, 155, 130], [198, 148, 124], [210, 162, 138]];
-const colourCases = [
-  ["典型肤色", [180, 120, 96]],
-  ["高光肤色", [235, 200, 185]],
-  ["深色头发", [35, 25, 20]],
-  ["灰白头发", [185, 180, 177]],
-  ["纯黑背景", [0, 0, 0]],
-  ["纯白背景", [255, 255, 255]],
-  ["蓝色布料", [40, 70, 190]],
-  ["边界肤色", [150, 105, 88]],
+// 每个参考集都配了跨阈值两侧的样本，所以任一实现改动阈值常数都会让对拍失败。
+// 阈值数值来自 skinColorMatchesReferences：distance <= 26、L < refLight*0.52 且 d > 10、
+// chroma < max(5, refChroma*0.70) 且 d > 10。三种肤色参考都测，因为 refLight / refChroma
+// 是从参考色算出来的，浅肤色下 tooDark 分支根本不可达。
+const referenceSets: Array<[string, ts.Rgb[], Array<[string, ts.Rgb]>]> = [
+  ["浅肤色", [[205, 155, 130], [198, 148, 124], [210, 162, 138]], [
+    ["典型肤色", [180, 120, 96]],
+    ["高光肤色", [235, 200, 185]],
+    ["深色头发", [35, 25, 20]],
+    ["灰白头发", [185, 180, 177]],
+    ["纯黑背景", [0, 0, 0]],
+    ["纯白背景", [255, 255, 255]],
+    ["蓝色布料", [40, 70, 190]],
+    ["仅距离拒绝·内侧 d=25.95", [117, 96, 69]],
+    ["仅距离拒绝·外侧 d=29.45", [108, 84, 60]],
+    ["低色度阈值内侧 chroma=17.7", [120, 100, 75]],
+    ["低色度但距离 d=9.83：靠 d>10 前置条件放行", [223, 184, 168]],
+  ]],
+  ["中等肤色", [[150, 110, 88], [143, 104, 83], [158, 118, 95]], [
+    ["典型肤色", [150, 110, 88]],
+    ["过暗阈值内侧 L=24.5", [69, 57, 27]],
+    ["过暗阈值外侧 L=26.5", [69, 63, 33]],
+    ["低色度但距离 d=9.72：靠 d>10 前置条件放行", [168, 138, 122]],
+    ["仅距离拒绝·外侧 d=29.28", [60, 66, 39]],
+  ]],
+  ["深肤色", [[92, 62, 48], [86, 58, 45], [99, 68, 53]], [
+    ["典型肤色", [92, 62, 48]],
+    ["过暗阈值内侧 L=13.8", [24, 39, 18]],
+    ["过暗阈值外侧 L=15.3", [24, 42, 33]],
+    ["仅距离拒绝·内侧 d=25.71", [27, 45, 24]],
+    ["仅距离拒绝·外侧 d=29.37", [15, 45, 30]],
+    ["浅肤色误判检查", [205, 155, 130]],
+  ]],
 ];
-for (const [label, rgb] of colourCases) {
-  same(
-    ts.skinColorMatchesReferences(rgb, skinReferences),
-    js.skinColorMatchesReferences(rgb, skinReferences),
-    `skinColorMatchesReferences 对「${label}」两实现一致`,
-  );
+for (const [setLabel, references, cases] of referenceSets) {
+  let accepted = 0;
+  for (const [label, rgb] of cases) {
+    const a = ts.skinColorMatchesReferences(rgb, references);
+    same(a, js.skinColorMatchesReferences(rgb, references),
+      `skinColorMatchesReferences[${setLabel}] 对「${label}」两实现一致`);
+    if (a) accepted++;
+  }
+  // 每个参考集都必须既有接受也有拒绝，否则这一组样本没有真正压住阈值
+  assert.ok(accepted > 0 && accepted < cases.length,
+    `${setLabel} 参考集必须同时产生接受与拒绝（接受 ${accepted}/${cases.length}）`);
+  same(ts.skinColorMatchesReferences(null, references), js.skinColorMatchesReferences(null, references),
+    `${setLabel}：采样为空时两实现一致`);
+  same(ts.skinColorMatchesReferences([180, 120, 96], []), js.skinColorMatchesReferences([180, 120, 96], []),
+    `${setLabel}：无参考色时两实现一致`);
 }
-same(ts.skinColorMatchesReferences(null, skinReferences), js.skinColorMatchesReferences(null, skinReferences),
-  "采样为空时两实现一致");
-same(ts.skinColorMatchesReferences([180, 120, 96], []), js.skinColorMatchesReferences([180, 120, 96], []),
-  "无参考色时两实现一致");
+const skinReferences: ts.Rgb[] = referenceSets[0][1];
 
 // ---- 2. Lab 转换与距离 ----
 for (const rgb of [[0, 0, 0], [255, 255, 255], [12, 200, 90], [128, 128, 128]]) {
