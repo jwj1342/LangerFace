@@ -1,7 +1,7 @@
 # 工程教训 / 协作避坑（Engineering Lessons）
 
 把多人并行改这个仓库时踩过的坑沉淀到这里，避免重复犯。每条都是真实事故复盘 + 可执行规则。
-新踩到坑就追加一条。配套规约见 [CONTRIBUTING.md](CONTRIBUTING.md)、[CI_CD_VERCEL.md](CI_CD_VERCEL.md)。
+新踩到坑就追加一条。配套规约见 [CONTRIBUTING.md](CONTRIBUTING.md)、[CI_CD_VERCEL.md](../quality/CI_CD_VERCEL.md)。
 
 ---
 
@@ -103,7 +103,7 @@ master 受保护：**1 个 approval + 5 个必需检查**（`lint` / `python-tes
 - **import 真能解析**：新代码引用的符号（如 `os`、`TOPOLOGY_ID`）在该文件里是否已 import？跑挂的常是 `NameError`。
 - **行为是否真保持**：是不是只加了日志/字段而没动控制流？异常仍照常上抛？
 - **测试是否非恒真**：扰动一下被测对象，测试会不会失败？还是 mock 到什么都没测？
-- **隐私边界**：诊断/日志导出有没有混入像素、人脸纹理、患者身份（本项目硬约束，见 [PRIVACY_AND_AUDIT.md](PRIVACY_AND_AUDIT.md)）。
+- **隐私边界**：诊断/日志导出有没有混入像素、人脸纹理、患者身份（本项目硬约束，见 [PRIVACY_AND_AUDIT.md](../clinical/PRIVACY_AND_AUDIT.md)）。
 
 ---
 

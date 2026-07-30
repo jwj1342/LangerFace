@@ -109,7 +109,7 @@ const resurrected = forbiddenBackendPaths.filter((rel) => fs.existsSync(path.joi
 if (resurrected.length) {
   console.error("FAIL the static frontend must not ship a serverless backend again:");
   for (const rel of resurrected) console.error(`  - web/${rel}`);
-  console.error("  见 docs/FLAME_3D_TRACK.md「生产侧零后端、零 GPU」；离线拟合走 tools/fit_flame_to_landmarks.py。");
+  console.error("  见 docs/tracks/FLAME_3D_TRACK.md「生产侧零后端、零 GPU」；离线拟合走 tools/fit_flame_to_landmarks.py。");
   process.exit(1);
 }
 const vercelConfig = JSON.parse(fs.readFileSync(path.join(root, "vercel.json"), "utf8"));

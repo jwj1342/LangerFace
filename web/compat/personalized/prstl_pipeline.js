@@ -1,7 +1,7 @@
 /**
  * 浏览器端个性化二维 RSTL — 纯算法（无 DOM）
  *
- * 文档：docs/PERSONALIZED_RSTL.md
+ * 文档：docs/tracks/PERSONALIZED_RSTL.md
  * UI：./personalized.js
  *
  * 管线：个人基线 → 结构张量 + 块匹配光流 → 保守融合 q0 → 先验锚定重追

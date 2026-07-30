@@ -1,4 +1,4 @@
-"""FLAME 离线拟合（3D 轨 · 模式 A：关键点）。见 docs/FLAME_3D_TRACK.md。
+"""FLAME 离线拟合（3D 轨 · 模式 A：关键点）。见 docs/tracks/FLAME_3D_TRACK.md。
 
 纯 numpy 的**线性形状拟合**：FLAME 的 neutral 身份是线性 PCA 基（shapedirs），关键点位置
 因此线性于形状系数 β。配合官方 mediapipe_landmark_embedding（105 个 MediaPipe 关键点 ↔
