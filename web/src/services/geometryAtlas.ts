@@ -20,6 +20,7 @@ export type AtlasPoint = [number, number, number];
 export interface AtlasLine {
   name?: string;
   region?: string;
+  disableRuntimeExpansion?: boolean;
   points?: AtlasPoint[];
 }
 
@@ -37,6 +38,10 @@ export interface MappedAtlasLine {
 
 export interface VisibleTriangleOptions {
   minTriangleAreaPx2?: number;
+}
+
+export interface MapAtlasOptions {
+  expandForehead?: boolean;
 }
 
 const FOREHEAD_BRIDGE_ARC_REGION = "forehead_bridge_arc_v15";
@@ -157,7 +162,12 @@ export function toPixels(landmarks: NormalizedLandmark[], width: number, height:
   return out;
 }
 
-export function mapAtlas(lines: AtlasLine[] | unknown, landmarksPx: Vec3[], triangles: Triangle[]): MappedAtlasLine[] {
+export function mapAtlas(
+  lines: AtlasLine[] | unknown,
+  landmarksPx: Vec3[],
+  triangles: Triangle[],
+  options: MapAtlasOptions = {},
+): MappedAtlasLine[] {
   const result: MappedAtlasLine[] = [];
   if (!Array.isArray(lines)) return result;
   const bridgeRanks = foreheadBridgeRanks(lines, landmarksPx, triangles);
@@ -182,7 +192,10 @@ export function mapAtlas(lines: AtlasLine[] | unknown, landmarksPx: Vec3[], tria
       ]);
       tris.push(tri);
     }
-    const mappedPoints = line.region === FOREHEAD_BRIDGE_ARC_REGION
+    const useBridgeExpansion = options.expandForehead !== false
+      && line.region === FOREHEAD_BRIDGE_ARC_REGION
+      && line.disableRuntimeExpansion !== true;
+    const mappedPoints = useBridgeExpansion
       ? extendForeheadBridge(pts, landmarksPx, bridgeRanks.get(line) ?? 0)
       : pts;
     result.push({ name: line.name, pts: mappedPoints, tris });

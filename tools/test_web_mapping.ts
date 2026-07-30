@@ -13,10 +13,65 @@ const J = (p) => JSON.parse(fs.readFileSync(path.join(REPO, p), "utf8"));
 const triangles = J("web/assets/triangles.json");
 const atlas = J("web/assets/atlas_rstl.json").lines;
 const expected = J("web/test/expected.json");
+const runtimeExpansionFixture = J("web/test/runtime_expansion_contract.json");
 const noseTris = noseTriangles(triangles);
 // #38 口裂三角面：生产渲染期永久排除，对拍时也要应用，否则 JS vis 会与
 // （含口裂排除的）Python 金标在张嘴帧上出现 ~14 位不一致。
 const innerMouth = innerMouthTriangles(triangles);
+
+const expansionFixtureTs = mapAtlas(
+  runtimeExpansionFixture.lines,
+  runtimeExpansionFixture.landmarks,
+  runtimeExpansionFixture.triangles,
+);
+const expansionFixtureCompat = mapCompatAtlas(
+  runtimeExpansionFixture.lines,
+  runtimeExpansionFixture.landmarks,
+  runtimeExpansionFixture.triangles,
+);
+const expansionFixtureDisabledTs = mapAtlas(
+  runtimeExpansionFixture.lines,
+  runtimeExpansionFixture.landmarks,
+  runtimeExpansionFixture.triangles,
+  { expandForehead: false },
+);
+const expansionFixtureDisabledCompat = mapCompatAtlas(
+  runtimeExpansionFixture.lines,
+  runtimeExpansionFixture.landmarks,
+  runtimeExpansionFixture.triangles,
+  { expandForehead: false },
+);
+const fixtureLine = (mapped, name) => mapped.find((line) => line.name === name)?.pts;
+const pointError = (actual, expectedPoints) => {
+  if (!actual || actual.length !== expectedPoints.length) return Number.POSITIVE_INFINITY;
+  let error = 0;
+  for (let i = 0; i < actual.length; i++) {
+    for (let axis = 0; axis < 3; axis++) {
+      error = Math.max(error, Math.abs(actual[i][axis] - expectedPoints[i][axis]));
+    }
+  }
+  return error;
+};
+const personalizedTsError = pointError(
+  fixtureLine(expansionFixtureTs, "personalized"),
+  runtimeExpansionFixture.expectedRawPoints,
+);
+const personalizedCompatError = pointError(
+  fixtureLine(expansionFixtureCompat, "personalized"),
+  runtimeExpansionFixture.expectedRawPoints,
+);
+const officialExpandedError = pointError(
+  fixtureLine(expansionFixtureTs, "official"),
+  runtimeExpansionFixture.expectedRawPoints,
+);
+const optionDisabledTsError = pointError(
+  fixtureLine(expansionFixtureDisabledTs, "official"),
+  runtimeExpansionFixture.expectedRawPoints,
+);
+const optionDisabledCompatError = pointError(
+  fixtureLine(expansionFixtureDisabledCompat, "official"),
+  runtimeExpansionFixture.expectedRawPoints,
+);
 
 let maxPosErr = 0;
 let maxRuntimeParityErr = 0;
@@ -82,7 +137,21 @@ console.log(`max position error (px): ${maxPosErr.toExponential(3)}`);
 console.log(`max browser-runtime parity error (px): ${maxRuntimeParityErr.toExponential(3)}`);
 console.log(`visibility mismatches: ${visMismatches}`);
 console.log(`one-euro fixture max error: ${oeErr.toExponential(3)}`);
+console.log(`personalized expansion-contract TS error: ${personalizedTsError.toExponential(3)}`);
+console.log(`personalized expansion-contract compat error: ${personalizedCompatError.toExponential(3)}`);
+console.log(`official expansion delta: ${officialExpandedError.toExponential(3)}`);
+console.log(`expandForehead=false TS error: ${optionDisabledTsError.toExponential(3)}`);
+console.log(`expandForehead=false compat error: ${optionDisabledCompatError.toExponential(3)}`);
 
-const ok = maxPosErr < 1e-2 && maxRuntimeParityErr < 1e-9 && visMismatches === 0 && oeErr < 1e-9;
+const expansionContractOk = personalizedTsError < 1e-9
+  && personalizedCompatError < 1e-9
+  && officialExpandedError > 1e-3
+  && optionDisabledTsError < 1e-9
+  && optionDisabledCompatError < 1e-9;
+const ok = maxPosErr < 1e-2
+  && maxRuntimeParityErr < 1e-9
+  && visMismatches === 0
+  && oeErr < 1e-9
+  && expansionContractOk;
 console.log(ok ? "\n✅ Web TypeScript 几何与 Python 一致" : "\n❌ 存在不一致");
 process.exit(ok ? 0 : 1);

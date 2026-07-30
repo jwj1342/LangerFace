@@ -2,9 +2,16 @@
 
 核心保证：重心坐标映射对仿射变换不变——人脸做任意仿射变形，叠加的线条随之同样变形。
 """
+import json
+from pathlib import Path
+
 import numpy as np
 
 from langerface.lines import Atlas, AtlasLine, map_atlas
+
+RUNTIME_EXPANSION_FIXTURE = (
+    Path(__file__).resolve().parents[1] / "web" / "test" / "runtime_expansion_contract.json"
+)
 
 
 def _one_line_atlas():
@@ -78,3 +85,22 @@ def test_forehead_bridge_v15_has_the_reviewed_arch_and_even_layer_offsets():
         mapped_by_name["lower"][:, 1] - mapped_by_name["upper"][:, 1],
         2.0,
     )
+
+
+def test_personalized_forehead_lines_skip_runtime_expansion_contract():
+    fixture = json.loads(RUNTIME_EXPANSION_FIXTURE.read_text(encoding="utf-8"))
+    atlas = Atlas.load(str(RUNTIME_EXPANSION_FIXTURE))
+    landmarks = np.asarray(fixture["landmarks"], dtype=float)
+    triangles = np.asarray(fixture["triangles"], dtype=np.int64)
+    expected = np.asarray(fixture["expectedRawPoints"], dtype=float)
+
+    mapped = {line.name: line.pts for line in map_atlas(atlas, landmarks, triangles)}
+    assert np.allclose(mapped["personalized"], expected)
+    assert not np.allclose(mapped["official"], expected)
+
+    unexpanded = {
+        line.name: line.pts
+        for line in map_atlas(atlas, landmarks, triangles, expand_forehead=False)
+    }
+    assert np.allclose(unexpanded["personalized"], expected)
+    assert np.allclose(unexpanded["official"], expected)

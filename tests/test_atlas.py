@@ -26,7 +26,12 @@ def test_validate_catches_short_line():
 
 def test_roundtrip(tmp_path):
     a = Atlas(system="rstl", lines=[
-        AtlasLine("l0", "forehead", np.array([[0, 0.5, 0.3], [1, 0.2, 0.2]], dtype=float)),
+        AtlasLine(
+            "l0",
+            "forehead",
+            np.array([[0, 0.5, 0.3], [1, 0.2, 0.2]], dtype=float),
+            disable_runtime_expansion=True,
+        ),
     ], provenance="test", validated=True)
     p = tmp_path / "atlas.json"
     a.save(str(p))
@@ -34,6 +39,7 @@ def test_roundtrip(tmp_path):
     assert b.system == "rstl" and b.validated is True
     assert b.topology_id == TOPOLOGY_ID and b.topology_version == TOPOLOGY_VERSION
     assert len(b.lines) == 1 and b.lines[0].points.shape == (2, 3)
+    assert b.lines[0].disable_runtime_expansion is True
 
 
 def test_validate_catches_topology_mismatch():

@@ -169,6 +169,18 @@ P' = u * V0' + v * V1' + w * V2'
 
 因此图谱随三角网格等价变形，对平移、旋转、缩放、局部仿射形变都稳定。这就是线条可以跟随身份、姿态、表情变化的数学基础。
 
+### 5.1 额头拱线的运行时展开例外
+
+正式 `forehead_bridge_arc_v15` 图谱在完成上述重心映射后，还会依据 landmark 9→10
+方向、脸宽和脸高执行额头可见区展开：轴向延伸、横向重标定、曲线平滑、抛物拱高和
+分层偏移。因此这些线的最终显示坐标并非只有纯重心插值。
+
+`/personalized` 的 V6 流程已经在个性化阶段完成这套展开，导出的每条对应曲线会携带
+`disableRuntimeExpansion: true`。Python、Web TypeScript 和纯 JavaScript 三套
+`mapAtlas` 实现都必须识别该字段并跳过二次展开；批量调用方也可以用
+`expandForehead: false`（Python 为 `expand_forehead=False`）关闭整个图谱的额头展开。
+该标记只控制显示期的额头后处理，不改变 `[tri,u,v]` 的拓扑和重心坐标契约。
+
 ## 6. 核心算法二：One-Euro 时间平滑
 
 实时关键点会抖动。基础滤波器使用 One-Euro Filter 对每个关键点每个坐标独立平滑。实现位于 `src/langerface/detection/smoothing.py` 和 `web/src/services/geometrySmoothing.ts`。

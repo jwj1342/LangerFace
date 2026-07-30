@@ -101,7 +101,13 @@ class MappedLine:
     tris: np.ndarray  # (N,) 每点所属三角面 id（供遮挡剔除使用）
 
 
-def map_atlas(atlas: Atlas, landmarks_px: np.ndarray, triangles: np.ndarray) -> list[MappedLine]:
+def map_atlas(
+    atlas: Atlas,
+    landmarks_px: np.ndarray,
+    triangles: np.ndarray,
+    *,
+    expand_forehead: bool = True,
+) -> list[MappedLine]:
     """把图谱映射到检测到的关键点上。
 
     landmarks_px: (>=468, 3) 图像空间关键点 (x_px, y_px, z)。
@@ -117,7 +123,11 @@ def map_atlas(atlas: Atlas, landmarks_px: np.ndarray, triangles: np.ndarray) -> 
         v1 = landmarks_px[tri_v[:, 1]]
         v2 = landmarks_px[tri_v[:, 2]]
         pts = bary[:, 0:1] * v0 + bary[:, 1:2] * v1 + bary[:, 2:3] * v2
-        if ln.region == FOREHEAD_BRIDGE_ARC_REGION:
+        if (
+            expand_forehead
+            and ln.region == FOREHEAD_BRIDGE_ARC_REGION
+            and not ln.disable_runtime_expansion
+        ):
             pts = _extend_forehead_bridge(
                 pts,
                 landmarks_px,
