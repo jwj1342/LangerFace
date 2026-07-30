@@ -133,6 +133,8 @@ const annotateSnapshotsService = read("src/services/annotateSnapshots.ts");
 const liveSnapshotsService = read("src/services/liveSnapshots.ts");
 const incisionSnapshotsService = read("src/services/incisionSnapshots.ts");
 const annotateRuntime = read("src/services/annotateRuntime.ts");
+const annotateDomService = read("src/services/annotateDom.ts");
+const annotationExportService = read("src/services/annotationExport.ts");
 const annotationModelService = read("src/services/annotationModel.ts");
 const flameFitService = read("src/services/flameFit.ts");
 const annotateViewerService = read("src/services/annotateViewer.ts");
@@ -171,6 +173,8 @@ const liveRuntimeDependencyTypes = [
   "src/services/liveUi.ts",
 ];
 const annotateRuntimeDependencyTypes = [
+  "src/services/annotateDom.ts",
+  "src/services/annotationExport.ts",
   "src/services/annotationModel.ts",
   "src/services/annotateViewer.ts",
   "src/services/assetLoader.ts",
@@ -1293,7 +1297,7 @@ assert.ok(scopedDom.includes("scopedElementById"), "React route controllers shar
 assert.ok(scopedDom.includes("requireScopedElement"), "React route controllers can fail fast when a host is missing an expected element");
 assert.ok(scopedDom.includes("requireScopedQuery"), "React route controllers can scope selector queries to the route host");
 for (const [name, source] of [
-  ["annotateRuntime.ts", annotateRuntime],
+  ["annotateDom.ts", annotateDomService],
   ["incisionDom.ts", incisionDomService],
 ]) {
   assert.ok(source.includes("../lib/scopedDom"), `${name} uses route-host scoped DOM helpers`);
@@ -1837,7 +1841,15 @@ for (const dependencyType of annotateRuntimeDependencyTypes) {
   );
 }
 assert.ok(!annotateRuntime.includes("// @ts-nocheck"), "annotation runtime should run under strict TypeScript checking");
-assert.ok(annotateRuntime.includes("interface AnnotateDomElements"), "annotation runtime types its DOM binding surface");
+assert.ok(annotateDomService.includes("interface AnnotateDomElements"), "annotation DOM service types its binding surface");
+assert.ok(annotateDomService.includes("collectAnnotateElements"), "annotation DOM service owns scoped element collection");
+assert.ok(annotateRuntime.includes("./annotateDom"), "annotation runtime consumes the shared DOM binding service");
+assert.ok(!annotateRuntime.includes("requireScopedElement"), "annotation runtime does not query scoped elements directly");
+assert.ok(annotationExportService.includes("buildAnnotationExport"), "annotation export service builds typed JSON artifacts");
+assert.ok(annotationExportService.includes("downloadAnnotationExport"), "annotation export service owns browser downloads");
+assert.ok(annotationExportService.includes("URL.revokeObjectURL"), "annotation export service releases object URLs");
+assert.ok(annotateRuntime.includes("./annotationExport"), "annotation runtime delegates export construction and download");
+assert.ok(!annotateRuntime.includes("new Blob"), "annotation runtime does not construct export blobs directly");
 assert.ok(annotateRuntime.includes("interface DragState"), "annotation runtime types pointer drag state");
 assert.ok(annotateRuntime.includes("function controllerEvent"), "annotation runtime narrows browser command events before reading detail");
 assert.ok(!fs.existsSync(path.join(web, "annotate_model.js")), "legacy annotate_model.js facade has been removed after TypeScript service migration");

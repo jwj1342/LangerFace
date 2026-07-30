@@ -18,7 +18,17 @@ import {
 import { AnnotationModel, type AnnotationLine, type AnnotationPoint } from "./annotationModel";
 import type { Triangle, Vec3 } from "./softBody";
 import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
-import { requireScopedElement } from "../lib/scopedDom";
+import {
+  annotateFileFromEvent,
+  collectAnnotateElements,
+  isAnnotateTextControl,
+  type AnnotateDomElements,
+} from "./annotateDom";
+import {
+  buildAnnotationExport,
+  downloadAnnotationExport,
+  type AnnotationExportKind,
+} from "./annotationExport";
 import {
   ANNOTATE_SYSTEM_LABELS as SYSTEM_LABELS,
   buildAnnotateControllerSnapshot,
@@ -30,31 +40,6 @@ import { facesArray, flameForward, loadFlameBasis, type FlameBasis } from "./fla
 import { parseMeshFile } from "./meshIo";
 import { parseSlicerCurveFile } from "./slicerCurve";
 import { topologyMeta } from "./topologyRegistry";
-
-interface AnnotateDomElements {
-  stage: HTMLCanvasElement;
-  system: HTMLSelectElement;
-  name: HTMLInputElement;
-  region: HTMLInputElement;
-  btnNew: HTMLButtonElement;
-  btnUndo: HTMLButtonElement;
-  btnFinish: HTMLButtonElement;
-  btnClear: HTMLButtonElement;
-  exAtlas: HTMLButtonElement;
-  exXyz: HTMLButtonElement;
-  setActive: HTMLButtonElement;
-  loadCanonical: HTMLButtonElement;
-  loadFlame: HTMLButtonElement;
-  loadFittedFlame: HTMLButtonElement;
-  meshFile: HTMLInputElement;
-  slicerFile: HTMLInputElement;
-  resampleSpacing: HTMLInputElement;
-  list: HTMLElement;
-  status: HTMLElement;
-  hint: HTMLElement;
-  current: HTMLElement;
-  drawMode: HTMLElement;
-}
 
 interface DragState {
   x: number;
@@ -89,37 +74,6 @@ function controllerEvent(event: Event): Event & { detail?: unknown } {
   return event as Event & { detail?: unknown };
 }
 
-const $ = <T extends Element>(root: ParentNode | Document, id: string): T => {
-  return requireScopedElement<T>(root, id);
-};
-
-function collectElements(root: ParentNode | Document = document): AnnotateDomElements {
-  return {
-    stage: $<HTMLCanvasElement>(root, "stage"),
-    system: $<HTMLSelectElement>(root, "annSystem"),
-    name: $<HTMLInputElement>(root, "annName"),
-    region: $<HTMLInputElement>(root, "annRegion"),
-    btnNew: $<HTMLButtonElement>(root, "btnNew"),
-    btnUndo: $<HTMLButtonElement>(root, "btnUndo"),
-    btnFinish: $<HTMLButtonElement>(root, "btnFinish"),
-    btnClear: $<HTMLButtonElement>(root, "btnClear"),
-    exAtlas: $<HTMLButtonElement>(root, "btnExportAtlas"),
-    exXyz: $<HTMLButtonElement>(root, "btnExportXyz"),
-    setActive: $<HTMLButtonElement>(root, "btnSetActiveAtlas"),
-    loadCanonical: $<HTMLButtonElement>(root, "btnLoadCanonical"),
-    loadFlame: $<HTMLButtonElement>(root, "btnLoadFlame"),
-    loadFittedFlame: $<HTMLButtonElement>(root, "btnLoadFittedFlame"),
-    meshFile: $<HTMLInputElement>(root, "meshFile"),
-    slicerFile: $<HTMLInputElement>(root, "slicerFile"),
-    resampleSpacing: $<HTMLInputElement>(root, "resampleSpacing"),
-    list: $<HTMLElement>(root, "lineList"),
-    status: $<HTMLElement>(root, "annStatus"),
-    hint: $<HTMLElement>(root, "hint"),
-    current: $<HTMLElement>(root, "currentState"),
-    drawMode: $<HTMLElement>(root, "drawMode"),
-  };
-}
-
 let els = {} as AnnotateDomElements;
 let viewer = null as unknown as Annotator3DInstance;
 let model = null as unknown as AnnotationModelInstance;
@@ -130,10 +84,6 @@ let abortController: AbortController | null = null;
 let activeSession = 0;
 
 let bundledFlameBasis: FlameBasis | null = null;
-
-function fileFromEvent(event: Event): File | undefined {
-  return (event.target as HTMLInputElement | null)?.files?.[0] ?? undefined;
-}
 
 function isAnnotationPoint(point: AnnotationPoint | null): point is AnnotationPoint {
   return point !== null;
@@ -349,19 +299,19 @@ function bindAnnotateEvents(): void {
     els.btnUndo.addEventListener("click", undoLast, { signal });
     els.btnFinish.addEventListener("click", saveCurrentLine, { signal });
     els.btnClear.addEventListener("click", () => { if (confirm("清空所有线？")) clearLines(); }, { signal });
-    els.exAtlas.addEventListener("click", () => exportJSON(() => model.toAtlasJSON(), `atlas_${model.system}_annotated.json`), { signal });
-    els.exXyz.addEventListener("click", () => exportJSON(() => model.toXyzJSON(), `lines_${model.system}_xyz.json`), { signal });
+    els.exAtlas.addEventListener("click", () => exportAnnotation("atlas"), { signal });
+    els.exXyz.addEventListener("click", () => exportAnnotation("xyz"), { signal });
     els.setActive.addEventListener("click", previewActiveAtlas, { signal });
     els.loadCanonical.addEventListener("click", loadCanonical, { signal });
     els.loadFlame.addEventListener("click", loadFlame, { signal });
     els.loadFittedFlame.addEventListener("click", loadFittedFlame, { signal });
   }
-  els.meshFile.addEventListener("change", (e) => loadMeshFile(fileFromEvent(e)), { signal });
-  els.slicerFile.addEventListener("change", (e) => loadSlicerFile(fileFromEvent(e)), { signal });
+  els.meshFile.addEventListener("change", (e) => loadMeshFile(annotateFileFromEvent(e)), { signal });
+  els.slicerFile.addEventListener("change", (e) => loadSlicerFile(annotateFileFromEvent(e)), { signal });
 
   document.addEventListener("keydown", (e: KeyboardEvent) => {
     if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || e.shiftKey) return;
-    if (isTextControl(e.target)) return;
+    if (isAnnotateTextControl(e.target)) return;
     e.preventDefault();
     undoLast();
   }, { signal });
@@ -488,11 +438,11 @@ function handleReactLineLibraryCommand(event: Event): void {
     return;
   }
   if (command === "export_atlas") {
-    exportJSON(() => model.toAtlasJSON(), `atlas_${model.system}_annotated.json`);
+    exportAnnotation("atlas");
     return;
   }
   if (command === "export_xyz") {
-    exportJSON(() => model.toXyzJSON(), `lines_${model.system}_xyz.json`);
+    exportAnnotation("xyz");
     return;
   }
   if (command === "set_active_atlas") {
@@ -510,20 +460,14 @@ function syncInputsFromLine(line?: AnnotationLine | null): void {
   els.region.value = line?.region || "";
 }
 
-function isTextControl(el: EventTarget | null): boolean {
-  if (!(el instanceof HTMLElement)) return false;
-  return el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
-}
-
-function exportJSON(build: () => unknown, filename: string): void {
-  let data;
-  try { data = build(); } catch (err) { setHint("导出失败：" + errorMessage(err)); return; }
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  setHint(`已导出 ${filename}`);
+function exportAnnotation(kind: AnnotationExportKind): void {
+  try {
+    const artifact = buildAnnotationExport(model, kind);
+    downloadAnnotationExport(artifact);
+    setHint(`已导出 ${artifact.filename}`);
+  } catch (err) {
+    setHint("导出失败：" + errorMessage(err));
+  }
 }
 
 function previewActiveAtlas(): void {
@@ -643,7 +587,7 @@ export function disposeAnnotateWorkbench() {
 
 export function mountAnnotateWorkbench(root: ParentNode | Document = document) {
   disposeAnnotateWorkbench();
-  els = collectElements(root);
+  els = collectAnnotateElements(root);
   viewer = new Annotator3D(els.stage);
   model = new AnnotationModel(els.system.value);
   viewer.setAnnotation(model);

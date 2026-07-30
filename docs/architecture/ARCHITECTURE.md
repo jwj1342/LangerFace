@@ -296,7 +296,9 @@ npm run dev
 |---|---|
 | `web/src/services/annotationModel.ts` | 纯数据模型：线/点管理、表面路径展开、重心坐标、导出图谱/xyz（node 可单测，见 `tools/test_annotate_model.ts`） |
 | `web/src/services/annotateViewer.ts` | Three.js 场景：网格加载、射线表面拾取、线与控制点渲染 |
-| `web/src/services/annotateRuntime.ts` | 标注 runtime 装配（指针拖拽/点击、导出、列表、快捷键；严格 TypeScript，直接依赖 TS service 模块） |
+| `web/src/services/annotateDom.ts` | scoped DOM 引用、文件输入事件与快捷键文本控件判定 |
+| `web/src/services/annotationExport.ts` | 图谱/xyz JSON artifact、稳定文件名与浏览器下载生命周期 |
+| `web/src/services/annotateRuntime.ts` | 标注 runtime 编排（指针交互、模型/viewer 协作、列表与快捷键；严格 TypeScript） |
 | `web/index.html` / `web/src/routes/AnnotateRoute.tsx` / `web/src/components/Annotate*.tsx` | React 标注页入口与 UI |
 | `web/annotate.html` / `web/annotate.css` | 标注兼容跳转页与历史样式 |
 
