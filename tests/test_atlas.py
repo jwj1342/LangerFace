@@ -3,6 +3,7 @@ import os
 
 import numpy as np
 import pytest
+from tools.annotate_atlas import _save as save_annotation_draft
 
 from langerface.config import ATLAS_PATHS, TOPOLOGY_ID, TOPOLOGY_VERSION
 from langerface.lines import Atlas, AtlasLine, atlas_line_from_points2d
@@ -27,12 +28,24 @@ def test_validate_catches_short_line():
 def test_roundtrip(tmp_path):
     a = Atlas(system="rstl", lines=[
         AtlasLine("l0", "forehead", np.array([[0, 0.5, 0.3], [1, 0.2, 0.2]], dtype=float)),
-    ], atlas_version="8.1.67", provenance="test", validated=True)
+    ],
+        atlas_version="8.1.67",
+        provenance="test",
+        validated=True,
+        clinical_validation={
+            "schemaVersion": "atlas-clinical-validation/v0.1",
+            "reviewer": "clinician-01",
+        },
+    )
     p = tmp_path / "atlas.json"
     a.save(str(p))
     b = Atlas.load(str(p))
     assert b.system == "rstl" and b.atlas_version == "8.1.67" and b.validated is True
     assert b.topology_id == TOPOLOGY_ID and b.topology_version == TOPOLOGY_VERSION
+    assert b.clinical_validation == {
+        "schemaVersion": "atlas-clinical-validation/v0.1",
+        "reviewer": "clinician-01",
+    }
     assert len(b.lines) == 1 and b.lines[0].points.shape == (2, 3)
 
 
@@ -99,3 +112,45 @@ def test_atlas_line_from_points2d_equals_manual_loop(canonical):
     assert ln.points.dtype == expected.dtype
     assert np.array_equal(ln.points, expected)
     assert ln.points.tobytes() == expected.tobytes()
+
+
+def test_annotation_save_preserves_metadata_and_never_validates(canonical, tmp_path):
+    proj = canonical.project_front()
+    existing = Atlas(
+        system="rstl",
+        version="0.2",
+        atlas_version="8.1.67",
+        provenance="existing draft.",
+        validated=False,
+    )
+    original_surface_points = np.array(
+        [[0, 0.2, 0.3], [1, 0.3, 0.2], [2, 0.4, 0.1]],
+        dtype=np.float64,
+    )
+    completed = [
+        {
+            "name": "forehead-existing",
+            "region": "forehead",
+            "points": proj[[0, 10, 50]],
+            "surface_points": original_surface_points,
+        }
+    ]
+    output = tmp_path / "atlas.json"
+
+    save_annotation_draft(
+        canonical,
+        proj,
+        completed,
+        "rstl",
+        str(output),
+        existing,
+    )
+
+    saved = Atlas.load(str(output))
+    assert saved.validated is False
+    assert saved.version == "0.2"
+    assert saved.atlas_version == "8.1.67"
+    assert saved.lines[0].name == "forehead-existing"
+    assert saved.lines[0].region == "forehead"
+    assert np.array_equal(saved.lines[0].points, original_surface_points)
+    assert "requires line-by-line clinical review" in saved.provenance

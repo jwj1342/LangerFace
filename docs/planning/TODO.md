@@ -16,7 +16,7 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
 ## 临床出口
 
 - [ ] 临床医生校验线图谱并置 `validated:true`（Stage 1 出口）— [#2](https://github.com/jwj1342/LangerFace/issues/2)
-      · 工程侧可生成 review packet、网页 3D 标注草案和指标，但只有受控临床流程中的医生能完成此项。
+      · 当前 PR 补齐逐线 JSON/CSV、源哈希门禁和结构化签署，并修复标注保存误置 validated/丢失既有线；只有受控临床流程中的医生能完成最终签署。
 
 ## 待合并的独立修复 / 功能
 

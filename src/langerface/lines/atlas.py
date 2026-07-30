@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 
@@ -53,6 +54,7 @@ class Atlas:
     topology_version: str = TOPOLOGY_VERSION
     provenance: str = ""
     validated: bool = False
+    clinical_validation: dict[str, Any] | None = None
 
     # ── I/O ───────────────────────────────────────────────────────────────────
     @classmethod
@@ -76,6 +78,7 @@ class Atlas:
             topology_version=data.get("topologyVersion", TOPOLOGY_VERSION),
             provenance=data.get("provenance", ""),
             validated=bool(data.get("validated", False)),
+            clinical_validation=data.get("clinicalValidation"),
         )
 
     def save(self, path: str) -> None:
@@ -87,6 +90,11 @@ class Atlas:
             "topologyVersion": self.topology_version,
             "provenance": self.provenance,
             "validated": self.validated,
+            **(
+                {"clinicalValidation": self.clinical_validation}
+                if self.clinical_validation is not None
+                else {}
+            ),
             "lines": [
                 {
                     "name": ln.name,
