@@ -13,7 +13,8 @@
     media/       视频 I/O 与逐帧处理工具
     apps/        命令行 / 摄像头入口（瘦壳）
 
-Stage 2（计划中）将以同级子包 tumor/、incision/ 接入，复用 geometry/detection/rendering。
+Stage 2 的确定性梭形几何已由同级 incision/ 子包接入，复用 geometry 并与 Web 金标对拍；
+其余肿物/切口流程仍由浏览器 workflow 承载。
 
 医学声明：本系统是可视化辅助工具，不是手术指令，也不是受监管的医疗器械。
 内置线条图谱为示意性首版，必须经临床医生校验后方可参考。详见 README《已知局限与医学声明》。

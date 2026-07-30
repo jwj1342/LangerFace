@@ -381,9 +381,11 @@ Stage 2 切口 workflow 只在浏览器本地处理肿物参数、标准化坐�
 | [ENVIRONMENT.md](docs/onboarding/ENVIRONMENT.md) | 本地 / 集群环境、venv、Node 24、测试与本地产物目录 |
 | [CONTRIBUTING.md](docs/onboarding/CONTRIBUTING.md) | 协作流程、测试约定、扩展点、PR 要求 |
 | [ENGINEERING_LESSONS.md](docs/onboarding/ENGINEERING_LESSONS.md) | 多人并行协作踩过的坑、避坑规则与提交前清单 |
+| [LABELS.md](docs/onboarding/LABELS.md) | issue / PR 标签规范 |
 | **架构 / 数据** — `docs/architecture/` | |
 | [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | 核心算法、坐标系、2D/3D 路线、网页 3D 标注、HeadSpace 离线管线、Stage 2 路线、资产与部署 |
 | [METHODS_AND_IMPLEMENTATION_SUMMARY.md](docs/architecture/METHODS_AND_IMPLEMENTATION_SUMMARY.md) | 各核心算法的**数学公式与推导**集中参考（重心映射 / One-Euro / 遮挡 / 流线生成 / Umeyama / FLAME / 软体 / 切口几何）；模块契约见 ARCHITECTURE，测试见 CONTRIBUTING |
+| **技术轨 / 功能专题** — `docs/tracks/` | |
 | [PERSONALIZED_RSTL.md](docs/tracks/PERSONALIZED_RSTL.md) | `/personalized` 个性化 RSTL 的输入、YOLO/V6 阈值依据、失败降级、隐私边界与图谱契约 |
 | [FLAME_3D_TRACK.md](docs/tracks/FLAME_3D_TRACK.md) | 3D FLAME 配准/标注、切口工作台 FLAME 资产回退/topology gate 与许可边界 |
 | [RSTL_3DMM_PRIOR.md](docs/tracks/RSTL_3DMM_PRIOR.md) | Borges RSTL 来源、3DMM 拓扑先验 manifest、与 #2/#13/2D-first 路线的衔接 |

@@ -36,6 +36,49 @@ function sameJson(a, b) {
 const clinicalRules = JSON.parse(
   fs.readFileSync(new URL("../assets/clinical_rules_face_incision.json", import.meta.url), "utf8"),
 );
+const fusiformParity = JSON.parse(
+  fs.readFileSync(new URL("../tests/fixtures/fusiform_candidates.json", import.meta.url), "utf8"),
+);
+ok(fusiformParity.schema === "fusiform-incision-parity/v0.1", "fusiform parity fixture schema is current");
+for (const fixture of fusiformParity.cases) {
+  const rules = structuredClone(T.DEFAULT_RULES);
+  Object.assign(rules.fusiform_cutaneous, fixture.rules);
+  rules.version = fixture.rules.version;
+  const candidate = T.generateFusiformIncision(
+    fixture.tumor,
+    fixture.direction,
+    fixture.units_per_mm,
+    fixture.normal,
+    rules,
+  );
+  const expected = fixture.expected;
+  const vectorNear = (actual, wanted) =>
+    actual.length === wanted.length && actual.every((value, index) => near(value, wanted[index], 1e-12));
+  ok(vectorNear(candidate.center, expected.center), `${fixture.name}: center matches shared golden`);
+  ok(vectorNear(candidate.axis, expected.axis), `${fixture.name}: axis matches shared golden`);
+  ok(vectorNear(candidate.width_axis, expected.width_axis), `${fixture.name}: width axis matches shared golden`);
+  ok(candidate.endpoints.every((point, index) => vectorNear(point, expected.endpoints[index])),
+    `${fixture.name}: endpoints match shared golden`);
+  ok(near(candidate.length_mm, expected.length_mm), `${fixture.name}: length matches shared golden`);
+  ok(near(candidate.width_mm, expected.width_mm), `${fixture.name}: width matches shared golden`);
+  ok(candidate.outline.length === expected.outline_points, `${fixture.name}: outline count matches shared golden`);
+  const samples = fixture.rules.samples;
+  ok(vectorNear(candidate.outline[samples / 2], expected.upper_midpoint),
+    `${fixture.name}: upper midpoint matches shared golden`);
+  ok(vectorNear(candidate.outline[samples + samples / 2], expected.lower_midpoint),
+    `${fixture.name}: lower midpoint matches shared golden`);
+  ok(near(candidate.metrics.tip_angle_target_deg, expected.tip_angle_target_deg),
+    `${fixture.name}: tip target matches shared golden`);
+  ok(candidate.metrics.tip_angle_limited_by_ratio === expected.tip_angle_limited_by_ratio,
+    `${fixture.name}: ratio-limit state matches shared golden`);
+  ok(candidate.metrics.boundary_used === expected.boundary_used,
+    `${fixture.name}: boundary state matches shared golden`);
+  for (const field of ["boundary_point_count", "boundary_area_mm2", "boundary_envelope_outside_count"]) {
+    if (Object.hasOwn(expected, field)) {
+      ok(near(candidate.metrics[field], expected[field]), `${fixture.name}: ${field} matches shared golden`);
+    }
+  }
+}
 ok(T.DEFAULT_RULES.version === clinicalRules.version, "web clinical rules version matches asset");
 for (const [section, fields] of Object.entries({
   linear_subcutaneous: ["length_multiplier", "min_length_mm", "max_length_mm"],
