@@ -203,7 +203,8 @@ P = u·V0 + v·V1 + w·V2
 4. `pytest` + `cd web && npm test` 全绿；`cd web && npm run build` 可生产构建。
 5. `cd web && npm run dev` → 浏览器打开 Vite 地址，验证 2D 实时；实时 3D 重建 / FLAME 孪生入口已由 #108 关闭，
    但 `/annotate` 的 3D 标注工具与 `/surgery` 闭合演示仍可从界面进入（见 §4 与 §12）。
-6. 临床校验图谱（`annotate_atlas.py`）后置 `validated:true` 方可作正式参考。
+6. `annotate_atlas.py` 只保存 `validated:false` 编辑草案；完成独立逐线临床复核、
+   来源记录和显式签署后，才允许由受控 finalize 流程生成 `validated:true` 候选资产。
 
 ## 11. 前端鲁棒性约束
 
@@ -260,7 +261,10 @@ npm run dev
 
 ### 接入项目
 
-- **临床校验闭环（issue #2）**：网页标注器只生成候选图谱草案；评审通过后，再由 `tools/annotate_atlas.py` 或资产维护流程替换 `assets/atlas_rstl.json` / `assets/atlas_langer.json`，将 `validated` 置 `true`，并在 `provenance` 记录校验者。
+- **临床校验闭环（issue #2）**：网页标注器与 `tools/annotate_atlas.py` 都只生成
+  `validated:false` 候选图谱草案。只有逐线评审全部通过，并记录评审者、角色、时间、
+  医学来源和显式 attestation 后，受控 finalize 流程才能生成单独的
+  `validated:true` 候选资产；普通编辑保存和手工修改布尔字段都不属于临床签署。
 - **3D 头模标注**：HeadSpace 等头模经离线管线导出为 `{vertices, triangles}` JSON 后，可在 `/app/annotate` 上传加载；标注得到的 xyz 线可继续经 `langerface.geometry`（加权 Sim3）在头模与标准脸之间迁移。
 - **数据隐私**：真实头模（HeadSpace / FaceScape）不入库，仅本地使用；标注产物（图谱/xyz JSON，仅坐标）可入库评审。
 
