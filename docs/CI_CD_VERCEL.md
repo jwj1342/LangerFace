@@ -137,6 +137,69 @@ Required status checks 建议包含：
 
 实际 check 名称由 GitHub UI 决定。第一次 PR 跑完后，在 Branch protection 页面选择已经出现的 check，不要手写猜名称。
 
+## GitHub Auto-merge 与 stacked PR
+
+仓库设置中保持 **Allow auto-merge** 和 **Automatically delete head branches**
+开启。自动删除不是单纯清理：父 PR 合并后，GitHub 会把仍以该 head branch 为 base
+的开放 PR 自动 retarget 到父 PR 原来的 base，这是 stacked PR 逐层进入 `master`
+的接力点。
+
+维护者为允许自动接力的 PR 添加 `automerge:stack` 标签。
+[`.github/workflows/automerge-approved.yml`](../.github/workflows/automerge-approved.yml)
+会在以下时机扫描：
+
+- PR 打标、Ready、更新或 base 变化；
+- reviewer 提交或撤回 review；
+- 每 5 分钟兜底轮询；
+- 维护者手动 `workflow_dispatch`。
+
+策略实现位于 [`tools/automerge_policy.mjs`](../tools/automerge_policy.mjs)，约束为：
+
+1. 只选择 `baseRefName == master`、非 Draft、带 `automerge:stack` 且尚未启用
+   Auto-merge 的 PR。子 PR 在仍指向临时父分支时不会被合并。
+2. 调用 `gh pr merge --auto --squash --match-head-commit <SHA>`，不使用
+   `--admin`。实际合并仍由 GitHub 原生 Auto-merge 等待 branch protection：
+   必需 checks 全绿且至少 1 个 approval。
+3. `pull_request_target` 场景只从受保护的默认分支 checkout
+   `tools/automerge_policy.mjs`，不读取或执行 PR head 代码；checkout credential
+   不持久化。
+4. workflow 的 job 权限只提升到 `contents: write` 和
+   `pull-requests: write`，不允许机器人提交 approving review。
+5. GitHub 在 PR 切换 base 时会取消旧 Auto-merge 请求；workflow 在子 PR
+   retarget 到 `master` 后重新启用，避免把它提前合进临时父分支。
+
+### 启用、暂停和排障
+
+启用：
+
+```bash
+gh pr edit <PR号> --add-label 'automerge:stack'
+```
+
+如果 PR 已经直接指向 `master`，也可立即登记原生 Auto-merge：
+
+```bash
+gh pr merge <PR号> --auto --squash
+```
+
+暂停时需要同时移除授权标签和已有的原生请求：
+
+```bash
+gh pr edit <PR号> --remove-label 'automerge:stack'
+gh pr merge <PR号> --disable-auto
+```
+
+PR 没有自动前进时依次检查：
+
+1. PR 是否 Ready、带 `automerge:stack`，当前 base 是否确实为 `master`。
+2. GitHub 合并框是否显示 Auto-merge 已启用；若没有，手动运行
+   `Auto-merge approved PRs` workflow 或等待下一次 5 分钟轮询。
+3. `master` 的必需 checks 是否全部成功、是否已有满足 branch protection 的
+   approving review、是否存在冲突或待更新分支。
+4. Repository Actions 设置是否允许 workflow 请求
+   `contents: write` / `pull-requests: write`；不要用 admin bypass 解决权限或 CI
+   问题。
+
 ## 日常发布流程
 
 协作者的日常流程见 [CONTRIBUTING.md](CONTRIBUTING.md#pr--preview-工作流)。本文件只保留维护者需要的 Vercel / GitHub 设置细节。

@@ -54,6 +54,7 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: web/package-lock.json
+      - run: node tools/test_automerge_policy.mjs
       - working-directory: web
         run: npm ci
       - working-directory: web

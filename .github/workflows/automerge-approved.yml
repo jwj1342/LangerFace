@@ -1,0 +1,47 @@
+name: Auto-merge approved PRs
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+  pull_request_target:
+    types:
+      - edited
+      - labeled
+      - opened
+      - closed
+      - ready_for_review
+      - reopened
+      - synchronize
+  pull_request_review:
+    types:
+      - dismissed
+      - submitted
+
+concurrency:
+  group: automerge-approved-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable-native-automerge:
+    runs-on: ubuntu-latest
+    steps:
+      # Never check out a pull request head from pull_request_target. The
+      # automation code always comes from the protected default branch.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: tools/automerge_policy.mjs
+          sparse-checkout-cone-mode: false
+      - name: Enable native auto-merge for eligible PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUTOMERGE_REPOSITORY: ${{ github.repository }}
+          AUTOMERGE_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          AUTOMERGE_LABEL: "automerge:stack"
+        run: node tools/automerge_policy.mjs
