@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Audit draft RSTL / 3DMM prior assets.
 
-The #86 assets are intentionally draft-only. This script makes that boundary
+The PR #88 follow-up assets are intentionally draft-only. This script makes that boundary
 machine-checkable so direction priors cannot quietly become "validated" or be
 used across the wrong topology.
 """

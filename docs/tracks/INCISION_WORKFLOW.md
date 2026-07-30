@@ -38,6 +38,14 @@
 
 机器可读契约见 [`assets/incision_workflow_schema.json`](../../assets/incision_workflow_schema.json)。
 
+审阅记录与导出容器从 Agentic 字段迁移后分别使用 `incision-review-record/v0.4` 和
+`incision-review-export/v0.4`；React controller snapshot 因移除 provider 状态并把 `agent_*` UI 字段改为
+`workflow_*`，升级为 `react-incision-controller-snapshot/v0.2`。`tools/evaluate_stage2_validation.py`
+仍兼容读取旧 `v0.3` 审阅导出，并在 summary 中分开报告源 schema，避免旧新结构静默混读。
+
+旧书签 `/incision_agent.html` 只保留一个无运行时代码的跳转页，统一重定向到 `/app/incision`；
+它不会恢复 Agentic 模式、Provider UI 或远程模型调用。
+
 ## 医生审阅
 
 候选可编辑、确认、退回或否决；每次编辑都会重算几何和 guardrails，并记录 provenance。工具门控未通过、缺少审阅人或高风险提示缺少说明时，候选不能标记为可发送到实时叠加。

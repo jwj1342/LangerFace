@@ -8,7 +8,7 @@
 | [`architecture/`](#architecture--架构与算法) | 它是怎么实现的、公式是什么 | 2 |
 | [`tracks/`](#tracks--技术轨与功能专题) | 某一条技术路线的设计与现状 | 4 |
 | [`quality/`](#quality--质量与运维) | 怎么证明它没坏、怎么部署和观测 | 4 |
-| [`clinical/`](#clinical--临床边界与合规) | 医学上能说什么、数据边界在哪 | 2 |
+| [`clinical/`](#clinical--临床边界与合规) | 医学上能说什么、数据边界在哪 | 3 |
 | [`planning/`](#planning--路线图) | 接下来做什么 | 1 |
 
 ---
@@ -31,11 +31,11 @@
 
 ## `clinical/` — 临床边界与合规
 
-**这个目录回答「这套东西在医学上能声称什么、不能声称什么，以及哪些数据绝对不能出域」——它约束的是承诺而不是实现。** [PRIVACY_AND_AUDIT.md](clinical/PRIVACY_AND_AUDIT.md) 是敏感数据边界、禁止提交项、导出约束与审计字段的总纲；[WRINKLE_LESION_CUES.md](clinical/WRINKLE_LESION_CUES.md) 统一记录自然皱襞/皱纹/病灶边界、Python texture warp、浏览器个性化路径和 checkpoint 许可边界。产品当前范围与重启条件统一由 planning/TODO 维护。
+**这个目录回答「这套东西在医学上能声称什么、不能声称什么，以及哪些数据绝对不能出域」——它约束的是承诺而不是实现。** [PRODUCT_BOUNDARIES.md](clinical/PRODUCT_BOUNDARIES.md) 固定当前研究范围、明确暂缓项与未来重启条件；[PRIVACY_AND_AUDIT.md](clinical/PRIVACY_AND_AUDIT.md) 是敏感数据边界、禁止提交项、导出约束与审计字段的总纲；[WRINKLE_LESION_CUES.md](clinical/WRINKLE_LESION_CUES.md) 统一记录自然皱襞/皱纹/病灶边界、Python texture warp、浏览器个性化路径和 checkpoint 许可边界。
 
 ## `planning/` — 路线图
 
-**这个目录回答「接下来做什么」，只有一篇。** [TODO.md](planning/TODO.md) 是与 GitHub Issues 自动核对的路线图与待办，按临床出口、待合并修复、文档架构和暂缓路线分组。GitHub Issues 是状态的唯一真源，本文只做分组与上下文。
+**这个目录回答「接下来做什么」，只有一篇。** [TODO.md](planning/TODO.md) 是与 GitHub Issues 自动核对的路线图与待办，按临床出口、待合并修复和文档架构分组。GitHub Issues 是状态的唯一真源，本文只做分组与上下文；产品承诺边界不放在可频繁变动的路线图里。
 
 ---
 
