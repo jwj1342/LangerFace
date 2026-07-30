@@ -241,6 +241,8 @@ P = u·V0 + v·V1 + w·V2
   `src/services/incisionDom.ts`、`src/services/incisionClinicalCopy.ts` 与 `src/services/incisionReviewPolicy.ts`。
   向量运算、平均网格边长以及 ring/boundary/polyline BufferGeometry 构造位于无 DOM、可独立测试的
   `src/services/incisionSceneGeometry.ts`；runtime 只传入当前状态并负责替换/释放 scene geometry。
+  审阅/肿物导出 schema、候选工程排序和浏览器下载边界位于 `src/services/incisionExport.ts`；
+  runtime 只组装当前业务快照、执行隐私 preflight 并触发下载。
   React 控件只通过 typed controller command 写入运行时，兼容页的原生 DOM 监听器不会在 React route 上回写旧 snapshot。
 - 实时页的 canvas/WebM 录制、额外视图合成和下载生命周期由 `src/services/canvasRecording.ts` 负责。
 - 摄像头约束/错误归一化由

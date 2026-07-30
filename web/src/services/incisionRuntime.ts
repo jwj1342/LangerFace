@@ -69,6 +69,12 @@ import type { AtlasPayload, HeadMeshPayload } from "./dataSource";
 import { auditExportPayload } from "./exportPrivacy";
 import { loadFlameBasisAsset, mediaPipeAtlasToFlamePreviewAtlas } from "./flameHeadAssets";
 import {
+  buildReviewExportPayload,
+  buildTumorExportPayload,
+  downloadCanvasPng,
+  downloadText,
+} from "./incisionExport";
+import {
   add3 as add,
   buildBoundaryGeometry,
   buildPolylineGeometry,
@@ -682,15 +688,6 @@ function invalidateReviewAfterGeometryChange(message = "候选几何已变化，
     updateReviewStateUI();
     els.stageStatus.textContent = message;
   }
-}
-
-function downloadText(filename: string, text: string, type = "application/json") {
-  const blob = new Blob([text], { type });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(a.href);
 }
 
 function exportPreflightPasses(payload: unknown, label: string) {
@@ -1758,15 +1755,11 @@ function exportReviewJson() {
     return;
   }
   const current = S.result ? reviewRecord(S.result, "当前候选") : null;
-  const records = [current, ...S.saved].filter(Boolean) as DynamicRecord[];
-  const payload = {
-    schema_version: "incision-review-export/v0.3",
-    exported_at: new Date().toISOString(),
+  const payload = buildReviewExportPayload({
     current,
     saved: S.saved,
-    secondary_cues: secondaryCueReviewSummary(),
-    candidate_comparison: compareCandidateRecords(records),
-  };
+    secondaryCues: secondaryCueReviewSummary(),
+  });
   if (!exportPreflightPasses(payload, "审阅 JSON 导出")) return;
   downloadText(`incision_review_${Date.now()}.json`, JSON.stringify(payload, null, 2));
 }
@@ -1774,19 +1767,11 @@ function exportReviewJson() {
 function exportTumorJson() {
   if (!S.verts) return;
   const tumor = tumorInput();
-  const payload = {
-    schema_version: "tumor-input/v0.2",
-    exported_at: new Date().toISOString(),
+  const payload = buildTumorExportPayload({
     tumor,
-    tumor_quality: summarizeTumorInputQuality(tumor),
-    boundary_summary: boundarySummaryFor(tumor),
-    privacy_audit: {
-      raw_image_sent: false,
-      raw_video_sent: false,
-      contains_face_image: false,
-      contains_abstract_face_coordinates: true,
-    },
-  };
+    tumorQuality: summarizeTumorInputQuality(tumor),
+    boundarySummary: boundarySummaryFor(tumor),
+  });
   if (!exportPreflightPasses(payload, "肿物输入 JSON 导出")) return;
   downloadText(`tumor_input_${Date.now()}.json`, JSON.stringify(payload, null, 2));
   els.stageStatus.textContent = "已导出肿物输入 JSON";
@@ -1970,14 +1955,7 @@ function exportScreenshot() {
     els.stageStatus.textContent = "没有可截图的候选";
     return;
   }
-  els.canvas.toBlob((blob) => {
-    if (!blob) return;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `incision_candidate_${Date.now()}.png`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
+  downloadCanvasPng(els.canvas, `incision_candidate_${Date.now()}.png`);
 }
 
 function stageLiveOverlay() {
