@@ -10,9 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _safe_review_export() -> dict:
     return {
-        "schema_version": "incision-review-export/v0.3",
+        "schema_version": "incision-review-export/v0.4",
         "current": {
-            "schema_version": "incision-review-record/v0.3",
+            "schema_version": "incision-review-record/v0.4",
             "id": "candidate-safe",
             "review": {"reviewer": "coded-reviewer-1", "notes": "synthetic fixture only"},
             "tumor": {"kind": "subcutaneous", "center": [0, 0, 0], "diameter_mm": 10},

@@ -24,7 +24,7 @@ const review = buildReviewExportPayload({
   exportedAt: "2026-07-29T00:00:00.000Z",
 });
 
-assert.equal(review.schema_version, "incision-review-export/v0.3");
+assert.equal(review.schema_version, "incision-review-export/v0.4");
 assert.equal(review.exported_at, "2026-07-29T00:00:00.000Z");
 assert.equal(review.current, current);
 assert.equal(review.saved, saved);

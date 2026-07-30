@@ -395,7 +395,7 @@ Stage 2 切口 workflow 只在浏览器本地处理肿物参数、标准化坐�
 | [FLAME_3D_TRACK.md](docs/tracks/FLAME_3D_TRACK.md) | 3D FLAME 配准/标注、切口工作台 FLAME 资产回退/topology gate 与许可边界 |
 | [RSTL_3DMM_PRIOR.md](docs/tracks/RSTL_3DMM_PRIOR.md) | Borges RSTL 来源、3DMM 拓扑先验 manifest、与 #2/#13/2D-first 路线的衔接 |
 | [INCISION_WORKFLOW.md](docs/tracks/INCISION_WORKFLOW.md) | 浏览器本地确定性切口 workflow、tool trace、worker 回退和医生审阅边界 |
-| [rstl_3dmm_prior_manifest.json](assets/rstl_3dmm_prior_manifest.json) | MediaPipe/3DMM RSTL 先验资产 manifest；高密度方向场大 JSON 由远端资产或本地生成提供（issue #86，`validated:false`） |
+| [rstl_3dmm_prior_manifest.json](assets/rstl_3dmm_prior_manifest.json) | MediaPipe/3DMM RSTL 先验资产 manifest；高密度方向场大 JSON 由远端资产或本地生成提供（历史实现见 PR #88，`validated:false`） |
 | **质量 / 运维** — `docs/quality/` | |
 | [CROSS_LANG_PARITY.md](docs/quality/CROSS_LANG_PARITY.md) | Python ⇄ Web TypeScript ⇄ 金标逐点对拍不变式与金标重生成 |
 | [OBSERVABILITY.md](docs/quality/OBSERVABILITY.md) | 浏览器诊断 JSON、结构化事件字段、计数器与运行时指标（issue #51）|
@@ -403,10 +403,11 @@ Stage 2 切口 workflow 只在浏览器本地处理肿物参数、标准化坐�
 | [LABELS.md](docs/onboarding/LABELS.md) | issue / PR 标签规范 |
 | **临床 / 合规** — `docs/clinical/` | |
 | [VALIDATION.md](docs/quality/VALIDATION.md) | 临床验证数据集、Stage 1/2 指标、失败分类、人工评审表（issue #20）|
+| [PRODUCT_BOUNDARIES.md](docs/clinical/PRODUCT_BOUNDARIES.md) | 当前产品承诺边界、明确暂缓项与未来重启条件 |
 | [PRIVACY_AND_AUDIT.md](docs/clinical/PRIVACY_AND_AUDIT.md) | 敏感数据边界、禁止提交项、导出约束、审计字段（issue #21）|
 | [WRINKLE_LESION_CUES.md](docs/clinical/WRINKLE_LESION_CUES.md) | 辅助线索、Python texture warp、浏览器个性化边界与 checkpoint 许可（issue #22）|
 | **规划** — `docs/planning/` | |
-| [TODO.md](docs/planning/TODO.md) | 当前产品边界、重启条件与 open issues（自动和 GitHub 同步）|
+| [TODO.md](docs/planning/TODO.md) | open issues 路线图（自动和 GitHub 同步）|
 
 > 医学声明、图谱状态与临床局限见 README [已知局限与医学声明](#已知局限与医学声明)。
 
