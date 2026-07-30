@@ -40,13 +40,27 @@ cd ..
 
 ```bash
 pytest                       # Python 单元/集成测试
-cd web && npm test           # Web TypeScript↔Python 几何对拍（多支 .ts）
+cd web && npm test           # 全量：typecheck + 下面 7 组（共 49 支脚本）
 ruff check .                 # 代码风格
 ```
 
 测试**不需要** mediapipe（注入假检测器 / 合成关键点）；资产已随仓库提交，故几何与渲染测试会真正运行。
 
 各测试覆盖（从 README 收口到此，作为测试事实来源）：
+
+`npm test` 按语义分成 7 组，调试时可以只跑相关的一组（组名即职责，全部由 `npm test` 串起来，不会漏跑）：
+
+| 组 | 覆盖 |
+|---|---|
+| `npm run test:arch` | 架构与文档守卫：import 无环、旧 JS runtime 不回流、文档链接与索引、主特性对拍、dist 资产 |
+| `npm run test:geometry` | 几何与图谱契约：三方映射对拍、额头可见性两实现对拍、遮挡、姿态门控、Umeyama、拓扑守卫、soft-body |
+| `npm run test:live` | 实时页与采集源：摄像头、图片源、画布适配、资产加载、导出、诊断 JSON |
+| `npm run test:annotate` | 标注与 3D 路线 |
+| `npm run test:incision` | 切口工作台：overlay、回放 QA、验收审计、工具契约 |
+| `npm run test:privacy` | 隐私与 Provider 边界 |
+| `npm run test:personalized` | `/personalized` 浏览器个性化链路（含 YOLO/V6） |
+
+分组的另一个作用是减少冲突面：这一行原本是串了 40 多项的**单行字符串**，任何两个想加测试的 PR 都必然文本冲突（#117↔#116、#142↔#116/#121 各撞过一次）。现在只会撞在实际改动的那一组上。
 
 - **Web TypeScript ↔ Python 逐点对拍**（`cd web && npm test`）：先查 `web/src/**/*.ts(x)` 静态 import 无模块环并阻止旧根目录 JS runtime 回流，再用真实帧关键点对拍映射（误差 ~5×10⁻⁵px）/ 背面剔除（0 不一致）/ One-Euro fixture；并含 `test_occlusion`（贴合手形掩膜、指缝保留、无手不剔除）、`test_umeyama`（恢复已知相似变换 ~1e-13）、`topologyId`/`topologyVersion` 守卫与 atlas roundtrip 契约、FLAME basis 拟合 + jaw/表情前向、RSTL 切除闭合 soft-body 张力方向断言、`test_logger`（`window.exportLangerfaceDiagnostics()` 结构化 JSON 契约）。
 - **Python 单测**（`pytest`）：图谱完整性、标准脸解析、映射仿射不变性、平滑降抖动、端到端渲染、`assets/`↔`web/assets/` 同步门禁、结构化可观测性。
