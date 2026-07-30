@@ -186,8 +186,8 @@ def audit_manifest(manifest_path: Path, root: Path) -> dict[str, Any]:
                     )
                 else:
                     _require(
-                        any("#61" in str(item) for item in asset.get("limitations", [])),
-                        f"{prefix}: pending 3DMM assets must reference #61 workflow",
+                        any("offline 3D workflow" in str(item) for item in asset.get("limitations", [])),
+                        f"{prefix}: pending 3DMM assets must reference the offline 3D workflow",
                         errors,
                     )
             else:

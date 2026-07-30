@@ -63,7 +63,7 @@
     "appVersion": "0.2.0",
     "topologyId": "mediapipe-468",
     "atlasSystem": "rstl",
-    "atlasVersion": "0.2"
+    "atlasVersion": "8.1.67"
   },
   "objectRef": {
     "type": "atlas|line|tumor|incision_candidate|diagnostics",
@@ -75,6 +75,9 @@
   }
 }
 ```
+
+`atlasVersion` 是内容发布版本；图谱 JSON 顶层 `version` 是格式契约版本。正式 RSTL 的审阅记录
+必须写 `8.1.67`（或实际内容版本），不能用 `0.2` 代替。
 
 ## 医生覆盖记录
 

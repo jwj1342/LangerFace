@@ -169,6 +169,25 @@ P' = u * V0' + v * V1' + w * V2'
 
 因此图谱随三角网格等价变形，对平移、旋转、缩放、局部仿射形变都稳定。这就是线条可以跟随身份、姿态、表情变化的数学基础。
 
+### 5.1 额头拱线的显式非重心后处理
+
+上式是所有点的基础映射，但 React 实时运行时对 `region=forehead_bridge_arc_v15` 还有一段显式、
+可测试的非重心形变。以关键点 9→10 定义额头轴单位向量 `e`，令 `l` 为其正交方向、`h` 为脸高、
+`W` 为脸宽。基础映射点 `P` 会依次执行：
+
+```text
+q = dot(P - anchor, e)
+P1 = P + 0.86 * q * e
+P2 = P1 + (0.82 * W / max(|dot(P1-anchor,l)|) - 1) * dot(P1-anchor,l) * l
+P3 = smooth_5_passes(P2)
+P4 = P3 + 0.140 * h * (1 - |dot(P3-anchor,l)|^2 / halfWidth^2) * e
+P5 = P4 - 0.100 * layerRank * h * e
+```
+
+这段展开只属于旧的标准 atlas runtime 补偿。`/personalized` V6 已在 canonical 空间完成额头几何，
+所以导出线条带 `disableRuntimeExpansion:true`；任何消费者都必须在调用上述后处理前尊重该标记，
+避免二次展开。Python/TypeScript 共享 fixture 在 #112 对这一例外做 parity 锁定。
+
 ## 6. 核心算法二：One-Euro 时间平滑
 
 实时关键点会抖动。基础滤波器使用 One-Euro Filter 对每个关键点每个坐标独立平滑。实现位于 `src/langerface/detection/smoothing.py` 和 `web/src/services/geometrySmoothing.ts`。
@@ -239,9 +258,29 @@ visible = sign * nz >= threshold
 
 此外，系统预先找出内唇/口裂相关三角面。张嘴时这些区域可能落入口腔或牙齿上，仅靠背面剔除无法稳定处理，因此代码将这些三角面永久设为不可见。
 
+### 7.1 纯 JS 实时页的额头皮肤/头发可见性
+
+`web/current/forehead_visibility.js` 对额头点使用图像证据，不等价于上面的三角面法向。像素先从
+sRGB 分段线性化，再变换到 CIE XYZ/Lab；候选 patch 与可信面部 patch 的色差为
+
+```text
+DeltaE_ab = sqrt((L-Lr)^2 + (a-ar)^2 + (b-br)^2)
+```
+
+最小色差必须 `<=26`，同时拒绝亮度低于参考中位数 `0.52` 且色差 `>10` 的暗区，以及色度低于
+`max(5, 0.70*Cr)` 且色差 `>10` 的近无彩头发区。空间上还要求点落在头部椭圆
+
+```text
+((x-cx)/(0.54*faceWidth))^2 + ((y-cy)/(0.46*faceHeight))^2 <= 1
+```
+
+最后沿曲线填补长度不超过 `1.5%` 的小缺口、删除短于 `2.5%` 的可见段，并只保留长度至少
+`22%` 的最长连续段。它是纯 JS 兼容实时页的实际额头可见性模型；React TypeScript 路径仍使用
+法向、pose gate、局部区域质量与遮挡组合，不能把两者写成同一算法。
+
 ## 8. 核心算法四：手部遮挡
 
-手挡脸时，手前方区域不应继续画线。该能力目前在 Web 端实现，相关函数在 `web/src/services/geometryAtlas.ts`：
+手挡脸时，手前方区域不应继续画线。该能力目前在 Web 端实现，相关函数在 `web/src/services/geometryOccluders.ts`：
 
 - `buildHandMasks`
 - `pointInHandMasks`
@@ -289,6 +328,29 @@ output = alpha * overlay + (1 - alpha) * frame
 ```
 
 当检测不到人脸时，`LinePipeline` 使用上一帧映射结果做淡出，避免线条突然消失造成闪烁。
+
+### 9.1 `/personalized` V6 的法向脊线微调
+
+V6 保持曲线连接关系不变，只允许标准线点 `P_i` 沿其局部单位法向 `n_i` 位移：
+
+```text
+P'_i = P_i + d_i * n_i
+```
+
+皱纹掩膜经必要时的 Zhang–Suen 骨架化后形成有序趋势段。候选证据只在
+`0.030*faceWidth` 搜索带内匹配，方向夹角不超过 `40°`；匹配权重组合掩膜置信度、切线对齐、
+法向距离的高斯衰减、覆盖率和连续性。每个有直接证据的区间向两侧扩
+`0.020*faceWidth` 作连续过渡，并迭代求解一维平滑位移：
+
+```text
+d_i <- (4.5*s_i*r_i + 1.2*d_i + 1.1*(d_(i-1)+d_(i+1))) / (4.5*s_i + 3.4)
+```
+
+其中 `r_i` 是带符号原始法向偏移，`s_i` 是区间内归一化支持度，区间端点固定为 0 以保持 C0
+连续。位移绝对值不超过 `0.020*faceWidth`；每个受影响区间的 P90 不超过
+`0.010*faceWidth`（少于 8 个活动点时用 RMS）。曲率变化超过 18°、出界、自交或产生新的曲线间
+相交时按 0.8 逐级缩放，最小仍不合法则整段回滚到先验。完整阈值、失败降级与逐点 provenance
+由 [PERSONALIZED_RSTL.md](../tracks/PERSONALIZED_RSTL.md) 单一维护。
 
 ## 10. 2D 运行管线
 
@@ -700,41 +762,12 @@ extra_tension = max(0, current_tension - baseline_tension)
 
 > 各测试的职责、目检脚本与浏览器实测清单见 [CONTRIBUTING.md «运行测试»](../onboarding/CONTRIBUTING.md#运行测试)（测试事实来源）；Python ⇄ Web TypeScript ⇄ 金标逐点对拍的不变式（映射误差 < 1e-2 px、可见性不一致数 = 0）与金标重生成见 [CROSS_LANG_PARITY.md](../quality/CROSS_LANG_PARITY.md)。本文不重复测试枚举，只强调：改动任何几何代码后，`pytest` 与 `cd web && npm test` 的对拍必须仍逐点一致。
 
-## 21. Stage 2 切口规划路线
+## 21. Stage 2 切口几何公式
 
-Stage 2 目标是在当前张力线迁移基础上，加入肿物输入、临床规则和候选切口生成。系统仍只生成可解释候选和风险提示，最终切口由医生确认。
+Stage 2 的输入/输出、模块 owner、规则优先级和区域约束统一见
+[ARCHITECTURE §14](ARCHITECTURE.md#14-stage-2-肿物与切口设计技术路线)。本节只保留不适合放在模块契约文档中的数学推导。
 
-### 21.1 输入
-
-| 输入 | 来源 | 说明 |
-| --- | --- | --- |
-| 患者脸部几何 | 照片、视频、摄像头、3D 扫描 | 由当前 2D/3D 配准体系提供 |
-| 肿物约束 | 医生标注、术前超声、病理判断 | 中心、直径、边界、深度、安全切缘等 |
-| 临床规则 | 医生团队规则库 | RSTL、自然皱襞、美学亚单位、敏感结构例外 |
-
-肿物约束会先经过 `summarize_tumor_input_quality`。该步骤不改变几何，只把缺作者、非 mm 单位、缺皮下深度、缺皮表切缘、自由轮廓点数过稀等输入风险写入工具 trace、`tumor_quality`、审阅 JSON 和 Markdown 报告，避免医生把不完整输入误读为已充分建模的肿物边界。
-
-### 21.2 输出
-
-- RSTL / Langer 线叠加。
-- 肿物位置和边界。
-- 一个或多个候选切口线。
-- 候选解释：方向来源、角度偏差、长宽比、尖端角、平滑性。
-- 敏感结构风险提示。
-- 医生编辑、覆盖和确认记录。
-
-### 21.3 规则优先级
-
-默认方向优先级：
-
-1. RSTL：长轴尽量平行松弛皮肤张力线。
-2. 自然皱襞/皱纹：利用额纹、鱼尾纹、鼻唇沟、睑缘纹等隐藏瘢痕。
-3. 美学亚单位边界：眉缘、唇红缘、发际线、鼻翼沟、耳前皱襞等。
-4. 敏感结构例外：下睑、唇红缘、鼻翼等区域需要优先保护形态和功能。
-
-当前面部分区仍是标准脸 bbox 启发式，但分区输出会携带 `confidence_reasons` 和 `region_boundary_margin_norm`。`bbox_heuristic_region_classifier`、`near_region_rule_boundary`、`near_canonical_face_edge`、`near_sensitive_free_margin`、`heuristic_region_low_confidence` 以及耳周、鼻尖、口角、下颌缘等过渡区标签会进入工具 trace、guardrail 文案和审阅报告，帮助医生区分“规则边界附近”与“明确敏感结构附近”。这些解释不是临床级分区验证。
-
-### 21.4 皮下肿物线性切口
+### 21.1 皮下肿物线性切口
 
 皮下肿物默认生成线性切口：
 
@@ -774,7 +807,7 @@ angular_spread = 2 * max_i axis_diff(theta_i, theta_ref)
 
 这样 `179°` 与 `-179°` 被视为约 `2°` 的轴向差异，而不是普通有向角 `max(theta)-min(theta)` 下的 `358°`。方向置信度因此只在真实邻域方向冲突时下降，不会在角度表示边界处误报低置信度。查询结果还会输出 `confidence_reasons`：`empty_atlas`、`nearest_atlas_support_far`、`nearest_atlas_support_sparse`、`low_support_count` 或 `high_angular_spread` 会进入候选 provenance、guardrail 文案和审阅报告，便于区分“没有图谱支持”和“邻域方向本身冲突”。
 
-### 21.5 皮表肿物梭形切口
+### 21.2 皮表肿物梭形切口
 
 皮表肿物生成梭形候选。默认临床经验参数：
 
@@ -834,19 +867,6 @@ axis_coverage_deficit_mm = max(0, axis_coverage_required_mm - length_mm)
 }
 ```
 
-### 21.6 计划模块
-
-| 模块 | 计划位置 | 职责 |
-| --- | --- | --- |
-| 临床规则库 | `assets/clinical_rules_face_incision.json` | 区域规则、优先级、例外和审核状态 |
-| 面部分区 | `web/src/services/incisionToolCore.ts` | 点位到临床区域和美学亚单位的映射，输出分区低置信原因 |
-| RSTL 方向服务 | `web/src/services/incisionToolCore.ts` | 查询局部方向、置信度和依据 |
-| 肿物模型 | `web/src/services/incisionCandidateTools.ts`, `web/src/services/tumorInput.ts` | 表达皮下/皮表肿物约束 |
-| 切口生成 | `web/src/services/incisionCandidateTools.ts` | 线性和梭形候选生成 |
-| guardrails | `web/src/services/incisionCandidateTools.ts` | 敏感结构风险提示 |
-| 审阅 UI | `web/src/services/incisionRuntime.ts`, `web/src/components/*Review*.tsx` | 医生编辑、覆盖、确认和导出 |
-| 验证指标 | `docs/quality/VALIDATION.md` | 角度误差、稳定性、医生接受率等 |
-
 ## 22. 已实现功能清单
 
 > 用户可见的已实现功能清单见 [README «它能做什么»](../../README.md#它能做什么)，路线图与待办见 [TODO.md](../planning/TODO.md)。本文聚焦算法原理，不维护功能清单（避免与 README 漂移）。
@@ -855,16 +875,16 @@ axis_coverage_deficit_mm = max(0, axis_coverage_required_mm - length_mm)
 
 1. 图谱医学准确性是首要限制。当前内置 RSTL / Langer 图谱是方向场生成的示意首版，未完成临床验证。
 2. MediaPipe 关键点在前额、强侧脸、强光、低光、遮挡、多脸快速进出时可能漂移。
-3. Python 端只处理自遮挡，Web 端才有手部遮挡；器械、纱布、口罩等通用外物遮挡尚未实现。
-4. 3D Beta 的实时投影是刚性配准，不随表情做非刚性形变。
+3. Python 端只处理自遮挡，Web 端另有手部遮挡；当前产品不承诺术中器械/纱布/口罩语义分割。
+4. 实时 3D 用户入口已关闭；保留的 FLAME/Three.js 能力只用于离线资产、标注和研究预览。
 5. 手术模拟是表面质点弹簧 demo，不是真实软组织 FEM。
-6. Stage 2 的肿物模型、切口候选生成、敏感结构规则和医生审阅 UI 仍在路线图中。
+6. Stage 2 工程闭环已实现，但规则与图谱仍保持研究草案状态，真实临床有效性由 #2 和受控验证流程决定。
 7. 系统默认本地运行，不上传患者数据；若部署到外网，需要额外访问控制、合规审查和数据治理。
 
 ## 24. 推荐复现路径
 
-> 从零搭建环境、安装依赖与构建步骤见 [CONTRIBUTING.md «开发环境»](../onboarding/CONTRIBUTING.md#开发环境) 与 [ENVIRONMENT.md](../onboarding/ENVIRONMENT.md)；测试运行见 [CONTRIBUTING.md «运行测试»](../onboarding/CONTRIBUTING.md#运行测试)。体验路径：React SPA `/app/live` 摄像头实时叠加 → 上传图片看贴合/平滑/背面剔除 → 3D Beta（示例脸或扫描重建）→ `/app/annotate` 标注导出草案与沿 RSTL 闭合演示 → `/app/incision` 生成肿物切口候选；改几何代码后务必跑 `pytest` 和 `cd web && npm test` 确认对拍仍通过。
+> 从零搭建环境、安装依赖与构建步骤见 [CONTRIBUTING.md «开发环境»](../onboarding/CONTRIBUTING.md#开发环境) 与 [ENVIRONMENT.md](../onboarding/ENVIRONMENT.md)；测试运行见 [CONTRIBUTING.md «运行测试»](../onboarding/CONTRIBUTING.md#运行测试)。体验路径：React SPA `/app/live` 摄像头实时叠加 → 上传图片看贴合/平滑/背面剔除 → `/app/annotate` 标注导出草案 → `/app/incision` 生成和审阅肿物切口候选；改几何代码后务必跑 `pytest` 和 `cd web && npm test` 确认对拍仍通过。
 
 ## 25. 一句话总结
 
-LangerFace 的核心不是“用 AI 猜线”，而是把可审核的医学线图谱编码到标准脸三角网格上，再通过 MediaPipe 关键点和重心坐标把它稳定迁移到当前人脸；在此基础上，系统逐步扩展 3D 重建、临床标注、手术模拟和未来的肿物切口候选设计。
+LangerFace 的核心不是“用 AI 猜线”，而是把可审核的医学线图谱编码到标准脸三角网格上，再通过 MediaPipe 关键点和重心坐标把它稳定迁移到当前人脸；在此基础上，系统提供个性化草案、临床标注、确定性肿物切口候选与受控研究预览。

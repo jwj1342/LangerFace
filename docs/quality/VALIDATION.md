@@ -21,7 +21,7 @@
   "assets": {
     "topologyId": "mediapipe-468",
     "atlasSystem": "rstl",
-    "atlasVersion": "0.2",
+    "atlasVersion": "8.1.67",
     "appVersion": "0.2.0"
   },
   "inputs": {
@@ -131,7 +131,8 @@ python tools/evaluate_stage2_validation.py \
 - `low_confidence_landmarks`：关键点置信度不足或明显漂移。
 - `pose_out_of_range`：转头或俯仰超出有效范围。
 - `occlusion_failure`：手、纸张、器械或头发遮挡处理失败。
-- `atlas_mismatch`：图谱拓扑、系统或版本与当前网格不匹配。
+- `atlas_mismatch`：图谱拓扑、系统或内容版本与当前网格不匹配。`atlasVersion` 表示内容发布
+  （正式 RSTL 当前为 `8.1.67`），图谱信封的 `version` 表示格式契约（当前为 `0.2`）。
 - `region_misclassification`：眼周、鼻唇沟、口周等区域判断错误。
 - `direction_error`：局部张力线方向与医生标注偏差过大。
 - `incision_rule_violation`：Stage 2 候选违反长宽比、尖端角或敏感结构约束。
