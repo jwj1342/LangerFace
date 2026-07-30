@@ -3,12 +3,12 @@
 本文是 LangerFace **各核心算法的数学公式与推导的集中参考**：重心坐标映射、One-Euro 平滑、背面剔除、手部遮挡、流线图谱生成、Umeyama/Sim3、FLAME 拟合、软体张力与切口几何。面向需要理解算法**为什么这样算**、或要复现/继续开发的读者。
 
 > **职责边界（避免与其它文档重复）**：本文只讲**算法与公式**。下列主题各有 owning 文档，本文按需引用、不复制：
-> - 模块分层、稳定契约、扩展点 → [ARCHITECTURE.md](ARCHITECTURE.md)、[CONTRIBUTING.md «架构与扩展点»](CONTRIBUTING.md#架构与扩展点)
-> - 环境与复现步骤 → [ENVIRONMENT.md](ENVIRONMENT.md)、[CONTRIBUTING.md «开发环境»](CONTRIBUTING.md#开发环境)
-> - 测试体系与跨语言对拍 → [CONTRIBUTING.md «运行测试»](CONTRIBUTING.md#运行测试)、[CROSS_LANG_PARITY.md](CROSS_LANG_PARITY.md)
-> - 诊断 / 隐私 / 可观测性 → [OBSERVABILITY.md](OBSERVABILITY.md)、[PRIVACY_AND_AUDIT.md](PRIVACY_AND_AUDIT.md)
-> - FLAME 3D 轨的设计与选型 → [FLAME_3D_TRACK.md](FLAME_3D_TRACK.md)
-> - 已实现功能清单 / 路线图 → [README «它能做什么»](../README.md#它能做什么)、[TODO.md](TODO.md)
+> - 模块分层、稳定契约、扩展点 → [ARCHITECTURE.md](ARCHITECTURE.md)、[CONTRIBUTING.md «架构与扩展点»](../onboarding/CONTRIBUTING.md#架构与扩展点)
+> - 环境与复现步骤 → [ENVIRONMENT.md](../onboarding/ENVIRONMENT.md)、[CONTRIBUTING.md «开发环境»](../onboarding/CONTRIBUTING.md#开发环境)
+> - 测试体系与跨语言对拍 → [CONTRIBUTING.md «运行测试»](../onboarding/CONTRIBUTING.md#运行测试)、[CROSS_LANG_PARITY.md](../quality/CROSS_LANG_PARITY.md)
+> - 诊断 / 隐私 / 可观测性 → [OBSERVABILITY.md](../quality/OBSERVABILITY.md)、[PRIVACY_AND_AUDIT.md](../clinical/PRIVACY_AND_AUDIT.md)
+> - FLAME 3D 轨的设计与选型 → [FLAME_3D_TRACK.md](../tracks/FLAME_3D_TRACK.md)
+> - 已实现功能清单 / 路线图 → [README «它能做什么»](../../README.md#它能做什么)、[TODO.md](../planning/TODO.md)
 
 ## 1. 项目定位
 
@@ -24,7 +24,7 @@ LangerFace 是一个面向面部手术规划研究的计算机视觉原型。当
 
 ## 2. 数据流总览
 
-> 仓库的模块分层（资产层 / Python 核心库 / Web 前端 / 工具脚本 / 测试）与各层稳定契约见 [ARCHITECTURE.md](ARCHITECTURE.md)、[CONTRIBUTING.md «架构与扩展点»](CONTRIBUTING.md#架构与扩展点)。本文只给**方法视角**的端到端数据流：
+> 仓库的模块分层（资产层 / Python 核心库 / Web 前端 / 工具脚本 / 测试）与各层稳定契约见 [ARCHITECTURE.md](ARCHITECTURE.md)、[CONTRIBUTING.md «架构与扩展点»](../onboarding/CONTRIBUTING.md#架构与扩展点)。本文只给**方法视角**的端到端数据流：
 
 整体数据流如下：
 
@@ -681,11 +681,11 @@ extra_tension = max(0, current_tension - baseline_tension)
 
 ## 16. 前端功能实现
 
-> Web 前端各模块（`web/src/services/pipeline.ts`、`render2d.ts`、`mode3d.ts`、`three3d.ts`、`logger.ts`、`annotate*.ts`、`softBody.ts` 以及 `geometry*.ts`）的职责与分层见 [ARCHITECTURE.md](ARCHITECTURE.md)；用户可见的功能清单见 [README «它能做什么»](../README.md#它能做什么)。本文不重复模块表——上面各算法章节已在节内标注其 Web 实现文件（如 `mapAtlas` 在 `web/src/services/geometryAtlas.ts`）。
+> Web 前端各模块（`web/src/services/pipeline.ts`、`render2d.ts`、`mode3d.ts`、`three3d.ts`、`logger.ts`、`annotate*.ts`、`softBody.ts` 以及 `geometry*.ts`）的职责与分层见 [ARCHITECTURE.md](ARCHITECTURE.md)；用户可见的功能清单见 [README «它能做什么»](../../README.md#它能做什么)。本文不重复模块表——上面各算法章节已在节内标注其 Web 实现文件（如 `mapAtlas` 在 `web/src/services/geometryAtlas.ts`）。
 
 ## 17. Python 功能实现
 
-> Python 包（`src/langerface/` 的 `detection/` / `geometry/` / `lines/` / `rendering/` / `pipeline/` / `media/` / `apps/` / `registration/` / `flame.py`）的分层职责与稳定契约见 [ARCHITECTURE.md](ARCHITECTURE.md) 与 [CONTRIBUTING.md «架构与扩展点»](CONTRIBUTING.md#架构与扩展点)。各算法的 Python 实现文件见对应算法章节。
+> Python 包（`src/langerface/` 的 `detection/` / `geometry/` / `lines/` / `rendering/` / `pipeline/` / `media/` / `apps/` / `registration/` / `flame.py`）的分层职责与稳定契约见 [ARCHITECTURE.md](ARCHITECTURE.md) 与 [CONTRIBUTING.md «架构与扩展点»](../onboarding/CONTRIBUTING.md#架构与扩展点)。各算法的 Python 实现文件见对应算法章节。
 
 ## 18. HeadSpace / FaceScape 离线配准
 
@@ -708,11 +708,11 @@ extra_tension = max(0, current_tension - baseline_tension)
 
 ## 19. 诊断、隐私与可观测性
 
-> 浏览器诊断 JSON 的 schema、结构化事件字段、计数器与运行时指标见 [OBSERVABILITY.md](OBSERVABILITY.md)；导出内容的隐私边界（禁止混入像素 / 视频帧 / 3D 纹理 / 患者身份 / secret）与审计约束见 [PRIVACY_AND_AUDIT.md](PRIVACY_AND_AUDIT.md)。这两条是本项目的硬约束——任何新增日志/导出都不得越界。
+> 浏览器诊断 JSON 的 schema、结构化事件字段、计数器与运行时指标见 [OBSERVABILITY.md](../quality/OBSERVABILITY.md)；导出内容的隐私边界（禁止混入像素 / 视频帧 / 3D 纹理 / 患者身份 / secret）与审计约束见 [PRIVACY_AND_AUDIT.md](../clinical/PRIVACY_AND_AUDIT.md)。这两条是本项目的硬约束——任何新增日志/导出都不得越界。
 
 ## 20. 验证与测试体系
 
-> 各测试的职责、目检脚本与浏览器实测清单见 [CONTRIBUTING.md «运行测试»](CONTRIBUTING.md#运行测试)（测试事实来源）；Python ⇄ Web TypeScript ⇄ 金标逐点对拍的不变式（映射误差 < 1e-2 px、可见性不一致数 = 0）与金标重生成见 [CROSS_LANG_PARITY.md](CROSS_LANG_PARITY.md)。本文不重复测试枚举，只强调：改动任何几何代码后，`pytest` 与 `cd web && npm test` 的对拍必须仍逐点一致。
+> 各测试的职责、目检脚本与浏览器实测清单见 [CONTRIBUTING.md «运行测试»](../onboarding/CONTRIBUTING.md#运行测试)（测试事实来源）；Python ⇄ Web TypeScript ⇄ 金标逐点对拍的不变式（映射误差 < 1e-2 px、可见性不一致数 = 0）与金标重生成见 [CROSS_LANG_PARITY.md](../quality/CROSS_LANG_PARITY.md)。本文不重复测试枚举，只强调：改动任何几何代码后，`pytest` 与 `cd web && npm test` 的对拍必须仍逐点一致。
 
 ## 21. Stage 2 切口规划路线
 
@@ -859,11 +859,11 @@ axis_coverage_deficit_mm = max(0, axis_coverage_required_mm - length_mm)
 | 切口生成 | `web/src/services/incisionCandidateTools.ts` | 线性和梭形候选生成 |
 | guardrails | `web/src/services/incisionCandidateTools.ts` | 敏感结构风险提示 |
 | 审阅 UI | `web/src/services/incisionAgentRuntime.ts`, `web/src/components/*Review*.tsx` | 医生编辑、覆盖、确认和导出 |
-| 验证指标 | `docs/VALIDATION.md` | 角度误差、稳定性、医生接受率等 |
+| 验证指标 | `docs/quality/VALIDATION.md` | 角度误差、稳定性、医生接受率等 |
 
 ## 22. 已实现功能清单
 
-> 用户可见的已实现功能清单见 [README «它能做什么»](../README.md#它能做什么)，路线图与待办见 [TODO.md](TODO.md)。本文聚焦算法原理，不维护功能清单（避免与 README 漂移）。
+> 用户可见的已实现功能清单见 [README «它能做什么»](../../README.md#它能做什么)，路线图与待办见 [TODO.md](../planning/TODO.md)。本文聚焦算法原理，不维护功能清单（避免与 README 漂移）。
 
 ## 23. 当前边界与局限
 
@@ -877,7 +877,7 @@ axis_coverage_deficit_mm = max(0, axis_coverage_required_mm - length_mm)
 
 ## 24. 推荐复现路径
 
-> 从零搭建环境、安装依赖与构建步骤见 [CONTRIBUTING.md «开发环境»](CONTRIBUTING.md#开发环境) 与 [ENVIRONMENT.md](ENVIRONMENT.md)；测试运行见 [CONTRIBUTING.md «运行测试»](CONTRIBUTING.md#运行测试)。体验路径：React SPA `/app/live` 摄像头实时叠加 → 上传图片看贴合/平滑/背面剔除 → 3D Beta（示例脸或扫描重建）→ `/app/annotate` 标注导出草案与沿 RSTL 闭合演示 → `/app/incision` 生成肿物切口候选；改几何代码后务必跑 `pytest` 和 `cd web && npm test` 确认对拍仍通过。
+> 从零搭建环境、安装依赖与构建步骤见 [CONTRIBUTING.md «开发环境»](../onboarding/CONTRIBUTING.md#开发环境) 与 [ENVIRONMENT.md](../onboarding/ENVIRONMENT.md)；测试运行见 [CONTRIBUTING.md «运行测试»](../onboarding/CONTRIBUTING.md#运行测试)。体验路径：React SPA `/app/live` 摄像头实时叠加 → 上传图片看贴合/平滑/背面剔除 → 3D Beta（示例脸或扫描重建）→ `/app/annotate` 标注导出草案与沿 RSTL 闭合演示 → `/app/incision` 生成肿物切口候选；改几何代码后务必跑 `pytest` 和 `cd web && npm test` 确认对拍仍通过。
 
 ## 25. 一句话总结
 

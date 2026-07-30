@@ -3,8 +3,8 @@
 本文是 `/personalized` 浏览器个性化 RSTL 流程的单一可审计说明：它吃什么输入、每个阈值为什么是这个值、
 失败时怎么降级、隐私边界在哪、产出的图谱遵守什么契约。代码入口 `web/personalized.html` +
 `web/compat/personalized/`；模型来源与许可见
-[`web/compat/personalized/model/NOTICE.md`](../web/compat/personalized/model/NOTICE.md) 与
-[MODEL_CARD.md](../web/compat/personalized/model/MODEL_CARD.md)。
+[`web/compat/personalized/model/NOTICE.md`](../../web/compat/personalized/model/NOTICE.md) 与
+[MODEL_CARD.md](../../web/compat/personalized/model/MODEL_CARD.md)。
 
 > ⚠️ 与全项目一致的边界：这里产出的是**个体皮纹线证据驱动的图谱草案**（`validated:false`），
 > 是决策辅助可视化，不是手术指令，也不是临床验证过的个体化 RSTL。
@@ -125,7 +125,7 @@
 - 人脸调试视频录制（静息与每个表情每轮的视频 + 同步关键点）**默认关闭**；勾选后还需一次显式同意，
   只留在当前标签页内存中，可点「丢弃调试录制」立即清除，`pagehide` 时回收 Blob URL。
 - 用户主动点下载导出的 JSON / 视频由用户自己保管；不要把它们提交进仓库，见
-  [PRIVACY_AND_AUDIT.md](PRIVACY_AND_AUDIT.md)。
+  [PRIVACY_AND_AUDIT.md](../clinical/PRIVACY_AND_AUDIT.md)。
 
 ## 6. 图谱契约
 
@@ -139,8 +139,8 @@
 
 ## 7. 相关文档
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — 重心坐标映射、坐标系、资产与部署
-- [METHODS_AND_IMPLEMENTATION_SUMMARY.md](METHODS_AND_IMPLEMENTATION_SUMMARY.md) — 数学推导集中参考
-- [WRINKLE_LESION_CUES.md](WRINKLE_LESION_CUES.md) — 皱襞 / 皱纹 / 病灶边界作为 secondary cue 的调研（#22）
-- [PRIVACY_AND_AUDIT.md](PRIVACY_AND_AUDIT.md) — 敏感数据边界与禁止提交项
-- [MODEL_CARD.md](../web/compat/personalized/model/MODEL_CARD.md) / [NOTICE.md](../web/compat/personalized/model/NOTICE.md) — 权重来源、许可未确认状态与使用边界
+- [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) — 重心坐标映射、坐标系、资产与部署
+- [METHODS_AND_IMPLEMENTATION_SUMMARY.md](../architecture/METHODS_AND_IMPLEMENTATION_SUMMARY.md) — 数学推导集中参考
+- [WRINKLE_LESION_CUES.md](../clinical/WRINKLE_LESION_CUES.md) — 皱襞 / 皱纹 / 病灶边界作为 secondary cue 的调研（#22）
+- [PRIVACY_AND_AUDIT.md](../clinical/PRIVACY_AND_AUDIT.md) — 敏感数据边界与禁止提交项
+- [MODEL_CARD.md](../../web/compat/personalized/model/MODEL_CARD.md) / [NOTICE.md](../../web/compat/personalized/model/NOTICE.md) — 权重来源、许可未确认状态与使用边界

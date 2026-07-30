@@ -121,7 +121,7 @@ Stage 2 的设计原则是：肿物模拟只负责病灶几何与约束表达，
 - 良性、癌前病变、恶性肿瘤的切缘策略不同，系统只记录医生输入的切缘规则，不自动判断病理性质。
 - AI/CV 输出只作为候选和提示；术前仍需医生结合触诊、皮肤松弛度、器官功能风险和病理要求确认。
 
-Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.json`](assets/clinical_rules_face_incision.json)。该资产记录区域规则、优先级、例外、来源、审核状态和最后审核日期；当前仍为 `draft_not_clinically_validated`，只用于决策辅助可视化，不是自动手术指令。Stage 2 任务拆解已同步到 [docs/TODO.md](docs/TODO.md) 与 GitHub Issues。
+Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.json`](assets/clinical_rules_face_incision.json)。该资产记录区域规则、优先级、例外、来源、审核状态和最后审核日期；当前仍为 `draft_not_clinically_validated`，只用于决策辅助可视化，不是自动手术指令。Stage 2 任务拆解已同步到 [docs/planning/TODO.md](docs/planning/TODO.md) 与 GitHub Issues。
 
 ---
 
@@ -134,7 +134,7 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 - 🖐️ **遮挡处理**：转头时背面线条隐藏；**手挡在脸前时，手覆盖处不画线**（贴合手形掩膜，指缝保留）。
 - 🔍 **关键区域放大窗**：主画面下方 6 个放大窗（额·眉间 / 双眼周 / 鼻·鼻唇沟 / 口周 / 颏部）同屏显示细节。
 - 🚫 **3D / FLAME 网页入口已关闭**：3D 关键点重建、FLAME 实时孪生和三维资产预览的用户入口已下线（#108 第一阶段）；底层 runtime 仍保留在 `web/src/services/mode3d.ts` / `flameFit.ts`，标注器仍可加载头模资产，离线 FLAME 拟合走 `tools/fit_flame_to_landmarks.py`。3D 轨的去向见 #61 / #40。
-- ✍️ **网页 3D 标注**：在浏览器里于标准脸 / 3D 头模表面手绘 RSTL/Langer 候选线，可导入 JSON/OBJ/PLY 头模和 3D Slicer `.mrk.json` 曲线，导出 `validated:false` 的图谱草案（`[tri,u,v]`）或 xyz 折线；临床复核与置 `validated:true` 仍走 Python/评审流程，见 [网页 3D 标注与图谱草案导出](docs/ARCHITECTURE.md#12-网页-3d-线标注与图谱草案导出)。
+- ✍️ **网页 3D 标注**：在浏览器里于标准脸 / 3D 头模表面手绘 RSTL/Langer 候选线，可导入 JSON/OBJ/PLY 头模和 3D Slicer `.mrk.json` 曲线，导出 `validated:false` 的图谱草案（`[tri,u,v]`）或 xyz 折线；临床复核与置 `validated:true` 仍走 Python/评审流程，见 [网页 3D 标注与图谱草案导出](docs/architecture/ARCHITECTURE.md#12-网页-3d-线标注与图谱草案导出)。
 - 🧰 **无状态研究工具入口**：站点根 `/` 是 React 工具入口（`/app` 保留为兼容地址），只负责进入实时 2D、个性化 2D、切口候选和图谱维护等独立工具，不创建、恢复或保存病例。
 - 🧭 **切口 Agent 工作台**：在标准脸上手动放置皮下 / 皮表肿物，支持椭圆 / 自由轮廓和肿物 JSON 导入导出，生成线性或梭形候选切口，显示 RSTL 方向、面部分区、guardrails、浏览器 workflow 工具 trace 和 provider 连通性状态；候选可记录审阅人、确认 / 退回 / 否决状态和备注，候选库会给出工程排序对比，导出审阅记录，也可发送到实时页叠加到上传照片、视频或摄像头画面。
 - 🔬 **RSTL 切除 -> 闭合演示（Beta）**：`/surgery` 作为独立研究演示保留，用于解释沿 RSTL 闭合的张力直觉，不是 FEM、不是患者个体化建模，也不是自动候选生成模块。
@@ -262,7 +262,7 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 
 线图谱是 JSON：信封带 `topologyId` / `topologyVersion`，每条线为 `[三角面id, u, v]` 重心坐标点序列（`w = 1−u−v`），网页注入时校验拓扑身份。正式 RSTL 图谱为 **v8.1.67：133 条 / 14,315 点**（其中 14 条属 `forehead_bridge_arc_v15` 额头拱线，按参考输入里的 `doctorConstraints` 生成；该资产仍为 `validated: false`，未经临床复核），由 [`tools/build_field_atlas_standard_v1.py`](tools/build_field_atlas_standard_v1.py) 从结构化参考输入 [`assets/rstl_standard_reference_v8_1_67.json`](assets/rstl_standard_reference_v8_1_67.json) 确定性生成；Langer 对照图谱仍由 [`tools/build_field_atlas.py`](tools/build_field_atlas.py) 的方向场 + 等间距流线生成。方向遵循 **Borges RSTL** 走向、几何为近似、`validated: false`，临床医生经 `annotate_atlas.py` / `digitize_from_diagram.py` 修正后置 `validated: true`。
 
-> 数据格式、方向场算法与生成流程的完整说明见 [ARCHITECTURE.md «6. 图谱（数据）生成与格式»](docs/ARCHITECTURE.md)。
+> 数据格式、方向场算法与生成流程的完整说明见 [ARCHITECTURE.md «6. 图谱（数据）生成与格式»](docs/architecture/ARCHITECTURE.md)。
 
 ---
 
@@ -273,7 +273,7 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 | `.claude/` | Claude Code 相关启动配置；本地私有设置文件已被 `.gitignore` 排除。 |
 | `.github/` | GitHub Actions CI；包含 Python 测试、Vite 构建和 Web TypeScript 几何对拍。 |
 | `assets/` | Python 端权威资产：MediaPipe 标准脸 obj、人脸 landmarker `.task`、RSTL/Langer atlas JSON；`assets/flame/` 仅放本地 license-gated 原始 FLAME 资产。 |
-| `docs/` | **全部项目文档集中于此**，命名统一 `UPPER_SNAKE_CASE.md`、单一职责；完整清单见下方[开发文档索引](#开发文档)。 |
+| `docs/` | **全部跨模块项目文档集中于此**，按语义分 `onboarding/architecture/tracks/quality/clinical/planning` 六个子目录，命名统一 `UPPER_SNAKE_CASE.md`、单一职责；入口见 [docs/README.md](docs/README.md)，平铺清单见下方[开发文档索引](#开发文档)。（资产目录内的 NOTICE / MODEL_CARD / README 就地存放，不搬进 `docs/`。） |
 | `src/langerface/` | Python 核心库，按 `config/geometry/detection/lines/rendering/pipeline/media/apps` 分层。 |
 | `tests/` | pytest 测试，覆盖图谱、标准脸、映射、稳定性、渲染和 pipeline 行为。 |
 | `tools/` | 资产下载、图谱生成、web 资产导出、3D 重建、临床标注、目检和对拍脚本。 |
@@ -302,7 +302,7 @@ python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文
 
 两套几何实现（Python / JS）由**逐点对拍**保证一致：`cd web && npm test`（架构无环 + 映射误差 ~5×10⁻⁵px + 背面剔除 0 不一致 + One-Euro / 拓扑契约 / FLAME / soft-body / 诊断导出）与 `pytest`（图谱完整性、仿射不变性、渲染、资产同步、可观测性）全绿即可。
 
-> 各测试的职责、目检脚本与浏览器实测清单见 [CONTRIBUTING.md «运行测试»](docs/CONTRIBUTING.md#运行测试)；跨语言对拍不变式与金标重生成见 [CROSS_LANG_PARITY.md](docs/CROSS_LANG_PARITY.md)。
+> 各测试的职责、目检脚本与浏览器实测清单见 [CONTRIBUTING.md «运行测试»](docs/onboarding/CONTRIBUTING.md#运行测试)；跨语言对拍不变式与金标重生成见 [CROSS_LANG_PARITY.md](docs/quality/CROSS_LANG_PARITY.md)。
 
 ---
 
@@ -356,7 +356,7 @@ Stage 2 的切口候选必须受以下边界约束：
 
 病人面部影像属敏感个人信息。本工具默认**本地运行，不上传任何数据**。Vite 前端默认用于本地研究演示；如需对外暴露，请自行加访问控制与合规审查（HIPAA / GDPR / 《个人信息保护法》）。
 
-Stage 2 切口 Agent 默认只把肿物参数、标准化坐标、候选切口、工具调用 trace 和审阅记录作为结构化 JSON 处理；导出 JSON / 报告草案不默认包含原始照片、视频帧、摄像头画面或纹理。自然皱襞 / 病灶辅助线索当前只允许以低置信摘要和 metrics 进入医生审阅，不自动改变切口几何，也不进入 LLM prompt。前端只保留 OpenAI-compatible / vLLM Provider 配置，可填写 Base URL、模型和访问密钥；密钥仅用于当前浏览器到用户提供 Provider 的连通性测试或后续摘要调用，审阅记录会做脱敏，不写入公开仓库。详细边界见 [`docs/INCISION_PRIVACY_AUDIT.md`](docs/INCISION_PRIVACY_AUDIT.md)。
+Stage 2 切口 Agent 默认只把肿物参数、标准化坐标、候选切口、工具调用 trace 和审阅记录作为结构化 JSON 处理；导出 JSON / 报告草案不默认包含原始照片、视频帧、摄像头画面或纹理。自然皱襞 / 病灶辅助线索当前只允许以低置信摘要和 metrics 进入医生审阅，不自动改变切口几何，也不进入 LLM prompt。前端只保留 OpenAI-compatible / vLLM Provider 配置，可填写 Base URL、模型和访问密钥；密钥仅用于当前浏览器到用户提供 Provider 的连通性测试或后续摘要调用，审阅记录会做脱敏，不写入公开仓库。详细边界见 [`docs/clinical/INCISION_PRIVACY_AUDIT.md`](docs/clinical/INCISION_PRIVACY_AUDIT.md)。
 
 ---
 
@@ -366,49 +366,57 @@ Stage 2 切口 Agent 默认只把肿物参数、标准化坐标、候选切口�
 - **CD**：网页是 Vite 构建的**纯静态站点**（`web/dist/`，全程浏览器运行、无后端），经 Vercel Git 集成自动部署（自动 HTTPS → 线上摄像头可用），Vercel Project 的 Root Directory 设为 `web`。
 - **隐私**：`web/assets/recon_demo.json` 是示例视频重建出的 468 点关键点网格，随站点**公开**；不想公开就把它加入 [`web/.vercelignore`](web/.vercelignore)（"用示例重建"按钮失效，仍可"转头扫描"）。
 
-> Vercel Project 设置、Production URL、branch protection 必需检查、Preview 访问策略、手动部署 fallback 与排障清单，全部见 **[CI/CD 与 Vercel 部署指南](docs/CI_CD_VERCEL.md)**。
+> Vercel Project 设置、Production URL、branch protection 必需检查、Preview 访问策略、手动部署 fallback 与排障清单，全部见 **[CI/CD 与 Vercel 部署指南](docs/quality/CI_CD_VERCEL.md)**。
 
 ## 开发文档
 
-所有项目文档集中在 `docs/`，文件名统一为 `UPPER_SNAKE_CASE.md`，**每个文档单一职责**。下表为索引（按「上手 → 架构 → 质量 → 临床 → 规划」分组）——想用 AI 编码工具熟悉本项目，从这里按需进入：
+项目文档集中在 `docs/`，按语义分成 6 个子目录：`onboarding/`（上手与协作）、`architecture/`（架构与算法）、`tracks/`（技术轨与功能专题）、`quality/`（质量与运维）、`clinical/`（临床边界与合规）、`planning/`（路线图）。文件名统一 `UPPER_SNAKE_CASE.md`，**每个文档单一职责**。
+
+> 📖 **每个子目录里有什么、该在什么时候读，见 [docs/README.md](docs/README.md)** —— 那是文档集的入口，
+> 也记录了维护契约与当前已知的文档/代码不一致项。下表为平铺索引，想用 AI 编码工具熟悉本项目可从这里按需进入：
 
 | 文档 | 职责 |
 |---|---|
-| **上手 / 协作** | |
-| [ENVIRONMENT.md](docs/ENVIRONMENT.md) | 本地 / 集群环境、venv、Node 24、测试与本地产物目录 |
-| [CONTRIBUTING.md](docs/CONTRIBUTING.md) | 协作流程、测试约定、扩展点、PR 要求 |
-| [ENGINEERING_LESSONS.md](docs/ENGINEERING_LESSONS.md) | 多人并行协作踩过的坑、避坑规则与提交前清单 |
-| **架构 / 数据** | |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 核心算法、坐标系、2D/3D 路线、网页 3D 标注、HeadSpace 离线管线、Stage 2 路线、资产与部署 |
-| [METHODS_AND_IMPLEMENTATION_SUMMARY.md](docs/METHODS_AND_IMPLEMENTATION_SUMMARY.md) | 各核心算法的**数学公式与推导**集中参考（重心映射 / One-Euro / 遮挡 / 流线生成 / Umeyama / FLAME / 软体 / 切口几何）；模块契约见 ARCHITECTURE，测试见 CONTRIBUTING |
-| [PERSONALIZED_RSTL.md](docs/PERSONALIZED_RSTL.md) | `/personalized` 个性化 RSTL 的输入、YOLO/V6 阈值依据、失败降级、隐私边界与图谱契约 |
-| [FLAME_3D_TRACK.md](docs/FLAME_3D_TRACK.md) | 3D FLAME 配准 / 标注轨的设计与技术选型（issue #61）|
-| [INCISION_FLAME_ASSET_STRATEGY.md](docs/INCISION_FLAME_ASSET_STRATEGY.md) | 切口工作台使用 FLAME 头模资产的核验点、设计边界、回退策略和验收重点 |
-| [RSTL_3DMM_PRIOR.md](docs/RSTL_3DMM_PRIOR.md) | Borges RSTL 来源、3DMM 拓扑先验 manifest、与 #2/#13/#61 的衔接 |
+| **上手 / 协作** — `docs/onboarding/` | |
+| [ENVIRONMENT.md](docs/onboarding/ENVIRONMENT.md) | 本地 / 集群环境、venv、Node 24、测试与本地产物目录 |
+| [CONTRIBUTING.md](docs/onboarding/CONTRIBUTING.md) | 协作流程、测试约定、扩展点、PR 要求 |
+| [ENGINEERING_LESSONS.md](docs/onboarding/ENGINEERING_LESSONS.md) | 多人并行协作踩过的坑、避坑规则与提交前清单 |
+| [LABELS.md](docs/onboarding/LABELS.md) | issue / PR 标签规范 |
+| **架构 / 数据** — `docs/architecture/` | |
+| [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | 核心算法、坐标系、2D/3D 路线、网页 3D 标注、HeadSpace 离线管线、Stage 2 路线、资产与部署 |
+| [METHODS_AND_IMPLEMENTATION_SUMMARY.md](docs/architecture/METHODS_AND_IMPLEMENTATION_SUMMARY.md) | 各核心算法的**数学公式与推导**集中参考（重心映射 / One-Euro / 遮挡 / 流线生成 / Umeyama / FLAME / 软体 / 切口几何）；模块契约见 ARCHITECTURE，测试见 CONTRIBUTING |
+| **技术轨 / 功能专题** — `docs/tracks/` | |
+| [PERSONALIZED_RSTL.md](docs/tracks/PERSONALIZED_RSTL.md) | `/personalized` 个性化 RSTL 的输入、YOLO/V6 阈值依据、失败降级、隐私边界与图谱契约 |
+| [FLAME_3D_TRACK.md](docs/tracks/FLAME_3D_TRACK.md) | 3D FLAME 配准 / 标注轨的设计与技术选型（issue #61）|
+| [INCISION_FLAME_ASSET_STRATEGY.md](docs/tracks/INCISION_FLAME_ASSET_STRATEGY.md) | 切口工作台使用 FLAME 头模资产的核验点、设计边界、回退策略和验收重点 |
+| [RSTL_3DMM_PRIOR.md](docs/tracks/RSTL_3DMM_PRIOR.md) | Borges RSTL 来源、3DMM 拓扑先验 manifest、与 #2/#13/#61 的衔接 |
+| [AGENTIC_INCISION.md](docs/tracks/AGENTIC_INCISION.md) | 切口设计 workflow 的 11 步 tool trace 契约、动作空间与 provider 边界（issue #64/#111）|
+| [PERSONALIZED_TEXTURE_WARP.md](docs/tracks/PERSONALIZED_TEXTURE_WARP.md) | Python 侧纹理 / 皱纹场 warp 原型与其 checkpoint 的许可边界 |
 | [rstl_3dmm_prior_manifest.json](assets/rstl_3dmm_prior_manifest.json) | MediaPipe/3DMM RSTL 先验资产 manifest；高密度方向场大 JSON 由远端资产或本地生成提供（issue #86，`validated:false`） |
-| **质量 / 运维** | |
-| [CROSS_LANG_PARITY.md](docs/CROSS_LANG_PARITY.md) | Python ⇄ Web TypeScript ⇄ 金标逐点对拍不变式与金标重生成 |
-| [OBSERVABILITY.md](docs/OBSERVABILITY.md) | 浏览器诊断 JSON、结构化事件字段、计数器与运行时指标（issue #51）|
-| [CI_CD_VERCEL.md](docs/CI_CD_VERCEL.md) | Vercel 设置、Preview 访问策略、branch protection 与排障 |
-| [LABELS.md](docs/LABELS.md) | issue / PR 标签规范 |
-| **临床 / 合规** | |
-| [ANNOTATION_QA.md](docs/ANNOTATION_QA.md) | 3D 标注贴面平滑、绘制反馈与导出一致性验收清单（issue #84） |
-| [VALIDATION.md](docs/VALIDATION.md) | 临床验证数据集、Stage 1/2 指标、失败分类、人工评审表（issue #20）|
-| [PRIVACY_AND_AUDIT.md](docs/PRIVACY_AND_AUDIT.md) | 敏感数据边界、禁止提交项、导出约束、审计字段（issue #21）|
-| [PRODUCT_BOUNDARIES.md](docs/PRODUCT_BOUNDARIES.md) | 近期聚焦表皮 RSTL 与病灶处理，暂缓肌肉骨骼实时孪生（issue #87） |
-| [WRINKLE_LESION_CUES.md](docs/WRINKLE_LESION_CUES.md) | 自然皱襞、皱纹与皮表肿物边界辅助线索调研和合成原型（issue #22）|
-| **规划** | |
-| [TODO.md](docs/TODO.md) | 路线图与待办（与 GitHub Issues 同步）|
+| **质量 / 运维** — `docs/quality/` | |
+| [CROSS_LANG_PARITY.md](docs/quality/CROSS_LANG_PARITY.md) | Python ⇄ Web TypeScript ⇄ 金标逐点对拍不变式与金标重生成 |
+| [OBSERVABILITY.md](docs/quality/OBSERVABILITY.md) | 浏览器诊断 JSON、结构化事件字段、计数器与运行时指标（issue #51）|
+| [CI_CD_VERCEL.md](docs/quality/CI_CD_VERCEL.md) | Vercel 设置、Preview 访问策略、branch protection 与排障 |
+| [ANNOTATION_QA.md](docs/quality/ANNOTATION_QA.md) | 3D 标注贴面平滑、绘制反馈与导出一致性验收清单（issue #84） |
+| [VALIDATION.md](docs/quality/VALIDATION.md) | 临床验证数据集、Stage 1/2 指标、失败分类、人工评审表（issue #20）|
+| **临床 / 合规** — `docs/clinical/` | |
+| [PRIVACY_AND_AUDIT.md](docs/clinical/PRIVACY_AND_AUDIT.md) | 敏感数据边界、禁止提交项、导出约束、审计字段（issue #21）|
+| [INCISION_PRIVACY_AUDIT.md](docs/clinical/INCISION_PRIVACY_AUDIT.md) | 切口流程专项边界：浏览器 ↔ 用户自备 LLM provider 的两方数据边界（issue #111）|
+| [PRODUCT_BOUNDARIES.md](docs/clinical/PRODUCT_BOUNDARIES.md) | 近期聚焦表皮 RSTL 与病灶处理，暂缓肌肉骨骼实时孪生（issue #87） |
+| [WRINKLE_LESION_CUES.md](docs/clinical/WRINKLE_LESION_CUES.md) | 自然皱襞、皱纹与皮表肿物边界辅助线索调研和合成原型（issue #22）|
+| **规划** — `docs/planning/` | |
+| [TODO.md](docs/planning/TODO.md) | 路线图与待办（与 GitHub Issues 同步）|
 
 > 医学声明、图谱状态与临床局限见 README [已知局限与医学声明](#已知局限与医学声明)。
 
 ## 文档维护约定
 
-**本仓库的 [README.md](README.md)、[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、[docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) 必须与代码保持同步。**
+**本仓库的 [README.md](README.md)、[docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md)、[docs/onboarding/ENVIRONMENT.md](docs/onboarding/ENVIRONMENT.md) 必须与代码保持同步。**
 任何功能更新（新增/修改特性、改动数据流、增删模块或资产、调整使用方式）都要在同一改动中更新这些文档，
-确保"读文档即可了解全貌并复现项目"。医学相关变化同时更新本 README 的[已知局限与医学声明](#已知局限与医学声明)小节；路线图变化更新 [docs/TODO.md](docs/TODO.md)。
+确保"读文档即可了解全貌并复现项目"。医学相关变化同时更新本 README 的[已知局限与医学声明](#已知局限与医学声明)小节；路线图变化更新 [docs/planning/TODO.md](docs/planning/TODO.md)。
 
 **文档规范**（便于人与 AI 编码工具都能快速定位）：
-- 文件名统一 `UPPER_SNAKE_CASE.md`，放在 `docs/`；一个文档只承担一个职责，别把不相关主题塞进同一篇。
-- 新增文档时，**同步把它加进上方[「开发文档」索引](#开发文档)表**并写清职责；删除/重命名文档时同步改索引与所有引用它的链接。
+- 文件名统一 `UPPER_SNAKE_CASE.md`，**放在 `docs/` 的某个语义子目录里**（不要直接放 `docs/` 根）；一个文档只承担一个职责，别把不相关主题塞进同一篇。
+- 新增文档时要做两件事：加进上方[「开发文档」索引](#开发文档)表，并在 [docs/README.md](docs/README.md) 对应目录的段落里提到它；删除/重命名/移动文档时同步改这两处与所有引用它的链接。
 - 文档顶部用一句话点明本篇职责（"本文…"），与索引里的职责描述一致。
+- 以上三条由 `tools/test_docs_links.ts`（`npm test` 内）机械强制：它检查全仓 md 的仓库内相对链接是否都解析得到、`docs/` 根有没有散落文档、每个子目录与每篇文档是否都被 `docs/README.md` 索引。**移动文档后跑一次它。**
