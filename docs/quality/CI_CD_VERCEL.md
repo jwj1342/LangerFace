@@ -191,7 +191,7 @@ gh api repos/jwj1342/LangerFace/branches/master/protection \
 ```
 
 维护者为允许自动接力的 PR 添加 `automerge:stack` 标签。
-[`.github/workflows/automerge-approved.yml`](../.github/workflows/automerge-approved.yml)
+[`.github/workflows/automerge-approved.yml`](../../.github/workflows/automerge-approved.yml)
 会在以下时机扫描：
 
 - PR 打标、Ready、更新或 base 变化；
@@ -199,7 +199,7 @@ gh api repos/jwj1342/LangerFace/branches/master/protection \
 - 每 5 分钟兜底轮询；
 - 维护者手动 `workflow_dispatch`。
 
-策略实现位于 [`tools/automerge_policy.mjs`](../tools/automerge_policy.mjs)，约束为：
+策略实现位于 [`tools/automerge_policy.mjs`](../../tools/automerge_policy.mjs)，约束为：
 
 1. 只选择 `baseRefName == master`、非 Draft、带 `automerge:stack` 且尚未启用
    Auto-merge 的 PR。子 PR 在仍指向临时父分支时不会被合并。

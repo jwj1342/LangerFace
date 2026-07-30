@@ -95,7 +95,7 @@ PR 描述必须保留“技术资料 / 临床依据”小节。凡涉及医学�
 `automerge:stack` 是维护者的显式授权标签，不是绕过审核的开关：
 
 - 只有非 Draft、带该标签、且**当前 base 已经是 `master`** 的 PR 才会被
-  [Auto-merge workflow](../.github/workflows/automerge-approved.yml) 处理。
+  [Auto-merge workflow](../../.github/workflows/automerge-approved.yml) 处理。
 - workflow 只启用 GitHub 原生 Auto-merge；`master` 的 branch protection 仍要求
   必需 checks 通过和至少 1 个 approving review，脚本不会使用 admin bypass。
 - 合并方式固定为 squash，并用当前 head SHA 做并发保护；review 后若又 push 了新
@@ -110,7 +110,7 @@ PR 描述必须保留“技术资料 / 临床依据”小节。凡涉及医学�
   移除标签并运行 `gh pr merge <PR号> --disable-auto`，避免后续条件满足时继续合并。
 
 自动化的权限、安全边界和排障方式见
-[CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#github-auto-merge-与-stacked-pr)。
+[CI/CD 与 Vercel 部署指南](../quality/CI_CD_VERCEL.md#github-auto-merge-与-stacked-pr)。
 
 PR 上应关注这些 checks：
 
