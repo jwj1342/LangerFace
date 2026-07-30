@@ -611,7 +611,15 @@ assert.ok(vercelIgnoreBuild.includes('["diff-tree", "--quiet", "--no-commit-id",
 assert.ok(vercel.includes('"source": "/app/(.*)"'), "Vercel rewrites nested SPA routes");
 assert.ok(vercel.includes('"source": "/"') && vercel.includes('"destination": "/index.html"'), "Vercel routes the root path to the React entry");
 assert.ok(vercel.includes('"destination": "/index.html"'), "Vercel routes SPA paths back to index.html");
-assert.ok(vercel.includes('"source": "/assets/(.*)"'), "Vercel declares root runtime asset handling");
+// 断言意图而不是字面量：站点根 /assets/ 必须有 header 规则覆盖运行时资产。
+// 具体的缓存策略（哈希 bundle immutable、固定名资产回源验证）由
+// tools/test_web_architecture.ts 用真实文件名逐个匹配，见 docs/CI_CD_VERCEL.md。
+{
+  const vercelJson = JSON.parse(vercel);
+  const assetHeaderRules = (vercelJson.headers || [])
+    .filter((rule) => String(rule.source).startsWith("/assets/"));
+  assert.ok(assetHeaderRules.length > 0, "Vercel declares root runtime asset handling");
+}
 assert.ok(assetLoaderService.includes('return normalizeAssetBaseUrl("/assets/")'), "asset loader defaults to the root /assets/ base");
 assert.ok(assetLoaderService.includes("SPA 路由回退"), "asset loader reports HTML SPA fallback responses as asset path errors");
 assert.ok(architectureDoc.includes("copy-runtime-assets") && architectureDoc.includes("站点根 `/assets/`"),
