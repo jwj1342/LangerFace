@@ -15,13 +15,13 @@
 | --- | --- | --- | --- | --- | --- |
 | 传统 CV 边缘/颜色/形态学 | 合成样例、强对比皱纹、红色/色差肿物 | 少量合成或脱敏图 | 低 | 低 | 当前 baseline |
 | Landmark 几何规则 | 鼻唇沟、睑缘、口角、亚单位近似边界 | MediaPipe/3DMM 点位 | 中 | 低 | 已与 #12 分区共用 |
-| 通用分割模型 | 皮表边界候选 mask | 需人工标注或提示 | 高 | 中到高 | 仅限受控调研 |
+| 通用分割模型 | 皮表边界候选 mask | 需人工标注或提示 | 高 | 中到高 | `/personalized` 有界研究路径 |
 | 医学/皮肤专用模型 | 病灶 mask、颜色/纹理特征 | 需合规医学数据 | 高 | 高 | 后续临床研究 |
 | 医生手工修正优先 | 最终边界和方向确认 | 医生标注 | 低到中 | 中 | 当前产品路径 |
 
 ## 当前最小原型
 
-`tools/prototype_wrinkle_lesion_cues.py` 只生成合成图，不读取真实人脸数据。它输出：
+传统 CV baseline `tools/prototype_wrinkle_lesion_cues.py` 只生成合成图，不读取真实人脸数据。它输出：
 
 - `synthetic_input.png`：合成输入。
 - `cue_overlay.png`：候选皱纹线和皮表肿物边界叠加图。
@@ -39,6 +39,28 @@ python tools/prototype_wrinkle_lesion_cues.py --output-dir local_outputs/wrinkle
 ```bash
 pytest tests/test_wrinkle_lesion_cues.py
 ```
+
+生产仓库同时包含 `/personalized` 的浏览器 YOLO/V6 路径和 Python texture-warp 原型。两者允许在
+`validated:false` 草案上做有界 RSTL 微调，但不得把输出送入 `/incision` 几何：
+
+1. `LinePipeline.process(..., wrinkle_mask=None)` 仍先检测人脸并映射 atlas prior。
+2. 开启 `Config.texture_warp.enabled` 后，`HessianWrinkleExtractor` 从输入图像构建稠密皱纹切向场。
+3. 若提供预测 wrinkle mask，它只门控 Hessian 场强度。
+4. `warp_mapped_lines` 沿 prior 法向搜索方向一致的邻近脊线，并应用受限像素位移；无充分证据时保持 prior。
+
+运行 Python 原型：
+
+```bash
+langerface --image patient.png --system rstl -o out.png --texture-warp
+python tools/predict_wrinkle_unet.py \
+  --checkpoint assets/models/wrinkle_unet_patient_finetuned.pth \
+  --input patient.png
+```
+
+训练数据只允许放在 `local_archives/datasets/ffhq_wrinkle/`，训练输出默认写入 `local_outputs/`。
+仓库中的 `assets/models/wrinkle_unet_patient_finetuned.pth` 是已明确版本化的研究 checkpoint
+（FFHQ-Wrinkle 衍生、CC BY-NC-SA 4.0），因此不得进入商用路径；新增 checkpoint 仍需单独完成来源、
+许可和再分发决策，不能仅因现有文件已入仓就默认允许提交。
 
 ## 指标口径
 
