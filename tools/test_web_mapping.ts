@@ -72,6 +72,34 @@ const optionDisabledCompatError = pointError(
   fixtureLine(expansionFixtureDisabledCompat, "official"),
   runtimeExpansionFixture.expectedRawPoints,
 );
+const lowerPersonalizedTsError = pointError(
+  fixtureLine(expansionFixtureTs, "personalized_lower_v13"),
+  runtimeExpansionFixture.expectedRawPoints,
+);
+const lowerPersonalizedCompatError = pointError(
+  fixtureLine(expansionFixtureCompat, "personalized_lower_v13"),
+  runtimeExpansionFixture.expectedRawPoints,
+);
+const lowerOfficialExpandedError = pointError(
+  fixtureLine(expansionFixtureTs, "official_lower_v13"),
+  runtimeExpansionFixture.expectedRawPoints,
+);
+const lowerOptionDisabledTsError = pointError(
+  fixtureLine(expansionFixtureDisabledTs, "official_lower_v13"),
+  runtimeExpansionFixture.expectedRawPoints,
+);
+const lowerOptionDisabledCompatError = pointError(
+  fixtureLine(expansionFixtureDisabledCompat, "official_lower_v13"),
+  runtimeExpansionFixture.expectedRawPoints,
+);
+const bridgeRuntimeParityError = pointError(
+  fixtureLine(expansionFixtureTs, "official"),
+  fixtureLine(expansionFixtureCompat, "official"),
+);
+const lowerRuntimeParityError = pointError(
+  fixtureLine(expansionFixtureTs, "official_lower_v13"),
+  fixtureLine(expansionFixtureCompat, "official_lower_v13"),
+);
 
 let maxPosErr = 0;
 let maxRuntimeParityErr = 0;
@@ -142,12 +170,27 @@ console.log(`personalized expansion-contract compat error: ${personalizedCompatE
 console.log(`official expansion delta: ${officialExpandedError.toExponential(3)}`);
 console.log(`expandForehead=false TS error: ${optionDisabledTsError.toExponential(3)}`);
 console.log(`expandForehead=false compat error: ${optionDisabledCompatError.toExponential(3)}`);
+console.log(`personalized lower-v13 TS error: ${lowerPersonalizedTsError.toExponential(3)}`);
+console.log(`personalized lower-v13 compat error: ${lowerPersonalizedCompatError.toExponential(3)}`);
+console.log(`official lower-v13 expansion delta: ${lowerOfficialExpandedError.toExponential(3)}`);
+console.log(`lower-v13 expandForehead=false TS error: ${lowerOptionDisabledTsError.toExponential(3)}`);
+console.log(`lower-v13 expandForehead=false compat error: ${lowerOptionDisabledCompatError.toExponential(3)}`);
+console.log(`bridge expanded TS/compat parity error: ${bridgeRuntimeParityError.toExponential(3)}`);
+console.log(`lower-v13 expanded TS/compat parity error: ${lowerRuntimeParityError.toExponential(3)}`);
 
 const expansionContractOk = personalizedTsError < 1e-9
   && personalizedCompatError < 1e-9
   && officialExpandedError > 1e-3
   && optionDisabledTsError < 1e-9
-  && optionDisabledCompatError < 1e-9;
+  && optionDisabledCompatError < 1e-9
+  && lowerPersonalizedTsError < 1e-9
+  && lowerPersonalizedCompatError < 1e-9
+  && lowerOfficialExpandedError > 1e-3
+  && lowerOptionDisabledTsError < 1e-9
+  && lowerOptionDisabledCompatError < 1e-9
+  && bridgeRuntimeParityError < 1e-9
+  && lowerRuntimeParityError < 1e-9
+  && runtimeExpansionFixture.fixturePurpose.includes("not a production atlas");
 const ok = maxPosErr < 1e-2
   && maxRuntimeParityErr < 1e-9
   && visMismatches === 0

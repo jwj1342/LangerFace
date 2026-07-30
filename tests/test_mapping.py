@@ -97,6 +97,8 @@ def test_personalized_forehead_lines_skip_runtime_expansion_contract():
     mapped = {line.name: line.pts for line in map_atlas(atlas, landmarks, triangles)}
     assert np.allclose(mapped["personalized"], expected)
     assert not np.allclose(mapped["official"], expected)
+    assert np.allclose(mapped["personalized_lower_v13"], expected)
+    assert not np.allclose(mapped["official_lower_v13"], expected)
 
     unexpanded = {
         line.name: line.pts
@@ -104,3 +106,5 @@ def test_personalized_forehead_lines_skip_runtime_expansion_contract():
     }
     assert np.allclose(unexpanded["personalized"], expected)
     assert np.allclose(unexpanded["official"], expected)
+    assert np.allclose(unexpanded["personalized_lower_v13"], expected)
+    assert np.allclose(unexpanded["official_lower_v13"], expected)

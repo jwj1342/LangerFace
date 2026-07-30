@@ -171,9 +171,11 @@ P' = u * V0' + v * V1' + w * V2'
 
 ### 5.1 额头拱线的运行时展开例外
 
-正式 `forehead_bridge_arc_v15` 图谱在完成上述重心映射后，还会依据 landmark 9→10
-方向、脸宽和脸高执行额头可见区展开：轴向延伸、横向重标定、曲线平滑、抛物拱高和
-分层偏移。因此这些线的最终显示坐标并非只有纯重心插值。
+正式 `forehead_bridge_arc_v15` 与历史 `forehead_lower_long_arc_v13` 图谱在完成上述
+重心映射后，还会依据 landmark 9→10 方向、脸宽和脸高执行额头可见区展开：两者都包含
+轴向延伸、横向重标定、曲线平滑与拱高，v15 另有分层偏移。因此这些线的最终显示坐标
+并非只有纯重心插值；Python、Web TypeScript 与纯 JavaScript 必须对两种 region 保持
+同一后处理语义。
 
 `/personalized` 的 V6 流程已经在个性化阶段完成这套展开，导出的每条对应曲线会携带
 `disableRuntimeExpansion: true`。Python、Web TypeScript 和纯 JavaScript 三套
