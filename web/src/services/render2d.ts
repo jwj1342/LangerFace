@@ -14,6 +14,11 @@ import {
   type MappedAtlasLine,
 } from "./geometryAtlas.ts";
 import { pointInHandMasks, type HandMask, type Point2 } from "./geometryOccluders.ts";
+import {
+  buildForeheadSkinVisibility,
+  buildHeadVisibility,
+  stabilizeForeheadMask,
+} from "./foreheadVisibility.ts";
 import type { Triangle, Vec3 } from "./softBody.ts";
 import { mapSurfaceRefs, measureIncisionOverlayJitter, measureIncisionOverlayRegistration } from "./incisionOverlay.ts";
 import type { SurfaceRef } from "./incisionOverlay.ts";
@@ -92,6 +97,23 @@ const isIncisionZoomRegion = (region: RenderRegion): region is IncisionZoomRegio
 const focusScratch = document.createElement("canvas");
 const focusCtx = focusScratch.getContext("2d") as CanvasRenderingContext2D;
 const focusZoomRange = { min: 1, max: 4.5 };
+// 这些 region 的线在 mapAtlas 之后被主动外推到面部网格之外（METHODS §5.1），
+// 显示期必须按头部包络 + 肤色再裁一次。与 web/current/render.js 的同名集合保持一致。
+const EXTENDED_FOREHEAD_REGIONS = new Set([
+  "forehead_lower_long_arc_v13",
+  "forehead_bridge_arc_v15",
+]);
+
+/** 读取当前帧像素供肤色判定使用；跨源画布读取失败时返回 null（退化为不按肤色裁剪）。 */
+function readFrameImageData(W: number, H: number): ImageData | null {
+  if (!(W > 0 && H > 0)) return null;
+  try {
+    return ctx.getImageData(0, 0, W, H);
+  } catch {
+    // 跨源图像在更早阶段就被拒绝，这里只是保证读取失败不会中断渲染。
+    return null;
+  }
+}
 const INCISION_ZOOM_REGION: IncisionZoomRegion = { kind: "incision_overlay" };
 const INCISION_OVERLAY_STABILITY_FRAMES = 8;
 const LIVE_OCCLUSION_MIN_TRIANGLE_AREA_PX2 = 1;
@@ -148,17 +170,24 @@ function estimateRenderQualityGate(lm: Vec3[], W: number, H: number): AnyRecord 
 }
 
 export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): number {
-  const atlas = modelState.atlases[renderState.system];
+  // modelState.atlases 存的是 lines 数组本身（pipelineModels 的 loadAtlas 返回 atlas.lines），
+  // 不是 atlas payload。名字写成 atlasLines 是因为写成 atlas 时曾经诱发过 `atlas?.lines` 这个
+  // 恒为 undefined 的取值，导致密度筛选返回空集、整页一条线都不画（#141）。
+  const atlasLines = modelState.atlases[renderState.system];
   const vis = renderState.clip
     ? visibleTriangles(lm, modelTriangles(), modelNoseTris(), undefined, {
       minTriangleAreaPx2: LIVE_OCCLUSION_MIN_TRIANGLE_AREA_PX2,
     })
     : null;
   const innerMouth = innerMouthTriangles(modelTriangles()); // 口裂三角面（张嘴会落进口内/牙齿），永久排除
-  const mapped = mapAtlas(atlas, lm, modelTriangles());
+  const mapped = mapAtlas(atlasLines, lm, modelTriangles());
   const bb = faceBBox(lm);
-  const visibleLineIndices = lineIndicesForDensity(atlas?.lines || [], renderState.densityFrac);
+  const visibleLineIndices = lineIndicesForDensity(atlasLines || [], renderState.densityFrac);
   const hasMasks = masks.length > 0;
+  // 外推的额头弧线要按头部包络 + 肤色再裁一次，否则会画到头发/背景/脸外（#141）
+  const foreheadImage = readFrameImageData(W, H);
+  const skinVisible = buildForeheadSkinVisibility(foreheadImage, W, H, lm);
+  const headVisible = buildHeadVisibility(lm);
   const frameQualityGate = estimateRenderQualityGate(lm, W, H);
   const canDrawAtlas = sourceState.sourceKind === "image" || frameQualityGate.passed;
   const localRegionQuality = frameQualityGate.local_region_quality;
@@ -177,9 +206,18 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
         ctx.strokeStyle = my < 0.36 ? BAND.top : my < 0.66 ? BAND.mid : BAND.low;
       } else ctx.strokeStyle = SOLID[renderState.system as keyof typeof SOLID] || SOLID.rstl;
       // 每点可见性 = 朝向相机(背面剔除) 且 不属于口裂三角面 且 不在前方手部凸包内
+      // 外推的额头弧线额外要求落在头部包络内且采样点是皮肤，再做一次段稳定化（#141）
+      const extendedForehead = EXTENDED_FOREHEAD_REGIONS.has(ln.region);
+      let onVisibleSkin: boolean[] = ln.pts.map(() => true);
+      if (extendedForehead) {
+        onVisibleSkin = stabilizeForeheadMask(
+          ln.pts.map((p) => headVisible(p) && skinVisible(p)),
+        );
+      }
       const mask = ln.pts.map((p, i) => {
         const v = vis ? vis[ln.tris[i]] : 1;
         if (innerMouth.has(ln.tris[i])) return 0; // 口裂三角面无论朝向都排除（#38）
+        if (!onVisibleSkin[i]) return 0;
         if (localActionForPoints([p], localRegionMasks).action === "freeze") return 0;
         return v && !(hasMasks && pointInHandMasks(toPoint2(p), masks)) ? 1 : 0;
       });
