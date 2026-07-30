@@ -3,6 +3,7 @@ import os
 
 import numpy as np
 import pytest
+from tools.annotate_atlas import _save as save_annotation_draft
 
 from langerface.config import ATLAS_PATHS, TOPOLOGY_ID, TOPOLOGY_VERSION
 from langerface.lines import Atlas, AtlasLine, atlas_line_from_points2d
@@ -99,3 +100,66 @@ def test_atlas_line_from_points2d_equals_manual_loop(canonical):
     assert ln.points.dtype == expected.dtype
     assert np.array_equal(ln.points, expected)
     assert ln.points.tobytes() == expected.tobytes()
+
+
+def test_annotation_save_preserves_loaded_lines_and_never_validates(canonical, tmp_path):
+    proj = canonical.project_front()
+    existing = Atlas(
+        system="rstl",
+        version="0.2",
+        topology_id="custom-topology",
+        topology_version="custom-topology-v2",
+        provenance="existing draft.",
+        validated=True,
+    )
+    original_surface_points = np.array(
+        [[0, 0.2, 0.3], [1, 0.3, 0.2], [2, 0.4, 0.1]],
+        dtype=np.float64,
+    )
+    completed = [
+        {
+            "name": "forehead-existing",
+            "region": "forehead",
+            "points": proj[[0, 10, 50]],
+            "surface_points": original_surface_points,
+        }
+    ]
+    output = tmp_path / "atlas.json"
+
+    save_annotation_draft(
+        canonical,
+        proj,
+        completed,
+        "rstl",
+        str(output),
+        existing,
+    )
+
+    saved = Atlas.load(str(output))
+    assert saved.validated is False
+    assert saved.version == "0.2"
+    assert saved.topology_id == "custom-topology"
+    assert saved.topology_version == "custom-topology-v2"
+    assert saved.lines[0].name == "forehead-existing"
+    assert saved.lines[0].region == "forehead"
+    assert np.array_equal(saved.lines[0].points, original_surface_points)
+    assert "requires line-by-line clinical review" in saved.provenance
+
+
+def test_annotation_save_assigns_name_and_region_to_new_line(canonical, tmp_path):
+    proj = canonical.project_front()
+    output = tmp_path / "atlas.json"
+    points = proj[[0, 10, 50]]
+
+    save_annotation_draft(
+        canonical,
+        proj,
+        [{"name": "annotated_0000", "region": "cheek", "points": points}],
+        "rstl",
+        str(output),
+    )
+
+    saved = Atlas.load(str(output))
+    assert saved.validated is False
+    assert saved.lines[0].name == "annotated_0000"
+    assert saved.lines[0].region == "cheek"
