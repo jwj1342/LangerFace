@@ -26,6 +26,7 @@ const toolsTsconfig = JSON.parse(fs.readFileSync(path.join(root, "tsconfig.tools
 const legacyLiveHtml = read("index.html");
 const legacyAnnotateHtml = read("annotate.html");
 const legacyIncisionHtml = read("incision_workflow.html");
+const legacyIncisionAgentHtml = read("incision_agent.html");
 const legacySurgeryHtml = read("surgery.html");
 const vite = read("vite.config.ts");
 const vercel = read("vercel.json");
@@ -578,6 +579,7 @@ for (const legacyEntry of [
   'annotate: resolve(import.meta.dirname, "annotate.html")',
   'surgery: resolve(import.meta.dirname, "surgery.html")',
   'incisionWorkflow: resolve(import.meta.dirname, "incision_workflow.html")',
+  'incisionAgent: resolve(import.meta.dirname, "incision_agent.html")',
 ]) {
   assert.ok(!vite.includes(legacyEntry), `Vite should not build legacy HTML as a Rollup input: ${legacyEntry}`);
 }
@@ -705,6 +707,7 @@ assert.ok(dashboardRoute.includes("不创建、恢复或保存病例"), "React d
 for (const [name, html, expected] of [
   ["annotate.html", legacyAnnotateHtml, ["/app/annotate"]],
   ["incision_workflow.html", legacyIncisionHtml, ["/app/incision"]],
+  ["incision_agent.html", legacyIncisionAgentHtml, ["/app/incision"]],
   ["surgery.html", legacySurgeryHtml, ["/app/surgery"]],
 ]) {
   for (const href of expected) {
@@ -715,6 +718,7 @@ for (const [name, html, legacyScript] of [
   ["index.html", legacyLiveHtml, "main.js"],
   ["annotate.html", legacyAnnotateHtml, "annotate_main.js"],
   ["incision_workflow.html", legacyIncisionHtml, "incision_workflow_main.js"],
+  ["incision_agent.html", legacyIncisionAgentHtml, "incision_agent_main.js"],
   ["surgery.html", legacySurgeryHtml, "surgery_main.js"],
 ]) {
   assert.ok(!html.includes(legacyScript), `${name} compatibility page should not load ${legacyScript}`);

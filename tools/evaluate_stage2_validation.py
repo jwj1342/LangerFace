@@ -18,8 +18,10 @@ from pathlib import Path
 from statistics import mean, median
 from typing import Any
 
-RECORD_SCHEMA = "incision-review-record/v0.3"
-EXPORT_SCHEMA = "incision-review-export/v0.3"
+RECORD_SCHEMA = "incision-review-record/v0.4"
+EXPORT_SCHEMA = "incision-review-export/v0.4"
+LEGACY_RECORD_SCHEMA = "incision-review-record/v0.3"
+LEGACY_EXPORT_SCHEMA = "incision-review-export/v0.3"
 SUMMARY_SCHEMA = "stage2-validation-summary/v0.1"
 OVERLAY_3D_VIEW_DIAGNOSTICS_SCHEMA = "incision-overlay-3d-view-diagnostics/v0.1"
 OVERLAY_3D_VIEW_SCHEMA = "incision-overlay-3d-view/v0.1"
@@ -68,6 +70,100 @@ def load_payload(path: str | Path) -> Any:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+def _normalize_legacy_review_record(record: dict[str, Any]) -> dict[str, Any]:
+    """Expose v0.3 Agentic fields through the v0.4 workflow vocabulary.
+
+    The source schema_version is deliberately retained so callers can distinguish
+    migrated legacy records from native v0.4 records. Legacy provider/LLM fields
+    also remain available to the privacy audit instead of being silently dropped.
+    """
+
+    if record.get("schema_version") != LEGACY_RECORD_SCHEMA:
+        return record
+
+    normalized = dict(record)
+    field_aliases = {
+        "agent_trace_gate": "workflow_trace_gate",
+        "agent_react_plan": "workflow_plan_audit",
+        "agent_execution_events": "workflow_execution_events",
+        "agent_orchestration_audit": "workflow_audit",
+    }
+    mapped_fields: list[str] = []
+    for legacy_key, workflow_key in field_aliases.items():
+        if workflow_key not in normalized and legacy_key in normalized:
+            normalized[workflow_key] = normalized[legacy_key]
+            mapped_fields.append(f"{legacy_key}->{workflow_key}")
+
+    llm = normalized.get("llm")
+    if isinstance(llm, dict):
+        if "summary" not in normalized and "summary" in llm:
+            normalized["summary"] = llm["summary"]
+            mapped_fields.append("llm.summary->summary")
+        if "next_step" not in normalized and "next_step" in llm:
+            normalized["next_step"] = llm["next_step"]
+            mapped_fields.append("llm.next_step->next_step")
+
+    review_gate = normalized.get("review_gate")
+    if isinstance(review_gate, dict):
+        normalized_gate = dict(review_gate)
+        if (
+            "workflow_trace_gate_passed" not in normalized_gate
+            and "agent_trace_gate_passed" in normalized_gate
+        ):
+            normalized_gate["workflow_trace_gate_passed"] = normalized_gate[
+                "agent_trace_gate_passed"
+            ]
+            mapped_fields.append(
+                "review_gate.agent_trace_gate_passed->workflow_trace_gate_passed"
+            )
+        if (
+            "workflow_trace_gate_missing" not in normalized_gate
+            and "agent_trace_gate_missing" in normalized_gate
+        ):
+            normalized_gate["workflow_trace_gate_missing"] = normalized_gate[
+                "agent_trace_gate_missing"
+            ]
+            mapped_fields.append(
+                "review_gate.agent_trace_gate_missing->workflow_trace_gate_missing"
+            )
+        if normalized_gate.get("reason") == "agent_trace_gate_failed":
+            normalized_gate["reason"] = "workflow_trace_gate_failed"
+            mapped_fields.append("review_gate.reason")
+        normalized["review_gate"] = normalized_gate
+
+    audit_events = normalized.get("audit_events")
+    if isinstance(audit_events, list):
+        normalized_events = []
+        for event in audit_events:
+            if not isinstance(event, dict):
+                normalized_events.append(event)
+                continue
+            normalized_event = dict(event)
+            if (
+                "workflow_trace_gate_passed" not in normalized_event
+                and "agent_trace_gate_passed" in normalized_event
+            ):
+                normalized_event["workflow_trace_gate_passed"] = normalized_event[
+                    "agent_trace_gate_passed"
+                ]
+                mapped_fields.append(
+                    "audit_events.agent_trace_gate_passed->workflow_trace_gate_passed"
+                )
+            normalized_events.append(normalized_event)
+        normalized["audit_events"] = normalized_events
+
+    normalized["compatibility"] = {
+        "schema_version": "incision-review-compatibility/v0.1",
+        "source_schema_version": LEGACY_RECORD_SCHEMA,
+        "normalized_for": RECORD_SCHEMA,
+        "mapped_fields": sorted(set(mapped_fields)),
+        "legacy_remote_fields_retained_for_privacy_audit": sorted(
+            key for key in ("provider", "provider_config", "llm") if key in normalized
+        ),
+    }
+    return normalized
+
+
 def records_from_payload(payload: Any) -> list[dict[str, Any]]:
     """Extract review records from one record, export payload, or list."""
 
@@ -81,16 +177,22 @@ def records_from_payload(payload: Any) -> list[dict[str, Any]]:
         return []
 
     schema = payload.get("schema_version")
-    if schema == RECORD_SCHEMA:
-        return [payload]
-    if schema == EXPORT_SCHEMA:
+    if schema in {RECORD_SCHEMA, LEGACY_RECORD_SCHEMA}:
+        return [_normalize_legacy_review_record(payload)]
+    if schema in {EXPORT_SCHEMA, LEGACY_EXPORT_SCHEMA}:
         records = []
         current = payload.get("current")
         if isinstance(current, dict):
-            records.append(current)
-        records.extend(r for r in payload.get("saved", []) if isinstance(r, dict))
+            records.extend(records_from_payload(current))
+        for record in payload.get("saved", []):
+            if isinstance(record, dict):
+                records.extend(records_from_payload(record))
         return records
 
+    if isinstance(schema, str) and schema.startswith(
+        ("incision-review-record/", "incision-review-export/")
+    ):
+        raise ValueError(f"unsupported incision review schema: {schema}")
     if "candidate" in payload and "tumor" in payload:
         return [payload]
     return []
@@ -307,6 +409,7 @@ def _has_secret_leak(value: Any, key_path: tuple[str, ...] = ()) -> bool:
 
 
 def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | None = None) -> dict[str, Any]:
+    record_schema_counts: Counter[str] = Counter()
     status_counts: Counter[str] = Counter()
     candidate_type_counts: Counter[str] = Counter()
     tumor_kind_counts: Counter[str] = Counter()
@@ -402,6 +505,7 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
     overlay_3d_mapping_mode_counts: Counter[str] = Counter()
 
     for record in records:
+        record_schema_counts[str(record.get("schema_version") or "unversioned")] += 1
         candidate = record.get("candidate") or {}
         tumor = record.get("tumor") or {}
         guardrails = record.get("guardrails") or {}
@@ -620,6 +724,7 @@ def evaluate_records(records: list[dict[str, Any]], input_files: list[str] | Non
         "schema_version": SUMMARY_SCHEMA,
         "input_files": input_files or [],
         "record_count": record_count,
+        "source_schema_version_counts": dict(sorted(record_schema_counts.items())),
         "candidate_type_counts": dict(sorted(candidate_type_counts.items())),
         "tumor_kind_counts": dict(sorted(tumor_kind_counts.items())),
         "review_status_counts": dict(sorted(status_counts.items())),

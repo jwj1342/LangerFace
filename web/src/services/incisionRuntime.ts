@@ -1510,7 +1510,7 @@ function reviewRecord(result: DynamicRecord = S.result, label = "候选") {
   const traceGate = workflowTraceGate(result);
   const tumorBoundarySummary = boundarySummaryFor(result.tumor, result);
   return {
-    schema_version: "incision-review-record/v0.3",
+    schema_version: "incision-review-record/v0.4",
     id: `candidate_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
     label,
     created_at: createdAt,
@@ -1797,7 +1797,7 @@ function exportReviewJson() {
   const current = S.result ? reviewRecord(S.result, "当前候选") : null;
   const records = [current, ...S.saved].filter(Boolean) as DynamicRecord[];
   const payload = {
-    schema_version: "incision-review-export/v0.3",
+    schema_version: "incision-review-export/v0.4",
     exported_at: new Date().toISOString(),
     current,
     saved: S.saved,
