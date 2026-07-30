@@ -41,6 +41,8 @@ def test_python_direction_service_matches_shared_browser_contract():
 
 def test_python_direction_service_is_static_query_stable():
     case = json.loads(FIXTURE.read_text(encoding="utf-8"))["cases"][0]
+    # Guard against future global caches or mutable module state affecting
+    # identical offline queries; this loop does not simulate elapsed frames.
     angles = [
         query_direction(
             case["point"],

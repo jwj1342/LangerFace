@@ -1,4 +1,9 @@
-"""Deterministic local RSTL direction queries shared with the Web workbench."""
+"""Python reference for the Web workbench's deterministic local RSTL query.
+
+The real-time incision path calls ``incisionToolCore.queryDirection`` in the
+browser. This module exists for cross-language parity and offline validation;
+the live browser workflow does not route through Python.
+"""
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence

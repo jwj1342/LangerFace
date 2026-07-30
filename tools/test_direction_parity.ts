@@ -51,6 +51,8 @@ for (const testCase of fixture.cases) {
 }
 
 const stableCase = fixture.cases[0];
+// Repeated identical calls guard against future global caches or mutable
+// module state making same-frame queries drift; this is not a timing test.
 const repeatedAngles = Array.from(
   { length: 100 },
   () => queryDirection(
@@ -62,7 +64,7 @@ const repeatedAngles = Array.from(
 );
 assert.ok(
   Math.max(...repeatedAngles) - Math.min(...repeatedAngles) < 1e-12,
-  "static direction query must remain stable across 100 frames",
+  "static direction query must not acquire cache or module-state drift",
 );
 
 console.log(`test_direction_parity: ${fixture.cases.length} shared Python/TypeScript cases passed`);
