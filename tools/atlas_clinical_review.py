@@ -188,7 +188,8 @@ def build_review_packet(
         ],
         "clinical_boundary": (
             "This packet is an audit scaffold. Building or editing it does not validate an atlas. "
-            "Only a clinician may attest the completed review and produce a validated candidate."
+            "The finalize command records the supplied attestation but cannot verify identity or "
+            "credentials; only an authorized clinician should produce a validated candidate."
         ),
         "items": items,
     }
@@ -408,7 +409,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.attest_clinical_review:
         raise ValueError(
-            "finalize requires --attest-clinical-review; only a clinician may make this attestation"
+            "finalize requires --attest-clinical-review; this records the operator's attestation "
+            "but does not verify identity or credentials"
         )
     if args.output.resolve() == args.atlas.resolve():
         raise ValueError("finalize refuses to overwrite the source atlas; review the separate output first")

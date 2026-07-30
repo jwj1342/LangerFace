@@ -68,6 +68,7 @@ def test_build_packet_prioritizes_forehead_and_pins_source(tmp_path):
     assert packet["summary"]["forehead_line_count"] == 1
     assert packet["items"][0]["priority"] == "critical"
     assert packet["items"][1]["decision"] == "pending"
+    assert "cannot verify identity or credentials" in packet["clinical_boundary"]
 
 
 def test_csv_roundtrip_and_finalize_requires_every_line(tmp_path):
