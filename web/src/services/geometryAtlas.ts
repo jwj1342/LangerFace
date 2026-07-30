@@ -32,6 +32,8 @@ export interface AtlasPayload {
 
 export interface MappedAtlasLine {
   name?: string;
+  /** 显示期需要按 region 决定后处理（额头外推线要额外裁剪，见 #141）。 */
+  region: string;
   pts: Vec3[];
   tris: number[];
 }
@@ -265,7 +267,7 @@ export function mapAtlas(
     } else if (useBridgeExpansion) {
       mappedPoints = extendForeheadBridge(pts, landmarksPx, bridgeRanks.get(line) ?? 0);
     }
-    result.push({ name: line.name, pts: mappedPoints, tris });
+    result.push({ name: line.name, region: line.region || "", pts: mappedPoints, tris });
   }
   return result;
 }
