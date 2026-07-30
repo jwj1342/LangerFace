@@ -840,7 +840,7 @@ axis_coverage_deficit_mm = max(0, axis_coverage_required_mm - length_mm)
 | --- | --- | --- |
 | 临床规则库 | `assets/clinical_rules_face_incision.json` | 区域规则、优先级、例外和审核状态 |
 | 面部分区 | `web/src/services/incisionToolCore.ts` | 点位到临床区域和美学亚单位的映射，输出分区低置信原因 |
-| RSTL 方向服务 | `web/src/services/incisionToolCore.ts` | 查询局部方向、置信度和依据 |
+| RSTL 方向服务 | `src/langerface/lines/direction.py`、`web/src/services/incisionToolCore.ts` | Python / TypeScript 同构查询局部方向、置信度和依据；共享金标防止两端漂移 |
 | 肿物模型 | `web/src/services/incisionCandidateTools.ts`, `web/src/services/tumorInput.ts` | 表达皮下/皮表肿物约束 |
 | 切口生成 | `web/src/services/incisionCandidateTools.ts` | 线性和梭形候选生成 |
 | guardrails | `web/src/services/incisionCandidateTools.ts` | 敏感结构风险提示 |
