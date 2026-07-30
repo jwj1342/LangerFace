@@ -128,4 +128,9 @@ cd web && node ../tools/test_incision_tools.ts
 
 肿物输入和审阅记录的结构化门禁已经迁到浏览器 workflow：导出中会保存 `tumor_quality`、`tumor_boundary_summary`、`sensitive_structure_inspection`、`workflow_trace_gate`、`workflow_plan_audit`、`workflow_execution_events` 和 `candidate_comparison`。前端 review gate 会检查 `approved_for_discussion` 是否有审阅人、高风险 guardrail 是否有备注或覆盖理由、`workflow_trace_gate` 是否通过，以及 `live_overlay_ready` 是否只在这些条件同时满足时为 `true`。它只检查导出状态自洽，不替代医生签名或病例系统权限控制。
 
+workflow-only 审阅记录使用 `incision-review-record/v0.4`，导出容器使用
+`incision-review-export/v0.4`。Agentic 删除前的 `v0.3` 记录不得直接当作 `v0.4` 使用；
+`tools/evaluate_stage2_validation.py` 会按源 schema 显式映射旧 `agent_*` 字段，并保留旧 provider/LLM
+字段供隐私审计，同时在汇总里分开报告版本。该兼容读取不恢复任何远程调用能力。
+
 该脚本只是工程守门，不能替代机构合规审查。

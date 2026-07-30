@@ -1,6 +1,6 @@
 # Borges RSTL 与 3DMM 拓扑先验
 
-本文对应 issue [#86](https://github.com/jwj1342/LangerFace/issues/86)，记录 Borges RSTL 来源、当前标准脸草案资产、3DMM 注册边界，以及与 #2/#13 和 2D-first 路线的衔接。
+本文记录 Borges RSTL 来源、当前标准脸草案资产、3DMM 注册边界，以及与 #2/#13、#40 的 2D-first 路线和已合并 PR #88 的衔接。
 
 ## 医学来源与定义
 
@@ -14,7 +14,7 @@
 | 资产 | 拓扑 | 格式 | 状态 | 用途 |
 | --- | --- | --- | --- | --- |
 | `web/assets/atlas_rstl.json` | `mediapipe-468` | `lines[].points = [tri,u,v]` | `validated:false` | Stage 1/2 的标准脸 RSTL 草案和 #13 方向服务输入 |
-| `rstl_mediapipe_direction_prior.json`（远端资产或 `local_outputs/` 本地生成） | `mediapipe-468` | 每个三角面中心的方向向量 / 置信度 / provenance | `validated:false` | 高密度方向场审阅资产，供 #13 方向服务和 #86 3DMM 先验注册对照；大 JSON 不提交进仓库 |
+| `rstl_mediapipe_direction_prior.json`（远端资产或 `local_outputs/` 本地生成） | `mediapipe-468` | 每个三角面中心的方向向量 / 置信度 / provenance | `validated:false` | 高密度方向场审阅资产，供 #13 方向服务和 PR #88 的 3DMM 草案注册对照；大 JSON 不提交进仓库 |
 | `web/assets/atlas_langer.json` | `mediapipe-468` | `lines[].points = [tri,u,v]` | `validated:false` | Langer 对照 / 教学，不作为面部主切口方向 |
 | `assets/rstl_3dmm_prior_manifest.json` | 多拓扑 manifest | JSON | `draft_not_clinically_validated` | 记录来源、拓扑、生成脚本和临床校验闸 |
 | FLAME/BFM RSTL atlas | `flame-2023` / BFM | 待生成 `[tri,u,v]` | pending | 3DMM 标注/迁移轨后续资产；旧的零消费者 redline 投影草案已删除 |
@@ -48,7 +48,7 @@
 
 这不是新的临床真值，也不是 FLAME/BFM 图谱本体。它的作用是把现有 RSTL 草案变成可审阅、
 可版本管理的高密度方向场中间资产：医生可以按 #2 复核低置信区域，#13 可以用同一套
-confidence / support 语义对齐方向服务，#86 后续把同类结构注册到 FLAME/BFM 时也有明确的
+confidence / support 语义对齐方向服务，PR #88 的 FLAME 草案注册和后续 BFM 工作也有明确的
 provenance 和拓扑边界可对照。
 
 ## FLAME / 通用 3DMM 方向先验生成器
@@ -173,7 +173,7 @@ FLAME 轨保持与 MediaPipe 轨独立：
 
 ## 自动审计
 
-`tools/audit_rstl_3dmm_prior.py` 会检查 `assets/rstl_3dmm_prior_manifest.json` 的拓扑、`validated:false`、`draft_not_clinically_validated`、remote/generated 大资产边界和 FLAME/BFM pending 边界。它的目标不是证明 #86 已经完成临床注册，而是防止草案方向场、MediaPipe atlas 与 FLAME/BFM pending 资产被误表达为已验证图谱或误提交为仓库内置大 JSON。
+`tools/audit_rstl_3dmm_prior.py` 会检查 `assets/rstl_3dmm_prior_manifest.json` 的拓扑、`validated:false`、`draft_not_clinically_validated`、remote/generated 大资产边界和 FLAME/BFM pending 边界。它的目标不是把 PR #88 的工程草案误说成已完成临床注册，而是防止草案方向场、MediaPipe atlas 与 FLAME/BFM pending 资产被误表达为已验证图谱或误提交为仓库内置大 JSON。
 
 ```bash
 python tools/audit_rstl_3dmm_prior.py --json

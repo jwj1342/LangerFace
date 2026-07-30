@@ -25,7 +25,7 @@ export function buildReviewExportPayload({
 }: ReviewExportInput): DynamicRecord {
   const records = [current, ...saved].filter(Boolean) as DynamicRecord[];
   return {
-    schema_version: "incision-review-export/v0.3",
+    schema_version: "incision-review-export/v0.4",
     exported_at: exportedAt,
     current,
     saved,
