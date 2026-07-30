@@ -69,6 +69,22 @@ import type { AtlasPayload, HeadMeshPayload } from "./dataSource";
 import { auditExportPayload } from "./exportPrivacy";
 import { loadFlameBasisAsset, mediaPipeAtlasToFlamePreviewAtlas } from "./flameHeadAssets";
 import {
+  add3 as add,
+  buildBoundaryGeometry,
+  buildPolylineGeometry,
+  buildRingGeometry,
+  clamp,
+  cross3 as cross,
+  dot3 as dot,
+  length3 as len,
+  meanMeshEdgeLength,
+  normalize3 as norm,
+  scale3 as mul,
+  subtract3 as sub,
+  tangentFrame,
+} from "./incisionSceneGeometry";
+import type { VectorLike } from "./incisionSceneGeometry";
+import {
   assessReviewReadiness,
   buildReviewGate,
   summarizeGuardrails,
@@ -80,7 +96,6 @@ import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.ts";
 import type { Triangle, Vec3 } from "./softBody";
 
 type DynamicRecord = Record<string, any>;
-type VectorLike = ArrayLike<number>;
 type ControllerCleanup = () => void;
 type IncisionMesh = THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>;
 type IncisionLine = THREE.Line<THREE.BufferGeometry, THREE.Material | THREE.Material[]>;
@@ -151,15 +166,6 @@ function fileFromEvent(event: Event): File | undefined {
 }
 
 let els = {} as IncisionDomElements;
-
-const sub = (a: VectorLike, b: VectorLike): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const add = (a: VectorLike, b: VectorLike): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const mul = (a: VectorLike, s: number): Vec3 => [a[0] * s, a[1] * s, a[2] * s];
-const dot = (a: VectorLike, b: VectorLike): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const len = (v: VectorLike): number => Math.hypot(v[0], v[1], v[2]);
-const norm = (v: VectorLike): Vec3 => { const l = len(v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
-const cross = (a: VectorLike, b: VectorLike): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-function clamp(v: number, lo: number, hi: number): number { return Math.max(lo, Math.min(hi, v)); }
 
 function createRuntimeState(): IncisionRuntimeState {
   return {
@@ -358,17 +364,6 @@ function hideAssetLoading() {
   publishIncisionState("asset_loaded");
 }
 
-function meanEdge(verts: Vec3[], tris: Triangle[]): number {
-  let e = 0, n = 0;
-  for (const [a, b, c] of tris) {
-    for (const [p, q] of [[a, b], [b, c], [c, a]]) {
-      e += len(sub(verts[p], verts[q]));
-      n++;
-    }
-  }
-  return n ? e / n : 1;
-}
-
 function defaultLesion(): number {
   const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity];
   for (const v of S.verts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], v[k]); hi[k] = Math.max(hi[k], v[k]); }
@@ -485,7 +480,7 @@ async function boot() {
   if (!S.mounted) return;
   S.verts = head.vertices; S.tris = head.triangles; S.atlas = atlas; S.headAsset = headAsset; S.assetWarnings = headAsset.warnings;
   S.normals = vertexNormals(S.verts, S.tris);
-  S.meanEdge = meanEdge(S.verts, S.tris);
+  S.meanEdge = meanMeshEdgeLength(S.verts, S.tris);
   S.unitsPerMm = unitsPerMmFromVertices(S.verts);
 
   S.head = new Head3D(els.canvas);
@@ -767,27 +762,6 @@ function updateAnatomyPreview() {
   );
 }
 
-function tangentFrame(normal: VectorLike, axis: VectorLike = [1, 0, 0]) {
-  const u0 = norm(cross(normal, axis));
-  const u = len(u0) > 0 ? u0 : [1, 0, 0];
-  const v = norm(cross(normal, u));
-  return { u, v };
-}
-
-function ringGeometry(center: VectorLike, normal: VectorLike, radius: number) {
-  const { u, v } = tangentFrame(normal, [0, 1, 0]);
-  const lift = S.meanEdge * 0.18;
-  const pos = [];
-  for (let i = 0; i <= 72; i++) {
-    const t = i / 72 * Math.PI * 2;
-    const p = add(add(center, mul(u, Math.cos(t) * radius)), add(mul(v, Math.sin(t) * radius), mul(normal, lift)));
-    pos.push(...p);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  return g;
-}
-
 function ellipseBoundaryPoints(samples = 32): Vec3[] {
   const center = S.verts[S.lesion], normal = S.normals[S.lesion];
   const { u, v } = tangentFrame(normal, [0, 1, 0]);
@@ -809,31 +783,6 @@ function tumorBoundaryPoints(): Vec3[] {
   return ellipseBoundaryPoints();
 }
 
-function boundaryGeometry(points: VectorLike[], normal: VectorLike, closed = true) {
-  const lift = S.meanEdge * 0.22;
-  const pos = [];
-  const pts = closed && points.length ? points.concat([points[0]]) : points;
-  for (const p0 of pts || []) {
-    const p = add(p0, mul(normal, lift));
-    pos.push(...p);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  return g;
-}
-
-function polylineGeometry(points: VectorLike[], normal: VectorLike) {
-  const lift = S.meanEdge * 0.32;
-  const pos = [];
-  for (const p0 of points || []) {
-    const p = add(p0, mul(normal, lift));
-    pos.push(...p);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  return g;
-}
-
 function setLesion(i: number) {
   S.lesion = i;
   const center = S.verts[i], normal = S.normals[i];
@@ -851,12 +800,22 @@ function updateTumorRing() {
   const marginMm = Number(tumor.margin_mm || 0);
   const radiusMm = tumor.kind === "cutaneous" ? diameterMm / 2 + marginMm : diameterMm / 2;
   const old = S.tumorRing.geometry;
-  S.tumorRing.geometry = ringGeometry(S.verts[S.lesion], S.normals[S.lesion], radiusMm * S.unitsPerMm);
+  S.tumorRing.geometry = buildRingGeometry(
+    S.verts[S.lesion],
+    S.normals[S.lesion],
+    radiusMm * S.unitsPerMm,
+    S.meanEdge,
+  );
   old.dispose();
   if (!S.boundaryLine) return;
   const bold = S.boundaryLine.geometry;
   const boundary = tumorBoundaryPoints();
-  S.boundaryLine.geometry = boundaryGeometry(boundary, S.normals[S.lesion], boundary.length >= 3);
+  S.boundaryLine.geometry = buildBoundaryGeometry(
+    boundary,
+    S.normals[S.lesion],
+    S.meanEdge,
+    boundary.length >= 3,
+  );
   S.boundaryLine.visible = tumor.kind === "cutaneous" && boundary.length >= 2;
   bold.dispose();
   updateBoundaryStatus();
@@ -865,7 +824,11 @@ function updateTumorRing() {
 function drawCandidate(result: DynamicRecord) {
   if (!S.candidateLine) return;
   const old = S.candidateLine.geometry;
-  S.candidateLine.geometry = polylineGeometry(result.candidate.polyline, S.normals[S.lesion]);
+  S.candidateLine.geometry = buildPolylineGeometry(
+    result.candidate.polyline,
+    S.normals[S.lesion],
+    S.meanEdge,
+  );
   old.dispose();
   (S.candidateLine.material as THREE.LineBasicMaterial).color.set(result.candidate.type === "linear" ? 0x34d399 : 0x5eead4);
   const endpoints = result.candidate.endpoints || [];
