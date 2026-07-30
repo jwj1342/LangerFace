@@ -9,8 +9,10 @@
 - `web/src/services/incisionWorkflowTools.ts` 按固定顺序调用确定性工具，生成候选、工具 trace、门控结果和候选比较。
 - `web/src/workers/workflow.worker.ts` 通过 Comlink 在 Web Worker 中执行同一套 workflow。
 - `web/src/services/workflowPlanner.ts` 在 Worker 不可用时回退到主线程执行相同的确定性函数。
-- `web/src/services/incisionRuntime.ts` 负责工作台交互、审阅、导出和实时叠加衔接。
+- `web/src/services/incisionRuntime.ts` 负责工作台编排、三维交互、导出和实时叠加衔接；route-scoped DOM 收集、临床展示文案和审阅门控分别由 `incisionDom.ts`、`incisionClinicalCopy.ts` 与 `incisionReviewPolicy.ts` 维护。
 - 运行时不读取模型密钥，不请求远程模型，也不把原始照片、视频帧、摄像头画面或纹理发送到外部服务。
+
+工作台把医生需要先看的候选摘要、保护规则和验证边界保持为默认可见；workflow trace、工具门控与候选比较收进默认折叠的技术详情。移动端先展示可定位病灶的三维视图，再进入长表单。
 
 ## 固定步骤
 
@@ -54,7 +56,8 @@
 cd web
 npm run typecheck
 npm test
+npm run test:browser
 npm run build
 ```
 
-相关静态和数值测试覆盖 worker 回退、固定工具顺序、trace 门控、候选比较、医生编辑、审阅导出和浏览器隐私预检。
+相关静态和数值测试覆盖 worker 回退、固定工具顺序、trace 门控、候选比较、医生编辑、审阅导出和浏览器隐私预检；Playwright 回归覆盖 `/app/incision` 与 `/live` 的控件对比度、受控滑杆状态保持、移动端三维视图顺序、临床中文和规则验证边界。

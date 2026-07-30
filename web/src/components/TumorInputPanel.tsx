@@ -67,9 +67,10 @@ export function TumorInputPanel() {
         id="tumorKind"
         value={kind}
         onChange={(event) => {
-          setKind(event.currentTarget.value);
+          const value = event.currentTarget.value;
+          setKind(value);
           setBoundaryActive(false);
-          commands.tumor("kind_changed");
+          commands.tumor("kind_changed", value);
         }}
       >
         <option value="subcutaneous">皮下肿物 · 线性切口</option>
@@ -83,12 +84,13 @@ export function TumorInputPanel() {
           max="40"
           value={diameter}
           onInput={(event) => {
-            setDiameter(event.currentTarget.value);
-            commands.tumor("diameter_input");
+            const value = event.currentTarget.value;
+            setDiameter(value);
+            commands.tumor("diameter_input", value);
           }}
-          onPointerUp={() => commands.tumor("diameter_changed")}
-          onKeyUp={() => commands.tumor("diameter_changed")}
-          onBlur={() => commands.tumor("diameter_changed")}
+          onPointerUp={(event) => commands.tumor("diameter_changed", event.currentTarget.value)}
+          onKeyUp={(event) => commands.tumor("diameter_changed", event.currentTarget.value)}
+          onBlur={(event) => commands.tumor("diameter_changed", event.currentTarget.value)}
           onChange={(event) => setDiameter(event.currentTarget.value)}
         />
       </FieldGroup>
@@ -98,8 +100,9 @@ export function TumorInputPanel() {
           id="tumorAuthor"
           value={author}
           onChange={(event) => {
-            setAuthor(event.currentTarget.value);
-            commands.tumor("author_changed");
+            const value = event.currentTarget.value;
+            setAuthor(value);
+            commands.tumor("author_changed", value);
           }}
         />
       </FieldGroup>
@@ -111,12 +114,13 @@ export function TumorInputPanel() {
           max="35"
           value={depth}
           onInput={(event) => {
-            setDepth(event.currentTarget.value);
-            commands.tumor("depth_input");
+            const value = event.currentTarget.value;
+            setDepth(value);
+            commands.tumor("depth_input", value);
           }}
-          onPointerUp={() => commands.tumor("depth_changed")}
-          onKeyUp={() => commands.tumor("depth_changed")}
-          onBlur={() => commands.tumor("depth_changed")}
+          onPointerUp={(event) => commands.tumor("depth_changed", event.currentTarget.value)}
+          onKeyUp={(event) => commands.tumor("depth_changed", event.currentTarget.value)}
+          onBlur={(event) => commands.tumor("depth_changed", event.currentTarget.value)}
           onChange={(event) => setDepth(event.currentTarget.value)}
         />
       </FieldGroup>
@@ -128,12 +132,13 @@ export function TumorInputPanel() {
           max="10"
           value={margin}
           onInput={(event) => {
-            setMargin(event.currentTarget.value);
-            commands.tumor("margin_input");
+            const value = event.currentTarget.value;
+            setMargin(value);
+            commands.tumor("margin_input", value);
           }}
-          onPointerUp={() => commands.tumor("margin_changed")}
-          onKeyUp={() => commands.tumor("margin_changed")}
-          onBlur={() => commands.tumor("margin_changed")}
+          onPointerUp={(event) => commands.tumor("margin_changed", event.currentTarget.value)}
+          onKeyUp={(event) => commands.tumor("margin_changed", event.currentTarget.value)}
+          onBlur={(event) => commands.tumor("margin_changed", event.currentTarget.value)}
           onChange={(event) => setMargin(event.currentTarget.value)}
         />
       </FieldGroup>
@@ -143,9 +148,10 @@ export function TumorInputPanel() {
           id="boundaryMode"
           value={boundaryMode}
           onChange={(event) => {
-            setBoundaryMode(event.currentTarget.value);
+            const value = event.currentTarget.value;
+            setBoundaryMode(value);
             setBoundaryActive(false);
-            commands.tumor("boundary_mode_changed");
+            commands.tumor("boundary_mode_changed", value);
           }}
         >
           <option value="ellipse">椭圆近似</option>
@@ -160,12 +166,13 @@ export function TumorInputPanel() {
           max="100"
           value={ellipseRatio}
           onInput={(event) => {
-            setEllipseRatio(event.currentTarget.value);
-            commands.tumor("ellipse_ratio_input");
+            const value = event.currentTarget.value;
+            setEllipseRatio(value);
+            commands.tumor("ellipse_ratio_input", value);
           }}
-          onPointerUp={() => commands.tumor("ellipse_ratio_changed")}
-          onKeyUp={() => commands.tumor("ellipse_ratio_changed")}
-          onBlur={() => commands.tumor("ellipse_ratio_changed")}
+          onPointerUp={(event) => commands.tumor("ellipse_ratio_changed", event.currentTarget.value)}
+          onKeyUp={(event) => commands.tumor("ellipse_ratio_changed", event.currentTarget.value)}
+          onBlur={(event) => commands.tumor("ellipse_ratio_changed", event.currentTarget.value)}
           onChange={(event) => setEllipseRatio(event.currentTarget.value)}
         />
       </FieldGroup>

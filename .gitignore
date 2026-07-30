@@ -49,3 +49,7 @@ assets/flame/*
 # FLAME-derived web assets — generated locally from the licensed model; never commit / deploy.
 web/assets/topology_flame_*.json
 web/assets/flame_*.json
+
+# Browser regression artifacts
+web/playwright-report/
+web/test-results/

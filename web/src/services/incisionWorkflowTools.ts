@@ -84,7 +84,9 @@ function buildEditedFusiform(
   const halfL = lengthMm * unitsPerMm * 0.5;
   const halfW = widthMm * unitsPerMm * 0.5;
   const samples = Math.max(12, Math.round((base.outline?.length || 58) / 2));
-  const targetTipAngle = base.metrics?.tip_angle_target_deg || base.tip_angle_deg || 30;
+  const targetTipAngle = edit.tip_angle_deg == null
+    ? Number(base.metrics?.tip_angle_target_deg || base.tip_angle_deg || 30)
+    : Number(edit.tip_angle_deg);
   const profile = fusiformProfile(center, axis, widthAxis, halfL, halfW, samples, targetTipAngle);
   const { upper, lower } = profile;
   const outline = upper.concat(lower.slice(1, -1).reverse());
@@ -154,6 +156,7 @@ export function applyCandidateEdit(
     angle_offset_deg: Number(edit.angle_offset_deg || 0),
     length_scale: Number(edit.length_scale || 1),
     width_scale: Number(edit.width_scale || 1),
+    tip_angle_deg: edit.tip_angle_deg == null ? null : Number(edit.tip_angle_deg),
     shift_along_mm: Number(edit.shift_along_mm || 0),
     shift_perp_mm: Number(edit.shift_perp_mm || 0),
     reason: String(edit.reason || ""),
@@ -201,6 +204,7 @@ export function applyCandidateEdit(
     editRecord.angle_offset_deg !== 0 ||
     editRecord.length_scale !== 1 ||
     editRecord.width_scale !== 1 ||
+    editRecord.tip_angle_deg != null ||
     editRecord.shift_along_mm !== 0 ||
     editRecord.shift_perp_mm !== 0 ||
     editRecord.reason

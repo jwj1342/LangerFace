@@ -1,5 +1,7 @@
 export const DEFAULT_RULES = {
   version: "0.3-deterministic-incision-workflow",
+  review_status: "draft_not_clinically_validated",
+  last_reviewed_at: "2026-06-24",
   linear_subcutaneous: {
     length_multiplier: 1.25,
     min_length_mm: 8,

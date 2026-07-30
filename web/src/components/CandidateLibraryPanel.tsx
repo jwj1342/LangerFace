@@ -43,7 +43,7 @@ export function CandidateLibraryPanel() {
         保存当前候选
       </Button>
       <ButtonRow className="two-cols">
-        <Button variant="workbench" id="makeVariantsBtn" type="button" disabled={!hasCandidate} onClick={() => commands.library("make_variants")}>生成备选</Button>
+        <Button variant="workbench" id="makeVariantsBtn" type="button" disabled={!hasCandidate} onClick={() => commands.library("make_variants")}>保存方向备选</Button>
         <Button variant={confirmClear ? "miniDanger" : "workbench"} id="clearSavedBtn" type="button" disabled={!hasSaved} onClick={clearSaved}>
           {confirmClear ? "确认清空" : "清空候选库"}
         </Button>

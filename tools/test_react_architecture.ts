@@ -139,6 +139,9 @@ const annotationModelService = read("src/services/annotationModel.ts");
 const flameFitService = read("src/services/flameFit.ts");
 const annotateViewerService = read("src/services/annotateViewer.ts");
 const controller = read("src/services/incisionRuntime.ts");
+const incisionDomService = read("src/services/incisionDom.ts");
+const incisionClinicalCopyService = read("src/services/incisionClinicalCopy.ts");
+const incisionReviewPolicyService = read("src/services/incisionReviewPolicy.ts");
 const incisionOverlayService = read("src/services/incisionOverlay.ts");
 const incisionCandidateToolsService = read("src/services/incisionCandidateTools.ts");
 const incisionWorkflowToolsService = read("src/services/incisionWorkflowTools.ts");
@@ -183,6 +186,9 @@ const incisionRuntimeDependencyTypes = [
   "src/services/assetLoader.ts",
   "src/services/dataSource.ts",
   "src/services/exportPrivacy.ts",
+  "src/services/incisionClinicalCopy.ts",
+  "src/services/incisionDom.ts",
+  "src/services/incisionReviewPolicy.ts",
   "src/services/softBody.ts",
   "src/services/three3d.ts",
 ];
@@ -1305,11 +1311,12 @@ assert.ok(scopedDom.includes("requireScopedElement"), "React route controllers c
 assert.ok(scopedDom.includes("requireScopedQuery"), "React route controllers can scope selector queries to the route host");
 for (const [name, source] of [
   ["annotateRuntime.ts", annotateRuntime],
-  ["incisionRuntime.ts", controller],
+  ["incisionDom.ts", incisionDomService],
 ]) {
   assert.ok(source.includes("../lib/scopedDom"), `${name} uses route-host scoped DOM helpers`);
   assert.ok(!source.includes("document.getElementById"), `${name} must not fall back to global document ids inside the SPA`);
 }
+assert.ok(controller.includes("./incisionDom"), "incision runtime delegates route-host DOM collection to the typed DOM service");
 assert.ok(!controller.includes('document.querySelector(".main-wrap")'), "incision runtime scopes the stage wrapper lookup to the React route host");
 assert.ok(!liveDomService.includes("return document.getElementById(id)"), "live DOM binding does not fall back to global document ids inside the SPA");
 assert.ok(!liveDomService.includes('document.querySelector(".main-wrap")'), "live DOM binding scopes the stage wrapper lookup to the React route host");
@@ -1532,6 +1539,9 @@ for (const id of [
   "widthScaleWrap",
   "widthScale",
   "widthScaleVal",
+  "tipAngleWrap",
+  "tipAngleDeg",
+  "tipAngleVal",
   "shiftAlongMm",
   "shiftAlongVal",
   "shiftPerpMm",
@@ -1590,7 +1600,11 @@ for (const dependencyType of incisionRuntimeDependencyTypes) {
   );
 }
 assert.ok(!controller.includes("// @ts-nocheck"), "incision runtime should run under strict TypeScript checking");
-assert.ok(controller.includes("interface IncisionDomElements"), "incision runtime types its DOM binding surface");
+assert.ok(incisionDomService.includes("interface IncisionDomElements"), "incision DOM service types the controller binding surface");
+assert.ok(incisionDomService.includes("collectIncisionElements"), "incision DOM service owns route-host element collection");
+assert.ok(incisionClinicalCopyService.includes("overrideLabel"), "incision clinical copy service owns clinician-facing override labels");
+assert.ok(incisionReviewPolicyService.includes("assessReviewReadiness"), "incision review policy service owns pure review readiness checks");
+assert.ok(controller.includes("./incisionReviewPolicy"), "incision runtime delegates review gates to the pure review policy service");
 assert.ok(controller.includes("interface IncisionRuntimeState"), "incision runtime types its long-lived renderer/workflow state");
 assert.ok(controller.includes("interface PointerDragState"), "incision runtime types pointer drag state");
 assert.ok(controller.includes("function controllerEvent"), "incision runtime narrows browser command events before reading detail");

@@ -54,8 +54,8 @@ export function useAnnotateControllerCommands() {
 }
 
 export function useIncisionControllerCommands() {
-  const tumor = useCallback((command: IncisionTumorCommand) => {
-    dispatchIncisionTumorCommand(command);
+  const tumor = useCallback((command: IncisionTumorCommand, value?: string | number) => {
+    dispatchIncisionTumorCommand(command, value);
   }, []);
   const secondaryCue = useCallback((command: IncisionSecondaryCueCommand) => {
     dispatchIncisionSecondaryCueCommand(command);

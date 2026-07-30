@@ -245,6 +245,22 @@ ok(editedBoundaryFusiform.candidate.metrics.boundary_envelope_outside_count > 0,
   "edited fusiform counts boundary points outside edited envelope");
 ok(editedBoundaryFusiform.guardrails.warnings.some((w) => w.code === "fusiform_boundary_outside_envelope"),
   "edited fusiform boundary envelope warning is re-evaluated");
+const tipAngleEditedFusiform = T.applyCandidateEdit({
+  tumor: boundaryTumor,
+  candidate: boundaryFusiform,
+  anatomy: { region: "cheek", confidence: 0.8 },
+  guardrails: T.evaluateGuardrails(boundaryFusiform, { region: "cheek", confidence: 0.8 }),
+  trace: [],
+}, {
+  tip_angle_deg: 45,
+  reason: "manual clinician preference",
+}, [0, 0, 1], 0.1);
+ok(near(tipAngleEditedFusiform.candidate.metrics.tip_angle_target_deg, 45),
+  "clinician edit overrides the fusiform tip-angle target");
+ok(near(tipAngleEditedFusiform.candidate.tip_angle_deg, 45),
+  "clinician tip-angle edit rebuilds the fusiform outline");
+ok(tipAngleEditedFusiform.candidate.provenance.clinician_edit.tip_angle_deg === 45,
+  "clinician tip-angle edit is retained in provenance");
 
 const envelopeRules = structuredClone(T.DEFAULT_RULES);
 envelopeRules.fusiform_cutaneous.max_length_mm = 200;

@@ -75,12 +75,14 @@ export interface IncisionEditState {
   angleOffsetDeg: number;
   lengthScalePct: number;
   widthScalePct: number;
+  tipAngleDeg: number;
   shiftAlongMm: number;
   shiftPerpMm: number;
   reason: string;
   statusLabel: string;
   active: boolean;
   widthScaleVisible: boolean;
+  tipAngleVisible: boolean;
   historyLabel: string;
   undoDisabled: boolean;
   redoDisabled: boolean;
@@ -160,6 +162,7 @@ export interface IncisionEditLike {
   angle_offset_deg?: number;
   length_scale?: number;
   width_scale?: number;
+  tip_angle_deg?: number | null;
   shift_along_mm?: number;
   shift_perp_mm?: number;
   reason?: string;
@@ -289,6 +292,8 @@ export function buildIncisionEditSnapshot({
   statusActive = false,
   editActive = false,
   widthScaleVisible = false,
+  tipAngleVisible = false,
+  tipAngleDeg = 30,
   historyLabel = "编辑版本：v1 · 无已提交调整",
   undoDisabled = false,
   redoDisabled = false,
@@ -298,6 +303,8 @@ export function buildIncisionEditSnapshot({
   statusActive?: boolean;
   editActive?: boolean;
   widthScaleVisible?: boolean;
+  tipAngleVisible?: boolean;
+  tipAngleDeg?: number;
   historyLabel?: string;
   undoDisabled?: boolean;
   redoDisabled?: boolean;
@@ -306,12 +313,14 @@ export function buildIncisionEditSnapshot({
     angleOffsetDeg: finiteOrFallback(edit.angle_offset_deg, 0),
     lengthScalePct: Math.round(finiteOrFallback(edit.length_scale, 1) * 100),
     widthScalePct: Math.round(finiteOrFallback(edit.width_scale, 1) * 100),
+    tipAngleDeg: Math.round(finiteOrFallback(tipAngleDeg, 30)),
     shiftAlongMm: finiteOrFallback(edit.shift_along_mm, 0),
     shiftPerpMm: finiteOrFallback(edit.shift_perp_mm, 0),
     reason: edit.reason || "",
     statusLabel,
     active: Boolean(statusActive) || Boolean(editActive),
     widthScaleVisible: Boolean(widthScaleVisible),
+    tipAngleVisible: Boolean(tipAngleVisible),
     historyLabel,
     undoDisabled: Boolean(undoDisabled),
     redoDisabled: Boolean(redoDisabled),

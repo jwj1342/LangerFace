@@ -36,8 +36,8 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候
       · 本 PR 已支持中心点、直径/深度/切缘、椭圆/自由轮廓、来源作者、肿物 JSON 导入导出、`tumor_quality` 输入质量摘要，以及自由轮廓点数/面积/自交/中心偏移 guardrails；新版 `boundary_summary` 会随前端导出 `units_per_mm`、`summary_axis` 和 `summary_normal`，审阅记录额外写入 `tumor_boundary_summary`，按保存候选的长轴固化边界点数、长短轴、面积、自交和中心偏移，Markdown 报告会显示“肿物边界摘要”；缺作者、非 mm 单位、缺皮下深度、缺皮表切缘或边界过稀会进入 trace/报告/审阅导出；当前由浏览器 workflow 和 JS 合约测试守住肿物输入、边界摘要、隐私预检和候选 metrics 的自洽性，自动影像分割仍属后续
 - [ ] 皮下肿物切口生成：按超声直径生成平行 RSTL 的线性切口 — [#15](https://github.com/jwj1342/LangerFace/issues/15)
       · 本 PR 已支持 RSTL 轴向线性候选、端点/长度编辑、目标长度 metrics、最大长度截断记录和直径覆盖不足 high guardrail
-- [ ] 皮表肿物梭形切口生成器：长轴、比例、尖端角与平滑对称约束 — [#16](https://github.com/jwj1342/LangerFace/issues/16)
-      · 本 PR 已支持边界投影覆盖、面积/自交质量指标、3:1 默认长宽比、cubic Hermite 轮廓、30° 默认尖端角目标和实际误差 metrics；梭形候选还会导出 `outline_area_mm2`、`outline_half_width_monotone`、`outline_symmetry_max_error_mm`、`outline_self_intersection`、`boundary_envelope_min_margin_mm` 和 `boundary_envelope_outside_count`，当自由轮廓点落在实际梭形收窄包络之外时触发 high guardrail；医生调整梭形宽度、长度、方向或中心后会重新计算这些 outline/envelope 指标并复跑 guardrails，避免沿用初始候选的旧覆盖判断；Markdown 报告会显示“梭形包络”一行，便于 reviewer 直接看到 outline 面积、单峰性、对称误差、包络余量和出界点数；真实病例曲线调参仍需医生 review
+- [x] 皮表肿物梭形切口生成器：长轴、比例、尖端角与平滑对称约束 — [#16](https://github.com/jwj1342/LangerFace/issues/16)
+      · 已支持边界投影覆盖、面积/自交质量指标、3:1 默认长宽比、cubic Hermite 轮廓、30° 默认尖端角目标和实际误差 metrics；梭形候选还会导出 `outline_area_mm2`、`outline_half_width_monotone`、`outline_symmetry_max_error_mm`、`outline_self_intersection`、`boundary_envelope_min_margin_mm` 和 `boundary_envelope_outside_count`，当自由轮廓点落在实际梭形收窄包络之外时触发 high guardrail；医生可调整梭形宽度、长度、方向、中心和尖端角，系统会重算 outline/envelope 指标、复跑 guardrails，并把尖端角覆盖写入 edit history 与导出 provenance；真实病例曲线调参仍需医生 review
 - [ ] 敏感结构保护规则：下睑、唇红缘、鼻翼等游离边缘风险提示与方向例外 — [#17](https://github.com/jwj1342/LangerFace/issues/17)
       · 本 PR 已支持敏感区提示、中心点和候选几何到敏感锚点/简化游离缘线段的距离筛查，并按下睑、唇红缘、鼻翼、鼻尖、口角使用 draft 阈值表；命中敏感结构时会输出 `protective_direction` 保护性方向建议并要求医生记录覆盖原因；JS 合约测试会比较 `free_margin_distance_thresholds_mm` 与 `protective_direction_hints`，防止浏览器实现和 JSON 资产不一致；真实解剖边界、阈值和保护性方向仍需临床确认
 
