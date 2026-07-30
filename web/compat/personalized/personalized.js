@@ -1,7 +1,7 @@
 /**
  * 表情 atlas 微调 Demo — 浏览器引导采集 UI / 会话
  *
- * 文档：docs/PERSONALIZED_RSTL.md
+ * 文档：docs/tracks/PERSONALIZED_RSTL.md
  * 算法：采集/质控 ./prstl_pipeline.js；皱纹检测 ./yolo_wrinkle_onnx.js；个性化 ./v6_rstl_refinement.js
  * 定位：非个体 RSTL 测量
  *

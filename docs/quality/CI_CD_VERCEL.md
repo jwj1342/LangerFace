@@ -44,9 +44,9 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 | Production | `master` | 合并后自动发布生产站 |
 | Preview | 任意开发分支 | 不走 Git 自动部署；需要验收时由维护者手动创建一次性 Preview |
 
-[web/vercel.json](../web/vercel.json) 已将 `git.deploymentEnabled` 设置为 `* = false` 和 `** = false`，只对白名单生产分支 `master` 开放。配置里仍保留 `github.autoJobCancelation`，用于后续维护者误开或临时打开分支部署时，取消同一 PR / 分支上的较旧构建。
+[web/vercel.json](../../web/vercel.json) 已将 `git.deploymentEnabled` 设置为 `* = false` 和 `** = false`，只对白名单生产分支 `master` 开放。配置里仍保留 `github.autoJobCancelation`，用于后续维护者误开或临时打开分支部署时，取消同一 PR / 分支上的较旧构建。
 
-此外，`ignoreCommand` 会运行 [`web/scripts/vercel-ignore-build.ts`](../web/scripts/vercel-ignore-build.ts)。它是二级保护：
+此外，`ignoreCommand` 会运行 [`web/scripts/vercel-ignore-build.ts`](../../web/scripts/vercel-ignore-build.ts)。它是二级保护：
 
 - 非 `master` 分支直接跳过 Vercel 构建，即使 Dashboard 误开了分支部署也不会继续消耗构建资源。
 - 即使当前分支允许构建，只要这次 push 相比上一次部署没有改动 Vercel Root Directory `web/`，仍会跳过实际构建。这样 docs / tools / issue 文案类改动仍会保留 GitHub Actions 质量门禁，但不会额外消耗 Vercel Preview 构建。
@@ -79,7 +79,7 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 | 固定名运行时资产 | `atlas_rstl.json`、`triangles.json`、`topology_mediapipe_468.json`、`face_landmarker.task`、`flame_basis.bin` | **不会** | `public, max-age=0, must-revalidate`（靠 ETag，未变更时是一次廉价 304） |
 
 两类文件同住 `dist/assets/`：哈希 bundle 由 Vite 产出，固定名资产由 `vite.config.ts` 的
-`copy-runtime-assets` 从 `web/assets/` 原样拷入。因此 [web/vercel.json](../web/vercel.json) 的
+`copy-runtime-assets` 从 `web/assets/` 原样拷入。因此 [web/vercel.json](../../web/vercel.json) 的
 header 规则必须**按文件形态而不是按目录**区分，两条 `source` 正则互斥。
 
 **为什么不能给固定名资产上 immutable**：`immutable` 明确告诉浏览器一年内不要回源验证，而这些文件名
@@ -105,7 +105,7 @@ v8.1.67（133 条）并已部署到生产后，测试者浏览器里仍在跑 13
 
 其余文档只引用本节，避免 Vercel 自动生成域名和人工别名在多处漂移。
 
-本仓库已有 [web/vercel.json](../web/vercel.json)，里面声明了：
+本仓库已有 [web/vercel.json](../../web/vercel.json)，里面声明了：
 - `installCommand`: `npm ci`
 - `buildCommand`: `npm run build`
 - `ignoreCommand`: `node scripts/vercel-ignore-build.ts`，作为二级保护：只允许 `master` 构建，并且仅在 `web/` 有变化时构建
@@ -138,7 +138,7 @@ React SPA 的线上入口是站点根 `/`，Vercel 会把 `/`、`/live`、`/inci
 
 遇到 Vercel rate limit / build queue 被打满时，按这个顺序处理：
 
-1. 先确认 Vercel Project 的 Git 分支部署开关与 [web/vercel.json](../web/vercel.json) 一致：`master` 为 `true`，所有 PR / feature / integration branch 都不要打开自动 Preview。
+1. 先确认 Vercel Project 的 Git 分支部署开关与 [web/vercel.json](../../web/vercel.json) 一致：`master` 为 `true`，所有 PR / feature / integration branch 都不要打开自动 Preview。
 2. 如果需要线上验收当前开发分支，由维护者用 Vercel Dashboard 或 CLI 手动创建一次 Preview，不要把该分支加入自动部署白名单。
 3. Dashboard / GitHub 仓库主页里看到的一长串旧 Deployment 是不可变历史记录 / 回滚点，不代表仍有一长串“活跃环境”。如果只想保留可见的当前开发和生产两个版本，需要在 Vercel Dashboard 里清理旧 Deployment，或者单独清理 GitHub deployment records；仓库配置只能阻止未来继续生成无关部署。
 
@@ -167,7 +167,7 @@ Required status checks 建议包含：
 
 ## 日常发布流程
 
-协作者的日常流程见 [CONTRIBUTING.md](CONTRIBUTING.md#pr--preview-工作流)。本文件只保留维护者需要的 Vercel / GitHub 设置细节。
+协作者的日常流程见 [CONTRIBUTING.md](../onboarding/CONTRIBUTING.md#pr--preview-工作流)。本文件只保留维护者需要的 Vercel / GitHub 设置细节。
 
 ## Preview 访问策略
 

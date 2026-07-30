@@ -1,6 +1,6 @@
 # 环境配置 (Environment)
 
-本文记录 LangerFace 的本地与集群开发环境。更高层的架构说明见 [ARCHITECTURE.md](ARCHITECTURE.md)，协作约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+本文记录 LangerFace 的本地与集群开发环境。更高层的架构说明见 [ARCHITECTURE.md](../architecture/ARCHITECTURE.md)，协作约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 版本要求
 
