@@ -75,6 +75,13 @@ import {
   type IncisionEdit,
 } from "./incisionEditHistory";
 import {
+  buildCandidateEditSession,
+  buildIncisionReviewRecord,
+  buildIncisionReviewReport,
+  findSensitiveStructureInspection,
+  formatRecoveredFailureSummary,
+} from "./incisionReviewRecords";
+import {
   readIncisionEditCommand,
   readIncisionLibraryCommand,
   readIncisionReviewCommand,
@@ -105,7 +112,6 @@ import type { VectorLike } from "./incisionSceneGeometry";
 import {
   assessReviewReadiness,
   buildReviewGate,
-  summarizeGuardrails,
 } from "./incisionReviewPolicy";
 import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
 import { createWorkflowWorkerClient } from "./workflowWorkerClient";
@@ -1226,22 +1232,6 @@ function renderWorkflowGate(result: DynamicRecord) {
   els.workflowGate.title = `observed_actions=${observedActions.join(", ")}`;
 }
 
-function formatRecoveredFailureSummary(audit: DynamicRecord, includeError = false): string {
-  const failures = Array.isArray(audit?.recovered_failures) ? audit.recovered_failures : [];
-  return failures
-    .map((failure: DynamicRecord) => {
-      const variant = failure.variant
-        || (failure.angle_offset_deg != null ? `${fmt(failure.angle_offset_deg)}°` : "候选变体");
-      const tool = failure.tool || "确定性工具";
-      const recovery = failure.recovery === "skipped_failed_variant_and_kept_other_candidates"
-        ? "已跳过失败变体并继续比较"
-        : failure.recovery || "已记录恢复动作";
-      const error = includeError && failure.error ? `；错误 ${String(failure.error).slice(0, 80)}` : "";
-      return `${variant}/${tool}：${recovery}${error}`;
-    })
-    .join("；");
-}
-
 function renderWorkflowComparison(result: DynamicRecord) {
   if (!els.workflowComparison) return;
   const comparison = Array.isArray(result.candidate_comparison) ? result.candidate_comparison : [];
@@ -1328,104 +1318,27 @@ function reviewGate(review: DynamicRecord, result: DynamicRecord) {
   });
 }
 
-function candidateEditSession(result: DynamicRecord = S.result) {
-  const provenance = result?.candidate?.provenance || {};
-  const history = Array.isArray(provenance.edit_history) ? provenance.edit_history : [];
-  return {
-    schema_version: "candidate-edit-session/v0.1",
-    candidate_version: Number(provenance.candidate_version || 1),
-    edit_count: history.length,
-    current_edit_id: provenance.clinician_edit?.edit_id || null,
-    undo_available: Boolean(els.undoEdit && !els.undoEdit.disabled),
-    redo_available: Boolean(els.redoEdit && !els.redoEdit.disabled),
-    source: "web/incision_workflow",
-    history: history.map((entry: DynamicRecord) => ({
-      edit_id: entry.edit_id,
-      resulting_candidate_version: entry.resulting_candidate_version,
-      angle_offset_deg: entry.angle_offset_deg,
-      length_scale: entry.length_scale,
-      width_scale: entry.width_scale,
-      tip_angle_deg: entry.tip_angle_deg,
-      shift_along_mm: entry.shift_along_mm,
-      shift_perp_mm: entry.shift_perp_mm,
-      reason: entry.reason || "",
-      interaction: entry.interaction || entry.source || "clinician_adjustment",
-    })),
-  };
-}
-
-function sensitiveStructureInspectionFor(result: DynamicRecord = S.result) {
-  if (result?.sensitive_structure_inspection) return result.sensitive_structure_inspection;
-  const trace = Array.isArray(result?.trace) ? result.trace : [];
-  for (let i = trace.length - 1; i >= 0; i -= 1) {
-    const step = trace[i];
-    if (step?.action === "inspect_sensitive_structures" && step.observation) return step.observation;
-  }
-  return null;
-}
-
 function reviewRecord(result: DynamicRecord = S.result, label = "候选") {
   const createdAt = new Date().toISOString();
   const review = currentReviewMetadata(createdAt);
-  const actor = review.reviewer || result.tumor?.author || "unknown";
   const gate = reviewGate(review, result);
-  const traceGate = workflowTraceGate(result);
-  const tumorBoundarySummary = boundarySummaryFor(result.tumor, result);
-  return {
-    schema_version: "incision-review-record/v0.4",
-    id: `candidate_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+  return buildIncisionReviewRecord({
+    result,
     label,
-    created_at: createdAt,
-    tumor: result.tumor,
-    tumor_quality: tumorQualityFor(result),
-    tumor_boundary_summary: tumorBoundarySummary,
-    head_asset: currentHeadAssetSnapshot(),
-    secondary_cues: secondaryCueReviewSummary(),
-    anatomy: result.anatomy,
-    sensitive_structure_inspection: sensitiveStructureInspectionFor(result),
-    direction: result.direction,
-    candidate: result.candidate,
-    original_candidate: result.original_candidate || result.candidate,
-    candidate_edit_session: candidateEditSession(result),
-    guardrails: result.guardrails,
-    trace: result.trace,
-    workflow_trace_gate: traceGate,
-    workflow_plan_audit: result.workflow_plan_audit || null,
-    workflow_execution_events: result.workflow_execution_events || null,
-    candidate_alternatives: result.candidate_alternatives || [],
-    candidate_comparison: result.candidate_comparison || [],
-    workflow_audit: result.workflow_audit || null,
-    summary: result.summary || null,
-    next_step: result.next_step || null,
-    privacy_audit: privacyAudit(),
-    review_status: review.status,
+    createdAt,
     review,
-    review_gate: gate,
-    guardrail_summary: summarizeGuardrails(result.guardrails),
-    audit_events: [
-      {
-        event: "candidate_saved",
-        at: createdAt,
-        actor,
-        status: review.status,
-        approval_ready: gate.approval_ready,
-        live_overlay_ready: gate.live_overlay_ready,
-        workflow_trace_gate_passed: traceGate.passed,
-        active_topology_id: S.headAsset?.topologyId || null,
-        active_topology_version: S.headAsset?.topologyVersion || null,
-      },
-      ...(review.status === "pending_clinician_confirmation"
-        ? []
-        : [{
-          event: "clinician_review_recorded",
-          at: createdAt,
-          actor,
-          status: review.status,
-          notes_present: Boolean(review.notes),
-          high_guardrail_codes: gate.high_guardrail_codes,
-        }]),
-    ],
-  };
+    reviewGate: gate,
+    tumorQuality: tumorQualityFor(result),
+    tumorBoundarySummary: boundarySummaryFor(result.tumor, result),
+    headAsset: currentHeadAssetSnapshot(),
+    secondaryCues: secondaryCueReviewSummary(),
+    candidateEditSession: buildCandidateEditSession(result, {
+      undoAvailable: Boolean(els.undoEdit && !els.undoEdit.disabled),
+      redoAvailable: Boolean(els.redoEdit && !els.redoEdit.disabled),
+    }),
+    sensitiveStructureInspection: findSensitiveStructureInspection(result),
+    privacyAudit: privacyAudit(),
+  });
 }
 
 function renderSaved() {
@@ -1754,102 +1667,8 @@ function exportReport() {
     return;
   }
   const rows = (S.saved.length ? S.saved : [reviewRecord(S.result, "当前候选")]).filter(Boolean) as DynamicRecord[];
-  const comparison = compareCandidateRecords(rows);
-  const comparisonBody = comparison.length
-    ? [
-      "## 候选工程排序",
-      "",
-      "该排序只按 guardrails、RSTL 偏角、覆盖缺口、敏感距离和几何误差比较，不是临床推荐或手术指令。",
-      "",
-      ...comparison.map((c: DynamicRecord) => `- #${c.rank} ${c.label}：${fmt(c.score, 1)} 分；${c.reasons.join("；")}`),
-      "",
-    ].join("\n")
-    : "";
-  const body = rows.map((r, idx) => {
-    const metrics = r.candidate.metrics || {};
-    const boundary = r.tumor_boundary_summary || {};
-    const warningLines = (r.guardrails.warnings || [])
-      .map((w: DynamicRecord) => `  - ${w.code} [${w.severity}] ${w.message || ""}`)
-      .join("\n") || "  - 无";
-    const overrideLines = (r.guardrails.suggested_overrides || [])
-      .map((o: DynamicRecord) => `  - ${o.kind}: ${o.reason || ""}`)
-      .join("\n") || "  - 无";
-    const recoveredFailureDetails = formatRecoveredFailureSummary(r.workflow_audit, true);
-    return [
-    `## 候选 ${idx + 1}: ${r.label}`,
-    `- 类型：${r.candidate.type === "linear" ? "皮下线性切口" : "皮表梭形切口"}`,
-    `- 候选版本：v${r.candidate.provenance?.candidate_version || 1}；编辑记录 ${(r.candidate.provenance?.edit_history || []).length} 条`,
-    r.head_asset
-      ? `- 头模资产：${r.head_asset.label}；topology=${r.head_asset.topologyId}@${r.head_asset.topologyVersion}；顶点 ${r.head_asset.vertexCount} / 三角面 ${r.head_asset.triangleCount}；状态 ${r.head_asset.statusLabel}`
-      : null,
-    (r.head_asset?.warnings || []).length
-      ? `- 头模资产提示：${r.head_asset.warnings.join("；")}`
-      : null,
-    r.candidate_edit_session?.edit_count
-      ? `- 编辑时间线：${r.candidate_edit_session.edit_count} 步；当前 edit_id ${r.candidate_edit_session.current_edit_id || "—"}`
-      : null,
-    `- 肿物：${r.tumor.kind}，直径 ${fmt(r.tumor.diameter_mm)} mm，切缘 ${fmt(r.tumor.margin_mm)} mm`,
-    (r.tumor_quality?.warnings || []).length
-      ? `- 肿物输入提示：${r.tumor_quality.warnings.map((w: DynamicRecord) => `${w.code}(${w.severity})`).join("；")}`
-      : null,
-    r.secondary_cues?.present
-      ? `- 辅助线索：${r.secondary_cues.confidence_label}；人工确认 ${r.secondary_cues.manual_confirmed ? "是" : "否"}；不参与几何 ${r.secondary_cues.used_for_geometry === false ? "是" : "否"}`
-      : null,
-    boundary.boundary_used
-      ? `- 肿物边界摘要：点数 ${boundary.point_count ?? "—"}；长轴 ${fmt(boundary.axis_diameter_mm)} mm；短轴 ${fmt(boundary.perp_diameter_mm)} mm；面积 ${fmt(boundary.area_mm2)} mm²；自交 ${boundary.self_intersection ? "是" : "否"}；中心偏移 ${fmt(boundary.center_shift_mm)} mm`
-      : null,
-    `- 面部分区：${r.anatomy.region} / ${r.anatomy.subunit}`,
-    (r.anatomy.confidence_reasons || []).length
-      ? `- 分区置信原因：${r.anatomy.confidence_reasons.join(", ")}`
-      : null,
-    `- RSTL 来源：${directionSourceLabel(r.direction.source)}；support ${r.direction.support_count ?? 0}；轴向离散 ${fmt(r.direction.angular_spread_deg)}°`,
-    `- RSTL 方向置信度：${Math.round((r.direction.confidence || 0) * 100)}%`,
-    (r.direction.confidence_reasons || []).length
-      ? `- RSTL 低置信原因：${r.direction.confidence_reasons.join(", ")}`
-      : null,
-    r.sensitive_structure_inspection
-      ? `- 敏感结构检查：中心距 ${fmt(r.sensitive_structure_inspection.center_free_margin_distance_mm)} mm / 阈值 ${fmt(r.sensitive_structure_inspection.center_free_margin_threshold_mm)} mm；候选几何距 ${fmt(r.sensitive_structure_inspection.candidate_free_margin_distance_mm)} mm / 阈值 ${fmt(r.sensitive_structure_inspection.candidate_free_margin_threshold_mm)} mm；warning ${r.sensitive_structure_inspection.warning_count || 0} 个；保护方向 ${r.sensitive_structure_inspection.protective_direction?.direction_hint || "无"}`
-      : null,
-    `- 工作流工具门控：passed=${Boolean(r.workflow_trace_gate?.passed)}；order_ok=${Boolean(r.workflow_trace_gate?.order_ok)}；missing=${(r.workflow_trace_gate?.missing_actions || []).map((item: DynamicRecord) => item.label || item.key).join(", ") || "无"}`,
-    r.workflow_plan_audit
-      ? `- 工作流计划：passed=${Boolean(r.workflow_plan_audit.passed)}；步骤 ${r.workflow_plan_audit.completed_step_count || 0}/${r.workflow_plan_audit.step_count || 0}；失败 ${r.workflow_plan_audit.failed_step_count || 0}`
-      : null,
-    r.workflow_execution_events
-      ? `- 工作流执行事件：passed=${Boolean(r.workflow_execution_events.passed)}；事件 ${r.workflow_execution_events.event_count || 0} 条；工具事件 ${r.workflow_execution_events.tool_event_count || 0} 条；重试 ${r.workflow_execution_events.retry_event_count || 0}；恢复 ${r.workflow_execution_events.recovery_event_count || 0}`
-      : null,
-    r.workflow_audit
-      ? `- 浏览器 workflow 审计：候选 ${r.workflow_audit.candidate_count || 0} 个；比较 ${r.workflow_audit.comparison_ready ? "已生成" : "未生成"}；恢复失败 ${r.workflow_audit.tool_failure_count || 0} 个`
-      : null,
-    recoveredFailureDetails ? `- 工作流恢复详情：${recoveredFailureDetails}` : null,
-    (r.candidate_comparison || []).length
-      ? `- 浏览器候选比较：${r.candidate_comparison.map((c: DynamicRecord) => `#${c.rank} ${c.label || c.id} ${fmt(c.score, 1)}分`).join("；")}（不是临床推荐或手术指令）`
-      : null,
-    `- 候选长度：${fmt(r.candidate.length_mm)} mm`,
-    r.candidate.type === "fusiform"
-      ? `- 梭形宽度 / 长宽比：${fmt(r.candidate.width_mm)} mm / ${fmt(r.candidate.metrics?.length_to_width_ratio, 2)}:1`
-      : null,
-    r.candidate.type === "fusiform"
-      ? `- 尖端角：${fmt(r.candidate.tip_angle_deg)}°；目标 ${fmt(r.candidate.metrics?.tip_angle_target_deg)}°；误差 ${fmt(r.candidate.metrics?.tip_angle_error_deg)}°`
-      : null,
-    r.candidate.type === "fusiform"
-      ? `- 边界质量：点数 ${metrics.boundary_point_count ?? "—"}；面积 ${fmt(metrics.boundary_area_mm2)} mm²；自交 ${metrics.boundary_self_intersection ? "是" : "否"}；中心偏移 ${fmt(metrics.boundary_center_shift_mm)} mm`
-      : null,
-    r.candidate.type === "fusiform"
-      ? `- 梭形包络：outline 面积 ${fmt(metrics.outline_area_mm2)} mm²；单峰收窄 ${metrics.outline_half_width_monotone === false ? "否" : "是"}；对称误差 ${fmt(metrics.outline_symmetry_max_error_mm)} mm；自交 ${metrics.outline_self_intersection ? "是" : "否"}；边界余量 ${fmt(metrics.boundary_envelope_min_margin_mm)} mm；出界点 ${metrics.boundary_envelope_outside_count ?? 0}`
-      : null,
-    metrics.sensitive_free_margin_min_distance_mm != null
-      ? `- 最近敏感游离缘：${metrics.sensitive_free_margin_nearest || "—"}，${fmt(metrics.sensitive_free_margin_min_distance_mm)} mm`
-      : null,
-    `- Guardrails：${r.guardrails.passed ? "通过" : "需医生复核"}`,
-    `- 警告：\n${warningLines}`,
-    `- 建议覆盖项：\n${overrideLines}`,
-    `- 审阅门槛：approval_ready=${Boolean(r.review_gate?.approval_ready)}；live_overlay_ready=${Boolean(r.review_gate?.live_overlay_ready)}；workflow_trace_gate=${Boolean(r.review_gate?.workflow_trace_gate_passed)}；high=${(r.review_gate?.high_guardrail_codes || []).join(", ") || "无"}`,
-    `- 审阅状态：${reviewStatusLabel(r.review_status)}；审阅人：${r.review?.reviewer || "未填写"}`,
-    `- 审阅备注：${r.review?.notes || "无"}`,
-    `- 审阅边界：研究候选记录，非手术指令。`,
-  ].filter(Boolean).join("\n");
-  }).join("\n\n");
-  downloadText(`incision_report_${Date.now()}.md`, `# 切口候选审阅草案\n\n${comparisonBody}${body}\n`, "text/markdown");
+  const artifact = buildIncisionReviewReport(rows);
+  downloadText(artifact.filename, artifact.text, artifact.mimeType);
 }
 
 function exportScreenshot() {

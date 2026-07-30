@@ -1,4 +1,4 @@
-import { workflowTraceGate } from "./incisionWorkflowTools";
+import { workflowTraceGate } from "./incisionWorkflowTools.ts";
 
 type AnyRecord = Record<string, any>;
 
