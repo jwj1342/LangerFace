@@ -3,6 +3,7 @@ import os
 
 import numpy as np
 import pytest
+from tools.annotate_atlas import DraftLines, next_annotated_name
 from tools.annotate_atlas import _save as save_annotation_draft
 
 from langerface.config import ATLAS_PATHS, TOPOLOGY_ID, TOPOLOGY_VERSION
@@ -163,3 +164,98 @@ def test_annotation_save_assigns_name_and_region_to_new_line(canonical, tmp_path
     assert saved.validated is False
     assert saved.lines[0].name == "annotated_0000"
     assert saved.lines[0].region == "cheek"
+
+
+def _loaded_entry(name, region, surface_points, proj):
+    return {
+        "name": name,
+        "region": region,
+        "points": proj[[0, 10, 50]],
+        "surface_points": np.asarray(surface_points, dtype=np.float64),
+    }
+
+
+# RongNianXin 在 #140 复核时要求的四个场景：d 键绝不能删掉已载入的官方曲线。
+def test_pressing_delete_without_new_lines_leaves_loaded_lines_untouched(canonical):
+    proj = canonical.project_front()
+    loaded = [_loaded_entry("official-0", "forehead", [[0, 0.2, 0.3]], proj)]
+    draft = DraftLines(loaded)
+
+    assert draft.undo_last_drawn() is None
+    assert draft.undo_last_drawn() is None
+    assert [line["name"] for line in draft.all_lines()] == ["official-0"]
+
+
+def test_delete_removes_only_the_line_drawn_in_this_session(canonical):
+    proj = canonical.project_front()
+    draft = DraftLines([_loaded_entry("official-0", "forehead", [[0, 0.2, 0.3]], proj)])
+    drawn = draft.add("cheek", proj[[0, 10, 50]])
+
+    assert draft.undo_last_drawn() is drawn
+    assert draft.drawn == []
+    assert [line["name"] for line in draft.all_lines()] == ["official-0"]
+
+
+def test_delete_stops_at_loaded_lines_once_drawn_lines_are_gone(canonical):
+    proj = canonical.project_front()
+    loaded = [
+        _loaded_entry("official-0", "forehead", [[0, 0.2, 0.3]], proj),
+        _loaded_entry("official-1", "cheek", [[1, 0.3, 0.2]], proj),
+    ]
+    draft = DraftLines(loaded)
+    draft.add("cheek", proj[[0, 10, 50]])
+    draft.add("cheek", proj[[0, 10, 50]])
+
+    assert draft.undo_last_drawn() is not None
+    assert draft.undo_last_drawn() is not None
+    for _ in range(3):
+        assert draft.undo_last_drawn() is None
+    assert [line["name"] for line in draft.all_lines()] == ["official-0", "official-1"]
+
+
+def test_saving_after_deleting_new_lines_preserves_loaded_geometry(canonical, tmp_path):
+    proj = canonical.project_front()
+    surface = np.array([[0, 0.2, 0.3], [1, 0.3, 0.2], [2, 0.4, 0.1]], dtype=np.float64)
+    draft = DraftLines([_loaded_entry("official-0", "forehead", surface, proj)])
+    draft.add("cheek", proj[[0, 10, 50]])
+    draft.undo_last_drawn()
+
+    output = tmp_path / "atlas.json"
+    save_annotation_draft(canonical, proj, draft.all_lines(), "rstl", str(output))
+
+    saved = Atlas.load(str(output))
+    assert saved.validated is False
+    assert len(saved.lines) == 1
+    assert saved.lines[0].name == "official-0"
+    assert saved.lines[0].region == "forehead"
+    assert np.array_equal(saved.lines[0].points, surface)
+
+
+# 命名不能用 len(lines) 当序号：当既有编号恰好等于行数时会直接撞名，而
+# atlas_clinical_review.py 要求线名唯一，到那一步才报错排查成本很高。
+def test_new_line_name_does_not_collide_when_index_equals_line_count():
+    # 1 条载入线、编号也是 1 —— len() 方案会再生成一次 annotated_0001
+    draft = DraftLines([{"name": "annotated_0001"}])
+    assert draft.add("cheek", None)["name"] == "annotated_0002"
+    assert len({line["name"] for line in draft.all_lines()}) == 2
+
+
+def test_new_line_name_continues_past_the_highest_existing_index():
+    draft = DraftLines([{"name": "annotated_0007"}, {"name": "forehead-official"}])
+    assert draft.add("cheek", None)["name"] == "annotated_0008"
+    assert draft.add("cheek", None)["name"] == "annotated_0009"
+
+
+def test_names_stay_unique_across_draw_delete_draw_sequences():
+    draft = DraftLines([{"name": "annotated_0002"}, {"name": "cheek_long_arc_v24"}])
+    seen = {line["name"] for line in draft.loaded}
+    for _ in range(4):
+        seen.add(draft.add("cheek", None)["name"])
+        draft.undo_last_drawn()
+        seen.add(draft.add("cheek", None)["name"])
+    names = [line["name"] for line in draft.all_lines()]
+    assert len(set(names)) == len(names), names
+
+
+def test_next_annotated_name_ignores_unrelated_names():
+    assert next_annotated_name([{"name": "cheek_long_arc_v24"}, {"name": ""}]) == "annotated_0000"

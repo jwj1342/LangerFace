@@ -1,7 +1,7 @@
 # 跨语言一致性（Python ⇄ Web TypeScript ⇄ 金标）
 
 本文定义线条几何在 **Python、Web TypeScript、纯 JS 兼容运行时**三套实现间的**逐点等价不变式**、活体对拍机制，
-以及金标的一键重生成流程，确保单边改动不会静默漂移过 CI。配合 [ARCHITECTURE.md](ARCHITECTURE.md)（几何算法）阅读。
+以及金标的一键重生成流程，确保单边改动不会静默漂移过 CI。配合 [ARCHITECTURE.md](../architecture/ARCHITECTURE.md)（几何算法）阅读。
 
 ## 不变式
 

@@ -10,7 +10,7 @@
   左键单击      在当前曲线上加点
   n             结束当前曲线、开始新曲线
   u             撤销当前曲线最后一个点
-  d             删除最近完成的一条曲线
+  d             撤销本次会话最近新画的一条曲线（已载入的曲线不会被删除）
   w             写入草案（始终保持 validated=false）
   q / 关闭窗口  退出（不自动保存）
 
@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import os
+import re
 from datetime import datetime
 
 import numpy as np
@@ -64,8 +65,10 @@ def main() -> int:
     ax.set_aspect("equal")
     ax.invert_yaxis()  # 图像 y 向下
 
-    completed: list[dict] = []
-    completed_artists = []
+    # 已载入的曲线与本次会话新画的曲线分开保存：`d` 只允许撤销本次新画的线，
+    # 否则一次误按就会删掉一条经临床复核的官方曲线，并被随后的 `w` 持久化。
+    draft = DraftLines()
+    drawn_artists = []
 
     # 载入已有曲线；再次保存时保留原名称、分区和表面坐标。
     if existing:
@@ -77,7 +80,7 @@ def main() -> int:
                 + b[:, 1:2] * proj[tv[:, 1]]
                 + b[:, 2:3] * proj[tv[:, 2]]
             )
-            completed.append(
+            draft.loaded.append(
                 {
                     "name": ln.name,
                     "region": ln.region,
@@ -85,8 +88,7 @@ def main() -> int:
                     "surface_points": ln.points.copy(),
                 }
             )
-            artist, = ax.plot(xy[:, 0], xy[:, 1], color="tab:blue", lw=1, alpha=0.5)
-            completed_artists.append(artist)
+            ax.plot(xy[:, 0], xy[:, 1], color="tab:blue", lw=1, alpha=0.5)
 
     current: list[list[float]] = []
     cur_line, = ax.plot([], [], "o-", color="tab:red", ms=3, lw=1.2)
@@ -105,25 +107,22 @@ def main() -> int:
         current.append([event.xdata, event.ydata])
         redraw()
 
+    def commit_current():
+        """把当前正在画的折线收尾成一条新曲线。`n` 与 `w` 共用这一条命名路径。"""
+        nonlocal current
+        if len(current) < 2:
+            return False
+        entry = draft.add(args.region, np.asarray(current))
+        points = entry["points"]
+        artist, = ax.plot(points[:, 0], points[:, 1], color="tab:green", lw=1.2)
+        drawn_artists.append(artist)
+        current = []
+        return True
+
     def on_key(event):
         nonlocal current
         if event.key == "n":
-            if len(current) >= 2:
-                points = np.asarray(current)
-                completed.append(
-                    {
-                        "name": f"annotated_{len(completed):04d}",
-                        "region": args.region,
-                        "points": points,
-                    }
-                )
-                artist, = ax.plot(
-                    points[:, 0],
-                    points[:, 1],
-                    color="tab:green",
-                    lw=1.2,
-                )
-                completed_artists.append(artist)
+            commit_current()
             current = []
             redraw()
         elif event.key == "u":
@@ -131,32 +130,18 @@ def main() -> int:
                 current.pop()
                 redraw()
         elif event.key == "d":
-            if completed:
-                completed.pop()
-                completed_artists.pop().remove()
+            # 只撤销本次会话新画的线；已载入的官方曲线不可通过本键删除。
+            if draft.undo_last_drawn() is not None:
+                drawn_artists.pop().remove()
                 fig.canvas.draw_idle()
+            elif draft.loaded:
+                print("[skip] 已载入的曲线不能用 d 删除；本次会话没有可撤销的新线。")
         elif event.key == "w":
-            if len(current) >= 2:
-                points = np.asarray(current)
-                completed.append(
-                    {
-                        "name": f"annotated_{len(completed):04d}",
-                        "region": args.region,
-                        "points": points,
-                    }
-                )
-                artist, = ax.plot(
-                    points[:, 0],
-                    points[:, 1],
-                    color="tab:green",
-                    lw=1.2,
-                )
-                completed_artists.append(artist)
-                current = []
+            if commit_current():
                 redraw()
-            _save(canonical, proj, completed, args.system, path, existing)
+            _save(canonical, proj, draft.all_lines(), args.system, path, existing)
             print(
-                f"[ok] 已保存 {len(completed)} 条草案曲线 -> {path}；"
+                f"[ok] 已保存 {len(draft.loaded)} 条载入曲线 + {len(draft.drawn)} 条新曲线 -> {path}；"
                 "validated=false，仍需逐线临床审阅"
             )
         elif event.key == "q":
@@ -166,6 +151,54 @@ def main() -> int:
     fig.canvas.mpl_connect("key_press_event", on_key)
     plt.show()
     return 0
+
+
+_ANNOTATED_NAME = re.compile(r"^annotated_(\d+)$")
+
+
+class DraftLines:
+    """一次标注会话的曲线状态。
+
+    已载入的曲线（``loaded``）与本次新画的曲线（``drawn``）分开保存，因为它们的
+    可删除性不同：``d`` 只能撤销本次新画的线。合并前两者放在同一个列表里，一次误按
+    ``d`` 就会删掉一条经临床复核的官方曲线，并被随后的 ``w`` 写进文件。
+    """
+
+    def __init__(self, loaded=None):
+        self.loaded: list[dict] = list(loaded or [])
+        self.drawn: list[dict] = []
+
+    def add(self, region: str, points) -> dict:
+        entry = {
+            "name": next_annotated_name(self.loaded, self.drawn),
+            "region": region,
+            "points": points,
+        }
+        self.drawn.append(entry)
+        return entry
+
+    def undo_last_drawn(self):
+        """撤销最近一条新画的线。没有新线时返回 ``None``，且绝不触及 ``loaded``。"""
+        return self.drawn.pop() if self.drawn else None
+
+    def all_lines(self) -> list[dict]:
+        return self.loaded + self.drawn
+
+
+def next_annotated_name(*line_groups) -> str:
+    """生成不与任何既有曲线重名的 ``annotated_NNNN``。
+
+    不能用 ``len(lines)`` 当序号：删除再新增、或载入的图谱里本来就含
+    ``annotated_*`` 名字时会撞名，而 ``atlas_clinical_review.py`` 要求线名唯一，
+    到那一步才报错排查成本很高。
+    """
+    highest = -1
+    for group in line_groups:
+        for line in group:
+            match = _ANNOTATED_NAME.match(str(line.get("name", "")))
+            if match:
+                highest = max(highest, int(match.group(1)))
+    return f"annotated_{highest + 1:04d}"
 
 
 def _save(canonical, proj, completed, system, path, existing=None):

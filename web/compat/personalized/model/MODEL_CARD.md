@@ -1,7 +1,7 @@
 # Model card · wrinkle-yolov8s-seg-640
 
 本文描述 `/personalized` 个性化 RSTL 流程中使用的浏览器端皱纹分割模型。许可与来源链条见同目录
-[NOTICE.md](NOTICE.md)（**许可未确认**）；算法上下文见 [`docs/PERSONALIZED_RSTL.md`](../../../../docs/PERSONALIZED_RSTL.md)。
+[NOTICE.md](NOTICE.md)（**许可未确认**）；算法上下文见 [`docs/tracks/PERSONALIZED_RSTL.md`](../../../../docs/tracks/PERSONALIZED_RSTL.md)。
 
 ## 1. 模型概况
 
@@ -35,7 +35,7 @@
 0.07 是为**高召回**选的工程阈值：宁可多召回再由下游几何约束筛掉，也不漏掉真实皱纹证据。
 代价是误检偏多，因此下游必须依赖严格并集 + 皮肤域硬约束 + 禁区掩膜 + 置信度加权来抑制误检，
 单看本模型输出的 precision 不具备临床意义。阈值与融合规则的完整说明见
-[`docs/PERSONALIZED_RSTL.md`](../../../../docs/PERSONALIZED_RSTL.md)。
+[`docs/tracks/PERSONALIZED_RSTL.md`](../../../../docs/tracks/PERSONALIZED_RSTL.md)。
 
 ## 5. 已知局限
 

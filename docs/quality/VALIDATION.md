@@ -77,7 +77,7 @@ Stage 2 涉及肿物模拟和候选切口，只能在医生审阅路径中评估
 | 照片 / 视频 / 实时叠加 | preview 诊断导出 | `window.exportLangerfaceDiagnostics()` 的 `sections.incision_overlay_runtime` 保存 pose gate、local region gate、最近一帧 registration 与最近 8 帧滚动 stability 摘要；只含 QA 数值、阈值和失败原因，不含照片/视频帧、canvas 像素或 landmark 坐标 |
 | 照片 / 视频 / 实时叠加 | #19 工程验收门禁 | `tools/build_incision_overlay_acceptance_evidence.ts` 把脱敏 photo/video/camera diagnostics、视频复放 QA、webm 导出契约和资源 QA 打包为标准 evidence；`tools/audit_incision_overlay_acceptance.ts` 检查照片投射、视频复放/导出、摄像头稳定、浏览器 runtime error、资源 404 和 evidence 脱敏是否同时满足 |
 
-当前公开仓库只提供合成样例原型，见 [WRINKLE_LESION_CUES.md](WRINKLE_LESION_CUES.md) 和
+当前公开仓库只提供合成样例原型，见 [WRINKLE_LESION_CUES.md](../clinical/WRINKLE_LESION_CUES.md) 和
 `tools/prototype_wrinkle_lesion_cues.py`。该脚本输出 `metrics.json`，字段包括：
 
 ```json

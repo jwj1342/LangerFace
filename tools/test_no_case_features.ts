@@ -30,11 +30,33 @@ for (const removedPath of [
   "workers/api/package.json",
   "workers/api/src/index.ts",
   "workers/api/migrations/0001_initial.sql",
-  "docs/CLINICAL_CASE_WORKFLOW_UI.md",
-  "docs/BACKEND_DATA_ARCHITECTURE.md",
-  "docs/CLOUDFLARE_BACKEND_ROLLOUT.md",
 ]) {
   assert.ok(!fs.existsSync(path.join(repositoryRoot, removedPath)), `case feature should be removed: ${removedPath}`);
+}
+
+// docs/ 现在按语义分了子目录，所以病例类文档要按 basename 在整棵 docs 树里找，
+// 否则换一个子目录就能绕过本守卫。
+{
+  const forbiddenDocNames = new Set([
+    "CLINICAL_CASE_WORKFLOW_UI.md",
+    "BACKEND_DATA_ARCHITECTURE.md",
+    "CLOUDFLARE_BACKEND_ROLLOUT.md",
+  ]);
+  const docsRoot = path.join(repositoryRoot, "docs");
+  const stack = [docsRoot];
+  while (stack.length) {
+    const dir = stack.pop();
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) stack.push(full);
+      else {
+        assert.ok(
+          !forbiddenDocNames.has(entry.name),
+          `case workflow doc should stay removed anywhere under docs/: ${path.relative(repositoryRoot, full)}`,
+        );
+      }
+    }
+  }
 }
 
 const app = read("web/src/App.tsx");
@@ -44,7 +66,7 @@ const currentRefine = read("web/current/refine2d.js");
 const currentHtml = read("web/current/index.html");
 const packageJson = read("web/package.json");
 const ci = read(".github/workflows/ci.yml");
-const deploymentDoc = read("docs/CI_CD_VERCEL.md");
+const deploymentDoc = read("docs/quality/CI_CD_VERCEL.md");
 const frontendAndCi = [
   readSourceTree("web/current"),
   readSourceTree("web/compat/personalized"),
