@@ -1,7 +1,7 @@
 # 技术架构与复现细节
 
 本文面向想**深入理解或从零复现**本项目的人，覆盖每个模块的职责、关键算法、坐标系约定、
-数据格式、网页客户端结构与验证基准。配合 [README.md](../README.md)（总览/使用，含医学声明与已知局限）阅读。
+数据格式、网页客户端结构与验证基准。配合 [README.md](../../README.md)（总览/使用，含医学声明与已知局限）阅读。
 
 > 维护约定：代码变更必须同步更新本文与 README。
 
@@ -21,7 +21,7 @@
 - **纯 JS 兼容运行时**：`web/current/`（`/current/` 实时页）、`web/compat/personalized/`（`/personalized` 个性化流程）与
   `web/compat/shared/`（两者共用的几何 / 常量 / 数据源）。它们**不进 TypeScript 类型检查**，由
   `tools/test_web_architecture.ts` 的**冻结清单**限定范围（owner #95，含退出条件），新增文件或清单腐烂都会让测试失败；
-  其相对 import 也在该测试里解析。设计说明见 [PERSONALIZED_RSTL.md](PERSONALIZED_RSTL.md)。
+  其相对 import 也在该测试里解析。设计说明见 [PERSONALIZED_RSTL.md](../tracks/PERSONALIZED_RSTL.md)。
 
 > 关键不变式：`web/src/services/geometry*.ts` 的映射/遮挡/平滑必须与 Python 端**逐点一致**，由
 > `tools/test_web_mapping.ts` 持续对拍保证（误差 < 1e-2 px、可见性 0 不一致）。
@@ -35,7 +35,7 @@
   - 像素化：`px = x·W, py = y·H, pz = z·W`（z 乘宽，保持与 x 同尺度，供 3D 法向计算）。
 - **标准脸模型** `canonical_face_model.obj`（MediaPipe 提供）：468 顶点（厘米，x 右 / y 上 / z 朝观察者）、
   **898 个三角面**、UV。顶点顺序 == 关键点索引 0..467，故 obj 的三角面可直接用于检测到的关键点。
-  解析见 [`src/langerface/geometry/canonical.py`](../src/langerface/geometry/canonical.py)。
+  解析见 [`src/langerface/geometry/canonical.py`](../../src/langerface/geometry/canonical.py)。
 
 ---
 
@@ -47,16 +47,16 @@
 P = u·V0 + v·V1 + w·V2
 ```
 
-- 实现：[`src/langerface/lines/mapping.py`](../src/langerface/lines/mapping.py) 与 `web/src/services/geometryAtlas.ts: mapAtlas`。
+- 实现：[`src/langerface/lines/mapping.py`](../../src/langerface/lines/mapping.py) 与 `web/src/services/geometryAtlas.ts: mapAtlas`。
 - 性质：**对仿射变换不变**——人脸做任意仿射形变，线条随之等价形变。由 `tests/test_mapping.py` 证明。
 - 这等价于 AR"脸绘"的纹理贴合：线条天生贴在皮肤上、随姿态/表情/身份变化。
 
 ### 3.1 时间平滑（One-Euro）
-[`src/langerface/detection/smoothing.py`](../src/langerface/detection/smoothing.py) / `web/src/services/geometrySmoothing.ts: OneEuro`。逐关键点逐坐标自适应低通：
+[`src/langerface/detection/smoothing.py`](../../src/langerface/detection/smoothing.py) / `web/src/services/geometrySmoothing.ts: OneEuro`。逐关键点逐坐标自适应低通：
 低速重平滑（去抖），高速低滞后（跟手）。参数 `min_cutoff / beta / dcutoff`；网页"平滑"滑杆映射到 `min_cutoff/beta`。
 
 ### 3.2 背面剔除（自遮挡）
-[`src/langerface/rendering/occlusion.py`](../src/langerface/rendering/occlusion.py) / `web/src/services/geometryAtlas.ts: visibleTriangles`。
+[`src/langerface/rendering/occlusion.py`](../../src/langerface/rendering/occlusion.py) / `web/src/services/geometryAtlas.ts: visibleTriangles`。
 对每个三角面用检测到的 3D 顶点求法向，取 `nz`；**用鼻尖(索引1)所在三角面自标定"朝前"的符号**
 （避免依赖缠绕方向/手性），`sign·nz ≥ 阈值` 即可见。转头时背侧线条隐藏。
 
@@ -67,7 +67,7 @@ P = u·V0 + v·V1 + w·V2
 - 由 `tools/test_occlusion.ts` 验证（缝隙点不被挡，旧凸包会误挡）。
 
 ### 3.4 渲染
-`web/src/services/render2d.ts: draw` / [`src/langerface/rendering/overlay.py`](../src/langerface/rendering/overlay.py)：抗锯齿折线，被遮挡点处**断开**子段；
+`web/src/services/render2d.ts: draw` / [`src/langerface/rendering/overlay.py`](../../src/langerface/rendering/overlay.py)：抗锯齿折线，被遮挡点处**断开**子段；
 按面部上/中/下三段分色（额=琥珀、中=蓝、下=绿）；alpha 由"透明度"控制 + 丢脸淡入淡出。
 
 ### 3.5 关键区域放大窗
@@ -81,14 +81,14 @@ P = u·V0 + v·V1 + w·V2
 > PR #108 关闭的是**本节描述的这条实时 3D 路线**的用户入口：实时页的「3D 面部重建」下拉项、
 > FLAME 实时孪生、以及三维资产预览页（`/three-preview`，已在 PR #110 删除）。这些 runtime 代码仍保留在
 > `web/src/services/mode3d.ts` / `projection3d.ts` / `three3d.ts`，但没有界面能进入。
-> 去留取决于 #61 与 #40，见 [FLAME_3D_TRACK.md](FLAME_3D_TRACK.md)。
+> 去留取决于 #61 与 #40，见 [FLAME_3D_TRACK.md](../tracks/FLAME_3D_TRACK.md)。
 >
 > **仍保留且可从界面进入的 3D 功能**：标准图谱生产 / 复核用的 3D 标注工具 `/annotate`
 > （路径：首页「图谱库管理」→ `/settings/atlas` → 打开图谱标注工具；`/app/annotate` 为兼容地址），
 > 见 §12；以及 `/surgery` 的 R3F 闭合演示。两者都不属于本节的实时重建路线。
 
 ### 4.1 重建个性化 3D 人头
-离线：[`tools/reconstruct_3d.py`](../tools/reconstruct_3d.py)；在线：`web/src/services/mode3d.ts: startScan/finishScan`。
+离线：[`tools/reconstruct_3d.py`](../../tools/reconstruct_3d.py)；在线：`web/src/services/mode3d.ts: startScan/finishScan`。
 - 每帧取 478→前 468 关键点；用 **Umeyama 相似变换**（scale+rot+trans）把该帧网格的**刚性锚点**
   （眼角、鼻梁、轮廓极值等 16 点 `RIGID3D`）对齐到统一参考系（标准脸翻到关键点手性）。
 - 对齐后的网格**逐顶点取中位数** → 稳定的个性化中性脸（中位数对表情/抖动/遮挡鲁棒）。
@@ -97,7 +97,7 @@ P = u·V0 + v·V1 + w·V2
   由 `tools/test_umeyama.ts` 验证（恢复已知变换误差 ~1e-13）。
 
 ### 4.2 把线贴到 3D 头并查看
-[`web/src/services/three3d.ts`](../web/src/services/three3d.ts)（Three.js 0.184，由 Vite 打包，按需动态加载）：
+[`web/src/services/three3d.ts`](../../web/src/services/three3d.ts)（Three.js 0.184，由 Vite 打包，按需动态加载）：
 - 头网格 = 重建顶点 + 898 三角面，皮肤材质 + 光照。
 - 线条 = 图谱重心坐标 → 重建顶点上的 3D 点，**沿插值法向微抬**避免 z-fighting，按高度分色。
 - `depthTest` + 头网格深度 → 旋转时背面线条被头自动遮挡。鼠标拖拽旋转。
@@ -127,11 +127,11 @@ P = u·V0 + v·V1 + w·V2
   {"system":"rstl","version":"0.2","provenance":"...","validated":false,
    "lines":[{"name":"f0","region":"rstl","points":[[tri,u,v], ...]}, ...]}
   ```
-- 方向场流线生成 [`tools/build_field_atlas.py`](../tools/build_field_atlas.py)：
+- 方向场流线生成 [`tools/build_field_atlas.py`](../../tools/build_field_atlas.py)：
   1. 在归一化人脸框内定义朝向场 θ(x,y)：用 `(cos2θ,sin2θ)` 加权平均融合各区走向（前额横/鼻竖/眼周同心/口周放射/颊斜）。
   2. Jobard–Lefèvre 等间距流线追踪（`d_sep` 控密度，越小越密；脚本默认 **0.030**）。
   > ⚠️ 该脚本一次写出 RSTL 与 Langer 两份图谱，会**覆盖** `assets/atlas_rstl.json` 里的正式 v8.1.67 图谱。
-  > 正式 RSTL 图谱由 [`tools/build_field_atlas_standard_v1.py`](../tools/build_field_atlas_standard_v1.py)
+  > 正式 RSTL 图谱由 [`tools/build_field_atlas_standard_v1.py`](../../tools/build_field_atlas_standard_v1.py)
   > 从 `assets/rstl_standard_reference_v8_1_67.json` 生成（两个路径参数都要显式传）。
   3. 椭圆掩膜裁剪在脸内、挖去眼/口；每点投影到最近三角面 → `(tri,u,v)`。
 - 旧的稀疏示意版见 `tools/build_initial_atlas.py`（保留备用）。
@@ -183,13 +183,13 @@ P = u·V0 + v·V1 + w·V2
 - 首次加载从 CDN 拉取 MediaPipe wasm（数秒）；之后浏览器缓存。
 
 ### 部署（Vercel，纯静态）
-- Vercel 使用 [`web/vercel.json`](../web/vercel.json) 运行 `npm run build`，输出目录为 `dist/`。
-- [`web/vercel.json`](../web/vercel.json)：`/app/*` 回退到 React SPA，`/assets/*` 保留为站点根运行时资产路径并设置缓存头。
+- Vercel 使用 [`web/vercel.json`](../../web/vercel.json) 运行 `npm run build`，输出目录为 `dist/`。
+- [`web/vercel.json`](../../web/vercel.json)：`/app/*` 回退到 React SPA，`/assets/*` 保留为站点根运行时资产路径并设置缓存头。
   排查 `Unexpected token '<'` / `<!DOCTYPE` JSON 解析错误时，先看 Network 面板失败 URL 是否误落到 `/app/assets/...`。
-- [`web/.vercelignore`](../web/.vercelignore)：排除本地测试/构建缓存。
+- [`web/.vercelignore`](../../web/.vercelignore)：排除本地测试/构建缓存。
 - Vercel 自动 HTTPS → 线上摄像头（getUserMedia，安全上下文）可用。
-- 线上：见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#production-url) 中的 Production URL。
-- 推荐使用 Vercel Git 集成自动部署，GitHub Actions 负责质量门禁；Vercel Project 的 Root Directory 设为 `web`。操作手册见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md)。
+- 线上：见 [CI/CD 与 Vercel 部署指南](../quality/CI_CD_VERCEL.md#production-url) 中的 Production URL。
+- 推荐使用 Vercel Git 集成自动部署，GitHub Actions 负责质量门禁；Vercel Project 的 Root Directory 设为 `web`。操作手册见 [CI/CD 与 Vercel 部署指南](../quality/CI_CD_VERCEL.md)。
 - 更新：改 `web/` 后（动了几何/图谱/3D 资产先 `export_web_assets.py`）发 PR；CI 与 Vercel Preview 通过后合并到 `master`，由 Vercel 自动发布生产环境。
 
 ---
@@ -208,7 +208,7 @@ P = u·V0 + v·V1 + w·V2
 ## 11. 前端鲁棒性约束
 
 - `tools/test_web_architecture.ts` 会检查 `web/src/**/*.ts(x)` 与 `vite.config.ts` 的静态相对 import 图，禁止新增模块环，并阻止旧根目录 JS 运行时文件回流。
-- `web/src/services/logger.ts` 统一记录浏览器端关键故障、降级事件、帧指标和资产版本；调试时可在控制台查看 `window.langerfaceDiagnostics`，或调用 `window.exportLangerfaceDiagnostics()` 导出脱敏 JSON。字段约定见 [OBSERVABILITY.md](OBSERVABILITY.md)。
+- `web/src/services/logger.ts` 统一记录浏览器端关键故障、降级事件、帧指标和资产版本；调试时可在控制台查看 `window.langerfaceDiagnostics`，或调用 `window.exportLangerfaceDiagnostics()` 导出脱敏 JSON。字段约定见 [OBSERVABILITY.md](../quality/OBSERVABILITY.md)。
 - `web/.npmrc` 启用 `engine-strict=true`，安装依赖时会严格执行 `package.json` 中的 Node/npm 版本要求。
 - React SPA 中仍由运行时服务接管的工作台必须只在 route host 内查询 DOM。`annotateRuntime.ts`、`incisionAgentRuntime.ts`
   通过 `src/lib/scopedDom.ts` 绑定元素，实时页绑定由 `src/services/liveDom.ts` 负责，也不再回退到全局 `document.getElementById`，
@@ -246,7 +246,7 @@ npm run dev
 ```
 
 生产构建（Vercel）以 `/app/*` React SPA 为唯一应用入口；`annotate.html` 仅复制为 `/app/annotate` 的兼容跳转页，
-不参与 Rollup 多入口构建。配置见 [`web/vite.config.ts`](../web/vite.config.ts)。
+不参与 Rollup 多入口构建。配置见 [`web/vite.config.ts`](../../web/vite.config.ts)。
 
 ### 标注工作流
 
@@ -255,7 +255,7 @@ npm run dev
 3. **画线**：拖拽旋转、滚轮缩放；点击在网格表面落控制点。相邻控制点会沿三角网格表面连接，避免直接穿过头模。
 4. **保存线**：一条线至少 2 个控制点；保存后可继续标下一条线，也可从列表中编辑或删除已保存线。
 5. **导出**：
-   - **导出图谱**（仅标准脸）：输出 langerface 图谱格式，每点 `[三角面 id, u, v]`（重心坐标，`w=1-u-v`），与 [`src/langerface/lines/atlas.py`](../src/langerface/lines/atlas.py)、`assets/atlas_*.json` 一致；导出结果保持 `validated:false`，作为后续临床复核草案。
+   - **导出图谱**（仅标准脸）：输出 langerface 图谱格式，每点 `[三角面 id, u, v]`（重心坐标，`w=1-u-v`），与 [`src/langerface/lines/atlas.py`](../../src/langerface/lines/atlas.py)、`assets/atlas_*.json` 一致；导出结果保持 `validated:false`，作为后续临床复核草案。
    - **导出 xyz**（任意头模）：输出 3D 折线坐标（`[x,y,z]`，网格局部坐标），与 `tools/headspace` 的 `*_xyz` 线兼容。
 
 ### 接入项目
@@ -364,15 +364,15 @@ Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部
 | 敏感结构 guardrails | `web/src/services/incisionCandidateTools.ts` | 下睑、唇红缘、鼻翼、鼻尖、口角等风险提示、分结构 draft 距离阈值、`protective_direction` 保护性方向建议和方向例外 | #17 |
 | 医生审阅 UI | `web/src/services/incisionAgentRuntime.ts`, `web/src/components/*Review*.tsx` | 候选解释、编辑、版本化 provenance、覆盖、导出 | #18 |
 | AR / 视频叠加 | `web/src/services/render2d.ts`, `web/src/services/projection3d.ts` | 把肿物和切口候选投射回照片、视频、实时视图 | #19 |
-| 验证指标 | `docs/VALIDATION.md` | 角度误差、稳定性、医生接受率、失败分类 | #20 |
-| 隐私 / 审计 | `docs/PRIVACY_AND_AUDIT.md` | 敏感数据边界、审计记录、受限存储 | #21 |
+| 验证指标 | `docs/quality/VALIDATION.md` | 角度误差、稳定性、医生接受率、失败分类 | #20 |
+| 隐私 / 审计 | `docs/clinical/PRIVACY_AND_AUDIT.md` | 敏感数据边界、审计记录、受限存储 | #21 |
 | AI 次级依据 | `tools/`, future model scripts | 皱襞/皱纹/肿物边界候选识别 | #22 |
 
 切口工作台的 3D 头模资产走 `dataSource.getHeadMesh()`：默认优先 `flame-2023`
 （由 `web/assets/flame_basis.bin` 生成 neutral mesh），失败时回退 `mediapipe-468`。
 MediaPipe RSTL 草案不会以 `[tri,u,v]` 形式直接套用到 FLAME 三角面；当前只生成
 `points3d` 预览线并保持 `validated:false`。FLAME 候选不会直接进入实时 MediaPipe
-叠加，相关核验点和非目标见 [INCISION_FLAME_ASSET_STRATEGY.md](INCISION_FLAME_ASSET_STRATEGY.md)。
+叠加，相关核验点和非目标见 [INCISION_FLAME_ASSET_STRATEGY.md](../tracks/INCISION_FLAME_ASSET_STRATEGY.md)。
 
 这些模块应与 `lines/`、`rendering/` 同级接入：`lines/` 仍只负责张力线图谱，`tumor/` 负责病灶几何输入，`incision/` 负责候选曲线生成与规则解释。
 

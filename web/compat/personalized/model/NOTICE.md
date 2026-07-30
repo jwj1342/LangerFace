@@ -27,7 +27,7 @@
 
 - 仅用于**研究性**皱纹分割证据：产出低置信度 secondary cue，喂给 V6 RSTL 微调。
 - **不**作为临床判断依据，**不**参与切口几何硬约束，**不**进入任何 LLM prompt。
-- 推理全程在浏览器 WASM 内本地完成，不上传人脸图像，见 [`docs/PERSONALIZED_RSTL.md`](../../../../docs/PERSONALIZED_RSTL.md)。
+- 推理全程在浏览器 WASM 内本地完成，不上传人脸图像，见 [`docs/tracks/PERSONALIZED_RSTL.md`](../../../../docs/tracks/PERSONALIZED_RSTL.md)。
 
 ## 未关闭的后续动作
 
