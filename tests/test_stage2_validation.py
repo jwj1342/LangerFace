@@ -4,6 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from tools.evaluate_stage2_validation import (
     evaluate_payloads,
     records_from_payload,
@@ -29,7 +30,7 @@ def _record(
     overlay_3d_view: dict | None = None,
 ) -> dict:
     record = {
-        "schema_version": "incision-review-record/v0.3",
+        "schema_version": "incision-review-record/v0.4",
         "id": record_id,
         "review_status": status,
         "review": {
@@ -451,11 +452,72 @@ def _export_payload() -> dict:
         registration_pass_rate=2 / 3,
     )
     return {
-        "schema_version": "incision-review-export/v0.3",
+        "schema_version": "incision-review-export/v0.4",
         "exported_at": "2026-06-24T00:00:00Z",
         "current": current,
         "saved": saved,
     }
+
+
+def test_stage2_validation_normalizes_legacy_agentic_fields_without_relabeling_schema():
+    legacy = _record(
+        record_id="legacy-agentic-record",
+        status="approved_for_discussion",
+        candidate_type="linear",
+        tumor_kind="subcutaneous",
+        guardrails_passed=True,
+        warnings=[],
+        metrics={},
+    )
+    legacy.update(
+        {
+            "schema_version": "incision-review-record/v0.3",
+            "agent_trace_gate": {"passed": True},
+            "agent_react_plan": {"passed": True},
+            "agent_execution_events": {"passed": True},
+            "agent_orchestration_audit": {"candidate_count": 3},
+            "llm": {"summary": "legacy summary", "next_step": "legacy next"},
+            "provider_config": {"api_key": "[redacted]"},
+            "review_gate": {
+                "agent_trace_gate_passed": True,
+                "agent_trace_gate_missing": [],
+                "reason": "agent_trace_gate_failed",
+            },
+            "audit_events": [{"event": "candidate_saved", "agent_trace_gate_passed": True}],
+        }
+    )
+    payload = {
+        "schema_version": "incision-review-export/v0.3",
+        "current": legacy,
+        "saved": [],
+    }
+
+    records = records_from_payload(payload)
+    assert len(records) == 1
+    normalized = records[0]
+    assert normalized["schema_version"] == "incision-review-record/v0.3"
+    assert normalized["workflow_trace_gate"] == legacy["agent_trace_gate"]
+    assert normalized["workflow_plan_audit"] == legacy["agent_react_plan"]
+    assert normalized["workflow_execution_events"] == legacy["agent_execution_events"]
+    assert normalized["workflow_audit"] == legacy["agent_orchestration_audit"]
+    assert normalized["summary"] == "legacy summary"
+    assert normalized["next_step"] == "legacy next"
+    assert normalized["review_gate"]["workflow_trace_gate_passed"] is True
+    assert normalized["review_gate"]["workflow_trace_gate_missing"] == []
+    assert normalized["review_gate"]["reason"] == "workflow_trace_gate_failed"
+    assert normalized["audit_events"][0]["workflow_trace_gate_passed"] is True
+    assert normalized["compatibility"]["source_schema_version"] == "incision-review-record/v0.3"
+    assert normalized["compatibility"]["normalized_for"] == "incision-review-record/v0.4"
+    assert normalized["compatibility"]["legacy_remote_fields_retained_for_privacy_audit"] == [
+        "llm",
+        "provider_config",
+    ]
+
+    summary = evaluate_payloads([payload])
+    assert summary["source_schema_version_counts"] == {"incision-review-record/v0.3": 1}
+
+    with pytest.raises(ValueError, match="unsupported incision review schema"):
+        records_from_payload({**legacy, "schema_version": "incision-review-record/v9.9"})
 
 
 def test_stage2_validation_summary_aggregates_review_export():
@@ -465,6 +527,7 @@ def test_stage2_validation_summary_aggregates_review_export():
     assert len(records_from_payload(payload)) == 3
     assert summary["schema_version"] == "stage2-validation-summary/v0.1"
     assert summary["record_count"] == 3
+    assert summary["source_schema_version_counts"] == {"incision-review-record/v0.4": 3}
     assert summary["candidate_type_counts"] == {"fusiform": 2, "linear": 1}
     assert summary["tumor_kind_counts"] == {"cutaneous": 2, "subcutaneous": 1}
     assert summary["clinician_review"]["approval_rate"] == 2 / 3
