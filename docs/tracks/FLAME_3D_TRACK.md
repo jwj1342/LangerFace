@@ -1,8 +1,9 @@
 # 3D FLAME 轨：设计与技术选型（issue #61）
 
 > 状态：**Sprint 0–5 已落地，Sprint 6 未开工**（逐 sprint 明细见 §9）。PR #108 已关闭 3D / FLAME 的
-> 全部网页入口，因此 Sprint 6 当前没有上线面；runtime 代码保留待 #61 / #40 裁决。
-> 关联：#61（Epic，OPEN）、#40（3D 可行性 gate，OPEN）、#2（临床校验，OPEN）、#65（拓扑守卫，已关闭）、#86（RSTL 3DMM 先验，已关闭）。
+> 全部实时 3D 网页入口。#40 已裁决为 2D-first + 3D 离线预处理/研究查看，因此 Sprint 6 没有实时上线面；
+> runtime 只在共享依赖拆分前保留，详见 [3D 路线 ADR](../architecture/ADR_3D_ROUTE_FEASIBILITY.md)。
+> 关联：#61（Epic，OPEN）、#40（3D 可行性 gate，由 ADR 完成）、#2（临床校验，OPEN）、#65（拓扑守卫，已关闭）、#86（RSTL 3DMM 先验，已关闭）。
 
 ## 1. 定位：与 2D MediaPipe 轨**独立双轨**
 

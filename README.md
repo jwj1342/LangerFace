@@ -384,6 +384,7 @@ Stage 2 切口 Agent 默认只把肿物参数、标准化坐标、候选切口�
 | **架构 / 数据** — `docs/architecture/` | |
 | [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | 核心算法、坐标系、2D/3D 路线、网页 3D 标注、HeadSpace 离线管线、Stage 2 路线、资产与部署 |
 | [METHODS_AND_IMPLEMENTATION_SUMMARY.md](docs/architecture/METHODS_AND_IMPLEMENTATION_SUMMARY.md) | 各核心算法的**数学公式与推导**集中参考（重心映射 / One-Euro / 遮挡 / 流线生成 / Umeyama / FLAME / 软体 / 切口几何）；模块契约见 ARCHITECTURE，测试见 CONTRIBUTING |
+| [ADR_3D_ROUTE_FEASIBILITY.md](docs/architecture/ADR_3D_ROUTE_FEASIBILITY.md) | 实时 3D 路线的算力、部署与质量 gate；正式裁决 2D-first + 3D 离线资产/研究查看 |
 | [PERSONALIZED_RSTL.md](docs/tracks/PERSONALIZED_RSTL.md) | `/personalized` 个性化 RSTL 的输入、YOLO/V6 阈值依据、失败降级、隐私边界与图谱契约 |
 | [FLAME_3D_TRACK.md](docs/tracks/FLAME_3D_TRACK.md) | 3D FLAME 配准 / 标注轨的设计与技术选型（issue #61）|
 | [INCISION_FLAME_ASSET_STRATEGY.md](docs/tracks/INCISION_FLAME_ASSET_STRATEGY.md) | 切口工作台使用 FLAME 头模资产的核验点、设计边界、回退策略和验收重点 |

@@ -11,9 +11,13 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候
 
 ## 增强
 - [ ] 通用外部遮挡：语义分割识别器械 / 纱布 / 口罩 — [#3](https://github.com/jwj1342/LangerFace/issues/3)
-- [ ] 3D：非刚性配准、网格导出（.obj/.glb）、3D 投影叠加手部遮挡 — [#4](https://github.com/jwj1342/LangerFace/issues/4)
 - [ ] 录制 / 导出完善（含放大窗与 3D）— [#5](https://github.com/jwj1342/LangerFace/issues/5)
       · 本 PR 已把实时页导出从单一主画布升级为组合录制：主 canvas 仍作为主体，右侧可附带当前可见的全脸/切口候选/区域细节放大窗和 3D 视图，输出仍为 `video/webm`；没有附加画布时保持原主画布 `captureStream` 行为。
+
+## 已裁决路线
+
+- [x] 实时 3D 重建不恢复用户入口；生产维持 2D-first，3D 仅作离线资产、图谱标注和研究预览 — [#40](https://github.com/jwj1342/LangerFace/issues/40)
+      · 量化 gate、三条路线边界与重启条件见 [3D 路线 ADR](../architecture/ADR_3D_ROUTE_FEASIBILITY.md)；#4、#26、#27 随该决策关闭为 not planned，不删除 `/annotate` 或 `/incision` 仍在使用的 3D 可视化基础设施。
 
 ## Stage 2：肿物与切口设计
 
