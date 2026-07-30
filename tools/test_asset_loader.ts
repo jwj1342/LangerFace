@@ -124,6 +124,28 @@ assert.equal(
 assert.ok(assetUrl("atlasRstl").endsWith("/assets/atlas_rstl.json"), "default RSTL asset URL resolves under /assets/");
 assert.ok(assetUrl("faceLandmarkerTask").endsWith("/assets/face_landmarker.task"), "task model resolves under /assets/");
 
+{
+  const originalFetch = globalThis.fetch;
+  let requestInit: RequestInit | undefined;
+  globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
+    requestInit = init;
+    return new Response('{"version":"cache-policy-probe"}', {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  try {
+    await loadJsonAsset("cache_policy_probe.json");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(
+    requestInit?.cache,
+    "no-cache",
+    "stable-name runtime assets must revalidate even when the browser has a fresh legacy immutable entry",
+  );
+}
+
 await withAssetBase(createAssetServer(), async () => {
   const data = await loadJsonAsset("canonicalVertices", { label: "标准脸顶点" });
   assert.deepEqual(data, [[0, 0, 0], [1, 0, 0], [0, 1, 0]], "JSON asset loader fetches from configured asset base");

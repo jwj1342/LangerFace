@@ -40,7 +40,7 @@ cd ..
 
 ```bash
 pytest                       # Python 单元/集成测试
-cd web && npm test           # Web TypeScript↔Python 几何对拍（多支 .ts）
+cd web && npm test           # 全量：typecheck + 下面 7 组（共 49 支脚本）
 ruff check .                 # 代码风格
 ```
 
@@ -48,12 +48,26 @@ ruff check .                 # 代码风格
 
 各测试覆盖（从 README 收口到此，作为测试事实来源）：
 
+`npm test` 按语义分成 7 组，调试时可以只跑相关的一组（组名即职责，全部由 `npm test` 串起来，不会漏跑）：
+
+| 组 | 覆盖 |
+|---|---|
+| `npm run test:arch` | 架构与文档守卫：import 无环、旧 JS runtime 不回流、文档链接与索引、主特性对拍、dist 资产 |
+| `npm run test:geometry` | 几何与图谱契约：三方映射对拍、额头可见性两实现对拍、遮挡、姿态门控、Umeyama、拓扑守卫、soft-body |
+| `npm run test:live` | 实时页与采集源：摄像头、图片源、画布适配、资产加载、导出、诊断 JSON |
+| `npm run test:annotate` | 标注与 3D 路线 |
+| `npm run test:incision` | 切口工作台：overlay、回放 QA、验收审计、工具契约 |
+| `npm run test:privacy` | 隐私与 Provider 边界 |
+| `npm run test:personalized` | `/personalized` 浏览器个性化链路（含 YOLO/V6） |
+
+分组的另一个作用是减少冲突面：这一行原本是串了 40 多项的**单行字符串**，任何两个想加测试的 PR 都必然文本冲突（#117↔#116、#142↔#116/#121 各撞过一次）。现在只会撞在实际改动的那一组上。
+
 - **Web TypeScript ↔ Python 逐点对拍**（`cd web && npm test`）：先查 `web/src/**/*.ts(x)` 静态 import 无模块环并阻止旧根目录 JS runtime 回流，再用真实帧关键点对拍映射（误差 ~5×10⁻⁵px）/ 背面剔除（0 不一致）/ One-Euro fixture；并含 `test_occlusion`（贴合手形掩膜、指缝保留、无手不剔除）、`test_umeyama`（恢复已知相似变换 ~1e-13）、`topologyId`/`topologyVersion` 守卫与 atlas roundtrip 契约、FLAME basis 拟合 + jaw/表情前向、RSTL 切除闭合 soft-body 张力方向断言、`test_logger`（`window.exportLangerfaceDiagnostics()` 结构化 JSON 契约）。
 - **Python 单测**（`pytest`）：图谱完整性、标准脸解析、映射仿射不变性、平滑降抖动、端到端渲染、`assets/`↔`web/assets/` 同步门禁、结构化可观测性。
 - **目检脚本**：`tools/render_check.py`、`inspect_frames.py`、`montage.py`、`sample_output.py`、`debug_one.py`。
 - **浏览器实测**：UI/3D 查看通过截图核对；实时摄像头链路需在带摄像头的浏览器中确认。
 
-跨语言对拍的不变式与金标重生成见 [CROSS_LANG_PARITY.md](CROSS_LANG_PARITY.md)。
+跨语言对拍的不变式与金标重生成见 [CROSS_LANG_PARITY.md](../quality/CROSS_LANG_PARITY.md)。
 
 ## PR / Preview 工作流
 
@@ -108,7 +122,7 @@ PR 上应关注这些 checks：
 | `Vercel` | Production 部署状态；临时 Preview 只在维护者手动创建时出现 |
 | `Vercel Preview Comments` | 手动创建 Preview 时，Vercel 可能在 PR 中发布 Preview 链接 |
 
-Vercel Preview 只在维护者按需手动创建时服务当前开发分支；当前策略见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#自动部署范围与限流控制)。普通 feature / integration 分支仍跑 GitHub Actions 质量门禁，但不会自动创建 Vercel Preview，避免长 PR 高频 push 打满 Vercel 限流或继续累积 GitHub deployment records。
+Vercel Preview 只在维护者按需手动创建时服务当前开发分支；当前策略见 [CI/CD 与 Vercel 部署指南](../quality/CI_CD_VERCEL.md#自动部署范围与限流控制)。普通 feature / integration 分支仍跑 GitHub Actions 质量门禁，但不会自动创建 Vercel Preview，避免长 PR 高频 push 打满 Vercel 限流或继续累积 GitHub deployment records。
 
 Preview 人工验收清单：
 
@@ -127,9 +141,9 @@ Preview 人工验收清单：
   - 外部临床评审：由维护者在 Vercel 生成 Shareable Link，或临时开启 Password Protection 并单独发送密码。
   - 自动化测试：只使用 Vercel Protection Bypass for Automation，secret 放在 GitHub Secrets；不要把 bypass token 当作人工分享链接。
   - 只有确认 Preview 不含受限头模、真实人脸影像或未公开数据时，才考虑关闭 Preview protection。
-- PR Preview 和生产站不是同一个地址。验证分支改动时不要只看 Production URL（见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md#production-url)）；那是 `master` 的生产环境。
+- PR Preview 和生产站不是同一个地址。验证分支改动时不要只看 Production URL（见 [CI/CD 与 Vercel 部署指南](../quality/CI_CD_VERCEL.md#production-url)）；那是 `master` 的生产环境。
 - `master` 受 GitHub Branch Protection 保护：PR 合并前必须通过必需 checks，并至少获得 1 个 approving review。
-- 详细的 Vercel 项目设置、branch protection 和排障信息见 [CI/CD 与 Vercel 部署指南](CI_CD_VERCEL.md)。
+- 详细的 Vercel 项目设置、branch protection 和排障信息见 [CI/CD 与 Vercel 部署指南](../quality/CI_CD_VERCEL.md)。
 
 ## 架构与扩展点
 
