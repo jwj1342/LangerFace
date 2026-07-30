@@ -65,11 +65,13 @@ ruff check .                 # 代码风格
 2. 预览线应沿表面展开，不应穿过网格内部；fallback 时 UI 必须明确提示，不能静默导出直线。
 3. 若本地 FLAME 资产可用，加载头模后重复跨三角面绘制；缺少 dev-local 资产时应正常降级，不能作为 fresh clone 的必过步骤。
 4. 导出 atlas JSON，确认每个点为 `[tri,u,v]`、包含 `topologyId`/`topologyVersion` 且
-   `validated:false`；上传任意自定义头模时只能导出 xyz，不能伪装成项目 atlas。
+   `validated:false`；导出点数与屏幕预览路径点一致。上传任意自定义头模时只能导出 xyz，
+   不能伪装成项目 atlas。
 5. 返回实时页预览 MediaPipe atlas，确认线条连续、无明显漂移；FLAME atlas 不得越过 topology gate 注入 2D 实时页。
 
-自动覆盖在 `test_annotate_model.ts`、`test_annotate_ui.ts`、`test_atlas_contract.ts`、
-`test_topology_registry.ts` 和 `test_atlas_roundtrip.ts`；人工验收只负责浏览器贴面反馈与视觉连续性。
+自动覆盖在 `tools/test_annotate_model.ts`、`tools/test_annotate_ui.ts`、
+`tools/test_atlas_contract.ts`、`tools/test_topology_registry.ts` 和
+`tools/test_atlas_roundtrip.ts`；人工验收只负责浏览器贴面反馈与视觉连续性。
 
 ## PR / Preview 工作流
 

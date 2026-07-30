@@ -87,7 +87,7 @@ const record = buildIncisionReviewRecord({
   sensitiveStructureInspection: findSensitiveStructureInspection(result),
   privacyAudit: { raw_image_sent: false },
 });
-assert.equal(record.schema_version, "incision-review-record/v0.3");
+assert.equal(record.schema_version, "incision-review-record/v0.4");
 assert.equal(record.id, "candidate-fixture");
 assert.equal(record.audit_events.length, 1);
 assert.equal(record.audit_events[0].actor, "clinician");
