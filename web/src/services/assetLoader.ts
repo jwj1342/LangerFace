@@ -166,7 +166,11 @@ async function fetchAsset<T>(
   if (assetCache.has(cacheKey)) return assetCache.get(cacheKey) as Promise<T>;
   const promise = (async () => {
     onProgress?.({ key, label, url, phase: "start", loaded: 0, total: null, ratio: null });
-    const resp = await fetch(url, { cache: "force-cache" });
+    // 运行时资产（atlas / topology / .task / .bin）文件名固定。这里必须显式要求
+    // revalidate：只改服务器响应头无法覆盖浏览器已经保存的一年 immutable 旧条目；
+    // `cache: "no-cache"` 会让 fresh/stale 命中都先走条件请求，配合 ETag，未变更时
+    // 只是一次廉价的 304，变更后则立即取得新版本。
+    const resp = await fetch(url, { cache: "no-cache" });
     if (!resp.ok) throw new Error(`资产加载失败：${label} HTTP ${resp.status}`);
     if (kind === "arrayBuffer") {
       const buf = await readBufferWithProgress(resp, (evt) => (

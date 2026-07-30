@@ -69,6 +69,34 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 | Production Branch | `master`（除非仓库改成 `main`） |
 | Node.js Version | 24.x；项目要求 Node `>=24.15.0`、npm `>=11.0.0` |
 
+## 运行时资产的缓存策略
+
+`dist/assets/` 里住着**两类性质完全不同**的文件，必须用不同的缓存策略，这是踩过的坑：
+
+| 类别 | 例子 | 文件名会变吗 | 策略 |
+|---|---|---|---|
+| 内容哈希 bundle | `app-ByjyBvTY.js`、`dataSource-DhELnIMr.js` | 会（哈希随内容变） | `public, max-age=31536000, immutable` |
+| 固定名运行时资产 | `atlas_rstl.json`、`triangles.json`、`topology_mediapipe_468.json`、`face_landmarker.task`、`flame_basis.bin` | **不会** | `public, max-age=0, must-revalidate`（靠 ETag，未变更时是一次廉价 304） |
+
+两类文件同住 `dist/assets/`：哈希 bundle 由 Vite 产出，固定名资产由 `vite.config.ts` 的
+`copy-runtime-assets` 从 `web/assets/` 原样拷入。因此 [web/vercel.json](../web/vercel.json) 的
+header 规则必须**按文件形态而不是按目录**区分，两条 `source` 正则互斥。
+
+**为什么不能给固定名资产上 immutable**：`immutable` 明确告诉浏览器一年内不要回源验证，而这些文件名
+永不改变，于是**回访用户会被长期钉在他第一次下载到的那份图谱上，且没有任何提示**。真实事故：图谱升到
+v8.1.67（133 条）并已部署到生产后，测试者浏览器里仍在跑 132 条的旧图谱——新的哈希 JS 配旧图谱资产。
+对一个把张力线叠加在患者脸上的临床可视化工具，这种静默的版本钉死是不可接受的。
+
+同一个坑还有代码侧的一半：`web/src/services/assetLoader.ts` 取固定名资产时必须使用
+`fetch(url, { cache: "no-cache" })`。这不仅避免 `force-cache`，还会让浏览器对 fresh 和 stale
+缓存都执行条件验证，因此能迁移已经保存了旧 `immutable` 响应头的回访用户；只改新响应的
+`Cache-Control` 或退回默认 fetch，都无法主动更新这些旧条目。
+
+以上两条由 `tools/test_web_architecture.ts`（`npm test` 内）机械守住：它会用 `web/assets/` 下的真实
+文件名去匹配每条带 `immutable` 的 header 规则，命中即失败；同时检查固定名资产确实有一条回源验证规则、
+以及 `assetLoader` 的真实代码显式使用 `cache: "no-cache"`。`tools/test_asset_loader.ts` 还会 mock fetch，
+直接断言运行时请求的 `RequestInit.cache`，避免只靠源码字符串判断。
+
 ## Production URL
 
 当前 `master` 生产环境的权威地址是：
