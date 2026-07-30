@@ -6,18 +6,14 @@ import { ReactRouteHost } from "./ReactShell";
 
 type ManagedWorkbenchWorkspace = Extract<Workspace, "annotate" | "incision" | "live">;
 
-export interface ManagedWorkbenchControllerAdapter<TModule> {
-  dispose?: (module: TModule) => void;
-  loadModule: () => Promise<TModule>;
-  mount: (module: TModule, root: HTMLElement) => () => void;
-}
-
 interface ManagedWorkbenchRouteProps<TModule> {
   children: ReactNode;
-  controller: ManagedWorkbenchControllerAdapter<TModule>;
+  dispose?: (module: TModule) => void;
   failedStatus: string;
   legacyNotice?: string;
+  loadModule: () => Promise<TModule>;
   loadingStatus: string;
+  mount: (module: TModule, root: HTMLElement) => () => void;
   mountedStatus: string;
   unloadedStatus: string;
   workspace: ManagedWorkbenchWorkspace;
@@ -25,10 +21,12 @@ interface ManagedWorkbenchRouteProps<TModule> {
 
 export function ManagedWorkbenchRoute<TModule>({
   children,
-  controller,
+  dispose,
   failedStatus,
   legacyNotice,
+  loadModule,
   loadingStatus,
+  mount,
   mountedStatus,
   unloadedStatus,
   workspace,
@@ -36,12 +34,12 @@ export function ManagedWorkbenchRoute<TModule>({
   const hostRef = useRef<HTMLDivElement | null>(null);
 
   useManagedWorkbenchController({
-    dispose: controller.dispose,
+    dispose,
     failedStatus,
     hostRef,
     loadingStatus,
-    loadModule: controller.loadModule,
-    mount: controller.mount,
+    loadModule,
+    mount,
     mountedStatus,
     unloadedStatus,
     workspace,

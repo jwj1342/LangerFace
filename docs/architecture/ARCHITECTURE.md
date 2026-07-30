@@ -17,6 +17,8 @@
   + `web/src/services/three3d.ts` / R3F 组件（3D Beta）。实时、本地、不上传。
   前端低频 UI 状态由 React/Zustand 管理，实时工作台状态在 `web/src/services/liveState.ts`
   分片；`pipeline.ts` 不依赖 `mode3d.ts`，3D 实时投影通过无 DOM 的 `projection3d.ts` 适配，避免模块环。
+  `AnnotateRoute` / `IncisionRoute` / `LiveRoute` 直接按需加载并挂载各自 TypeScript runtime，
+  共享 `ManagedWorkbenchRoute` 的 mount/dispose 生命周期；不再经过 `legacyControllers.ts` 转发层。
 
 - **纯 JS 兼容运行时**：`web/current/`（`/current/` 实时页）、`web/compat/personalized/`（`/personalized` 个性化流程）与
   `web/compat/shared/`（两者共用的几何 / 常量 / 数据源）。它们**不进 TypeScript 类型检查**，由

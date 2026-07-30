@@ -47,7 +47,6 @@ const controllerEvents = read("src/lib/controllerEvents.ts");
 const controllerSnapshotSchemas = read("src/lib/controllerSnapshotSchemas.ts");
 const reactManagedWorkbench = read("src/lib/reactManagedWorkbench.ts");
 const scopedDom = read("src/lib/scopedDom.ts");
-const legacyControllers = read("src/services/legacyControllers.ts");
 const uiAnnotateStatus = read("src/components/ui/annotate-status.tsx");
 const uiButton = read("src/components/ui/button.tsx");
 const uiButtonRow = read("src/components/ui/button-row.tsx");
@@ -658,30 +657,26 @@ assert.ok(reactShell.includes('type { Workspace } from "../stores/appStore"'), "
 assert.ok(reactShell.includes("Extract<Workspace"), "React shell keeps a narrowed route workspace type from the shared Workspace union");
 assert.ok(managedWorkbenchRoute.includes("useRef<HTMLDivElement | null>(null)"), "managed workbench route owns the legacy host ref");
 assert.ok(managedWorkbenchRoute.includes("useManagedWorkbenchController"), "managed workbench route owns legacy controller lifecycle wiring");
-assert.ok(managedWorkbenchRoute.includes("ManagedWorkbenchControllerAdapter"), "managed workbench route accepts typed controller adapter objects");
-assert.ok(managedWorkbenchRoute.includes("controller.loadModule"), "managed workbench route loads controllers through the adapter boundary");
-assert.ok(managedWorkbenchRoute.includes("controller.mount"), "managed workbench route mounts controllers through the adapter boundary");
+assert.ok(managedWorkbenchRoute.includes("loadModule: () => Promise<TModule>"), "managed workbench route accepts a typed runtime loader");
+assert.ok(managedWorkbenchRoute.includes("mount: (module: TModule"), "managed workbench route accepts a typed runtime mount function");
+assert.ok(managedWorkbenchRoute.includes("dispose?: (module: TModule)"), "managed workbench route accepts an optional runtime disposer");
 assert.ok(managedWorkbenchRoute.includes("ReactRouteHost"), "managed workbench route renders through the shared ReactRouteHost primitive");
 assert.ok(managedWorkbenchRoute.includes("Extract<Workspace"), "managed workbench route narrows workspace type from the shared Workspace union");
-assert.ok(legacyControllers.includes("ManagedWorkbenchControllerAdapter"), "legacy controller service owns typed controller adapter objects");
-for (const legacyEntry of ["annotateRuntime", "incisionRuntime", "liveRuntime"]) {
-  assert.ok(legacyControllers.includes(legacyEntry), `legacy controller service owns ${legacyEntry} import boundary`);
-}
+assert.ok(!fs.existsSync(path.join(web, "src/services/legacyControllers.ts")), "obsolete legacy controller adapter module is deleted");
 assert.ok(!fs.existsSync(path.join(web, "annotate_main.js")), "legacy annotation runtime file has moved into the React TypeScript service layer");
 assert.ok(!fs.existsSync(path.join(web, "incision_workflow_main.js")), "legacy incision runtime file has moved into the React TypeScript service layer");
 assert.ok(!fs.existsSync(path.join(web, "main.js")), "legacy live runtime file has moved into the React TypeScript service layer");
-for (const [name, source, workspace] of [
-  ["AnnotateRoute.tsx", annotateRoute, "annotate"],
-  ["IncisionRoute.tsx", incisionRoute, "incision"],
-  ["LiveRoute.tsx", liveRoute, "live"],
+for (const [name, source, workspace, runtime] of [
+  ["AnnotateRoute.tsx", annotateRoute, "annotate", "annotateRuntime"],
+  ["IncisionRoute.tsx", incisionRoute, "incision", "incisionRuntime"],
+  ["LiveRoute.tsx", liveRoute, "live", "liveRuntime"],
 ]) {
   assert.ok(source.includes("ManagedWorkbenchRoute"), `${name} should render through the shared managed workbench route primitive`);
-  assert.ok(source.includes("LegacyController"), `${name} should use a named legacy controller adapter`);
-  assert.ok(!source.includes('typeof import("../../'), `${name} should not own legacy controller module typing`);
-  assert.ok(!source.includes('import("../../'), `${name} should not dynamically import legacy controllers directly`);
-  assert.ok(!source.includes("mountLiveWorkbench"), `${name} should not name legacy live controller exports directly`);
-  assert.ok(!source.includes("mountAnnotateWorkbench"), `${name} should not name legacy annotate controller exports directly`);
-  assert.ok(!source.includes("mountIncisionWorkbench"), `${name} should not name legacy incision controller exports directly`);
+  assert.ok(source.includes(`typeof import("../services/${runtime}")`), `${name} should type its TypeScript runtime module`);
+  assert.ok(source.includes(`import("../services/${runtime}")`), `${name} should lazily load its TypeScript runtime`);
+  assert.ok(source.includes("loadModule={"), `${name} should pass its runtime loader to the shared lifecycle`);
+  assert.ok(source.includes("mount={"), `${name} should pass its runtime mount function to the shared lifecycle`);
+  assert.ok(source.includes("dispose={"), `${name} should pass its runtime disposer to the shared lifecycle`);
   assert.ok(source.includes(`workspace="${workspace}"`), `${name} should declare its managed workbench workspace`);
   assert.ok(!source.includes("ReactRouteHost"), `${name} should not duplicate the route host wrapper`);
   assert.ok(!source.includes("useManagedWorkbenchController"), `${name} should not duplicate managed controller lifecycle wiring`);
@@ -1359,9 +1354,8 @@ assert.ok(incisionStatePanel.includes("useIncisionStore"), "React incision UI re
 assert.ok(incisionStatePanel.includes("<Card"), "React incision state panel uses the shared shadcn-style card primitive");
 
 assert.ok(incisionRoute.includes("ManagedWorkbenchRoute"), "React incision route uses the shared managed route lifecycle");
-assert.ok(incisionRoute.includes("incisionLegacyController"), "React incision route configures the existing controller through the legacy adapter");
-assert.ok(legacyControllers.includes("mountIncisionWorkbench"), "legacy controller service configures the existing incision controller mount function");
-assert.ok(legacyControllers.includes("disposeIncisionWorkbench"), "legacy controller service configures the existing incision controller dispose function");
+assert.ok(incisionRoute.includes("mountIncisionWorkbench"), "React incision route directly configures the TypeScript runtime mount function");
+assert.ok(incisionRoute.includes("disposeIncisionWorkbench"), "React incision route directly configures the TypeScript runtime disposer");
 assert.ok(!incisionRoute.includes("window.__LANGERFACE_REACT_MANAGED__ = true"), "React incision route does not duplicate managed flag logic");
 assert.ok(incisionRoute.includes("<IncisionWorkbench />"), "React incision route renders the workbench as TSX");
 assert.ok(incisionWorkbench.includes("WorkbenchBrand"), "React incision workbench uses the shared workbench brand");
@@ -1725,9 +1719,8 @@ assert.ok(controller.includes("dispatchControllerEvent(INCISION_CONTROLLER_STATE
 assert.ok(!controller.includes("CustomEvent(INCISION_CONTROLLER_STATE_EVENT"), "incision controller does not hand-roll state snapshot CustomEvent dispatch");
 assert.ok(annotateRoute.includes("useAnnotateControllerBridge"), "annotation route mounts the Zustand/controller bridge");
 assert.ok(annotateRoute.includes("ManagedWorkbenchRoute"), "React annotation route uses the shared managed route lifecycle");
-assert.ok(annotateRoute.includes("annotateLegacyController"), "React annotation route configures the annotation runtime through the legacy adapter");
-assert.ok(legacyControllers.includes("mountAnnotateWorkbench"), "legacy controller service configures the annotation runtime mount function");
-assert.ok(legacyControllers.includes("disposeAnnotateWorkbench"), "legacy controller service configures the annotation runtime dispose function");
+assert.ok(annotateRoute.includes("mountAnnotateWorkbench"), "React annotation route directly configures the TypeScript runtime mount function");
+assert.ok(annotateRoute.includes("disposeAnnotateWorkbench"), "React annotation route directly configures the TypeScript runtime disposer");
 assert.ok(!annotateRoute.includes("window.__LANGERFACE_REACT_MANAGED__ = true"), "React annotation route does not duplicate managed flag logic");
 assert.ok(annotateRoute.includes("<AnnotateWorkbench />"), "React annotate route renders the annotation UI as TSX");
 assert.ok(!annotateRoute.includes("DOMParser"), "React annotate route should not parse legacy HTML");
@@ -1891,9 +1884,8 @@ assert.ok(!annotateRuntime.includes('document.getElementById("stage")'), "annota
 assert.ok(annotateViewerService.includes("dispose()"), "annotation viewer exposes a WebGL dispose lifecycle");
 assert.ok(liveRoute.includes("useLiveControllerBridge"), "live route mounts the Zustand/controller bridge");
 assert.ok(liveRoute.includes("ManagedWorkbenchRoute"), "React live route uses the shared managed route lifecycle");
-assert.ok(liveRoute.includes("liveLegacyController"), "React live route configures the live controller through the legacy adapter");
-assert.ok(legacyControllers.includes("mountLiveWorkbench"), "legacy controller service configures the live controller mount function");
-assert.ok(legacyControllers.includes("disposeLiveWorkbench"), "legacy controller service configures the live controller dispose function");
+assert.ok(liveRoute.includes("mountLiveWorkbench"), "React live route directly configures the TypeScript runtime mount function");
+assert.ok(liveRoute.includes("disposeLiveWorkbench"), "React live route directly configures the TypeScript runtime disposer");
 assert.ok(!liveRoute.includes("window.__LANGERFACE_REACT_MANAGED__ = true"), "React live route does not duplicate managed flag logic");
 assert.ok(liveRoute.includes("<LiveWorkbench />"), "React live route renders the live UI as TSX");
 assert.ok(!liveRoute.includes("DOMParser"), "React live route should not parse legacy HTML");
