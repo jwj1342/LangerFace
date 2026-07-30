@@ -3,6 +3,7 @@ import fs from "node:fs";
 import assert from "node:assert/strict";
 
 const compatibilityHtml = fs.readFileSync("incision_workflow.html", "utf8");
+const legacyAgenticCompatibilityHtml = fs.readFileSync("incision_agent.html", "utf8");
 function normalizeTsxContracts(source) {
   return source.replace(/id:\s*"([^"]+)"/g, 'id="$1"');
 }
@@ -33,6 +34,14 @@ const controllerSnapshotSchemas = fs.readFileSync("src/lib/controllerSnapshotSch
 
 assert.ok(compatibilityHtml.includes("/app/incision"), "legacy incision HTML redirects to the React incision route");
 assert.ok(!compatibilityHtml.includes("incision_workflow_main.js"), "legacy incision HTML no longer mounts the incision controller directly");
+assert.ok(
+  legacyAgenticCompatibilityHtml.includes("/app/incision"),
+  "retired incision_agent.html links continue to redirect to the deterministic workflow",
+);
+assert.ok(
+  !legacyAgenticCompatibilityHtml.includes("incision_agent_main.js"),
+  "retired incision_agent.html never mounts the deleted Agentic runtime",
+);
 assert.ok(html.includes('id="boundaryStatus"'), "workbench exposes tumor boundary status");
 assert.ok(html.includes('id="anatomyPreview"'), "workbench exposes live anatomy preview for selected tumor center");
 assert.ok(html.includes('id="exportTumorBtn"'), "workbench exposes tumor export button");
@@ -85,7 +94,7 @@ assert.ok(incisionSnapshotsService.includes("IncisionSavedCandidateRecordLike"),
 assert.ok(!incisionSnapshotsService.includes("result: any"), "shared incision snapshot service does not accept untyped candidate results");
 assert.ok(!incisionSnapshotsService.includes("records?: any[]"), "shared incision snapshot service does not accept untyped saved candidate records");
 assert.ok(incisionSnapshotsService.includes("../lib/controllerSnapshotSchemas"), "shared incision snapshot service reuses the lightweight React snapshot schema module");
-assert.ok(controllerSnapshotSchemas.includes("react-incision-controller-snapshot/v0.1"), "shared snapshot schema module owns the incision React snapshot schema");
+assert.ok(controllerSnapshotSchemas.includes("react-incision-controller-snapshot/v0.2"), "shared snapshot schema distinguishes the workflow-only incision state shape");
 assert.ok(js.includes("./incisionSnapshots"), "workbench consumes the shared typed incision snapshot service");
 assert.ok(js.includes("buildIncisionControllerSnapshot({"), "workbench delegates React snapshot payloads to the shared service");
 assert.ok(js.includes('from "./exportPrivacy"'), "workbench imports browser export privacy preflight from the typed service");
@@ -119,7 +128,7 @@ assert.ok(js.includes("secondary_cues"), "review exports include secondary cue s
 assert.ok(js.includes("used_for_geometry: false"), "secondary cues never drive geometry");
 assert.ok(js.includes("辅助线索仅随审阅导出，不参与几何"), "privacy copy keeps secondary cues out of geometry");
 assert.ok(js.includes("tip_angle_error_deg"), "workbench renders fusiform tip angle error");
-assert.ok(js.includes("incision-review-record/v0.3"), "review records use explicit review workflow schema");
+assert.ok(js.includes("incision-review-record/v0.4"), "review records use explicit review workflow schema");
 assert.ok(js.includes("approved_for_discussion"), "review records support clinician approval");
 assert.ok(js.includes("rejected_by_clinician"), "review records support clinician rejection");
 assert.ok(js.includes("audit_events"), "review records include audit events");
