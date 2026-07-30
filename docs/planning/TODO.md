@@ -8,10 +8,8 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
 
 ## 当前产品边界
 
-- 当前聚焦实时/个性化 2D RSTL、图谱标注、医生输入的肿物几何、确定性切口候选、guardrails 和审阅导出。
-- `/app` 是无状态研究工具入口；不建立病例大厅、患者档案、历史记录、本地病例持久化或云端病例库。
-- 系统只做研究级决策辅助可视化，不输出自主手术指令；候选和图谱在医生复核前保持未临床验证状态。
-- 低置信度皱纹、自然皱襞和病灶边界只作 secondary cue；不得自动改变 `/incision` 几何。
+产品承诺、明确暂缓项与未来重启条件由
+[`clinical/PRODUCT_BOUNDARIES.md`](../clinical/PRODUCT_BOUNDARIES.md) 维护；本文只跟踪 open issue 状态。
 
 ## 临床出口
 
@@ -34,6 +32,8 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
       · Ready PR #120；Python/TypeScript 共享 fixture 锁定 `disableRuntimeExpansion`。
 - [ ] 切口与实时工作台控件对比度 — [#115](https://github.com/jwj1342/LangerFace/issues/115)
       · Ready PR #119；浏览器断言锁定 active control ≥ 4.5:1。
+- [ ] 修复固定名运行时资产被旧 immutable 缓存钉死 — [#135](https://github.com/jwj1342/LangerFace/issues/135)
+      · Ready PR #117；改用条件回源并拆分固定名资产与带哈希构建产物的缓存策略。
 
 ## 文档与架构
 
@@ -41,13 +41,3 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
       · 当前 PR；删除专题重复页，把标注验收、FLAME 切口资产、纹理 warp 和产品边界归回各自 owner。
 - [ ] Phase 2：消化大型 runtime，推进核心 TypeScript 服务化 — [#95](https://github.com/jwj1342/LangerFace/issues/95)
       · 长期 epic；按小 PR 拆 scene、export、live state/lifecycle、annotation 和 legacy adapter，不用单个大 PR 假装完成。
-
-## 暂缓路线与重启条件
-
-实时 3D 重建、肌肉骨骼实时孪生、术中级软组织/肌肉骨骼耦合模拟不属于当前 Stage 2。
-未来重启必须新开决策 issue，并同时满足：
-
-- 已有受控真实数据、伦理/合规审批和明确临床价值。
-- 已定义可复现的几何、稳定性、安全与医生评审指标。
-- 已明确目标硬件、算力预算、部署/访问控制和日志审计。
-- 临床团队确认该方向优先级高于完善现有 2D RSTL 与病灶闭环。
