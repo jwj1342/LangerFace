@@ -1,5 +1,7 @@
 # 贡献指南 (Contributing)
 
+本文是开发、测试、提交与人工验收的协作契约；环境细节和部署访问分别由链接的专门文档维护。
+
 LangerFace 是一个**两阶段**面部手术可视化研究项目，多人协作：
 
 - **Stage 1（当前）**：在 3D 人脸上稳定标注朗格 / RSTL 皮肤张力线。
@@ -69,6 +71,22 @@ ruff check .                 # 代码风格
 
 跨语言对拍的不变式与金标重生成见 [CROSS_LANG_PARITY.md](../quality/CROSS_LANG_PARITY.md)。
 
+### 3D 标注人工验收
+
+修改 `/annotate`、网格路由或图谱导出后，除自动测试外还要在浏览器核对：
+
+1. 打开 `/app/annotate`，加载标准脸；画线模式下点击同一连通表面的不同三角面，再点“保存当前线”。
+2. 预览线应沿表面展开，不应穿过网格内部；fallback 时 UI 必须明确提示，不能静默导出直线。
+3. 若本地 FLAME 资产可用，加载头模后重复跨三角面绘制；缺少 dev-local 资产时应正常降级，不能作为 fresh clone 的必过步骤。
+4. 导出 atlas JSON，确认每个点为 `[tri,u,v]`、包含 `topologyId`/`topologyVersion` 且
+   `validated:false`；导出点数与屏幕预览路径点一致。上传任意自定义头模时只能导出 xyz，
+   不能伪装成项目 atlas。
+5. 返回实时页预览 MediaPipe atlas，确认线条连续、无明显漂移；FLAME atlas 不得越过 topology gate 注入 2D 实时页。
+
+自动覆盖在 `tools/test_annotate_model.ts`、`tools/test_annotate_ui.ts`、
+`tools/test_atlas_contract.ts`、`tools/test_topology_registry.ts` 和
+`tools/test_atlas_roundtrip.ts`；人工验收只负责浏览器贴面反馈与视觉连续性。
+
 ## PR / Preview 工作流
 
 本项目采用 **GitHub Actions 做质量门禁，Vercel Git 集成做网页 Preview / Production 部署**。日常协作不要手动 `npx vercel deploy --prod`；按 PR 流程走，避免绕过测试和审阅。
@@ -112,16 +130,8 @@ Preview 人工验收清单：
 - 如果控制台出现 `Unexpected token '<'` 或 `<!DOCTYPE` JSON 解析错误，优先检查资产 URL 是否被嵌套 SPA 路由错误解析。
 - 浏览器控制台没有新的应用级错误。MediaPipe 的 WebGL / XNNPACK 初始化日志通常是正常信息。
 
-注意：
-
-- Vercel Preview 可能启用了 Deployment Protection。协作者访问规则如下：
-  - 项目组成员：加入 Vercel project/team 后，用自己的 Vercel 账号登录访问 Preview。
-  - 外部临床评审：由维护者在 Vercel 生成 Shareable Link，或临时开启 Password Protection 并单独发送密码。
-  - 自动化测试：只使用 Vercel Protection Bypass for Automation，secret 放在 GitHub Secrets；不要把 bypass token 当作人工分享链接。
-  - 只有确认 Preview 不含受限头模、真实人脸影像或未公开数据时，才考虑关闭 Preview protection。
-- PR Preview 和生产站不是同一个地址。验证分支改动时不要只看 Production URL（见 [CI/CD 与 Vercel 部署指南](../quality/CI_CD_VERCEL.md#production-url)）；那是 `master` 的生产环境。
-- `master` 受 GitHub Branch Protection 保护：PR 合并前必须通过必需 checks，并至少获得 1 个 approving review。
-- 详细的 Vercel 项目设置、branch protection 和排障信息见 [CI/CD 与 Vercel 部署指南](../quality/CI_CD_VERCEL.md)。
+Preview protection、协作者/外部评审/自动化三种访问方式、Production URL 与 branch protection 的唯一 owner 是
+[CI/CD 与 Vercel 部署指南](../quality/CI_CD_VERCEL.md)。不要在贡献指南复制 token 或访问策略。
 
 ## 架构与扩展点
 

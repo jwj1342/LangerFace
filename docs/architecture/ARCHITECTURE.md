@@ -81,7 +81,8 @@ P = u·V0 + v·V1 + w·V2
 > PR #108 关闭的是**本节描述的这条实时 3D 路线**的用户入口：实时页的「3D 面部重建」下拉项、
 > FLAME 实时孪生、以及三维资产预览页（`/three-preview`，已在 PR #110 删除）。这些 runtime 代码仍保留在
 > `web/src/services/mode3d.ts` / `projection3d.ts` / `three3d.ts`，但没有界面能进入。
-> 去留取决于 #61 与 #40，见 [FLAME_3D_TRACK.md](../tracks/FLAME_3D_TRACK.md)。
+> #40 / PR #122 将路线收敛为 2D-first，3D 只保留离线资产、标注和研究预览，见
+> [FLAME_3D_TRACK.md](../tracks/FLAME_3D_TRACK.md)。
 >
 > **仍保留且可从界面进入的 3D 功能**：标准图谱生产 / 复核用的 3D 标注工具 `/annotate`
 > （路径：首页「图谱库管理」→ `/settings/atlas` → 打开图谱标注工具；`/app/annotate` 为兼容地址），
@@ -124,9 +125,12 @@ P = u·V0 + v·V1 + w·V2
 - 文件：`assets/atlas_rstl.json` / `assets/atlas_langer.json`（导出到 `web/assets/`）。
 - 结构：
   ```json
-  {"system":"rstl","version":"0.2","provenance":"...","validated":false,
+  {"system":"rstl","version":"0.2","atlasVersion":"8.1.67",
+   "topologyId":"mediapipe-468","topologyVersion":"mediapipe-canonical-468-v1",
+   "provenance":"...","validated":false,
    "lines":[{"name":"f0","region":"rstl","points":[[tri,u,v], ...]}, ...]}
   ```
+- `version` 是信封/格式契约版本；`atlasVersion` 是图谱内容发布版本。二者不能互相替代。
 - 方向场流线生成 [`tools/build_field_atlas.py`](../../tools/build_field_atlas.py)：
   1. 在归一化人脸框内定义朝向场 θ(x,y)：用 `(cos2θ,sin2θ)` 加权平均融合各区走向（前额横/鼻竖/眼周同心/口周放射/颊斜）。
   2. Jobard–Lefèvre 等间距流线追踪（`d_sep` 控密度，越小越密；脚本默认 **0.030**）。
@@ -153,11 +157,19 @@ P = u·V0 + v·V1 + w·V2
 | `canonical_face_model.obj` | MediaPipe 仓库 | 顶点/三角拓扑/UV（图谱坐标基底）|
 | `face_landmarker.task` (~3.6M) | MediaPipe models | 478 人脸关键点 |
 | `hand_landmarker.task` (~7.5M) | MediaPipe models | 21 手部关键点（手部遮挡）|
-| `atlas_rstl.json` / `atlas_langer.json` | 本项目生成（Borges RSTL 走向，示意首版）| 线条图谱 |
+| `atlas_rstl.json` / `atlas_langer.json` | 本项目生成；RSTL 由正式参考输入确定性生成，Langer 为对照资产 | 线条图谱；RSTL `atlasVersion=8.1.67`，两者 `validated:false` |
+| `rstl_standard_reference_v8_1_67.json` (~1.7M) | 医生标准图结构化提取与约束 | 正式 RSTL v8.1.67 的可复现生成输入 |
 | `triangles.json` / `canonical_vertices.json` | 由 obj 导出 | 网页端拓扑/几何 |
 | `recon_demo.json` | 示例视频重建 | 3D Beta 直接体验 |
+| `flame_basis.npz` + `flame_basis.NOTICE.md` (~3.5M) | CC BY 4.0 可再分发的紧凑 FLAME 派生 basis | 离线 FLAME 拟合；署名和来源以 NOTICE 为准 |
+| `web/assets/flame_basis.bin` (~6.9M) | 由 `tools/build_flame_basis.py` 从同一 basis 生成 | 浏览器标注、切口 3D 研究预览所需的身份/表情/jaw basis |
+| `assets/models/*.pth` (~69M) | CC BY-NC-SA 4.0 衍生 checkpoint | Python 皱纹/辅助线索研究；非商业、非临床发布资产 |
+| `wrinkle-yolov8s-seg-640.onnx.part00..03` (~47M) | 个性化模型的四分片浏览器产物 | `/personalized` 本地 WASM 推理；来源、hash 和许可见同目录 MODEL_CARD/NOTICE |
+| `clinical_rules_face_incision.json` | 本项目维护的结构化规则草案 | 本地确定性切口候选与 guardrails；`draft_not_clinically_validated` |
+| `incision_workflow_schema.json` | 本项目 JSON Schema | 确定性 workflow 输入/输出契约；不是 Agentic/Provider schema |
 | MediaPipe tasks-vision (JS) | npm `@mediapipe/tasks-vision@0.10.35` + jsDelivr wasm `@0.10.35` | 浏览器端推理（wasm）|
 | Three.js | npm `three@0.184.0` | 3D 渲染 |
+| ONNX Runtime Web | npm `onnxruntime-web@1.27.0` | `/personalized` 按需加载的浏览器 WASM 推理运行时 |
 
 下载脚本：`tools/download_assets.py`（obj + 人脸模型）；手部模型与 web 资产见 README 复现步骤；`tools/export_web_assets.py` 导出网页资产。
 
@@ -278,6 +290,11 @@ npm run dev
 | `web/index.html` / `web/src/routes/AnnotateRoute.tsx` / `web/src/components/Annotate*.tsx` | React 标注页入口与 UI |
 | `web/annotate.html` / `web/annotate.css` | 标注兼容跳转页与历史样式 |
 
+工程验收必须守住三条边界：跨三角面控制点要沿连通表面展开且 fallback 可见；项目 atlas 只能导出
+带 topology 信封的 `[tri,u,v]` 并保持 `validated:false`；任意自定义网格只能导出 xyz。浏览器人工步骤
+统一放在 [CONTRIBUTING «3D 标注人工验收»](../onboarding/CONTRIBUTING.md#3d-标注人工验收)，本架构文档
+不再维护易漂移的按钮文案清单。
+
 ---
 
 ## 13. HeadSpace / FaceScape 离线数据与配准管线
@@ -376,7 +393,7 @@ Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部
 （由 `web/assets/flame_basis.bin` 生成 neutral mesh），失败时回退 `mediapipe-468`。
 MediaPipe RSTL 草案不会以 `[tri,u,v]` 形式直接套用到 FLAME 三角面；当前只生成
 `points3d` 预览线并保持 `validated:false`。FLAME 候选不会直接进入实时 MediaPipe
-叠加，相关核验点和非目标见 [INCISION_FLAME_ASSET_STRATEGY.md](../tracks/INCISION_FLAME_ASSET_STRATEGY.md)。
+叠加，相关核验点和非目标见 [FLAME_3D_TRACK.md §10](../tracks/FLAME_3D_TRACK.md#10-切口工作台的-flame-资产边界)。
 
 这些模块应与 `lines/`、`rendering/` 同级接入：`lines/` 仍只负责张力线图谱，`tumor/` 负责病灶几何输入，`incision/` 负责候选曲线生成与规则解释。
 
@@ -469,16 +486,9 @@ candidate = segment(center, axis, length)
 
 ### 14.6 验证与失败模式
 
-Stage 2 必须先定义验证指标，再谈临床可用：
-
-- RSTL 方向误差：候选长轴与医生确认方向的角度差。
-- 投影稳定性：视频 / AR 中候选线端点和肿物中心的帧间抖动。
-- 肿物边界误差：人工边界与系统边界的 IoU / Hausdorff / 直径误差。
-- 几何规则误差：长宽比例、尖端角、曲率连续性、左右对称性。
-- 敏感结构安全：敏感区警告召回率和误报率。
-- 医生接受率：候选被直接接受、轻微修改、重大修改、否决的比例。
-
-失败模式必须显式记录：检测失败、面部分区错分、方向低置信度、图谱未 validated、皮肤松弛度不足、病变性质/切缘未输入、敏感结构漏警、用户把系统输出误认为手术指令等。当前敏感游离缘距离是标准脸归一化锚点与下睑/鼻翼/唇红缘简化线段的工程筛查，并用 draft 分结构阈值触发提示，不是临床测量。
+Stage 1/2 数据集 schema、方向/稳定性/几何/敏感结构指标、失败分类和人工评审表的唯一 owner 是
+[VALIDATION.md](../quality/VALIDATION.md)。本节只定义模块契约，不复制指标表。当前敏感游离缘距离仍是
+标准脸归一化锚点与简化线段的工程筛查，不是患者真实毫米级临床测量。
 
 ### 14.7 参考依据
 

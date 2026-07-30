@@ -1,36 +1,41 @@
 # TODO / 路线图
 
-待办与 [GitHub Issues](https://github.com/jwj1342/LangerFace/issues) 同步。
-Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候选设计。
+本文只列 GitHub 中当前为 open 的 issue；GitHub Issues 是状态真源。`tools/check_todo_issue_sync.mjs`
+会比较所有未勾选 issue 链接与仓库 open issue，issue 打开、关闭或重开时由独立 workflow 自动检查。
+已完成工作的历史归 PR/issue，本文件不再充当逐 PR changelog。
 
-> PR #91 已把 Stage 2 的工程闭环推进到候选切口、审阅导出、2D 实时叠加、验证文档与隐私审计；合并前下列 issue 仍在 GitHub 显示 open。当前产品边界见 [PRODUCT_BOUNDARIES.md](../clinical/PRODUCT_BOUNDARIES.md)。
+Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定性候选切口、医生审阅和受控叠加。
 
-## Stage 1 收尾
-- [ ] 临床医生校验线图谱并置 `validated:true`（Stage 1 真正出口）— [#2](https://github.com/jwj1342/LangerFace/issues/2)
-      · 现可用[网页 3D 标注](../architecture/ARCHITECTURE.md#12-网页-3d-线标注与图谱草案导出)在标准脸上产出待复核图谱草案
+## 当前产品边界
 
-## 增强
-- [ ] 通用外部遮挡：语义分割识别器械 / 纱布 / 口罩 — [#3](https://github.com/jwj1342/LangerFace/issues/3)
-- [ ] 3D：非刚性配准、网格导出（.obj/.glb）、3D 投影叠加手部遮挡 — [#4](https://github.com/jwj1342/LangerFace/issues/4)
-- [ ] 录制 / 导出完善（含放大窗与 3D）— [#5](https://github.com/jwj1342/LangerFace/issues/5)
-      · 本 PR 已把实时页导出从单一主画布升级为组合录制：主 canvas 仍作为主体，右侧可附带当前可见的全脸/切口候选/区域细节放大窗和 3D 视图，输出仍为 `video/webm`；没有附加画布时保持原主画布 `captureStream` 行为。
+产品承诺、明确暂缓项与未来重启条件由
+[`clinical/PRODUCT_BOUNDARIES.md`](../clinical/PRODUCT_BOUNDARIES.md) 维护；本文只跟踪 open issue 状态。
 
-## Stage 2：肿物与切口设计
+## 临床出口
 
-临床目标：把标准 RSTL / 皱襞 / 美学亚单位边界迁移到患者脸上，在医生输入肿物信息后，生成可解释、可编辑、可审阅的候选切口。系统只做决策辅助，不输出手术指令。
+- [ ] 临床医生校验线图谱并置 `validated:true`（Stage 1 出口）— [#2](https://github.com/jwj1342/LangerFace/issues/2)
+      · 工程侧可生成 review packet、网页 3D 标注草案和指标，但只有受控临床流程中的医生能完成此项。
 
-### 临床知识与几何基础
+## 待合并的独立修复 / 功能
 
-- [ ] 结构化面部皮纹线与切口设计原则，形成可版本管理的临床规则库 — [#11](https://github.com/jwj1342/LangerFace/issues/11)
-      · 本 PR 已提供 `assets/clinical_rules_face_incision.json`，包含 RSTL 首选、自然皱襞/美学亚单位次级、敏感游离缘例外、皮下/皮表策略、区域规则、provenance 和 `draft_not_clinically_validated` 状态；前端 JS 合约测试会守住资产和浏览器默认规则的版本、长度/梭形参数、guardrail 阈值与保护性方向 hint 不漂移
-- [ ] 面部分区与美学亚单位定位：把人脸点位映射到临床区域 — [#12](https://github.com/jwj1342/LangerFace/issues/12)
-      · 本 PR 已覆盖额部、耳周、颞颊、上下睑、内眦、鼻背/鼻翼/鼻尖、鼻唇沟、颊部、唇红、上唇、口角、颏部和下颌缘，并输出 `confidence_reasons` 与 `region_boundary_margin_norm`；前端在肿物点位选择时会实时显示当前分区、亚单位、置信度和敏感游离缘/规则边界提示；真实 MediaPipe/FLAME 分区边界和侧脸/表情稳定性仍待后续临床校验
-- [ ] RSTL 局部方向服务：为切口设计提供方向、置信度与可解释依据 — [#13](https://github.com/jwj1342/LangerFace/issues/13)
-      · 本 PR 已支持 atlas weighted-nearest 查询、support count、无向轴角离散度、JS/Python 对拍和结构化 `confidence_reasons`；atlas 为空、最近支持点过远、支持点过少或邻域角度冲突会进入 trace、候选 provenance、前端方向依据、guardrail 文案和报告；前端会区分 RSTL atlas、敏感结构方向例外、辅助线索只读和医生人工覆盖；临床级 atlas 质量与个体头模一致性仍待医生校验
-- [ ] Borges RSTL 3DMM 拓扑先验：数字化经典图谱并注册到 FLAME/BFM 标准网格 — [#86](https://github.com/jwj1342/LangerFace/issues/86)
-      · 本 PR 已把 `rstl_mediapipe_direction_prior.json` 改为 remote/generated 大资产契约：manifest 记录 `remote_filename` 与 gitignored `local_outputs/rstl_mediapipe_direction_prior.json`，仓库不再提交这份高密度方向场 JSON；`tools/audit_rstl_3dmm_prior.py` 自动审计 manifest 的拓扑、`validated:false`、remote/generated 边界和 FLAME/BFM pending 边界；`tools/build_flame_rstl_direction_prior.py` 可在本地 FLAME 资产就位后生成 gitignored 的 `rstl-3dmm-direction-prior/v0.1` dev-local 方向场；`tools/build_3dmm_rstl_direction_prior.py` 可对授权本地 BFM/custom 3DMM 拓扑生成同 schema 的 review scaffold，并把 target name、topology path、vertices path 写入 provenance；`tools/build_rstl_3dmm_review_packet.py` 可把草案方向先验抽样成 `rstl-3dmm-review-packet/v0.1` 医生审阅包，覆盖低置信度、高方向离散度、空间极值和均匀覆盖样本，并可额外导出 gitignored CSV 表格，保留 reviewer / decision / corrected direction / notes 等待填字段；`tools/apply_rstl_3dmm_review_packet.py` 可直接应用 JSON 审阅包，也可用 `--review-csv` 把医生表格结果按 `review_id` / sample index 回灌到 JSON packet 后再生成 gitignored 的 `rstl-3dmm-reviewed-direction-prior/v0.1` 草案，并保留 reviewer、reviewed_at、校正向量、decision source、CSV overlay 计数和 rejected excluded 标记；正式 FLAME/BFM 注册仍待 #61 资产与医生标注
+- [ ] RSTL 局部方向服务 Python/TypeScript parity — [#13](https://github.com/jwj1342/LangerFace/issues/13)
+      · Ready PR #121；共享金标覆盖 atlas、低置信、FLAME `points3d` 和 ±180° 轴向 wrap。
+- [ ] 皮表梭形切口完整验收 — [#16](https://github.com/jwj1342/LangerFace/issues/16)
+      · Ready PR #119；补齐可编辑尖端角、轮廓重算、guardrail 与 provenance。
+- [ ] 3D 路线可行性裁决 — [#40](https://github.com/jwj1342/LangerFace/issues/40)
+      · Ready PR #122；裁决 2D-first + 3D 离线资产/标注/研究预览。
+- [ ] 修复 React 受控输入 snapshot echo — [#109](https://github.com/jwj1342/LangerFace/issues/109)
+      · Ready PR #119；Chromium 回归覆盖输入保持。
+- [ ] 删除 Agentic/Provider 出域路径 — [#111](https://github.com/jwj1342/LangerFace/issues/111)
+      · Ready PR #118；保留本地确定性 workflow，不保留 Provider UI、密钥或远程模型请求。
+- [ ] 统一额头 runtime expansion 契约 — [#112](https://github.com/jwj1342/LangerFace/issues/112)
+      · Ready PR #120；Python/TypeScript 共享 fixture 锁定 `disableRuntimeExpansion`。
+- [ ] 切口与实时工作台控件对比度 — [#115](https://github.com/jwj1342/LangerFace/issues/115)
+      · Ready PR #119；浏览器断言锁定 active control ≥ 4.5:1。
+- [ ] 修复固定名运行时资产被旧 immutable 缓存钉死 — [#135](https://github.com/jwj1342/LangerFace/issues/135)
+      · Ready PR #117；改用条件回源并拆分固定名资产与带哈希构建产物的缓存策略。
 
-### 肿物与切口候选生成
+## 文档与架构
 
 - [ ] 肿物输入模型：支持皮下肿物与皮表肿物的术前约束表达 — [#14](https://github.com/jwj1342/LangerFace/issues/14)
       · 本 PR 已支持中心点、直径/深度/切缘、椭圆/自由轮廓、来源作者、肿物 JSON 导入导出、`tumor_quality` 输入质量摘要，以及自由轮廓点数/面积/自交/中心偏移 guardrails；新版 `boundary_summary` 会随前端导出 `units_per_mm`、`summary_axis` 和 `summary_normal`，审阅记录额外写入 `tumor_boundary_summary`，按保存候选的长轴固化边界点数、长短轴、面积、自交和中心偏移，Markdown 报告会显示“肿物边界摘要”；缺作者、非 mm 单位、缺皮下深度、缺皮表切缘或边界过稀会进入 trace/报告/审阅导出；当前由浏览器 workflow 和 JS 合约测试守住肿物输入、边界摘要、隐私预检和候选 metrics 的自洽性，自动影像分割仍属后续
@@ -70,3 +75,7 @@ Stage 1 = 稳定显示张力线（当前）；Stage 2 = 肿物模拟 + 切口候
 ## 暂缓路线
 
 - 肌肉骨骼实时孪生、术中级软组织/肌肉骨骼耦合模拟：当前不属于 Stage 2 切口 workflow 目标。未来如重启，需另开决策 gate，详见 [PRODUCT_BOUNDARIES.md](../clinical/PRODUCT_BOUNDARIES.md)。
+- [ ] 合并重复文档、修正内容 owner 并自动核对 TODO 状态 — [#113](https://github.com/jwj1342/LangerFace/issues/113)
+      · 当前 PR；删除专题重复页，把标注验收、FLAME 切口资产、纹理 warp 和产品边界归回各自 owner。
+- [ ] Phase 2：消化大型 runtime，推进核心 TypeScript 服务化 — [#95](https://github.com/jwj1342/LangerFace/issues/95)
+      · 长期 epic；按小 PR 拆 scene、export、live state/lifecycle、annotation 和 legacy adapter，不用单个大 PR 假装完成。
