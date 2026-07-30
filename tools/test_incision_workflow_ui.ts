@@ -71,6 +71,8 @@ assert.ok(html.includes('id="approveCandidateBtn"'), "workbench exposes candidat
 assert.ok(html.includes('id="rejectCandidateBtn"'), "workbench exposes candidate rejection action");
 assert.ok(html.includes('id="candidateWidth"'), "workbench exposes fusiform width and ratio metric");
 assert.ok(html.includes('id="candidateTipAngle"'), "workbench exposes fusiform tip angle metric");
+assert.ok(html.includes('id="tipAngleDeg"'), "workbench exposes clinician-adjustable fusiform tip angle");
+assert.ok(html.includes('id="tipAngleWrap"'), "workbench scopes the tip-angle control to fusiform candidates");
 assert.ok(js.includes("exportTumorJson"), "workbench implements tumor JSON export");
 assert.ok(js.includes("importTumorFile"), "workbench implements tumor JSON import");
 assert.ok(js.includes("applyImportedTumor"), "workbench applies imported tumor payloads");
@@ -127,6 +129,7 @@ assert.ok(js.includes("audit_events"), "review records include audit events");
 assert.ok(js.includes("guardrail_summary"), "review records include guardrail summary");
 assert.ok(js.includes("review_gate"), "review records include review gate state");
 assert.ok(js.includes("candidate_edit_session"), "review records include clinician edit session state");
+assert.ok(js.includes("tip_angle_deg: entry.tip_angle_deg"), "review records retain tip-angle edit provenance");
 assert.ok(js.includes("candidate-edit-session/v0.1"), "clinician edit session has an explicit schema");
 assert.ok(js.includes("undoEditSnapshot"), "workbench implements clinician edit undo");
 assert.ok(js.includes("redoEditSnapshot"), "workbench implements clinician edit redo");

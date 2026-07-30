@@ -57,6 +57,9 @@ export interface IncisionDomElements extends Record<string, any> {
   widthScale: HTMLInputElement;
   widthScaleVal: HTMLElement;
   widthScaleWrap: HTMLElement;
+  tipAngle: HTMLInputElement;
+  tipAngleVal: HTMLElement;
+  tipAngleWrap: HTMLElement;
   shiftAlong: HTMLInputElement;
   shiftAlongVal: HTMLElement;
   shiftPerp: HTMLInputElement;
@@ -149,6 +152,9 @@ export function collectIncisionElements(root: ParentNode | Document = document):
     widthScale: byId(root, "widthScale"),
     widthScaleVal: byId(root, "widthScaleVal"),
     widthScaleWrap: byId(root, "widthScaleWrap"),
+    tipAngle: byId(root, "tipAngleDeg"),
+    tipAngleVal: byId(root, "tipAngleVal"),
+    tipAngleWrap: byId(root, "tipAngleWrap"),
     shiftAlong: byId(root, "shiftAlongMm"),
     shiftAlongVal: byId(root, "shiftAlongVal"),
     shiftPerp: byId(root, "shiftPerpMm"),

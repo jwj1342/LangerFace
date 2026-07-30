@@ -54,6 +54,18 @@ test("active controls remain readable and clinician sliders retain edits", async
   await page.waitForTimeout(300);
   await expect(angle).toHaveValue("1");
   await expect(page.locator("#editStatus")).toHaveText("已调整");
+
+  await page.locator("#tumorKind").selectOption("cutaneous");
+  await expect(page.locator("#candidateType")).toHaveText("梭形");
+  const tipAngle = page.locator("#tipAngleDeg");
+  await expect(tipAngle).toBeVisible();
+  await expect(tipAngle).toHaveValue("30");
+  await tipAngle.focus();
+  await tipAngle.press("ArrowRight");
+  await expect(tipAngle).toHaveValue("31");
+  await page.waitForTimeout(300);
+  await expect(tipAngle).toHaveValue("31");
+  await expect(page.locator("#candidateTipAngle")).toContainText("31.0°");
 });
 
 test("live workbench controls use the same readable clinical theme", async ({ page }) => {

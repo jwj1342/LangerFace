@@ -16,12 +16,14 @@ const DEFAULT_EDIT_STATE = {
   angleOffsetDeg: 0,
   lengthScalePct: 100,
   widthScalePct: 100,
+  tipAngleDeg: 30,
   shiftAlongMm: 0,
   shiftPerpMm: 0,
   reason: "",
   statusLabel: "工具建议",
   active: false,
   widthScaleVisible: false,
+  tipAngleVisible: false,
   historyLabel: "编辑版本：v1 · 无已提交调整",
   undoDisabled: true,
   redoDisabled: true,
@@ -33,12 +35,14 @@ export function EditControlsPanel() {
   const [angleOffsetDeg, setAngleOffsetDeg] = useState(String(DEFAULT_EDIT_STATE.angleOffsetDeg));
   const [lengthScalePct, setLengthScalePct] = useState(String(DEFAULT_EDIT_STATE.lengthScalePct));
   const [widthScalePct, setWidthScalePct] = useState(String(DEFAULT_EDIT_STATE.widthScalePct));
+  const [tipAngleDeg, setTipAngleDeg] = useState(String(DEFAULT_EDIT_STATE.tipAngleDeg));
   const [shiftAlongMm, setShiftAlongMm] = useState(String(DEFAULT_EDIT_STATE.shiftAlongMm));
   const [shiftPerpMm, setShiftPerpMm] = useState(String(DEFAULT_EDIT_STATE.shiftPerpMm));
   const [reason, setReason] = useState(DEFAULT_EDIT_STATE.reason);
   const [statusLabel, setStatusLabel] = useState(DEFAULT_EDIT_STATE.statusLabel);
   const [active, setActive] = useState(DEFAULT_EDIT_STATE.active);
   const [widthScaleVisible, setWidthScaleVisible] = useState(DEFAULT_EDIT_STATE.widthScaleVisible);
+  const [tipAngleVisible, setTipAngleVisible] = useState(DEFAULT_EDIT_STATE.tipAngleVisible);
   const [historyLabel, setHistoryLabel] = useState(DEFAULT_EDIT_STATE.historyLabel);
   const [undoDisabled, setUndoDisabled] = useState(DEFAULT_EDIT_STATE.undoDisabled);
   const [redoDisabled, setRedoDisabled] = useState(DEFAULT_EDIT_STATE.redoDisabled);
@@ -49,12 +53,14 @@ export function EditControlsPanel() {
     setAngleOffsetDeg(String(edit.angleOffsetDeg));
     setLengthScalePct(String(edit.lengthScalePct));
     setWidthScalePct(String(edit.widthScalePct));
+    setTipAngleDeg(String(edit.tipAngleDeg));
     setShiftAlongMm(String(edit.shiftAlongMm));
     setShiftPerpMm(String(edit.shiftPerpMm));
     setReason(edit.reason || "");
     setStatusLabel(edit.statusLabel || DEFAULT_EDIT_STATE.statusLabel);
     setActive(Boolean(edit.active));
     setWidthScaleVisible(Boolean(edit.widthScaleVisible));
+    setTipAngleVisible(Boolean(edit.tipAngleVisible));
     setHistoryLabel(edit.historyLabel || DEFAULT_EDIT_STATE.historyLabel);
     setUndoDisabled(Boolean(edit.undoDisabled));
     setRedoDisabled(Boolean(edit.redoDisabled));
@@ -118,6 +124,23 @@ export function EditControlsPanel() {
           onKeyUp={commit}
           onBlur={commit}
           onChange={(event) => setWidthScalePct(event.currentTarget.value)}
+        />
+      </FieldGroup>
+      <FieldGroup id="tipAngleWrap" visible={tipAngleVisible}>
+        <Label htmlFor="tipAngleDeg">尖端角 <FieldValue id="tipAngleVal">{tipAngleDeg}°</FieldValue></Label>
+        <RangeInput
+          id="tipAngleDeg"
+          min="15"
+          max="60"
+          value={tipAngleDeg}
+          onInput={(event) => {
+            setTipAngleDeg(event.currentTarget.value);
+            preview();
+          }}
+          onPointerUp={commit}
+          onKeyUp={commit}
+          onBlur={commit}
+          onChange={(event) => setTipAngleDeg(event.currentTarget.value)}
         />
       </FieldGroup>
       <FieldGroup>

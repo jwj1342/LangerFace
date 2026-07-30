@@ -123,6 +123,7 @@ interface RuntimeEdit extends DynamicRecord {
   angle_offset_deg: number;
   length_scale: number;
   width_scale: number;
+  tip_angle_deg: number | null;
   shift_along_mm: number;
   shift_perp_mm: number;
   reason: string;
@@ -268,10 +269,12 @@ function currentEditSnapshot() {
   const edit = currentEditBase();
   return buildIncisionEditSnapshot({
     edit,
+    tipAngleDeg: Number(els.tipAngle?.value || baseTipAngleDeg()),
     statusLabel: els.editStatus?.textContent || "工具建议",
     statusActive: Boolean(els.editStatus?.classList?.contains("active")),
     editActive: editIsActive(edit),
     widthScaleVisible: !els.widthScaleWrap?.classList?.contains("hidden"),
+    tipAngleVisible: !els.tipAngleWrap?.classList?.contains("hidden"),
     historyLabel: els.editHistoryState?.textContent || "编辑版本：v1 · 无已提交调整",
     undoDisabled: Boolean(els.undoEdit?.disabled),
     redoDisabled: Boolean(els.redoEdit?.disabled),
@@ -1002,17 +1005,29 @@ function neutralEdit(): RuntimeEdit {
     angle_offset_deg: 0,
     length_scale: 1,
     width_scale: 1,
+    tip_angle_deg: null,
     shift_along_mm: 0,
     shift_perp_mm: 0,
     reason: "",
   };
 }
 
+function baseTipAngleDeg(): number {
+  const base = S.baseResult?.original_candidate || S.baseResult?.candidate;
+  const value = Number(base?.metrics?.tip_angle_target_deg ?? base?.tip_angle_deg ?? 30);
+  return Number.isFinite(value) ? value : 30;
+}
+
 function currentEditBase(): RuntimeEdit {
+  const tipAngleDeg = Number(els.tipAngle.value);
+  const baseTipAngle = baseTipAngleDeg();
   return {
     angle_offset_deg: Number(els.angleOffset.value),
     length_scale: Number(els.lengthScale.value) / 100,
     width_scale: Number(els.widthScale.value) / 100,
+    tip_angle_deg: Number.isFinite(tipAngleDeg) && Math.abs(tipAngleDeg - baseTipAngle) > 1e-9
+      ? tipAngleDeg
+      : null,
     shift_along_mm: Number(els.shiftAlong.value),
     shift_perp_mm: Number(els.shiftPerp.value),
     reason: els.editReason.value,
@@ -1023,6 +1038,7 @@ function editIsActive(edit: DynamicRecord = currentEdit()): boolean {
   return edit.angle_offset_deg !== 0 ||
     edit.length_scale !== 1 ||
     edit.width_scale !== 1 ||
+    edit.tip_angle_deg != null ||
     edit.shift_along_mm !== 0 ||
     edit.shift_perp_mm !== 0 ||
     Boolean(edit.reason);
@@ -1032,6 +1048,8 @@ function editsEqual(a: DynamicRecord = neutralEdit(), b: DynamicRecord = neutral
   return Number(a.angle_offset_deg || 0) === Number(b.angle_offset_deg || 0) &&
     Number(a.length_scale || 1) === Number(b.length_scale || 1) &&
     Number(a.width_scale || 1) === Number(b.width_scale || 1) &&
+    (a.tip_angle_deg == null ? null : Number(a.tip_angle_deg)) ===
+      (b.tip_angle_deg == null ? null : Number(b.tip_angle_deg)) &&
     Number(a.shift_along_mm || 0) === Number(b.shift_along_mm || 0) &&
     Number(a.shift_perp_mm || 0) === Number(b.shift_perp_mm || 0) &&
     String(a.reason || "") === String(b.reason || "");
@@ -1042,6 +1060,7 @@ function cloneEdit(edit: DynamicRecord = neutralEdit()): RuntimeEdit {
     angle_offset_deg: Number(edit.angle_offset_deg || 0),
     length_scale: Number(edit.length_scale || 1),
     width_scale: Number(edit.width_scale || 1),
+    tip_angle_deg: edit.tip_angle_deg == null ? null : Number(edit.tip_angle_deg),
     shift_along_mm: Number(edit.shift_along_mm || 0),
     shift_perp_mm: Number(edit.shift_perp_mm || 0),
     reason: String(edit.reason || ""),
@@ -1091,6 +1110,7 @@ function syncEditLabels() {
   els.angleOffsetVal.textContent = els.angleOffset.value;
   els.lengthScaleVal.textContent = `${els.lengthScale.value}%`;
   els.widthScaleVal.textContent = `${els.widthScale.value}%`;
+  els.tipAngleVal.textContent = `${els.tipAngle.value}°`;
   els.shiftAlongVal.textContent = els.shiftAlong.value;
   els.shiftPerpVal.textContent = els.shiftPerp.value;
 }
@@ -1099,6 +1119,9 @@ function setEditControls(edit: DynamicRecord = neutralEdit()) {
   els.angleOffset.value = String(Math.round(Number(edit.angle_offset_deg || 0)));
   els.lengthScale.value = String(Math.round(Number(edit.length_scale || 1) * 100));
   els.widthScale.value = String(Math.round(Number(edit.width_scale || 1) * 100));
+  els.tipAngle.value = String(Math.round(
+    edit.tip_angle_deg == null ? baseTipAngleDeg() : Number(edit.tip_angle_deg),
+  ));
   els.shiftAlong.value = String(Math.round(Number(edit.shift_along_mm || 0)));
   els.shiftPerp.value = String(Math.round(Number(edit.shift_perp_mm || 0)));
   els.editReason.value = String(edit.reason || "");
@@ -1221,6 +1244,7 @@ function handleReactEditCommand(event: Event) {
 function updateEditVisibility(result: DynamicRecord) {
   const fusiform = result?.candidate?.type === "fusiform";
   els.widthScaleWrap.classList.toggle("hidden", !fusiform);
+  els.tipAngleWrap.classList.toggle("hidden", !fusiform);
   const active = editIsActive();
   els.editStatus.textContent = active ? "已调整" : "工具建议";
   els.editStatus.classList.toggle("active", active);
@@ -1459,6 +1483,7 @@ function candidateEditSession(result: DynamicRecord = S.result) {
       angle_offset_deg: entry.angle_offset_deg,
       length_scale: entry.length_scale,
       width_scale: entry.width_scale,
+      tip_angle_deg: entry.tip_angle_deg,
       shift_along_mm: entry.shift_along_mm,
       shift_perp_mm: entry.shift_perp_mm,
       reason: entry.reason || "",
@@ -2223,6 +2248,7 @@ function bindWorkbenchEvents() {
     els.angleOffset,
     els.lengthScale,
     els.widthScale,
+    els.tipAngle,
     els.shiftAlong,
     els.shiftPerp,
     ].forEach((el) => { el.oninput = applyEditControls; });
@@ -2230,6 +2256,7 @@ function bindWorkbenchEvents() {
     els.angleOffset,
     els.lengthScale,
     els.widthScale,
+    els.tipAngle,
     els.shiftAlong,
     els.shiftPerp,
     ].forEach((el) => { el.onchange = () => commitEditSnapshot("control_change"); });
