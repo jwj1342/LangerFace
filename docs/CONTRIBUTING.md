@@ -85,10 +85,13 @@ PR 描述必须保留“技术资料 / 临床依据”小节。凡涉及医学�
 - workflow 只启用 GitHub 原生 Auto-merge；`master` 的 branch protection 仍要求
   必需 checks 通过和至少 1 个 approving review，脚本不会使用 admin bypass。
 - 合并方式固定为 squash，并用当前 head SHA 做并发保护；review 后若又 push 了新
-  commit，GitHub 会按保护规则重新判断，不会把旧的审核结果强行用于变化后的 head。
+  commit，`master` 的 `dismiss_stale_reviews: true` 会撤销旧 approval，必须针对新
+  head 重新审核。该仓库设置是自动合并的安全前提，不得关闭。
 - stacked PR 仍按父到子顺序 review。父 PR 合并后 head branch 自动删除，GitHub 会把
   以该分支为 base 的子 PR retarget 到 `master`；切 base 会取消原 Auto-merge 请求，
-  workflow 会在事件触发或最长约 5 分钟的轮询后重新启用。
+  workflow 会在事件触发或最长约 5 分钟的轮询后处理。如果分支落后于 `master`，
+  workflow 会先按精确 head SHA 自动更新分支；更新产生的新 head 必须重新跑 CI 和审核，
+  下一轮才启用 Auto-merge。
 - 不需要自动合并时不要添加该标签。若要暂停一个已经启用 Auto-merge 的 PR，同时
   移除标签并运行 `gh pr merge <PR号> --disable-auto`，避免后续条件满足时继续合并。
 

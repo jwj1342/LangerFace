@@ -144,6 +144,24 @@ Required status checks 建议包含：
 的开放 PR 自动 retarget 到父 PR 原来的 base，这是 stacked PR 逐层进入 `master`
 的接力点。
 
+`master` 的保护规则还必须保持：
+
+- `strict: true`，PR 分支必须包含最新 `master`；
+- 至少 1 个 approving review；
+- `dismiss_stale_reviews: true`，任何新提交都会撤销旧 approval；
+- 不使用 admin bypass。
+
+2026-07-30 已通过 GitHub API 启用 `dismiss_stale_reviews`。可用下面的只读命令复核，
+不要仅依据文档推断线上设置：
+
+```bash
+gh api repos/jwj1342/LangerFace/branches/master/protection \
+  --jq '{strict:.required_status_checks.strict,
+         dismiss_stale_reviews:.required_pull_request_reviews.dismiss_stale_reviews,
+         approvals:.required_pull_request_reviews.required_approving_review_count,
+         checks:.required_status_checks.contexts}'
+```
+
 维护者为允许自动接力的 PR 添加 `automerge:stack` 标签。
 [`.github/workflows/automerge-approved.yml`](../.github/workflows/automerge-approved.yml)
 会在以下时机扫描：
@@ -160,13 +178,23 @@ Required status checks 建议包含：
 2. 调用 `gh pr merge --auto --squash --match-head-commit <SHA>`，不使用
    `--admin`。实际合并仍由 GitHub 原生 Auto-merge 等待 branch protection：
    必需 checks 全绿且至少 1 个 approval。
-3. `pull_request_target` 场景只从受保护的默认分支 checkout
+3. 如果 PR 因 `strict: true` 落后于 `master`，先调用 GitHub Update branch API，
+   并用 `expected_head_sha` 防止并发覆盖；本轮不会同时启用 Auto-merge。新 head
+   重新通过 CI 和审核后，下一轮才登记自动合并。
+4. 单个 PR 更新或登记失败不会中断后续 PR；脚本会尝试完全部候选，再汇总失败并让
+   workflow 以非零状态结束，便于按 PR 排障。
+5. `pull_request_target` 场景只从受保护的默认分支 checkout
    `tools/automerge_policy.mjs`，不读取或执行 PR head 代码；checkout credential
    不持久化。
-4. workflow 的 job 权限只提升到 `contents: write` 和
+6. workflow 的 job 权限只提升到 `contents: write` 和
    `pull-requests: write`，不允许机器人提交 approving review。
-5. GitHub 在 PR 切换 base 时会取消旧 Auto-merge 请求；workflow 在子 PR
+7. GitHub 在 PR 切换 base 时会取消旧 Auto-merge 请求；workflow 在子 PR
    retarget 到 `master` 后重新启用，避免把它提前合进临时父分支。
+
+Branch protection 的 required checks 是显式 allowlist，不会因为 workflow 新增 job
+自动扩充。新增 `browser-tests`、文档同步或其他合并门禁时，必须等该 job 已在默认分支
+存在、所有仍指向 `master` 的开放 PR 都能产生该 check 后，再把它加入 required
+contexts；在完成设置更新前，不得把新 job 仅写成“必需”而实际仍为 optional。
 
 ### 启用、暂停和排障
 

@@ -9,7 +9,6 @@ on:
       - edited
       - labeled
       - opened
-      - closed
       - ready_for_review
       - reopened
       - synchronize

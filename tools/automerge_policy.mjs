@@ -40,6 +40,17 @@ export function nativeAutomergeArguments(pullRequest, repository) {
   ];
 }
 
+export function updateBranchArguments(pullRequest, repository) {
+  return [
+    "api",
+    "--method",
+    "PUT",
+    `repos/${repository}/pulls/${pullRequest.number}/update-branch`,
+    "-f",
+    `expected_head_sha=${pullRequest.headRefOid}`,
+  ];
+}
+
 function requireRepository(value) {
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(value || "")) {
     throw new Error("AUTOMERGE_REPOSITORY must be an owner/repository name");
@@ -64,7 +75,7 @@ function listPullRequests(repository, defaultBranch, label) {
       "--limit",
       "100",
       "--json",
-      "number,url,isDraft,baseRefName,headRefOid,autoMergeRequest,labels",
+      "number,url,isDraft,baseRefName,headRefOid,mergeStateStatus,autoMergeRequest,labels",
     ],
     {
       encoding: "utf8",
@@ -72,6 +83,48 @@ function listPullRequests(repository, defaultBranch, label) {
     },
   );
   return JSON.parse(output);
+}
+
+export function processEligiblePullRequests(
+  eligible,
+  repository,
+  {
+    dryRun = false,
+    execute = execFileSync,
+    logger = console,
+  } = {},
+) {
+  const processed = [];
+  const failures = [];
+
+  for (const pullRequest of eligible) {
+    const needsBaseUpdate = pullRequest.mergeStateStatus === "BEHIND";
+    const args = needsBaseUpdate
+      ? updateBranchArguments(pullRequest, repository)
+      : nativeAutomergeArguments(pullRequest, repository);
+    const action = needsBaseUpdate ? "update branch for" : "enable native auto-merge for";
+
+    try {
+      if (dryRun) {
+        logger.log(`[dry-run] ${action} #${pullRequest.number}`);
+      } else {
+        execute("gh", args, { stdio: "inherit" });
+      }
+      processed.push(pullRequest.number);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to ${action} #${pullRequest.number}: ${reason}`);
+      failures.push(new Error(`#${pullRequest.number}: ${reason}`, { cause: error }));
+    }
+  }
+
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures,
+      `Failed to process ${failures.length} auto-merge pull request(s)`,
+    );
+  }
+  return processed;
 }
 
 export function run({
@@ -95,15 +148,7 @@ export function run({
     return [];
   }
 
-  for (const pullRequest of eligible) {
-    const args = nativeAutomergeArguments(pullRequest, resolvedRepository);
-    if (dryRun) {
-      console.log(`[dry-run] enable native auto-merge for #${pullRequest.number}`);
-      continue;
-    }
-    execFileSync("gh", args, { stdio: "inherit" });
-  }
-  return eligible.map((pullRequest) => pullRequest.number);
+  return processEligiblePullRequests(eligible, resolvedRepository, { dryRun });
 }
 
 const invokedPath = process.argv[1] ? pathToFileURL(process.argv[1]).href : "";
