@@ -237,8 +237,11 @@ P = u·V0 + v·V1 + w·V2
 - 切口候选由 `src/services/incisionWorkflowTools.ts` 中的本地确定性 workflow 生成；
   `workflow.worker.ts` 通过 Comlink 执行，`workflowPlanner.ts` 在 Worker 不可用时回退到主线程执行相同函数。
   运行时不包含远程模型或模型密钥配置。
-- 切口工作台编排保留在 `src/services/incisionRuntime.ts`；route-scoped DOM 契约、临床展示文案和纯审阅门控分别位于
-  `src/services/incisionDom.ts`、`src/services/incisionClinicalCopy.ts` 与 `src/services/incisionReviewPolicy.ts`。
+- 切口工作台编排保留在 `src/services/incisionRuntime.ts`；route-scoped DOM 查询契约位于
+  `src/services/incisionDom.ts`，canvas / 兼容表单 / 文件输入 / `ResizeObserver` 的监听与对称清理由
+  `src/services/incisionDomBindings.ts` 统一负责，重复 mount 不得累积监听器。长生命周期 renderer/workflow
+  状态的类型与 fresh-mount factory 位于 `src/services/incisionControllerState.ts`；临床展示文案和纯审阅门控
+  分别位于 `src/services/incisionClinicalCopy.ts` 与 `src/services/incisionReviewPolicy.ts`。
   向量运算、平均网格边长以及 ring/boundary/polyline BufferGeometry 构造位于无 DOM、可独立测试的
   `src/services/incisionSceneGeometry.ts`；runtime 只传入当前状态并负责替换/释放 scene geometry。
   审阅/肿物导出 schema、候选工程排序和浏览器下载边界位于 `src/services/incisionExport.ts`；
