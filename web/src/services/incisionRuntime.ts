@@ -69,6 +69,12 @@ import {
   downloadText,
 } from "./incisionExport";
 import {
+  IncisionEditHistory,
+  incisionEditIsActive,
+  neutralIncisionEdit,
+  type IncisionEdit,
+} from "./incisionEditHistory";
+import {
   readIncisionEditCommand,
   readIncisionLibraryCommand,
   readIncisionReviewCommand,
@@ -141,20 +147,8 @@ interface IncisionRuntimeState {
   workflowWorker: WorkflowWorkerClient | null;
   workflowWorkerFailed: boolean;
   reactCommandCleanup: ControllerCleanup | null;
-  editTimeline: DynamicRecord[];
-  editCursor: number;
+  editHistory: IncisionEditHistory;
   lastConsoleTraceSignature: string;
-}
-
-interface RuntimeEdit extends DynamicRecord {
-  angle_offset_deg: number;
-  length_scale: number;
-  width_scale: number;
-  tip_angle_deg: number | null;
-  shift_along_mm: number;
-  shift_perp_mm: number;
-  reason: string;
-  session_history?: DynamicRecord[];
 }
 
 interface PointerDragState {
@@ -205,8 +199,7 @@ function createRuntimeState(): IncisionRuntimeState {
     workflowWorker: null,
     workflowWorkerFailed: false,
     reactCommandCleanup: null,
-    editTimeline: [],
-    editCursor: 0,
+    editHistory: new IncisionEditHistory(),
     lastConsoleTraceSignature: "",
   };
 }
@@ -286,7 +279,7 @@ function currentEditSnapshot() {
     tipAngleDeg: Number(els.tipAngle?.value || baseTipAngleDeg()),
     statusLabel: els.editStatus?.textContent || "工具建议",
     statusActive: Boolean(els.editStatus?.classList?.contains("active")),
-    editActive: editIsActive(edit),
+    editActive: incisionEditIsActive(edit),
     widthScaleVisible: !els.widthScaleWrap?.classList?.contains("hidden"),
     tipAngleVisible: !els.tipAngleWrap?.classList?.contains("hidden"),
     historyLabel: els.editHistoryState?.textContent || "编辑版本：v1 · 无已提交调整",
@@ -962,25 +955,13 @@ function fmt(x: unknown, digits = 1): string {
   return Number.isFinite(Number(x)) ? Number(x).toFixed(digits) : "—";
 }
 
-function neutralEdit(): RuntimeEdit {
-  return {
-    angle_offset_deg: 0,
-    length_scale: 1,
-    width_scale: 1,
-    tip_angle_deg: null,
-    shift_along_mm: 0,
-    shift_perp_mm: 0,
-    reason: "",
-  };
-}
-
 function baseTipAngleDeg(): number {
   const base = S.baseResult?.original_candidate || S.baseResult?.candidate;
   const value = Number(base?.metrics?.tip_angle_target_deg ?? base?.tip_angle_deg ?? 30);
   return Number.isFinite(value) ? value : 30;
 }
 
-function currentEditBase(): RuntimeEdit {
+function currentEditBase(): IncisionEdit {
   const tipAngleDeg = Number(els.tipAngle.value);
   const baseTipAngle = baseTipAngleDeg();
   return {
@@ -996,75 +977,11 @@ function currentEditBase(): RuntimeEdit {
   };
 }
 
-function editIsActive(edit: DynamicRecord = currentEdit()): boolean {
-  return edit.angle_offset_deg !== 0 ||
-    edit.length_scale !== 1 ||
-    edit.width_scale !== 1 ||
-    edit.tip_angle_deg != null ||
-    edit.shift_along_mm !== 0 ||
-    edit.shift_perp_mm !== 0 ||
-    Boolean(edit.reason);
-}
-
-function editsEqual(a: DynamicRecord = neutralEdit(), b: DynamicRecord = neutralEdit()): boolean {
-  return Number(a.angle_offset_deg || 0) === Number(b.angle_offset_deg || 0) &&
-    Number(a.length_scale || 1) === Number(b.length_scale || 1) &&
-    Number(a.width_scale || 1) === Number(b.width_scale || 1) &&
-    (a.tip_angle_deg == null ? null : Number(a.tip_angle_deg)) ===
-      (b.tip_angle_deg == null ? null : Number(b.tip_angle_deg)) &&
-    Number(a.shift_along_mm || 0) === Number(b.shift_along_mm || 0) &&
-    Number(a.shift_perp_mm || 0) === Number(b.shift_perp_mm || 0) &&
-    String(a.reason || "") === String(b.reason || "");
-}
-
-function cloneEdit(edit: DynamicRecord = neutralEdit()): RuntimeEdit {
-  return {
-    angle_offset_deg: Number(edit.angle_offset_deg || 0),
-    length_scale: Number(edit.length_scale || 1),
-    width_scale: Number(edit.width_scale || 1),
-    tip_angle_deg: edit.tip_angle_deg == null ? null : Number(edit.tip_angle_deg),
-    shift_along_mm: Number(edit.shift_along_mm || 0),
-    shift_perp_mm: Number(edit.shift_perp_mm || 0),
-    reason: String(edit.reason || ""),
-  };
-}
-
-function ensureEditTimeline(): void {
-  if (!Array.isArray(S.editTimeline) || !S.editTimeline.length) {
-    S.editTimeline = [neutralEdit()];
-    S.editCursor = 0;
-  }
-}
-
-function editHistoryEntriesForCurrent(edit: DynamicRecord = currentEditBase()): DynamicRecord[] {
-  ensureEditTimeline();
-  const rawCommitted = S.editTimeline.slice(1, Math.max(1, S.editCursor + 1));
-  const committedSource = rawCommitted.some((entry) => editIsActive(entry))
-    ? rawCommitted
-    : rawCommitted.filter((entry) => editIsActive(entry));
-  const committed = committedSource.map((entry: DynamicRecord, idx: number) => ({
-      ...cloneEdit(entry),
-      source: "web/incision_workflow",
-      interaction: entry.interaction || "committed_control_edit",
-      history_index: idx + 1,
-    }));
-  const cursorEdit = S.editTimeline[S.editCursor] || neutralEdit();
-  if (!editsEqual(edit, cursorEdit) && editIsActive(edit)) {
-    committed.push({
-      ...cloneEdit(edit),
-      source: "web/incision_workflow",
-      interaction: "live_preview_uncommitted_edit",
-      history_index: committed.length + 1,
-    });
-  }
-  return committed;
-}
-
-function currentEdit(): RuntimeEdit {
+function currentEdit(): IncisionEdit {
   const edit = currentEditBase();
   return {
     ...edit,
-    session_history: editHistoryEntriesForCurrent(edit),
+    session_history: S.editHistory.entriesFor(edit),
   };
 }
 
@@ -1077,7 +994,7 @@ function syncEditLabels() {
   els.shiftPerpVal.textContent = els.shiftPerp.value;
 }
 
-function setEditControls(edit: DynamicRecord = neutralEdit()) {
+function setEditControls(edit: DynamicRecord = neutralIncisionEdit()) {
   els.angleOffset.value = String(Math.round(Number(edit.angle_offset_deg || 0)));
   els.lengthScale.value = String(Math.round(Number(edit.length_scale || 1) * 100));
   els.widthScale.value = String(Math.round(Number(edit.width_scale || 1) * 100));
@@ -1091,47 +1008,32 @@ function setEditControls(edit: DynamicRecord = neutralEdit()) {
 }
 
 function resetEditControls() {
-  setEditControls(neutralEdit());
+  setEditControls(neutralIncisionEdit());
 }
 
 function resetEditTimeline() {
-  S.editTimeline = [neutralEdit()];
-  S.editCursor = 0;
+  S.editHistory.reset();
   renderEditHistoryState();
 }
 
 function renderEditHistoryState() {
   if (!els.editHistoryState) return;
-  ensureEditTimeline();
   const edit = currentEditBase();
-  const committedCount = Math.max(0, S.editCursor);
-  const uncommitted = !editsEqual(edit, S.editTimeline[S.editCursor] || neutralEdit());
-  const historyCount = editHistoryEntriesForCurrent(edit).length;
-  const version = 1 + historyCount;
-  const pending = uncommitted ? " · 当前预览未提交" : "";
-  els.editHistoryState.textContent = historyCount
-    ? `编辑版本：v${version} · 已提交 ${committedCount} 步${pending}`
+  const summary = S.editHistory.summary(edit);
+  const pending = summary.uncommitted ? " · 当前预览未提交" : "";
+  els.editHistoryState.textContent = summary.historyCount
+    ? `编辑版本：v${summary.version} · 已提交 ${summary.committedCount} 步${pending}`
     : `编辑版本：v1 · 无已提交调整${pending}`;
-  if (els.undoEdit) els.undoEdit.disabled = S.editCursor <= 0;
-  if (els.redoEdit) els.redoEdit.disabled = S.editCursor >= S.editTimeline.length - 1;
+  if (els.undoEdit) els.undoEdit.disabled = !summary.canUndo;
+  if (els.redoEdit) els.redoEdit.disabled = !summary.canRedo;
   publishIncisionState("edit_state");
 }
 
 function commitEditSnapshot(interaction = "control_change") {
-  ensureEditTimeline();
-  const edit = {
-    ...cloneEdit(currentEditBase()),
-    interaction,
-    committed_at: new Date().toISOString(),
-  };
-  const current = S.editTimeline[S.editCursor] || neutralEdit();
-  if (editsEqual(edit, current)) {
+  if (!S.editHistory.commit(currentEditBase(), interaction)) {
     renderEditHistoryState();
     return;
   }
-  S.editTimeline = S.editTimeline.slice(0, S.editCursor + 1);
-  S.editTimeline.push(edit);
-  S.editCursor = S.editTimeline.length - 1;
   renderEditHistoryState();
   if (S.baseResult) {
     const result = applyCandidateEdit(S.baseResult, currentEdit(), S.normals[S.lesion], S.unitsPerMm, S.verts);
@@ -1150,19 +1052,17 @@ function applyEditSnapshot(edit: DynamicRecord) {
 }
 
 function undoEditSnapshot() {
-  ensureEditTimeline();
-  if (S.editCursor <= 0) return;
-  S.editCursor -= 1;
+  const edit = S.editHistory.undo();
+  if (!edit) return;
   invalidateReviewAfterGeometryChange("已撤销上一步医生调整，审阅状态已回到待医生确认。");
-  applyEditSnapshot(S.editTimeline[S.editCursor]);
+  applyEditSnapshot(edit);
 }
 
 function redoEditSnapshot() {
-  ensureEditTimeline();
-  if (S.editCursor >= S.editTimeline.length - 1) return;
-  S.editCursor += 1;
+  const edit = S.editHistory.redo();
+  if (!edit) return;
   invalidateReviewAfterGeometryChange("已重做医生调整，审阅状态已回到待医生确认。");
-  applyEditSnapshot(S.editTimeline[S.editCursor]);
+  applyEditSnapshot(edit);
 }
 
 function resetEditToToolSuggestion() {
@@ -1207,7 +1107,7 @@ function updateEditVisibility(result: DynamicRecord) {
   const fusiform = result?.candidate?.type === "fusiform";
   els.widthScaleWrap.classList.toggle("hidden", !fusiform);
   els.tipAngleWrap.classList.toggle("hidden", !fusiform);
-  const active = editIsActive();
+  const active = incisionEditIsActive(currentEdit());
   els.editStatus.textContent = active ? "已调整" : "工具建议";
   els.editStatus.classList.toggle("active", active);
   renderEditHistoryState();
@@ -1217,7 +1117,7 @@ function applyEditControls() {
   syncEditLabels();
   renderEditHistoryState();
   if (!S.baseResult) return;
-  if (editIsActive()) invalidateReviewAfterGeometryChange();
+  if (incisionEditIsActive(currentEdit())) invalidateReviewAfterGeometryChange();
   const result = applyCandidateEdit(S.baseResult, currentEdit(), S.normals[S.lesion], S.unitsPerMm, S.verts);
   renderResult(result);
 }
