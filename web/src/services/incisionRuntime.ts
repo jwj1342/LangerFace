@@ -75,6 +75,11 @@ import {
   downloadText,
 } from "./incisionExport";
 import {
+  pickEndpointHandle,
+  pickFaceSurface,
+  signedAngleDegrees,
+} from "./incisionPicking";
+import {
   add3 as add,
   buildBoundaryGeometry,
   buildPolylineGeometry,
@@ -2038,31 +2043,24 @@ async function planWorkflowForCurrentTumor(tumor: TumorInput) {
 
 function facePointFromEvent(e: PointerEvent) {
   if (!S.head || !S.head.mesh) return null;
-  const r = els.canvas.getBoundingClientRect();
-  const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-  S.head.camera.updateMatrixWorld(true);
-  S.head.scene.updateMatrixWorld(true);
-  S.raycaster.setFromCamera(ndc, S.head.camera);
-  const hit = S.raycaster.intersectObject(S.head.mesh, false)[0];
-  if (!hit || !hit.face) return null;
-  const local = S.head.group.worldToLocal(hit.point.clone());
-  return { point: [local.x, local.y, local.z] as Vec3, face: hit.face };
+  return pickFaceSurface(
+    e,
+    els.canvas.getBoundingClientRect(),
+    S.head,
+    S.raycaster,
+  );
 }
 
 function handleFromEvent(e: PointerEvent) {
   if (!S.head || !S.endpointHandles.length) return null;
-  const r = els.canvas.getBoundingClientRect();
-  const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-  S.head.camera.updateMatrixWorld(true);
-  S.head.scene.updateMatrixWorld(true);
-  S.raycaster.setFromCamera(ndc, S.head.camera);
-  const hit = S.raycaster.intersectObjects(S.endpointHandles.filter((h) => h.visible), false)[0];
-  return hit?.object?.userData?.handle ?? null;
-}
-
-function signedAngleDeg(axis0: VectorLike, axis1: VectorLike, normal: VectorLike): number {
-  const perp = norm(cross(normal, axis0));
-  return Math.atan2(dot(axis1, perp), dot(axis1, axis0)) * 180 / Math.PI;
+  return pickEndpointHandle(
+    e,
+    els.canvas.getBoundingClientRect(),
+    S.head.camera,
+    S.head.scene,
+    S.endpointHandles,
+    S.raycaster,
+  );
 }
 
 function setEditFromGeometry(center: VectorLike, axis: VectorLike, lengthMm: number) {
@@ -2072,7 +2070,11 @@ function setEditFromGeometry(center: VectorLike, axis: VectorLike, lengthMm: num
   const normal = S.normals[S.lesion];
   const perp0 = norm(cross(normal, axis0));
   const delta = sub(center, base.center || S.baseResult.tumor.center);
-  const angle = clamp(signedAngleDeg(axis0, axis, normal), Number(els.angleOffset.min), Number(els.angleOffset.max));
+  const angle = clamp(
+    signedAngleDegrees(axis0, axis, normal),
+    Number(els.angleOffset.min),
+    Number(els.angleOffset.max),
+  );
   const lengthScale = clamp((lengthMm / Math.max(Number(base.length_mm || 1), 1)) * 100, Number(els.lengthScale.min), Number(els.lengthScale.max));
   const shiftAlong = clamp(dot(delta, axis0) / S.unitsPerMm, Number(els.shiftAlong.min), Number(els.shiftAlong.max));
   const shiftPerp = clamp(dot(delta, perp0) / S.unitsPerMm, Number(els.shiftPerp.min), Number(els.shiftPerp.max));
