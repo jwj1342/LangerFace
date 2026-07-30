@@ -8,12 +8,8 @@ import {
   ANNOTATE_MESH_REACT_COMMAND_EVENT,
 } from "../lib/controllerEvents";
 import {
-  ANNOTATE_DRAW_COMMANDS,
-  ANNOTATE_LIBRARY_COMMANDS,
-  ANNOTATE_MESH_COMMANDS,
   bindWindowControllerEvents,
   dispatchControllerEvent,
-  readControllerCommandDetail,
 } from "../lib/controllerCommand";
 import { AnnotationModel, type AnnotationLine, type AnnotationPoint } from "./annotationModel";
 import type { Triangle, Vec3 } from "./softBody";
@@ -40,6 +36,11 @@ import { facesArray, flameForward, loadFlameBasis, type FlameBasis } from "./fla
 import { parseMeshFile } from "./meshIo";
 import { parseSlicerCurveFile } from "./slicerCurve";
 import { topologyMeta } from "./topologyRegistry";
+import {
+  readAnnotateDrawCommand,
+  readAnnotateLibraryCommand,
+  readAnnotateMeshCommand,
+} from "./workbenchCommandSchemas";
 
 interface DragState {
   x: number;
@@ -68,10 +69,6 @@ type Annotator3DInstance = InstanceType<typeof Annotator3D>;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function controllerEvent(event: Event): Event & { detail?: unknown } {
-  return event as Event & { detail?: unknown };
 }
 
 let els = {} as AnnotateDomElements;
@@ -186,7 +183,7 @@ const loadFlame = () => loadFlameMesh("flame_neutral_vertices", topologyMeta("fl
 const loadFittedFlame = () => loadFlameMesh("flame_fitted_vertices", "FLAME 个体（拟合）");
 
 function handleReactMeshCommand(event: Event): void {
-  const detail = readControllerCommandDetail(controllerEvent(event), ANNOTATE_MESH_COMMANDS);
+  const detail = readAnnotateMeshCommand(event);
   if (!detail) return;
   const { command } = detail;
   if (command === "load_canonical") loadCanonical();
@@ -354,7 +351,7 @@ function startLineFromInputs(): boolean {
 }
 
 function handleReactDrawCommand(event: Event): void {
-  const detail = readControllerCommandDetail(controllerEvent(event), ANNOTATE_DRAW_COMMANDS);
+  const detail = readAnnotateDrawCommand(event);
   if (!detail) return;
   const { command, value } = detail;
   if (command === "system_changed") {
@@ -430,7 +427,7 @@ function deleteLine(i: number): void {
 }
 
 function handleReactLineLibraryCommand(event: Event): void {
-  const detail = readControllerCommandDetail(controllerEvent(event), ANNOTATE_LIBRARY_COMMANDS);
+  const detail = readAnnotateLibraryCommand(event);
   if (!detail) return;
   const { command, index } = detail;
   if (command === "clear_lines") {

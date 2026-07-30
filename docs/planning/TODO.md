@@ -40,7 +40,7 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
 - [ ] 合并重复文档、修正内容 owner 并自动核对 TODO 状态 — [#113](https://github.com/jwj1342/LangerFace/issues/113)
       · 当前 PR；删除专题重复页，把标注验收、FLAME 切口资产、纹理 warp 和产品边界归回各自 owner。
 - [ ] Phase 2：消化大型 runtime，推进核心 TypeScript 服务化 — [#95](https://github.com/jwj1342/LangerFace/issues/95)
-      · 长期 epic；PR #124–#128 已拆 legacy adapter、切口 scene geometry/export/picking 和 command schema；当前分支拆 annotation DOM/export；live state/lifecycle 继续按小 PR 拆。
+      · 长期 epic；PR #124–#129 已拆 legacy adapter、切口边界及 annotation DOM/export；当前分支补齐 live/annotation command schema；切口 edit/review state 继续按小 PR 拆。
 
 ## 暂缓路线与重启条件
 

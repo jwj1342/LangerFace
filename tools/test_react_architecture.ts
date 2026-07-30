@@ -135,6 +135,7 @@ const incisionSnapshotsService = read("src/services/incisionSnapshots.ts");
 const annotateRuntime = read("src/services/annotateRuntime.ts");
 const annotateDomService = read("src/services/annotateDom.ts");
 const annotationExportService = read("src/services/annotationExport.ts");
+const workbenchCommandSchemasService = read("src/services/workbenchCommandSchemas.ts");
 const annotationModelService = read("src/services/annotationModel.ts");
 const flameFitService = read("src/services/flameFit.ts");
 const annotateViewerService = read("src/services/annotateViewer.ts");
@@ -171,6 +172,7 @@ const liveRuntimeDependencyTypes = [
   "src/services/render2d.ts",
   "src/services/liveState.ts",
   "src/services/liveUi.ts",
+  "src/services/workbenchCommandSchemas.ts",
 ];
 const annotateRuntimeDependencyTypes = [
   "src/services/annotateDom.ts",
@@ -182,6 +184,7 @@ const annotateRuntimeDependencyTypes = [
   "src/services/meshIo.ts",
   "src/services/slicerCurve.ts",
   "src/services/softBody.ts",
+  "src/services/workbenchCommandSchemas.ts",
   "src/services/topologyRegistry.ts",
 ];
 const incisionRuntimeDependencyTypes = [
@@ -1851,7 +1854,7 @@ assert.ok(annotationExportService.includes("URL.revokeObjectURL"), "annotation e
 assert.ok(annotateRuntime.includes("./annotationExport"), "annotation runtime delegates export construction and download");
 assert.ok(!annotateRuntime.includes("new Blob"), "annotation runtime does not construct export blobs directly");
 assert.ok(annotateRuntime.includes("interface DragState"), "annotation runtime types pointer drag state");
-assert.ok(annotateRuntime.includes("function controllerEvent"), "annotation runtime narrows browser command events before reading detail");
+assert.ok(!annotateRuntime.includes("function controllerEvent"), "annotation runtime delegates browser command parsing to typed schemas");
 assert.ok(!fs.existsSync(path.join(web, "annotate_model.js")), "legacy annotate_model.js facade has been removed after TypeScript service migration");
 assert.ok(!fs.existsSync(path.join(web, "annotate_model.d.ts")), "legacy annotation model declaration facade has been removed after TypeScript service migration");
 assert.ok(annotationModelService.includes("class AnnotationModel"), "TypeScript annotation model service exposes the typed line model contract");
@@ -1868,12 +1871,13 @@ assert.ok(annotateRuntime.includes("../lib/controllerEvents"), "annotation runti
 assert.ok(annotateRuntime.includes("ANNOTATE_MESH_REACT_COMMAND_EVENT"), "annotation runtime declares a React mesh source command bridge event");
 assert.ok(annotateRuntime.includes("ANNOTATE_DRAW_REACT_COMMAND_EVENT"), "annotation runtime declares a React current-line command bridge event");
 assert.ok(annotateRuntime.includes("ANNOTATE_LIBRARY_REACT_COMMAND_EVENT"), "annotation runtime declares a React saved line command bridge event");
-assert.ok(annotateRuntime.includes("../lib/controllerCommand"), "annotation runtime imports the shared command parsing module");
+assert.ok(annotateRuntime.includes("../lib/controllerCommand"), "annotation runtime imports the shared command binding module");
+assert.ok(annotateRuntime.includes("./workbenchCommandSchemas"), "annotation runtime imports payload-aware command schemas");
 assert.ok(annotateRuntime.includes("bindWindowControllerEvents"), "annotation runtime binds React command events through the shared helper");
 assert.ok(!annotateRuntime.includes("window.addEventListener(ANNOTATE"), "annotation runtime does not register React command listeners one-by-one");
-assert.ok(annotateRuntime.includes("readControllerCommandDetail(controllerEvent(event), ANNOTATE_MESH_COMMANDS)"), "annotation mesh handler validates incoming command names");
-assert.ok(annotateRuntime.includes("readControllerCommandDetail(controllerEvent(event), ANNOTATE_DRAW_COMMANDS)"), "annotation draw handler validates incoming command names");
-assert.ok(annotateRuntime.includes("readControllerCommandDetail(controllerEvent(event), ANNOTATE_LIBRARY_COMMANDS)"), "annotation library handler validates incoming command names");
+assert.ok(annotateRuntime.includes("readAnnotateMeshCommand(event)"), "annotation mesh handler validates incoming command names");
+assert.ok(annotateRuntime.includes("readAnnotateDrawCommand(event)"), "annotation draw handler validates command names and system values");
+assert.ok(annotateRuntime.includes("readAnnotateLibraryCommand(event)"), "annotation library handler validates command names and line indexes");
 assert.ok(!annotateRuntime.includes("event.detail || {}"), "annotation runtime does not read raw command detail directly");
 assert.ok(annotateRuntime.includes("handleReactMeshCommand"), "annotation runtime routes React mesh source commands to existing workflow functions");
 assert.ok(annotateRuntime.includes("handleReactDrawCommand"), "annotation runtime routes React current-line commands to existing workflow functions");
@@ -2109,7 +2113,9 @@ for (const rel of liveRuntimeDependencyTypes) {
 }
 assert.ok(!liveController.includes("// @ts-nocheck"), "live runtime should run under strict TypeScript checking");
 assert.ok(liveController.includes("interface ImageDragState"), "live runtime types its route-local drag state");
-assert.ok(liveController.includes("function controllerEvent"), "live runtime narrows browser command events before reading detail");
+assert.ok(!liveController.includes("function controllerEvent"), "live runtime delegates browser command parsing to typed schemas");
+assert.ok(workbenchCommandSchemasService.includes("readLiveRenderCommand"), "workbench command schemas validate live render payloads");
+assert.ok(workbenchCommandSchemasService.includes("readAnnotateLibraryCommand"), "workbench command schemas validate annotation library payloads");
 assert.ok(liveDomService.includes("interface LiveDomElements"), "TypeScript live DOM service exposes typed live elements");
 assert.ok(!fs.existsSync(path.join(web, "state.js")), "legacy state.js facade has been removed after TypeScript service migration");
 assert.ok(!fs.existsSync(path.join(web, "state.d.ts")), "legacy state declaration facade has been removed after TypeScript service migration");
@@ -2155,12 +2161,13 @@ assert.ok(liveController.includes("../lib/controllerEvents"), "live controller i
 assert.ok(liveController.includes("LIVE_ROUTE_REACT_COMMAND_EVENT"), "live controller declares a React route command bridge event");
 assert.ok(liveController.includes("LIVE_SOURCE_REACT_COMMAND_EVENT"), "live controller declares a React source command bridge event");
 assert.ok(liveController.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "live controller declares a React render command bridge event");
-assert.ok(liveController.includes("../lib/controllerCommand"), "live controller imports the shared command parsing module");
+assert.ok(liveController.includes("../lib/controllerCommand"), "live controller imports the shared command binding module");
+assert.ok(liveController.includes("./workbenchCommandSchemas"), "live controller imports payload-aware command schemas");
 assert.ok(liveController.includes("bindWindowControllerEvents"), "live controller binds React command events through the shared helper");
 assert.ok(!liveController.includes("window.addEventListener(LIVE"), "live controller does not register React command listeners one-by-one");
-assert.ok(liveController.includes("readControllerCommandDetail(controllerEvent(event), LIVE_SOURCE_COMMANDS)"), "live source handler validates incoming command names");
-assert.ok(liveController.includes("readControllerCommandDetail(controllerEvent(event), LIVE_RENDER_COMMANDS)"), "live render handler validates incoming command names");
-assert.ok(liveController.includes("readControllerCommandDetail(controllerEvent(event), LIVE_ROUTE_COMMANDS)"), "live route handler validates incoming command names");
+assert.ok(liveController.includes("readLiveSourceCommand(event)"), "live source handler validates incoming command names");
+assert.ok(liveController.includes("readLiveRenderCommand(event)"), "live render handler validates command names and payloads");
+assert.ok(liveController.includes("readLiveRouteCommand(event)"), "live route handler validates command names and route values");
 assert.ok(!liveController.includes("event.detail || {}"), "live controller does not read raw command detail directly");
 assert.ok(liveController.includes("handleReactRouteCommand"), "live controller routes React route commands to existing 3D workflow functions");
 assert.ok(liveController.includes("handleReactSourceCommand"), "live controller routes React source commands to existing workflow functions");
