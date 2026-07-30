@@ -20,14 +20,8 @@ import {
   INCISION_TUMOR_REACT_COMMAND_EVENT,
 } from "../lib/controllerEvents";
 import {
-  INCISION_EDIT_COMMANDS,
-  INCISION_LIBRARY_COMMANDS,
-  INCISION_REVIEW_COMMANDS,
-  INCISION_SECONDARY_CUE_COMMANDS,
-  INCISION_TUMOR_COMMANDS,
   bindWindowControllerEvents,
   dispatchControllerEvent,
-  readControllerCommandDetail,
 } from "../lib/controllerCommand";
 import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
 import { assetBaseUrl } from "./assetLoader";
@@ -74,6 +68,13 @@ import {
   downloadCanvasPng,
   downloadText,
 } from "./incisionExport";
+import {
+  readIncisionEditCommand,
+  readIncisionLibraryCommand,
+  readIncisionReviewCommand,
+  readIncisionSecondaryCueCommand,
+  readIncisionTumorCommand,
+} from "./incisionCommandSchemas";
 import {
   pickEndpointHandle,
   pickFaceSurface,
@@ -166,10 +167,6 @@ interface PointerDragState {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function controllerEvent(event: Event): Event & { detail?: unknown } {
-  return event as Event & { detail?: unknown };
 }
 
 function fileFromEvent(event: Event): File | undefined {
@@ -873,7 +870,7 @@ function clearBoundaryPoints() {
 }
 
 function handleReactTumorCommand(event: Event) {
-  const detail = readControllerCommandDetail(controllerEvent(event), INCISION_TUMOR_COMMANDS);
+  const detail = readIncisionTumorCommand(event);
   if (!detail) return;
   const { command, value } = detail;
   const syncValue = (control: HTMLInputElement | HTMLSelectElement) => {
@@ -945,7 +942,7 @@ function handleReactTumorCommand(event: Event) {
 }
 
 function handleReactSecondaryCueCommand(event: Event) {
-  const detail = readControllerCommandDetail(controllerEvent(event), INCISION_SECONDARY_CUE_COMMANDS);
+  const detail = readIncisionSecondaryCueCommand(event);
   if (!detail) return;
   const { command } = detail;
   if (command === "import_secondary_cue") {
@@ -1177,7 +1174,7 @@ function resetEditToToolSuggestion() {
 }
 
 function handleReactEditCommand(event: Event) {
-  const detail = readControllerCommandDetail(controllerEvent(event), INCISION_EDIT_COMMANDS);
+  const detail = readIncisionEditCommand(event);
   if (!detail) return;
   const { command } = detail;
   if (command === "preview_edit") {
@@ -1693,7 +1690,7 @@ function recordReviewDecision(status: string, label: string) {
 }
 
 function handleReactReviewCommand(event: Event) {
-  const detail = readControllerCommandDetail(controllerEvent(event), INCISION_REVIEW_COMMANDS);
+  const detail = readIncisionReviewCommand(event);
   if (!detail) return;
   const { command } = detail;
   if (command === "review_state_changed") {
@@ -1714,7 +1711,7 @@ function handleReactReviewCommand(event: Event) {
 }
 
 function handleReactLibraryCommand(event: Event) {
-  const detail = readControllerCommandDetail(controllerEvent(event), INCISION_LIBRARY_COMMANDS);
+  const detail = readIncisionLibraryCommand(event);
   if (!detail) return;
   const { command, id } = detail;
   if (command === "save_current") {

@@ -245,6 +245,8 @@ P = u·V0 + v·V1 + w·V2
   runtime 只组装当前业务快照、执行隐私 preflight 并触发下载。
   指针到 NDC、脸面 raycast、端点 handle raycast 和有向角计算位于 `src/services/incisionPicking.ts`；
   runtime 只决定“拾取后更新肿物、自由轮廓还是候选编辑”。
+  React command 的名称、数值输入、肿物枚举和候选 id 在
+  `src/services/incisionCommandSchemas.ts` 通过运行时 schema 后才进入业务逻辑。
   React 控件只通过 typed controller command 写入运行时，兼容页的原生 DOM 监听器不会在 React route 上回写旧 snapshot。
 - 实时页的 canvas/WebM 录制、额外视图合成和下载生命周期由 `src/services/canvasRecording.ts` 负责。
 - 摄像头约束/错误归一化由
