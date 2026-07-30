@@ -31,7 +31,18 @@ import {
 } from "../lib/controllerCommand";
 import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
 import { assetBaseUrl } from "./assetLoader";
-import { requireScopedElement, requireScopedQuery } from "../lib/scopedDom";
+import {
+  directionHintLabel,
+  directionSourceLabel,
+  guardrailLabel,
+  overrideLabel,
+  reasonLabel,
+  regionLabel,
+  reviewStatusLabel,
+  severityLabel,
+  subunitLabel,
+} from "./incisionClinicalCopy";
+import { collectIncisionElements, type IncisionDomElements } from "./incisionDom";
 import {
   buildIncisionAssetLoadingSnapshot,
   buildIncisionCandidateSnapshot,
@@ -57,6 +68,11 @@ import { dataSource } from "./dataSource";
 import type { AtlasPayload, HeadMeshPayload } from "./dataSource";
 import { auditExportPayload } from "./exportPrivacy";
 import { loadFlameBasisAsset, mediaPipeAtlasToFlamePreviewAtlas } from "./flameHeadAssets";
+import {
+  assessReviewReadiness,
+  buildReviewGate,
+  summarizeGuardrails,
+} from "./incisionReviewPolicy";
 import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
 import { createWorkflowWorkerClient } from "./workflowWorkerClient";
 import type { WorkflowWorkerClient } from "./workflowWorkerClient";
@@ -68,93 +84,6 @@ type VectorLike = ArrayLike<number>;
 type ControllerCleanup = () => void;
 type IncisionMesh = THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>;
 type IncisionLine = THREE.Line<THREE.BufferGeometry, THREE.Material | THREE.Material[]>;
-
-interface IncisionDomElements extends Record<string, any> {
-  canvas: HTMLCanvasElement;
-  wrap: HTMLElement;
-  assetLoading: HTMLElement;
-  assetLoadingText: HTMLElement;
-  tumorKind: HTMLSelectElement;
-  diameter: HTMLInputElement;
-  diameterVal: HTMLElement;
-  tumorAuthor: HTMLInputElement;
-  depth: HTMLInputElement;
-  depthVal: HTMLElement;
-  depthWrap: HTMLElement;
-  margin: HTMLInputElement;
-  marginVal: HTMLElement;
-  marginWrap: HTMLElement;
-  boundaryWrap: HTMLElement;
-  boundaryMode: HTMLSelectElement;
-  ellipseWrap: HTMLElement;
-  ellipseRatio: HTMLInputElement;
-  ellipseRatioVal: HTMLElement;
-  freehandControls: HTMLElement;
-  startBoundary: HTMLButtonElement;
-  clearBoundary: HTMLButtonElement;
-  boundaryStatus: HTMLElement;
-  exportTumor: HTMLButtonElement;
-  importTumor: HTMLButtonElement;
-  tumorImportFile: HTMLInputElement;
-  run: HTMLButtonElement;
-  pickState: HTMLElement;
-  anatomyPreview: HTMLElement;
-  secondaryCueState: HTMLElement;
-  secondaryCueSummary: HTMLElement;
-  importSecondaryCue: HTMLButtonElement;
-  clearSecondaryCue: HTMLButtonElement;
-  secondaryCueImportFile: HTMLInputElement;
-  secondaryCueConfirmed: HTMLInputElement;
-  candidateType: HTMLElement;
-  candidateLength: HTMLElement;
-  candidateWidth: HTMLElement;
-  candidateTipAngle: HTMLElement;
-  directionConf: HTMLElement;
-  regionVal: HTMLElement;
-  guardrailVal: HTMLElement;
-  directionSource: HTMLElement;
-  workflowGate: HTMLElement;
-  workflowComparison: HTMLElement;
-  guardrailDetails: HTMLElement;
-  workflowSummary: HTMLElement;
-  nextStep: HTMLElement;
-  editStatus: HTMLElement;
-  angleOffset: HTMLInputElement;
-  angleOffsetVal: HTMLElement;
-  lengthScale: HTMLInputElement;
-  lengthScaleVal: HTMLElement;
-  widthScale: HTMLInputElement;
-  widthScaleVal: HTMLElement;
-  widthScaleWrap: HTMLElement;
-  shiftAlong: HTMLInputElement;
-  shiftAlongVal: HTMLElement;
-  shiftPerp: HTMLInputElement;
-  shiftPerpVal: HTMLElement;
-  editReason: HTMLInputElement;
-  undoEdit: HTMLButtonElement;
-  redoEdit: HTMLButtonElement;
-  resetEdit: HTMLButtonElement;
-  editHistoryState: HTMLElement;
-  reviewerName: HTMLInputElement;
-  reviewDecision: HTMLSelectElement;
-  reviewNotes: HTMLTextAreaElement;
-  reviewState: HTMLElement;
-  approveCandidate: HTMLButtonElement;
-  rejectCandidate: HTMLButtonElement;
-  saveReview: HTMLButtonElement;
-  saveCandidate: HTMLButtonElement;
-  makeVariants: HTMLButtonElement;
-  clearSaved: HTMLButtonElement;
-  exportJson: HTMLButtonElement;
-  exportReport: HTMLButtonElement;
-  exportPng: HTMLButtonElement;
-  stageLiveOverlay: HTMLButtonElement;
-  candidateList: HTMLElement;
-  savedCount: HTMLElement;
-  privacyState: HTMLElement;
-  privacyAudit: HTMLElement;
-  stageStatus: HTMLElement;
-}
 
 interface IncisionRuntimeState {
   mounted: boolean;
@@ -220,99 +149,6 @@ function fileFromEvent(event: Event): File | undefined {
   return (event.target as HTMLInputElement | null)?.files?.[0] ?? undefined;
 }
 
-const $ = <T extends Element = HTMLElement>(root: ParentNode | Document, id: string): T => {
-  return requireScopedElement<T>(root, id);
-};
-
-function collectElements(root: ParentNode | Document = document): IncisionDomElements {
-  return {
-    canvas: $<HTMLCanvasElement>(root, "incisionCanvas"),
-    wrap: requireScopedQuery<HTMLElement>(root, ".main-wrap"),
-    assetLoading: $(root, "assetLoading"),
-    assetLoadingText: $(root, "assetLoadingText"),
-    tumorKind: $(root, "tumorKind"),
-    diameter: $(root, "diameterMm"),
-    diameterVal: $(root, "diameterVal"),
-    tumorAuthor: $(root, "tumorAuthor"),
-    depth: $(root, "depthMm"),
-    depthVal: $(root, "depthVal"),
-    depthWrap: $(root, "depthWrap"),
-    margin: $(root, "marginMm"),
-    marginVal: $(root, "marginVal"),
-    marginWrap: $(root, "marginWrap"),
-    boundaryWrap: $(root, "boundaryWrap"),
-    boundaryMode: $(root, "boundaryMode"),
-    ellipseWrap: $(root, "ellipseWrap"),
-    ellipseRatio: $(root, "ellipseRatio"),
-    ellipseRatioVal: $(root, "ellipseRatioVal"),
-    freehandControls: $(root, "freehandControls"),
-    startBoundary: $(root, "startBoundaryBtn"),
-    clearBoundary: $(root, "clearBoundaryBtn"),
-    boundaryStatus: $(root, "boundaryStatus"),
-    exportTumor: $(root, "exportTumorBtn"),
-    importTumor: $(root, "importTumorBtn"),
-    tumorImportFile: $(root, "tumorImportFile"),
-    run: $(root, "runWorkflowBtn"),
-    pickState: $(root, "pickState"),
-    anatomyPreview: $(root, "anatomyPreview"),
-    secondaryCueState: $(root, "secondaryCueState"),
-    secondaryCueSummary: $(root, "secondaryCueSummary"),
-    importSecondaryCue: $(root, "importSecondaryCueBtn"),
-    clearSecondaryCue: $(root, "clearSecondaryCueBtn"),
-    secondaryCueImportFile: $(root, "secondaryCueImportFile"),
-    secondaryCueConfirmed: $(root, "secondaryCueConfirmed"),
-    candidateType: $(root, "candidateType"),
-    candidateLength: $(root, "candidateLength"),
-    candidateWidth: $(root, "candidateWidth"),
-    candidateTipAngle: $(root, "candidateTipAngle"),
-    directionConf: $(root, "directionConf"),
-    regionVal: $(root, "regionVal"),
-    guardrailVal: $(root, "guardrailVal"),
-    directionSource: $(root, "directionSource"),
-    workflowGate: $(root, "workflowGate"),
-    workflowComparison: $(root, "workflowComparison"),
-    guardrailDetails: $(root, "guardrailDetails"),
-    workflowSummary: $(root, "workflowSummary"),
-    nextStep: $(root, "nextStep"),
-    editStatus: $(root, "editStatus"),
-    angleOffset: $(root, "angleOffsetDeg"),
-    angleOffsetVal: $(root, "angleOffsetVal"),
-    lengthScale: $(root, "lengthScale"),
-    lengthScaleVal: $(root, "lengthScaleVal"),
-    widthScale: $(root, "widthScale"),
-    widthScaleVal: $(root, "widthScaleVal"),
-    widthScaleWrap: $(root, "widthScaleWrap"),
-    shiftAlong: $(root, "shiftAlongMm"),
-    shiftAlongVal: $(root, "shiftAlongVal"),
-    shiftPerp: $(root, "shiftPerpMm"),
-    shiftPerpVal: $(root, "shiftPerpVal"),
-    editReason: $(root, "editReason"),
-    undoEdit: $(root, "undoEditBtn"),
-    redoEdit: $(root, "redoEditBtn"),
-    resetEdit: $(root, "resetEditBtn"),
-    editHistoryState: $(root, "editHistoryState"),
-    reviewerName: $(root, "reviewerName"),
-    reviewDecision: $(root, "reviewDecision"),
-    reviewNotes: $(root, "reviewNotes"),
-    reviewState: $(root, "reviewState"),
-    approveCandidate: $(root, "approveCandidateBtn"),
-    rejectCandidate: $(root, "rejectCandidateBtn"),
-    saveReview: $(root, "saveReviewBtn"),
-    saveCandidate: $(root, "saveCandidateBtn"),
-    makeVariants: $(root, "makeVariantsBtn"),
-    clearSaved: $(root, "clearSavedBtn"),
-    exportJson: $(root, "exportJsonBtn"),
-    exportReport: $(root, "exportReportBtn"),
-    exportPng: $(root, "exportPngBtn"),
-    stageLiveOverlay: $(root, "stageLiveOverlayBtn"),
-    candidateList: $(root, "candidateList"),
-    savedCount: $(root, "savedCount"),
-    privacyState: $(root, "privacyState"),
-    privacyAudit: $(root, "privacyAudit"),
-    stageStatus: $(root, "stageStatus"),
-  } as IncisionDomElements;
-}
-
 let els = {} as IncisionDomElements;
 
 const sub = (a: VectorLike, b: VectorLike): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -362,12 +198,6 @@ function createRuntimeState(): IncisionRuntimeState {
 
 let S = createRuntimeState();
 
-const REVIEW_LABELS = {
-  pending_clinician_confirmation: "待医生确认",
-  approved_for_discussion: "确认候选草案",
-  needs_revision: "退回修改",
-  rejected_by_clinician: "否决候选",
-};
 function currentTumorFormSnapshot() {
   return buildTumorFormSnapshot({
     kind: els.tumorKind?.value,
@@ -540,7 +370,9 @@ function defaultLesion(): number {
   const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity];
   for (const v of S.verts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], v[k]); hi[k] = Math.max(hi[k], v[k]); }
   const c: Vec3 = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
-  const target: Vec3 = [c[0] + 0.38 * (hi[0] - lo[0]), c[1] + 0.03 * (hi[1] - lo[1]), hi[2]];
+  // Start the research demo in the mid-cheek classifier instead of directly
+  // inside the lower-eyelid region.
+  const target: Vec3 = [c[0] + 0.30 * (hi[0] - lo[0]), c[1] - 0.02 * (hi[1] - lo[1]), hi[2]];
   let best = 0, bd = Infinity;
   for (let i = 0; i < S.verts.length; i++) {
     const d = len(sub(S.verts[i], target));
@@ -804,10 +636,6 @@ function setSecondaryCueConfirmedFromControl() {
   publishIncisionState("secondary_cue_confirmed");
 }
 
-function reviewStatusLabel(status = "pending_clinician_confirmation"): string {
-  return (REVIEW_LABELS as Record<string, string>)[status] || REVIEW_LABELS.pending_clinician_confirmation;
-}
-
 function updateReviewStateUI() {
   const status = els.reviewDecision.value || "pending_clinician_confirmation";
   els.reviewState.textContent = reviewStatusLabel(status);
@@ -837,23 +665,13 @@ function setReviewControls(review: DynamicRecord = {}) {
   updateReviewStateUI();
 }
 
-function highGuardrailWarnings(result = S.result) {
-  return (result?.guardrails?.warnings || []).filter((w: DynamicRecord) => w.severity === "high");
-}
-
 function reviewReadiness(status: string, result = S.result) {
-  if (!result) return { ok: false, message: "没有可审阅的候选" };
-  if (status === "approved_for_discussion") {
-    const traceGate = workflowTraceGate(result);
-    if (!traceGate.passed) {
-      return { ok: false, message: "工作流工具 trace 未通过门控；缺少必要工具动作或顺序异常，不能确认候选。" };
-    }
-    if (!els.reviewerName.value.trim()) return { ok: false, message: "确认候选前请填写审阅人。" };
-    if (highGuardrailWarnings(result).length && !els.reviewNotes.value.trim()) {
-      return { ok: false, message: "当前候选有高风险 guardrail；确认前请填写审阅备注或覆盖原因。" };
-    }
-  }
-  return { ok: true, message: "" };
+  return assessReviewReadiness({
+    status,
+    result,
+    reviewer: els.reviewerName.value,
+    notes: els.reviewNotes.value,
+  });
 }
 
 function resetReviewControls() {
@@ -921,7 +739,7 @@ function updateBoundaryStatus() {
     els.boundaryStatus.textContent = `皮表边界：${summary.point_count || 0} 点，当前按中心直径近似`;
     return;
   }
-  const warn = summary.warnings?.length ? ` · ${summary.warnings.map((w: DynamicRecord) => w.code).join(", ")}` : "";
+  const warn = summary.warnings?.length ? ` · ${summary.warnings.map((w: DynamicRecord) => guardrailLabel(w.code)).join("；")}` : "";
   const area = summary.area_mm2 != null ? ` · 面积 ${fmt(summary.area_mm2)} mm²` : "";
   const selfX = summary.self_intersection ? " · 自交" : "";
   els.boundaryStatus.textContent = `皮表边界：${summary.point_count} 点 · 横向 ${fmt(summary.perp_diameter_mm)} mm · 长轴覆盖 ${fmt(summary.axis_diameter_mm)} mm${area}${selfX}${warn}`;
@@ -935,9 +753,9 @@ function updateAnatomyPreview() {
   const freeMargin = anatomy.free_margin_distance_mm != null
     ? ` · 游离缘 ${fmt(anatomy.free_margin_distance_mm)} mm`
     : "";
-  const reasonText = reasons.length ? ` · ${reasons.join(", ")}` : "";
-  els.anatomyPreview.textContent = `当前点位分区：${anatomy.region} / ${anatomy.subunit} · 置信 ${confidence}%${freeMargin}${reasonText}`;
-  els.anatomyPreview.title = reasons.length ? `分区置信原因：${reasons.join(", ")}` : "";
+  const reasonText = reasons.length ? ` · ${reasons.map(reasonLabel).join("；")}` : "";
+  els.anatomyPreview.textContent = `当前点位分区：${regionLabel(anatomy.region)} / ${subunitLabel(anatomy.subunit)} · 置信 ${confidence}%${freeMargin}${reasonText}`;
+  els.anatomyPreview.title = reasons.length ? `分区置信原因：${reasons.map(reasonLabel).join("；")}` : "";
   els.anatomyPreview.classList.toggle(
     "warn",
     (anatomy.confidence || 0) < 0.55 ||
@@ -1089,8 +907,12 @@ function clearBoundaryPoints() {
 function handleReactTumorCommand(event: Event) {
   const detail = readControllerCommandDetail(controllerEvent(event), INCISION_TUMOR_COMMANDS);
   if (!detail) return;
-  const { command } = detail;
+  const { command, value } = detail;
+  const syncValue = (control: HTMLInputElement | HTMLSelectElement) => {
+    if (typeof value === "string" || typeof value === "number") control.value = String(value);
+  };
   if (command === "kind_changed") {
+    syncValue(els.tumorKind);
     S.boundaryActive = false;
     updateFormVisibility();
     publishIncisionState("tumor_kind_changed");
@@ -1098,24 +920,35 @@ function handleReactTumorCommand(event: Event) {
     return;
   }
   if (command === "diameter_input") {
+    syncValue(els.diameter);
     updateTumorRing();
     publishIncisionState("tumor_diameter_input");
     return;
   }
   if (command === "depth_input" || command === "author_changed") {
+    syncValue(command === "depth_input" ? els.depth : els.tumorAuthor);
     publishIncisionState(command);
     return;
   }
   if (command === "margin_input" || command === "ellipse_ratio_input") {
+    syncValue(command === "margin_input" ? els.margin : els.ellipseRatio);
     updateTumorRing();
     publishIncisionState(command);
     return;
   }
   if (command === "diameter_changed" || command === "depth_changed" || command === "margin_changed" || command === "ellipse_ratio_changed") {
+    const controls = {
+      diameter_changed: els.diameter,
+      depth_changed: els.depth,
+      margin_changed: els.margin,
+      ellipse_ratio_changed: els.ellipseRatio,
+    };
+    syncValue(controls[command]);
     runWorkflow();
     return;
   }
   if (command === "boundary_mode_changed") {
+    syncValue(els.boundaryMode);
     S.boundaryActive = false;
     updateFormVisibility();
     publishIncisionState("tumor_boundary_mode_changed");
@@ -1453,33 +1286,29 @@ function logWorkflowTraceToConsole(result: DynamicRecord) {
   if (typeof console.groupEnd === "function") console.groupEnd();
 }
 
+function overrideAdviceLabel(override: DynamicRecord) {
+  if (override.kind === "protective_direction") {
+    return `${regionLabel(override.structure)}优先采用${directionHintLabel(override.direction_hint)}`;
+  }
+  return overrideLabel(override.kind);
+}
+
 function renderGuardrailDetails(guardrails: DynamicRecord = {}) {
   const warnings = guardrails?.warnings || [];
   const overrides = guardrails?.suggested_overrides || [];
   els.guardrailDetails.classList.toggle("warn", warnings.some((w: DynamicRecord) => w.severity === "medium"));
   els.guardrailDetails.classList.toggle("danger", warnings.some((w: DynamicRecord) => w.severity === "high"));
   if (!warnings.length) {
-    els.guardrailDetails.textContent = "Guardrails：未发现需要复核的规则项。";
+    els.guardrailDetails.textContent = "保护提示：未发现需要复核的规则项。";
     if (overrides.length) {
-      els.guardrailDetails.textContent += `\n建议：${overrides.map((o: DynamicRecord) => o.kind).join(" · ")}`;
+      els.guardrailDetails.textContent += `\n建议：${overrides.map(overrideAdviceLabel).join(" · ")}`;
     }
     return;
   }
-  els.guardrailDetails.textContent = `Guardrails：${warnings.map((w: DynamicRecord) => `${w.code}(${w.severity})`).join(" · ")}`;
+  els.guardrailDetails.textContent = `保护提示：${warnings.map((w: DynamicRecord) => `${guardrailLabel(w.code)}（${severityLabel(w.severity)}）`).join("；")}`;
   if (overrides.length) {
-    els.guardrailDetails.textContent += `\n建议：${overrides.map((o: DynamicRecord) => {
-      if (o.kind === "protective_direction") return `${o.kind}:${o.structure}/${o.direction_hint}`;
-      return `${o.kind}:${o.reason || ""}`;
-    }).join(" · ")}`;
+    els.guardrailDetails.textContent += `\n建议：${overrides.map(overrideAdviceLabel).join(" · ")}`;
   }
-}
-
-function directionSourceLabel(source: string): string {
-  const labels = {
-    rstl_atlas_weighted_nearest: "RSTL 图谱 weighted-nearest",
-    rstl_atlas_empty: "RSTL 图谱无可用支持点",
-  };
-  return (labels as Record<string, string>)[source] || source || "未记录";
 }
 
 function renderDirectionSource(result: DynamicRecord) {
@@ -1487,12 +1316,12 @@ function renderDirectionSource(result: DynamicRecord) {
   const direction = result.direction || {};
   const sources = [
     directionSourceLabel(direction.source),
-    `support ${direction.support_count ?? 0}`,
+    `支持线 ${direction.support_count ?? 0} 条`,
     direction.angular_spread_deg != null ? `轴向离散 ${fmt(direction.angular_spread_deg)}°` : null,
   ].filter(Boolean);
   const overrides = (result.guardrails?.suggested_overrides || []).filter((o: DynamicRecord) => o.kind === "protective_direction");
   if (overrides.length) {
-    sources.push(`敏感结构方向例外：${overrides.map((o: DynamicRecord) => `${o.structure}/${o.direction_hint}`).join("；")}`);
+    sources.push(`敏感结构方向例外：${overrides.map((o: DynamicRecord) => `${regionLabel(o.structure)}／${directionHintLabel(o.direction_hint)}`).join("；")}`);
   }
   sources.push(S.secondaryCues ? "皱襞/边界辅助线索：只读审阅，不参与几何" : "皱襞/边界辅助线索：未参与几何");
   if (result.candidate?.edited) sources.push("医生人工覆盖已记录");
@@ -1573,11 +1402,11 @@ function renderResult(result: DynamicRecord) {
     els.candidateTipAngle.textContent = "—";
   }
   const directionReasons = result.direction.confidence_reasons || [];
-  els.directionConf.textContent = `${Math.round((result.direction.confidence || 0) * 100)}%${directionReasons.length ? ` · ${directionReasons.join(", ")}` : ""}`;
-  els.directionConf.title = directionReasons.length ? `RSTL 低置信原因：${directionReasons.join(", ")}` : "";
+  els.directionConf.textContent = `${Math.round((result.direction.confidence || 0) * 100)}%${directionReasons.length ? ` · ${directionReasons.map(reasonLabel).join("、")}` : ""}`;
+  els.directionConf.title = directionReasons.length ? `原始原因代码：${directionReasons.join(", ")}` : "";
   const regionReasons = result.anatomy.confidence_reasons || [];
-  els.regionVal.textContent = `${result.anatomy.region}${regionReasons.length ? ` · ${regionReasons.join(", ")}` : ""}`;
-  els.regionVal.title = regionReasons.length ? `分区置信原因：${regionReasons.join(", ")}` : "";
+  els.regionVal.textContent = `${regionLabel(result.anatomy.region)}${regionReasons.length ? ` · ${regionReasons.map(reasonLabel).join("、")}` : ""}`;
+  els.regionVal.title = regionReasons.length ? `原始分区代码：${result.anatomy.region}；${regionReasons.join(", ")}` : "";
   els.guardrailVal.textContent = result.guardrails.passed ? "通过" : "复核";
   els.guardrailVal.style.color = result.guardrails.passed ? "" : "#b45309";
   renderGuardrailDetails(result.guardrails);
@@ -1586,7 +1415,7 @@ function renderResult(result: DynamicRecord) {
   renderWorkflowComparison(result);
   const tumorQuality = tumorQualityFor(result);
   if (tumorQuality.warning_count) {
-    els.guardrailDetails.textContent += `\n肿物输入：${tumorQuality.warnings.map((w: DynamicRecord) => `${w.code}(${w.severity})`).join(" · ")}`;
+    els.guardrailDetails.textContent += `\n肿物输入：${tumorQuality.warnings.map((w: DynamicRecord) => `${guardrailLabel(w.code)}（${severityLabel(w.severity)}）`).join("；")}`;
   }
   els.workflowSummary.textContent = result.summary || "已生成候选。";
   els.nextStep.textContent = result.next_step || "医生审阅、编辑或拒绝该候选。";
@@ -1603,57 +1432,14 @@ function renderResult(result: DynamicRecord) {
   publishIncisionState("candidate_result");
 }
 
-function guardrailSummary(guardrails: DynamicRecord = {}) {
-  const warnings = guardrails.warnings || [];
-  const high = warnings.filter((w: DynamicRecord) => w.severity === "high");
-  const medium = warnings.filter((w: DynamicRecord) => w.severity === "medium");
-  return {
-    passed: Boolean(guardrails.passed),
-    high_count: high.length,
-    medium_count: medium.length,
-    high_codes: high.map((w: DynamicRecord) => w.code),
-    medium_codes: medium.map((w: DynamicRecord) => w.code),
-    warnings: warnings.map((w: DynamicRecord) => ({
-      code: w.code,
-      severity: w.severity,
-      message: w.message || "",
-    })),
-    suggested_overrides: guardrails.suggested_overrides || [],
-  };
-}
-
 function reviewGate(review: DynamicRecord, result: DynamicRecord) {
-  const summary = guardrailSummary(result.guardrails);
-  const traceGate = workflowTraceGate(result);
-  const reviewerRequired = review.status === "approved_for_discussion";
-  const notesRequired = reviewerRequired && summary.high_count > 0;
-  const reviewerPresent = Boolean(review.reviewer);
-  const notesPresent = Boolean(review.notes);
-  const approvalReady = review.status === "approved_for_discussion" &&
-    traceGate.passed &&
-    (!reviewerRequired || reviewerPresent) &&
-    (!notesRequired || notesPresent);
-  const liveOverlaySupported = S.headAsset?.liveOverlaySupported !== false;
-  const liveOverlayReady = approvalReady && liveOverlaySupported;
-  return {
-    reviewer_required: reviewerRequired,
-    reviewer_present: reviewerPresent,
-    notes_required_for_high_guardrails: notesRequired,
-    notes_present: notesPresent,
-    high_guardrail_codes: summary.high_codes,
-    workflow_trace_gate_passed: traceGate.passed,
-    workflow_trace_gate_missing: traceGate.missing_actions.map((item: DynamicRecord) => item.key),
-    approval_ready: approvalReady,
-    live_overlay_ready: liveOverlayReady,
-    live_overlay_blocked_reason: liveOverlaySupported ? null : "active_head_topology_not_supported_by_mediapipe_live_overlay",
-    active_topology_id: S.headAsset?.topologyId || null,
-    active_topology_version: S.headAsset?.topologyVersion || null,
-    reason: liveOverlayReady
-      ? "approved_candidate_ready_for_research_overlay"
-      : approvalReady && !liveOverlaySupported
-        ? "approved_candidate_on_flame_preview_requires_explicit_topology_mapping_before_live_overlay"
-        : traceGate.passed ? "pending_clinician_confirmation_or_missing_required_review_context" : "workflow_trace_gate_failed",
-  };
+  return buildReviewGate({
+    review,
+    result,
+    liveOverlaySupported: S.headAsset?.liveOverlaySupported !== false,
+    topologyId: S.headAsset?.topologyId,
+    topologyVersion: S.headAsset?.topologyVersion,
+  });
 }
 
 function candidateEditSession(result: DynamicRecord = S.result) {
@@ -1728,7 +1514,7 @@ function reviewRecord(result: DynamicRecord = S.result, label = "候选") {
     review_status: review.status,
     review,
     review_gate: gate,
-    guardrail_summary: guardrailSummary(result.guardrails),
+    guardrail_summary: summarizeGuardrails(result.guardrails),
     audit_events: [
       {
         event: "candidate_saved",
@@ -1778,9 +1564,9 @@ function renderSaved() {
     const meta = document.createElement("div");
     meta.className = "meta";
     const reviewer = rec.review?.reviewer ? ` · 审阅人 ${rec.review.reviewer}` : "";
-    const guardrails = rec.guardrails.passed ? "guardrails 通过" : "guardrails 需复核";
+    const guardrails = rec.guardrails.passed ? "保护规则通过" : "保护规则需复核";
     const rank = comparison ? `工程排序 #${comparison.rank} · 分 ${fmt(comparison.score, 1)} · ${comparison.reasons.slice(0, 2).join("；")} · ` : "";
-    meta.textContent = `${rank}长度 ${fmt(rec.candidate.length_mm)} mm · 区域 ${rec.anatomy.region} · ${guardrails}${reviewer} · ${rec.created_at}`;
+    meta.textContent = `${rank}长度 ${fmt(rec.candidate.length_mm)} mm · 区域 ${regionLabel(rec.anatomy.region)} · ${guardrails}${reviewer} · ${rec.created_at}`;
     const actions = document.createElement("div");
     actions.className = "btn-row";
     actions.style.gridTemplateColumns = "1fr 1fr";
@@ -1869,7 +1655,7 @@ function workflowAlternativeResult(baseResult: DynamicRecord, alternative: Dynam
     sensitive_structure_inspection:
       alternative.sensitive_structure_inspection || baseResult.sensitive_structure_inspection,
     review_status: alternative.review_status || "pending_clinician_confirmation",
-    summary: `已载入浏览器方向备选：${alternative.label || alternative.id || "候选"}；请复核 guardrails、敏感结构和候选比较。`,
+    summary: `已载入浏览器方向备选：${alternative.label || alternative.id || "候选"}；请复核保护规则、敏感结构和候选比较。`,
     next_step: "医生审阅、编辑或否决该候选。",
   };
 }
@@ -1884,7 +1670,7 @@ function makeVariantCandidates() {
       const result = workflowAlternativeResult(S.result, alternative);
       S.saved.push(reviewRecord(result, alternative.label || `浏览器备选 ${S.saved.length + 1}`));
     }
-    els.stageStatus.textContent = `已保存 ${workflowAlternatives.length} 个浏览器方向备选，并保留各自 guardrails、敏感结构复核和工程排序`;
+    els.stageStatus.textContent = `已保存 ${workflowAlternatives.length} 个浏览器方向备选，并保留各自保护规则、敏感结构复核和工程排序`;
     renderSaved();
     return;
   }
@@ -2400,18 +2186,17 @@ function bindWorkbenchEvents() {
   drag = null;
   });
   els.canvas.addEventListener("wheel", (e: WheelEvent) => { e.preventDefault(); S.head?.zoom(e.deltaY > 0 ? 1.1 : 0.9); }, { passive: false });
-  const stateRoot = els.canvas?.closest(".app");
-  stateRoot?.addEventListener("change", () => publishIncisionState("form_change"));
-  stateRoot?.addEventListener("input", (event) => {
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement) {
-      publishIncisionState("form_input");
-    }
-  });
-
   const reactManaged = isReactManagedWorkbench();
   if (reactManaged) bindReactWorkbenchCommands();
 
   if (!reactManaged) {
+    const stateRoot = els.canvas?.closest(".app");
+    stateRoot?.addEventListener("change", () => publishIncisionState("form_change"));
+    stateRoot?.addEventListener("input", (event) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement) {
+        publishIncisionState("form_input");
+      }
+    });
     els.tumorKind.onchange = () => { updateFormVisibility(); runWorkflow(); };
     els.diameter.oninput = () => { els.diameterVal.textContent = els.diameter.value; updateTumorRing(); };
     els.diameter.onchange = runWorkflow;
@@ -2506,7 +2291,7 @@ export function disposeIncisionWorkbench() {
 
 export function mountIncisionWorkbench(root: ParentNode | Document = document) {
   disposeIncisionWorkbench();
-  els = collectElements(root);
+  els = collectIncisionElements(root);
   S = createRuntimeState();
   S.mounted = true;
   bindWorkbenchEvents();

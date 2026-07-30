@@ -10,17 +10,11 @@ import { Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { Textarea } from "./ui/textarea";
 import { useIncisionControllerCommands } from "../hooks/useControllerCommands";
+import { reviewStatusLabel } from "../services/incisionClinicalCopy";
 import { useIncisionStore } from "../stores/incisionStore";
 
-const REVIEW_LABELS: Record<string, string> = {
-  pending_clinician_confirmation: "待医生确认",
-  approved_for_discussion: "确认候选草案",
-  needs_revision: "退回修改",
-  rejected_by_clinician: "否决候选",
-};
-
 function reviewLabel(status: string) {
-  return REVIEW_LABELS[status] || REVIEW_LABELS.pending_clinician_confirmation;
+  return reviewStatusLabel(status);
 }
 
 function reviewTone(status: string): "" | "approved" | "rejected" | "revision" {

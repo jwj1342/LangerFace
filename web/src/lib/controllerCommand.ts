@@ -181,8 +181,8 @@ export function dispatchAnnotateLibraryCommand(command: AnnotateLibraryCommand, 
   dispatchControllerCommand(ANNOTATE_LIBRARY_REACT_COMMAND_EVENT, { command, index });
 }
 
-export function dispatchIncisionTumorCommand(command: IncisionTumorCommand) {
-  dispatchControllerCommand(INCISION_TUMOR_REACT_COMMAND_EVENT, { command });
+export function dispatchIncisionTumorCommand(command: IncisionTumorCommand, value?: string | number) {
+  dispatchControllerCommand(INCISION_TUMOR_REACT_COMMAND_EVENT, { command, value });
 }
 
 export function dispatchIncisionSecondaryCueCommand(command: IncisionSecondaryCueCommand) {

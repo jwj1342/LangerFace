@@ -54,4 +54,4 @@
 
 - **#112** —— `web/src/services/geometryAtlas.ts` 未遵守 `disableRuntimeExpansion`，导致 `/personalized` 的额头拱线在 React 实时页被二次形变；`architecture/METHODS_AND_IMPLEMENTATION_SUMMARY.md` §5 也尚未记录这段非重心变换。
 - **#113** —— 9 组仍可合并的重复文档、`planning/TODO.md` 与 issue 状态双向失同步、`quality/OBSERVABILITY.md` 缺 pose-gate 一族指标、`atlasVersion` 字段无法判别图谱版本。
-- **#114** —— 工程实践债（`incisionRuntime.ts` 仍是较大的运行时文件，需要继续按交互、导出和渲染职责拆分）。
+- **#114** —— 工程实践债（DOM 收集、临床文案和审阅策略已从 `incisionRuntime.ts` 拆出；导出、三维交互与渲染职责仍需继续拆分）。

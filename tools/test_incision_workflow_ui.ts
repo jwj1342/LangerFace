@@ -20,6 +20,7 @@ const html = normalizeTsxContracts([
   fs.readFileSync("src/components/PrivacyAuditPanel.tsx", "utf8"),
 ].join("\n"));
 const js = fs.readFileSync("src/services/incisionRuntime.ts", "utf8");
+const reviewPolicy = fs.readFileSync("src/services/incisionReviewPolicy.ts", "utf8");
 const tools = [
   fs.readFileSync("src/services/incisionToolRules.ts", "utf8"),
   fs.readFileSync("src/services/incisionToolCore.ts", "utf8"),
@@ -103,7 +104,7 @@ assert.ok(tools.includes("summary_normal"), "tumor boundary summary exports summ
 assert.ok(js.includes("summarizeTumorInputQuality"), "workbench renders tumor input quality summaries");
 assert.ok(js.includes("loadPreferredIncisionAssets"), "workbench prefers FLAME head assets before falling back to MediaPipe");
 assert.ok(js.includes("mediaPipeAtlasToFlamePreviewAtlas"), "workbench converts MediaPipe RSTL draft lines before rendering on FLAME");
-assert.ok(js.includes("active_head_topology_not_supported_by_mediapipe_live_overlay"), "workbench blocks FLAME candidates from direct MediaPipe live overlay");
+assert.ok(reviewPolicy.includes("active_head_topology_not_supported_by_mediapipe_live_overlay"), "workbench blocks FLAME candidates from direct MediaPipe live overlay");
 assert.ok(js.includes("head_asset: currentHeadAssetSnapshot()"), "review records include head asset provenance");
 assert.ok(js.includes("classifyRegion(S.verts[S.lesion]"), "workbench derives anatomy preview from selected tumor center");
 assert.ok(js.includes("当前点位分区"), "workbench labels live anatomy preview in Chinese");
@@ -146,7 +147,7 @@ assert.ok(tools.includes("inspect_sensitive_structures"), "workflow gate require
 assert.ok(tools.includes("linear_subcutaneous_incision"), "workflow gate accepts linear incision generation tool");
 assert.ok(tools.includes("fusiform_cutaneous_incision"), "workflow gate accepts fusiform incision generation tool");
 assert.ok(tools.includes("preview_incision_on_face"), "workflow gate requires deterministic face preview before review");
-assert.ok(js.includes("工作流工具 trace 未通过门控"), "approval is blocked when workflow trace gate fails");
+assert.ok(reviewPolicy.includes("工作流工具 trace 未通过门控"), "approval is blocked when workflow trace gate fails");
 assert.ok(js.includes("工作流工具门控"), "markdown report includes workflow trace gate status");
 assert.ok(js.includes("工作流计划："), "markdown report includes workflow plan status");
 assert.ok(js.includes("candidate_comparison"), "review export includes candidate comparison");
@@ -161,8 +162,8 @@ assert.ok(js.includes("工作流恢复详情"), "markdown report includes recove
 assert.ok(js.includes("已跳过失败变体并继续比较"), "recovered failure summary explains candidate skip behavior");
 assert.ok(js.includes("不是临床推荐或手术指令"), "candidate comparison warns it is not clinical recommendation");
 assert.ok(js.includes("reviewReadiness"), "review workflow validates approval readiness");
-assert.ok(js.includes("highGuardrailWarnings"), "review workflow detects high guardrail warnings");
-assert.ok(js.includes("live_overlay_ready"), "review gate records live overlay readiness");
+assert.ok(reviewPolicy.includes("summarizeGuardrails(result.guardrails).high_count"), "review workflow detects high guardrail warnings");
+assert.ok(reviewPolicy.includes("live_overlay_ready"), "review gate records live overlay readiness");
 assert.ok(!js.includes("testProviderConnection"), "workbench contains no remote model connectivity runtime");
 assert.ok(!js.includes("normalizeProviderBaseUrl"), "workbench contains no provider URL handling");
 assert.ok(!js.includes("stream: true"), "workbench does not request streaming model output");
@@ -183,6 +184,6 @@ assert.ok(js.includes("RSTL 来源"), "markdown report includes direction source
 assert.ok(js.includes("最近敏感游离缘"), "markdown report includes sensitive free-margin distance");
 assert.ok(js.includes("候选版本"), "markdown report includes candidate version provenance");
 assert.ok(js.includes("发送到实时叠加前，请先确认当前候选草案"), "live overlay requires candidate approval");
-assert.ok(js.includes("当前候选有高风险 guardrail"), "high-risk approval requires review notes");
+assert.ok(reviewPolicy.includes("当前候选有高风险保护提示"), "high-risk approval requires review notes");
 
 console.log("test_incision_workflow_ui: tumor boundary IO and review workflow assertions passed");

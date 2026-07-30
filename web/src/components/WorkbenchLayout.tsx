@@ -18,12 +18,16 @@ export function WorkbenchLayout({
   workspace,
   ...props
 }: WorkbenchLayoutProps) {
+  const sidebar = (
+    <aside className="sidebar">
+      {children}
+    </aside>
+  );
+
   return (
     <div className={cn("app", "clinical-compat-workbench", `${workspace}-workbench`, className)} {...props}>
-      <aside className="sidebar">
-        {children}
-      </aside>
-      {stage}
+      {workspace === "incision" ? stage : sidebar}
+      {workspace === "incision" ? sidebar : stage}
     </div>
   );
 }

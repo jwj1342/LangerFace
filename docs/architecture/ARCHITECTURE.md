@@ -223,6 +223,9 @@ P = u·V0 + v·V1 + w·V2
 - 切口候选由 `src/services/incisionWorkflowTools.ts` 中的本地确定性 workflow 生成；
   `workflow.worker.ts` 通过 Comlink 执行，`workflowPlanner.ts` 在 Worker 不可用时回退到主线程执行相同函数。
   运行时不包含远程模型或模型密钥配置。
+- 切口工作台编排保留在 `src/services/incisionRuntime.ts`；route-scoped DOM 契约、临床展示文案和纯审阅门控分别位于
+  `src/services/incisionDom.ts`、`src/services/incisionClinicalCopy.ts` 与 `src/services/incisionReviewPolicy.ts`。
+  React 控件只通过 typed controller command 写入运行时，兼容页的原生 DOM 监听器不会在 React route 上回写旧 snapshot。
 - 实时页的 canvas/WebM 录制、额外视图合成和下载生命周期由 `src/services/canvasRecording.ts` 负责。
 - 摄像头约束/错误归一化由
   `src/services/cameraSource.ts` 负责，上传图片工作尺寸控制由 `src/services/imageSource.ts` 负责。
