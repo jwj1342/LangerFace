@@ -92,7 +92,7 @@ Stage 2 涉及肿物模拟和候选切口，只能在医生审阅路径中评估
 
 ## Stage 2 审阅导出汇总
 
-切口 workflow 工作台导出的 `incision-review-record/v0.3` 或 `incision-review-export/v0.3` 可用脚本汇总为脱敏指标：
+切口 workflow 工作台导出的 `incision-review-record/v0.4` 或 `incision-review-export/v0.4` 可用脚本汇总为脱敏指标：
 
 ```bash
 python tools/evaluate_stage2_validation.py \
@@ -105,6 +105,12 @@ python tools/evaluate_stage2_validation.py \
 `stage2-validation-summary/v0.1`。可选 CSV 会把同一份 summary 展平成
 `section / metric / submetric / value / count / mean / median / p90 / min / max / clinical_boundary`
 表格，供 reviewer 快速检查计数、通过率、overlay QA、privacy gate 和 secondary cue 是否越界；CSV 不包含影像、视频帧、纹理或 landmark 坐标。JSON 包含：
+
+为兼容 Agentic 删除前已导出的 `v0.3` 记录，汇总脚本会显式识别旧 schema，并在内存中把
+`agent_trace_gate`、`agent_react_plan`、`agent_execution_events` 和
+`agent_orchestration_audit` 映射为新的 `workflow_*` 读取名。源记录的 `schema_version` 不会被伪装成
+`v0.4`，summary 会通过 `source_schema_version_counts` 分开计数；旧 provider/LLM 字段仍保留给隐私扫描，
+不会在迁移时被静默丢弃。未知 schema 会明确报错，不会与当前记录混读。
 
 - 候选数、肿物类型分布、切口类型分布。
 - 医生确认 / 否决状态计数和确认率。

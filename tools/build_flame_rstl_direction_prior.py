@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a dev-local 3DMM RSTL direction prior from the MediaPipe draft prior.
 
-This is a topology bridge generator for issue #86. It does not commit or
+This is a topology bridge generator following the draft work in PR #88. It does not commit or
 redistribute FLAME/BFM/3DMM-derived outputs; the FLAME default output path
 lives under ``local_outputs/`` and is gitignored. The generated asset remains
 ``validated:false`` and requires #2 clinical review.

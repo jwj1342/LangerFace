@@ -184,7 +184,7 @@ P = u·V0 + v·V1 + w·V2
 - 生产预览：`cd web && npm run preview`，Vite 默认监听 `http://127.0.0.1:4173`。
 - Vite 有 **4 个 Rollup 入口**：`web/index.html`（React SPA，挂在站点根，`/app/*` 仍作为旧地址兼容）、
   `web/current/index.html`（`/current/` 纯 JS 实时页）、`web/personalized.html`（`/personalized`）、
-  `web/compat/personalized/v6_review.html`（`/v6-review`）。`annotate.html`、`incision_workflow.html`、`surgery.html`
+  `web/compat/personalized/v6_review.html`（`/v6-review`）。`annotate.html`、`incision_workflow.html`、`incision_agent.html`、`surgery.html`
   只作为轻量兼容跳转页复制进 `dist/`，不再作为 Rollup 多入口应用构建。
 - `web/vite.config.ts` 使用 `base: "/"`，让 SPA shell 的 JS/CSS 在深链接下仍从站点根 `/assets/...` 读取；`copy-runtime-assets`
   会把 `web/assets/` 复制到 `dist/assets/`；`web/src/services/assetLoader.ts`

@@ -4,10 +4,10 @@ import { auditExportPayload } from "../web/src/services/exportPrivacy.ts";
 
 function safeReviewExport() {
   return {
-    schema_version: "incision-review-export/v0.3",
+    schema_version: "incision-review-export/v0.4",
     exported_at: "2026-06-25T12:34:56.000Z",
     current: {
-      schema_version: "incision-review-record/v0.3",
+      schema_version: "incision-review-record/v0.4",
       credentials: { token_present: true, token: "[redacted]" },
       privacy_audit: {
         raw_image_sent: false,
