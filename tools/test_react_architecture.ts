@@ -144,6 +144,7 @@ const incisionDomService = read("src/services/incisionDom.ts");
 const incisionClinicalCopyService = read("src/services/incisionClinicalCopy.ts");
 const incisionReviewPolicyService = read("src/services/incisionReviewPolicy.ts");
 const incisionEditHistoryService = read("src/services/incisionEditHistory.ts");
+const incisionReviewRecordsService = read("src/services/incisionReviewRecords.ts");
 const incisionOverlayService = read("src/services/incisionOverlay.ts");
 const incisionCandidateToolsService = read("src/services/incisionCandidateTools.ts");
 const incisionWorkflowToolsService = read("src/services/incisionWorkflowTools.ts");
@@ -195,6 +196,7 @@ const incisionRuntimeDependencyTypes = [
   "src/services/incisionClinicalCopy.ts",
   "src/services/incisionDom.ts",
   "src/services/incisionReviewPolicy.ts",
+  "src/services/incisionReviewRecords.ts",
   "src/services/softBody.ts",
   "src/services/three3d.ts",
 ];
@@ -1601,6 +1603,11 @@ assert.ok(incisionEditHistoryService.includes("redo()"), "incision edit history 
 assert.ok(controller.includes("./incisionEditHistory"), "incision runtime delegates edit timeline state");
 assert.ok(!controller.includes("editTimeline:"), "incision runtime no longer stores raw edit timeline arrays");
 assert.ok(!controller.includes("editCursor:"), "incision runtime no longer stores raw edit cursors");
+assert.ok(incisionReviewRecordsService.includes("buildIncisionReviewRecord"), "incision review record service owns audit record construction");
+assert.ok(incisionReviewRecordsService.includes("buildIncisionReviewReport"), "incision review record service owns markdown report construction");
+assert.ok(controller.includes("./incisionReviewRecords"), "incision runtime delegates review records and reports");
+assert.ok(!controller.includes("function candidateEditSession"), "incision runtime does not build edit sessions inline");
+assert.ok(controller.split("\n").length <= 2000, "incision runtime remains below the 2000-line God Object threshold");
 assert.ok(controller.includes("interface IncisionRuntimeState"), "incision runtime types its long-lived renderer/workflow state");
 assert.ok(controller.includes("interface PointerDragState"), "incision runtime types pointer drag state");
 assert.ok(!controller.includes("function controllerEvent"), "incision runtime delegates browser command parsing to typed schemas");
