@@ -23,7 +23,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run dev -- --port 4173",
+    command: "npm run build && npm run preview -- --port 4173",
     url: "http://127.0.0.1:4173/app/incision",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
