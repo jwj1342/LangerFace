@@ -357,7 +357,7 @@ Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部
 |---|---|---|---|
 | 临床规则库 | `assets/clinical_rules_face_incision.json` | 结构化区域规则、优先级、例外、审核状态 | #11 |
 | 面部分区 / 亚单位 | `web/src/services/incisionToolCore.ts` | 把点或肿物中心映射到临床区域 / 美学亚单位，并输出 bbox/边界/过渡区/敏感游离缘相关 `confidence_reasons` | #12 |
-| RSTL 方向服务 | `src/langerface/lines/direction.py`、`web/src/services/incisionToolCore.ts` | Python / TypeScript 同构查询局部方向、置信度和依据；共享金标固定无向轴角、atlas 为空、支持点过远/过少和角度冲突语义 | #13 |
+| RSTL 方向服务 | `src/langerface/lines/direction.py`、`web/src/services/incisionToolCore.ts` | Python / TypeScript 同构查询局部方向、置信度和依据；共享金标固定 JSON-safe 空结果、无效/零长度样本过滤、点序无关的规范无向轴，以及真实检测派生 100 帧稳定性门槛 | #13 |
 | 肿物模型 | `web/src/services/incisionCandidateTools.ts`, `web/src/services/tumorInput.ts` | 表示皮下 / 皮表肿物输入、单位与输入质量摘要 | #14 |
 | 皮下线性切口 | `web/src/services/incisionCandidateTools.ts` | 基于超声直径和 RSTL 方向生成线性候选 | #15 |
 | 皮表梭形切口 | `web/src/services/incisionCandidateTools.ts` | 生成梭形候选，约束比例、尖端角和平滑对称 | #16 |

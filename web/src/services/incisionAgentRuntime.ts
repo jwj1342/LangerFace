@@ -1624,6 +1624,7 @@ function directionSourceLabel(source: string): string {
   const labels = {
     rstl_atlas_weighted_nearest: "RSTL 图谱 weighted-nearest",
     rstl_atlas_empty: "RSTL 图谱无可用支持点",
+    rstl_atlas_no_valid_direction_support: "RSTL 图谱记录无有效方向支持",
   };
   return (labels as Record<string, string>)[source] || source || "未记录";
 }

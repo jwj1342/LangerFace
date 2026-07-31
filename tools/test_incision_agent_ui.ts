@@ -62,6 +62,10 @@ assert.ok(!html.includes('value="/api/agentic-incision"'), "workbench does not p
 assert.ok(html.includes("浏览器内确定性 workflow"), "workbench explains candidate generation is browser-side");
 assert.ok(html.includes('id="guardrailDetails"'), "workbench exposes guardrail detail feedback");
 assert.ok(html.includes('id="directionSource"'), "workbench exposes direction source explanation");
+assert.ok(
+  js.includes("RSTL 图谱记录无有效方向支持"),
+  "workbench explains a non-empty atlas with no valid direction samples",
+);
 assert.ok(html.includes('id="agentGate"'), "workbench exposes agent trace gate feedback");
 assert.ok(html.includes('id="undoEditBtn"'), "workbench exposes clinician edit undo");
 assert.ok(html.includes('id="redoEditBtn"'), "workbench exposes clinician edit redo");

@@ -485,10 +485,14 @@ export function rotateDirectionVariant(
   ];
   return {
     ...direction,
+    point: direction.point || [0, 0, 0],
     vector,
     angle_deg: angle,
     confidence: Math.max(0, Number(direction.confidence || 0) - Math.abs(Number(angleOffsetDeg || 0)) / 180),
     source: direction.source || "rstl_atlas_weighted_nearest",
+    nearest_distance: direction.nearest_distance ?? null,
+    support_count: Number(direction.support_count || 0),
+    angular_spread_deg: Number(direction.angular_spread_deg || 0),
     variant_source: Math.abs(Number(angleOffsetDeg || 0)) > 1e-9 ? "browser_direction_variant" : "rstl_primary",
     angle_offset_deg: Number(angleOffsetDeg || 0),
     confidence_reasons: [...new Set(reasons)],

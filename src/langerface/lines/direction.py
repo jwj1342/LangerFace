@@ -25,7 +25,7 @@ class DirectionResult:
     angle_deg: float
     confidence: float
     source: str
-    nearest_distance: float
+    nearest_distance: float | None
     support_count: int
     angular_spread_deg: float
     confidence_reasons: tuple[str, ...]
@@ -52,6 +52,15 @@ def _norm(vector: np.ndarray) -> np.ndarray:
     return vector / length
 
 
+def _canonical_axis(vector: np.ndarray) -> np.ndarray:
+    """Give an undirected axis a stable sign independent of polyline order."""
+    for component in vector:
+        if abs(float(component)) <= 1e-12:
+            continue
+        return -vector if component < 0 else vector
+    return vector
+
+
 def _line_value(line: AtlasLine | Mapping[str, Any], key: str, default: Any) -> Any:
     if isinstance(line, Mapping):
         return line.get(key, default)
@@ -75,36 +84,54 @@ def _atlas_samples(
     for line in _atlas_lines(atlas):
         polyline: list[np.ndarray] = []
         points3d = _line_value(line, "points3d", [])
-        if isinstance(points3d, list) and points3d:
+        if isinstance(points3d, list | tuple | np.ndarray) and len(points3d):
             for raw in points3d:
-                point = np.asarray(raw, dtype=np.float64)
+                try:
+                    point = np.asarray(raw, dtype=np.float64)
+                except (TypeError, ValueError):
+                    continue
                 if point.shape == (3,) and np.all(np.isfinite(point)):
                     polyline.append(point)
         else:
             raw_points = _line_value(line, "points", [])
             for raw in raw_points:
-                if len(raw) < 3:
+                try:
+                    if len(raw) < 3:
+                        continue
+                    tri_raw, u_raw, v_raw = raw[:3]
+                    tri_value = float(tri_raw)
+                    u = float(u_raw)
+                    v = float(v_raw)
+                except (TypeError, ValueError):
                     continue
-                tri_index = int(round(float(raw[0])))
+                if not np.isfinite(tri_value) or not np.isfinite(u) or not np.isfinite(v):
+                    continue
+                tri_index = int(round(tri_value))
                 if tri_index < 0 or tri_index >= len(triangles):
                     continue
                 triangle = triangles[tri_index]
                 if np.any(triangle < 0) or np.any(triangle >= len(vertices)):
                     continue
-                u = float(raw[1])
-                v = float(raw[2])
-                if not np.isfinite(u) or not np.isfinite(v):
+                a, b, c = vertices[triangle]
+                if not np.all(np.isfinite([a, b, c])):
                     continue
                 w = 1.0 - u - v
-                a, b, c = vertices[triangle]
                 polyline.append(u * a + v * b + w * c)
+        deduplicated: list[np.ndarray] = []
+        for point in polyline:
+            if not deduplicated or float(np.linalg.norm(point - deduplicated[-1])) > 1e-12:
+                deduplicated.append(point)
+        polyline = deduplicated
         if len(polyline) < 2:
             continue
         for index, point in enumerate(polyline):
             before = polyline[max(0, index - 1)]
             after = polyline[min(len(polyline) - 1, index + 1)]
+            delta = after - before
+            if float(np.linalg.norm(delta)) <= 1e-12:
+                continue
             points.append(point)
-            tangents.append(_norm(after - before))
+            tangents.append(_norm(delta))
     if not points:
         empty = np.empty((0, 3), dtype=np.float64)
         return empty, empty
@@ -138,16 +165,17 @@ def query_direction(
     tris = np.asarray(triangles, dtype=np.int64)
     sample_points, sample_tangents = _atlas_samples(verts, tris, atlas)
     if len(sample_points) == 0:
+        empty_atlas = len(_atlas_lines(atlas)) == 0
         return DirectionResult(
             point=query,
             vector=np.array([1.0, 0.0, 0.0], dtype=np.float64),
             angle_deg=0.0,
             confidence=0.0,
-            source="rstl_atlas_empty",
-            nearest_distance=float("inf"),
+            source="rstl_atlas_empty" if empty_atlas else "rstl_atlas_no_valid_direction_support",
+            nearest_distance=None,
             support_count=0,
             angular_spread_deg=0.0,
-            confidence_reasons=("empty_atlas",),
+            confidence_reasons=("empty_atlas" if empty_atlas else "no_valid_direction_support",),
         )
 
     delta = sample_points - query
@@ -171,7 +199,7 @@ def query_direction(
         weight_sum += weight
         signed.append(tangent)
 
-    vector = _norm(weighted / max(weight_sum, 1e-9))
+    vector = _canonical_axis(_norm(weighted / max(weight_sum, 1e-9)))
     spread = _axial_angular_spread_deg(np.vstack(signed), vector)
     reasons: list[str] = []
     if len(order) < 3:
