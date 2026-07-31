@@ -103,6 +103,7 @@ export interface IncisionResultViewState {
   candidateLength: string;
   candidateWidth: string;
   candidateTipAngle: string;
+  rstlDeviation: string;
   directionConfidence: string;
   directionTitle: string;
   region: string;
@@ -346,6 +347,7 @@ export function buildIncisionResultViewSnapshot(input: {
   candidateLength?: IncisionTextLike | null;
   candidateWidth?: IncisionTextLike | null;
   candidateTipAngle?: IncisionTextLike | null;
+  rstlDeviation?: IncisionTextLike | null;
   directionConfidence?: IncisionTextLike | null;
   region?: IncisionTextLike | null;
   guardrail?: IncisionTextLike | null;
@@ -361,6 +363,7 @@ export function buildIncisionResultViewSnapshot(input: {
     candidateLength: incisionTextOf(input.candidateLength, "—"),
     candidateWidth: incisionTextOf(input.candidateWidth, "—"),
     candidateTipAngle: incisionTextOf(input.candidateTipAngle, "—"),
+    rstlDeviation: incisionTextOf(input.rstlDeviation, "—"),
     directionConfidence: incisionTextOf(input.directionConfidence, "—"),
     directionTitle: incisionTitleOf(input.directionConfidence),
     region: incisionTextOf(input.region, "—"),

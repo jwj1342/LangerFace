@@ -291,6 +291,7 @@ function currentResultViewSnapshot() {
     candidateLength: els.candidateLength,
     candidateWidth: els.candidateWidth,
     candidateTipAngle: els.candidateTipAngle,
+    rstlDeviation: els.candidateRstlDeviation,
     directionConfidence: els.directionConf,
     region: els.regionVal,
     guardrail: els.guardrailVal,
@@ -1459,6 +1460,8 @@ function renderResult(result: DynamicRecord) {
     els.candidateWidth.textContent = "—";
     els.candidateTipAngle.textContent = "—";
   }
+  const rstlDeviation = Number(c.metrics?.rstl_deviation_deg);
+  els.candidateRstlDeviation.textContent = Number.isFinite(rstlDeviation) ? `${fmt(rstlDeviation)}°` : "—";
   const directionReasons = result.direction.confidence_reasons || [];
   els.directionConf.textContent = `${Math.round((result.direction.confidence || 0) * 100)}%${directionReasons.length ? ` · ${directionReasons.map(reasonLabel).join("、")}` : ""}`;
   els.directionConf.title = directionReasons.length ? `原始原因代码：${directionReasons.join(", ")}` : "";

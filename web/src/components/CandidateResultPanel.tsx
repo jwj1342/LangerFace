@@ -10,6 +10,7 @@ const DEFAULT_RESULT_VIEW: IncisionResultViewState = {
   candidateLength: "—",
   candidateWidth: "—",
   candidateTipAngle: "—",
+  rstlDeviation: "—",
   directionConfidence: "—",
   directionTitle: "",
   region: "—",
@@ -47,6 +48,7 @@ export function CandidateResultPanel() {
         <MetricItem label="长度" value={view.candidateLength} valueProps={{ id: "candidateLength" }} />
         <MetricItem label="宽度 / 比例" value={view.candidateWidth} valueProps={{ id: "candidateWidth" }} />
         <MetricItem label="尖端角" value={view.candidateTipAngle} valueProps={{ id: "candidateTipAngle" }} />
+        <MetricItem label="RSTL 角度偏差" value={view.rstlDeviation} valueProps={{ id: "candidateRstlDeviation" }} />
         <MetricItem
           label="RSTL 置信度"
           value={view.directionConfidence}
