@@ -4,6 +4,7 @@ import {
   type AnnotateDrawCommand,
   type AnnotateLibraryCommand,
   type AnnotateMeshCommand,
+  type IncisionEditControlId,
   type IncisionEditCommand,
   type IncisionLibraryCommand,
   type IncisionReviewCommand,
@@ -60,8 +61,8 @@ export function useIncisionControllerCommands() {
   const secondaryCue = useCallback((command: IncisionSecondaryCueCommand) => {
     dispatchIncisionSecondaryCueCommand(command);
   }, []);
-  const edit = useCallback((command: IncisionEditCommand) => {
-    dispatchIncisionEditCommand(command);
+  const edit = useCallback((command: IncisionEditCommand, controlId?: IncisionEditControlId, value?: string) => {
+    dispatchIncisionEditCommand(command, controlId, value);
   }, []);
   const review = useCallback((command: IncisionReviewCommand) => {
     dispatchIncisionReviewCommand(command);

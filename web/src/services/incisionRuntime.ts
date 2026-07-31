@@ -1211,10 +1211,44 @@ function resetEditToToolSuggestion() {
   renderResult(S.baseResult);
 }
 
+function editCommandControl(controlId: unknown): HTMLInputElement | HTMLSelectElement | null {
+  if (controlId === "angleOffsetDeg") return els.angleOffset;
+  if (controlId === "lengthScale") return els.lengthScale;
+  if (controlId === "widthScale") return els.widthScale;
+  if (controlId === "tipAngleDeg") return els.tipAngle;
+  if (controlId === "shiftAlongMm") return els.shiftAlong;
+  if (controlId === "shiftPerpMm") return els.shiftPerp;
+  if (controlId === "editReason") return els.editReason;
+  return null;
+}
+
+function applyReactEditControlValue(controlId: unknown, value: unknown) {
+  const control = editCommandControl(controlId);
+  if (!control || typeof value !== "string") return;
+  if (control instanceof HTMLSelectElement) {
+    if ([...control.options].some((option) => option.value === value)) control.value = value;
+    return;
+  }
+  if (control.type !== "range") {
+    control.value = value;
+    return;
+  }
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return;
+  const minimum = Number(control.min);
+  const maximum = Number(control.max);
+  control.value = String(clamp(
+    numericValue,
+    Number.isFinite(minimum) ? minimum : numericValue,
+    Number.isFinite(maximum) ? maximum : numericValue,
+  ));
+}
+
 function handleReactEditCommand(event: Event) {
   const detail = readControllerCommandDetail(controllerEvent(event), INCISION_EDIT_COMMANDS);
   if (!detail) return;
   const { command } = detail;
+  applyReactEditControlValue(detail.controlId, detail.value);
   if (command === "preview_edit") {
     applyEditControls();
     return;

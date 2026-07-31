@@ -1559,6 +1559,26 @@ assert.ok(incisionWorkbench.includes("EditControlsPanel"), "React incision workb
 assert.ok(editPanel.includes("useIncisionControllerCommands"), "React edit panel uses typed incision command callbacks");
 assert.ok(!editPanel.includes("dispatchIncisionEditCommand"), "React edit panel does not import low-level command dispatch helpers directly");
 assert.ok(!editPanel.includes("../lib/controllerEvents"), "React edit panel does not import controller event names directly");
+for (const controlId of [
+  "angleOffsetDeg",
+  "lengthScale",
+  "widthScale",
+  "tipAngleDeg",
+  "shiftAlongMm",
+  "shiftPerpMm",
+]) {
+  assert.ok(
+    editPanel.includes(`preview("${controlId}", value)`) &&
+    editPanel.includes(`commit("${controlId}", event.currentTarget.value)`),
+    `React clinician edit control #${controlId} sends its latest value to the runtime bridge`,
+  );
+}
+assert.ok(
+  controllerCommand.includes("controlId?: IncisionEditControlId") &&
+  controllerCommandsHook.includes("dispatchIncisionEditCommand(command, controlId, value)") &&
+  controller.includes("applyReactEditControlValue(detail.controlId, detail.value)"),
+  "incision edit command bridge applies validated React values before publishing snapshots",
+);
 assert.ok(editPanel.includes("useIncisionStore"), "React edit panel syncs low-frequency edit state from Zustand");
 assert.ok(editPanel.includes("Button"), "React edit panel uses the shared shadcn-style button primitive");
 assert.ok(editPanel.includes("Label"), "React edit panel uses the shared shadcn-style label primitive");
