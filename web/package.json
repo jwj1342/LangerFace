@@ -12,6 +12,7 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "visual:compat:parity": "node ../tools/capture_compat_feature_parity.ts",
+    "test:browser": "playwright test",
     "typecheck": "tsc --noEmit && tsc --noEmit -p ../tsconfig.tools.json",
     "test:personalized": "node ../tools/test_bottom_up_personalization.mjs && node ../tools/test_prstl_personalization_v2.mjs && node ../tools/test_prstl_pipeline.mjs && node ../tools/test_v6_review_model.mjs && node ../tools/test_yolo_wrinkle_onnx.mjs && node ../tools/test_v6_rstl_refinement.mjs && node ../tools/test_personalized_capture_preview.mjs && node ../tools/test_personalized_yolo_v6_integration.mjs && node ../tools/test_line_density.mjs",
     "test:arch": "node ../tools/test_web_architecture.ts && node ../tools/test_react_architecture.ts && node ../tools/test_docs_links.ts && node ../tools/test_main_feature_parity.ts && node ../tools/test_live_page_dist_assets.ts",
