@@ -29,6 +29,8 @@ cd web
 npm ci
 npm run build
 npm test
+npx playwright install chromium
+npm run test:browser
 cd ..
 
 pytest -q
@@ -89,6 +91,8 @@ cd web
 npm ci
 npm run build
 npm test
+npx playwright install chromium
+npm run test:browser
 ```
 
 ## 本地产物目录
