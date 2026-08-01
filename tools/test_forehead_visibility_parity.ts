@@ -145,12 +145,21 @@ same(
   "无像素数据时两实现一致（退化为不裁剪）",
 );
 
-// ---- 5. 掩膜稳定化：补洞、删短段、只留最长段 ----
+// ---- 5. 掩膜稳定化：补洞、删短段、保留所有达到 minRun 的段 ----
+const splitByGap = (left, gap, right) => [
+  ...new Array(left).fill(1),
+  ...new Array(gap).fill(0),
+  ...new Array(right).fill(1),
+];
+const threePointMidlineGap = splitByGap(20, 3, 20);
+const tenPointMidlineGap = splitByGap(20, 10, 20);
 const maskCases = [
   [1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
   [0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
   [1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
+  threePointMidlineGap,
+  tenPointMidlineGap,
   new Array(60).fill(1),
   new Array(60).fill(0),
   Array.from({ length: 80 }, (_, i) => (i % 7 === 0 ? 0 : 1)),
@@ -162,6 +171,20 @@ for (const [index, mask] of maskCases.entries()) {
 assert.ok(
   ts.stabilizeForeheadMask([0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).every((v) => !v),
   "过短的可见段必须被整体丢弃，否则稳定化没有生效",
+);
+const stableThreePointGap = ts.stabilizeForeheadMask(threePointMidlineGap);
+assert.ok(
+  stableThreePointGap.slice(0, 20).every(Boolean)
+    && stableThreePointGap.slice(20, 23).every((v) => !v)
+    && stableThreePointGap.slice(23).every(Boolean),
+  "跨中线额头弧只有 3 点断裂时必须保留两侧合格可见段",
+);
+const stableTenPointGap = ts.stabilizeForeheadMask(tenPointMidlineGap);
+assert.ok(
+  stableTenPointGap.slice(0, 20).every(Boolean)
+    && stableTenPointGap.slice(20, 30).every((v) => !v)
+    && stableTenPointGap.slice(30).every(Boolean),
+  "跨中线额头弧有 10 点断裂时仍必须保留两侧合格可见段",
 );
 
 console.log(`test_forehead_visibility_parity: ${checks} 项两实现逐点一致（含头部包络与像素肤色网格采样）`);
