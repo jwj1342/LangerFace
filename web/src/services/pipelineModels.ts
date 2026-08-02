@@ -22,6 +22,8 @@ type AtlasPayload = {
 };
 
 let readyPromise: Promise<void> | null = null;
+let imageReadyPromise: Promise<void> | null = null;
+let visionResolver: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>> | null = null;
 
 async function initializeReady(): Promise<void> {
   const [topologyRaw, rstlRaw, langerRaw] = await Promise.all([
@@ -64,6 +66,7 @@ async function initializeReady(): Promise<void> {
     handLandmarker: "mediapipe/tasks-vision@0.10.35",
   });
   const resolver = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
+  visionResolver = resolver;
   const build = (delegate: Delegate) => FaceLandmarker.createFromOptions(resolver, {
     baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
     runningMode: "VIDEO",
@@ -120,4 +123,55 @@ export function ensureReady(): Promise<void> {
     throw error;
   });
   return readyPromise;
+}
+
+async function initializeImageReady(): Promise<void> {
+  await ensureReady();
+  if (!visionResolver) throw new Error("MediaPipe Vision 运行时尚未就绪");
+
+  const build = (delegate: Delegate) => FaceLandmarker.createFromOptions(visionResolver!, {
+    baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
+    runningMode: "IMAGE",
+    numFaces: 1,
+    outputFaceBlendshapes: true,
+    minFaceDetectionConfidence: 0.5,
+    minFacePresenceConfidence: 0.5,
+  });
+  try {
+    modelState.imageLandmarker = await build("GPU");
+  } catch (error) {
+    countMetric("faceLandmarker.imageGpuFallback");
+    logWarn("静态图片 Face Landmarker GPU 初始化失败，回退到 CPU。", error);
+    modelState.imageLandmarker = await build("CPU");
+  }
+
+  const buildHand = (delegate: Delegate) => HandLandmarker.createFromOptions(visionResolver!, {
+    baseOptions: { modelAssetPath: assetUrls.handLandmarkerTask, delegate },
+    runningMode: "IMAGE",
+    numHands: 2,
+    minHandDetectionConfidence: 0.5,
+    minHandPresenceConfidence: 0.5,
+  });
+  try {
+    modelState.imageHandLandmarker = await buildHand("GPU");
+  } catch (error) {
+    countMetric("handLandmarker.imageGpuFallback");
+    logWarn("静态图片 Hand Landmarker GPU 初始化失败，回退到 CPU。", error);
+    try {
+      modelState.imageHandLandmarker = await buildHand("CPU");
+    } catch (err) {
+      countMetric("handLandmarker.imageLoadFailure");
+      logWarn("静态图片手部模型加载失败，照片手部遮挡功能将暂不可用。", err);
+    }
+  }
+}
+
+export function ensureImageReady(): Promise<void> {
+  if (imageReadyPromise) return imageReadyPromise;
+  if (modelState.imageLandmarker) return Promise.resolve();
+  imageReadyPromise = initializeImageReady().catch((error: unknown) => {
+    imageReadyPromise = null;
+    throw error;
+  });
+  return imageReadyPromise;
 }
