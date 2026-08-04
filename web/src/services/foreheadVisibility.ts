@@ -135,7 +135,7 @@ export function buildForeheadSkinVisibility(
 }
 
 /**
- * 逐点掩膜的稳定化：补小空洞、删过短可见段、只保留最长的一段。
+ * 逐点掩膜的稳定化：补小空洞、删过短可见段；剩余可见总量达标时保留全部合格段。
  * 没有这一步，肤色判定的逐帧噪声会让额头线闪烁成虚线。
  */
 export function stabilizeForeheadMask(mask: ArrayLike<unknown>): boolean[] {
@@ -163,22 +163,9 @@ export function stabilizeForeheadMask(mask: ArrayLike<unknown>): boolean[] {
     }
     start = end;
   }
-  let longestRun: { start: number; end: number } | null = null;
-  for (let start = 0; start < stable.length;) {
-    if (!stable[start]) { start++; continue; }
-    let end = start;
-    while (end < stable.length && stable[end]) end++;
-    if (!longestRun || end - start > longestRun.end - longestRun.start) {
-      longestRun = { start, end };
-    }
-    start = end;
-  }
-  if (!longestRun || longestRun.end - longestRun.start < minVisibleSpan) {
+  const visibleCount = stable.reduce((count, visible) => count + (visible ? 1 : 0), 0);
+  if (visibleCount < minVisibleSpan) {
     stable.fill(false);
-  } else {
-    for (let i = 0; i < stable.length; i++) {
-      stable[i] = i >= longestRun.start && i < longestRun.end;
-    }
   }
   return stable;
 }
