@@ -36,13 +36,13 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
 
 - [ ] 抽离 incision DOM 事件绑定并补齐卸载清理 — [#137](https://github.com/jwj1342/LangerFace/issues/137)
       · Phase 2-A；PR #138 已并入 #131。
-- [ ] 图谱标注器保存草稿时误置 validated:true 并丢失已加载曲线元数据 — [#139](https://github.com/jwj1342/LangerFace/issues/139)
+- [x] 图谱标注器保存草稿时误置 validated:true 并丢失已加载曲线元数据 — [#139](https://github.com/jwj1342/LangerFace/issues/139)
       · 由 PR #140 修复，含 loaded/drawn 分离与命名唯一性。
 - [ ] 切口设计界面：生成候选无反应、滑条拖不动 — [#143](https://github.com/jwj1342/LangerFace/issues/143)
       · 与 #109 同源；PR #144 处理。
-- [ ] 额头张力线单侧缺失：stabilizeForeheadMask 只保留最长可见段 — [#145](https://github.com/jwj1342/LangerFace/issues/145)
+- [x] 额头张力线单侧缺失：stabilizeForeheadMask 只保留最长可见段 — [#145](https://github.com/jwj1342/LangerFace/issues/145)
       · 两套运行时须一起改，改任一侧都会让 test_forehead_visibility_parity 变红。
-- [ ] 闭合模拟页按钮对比度与浏览器守卫覆盖 — [#146](https://github.com/jwj1342/LangerFace/issues/146)
+- [x] 闭合模拟页按钮对比度与浏览器守卫覆盖 — [#146](https://github.com/jwj1342/LangerFace/issues/146)
       · 等待具体控件/状态截图；修复时把 `/surgery` 纳入半透明背景合成后的 e2e 对比度断言。
 
 ## 文档与架构
