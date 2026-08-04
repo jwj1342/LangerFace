@@ -28,6 +28,7 @@ import {
   bindWindowControllerEvents,
   dispatchControllerEvent,
   readControllerCommandDetail,
+  type IncisionTumorCommand,
 } from "../lib/controllerCommand";
 import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
 import { assetBaseUrl } from "./assetLoader";
@@ -117,6 +118,7 @@ interface IncisionRuntimeState {
   editTimeline: DynamicRecord[];
   editCursor: number;
   lastConsoleTraceSignature: string;
+  generationCount: number;
 }
 
 interface RuntimeEdit extends DynamicRecord {
@@ -194,6 +196,7 @@ function createRuntimeState(): IncisionRuntimeState {
     editTimeline: [],
     editCursor: 0,
     lastConsoleTraceSignature: "",
+    generationCount: 0,
   };
 }
 
@@ -908,15 +911,52 @@ function clearBoundaryPoints() {
   publishIncisionState("tumor_boundary_clear");
 }
 
+function tumorCommandControl(command: IncisionTumorCommand): HTMLInputElement | HTMLSelectElement | null {
+  if (command === "kind_changed") return els.tumorKind;
+  if (command === "diameter_input" || command === "diameter_changed") return els.diameter;
+  if (command === "author_changed") return els.tumorAuthor;
+  if (command === "depth_input" || command === "depth_changed") return els.depth;
+  if (command === "margin_input" || command === "margin_changed") return els.margin;
+  if (command === "boundary_mode_changed") return els.boundaryMode;
+  if (command === "ellipse_ratio_input" || command === "ellipse_ratio_changed") return els.ellipseRatio;
+  return null;
+}
+
+function applyReactControlValue(
+  control: HTMLInputElement | HTMLSelectElement | null,
+  value: unknown,
+) {
+  if (!control || (typeof value !== "string" && typeof value !== "number")) return;
+  const serializedValue = String(value);
+  if (control instanceof HTMLSelectElement) {
+    if ([...control.options].some((option) => option.value === serializedValue)) control.value = serializedValue;
+    return;
+  }
+  if (control.type === "range") {
+    const numericValue = Number(serializedValue);
+    if (!Number.isFinite(numericValue)) return;
+    const min = Number(control.min);
+    const max = Number(control.max);
+    control.value = String(clamp(
+      numericValue,
+      Number.isFinite(min) ? min : numericValue,
+      Number.isFinite(max) ? max : numericValue,
+    ));
+    return;
+  }
+  control.value = serializedValue;
+}
+
+function applyReactTumorCommandValue(command: IncisionTumorCommand, value: unknown) {
+  applyReactControlValue(tumorCommandControl(command), value);
+}
+
 function handleReactTumorCommand(event: Event) {
   const detail = readControllerCommandDetail(controllerEvent(event), INCISION_TUMOR_COMMANDS);
   if (!detail) return;
-  const { command, value } = detail;
-  const syncValue = (control: HTMLInputElement | HTMLSelectElement) => {
-    if (typeof value === "string" || typeof value === "number") control.value = String(value);
-  };
+  const { command } = detail;
+  applyReactTumorCommandValue(command, detail.value);
   if (command === "kind_changed") {
-    syncValue(els.tumorKind);
     S.boundaryActive = false;
     updateFormVisibility();
     publishIncisionState("tumor_kind_changed");
@@ -924,35 +964,24 @@ function handleReactTumorCommand(event: Event) {
     return;
   }
   if (command === "diameter_input") {
-    syncValue(els.diameter);
     updateTumorRing();
     publishIncisionState("tumor_diameter_input");
     return;
   }
   if (command === "depth_input" || command === "author_changed") {
-    syncValue(command === "depth_input" ? els.depth : els.tumorAuthor);
     publishIncisionState(command);
     return;
   }
   if (command === "margin_input" || command === "ellipse_ratio_input") {
-    syncValue(command === "margin_input" ? els.margin : els.ellipseRatio);
     updateTumorRing();
     publishIncisionState(command);
     return;
   }
   if (command === "diameter_changed" || command === "depth_changed" || command === "margin_changed" || command === "ellipse_ratio_changed") {
-    const controls = {
-      diameter_changed: els.diameter,
-      depth_changed: els.depth,
-      margin_changed: els.margin,
-      ellipse_ratio_changed: els.ellipseRatio,
-    };
-    syncValue(controls[command]);
     runWorkflow();
     return;
   }
   if (command === "boundary_mode_changed") {
-    syncValue(els.boundaryMode);
     S.boundaryActive = false;
     updateFormVisibility();
     publishIncisionState("tumor_boundary_mode_changed");
@@ -1223,33 +1252,14 @@ function editCommandControl(controlId: unknown): HTMLInputElement | HTMLSelectEl
   return null;
 }
 
-function applyReactEditControlValue(controlId: unknown, value: unknown) {
-  const control = editCommandControl(controlId);
-  if (!control || typeof value !== "string") return;
-  if (control instanceof HTMLSelectElement) {
-    if ([...control.options].some((option) => option.value === value)) control.value = value;
-    return;
-  }
-  if (control.type !== "range") {
-    control.value = value;
-    return;
-  }
-  const numericValue = Number(value);
-  if (!Number.isFinite(numericValue)) return;
-  const minimum = Number(control.min);
-  const maximum = Number(control.max);
-  control.value = String(clamp(
-    numericValue,
-    Number.isFinite(minimum) ? minimum : numericValue,
-    Number.isFinite(maximum) ? maximum : numericValue,
-  ));
-}
-
 function handleReactEditCommand(event: Event) {
   const detail = readControllerCommandDetail(controllerEvent(event), INCISION_EDIT_COMMANDS);
   if (!detail) return;
   const { command } = detail;
-  applyReactEditControlValue(detail.controlId, detail.value);
+  applyReactControlValue(
+    editCommandControl(detail.controlId),
+    detail.value,
+  );
   if (command === "preview_edit") {
     applyEditControls();
     return;
@@ -1491,7 +1501,8 @@ function renderResult(result: DynamicRecord) {
     `不上传原始影像；${audit.local_workflow_fields.length} 类抽象字段只在浏览器确定性 workflow 内处理，不配置或调用远程模型。${audit.secondary_cues_present ? " 辅助线索仅随审阅导出，不参与几何。" : ""}`;
   const edited = result.candidate.edited ? " · 已记录医生调整" : "";
   const headLabel = S.headAsset?.statusLabel ? ` · ${S.headAsset.statusLabel}` : "";
-  els.stageStatus.textContent = `浏览器确定性 workflow 已更新候选${edited}${headLabel}`;
+  const generationLabel = S.generationCount ? ` · 第 ${S.generationCount} 次生成` : "";
+  els.stageStatus.textContent = `浏览器确定性 workflow 已更新候选${generationLabel}${edited}${headLabel}`;
   publishIncisionState("candidate_result");
 }
 
@@ -2095,6 +2106,7 @@ async function runWorkflow() {
     const tumor = tumorInput();
     const result = await planWorkflowForCurrentTumor(tumor);
     S.baseResult = result;
+    S.generationCount += 1;
     resetEditControls();
     resetEditTimeline();
     resetReviewControls();
@@ -2251,9 +2263,9 @@ function bindWorkbenchEvents() {
   });
   els.canvas.addEventListener("wheel", (e: WheelEvent) => { e.preventDefault(); S.head?.zoom(e.deltaY > 0 ? 1.1 : 0.9); }, { passive: false });
   const reactManaged = isReactManagedWorkbench();
-  if (reactManaged) bindReactWorkbenchCommands();
-
-  if (!reactManaged) {
+  if (reactManaged) {
+    bindReactWorkbenchCommands();
+  } else {
     const stateRoot = els.canvas?.closest(".app");
     stateRoot?.addEventListener("change", () => publishIncisionState("form_change"));
     stateRoot?.addEventListener("input", (event) => {
@@ -2261,6 +2273,9 @@ function bindWorkbenchEvents() {
         publishIncisionState("form_input");
       }
     });
+  }
+
+  if (!reactManaged) {
     els.tumorKind.onchange = () => { updateFormVisibility(); runWorkflow(); };
     els.diameter.oninput = () => { els.diameterVal.textContent = els.diameter.value; updateTumorRing(); };
     els.diameter.onchange = runWorkflow;

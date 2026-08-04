@@ -1425,6 +1425,40 @@ assert.ok(incisionWorkbench.includes("TumorInputPanel"), "React incision workben
 assert.ok(tumorPanel.includes("useIncisionControllerCommands"), "React tumor panel uses typed incision command callbacks");
 assert.ok(!tumorPanel.includes("dispatchIncisionTumorCommand"), "React tumor panel does not import low-level command dispatch helpers directly");
 assert.ok(!tumorPanel.includes("../lib/controllerEvents"), "React tumor panel does not import controller event names directly");
+assert.ok(
+  tumorPanel.includes('commands.tumor("diameter_input", value)') &&
+  tumorPanel.includes('commands.tumor("depth_input", value)') &&
+  tumorPanel.includes('commands.tumor("margin_input", value)') &&
+  tumorPanel.includes('commands.tumor("ellipse_ratio_input", value)'),
+  "React tumor range controls send their latest controlled value to the runtime bridge",
+);
+assert.ok(
+  controllerCommand.includes("dispatchIncisionTumorCommand(command: IncisionTumorCommand, value?:") &&
+  controllerCommand.includes("INCISION_TUMOR_REACT_COMMAND_EVENT, { command, value }") &&
+  controllerCommandsHook.includes("dispatchIncisionTumorCommand(command, value)"),
+  "incision tumor command bridge preserves the latest React control value",
+);
+assert.ok(
+  controller.includes("applyReactTumorCommandValue(command, detail.value)") &&
+  controller.includes("tumorCommandControl(command: IncisionTumorCommand)"),
+  "incision runtime applies validated React tumor values before publishing snapshots",
+);
+assert.ok(
+  controller.includes("if (reactManaged) {\n    bindReactWorkbenchCommands();\n  } else {\n    const stateRoot"),
+  "React-managed incision controls do not race legacy generic form listeners",
+);
+assert.ok(
+  editPanel.includes('preview("lengthScale", value)') &&
+  editPanel.includes('commit("lengthScale", event.currentTarget.value)') &&
+  controllerCommand.includes("controlId?: IncisionEditControlId") &&
+  controller.includes("editCommandControl(detail.controlId)"),
+  "React clinician edit controls preserve their latest values across synchronous runtime previews",
+);
+assert.ok(
+  controller.includes("S.generationCount += 1") &&
+  controller.includes("第 ${S.generationCount} 次生成"),
+  "incision runtime exposes observable feedback for repeated candidate generation",
+);
 assert.ok(tumorPanel.includes("useIncisionStore"), "React tumor panel syncs low-frequency tumor status from Zustand");
 assert.ok(tumorPanel.includes("Button"), "React tumor panel uses the shared shadcn-style button primitive");
 assert.ok(tumorPanel.includes("Input"), "React tumor panel uses the shared shadcn-style input primitive");
@@ -1575,8 +1609,10 @@ for (const controlId of [
 }
 assert.ok(
   controllerCommand.includes("controlId?: IncisionEditControlId") &&
-  controllerCommandsHook.includes("dispatchIncisionEditCommand(command, controlId, value)") &&
-  controller.includes("applyReactEditControlValue(detail.controlId, detail.value)"),
+    controllerCommandsHook.includes("dispatchIncisionEditCommand(command, controlId, value)") &&
+    controller.includes("applyReactControlValue(") &&
+    controller.includes("editCommandControl(detail.controlId)") &&
+    controller.includes("detail.value"),
   "incision edit command bridge applies validated React values before publishing snapshots",
 );
 assert.ok(editPanel.includes("useIncisionStore"), "React edit panel syncs low-frequency edit state from Zustand");
