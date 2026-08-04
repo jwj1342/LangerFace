@@ -5,16 +5,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_product_boundary_docs_keep_stage2_scope_clear():
-    text = (ROOT / "docs" / "clinical" / "PRODUCT_BOUNDARIES.md").read_text()
+    text = (ROOT / "docs" / "clinical" / "PRODUCT_BOUNDARIES.md").read_text(encoding="utf-8")
     assert "肌肉骨骼实时孪生" in text
     assert "不属于当前阶段目标" in text
-    assert "#64 Stage 2 agentic 切口规划" in text
-    readme = (ROOT / "README.md").read_text()
-    assert "PRODUCT_BOUNDARIES.md" in readme
+    assert "本地确定性候选可视化 + 医生复核" in text
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "docs/clinical/PRODUCT_BOUNDARIES.md" in readme
+    todo = (ROOT / "docs" / "planning" / "TODO.md").read_text(encoding="utf-8")
+    assert "../clinical/PRODUCT_BOUNDARIES.md" in todo
 
 
 def test_annotation_qa_documents_surface_path_and_export_consistency():
-    text = (ROOT / "docs" / "quality" / "ANNOTATION_QA.md").read_text()
+    text = (ROOT / "docs" / "onboarding" / "CONTRIBUTING.md").read_text(encoding="utf-8")
     assert "贴面" in text
     assert "导出点数与屏幕预览路径点一致" in text
     assert "validated:false" in text
@@ -51,7 +53,7 @@ def test_rstl_3dmm_prior_manifest_preserves_draft_status():
     assert ids["bfm_rstl_direction_prior"]["path"] is None
     assert ids["bfm_rstl_direction_prior"]["validated"] is False
 
-    doc = (ROOT / "docs" / "tracks" / "RSTL_3DMM_PRIOR.md").read_text()
+    doc = (ROOT / "docs" / "tracks" / "RSTL_3DMM_PRIOR.md").read_text(encoding="utf-8")
     assert "Borges" in doc
     assert "rstl_mediapipe_direction_prior.json" in doc
     assert "build_flame_rstl_direction_prior.py" in doc
@@ -59,5 +61,7 @@ def test_rstl_3dmm_prior_manifest_preserves_draft_status():
     assert "triangle_centroid_direction" in doc
     assert "#2" in doc
     assert "#13" in doc
-    assert "#61" in doc
+    assert "#40" in doc
+    assert "#88" in doc
+    assert "2D-first" in doc
     assert "validated:true" in doc

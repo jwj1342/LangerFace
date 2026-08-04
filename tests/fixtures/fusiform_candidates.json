@@ -1,0 +1,123 @@
+{
+  "schema": "fusiform-incision-parity/v0.1",
+  "cases": [
+    {
+      "name": "rotated_default",
+      "tumor": {
+        "kind": "cutaneous",
+        "center": [1.0, 2.0, 3.0],
+        "diameter_mm": 4.0,
+        "margin_mm": 1.0
+      },
+      "direction": {
+        "vector": [0.0, 2.0, 0.0],
+        "confidence": 0.9,
+        "source": "fixture_rstl"
+      },
+      "normal": [0.0, 0.0, 1.0],
+      "units_per_mm": 0.5,
+      "rules": {
+        "length_to_width_ratio": 3.0,
+        "tip_angle_deg": 30.0,
+        "min_length_mm": 1.0,
+        "max_length_mm": 200.0,
+        "samples": 12,
+        "version": "fixture-v1"
+      },
+      "expected": {
+        "center": [1.0, 2.0, 3.0],
+        "axis": [0.0, 1.0, 0.0],
+        "width_axis": [-1.0, 0.0, 0.0],
+        "endpoints": [[1.0, -2.5, 3.0], [1.0, 6.5, 3.0]],
+        "upper_midpoint": [-0.5, 2.0, 3.0],
+        "lower_midpoint": [2.5, 2.0, 3.0],
+        "outline_points": 24,
+        "length_mm": 18.0,
+        "width_mm": 6.0,
+        "tip_angle_target_deg": 30.0,
+        "tip_angle_limited_by_ratio": false,
+        "boundary_used": false
+      }
+    },
+    {
+      "name": "ratio_limited_tip",
+      "tumor": {
+        "kind": "cutaneous",
+        "center": [0.0, 0.0, 0.0],
+        "diameter_mm": 4.0,
+        "margin_mm": 0.0
+      },
+      "direction": {
+        "vector": [1.0, 0.0, 0.0],
+        "confidence": 0.75
+      },
+      "normal": [0.0, 0.0, 1.0],
+      "units_per_mm": 1.0,
+      "rules": {
+        "length_to_width_ratio": 8.0,
+        "tip_angle_deg": 45.0,
+        "min_length_mm": 1.0,
+        "max_length_mm": 200.0,
+        "samples": 16,
+        "version": "fixture-v1"
+      },
+      "expected": {
+        "center": [0.0, 0.0, 0.0],
+        "axis": [1.0, 0.0, 0.0],
+        "width_axis": [0.0, 1.0, 0.0],
+        "endpoints": [[-16.0, 0.0, 0.0], [16.0, 0.0, 0.0]],
+        "upper_midpoint": [0.0, 2.0, 0.0],
+        "lower_midpoint": [0.0, -2.0, 0.0],
+        "outline_points": 32,
+        "length_mm": 32.0,
+        "width_mm": 4.0,
+        "tip_angle_target_deg": 45.0,
+        "tip_angle_limited_by_ratio": true,
+        "boundary_used": false
+      }
+    },
+    {
+      "name": "freehand_boundary_recenter",
+      "tumor": {
+        "kind": "cutaneous",
+        "center": [0.0, 0.0, 0.0],
+        "diameter_mm": 4.0,
+        "margin_mm": 1.0,
+        "boundary": [[0.0, 0.0, 0.0], [2.0, 1.0, 0.0], [4.0, 0.0, 0.0], [2.0, -1.0, 0.0]],
+        "boundary_mode": "freehand",
+        "boundary_source": "manual_freehand"
+      },
+      "direction": {
+        "vector": [1.0, 0.0, 0.0],
+        "confidence": 0.8
+      },
+      "normal": [0.0, 0.0, 1.0],
+      "units_per_mm": 1.0,
+      "rules": {
+        "length_to_width_ratio": 3.0,
+        "tip_angle_deg": 30.0,
+        "min_length_mm": 1.0,
+        "max_length_mm": 200.0,
+        "samples": 12,
+        "version": "fixture-v1"
+      },
+      "expected": {
+        "center": [2.0, 0.0, 0.0],
+        "axis": [1.0, 0.0, 0.0],
+        "width_axis": [0.0, 1.0, 0.0],
+        "endpoints": [[-7.0, 0.0, 0.0], [11.0, 0.0, 0.0]],
+        "upper_midpoint": [2.0, 3.0, 0.0],
+        "lower_midpoint": [2.0, -3.0, 0.0],
+        "outline_points": 24,
+        "length_mm": 18.0,
+        "width_mm": 6.0,
+        "tip_angle_target_deg": 30.0,
+        "tip_angle_limited_by_ratio": false,
+        "boundary_used": true,
+        "boundary_point_count": 4,
+        "boundary_area_mm2": 4.0,
+        "boundary_envelope_outside_count": 0
+      }
+    }
+  ]
+}

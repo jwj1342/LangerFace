@@ -3,21 +3,6 @@ import type { HTMLAttributes } from "react";
 
 import { cn } from "../../lib/cn";
 
-interface ProviderConnectionStatusProps extends HTMLAttributes<HTMLSpanElement> {
-  tone?: "" | "ok" | "warn";
-}
-
-export const ProviderConnectionStatus = forwardRef<HTMLSpanElement, ProviderConnectionStatusProps>(
-  ({ className, tone = "", ...props }, ref) => (
-    <span
-      ref={ref}
-      className={cn(tone ? `provider-state-${tone}` : undefined, className)}
-      {...props}
-    />
-  ),
-);
-ProviderConnectionStatus.displayName = "ProviderConnectionStatus";
-
 interface EditStatusProps extends HTMLAttributes<HTMLSpanElement> {
   active?: boolean;
 }

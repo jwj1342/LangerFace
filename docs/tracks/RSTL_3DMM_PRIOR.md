@@ -1,6 +1,6 @@
 # Borges RSTL 与 3DMM 拓扑先验
 
-本文对应 issue [#86](https://github.com/jwj1342/LangerFace/issues/86)，记录 Borges RSTL 来源、当前标准脸草案资产、3DMM 注册边界和与 #2/#13/#61 的衔接。
+本文记录 Borges RSTL 来源、当前标准脸草案资产、3DMM 注册边界，以及与 #2/#13、#40 的 2D-first 路线和已合并 PR #88 的衔接。
 
 ## 医学来源与定义
 
@@ -14,10 +14,10 @@
 | 资产 | 拓扑 | 格式 | 状态 | 用途 |
 | --- | --- | --- | --- | --- |
 | `web/assets/atlas_rstl.json` | `mediapipe-468` | `lines[].points = [tri,u,v]` | `validated:false` | Stage 1/2 的标准脸 RSTL 草案和 #13 方向服务输入 |
-| `rstl_mediapipe_direction_prior.json`（远端资产或 `local_outputs/` 本地生成） | `mediapipe-468` | 每个三角面中心的方向向量 / 置信度 / provenance | `validated:false` | 高密度方向场审阅资产，供 #13 方向服务和 #86 3DMM 先验注册对照；大 JSON 不提交进仓库 |
+| `rstl_mediapipe_direction_prior.json`（远端资产或 `local_outputs/` 本地生成） | `mediapipe-468` | 每个三角面中心的方向向量 / 置信度 / provenance | `validated:false` | 高密度方向场审阅资产，供 #13 方向服务和 PR #88 的 3DMM 草案注册对照；大 JSON 不提交进仓库 |
 | `web/assets/atlas_langer.json` | `mediapipe-468` | `lines[].points = [tri,u,v]` | `validated:false` | Langer 对照 / 教学，不作为面部主切口方向 |
 | `assets/rstl_3dmm_prior_manifest.json` | 多拓扑 manifest | JSON | `draft_not_clinically_validated` | 记录来源、拓扑、生成脚本和临床校验闸 |
-| FLAME/BFM RSTL atlas | `flame-2023` / BFM | 待生成 `[tri,u,v]` | pending | #61 3DMM 标注/迁移轨后续资产 |
+| FLAME/BFM RSTL atlas | `flame-2023` / BFM | 待生成 `[tri,u,v]` | pending | 3DMM 标注/迁移轨后续资产；旧的零消费者 redline 投影草案已删除 |
 | FLAME RSTL direction prior | `flame-2023` | dev-local triangle centroid direction field | pending / `validated:false` | `tools/build_flame_rstl_direction_prior.py` 可在本地 FLAME 资产就位后生成，产物位于 gitignored `local_outputs/rstl_flame_direction_prior.json` |
 | BFM/custom 3DMM RSTL direction prior | `bfm-local` / 自定义 3DMM | dev-local triangle centroid direction field | pending / `validated:false` | `tools/build_3dmm_rstl_direction_prior.py` 可读取授权本地拓扑和 neutral vertices，默认输出到 gitignored `local_outputs/rstl_3dmm_direction_prior.json` |
 | FLAME/BFM review packet | `flame-2023` / BFM | `rstl-3dmm-review-packet/v0.1` | `draft_not_clinically_validated` | `tools/build_rstl_3dmm_review_packet.py` 从方向先验抽样生成医生审阅包，产物位于 gitignored `local_outputs/rstl_3dmm_review_packet.json` |
@@ -48,7 +48,7 @@
 
 这不是新的临床真值，也不是 FLAME/BFM 图谱本体。它的作用是把现有 RSTL 草案变成可审阅、
 可版本管理的高密度方向场中间资产：医生可以按 #2 复核低置信区域，#13 可以用同一套
-confidence / support 语义对齐方向服务，#86 后续把同类结构注册到 FLAME/BFM 时也有明确的
+confidence / support 语义对齐方向服务，PR #88 的 FLAME 草案注册和后续 BFM 工作也有明确的
 provenance 和拓扑边界可对照。
 
 ## FLAME / 通用 3DMM 方向先验生成器
@@ -61,7 +61,7 @@ python tools/export_flame_topology.py
 python tools/build_flame_rstl_direction_prior.py --generated-at now
 ```
 
-该生成器只是 MediaPipe 草案方向场到 FLAME 拓扑的 bbox-aligned nearest-neighbor review scaffold，输出 schema 为 `rstl-3dmm-direction-prior/v0.1`，仍保持 `validated:false`。它不是 Borges 原图的正式 FLAME/BFM 注册，也不是临床可用 atlas；真实可关闭 #86 的 FLAME/BFM 图谱仍需要 #61 的本地资产流程、医生在 FLAME/BFM 标准头上的逐线审核，以及 #2 的临床校验出口。
+该生成器只是 MediaPipe 草案方向场到 FLAME 拓扑的 bbox-aligned nearest-neighbor review scaffold，输出 schema 为 `rstl-3dmm-direction-prior/v0.1`，仍保持 `validated:false`。它不是 Borges 原图的正式 FLAME/BFM 注册，也不是临床可用 atlas；正式 FLAME/BFM 图谱仍需要本地资产流程、医生在 FLAME/BFM 标准头上的逐线审核，以及 #2 的临床校验出口。
 
 如果目标不是 FLAME，而是授权本地 BFM 或其他 3DMM neutral mesh，可以使用通用入口。该入口要求显式传入目标拓扑和顶点文件，并把 `target_model_name`、`target_topology_path`、`target_vertices_path` 写入 provenance：
 
@@ -74,7 +74,7 @@ python tools/build_3dmm_rstl_direction_prior.py \
   --generated-at now
 ```
 
-通用入口与 FLAME 入口共用同一套 `rstl-3dmm-direction-prior/v0.1` schema 和置信度规则。它只解决“本地授权 3DMM 拓扑可生成可审阅方向场”的工程接口问题，不解决临床注册、个体化迁移或医生校验问题；这些仍然归 #61、#2 和 #13 后续规则服务处理。
+通用入口与 FLAME 入口共用同一套 `rstl-3dmm-direction-prior/v0.1` schema 和置信度规则。它只解决“本地授权 3DMM 拓扑可生成可审阅方向场”的工程接口问题，不解决临床注册、个体化迁移或医生校验问题；这些仍然归 3D 离线轨、#2 和 #13 后续规则服务处理。
 
 ## FLAME/BFM 医生审阅包
 
@@ -163,7 +163,7 @@ Python 入口位于 `src/langerface/lines/direction.py`，Web TypeScript 入口�
 
 当查询点远离 atlas 支撑点或方向 spread 过大时，必须返回低置信度并要求医生确认，而不是硬凑方向。
 
-## 与 #61 的衔接
+## 与 3D 离线轨的衔接
 
 FLAME 轨保持与 MediaPipe 轨独立：
 
@@ -178,7 +178,7 @@ FLAME 轨保持与 MediaPipe 轨独立：
 
 ## 自动审计
 
-`tools/audit_rstl_3dmm_prior.py` 会检查 `assets/rstl_3dmm_prior_manifest.json` 的拓扑、`validated:false`、`draft_not_clinically_validated`、remote/generated 大资产边界和 FLAME/BFM pending 边界。它的目标不是证明 #86 已经完成临床注册，而是防止草案方向场、MediaPipe atlas 与 FLAME/BFM pending 资产被误表达为已验证图谱或误提交为仓库内置大 JSON。
+`tools/audit_rstl_3dmm_prior.py` 会检查 `assets/rstl_3dmm_prior_manifest.json` 的拓扑、`validated:false`、`draft_not_clinically_validated`、remote/generated 大资产边界和 FLAME/BFM pending 边界。它的目标不是把 PR #88 的工程草案误说成已完成临床注册，而是防止草案方向场、MediaPipe atlas 与 FLAME/BFM pending 资产被误表达为已验证图谱或误提交为仓库内置大 JSON。
 
 ```bash
 python tools/audit_rstl_3dmm_prior.py --json

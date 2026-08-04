@@ -376,29 +376,12 @@
     grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr);
   }
 
-  .settings-provider-panel {
-    min-width: 0;
-    grid-row: span 3;
-  }
-
   .settings-worker-panel {
     min-width: 0;
   }
 
   .settings-worker-panel .card {
     height: 100%;
-  }
-
-  .settings-provider-panel .agent-grid {
-    display: grid;
-    gap: 12px;
-    height: 100%;
-    border: 1px solid var(--clinical-dark-border);
-    border-radius: 4px;
-    background: var(--clinical-dark-panel);
-    color: var(--clinical-text-primary);
-    padding: 14px;
-    box-shadow: none;
   }
 
   .settings-boundary-list p {
@@ -507,7 +490,7 @@
     overflow-x: hidden;
   }
 
-  .incision-workbench .agent-grid {
+  .incision-workbench .workbench-grid {
     display: grid;
     grid-template-columns: 1fr;
     gap: 12px;
@@ -612,7 +595,7 @@
     gap: 12px;
   }
 
-  .incision-workbench .agent-note {
+  .incision-workbench .workbench-note {
     font-size: 11px;
     color: var(--muted);
     line-height: 1.55;
@@ -621,17 +604,9 @@
     word-break: break-word;
   }
 
-  .incision-workbench .agent-note.ok {
+  .incision-workbench .workbench-note.ok {
     color: var(--green-d);
     font-weight: 700;
-  }
-
-  .incision-workbench .provider-state-ok {
-    color: var(--green-d);
-  }
-
-  .incision-workbench .provider-state-warn {
-    color: #b45309;
   }
 
   .react-surgery-host {
@@ -783,7 +758,7 @@
     color: var(--muted);
   }
 
-  .incision-workbench .agent-note.warn {
+  .incision-workbench .workbench-note.warn {
     color: #8a5a00;
     font-weight: 700;
   }
@@ -1024,7 +999,7 @@
     grid-template-columns: 1fr 1fr 1fr;
   }
 
-  .incision-workbench #agentCanvas {
+  .incision-workbench #incisionCanvas {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -1075,7 +1050,7 @@
   }
 
   .clinical-compat-workbench .card,
-  .clinical-compat-workbench .agent-grid,
+  .clinical-compat-workbench .workbench-grid,
   .clinical-compat-workbench .scan-panel,
   .clinical-compat-workbench .overlay-qa,
   .clinical-compat-workbench .candidate-row,
@@ -1183,7 +1158,7 @@
 
   .clinical-compat-workbench .field-label,
   .clinical-compat-workbench .hint,
-  .clinical-compat-workbench .agent-note,
+  .clinical-compat-workbench .workbench-note,
   .clinical-compat-workbench .disclaimer,
   .clinical-compat-workbench .candidate-row .meta,
   .clinical-compat-workbench .guardrail-details,
@@ -1236,7 +1211,7 @@
   }
 
   .clinical-compat-workbench .main-wrap,
-  .clinical-compat-workbench #agentCanvas,
+  .clinical-compat-workbench #incisionCanvas,
   .clinical-compat-workbench #surgeryCanvas,
   .clinical-compat-workbench #stage,
   .clinical-compat-workbench #three,
@@ -1306,9 +1281,8 @@
   .clinical-compat-workbench .overlay-qa.warn,
   .clinical-compat-workbench .boundary-status.warn,
   .clinical-compat-workbench .anatomy-preview.warn,
-  .clinical-compat-workbench .agent-note.warn,
+  .clinical-compat-workbench .workbench-note.warn,
   .clinical-compat-workbench .guardrail-details.warn,
-  .clinical-compat-workbench .provider-state-warn,
   .clinical-compat-workbench .annotate-state-warning,
   .clinical-compat-workbench .edit-status.active,
   .clinical-compat-workbench .review-state.revision {
@@ -1320,8 +1294,7 @@
     color: #ff8389;
   }
 
-  .clinical-compat-workbench .agent-note.ok,
-  .clinical-compat-workbench .provider-state-ok,
+  .clinical-compat-workbench .workbench-note.ok,
   .clinical-compat-workbench .review-state.approved,
   .clinical-compat-workbench .surgery-verdict-ok {
     color: #42be65;
@@ -1392,7 +1365,7 @@
   }
 
   .clinical-compat-workbench #surgeryCanvas,
-  .clinical-compat-workbench #agentCanvas {
+  .clinical-compat-workbench #incisionCanvas {
     background: radial-gradient(circle at 50% 38%, #1b2531 0%, #101820 52%, #070a0f 100%);
   }
 
@@ -1428,7 +1401,7 @@
   }
 
   .clinical-developer-disclosure .card,
-  .clinical-developer-disclosure .agent-grid {
+  .clinical-developer-disclosure .workbench-grid {
     border-width: 1px 0 0;
     border-radius: 0;
     background: transparent;
@@ -1534,6 +1507,77 @@
   accent-color: var(--clinical-accent);
 }
 
+/* These unlayered overrides intentionally follow legacy style imports.
+   They keep active clinical controls visually distinct from disabled controls. */
+.clinical-compat-workbench input:not([type="range"]):not([type="checkbox"]),
+.clinical-compat-workbench select,
+.clinical-compat-workbench textarea,
+.clinical-compat-workbench .select,
+.clinical-compat-workbench .text-input,
+.clinical-compat-workbench .text-area {
+  border-color: var(--clinical-dark-border);
+  background: #0f141b;
+  color: var(--clinical-text-primary);
+  color-scheme: dark;
+}
+
+.clinical-compat-workbench input::placeholder,
+.clinical-compat-workbench textarea::placeholder {
+  color: #98a6b5;
+  opacity: 1;
+}
+
+.clinical-compat-workbench .btn {
+  border-color: var(--clinical-dark-border);
+  background: #151b23;
+  color: var(--clinical-text-primary);
+}
+
+.clinical-compat-workbench .btn:hover {
+  border-color: var(--clinical-dark-border-strong);
+  background: #1c2530;
+}
+
+.clinical-compat-workbench .btn-primary {
+  border-color: var(--clinical-accent);
+  background: var(--clinical-accent);
+  color: #f4f7fb;
+}
+
+.clinical-compat-workbench .btn:disabled {
+  opacity: 0.45;
+}
+
+.incision-workbench > .sidebar {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.incision-workbench > .stage {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.incision-workbench .incision-rule-warning {
+  border-left: 3px solid #f59e0b;
+  color: #fbbf24;
+  padding-left: 9px;
+  font-weight: 700;
+}
+
+.incision-workbench .incision-technical-details {
+  margin-top: 10px;
+  padding: 10px;
+  background: #0f141b;
+}
+
+.incision-workbench .incision-technical-details summary {
+  cursor: pointer;
+  color: #c8d2dc;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 html:has(.dark-workbench-page),
 body:has(.dark-workbench-page) {
   height: 100%;
@@ -1623,14 +1667,39 @@ body:has(.dark-workbench-page) {
 @media (max-width: 980px) {
   .incision-workbench.app {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto;
+    grid-template-rows: minmax(480px, 72dvh) auto;
     height: auto;
     min-height: 100dvh;
   }
 
-  .incision-workbench #agentCanvas {
-    position: static;
-    min-height: 420px;
+  .incision-workbench > .stage {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 480px;
+  }
+
+  .incision-workbench > .sidebar {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .incision-workbench #incisionCanvas {
+    position: absolute;
+    min-height: 0;
+  }
+
+  .incision-workbench .stage-top {
+    gap: 8px;
+    padding-inline: 12px;
+  }
+
+  .incision-workbench .stage-actions {
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .incision-workbench #stageStatus {
+    display: none;
   }
 
   .incision-workbench .metric-grid {
