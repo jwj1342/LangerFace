@@ -1,8 +1,10 @@
-import { V6_DEMO_RESULTS, V6_VIEW_LABELS } from "./v6_demo_manifest.js";
-import { displacementSamples, resultExtent, validateV6Result } from "./v6_review_model.js";
+// @ts-nocheck -- DOM runtime typing is tracked by #95.
+import { V6_DEMO_RESULTS, V6_VIEW_LABELS } from "./v6DemoManifest.ts";
+import { displacementSamples, resultExtent, validateV6Result } from "./v6ReviewModel.ts";
 
 const $ = (id) => document.getElementById(id);
-const els = {
+function collectElements() {
+  return {
   subjectTabs: $("subjectTabs"),
   viewTabs: $("viewTabs"),
   exampleImage: $("exampleImage"),
@@ -19,7 +21,10 @@ const els = {
   exportButton: $("exportButton"),
   reviewCanvas: $("reviewCanvas"),
   canvasTitle: $("canvasTitle"),
-};
+  };
+}
+const els = collectElements();
+let uiAbortController = null;
 
 const state = {
   subjectIndex: 0,
@@ -271,29 +276,53 @@ async function loadFiles(fileList) {
   updateReviewPanel();
 }
 
-els.fileInput.addEventListener("change", () => loadFiles(els.fileInput.files));
-for (const eventName of ["dragenter", "dragover"]) {
-  els.dropZone.addEventListener(eventName, (event) => { event.preventDefault(); els.dropZone.classList.add("dragging"); });
-}
-for (const eventName of ["dragleave", "drop"]) {
-  els.dropZone.addEventListener(eventName, (event) => { event.preventDefault(); els.dropZone.classList.remove("dragging"); });
-}
-els.dropZone.addEventListener("drop", (event) => loadFiles(event.dataTransfer.files));
-for (const input of [els.showPrior, els.showFinal, els.showMask, els.showArrows, els.backgroundOpacity]) {
-  input.addEventListener("input", renderReview);
-}
-els.exportButton.addEventListener("click", () => {
-  renderReview();
-  els.reviewCanvas.toBlob((blob) => {
-    if (!blob) return;
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `rstl_v6_review_${new Date().toISOString().slice(0, 10)}.png`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-  }, "image/png");
-});
+export function mountV6Review() {
+  uiAbortController?.abort();
+  Object.assign(els, collectElements());
+  Object.assign(state, {
+    subjectIndex: 0,
+    view: "compare",
+    payload: null,
+    report: null,
+    background: null,
+    mask: null,
+    maskTint: null,
+    fileLabel: "",
+  });
+  uiAbortController = new AbortController();
+  const options = { signal: uiAbortController.signal };
 
-renderExampleNavigation();
-renderExample();
-updateReviewPanel();
+  els.fileInput.addEventListener("change", () => loadFiles(els.fileInput.files), options);
+  for (const eventName of ["dragenter", "dragover"]) {
+    els.dropZone.addEventListener(eventName, (event) => { event.preventDefault(); els.dropZone.classList.add("dragging"); }, options);
+  }
+  for (const eventName of ["dragleave", "drop"]) {
+    els.dropZone.addEventListener(eventName, (event) => { event.preventDefault(); els.dropZone.classList.remove("dragging"); }, options);
+  }
+  els.dropZone.addEventListener("drop", (event) => loadFiles(event.dataTransfer.files), options);
+  for (const input of [els.showPrior, els.showFinal, els.showMask, els.showArrows, els.backgroundOpacity]) {
+    input.addEventListener("input", renderReview, options);
+  }
+  els.exportButton.addEventListener("click", () => {
+    renderReview();
+    els.reviewCanvas.toBlob((blob) => {
+      if (!blob) return;
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `rstl_v6_review_${new Date().toISOString().slice(0, 10)}.png`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }, "image/png");
+  }, options);
+
+  renderExampleNavigation();
+  renderExample();
+  updateReviewPanel();
+}
+
+export function disposeV6Review() {
+  uiAbortController?.abort();
+  uiAbortController = null;
+  state.background?.close?.();
+  state.mask?.close?.();
+}

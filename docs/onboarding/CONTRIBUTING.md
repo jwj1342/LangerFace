@@ -56,7 +56,7 @@ ruff check .                 # 代码风格
 | 组 | 覆盖 |
 |---|---|
 | `npm run test:arch` | 架构与文档守卫：import 无环、旧 JS runtime 不回流、文档链接与索引、主特性对拍、dist 资产 |
-| `npm run test:geometry` | 几何与图谱契约：三方映射对拍、额头可见性两实现对拍、遮挡、姿态门控、Umeyama、拓扑守卫、soft-body |
+| `npm run test:geometry` | 几何与图谱契约：Python/TypeScript 金标对拍、额头可见性行为、遮挡、姿态门控、Umeyama、拓扑守卫、soft-body |
 | `npm run test:live` | 实时页与采集源：摄像头、图片源、画布适配、资产加载、导出、诊断 JSON |
 | `npm run test:annotate` | 标注与 3D 路线 |
 | `npm run test:incision` | 切口工作台：overlay、回放 QA、验收审计、工具契约 |

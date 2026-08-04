@@ -3,11 +3,11 @@ import fs from "node:fs";
 
 const theme = fs.readFileSync("clinical-theme.css", "utf8");
 const appStyles = fs.readFileSync("src/styles.css", "utf8");
-const personalized = fs.readFileSync("personalized.html", "utf8");
-const personalizedRuntime = fs.readFileSync("compat/personalized/personalized.js", "utf8");
-const current = fs.readFileSync("current/index.html", "utf8");
-const v6Page = fs.readFileSync("compat/personalized/v6_review.html", "utf8");
-const v6Styles = fs.readFileSync("compat/personalized/v6_review.css", "utf8");
+const personalized = fs.readFileSync("src/personalized.css", "utf8");
+const personalizedRuntime = fs.readFileSync("src/services/personalized/personalizedRuntime.ts", "utf8");
+const personalizedPage = fs.readFileSync("src/routes/PersonalizedWorkbench.tsx", "utf8");
+const v6Page = fs.readFileSync("src/routes/V6ReviewRoute.tsx", "utf8");
+const v6Styles = fs.readFileSync("src/v6Review.css", "utf8");
 const dashboard = fs.readFileSync("src/routes/DashboardRoute.tsx", "utf8");
 
 assert.match(theme, /--clinical-accent:\s*#0f62fe/);
@@ -16,25 +16,22 @@ assert.match(theme, /--clinical-dark-bg:\s*#090b0f/);
 assert.match(appStyles, /@import "\.\.\/clinical-theme\.css"/,
   "the React app must consume the shared clinical tokens");
 
-assert.match(personalized, /href="\/clinical-theme\.css"/);
-assert.match(personalized, /--accent:var\(--clinical-accent\)/);
-assert.match(personalized, /\.btn-primary\{background:var\(--accent\)/);
-assert.match(personalized, /\.step\.current\{border-color:#78a9ff/);
-assert.match(personalized, /\.step\.done\{background:var\(--success-soft\)/,
+assert.match(personalized, /--p-accent:var\(--clinical-accent\)/);
+assert.match(personalized, /\.personalized-button\.primary\{background:var\(--p-accent\)/);
+assert.match(personalized, /\.personalized-steps \.step\.current\{border-color:#78a9ff/);
+assert.match(personalized, /\.personalized-steps \.step\.done\{background:var\(--clinical-success-soft\)/,
   "completed capture steps must retain semantic success green");
 assert.doesNotMatch(personalized, /#0f9b6e|#0c8460|--green:/,
   "the personalized page must not retain its old green brand palette");
 assert.doesNotMatch(personalizedRuntime, /#0c8460/,
   "runtime-generated personalized summaries must use the clinical palette");
-
-assert.match(current, /href="\/src\/styles\.css"/);
-assert.match(current, /<body class="clinical-compat-workbench">/,
-  "the public compatibility page must use the shared clinical workbench theme");
-
-assert.match(v6Page, /href="\/clinical-theme\.css"/);
+assert.match(personalizedPage, /className="personalized-page"/);
+assert.match(v6Page, /className="v6-review-page"/);
 assert.match(v6Styles, /--accent:\s*var\(--clinical-accent\)/);
 assert.match(v6Styles, /--success:\s*var\(--clinical-success\)/);
-assert.match(v6Styles, /\.button-primary \{ color: #f4f7fb; background: var\(--accent\)/);
+assert.match(v6Styles, /\.v6-review-page \.button-primary\{ color: #f4f7fb; background: var\(--accent\)/);
+assert.doesNotMatch(v6Styles, /^(?:\s*:root|\s*body|\s*h1|\s*\.button)\s*\{/m,
+  "lazy V6 route styles must stay scoped and must not leak into other SPA routes");
 assert.doesNotMatch(v6Styles, /--green:|#38e3a1/,
   "V6 review uses blue for actions and keeps green only as semantic/scientific data color");
 assert.match(dashboard, /text-blue-300/);

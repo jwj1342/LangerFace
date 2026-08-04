@@ -62,13 +62,12 @@ for (const removedPath of [
 const app = read("web/src/App.tsx");
 const dashboard = read("web/src/routes/DashboardRoute.tsx");
 const dataSource = read("web/src/services/dataSource.ts");
-const currentRefine = read("web/current/refine2d.js");
-const currentHtml = read("web/current/index.html");
+const liveRefine = read("web/src/services/liveRefine2d.ts");
+const liveRefinePanel = read("web/src/components/LiveRefinePanel.tsx");
 const packageJson = read("web/package.json");
 const ci = read(".github/workflows/ci.yml");
 const deploymentDoc = read("docs/quality/CI_CD_VERCEL.md");
 const frontendAndCi = [
-  readSourceTree("web/current"),
   readSourceTree("web/compat/personalized"),
   readSourceTree("web/src"),
   readSourceTree(".github"),
@@ -114,13 +113,13 @@ for (const forbidden of [
   "localStorage",
   "saveRefine",
 ]) {
-  assert.ok(!currentRefine.includes(forbidden), `patient-derived 2D refinement should not persist: ${forbidden}`);
+  assert.ok(!liveRefine.includes(forbidden), `patient-derived 2D refinement should not persist: ${forbidden}`);
 }
-assert.ok(!currentHtml.includes("refineSaveBtn"), "current live UI should not offer persistent refinement save");
+assert.ok(!liveRefinePanel.includes("refineSaveBtn"), "live UI should not offer persistent refinement save");
 assert.ok(!deploymentDoc.includes("VITE_API_BASE_URL"), "deployment docs should not direct the frontend to a removed case API");
 assert.ok(!deploymentDoc.includes("Worker API、D1、R2"), "deployment docs should not retain the removed case backend plan");
 assert.ok(dashboard.includes("不创建、恢复或保存病例"), "tool launcher should state the no-case-storage boundary");
-assert.ok(dashboard.includes('href: "/personalized"'), "personalized 2D tool should remain available");
+assert.ok(dashboard.includes('to: "/personalized"'), "personalized 2D tool should remain available");
 assert.ok(dashboard.includes('to: "/live"'), "live 2D tool should remain available");
 
 console.log("No-case-feature boundary checks passed.");

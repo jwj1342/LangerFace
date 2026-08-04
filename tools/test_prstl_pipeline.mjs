@@ -40,12 +40,12 @@ import {
   TIMED_ACTIONS,
   REFINE_CONF,
   SIZE,
-} from "../web/compat/personalized/prstl_pipeline.js";
+} from "../web/src/services/personalized/prstlPipeline.ts";
 import {
   extractDifferentialWrinkles,
   fuseRepeatedWrinkleExtractions,
   fuseRepeatedWrinkleProbabilities,
-} from "../web/compat/personalized/wrinkle_extraction.js";
+} from "../web/src/services/personalized/wrinkleExtraction.ts";
 
 let fail = 0;
 const ok = (c, m) => {
@@ -871,7 +871,7 @@ ok(def90 <= 10, `冲突动态方向不能覆盖中性候选与解剖先验（got
 
 // ── 采集状态机回退契约：峰值保持后直接提交，同时保留两轮一致性验证 ──────────
 {
-const source = readFileSync(new URL("../web/compat/personalized/personalized.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../web/src/services/personalized/personalizedRuntime.ts", import.meta.url), "utf8");
   ok(!source.includes("enterReturnPhase("), "采集流程不再进入回到自然表情状态机");
   ok((source.match(/commitCycle\(action\);/g) || []).length >= 3, "自动与手动动作完成均直接提交本轮");
   ok(source.includes("const CYCLES_REQUIRED = 1"), "每个表情默认只采集一轮");
@@ -882,7 +882,7 @@ const source = readFileSync(new URL("../web/compat/personalized/personalized.js"
 // 用 pickBestFrames(..., 4) 硬性选 4 帧且不足即抛错，门控值低于 4 永不生效。锁住这个一致性，
 // 避免两处再次分叉。
 {
-  const runtimeSrc = readFileSync(new URL("../web/compat/personalized/personalized.js", import.meta.url), "utf8");
+  const runtimeSrc = readFileSync(new URL("../web/src/services/personalized/personalizedRuntime.ts", import.meta.url), "utf8");
   const selected = runtimeSrc.match(/pickBestFrames\(\s*sess\.neutralGrayHi,\s*frames,\s*selectionMask,\s*(\d+)/);
   ok(Boolean(selected), "aggregateCycleEvidence 必须经 pickBestFrames 选帧");
   const aggregationFrames = Number(selected?.[1] ?? 0);

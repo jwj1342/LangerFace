@@ -719,7 +719,7 @@ for (const route of ["/live", "/incision"]) {
   assert.ok(dashboardRoute.includes(`to: "${route}"`), `React dashboard exposes stateless tool route ${route}`);
 }
 assert.ok(!dashboardRoute.includes('to: "/three-preview"'), "React dashboard should not expose the public R3F preview card");
-assert.ok(dashboardRoute.includes('href: "/personalized"'), "React dashboard exposes the personalized browser tool");
+assert.ok(dashboardRoute.includes('to: "/personalized"'), "React dashboard exposes the personalized browser tool as an SPA route");
 assert.ok(!dashboardRoute.includes("/cases"), "React dashboard does not expose a case lobby");
 assert.ok(dashboardRoute.includes("不创建、恢复或保存病例"), "React dashboard states the no-case-storage boundary");
 for (const [name, html, expected] of [

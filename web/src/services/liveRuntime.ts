@@ -3,7 +3,7 @@ import { bindDom, clearDomBinding, els } from "./liveDom.ts";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./liveCanvasFit.ts";
 import { validateIncisionOverlay } from "./incisionOverlay.ts";
 import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, stopTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.ts";
-import { ensureReady, handleFile, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.ts";
+import { ensureReady, handleFile, redrawPausedFrame, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.ts";
 import { adjustFocusZoom, buildZoomCards } from "./render2d.ts";
 import {
   LIVE_CONTROLLER_STATE_EVENT,
@@ -26,7 +26,23 @@ import { dataSource } from "./dataSource";
 import { countMetric, logError } from "./logger";
 import { createCanvasRecordingController, type CanvasRecordingController, type RecordingExtraCanvas } from "./canvasRecording";
 import { recordingState, reconState, renderState, sourceState } from "./liveState";
-import { setIncisionOverlayQa, setMsg, setProvenance, smoothLabel } from "./liveUi";
+import {
+  beginRefinePointer,
+  commitRefineForLive,
+  endRefinePointer,
+  exportRefine,
+  isRefineActive,
+  moveRefinePointer,
+  resetRefineToAuto,
+  setAxisVisible,
+  setRefineMode,
+  setRefineAvailability,
+  setSymmetryEnabled,
+  toggleRefine2d,
+  undoRefine,
+  updateRefineUi,
+} from "./liveRefine2d";
+import { setIncisionOverlayQa, setLive, setMsg, setProvenance, smoothLabel } from "./liveUi";
 import {
   readLiveRenderCommand,
   readLiveRouteCommand,
@@ -228,6 +244,10 @@ function visibleRecordingCanvases(): RecordingExtraCanvas[] {
 }
 
 function startImageDrag(e: PointerEvent): void {
+  if (isRefineActive()) {
+    if (beginRefinePointer(e)) e.preventDefault();
+    return;
+  }
   if (sourceState.sourceKind !== "image" || e.button !== 0) return;
   imageDrag = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
   els.mainWrap.classList.add("dragging");
@@ -235,6 +255,10 @@ function startImageDrag(e: PointerEvent): void {
 }
 
 function moveImageDrag(e: PointerEvent): void {
+  if (isRefineActive()) {
+    if (moveRefinePointer(e)) e.preventDefault();
+    return;
+  }
   if (!imageDrag || e.pointerId !== imageDrag.pointerId) return;
   panImageViewBy(e.clientX - imageDrag.x, e.clientY - imageDrag.y);
   imageDrag.x = e.clientX;
@@ -243,6 +267,10 @@ function moveImageDrag(e: PointerEvent): void {
 }
 
 function endImageDrag(e: PointerEvent): void {
+  if (isRefineActive()) {
+    if (endRefinePointer(e)) e.preventDefault();
+    return;
+  }
   if (!imageDrag || e.pointerId !== imageDrag.pointerId) return;
   imageDrag = null;
   els.mainWrap.classList.remove("dragging");
@@ -260,8 +288,35 @@ function handleMainWheel(e: WheelEvent): void {
 }
 
 function handlePauseToggle(): void {
-  sourceState.paused = !sourceState.paused; els.pause.textContent = sourceState.paused ? "▶ 继续" : "⏸ 暂停";
-  if (!sourceState.paused) requestFrame();
+  if (!sourceState.running || sourceState.sourceKind === "image") return;
+  if (!sourceState.paused) {
+    if (!sourceState.lastLM || sourceState.presence <= 0) {
+      setMsg("尚未获得稳定人脸，请正对摄像头后再定格。");
+      return;
+    }
+    const frozen = document.createElement("canvas");
+    frozen.width = els.canvas.width;
+    frozen.height = els.canvas.height;
+    frozen.getContext("2d")?.drawImage(sourceState.source as CanvasImageSource, 0, 0, frozen.width, frozen.height);
+    sourceState.frozenFrame = frozen;
+    sourceState.paused = true;
+    els.pause.textContent = "▶ 继续实时";
+    els.pause.setAttribute("aria-pressed", "true");
+    setLive(false, "已定格 · 可微调");
+    setMsg("已定格当前帧。可拖动、擦除或对称调整曲线；继续实时后微调结果会自动跟随人脸。");
+    redrawPausedFrame();
+    setRefineAvailability();
+    if (!isRefineActive()) toggleRefine2d();
+    return;
+  }
+  sourceState.paused = false;
+  sourceState.frozenFrame = null;
+  const refinementCommitted = commitRefineForLive();
+  els.pause.textContent = sourceState.sourceKind === "camera" ? "📷 定格微调" : "⏸ 暂停";
+  els.pause.setAttribute("aria-pressed", "false");
+  setMsg(refinementCommitted ? "已返回实时画面，当前微调曲线会继续跟随人脸。" : null);
+  setLive(true, sourceState.sourceKind === "camera" ? "实时摄像头" : "视频");
+  requestFrame();
 }
 
 function handleTemplateChange(e: Event | ValueControlEvent): void {
@@ -388,6 +443,18 @@ function handleReactRouteCommand(event: Event): void {
 
 function bindLiveEvents(signal: AbortSignal): void {
   els.file.addEventListener("change", (e) => runLiveAction("file_source", () => handleFile((e.target as HTMLInputElement | null)?.files?.[0])), { signal });
+  els.refine2d.addEventListener("click", () => runLiveAction("refine_toggle", toggleRefine2d), { signal });
+  els.refineView.addEventListener("click", () => runLiveAction("refine_view", () => setRefineMode("view")), { signal });
+  els.refineDrag.addEventListener("click", () => runLiveAction("refine_drag", () => setRefineMode("drag")), { signal });
+  els.refineErase.addEventListener("click", () => runLiveAction("refine_erase", () => setRefineMode("erase")), { signal });
+  els.refineUndo.addEventListener("click", () => runLiveAction("refine_undo", undoRefine), { signal });
+  els.refineExport.addEventListener("click", () => runLiveAction("refine_export", exportRefine), { signal });
+  els.refineSymmetry.addEventListener("change", (event) => runLiveAction("refine_symmetry", () => setSymmetryEnabled((event.target as HTMLInputElement).checked)), { signal });
+  els.refineAxis.addEventListener("change", (event) => runLiveAction("refine_axis", () => setAxisVisible((event.target as HTMLInputElement).checked)), { signal });
+  els.refineReset.addEventListener("click", () => runLiveAction("refine_reset", resetRefineToAuto), { signal });
+  window.addEventListener("langerface:refine2d-redraw", () => {
+    if (!redrawPausedFrame()) refreshStaticImage();
+  }, { signal });
   if (isReactManagedWorkbench()) {
     bindWindowControllerEvents([
       [LIVE_SOURCE_REACT_COMMAND_EVENT, handleReactSourceCommand],
@@ -476,6 +543,7 @@ export function mountLiveWorkbench(root: ParentNode | Document = document) {
   recordingController = null;
   imageDrag = null;
   bindLiveEvents(abortController.signal);
+  updateRefineUi();
   buildZoomCards(refreshStaticImage);
   resizeCleanup = observeCanvasStageResize(() => {
     if (sourceState.sourceKind === "image") fitCanvasDisplayToStage();

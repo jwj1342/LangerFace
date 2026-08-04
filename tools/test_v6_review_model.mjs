@@ -6,7 +6,7 @@ import {
   validateV6Result,
   V6_ALGORITHM,
   V6_EXPECTED_CURVE_COUNT,
-} from "../web/compat/personalized/v6_review_model.js";
+} from "../web/src/services/personalized/v6ReviewModel.ts";
 
 assert.equal(percentile([1, 2, 3, 4, 5], 0.5), 3);
 assert.deepEqual(resultExtent([{ points_xy: [[10, 20]], points_prior_xy: [[8, 18]] }]), { width: 10, height: 20 });

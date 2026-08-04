@@ -7,7 +7,7 @@ import {
   optimizeCurvesWithFieldV2,
   PERSONALIZATION_V2_VERSION,
   smoothProjectedCurveV2,
-} from "../web/compat/personalized/prstl_personalization_v2.js";
+} from "../web/src/services/personalized/prstlPersonalizationV2.ts";
 
 const ok = (message) => console.log(`ok: ${message}`);
 

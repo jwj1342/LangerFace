@@ -17,12 +17,12 @@ test("public workflow entrypoints share the blue clinical action theme", async (
   expect((await measureContrast(capturePrimary)).ratio).toBeGreaterThanOrEqual(4.5);
 
   await page.goto("/current/", { waitUntil: "domcontentloaded" });
-  await expect(page.locator("body")).toHaveClass(/clinical-compat-workbench/);
-  const compatibilityPrimary = page.locator("#uploadBtn");
-  await expect(compatibilityPrimary).toHaveCSS("background-color", CLINICAL_BLUE);
-  expect((await measureContrast(compatibilityPrimary)).ratio).toBeGreaterThanOrEqual(4.5);
+  await expect(page).toHaveURL(/\/live$/);
+  const livePrimary = page.locator("#uploadBtn");
+  await expect(livePrimary).toHaveCSS("background-color", CLINICAL_BLUE);
+  expect((await measureContrast(livePrimary)).ratio).toBeGreaterThanOrEqual(4.5);
 
-  await page.goto("/compat/personalized/v6_review.html", { waitUntil: "domcontentloaded" });
+  await page.goto("/v6-review", { waitUntil: "domcontentloaded" });
   await expect(page.locator("body")).toHaveCSS("background-color", DARK_PAGE);
   const reviewPrimary = page.locator(".button-primary").first();
   await expect(reviewPrimary).toHaveCSS("background-color", CLINICAL_BLUE);

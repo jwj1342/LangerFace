@@ -1,3 +1,4 @@
+// @ts-nocheck -- ONNX tensor surface typing is tracked by #95.
 /**
  * Browser-side YOLOv8-seg wrinkle inference.
  *
@@ -19,10 +20,10 @@ export const YOLO_WRINKLE_MODEL_SHA256 =
 // `new URL(..., import.meta.url)` works in Node tests, Vite development and
 // Vite production builds without teaching Node how to import the binary parts.
 export const DEFAULT_MODEL_CHUNK_URLS = Object.freeze([
-  new URL("./model/wrinkle-yolov8s-seg-640.onnx.part00", import.meta.url).href,
-  new URL("./model/wrinkle-yolov8s-seg-640.onnx.part01", import.meta.url).href,
-  new URL("./model/wrinkle-yolov8s-seg-640.onnx.part02", import.meta.url).href,
-  new URL("./model/wrinkle-yolov8s-seg-640.onnx.part03", import.meta.url).href,
+  new URL("../../../compat/personalized/model/wrinkle-yolov8s-seg-640.onnx.part00", import.meta.url).href,
+  new URL("../../../compat/personalized/model/wrinkle-yolov8s-seg-640.onnx.part01", import.meta.url).href,
+  new URL("../../../compat/personalized/model/wrinkle-yolov8s-seg-640.onnx.part02", import.meta.url).href,
+  new URL("../../../compat/personalized/model/wrinkle-yolov8s-seg-640.onnx.part03", import.meta.url).href,
 ]);
 
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));

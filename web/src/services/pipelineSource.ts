@@ -4,6 +4,7 @@ import { ctx, els } from "./liveDom.ts";
 import { prepareImageSource } from "./imageSource.ts";
 import { countMetric, logWarn } from "./logger.ts";
 import { renderState, sourceState } from "./liveState.ts";
+import { resetRefineForNewSource } from "./liveRefine2d";
 import { setLive, setMsg } from "./liveUi.ts";
 import { requestFrame } from "./pipelineLoop.ts";
 import { ensureImageReady, ensureReady } from "./pipelineModels.ts";
@@ -122,6 +123,7 @@ export function setSource(src: CanvasImageSource, kind: SourceKind, width?: numb
     clearCanvasDisplayFit();
   }
   renderState.smoother.reset();
+  resetRefineForNewSource();
   sourceState.presence = 0;
   sourceState.lastLM = null;
   sourceState.imageCacheLM = null;
@@ -133,11 +135,13 @@ export function setSource(src: CanvasImageSource, kind: SourceKind, width?: numb
   sourceState.eyeBlinkRight = 0;
   sourceState.qualityGate = null;
   sourceState.localRegionQuality = null;
+  sourceState.frozenFrame = null;
+  sourceState.lastHulls = [];
   sourceState.running = true;
   sourceState.paused = false;
-  els.pause.disabled = false;
+  els.pause.disabled = kind === "image";
   els.export.disabled = false;
-  els.pause.textContent = "⏸ 暂停";
+  els.pause.textContent = kind === "camera" ? "📷 定格微调" : "⏸ 暂停";
   setMsg(null);
   setLive(true, kind === "camera" ? "实时摄像头" : kind === "video" ? "视频" : "照片");
   requestFrame();
@@ -152,6 +156,9 @@ export function stopSource({ preserveOperation = false }: { preserveOperation?: 
   sourceState.source = null;
   sourceState.sourceKind = null;
   sourceState.running = false;
+  sourceState.paused = false;
+  sourceState.frozenFrame = null;
+  sourceState.lastHulls = [];
   els.mainWrap.classList.remove("image-viewer");
   els.canvas.classList.remove("image-source");
   clearCanvasDisplayFit();
@@ -165,4 +172,7 @@ export function stopSource({ preserveOperation = false }: { preserveOperation?: 
   sourceState.eyeBlinkRight = 0;
   sourceState.qualityGate = null;
   sourceState.localRegionQuality = null;
+  resetRefineForNewSource();
+  els.pause.disabled = true;
+  els.pause.textContent = "📷 定格微调";
 }

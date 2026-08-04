@@ -15,7 +15,11 @@ function shouldServeSpaIndex(url = "") {
     pathname === "/live"
     || pathname === "/incision"
     || pathname === "/annotate"
+    || pathname === "/personalized"
     || pathname === "/surgery"
+    || pathname === "/v6-review"
+    || pathname === "/current"
+    || pathname.startsWith("/current/")
     || pathname.startsWith("/settings/")
   ) {
     return true;
@@ -81,9 +85,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         app: resolve(import.meta.dirname, "index.html"),
-        current: resolve(import.meta.dirname, "current/index.html"),
-        personalized: resolve(import.meta.dirname, "personalized.html"),
-        v6Review: resolve(import.meta.dirname, "compat/personalized/v6_review.html"),
       },
     },
   },

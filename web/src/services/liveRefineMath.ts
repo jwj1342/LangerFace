@@ -1,3 +1,4 @@
+// @ts-nocheck -- geometry kernel typing is tracked by #95.
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
 
 function normalizedArcPositions(points) {

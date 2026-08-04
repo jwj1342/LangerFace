@@ -1,3 +1,4 @@
+// @ts-nocheck -- numerical kernel typing is tracked by #95.
 /**
  * Browser-ready wrinkle-guided RSTL V6 refinement.
  *

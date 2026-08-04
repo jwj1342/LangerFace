@@ -1,11 +1,12 @@
-﻿import { els } from "./dom.js";
+// @ts-nocheck -- the migrated doctor-refinement runtime is tracked by #95 for strict typing.
+import { els } from "./liveDom.ts";
 import {
   applyCurveRefinementTransport,
   buildCurveRefinementTransport,
   curveEraseTargets,
   deformCurveWide,
-} from "./refine2d_math.js";
-import { renderState, sourceState } from "./state.js";
+} from "./liveRefineMath.ts";
+import { renderState, sourceState } from "./liveState.ts";
 
 const HISTORY_LIMIT = 20;
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));

@@ -9,7 +9,7 @@
 
 ## 1. 总体架构
 
-两套等价的几何实现，共享同一份图谱与三角拓扑；此外还有一层被冻结的纯 JS 兼容运行时：
+Python 与浏览器两套等价几何实现共享同一份图谱与三角拓扑；浏览器侧只有一套 React/TypeScript 运行时：
 
 - **Python 库 `src/langerface/`**：分层核心库 + console scripts + **验证基准（ground truth）** + 3D 重建离线工具。
 - **浏览器客户端 `web/`**：Vite 8 + React + TypeScript + MediaPipe Tasks Vision + `web/src/services/geometry*.ts`
@@ -17,13 +17,11 @@
   + `web/src/services/three3d.ts` / R3F 组件（3D Beta）。实时、本地、不上传。
   前端低频 UI 状态由 React/Zustand 管理，实时工作台状态在 `web/src/services/liveState.ts`
   分片；`pipeline.ts` 不依赖 `mode3d.ts`，3D 实时投影通过无 DOM 的 `projection3d.ts` 适配，避免模块环。
-  `AnnotateRoute` / `IncisionRoute` / `LiveRoute` 直接按需加载并挂载各自 TypeScript runtime，
+  `AnnotateRoute` / `IncisionRoute` / `LiveRoute` / `PersonalizedRoute` / `V6ReviewRoute` 直接按需加载并挂载各自 TypeScript runtime，
   共享 `ManagedWorkbenchRoute` 的 mount/dispose 生命周期；不再经过 `legacyControllers.ts` 转发层。
-
-- **纯 JS 兼容运行时**：`web/current/`（`/current/` 实时页）、`web/compat/personalized/`（`/personalized` 个性化流程）与
-  `web/compat/shared/`（两者共用的几何 / 常量 / 数据源）。它们**不进 TypeScript 类型检查**，由
-  `tools/test_web_architecture.ts` 的**冻结清单**限定范围（owner #95，含退出条件），新增文件或清单腐烂都会让测试失败；
-  其相对 import 也在该测试里解析。设计说明见 [PERSONALIZED_RSTL.md](../tracks/PERSONALIZED_RSTL.md)。
+  个性化算法与手动 2D 微调已迁入 `web/src/services/personalized/`、`liveRefine2d.ts`；部分数值核仍以
+  `@ts-nocheck` 作为 #95 的过渡边界，但已进入 Vite 模块图和统一构建。`tools/test_web_architecture.ts`
+  禁止 `web/` 重新出现 `.js` 源运行时。`web/compat/personalized/` 仅保留 ONNX 分片与 V6 示例等静态资产。
 
 - **视觉主题契约**：公开主路径统一使用 `web/clinical-theme.css` 的深色临床界面与蓝色主操作色
   （`--clinical-accent: #0f62fe`）。React 入口通过 `web/src/styles.css` 导入同一份 token；`/personalized`、
@@ -189,9 +187,8 @@ P = u·V0 + v·V1 + w·V2
 - 本地开发：`cd web && npm run dev`，Vite 默认监听 `http://127.0.0.1:5173`。
 - 生产构建：`cd web && npm ci && npm run build`，输出 `web/dist/`。
 - 生产预览：`cd web && npm run preview`，Vite 默认监听 `http://127.0.0.1:4173`。
-- Vite 有 **4 个 Rollup 入口**：`web/index.html`（React SPA，挂在站点根，`/app/*` 仍作为旧地址兼容）、
-  `web/current/index.html`（`/current/` 纯 JS 实时页）、`web/personalized.html`（`/personalized`）、
-  `web/compat/personalized/v6_review.html`（`/v6-review`）。`annotate.html`、`incision_workflow.html`、`incision_agent.html`、`surgery.html`
+- Vite 只有 **1 个 Rollup 入口**：`web/index.html`。`/live`、`/personalized`、`/v6-review` 与 `/app/*`
+  均由 React Router 处理；历史 `/current/*` 在 SPA 内重定向到 `/live`。`annotate.html`、`incision_workflow.html`、`incision_agent.html`、`surgery.html`
   只作为轻量兼容跳转页复制进 `dist/`，不再作为 Rollup 多入口应用构建。
 - `web/vite.config.ts` 使用 `base: "/"`，让 SPA shell 的 JS/CSS 在深链接下仍从站点根 `/assets/...` 读取；`copy-runtime-assets`
   会把 `web/assets/` 复制到 `dist/assets/`；`web/src/services/assetLoader.ts`

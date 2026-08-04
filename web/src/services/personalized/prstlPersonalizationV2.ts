@@ -1,3 +1,4 @@
+// @ts-nocheck -- numerical kernel typing is tracked by #95.
 /**
  * Browser-ready RSTL personalization v2.
  *
@@ -16,7 +17,7 @@
 
 import {
   axialDiffDeg, normalizeQ, staticTextureEvidence,
-} from "./prstl_pipeline.js";
+} from "./prstlPipeline.ts";
 
 export const PERSONALIZATION_V2_VERSION = "prstl-consensus-localized-diffeomorphic-field-0.2.0";
 

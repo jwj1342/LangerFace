@@ -37,6 +37,7 @@ export interface LiveRenderState {
   bands: boolean;
   zoom: boolean;
   meshPts: boolean;
+  refine2d: AnyRecord;
   zoomCards: LiveZoomCard[];
   focusRegion: unknown;
   focusZoom: number;
@@ -65,6 +66,8 @@ export interface LiveSourceState {
   eyeBlinkRight: number;
   qualityGate: any;
   localRegionQuality: any;
+  frozenFrame: HTMLCanvasElement | null;
+  lastHulls: any[];
   [key: string]: unknown;
 }
 
@@ -114,6 +117,19 @@ export const renderState: LiveRenderState = {
   bands: false,
   zoom: true,
   meshPts: false,
+  refine2d: {
+    active: false,
+    mode: "view",
+    symmetry: true,
+    showAxis: true,
+    lines: null,
+    latestAutoLines: null,
+    liveTransport: null,
+    selected: null,
+    dirty: false,
+    undoStack: [],
+    drag: null,
+  },
   zoomCards: [],
   focusRegion: null,
   focusZoom: 1.8,
@@ -150,6 +166,8 @@ export const sourceState: LiveSourceState = {
   eyeBlinkRight: 0,
   qualityGate: null,
   localRegionQuality: null,
+  frozenFrame: null,
+  lastHulls: [],
 };
 
 export const recordingState: LiveRecordingState = {

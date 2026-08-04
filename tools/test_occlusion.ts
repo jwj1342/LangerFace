@@ -12,7 +12,7 @@ import { INNER_LIP, innerMouthTriangles, visibleTriangles } from "../web/src/ser
 import {
   skinColorMatchesReferences,
   stabilizeForeheadMask,
-} from "../web/current/forehead_visibility.js";
+} from "../web/src/services/foreheadVisibility.ts";
 
 let fail = 0;
 const ok = (c, m) => { if (!c) { console.error("FAIL:", m); fail++; } else console.log("ok:", m); };

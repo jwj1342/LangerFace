@@ -1,3 +1,4 @@
+// @ts-nocheck -- numerical kernel typing is tracked by #95.
 /**
  * 浏览器端个性化二维 RSTL — 纯算法（无 DOM）
  *
@@ -6,7 +7,8 @@
  *
  * 管线：个人基线 → 结构张量 + 块匹配光流 → 保守融合 q0 → 先验锚定重追
  */
-import { mapAtlas, umeyama, applySim } from "../shared/geometry.js";
+import { mapAtlas } from "../geometryAtlas.ts";
+import { applySim, umeyama } from "../geometryTransform.ts";
 
 export const SIZE = 320;
 export const TEXTURE_SIZE = 640;

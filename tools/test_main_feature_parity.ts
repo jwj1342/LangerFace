@@ -28,11 +28,7 @@ const render2d = read("src/services/render2d.ts");
 const typedConstants = read("src/services/constants.ts");
 const liveState = read("src/services/liveState.ts");
 const liveRenderControls = read("src/components/LiveRenderControlsPanel.tsx");
-const compatConstants = read("compat/shared/constants.js");
-const currentRender = read("current/render.js");
-const currentState = read("current/state.js");
-const currentHtml = read("current/index.html");
-const foreheadVisibility = read("current/forehead_visibility.js");
+const foreheadVisibility = read("src/services/foreheadVisibility.ts");
 const cameraSource = read("src/services/cameraSource.ts");
 const skinMaterial = read("src/services/skinMaterial.ts");
 const incisionStage = read("src/components/IncisionStagePanel.tsx");
@@ -180,12 +176,7 @@ includesAll(render2d, [
   "renderState",
 ], "2D render overlay support");
 
-for (const [label, source] of [
-  ["typed live constants", typedConstants],
-  ["shared compatibility constants", compatConstants],
-]) {
-  assert.ok(source.includes('rstl: "#c800c8"'), `${label} must use the v8.1.67 reference magenta`);
-}
+assert.ok(typedConstants.includes('rstl: "#c800c8"'), "live constants must use the v8.1.67 reference magenta");
 assert.ok(
   render2d.includes("Math.max(2, W / 1300)"),
   "typed live RSTL strokes must use the two-pixel reference minimum",
@@ -194,42 +185,25 @@ assert.ok(
 // 密度筛选拿到空集后整页一条线都不画。正反向各一条，回退任一侧都会红。
 assert.match(
   render2d,
-  /lineIndicesForDensity\(\s*atlasLines \|\| \[\],\s*renderState\.densityFrac,?\s*\)/,
-  "typed live must apply density selection to the atlas line array",
+  /lineIndicesForDensity\(\s*displayLines \|\| \[\],\s*renderState\.densityFrac,?\s*\)/,
+  "typed live must apply density selection to the displayed atlas line array",
 );
 assert.doesNotMatch(
   render2d,
   /lineIndicesForDensity\(\s*\w*\?\.lines/,
   "typed live must not treat the atlas line array as an atlas payload",
 );
-// #141：外推的额头线在两套运行时都必须再裁一次，且用同一份 region 集合
-for (const [label, source] of [
-  ["typed live", render2d],
-  ["current live", currentRender],
-] as const) {
-  assert.ok(
-    source.includes('"forehead_lower_long_arc_v13"') && source.includes('"forehead_bridge_arc_v15"'),
-    `${label} must gate the extended forehead regions by name`,
-  );
-  assert.ok(
-    /stabilizeForeheadMask\(/.test(source) && /headVisible\(/.test(source) && /skinVisible\(/.test(source),
-    `${label} must clip extended forehead arcs by head envelope and skin colour`,
-  );
-}
+// #141：外推的额头线必须在唯一的 TypeScript 运行时再按头部包络与肤色裁剪。
 assert.ok(
-  currentRender.includes("Math.max(2, W / 1300)"),
-  "current live RSTL strokes must use the two-pixel reference minimum",
+  render2d.includes('"forehead_lower_long_arc_v13"') && render2d.includes('"forehead_bridge_arc_v15"'),
+  "live renderer must gate the extended forehead regions by name",
 );
-assert.ok(
-  currentRender.includes('"forehead_bridge_arc_v15"'),
-  "current live must not clip v8.1.67 bridge arcs to the MediaPipe face oval",
-);
-includesAll(currentRender, [
+includesAll(render2d, [
   "buildForeheadSkinVisibility",
   "buildHeadVisibility",
   "stabilizeForeheadMask",
   "headVisible(p) && skinVisible(p)",
-], "current live v8.1.67 forehead visibility integration");
+], "live v8.1.67 forehead visibility integration");
 includesAll(foreheadVisibility, [
   "skinColorMatchesReferences",
   "distance <= 26",
@@ -240,14 +214,12 @@ includesAll(foreheadVisibility, [
   "minRun",
   "minVisibleSpan",
   "visibleCount < minVisibleSpan",
-], "current live hair-aware forehead visibility");
+], "live hair-aware forehead visibility");
 assert.ok(
   !foreheadVisibility.includes("longestRun"),
-  "current live forehead visibility must preserve every qualifying run instead of selecting one longest run (#145)",
+  "live forehead visibility must preserve every qualifying run instead of selecting one longest run (#145)",
 );
 assert.ok(liveState.includes("opacity: 0.60"), "typed live RSTL opacity must match the 60% reference");
-assert.ok(currentState.includes("opacity: 0.60"), "current live RSTL opacity must match the 60% reference");
-includesAll(currentHtml, ['id="opacityVal">60%</span>', 'id="opacity" min="25" max="100" value="60"'], "current live reference opacity controls");
 assert.ok(
   liveRenderControls.includes("render?.opacityPct || 60"),
   "React live opacity control must default to the 60% reference",
@@ -395,7 +367,7 @@ includesAll(standardFaceAssets, [
 
 includesAll(dashboardRoute, [
   'to: "/live"',
-  'href: "/personalized"',
+  'to: "/personalized"',
   'to: "/incision"',
   "不创建、恢复或保存病例",
   "不维护病例大厅、患者档案、历史记录或云端病例库",

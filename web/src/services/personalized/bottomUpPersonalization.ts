@@ -8,6 +8,7 @@
  * one-dimensional smoothing couples neighbouring points on each full curve.
  */
 
+// @ts-nocheck -- numerical kernel typing is tracked by #95.
 export const BOTTOM_UP_PERSONALIZATION_VERSION =
   "bottom-up-hessian-rstl-warp-1.0.0";
 export const BOTTOM_UP_PARAMETER_VERSION =

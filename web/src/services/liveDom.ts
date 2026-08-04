@@ -8,6 +8,18 @@ export interface LiveDomElements {
   cam: HTMLButtonElement;
   pause: HTMLButtonElement;
   export: HTMLButtonElement;
+  refine2d: HTMLButtonElement;
+  refine2dPanel: HTMLElement;
+  refine2dStatus: HTMLElement;
+  refineView: HTMLButtonElement;
+  refineDrag: HTMLButtonElement;
+  refineErase: HTMLButtonElement;
+  refineUndo: HTMLButtonElement;
+  refineExport: HTMLButtonElement;
+  refineSymmetry: HTMLInputElement;
+  refineAxis: HTMLInputElement;
+  refineReset: HTMLButtonElement;
+  refine2dHint: HTMLElement;
   tmpl: HTMLSelectElement;
   density: HTMLInputElement;
   smooth: HTMLInputElement;
@@ -85,6 +97,18 @@ function collectElements(root: ParentNode | Document): LiveDomElements {
     cam: elementById<HTMLButtonElement>(root, "camBtn") as HTMLButtonElement,
     pause: elementById<HTMLButtonElement>(root, "pauseBtn") as HTMLButtonElement,
     export: elementById<HTMLButtonElement>(root, "exportBtn") as HTMLButtonElement,
+    refine2d: elementById<HTMLButtonElement>(root, "refine2dBtn") as HTMLButtonElement,
+    refine2dPanel: elementById<HTMLElement>(root, "refine2dPanel") as HTMLElement,
+    refine2dStatus: elementById<HTMLElement>(root, "refine2dStatus") as HTMLElement,
+    refineView: elementById<HTMLButtonElement>(root, "refineViewBtn") as HTMLButtonElement,
+    refineDrag: elementById<HTMLButtonElement>(root, "refineDragBtn") as HTMLButtonElement,
+    refineErase: elementById<HTMLButtonElement>(root, "refineEraseBtn") as HTMLButtonElement,
+    refineUndo: elementById<HTMLButtonElement>(root, "refineUndoBtn") as HTMLButtonElement,
+    refineExport: elementById<HTMLButtonElement>(root, "refineExportBtn") as HTMLButtonElement,
+    refineSymmetry: elementById<HTMLInputElement>(root, "refineSymmetryToggle") as HTMLInputElement,
+    refineAxis: elementById<HTMLInputElement>(root, "refineAxisToggle") as HTMLInputElement,
+    refineReset: elementById<HTMLButtonElement>(root, "refineResetBtn") as HTMLButtonElement,
+    refine2dHint: elementById<HTMLElement>(root, "refine2dHint") as HTMLElement,
     tmpl: elementById<HTMLSelectElement>(root, "templateSel") as HTMLSelectElement,
     density: elementById<HTMLInputElement>(root, "density") as HTMLInputElement,
     smooth: elementById<HTMLInputElement>(root, "smooth") as HTMLInputElement,

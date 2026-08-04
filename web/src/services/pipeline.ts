@@ -7,7 +7,7 @@ import type { Triangle } from "./softBody";
 
 export { ensureReady } from "./pipelineModels.ts";
 export { handleFile, setSource, showCameraPlaceholder, startCamera, stopSource } from "./pipelineSource.ts";
-export { detectHands, loop, requestFrame } from "./pipelineLoop.ts";
+export { detectHands, loop, redrawPausedFrame, requestFrame } from "./pipelineLoop.ts";
 
 function requestRedraw(): void {
   if (sourceState.running && !sourceState.paused) requestAnimationFrame(loop);

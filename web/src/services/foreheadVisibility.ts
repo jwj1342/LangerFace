@@ -1,9 +1,8 @@
 // 额头可见性裁剪：v8.1.67 的 forehead_bridge_arc_v15 会把弧线主动外推到面部网格之外
 // （见 METHODS §5.1），所以显示期必须再裁一次，否则线会画到头发、背景或脸外。
 //
-// 本模块是 web/current/forehead_visibility.js 的 TypeScript 移植。两套实现由
-// tools/test_forehead_visibility_parity.ts 对同一份 fixture 逐点对拍，任何一侧
-// 改动阈值或算法都会让对拍失败——不要单独改一边。
+// 这是 React live 的唯一生产实现；阈值与分段边界由
+// tools/test_forehead_visibility_parity.ts 的固定行为样例守住。
 import type { Vec3 } from "./softBody.ts";
 
 export type Rgb = [number, number, number];

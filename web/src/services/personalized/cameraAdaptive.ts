@@ -1,4 +1,5 @@
 /** Camera-resolution quality metrics shared by capture and optimizers. */
+// @ts-nocheck -- compatibility kernel typing is tracked by #95.
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
 
 export function adaptiveFaceResolutionMetrics(context = {}) {

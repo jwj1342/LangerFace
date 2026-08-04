@@ -1,3 +1,4 @@
+// @ts-nocheck -- payload typing is tracked by #95.
 export const V6_EXPECTED_CURVE_COUNT = 216;
 export const V6_ALGORITHM = "interval-guarded-continuous-polyline-rstl-refinement-6.0";
 

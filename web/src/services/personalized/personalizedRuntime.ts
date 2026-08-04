@@ -1,8 +1,9 @@
+// @ts-nocheck -- compatibility algorithm typing is tracked by #95; the UI/runtime now lives under the TypeScript boundary.
 /**
  * 表情 atlas 微调 Demo — 浏览器引导采集 UI / 会话
  *
  * 文档：docs/tracks/PERSONALIZED_RSTL.md
- * 算法：采集/质控 ./prstl_pipeline.js；皱纹检测 ./yolo_wrinkle_onnx.js；个性化 ./v6_rstl_refinement.js
+ * 算法：采集/质控 ./prstlPipeline；皱纹检测 ./yoloWrinkleOnnx；个性化 ./v6RstlRefinement
  * 定位：非个体 RSTL 测量
  *
  * 分区：
@@ -14,11 +15,9 @@
  *   6. 主循环 tick / runSession
  *   7. 3-2-1 倒计时与开停摄像头
  */
-import { FaceLandmarker, FilesetResolver }
-  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18";
-import {
-  toPixels, OneEuro, mapAtlas,
-} from "../shared/geometry.js";
+import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import { mapAtlas, toPixels } from "../geometryAtlas.ts";
+import { OneEuro } from "../geometrySmoothing.ts";
 import {
   SIZE, TEXTURE_SIZE, ACTION_ORDER, ACTION_LABELS, ACTION_REGION_WEIGHT, THRESHOLDS, QUALITY_THRESHOLDS, REFINE_CONF, TIMED_ACTIONS,
   CANONICAL_REGISTRATION_ANCHORS,
@@ -31,24 +30,24 @@ import {
   summarizeWeightedField, summarizeCurveDisplacements, axialDiffDeg,
   relativeScore, estimateBaseline, personalThreshold,
   dominantExpression, NEUTRAL_MAX,
-} from "./prstl_pipeline.js";
-import { adaptiveFaceResolutionMetrics } from "./camera_adaptive.js";
+} from "./prstlPipeline.ts";
+import { adaptiveFaceResolutionMetrics } from "./cameraAdaptive.ts";
 import {
   BOTTOM_UP_PARAMETER_VERSION,
   BOTTOM_UP_PERSONALIZATION_VERSION,
   buildStaticHessianTextureTemplate,
   validateHessianTemplateWithAction,
-} from "./bottom_up_personalization.js";
-import { smoothProjectedCurveV2 } from "./prstl_personalization_v2.js";
-import { dataSource } from "../shared/data_source.js";
-import { WrinkleYoloOnnx, fuseStrictUnion } from "./yolo_wrinkle_onnx.js";
-import { refineV6 } from "./v6_rstl_refinement.js";
-import personalizedAtlasUrl from "../../assets/atlas_rstl.json?url";
-import faceLandmarkerUrl from "../../assets/face_landmarker.task?url";
-import trianglesUrl from "../../assets/triangles.json?url";
+} from "./bottomUpPersonalization.ts";
+import { smoothProjectedCurveV2 } from "./prstlPersonalizationV2.ts";
+import { dataSource } from "../dataSource.ts";
+import { WrinkleYoloOnnx, fuseStrictUnion } from "./yoloWrinkleOnnx.ts";
+import { refineV6 } from "./v6RstlRefinement.ts";
+import personalizedAtlasUrl from "../../../assets/atlas_rstl.json?url";
+import faceLandmarkerUrl from "../../../assets/face_landmarker.task?url";
+import trianglesUrl from "../../../assets/triangles.json?url";
 
 // ── 1. 常量与 DOM ───────────────────────────────────────────────────────────
-const CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18";
+const CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35";
 const $ = (id) => document.getElementById(id);
 
 const ACTION_HINT = {
@@ -110,7 +109,8 @@ const ACTIVE_ATLAS_VERSION = "0.2";
 const ACTIVE_TOPOLOGY_ID = "mediapipe-468";
 const ACTIVE_TOPOLOGY_VERSION = "mediapipe-canonical-468-v1";
 
-const els = {
+function collectElements() {
+  return {
   start: $("startBtn"), stop: $("stopBtn"), skip: $("skipBtn"), confirm: $("confirmBtn"), debug: $("debugBtn"),
   recordDebugMedia: $("recordDebugMedia"), debugMediaStatus: $("debugMediaStatus"), debugMediaExports: $("debugMediaExports"),
   discardDebugMedia: $("discardDebugMediaBtn"),
@@ -129,8 +129,11 @@ const els = {
   video: $("video"), view: $("view"), boot: $("boot"),
   countdown: $("countdown"), countNum: $("countNum"), countTip: $("countTip"),
   coach: $("coach"), coachTitle: $("coachTitle"), coachSub: $("coachSub"), coachBar: $("coachBar"),
-};
-const ctx = els.view.getContext("2d", { willReadFrequently: true });
+  };
+}
+const els = collectElements();
+let ctx = els.view.getContext("2d", { willReadFrequently: true });
+let uiAbortController = null;
 
 let landmarker = null, triangles = null, atlasLines = null;
 let smoother = new OneEuro({ minCutoff: 1.8, beta: 0.04 });
@@ -2853,42 +2856,6 @@ async function stopCapture() {
   syncStartButton();
 }
 
-els.start.addEventListener("click", () => { onStartClick(); });
-els.stop.addEventListener("click", stopCapture);
-els.skip.addEventListener("click", skipStep);
-if (els.confirm) els.confirm.addEventListener("click", confirmCurrentStep);
-if (els.debug) els.debug.addEventListener("click", downloadDebugPayload);
-if (els.discardDebugMedia) els.discardDebugMedia.addEventListener("click", discardDebugRecording);
-// 页面卸载时主动回收 Blob URL，避免录制的人脸视频比标签页活得更久。
-window.addEventListener("pagehide", releaseMediaUrls);
-if (els.wrinkleMaskDownload) els.wrinkleMaskDownload.addEventListener("click", () => {
-  if (!els.wrinkleMaskCanvas) return;
-  const link = document.createElement("a");
-  link.href = els.wrinkleMaskCanvas.toDataURL("image/png");
-  link.download = `wrinkle_mask_strict_union_${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
-  link.click();
-});
-if (els.wrinkleSemanticDownload) els.wrinkleSemanticDownload.addEventListener("click", () => {
-  if (!els.wrinkleSemanticCanvas) return;
-  const link = document.createElement("a");
-  link.href = els.wrinkleSemanticCanvas.toDataURL("image/png");
-  link.download = `wrinkle_mask_semantic_front_${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
-  link.click();
-});
-if (els.wrinkleAlignmentDownload) els.wrinkleAlignmentDownload.addEventListener("click", () => {
-  if (!els.wrinkleAlignmentCanvas) return;
-  const link = document.createElement("a");
-  link.href = els.wrinkleAlignmentCanvas.toDataURL("image/png");
-  link.download = `wrinkle_alignment_audit_${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
-  link.click();
-});
-if (els.wrinkleEvidenceDownload) els.wrinkleEvidenceDownload.addEventListener("click", () => {
-  if (!els.wrinkleEvidenceCanvas) return;
-  const link = document.createElement("a");
-  link.href = els.wrinkleEvidenceCanvas.toDataURL("image/png");
-  link.download = `wrinkle_v6_evidence_${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
-  link.click();
-});
 async function openIncisionWorkspace() {
   const activeAtlas = personalizedActiveAtlas || sess?.v6Result?.activeAtlas || null;
   if (!activeAtlas) return;
@@ -2908,11 +2875,51 @@ async function openIncisionWorkspace() {
   location.assign(`/app/incision?source=personalized&v=${Date.now()}`);
 }
 
-if (els.usePersonalized) els.usePersonalized.addEventListener("click", () => { void openIncisionWorkspace(); });
+function downloadCanvas(canvas, filename) {
+  if (!canvas) return;
+  const link = document.createElement("a");
+  link.href = canvas.toDataURL("image/png");
+  link.download = `${filename}_${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
+  link.click();
+}
 
-updateGuide();
-setMeters(0, 0);
-setLocalPipelineStatus("采集完成后将在本机运行 YOLO 0.07 与 V6。", 0);
-els.badge.textContent = "就绪";
-els.badge.classList.remove("warn");
-setMsg("点击「开始采集」开启摄像头；每完成一步需再点一次进入下一步。");
+export function mountPersonalizedWorkbench() {
+  uiAbortController?.abort();
+  Object.assign(els, collectElements());
+  ctx = els.view.getContext("2d", { willReadFrequently: true });
+  uiAbortController = new AbortController();
+  const options = { signal: uiAbortController.signal };
+
+  els.start.addEventListener("click", () => { void onStartClick(); }, options);
+  els.stop.addEventListener("click", stopCapture, options);
+  els.skip.addEventListener("click", skipStep, options);
+  els.confirm?.addEventListener("click", confirmCurrentStep, options);
+  els.debug?.addEventListener("click", downloadDebugPayload, options);
+  els.discardDebugMedia?.addEventListener("click", discardDebugRecording, options);
+  window.addEventListener("pagehide", releaseMediaUrls, options);
+  els.wrinkleMaskDownload?.addEventListener("click", () => downloadCanvas(els.wrinkleMaskCanvas, "wrinkle_mask_strict_union"), options);
+  els.wrinkleSemanticDownload?.addEventListener("click", () => downloadCanvas(els.wrinkleSemanticCanvas, "wrinkle_mask_semantic_front"), options);
+  els.wrinkleAlignmentDownload?.addEventListener("click", () => downloadCanvas(els.wrinkleAlignmentCanvas, "wrinkle_alignment_audit"), options);
+  els.wrinkleEvidenceDownload?.addEventListener("click", () => downloadCanvas(els.wrinkleEvidenceCanvas, "wrinkle_v6_evidence"), options);
+  els.usePersonalized?.addEventListener("click", () => { void openIncisionWorkspace(); }, options);
+
+  updateGuide();
+  setMeters(0, 0);
+  setLocalPipelineStatus("采集完成后将在本机运行 YOLO 0.07 与 V6。", 0);
+  els.badge.textContent = "就绪";
+  els.badge.classList.remove("warn");
+  setMsg("点击「开始采集」开启摄像头；每完成一步需再点一次进入下一步。");
+}
+
+export function disposePersonalizedWorkbench() {
+  uiAbortController?.abort();
+  uiAbortController = null;
+  looping = false;
+  processing = false;
+  if (stream) {
+    stream.getTracks().forEach((track) => track.stop());
+    stream = null;
+  }
+  if (els.video) els.video.srcObject = null;
+  releaseMediaUrls();
+}

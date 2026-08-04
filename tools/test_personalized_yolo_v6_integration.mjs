@@ -5,13 +5,15 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const web = new URL("../web/", import.meta.url);
-const runtime = new URL("../web/compat/personalized/", import.meta.url);
-const source = await readFile(new URL("personalized.js", runtime), "utf8");
-const page = await readFile(new URL("personalized.html", web), "utf8");
-const currentPage = await readFile(new URL("current/index.html", web), "utf8");
-const currentMain = await readFile(new URL("current/main.js", web), "utf8");
-const currentRender = await readFile(new URL("current/render.js", web), "utf8");
+const assets = new URL("../web/compat/personalized/", import.meta.url);
+const source = await readFile(new URL("src/services/personalized/personalizedRuntime.ts", web), "utf8");
+const page = await readFile(new URL("src/routes/PersonalizedWorkbench.tsx", web), "utf8");
+const livePanel = await readFile(new URL("src/components/LiveRefinePanel.tsx", web), "utf8");
+const liveSourcePanel = await readFile(new URL("src/components/LiveSourceControlsPanel.tsx", web), "utf8");
+const liveRenderPanel = await readFile(new URL("src/components/LiveRenderControlsPanel.tsx", web), "utf8");
 const liveSource = await readFile(new URL("src/services/liveRuntime.ts", web), "utf8");
+const liveRender = await readFile(new URL("src/services/render2d.ts", web), "utf8");
+const app = await readFile(new URL("src/App.tsx", web), "utf8");
 const incisionRuntime = await readFile(new URL("src/services/incisionRuntime.ts", web), "utf8");
 const incisionAtlasSource = await readFile(new URL("src/services/incisionAtlasSource.ts", web), "utf8");
 const dataSource = await readFile(new URL("src/services/dataSource.ts", web), "utf8");
@@ -23,9 +25,9 @@ assert.equal(atlas.lines.reduce((count, line) => count + line.points.length, 0),
   "the latest atlas point topology must be preserved");
 assert.equal(atlas.lines.at(-1)?.name, "standard_field_0161_cross",
   "the latest atlas tail must be present");
-assert.match(source, /from "\.\/yolo_wrinkle_onnx\.js"/);
-assert.match(source, /from "\.\/v6_rstl_refinement\.js"/);
-assert.match(source, /from "\.\.\/\.\.\/assets\/atlas_rstl\.json\?url"/);
+assert.match(source, /from "\.\/yoloWrinkleOnnx\.ts"/);
+assert.match(source, /from "\.\/v6RstlRefinement\.ts"/);
+assert.match(source, /from "\.\.\/\.\.\/\.\.\/assets\/atlas_rstl\.json\?url"/);
 assert.match(source, /confidenceThreshold: YOLO_CONFIDENCE/);
 assert.match(source, /const CYCLES_REQUIRED = 1;/,
   "each expression must be captured exactly once");
@@ -85,29 +87,32 @@ assert.match(source, /disableRuntimeExpansion: true/,
   "the staged personalized atlas must keep legacy expansion disabled in the live renderer");
 assert.doesNotMatch(source, /warpPriorCurvesWithHessian/,
   "the legacy Hessian curve warper must not remain in the final personalization route");
-assert.match(page, /id="localPipelineProgress"/);
-assert.match(page, /id="usePersonalizedBtn"/);
-assert.match(page, /id="wrinkleMaskCanvas"/);
-assert.match(page, /id="wrinkleMaskDownloadBtn"/);
-assert.match(page, /id="wrinkleSemanticCanvas"/);
-assert.match(page, /id="wrinkleSemanticDownloadBtn"/);
+for (const id of [
+  "localPipelineProgress",
+  "usePersonalizedBtn",
+  "wrinkleMaskCanvas",
+  "wrinkleMaskDownloadBtn",
+  "wrinkleSemanticCanvas",
+  "wrinkleSemanticDownloadBtn",
+]) {
+  assert.match(page, new RegExp(`["']${id}["']`), `personalized React workbench must expose ${id}`);
+}
 assert.match(page, /每个表情采集一次/);
 assert.deepEqual(vercelConfig.rewrites[0], { source: "/", destination: "/index.html" },
   "the React tool launcher must be the deployed main page");
 for (const id of ["uploadBtn", "camBtn", "pauseBtn", "exportBtn", "refine2dBtn", "density"]) {
-  assert.match(currentPage, new RegExp(`id=["']${id}["']`), `current main page must expose ${id}`);
+  const reactSource = [livePanel, liveSourcePanel, liveRenderPanel, liveSource, liveRender].join("\n");
+  assert.match(reactSource, new RegExp(`["']${id}["']`), `React live workbench must expose ${id}`);
 }
-assert.match(currentPage, /href="\/personalized"/,
-  "the main page must open the V6 personalized workflow");
-assert.doesNotMatch(currentPage, /id="routeSel"/,
-  "the compat live page must not expose the closed 3D/FLAME route selector");
-assert.match(currentMain, /String\(atlas\.provenance \|\| ""\)\.includes\("local-yolo"\)/,
-  "the current main page must identify a staged V6 atlas");
-assert.match(currentRender, /lineIndicesForDensity/,
-  "the current main page must keep symmetric line-density selection");
+assert.match(app, /path="\/current\/\*" element=\{<Navigate to="\/live" replace \/>\}/,
+  "the retired /current URL must redirect to the React live workbench");
+assert.match(liveSource, /provenanceText\.includes\("local-yolo"\)/,
+  "the React live page must identify a staged V6 atlas");
+assert.match(liveRender, /lineIndicesForDensity/,
+  "the React live page must keep symmetric line-density selection");
 
 const modelParts = [0, 1, 2, 3].map((index) =>
-  new URL(`model/wrinkle-yolov8s-seg-640.onnx.part${String(index).padStart(2, "0")}`, runtime));
+  new URL(`model/wrinkle-yolov8s-seg-640.onnx.part${String(index).padStart(2, "0")}`, assets));
 const hash = createHash("sha256");
 let bytes = 0;
 for (const part of modelParts) {

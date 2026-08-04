@@ -16,8 +16,10 @@
   },
   "rewrites": [
     { "source": "/", "destination": "/index.html" },
-    { "source": "/personalized", "destination": "/personalized.html" },
-    { "source": "/v6-review", "destination": "/compat/personalized/v6_review.html" },
+    { "source": "/personalized", "destination": "/index.html" },
+    { "source": "/v6-review", "destination": "/index.html" },
+    { "source": "/current", "destination": "/index.html" },
+    { "source": "/current/(.*)", "destination": "/index.html" },
     { "source": "/live", "destination": "/index.html" },
     { "source": "/incision", "destination": "/index.html" },
     { "source": "/annotate", "destination": "/index.html" },

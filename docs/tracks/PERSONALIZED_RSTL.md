@@ -1,8 +1,8 @@
 # 个性化 RSTL（`/personalized`）：输入、阈值依据、失败降级与边界
 
 本文是 `/personalized` 浏览器个性化 RSTL 流程的单一可审计说明：它吃什么输入、每个阈值为什么是这个值、
-失败时怎么降级、隐私边界在哪、产出的图谱遵守什么契约。代码入口 `web/personalized.html` +
-`web/compat/personalized/`；模型来源与许可见
+失败时怎么降级、隐私边界在哪、产出的图谱遵守什么契约。React 入口是
+`web/src/routes/PersonalizedRoute.tsx`，算法运行时位于 `web/src/services/personalized/`；模型来源与许可见
 [`web/compat/personalized/model/NOTICE.md`](../../web/compat/personalized/model/NOTICE.md) 与
 [MODEL_CARD.md](../../web/compat/personalized/model/MODEL_CARD.md)。
 
