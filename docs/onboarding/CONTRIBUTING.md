@@ -41,6 +41,7 @@ cd ..
 ```bash
 pytest                       # Python 单元/集成测试
 cd web && npm test           # 全量：typecheck + 下面 7 组（共 49 支脚本）
+cd web && npm run test:browser # 生产构建上的 Playwright UI/对比度回归
 ruff check .                 # 代码风格
 ```
 
@@ -64,6 +65,7 @@ ruff check .                 # 代码风格
 
 - **Web TypeScript ↔ Python 逐点对拍**（`cd web && npm test`）：先查 `web/src/**/*.ts(x)` 静态 import 无模块环并阻止旧根目录 JS runtime 回流，再用真实帧关键点对拍映射（误差 ~5×10⁻⁵px）/ 背面剔除（0 不一致）/ One-Euro fixture；并含 `test_occlusion`（贴合手形掩膜、指缝保留、无手不剔除）、`test_umeyama`（恢复已知相似变换 ~1e-13）、`topologyId`/`topologyVersion` 守卫与 atlas roundtrip 契约、FLAME basis 拟合 + jaw/表情前向、RSTL 切除闭合 soft-body 张力方向断言、`test_logger`（`window.exportLangerfaceDiagnostics()` 结构化 JSON 契约）。
 - **Python 单测**（`pytest`）：图谱完整性、标准脸解析、映射仿射不变性、平滑降抖动、端到端渲染、`assets/`↔`web/assets/` 同步门禁、结构化可观测性。
+- **浏览器回归**（`cd web && npm run test:browser`）：在 Vite 生产构建上运行 Chromium，覆盖 `/surgery` 按钮状态、透明背景合成后的文本对比度与伪元素颜色读取；首次本地运行前执行 `npx playwright install chromium`。
 - **目检脚本**：`tools/render_check.py`、`inspect_frames.py`、`montage.py`、`sample_output.py`、`debug_one.py`。
 - **浏览器实测**：UI/3D 查看通过截图核对；实时摄像头链路需在带摄像头的浏览器中确认。
 
@@ -80,7 +82,7 @@ ruff check .                 # 代码风格
    ```bash
    ruff check .
    pytest -q
-   cd web && npm run build && npm test
+   cd web && npm run build && npm test && npm run test:browser
    ```
 3. push 分支并创建 PR。可以先开 Draft PR。
 4. 等 GitHub Actions 自动运行；默认不要为每个 PR 自动创建 Vercel Preview。
