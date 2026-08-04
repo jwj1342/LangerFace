@@ -20,6 +20,7 @@ export type AtlasPoint = [number, number, number];
 export interface AtlasLine {
   name?: string;
   region?: string;
+  disableRuntimeExpansion?: boolean;
   points?: AtlasPoint[];
 }
 
@@ -41,7 +42,72 @@ export interface VisibleTriangleOptions {
   minTriangleAreaPx2?: number;
 }
 
+export interface MapAtlasOptions {
+  expandForehead?: boolean;
+}
+
+const FOREHEAD_LOWER_LONG_ARC_REGION = "forehead_lower_long_arc_v13";
 const FOREHEAD_BRIDGE_ARC_REGION = "forehead_bridge_arc_v15";
+
+function extendForeheadLowerLongArc(points: Vec3[], landmarksPx: Vec3[]): Vec3[] {
+  if (points.length === 0 || landmarksPx.length <= 10) return points;
+  const anchor = landmarksPx[9];
+  const top = landmarksPx[10];
+  const axisX = top[0] - anchor[0];
+  const axisY = top[1] - anchor[1];
+  const axisNorm = Math.hypot(axisX, axisY);
+  if (axisNorm <= 1e-9) return points;
+  const unitX = axisX / axisNorm;
+  const unitY = axisY / axisNorm;
+  const lateralX = -unitY;
+  const lateralY = unitX;
+  const out = points.map((point) => [...point] as Vec3);
+  const lateralCoordinates = out.map((point) => (
+    (point[0] - anchor[0]) * lateralX + (point[1] - anchor[1]) * lateralY
+  ));
+
+  for (const point of out) {
+    const parallel = (point[0] - anchor[0]) * unitX + (point[1] - anchor[1]) * unitY;
+    point[0] += 0.86 * parallel * unitX;
+    point[1] += 0.86 * parallel * unitY;
+  }
+
+  const currentHalfWidth = Math.max(...lateralCoordinates.map((value) => Math.abs(value)));
+  const landmarkXs = landmarksPx.map((point) => point[0]);
+  const faceWidth = Math.max(...landmarkXs) - Math.min(...landmarkXs);
+  if (currentHalfWidth > 1e-9 && faceWidth > 1e-9) {
+    const factor = 0.82 * faceWidth / currentHalfWidth;
+    for (let index = 0; index < out.length; index++) {
+      out[index][0] += (factor - 1) * lateralCoordinates[index] * lateralX;
+      out[index][1] += (factor - 1) * lateralCoordinates[index] * lateralY;
+    }
+  }
+
+  for (let iteration = 0; iteration < 5; iteration++) {
+    const smoothed = out.map((point) => [...point] as Vec3);
+    for (let index = 1; index < out.length - 1; index++) {
+      smoothed[index][0] = 0.25 * out[index - 1][0] + 0.5 * out[index][0] + 0.25 * out[index + 1][0];
+      smoothed[index][1] = 0.25 * out[index - 1][1] + 0.5 * out[index][1] + 0.25 * out[index + 1][1];
+    }
+    for (let index = 0; index < out.length; index++) out[index] = smoothed[index];
+  }
+
+  const laterals = out.map((point) => (
+    (point[0] - anchor[0]) * lateralX + (point[1] - anchor[1]) * lateralY
+  ));
+  const halfWidth = Math.max(...laterals.map((value) => Math.abs(value)));
+  const landmarkYs = landmarksPx.map((point) => point[1]);
+  const faceHeight = Math.max(...landmarkYs) - Math.min(...landmarkYs);
+  if (halfWidth > 1e-9 && faceHeight > 1e-9) {
+    for (let index = 0; index < out.length; index++) {
+      const normalized = Math.min(1, Math.abs(laterals[index]) / halfWidth);
+      const arch = 0.055 * faceHeight * (1 - normalized ** 2.4);
+      out[index][0] += arch * unitX;
+      out[index][1] += arch * unitY;
+    }
+  }
+  return out;
+}
 
 function foreheadBridgeRanks(
   lines: AtlasLine[],
@@ -159,7 +225,12 @@ export function toPixels(landmarks: NormalizedLandmark[], width: number, height:
   return out;
 }
 
-export function mapAtlas(lines: AtlasLine[] | unknown, landmarksPx: Vec3[], triangles: Triangle[]): MappedAtlasLine[] {
+export function mapAtlas(
+  lines: AtlasLine[] | unknown,
+  landmarksPx: Vec3[],
+  triangles: Triangle[],
+  options: MapAtlasOptions = {},
+): MappedAtlasLine[] {
   const result: MappedAtlasLine[] = [];
   if (!Array.isArray(lines)) return result;
   const bridgeRanks = foreheadBridgeRanks(lines, landmarksPx, triangles);
@@ -184,9 +255,18 @@ export function mapAtlas(lines: AtlasLine[] | unknown, landmarksPx: Vec3[], tria
       ]);
       tris.push(tri);
     }
-    const mappedPoints = line.region === FOREHEAD_BRIDGE_ARC_REGION
-      ? extendForeheadBridge(pts, landmarksPx, bridgeRanks.get(line) ?? 0)
-      : pts;
+    const useLegacyForeheadExpansion = options.expandForehead !== false
+      && line.region === FOREHEAD_LOWER_LONG_ARC_REGION
+      && line.disableRuntimeExpansion !== true;
+    const useBridgeExpansion = options.expandForehead !== false
+      && line.region === FOREHEAD_BRIDGE_ARC_REGION
+      && line.disableRuntimeExpansion !== true;
+    let mappedPoints = pts;
+    if (useLegacyForeheadExpansion) {
+      mappedPoints = extendForeheadLowerLongArc(pts, landmarksPx);
+    } else if (useBridgeExpansion) {
+      mappedPoints = extendForeheadBridge(pts, landmarksPx, bridgeRanks.get(line) ?? 0);
+    }
     result.push({ name: line.name, region: line.region || "", pts: mappedPoints, tris });
   }
   return result;

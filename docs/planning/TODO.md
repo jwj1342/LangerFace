@@ -27,7 +27,7 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
       · Ready PR #119；Chromium 回归覆盖输入保持。
 - [x] 删除 Agentic/Provider 出域路径 — [#111](https://github.com/jwj1342/LangerFace/issues/111)
       · Ready PR #118；保留本地确定性 workflow，不保留 Provider UI、密钥或远程模型请求。
-- [ ] 统一额头 runtime expansion 契约 — [#112](https://github.com/jwj1342/LangerFace/issues/112)
+- [x] 统一额头 runtime expansion 契约 — [#112](https://github.com/jwj1342/LangerFace/issues/112)
       · Ready PR #120；Python/TypeScript 共享 fixture 锁定 `disableRuntimeExpansion`。
 - [x] 切口与实时工作台控件对比度 — [#115](https://github.com/jwj1342/LangerFace/issues/115)
       · Ready PR #119；浏览器断言锁定 active control ≥ 4.5:1。
