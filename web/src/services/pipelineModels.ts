@@ -18,6 +18,7 @@ type TopologyPayload = {
 };
 type AtlasPayload = {
   version?: string;
+  atlasVersion?: string;
   lines: unknown[];
 };
 
@@ -60,8 +61,8 @@ async function initializeReady(): Promise<void> {
     topology: topologyId,
     topologyVersion,
     triangles: tri.length,
-    rstlAtlasVersion: rstl.version ?? "unknown",
-    langerAtlasVersion: langer.version ?? "unknown",
+    rstlAtlasVersion: rstl.atlasVersion ?? rstl.version ?? "unknown",
+    langerAtlasVersion: langer.atlasVersion ?? langer.version ?? "unknown",
     faceLandmarker: "mediapipe/tasks-vision@0.10.35",
     handLandmarker: "mediapipe/tasks-vision@0.10.35",
   });

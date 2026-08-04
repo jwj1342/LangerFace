@@ -47,7 +47,9 @@ window.exportLangerfaceDiagnostics()
 - `camera.openFailure.permission_denied`
 - `scan.cameraOpenFailure.not_found`
 - `faceLandmarker.gpuFallback`
+- `handLandmarker.gpuFallback`
 - `handLandmarker.loadFailure`
+- `bootstrap.loadFailure`
 - `faceLandmarker.noFaceFrame.camera`
 - `runtime.error`
 - `runtime.unhandledrejection`
@@ -55,6 +57,10 @@ window.exportLangerfaceDiagnostics()
 - `incisionOverlay.registration.fail`
 - `incisionOverlay.stability.pass`
 - `incisionOverlay.stability.fail`
+- `incisionOverlay.poseGate.pass`
+- `incisionOverlay.poseGate.blocked`
+- `incisionOverlay.localRegionQuality.review`
+- `incisionOverlay.localRegionQuality.pass`
 
 浏览器端会自动捕获 `window.error` 与 `unhandledrejection`，写入上述计数器和
 `runtime.error` / `runtime.unhandledrejection` 事件。事件 detail 只记录 message、
@@ -88,12 +94,23 @@ window.exportLangerfaceDiagnostics()
 - `incisionOverlay.stability.rmsPx`
 - `incisionOverlay.stability.p95Px`
 - `incisionOverlay.stability.maxPx`
+- `incisionOverlay.poseGate.absYawNorm`
+- `incisionOverlay.poseGate.presence`
+- `incisionOverlay.poseGate.frameMotionNorm`
+- `incisionOverlay.poseGate.jawOpen`
+- `incisionOverlay.poseGate.eyeBlinkMax`
+- `incisionOverlay.localRegionQuality.activeRegionCount`
+- `incisionOverlay.localRegionQuality.regionMotionNorm`
 
 切口 overlay registration / stability 指标只来自运行期 landmarks、三角面索引和
 surface refs；导出只保留计数、阈值、RMS/P95/max、bbox 和失败原因，不包含照片、
 视频帧、canvas 像素或 landmark 坐标。它用于 preview/回归时判断
 `incision-overlay/v0.1` 是否能在当前 runtime landmarks 上投射并稳定跟随，不代表患者
 个体化临床 AR 配准。
+
+`incisionOverlay.poseGate.blocked` 会直接短路本帧 overlay 绘制，因此排查“候选存在但画面没线”
+时应先看它，再看 registration、stability 和 local-region 指标。`blocked` 不是渲染异常，而是偏航、
+人脸存在度、整帧运动、张口或眨眼超过门槛后的保护性结果。
 
 ## 脱敏诊断区
 
@@ -130,7 +147,9 @@ FLAME 示例头上的切口 overlay 只是把 MediaPipe surface refs 映射到�
 - `faceLandmarker`
 - `handLandmarker`
 
-这些字段用于把一次评审或 bug 报告回指到具体图谱、拓扑和模型版本。
+这些字段用于把一次评审或 bug 报告回指到具体图谱、拓扑和模型版本。图谱 JSON 顶层
+`atlasVersion` 是内容发布版本（正式 RSTL 当前为 `8.1.67`），`version` 是 JSON 契约版本
+（当前为 `0.2`）；诊断优先记录前者，旧资产缺失时才回退到后者。
 
 ## Python 端（业务路径结构化日志）
 

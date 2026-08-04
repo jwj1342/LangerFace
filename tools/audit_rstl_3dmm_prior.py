@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Audit draft RSTL / 3DMM prior assets.
 
-The #86 assets are intentionally draft-only. This script makes that boundary
+The PR #88 follow-up assets are intentionally draft-only. This script makes that boundary
 machine-checkable so direction priors cannot quietly become "validated" or be
 used across the wrong topology.
 """
@@ -186,8 +186,8 @@ def audit_manifest(manifest_path: Path, root: Path) -> dict[str, Any]:
                     )
                 else:
                     _require(
-                        any("#61" in str(item) for item in asset.get("limitations", [])),
-                        f"{prefix}: pending 3DMM assets must reference #61 workflow",
+                        any("offline 3D workflow" in str(item) for item in asset.get("limitations", [])),
+                        f"{prefix}: pending 3DMM assets must reference the offline 3D workflow",
                         errors,
                     )
             else:

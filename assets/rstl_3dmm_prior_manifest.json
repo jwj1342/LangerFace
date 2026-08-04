@@ -65,7 +65,7 @@
       "status": "pending_doctor_annotation",
       "validated": false,
       "uses": ["flame_standard_head_annotation", "flame_individual_transfer"],
-      "limitations": ["FLAME assets are not redistributed", "requires #61 workflow", "requires #2 clinical review before validated use"]
+      "limitations": ["licensed source assets remain dev-local", "requires the offline 3D workflow", "requires #2 clinical review before validated use"]
     },
     {
       "id": "flame_rstl_direction_prior",
@@ -82,7 +82,7 @@
         "FLAME assets and generated direction fields are not redistributed",
         "generated output is gitignored under local_outputs/rstl_flame_direction_prior.json",
         "nearest-neighbor MediaPipe-to-FLAME bridge is not clinical registration",
-        "requires #61 workflow",
+        "requires the offline 3D workflow",
         "requires #2 clinical review before validated use"
       ]
     },
@@ -106,7 +106,7 @@
         "BFM/custom 3DMM assets and generated direction fields are not redistributed",
         "default generic output is gitignored under local_outputs/rstl_3dmm_direction_prior.json",
         "nearest-neighbor MediaPipe-to-3DMM bridge is not clinical registration",
-        "requires #61 workflow",
+        "requires the offline 3D workflow",
         "requires #2 clinical review before validated use"
       ]
     }

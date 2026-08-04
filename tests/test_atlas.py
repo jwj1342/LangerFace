@@ -34,11 +34,11 @@ def test_roundtrip(tmp_path):
             np.array([[0, 0.5, 0.3], [1, 0.2, 0.2]], dtype=float),
             disable_runtime_expansion=True,
         ),
-    ], provenance="test", validated=True)
+    ], atlas_version="8.1.67", provenance="test", validated=True)
     p = tmp_path / "atlas.json"
     a.save(str(p))
     b = Atlas.load(str(p))
-    assert b.system == "rstl" and b.validated is True
+    assert b.system == "rstl" and b.atlas_version == "8.1.67" and b.validated is True
     assert b.topology_id == TOPOLOGY_ID and b.topology_version == TOPOLOGY_VERSION
     assert len(b.lines) == 1 and b.lines[0].points.shape == (2, 3)
     assert b.lines[0].disable_runtime_expansion is True

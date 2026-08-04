@@ -63,6 +63,7 @@ export interface HeadMeshPayload extends HeadDescriptor {
 export interface AtlasPayload {
   system?: string;
   version?: string;
+  atlasVersion?: string;
   lines: unknown[];
   [key: string]: unknown;
 }

@@ -182,10 +182,10 @@ test("compat routes preserve live, incision, annotate, and texture controls", as
   await shot(page, "02-annotate.png");
 
   await page.goto(\`\${baseUrl}/app/incision\`);
-  await expect(page.locator("#agentCanvas")).toBeVisible({ timeout: 30000 });
+  await expect(page.locator("#incisionCanvas")).toBeVisible({ timeout: 30000 });
   await expect(page.locator("#tumorKind")).toBeVisible();
   await expect(page.locator("#diameterMm")).toBeVisible();
-  await expect(page.locator("#runAgentBtn")).toBeVisible();
+  await expect(page.locator("#runWorkflowBtn")).toBeVisible();
   await expect(page.locator("#exportTumorBtn")).toBeVisible();
   await expect(page.locator("#importTumorBtn")).toBeVisible();
   await expect(page.locator("#saveCandidateBtn")).toBeVisible();
@@ -193,8 +193,8 @@ test("compat routes preserve live, incision, annotate, and texture controls", as
   await expect(page.locator("#exportReportBtn")).toBeVisible();
   await expect(page.locator("#exportPngBtn")).toBeVisible();
   await expect(page.locator("#stageLiveOverlayBtn")).toBeVisible();
-  await expectCanvasHasPixels(page, "#agentCanvas", "incision planning face canvas");
-  await page.locator("#runAgentBtn").click();
+  await expectCanvasHasPixels(page, "#incisionCanvas", "incision planning face canvas");
+  await page.locator("#runWorkflowBtn").click();
   await expect(page.locator("#candidateType")).not.toHaveText("—", { timeout: 30000 });
   await expect(page.locator("#candidateLength")).not.toHaveText("—", { timeout: 30000 });
   await page.locator("#saveCandidateBtn").click();

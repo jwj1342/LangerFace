@@ -1,6 +1,6 @@
 import {
-  AGENT_REACT_PLAN_STEP_DEFINITIONS,
-  AGENT_TRACE_GATE_REQUIRED,
+  WORKFLOW_PLAN_STEP_DEFINITIONS,
+  WORKFLOW_TRACE_GATE_REQUIRED,
   DEFAULT_RULES,
   TOOL_SCHEMAS,
 } from "./incisionToolRules.ts";
@@ -84,7 +84,9 @@ function buildEditedFusiform(
   const halfL = lengthMm * unitsPerMm * 0.5;
   const halfW = widthMm * unitsPerMm * 0.5;
   const samples = Math.max(12, Math.round((base.outline?.length || 58) / 2));
-  const targetTipAngle = base.metrics?.tip_angle_target_deg || base.tip_angle_deg || 30;
+  const targetTipAngle = edit.tip_angle_deg == null
+    ? Number(base.metrics?.tip_angle_target_deg || base.tip_angle_deg || 30)
+    : Number(edit.tip_angle_deg);
   const profile = fusiformProfile(center, axis, widthAxis, halfL, halfW, samples, targetTipAngle);
   const { upper, lower } = profile;
   const outline = upper.concat(lower.slice(1, -1).reverse());
@@ -154,10 +156,11 @@ export function applyCandidateEdit(
     angle_offset_deg: Number(edit.angle_offset_deg || 0),
     length_scale: Number(edit.length_scale || 1),
     width_scale: Number(edit.width_scale || 1),
+    tip_angle_deg: edit.tip_angle_deg == null ? null : Number(edit.tip_angle_deg),
     shift_along_mm: Number(edit.shift_along_mm || 0),
     shift_perp_mm: Number(edit.shift_perp_mm || 0),
     reason: String(edit.reason || ""),
-    source: "web/incision_agent",
+    source: "web/incision_workflow",
   };
   const sessionHistory = Array.isArray(edit.session_history) ? edit.session_history : [];
   const sessionHasEdits = sessionHistory.some((entry) => editRecordIsActive(entry) || entry.interaction === "control_change");
@@ -201,16 +204,14 @@ export function applyCandidateEdit(
     editRecord.angle_offset_deg !== 0 ||
     editRecord.length_scale !== 1 ||
     editRecord.width_scale !== 1 ||
+    editRecord.tip_angle_deg != null ||
     editRecord.shift_along_mm !== 0 ||
     editRecord.shift_perp_mm !== 0 ||
     editRecord.reason
   ) {
     out.trace.push(editedTraceStep(editRecord, candidate, out.guardrails));
-    out.llm = {
-      ...(out.llm || {}),
-      summary: "已应用医生调整并重新计算候选几何；请复核 guardrails 与覆盖原因。",
-      next_step: "医生确认调整是否进入审阅记录。",
-    };
+    out.summary = "已应用医生调整并重新计算候选几何；请复核 guardrails 与覆盖原因。";
+    out.next_step = "医生确认调整是否进入审阅记录。";
   }
   return attachWorkflowAudit(out);
 }
@@ -273,15 +274,15 @@ function indexesForActions(actions: string[] = [], accepted: Set<string> = new S
     .filter((index) => index >= 0);
 }
 
-export function agentTraceGate(
+export function workflowTraceGate(
   resultOrTrace: AnyRecord | AnyRecord[] = {},
   candidateArg: IncisionCandidate | null = null,
-  mode = "single_turn_react_with_deterministic_tools",
+  mode = "deterministic_single_candidate",
 ): AnyRecord {
   const trace = Array.isArray(resultOrTrace) ? resultOrTrace : resultOrTrace?.trace || [];
   const candidate = candidateArg || (Array.isArray(resultOrTrace) ? null : resultOrTrace?.candidate);
   const actions = traceActions(trace);
-  const required = AGENT_TRACE_GATE_REQUIRED.map((req) => {
+  const required = WORKFLOW_TRACE_GATE_REQUIRED.map((req) => {
     const indexes = req.actions
       .map((action) => actions.indexOf(action))
       .filter((index) => index >= 0);
@@ -300,7 +301,7 @@ export function agentTraceGate(
   const orderOk = presentIndexes.every((idx, i) => i === 0 || idx >= presentIndexes[i - 1]);
   const geometryPresent = Array.isArray(candidate?.polyline) && candidate.polyline.length >= 2;
   return {
-    schema_version: "agent-trace-gate/v0.1",
+    schema_version: "incision-workflow-trace-gate/v0.1",
     passed: missing.length === 0 && orderOk && geometryPresent,
     mode,
     observed_actions: actions,
@@ -308,11 +309,11 @@ export function agentTraceGate(
     missing_actions: missing.map((req) => ({ key: req.key, label: req.label, actions: req.actions })),
     order_ok: orderOk,
     deterministic_geometry_present: geometryPresent,
-    boundary: "LLM 只能在确定性工具完成敏感结构、几何、guardrails 和预览观察后做摘要解释；不能计算或覆盖切口几何。",
+    boundary: "候选几何、敏感结构检查、guardrails 和预览均由浏览器本地确定性工具完成；不能绕过医生审阅。",
   };
 }
 
-export function agentReactPlan(
+export function workflowPlanAudit(
   resultOrTrace: AnyRecord | AnyRecord[] = {},
   {
     candidateCount = 0,
@@ -320,7 +321,7 @@ export function agentReactPlan(
     traceGate = null,
     retriedFailures = [],
     recoveredFailures = [],
-    mode = "single_turn_react_multi_candidate_with_deterministic_tools",
+    mode = "deterministic_multi_candidate",
   }: {
     candidateCount?: number;
     comparisonReady?: boolean;
@@ -332,8 +333,8 @@ export function agentReactPlan(
 ) {
   const trace = Array.isArray(resultOrTrace) ? resultOrTrace : resultOrTrace?.trace || [];
   const actions = traceActions(trace);
-  const gate = traceGate || agentTraceGate(resultOrTrace);
-  const steps = AGENT_REACT_PLAN_STEP_DEFINITIONS.map((definition) => {
+  const gate = traceGate || workflowTraceGate(resultOrTrace);
+  const steps = WORKFLOW_PLAN_STEP_DEFINITIONS.map((definition) => {
     const requiredGroups = definition.required_action_groups.map((group) => [...group]);
     const optionalActions = [...(definition.optional_actions || [])];
     const requiredActions = new Set(requiredGroups.flat());
@@ -374,7 +375,7 @@ export function agentReactPlan(
   const failedSteps = steps.filter((step) => String(step.status).startsWith("failed"));
   const passed = Boolean(gate.passed) && comparisonReady && candidateCount > 0 && failedSteps.length === 0;
   return {
-    schema_version: "agent-react-plan/v0.1",
+    schema_version: "incision-workflow-plan-audit/v0.1",
     mode,
     passed,
     trace_gate_passed: Boolean(gate.passed),
@@ -386,13 +387,13 @@ export function agentReactPlan(
     retry_count: retriedFailures.length,
     recovery_count: recoveredFailures.length,
     steps,
-    clinical_boundary: "该 ReAct 计划只是确定性工具 trace 的审计脚手架，不是自主临床推理或手术指令。",
+    clinical_boundary: "该计划只是确定性工具 trace 的审计脚手架，不是自主临床推理或手术指令。",
   };
 }
 
-function reactPlanStepIdsByTraceIndex(reactPlan: AnyRecord = {}): Map<number, string[]> {
+function planStepIdsByTraceIndex(plan: AnyRecord = {}): Map<number, string[]> {
   const byIndex = new Map();
-  for (const step of reactPlan.steps || []) {
+  for (const step of plan.steps || []) {
     if (!step?.id) continue;
     for (const rawIndex of step.trace_indexes || []) {
       const index = Number(rawIndex);
@@ -403,18 +404,18 @@ function reactPlanStepIdsByTraceIndex(reactPlan: AnyRecord = {}): Map<number, st
   return byIndex;
 }
 
-export function agentExecutionEvents(
+export function workflowExecutionEvents(
   resultOrTrace: AnyRecord | AnyRecord[] = {},
   {
     traceGate = null,
-    reactPlan = null,
-    mode = "single_turn_react_multi_candidate_with_deterministic_tools",
-  }: { traceGate?: AnyRecord | null; reactPlan?: AnyRecord | null; mode?: string } = {},
+    workflowPlan = null,
+    mode = "deterministic_multi_candidate",
+  }: { traceGate?: AnyRecord | null; workflowPlan?: AnyRecord | null; mode?: string } = {},
 ): AnyRecord {
   const trace = Array.isArray(resultOrTrace) ? resultOrTrace : resultOrTrace?.trace || [];
-  const gate = traceGate || agentTraceGate(resultOrTrace);
-  const plan = reactPlan || agentReactPlan(resultOrTrace, { traceGate: gate });
-  const stepIdsByTraceIndex = reactPlanStepIdsByTraceIndex(plan);
+  const gate = traceGate || workflowTraceGate(resultOrTrace);
+  const plan = workflowPlan || workflowPlanAudit(resultOrTrace, { traceGate: gate });
+  const stepIdsByTraceIndex = planStepIdsByTraceIndex(plan);
   const events: AnyRecord[] = [{
     index: 0,
     event: "execution_started",
@@ -444,23 +445,23 @@ export function agentExecutionEvents(
     event: "trace_gate_evaluated",
     status: gate.passed ? "passed" : "failed",
     trace_index: null,
-    action: "agent_trace_gate",
+    action: "workflow_trace_gate",
     plan_step_ids: [],
     message: gate.passed ? "确定性工具门控已通过。" : "确定性工具门控未通过，候选不能确认。",
     missing_actions: gate.missing_actions || [],
   });
   events.push({
     index: events.length,
-    event: "react_plan_evaluated",
+    event: "workflow_plan_evaluated",
     status: plan.passed ? "passed" : "failed",
     trace_index: null,
-    action: "agent_react_plan",
+    action: "workflow_plan_audit",
     plan_step_ids: (plan.steps || []).map((step: AnyRecord) => step.id).filter(Boolean),
-    message: `ReAct 审计计划已评估：${plan.completed_step_count || 0}/${plan.step_count || 0} 步完成。`,
+    message: `确定性 workflow 计划已评估：${plan.completed_step_count || 0}/${plan.step_count || 0} 步完成。`,
     failed_step_count: Number(plan.failed_step_count || 0),
   });
   return {
-    schema_version: "agent-execution-events/v0.1",
+    schema_version: "incision-workflow-execution-events/v0.1",
     mode,
     passed: Boolean(gate.passed) && Boolean(plan.passed),
     event_count: events.length,
@@ -524,28 +525,28 @@ export function workflowAudit(
     ? result.candidate_alternatives.filter((record) => record?.candidate)
     : [];
   const comparisonReady = Array.isArray(result.candidate_comparison) && result.candidate_comparison.length > 0;
-  const traceGate = agentTraceGate(result);
-  const reactPlan = agentReactPlan(result, {
+  const traceGate = workflowTraceGate(result);
+  const workflowPlan = workflowPlanAudit(result, {
     candidateCount: candidateRecords.length,
     comparisonReady,
     traceGate,
     retriedFailures,
     recoveredFailures,
   });
-  const executionEvents = agentExecutionEvents(result, { traceGate, reactPlan });
+  const executionEvents = workflowExecutionEvents(result, { traceGate, workflowPlan });
   return {
     traceGate,
-    reactPlan,
+    workflowPlan,
     executionEvents,
     orchestrationAudit: {
-      schema_version: "agent-orchestration-audit/v0.1",
-      mode: "browser_single_turn_react_multi_candidate_with_deterministic_tools",
+      schema_version: "incision-workflow-audit/v0.1",
+      mode: "browser_deterministic_multi_candidate",
       candidate_count: candidateRecords.length,
       preview_count: candidateRecords.filter((record) => record.preview && typeof record.preview === "object").length,
       preview_ready_count: candidateRecords.filter((record) => record.preview?.renderable === true).length,
       comparison_ready: comparisonReady,
-      react_plan_passed: reactPlan.passed,
-      react_plan_step_count: reactPlan.step_count,
+      workflow_plan_passed: workflowPlan.passed,
+      workflow_plan_step_count: workflowPlan.step_count,
       retry_count: retriedFailures.length,
       retried_failures: retriedFailures,
       tool_failure_count: recoveredFailures.length,
@@ -558,10 +559,10 @@ export function workflowAudit(
 
 export function attachWorkflowAudit(result: AnyRecord, opts: { retriedFailures?: AnyRecord[]; recoveredFailures?: AnyRecord[] } = {}): AnyRecord {
   const audit = workflowAudit(result, opts);
-  result.agent_trace_gate = audit.traceGate;
-  result.agent_react_plan = audit.reactPlan;
-  result.agent_execution_events = audit.executionEvents;
-  result.agent_orchestration_audit = audit.orchestrationAudit;
+  result.workflow_trace_gate = audit.traceGate;
+  result.workflow_plan_audit = audit.workflowPlan;
+  result.workflow_execution_events = audit.executionEvents;
+  result.workflow_audit = audit.orchestrationAudit;
   return result;
 }
 
@@ -612,8 +613,8 @@ export function planIncisionDeterministic({
     { summary: "在标准脸上预览候选切口，确认几何可渲染后再进入医生审阅。", action: "preview_incision_on_face", input: { candidate: shortCandidate(candidate), tumor, anatomy }, observation: preview },
   ];
   return {
-    schema_version: "agentic-incision-plan/v0.1",
-    agent_trace_mode: "single_turn_react_with_deterministic_tools",
+    schema_version: "incision-workflow-plan/v0.1",
+    workflow_mode: "deterministic_single_candidate",
     tool_schemas: TOOL_SCHEMAS,
     tumor,
     tumor_quality: tumorQuality,
@@ -624,14 +625,8 @@ export function planIncisionDeterministic({
     preview,
     guardrails,
     trace,
-    llm: {
-      summary: fallbackSummary(tumor, candidate, guardrails),
-      rationale: "浏览器内确定性工具生成；未使用 LLM 摘要。",
-      next_step: "医生审阅、编辑或拒绝该候选。",
-      model: null,
-      reasoning: "",
-    },
-    provider: { mode: "browser_deterministic_fallback", model: null, error: null },
+    summary: fallbackSummary(tumor, candidate, guardrails),
+    next_step: "医生审阅、编辑或拒绝该候选。",
   };
 }
 
@@ -656,7 +651,7 @@ export function planIncisionWorkflow({
     throw new Error("planIncisionWorkflow requires tumor, verts, tris, and atlas");
   }
   const result = planIncisionDeterministic({ tumor: tumorInput, verts, tris, atlas, normal });
-  result.agent_trace_mode = "single_turn_react_multi_candidate_with_deterministic_tools";
+  result.workflow_mode = "deterministic_multi_candidate";
   const tumor = result.tumor;
   const unitsPerMm = unitsPerMmFromVertices(verts);
   const directionVariants = angleOffsetsDeg.map((offset) => rotateDirectionVariant(result.direction, offset, normal));
@@ -671,7 +666,7 @@ export function planIncisionWorkflow({
         source: variant.source,
         variant_source: variant.variant_source,
       })),
-      boundary: "方向备选是浏览器确定性参数探索，不是 LLM 计算几何。",
+      boundary: "方向备选由浏览器本地确定性工具按固定角度参数生成。",
     },
     "探索附近方向偏移，供审阅面板比较确定性候选。",
   ));
@@ -816,14 +811,8 @@ export function planIncisionWorkflow({
     },
     "用确定性工程指标对方向备选做排序，辅助医生审阅。",
   ));
-  result.llm = {
-    summary: fallbackSummary(tumor, result.candidate, result.guardrails),
-    rationale: "浏览器确定性 workflow 已执行全部工具；当前未调用 LLM 摘要。",
-    next_step: "医生查看 trace、候选比较和 guardrails 后，编辑、确认或否决该候选。",
-    model: null,
-    reasoning: "",
-  };
-  result.provider = { mode: "browser_deterministic_workflow", model: null, error: null };
+  result.summary = fallbackSummary(tumor, result.candidate, result.guardrails);
+  result.next_step = "医生查看 trace、候选比较和 guardrails 后，编辑、确认或否决该候选。";
   return attachWorkflowAudit(result, { retriedFailures, recoveredFailures });
 }
 
@@ -946,10 +935,10 @@ export function compareCandidateRecords(records: AnyRecord[] = [], rules: Incisi
 export const __incisionToolsForTests = {
   DEFAULT_RULES,
   TOOL_SCHEMAS,
-  AGENT_TRACE_GATE_REQUIRED,
-  agentTraceGate,
-  agentReactPlan,
-  agentExecutionEvents,
+  WORKFLOW_TRACE_GATE_REQUIRED,
+  workflowTraceGate,
+  workflowPlanAudit,
+  workflowExecutionEvents,
   applyCandidateEdit,
   compareCandidateRecords,
   classifyRegion,

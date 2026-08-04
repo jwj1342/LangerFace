@@ -13,6 +13,7 @@ export interface AtlasPointLine {
 export interface AtlasContractPayload {
   system?: string;
   version?: string;
+  atlasVersion?: string;
   topologyId?: string;
   topologyVersion?: string;
   lines?: AtlasPointLine[];

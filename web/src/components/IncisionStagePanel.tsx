@@ -25,7 +25,7 @@ export function IncisionStagePanel() {
       )}
     >
       <StageViewport>
-        <canvas id="agentCanvas"></canvas>
+        <canvas id="incisionCanvas"></canvas>
         <AssetLoadingOverlay
           id="assetLoading"
           heading="正在加载切口规划资产"
