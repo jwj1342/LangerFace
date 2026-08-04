@@ -19,7 +19,10 @@ export function selectEligiblePullRequests(
   return pullRequests.filter((pullRequest) => (
     pullRequest?.baseRefName === defaultBranch
     && pullRequest?.isDraft === false
-    && pullRequest?.autoMergeRequest == null
+    && (
+      pullRequest?.autoMergeRequest == null
+      || pullRequest?.mergeStateStatus === "BEHIND"
+    )
     && typeof pullRequest?.headRefOid === "string"
     && pullRequest.headRefOid.length > 0
     && hasLabel(pullRequest, label)
