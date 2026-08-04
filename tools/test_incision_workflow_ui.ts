@@ -134,6 +134,7 @@ assert.ok(js.includes("used_for_geometry: false"), "secondary cues never drive g
 assert.ok(js.includes("辅助线索仅随审阅导出，不参与几何"), "privacy copy keeps secondary cues out of geometry");
 assert.ok(js.includes("tip_angle_error_deg"), "workbench renders fusiform tip angle error");
 assert.ok(js.includes("rstl_deviation_deg"), "workbench renders the candidate RSTL direction deviation");
+assert.ok(js.includes('typeof rstlDeviation === "number"'), "missing or null RSTL deviation is not rendered as a false 0°");
 assert.ok(incisionSnapshotsService.includes("rstlDeviation"), "controller snapshot preserves the visible RSTL direction deviation");
 assert.ok(js.includes("incision-review-record/v0.4"), "review records use explicit review workflow schema");
 assert.ok(js.includes("approved_for_discussion"), "review records support clinician approval");
