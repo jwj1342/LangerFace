@@ -16,13 +16,6 @@ export interface IncisionTextLike {
   };
 }
 
-export interface IncisionProviderConfigLike {
-  provider?: string;
-  base_url?: string;
-  model?: string;
-  timeout_s?: number | string | null;
-}
-
 export interface IncisionTumorState {
   kind: "subcutaneous" | "cutaneous" | string;
   author: string;
@@ -37,15 +30,6 @@ export interface IncisionTumorState {
   pickState: string;
   anatomyPreview: string;
   anatomyPreviewWarn: boolean;
-}
-
-export interface IncisionProviderState {
-  provider: string;
-  baseUrl: string;
-  model: string;
-  timeoutS: number | null;
-  stateLabel: string;
-  testLabel: string;
 }
 
 export interface IncisionSecondaryCueState {
@@ -91,12 +75,14 @@ export interface IncisionEditState {
   angleOffsetDeg: number;
   lengthScalePct: number;
   widthScalePct: number;
+  tipAngleDeg: number;
   shiftAlongMm: number;
   shiftPerpMm: number;
   reason: string;
   statusLabel: string;
   active: boolean;
   widthScaleVisible: boolean;
+  tipAngleVisible: boolean;
   historyLabel: string;
   undoDisabled: boolean;
   redoDisabled: boolean;
@@ -117,21 +103,22 @@ export interface IncisionResultViewState {
   candidateLength: string;
   candidateWidth: string;
   candidateTipAngle: string;
+  rstlDeviation: string;
   directionConfidence: string;
   directionTitle: string;
   region: string;
   regionTitle: string;
   guardrailLabel: string;
   guardrailWarn: boolean;
-  llmSummary: string;
+  workflowSummary: string;
   directionSource: string;
   directionSourceWarn: boolean;
-  agentGate: string;
-  agentGateWarn: boolean;
-  agentGateTitle: string;
-  agentComparison: string;
-  agentComparisonWarn: boolean;
-  agentComparisonTitle: string;
+  workflowGate: string;
+  workflowGateWarn: boolean;
+  workflowGateTitle: string;
+  workflowComparison: string;
+  workflowComparisonWarn: boolean;
+  workflowComparisonTitle: string;
   nextStep: string;
   guardrailDetails: string;
   guardrailDetailsWarn: boolean;
@@ -162,7 +149,6 @@ export interface IncisionControllerSnapshot {
   tumor: IncisionTumorState;
   secondaryCue: IncisionSecondaryCueState;
   privacyAudit: IncisionPrivacyAuditState;
-  provider: IncisionProviderState;
   review: IncisionReviewState;
   edit: IncisionEditState;
   candidate: IncisionCandidateSummary | null;
@@ -177,6 +163,7 @@ export interface IncisionEditLike {
   angle_offset_deg?: number;
   length_scale?: number;
   width_scale?: number;
+  tip_angle_deg?: number | null;
   shift_along_mm?: number;
   shift_perp_mm?: number;
   reason?: string;
@@ -253,21 +240,6 @@ function finiteOrFallback(value: unknown, fallback: number) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-export function buildIncisionProviderSnapshot(
-  cfg: IncisionProviderConfigLike,
-  stateLabel = "待运行",
-  testLabel = "",
-): IncisionProviderState {
-  return {
-    provider: cfg.provider || "openai-compatible",
-    baseUrl: cfg.base_url || "",
-    model: cfg.model || "",
-    timeoutS: finiteOrNull(cfg.timeout_s),
-    stateLabel,
-    testLabel,
-  };
-}
-
 export function buildIncisionSecondaryCueSnapshot({
   present = false,
   stateLabel = "未导入",
@@ -284,7 +256,7 @@ export function buildIncisionSecondaryCueSnapshot({
 
 export function buildIncisionPrivacyAuditSnapshot({
   stateLabel = "本地几何",
-  message = "不上传原始影像；Agent 只接收肿物参数、抽象坐标、规则和候选几何。",
+  message = "所有切口 workflow 均在浏览器本地执行，不配置或调用远程模型。",
 }: Partial<IncisionPrivacyAuditState>): IncisionPrivacyAuditState {
   return {
     stateLabel,
@@ -321,6 +293,8 @@ export function buildIncisionEditSnapshot({
   statusActive = false,
   editActive = false,
   widthScaleVisible = false,
+  tipAngleVisible = false,
+  tipAngleDeg = 30,
   historyLabel = "编辑版本：v1 · 无已提交调整",
   undoDisabled = false,
   redoDisabled = false,
@@ -330,6 +304,8 @@ export function buildIncisionEditSnapshot({
   statusActive?: boolean;
   editActive?: boolean;
   widthScaleVisible?: boolean;
+  tipAngleVisible?: boolean;
+  tipAngleDeg?: number;
   historyLabel?: string;
   undoDisabled?: boolean;
   redoDisabled?: boolean;
@@ -338,12 +314,14 @@ export function buildIncisionEditSnapshot({
     angleOffsetDeg: finiteOrFallback(edit.angle_offset_deg, 0),
     lengthScalePct: Math.round(finiteOrFallback(edit.length_scale, 1) * 100),
     widthScalePct: Math.round(finiteOrFallback(edit.width_scale, 1) * 100),
+    tipAngleDeg: Math.round(finiteOrFallback(tipAngleDeg, 30)),
     shiftAlongMm: finiteOrFallback(edit.shift_along_mm, 0),
     shiftPerpMm: finiteOrFallback(edit.shift_perp_mm, 0),
     reason: edit.reason || "",
     statusLabel,
     active: Boolean(statusActive) || Boolean(editActive),
     widthScaleVisible: Boolean(widthScaleVisible),
+    tipAngleVisible: Boolean(tipAngleVisible),
     historyLabel,
     undoDisabled: Boolean(undoDisabled),
     redoDisabled: Boolean(redoDisabled),
@@ -369,13 +347,14 @@ export function buildIncisionResultViewSnapshot(input: {
   candidateLength?: IncisionTextLike | null;
   candidateWidth?: IncisionTextLike | null;
   candidateTipAngle?: IncisionTextLike | null;
+  rstlDeviation?: IncisionTextLike | null;
   directionConfidence?: IncisionTextLike | null;
   region?: IncisionTextLike | null;
   guardrail?: IncisionTextLike | null;
-  llmSummary?: IncisionTextLike | null;
+  workflowSummary?: IncisionTextLike | null;
   directionSource?: IncisionTextLike | null;
-  agentGate?: IncisionTextLike | null;
-  agentComparison?: IncisionTextLike | null;
+  workflowGate?: IncisionTextLike | null;
+  workflowComparison?: IncisionTextLike | null;
   nextStep?: IncisionTextLike | null;
   guardrailDetails?: IncisionTextLike | null;
 }): IncisionResultViewState {
@@ -384,21 +363,22 @@ export function buildIncisionResultViewSnapshot(input: {
     candidateLength: incisionTextOf(input.candidateLength, "—"),
     candidateWidth: incisionTextOf(input.candidateWidth, "—"),
     candidateTipAngle: incisionTextOf(input.candidateTipAngle, "—"),
+    rstlDeviation: incisionTextOf(input.rstlDeviation, "—"),
     directionConfidence: incisionTextOf(input.directionConfidence, "—"),
     directionTitle: incisionTitleOf(input.directionConfidence),
     region: incisionTextOf(input.region, "—"),
     regionTitle: incisionTitleOf(input.region),
     guardrailLabel: incisionTextOf(input.guardrail, "—"),
     guardrailWarn: Boolean(input.guardrail?.style?.color),
-    llmSummary: incisionTextOf(input.llmSummary, "尚未生成。"),
+    workflowSummary: incisionTextOf(input.workflowSummary, "尚未生成。"),
     directionSource: incisionTextOf(input.directionSource, "方向依据：尚未生成。"),
     directionSourceWarn: incisionHasClass(input.directionSource, "warn"),
-    agentGate: incisionTextOf(input.agentGate, "Agent 工具门控：尚未生成。"),
-    agentGateWarn: incisionHasClass(input.agentGate, "warn"),
-    agentGateTitle: incisionTitleOf(input.agentGate),
-    agentComparison: incisionTextOf(input.agentComparison, "Agent 候选比较：尚未生成。"),
-    agentComparisonWarn: incisionHasClass(input.agentComparison, "warn"),
-    agentComparisonTitle: incisionTitleOf(input.agentComparison),
+    workflowGate: incisionTextOf(input.workflowGate, "工作流工具门控：尚未生成。"),
+    workflowGateWarn: incisionHasClass(input.workflowGate, "warn"),
+    workflowGateTitle: incisionTitleOf(input.workflowGate),
+    workflowComparison: incisionTextOf(input.workflowComparison, "工作流候选比较：尚未生成。"),
+    workflowComparisonWarn: incisionHasClass(input.workflowComparison, "warn"),
+    workflowComparisonTitle: incisionTitleOf(input.workflowComparison),
     nextStep: incisionTextOf(input.nextStep, ""),
     guardrailDetails: incisionTextOf(input.guardrailDetails, "Guardrails 尚未运行。"),
     guardrailDetailsWarn: incisionHasClass(input.guardrailDetails, "warn"),
@@ -441,7 +421,6 @@ export function buildIncisionControllerSnapshot({
   tumor,
   secondaryCue,
   privacyAudit,
-  provider,
   review,
   edit,
   candidate,
@@ -460,7 +439,6 @@ export function buildIncisionControllerSnapshot({
     tumor,
     secondaryCue,
     privacyAudit,
-    provider,
     review,
     edit,
     candidate,

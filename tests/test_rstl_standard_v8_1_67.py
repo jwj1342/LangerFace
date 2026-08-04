@@ -23,6 +23,7 @@ def test_v8_1_67_is_reproducible_and_synced_to_the_web(tmp_path):
 
     payload = json.loads(atlas_path.read_text(encoding="utf-8"))
     assert payload["validated"] is False
+    assert payload["atlasVersion"] == "8.1.67"
     assert len(payload["lines"]) == 133
     assert sum(len(line["points"]) for line in payload["lines"]) == 14315
     assert sum(
@@ -42,6 +43,7 @@ def test_v8_1_67_is_reproducible_and_synced_to_the_web(tmp_path):
     for key in (
         "system",
         "version",
+        "atlasVersion",
         "topologyId",
         "topologyVersion",
         "provenance",

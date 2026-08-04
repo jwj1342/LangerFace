@@ -9,7 +9,6 @@ export const ANNOTATE_DRAW_REACT_COMMAND_EVENT = "langerface:annotate-draw-react
 export const ANNOTATE_LIBRARY_REACT_COMMAND_EVENT = "langerface:annotate-library-react-command";
 
 export const INCISION_CONTROLLER_STATE_EVENT = "langerface:incision-state";
-export const INCISION_PROVIDER_REACT_STATE_EVENT = "langerface:incision-provider-react-state";
 export const INCISION_TUMOR_REACT_COMMAND_EVENT = "langerface:incision-tumor-react-command";
 export const INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT = "langerface:incision-secondary-cue-react-command";
 export const INCISION_EDIT_REACT_COMMAND_EVENT = "langerface:incision-edit-react-command";

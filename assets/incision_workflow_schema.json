@@ -1,0 +1,85 @@
+{
+  "version": "1.0-deterministic-incision-workflow",
+  "mode": "browser_local_deterministic_multi_candidate",
+  "boundary": "The browser runs fixed deterministic tools and compares candidates for clinician review. It does not call a remote model or issue surgical instructions.",
+  "trace_gate": {
+    "schema_version": "incision-workflow-trace-gate/v0.1",
+    "blocks_confirmation": true,
+    "required_actions": [
+      ["summarize_tumor_input_quality"],
+      ["classify_region"],
+      ["query_rstl_direction"],
+      ["inspect_sensitive_structures"],
+      ["linear_subcutaneous_incision", "fusiform_cutaneous_incision"],
+      ["evaluate_guardrails"],
+      ["preview_incision_on_face"]
+    ]
+  },
+  "plan_audit": {
+    "schema_version": "incision-workflow-plan-audit/v0.1",
+    "records": [
+      "required_action_groups",
+      "observed_actions",
+      "trace_indexes",
+      "status",
+      "issues"
+    ]
+  },
+  "execution_events": {
+    "schema_version": "incision-workflow-execution-events/v0.1",
+    "event_fields": [
+      "event",
+      "status",
+      "trace_index",
+      "action",
+      "plan_step_ids",
+      "message"
+    ]
+  },
+  "workflow_audit": {
+    "schema_version": "incision-workflow-audit/v0.1",
+    "records": [
+      "candidate_count",
+      "preview_count",
+      "preview_ready_count",
+      "comparison_ready",
+      "workflow_plan_passed",
+      "workflow_plan_step_count",
+      "retry_count",
+      "retried_failures",
+      "tool_failure_count",
+      "recovered_failures",
+      "trace_gate_passed"
+    ]
+  },
+  "candidate_comparison": {
+    "tool": "compare_candidates",
+    "inputs": [
+      "candidate_alternatives",
+      "guardrails",
+      "rstl_angle_error",
+      "coverage_deficit",
+      "sensitive_distance",
+      "geometry_error"
+    ],
+    "output": [
+      "ranked_candidates",
+      "score_breakdown",
+      "clinical_boundary"
+    ]
+  },
+  "tools": [
+    "summarize_tumor_input_quality",
+    "classify_region",
+    "query_rstl_direction",
+    "inspect_sensitive_structures",
+    "linear_subcutaneous_incision",
+    "fusiform_cutaneous_incision",
+    "evaluate_guardrails",
+    "preview_incision_on_face",
+    "propose_direction_variants",
+    "compare_candidates",
+    "clinician_edit_candidate",
+    "save_review_record"
+  ]
+}

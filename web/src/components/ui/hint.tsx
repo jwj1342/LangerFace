@@ -15,9 +15,9 @@ export const Hint = forwardRef<HTMLParagraphElement, HintProps>(
 );
 Hint.displayName = "Hint";
 
-export const AgentNote = forwardRef<HTMLParagraphElement, HintProps>(
+export const WorkbenchNote = forwardRef<HTMLParagraphElement, HintProps>(
   ({ className, hiddenClassName = "hidden", visible = true, ...props }, ref) => (
-    <p ref={ref} className={cn("agent-note", !visible && hiddenClassName, className)} {...props} />
+    <p ref={ref} className={cn("workbench-note", !visible && hiddenClassName, className)} {...props} />
   ),
 );
-AgentNote.displayName = "AgentNote";
+WorkbenchNote.displayName = "WorkbenchNote";

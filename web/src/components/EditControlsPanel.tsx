@@ -5,9 +5,9 @@ import type { IncisionEditControlId } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
-import { AgentCard, CardHeader } from "./ui/card";
+import { WorkbenchCard, CardHeader } from "./ui/card";
 import { FieldGroup } from "./ui/field-group";
-import { AgentNote } from "./ui/hint";
+import { WorkbenchNote } from "./ui/hint";
 import { EditStatus } from "./ui/incision-status";
 import { FieldValue, Label } from "./ui/label";
 import { Select } from "./ui/select";
@@ -17,12 +17,14 @@ const DEFAULT_EDIT_STATE = {
   angleOffsetDeg: 0,
   lengthScalePct: 100,
   widthScalePct: 100,
+  tipAngleDeg: 30,
   shiftAlongMm: 0,
   shiftPerpMm: 0,
   reason: "",
   statusLabel: "工具建议",
   active: false,
   widthScaleVisible: false,
+  tipAngleVisible: false,
   historyLabel: "编辑版本：v1 · 无已提交调整",
   undoDisabled: true,
   redoDisabled: true,
@@ -34,12 +36,14 @@ export function EditControlsPanel() {
   const [angleOffsetDeg, setAngleOffsetDeg] = useState(String(DEFAULT_EDIT_STATE.angleOffsetDeg));
   const [lengthScalePct, setLengthScalePct] = useState(String(DEFAULT_EDIT_STATE.lengthScalePct));
   const [widthScalePct, setWidthScalePct] = useState(String(DEFAULT_EDIT_STATE.widthScalePct));
+  const [tipAngleDeg, setTipAngleDeg] = useState(String(DEFAULT_EDIT_STATE.tipAngleDeg));
   const [shiftAlongMm, setShiftAlongMm] = useState(String(DEFAULT_EDIT_STATE.shiftAlongMm));
   const [shiftPerpMm, setShiftPerpMm] = useState(String(DEFAULT_EDIT_STATE.shiftPerpMm));
   const [reason, setReason] = useState(DEFAULT_EDIT_STATE.reason);
   const [statusLabel, setStatusLabel] = useState(DEFAULT_EDIT_STATE.statusLabel);
   const [active, setActive] = useState(DEFAULT_EDIT_STATE.active);
   const [widthScaleVisible, setWidthScaleVisible] = useState(DEFAULT_EDIT_STATE.widthScaleVisible);
+  const [tipAngleVisible, setTipAngleVisible] = useState(DEFAULT_EDIT_STATE.tipAngleVisible);
   const [historyLabel, setHistoryLabel] = useState(DEFAULT_EDIT_STATE.historyLabel);
   const [undoDisabled, setUndoDisabled] = useState(DEFAULT_EDIT_STATE.undoDisabled);
   const [redoDisabled, setRedoDisabled] = useState(DEFAULT_EDIT_STATE.redoDisabled);
@@ -50,12 +54,14 @@ export function EditControlsPanel() {
     setAngleOffsetDeg(String(edit.angleOffsetDeg));
     setLengthScalePct(String(edit.lengthScalePct));
     setWidthScalePct(String(edit.widthScalePct));
+    setTipAngleDeg(String(edit.tipAngleDeg));
     setShiftAlongMm(String(edit.shiftAlongMm));
     setShiftPerpMm(String(edit.shiftPerpMm));
     setReason(edit.reason || "");
     setStatusLabel(edit.statusLabel || DEFAULT_EDIT_STATE.statusLabel);
     setActive(Boolean(edit.active));
     setWidthScaleVisible(Boolean(edit.widthScaleVisible));
+    setTipAngleVisible(Boolean(edit.tipAngleVisible));
     setHistoryLabel(edit.historyLabel || DEFAULT_EDIT_STATE.historyLabel);
     setUndoDisabled(Boolean(edit.undoDisabled));
     setRedoDisabled(Boolean(edit.redoDisabled));
@@ -69,7 +75,7 @@ export function EditControlsPanel() {
   };
 
   return (
-    <AgentCard>
+    <WorkbenchCard>
       <CardHeader>
         <span>医生调整</span>
         <EditStatus active={active} id="editStatus">{statusLabel}</EditStatus>
@@ -128,6 +134,24 @@ export function EditControlsPanel() {
           onChange={(event) => setWidthScalePct(event.currentTarget.value)}
         />
       </FieldGroup>
+      <FieldGroup id="tipAngleWrap" visible={tipAngleVisible}>
+        <Label htmlFor="tipAngleDeg">尖端角 <FieldValue id="tipAngleVal">{tipAngleDeg}°</FieldValue></Label>
+        <RangeInput
+          id="tipAngleDeg"
+          min="15"
+          max="60"
+          value={tipAngleDeg}
+          onInput={(event) => {
+            const value = event.currentTarget.value;
+            setTipAngleDeg(value);
+            preview("tipAngleDeg", value);
+          }}
+          onPointerUp={(event) => commit("tipAngleDeg", event.currentTarget.value)}
+          onKeyUp={(event) => commit("tipAngleDeg", event.currentTarget.value)}
+          onBlur={(event) => commit("tipAngleDeg", event.currentTarget.value)}
+          onChange={(event) => setTipAngleDeg(event.currentTarget.value)}
+        />
+      </FieldGroup>
       <FieldGroup>
         <Label htmlFor="shiftAlongMm">沿长轴移动 mm <FieldValue id="shiftAlongVal">{shiftAlongMm}</FieldValue></Label>
         <RangeInput
@@ -184,8 +208,8 @@ export function EditControlsPanel() {
         <Button variant="workbench" id="redoEditBtn" type="button" disabled={redoDisabled} onClick={() => commands.edit("redo_edit")}>重做调整</Button>
       </ButtonRow>
       <Button variant="workbench" id="resetEditBtn" type="button" onClick={() => commands.edit("reset_edit")}>恢复工具建议</Button>
-      <AgentNote id="editHistoryState">{historyLabel}</AgentNote>
-      <AgentNote>调整只改变候选草案并记录 provenance；真实切口仍需医生复核。</AgentNote>
-    </AgentCard>
+      <WorkbenchNote id="editHistoryState">{historyLabel}</WorkbenchNote>
+      <WorkbenchNote>调整只改变候选草案并记录 provenance；真实切口仍需医生复核。</WorkbenchNote>
+    </WorkbenchCard>
   );
 }

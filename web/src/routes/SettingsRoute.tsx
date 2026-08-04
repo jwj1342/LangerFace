@@ -14,7 +14,6 @@ import {
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
-import { ProviderConfigPanel } from "../components/ProviderConfigPanel";
 import {
   ReactPage,
   ReactShell,
@@ -49,8 +48,8 @@ const SETTINGS_COPY = {
     label: "开发者诊断",
     eyebrow: "系统设置",
     status: "诊断维护",
-    title: "AI 摘要服务和运行时诊断",
-    summary: "这里集中放置服务连接测试、后台任务状态和独立研究工具入口。",
+    title: "本地运行时诊断",
+    summary: "这里集中展示后台 workflow 状态和独立研究工具入口。",
   },
 } satisfies Record<SettingsRouteProps["section"], {
   eyebrow: string;
@@ -112,7 +111,7 @@ function SettingsSidebar({ section }: SettingsRouteProps) {
           <div className="settings-mini-grid">
             <SettingMetric label="病例存储" value="不提供" />
             <SettingMetric label="图谱维护" value="设置" />
-            <SettingMetric label="服务配置" value="设置" />
+            <SettingMetric label="远程模型" value="已停用" />
             <SettingMetric label="研究工具" value="独立" />
           </div>
         </CardContent>
@@ -200,10 +199,6 @@ function DeveloperSettings() {
     <>
       <SettingsHero section="developer" />
       <section className="settings-panel-grid settings-panel-grid-wide" aria-label="开发者诊断内容">
-        <div className="settings-provider-panel">
-          <ProviderConfigPanel />
-        </div>
-
         <Card>
           <CardHeader><span>兼容工作台</span><Activity size={16} /></CardHeader>
           <CardContent className="settings-action-list">
@@ -220,8 +215,8 @@ function DeveloperSettings() {
         <Card>
           <CardHeader><span>诊断边界</span><ShieldCheck size={16} /></CardHeader>
           <CardContent className="settings-boundary-list">
-            <p><b>AI 服务</b><span>只测试浏览器到 OpenAI-compatible / vLLM 服务的连接，不参与确定性切口几何。</span></p>
-            <p><b>运行时诊断</b><span>用于排查服务连接、后台任务状态和浏览器兼容性。</span></p>
+            <p><b>执行模式</b><span>切口候选只由浏览器本地确定性 workflow 生成，不配置或调用远程模型。</span></p>
+            <p><b>运行时诊断</b><span>用于排查 Worker、后台任务状态和浏览器兼容性。</span></p>
             <p><b>独立入口</b><span>工具不共享病例状态，也不建立历史档案。</span></p>
           </CardContent>
         </Card>

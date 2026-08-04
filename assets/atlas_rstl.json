@@ -1,6 +1,7 @@
 {
   "system": "rstl",
   "version": "0.2",
+  "atlasVersion": "8.1.67",
   "topologyId": "mediapipe-468",
   "topologyVersion": "mediapipe-canonical-468-v1",
   "provenance": "Doctor-standard RSTL v1 traced from a symmetric continuous tangent field extracted from the thin gray lines in standard_1.png and cross-checked against standard_2.png. Red incision/scar annotations are excluded. Source-half streamlines are mirrored exactly. validated=false.",

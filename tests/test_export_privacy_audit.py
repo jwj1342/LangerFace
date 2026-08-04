@@ -10,14 +10,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _safe_review_export() -> dict:
     return {
-        "schema_version": "incision-review-export/v0.3",
+        "schema_version": "incision-review-export/v0.4",
         "current": {
-            "schema_version": "incision-review-record/v0.3",
+            "schema_version": "incision-review-record/v0.4",
             "id": "candidate-safe",
             "review": {"reviewer": "coded-reviewer-1", "notes": "synthetic fixture only"},
             "tumor": {"kind": "subcutaneous", "center": [0, 0, 0], "diameter_mm": 10},
             "candidate": {"type": "linear", "polyline": [[-1, 0, 0], [1, 0, 0]]},
-            "provider_config": {"api_key_present": True, "api_key": "[redacted]"},
+            "credentials": {"token_present": True, "token": "[redacted]"},
             "privacy_audit": {
                 "raw_image_sent": False,
                 "raw_video_sent": False,
@@ -48,7 +48,6 @@ def test_privacy_audit_accepts_sanitized_secondary_cues():
         "confidence_label": "low",
         "manual_confirmed": True,
         "used_for_geometry": False,
-        "used_for_agent_prompt": False,
         "outputs": {
             "cue_overlay": "cue-overlay-review.png",
             "lesion_mask": "lesion-mask-review.png",
@@ -68,7 +67,7 @@ def test_privacy_audit_accepts_sanitized_secondary_cues():
 def test_privacy_audit_flags_secret_raw_media_and_pii():
     payload = _safe_review_export()
     record = payload["current"]
-    record["provider_config"]["api_key"] = "sk-test-not-redacted"
+    record["credentials"]["token"] = "test-not-redacted"
     record["privacy_audit"]["raw_image_sent"] = True
     record["patient_name"] = "Alice Example"
     record["review"]["notes"] = "Call +1 555 010 9999 before review"
@@ -90,7 +89,6 @@ def test_privacy_audit_flags_embedded_secondary_cue_media():
         "present": True,
         "source": "synthetic_fixture",
         "used_for_geometry": False,
-        "used_for_agent_prompt": False,
         "outputs": {
             "cue_overlay": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB",
         },
@@ -110,7 +108,6 @@ def test_privacy_audit_flags_secondary_cue_boundary_violations():
         "present": True,
         "source": "synthetic_fixture",
         "used_for_geometry": True,
-        "used_for_agent_prompt": True,
     }
 
     report = audit_payload(payload, file="secondary-cues-boundary.json")
@@ -118,12 +115,11 @@ def test_privacy_audit_flags_secondary_cue_boundary_violations():
 
     assert report["passed"] is False
     assert "secondary_cue_used_for_geometry" in codes
-    assert "secondary_cue_sent_to_agent_prompt" in codes
 
 
 def test_privacy_audit_cli_exits_nonzero_on_violation(tmp_path: Path):
     unsafe = _safe_review_export()
-    unsafe["current"]["provider_config"]["token"] = "plain-token"
+    unsafe["current"]["credentials"]["token"] = "plain-token"
     input_path = tmp_path / "unsafe.json"
     output_path = tmp_path / "privacy_report.json"
     input_path.write_text(json.dumps(unsafe), encoding="utf-8")

@@ -4,9 +4,9 @@ import { useIncisionControllerCommands } from "../hooks/useControllerCommands";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
-import { AgentCard } from "./ui/card";
+import { WorkbenchCard } from "./ui/card";
 import { FieldGroup } from "./ui/field-group";
-import { AgentNote } from "./ui/hint";
+import { WorkbenchNote } from "./ui/hint";
 import { AnatomyPreview, BoundaryStatus } from "./ui/incision-feedback";
 import { Input } from "./ui/input";
 import { FieldValue, Label } from "./ui/label";
@@ -61,7 +61,7 @@ export function TumorInputPanel() {
       : pickState;
 
   return (
-    <AgentCard>
+    <WorkbenchCard>
       <Label htmlFor="tumorKind">肿物类型</Label>
       <Select
         id="tumorKind"
@@ -207,9 +207,9 @@ export function TumorInputPanel() {
         <Button variant="workbench" id="importTumorBtn" type="button" onClick={() => commands.tumor("import_tumor")}>导入肿物</Button>
       </ButtonRow>
       <Input id="tumorImportFile" hidden type="file" accept="application/json,.json" />
-      <Button variant="workbenchPrimary" id="runAgentBtn" type="button" onClick={() => commands.tumor("run_agent")}>生成候选切口</Button>
-      <AgentNote id="pickState">{freehand ? boundaryHint : pickState}</AgentNote>
+      <Button variant="workbenchPrimary" id="runWorkflowBtn" type="button" onClick={() => commands.tumor("run_workflow")}>生成候选切口</Button>
+      <WorkbenchNote id="pickState">{freehand ? boundaryHint : pickState}</WorkbenchNote>
       <AnatomyPreview warn={anatomyPreviewWarn} id="anatomyPreview">{anatomyPreview}</AnatomyPreview>
-    </AgentCard>
+    </WorkbenchCard>
   );
 }

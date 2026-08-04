@@ -220,7 +220,7 @@ export function compileIncisionOverlay(
     review_gate: reviewGate,
     audit: {
       raw_image_sent: false,
-      source: "web/incision_agent",
+      source: "web/incision_workflow",
       review_required: true,
       review_status: reviewStatus,
       approval_ready: reviewGate.approval_ready,
