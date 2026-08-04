@@ -811,7 +811,11 @@ axis_diff(theta_i, theta_ref) = |((theta_i - theta_ref + 90) mod 180) - 90|
 angular_spread = 2 * max_i axis_diff(theta_i, theta_ref)
 ```
 
-这样 `179°` 与 `-179°` 被视为约 `2°` 的轴向差异，而不是普通有向角 `max(theta)-min(theta)` 下的 `358°`。方向置信度因此只在真实邻域方向冲突时下降，不会在角度表示边界处误报低置信度。查询结果还会输出 `confidence_reasons`：`empty_atlas`、`nearest_atlas_support_far`、`nearest_atlas_support_sparse`、`low_support_count` 或 `high_angular_spread` 会进入候选 provenance、guardrail 文案和审阅报告，便于区分“没有图谱支持”和“邻域方向本身冲突”。
+这样 `179°` 与 `-179°` 被视为约 `2°` 的轴向差异，而不是普通有向角 `max(theta)-min(theta)` 下的 `358°`。输出轴还会固定为首个非零分量为正的规范符号，因此 atlas 折线点序反转不会改变方向结果。方向置信度只在真实邻域方向冲突时下降，不会在角度表示边界处误报低置信度。
+
+方向样本必须来自至少两个不同的有限坐标点；缺失重心坐标、非有限点、单点线和零长度重复点均不计入 `support_count`。空 atlas 返回 `source=rstl_atlas_empty`，非空但没有有效切向则返回 `source=rstl_atlas_no_valid_direction_support`；两者都使用 JSON 安全的 `nearest_distance=null`、`confidence=0`、`support_count=0` 和完整结果字段。查询结果还会输出 `confidence_reasons`：`empty_atlas`、`no_valid_direction_support`、`nearest_atlas_support_far`、`nearest_atlas_support_sparse`、`low_support_count` 或 `high_angular_spread` 会进入候选 provenance、guardrail 文案和审阅报告，便于区分“没有图谱”“图谱记录无有效方向支持”和“邻域方向本身冲突”。
+
+`web/test/rstl_direction_contract.json` 同时保存 11 个边界契约和一个隐私最小化的真实检测序列。序列来自同一 held-pose 人脸连续 100 帧，只提交归一化查询点、face bounds 与附近 9 个映射 RSTL 点，不提交原始帧或完整 478 点 landmarks。Python 与 TypeScript 逐帧复算，并固定以下工程门槛：轴向角总范围 `≤ 6°`、相邻帧最大变化 `≤ 1.5°`、角度标准差 `≤ 2°`、最低方向置信度 `≥ 0.95`。当前 fixture 实测分别为约 `5.73°`、`1.28°`、`1.72°` 和 `0.979`；这些是工程回归阈值，不代表临床方向准确度验证。
 
 ### 21.2 皮表肿物梭形切口
 

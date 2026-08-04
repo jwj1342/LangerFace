@@ -21,6 +21,7 @@ const html = normalizeTsxContracts([
   fs.readFileSync("src/components/PrivacyAuditPanel.tsx", "utf8"),
 ].join("\n"));
 const js = fs.readFileSync("src/services/incisionRuntime.ts", "utf8");
+const clinicalCopy = fs.readFileSync("src/services/incisionClinicalCopy.ts", "utf8");
 const reviewPolicy = fs.readFileSync("src/services/incisionReviewPolicy.ts", "utf8");
 const tools = [
   fs.readFileSync("src/services/incisionToolRules.ts", "utf8"),
@@ -65,6 +66,10 @@ assert.ok(!html.includes('value="/api/agentic-incision"'), "workbench does not p
 assert.ok(html.includes("本地确定性 workflow"), "workbench explains candidate generation is browser-side");
 assert.ok(html.includes('id="guardrailDetails"'), "workbench exposes guardrail detail feedback");
 assert.ok(html.includes('id="directionSource"'), "workbench exposes direction source explanation");
+assert.ok(
+  clinicalCopy.includes("RSTL 图谱记录无有效方向支持"),
+  "workbench explains a non-empty atlas with no valid direction samples",
+);
 assert.ok(html.includes('id="workflowGate"'), "workbench exposes agent trace gate feedback");
 assert.ok(html.includes('id="undoEditBtn"'), "workbench exposes clinician edit undo");
 assert.ok(html.includes('id="redoEditBtn"'), "workbench exposes clinician edit redo");
