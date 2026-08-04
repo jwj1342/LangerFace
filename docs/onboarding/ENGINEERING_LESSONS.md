@@ -1,6 +1,6 @@
 # 工程教训 / 协作避坑（Engineering Lessons）
 
-把多人并行改这个仓库时踩过的坑沉淀到这里，避免重复犯。每条都是真实事故复盘 + 可执行规则。
+本文把多人并行改这个仓库时踩过的坑沉淀为真实事故复盘和可执行规则，避免重复犯。
 新踩到坑就追加一条。配套规约见 [CONTRIBUTING.md](CONTRIBUTING.md)、[CI_CD_VERCEL.md](../quality/CI_CD_VERCEL.md)。
 
 ---
@@ -75,10 +75,9 @@ master 受保护：**1 个 approval + 5 个必需检查**（`lint` / `python-tes
 
 - **Python**：仓库 `.venv` 用**纯 `.pth`**（只写 src 路径）做 editable 安装，所以可用
   `PYTHONPATH=<worktree>/src .venv/bin/python -m pytest ...` 干净地让每个 worktree 跑自己的代码，支持并行测试。
-- **cv2 装不上**：集群通过 Lmod dummy-wheel 提供 opencv，`pip install opencv-python[-headless]` 会在构建步失败。
-  因此 `tests/test_render.py::test_overlay_draws_lines` 与 `tests/test_pipeline.py::test_fade_out_after_face_lost`
-  在本机必然 `ModuleNotFoundError: cv2` ——**这是预期基线**，GitHub Actions（ubuntu，装了 opencv）会覆盖它们。
-  本地别为这 2 个失败惊慌；用 `--continue-on-collection-errors` 或只跑相关子集。
+- **cv2 / Lmod 约束**：模块版本、dummy-wheel 原因和当前本地测试基线只在
+  [ENVIRONMENT «Compute Canada / Alliance 集群环境»](ENVIRONMENT.md#compute-canada--alliance-集群环境) 维护；
+  这里不复制可能随集群升级漂移的失败数量。
 - **web**：在 worktree 里 `ln -sfn <主仓库>/web/node_modules <worktree>/web/node_modules` 复用依赖，避免重装；
   但见教训 #1——这个 symlink 绝不能被 `git add -A` 收进去。
 

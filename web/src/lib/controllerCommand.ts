@@ -4,7 +4,6 @@ import {
   ANNOTATE_MESH_REACT_COMMAND_EVENT,
   INCISION_EDIT_REACT_COMMAND_EVENT,
   INCISION_LIBRARY_REACT_COMMAND_EVENT,
-  INCISION_PROVIDER_REACT_STATE_EVENT,
   INCISION_REVIEW_REACT_COMMAND_EVENT,
   INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT,
   INCISION_TUMOR_REACT_COMMAND_EVENT,
@@ -70,7 +69,7 @@ export const INCISION_TUMOR_COMMANDS = [
   "clear_boundary",
   "export_tumor",
   "import_tumor",
-  "run_agent",
+  "run_workflow",
 ] as const;
 export const INCISION_SECONDARY_CUE_COMMANDS = [
   "import_secondary_cue",
@@ -116,6 +115,7 @@ export type IncisionEditControlId =
   | "angleOffsetDeg"
   | "lengthScale"
   | "widthScale"
+  | "tipAngleDeg"
   | "shiftAlongMm"
   | "shiftPerpMm"
   | "editReason";
@@ -189,12 +189,8 @@ export function dispatchAnnotateLibraryCommand(command: AnnotateLibraryCommand, 
   dispatchControllerCommand(ANNOTATE_LIBRARY_REACT_COMMAND_EVENT, { command, index });
 }
 
-export function dispatchIncisionTumorCommand(command: IncisionTumorCommand, value?: string) {
+export function dispatchIncisionTumorCommand(command: IncisionTumorCommand, value?: string | number) {
   dispatchControllerCommand(INCISION_TUMOR_REACT_COMMAND_EVENT, { command, value });
-}
-
-export function dispatchIncisionProviderState(source = "react_provider_panel") {
-  dispatchControllerEvent(INCISION_PROVIDER_REACT_STATE_EVENT, { source });
 }
 
 export function dispatchIncisionSecondaryCueCommand(command: IncisionSecondaryCueCommand) {

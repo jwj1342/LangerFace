@@ -25,7 +25,8 @@ const tsconfig = JSON.parse(read("tsconfig.json"));
 const toolsTsconfig = JSON.parse(fs.readFileSync(path.join(root, "tsconfig.tools.json"), "utf8"));
 const legacyLiveHtml = read("index.html");
 const legacyAnnotateHtml = read("annotate.html");
-const legacyIncisionHtml = read("incision_agent.html");
+const legacyIncisionHtml = read("incision_workflow.html");
+const legacyIncisionAgentHtml = read("incision_agent.html");
 const legacySurgeryHtml = read("surgery.html");
 const vite = read("vite.config.ts");
 const vercel = read("vercel.json");
@@ -95,8 +96,6 @@ const secondaryCuePanel = read("src/components/SecondaryCuePanel.tsx");
 const candidateResultPanel = read("src/components/CandidateResultPanel.tsx");
 const candidateLibraryPanel = read("src/components/CandidateLibraryPanel.tsx");
 const privacyAuditPanel = read("src/components/PrivacyAuditPanel.tsx");
-const providerPanel = read("src/components/ProviderConfigPanel.tsx");
-const llmProviderService = read("src/services/llmProvider.ts");
 const editPanel = read("src/components/EditControlsPanel.tsx");
 const reviewPanel = read("src/components/ReviewControlsPanel.tsx");
 const liveStore = read("src/stores/liveStore.ts");
@@ -131,7 +130,6 @@ const workerContract = read("src/workers/workflowWorkerContract.ts");
 const workerClient = read("src/services/workflowWorkerClient.ts");
 const workflowPlanner = read("src/services/workflowPlanner.ts");
 const workerPanel = read("src/components/WorkerStatusPanel.tsx");
-const providerConfigService = read("src/services/providerConfig.ts");
 const tumorInputService = read("src/services/tumorInput.ts");
 const annotateSnapshotsService = read("src/services/annotateSnapshots.ts");
 const liveSnapshotsService = read("src/services/liveSnapshots.ts");
@@ -140,7 +138,10 @@ const annotateRuntime = read("src/services/annotateRuntime.ts");
 const annotationModelService = read("src/services/annotationModel.ts");
 const flameFitService = read("src/services/flameFit.ts");
 const annotateViewerService = read("src/services/annotateViewer.ts");
-const controller = read("src/services/incisionAgentRuntime.ts");
+const controller = read("src/services/incisionRuntime.ts");
+const incisionDomService = read("src/services/incisionDom.ts");
+const incisionClinicalCopyService = read("src/services/incisionClinicalCopy.ts");
+const incisionReviewPolicyService = read("src/services/incisionReviewPolicy.ts");
 const incisionOverlayService = read("src/services/incisionOverlay.ts");
 const incisionCandidateToolsService = read("src/services/incisionCandidateTools.ts");
 const incisionWorkflowToolsService = read("src/services/incisionWorkflowTools.ts");
@@ -185,7 +186,9 @@ const incisionRuntimeDependencyTypes = [
   "src/services/assetLoader.ts",
   "src/services/dataSource.ts",
   "src/services/exportPrivacy.ts",
-  "src/services/llmProvider.ts",
+  "src/services/incisionClinicalCopy.ts",
+  "src/services/incisionDom.ts",
+  "src/services/incisionReviewPolicy.ts",
   "src/services/softBody.ts",
   "src/services/three3d.ts",
 ];
@@ -248,10 +251,9 @@ const cardHeaderTitleConsumerSources = new Map([
   ["LiveStatePanel.tsx", liveStatePanel],
   ["WorkerStatusPanel.tsx", workerPanel],
 ]);
-const incisionAgentCardConsumerSources = new Map([
+const workbenchCardConsumerSources = new Map([
   ["CandidateLibraryPanel.tsx", candidateLibraryPanel],
   ["EditControlsPanel.tsx", editPanel],
-  ["ProviderConfigPanel.tsx", providerPanel],
   ["ReviewControlsPanel.tsx", reviewPanel],
   ["SecondaryCuePanel.tsx", secondaryCuePanel],
   ["TumorInputPanel.tsx", tumorPanel],
@@ -267,12 +269,10 @@ const helpDisclosureConsumerSources = new Map([
 const fieldValueConsumerSources = new Map([
   ["EditControlsPanel.tsx", editPanel],
   ["LiveRenderControlsPanel.tsx", liveRenderControlsPanel],
-  ["ProviderConfigPanel.tsx", providerPanel],
   ["TumorInputPanel.tsx", tumorPanel],
 ]);
-const agentNoteConsumerSources = new Map([
+const workbenchNoteConsumerSources = new Map([
   ["EditControlsPanel.tsx", editPanel],
-  ["ProviderConfigPanel.tsx", providerPanel],
   ["ReviewControlsPanel.tsx", reviewPanel],
   ["SecondaryCuePanel.tsx", secondaryCuePanel],
   ["TumorInputPanel.tsx", tumorPanel],
@@ -283,7 +283,6 @@ const incisionFeedbackConsumerSources = new Map([
 ]);
 const incisionStatusConsumerSources = new Map([
   ["EditControlsPanel.tsx", editPanel],
-  ["ProviderConfigPanel.tsx", providerPanel],
   ["ReviewControlsPanel.tsx", reviewPanel],
 ]);
 const reactUiConsumerSources = new Map([
@@ -364,8 +363,8 @@ const fieldValueConsumersWithRawClass = (className) => (
     ))
     .map(([name]) => name)
 );
-const agentNoteConsumersWithRawClass = (className) => (
-  [...agentNoteConsumerSources.entries()]
+const workbenchNoteConsumersWithRawClass = (className) => (
+  [...workbenchNoteConsumerSources.entries()]
     .filter(([, source]) => (
       source.includes(`className="${className}`)
       || source.includes(`className={\`${className}`)
@@ -527,8 +526,8 @@ const cardHeaderTitleConsumersWithRawClass = (className) => (
     ))
     .map(([name]) => name)
 );
-const incisionAgentCardConsumersWithRawClass = (className) => (
-  [...incisionAgentCardConsumerSources.entries()]
+const workbenchCardConsumersWithRawClass = (className) => (
+  [...workbenchCardConsumerSources.entries()]
     .filter(([, source]) => (
       source.includes(`className="${className}`)
       || source.includes(`className={\`${className}`)
@@ -579,6 +578,7 @@ for (const legacyEntry of [
   'main: resolve(import.meta.dirname, "index.html")',
   'annotate: resolve(import.meta.dirname, "annotate.html")',
   'surgery: resolve(import.meta.dirname, "surgery.html")',
+  'incisionWorkflow: resolve(import.meta.dirname, "incision_workflow.html")',
   'incisionAgent: resolve(import.meta.dirname, "incision_agent.html")',
 ]) {
   assert.ok(!vite.includes(legacyEntry), `Vite should not build legacy HTML as a Rollup input: ${legacyEntry}`);
@@ -674,11 +674,11 @@ assert.ok(managedWorkbenchRoute.includes("controller.mount"), "managed workbench
 assert.ok(managedWorkbenchRoute.includes("ReactRouteHost"), "managed workbench route renders through the shared ReactRouteHost primitive");
 assert.ok(managedWorkbenchRoute.includes("Extract<Workspace"), "managed workbench route narrows workspace type from the shared Workspace union");
 assert.ok(legacyControllers.includes("ManagedWorkbenchControllerAdapter"), "legacy controller service owns typed controller adapter objects");
-for (const legacyEntry of ["annotateRuntime", "incisionAgentRuntime", "liveRuntime"]) {
+for (const legacyEntry of ["annotateRuntime", "incisionRuntime", "liveRuntime"]) {
   assert.ok(legacyControllers.includes(legacyEntry), `legacy controller service owns ${legacyEntry} import boundary`);
 }
 assert.ok(!fs.existsSync(path.join(web, "annotate_main.js")), "legacy annotation runtime file has moved into the React TypeScript service layer");
-assert.ok(!fs.existsSync(path.join(web, "incision_agent_main.js")), "legacy incision runtime file has moved into the React TypeScript service layer");
+assert.ok(!fs.existsSync(path.join(web, "incision_workflow_main.js")), "legacy incision runtime file has moved into the React TypeScript service layer");
 assert.ok(!fs.existsSync(path.join(web, "main.js")), "legacy live runtime file has moved into the React TypeScript service layer");
 for (const [name, source, workspace] of [
   ["AnnotateRoute.tsx", annotateRoute, "annotate"],
@@ -691,7 +691,7 @@ for (const [name, source, workspace] of [
   assert.ok(!source.includes('import("../../'), `${name} should not dynamically import legacy controllers directly`);
   assert.ok(!source.includes("mountLiveWorkbench"), `${name} should not name legacy live controller exports directly`);
   assert.ok(!source.includes("mountAnnotateWorkbench"), `${name} should not name legacy annotate controller exports directly`);
-  assert.ok(!source.includes("mountIncisionAgentWorkbench"), `${name} should not name legacy incision controller exports directly`);
+  assert.ok(!source.includes("mountIncisionWorkbench"), `${name} should not name legacy incision controller exports directly`);
   assert.ok(source.includes(`workspace="${workspace}"`), `${name} should declare its managed workbench workspace`);
   assert.ok(!source.includes("ReactRouteHost"), `${name} should not duplicate the route host wrapper`);
   assert.ok(!source.includes("useManagedWorkbenchController"), `${name} should not duplicate managed controller lifecycle wiring`);
@@ -714,7 +714,8 @@ assert.ok(!dashboardRoute.includes("/cases"), "React dashboard does not expose a
 assert.ok(dashboardRoute.includes("不创建、恢复或保存病例"), "React dashboard states the no-case-storage boundary");
 for (const [name, html, expected] of [
   ["annotate.html", legacyAnnotateHtml, ["/app/annotate"]],
-  ["incision_agent.html", legacyIncisionHtml, ["/app/incision"]],
+  ["incision_workflow.html", legacyIncisionHtml, ["/app/incision"]],
+  ["incision_agent.html", legacyIncisionAgentHtml, ["/app/incision"]],
   ["surgery.html", legacySurgeryHtml, ["/app/surgery"]],
 ]) {
   for (const href of expected) {
@@ -724,18 +725,19 @@ for (const [name, html, expected] of [
 for (const [name, html, legacyScript] of [
   ["index.html", legacyLiveHtml, "main.js"],
   ["annotate.html", legacyAnnotateHtml, "annotate_main.js"],
-  ["incision_agent.html", legacyIncisionHtml, "incision_agent_main.js"],
+  ["incision_workflow.html", legacyIncisionHtml, "incision_workflow_main.js"],
+  ["incision_agent.html", legacyIncisionAgentHtml, "incision_agent_main.js"],
   ["surgery.html", legacySurgeryHtml, "surgery_main.js"],
 ]) {
   assert.ok(!html.includes(legacyScript), `${name} compatibility page should not load ${legacyScript}`);
 }
 for (const [name, html, legacyHref] of [
   ["index.html", legacyLiveHtml, "annotate.html"],
-  ["index.html", legacyLiveHtml, "incision_agent.html"],
+  ["index.html", legacyLiveHtml, "incision_workflow.html"],
   ["annotate.html", legacyAnnotateHtml, "index.html"],
   ["annotate.html", legacyAnnotateHtml, "surgery.html"],
-  ["incision_agent.html", legacyIncisionHtml, "index.html"],
-  ["incision_agent.html", legacyIncisionHtml, "annotate.html"],
+  ["incision_workflow.html", legacyIncisionHtml, "index.html"],
+  ["incision_workflow.html", legacyIncisionHtml, "annotate.html"],
   ["surgery.html", legacySurgeryHtml, "annotate.html"],
 ]) {
   assert.ok(!html.includes(`href="${legacyHref}"`), `${name} compatibility navigation should not route users back to ${legacyHref}`);
@@ -772,7 +774,6 @@ for (const helperName of [
   "dispatchAnnotateDrawCommand",
   "dispatchAnnotateLibraryCommand",
   "dispatchIncisionTumorCommand",
-  "dispatchIncisionProviderState",
   "dispatchIncisionSecondaryCueCommand",
   "dispatchIncisionEditCommand",
   "dispatchIncisionReviewCommand",
@@ -825,7 +826,6 @@ for (const eventName of [
   "ANNOTATE_DRAW_REACT_COMMAND_EVENT",
   "ANNOTATE_LIBRARY_REACT_COMMAND_EVENT",
   "INCISION_CONTROLLER_STATE_EVENT",
-  "INCISION_PROVIDER_REACT_STATE_EVENT",
   "INCISION_TUMOR_REACT_COMMAND_EVENT",
   "INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT",
   "INCISION_EDIT_REACT_COMMAND_EVENT",
@@ -921,9 +921,9 @@ assert.ok(uiCard.includes("CardHeader"), "shadcn-style Card exposes a header pri
 assert.ok(uiCard.includes("CardHeaderTitle"), "shadcn-style Card exposes a header title primitive");
 assert.ok(uiCard.includes('cn("inline-flex items-center gap-2"'), "shadcn-style CardHeaderTitle preserves compact icon-title alignment");
 assert.ok(uiCard.includes("CardContent"), "shadcn-style Card exposes a content primitive");
-assert.ok(uiCard.includes("AgentCard"), "shadcn-style Card exposes an incision agent card primitive");
+assert.ok(uiCard.includes("WorkbenchCard"), "shadcn-style Card exposes an incision workbench card primitive");
 assert.ok(uiCard.includes('cn("card"'), "shadcn-style Card preserves existing card styling");
-assert.ok(uiCard.includes('cn("agent-grid"'), "shadcn-style AgentCard preserves existing agent-grid styling");
+assert.ok(uiCard.includes('cn("workbench-grid"'), "shadcn-style WorkbenchCard preserves existing workbench-grid styling");
 assert.ok(uiCard.includes("@radix-ui/react-slot"), "shadcn-style Card supports asChild through Radix Slot");
 assert.ok(uiCard.includes("asChild?: boolean"), "shadcn-style Card exposes an asChild prop for semantic containers");
 assert.ok(uiCard.includes("visible?: boolean"), "shadcn-style Card exposes a typed visibility prop");
@@ -945,12 +945,12 @@ for (const [name, source] of cardHeaderTitleConsumerSources.entries()) {
   assert.ok(source.includes("CardHeaderTitle"), `${name} should render icon-title headers through CardHeaderTitle`);
 }
 assert.deepEqual(
-  incisionAgentCardConsumersWithRawClass("agent-grid"),
+  workbenchCardConsumersWithRawClass("workbench-grid"),
   [],
-  "React incision agent panels should use AgentCard instead of hand-written agent-grid card wrappers",
+  "React incision panels should use WorkbenchCard instead of hand-written workbench-grid card wrappers",
 );
-for (const [name, source] of incisionAgentCardConsumerSources.entries()) {
-  assert.ok(source.includes("AgentCard"), `${name} should render through AgentCard`);
+for (const [name, source] of workbenchCardConsumerSources.entries()) {
+  assert.ok(source.includes("WorkbenchCard"), `${name} should render through WorkbenchCard`);
 }
 assert.ok(uiCheckbox.includes('type="checkbox"'), "shadcn-style Checkbox preserves native checkbox behavior");
 assert.ok(uiCheckboxField.includes("visible?: boolean"), "shadcn-style CheckboxField exposes a typed visibility prop");
@@ -1019,18 +1019,18 @@ assert.deepEqual(
 assert.ok(uiSectionTitle.includes('cn("section-title"'), "shadcn-style SectionTitle preserves existing section title styling");
 assert.ok(uiSectionTitle.includes("valueProps"), "shadcn-style SectionTitle can preserve value span ids");
 assert.ok(uiHint.includes('cn("hint"'), "shadcn-style Hint preserves existing hint styling");
-assert.ok(uiHint.includes("AgentNote"), "shadcn-style Hint module exports an AgentNote primitive");
-assert.ok(uiHint.includes('cn("agent-note"'), "shadcn-style AgentNote preserves existing agent-note styling");
-assert.ok(uiHint.includes("visible?: boolean"), "shadcn-style Hint/AgentNote expose a typed visibility prop");
-assert.ok(uiHint.includes('hiddenClassName = "hidden"'), "shadcn-style Hint/AgentNote default invisible copy to the legacy hidden class");
-assert.ok(uiHint.includes("!visible && hiddenClassName"), "shadcn-style Hint/AgentNote centralize hidden class application");
+assert.ok(uiHint.includes("WorkbenchNote"), "shadcn-style Hint module exports an WorkbenchNote primitive");
+assert.ok(uiHint.includes('cn("workbench-note"'), "shadcn-style WorkbenchNote preserves existing workbench-note styling");
+assert.ok(uiHint.includes("visible?: boolean"), "shadcn-style Hint/WorkbenchNote expose a typed visibility prop");
+assert.ok(uiHint.includes('hiddenClassName = "hidden"'), "shadcn-style Hint/WorkbenchNote default invisible copy to the legacy hidden class");
+assert.ok(uiHint.includes("!visible && hiddenClassName"), "shadcn-style Hint/WorkbenchNote centralize hidden class application");
 assert.deepEqual(
-  agentNoteConsumersWithRawClass("agent-note"),
+  workbenchNoteConsumersWithRawClass("workbench-note"),
   [],
-  "React incision note panels should use AgentNote instead of hand-written agent-note paragraphs",
+  "React incision note panels should use WorkbenchNote instead of hand-written workbench-note paragraphs",
 );
-for (const [name, source] of agentNoteConsumerSources.entries()) {
-  assert.ok(source.includes("AgentNote"), `${name} should render incision explanatory notes through the shared AgentNote primitive`);
+for (const [name, source] of workbenchNoteConsumerSources.entries()) {
+  assert.ok(source.includes("WorkbenchNote"), `${name} should render incision explanatory notes through the shared WorkbenchNote primitive`);
 }
 for (const [componentName, className] of [
   ["BoundaryStatus", "boundary-status"],
@@ -1053,28 +1053,25 @@ assert.ok(tumorPanel.includes("BoundaryStatus"), "React tumor panel uses the sha
 assert.ok(tumorPanel.includes("AnatomyPreview"), "React tumor panel uses the shared anatomy preview primitive");
 assert.ok(candidateResultPanel.includes("GuardrailDetails"), "React candidate result panel uses the shared guardrail details primitive");
 for (const componentName of [
-  "ProviderConnectionStatus",
   "EditStatus",
   "ReviewStatus",
 ]) {
   assert.ok(uiIncisionStatus.includes(componentName), `shadcn-style incision status primitive exports ${componentName}`);
 }
 for (const className of [
-  "provider-state-${tone}",
   "edit-status",
   "review-state",
 ]) {
   assert.ok(uiIncisionStatus.includes(className), `shadcn-style incision status primitive preserves ${className} styling`);
 }
 assert.ok(uiIncisionStatus.includes('active && "active"'), "incision edit status primitive preserves active styling");
-for (const className of ["provider-state-", "edit-status", "review-state"]) {
+for (const className of ["edit-status", "review-state"]) {
   assert.deepEqual(
     incisionStatusConsumersWithRawClass(className),
     [],
     `React incision status panels should use shared status primitives instead of hand-written ${className} wrappers`,
   );
 }
-assert.ok(providerPanel.includes("ProviderConnectionStatus"), "React provider panel uses the shared provider connection status primitive");
 assert.ok(editPanel.includes("EditStatus"), "React edit panel uses the shared edit status primitive");
 assert.ok(reviewPanel.includes("ReviewStatus"), "React review panel uses the shared review status primitive");
 assert.ok(uiStatusBadge.includes('cn("badge"'), "shadcn-style StatusBadge preserves existing badge styling");
@@ -1314,11 +1311,12 @@ assert.ok(scopedDom.includes("requireScopedElement"), "React route controllers c
 assert.ok(scopedDom.includes("requireScopedQuery"), "React route controllers can scope selector queries to the route host");
 for (const [name, source] of [
   ["annotateRuntime.ts", annotateRuntime],
-  ["incisionAgentRuntime.ts", controller],
+  ["incisionDom.ts", incisionDomService],
 ]) {
   assert.ok(source.includes("../lib/scopedDom"), `${name} uses route-host scoped DOM helpers`);
   assert.ok(!source.includes("document.getElementById"), `${name} must not fall back to global document ids inside the SPA`);
 }
+assert.ok(controller.includes("./incisionDom"), "incision runtime delegates route-host DOM collection to the typed DOM service");
 assert.ok(!controller.includes('document.querySelector(".main-wrap")'), "incision runtime scopes the stage wrapper lookup to the React route host");
 assert.ok(!liveDomService.includes("return document.getElementById(id)"), "live DOM binding does not fall back to global document ids inside the SPA");
 assert.ok(!liveDomService.includes('document.querySelector(".main-wrap")'), "live DOM binding scopes the stage wrapper lookup to the React route host");
@@ -1374,16 +1372,16 @@ assert.ok(incisionStatePanel.includes("<Card"), "React incision state panel uses
 
 assert.ok(incisionRoute.includes("ManagedWorkbenchRoute"), "React incision route uses the shared managed route lifecycle");
 assert.ok(incisionRoute.includes("incisionLegacyController"), "React incision route configures the existing controller through the legacy adapter");
-assert.ok(legacyControllers.includes("mountIncisionAgentWorkbench"), "legacy controller service configures the existing incision controller mount function");
-assert.ok(legacyControllers.includes("disposeIncisionAgentWorkbench"), "legacy controller service configures the existing incision controller dispose function");
+assert.ok(legacyControllers.includes("mountIncisionWorkbench"), "legacy controller service configures the existing incision controller mount function");
+assert.ok(legacyControllers.includes("disposeIncisionWorkbench"), "legacy controller service configures the existing incision controller dispose function");
 assert.ok(!incisionRoute.includes("window.__LANGERFACE_REACT_MANAGED__ = true"), "React incision route does not duplicate managed flag logic");
 assert.ok(incisionRoute.includes("<IncisionWorkbench />"), "React incision route renders the workbench as TSX");
 assert.ok(incisionWorkbench.includes("WorkbenchBrand"), "React incision workbench uses the shared workbench brand");
 assert.ok(!incisionRoute.includes("DOMParser"), "React incision route should not parse legacy HTML");
 assert.ok(!incisionRoute.includes("innerHTML"), "React incision route should not inject legacy HTML");
-assert.ok(!incisionRoute.includes("incision_agent.html"), "React incision route should not fetch the legacy workbench HTML");
+assert.ok(!incisionRoute.includes("incision_workflow.html"), "React incision route should not fetch the legacy workbench HTML");
 for (const id of [
-  "agentCanvas",
+  "incisionCanvas",
   "stageStatus",
   "assetLoading",
   "assetLoadingText",
@@ -1416,7 +1414,7 @@ for (const id of [
   "exportTumorBtn",
   "importTumorBtn",
   "tumorImportFile",
-  "runAgentBtn",
+  "runWorkflowBtn",
   "boundaryStatus",
   "pickState",
   "anatomyPreview",
@@ -1435,7 +1433,8 @@ assert.ok(
   "React tumor range controls send their latest controlled value to the runtime bridge",
 );
 assert.ok(
-  controllerCommand.includes("dispatchIncisionTumorCommand(command: IncisionTumorCommand, value?: string)") &&
+  controllerCommand.includes("dispatchIncisionTumorCommand(command: IncisionTumorCommand, value?:") &&
+  controllerCommand.includes("INCISION_TUMOR_REACT_COMMAND_EVENT, { command, value }") &&
   controllerCommandsHook.includes("dispatchIncisionTumorCommand(command, value)"),
   "incision tumor command bridge preserves the latest React control value",
 );
@@ -1467,7 +1466,7 @@ assert.ok(tumorPanel.includes("Label"), "React tumor panel uses the shared shadc
 assert.ok(tumorPanel.includes("Select"), "React tumor panel uses the shared shadcn-style select primitive");
 assert.ok(tumorPanel.includes("RangeInput"), "React tumor panel uses the shared shadcn-style range primitive");
 assert.ok(tumorPanel.includes("ButtonRow"), "React tumor panel uses the shared shadcn-style button row primitive");
-assert.ok(tumorPanel.includes("AgentCard"), "React tumor panel uses the shared shadcn-style agent card primitive");
+assert.ok(tumorPanel.includes("WorkbenchCard"), "React tumor panel uses the shared shadcn-style workbench card primitive");
 assert.ok(tumorPanel.includes('variant="workbenchPrimary"'), "React tumor panel keeps primary workbench button styling through Button variants");
 assert.ok(tumorInputService.includes("buildTumorInput"), "shared tumor input service builds typed TumorInput payloads");
 assert.ok(tumorInputService.includes("buildTumorFormSnapshot"), "shared tumor input service builds React-safe tumor form snapshots");
@@ -1492,7 +1491,7 @@ assert.ok(secondaryCuePanel.includes("Button"), "React secondary cue panel uses 
 assert.ok(secondaryCuePanel.includes("ButtonRow"), "React secondary cue panel uses the shared shadcn-style button row primitive");
 assert.ok(secondaryCuePanel.includes("Input"), "React secondary cue panel uses the shared shadcn-style input primitive");
 assert.ok(secondaryCuePanel.includes("CheckboxField"), "React secondary cue panel uses the shared shadcn-style checkbox field primitive");
-assert.ok(secondaryCuePanel.includes("AgentCard"), "React secondary cue panel uses the shared shadcn-style agent card primitive");
+assert.ok(secondaryCuePanel.includes("WorkbenchCard"), "React secondary cue panel uses the shared shadcn-style workbench card primitive");
 for (const id of [
   "candidateType",
   "candidateLength",
@@ -1501,10 +1500,10 @@ for (const id of [
   "directionConf",
   "regionVal",
   "guardrailVal",
-  "llmSummary",
+  "workflowSummary",
   "directionSource",
-  "agentGate",
-  "agentComparison",
+  "workflowGate",
+  "workflowComparison",
   "nextStep",
   "guardrailDetails",
 ]) {
@@ -1544,7 +1543,7 @@ assert.ok(candidateLibraryPanel.includes("CandidateRow"), "React candidate libra
 assert.ok(candidateLibraryPanel.includes("CandidateRowTop"), "React candidate library uses the shared candidate row top primitive");
 assert.ok(candidateLibraryPanel.includes("CandidateRowMeta"), "React candidate library uses the shared candidate row metadata primitive");
 assert.ok(candidateLibraryPanel.includes("CandidateRowStatus"), "React candidate library uses the shared candidate row status primitive");
-assert.ok(candidateLibraryPanel.includes("AgentCard"), "React candidate library uses the shared shadcn-style agent card primitive");
+assert.ok(candidateLibraryPanel.includes("WorkbenchCard"), "React candidate library uses the shared shadcn-style workbench card primitive");
 assert.ok(candidateLibraryPanel.includes('variant="workbenchPrimary"'), "React candidate library keeps primary workbench button styling through Button variants");
 for (const id of [
   "privacyState",
@@ -1556,48 +1555,15 @@ assert.ok(incisionStore.includes("IncisionPrivacyAuditState"), "incision Zustand
 assert.ok(incisionWorkbench.includes("PrivacyAuditPanel"), "React incision workbench renders the privacy audit panel as a React component");
 assert.ok(privacyAuditPanel.includes("useIncisionStore"), "React privacy audit panel reads low-frequency audit state from Zustand");
 assert.ok(privacyAuditPanel.includes("<Card"), "React privacy audit panel uses the shared shadcn-style card primitive");
-for (const id of [
-  "providerMode",
-  "providerBaseUrl",
-  "providerModel",
-  "providerApiKey",
-  "providerTimeout",
-  "testProviderBtn",
-  "providerTestState",
+assert.ok(!incisionWorkbench.includes("ProviderConfigPanel"), "React incision workbench exposes no remote model configuration");
+for (const removedPath of [
+  "src/components/ProviderConfigPanel.tsx",
+  "src/services/providerConfig.ts",
+  "src/services/llmProvider.ts",
+  "src/services/aiSdkProvider.ts",
 ]) {
-  assert.ok(providerPanel.includes(`id="${id}"`), `React provider panel exposes #${id}`);
+  assert.ok(!fs.existsSync(path.join(web, removedPath)), `${removedPath} stays removed with Agentic mode`);
 }
-assert.ok(incisionWorkbench.includes("ProviderConfigPanel"), "React incision workbench renders the provider panel as a React component");
-assert.ok(providerPanel.includes("testProviderConnection"), "React provider panel owns the browser-side Provider connectivity test");
-assert.ok(providerPanel.includes("normalizeProviderBaseUrl"), "React provider panel normalizes provider Base URL");
-assert.ok(providerPanel.includes("../services/llmProvider"), "React provider panel imports Provider connectivity from the typed service");
-assert.ok(providerPanel.includes("useIncisionControllerCommands"), "React provider panel uses typed incision command callbacks");
-assert.ok(!providerPanel.includes("dispatchIncisionProviderState"), "React provider panel does not import low-level provider state dispatch directly");
-assert.ok(!providerPanel.includes("../lib/controllerEvents"), "React provider panel does not import controller event names directly");
-assert.ok(providerPanel.includes("../services/providerConfig"), "React provider panel consumes the shared typed Provider config service");
-assert.ok(providerConfigService.includes("PROVIDER_STORAGE_KEY"), "Provider config service owns browser storage keying");
-assert.ok(providerConfigService.includes("initialProviderState"), "Provider config service owns stored/default Provider initialization");
-assert.ok(providerConfigService.includes("isDeprecatedNativeProviderConfig"), "Provider config service owns deprecated native Provider cleanup");
-assert.ok(providerConfigService.includes("browserProviderStorage"), "Provider config service centralizes browser storage access");
-assert.ok(providerConfigService.includes("browserProviderLocation"), "Provider config service centralizes browser location access");
-assert.ok(providerConfigService.includes('typeof window === "undefined"'), "Provider config service guards non-browser imports");
-assert.ok(!providerConfigService.includes("= window.localStorage"), "Provider config service does not bind window.localStorage in function defaults");
-assert.ok(!providerConfigService.includes("= window.location"), "Provider config service does not bind window.location in function defaults");
-assert.ok(providerConfigService.includes("localProviderFromRemotePageMessage"), "Provider config service owns loopback Provider browser warning text");
-assert.ok(providerConfigService.includes("insecureProviderFromSecurePageMessage"), "Provider config service owns HTTPS-to-HTTP Provider warning text");
-assert.ok(providerConfigService.includes("redactedProviderConfig"), "Provider config service owns Provider export redaction");
-assert.ok(providerConfigService.includes("./llmProvider"), "Provider config service consumes the typed Provider connectivity contract");
-assert.ok(!fs.existsSync(path.join(web, "llm_provider.js")), "legacy llm_provider.js facade has been removed after TypeScript service migration");
-assert.ok(!fs.existsSync(path.join(web, "llm_provider.d.ts")), "legacy LLM Provider declaration facade has been removed after TypeScript service migration");
-assert.ok(llmProviderService.includes("export interface ProviderConfig"), "TypeScript LLM Provider service owns ProviderConfig");
-assert.ok(llmProviderService.includes("export async function testProviderConnection"), "TypeScript LLM Provider service owns browser connectivity testing");
-assert.ok(llmProviderService.includes("Array.isArray(data.data)"), "TypeScript LLM Provider service counts OpenAI-compatible /models data arrays");
-assert.ok(providerPanel.includes("Input"), "React provider panel uses the shared shadcn-style input primitive");
-assert.ok(providerPanel.includes("Label"), "React provider panel uses the shared shadcn-style label primitive");
-assert.ok(providerPanel.includes("RangeInput"), "React provider panel uses the shared shadcn-style range primitive");
-assert.ok(providerPanel.includes("Button"), "React provider panel uses the shared shadcn-style button primitive");
-assert.ok(providerPanel.includes("AgentCard"), "React provider panel uses the shared shadcn-style agent card primitive");
-assert.ok(!providerPanel.includes("<input"), "React provider panel should route hidden and visible inputs through the shared input primitive");
 for (const id of [
   "editStatus",
   "angleOffsetDeg",
@@ -1607,6 +1573,9 @@ for (const id of [
   "widthScaleWrap",
   "widthScale",
   "widthScaleVal",
+  "tipAngleWrap",
+  "tipAngleDeg",
+  "tipAngleVal",
   "shiftAlongMm",
   "shiftAlongVal",
   "shiftPerpMm",
@@ -1624,13 +1593,35 @@ assert.ok(incisionWorkbench.includes("EditControlsPanel"), "React incision workb
 assert.ok(editPanel.includes("useIncisionControllerCommands"), "React edit panel uses typed incision command callbacks");
 assert.ok(!editPanel.includes("dispatchIncisionEditCommand"), "React edit panel does not import low-level command dispatch helpers directly");
 assert.ok(!editPanel.includes("../lib/controllerEvents"), "React edit panel does not import controller event names directly");
+for (const controlId of [
+  "angleOffsetDeg",
+  "lengthScale",
+  "widthScale",
+  "tipAngleDeg",
+  "shiftAlongMm",
+  "shiftPerpMm",
+]) {
+  assert.ok(
+    editPanel.includes(`preview("${controlId}", value)`) &&
+    editPanel.includes(`commit("${controlId}", event.currentTarget.value)`),
+    `React clinician edit control #${controlId} sends its latest value to the runtime bridge`,
+  );
+}
+assert.ok(
+  controllerCommand.includes("controlId?: IncisionEditControlId") &&
+    controllerCommandsHook.includes("dispatchIncisionEditCommand(command, controlId, value)") &&
+    controller.includes("applyReactControlValue(") &&
+    controller.includes("editCommandControl(detail.controlId)") &&
+    controller.includes("detail.value"),
+  "incision edit command bridge applies validated React values before publishing snapshots",
+);
 assert.ok(editPanel.includes("useIncisionStore"), "React edit panel syncs low-frequency edit state from Zustand");
 assert.ok(editPanel.includes("Button"), "React edit panel uses the shared shadcn-style button primitive");
 assert.ok(editPanel.includes("Label"), "React edit panel uses the shared shadcn-style label primitive");
 assert.ok(editPanel.includes("Select"), "React edit panel uses the shared shadcn-style select primitive");
 assert.ok(editPanel.includes("RangeInput"), "React edit panel uses the shared shadcn-style range primitive");
 assert.ok(editPanel.includes("ButtonRow"), "React edit panel uses the shared shadcn-style button row primitive");
-assert.ok(editPanel.includes("AgentCard"), "React edit panel uses the shared shadcn-style agent card primitive");
+assert.ok(editPanel.includes("WorkbenchCard"), "React edit panel uses the shared shadcn-style workbench card primitive");
 for (const id of [
   "reviewState",
   "reviewerName",
@@ -1653,7 +1644,7 @@ assert.ok(reviewPanel.includes("Select"), "React review panel uses the shared sh
 assert.ok(reviewPanel.includes("Textarea"), "React review panel uses the shared shadcn-style textarea primitive");
 assert.ok(reviewPanel.includes("Button"), "React review panel uses the shared shadcn-style button primitive");
 assert.ok(reviewPanel.includes("ButtonRow"), "React review panel uses the shared shadcn-style button row primitive");
-assert.ok(reviewPanel.includes("AgentCard"), "React review panel uses the shared shadcn-style agent card primitive");
+assert.ok(reviewPanel.includes("WorkbenchCard"), "React review panel uses the shared shadcn-style workbench card primitive");
 assert.ok(reviewPanel.includes('variant="workbenchPrimary"'), "React review panel keeps primary workbench button styling through Button variants");
 assert.ok(incisionWorkbench.includes('to="/"'), "React incision workbench returns to the stateless tool launcher");
 assert.ok(incisionStagePanel.includes('to="/settings/atlas"'), "React incision stage routes atlas maintenance through settings");
@@ -1665,7 +1656,11 @@ for (const dependencyType of incisionRuntimeDependencyTypes) {
   );
 }
 assert.ok(!controller.includes("// @ts-nocheck"), "incision runtime should run under strict TypeScript checking");
-assert.ok(controller.includes("interface IncisionDomElements"), "incision runtime types its DOM binding surface");
+assert.ok(incisionDomService.includes("interface IncisionDomElements"), "incision DOM service types the controller binding surface");
+assert.ok(incisionDomService.includes("collectIncisionElements"), "incision DOM service owns route-host element collection");
+assert.ok(incisionClinicalCopyService.includes("overrideLabel"), "incision clinical copy service owns clinician-facing override labels");
+assert.ok(incisionReviewPolicyService.includes("assessReviewReadiness"), "incision review policy service owns pure review readiness checks");
+assert.ok(controller.includes("./incisionReviewPolicy"), "incision runtime delegates review gates to the pure review policy service");
 assert.ok(controller.includes("interface IncisionRuntimeState"), "incision runtime types its long-lived renderer/workflow state");
 assert.ok(controller.includes("interface PointerDragState"), "incision runtime types pointer drag state");
 assert.ok(controller.includes("function controllerEvent"), "incision runtime narrows browser command events before reading detail");
@@ -1680,8 +1675,8 @@ assert.ok(!fs.existsSync(path.join(web, "export_privacy.js")), "legacy export_pr
 assert.ok(!fs.existsSync(path.join(web, "export_privacy.d.ts")), "legacy privacy audit declaration facade has been removed after TypeScript service migration");
 assert.ok(exportPrivacyService.includes("export function auditExportPayload"), "TypeScript export privacy service owns browser export preflight checks");
 assert.ok(controller.includes("./exportPrivacy"), "incision controller imports browser export privacy checks from the typed service");
-assert.ok(controller.includes("export function mountIncisionAgentWorkbench"), "incision controller exposes a mount lifecycle");
-assert.ok(controller.includes("export function disposeIncisionAgentWorkbench"), "incision controller exposes a dispose lifecycle");
+assert.ok(controller.includes("export function mountIncisionWorkbench"), "incision controller exposes a mount lifecycle");
+assert.ok(controller.includes("export function disposeIncisionWorkbench"), "incision controller exposes a dispose lifecycle");
 assert.ok(controller.includes("INCISION_TUMOR_REACT_COMMAND_EVENT"), "incision controller listens for React tumor input commands");
 assert.ok(controller.includes("../lib/controllerEvents"), "incision controller imports event names from the shared module");
 assert.ok(controller.includes("../lib/controllerCommand"), "incision controller imports the shared command parsing module");
@@ -1710,10 +1705,8 @@ assert.ok(controller.includes("currentAssetLoadingSnapshot"), "incision controll
 assert.ok(controller.includes('publishIncisionState("asset_loading")'), "asset loading progress republishes React stage state");
 assert.ok(controller.includes('publishIncisionState("asset_loaded")'), "asset load completion republishes React stage state");
 assert.ok(controller.includes('publishIncisionState("asset_load_failed")'), "asset load failures republish React stage state");
-assert.ok(controller.includes("INCISION_PROVIDER_REACT_STATE_EVENT"), "incision controller listens for React provider state changes");
-assert.ok(controller.includes("./providerConfig"), "incision controller consumes the shared typed Provider config service");
-assert.ok(controller.includes("persistProviderPrefs(providerConfig())"), "incision controller saves Provider config through the shared service");
-assert.ok(controller.includes("redactProviderConfig(providerConfig())"), "incision controller redacts Provider config through the shared service");
+assert.ok(!controller.includes("INCISION_PROVIDER_REACT_STATE_EVENT"), "incision controller has no remote model state bridge");
+assert.ok(!controller.includes("./providerConfig"), "incision controller has no provider configuration dependency");
 assert.ok(incisionSnapshotsService.includes("buildIncisionControllerSnapshot"), "shared incision snapshot service builds typed controller snapshots");
 assert.ok(incisionSnapshotsService.includes("buildIncisionResultViewSnapshot"), "shared incision snapshot service builds candidate result view snapshots");
 assert.ok(incisionSnapshotsService.includes("buildIncisionSavedCandidateSummaries"), "shared incision snapshot service builds saved candidate summaries");
@@ -1731,13 +1724,12 @@ assert.ok(controller.includes("handleReactEditCommand"), "incision controller ro
 assert.ok(controller.includes("INCISION_LIBRARY_REACT_COMMAND_EVENT"), "incision controller listens for React candidate library commands");
 assert.ok(controller.includes("handleReactLibraryCommand"), "incision controller routes React library commands to existing save/export workflow functions");
 assert.ok(controller.includes("../lib/reactManagedWorkbench"), "incision controller imports the shared React-managed flag helper");
-assert.ok(controller.includes("isReactManagedWorkbench()"), "incision controller can branch between React and legacy provider handling");
+assert.ok(controller.includes("isReactManagedWorkbench()"), "incision controller can branch between React and compatibility workbench handling");
 assert.ok(!controller.includes("window.__LANGERFACE_REACT_MANAGED__"), "incision controller does not touch the managed flag directly");
-assert.ok(!controller.includes('document.getElementById("agentCanvas")'), "incision runtime no longer auto-mounts from legacy HTML");
+assert.ok(!controller.includes('document.getElementById("incisionCanvas")'), "incision runtime no longer auto-mounts from legacy HTML");
 assert.ok(controller.includes("els.tumorKind.onchange"), "legacy incision HTML still owns direct tumor input handlers");
 assert.ok(controller.includes("els.importSecondaryCue.onclick"), "legacy incision HTML still owns direct secondary cue handlers");
 assert.ok(controller.includes("el.oninput = applyEditControls"), "legacy incision HTML still owns direct edit preview handlers");
-assert.ok(controller.includes("els.testProvider.onclick = testProviderEndpoint"), "legacy incision HTML still owns provider connectivity testing");
 assert.ok(controller.includes("els.approveCandidate.onclick"), "legacy incision HTML still owns direct review action handlers");
 assert.ok(controller.includes("els.saveCandidate.onclick"), "legacy incision HTML still owns direct candidate library handlers");
 assert.ok(controller.includes("cancelAnimationFrame"), "incision controller cancels its render loop on dispose");
@@ -1756,7 +1748,7 @@ assert.ok(standardFaceAssetsHook.includes(".catch((error) => {\n      if (dispos
 assert.ok(standardFaceAssetsHook.includes("setAssetStatus"), "standard face asset hook publishes low-frequency asset status through Zustand");
 assert.ok(settingsRoute.includes("useReactRouteLifecycle"), "settings route publishes route lifecycle state");
 assert.ok(settingsRoute.includes('workspace: "settings"'), "settings route uses the settings workspace");
-assert.ok(settingsRoute.includes("ProviderConfigPanel"), "developer settings owns the AI service configuration entry");
+assert.ok(!settingsRoute.includes("ProviderConfigPanel"), "developer settings exposes no remote model configuration");
 assert.ok(settingsRoute.includes('to="/annotate"'), "settings route keeps the annotation tool as a controlled atlas entry");
 assert.ok(!settingsRoute.includes('to="/three-preview"'), "settings route should not expose the public R3F preview developer entry");
 assert.ok(settingsRoute.includes('to="/surgery"'), "settings route keeps the standalone closure demo as a controlled developer entry");

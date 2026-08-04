@@ -4,11 +4,11 @@ import { auditExportPayload } from "../web/src/services/exportPrivacy.ts";
 
 function safeReviewExport() {
   return {
-    schema_version: "incision-review-export/v0.3",
+    schema_version: "incision-review-export/v0.4",
     exported_at: "2026-06-25T12:34:56.000Z",
     current: {
-      schema_version: "incision-review-record/v0.3",
-      provider_config: { api_key_present: true, api_key: "[redacted]" },
+      schema_version: "incision-review-record/v0.4",
+      credentials: { token_present: true, token: "[redacted]" },
       privacy_audit: {
         raw_image_sent: false,
         raw_video_sent: false,
@@ -17,7 +17,6 @@ function safeReviewExport() {
       secondary_cues: {
         present: true,
         used_for_geometry: false,
-        used_for_agent_prompt: false,
         outputs: { cue_overlay: "review-overlay.png" },
       },
     },
@@ -31,12 +30,11 @@ assert.equal(report.passed, true);
 assert.equal(report.violation_count, 0);
 
 const unsafe = safeReviewExport();
-unsafe.current.provider_config.api_key = "sk-test-not-redacted";
+unsafe.current.credentials.token = "test-not-redacted";
 unsafe.current.privacy_audit.raw_image_sent = true;
 unsafe.current.patient_name = "Alice Example";
 unsafe.current.review = { notes: "Call +1 555 010 9999 before review" };
 unsafe.current.secondary_cues.used_for_geometry = true;
-unsafe.current.secondary_cues.used_for_agent_prompt = true;
 unsafe.current.secondary_cues.outputs.cue_overlay = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB";
 report = auditExportPayload(unsafe);
 const codes = new Set(report.violations.map((item) => item.code));
@@ -46,7 +44,6 @@ assert.ok(codes.has("raw_media_flag_true"));
 assert.ok(codes.has("pii_field_present"));
 assert.ok(codes.has("pii_pattern_present"));
 assert.ok(codes.has("secondary_cue_used_for_geometry_true"));
-assert.ok(codes.has("secondary_cue_used_for_agent_prompt_true"));
 assert.ok(codes.has("embedded_media_payload"));
 
 const timestampOnly = safeReviewExport();

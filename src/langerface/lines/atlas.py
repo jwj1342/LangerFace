@@ -6,6 +6,7 @@
 {
   "system": "rstl",
   "version": "0.1",
+  "atlasVersion": "8.1.67",
   "topologyId": "mediapipe-468",
   "topologyVersion": "mediapipe-canonical-468-v1",
   "provenance": "...",
@@ -47,6 +48,7 @@ class Atlas:
     system: str
     lines: list[AtlasLine] = field(default_factory=list)
     version: str = "0.1"
+    atlas_version: str | None = None
     topology_id: str = TOPOLOGY_ID
     topology_version: str = TOPOLOGY_VERSION
     provenance: str = ""
@@ -69,6 +71,7 @@ class Atlas:
             system=data["system"],
             lines=lines,
             version=data.get("version", "0.1"),
+            atlas_version=data.get("atlasVersion"),
             topology_id=data.get("topologyId", TOPOLOGY_ID),
             topology_version=data.get("topologyVersion", TOPOLOGY_VERSION),
             provenance=data.get("provenance", ""),
@@ -79,6 +82,7 @@ class Atlas:
         data = {
             "system": self.system,
             "version": self.version,
+            **({"atlasVersion": self.atlas_version} if self.atlas_version else {}),
             "topologyId": self.topology_id,
             "topologyVersion": self.topology_version,
             "provenance": self.provenance,

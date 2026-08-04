@@ -39,9 +39,8 @@ const incisionStage = read("src/components/IncisionStagePanel.tsx");
 const tumorInput = read("src/components/TumorInputPanel.tsx");
 const candidateLibrary = read("src/components/CandidateLibraryPanel.tsx");
 const candidateResult = read("src/components/CandidateResultPanel.tsx");
-const providerConfig = read("src/components/ProviderConfigPanel.tsx");
 const reviewControls = read("src/components/ReviewControlsPanel.tsx");
-const incisionRuntime = read("src/services/incisionAgentRuntime.ts");
+const incisionRuntime = read("src/services/incisionRuntime.ts");
 const incisionWorkflowTools = read("src/services/incisionWorkflowTools.ts");
 const annotateStage = read("src/components/AnnotateStagePanel.tsx");
 const annotateMeshSource = read("src/components/AnnotateMeshSourcePanel.tsx");
@@ -67,13 +66,13 @@ assert.ok(!app.includes('path="/app/three-preview"'), "router should not preserv
 includesAll(settingsRoute, [
   'to="/annotate"',
   'to="/surgery"',
-  "ProviderConfigPanel",
   "WorkerStatusPanel",
   "病例存储",
   "不提供",
   "不保存患者或病例信息",
 ], "controlled settings entry points");
 assert.ok(!settingsRoute.includes('to="/three-preview"'), "developer settings should not expose the public 3D preview entry");
+assert.ok(!settingsRoute.includes("ProviderConfigPanel"), "developer settings should not expose remote model configuration");
 
 includesAll(liveStage, [
   'id="video"',
@@ -266,7 +265,7 @@ includesAll(skinMaterial, [
 ], "face texture material support");
 
 includesAll(incisionStage, [
-  'id="agentCanvas"',
+  'id="incisionCanvas"',
   "AssetLoadingOverlay",
   "病灶中心",
   "肿物范围",
@@ -285,8 +284,8 @@ includesAll(tumorInput, [
   'id="exportTumorBtn"',
   'id="importTumorBtn"',
   'id="tumorImportFile"',
-  'id="runAgentBtn"',
-  'commands.tumor("run_agent")',
+  'id="runWorkflowBtn"',
+  'commands.tumor("run_workflow")',
 ], "incision tumor input");
 
 includesAll(candidateResult, [
@@ -294,7 +293,7 @@ includesAll(candidateResult, [
   'id: "candidateLength"',
   'id: "candidateWidth"',
   'id: "candidateTipAngle"',
-  'id="llmSummary"',
+  'id="workflowSummary"',
   'id="guardrailDetails"',
 ], "incision candidate metrics");
 
@@ -308,15 +307,6 @@ includesAll(candidateLibrary, [
   'commands.library("stage_live_overlay")',
 ], "incision candidate library and exports");
 
-includesAll(providerConfig, [
-  'id="providerMode"',
-  'value="openai-compatible"',
-  'id="providerBaseUrl"',
-  'id="providerModel"',
-  'id="providerApiKey"',
-  'id="testProviderBtn"',
-], "OpenAI-compatible provider configuration");
-
 includesAll(reviewControls, [
   'id="reviewerName"',
   'id="reviewDecision"',
@@ -327,7 +317,7 @@ includesAll(reviewControls, [
 ], "doctor review controls");
 
 includesAll(incisionRuntime, [
-  "mountIncisionAgentWorkbench",
+  "mountIncisionWorkbench",
   "loadFlameBasisAsset",
   "mediaPipeAtlasToFlamePreviewAtlas",
   "planWorkflowForCurrentTumor",
@@ -339,7 +329,7 @@ includesAll(incisionRuntime, [
   "exportReport",
   "exportScreenshot",
   "summarizeTumorInputQuality",
-  "runAgent",
+  "runWorkflow",
 ], "incision runtime workflow");
 
 includesAll(incisionWorkflowTools, [
