@@ -219,6 +219,10 @@ gh api repos/jwj1342/LangerFace/branches/master/protection \
 7. GitHub 在 PR 切换 base 时会取消旧 Auto-merge 请求；workflow 在子 PR
    retarget 到 `master` 后重新启用，避免把它提前合进临时父分支。
 
+首次引入该 workflow 时，受信任的策略脚本尚未存在于默认分支。此时 workflow
+会明确记录 notice 并安全跳过策略执行，而不是尝试运行 PR head 中的脚本或报告
+`MODULE_NOT_FOUND`；合并部署后，定时轮询会从 `master` 读取脚本并开始正常处理。
+
 Branch protection 的 required checks 是显式 allowlist，不会因为 workflow 新增 job
 自动扩充。新增 `browser-tests`、文档同步或其他合并门禁时，必须等该 job 已在默认分支
 存在、所有仍指向 `master` 的开放 PR 都能产生该 check 后，再把它加入 required

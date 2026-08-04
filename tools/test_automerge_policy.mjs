@@ -167,6 +167,9 @@ const workflow = fs.readFileSync(".github/workflows/automerge-approved.yml", "ut
 assert.match(workflow, /pull_request_target:/);
 assert.match(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
 assert.match(workflow, /persist-credentials: false/);
+assert.match(workflow, /id: trusted_policy/);
+assert.match(workflow, /\[\[ -f tools\/automerge_policy\.mjs \]\]/);
+assert.match(workflow, /if: steps\.trusted_policy\.outputs\.available == 'true'/);
 assert.match(workflow, /pull-requests: write/);
 assert.match(workflow, /contents: write/);
 assert.doesNotMatch(workflow, /pull_request\.head/);

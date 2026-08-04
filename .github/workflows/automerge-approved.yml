@@ -37,7 +37,18 @@ jobs:
           persist-credentials: false
           sparse-checkout: tools/automerge_policy.mjs
           sparse-checkout-cone-mode: false
+      - name: Detect deployed trusted policy
+        id: trusted_policy
+        shell: bash
+        run: |
+          if [[ -f tools/automerge_policy.mjs ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Trusted auto-merge policy is not deployed on the default branch yet."
+          fi
       - name: Enable native auto-merge for eligible PRs
+        if: steps.trusted_policy.outputs.available == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           AUTOMERGE_REPOSITORY: ${{ github.repository }}
