@@ -1479,6 +1479,14 @@ assert.ok(
   !incisionPresenterService.includes("THREE"),
   "incision presenter remains a typed mapping without DOM or Three.js access",
 );
+assert.ok(
+  controller.includes("if (presentation.title !== undefined) element.title = presentation.title;"),
+  "incision runtime writes title only when a presentation explicitly provides one",
+);
+assert.ok(
+  !controller.includes("element.title = presentation.title || \"\""),
+  "incision runtime keeps an existing title when a presentation omits title",
+);
 assert.ok(tumorPanel.includes("useIncisionStore"), "React tumor panel syncs low-frequency tumor status from Zustand");
 assert.ok(tumorPanel.includes("Button"), "React tumor panel uses the shared shadcn-style button primitive");
 assert.ok(tumorPanel.includes("Input"), "React tumor panel uses the shared shadcn-style input primitive");

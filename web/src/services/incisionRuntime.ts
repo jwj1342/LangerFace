@@ -1095,7 +1095,7 @@ function tumorQualityFor(result: DynamicRecord = S.result) {
 
 function applyTextPresentation(element: HTMLElement, presentation: IncisionTextPresentation) {
   element.textContent = presentation.text;
-  element.title = presentation.title || "";
+  if (presentation.title !== undefined) element.title = presentation.title;
   element.classList.toggle("warn", Boolean(presentation.classNames?.includes("warn")));
   element.classList.toggle("danger", Boolean(presentation.classNames?.includes("danger")));
 }
