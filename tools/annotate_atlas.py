@@ -14,8 +14,10 @@
   w             写入草案（始终保持 validated=false）
   q / 关闭窗口  退出（不自动保存）
 
-保存只生成待复核草案，不能声明临床校验已经完成。临床审核和将
-``validated`` 置为 ``true`` 必须通过独立的逐线复核流程完成。
+保存只生成待复核草案，不能声明临床校验已经完成。请用
+``tools/atlas_clinical_review.py`` 生成逐线审阅包；只有完成医生逐线复核、
+来源记录和显式签署后，finalize 子命令才会生成单独的
+``validated:true`` 候选文件。
 """
 from __future__ import annotations
 
@@ -211,6 +213,7 @@ def _save(canonical, proj, completed, system, path, existing=None):
     atlas = Atlas(
         system=system,
         version=existing.version if existing else "0.1",
+        atlas_version=existing.atlas_version if existing else None,
         topology_id=existing.topology_id if existing else TOPOLOGY_ID,
         topology_version=existing.topology_version if existing else TOPOLOGY_VERSION,
         provenance=f"{previous_provenance} {edit_note}".strip(),

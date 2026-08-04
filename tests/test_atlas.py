@@ -34,12 +34,24 @@ def test_roundtrip(tmp_path):
             np.array([[0, 0.5, 0.3], [1, 0.2, 0.2]], dtype=float),
             disable_runtime_expansion=True,
         ),
-    ], atlas_version="8.1.67", provenance="test", validated=True)
+    ],
+        atlas_version="8.1.67",
+        provenance="test",
+        validated=True,
+        clinical_validation={
+            "schemaVersion": "atlas-clinical-validation/v0.1",
+            "reviewer": "clinician-01",
+        },
+    )
     p = tmp_path / "atlas.json"
     a.save(str(p))
     b = Atlas.load(str(p))
     assert b.system == "rstl" and b.atlas_version == "8.1.67" and b.validated is True
     assert b.topology_id == TOPOLOGY_ID and b.topology_version == TOPOLOGY_VERSION
+    assert b.clinical_validation == {
+        "schemaVersion": "atlas-clinical-validation/v0.1",
+        "reviewer": "clinician-01",
+    }
     assert len(b.lines) == 1 and b.lines[0].points.shape == (2, 3)
     assert b.lines[0].disable_runtime_expansion is True
 
@@ -109,11 +121,12 @@ def test_atlas_line_from_points2d_equals_manual_loop(canonical):
     assert ln.points.tobytes() == expected.tobytes()
 
 
-def test_annotation_save_preserves_loaded_lines_and_never_validates(canonical, tmp_path):
+def test_annotation_save_preserves_loaded_lines_and_metadata_and_never_validates(canonical, tmp_path):
     proj = canonical.project_front()
     existing = Atlas(
         system="rstl",
         version="0.2",
+        atlas_version="8.1.67",
         topology_id="custom-topology",
         topology_version="custom-topology-v2",
         provenance="existing draft.",
@@ -145,6 +158,7 @@ def test_annotation_save_preserves_loaded_lines_and_never_validates(canonical, t
     saved = Atlas.load(str(output))
     assert saved.validated is False
     assert saved.version == "0.2"
+    assert saved.atlas_version == "8.1.67"
     assert saved.topology_id == "custom-topology"
     assert saved.topology_version == "custom-topology-v2"
     assert saved.lines[0].name == "forehead-existing"

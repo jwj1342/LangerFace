@@ -299,10 +299,7 @@ npm run dev
 
 ### 接入项目
 
-- **临床校验闭环（issue #2）**：网页标注器与 `tools/annotate_atlas.py` 都只生成
-  `validated:false` 候选图谱草案。只有逐线评审全部通过，并记录评审者、角色、时间、
-  医学来源和显式 attestation 后，受控 finalize 流程才能生成单独的
-  `validated:true` 候选资产；普通编辑保存和手工修改布尔字段都不属于临床签署。
+- **临床校验闭环（issue #2）**：网页标注器、`tools/annotate_atlas.py` 和文献描线工具都只生成 `validated:false` 草案；`tools/atlas_clinical_review.py build` 固定源资产哈希并生成逐线 JSON/CSV（额头线优先），医生完成方向/位置评分、评审者、角色、时间、医学来源和显式 attestation 后，`finalize` 才会生成单独的 `validated:true` 候选文件，并写入结构化 `clinicalValidation`。普通编辑保存和手工修改布尔字段都不属于临床签署；候选仍需经 PR 审核后才能替换正式资产。
 - **3D 头模标注**：HeadSpace 等头模经离线管线导出为 `{vertices, triangles}` JSON 后，可在 `/app/annotate` 上传加载；标注得到的 xyz 线可继续经 `langerface.geometry`（加权 Sim3）在头模与标准脸之间迁移。
 - **数据隐私**：真实头模（HeadSpace / FaceScape）不入库，仅本地使用；标注产物（图谱/xyz JSON，仅坐标）可入库评审。
 
