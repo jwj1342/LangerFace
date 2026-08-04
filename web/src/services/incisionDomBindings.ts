@@ -1,4 +1,5 @@
 import type { IncisionDomElements } from "./incisionDom";
+import type { IncisionTumorCommand } from "../lib/controllerCommand";
 
 export type IncisionDomCleanup = () => void;
 
@@ -56,6 +57,76 @@ export interface IncisionDomEventHandlers {
   onTumorFile(file?: File): void;
   onSecondaryCueFile(file?: File): void;
   onResize(): void;
+}
+
+function applyReactControlValue(
+  control: HTMLInputElement | HTMLSelectElement | null,
+  value: unknown,
+) {
+  if (!control || (typeof value !== "string" && typeof value !== "number")) return;
+  const serializedValue = String(value);
+  if (control instanceof HTMLSelectElement) {
+    if ([...control.options].some((option) => option.value === serializedValue)) {
+      control.value = serializedValue;
+    }
+    return;
+  }
+  if (control.type === "range") {
+    const numericValue = Number(serializedValue);
+    if (!Number.isFinite(numericValue)) return;
+    const min = Number(control.min);
+    const max = Number(control.max);
+    control.value = String(Math.max(
+      Number.isFinite(min) ? min : numericValue,
+      Math.min(Number.isFinite(max) ? max : numericValue, numericValue),
+    ));
+    return;
+  }
+  control.value = serializedValue;
+}
+
+function tumorCommandControl(
+  elements: IncisionDomElements,
+  command: IncisionTumorCommand,
+): HTMLInputElement | HTMLSelectElement | null {
+  if (command === "kind_changed") return elements.tumorKind;
+  if (command === "diameter_input" || command === "diameter_changed") return elements.diameter;
+  if (command === "author_changed") return elements.tumorAuthor;
+  if (command === "depth_input" || command === "depth_changed") return elements.depth;
+  if (command === "margin_input" || command === "margin_changed") return elements.margin;
+  if (command === "boundary_mode_changed") return elements.boundaryMode;
+  if (command === "ellipse_ratio_input" || command === "ellipse_ratio_changed") return elements.ellipseRatio;
+  return null;
+}
+
+export function applyReactTumorControlValue(
+  elements: IncisionDomElements,
+  command: IncisionTumorCommand,
+  value: unknown,
+) {
+  applyReactControlValue(tumorCommandControl(elements, command), value);
+}
+
+function editCommandControl(
+  elements: IncisionDomElements,
+  controlId: unknown,
+): HTMLInputElement | HTMLSelectElement | null {
+  if (controlId === "angleOffsetDeg") return elements.angleOffset;
+  if (controlId === "lengthScale") return elements.lengthScale;
+  if (controlId === "widthScale") return elements.widthScale;
+  if (controlId === "tipAngleDeg") return elements.tipAngle;
+  if (controlId === "shiftAlongMm") return elements.shiftAlong;
+  if (controlId === "shiftPerpMm") return elements.shiftPerp;
+  if (controlId === "editReason") return elements.editReason;
+  return null;
+}
+
+export function applyReactEditControlValue(
+  elements: IncisionDomElements,
+  controlId: unknown,
+  value: unknown,
+) {
+  applyReactControlValue(editCommandControl(elements, controlId), value);
 }
 
 function fileFromEvent(event: Event): File | undefined {

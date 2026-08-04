@@ -43,6 +43,7 @@ export interface IncisionRuntimeState {
   reactCommandCleanup: ControllerCleanup | null;
   editHistory: IncisionEditHistory;
   lastConsoleTraceSignature: string;
+  generationCount: number;
 }
 
 export function createIncisionControllerState(): IncisionRuntimeState {
@@ -77,5 +78,6 @@ export function createIncisionControllerState(): IncisionRuntimeState {
     reactCommandCleanup: null,
     editHistory: new IncisionEditHistory(),
     lastConsoleTraceSignature: "",
+    generationCount: 0,
   };
 }

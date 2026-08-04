@@ -17,8 +17,11 @@ import { modelState, renderState, sourceState } from "./state.js";
 import { setLive, setMsg } from "./ui.js";
 
 // ── 资产 / 模型加载 ───────────────────────────────────────────────────────────
-export async function ensureReady() {
-  if (modelState.landmarker) return;
+let readyPromise = null;
+let imageReadyPromise = null;
+let visionResolver = null;
+
+async function initializeReady() {
   const [topology, rstl] = await Promise.all([
     fetch(assetUrls.topology).then((r) => r.json()),
     fetch(assetUrls.atlasRstl).then((r) => r.json()),
@@ -51,6 +54,7 @@ export async function ensureReady() {
     handLandmarker: "mediapipe/tasks-vision@0.10.35",
   });
   const resolver = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
+  visionResolver = resolver;
   const build = (delegate) => FaceLandmarker.createFromOptions(resolver, {
     baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
     runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: true,  // 表情通道供 RSTL 表情适配使用
@@ -86,6 +90,59 @@ export async function ensureReady() {
     rstlLines: modelState.atlases.rstl.length,
     handOcclusionReady: Boolean(modelState.handLandmarker),
   });
+}
+
+export function ensureReady() {
+  if (readyPromise) return readyPromise;
+  if (modelState.landmarker) return Promise.resolve();
+  readyPromise = initializeReady().catch((error) => {
+    readyPromise = null;
+    throw error;
+  });
+  return readyPromise;
+}
+
+async function initializeImageReady() {
+  await ensureReady();
+  if (!visionResolver) throw new Error("MediaPipe Vision 运行时尚未就绪");
+
+  const build = (delegate) => FaceLandmarker.createFromOptions(visionResolver, {
+    baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
+    runningMode: "IMAGE", numFaces: 1, outputFaceBlendshapes: true,
+    minFaceDetectionConfidence: 0.5, minFacePresenceConfidence: 0.5,
+  });
+  try { modelState.imageLandmarker = await build("GPU"); }
+  catch (e) {
+    countMetric("faceLandmarker.imageGpuFallback");
+    logWarn("静态图片 Face Landmarker GPU 初始化失败，回退到 CPU。", e);
+    modelState.imageLandmarker = await build("CPU");
+  }
+
+  const buildHand = (delegate) => HandLandmarker.createFromOptions(visionResolver, {
+    baseOptions: { modelAssetPath: assetUrls.handLandmarkerTask, delegate },
+    runningMode: "IMAGE", numHands: 2,
+    minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5,
+  });
+  try { modelState.imageHandLandmarker = await buildHand("GPU"); }
+  catch (e) {
+    countMetric("handLandmarker.imageGpuFallback");
+    logWarn("静态图片 Hand Landmarker GPU 初始化失败，回退到 CPU。", e);
+    try { modelState.imageHandLandmarker = await buildHand("CPU"); }
+    catch (err) {
+      countMetric("handLandmarker.imageLoadFailure");
+      logWarn("静态图片手部模型加载失败，照片手部遮挡功能将暂不可用。", err);
+    }
+  }
+}
+
+export function ensureImageReady() {
+  if (imageReadyPromise) return imageReadyPromise;
+  if (modelState.imageLandmarker) return Promise.resolve();
+  imageReadyPromise = initializeImageReady().catch((error) => {
+    imageReadyPromise = null;
+    throw error;
+  });
+  return imageReadyPromise;
 }
 
 function requestRedraw() {
@@ -130,26 +187,38 @@ export function restoreOfficialAtlas(system) {
 
 // 检测手部 → 凸包列表（图像空间），落在其中的脸部线点将被剔除
 export function detectHands(t, W, H) {
-  if (!renderState.handOcc || !modelState.handLandmarker) return [];
-  const hr = modelState.handLandmarker.detectForVideo(sourceState.source, t);
+  if (!renderState.handOcc) return [];
+  const imageMode = sourceState.sourceKind === "image";
+  const detector = imageMode ? modelState.imageHandLandmarker : modelState.handLandmarker;
+  if (!detector) return [];
+  const hr = imageMode ? detector.detect(sourceState.source) : detector.detectForVideo(sourceState.source, t);
   if (!hr.landmarks || !hr.landmarks.length) return [];
   const margin = Math.max(5, W * 0.006);
   return buildHandMasks(hr.landmarks.map((h) => toPixels(h, W, H)), 0.16, margin);
 }
 
 // ── 数据源 ────────────────────────────────────────────────────────────────────
+let sourceOperationId = 0;
+
 export async function startCamera() {
+  const operationId = ++sourceOperationId;
   if (sourceState.sourceKind === "camera") { stopSource(); setLive(false, "待机"); els.cam.setAttribute("aria-pressed","false"); return; }
   setMsg("加载模型…");
   try {
     await ensureReady();
+    if (operationId !== sourceOperationId) return;
     setMsg("请求摄像头权限…");
     const stream = await openCameraStream(CAMERA_CONSTRAINTS);
-    stopSource();
+    if (operationId !== sourceOperationId) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    stopSource({ preserveOperation: true });
     els.video.srcObject = stream; await els.video.play();
     setSource(els.video, "camera", els.video.videoWidth, els.video.videoHeight);
     els.cam.setAttribute("aria-pressed", "true");
   } catch (e) {
+    if (operationId !== sourceOperationId) return;
     const detail = describeCameraError(e);
     countMetric(`camera.openFailure.${detail.reason}`);
     logWarn("无法开启摄像头。", { reason: detail.reason, error: e });
@@ -176,20 +245,40 @@ export function showCameraPlaceholder(message) {
 
 export async function handleFile(file) {
   if (!file) return;
-  setMsg("加载模型…"); await ensureReady();
-  stopSource();
-  const url = URL.createObjectURL(file);
-  if (file.type.startsWith("image/")) {
-    const img = new Image(); img.src = url; await img.decode();
-    const prepared = prepareImageSource(img);
-    setSource(prepared.source, "image", prepared.width, prepared.height);
-    URL.revokeObjectURL(url);
-    if (prepared.scaled) setMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
-  } else {
-    els.video.srcObject = null; els.video.src = url; els.video.loop = true; await els.video.play();
-    setSource(els.video, "video", els.video.videoWidth, els.video.videoHeight);
+  const operationId = ++sourceOperationId;
+  els.file.value = "";
+  stopSource({ preserveOperation: true });
+  setLive(false, "待机");
+  setMsg(file.type.startsWith("image/") ? "加载图片检测模型…" : "加载模型…");
+  try {
+    await ensureReady();
+    if (file.type.startsWith("image/")) await ensureImageReady();
+    if (operationId !== sourceOperationId) return;
+
+    const url = URL.createObjectURL(file);
+    if (file.type.startsWith("image/")) {
+      try {
+        const img = new Image(); img.src = url; await img.decode();
+        if (operationId !== sourceOperationId) return;
+        const prepared = prepareImageSource(img);
+        setSource(prepared.source, "image", prepared.width, prepared.height);
+        if (prepared.scaled) setMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    } else {
+      els.video.srcObject = null; els.video.src = url; els.video.loop = true; await els.video.play();
+      if (operationId !== sourceOperationId) return;
+      setSource(els.video, "video", els.video.videoWidth, els.video.videoHeight);
+    }
+    els.cam.setAttribute("aria-pressed", "false");
+  } catch (e) {
+    if (operationId !== sourceOperationId) return;
+    countMetric("source.fileLoadFailure");
+    logWarn("上传文件加载失败。", e);
+    setLive(false, "待机");
+    setMsg("无法读取或检测该文件。请重新上传；若仍失败，请换用受支持的清晰图片或视频。");
   }
-  els.cam.setAttribute("aria-pressed", "false");
 }
 
 export function setSource(src, kind, w, h) {
@@ -206,6 +295,7 @@ export function setSource(src, kind, w, h) {
   renderState.smoother.reset();
   resetRefineForNewSource();
   sourceState.presence = 0; sourceState.lastLM = null; sourceState.imageCacheLM = null; sourceState.imageHulls = null;
+  sourceState.imageDetectionComplete = false; sourceState.imageDetectionAttempts = 0;
   sourceState.frozenFrame = null; sourceState.lastHulls = [];
   sourceState.blend = null; sourceState.rawBlend = null;
   sourceState.running = true; sourceState.paused = false;
@@ -216,7 +306,8 @@ export function setSource(src, kind, w, h) {
   requestFrame();
 }
 
-export function stopSource() {
+export function stopSource({ preserveOperation = false } = {}) {
+  if (!preserveOperation) sourceOperationId += 1;
   const ms = els.video.srcObject;
   if (ms) ms.getTracks().forEach((t) => t.stop());
   els.video.srcObject = null; els.video.removeAttribute("src");
@@ -226,6 +317,7 @@ export function stopSource() {
   els.canvas.classList.remove("image-source");
   clearCanvasDisplayFit();
   sourceState.imageCacheLM = null; sourceState.imageHulls = null; sourceState.lastLM = null;
+  sourceState.imageDetectionComplete = false; sourceState.imageDetectionAttempts = 0;
   sourceState.blend = null; sourceState.rawBlend = null;
   resetRefineForNewSource();
   els.pause.disabled = true;
@@ -305,6 +397,25 @@ export function requestFrame() {
   requestAnimationFrame(loop);
 }
 
+const STATIC_IMAGE_MAX_ATTEMPTS = 3;
+
+function detectStaticImageWithRetries(detector, source, maxAttempts = STATIC_IMAGE_MAX_ATTEMPTS) {
+  const attemptLimit = Math.max(1, Math.floor(maxAttempts));
+  let result = null, error = null;
+  if (!detector) return { result, attempts: 0, error: new Error("静态图片检测器尚未就绪") };
+  for (let attempts = 1; attempts <= attemptLimit; attempts += 1) {
+    try {
+      result = detector.detect(source);
+      error = null;
+      if (result?.faceLandmarks?.[0]?.length) return { result, attempts, error };
+    } catch (caught) {
+      result = null;
+      error = caught;
+    }
+  }
+  return { result, attempts: attemptLimit, error };
+}
+
 export function loop() {
   frameScheduled = false;
   if (!sourceState.running || sourceState.paused) return;
@@ -314,10 +425,20 @@ export function loop() {
 
   let lm = null, hulls = [];
   if (sourceState.sourceKind === "image") {
-    if (!sourceState.imageCacheLM) {
-      const res = modelState.landmarker.detectForVideo(sourceState.source, t);
-      sourceState.imageCacheLM = (res.faceLandmarks && res.faceLandmarks[0]) ? toPixels(res.faceLandmarks[0], W, H) : null;
+    if (!sourceState.imageDetectionComplete) {
+      sourceState.imageDetectionComplete = true;
+      const outcome = detectStaticImageWithRetries(modelState.imageLandmarker, sourceState.source);
+      sourceState.imageDetectionAttempts = outcome.attempts;
+      const res = outcome.result;
+      sourceState.imageCacheLM = (res?.faceLandmarks && res.faceLandmarks[0]) ? toPixels(res.faceLandmarks[0], W, H) : null;
       sourceState.imageHulls = detectHands(t, W, H);
+      if (!sourceState.imageCacheLM) {
+        countMetric("faceLandmarker.noFaceImage");
+        if (outcome.error) logWarn("静态图片检测失败。", outcome.error);
+        setMsg(outcome.error
+          ? `图片检测失败（已尝试 ${outcome.attempts} 次）。请重新上传；若仍失败，请换一张正面清晰的照片。`
+          : `未检测到人脸（已尝试 ${outcome.attempts} 次）。请换用正面、清晰、光线充足的照片后重新上传。`);
+      }
     } else if (renderState.handOcc && sourceState.imageHulls === null) {
       sourceState.imageHulls = detectHands(t, W, H);
     }

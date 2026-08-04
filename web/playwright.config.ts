@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const chromiumExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+
 export default defineConfig({
   testDir: "./e2e",
   timeout: 45_000,
@@ -19,11 +21,16 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        launchOptions: chromiumExecutablePath
+          ? { executablePath: chromiumExecutablePath }
+          : undefined,
+      },
     },
   ],
   webServer: {
-    command: "npm run build && npm run preview -- --port 4173",
+    command: "npm run build && npm run preview -- --port 4173 --strictPort",
     url: "http://127.0.0.1:4173/app/incision",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

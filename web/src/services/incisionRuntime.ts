@@ -38,6 +38,8 @@ import {
 } from "./incisionClinicalCopy";
 import { collectIncisionElements, type IncisionDomElements } from "./incisionDom";
 import {
+  applyReactEditControlValue,
+  applyReactTumorControlValue,
   bindIncisionDomEvents,
 } from "./incisionDomBindings";
 import {
@@ -225,6 +227,7 @@ function currentResultViewSnapshot() {
     candidateLength: els.candidateLength,
     candidateWidth: els.candidateWidth,
     candidateTipAngle: els.candidateTipAngle,
+    rstlDeviation: els.candidateRstlDeviation,
     directionConfidence: els.directionConf,
     region: els.regionVal,
     guardrail: els.guardrailVal,
@@ -792,12 +795,9 @@ function clearBoundaryPoints() {
 function handleReactTumorCommand(event: Event) {
   const detail = readIncisionTumorCommand(event);
   if (!detail) return;
-  const { command, value } = detail;
-  const syncValue = (control: HTMLInputElement | HTMLSelectElement) => {
-    if (typeof value === "string" || typeof value === "number") control.value = String(value);
-  };
+  const { command } = detail;
+  applyReactTumorControlValue(els, command, detail.value);
   if (command === "kind_changed") {
-    syncValue(els.tumorKind);
     S.boundaryActive = false;
     updateFormVisibility();
     publishIncisionState("tumor_kind_changed");
@@ -805,35 +805,24 @@ function handleReactTumorCommand(event: Event) {
     return;
   }
   if (command === "diameter_input") {
-    syncValue(els.diameter);
     updateTumorRing();
     publishIncisionState("tumor_diameter_input");
     return;
   }
   if (command === "depth_input" || command === "author_changed") {
-    syncValue(command === "depth_input" ? els.depth : els.tumorAuthor);
     publishIncisionState(command);
     return;
   }
   if (command === "margin_input" || command === "ellipse_ratio_input") {
-    syncValue(command === "margin_input" ? els.margin : els.ellipseRatio);
     updateTumorRing();
     publishIncisionState(command);
     return;
   }
   if (command === "diameter_changed" || command === "depth_changed" || command === "margin_changed" || command === "ellipse_ratio_changed") {
-    const controls = {
-      diameter_changed: els.diameter,
-      depth_changed: els.depth,
-      margin_changed: els.margin,
-      ellipse_ratio_changed: els.ellipseRatio,
-    };
-    syncValue(controls[command]);
     runWorkflow();
     return;
   }
   if (command === "boundary_mode_changed") {
-    syncValue(els.boundaryMode);
     S.boundaryActive = false;
     updateFormVisibility();
     publishIncisionState("tumor_boundary_mode_changed");
@@ -1004,6 +993,7 @@ function handleReactEditCommand(event: Event) {
   const detail = readIncisionEditCommand(event);
   if (!detail) return;
   const { command } = detail;
+  applyReactEditControlValue(els, detail.controlId, detail.value);
   if (command === "preview_edit") {
     applyEditControls();
     return;
@@ -1198,6 +1188,10 @@ function renderResult(result: DynamicRecord) {
     els.candidateWidth.textContent = "—";
     els.candidateTipAngle.textContent = "—";
   }
+  const rstlDeviation = c.metrics?.rstl_deviation_deg;
+  els.candidateRstlDeviation.textContent = typeof rstlDeviation === "number" && Number.isFinite(rstlDeviation)
+    ? `${fmt(rstlDeviation)}°`
+    : "—";
   const directionReasons = result.direction.confidence_reasons || [];
   els.directionConf.textContent = `${Math.round((result.direction.confidence || 0) * 100)}%${directionReasons.length ? ` · ${directionReasons.map(reasonLabel).join("、")}` : ""}`;
   els.directionConf.title = directionReasons.length ? `原始原因代码：${directionReasons.join(", ")}` : "";
@@ -1225,7 +1219,8 @@ function renderResult(result: DynamicRecord) {
     `不上传原始影像；${audit.local_workflow_fields.length} 类抽象字段只在浏览器确定性 workflow 内处理，不配置或调用远程模型。${audit.secondary_cues_present ? " 辅助线索仅随审阅导出，不参与几何。" : ""}`;
   const edited = result.candidate.edited ? " · 已记录医生调整" : "";
   const headLabel = S.headAsset?.statusLabel ? ` · ${S.headAsset.statusLabel}` : "";
-  els.stageStatus.textContent = `浏览器确定性 workflow 已更新候选${edited}${headLabel}`;
+  const generationLabel = S.generationCount ? ` · 第 ${S.generationCount} 次生成` : "";
+  els.stageStatus.textContent = `浏览器确定性 workflow 已更新候选${generationLabel}${edited}${headLabel}`;
   publishIncisionState("candidate_result");
 }
 
@@ -1639,6 +1634,7 @@ async function runWorkflow() {
     const tumor = tumorInput();
     const result = await planWorkflowForCurrentTumor(tumor);
     S.baseResult = result;
+    S.generationCount += 1;
     resetEditControls();
     resetEditTimeline();
     resetReviewControls();
