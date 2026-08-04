@@ -145,6 +145,7 @@ const incisionDomService = read("src/services/incisionDom.ts");
 const incisionDomBindingsService = read("src/services/incisionDomBindings.ts");
 const incisionControllerStateService = read("src/services/incisionControllerState.ts");
 const incisionClinicalCopyService = read("src/services/incisionClinicalCopy.ts");
+const incisionPresenterService = read("src/services/incisionPresenter.ts");
 const incisionReviewPolicyService = read("src/services/incisionReviewPolicy.ts");
 const incisionEditHistoryService = read("src/services/incisionEditHistory.ts");
 const incisionReviewRecordsService = read("src/services/incisionReviewRecords.ts");
@@ -1467,8 +1468,16 @@ assert.ok(
 );
 assert.ok(
   controller.includes("S.generationCount += 1") &&
-  controller.includes("第 ${S.generationCount} 次生成"),
+  controller.includes("buildIncisionResultPresentation") &&
+  incisionPresenterService.includes("第 ${input.generationCount} 次生成"),
   "incision runtime exposes observable feedback for repeated candidate generation",
+);
+assert.ok(
+  incisionPresenterService.includes("BuildIncisionResultPresentationInput") &&
+  !incisionPresenterService.includes("document") &&
+  !incisionPresenterService.includes("window") &&
+  !incisionPresenterService.includes("THREE"),
+  "incision presenter remains a typed mapping without DOM or Three.js access",
 );
 assert.ok(tumorPanel.includes("useIncisionStore"), "React tumor panel syncs low-frequency tumor status from Zustand");
 assert.ok(tumorPanel.includes("Button"), "React tumor panel uses the shared shadcn-style button primitive");

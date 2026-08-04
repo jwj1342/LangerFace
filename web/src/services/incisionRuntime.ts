@@ -26,14 +26,10 @@ import {
 import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
 import { assetBaseUrl } from "./assetLoader";
 import {
-  directionHintLabel,
-  directionSourceLabel,
   guardrailLabel,
-  overrideLabel,
   reasonLabel,
   regionLabel,
   reviewStatusLabel,
-  severityLabel,
   subunitLabel,
 } from "./incisionClinicalCopy";
 import { collectIncisionElements, type IncisionDomElements } from "./incisionDom";
@@ -87,8 +83,11 @@ import {
   buildIncisionReviewRecord,
   buildIncisionReviewReport,
   findSensitiveStructureInspection,
-  formatRecoveredFailureSummary,
 } from "./incisionReviewRecords";
+import {
+  buildIncisionResultPresentation,
+  type IncisionTextPresentation,
+} from "./incisionPresenter";
 import {
   readIncisionEditCommand,
   readIncisionLibraryCommand,
@@ -1089,138 +1088,52 @@ function logWorkflowTraceToConsole(result: DynamicRecord) {
   if (typeof console.groupEnd === "function") console.groupEnd();
 }
 
-function overrideAdviceLabel(override: DynamicRecord) {
-  if (override.kind === "protective_direction") {
-    return `${regionLabel(override.structure)}优先采用${directionHintLabel(override.direction_hint)}`;
-  }
-  return overrideLabel(override.kind);
-}
-
-function renderGuardrailDetails(guardrails: DynamicRecord = {}) {
-  const warnings = guardrails?.warnings || [];
-  const overrides = guardrails?.suggested_overrides || [];
-  els.guardrailDetails.classList.toggle("warn", warnings.some((w: DynamicRecord) => w.severity === "medium"));
-  els.guardrailDetails.classList.toggle("danger", warnings.some((w: DynamicRecord) => w.severity === "high"));
-  if (!warnings.length) {
-    els.guardrailDetails.textContent = "保护提示：未发现需要复核的规则项。";
-    if (overrides.length) {
-      els.guardrailDetails.textContent += `\n建议：${overrides.map(overrideAdviceLabel).join(" · ")}`;
-    }
-    return;
-  }
-  els.guardrailDetails.textContent = `保护提示：${warnings.map((w: DynamicRecord) => `${guardrailLabel(w.code)}（${severityLabel(w.severity)}）`).join("；")}`;
-  if (overrides.length) {
-    els.guardrailDetails.textContent += `\n建议：${overrides.map(overrideAdviceLabel).join(" · ")}`;
-  }
-}
-
-function renderDirectionSource(result: DynamicRecord) {
-  if (!els.directionSource) return;
-  const direction = result.direction || {};
-  const sources = [
-    directionSourceLabel(direction.source),
-    `支持线 ${direction.support_count ?? 0} 条`,
-    direction.angular_spread_deg != null ? `轴向离散 ${fmt(direction.angular_spread_deg)}°` : null,
-  ].filter(Boolean);
-  const overrides = (result.guardrails?.suggested_overrides || []).filter((o: DynamicRecord) => o.kind === "protective_direction");
-  if (overrides.length) {
-    sources.push(`敏感结构方向例外：${overrides.map((o: DynamicRecord) => `${regionLabel(o.structure)}／${directionHintLabel(o.direction_hint)}`).join("；")}`);
-  }
-  sources.push(S.secondaryCues ? "皱襞/边界辅助线索：只读审阅，不参与几何" : "皱襞/边界辅助线索：未参与几何");
-  if (result.candidate?.edited) sources.push("医生人工覆盖已记录");
-  els.directionSource.textContent = `方向依据：${sources.join(" · ")}`;
-  els.directionSource.classList.toggle("warn", direction.confidence < 0.35 || overrides.length > 0 || Boolean(result.candidate?.edited));
-}
-
-function renderWorkflowGate(result: DynamicRecord) {
-  if (!els.workflowGate) return;
-  const gate = workflowTraceGate(result);
-  const observedActions = gate.observed_actions || [];
-  els.workflowGate.classList.toggle("warn", !gate.passed);
-  const missing = gate.missing_actions.map((item: DynamicRecord) => item.label).join("、");
-  const status = gate.passed ? "通过" : `未通过${missing ? `；缺 ${missing}` : ""}`;
-  els.workflowGate.textContent = `工作流工具门控：${status} · ${observedActions.length} 个动作；完整 workflow trace 已写入 DevTools Console。`;
-  els.workflowGate.title = `observed_actions=${observedActions.join(", ")}`;
-}
-
-function renderWorkflowComparison(result: DynamicRecord) {
-  if (!els.workflowComparison) return;
-  const comparison = Array.isArray(result.candidate_comparison) ? result.candidate_comparison : [];
-  const audit = result.workflow_audit || {};
-  if (!comparison.length) {
-    els.workflowComparison.classList.add("warn");
-    els.workflowComparison.textContent = "候选比较：浏览器 workflow 尚未生成多候选比较；可手动保存候选后生成备选。";
-    return;
-  }
-  const top = comparison
-    .slice(0, 3)
-    .map((item: DynamicRecord) => `#${item.rank} ${item.label || item.id} ${fmt(item.score, 1)}分`)
-    .join("；");
-  const failureSummary = formatRecoveredFailureSummary(audit);
-  const failures = audit.tool_failure_count
-    ? `；恢复失败 ${audit.tool_failure_count} 个${failureSummary ? `（${failureSummary}）` : ""}`
-    : "";
-  els.workflowComparison.classList.toggle("warn", Boolean(audit.tool_failure_count));
-  els.workflowComparison.title = failureSummary
-    ? `recovered_failures=${formatRecoveredFailureSummary(audit, true)}`
-    : "";
-  els.workflowComparison.textContent =
-    `候选比较：${comparison.length} 个浏览器确定性候选 · ${top}${failures}。工程排序不是临床推荐或手术指令。`;
-}
-
 function tumorQualityFor(result: DynamicRecord = S.result) {
   if (!result?.tumor) return { warnings: [], warning_count: 0, passed: true };
   return result.tumor_quality || summarizeTumorInputQuality(result.tumor);
 }
 
+function applyTextPresentation(element: HTMLElement, presentation: IncisionTextPresentation) {
+  element.textContent = presentation.text;
+  element.title = presentation.title || "";
+  element.classList.toggle("warn", Boolean(presentation.classNames?.includes("warn")));
+  element.classList.toggle("danger", Boolean(presentation.classNames?.includes("danger")));
+}
+
 function renderResult(result: DynamicRecord) {
   S.result = result;
   drawCandidate(result);
-  const c = result.candidate;
-  els.candidateType.textContent = c.type === "linear" ? "线性" : "梭形";
-  els.candidateLength.textContent = `${fmt(c.length_mm)} mm`;
-  if (c.type === "fusiform") {
-    const ratio = c.metrics?.length_to_width_ratio;
-    const err = c.metrics?.tip_angle_error_deg;
-    els.candidateWidth.textContent = `${fmt(c.width_mm)} mm / ${fmt(ratio, 2)}:1`;
-    els.candidateTipAngle.textContent = `${fmt(c.tip_angle_deg)}° · 误差 ${fmt(err)}°`;
-  } else {
-    els.candidateWidth.textContent = "—";
-    els.candidateTipAngle.textContent = "—";
-  }
-  const rstlDeviation = c.metrics?.rstl_deviation_deg;
-  els.candidateRstlDeviation.textContent = typeof rstlDeviation === "number" && Number.isFinite(rstlDeviation)
-    ? `${fmt(rstlDeviation)}°`
-    : "—";
-  const directionReasons = result.direction.confidence_reasons || [];
-  els.directionConf.textContent = `${Math.round((result.direction.confidence || 0) * 100)}%${directionReasons.length ? ` · ${directionReasons.map(reasonLabel).join("、")}` : ""}`;
-  els.directionConf.title = directionReasons.length ? `原始原因代码：${directionReasons.join(", ")}` : "";
-  const regionReasons = result.anatomy.confidence_reasons || [];
-  els.regionVal.textContent = `${regionLabel(result.anatomy.region)}${regionReasons.length ? ` · ${regionReasons.map(reasonLabel).join("、")}` : ""}`;
-  els.regionVal.title = regionReasons.length ? `原始分区代码：${result.anatomy.region}；${regionReasons.join(", ")}` : "";
-  els.guardrailVal.textContent = result.guardrails.passed ? "通过" : "复核";
-  els.guardrailVal.style.color = result.guardrails.passed ? "" : "#b45309";
-  renderGuardrailDetails(result.guardrails);
-  renderDirectionSource(result);
-  renderWorkflowGate(result);
-  renderWorkflowComparison(result);
   const tumorQuality = tumorQualityFor(result);
-  if (tumorQuality.warning_count) {
-    els.guardrailDetails.textContent += `\n肿物输入：${tumorQuality.warnings.map((w: DynamicRecord) => `${guardrailLabel(w.code)}（${severityLabel(w.severity)}）`).join("；")}`;
-  }
-  els.workflowSummary.textContent = result.summary || "已生成候选。";
-  els.nextStep.textContent = result.next_step || "医生审阅、编辑或拒绝该候选。";
+  const presentation = buildIncisionResultPresentation({
+    result,
+    workflowGate: workflowTraceGate(result),
+    tumorQuality,
+    secondaryCuesPresent: Boolean(S.secondaryCues),
+    generationCount: S.generationCount,
+    headStatusLabel: S.headAsset?.statusLabel,
+    privacyAudit: privacyAudit(),
+  });
+  els.candidateType.textContent = presentation.candidateType;
+  els.candidateLength.textContent = presentation.candidateLength;
+  els.candidateWidth.textContent = presentation.candidateWidth;
+  els.candidateTipAngle.textContent = presentation.candidateTipAngle;
+  els.candidateRstlDeviation.textContent = presentation.candidateRstlDeviation;
+  applyTextPresentation(els.directionConf, presentation.directionConfidence);
+  applyTextPresentation(els.regionVal, presentation.region);
+  els.guardrailVal.textContent = presentation.guardrailValue.text;
+  els.guardrailVal.style.color = presentation.guardrailValue.color;
+  applyTextPresentation(els.guardrailDetails, presentation.guardrailDetails);
+  if (els.directionSource) applyTextPresentation(els.directionSource, presentation.directionSource);
+  if (els.workflowGate) applyTextPresentation(els.workflowGate, presentation.workflowGate);
+  if (els.workflowComparison) applyTextPresentation(els.workflowComparison, presentation.workflowComparison);
+  els.workflowSummary.textContent = presentation.workflowSummary;
+  els.nextStep.textContent = presentation.nextStep;
   logWorkflowTraceToConsole(result);
   updateBoundaryStatus();
   updateEditVisibility(result);
-  const audit = privacyAudit();
-  els.privacyState.textContent = "浏览器本地";
-  els.privacyAudit.textContent =
-    `不上传原始影像；${audit.local_workflow_fields.length} 类抽象字段只在浏览器确定性 workflow 内处理，不配置或调用远程模型。${audit.secondary_cues_present ? " 辅助线索仅随审阅导出，不参与几何。" : ""}`;
-  const edited = result.candidate.edited ? " · 已记录医生调整" : "";
-  const headLabel = S.headAsset?.statusLabel ? ` · ${S.headAsset.statusLabel}` : "";
-  const generationLabel = S.generationCount ? ` · 第 ${S.generationCount} 次生成` : "";
-  els.stageStatus.textContent = `浏览器确定性 workflow 已更新候选${generationLabel}${edited}${headLabel}`;
+  els.privacyState.textContent = presentation.privacyState;
+  els.privacyAudit.textContent = presentation.privacyAudit;
+  els.stageStatus.textContent = presentation.stageStatus;
   publishIncisionState("candidate_result");
 }
 

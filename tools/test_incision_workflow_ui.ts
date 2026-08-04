@@ -20,7 +20,10 @@ const html = normalizeTsxContracts([
   fs.readFileSync("src/components/CandidateLibraryPanel.tsx", "utf8"),
   fs.readFileSync("src/components/PrivacyAuditPanel.tsx", "utf8"),
 ].join("\n"));
-const js = fs.readFileSync("src/services/incisionRuntime.ts", "utf8");
+const js = [
+  fs.readFileSync("src/services/incisionRuntime.ts", "utf8"),
+  fs.readFileSync("src/services/incisionPresenter.ts", "utf8"),
+].join("\n");
 const clinicalCopy = fs.readFileSync("src/services/incisionClinicalCopy.ts", "utf8");
 const reviewPolicy = fs.readFileSync("src/services/incisionReviewPolicy.ts", "utf8");
 const tools = [
@@ -176,7 +179,7 @@ assert.ok(incisionReviewRecordsService.includes("工作流计划："), "markdown
 assert.ok(incisionReviewRecordsService.includes("candidate_comparison"), "review export includes candidate comparison");
 assert.ok(incisionReviewRecordsService.includes("candidate_alternatives"), "review export includes browser workflow candidate alternatives");
 assert.ok(incisionReviewRecordsService.includes("workflow_audit"), "review export includes browser workflow orchestration audit");
-assert.ok(js.includes("renderWorkflowComparison"), "workbench renders browser workflow candidate comparison");
+assert.ok(js.includes("buildWorkflowComparisonPresentation"), "workbench renders browser workflow candidate comparison");
 assert.ok(js.includes("workflowAlternativeResult"), "workbench can save browser workflow alternatives as review records");
 assert.ok(js.includes("alternative.sensitive_structure_inspection"), "saved browser alternatives keep sensitive inspection");
 assert.ok(js.includes("已保存 ${workflowAlternatives.length} 个浏览器方向备选"), "variant save action prefers browser workflow alternatives");
