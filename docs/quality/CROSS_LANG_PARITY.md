@@ -46,6 +46,13 @@ CI 现状（**无需改 `.github/workflows/ci.yml`**）：
 - `pytest` 已自动收集并运行 `tests/test_cross_lang_parity.py`（live Python 侧），其中包含 `tools/dump_landmarks.py` 纯重算路径的完整 golden 重建断言。
 - `npm test` 已运行 `tools/test_web_mapping.ts`（Web TypeScript 侧）。
 
+RSTL 局部方向服务另有一份独立的 Python ⇄ TypeScript 契约：
+
+- `web/test/rstl_direction_contract.json` 的普通 cases 固定正常路径和空/单点/重复点/缺字段/未知 metadata/点序反转等边界语义；空或无有效支持结果必须字段完整、可由严格 JSON 往返，且 `nearest_distance` 为 `null`。
+- 同一 fixture 的 `static_face_sequence` 来自本地 held-pose 人脸视频连续 100 帧的 MediaPipe 检测。为减少生物特征数据暴露，只提交按 face bbox 统一尺度归一化后的查询点、两个 bounds 点和附近 9 个 RSTL 映射点，不提交原始帧或完整 478 点 landmarks。
+- `tests/test_direction.py` 与 `tools/test_direction_parity.ts` 都逐帧重放完整 100 帧并断言共同金标，同时执行轴向角范围 `≤ 6°`、最大相邻帧变化 `≤ 1.5°`、标准差 `≤ 2°`、最低置信度 `≥ 0.95` 的稳定性门禁。
+- 需要从拥有授权私有素材的本机重采样时，运行 `PYTHONPATH=src python tools/build_direction_static_sequence.py --video local_media/IMG_3458.MOV`。该来源路径需要可选的 MediaPipe/OpenCV；CI 只重放已提交的隐私最小化派生数据。
+
 历史缺口（#28）：CI 从不重跑 Python 生成金标，且旧 JS 对拍路径**没有**应用口裂掩膜，
 于是单边的 Python 改动（如 #38 排除口裂三角面）会从 CI 旁漏过去、让金标静默漂移。
 现已通过「live Python 重算 + Web TypeScript 对拍应用同一口裂掩膜」双向闭合。
