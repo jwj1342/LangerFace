@@ -112,6 +112,13 @@ export type AnnotateLibraryCommand = (typeof ANNOTATE_LIBRARY_COMMANDS)[number];
 export type IncisionTumorCommand = (typeof INCISION_TUMOR_COMMANDS)[number];
 export type IncisionSecondaryCueCommand = (typeof INCISION_SECONDARY_CUE_COMMANDS)[number];
 export type IncisionEditCommand = (typeof INCISION_EDIT_COMMANDS)[number];
+export type IncisionEditControlId =
+  | "angleOffsetDeg"
+  | "lengthScale"
+  | "widthScale"
+  | "shiftAlongMm"
+  | "shiftPerpMm"
+  | "editReason";
 export type IncisionReviewCommand = (typeof INCISION_REVIEW_COMMANDS)[number];
 export type IncisionLibraryCommand = (typeof INCISION_LIBRARY_COMMANDS)[number];
 
@@ -182,8 +189,8 @@ export function dispatchAnnotateLibraryCommand(command: AnnotateLibraryCommand, 
   dispatchControllerCommand(ANNOTATE_LIBRARY_REACT_COMMAND_EVENT, { command, index });
 }
 
-export function dispatchIncisionTumorCommand(command: IncisionTumorCommand) {
-  dispatchControllerCommand(INCISION_TUMOR_REACT_COMMAND_EVENT, { command });
+export function dispatchIncisionTumorCommand(command: IncisionTumorCommand, value?: string) {
+  dispatchControllerCommand(INCISION_TUMOR_REACT_COMMAND_EVENT, { command, value });
 }
 
 export function dispatchIncisionProviderState(source = "react_provider_panel") {
@@ -194,8 +201,12 @@ export function dispatchIncisionSecondaryCueCommand(command: IncisionSecondaryCu
   dispatchControllerCommand(INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT, { command });
 }
 
-export function dispatchIncisionEditCommand(command: IncisionEditCommand) {
-  dispatchControllerCommand(INCISION_EDIT_REACT_COMMAND_EVENT, { command });
+export function dispatchIncisionEditCommand(
+  command: IncisionEditCommand,
+  controlId?: IncisionEditControlId,
+  value?: string,
+) {
+  dispatchControllerCommand(INCISION_EDIT_REACT_COMMAND_EVENT, { command, controlId, value });
 }
 
 export function dispatchIncisionReviewCommand(command: IncisionReviewCommand) {
