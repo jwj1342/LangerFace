@@ -32,6 +32,7 @@ class AtlasLine:
     name: str
     region: str
     points: np.ndarray  # (N, 3) = [tri_index(float), u, v]
+    disable_runtime_expansion: bool = False
 
     def tris(self) -> np.ndarray:
         return self.points[:, 0].astype(np.int64)
@@ -64,6 +65,7 @@ class Atlas:
                 name=ln["name"],
                 region=ln.get("region", ""),
                 points=np.asarray(ln["points"], dtype=np.float64).reshape(-1, 3),
+                disable_runtime_expansion=ln.get("disableRuntimeExpansion") is True,
             )
             for ln in data["lines"]
         ]
@@ -91,6 +93,11 @@ class Atlas:
                 {
                     "name": ln.name,
                     "region": ln.region,
+                    **(
+                        {"disableRuntimeExpansion": True}
+                        if ln.disable_runtime_expansion
+                        else {}
+                    ),
                     "points": [[int(round(p[0])), round(float(p[1]), 6), round(float(p[2]), 6)]
                                for p in ln.points],
                 }
