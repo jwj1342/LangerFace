@@ -6,11 +6,13 @@ import { countMetric, logWarn } from "./logger.ts";
 import { renderState, sourceState } from "./liveState.ts";
 import { setLive, setMsg } from "./liveUi.ts";
 import { requestFrame } from "./pipelineLoop.ts";
-import { ensureReady } from "./pipelineModels.ts";
+import { ensureImageReady, ensureReady } from "./pipelineModels.ts";
 
 type SourceKind = "camera" | "video" | "image";
+let sourceOperationId = 0;
 
 export async function startCamera(): Promise<void> {
+  const operationId = ++sourceOperationId;
   if (sourceState.sourceKind === "camera") {
     stopSource();
     setLive(false, "待机");
@@ -20,14 +22,20 @@ export async function startCamera(): Promise<void> {
   setMsg("加载模型…");
   try {
     await ensureReady();
+    if (operationId !== sourceOperationId) return;
     setMsg("请求摄像头权限…");
     const stream = await openCameraStream(CAMERA_CONSTRAINTS);
-    stopSource();
+    if (operationId !== sourceOperationId) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    stopSource({ preserveOperation: true });
     els.video.srcObject = stream;
     await els.video.play();
     setSource(els.video, "camera", els.video.videoWidth, els.video.videoHeight);
     els.cam.setAttribute("aria-pressed", "true");
   } catch (error) {
+    if (operationId !== sourceOperationId) return;
     const detail = describeCameraError(error);
     countMetric(`camera.openFailure.${detail.reason}`);
     logWarn("无法开启摄像头。", { reason: detail.reason, error });
@@ -59,26 +67,45 @@ export function showCameraPlaceholder(message = ""): void {
 
 export async function handleFile(file?: File): Promise<void> {
   if (!file) return;
-  setMsg("加载模型…");
-  await ensureReady();
-  stopSource();
-  const url = URL.createObjectURL(file);
-  if (file.type.startsWith("image/")) {
-    const img = new Image();
-    img.src = url;
-    await img.decode();
-    const prepared = prepareImageSource(img);
-    setSource(prepared.source, "image", prepared.width, prepared.height);
-    URL.revokeObjectURL(url);
-    if (prepared.scaled) setMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
-  } else {
-    els.video.srcObject = null;
-    els.video.src = url;
-    els.video.loop = true;
-    await els.video.play();
-    setSource(els.video, "video", els.video.videoWidth, els.video.videoHeight);
+  const operationId = ++sourceOperationId;
+  els.file.value = "";
+  stopSource({ preserveOperation: true });
+  setLive(false, "待机");
+  setMsg(file.type.startsWith("image/") ? "加载图片检测模型…" : "加载模型…");
+  try {
+    await ensureReady();
+    if (file.type.startsWith("image/")) await ensureImageReady();
+    if (operationId !== sourceOperationId) return;
+
+    const url = URL.createObjectURL(file);
+    if (file.type.startsWith("image/")) {
+      try {
+        const img = new Image();
+        img.src = url;
+        await img.decode();
+        if (operationId !== sourceOperationId) return;
+        const prepared = prepareImageSource(img);
+        setSource(prepared.source, "image", prepared.width, prepared.height);
+        if (prepared.scaled) setMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    } else {
+      els.video.srcObject = null;
+      els.video.src = url;
+      els.video.loop = true;
+      await els.video.play();
+      if (operationId !== sourceOperationId) return;
+      setSource(els.video, "video", els.video.videoWidth, els.video.videoHeight);
+    }
+    els.cam.setAttribute("aria-pressed", "false");
+  } catch (error) {
+    if (operationId !== sourceOperationId) return;
+    countMetric("source.fileLoadFailure");
+    logWarn("上传文件加载失败。", error);
+    setLive(false, "待机");
+    setMsg("无法读取或检测该文件。请重新上传；若仍失败，请换用受支持的清晰图片或视频。");
   }
-  els.cam.setAttribute("aria-pressed", "false");
 }
 
 export function setSource(src: CanvasImageSource, kind: SourceKind, width?: number, height?: number): void {
@@ -99,6 +126,8 @@ export function setSource(src: CanvasImageSource, kind: SourceKind, width?: numb
   sourceState.lastLM = null;
   sourceState.imageCacheLM = null;
   sourceState.imageHulls = null;
+  sourceState.imageDetectionComplete = false;
+  sourceState.imageDetectionAttempts = 0;
   sourceState.jawOpen = 0;
   sourceState.eyeBlinkLeft = 0;
   sourceState.eyeBlinkRight = 0;
@@ -114,7 +143,8 @@ export function setSource(src: CanvasImageSource, kind: SourceKind, width?: numb
   requestFrame();
 }
 
-export function stopSource(): void {
+export function stopSource({ preserveOperation = false }: { preserveOperation?: boolean } = {}): void {
+  if (!preserveOperation) sourceOperationId += 1;
   const mediaStream = els.video.srcObject as MediaStream | null;
   if (mediaStream) mediaStream.getTracks().forEach((track) => track.stop());
   els.video.srcObject = null;
@@ -127,6 +157,8 @@ export function stopSource(): void {
   clearCanvasDisplayFit();
   sourceState.imageCacheLM = null;
   sourceState.imageHulls = null;
+  sourceState.imageDetectionComplete = false;
+  sourceState.imageDetectionAttempts = 0;
   sourceState.lastLM = null;
   sourceState.jawOpen = 0;
   sourceState.eyeBlinkLeft = 0;
