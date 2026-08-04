@@ -125,6 +125,10 @@ async function saveEvidenceScreenshot(page: Page, testInfo: TestInfo, name: stri
 }
 
 test("clinician edit sliders retain real mouse drags after the controller echo", async ({ page }, testInfo) => {
+  // This scenario intentionally performs five serial physical drags plus five
+  // controller round trips. Keep each assertion timeout strict while allowing
+  // the complete matrix to finish on a contended CI browser runner.
+  test.setTimeout(120_000);
   await waitForWorkbench(page);
 
   await page.locator("#tumorKind").selectOption("cutaneous");
