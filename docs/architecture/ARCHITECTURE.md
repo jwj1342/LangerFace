@@ -69,6 +69,7 @@ P = u·V0 + v·V1 + w·V2
 ### 3.4 渲染
 `web/src/services/render2d.ts: draw` / [`src/langerface/rendering/overlay.py`](../../src/langerface/rendering/overlay.py)：抗锯齿折线，被遮挡点处**断开**子段；
 按面部上/中/下三段分色（额=琥珀、中=蓝、下=绿）；alpha 由"透明度"控制 + 丢脸淡入淡出。
+`forehead_bridge_arc_v15` 外推额头弧线还会经过 `stabilizeForeheadMask`：先填补不超过 `maxGap` 的内部小洞，再删除短于 `minRun` 的可见伪段；所有剩余可见点总量达到 `minVisibleSpan` 时保留全部合格段，否则隐藏整条线。中部较大遮挡因此会让线条按真实掩膜断开，但不会再只保留左右两侧中的最长一侧（#145）。
 
 ### 3.5 关键区域放大窗
 `web/src/services/render2d.ts: drawZooms`。6 个区域（额·眉间/右眼周/左眼周/鼻·鼻唇沟/口周/颏部）各由一组关键点界定取景框，

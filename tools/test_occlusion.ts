@@ -111,15 +111,16 @@ ok(
   stabilizeForeheadMask([0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).every((value) => !value),
   "额头皮肤掩膜移除头发上缺乏连续皮肤支持的悬空短弧",
 );
-const longestForeheadRun = stabilizeForeheadMask([
+const separatedForeheadRuns = stabilizeForeheadMask([
   0,
   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
   0, 0, 0, 0,
   1, 1, 1, 1, 1, 1,
   0,
 ]);
-ok(longestForeheadRun.slice(1, 13).every(Boolean), "额头皮肤掩膜保留每条弧的最长连续皮肤段");
-ok(longestForeheadRun.slice(17, 23).every((value) => !value), "额头皮肤掩膜删除与主段分离的次要短弧");
+ok(separatedForeheadRuns.slice(1, 13).every(Boolean), "额头皮肤掩膜保留第一段合格连续皮肤");
+ok(separatedForeheadRuns.slice(17, 23).every(Boolean), "额头皮肤掩膜保留与第一段分离的第二段合格连续皮肤");
+ok(separatedForeheadRuns.slice(13, 17).every((value) => !value), "额头皮肤掩膜仍保留两段之间的真实遮挡");
 
 console.log(fail === 0 ? "\n✅ 贴合手形遮挡 + 口裂排除正确" : `\n❌ ${fail} 项失败`);
 process.exit(fail ? 1 : 0);

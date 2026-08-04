@@ -21,8 +21,9 @@ type AtlasPayload = {
   lines: unknown[];
 };
 
-export async function ensureReady(): Promise<void> {
-  if (modelState.landmarker) return;
+let readyPromise: Promise<void> | null = null;
+
+async function initializeReady(): Promise<void> {
   const [topologyRaw, rstlRaw, langerRaw] = await Promise.all([
     dataSource.loadTopology("mediapipe-468"),
     dataSource.loadAtlas("rstl"),
@@ -109,4 +110,14 @@ export async function ensureReady(): Promise<void> {
     langerLines: langer.lines.length,
     handOcclusionReady: Boolean(modelState.handLandmarker),
   });
+}
+
+export function ensureReady(): Promise<void> {
+  if (readyPromise) return readyPromise;
+  if (modelState.landmarker) return Promise.resolve();
+  readyPromise = initializeReady().catch((error: unknown) => {
+    readyPromise = null;
+    throw error;
+  });
+  return readyPromise;
 }

@@ -31,6 +31,7 @@ npm run build
 npm test
 npx playwright install chromium
 npm run test:browser
+# 调试额头可见性或遮挡时，可先运行 npm run test:geometry；交付前仍需运行 npm test。
 cd ..
 
 pytest -q
