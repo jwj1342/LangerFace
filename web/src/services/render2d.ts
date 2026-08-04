@@ -194,7 +194,7 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   const mapped = mapAtlas(atlasLines, lm, modelTriangles());
   if (sourceState.sourceKind === "image" || sourceState.paused) setLatestAutoLines(mapped);
   const refineActive = isRefineActive();
-  const displayLines = getDisplayLines(mapped) as Array<MappedAtlasLine & { hidden?: boolean }>;
+  const displayLines = getDisplayLines(mapped);
   const selectedLine = refineActive ? selectedLineIndex() : null;
   const selectedPoint = refineActive ? selectedPointIndex() : null;
   const symmetryPartner = refineActive ? symmetryPartnerIndex() : null;

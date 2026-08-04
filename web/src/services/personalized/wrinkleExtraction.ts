@@ -1,4 +1,3 @@
-// @ts-nocheck -- numerical kernel typing is tracked by #95.
 /**
  * Browser-ready 2D wrinkle extraction.
  *
@@ -18,33 +17,92 @@ export const WRINKLE_EXTRACTOR_METHODS = [
   "frown-furrow", "paired-expression-lines",
 ];
 
-const clamp = (value, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, value));
-const angleToQ = (angle) => [Math.cos(2 * angle), Math.sin(2 * angle)];
+type NumericField = ArrayLike<number>;
+type Point2 = [number, number];
 
-function normalizeQ(x, y) {
+interface Bounds { minX: number; minY: number; maxX: number; maxY: number }
+
+interface WrinkleOptions {
+  analysisExtentPx?: number;
+  blackHatRadii?: number[];
+  furrowRadii?: number[];
+  preferredAngleRad?: number;
+  maxDirectionErrorDeg?: number;
+  neutralRetention?: number;
+  minActivationRatio?: number;
+  minBilateralDepthRatio?: number;
+  minBilateralBalance?: number;
+  method?: string;
+  minAbsoluteDarkening?: number;
+  noiseMadMultiplier?: number;
+  minAbsoluteSupportPixels?: number;
+  minComponentPixels?: number;
+  matchRadius?: number;
+  minFrameProbability?: number;
+  minFrameSupportFraction?: number;
+  minFrameDirectionAgreement?: number;
+  minCycleProbability?: number;
+  minDirectionAgreement?: number;
+  minFusedProbability?: number;
+  minRepeatedComponentPixels?: number;
+  minConfidence?: number;
+}
+
+interface WrinkleBranch {
+  response: Float32Array;
+  q: Float32Array;
+  absoluteResponse?: Float32Array;
+  diagnostics?: Record<string, number>;
+}
+
+interface DirectionalField {
+  q: Float32Array;
+  confidence: Float32Array;
+  ridge: Float32Array;
+  skeleton?: Uint8Array;
+}
+
+export interface WrinkleExtraction {
+  q: Float32Array;
+  confidence: Float32Array;
+  ridge: Float32Array;
+  skeleton: Uint8Array;
+  response: Float32Array;
+  responseQ: Float32Array;
+  absoluteResponse: Float32Array;
+  absoluteGatePassed: boolean;
+  method?: string;
+  diagnostics?: Record<string, number | boolean>;
+  [key: string]: unknown;
+}
+
+const clamp = (value: number, lo = 0, hi = 1): number => Math.max(lo, Math.min(hi, value));
+const angleToQ = (angle: number): Point2 => [Math.cos(2 * angle), Math.sin(2 * angle)];
+
+function normalizeQ(x: number, y: number): Point2 {
   const length = Math.hypot(x, y);
   return length > 1e-8 ? [x / length, y / length] : [0, 0];
 }
 
-function axialAgreement(ax, ay, bx, by) {
+function axialAgreement(ax: number, ay: number, bx: number, by: number): number {
   return clamp(0.5 + 0.5 * (ax * bx + ay * by));
 }
 
-function maskedValues(field, mask, minimum = -Infinity) {
-  const values = [];
+function maskedValues(field: NumericField, mask: NumericField | null | undefined, minimum = -Infinity): number[] {
+  const values: number[] = [];
   for (let index = 0; index < field.length; index++) {
     if ((mask?.[index] || 0) > 0.02 && field[index] > minimum) values.push(field[index]);
   }
   return values;
 }
 
-function percentile(values, fraction) {
+function percentile(values: number[], fraction: number): number {
   if (!values.length) return 0;
   values.sort((a, b) => a - b);
   return values[Math.round(clamp(fraction) * (values.length - 1))];
 }
 
-function maskedStats(field, mask) {
+function maskedStats(field: NumericField, mask: NumericField | null | undefined) {
   let sum = 0, sum2 = 0, count = 0;
   for (let index = 0; index < field.length; index++) {
     if ((mask?.[index] || 0) <= 0.02) continue;
@@ -55,7 +113,11 @@ function maskedStats(field, mask) {
   return { mean, std: Math.sqrt(Math.max(0, count ? sum2 / count - mean * mean : 0)), count };
 }
 
-export function normalizePairedIllumination(neutral, expression, mask) {
+export function normalizePairedIllumination(
+  neutral: NumericField,
+  expression: NumericField,
+  mask: NumericField | null | undefined,
+) {
   const reference = maskedStats(neutral, mask), current = maskedStats(expression, mask);
   const output = new Float32Array(expression.length);
   const gain = current.std > 1e-6 && reference.std > 1e-6
@@ -66,7 +128,7 @@ export function normalizePairedIllumination(neutral, expression, mask) {
   return { gray: output, gain, offset: reference.mean - gain * current.mean };
 }
 
-function maskGeometry(mask, width, height) {
+function maskGeometry(mask: NumericField, width: number, height: number) {
   const bounds = roiBounds(mask, width, height, 0);
   if (!bounds) return { bounds: null, extent: Math.min(width, height), area: 0 };
   let area = 0;
@@ -78,14 +140,14 @@ function maskGeometry(mask, width, height) {
   };
 }
 
-function analysisGeometry(mask, width, height, options = {}) {
+function analysisGeometry(mask: NumericField, width: number, height: number, options: WrinkleOptions = {}) {
   const geometry = maskGeometry(mask, width, height);
   const extent = options.analysisExtentPx ?? geometry.extent;
   return { ...geometry, extent, scale: clamp(extent / 256, 0.5, 2.0) };
 }
 
-function normalizedGrayInputs(neutral, expression, mask) {
-  const values = [];
+function normalizedGrayInputs(neutral: NumericField, expression: NumericField, mask: NumericField) {
+  const values: number[] = [];
   for (let index = 0; index < neutral.length; index++) {
     if ((mask[index] || 0) <= 0.02) continue;
     values.push(neutral[index], expression[index]);
@@ -102,14 +164,14 @@ function normalizedGrayInputs(neutral, expression, mask) {
   return { neutral: scaledNeutral, expression: scaledExpression, factor };
 }
 
-function medianAbsoluteDeviation(values) {
+function medianAbsoluteDeviation(values: number[]): number {
   if (!values.length) return 0;
   const median = percentile([...values], 0.5);
   const deviations = values.map((value) => Math.abs(value - median));
   return 1.4826 * percentile(deviations, 0.5);
 }
 
-function roiBounds(mask, width, height, padding) {
+function roiBounds(mask: NumericField, width: number, height: number, padding: number): Bounds | null {
   let minX = width, minY = height, maxX = -1, maxY = -1;
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     if ((mask[y * width + x] || 0) <= 0.001) continue;
@@ -123,7 +185,15 @@ function roiBounds(mask, width, height, padding) {
   };
 }
 
-function extremeFilter(src, width, height, radius, horizontal, maximum, bounds) {
+function extremeFilter(
+  src: NumericField,
+  width: number,
+  height: number,
+  radius: number,
+  horizontal: boolean,
+  maximum: boolean,
+  bounds: Bounds,
+): Float32Array {
   const output = new Float32Array(src);
   const x0 = bounds.minX, x1 = bounds.maxX, y0 = bounds.minY, y1 = bounds.maxY;
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
@@ -138,7 +208,7 @@ function extremeFilter(src, width, height, radius, horizontal, maximum, bounds) 
   return output;
 }
 
-function blackHat(gray, width, height, mask, radius) {
+function blackHat(gray: NumericField, width: number, height: number, mask: NumericField, radius: number): Float32Array {
   const bounds = roiBounds(mask, width, height, radius * 2 + 2);
   const output = new Float32Array(width * height);
   if (!bounds) return output;
@@ -153,7 +223,7 @@ function blackHat(gray, width, height, mask, radius) {
   return output;
 }
 
-function boxBlur(src, width, height, radius, bounds) {
+function boxBlur(src: NumericField, width: number, height: number, radius: number, bounds: Bounds): Float32Array {
   const temporary = new Float32Array(src.length), output = new Float32Array(src.length);
   for (let y = bounds.minY; y <= bounds.maxY; y++) for (let x = bounds.minX; x <= bounds.maxX; x++) {
     let sum = 0, count = 0;
@@ -172,7 +242,9 @@ function boxBlur(src, width, height, radius, bounds) {
   return output;
 }
 
-function frangiLineResponse(source, width, height, mask, radius) {
+function frangiLineResponse(
+  source: NumericField, width: number, height: number, mask: NumericField, radius: number,
+): WrinkleBranch {
   const bounds = roiBounds(mask, width, height, radius + 3);
   const response = new Float32Array(source.length), q = new Float32Array(source.length * 2);
   if (!bounds) return { response, q };
@@ -210,7 +282,7 @@ function frangiLineResponse(source, width, height, mask, radius) {
   return { response, q };
 }
 
-function sampleBilinear(field, x, y, width, height) {
+function sampleBilinear(field: NumericField, x: number, y: number, width: number, height: number): number {
   const x0 = clamp(Math.floor(x), 0, width - 1), y0 = clamp(Math.floor(y), 0, height - 1);
   const x1 = Math.min(width - 1, x0 + 1), y1 = Math.min(height - 1, y0 + 1);
   const tx = clamp(x - x0), ty = clamp(y - y0);
@@ -228,7 +300,10 @@ function sampleBilinear(field, x, y, width, height) {
  * sensitive to a single pore or compression block without blurring across the
  * candidate normal.
  */
-function bilateralGrooveProfile(gray, x, y, q0, q1, halfWidth, width, height) {
+function bilateralGrooveProfile(
+  gray: NumericField, x: number, y: number, q0: number, q1: number,
+  halfWidth: number, width: number, height: number,
+) {
   const angle = 0.5 * Math.atan2(q1, q0);
   const tx = Math.cos(angle), ty = Math.sin(angle);
   const nx = -ty, ny = tx;
@@ -256,7 +331,7 @@ function bilateralGrooveProfile(gray, x, y, q0, q1, halfWidth, width, height) {
   };
 }
 
-function normalizeResponse(response, mask, quantile = 0.94) {
+function normalizeResponse(response: NumericField, mask: NumericField, quantile = 0.94): Float32Array {
   const scale = Math.max(1e-6, percentile(maskedValues(response, mask, 0), quantile));
   const output = new Float32Array(response.length);
   for (let index = 0; index < response.length; index++) {
@@ -266,7 +341,10 @@ function normalizeResponse(response, mask, quantile = 0.94) {
   return output;
 }
 
-function differentialDarkening(neutral, expression, width, height, mask, options = {}) {
+function differentialDarkening(
+  neutral: NumericField, expression: NumericField, width: number, height: number,
+  mask: NumericField, options: WrinkleOptions = {},
+) {
   const geometry = analysisGeometry(mask, width, height, options);
   const bounds = roiBounds(mask, width, height, Math.max(4, Math.round(geometry.extent * 0.02)));
   const raw = new Float32Array(neutral.length), residual = new Float32Array(neutral.length);
@@ -284,7 +362,7 @@ function differentialDarkening(neutral, expression, width, height, mask, options
   return { positive: output, residual };
 }
 
-function gradientMagnitude(gray, width, height, mask) {
+function gradientMagnitude(gray: NumericField, width: number, height: number, mask: NumericField): Float32Array {
   const output = new Float32Array(gray.length);
   for (let y = 1; y < height - 1; y++) for (let x = 1; x < width - 1; x++) {
     const index = y * width + x;
@@ -296,7 +374,10 @@ function gradientMagnitude(gray, width, height, mask) {
   return output;
 }
 
-function blackHatFrangiBranch(neutral, expression, width, height, mask, options = {}) {
+function blackHatFrangiBranch(
+  neutral: NumericField, expression: NumericField, width: number, height: number,
+  mask: NumericField, options: WrinkleOptions = {},
+): WrinkleBranch {
   const n = width * height, scale = analysisGeometry(mask, width, height, options).scale;
   const radii = options.blackHatRadii || [2, 4, 7].map((radius) => Math.max(1, Math.round(radius * scale)));
   const response = new Float32Array(n), q = new Float32Array(n * 2);
@@ -320,7 +401,10 @@ function blackHatFrangiBranch(neutral, expression, width, height, mask, options 
 }
 
 /** Browser-only oriented zero-mean line bank (Gabor/DoG approximation). */
-function orientedGaborBranch(source, width, height, mask, options = {}) {
+function orientedGaborBranch(
+  source: NumericField, width: number, height: number, mask: NumericField,
+  options: WrinkleOptions = {},
+): WrinkleBranch {
   const n = width * height, raw = new Float32Array(n), q = new Float32Array(n * 2);
   const geometry = analysisGeometry(mask, width, height, options);
   const bounds = roiBounds(mask, width, height, Math.max(4, Math.round(geometry.extent * 0.02)));
@@ -362,7 +446,10 @@ function orientedGaborBranch(source, width, height, mask, options = {}) {
 }
 
 /** Opposing normal gradients identify the two edges of one dark wrinkle. */
-function edgePairBranch(source, width, height, mask, options = {}) {
+function edgePairBranch(
+  source: NumericField, width: number, height: number, mask: NumericField,
+  options: WrinkleOptions = {},
+): WrinkleBranch {
   const n = width * height, gx = new Float32Array(n), gy = new Float32Array(n);
   const raw = new Float32Array(n), q = new Float32Array(n * 2);
   const geometry = analysisGeometry(mask, width, height, options);
@@ -415,11 +502,14 @@ function edgePairBranch(source, width, height, mask, options = {}) {
  * may supply an action-specific axial direction prior; otherwise the local
  * line direction is unconstrained inside the action ROI.
  */
-function pairedExpressionLineBranch(neutral, expression, darkening, width, height, mask, options = {}) {
+function pairedExpressionLineBranch(
+  neutral: NumericField, expression: NumericField, darkening: NumericField,
+  width: number, height: number, mask: NumericField, options: WrinkleOptions = {},
+): WrinkleBranch {
   const n = width * height, raw = new Float32Array(n), q = new Float32Array(n * 2);
   const scale = analysisGeometry(mask, width, height, options).scale;
   const radii = options.furrowRadii || [2, 3, 5, 8].map((radius) => Math.max(1, Math.round(radius * scale)));
-  const preferredQ = Number.isFinite(options.preferredAngleRad)
+  const preferredQ = typeof options.preferredAngleRad === "number" && Number.isFinite(options.preferredAngleRad)
     ? angleToQ(options.preferredAngleRad) : null;
   const maxDirectionError = options.maxDirectionErrorDeg ?? 90;
   const neutralRetention = options.neutralRetention ?? 0.94;
@@ -431,7 +521,7 @@ function pairedExpressionLineBranch(neutral, expression, darkening, width, heigh
   const neutralGradientScale = Math.max(1e-6, percentile(maskedValues(neutralGradient, mask, 0), 0.90));
   const expressionGradient = gradientMagnitude(expression, width, height, mask);
   const expressionGradientScale = Math.max(1e-6, percentile(maskedValues(expressionGradient, mask, 0), 0.90));
-  const expressionScales = [], activationScales = [];
+  const expressionScales: number[] = [], activationScales: number[] = [];
   let profileCandidates = 0, profileRejected = 0;
   for (const radius of [...new Set(radii)]) {
     const neutralHat = blackHat(neutral, width, height, mask, radius);
@@ -524,7 +614,7 @@ function pairedExpressionLineBranch(neutral, expression, darkening, width, heigh
   };
 }
 
-function ensembleBranches(branches, mask) {
+function ensembleBranches(branches: [WrinkleBranch, WrinkleBranch, WrinkleBranch], mask: NumericField): WrinkleBranch {
   const [blackHat, gabor, edgePair] = branches;
   const n = mask.length, response = new Float32Array(n), q = new Float32Array(n * 2);
   for (let index = 0; index < n; index++) {
@@ -562,7 +652,7 @@ function ensembleBranches(branches, mask) {
   return { response, q };
 }
 
-function axialDifferenceDeg(a0, a1, b0, b1) {
+function axialDifferenceDeg(a0: number, a1: number, b0: number, b1: number): number {
   return 0.5 * Math.acos(clamp(a0 * b0 + a1 * b1, -1, 1)) * 180 / Math.PI;
 }
 
@@ -574,7 +664,15 @@ function axialDifferenceDeg(a0, a1, b0, b1) {
  * neighbourhood. This rejects displaced eyebrow boundaries while retaining a
  * slightly shifted wrinkle center between repeated frowns.
  */
-function frownConsensusBranch(blackHat, gabor, edgePair, width, height, mask, options = {}) {
+function frownConsensusBranch(
+  blackHat: WrinkleBranch,
+  gabor: WrinkleBranch,
+  edgePair: WrinkleBranch,
+  width: number,
+  height: number,
+  mask: NumericField,
+  options: WrinkleOptions = {},
+): WrinkleBranch {
   const n = mask.length, raw = new Float32Array(n), q = new Float32Array(n * 2);
   const verticalQ = angleToQ(Math.PI / 2);
   const radius = Math.max(2, Math.round(analysisGeometry(mask, width, height, options).extent * 0.005));
@@ -603,7 +701,10 @@ function frownConsensusBranch(blackHat, gabor, edgePair, width, height, mask, op
   return { response: normalizeResponse(raw, mask), q };
 }
 
-function cleanComponents(binary, response, width, height, mask, minLength) {
+function cleanComponents(
+  binary: NumericField, response: NumericField, width: number, height: number,
+  mask: NumericField, minLength: number,
+): Uint8Array {
   const output = new Uint8Array(binary.length), visited = new Uint8Array(binary.length);
   const directions = [-width - 1, -width, -width + 1, -1, 1, width - 1, width, width + 1];
   for (let start = 0; start < binary.length; start++) {
@@ -626,7 +727,10 @@ function cleanComponents(binary, response, width, height, mask, minLength) {
   return output;
 }
 
-function cleanFrownComponents(binary, response, directionQ, width, height, mask, minLength) {
+function cleanFrownComponents(
+  binary: NumericField, response: NumericField, directionQ: NumericField,
+  width: number, height: number, mask: NumericField, minLength: number,
+): Uint8Array {
   const output = new Uint8Array(binary.length), visited = new Uint8Array(binary.length);
   const offsets = [-width - 1, -width, -width + 1, -1, 1, width - 1, width, width + 1];
   const verticalQ = angleToQ(Math.PI / 2);
@@ -663,7 +767,10 @@ function cleanFrownComponents(binary, response, directionQ, width, height, mask,
   return output;
 }
 
-function cleanElongatedComponents(binary, response, directionQ, width, height, mask, minLength) {
+function cleanElongatedComponents(
+  binary: NumericField, response: NumericField, directionQ: NumericField,
+  width: number, height: number, mask: NumericField, minLength: number,
+): Uint8Array {
   const output = new Uint8Array(binary.length), visited = new Uint8Array(binary.length);
   const offsets = [-width - 1, -width, -width + 1, -1, 1, width - 1, width, width + 1];
   for (let start = 0; start < binary.length; start++) {
@@ -704,7 +811,7 @@ function cleanElongatedComponents(binary, response, directionQ, width, height, m
   return output;
 }
 
-function transitions(neighbours) {
+function transitions(neighbours: number[]): number {
   let count = 0;
   for (let index = 0; index < neighbours.length; index++) {
     if (!neighbours[index] && neighbours[(index + 1) % neighbours.length]) count++;
@@ -712,7 +819,7 @@ function transitions(neighbours) {
   return count;
 }
 
-function skeletonize(binary, width, height, maxIterations = 80) {
+function skeletonize(binary: NumericField, width: number, height: number, maxIterations = 80): Uint8Array {
   const image = new Uint8Array(binary);
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     let changed = false;
@@ -738,7 +845,9 @@ function skeletonize(binary, width, height, maxIterations = 80) {
   return image;
 }
 
-function skeletonDirections(skeleton, response, width, height, radius) {
+function skeletonDirections(
+  skeleton: NumericField, response: NumericField, width: number, height: number, radius: number,
+) {
   const q = new Float32Array(skeleton.length * 2), confidence = new Float32Array(skeleton.length);
   const responseScale = Math.max(1e-6, percentile(maskedValues(response, skeleton, 0), 0.92));
   for (let y = radius; y < height - radius; y++) for (let x = radius; x < width - radius; x++) {
@@ -768,7 +877,14 @@ function skeletonDirections(skeleton, response, width, height, radius) {
   return { q, confidence };
 }
 
-export function extractDifferentialWrinkles(neutral, expression, width, height, roiMask, options = {}) {
+export function extractDifferentialWrinkles(
+  neutral: NumericField,
+  expression: NumericField,
+  width: number,
+  height: number,
+  roiMask: NumericField,
+  options: WrinkleOptions = {},
+) {
   const n = width * height;
   const empty = () => ({
     q: new Float32Array(n * 2), confidence: new Float32Array(n), ridge: new Float32Array(n),
@@ -778,8 +894,9 @@ export function extractDifferentialWrinkles(neutral, expression, width, height, 
   if (!neutral || !expression || neutral.length !== n || expression.length !== n || roiMask?.length !== n) return empty();
   const inputs = normalizedGrayInputs(neutral, expression, roiMask);
   const normalized = normalizePairedIllumination(inputs.neutral, inputs.expression, roiMask);
-  const method = WRINKLE_EXTRACTOR_METHODS.includes(options.method)
-    ? options.method : "paired-expression-lines";
+  const requestedMethod = options.method || "";
+  const method = WRINKLE_EXTRACTOR_METHODS.includes(requestedMethod)
+    ? requestedMethod : "paired-expression-lines";
   const geometry = analysisGeometry(roiMask, width, height, options);
   const differential = differentialDarkening(
     inputs.neutral, normalized.gray, width, height, roiMask, options,
@@ -800,7 +917,7 @@ export function extractDifferentialWrinkles(neutral, expression, width, height, 
   const minAbsoluteSupportPixels = options.minAbsoluteSupportPixels ??
     Math.max(4, Math.round(geometry.extent * 0.015));
   const absoluteGatePassed = absoluteSupportPixels >= minAbsoluteSupportPixels;
-  const absoluteDiagnostics = {
+  const absoluteDiagnostics: Record<string, number | boolean> = {
     input_range_factor: inputs.factor,
     analysis_extent_px: geometry.extent,
     analysis_scale: geometry.scale,
@@ -828,13 +945,13 @@ export function extractDifferentialWrinkles(neutral, expression, width, height, 
         ? { ...options, preferredAngleRad: Math.PI / 2, maxDirectionErrorDeg: 52 }
         : options)
     : null;
-  const selected = method === "blackhat-frangi" ? blackHatBranch
-    : method === "oriented-gabor" ? gaborBranch
-    : method === "edge-pair" ? pairBranch
-    : method === "frown-furrow" || method === "paired-expression-lines" ? pairedLineBranch
+  const selected: WrinkleBranch = method === "blackhat-frangi" ? blackHatBranch
+    : method === "oriented-gabor" ? gaborBranch!
+    : method === "edge-pair" ? pairBranch!
+    : method === "frown-furrow" || method === "paired-expression-lines" ? pairedLineBranch!
     : method === "frown-consensus"
-      ? frownConsensusBranch(blackHatBranch, gaborBranch, pairBranch, width, height, roiMask, options)
-    : ensembleBranches([blackHatBranch, gaborBranch, pairBranch], roiMask);
+      ? frownConsensusBranch(blackHatBranch, gaborBranch!, pairBranch!, width, height, roiMask, options)
+    : ensembleBranches([blackHatBranch, gaborBranch!, pairBranch!], roiMask);
   const response = selected.response, directionQ = selected.q;
   const darkeningValues = maskedValues(darkening, roiMask, -Infinity);
   const absoluteContrastScale = Math.max(
@@ -910,7 +1027,7 @@ export function extractDifferentialWrinkles(neutral, expression, width, height, 
   };
 }
 
-function localBest(field, index, width, height, radius) {
+function localBest(field: DirectionalField, index: number, width: number, height: number, radius: number) {
   const x = index % width, y = Math.floor(index / width);
   let best = -1, bestConfidence = 0;
   for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
@@ -922,7 +1039,10 @@ function localBest(field, index, width, height, radius) {
   return best >= 0 ? { index: best, confidence: bestConfidence } : null;
 }
 
-function localBestDirectional(field, index, width, height, radius, referenceQ) {
+function localBestDirectional(
+  field: DirectionalField, index: number, width: number, height: number,
+  radius: number, referenceQ: Point2,
+) {
   const x = index % width, y = Math.floor(index / width), sigma = Math.max(1, radius * 0.58);
   let best = -1, bestScore = 0, bestConfidence = 0, bestAgreement = 0;
   for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
@@ -944,7 +1064,7 @@ function localBestDirectional(field, index, width, height, radius, referenceQ) {
     : null;
 }
 
-function cycleConsensus(fields, width, height, radius) {
+function cycleConsensus(fields: DirectionalField[], width: number, height: number, radius: number) {
   const n = width * height, q = new Float32Array(n * 2), confidence = new Float32Array(n), ridge = new Float32Array(n);
   for (let index = 0; index < n; index++) {
     // Anchor consensus on an observed centerline.  The previous implementation
@@ -968,7 +1088,21 @@ function cycleConsensus(fields, width, height, radius) {
   return { q, confidence, ridge };
 }
 
-function localBestProbability(field, index, width, height, radius, referenceQ, minimum) {
+interface ProbabilityField {
+  response: Float32Array;
+  responseQ: Float32Array;
+  absoluteGatePassed?: boolean;
+}
+
+function localBestProbability(
+  field: ProbabilityField,
+  index: number,
+  width: number,
+  height: number,
+  radius: number,
+  referenceQ: Point2 | null,
+  minimum: number,
+) {
   const x = index % width, y = Math.floor(index / width), sigma = Math.max(1, radius * 0.62);
   let best = -1, bestScore = 0, bestResponse = 0, bestAgreement = 0;
   for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
@@ -988,7 +1122,10 @@ function localBestProbability(field, index, width, height, radius, referenceQ, m
   return best >= 0 ? { index: best, response: bestResponse, agreement: bestAgreement } : null;
 }
 
-function probabilityCycleConsensus(fields, width, height, mask, radius, options = {}) {
+function probabilityCycleConsensus(
+  fields: ProbabilityField[], width: number, height: number, mask: NumericField,
+  radius: number, options: WrinkleOptions = {},
+): ProbabilityField {
   const n = width * height, response = new Float32Array(n), responseQ = new Float32Array(n * 2);
   if (!fields.length) return { response, responseQ };
   const minimum = options.minFrameProbability ?? 0.14;
@@ -1004,7 +1141,10 @@ function probabilityCycleConsensus(fields, width, height, mask, radius, options 
   if (!(anchorMass > 0)) return { response, responseQ };
   for (let index = 0; index < n; index++) {
     if ((mask[index] || 0) <= 0.03 || (anchor.response?.[index] || 0) < minimum) continue;
-    const referenceQ = [anchor.responseQ?.[index * 2] || 0, anchor.responseQ?.[index * 2 + 1] || 0];
+    const referenceQ: Point2 = [
+      anchor.responseQ?.[index * 2] || 0,
+      anchor.responseQ?.[index * 2 + 1] || 0,
+    ];
     if (Math.hypot(referenceQ[0], referenceQ[1]) < 0.5) continue;
     let support = 0, logSum = 0, sumQ0 = 0, sumQ1 = 0, weight = 0;
     for (const field of fields) {
@@ -1038,7 +1178,12 @@ function probabilityCycleConsensus(fields, width, height, mask, radius, options 
  * axial agreement are then evaluated on the still-continuous line response.
  */
 export function fuseRepeatedWrinkleProbabilities(
-  firstCycle, secondCycle, width, height, roiMask, options = {},
+  firstCycle: ProbabilityField[],
+  secondCycle: ProbabilityField[],
+  width: number,
+  height: number,
+  roiMask: NumericField,
+  options: WrinkleOptions = {},
 ) {
   const n = width * height, geometry = analysisGeometry(roiMask, width, height, options);
   const radius = options.matchRadius ?? Math.max(2, Math.round(geometry.extent * 0.012));
@@ -1051,7 +1196,10 @@ export function fuseRepeatedWrinkleProbabilities(
   for (let index = 0; index < n; index++) {
     const firstResponse = first.response[index] || 0;
     if (firstResponse < minimum) continue;
-    const referenceQ = [first.responseQ[index * 2] || 0, first.responseQ[index * 2 + 1] || 0];
+    const referenceQ: Point2 = [
+      first.responseQ[index * 2] || 0,
+      first.responseQ[index * 2 + 1] || 0,
+    ];
     const match = localBestProbability(
       second, index, width, height, radius, referenceQ, minimum,
     );
@@ -1108,7 +1256,14 @@ export function fuseRepeatedWrinkleProbabilities(
   };
 }
 
-export function fuseRepeatedWrinkleExtractions(firstCycle, secondCycle, width, height, roiMask, options = {}) {
+export function fuseRepeatedWrinkleExtractions(
+  firstCycle: WrinkleExtraction[],
+  secondCycle: WrinkleExtraction[],
+  width: number,
+  height: number,
+  roiMask: NumericField,
+  options: WrinkleOptions = {},
+) {
   const geometry = analysisGeometry(roiMask, width, height, options);
   const n = width * height, radius = options.matchRadius ??
     Math.max(2, Math.round(geometry.extent * 0.006));

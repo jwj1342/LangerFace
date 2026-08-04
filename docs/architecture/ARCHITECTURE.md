@@ -19,9 +19,10 @@ Python 与浏览器两套等价几何实现共享同一份图谱与三角拓扑�
   分片；`pipeline.ts` 不依赖 `mode3d.ts`，3D 实时投影通过无 DOM 的 `projection3d.ts` 适配，避免模块环。
   `AnnotateRoute` / `IncisionRoute` / `LiveRoute` / `PersonalizedRoute` / `V6ReviewRoute` 直接按需加载并挂载各自 TypeScript runtime，
   共享 `ManagedWorkbenchRoute` 的 mount/dispose 生命周期；不再经过 `legacyControllers.ts` 转发层。
-  个性化算法与手动 2D 微调已迁入 `web/src/services/personalized/`、`liveRefine2d.ts`；部分数值核仍以
-  `@ts-nocheck` 作为 #95 的过渡边界，但已进入 Vite 模块图和统一构建。`tools/test_web_architecture.ts`
-  禁止 `web/` 重新出现 `.js` 源运行时。`web/compat/personalized/` 仅保留 ONNX 分片与 V6 示例等静态资产。
+  个性化算法与手动 2D 微调已迁入 `web/src/services/personalized/`、`liveRefine2d.ts`，DOM、Canvas、
+  MediaPipe 与 ONNX 边界均进入严格 TypeScript 检查。`tools/test_web_architecture.ts` 同时禁止 `web/`
+  重新出现 `.js` 源运行时，以及用 `@ts-nocheck` / `@ts-ignore` / `@ts-expect-error` 绕过类型迁移。
+  `web/compat/personalized/` 仅保留 ONNX 分片与 V6 示例等静态资产。
 
 - **视觉主题契约**：公开主路径统一使用 `web/clinical-theme.css` 的深色临床界面与蓝色主操作色
   （`--clinical-accent: #0f62fe`）。React 入口通过 `web/src/styles.css` 导入同一份 token；`/personalized`、

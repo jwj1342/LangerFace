@@ -28,6 +28,24 @@ if (allLegacyJs.length) {
 }
 console.log("ok: web 运行时没有遗留 JavaScript 源文件（owner #95）");
 
+// #95 的迁移不能靠把 .js 改名为 .ts 后关闭检查来“完成”。所有 React
+// runtime 与算法服务都必须继续进入 strict TypeScript；需要表达动态边界时，
+// 应在边界处显式建模，不能用文件级或逐行 suppression 隐藏回归。
+const suppressedTypeScript = walk(srcRoot, (file) => file.endsWith(".ts") || file.endsWith(".tsx"))
+  .flatMap((file) => {
+    const relative = path.relative(root, file).split(path.sep).join("/");
+    return fs.readFileSync(file, "utf8").split(/\r?\n/)
+      .map((line, index) => ({ relative, line, lineNumber: index + 1 }))
+      .filter(({ line }) => /@ts-(?:nocheck|ignore|expect-error)\b/.test(line));
+  });
+if (suppressedTypeScript.length) {
+  console.error("FAIL web strict TypeScript must not contain compiler suppression directives:");
+  for (const hit of suppressedTypeScript) console.error(`  - ${hit.relative}:${hit.lineNumber}`);
+  console.error("  请在 DOM、SDK 或数据边界建立显式类型，不要绕过 #95 的迁移门禁。");
+  process.exit(1);
+}
+console.log("ok: web TypeScript 无 @ts-nocheck / @ts-ignore / @ts-expect-error（owner #95）");
+
 // #110：静态前端不得再出现 serverless 函数。web/api/fit.py 曾是线上无鉴权、
 // CORS *、无请求体上限的公开算力端点，删除后需要围栏，避免它无声回流。
 const forbiddenBackendPaths = ["api", "requirements.txt"];

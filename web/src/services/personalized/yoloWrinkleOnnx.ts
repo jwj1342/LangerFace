@@ -1,4 +1,3 @@
-// @ts-nocheck -- ONNX tensor surface typing is tracked by #95.
 /**
  * Browser-side YOLOv8-seg wrinkle inference.
  *
@@ -26,33 +25,152 @@ export const DEFAULT_MODEL_CHUNK_URLS = Object.freeze([
   new URL("../../../compat/personalized/model/wrinkle-yolov8s-seg-640.onnx.part03", import.meta.url).href,
 ]);
 
-const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
+type NumericField = ArrayLike<number>;
+type NumericTypedArray = Float32Array | Float64Array | Int8Array | Uint8Array |
+  Uint8ClampedArray | Int16Array | Uint16Array | Int32Array | Uint32Array;
+type Box = [number, number, number, number];
 
-function assertPositiveInteger(value, label) {
-  if (!Number.isInteger(value) || value <= 0) throw new TypeError(`${label} must be a positive integer`);
+interface TensorLike {
+  data?: NumericTypedArray;
+  dims?: readonly number[];
+  dispose?: () => void;
 }
 
-function maskEnabled(mask, index) {
+interface LetterboxTransform {
+  inputSize: number;
+  sourceWidth: number;
+  sourceHeight: number;
+  resizedWidth: number;
+  resizedHeight: number;
+  padX: number;
+  padY: number;
+  scale: number;
+  scaleX: number;
+  scaleY: number;
+}
+
+export interface YoloDetection {
+  anchor: number;
+  classId: number;
+  score: number;
+  box: Box;
+  modelBox: Box;
+  coefficients: Float32Array;
+  sourceBox?: Box;
+}
+
+interface ModelProgress {
+  loadedChunks: number;
+  totalChunks: number;
+  loadedBytes: number;
+}
+
+interface FetchChunkOptions {
+  fetchImpl?: typeof fetch;
+  maximumBytes?: number;
+  cache?: RequestCache;
+  onProgress?: (progress: ModelProgress) => void;
+  expectedBytes?: number;
+}
+
+interface YoloOptions {
+  classCount?: number;
+  maskChannels?: number;
+  confidenceThreshold?: number;
+  preNmsTopK?: number;
+  maskThreshold?: number;
+  skinMask?: NumericField | null;
+  forbiddenMask?: NumericField | null;
+  regionGate?: NumericField | null;
+  regionGateThreshold?: number;
+  minArea?: number;
+  minSpan?: number;
+  width?: number;
+  height?: number;
+  radiusPx?: number;
+  directionToleranceDegrees?: number;
+  consolidationRadiusPx?: number;
+  consolidationDirectionToleranceDegrees?: number;
+  iouThreshold?: number;
+  maxDetections?: number;
+  minComponentArea?: number;
+  minComponentSpan?: number;
+  maxSkeletonIterations?: number;
+  minSkeletonPixels?: number;
+  minSkeletonSpan?: number;
+  directionRadius?: number;
+  onModelProgress?: (progress: ModelProgress) => void;
+}
+
+interface WrinkleResultLike {
+  width?: number;
+  height?: number;
+  skeleton?: NumericField;
+  binaryMask?: NumericField;
+  mask?: NumericField;
+  confidence?: NumericField;
+  denseConfidence?: NumericField;
+  directionQ?: NumericField;
+  q?: NumericField;
+  directionConsistency?: NumericField;
+  consistency?: NumericField;
+  classMasks?: Record<string, NumericField>;
+}
+
+interface InferenceSessionLike {
+  inputNames?: string[];
+  run(feeds: Record<string, TensorLike>): Promise<Record<string, TensorLike>>;
+  release?: () => void | Promise<void>;
+}
+
+interface OrtRuntimeLike {
+  env?: { wasm?: { wasmPaths?: string | Record<string, string> } };
+  Tensor: new (type: string, data: Float32Array, dims: readonly number[]) => TensorLike;
+  InferenceSession: {
+    create(bytes: Uint8Array, options: Record<string, unknown>): Promise<InferenceSessionLike>;
+  };
+}
+
+export interface YoloWrinkleConstructorOptions extends YoloOptions {
+  chunkUrls?: readonly string[];
+  inputSize?: number;
+  executionProviders?: string[];
+  wasmPaths?: string | Record<string, string>;
+  verifySha256?: boolean;
+  fetchImpl?: typeof fetch;
+  runtime?: OrtRuntimeLike | null;
+  session?: InferenceSessionLike | null;
+}
+
+const clamp = (value: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, value));
+
+function assertPositiveInteger(value: unknown, label: string): asserts value is number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new TypeError(`${label} must be a positive integer`);
+  }
+}
+
+function maskEnabled(mask: NumericField | null | undefined, index: number): boolean {
   return !!mask && Number(mask[index] || 0) > 0;
 }
 
-function skinAllows(mask, index) {
+function skinAllows(mask: NumericField | null | undefined, index: number): boolean {
   return !mask || maskEnabled(mask, index);
 }
 
-function tensorData(tensor, label) {
+function tensorData(tensor: TensorLike | null | undefined, label: string): NumericTypedArray {
   const data = tensor?.data;
   if (!data || !ArrayBuffer.isView(data)) throw new TypeError(`${label} has no typed-array data`);
   return data;
 }
 
 /** Fetch ordered binary chunks and concatenate them without string conversion. */
-export async function fetchBinaryChunks(urls, options = {}) {
+export async function fetchBinaryChunks(urls: readonly string[], options: FetchChunkOptions = {}): Promise<Uint8Array> {
   if (!Array.isArray(urls) || !urls.length) throw new TypeError("At least one model chunk URL is required");
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   if (typeof fetchImpl !== "function") throw new Error("fetch is unavailable; pass options.fetchImpl");
   const maximumBytes = options.maximumBytes ?? 128 * 1024 * 1024;
-  const chunks = [];
+  const chunks: Uint8Array[] = [];
   let total = 0;
   for (const url of urls) {
     const response = await fetchImpl(url, { cache: options.cache || "force-cache" });
@@ -75,10 +193,10 @@ export async function fetchBinaryChunks(urls, options = {}) {
   return output;
 }
 
-export async function sha256Hex(bytes, cryptoImpl = globalThis.crypto) {
+export async function sha256Hex(bytes: Uint8Array, cryptoImpl: Crypto = globalThis.crypto): Promise<string> {
   if (!cryptoImpl?.subtle) throw new Error("Web Crypto is unavailable for model verification");
   const digest = await cryptoImpl.subtle.digest(
-    "SHA-256", bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+    "SHA-256", bytes.slice().buffer,
   );
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("").toUpperCase();
 }
@@ -87,7 +205,11 @@ export async function sha256Hex(bytes, cryptoImpl = globalThis.crypto) {
  * Letterbox RGBA ImageData into normalized RGB NCHW input.
  * The returned transform is also used to undo padding during output decode.
  */
-export function preprocessImageData(imageData, inputSize = YOLO_WRINKLE_INPUT_SIZE, padValue = 114) {
+export function preprocessImageData(
+  imageData: ImageData,
+  inputSize = YOLO_WRINKLE_INPUT_SIZE,
+  padValue = 114,
+) {
   assertPositiveInteger(inputSize, "inputSize");
   const sourceWidth = Number(imageData?.width);
   const sourceHeight = Number(imageData?.height);
@@ -139,7 +261,7 @@ export function preprocessImageData(imageData, inputSize = YOLO_WRINKLE_INPUT_SI
   };
 }
 
-export function boxIou(first, second) {
+export function boxIou(first: Box, second: Box): number {
   const x1 = Math.max(first[0], second[0]), y1 = Math.max(first[1], second[1]);
   const x2 = Math.min(first[2], second[2]), y2 = Math.min(first[3], second[3]);
   const intersection = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
@@ -150,9 +272,13 @@ export function boxIou(first, second) {
 }
 
 /** Score-sorted, class-aware non-maximum suppression. */
-export function classAwareNms(candidates, iouThreshold = 0.45, maxDetections = 100) {
+export function classAwareNms(
+  candidates: readonly YoloDetection[] | null | undefined,
+  iouThreshold = 0.45,
+  maxDetections = 100,
+): YoloDetection[] {
   const sorted = [...(candidates || [])].sort((a, b) => b.score - a.score);
-  const kept = [];
+  const kept: YoloDetection[] = [];
   for (const candidate of sorted) {
     const box = candidate.box || candidate.sourceBox;
     if (!box || kept.some((other) => other.classId === candidate.classId
@@ -163,7 +289,7 @@ export function classAwareNms(candidates, iouThreshold = 0.45, maxDetections = 1
   return kept;
 }
 
-function predictionLayout(dims, classCount, maskChannels) {
+function predictionLayout(dims: readonly number[] | undefined, classCount: number, maskChannels: number) {
   if (!Array.isArray(dims) || dims.length !== 3 || dims[0] !== 1) {
     throw new Error(`Unexpected detection tensor shape: ${JSON.stringify(dims)}`);
   }
@@ -174,17 +300,21 @@ function predictionLayout(dims, classCount, maskChannels) {
 }
 
 /** Decode [1,39,8400] YOLOv8-seg output and undo the input letterbox. */
-export function decodeYoloSegOutput(prediction, transform, options = {}) {
+export function decodeYoloSegOutput(
+  prediction: TensorLike,
+  transform: LetterboxTransform,
+  options: YoloOptions = {},
+): YoloDetection[] {
   const classCount = options.classCount ?? YOLO_WRINKLE_CLASSES.length;
   const maskChannels = options.maskChannels ?? 32;
   const confidenceThreshold = options.confidenceThreshold ?? YOLO_WRINKLE_CONFIDENCE;
   const layout = predictionLayout(prediction?.dims, classCount, maskChannels);
   const data = tensorData(prediction, "Detection tensor");
   const at = layout.channelFirst
-    ? (channel, anchor) => Number(data[channel * layout.anchors + anchor])
-    : (channel, anchor) => Number(data[anchor * layout.channels + channel]);
+    ? (channel: number, anchor: number) => Number(data[channel * layout.anchors + anchor])
+    : (channel: number, anchor: number) => Number(data[anchor * layout.channels + channel]);
   const inputSize = transform.inputSize;
-  const candidates = [];
+  const candidates: YoloDetection[] = [];
   for (let anchor = 0; anchor < layout.anchors; anchor++) {
     let classId = 0, score = at(4, anchor);
     for (let id = 1; id < classCount; id++) {
@@ -194,11 +324,11 @@ export function decodeYoloSegOutput(prediction, transform, options = {}) {
     if (!Number.isFinite(score) || score < confidenceThreshold) continue;
     const cx = at(0, anchor), cy = at(1, anchor);
     const width = Math.max(0, at(2, anchor)), height = Math.max(0, at(3, anchor));
-    const modelBox = [
+    const modelBox: Box = [
       clamp(cx - width / 2, 0, inputSize), clamp(cy - height / 2, 0, inputSize),
       clamp(cx + width / 2, 0, inputSize), clamp(cy + height / 2, 0, inputSize),
     ];
-    const box = [
+    const box: Box = [
       clamp((modelBox[0] - transform.padX) / transform.scaleX, 0, transform.sourceWidth),
       clamp((modelBox[1] - transform.padY) / transform.scaleY, 0, transform.sourceHeight),
       clamp((modelBox[2] - transform.padX) / transform.scaleX, 0, transform.sourceWidth),
@@ -219,14 +349,20 @@ export function decodeYoloSegOutput(prediction, transform, options = {}) {
   return candidates;
 }
 
-function sigmoid(value) {
+function sigmoid(value: number): number {
   if (value >= 0) return 1 / (1 + Math.exp(-value));
   const exponential = Math.exp(value);
   return exponential / (1 + exponential);
 }
 
 /** Multiply one 32-value coefficient vector by the prototype tensor. */
-export function decodePrototypeMask(protoData, coefficients, channels, width, height) {
+export function decodePrototypeMask(
+  protoData: NumericField,
+  coefficients: NumericField,
+  channels: number,
+  width: number,
+  height: number,
+): Float32Array {
   const pixels = width * height;
   if (protoData.length < channels * pixels) throw new RangeError("Prototype tensor is too small");
   if (coefficients.length < channels) throw new RangeError("Mask coefficient vector is too small");
@@ -241,7 +377,7 @@ export function decodePrototypeMask(protoData, coefficients, channels, width, he
   return output;
 }
 
-export function sampleBilinear(field, x, y, width, height) {
+export function sampleBilinear(field: NumericField, x: number, y: number, width: number, height: number): number {
   x = clamp(x, 0, width - 1); y = clamp(y, 0, height - 1);
   const x0 = Math.floor(x), y0 = Math.floor(y);
   const x1 = Math.min(width - 1, x0 + 1), y1 = Math.min(height - 1, y0 + 1);
@@ -252,7 +388,12 @@ export function sampleBilinear(field, x, y, width, height) {
 }
 
 /** Rasterize retained instance masks into source-image coordinates. */
-export function combinePrototypeMasks(detections, prototype, transform, options = {}) {
+export function combinePrototypeMasks(
+  detections: readonly YoloDetection[] | null | undefined,
+  prototype: TensorLike,
+  transform: LetterboxTransform,
+  options: YoloOptions = {},
+) {
   const dims = prototype?.dims;
   if (!Array.isArray(dims) || dims.length !== 4 || dims[0] !== 1) {
     throw new Error(`Unexpected prototype tensor shape: ${JSON.stringify(dims)}`);
@@ -293,7 +434,13 @@ export function combinePrototypeMasks(detections, prototype, transform, options 
 }
 
 /** Restrict evidence to skin and remove eyes, brows, lips and other forbidden regions. */
-export function applyAnatomicalGates(binaryMask, confidence, width, height, options = {}) {
+export function applyAnatomicalGates(
+  binaryMask: NumericField,
+  confidence: NumericField,
+  width: number,
+  height: number,
+  options: YoloOptions = {},
+) {
   const pixels = width * height;
   if (binaryMask.length !== pixels || confidence.length !== pixels) throw new RangeError("Gate input shape mismatch");
   const { skinMask = null, forbiddenMask = null, regionGate = null } = options;
@@ -312,7 +459,9 @@ export function applyAnatomicalGates(binaryMask, confidence, width, height, opti
 }
 
 /** Eight-connected component filtering by pixel count and geometric span. */
-export function filterConnectedComponents(binary, width, height, options = {}) {
+export function filterConnectedComponents(
+  binary: NumericField, width: number, height: number, options: YoloOptions = {},
+): Uint8Array {
   const pixels = width * height;
   if (binary.length !== pixels) throw new RangeError("Component input shape mismatch");
   const minArea = options.minArea ?? 8;
@@ -343,11 +492,13 @@ export function filterConnectedComponents(binary, width, height, options = {}) {
 }
 
 /** Zhang-Suen thinning. Input and output use 0/1 Uint8 values. */
-export function skeletonizeBinary(binary, width, height, maxIterations = 96) {
+export function skeletonizeBinary(
+  binary: NumericField, width: number, height: number, maxIterations = 96,
+): Uint8Array {
   if (binary.length !== width * height) throw new RangeError("Skeleton input shape mismatch");
   const current = Uint8Array.from(binary, (value) => value ? 1 : 0);
   const remove = new Int32Array(current.length);
-  const transitionCount = (p) => {
+  const transitionCount = (p: number[]): number => {
     let transitions = 0;
     for (let index = 0; index < 8; index++) if (!p[index] && p[(index + 1) % 8]) transitions++;
     return transitions;
@@ -380,7 +531,13 @@ export function skeletonizeBinary(binary, width, height, maxIterations = 96) {
 }
 
 /** Local PCA direction in axial q=(cos(2 theta), sin(2 theta)) form. */
-export function estimateSkeletonDirections(skeleton, confidence, width, height, radius = 6) {
+export function estimateSkeletonDirections(
+  skeleton: NumericField,
+  confidence: NumericField,
+  width: number,
+  height: number,
+  radius = 6,
+) {
   const pixels = width * height;
   if (skeleton.length !== pixels || confidence.length !== pixels) throw new RangeError("Direction input shape mismatch");
   const q = new Float32Array(pixels * 2), consistency = new Float32Array(pixels);
@@ -429,7 +586,9 @@ export function estimateSkeletonDirections(skeleton, confidence, width, height, 
  * Exact cross-expression union. Confidence and direction describe evidence
  * quality, but neither is allowed to remove a positive pixel from the union.
  */
-export function consolidateParallelSkeletonUnion(results, options = {}) {
+export function consolidateParallelSkeletonUnion(
+  results: WrinkleResultLike[], options: YoloOptions = {},
+) {
   if (!Array.isArray(results) || !results.length) return null;
   const width = options.width ?? results[0]?.width;
   const height = options.height ?? results[0]?.height;
@@ -535,7 +694,7 @@ export function consolidateParallelSkeletonUnion(results, options = {}) {
   return { skeleton: kept, sourceSkeleton: skeleton, support, score, q, removed, radius };
 }
 
-export function fuseStrictUnion(results, options = {}) {
+export function fuseStrictUnion(results: WrinkleResultLike[], options: YoloOptions = {}) {
   if (!Array.isArray(results) || !results.length) throw new TypeError("At least one wrinkle result is required");
   const width = options.width ?? results[0]?.width;
   const height = options.height ?? results[0]?.height;
@@ -589,7 +748,9 @@ export function fuseStrictUnion(results, options = {}) {
     directionQ[index * 2 + 1] = q1 / magnitude;
     directionConsistency[index] = clamp(magnitude / Math.max(1e-8, directionWeight[index]), 0, 1);
   }
-  let consolidatedSkeleton = null, consolidatedMask = null, consolidation = null;
+  let consolidatedSkeleton: Uint8Array | null = null;
+  let consolidatedMask: Uint8Array | null = null;
+  let consolidation: ReturnType<typeof consolidateParallelSkeletonUnion> = null;
   if (Number(options.consolidationRadiusPx) > 0) {
     consolidation = consolidateParallelSkeletonUnion(results, {
       width,
@@ -630,7 +791,7 @@ export function fuseStrictUnion(results, options = {}) {
   };
 }
 
-function findOutputTensors(outputs) {
+function findOutputTensors(outputs: Record<string, TensorLike> | null | undefined) {
   const tensors = Object.values(outputs || {});
   const prediction = tensors.find((tensor) => Array.isArray(tensor?.dims) && tensor.dims.length === 3
     && (tensor.dims[1] === 39 || tensor.dims[2] === 39));
@@ -644,7 +805,21 @@ function findOutputTensors(outputs) {
 }
 
 export class YoloWrinkleOnnx {
-  constructor(options = {}) {
+  chunkUrls: readonly string[];
+  inputSize: number;
+  confidenceThreshold: number;
+  iouThreshold: number;
+  maxDetections: number;
+  maskThreshold: number;
+  executionProviders: string[];
+  wasmPaths: string | Record<string, string> | undefined;
+  verifySha256: boolean;
+  fetchImpl: typeof fetch | undefined;
+  runtime: OrtRuntimeLike | null;
+  session: InferenceSessionLike | null;
+  modelBytes: Uint8Array | null;
+
+  constructor(options: YoloWrinkleConstructorOptions = {}) {
     this.chunkUrls = options.chunkUrls || DEFAULT_MODEL_CHUNK_URLS;
     this.inputSize = options.inputSize ?? YOLO_WRINKLE_INPUT_SIZE;
     this.confidenceThreshold = options.confidenceThreshold ?? YOLO_WRINKLE_CONFIDENCE;
@@ -662,9 +837,9 @@ export class YoloWrinkleOnnx {
     this.modelBytes = null;
   }
 
-  async load(onProgress) {
+  async load(onProgress?: (progress: ModelProgress) => void): Promise<this> {
     if (this.session) return this;
-    const runtime = this.runtime || await import("onnxruntime-web/wasm");
+    const runtime = this.runtime || await import("onnxruntime-web/wasm") as unknown as OrtRuntimeLike;
     if (this.wasmPaths && runtime.env?.wasm) runtime.env.wasm.wasmPaths = this.wasmPaths;
     const bytes = await fetchBinaryChunks(this.chunkUrls, {
       fetchImpl: this.fetchImpl,
@@ -686,12 +861,13 @@ export class YoloWrinkleOnnx {
     return this;
   }
 
-  async infer(imageData, options = {}) {
+  async infer(imageData: ImageData, options: YoloOptions = {}) {
     await this.load(options.onModelProgress);
     const prepared = preprocessImageData(imageData, this.inputSize);
+    if (!this.session || !this.runtime) throw new Error("YOLO session failed to initialize");
     const inputName = this.session.inputNames?.[0] || "images";
     const tensor = new this.runtime.Tensor("float32", prepared.data, prepared.dims);
-    let outputs;
+    let outputs: Record<string, TensorLike> | undefined;
     try {
       outputs = await this.session.run({ [inputName]: tensor });
       const { prediction, prototype } = findOutputTensors(outputs);
@@ -778,11 +954,11 @@ export class YoloWrinkleOnnx {
     }
   }
 
-  async detect(imageData, options = {}) {
+  async detect(imageData: ImageData, options: YoloOptions = {}) {
     return this.infer(imageData, options);
   }
 
-  async close() {
+  async close(): Promise<void> {
     await this.session?.release?.();
     this.session = null;
     this.modelBytes = null;

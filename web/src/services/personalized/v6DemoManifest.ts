@@ -1,4 +1,3 @@
-// @ts-nocheck -- static review fixture typing is tracked by #95.
 import id001Compare from "../../../compat/personalized/v6_demo/id_001/rstl_before_after.jpg?url";
 import id001Zoom from "../../../compat/personalized/v6_demo/id_001/rstl_visible_change_zoom_4x.jpg?url";
 import id001Match from "../../../compat/personalized/v6_demo/id_001/wrinkle_rstl_correspondence.jpg?url";
@@ -20,9 +19,34 @@ import id006Zoom from "../../../compat/personalized/v6_demo/id_006/rstl_visible_
 import id006Match from "../../../compat/personalized/v6_demo/id_006/wrinkle_rstl_correspondence.jpg?url";
 import id006Heatmap from "../../../compat/personalized/v6_demo/id_006/rstl_displacement_heatmap.jpg?url";
 
-const result = (id, metrics, images) => ({ id, metrics, images });
+export interface V6DemoMetrics {
+  movedCurves: number;
+  movedPoints: number;
+  p90Before: number;
+  p90After: number;
+  p90Limit: number;
+  softLink: number;
+  distanceGain: number;
+  directionGain: number;
+}
 
-export const V6_DEMO_RESULTS = [
+export type V6DemoView = "compare" | "zoom" | "match" | "heatmap";
+
+export type V6DemoImages = Record<V6DemoView, string>;
+
+export interface V6DemoResult {
+  id: string;
+  metrics: V6DemoMetrics;
+  images: V6DemoImages;
+}
+
+const result = (id: string, metrics: V6DemoMetrics, images: V6DemoImages): V6DemoResult => ({
+  id,
+  metrics,
+  images,
+});
+
+export const V6_DEMO_RESULTS: readonly V6DemoResult[] = [
   result("001", { movedCurves: 4, movedPoints: 188, p90Before: 4.92, p90After: 4.17, p90Limit: 4.17, softLink: 7.75, distanceGain: 1.17, directionGain: -0.27 },
     { compare: id001Compare, zoom: id001Zoom, match: id001Match, heatmap: id001Heatmap }),
   result("003", { movedCurves: 7, movedPoints: 395, p90Before: 7.71, p90After: 4.12, p90Limit: 4.17, softLink: 7.74, distanceGain: 2.13, directionGain: 0.51 },
@@ -35,7 +59,7 @@ export const V6_DEMO_RESULTS = [
     { compare: id006Compare, zoom: id006Zoom, match: id006Match, heatmap: id006Heatmap }),
 ];
 
-export const V6_VIEW_LABELS = {
+export const V6_VIEW_LABELS: Readonly<Record<V6DemoView, string>> = {
   compare: "完整前后对比",
   zoom: "4× 局部变化",
   match: "皱纹—RSTL 对应",

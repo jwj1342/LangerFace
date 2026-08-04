@@ -1,4 +1,3 @@
-// @ts-nocheck -- compatibility algorithm typing is tracked by #95; the UI/runtime now lives under the TypeScript boundary.
 /**
  * 表情 atlas 微调 Demo — 浏览器引导采集 UI / 会话
  *
@@ -31,6 +30,10 @@ import {
   relativeScore, estimateBaseline, personalThreshold,
   dominantExpression, NEUTRAL_MAX,
 } from "./prstlPipeline.ts";
+import type {
+  ActionName, BlendshapeDict, CaptureFrame, CurveSeed, NumericField, Point2, Point3, RefinedCurve, Triangle,
+} from "./prstlPipeline.ts";
+import type { AtlasLine } from "../geometryAtlas.ts";
 import { adaptiveFaceResolutionMetrics } from "./cameraAdaptive.ts";
 import {
   BOTTOM_UP_PARAMETER_VERSION,
@@ -39,7 +42,7 @@ import {
   validateHessianTemplateWithAction,
 } from "./bottomUpPersonalization.ts";
 import { smoothProjectedCurveV2 } from "./prstlPersonalizationV2.ts";
-import { dataSource } from "../dataSource.ts";
+import { dataSource, type PreviewAtlasPayload } from "../dataSource.ts";
 import { WrinkleYoloOnnx, fuseStrictUnion } from "./yoloWrinkleOnnx.ts";
 import { refineV6 } from "./v6RstlRefinement.ts";
 import personalizedAtlasUrl from "../../../assets/atlas_rstl.json?url";
@@ -48,7 +51,17 @@ import trianglesUrl from "../../../assets/triangles.json?url";
 
 // ── 1. 常量与 DOM ───────────────────────────────────────────────────────────
 const CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35";
-const $ = (id) => document.getElementById(id);
+function requiredElement<T extends HTMLElement>(id: string): T {
+  const element = document.getElementById(id);
+  if (!element) throw new Error(`Missing personalized workbench element #${id}`);
+  return element as T;
+}
+
+function canvas2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("2D canvas context is unavailable");
+  return context;
+}
 
 const ACTION_HINT = {
   raise_brows: "慢慢把眉毛往上抬，像惊讶一样，保持住",
@@ -109,53 +122,99 @@ const ACTIVE_ATLAS_VERSION = "0.2";
 const ACTIVE_TOPOLOGY_ID = "mediapipe-468";
 const ACTIVE_TOPOLOGY_VERSION = "mediapipe-canonical-468-v1";
 
+// The capture session is an intentionally extensible diagnostics envelope:
+// algorithm stages append image-free audit fields as they complete. Stable
+// computational values are typed at function boundaries below, while this
+// single bag remains open for versioned/debug metadata.
+type RuntimeSession = Record<string, any>;
+interface ActiveRecording {
+  clipId: string;
+  action: ActionName | "neutral";
+  actionLabel: string;
+  round: number;
+  role: string;
+  startedAt: string;
+  startedPerfMs: number;
+  mimeType: string;
+  chunks: Blob[];
+  frames: RuntimeSession[];
+  lastFrameLogMs: number;
+  recorder: MediaRecorder | null;
+  videoError: string | null;
+}
+interface RecordedClip {
+  clipId: string;
+  action: ActionName | "neutral";
+  actionLabel: string;
+  round: number;
+  role: string;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  stopReason: string;
+  mimeType: string;
+  bytes: number;
+  fileName: string;
+  videoError: string | null;
+  frameSamples: RuntimeSession[];
+  blob: Blob | null;
+  downloadUrl: string | null;
+}
+
 function collectElements() {
   return {
-  start: $("startBtn"), stop: $("stopBtn"), skip: $("skipBtn"), confirm: $("confirmBtn"), debug: $("debugBtn"),
-  recordDebugMedia: $("recordDebugMedia"), debugMediaStatus: $("debugMediaStatus"), debugMediaExports: $("debugMediaExports"),
-  discardDebugMedia: $("discardDebugMediaBtn"),
-  msg: $("msg"), badge: $("badge"), live: $("live"), fps: $("fps"),
-  guideTitle: $("guideTitle"), guideSub: $("guideSub"),
-  scoreVal: $("scoreVal"), scoreFill: $("scoreFill"),
-  holdVal: $("holdVal"), holdFill: $("holdFill"),
-  steps: $("steps"), exports: $("exports"), compareSummary: $("compareSummary"), compareCanvas: $("compareCanvas"),
-  wrinkleMaskPanel: $("wrinkleMaskPanel"), wrinkleMaskCanvas: $("wrinkleMaskCanvas"),
-  wrinkleMaskDownload: $("wrinkleMaskDownloadBtn"), wrinkleSemanticCanvas: $("wrinkleSemanticCanvas"),
-  wrinkleSemanticDownload: $("wrinkleSemanticDownloadBtn"),
-  wrinkleAlignmentCanvas: $("wrinkleAlignmentCanvas"), wrinkleAlignmentDownload: $("wrinkleAlignmentDownloadBtn"),
-  wrinkleEvidenceCanvas: $("wrinkleEvidenceCanvas"), wrinkleEvidenceDownload: $("wrinkleEvidenceDownloadBtn"),
-  localPipelineStatus: $("localPipelineStatus"), localPipelineProgress: $("localPipelineProgress"),
-  usePersonalized: $("usePersonalizedBtn"),
-  video: $("video"), view: $("view"), boot: $("boot"),
-  countdown: $("countdown"), countNum: $("countNum"), countTip: $("countTip"),
-  coach: $("coach"), coachTitle: $("coachTitle"), coachSub: $("coachSub"), coachBar: $("coachBar"),
+  start: requiredElement<HTMLButtonElement>("startBtn"), stop: requiredElement<HTMLButtonElement>("stopBtn"),
+  skip: requiredElement<HTMLButtonElement>("skipBtn"), confirm: requiredElement<HTMLButtonElement>("confirmBtn"),
+  debug: requiredElement<HTMLButtonElement>("debugBtn"), recordDebugMedia: requiredElement<HTMLInputElement>("recordDebugMedia"),
+  debugMediaStatus: requiredElement<HTMLElement>("debugMediaStatus"), debugMediaExports: requiredElement<HTMLElement>("debugMediaExports"),
+  discardDebugMedia: requiredElement<HTMLButtonElement>("discardDebugMediaBtn"),
+  msg: requiredElement<HTMLElement>("msg"), badge: requiredElement<HTMLElement>("badge"),
+  live: requiredElement<HTMLElement>("live"), fps: requiredElement<HTMLElement>("fps"),
+  guideTitle: requiredElement<HTMLElement>("guideTitle"), guideSub: requiredElement<HTMLElement>("guideSub"),
+  scoreVal: requiredElement<HTMLElement>("scoreVal"), scoreFill: requiredElement<HTMLElement>("scoreFill"),
+  holdVal: requiredElement<HTMLElement>("holdVal"), holdFill: requiredElement<HTMLElement>("holdFill"),
+  steps: requiredElement<HTMLElement>("steps"), exports: requiredElement<HTMLElement>("exports"),
+  compareSummary: requiredElement<HTMLElement>("compareSummary"), compareCanvas: requiredElement<HTMLCanvasElement>("compareCanvas"),
+  wrinkleMaskPanel: requiredElement<HTMLElement>("wrinkleMaskPanel"), wrinkleMaskCanvas: requiredElement<HTMLCanvasElement>("wrinkleMaskCanvas"),
+  wrinkleMaskDownload: requiredElement<HTMLButtonElement>("wrinkleMaskDownloadBtn"), wrinkleSemanticCanvas: requiredElement<HTMLCanvasElement>("wrinkleSemanticCanvas"),
+  wrinkleSemanticDownload: requiredElement<HTMLButtonElement>("wrinkleSemanticDownloadBtn"),
+  wrinkleAlignmentCanvas: requiredElement<HTMLCanvasElement>("wrinkleAlignmentCanvas"), wrinkleAlignmentDownload: requiredElement<HTMLButtonElement>("wrinkleAlignmentDownloadBtn"),
+  wrinkleEvidenceCanvas: requiredElement<HTMLCanvasElement>("wrinkleEvidenceCanvas"), wrinkleEvidenceDownload: requiredElement<HTMLButtonElement>("wrinkleEvidenceDownloadBtn"),
+  localPipelineStatus: requiredElement<HTMLElement>("localPipelineStatus"), localPipelineProgress: requiredElement<HTMLProgressElement>("localPipelineProgress"),
+  usePersonalized: requiredElement<HTMLButtonElement>("usePersonalizedBtn"),
+  video: requiredElement<HTMLVideoElement>("video"), view: requiredElement<HTMLCanvasElement>("view"), boot: requiredElement<HTMLElement>("boot"),
+  countdown: requiredElement<HTMLElement>("countdown"), countNum: requiredElement<HTMLElement>("countNum"), countTip: requiredElement<HTMLElement>("countTip"),
+  coach: requiredElement<HTMLElement>("coach"), coachTitle: requiredElement<HTMLElement>("coachTitle"), coachSub: requiredElement<HTMLElement>("coachSub"), coachBar: requiredElement<HTMLElement>("coachBar"),
   };
 }
 const els = collectElements();
-let ctx = els.view.getContext("2d", { willReadFrequently: true });
-let uiAbortController = null;
+let ctx: CanvasRenderingContext2D = canvas2d(els.view);
+let uiAbortController: AbortController | null = null;
 
-let landmarker = null, triangles = null, atlasLines = null;
+let landmarker: FaceLandmarker | null = null;
+let triangles: Triangle[] | null = null;
+let atlasLines: AtlasLine[] | null = null;
 let smoother = new OneEuro({ minCutoff: 1.8, beta: 0.04 });
-let stream = null, looping = false, sess = null;
+let stream: MediaStream | null = null, looping = false;
+let sess: RuntimeSession = null!;
 let t0 = performance.now(), frames = 0;
 let lastEvidenceT = 0, processing = false;
-let retainedMediaUrls = [];
-let wrinkleYolo = null;
+let retainedMediaUrls: string[] = [];
+let wrinkleYolo: InstanceType<typeof WrinkleYoloOnnx> | null = null;
 /** Survives sess=null so the completed V6 atlas can enter incision planning. */
 let personalizedAtlasStaged = false;
-let personalizedActiveAtlas = null;
+let personalizedActiveAtlas: (PreviewAtlasPayload & RuntimeSession) | null = null;
 
 // ── 2. 侧栏引导 / 步骤 / 按钮状态 ───────────────────────────────────────────
-function setLive(on) {
+function setLive(on: boolean): void {
   els.live.innerHTML = `<span class="dot"></span>${on ? "采集中" : "待机"}`;
   els.live.classList.toggle("on", on);
 }
-function setMsg(t, warn = false) {
+function setMsg(t: string, warn = false): void {
   els.msg.textContent = t || "";
   els.msg.classList.toggle("warn", !!warn);
 }
-function setMeters(score01, hold01) {
+function setMeters(score01: number, hold01: number): void {
   const s = Math.max(0, Math.min(1, score01 || 0));
   const h = Math.max(0, Math.min(1, hold01 || 0));
   els.scoreFill.style.width = `${(s * 100).toFixed(0)}%`;
@@ -164,7 +223,7 @@ function setMeters(score01, hold01) {
   els.holdVal.textContent = `${(h * 100).toFixed(0)}%`;
   els.coachBar.style.width = `${(h * 100).toFixed(0)}%`;
 }
-function setLocalPipelineStatus(text, progress = 0, tone = "") {
+function setLocalPipelineStatus(text: string, progress = 0, tone = ""): void {
   if (els.localPipelineStatus) {
     els.localPipelineStatus.textContent = text || "";
     els.localPipelineStatus.dataset.tone = tone;
@@ -268,7 +327,7 @@ function updateGuide() {
       els.guideSub.textContent = ACTION_HINT[a] || "";
       els.coach.classList.remove("hidden");
       els.coachTitle.textContent = label;
-      els.coachSub.textContent = PHASE_TEXT[phase] || ACTION_HINT[a];
+      els.coachSub.textContent = PHASE_TEXT[phase as keyof typeof PHASE_TEXT] || ACTION_HINT[a];
     }
   } else if (sess.stage === "done") {
     els.guideTitle.textContent = "采集完成 · 对比结果";
@@ -287,7 +346,11 @@ function updateGuide() {
  * 因此背景图与 refMesh 坐标系里的种子/曲线始终对齐（修复坐标漂移）。
  * refMesh 在静息期一次性锁定后不再更改；重设会让已累计的方向场/曲线失去坐标依据。
  */
-function stableRegistrationMetrics(reference, aligned, faceWidth = SIZE * 0.72) {
+function stableRegistrationMetrics(
+  reference: readonly Point2[] | null | undefined,
+  aligned: readonly Point2[] | null | undefined,
+  faceWidth = SIZE * 0.72,
+) {
   if (!reference?.length || !aligned?.length) {
     return { medianPx: Infinity, p90Px: Infinity, limitPx: Infinity, ok: false };
   }
@@ -302,7 +365,7 @@ function stableRegistrationMetrics(reference, aligned, faceWidth = SIZE * 0.72) 
   if (distances.length < 3) {
     return { medianPx: Infinity, p90Px: Infinity, limitPx: Infinity, ok: false };
   }
-  const at = (fraction) => distances[Math.min(distances.length - 1,
+  const at = (fraction: number): number => distances[Math.min(distances.length - 1,
     Math.max(0, Math.round((distances.length - 1) * fraction)))];
   const limitPx = Math.max(2.5, REGISTRATION_RESIDUAL_LIMIT_FACE_RATIO * faceWidth);
   const p90Px = at(0.90);
@@ -316,10 +379,13 @@ function stableRegistrationMetrics(reference, aligned, faceWidth = SIZE * 0.72) 
   };
 }
 
-function buildExpressionRegionGate(expression, session = sess) {
+function buildExpressionRegionGate(
+  expression: ActionName | "neutral",
+  session: RuntimeSession | null = sess,
+): Float32Array | Uint8Array | null {
   const pixels = SIZE * SIZE;
   const skin = session?.skin;
-  if (!skin?.length || skin.length !== pixels) return null;
+  if (!session || !skin?.length || skin.length !== pixels) return null;
   if (expression === "neutral") return Uint8Array.from(skin, (value) => value ? 1 : 0);
   const field = actionRegionField(expression, session.regionMasks, SIZE);
   const gate = new Float32Array(pixels);
@@ -330,8 +396,8 @@ function buildExpressionRegionGate(expression, session = sess) {
   return gate;
 }
 
-function warpFrameToRef(lmPx, size = SIZE) {
-  if (!sess?.refMesh) return null;
+function warpFrameToRef(lmPx: Point2[], size = SIZE): ImageData | null {
+  if (!sess?.refMesh || !triangles) return null;
   try {
     const target = size === TEXTURE_SIZE ? sess.refMeshHi : sess.refMesh;
     return warpToCanonical(els.video, lmPx, target, triangles, size);
@@ -340,7 +406,7 @@ function warpFrameToRef(lmPx, size = SIZE) {
   }
 }
 
-function grayFromImageData(img) {
+function grayFromImageData(img: ImageData): Float32Array {
   const g = new Float32Array(img.width * img.height);
   const d = img.data;
   for (let i = 0, j = 0; i < d.length; i += 4, j++) {
@@ -348,7 +414,7 @@ function grayFromImageData(img) {
   }
   return g;
 }
-function boxBlurGray(source, size, radius = 4) {
+function boxBlurGray(source: Float32Array, size: number, radius = 4): Float32Array {
   if (!source || source.length !== size * size || radius < 1) return source;
   const temp = new Float32Array(source.length);
   const output = new Float32Array(source.length);
@@ -379,11 +445,11 @@ function boxBlurGray(source, size, radius = 4) {
   }
   return output;
 }
-function cloneImageData(image) {
+function cloneImageData(image: ImageData | null | undefined): ImageData | null {
   if (!image?.data || !image.width || !image.height) return null;
   return new ImageData(new Uint8ClampedArray(image.data), image.width, image.height);
 }
-function medianImages(list) {
+function medianImages(list: readonly ImageData[]): ImageData {
   // 用均值代替逐像素排序，避免静息结束时卡死
   const n = list.length, out = new ImageData(SIZE, SIZE);
   const d = out.data;
@@ -403,11 +469,11 @@ function medianImages(list) {
   return out;
 }
 
-async function fetchJsonAsset(url, label) {
+async function fetchJsonAsset<T>(url: string, label: string): Promise<T> {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`${label}加载失败（HTTP ${response.status}）`);
   try {
-    return await response.json();
+    return await response.json() as T;
   } catch {
     throw new Error(`${label}格式错误，请刷新页面后重试`);
   }
@@ -418,13 +484,13 @@ async function ensureModels() {
   els.badge.textContent = "加载模型";
   els.badge.classList.add("warn");
   const [tri, rstl] = await Promise.all([
-    fetchJsonAsset(trianglesUrl, "面部拓扑"),
-    fetchJsonAsset(personalizedAtlasUrl, "个性化图谱"),
+    fetchJsonAsset<Triangle[]>(trianglesUrl, "面部拓扑"),
+    fetchJsonAsset<{ lines: AtlasLine[] }>(personalizedAtlasUrl, "个性化图谱"),
   ]);
   triangles = tri;
   atlasLines = rstl.lines;
   const resolver = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
-  const build = (d) => FaceLandmarker.createFromOptions(resolver, {
+  const build = (d: "GPU" | "CPU") => FaceLandmarker.createFromOptions(resolver, {
     baseOptions: { modelAssetPath: faceLandmarkerUrl, delegate: d },
     runningMode: "VIDEO", numFaces: 1,
     outputFaceBlendshapes: true,
@@ -436,7 +502,12 @@ async function ensureModels() {
 }
 
 // ── 4. 先验 vs 微调对比与导出 ───────────────────────────────────────────────
-function strokePoly(cctx, pts, color, width) {
+function strokePoly(
+  cctx: CanvasRenderingContext2D,
+  pts: readonly Point2[],
+  color: string,
+  width: number,
+): void {
   if (!pts || pts.length < 2) return;
   cctx.strokeStyle = color;
   cctx.lineWidth = width;
@@ -456,11 +527,19 @@ const PRIOR_COLOR = "rgba(150,160,175,0.85)";
  * 画一条完整连续曲线（不按分类切碎）。mapPt(p,i)->[x,y] 可把 canonical 点
  * 重投影到目标画布；返回 null 的点跳过但不断线（用前一个有效点续接）。
  */
-function strokeFull(cctx, pts, width, color, mapPt, dash = [], projectionSmoothingPasses = 0) {
+function strokeFull(
+  cctx: CanvasRenderingContext2D,
+  pts: readonly Point2[],
+  width: number,
+  color: string,
+  mapPt: ((point: Point2, index: number) => Point2 | null) | null,
+  dash: number[] = [],
+  projectionSmoothingPasses = 0,
+): void {
   if (!pts || pts.length < 2) return;
-  const conv = mapPt || ((p) => p);
+  const conv = mapPt || ((p: Point2): Point2 => p);
   let mapped = pts.map((point, index) => conv(point, index))
-    .filter((point) => point && Number.isFinite(point[0]) && Number.isFinite(point[1]));
+    .filter((point): point is Point2 => Boolean(point && Number.isFinite(point[0]) && Number.isFinite(point[1])));
   if (projectionSmoothingPasses > 0) {
     mapped = smoothProjectedCurveV2(mapped, projectionSmoothingPasses);
   }
@@ -479,7 +558,7 @@ function strokeFull(cctx, pts, width, color, mapPt, dash = [], projectionSmoothi
   cctx.setLineDash([]);
 }
 
-function nearestDist(p, poly) {
+function nearestDist(p: Point2, poly: readonly Point2[]): number {
   let best = 1e9;
   for (let i = 0; i < poly.length; i++) {
     const d = Math.hypot(p[0] - poly[i][0], p[1] - poly[i][1]);
@@ -489,9 +568,15 @@ function nearestDist(p, poly) {
 }
 
 /** 先验种子 vs 微调曲线：逐条平均偏移（像素） */
-function compareCurves(seeds, curves) {
+function compareCurves(seeds: readonly CurveSeed[], curves: readonly RefinedCurve[]) {
   const byName = new Map((curves || []).map((c) => [c.name, c]));
-  const rows = [];
+  const rows: Array<{
+    name: string | undefined;
+    meanPx: number | null;
+    maxPx: number | null;
+    prior: Point2[];
+    personalized: Point2[] | null;
+  }> = [];
   let sum = 0, n = 0;
   for (const s of seeds || []) {
     const c = byName.get(s.name);
@@ -513,7 +598,13 @@ function compareCurves(seeds, curves) {
   return { rows, meanAll: n ? sum / n : 0, n };
 }
 
-function drawLegend(cctx, x, y, lineCount = atlasLines?.length || 0, hasWrinkles = false) {
+function drawLegend(
+  cctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  lineCount = atlasLines?.length || 0,
+  hasWrinkles = false,
+): void {
   cctx.font = "11px sans-serif";
   cctx.fillStyle = "rgba(0,0,0,0.6)";
   cctx.fillRect(x - 6, y - 12, 214, hasWrinkles ? 76 : 58);
@@ -539,8 +630,9 @@ function drawLegend(cctx, x, y, lineCount = atlasLines?.length || 0, hasWrinkles
   }
 }
 
-function scalarMask(mask, size = SIZE) {
-  const source = mask?.mask || mask?.wrinkleMask || mask;
+function scalarMask(mask: RuntimeSession | NumericField | null | undefined, size = SIZE): NumericField | null {
+  const carrier = mask as RuntimeSession | null | undefined;
+  const source = carrier?.mask || carrier?.wrinkleMask || mask;
   const data = source?.data || source;
   if (!data || typeof data.length !== "number") return null;
   if (data.length === size * size) return data;
@@ -552,12 +644,15 @@ function scalarMask(mask, size = SIZE) {
   return null;
 }
 
-function wrinkleMaskCanvas(mask, size = SIZE) {
+function wrinkleMaskCanvas(
+  mask: RuntimeSession | NumericField | null | undefined,
+  size = SIZE,
+): HTMLCanvasElement | null {
   const values = scalarMask(mask, size);
   if (!values) return null;
   const canvas = document.createElement("canvas");
   canvas.width = size; canvas.height = size;
-  const g = canvas.getContext("2d");
+  const g = canvas2d(canvas);
   const overlay = g.createImageData(size, size);
   for (let i = 0; i < values.length; i++) {
     const value = Number(values[i]) || 0;
@@ -571,12 +666,16 @@ function wrinkleMaskCanvas(mask, size = SIZE) {
   return canvas;
 }
 
-function drawBinaryWrinkleMask(mask, target, size = SIZE) {
+function drawBinaryWrinkleMask(
+  mask: RuntimeSession | NumericField | null | undefined,
+  target: HTMLCanvasElement,
+  size = SIZE,
+): boolean {
   const values = scalarMask(mask, size);
   if (!values || !target) return false;
   target.width = size;
   target.height = size;
-  const g = target.getContext("2d");
+  const g = canvas2d(target);
   const image = g.createImageData(size, size);
   for (let i = 0; i < values.length; i++) {
     const on = Number(values[i]) > 0;
@@ -592,13 +691,17 @@ function drawBinaryWrinkleMask(mask, target, size = SIZE) {
   return true;
 }
 
-function drawSemanticWrinkleMask(imageData, fused, target, size = SIZE) {
-  if (!target) return false;
+function drawSemanticWrinkleMask(
+  imageData: ImageData | null | undefined,
+  fused: RuntimeSession,
+  target: HTMLCanvasElement,
+  size = SIZE,
+): boolean {
   const union = scalarMask(fused?.consolidatedMask || fused?.mask || fused?.binaryMask || fused, size);
   if (!union) return false;
   target.width = size;
   target.height = size;
-  const g = target.getContext("2d");
+  const g = canvas2d(target);
   if (imageData?.data && imageData.width === size && imageData.height === size) {
     g.putImageData(imageData, 0, 0);
   } else {
@@ -606,14 +709,14 @@ function drawSemanticWrinkleMask(imageData, fused, target, size = SIZE) {
     g.fillRect(0, 0, size, size);
   }
   const base = g.getImageData(0, 0, size, size);
-  const classes = [
+  const classes: Array<[string, [number, number, number]]> = [
     ["forehead", [255, 176, 32]],
     ["frown", [56, 189, 248]],
     ["wrinkle", [244, 63, 94]],
   ];
   for (let i = 0; i < union.length; i++) {
     if (!union[i]) continue;
-    let color = [52, 233, 155];
+    let color: [number, number, number] = [52, 233, 155];
     for (const [name, candidate] of classes) {
       if (fused?.classMasks?.[name]?.[i]) { color = candidate; break; }
     }
@@ -629,7 +732,7 @@ function drawSemanticWrinkleMask(imageData, fused, target, size = SIZE) {
   return true;
 }
 
-const EXPRESSION_AUDIT_COLORS = Object.freeze({
+const EXPRESSION_AUDIT_COLORS: Readonly<Record<string, readonly [number, number, number]>> = Object.freeze({
   neutral: [255, 255, 255],
   raise_brows: [250, 204, 21],
   frown: [56, 189, 248],
@@ -640,11 +743,15 @@ const EXPRESSION_AUDIT_COLORS = Object.freeze({
   open_mouth: [236, 72, 153],
 });
 
-function drawExpressionAlignmentAudit(imageData, detections, target, size = SIZE) {
-  if (!target) return false;
+function drawExpressionAlignmentAudit(
+  imageData: ImageData | null | undefined,
+  detections: readonly RuntimeSession[],
+  target: HTMLCanvasElement,
+  size = SIZE,
+): boolean {
   target.width = size;
   target.height = size;
-  const g = target.getContext("2d");
+  const g = canvas2d(target);
   if (imageData?.data && imageData.width === size && imageData.height === size) {
     g.putImageData(imageData, 0, 0);
   } else {
@@ -671,11 +778,16 @@ function drawExpressionAlignmentAudit(imageData, detections, target, size = SIZE
   return true;
 }
 
-function drawV6EvidenceMask(imageData, mask, target, size = SIZE) {
-  if (!target || !mask || mask.length !== size * size) return false;
+function drawV6EvidenceMask(
+  imageData: ImageData | null | undefined,
+  mask: NumericField,
+  target: HTMLCanvasElement,
+  size = SIZE,
+): boolean {
+  if (!mask || mask.length !== size * size) return false;
   target.width = size;
   target.height = size;
-  const g = target.getContext("2d");
+  const g = canvas2d(target);
   if (imageData?.data && imageData.width === size && imageData.height === size) {
     g.putImageData(imageData, 0, 0);
   } else {
@@ -697,7 +809,7 @@ function drawV6EvidenceMask(imageData, mask, target, size = SIZE) {
   return true;
 }
 
-function drawDisplacementArrow(cctx, start, end) {
+function drawDisplacementArrow(cctx: CanvasRenderingContext2D, start: Point2, end: Point2): void {
   const dx = end[0] - start[0], dy = end[1] - start[1];
   const length = Math.hypot(dx, dy);
   if (length < 0.25) return;
@@ -716,10 +828,16 @@ function drawDisplacementArrow(cctx, start, end) {
  * 在 canonical 图上按输出分类叠画（全部 atlas 线）：
  * refined 粉实线 / prior_only 灰虚线 / occluded 不画 + 位移短线。
  */
-function renderCompareImage(imageData, seeds, curves, size = SIZE, wrinkleEvidence = null) {
+function renderCompareImage(
+  imageData: ImageData | null | undefined,
+  seeds: readonly CurveSeed[],
+  curves: readonly RefinedCurve[],
+  size = SIZE,
+  wrinkleEvidence: RuntimeSession | NumericField | null = null,
+) {
   const c = document.createElement("canvas");
   c.width = size; c.height = size;
-  const cctx = c.getContext("2d");
+  const cctx = canvas2d(c);
   if (imageData) cctx.putImageData(imageData, 0, 0);
   else {
     cctx.fillStyle = "#111";
@@ -788,20 +906,22 @@ function paint() {
 }
 
 /** 统计一条曲线里的直接证据、连续传播、先验与遮挡点数。 */
-function curveKindStats(c) {
+function curveKindStats(c: { kinds?: readonly string[] | null }) {
   const s = { refined: 0, propagated: 0, prior: 0, occluded: 0 };
-  for (const k of c.kinds || []) if (s[k] != null) s[k]++;
+  for (const k of c.kinds || []) {
+    if (k in s) s[k as keyof typeof s]++;
+  }
   return s;
 }
 
-const finiteMedian = (values) => {
+const finiteMedian = (values: readonly number[]): number | null => {
   const sorted = (values || []).filter(Number.isFinite).sort((a, b) => a - b);
   if (!sorted.length) return null;
   const mid = sorted.length >> 1;
   return sorted.length % 2 ? sorted[mid] : 0.5 * (sorted[mid - 1] + sorted[mid]);
 };
 
-function roundedMetrics(value, digits = 4) {
+function roundedMetrics(value: unknown, digits = 4): any {
   if (typeof value === "number") return Number.isFinite(value) ? +value.toFixed(digits) : null;
   if (Array.isArray(value)) return value.map((item) => roundedMetrics(item, digits));
   if (value && typeof value === "object") {
@@ -810,7 +930,7 @@ function roundedMetrics(value, digits = 4) {
   return value;
 }
 
-function recordDebugEvent(type, details = {}) {
+function recordDebugEvent(type: string, details: Record<string, unknown> = {}) {
   if (!sess) return null;
   const event = {
     seq: ++sess.debugSequence,
@@ -822,7 +942,7 @@ function recordDebugEvent(type, details = {}) {
   return event;
 }
 
-function preferredRecordingMime() {
+function preferredRecordingMime(): string {
   if (typeof MediaRecorder === "undefined") return "";
   const candidates = [
     "video/webm;codecs=vp9",
@@ -834,17 +954,17 @@ function preferredRecordingMime() {
   return candidates.find((mime) => MediaRecorder.isTypeSupported?.(mime)) || "";
 }
 
-function clipFileExtension(mime = "") {
+function clipFileExtension(mime = ""): string {
   return mime.includes("mp4") ? "mp4" : "webm";
 }
 
-function releaseMediaUrls() {
+function releaseMediaUrls(): void {
   for (const url of retainedMediaUrls) URL.revokeObjectURL(url);
   retainedMediaUrls = [];
 }
 
 // 人脸视频调试录制默认关闭；勾选后仍需一次显式同意，明确用途、留存位置和生命周期。
-function consentToDebugRecording() {
+function consentToDebugRecording(): boolean {
   if (!els.recordDebugMedia?.checked) return false;
   const agreed = typeof confirm !== "function" || confirm(
     "将录制静息及每个表情每轮的人脸视频与同步关键点。\n\n"
@@ -861,7 +981,7 @@ function consentToDebugRecording() {
 }
 
 // 让使用者可以在导出后立刻抹掉内存中的人脸视频，而不必依赖刷新页面。
-function discardDebugRecording() {
+function discardDebugRecording(): void {
   releaseMediaUrls();
   if (sess) {
     sess.recordedClips = [];
@@ -872,10 +992,10 @@ function discardDebugRecording() {
   if (els.discardDebugMedia) els.discardDebugMedia.disabled = true;
 }
 
-function renderDebugMediaExports() {
+function renderDebugMediaExports(): void {
   if (!els.debugMediaStatus || !els.debugMediaExports) return;
-  const clips = sess?.recordedClips || [];
-  const active = sess?.activeRecording;
+  const clips = (sess?.recordedClips || []) as RecordedClip[];
+  const active = sess?.activeRecording as ActiveRecording | null | undefined;
   const bytes = clips.reduce((sum, clip) => sum + (clip.bytes || 0), 0);
   els.debugMediaStatus.textContent = active
     ? `正在记录：${active.actionLabel}（已保存 ${clips.length} 段）`
@@ -893,7 +1013,11 @@ function renderDebugMediaExports() {
   }).join("");
 }
 
-async function startClipRecording(action, round, role = "action_cycle") {
+async function startClipRecording(
+  action: ActionName | "neutral",
+  round: number,
+  role = "action_cycle",
+): Promise<ActiveRecording | null> {
   if (!sess?.recordingEnabled || !stream) return null;
   if (sess.pendingClipStop) {
     await sess.pendingClipStop;
@@ -903,7 +1027,7 @@ async function startClipRecording(action, round, role = "action_cycle") {
   const actionLabel = action === "neutral" ? "静息基线" : (ACTION_LABELS[action] || action);
   const clipIndex = (sess.recordedClips?.length || 0) + 1;
   const mimeType = preferredRecordingMime();
-  const active = {
+  const active: ActiveRecording = {
     clipId: `${action}_r${round}_${String(clipIndex).padStart(2, "0")}`,
     action,
     actionLabel,
@@ -921,18 +1045,19 @@ async function startClipRecording(action, round, role = "action_cycle") {
   sess.activeRecording = active;
   try {
     if (typeof MediaRecorder === "undefined") throw new Error("当前浏览器不支持 MediaRecorder");
-    const options = { videoBitsPerSecond: 1_600_000 };
+    const options: MediaRecorderOptions = { videoBitsPerSecond: 1_600_000 };
     if (mimeType) options.mimeType = mimeType;
     const recorder = new MediaRecorder(stream, options);
     active.recorder = recorder;
     recorder.ondataavailable = (event) => { if (event.data?.size) active.chunks.push(event.data); };
     recorder.onerror = (event) => {
-      active.videoError = event.error?.message || "MediaRecorder error";
+      const mediaError = (event as Event & { error?: DOMException }).error;
+      active.videoError = mediaError?.message || "MediaRecorder error";
       sess?.recordingErrors?.push({ clip_id: active.clipId, error: active.videoError });
     };
     recorder.start(1000);
   } catch (error) {
-    active.videoError = error.message || String(error);
+    active.videoError = error instanceof Error ? error.message : String(error);
     sess.recordingErrors.push({ clip_id: active.clipId, error: active.videoError });
   }
   recordDebugEvent("clip_started", { clip_id: active.clipId, action, round, role, mime_type: mimeType || null });
@@ -940,14 +1065,14 @@ async function startClipRecording(action, round, role = "action_cycle") {
   return active;
 }
 
-async function stopClipRecording(reason = "completed") {
+async function stopClipRecording(reason = "completed"): Promise<RecordedClip | null> {
   const session = sess;
-  const active = session?.activeRecording;
+  const active = session?.activeRecording as ActiveRecording | null | undefined;
   if (!active) return null;
   session.activeRecording = null;
   const recorder = active.recorder;
   if (recorder && recorder.state !== "inactive") {
-    await new Promise((resolve) => {
+    await new Promise<void>((resolve) => {
       const finish = () => resolve();
       recorder.addEventListener("stop", finish, { once: true });
       try { recorder.stop(); } catch (_) { resolve(); }
@@ -957,7 +1082,7 @@ async function stopClipRecording(reason = "completed") {
   const actualMime = recorder?.mimeType || active.mimeType || "video/webm";
   const blob = active.chunks.length ? new Blob(active.chunks, { type: actualMime }) : null;
   const endedPerfMs = performance.now();
-  const clip = {
+  const clip: RecordedClip = {
     clipId: active.clipId,
     action: active.action,
     actionLabel: active.actionLabel,
@@ -988,8 +1113,18 @@ async function stopClipRecording(reason = "completed") {
   return clip;
 }
 
-function appendCaptureSample({ bs, alignedMesh, registration, pose, poseQuality, sourceFaceWidth, detectedFace = true }) {
-  const active = sess?.activeRecording;
+function appendCaptureSample({
+  bs, alignedMesh, registration, pose, poseQuality, sourceFaceWidth, detectedFace = true,
+}: {
+  bs: BlendshapeDict;
+  alignedMesh: Point2[] | null;
+  registration: RuntimeSession | null;
+  pose: RuntimeSession | null;
+  poseQuality: number;
+  sourceFaceWidth: number;
+  detectedFace?: boolean;
+}): void {
+  const active = sess?.activeRecording as ActiveRecording | null | undefined;
   if (!active) return;
   const nowMs = performance.now();
   if (nowMs - active.lastFrameLogMs < 120) return;
@@ -1029,10 +1164,10 @@ function appendCaptureSample({ bs, alignedMesh, registration, pose, poseQuality,
   }, 3));
 }
 
-function curvePointDiagnostics(session) {
-  return (session?.curves || []).map((curve) => ({
+function curvePointDiagnostics(session: RuntimeSession) {
+  return (session?.curves || []).map((curve: RuntimeSession) => ({
     name: curve.name,
-    points: (curve.pts || []).map((point, index) => {
+    points: (curve.pts || []).map((point: Point2, index: number) => {
       const prior = curve.priorPts?.[index] || point;
       const x = Math.max(0, Math.min(SIZE - 1, Math.round(prior[0])));
       const y = Math.max(0, Math.min(SIZE - 1, Math.round(prior[1])));
@@ -1055,8 +1190,9 @@ function curvePointDiagnostics(session) {
   }));
 }
 
-function clipDataForExport(clip, partial = false) {
+function clipDataForExport(clip: RecordedClip | ActiveRecording | null | undefined, partial = false) {
   if (!clip) return null;
+  const data = clip as unknown as RuntimeSession;
   const nowMs = performance.now();
   return {
     clip_id: clip.clipId,
@@ -1066,21 +1202,21 @@ function clipDataForExport(clip, partial = false) {
     role: clip.role,
     partial,
     started_at: clip.startedAt,
-    ended_at: partial ? null : clip.endedAt,
-    duration_ms: partial ? nowMs - clip.startedPerfMs : clip.durationMs,
-    stop_reason: partial ? null : clip.stopReason,
-    video_file: partial ? null : clip.fileName,
+    ended_at: partial ? null : data.endedAt,
+    duration_ms: partial ? nowMs - data.startedPerfMs : data.durationMs,
+    stop_reason: partial ? null : data.stopReason,
+    video_file: partial ? null : data.fileName,
     video_mime_type: clip.mimeType || null,
-    video_bytes: partial ? null : clip.bytes,
+    video_bytes: partial ? null : data.bytes,
     video_error: clip.videoError || null,
-    synchronized_frame_samples: clip.frameSamples || clip.frames || [],
+    synchronized_frame_samples: data.frameSamples || data.frames || [],
   };
 }
 
-function buildDebugPayload(session = sess) {
+function buildDebugPayload(session: RuntimeSession | null = sess) {
   if (!session) return null;
   const camera = session.captureSettings || {};
-  const completedClips = (session.recordedClips || []).map((clip) => clipDataForExport(clip));
+  const completedClips = (session.recordedClips || []).map((clip: RecordedClip) => clipDataForExport(clip)!);
   const activeClip = session.activeRecording ? clipDataForExport(session.activeRecording, true) : null;
   return {
     schema: "langerface.personalized.debug.v2",
@@ -1090,7 +1226,7 @@ function buildDebugPayload(session = sess) {
       contains_video_frames: false,
       contains_synchronized_canonical_landmarks: completedClips.length > 0 || !!activeClip,
       contains_raw_blendshapes: completedClips.length > 0 || !!activeClip,
-      associated_face_video_files: completedClips.some((clip) => clip.video_bytes > 0),
+      associated_face_video_files: completedClips.some((clip: RuntimeSession) => clip.video_bytes > 0),
       storage: "browser_memory_and_user_initiated_local_download_only",
       note: "The JSON contains synchronized facial motion data. Video binaries are separate local downloads and are not embedded or uploaded.",
     },
@@ -1147,7 +1283,7 @@ function buildDebugPayload(session = sess) {
       confidence_threshold: YOLO_CONFIDENCE,
       expression_count: session.v6Result.detections?.length || 0,
       fusion_operation: session.v6Result.fused?.fusionOperation || "strict_union",
-      detection_diagnostics: (session.v6Result.detections || []).map((result) => ({
+      detection_diagnostics: (session.v6Result.detections || []).map((result: RuntimeSession) => ({
         expression: result.expression,
         diagnostics: result.diagnostics || null,
         region_gate_threshold: result.regionGateThreshold ?? REGION_GATE_THRESHOLD,
@@ -1166,7 +1302,7 @@ function buildDebugPayload(session = sess) {
   };
 }
 
-function downloadDebugPayload() {
+function downloadDebugPayload(): void {
   const payload = buildDebugPayload();
   if (!payload) return;
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -1178,7 +1314,7 @@ function downloadDebugPayload() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function preserveFinalDebugDownload(payload) {
+function preserveFinalDebugDownload(payload: RuntimeSession | null): void {
   if (!payload || !els.debugMediaExports) return;
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -1187,11 +1323,11 @@ function preserveFinalDebugDownload(payload) {
     `<a href="${url}" download="personalized_capture_data.json">下载本次同步采集数据 JSON</a>`);
 }
 
-function renderFinalExports() {
-  const links = [];
-  const seeds = sess?.displaySeeds || sess?.seeds || [];
-  const curves = sess?.curves || [];
-  const neutralImage = sess?.neutralCanonical || sess?.lastCanon;
+function renderFinalExports(): void {
+  const links: string[] = [];
+  const seeds = (sess?.displaySeeds || sess?.seeds || []) as CurveSeed[];
+  const curves = (sess?.curves || []) as Array<RefinedCurve & RuntimeSession>;
+  const neutralImage = (sess?.neutralCanonical || sess?.lastCanon) as ImageData | null;
   const wrinkleEvidence = sess?.v6Result?.wrinkleMask || null;
   const v6EvidenceMask = sess?.v6Result?.evidenceMask || null;
   drawSemanticWrinkleMask(neutralImage, sess?.v6Result?.fused, els.wrinkleSemanticCanvas, SIZE);
@@ -1224,13 +1360,13 @@ function renderFinalExports() {
   if (els.compareCanvas) {
     const cc = els.compareCanvas;
     cc.style.display = "block";
-    const cx = cc.getContext("2d");
+    const cx = canvas2d(cc);
     cx.clearRect(0, 0, cc.width, cc.height);
     cx.drawImage(cmpCanvas, 0, 0, cc.width, cc.height);
   }
   if (els.compareSummary) {
     const top = [...cmp.rows]
-      .filter((r) => r.meanPx != null)
+      .filter((r): r is typeof r & { meanPx: number; maxPx: number } => r.meanPx != null && r.maxPx != null)
       .sort((a, b) => b.meanPx - a.meanPx)
       .slice(0, 5);
     const lines = top.map((r) =>
@@ -1276,7 +1412,7 @@ function renderFinalExports() {
     const sideC = document.createElement("canvas");
     sideC.width = SIZE * 2 + 12;
     sideC.height = SIZE + 28;
-    const sx = sideC.getContext("2d");
+    const sx = canvas2d(sideC);
     sx.fillStyle = "#0c0f14";
     sx.fillRect(0, 0, sideC.width, sideC.height);
     if (neutralImage) {
@@ -1305,7 +1441,7 @@ function renderFinalExports() {
     algorithm_version: sess?.algorithmVersion || null,
     parameter_version: sess?.parameterVersion || null,
     evidence_sources: [
-      `anatomical_rstl_prior_${atlasLines.length}`,
+      `anatomical_rstl_prior_${atlasLines?.length || 0}`,
       "temporally_stable_neutral_texture_adaptive_resolution",
       "repeatable_dynamic_texture_validation",
       "mesh_deformation_quality_support",
@@ -1317,7 +1453,7 @@ function renderFinalExports() {
     action_validation: sess?.actionValidation || {},
     optimizer: sess?.optimizationDiagnostics || {},
     region_evidence: sess?.regionState || {},
-    action_cycles: Object.fromEntries(Object.entries(sess?.actionCycles || {}).map(([action, cycles]) => [action, cycles.map((cycle) => ({
+    action_cycles: Object.fromEntries(Object.entries(sess?.actionCycles || {}).map(([action, cycles]) => [action, (cycles as RuntimeSession[]).map((cycle) => ({
       quality: cycle.quality,
       temporal_persistence: cycle.temporalPersistence,
     }))])),
@@ -1346,26 +1482,26 @@ function renderFinalExports() {
       note: "per-point offset final vs prior (0 where no observation)",
       mean_offset_px: +cmp.meanAll.toFixed(3),
       n_matched: cmp.n,
-      per_line: cmp.rows.filter((r) => r.meanPx != null).map((r) => ({
+      per_line: cmp.rows.filter((r): r is typeof r & { meanPx: number; maxPx: number } => r.meanPx != null && r.maxPx != null).map((r) => ({
         name: r.name,
         mean_offset_px: +r.meanPx.toFixed(3),
         max_offset_px: +r.maxPx.toFixed(3),
       })),
     },
-    lines: curves.map((c) => ({
+    lines: curves.map((c: RefinedCurve & RuntimeSession) => ({
       name: c.name,
       status: (c.movedFrac || 0) > 0 ? "continuous_field_moved" : "prior_preserved",
       corrected_fraction: +(c.refinedFrac || 0).toFixed(3),
       moved_fraction: +(c.movedFrac || 0).toFixed(3),
-      points_xy: c.pts.map((p) => [+p[0].toFixed(2), +p[1].toFixed(2)]),
-      points_prior_xy: (c.priorPts || c.pts).map((p) => [+p[0].toFixed(2), +p[1].toFixed(2)]),
+      points_xy: c.pts.map((p: Point2) => [+p[0].toFixed(2), +p[1].toFixed(2)]),
+      points_prior_xy: (c.priorPts || c.pts).map((p: Point2) => [+p[0].toFixed(2), +p[1].toFixed(2)]),
       point_kinds: c.kinds || [],
       point_audit: c.audit || [],
       rollback_reason: c.rollbackReason || null,
       max_direction_change_deg: +(c.maxDirectionChangeDeg || 0).toFixed(3),
       max_curvature_change_deg: +(c.maxCurvatureChangeDeg || 0).toFixed(3),
       // 重心坐标（tri,u,v）：配合 topology 可在导出后重投影到任意帧关键点
-      points_bary: (c.bary || []).map((b) => (b ? [b.tri, +b.u.toFixed(4), +b.v.toFixed(4)] : null)),
+      points_bary: (c.bary || []).map((b: RuntimeSession | null) => (b ? [b.tri, +b.u.toFixed(4), +b.v.toFixed(4)] : null)),
     })),
   };
   const blob = new Blob([JSON.stringify(json, null, 2)], { type: "application/json" });
@@ -1388,22 +1524,25 @@ function renderFinalExports() {
 
 // ── 5. 每步融合 + 动作状态机 ────────────────────────────────────────────────
 /** 把 canonical 曲线锚到网格拓扑（重心坐标），供实时主画面重投影，避免坐标漂移 */
-function attachCurveBary(curves) {
+function attachCurveBary(curves: Array<RuntimeSession & { pts: Point2[] }>): void {
   if (!sess?.refMesh || !curves) return;
   for (const c of curves) {
-    c.bary = (c.pts || []).map((p) => pointToBary(p, sess.refMesh, triangles));
+    c.bary = (c.pts || []).map((p: Point2) => pointToBary(p, sess.refMesh, triangles));
   }
 }
 
-async function ensureWrinkleYolo() {
+async function ensureWrinkleYolo(): Promise<InstanceType<typeof WrinkleYoloOnnx>> {
   if (!wrinkleYolo) wrinkleYolo = new WrinkleYoloOnnx({ confidenceThreshold: YOLO_CONFIDENCE });
-  if (typeof wrinkleYolo.initialize === "function") await wrinkleYolo.initialize();
-  else if (typeof wrinkleYolo.load === "function") await wrinkleYolo.load();
-  else if (wrinkleYolo.ready && typeof wrinkleYolo.ready.then === "function") await wrinkleYolo.ready;
+  await wrinkleYolo.load();
   return wrinkleYolo;
 }
 
-function applyResidualFlowToDetection(result, flow, regionGate, size = SIZE) {
+function applyResidualFlowToDetection(
+  result: RuntimeSession,
+  flow: RuntimeSession | null | undefined,
+  regionGate: NumericField | null | undefined,
+  size = SIZE,
+): RuntimeSession {
   const pixels = size * size;
   if (!result || !flow?.u || !flow?.v || !flow?.conf
     || flow.u.length !== pixels || flow.v.length !== pixels || flow.conf.length !== pixels) return result;
@@ -1427,7 +1566,11 @@ function applyResidualFlowToDetection(result, flow, regionGate, size = SIZE) {
       maximumShift = Math.max(maximumShift, Math.hypot(dx, dy));
     }
   }
-  const nearest = (field, channels = 1, Output = field?.constructor || Float32Array) => {
+  const nearest = (
+    field: NumericField | null | undefined,
+    channels = 1,
+    Output: any = Float32Array,
+  ): any => {
     if (!field || field.length !== pixels * channels) return field;
     const output = new Output(field.length);
     for (let index = 0; index < pixels; index += 1) {
@@ -1440,7 +1583,7 @@ function applyResidualFlowToDetection(result, flow, regionGate, size = SIZE) {
     }
     return output;
   };
-  const gatedMask = (field) => {
+  const gatedMask = (field: NumericField | null | undefined): Uint8Array | null | undefined => {
     const output = nearest(field, 1, Uint8Array);
     if (!output) return output;
     for (let index = 0; index < pixels; index += 1) {
@@ -1448,7 +1591,7 @@ function applyResidualFlowToDetection(result, flow, regionGate, size = SIZE) {
     }
     return output;
   };
-  const gatedScalar = (field) => {
+  const gatedScalar = (field: NumericField | null | undefined): Float32Array | null | undefined => {
     const output = nearest(field, 1, Float32Array);
     if (!output) return output;
     for (let index = 0; index < pixels; index += 1) {
@@ -1466,7 +1609,7 @@ function applyResidualFlowToDetection(result, flow, regionGate, size = SIZE) {
     directionQ: nearest(result.directionQ, 2, Float32Array),
     directionConsistency: gatedScalar(result.directionConsistency),
     classMasks: Object.fromEntries(Object.entries(result.classMasks || {})
-      .map(([name, mask]) => [name, gatedMask(mask)])),
+      .map(([name, mask]) => [name, gatedMask(mask as NumericField)])),
     diagnostics: {
       ...(result.diagnostics || {}),
       residualRegistration: {
@@ -1480,7 +1623,10 @@ function applyResidualFlowToDetection(result, flow, regionGate, size = SIZE) {
   };
 }
 
-async function detectWrinkles(model, sample) {
+async function detectWrinkles(
+  model: InstanceType<typeof WrinkleYoloOnnx>,
+  sample: RuntimeSession & { imageData: ImageData; expression: ActionName | "neutral" },
+): Promise<RuntimeSession> {
   const options = {
     confidenceThreshold: YOLO_CONFIDENCE,
     expression: sample.expression,
@@ -1491,19 +1637,12 @@ async function detectWrinkles(model, sample) {
     regionGate: sample.regionGate || buildExpressionRegionGate(sample.expression, sess),
     regionGateThreshold: REGION_GATE_THRESHOLD,
   };
-  for (const name of ["detect", "infer", "predict", "run"]) {
-    if (typeof model?.[name] !== "function") continue;
-    const result = await model[name](sample.imageData, options);
-    if (result && typeof result === "object" && !ArrayBuffer.isView(result)) {
-      const normalized = { ...result, ...options };
-      return applyResidualFlowToDetection(normalized, sample.residualFlow, options.regionGate, SIZE);
-    }
-    return { mask: result, ...options };
-  }
-  throw new Error("WrinkleYoloOnnx 未提供 detect/infer/predict/run 方法");
+  const result = await model.detect(sample.imageData, options);
+  const normalized: RuntimeSession = { ...result, ...options };
+  return applyResidualFlowToDetection(normalized, sample.residualFlow, options.regionGate, SIZE);
 }
 
-function canonicalFaceWidth(session) {
+function canonicalFaceWidth(session: RuntimeSession): number {
   const points = session?.refMesh || [];
   let minX = Infinity, maxX = -Infinity;
   for (const point of points) {
@@ -1514,10 +1653,10 @@ function canonicalFaceWidth(session) {
   return Number.isFinite(minX) && Number.isFinite(maxX) && maxX > minX ? maxX - minX : SIZE * 0.72;
 }
 
-function normalizeV6Curves(rawCurves, seeds) {
-  const source = Array.isArray(rawCurves) ? rawCurves : [];
+function normalizeV6Curves(rawCurves: unknown, seeds: readonly CurveSeed[]): RuntimeSession[] {
+  const source = Array.isArray(rawCurves) ? rawCurves as RuntimeSession[] : [];
   const byName = new Map(source.map((curve, index) => [curve?.name || seeds[index]?.name, curve]));
-  return seeds.map((seed, index) => {
+  return seeds.map((seed, index): RuntimeSession => {
     const curve = byName.get(seed.name) || source[index] || {};
     const priorPts = curve.priorPts || curve.points_prior_xy || seed.pts;
     const pts = curve.pts || curve.points_xy || curve.finalPts || priorPts;
@@ -1528,17 +1667,18 @@ function normalizeV6Curves(rawCurves, seeds) {
       ...curve,
       name: seed.name,
       region: curve.region || atlasLines?.[index]?.region || "",
-      priorPts: priorPts.map((point) => [Number(point[0]), Number(point[1])]),
-      pts: pts.map((point) => [Number(point[0]), Number(point[1])]),
+      priorPts: priorPts.map((point: Point2): Point2 => [Number(point[0]), Number(point[1])]),
+      pts: pts.map((point: Point2): Point2 => [Number(point[0]), Number(point[1])]),
     };
   });
 }
 
-function baryArray(value) {
+function baryArray(value: unknown): Point3 | null {
+  const objectValue = value as RuntimeSession | null;
   const point = Array.isArray(value) && value.length >= 3
-    ? [Number(value[0]), Number(value[1]), Number(value[2])]
-    : value && Number.isInteger(value.tri)
-      ? [value.tri, Number(value.u), Number(value.v)]
+    ? [Number(value[0]), Number(value[1]), Number(value[2])] as Point3
+    : objectValue && Number.isInteger(objectValue.tri)
+      ? [objectValue.tri, Number(objectValue.u), Number(objectValue.v)] as Point3
       : null;
   if (!point || !Number.isInteger(point[0]) || !point.slice(1).every(Number.isFinite)) return null;
   const w = 1 - point[1] - point[2], eps = 1e-3;
@@ -1547,18 +1687,22 @@ function baryArray(value) {
   return point;
 }
 
-function buildActiveAtlas(curves, diagnostics = {}) {
+function buildActiveAtlas(
+  curves: readonly RuntimeSession[],
+  diagnostics: RuntimeSession = {},
+): PreviewAtlasPayload & RuntimeSession {
   const sourceByName = new Map((atlasLines || []).map((line) => [line.name, line]));
-  const lines = curves.map((curve) => {
+  const lines = curves.map((curve: RuntimeSession) => {
     const source = sourceByName.get(curve.name);
+    const sourcePoints = source?.points || [];
     const bary = curve.bary || curve.points_bary || [];
-    const points = (curve.pts || []).map((_, index) => {
-      const sourceIndex = source?.points?.length > 1 && curve.pts.length > 1
-        ? Math.round(index * (source.points.length - 1) / (curve.pts.length - 1))
+    const points = (curve.pts || []).map((_: Point2, index: number) => {
+      const sourceIndex = sourcePoints.length > 1 && curve.pts.length > 1
+        ? Math.round(index * (sourcePoints.length - 1) / (curve.pts.length - 1))
         : index;
-      return baryArray(bary[index]) || baryArray(source?.points?.[sourceIndex]);
+      return baryArray(bary[index]) || baryArray(sourcePoints[sourceIndex]);
     });
-    if (points.some((point) => !point)) {
+    if (points.some((point: Point3 | null) => !point)) {
       throw new Error(`曲线 ${curve.name} 含无法重投影的点`);
     }
     return {
@@ -1595,7 +1739,11 @@ function buildActiveAtlas(curves, diagnostics = {}) {
   };
 }
 
-function buildV6Payload(curves, diagnostics, activeAtlas) {
+function buildV6Payload(
+  curves: readonly RuntimeSession[],
+  diagnostics: RuntimeSession,
+  activeAtlas: RuntimeSession,
+): RuntimeSession {
   return {
     system: "rstl",
     validated: false,
@@ -1608,13 +1756,13 @@ function buildV6Payload(curves, diagnostics, activeAtlas) {
       topology_contract_preserved: true,
       ...diagnostics,
     },
-    lines: curves.map((curve, index) => ({
+    lines: curves.map((curve: RuntimeSession, index: number) => ({
       name: curve.name,
       region: curve.region || "",
-      points_prior_xy: curve.priorPts.map((point) => [Number(point[0]), Number(point[1])]),
-      points_xy: curve.pts.map((point) => [Number(point[0]), Number(point[1])]),
+      points_prior_xy: curve.priorPts.map((point: Point2) => [Number(point[0]), Number(point[1])]),
+      points_xy: curve.pts.map((point: Point2) => [Number(point[0]), Number(point[1])]),
       points_source_bary: atlasLines?.[index]?.points || [],
-      points_bary: (activeAtlas.lines[index]?.points || []).map((point) => [...point]),
+      points_bary: (activeAtlas.lines[index]?.points || []).map((point: Point3) => [...point]),
       normal_offsets_px: curve.normalOffsets || curve.normal_offsets_px || [],
       affected_intervals: curve.affectedIntervals || curve.affected_intervals || [],
       direct_match_count: curve.directMatchCount || curve.direct_match_count || 0,
@@ -1623,14 +1771,14 @@ function buildV6Payload(curves, diagnostics, activeAtlas) {
   };
 }
 
-async function runLocalYoloV6(session) {
-  const samples = (session.yoloSamples || []).filter((sample) => sample?.imageData?.data);
-  if (samples.length < 2 || !samples.some((sample) => sample.expression === "neutral")) {
+async function runLocalYoloV6(session: RuntimeSession): Promise<RuntimeSession> {
+  const samples = (session.yoloSamples || []).filter((sample: RuntimeSession) => sample?.imageData?.data) as Array<RuntimeSession & { imageData: ImageData; expression: ActionName | "neutral" }>;
+  if (samples.length < 2 || !samples.some((sample: RuntimeSession) => sample.expression === "neutral")) {
     throw new Error("至少需要中性帧和一个已接受的表情轮次才能运行 YOLO + V6");
   }
   setLocalPipelineStatus("正在本机加载皱纹 YOLO…", 4);
   const model = await ensureWrinkleYolo();
-  const detections = [];
+  const detections: RuntimeSession[] = [];
   for (let index = 0; index < samples.length; index++) {
     const sample = samples[index];
     setLocalPipelineStatus(
@@ -1641,7 +1789,7 @@ async function runLocalYoloV6(session) {
       ...sample,
       regionGate: buildExpressionRegionGate(sample.expression, session),
     }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
 
   setLocalPipelineStatus("正在对所有表情执行严格像素并集…", 68);
@@ -1652,20 +1800,19 @@ async function runLocalYoloV6(session) {
   const fused = await fuseStrictUnion(detections, {
     width: SIZE,
     height: SIZE,
-    operation: "strict_union",
     consolidationRadiusPx,
     consolidationDirectionToleranceDegrees: 28,
   });
   // fused.mask 始终保留逐像素严格并集，供审计；显示与 V6 使用相邻同向
   // 重复皱纹合并后的 mask，避免不同表情的轻微错位形成双线。
-  const wrinkleMask = fused?.consolidatedMask || fused?.mask || fused?.wrinkleMask || fused?.unionMask || fused;
+  const wrinkleMask = fused.consolidatedMask || fused.mask;
   if (!scalarMask(wrinkleMask, SIZE)) throw new Error("严格并集未返回有效的 320×320 皱纹 mask");
   drawSemanticWrinkleMask(session.neutralCanonical || session.lastCanon, fused, els.wrinkleSemanticCanvas, SIZE);
   // Expose the binary union as soon as detection finishes, independently of
   // the later V6 refinement, so the user can inspect/export the actual evidence.
   drawBinaryWrinkleMask(wrinkleMask, els.wrinkleMaskCanvas, SIZE);
-  const confidenceMap = fused?.confidenceMap || fused?.confidence || fused?.scoreMap || null;
-  const directionQ = fused?.directionQ || fused?.direction || null;
+  const confidenceMap = fused.confidence || null;
+  const directionQ = fused.directionQ || null;
 
   setLocalPipelineStatus("正在按皱纹位置与走势执行 RSTL V6 局部法向微调…", 76);
   const seeds = session.displaySeeds || session.seeds || [];
@@ -1679,8 +1826,8 @@ async function runLocalYoloV6(session) {
   });
   if (sess !== session) throw new Error("采集会话已结束，已丢弃过期微调结果");
   const curves = normalizeV6Curves(refined?.curves || refined?.lines || refined, seeds);
-  if (curves.length !== seeds.length || curves.length !== atlasLines.length) {
-    throw new Error(`V6 必须保持 ${atlasLines.length} 条曲线，实际得到 ${curves.length} 条`);
+  if (!atlasLines || curves.length !== seeds.length || curves.length !== atlasLines.length) {
+    throw new Error(`V6 必须保持 ${atlasLines?.length || 0} 条曲线，实际得到 ${curves.length} 条`);
   }
   session.curves = curves;
   session.algorithmVersion = refined?.diagnostics?.algorithm || "interval-guarded-continuous-polyline-rstl-refinement-6.0";
@@ -1743,10 +1890,11 @@ function finishExports() {
   const session = sess;
   session.finalizationPromise = runLocalYoloV6(session).catch((error) => {
     console.error(error);
+    const message = error instanceof Error ? error.message : String(error);
     if (sess === session) {
       renderFinalExports();
-      setLocalPipelineStatus(`本地 YOLO / V6 失败：${error.message || error}`, 0, "error");
-      setMsg(`本地 YOLO / V6 失败：${error.message || error}`, true);
+      setLocalPipelineStatus(`本地 YOLO / V6 失败：${message}`, 0, "error");
+      setMsg(`本地 YOLO / V6 失败：${message}`, true);
     }
     return null;
   });
@@ -1754,20 +1902,20 @@ function finishExports() {
 }
 
 
-function meanGray(gray, mask) {
+function meanGray(gray: NumericField, mask: NumericField | null | undefined): number {
   let sum = 0, count = 0;
   for (let i = 0; i < gray.length; i++) if (!mask || mask[i]) { sum += gray[i]; count++; }
   return count ? sum / count : 0;
 }
 
-function medianNumber(values) {
+function medianNumber(values: readonly number[]): number {
   if (!values.length) return Infinity;
   const sorted = values.slice().sort((a, b) => a - b);
   const mid = sorted.length >> 1;
   return sorted.length % 2 ? sorted[mid] : 0.5 * (sorted[mid - 1] + sorted[mid]);
 }
 
-async function aggregateCycleEvidence(frames, action) {
+async function aggregateCycleEvidence(frames: readonly RuntimeSession[], action: ActionName): Promise<RuntimeSession> {
   const selectionField = actionRegionField(action, sess.regionMasksHi, TEXTURE_SIZE);
   const selectionMask = new Uint8Array(selectionField.length);
   for (let i = 0; i < selectionMask.length; i++) {
@@ -1814,10 +1962,10 @@ async function aggregateCycleEvidence(frames, action) {
   const neutralRegistrationGray = boxBlurGray(sess.neutralGray, SIZE, 4);
   const residualFlowSearchPx = Math.max(2, Math.min(4,
     Math.round(RESIDUAL_FLOW_SEARCH_FACE_RATIO * canonicalFaceWidth(sess))));
-  let representativeFlow = null;
+  let representativeFlow: RuntimeSession | null = null;
   const neutralMean = meanGray(sess.neutralGrayHi, sess.skinHi);
   for (const item of best) {
-    const fr = item.fr;
+    const fr = item.fr as RuntimeSession;
     const texHi = textureOrientation(sess.neutralGrayHi, item.gray, TEXTURE_SIZE, TEXTURE_SIZE, sess.skinHi);
     const tex = downsampleAxialEvidence(texHi.q, texHi.coh, texHi.amp, TEXTURE_SIZE, TEXTURE_SIZE, SIZE, SIZE);
     const currentRegistrationGray = boxBlurGray(fr.grayLow, SIZE, 4);
@@ -1853,10 +2001,10 @@ async function aggregateCycleEvidence(frames, action) {
       deformation[i] += def.support[i];
       stretch[i] += def.stretch[i];
     }
-    tracking += fr.tracking ?? 0;
+    tracking += Number(fr.tracking ?? 0);
     const lightDelta = Math.abs(meanGray(item.gray, sess.skinHi) - neutralMean);
     illumination += Math.exp(-lightDelta / 24);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
   const count = best.length;
   const q = new Float32Array(n * 2);
@@ -1868,7 +2016,7 @@ async function aggregateCycleEvidence(frames, action) {
     temporalWeight += coh[i];
     coh[i] /= count; amp[i] /= count; ridge[i] /= count; flowConf[i] /= count; deformation[i] /= count; stretch[i] /= count;
   }
-  const quality = {
+  const quality: RuntimeSession = {
     tracking: tracking / count,
     illumination: illumination / count,
     returnConsistency: null,
@@ -1884,7 +2032,7 @@ async function aggregateCycleEvidence(frames, action) {
   };
   return {
     q, coh, amp, ridge, flow: { conf: flowConf }, deformation, stretch, quality,
-    representativeImage: cloneImageData(best[0]?.fr?.imageLow || null),
+    representativeImage: cloneImageData((best[0]?.fr as RuntimeSession | undefined)?.imageLow || null),
     representativeFlow,
     bottomUp: {
       q: bottomUp.q,
@@ -1896,7 +2044,7 @@ async function aggregateCycleEvidence(frames, action) {
   };
 }
 
-function repeatabilityScore(a, b, regionWeight) {
+function repeatabilityScore(a: RuntimeSession, b: RuntimeSession, regionWeight: NumericField): number {
   let sum = 0, weight = 0;
   for (let i = 0; i < regionWeight.length; i++) {
     const sharedRidge = Math.min(a.ridge?.[i] || 0, b.ridge?.[i] || 0);
@@ -1915,7 +2063,7 @@ function repeatabilityScore(a, b, regionWeight) {
   return weight ? sum / weight : 0;
 }
 
-function mergeRepeatedCycles(a, b) {
+function mergeRepeatedCycles(a: RuntimeSession, b: RuntimeSession): RuntimeSession {
   const n = a.coh.length;
   const q = new Float32Array(n * 2);
   const coh = new Float32Array(n), amp = new Float32Array(n), ridge = new Float32Array(n);
@@ -1952,11 +2100,16 @@ function mergeRepeatedCycles(a, b) {
   };
 }
 
-function createCycleDiagnostic(action, cycle, gate, round) {
+function createCycleDiagnostic(
+  action: ActionName,
+  cycle: RuntimeSession,
+  gate: { valid: boolean; reasons: string[] },
+  round: number,
+): RuntimeSession {
   const regionWeight = actionRegionField(action, sess.regionMasks, SIZE);
-  const meshResiduals = sess.returnFrames.map((frame) => frame.meshResidual);
-  const meshRatios = sess.returnFrames.map((frame) => frame.meshRatio);
-  const signal = (field) => roundedMetrics(summarizeWeightedField(field, regionWeight));
+  const meshResiduals = sess.returnFrames.map((frame: RuntimeSession) => frame.meshResidual);
+  const meshRatios = sess.returnFrames.map((frame: RuntimeSession) => frame.meshRatio);
+  const signal = (field: NumericField) => roundedMetrics(summarizeWeightedField(field, regionWeight));
   return {
     id: `${action}-${String((sess.cycleDiagnostics?.length || 0) + 1).padStart(3, "0")}`,
     recorded_at: new Date().toISOString(),
@@ -1992,11 +2145,11 @@ function createCycleDiagnostic(action, cycle, gate, round) {
   };
 }
 
-function compactCurveUpdate(curves) {
+function compactCurveUpdate(curves: readonly RefinedCurve[]) {
   const summary = summarizeCurveDisplacements(curves || []);
   const moved = [...summary.per_line]
-    .filter((line) => line.moved_points > 0)
-    .sort((a, b) => b.mean_offset_px - a.mean_offset_px)
+    .filter((line) => Number(line.moved_points) > 0)
+    .sort((a, b) => Number(b.mean_offset_px) - Number(a.mean_offset_px))
     .slice(0, 20);
   return roundedMetrics({
     lines: summary.lines,
@@ -2009,10 +2162,15 @@ function compactCurveUpdate(curves) {
   });
 }
 
-function retainYoloSample(action, round, imageData, residualFlow = null) {
+function retainYoloSample(
+  action: ActionName | "neutral",
+  round: number,
+  imageData: ImageData | null,
+  residualFlow: RuntimeSession | null = null,
+): void {
   if (!sess || !imageData?.data) return;
   sess.yoloSamples = sess.yoloSamples || [];
-  sess.yoloSamples = sess.yoloSamples.filter((sample) =>
+  sess.yoloSamples = sess.yoloSamples.filter((sample: RuntimeSession) =>
     !(sample.expression === action && sample.round === round));
   sess.yoloSamples.push({
     expression: action,
@@ -2023,7 +2181,7 @@ function retainYoloSample(action, round, imageData, residualFlow = null) {
   });
 }
 
-function commitCycle(action) {
+function commitCycle(action: ActionName): void {
   if (processing || !sess?.neutralGray || !["onset", "apex", "return"].includes(sess.phase)) return;
   const stoppedClip = stopClipRecording("action_captured");
   processing = true;
@@ -2034,7 +2192,7 @@ function commitCycle(action) {
 
   // 让 UI 先刷新再算，避免卡死感
   setTimeout(async () => {
-    let debugRecord = null;
+    let debugRecord: RuntimeSession | null = null;
     try {
       await stoppedClip;
       const cycle = await aggregateCycleEvidence(sess.cycleFrames, action);
@@ -2096,7 +2254,7 @@ function commitCycle(action) {
         decision_mode: repeatDecision.mode,
         direction_validated: repeatDecision.directionValidated,
       });
-      const current = {
+      const current: RuntimeSession = {
         ...cycle,
         effectiveSampleCount: cycle.quality?.validPeakFrames || 0,
       };
@@ -2144,10 +2302,10 @@ function commitCycle(action) {
       // 采集阶段只做单次质量与时序稳定性门控，不提前改写 RSTL。
       // 全部已接受表情会在采集结束后统一进入 YOLO 严格并集与 V6。
       const seedsForTrace = sess.displaySeeds || sess.seeds || [];
-      sess.curves = seedsForTrace.map((seed) => ({
+      sess.curves = seedsForTrace.map((seed: CurveSeed) => ({
         name: seed.name,
-        pts: seed.pts.map((point) => [...point]),
-        priorPts: seed.pts.map((point) => [...point]),
+        pts: seed.pts.map((point: Point2): Point2 => [...point]),
+        priorPts: seed.pts.map((point: Point2): Point2 => [...point]),
         kinds: seed.pts.map(() => "prior"),
         refinedFrac: 0,
         movedFrac: 0,
@@ -2172,14 +2330,14 @@ function commitCycle(action) {
         const { canvas: prev } = renderCompareImage(sess.neutralCanonical || sess.lastCanon, sess.displaySeeds || sess.seeds, sess.curves, SIZE);
         if (els.compareCanvas) {
           els.compareCanvas.style.display = "block";
-          const cx = els.compareCanvas.getContext("2d");
+          const cx = canvas2d(els.compareCanvas);
           cx.clearRect(0, 0, els.compareCanvas.width, els.compareCanvas.height);
           cx.drawImage(prev, 0, 0, els.compareCanvas.width, els.compareCanvas.height);
         }
         if (els.compareSummary) {
           els.compareSummary.innerHTML =
             `<div style="font-size:12px">已接受 ${(sess.completed?.length || 0) + 1} 个表情 · 等待最终 YOLO 严格并集与 V6</div>
-             <div class="hint">采集结束前保持 ${atlasLines.length} 条初始先验不变</div>`;
+             <div class="hint">采集结束前保持 ${atlasLines?.length || 0} 条初始先验不变</div>`;
         }
       } catch (_) {}
       sess.completed = sess.completed || [];
@@ -2209,7 +2367,7 @@ function commitCycle(action) {
       }
     } catch (e) {
       console.error(e);
-      const reason = e?.message || String(e);
+      const reason = e instanceof Error ? e.message : String(e);
       if (debugRecord) {
         debugRecord.failure_reason = reason;
       } else {
@@ -2230,9 +2388,9 @@ function commitCycle(action) {
       sess.retryCurrent = true;
       sess.cycleFrames = [];
       sess.returnFrames = [];
-      const tip = /reading ['"]?0['"]?/i.test(String(e?.message || e))
+      const tip = /reading ['"]?0['"]?/i.test(reason)
         ? "曲线重采样异常，已修复请重试本步"
-        : (e.message || String(e));
+        : reason;
       sess.message = `本步失败，点击「重新采集」：${tip}`;
       setMsg(sess.message, true);
     }
@@ -2243,7 +2401,7 @@ function commitCycle(action) {
   }, 30);
 }
 
-function advanceActionMachine(bs, now, score) {
+function advanceActionMachine(bs: BlendshapeDict, now: number, score: number): void {
   const action = ACTION_ORDER[sess.actionIndex];
   if (!action) return;
   const thr = personalThreshold(action, sess.baseline);
@@ -2320,31 +2478,34 @@ function confirmCurrentStep() {
 }
 
 // ── 6. 主循环 ───────────────────────────────────────────────────────────────
-function tick() {
+function tick(): void {
   if (!looping) return;
   if (els.video.readyState < 2) {
     requestAnimationFrame(tick);
     return;
   }
 
-  let lmPx = null;
+  let lmPx: Point2[] | null = null;
   const now = performance.now() / 1000;
   try {
+    if (!landmarker) throw new Error("FaceLandmarker 尚未加载");
     const res = landmarker.detectForVideo(els.video, performance.now());
     const face = res.faceLandmarks?.[0];
     const bs = blendDict(res.faceBlendshapes?.[0]?.categories);
     if (face) {
-      lmPx = smoother.filter(toPixels(face, els.video.videoWidth, els.video.videoHeight), now);
+      lmPx = smoother
+        .filter(toPixels(face, els.video.videoWidth, els.video.videoHeight), now)
+        .map((point): Point2 => [point[0], point[1]]);
       runSession(lmPx, bs, now);
       els.boot.classList.add("hidden");
     } else if (sess) {
-      appendCaptureSample({ bs, alignedMesh: null, pose: null, poseQuality: 0, sourceFaceWidth: 0, detectedFace: false });
+      appendCaptureSample({ bs, alignedMesh: null, registration: null, pose: null, poseQuality: 0, sourceFaceWidth: 0, detectedFace: false });
       sess.message = "未检测到人脸，请正对镜头、光线充足";
       setMsg(sess.message, true);
     }
   } catch (e) {
     console.error(e);
-    setMsg(`检测异常：${e.message}`, true);
+    setMsg(`检测异常：${e instanceof Error ? e.message : String(e)}`, true);
   }
 
   try { paint(); } catch (e) { console.warn(e); }
@@ -2359,15 +2520,15 @@ function tick() {
   if (sess?.stage !== "done") requestAnimationFrame(tick);
 }
 
-function runSession(lmPx, bs, now) {
+function runSession(lmPx: Point2[], bs: BlendshapeDict, now: number): void {
   if (!sess || processing) return;
 
   // 每帧 warp 到固定 refMesh（表情期姿态过差则跳过，减少转头伪影）
-  let warped = null;
-  let warpedHi = null;
-  let alignedMesh = null;
+  let warped: ImageData | null = null;
+  let warpedHi: ImageData | null = null;
+  let alignedMesh: Point2[] | null = null;
   let poseQuality = 0;
-  let poseSnapshot = null;
+  let poseSnapshot: RuntimeSession | null = null;
   let sourceFaceWidthSnapshot = 0;
   const needFrame = sess.stage === "neutral"
     || (sess.stage === "actions" && ["onset", "apex", "return"].includes(sess.phase));
@@ -2376,16 +2537,16 @@ function runSession(lmPx, bs, now) {
     try {
       const pose = estimatePoseQuality(lmPx);
       poseSnapshot = pose;
-      const faceXs = lmPx.slice(0, 468).map((p) => p[0]);
+      const faceXs = lmPx.slice(0, 468).map((p: Point2) => p[0]);
       const sourceFaceWidth = Math.max(...faceXs) - Math.min(...faceXs);
       sourceFaceWidthSnapshot = sourceFaceWidth;
       sess.sourceFaceWidth = sourceFaceWidth;
       // 尚未锁定参考：仅在姿态合格时锁定 refMesh + 掩膜（一次，之后冻结）
       if (!sess.refMesh) {
         if (pose.ok) {
-          sess.refLm = lmPx.map((p) => [p[0], p[1]]);
+          sess.refLm = lmPx.map((p: Point2): Point2 => [p[0], p[1]]);
           sess.refMesh = landmarksToCanonicalXY(lmPx, SIZE);
-          sess.refMeshHi = sess.refMesh.map((p) => [p[0] * TEXTURE_SIZE / SIZE, p[1] * TEXTURE_SIZE / SIZE]);
+          sess.refMeshHi = sess.refMesh.map((p: Point2): Point2 => [p[0] * TEXTURE_SIZE / SIZE, p[1] * TEXTURE_SIZE / SIZE]);
           const m = buildMasksFromMesh(sess.refMesh, SIZE);
           sess.skin = m.skin;
           sess.forbidden = m.forbidden;
@@ -2490,20 +2651,23 @@ function runSession(lmPx, bs, now) {
         for (const action of ACTION_ORDER) {
           sess.returnMeshThresholds[action] = estimateReturnMeshThreshold(sess.neutralMeshResiduals[action]);
         }
-        const mesh3 = (sess.refMesh || []).map((p) => [p[0], p[1], 0]);
+        const loadedAtlas = atlasLines;
+        const loadedTriangles = triangles;
+        if (!loadedAtlas || !loadedTriangles) throw new Error("面部拓扑或 RSTL atlas 尚未加载");
+        const mesh3 = (sess.refMesh || []).map((p: Point2): Point3 => [p[0], p[1], 0]);
         if (mesh3.length < 100) throw new Error("关键点不足");
         const masks = buildMasksFromMesh(sess.refMesh, SIZE);
         sess.skin = masks.skin;
         sess.forbidden = masks.forbidden;
-        const prior = rasterizePrior(atlasLines, mesh3, triangles, SIZE, { expandForehead: false });
-        const topologySeeds = mapAtlas(atlasLines, mesh3, triangles, { expandForehead: false }).map((line, id) => ({
+        const prior = rasterizePrior(loadedAtlas, sess.refMesh, loadedTriangles, SIZE, { expandForehead: false });
+        const topologySeeds = mapAtlas(loadedAtlas, mesh3, loadedTriangles, { expandForehead: false }).map((line, id) => ({
           name: line.name,
-          region: line.region || atlasLines[id]?.region || "",
+          region: line.region || loadedAtlas[id]?.region || "",
           id,
-          pts: line.pts.map((point) => [point[0], point[1]]),
+          pts: line.pts.map((point): Point2 => [point[0], point[1]]),
         }));
-        if (topologySeeds.length !== atlasLines.length
-          || topologySeeds.some((line, id) => line.pts.length !== atlasLines[id].points.length)) {
+        if (topologySeeds.length !== loadedAtlas.length
+          || topologySeeds.some((line, id) => line.pts.length !== (loadedAtlas[id].points?.length || 0))) {
           throw new Error("初始 RSTL 的曲线或点数未保持");
         }
         sess.q0 = prior.q0;
@@ -2535,7 +2699,7 @@ function runSession(lmPx, bs, now) {
         sess.fieldC = staticLow.confidence.slice();
         sess.ridgeField = staticLow.ridge.slice();
         sess.dynamicValidation.fill(0);
-        for (const [region, mask] of Object.entries(sess.regionMasks)) {
+        for (const [region, mask] of Object.entries(sess.regionMasks) as Array<[string, NumericField]>) {
           let sum = 0, count = 0;
           for (let i = 0; i < mask.length; i++) if (mask[i]) { sum += staticLow.confidence[i]; count++; }
           sess.regionState[region].staticConfidence = count ? sum / count : 0;
@@ -2549,7 +2713,7 @@ function runSession(lmPx, bs, now) {
           static_illumination_stability: staticHi.illuminationStability,
           static_frames_evaluated: staticHi.frameCount,
           region_static_confidence: Object.fromEntries(Object.entries(sess.regionState)
-            .map(([region, state]) => [region, state.staticConfidence])),
+            .map(([region, state]) => [region, (state as RuntimeSession).staticConfidence])),
           return_mesh_thresholds_px: sess.returnMeshThresholds,
         });
         sess.pendingClipStop = stopClipRecording("neutral_calibrated");
@@ -2567,7 +2731,7 @@ function runSession(lmPx, bs, now) {
         sess.neutralFrames = [];
         sess.neutralGrayFramesHi = [];
         sess.neutralBs = [];
-        sess.message = `静息建场失败，请重试：${e.message}`;
+        sess.message = `静息建场失败，请重试：${e instanceof Error ? e.message : String(e)}`;
         setMsg(sess.message, true);
       }
     }
@@ -2599,11 +2763,11 @@ function runSession(lmPx, bs, now) {
 }
 
 // ── 7. 倒计时与开停摄像头 ───────────────────────────────────────────────────
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function showCountdown(n, tip) {
+function showCountdown(n: number | string, tip: string): void {
   if (!els.countdown) return;
   els.countdown.classList.remove("hidden");
   // 触发动画重播
@@ -2614,7 +2778,7 @@ function showCountdown(n, tip) {
   if (els.countTip) els.countTip.textContent = tip || "";
 }
 
-function hideCountdown() {
+function hideCountdown(): void {
   if (els.countdown) els.countdown.classList.add("hidden");
 }
 
@@ -2776,9 +2940,10 @@ async function startCapture() {
     els.start.disabled = false;
     syncStartButton();
     setLive(false);
-    const tip = /NotAllowed|Permission/i.test(`${e.name} ${e.message}`)
+    const error = e instanceof Error ? e : new Error(String(e));
+    const tip = /NotAllowed|Permission/i.test(`${error.name} ${error.message}`)
       ? "请允许摄像头权限后重试"
-      : e.message;
+      : error.message;
     setMsg(`启动失败：${tip}`, true);
     els.boot.textContent = `启动失败：${tip}`;
     els.badge.textContent = "失败";
@@ -2803,10 +2968,10 @@ async function skipStep() {
   if (!next) {
     const seedsForTrace = sess.displaySeeds || sess.seeds;
     if (seedsForTrace) {
-      sess.curves = seedsForTrace.map((s) => ({
+      sess.curves = seedsForTrace.map((s: CurveSeed) => ({
         name: s.name,
-        pts: s.pts.map((point) => [...point]),
-        priorPts: s.pts.map((point) => [...point]),
+        pts: s.pts.map((point: Point2): Point2 => [...point]),
+        priorPts: s.pts.map((point: Point2): Point2 => [...point]),
         kinds: s.pts.map(() => "prior"),
         refinedFrac: 0, movedFrac: 0,
       }));
@@ -2836,13 +3001,13 @@ async function stopCapture() {
   if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
   if (sess?.curves?.length || sess?.seeds?.length) {
     if (!sess.curves?.length && sess.seeds) {
-      sess.curves = sess.seeds.map((s) => ({ name: s.name, pts: s.pts }));
+      sess.curves = sess.seeds.map((s: CurveSeed) => ({ name: s.name, pts: s.pts }));
     }
     attachCurveBary(sess.curves);
     await finishExports();
   }
   if (sess) preserveFinalDebugDownload(buildDebugPayload(sess));
-  sess = null;
+  sess = null!;
   els.start.disabled = false;
   els.start.textContent = "开始采集";
   els.stop.disabled = true;
@@ -2875,7 +3040,7 @@ async function openIncisionWorkspace() {
   location.assign(`/app/incision?source=personalized&v=${Date.now()}`);
 }
 
-function downloadCanvas(canvas, filename) {
+function downloadCanvas(canvas: HTMLCanvasElement, filename: string): void {
   if (!canvas) return;
   const link = document.createElement("a");
   link.href = canvas.toDataURL("image/png");
@@ -2886,7 +3051,7 @@ function downloadCanvas(canvas, filename) {
 export function mountPersonalizedWorkbench() {
   uiAbortController?.abort();
   Object.assign(els, collectElements());
-  ctx = els.view.getContext("2d", { willReadFrequently: true });
+  ctx = canvas2d(els.view);
   uiAbortController = new AbortController();
   const options = { signal: uiAbortController.signal };
 

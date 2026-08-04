@@ -58,7 +58,7 @@
 两个**必须知道的例外**，否则会误判这套门控的强度：
 
 - **`returnConsistency`（动作后能否回到静息）目前只被记录，不拦截。** 常量里写着 0.58，但唯一调用点
-  `personalized.js` 在三个分支里都把它覆写成 `returnConsistency: 0`，而 `prstl_pipeline.js` 用严格
+  `personalizedRuntime.ts` 在三个分支里都把它覆写成 `returnConsistency: 0`，而 `prstlPipeline.ts` 用严格
   小于判定，所以该项永不触发。真正拦头动的是上表最后一行的**配准残差上限**
   （`REGISTRATION_RESIDUAL_LIMIT_FACE_RATIO`）。若要恢复拦截，改的是那三处覆写而不是常量。
 - **`frown` 的表情信号门被硬编码为通过**：皱眉走计时采集，视觉信号只当证据强度，不作采集资格门槛。

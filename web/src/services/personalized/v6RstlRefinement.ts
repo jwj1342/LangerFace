@@ -1,4 +1,3 @@
-// @ts-nocheck -- numerical kernel typing is tracked by #95.
 /**
  * Browser-ready wrinkle-guided RSTL V6 refinement.
  *
@@ -22,18 +21,131 @@ const DIRECTION_TOLERANCE_DEGREES = 40;
 const SOFT_LINK_TURN_DEGREES = 35;
 const EPSILON = 1e-8;
 
-const clamp = (value, lower = 0, upper = 1) =>
+type Point2 = [number, number];
+type NumericField = ArrayLike<number>;
+type Interval = [number, number];
+
+export interface V6Seed {
+  name?: string;
+  region?: string;
+  pts?: unknown;
+  points_xy?: unknown;
+  priorPts?: unknown;
+  [key: string]: unknown;
+}
+
+export interface V6RefinementOptions {
+  parallelDedupRadiusPx?: number;
+  softLinkDistancePx?: number;
+  tangentWindowPx?: number;
+  searchRadiusPx?: number;
+  directionToleranceDegrees?: number;
+  minimumMatchScore?: number;
+  transitionLengthPx?: number;
+  maxDisplacementPx?: number;
+  p90LimitPx?: number;
+  smoothingPasses?: number;
+  maxCurvatureChangeDegrees?: number;
+}
+
+interface PolylineMetrics {
+  arc: Float64Array;
+  directArc: Float64Array;
+  tangents: Point2[];
+  length: number;
+  directLength: number;
+}
+
+interface Trend {
+  points: Point2[];
+  sourcePathCount: number;
+  softLinkCount: number;
+  metrics: PolylineMetrics;
+}
+
+interface CurveSegment {
+  index: number;
+  start: Point2;
+  dx: number;
+  dy: number;
+  length: number;
+  lengthSquared: number;
+  tangent: Point2;
+  normal: Point2;
+  arcStart: number;
+}
+
+interface CurveGeometry {
+  seed: V6Seed;
+  prior: Point2[];
+  normals: Point2[];
+  vertexArc: Float64Array;
+  segments: CurveSegment[];
+}
+
+interface MatchRecord {
+  trendIndex: number;
+  pointOrder: number;
+  curveIndex: number;
+  score: number;
+  alignment: number;
+  distance: number;
+  confidence: number;
+  normalOffset: number;
+  projectionArc: number;
+  directArc: number;
+}
+
+interface MatchGroup {
+  trendIndex: number;
+  curveIndex: number;
+  records: MatchRecord[];
+  directLength: number;
+  coverage: number;
+  influence: number;
+  summary: Record<string, number | boolean>;
+}
+
+interface MatchingResult {
+  acceptedGroups: MatchGroup[];
+  curveSupportRecords: Array<Record<string, number | boolean | string>>;
+  groupRecords: Array<Record<string, number | boolean>>;
+  bandRadius: number;
+  candidatePairCount: number;
+  directionRejectedPairCount: number;
+}
+
+interface CurveRefineResult {
+  curve: CurveGeometry;
+  offsets: Float64Array;
+  intervals: Interval[];
+  points: Point2[];
+  supportScore: number;
+  rollbackReason: string | null;
+}
+
+export interface RefineV6Input {
+  seeds: V6Seed[];
+  wrinkleMask: NumericField;
+  confidenceMap?: NumericField | null;
+  directionQ?: NumericField | null;
+  size: number;
+  faceWidthPx: number;
+  options?: V6RefinementOptions;
+}
+
+const clamp = (value: number, lower = 0, upper = 1): number =>
   Math.max(lower, Math.min(upper, value));
 
-const finitePoint = (point) => Array.isArray(point) && point.length >= 2 &&
+const finitePoint = (point: unknown): point is Point2 => Array.isArray(point) && point.length >= 2 &&
   Number.isFinite(Number(point[0])) && Number.isFinite(Number(point[1]));
 
-function normalize2(x, y) {
+function normalize2(x: number, y: number): Point2 {
   const length = Math.hypot(x, y);
   return length > EPSILON ? [x / length, y / length] : [0, 0];
 }
 
-function percentile(values, fraction) {
+function percentile(values: readonly number[], fraction: number): number {
   if (!values.length) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const position = clamp(fraction) * (sorted.length - 1);
@@ -42,11 +154,15 @@ function percentile(values, fraction) {
   return sorted[lower] * (1 - mix) + sorted[upper] * mix;
 }
 
-function fieldLength(field) {
+function fieldLength(field: NumericField | null | undefined): number {
   return field && Number.isFinite(field.length) ? field.length : 0;
 }
 
-function normalizeScalarField(field, length, fallback = 0) {
+function normalizeScalarField(
+  field: NumericField | null | undefined,
+  length: number,
+  fallback = 0,
+): Float32Array {
   const output = new Float32Array(length);
   if (!field || fieldLength(field) !== length) {
     if (fallback !== 0) output.fill(fallback);
@@ -65,7 +181,7 @@ function normalizeScalarField(field, length, fallback = 0) {
   return output;
 }
 
-function normalizeMask(mask, length) {
+function normalizeMask(mask: NumericField | null | undefined, length: number): Uint8Array {
   if (!mask || fieldLength(mask) !== length) {
     throw new Error(`wrinkleMask length must be ${length}`);
   }
@@ -76,7 +192,7 @@ function normalizeMask(mask, length) {
   return output;
 }
 
-function maskNeedsThinning(mask, size) {
+function maskNeedsThinning(mask: Uint8Array, size: number): boolean {
   for (let y = 0; y < size - 1; y += 1) {
     const row = y * size;
     for (let x = 0; x < size - 1; x += 1) {
@@ -88,7 +204,7 @@ function maskNeedsThinning(mask, size) {
   return false;
 }
 
-function neighbourBits(mask, x, y, size) {
+function neighbourBits(mask: Uint8Array, x: number, y: number, size: number): number[] {
   const index = y * size + x;
   return [
     mask[index - size], mask[index - size + 1], mask[index + 1],
@@ -98,7 +214,7 @@ function neighbourBits(mask, x, y, size) {
 }
 
 /** Zhang-Suen thinning. Called only for masks containing a true 2x2 interior. */
-function skeletonize(mask, size) {
+function skeletonize(mask: Uint8Array, size: number): Uint8Array {
   let current = new Uint8Array(mask);
   const remove = new Uint8Array(mask.length);
   let changed = true, iteration = 0;
@@ -136,9 +252,9 @@ function skeletonize(mask, size) {
   return current;
 }
 
-function pixelNeighbours(index, mask, size) {
+function pixelNeighbours(index: number, mask: Uint8Array, size: number): number[] {
   const x = index % size, y = Math.floor(index / size);
-  const neighbours = [];
+  const neighbours: number[] = [];
   for (let dy = -1; dy <= 1; dy += 1) {
     for (let dx = -1; dx <= 1; dx += 1) {
       if ((!dx && !dy) || x + dx < 0 || y + dy < 0 ||
@@ -153,16 +269,16 @@ function pixelNeighbours(index, mask, size) {
   return neighbours;
 }
 
-const edgeKey = (first, second) => first < second
+const edgeKey = (first: number, second: number): string => first < second
   ? `${first}:${second}` : `${second}:${first}`;
 
-function orderedSkeletonPaths(skeleton, size) {
-  const adjacency = new Map();
+function orderedSkeletonPaths(skeleton: Uint8Array, size: number): Point2[][] {
+  const adjacency = new Map<number, number[]>();
   for (let index = 0; index < skeleton.length; index += 1) {
     if (skeleton[index]) adjacency.set(index, pixelNeighbours(index, skeleton, size));
   }
-  const visited = new Set(), paths = [];
-  const trace = (start, next) => {
+  const visited = new Set<string>(), paths: Point2[][] = [];
+  const trace = (start: number, next: number): Point2[] => {
     const indices = [start];
     let previous = start, current = next;
     visited.add(edgeKey(previous, current));
@@ -177,7 +293,7 @@ function orderedSkeletonPaths(skeleton, size) {
       previous = current;
       current = following;
     }
-    return indices.map((index) => [index % size, Math.floor(index / size)]);
+    return indices.map((index) => [index % size, Math.floor(index / size)] as Point2);
   };
 
   for (const [index, neighbours] of adjacency) {
@@ -194,7 +310,7 @@ function orderedSkeletonPaths(skeleton, size) {
   return paths.filter((path) => path.length >= 2);
 }
 
-function endpointDirection(path, endpoint, sampleSpan = 4) {
+function endpointDirection(path: Point2[], endpoint: number, sampleSpan = 4): Point2 {
   if (endpoint === 0) {
     const inside = path[Math.min(path.length - 1, sampleSpan)];
     return normalize2(path[0][0] - inside[0], path[0][1] - inside[1]);
@@ -204,8 +320,20 @@ function endpointDirection(path, endpoint, sampleSpan = 4) {
   return normalize2(path[last][0] - inside[0], path[last][1] - inside[1]);
 }
 
-function mergeTrendPaths(paths, maximumGap, maximumTurnDegrees = SOFT_LINK_TURN_DEGREES) {
-  const endpointInfo = new Map();
+function mergeTrendPaths(
+  paths: Point2[][],
+  maximumGap: number,
+  maximumTurnDegrees = SOFT_LINK_TURN_DEGREES,
+): Array<Omit<Trend, "metrics">> {
+  interface EndpointInfo {
+    pathIndex: number;
+    endpoint: number;
+    point: Point2;
+    outward: Point2;
+    soft?: boolean;
+    gap?: number;
+  }
+  const endpointInfo = new Map<string, EndpointInfo>();
   paths.forEach((path, pathIndex) => {
     endpointInfo.set(`${pathIndex}:0`, { pathIndex, endpoint: 0,
       point: path[0], outward: endpointDirection(path, 0) });
@@ -213,7 +341,10 @@ function mergeTrendPaths(paths, maximumGap, maximumTurnDegrees = SOFT_LINK_TURN_
       point: path[path.length - 1], outward: endpointDirection(path, 1) });
   });
   const cosine = Math.cos(maximumTurnDegrees * Math.PI / 180);
-  const endpoints = [...endpointInfo.values()], candidates = [];
+  const endpoints = [...endpointInfo.values()];
+  const candidates: Array<{
+    score: number; first: EndpointInfo; second: EndpointInfo; gap: number; soft: boolean;
+  }> = [];
   for (let firstIndex = 0; firstIndex < endpoints.length; firstIndex += 1) {
     const first = endpoints[firstIndex];
     for (let secondIndex = firstIndex + 1; secondIndex < endpoints.length; secondIndex += 1) {
@@ -234,7 +365,7 @@ function mergeTrendPaths(paths, maximumGap, maximumTurnDegrees = SOFT_LINK_TURN_
     }
   }
   candidates.sort((a, b) => b.score - a.score);
-  const links = new Map();
+  const links = new Map<string, EndpointInfo>();
   for (const candidate of candidates) {
     const firstKey = `${candidate.first.pathIndex}:${candidate.first.endpoint}`;
     const secondKey = `${candidate.second.pathIndex}:${candidate.second.endpoint}`;
@@ -243,11 +374,12 @@ function mergeTrendPaths(paths, maximumGap, maximumTurnDegrees = SOFT_LINK_TURN_
     links.set(secondKey, { ...candidate.first, soft: candidate.soft, gap: candidate.gap });
   }
 
-  const merged = [], visitedPaths = new Set();
+  const merged: Array<Omit<Trend, "metrics">> = [];
+  const visitedPaths = new Set<number>();
   for (let seed = 0; seed < paths.length; seed += 1) {
     if (visitedPaths.has(seed)) continue;
     let entry = links.has(`${seed}:0`) && !links.has(`${seed}:1`) ? 1 : 0;
-    let current = seed, points = [], sourcePathCount = 0, softLinkCount = 0;
+    let current = seed, points: Point2[] = [], sourcePathCount = 0, softLinkCount = 0;
     while (!visitedPaths.has(current)) {
       visitedPaths.add(current);
       sourcePathCount += 1;
@@ -269,7 +401,11 @@ function mergeTrendPaths(paths, maximumGap, maximumTurnDegrees = SOFT_LINK_TURN_
   return merged;
 }
 
-function qDirectionAt(directionQ, point, size) {
+function qDirectionAt(
+  directionQ: NumericField | null | undefined,
+  point: Point2,
+  size: number,
+): Point2 {
   if (!directionQ || fieldLength(directionQ) !== size * size * 2) return [0, 0];
   const x = clamp(Math.round(point[0]), 0, size - 1);
   const y = clamp(Math.round(point[1]), 0, size - 1);
@@ -280,7 +416,13 @@ function qDirectionAt(directionQ, point, size) {
   return [Math.cos(angle), Math.sin(angle)];
 }
 
-function suppressParallelDuplicateSkeleton(skeleton, confidence, directionQ, size, radiusPixels) {
+function suppressParallelDuplicateSkeleton(
+  skeleton: Uint8Array,
+  confidence: NumericField,
+  directionQ: NumericField | null | undefined,
+  size: number,
+  radiusPixels: number,
+): { skeleton: Uint8Array; removed: number } {
   const output = new Uint8Array(skeleton);
   const radius = Math.max(1, Math.round(radiusPixels));
   const cosine = Math.cos(22 * Math.PI / 180);
@@ -317,8 +459,13 @@ function suppressParallelDuplicateSkeleton(skeleton, confidence, directionQ, siz
   return { skeleton: output, removed };
 }
 
-function polylineMetrics(points, tangentWindowPixels, directionQ = null, size = 0) {
-  const steps = [];
+function polylineMetrics(
+  points: Point2[],
+  tangentWindowPixels: number,
+  directionQ: NumericField | null = null,
+  size = 0,
+): PolylineMetrics {
+  const steps: number[] = [];
   for (let index = 1; index < points.length; index += 1) {
     steps.push(Math.hypot(
       points[index][0] - points[index - 1][0],
@@ -330,7 +477,7 @@ function polylineMetrics(points, tangentWindowPixels, directionQ = null, size = 
     arc[index] = arc[index - 1] + steps[index - 1];
     directArc[index] = directArc[index - 1] + (steps[index - 1] <= 1.5 ? steps[index - 1] : 0);
   }
-  const tangents = Array.from({ length: points.length }, () => [0, 0]);
+  const tangents: Point2[] = Array.from({ length: points.length }, () => [0, 0]);
   const halfWindow = Math.max(1, tangentWindowPixels * 0.5);
   for (let index = 0; index < points.length; index += 1) {
     let before = index, after = index;
@@ -356,13 +503,13 @@ function polylineMetrics(points, tangentWindowPixels, directionQ = null, size = 
   };
 }
 
-function confidenceAt(confidence, point, size) {
+function confidenceAt(confidence: NumericField, point: Point2, size: number): number {
   const x = clamp(Math.round(point[0]), 0, size - 1);
   const y = clamp(Math.round(point[1]), 0, size - 1);
   return confidence[y * size + x] || 0;
 }
 
-function curvePriorPoints(seed) {
+function curvePriorPoints(seed: V6Seed): Point2[] {
   const source = seed?.pts || seed?.points_xy || seed?.priorPts || [];
   if (!Array.isArray(source) || source.length < 2 || !source.every(finitePoint)) {
     throw new Error("Every seed must contain at least two finite pts");
@@ -370,17 +517,17 @@ function curvePriorPoints(seed) {
   return source.map((point) => [Number(point[0]), Number(point[1])]);
 }
 
-function buildCurveGeometry(seed, tangentWindowPixels) {
+function buildCurveGeometry(seed: V6Seed, tangentWindowPixels: number): CurveGeometry {
   const prior = curvePriorPoints(seed);
   const metrics = polylineMetrics(prior, tangentWindowPixels);
-  const normals = metrics.tangents.map((tangent) => [-tangent[1], tangent[0]]);
-  const segments = [];
+  const normals: Point2[] = metrics.tangents.map((tangent) => [-tangent[1], tangent[0]]);
+  const segments: CurveSegment[] = [];
   for (let index = 0; index < prior.length - 1; index += 1) {
     const dx = prior[index + 1][0] - prior[index][0];
     const dy = prior[index + 1][1] - prior[index][1];
     const length = Math.hypot(dx, dy);
     if (length <= EPSILON) continue;
-    const tangent = [dx / length, dy / length];
+    const tangent: Point2 = [dx / length, dy / length];
     segments.push({
       index, start: prior[index], dx, dy, length, lengthSquared: length * length,
       tangent, normal: [-tangent[1], tangent[0]], arcStart: metrics.arc[index],
@@ -389,13 +536,20 @@ function buildCurveGeometry(seed, tangentWindowPixels) {
   return { seed, prior, normals, vertexArc: metrics.arc, segments };
 }
 
-function matchTrendsToCurves(trends, curves, confidence, size, faceWidth, options) {
+function matchTrendsToCurves(
+  trends: Trend[],
+  curves: CurveGeometry[],
+  confidence: NumericField,
+  size: number,
+  faceWidth: number,
+  options: V6RefinementOptions,
+): MatchingResult {
   const bandRadius = options.searchRadiusPx ?? Math.max(3, SEARCH_FACE_RATIO * faceWidth);
   const normalScale = Math.max(2, bandRadius * 0.45);
   const directionCosine = Math.cos(
     (options.directionToleranceDegrees ?? DIRECTION_TOLERANCE_DEGREES) * Math.PI / 180,
   );
-  const groups = new Map();
+  const groups = new Map<string, MatchRecord[]>();
   let candidatePairCount = 0, directionRejectedPairCount = 0;
   for (let trendIndex = 0; trendIndex < trends.length; trendIndex += 1) {
     const trend = trends[trendIndex];
@@ -405,7 +559,7 @@ function matchTrendsToCurves(trends, curves, confidence, size, faceWidth, option
       const wrinkleConfidence = confidenceAt(confidence, point, size);
       if (!(wrinkleConfidence > 0) || !(wrinkleTangent[0] || wrinkleTangent[1])) continue;
       for (let curveIndex = 0; curveIndex < curves.length; curveIndex += 1) {
-        let best = null;
+        let best: MatchRecord | null = null;
         for (const segment of curves[curveIndex].segments) {
           const fromX = point[0] - segment.start[0];
           const fromY = point[1] - segment.start[1];
@@ -437,13 +591,15 @@ function matchTrendsToCurves(trends, curves, confidence, size, faceWidth, option
         }
         if (!best || best.score < (options.minimumMatchScore ?? 0.025)) continue;
         const key = `${trendIndex}:${curveIndex}`;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(best);
+        const records = groups.get(key) || [];
+        records.push(best);
+        groups.set(key, records);
       }
     }
   }
 
-  const acceptedGroups = [], groupRecords = [];
+  const acceptedGroups: MatchGroup[] = [];
+  const groupRecords: Array<Record<string, number | boolean>> = [];
   for (const [key, records] of groups) {
     records.sort((a, b) => a.pointOrder - b.pointOrder);
     const [trendIndexText, curveIndexText] = key.split(":");
@@ -481,12 +637,14 @@ function matchTrendsToCurves(trends, curves, confidence, size, faceWidth, option
       coverage, influence, summary });
   }
 
-  const byCurve = new Map();
+  const byCurve = new Map<number, MatchGroup[]>();
   for (const group of acceptedGroups) {
-    if (!byCurve.has(group.curveIndex)) byCurve.set(group.curveIndex, []);
-    byCurve.get(group.curveIndex).push(group);
+    const curveGroups = byCurve.get(group.curveIndex) || [];
+    curveGroups.push(group);
+    byCurve.set(group.curveIndex, curveGroups);
   }
-  const curveSupportRecords = [], acceptedCurves = new Set();
+  const curveSupportRecords: Array<Record<string, number | boolean | string>> = [];
+  const acceptedCurves = new Set<number>();
   for (const [curveIndex, curveGroups] of byCurve) {
     const directLength = curveGroups.reduce((sum, group) => sum + group.directLength, 0);
     const coverage = curveGroups.reduce((sum, group) => sum + group.coverage, 0) /
@@ -518,15 +676,19 @@ function matchTrendsToCurves(trends, curves, confidence, size, faceWidth, option
   };
 }
 
-function intervalIndices(directSupport, vertexArc, transitionLength) {
-  const maximum = directSupport.length ? Math.max(...directSupport) : 0;
+function intervalIndices(
+  directSupport: NumericField,
+  vertexArc: NumericField,
+  transitionLength: number,
+): Interval[] {
+  const maximum = directSupport.length ? Math.max(...Array.from(directSupport)) : 0;
   if (!(maximum > 0)) return [];
-  const active = [];
+  const active: number[] = [];
   for (let index = 0; index < directSupport.length; index += 1) {
     if (directSupport[index] >= Math.max(1e-8, maximum * 0.03)) active.push(index);
   }
   if (!active.length) return [];
-  const groups = [];
+  const groups: Interval[] = [];
   let start = active[0], end = active[0];
   for (const index of active.slice(1)) {
     if (index <= end + 1) end = index;
@@ -538,8 +700,8 @@ function intervalIndices(directSupport, vertexArc, transitionLength) {
     while (left > 0 && vertexArc[first] - vertexArc[left] < transitionLength) left -= 1;
     while (right < vertexArc.length &&
       vertexArc[right - 1] - vertexArc[exclusiveEnd - 1] < transitionLength) right += 1;
-    return [left, right];
-  }).reduce((merged, interval) => {
+    return [left, right] as Interval;
+  }).reduce<Interval[]>((merged, interval) => {
     const previous = merged[merged.length - 1];
     if (previous && interval[0] <= previous[1]) previous[1] = Math.max(previous[1], interval[1]);
     else merged.push(interval);
@@ -547,7 +709,13 @@ function intervalIndices(directSupport, vertexArc, transitionLength) {
   }, []);
 }
 
-function solveInterval(raw, support, start, end, passes = 48) {
+function solveInterval(
+  raw: NumericField,
+  support: NumericField,
+  start: number,
+  end: number,
+  passes = 48,
+): Float64Array {
   const length = end - start;
   const output = new Float64Array(length);
   let maximumSupport = 0;
@@ -575,7 +743,7 @@ function solveInterval(raw, support, start, end, passes = 48) {
   return output;
 }
 
-function turnAngles(points) {
+function turnAngles(points: Point2[]): Float64Array {
   const output = new Float64Array(points.length);
   for (let index = 1; index < points.length - 1; index += 1) {
     const first = normalize2(points[index][0] - points[index - 1][0],
@@ -587,14 +755,20 @@ function turnAngles(points) {
   return output;
 }
 
-function pointsFromOffsets(curve, offsets) {
+function pointsFromOffsets(curve: CurveGeometry, offsets: NumericField): Point2[] {
   return curve.prior.map((point, index) => [
     point[0] + curve.normals[index][0] * offsets[index],
     point[1] + curve.normals[index][1] * offsets[index],
   ]);
 }
 
-function geometryGuard(curve, offsets, intervals, size, options) {
+function geometryGuard(
+  curve: CurveGeometry,
+  offsets: Float64Array,
+  intervals: Interval[],
+  size: number,
+  options: V6RefinementOptions,
+): { scaled: number; rolledBack: number } {
   const priorTurns = turnAngles(curve.prior);
   const maximumChange = (options.maxCurvatureChangeDegrees ?? 18) * Math.PI / 180;
   let scaled = 0, rolledBack = 0;
@@ -626,12 +800,12 @@ function geometryGuard(curve, offsets, intervals, size, options) {
   return { scaled, rolledBack };
 }
 
-function orientation(a, b, c) {
+function orientation(a: Point2, b: Point2, c: Point2): number {
   return (b[0] - a[0]) * (c[1] - a[1]) -
     (b[1] - a[1]) * (c[0] - a[0]);
 }
 
-function segmentsCross(a, b, c, d) {
+function segmentsCross(a: Point2, b: Point2, c: Point2, d: Point2): boolean {
   if (Math.max(a[0], b[0]) <= Math.min(c[0], d[0]) + 1e-7 ||
       Math.max(c[0], d[0]) <= Math.min(a[0], b[0]) + 1e-7 ||
       Math.max(a[1], b[1]) <= Math.min(c[1], d[1]) + 1e-7 ||
@@ -641,7 +815,9 @@ function segmentsCross(a, b, c, d) {
   return first * second < -1e-7 && third * fourth < -1e-7;
 }
 
-function curveBounds(points) {
+interface Bounds { minX: number; minY: number; maxX: number; maxY: number }
+
+function curveBounds(points: Point2[]): Bounds {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const point of points) {
     minX = Math.min(minX, point[0]); minY = Math.min(minY, point[1]);
@@ -650,12 +826,12 @@ function curveBounds(points) {
   return { minX, minY, maxX, maxY };
 }
 
-function boundsOverlap(first, second) {
+function boundsOverlap(first: Bounds, second: Bounds): boolean {
   return first.maxX > second.minX + 1e-7 && second.maxX > first.minX + 1e-7 &&
     first.maxY > second.minY + 1e-7 && second.maxY > first.minY + 1e-7;
 }
 
-function selfCrosses(points) {
+function selfCrosses(points: Point2[]): boolean {
   for (let first = 0; first < points.length - 1; first += 1) {
     for (let second = first + 2; second < points.length - 1; second += 1) {
       if (segmentsCross(points[first], points[first + 1],
@@ -665,7 +841,7 @@ function selfCrosses(points) {
   return false;
 }
 
-function curvesCross(first, second) {
+function curvesCross(first: Point2[], second: Point2[]): boolean {
   if (!boundsOverlap(curveBounds(first), curveBounds(second))) return false;
   for (let a = 0; a < first.length - 1; a += 1) {
     for (let b = 0; b < second.length - 1; b += 1) {
@@ -675,8 +851,8 @@ function curvesCross(first, second) {
   return false;
 }
 
-function intersectionPairs(curves) {
-  const pairs = new Set();
+function intersectionPairs(curves: Point2[][]): Set<string> {
+  const pairs = new Set<string>();
   const bounds = curves.map(curveBounds);
   for (let first = 0; first < curves.length; first += 1) {
     for (let second = first + 1; second < curves.length; second += 1) {
@@ -687,11 +863,11 @@ function intersectionPairs(curves) {
   return pairs;
 }
 
-function rollbackNewIntersections(results, priorCurves) {
+function rollbackNewIntersections(results: CurveRefineResult[], priorCurves: Point2[][]) {
   const priorPairs = intersectionPairs(priorCurves);
   const priorSelf = priorCurves.map(selfCrosses);
-  const rolledBack = new Set();
-  const rollback = (index, reason) => {
+  const rolledBack = new Set<number>();
+  const rollback = (index: number, reason: string): void => {
     const result = results[index];
     result.offsets.fill(0);
     result.points = result.curve.prior.map((point) => [...point]);
@@ -725,18 +901,25 @@ function rollbackNewIntersections(results, priorCurves) {
   return { rolledBack, newPairs, newSelf };
 }
 
-function refineCurves(curves, matching, faceWidth, size, options) {
-  const grouped = new Map();
+function refineCurves(
+  curves: CurveGeometry[],
+  matching: MatchingResult,
+  faceWidth: number,
+  size: number,
+  options: V6RefinementOptions,
+) {
+  const grouped = new Map<number, MatchGroup[]>();
   for (const group of matching.acceptedGroups) {
-    if (!grouped.has(group.curveIndex)) grouped.set(group.curveIndex, []);
-    grouped.get(group.curveIndex).push(group);
+    const curveGroups = grouped.get(group.curveIndex) || [];
+    curveGroups.push(group);
+    grouped.set(group.curveIndex, curveGroups);
   }
   const spreadSigma = Math.max(2, matching.bandRadius * 0.30);
   const spreadRadius = Math.max(6, matching.bandRadius * 0.70);
   const transitionLength = options.transitionLengthPx ?? TRANSITION_FACE_RATIO * faceWidth;
   const maximumDisplacement = options.maxDisplacementPx ?? MAX_DISPLACEMENT_FACE_RATIO * faceWidth;
   const p90Limit = options.p90LimitPx ?? P90_FACE_RATIO * faceWidth;
-  const guardEvents = [];
+  const guardEvents: Array<Record<string, number | string | Interval>> = [];
   let geometryScaled = 0, geometryRolledBack = 0;
 
   const results = curves.map((curve, curveIndex) => {
@@ -818,7 +1001,7 @@ function refineCurves(curves, matching, faceWidth, size, options) {
 export function refineV6({
   seeds, wrinkleMask, confidenceMap = null, directionQ = null,
   size, faceWidthPx, options = {},
-}) {
+}: RefineV6Input) {
   if (!Number.isInteger(size) || size < 4) throw new Error("size must be an integer >= 4");
   if (!Array.isArray(seeds)) throw new Error("seeds must be an array");
   if (!(Number(faceWidthPx) > 0)) throw new Error("faceWidthPx must be positive");
