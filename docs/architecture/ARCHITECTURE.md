@@ -69,6 +69,7 @@ P = u·V0 + v·V1 + w·V2
 ### 3.4 渲染
 `web/src/services/render2d.ts: draw` / [`src/langerface/rendering/overlay.py`](../../src/langerface/rendering/overlay.py)：抗锯齿折线，被遮挡点处**断开**子段；
 按面部上/中/下三段分色（额=琥珀、中=蓝、下=绿）；alpha 由"透明度"控制 + 丢脸淡入淡出。
+`forehead_bridge_arc_v15` 外推额头弧线还会经过 `stabilizeForeheadMask`：先填补不超过 `maxGap` 的内部小洞，再删除短于 `minRun` 的可见伪段；所有剩余可见点总量达到 `minVisibleSpan` 时保留全部合格段，否则隐藏整条线。中部较大遮挡因此会让线条按真实掩膜断开，但不会再只保留左右两侧中的最长一侧（#145）。
 
 ### 3.5 关键区域放大窗
 `web/src/services/render2d.ts: drawZooms`。6 个区域（额·眉间/右眼周/左眼周/鼻·鼻唇沟/口周/颏部）各由一组关键点界定取景框，
@@ -204,7 +205,8 @@ P = u·V0 + v·V1 + w·V2
 4. `pytest` + `cd web && npm test` 全绿；`cd web && npm run build` 可生产构建。
 5. `cd web && npm run dev` → 浏览器打开 Vite 地址，验证 2D 实时；实时 3D 重建 / FLAME 孪生入口已由 #108 关闭，
    但 `/annotate` 的 3D 标注工具与 `/surgery` 闭合演示仍可从界面进入（见 §4 与 §12）。
-6. 临床校验图谱（`annotate_atlas.py`）后置 `validated:true` 方可作正式参考。
+6. `annotate_atlas.py` 只保存 `validated:false` 编辑草案；完成独立逐线临床复核、
+   来源记录和显式签署后，才允许由受控 finalize 流程生成 `validated:true` 候选资产。
 
 ## 11. 前端鲁棒性约束
 
@@ -261,7 +263,10 @@ npm run dev
 
 ### 接入项目
 
-- **临床校验闭环（issue #2）**：网页标注器只生成候选图谱草案；评审通过后，再由 `tools/annotate_atlas.py` 或资产维护流程替换 `assets/atlas_rstl.json` / `assets/atlas_langer.json`，将 `validated` 置 `true`，并在 `provenance` 记录校验者。
+- **临床校验闭环（issue #2）**：网页标注器与 `tools/annotate_atlas.py` 都只生成
+  `validated:false` 候选图谱草案。只有逐线评审全部通过，并记录评审者、角色、时间、
+  医学来源和显式 attestation 后，受控 finalize 流程才能生成单独的
+  `validated:true` 候选资产；普通编辑保存和手工修改布尔字段都不属于临床签署。
 - **3D 头模标注**：HeadSpace 等头模经离线管线导出为 `{vertices, triangles}` JSON 后，可在 `/app/annotate` 上传加载；标注得到的 xyz 线可继续经 `langerface.geometry`（加权 Sim3）在头模与标准脸之间迁移。
 - **数据隐私**：真实头模（HeadSpace / FaceScape）不入库，仅本地使用；标注产物（图谱/xyz JSON，仅坐标）可入库评审。
 

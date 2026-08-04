@@ -3,7 +3,9 @@ import { OneEuro } from "../compat/shared/geometry.js";
 
 export const modelState = {
   landmarker: null,
+  imageLandmarker: null,
   handLandmarker: null,
+  imageHandLandmarker: null,
   topology: null,
   triangles: null,
   noseTris: null,
@@ -39,7 +41,9 @@ export const renderState = {
 export const sourceState = {
   source: null, sourceKind: null,      // 'camera' | 'video' | 'image'
   running: false, paused: false, presence: 0,
-  lastLM: null, imageCacheLM: null, imageHulls: null, jawOpen: 0, blend: null, rawBlend: null,
+  lastLM: null, imageCacheLM: null, imageHulls: null,
+  imageDetectionComplete: false, imageDetectionAttempts: 0,
+  jawOpen: 0, blend: null, rawBlend: null,
   frozenFrame: null, lastHulls: [],
 };
 

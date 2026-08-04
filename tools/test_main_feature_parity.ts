@@ -240,8 +240,12 @@ includesAll(foreheadVisibility, [
   "maxGap",
   "minRun",
   "minVisibleSpan",
-  "longestRun.start",
+  "visibleCount < minVisibleSpan",
 ], "current live hair-aware forehead visibility");
+assert.ok(
+  !foreheadVisibility.includes("longestRun"),
+  "current live forehead visibility must preserve every qualifying run instead of selecting one longest run (#145)",
+);
 assert.ok(liveState.includes("opacity: 0.60"), "typed live RSTL opacity must match the 60% reference");
 assert.ok(currentState.includes("opacity: 0.60"), "current live RSTL opacity must match the 60% reference");
 includesAll(currentHtml, ['id="opacityVal">60%</span>', 'id="opacity" min="25" max="100" value="60"'], "current live reference opacity controls");
