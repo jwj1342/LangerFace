@@ -53,6 +53,53 @@ async function waitForIncisionSnapshot(
   }).toBe(true);
 }
 
+async function dragRangeAndRetainValue(
+  page: Page,
+  locator: Locator,
+  targetFraction: number,
+  snapshotField: "diameterMm" | "angleOffsetDeg",
+) {
+  const before = await locator.inputValue();
+  const bounds = await locator.boundingBox();
+  expect(bounds).not.toBeNull();
+  const minimum = Number(await locator.getAttribute("min"));
+  const maximum = Number(await locator.getAttribute("max"));
+  const currentFraction = (Number(before) - minimum) / (maximum - minimum);
+  const y = bounds!.y + bounds!.height / 2;
+
+  await page.evaluate(() => {
+    const auditWindow = window as Window & { __incisionE2eSnapshots?: unknown[] };
+    auditWindow.__incisionE2eSnapshots = [];
+  });
+  await page.mouse.move(bounds!.x + bounds!.width * currentFraction, y);
+  await page.mouse.down();
+  await page.mouse.move(bounds!.x + bounds!.width * targetFraction, y, { steps: 8 });
+  await page.mouse.up();
+
+  const retained = await locator.inputValue();
+  expect(retained).not.toBe(before);
+  await expect(locator).toHaveValue(retained);
+  await expect.poll(() => page.evaluate(({ field, value }) => {
+    const auditWindow = window as Window & {
+      __incisionE2eSnapshots?: Array<{
+        reason?: string;
+        tumor?: { diameterMm?: number };
+        edit?: { angleOffsetDeg?: number };
+      }>;
+    };
+    return (auditWindow.__incisionE2eSnapshots || []).some((snapshot) => {
+      if (field === "diameterMm") {
+        return snapshot.reason === "tumor_diameter_input" &&
+          snapshot.tumor?.diameterMm === Number(value);
+      }
+      return snapshot.reason === "edit_state" &&
+        snapshot.edit?.angleOffsetDeg === Number(value);
+    });
+  }, { field: snapshotField, value: retained })).toBe(true);
+
+  return retained;
+}
+
 async function contrastRatio(locator: Locator, pseudo?: "::placeholder") {
   return locator.evaluate((element, pseudoElement) => {
     type Color = { red: number; green: number; blue: number; alpha: number };
@@ -105,6 +152,10 @@ async function contrastRatio(locator: Locator, pseudo?: "::placeholder") {
 }
 
 test("active controls remain readable and clinician sliders retain edits", async ({ page }) => {
+  // This scenario performs multiple contrast scans plus serial keyboard and
+  // physical-drag round trips. Keep assertion timeouts strict while allowing
+  // the full interaction matrix to finish on a contended CI browser runner.
+  test.setTimeout(120_000);
   await waitForWorkbench(page);
 
   for (const selector of ["#tumorKind", "#reviewerName", "#runWorkflowBtn", "#approveCandidateBtn", "#exportJsonBtn"]) {
@@ -124,6 +175,7 @@ test("active controls remain readable and clinician sliders retain edits", async
     () => diameter.press("ArrowRight"),
   );
   await expect(diameter).toHaveValue(String(diameterBefore + 1));
+  await dragRangeAndRetainValue(page, diameter, 0.75, "diameterMm");
 
   const angle = page.locator("#angleOffsetDeg");
   await angle.focus();
@@ -134,6 +186,7 @@ test("active controls remain readable and clinician sliders retain edits", async
   );
   await expect(angle).toHaveValue("1");
   await expect(page.locator("#editStatus")).toHaveText("已调整");
+  await dragRangeAndRetainValue(page, angle, 0.75, "angleOffsetDeg");
 
   await page.locator("#tumorKind").selectOption("cutaneous");
   await expect(page.locator("#candidateType")).toHaveText("梭形");
@@ -148,6 +201,68 @@ test("active controls remain readable and clinician sliders retain edits", async
   );
   await expect(tipAngle).toHaveValue("31");
   await expect(page.locator("#candidateTipAngle")).toContainText("31.0°");
+});
+
+test("route remount removes and rebinds one canvas listener set", async ({ page }) => {
+  await page.addInitScript(() => {
+    const tracked = new Set(["pointerdown", "pointermove", "pointerup", "pointercancel", "wheel"]);
+    const auditWindow = window as Window & {
+      __incisionListenerBalance?: Record<string, number>;
+    };
+    auditWindow.__incisionListenerBalance = {};
+    const originalAdd = EventTarget.prototype.addEventListener;
+    const originalRemove = EventTarget.prototype.removeEventListener;
+    EventTarget.prototype.addEventListener = function (type, listener, options) {
+      if (this instanceof HTMLElement && this.id === "incisionCanvas" && tracked.has(type)) {
+        auditWindow.__incisionListenerBalance![type] =
+          (auditWindow.__incisionListenerBalance![type] || 0) + 1;
+      }
+      return Reflect.apply(originalAdd, this, [type, listener, options]);
+    };
+    EventTarget.prototype.removeEventListener = function (type, listener, options) {
+      if (this instanceof HTMLElement && this.id === "incisionCanvas" && tracked.has(type)) {
+        auditWindow.__incisionListenerBalance![type] =
+          (auditWindow.__incisionListenerBalance![type] || 0) - 1;
+      }
+      return Reflect.apply(originalRemove, this, [type, listener, options]);
+    };
+  });
+  await waitForWorkbench(page);
+
+  const listenerBalance = () => page.evaluate(() => {
+    const auditWindow = window as Window & {
+      __incisionListenerBalance?: Record<string, number>;
+    };
+    return auditWindow.__incisionListenerBalance || {};
+  });
+  await expect.poll(listenerBalance).toEqual({
+    pointerdown: 1,
+    pointermove: 1,
+    pointerup: 1,
+    pointercancel: 1,
+    wheel: 1,
+  });
+
+  await page.getByRole("link", { name: "返回工具入口" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect.poll(listenerBalance).toEqual({
+    pointerdown: 0,
+    pointermove: 0,
+    pointerup: 0,
+    pointercancel: 0,
+    wheel: 0,
+  });
+
+  await page.locator('a[href="/incision"]').filter({ hasText: "打开工具" }).click();
+  await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
+  await expect(page.locator("#candidateType")).not.toHaveText("—");
+  await expect.poll(listenerBalance).toEqual({
+    pointerdown: 1,
+    pointermove: 1,
+    pointerup: 1,
+    pointercancel: 1,
+    wheel: 1,
+  });
 });
 
 test("live workbench controls use the same readable clinical theme", async ({ page }) => {

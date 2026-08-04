@@ -827,6 +827,12 @@ h(u) = (s - 2)u^3 + (3 - 2s)u^2 + su
 
 生成从端点 `h(0)=0` 到中点 `h(1)=1`、且中点切线水平 `h'(1)=0` 的平滑轮廓。为避免极端长宽比下曲线过冲，工程上会限制可用端点斜率并在 metrics 中记录 `tip_angle_target_deg`、`tip_angle_estimated_deg`、`tip_angle_error_deg` 和 `tip_angle_limited_by_ratio`。候选还会记录 `outline_area_mm2`、`outline_half_width_monotone`、`outline_symmetry_max_error_mm` 和 `outline_self_intersection`，用于 reviewer 判断生成曲线是否仍是单峰、对称、无自交的梭形轮廓。
 
+同一几何契约分别由 `src/langerface/incision/fusiform.py` 和
+`web/src/services/incisionCandidateTools.ts` 实现；两侧共同读取
+`tests/fixtures/fusiform_candidates.json`，对长短轴、端点、中点、边界重心、
+尖端受限状态和包络结果做金标对拍。Python 单元测试另以高密度采样验证中点
+C1 连续、两侧单调收窄和端点切线夹角，避免“JSON 字段相同但曲线已经漂移”。
+
 边界覆盖按长轴投影单独计算：
 
 ```text

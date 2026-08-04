@@ -142,6 +142,8 @@ const flameFitService = read("src/services/flameFit.ts");
 const annotateViewerService = read("src/services/annotateViewer.ts");
 const controller = read("src/services/incisionRuntime.ts");
 const incisionDomService = read("src/services/incisionDom.ts");
+const incisionDomBindingsService = read("src/services/incisionDomBindings.ts");
+const incisionControllerStateService = read("src/services/incisionControllerState.ts");
 const incisionClinicalCopyService = read("src/services/incisionClinicalCopy.ts");
 const incisionReviewPolicyService = read("src/services/incisionReviewPolicy.ts");
 const incisionEditHistoryService = read("src/services/incisionEditHistory.ts");
@@ -195,7 +197,9 @@ const incisionRuntimeDependencyTypes = [
   "src/services/dataSource.ts",
   "src/services/exportPrivacy.ts",
   "src/services/incisionClinicalCopy.ts",
+  "src/services/incisionControllerState.ts",
   "src/services/incisionDom.ts",
+  "src/services/incisionDomBindings.ts",
   "src/services/incisionReviewPolicy.ts",
   "src/services/incisionReviewRecords.ts",
   "src/services/softBody.ts",
@@ -620,7 +624,15 @@ assert.ok(vercelIgnoreBuild.includes('["diff-tree", "--quiet", "--no-commit-id",
 assert.ok(vercel.includes('"source": "/app/(.*)"'), "Vercel rewrites nested SPA routes");
 assert.ok(vercel.includes('"source": "/"') && vercel.includes('"destination": "/index.html"'), "Vercel routes the root path to the React entry");
 assert.ok(vercel.includes('"destination": "/index.html"'), "Vercel routes SPA paths back to index.html");
-assert.ok(vercel.includes('"source": "/assets/(.*)"'), "Vercel declares root runtime asset handling");
+// 断言意图而不是字面量：站点根 /assets/ 必须有 header 规则覆盖运行时资产。
+// 具体的缓存策略（哈希 bundle immutable、固定名资产回源验证）由
+// tools/test_web_architecture.ts 用真实文件名逐个匹配，见 docs/CI_CD_VERCEL.md。
+{
+  const vercelJson = JSON.parse(vercel);
+  const assetHeaderRules = (vercelJson.headers || [])
+    .filter((rule) => String(rule.source).startsWith("/assets/"));
+  assert.ok(assetHeaderRules.length > 0, "Vercel declares root runtime asset handling");
+}
 assert.ok(assetLoaderService.includes('return normalizeAssetBaseUrl("/assets/")'), "asset loader defaults to the root /assets/ base");
 assert.ok(assetLoaderService.includes("SPA 路由回退"), "asset loader reports HTML SPA fallback responses as asset path errors");
 assert.ok(architectureDoc.includes("copy-runtime-assets") && architectureDoc.includes("站点根 `/assets/`"),
@@ -1421,6 +1433,43 @@ assert.ok(incisionWorkbench.includes("TumorInputPanel"), "React incision workben
 assert.ok(tumorPanel.includes("useIncisionControllerCommands"), "React tumor panel uses typed incision command callbacks");
 assert.ok(!tumorPanel.includes("dispatchIncisionTumorCommand"), "React tumor panel does not import low-level command dispatch helpers directly");
 assert.ok(!tumorPanel.includes("../lib/controllerEvents"), "React tumor panel does not import controller event names directly");
+assert.ok(
+  tumorPanel.includes('commands.tumor("diameter_input", value)') &&
+  tumorPanel.includes('commands.tumor("depth_input", value)') &&
+  tumorPanel.includes('commands.tumor("margin_input", value)') &&
+  tumorPanel.includes('commands.tumor("ellipse_ratio_input", value)'),
+  "React tumor range controls send their latest controlled value to the runtime bridge",
+);
+assert.ok(
+  controllerCommand.includes("dispatchIncisionTumorCommand(command: IncisionTumorCommand, value?:") &&
+  controllerCommand.includes("INCISION_TUMOR_REACT_COMMAND_EVENT, { command, value }") &&
+  controllerCommandsHook.includes("dispatchIncisionTumorCommand(command, value)"),
+  "incision tumor command bridge preserves the latest React control value",
+);
+assert.ok(
+  controller.includes("applyReactTumorControlValue(els, command, detail.value)") &&
+    incisionDomBindingsService.includes("function tumorCommandControl(") &&
+    incisionDomBindingsService.includes("applyReactTumorControlValue"),
+  "incision runtime applies validated React tumor values before publishing snapshots",
+);
+assert.ok(
+  controller.includes("bindIncisionDomEvents({") &&
+    controller.includes("reactManaged,") &&
+    incisionDomBindingsService.includes("if (!reactManaged) {\n    const stateRoot"),
+  "React-managed incision controls do not race legacy generic form listeners",
+);
+assert.ok(
+  editPanel.includes('preview("lengthScale", value)') &&
+    editPanel.includes('commit("lengthScale", event.currentTarget.value)') &&
+    controllerCommand.includes("controlId?: IncisionEditControlId") &&
+    controller.includes("applyReactEditControlValue(els, detail.controlId, detail.value)"),
+  "React clinician edit controls preserve their latest values across synchronous runtime previews",
+);
+assert.ok(
+  controller.includes("S.generationCount += 1") &&
+  controller.includes("第 ${S.generationCount} 次生成"),
+  "incision runtime exposes observable feedback for repeated candidate generation",
+);
 assert.ok(tumorPanel.includes("useIncisionStore"), "React tumor panel syncs low-frequency tumor status from Zustand");
 assert.ok(tumorPanel.includes("Button"), "React tumor panel uses the shared shadcn-style button primitive");
 assert.ok(tumorPanel.includes("Input"), "React tumor panel uses the shared shadcn-style input primitive");
@@ -1555,6 +1604,28 @@ assert.ok(incisionWorkbench.includes("EditControlsPanel"), "React incision workb
 assert.ok(editPanel.includes("useIncisionControllerCommands"), "React edit panel uses typed incision command callbacks");
 assert.ok(!editPanel.includes("dispatchIncisionEditCommand"), "React edit panel does not import low-level command dispatch helpers directly");
 assert.ok(!editPanel.includes("../lib/controllerEvents"), "React edit panel does not import controller event names directly");
+for (const controlId of [
+  "angleOffsetDeg",
+  "lengthScale",
+  "widthScale",
+  "tipAngleDeg",
+  "shiftAlongMm",
+  "shiftPerpMm",
+]) {
+  assert.ok(
+    editPanel.includes(`preview("${controlId}", value)`) &&
+    editPanel.includes(`commit("${controlId}", event.currentTarget.value)`),
+    `React clinician edit control #${controlId} sends its latest value to the runtime bridge`,
+  );
+}
+assert.ok(
+  controllerCommand.includes("controlId?: IncisionEditControlId") &&
+    controllerCommandsHook.includes("dispatchIncisionEditCommand(command, controlId, value)") &&
+    controller.includes("applyReactEditControlValue(els, detail.controlId, detail.value)") &&
+    incisionDomBindingsService.includes("function editCommandControl(") &&
+    incisionDomBindingsService.includes("applyReactControlValue("),
+  "incision edit command bridge applies validated React values before publishing snapshots",
+);
 assert.ok(editPanel.includes("useIncisionStore"), "React edit panel syncs low-frequency edit state from Zustand");
 assert.ok(editPanel.includes("Button"), "React edit panel uses the shared shadcn-style button primitive");
 assert.ok(editPanel.includes("Label"), "React edit panel uses the shared shadcn-style label primitive");
@@ -1598,6 +1669,10 @@ for (const dependencyType of incisionRuntimeDependencyTypes) {
 assert.ok(!controller.includes("// @ts-nocheck"), "incision runtime should run under strict TypeScript checking");
 assert.ok(incisionDomService.includes("interface IncisionDomElements"), "incision DOM service types the controller binding surface");
 assert.ok(incisionDomService.includes("collectIncisionElements"), "incision DOM service owns route-host element collection");
+assert.ok(incisionDomBindingsService.includes("interface IncisionDomEventHandlers"), "incision DOM binding service types runtime callbacks");
+assert.ok(incisionDomBindingsService.includes("bindIncisionDomEvents"), "incision DOM binding service owns workbench listeners");
+assert.ok(incisionDomBindingsService.includes("removeEventListener"), "incision DOM binding service removes every registered listener");
+assert.ok(incisionDomBindingsService.includes("resizeObserver.disconnect"), "incision DOM binding service disconnects resize observation");
 assert.ok(incisionClinicalCopyService.includes("overrideLabel"), "incision clinical copy service owns clinician-facing override labels");
 assert.ok(incisionReviewPolicyService.includes("assessReviewReadiness"), "incision review policy service owns pure review readiness checks");
 assert.ok(controller.includes("./incisionReviewPolicy"), "incision runtime delegates review gates to the pure review policy service");
@@ -1611,9 +1686,11 @@ assert.ok(incisionReviewRecordsService.includes("buildIncisionReviewRecord"), "i
 assert.ok(incisionReviewRecordsService.includes("buildIncisionReviewReport"), "incision review record service owns markdown report construction");
 assert.ok(controller.includes("./incisionReviewRecords"), "incision runtime delegates review records and reports");
 assert.ok(!controller.includes("function candidateEditSession"), "incision runtime does not build edit sessions inline");
-assert.ok(controller.split("\n").length <= 2000, "incision runtime remains below the 2000-line God Object threshold");
-assert.ok(controller.includes("interface IncisionRuntimeState"), "incision runtime types its long-lived renderer/workflow state");
-assert.ok(controller.includes("interface PointerDragState"), "incision runtime types pointer drag state");
+assert.ok(controller.split("\n").length <= 1900, "incision runtime remains below the 1900-line God Object threshold");
+assert.ok(incisionControllerStateService.includes("interface IncisionRuntimeState"), "incision state service types long-lived renderer/workflow state");
+assert.ok(incisionControllerStateService.includes("createIncisionControllerState"), "incision state service owns fresh mount state");
+assert.ok(controller.includes("createIncisionControllerState"), "incision runtime resets state through the state service");
+assert.ok(incisionDomBindingsService.includes("interface PointerDragState"), "incision DOM binding service owns pointer drag state");
 assert.ok(!controller.includes("function controllerEvent"), "incision runtime delegates browser command parsing to typed schemas");
 assert.ok(incisionWorkflowToolsService.includes("export function applyCandidateEdit"), "TypeScript incision workflow service exposes candidate edit workflow helpers");
 assert.ok(incisionCandidateToolsService.includes("export function summarizeTumorBoundary"), "TypeScript incision candidate service exposes tumor boundary summaries");
@@ -1679,13 +1756,13 @@ assert.ok(controller.includes("../lib/reactManagedWorkbench"), "incision control
 assert.ok(controller.includes("isReactManagedWorkbench()"), "incision controller can branch between React and compatibility workbench handling");
 assert.ok(!controller.includes("window.__LANGERFACE_REACT_MANAGED__"), "incision controller does not touch the managed flag directly");
 assert.ok(!controller.includes('document.getElementById("incisionCanvas")'), "incision runtime no longer auto-mounts from legacy HTML");
-assert.ok(controller.includes("els.tumorKind.onchange"), "legacy incision HTML still owns direct tumor input handlers");
-assert.ok(controller.includes("els.importSecondaryCue.onclick"), "legacy incision HTML still owns direct secondary cue handlers");
-assert.ok(controller.includes("el.oninput = applyEditControls"), "legacy incision HTML still owns direct edit preview handlers");
-assert.ok(controller.includes("els.approveCandidate.onclick"), "legacy incision HTML still owns direct review action handlers");
-assert.ok(controller.includes("els.saveCandidate.onclick"), "legacy incision HTML still owns direct candidate library handlers");
+assert.ok(controller.includes("bindIncisionDomEvents"), "incision runtime delegates DOM listener lifecycle");
+assert.ok(!controller.includes("els.canvas.addEventListener"), "incision runtime does not bind canvas listeners inline");
+assert.ok(!/els\.\w+\.onclick\s*=/.test(controller), "incision runtime does not assign compatibility click handlers inline");
+assert.ok(!/els\.\w+\.onchange\s*=/.test(controller), "incision runtime does not assign compatibility change handlers inline");
+assert.ok(!/els\.\w+\.oninput\s*=/.test(controller), "incision runtime does not assign compatibility input handlers inline");
 assert.ok(controller.includes("cancelAnimationFrame"), "incision controller cancels its render loop on dispose");
-assert.ok(controller.includes("S.resizeObserver?.disconnect"), "incision controller disconnects ResizeObserver on dispose");
+assert.ok(controller.includes("S.domEventCleanup?.()"), "incision controller removes DOM listeners on dispose");
 assert.ok(controller.includes("S.head?.dispose"), "incision controller disposes WebGL resources on dispose");
 
 assert.ok(standardFaceAssets.includes("loadStandardFaceAssets"), "standard face asset service exposes a shared lazy loader");

@@ -1,6 +1,25 @@
-// Forehead visibility helpers shared by still-image and live-camera rendering.
+// 额头可见性裁剪：v8.1.67 的 forehead_bridge_arc_v15 会把弧线主动外推到面部网格之外
+// （见 METHODS §5.1），所以显示期必须再裁一次，否则线会画到头发、背景或脸外。
+//
+// 本模块是 web/current/forehead_visibility.js 的 TypeScript 移植。两套实现由
+// tools/test_forehead_visibility_parity.ts 对同一份 fixture 逐点对拍，任何一侧
+// 改动阈值或算法都会让对拍失败——不要单独改一边。
+import type { Vec3 } from "./softBody.ts";
 
-function meanPatch(image, width, height, x, y, radius = 3) {
+export type Rgb = [number, number, number];
+export type Lab = [number, number, number];
+export type VisibilityPredicate = (point: Vec3 | undefined) => boolean;
+
+/** 以 (x, y) 为中心、边长 2*radius+1 的方块内的平均 RGB；越界像素跳过。 */
+export function meanPatch(
+  image: ImageData | null,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  radius = 3,
+): Rgb | null {
+  if (!image) return null;
   const cx = Math.round(x), cy = Math.round(y);
   let r = 0, g = 0, b = 0, n = 0;
   for (let yy = cy - radius; yy <= cy + radius; yy++) {
@@ -17,28 +36,32 @@ function meanPatch(image, width, height, x, y, radius = 3) {
   return n ? [r / n, g / n, b / n] : null;
 }
 
-function srgbToLinear(value) {
+function srgbToLinear(value: number): number {
   const channel = value / 255;
   return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
 }
 
-export function rgbToLab(rgb) {
+export function rgbToLab(rgb: Rgb): Lab {
   const r = srgbToLinear(rgb[0]);
   const g = srgbToLinear(rgb[1]);
   const b = srgbToLinear(rgb[2]);
   const x = (0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / 0.95047;
   const y = 0.2126729 * r + 0.7151522 * g + 0.0721750 * b;
   const z = (0.0193339 * r + 0.1191920 * g + 0.9503041 * b) / 1.08883;
-  const f = (value) => value > 216 / 24389 ? Math.cbrt(value) : (24389 / 27 * value + 16) / 116;
+  const f = (value: number) => value > 216 / 24389 ? Math.cbrt(value) : (24389 / 27 * value + 16) / 116;
   const fx = f(x), fy = f(y), fz = f(z);
   return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
 }
 
-export function labDistance(a, b) {
+export function labDistance(a: Lab, b: Lab): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 }
 
-export function skinColorMatchesReferences(rgb, referenceRgbs) {
+/**
+ * 采样颜色是否属于「脸上可见皮肤」。参考色取自可信的中面部关键点。
+ * 三个拒绝条件：与所有参考色都远、明显偏暗（头发阴影）、色度过低（灰白发）。
+ */
+export function skinColorMatchesReferences(rgb: Rgb | null, referenceRgbs: Rgb[] | null | undefined): boolean {
   if (!rgb || !referenceRgbs?.length) return true;
   const sample = rgbToLab(rgb);
   const references = referenceRgbs.map(rgbToLab);
@@ -55,7 +78,8 @@ export function skinColorMatchesReferences(rgb, referenceRgbs) {
   return !tooDark && !achromaticHair && distance <= 26;
 }
 
-export function buildHeadVisibility(landmarks) {
+/** 头部椭圆包络：外推的额头线必须落在这个椭圆内，否则会画到脸外。 */
+export function buildHeadVisibility(landmarks: Vec3[] | null | undefined): VisibilityPredicate {
   if (!landmarks?.length || !landmarks[10]) return () => true;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const point of landmarks) {
@@ -73,13 +97,22 @@ export function buildHeadVisibility(landmarks) {
   };
 }
 
-export function buildForeheadSkinVisibility(image, width, height, landmarks) {
+/**
+ * 基于画面像素的额头皮肤判定。眉线以下一律放行（那里本来就是脸），
+ * 眉线以上才做肤色比对，用来挡住头发和背景。
+ */
+export function buildForeheadSkinVisibility(
+  image: ImageData | null,
+  width: number,
+  height: number,
+  landmarks: Vec3[] | null | undefined,
+): VisibilityPredicate {
   if (!image || !landmarks?.length || width <= 0 || height <= 0) return () => true;
   const trustedReferences = [1, 4, 5, 195, 197, 205, 425]
     .map((index) => landmarks[index])
     .filter(Boolean)
     .map((point) => meanPatch(image, width, height, point[0], point[1], 3))
-    .filter(Boolean);
+    .filter((color): color is Rgb => Boolean(color));
   if (!trustedReferences.length) return () => true;
 
   const foreheadOffset = Math.max(4, 0.0165 * width);
@@ -87,10 +120,10 @@ export function buildForeheadSkinVisibility(image, width, height, landmarks) {
     .map((index) => landmarks[index])
     .filter(Boolean)
     .map((point) => meanPatch(image, width, height, point[0], point[1] + foreheadOffset, 3))
-    .filter(Boolean)
+    .filter((color): color is Rgb => Boolean(color))
     .filter((color) => skinColorMatchesReferences(color, trustedReferences));
   const references = trustedReferences.concat(foreheadReferences);
-  const browY = [9, 8, 107, 336].map((index) => landmarks[index]?.[1]).filter(Number.isFinite);
+  const browY = [9, 8, 107, 336].map((index) => landmarks[index]?.[1]).filter(Number.isFinite) as number[];
   const browLine = browY.length ? browY.reduce((a, b) => a + b, 0) / browY.length : height * 0.38;
   const foreheadFloor = browLine + Math.max(8, height * 0.018);
 
@@ -101,7 +134,11 @@ export function buildForeheadSkinVisibility(image, width, height, landmarks) {
   };
 }
 
-export function stabilizeForeheadMask(mask) {
+/**
+ * 逐点掩膜的稳定化：补小空洞、删过短可见段；剩余可见总量达标时保留全部合格段。
+ * 没有这一步，肤色判定的逐帧噪声会让额头线闪烁成虚线。
+ */
+export function stabilizeForeheadMask(mask: ArrayLike<unknown>): boolean[] {
   const stable = Array.from(mask, Boolean);
   const maxGap = Math.max(2, Math.round(stable.length * 0.015));
   const minRun = Math.max(3, Math.round(stable.length * 0.025));

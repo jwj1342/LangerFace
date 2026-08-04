@@ -1713,3 +1713,37 @@ body:has(.dark-workbench-page) {
     grid-template-columns: 1fr;
   }
 }
+
+/*
+ * style.css is intentionally imported outside a cascade layer, so its legacy
+ * .btn rules outrank the layered surgery rules above. Keep these overrides
+ * unlayered and surgery-scoped so the rendered controls use the dark workbench
+ * palette without changing /live, /incision, or other compatibility pages.
+ */
+.surgery-workbench.clinical-compat-workbench .btn {
+  border-color: var(--clinical-dark-border);
+  background: #151b23;
+  color: var(--clinical-text-primary);
+}
+
+.surgery-workbench.clinical-compat-workbench .btn:hover {
+  border-color: var(--clinical-dark-border-strong);
+  background: #1c2530;
+}
+
+.surgery-workbench.clinical-compat-workbench .btn.cut-along {
+  border-color: var(--clinical-accent);
+  background: rgb(15 98 254 / 0.14);
+  color: #d0e2ff;
+}
+
+.surgery-workbench.clinical-compat-workbench .btn.cut-along:hover {
+  background: rgb(15 98 254 / 0.22);
+}
+
+.surgery-workbench.clinical-compat-workbench .btn.cut-along.active {
+  border-color: #78a9ff;
+  background: var(--clinical-accent);
+  color: #f4f7fb;
+  box-shadow: none;
+}

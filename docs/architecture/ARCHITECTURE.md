@@ -71,6 +71,7 @@ P = u·V0 + v·V1 + w·V2
 ### 3.4 渲染
 `web/src/services/render2d.ts: draw` / [`src/langerface/rendering/overlay.py`](../../src/langerface/rendering/overlay.py)：抗锯齿折线，被遮挡点处**断开**子段；
 按面部上/中/下三段分色（额=琥珀、中=蓝、下=绿）；alpha 由"透明度"控制 + 丢脸淡入淡出。
+`forehead_bridge_arc_v15` 外推额头弧线还会经过 `stabilizeForeheadMask`：先填补不超过 `maxGap` 的内部小洞，再删除短于 `minRun` 的可见伪段；所有剩余可见点总量达到 `minVisibleSpan` 时保留全部合格段，否则隐藏整条线。中部较大遮挡因此会让线条按真实掩膜断开，但不会再只保留左右两侧中的最长一侧（#145）。
 
 ### 3.5 关键区域放大窗
 `web/src/services/render2d.ts: drawZooms`。6 个区域（额·眉间/右眼周/左眼周/鼻·鼻唇沟/口周/颏部）各由一组关键点界定取景框，
@@ -217,7 +218,8 @@ P = u·V0 + v·V1 + w·V2
 4. `pytest` + `cd web && npm test` 全绿；`cd web && npm run build` 可生产构建。
 5. `cd web && npm run dev` → 浏览器打开 Vite 地址，验证 2D 实时；实时 3D 重建 / FLAME 孪生入口已由 #108 关闭，
    但 `/annotate` 的 3D 标注工具与 `/surgery` 闭合演示仍可从界面进入（见 §4 与 §12）。
-6. 临床校验图谱（`annotate_atlas.py`）后置 `validated:true` 方可作正式参考。
+6. `annotate_atlas.py` 只保存 `validated:false` 编辑草案；完成独立逐线临床复核、
+   来源记录和显式签署后，才允许由受控 finalize 流程生成 `validated:true` 候选资产。
 
 ## 11. 前端鲁棒性约束
 
@@ -237,8 +239,11 @@ P = u·V0 + v·V1 + w·V2
 - 切口候选由 `src/services/incisionWorkflowTools.ts` 中的本地确定性 workflow 生成；
   `workflow.worker.ts` 通过 Comlink 执行，`workflowPlanner.ts` 在 Worker 不可用时回退到主线程执行相同函数。
   运行时不包含远程模型或模型密钥配置。
-- 切口工作台编排保留在 `src/services/incisionRuntime.ts`；route-scoped DOM 契约、临床展示文案和纯审阅门控分别位于
-  `src/services/incisionDom.ts`、`src/services/incisionClinicalCopy.ts` 与 `src/services/incisionReviewPolicy.ts`。
+- 切口工作台编排保留在 `src/services/incisionRuntime.ts`；route-scoped DOM 查询契约位于
+  `src/services/incisionDom.ts`，canvas / 兼容表单 / 文件输入 / `ResizeObserver` 的监听与对称清理由
+  `src/services/incisionDomBindings.ts` 统一负责，重复 mount 不得累积监听器。长生命周期 renderer/workflow
+  状态的类型与 fresh-mount factory 位于 `src/services/incisionControllerState.ts`；临床展示文案和纯审阅门控
+  分别位于 `src/services/incisionClinicalCopy.ts` 与 `src/services/incisionReviewPolicy.ts`。
   向量运算、平均网格边长以及 ring/boundary/polyline BufferGeometry 构造位于无 DOM、可独立测试的
   `src/services/incisionSceneGeometry.ts`；runtime 只传入当前状态并负责替换/释放 scene geometry。
   审阅/肿物导出 schema、候选工程排序和浏览器下载边界位于 `src/services/incisionExport.ts`；
@@ -292,7 +297,7 @@ npm run dev
 
 ### 接入项目
 
-- **临床校验闭环（issue #2）**：网页标注器、`tools/annotate_atlas.py` 和文献描线工具都只生成 `validated:false` 草案；`tools/atlas_clinical_review.py build` 固定源资产哈希并生成逐线 JSON/CSV（额头线优先），医生完成方向/位置评分、来源和署名后，`finalize` 才会生成单独的 `validated:true` 候选文件，并写入结构化 `clinicalValidation`。候选仍需经 PR 审核后才能替换正式资产。
+- **临床校验闭环（issue #2）**：网页标注器、`tools/annotate_atlas.py` 和文献描线工具都只生成 `validated:false` 草案；`tools/atlas_clinical_review.py build` 固定源资产哈希并生成逐线 JSON/CSV（额头线优先），医生完成方向/位置评分、评审者、角色、时间、医学来源和显式 attestation 后，`finalize` 才会生成单独的 `validated:true` 候选文件，并写入结构化 `clinicalValidation`。普通编辑保存和手工修改布尔字段都不属于临床签署；候选仍需经 PR 审核后才能替换正式资产。
 - **3D 头模标注**：HeadSpace 等头模经离线管线导出为 `{vertices, triangles}` JSON 后，可在 `/app/annotate` 上传加载；标注得到的 xyz 线可继续经 `langerface.geometry`（加权 Sim3）在头模与标准脸之间迁移。
 - **数据隐私**：真实头模（HeadSpace / FaceScape）不入库，仅本地使用；标注产物（图谱/xyz JSON，仅坐标）可入库评审。
 
@@ -461,7 +466,7 @@ candidate = segment(center, axis, length)
 
 #### 皮表肿物
 
-皮表肿物生成梭形候选。医生给出的当前默认规则是：长轴平行 RSTL；长轴与类圆化后的肿物直径按 3:1 控制；两端尖角默认 30°；两侧弧线对称平滑，从最宽处向两端逐渐收窄至尖点。当前实现使用对称 cubic Hermite profile：端点切线由 `tip_angle_deg` 决定，中点达到最大宽度且切线水平，导出 `tip_angle_target_deg`、`tip_angle_estimated_deg` 和 `tip_angle_error_deg`。同时导出 `boundary_point_count`、`boundary_area_mm2`、`boundary_self_intersection`、`boundary_center_shift_mm`、`axis_coverage_required_mm`、`axis_coverage_deficit_mm`、`outline_area_mm2`、`outline_half_width_monotone`、`outline_symmetry_max_error_mm`、`outline_self_intersection`、`boundary_envelope_min_margin_mm` 与 `boundary_envelope_outside_count`；当自由轮廓点数过少、面积退化、自交、边界中心明显偏离选中肿物中心、候选 outline 自交 / 非单调收窄、自由轮廓点落在实际梭形包络之外，或最大长度规则导致候选短于边界加切缘覆盖需求时，guardrails 必须提示医生复核。肿物输入还会先经过 `summarize_tumor_input_quality`，把缺作者、非 mm 单位、缺皮下深度、缺皮表切缘或边界过稀记录到 trace、审阅 JSON 和报告中。
+皮表肿物生成梭形候选。医生给出的当前默认规则是：长轴平行 RSTL；长轴与类圆化后的肿物直径按 3:1 控制；两端尖角默认 30°；两侧弧线对称平滑，从最宽处向两端逐渐收窄至尖点。当前实现使用对称 cubic Hermite profile：端点切线由 `tip_angle_deg` 决定，中点达到最大宽度且切线水平，导出 `tip_angle_target_deg`、`tip_angle_estimated_deg` 和 `tip_angle_error_deg`。Python `src/langerface/incision/fusiform.py` 与 Web `incisionCandidateTools.ts` 共用 `tests/fixtures/fusiform_candidates.json` 金标，防止规则和曲线跨语言漂移。同时导出 `boundary_point_count`、`boundary_area_mm2`、`boundary_self_intersection`、`boundary_center_shift_mm`、`axis_coverage_required_mm`、`axis_coverage_deficit_mm`、`outline_area_mm2`、`outline_half_width_monotone`、`outline_symmetry_max_error_mm`、`outline_self_intersection`、`boundary_envelope_min_margin_mm` 与 `boundary_envelope_outside_count`；当自由轮廓点数过少、面积退化、自交、边界中心明显偏离选中肿物中心、候选 outline 自交 / 非单调收窄、自由轮廓点落在实际梭形包络之外，或最大长度规则导致候选短于边界加切缘覆盖需求时，guardrails 必须提示医生复核。肿物输入还会先经过 `summarize_tumor_input_quality`，把缺作者、非 mm 单位、缺皮下深度、缺皮表切缘或边界过稀记录到 trace、审阅 JSON 和报告中。
 
 实现时要把这些写成**参数化临床规则**，不要硬编码为不可变数学常量。原因是 3:1 与 30°在几何上并不总能同时严格成立；工程上应显示实际指标，让医生在比例、尖端角、邻近解剖结构和可直接拉拢缝合之间做判断。
 

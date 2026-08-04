@@ -2,12 +2,26 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { assetNames, assetUrl, loadJsonAsset, normalizeAssetBaseUrl } from "../web/src/services/assetLoader.ts";
 import { dataSource } from "../web/src/services/dataSource.ts";
+import { els } from "../web/src/services/liveDom.ts";
+import { modelState } from "../web/src/services/liveState.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const {
+  FaceLandmarker,
+  FilesetResolver,
+  HandLandmarker,
+} = await import(pathToFileURL(join(
+  root,
+  "web",
+  "node_modules",
+  "@mediapipe",
+  "tasks-vision",
+  "vision_bundle.mjs",
+)).href);
 
 function createAssetServer() {
   return createServer((req, res) => {
@@ -124,6 +138,28 @@ assert.equal(
 assert.ok(assetUrl("atlasRstl").endsWith("/assets/atlas_rstl.json"), "default RSTL asset URL resolves under /assets/");
 assert.ok(assetUrl("faceLandmarkerTask").endsWith("/assets/face_landmarker.task"), "task model resolves under /assets/");
 
+{
+  const originalFetch = globalThis.fetch;
+  let requestInit: RequestInit | undefined;
+  globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
+    requestInit = init;
+    return new Response('{"version":"cache-policy-probe"}', {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  try {
+    await loadJsonAsset("cache_policy_probe.json");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(
+    requestInit?.cache,
+    "no-cache",
+    "stable-name runtime assets must revalidate even when the browser has a fresh legacy immutable entry",
+  );
+}
+
 await withAssetBase(createAssetServer(), async () => {
   const data = await loadJsonAsset("canonicalVertices", { label: "标准脸顶点" });
   assert.deepEqual(data, [[0, 0, 0], [1, 0, 0], [0, 1, 0]], "JSON asset loader fetches from configured asset base");
@@ -163,6 +199,135 @@ for (const rel of [
   const source = readFileSync(join(root, rel), "utf8");
   assert.ok(!/fetch\(\s*assetUrls\.(topology|atlasRstl|atlasLanger|canonicalVertices|triangles)/.test(source),
     `${rel} reads static JSON assets through dataSource instead of direct asset fetches`);
+}
+
+for (const rel of ["web/src/services/pipelineModels.ts", "web/current/pipeline.js"]) {
+  const source = readFileSync(join(root, rel), "utf8");
+  assert.match(source, /let readyPromise(?:: Promise<void> \| null)? = null;/,
+    `${rel} owns one module-scoped readiness promise`);
+  assert.match(source, /readyPromise = initializeReady\(\)\.catch/,
+    `${rel} shares the complete initialization attempt`);
+  assert.match(source, /readyPromise = null;\s*throw error;/,
+    `${rel} clears a failed attempt before retry`);
+}
+
+{
+  const originalLoadTopology = dataSource.loadTopology;
+  const originalLoadAtlas = dataSource.loadAtlas;
+  const originalForVisionTasks = FilesetResolver.forVisionTasks;
+  const originalCreateFace = FaceLandmarker.createFromOptions;
+  const originalCreateHand = HandLandmarker.createFromOptions;
+  const originalBadge = els.badge;
+  const originalConsoleInfo = console.info;
+  const originalConsoleWarn = console.warn;
+  const originalModelState = {
+    landmarker: modelState.landmarker,
+    handLandmarker: modelState.handLandmarker,
+    topology: modelState.topology,
+    triangles: modelState.triangles,
+    noseTris: modelState.noseTris,
+    atlases: modelState.atlases,
+    officialAtlases: modelState.officialAtlases,
+  };
+  let topologyLoads = 0;
+  let atlasLoads = 0;
+  let resolverLoads = 0;
+  const faceDelegates: string[] = [];
+  const handDelegates: string[] = [];
+  let rejectFaceAttempt = true;
+  const faceModel = { kind: "face" };
+  const handModel = { kind: "hand" };
+
+  try {
+    modelState.landmarker = null;
+    modelState.handLandmarker = null;
+    modelState.topology = null;
+    modelState.triangles = null;
+    modelState.noseTris = null;
+    modelState.atlases = {};
+    modelState.officialAtlases = {};
+    els.badge = {
+      textContent: "",
+      classList: { remove() {} },
+    } as unknown as HTMLElement;
+    console.info = () => {};
+    console.warn = () => {};
+
+    dataSource.loadTopology = async () => {
+      topologyLoads += 1;
+      return {
+        topologyId: "mediapipe-468",
+        topologyVersion: "mediapipe-canonical-468-v1",
+        triangles: [[0, 1, 2]],
+      };
+    };
+    dataSource.loadAtlas = async (system: string) => {
+      atlasLoads += 1;
+      return {
+        system,
+        version: "0.2",
+        topologyId: "mediapipe-468",
+        topologyVersion: "mediapipe-canonical-468-v1",
+        lines: [{ name: `${system}-line`, points: [[0, 0.2, 0.2], [0, 0.3, 0.2]] }],
+      };
+    };
+    FilesetResolver.forVisionTasks = async () => {
+      resolverLoads += 1;
+      return {} as never;
+    };
+    FaceLandmarker.createFromOptions = async (
+      _resolver: unknown,
+      options: { baseOptions?: { delegate?: unknown } },
+    ) => {
+      const delegate = String(options.baseOptions?.delegate);
+      faceDelegates.push(delegate);
+      if (rejectFaceAttempt) throw new Error(`${delegate} initialization failed`);
+      return faceModel as never;
+    };
+    HandLandmarker.createFromOptions = async (
+      _resolver: unknown,
+      options: { baseOptions?: { delegate?: unknown } },
+    ) => {
+      handDelegates.push(String(options.baseOptions?.delegate));
+      return handModel as never;
+    };
+
+    const moduleUrl = new URL("../web/src/services/pipelineModels.ts", import.meta.url);
+    moduleUrl.searchParams.set("single-flight-test", String(Date.now()));
+    const { ensureReady } = await import(moduleUrl.href);
+
+    const failedA = ensureReady();
+    const failedB = ensureReady();
+    assert.strictEqual(failedB, failedA, "concurrent callers share the failed initialization promise");
+    await assert.rejects(failedA, /CPU initialization failed/);
+    assert.deepEqual(faceDelegates, ["GPU", "CPU"], "GPU fallback runs once for one shared attempt");
+    assert.equal(topologyLoads, 1, "shared failed attempt loads topology once");
+    assert.equal(atlasLoads, 2, "shared failed attempt loads each atlas once");
+    assert.equal(resolverLoads, 1, "shared failed attempt creates one fileset resolver");
+
+    rejectFaceAttempt = false;
+    const retryA = ensureReady();
+    const retryB = ensureReady();
+    assert.notStrictEqual(retryA, failedA, "a failed attempt is cleared for retry");
+    assert.strictEqual(retryB, retryA, "concurrent retry callers share one promise");
+    await retryA;
+    assert.deepEqual(faceDelegates, ["GPU", "CPU", "GPU"], "retry starts one fresh GPU attempt");
+    assert.deepEqual(handDelegates, ["GPU"], "successful retry initializes the hand model once");
+    assert.equal(modelState.landmarker, faceModel, "successful initialization publishes one face instance");
+    assert.equal(modelState.handLandmarker, handModel, "successful initialization publishes one hand instance");
+    assert.strictEqual(ensureReady(), retryA, "later callers reuse the successful readiness promise");
+  } finally {
+    dataSource.loadTopology = originalLoadTopology;
+    dataSource.loadAtlas = originalLoadAtlas;
+    FilesetResolver.forVisionTasks = originalForVisionTasks;
+    FaceLandmarker.createFromOptions = originalCreateFace;
+    HandLandmarker.createFromOptions = originalCreateHand;
+    console.info = originalConsoleInfo;
+    console.warn = originalConsoleWarn;
+    if (originalBadge === undefined) delete (els as Partial<typeof els>).badge;
+    else els.badge = originalBadge;
+    Object.assign(modelState, originalModelState);
+  }
 }
 
 console.log("test_asset_loader: runtime asset URL and lazy-load failure assertions passed");

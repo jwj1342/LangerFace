@@ -38,6 +38,11 @@ import {
 } from "./incisionClinicalCopy";
 import { collectIncisionElements, type IncisionDomElements } from "./incisionDom";
 import {
+  applyReactEditControlValue,
+  applyReactTumorControlValue,
+  bindIncisionDomEvents,
+} from "./incisionDomBindings";
+import {
   buildIncisionAssetLoadingSnapshot,
   buildIncisionCandidateSnapshot,
   buildIncisionControllerSnapshot,
@@ -69,11 +74,14 @@ import {
   downloadText,
 } from "./incisionExport";
 import {
-  IncisionEditHistory,
   incisionEditIsActive,
   neutralIncisionEdit,
   type IncisionEdit,
 } from "./incisionEditHistory";
+import {
+  createIncisionControllerState,
+  type IncisionRuntimeState,
+} from "./incisionControllerState";
 import {
   buildCandidateEditSession,
   buildIncisionReviewRecord,
@@ -115,102 +123,17 @@ import {
 } from "./incisionReviewPolicy";
 import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
 import { createWorkflowWorkerClient } from "./workflowWorkerClient";
-import type { WorkflowWorkerClient } from "./workflowWorkerClient";
 import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.ts";
-import type { Triangle, Vec3 } from "./softBody";
+import type { Vec3 } from "./softBody";
 
 type DynamicRecord = Record<string, any>;
-type ControllerCleanup = () => void;
-type IncisionMesh = THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>;
-type IncisionLine = THREE.Line<THREE.BufferGeometry, THREE.Material | THREE.Material[]>;
-
-interface IncisionRuntimeState {
-  mounted: boolean;
-  frameId: number;
-  resizeObserver: ResizeObserver | null;
-  verts: Vec3[];
-  tris: Triangle[];
-  atlas: DynamicRecord | null;
-  headAsset: IncisionHeadAssetState | null;
-  assetWarnings: string[];
-  normals: Vec3[];
-  meanEdge: number;
-  unitsPerMm: number;
-  head: Head3D | null;
-  marker: IncisionMesh | null;
-  tumorRing: IncisionLine | null;
-  boundaryLine: IncisionLine | null;
-  candidateLine: IncisionLine | null;
-  endpointHandles: IncisionMesh[];
-  raycaster: THREE.Raycaster;
-  lesion: number;
-  boundaryPoints: Vec3[];
-  boundaryActive: boolean;
-  saved: DynamicRecord[];
-  result: any;
-  baseResult: any;
-  secondaryCues: any;
-  workflowWorker: WorkflowWorkerClient | null;
-  workflowWorkerFailed: boolean;
-  reactCommandCleanup: ControllerCleanup | null;
-  editHistory: IncisionEditHistory;
-  lastConsoleTraceSignature: string;
-}
-
-interface PointerDragState {
-  x: number;
-  y: number;
-  moved: number;
-  id: number;
-  handle?: number | null;
-}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function fileFromEvent(event: Event): File | undefined {
-  return (event.target as HTMLInputElement | null)?.files?.[0] ?? undefined;
-}
-
 let els = {} as IncisionDomElements;
-
-function createRuntimeState(): IncisionRuntimeState {
-  return {
-    mounted: false,
-    frameId: 0,
-    resizeObserver: null,
-    verts: [],
-    tris: [],
-    atlas: null,
-    headAsset: null,
-    assetWarnings: [],
-    normals: [],
-    meanEdge: 1,
-    unitsPerMm: 1,
-    head: null,
-    marker: null,
-    tumorRing: null,
-    boundaryLine: null,
-    candidateLine: null,
-    endpointHandles: [],
-    raycaster: new THREE.Raycaster(),
-    lesion: 0,
-    boundaryPoints: [],
-    boundaryActive: false,
-    saved: [],
-    result: null,
-    baseResult: null,
-    secondaryCues: null,
-    workflowWorker: null,
-    workflowWorkerFailed: false,
-    reactCommandCleanup: null,
-    editHistory: new IncisionEditHistory(),
-    lastConsoleTraceSignature: "",
-  };
-}
-
-let S = createRuntimeState();
+let S: IncisionRuntimeState = createIncisionControllerState();
 
 function currentTumorFormSnapshot() {
   return buildTumorFormSnapshot({
@@ -304,6 +227,7 @@ function currentResultViewSnapshot() {
     candidateLength: els.candidateLength,
     candidateWidth: els.candidateWidth,
     candidateTipAngle: els.candidateTipAngle,
+    rstlDeviation: els.candidateRstlDeviation,
     directionConfidence: els.directionConf,
     region: els.regionVal,
     guardrail: els.guardrailVal,
@@ -871,12 +795,9 @@ function clearBoundaryPoints() {
 function handleReactTumorCommand(event: Event) {
   const detail = readIncisionTumorCommand(event);
   if (!detail) return;
-  const { command, value } = detail;
-  const syncValue = (control: HTMLInputElement | HTMLSelectElement) => {
-    if (typeof value === "string" || typeof value === "number") control.value = String(value);
-  };
+  const { command } = detail;
+  applyReactTumorControlValue(els, command, detail.value);
   if (command === "kind_changed") {
-    syncValue(els.tumorKind);
     S.boundaryActive = false;
     updateFormVisibility();
     publishIncisionState("tumor_kind_changed");
@@ -884,35 +805,24 @@ function handleReactTumorCommand(event: Event) {
     return;
   }
   if (command === "diameter_input") {
-    syncValue(els.diameter);
     updateTumorRing();
     publishIncisionState("tumor_diameter_input");
     return;
   }
   if (command === "depth_input" || command === "author_changed") {
-    syncValue(command === "depth_input" ? els.depth : els.tumorAuthor);
     publishIncisionState(command);
     return;
   }
   if (command === "margin_input" || command === "ellipse_ratio_input") {
-    syncValue(command === "margin_input" ? els.margin : els.ellipseRatio);
     updateTumorRing();
     publishIncisionState(command);
     return;
   }
   if (command === "diameter_changed" || command === "depth_changed" || command === "margin_changed" || command === "ellipse_ratio_changed") {
-    const controls = {
-      diameter_changed: els.diameter,
-      depth_changed: els.depth,
-      margin_changed: els.margin,
-      ellipse_ratio_changed: els.ellipseRatio,
-    };
-    syncValue(controls[command]);
     runWorkflow();
     return;
   }
   if (command === "boundary_mode_changed") {
-    syncValue(els.boundaryMode);
     S.boundaryActive = false;
     updateFormVisibility();
     publishIncisionState("tumor_boundary_mode_changed");
@@ -1083,6 +993,7 @@ function handleReactEditCommand(event: Event) {
   const detail = readIncisionEditCommand(event);
   if (!detail) return;
   const { command } = detail;
+  applyReactEditControlValue(els, detail.controlId, detail.value);
   if (command === "preview_edit") {
     applyEditControls();
     return;
@@ -1277,6 +1188,10 @@ function renderResult(result: DynamicRecord) {
     els.candidateWidth.textContent = "—";
     els.candidateTipAngle.textContent = "—";
   }
+  const rstlDeviation = c.metrics?.rstl_deviation_deg;
+  els.candidateRstlDeviation.textContent = typeof rstlDeviation === "number" && Number.isFinite(rstlDeviation)
+    ? `${fmt(rstlDeviation)}°`
+    : "—";
   const directionReasons = result.direction.confidence_reasons || [];
   els.directionConf.textContent = `${Math.round((result.direction.confidence || 0) * 100)}%${directionReasons.length ? ` · ${directionReasons.map(reasonLabel).join("、")}` : ""}`;
   els.directionConf.title = directionReasons.length ? `原始原因代码：${directionReasons.join(", ")}` : "";
@@ -1304,7 +1219,8 @@ function renderResult(result: DynamicRecord) {
     `不上传原始影像；${audit.local_workflow_fields.length} 类抽象字段只在浏览器确定性 workflow 内处理，不配置或调用远程模型。${audit.secondary_cues_present ? " 辅助线索仅随审阅导出，不参与几何。" : ""}`;
   const edited = result.candidate.edited ? " · 已记录医生调整" : "";
   const headLabel = S.headAsset?.statusLabel ? ` · ${S.headAsset.statusLabel}` : "";
-  els.stageStatus.textContent = `浏览器确定性 workflow 已更新候选${edited}${headLabel}`;
+  const generationLabel = S.generationCount ? ` · 第 ${S.generationCount} 次生成` : "";
+  els.stageStatus.textContent = `浏览器确定性 workflow 已更新候选${generationLabel}${edited}${headLabel}`;
   publishIncisionState("candidate_result");
 }
 
@@ -1718,6 +1634,7 @@ async function runWorkflow() {
     const tumor = tumorInput();
     const result = await planWorkflowForCurrentTumor(tumor);
     S.baseResult = result;
+    S.generationCount += 1;
     resetEditControls();
     resetEditTimeline();
     resetReviewControls();
@@ -1838,114 +1755,80 @@ function pick(e: PointerEvent) {
 }
 
 function bindWorkbenchEvents() {
-  let drag: PointerDragState | null = null;
-  els.canvas.addEventListener("pointerdown", (e: PointerEvent) => {
-    const handle = handleFromEvent(e);
-  if (handle != null) {
-    drag = { x: e.clientX, y: e.clientY, moved: 0, id: e.pointerId, handle };
-    els.canvas.setPointerCapture(e.pointerId);
-    return;
-  }
-  drag = { x: e.clientX, y: e.clientY, moved: 0, id: e.pointerId };
-  els.canvas.setPointerCapture(e.pointerId);
-  });
-  els.canvas.addEventListener("pointermove", (e: PointerEvent) => {
-  if (!drag || e.pointerId !== drag.id) return;
-  if (drag.handle != null) {
-    dragEndpointTo(e, drag.handle);
-    drag.moved += Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y);
-    drag.x = e.clientX; drag.y = e.clientY;
-    return;
-  }
-  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-  drag.moved += Math.abs(dx) + Math.abs(dy);
-  S.head?.setRotation(clamp((S.head?.rotX || 0) + dy * 0.01, -1.2, 1.2), (S.head?.rotY || 0) + dx * 0.01);
-  drag.x = e.clientX; drag.y = e.clientY;
-  });
-  els.canvas.addEventListener("pointerup", (e: PointerEvent) => {
-  const endpointDrag = drag?.handle != null;
-  const moved = drag?.moved || 0;
-  if (drag && drag.moved < 6 && !endpointDrag) pick(e);
-  if (endpointDrag && moved >= 1) commitEditSnapshot("endpoint_drag");
-  drag = null;
-  });
-  els.canvas.addEventListener("wheel", (e: WheelEvent) => { e.preventDefault(); S.head?.zoom(e.deltaY > 0 ? 1.1 : 0.9); }, { passive: false });
   const reactManaged = isReactManagedWorkbench();
   if (reactManaged) bindReactWorkbenchCommands();
-
-  if (!reactManaged) {
-    const stateRoot = els.canvas?.closest(".app");
-    stateRoot?.addEventListener("change", () => publishIncisionState("form_change"));
-    stateRoot?.addEventListener("input", (event) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement) {
-        publishIncisionState("form_input");
-      }
-    });
-    els.tumorKind.onchange = () => { updateFormVisibility(); runWorkflow(); };
-    els.diameter.oninput = () => { els.diameterVal.textContent = els.diameter.value; updateTumorRing(); };
-    els.diameter.onchange = runWorkflow;
-    els.depth.oninput = () => { els.depthVal.textContent = els.depth.value; };
-    els.depth.onchange = runWorkflow;
-    els.margin.oninput = () => { els.marginVal.textContent = els.margin.value; updateTumorRing(); };
-    els.margin.onchange = runWorkflow;
-    els.ellipseRatio.oninput = () => { els.ellipseRatioVal.textContent = `${els.ellipseRatio.value}%`; updateTumorRing(); };
-    els.ellipseRatio.onchange = runWorkflow;
-    els.boundaryMode.onchange = () => { S.boundaryActive = false; updateFormVisibility(); runWorkflow(); };
-    els.run.onclick = runWorkflow;
-    els.startBoundary.onclick = toggleBoundaryDrawing;
-    els.clearBoundary.onclick = clearBoundaryPoints;
-    els.exportTumor.onclick = exportTumorJson;
-    els.importTumor.onclick = () => els.tumorImportFile.click();
-  }
-  if (!reactManaged) {
-    els.importSecondaryCue.onclick = () => els.secondaryCueImportFile.click();
-    els.clearSecondaryCue.onclick = clearSecondaryCues;
-    els.secondaryCueConfirmed.onchange = setSecondaryCueConfirmedFromControl;
-  }
-  if (!reactManaged) {
-    [
-    els.angleOffset,
-    els.lengthScale,
-    els.widthScale,
-    els.tipAngle,
-    els.shiftAlong,
-    els.shiftPerp,
-    ].forEach((el) => { el.oninput = applyEditControls; });
-    [
-    els.angleOffset,
-    els.lengthScale,
-    els.widthScale,
-    els.tipAngle,
-    els.shiftAlong,
-    els.shiftPerp,
-    ].forEach((el) => { el.onchange = () => commitEditSnapshot("control_change"); });
-    els.editReason.onchange = () => {
-    applyEditControls();
-    commitEditSnapshot("reason_change");
-    };
-    els.undoEdit.onclick = undoEditSnapshot;
-    els.redoEdit.onclick = redoEditSnapshot;
-    els.resetEdit.onclick = resetEditToToolSuggestion;
-  }
-  if (!reactManaged) {
-    els.reviewDecision.onchange = updateReviewStateUI;
-    els.approveCandidate.onclick = () => recordReviewDecision("approved_for_discussion", "确认候选");
-    els.rejectCandidate.onclick = () => recordReviewDecision("rejected_by_clinician", "否决候选");
-    els.saveReview.onclick = saveReviewRecord;
-  }
-  if (!reactManaged) {
-    els.saveCandidate.onclick = () => saveCurrentCandidate();
-    els.makeVariants.onclick = makeVariantCandidates;
-    els.clearSaved.onclick = clearSavedCandidates;
-    els.exportJson.onclick = exportReviewJson;
-    els.exportReport.onclick = exportReport;
-    els.exportPng.onclick = exportScreenshot;
-    els.stageLiveOverlay.onclick = stageLiveOverlay;
-  }
-  els.tumorImportFile.onchange = (e: Event) => importTumorFile(fileFromEvent(e));
-  els.secondaryCueImportFile.onchange = (e: Event) => importSecondaryCueFile(fileFromEvent(e));
-  S.resizeObserver = new ResizeObserver(fitSize);
-  S.resizeObserver.observe(els.wrap);
+  S.domEventCleanup = bindIncisionDomEvents({
+    elements: els,
+    reactManaged,
+    handlers: {
+      endpointHandleFromEvent: handleFromEvent,
+      dragEndpoint: dragEndpointTo,
+      rotateHead: (dx, dy) => {
+        S.head?.setRotation(
+          clamp((S.head?.rotX || 0) + dy * 0.01, -1.2, 1.2),
+          (S.head?.rotY || 0) + dx * 0.01,
+        );
+      },
+      pickFace: pick,
+      commitEndpointDrag: () => commitEditSnapshot("endpoint_drag"),
+      zoomHead: (direction) => S.head?.zoom(direction > 0 ? 1.1 : 0.9),
+      publishState: publishIncisionState,
+      onTumorKindChange: () => { updateFormVisibility(); runWorkflow(); },
+      onDiameterInput: () => {
+        els.diameterVal.textContent = els.diameter.value;
+        updateTumorRing();
+      },
+      onDiameterChange: runWorkflow,
+      onDepthInput: () => { els.depthVal.textContent = els.depth.value; },
+      onDepthChange: runWorkflow,
+      onMarginInput: () => {
+        els.marginVal.textContent = els.margin.value;
+        updateTumorRing();
+      },
+      onMarginChange: runWorkflow,
+      onEllipseRatioInput: () => {
+        els.ellipseRatioVal.textContent = `${els.ellipseRatio.value}%`;
+        updateTumorRing();
+      },
+      onEllipseRatioChange: runWorkflow,
+      onBoundaryModeChange: () => {
+        S.boundaryActive = false;
+        updateFormVisibility();
+        runWorkflow();
+      },
+      onRunWorkflow: runWorkflow,
+      onToggleBoundary: toggleBoundaryDrawing,
+      onClearBoundary: clearBoundaryPoints,
+      onExportTumor: exportTumorJson,
+      onImportTumorRequest: () => els.tumorImportFile.click(),
+      onImportSecondaryCueRequest: () => els.secondaryCueImportFile.click(),
+      onClearSecondaryCue: clearSecondaryCues,
+      onSecondaryCueConfirmed: setSecondaryCueConfirmedFromControl,
+      onEditInput: applyEditControls,
+      onEditCommit: () => commitEditSnapshot("control_change"),
+      onEditReasonChange: () => {
+        applyEditControls();
+        commitEditSnapshot("reason_change");
+      },
+      onUndoEdit: undoEditSnapshot,
+      onRedoEdit: redoEditSnapshot,
+      onResetEdit: resetEditToToolSuggestion,
+      onReviewDecisionChange: updateReviewStateUI,
+      onApproveCandidate: () => recordReviewDecision("approved_for_discussion", "确认候选"),
+      onRejectCandidate: () => recordReviewDecision("rejected_by_clinician", "否决候选"),
+      onSaveReview: saveReviewRecord,
+      onSaveCandidate: () => saveCurrentCandidate(),
+      onMakeVariants: makeVariantCandidates,
+      onClearSaved: clearSavedCandidates,
+      onExportReview: exportReviewJson,
+      onExportReport: exportReport,
+      onExportScreenshot: exportScreenshot,
+      onStageLiveOverlay: stageLiveOverlay,
+      onTumorFile: importTumorFile,
+      onSecondaryCueFile: importSecondaryCueFile,
+      onResize: fitSize,
+    },
+  });
 }
 
 function renderLoop() {
@@ -1967,7 +1850,8 @@ function bindReactWorkbenchCommands() {
 export function disposeIncisionWorkbench() {
   S.mounted = false;
   if (S.frameId) cancelAnimationFrame(S.frameId);
-  S.resizeObserver?.disconnect?.();
+  S.domEventCleanup?.();
+  S.domEventCleanup = null;
   S.workflowWorker?.dispose?.();
   S.workflowWorker = null;
   S.reactCommandCleanup?.();
@@ -1978,7 +1862,7 @@ export function disposeIncisionWorkbench() {
 export function mountIncisionWorkbench(root: ParentNode | Document = document) {
   disposeIncisionWorkbench();
   els = collectIncisionElements(root);
-  S = createRuntimeState();
+  S = createIncisionControllerState();
   S.mounted = true;
   bindWorkbenchEvents();
   boot().catch((err) => {

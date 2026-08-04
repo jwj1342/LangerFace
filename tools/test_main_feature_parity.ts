@@ -190,6 +190,32 @@ assert.ok(
   render2d.includes("Math.max(2, W / 1300)"),
   "typed live RSTL strokes must use the two-pixel reference minimum",
 );
+// #141：modelState.atlases 存的是 lines 数组，写成 atlas?.lines 会恒为 undefined，
+// 密度筛选拿到空集后整页一条线都不画。正反向各一条，回退任一侧都会红。
+assert.match(
+  render2d,
+  /lineIndicesForDensity\(\s*atlasLines \|\| \[\],\s*renderState\.densityFrac,?\s*\)/,
+  "typed live must apply density selection to the atlas line array",
+);
+assert.doesNotMatch(
+  render2d,
+  /lineIndicesForDensity\(\s*\w*\?\.lines/,
+  "typed live must not treat the atlas line array as an atlas payload",
+);
+// #141：外推的额头线在两套运行时都必须再裁一次，且用同一份 region 集合
+for (const [label, source] of [
+  ["typed live", render2d],
+  ["current live", currentRender],
+] as const) {
+  assert.ok(
+    source.includes('"forehead_lower_long_arc_v13"') && source.includes('"forehead_bridge_arc_v15"'),
+    `${label} must gate the extended forehead regions by name`,
+  );
+  assert.ok(
+    /stabilizeForeheadMask\(/.test(source) && /headVisible\(/.test(source) && /skinVisible\(/.test(source),
+    `${label} must clip extended forehead arcs by head envelope and skin colour`,
+  );
+}
 assert.ok(
   currentRender.includes("Math.max(2, W / 1300)"),
   "current live RSTL strokes must use the two-pixel reference minimum",
@@ -213,8 +239,12 @@ includesAll(foreheadVisibility, [
   "maxGap",
   "minRun",
   "minVisibleSpan",
-  "longestRun.start",
+  "visibleCount < minVisibleSpan",
 ], "current live hair-aware forehead visibility");
+assert.ok(
+  !foreheadVisibility.includes("longestRun"),
+  "current live forehead visibility must preserve every qualifying run instead of selecting one longest run (#145)",
+);
 assert.ok(liveState.includes("opacity: 0.60"), "typed live RSTL opacity must match the 60% reference");
 assert.ok(currentState.includes("opacity: 0.60"), "current live RSTL opacity must match the 60% reference");
 includesAll(currentHtml, ['id="opacityVal">60%</span>', 'id="opacity" min="25" max="100" value="60"'], "current live reference opacity controls");

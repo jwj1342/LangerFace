@@ -40,6 +40,7 @@ export interface IncisionDomElements extends Record<string, any> {
   candidateLength: HTMLElement;
   candidateWidth: HTMLElement;
   candidateTipAngle: HTMLElement;
+  candidateRstlDeviation: HTMLElement;
   directionConf: HTMLElement;
   regionVal: HTMLElement;
   guardrailVal: HTMLElement;
@@ -135,6 +136,7 @@ export function collectIncisionElements(root: ParentNode | Document = document):
     candidateLength: byId(root, "candidateLength"),
     candidateWidth: byId(root, "candidateWidth"),
     candidateTipAngle: byId(root, "candidateTipAngle"),
+    candidateRstlDeviation: byId(root, "candidateRstlDeviation"),
     directionConf: byId(root, "directionConf"),
     regionVal: byId(root, "regionVal"),
     guardrailVal: byId(root, "guardrailVal"),
