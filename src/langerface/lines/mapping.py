@@ -13,7 +13,52 @@ import numpy as np
 
 from .atlas import Atlas
 
+FOREHEAD_LOWER_LONG_ARC_REGION = "forehead_lower_long_arc_v13"
 FOREHEAD_BRIDGE_ARC_REGION = "forehead_bridge_arc_v15"
+
+
+def _extend_forehead_lower_long_arc(
+    points: np.ndarray,
+    landmarks_px: np.ndarray,
+) -> np.ndarray:
+    """Apply the historical v13 forehead expansion used by the browser runtime."""
+    if len(points) == 0 or len(landmarks_px) <= 10:
+        return points
+    anchor = landmarks_px[9, :2]
+    axis = landmarks_px[10, :2] - anchor
+    axis_norm = float(np.linalg.norm(axis))
+    if axis_norm <= 1e-9:
+        return points
+    axis /= axis_norm
+    lateral_axis = np.array([-axis[1], axis[0]], dtype=np.float64)
+
+    out = points.copy()
+    relative = out[:, :2] - anchor
+    parallel = relative @ axis
+    lateral = relative @ lateral_axis
+    out[:, :2] += (0.86 * parallel)[:, None] * axis
+
+    current_half_width = float(np.max(np.abs(lateral)))
+    face_width = float(np.ptp(landmarks_px[:, 0]))
+    if current_half_width > 1e-9 and face_width > 1e-9:
+        factor = 0.82 * face_width / current_half_width
+        out[:, :2] += ((factor - 1.0) * lateral)[:, None] * lateral_axis
+
+    for _ in range(5):
+        smoothed = out.copy()
+        smoothed[1:-1, :2] = (
+            0.25 * out[:-2, :2] + 0.5 * out[1:-1, :2] + 0.25 * out[2:, :2]
+        )
+        out = smoothed
+
+    laterals = (out[:, :2] - anchor) @ lateral_axis
+    half_width = float(np.max(np.abs(laterals)))
+    face_height = float(np.ptp(landmarks_px[:, 1]))
+    if half_width > 1e-9 and face_height > 1e-9:
+        normalized = np.clip(np.abs(laterals) / half_width, 0.0, 1.0)
+        arch = 0.055 * face_height * (1.0 - normalized**2.4)
+        out[:, :2] += arch[:, None] * axis
+    return out
 
 
 def _extend_forehead_bridge(
@@ -101,7 +146,13 @@ class MappedLine:
     tris: np.ndarray  # (N,) 每点所属三角面 id（供遮挡剔除使用）
 
 
-def map_atlas(atlas: Atlas, landmarks_px: np.ndarray, triangles: np.ndarray) -> list[MappedLine]:
+def map_atlas(
+    atlas: Atlas,
+    landmarks_px: np.ndarray,
+    triangles: np.ndarray,
+    *,
+    expand_forehead: bool = True,
+) -> list[MappedLine]:
     """把图谱映射到检测到的关键点上。
 
     landmarks_px: (>=468, 3) 图像空间关键点 (x_px, y_px, z)。
@@ -117,7 +168,17 @@ def map_atlas(atlas: Atlas, landmarks_px: np.ndarray, triangles: np.ndarray) -> 
         v1 = landmarks_px[tri_v[:, 1]]
         v2 = landmarks_px[tri_v[:, 2]]
         pts = bary[:, 0:1] * v0 + bary[:, 1:2] * v1 + bary[:, 2:3] * v2
-        if ln.region == FOREHEAD_BRIDGE_ARC_REGION:
+        if (
+            expand_forehead
+            and ln.region == FOREHEAD_LOWER_LONG_ARC_REGION
+            and not ln.disable_runtime_expansion
+        ):
+            pts = _extend_forehead_lower_long_arc(pts, landmarks_px)
+        elif (
+            expand_forehead
+            and ln.region == FOREHEAD_BRIDGE_ARC_REGION
+            and not ln.disable_runtime_expansion
+        ):
             pts = _extend_forehead_bridge(
                 pts,
                 landmarks_px,

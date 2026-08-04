@@ -171,22 +171,28 @@ P' = u * V0' + v * V1' + w * V2'
 
 ### 5.1 额头拱线的显式非重心后处理
 
-上式是所有点的基础映射，但 React 实时运行时对 `region=forehead_bridge_arc_v15` 还有一段显式、
-可测试的非重心形变。以关键点 9→10 定义额头轴单位向量 `e`，令 `l` 为其正交方向、`h` 为脸高、
-`W` 为脸宽。基础映射点 `P` 会依次执行：
+上式是所有点的基础映射，但正式 `forehead_bridge_arc_v15` 与历史
+`forehead_lower_long_arc_v13` 图谱在完成重心映射后，还会执行额头可见区展开。
+以关键点 9→10 定义额头轴单位向量 `e`，令 `l` 为其正交方向、`h` 为脸高、`W` 为脸宽。
+两种 region 都依次执行轴向延伸、横向重标定、五次平滑与拱高；v15 另有分层偏移：
 
 ```text
 q = dot(P - anchor, e)
 P1 = P + 0.86 * q * e
 P2 = P1 + (0.82 * W / max(|dot(P1-anchor,l)|) - 1) * dot(P1-anchor,l) * l
 P3 = smooth_5_passes(P2)
-P4 = P3 + 0.140 * h * (1 - |dot(P3-anchor,l)|^2 / halfWidth^2) * e
-P5 = P4 - 0.100 * layerRank * h * e
+P4 = P3 + c * h * (1 - |dot(P3-anchor,l)|^p / halfWidth^p) * e
+P5 = P4 - 0.100 * layerRank * h * e  # 仅 v15
 ```
 
+其中 v13 使用 `c=0.055, p=2.4`，v15 使用 `c=0.140, p=2.0`。
+
 这段展开只属于旧的标准 atlas runtime 补偿。`/personalized` V6 已在 canonical 空间完成额头几何，
-所以导出线条带 `disableRuntimeExpansion:true`；任何消费者都必须在调用上述后处理前尊重该标记，
-避免二次展开。Python/TypeScript 共享 fixture 在 #112 对这一例外做 parity 锁定。
+所以导出线条带 `disableRuntimeExpansion:true`；Python、Web TypeScript 和纯 JavaScript
+三套 `mapAtlas` 都必须在调用上述后处理前尊重该标记，避免二次展开。批量调用方也可以用
+`expandForehead: false`（Python 为 `expand_forehead=False`）关闭整个图谱的额头展开。
+该标记只控制显示期的额头后处理，不改变 `[tri,u,v]` 的拓扑和重心坐标契约；共享 fixture 在
+#112 对两种 region 的这项契约做 parity 锁定。
 
 ## 6. 核心算法二：One-Euro 时间平滑
 
