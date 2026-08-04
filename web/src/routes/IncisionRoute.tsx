@@ -1,16 +1,24 @@
 import { IncisionWorkbench } from "./IncisionWorkbench";
 import { ManagedWorkbenchRoute } from "../components/ManagedWorkbenchRoute";
 import { useIncisionControllerBridge } from "../hooks/useIncisionControllerBridge";
-import { incisionLegacyController } from "../services/legacyControllers";
+
+type IncisionRuntime = typeof import("../services/incisionRuntime");
+
+const loadIncisionRuntime = () => import("../services/incisionRuntime");
+const mountIncisionRuntime = (runtime: IncisionRuntime, root: HTMLElement) =>
+  runtime.mountIncisionWorkbench(root);
+const disposeIncisionRuntime = (runtime: IncisionRuntime) => runtime.disposeIncisionWorkbench();
 
 export function IncisionRoute() {
   useIncisionControllerBridge();
 
   return (
     <ManagedWorkbenchRoute
-      controller={incisionLegacyController}
+      dispose={disposeIncisionRuntime}
       failedStatus="切口工作台加载失败"
+      loadModule={loadIncisionRuntime}
       loadingStatus="加载切口工作台"
+      mount={mountIncisionRuntime}
       mountedStatus="切口工作台已挂载"
       unloadedStatus="切口工作台已卸载"
       workspace="incision"

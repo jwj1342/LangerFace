@@ -17,6 +17,8 @@
   + `web/src/services/three3d.ts` / R3F 组件（3D Beta）。实时、本地、不上传。
   前端低频 UI 状态由 React/Zustand 管理，实时工作台状态在 `web/src/services/liveState.ts`
   分片；`pipeline.ts` 不依赖 `mode3d.ts`，3D 实时投影通过无 DOM 的 `projection3d.ts` 适配，避免模块环。
+  `AnnotateRoute` / `IncisionRoute` / `LiveRoute` 直接按需加载并挂载各自 TypeScript runtime，
+  共享 `ManagedWorkbenchRoute` 的 mount/dispose 生命周期；不再经过 `legacyControllers.ts` 转发层。
 
 - **纯 JS 兼容运行时**：`web/current/`（`/current/` 实时页）、`web/compat/personalized/`（`/personalized` 个性化流程）与
   `web/compat/shared/`（两者共用的几何 / 常量 / 数据源）。它们**不进 TypeScript 类型检查**，由
@@ -237,8 +239,25 @@ P = u·V0 + v·V1 + w·V2
 - 切口候选由 `src/services/incisionWorkflowTools.ts` 中的本地确定性 workflow 生成；
   `workflow.worker.ts` 通过 Comlink 执行，`workflowPlanner.ts` 在 Worker 不可用时回退到主线程执行相同函数。
   运行时不包含远程模型或模型密钥配置。
-- 切口工作台编排保留在 `src/services/incisionRuntime.ts`；route-scoped DOM 契约、临床展示文案和纯审阅门控分别位于
-  `src/services/incisionDom.ts`、`src/services/incisionClinicalCopy.ts` 与 `src/services/incisionReviewPolicy.ts`。
+- 切口工作台编排保留在 `src/services/incisionRuntime.ts`；route-scoped DOM 查询契约位于
+  `src/services/incisionDom.ts`，canvas / 兼容表单 / 文件输入 / `ResizeObserver` 的监听与对称清理由
+  `src/services/incisionDomBindings.ts` 统一负责，重复 mount 不得累积监听器。长生命周期 renderer/workflow
+  状态的类型与 fresh-mount factory 位于 `src/services/incisionControllerState.ts`；临床展示文案和纯审阅门控
+  分别位于 `src/services/incisionClinicalCopy.ts` 与 `src/services/incisionReviewPolicy.ts`。
+  向量运算、平均网格边长以及 ring/boundary/polyline BufferGeometry 构造位于无 DOM、可独立测试的
+  `src/services/incisionSceneGeometry.ts`；runtime 只传入当前状态并负责替换/释放 scene geometry。
+  审阅/肿物导出 schema、候选工程排序和浏览器下载边界位于 `src/services/incisionExport.ts`；
+  runtime 只组装当前业务快照、执行隐私 preflight 并触发下载。
+  指针到 NDC、脸面 raycast、端点 handle raycast 和有向角计算位于 `src/services/incisionPicking.ts`；
+  runtime 只决定“拾取后更新肿物、自由轮廓还是候选编辑”。
+  React command 的名称、数值输入、肿物枚举和候选 id 在
+  `src/services/incisionCommandSchemas.ts` 通过运行时 schema 后才进入业务逻辑。
+  live 与 annotation 的枚举、布尔值、数值范围和 line index 同理由
+  `src/services/workbenchCommandSchemas.ts` 校验。
+  医生编辑的提交、去重、undo/redo、分支截断和未提交预览历史由
+  `src/services/incisionEditHistory.ts` 管理，runtime 只同步控件并重算候选。
+  审阅 record、候选编辑 session、敏感结构 trace 回收和 Markdown 报告由
+  `src/services/incisionReviewRecords.ts` 构建；runtime 只注入当前 UI/资产上下文。
   React 控件只通过 typed controller command 写入运行时，兼容页的原生 DOM 监听器不会在 React route 上回写旧 snapshot。
 - 实时页的 canvas/WebM 录制、额外视图合成和下载生命周期由 `src/services/canvasRecording.ts` 负责。
 - 摄像头约束/错误归一化由
@@ -291,7 +310,9 @@ npm run dev
 |---|---|
 | `web/src/services/annotationModel.ts` | 纯数据模型：线/点管理、表面路径展开、重心坐标、导出图谱/xyz（node 可单测，见 `tools/test_annotate_model.ts`） |
 | `web/src/services/annotateViewer.ts` | Three.js 场景：网格加载、射线表面拾取、线与控制点渲染 |
-| `web/src/services/annotateRuntime.ts` | 标注 runtime 装配（指针拖拽/点击、导出、列表、快捷键；严格 TypeScript，直接依赖 TS service 模块） |
+| `web/src/services/annotateDom.ts` | scoped DOM 引用、文件输入事件与快捷键文本控件判定 |
+| `web/src/services/annotationExport.ts` | 图谱/xyz JSON artifact、稳定文件名与浏览器下载生命周期 |
+| `web/src/services/annotateRuntime.ts` | 标注 runtime 编排（指针交互、模型/viewer 协作、列表与快捷键；严格 TypeScript） |
 | `web/index.html` / `web/src/routes/AnnotateRoute.tsx` / `web/src/components/Annotate*.tsx` | React 标注页入口与 UI |
 | `web/annotate.html` / `web/annotate.css` | 标注兼容跳转页与历史样式 |
 
