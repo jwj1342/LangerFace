@@ -19,7 +19,7 @@
 
 ## `architecture/` — 架构与算法
 
-**这个目录回答「代码为什么这么组织、某个数字是怎么算出来的」。** [ARCHITECTURE.md](architecture/ARCHITECTURE.md) 是**模块契约与坐标系**的权威来源：分层结构（含三套并存的运行时——TypeScript service 层、`web/current/` 与 `web/compat/` 的纯 JS 兼容运行时）、关键点与标准脸模型、2D 重心坐标映射、图谱格式与生成、资产清单、构建与 Vercel 部署边界、网页 3D 标注、HeadSpace 离线管线。[METHODS_AND_IMPLEMENTATION_SUMMARY.md](architecture/METHODS_AND_IMPLEMENTATION_SUMMARY.md) 是**数学推导的集中地**：重心映射的仿射不变性、One-Euro、背面剔除与遮挡、方向场流线生成、Umeyama、FLAME 线性拟合、软体闭合、切口几何（3:1 长宽比、30° 尖端角、cubic Hermite 轮廓）。[ADR_3D_ROUTE_FEASIBILITY.md](architecture/ADR_3D_ROUTE_FEASIBILITY.md) 正式裁决实时 3D 路线：生产维持 2D-first，3D 只作离线资产、标注和研究预览。模块契约在 ARCHITECTURE、公式在 METHODS、路线裁决在 ADR。
+**这个目录回答「代码为什么这么组织、某个数字是怎么算出来的」。** [ARCHITECTURE.md](architecture/ARCHITECTURE.md) 是**模块契约与坐标系**的权威来源：分层结构（含三套并存的运行时——TypeScript service 层、`web/current/` 与 `web/compat/` 的纯 JS 兼容运行时）、关键点与标准脸模型、2D 重心坐标映射、图谱格式与生成、资产清单、构建与 Vercel 部署边界、网页 3D 标注、HeadSpace 离线管线。[METHODS_AND_IMPLEMENTATION_SUMMARY.md](architecture/METHODS_AND_IMPLEMENTATION_SUMMARY.md) 是**数学推导的集中地**：重心映射的仿射不变性、One-Euro、背面剔除与遮挡、方向场流线生成、Umeyama、FLAME 线性拟合、软体闭合、切口几何（3:1 长宽比、30° 尖端角、cubic Hermite 轮廓）。[ADR_3D_ROUTE_FEASIBILITY.md](architecture/ADR_3D_ROUTE_FEASIBILITY.md) 提供实时 3D 路线的工程评估：2D-first、3D 只作离线资产/标注/研究预览的建议仍待 #40 owner 正式确认。模块契约在 ARCHITECTURE、公式在 METHODS、路线建议在 ADR。
 
 ## `tracks/` — 技术轨与功能专题
 

@@ -18,11 +18,11 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
 
 ## 待合并的独立修复 / 功能
 
-- [ ] RSTL 局部方向服务 Python/TypeScript parity — [#13](https://github.com/jwj1342/LangerFace/issues/13)
+- [x] RSTL 局部方向服务 Python/TypeScript parity — [#13](https://github.com/jwj1342/LangerFace/issues/13)
       · Ready PR #121；共享金标覆盖 atlas、低置信、FLAME `points3d` 和 ±180° 轴向 wrap。
       · Ready PR #119；补齐可编辑尖端角、轮廓重算、guardrail 与 provenance。
 - [ ] 3D 路线可行性裁决 — [#40](https://github.com/jwj1342/LangerFace/issues/40)
-      · Ready PR #122；裁决 2D-first + 3D 离线资产/标注/研究预览。
+      · Ready PR #122；建议 2D-first + 3D 离线资产/标注/研究预览，等待 #40 owner 正式确认。
 - [x] 修复 React 受控输入 snapshot echo — [#109](https://github.com/jwj1342/LangerFace/issues/109)
       · Ready PR #119；Chromium 回归覆盖输入保持。
 - [x] 删除 Agentic/Provider 出域路径 — [#111](https://github.com/jwj1342/LangerFace/issues/111)
@@ -50,7 +50,7 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
       · 本 PR 已支持中心点、直径/深度/切缘、椭圆/自由轮廓、来源作者、肿物 JSON 导入导出、`tumor_quality` 输入质量摘要，以及自由轮廓点数/面积/自交/中心偏移 guardrails；新版 `boundary_summary` 会随前端导出 `units_per_mm`、`summary_axis` 和 `summary_normal`，审阅记录额外写入 `tumor_boundary_summary`，按保存候选的长轴固化边界点数、长短轴、面积、自交和中心偏移，Markdown 报告会显示“肿物边界摘要”；缺作者、非 mm 单位、缺皮下深度、缺皮表切缘或边界过稀会进入 trace/报告/审阅导出；当前由浏览器 workflow 和 JS 合约测试守住肿物输入、边界摘要、隐私预检和候选 metrics 的自洽性，自动影像分割仍属后续
 - [x] 皮下肿物切口生成：按超声直径生成平行 RSTL 的线性切口 — [#15](https://github.com/jwj1342/LangerFace/issues/15)
       · 本 PR 已支持 RSTL 轴向线性候选、端点/长度编辑、目标长度 metrics、最大长度截断记录和直径覆盖不足 high guardrail
-- [ ] 皮表肿物梭形切口生成器：长轴、比例、尖端角与平滑对称约束 — [#16](https://github.com/jwj1342/LangerFace/issues/16)
+- [x] 皮表肿物梭形切口生成器：长轴、比例、尖端角与平滑对称约束 — [#16](https://github.com/jwj1342/LangerFace/issues/16)
       · 已支持边界投影覆盖、面积/自交质量指标、3:1 默认长宽比、cubic Hermite 轮廓、30° 默认尖端角目标和实际误差 metrics；Python `langerface.incision` 与 Web 生成器共用金标，测试覆盖比例、端点角、中点 C1 连续、对称单调收窄、面积和自由轮廓包络；医生可调整梭形宽度、长度、方向、中心和尖端角，系统会重算 outline/envelope 指标、复跑 guardrails，并把尖端角覆盖写入 edit history 与导出 provenance；真实病例曲线调参仍需医生 review
 - [x] 敏感结构保护规则：下睑、唇红缘、鼻翼等游离边缘风险提示与方向例外 — [#17](https://github.com/jwj1342/LangerFace/issues/17)
       · 本 PR 已支持敏感区提示、中心点和候选几何到敏感锚点/简化游离缘线段的距离筛查，并按下睑、唇红缘、鼻翼、鼻尖、口角使用 draft 阈值表；命中敏感结构时会输出 `protective_direction` 保护性方向建议并要求医生记录覆盖原因；JS 合约测试会比较 `free_margin_distance_thresholds_mm` 与 `protective_direction_hints`，防止浏览器实现和 JSON 资产不一致；真实解剖边界、阈值和保护性方向仍需临床确认
@@ -84,7 +84,7 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
 ## 暂缓路线
 
 - 肌肉骨骼实时孪生、术中级软组织/肌肉骨骼耦合模拟：当前不属于 Stage 2 切口 workflow 目标。未来如重启，需另开决策 gate，详见 [PRODUCT_BOUNDARIES.md](../clinical/PRODUCT_BOUNDARIES.md)。
-- [ ] 合并重复文档、修正内容 owner 并自动核对 TODO 状态 — [#113](https://github.com/jwj1342/LangerFace/issues/113)
+- [x] 合并重复文档、修正内容 owner 并自动核对 TODO 状态 — [#113](https://github.com/jwj1342/LangerFace/issues/113)
       · 当前 PR；删除专题重复页，把标注验收、FLAME 切口资产、纹理 warp 和产品边界归回各自 owner。
 - [ ] Phase 2：消化大型 runtime，推进核心 TypeScript 服务化 — [#95](https://github.com/jwj1342/LangerFace/issues/95)
       · 长期 epic；按小 PR 拆 scene、export、live state/lifecycle、annotation 和 legacy adapter，不用单个大 PR 假装完成。
