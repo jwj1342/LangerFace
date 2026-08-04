@@ -119,7 +119,7 @@
 
 - 摄像头帧、YOLO 推理、严格并集融合、V6 微调**全部在当前浏览器本地完成**，不上传服务器，无推理后端。
 - **不写入** `localStorage` / `IndexedDB` 任何患者衍生数据（图像、线条、掩膜、审阅记录）。
-  `localStorage` 只用于非患者配置（资产 base URL、Provider URL/model/timeout）。
+  `localStorage` 只用于非患者配置（例如资产 base URL）。
 - 跨页只经 `sessionStorage` 的 `langerface.previewAtlas` 传一次性预览图谱，
   `takePreviewAtlas()` **读取即删**，关标签页即清；不形成病例、档案或历史记录。
 - 人脸调试视频录制（静息与每个表情每轮的视频 + 同步关键点）**默认关闭**；勾选后还需一次显式同意，

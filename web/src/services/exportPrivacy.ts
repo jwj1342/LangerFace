@@ -28,7 +28,7 @@ const MEDIA_KEY_HINTS = [
   "overlay",
   "bytes",
 ];
-const SECONDARY_CUE_FORBIDDEN_TRUE = ["used_for_geometry", "used_for_agent_prompt"];
+const SECONDARY_CUE_FORBIDDEN_TRUE = ["used_for_geometry"];
 const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 const PHONE_RE = /(^|[^\d])(?:\+?\d[\d .()\-]{8,}\d)(?!\d)/;
 

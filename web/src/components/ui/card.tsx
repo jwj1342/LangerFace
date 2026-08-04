@@ -18,12 +18,12 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
 );
 Card.displayName = "Card";
 
-export const AgentCard = forwardRef<HTMLDivElement, CardProps>(
+export const WorkbenchCard = forwardRef<HTMLDivElement, CardProps>(
   ({ className, ...props }, ref) => (
-    <Card ref={ref} className={cn("agent-grid", className)} {...props} />
+    <Card ref={ref} className={cn("workbench-grid", className)} {...props} />
   ),
 );
-AgentCard.displayName = "AgentCard";
+WorkbenchCard.displayName = "WorkbenchCard";
 
 export const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (

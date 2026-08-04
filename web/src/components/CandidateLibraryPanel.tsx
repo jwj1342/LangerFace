@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
-import { AgentCard, CardHeader } from "./ui/card";
+import { WorkbenchCard, CardHeader } from "./ui/card";
 import { Hint } from "./ui/hint";
 import { CandidateList, CandidateRow, CandidateRowMeta, CandidateRowStatus, CandidateRowTop } from "./ui/library-list";
 import { useIncisionControllerCommands } from "../hooks/useControllerCommands";
@@ -31,7 +31,7 @@ export function CandidateLibraryPanel() {
   };
 
   return (
-    <AgentCard>
+    <WorkbenchCard>
       <CardHeader><span>候选库</span><span id="savedCount">{saved.length}</span></CardHeader>
       <Button
         variant="workbenchPrimary"
@@ -43,7 +43,7 @@ export function CandidateLibraryPanel() {
         保存当前候选
       </Button>
       <ButtonRow className="two-cols">
-        <Button variant="workbench" id="makeVariantsBtn" type="button" disabled={!hasCandidate} onClick={() => commands.library("make_variants")}>生成备选</Button>
+        <Button variant="workbench" id="makeVariantsBtn" type="button" disabled={!hasCandidate} onClick={() => commands.library("make_variants")}>保存方向备选</Button>
         <Button variant={confirmClear ? "miniDanger" : "workbench"} id="clearSavedBtn" type="button" disabled={!hasSaved} onClick={clearSaved}>
           {confirmClear ? "确认清空" : "清空候选库"}
         </Button>
@@ -75,6 +75,6 @@ export function CandidateLibraryPanel() {
           </CandidateRow>
         ))}
       </CandidateList>
-    </AgentCard>
+    </WorkbenchCard>
   );
 }

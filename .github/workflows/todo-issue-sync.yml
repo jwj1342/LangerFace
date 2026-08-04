@@ -1,0 +1,29 @@
+name: TODO issue sync
+
+on:
+  issues:
+    types: [opened, closed, reopened]
+  pull_request:
+    paths:
+      - "docs/planning/TODO.md"
+      - "tools/check_todo_issue_sync.mjs"
+      - ".github/workflows/todo-issue-sync.yml"
+  schedule:
+    - cron: "17 13 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: node tools/check_todo_issue_sync.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

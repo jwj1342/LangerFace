@@ -54,8 +54,8 @@ LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它
 | 感知层 | 已实现 | 从图片、视频、摄像头中提取 478 个 3D 人脸关键点；网页端还检测手部遮挡 | `src/langerface/detection/`, `web/src/services/pipeline.ts` |
 | 配准与几何层 | 已实现 | 2D 重心坐标贴合；3D Beta Umeyama 关键点网格重建与刚性配准；FLAME 关键点拟合实验；离线 HeadSpace 多视角加权 Sim3 配准 | `src/langerface/geometry/`, `src/langerface/registration/`, `src/langerface/flame.py`, `web/src/services/geometry*.ts`, `web/src/services/projection3d.ts`, `tools/reconstruct_3d.py`, `tools/headspace/` |
 | 面部标注 / 图谱层 | 已实现 | 生成、读取、校验和映射 RSTL/Langer 线条；网页 3D 标注只产出待复核草案，临床校验由 Python/评审流程完成 | `src/langerface/lines/`, `web/src/services/annotationModel.ts`, `web/src/services/annotateViewer.ts`, `web/src/services/annotateRuntime.ts`, `tools/annotate_atlas.py`, `tools/digitize_from_diagram.py` |
-| 肿物模拟层 | Stage 2 功能切片（#14） | 表示脸部肿物的位置、大小、深度、安全切缘和与皮肤表面的关系；当前支持手动中心点、椭圆 / 自由轮廓、来源作者和 JSON 导入导出，自动分割与临床复核仍待补 | `web/src/services/incisionCandidateTools.ts`, `web/src/services/tumorInput.ts`, `web/src/services/incisionAgentRuntime.ts` |
-| 切口设计层 | Stage 2 工程闭环（#11-#22/#64/#83/#85） | 综合张力线方向、肿物约束、安全切缘、敏感结构、医生编辑、审阅导出和 2D 实时叠加，生成候选切口可视化；只做决策辅助，不输出手术指令 | `assets/clinical_rules_face_incision.json`, `assets/agentic_incision_tool_schema.json`, `web/src/services/incision*.ts` |
+| 肿物模拟层 | Stage 2 功能切片（#14） | 表示脸部肿物的位置、大小、深度、安全切缘和与皮肤表面的关系；当前支持手动中心点、椭圆 / 自由轮廓、来源作者和 JSON 导入导出，自动分割与临床复核仍待补 | `web/src/services/incisionCandidateTools.ts`, `web/src/services/tumorInput.ts`, `web/src/services/incisionRuntime.ts`, `web/src/services/incisionReviewPolicy.ts` |
+| 切口设计层 | Stage 2 工程闭环（#11-#22/#83/#85） | 由浏览器本地确定性 workflow 综合张力线方向、肿物约束、安全切缘、敏感结构、医生编辑、审阅导出和 2D 实时叠加，生成候选切口可视化；只做决策辅助，不输出手术指令 | `assets/clinical_rules_face_incision.json`, `assets/incision_workflow_schema.json`, `web/src/services/incision*.ts` |
 | 渲染与交互层 | 已实现 / 扩展中 | 2D Canvas 叠加、3D 查看、遮挡、放大窗、录制导出和 UI 控制 | `src/langerface/rendering/`, `web/src/services/liveRuntime.ts`, `web/src/services/render2d.ts`, `web/src/services/three3d.ts` |
 | 实验演示层 | 入口已关闭 / 保留代码 | FLAME 实时孪生（无网页入口）；RSTL 切除 -> 闭合定性软体演示（`/surgery`） | `web/src/services/flameFit.ts`, `web/src/services/mode3d.ts`, `web/src/routes/SurgeryRoute.tsx`, `web/src/services/softBody.ts` |
 
@@ -133,10 +133,10 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 - 🔬 **RSTL 主流程 + Langer 对照资产**：网页主 demo 当前只暴露 RSTL；Langer 图谱仍保留在资产、CLI 和标注器中用于对照 / 教学。
 - 🖐️ **遮挡处理**：转头时背面线条隐藏；**手挡在脸前时，手覆盖处不画线**（贴合手形掩膜，指缝保留）。
 - 🔍 **关键区域放大窗**：主画面下方 6 个放大窗（额·眉间 / 双眼周 / 鼻·鼻唇沟 / 口周 / 颏部）同屏显示细节。
-- 🚫 **3D / FLAME 网页入口已关闭**：3D 关键点重建、FLAME 实时孪生和三维资产预览的用户入口已下线（#108 第一阶段）；底层 runtime 仍保留在 `web/src/services/mode3d.ts` / `flameFit.ts`，标注器仍可加载头模资产，离线 FLAME 拟合走 `tools/fit_flame_to_landmarks.py`。3D 轨的去向见 #61 / #40。
+- 🚫 **3D / FLAME 网页入口已关闭**：3D 关键点重建、FLAME 实时孪生和三维资产预览的用户入口已下线（#108 第一阶段）；底层 runtime 仍保留在 `web/src/services/mode3d.ts` / `flameFit.ts`，标注器仍可加载头模资产，离线 FLAME 拟合走 `tools/fit_flame_to_landmarks.py`。#40 / PR #122 将路线收敛为 2D-first + 3D 离线资产/标注/研究预览。
 - ✍️ **网页 3D 标注**：在浏览器里于标准脸 / 3D 头模表面手绘 RSTL/Langer 候选线，可导入 JSON/OBJ/PLY 头模和 3D Slicer `.mrk.json` 曲线，导出 `validated:false` 的图谱草案（`[tri,u,v]`）或 xyz 折线；临床复核与置 `validated:true` 仍走 Python/评审流程，见 [网页 3D 标注与图谱草案导出](docs/architecture/ARCHITECTURE.md#12-网页-3d-线标注与图谱草案导出)。
 - 🧰 **无状态研究工具入口**：站点根 `/` 是 React 工具入口（`/app` 保留为兼容地址），只负责进入实时 2D、个性化 2D、切口候选和图谱维护等独立工具，不创建、恢复或保存病例。
-- 🧭 **切口 Agent 工作台**：在标准脸上手动放置皮下 / 皮表肿物，支持椭圆 / 自由轮廓和肿物 JSON 导入导出，生成线性或梭形候选切口，显示 RSTL 方向、面部分区、guardrails、浏览器 workflow 工具 trace 和 provider 连通性状态；候选可记录审阅人、确认 / 退回 / 否决状态和备注，候选库会给出工程排序对比，导出审阅记录，也可发送到实时页叠加到上传照片、视频或摄像头画面。
+- 🧭 **切口 workflow 工作台**：在标准脸上手动放置皮下 / 皮表肿物，支持椭圆 / 自由轮廓和肿物 JSON 导入导出，由浏览器本地确定性工具生成线性或梭形候选切口；默认界面优先显示临床中文摘要、面部分区、保护规则和规则验证边界，并把工具 trace 与候选比较收进技术详情。候选可记录审阅人、确认 / 退回 / 否决状态和备注，导出审阅记录，也可发送到实时页叠加到上传照片、视频或摄像头画面。
 - 🔬 **RSTL 切除 -> 闭合演示（Beta）**：`/surgery` 作为独立研究演示保留，用于解释沿 RSTL 闭合的张力直觉，不是 FEM、不是患者个体化建模，也不是自动候选生成模块。
 - 🎛️ **实时控制**：主界面暴露数据源、线密度、透明度、镜像和网格采样点；平滑、背面剔除、手部遮挡、分区着色和放大窗为底层支持或默认能力，部分调试开关当前隐藏。
 - 🔒 **全程本地运行**，不上传任何画面（隐私友好）。
@@ -181,7 +181,7 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 3D 重建流程：每帧 478 关键点 → 用相似变换(Umeyama)对齐到统一参考系 → **各顶点取中位数**得到稳定中性脸 →
 图谱按重心坐标贴到该网格 → Three.js 渲染（可旋转）/ 每帧 Umeyama 刚性配准到活体脸投影（z 缓冲遮挡）。
 
-FLAME 实时孪生（`web/src/services/flameFit.ts` / `web/src/services/mode3d.ts`）的入口已关闭，代码保留待 #61 决策；RSTL 切除闭合定性演示仍可从 `/surgery` 打开。它们不改变 Stage 2 仍处于规划中的边界。
+FLAME 实时孪生（`web/src/services/flameFit.ts` / `web/src/services/mode3d.ts`）的入口已关闭；RSTL 切除闭合定性演示仍可从 `/surgery` 打开。3D 按 #40 / PR #122 仅保留离线资产、标注和研究预览，不改变 Stage 2 已实现的本地确定性切口工作流边界。
 
 ---
 
@@ -241,7 +241,7 @@ npm run dev                      # Vite dev server，默认 http://127.0.0.1:517
 - **滑杆**：线密度、透明度；平滑参数仍在运行时存在，但主界面调试控件当前隐藏。
 - **开关**：镜像、显示网格采样点；背面剔除、手部遮挡、分区着色和细节放大窗为底层支持或默认能力，部分控件当前隐藏。
 - **研究工具入口**：进入站点根 `/`（`/app` 为兼容地址）选择独立工具；当前不提供病例新建、恢复、历史记录或云端病例库。
-- **系统设置 / 实验页**：`/settings/atlas` 提供图谱库管理壳，并把 `/annotate` 作为受控维护入口；`/settings/developer` 集中 AI 服务连接测试和兼容工作台入口（三维模型预览入口已随 3D 网页入口一并移除）。`/surgery` 仍可查看 RSTL 切除 -> 闭合定性演示，但它只是兼容研究入口。旧 HTML 入口仅保留为 React SPA 兼容跳转页。
+- **系统设置 / 实验页**：`/settings/atlas` 提供图谱库管理壳，并把 `/annotate` 作为受控维护入口；`/settings/developer` 集中本地 workflow worker 状态和兼容工作台入口（三维模型预览入口已随 3D 网页入口一并移除）。`/surgery` 仍可查看 RSTL 切除 -> 闭合定性演示，但它只是兼容研究入口。旧 HTML 入口仅保留为 React SPA 兼容跳转页。
 - **统计**：追踪质量、状态、脸部占比、偏航估计、线束数量、fps。
 
 ### 命令行
@@ -356,14 +356,14 @@ Stage 2 的切口候选必须受以下边界约束：
 - **强光 / 阴影 / 低分辨率**：降低关键点置信度，触发淡出。
 - **多张脸**：网页端 Face Landmarker 当前配置为单脸追踪；多人同框时只处理首个检测结果，快速进出画面时可能错配。
 - **3D Beta**：当前在线重建是 468 点关键点网格，不是稠密患者头模；刚性配准不随表情形变；在线扫描 / 实时投影需摄像头实测；尚未做非刚性配准与网格导出。
-- **FLAME 实验**：已支持浏览器内实时孪生和本地/兜底拟合 basis，但医生 FLAME 标准线渲染到个体 FLAME 头、Mode-B 3D 扫描配准等仍在 #61 后续工作中。
+- **FLAME 实验**：实时孪生入口已关闭；本地/兜底拟合 basis、标注和研究预览保留。医生 FLAME 标准线迁移到个体头、Mode-B 扫描配准等不在当前路线内，重启须满足 TODO 的 3D gate。
 - **切除闭合演示**：`/app/surgery` 是独立的标准脸定性表面软体研究演示，只解释沿 RSTL 闭合的张力直觉，不创建病例，也不能替代真实软组织 FEM、患者个体化建模或正式候选审阅。
 
 ### 数据与隐私
 
 病人面部影像属敏感个人信息。本工具默认**本地运行，不上传任何数据**。Vite 前端默认用于本地研究演示；如需对外暴露，请自行加访问控制与合规审查（HIPAA / GDPR / 《个人信息保护法》）。
 
-Stage 2 切口 Agent 默认只把肿物参数、标准化坐标、候选切口、工具调用 trace 和审阅记录作为结构化 JSON 处理；导出 JSON / 报告草案不默认包含原始照片、视频帧、摄像头画面或纹理。自然皱襞 / 病灶辅助线索当前只允许以低置信摘要和 metrics 进入医生审阅，不自动改变切口几何，也不进入 LLM prompt。前端只保留 OpenAI-compatible / vLLM Provider 配置，可填写 Base URL、模型和访问密钥；密钥仅用于当前浏览器到用户提供 Provider 的连通性测试或后续摘要调用，审阅记录会做脱敏，不写入公开仓库。详细边界见 [`docs/clinical/INCISION_PRIVACY_AUDIT.md`](docs/clinical/INCISION_PRIVACY_AUDIT.md)。
+Stage 2 切口 workflow 只在浏览器本地处理肿物参数、标准化坐标、候选切口、工具调用 trace 和审阅记录；导出 JSON / 报告草案不默认包含原始照片、视频帧、摄像头画面或纹理。自然皱襞 / 病灶辅助线索只允许以低置信摘要和 metrics 进入医生审阅，不自动改变切口几何。运行时没有远程模型配置、访问密钥或模型请求。详细边界见 [`docs/clinical/PRIVACY_AND_AUDIT.md`](docs/clinical/PRIVACY_AND_AUDIT.md)。
 
 ---
 
@@ -395,25 +395,22 @@ Stage 2 切口 Agent 默认只把肿物参数、标准化坐标、候选切口�
 | [ADR_3D_ROUTE_FEASIBILITY.md](docs/architecture/ADR_3D_ROUTE_FEASIBILITY.md) | 实时 3D 路线的算力、部署与质量 gate；正式裁决 2D-first + 3D 离线资产/研究查看 |
 | **技术轨 / 功能专题** — `docs/tracks/` | |
 | [PERSONALIZED_RSTL.md](docs/tracks/PERSONALIZED_RSTL.md) | `/personalized` 个性化 RSTL 的输入、YOLO/V6 阈值依据、失败降级、隐私边界与图谱契约 |
-| [FLAME_3D_TRACK.md](docs/tracks/FLAME_3D_TRACK.md) | 3D FLAME 配准 / 标注轨的设计与技术选型（issue #61）|
-| [INCISION_FLAME_ASSET_STRATEGY.md](docs/tracks/INCISION_FLAME_ASSET_STRATEGY.md) | 切口工作台使用 FLAME 头模资产的核验点、设计边界、回退策略和验收重点 |
-| [RSTL_3DMM_PRIOR.md](docs/tracks/RSTL_3DMM_PRIOR.md) | Borges RSTL 来源、3DMM 拓扑先验 manifest、与 #2/#13/#61 的衔接 |
-| [AGENTIC_INCISION.md](docs/tracks/AGENTIC_INCISION.md) | 切口设计 workflow 的 11 步 tool trace 契约、动作空间与 provider 边界（issue #64/#111）|
-| [PERSONALIZED_TEXTURE_WARP.md](docs/tracks/PERSONALIZED_TEXTURE_WARP.md) | Python 侧纹理 / 皱纹场 warp 原型与其 checkpoint 的许可边界 |
-| [rstl_3dmm_prior_manifest.json](assets/rstl_3dmm_prior_manifest.json) | MediaPipe/3DMM RSTL 先验资产 manifest；高密度方向场大 JSON 由远端资产或本地生成提供（issue #86，`validated:false`） |
+| [FLAME_3D_TRACK.md](docs/tracks/FLAME_3D_TRACK.md) | 3D FLAME 配准/标注、切口工作台 FLAME 资产回退/topology gate 与许可边界 |
+| [RSTL_3DMM_PRIOR.md](docs/tracks/RSTL_3DMM_PRIOR.md) | Borges RSTL 来源、3DMM 拓扑先验 manifest、与 #2/#13/2D-first 路线的衔接 |
+| [INCISION_WORKFLOW.md](docs/tracks/INCISION_WORKFLOW.md) | 浏览器本地确定性切口 workflow、tool trace、worker 回退和医生审阅边界 |
+| [rstl_3dmm_prior_manifest.json](assets/rstl_3dmm_prior_manifest.json) | MediaPipe/3DMM RSTL 先验资产 manifest；高密度方向场大 JSON 由远端资产或本地生成提供（历史实现见 PR #88，`validated:false`） |
 | **质量 / 运维** — `docs/quality/` | |
 | [CROSS_LANG_PARITY.md](docs/quality/CROSS_LANG_PARITY.md) | Python ⇄ Web TypeScript ⇄ 金标逐点对拍不变式与金标重生成 |
 | [OBSERVABILITY.md](docs/quality/OBSERVABILITY.md) | 浏览器诊断 JSON、结构化事件字段、计数器与运行时指标（issue #51）|
 | [CI_CD_VERCEL.md](docs/quality/CI_CD_VERCEL.md) | Vercel 设置、Preview 访问策略、branch protection 与排障 |
-| [ANNOTATION_QA.md](docs/quality/ANNOTATION_QA.md) | 3D 标注贴面平滑、绘制反馈与导出一致性验收清单（issue #84） |
-| [VALIDATION.md](docs/quality/VALIDATION.md) | 临床验证数据集、Stage 1/2 指标、失败分类、人工评审表（issue #20）|
+| [LABELS.md](docs/onboarding/LABELS.md) | issue / PR 标签规范 |
 | **临床 / 合规** — `docs/clinical/` | |
+| [VALIDATION.md](docs/quality/VALIDATION.md) | 临床验证数据集、Stage 1/2 指标、失败分类、人工评审表（issue #20）|
+| [PRODUCT_BOUNDARIES.md](docs/clinical/PRODUCT_BOUNDARIES.md) | 当前产品承诺边界、明确暂缓项与未来重启条件 |
 | [PRIVACY_AND_AUDIT.md](docs/clinical/PRIVACY_AND_AUDIT.md) | 敏感数据边界、禁止提交项、导出约束、审计字段（issue #21）|
-| [INCISION_PRIVACY_AUDIT.md](docs/clinical/INCISION_PRIVACY_AUDIT.md) | 切口流程专项边界：浏览器 ↔ 用户自备 LLM provider 的两方数据边界（issue #111）|
-| [PRODUCT_BOUNDARIES.md](docs/clinical/PRODUCT_BOUNDARIES.md) | 近期聚焦表皮 RSTL 与病灶处理，暂缓肌肉骨骼实时孪生（issue #87） |
-| [WRINKLE_LESION_CUES.md](docs/clinical/WRINKLE_LESION_CUES.md) | 自然皱襞、皱纹与皮表肿物边界辅助线索调研和合成原型（issue #22）|
+| [WRINKLE_LESION_CUES.md](docs/clinical/WRINKLE_LESION_CUES.md) | 辅助线索、Python texture warp、浏览器个性化边界与 checkpoint 许可（issue #22）|
 | **规划** — `docs/planning/` | |
-| [TODO.md](docs/planning/TODO.md) | 路线图与待办（与 GitHub Issues 同步）|
+| [TODO.md](docs/planning/TODO.md) | open issues 路线图（自动和 GitHub 同步）|
 
 > 医学声明、图谱状态与临床局限见 README [已知局限与医学声明](#已知局限与医学声明)。
 

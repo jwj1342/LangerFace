@@ -6,6 +6,7 @@
 {
   "system": "rstl",
   "version": "0.1",
+  "atlasVersion": "8.1.67",
   "topologyId": "mediapipe-468",
   "topologyVersion": "mediapipe-canonical-468-v1",
   "provenance": "...",
@@ -31,6 +32,7 @@ class AtlasLine:
     name: str
     region: str
     points: np.ndarray  # (N, 3) = [tri_index(float), u, v]
+    disable_runtime_expansion: bool = False
 
     def tris(self) -> np.ndarray:
         return self.points[:, 0].astype(np.int64)
@@ -47,6 +49,7 @@ class Atlas:
     system: str
     lines: list[AtlasLine] = field(default_factory=list)
     version: str = "0.1"
+    atlas_version: str | None = None
     topology_id: str = TOPOLOGY_ID
     topology_version: str = TOPOLOGY_VERSION
     provenance: str = ""
@@ -62,6 +65,7 @@ class Atlas:
                 name=ln["name"],
                 region=ln.get("region", ""),
                 points=np.asarray(ln["points"], dtype=np.float64).reshape(-1, 3),
+                disable_runtime_expansion=ln.get("disableRuntimeExpansion") is True,
             )
             for ln in data["lines"]
         ]
@@ -69,6 +73,7 @@ class Atlas:
             system=data["system"],
             lines=lines,
             version=data.get("version", "0.1"),
+            atlas_version=data.get("atlasVersion"),
             topology_id=data.get("topologyId", TOPOLOGY_ID),
             topology_version=data.get("topologyVersion", TOPOLOGY_VERSION),
             provenance=data.get("provenance", ""),
@@ -79,6 +84,7 @@ class Atlas:
         data = {
             "system": self.system,
             "version": self.version,
+            **({"atlasVersion": self.atlas_version} if self.atlas_version else {}),
             "topologyId": self.topology_id,
             "topologyVersion": self.topology_version,
             "provenance": self.provenance,
@@ -87,6 +93,11 @@ class Atlas:
                 {
                     "name": ln.name,
                     "region": ln.region,
+                    **(
+                        {"disableRuntimeExpansion": True}
+                        if ln.disable_runtime_expansion
+                        else {}
+                    ),
                     "points": [[int(round(p[0])), round(float(p[1]), 6), round(float(p[2]), 6)]
                                for p in ln.points],
                 }

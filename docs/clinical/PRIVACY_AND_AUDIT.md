@@ -63,7 +63,7 @@
     "appVersion": "0.2.0",
     "topologyId": "mediapipe-468",
     "atlasSystem": "rstl",
-    "atlasVersion": "0.2"
+    "atlasVersion": "8.1.67"
   },
   "objectRef": {
     "type": "atlas|line|tumor|incision_candidate|diagnostics",
@@ -75,6 +75,9 @@
   }
 }
 ```
+
+`atlasVersion` 是内容发布版本；图谱 JSON 顶层 `version` 是格式契约版本。正式 RSTL 的审阅记录
+必须写 `8.1.67`（或实际内容版本），不能用 `0.2` 代替。
 
 ## 医生覆盖记录
 
@@ -103,7 +106,7 @@
 
 ## 导出前自动审计
 
-React 切口工作台 `/app/incision` 在导出审阅 JSON 或肿物输入 JSON 前会先运行 `browser-export-privacy-preflight/v0.1`，阻断 raw media 标记、未脱敏 secret、直接身份字段 / 电话邮箱模式、疑似嵌入媒体 payload，以及辅助线索越界参与几何或 Agent prompt。这个浏览器预检用于减少误导出；正式分享前仍建议运行离线脚本。
+React 切口工作台 `/app/incision` 在导出审阅 JSON 或肿物输入 JSON 前会先运行 `browser-export-privacy-preflight/v0.1`，阻断 raw media 标记、未脱敏 secret、直接身份字段 / 电话邮箱模式、疑似嵌入媒体 payload，以及辅助线索越界参与几何。这个浏览器预检用于减少误导出；正式分享前仍建议运行离线脚本。
 
 分享审阅记录、肿物输入或诊断 JSON 前，可运行：
 
@@ -119,10 +122,15 @@ cd web && node ../tools/test_incision_tools.ts
 - `patient_name`、`mrn`、`phone`、`email`、`date_of_birth` 等身份字段被填充。
 - 自由文本中出现 email 或电话样式字符串。
 - 媒体相关字段中疑似嵌入 base64 图像 / 视频 / DICOM payload。
-- `secondary_cues.used_for_geometry` 或 `secondary_cues.used_for_agent_prompt` 被置为 `true`。
+- `secondary_cues.used_for_geometry` 被置为 `true`。
 
-辅助线索当前只能作为医生审阅时的只读证据进入导出，不得自动改变肿物边界、候选切口或 LLM Agent 的 prompt；若后续要让受控 CV/LLM 模型参与几何生成，必须重新定义出域、访问控制和临床验证流程。
+辅助线索当前只能作为医生审阅时的只读证据进入导出，不得自动改变肿物边界或候选切口。若未来重新引入任何远程模型，必须作为新的架构决策重新定义出域、访问控制和临床验证流程。
 
-肿物输入和审阅记录的结构化门禁已经迁到浏览器 workflow：导出中会保存 `tumor_quality`、`tumor_boundary_summary`、`sensitive_structure_inspection`、`agent_trace_gate`、`agent_react_plan`、`agent_execution_events` 和 `candidate_comparison`。前端 review gate 会检查 `approved_for_discussion` 是否有审阅人、高风险 guardrail 是否有备注或覆盖理由、`agent_trace_gate` 是否通过，以及 `live_overlay_ready` 是否只在这些条件同时满足时为 `true`。它只检查导出状态自洽，不替代医生签名或病例系统权限控制。
+肿物输入和审阅记录的结构化门禁已经迁到浏览器 workflow：导出中会保存 `tumor_quality`、`tumor_boundary_summary`、`sensitive_structure_inspection`、`workflow_trace_gate`、`workflow_plan_audit`、`workflow_execution_events` 和 `candidate_comparison`。前端 review gate 会检查 `approved_for_discussion` 是否有审阅人、高风险 guardrail 是否有备注或覆盖理由、`workflow_trace_gate` 是否通过，以及 `live_overlay_ready` 是否只在这些条件同时满足时为 `true`。它只检查导出状态自洽，不替代医生签名或病例系统权限控制。
+
+workflow-only 审阅记录使用 `incision-review-record/v0.4`，导出容器使用
+`incision-review-export/v0.4`。Agentic 删除前的 `v0.3` 记录不得直接当作 `v0.4` 使用；
+`tools/evaluate_stage2_validation.py` 会按源 schema 显式映射旧 `agent_*` 字段，并保留旧 provider/LLM
+字段供隐私审计，同时在汇总里分开报告版本。该兼容读取不恢复任何远程调用能力。
 
 该脚本只是工程守门，不能替代机构合规审查。
