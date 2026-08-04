@@ -80,6 +80,8 @@ assert.ok(html.includes('id="approveCandidateBtn"'), "workbench exposes candidat
 assert.ok(html.includes('id="rejectCandidateBtn"'), "workbench exposes candidate rejection action");
 assert.ok(html.includes('id="candidateWidth"'), "workbench exposes fusiform width and ratio metric");
 assert.ok(html.includes('id="candidateTipAngle"'), "workbench exposes fusiform tip angle metric");
+assert.ok(html.includes('id="candidateRstlDeviation"'), "workbench exposes RSTL direction-deviation metric");
+assert.ok(html.includes('label="RSTL 角度偏差"'), "workbench labels RSTL direction deviation distinctly from tip-angle error");
 assert.ok(html.includes('id="tipAngleDeg"'), "workbench exposes clinician-adjustable fusiform tip angle");
 assert.ok(html.includes('id="tipAngleWrap"'), "workbench scopes the tip-angle control to fusiform candidates");
 assert.ok(js.includes("exportTumorJson"), "workbench implements tumor JSON export");
@@ -131,6 +133,9 @@ assert.ok(js.includes("secondary_cues"), "review exports include secondary cue s
 assert.ok(js.includes("used_for_geometry: false"), "secondary cues never drive geometry");
 assert.ok(js.includes("辅助线索仅随审阅导出，不参与几何"), "privacy copy keeps secondary cues out of geometry");
 assert.ok(js.includes("tip_angle_error_deg"), "workbench renders fusiform tip angle error");
+assert.ok(js.includes("rstl_deviation_deg"), "workbench renders the candidate RSTL direction deviation");
+assert.ok(js.includes('typeof rstlDeviation === "number"'), "missing or null RSTL deviation is not rendered as a false 0°");
+assert.ok(incisionSnapshotsService.includes("rstlDeviation"), "controller snapshot preserves the visible RSTL direction deviation");
 assert.ok(js.includes("incision-review-record/v0.4"), "review records use explicit review workflow schema");
 assert.ok(js.includes("approved_for_discussion"), "review records support clinician approval");
 assert.ok(js.includes("rejected_by_clinician"), "review records support clinician rejection");
