@@ -11,7 +11,7 @@ test("public workflow entrypoints share the blue clinical action theme", async (
   await expect(dashboardEyebrow).toHaveClass(/text-blue-300/);
 
   await page.goto("/personalized", { waitUntil: "domcontentloaded" });
-  await expect(page.locator("body")).toHaveCSS("background-color", DARK_PAGE);
+  await expect(page.locator(".personalized-page")).toHaveCSS("background-color", DARK_PAGE);
   const capturePrimary = page.locator("#startBtn");
   await expect(capturePrimary).toHaveCSS("background-color", CLINICAL_BLUE);
   expect((await measureContrast(capturePrimary)).ratio).toBeGreaterThanOrEqual(4.5);
@@ -23,7 +23,7 @@ test("public workflow entrypoints share the blue clinical action theme", async (
   expect((await measureContrast(livePrimary)).ratio).toBeGreaterThanOrEqual(4.5);
 
   await page.goto("/v6-review", { waitUntil: "domcontentloaded" });
-  await expect(page.locator("body")).toHaveCSS("background-color", DARK_PAGE);
+  await expect(page.locator(".v6-review-page")).toHaveCSS("background-color", DARK_PAGE);
   const reviewPrimary = page.locator(".button-primary").first();
   await expect(reviewPrimary).toHaveCSS("background-color", CLINICAL_BLUE);
   expect((await measureContrast(reviewPrimary)).ratio).toBeGreaterThanOrEqual(4.5);
