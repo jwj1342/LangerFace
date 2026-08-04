@@ -93,9 +93,12 @@ python tools/atlas_clinical_review.py finalize \
 
 finalize 会拒绝源哈希变化、缺行、拒绝/待定结论、缺少评分/署名/来源、无时区时间，
 也拒绝直接覆盖源 atlas。成功输出包含 `clinicalValidation` 审计字段和更新后的
-`provenance`，把签署人、角色、时间和医学来源留作事后审计。CLI 只能校验这些字段
-存在且格式有效，**不能验证运行者身份、执业资格或其是否获授权**；
-`--attest-clinical-review` 记录的是运行者作出的显式声明，不是技术身份认证。
+`provenance`：`sourceAtlasSha256` 绑定源 atlas，`reviewPacketSha256` 绑定完成审阅并
+规范化后的 JSON packet；提供 `--review-csv` 时，`rawReviewCsvSha256` 另行绑定原始
+CSV 字节。三类来源不会复用同一字段。CLI 只能校验这些字段存在且格式有效，
+**不能验证运行者身份、执业资格或其是否获授权**；`--attest-clinical-review` 会在核心
+finalize 门禁中强制校验，并把固定声明及 `affirmed:true` 持久化。它记录的是运行者
+作出的显式声明，不是技术身份认证。
 临床责任由实际运行并签署的人承担。只有审阅输出 diff、同步 `assets/` 与
 `web/assets/` 并通过完整 CI 后，才可由维护 PR 替换正式资产；工程人员不得代替
 医生作出该声明。

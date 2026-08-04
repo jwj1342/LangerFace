@@ -38,6 +38,10 @@ from typing import Any
 PACKET_SCHEMA = "atlas-clinical-review-packet/v0.1"
 VALIDATION_SCHEMA = "atlas-clinical-validation/v0.1"
 ACCEPTED_DECISION = "accept"
+CLINICAL_REVIEW_ATTESTATION = (
+    "I attest that every line in this review packet was clinically reviewed against the cited "
+    "source and that the recorded decisions and scores are complete and accurate."
+)
 CSV_FIELDS = [
     "review_id",
     "line_name",
@@ -81,6 +85,11 @@ def _source_sha256(path: Path) -> str:
 
 def _line_sha256(line: dict[str, Any]) -> str:
     payload = json.dumps(line, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return _sha256_bytes(payload.encode("utf-8"))
+
+
+def _canonical_json_sha256(data: dict[str, Any]) -> str:
+    payload = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return _sha256_bytes(payload.encode("utf-8"))
 
 
@@ -269,6 +278,8 @@ def finalize_reviewed_atlas(
     reviewer_role: str,
     reviewed_at: str,
     source_reference: str,
+    attestation: bool,
+    review_csv_path: Path | None = None,
 ) -> dict[str, Any]:
     atlas_path = atlas_path.resolve()
     atlas = _load_json(atlas_path)
@@ -311,6 +322,8 @@ def finalize_reviewed_atlas(
         raise ValueError("reviewer_role is required")
     if not global_source:
         raise ValueError("source_reference is required")
+    if attestation is not True:
+        raise ValueError("clinical review attestation must be explicitly affirmed")
 
     reviewed_items = []
     for line in lines:
@@ -318,6 +331,14 @@ def finalize_reviewed_atlas(
         item = items_by_id.get(review_id)
         if item is None:
             raise ValueError(f"missing review for {review_id}")
+        expected_item = {
+            "line_name": line["name"],
+            "region": line["region"],
+            "point_count": len(line["points"]),
+        }
+        for field, expected in expected_item.items():
+            if item.get(field) != expected:
+                raise ValueError(f"{review_id}: {field} does not match the atlas")
         if item.get("line_sha256") != _line_sha256(line):
             raise ValueError(f"{review_id}: line geometry changed after packet generation")
         if str(item.get("decision") or "").strip().lower() != ACCEPTED_DECISION:
@@ -349,6 +370,28 @@ def finalize_reviewed_atlas(
             }
         )
 
+    normalized_packet = copy.deepcopy(packet)
+    normalized_packet["review_status"] = "completed_clinical_line_review"
+    normalized_items = {item["review_id"]: item for item in reviewed_items}
+    for item in normalized_packet["items"]:
+        normalized = normalized_items[str(item["review_id"])]
+        item.update(
+            {
+                "decision": ACCEPTED_DECISION,
+                "direction_score_1_to_5": normalized["direction_score_1_to_5"],
+                "position_score_1_to_5": normalized["position_score_1_to_5"],
+                "reviewer": normalized["reviewer"],
+                "reviewer_role": normalized["reviewer_role"],
+                "reviewed_at": normalized["reviewed_at"],
+                "source_reference": normalized["source_reference"],
+                "notes": str(item.get("notes") or "").strip(),
+            }
+        )
+    review_packet_sha256 = _canonical_json_sha256(normalized_packet)
+    raw_review_csv_sha256 = None
+    if review_csv_path is not None:
+        raw_review_csv_sha256 = _sha256_bytes(review_csv_path.resolve().read_bytes())
+
     finalized = copy.deepcopy(atlas)
     finalized["validated"] = True
     finalized["clinicalValidation"] = {
@@ -358,17 +401,26 @@ def finalize_reviewed_atlas(
         "reviewerRole": global_role,
         "reviewedAt": global_reviewed_at,
         "sourceReference": global_source,
+        "attestation": {
+            "affirmed": True,
+            "statement": CLINICAL_REVIEW_ATTESTATION,
+        },
         "sourceAtlasSha256": source["sha256"],
+        "reviewPacketSha256": review_packet_sha256,
         "packetGeneratedAt": packet.get("generated_at"),
         "lineCount": len(lines),
         "pointCount": expected_source["point_count"],
         "reviewedLineCount": len(reviewed_items),
         "foreheadLineCount": packet.get("summary", {}).get("forehead_line_count", 0),
     }
+    if raw_review_csv_sha256 is not None:
+        finalized["clinicalValidation"]["rawReviewCsvSha256"] = raw_review_csv_sha256
     finalized["provenance"] = (
         f"{atlas['provenance']} Clinically reviewed by {global_reviewer} "
         f"({global_role}) at {global_reviewed_at}; source={global_source}; "
-        f"packet_sha256={source['sha256']}."
+        f"source_atlas_sha256={source['sha256']}; "
+        f"review_packet_sha256={review_packet_sha256}"
+        f"{f'; raw_review_csv_sha256={raw_review_csv_sha256}' if raw_review_csv_sha256 else ''}."
     ).strip()
     return finalized
 
@@ -424,6 +476,8 @@ def main(argv: list[str] | None = None) -> int:
         reviewer_role=args.reviewer_role,
         reviewed_at=args.reviewed_at,
         source_reference=args.source_reference,
+        attestation=args.attest_clinical_review,
+        review_csv_path=args.review_csv,
     )
     _write_json(args.output, finalized)
     print(f"[ok] clinically reviewed candidate -> {args.output}")

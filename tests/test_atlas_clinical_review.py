@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import json
 
 import pytest
@@ -95,11 +96,21 @@ def test_csv_roundtrip_and_finalize_requires_every_line(tmp_path):
         reviewer_role="plastic-surgeon",
         reviewed_at="2026-07-29T12:00:00-06:00",
         source_reference="controlled-reference-set-v1",
+        attestation=True,
+        review_csv_path=csv_path,
     )
     assert finalized["validated"] is True
     assert finalized["clinicalValidation"]["schemaVersion"] == VALIDATION_SCHEMA
     assert finalized["clinicalValidation"]["reviewedLineCount"] == 2
     assert finalized["clinicalValidation"]["foreheadLineCount"] == 1
+    assert finalized["clinicalValidation"]["attestation"]["affirmed"] is True
+    assert finalized["clinicalValidation"]["rawReviewCsvSha256"] == hashlib.sha256(
+        csv_path.read_bytes()
+    ).hexdigest()
+    assert (
+        finalized["clinicalValidation"]["sourceAtlasSha256"]
+        != finalized["clinicalValidation"]["reviewPacketSha256"]
+    )
     assert "clinician-01" in finalized["provenance"]
 
 
@@ -114,6 +125,7 @@ def test_finalize_rejects_pending_or_changed_source(tmp_path):
             reviewer_role="plastic-surgeon",
             reviewed_at="2026-07-29T12:00:00-06:00",
             source_reference="controlled-reference-set-v1",
+            attestation=True,
         )
 
     _accept_all(packet)
@@ -128,4 +140,105 @@ def test_finalize_rejects_pending_or_changed_source(tmp_path):
             reviewer_role="plastic-surgeon",
             reviewed_at="2026-07-29T12:00:00-06:00",
             source_reference="controlled-reference-set-v1",
+            attestation=True,
         )
+
+
+def test_finalize_requires_and_persists_attestation(tmp_path):
+    atlas_path = _write_atlas(tmp_path)
+    packet = build_review_packet(atlas_path)
+    _accept_all(packet)
+
+    with pytest.raises(TypeError, match="attestation"):
+        finalize_reviewed_atlas(
+            atlas_path,
+            packet,
+            reviewer="clinician-01",
+            reviewer_role="plastic-surgeon",
+            reviewed_at="2026-07-29T12:00:00-06:00",
+            source_reference="controlled-reference-set-v1",
+        )
+
+    with pytest.raises(ValueError, match="attestation must be explicitly affirmed"):
+        finalize_reviewed_atlas(
+            atlas_path,
+            packet,
+            reviewer="clinician-01",
+            reviewer_role="plastic-surgeon",
+            reviewed_at="2026-07-29T12:00:00-06:00",
+            source_reference="controlled-reference-set-v1",
+            attestation=False,
+        )
+
+    finalized = finalize_reviewed_atlas(
+        atlas_path,
+        packet,
+        reviewer="clinician-01",
+        reviewer_role="plastic-surgeon",
+        reviewed_at="2026-07-29T12:00:00-06:00",
+        source_reference="controlled-reference-set-v1",
+        attestation=True,
+    )
+    assert finalized["clinicalValidation"]["attestation"]["affirmed"] is True
+    assert "every line" in finalized["clinicalValidation"]["attestation"]["statement"]
+
+
+def test_review_packet_hash_changes_with_scores_and_is_not_source_hash(tmp_path):
+    atlas_path = _write_atlas(tmp_path)
+    packet = build_review_packet(atlas_path)
+    _accept_all(packet)
+
+    first = finalize_reviewed_atlas(
+        atlas_path,
+        packet,
+        reviewer="clinician-01",
+        reviewer_role="plastic-surgeon",
+        reviewed_at="2026-07-29T12:00:00-06:00",
+        source_reference="controlled-reference-set-v1",
+        attestation=True,
+    )
+    packet["items"][0]["direction_score_1_to_5"] = "4"
+    second = finalize_reviewed_atlas(
+        atlas_path,
+        packet,
+        reviewer="clinician-01",
+        reviewer_role="plastic-surgeon",
+        reviewed_at="2026-07-29T12:00:00-06:00",
+        source_reference="controlled-reference-set-v1",
+        attestation=True,
+    )
+
+    first_validation = first["clinicalValidation"]
+    second_validation = second["clinicalValidation"]
+    assert first_validation["reviewPacketSha256"] != second_validation["reviewPacketSha256"]
+    assert first_validation["sourceAtlasSha256"] == second_validation["sourceAtlasSha256"]
+    assert first_validation["sourceAtlasSha256"] != first_validation["reviewPacketSha256"]
+    assert "; packet_sha256=" not in first["provenance"]
+
+
+def test_finalize_rejects_tampered_or_incomplete_packet(tmp_path):
+    atlas_path = _write_atlas(tmp_path)
+    packet = build_review_packet(atlas_path)
+    _accept_all(packet)
+    packet["items"][0].pop("region")
+
+    with pytest.raises(ValueError, match="region does not match"):
+        finalize_reviewed_atlas(
+            atlas_path,
+            packet,
+            reviewer="clinician-01",
+            reviewer_role="plastic-surgeon",
+            reviewed_at="2026-07-29T12:00:00-06:00",
+            source_reference="controlled-reference-set-v1",
+            attestation=True,
+        )
+
+
+def test_overlay_rejects_csv_with_missing_required_field(tmp_path):
+    atlas_path = _write_atlas(tmp_path)
+    packet = build_review_packet(atlas_path)
+    csv_path = tmp_path / "incomplete.csv"
+    csv_path.write_text("review_id,decision\nrstl:forehead-1,accept\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="missing CSV fields"):
+        overlay_review_csv(packet, csv_path)
