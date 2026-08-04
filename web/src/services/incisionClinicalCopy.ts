@@ -105,6 +105,7 @@ const GUARDRAIL_LABELS: Record<string, string> = {
 
 const DIRECTION_SOURCE_LABELS: Record<string, string> = {
   rstl_atlas_weighted_nearest: "局部 RSTL 图谱",
+  personalized_rstl_atlas_weighted_nearest: "个体化 RSTL（YOLO/V6 皱纹证据）",
   rstl_atlas_empty: "RSTL 图谱无可用支持点",
   rstl_atlas_no_valid_direction_support: "RSTL 图谱记录无有效方向支持",
 };

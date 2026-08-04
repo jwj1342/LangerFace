@@ -59,10 +59,10 @@ export interface IncisionHeadAssetState {
   triangleCount: number;
   atlasTopologyId: string | null;
   atlasLineCount: number;
-  mode: "flame_preview" | "mediapipe_fallback" | "unknown";
+  mode: "mediapipe_personalized" | "mediapipe_standard" | "unknown";
+  atlasProvenance: string | null;
   statusLabel: string;
   warnings: string[];
-  liveOverlaySupported: boolean;
 }
 
 export interface IncisionReviewState {

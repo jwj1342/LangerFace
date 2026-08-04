@@ -113,7 +113,7 @@
 | 某点无证据或落在禁区 | 该点标 `prior` / `occluded`，保持标准线位置 |
 | 整条线证据不足（`evidenceOk=false`） | 整条线回退先验，只保留遮挡标记 |
 | `sessionStorage` 不可用 | 预览图谱暂存失败并提示，不静默丢数据 |
-| 预览图谱解析失败 | 实时端返回 `null` 并回退内置图谱，绝不因坏数据中断启动 |
+| 预览图谱解析或拓扑校验失败 | 切口工作台拒绝该草案，明确显示“标准 RSTL 降级模式”，绝不因坏数据中断启动 |
 
 ## 5. 隐私边界
 
@@ -127,15 +127,22 @@
 - 用户主动点下载导出的 JSON / 视频由用户自己保管；不要把它们提交进仓库，见
   [PRIVACY_AND_AUDIT.md](../clinical/PRIVACY_AND_AUDIT.md)。
 
-## 6. 图谱契约
+## 6. 图谱契约与切口交接
 
-个性化输出仍是标准 langerface 图谱信封，因此能被实时页直接消费：
+个性化输出仍是标准 langerface 图谱信封。完成采集后，主路径是
+`/personalized` → `/app/incision` → 医生审阅通过后 `/app/live`：
 
 - `system: "rstl"`、`topologyId: "mediapipe-468"`、`topologyVersion: "mediapipe-canonical-468-v1"`，
   每点 `[tri, u, v]`（`w = 1-u-v`）。
 - `validated: false` 恒定：个性化只改几何、不改校验状态，不代表任何临床复核结论。
-- 注入实时页时仍走 `validateAtlas()` 的拓扑身份校验：拓扑不匹配的图谱不会被静默渲染（#65 守卫）。
-- FLAME（`topologyId: "flame-2023"`）图谱与本流程**互不通用**，不能交叉注入。
+- `/personalized` 把草案暂存到 `sessionStorage`；`/app/incision` 用 `takePreviewAtlas()` 读取即删，校验
+  `system`、`topologyId` 和 `topologyVersion` 后，将它作为 `query_rstl_direction` 的首选方向图谱。
+- 如果没有个性化草案、草案损坏、来源不属于 YOLO/V6 个性化流程，或拓扑不匹配，切口工作台才回退
+  内置标准 RSTL，并在 UI、snapshot 和审阅导出中保留降级提示。
+- 原始 YOLO mask 不直接成为切口线；真正进入几何的是经过 V6 位移上限、方向一致性、皮肤域和禁区约束后
+  形成的个体化 RSTL 图谱。它仍是 `validated:false`，候选仍需 guardrails 和医生确认。
+- 切口设计固定使用 `mediapipe-468` 面部表面，不加载、转换或依赖 FLAME。FLAME 图谱不能进入该链路。
+- 审阅通过的候选进入实时页时仍走拓扑身份校验；不匹配的图谱或 overlay 不会被静默渲染（#65 守卫）。
 
 ## 7. 相关文档
 

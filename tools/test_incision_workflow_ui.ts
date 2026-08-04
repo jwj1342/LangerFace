@@ -26,6 +26,7 @@ const js = [
 ].join("\n");
 const clinicalCopy = fs.readFileSync("src/services/incisionClinicalCopy.ts", "utf8");
 const reviewPolicy = fs.readFileSync("src/services/incisionReviewPolicy.ts", "utf8");
+const atlasSource = fs.readFileSync("src/services/incisionAtlasSource.ts", "utf8");
 const tools = [
   fs.readFileSync("src/services/incisionToolRules.ts", "utf8"),
   fs.readFileSync("src/services/incisionToolCore.ts", "utf8"),
@@ -83,7 +84,7 @@ assert.ok(!html.includes('id="traceList"'), "workbench keeps workflow trace deta
 assert.ok(!html.includes("工具调用轨迹"), "workbench does not render a sidebar trace dump");
 assert.ok(html.includes('id="workflowComparison"'), "workbench exposes browser workflow candidate comparison");
 assert.ok(html.includes("snapshot?.headAsset.statusLabel"), "workbench stage shows the active head asset status");
-assert.ok(html.includes('label="头模"'), "workbench state panel exposes the active head asset");
+assert.ok(html.includes('label="RSTL 来源"'), "workbench state panel exposes the active RSTL source");
 assert.ok(html.includes('label="模型版本"'), "workbench state panel exposes the active model version without topology jargon");
 assert.ok(html.includes('id="approveCandidateBtn"'), "workbench exposes candidate approval action");
 assert.ok(html.includes('id="rejectCandidateBtn"'), "workbench exposes candidate rejection action");
@@ -124,9 +125,14 @@ assert.ok(tools.includes("units_per_mm"), "tumor boundary summary exports coordi
 assert.ok(tools.includes("summary_axis"), "tumor boundary summary exports summary axis for audit");
 assert.ok(tools.includes("summary_normal"), "tumor boundary summary exports summary normal for audit");
 assert.ok(js.includes("summarizeTumorInputQuality"), "workbench renders tumor input quality summaries");
-assert.ok(js.includes("loadPreferredIncisionAssets"), "workbench prefers FLAME head assets before falling back to MediaPipe");
-assert.ok(js.includes("mediaPipeAtlasToFlamePreviewAtlas"), "workbench converts MediaPipe RSTL draft lines before rendering on FLAME");
-assert.ok(reviewPolicy.includes("active_head_topology_not_supported_by_mediapipe_live_overlay"), "workbench blocks FLAME candidates from direct MediaPipe live overlay");
+assert.ok(js.includes("loadMediaPipeIncisionAssets"), "workbench uses a fixed MediaPipe incision surface");
+assert.ok(js.includes("dataSource.takePreviewAtlas()"), "workbench consumes the staged personalized RSTL atlas");
+assert.ok(js.includes("resolveIncisionAtlas"), "workbench resolves personalized RSTL before the standard fallback");
+assert.ok(atlasSource.includes('mode: "mediapipe_personalized"'), "personalized MediaPipe RSTL is the primary incision input");
+assert.ok(atlasSource.includes('mode: "mediapipe_standard"'), "standard MediaPipe RSTL remains an explicit fallback");
+assert.ok(!js.includes("mediaPipeAtlasToFlamePreviewAtlas"), "incision runtime does not convert RSTL onto FLAME");
+assert.ok(!js.includes("loadFlameBasisAsset"), "incision runtime does not load FLAME assets");
+assert.ok(!reviewPolicy.includes("active_head_topology_not_supported_by_mediapipe_live_overlay"), "review policy has no obsolete FLAME overlay branch");
 assert.ok(incisionReviewRecordsService.includes("head_asset: headAsset"), "review records include head asset provenance");
 assert.ok(js.includes("classifyRegion(S.verts[S.lesion]"), "workbench derives anatomy preview from selected tumor center");
 assert.ok(js.includes("当前点位分区"), "workbench labels live anatomy preview in Chinese");

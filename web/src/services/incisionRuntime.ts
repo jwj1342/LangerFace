@@ -60,9 +60,9 @@ import {
   numericControlValue,
 } from "./tumorInput";
 import { dataSource } from "./dataSource";
-import type { AtlasPayload, HeadMeshPayload } from "./dataSource";
+import type { HeadMeshPayload } from "./dataSource";
 import { auditExportPayload } from "./exportPrivacy";
-import { loadFlameBasisAsset, mediaPipeAtlasToFlamePreviewAtlas } from "./flameHeadAssets";
+import { resolveIncisionAtlas, type IncisionAtlasMode } from "./incisionAtlasSource";
 import {
   buildReviewExportPayload,
   buildTumorExportPayload,
@@ -171,14 +171,14 @@ function currentPrivacyAuditSnapshot() {
 function currentAssetLoadingSnapshot() {
   return buildIncisionAssetLoadingSnapshot({
     visible: !els.assetLoading?.classList?.contains("hidden"),
-    text: els.assetLoadingText?.textContent || "准备下载标准三维面部模型、张力线图谱和切口规划资产。",
+    text: els.assetLoadingText?.textContent || "准备下载 MediaPipe 面部表面、个体化张力线和切口规划资产。",
   });
 }
 
 function currentHeadAssetSnapshot(): IncisionHeadAssetState {
   return S.headAsset || {
     id: "pending",
-    label: "头模资产加载中",
+    label: "RSTL 资产加载中",
     topologyId: "unknown",
     topologyVersion: "unknown",
     vertexCount: 0,
@@ -186,9 +186,9 @@ function currentHeadAssetSnapshot(): IncisionHeadAssetState {
     atlasTopologyId: null,
     atlasLineCount: 0,
     mode: "unknown",
+    atlasProvenance: null,
     statusLabel: "资产加载中",
     warnings: [],
-    liveOverlaySupported: false,
   };
 }
 
@@ -323,16 +323,16 @@ function headAssetSnapshot({
   head,
   atlas,
   mode,
+  atlasProvenance,
   statusLabel,
   warnings,
-  liveOverlaySupported,
 }: {
   head: HeadMeshPayload;
   atlas: DynamicRecord;
-  mode: IncisionHeadAssetState["mode"];
+  mode: IncisionAtlasMode;
+  atlasProvenance: string;
   statusLabel: string;
   warnings: string[];
-  liveOverlaySupported: boolean;
 }): IncisionHeadAssetState {
   return {
     id: head.id,
@@ -344,69 +344,38 @@ function headAssetSnapshot({
     atlasTopologyId: typeof atlas?.topologyId === "string" ? atlas.topologyId : null,
     atlasLineCount: Array.isArray(atlas?.lines) ? atlas.lines.length : 0,
     mode,
+    atlasProvenance,
     statusLabel,
     warnings,
-    liveOverlaySupported,
   };
 }
 
-async function loadMediaPipeIncisionAssets(atlas?: AtlasPayload, warnings: string[] = []) {
-  const [head, resolvedAtlas] = await Promise.all([
+async function loadMediaPipeIncisionAssets() {
+  const [head, standardAtlas] = await Promise.all([
     dataSource.getHeadMesh("mediapipe-468", { onProgress: updateAssetLoading }),
-    atlas ? Promise.resolve(atlas) : dataSource.loadAtlas("rstl", { onProgress: updateAssetLoading }),
+    dataSource.loadAtlas("rstl", { onProgress: updateAssetLoading }),
   ]);
+  const resolved = resolveIncisionAtlas({
+    personalizedAtlas: dataSource.takePreviewAtlas(),
+    standardAtlas,
+    triangleCount: head.triangles.length,
+  });
   return {
     head,
-    atlas: resolvedAtlas as DynamicRecord,
+    atlas: resolved.atlas as DynamicRecord,
     headAsset: headAssetSnapshot({
       head,
-      atlas: resolvedAtlas as DynamicRecord,
-      mode: "mediapipe_fallback",
-      statusLabel: warnings.length
-        ? "标准三维模型回退 · 高精度头模资产未就绪"
-        : "标准三维面部模型",
-      warnings,
-      liveOverlaySupported: true,
+      atlas: resolved.atlas as DynamicRecord,
+      mode: resolved.mode,
+      atlasProvenance: resolved.provenance,
+      statusLabel: resolved.statusLabel,
+      warnings: resolved.warnings,
     }),
   };
 }
 
-async function loadPreferredIncisionAssets() {
-  const rstlAtlas = await dataSource.loadAtlas("rstl", { onProgress: updateAssetLoading });
-  const warnings: string[] = [];
-  try {
-    const [mediaPipeHead, flameHead, basis] = await Promise.all([
-      dataSource.getHeadMesh("mediapipe-468", { onProgress: updateAssetLoading }),
-      dataSource.getHeadMesh("flame-2023", { onProgress: updateAssetLoading }),
-      loadFlameBasisAsset({ label: "高精度头模基底", onProgress: updateAssetLoading }),
-    ]);
-    const flameAtlas = mediaPipeAtlasToFlamePreviewAtlas({
-      atlas: rstlAtlas,
-      mediaPipeHead,
-      flameHead,
-      basis,
-    });
-    warnings.push("当前高精度头模上的 RSTL 线为研究预览；发送到实时叠加前必须完成单独映射复核。");
-    return {
-      head: flameHead,
-      atlas: flameAtlas as DynamicRecord,
-      headAsset: headAssetSnapshot({
-        head: flameHead,
-        atlas: flameAtlas as DynamicRecord,
-        mode: "flame_preview",
-        statusLabel: "高精度三维头模 · RSTL 预览",
-        warnings,
-        liveOverlaySupported: false,
-      }),
-    };
-  } catch (error) {
-    warnings.push(`高精度头模资产加载或转换失败：${errorMessage(error)}`);
-    return loadMediaPipeIncisionAssets(rstlAtlas, warnings);
-  }
-}
-
 async function boot() {
-  const { head, atlas, headAsset } = await loadPreferredIncisionAssets();
+  const { head, atlas, headAsset } = await loadMediaPipeIncisionAssets();
   if (!S.mounted) return;
   S.verts = head.vertices; S.tris = head.triangles; S.atlas = atlas; S.headAsset = headAsset; S.assetWarnings = headAsset.warnings;
   S.normals = vertexNormals(S.verts, S.tris);
@@ -1141,7 +1110,6 @@ function reviewGate(review: DynamicRecord, result: DynamicRecord) {
   return buildReviewGate({
     review,
     result,
-    liveOverlaySupported: S.headAsset?.liveOverlaySupported !== false,
     topologyId: S.headAsset?.topologyId,
     topologyVersion: S.headAsset?.topologyVersion,
   });
@@ -1519,11 +1487,6 @@ function stageLiveOverlay() {
   }
   if (els.reviewDecision.value !== "approved_for_discussion") {
     els.stageStatus.textContent = "发送到实时叠加前，请先确认当前候选草案。";
-    return;
-  }
-  if (S.headAsset?.liveOverlaySupported === false) {
-    els.stageStatus.textContent = "当前候选基于高精度三维头模预览生成；发送到实时叠加前需要单独映射复核，已阻止发送。";
-    publishIncisionState("live_overlay_blocked_by_topology");
     return;
   }
   const readiness = reviewReadiness("approved_for_discussion");

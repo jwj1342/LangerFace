@@ -318,8 +318,9 @@ includesAll(reviewControls, [
 
 includesAll(incisionRuntime, [
   "mountIncisionWorkbench",
-  "loadFlameBasisAsset",
-  "mediaPipeAtlasToFlamePreviewAtlas",
+  "loadMediaPipeIncisionAssets",
+  "resolveIncisionAtlas",
+  "takePreviewAtlas",
   "planWorkflowForCurrentTumor",
   "stageLiveOverlay",
   "compileIncisionOverlay",
@@ -331,6 +332,8 @@ includesAll(incisionRuntime, [
   "summarizeTumorInputQuality",
   "runWorkflow",
 ], "incision runtime workflow");
+assert.ok(!incisionRuntime.includes("loadFlameBasisAsset"), "incision runtime should not load FLAME assets");
+assert.ok(!incisionRuntime.includes("mediaPipeAtlasToFlamePreviewAtlas"), "incision runtime should not map RSTL onto FLAME");
 
 includesAll(incisionWorkflowTools, [
   "linear_subcutaneous_incision",

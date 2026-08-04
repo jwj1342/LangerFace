@@ -40,8 +40,10 @@ python tools/prototype_wrinkle_lesion_cues.py --output-dir local_outputs/wrinkle
 pytest tests/test_wrinkle_lesion_cues.py
 ```
 
-生产仓库同时包含 `/personalized` 的浏览器 YOLO/V6 路径和 Python texture-warp 原型。两者允许在
-`validated:false` 草案上做有界 RSTL 微调，但不得把输出送入 `/incision` 几何：
+生产仓库同时包含 `/personalized` 的浏览器 YOLO/V6 路径和 Python texture-warp 原型。两者都允许在
+`validated:false` 草案上做有界 RSTL 微调，但当前只有浏览器 YOLO/V6 路径产出的、通过
+`mediapipe-468` 拓扑与来源校验的**个体化 RSTL 图谱**可以进入 `/app/incision`，并作为标准 RSTL 之前的
+首选方向输入。原始 mask、检测框、像素级皱纹或 Python 原型输出都不能直接驱动切口几何：
 
 1. `LinePipeline.process(..., wrinkle_mask=None)` 仍先检测人脸并映射 atlas prior。
 2. 开启 `Config.texture_warp.enabled` 后，`HessianWrinkleExtractor` 从输入图像构建稠密皱纹切向场。
@@ -66,13 +68,18 @@ python tools/predict_wrinkle_unet.py \
 
 - 皮表肿物边界：以 mask IoU 和边界可视化为主。
 - 皱纹 / 自然皱襞：以 recall、precision 和线段角度误差为主。
-- 切口设计使用时：只能作为 `secondary_source=wrinkle_or_crease_cue` 的候选依据，必须显示置信度和人工确认状态。
+- 独立导入的皱纹/肿物 metrics 只能作为 `secondary_source=wrinkle_or_crease_cue` 的审阅依据，必须显示
+  置信度和人工确认状态，且 `used_for_geometry=false`。
+- `/personalized` 的 YOLO mask 是 V6 个体化过程中的证据；只有经 prior 约束、方向匹配、位移上限、禁区
+  和 MediaPipe 拓扑校验后形成的 RSTL 图谱才参与 `query_rstl_direction`。它仍为 `validated:false`，不绕过
+  guardrails 或医生审阅。
 - 如果与局部 RSTL 或敏感结构 guardrail 冲突，guardrail 和医生审阅优先。
 
 ## 前端展示要求
 
 - React 切口工作台 `/app/incision` 支持导入 `metrics.json` 或等价 JSON，并只读展示“辅助线索 / 低置信度 / 需医生确认”摘要。
-- 前端导入辅助线索不会触发候选重新生成，不会自动改变肿物边界、切口方向或 guardrails。
+- 前端单独导入辅助线索不会触发候选重新生成，不会自动改变肿物边界、切口方向或 guardrails；这与
+  `/personalized` 产生完整、受约束的 RSTL 图谱后再进入切口工作台是两条不同契约。
 - 导出审阅记录保留 `secondary_cues`，包括 `source=synthetic|manual|restricted_cv`、脚本/模型来源、导入时间、metrics、人工确认状态，以及 `used_for_geometry=false`。
 - 公开 PR Preview 不加载真实患者图像或受限模型输出。
 
