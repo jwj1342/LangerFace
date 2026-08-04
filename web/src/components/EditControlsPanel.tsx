@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { useIncisionControllerCommands } from "../hooks/useControllerCommands";
+import type { IncisionEditControlId } from "../lib/controllerCommand";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
@@ -60,8 +61,12 @@ export function EditControlsPanel() {
     setRedoDisabled(Boolean(edit.redoDisabled));
   }, [snapshot?.edit]);
 
-  const preview = () => commands.edit("preview_edit");
-  const commit = () => commands.edit("commit_edit");
+  const preview = (controlId: IncisionEditControlId, value: string) => {
+    commands.edit("preview_edit", controlId, value);
+  };
+  const commit = (controlId: IncisionEditControlId, value: string) => {
+    commands.edit("commit_edit", controlId, value);
+  };
 
   return (
     <AgentCard>
@@ -77,12 +82,13 @@ export function EditControlsPanel() {
           max="35"
           value={angleOffsetDeg}
           onInput={(event) => {
-            setAngleOffsetDeg(event.currentTarget.value);
-            preview();
+            const value = event.currentTarget.value;
+            setAngleOffsetDeg(value);
+            preview("angleOffsetDeg", value);
           }}
-          onPointerUp={commit}
-          onKeyUp={commit}
-          onBlur={commit}
+          onPointerUp={(event) => commit("angleOffsetDeg", event.currentTarget.value)}
+          onKeyUp={(event) => commit("angleOffsetDeg", event.currentTarget.value)}
+          onBlur={(event) => commit("angleOffsetDeg", event.currentTarget.value)}
           onChange={(event) => setAngleOffsetDeg(event.currentTarget.value)}
         />
       </FieldGroup>
@@ -94,12 +100,13 @@ export function EditControlsPanel() {
           max="150"
           value={lengthScalePct}
           onInput={(event) => {
-            setLengthScalePct(event.currentTarget.value);
-            preview();
+            const value = event.currentTarget.value;
+            setLengthScalePct(value);
+            preview("lengthScale", value);
           }}
-          onPointerUp={commit}
-          onKeyUp={commit}
-          onBlur={commit}
+          onPointerUp={(event) => commit("lengthScale", event.currentTarget.value)}
+          onKeyUp={(event) => commit("lengthScale", event.currentTarget.value)}
+          onBlur={(event) => commit("lengthScale", event.currentTarget.value)}
           onChange={(event) => setLengthScalePct(event.currentTarget.value)}
         />
       </FieldGroup>
@@ -111,12 +118,13 @@ export function EditControlsPanel() {
           max="150"
           value={widthScalePct}
           onInput={(event) => {
-            setWidthScalePct(event.currentTarget.value);
-            preview();
+            const value = event.currentTarget.value;
+            setWidthScalePct(value);
+            preview("widthScale", value);
           }}
-          onPointerUp={commit}
-          onKeyUp={commit}
-          onBlur={commit}
+          onPointerUp={(event) => commit("widthScale", event.currentTarget.value)}
+          onKeyUp={(event) => commit("widthScale", event.currentTarget.value)}
+          onBlur={(event) => commit("widthScale", event.currentTarget.value)}
           onChange={(event) => setWidthScalePct(event.currentTarget.value)}
         />
       </FieldGroup>
@@ -128,12 +136,13 @@ export function EditControlsPanel() {
           max="12"
           value={shiftAlongMm}
           onInput={(event) => {
-            setShiftAlongMm(event.currentTarget.value);
-            preview();
+            const value = event.currentTarget.value;
+            setShiftAlongMm(value);
+            preview("shiftAlongMm", value);
           }}
-          onPointerUp={commit}
-          onKeyUp={commit}
-          onBlur={commit}
+          onPointerUp={(event) => commit("shiftAlongMm", event.currentTarget.value)}
+          onKeyUp={(event) => commit("shiftAlongMm", event.currentTarget.value)}
+          onBlur={(event) => commit("shiftAlongMm", event.currentTarget.value)}
           onChange={(event) => setShiftAlongMm(event.currentTarget.value)}
         />
       </FieldGroup>
@@ -145,12 +154,13 @@ export function EditControlsPanel() {
           max="12"
           value={shiftPerpMm}
           onInput={(event) => {
-            setShiftPerpMm(event.currentTarget.value);
-            preview();
+            const value = event.currentTarget.value;
+            setShiftPerpMm(value);
+            preview("shiftPerpMm", value);
           }}
-          onPointerUp={commit}
-          onKeyUp={commit}
-          onBlur={commit}
+          onPointerUp={(event) => commit("shiftPerpMm", event.currentTarget.value)}
+          onKeyUp={(event) => commit("shiftPerpMm", event.currentTarget.value)}
+          onBlur={(event) => commit("shiftPerpMm", event.currentTarget.value)}
           onChange={(event) => setShiftPerpMm(event.currentTarget.value)}
         />
       </FieldGroup>
@@ -158,8 +168,9 @@ export function EditControlsPanel() {
         id="editReason"
         value={reason}
         onChange={(event) => {
-          setReason(event.currentTarget.value);
-          commands.edit("commit_reason");
+          const value = event.currentTarget.value;
+          setReason(value);
+          commands.edit("commit_reason", "editReason", value);
         }}
       >
         <option value="">未选择覆盖原因</option>
