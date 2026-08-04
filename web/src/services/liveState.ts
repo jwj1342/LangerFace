@@ -7,7 +7,9 @@ type AnyRecord = Record<string, any>;
 
 export interface LiveModelState {
   landmarker: any;
+  imageLandmarker: any;
   handLandmarker: any;
+  imageHandLandmarker: any;
   topology: any;
   triangles: any;
   noseTris: any;
@@ -56,6 +58,8 @@ export interface LiveSourceState {
   lastLM: any;
   imageCacheLM: any;
   imageHulls: any;
+  imageDetectionComplete: boolean;
+  imageDetectionAttempts: number;
   jawOpen: number;
   eyeBlinkLeft: number;
   eyeBlinkRight: number;
@@ -92,7 +96,9 @@ export interface LiveReconState {
 
 export const modelState: LiveModelState = {
   landmarker: null,
+  imageLandmarker: null,
   handLandmarker: null,
+  imageHandLandmarker: null,
   topology: null,
   triangles: null,
   noseTris: null,
@@ -137,6 +143,8 @@ export const sourceState: LiveSourceState = {
   lastLM: null,
   imageCacheLM: null,
   imageHulls: null,
+  imageDetectionComplete: false,
+  imageDetectionAttempts: 0,
   jawOpen: 0,
   eyeBlinkLeft: 0,
   eyeBlinkRight: 0,

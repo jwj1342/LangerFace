@@ -6,11 +6,22 @@ import { countMetric, logWarn, recordMetricSample } from "./logger.ts";
 import { projectVerts } from "./projection3d.ts";
 import { clearZooms, draw, drawFocusedRegion, drawZooms, updateStats } from "./render2d.ts";
 import { modelState, renderState, sourceState } from "./liveState.ts";
+import { setMsg } from "./liveUi.ts";
+import {
+  detectStaticImageWithRetries,
+  type StaticImageDetector,
+} from "./staticImageDetection.ts";
 
 interface VideoDetector {
   detectForVideo: (source: unknown, timeMs: number) => {
     faceLandmarks?: NormalizedLandmark[][];
     faceBlendshapes?: Array<{ categories?: BlendshapeCategory[] }>;
+    landmarks?: NormalizedLandmark[][];
+  };
+}
+
+interface HandDetector extends VideoDetector {
+  detect?: (source: unknown) => {
     landmarks?: NormalizedLandmark[][];
   };
 }
@@ -21,10 +32,14 @@ interface BlendshapeCategory {
 }
 
 export function detectHands(timeMs: number, width: number, height: number): HandMask[] {
-  if (!renderState.handOcc || !modelState.handLandmarker) return [];
-  const detector = modelState.handLandmarker as VideoDetector;
-  const result = detector.detectForVideo(sourceState.source, timeMs);
-  if (!result.landmarks || !result.landmarks.length) return [];
+  if (!renderState.handOcc) return [];
+  const imageMode = sourceState.sourceKind === "image";
+  const detector = (imageMode ? modelState.imageHandLandmarker : modelState.handLandmarker) as HandDetector | null;
+  if (!detector) return [];
+  const result = imageMode
+    ? detector.detect?.(sourceState.source)
+    : detector.detectForVideo(sourceState.source, timeMs);
+  if (!result?.landmarks || !result.landmarks.length) return [];
   const margin = Math.max(5, width * 0.006);
   return buildHandMasks(result.landmarks.map((hand) => toPixels(hand, width, height).map((point) => [point[0], point[1]] as [number, number])), 0.16, margin);
 }
@@ -70,13 +85,25 @@ export function loop(): void {
 
   let landmarks: Vec3[] | null = null;
   let hulls: HandMask[] = [];
-  const landmarker = modelState.landmarker as VideoDetector | null;
   if (sourceState.sourceKind === "image") {
-    if (!sourceState.imageCacheLM) {
-      const result = landmarker?.detectForVideo(source, timeMs);
+    if (!sourceState.imageDetectionComplete) {
+      sourceState.imageDetectionComplete = true;
+      const outcome = detectStaticImageWithRetries(
+        modelState.imageLandmarker as StaticImageDetector | null,
+        source,
+      );
+      sourceState.imageDetectionAttempts = outcome.attempts;
+      const result = outcome.result;
       sourceState.imageCacheLM = (result?.faceLandmarks && result.faceLandmarks[0]) ? toPixels(result.faceLandmarks[0], width, height) : null;
       updateFaceExpression(result?.faceBlendshapes);
       sourceState.imageHulls = detectHands(timeMs, width, height);
+      if (!sourceState.imageCacheLM) {
+        countMetric("faceLandmarker.noFaceImage");
+        if (outcome.error) logWarn("静态图片检测失败。", outcome.error);
+        setMsg(outcome.error
+          ? `图片检测失败（已尝试 ${outcome.attempts} 次）。请重新上传；若仍失败，请换一张正面清晰的照片。`
+          : `未检测到人脸（已尝试 ${outcome.attempts} 次）。请换用正面、清晰、光线充足的照片后重新上传。`);
+      }
     } else if (renderState.handOcc && sourceState.imageHulls === null) {
       sourceState.imageHulls = detectHands(timeMs, width, height);
     }
@@ -84,6 +111,7 @@ export function loop(): void {
     hulls = renderState.handOcc ? (sourceState.imageHulls as HandMask[] | null) || [] : [];
     sourceState.presence = landmarks ? 1 : 0;
   } else if (source.currentTime !== undefined) {
+    const landmarker = modelState.landmarker as VideoDetector | null;
     const result = landmarker?.detectForVideo(source, timeMs);
     updateFaceExpression(result?.faceBlendshapes);
     if (result?.faceLandmarks && result.faceLandmarks.length) {
