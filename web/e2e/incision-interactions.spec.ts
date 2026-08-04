@@ -107,12 +107,12 @@ async function waitForCommittedEcho(
   }).toBe(true);
 }
 
-async function expectValueStableAfterReactEcho(slider: Locator, expectedValue: number) {
-  await expect.poll(() => slider.evaluate(async (element) => {
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    return Number((element as HTMLInputElement).value);
-  }), {
+async function expectValueStableAfterReactEcho(page: Page, slider: Locator, expectedValue: number) {
+  // Playwright runs this file in parallel with the surgery checks. Chromium may
+  // throttle requestAnimationFrame in a background page, so wait on the driver
+  // side before checking that a delayed React snapshot did not restore the old value.
+  await page.waitForTimeout(150);
+  await expect.poll(async () => Number(await slider.inputValue()), {
     message: "controlled slider value must not bounce back after the controller snapshot",
   }).toBe(expectedValue);
 }
@@ -142,7 +142,7 @@ test("clinician edit sliders retain real mouse drags after the controller echo",
       const after = Number(await slider.inputValue());
       expect(after, `${controlId} must move in the expected direction`).toBeGreaterThan(before);
       await waitForCommittedEcho(page, snapshotField, after);
-      await expectValueStableAfterReactEcho(slider, after);
+      await expectValueStableAfterReactEcho(page, slider, after);
     });
   }
 
