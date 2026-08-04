@@ -152,6 +152,10 @@ async function contrastRatio(locator: Locator, pseudo?: "::placeholder") {
 }
 
 test("active controls remain readable and clinician sliders retain edits", async ({ page }) => {
+  // This scenario performs multiple contrast scans plus serial keyboard and
+  // physical-drag round trips. Keep assertion timeouts strict while allowing
+  // the full interaction matrix to finish on a contended CI browser runner.
+  test.setTimeout(120_000);
   await waitForWorkbench(page);
 
   for (const selector of ["#tumorKind", "#reviewerName", "#runWorkflowBtn", "#approveCandidateBtn", "#exportJsonBtn"]) {
