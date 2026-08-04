@@ -1,0 +1,30 @@
+import { expect, test } from "@playwright/test";
+
+import { measureContrast } from "./contrast";
+
+const CLINICAL_BLUE = "rgb(15, 98, 254)";
+const DARK_PAGE = "rgb(9, 11, 15)";
+
+test("public workflow entrypoints share the blue clinical action theme", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  const dashboardEyebrow = page.getByText("STATELESS WORKBENCH");
+  await expect(dashboardEyebrow).toHaveCSS("color", "rgb(147, 197, 253)");
+
+  await page.goto("/personalized", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).toHaveCSS("background-color", DARK_PAGE);
+  const capturePrimary = page.locator("#startBtn");
+  await expect(capturePrimary).toHaveCSS("background-color", CLINICAL_BLUE);
+  expect((await measureContrast(capturePrimary)).ratio).toBeGreaterThanOrEqual(4.5);
+
+  await page.goto("/current/", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).toHaveClass(/clinical-compat-workbench/);
+  const compatibilityPrimary = page.locator("#uploadBtn");
+  await expect(compatibilityPrimary).toHaveCSS("background-color", CLINICAL_BLUE);
+  expect((await measureContrast(compatibilityPrimary)).ratio).toBeGreaterThanOrEqual(4.5);
+
+  await page.goto("/compat/personalized/v6_review.html", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).toHaveCSS("background-color", DARK_PAGE);
+  const reviewPrimary = page.locator(".button-primary").first();
+  await expect(reviewPrimary).toHaveCSS("background-color", CLINICAL_BLUE);
+  expect((await measureContrast(reviewPrimary)).ratio).toBeGreaterThanOrEqual(4.5);
+});

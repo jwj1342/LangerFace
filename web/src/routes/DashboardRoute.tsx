@@ -97,7 +97,7 @@ export function DashboardRoute() {
         <ReactShellMain className="overflow-auto bg-slate-950 p-6">
           <div className="mx-auto grid w-full max-w-5xl gap-5">
             <section className="rounded-xl border border-slate-700 bg-slate-900 p-6 text-slate-100">
-              <span className="text-xs font-bold tracking-[0.18em] text-emerald-300">STATELESS WORKBENCH</span>
+              <span className="text-xs font-bold tracking-[0.18em] text-blue-300">STATELESS WORKBENCH</span>
               <h2 className="mt-3 text-2xl font-bold">选择一个独立工具开始</h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
                 当前阶段聚焦 2D 张力线显示和浏览器本地个性化。工具之间只传递短期预览数据，不维护病例大厅、患者档案、历史记录或云端病例库。

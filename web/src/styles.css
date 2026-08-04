@@ -1,39 +1,9 @@
 @import "tailwindcss";
+@import "../clinical-theme.css";
 @import "../style.css";
 @import "../annotate.css";
 
 @layer base {
-  :root {
-    --font-clinical-sans: "IBM Plex Sans", Inter, Roboto, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
-    --font-clinical-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-    --clinical-text-primary: rgb(229 234 240 / 0.94);
-    --clinical-text-secondary: rgb(229 234 240 / 0.78);
-    --clinical-text-tertiary: rgb(229 234 240 / 0.66);
-    --clinical-bg: #f4f4f4;
-    --clinical-surface: #ffffff;
-    --clinical-surface-muted: #f8f8f8;
-    --clinical-border: #d7dce2;
-    --clinical-border-strong: #aeb6c2;
-    --clinical-ink: #161616;
-    --clinical-muted: #52565c;
-    --clinical-muted-2: #697077;
-    --clinical-accent: #0f62fe;
-    --clinical-accent-hover: #0043ce;
-    --clinical-accent-soft: #edf5ff;
-    --clinical-warning: #b28600;
-    --clinical-warning-soft: #fff4ce;
-    --clinical-danger: #da1e28;
-    --clinical-danger-soft: #fff1f1;
-    --clinical-dark-bg: #090b0f;
-    --clinical-dark-sidebar: #0d1117;
-    --clinical-dark-panel: #121820;
-    --clinical-dark-panel-2: #171e27;
-    --clinical-dark-border: #2a3440;
-    --clinical-dark-border-strong: #3e4b59;
-    --clinical-dark-muted: rgb(229 234 240 / 0.64);
-    --clinical-dark-faint: rgb(229 234 240 / 0.42);
-  }
-
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
