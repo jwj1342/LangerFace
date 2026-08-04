@@ -161,7 +161,7 @@ test("same parameters can generate a second candidate with visible feedback", as
     (elements) => elements.map((element) => (element as HTMLInputElement | HTMLSelectElement).value),
   );
 
-  await page.locator("#runAgentBtn").click();
+  await page.locator("#runWorkflowBtn").click();
   await expect(page.locator("#stageStatus")).toContainText("第 2 次生成");
 
   const parametersAfter = await page.locator(parameterIds.map((id) => `#${id}`).join(",")).evaluateAll(

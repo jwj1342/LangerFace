@@ -15,7 +15,7 @@ VALID_SYSTEMS = (SYSTEM_RSTL, SYSTEM_LANGER)
 ATLAS_VERSION = "0.2"
 TOPOLOGY_ID = "mediapipe-468"
 TOPOLOGY_VERSION = "mediapipe-canonical-468-v1"
-# 3D FLAME 轨（#61）：独立第二拓扑，仅用于 3D 标注/配准，不替代上面的 2D MediaPipe 拓扑。
+# 3D FLAME 离线轨：独立第二拓扑，仅用于 3D 标注/配准，不替代上面的 2D MediaPipe 拓扑。
 TOPOLOGY_ID_FLAME = "flame-2023"
 TOPOLOGY_VERSION_FLAME = "flame-2023-v1"
 

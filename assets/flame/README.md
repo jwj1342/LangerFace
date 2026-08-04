@@ -1,6 +1,6 @@
 # FLAME 原始资产目录（license-gated，**不入库**）
 
-本目录用于本地存放 **FLAME 2023 Open** 原始模型和官方 MediaPipe landmark embedding，供 3D FLAME 轨（见 issue #61）的拓扑导出、basis 构建和离线拟合使用。
+本目录用于本地存放 **FLAME 2023 Open** 原始模型和官方 MediaPipe landmark embedding，供 3D FLAME 离线轨的拓扑导出、basis 构建和拟合使用。
 
 > ⚠️ **本目录除本 README 外全部 gitignore。** 不要提交原始 `.pkl`、embedding、neutral OBJ、纹理模型或本地生成的完整顶点 JSON。
 > 当前仓库只提交了一组从 **FLAME 2023 Open (CC-BY-4.0)** 抽出的紧凑运行时 basis，用于浏览器实时孪生和兜底拟合；署名见 `assets/flame_basis.NOTICE.md`。

@@ -319,6 +319,7 @@ def build_registered_atlas(
         system=source.system,
         lines=lines,
         version=source.version,
+        atlas_version=source.atlas_version,
         topology_id=TOPOLOGY_ID_FLAME,
         topology_version=TOPOLOGY_VERSION_FLAME,
         provenance=source.provenance,

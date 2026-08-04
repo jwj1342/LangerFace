@@ -70,7 +70,7 @@ export default defineConfig({
       name: "copy-compat-entrypoints",
       writeBundle(options) {
         const outDir = options.dir || "dist";
-        for (const page of ["annotate.html", "surgery.html", "incision_agent.html"]) {
+        for (const page of ["annotate.html", "surgery.html", "incision_workflow.html", "incision_agent.html"]) {
           cpSync(resolve(import.meta.dirname, page), resolve(outDir, page));
         }
       },

@@ -338,6 +338,7 @@ export function editFingerprint(editRecord: AnyRecord): string {
     editRecord.angle_offset_deg,
     editRecord.length_scale,
     editRecord.width_scale,
+    editRecord.tip_angle_deg,
     editRecord.shift_along_mm,
     editRecord.shift_perp_mm,
     editRecord.reason,
@@ -351,6 +352,7 @@ export function editRecordIsActive(editRecord: AnyRecord = {}): boolean {
   return Number(editRecord.angle_offset_deg || 0) !== 0 ||
     Number(editRecord.length_scale || 1) !== 1 ||
     Number(editRecord.width_scale || 1) !== 1 ||
+    editRecord.tip_angle_deg != null ||
     Number(editRecord.shift_along_mm || 0) !== 0 ||
     Number(editRecord.shift_perp_mm || 0) !== 0 ||
     Boolean(editRecord.reason);
@@ -362,10 +364,11 @@ export function normalizeEditHistoryEntry(base: AnyRecord, raw: AnyRecord, index
     angle_offset_deg: Number(raw.angle_offset_deg || 0),
     length_scale: Number(raw.length_scale || 1),
     width_scale: Number(raw.width_scale || 1),
+    tip_angle_deg: raw.tip_angle_deg == null ? null : Number(raw.tip_angle_deg),
     shift_along_mm: Number(raw.shift_along_mm || 0),
     shift_perp_mm: Number(raw.shift_perp_mm || 0),
     reason: String(raw.reason || ""),
-    source: raw.source || "web/incision_agent",
+    source: raw.source || "web/incision_workflow",
     interaction: raw.interaction || "committed_control_edit",
     committed_at: raw.committed_at || null,
     history_index: Number(raw.history_index || index + 1),
