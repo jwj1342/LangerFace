@@ -156,6 +156,11 @@ CSV 只是医生审阅决策的表格输入层，不能单独替代 JSON 审阅�
 - `support_count`
 - `angular_spread_deg`
 
+Python 入口位于 `src/langerface/lines/direction.py`，Web TypeScript 入口位于
+`web/src/services/incisionToolCore.ts`。两端共同读取
+`web/test/rstl_direction_contract.json`，对近场、远场、FLAME `points3d` 和
+`±180°` 无向轴边界做逐项金标验证。
+
 当查询点远离 atlas 支撑点或方向 spread 过大时，必须返回低置信度并要求医生确认，而不是硬凑方向。
 
 ## 与 3D 离线轨的衔接

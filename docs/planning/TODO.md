@@ -25,15 +25,14 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
       · Ready PR #122；裁决 2D-first + 3D 离线资产/标注/研究预览。
 - [x] 修复 React 受控输入 snapshot echo — [#109](https://github.com/jwj1342/LangerFace/issues/109)
       · Ready PR #119；Chromium 回归覆盖输入保持。
-- [ ] 删除 Agentic/Provider 出域路径 — [#111](https://github.com/jwj1342/LangerFace/issues/111)
+- [x] 删除 Agentic/Provider 出域路径 — [#111](https://github.com/jwj1342/LangerFace/issues/111)
       · Ready PR #118；保留本地确定性 workflow，不保留 Provider UI、密钥或远程模型请求。
-- [ ] 统一额头 runtime expansion 契约 — [#112](https://github.com/jwj1342/LangerFace/issues/112)
+- [x] 统一额头 runtime expansion 契约 — [#112](https://github.com/jwj1342/LangerFace/issues/112)
       · Ready PR #120；Python/TypeScript 共享 fixture 锁定 `disableRuntimeExpansion`。
-- [ ] 切口与实时工作台控件对比度 — [#115](https://github.com/jwj1342/LangerFace/issues/115)
+- [x] 切口与实时工作台控件对比度 — [#115](https://github.com/jwj1342/LangerFace/issues/115)
       · Ready PR #119；浏览器断言锁定 active control ≥ 4.5:1。
 - [x] 修复固定名运行时资产被旧 immutable 缓存钉死 — [#135](https://github.com/jwj1342/LangerFace/issues/135)
       · Ready PR #117；改用条件回源并拆分固定名资产与带哈希构建产物的缓存策略。
-
 - [ ] 抽离 incision DOM 事件绑定并补齐卸载清理 — [#137](https://github.com/jwj1342/LangerFace/issues/137)
       · Phase 2-A；PR #138 已并入 #131。
 - [x] 图谱标注器保存草稿时误置 validated:true 并丢失已加载曲线元数据 — [#139](https://github.com/jwj1342/LangerFace/issues/139)
