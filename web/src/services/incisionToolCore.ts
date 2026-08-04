@@ -24,15 +24,15 @@ type RegionConfidenceInput = {
 };
 
 export interface DirectionResult extends AnyRecord {
-  point?: Vec3;
+  point: Vec3;
   vector: Vec3;
   angle_deg: number;
   confidence: number;
   source: string;
-  nearest_distance?: number;
-  support_count?: number;
-  angular_spread_deg?: number;
-  confidence_reasons?: string[];
+  nearest_distance: number | null;
+  support_count: number;
+  angular_spread_deg: number;
+  confidence_reasons: string[];
 }
 
 export const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
@@ -49,6 +49,14 @@ export const norm = (v: ArrayLike<number>): Vec3 => {
   const l = Math.hypot(v[0], v[1], v[2]);
   return l > 1e-12 ? [v[0] / l, v[1] / l, v[2] / l] : [1, 0, 0];
 };
+
+function canonicalAxis(vector: Vec3): Vec3 {
+  for (const component of vector) {
+    if (Math.abs(component) <= 1e-12) continue;
+    return component < 0 ? mul(vector, -1) : vector;
+  }
+  return vector;
+}
 
 export function bbox(verts: ArrayLike<number>[]): { lo: Vec3; hi: Vec3 } {
   const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity];
@@ -198,27 +206,41 @@ function atlasSamples(verts: ArrayLike<number>[], tris: Triangle[], atlas: Atlas
     const P: Vec3[] = [];
     if (Array.isArray(line.points3d) && line.points3d.length) {
       for (const point of line.points3d) {
-        if (Array.isArray(point) && point.length >= 3 && point.every(Number.isFinite)) P.push([point[0], point[1], point[2]]);
+        if (Array.isArray(point) && point.length === 3 && point.every(Number.isFinite)) P.push([point[0], point[1], point[2]]);
       }
     } else {
       for (const raw of line.points || []) {
+        if (!Array.isArray(raw) || raw.length < 3) continue;
         const [tri, u, v] = raw;
+        if (![tri, u, v].every(Number.isFinite)) continue;
         const t = tris[Math.round(tri)];
         if (!t) continue;
-        const w = 1 - u - v, A = verts[t[0]], B = verts[t[1]], C = verts[t[2]];
-        P.push([
+        const A = verts[t[0]], B = verts[t[1]], C = verts[t[2]];
+        if (![A, B, C].every((vertex) => vertex?.length >= 3 && Array.from(vertex).slice(0, 3).every(Number.isFinite))) continue;
+        const w = 1 - u - v;
+        const mapped: Vec3 = [
           u * A[0] + v * B[0] + w * C[0],
           u * A[1] + v * B[1] + w * C[1],
           u * A[2] + v * B[2] + w * C[2],
-        ]);
+        ];
+        if (mapped.every(Number.isFinite)) P.push(mapped);
       }
     }
+    const deduplicated: Vec3[] = [];
+    for (const point of P) {
+      const previous = deduplicated[deduplicated.length - 1];
+      if (!previous || Math.hypot(...sub(point, previous)) > 1e-12) deduplicated.push(point);
+    }
+    P.length = 0;
+    P.push(...deduplicated);
     if (P.length < 2) continue;
     for (let i = 0; i < P.length; i++) {
       const before = P[Math.max(0, i - 1)];
       const after = P[Math.min(P.length - 1, i + 1)];
+      const delta = sub(after, before);
+      if (Math.hypot(...delta) <= 1e-12) continue;
       pts.push(P[i]);
-      tans.push(norm(sub(after, before)));
+      tans.push(norm(delta));
     }
   }
   return { pts, tans };
@@ -242,14 +264,17 @@ function axialAngularSpreadDeg(vectors: Vec3[], reference: Vec3): number {
 export function queryDirection(point: Vec3, verts: ArrayLike<number>[], tris: Triangle[], atlas: AtlasPayload): DirectionResult {
   const { pts, tans } = atlasSamples(verts, tris, atlas);
   if (!pts.length) {
+    const emptyAtlas = !Array.isArray(atlas.lines) || atlas.lines.length === 0;
     return {
       point,
       vector: [1, 0, 0],
       angle_deg: 0,
       confidence: 0,
-      source: "rstl_atlas_empty",
-      nearest_distance: Infinity,
-      confidence_reasons: ["empty_atlas"],
+      source: emptyAtlas ? "rstl_atlas_empty" : "rstl_atlas_no_valid_direction_support",
+      nearest_distance: null,
+      support_count: 0,
+      angular_spread_deg: 0,
+      confidence_reasons: [emptyAtlas ? "empty_atlas" : "no_valid_direction_support"],
     };
   }
   let best = 0, bd = Infinity;
@@ -276,7 +301,7 @@ export function queryDirection(point: Vec3, verts: ArrayLike<number>[], tris: Tr
     weightSum += w;
     signed.push(t);
   }
-  const vector = norm(mul(acc, 1 / Math.max(weightSum, 1e-9)));
+  const vector = canonicalAxis(norm(mul(acc, 1 / Math.max(weightSum, 1e-9))));
   const spread = axialAngularSpreadDeg(signed, vector);
   const confidenceReasons: string[] = [];
   if (order.length < Math.min(3, 7)) confidenceReasons.push("low_support_count");
