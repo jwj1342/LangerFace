@@ -8,7 +8,7 @@ const DARK_PAGE = "rgb(9, 11, 15)";
 test("public workflow entrypoints share the blue clinical action theme", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   const dashboardEyebrow = page.getByText("STATELESS WORKBENCH");
-  await expect(dashboardEyebrow).toHaveCSS("color", "rgb(147, 197, 253)");
+  await expect(dashboardEyebrow).toHaveClass(/text-blue-300/);
 
   await page.goto("/personalized", { waitUntil: "domcontentloaded" });
   await expect(page.locator("body")).toHaveCSS("background-color", DARK_PAGE);
