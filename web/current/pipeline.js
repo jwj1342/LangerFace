@@ -17,8 +17,9 @@ import { modelState, renderState, sourceState } from "./state.js";
 import { setLive, setMsg } from "./ui.js";
 
 // ── 资产 / 模型加载 ───────────────────────────────────────────────────────────
-export async function ensureReady() {
-  if (modelState.landmarker) return;
+let readyPromise = null;
+
+async function initializeReady() {
   const [topology, rstl] = await Promise.all([
     fetch(assetUrls.topology).then((r) => r.json()),
     fetch(assetUrls.atlasRstl).then((r) => r.json()),
@@ -86,6 +87,16 @@ export async function ensureReady() {
     rstlLines: modelState.atlases.rstl.length,
     handOcclusionReady: Boolean(modelState.handLandmarker),
   });
+}
+
+export function ensureReady() {
+  if (readyPromise) return readyPromise;
+  if (modelState.landmarker) return Promise.resolve();
+  readyPromise = initializeReady().catch((error) => {
+    readyPromise = null;
+    throw error;
+  });
+  return readyPromise;
 }
 
 function requestRedraw() {
