@@ -57,6 +57,52 @@
 | 检测鲁棒性 | 检测失败率 | 无脸、多人脸、侧脸、强光、低光等枚举原因 | 按失败原因汇总 |
 | 医生可接受度 | 人工评分 | 医生对每个区域 1-5 分或接受/拒绝 | reviewer 一致性 |
 
+## Stage 1 图谱逐线签署
+
+`tools/annotate_atlas.py` 只保存 `validated:false` 草案：它会保留载入的既有线，
+不会再因按下保存键直接宣称临床验证完成。正式签署必须走以下独立流程：
+
+```bash
+python tools/atlas_clinical_review.py build \
+  --atlas assets/atlas_rstl.json \
+  --output local_outputs/atlas_rstl_review.json \
+  --csv-output local_outputs/atlas_rstl_review.csv
+```
+
+医生逐行检查方向、解剖位置、连续性、对称性和来源，在 CSV 中把
+`decision` 填为 `accept`，把 `direction_score_1_to_5`、
+`position_score_1_to_5` 填为 1–5，并填写 reviewer、角色、带时区的时间和
+受控医学来源引用。额头线会标为 `critical`，用于显式覆盖 MediaPipe 额头关键点
+稀疏的风险。需要修线时，先回到标注工具修改草案，再重新生成 packet；不要在旧
+packet 上接受已经变化的几何。
+
+完成逐线审阅后，由实际承担临床责任的医生运行：
+
+```bash
+python tools/atlas_clinical_review.py finalize \
+  --atlas assets/atlas_rstl.json \
+  --packet local_outputs/atlas_rstl_review.json \
+  --review-csv local_outputs/atlas_rstl_review.csv \
+  --reviewer clinician-01 \
+  --reviewer-role plastic-surgeon \
+  --reviewed-at 2026-07-29T12:00:00-06:00 \
+  --source-reference controlled-reference-set-v1 \
+  --attest-clinical-review \
+  --output local_outputs/atlas_rstl.validated.json
+```
+
+finalize 会拒绝源哈希变化、缺行、拒绝/待定结论、缺少评分/署名/来源、无时区时间，
+也拒绝直接覆盖源 atlas。成功输出包含 `clinicalValidation` 审计字段和更新后的
+`provenance`：`sourceAtlasSha256` 绑定源 atlas，`reviewPacketSha256` 绑定完成审阅并
+规范化后的 JSON packet；提供 `--review-csv` 时，`rawReviewCsvSha256` 另行绑定原始
+CSV 字节。三类来源不会复用同一字段。CLI 只能校验这些字段存在且格式有效，
+**不能验证运行者身份、执业资格或其是否获授权**；`--attest-clinical-review` 会在核心
+finalize 门禁中强制校验，并把固定声明及 `affirmed:true` 持久化。它记录的是运行者
+作出的显式声明，不是技术身份认证。
+临床责任由实际运行并签署的人承担。只有审阅输出 diff、同步 `assets/` 与
+`web/assets/` 并通过完整 CI 后，才可由维护 PR 替换正式资产；工程人员不得代替
+医生作出该声明。
+
 ## Stage 2 指标
 
 Stage 2 涉及肿物模拟和候选切口，只能在医生审阅路径中评估：

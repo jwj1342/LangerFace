@@ -252,11 +252,18 @@ langerface-webcam --system rstl          # 原生窗口实时（热键 t/o/s/q�
 ```
 
 ### 临床校验图谱（关键）
-内置图谱仅为示意。标注工具只负责修正几何并保存
-`validated:false` 草案；普通保存不能代替逐线临床复核、来源记录与签署：
+内置图谱仅为示意。标注工具只负责修正几何、保留已加载的线并保存
+`validated:false` 草案；普通保存不能代替逐线临床复核、来源记录与签署。
+临床医生修正后还需完成逐线审阅包，finalize 会校验源文件哈希、每条线的结论/
+评分/校验者/时间/医学来源，并只写出一个单独的待 review 文件：
 ```bash
-python3 tools/annotate_atlas.py --system rstl                       # 在标准脸上直接画/改
+python3 tools/annotate_atlas.py --system rstl --region forehead    # 在标准脸上直接画/改
 python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文献图描线
+python3 tools/atlas_clinical_review.py build \
+  --atlas assets/atlas_rstl.json \
+  --output local_outputs/atlas_rstl_review.json \
+  --csv-output local_outputs/atlas_rstl_review.csv
+# 医生逐行填写 CSV 后，按 docs/quality/VALIDATION.md 的命令显式签署并生成候选文件。
 ```
 
 只有独立的逐线临床评审全部通过，并记录评审者、角色、时间、医学来源和显式
@@ -267,7 +274,7 @@ attestation 后，才能由受控 finalize 流程生成 `validated:true` 候选�
 
 ## 线条图谱（数据）
 
-线图谱是 JSON：信封带 `topologyId` / `topologyVersion`，每条线为 `[三角面id, u, v]` 重心坐标点序列（`w = 1−u−v`），网页注入时校验拓扑身份。正式 RSTL 图谱为 **v8.1.67：133 条 / 14,315 点**（其中 14 条属 `forehead_bridge_arc_v15` 额头拱线，按参考输入里的 `doctorConstraints` 生成；该资产仍为 `validated: false`，未经临床复核），由 [`tools/build_field_atlas_standard_v1.py`](tools/build_field_atlas_standard_v1.py) 从结构化参考输入 [`assets/rstl_standard_reference_v8_1_67.json`](assets/rstl_standard_reference_v8_1_67.json) 确定性生成；Langer 对照图谱仍由 [`tools/build_field_atlas.py`](tools/build_field_atlas.py) 的方向场 + 等间距流线生成。方向遵循 **Borges RSTL** 走向、几何为近似、`validated: false`；`annotate_atlas.py` / `digitize_from_diagram.py` 的编辑保存仍保持草案状态，只有完成上述独立逐线评审和签署后才允许生成 `validated: true` 候选资产。
+线图谱是 JSON：信封带 `topologyId` / `topologyVersion`，每条线为 `[三角面id, u, v]` 重心坐标点序列（`w = 1−u−v`），网页注入时校验拓扑身份。正式 RSTL 图谱为 **v8.1.67：133 条 / 14,315 点**（其中 14 条属 `forehead_bridge_arc_v15` 额头拱线，按参考输入里的 `doctorConstraints` 生成；该资产仍为 `validated: false`，未经临床复核），由 [`tools/build_field_atlas_standard_v1.py`](tools/build_field_atlas_standard_v1.py) 从结构化参考输入 [`assets/rstl_standard_reference_v8_1_67.json`](assets/rstl_standard_reference_v8_1_67.json) 确定性生成；Langer 对照图谱仍由 [`tools/build_field_atlas.py`](tools/build_field_atlas.py) 的方向场 + 等间距流线生成。方向遵循 **Borges RSTL** 走向、几何为近似、`validated: false`；医生修正后必须经 `atlas_clinical_review.py` 的逐线审阅与显式签署门槛，才会生成含结构化 `clinicalValidation` 记录的 `validated:true` 候选文件。
 
 > 数据格式、方向场算法与生成流程的完整说明见 [ARCHITECTURE.md «6. 图谱（数据）生成与格式»](docs/architecture/ARCHITECTURE.md)。
 
