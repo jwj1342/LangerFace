@@ -442,6 +442,130 @@
       }
     },
     {
+      "name": "null_points_has_no_direction_support",
+      "vertices": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          10.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          10.0,
+          0.0
+        ]
+      ],
+      "triangles": [
+        [
+          0,
+          1,
+          2
+        ]
+      ],
+      "atlas": {
+        "system": "rstl",
+        "lines": [
+          {
+            "name": "null_points",
+            "points": null
+          }
+        ]
+      },
+      "point": [
+        4.0,
+        2.0,
+        0.0
+      ],
+      "expected": {
+        "point": [
+          4.0,
+          2.0,
+          0.0
+        ],
+        "vector": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "angle_deg": 0.0,
+        "confidence": 0.0,
+        "source": "rstl_atlas_no_valid_direction_support",
+        "nearest_distance": null,
+        "support_count": 0,
+        "angular_spread_deg": 0.0,
+        "confidence_reasons": [
+          "no_valid_direction_support"
+        ]
+      }
+    },
+    {
+      "name": "null_points3d_has_no_direction_support",
+      "vertices": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          10.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          10.0,
+          0.0
+        ]
+      ],
+      "triangles": [
+        [
+          0,
+          1,
+          2
+        ]
+      ],
+      "atlas": {
+        "system": "rstl",
+        "lines": [
+          {
+            "name": "null_points3d",
+            "points3d": null
+          }
+        ]
+      },
+      "point": [
+        4.0,
+        2.0,
+        0.0
+      ],
+      "expected": {
+        "point": [
+          4.0,
+          2.0,
+          0.0
+        ],
+        "vector": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "angle_deg": 0.0,
+        "confidence": 0.0,
+        "source": "rstl_atlas_no_valid_direction_support",
+        "nearest_distance": null,
+        "support_count": 0,
+        "angular_spread_deg": 0.0,
+        "confidence_reasons": [
+          "no_valid_direction_support"
+        ]
+      }
+    },
+    {
       "name": "single_point_has_no_direction_support",
       "vertices": [
         [

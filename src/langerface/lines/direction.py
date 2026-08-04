@@ -94,6 +94,8 @@ def _atlas_samples(
                     polyline.append(point)
         else:
             raw_points = _line_value(line, "points", [])
+            if not isinstance(raw_points, list | tuple | np.ndarray):
+                continue
             for raw in raw_points:
                 try:
                     if len(raw) < 3:
