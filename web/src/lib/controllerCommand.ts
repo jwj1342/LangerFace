@@ -10,7 +10,7 @@ import {
   LIVE_RENDER_REACT_COMMAND_EVENT,
   LIVE_ROUTE_REACT_COMMAND_EVENT,
   LIVE_SOURCE_REACT_COMMAND_EVENT,
-} from "./controllerEvents";
+} from "./controllerEvents.ts";
 
 export interface ControllerCommandDetail<TCommand extends string = string> {
   command: TCommand;

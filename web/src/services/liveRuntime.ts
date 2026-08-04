@@ -12,12 +12,8 @@ import {
   LIVE_SOURCE_REACT_COMMAND_EVENT,
 } from "../lib/controllerEvents";
 import {
-  LIVE_RENDER_COMMANDS,
-  LIVE_ROUTE_COMMANDS,
-  LIVE_SOURCE_COMMANDS,
   bindWindowControllerEvents,
   dispatchControllerEvent,
-  readControllerCommandDetail,
 } from "../lib/controllerCommand";
 import type { LiveZoomCard } from "./render2d.ts";
 import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
@@ -31,6 +27,11 @@ import { countMetric, logError } from "./logger";
 import { createCanvasRecordingController, type CanvasRecordingController, type RecordingExtraCanvas } from "./canvasRecording";
 import { recordingState, reconState, renderState, sourceState } from "./liveState";
 import { setIncisionOverlayQa, setMsg, setProvenance, smoothLabel } from "./liveUi";
+import {
+  readLiveRenderCommand,
+  readLiveRouteCommand,
+  readLiveSourceCommand,
+} from "./workbenchCommandSchemas";
 
 interface ImageDragState {
   pointerId: number;
@@ -70,10 +71,6 @@ function eventValue(event: Event | ValueControlEvent): unknown {
 
 function eventChecked(event: Event | CheckedControlEvent): boolean {
   return Boolean((event.target as { checked?: boolean } | null)?.checked);
-}
-
-function controllerEvent(event: Event): Event & { detail?: unknown } {
-  return event as Event & { detail?: unknown };
 }
 
 function hasBoundLiveDom(): boolean {
@@ -339,7 +336,7 @@ function toggleRecording(): void {
 }
 
 function handleReactSourceCommand(event: Event): void {
-  const detail = readControllerCommandDetail(controllerEvent(event), LIVE_SOURCE_COMMANDS);
+  const detail = readLiveSourceCommand(event);
   if (!detail) return;
   const { command } = detail;
   if (command === "upload_source") {
@@ -352,7 +349,7 @@ function handleReactSourceCommand(event: Event): void {
 }
 
 function handleReactRenderCommand(event: Event): void {
-  const detail = readControllerCommandDetail(controllerEvent(event), LIVE_RENDER_COMMANDS);
+  const detail = readLiveRenderCommand(event);
   if (!detail) return;
   const { command, value } = detail;
   if (command === "template_change") runLiveAction("template_change", () => handleTemplateChange(valueEvent(value)));
@@ -369,7 +366,7 @@ function handleReactRenderCommand(event: Event): void {
 }
 
 function handleReactRouteCommand(event: Event): void {
-  const detail = readControllerCommandDetail(controllerEvent(event), LIVE_ROUTE_COMMANDS);
+  const detail = readLiveRouteCommand(event);
   if (!detail) return;
   const { command, value } = detail;
   if (command === "route_change") runLiveAction("route_change", () => enterRoute(value === "3d" ? "3d" : "2d"));
