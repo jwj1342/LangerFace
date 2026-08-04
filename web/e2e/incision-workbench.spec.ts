@@ -203,6 +203,68 @@ test("active controls remain readable and clinician sliders retain edits", async
   await expect(page.locator("#candidateTipAngle")).toContainText("31.0°");
 });
 
+test("route remount removes and rebinds one canvas listener set", async ({ page }) => {
+  await page.addInitScript(() => {
+    const tracked = new Set(["pointerdown", "pointermove", "pointerup", "pointercancel", "wheel"]);
+    const auditWindow = window as Window & {
+      __incisionListenerBalance?: Record<string, number>;
+    };
+    auditWindow.__incisionListenerBalance = {};
+    const originalAdd = EventTarget.prototype.addEventListener;
+    const originalRemove = EventTarget.prototype.removeEventListener;
+    EventTarget.prototype.addEventListener = function (type, listener, options) {
+      if (this instanceof HTMLElement && this.id === "incisionCanvas" && tracked.has(type)) {
+        auditWindow.__incisionListenerBalance![type] =
+          (auditWindow.__incisionListenerBalance![type] || 0) + 1;
+      }
+      return Reflect.apply(originalAdd, this, [type, listener, options]);
+    };
+    EventTarget.prototype.removeEventListener = function (type, listener, options) {
+      if (this instanceof HTMLElement && this.id === "incisionCanvas" && tracked.has(type)) {
+        auditWindow.__incisionListenerBalance![type] =
+          (auditWindow.__incisionListenerBalance![type] || 0) - 1;
+      }
+      return Reflect.apply(originalRemove, this, [type, listener, options]);
+    };
+  });
+  await waitForWorkbench(page);
+
+  const listenerBalance = () => page.evaluate(() => {
+    const auditWindow = window as Window & {
+      __incisionListenerBalance?: Record<string, number>;
+    };
+    return auditWindow.__incisionListenerBalance || {};
+  });
+  await expect.poll(listenerBalance).toEqual({
+    pointerdown: 1,
+    pointermove: 1,
+    pointerup: 1,
+    pointercancel: 1,
+    wheel: 1,
+  });
+
+  await page.getByRole("link", { name: "返回工具入口" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect.poll(listenerBalance).toEqual({
+    pointerdown: 0,
+    pointermove: 0,
+    pointerup: 0,
+    pointercancel: 0,
+    wheel: 0,
+  });
+
+  await page.locator('a[href="/incision"]').filter({ hasText: "打开工具" }).click();
+  await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
+  await expect(page.locator("#candidateType")).not.toHaveText("—");
+  await expect.poll(listenerBalance).toEqual({
+    pointerdown: 1,
+    pointermove: 1,
+    pointerup: 1,
+    pointercancel: 1,
+    wheel: 1,
+  });
+});
+
 test("live workbench controls use the same readable clinical theme", async ({ page }) => {
   await page.goto("/live");
   await expect(page.locator("#templateSel")).toBeVisible();

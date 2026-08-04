@@ -48,7 +48,6 @@ const controllerEvents = read("src/lib/controllerEvents.ts");
 const controllerSnapshotSchemas = read("src/lib/controllerSnapshotSchemas.ts");
 const reactManagedWorkbench = read("src/lib/reactManagedWorkbench.ts");
 const scopedDom = read("src/lib/scopedDom.ts");
-const legacyControllers = read("src/services/legacyControllers.ts");
 const uiAnnotateStatus = read("src/components/ui/annotate-status.tsx");
 const uiButton = read("src/components/ui/button.tsx");
 const uiButtonRow = read("src/components/ui/button-row.tsx");
@@ -135,13 +134,20 @@ const annotateSnapshotsService = read("src/services/annotateSnapshots.ts");
 const liveSnapshotsService = read("src/services/liveSnapshots.ts");
 const incisionSnapshotsService = read("src/services/incisionSnapshots.ts");
 const annotateRuntime = read("src/services/annotateRuntime.ts");
+const annotateDomService = read("src/services/annotateDom.ts");
+const annotationExportService = read("src/services/annotationExport.ts");
+const workbenchCommandSchemasService = read("src/services/workbenchCommandSchemas.ts");
 const annotationModelService = read("src/services/annotationModel.ts");
 const flameFitService = read("src/services/flameFit.ts");
 const annotateViewerService = read("src/services/annotateViewer.ts");
 const controller = read("src/services/incisionRuntime.ts");
 const incisionDomService = read("src/services/incisionDom.ts");
+const incisionDomBindingsService = read("src/services/incisionDomBindings.ts");
+const incisionControllerStateService = read("src/services/incisionControllerState.ts");
 const incisionClinicalCopyService = read("src/services/incisionClinicalCopy.ts");
 const incisionReviewPolicyService = read("src/services/incisionReviewPolicy.ts");
+const incisionEditHistoryService = read("src/services/incisionEditHistory.ts");
+const incisionReviewRecordsService = read("src/services/incisionReviewRecords.ts");
 const incisionOverlayService = read("src/services/incisionOverlay.ts");
 const incisionCandidateToolsService = read("src/services/incisionCandidateTools.ts");
 const incisionWorkflowToolsService = read("src/services/incisionWorkflowTools.ts");
@@ -171,8 +177,11 @@ const liveRuntimeDependencyTypes = [
   "src/services/render2d.ts",
   "src/services/liveState.ts",
   "src/services/liveUi.ts",
+  "src/services/workbenchCommandSchemas.ts",
 ];
 const annotateRuntimeDependencyTypes = [
+  "src/services/annotateDom.ts",
+  "src/services/annotationExport.ts",
   "src/services/annotationModel.ts",
   "src/services/annotateViewer.ts",
   "src/services/assetLoader.ts",
@@ -180,6 +189,7 @@ const annotateRuntimeDependencyTypes = [
   "src/services/meshIo.ts",
   "src/services/slicerCurve.ts",
   "src/services/softBody.ts",
+  "src/services/workbenchCommandSchemas.ts",
   "src/services/topologyRegistry.ts",
 ];
 const incisionRuntimeDependencyTypes = [
@@ -187,8 +197,11 @@ const incisionRuntimeDependencyTypes = [
   "src/services/dataSource.ts",
   "src/services/exportPrivacy.ts",
   "src/services/incisionClinicalCopy.ts",
+  "src/services/incisionControllerState.ts",
   "src/services/incisionDom.ts",
+  "src/services/incisionDomBindings.ts",
   "src/services/incisionReviewPolicy.ts",
+  "src/services/incisionReviewRecords.ts",
   "src/services/softBody.ts",
   "src/services/three3d.ts",
 ];
@@ -668,30 +681,26 @@ assert.ok(reactShell.includes('type { Workspace } from "../stores/appStore"'), "
 assert.ok(reactShell.includes("Extract<Workspace"), "React shell keeps a narrowed route workspace type from the shared Workspace union");
 assert.ok(managedWorkbenchRoute.includes("useRef<HTMLDivElement | null>(null)"), "managed workbench route owns the legacy host ref");
 assert.ok(managedWorkbenchRoute.includes("useManagedWorkbenchController"), "managed workbench route owns legacy controller lifecycle wiring");
-assert.ok(managedWorkbenchRoute.includes("ManagedWorkbenchControllerAdapter"), "managed workbench route accepts typed controller adapter objects");
-assert.ok(managedWorkbenchRoute.includes("controller.loadModule"), "managed workbench route loads controllers through the adapter boundary");
-assert.ok(managedWorkbenchRoute.includes("controller.mount"), "managed workbench route mounts controllers through the adapter boundary");
+assert.ok(managedWorkbenchRoute.includes("loadModule: () => Promise<TModule>"), "managed workbench route accepts a typed runtime loader");
+assert.ok(managedWorkbenchRoute.includes("mount: (module: TModule"), "managed workbench route accepts a typed runtime mount function");
+assert.ok(managedWorkbenchRoute.includes("dispose?: (module: TModule)"), "managed workbench route accepts an optional runtime disposer");
 assert.ok(managedWorkbenchRoute.includes("ReactRouteHost"), "managed workbench route renders through the shared ReactRouteHost primitive");
 assert.ok(managedWorkbenchRoute.includes("Extract<Workspace"), "managed workbench route narrows workspace type from the shared Workspace union");
-assert.ok(legacyControllers.includes("ManagedWorkbenchControllerAdapter"), "legacy controller service owns typed controller adapter objects");
-for (const legacyEntry of ["annotateRuntime", "incisionRuntime", "liveRuntime"]) {
-  assert.ok(legacyControllers.includes(legacyEntry), `legacy controller service owns ${legacyEntry} import boundary`);
-}
+assert.ok(!fs.existsSync(path.join(web, "src/services/legacyControllers.ts")), "obsolete legacy controller adapter module is deleted");
 assert.ok(!fs.existsSync(path.join(web, "annotate_main.js")), "legacy annotation runtime file has moved into the React TypeScript service layer");
 assert.ok(!fs.existsSync(path.join(web, "incision_workflow_main.js")), "legacy incision runtime file has moved into the React TypeScript service layer");
 assert.ok(!fs.existsSync(path.join(web, "main.js")), "legacy live runtime file has moved into the React TypeScript service layer");
-for (const [name, source, workspace] of [
-  ["AnnotateRoute.tsx", annotateRoute, "annotate"],
-  ["IncisionRoute.tsx", incisionRoute, "incision"],
-  ["LiveRoute.tsx", liveRoute, "live"],
+for (const [name, source, workspace, runtime] of [
+  ["AnnotateRoute.tsx", annotateRoute, "annotate", "annotateRuntime"],
+  ["IncisionRoute.tsx", incisionRoute, "incision", "incisionRuntime"],
+  ["LiveRoute.tsx", liveRoute, "live", "liveRuntime"],
 ]) {
   assert.ok(source.includes("ManagedWorkbenchRoute"), `${name} should render through the shared managed workbench route primitive`);
-  assert.ok(source.includes("LegacyController"), `${name} should use a named legacy controller adapter`);
-  assert.ok(!source.includes('typeof import("../../'), `${name} should not own legacy controller module typing`);
-  assert.ok(!source.includes('import("../../'), `${name} should not dynamically import legacy controllers directly`);
-  assert.ok(!source.includes("mountLiveWorkbench"), `${name} should not name legacy live controller exports directly`);
-  assert.ok(!source.includes("mountAnnotateWorkbench"), `${name} should not name legacy annotate controller exports directly`);
-  assert.ok(!source.includes("mountIncisionWorkbench"), `${name} should not name legacy incision controller exports directly`);
+  assert.ok(source.includes(`typeof import("../services/${runtime}")`), `${name} should type its TypeScript runtime module`);
+  assert.ok(source.includes(`import("../services/${runtime}")`), `${name} should lazily load its TypeScript runtime`);
+  assert.ok(source.includes("loadModule={"), `${name} should pass its runtime loader to the shared lifecycle`);
+  assert.ok(source.includes("mount={"), `${name} should pass its runtime mount function to the shared lifecycle`);
+  assert.ok(source.includes("dispose={"), `${name} should pass its runtime disposer to the shared lifecycle`);
   assert.ok(source.includes(`workspace="${workspace}"`), `${name} should declare its managed workbench workspace`);
   assert.ok(!source.includes("ReactRouteHost"), `${name} should not duplicate the route host wrapper`);
   assert.ok(!source.includes("useManagedWorkbenchController"), `${name} should not duplicate managed controller lifecycle wiring`);
@@ -1310,7 +1319,7 @@ assert.ok(scopedDom.includes("scopedElementById"), "React route controllers shar
 assert.ok(scopedDom.includes("requireScopedElement"), "React route controllers can fail fast when a host is missing an expected element");
 assert.ok(scopedDom.includes("requireScopedQuery"), "React route controllers can scope selector queries to the route host");
 for (const [name, source] of [
-  ["annotateRuntime.ts", annotateRuntime],
+  ["annotateDom.ts", annotateDomService],
   ["incisionDom.ts", incisionDomService],
 ]) {
   assert.ok(source.includes("../lib/scopedDom"), `${name} uses route-host scoped DOM helpers`);
@@ -1371,9 +1380,8 @@ assert.ok(incisionStatePanel.includes("useIncisionStore"), "React incision UI re
 assert.ok(incisionStatePanel.includes("<Card"), "React incision state panel uses the shared shadcn-style card primitive");
 
 assert.ok(incisionRoute.includes("ManagedWorkbenchRoute"), "React incision route uses the shared managed route lifecycle");
-assert.ok(incisionRoute.includes("incisionLegacyController"), "React incision route configures the existing controller through the legacy adapter");
-assert.ok(legacyControllers.includes("mountIncisionWorkbench"), "legacy controller service configures the existing incision controller mount function");
-assert.ok(legacyControllers.includes("disposeIncisionWorkbench"), "legacy controller service configures the existing incision controller dispose function");
+assert.ok(incisionRoute.includes("mountIncisionWorkbench"), "React incision route directly configures the TypeScript runtime mount function");
+assert.ok(incisionRoute.includes("disposeIncisionWorkbench"), "React incision route directly configures the TypeScript runtime disposer");
 assert.ok(!incisionRoute.includes("window.__LANGERFACE_REACT_MANAGED__ = true"), "React incision route does not duplicate managed flag logic");
 assert.ok(incisionRoute.includes("<IncisionWorkbench />"), "React incision route renders the workbench as TSX");
 assert.ok(incisionWorkbench.includes("WorkbenchBrand"), "React incision workbench uses the shared workbench brand");
@@ -1439,19 +1447,22 @@ assert.ok(
   "incision tumor command bridge preserves the latest React control value",
 );
 assert.ok(
-  controller.includes("applyReactTumorCommandValue(command, detail.value)") &&
-  controller.includes("tumorCommandControl(command: IncisionTumorCommand)"),
+  controller.includes("applyReactTumorControlValue(els, command, detail.value)") &&
+    incisionDomBindingsService.includes("function tumorCommandControl(") &&
+    incisionDomBindingsService.includes("applyReactTumorControlValue"),
   "incision runtime applies validated React tumor values before publishing snapshots",
 );
 assert.ok(
-  controller.includes("if (reactManaged) {\n    bindReactWorkbenchCommands();\n  } else {\n    const stateRoot"),
+  controller.includes("bindIncisionDomEvents({") &&
+    controller.includes("reactManaged,") &&
+    incisionDomBindingsService.includes("if (!reactManaged) {\n    const stateRoot"),
   "React-managed incision controls do not race legacy generic form listeners",
 );
 assert.ok(
   editPanel.includes('preview("lengthScale", value)') &&
-  editPanel.includes('commit("lengthScale", event.currentTarget.value)') &&
-  controllerCommand.includes("controlId?: IncisionEditControlId") &&
-  controller.includes("editCommandControl(detail.controlId)"),
+    editPanel.includes('commit("lengthScale", event.currentTarget.value)') &&
+    controllerCommand.includes("controlId?: IncisionEditControlId") &&
+    controller.includes("applyReactEditControlValue(els, detail.controlId, detail.value)"),
   "React clinician edit controls preserve their latest values across synchronous runtime previews",
 );
 assert.ok(
@@ -1610,9 +1621,9 @@ for (const controlId of [
 assert.ok(
   controllerCommand.includes("controlId?: IncisionEditControlId") &&
     controllerCommandsHook.includes("dispatchIncisionEditCommand(command, controlId, value)") &&
-    controller.includes("applyReactControlValue(") &&
-    controller.includes("editCommandControl(detail.controlId)") &&
-    controller.includes("detail.value"),
+    controller.includes("applyReactEditControlValue(els, detail.controlId, detail.value)") &&
+    incisionDomBindingsService.includes("function editCommandControl(") &&
+    incisionDomBindingsService.includes("applyReactControlValue("),
   "incision edit command bridge applies validated React values before publishing snapshots",
 );
 assert.ok(editPanel.includes("useIncisionStore"), "React edit panel syncs low-frequency edit state from Zustand");
@@ -1658,12 +1669,29 @@ for (const dependencyType of incisionRuntimeDependencyTypes) {
 assert.ok(!controller.includes("// @ts-nocheck"), "incision runtime should run under strict TypeScript checking");
 assert.ok(incisionDomService.includes("interface IncisionDomElements"), "incision DOM service types the controller binding surface");
 assert.ok(incisionDomService.includes("collectIncisionElements"), "incision DOM service owns route-host element collection");
+assert.ok(incisionDomBindingsService.includes("interface IncisionDomEventHandlers"), "incision DOM binding service types runtime callbacks");
+assert.ok(incisionDomBindingsService.includes("bindIncisionDomEvents"), "incision DOM binding service owns workbench listeners");
+assert.ok(incisionDomBindingsService.includes("removeEventListener"), "incision DOM binding service removes every registered listener");
+assert.ok(incisionDomBindingsService.includes("resizeObserver.disconnect"), "incision DOM binding service disconnects resize observation");
 assert.ok(incisionClinicalCopyService.includes("overrideLabel"), "incision clinical copy service owns clinician-facing override labels");
 assert.ok(incisionReviewPolicyService.includes("assessReviewReadiness"), "incision review policy service owns pure review readiness checks");
 assert.ok(controller.includes("./incisionReviewPolicy"), "incision runtime delegates review gates to the pure review policy service");
-assert.ok(controller.includes("interface IncisionRuntimeState"), "incision runtime types its long-lived renderer/workflow state");
-assert.ok(controller.includes("interface PointerDragState"), "incision runtime types pointer drag state");
-assert.ok(controller.includes("function controllerEvent"), "incision runtime narrows browser command events before reading detail");
+assert.ok(incisionEditHistoryService.includes("class IncisionEditHistory"), "incision edit history service owns timeline state");
+assert.ok(incisionEditHistoryService.includes("undo()"), "incision edit history service owns undo transitions");
+assert.ok(incisionEditHistoryService.includes("redo()"), "incision edit history service owns redo transitions");
+assert.ok(controller.includes("./incisionEditHistory"), "incision runtime delegates edit timeline state");
+assert.ok(!controller.includes("editTimeline:"), "incision runtime no longer stores raw edit timeline arrays");
+assert.ok(!controller.includes("editCursor:"), "incision runtime no longer stores raw edit cursors");
+assert.ok(incisionReviewRecordsService.includes("buildIncisionReviewRecord"), "incision review record service owns audit record construction");
+assert.ok(incisionReviewRecordsService.includes("buildIncisionReviewReport"), "incision review record service owns markdown report construction");
+assert.ok(controller.includes("./incisionReviewRecords"), "incision runtime delegates review records and reports");
+assert.ok(!controller.includes("function candidateEditSession"), "incision runtime does not build edit sessions inline");
+assert.ok(controller.split("\n").length <= 1900, "incision runtime remains below the 1900-line God Object threshold");
+assert.ok(incisionControllerStateService.includes("interface IncisionRuntimeState"), "incision state service types long-lived renderer/workflow state");
+assert.ok(incisionControllerStateService.includes("createIncisionControllerState"), "incision state service owns fresh mount state");
+assert.ok(controller.includes("createIncisionControllerState"), "incision runtime resets state through the state service");
+assert.ok(incisionDomBindingsService.includes("interface PointerDragState"), "incision DOM binding service owns pointer drag state");
+assert.ok(!controller.includes("function controllerEvent"), "incision runtime delegates browser command parsing to typed schemas");
 assert.ok(incisionWorkflowToolsService.includes("export function applyCandidateEdit"), "TypeScript incision workflow service exposes candidate edit workflow helpers");
 assert.ok(incisionCandidateToolsService.includes("export function summarizeTumorBoundary"), "TypeScript incision candidate service exposes tumor boundary summaries");
 assert.ok(incisionOverlayService.includes("export function compileIncisionOverlay"), "TypeScript incision overlay service exposes live overlay compilation");
@@ -1679,15 +1707,16 @@ assert.ok(controller.includes("export function mountIncisionWorkbench"), "incisi
 assert.ok(controller.includes("export function disposeIncisionWorkbench"), "incision controller exposes a dispose lifecycle");
 assert.ok(controller.includes("INCISION_TUMOR_REACT_COMMAND_EVENT"), "incision controller listens for React tumor input commands");
 assert.ok(controller.includes("../lib/controllerEvents"), "incision controller imports event names from the shared module");
-assert.ok(controller.includes("../lib/controllerCommand"), "incision controller imports the shared command parsing module");
+assert.ok(controller.includes("../lib/controllerCommand"), "incision controller imports the shared command binding module");
+assert.ok(controller.includes("./incisionCommandSchemas"), "incision controller imports payload-aware command schemas");
 assert.ok(controller.includes("bindWindowControllerEvents"), "incision controller binds React command events through the shared helper");
 assert.ok(controller.includes("reactCommandCleanup"), "incision controller stores a single React command cleanup handle");
 assert.ok(!controller.includes("window.addEventListener(INCISION"), "incision controller does not register React command listeners one-by-one");
-assert.ok(controller.includes("readControllerCommandDetail(controllerEvent(event), INCISION_TUMOR_COMMANDS)"), "incision tumor handler validates incoming command names");
-assert.ok(controller.includes("readControllerCommandDetail(controllerEvent(event), INCISION_SECONDARY_CUE_COMMANDS)"), "incision secondary cue handler validates incoming command names");
-assert.ok(controller.includes("readControllerCommandDetail(controllerEvent(event), INCISION_EDIT_COMMANDS)"), "incision edit handler validates incoming command names");
-assert.ok(controller.includes("readControllerCommandDetail(controllerEvent(event), INCISION_REVIEW_COMMANDS)"), "incision review handler validates incoming command names");
-assert.ok(controller.includes("readControllerCommandDetail(controllerEvent(event), INCISION_LIBRARY_COMMANDS)"), "incision library handler validates incoming command names");
+assert.ok(controller.includes("readIncisionTumorCommand(event)"), "incision tumor handler validates command names and payloads");
+assert.ok(controller.includes("readIncisionSecondaryCueCommand(event)"), "incision secondary cue handler validates incoming command names");
+assert.ok(controller.includes("readIncisionEditCommand(event)"), "incision edit handler validates incoming command names");
+assert.ok(controller.includes("readIncisionReviewCommand(event)"), "incision review handler validates incoming command names");
+assert.ok(controller.includes("readIncisionLibraryCommand(event)"), "incision library handler validates command names and candidate ids");
 assert.ok(!controller.includes("window.removeEventListener(INCISION"), "incision controller does not remove React command listeners one-by-one");
 assert.ok(!controller.includes("event?.detail?.command"), "incision controller does not read raw command detail directly");
 assert.ok(controller.includes("handleReactTumorCommand"), "incision controller routes React tumor commands to existing tumor workflow functions");
@@ -1727,13 +1756,13 @@ assert.ok(controller.includes("../lib/reactManagedWorkbench"), "incision control
 assert.ok(controller.includes("isReactManagedWorkbench()"), "incision controller can branch between React and compatibility workbench handling");
 assert.ok(!controller.includes("window.__LANGERFACE_REACT_MANAGED__"), "incision controller does not touch the managed flag directly");
 assert.ok(!controller.includes('document.getElementById("incisionCanvas")'), "incision runtime no longer auto-mounts from legacy HTML");
-assert.ok(controller.includes("els.tumorKind.onchange"), "legacy incision HTML still owns direct tumor input handlers");
-assert.ok(controller.includes("els.importSecondaryCue.onclick"), "legacy incision HTML still owns direct secondary cue handlers");
-assert.ok(controller.includes("el.oninput = applyEditControls"), "legacy incision HTML still owns direct edit preview handlers");
-assert.ok(controller.includes("els.approveCandidate.onclick"), "legacy incision HTML still owns direct review action handlers");
-assert.ok(controller.includes("els.saveCandidate.onclick"), "legacy incision HTML still owns direct candidate library handlers");
+assert.ok(controller.includes("bindIncisionDomEvents"), "incision runtime delegates DOM listener lifecycle");
+assert.ok(!controller.includes("els.canvas.addEventListener"), "incision runtime does not bind canvas listeners inline");
+assert.ok(!/els\.\w+\.onclick\s*=/.test(controller), "incision runtime does not assign compatibility click handlers inline");
+assert.ok(!/els\.\w+\.onchange\s*=/.test(controller), "incision runtime does not assign compatibility change handlers inline");
+assert.ok(!/els\.\w+\.oninput\s*=/.test(controller), "incision runtime does not assign compatibility input handlers inline");
 assert.ok(controller.includes("cancelAnimationFrame"), "incision controller cancels its render loop on dispose");
-assert.ok(controller.includes("S.resizeObserver?.disconnect"), "incision controller disconnects ResizeObserver on dispose");
+assert.ok(controller.includes("S.domEventCleanup?.()"), "incision controller removes DOM listeners on dispose");
 assert.ok(controller.includes("S.head?.dispose"), "incision controller disposes WebGL resources on dispose");
 
 assert.ok(standardFaceAssets.includes("loadStandardFaceAssets"), "standard face asset service exposes a shared lazy loader");
@@ -1793,9 +1822,8 @@ assert.ok(controller.includes("dispatchControllerEvent(INCISION_CONTROLLER_STATE
 assert.ok(!controller.includes("CustomEvent(INCISION_CONTROLLER_STATE_EVENT"), "incision controller does not hand-roll state snapshot CustomEvent dispatch");
 assert.ok(annotateRoute.includes("useAnnotateControllerBridge"), "annotation route mounts the Zustand/controller bridge");
 assert.ok(annotateRoute.includes("ManagedWorkbenchRoute"), "React annotation route uses the shared managed route lifecycle");
-assert.ok(annotateRoute.includes("annotateLegacyController"), "React annotation route configures the annotation runtime through the legacy adapter");
-assert.ok(legacyControllers.includes("mountAnnotateWorkbench"), "legacy controller service configures the annotation runtime mount function");
-assert.ok(legacyControllers.includes("disposeAnnotateWorkbench"), "legacy controller service configures the annotation runtime dispose function");
+assert.ok(annotateRoute.includes("mountAnnotateWorkbench"), "React annotation route directly configures the TypeScript runtime mount function");
+assert.ok(annotateRoute.includes("disposeAnnotateWorkbench"), "React annotation route directly configures the TypeScript runtime disposer");
 assert.ok(!annotateRoute.includes("window.__LANGERFACE_REACT_MANAGED__ = true"), "React annotation route does not duplicate managed flag logic");
 assert.ok(annotateRoute.includes("<AnnotateWorkbench />"), "React annotate route renders the annotation UI as TSX");
 assert.ok(!annotateRoute.includes("DOMParser"), "React annotate route should not parse legacy HTML");
@@ -1911,9 +1939,17 @@ for (const dependencyType of annotateRuntimeDependencyTypes) {
   );
 }
 assert.ok(!annotateRuntime.includes("// @ts-nocheck"), "annotation runtime should run under strict TypeScript checking");
-assert.ok(annotateRuntime.includes("interface AnnotateDomElements"), "annotation runtime types its DOM binding surface");
+assert.ok(annotateDomService.includes("interface AnnotateDomElements"), "annotation DOM service types its binding surface");
+assert.ok(annotateDomService.includes("collectAnnotateElements"), "annotation DOM service owns scoped element collection");
+assert.ok(annotateRuntime.includes("./annotateDom"), "annotation runtime consumes the shared DOM binding service");
+assert.ok(!annotateRuntime.includes("requireScopedElement"), "annotation runtime does not query scoped elements directly");
+assert.ok(annotationExportService.includes("buildAnnotationExport"), "annotation export service builds typed JSON artifacts");
+assert.ok(annotationExportService.includes("downloadAnnotationExport"), "annotation export service owns browser downloads");
+assert.ok(annotationExportService.includes("URL.revokeObjectURL"), "annotation export service releases object URLs");
+assert.ok(annotateRuntime.includes("./annotationExport"), "annotation runtime delegates export construction and download");
+assert.ok(!annotateRuntime.includes("new Blob"), "annotation runtime does not construct export blobs directly");
 assert.ok(annotateRuntime.includes("interface DragState"), "annotation runtime types pointer drag state");
-assert.ok(annotateRuntime.includes("function controllerEvent"), "annotation runtime narrows browser command events before reading detail");
+assert.ok(!annotateRuntime.includes("function controllerEvent"), "annotation runtime delegates browser command parsing to typed schemas");
 assert.ok(!fs.existsSync(path.join(web, "annotate_model.js")), "legacy annotate_model.js facade has been removed after TypeScript service migration");
 assert.ok(!fs.existsSync(path.join(web, "annotate_model.d.ts")), "legacy annotation model declaration facade has been removed after TypeScript service migration");
 assert.ok(annotationModelService.includes("class AnnotationModel"), "TypeScript annotation model service exposes the typed line model contract");
@@ -1930,12 +1966,13 @@ assert.ok(annotateRuntime.includes("../lib/controllerEvents"), "annotation runti
 assert.ok(annotateRuntime.includes("ANNOTATE_MESH_REACT_COMMAND_EVENT"), "annotation runtime declares a React mesh source command bridge event");
 assert.ok(annotateRuntime.includes("ANNOTATE_DRAW_REACT_COMMAND_EVENT"), "annotation runtime declares a React current-line command bridge event");
 assert.ok(annotateRuntime.includes("ANNOTATE_LIBRARY_REACT_COMMAND_EVENT"), "annotation runtime declares a React saved line command bridge event");
-assert.ok(annotateRuntime.includes("../lib/controllerCommand"), "annotation runtime imports the shared command parsing module");
+assert.ok(annotateRuntime.includes("../lib/controllerCommand"), "annotation runtime imports the shared command binding module");
+assert.ok(annotateRuntime.includes("./workbenchCommandSchemas"), "annotation runtime imports payload-aware command schemas");
 assert.ok(annotateRuntime.includes("bindWindowControllerEvents"), "annotation runtime binds React command events through the shared helper");
 assert.ok(!annotateRuntime.includes("window.addEventListener(ANNOTATE"), "annotation runtime does not register React command listeners one-by-one");
-assert.ok(annotateRuntime.includes("readControllerCommandDetail(controllerEvent(event), ANNOTATE_MESH_COMMANDS)"), "annotation mesh handler validates incoming command names");
-assert.ok(annotateRuntime.includes("readControllerCommandDetail(controllerEvent(event), ANNOTATE_DRAW_COMMANDS)"), "annotation draw handler validates incoming command names");
-assert.ok(annotateRuntime.includes("readControllerCommandDetail(controllerEvent(event), ANNOTATE_LIBRARY_COMMANDS)"), "annotation library handler validates incoming command names");
+assert.ok(annotateRuntime.includes("readAnnotateMeshCommand(event)"), "annotation mesh handler validates incoming command names");
+assert.ok(annotateRuntime.includes("readAnnotateDrawCommand(event)"), "annotation draw handler validates command names and system values");
+assert.ok(annotateRuntime.includes("readAnnotateLibraryCommand(event)"), "annotation library handler validates command names and line indexes");
 assert.ok(!annotateRuntime.includes("event.detail || {}"), "annotation runtime does not read raw command detail directly");
 assert.ok(annotateRuntime.includes("handleReactMeshCommand"), "annotation runtime routes React mesh source commands to existing workflow functions");
 assert.ok(annotateRuntime.includes("handleReactDrawCommand"), "annotation runtime routes React current-line commands to existing workflow functions");
@@ -1959,9 +1996,8 @@ assert.ok(!annotateRuntime.includes('document.getElementById("stage")'), "annota
 assert.ok(annotateViewerService.includes("dispose()"), "annotation viewer exposes a WebGL dispose lifecycle");
 assert.ok(liveRoute.includes("useLiveControllerBridge"), "live route mounts the Zustand/controller bridge");
 assert.ok(liveRoute.includes("ManagedWorkbenchRoute"), "React live route uses the shared managed route lifecycle");
-assert.ok(liveRoute.includes("liveLegacyController"), "React live route configures the live controller through the legacy adapter");
-assert.ok(legacyControllers.includes("mountLiveWorkbench"), "legacy controller service configures the live controller mount function");
-assert.ok(legacyControllers.includes("disposeLiveWorkbench"), "legacy controller service configures the live controller dispose function");
+assert.ok(liveRoute.includes("mountLiveWorkbench"), "React live route directly configures the TypeScript runtime mount function");
+assert.ok(liveRoute.includes("disposeLiveWorkbench"), "React live route directly configures the TypeScript runtime disposer");
 assert.ok(!liveRoute.includes("window.__LANGERFACE_REACT_MANAGED__ = true"), "React live route does not duplicate managed flag logic");
 assert.ok(liveRoute.includes("<LiveWorkbench />"), "React live route renders the live UI as TSX");
 assert.ok(!liveRoute.includes("DOMParser"), "React live route should not parse legacy HTML");
@@ -2172,7 +2208,9 @@ for (const rel of liveRuntimeDependencyTypes) {
 }
 assert.ok(!liveController.includes("// @ts-nocheck"), "live runtime should run under strict TypeScript checking");
 assert.ok(liveController.includes("interface ImageDragState"), "live runtime types its route-local drag state");
-assert.ok(liveController.includes("function controllerEvent"), "live runtime narrows browser command events before reading detail");
+assert.ok(!liveController.includes("function controllerEvent"), "live runtime delegates browser command parsing to typed schemas");
+assert.ok(workbenchCommandSchemasService.includes("readLiveRenderCommand"), "workbench command schemas validate live render payloads");
+assert.ok(workbenchCommandSchemasService.includes("readAnnotateLibraryCommand"), "workbench command schemas validate annotation library payloads");
 assert.ok(liveDomService.includes("interface LiveDomElements"), "TypeScript live DOM service exposes typed live elements");
 assert.ok(!fs.existsSync(path.join(web, "state.js")), "legacy state.js facade has been removed after TypeScript service migration");
 assert.ok(!fs.existsSync(path.join(web, "state.d.ts")), "legacy state declaration facade has been removed after TypeScript service migration");
@@ -2218,12 +2256,13 @@ assert.ok(liveController.includes("../lib/controllerEvents"), "live controller i
 assert.ok(liveController.includes("LIVE_ROUTE_REACT_COMMAND_EVENT"), "live controller declares a React route command bridge event");
 assert.ok(liveController.includes("LIVE_SOURCE_REACT_COMMAND_EVENT"), "live controller declares a React source command bridge event");
 assert.ok(liveController.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "live controller declares a React render command bridge event");
-assert.ok(liveController.includes("../lib/controllerCommand"), "live controller imports the shared command parsing module");
+assert.ok(liveController.includes("../lib/controllerCommand"), "live controller imports the shared command binding module");
+assert.ok(liveController.includes("./workbenchCommandSchemas"), "live controller imports payload-aware command schemas");
 assert.ok(liveController.includes("bindWindowControllerEvents"), "live controller binds React command events through the shared helper");
 assert.ok(!liveController.includes("window.addEventListener(LIVE"), "live controller does not register React command listeners one-by-one");
-assert.ok(liveController.includes("readControllerCommandDetail(controllerEvent(event), LIVE_SOURCE_COMMANDS)"), "live source handler validates incoming command names");
-assert.ok(liveController.includes("readControllerCommandDetail(controllerEvent(event), LIVE_RENDER_COMMANDS)"), "live render handler validates incoming command names");
-assert.ok(liveController.includes("readControllerCommandDetail(controllerEvent(event), LIVE_ROUTE_COMMANDS)"), "live route handler validates incoming command names");
+assert.ok(liveController.includes("readLiveSourceCommand(event)"), "live source handler validates incoming command names");
+assert.ok(liveController.includes("readLiveRenderCommand(event)"), "live render handler validates command names and payloads");
+assert.ok(liveController.includes("readLiveRouteCommand(event)"), "live route handler validates command names and route values");
 assert.ok(!liveController.includes("event.detail || {}"), "live controller does not read raw command detail directly");
 assert.ok(liveController.includes("handleReactRouteCommand"), "live controller routes React route commands to existing 3D workflow functions");
 assert.ok(liveController.includes("handleReactSourceCommand"), "live controller routes React source commands to existing workflow functions");

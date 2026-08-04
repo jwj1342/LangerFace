@@ -33,7 +33,7 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
       · Ready PR #119；浏览器断言锁定 active control ≥ 4.5:1。
 - [x] 修复固定名运行时资产被旧 immutable 缓存钉死 — [#135](https://github.com/jwj1342/LangerFace/issues/135)
       · Ready PR #117；改用条件回源并拆分固定名资产与带哈希构建产物的缓存策略。
-- [ ] 抽离 incision DOM 事件绑定并补齐卸载清理 — [#137](https://github.com/jwj1342/LangerFace/issues/137)
+- [x] 抽离 incision DOM 事件绑定并补齐卸载清理 — [#137](https://github.com/jwj1342/LangerFace/issues/137)
       · Phase 2-A；PR #138 已并入 #131。
 - [x] 图谱标注器保存草稿时误置 validated:true 并丢失已加载曲线元数据 — [#139](https://github.com/jwj1342/LangerFace/issues/139)
       · 由 PR #140 修复，含 loaded/drawn 分离与命名唯一性。
@@ -87,4 +87,4 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
 - [x] 合并重复文档、修正内容 owner 并自动核对 TODO 状态 — [#113](https://github.com/jwj1342/LangerFace/issues/113)
       · 当前 PR；删除专题重复页，把标注验收、FLAME 切口资产、纹理 warp 和产品边界归回各自 owner。
 - [ ] Phase 2：消化大型 runtime，推进核心 TypeScript 服务化 — [#95](https://github.com/jwj1342/LangerFace/issues/95)
-      · 长期 epic；按小 PR 拆 scene、export、live state/lifecycle、annotation 和 legacy adapter，不用单个大 PR 假装完成。
+      · 长期 epic；本栈逐步删除 legacy adapter，并抽离 scene、export、picking、command validation、edit history 与 review records；annotate/live runtime 和剩余 God Object 继续按小 PR 拆。

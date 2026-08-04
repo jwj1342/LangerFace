@@ -121,7 +121,7 @@ includesAll(liveRuntime, [
   "els.upload.addEventListener",
   "els.file.click",
   "setIncisionOverlayQa",
-  "readControllerCommandDetail",
+  "readLiveSourceCommand",
 ], "live runtime bridge");
 
 includesAll(liveControllerBridge, [

@@ -20,15 +20,8 @@ import {
   INCISION_TUMOR_REACT_COMMAND_EVENT,
 } from "../lib/controllerEvents";
 import {
-  INCISION_EDIT_COMMANDS,
-  INCISION_LIBRARY_COMMANDS,
-  INCISION_REVIEW_COMMANDS,
-  INCISION_SECONDARY_CUE_COMMANDS,
-  INCISION_TUMOR_COMMANDS,
   bindWindowControllerEvents,
   dispatchControllerEvent,
-  readControllerCommandDetail,
-  type IncisionTumorCommand,
 } from "../lib/controllerCommand";
 import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
 import { assetBaseUrl } from "./assetLoader";
@@ -44,6 +37,11 @@ import {
   subunitLabel,
 } from "./incisionClinicalCopy";
 import { collectIncisionElements, type IncisionDomElements } from "./incisionDom";
+import {
+  applyReactEditControlValue,
+  applyReactTumorControlValue,
+  bindIncisionDomEvents,
+} from "./incisionDomBindings";
 import {
   buildIncisionAssetLoadingSnapshot,
   buildIncisionCandidateSnapshot,
@@ -70,137 +68,72 @@ import type { AtlasPayload, HeadMeshPayload } from "./dataSource";
 import { auditExportPayload } from "./exportPrivacy";
 import { loadFlameBasisAsset, mediaPipeAtlasToFlamePreviewAtlas } from "./flameHeadAssets";
 import {
+  buildReviewExportPayload,
+  buildTumorExportPayload,
+  downloadCanvasPng,
+  downloadText,
+} from "./incisionExport";
+import {
+  incisionEditIsActive,
+  neutralIncisionEdit,
+  type IncisionEdit,
+} from "./incisionEditHistory";
+import {
+  createIncisionControllerState,
+  type IncisionRuntimeState,
+} from "./incisionControllerState";
+import {
+  buildCandidateEditSession,
+  buildIncisionReviewRecord,
+  buildIncisionReviewReport,
+  findSensitiveStructureInspection,
+  formatRecoveredFailureSummary,
+} from "./incisionReviewRecords";
+import {
+  readIncisionEditCommand,
+  readIncisionLibraryCommand,
+  readIncisionReviewCommand,
+  readIncisionSecondaryCueCommand,
+  readIncisionTumorCommand,
+} from "./incisionCommandSchemas";
+import {
+  pickEndpointHandle,
+  pickFaceSurface,
+  signedAngleDegrees,
+} from "./incisionPicking";
+import {
+  add3 as add,
+  buildBoundaryGeometry,
+  buildPolylineGeometry,
+  buildRingGeometry,
+  clamp,
+  cross3 as cross,
+  dot3 as dot,
+  length3 as len,
+  meanMeshEdgeLength,
+  normalize3 as norm,
+  scale3 as mul,
+  subtract3 as sub,
+  tangentFrame,
+} from "./incisionSceneGeometry";
+import type { VectorLike } from "./incisionSceneGeometry";
+import {
   assessReviewReadiness,
   buildReviewGate,
-  summarizeGuardrails,
 } from "./incisionReviewPolicy";
 import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
 import { createWorkflowWorkerClient } from "./workflowWorkerClient";
-import type { WorkflowWorkerClient } from "./workflowWorkerClient";
 import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.ts";
-import type { Triangle, Vec3 } from "./softBody";
+import type { Vec3 } from "./softBody";
 
 type DynamicRecord = Record<string, any>;
-type VectorLike = ArrayLike<number>;
-type ControllerCleanup = () => void;
-type IncisionMesh = THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>;
-type IncisionLine = THREE.Line<THREE.BufferGeometry, THREE.Material | THREE.Material[]>;
-
-interface IncisionRuntimeState {
-  mounted: boolean;
-  frameId: number;
-  resizeObserver: ResizeObserver | null;
-  verts: Vec3[];
-  tris: Triangle[];
-  atlas: DynamicRecord | null;
-  headAsset: IncisionHeadAssetState | null;
-  assetWarnings: string[];
-  normals: Vec3[];
-  meanEdge: number;
-  unitsPerMm: number;
-  head: Head3D | null;
-  marker: IncisionMesh | null;
-  tumorRing: IncisionLine | null;
-  boundaryLine: IncisionLine | null;
-  candidateLine: IncisionLine | null;
-  endpointHandles: IncisionMesh[];
-  raycaster: THREE.Raycaster;
-  lesion: number;
-  boundaryPoints: Vec3[];
-  boundaryActive: boolean;
-  saved: DynamicRecord[];
-  result: any;
-  baseResult: any;
-  secondaryCues: any;
-  workflowWorker: WorkflowWorkerClient | null;
-  workflowWorkerFailed: boolean;
-  reactCommandCleanup: ControllerCleanup | null;
-  editTimeline: DynamicRecord[];
-  editCursor: number;
-  lastConsoleTraceSignature: string;
-  generationCount: number;
-}
-
-interface RuntimeEdit extends DynamicRecord {
-  angle_offset_deg: number;
-  length_scale: number;
-  width_scale: number;
-  tip_angle_deg: number | null;
-  shift_along_mm: number;
-  shift_perp_mm: number;
-  reason: string;
-  session_history?: DynamicRecord[];
-}
-
-interface PointerDragState {
-  x: number;
-  y: number;
-  moved: number;
-  id: number;
-  handle?: number | null;
-}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function controllerEvent(event: Event): Event & { detail?: unknown } {
-  return event as Event & { detail?: unknown };
-}
-
-function fileFromEvent(event: Event): File | undefined {
-  return (event.target as HTMLInputElement | null)?.files?.[0] ?? undefined;
-}
-
 let els = {} as IncisionDomElements;
-
-const sub = (a: VectorLike, b: VectorLike): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const add = (a: VectorLike, b: VectorLike): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const mul = (a: VectorLike, s: number): Vec3 => [a[0] * s, a[1] * s, a[2] * s];
-const dot = (a: VectorLike, b: VectorLike): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const len = (v: VectorLike): number => Math.hypot(v[0], v[1], v[2]);
-const norm = (v: VectorLike): Vec3 => { const l = len(v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
-const cross = (a: VectorLike, b: VectorLike): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-function clamp(v: number, lo: number, hi: number): number { return Math.max(lo, Math.min(hi, v)); }
-
-function createRuntimeState(): IncisionRuntimeState {
-  return {
-    mounted: false,
-    frameId: 0,
-    resizeObserver: null,
-    verts: [],
-    tris: [],
-    atlas: null,
-    headAsset: null,
-    assetWarnings: [],
-    normals: [],
-    meanEdge: 1,
-    unitsPerMm: 1,
-    head: null,
-    marker: null,
-    tumorRing: null,
-    boundaryLine: null,
-    candidateLine: null,
-    endpointHandles: [],
-    raycaster: new THREE.Raycaster(),
-    lesion: 0,
-    boundaryPoints: [],
-    boundaryActive: false,
-    saved: [],
-    result: null,
-    baseResult: null,
-    secondaryCues: null,
-    workflowWorker: null,
-    workflowWorkerFailed: false,
-    reactCommandCleanup: null,
-    editTimeline: [],
-    editCursor: 0,
-    lastConsoleTraceSignature: "",
-    generationCount: 0,
-  };
-}
-
-let S = createRuntimeState();
+let S: IncisionRuntimeState = createIncisionControllerState();
 
 function currentTumorFormSnapshot() {
   return buildTumorFormSnapshot({
@@ -275,7 +208,7 @@ function currentEditSnapshot() {
     tipAngleDeg: Number(els.tipAngle?.value || baseTipAngleDeg()),
     statusLabel: els.editStatus?.textContent || "工具建议",
     statusActive: Boolean(els.editStatus?.classList?.contains("active")),
-    editActive: editIsActive(edit),
+    editActive: incisionEditIsActive(edit),
     widthScaleVisible: !els.widthScaleWrap?.classList?.contains("hidden"),
     tipAngleVisible: !els.tipAngleWrap?.classList?.contains("hidden"),
     historyLabel: els.editHistoryState?.textContent || "编辑版本：v1 · 无已提交调整",
@@ -360,17 +293,6 @@ function updateAssetLoading(evt: DynamicRecord = {}): void {
 function hideAssetLoading() {
   els.assetLoading?.classList.add("hidden");
   publishIncisionState("asset_loaded");
-}
-
-function meanEdge(verts: Vec3[], tris: Triangle[]): number {
-  let e = 0, n = 0;
-  for (const [a, b, c] of tris) {
-    for (const [p, q] of [[a, b], [b, c], [c, a]]) {
-      e += len(sub(verts[p], verts[q]));
-      n++;
-    }
-  }
-  return n ? e / n : 1;
 }
 
 function defaultLesion(): number {
@@ -489,7 +411,7 @@ async function boot() {
   if (!S.mounted) return;
   S.verts = head.vertices; S.tris = head.triangles; S.atlas = atlas; S.headAsset = headAsset; S.assetWarnings = headAsset.warnings;
   S.normals = vertexNormals(S.verts, S.tris);
-  S.meanEdge = meanEdge(S.verts, S.tris);
+  S.meanEdge = meanMeshEdgeLength(S.verts, S.tris);
   S.unitsPerMm = unitsPerMmFromVertices(S.verts);
 
   S.head = new Head3D(els.canvas);
@@ -693,15 +615,6 @@ function invalidateReviewAfterGeometryChange(message = "候选几何已变化，
   }
 }
 
-function downloadText(filename: string, text: string, type = "application/json") {
-  const blob = new Blob([text], { type });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
 function exportPreflightPasses(payload: unknown, label: string) {
   const report = auditExportPayload(payload);
   if (report.passed) return true;
@@ -771,27 +684,6 @@ function updateAnatomyPreview() {
   );
 }
 
-function tangentFrame(normal: VectorLike, axis: VectorLike = [1, 0, 0]) {
-  const u0 = norm(cross(normal, axis));
-  const u = len(u0) > 0 ? u0 : [1, 0, 0];
-  const v = norm(cross(normal, u));
-  return { u, v };
-}
-
-function ringGeometry(center: VectorLike, normal: VectorLike, radius: number) {
-  const { u, v } = tangentFrame(normal, [0, 1, 0]);
-  const lift = S.meanEdge * 0.18;
-  const pos = [];
-  for (let i = 0; i <= 72; i++) {
-    const t = i / 72 * Math.PI * 2;
-    const p = add(add(center, mul(u, Math.cos(t) * radius)), add(mul(v, Math.sin(t) * radius), mul(normal, lift)));
-    pos.push(...p);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  return g;
-}
-
 function ellipseBoundaryPoints(samples = 32): Vec3[] {
   const center = S.verts[S.lesion], normal = S.normals[S.lesion];
   const { u, v } = tangentFrame(normal, [0, 1, 0]);
@@ -813,31 +705,6 @@ function tumorBoundaryPoints(): Vec3[] {
   return ellipseBoundaryPoints();
 }
 
-function boundaryGeometry(points: VectorLike[], normal: VectorLike, closed = true) {
-  const lift = S.meanEdge * 0.22;
-  const pos = [];
-  const pts = closed && points.length ? points.concat([points[0]]) : points;
-  for (const p0 of pts || []) {
-    const p = add(p0, mul(normal, lift));
-    pos.push(...p);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  return g;
-}
-
-function polylineGeometry(points: VectorLike[], normal: VectorLike) {
-  const lift = S.meanEdge * 0.32;
-  const pos = [];
-  for (const p0 of points || []) {
-    const p = add(p0, mul(normal, lift));
-    pos.push(...p);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  return g;
-}
-
 function setLesion(i: number) {
   S.lesion = i;
   const center = S.verts[i], normal = S.normals[i];
@@ -855,12 +722,22 @@ function updateTumorRing() {
   const marginMm = Number(tumor.margin_mm || 0);
   const radiusMm = tumor.kind === "cutaneous" ? diameterMm / 2 + marginMm : diameterMm / 2;
   const old = S.tumorRing.geometry;
-  S.tumorRing.geometry = ringGeometry(S.verts[S.lesion], S.normals[S.lesion], radiusMm * S.unitsPerMm);
+  S.tumorRing.geometry = buildRingGeometry(
+    S.verts[S.lesion],
+    S.normals[S.lesion],
+    radiusMm * S.unitsPerMm,
+    S.meanEdge,
+  );
   old.dispose();
   if (!S.boundaryLine) return;
   const bold = S.boundaryLine.geometry;
   const boundary = tumorBoundaryPoints();
-  S.boundaryLine.geometry = boundaryGeometry(boundary, S.normals[S.lesion], boundary.length >= 3);
+  S.boundaryLine.geometry = buildBoundaryGeometry(
+    boundary,
+    S.normals[S.lesion],
+    S.meanEdge,
+    boundary.length >= 3,
+  );
   S.boundaryLine.visible = tumor.kind === "cutaneous" && boundary.length >= 2;
   bold.dispose();
   updateBoundaryStatus();
@@ -869,7 +746,11 @@ function updateTumorRing() {
 function drawCandidate(result: DynamicRecord) {
   if (!S.candidateLine) return;
   const old = S.candidateLine.geometry;
-  S.candidateLine.geometry = polylineGeometry(result.candidate.polyline, S.normals[S.lesion]);
+  S.candidateLine.geometry = buildPolylineGeometry(
+    result.candidate.polyline,
+    S.normals[S.lesion],
+    S.meanEdge,
+  );
   old.dispose();
   (S.candidateLine.material as THREE.LineBasicMaterial).color.set(result.candidate.type === "linear" ? 0x34d399 : 0x5eead4);
   const endpoints = result.candidate.endpoints || [];
@@ -911,51 +792,11 @@ function clearBoundaryPoints() {
   publishIncisionState("tumor_boundary_clear");
 }
 
-function tumorCommandControl(command: IncisionTumorCommand): HTMLInputElement | HTMLSelectElement | null {
-  if (command === "kind_changed") return els.tumorKind;
-  if (command === "diameter_input" || command === "diameter_changed") return els.diameter;
-  if (command === "author_changed") return els.tumorAuthor;
-  if (command === "depth_input" || command === "depth_changed") return els.depth;
-  if (command === "margin_input" || command === "margin_changed") return els.margin;
-  if (command === "boundary_mode_changed") return els.boundaryMode;
-  if (command === "ellipse_ratio_input" || command === "ellipse_ratio_changed") return els.ellipseRatio;
-  return null;
-}
-
-function applyReactControlValue(
-  control: HTMLInputElement | HTMLSelectElement | null,
-  value: unknown,
-) {
-  if (!control || (typeof value !== "string" && typeof value !== "number")) return;
-  const serializedValue = String(value);
-  if (control instanceof HTMLSelectElement) {
-    if ([...control.options].some((option) => option.value === serializedValue)) control.value = serializedValue;
-    return;
-  }
-  if (control.type === "range") {
-    const numericValue = Number(serializedValue);
-    if (!Number.isFinite(numericValue)) return;
-    const min = Number(control.min);
-    const max = Number(control.max);
-    control.value = String(clamp(
-      numericValue,
-      Number.isFinite(min) ? min : numericValue,
-      Number.isFinite(max) ? max : numericValue,
-    ));
-    return;
-  }
-  control.value = serializedValue;
-}
-
-function applyReactTumorCommandValue(command: IncisionTumorCommand, value: unknown) {
-  applyReactControlValue(tumorCommandControl(command), value);
-}
-
 function handleReactTumorCommand(event: Event) {
-  const detail = readControllerCommandDetail(controllerEvent(event), INCISION_TUMOR_COMMANDS);
+  const detail = readIncisionTumorCommand(event);
   if (!detail) return;
   const { command } = detail;
-  applyReactTumorCommandValue(command, detail.value);
+  applyReactTumorControlValue(els, command, detail.value);
   if (command === "kind_changed") {
     S.boundaryActive = false;
     updateFormVisibility();
@@ -1010,7 +851,7 @@ function handleReactTumorCommand(event: Event) {
 }
 
 function handleReactSecondaryCueCommand(event: Event) {
-  const detail = readControllerCommandDetail(controllerEvent(event), INCISION_SECONDARY_CUE_COMMANDS);
+  const detail = readIncisionSecondaryCueCommand(event);
   if (!detail) return;
   const { command } = detail;
   if (command === "import_secondary_cue") {
@@ -1030,25 +871,13 @@ function fmt(x: unknown, digits = 1): string {
   return Number.isFinite(Number(x)) ? Number(x).toFixed(digits) : "—";
 }
 
-function neutralEdit(): RuntimeEdit {
-  return {
-    angle_offset_deg: 0,
-    length_scale: 1,
-    width_scale: 1,
-    tip_angle_deg: null,
-    shift_along_mm: 0,
-    shift_perp_mm: 0,
-    reason: "",
-  };
-}
-
 function baseTipAngleDeg(): number {
   const base = S.baseResult?.original_candidate || S.baseResult?.candidate;
   const value = Number(base?.metrics?.tip_angle_target_deg ?? base?.tip_angle_deg ?? 30);
   return Number.isFinite(value) ? value : 30;
 }
 
-function currentEditBase(): RuntimeEdit {
+function currentEditBase(): IncisionEdit {
   const tipAngleDeg = Number(els.tipAngle.value);
   const baseTipAngle = baseTipAngleDeg();
   return {
@@ -1064,75 +893,11 @@ function currentEditBase(): RuntimeEdit {
   };
 }
 
-function editIsActive(edit: DynamicRecord = currentEdit()): boolean {
-  return edit.angle_offset_deg !== 0 ||
-    edit.length_scale !== 1 ||
-    edit.width_scale !== 1 ||
-    edit.tip_angle_deg != null ||
-    edit.shift_along_mm !== 0 ||
-    edit.shift_perp_mm !== 0 ||
-    Boolean(edit.reason);
-}
-
-function editsEqual(a: DynamicRecord = neutralEdit(), b: DynamicRecord = neutralEdit()): boolean {
-  return Number(a.angle_offset_deg || 0) === Number(b.angle_offset_deg || 0) &&
-    Number(a.length_scale || 1) === Number(b.length_scale || 1) &&
-    Number(a.width_scale || 1) === Number(b.width_scale || 1) &&
-    (a.tip_angle_deg == null ? null : Number(a.tip_angle_deg)) ===
-      (b.tip_angle_deg == null ? null : Number(b.tip_angle_deg)) &&
-    Number(a.shift_along_mm || 0) === Number(b.shift_along_mm || 0) &&
-    Number(a.shift_perp_mm || 0) === Number(b.shift_perp_mm || 0) &&
-    String(a.reason || "") === String(b.reason || "");
-}
-
-function cloneEdit(edit: DynamicRecord = neutralEdit()): RuntimeEdit {
-  return {
-    angle_offset_deg: Number(edit.angle_offset_deg || 0),
-    length_scale: Number(edit.length_scale || 1),
-    width_scale: Number(edit.width_scale || 1),
-    tip_angle_deg: edit.tip_angle_deg == null ? null : Number(edit.tip_angle_deg),
-    shift_along_mm: Number(edit.shift_along_mm || 0),
-    shift_perp_mm: Number(edit.shift_perp_mm || 0),
-    reason: String(edit.reason || ""),
-  };
-}
-
-function ensureEditTimeline(): void {
-  if (!Array.isArray(S.editTimeline) || !S.editTimeline.length) {
-    S.editTimeline = [neutralEdit()];
-    S.editCursor = 0;
-  }
-}
-
-function editHistoryEntriesForCurrent(edit: DynamicRecord = currentEditBase()): DynamicRecord[] {
-  ensureEditTimeline();
-  const rawCommitted = S.editTimeline.slice(1, Math.max(1, S.editCursor + 1));
-  const committedSource = rawCommitted.some((entry) => editIsActive(entry))
-    ? rawCommitted
-    : rawCommitted.filter((entry) => editIsActive(entry));
-  const committed = committedSource.map((entry: DynamicRecord, idx: number) => ({
-      ...cloneEdit(entry),
-      source: "web/incision_workflow",
-      interaction: entry.interaction || "committed_control_edit",
-      history_index: idx + 1,
-    }));
-  const cursorEdit = S.editTimeline[S.editCursor] || neutralEdit();
-  if (!editsEqual(edit, cursorEdit) && editIsActive(edit)) {
-    committed.push({
-      ...cloneEdit(edit),
-      source: "web/incision_workflow",
-      interaction: "live_preview_uncommitted_edit",
-      history_index: committed.length + 1,
-    });
-  }
-  return committed;
-}
-
-function currentEdit(): RuntimeEdit {
+function currentEdit(): IncisionEdit {
   const edit = currentEditBase();
   return {
     ...edit,
-    session_history: editHistoryEntriesForCurrent(edit),
+    session_history: S.editHistory.entriesFor(edit),
   };
 }
 
@@ -1145,7 +910,7 @@ function syncEditLabels() {
   els.shiftPerpVal.textContent = els.shiftPerp.value;
 }
 
-function setEditControls(edit: DynamicRecord = neutralEdit()) {
+function setEditControls(edit: DynamicRecord = neutralIncisionEdit()) {
   els.angleOffset.value = String(Math.round(Number(edit.angle_offset_deg || 0)));
   els.lengthScale.value = String(Math.round(Number(edit.length_scale || 1) * 100));
   els.widthScale.value = String(Math.round(Number(edit.width_scale || 1) * 100));
@@ -1159,47 +924,32 @@ function setEditControls(edit: DynamicRecord = neutralEdit()) {
 }
 
 function resetEditControls() {
-  setEditControls(neutralEdit());
+  setEditControls(neutralIncisionEdit());
 }
 
 function resetEditTimeline() {
-  S.editTimeline = [neutralEdit()];
-  S.editCursor = 0;
+  S.editHistory.reset();
   renderEditHistoryState();
 }
 
 function renderEditHistoryState() {
   if (!els.editHistoryState) return;
-  ensureEditTimeline();
   const edit = currentEditBase();
-  const committedCount = Math.max(0, S.editCursor);
-  const uncommitted = !editsEqual(edit, S.editTimeline[S.editCursor] || neutralEdit());
-  const historyCount = editHistoryEntriesForCurrent(edit).length;
-  const version = 1 + historyCount;
-  const pending = uncommitted ? " · 当前预览未提交" : "";
-  els.editHistoryState.textContent = historyCount
-    ? `编辑版本：v${version} · 已提交 ${committedCount} 步${pending}`
+  const summary = S.editHistory.summary(edit);
+  const pending = summary.uncommitted ? " · 当前预览未提交" : "";
+  els.editHistoryState.textContent = summary.historyCount
+    ? `编辑版本：v${summary.version} · 已提交 ${summary.committedCount} 步${pending}`
     : `编辑版本：v1 · 无已提交调整${pending}`;
-  if (els.undoEdit) els.undoEdit.disabled = S.editCursor <= 0;
-  if (els.redoEdit) els.redoEdit.disabled = S.editCursor >= S.editTimeline.length - 1;
+  if (els.undoEdit) els.undoEdit.disabled = !summary.canUndo;
+  if (els.redoEdit) els.redoEdit.disabled = !summary.canRedo;
   publishIncisionState("edit_state");
 }
 
 function commitEditSnapshot(interaction = "control_change") {
-  ensureEditTimeline();
-  const edit = {
-    ...cloneEdit(currentEditBase()),
-    interaction,
-    committed_at: new Date().toISOString(),
-  };
-  const current = S.editTimeline[S.editCursor] || neutralEdit();
-  if (editsEqual(edit, current)) {
+  if (!S.editHistory.commit(currentEditBase(), interaction)) {
     renderEditHistoryState();
     return;
   }
-  S.editTimeline = S.editTimeline.slice(0, S.editCursor + 1);
-  S.editTimeline.push(edit);
-  S.editCursor = S.editTimeline.length - 1;
   renderEditHistoryState();
   if (S.baseResult) {
     const result = applyCandidateEdit(S.baseResult, currentEdit(), S.normals[S.lesion], S.unitsPerMm, S.verts);
@@ -1218,19 +968,17 @@ function applyEditSnapshot(edit: DynamicRecord) {
 }
 
 function undoEditSnapshot() {
-  ensureEditTimeline();
-  if (S.editCursor <= 0) return;
-  S.editCursor -= 1;
+  const edit = S.editHistory.undo();
+  if (!edit) return;
   invalidateReviewAfterGeometryChange("已撤销上一步医生调整，审阅状态已回到待医生确认。");
-  applyEditSnapshot(S.editTimeline[S.editCursor]);
+  applyEditSnapshot(edit);
 }
 
 function redoEditSnapshot() {
-  ensureEditTimeline();
-  if (S.editCursor >= S.editTimeline.length - 1) return;
-  S.editCursor += 1;
+  const edit = S.editHistory.redo();
+  if (!edit) return;
   invalidateReviewAfterGeometryChange("已重做医生调整，审阅状态已回到待医生确认。");
-  applyEditSnapshot(S.editTimeline[S.editCursor]);
+  applyEditSnapshot(edit);
 }
 
 function resetEditToToolSuggestion() {
@@ -1241,25 +989,11 @@ function resetEditToToolSuggestion() {
   renderResult(S.baseResult);
 }
 
-function editCommandControl(controlId: unknown): HTMLInputElement | HTMLSelectElement | null {
-  if (controlId === "angleOffsetDeg") return els.angleOffset;
-  if (controlId === "lengthScale") return els.lengthScale;
-  if (controlId === "widthScale") return els.widthScale;
-  if (controlId === "tipAngleDeg") return els.tipAngle;
-  if (controlId === "shiftAlongMm") return els.shiftAlong;
-  if (controlId === "shiftPerpMm") return els.shiftPerp;
-  if (controlId === "editReason") return els.editReason;
-  return null;
-}
-
 function handleReactEditCommand(event: Event) {
-  const detail = readControllerCommandDetail(controllerEvent(event), INCISION_EDIT_COMMANDS);
+  const detail = readIncisionEditCommand(event);
   if (!detail) return;
   const { command } = detail;
-  applyReactControlValue(
-    editCommandControl(detail.controlId),
-    detail.value,
-  );
+  applyReactEditControlValue(els, detail.controlId, detail.value);
   if (command === "preview_edit") {
     applyEditControls();
     return;
@@ -1290,7 +1024,7 @@ function updateEditVisibility(result: DynamicRecord) {
   const fusiform = result?.candidate?.type === "fusiform";
   els.widthScaleWrap.classList.toggle("hidden", !fusiform);
   els.tipAngleWrap.classList.toggle("hidden", !fusiform);
-  const active = editIsActive();
+  const active = incisionEditIsActive(currentEdit());
   els.editStatus.textContent = active ? "已调整" : "工具建议";
   els.editStatus.classList.toggle("active", active);
   renderEditHistoryState();
@@ -1300,7 +1034,7 @@ function applyEditControls() {
   syncEditLabels();
   renderEditHistoryState();
   if (!S.baseResult) return;
-  if (editIsActive()) invalidateReviewAfterGeometryChange();
+  if (incisionEditIsActive(currentEdit())) invalidateReviewAfterGeometryChange();
   const result = applyCandidateEdit(S.baseResult, currentEdit(), S.normals[S.lesion], S.unitsPerMm, S.verts);
   renderResult(result);
 }
@@ -1409,22 +1143,6 @@ function renderWorkflowGate(result: DynamicRecord) {
   els.workflowGate.title = `observed_actions=${observedActions.join(", ")}`;
 }
 
-function formatRecoveredFailureSummary(audit: DynamicRecord, includeError = false): string {
-  const failures = Array.isArray(audit?.recovered_failures) ? audit.recovered_failures : [];
-  return failures
-    .map((failure: DynamicRecord) => {
-      const variant = failure.variant
-        || (failure.angle_offset_deg != null ? `${fmt(failure.angle_offset_deg)}°` : "候选变体");
-      const tool = failure.tool || "确定性工具";
-      const recovery = failure.recovery === "skipped_failed_variant_and_kept_other_candidates"
-        ? "已跳过失败变体并继续比较"
-        : failure.recovery || "已记录恢复动作";
-      const error = includeError && failure.error ? `；错误 ${String(failure.error).slice(0, 80)}` : "";
-      return `${variant}/${tool}：${recovery}${error}`;
-    })
-    .join("；");
-}
-
 function renderWorkflowComparison(result: DynamicRecord) {
   if (!els.workflowComparison) return;
   const comparison = Array.isArray(result.candidate_comparison) ? result.candidate_comparison : [];
@@ -1516,104 +1234,27 @@ function reviewGate(review: DynamicRecord, result: DynamicRecord) {
   });
 }
 
-function candidateEditSession(result: DynamicRecord = S.result) {
-  const provenance = result?.candidate?.provenance || {};
-  const history = Array.isArray(provenance.edit_history) ? provenance.edit_history : [];
-  return {
-    schema_version: "candidate-edit-session/v0.1",
-    candidate_version: Number(provenance.candidate_version || 1),
-    edit_count: history.length,
-    current_edit_id: provenance.clinician_edit?.edit_id || null,
-    undo_available: Boolean(els.undoEdit && !els.undoEdit.disabled),
-    redo_available: Boolean(els.redoEdit && !els.redoEdit.disabled),
-    source: "web/incision_workflow",
-    history: history.map((entry: DynamicRecord) => ({
-      edit_id: entry.edit_id,
-      resulting_candidate_version: entry.resulting_candidate_version,
-      angle_offset_deg: entry.angle_offset_deg,
-      length_scale: entry.length_scale,
-      width_scale: entry.width_scale,
-      tip_angle_deg: entry.tip_angle_deg,
-      shift_along_mm: entry.shift_along_mm,
-      shift_perp_mm: entry.shift_perp_mm,
-      reason: entry.reason || "",
-      interaction: entry.interaction || entry.source || "clinician_adjustment",
-    })),
-  };
-}
-
-function sensitiveStructureInspectionFor(result: DynamicRecord = S.result) {
-  if (result?.sensitive_structure_inspection) return result.sensitive_structure_inspection;
-  const trace = Array.isArray(result?.trace) ? result.trace : [];
-  for (let i = trace.length - 1; i >= 0; i -= 1) {
-    const step = trace[i];
-    if (step?.action === "inspect_sensitive_structures" && step.observation) return step.observation;
-  }
-  return null;
-}
-
 function reviewRecord(result: DynamicRecord = S.result, label = "候选") {
   const createdAt = new Date().toISOString();
   const review = currentReviewMetadata(createdAt);
-  const actor = review.reviewer || result.tumor?.author || "unknown";
   const gate = reviewGate(review, result);
-  const traceGate = workflowTraceGate(result);
-  const tumorBoundarySummary = boundarySummaryFor(result.tumor, result);
-  return {
-    schema_version: "incision-review-record/v0.4",
-    id: `candidate_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+  return buildIncisionReviewRecord({
+    result,
     label,
-    created_at: createdAt,
-    tumor: result.tumor,
-    tumor_quality: tumorQualityFor(result),
-    tumor_boundary_summary: tumorBoundarySummary,
-    head_asset: currentHeadAssetSnapshot(),
-    secondary_cues: secondaryCueReviewSummary(),
-    anatomy: result.anatomy,
-    sensitive_structure_inspection: sensitiveStructureInspectionFor(result),
-    direction: result.direction,
-    candidate: result.candidate,
-    original_candidate: result.original_candidate || result.candidate,
-    candidate_edit_session: candidateEditSession(result),
-    guardrails: result.guardrails,
-    trace: result.trace,
-    workflow_trace_gate: traceGate,
-    workflow_plan_audit: result.workflow_plan_audit || null,
-    workflow_execution_events: result.workflow_execution_events || null,
-    candidate_alternatives: result.candidate_alternatives || [],
-    candidate_comparison: result.candidate_comparison || [],
-    workflow_audit: result.workflow_audit || null,
-    summary: result.summary || null,
-    next_step: result.next_step || null,
-    privacy_audit: privacyAudit(),
-    review_status: review.status,
+    createdAt,
     review,
-    review_gate: gate,
-    guardrail_summary: summarizeGuardrails(result.guardrails),
-    audit_events: [
-      {
-        event: "candidate_saved",
-        at: createdAt,
-        actor,
-        status: review.status,
-        approval_ready: gate.approval_ready,
-        live_overlay_ready: gate.live_overlay_ready,
-        workflow_trace_gate_passed: traceGate.passed,
-        active_topology_id: S.headAsset?.topologyId || null,
-        active_topology_version: S.headAsset?.topologyVersion || null,
-      },
-      ...(review.status === "pending_clinician_confirmation"
-        ? []
-        : [{
-          event: "clinician_review_recorded",
-          at: createdAt,
-          actor,
-          status: review.status,
-          notes_present: Boolean(review.notes),
-          high_guardrail_codes: gate.high_guardrail_codes,
-        }]),
-    ],
-  };
+    reviewGate: gate,
+    tumorQuality: tumorQualityFor(result),
+    tumorBoundarySummary: boundarySummaryFor(result.tumor, result),
+    headAsset: currentHeadAssetSnapshot(),
+    secondaryCues: secondaryCueReviewSummary(),
+    candidateEditSession: buildCandidateEditSession(result, {
+      undoAvailable: Boolean(els.undoEdit && !els.undoEdit.disabled),
+      redoAvailable: Boolean(els.redoEdit && !els.redoEdit.disabled),
+    }),
+    sensitiveStructureInspection: findSensitiveStructureInspection(result),
+    privacyAudit: privacyAudit(),
+  });
 }
 
 function renderSaved() {
@@ -1778,7 +1419,7 @@ function recordReviewDecision(status: string, label: string) {
 }
 
 function handleReactReviewCommand(event: Event) {
-  const detail = readControllerCommandDetail(controllerEvent(event), INCISION_REVIEW_COMMANDS);
+  const detail = readIncisionReviewCommand(event);
   if (!detail) return;
   const { command } = detail;
   if (command === "review_state_changed") {
@@ -1799,7 +1440,7 @@ function handleReactReviewCommand(event: Event) {
 }
 
 function handleReactLibraryCommand(event: Event) {
-  const detail = readControllerCommandDetail(controllerEvent(event), INCISION_LIBRARY_COMMANDS);
+  const detail = readIncisionLibraryCommand(event);
   if (!detail) return;
   const { command, id } = detail;
   if (command === "save_current") {
@@ -1845,15 +1486,11 @@ function exportReviewJson() {
     return;
   }
   const current = S.result ? reviewRecord(S.result, "当前候选") : null;
-  const records = [current, ...S.saved].filter(Boolean) as DynamicRecord[];
-  const payload = {
-    schema_version: "incision-review-export/v0.4",
-    exported_at: new Date().toISOString(),
+  const payload = buildReviewExportPayload({
     current,
     saved: S.saved,
-    secondary_cues: secondaryCueReviewSummary(),
-    candidate_comparison: compareCandidateRecords(records),
-  };
+    secondaryCues: secondaryCueReviewSummary(),
+  });
   if (!exportPreflightPasses(payload, "审阅 JSON 导出")) return;
   downloadText(`incision_review_${Date.now()}.json`, JSON.stringify(payload, null, 2));
 }
@@ -1861,19 +1498,11 @@ function exportReviewJson() {
 function exportTumorJson() {
   if (!S.verts) return;
   const tumor = tumorInput();
-  const payload = {
-    schema_version: "tumor-input/v0.2",
-    exported_at: new Date().toISOString(),
+  const payload = buildTumorExportPayload({
     tumor,
-    tumor_quality: summarizeTumorInputQuality(tumor),
-    boundary_summary: boundarySummaryFor(tumor),
-    privacy_audit: {
-      raw_image_sent: false,
-      raw_video_sent: false,
-      contains_face_image: false,
-      contains_abstract_face_coordinates: true,
-    },
-  };
+    tumorQuality: summarizeTumorInputQuality(tumor),
+    boundarySummary: boundarySummaryFor(tumor),
+  });
   if (!exportPreflightPasses(payload, "肿物输入 JSON 导出")) return;
   downloadText(`tumor_input_${Date.now()}.json`, JSON.stringify(payload, null, 2));
   els.stageStatus.textContent = "已导出肿物输入 JSON";
@@ -1954,102 +1583,8 @@ function exportReport() {
     return;
   }
   const rows = (S.saved.length ? S.saved : [reviewRecord(S.result, "当前候选")]).filter(Boolean) as DynamicRecord[];
-  const comparison = compareCandidateRecords(rows);
-  const comparisonBody = comparison.length
-    ? [
-      "## 候选工程排序",
-      "",
-      "该排序只按 guardrails、RSTL 偏角、覆盖缺口、敏感距离和几何误差比较，不是临床推荐或手术指令。",
-      "",
-      ...comparison.map((c: DynamicRecord) => `- #${c.rank} ${c.label}：${fmt(c.score, 1)} 分；${c.reasons.join("；")}`),
-      "",
-    ].join("\n")
-    : "";
-  const body = rows.map((r, idx) => {
-    const metrics = r.candidate.metrics || {};
-    const boundary = r.tumor_boundary_summary || {};
-    const warningLines = (r.guardrails.warnings || [])
-      .map((w: DynamicRecord) => `  - ${w.code} [${w.severity}] ${w.message || ""}`)
-      .join("\n") || "  - 无";
-    const overrideLines = (r.guardrails.suggested_overrides || [])
-      .map((o: DynamicRecord) => `  - ${o.kind}: ${o.reason || ""}`)
-      .join("\n") || "  - 无";
-    const recoveredFailureDetails = formatRecoveredFailureSummary(r.workflow_audit, true);
-    return [
-    `## 候选 ${idx + 1}: ${r.label}`,
-    `- 类型：${r.candidate.type === "linear" ? "皮下线性切口" : "皮表梭形切口"}`,
-    `- 候选版本：v${r.candidate.provenance?.candidate_version || 1}；编辑记录 ${(r.candidate.provenance?.edit_history || []).length} 条`,
-    r.head_asset
-      ? `- 头模资产：${r.head_asset.label}；topology=${r.head_asset.topologyId}@${r.head_asset.topologyVersion}；顶点 ${r.head_asset.vertexCount} / 三角面 ${r.head_asset.triangleCount}；状态 ${r.head_asset.statusLabel}`
-      : null,
-    (r.head_asset?.warnings || []).length
-      ? `- 头模资产提示：${r.head_asset.warnings.join("；")}`
-      : null,
-    r.candidate_edit_session?.edit_count
-      ? `- 编辑时间线：${r.candidate_edit_session.edit_count} 步；当前 edit_id ${r.candidate_edit_session.current_edit_id || "—"}`
-      : null,
-    `- 肿物：${r.tumor.kind}，直径 ${fmt(r.tumor.diameter_mm)} mm，切缘 ${fmt(r.tumor.margin_mm)} mm`,
-    (r.tumor_quality?.warnings || []).length
-      ? `- 肿物输入提示：${r.tumor_quality.warnings.map((w: DynamicRecord) => `${w.code}(${w.severity})`).join("；")}`
-      : null,
-    r.secondary_cues?.present
-      ? `- 辅助线索：${r.secondary_cues.confidence_label}；人工确认 ${r.secondary_cues.manual_confirmed ? "是" : "否"}；不参与几何 ${r.secondary_cues.used_for_geometry === false ? "是" : "否"}`
-      : null,
-    boundary.boundary_used
-      ? `- 肿物边界摘要：点数 ${boundary.point_count ?? "—"}；长轴 ${fmt(boundary.axis_diameter_mm)} mm；短轴 ${fmt(boundary.perp_diameter_mm)} mm；面积 ${fmt(boundary.area_mm2)} mm²；自交 ${boundary.self_intersection ? "是" : "否"}；中心偏移 ${fmt(boundary.center_shift_mm)} mm`
-      : null,
-    `- 面部分区：${r.anatomy.region} / ${r.anatomy.subunit}`,
-    (r.anatomy.confidence_reasons || []).length
-      ? `- 分区置信原因：${r.anatomy.confidence_reasons.join(", ")}`
-      : null,
-    `- RSTL 来源：${directionSourceLabel(r.direction.source)}；support ${r.direction.support_count ?? 0}；轴向离散 ${fmt(r.direction.angular_spread_deg)}°`,
-    `- RSTL 方向置信度：${Math.round((r.direction.confidence || 0) * 100)}%`,
-    (r.direction.confidence_reasons || []).length
-      ? `- RSTL 低置信原因：${r.direction.confidence_reasons.join(", ")}`
-      : null,
-    r.sensitive_structure_inspection
-      ? `- 敏感结构检查：中心距 ${fmt(r.sensitive_structure_inspection.center_free_margin_distance_mm)} mm / 阈值 ${fmt(r.sensitive_structure_inspection.center_free_margin_threshold_mm)} mm；候选几何距 ${fmt(r.sensitive_structure_inspection.candidate_free_margin_distance_mm)} mm / 阈值 ${fmt(r.sensitive_structure_inspection.candidate_free_margin_threshold_mm)} mm；warning ${r.sensitive_structure_inspection.warning_count || 0} 个；保护方向 ${r.sensitive_structure_inspection.protective_direction?.direction_hint || "无"}`
-      : null,
-    `- 工作流工具门控：passed=${Boolean(r.workflow_trace_gate?.passed)}；order_ok=${Boolean(r.workflow_trace_gate?.order_ok)}；missing=${(r.workflow_trace_gate?.missing_actions || []).map((item: DynamicRecord) => item.label || item.key).join(", ") || "无"}`,
-    r.workflow_plan_audit
-      ? `- 工作流计划：passed=${Boolean(r.workflow_plan_audit.passed)}；步骤 ${r.workflow_plan_audit.completed_step_count || 0}/${r.workflow_plan_audit.step_count || 0}；失败 ${r.workflow_plan_audit.failed_step_count || 0}`
-      : null,
-    r.workflow_execution_events
-      ? `- 工作流执行事件：passed=${Boolean(r.workflow_execution_events.passed)}；事件 ${r.workflow_execution_events.event_count || 0} 条；工具事件 ${r.workflow_execution_events.tool_event_count || 0} 条；重试 ${r.workflow_execution_events.retry_event_count || 0}；恢复 ${r.workflow_execution_events.recovery_event_count || 0}`
-      : null,
-    r.workflow_audit
-      ? `- 浏览器 workflow 审计：候选 ${r.workflow_audit.candidate_count || 0} 个；比较 ${r.workflow_audit.comparison_ready ? "已生成" : "未生成"}；恢复失败 ${r.workflow_audit.tool_failure_count || 0} 个`
-      : null,
-    recoveredFailureDetails ? `- 工作流恢复详情：${recoveredFailureDetails}` : null,
-    (r.candidate_comparison || []).length
-      ? `- 浏览器候选比较：${r.candidate_comparison.map((c: DynamicRecord) => `#${c.rank} ${c.label || c.id} ${fmt(c.score, 1)}分`).join("；")}（不是临床推荐或手术指令）`
-      : null,
-    `- 候选长度：${fmt(r.candidate.length_mm)} mm`,
-    r.candidate.type === "fusiform"
-      ? `- 梭形宽度 / 长宽比：${fmt(r.candidate.width_mm)} mm / ${fmt(r.candidate.metrics?.length_to_width_ratio, 2)}:1`
-      : null,
-    r.candidate.type === "fusiform"
-      ? `- 尖端角：${fmt(r.candidate.tip_angle_deg)}°；目标 ${fmt(r.candidate.metrics?.tip_angle_target_deg)}°；误差 ${fmt(r.candidate.metrics?.tip_angle_error_deg)}°`
-      : null,
-    r.candidate.type === "fusiform"
-      ? `- 边界质量：点数 ${metrics.boundary_point_count ?? "—"}；面积 ${fmt(metrics.boundary_area_mm2)} mm²；自交 ${metrics.boundary_self_intersection ? "是" : "否"}；中心偏移 ${fmt(metrics.boundary_center_shift_mm)} mm`
-      : null,
-    r.candidate.type === "fusiform"
-      ? `- 梭形包络：outline 面积 ${fmt(metrics.outline_area_mm2)} mm²；单峰收窄 ${metrics.outline_half_width_monotone === false ? "否" : "是"}；对称误差 ${fmt(metrics.outline_symmetry_max_error_mm)} mm；自交 ${metrics.outline_self_intersection ? "是" : "否"}；边界余量 ${fmt(metrics.boundary_envelope_min_margin_mm)} mm；出界点 ${metrics.boundary_envelope_outside_count ?? 0}`
-      : null,
-    metrics.sensitive_free_margin_min_distance_mm != null
-      ? `- 最近敏感游离缘：${metrics.sensitive_free_margin_nearest || "—"}，${fmt(metrics.sensitive_free_margin_min_distance_mm)} mm`
-      : null,
-    `- Guardrails：${r.guardrails.passed ? "通过" : "需医生复核"}`,
-    `- 警告：\n${warningLines}`,
-    `- 建议覆盖项：\n${overrideLines}`,
-    `- 审阅门槛：approval_ready=${Boolean(r.review_gate?.approval_ready)}；live_overlay_ready=${Boolean(r.review_gate?.live_overlay_ready)}；workflow_trace_gate=${Boolean(r.review_gate?.workflow_trace_gate_passed)}；high=${(r.review_gate?.high_guardrail_codes || []).join(", ") || "无"}`,
-    `- 审阅状态：${reviewStatusLabel(r.review_status)}；审阅人：${r.review?.reviewer || "未填写"}`,
-    `- 审阅备注：${r.review?.notes || "无"}`,
-    `- 审阅边界：研究候选记录，非手术指令。`,
-  ].filter(Boolean).join("\n");
-  }).join("\n\n");
-  downloadText(`incision_report_${Date.now()}.md`, `# 切口候选审阅草案\n\n${comparisonBody}${body}\n`, "text/markdown");
+  const artifact = buildIncisionReviewReport(rows);
+  downloadText(artifact.filename, artifact.text, artifact.mimeType);
 }
 
 function exportScreenshot() {
@@ -2057,14 +1592,7 @@ function exportScreenshot() {
     els.stageStatus.textContent = "没有可截图的候选";
     return;
   }
-  els.canvas.toBlob((blob) => {
-    if (!blob) return;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `incision_candidate_${Date.now()}.png`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
+  downloadCanvasPng(els.canvas, `incision_candidate_${Date.now()}.png`);
 }
 
 function stageLiveOverlay() {
@@ -2148,31 +1676,24 @@ async function planWorkflowForCurrentTumor(tumor: TumorInput) {
 
 function facePointFromEvent(e: PointerEvent) {
   if (!S.head || !S.head.mesh) return null;
-  const r = els.canvas.getBoundingClientRect();
-  const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-  S.head.camera.updateMatrixWorld(true);
-  S.head.scene.updateMatrixWorld(true);
-  S.raycaster.setFromCamera(ndc, S.head.camera);
-  const hit = S.raycaster.intersectObject(S.head.mesh, false)[0];
-  if (!hit || !hit.face) return null;
-  const local = S.head.group.worldToLocal(hit.point.clone());
-  return { point: [local.x, local.y, local.z] as Vec3, face: hit.face };
+  return pickFaceSurface(
+    e,
+    els.canvas.getBoundingClientRect(),
+    S.head,
+    S.raycaster,
+  );
 }
 
 function handleFromEvent(e: PointerEvent) {
   if (!S.head || !S.endpointHandles.length) return null;
-  const r = els.canvas.getBoundingClientRect();
-  const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-  S.head.camera.updateMatrixWorld(true);
-  S.head.scene.updateMatrixWorld(true);
-  S.raycaster.setFromCamera(ndc, S.head.camera);
-  const hit = S.raycaster.intersectObjects(S.endpointHandles.filter((h) => h.visible), false)[0];
-  return hit?.object?.userData?.handle ?? null;
-}
-
-function signedAngleDeg(axis0: VectorLike, axis1: VectorLike, normal: VectorLike): number {
-  const perp = norm(cross(normal, axis0));
-  return Math.atan2(dot(axis1, perp), dot(axis1, axis0)) * 180 / Math.PI;
+  return pickEndpointHandle(
+    e,
+    els.canvas.getBoundingClientRect(),
+    S.head.camera,
+    S.head.scene,
+    S.endpointHandles,
+    S.raycaster,
+  );
 }
 
 function setEditFromGeometry(center: VectorLike, axis: VectorLike, lengthMm: number) {
@@ -2182,7 +1703,11 @@ function setEditFromGeometry(center: VectorLike, axis: VectorLike, lengthMm: num
   const normal = S.normals[S.lesion];
   const perp0 = norm(cross(normal, axis0));
   const delta = sub(center, base.center || S.baseResult.tumor.center);
-  const angle = clamp(signedAngleDeg(axis0, axis, normal), Number(els.angleOffset.min), Number(els.angleOffset.max));
+  const angle = clamp(
+    signedAngleDegrees(axis0, axis, normal),
+    Number(els.angleOffset.min),
+    Number(els.angleOffset.max),
+  );
   const lengthScale = clamp((lengthMm / Math.max(Number(base.length_mm || 1), 1)) * 100, Number(els.lengthScale.min), Number(els.lengthScale.max));
   const shiftAlong = clamp(dot(delta, axis0) / S.unitsPerMm, Number(els.shiftAlong.min), Number(els.shiftAlong.max));
   const shiftPerp = clamp(dot(delta, perp0) / S.unitsPerMm, Number(els.shiftPerp.min), Number(els.shiftPerp.max));
@@ -2230,117 +1755,80 @@ function pick(e: PointerEvent) {
 }
 
 function bindWorkbenchEvents() {
-  let drag: PointerDragState | null = null;
-  els.canvas.addEventListener("pointerdown", (e: PointerEvent) => {
-    const handle = handleFromEvent(e);
-  if (handle != null) {
-    drag = { x: e.clientX, y: e.clientY, moved: 0, id: e.pointerId, handle };
-    els.canvas.setPointerCapture(e.pointerId);
-    return;
-  }
-  drag = { x: e.clientX, y: e.clientY, moved: 0, id: e.pointerId };
-  els.canvas.setPointerCapture(e.pointerId);
-  });
-  els.canvas.addEventListener("pointermove", (e: PointerEvent) => {
-  if (!drag || e.pointerId !== drag.id) return;
-  if (drag.handle != null) {
-    dragEndpointTo(e, drag.handle);
-    drag.moved += Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y);
-    drag.x = e.clientX; drag.y = e.clientY;
-    return;
-  }
-  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-  drag.moved += Math.abs(dx) + Math.abs(dy);
-  S.head?.setRotation(clamp((S.head?.rotX || 0) + dy * 0.01, -1.2, 1.2), (S.head?.rotY || 0) + dx * 0.01);
-  drag.x = e.clientX; drag.y = e.clientY;
-  });
-  els.canvas.addEventListener("pointerup", (e: PointerEvent) => {
-  const endpointDrag = drag?.handle != null;
-  const moved = drag?.moved || 0;
-  if (drag && drag.moved < 6 && !endpointDrag) pick(e);
-  if (endpointDrag && moved >= 1) commitEditSnapshot("endpoint_drag");
-  drag = null;
-  });
-  els.canvas.addEventListener("wheel", (e: WheelEvent) => { e.preventDefault(); S.head?.zoom(e.deltaY > 0 ? 1.1 : 0.9); }, { passive: false });
   const reactManaged = isReactManagedWorkbench();
-  if (reactManaged) {
-    bindReactWorkbenchCommands();
-  } else {
-    const stateRoot = els.canvas?.closest(".app");
-    stateRoot?.addEventListener("change", () => publishIncisionState("form_change"));
-    stateRoot?.addEventListener("input", (event) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement) {
-        publishIncisionState("form_input");
-      }
-    });
-  }
-
-  if (!reactManaged) {
-    els.tumorKind.onchange = () => { updateFormVisibility(); runWorkflow(); };
-    els.diameter.oninput = () => { els.diameterVal.textContent = els.diameter.value; updateTumorRing(); };
-    els.diameter.onchange = runWorkflow;
-    els.depth.oninput = () => { els.depthVal.textContent = els.depth.value; };
-    els.depth.onchange = runWorkflow;
-    els.margin.oninput = () => { els.marginVal.textContent = els.margin.value; updateTumorRing(); };
-    els.margin.onchange = runWorkflow;
-    els.ellipseRatio.oninput = () => { els.ellipseRatioVal.textContent = `${els.ellipseRatio.value}%`; updateTumorRing(); };
-    els.ellipseRatio.onchange = runWorkflow;
-    els.boundaryMode.onchange = () => { S.boundaryActive = false; updateFormVisibility(); runWorkflow(); };
-    els.run.onclick = runWorkflow;
-    els.startBoundary.onclick = toggleBoundaryDrawing;
-    els.clearBoundary.onclick = clearBoundaryPoints;
-    els.exportTumor.onclick = exportTumorJson;
-    els.importTumor.onclick = () => els.tumorImportFile.click();
-  }
-  if (!reactManaged) {
-    els.importSecondaryCue.onclick = () => els.secondaryCueImportFile.click();
-    els.clearSecondaryCue.onclick = clearSecondaryCues;
-    els.secondaryCueConfirmed.onchange = setSecondaryCueConfirmedFromControl;
-  }
-  if (!reactManaged) {
-    [
-    els.angleOffset,
-    els.lengthScale,
-    els.widthScale,
-    els.tipAngle,
-    els.shiftAlong,
-    els.shiftPerp,
-    ].forEach((el) => { el.oninput = applyEditControls; });
-    [
-    els.angleOffset,
-    els.lengthScale,
-    els.widthScale,
-    els.tipAngle,
-    els.shiftAlong,
-    els.shiftPerp,
-    ].forEach((el) => { el.onchange = () => commitEditSnapshot("control_change"); });
-    els.editReason.onchange = () => {
-    applyEditControls();
-    commitEditSnapshot("reason_change");
-    };
-    els.undoEdit.onclick = undoEditSnapshot;
-    els.redoEdit.onclick = redoEditSnapshot;
-    els.resetEdit.onclick = resetEditToToolSuggestion;
-  }
-  if (!reactManaged) {
-    els.reviewDecision.onchange = updateReviewStateUI;
-    els.approveCandidate.onclick = () => recordReviewDecision("approved_for_discussion", "确认候选");
-    els.rejectCandidate.onclick = () => recordReviewDecision("rejected_by_clinician", "否决候选");
-    els.saveReview.onclick = saveReviewRecord;
-  }
-  if (!reactManaged) {
-    els.saveCandidate.onclick = () => saveCurrentCandidate();
-    els.makeVariants.onclick = makeVariantCandidates;
-    els.clearSaved.onclick = clearSavedCandidates;
-    els.exportJson.onclick = exportReviewJson;
-    els.exportReport.onclick = exportReport;
-    els.exportPng.onclick = exportScreenshot;
-    els.stageLiveOverlay.onclick = stageLiveOverlay;
-  }
-  els.tumorImportFile.onchange = (e: Event) => importTumorFile(fileFromEvent(e));
-  els.secondaryCueImportFile.onchange = (e: Event) => importSecondaryCueFile(fileFromEvent(e));
-  S.resizeObserver = new ResizeObserver(fitSize);
-  S.resizeObserver.observe(els.wrap);
+  if (reactManaged) bindReactWorkbenchCommands();
+  S.domEventCleanup = bindIncisionDomEvents({
+    elements: els,
+    reactManaged,
+    handlers: {
+      endpointHandleFromEvent: handleFromEvent,
+      dragEndpoint: dragEndpointTo,
+      rotateHead: (dx, dy) => {
+        S.head?.setRotation(
+          clamp((S.head?.rotX || 0) + dy * 0.01, -1.2, 1.2),
+          (S.head?.rotY || 0) + dx * 0.01,
+        );
+      },
+      pickFace: pick,
+      commitEndpointDrag: () => commitEditSnapshot("endpoint_drag"),
+      zoomHead: (direction) => S.head?.zoom(direction > 0 ? 1.1 : 0.9),
+      publishState: publishIncisionState,
+      onTumorKindChange: () => { updateFormVisibility(); runWorkflow(); },
+      onDiameterInput: () => {
+        els.diameterVal.textContent = els.diameter.value;
+        updateTumorRing();
+      },
+      onDiameterChange: runWorkflow,
+      onDepthInput: () => { els.depthVal.textContent = els.depth.value; },
+      onDepthChange: runWorkflow,
+      onMarginInput: () => {
+        els.marginVal.textContent = els.margin.value;
+        updateTumorRing();
+      },
+      onMarginChange: runWorkflow,
+      onEllipseRatioInput: () => {
+        els.ellipseRatioVal.textContent = `${els.ellipseRatio.value}%`;
+        updateTumorRing();
+      },
+      onEllipseRatioChange: runWorkflow,
+      onBoundaryModeChange: () => {
+        S.boundaryActive = false;
+        updateFormVisibility();
+        runWorkflow();
+      },
+      onRunWorkflow: runWorkflow,
+      onToggleBoundary: toggleBoundaryDrawing,
+      onClearBoundary: clearBoundaryPoints,
+      onExportTumor: exportTumorJson,
+      onImportTumorRequest: () => els.tumorImportFile.click(),
+      onImportSecondaryCueRequest: () => els.secondaryCueImportFile.click(),
+      onClearSecondaryCue: clearSecondaryCues,
+      onSecondaryCueConfirmed: setSecondaryCueConfirmedFromControl,
+      onEditInput: applyEditControls,
+      onEditCommit: () => commitEditSnapshot("control_change"),
+      onEditReasonChange: () => {
+        applyEditControls();
+        commitEditSnapshot("reason_change");
+      },
+      onUndoEdit: undoEditSnapshot,
+      onRedoEdit: redoEditSnapshot,
+      onResetEdit: resetEditToToolSuggestion,
+      onReviewDecisionChange: updateReviewStateUI,
+      onApproveCandidate: () => recordReviewDecision("approved_for_discussion", "确认候选"),
+      onRejectCandidate: () => recordReviewDecision("rejected_by_clinician", "否决候选"),
+      onSaveReview: saveReviewRecord,
+      onSaveCandidate: () => saveCurrentCandidate(),
+      onMakeVariants: makeVariantCandidates,
+      onClearSaved: clearSavedCandidates,
+      onExportReview: exportReviewJson,
+      onExportReport: exportReport,
+      onExportScreenshot: exportScreenshot,
+      onStageLiveOverlay: stageLiveOverlay,
+      onTumorFile: importTumorFile,
+      onSecondaryCueFile: importSecondaryCueFile,
+      onResize: fitSize,
+    },
+  });
 }
 
 function renderLoop() {
@@ -2362,7 +1850,8 @@ function bindReactWorkbenchCommands() {
 export function disposeIncisionWorkbench() {
   S.mounted = false;
   if (S.frameId) cancelAnimationFrame(S.frameId);
-  S.resizeObserver?.disconnect?.();
+  S.domEventCleanup?.();
+  S.domEventCleanup = null;
   S.workflowWorker?.dispose?.();
   S.workflowWorker = null;
   S.reactCommandCleanup?.();
@@ -2373,7 +1862,7 @@ export function disposeIncisionWorkbench() {
 export function mountIncisionWorkbench(root: ParentNode | Document = document) {
   disposeIncisionWorkbench();
   els = collectIncisionElements(root);
-  S = createRuntimeState();
+  S = createIncisionControllerState();
   S.mounted = true;
   bindWorkbenchEvents();
   boot().catch((err) => {
