@@ -152,7 +152,7 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 3. **线条随脸网格变形**：运行时同一套三角拓扑把图谱映射到检测到的人脸上——
    `点 = u·V0 + v·V1 + w·V2`（V 为该三角面三个检测顶点）。这是精确的**分片仿射变形**（即 AR"脸绘"技术），
    对身份、姿态、表情天然不变，是稳定性的根基。
-4. **稳定性工程**：One-Euro 时间平滑去抖动、置信度门控淡入淡出、背面剔除、手部遮挡掩膜。
+4. **稳定性工程**：One-Euro 时间平滑去抖动、置信度门控淡入淡出、背面剔除、手部遮挡掩膜；外推额头弧线的皮肤掩膜会补小空洞、删除短伪段，并在总可见量达标时保留所有合格可见段，避免中部局部遮挡导致单侧缺线。
 
 > 不训练自定义模型是刻意为之：复用稳健的预训练关键点模型 + 可编辑可校验的图谱资产，
 > 才有可复现、可解释、可被临床医生修正的系统，而不是一个抖动不可控的黑盒。
@@ -219,6 +219,8 @@ cd web
 npm ci
 npm run build                      # Vite 生产构建
 npm test                           # Web TypeScript 几何/遮挡/Umeyama 对拍
+npx playwright install chromium    # 首次运行浏览器回归前安装 Chromium
+npm run test:browser               # 生产构建上的 Playwright UI/对比度回归
 cd ..
 
 # 7) 启动网页
@@ -305,7 +307,7 @@ attestation 后，才能由受控 finalize 流程生成 `validated:true` 候选�
 
 ## 验证与测试
 
-两套几何实现（Python / JS）由**逐点对拍**保证一致：`cd web && npm test`（架构无环 + 映射误差 ~5×10⁻⁵px + 背面剔除 0 不一致 + One-Euro / 拓扑契约 / FLAME / soft-body / 诊断导出）与 `pytest`（图谱完整性、仿射不变性、渲染、资产同步、可观测性）全绿即可。
+两套几何实现（Python / JS）由**逐点对拍**保证一致：`cd web && npm test`（架构无环 + 映射误差 ~5×10⁻⁵px + 背面剔除 0 不一致 + One-Euro / 拓扑契约 / FLAME / soft-body / 诊断导出）与 `pytest`（图谱完整性、仿射不变性、渲染、资产同步、可观测性）全绿即可。生产构建上的 `/surgery` 按钮状态与对比度守卫由 `cd web && npm run test:browser` 单独运行。
 
 > 各测试的职责、目检脚本与浏览器实测清单见 [CONTRIBUTING.md «运行测试»](docs/onboarding/CONTRIBUTING.md#运行测试)；跨语言对拍不变式与金标重生成见 [CROSS_LANG_PARITY.md](docs/quality/CROSS_LANG_PARITY.md)。
 
@@ -367,7 +369,7 @@ Stage 2 切口 Agent 默认只把肿物参数、标准化坐标、候选切口�
 
 ## 持续集成与部署（CI/CD）
 
-- **CI**：push 到 `master` / `refactor/**` 或发 PR 时，[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 跑三个并行 job —— `lint`（`ruff check .`）、`python-tests`（`pytest`，**Python 3.10 / 3.11 / 3.12** 矩阵，不装 mediapipe）、`js-tests`（**Node 24**：`npm ci` + `npm run build` + `npm test` 对拍 Web TypeScript 几何与 Python 一致）。提交前可装 `pre-commit`（[`.pre-commit-config.yaml`](.pre-commit-config.yaml)）做本地预检。
+- **CI**：push 到 `master` / `refactor/**` 或发 PR 时，[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 跑四个并行 job —— `lint`（`ruff check .`）、`python-tests`（`pytest`，**Python 3.10 / 3.11 / 3.12** 矩阵，不装 mediapipe）、`js-tests`（**Node 24**：`npm ci` + `npm run build` + `npm test` 对拍 Web TypeScript 几何与 Python 一致）、`browser-tests`（Chromium 上运行生产构建的 `/surgery` UI/对比度回归）。提交前可装 `pre-commit`（[`.pre-commit-config.yaml`](.pre-commit-config.yaml)）做本地预检。
 - **CD**：网页是 Vite 构建的**纯静态站点**（`web/dist/`，全程浏览器运行、无后端），经 Vercel Git 集成自动部署（自动 HTTPS → 线上摄像头可用），Vercel Project 的 Root Directory 设为 `web`。
 - **隐私**：`web/assets/recon_demo.json` 是示例视频重建出的 468 点关键点网格，随站点**公开**；不想公开就把它加入 [`web/.vercelignore`](web/.vercelignore)（"用示例重建"按钮失效，仍可"转头扫描"）。
 
