@@ -182,7 +182,7 @@ export const renderState: LiveRenderState = {
     spread: 0.28,
     pointCount: 1,
     nudgeStep: 0.5,
-    symmetry: true,
+    symmetry: false,
     showAxis: true,
     lines: null,
     latestAutoLines: null,

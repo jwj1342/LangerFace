@@ -61,10 +61,10 @@ export function LiveRefinePanel() {
           <Button variant="workbench" type="button" data-refine-nudge="down" aria-label="向下精调">↓</Button>
           <Button variant="workbench" type="button" data-refine-nudge="right" aria-label="向右精调">→</Button>
         </ButtonRow>
-        <CheckboxField checkboxProps={{ id: "refineSymmetryToggle", defaultChecked: true }}>对称联动</CheckboxField>
+        <CheckboxField checkboxProps={{ id: "refineSymmetryToggle" }}>对称联动（可选）</CheckboxField>
         <CheckboxField checkboxProps={{ id: "refineAxisToggle", defaultChecked: true }}>显示人脸中线</CheckboxField>
         <Button variant="workbench" id="refineResetBtn" type="button">恢复自动结果</Button>
-        <Hint id="refine2dHint">“拖线”可向任意方向调整整条曲线，大幅移动会自动平滑限幅；“拖点”可控制单点或一小段连续点。</Hint>
+        <Hint id="refine2dHint">默认只修改选中的一根线；如需镜像同步，请手动开启“对称联动”。</Hint>
       </div>
     </Card>
   );
