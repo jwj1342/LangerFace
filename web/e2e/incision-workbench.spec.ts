@@ -204,9 +204,9 @@ test("active controls remain readable and clinician sliders retain edits", async
   await expect(page.locator("#candidateTipAngle")).toContainText("31.0°");
 
   for (const [value, label] of [
-    ["approved_for_discussion", "确认候选草案"],
+    ["approved_for_discussion", "已确认研究候选"],
     ["needs_revision", "退回修改"],
-    ["rejected_by_clinician", "否决候选"],
+    ["rejected_by_clinician", "医生已否决"],
   ]) {
     await page.locator("#reviewDecision").selectOption(value);
     await expect(page.locator("#reviewState")).toHaveText(label);

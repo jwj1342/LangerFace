@@ -49,15 +49,21 @@ test("approved incision reaches the live photo renderer with visible feedback", 
   await expect(page.locator("#liveIncisionOverlayCard")).toBeVisible({ timeout: 60_000 });
   await expect(page.locator("#liveIncisionOverlayState")).toContainText(/已载入|等待画面/);
 
-  await page.locator("#fileInput").setInputFiles(path.resolve("test/face_small.jpg"));
+  await page.locator("#fileInput").setInputFiles(path.resolve("compat/personalized/v6_demo/id_001/rstl_before_after.jpg"));
   await expect(page.locator("#incisionOverlayQaState")).not.toHaveText("等待画面", { timeout: 60_000 });
-  await expect.poll(() => page.evaluate(candidatePixelCount), {
+  const candidatePixelsWithOverlay = await expect.poll(() => page.evaluate(candidatePixelCount), {
     message: "the live canvas must contain the green/cyan incision candidate stroke",
-  }).toBeGreaterThan(8);
+  }).toBeGreaterThan(8).then(() => page.evaluate(candidatePixelCount));
 
   const keypointsBefore = await page.evaluate(keypointPixelCount);
   await page.locator("#meshPts").check();
   await expect.poll(() => page.evaluate(keypointPixelCount), {
     message: "the visible face-keypoint toggle must add high-contrast point pixels",
   }).toBeGreaterThan(keypointsBefore + 100);
+
+  await page.locator("#clearIncisionOverlayBtn").click();
+  await expect(page.locator("#liveIncisionOverlayCard")).toBeHidden();
+  await expect.poll(() => page.evaluate(candidatePixelCount), {
+    message: "clearing the overlay must remove candidate pixels without replacing the source image",
+  }).toBeLessThan(candidatePixelsWithOverlay - 8);
 });
