@@ -1,11 +1,17 @@
 import { els } from "./liveDom.ts";
+import { resetImageView, setRefineCanvasViewActive, stepImageViewZoom } from "./liveCanvasFit.ts";
 import type { MappedAtlasLine } from "./geometryAtlas.ts";
 import type { Vec3 } from "./softBody";
 import {
   applyCurveRefinementTransport,
+  applyMirroredCurveDelta,
   buildCurveRefinementTransport,
+  curvePointWindow,
   curveEraseTargets,
   deformCurveWide,
+  mapRefineViewportPoint,
+  moveCurvePoints,
+  stabilizeCurveToReference,
   type RefineLine,
   type RefinePoint,
 } from "./liveRefineMath.ts";
@@ -38,8 +44,13 @@ function state() {
 function canvasPoint(event: PointerEvent): [number, number] {
   const rect = els.canvas.getBoundingClientRect();
   let x = (event.clientX - rect.left) * els.canvas.width / Math.max(1, rect.width);
-  const y = (event.clientY - rect.top) * els.canvas.height / Math.max(1, rect.height);
+  let y = (event.clientY - rect.top) * els.canvas.height / Math.max(1, rect.height);
   if (renderState.mirror) x = els.canvas.width - x;
+  [x, y] = mapRefineViewportPoint(
+    [x, y],
+    { width: els.canvas.width, height: els.canvas.height },
+    renderState.focusCrop,
+  );
   return [clamp(x, 0, els.canvas.width), clamp(y, 0, els.canvas.height)];
 }
 
@@ -88,7 +99,10 @@ function markDirty(message: string): void {
 
 export function setLatestAutoLines(mapped: readonly RefineLine[]): void {
   const s = state();
-  s.latestAutoLines = cloneLines(mapped);
+  // The automatic result is the safety reference for the whole edit session.
+  // Keep it frozen while refining; redraws, focus changes, and zoom changes must
+  // never move the baseline underneath an in-progress gesture.
+  if (!s.active || !s.latestAutoLines?.length) s.latestAutoLines = cloneLines(mapped);
   if (s.active && !s.lines) {
     s.lines = cloneLines(mapped);
     s.selected = null;
@@ -132,6 +146,7 @@ export function commitRefineForLive(): boolean {
   s.mode = "view";
   s.selected = null;
   s.drag = null;
+  setRefineCanvasViewActive(false);
   updateRefineUi();
   return true;
 }
@@ -144,8 +159,20 @@ export function selectedPointIndex(): number | null {
   return state().selected?.pointIndex ?? null;
 }
 
+export function selectedPointWindow(): { start: number; end: number } | null {
+  const s = state();
+  const line = s.selected?.lineIndex == null ? null : s.lines?.[s.selected.lineIndex];
+  if (!line?.pts.length || !Number.isInteger(s.selected?.pointIndex)) return null;
+  return curvePointWindow(line.pts.length, s.selected!.pointIndex, s.pointCount);
+}
+
 export function isRefineActive(): boolean {
   return state().active;
+}
+
+export function isPointRefineMode(): boolean {
+  const s = state();
+  return Boolean(s.active && s.mode === "point");
 }
 
 export function isLineHidden(lineIndex: number): boolean {
@@ -167,6 +194,9 @@ export function resetRefineForNewSource(): void {
   const s = state();
   s.active = false;
   s.mode = "view";
+  s.spread = 0.28;
+  s.pointCount = 1;
+  s.nudgeStep = 0.5;
   s.symmetry = true;
   s.showAxis = true;
   s.lines = null;
@@ -176,6 +206,7 @@ export function resetRefineForNewSource(): void {
   s.dirty = false;
   s.undoStack = [];
   s.drag = null;
+  setRefineCanvasViewActive(false);
   updateRefineUi();
   setRefineAvailability();
 }
@@ -186,12 +217,15 @@ export function updateRefineUi(): void {
   els.refine2d.textContent = s.active ? "退出 2D 微调" : "2D 结果微调";
   els.refine2dPanel.classList.toggle("hidden", !s.active);
   els.mainWrap.classList.toggle("refining", s.active);
+  els.mainWrap.classList.toggle("refine-drag", s.active && s.mode === "drag");
+  els.mainWrap.classList.toggle("refine-point", s.active && s.mode === "point");
   els.refine2dStatus.textContent = !s.active
     ? "未开始"
     : s.dirty ? "已修改" : "查看中";
   const modeButtons: Array<[HTMLButtonElement, RefineMode]> = [
     [els.refineView, "view"],
     [els.refineDrag, "drag"],
+    [els.refinePoint, "point"],
     [els.refineErase, "erase"],
   ];
   for (const [button, mode] of modeButtons) {
@@ -200,6 +234,22 @@ export function updateRefineUi(): void {
   els.refineUndo.disabled = !s.undoStack.length;
   els.refineExport.disabled = !s.active || !s.lines?.length;
   els.refineReset.disabled = !s.active || !s.latestAutoLines?.length;
+  const zoomPercent = Math.round(renderState.imageView.zoom * 100);
+  els.refineZoomVal.textContent = `${zoomPercent}%`;
+  els.refineZoomOut.disabled = !s.active || renderState.imageView.zoom <= renderState.imageView.minZoom + 0.001;
+  els.refineZoomReset.disabled = !s.active || Math.abs(renderState.imageView.zoom - 1) < 0.001;
+  els.refineZoomIn.disabled = !s.active || renderState.imageView.zoom >= renderState.imageView.maxZoom - 0.001;
+  els.refineSpread.value = String(Math.round(s.spread * 100));
+  els.refineSpread.disabled = s.mode !== "drag";
+  els.refineSpreadVal.textContent = `${Math.round(s.spread * 100)}%`;
+  els.refinePointCountWrap.classList.toggle("hidden", s.mode !== "point");
+  els.refinePointCount.value = String(s.pointCount);
+  els.refinePointCount.disabled = s.mode !== "point";
+  els.refinePointCountVal.textContent = `${s.pointCount} 个点`;
+  els.refineNudgeStep.value = String(s.nudgeStep);
+  for (const button of els.refineNudgeButtons) {
+    button.disabled = !s.active || s.selected?.lineIndex == null;
+  }
   els.refineSymmetry.checked = s.symmetry;
   els.refineAxis.checked = s.showAxis;
 }
@@ -209,6 +259,7 @@ export function toggleRefine2d(): void {
   if (s.active) {
     s.active = false;
     s.selected = null;
+    setRefineCanvasViewActive(false);
     updateRefineUi();
     requestRefineFrame();
     return;
@@ -221,22 +272,63 @@ export function toggleRefine2d(): void {
     return;
   }
   s.active = true;
-  s.mode = "view";
+  s.mode = "drag";
   s.lines = s.lines || cloneLines(s.latestAutoLines);
   s.selected = null;
-  els.refine2dHint.textContent = `${sourceLabel()}结果已进入微调：先点选线，切到“拖点”后再修改。`;
+  setRefineCanvasViewActive(true);
+  els.refine2dHint.textContent = `${sourceLabel()}结果已进入微调：可拖线或拖点调整。`;
   updateRefineUi();
   requestRefineFrame();
 }
 
 export function setRefineMode(mode: RefineMode): void {
-  state().mode = mode;
+  const s = state();
+  s.mode = mode;
+  s.drag = null;
   els.refine2dHint.textContent = {
     view: "查看模式只允许点选线，避免误改。",
-    drag: "拖动曲线上任意位置，整条线会按弧长平滑联动。",
-    erase: "点击不需要的曲线即可隐藏整条线；可用“撤销”恢复。",
+    drag: "拖线：跟随鼠标横向和纵向移动；大幅移动会自动平滑限幅，防止曲线拉出尖峰。",
+    point: `拖点：当前连续控制 ${s.pointCount} 个点；中心点完全跟随，两侧平滑递减。`,
+    erase: "隐藏：点击不需要的曲线即可隐藏整条线；可用“撤销”恢复。",
   }[mode] || "";
   updateRefineUi();
+}
+
+export function setRefineSpread(value: number | string): void {
+  const s = state();
+  s.spread = clamp(Number(value) / 100, 0.12, 0.6);
+  els.refine2dHint.textContent = `拖线联动范围已设为 ${Math.round(s.spread * 100)}%。`;
+  updateRefineUi();
+}
+
+export function setRefinePointCount(value: number | string): void {
+  const s = state();
+  s.pointCount = clamp(Math.round(Number(value) || 1), 1, 30);
+  els.refine2dHint.textContent = s.pointCount === 1
+    ? "拖点范围为单点：只移动当前抓住的采样点。"
+    : `拖点范围为 ${s.pointCount} 个点：可对一小段曲线进行连续微调。`;
+  updateRefineUi();
+  requestRefineFrame();
+}
+
+export function setRefineNudgeStep(value: number | string): void {
+  state().nudgeStep = clamp(Number(value) || 0.5, 0.25, 2);
+  updateRefineUi();
+}
+
+export function adjustRefineImageZoom(action: "in" | "out" | "reset"): boolean {
+  if (!state().active) return false;
+  let changed = false;
+  if (action === "reset") {
+    changed = Math.abs(renderState.imageView.zoom - 1) >= 0.001;
+    resetImageView();
+  } else {
+    changed = stepImageViewZoom(action === "in" ? 1 : -1);
+  }
+  if (!changed) return false;
+  els.refine2dHint.textContent = `图片缩放已调整为 ${Math.round(renderState.imageView.zoom * 100)}%。`;
+  updateRefineUi();
+  return true;
 }
 
 export function setSymmetryEnabled(enabled: boolean): void {
@@ -301,19 +393,75 @@ function nearestSegmentLine(
 
 function pickLine(point: readonly [number, number]): RefinePick | null {
   const s = state();
-  const maxPx = Math.max(10, els.canvas.width / 90);
+  const maxPx = Math.max(s.mode === "point" ? 14 : 10, els.canvas.width / 90);
+  if (s.mode === "point") return nearestPoint(s.lines || [], point, maxPx);
   return nearestPoint(s.lines || [], point, maxPx) || nearestSegmentLine(s.lines || [], point, maxPx);
 }
 
-function movePoint(pick: RefinePick, target: readonly [number, number]): void {
+function automaticReferenceForLine(
+  line: EditableRefineLine,
+  lineIndex: number,
+): readonly RefinePoint[] | null {
+  const automatic = state().latestAutoLines;
+  const indexed = automatic?.[lineIndex];
+  if (indexed?.name === line.name && indexed.pts.length === line.pts.length) return indexed.pts;
+  return automatic?.find((candidate) => (
+    candidate.name === line.name && candidate.pts.length === line.pts.length
+  ))?.pts || null;
+}
+
+function strongestDisplacementIndex(
+  reference: readonly RefinePoint[],
+  current: readonly RefinePoint[],
+): number {
+  let bestIndex = 0;
+  let bestDistance = -1;
+  for (let index = 0; index < Math.min(reference.length, current.length); index++) {
+    const distance = Math.hypot(
+      current[index][0] - reference[index][0],
+      current[index][1] - reference[index][1],
+    );
+    if (distance > bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  }
+  return bestIndex;
+}
+
+function movePoint(pick: RefinePick, offset: readonly [number, number]): [number, number] {
   const s = state();
   const line = s.lines?.[pick.lineIndex];
-  if (!line) return;
+  if (!line) return [0, 0];
   const original = s.drag?.original || line.pts.map((point) => [...point]);
-  line.pts = deformCurveWide(original, pick.pointIndex, target, {
-    width: els.canvas.width,
-    height: els.canvas.height,
-  }).map((point) => [point[0], point[1], point[2] || 0]);
+  const effectiveOffset: [number, number] = [offset[0], offset[1]];
+  if (s.mode === "point") {
+    line.pts = moveCurvePoints(original, pick.pointIndex, s.pointCount, effectiveOffset, {
+      width: els.canvas.width,
+      height: els.canvas.height,
+    }).map((point) => [point[0], point[1], point[2] || 0]);
+  } else {
+    const anchor = original[pick.pointIndex];
+    if (!anchor) return [0, 0];
+    line.pts = deformCurveWide(original, pick.pointIndex, [
+      anchor[0] + effectiveOffset[0],
+      anchor[1] + effectiveOffset[1],
+    ], {
+      width: els.canvas.width,
+      height: els.canvas.height,
+      spread: s.spread,
+    }).map((point) => [point[0], point[1], point[2] || 0]);
+    const reference = automaticReferenceForLine(line, pick.lineIndex) || original;
+    line.pts = stabilizeCurveToReference(
+      reference,
+      line.pts,
+      { width: els.canvas.width, height: els.canvas.height },
+      pick.pointIndex,
+    ).map((point) => [point[0], point[1], point[2] || 0]);
+  }
+  const moved = line.pts[pick.pointIndex];
+  const anchor = original[pick.pointIndex];
+  return moved && anchor ? [moved[0] - anchor[0], moved[1] - anchor[1]] : [0, 0];
 }
 
 function lineCentroid(line: EditableRefineLine | null | undefined): [number, number] {
@@ -378,30 +526,44 @@ export function symmetryPartnerIndex(): number | null {
   return findSymmetryPartner(s.selected.lineIndex);
 }
 
-function mirroredPoints(
-  points: readonly RefinePoint[],
-  axis: number,
-  reference: readonly RefinePoint[] | null = null,
-): Vec3[] {
-  const next: Vec3[] = points.map((point) => [2 * axis - point[0], point[1], point[2] || 0]);
-  if (!reference?.length || reference.length !== next.length) return next;
-  const direct = next.reduce((sum, point, index) =>
-    sum + Math.hypot(point[0] - reference[index][0], point[1] - reference[index][1]), 0);
-  const reverse = next.reduce((sum, point, index) =>
-    sum + Math.hypot(point[0] - reference[reference.length - 1 - index][0], point[1] - reference[reference.length - 1 - index][1]), 0);
-  return reverse < direct ? next.reverse() : next;
-}
-
-function syncSymmetryForLine(lineIndex: number): number | null {
+function syncSymmetryForLine(
+  lineIndex: number,
+  pointIndex: number | null,
+  pointCount: number,
+  originalSource: readonly RefinePoint[],
+  originalPartner: readonly RefinePoint[] | null,
+  partnerIndexOverride: number | null,
+): number | null {
   const s = state();
   if (!s.symmetry) return null;
   const lines = s.lines;
   const source = lines?.[lineIndex];
-  const partnerIndex = findSymmetryPartner(lineIndex);
+  const partnerIndex = Number.isInteger(partnerIndexOverride)
+    ? partnerIndexOverride
+    : findSymmetryPartner(lineIndex);
   const partner = partnerIndex == null ? null : lines?.[partnerIndex];
   if (!source || !partner) return null;
-  partner.pts = mirroredPoints(source.pts, faceAxisX(), partner.pts);
-  partner.tris = source.tris.length === partner.pts.length ? [...source.tris] : partner.tris;
+  const sourceWindow = Number.isInteger(pointIndex)
+    ? curvePointWindow(source.pts.length, pointIndex!, pointCount)
+    : null;
+  let nextPartner = applyMirroredCurveDelta(
+    originalSource,
+    source.pts,
+    originalPartner || partner.pts,
+    faceAxisX(),
+    sourceWindow,
+    { width: els.canvas.width, height: els.canvas.height },
+  );
+  if (!sourceWindow) {
+    const reference = automaticReferenceForLine(partner, partnerIndex as number) || originalPartner || partner.pts;
+    nextPartner = stabilizeCurveToReference(
+      reference,
+      nextPartner,
+      { width: els.canvas.width, height: els.canvas.height },
+      strongestDisplacementIndex(reference, nextPartner),
+    );
+  }
+  partner.pts = nextPartner.map((point) => [point[0], point[1], point[2] || 0]);
   return partnerIndex;
 }
 
@@ -435,14 +597,21 @@ export function beginRefinePointer(event: PointerEvent): boolean {
     eraseLine(pick);
     return true;
   }
-  if (s.mode === "drag") {
+  if (s.mode === "drag" || s.mode === "point") {
     const line = s.lines[pick.lineIndex];
     if (!line) return false;
-    captureHistory(`拖动 ${line.name}`);
+    const partnerIndex = s.symmetry ? findSymmetryPartner(pick.lineIndex) : null;
     s.drag = {
       pointerId: event.pointerId,
       pick,
+      startPointer: point,
       original: line.pts.map((point) => [...point] as Vec3),
+      partnerIndex,
+      originalPartner: partnerIndex == null
+        ? null
+        : s.lines[partnerIndex]?.pts.map((partnerPoint) => [...partnerPoint] as Vec3) || null,
+      moved: false,
+      symmetryLinkedIndex: null,
     };
     els.canvas.setPointerCapture(event.pointerId);
   }
@@ -454,8 +623,27 @@ export function beginRefinePointer(event: PointerEvent): boolean {
 export function moveRefinePointer(event: PointerEvent): boolean {
   const s = state();
   if (!s.active || !s.drag || s.drag.pointerId !== event.pointerId) return false;
-  movePoint(s.drag.pick, canvasPoint(event));
-  syncSymmetryForLine(s.drag.pick.lineIndex);
+  const current = canvasPoint(event);
+  const precision = event.altKey ? 0.25 : 1;
+  const offset: [number, number] = [
+    (current[0] - s.drag.startPointer[0]) * precision,
+    (current[1] - s.drag.startPointer[1]) * precision,
+  ];
+  if (!s.drag.moved && Math.hypot(offset[0], offset[1]) < 0.01) return true;
+  if (!s.drag.moved) {
+    const action = s.mode === "point" ? "拖点调整" : "拖线调整";
+    captureHistory(`${action} ${s.lines?.[s.drag.pick.lineIndex]?.name || "曲线"}`);
+  }
+  s.drag.moved = true;
+  movePoint(s.drag.pick, offset);
+  s.drag.symmetryLinkedIndex = syncSymmetryForLine(
+    s.drag.pick.lineIndex,
+    s.mode === "point" ? s.drag.pick.pointIndex : null,
+    s.pointCount,
+    s.drag.original,
+    s.drag.originalPartner,
+    s.drag.partnerIndex,
+  );
   s.selected = s.drag.pick;
   s.dirty = true;
   updateRefineUi();
@@ -467,9 +655,54 @@ export function endRefinePointer(event: PointerEvent): boolean {
   const s = state();
   if (!s.active || !s.drag || s.drag.pointerId !== event.pointerId) return false;
   const line = s.lines?.[s.drag.pick.lineIndex];
+  const moved = s.drag.moved;
+  const symmetryLinked = s.drag.symmetryLinkedIndex != null;
   s.drag = null;
   if (els.canvas.hasPointerCapture(event.pointerId)) els.canvas.releasePointerCapture(event.pointerId);
-  markDirty(line ? `${line.name} 已微调。` : "线条已微调。");
+  if (moved) {
+    const symmetryMessage = s.symmetry
+      ? symmetryLinked ? "已同步对称线。" : "此曲线未找到可联动的对称线。"
+      : "";
+    markDirty(line ? `${line.name} 已微调。${symmetryMessage}` : `线条已微调。${symmetryMessage}`);
+  } else {
+    updateRefineUi();
+  }
+  requestRefineFrame();
+  return true;
+}
+
+export function nudgeSelected(direction: string): boolean {
+  const s = state();
+  const selected = s.selected;
+  const line = selected?.lineIndex == null ? null : s.lines?.[selected.lineIndex];
+  if (!s.active || !selected || !line) return false;
+  const vectors: Record<string, [number, number]> = {
+    left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1],
+  };
+  const vector = vectors[direction];
+  if (!vector) return false;
+  const visualX = renderState.mirror ? -vector[0] : vector[0];
+  const offset: [number, number] = [visualX * s.nudgeStep, vector[1] * s.nudgeStep];
+  captureHistory(`精调 ${line.name}`);
+  const original = line.pts.map((point) => [...point] as Vec3);
+  const partnerIndex = s.symmetry ? findSymmetryPartner(selected.lineIndex) : null;
+  const originalPartner = partnerIndex == null
+    ? null
+    : s.lines?.[partnerIndex]?.pts.map((point) => [...point] as Vec3) || null;
+  movePoint(selected, offset);
+  const symmetryLinked = syncSymmetryForLine(
+    selected.lineIndex,
+    s.mode === "point" ? selected.pointIndex : null,
+    s.pointCount,
+    original,
+    originalPartner,
+    partnerIndex,
+  ) != null;
+  const distance = Math.round(Math.hypot(offset[0], offset[1]) * 100) / 100;
+  const symmetryMessage = s.symmetry
+    ? symmetryLinked ? "已同步对称线。" : "此曲线未找到可联动的对称线。"
+    : "";
+  markDirty(`${line.name} 已精调 ${distance} px。${symmetryMessage}`);
   requestRefineFrame();
   return true;
 }

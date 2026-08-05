@@ -7,6 +7,7 @@ import type {
   CurveRefinementTransport,
   RefineLine,
   RefinePoint,
+  RefineViewportCrop,
 } from "./liveRefineMath";
 
 type AnyRecord = Record<string, any>;
@@ -46,6 +47,7 @@ export interface LiveRenderState {
   refine2d: LiveRefine2dState;
   zoomCards: LiveZoomCard[];
   focusRegion: unknown;
+  focusCrop: RefineViewportCrop | null;
   focusZoom: number;
   imageView: LiveImageViewState;
   densityFrac: number;
@@ -56,7 +58,7 @@ export interface LiveRenderState {
   [key: string]: unknown;
 }
 
-export type RefineMode = "view" | "drag" | "erase";
+export type RefineMode = "view" | "drag" | "point" | "erase";
 
 export interface EditableRefineLine extends RefineLine {
   name: string;
@@ -82,12 +84,20 @@ export interface RefineHistoryEntry {
 export interface RefineDrag {
   pointerId: number;
   pick: RefinePick;
+  startPointer: [number, number];
   original: Vec3[];
+  partnerIndex: number | null;
+  originalPartner: Vec3[] | null;
+  moved: boolean;
+  symmetryLinkedIndex: number | null;
 }
 
 export interface LiveRefine2dState {
   active: boolean;
   mode: RefineMode;
+  spread: number;
+  pointCount: number;
+  nudgeStep: number;
   symmetry: boolean;
   showAxis: boolean;
   lines: EditableRefineLine[] | null;
@@ -169,6 +179,9 @@ export const renderState: LiveRenderState = {
   refine2d: {
     active: false,
     mode: "view",
+    spread: 0.28,
+    pointCount: 1,
+    nudgeStep: 0.5,
     symmetry: true,
     showAxis: true,
     lines: null,
@@ -181,6 +194,7 @@ export const renderState: LiveRenderState = {
   },
   zoomCards: [],
   focusRegion: null,
+  focusCrop: null,
   focusZoom: 1.8,
   imageView: {
     baseWidth: 0,

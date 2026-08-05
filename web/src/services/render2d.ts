@@ -27,8 +27,10 @@ import { lineIndicesForDensity } from "./lineDensity.ts";
 import {
   getDisplayLines,
   isRefineActive,
+  isPointRefineMode,
   selectedLineIndex,
   selectedPointIndex,
+  selectedPointWindow,
   setLatestAutoLines,
   setRefineAvailability,
   showSymmetryAxis,
@@ -197,6 +199,8 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   const displayLines = getDisplayLines(mapped);
   const selectedLine = refineActive ? selectedLineIndex() : null;
   const selectedPoint = refineActive ? selectedPointIndex() : null;
+  const pointMode = refineActive && isPointRefineMode();
+  const pointWindow = pointMode ? selectedPointWindow() : null;
   const symmetryPartner = refineActive ? symmetryPartnerIndex() : null;
   const bb = faceBBox(lm);
   const visibleLineIndices = refineActive ? null : lineIndicesForDensity(displayLines || [], renderState.densityFrac);
@@ -275,6 +279,24 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
     ctx.moveTo(axis, 0);
     ctx.lineTo(axis, H);
     ctx.stroke();
+    ctx.restore();
+  }
+  if (pointMode && selectedLine != null) {
+    const points = displayLines[selectedLine]?.pts || [];
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    for (let pointIndex = 0; pointIndex < points.length; pointIndex++) {
+      const point = points[pointIndex];
+      if (!point) continue;
+      const inWindow = pointWindow && pointIndex >= pointWindow.start && pointIndex <= pointWindow.end;
+      ctx.fillStyle = pointIndex === selectedPoint ? "#f1c21b" : inWindow ? "#a7f0d2" : "#f4f7fb";
+      ctx.strokeStyle = inWindow ? "#198754" : "#42be65";
+      ctx.lineWidth = Math.max(1, W / 1200);
+      ctx.beginPath();
+      ctx.arc(point[0], point[1], Math.max(2.5, W / 360), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
     ctx.restore();
   }
   if (refineActive && selectedLine != null && selectedPoint != null) {
@@ -843,6 +865,9 @@ export function buildZoomCards(onSelect: () => void = () => {}): void {
   renderState.zoomCards = zoomItems.map((item) => {
     const card = document.createElement("div"); card.className = "zoom-card";
     card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-label", item.region ? `进入${item.label}局部微调` : "返回全脸视图");
+    card.title = item.region ? `点击进入${item.label}局部微调` : "点击返回全脸视图";
     const cv = document.createElement("canvas"); cv.width = 300; cv.height = 300;
     if (renderState.mirror) cv.classList.add("mirror");
     const tag = document.createElement("div"); tag.className = "tag"; tag.textContent = item.label;
@@ -865,6 +890,7 @@ export function buildZoomCards(onSelect: () => void = () => {}): void {
 
 export function setFocusRegion(region: RenderRegion): void {
   renderState.focusRegion = region;
+  renderState.focusCrop = null;
   syncFocusCards();
 }
 
@@ -876,7 +902,11 @@ export function adjustFocusZoom(deltaY: number): boolean {
 }
 
 function syncFocusCards() {
-  (renderState.zoomCards as LiveZoomCard[]).forEach((zc) => zc.card.classList.toggle("active", zc.region === renderState.focusRegion));
+  (renderState.zoomCards as LiveZoomCard[]).forEach((zc) => {
+    const active = zc.region === renderState.focusRegion;
+    zc.card.classList.toggle("active", active);
+    zc.card.setAttribute("aria-pressed", String(active));
+  });
 }
 
 export function clearZooms(): void {
@@ -950,9 +980,16 @@ function zoomRegionBounds(lm: Vec3[], region: RenderRegion): Bounds | null {
 
 export function drawFocusedRegion(lm: Vec3[] | null, W: number, H: number): void {
   const region = renderState.focusRegion as RenderRegion;
-  if (!region || !lm) return;
+  if (!region || !lm) {
+    renderState.focusCrop = null;
+    return;
+  }
   const crop = focusCropRect(lm, region, W, H);
-  if (!crop) return;
+  if (!crop) {
+    renderState.focusCrop = null;
+    return;
+  }
+  renderState.focusCrop = crop;
 
   focusScratch.width = W;
   focusScratch.height = H;

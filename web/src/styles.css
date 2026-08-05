@@ -1,7 +1,23 @@
 @import "tailwindcss";
 @import "../clinical-theme.css";
 
-.live-refine-panel{display:flex;flex-direction:column;gap:9px;padding-top:4px}.live-refine-three{grid-template-columns:repeat(3,minmax(0,1fr))}.live-refine-status{display:flex;justify-content:space-between;color:var(--muted);font-size:12px}.live-refine-status span:last-child{color:var(--ink);font-weight:700}.main-wrap.refining{cursor:crosshair}
+.live-refine-panel{display:flex;min-width:0;flex-direction:column;gap:9px;padding-top:4px}
+.btn-row.live-refine-modes{grid-template-columns:repeat(3,minmax(0,1fr))}
+.live-refine-modes .btn{min-width:0;padding-inline:5px;font-size:12px}
+.live-refine-status,.live-refine-range,.live-refine-nudge-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px}
+.live-refine-status span:last-child,.live-refine-range output{color:var(--ink);font-weight:700}
+.live-refine-zoom,.live-refine-point-count{display:flex;min-width:0;flex-direction:column;gap:7px;padding:9px;border:1px solid var(--line);border-radius:4px}
+.live-refine-point-count.hidden{display:none}
+.btn-row.live-refine-zoom-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
+.live-refine-zoom-actions .btn{min-width:0;padding:7px 5px}
+.live-refine-nudge-head label{display:flex;align-items:center;gap:6px}
+.live-refine-nudge-head select{min-width:0;max-width:96px;padding:4px 6px;font-size:12px}
+.btn-row.live-refine-nudge{grid-template-columns:repeat(4,minmax(0,1fr))}
+.live-refine-nudge .btn{min-width:0;padding:6px;font-size:17px}
+.main-wrap.refining{cursor:crosshair}
+.main-wrap.refining.refine-drag{cursor:grab}
+.main-wrap.refining.refine-drag:active{cursor:grabbing}
+.main-wrap.refining.refine-point{cursor:crosshair}
 @import "../style.css";
 @import "../annotate.css";
 
@@ -1518,6 +1534,23 @@
 
 .clinical-compat-workbench .btn:disabled {
   opacity: 0.45;
+}
+
+.clinical-compat-workbench .live-refine-zoom,
+.clinical-compat-workbench .live-refine-point-count {
+  border-color: var(--clinical-dark-border);
+  background: #0f141b;
+  color: var(--clinical-text-primary);
+}
+
+.clinical-compat-workbench .live-refine-zoom .live-refine-range output,
+.clinical-compat-workbench .live-refine-point-count .live-refine-range output {
+  color: var(--clinical-text-primary);
+}
+
+.clinical-compat-workbench .live-refine-point-count input[type="range"] {
+  min-width: 0;
+  margin-inline: 0;
 }
 
 .incision-workbench > .sidebar {

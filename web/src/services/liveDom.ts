@@ -13,9 +13,21 @@ export interface LiveDomElements {
   refine2dStatus: HTMLElement;
   refineView: HTMLButtonElement;
   refineDrag: HTMLButtonElement;
+  refinePoint: HTMLButtonElement;
   refineErase: HTMLButtonElement;
   refineUndo: HTMLButtonElement;
   refineExport: HTMLButtonElement;
+  refineZoomOut: HTMLButtonElement;
+  refineZoomReset: HTMLButtonElement;
+  refineZoomIn: HTMLButtonElement;
+  refineZoomVal: HTMLOutputElement;
+  refineSpread: HTMLInputElement;
+  refineSpreadVal: HTMLOutputElement;
+  refinePointCountWrap: HTMLElement;
+  refinePointCount: HTMLInputElement;
+  refinePointCountVal: HTMLOutputElement;
+  refineNudgeStep: HTMLSelectElement;
+  refineNudgeButtons: NodeListOf<HTMLButtonElement>;
   refineSymmetry: HTMLInputElement;
   refineAxis: HTMLInputElement;
   refineReset: HTMLButtonElement;
@@ -102,9 +114,21 @@ function collectElements(root: ParentNode | Document): LiveDomElements {
     refine2dStatus: elementById<HTMLElement>(root, "refine2dStatus") as HTMLElement,
     refineView: elementById<HTMLButtonElement>(root, "refineViewBtn") as HTMLButtonElement,
     refineDrag: elementById<HTMLButtonElement>(root, "refineDragBtn") as HTMLButtonElement,
+    refinePoint: elementById<HTMLButtonElement>(root, "refinePointBtn") as HTMLButtonElement,
     refineErase: elementById<HTMLButtonElement>(root, "refineEraseBtn") as HTMLButtonElement,
     refineUndo: elementById<HTMLButtonElement>(root, "refineUndoBtn") as HTMLButtonElement,
     refineExport: elementById<HTMLButtonElement>(root, "refineExportBtn") as HTMLButtonElement,
+    refineZoomOut: elementById<HTMLButtonElement>(root, "refineZoomOutBtn") as HTMLButtonElement,
+    refineZoomReset: elementById<HTMLButtonElement>(root, "refineZoomResetBtn") as HTMLButtonElement,
+    refineZoomIn: elementById<HTMLButtonElement>(root, "refineZoomInBtn") as HTMLButtonElement,
+    refineZoomVal: elementById<HTMLOutputElement>(root, "refineZoomVal") as HTMLOutputElement,
+    refineSpread: elementById<HTMLInputElement>(root, "refineSpread") as HTMLInputElement,
+    refineSpreadVal: elementById<HTMLOutputElement>(root, "refineSpreadVal") as HTMLOutputElement,
+    refinePointCountWrap: elementById<HTMLElement>(root, "refinePointCountWrap") as HTMLElement,
+    refinePointCount: elementById<HTMLInputElement>(root, "refinePointCount") as HTMLInputElement,
+    refinePointCountVal: elementById<HTMLOutputElement>(root, "refinePointCountVal") as HTMLOutputElement,
+    refineNudgeStep: elementById<HTMLSelectElement>(root, "refineNudgeStep") as HTMLSelectElement,
+    refineNudgeButtons: root.querySelectorAll<HTMLButtonElement>("[data-refine-nudge]"),
     refineSymmetry: elementById<HTMLInputElement>(root, "refineSymmetryToggle") as HTMLInputElement,
     refineAxis: elementById<HTMLInputElement>(root, "refineAxisToggle") as HTMLInputElement,
     refineReset: elementById<HTMLButtonElement>(root, "refineResetBtn") as HTMLButtonElement,
