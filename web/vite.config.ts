@@ -85,6 +85,9 @@ export default defineConfig({
     rollupOptions: {
       input: {
         app: resolve(import.meta.dirname, "index.html"),
+        wrinkleRstlExperiment: resolve(
+          import.meta.dirname, "compat/personalized/wrinkle_rstl_experiment.html",
+        ),
       },
     },
   },

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>皱纹引导 RSTL 单图实验</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #f3f4f6;
+      color: #171717;
+    }
+    * { box-sizing: border-box; letter-spacing: 0; }
+    body { margin: 0; min-width: 320px; }
+    header {
+      border-bottom: 1px solid #d4d4d4;
+      background: #ffffff;
+    }
+    .header-inner, main { width: min(1500px, calc(100% - 32px)); margin: 0 auto; }
+    .header-inner {
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 12px 0;
+    }
+    h1 { margin: 0; font-size: 21px; font-weight: 700; }
+    .subtitle { margin: 4px 0 0; color: #525252; font-size: 13px; }
+    .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    input[type="file"] {
+      max-width: 280px;
+      border: 1px solid #a3a3a3;
+      background: #ffffff;
+      padding: 8px;
+      border-radius: 6px;
+      font: inherit;
+      font-size: 13px;
+    }
+    button {
+      min-height: 38px;
+      border: 1px solid #171717;
+      border-radius: 6px;
+      padding: 0 14px;
+      background: #171717;
+      color: #ffffff;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    button.secondary { background: #ffffff; color: #171717; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    main { padding: 18px 0 34px; }
+    .status-band {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      min-height: 46px;
+      padding: 10px 0 16px;
+      border-bottom: 1px solid #d4d4d4;
+      margin-bottom: 18px;
+    }
+    #status { margin: 0; font-size: 14px; color: #404040; }
+    #summary { margin: 0; font-size: 13px; color: #525252; text-align: right; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    figure {
+      margin: 0;
+      border: 1px solid #d4d4d4;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #ffffff;
+    }
+    figcaption {
+      min-height: 46px;
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      border-bottom: 1px solid #e5e5e5;
+      font-size: 14px;
+      font-weight: 650;
+    }
+    .canvas-wrap { aspect-ratio: 1; background: #111827; }
+    canvas { display: block; width: 100%; height: 100%; }
+    @media (max-width: 1000px) {
+      .header-inner { align-items: flex-start; flex-direction: column; }
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+      .header-inner, main { width: min(100% - 20px, 1500px); }
+      .grid { grid-template-columns: 1fr; }
+      .status-band { grid-template-columns: 1fr; }
+      #summary { text-align: left; }
+      input[type="file"] { max-width: 100%; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div>
+        <h1>皱纹引导 RSTL 单图实验</h1>
+        <p id="experimentSubtitle" class="subtitle">v8.1.68 · 本地 YOLO · 区间主锚+门禁重分配 v8 · validated=false</p>
+      </div>
+      <div class="controls">
+        <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp">
+        <input id="fineLineInput" type="file" accept="application/json,.json">
+        <button id="runButton" type="button">运行实验</button>
+        <button id="exportButton" class="secondary" type="button" disabled>导出全部</button>
+      </div>
+    </div>
+  </header>
+  <main>
+    <div class="status-band" role="status" aria-live="polite">
+      <p id="status">请选择一张正面人脸图片。</p>
+      <p id="summary"></p>
+    </div>
+    <section class="grid" aria-label="实验结果">
+      <figure><figcaption>01 原始 v8.1.68 RSTL</figcaption><div class="canvas-wrap"><canvas id="priorCanvas" width="320" height="320"></canvas></div></figure>
+      <figure><figcaption>02 本地 YOLO 皱纹证据</figcaption><div class="canvas-wrap"><canvas id="evidenceCanvas" width="320" height="320"></canvas></div></figure>
+      <figure><figcaption>03 皱纹采用与拒绝</figcaption><div class="canvas-wrap"><canvas id="decisionCanvas" width="320" height="320"></canvas></div></figure>
+      <figure><figcaption>04 微调后的 RSTL</figcaption><div class="canvas-wrap"><canvas id="refinedCanvas" width="320" height="320"></canvas></div></figure>
+      <figure><figcaption>05 调整前后对比</figcaption><div class="canvas-wrap"><canvas id="compareCanvas" width="320" height="320"></canvas></div></figure>
+      <figure><figcaption>06 位移审计</figcaption><div class="canvas-wrap"><canvas id="displacementCanvas" width="320" height="320"></canvas></div></figure>
+    </section>
+  </main>
+  <script type="module" src="./wrinkleRstlExperiment.ts"></script>
+</body>
+</html>

@@ -122,6 +122,7 @@ _ORBITAL_BROW_MEDIAL_LONGER_EXTENSION_V61 = False
 _FOREHEAD_FOURTEEN_ARCHED_DENSITY_V62 = False
 _FOREHEAD_RIGID_DOWNWARD_SHIFT_V63 = False
 _FOREHEAD_ADDITIONAL_DOWNWARD_SHIFT_V64 = False
+_LATERAL_CANTHUS_SHORT_ARCS_V65 = False
 
 _NASAL_BUNDLE_LAYER_SPACING_V30 = 0.015
 _NASAL_BUNDLE_OUTER_X_STEP_V30 = 0.004
@@ -202,6 +203,12 @@ _FOREHEAD_ARCHED_LEVELS_V62 = (
 _FOREHEAD_ARCHED_CROWN_RISE_V62 = 0.030
 _FOREHEAD_RIGID_DOWNWARD_AMOUNT_V63 = 0.012
 _FOREHEAD_TOTAL_DOWNWARD_AMOUNT_V64 = 0.037
+_LATERAL_CANTHUS_NEW_START_X_V65 = 0.030
+_LATERAL_CANTHUS_NEW_END_X_V65 = 0.205
+_LATERAL_CANTHUS_UNDEREYE_START_X_V65 = 0.030
+_LATERAL_CANTHUS_UNDEREYE_BLEND_X_V65 = 0.235
+_LATERAL_CANTHUS_UNDEREYE_OUTER_Y_V65 = (0.390, 0.410, 0.427)
+_LATERAL_CANTHUS_SHORT_ARC_REGION_V65 = "lateral_canthus_short_arc_v65"
 _CHEEK_GAP_BRIDGE_SHIFT_V54 = 0.006
 _CHEEK_GAP_BRIDGE_WINDOW_V54 = (0.26, 0.48)
 _CHEEK_GAP_BRIDGE_ROOT_OFFSET_V54 = 0.010
@@ -3192,6 +3199,105 @@ def _remove_superior_orbital_guide_v58(curves: list[Curve]) -> list[Curve]:
     return revised
 
 
+def _replace_curve_lateral_prefix_v65(
+    points: np.ndarray,
+    start_x: float,
+    outer_y: float,
+    blend_x: float,
+) -> np.ndarray:
+    """Replace an outer prefix with a flat-to-existing-tangent Hermite segment."""
+    oriented = points if float(points[0, 0]) < float(points[-1, 0]) else points[::-1]
+    keep = oriented[:, 0] >= blend_x
+    first_kept = int(np.argmax(keep))
+    if first_kept == 0 or not np.any(keep):
+        raise RuntimeError(f"curve does not cross prefix blend x={blend_x:.3f}")
+    before = oriented[first_kept - 1]
+    after = oriented[first_kept]
+    fraction = (blend_x - before[0]) / (after[0] - before[0])
+    join = before + fraction * (after - before)
+    join_slope = float((after[1] - before[1]) / (after[0] - before[0]))
+    sample_x = np.linspace(start_x, blend_x, 60, endpoint=False)
+    width = blend_x - start_x
+    t = (sample_x - start_x) / width
+    h00 = 2.0 * t**3 - 3.0 * t**2 + 1.0
+    h01 = -2.0 * t**3 + 3.0 * t**2
+    h11 = t**3 - t**2
+    sample_y = h00 * outer_y + h01 * float(join[1]) + h11 * width * join_slope
+    extension = np.column_stack([sample_x, sample_y])
+    return np.vstack([extension, join, oriented[first_kept:]])
+
+
+def _add_lateral_canthus_short_arcs_v65(curves: list[Curve]) -> list[Curve]:
+    """Add four rising outer-canthus arcs and extend three under-eye lines."""
+    revised = list(curves)
+
+    infraorbital = [
+        index for index, curve in enumerate(curves) if curve.region == "nose_root_cross_v9"
+    ]
+    upper_cheek_bridge = [
+        index
+        for index, curve in enumerate(curves)
+        if curve.region == _CHEEK_GAP_DENSITY_REGION_V53
+        and min(abs(curve.points[0, 0] - CENTER_X), abs(curve.points[-1, 0] - CENTER_X))
+        < 0.008
+    ]
+    if len(infraorbital) != 2 or len(upper_cheek_bridge) != 1:
+        raise RuntimeError(
+            "expected two infraorbital waves and one cross-face upper-cheek bridge; "
+            f"found {len(infraorbital)} and {len(upper_cheek_bridge)}"
+        )
+    def outer_y(index: int) -> float:
+        points = curves[index].points
+        endpoint = 0 if float(points[0, 0]) < float(points[-1, 0]) else -1
+        return float(points[endpoint, 1])
+
+    changed = sorted(infraorbital, key=outer_y) + upper_cheek_bridge
+    for index, target_outer_y in zip(
+        changed,
+        _LATERAL_CANTHUS_UNDEREYE_OUTER_Y_V65,
+        strict=True,
+    ):
+        revised[index] = Curve(
+            curves[index].region,
+            _replace_curve_lateral_prefix_v65(
+                curves[index].points,
+                _LATERAL_CANTHUS_UNDEREYE_START_X_V65,
+                target_outer_y,
+                _LATERAL_CANTHUS_UNDEREYE_BLEND_X_V65,
+            ),
+        )
+
+    short_arcs: list[Curve] = []
+    for rank in range(4):
+        outer_layer = 0.013 * rank
+        controls = np.asarray(
+            (
+                (_LATERAL_CANTHUS_NEW_START_X_V65, 0.330 + outer_layer),
+                (0.085, 0.325 + 0.0110 * rank),
+                (0.155, 0.311 + 0.0085 * rank),
+                (_LATERAL_CANTHUS_NEW_END_X_V65, 0.299 + 0.0070 * rank),
+            ),
+            dtype=np.float64,
+        )
+        points = _cubic_bezier(*controls, 90)
+        short_arcs.append(
+            Curve(
+                _LATERAL_CANTHUS_SHORT_ARC_REGION_V65,
+                resample(points, spacing=0.0035),
+            )
+        )
+
+    print(
+        "[lateral-canthus-short-arcs] extended_half_lines=3 "
+        f"new_half_lines={len(short_arcs)} undereye_start_x="
+        f"{_LATERAL_CANTHUS_UNDEREYE_START_X_V65:.3f} "
+        f"undereye_blend_x={_LATERAL_CANTHUS_UNDEREYE_BLEND_X_V65:.3f} "
+        f"new_span_x=({_LATERAL_CANTHUS_NEW_START_X_V65:.3f}, "
+        f"{_LATERAL_CANTHUS_NEW_END_X_V65:.3f})"
+    )
+    return revised + short_arcs
+
+
 def _densify_and_extend_orbital_brow_v59(curves: list[Curve]) -> list[Curve]:
     """Rebuild seven evenly spaced brow layers and extend both endpoint families."""
     indices = [
@@ -3927,6 +4033,8 @@ def trace_standard_streamlines(
         curves = _rebuild_forehead_fourteen_arches_v62(curves)
     if _FOREHEAD_RIGID_DOWNWARD_SHIFT_V63:
         curves = _shift_forehead_arches_rigidly_downward_v63(curves)
+    if _LATERAL_CANTHUS_SHORT_ARCS_V65:
+        curves = _add_lateral_canthus_short_arcs_v65(curves)
     return curves
 
 
@@ -4017,6 +4125,7 @@ def build(canonical: CanonicalFaceModel, reference: dict) -> Atlas:
         global _FOREHEAD_FOURTEEN_ARCHED_DENSITY_V62
         global _FOREHEAD_RIGID_DOWNWARD_SHIFT_V63
         global _FOREHEAD_ADDITIONAL_DOWNWARD_SHIFT_V64
+        global _LATERAL_CANTHUS_SHORT_ARCS_V65
         constraints = reference.get("extraction", {}).get("doctorConstraints", {})
         _FOREHEAD_MIN_Y = 0.012 if "foreheadUpperExtension" in constraints else 0.060
         _NOSE_ROOT_HORIZONTAL_PATCH = "noseRootHorizontalPatch" in constraints
@@ -4180,6 +4289,9 @@ def build(canonical: CanonicalFaceModel, reference: dict) -> Atlas:
         )
         _FOREHEAD_ADDITIONAL_DOWNWARD_SHIFT_V64 = (
             "foreheadAdditionalDownwardShiftV64" in constraints
+        )
+        _LATERAL_CANTHUS_SHORT_ARCS_V65 = (
+            "lateralCanthusShortArcsV65" in constraints
         )
         projected_norm = (canonical.project_front() - canonical.face_frame()[0]) / canonical.face_frame()[1]
         _FACE_POLYGON = cv2.convexHull(projected_norm.astype(np.float32))
