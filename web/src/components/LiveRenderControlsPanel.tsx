@@ -94,7 +94,7 @@ export function LiveRenderControlsPanel() {
             onChange: (event) => commands.render("mesh_points_toggle", event.currentTarget.checked),
           }}
         >
-          显示网格采样点
+          显示人脸关键点（白色圆点）
         </CheckboxField>
       </Card>
     </>

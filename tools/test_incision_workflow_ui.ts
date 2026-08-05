@@ -86,8 +86,9 @@ assert.ok(html.includes('id="workflowComparison"'), "workbench exposes browser w
 assert.ok(html.includes("snapshot?.headAsset.statusLabel"), "workbench stage shows the active head asset status");
 assert.ok(html.includes('label="RSTL 来源"'), "workbench state panel exposes the active RSTL source");
 assert.ok(html.includes('label="模型版本"'), "workbench state panel exposes the active model version without topology jargon");
-assert.ok(html.includes('id="approveCandidateBtn"'), "workbench exposes candidate approval action");
-assert.ok(html.includes('id="rejectCandidateBtn"'), "workbench exposes candidate rejection action");
+assert.ok(!html.includes('id="approveCandidateBtn"'), "workbench removes duplicate candidate approval action");
+assert.ok(!html.includes('id="rejectCandidateBtn"'), "workbench removes duplicate candidate rejection action");
+assert.ok(html.includes("保存所选审阅状态"), "workbench saves the selected review state with one clear action");
 assert.ok(html.includes('id="candidateWidth"'), "workbench exposes fusiform width and ratio metric");
 assert.ok(html.includes('id="candidateTipAngle"'), "workbench exposes fusiform tip angle metric");
 assert.ok(html.includes('id="candidateRstlDeviation"'), "workbench exposes RSTL direction-deviation metric");
@@ -216,6 +217,9 @@ assert.ok(incisionReviewRecordsService.includes("RSTL 来源"), "markdown report
 assert.ok(incisionReviewRecordsService.includes("最近敏感游离缘"), "markdown report includes sensitive free-margin distance");
 assert.ok(incisionReviewRecordsService.includes("候选版本"), "markdown report includes candidate version provenance");
 assert.ok(js.includes("发送到实时叠加前，请先确认当前候选草案"), "live overlay requires candidate approval");
+assert.ok(js.includes('window.location.assign("/live?incisionOverlay=staged")'), "successful overlay handoff navigates to the live workbench");
+assert.ok(js.includes("atlas.lines || []"), "incision stage renders the complete bilateral RSTL atlas");
+assert.ok(!js.includes("i % 2 === 0"), "incision stage never drops one side through index thinning");
 assert.ok(reviewPolicy.includes("当前候选有高风险保护提示"), "high-risk approval requires review notes");
 
 console.log("test_incision_workflow_ui: tumor boundary IO and review workflow assertions passed");

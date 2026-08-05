@@ -283,10 +283,10 @@ includesAll(reviewControls, [
   'id="reviewerName"',
   'id="reviewDecision"',
   'id="reviewNotes"',
-  'id="approveCandidateBtn"',
-  'id="rejectCandidateBtn"',
   'id="saveReviewBtn"',
 ], "doctor review controls");
+assert.ok(!reviewControls.includes('id="approveCandidateBtn"'), "review panel removes duplicate approval button");
+assert.ok(!reviewControls.includes('id="rejectCandidateBtn"'), "review panel removes duplicate rejection button");
 
 includesAll(incisionRuntime, [
   "mountIncisionWorkbench",

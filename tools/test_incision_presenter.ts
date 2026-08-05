@@ -87,6 +87,6 @@ assert.match(presentation.guardrailDetails.text, /肿物输入：缺少记录者
 assert.match(presentation.directionSource.text, /皱襞\/边界辅助线索：只读审阅，不参与几何/);
 assert.match(presentation.directionSource.text, /医生人工覆盖已记录/);
 assert.deepEqual(presentation.directionSource.classNames, ["warn"]);
-assert.equal(presentation.stageStatus, "浏览器确定性 workflow 已更新候选 · 第 2 次生成 · 已记录医生调整 · 标准脸");
+assert.equal(presentation.stageStatus, "浏览器确定性 workflow 已更新候选 · 已明确生成 2 次 · 已记录医生调整 · 标准脸");
 
 console.log("test_incision_presenter: pure guardrail, workflow, candidate, and tumor-quality presentations passed");

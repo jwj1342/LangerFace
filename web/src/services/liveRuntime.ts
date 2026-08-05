@@ -227,6 +227,16 @@ function applyStagedIncisionOverlay(): void {
   scheduleLiveState("staged_incision_overlay");
 }
 
+function clearIncisionOverlay(): void {
+  dataSource.clearIncisionOverlay();
+  renderState.incisionOverlay = null;
+  setIncisionOverlayQa(null);
+  buildZoomCards(refreshStaticImage);
+  refreshStaticImage();
+  setMsg("已清除本次切口候选叠加。RSTL 显示不受影响。");
+  scheduleLiveState("incision_overlay_cleared");
+}
+
 // ── UI 绑定 ───────────────────────────────────────────────────────────────────
 function refreshStaticImage(): void {
   if (sourceState.paused && redrawPausedFrame()) return;
@@ -427,6 +437,7 @@ function handleReactRenderCommand(event: Event): void {
     });
   }
   if (command === "restore_atlas") runLiveAction("restore_atlas", restoreAtlasPreview);
+  if (command === "clear_incision_overlay") runLiveAction("clear_incision_overlay", clearIncisionOverlay);
 }
 
 function handleReactRouteCommand(event: Event): void {

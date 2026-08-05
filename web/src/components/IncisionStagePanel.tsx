@@ -1,4 +1,4 @@
-import { StageActions, StageLink, StageMeta, StageShell, StageStatus, StageViewport } from "./StageShell";
+import { StageActions, StageMeta, StageShell, StageStatus, StageViewport } from "./StageShell";
 import { CanvasLegendItem, Legend } from "./ui/legend";
 import { AssetLoadingOverlay } from "./ui/loading-overlay";
 import { useIncisionStore, type IncisionAssetLoadingState } from "../stores/incisionStore";
@@ -18,8 +18,7 @@ export function IncisionStagePanel() {
         <>
           <StageStatus active>{snapshot?.headAsset.statusLabel || "个体化 RSTL 规划"}</StageStatus>
           <StageActions>
-            <StageMeta id="stageStatus">{snapshot?.stageStatus || "拖拽旋转 · 滚轮缩放 · 点击定位"}</StageMeta>
-            <StageLink variant="meta" to="/settings/atlas">图谱库管理</StageLink>
+            <StageMeta id="stageStatus" aria-live="polite">{snapshot?.stageStatus || "拖拽旋转 · 滚轮缩放 · 点击定位"}</StageMeta>
           </StageActions>
         </>
       )}
@@ -39,6 +38,7 @@ export function IncisionStagePanel() {
           <CanvasLegendItem swatchClassName="line">候选切口</CanvasLegendItem>
           <CanvasLegendItem swatchClassName="handle">端点控制</CanvasLegendItem>
         </Legend>
+        <span className="incision-stage-boundary">标准 MediaPipe 规划表面，不是患者三维重建</span>
       </StageViewport>
     </StageShell>
   );

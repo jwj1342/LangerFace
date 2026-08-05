@@ -386,9 +386,13 @@ async function boot() {
   S.head.setGeometry(
     S.verts,
     S.tris,
-    (atlas.lines || []).filter((_: unknown, i: number) => i % 2 === 0),
+    atlas.lines || [],
     { showSurface: true, bands: false },
   );
+  if (S.head.lines) {
+    S.head.lines.material.transparent = true;
+    S.head.lines.material.opacity = 0.62;
+  }
   S.head.resetView();
 
   S.marker = new THREE.Mesh(
@@ -405,7 +409,7 @@ async function boot() {
   );
   S.candidateLine = new THREE.Line(
     new THREE.BufferGeometry(),
-    new THREE.LineBasicMaterial({ color: 0x34d399, toneMapped: false, linewidth: 2 }),
+    new THREE.LineBasicMaterial({ color: 0x34d399, depthTest: false, toneMapped: false }),
   );
   S.endpointHandles = [0, 1].map((idx) => {
     const h = new THREE.Mesh(
@@ -814,7 +818,7 @@ function handleReactTumorCommand(event: Event) {
     return;
   }
   if (command === "run_workflow") {
-    runWorkflow();
+    runWorkflow({ countGeneration: true });
   }
 }
 
@@ -1284,35 +1288,12 @@ function makeVariantCandidates() {
   renderSaved();
 }
 
-function recordReviewDecision(status: string, label: string) {
-  if (!S.result) {
-    els.stageStatus.textContent = "没有可审阅的候选";
-    return;
-  }
-  const readiness = reviewReadiness(status);
-  if (!readiness.ok) {
-    els.stageStatus.textContent = readiness.message;
-    return;
-  }
-  els.reviewDecision.value = status;
-  updateReviewStateUI();
-  saveCurrentCandidate(label);
-}
-
 function handleReactReviewCommand(event: Event) {
   const detail = readIncisionReviewCommand(event);
   if (!detail) return;
   const { command } = detail;
   if (command === "review_state_changed") {
     updateReviewStateUI();
-    return;
-  }
-  if (command === "approve_candidate") {
-    recordReviewDecision("approved_for_discussion", "确认候选");
-    return;
-  }
-  if (command === "reject_candidate") {
-    recordReviewDecision("rejected_by_clinician", "否决候选");
     return;
   }
   if (command === "save_review") {
@@ -1497,12 +1478,15 @@ function stageLiveOverlay() {
   const overlay = compileIncisionOverlay(reviewRecord(S.result, "实时叠加候选"), S.verts, S.tris);
   if (!overlay || !dataSource.stageIncisionOverlay(overlay)) {
     els.stageStatus.textContent = "切口候选叠加暂存失败";
+    publishIncisionState("live_overlay_stage_failed");
     return;
   }
-  els.stageStatus.textContent = "已发送到实时叠加；返回实时显示后上传照片、视频或开启摄像头查看。";
+  els.stageStatus.textContent = "切口候选已暂存，正在进入实时叠加。";
+  publishIncisionState("live_overlay_staged");
+  window.location.assign("/live?incisionOverlay=staged");
 }
 
-async function runWorkflow() {
+async function runWorkflow({ countGeneration = false }: { countGeneration?: boolean } = {}) {
   if (!S.verts) return;
   els.run.disabled = true;
   els.stageStatus.textContent = "Worker 确定性 workflow 生成中…";
@@ -1510,7 +1494,7 @@ async function runWorkflow() {
     const tumor = tumorInput();
     const result = await planWorkflowForCurrentTumor(tumor);
     S.baseResult = result;
-    S.generationCount += 1;
+    if (countGeneration) S.generationCount += 1;
     resetEditControls();
     resetEditTimeline();
     resetReviewControls();
@@ -1672,7 +1656,7 @@ function bindWorkbenchEvents() {
         updateFormVisibility();
         runWorkflow();
       },
-      onRunWorkflow: runWorkflow,
+      onRunWorkflow: () => runWorkflow({ countGeneration: true }),
       onToggleBoundary: toggleBoundaryDrawing,
       onClearBoundary: clearBoundaryPoints,
       onExportTumor: exportTumorJson,
@@ -1690,8 +1674,6 @@ function bindWorkbenchEvents() {
       onRedoEdit: redoEditSnapshot,
       onResetEdit: resetEditToToolSuggestion,
       onReviewDecisionChange: updateReviewStateUI,
-      onApproveCandidate: () => recordReviewDecision("approved_for_discussion", "确认候选"),
-      onRejectCandidate: () => recordReviewDecision("rejected_by_clinician", "否决候选"),
       onSaveReview: saveReviewRecord,
       onSaveCandidate: () => saveCurrentCandidate(),
       onMakeVariants: makeVariantCandidates,

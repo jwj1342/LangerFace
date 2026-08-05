@@ -221,7 +221,7 @@ export function buildIncisionResultPresentation(
   const rstlDeviation = metrics.rstl_deviation_deg;
   const edited = candidate.edited ? " · 已记录医生调整" : "";
   const headLabel = input.headStatusLabel ? ` · ${input.headStatusLabel}` : "";
-  const generationLabel = input.generationCount ? ` · 第 ${input.generationCount} 次生成` : "";
+  const generationLabel = input.generationCount ? ` · 已明确生成 ${input.generationCount} 次` : " · 自动预览";
 
   return {
     candidateType: candidate.type === "linear" ? "线性" : "梭形",

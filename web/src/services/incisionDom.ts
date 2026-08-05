@@ -74,8 +74,6 @@ export interface IncisionDomElements extends Record<string, any> {
   reviewDecision: HTMLSelectElement;
   reviewNotes: HTMLTextAreaElement;
   reviewState: HTMLElement;
-  approveCandidate: HTMLButtonElement;
-  rejectCandidate: HTMLButtonElement;
   saveReview: HTMLButtonElement;
   saveCandidate: HTMLButtonElement;
   makeVariants: HTMLButtonElement;
@@ -170,8 +168,6 @@ export function collectIncisionElements(root: ParentNode | Document = document):
     reviewDecision: byId(root, "reviewDecision"),
     reviewNotes: byId(root, "reviewNotes"),
     reviewState: byId(root, "reviewState"),
-    approveCandidate: byId(root, "approveCandidateBtn"),
-    rejectCandidate: byId(root, "rejectCandidateBtn"),
     saveReview: byId(root, "saveReviewBtn"),
     saveCandidate: byId(root, "saveCandidateBtn"),
     makeVariants: byId(root, "makeVariantsBtn"),

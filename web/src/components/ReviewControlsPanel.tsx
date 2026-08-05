@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "./ui/button";
-import { ButtonRow } from "./ui/button-row";
 import { WorkbenchCard, CardHeader } from "./ui/card";
 import { WorkbenchNote } from "./ui/hint";
 import { ReviewStatus } from "./ui/incision-status";
@@ -65,31 +64,13 @@ export function ReviewControlsPanel() {
         id="reviewNotes"
         placeholder="审阅备注、覆盖原因或需要回看的位置"
       />
-      <ButtonRow className="two-cols">
-        <Button
-          variant="workbench"
-          id="approveCandidateBtn"
-          type="button"
-          onClick={() => commands.review("approve_candidate")}
-        >
-          确认当前候选
-        </Button>
-        <Button
-          variant="workbench"
-          id="rejectCandidateBtn"
-          type="button"
-          onClick={() => commands.review("reject_candidate")}
-        >
-          否决当前候选
-        </Button>
-      </ButtonRow>
       <Button
         variant="workbenchPrimary"
         id="saveReviewBtn"
         type="button"
         onClick={() => commands.review("save_review")}
       >
-        保存审阅记录
+        保存所选审阅状态
       </Button>
       <WorkbenchNote>确认只代表进入研究审阅记录，不是手术指令；候选几何一旦调整，审阅状态会回到待确认。</WorkbenchNote>
     </WorkbenchCard>

@@ -44,8 +44,6 @@ export interface IncisionDomEventHandlers {
   onRedoEdit(): void;
   onResetEdit(): void;
   onReviewDecisionChange(): void;
-  onApproveCandidate(): void;
-  onRejectCandidate(): void;
   onSaveReview(): void;
   onSaveCandidate(): void;
   onMakeVariants(): void;
@@ -252,8 +250,6 @@ export function bindIncisionDomEvents({
     action(elements.resetEdit, "click", handlers.onResetEdit);
 
     action(elements.reviewDecision, "change", handlers.onReviewDecisionChange);
-    action(elements.approveCandidate, "click", handlers.onApproveCandidate);
-    action(elements.rejectCandidate, "click", handlers.onRejectCandidate);
     action(elements.saveReview, "click", handlers.onSaveReview);
 
     action(elements.saveCandidate, "click", handlers.onSaveCandidate);
