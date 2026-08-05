@@ -16,13 +16,122 @@
 
 import {
   axialDiffDeg, normalizeQ, staticTextureEvidence,
-} from "./prstl_pipeline.js";
+} from "./prstlPipeline.ts";
 
 export const PERSONALIZATION_V2_VERSION = "prstl-consensus-localized-diffeomorphic-field-0.2.0";
 
-const clamp = (value, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, value));
+type NumericField = ArrayLike<number>;
+type Point2 = [number, number];
 
-function scalarAt(field, x, y, size) {
+interface EvidenceField {
+  q: NumericField;
+  confidence: NumericField;
+  ridge: NumericField;
+  coh?: NumericField;
+  deformation?: NumericField;
+}
+
+interface PersonalizationOptions {
+  visibleConfidence?: number;
+  visibleRidge?: number;
+  repeatability?: number;
+  temporalPersistence?: number;
+  expressionAmplitudeQuality?: number;
+  returnConsistency?: number;
+  dynamicValidation?: NumericField | null;
+  minEvidence?: number;
+  distancePriorBase?: number;
+  distancePriorUncertainty?: number;
+  staticOnlyEvidence?: number;
+  minDynamicValidation?: number;
+  minRidge?: number;
+  minDirectionFit?: number;
+  minImprovement?: number;
+  smoothness?: number;
+  anchor?: number;
+  boundaryAnchor?: number;
+  iterations?: number;
+  supportReferencePercentile?: number;
+  supportFloorRatio?: number;
+  supportFullRatio?: number;
+  supportSmoothingPasses?: number;
+  minimumAppliedSupport?: number;
+  fullAppliedSupport?: number;
+  displacementSmoothingPasses?: number;
+  maxCurvatureChangeDeg?: number;
+  maxDisplacementSecondDifferencePx?: number;
+  gridSize?: number;
+  minJacobian?: number;
+}
+
+interface DisplacementGrid {
+  size: number;
+  gridSize: number;
+  step: number;
+  targetX: Float32Array;
+  targetY: Float32Array;
+  dataWeight: Float32Array;
+  u: Float32Array;
+  v: Float32Array;
+  supportReference: number;
+  supportFloor: number;
+  supportFull: number;
+}
+
+interface CurveSeed {
+  name?: string;
+  id?: string | number;
+  pts?: Point2[];
+}
+
+interface EvidenceTarget {
+  offset: number;
+  vector: Point2;
+  weight: number;
+  accepted: boolean;
+  blocked?: boolean;
+  confidence?: number;
+  ridge?: number;
+  directionFit?: number;
+  dynamicValidation?: number;
+  improvement?: number;
+}
+
+interface CurveAudit {
+  kind: string;
+  evidence: number;
+  target_offset_px: number;
+  target_weight: number;
+  support: number;
+  final_offset_px: number;
+  field_scale: number;
+  curve_continuity_scale: number;
+}
+
+interface OptimizedCurve {
+  name?: string;
+  id?: string | number;
+  pts: Point2[];
+  priorPts: Point2[];
+  kinds: string[];
+  audit: CurveAudit[];
+  optimizedOk: boolean;
+  refinedFrac: number;
+  meanEvidence: number;
+  maxDirectionChangeDeg: number;
+  maxCurvatureChangeDeg: number;
+  maxDisplacementSecondDifferencePx: number;
+  continuitySmoothingIterations: number;
+  continuityScale: number;
+  rollbackReason: string | null;
+  topologyScale: number;
+}
+
+interface Bounds { minX: number; minY: number; maxX: number; maxY: number }
+
+const clamp = (value: number, lo = 0, hi = 1): number => Math.max(lo, Math.min(hi, value));
+
+function scalarAt(field: NumericField | null | undefined, x: number, y: number, size: number): number {
   if (!field) return 0;
   const x0 = Math.max(0, Math.min(size - 1, Math.floor(x)));
   const y0 = Math.max(0, Math.min(size - 1, Math.floor(y)));
@@ -33,26 +142,33 @@ function scalarAt(field, x, y, size) {
   return (1 - ty) * ((1 - tx) * a + tx * b) + ty * ((1 - tx) * c + tx * d);
 }
 
-function qAt(field, x, y, size) {
+function qAt(field: NumericField | null | undefined, x: number, y: number, size: number): Point2 {
   if (!field) return [0, 0];
   const x0 = Math.max(0, Math.min(size - 1, Math.floor(x)));
   const y0 = Math.max(0, Math.min(size - 1, Math.floor(y)));
   const x1 = Math.min(size - 1, x0 + 1), y1 = Math.min(size - 1, y0 + 1);
   const tx = clamp(x - x0), ty = clamp(y - y0);
   let sx = 0, sy = 0;
-  for (const [ix, iy, weight] of [
+  const samples: Array<[number, number, number]> = [
     [x0, y0, (1 - tx) * (1 - ty)], [x1, y0, tx * (1 - ty)],
     [x0, y1, (1 - tx) * ty], [x1, y1, tx * ty],
-  ]) {
+  ];
+  for (const [ix, iy, weight] of samples) {
     const index = iy * size + ix;
     sx += (field[index * 2] || 0) * weight;
     sy += (field[index * 2 + 1] || 0) * weight;
   }
-  return normalizeQ([sx, sy]);
+  return normalizeQ([sx, sy]) as Point2;
 }
 
 /** Aggregate line orientation, ridge strength, and persistence across neutral frames. */
-export function buildNeutralConsensusEvidence(frames, width, height, skin, options = {}) {
+export function buildNeutralConsensusEvidence(
+  frames: readonly NumericField[] | null | undefined,
+  width: number,
+  height: number,
+  skin: NumericField | null | undefined,
+  options: PersonalizationOptions = {},
+) {
   const valid = (frames || []).filter((frame) => frame?.length === width * height);
   const n = width * height;
   const q = new Float32Array(n * 2);
@@ -95,18 +211,25 @@ export function buildNeutralConsensusEvidence(frames, width, height, skin, optio
   return { q, confidence, ridge, orientationConsistency, persistence, frameCount: valid.length };
 }
 
-export function createDynamicValidationV2(length) {
+export function createDynamicValidationV2(length: number): Float32Array {
   return new Float32Array(length);
 }
 
 /** Expressions validate neutral candidates; they never contribute a new final direction. */
-export function accumulateDynamicValidationV2(neutral, action, regionWeight, state, options = {}) {
+export function accumulateDynamicValidationV2(
+  neutral: EvidenceField,
+  action: EvidenceField,
+  regionWeight: NumericField | null | undefined,
+  state: Float32Array | null | undefined,
+  options: PersonalizationOptions = {},
+): Float32Array {
   const n = neutral.confidence.length;
   const validation = state?.length === n ? state : new Float32Array(n);
   const repeatability = clamp(options.repeatability ?? 0);
   const temporalPersistence = clamp(options.temporalPersistence ?? 0);
   const amplitudeQuality = clamp(options.expressionAmplitudeQuality ?? 0.7);
-  const returnFactor = Number.isFinite(options.returnConsistency)
+  const returnFactor = typeof options.returnConsistency === "number"
+      && Number.isFinite(options.returnConsistency)
     ? 0.55 + 0.45 * clamp(options.returnConsistency)
     : 0.72; // Dataset mode: useful but explicitly capped without a real return sequence.
   for (let i = 0; i < n; i++) {
@@ -131,7 +254,12 @@ export function accumulateDynamicValidationV2(neutral, action, regionWeight, sta
   return validation;
 }
 
-export function finalizePersonalizationEvidenceV2(q0, neutral, dynamicValidation, skin) {
+export function finalizePersonalizationEvidenceV2(
+  q0: NumericField | null | undefined,
+  neutral: EvidenceField,
+  dynamicValidation: NumericField | null | undefined,
+  skin: NumericField | null | undefined,
+) {
   const n = neutral.confidence.length;
   const q = new Float32Array(n * 2);
   const confidence = new Float32Array(n);
@@ -154,18 +282,25 @@ export function finalizePersonalizationEvidenceV2(q0, neutral, dynamicValidation
   return { q, confidence, ridge, dynamicValidation };
 }
 
-function tangentAt(points, index) {
+function tangentAt(points: Point2[], index: number): Point2 {
   const before = points[Math.max(0, index - 1)], after = points[Math.min(points.length - 1, index + 1)];
   const length = Math.hypot(after[0] - before[0], after[1] - before[1]) || 1;
   return [(after[0] - before[0]) / length, (after[1] - before[1]) / length];
 }
 
-function huber(value) {
+function huber(value: number): number {
   const absolute = Math.abs(value);
   return absolute <= 1 ? 0.5 * absolute * absolute : absolute - 0.5;
 }
 
-function scanAnatomicalDistance(point, normal, sign, skin, forbidden, size) {
+function scanAnatomicalDistance(
+  point: Point2,
+  normal: Point2,
+  sign: number,
+  skin: NumericField,
+  forbidden: NumericField | null | undefined,
+  size: number,
+): number {
   let last = 0;
   for (let distance = 0.75; distance <= size * Math.SQRT2; distance += 0.75) {
     const x = point[0] + sign * normal[0] * distance;
@@ -178,13 +313,22 @@ function scanAnatomicalDistance(point, normal, sign, skin, forbidden, size) {
   return last;
 }
 
-function findEvidenceTarget(point, tangent, fields, skin, forbidden, size, scale, options) {
-  const normal = [-tangent[1], tangent[0]];
+function findEvidenceTarget(
+  point: Point2,
+  tangent: Point2,
+  fields: EvidenceField,
+  skin: NumericField,
+  forbidden: NumericField | null | undefined,
+  size: number,
+  scale: number,
+  options: PersonalizationOptions,
+): EvidenceTarget {
+  const normal: Point2 = [-tangent[1], tangent[0]];
   const negative = scanAnatomicalDistance(point, normal, -1, skin, forbidden, size);
   const positive = scanAnatomicalDistance(point, normal, 1, skin, forbidden, size);
   const priorQ = normalizeQ([tangent[0] * tangent[0] - tangent[1] * tangent[1], 2 * tangent[0] * tangent[1]]);
   const minEvidence = options.minEvidence ?? 0.07;
-  const scoreAt = (distance) => {
+  const scoreAt = (distance: number) => {
     const x = point[0] + normal[0] * distance, y = point[1] + normal[1] * distance;
     const confidence = scalarAt(fields.confidence, x, y, size);
     const ridge = scalarAt(fields.ridge, x, y, size);
@@ -221,34 +365,42 @@ function findEvidenceTarget(point, tangent, fields, skin, forbidden, size, scale
     : 0;
   return {
     offset: accepted ? bestDistance : 0,
-    vector: accepted ? [normal[0] * bestDistance, normal[1] * bestDistance] : [0, 0],
+    vector: accepted
+      ? [normal[0] * bestDistance, normal[1] * bestDistance] as Point2
+      : [0, 0] as Point2,
     weight, accepted, confidence: best.confidence, ridge: best.ridge,
     directionFit: best.directionFit, dynamicValidation: best.dynamicValidation, improvement,
   };
 }
 
-function createGrid(size, gridSize) {
+function createGrid(size: number, gridSize: number): DisplacementGrid {
   const count = gridSize * gridSize;
   return {
     size, gridSize, step: (size - 1) / (gridSize - 1),
     targetX: new Float32Array(count), targetY: new Float32Array(count),
     dataWeight: new Float32Array(count), u: new Float32Array(count), v: new Float32Array(count),
+    supportReference: 0, supportFloor: 0, supportFull: 0,
   };
 }
 
-function pointMaskIndex(point, size) {
+function pointMaskIndex(point: Point2, size: number): number {
   const x = Math.max(0, Math.min(size - 1, Math.round(point[0])));
   const y = Math.max(0, Math.min(size - 1, Math.round(point[1])));
   return y * size + x;
 }
 
-function pointIsBlocked(point, skin, forbidden, size) {
+function pointIsBlocked(
+  point: Point2,
+  skin: NumericField | null | undefined,
+  forbidden: NumericField | null | undefined,
+  size: number,
+): boolean {
   if (point[0] < 0 || point[1] < 0 || point[0] >= size || point[1] >= size) return true;
   const index = pointMaskIndex(point, size);
   return !!((skin && !skin[index]) || forbidden?.[index]);
 }
 
-function splatConstraint(grid, point, vector, weight) {
+function splatConstraint(grid: DisplacementGrid, point: Point2, vector: Point2, weight: number): void {
   if (!(weight > 0)) return;
   const gx = point[0] / grid.step, gy = point[1] / grid.step;
   const radius = 1.65, sigma2 = 0.72 * 0.72;
@@ -266,7 +418,7 @@ function splatConstraint(grid, point, vector, weight) {
   }
 }
 
-function solveGrid(grid, options = {}) {
+function solveGrid(grid: DisplacementGrid, options: PersonalizationOptions = {}) {
   const smoothness = options.smoothness ?? 2.4;
   const anchor = options.anchor ?? 0.10;
   const boundaryAnchor = options.boundaryAnchor ?? 4.0;
@@ -278,7 +430,8 @@ function solveGrid(grid, options = {}) {
       for (let x = 0; x < grid.gridSize; x++) {
         const index = y * grid.gridSize + x;
         let sumU = 0, sumV = 0, neighbours = 0;
-        for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const neighbours4: Point2[] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        for (const [dx, dy] of neighbours4) {
           const xx = x + dx, yy = y + dy;
           if (xx < 0 || yy < 0 || xx >= grid.gridSize || yy >= grid.gridSize) continue;
           const neighbour = yy * grid.gridSize + xx;
@@ -301,7 +454,7 @@ function solveGrid(grid, options = {}) {
   return { supportedControls, constraintWeight };
 }
 
-function gridScalarAt(grid, field, point) {
+function gridScalarAt(grid: DisplacementGrid, field: NumericField, point: Point2): number {
   const gx = clamp(point[0] / grid.step, 0, grid.gridSize - 1);
   const gy = clamp(point[1] / grid.step, 0, grid.gridSize - 1);
   const x0 = Math.floor(gx), y0 = Math.floor(gy);
@@ -311,7 +464,7 @@ function gridScalarAt(grid, field, point) {
     ty * ((1 - tx) * field[y1 * grid.gridSize + x0] + tx * field[y1 * grid.gridSize + x1]);
 }
 
-function positivePercentile(values, percentile) {
+function positivePercentile(values: NumericField | null | undefined, percentile: number): number {
   const positive = Array.from(values || []).filter((value) => value > 1e-8).sort((a, b) => a - b);
   if (!positive.length) return 0;
   const position = clamp(percentile, 0, 1) * (positive.length - 1);
@@ -319,7 +472,7 @@ function positivePercentile(values, percentile) {
   return positive[lower] * (1 - fraction) + positive[upper] * fraction;
 }
 
-function calibrateConstraintSupport(grid, options = {}) {
+function calibrateConstraintSupport(grid: DisplacementGrid, options: PersonalizationOptions = {}) {
   const reference = positivePercentile(grid.dataWeight, options.supportReferencePercentile ?? 0.60);
   const floorRatio = options.supportFloorRatio ?? 0.035;
   const fullRatio = Math.max(floorRatio + 0.02, options.supportFullRatio ?? 0.30);
@@ -329,7 +482,7 @@ function calibrateConstraintSupport(grid, options = {}) {
   return { reference, floor: grid.supportFloor, full: grid.supportFull };
 }
 
-function constraintSupportAt(grid, point) {
+function constraintSupportAt(grid: DisplacementGrid, point: Point2): number {
   if (!(grid.supportReference > 0)) return 0;
   const weight = gridScalarAt(grid, grid.dataWeight, point);
   const normalized = clamp((weight - grid.supportFloor) /
@@ -337,11 +490,11 @@ function constraintSupportAt(grid, point) {
   return normalized * normalized * (3 - 2 * normalized);
 }
 
-function displacementAt(grid, point, scale = 1) {
+function displacementAt(grid: DisplacementGrid, point: Point2, scale = 1): Point2 {
   return [scale * gridScalarAt(grid, grid.u, point), scale * gridScalarAt(grid, grid.v, point)];
 }
 
-function jacobianStats(grid, scale) {
+function jacobianStats(grid: DisplacementGrid, scale: number) {
   let min = Infinity, sum = 0, count = 0, folds = 0;
   for (let y = 0; y < grid.gridSize - 1; y++) {
     for (let x = 0; x < grid.gridSize - 1; x++) {
@@ -349,7 +502,8 @@ function jacobianStats(grid, scale) {
       const ixy = iy + 1;
       // A bilinear cell can be valid at its lower-left corner and still fold
       // elsewhere. Evaluate the analytic derivative at all corners and centre.
-      for (const [tx, ty] of [[0, 0], [1, 0], [0, 1], [1, 1], [0.5, 0.5]]) {
+      const samples: Point2[] = [[0, 0], [1, 0], [0, 1], [1, 1], [0.5, 0.5]];
+      for (const [tx, ty] of samples) {
         const duDx = scale * ((1 - ty) * (grid.u[ix] - grid.u[i]) +
           ty * (grid.u[ixy] - grid.u[iy])) / grid.step;
         const duDy = scale * ((1 - tx) * (grid.u[iy] - grid.u[i]) +
@@ -367,18 +521,18 @@ function jacobianStats(grid, scale) {
   return { min: count ? min : 1, mean: count ? sum / count : 1, folds };
 }
 
-function orientation(a, b, c) {
+function orientation(a: Point2, b: Point2, c: Point2): number {
   return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
 }
 
-function segmentsCross(a, b, c, d) {
+function segmentsCross(a: Point2, b: Point2, c: Point2, d: Point2): boolean {
   const o1 = orientation(a, b, c), o2 = orientation(a, b, d);
   const o3 = orientation(c, d, a), o4 = orientation(c, d, b);
   const eps = 1e-6;
   return o1 * o2 < -eps && o3 * o4 < -eps;
 }
 
-function bbox(points) {
+function bbox(points: Point2[]): Bounds {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const point of points) {
     minX = Math.min(minX, point[0]); minY = Math.min(minY, point[1]);
@@ -387,11 +541,11 @@ function bbox(points) {
   return { minX, minY, maxX, maxY };
 }
 
-function boxesOverlap(a, b) {
+function boxesOverlap(a: Bounds, b: Bounds): boolean {
   return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
 }
 
-function polylinesCross(first, second) {
+function polylinesCross(first: Point2[], second: Point2[]): boolean {
   for (let i = 0; i < first.length - 1; i++) {
     const a = first[i], b = first[i + 1];
     const ab = { minX: Math.min(a[0], b[0]), minY: Math.min(a[1], b[1]), maxX: Math.max(a[0], b[0]), maxY: Math.max(a[1], b[1]) };
@@ -404,9 +558,9 @@ function polylinesCross(first, second) {
   return false;
 }
 
-function intersectionPairs(curves) {
+function intersectionPairs(curves: Point2[][]): Set<string> {
   const boxes = curves.map((curve) => bbox(curve));
-  const pairs = new Set();
+  const pairs = new Set<string>();
   for (let i = 0; i < curves.length; i++) {
     for (let j = i + 1; j < curves.length; j++) {
       if (!boxesOverlap(boxes[i], boxes[j])) continue;
@@ -416,21 +570,21 @@ function intersectionPairs(curves) {
   return pairs;
 }
 
-function turnAngle(points, index) {
+function turnAngle(points: Point2[], index: number): number {
   if (index <= 0 || index >= points.length - 1) return 0;
   const a = points[index - 1], b = points[index], c = points[index + 1];
   return Math.atan2((b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]),
     (b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1]));
 }
 
-function angularDifferenceDegrees(a, b) {
+function angularDifferenceDegrees(a: number, b: number): number {
   let difference = a - b;
   while (difference > Math.PI) difference -= 2 * Math.PI;
   while (difference < -Math.PI) difference += 2 * Math.PI;
   return Math.abs(difference) * 180 / Math.PI;
 }
 
-function smoothScalarAlongCurve(values, blocked, passes) {
+function smoothScalarAlongCurve(values: number[], blocked: boolean[], passes: number): number[] {
   let current = values.slice();
   for (let pass = 0; pass < passes; pass++) {
     const next = current.slice();
@@ -446,10 +600,15 @@ function smoothScalarAlongCurve(values, blocked, passes) {
   return current;
 }
 
-function smoothDisplacementAlongCurve(displacements, support, blocked, passes) {
-  let current = displacements.map((value) => [...value]);
+function smoothDisplacementAlongCurve(
+  displacements: Point2[],
+  support: number[],
+  blocked: boolean[],
+  passes: number,
+): Point2[] {
+  let current: Point2[] = displacements.map((value) => [...value]);
   for (let pass = 0; pass < passes; pass++) {
-    const next = current.map((value) => [...value]);
+    const next: Point2[] = current.map((value) => [...value]);
     for (let index = 0; index < current.length; index++) {
       // Keep the application threshold identical to the audit threshold. A
       // smoothing tail below 0.01 is not evidence-backed propagation and must
@@ -469,8 +628,8 @@ function smoothDisplacementAlongCurve(displacements, support, blocked, passes) {
   return current;
 }
 
-function measureCurveContinuity(priorPts, displacements) {
-  const pts = priorPts.map((point, index) => [
+function measureCurveContinuity(priorPts: Point2[], displacements: Point2[]) {
+  const pts: Point2[] = priorPts.map((point, index) => [
     point[0] + displacements[index][0], point[1] + displacements[index][1],
   ]);
   let maxCurvatureChangeDeg = 0, maxDisplacementSecondDifferencePx = 0;
@@ -486,9 +645,19 @@ function measureCurveContinuity(priorPts, displacements) {
   return { pts, maxCurvatureChangeDeg, maxDisplacementSecondDifferencePx };
 }
 
-function buildCurves(seeds, grid, scale, fields, skin, forbidden, size, targets, options = {}) {
+function buildCurves(
+  seeds: CurveSeed[],
+  grid: DisplacementGrid,
+  scale: number,
+  fields: EvidenceField,
+  skin: NumericField,
+  forbidden: NumericField | null | undefined,
+  size: number,
+  targets: EvidenceTarget[][],
+  options: PersonalizationOptions = {},
+): OptimizedCurve[] {
   return seeds.map((seed, curveIndex) => {
-    const priorPts = (seed.pts || []).map((point) => [point[0], point[1]]);
+    const priorPts: Point2[] = (seed.pts || []).map((point) => [point[0], point[1]]);
     const blocked = priorPts.map((point) => pointIsBlocked(point, skin, forbidden, size));
     let support = priorPts.map((point, index) => blocked[index] ? 0 : constraintSupportAt(grid, point));
     support = smoothScalarAlongCurve(support, blocked, options.supportSmoothingPasses ?? 4);
@@ -499,7 +668,7 @@ function buildCurves(seeds, grid, scale, fields, skin, forbidden, size, targets,
       const normalized = clamp((value - minimumSupport) / (fullSupport - minimumSupport));
       return normalized * normalized * (3 - 2 * normalized);
     });
-    let displacements = priorPts.map((point, index) => {
+    let displacements: Point2[] = priorPts.map((point, index) => {
       if (blocked[index] || support[index] <= 0) return [0, 0];
       const displacement = displacementAt(grid, point, scale);
       return [displacement[0] * support[index], displacement[1] * support[index]];
@@ -531,7 +700,7 @@ function buildCurves(seeds, grid, scale, fields, skin, forbidden, size, targets,
     const maxCurvatureChangeDeg = continuity.maxCurvatureChangeDeg;
     const maxDisplacementSecondDifferencePx = continuity.maxDisplacementSecondDifferencePx;
     let directlySupported = 0;
-    const kinds = [], audit = [];
+    const kinds: string[] = [], audit: CurveAudit[] = [];
     for (let i = 0; i < pts.length; i++) {
       const prior = priorPts[i], point = pts[i];
       const offset = Math.hypot(point[0] - prior[0], point[1] - prior[1]);
@@ -565,7 +734,7 @@ function buildCurves(seeds, grid, scale, fields, skin, forbidden, size, targets,
   });
 }
 
-function curveContinuityStats(curves) {
+function curveContinuityStats(curves: OptimizedCurve[]) {
   let maxCurvatureChangeDeg = 0, maxDisplacementSecondDifferencePx = 0;
   for (const curve of curves) {
     maxCurvatureChangeDeg = Math.max(maxCurvatureChangeDeg, curve.maxCurvatureChangeDeg || 0);
@@ -576,11 +745,11 @@ function curveContinuityStats(curves) {
   return { maxCurvatureChangeDeg, maxDisplacementSecondDifferencePx };
 }
 
-export function smoothProjectedCurveV2(points, passes = 2) {
-  let current = (points || []).map((point) => [point[0], point[1]]);
+export function smoothProjectedCurveV2(points: Point2[] | null | undefined, passes = 2): Point2[] {
+  let current: Point2[] = (points || []).map((point) => [point[0], point[1]]);
   if (current.length < 3) return current;
   for (let pass = 0; pass < Math.max(0, passes); pass++) {
-    const next = current.map((point) => [...point]);
+    const next: Point2[] = current.map((point) => [...point]);
     for (let index = 1; index < current.length - 1; index++) {
       next[index][0] = 0.20 * current[index - 1][0] + 0.60 * current[index][0] + 0.20 * current[index + 1][0];
       next[index][1] = 0.20 * current[index - 1][1] + 0.60 * current[index][1] + 0.20 * current[index + 1][1];
@@ -595,21 +764,31 @@ export function smoothProjectedCurveV2(points, passes = 2) {
  * There is no fixed displacement cap; the hard constraints are the skin domain,
  * positive field Jacobian, and preservation of the atlas' existing topology.
  */
-export function optimizeCurvesWithFieldV2(fieldQ, fieldC, ridge, q0, seeds, skin, forbidden, size, options = {}) {
+export function optimizeCurvesWithFieldV2(
+  fieldQ: NumericField,
+  fieldC: NumericField,
+  ridge: NumericField,
+  q0: NumericField | null | undefined,
+  seeds: CurveSeed[],
+  skin: NumericField,
+  forbidden: NumericField | null | undefined,
+  size: number,
+  options: PersonalizationOptions = {},
+) {
   const fields = { q: fieldQ, confidence: fieldC, ridge };
   const grid = createGrid(size, options.gridSize ?? 17);
   const allX = seeds.flatMap((seed) => (seed.pts || []).map((point) => point[0]));
   const faceWidth = allX.length ? Math.max(...allX) - Math.min(...allX) : size;
-  const targets = [];
+  const targets: EvidenceTarget[][] = [];
   let acceptedTargets = 0, targetWeight = 0, targetOffsetSum = 0, maxTargetOffset = 0;
   for (const seed of seeds) {
-    const points = seed.pts || [], curveTargets = [];
+    const points = seed.pts || [], curveTargets: EvidenceTarget[] = [];
     const sampleStride = Math.max(1, Math.floor(points.length / 28));
     for (let index = 0; index < points.length; index++) {
       const point = points[index], tangent = tangentAt(points, index);
       const localScale = Math.max(2.0, faceWidth * 0.018);
       const target = pointIsBlocked(point, skin, forbidden, size)
-        ? { offset: 0, vector: [0, 0], weight: 0, accepted: false, blocked: true }
+        ? { offset: 0, vector: [0, 0] as Point2, weight: 0, accepted: false, blocked: true }
         : findEvidenceTarget(point, tangent, fields, skin, forbidden, size, localScale, options);
       curveTargets.push(target);
       if (target.accepted && index % sampleStride === 0) {
@@ -622,12 +801,15 @@ export function optimizeCurvesWithFieldV2(fieldQ, fieldC, ridge, q0, seeds, skin
   }
   const supportCalibration = calibrateConstraintSupport(grid, options);
   const gridFit = solveGrid(grid, options);
-  const baselinePoints = seeds.map((seed) => (seed.pts || []).map((point) => [point[0], point[1]]));
+  const baselinePoints: Point2[][] = seeds.map((seed) => (
+    seed.pts || []).map((point) => [point[0], point[1]]));
   const baselineIntersections = intersectionPairs(baselinePoints);
   const minJacobian = options.minJacobian ?? 0.35;
   const maxCurvatureChangeDeg = options.maxCurvatureChangeDeg ?? 22;
   const maxDisplacementSecondDifferencePx = options.maxDisplacementSecondDifferencePx ?? 0.85;
-  let scale = 1, topologyIterations = 0, candidateCurves = null, newIntersections = new Set();
+  let scale = 1, topologyIterations = 0;
+  let candidateCurves: OptimizedCurve[] | null = null;
+  let newIntersections = new Set<string>();
   let continuity = { maxCurvatureChangeDeg: 0, maxDisplacementSecondDifferencePx: 0 };
   while (topologyIterations < 28) {
     const jacobian = jacobianStats(grid, scale);

@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @import "../clinical-theme.css";
+
+.live-refine-panel{display:flex;flex-direction:column;gap:9px;padding-top:4px}.live-refine-three{grid-template-columns:repeat(3,minmax(0,1fr))}.live-refine-status{display:flex;justify-content:space-between;color:var(--muted);font-size:12px}.live-refine-status span:last-child{color:var(--ink);font-weight:700}.main-wrap.refining{cursor:crosshair}
 @import "../style.css";
 @import "../annotate.css";
 

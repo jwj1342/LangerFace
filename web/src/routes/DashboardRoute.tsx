@@ -33,7 +33,7 @@ const TOOLS = [
   {
     title: "个性化 RSTL",
     description: "在浏览器本地完成多表情采集、皱纹分割与 V6 微调。",
-    href: "/personalized",
+    to: "/personalized",
     icon: Sparkles,
   },
   {
@@ -70,7 +70,7 @@ export function DashboardRoute() {
                 <Link to="/live"><Activity size={16} />打开实时 2D</Link>
               </Button>
               <Button asChild variant="workbench">
-                <a href="/personalized"><Sparkles size={16} />开始个性化采集</a>
+                <Link to="/personalized"><Sparkles size={16} />开始个性化采集</Link>
               </Button>
             </CardContent>
           </Card>
@@ -105,15 +105,13 @@ export function DashboardRoute() {
             </section>
 
             <section className="grid gap-4 md:grid-cols-2" aria-label="研究工具">
-              {TOOLS.map(({ title, description, icon: Icon, ...destination }) => (
+              {TOOLS.map(({ title, description, icon: Icon, to }) => (
                 <Card key={title}>
                   <CardHeader><span>{title}</span><Icon size={17} /></CardHeader>
                   <CardContent>
                     <Hint>{description}</Hint>
                     <Button asChild variant="workbenchPrimary">
-                      {"href" in destination
-                        ? <a href={destination.href}>打开工具</a>
-                        : <Link to={destination.to}>打开工具</Link>}
+                      <Link to={to}>打开工具</Link>
                     </Button>
                   </CardContent>
                 </Card>

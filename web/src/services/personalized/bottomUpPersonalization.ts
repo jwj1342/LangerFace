@@ -13,19 +13,101 @@ export const BOTTOM_UP_PERSONALIZATION_VERSION =
 export const BOTTOM_UP_PARAMETER_VERSION =
   "hessian-roi-absolute-v1-neutral-template-dynamic-validation";
 
-const clamp = (value, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, value));
-const axialQ = (angle) => [Math.cos(2 * angle), Math.sin(2 * angle)];
+export type NumericField = ArrayLike<number>;
+export type Point2 = [number, number];
 
-function normalize2(x, y) {
+export interface HessianOptions {
+  radii?: number[];
+  minimumCurvature?: number;
+  minimumGrooveDepth?: number;
+  minimumSideBalance?: number;
+  madMultiplier?: number;
+  continuityRadius?: number;
+  minimumContinuity?: number;
+  maxValidationFrames?: number;
+  minimumReferenceConfidence?: number;
+  matchRadius?: number;
+  minimumDirectionAgreement?: number;
+  minimumTemporalSupport?: number;
+  maxFrames?: number;
+  minimumStaticConfidence?: number;
+  minimumFrameSupport?: number;
+  searchRadius?: number;
+  minimumEvidence?: number;
+  smoothingPasses?: number;
+}
+
+export interface HessianTextureField {
+  q: Float32Array;
+  confidence: Float32Array;
+  ridge: Float32Array;
+  response?: Float32Array;
+  curvature?: Float32Array;
+  scaleMap?: Float32Array;
+  diagnostics: Record<string, unknown>;
+}
+
+export interface HessianStaticTemplate extends HessianTextureField {
+  temporalStability: Float32Array;
+  frameCount: number;
+  illuminationStability: number;
+}
+
+export interface HessianActionValidation extends HessianTextureField {
+  validation: Float32Array;
+  amplification: Float32Array;
+  frameCount: number;
+}
+
+export interface HessianCurveSeed {
+  name?: string;
+  pts: ArrayLike<Point2>;
+}
+
+export interface HessianWarpInput {
+  seeds: readonly HessianCurveSeed[];
+  textureQ: NumericField;
+  textureConfidence: NumericField;
+  textureRidge: NumericField;
+  dynamicValidation?: NumericField | null;
+  skin: NumericField;
+  forbidden?: NumericField | null;
+  size: number;
+  options?: HessianOptions;
+}
+
+export interface HessianPointAudit {
+  source: string;
+  static_hessian: number;
+  dynamic_validation: number;
+  ridge?: number;
+  direction_agreement: number;
+  normal_displacement_px: number;
+}
+
+export interface HessianWarpCurve {
+  name?: string;
+  pts: Point2[];
+  priorPts: Point2[];
+  kinds: string[];
+  audit: HessianPointAudit[];
+  movedFrac: number;
+  refinedFrac: number;
+}
+
+const clamp = (value: number, lo = 0, hi = 1): number => Math.max(lo, Math.min(hi, value));
+const axialQ = (angle: number): Point2 => [Math.cos(2 * angle), Math.sin(2 * angle)];
+
+function normalize2(x: number, y: number): Point2 {
   const length = Math.hypot(x, y);
   return length > 1e-8 ? [x / length, y / length] : [0, 0];
 }
 
-function axialAgreement(a0, a1, b0, b1) {
+function axialAgreement(a0: number, a1: number, b0: number, b1: number): number {
   return clamp(0.5 + 0.5 * (a0 * b0 + a1 * b1));
 }
 
-function percentile(values, fraction) {
+function percentile(values: number[], fraction: number): number {
   if (!values.length) return 0;
   values.sort((a, b) => a - b);
   const position = clamp(fraction) * (values.length - 1);
@@ -33,14 +115,14 @@ function percentile(values, fraction) {
   return values[lo] * (1 - t) + values[hi] * t;
 }
 
-function madSigma(values) {
+function madSigma(values: number[]): number {
   if (!values.length) return 0;
   const median = percentile([...values], 0.5);
   return 1.4826 * percentile(values.map((value) => Math.abs(value - median)), 0.5);
 }
 
-function normalizedGray(gray, mask) {
-  const values = [];
+function normalizedGray(gray: NumericField, mask?: NumericField | null): { gray: NumericField; factor: number } {
+  const values: number[] = [];
   for (let index = 0; index < gray.length; index++) {
     if (!mask || mask[index]) values.push(gray[index]);
   }
@@ -51,7 +133,7 @@ function normalizedGray(gray, mask) {
   return { gray: output, factor };
 }
 
-function maskedMean(gray, mask) {
+function maskedMean(gray: NumericField, mask?: NumericField | null): number {
   if (!gray?.length) return 0;
   let sum = 0, count = 0;
   for (let index = 0; index < gray.length; index++) {
@@ -62,7 +144,7 @@ function maskedMean(gray, mask) {
   return count ? sum / count : 0;
 }
 
-function boxBlur(source, width, height, radius) {
+function boxBlur(source: NumericField, width: number, height: number, radius: number): Float32Array {
   if (radius <= 0) return new Float32Array(source);
   const horizontal = new Float32Array(source.length);
   const output = new Float32Array(source.length);
@@ -87,7 +169,7 @@ function boxBlur(source, width, height, radius) {
   return output;
 }
 
-function sample(field, x, y, width, height) {
+function sample(field: NumericField, x: number, y: number, width: number, height: number): number {
   const x0 = clamp(Math.floor(x), 0, width - 1), y0 = clamp(Math.floor(y), 0, height - 1);
   const x1 = Math.min(width - 1, x0 + 1), y1 = Math.min(height - 1, y0 + 1);
   const tx = clamp(x - x0), ty = clamp(y - y0);
@@ -96,7 +178,14 @@ function sample(field, x, y, width, height) {
   return (1 - ty) * ((1 - tx) * a + tx * b) + ty * ((1 - tx) * c + tx * d);
 }
 
-function localDirectionSupport(response, q, index, width, height, radius) {
+function localDirectionSupport(
+  response: NumericField,
+  q: NumericField,
+  index: number,
+  width: number,
+  height: number,
+  radius: number,
+): number {
   const x = index % width, y = Math.floor(index / width);
   const angle = 0.5 * Math.atan2(q[index * 2 + 1] || 0, q[index * 2] || 0);
   const tx = Math.cos(angle), ty = Math.sin(angle);
@@ -116,7 +205,13 @@ function localDirectionSupport(response, q, index, width, height, radius) {
 }
 
 /** Extract dark, two-sided skin grooves and their tangent directions. */
-export function extractHessianTextureField(grayInput, width, height, mask, options = {}) {
+export function extractHessianTextureField(
+  grayInput: NumericField | null | undefined,
+  width: number,
+  height: number,
+  mask: NumericField | null | undefined,
+  options: HessianOptions = {},
+): HessianTextureField {
   const n = width * height;
   const q = new Float32Array(n * 2), response = new Float32Array(n);
   const curvature = new Float32Array(n), scaleMap = new Float32Array(n);
@@ -129,12 +224,12 @@ export function extractHessianTextureField(grayInput, width, height, mask, optio
   const minimumCurvature = options.minimumCurvature ?? 0.22;
   const minimumGrooveDepth = options.minimumGrooveDepth ?? 0.65;
   const minimumSideBalance = options.minimumSideBalance ?? 0.24;
-  const scaleDiagnostics = [];
+  const scaleDiagnostics: Array<Record<string, number>> = [];
 
   for (const radius of radii) {
     const smooth = boxBlur(gray, width, height, radius);
     const raw = new Float32Array(n), rawQ = new Float32Array(n * 2);
-    const candidates = [], curvatureNoise = [];
+    const candidates: number[] = [], curvatureNoise: number[] = [];
     for (let y = 1; y < height - 1; y++) for (let x = 1; x < width - 1; x++) {
       const index = y * width + x;
       if (!mask[index]) continue;
@@ -210,7 +305,14 @@ export function extractHessianTextureField(grayInput, width, height, mask, optio
   };
 }
 
-function localBestField(field, index, width, height, radius, referenceQ) {
+function localBestField(
+  field: HessianTextureField,
+  index: number,
+  width: number,
+  height: number,
+  radius: number,
+  referenceQ: Point2,
+): { index: number; confidence: number; agreement: number; score: number } | null {
   const x = index % width, y = Math.floor(index / width);
   let best = null, bestScore = 0;
   for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
@@ -231,8 +333,13 @@ function localBestField(field, index, width, height, radius, referenceQ) {
 
 /** Build the stable neutral patient texture template from repeated frames. */
 export function buildStaticHessianTextureTemplate(
-  neutralMedian, neutralFrames, width, height, skin, options = {},
-) {
+  neutralMedian: NumericField,
+  neutralFrames: readonly NumericField[] | null | undefined,
+  width: number,
+  height: number,
+  skin: NumericField,
+  options: HessianOptions = {},
+): HessianStaticTemplate {
   const reference = extractHessianTextureField(neutralMedian, width, height, skin, options);
   const maxFrames = options.maxValidationFrames ?? 6;
   const stride = Math.max(1, Math.floor((neutralFrames?.length || 1) / maxFrames));
@@ -251,7 +358,7 @@ export function buildStaticHessianTextureTemplate(
   for (let index = 0; index < n; index++) {
     const base = reference.confidence[index] || 0;
     if (base < (options.minimumReferenceConfidence ?? 0.08)) continue;
-    const referenceQ = [q[index * 2] || 0, q[index * 2 + 1] || 0];
+    const referenceQ: Point2 = [q[index * 2] || 0, q[index * 2 + 1] || 0];
     let support = 0, agreementSum = 0, confidenceSum = 0;
     for (const field of fields) {
       const match = localBestField(field, index, width, height, options.matchRadius ?? 2, referenceQ);
@@ -282,15 +389,20 @@ export function buildStaticHessianTextureTemplate(
 
 /** Expressions validate neutral candidates; they cannot introduce new q. */
 export function validateHessianTemplateWithAction(
-  staticTemplate, expressionFrames, width, height, actionMask, options = {},
-) {
+  staticTemplate: HessianStaticTemplate,
+  expressionFrames: readonly NumericField[] | null | undefined,
+  width: number,
+  height: number,
+  actionMask: NumericField,
+  options: HessianOptions = {},
+): HessianActionValidation {
   const n = width * height, validation = new Float32Array(n), amplification = new Float32Array(n);
   const fields = (expressionFrames || []).slice(0, options.maxFrames ?? 4)
     .map((frame) => extractHessianTextureField(frame, width, height, actionMask, options));
   for (let index = 0; index < n; index++) {
     const staticConfidence = staticTemplate?.confidence?.[index] || 0;
     if (staticConfidence < (options.minimumStaticConfidence ?? 0.06) || !(actionMask[index] > 0)) continue;
-    const referenceQ = [staticTemplate.q[index * 2] || 0, staticTemplate.q[index * 2 + 1] || 0];
+    const referenceQ: Point2 = [staticTemplate.q[index * 2] || 0, staticTemplate.q[index * 2 + 1] || 0];
     let support = 0, sum = 0, amp = 0;
     for (const field of fields) {
       const match = localBestField(field, index, width, height, options.matchRadius ?? 3, referenceQ);
@@ -315,22 +427,22 @@ export function validateHessianTemplateWithAction(
   };
 }
 
-function pointTangent(points, index) {
+function pointTangent(points: readonly Point2[], index: number): Point2 {
   const a = points[Math.max(0, index - 1)], b = points[Math.min(points.length - 1, index + 1)];
   return normalize2((b?.[0] || 0) - (a?.[0] || 0), (b?.[1] || 0) - (a?.[1] || 0));
 }
 
-function scalarAt(field, x, y, width, height) {
+function scalarAt(field: NumericField, x: number, y: number, width: number, height: number): number {
   return sample(field, x, y, width, height);
 }
 
-function qAt(field, x, y, width, height) {
+function qAt(field: NumericField, x: number, y: number, width: number, height: number): Point2 {
   const ix = clamp(Math.round(x), 0, width - 1), iy = clamp(Math.round(y), 0, height - 1);
   const index = iy * width + ix;
   return [field[index * 2] || 0, field[index * 2 + 1] || 0];
 }
 
-function smoothDisplacements(raw, support, passes = 10) {
+function smoothDisplacements(raw: NumericField, support: NumericField, passes = 10): Float32Array {
   let current = new Float32Array(raw);
   for (let pass = 0; pass < passes; pass++) {
     const next = new Float32Array(current);
@@ -349,17 +461,17 @@ function smoothDisplacements(raw, support, passes = 10) {
   return current;
 }
 
-function orientation(a, b, c) {
+function orientation(a: Point2, b: Point2, c: Point2): number {
   return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
 }
 
-function segmentsIntersect(a, b, c, d) {
+function segmentsIntersect(a: Point2, b: Point2, c: Point2, d: Point2): boolean {
   const o1 = orientation(a, b, c), o2 = orientation(a, b, d);
   const o3 = orientation(c, d, a), o4 = orientation(c, d, b);
   return o1 * o2 < -1e-6 && o3 * o4 < -1e-6;
 }
 
-function curveIntersects(curve, accepted) {
+function curveIntersects(curve: readonly Point2[], accepted: readonly Point2[][]): boolean {
   for (const other of accepted) {
     for (let i = 1; i < curve.length; i++) for (let j = 1; j < other.length; j++) {
       if (segmentsIntersect(curve[i - 1], curve[i], other[j - 1], other[j])) return true;
@@ -372,8 +484,9 @@ function curveIntersects(curve, accepted) {
 export function warpPriorCurvesWithHessian({
   seeds, textureQ, textureConfidence, textureRidge, dynamicValidation,
   skin, forbidden, size, options = {},
-}) {
-  const curves = [], acceptedGeometry = [];
+}: HessianWarpInput) {
+  const curves: HessianWarpCurve[] = [];
+  const acceptedGeometry: Point2[][] = [];
   // This is an adaptive search neighbourhood, not a fixed displacement clamp.
   // The distance prior and evidence score decide the applied displacement.
   const searchRadius = options.searchRadius ?? Math.max(10, Math.round(size * 0.075));
@@ -381,9 +494,9 @@ export function warpPriorCurvesWithHessian({
   const minimumDirectionAgreement = options.minimumDirectionAgreement ?? 0.58;
   let acceptedTargets = 0, movedPoints = 0, topologyRollbacks = 0;
   for (const seed of seeds || []) {
-    const prior = (seed.pts || []).map((point) => [point[0], point[1]]);
+    const prior: Point2[] = Array.from(seed.pts || [], (point) => [point[0], point[1]]);
     const raw = new Float32Array(prior.length), support = new Float32Array(prior.length);
-    const audit = Array.from({ length: prior.length }, () => ({
+    const audit: HessianPointAudit[] = Array.from({ length: prior.length }, () => ({
       source: "prior", static_hessian: 0, dynamic_validation: 0,
       direction_agreement: 0, normal_displacement_px: 0,
     }));
@@ -431,10 +544,10 @@ export function warpPriorCurvesWithHessian({
       acceptedTargets++;
     }
     const displacement = smoothDisplacements(raw, support, options.smoothingPasses ?? 12);
-    let points = prior.map((point, pointIndex) => {
+    let points: Point2[] = prior.map((point, pointIndex) => {
       const tangent = pointTangent(prior, pointIndex), normal = [-tangent[1], tangent[0]];
       const applied = displacement[pointIndex] * clamp(0.30 + 1.7 * support[pointIndex], 0, 1);
-      const candidate = [point[0] + normal[0] * applied, point[1] + normal[1] * applied];
+      const candidate: Point2 = [point[0] + normal[0] * applied, point[1] + normal[1] * applied];
       const ix = clamp(Math.round(candidate[0]), 0, size - 1);
       const iy = clamp(Math.round(candidate[1]), 0, size - 1);
       const pixel = iy * size + ix;

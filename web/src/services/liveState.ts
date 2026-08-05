@@ -2,6 +2,12 @@ import { MotionStabilizedOneEuro } from "./geometrySmoothing.ts";
 import type { LiveZoomCard } from "./render2d.ts";
 import type { CanvasRecordingController } from "./canvasRecording";
 import type { IncisionOverlayPayload } from "./dataSource";
+import type { Vec3 } from "./softBody";
+import type {
+  CurveRefinementTransport,
+  RefineLine,
+  RefinePoint,
+} from "./liveRefineMath";
 
 type AnyRecord = Record<string, any>;
 
@@ -37,6 +43,7 @@ export interface LiveRenderState {
   bands: boolean;
   zoom: boolean;
   meshPts: boolean;
+  refine2d: LiveRefine2dState;
   zoomCards: LiveZoomCard[];
   focusRegion: unknown;
   focusZoom: number;
@@ -47,6 +54,49 @@ export interface LiveRenderState {
   smoother: MotionStabilizedOneEuro;
   incisionOverlay: IncisionOverlayPayload | null;
   [key: string]: unknown;
+}
+
+export type RefineMode = "view" | "drag" | "erase";
+
+export interface EditableRefineLine extends RefineLine {
+  name: string;
+  region: string;
+  symmetryRole: string;
+  symmetryPairId: string;
+  hidden: boolean;
+  tris: number[];
+  pts: Vec3[];
+}
+
+export interface RefinePick {
+  lineIndex: number;
+  pointIndex: number;
+  distancePx: number;
+}
+
+export interface RefineHistoryEntry {
+  label: string;
+  lines: EditableRefineLine[];
+}
+
+export interface RefineDrag {
+  pointerId: number;
+  pick: RefinePick;
+  original: Vec3[];
+}
+
+export interface LiveRefine2dState {
+  active: boolean;
+  mode: RefineMode;
+  symmetry: boolean;
+  showAxis: boolean;
+  lines: EditableRefineLine[] | null;
+  latestAutoLines: EditableRefineLine[] | null;
+  liveTransport: CurveRefinementTransport | null;
+  selected: RefinePick | null;
+  dirty: boolean;
+  undoStack: RefineHistoryEntry[];
+  drag: RefineDrag | null;
 }
 
 export interface LiveSourceState {
@@ -65,6 +115,8 @@ export interface LiveSourceState {
   eyeBlinkRight: number;
   qualityGate: any;
   localRegionQuality: any;
+  frozenFrame: HTMLCanvasElement | null;
+  lastHulls: any[];
   [key: string]: unknown;
 }
 
@@ -114,6 +166,19 @@ export const renderState: LiveRenderState = {
   bands: false,
   zoom: true,
   meshPts: false,
+  refine2d: {
+    active: false,
+    mode: "view",
+    symmetry: true,
+    showAxis: true,
+    lines: null,
+    latestAutoLines: null,
+    liveTransport: null,
+    selected: null,
+    dirty: false,
+    undoStack: [],
+    drag: null,
+  },
   zoomCards: [],
   focusRegion: null,
   focusZoom: 1.8,
@@ -150,6 +215,8 @@ export const sourceState: LiveSourceState = {
   eyeBlinkRight: 0,
   qualityGate: null,
   localRegionQuality: null,
+  frozenFrame: null,
+  lastHulls: [],
 };
 
 export const recordingState: LiveRecordingState = {

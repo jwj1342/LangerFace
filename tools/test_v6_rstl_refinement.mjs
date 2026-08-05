@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   refineV6,
   V6_RSTL_ALGORITHM,
-} from "../web/compat/personalized/v6_rstl_refinement.js";
+} from "../web/src/services/personalized/v6RstlRefinement.ts";
 
 const size = 96;
 const index = (x, y) => y * size + x;

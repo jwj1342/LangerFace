@@ -55,8 +55,8 @@ ruff check .                 # 代码风格
 
 | 组 | 覆盖 |
 |---|---|
-| `npm run test:arch` | 架构与文档守卫：import 无环、旧 JS runtime 不回流、文档链接与索引、主特性对拍、dist 资产 |
-| `npm run test:geometry` | 几何与图谱契约：三方映射对拍、额头可见性两实现对拍、遮挡、姿态门控、Umeyama、拓扑守卫、soft-body |
+| `npm run test:arch` | 架构与文档守卫：import 无环、旧 JS runtime 不回流、禁止 TypeScript suppression、文档链接与索引、主特性对拍、dist 资产 |
+| `npm run test:geometry` | 几何与图谱契约：Python/TypeScript 金标对拍、额头可见性行为、遮挡、姿态门控、Umeyama、拓扑守卫、soft-body |
 | `npm run test:live` | 实时页与采集源：摄像头、图片源、画布适配、资产加载、导出、诊断 JSON |
 | `npm run test:annotate` | 标注与 3D 路线 |
 | `npm run test:incision` | 切口工作台：overlay、回放 QA、验收审计、工具契约 |
@@ -65,7 +65,7 @@ ruff check .                 # 代码风格
 
 分组的另一个作用是减少冲突面：这一行原本是串了 40 多项的**单行字符串**，任何两个想加测试的 PR 都必然文本冲突（#117↔#116、#142↔#116/#121 各撞过一次）。现在只会撞在实际改动的那一组上。
 
-- **Web TypeScript ↔ Python 逐点对拍**（`cd web && npm test`）：先查 `web/src/**/*.ts(x)` 静态 import 无模块环并阻止旧根目录 JS runtime 回流，再用真实帧关键点对拍映射（误差 ~5×10⁻⁵px）/ 背面剔除（0 不一致）/ One-Euro fixture；并含 `test_occlusion`（贴合手形掩膜、指缝保留、无手不剔除）、`test_umeyama`（恢复已知相似变换 ~1e-13）、`topologyId`/`topologyVersion` 守卫与 atlas roundtrip 契约、FLAME basis 拟合 + jaw/表情前向、RSTL 切除闭合 soft-body 张力方向断言、`test_logger`（`window.exportLangerfaceDiagnostics()` 结构化 JSON 契约）。
+- **Web TypeScript ↔ Python 逐点对拍**（`cd web && npm test`）：先查 `web/src/**/*.ts(x)` 静态 import 无模块环、阻止旧根目录 JS runtime 回流，并拒绝 `@ts-nocheck` / `@ts-ignore` / `@ts-expect-error`；再用真实帧关键点对拍映射（误差 ~5×10⁻⁵px）/ 背面剔除（0 不一致）/ One-Euro fixture；并含 `test_occlusion`（贴合手形掩膜、指缝保留、无手不剔除）、`test_umeyama`（恢复已知相似变换 ~1e-13）、`topologyId`/`topologyVersion` 守卫与 atlas roundtrip 契约、FLAME basis 拟合 + jaw/表情前向、RSTL 切除闭合 soft-body 张力方向断言、`test_logger`（`window.exportLangerfaceDiagnostics()` 结构化 JSON 契约）。
 - **Python 单测**（`pytest`）：图谱完整性、标准脸解析、映射仿射不变性、平滑降抖动、端到端渲染、`assets/`↔`web/assets/` 同步门禁、结构化可观测性。
 - **浏览器回归**（`cd web && npm run test:browser`）：在 Vite 生产构建上运行 Chromium，覆盖 `/surgery` 按钮状态、透明背景合成后的文本对比度与伪元素颜色读取；首次本地运行前执行 `npx playwright install chromium`。
 - **目检脚本**：`tools/render_check.py`、`inspect_frames.py`、`montage.py`、`sample_output.py`、`debug_one.py`。

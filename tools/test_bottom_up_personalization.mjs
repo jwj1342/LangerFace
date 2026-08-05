@@ -4,7 +4,7 @@ import {
   extractHessianTextureField,
   validateHessianTemplateWithAction,
   warpPriorCurvesWithHessian,
-} from "../web/compat/personalized/bottom_up_personalization.js";
+} from "../web/src/services/personalized/bottomUpPersonalization.ts";
 
 const WIDTH = 96;
 const HEIGHT = 96;

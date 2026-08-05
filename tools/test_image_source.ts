@@ -83,21 +83,21 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
   assert.equal(outcome.result?.faceLandmarks?.[0]?.length, 1);
 }
 
-for (const rel of ["web/src/services/pipelineModels.ts", "web/current/pipeline.js"]) {
+for (const rel of ["web/src/services/pipelineModels.ts"]) {
   const source = readFileSync(join(root, rel), "utf8");
   assert.match(source, /runningMode: "VIDEO"/, `${rel} keeps the camera/video detector in VIDEO mode`);
   assert.match(source, /runningMode: "IMAGE"/, `${rel} creates an independent IMAGE detector`);
   assert.match(source, /imageLandmarker/, `${rel} stores the IMAGE detector separately`);
 }
 
-for (const rel of ["web/src/services/pipelineLoop.ts", "web/current/pipeline.js"]) {
+for (const rel of ["web/src/services/pipelineLoop.ts"]) {
   const source = readFileSync(join(root, rel), "utf8");
   assert.match(source, /imageLandmarker/, `${rel} selects the independent IMAGE detector`);
   assert.match(source, /detectStaticImageWithRetries/, `${rel} uses bounded single-image detection`);
   assert.match(source, /detectForVideo/, `${rel} keeps camera/video detection on detectForVideo`);
 }
 
-for (const rel of ["web/src/services/pipelineSource.ts", "web/current/pipeline.js"]) {
+for (const rel of ["web/src/services/pipelineSource.ts"]) {
   const source = readFileSync(join(root, rel), "utf8");
   assert.match(source, /els\.file\.value = "";/, `${rel} permits selecting the same file repeatedly`);
   assert.match(source, /imageDetectionComplete = false/, `${rel} resets per-image detection completion`);
@@ -105,7 +105,7 @@ for (const rel of ["web/src/services/pipelineSource.ts", "web/current/pipeline.j
   assert.match(source, /operationId !== sourceOperationId/, `${rel} prevents stale uploads from replacing a newer source`);
 }
 
-for (const rel of ["web/src/services/pipelineLoop.ts", "web/current/pipeline.js"]) {
+for (const rel of ["web/src/services/pipelineLoop.ts"]) {
   const source = readFileSync(join(root, rel), "utf8");
   assert.match(source, /未检测到人脸（已尝试/, `${rel} exposes a clear no-landmarks retry message`);
   assert.match(source, /imageDetectionComplete/, `${rel} does not retry indefinitely on redraw`);

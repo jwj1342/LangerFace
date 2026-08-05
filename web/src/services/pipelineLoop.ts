@@ -129,6 +129,7 @@ export function loop(): void {
     }
     hulls = detectHands(timeMs, width, height);
   }
+  sourceState.lastHulls = hulls;
 
   let lineCount = 0;
   if (landmarks && sourceState.presence > 0) {
@@ -167,4 +168,20 @@ export function loop(): void {
   lastT = now;
   els.fps.textContent = `${fpsEMA.toFixed(0)} fps`;
   if (sourceState.sourceKind !== "image") requestFrame();
+}
+
+export function redrawPausedFrame(): boolean {
+  if (!sourceState.running || !sourceState.paused || !sourceState.frozenFrame || !ctx) return false;
+  const width = els.canvas.width;
+  const height = els.canvas.height;
+  ctx.drawImage(sourceState.frozenFrame, 0, 0, width, height);
+  const landmarks = sourceState.lastLM ? projectVerts(sourceState.lastLM as Vec3[]) : null;
+  let lineCount = 0;
+  if (landmarks && sourceState.presence > 0) {
+    lineCount = draw(landmarks, width, height, sourceState.lastHulls as HandMask[]);
+    drawZooms(landmarks, width);
+    drawFocusedRegion(landmarks, width, height);
+  }
+  updateStats(landmarks, width, height, lineCount);
+  return true;
 }

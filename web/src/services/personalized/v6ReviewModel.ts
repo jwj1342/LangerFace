@@ -1,10 +1,75 @@
 export const V6_EXPECTED_CURVE_COUNT = 216;
 export const V6_ALGORITHM = "interval-guarded-continuous-polyline-rstl-refinement-6.0";
 
-const finitePoint = (point) => Array.isArray(point) && point.length >= 2
+export type V6Point = [number, number, ...number[]];
+
+export interface V6ResultLine {
+  name?: string;
+  points_prior_xy: V6Point[];
+  points_xy: V6Point[];
+  [key: string]: unknown;
+}
+
+export interface V6Diagnostics {
+  algorithm?: string;
+  topology_contract_preserved?: boolean;
+  post_export_new_intersection_pair_count?: number;
+  post_export_new_self_cross_curve_count?: number;
+  soft_link_max_gap_px?: number;
+  displacement_p90_limit_px?: number;
+  mean_matched_distance_improvement_px?: number;
+  mean_direction_improvement_degrees?: number;
+  [key: string]: unknown;
+}
+
+export interface V6ResultPayload {
+  lines: V6ResultLine[];
+  diagnostics?: V6Diagnostics;
+  [key: string]: unknown;
+}
+
+export interface V6ValidationMetrics {
+  curveCount: number;
+  pointCount: number;
+  movedCurveCount: number;
+  movedPointCount: number;
+  movedPointRatio: number;
+  p90Px: number;
+  maxPx: number;
+  softLinkPx: number;
+  p90LimitPx: number;
+  distanceGainPx: number;
+  directionGainDeg: number;
+  topologyPreserved: boolean;
+}
+
+export interface V6ValidationResult {
+  ok: boolean;
+  errors: string[];
+  warnings: string[];
+  lines: V6ResultLine[];
+  metrics: V6ValidationMetrics;
+}
+
+export interface V6DisplacementSample {
+  prior: V6Point;
+  final: V6Point;
+  distance: number;
+}
+
+const finitePoint = (point: unknown): point is V6Point => Array.isArray(point) && point.length >= 2
   && Number.isFinite(Number(point[0])) && Number.isFinite(Number(point[1]));
 
-export function percentile(values, fraction) {
+const isRecord = (value: unknown): value is Record<string, unknown> => (
+  typeof value === "object" && value !== null
+);
+
+const validLine = (value: unknown): value is V6ResultLine => {
+  if (!isRecord(value)) return false;
+  return Array.isArray(value.points_prior_xy) && Array.isArray(value.points_xy);
+};
+
+export function percentile(values: readonly number[] | null | undefined, fraction: number): number {
   const sorted = (values || []).filter(Number.isFinite).sort((a, b) => a - b);
   if (!sorted.length) return 0;
   const position = Math.max(0, Math.min(1, fraction)) * (sorted.length - 1);
@@ -14,20 +79,23 @@ export function percentile(values, fraction) {
   return sorted[lower] * (1 - mix) + sorted[upper] * mix;
 }
 
-export function validateV6Result(payload) {
-  const errors = [];
-  const warnings = [];
-  const lines = Array.isArray(payload?.lines) ? payload.lines : [];
+export function validateV6Result(payload: unknown): V6ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const payloadRecord = isRecord(payload) ? payload : {};
+  const rawLines = Array.isArray(payloadRecord.lines) ? payloadRecord.lines : [];
+  const lines = rawLines.filter(validLine);
+  if (rawLines.length !== lines.length) errors.push("lines 中包含无效曲线对象");
   if (!lines.length) errors.push("JSON 中没有 lines 数组");
   if (lines.length && lines.length !== V6_EXPECTED_CURVE_COUNT) {
     errors.push(`曲线数为 ${lines.length}，预期 ${V6_EXPECTED_CURVE_COUNT}`);
   }
 
-  const names = new Set();
+  const names = new Set<string>();
   let pointCount = 0;
   let movedPointCount = 0;
   let movedCurveCount = 0;
-  const offsets = [];
+  const offsets: number[] = [];
   lines.forEach((line, curveIndex) => {
     const name = String(line?.name || `curve_${curveIndex}`);
     if (names.has(name)) errors.push(`曲线名称重复：${name}`);
@@ -62,7 +130,9 @@ export function validateV6Result(payload) {
     if (curveMoved) movedCurveCount += 1;
   });
 
-  const diagnostics = payload?.diagnostics || {};
+  const diagnostics = isRecord(payloadRecord.diagnostics)
+    ? payloadRecord.diagnostics as V6Diagnostics
+    : {};
   if (diagnostics.algorithm && diagnostics.algorithm !== V6_ALGORITHM) {
     warnings.push(`算法标识不是 V6：${diagnostics.algorithm}`);
   }
@@ -98,7 +168,10 @@ export function validateV6Result(payload) {
   };
 }
 
-export function resultExtent(lines, fallback = 768) {
+export function resultExtent(
+  lines: readonly V6ResultLine[] | null | undefined,
+  fallback = 768,
+): { width: number; height: number } {
   let maxX = 0;
   let maxY = 0;
   for (const line of lines || []) {
@@ -116,12 +189,16 @@ export function resultExtent(lines, fallback = 768) {
   };
 }
 
-export function displacementSamples(line, minimumPx = 0.25, targetCount = 14) {
+export function displacementSamples(
+  line: V6ResultLine | null | undefined,
+  minimumPx = 0.25,
+  targetCount = 14,
+): V6DisplacementSample[] {
   const prior = line?.points_prior_xy || [];
   const final = line?.points_xy || [];
   const count = Math.min(prior.length, final.length);
   const stride = Math.max(1, Math.floor(count / targetCount));
-  const samples = [];
+  const samples: V6DisplacementSample[] = [];
   for (let index = 0; index < count; index += stride) {
     if (!finitePoint(prior[index]) || !finitePoint(final[index])) continue;
     const distance = Math.hypot(final[index][0] - prior[index][0], final[index][1] - prior[index][1]);

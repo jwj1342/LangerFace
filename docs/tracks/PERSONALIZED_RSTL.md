@@ -1,8 +1,8 @@
 # 个性化 RSTL（`/personalized`）：输入、阈值依据、失败降级与边界
 
 本文是 `/personalized` 浏览器个性化 RSTL 流程的单一可审计说明：它吃什么输入、每个阈值为什么是这个值、
-失败时怎么降级、隐私边界在哪、产出的图谱遵守什么契约。代码入口 `web/personalized.html` +
-`web/compat/personalized/`；模型来源与许可见
+失败时怎么降级、隐私边界在哪、产出的图谱遵守什么契约。React 入口是
+`web/src/routes/PersonalizedRoute.tsx`，算法运行时位于 `web/src/services/personalized/`；模型来源与许可见
 [`web/compat/personalized/model/NOTICE.md`](../../web/compat/personalized/model/NOTICE.md) 与
 [MODEL_CARD.md](../../web/compat/personalized/model/MODEL_CARD.md)。
 
@@ -58,7 +58,7 @@
 两个**必须知道的例外**，否则会误判这套门控的强度：
 
 - **`returnConsistency`（动作后能否回到静息）目前只被记录，不拦截。** 常量里写着 0.58，但唯一调用点
-  `personalized.js` 在三个分支里都把它覆写成 `returnConsistency: 0`，而 `prstl_pipeline.js` 用严格
+  `personalizedRuntime.ts` 在三个分支里都把它覆写成 `returnConsistency: 0`，而 `prstlPipeline.ts` 用严格
   小于判定，所以该项永不触发。真正拦头动的是上表最后一行的**配准残差上限**
   （`REGISTRATION_RESIDUAL_LIMIT_FACE_RATIO`）。若要恢复拦截，改的是那三处覆写而不是常量。
 - **`frown` 的表情信号门被硬编码为通过**：皱眉走计时采集，视觉信号只当证据强度，不作采集资格门槛。

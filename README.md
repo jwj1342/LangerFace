@@ -292,7 +292,8 @@ attestation 后，才能由受控 finalize 流程生成 `validated:true` 候选�
 | `tests/` | pytest 测试，覆盖图谱、标准脸、映射、稳定性、渲染和 pipeline 行为。 |
 | `tools/` | 资产下载、图谱生成、web 资产导出、3D 重建、临床标注、目检和对拍脚本。 |
 | `web/` | Vite 8 + React + TypeScript 前端（唯一应用入口 `web/index.html`）；Canvas 2D + MediaPipe Tasks + Three.js / R3F。 |
-| `web/current/`, `web/compat/` | 纯 JS 兼容运行时：`current/` 是 `/current/` 实时页，`compat/personalized/` 是 `/personalized` 个性化流程，`compat/shared/` 是两者共用的几何 / 常量 / 数据源模块。范围与退出条件由 `tools/test_web_architecture.ts` 的冻结清单守住（owner #95）。 |
+| `web/src/routes/`, `web/src/services/` | React 页面与 TypeScript 浏览器运行时；`/live`、`/personalized`、`/v6-review` 共用唯一 SPA 入口。历史 `/current/*` 只重定向到 `/live`，`tools/test_web_architecture.ts` 禁止重新加入 `.js` 运行时代码（#95）。 |
+| `web/compat/personalized/` | 个性化流程的静态算法资产（YOLO ONNX 分片与 V6 示例），不含 HTML/JavaScript/CSS 运行时。 |
 | `web/src/services/geometry*.ts` | Web TypeScript 几何子系统：atlas 映射 / 平滑 / 遮挡 / Umeyama。 |
 | `web/assets/` | 浏览器端静态资产：MediaPipe/atlas/topology 由 `tools/export_web_assets.py` 从 `assets/` 派生（勿手改，CI 有一致性门禁，见 #47）；紧凑 FLAME basis 由 `tools/build_flame_basis.py` 生成并带署名 notice。 |
 | `web/test/` | Web/Python 几何对拍用 ground truth 和本地测试图像；真实图片被忽略。 |

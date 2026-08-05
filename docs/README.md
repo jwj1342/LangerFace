@@ -19,7 +19,7 @@
 
 ## `architecture/` — 架构与算法
 
-**这个目录回答「代码为什么这么组织、某个数字是怎么算出来的」。** [ARCHITECTURE.md](architecture/ARCHITECTURE.md) 是**模块契约与坐标系**的权威来源：分层结构（含三套并存的运行时——TypeScript service 层、`web/current/` 与 `web/compat/` 的纯 JS 兼容运行时）、关键点与标准脸模型、2D 重心坐标映射、图谱格式与生成、资产清单、构建与 Vercel 部署边界、网页 3D 标注、HeadSpace 离线管线。[METHODS_AND_IMPLEMENTATION_SUMMARY.md](architecture/METHODS_AND_IMPLEMENTATION_SUMMARY.md) 是**数学推导的集中地**：重心映射的仿射不变性、One-Euro、背面剔除与遮挡、方向场流线生成、Umeyama、FLAME 线性拟合、软体闭合、切口几何（3:1 长宽比、30° 尖端角、cubic Hermite 轮廓）。[ADR_3D_ROUTE_FEASIBILITY.md](architecture/ADR_3D_ROUTE_FEASIBILITY.md) 提供实时 3D 路线的工程评估：2D-first、3D 只作离线资产/标注/研究预览的建议仍待 #40 owner 正式确认。模块契约在 ARCHITECTURE、公式在 METHODS、路线建议在 ADR。
+**这个目录回答「代码为什么这么组织、某个数字是怎么算出来的」。** [ARCHITECTURE.md](architecture/ARCHITECTURE.md) 是**模块契约与坐标系**的权威来源：React 路由与唯一 TypeScript service 运行时、关键点与标准脸模型、2D 重心坐标映射、3D 路线（网页入口已由 #108 关闭、runtime 保留）、图谱格式与生成、资产清单、构建与 Vercel 部署边界、网页 3D 标注、HeadSpace 离线管线。[METHODS_AND_IMPLEMENTATION_SUMMARY.md](architecture/METHODS_AND_IMPLEMENTATION_SUMMARY.md) 是**数学推导的集中地**：重心映射的仿射不变性、One-Euro、背面剔除与遮挡、方向场流线生成、Umeyama、FLAME 线性拟合、软体闭合、切口几何（3:1 长宽比、30° 尖端角、cubic Hermite 轮廓）。[ADR_3D_ROUTE_FEASIBILITY.md](architecture/ADR_3D_ROUTE_FEASIBILITY.md) 提供实时 3D 路线的工程评估：2D-first、3D 只作离线资产/标注/研究预览的建议仍待 #40 owner 正式确认。模块契约在 ARCHITECTURE、公式在 METHODS、路线建议在 ADR。
 
 ## `tracks/` — 技术轨与功能专题
 
@@ -27,7 +27,7 @@
 
 ## `quality/` — 质量与运维
 
-**这个目录回答「凭什么相信它没坏、以及它是怎么上线和被观测的」。** [CROSS_LANG_PARITY.md](quality/CROSS_LANG_PARITY.md) 定义 Python、Web TypeScript、纯 JS 兼容运行时三方逐点等价；[CI_CD_VERCEL.md](quality/CI_CD_VERCEL.md) 是 Vercel、Preview、branch protection 与排障的唯一 owner；[OBSERVABILITY.md](quality/OBSERVABILITY.md) 定义浏览器诊断字段与指标；[VALIDATION.md](quality/VALIDATION.md) 定义临床验证数据集、Stage 1/2 指标、失败分类与人工评审表。3D 标注人工验收已归入 CONTRIBUTING。
+**这个目录回答「凭什么相信它没坏、以及它是怎么上线和被观测的」。** [CROSS_LANG_PARITY.md](quality/CROSS_LANG_PARITY.md) 定义 Python 与 Web TypeScript 对共同金标的逐点等价；[CI_CD_VERCEL.md](quality/CI_CD_VERCEL.md) 是 Vercel、Preview、branch protection 与排障的唯一 owner；[OBSERVABILITY.md](quality/OBSERVABILITY.md) 定义浏览器诊断字段与指标；[VALIDATION.md](quality/VALIDATION.md) 定义临床验证数据集、Stage 1/2 指标、失败分类与人工评审表。3D 标注人工验收已归入 CONTRIBUTING。
 
 ## `clinical/` — 临床边界与合规
 

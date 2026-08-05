@@ -1,27 +1,79 @@
-import { V6_DEMO_RESULTS, V6_VIEW_LABELS } from "./v6_demo_manifest.js";
-import { displacementSamples, resultExtent, validateV6Result } from "./v6_review_model.js";
+import {
+  V6_DEMO_RESULTS,
+  V6_VIEW_LABELS,
+  type V6DemoView,
+} from "./v6DemoManifest.ts";
+import {
+  displacementSamples,
+  resultExtent,
+  validateV6Result,
+  type V6Point,
+  type V6ResultPayload,
+  type V6ValidationResult,
+} from "./v6ReviewModel.ts";
 
-const $ = (id) => document.getElementById(id);
-const els = {
-  subjectTabs: $("subjectTabs"),
-  viewTabs: $("viewTabs"),
-  exampleImage: $("exampleImage"),
-  exampleMetrics: $("exampleMetrics"),
-  dropZone: $("dropZone"),
-  fileInput: $("fileInput"),
-  showPrior: $("showPrior"),
-  showFinal: $("showFinal"),
-  showMask: $("showMask"),
-  showArrows: $("showArrows"),
-  backgroundOpacity: $("backgroundOpacity"),
-  reviewStatus: $("reviewStatus"),
-  reviewMetrics: $("reviewMetrics"),
-  exportButton: $("exportButton"),
-  reviewCanvas: $("reviewCanvas"),
-  canvasTitle: $("canvasTitle"),
-};
+type DecodedImage = ImageBitmap | HTMLImageElement;
 
-const state = {
+interface V6ReviewElements {
+  subjectTabs: HTMLElement;
+  viewTabs: HTMLElement;
+  exampleImage: HTMLImageElement;
+  exampleMetrics: HTMLElement;
+  dropZone: HTMLElement;
+  fileInput: HTMLInputElement;
+  showPrior: HTMLInputElement;
+  showFinal: HTMLInputElement;
+  showMask: HTMLInputElement;
+  showArrows: HTMLInputElement;
+  backgroundOpacity: HTMLInputElement;
+  reviewStatus: HTMLElement;
+  reviewMetrics: HTMLElement;
+  exportButton: HTMLButtonElement;
+  reviewCanvas: HTMLCanvasElement;
+  canvasTitle: HTMLElement;
+}
+
+interface V6ReviewState {
+  subjectIndex: number;
+  view: V6DemoView;
+  payload: V6ResultPayload | null;
+  report: V6ValidationResult | null;
+  background: DecodedImage | null;
+  mask: DecodedImage | null;
+  maskTint: HTMLCanvasElement | null;
+  fileLabel: string;
+}
+
+function requiredElement<T extends HTMLElement>(id: string): T {
+  const element = document.getElementById(id);
+  if (!element) throw new Error(`V6 review element #${id} is missing`);
+  return element as T;
+}
+
+function collectElements(): V6ReviewElements {
+  return {
+    subjectTabs: requiredElement("subjectTabs"),
+    viewTabs: requiredElement("viewTabs"),
+    exampleImage: requiredElement<HTMLImageElement>("exampleImage"),
+    exampleMetrics: requiredElement("exampleMetrics"),
+    dropZone: requiredElement("dropZone"),
+    fileInput: requiredElement<HTMLInputElement>("fileInput"),
+    showPrior: requiredElement<HTMLInputElement>("showPrior"),
+    showFinal: requiredElement<HTMLInputElement>("showFinal"),
+    showMask: requiredElement<HTMLInputElement>("showMask"),
+    showArrows: requiredElement<HTMLInputElement>("showArrows"),
+    backgroundOpacity: requiredElement<HTMLInputElement>("backgroundOpacity"),
+    reviewStatus: requiredElement("reviewStatus"),
+    reviewMetrics: requiredElement("reviewMetrics"),
+    exportButton: requiredElement<HTMLButtonElement>("exportButton"),
+    reviewCanvas: requiredElement<HTMLCanvasElement>("reviewCanvas"),
+    canvasTitle: requiredElement("canvasTitle"),
+  };
+}
+const els = collectElements();
+let uiAbortController: AbortController | null = null;
+
+const state: V6ReviewState = {
   subjectIndex: 0,
   view: "compare",
   payload: null,
@@ -32,7 +84,7 @@ const state = {
   fileLabel: "",
 };
 
-function buttonTab(label, selected, onClick) {
+function buttonTab(label: string, selected: boolean, onClick: () => void): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "tab";
@@ -49,19 +101,21 @@ function renderExampleNavigation() {
     index === state.subjectIndex,
     () => { state.subjectIndex = index; renderExampleNavigation(); renderExample(); },
   )));
-  els.viewTabs.replaceChildren(...Object.entries(V6_VIEW_LABELS).map(([key, label]) => buttonTab(
+  const viewEntries = Object.entries(V6_VIEW_LABELS) as Array<[V6DemoView, string]>;
+  els.viewTabs.replaceChildren(...viewEntries.map(([key, label]) => buttonTab(
     label,
     key === state.view,
     () => { state.view = key; renderExampleNavigation(); renderExample(); },
   )));
 }
 
-function metricCard(label, value, detail = "", tone = "") {
+function metricCard(label: string, value: string, detail = "", tone = ""): string {
   return `<div class="metric"><span class="metric-label">${label}</span><span class="metric-value ${tone}">${value}</span>${detail ? `<small>${detail}</small>` : ""}</div>`;
 }
 
 function renderExample() {
   const entry = V6_DEMO_RESULTS[state.subjectIndex];
+  if (!entry) return;
   els.exampleImage.src = entry.images[state.view];
   els.exampleImage.alt = `ID ${entry.id} · ${V6_VIEW_LABELS[state.view]}`;
   const metric = entry.metrics;
@@ -75,7 +129,7 @@ function renderExample() {
   ].join("");
 }
 
-async function decodeImage(file) {
+async function decodeImage(file: File): Promise<DecodedImage> {
   if (typeof createImageBitmap === "function") return createImageBitmap(file);
   const url = URL.createObjectURL(file);
   try {
@@ -88,16 +142,21 @@ async function decodeImage(file) {
   }
 }
 
-function imageSize(image) {
-  return { width: image?.width || image?.naturalWidth || 0, height: image?.height || image?.naturalHeight || 0 };
+function imageSize(image: DecodedImage | null): { width: number; height: number } {
+  if (!image) return { width: 0, height: 0 };
+  if (image instanceof HTMLImageElement) {
+    return { width: image.naturalWidth || image.width, height: image.naturalHeight || image.height };
+  }
+  return { width: image.width, height: image.height };
 }
 
-function buildMaskTint(mask, width, height) {
+function buildMaskTint(mask: DecodedImage, width: number, height: number): HTMLCanvasElement {
   const sourceSize = imageSize(mask);
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) throw new Error("2D canvas context is unavailable");
   context.drawImage(mask, 0, 0, sourceSize.width, sourceSize.height, 0, 0, width, height);
   const image = context.getImageData(0, 0, width, height);
   for (let index = 0; index < image.data.length; index += 4) {
@@ -115,7 +174,12 @@ function buildMaskTint(mask, width, height) {
   return canvas;
 }
 
-function strokePolyline(context, points, color, width) {
+function strokePolyline(
+  context: CanvasRenderingContext2D,
+  points: readonly V6Point[],
+  color: string,
+  width: number,
+): void {
   if (!Array.isArray(points) || points.length < 2) return;
   context.beginPath();
   context.strokeStyle = color;
@@ -129,7 +193,13 @@ function strokePolyline(context, points, color, width) {
   context.stroke();
 }
 
-function drawArrow(context, start, end, color, lineWidth) {
+function drawArrow(
+  context: CanvasRenderingContext2D,
+  start: V6Point,
+  end: V6Point,
+  color: string,
+  lineWidth: number,
+): void {
   const dx = end[0] - start[0];
   const dy = end[1] - start[1];
   const length = Math.hypot(dx, dy);
@@ -150,6 +220,7 @@ function drawArrow(context, start, end, color, lineWidth) {
 function renderReview() {
   const canvas = els.reviewCanvas;
   const context = canvas.getContext("2d");
+  if (!context) return;
   const extent = resultExtent(state.report?.lines || []);
   const backgroundSize = imageSize(state.background);
   const maskSize = imageSize(state.mask);
@@ -197,7 +268,7 @@ function renderReview() {
   }
 }
 
-function miniMetric(label, value) {
+function miniMetric(label: string, value: string | number): string {
   return `<div class="mini-metric"><b>${value}</b><span>${label}</span></div>`;
 }
 
@@ -233,14 +304,20 @@ function updateReviewPanel() {
   renderReview();
 }
 
-async function loadFiles(fileList) {
+async function loadFiles(fileList: FileList | readonly File[] | null): Promise<void> {
+  if (!fileList) return;
   const files = [...fileList];
   if (!files.length) return;
-  const jsonCandidates = [];
+  const jsonCandidates: Array<{ file: File; payload: unknown }> = [];
   for (const file of files.filter((entry) => entry.name.toLowerCase().endsWith(".json"))) {
     try {
-      const payload = JSON.parse(await file.text());
-      if (Array.isArray(payload?.lines) && payload.lines.some((line) => Array.isArray(line?.points_xy))) {
+      const payload: unknown = JSON.parse(await file.text());
+      if (typeof payload === "object" && payload !== null && "lines" in payload
+          && Array.isArray(payload.lines)
+          && payload.lines.some((line) => (
+            typeof line === "object" && line !== null && "points_xy" in line
+            && Array.isArray(line.points_xy)
+          ))) {
         jsonCandidates.push({ file, payload });
       }
     } catch (error) {
@@ -248,8 +325,10 @@ async function loadFiles(fileList) {
     }
   }
   if (jsonCandidates.length) {
-    const preferred = jsonCandidates.find(({ file }) => file.name.toLowerCase() === "personalized_rstl.json") || jsonCandidates[0];
-    state.payload = preferred.payload;
+    const preferred = jsonCandidates.find(({ file }) => file.name.toLowerCase() === "personalized_rstl.json")
+      || jsonCandidates[0];
+    if (!preferred) return;
+    state.payload = preferred.payload as V6ResultPayload;
     state.report = validateV6Result(preferred.payload);
     state.fileLabel = preferred.file.name;
   }
@@ -271,29 +350,55 @@ async function loadFiles(fileList) {
   updateReviewPanel();
 }
 
-els.fileInput.addEventListener("change", () => loadFiles(els.fileInput.files));
-for (const eventName of ["dragenter", "dragover"]) {
-  els.dropZone.addEventListener(eventName, (event) => { event.preventDefault(); els.dropZone.classList.add("dragging"); });
-}
-for (const eventName of ["dragleave", "drop"]) {
-  els.dropZone.addEventListener(eventName, (event) => { event.preventDefault(); els.dropZone.classList.remove("dragging"); });
-}
-els.dropZone.addEventListener("drop", (event) => loadFiles(event.dataTransfer.files));
-for (const input of [els.showPrior, els.showFinal, els.showMask, els.showArrows, els.backgroundOpacity]) {
-  input.addEventListener("input", renderReview);
-}
-els.exportButton.addEventListener("click", () => {
-  renderReview();
-  els.reviewCanvas.toBlob((blob) => {
-    if (!blob) return;
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `rstl_v6_review_${new Date().toISOString().slice(0, 10)}.png`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-  }, "image/png");
-});
+export function mountV6Review(): void {
+  uiAbortController?.abort();
+  Object.assign(els, collectElements());
+  Object.assign(state, {
+    subjectIndex: 0,
+    view: "compare",
+    payload: null,
+    report: null,
+    background: null,
+    mask: null,
+    maskTint: null,
+    fileLabel: "",
+  });
+  uiAbortController = new AbortController();
+  const options: AddEventListenerOptions = { signal: uiAbortController.signal };
 
-renderExampleNavigation();
-renderExample();
-updateReviewPanel();
+  els.fileInput.addEventListener("change", () => loadFiles(els.fileInput.files), options);
+  for (const eventName of ["dragenter", "dragover"]) {
+    els.dropZone.addEventListener(eventName, (event) => { event.preventDefault(); els.dropZone.classList.add("dragging"); }, options);
+  }
+  for (const eventName of ["dragleave", "drop"]) {
+    els.dropZone.addEventListener(eventName, (event) => { event.preventDefault(); els.dropZone.classList.remove("dragging"); }, options);
+  }
+  els.dropZone.addEventListener("drop", (event) => {
+    if (event instanceof DragEvent) void loadFiles(event.dataTransfer?.files ?? null);
+  }, options);
+  for (const input of [els.showPrior, els.showFinal, els.showMask, els.showArrows, els.backgroundOpacity]) {
+    input.addEventListener("input", renderReview, options);
+  }
+  els.exportButton.addEventListener("click", () => {
+    renderReview();
+    els.reviewCanvas.toBlob((blob) => {
+      if (!blob) return;
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `rstl_v6_review_${new Date().toISOString().slice(0, 10)}.png`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }, "image/png");
+  }, options);
+
+  renderExampleNavigation();
+  renderExample();
+  updateReviewPanel();
+}
+
+export function disposeV6Review(): void {
+  uiAbortController?.abort();
+  uiAbortController = null;
+  if (state.background instanceof ImageBitmap) state.background.close();
+  if (state.mask instanceof ImageBitmap) state.mask.close();
+}

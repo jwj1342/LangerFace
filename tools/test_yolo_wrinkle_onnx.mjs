@@ -16,7 +16,7 @@ import {
   fuseStrictUnion,
   preprocessImageData,
   skeletonizeBinary,
-} from "../web/compat/personalized/yolo_wrinkle_onnx.js";
+} from "../web/src/services/personalized/yoloWrinkleOnnx.ts";
 
 assert.equal(DEFAULT_MODEL_CHUNK_URLS.length, 4);
 assert.ok(DEFAULT_MODEL_CHUNK_URLS.every((url) => /\.onnx\.part0[0-3]$/.test(url)));

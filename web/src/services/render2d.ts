@@ -24,6 +24,17 @@ import { mapSurfaceRefs, measureIncisionOverlayJitter, measureIncisionOverlayReg
 import type { SurfaceRef } from "./incisionOverlay.ts";
 import { countMetric, recordMetricSample, setDiagnosticSection } from "./logger.ts";
 import { lineIndicesForDensity } from "./lineDensity.ts";
+import {
+  getDisplayLines,
+  isRefineActive,
+  selectedLineIndex,
+  selectedPointIndex,
+  setLatestAutoLines,
+  setRefineAvailability,
+  showSymmetryAxis,
+  symmetryAxisX,
+  symmetryPartnerIndex,
+} from "./liveRefine2d";
 import { modelState, renderState, sourceState } from "./liveState.ts";
 import { setIncisionOverlayQa, setLive } from "./liveUi.ts";
 import type { IncisionOverlayPayload } from "./dataSource";
@@ -98,7 +109,7 @@ const focusScratch = document.createElement("canvas");
 const focusCtx = focusScratch.getContext("2d") as CanvasRenderingContext2D;
 const focusZoomRange = { min: 1, max: 4.5 };
 // 这些 region 的线在 mapAtlas 之后被主动外推到面部网格之外（METHODS §5.1），
-// 显示期必须按头部包络 + 肤色再裁一次。与 web/current/render.js 的同名集合保持一致。
+// 显示期必须按头部包络 + 肤色再裁一次；这里是 React live 的唯一生产渲染路径。
 const EXTENDED_FOREHEAD_REGIONS = new Set([
   "forehead_lower_long_arc_v13",
   "forehead_bridge_arc_v15",
@@ -181,8 +192,14 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
     : null;
   const innerMouth = innerMouthTriangles(modelTriangles()); // 口裂三角面（张嘴会落进口内/牙齿），永久排除
   const mapped = mapAtlas(atlasLines, lm, modelTriangles());
+  if (sourceState.sourceKind === "image" || sourceState.paused) setLatestAutoLines(mapped);
+  const refineActive = isRefineActive();
+  const displayLines = getDisplayLines(mapped);
+  const selectedLine = refineActive ? selectedLineIndex() : null;
+  const selectedPoint = refineActive ? selectedPointIndex() : null;
+  const symmetryPartner = refineActive ? symmetryPartnerIndex() : null;
   const bb = faceBBox(lm);
-  const visibleLineIndices = lineIndicesForDensity(atlasLines || [], renderState.densityFrac);
+  const visibleLineIndices = refineActive ? null : lineIndicesForDensity(displayLines || [], renderState.densityFrac);
   const hasMasks = masks.length > 0;
   // 外推的额头弧线要按头部包络 + 肤色再裁一次，否则会画到头发/背景/脸外（#141）
   const foreheadImage = readFrameImageData(W, H);
@@ -198,13 +215,26 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   ctx.lineJoin = "round"; ctx.lineCap = "round";
   let count = 0;
   if (canDrawAtlas) {
-    for (let li = 0; li < mapped.length; li++) {
-      if (!visibleLineIndices.has(li)) continue;
-      const ln = mapped[li];
+    for (let li = 0; li < displayLines.length; li++) {
+      if (visibleLineIndices && !visibleLineIndices.has(li)) continue;
+      const ln = displayLines[li];
+      if (ln.hidden) continue;
+      const isSelected = refineActive && li === selectedLine;
+      const isPartner = refineActive && li === symmetryPartner;
       if (renderState.bands) {
         let my = 0; for (const p of ln.pts) my += p[1]; my = (my / ln.pts.length - bb.y0) / (bb.h || 1);
         ctx.strokeStyle = my < 0.36 ? BAND.top : my < 0.66 ? BAND.mid : BAND.low;
       } else ctx.strokeStyle = SOLID[renderState.system as keyof typeof SOLID] || SOLID.rstl;
+      if (isSelected) {
+        ctx.strokeStyle = "#42be65";
+        ctx.lineWidth = Math.max(2.5, W / 520);
+      } else if (isPartner) {
+        ctx.strokeStyle = "#78a9ff";
+        ctx.lineWidth = Math.max(2, W / 680);
+        ctx.setLineDash([8, 6]);
+      } else {
+        ctx.lineWidth = Math.max(2, W / 1300);
+      }
       // 每点可见性 = 朝向相机(背面剔除) 且 不属于口裂三角面 且 不在前方手部凸包内
       // 外推的额头弧线额外要求落在头部包络内且采样点是皮肤，再做一次段稳定化（#141）
       const extendedForehead = EXTENDED_FOREHEAD_REGIONS.has(ln.region);
@@ -229,8 +259,35 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
         for (let i = 1; i < run.length; i++) ctx.lineTo(run[i][0], run[i][1]);
         ctx.stroke();
       }
+      if (isPartner) ctx.setLineDash([]);
       ctx.globalAlpha = savedAlpha;
       count++;
+    }
+  }
+  if (showSymmetryAxis()) {
+    const axis = symmetryAxisX();
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.strokeStyle = "#f1c21b";
+    ctx.lineWidth = Math.max(1.5, W / 900);
+    ctx.setLineDash([10, 8]);
+    ctx.beginPath();
+    ctx.moveTo(axis, 0);
+    ctx.lineTo(axis, H);
+    ctx.stroke();
+    ctx.restore();
+  }
+  if (refineActive && selectedLine != null && selectedPoint != null) {
+    const point = displayLines[selectedLine]?.pts?.[selectedPoint];
+    if (point) {
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#f1c21b";
+      ctx.strokeStyle = "#11151c";
+      ctx.lineWidth = Math.max(1.5, W / 900);
+      ctx.beginPath();
+      ctx.arc(point[0], point[1], Math.max(4, W / 180), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
     }
   }
   if (canDrawAtlas && renderState.meshPts) {
@@ -924,6 +981,7 @@ function focusCropRect(lm: Vec3[], region: RenderRegion, W: number, H: number): 
 
 // ── 统计 ──────────────────────────────────────────────────────────────────────
 export function updateStats(lm: Vec3[] | null, W: number, H: number, lineCount: number): void {
+  setRefineAvailability();
   const gate = sourceState.qualityGate as AnyRecord | null;
   const localRegionQuality = (sourceState.localRegionQuality || gate?.local_region_quality) as AnyRecord | null;
   const localNeedsReview = gate?.passed && localQualityNeedsReview(localRegionQuality) && sourceState.sourceKind !== "image";

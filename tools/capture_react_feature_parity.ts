@@ -1,6 +1,5 @@
-// Runtime smoke check for compatibility workbenches that must stay functional
-// while the main tool launcher hides them from the primary path.
-// Run from web/: npm run visual:compat:parity
+// Runtime smoke check for the React workbenches on their public SPA routes.
+// Run from web/: npm run visual:react:parity
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -9,12 +8,12 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const webDir = join(root, "web");
-const outDir = join(root, "local_outputs", "compat-feature-parity");
+const outDir = join(root, "local_outputs", "react-feature-parity");
 const port = Number(process.env.COMPAT_FEATURE_PARITY_PORT || 5199);
 const baseUrl = `http://127.0.0.1:${port}`;
 const viteBin = join(webDir, "node_modules", "vite", "bin", "vite.js");
 const playwrightBin = join(webDir, "node_modules", ".bin", "playwright");
-const specPath = join(outDir, "compat-feature-parity.spec.ts");
+const specPath = join(outDir, "react-feature-parity.spec.ts");
 const configPath = join(outDir, "playwright.config.ts");
 const fixtureImagePath = join(outDir, "upload-fixture.png");
 
@@ -165,7 +164,7 @@ async function expectCanvasHasPixels(page, selector, label) {
   expect(metrics.ok, JSON.stringify(metrics)).toBe(true);
 }
 
-test("compat routes preserve live, incision, annotate, and texture controls", async ({ page, context }) => {
+test("React routes preserve live, incision, annotate, and texture controls", async ({ page, context }) => {
   const errors = collectErrors(page);
   await context.grantPermissions(["camera"], { origin: baseUrl });
 

@@ -4,6 +4,7 @@ import { LiveRenderControlsPanel } from "../components/LiveRenderControlsPanel";
 import { LiveRouteControlsPanel } from "../components/LiveRouteControlsPanel";
 import { LiveSourceControlsPanel } from "../components/LiveSourceControlsPanel";
 import { LiveQualityPanel } from "../components/LiveQualityPanel";
+import { LiveRefinePanel } from "../components/LiveRefinePanel";
 import { LiveStagePanel } from "../components/LiveStagePanel";
 import { LiveStatePanel } from "../components/LiveStatePanel";
 import { Disclaimer, WorkbenchLayout } from "../components/WorkbenchLayout";
@@ -41,6 +42,8 @@ export function LiveWorkbench() {
       <LiveStatePanel />
 
       <LiveSourceControlsPanel />
+
+      <LiveRefinePanel />
 
       <LiveRenderControlsPanel />
 

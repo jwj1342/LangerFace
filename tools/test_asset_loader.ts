@@ -201,7 +201,7 @@ for (const rel of [
     `${rel} reads static JSON assets through dataSource instead of direct asset fetches`);
 }
 
-for (const rel of ["web/src/services/pipelineModels.ts", "web/current/pipeline.js"]) {
+for (const rel of ["web/src/services/pipelineModels.ts"]) {
   const source = readFileSync(join(root, rel), "utf8");
   assert.match(source, /let readyPromise(?:: Promise<void> \| null)? = null;/,
     `${rel} owns one module-scoped readiness promise`);

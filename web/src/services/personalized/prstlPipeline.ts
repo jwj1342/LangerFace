@@ -2,17 +2,20 @@
  * 浏览器端个性化二维 RSTL — 纯算法（无 DOM）
  *
  * 文档：docs/tracks/PERSONALIZED_RSTL.md
- * UI：./personalized.js
+ * UI：React PersonalizedWorkbench 页面；本模块只承载纯算法。
  *
  * 管线：个人基线 → 结构张量 + 块匹配光流 → 保守融合 q0 → 先验锚定重追
  */
-import { mapAtlas, umeyama, applySim } from "../shared/geometry.js";
+import { mapAtlas } from "../geometryAtlas.ts";
+import { applySim, umeyama } from "../geometryTransform.ts";
+import type { AtlasLine, AtlasPayload } from "../geometryAtlas.ts";
 
 export const SIZE = 320;
 export const TEXTURE_SIZE = 640;
 export const ACTION_ORDER = [
   "raise_brows", "frown", "squint", "smile", "puff", "purse", "open_mouth",
-];
+] as const;
+export type ActionName = typeof ACTION_ORDER[number];
 export const ACTION_LABELS = {
   raise_brows: "抬眉", frown: "皱眉", squint: "眯眼", smile: "微笑",
   puff: "鼓腮", purse: "撅嘴", open_mouth: "张嘴",
@@ -38,12 +41,13 @@ const THRESHOLDS = {
 // 这些动作的 blendshape 在不同手机和眉形上不够稳定：点击开始后按计时完成，
 // 再由图像变化、跟踪、光照和配准质量门控决定是否接收。
 // 皱眉不能只依赖 browDown，否则部分用户会一直停在动作启动阈值之前。
-export const TIMED_ACTIONS = new Set(["frown", "puff", "purse"]);
-export const CORE_ACTIONS = new Set(["raise_brows", "frown", "squint", "smile", "purse"]);
+export const TIMED_ACTIONS = new Set<ActionName>(["frown", "puff", "purse"]);
+export const CORE_ACTIONS = new Set<ActionName>(["raise_brows", "frown", "squint", "smile", "purse"]);
 export const REGION_NAMES = [
   "forehead", "glabella", "left_periocular", "right_periocular",
   "left_cheek", "right_cheek", "nose", "perioral", "chin",
-];
+] as const;
+export type RegionName = typeof REGION_NAMES[number];
 export const ACTION_REGION_WEIGHT = Object.freeze({
   raise_brows: { forehead: 1.0, glabella: 0.4 },
   frown: { glabella: 1.0, forehead: 0.4, nose: 0.3 },
@@ -59,7 +63,7 @@ export const ACTION_REGION_WEIGHT = Object.freeze({
   open_mouth: { chin: 1.0, perioral: 0.25 },
 });
 
-export const QUALITY_THRESHOLDS = Object.freeze({
+export const QUALITY_THRESHOLDS: Readonly<QualityThresholds> = Object.freeze({
   tracking: 0.62,
   illumination: 0.55,
   returnConsistency: 0.58,
@@ -85,14 +89,131 @@ export const CANONICAL_REGISTRATION_ANCHORS = Object.freeze([
 const NEUTRAL_MAX = 0.45;
 export { THRESHOLDS, NEUTRAL_MAX };
 
+export type NumericField = ArrayLike<number>;
+export type Point2 = [number, number];
+export type Point3 = [number, number, number];
+export type Triangle = [number, number, number];
+export type BlendshapeDict = Record<string, number>;
+type RegionMasks = Record<RegionName, Float32Array>;
+
+export interface RegionEvidence {
+  staticConfidence: number;
+  dynamicConfidence: number;
+  deformationConfidence: number;
+  repeatability: number;
+  conflict: number;
+  coverage: number;
+  finalConfidence: number;
+}
+export type RegionEvidenceState = Record<RegionName, RegionEvidence>;
+
+interface PipelineOptions {
+  anchorIndices?: readonly number[];
+  deformationSupport?: NumericField | null;
+  dynamicValidation?: NumericField | null;
+  effectiveSampleCount?: number;
+  expressionAmplitudeQuality?: number;
+  intersectionGuard?: boolean;
+  qualityGate?: QualityGateResult;
+  regionWeight?: NumericField | null;
+  registrationResidualLimitPx?: number;
+  registrationWeight?: number;
+  repeatability?: number;
+  returnConsistency?: number;
+  ridge?: NumericField | null;
+  staticConfidence?: NumericField | null;
+  temporalPersistence?: number;
+  expandForehead?: boolean;
+}
+
+interface QualityMetrics {
+  tracking?: number;
+  illumination?: number;
+  returnConsistency?: number;
+  validPeakFrames?: number;
+}
+
+interface QualityThresholds {
+  tracking: number;
+  illumination: number;
+  returnConsistency: number;
+  minPeakFrames: number;
+}
+
+interface QualityGateResult { valid: boolean; reasons: string[] }
+
+interface EvidenceField {
+  q: Float32Array;
+  confidence: Float32Array;
+  ridge: Float32Array;
+  [key: string]: unknown;
+}
+
+interface EvidenceAccumulator {
+  moment: Float32Array;
+  weight: Float32Array;
+  ridgeMoment: Float32Array;
+  ridgeWeight: Float32Array;
+  staticQ: Float32Array;
+  staticConfidence: Float32Array;
+  staticRidge: Float32Array;
+  dynamicValidation: Float32Array;
+  dynamicRidge: Float32Array;
+  fieldQ: Float32Array | null;
+  fieldC: Float32Array | null;
+  ridgeField: Float32Array;
+}
+
+interface FlowField { u?: NumericField; v?: NumericField; conf?: NumericField }
+interface DynamicConfidenceParts {
+  temporalPersistence?: number;
+  repetitionConsistency?: number;
+  wrinkleVisibility?: number;
+  deformationSupport?: number;
+  expressionAmplitudeQuality?: number;
+  neutralReturnConsistency?: number;
+}
+interface ScoredCapture {
+  fr: CaptureFrame;
+  idx: number;
+  score: number;
+  imageDifferenceScore: number;
+  registrationResidualPx: number | null;
+  gray: Float32Array;
+  selectionScore: number;
+}
+
+export interface CurveSeed { name?: string; id?: number; pts: Point2[] }
+export interface RefinedCurve {
+  name?: string;
+  pts: Point2[];
+  priorPts: Point2[];
+  kinds: string[];
+  audit: Array<Record<string, unknown>>;
+  optimizedOk: boolean;
+  refinedFrac: number;
+  meanEvidence: number;
+  maxDirectionChangeDeg: number;
+  maxCurvatureChangeDeg: number;
+  rollbackReason: string | null;
+}
+
+export interface CaptureFrame {
+  image?: ImageData;
+  registrationResidualPx?: number;
+  [key: string]: unknown;
+}
+
+interface BarycentricPoint { tri: number; u: number; v: number }
+
 // ── 轴向场 ──────────────────────────────────────────────────────────────────
-export function angleToQ(th) {
+export function angleToQ(th: number): Point2 {
   return [Math.cos(2 * th), Math.sin(2 * th)];
 }
-export function qToAngle(q) {
+export function qToAngle(q: NumericField): number {
   return 0.5 * Math.atan2(q[1], q[0]);
 }
-export function normalizeQ(q, eps = 1e-8) {
+export function normalizeQ(q: NumericField, eps = 1e-8): Point2 {
   const n = Math.hypot(q[0], q[1]);
   return n > eps ? [q[0] / n, q[1] / n] : [0, 0];
 }
@@ -101,7 +222,7 @@ export function normalizeQ(q, eps = 1e-8) {
  * 双角度轴向夹角（度），范围 [0, 90]。
  * q=(cos2θ,sin2θ) 已处理 θ~θ+π 等价；勿对 dot 取 abs（否则 90° 会被当成 0°）。
  */
-export function axialDiffDeg(qa, qb) {
+export function axialDiffDeg(qa: NumericField, qb: NumericField): number {
   const a = normalizeQ(qa), b = normalizeQ(qb);
   const dot = Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1]));
   return 0.5 * (Math.acos(dot) * 180 / Math.PI);
@@ -109,7 +230,7 @@ export function axialDiffDeg(qa, qb) {
 
 // ── 掩膜 ────────────────────────────────────────────────────────────────────
 /** 固定椭圆回退（无网格时） */
-export function buildMasks(size = SIZE) {
+export function buildMasks(size = SIZE): { skin: Uint8Array; forbidden: Uint8Array } {
   const skin = new Uint8Array(size * size);
   const forbidden = new Uint8Array(size * size);
   const holes = [
@@ -149,7 +270,7 @@ const MASK_LEFT_BROW = [70, 63, 105, 66, 107, 55, 65, 52, 53, 46];
 const MASK_RIGHT_BROW = [336, 296, 334, 293, 300, 285, 295, 282, 283, 276];
 const MASK_OVAL = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
 
-function stampDisk(forbidden, size, cx, cy, r) {
+function stampDisk(forbidden: Uint8Array, size: number, cx: number, cy: number, r: number): void {
   const x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(size - 1, Math.ceil(cx + r));
   const y0 = Math.max(0, Math.floor(cy - r)), y1 = Math.min(size - 1, Math.ceil(cy + r));
   const r2 = r * r;
@@ -161,7 +282,7 @@ function stampDisk(forbidden, size, cx, cy, r) {
   }
 }
 
-function regionRadius(mesh, idxs, size, scale = 1.15) {
+function regionRadius(mesh: Point2[], idxs: readonly number[], size: number, scale = 1.15) {
   let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9, n = 0;
   for (const i of idxs) {
     const p = mesh[i];
@@ -177,7 +298,7 @@ function regionRadius(mesh, idxs, size, scale = 1.15) {
 }
 
 /** 随用户关键点生成皮肤/禁区掩膜（canonical 像素坐标） */
-export function buildMasksFromMesh(meshXY, size = SIZE) {
+export function buildMasksFromMesh(meshXY: Point2[] | null | undefined, size = SIZE) {
   if (!meshXY || meshXY.length < 200) return buildMasks(size);
   const skin = new Uint8Array(size * size);
   const forbidden = new Uint8Array(size * size);
@@ -230,8 +351,14 @@ export function buildMasksFromMesh(meshXY, size = SIZE) {
  * 面部区域掩膜。区域用于限定动作证据，不替代皮肤/遮挡掩膜。
  * 坐标基于冻结后的 canonical 脸框，因此 320/640 两层可以共享同一比例定义。
  */
-export function buildRegionMasks(meshXY, skin, size = SIZE) {
-  const masks = Object.fromEntries(REGION_NAMES.map((name) => [name, new Float32Array(size * size)]));
+export function buildRegionMasks(
+  meshXY: Point2[] | null | undefined,
+  skin: NumericField | null | undefined,
+  size = SIZE,
+): RegionMasks {
+  const masks = Object.fromEntries(
+    REGION_NAMES.map((name) => [name, new Float32Array(size * size)]),
+  ) as RegionMasks;
   let minX = size * 0.08, minY = size * 0.08, maxX = size * 0.92, maxY = size * 0.94;
   if (meshXY?.length) {
     const pts = MASK_OVAL.map((i) => meshXY[i]).filter(Boolean);
@@ -241,7 +368,7 @@ export function buildRegionMasks(meshXY, skin, size = SIZE) {
     }
   }
   const w = Math.max(1, maxX - minX), h = Math.max(1, maxY - minY);
-  const ell = (nx, ny, cx, cy, rx, ry) => {
+  const ell = (nx: number, ny: number, cx: number, cy: number, rx: number, ry: number): number => {
     const d = ((nx - cx) / rx) ** 2 + ((ny - cy) / ry) ** 2;
     return d >= 1 ? 0 : Math.max(0, 1 - d);
   };
@@ -273,7 +400,11 @@ export function buildRegionMasks(meshXY, skin, size = SIZE) {
  * in canonical, face-relative coordinates, so no camera-pixel threshold is
  * involved.  Eyebrow/nose/hair exclusions remain controlled by `skin`.
  */
-export function buildGlabellaWrinkleMask(meshXY, skin, size = SIZE) {
+export function buildGlabellaWrinkleMask(
+  meshXY: Point2[] | null | undefined,
+  skin: NumericField | null | undefined,
+  size = SIZE,
+): Float32Array {
   const mask = new Float32Array(size * size);
   let minX = size * 0.08, minY = size * 0.08, maxX = size * 0.92, maxY = size * 0.94;
   if (meshXY?.length) {
@@ -294,8 +425,8 @@ export function buildGlabellaWrinkleMask(meshXY, skin, size = SIZE) {
     ? [...MASK_LEFT_BROW, ...MASK_RIGHT_BROW].map((index) => meshXY[index]).filter(Boolean)
     : [];
   const browMargin = Math.max(2, 0.010 * faceWidth);
-  const nearestBrowPoint = (x) => {
-    let nearest = null, distance = Infinity;
+  const nearestBrowPoint = (x: number): Point2 | null => {
+    let nearest: Point2 | null = null, distance = Infinity;
     for (const point of browPoints) {
       const nextDistance = Math.abs(point[0] - x);
       if (nextDistance < distance) { distance = nextDistance; nearest = point; }
@@ -328,7 +459,12 @@ export function buildGlabellaWrinkleMask(meshXY, skin, size = SIZE) {
 }
 
 /** Action-specific skin zones where an expression may reveal real grooves. */
-export function buildActionWrinkleMask(action, meshXY, skin, size = SIZE) {
+export function buildActionWrinkleMask(
+  action: ActionName,
+  meshXY: Point2[] | null | undefined,
+  skin: NumericField | null | undefined,
+  size = SIZE,
+): Float32Array {
   if (action === "frown") return buildGlabellaWrinkleMask(meshXY, skin, size);
   const mask = new Float32Array(size * size);
   let minX = size * 0.08, minY = size * 0.08, maxX = size * 0.92, maxY = size * 0.94;
@@ -342,7 +478,8 @@ export function buildActionWrinkleMask(action, meshXY, skin, size = SIZE) {
     }
   }
   const faceWidth = Math.max(1, maxX - minX), faceHeight = Math.max(1, maxY - minY);
-  const featureBox = (indices, padX, padY) => {
+  interface FeatureBox { cx: number; cy: number; rx: number; ry: number }
+  const featureBox = (indices: readonly number[], padX: number, padY: number): FeatureBox | null => {
     const points = meshXY?.length ? indices.map((index) => meshXY[index]).filter(Boolean) : [];
     if (!points.length) return null;
     const x0 = Math.min(...points.map((point) => point[0])) - padX * faceWidth;
@@ -351,8 +488,9 @@ export function buildActionWrinkleMask(action, meshXY, skin, size = SIZE) {
     const y1 = Math.max(...points.map((point) => point[1])) + padY * faceHeight;
     return { cx: 0.5 * (x0 + x1), cy: 0.5 * (y0 + y1), rx: 0.5 * (x1 - x0), ry: 0.5 * (y1 - y0) };
   };
-  const insideBoxEllipse = (x, y, box) => box &&
-    ((x - box.cx) / Math.max(1, box.rx)) ** 2 + ((y - box.cy) / Math.max(1, box.ry)) ** 2 <= 1;
+  const insideBoxEllipse = (x: number, y: number, box: FeatureBox): boolean =>
+    ((x - box.cx) / Math.max(1, box.rx)) ** 2
+      + ((y - box.cy) / Math.max(1, box.ry)) ** 2 <= 1;
   // Wrinkle extraction needs a wider exclusion band than rendering/optimization:
   // a moving eyelid, nostril or lip boundary remains highly repeatable after warp.
   const mouthAction = action === "purse" || action === "open_mouth";
@@ -363,8 +501,8 @@ export function buildActionWrinkleMask(action, meshXY, skin, size = SIZE) {
     featureBox(MASK_RIGHT_BROW, 0.022, 0.032),
     featureBox(MASK_NOSE_BOUNDARY, mouthAction ? 0.070 : 0.050, mouthAction ? 0.075 : 0.060),
     featureBox(MASK_LIPS, mouthAction ? 0.105 : 0.070, mouthAction ? 0.090 : 0.070),
-  ].filter(Boolean);
-  const ell = (nx, ny, cx, cy, rx, ry) => {
+  ].filter((box): box is FeatureBox => Boolean(box));
+  const ell = (nx: number, ny: number, cx: number, cy: number, rx: number, ry: number): number => {
     const distance = ((nx - cx) / rx) ** 2 + ((ny - cy) / ry) ** 2;
     return distance >= 1 ? 0 : (1 - distance) ** 2;
   };
@@ -409,10 +547,10 @@ export function buildActionWrinkleMask(action, meshXY, skin, size = SIZE) {
   return mask;
 }
 
-export function actionRegionField(action, regionMasks, size = SIZE) {
+export function actionRegionField(action: ActionName, regionMasks: Partial<RegionMasks>, size = SIZE): Float32Array {
   const out = new Float32Array(size * size);
   const weights = ACTION_REGION_WEIGHT[action] || {};
-  for (const [name, weight] of Object.entries(weights)) {
+  for (const [name, weight] of Object.entries(weights) as Array<[RegionName, number]>) {
     const mask = regionMasks?.[name];
     if (!mask) continue;
     for (let i = 0; i < out.length; i++) out[i] = Math.max(out[i], mask[i] * weight);
@@ -420,7 +558,7 @@ export function actionRegionField(action, regionMasks, size = SIZE) {
   return out;
 }
 
-export function createRegionEvidenceState() {
+export function createRegionEvidenceState(): RegionEvidenceState {
   return Object.fromEntries(REGION_NAMES.map((name) => [name, {
     staticConfidence: 0,
     dynamicConfidence: 0,
@@ -429,26 +567,31 @@ export function createRegionEvidenceState() {
     conflict: 0,
     coverage: 0,
     finalConfidence: 0,
-  }]));
+  }])) as RegionEvidenceState;
 }
 
-export function chooseNextAction(regionState, completed = [], skipped = [], attempts = {}) {
+export function chooseNextAction(
+  regionState: Partial<RegionEvidenceState>,
+  completed: readonly ActionName[] = [],
+  skipped: readonly ActionName[] = [],
+  attempts: Partial<Record<ActionName, number>> = {},
+): { action: ActionName | null; score: number } {
   const done = new Set(completed);
   const skip = new Set(skipped);
   const coreFinished = [...CORE_ACTIONS].every((action) => done.has(action) || skip.has(action));
-  let best = null, bestScore = -Infinity;
+  let best: ActionName | null = null, bestScore = -Infinity;
   for (let order = 0; order < ACTION_ORDER.length; order++) {
     const action = ACTION_ORDER[order];
     if (done.has(action) || skip.has(action)) continue;
     if (!CORE_ACTIONS.has(action) && !coreFinished) continue;
     const weights = ACTION_REGION_WEIGHT[action] || {};
     let gain = 0, low = 0, conflict = 0, norm = 0;
-    for (const [region, weight] of Object.entries(weights)) {
-      const s = regionState?.[region] || {};
-      const c = s.finalConfidence || 0;
+    for (const [region, weight] of Object.entries(weights) as Array<[RegionName, number]>) {
+      const s = regionState[region];
+      const c = s?.finalConfidence || 0;
       gain += weight * (1 - c);
       low += weight * Math.max(0, 0.55 - c);
-      conflict += weight * (s.conflict || 0);
+      conflict += weight * (s?.conflict || 0);
       norm += weight;
     }
     if (!norm) continue;
@@ -465,7 +608,7 @@ export function chooseNextAction(regionState, completed = [], skipped = [], atte
  * 粗姿态质量：用双眼外角 + 鼻尖估计 roll / 左右不对称（yaw 代理）。
  * 返回 { ok, rollDeg, yawProxy, scale }；超限时 ok=false。
  */
-export function estimatePoseQuality(lmPx) {
+export function estimatePoseQuality(lmPx: readonly Point2[] | null | undefined) {
   if (!lmPx || lmPx.length < 264) {
     return { ok: false, rollDeg: 0, yawProxy: 0, scale: 0 };
   }
@@ -482,7 +625,7 @@ export function estimatePoseQuality(lmPx) {
 }
 
 // ── 图像工具 ────────────────────────────────────────────────────────────────
-export function grayFromImageData(img) {
+export function grayFromImageData(img: ImageData): Float32Array {
   const { data, width, height } = img;
   const g = new Float32Array(width * height);
   for (let i = 0, j = 0; i < data.length; i += 4, j++) {
@@ -491,7 +634,7 @@ export function grayFromImageData(img) {
   return g;
 }
 
-export function downsampleGray(src, srcW, srcH, dstW, dstH) {
+export function downsampleGray(src: NumericField, srcW: number, srcH: number, dstW: number, dstH: number): Float32Array {
   const out = new Float32Array(dstW * dstH);
   for (let y = 0; y < dstH; y++) {
     const y0 = Math.floor(y * srcH / dstH), y1 = Math.max(y0 + 1, Math.floor((y + 1) * srcH / dstH));
@@ -508,7 +651,7 @@ export function downsampleGray(src, srcW, srcH, dstW, dstH) {
 }
 
 /** 小样本逐像素中位数；复用工作数组，避免每像素分配对象。 */
-export function temporalMedianGray(frames) {
+export function temporalMedianGray(frames: readonly NumericField[]): Float32Array {
   if (!frames?.length) return new Float32Array(0);
   const len = frames[0].length, n = frames.length;
   const out = new Float32Array(len);
@@ -529,7 +672,14 @@ export function temporalMedianGray(frames) {
  * Brightness/contrast invariant return-to-neutral similarity with a small
  * translation search. This prevents minor camera motion from failing return.
  */
-export function normalizedReturnConsistency(reference, current, mask, width, height, maxShift = 2) {
+export function normalizedReturnConsistency(
+  reference: NumericField | null | undefined,
+  current: NumericField | null | undefined,
+  mask: NumericField | null | undefined,
+  width: number,
+  height: number,
+  maxShift = 2,
+): number {
   if (!reference || !current || reference.length !== current.length) return 0;
   let best = -1;
   for (let dy = -maxShift; dy <= maxShift; dy++) {
@@ -559,9 +709,9 @@ export function normalizedReturnConsistency(reference, current, mask, width, hei
   }
   return Math.max(0, Math.min(1, 0.5 + 0.5 * best));
 }
-function gaussianBlurGray(src, w, h, sigma) {
+function gaussianBlurGray(src: NumericField, w: number, h: number, sigma: number): Float32Array {
   const r = Math.max(1, Math.ceil(sigma * 2));
-  const kernel = [];
+  const kernel: number[] = [];
   let sum = 0;
   for (let i = -r; i <= r; i++) {
     const v = Math.exp(-(i * i) / (2 * sigma * sigma));
@@ -592,7 +742,7 @@ function gaussianBlurGray(src, w, h, sigma) {
   }
   return out;
 }
-function sobel(src, w, h) {
+function sobel(src: NumericField, w: number, h: number): { gx: Float32Array; gy: Float32Array } {
   const gx = new Float32Array(w * h);
   const gy = new Float32Array(w * h);
   for (let y = 1; y < h - 1; y++) {
@@ -611,11 +761,16 @@ function sobel(src, w, h) {
 }
 
 // ── 分片仿射 warp 到 canonical ──────────────────────────────────────────────
-export function landmarksToCanonicalXY(lmPx, size, refXY = null, options = {}) {
+export function landmarksToCanonicalXY(
+  lmPx: readonly Point2[],
+  size: number,
+  refXY: readonly Point2[] | null = null,
+  options: PipelineOptions = {},
+): Point2[] {
   // lmPx: [[x,y,z],...] image pixels; return mesh in canonical pixels
   const n = Math.min(468, lmPx.length);
-  const src = lmPx.slice(0, n).map((p) => [p[0], p[1], 0]);
-  let dst;
+  const src: Point3[] = lmPx.slice(0, n).map((p) => [p[0], p[1], 0]);
+  let dst: Point3[];
   if (refXY) {
     dst = refXY.slice(0, n).map((p) => [p[0], p[1], 0]);
   } else {
@@ -626,7 +781,7 @@ export function landmarksToCanonicalXY(lmPx, size, refXY = null, options = {}) {
     }
     const pad = 0.08;
     const bw = maxX - minX || 1, bh = maxY - minY || 1;
-    dst = src.map(([x, y]) => [
+    dst = src.map(([x, y]): Point3 => [
       ((x - minX) / bw * (1 - 2 * pad) + pad) * (size - 1),
       ((y - minY) / bh * (1 - 2 * pad) + pad) * (size - 1),
       0,
@@ -638,25 +793,34 @@ export function landmarksToCanonicalXY(lmPx, size, refXY = null, options = {}) {
   const anchorIndices = requestedAnchors?.length
     ? requestedAnchors.filter((index) => index >= 0 && index < n && src[index] && dst[index])
     : null;
-  const fitSrc = anchorIndices?.length >= 3 ? anchorIndices.map((index) => src[index]) : src;
-  const fitDst = anchorIndices?.length >= 3 ? anchorIndices.map((index) => dst[index]) : dst;
+  const hasAnchors = Boolean(anchorIndices && anchorIndices.length >= 3);
+  const fitSrc = hasAnchors ? anchorIndices!.map((index) => src[index]) : src;
+  const fitDst = hasAnchors ? anchorIndices!.map((index) => dst[index]) : dst;
   const sim = umeyama(fitSrc, fitDst);
-  return applySim(sim, src).map((p) => [p[0], p[1]]);
+  return applySim(sim, src).map((p): Point2 => [p[0], p[1]]);
 }
 
-export function warpToCanonical(videoOrCanvas, srcXY, dstXY, triangles, size) {
+export function warpToCanonical(
+  videoOrCanvas: HTMLVideoElement | HTMLCanvasElement,
+  srcXY: readonly Point2[],
+  dstXY: readonly Point2[],
+  triangles: readonly Triangle[],
+  size: number,
+): ImageData {
   const c = document.createElement("canvas");
   c.width = size; c.height = size;
   const ctx = c.getContext("2d", { willReadFrequently: true });
+  if (!ctx) throw new Error("2D canvas context is unavailable");
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, size, size);
 
   // 源图画到临时 canvas
   const srcC = document.createElement("canvas");
-  const sw = videoOrCanvas.videoWidth || videoOrCanvas.width;
-  const sh = videoOrCanvas.videoHeight || videoOrCanvas.height;
+  const sw = videoOrCanvas instanceof HTMLVideoElement ? videoOrCanvas.videoWidth : videoOrCanvas.width;
+  const sh = videoOrCanvas instanceof HTMLVideoElement ? videoOrCanvas.videoHeight : videoOrCanvas.height;
   srcC.width = sw; srcC.height = sh;
   const sctx = srcC.getContext("2d", { willReadFrequently: true });
+  if (!sctx) throw new Error("2D source canvas context is unavailable");
   sctx.drawImage(videoOrCanvas, 0, 0);
 
   const n = Math.min(468, srcXY.length, dstXY.length);
@@ -697,7 +861,7 @@ export function warpToCanonical(videoOrCanvas, srcXY, dstXY, triangles, size) {
     const cx = (d0[0] + d1[0] + d2[0]) / 3;
     const cy = (d0[1] + d1[1] + d2[1]) / 3;
     const EXP = 0.8;
-    const push = (d) => {
+    const push = (d: Point2): Point2 => {
       const vx = d[0] - cx, vy = d[1] - cy;
       const l = Math.hypot(vx, vy) || 1;
       return [d[0] + (vx / l) * EXP, d[1] + (vy / l) * EXP];
@@ -719,7 +883,7 @@ export function warpToCanonical(videoOrCanvas, srcXY, dstXY, triangles, size) {
   return ctx.getImageData(0, 0, size, size);
 }
 
-function solve6(A, b) {
+function solve6(A: number[][], b: number[]): number[] | null {
   // 高斯消元 6x6
   const M = A.map((row, i) => row.concat([b[i]]));
   const n = 6;
@@ -743,7 +907,11 @@ function solve6(A, b) {
  * 点 → 网格三角重心坐标。用于把 canonical 曲线锚到网格拓扑，
  * 之后可映射到任意帧的关键点（消除坐标系漂移）。返回 {tri,u,v} 或 null。
  */
-export function pointToBary(pt, meshXY, triangles) {
+export function pointToBary(
+  pt: Point2 | null | undefined,
+  meshXY: readonly Point2[] | null | undefined,
+  triangles: readonly Triangle[] | null | undefined,
+): BarycentricPoint | null {
   if (!pt || !meshXY || !triangles) return null;
   const px = pt[0], py = pt[1];
   const n = meshXY.length;
@@ -768,7 +936,11 @@ export function pointToBary(pt, meshXY, triangles) {
 }
 
 /** 重心坐标 → 目标网格上的点。meshXY 可为任意帧（如实时关键点）。 */
-export function baryToPoint(bary, meshXY, triangles) {
+export function baryToPoint(
+  bary: BarycentricPoint | null | undefined,
+  meshXY: readonly Point2[] | null | undefined,
+  triangles: readonly Triangle[] | null | undefined,
+): Point2 | null {
   if (!bary || !meshXY || !triangles) return null;
   const tri = triangles[bary.tri];
   if (!tri) return null;
@@ -781,7 +953,12 @@ export function baryToPoint(bary, meshXY, triangles) {
   ];
 }
 
-export function meshFlowField(srcXY, dstXY, triangles, size) {
+export function meshFlowField(
+  srcXY: readonly Point2[],
+  dstXY: readonly Point2[],
+  triangles: readonly Triangle[],
+  size: number,
+) {
   // U = dst - src 在 dst 坐标上插值
   const u = new Float32Array(size * size);
   const v = new Float32Array(size * size);
@@ -791,9 +968,9 @@ export function meshFlowField(srcXY, dstXY, triangles, size) {
     const i0 = tri[0], i1 = tri[1], i2 = tri[2];
     if (Math.max(i0, i1, i2) >= n) continue;
     const d0 = dstXY[i0], d1 = dstXY[i1], d2 = dstXY[i2];
-    const f0 = [dstXY[i0][0] - srcXY[i0][0], dstXY[i0][1] - srcXY[i0][1]];
-    const f1 = [dstXY[i1][0] - srcXY[i1][0], dstXY[i1][1] - srcXY[i1][1]];
-    const f2 = [dstXY[i2][0] - srcXY[i2][0], dstXY[i2][1] - srcXY[i2][1]];
+    const f0: Point2 = [dstXY[i0][0] - srcXY[i0][0], dstXY[i0][1] - srcXY[i0][1]];
+    const f1: Point2 = [dstXY[i1][0] - srcXY[i1][0], dstXY[i1][1] - srcXY[i1][1]];
+    const f2: Point2 = [dstXY[i2][0] - srcXY[i2][0], dstXY[i2][1] - srcXY[i2][1]];
     const minX = Math.max(0, Math.floor(Math.min(d0[0], d1[0], d2[0])));
     const maxX = Math.min(size - 1, Math.ceil(Math.max(d0[0], d1[0], d2[0])));
     const minY = Math.max(0, Math.floor(Math.min(d0[1], d1[1], d2[1])));
@@ -833,7 +1010,12 @@ export function meshFlowField(srcXY, dstXY, triangles, size) {
  * 由中性网格到当前网格的三角形 Jacobian 计算粗尺度形变标量。
  * 该分支不输出 RSTL 方向，只用于支持或否决纹理证据。
  */
-export function meshDeformationSupport(refXY, currentXY, triangles, size = SIZE) {
+export function meshDeformationSupport(
+  refXY: readonly Point2[] | null | undefined,
+  currentXY: readonly Point2[] | null | undefined,
+  triangles: readonly Triangle[] | null | undefined,
+  size = SIZE,
+) {
   const compression = new Float32Array(size * size);
   const stretch = new Float32Array(size * size);
   const shear = new Float32Array(size * size);
@@ -841,11 +1023,13 @@ export function meshDeformationSupport(refXY, currentXY, triangles, size = SIZE)
   const weight = new Float32Array(size * size);
   const n = Math.min(refXY?.length || 0, currentXY?.length || 0, 468);
   if (n < 3) return { compression, stretch, shear, support };
+  const reference = refXY!;
+  const current = currentXY!;
   for (const tri of triangles || []) {
     const [i0, i1, i2] = tri;
     if (Math.max(i0, i1, i2) >= n) continue;
-    const r0 = refXY[i0], r1 = refXY[i1], r2 = refXY[i2];
-    const c0 = currentXY[i0], c1 = currentXY[i1], c2 = currentXY[i2];
+    const r0 = reference[i0], r1 = reference[i1], r2 = reference[i2];
+    const c0 = current[i0], c1 = current[i1], c2 = current[i2];
     if (!r0 || !r1 || !r2 || !c0 || !c1 || !c2) continue;
     const a = r1[0] - r0[0], b = r2[0] - r0[0];
     const c = r1[1] - r0[1], d = r2[1] - r0[1];
@@ -889,7 +1073,13 @@ export function meshDeformationSupport(refXY, currentXY, triangles, size = SIZE)
 }
 
 // ── 结构张量方向 ────────────────────────────────────────────────────────────
-export function textureOrientation(refGray, curGray, w, h, skin) {
+export function textureOrientation(
+  refGray: NumericField,
+  curGray: NumericField,
+  w: number,
+  h: number,
+  skin: NumericField,
+) {
   const refB = gaussianBlurGray(refGray, w, h, 1.5);
   const curB = gaussianBlurGray(curGray, w, h, 1.5);
   const delta = new Float32Array(w * h);
@@ -914,7 +1104,12 @@ export function textureOrientation(refGray, curGray, w, h, skin) {
 }
 
 /** 中性中位图上的静态线结构，不把光流或表情差分当作方向。 */
-export function staticTextureEvidence(neutralGray, w, h, skin) {
+export function staticTextureEvidence(
+  neutralGray: NumericField,
+  w: number,
+  h: number,
+  skin: NumericField | null | undefined,
+): EvidenceField {
   const low = gaussianBlurGray(neutralGray, w, h, 2.2);
   const high = new Float32Array(w * h);
   for (let i = 0; i < high.length; i++) high[i] = neutralGray[i] - low[i];
@@ -954,7 +1149,13 @@ export function staticTextureEvidence(neutralGray, w, h, skin) {
  * structure rather than a transient highlight, compression edge or broad
  * shadow. Frames are already warped to the frozen neutral mesh by the caller.
  */
-export function stableStaticTextureEvidence(neutralGray, frames, w, h, skin) {
+export function stableStaticTextureEvidence(
+  neutralGray: NumericField,
+  frames: readonly NumericField[],
+  w: number,
+  h: number,
+  skin: NumericField | null | undefined,
+) {
   const base = staticTextureEvidence(neutralGray, w, h, skin);
   const n = w * h;
   const confidence = new Float32Array(n);
@@ -984,7 +1185,7 @@ export function stableStaticTextureEvidence(neutralGray, frames, w, h, skin) {
     };
   }
 
-  const statsOf = (frame) => {
+  const statsOf = (frame: NumericField) => {
     let sum = 0, sum2 = 0, count = 0;
     for (let i = 0; i < n; i += 2) {
       if (skin && !skin[i]) continue;
@@ -1012,7 +1213,7 @@ export function stableStaticTextureEvidence(neutralGray, frames, w, h, skin) {
 
   const fineLow = gaussianBlurGray(neutralGray, w, h, 2.0);
   const broadLow = gaussianBlurGray(neutralGray, w, h, 6.0);
-  const at = (frame, x, y) => frame[
+  const at = (frame: NumericField, x: number, y: number): number => frame[
     Math.max(0, Math.min(h - 1, y)) * w + Math.max(0, Math.min(w - 1, x))
   ];
 
@@ -1071,7 +1272,15 @@ export function stableStaticTextureEvidence(neutralGray, frames, w, h, skin) {
 }
 
 /** 把高分辨率轴向证据保守聚合到几何层。 */
-export function downsampleAxialEvidence(q, conf, ridge, srcW, srcH, dstW, dstH) {
+export function downsampleAxialEvidence(
+  q: NumericField,
+  conf: NumericField,
+  ridge: NumericField,
+  srcW: number,
+  srcH: number,
+  dstW: number,
+  dstH: number,
+) {
   const outQ = new Float32Array(dstW * dstH * 2);
   const outC = new Float32Array(dstW * dstH);
   const outR = new Float32Array(dstW * dstH);
@@ -1097,7 +1306,12 @@ export function downsampleAxialEvidence(q, conf, ridge, srcW, srcH, dstW, dstH) 
 }
 
 /** Seed the shared evidence accumulator with static skin-line evidence. */
-export function initializeStaticEvidence(q0, evidence, skin, state) {
+export function initializeStaticEvidence(
+  q0: Float32Array,
+  evidence: EvidenceField,
+  skin: NumericField,
+  state: EvidenceAccumulator,
+) {
   const n = skin.length;
   const q = q0.slice();
   const confidence = new Float32Array(n);
@@ -1126,14 +1340,24 @@ export function initializeStaticEvidence(q0, evidence, skin, state) {
   state.ridgeField = evidence.ridge.slice();
   return { q, conf: confidence, ridge: state.ridgeField };
 }
-function mul(a, b) {
+function mul(a: NumericField, b: NumericField): Float32Array {
   const o = new Float32Array(a.length);
   for (let i = 0; i < a.length; i++) o[i] = a[i] * b[i];
   return o;
 }
 
 // ── 块匹配运动门控（非完整 DIS；u/v 会进入融合）────────────────────────────
-function blockSSD(refG, curG, w, h, bx, by, dx, dy, block) {
+function blockSSD(
+  refG: NumericField,
+  curG: NumericField,
+  w: number,
+  h: number,
+  bx: number,
+  by: number,
+  dx: number,
+  dy: number,
+  block: number,
+): number {
   let ssd = 0, n = 0;
   for (let y = 0; y < block; y++) {
     for (let x = 0; x < block; x++) {
@@ -1151,7 +1375,15 @@ function blockSSD(refG, curG, w, h, bx, by, dx, dy, block) {
  * 块匹配：返回位移场 u,v 与置信度。
  * 置信度综合：残差、最佳/次佳比、反向一致性；不是完整光流算法。
  */
-export function blockMatchFlow(refG, curG, w, h, skin, block = 8, search = 4) {
+export function blockMatchFlow(
+  refG: NumericField,
+  curG: NumericField,
+  w: number,
+  h: number,
+  skin: NumericField,
+  block = 8,
+  search = 4,
+) {
   const u = new Float32Array(w * h);
   const v = new Float32Array(w * h);
   const conf = new Float32Array(w * h);
@@ -1214,14 +1446,20 @@ export function blockMatchFlow(refG, curG, w, h, skin, block = 8, search = 4) {
 }
 
 // ── 先验栅格化 ──────────────────────────────────────────────────────────────
-export function rasterizePrior(atlasLines, refXY, triangles, size, options = {}) {
-  const mapped = mapAtlas(atlasLines, refXY.map((p) => [p[0], p[1], 0]), triangles, options);
+export function rasterizePrior(
+  atlasLines: AtlasLine[] | unknown,
+  refXY: readonly Point2[],
+  triangles: Triangle[],
+  size: number,
+  options: PipelineOptions = {},
+) {
+  const mapped = mapAtlas(atlasLines, refXY.map((p): Point3 => [p[0], p[1], 0]), triangles, options);
   const qAcc = new Float32Array(size * size * 2);
   const wt = new Float32Array(size * size);
-  const seeds = [];
+  const seeds: CurveSeed[] = [];
   mapped.forEach((ln, id) => {
     if (ln.pts.length < 2) return;
-    const pts = ln.pts.map((p) => [p[0], p[1]]);
+    const pts = ln.pts.map((p): Point2 => [p[0], p[1]]);
     seeds.push({ name: ln.name, id, pts: resample(pts, 2) });
     for (let i = 0; i < pts.length - 1; i++) {
       const dx = pts[i + 1][0] - pts[i][0], dy = pts[i + 1][1] - pts[i][1];
@@ -1274,9 +1512,9 @@ export function rasterizePrior(atlasLines, refXY, triangles, size, options = {})
   return { q0, seeds };
 }
 
-function resample(pts, spacing) {
-  if (pts.length < 2) return pts;
-  const out = [pts[0]];
+function resample(pts: readonly Point2[], spacing: number): Point2[] {
+  if (pts.length < 2) return pts.map((point): Point2 => [...point]);
+  const out: Point2[] = [pts[0]];
   let dist = 0;
   for (let i = 1; i < pts.length; i++) {
     let x0 = pts[i - 1][0], y0 = pts[i - 1][1];
@@ -1295,8 +1533,11 @@ function resample(pts, spacing) {
 }
 
 // ── 融合（先验保持，偏保守以稳住结果）──────────────────────────────────────
-export function evaluateQualityGate(quality = {}, thresholds = QUALITY_THRESHOLDS) {
-  const reasons = [];
+export function evaluateQualityGate(
+  quality: QualityMetrics = {},
+  thresholds: QualityThresholds = QUALITY_THRESHOLDS,
+): QualityGateResult {
+  const reasons: string[] = [];
   if ((quality.tracking ?? 0) < thresholds.tracking) reasons.push("tracking");
   if ((quality.illumination ?? 0) < thresholds.illumination) reasons.push("illumination");
   if ((quality.returnConsistency ?? 0) < thresholds.returnConsistency) reasons.push("return_consistency");
@@ -1304,7 +1545,7 @@ export function evaluateQualityGate(quality = {}, thresholds = QUALITY_THRESHOLD
   return { valid: reasons.length === 0, reasons };
 }
 
-export function dynamicConfidenceScore(parts = {}) {
+export function dynamicConfidenceScore(parts: DynamicConfidenceParts = {}): number {
   const value =
     0.25 * (parts.temporalPersistence ?? 0) +
     0.22 * (parts.repetitionConsistency ?? 0) +
@@ -1316,7 +1557,7 @@ export function dynamicConfidenceScore(parts = {}) {
 }
 
 /** Action-specific decision for two-cycle directional repeatability. */
-export function decideRepeatability(action, score, previousRetries = 0) {
+export function decideRepeatability(action: ActionName, score: number, previousRetries = 0) {
   const threshold = action === "squint" ? 0.50 : 0.60;
   if (score >= threshold) {
     return { accept: true, retry: false, directionValidated: true, threshold, mode: "direction_validated" };
@@ -1337,7 +1578,16 @@ export function decideRepeatability(action, score, previousRetries = 0) {
  * candidate already exists. The final direction remains a soft blend of the
  * anatomical atlas and that neutral candidate.
  */
-export function fuseEvidence(q0, qTex, flow, texCoh, texAmp, skin, state, options = {}) {
+export function fuseEvidence(
+  q0: Float32Array,
+  qTex: NumericField,
+  flow: FlowField | NumericField | null | undefined,
+  texCoh: NumericField,
+  texAmp: NumericField,
+  skin: NumericField,
+  state: EvidenceAccumulator,
+  options: PipelineOptions = {},
+) {
   const n = skin.length;
   const size = Math.sqrt(n);
   const gate = options.qualityGate || { valid: true, reasons: [] };
@@ -1355,15 +1605,15 @@ export function fuseEvidence(q0, qTex, flow, texCoh, texAmp, skin, state, option
   const temporalPersistence = Math.max(0, Math.min(1, options.temporalPersistence ?? 0.5));
   const amplitudeQuality = Math.max(0, Math.min(1, options.expressionAmplitudeQuality ?? 0.5));
   const neutralReturnConsistency = Math.max(0, Math.min(1,
-    Number.isFinite(options.returnConsistency) ? options.returnConsistency : 0
+    Number.isFinite(options.returnConsistency) ? (options.returnConsistency ?? 0) : 0
   ));
   const effectiveSampleCount = Math.max(1, Math.min(12, options.effectiveSampleCount ?? 1));
   const sampleMass = Math.sqrt(effectiveSampleCount);
   const ridge = options.ridge;
-  let flowConf = null;
-  if (flow && flow.conf) {
+  let flowConf: NumericField | null = null;
+  if (flow && "conf" in flow && flow.conf) {
     flowConf = flow.conf;
-  } else {
+  } else if (flow && "length" in flow) {
     flowConf = flow;
   }
 
@@ -1415,7 +1665,7 @@ export function fuseEvidence(q0, qTex, flow, texCoh, texAmp, skin, state, option
 
     // Dynamic direction is used only as an agreement test.
     const qObs = [qTex[i * 2], qTex[i * 2 + 1]];
-    const q0i = [q0[i * 2], q0[i * 2 + 1]];
+    const q0i: Point2 = [q0[i * 2], q0[i * 2 + 1]];
     const qStatic = [staticQ[i * 2], staticQ[i * 2 + 1]];
     const anchorQ = (qStatic[0] || qStatic[1]) ? qStatic : q0i;
     if (!(anchorQ[0] || anchorQ[1]) || !(qObs[0] || qObs[1])) continue;
@@ -1445,7 +1695,7 @@ export function fuseEvidence(q0, qTex, flow, texCoh, texAmp, skin, state, option
     const staticBase = 1 - Math.exp(-1.20 * staticC);
     conf[i] = Math.max(0, Math.min(1, staticBase * (0.78 + 0.42 * dynamicV)));
     const qv = normalizeQ([staticQ[i * 2], staticQ[i * 2 + 1]]);
-    const q0i = [q0[i * 2], q0[i * 2 + 1]];
+    const q0i: Point2 = [q0[i * 2], q0[i * 2 + 1]];
     const alpha = Math.max(0, Math.min(0.82,
       conf[i] * (0.28 + 0.72 * staticC) * (0.82 + 0.18 * dynamicV)
     ));
@@ -1495,9 +1745,15 @@ export function fuseEvidence(q0, qTex, flow, texCoh, texAmp, skin, state, option
 }
 
 /** 选差异最大且不太糊的表情帧，避免 onset/噪声帧污染 */
-export function pickBestFrames(neutralGray, frames, skin, k = 3, options = {}) {
+export function pickBestFrames(
+  neutralGray: NumericField | null | undefined,
+  frames: readonly CaptureFrame[],
+  skin: NumericField | null | undefined,
+  k = 3,
+  options: PipelineOptions = {},
+): ScoredCapture[] {
   if (!frames?.length || !neutralGray || !skin) return [];
-  const scored = [];
+  const scored: ScoredCapture[] = [];
   for (let idx = 0; idx < frames.length; idx++) {
     const fr = frames[idx];
     if (!fr?.image?.data || !fr.image.width) continue;
@@ -1515,7 +1771,7 @@ export function pickBestFrames(neutralGray, frames, skin, k = 3, options = {}) {
     const registrationResidualPx = Number(fr.registrationResidualPx);
     scored.push({ fr, idx, score: imageDifferenceScore, imageDifferenceScore,
       registrationResidualPx: Number.isFinite(registrationResidualPx) ? registrationResidualPx : null,
-      gray: g });
+      gray: g, selectionScore: 0 });
   }
   if (!scored.length) return [];
   const maxDifference = Math.max(...scored.map((item) => item.imageDifferenceScore), 1);
@@ -1535,14 +1791,14 @@ export function pickBestFrames(neutralGray, frames, skin, k = 3, options = {}) {
   return pool.slice(0, Math.min(k, pool.length));
 }
 
-function resamplePoly(pts, n) {
+function resamplePoly(pts: readonly Point2[], n: number): Point2[] {
   if (!pts || pts.length < 2 || n < 2) {
-    if (pts?.length === 1 && pts[0]) return Array.from({ length: Math.max(2, n) }, () => [pts[0][0], pts[0][1]]);
+    if (pts?.length === 1 && pts[0]) return Array.from({ length: Math.max(2, n) }, (): Point2 => [pts[0][0], pts[0][1]]);
     return [];
   }
   const dens = resample(pts, 1.0);
   const src = dens.length >= 2 ? dens : pts;
-  const out = [];
+  const out: Point2[] = [];
   for (let i = 0; i < n; i++) {
     const t = i / (n - 1);
     const f = t * (src.length - 1);
@@ -1553,16 +1809,16 @@ function resamplePoly(pts, n) {
     if (!p0 || !p1) continue;
     out.push([p0[0] * (1 - a) + p1[0] * a, p0[1] * (1 - a) + p1[1] * a]);
   }
-  return out.length >= 2 ? out : pts.map((p) => [p[0], p[1]]);
+  return out.length >= 2 ? out : pts.map((p): Point2 => [p[0], p[1]]);
 }
 
-function smoothPolyline(pts, passes = 2) {
-  if (!pts || pts.length < 3) return pts || [];
-  let cur = pts.filter((p) => p && Number.isFinite(p[0]) && Number.isFinite(p[1]))
-    .map((p) => [p[0], p[1]]);
+function smoothPolyline(pts: readonly Point2[], passes = 2): Point2[] {
+  if (pts.length < 3) return pts.map((point): Point2 => [...point]);
+  let cur: Point2[] = pts.filter((p) => p && Number.isFinite(p[0]) && Number.isFinite(p[1]))
+    .map((p): Point2 => [p[0], p[1]]);
   if (cur.length < 3) return cur;
   for (let p = 0; p < passes; p++) {
-    const nxt = [cur[0]];
+    const nxt: Point2[] = [cur[0]];
     for (let i = 1; i < cur.length - 1; i++) {
       nxt.push([
         (cur[i - 1][0] + cur[i][0] * 2 + cur[i + 1][0]) / 4,
@@ -1579,7 +1835,11 @@ function smoothPolyline(pts, passes = 2) {
  * Compact, image-free diagnostics for a scalar evidence field.
  * `weights` may be a binary mask or an action-region weight map.
  */
-export function summarizeWeightedField(field, weights = null, thresholds = [0.25, 0.5, 0.75]) {
+export function summarizeWeightedField(
+  field: NumericField | null | undefined,
+  weights: NumericField | null = null,
+  thresholds: readonly number[] = [0.25, 0.5, 0.75],
+) {
   if (!field?.length) return { count: 0, mean: 0, min: 0, p50: 0, p90: 0, max: 0, ratios: {} };
   const bins = new Float64Array(101);
   const ratios = Object.fromEntries(thresholds.map((threshold) => [String(threshold), 0]));
@@ -1597,7 +1857,7 @@ export function summarizeWeightedField(field, weights = null, thresholds = [0.25
     for (const threshold of thresholds) if (value >= threshold) ratios[String(threshold)] += weight;
   }
   if (!(weightSum > 0)) return { count: 0, mean: 0, min: 0, p50: 0, p90: 0, max: 0, ratios: {} };
-  const quantile = (target) => {
+  const quantile = (target: number): number => {
     let acc = 0;
     for (let i = 0; i < bins.length; i++) {
       acc += bins[i];
@@ -1618,9 +1878,9 @@ export function summarizeWeightedField(field, weights = null, thresholds = [0.25
 }
 
 /** Summarize how far directly-optimized curves moved from their matched priors. */
-export function summarizeCurveDisplacements(curves = [], movementEps = 0.05) {
+export function summarizeCurveDisplacements(curves: readonly RefinedCurve[] = [], movementEps = 0.05) {
   let pointCount = 0, movedPoints = 0, sum = 0, max = 0;
-  const perLine = [];
+  const perLine: Array<Record<string, string | number | null>> = [];
   for (const curve of curves || []) {
     const prior = curve?.priorPts || curve?.pts || [];
     const final = curve?.pts || [];
@@ -1664,7 +1924,14 @@ export const REFINE_CONF = 0.22;
  * 逐点分类：refined（有证据）/ prior（无证据回退）/ occluded（眼口/毛发禁区或非皮肤）。
  * evidenceOk=false 时，本线整体属先验回退，除遮挡点外全部 prior。
  */
-function classifyPts(pts, fieldC, skin, forbidden, size, evidenceOk) {
+function classifyPts(
+  pts: readonly Point2[],
+  fieldC: NumericField | null | undefined,
+  skin: NumericField,
+  forbidden: NumericField,
+  size: number,
+  evidenceOk: boolean,
+): string[] {
   return pts.map((p) => {
     if (!p) return "prior";
     const ix = Math.max(0, Math.min(size - 1, Math.round(p[0])));
@@ -1677,7 +1944,7 @@ function classifyPts(pts, fieldC, skin, forbidden, size, evidenceOk) {
 }
 
 /** 单点混合系数：conf<REFINE_CONF → 0（严格保留先验）；否则 smoothstep(0..1)。 */
-export function pointAlpha(conf) {
+export function pointAlpha(conf: number): number {
   if (!(conf >= REFINE_CONF)) return 0;
   const t = Math.min(1, (conf - REFINE_CONF) / (0.72 - REFINE_CONF));
   const smooth = t * t * (3 - 2 * t);
@@ -1695,8 +1962,18 @@ export function pointAlpha(conf) {
 //   · 低置信 / 眼口毛发遮挡 / 追踪失败 → alpha=0，该点严格保留原始 atlas 位置。
 //   · 132 条曲线始终连续存在；遮挡表示“无个体观测”，不删点、不断线。
 //   · kinds 仅作置信度/遮挡元数据（refined/prior/occluded），不决定是否绘制。
-export function optimizePriorCurves(fieldQ, fieldC, ridge, q0, seeds, skin, forbidden, size, options = {}) {
-  const out = [];
+export function optimizePriorCurves(
+  fieldQ: NumericField | null | undefined,
+  fieldC: NumericField | null | undefined,
+  ridge: NumericField | null | undefined,
+  q0: NumericField,
+  seeds: readonly CurveSeed[],
+  skin: NumericField,
+  forbidden: NumericField,
+  size: number,
+  options: PipelineOptions = {},
+): RefinedCurve[] {
+  const out: RefinedCurve[] = [];
   const allSeedPoints = seeds.flatMap((seed) => seed?.pts || []);
   const xs = allSeedPoints.map((p) => p[0]).filter(Number.isFinite);
   const faceWidth = xs.length ? Math.max(1, Math.max(...xs) - Math.min(...xs)) : size;
@@ -1705,7 +1982,7 @@ export function optimizePriorCurves(fieldQ, fieldC, ridge, q0, seeds, skin, forb
   const sampled = seeds.map((seed) => {
     const src = seed?.pts || [];
     const count = Math.max(12, Math.min(64, src.length || 12));
-    return src.length >= 2 ? resamplePoly(src, count) : src.map((p) => [p[0], p[1]]);
+    return src.length >= 2 ? resamplePoly(src, count) : src.map((p): Point2 => [p[0], p[1]]);
   });
   for (let ci = 0; ci < sampled.length; ci++) {
     for (const p of sampled[ci]) {
@@ -1714,19 +1991,19 @@ export function optimizePriorCurves(fieldQ, fieldC, ridge, q0, seeds, skin, forb
       owner[y * size + x] = ci;
     }
   }
-  const scalarAt = (arr, x, y) => {
+  const scalarAt = (arr: NumericField | null | undefined, x: number, y: number): number => {
     if (!arr) return 0;
     const ix = Math.max(0, Math.min(size - 1, Math.round(x)));
     const iy = Math.max(0, Math.min(size - 1, Math.round(y)));
     return arr[iy * size + ix] || 0;
   };
-  const isBlocked = (p) => {
+  const isBlocked = (p: Point2): boolean => {
     const x = Math.max(0, Math.min(size - 1, Math.round(p[0])));
     const y = Math.max(0, Math.min(size - 1, Math.round(p[1])));
     const i = y * size + x;
     return !skin[i] || !!forbidden[i];
   };
-  const localSpacingAt = (p, curveIndex) => {
+  const localSpacingAt = (p: Point2, curveIndex: number): number => {
     const cx = Math.round(p[0]), cy = Math.round(p[1]);
     const searchRadius = Math.min(Math.ceil(size / 3), 64);
     for (let r = 2; r <= searchRadius; r++) {
@@ -1740,8 +2017,8 @@ export function optimizePriorCurves(fieldQ, fieldC, ridge, q0, seeds, skin, forb
     }
     return Math.max(4, faceWidth * 0.12);
   };
-  const anatomicalOffsetBounds = (p, nx, ny) => {
-    const scan = (sign) => {
+  const anatomicalOffsetBounds = (p: Point2, nx: number, ny: number) => {
+    const scan = (sign: number): number => {
       let last = 0;
       for (let distance = 0.5; distance <= size * Math.SQRT2; distance += 0.5) {
         const x = p[0] + sign * nx * distance;
@@ -1754,18 +2031,18 @@ export function optimizePriorCurves(fieldQ, fieldC, ridge, q0, seeds, skin, forb
     return { min: -scan(-1), max: scan(1) };
   };
 
-  const signedDirectionDelta = (observedQ, priorQ) => {
+  const signedDirectionDelta = (observedQ: NumericField, priorQ: NumericField): number => {
     let delta = qToAngle(observedQ) - qToAngle(priorQ);
     while (delta > Math.PI / 2) delta -= Math.PI;
     while (delta <= -Math.PI / 2) delta += Math.PI;
     return delta;
   };
-  const tangentAt = (pts, index) => {
+  const tangentAt = (pts: readonly Point2[], index: number): Point2 => {
     const p0 = pts[Math.max(0, index - 1)], p1 = pts[Math.min(pts.length - 1, index + 1)];
     const length = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) || 1;
     return [(p1[0] - p0[0]) / length, (p1[1] - p0[1]) / length];
   };
-  const turnAngle = (pts, index) => {
+  const turnAngle = (pts: readonly Point2[], index: number): number => {
     if (index <= 0 || index >= pts.length - 1) return 0;
     const a = pts[index - 1], b = pts[index], c = pts[index + 1];
     const ax = b[0] - a[0], ay = b[1] - a[1];
@@ -1775,12 +2052,12 @@ export function optimizePriorCurves(fieldQ, fieldC, ridge, q0, seeds, skin, forb
 
   for (let ci = 0; ci < seeds.length; ci++) {
     const seed = seeds[ci] || {};
-    const priorPts = sampled[ci].map((p) => [p[0], p[1]]);
+    const priorPts: Point2[] = sampled[ci].map((p): Point2 => [p[0], p[1]]);
     if (priorPts.length < 2) {
       out.push({
         name: seed.name,
         pts: priorPts,
-        priorPts: priorPts.map((p) => [...p]),
+        priorPts: priorPts.map((p): Point2 => [...p]),
         kinds: priorPts.map(() => "prior"),
         audit: priorPts.map(() => ({ kind: "prior", reason: "insufficient_prior_points", final_offset_px: 0 })),
         optimizedOk: false,
@@ -1801,7 +2078,7 @@ export function optimizePriorCurves(fieldQ, fieldC, ridge, q0, seeds, skin, forb
     const directionProfiles = new Float32Array(priorPts.length);
     const evidenceStrength = new Float32Array(priorPts.length);
     const directSupport = new Uint8Array(priorPts.length);
-    const audit = new Array(priorPts.length);
+    const audit: Array<Record<string, unknown>> = new Array(priorPts.length);
     let confSum = 0, supportedCount = 0;
     for (let i = 0; i < priorPts.length; i++) {
       const p = priorPts[i];
@@ -1948,11 +2225,11 @@ export function optimizePriorCurves(fieldQ, fieldC, ridge, q0, seeds, skin, forb
         offsets[i] = next;
       }
     }
-    const buildPoints = () => priorPts.map((p, i) => {
+    const buildPoints = (): Point2[] => priorPts.map((p, i): Point2 => {
       if (!directSupport[i] || Math.abs(offsets[i]) < 0.025) return [p[0], p[1]];
       const [tx, ty] = tangentAt(priorPts, i);
       let offset = offsets[i];
-      let candidate = [p[0] - ty * offset, p[1] + tx * offset];
+      let candidate: Point2 = [p[0] - ty * offset, p[1] + tx * offset];
       // Skin/occlusion validity is a hard anatomical constraint. If raster
       // rounding puts a solved point across the boundary, retract only that
       // point along its normal instead of applying an arbitrary global cap.
@@ -1965,7 +2242,7 @@ export function optimizePriorCurves(fieldQ, fieldC, ridge, q0, seeds, skin, forb
       return Math.abs(offset) < 0.025 ? [p[0], p[1]] : candidate;
     });
     const meanConf = confSum / Math.max(1, supportedCount);
-    const measureShape = (candidate) => {
+    const measureShape = (candidate: readonly Point2[]) => {
       let maxDirectionChange = 0, maxCurvatureChange = 0;
       for (let i = 1; i < candidate.length - 1; i++) {
         const priorTangent = tangentAt(priorPts, i), nextTangent = tangentAt(candidate, i);
@@ -2011,8 +2288,9 @@ export function optimizePriorCurves(fieldQ, fieldC, ridge, q0, seeds, skin, forb
 
   // Global safety guard: reject only newly introduced self/cross intersections.
   // Existing atlas junctions are preserved and are not treated as new faults.
-  const orient = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
-  const segmentCrosses = (a, b, c, d) => {
+  const orient = (a: Point2, b: Point2, c: Point2): number =>
+    (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  const segmentCrosses = (a: Point2, b: Point2, c: Point2, d: Point2): boolean => {
     const minAx = Math.min(a[0], b[0]), maxAx = Math.max(a[0], b[0]);
     const minAy = Math.min(a[1], b[1]), maxAy = Math.max(a[1], b[1]);
     const minCx = Math.min(c[0], d[0]), maxCx = Math.max(c[0], d[0]);
@@ -2021,8 +2299,8 @@ export function optimizePriorCurves(fieldQ, fieldC, ridge, q0, seeds, skin, forb
     const o1 = orient(a, b, c), o2 = orient(a, b, d), o3 = orient(c, d, a), o4 = orient(c, d, b);
     return o1 * o2 < -1e-6 && o3 * o4 < -1e-6;
   };
-  const polylinesCross = (a, b) => {
-    const bounds = (pts) => {
+  const polylinesCross = (a: readonly Point2[], b: readonly Point2[]): boolean => {
+    const bounds = (pts: readonly Point2[]) => {
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const p of pts) {
         minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]);
@@ -2039,7 +2317,7 @@ export function optimizePriorCurves(fieldQ, fieldC, ridge, q0, seeds, skin, forb
     }
     return false;
   };
-  const selfCrosses = (pts) => {
+  const selfCrosses = (pts: readonly Point2[]): boolean => {
     for (let i = 0; i < pts.length - 1; i++) {
       for (let j = i + 2; j < pts.length - 1; j++) {
         if (segmentCrosses(pts[i], pts[i + 1], pts[j], pts[j + 1])) return true;
@@ -2047,8 +2325,8 @@ export function optimizePriorCurves(fieldQ, fieldC, ridge, q0, seeds, skin, forb
     }
     return false;
   };
-  const rollback = (curve, reason) => {
-    curve.pts = curve.priorPts.map((p) => [...p]);
+  const rollback = (curve: RefinedCurve, reason: string): void => {
+    curve.pts = curve.priorPts.map((p): Point2 => [...p]);
     curve.kinds = curve.kinds.map((kind) => kind === "occluded" ? "occluded" : "prior");
     curve.optimizedOk = false;
     curve.refinedFrac = 0;
@@ -2079,14 +2357,14 @@ export function optimizePriorCurves(fieldQ, fieldC, ridge, q0, seeds, skin, forb
   return out;
 }
 
-function sampleQ(q, x, y, size) {
+function sampleQ(q: NumericField, x: number, y: number, size: number): Point2 {
   const ix = Math.max(0, Math.min(size - 1, Math.round(x)));
   const iy = Math.max(0, Math.min(size - 1, Math.round(y)));
   const i = iy * size + ix;
   return [q[i * 2], q[i * 2 + 1]];
 }
 // ── 动作状态机（个人相对基线）──────────────────────────────────────────────
-export function actionScore(bs, action) {
+export function actionScore(bs: BlendshapeDict | null | undefined, action: ActionName): number {
   const keys = ACTION_BLEND[action] || [];
   if (!keys.length || !bs) return 0;
   let m = 0;
@@ -2095,15 +2373,19 @@ export function actionScore(bs, action) {
 }
 
 /** 相对个人静息的动作分：max(0, raw - baseline) */
-export function relativeScore(bs, action, baseline) {
+export function relativeScore(
+  bs: BlendshapeDict | null | undefined,
+  action: ActionName,
+  baseline: Partial<Record<ActionName, number>> | null | undefined,
+): number {
   const raw = actionScore(bs, action);
   const base = baseline?.[action] ?? 0;
   return Math.max(0, raw - base);
 }
 
 /** 从多帧 blendshape 估计个人静息基线 */
-export function estimateBaseline(bsList) {
-  const out = {};
+export function estimateBaseline(bsList: readonly BlendshapeDict[]): Record<ActionName, number> {
+  const out = {} as Record<ActionName, number>;
   if (!bsList?.length) {
     for (const a of ACTION_ORDER) out[a] = 0;
     return out;
@@ -2119,7 +2401,10 @@ export function estimateBaseline(bsList) {
  * 个人阈值：在静息基线上再抬一点即可。
  * 眉眼间距大的人静息 brow 通道常偏高，绝对阈值会一直嫌「不够」。
  */
-export function personalThreshold(action, baseline) {
+export function personalThreshold(
+  action: ActionName,
+  baseline: Partial<Record<ActionName, number>> | null | undefined,
+): number {
   const abs = THRESHOLDS[action] ?? 0.18;
   const base = baseline?.[action] ?? 0;
   // 相对增量：约 55% 绝对阈值，且至少 0.06；基线很高时略放宽
@@ -2129,8 +2414,12 @@ export function personalThreshold(action, baseline) {
   return rel;
 }
 
-export function dominantExpression(bs, baseline = null) {
-  let best = 0, name = null;
+export function dominantExpression(
+  bs: BlendshapeDict | null | undefined,
+  baseline: Partial<Record<ActionName, number>> | null = null,
+): { score: number; action: ActionName | null } {
+  let best = 0;
+  let name: ActionName | null = null;
   for (const a of ACTION_ORDER) {
     const s = baseline ? relativeScore(bs, a, baseline) : actionScore(bs, a);
     if (s > best) { best = s; name = a; }
@@ -2138,7 +2427,10 @@ export function dominantExpression(bs, baseline = null) {
   return { score: best, action: name };
 }
 
-export function isNeutral(bs, baseline = null) {
+export function isNeutral(
+  bs: BlendshapeDict | null | undefined,
+  baseline: Partial<Record<ActionName, number>> | null = null,
+): boolean {
   if (baseline) {
     // 相对个人静息：各通道增量都很小才算中性
     return ACTION_ORDER.every((a) => relativeScore(bs, a, baseline) < personalThreshold(a, baseline) * 0.7);
@@ -2146,7 +2438,7 @@ export function isNeutral(bs, baseline = null) {
   return dominantExpression(bs).score < NEUTRAL_MAX;
 }
 
-function medianValue(values) {
+function medianValue(values: readonly number[]): number {
   if (!values.length) return Infinity;
   const sorted = values.slice().sort((a, b) => a - b);
   const mid = sorted.length >> 1;
@@ -2158,10 +2450,14 @@ function medianValue(values) {
  * mesh to the frozen neutral mesh. Camera translation/scale/roll are therefore
  * excluded before the return-to-neutral decision.
  */
-export function actionMeshResidual(referenceXY, alignedXY, action) {
+export function actionMeshResidual(
+  referenceXY: readonly Point2[] | null | undefined,
+  alignedXY: readonly Point2[] | null | undefined,
+  action: ActionName,
+): number {
   const indices = ACTION_RETURN_LANDMARKS[action] || [];
   if (!referenceXY || !alignedXY || !indices.length) return Infinity;
-  const distances = [];
+  const distances: number[] = [];
   for (const index of indices) {
     const a = referenceXY[index], b = alignedXY[index];
     if (!a || !b) continue;
@@ -2172,7 +2468,7 @@ export function actionMeshResidual(referenceXY, alignedXY, action) {
 }
 
 /** Neutral jitter-derived threshold in canonical pixels, with safe bounds. */
-export function estimateReturnMeshThreshold(samples) {
+export function estimateReturnMeshThreshold(samples: readonly number[]): number {
   const finite = (samples || []).filter(Number.isFinite);
   if (!finite.length) return 2.4;
   const med = medianValue(finite);
@@ -2184,13 +2480,18 @@ export function estimateReturnMeshThreshold(samples) {
  * Robust multi-frame return gate. The performed action must return close to
  * baseline, while a minority of noisy blendshape channels may be ignored.
  */
-export function robustReturnNeutral(bsHistory, action, baseline, windowSize = 7) {
+export function robustReturnNeutral(
+  bsHistory: readonly BlendshapeDict[],
+  action: ActionName,
+  baseline: Partial<Record<ActionName, number>>,
+  windowSize = 7,
+) {
   const frames = (bsHistory || []).slice(-windowSize);
   if (frames.length < Math.min(5, windowSize)) {
     return { stable: false, actionRatio: Infinity, globalRatio: Infinity, samples: frames.length };
   }
-  const actionRatios = [];
-  const globalRatios = [];
+  const actionRatios: number[] = [];
+  const globalRatios: number[] = [];
   for (const bs of frames) {
     actionRatios.push(relativeScore(bs, action, baseline) / Math.max(0.01, personalThreshold(action, baseline)));
     const ratios = ACTION_ORDER.map((name) =>
@@ -2269,8 +2570,10 @@ export function createSessionState(size = SIZE) {
   };
 }
 
-export function blendDict(categories) {
-  const out = {};
+export function blendDict(
+  categories: readonly { categoryName: string; score: number }[] | null | undefined,
+): BlendshapeDict {
+  const out: BlendshapeDict = {};
   if (!categories) return out;
   for (const c of categories) out[c.categoryName] = c.score;
   return out;
