@@ -25,6 +25,12 @@
   `tools/test_web_architecture.ts` 的**冻结清单**限定范围（owner #95，含退出条件），新增文件或清单腐烂都会让测试失败；
   其相对 import 也在该测试里解析。设计说明见 [PERSONALIZED_RSTL.md](../tracks/PERSONALIZED_RSTL.md)。
 
+- **视觉主题契约**：公开主路径统一使用 `web/clinical-theme.css` 的深色临床界面与蓝色主操作色
+  （`--clinical-accent: #0f62fe`）。React 入口通过 `web/src/styles.css` 导入同一份 token；`/personalized`、
+  `/current/` 与 `/v6-review` 也必须消费该主题，不能各自重新定义品牌色。绿色只表示成功、在线或皱纹证据，
+  黄色表示等待 / 警告，红色表示危险 / 失败，不能再把语义色当主按钮色。`test_clinical_theme_consistency.ts`
+  锁定跨入口 token、旧绿色残留和关键文字的 WCAG AA 对比度。
+
 > 关键不变式：`web/src/services/geometry*.ts` 的映射/遮挡/平滑必须与 Python 端**逐点一致**，由
 > `tools/test_web_mapping.ts` 持续对拍保证（误差 < 1e-2 px、可见性 0 不一致）。
 
