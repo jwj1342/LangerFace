@@ -37,6 +37,8 @@ assert.match(v6Styles, /--success:\s*var\(--clinical-success\)/);
 assert.match(v6Styles, /\.button-primary \{ color: #f4f7fb; background: var\(--accent\)/);
 assert.doesNotMatch(v6Styles, /--green:|#38e3a1/,
   "V6 review uses blue for actions and keeps green only as semantic/scientific data color");
+assert.match(dashboard, /<ReactPage className="dark-workbench-page dashboard-workbench-page">/,
+  "the dashboard shell must use the same dark theme as the tool workbenches");
 assert.match(dashboard, /text-blue-300/);
 assert.doesNotMatch(dashboard, /text-emerald-300/);
 
