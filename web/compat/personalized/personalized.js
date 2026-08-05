@@ -126,8 +126,6 @@ const els = {
   wrinkleEvidenceCanvas: $("wrinkleEvidenceCanvas"), wrinkleEvidenceDownload: $("wrinkleEvidenceDownloadBtn"),
   localPipelineStatus: $("localPipelineStatus"), localPipelineProgress: $("localPipelineProgress"),
   usePersonalized: $("usePersonalizedBtn"),
-  liveWorkspace: $("liveWorkspace"), liveWorkspaceFrame: $("liveWorkspaceFrame"),
-  closeLiveWorkspace: $("closeLiveWorkspaceBtn"),
   video: $("video"), view: $("view"), boot: $("boot"),
   countdown: $("countdown"), countNum: $("countNum"), countTip: $("countTip"),
   coach: $("coach"), coachTitle: $("coachTitle"), coachSub: $("coachSub"), coachBar: $("coachBar"),
@@ -141,7 +139,7 @@ let t0 = performance.now(), frames = 0;
 let lastEvidenceT = 0, processing = false;
 let retainedMediaUrls = [];
 let wrinkleYolo = null;
-/** Survives sess=null so the completed V6 atlas can enter the inline live workspace. */
+/** Survives sess=null so the completed V6 atlas can enter incision planning. */
 let personalizedAtlasStaged = false;
 let personalizedActiveAtlas = null;
 
@@ -1565,6 +1563,13 @@ function buildActiveAtlas(curves, diagnostics = {}) {
       region: curve.region || source?.region || "",
       disableRuntimeExpansion: true,
       points,
+      personalization: {
+        source: "personalized_rstl_yolo_v6",
+        normal_offsets_px: Array.from(curve.normalOffsets || curve.normalOffsetsPx || curve.normal_offsets_px || []),
+        affected_intervals: curve.affectedIntervals || curve.affected_intervals || [],
+        direct_match_count: curve.directMatchCount || curve.direct_match_count || 0,
+        mean_match_weight: curve.meanMatchWeight || curve.mean_match_weight || 0,
+      },
     };
   });
   return {
@@ -1574,6 +1579,14 @@ function buildActiveAtlas(curves, diagnostics = {}) {
     topologyVersion: ACTIVE_TOPOLOGY_VERSION,
     provenance: "local-yolo-conf007-softgate008-rstl-v6-p90-010",
     validated: false,
+    clinical_status: "research_visualization_requires_clinician_review",
+    personalization: {
+      source: "personalized_rstl_yolo_v6",
+      algorithm: diagnostics?.algorithm || "interval-guarded-continuous-polyline-rstl-refinement-6.0",
+      yolo_confidence: YOLO_CONFIDENCE,
+      raw_images_embedded: false,
+      requires_clinician_review: true,
+    },
     diagnostics,
     lines,
   };
@@ -1711,12 +1724,12 @@ async function runLocalYoloV6(session) {
   renderFinalExports();
   setLocalPipelineStatus(
     staged
-      ? "完成：V6 个性化 Atlas 已暂存，可进入实时 2D RSTL。"
-      : "V6 已完成，但浏览器无法暂存实时 Atlas；仍可下载结果。",
+      ? "完成：V6 个性化 Atlas 已暂存，可进入切口设计。"
+      : "V6 已完成，但浏览器无法暂存切口规划 Atlas；仍可下载结果。",
     100,
     staged ? "success" : "warning",
   );
-  setMsg(staged ? "个性化微调完成，可查看完整对比或进入实时 2D RSTL。" : "个性化微调完成，请下载结果。", !staged);
+  setMsg(staged ? "个性化微调完成，可查看完整对比或进入切口设计。" : "个性化微调完成，请下载结果。", !staged);
   updateGuide();
   return session.v6Result;
 }
@@ -2876,15 +2889,15 @@ if (els.wrinkleEvidenceDownload) els.wrinkleEvidenceDownload.addEventListener("c
   link.download = `wrinkle_v6_evidence_${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
   link.click();
 });
-async function openLiveWorkspace() {
+async function openIncisionWorkspace() {
   const activeAtlas = personalizedActiveAtlas || sess?.v6Result?.activeAtlas || null;
-  if (!activeAtlas || !els.liveWorkspace || !els.liveWorkspaceFrame) return;
+  if (!activeAtlas) return;
   if (!dataSource.stagePreviewAtlas(activeAtlas)) {
-    setMsg("浏览器无法暂存个性化 Atlas，实时 2D 工作区未打开；仍可下载当前结果。", true);
+    setMsg("浏览器无法暂存个性化 Atlas，切口工作台未打开；仍可下载当前结果。", true);
     return;
   }
   personalizedAtlasStaged = true;
-  await stopClipRecording("enter_live_2d_workspace");
+  await stopClipRecording("enter_incision_workspace");
   looping = false;
   setLive(false);
   if (stream) {
@@ -2892,21 +2905,10 @@ async function openLiveWorkspace() {
     stream = null;
     els.video.srcObject = null;
   }
-  els.liveWorkspace.hidden = false;
-  els.liveWorkspaceFrame.src = `/app/live?embedded=personalized&v=${Date.now()}`;
+  location.assign(`/app/incision?source=personalized&v=${Date.now()}`);
 }
 
-function closeLiveWorkspace() {
-  if (!els.liveWorkspace || !els.liveWorkspaceFrame) return;
-  // Unloading the child page also releases any camera it opened. The atlas is
-  // retained here and will be staged again if the workspace is reopened.
-  els.liveWorkspaceFrame.src = "about:blank";
-  els.liveWorkspace.hidden = true;
-  setMsg("个性化 RSTL 已保留；可继续查看 Mask、对比图，或再次进入实时 2D 工作区。");
-}
-
-if (els.usePersonalized) els.usePersonalized.addEventListener("click", () => { void openLiveWorkspace(); });
-if (els.closeLiveWorkspace) els.closeLiveWorkspace.addEventListener("click", closeLiveWorkspace);
+if (els.usePersonalized) els.usePersonalized.addEventListener("click", () => { void openIncisionWorkspace(); });
 
 updateGuide();
 setMeters(0, 0);

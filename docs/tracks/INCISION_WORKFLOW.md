@@ -10,6 +10,9 @@
 - `web/src/workers/workflow.worker.ts` 通过 Comlink 在 Web Worker 中执行同一套 workflow。
 - `web/src/services/workflowPlanner.ts` 在 Worker 不可用时回退到主线程执行相同的确定性函数。
 - `web/src/services/incisionRuntime.ts` 负责工作台编排、三维交互、导出和实时叠加衔接；route-scoped DOM 收集、临床展示文案和审阅门控分别由 `incisionDom.ts`、`incisionClinicalCopy.ts` 与 `incisionReviewPolicy.ts` 维护。
+- 工作台固定使用 `mediapipe-468` 面部表面，不加载 FLAME basis，也不把 MediaPipe 图谱转换到 FLAME。
+- `incisionAtlasSource.ts` 优先接收 `/personalized` 暂存的 YOLO/V6 个体化 RSTL；仅在缺失、来源不符或
+  拓扑校验失败时使用内置标准 RSTL，并把降级原因写入 UI、snapshot 和审阅导出。
 - 运行时不读取模型密钥，不请求远程模型，也不把原始照片、视频帧、摄像头画面或纹理发送到外部服务。
 
 工作台把医生需要先看的候选摘要、保护规则和验证边界保持为默认可见；workflow trace、工具门控与候选比较收进默认折叠的技术详情。移动端先展示可定位病灶的三维视图，再进入长表单。
@@ -18,7 +21,7 @@
 
 1. `summarize_tumor_input_quality` 检查肿物输入、单位、来源、作者、深度、切缘和边界。
 2. `classify_region` 计算面部分区、亚单位和敏感游离缘距离。
-3. `query_rstl_direction` 从本地图谱读取局部 RSTL 方向及其置信信息。
+3. `query_rstl_direction` 从个体化 RSTL 图谱读取经 YOLO/V6 有界修正后的局部方向和 provenance；标准 RSTL 只作为显式降级。
 4. `inspect_sensitive_structures` 检查敏感结构和保护性方向例外。
 5. `linear_subcutaneous_incision` 或 `fusiform_cutaneous_incision` 生成主候选。
 6. 对候选复查敏感距离并运行 `evaluate_guardrails`。
@@ -37,6 +40,9 @@
 - `summary` 与 `next_step`：由本地规则生成的固定说明文本。
 
 机器可读契约见 [`assets/incision_workflow_schema.json`](../../assets/incision_workflow_schema.json)。
+
+原始 YOLO mask 或单独导入的皱纹 / 病灶 metrics 不直接参与上述方向查询。进入几何的个体化 RSTL 已经
+过 V6 的 prior 约束、方向一致性、最大位移、皮肤域、禁区与拓扑校验；它仍是研究草案，不能替代医生审阅。
 
 审阅记录与导出容器从 Agentic 字段迁移后分别使用 `incision-review-record/v0.4` 和
 `incision-review-export/v0.4`；React controller snapshot 因移除 provider 状态并把 `agent_*` UI 字段改为

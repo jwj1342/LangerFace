@@ -55,7 +55,7 @@ LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它
 | 配准与几何层 | 已实现 | 2D 重心坐标贴合；3D Beta Umeyama 关键点网格重建与刚性配准；FLAME 关键点拟合实验；离线 HeadSpace 多视角加权 Sim3 配准 | `src/langerface/geometry/`, `src/langerface/registration/`, `src/langerface/flame.py`, `web/src/services/geometry*.ts`, `web/src/services/projection3d.ts`, `tools/reconstruct_3d.py`, `tools/headspace/` |
 | 面部标注 / 图谱层 | 已实现 | 生成、读取、校验和映射 RSTL/Langer 线条；网页 3D 标注只产出待复核草案，临床校验由 Python/评审流程完成 | `src/langerface/lines/`, `web/src/services/annotationModel.ts`, `web/src/services/annotateViewer.ts`, `web/src/services/annotateRuntime.ts`, `tools/annotate_atlas.py`, `tools/digitize_from_diagram.py` |
 | 肿物模拟层 | Stage 2 功能切片（#14） | 表示脸部肿物的位置、大小、深度、安全切缘和与皮肤表面的关系；当前支持手动中心点、椭圆 / 自由轮廓、来源作者和 JSON 导入导出，自动分割与临床复核仍待补 | `web/src/services/incisionCandidateTools.ts`, `web/src/services/tumorInput.ts`, `web/src/services/incisionRuntime.ts`, `web/src/services/incisionReviewPolicy.ts` |
-| 切口设计层 | Stage 2 工程闭环（#11-#22/#83/#85） | 由浏览器本地确定性 workflow 综合张力线方向、肿物约束、安全切缘、敏感结构、医生编辑、审阅导出和 2D 实时叠加，生成候选切口可视化；只做决策辅助，不输出手术指令 | `assets/clinical_rules_face_incision.json`, `assets/incision_workflow_schema.json`, `web/src/services/incision*.ts` |
+| 切口设计层 | Stage 2 工程闭环（#11-#22/#83/#85） | 由浏览器本地确定性 workflow 优先消费 YOLO/V6 个体化 MediaPipe RSTL（标准 RSTL 仅作显式降级），再综合肿物约束、安全切缘、敏感结构、医生编辑、审阅导出和 2D 实时叠加；不依赖 FLAME，只做决策辅助 | `assets/clinical_rules_face_incision.json`, `assets/incision_workflow_schema.json`, `web/src/services/incision*.ts` |
 | 渲染与交互层 | 已实现 / 扩展中 | 2D Canvas 叠加、3D 查看、遮挡、放大窗、录制导出和 UI 控制 | `src/langerface/rendering/`, `web/src/services/liveRuntime.ts`, `web/src/services/render2d.ts`, `web/src/services/three3d.ts` |
 | 实验演示层 | 入口已关闭 / 保留代码 | FLAME 实时孪生（无网页入口）；RSTL 切除 -> 闭合定性软体演示（`/surgery`） | `web/src/services/flameFit.ts`, `web/src/services/mode3d.ts`, `web/src/routes/SurgeryRoute.tsx`, `web/src/services/softBody.ts` |
 
@@ -136,7 +136,7 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 - 🚫 **3D / FLAME 网页入口已关闭**：3D 关键点重建、FLAME 实时孪生和三维资产预览的用户入口已下线（#108 第一阶段）；底层 runtime 仍保留在 `web/src/services/mode3d.ts` / `flameFit.ts`，标注器仍可加载头模资产，离线 FLAME 拟合走 `tools/fit_flame_to_landmarks.py`。PR #122 建议将路线收敛为 2D-first + 3D 离线资产/标注/研究预览，仍待 #40 owner 正式确认。
 - ✍️ **网页 3D 标注**：在浏览器里于标准脸 / 3D 头模表面手绘 RSTL/Langer 候选线，可导入 JSON/OBJ/PLY 头模和 3D Slicer `.mrk.json` 曲线，导出 `validated:false` 的图谱草案（`[tri,u,v]`）或 xyz 折线；临床复核与置 `validated:true` 仍走 Python/评审流程，见 [网页 3D 标注与图谱草案导出](docs/architecture/ARCHITECTURE.md#12-网页-3d-线标注与图谱草案导出)。
 - 🧰 **无状态研究工具入口**：站点根 `/` 是 React 工具入口（`/app` 保留为兼容地址），只负责进入实时 2D、个性化 2D、切口候选和图谱维护等独立工具，不创建、恢复或保存病例。
-- 🧭 **切口 workflow 工作台**：在标准脸上手动放置皮下 / 皮表肿物，支持椭圆 / 自由轮廓和肿物 JSON 导入导出，由浏览器本地确定性工具生成线性或梭形候选切口；默认界面优先显示临床中文摘要、面部分区、保护规则和规则验证边界，并把工具 trace 与候选比较收进技术详情。候选可记录审阅人、确认 / 退回 / 否决状态和备注，导出审阅记录，也可发送到实时页叠加到上传照片、视频或摄像头画面。
+- 🧭 **切口 workflow 工作台**：推荐先从 `/personalized` 生成 YOLO/V6 个体化 RSTL，再进入 `/app/incision`；工作台固定使用 MediaPipe 468 表面，个体化 RSTL 是方向首选，标准 RSTL 只在缺失或校验失败时明确降级，不加载 FLAME。医生可放置皮下 / 皮表肿物、编辑和审阅确定性候选，并把批准结果发送到实时页叠加。
 - 🔬 **RSTL 切除 -> 闭合演示（Beta）**：`/surgery` 作为独立研究演示保留，用于解释沿 RSTL 闭合的张力直觉，不是 FEM、不是患者个体化建模，也不是自动候选生成模块。
 - 🎛️ **实时控制**：主界面暴露数据源、线密度、透明度、镜像和网格采样点；平滑、背面剔除、手部遮挡、分区着色和放大窗为底层支持或默认能力，部分调试开关当前隐藏。
 - 🔒 **全程本地运行**，不上传任何画面（隐私友好）。
@@ -181,7 +181,7 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 3D 重建流程：每帧 478 关键点 → 用相似变换(Umeyama)对齐到统一参考系 → **各顶点取中位数**得到稳定中性脸 →
 图谱按重心坐标贴到该网格 → Three.js 渲染（可旋转）/ 每帧 Umeyama 刚性配准到活体脸投影（z 缓冲遮挡）。
 
-FLAME 实时孪生（`web/src/services/flameFit.ts` / `web/src/services/mode3d.ts`）的入口已关闭；RSTL 切除闭合定性演示仍可从 `/surgery` 打开。PR #122 建议 3D 仅保留离线资产、标注和研究预览；在 #40 owner 正式确认前，不改变现有入口关闭状态和 Stage 2 本地确定性切口工作流边界。
+FLAME 实时孪生（`web/src/services/flameFit.ts` / `web/src/services/mode3d.ts`）的入口已关闭；RSTL 切除闭合定性演示仍可从 `/surgery` 打开。3D 按 #40 / PR #122 仅保留离线资产、标注和研究预览；切口工作台已彻底移除 FLAME 运行时依赖，固定走 MediaPipe 个体化 RSTL。
 
 ---
 
@@ -402,7 +402,7 @@ Stage 2 切口 workflow 只在浏览器本地处理肿物参数、标准化坐�
 | [ADR_3D_ROUTE_FEASIBILITY.md](docs/architecture/ADR_3D_ROUTE_FEASIBILITY.md) | 实时 3D 路线的算力、部署与质量 gate；2D-first + 3D 离线资产/研究查看建议，等待 #40 owner 确认 |
 | **技术轨 / 功能专题** — `docs/tracks/` | |
 | [PERSONALIZED_RSTL.md](docs/tracks/PERSONALIZED_RSTL.md) | `/personalized` 个性化 RSTL 的输入、YOLO/V6 阈值依据、失败降级、隐私边界与图谱契约 |
-| [FLAME_3D_TRACK.md](docs/tracks/FLAME_3D_TRACK.md) | 3D FLAME 配准/标注、切口工作台 FLAME 资产回退/topology gate 与许可边界 |
+| [FLAME_3D_TRACK.md](docs/tracks/FLAME_3D_TRACK.md) | 3D FLAME 配准/标注与许可边界，以及 FLAME 与当前切口工作台的隔离契约 |
 | [RSTL_3DMM_PRIOR.md](docs/tracks/RSTL_3DMM_PRIOR.md) | Borges RSTL 来源、3DMM 拓扑先验 manifest、与 #2/#13/2D-first 路线的衔接 |
 | [INCISION_WORKFLOW.md](docs/tracks/INCISION_WORKFLOW.md) | 浏览器本地确定性切口 workflow、tool trace、worker 回退和医生审阅边界 |
 | [rstl_3dmm_prior_manifest.json](assets/rstl_3dmm_prior_manifest.json) | MediaPipe/3DMM RSTL 先验资产 manifest；高密度方向场大 JSON 由远端资产或本地生成提供（历史实现见 PR #88，`validated:false`） |

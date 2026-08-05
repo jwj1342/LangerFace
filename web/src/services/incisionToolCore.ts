@@ -13,7 +13,12 @@ export type AnyRecord = Record<string, any>;
 
 type AtlasPoint = [number, number, number];
 type AtlasLine = { points?: AtlasPoint[]; points3d?: Vec3[] };
-type AtlasPayload = { lines?: AtlasLine[] };
+type AtlasPayload = {
+  lines?: AtlasLine[];
+  provenance?: string;
+  personalization?: { source?: string; algorithm?: string };
+  diagnostics?: { algorithm?: string };
+};
 type RegionConfidenceInput = {
   region: string;
   confidence: number;
@@ -262,6 +267,10 @@ function axialAngularSpreadDeg(vectors: Vec3[], reference: Vec3): number {
 }
 
 export function queryDirection(point: Vec3, verts: ArrayLike<number>[], tris: Triangle[], atlas: AtlasPayload): DirectionResult {
+  const atlasProvenance = String(atlas.provenance || atlas.personalization?.source || "bundled_standard_rstl_prior");
+  const personalized = atlasProvenance.toLowerCase().includes("local-yolo")
+    || atlasProvenance.toLowerCase().includes("personalized_rstl")
+    || String(atlas.personalization?.algorithm || atlas.diagnostics?.algorithm || "").toLowerCase().includes("rstl-refinement");
   const { pts, tans } = atlasSamples(verts, tris, atlas);
   if (!pts.length) {
     const emptyAtlas = !Array.isArray(atlas.lines) || atlas.lines.length === 0;
@@ -315,7 +324,7 @@ export function queryDirection(point: Vec3, verts: ArrayLike<number>[], tris: Tr
     vector,
     angle_deg: Math.atan2(vector[1], vector[0]) * 180 / Math.PI,
     confidence,
-    source: "rstl_atlas_weighted_nearest",
+    source: personalized ? "personalized_rstl_atlas_weighted_nearest" : "rstl_atlas_weighted_nearest",
     nearest_distance: nearest,
     support_count: order.length,
     angular_spread_deg: spread,

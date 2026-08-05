@@ -414,11 +414,11 @@ Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部
 | 隐私 / 审计 | `docs/clinical/PRIVACY_AND_AUDIT.md` | 敏感数据边界、审计记录、受限存储 | #21 |
 | AI 次级依据 | `tools/`, future model scripts | 皱襞/皱纹/肿物边界候选识别 | #22 |
 
-切口工作台的 3D 头模资产走 `dataSource.getHeadMesh()`：默认优先 `flame-2023`
-（由 `web/assets/flame_basis.bin` 生成 neutral mesh），失败时回退 `mediapipe-468`。
-MediaPipe RSTL 草案不会以 `[tri,u,v]` 形式直接套用到 FLAME 三角面；当前只生成
-`points3d` 预览线并保持 `validated:false`。FLAME 候选不会直接进入实时 MediaPipe
-叠加，相关核验点和非目标见 [FLAME_3D_TRACK.md §10](../tracks/FLAME_3D_TRACK.md#10-切口工作台的-flame-资产边界)。
+切口工作台的面部表面固定走 `dataSource.getHeadMesh("mediapipe-468")`。它优先消费
+`/personalized` 暂存的 YOLO/V6 个体化 RSTL；缺失、来源不符或拓扑校验失败时，才明确降级到内置
+MediaPipe 标准 RSTL。切口运行时不加载 FLAME basis，也不做 MediaPipe→FLAME 预览转换。
+个体化草案保持 `validated:false`，guardrails 与医生审阅仍是必经门槛；与 FLAME 的隔离边界见
+[FLAME_3D_TRACK.md §10](../tracks/FLAME_3D_TRACK.md#10-与切口工作台的边界)。
 
 这些模块应与 `lines/`、`rendering/` 同级接入：`lines/` 仍只负责张力线图谱，`tumor/` 负责病灶几何输入，`incision/` 负责候选曲线生成与规则解释。
 

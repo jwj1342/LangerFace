@@ -49,13 +49,11 @@ export function assessReviewReadiness({
 export function buildReviewGate({
   review,
   result,
-  liveOverlaySupported,
   topologyId,
   topologyVersion,
 }: {
   review: AnyRecord;
   result: AnyRecord;
-  liveOverlaySupported: boolean;
   topologyId?: string | null;
   topologyVersion?: string | null;
 }) {
@@ -69,7 +67,7 @@ export function buildReviewGate({
     && traceGate.passed
     && (!reviewerRequired || reviewerPresent)
     && (!notesRequired || notesPresent);
-  const liveOverlayReady = approvalReady && liveOverlaySupported;
+  const liveOverlayReady = approvalReady;
   return {
     reviewer_required: reviewerRequired,
     reviewer_present: reviewerPresent,
@@ -80,15 +78,13 @@ export function buildReviewGate({
     workflow_trace_gate_missing: traceGate.missing_actions.map((item: AnyRecord) => item.key),
     approval_ready: approvalReady,
     live_overlay_ready: liveOverlayReady,
-    live_overlay_blocked_reason: liveOverlaySupported ? null : "active_head_topology_not_supported_by_mediapipe_live_overlay",
+    live_overlay_blocked_reason: null,
     active_topology_id: topologyId || null,
     active_topology_version: topologyVersion || null,
     reason: liveOverlayReady
       ? "approved_candidate_ready_for_research_overlay"
-      : approvalReady && !liveOverlaySupported
-        ? "approved_candidate_on_flame_preview_requires_explicit_topology_mapping_before_live_overlay"
-        : traceGate.passed
-          ? "pending_clinician_confirmation_or_missing_required_review_context"
-          : "workflow_trace_gate_failed",
+      : traceGate.passed
+        ? "pending_clinician_confirmation_or_missing_required_review_context"
+        : "workflow_trace_gate_failed",
   };
 }

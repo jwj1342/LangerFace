@@ -23,7 +23,7 @@
 
 ## `tracks/` — 技术轨与功能专题
 
-**这个目录回答「某条技术路线当初为什么这么选、现在到哪一步了」。** [FLAME_3D_TRACK.md](tracks/FLAME_3D_TRACK.md) 是 3D FLAME 配准/标注轨、切口工作台 FLAME 资产回退/topology gate 与 license 边界的单一 owner；[RSTL_3DMM_PRIOR.md](tracks/RSTL_3DMM_PRIOR.md) 记录 Borges RSTL 来源与 3DMM 拓扑先验 manifest；[PERSONALIZED_RSTL.md](tracks/PERSONALIZED_RSTL.md) 是 `/personalized` 浏览器个性化流程的可审计说明；[INCISION_WORKFLOW.md](tracks/INCISION_WORKFLOW.md) 记录浏览器本地确定性切口 workflow、worker 回退、tool trace 与审阅边界。Python texture warp 与 checkpoint 许可边界已归入 clinical 的辅助线索文档。
+**这个目录回答「某条技术路线当初为什么这么选、现在到哪一步了」。** [FLAME_3D_TRACK.md](tracks/FLAME_3D_TRACK.md) 是 3D FLAME 配准/标注轨、与当前 MediaPipe 切口工作台的隔离契约及 license 边界的单一 owner；[RSTL_3DMM_PRIOR.md](tracks/RSTL_3DMM_PRIOR.md) 记录 Borges RSTL 来源与 3DMM 拓扑先验 manifest；[PERSONALIZED_RSTL.md](tracks/PERSONALIZED_RSTL.md) 是 `/personalized` 浏览器个性化流程及其向切口工作台交接的可审计说明；[INCISION_WORKFLOW.md](tracks/INCISION_WORKFLOW.md) 记录浏览器本地确定性切口 workflow、worker 回退、tool trace 与审阅边界。Python texture warp 与 checkpoint 许可边界已归入 clinical 的辅助线索文档。
 
 ## `quality/` — 质量与运维
 
