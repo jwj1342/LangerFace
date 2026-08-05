@@ -27,8 +27,10 @@ import { lineIndicesForDensity } from "./lineDensity.ts";
 import {
   getDisplayLines,
   isRefineActive,
+  isPointRefineMode,
   selectedLineIndex,
   selectedPointIndex,
+  selectedPointWindow,
   setLatestAutoLines,
   setRefineAvailability,
   showSymmetryAxis,
@@ -197,6 +199,8 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   const displayLines = getDisplayLines(mapped);
   const selectedLine = refineActive ? selectedLineIndex() : null;
   const selectedPoint = refineActive ? selectedPointIndex() : null;
+  const pointMode = refineActive && isPointRefineMode();
+  const pointWindow = pointMode ? selectedPointWindow() : null;
   const symmetryPartner = refineActive ? symmetryPartnerIndex() : null;
   const bb = faceBBox(lm);
   const visibleLineIndices = refineActive ? null : lineIndicesForDensity(displayLines || [], renderState.densityFrac);
@@ -275,6 +279,24 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
     ctx.moveTo(axis, 0);
     ctx.lineTo(axis, H);
     ctx.stroke();
+    ctx.restore();
+  }
+  if (pointMode && selectedLine != null) {
+    const points = displayLines[selectedLine]?.pts || [];
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    for (let pointIndex = 0; pointIndex < points.length; pointIndex++) {
+      const point = points[pointIndex];
+      if (!point) continue;
+      const inWindow = pointWindow && pointIndex >= pointWindow.start && pointIndex <= pointWindow.end;
+      ctx.fillStyle = pointIndex === selectedPoint ? "#f1c21b" : inWindow ? "#a7f0d2" : "#f4f7fb";
+      ctx.strokeStyle = inWindow ? "#198754" : "#42be65";
+      ctx.lineWidth = Math.max(1, W / 1200);
+      ctx.beginPath();
+      ctx.arc(point[0], point[1], Math.max(2.5, W / 360), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
     ctx.restore();
   }
   if (refineActive && selectedLine != null && selectedPoint != null) {

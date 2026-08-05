@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "../clinical-theme.css";
 
-.live-refine-panel{display:flex;flex-direction:column;gap:9px;padding-top:4px}.live-refine-three{grid-template-columns:repeat(3,minmax(0,1fr))}.live-refine-status{display:flex;justify-content:space-between;color:var(--muted);font-size:12px}.live-refine-status span:last-child{color:var(--ink);font-weight:700}.main-wrap.refining{cursor:crosshair}
+.live-refine-panel{display:flex;flex-direction:column;gap:9px;padding-top:4px}.btn-row.live-refine-modes{grid-template-columns:repeat(5,minmax(0,1fr))}.live-refine-modes .btn{padding-inline:3px;font-size:12px}.live-refine-status,.live-refine-range,.live-refine-nudge-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px}.live-refine-status span:last-child,.live-refine-range output{color:var(--ink);font-weight:700}.live-refine-point-count{display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid var(--line);border-radius:4px;background:#fff}.live-refine-point-count.hidden{display:none}.live-refine-nudge-head label{display:flex;align-items:center;gap:6px}.live-refine-nudge-head select{padding:4px 6px;font-size:12px}.btn-row.live-refine-nudge{grid-template-columns:repeat(4,minmax(0,1fr))}.live-refine-nudge .btn{padding:6px;font-size:17px}.main-wrap.refining{cursor:crosshair}.main-wrap.refining.refine-drag{cursor:grab}.main-wrap.refining.refine-drag:active{cursor:grabbing}.main-wrap.refining.refine-point,.main-wrap.refining.refine-normal{cursor:crosshair}
 @import "../style.css";
 @import "../annotate.css";
 

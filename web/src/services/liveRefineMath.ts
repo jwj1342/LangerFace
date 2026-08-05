@@ -172,6 +172,113 @@ export function deformCurveWide(
   });
 }
 
+/** Keep only the pointer component perpendicular to the selected curve point. */
+export function projectOffsetToCurveNormal(
+  points: readonly RefinePoint[],
+  anchorIndex: number,
+  offset: readonly [number, number],
+): [number, number] {
+  if (!points?.length || !points[anchorIndex]) return [0, 0];
+  const tangent = pointTangent(points, anchorIndex);
+  const normal: [number, number] = [-tangent[1], tangent[0]];
+  const amount = offset[0] * normal[0] + offset[1] * normal[1];
+  return [normal[0] * amount, normal[1] * amount];
+}
+
+export interface CurvePointWindow {
+  start: number;
+  end: number;
+}
+
+export function curvePointWindow(pointLength: number, pointIndex: number, pointCount = 1): CurvePointWindow {
+  const length = Math.max(0, Math.floor(Number(pointLength) || 0));
+  if (!length) return { start: 0, end: -1 };
+  const anchor = clamp(Math.round(Number(pointIndex) || 0), 0, length - 1);
+  const count = clamp(Math.round(Number(pointCount) || 1), 1, length);
+  let start = anchor - Math.floor((count - 1) / 2);
+  start = clamp(start, 0, length - count);
+  return { start, end: start + count - 1 };
+}
+
+/** Move a contiguous point window with smooth falloff from the grabbed point. */
+export function moveCurvePoints(
+  points: readonly RefinePoint[],
+  pointIndex: number,
+  pointCount: number,
+  offset: readonly [number, number],
+  bounds: RefineBounds = {},
+): RefinePoint[] {
+  if (!points?.length || !points[pointIndex]) return points.map((point) => [...point]);
+  const width = typeof bounds.width === "number" && Number.isFinite(bounds.width) ? bounds.width : Infinity;
+  const height = typeof bounds.height === "number" && Number.isFinite(bounds.height) ? bounds.height : Infinity;
+  const window = curvePointWindow(points.length, pointIndex, pointCount);
+  const maxDistance = Math.max(pointIndex - window.start, window.end - pointIndex, 0);
+  return points.map((point, index) => {
+    if (index < window.start || index > window.end) return [...point];
+    const distance = Math.abs(index - pointIndex);
+    const weight = maxDistance === 0
+      ? 1
+      : Math.cos((distance / (maxDistance + 1)) * Math.PI / 2) ** 2;
+    return [
+      clamp(point[0] + offset[0] * weight, 0, width),
+      clamp(point[1] + offset[1] * weight, 0, height),
+      ...point.slice(2),
+    ];
+  });
+}
+
+function mirroredCurveOrderIsReversed(
+  sourcePoints: readonly RefinePoint[],
+  targetPoints: readonly RefinePoint[],
+  axisX: number,
+): boolean {
+  if (!sourcePoints.length || !targetPoints.length) return false;
+  const sourceEnds = [sourcePoints[0]!, sourcePoints[sourcePoints.length - 1]!];
+  const directTargets = [targetPoints[0]!, targetPoints[targetPoints.length - 1]!];
+  const reverseTargets = [targetPoints[targetPoints.length - 1]!, targetPoints[0]!];
+  const score = (targets: readonly RefinePoint[]) => sourceEnds.reduce((sum, point, index) => {
+    const target = targets[index]!;
+    return sum + Math.hypot(2 * axisX - point[0] - target[0], point[1] - target[1]);
+  }, 0);
+  return score(reverseTargets) < score(directTargets);
+}
+
+/** Mirror only the edit delta, preserving the partner curve's original fit. */
+export function applyMirroredCurveDelta(
+  sourceOriginal: readonly RefinePoint[],
+  sourceCurrent: readonly RefinePoint[],
+  targetOriginal: readonly RefinePoint[],
+  axisX: number,
+  sourceWindow: CurvePointWindow | null = null,
+  bounds: RefineBounds = {},
+): RefinePoint[] {
+  if (!sourceOriginal.length || !sourceCurrent.length || !targetOriginal.length) {
+    return targetOriginal.map((point) => [...point]);
+  }
+  const width = typeof bounds.width === "number" && Number.isFinite(bounds.width) ? bounds.width : Infinity;
+  const height = typeof bounds.height === "number" && Number.isFinite(bounds.height) ? bounds.height : Infinity;
+  const reversed = mirroredCurveOrderIsReversed(sourceOriginal, targetOriginal, axisX);
+  const start = clamp(Math.round(sourceWindow?.start ?? 0), 0, sourceOriginal.length - 1);
+  const end = clamp(Math.round(sourceWindow?.end ?? sourceOriginal.length - 1), start, sourceOriginal.length - 1);
+  const next: RefinePoint[] = targetOriginal.map((point) => [...point] as RefinePoint);
+  for (let sourceIndex = start; sourceIndex <= end; sourceIndex++) {
+    const original = sourceOriginal[sourceIndex];
+    const current = sourceCurrent[sourceIndex];
+    if (!original || !current) continue;
+    const position = sourceIndex / Math.max(1, sourceOriginal.length - 1);
+    const targetPosition = reversed ? 1 - position : position;
+    const targetIndex = Math.round(targetPosition * Math.max(0, targetOriginal.length - 1));
+    const target = targetOriginal[targetIndex];
+    if (!target) continue;
+    next[targetIndex] = [
+      clamp(target[0] - (current[0] - original[0]), 0, width),
+      clamp(target[1] + (current[1] - original[1]), 0, height),
+      ...target.slice(2),
+    ] as RefinePoint;
+  }
+  return next;
+}
+
 export function curveEraseTargets(
   lineIndex: number,
   partnerIndex: number | null | undefined,

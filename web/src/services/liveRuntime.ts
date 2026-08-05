@@ -33,9 +33,13 @@ import {
   exportRefine,
   isRefineActive,
   moveRefinePointer,
+  nudgeSelected,
   resetRefineToAuto,
   setAxisVisible,
   setRefineMode,
+  setRefineNudgeStep,
+  setRefinePointCount,
+  setRefineSpread,
   setRefineAvailability,
   setSymmetryEnabled,
   toggleRefine2d,
@@ -446,11 +450,19 @@ function bindLiveEvents(signal: AbortSignal): void {
   els.refine2d.addEventListener("click", () => runLiveAction("refine_toggle", toggleRefine2d), { signal });
   els.refineView.addEventListener("click", () => runLiveAction("refine_view", () => setRefineMode("view")), { signal });
   els.refineDrag.addEventListener("click", () => runLiveAction("refine_drag", () => setRefineMode("drag")), { signal });
+  els.refinePoint.addEventListener("click", () => runLiveAction("refine_point", () => setRefineMode("point")), { signal });
+  els.refineNormal.addEventListener("click", () => runLiveAction("refine_normal", () => setRefineMode("normal")), { signal });
   els.refineErase.addEventListener("click", () => runLiveAction("refine_erase", () => setRefineMode("erase")), { signal });
   els.refineUndo.addEventListener("click", () => runLiveAction("refine_undo", undoRefine), { signal });
   els.refineExport.addEventListener("click", () => runLiveAction("refine_export", exportRefine), { signal });
   els.refineSymmetry.addEventListener("change", (event) => runLiveAction("refine_symmetry", () => setSymmetryEnabled((event.target as HTMLInputElement).checked)), { signal });
   els.refineAxis.addEventListener("change", (event) => runLiveAction("refine_axis", () => setAxisVisible((event.target as HTMLInputElement).checked)), { signal });
+  els.refineSpread.addEventListener("input", (event) => runLiveAction("refine_spread", () => setRefineSpread((event.target as HTMLInputElement).value)), { signal });
+  els.refinePointCount.addEventListener("input", (event) => runLiveAction("refine_point_count", () => setRefinePointCount((event.target as HTMLInputElement).value)), { signal });
+  els.refineNudgeStep.addEventListener("change", (event) => runLiveAction("refine_nudge_step", () => setRefineNudgeStep((event.target as HTMLSelectElement).value)), { signal });
+  for (const button of els.refineNudgeButtons) {
+    button.addEventListener("click", () => runLiveAction("refine_nudge", () => nudgeSelected(button.dataset.refineNudge || "")), { signal });
+  }
   els.refineReset.addEventListener("click", () => runLiveAction("refine_reset", resetRefineToAuto), { signal });
   window.addEventListener("langerface:refine2d-redraw", () => {
     if (!redrawPausedFrame()) refreshStaticImage();
