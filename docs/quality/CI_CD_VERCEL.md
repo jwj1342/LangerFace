@@ -161,9 +161,118 @@ Required status checks 建议包含：
 | `python-tests (3.11)` | `.github/workflows/ci.yml` matrix |
 | `python-tests (3.12)` | `.github/workflows/ci.yml` matrix |
 | `js-tests` | `.github/workflows/ci.yml` |
+| `browser-tests` | `.github/workflows/ci.yml` Playwright 浏览器回归 |
 | Vercel Production Deployment check | Vercel GitHub 集成在 `master` 生产部署时生成，具体名称以 GitHub UI 显示为准 |
 
 实际 check 名称由 GitHub UI 决定。第一次 PR 跑完后，在 Branch protection 页面选择已经出现的 check，不要手写猜名称。
+
+截至 2026-08-04，线上 required contexts 为 `lint`、三个 Python matrix、
+`js-tests` 和 `browser-tests`；`strict`、过期审批撤销和管理员同样受保护规则约束均已启用。
+管理员状态可从上面的 protection API 回读；仓库当前没有 Ruleset，因此也没有通过
+Ruleset 配置的 merge queue 或 bypass actor。
+
+`TODO issue sync / check` 是条件性、非阻塞审计，不属于 Auto-merge 的 required
+contexts。它会在 Issue 状态变化、定时任务，以及修改 TODO / 同步脚本 / 自身 workflow
+的 PR 上运行；新开或重开 Issue 会在 PR 之外改变其结果，因此不能把该条件性 check
+描述成稳定的逐 PR 合并门禁。TODO owner 仍应在失败时及时同步
+[`docs/planning/TODO.md`](../planning/TODO.md)，但缺少该 check 不阻止原生 Auto-merge。
+
+## GitHub Auto-merge 与 stacked PR
+
+仓库设置中保持 **Allow auto-merge** 和 **Automatically delete head branches**
+开启。自动删除不是单纯清理：父 PR 合并后，GitHub 会把仍以该 head branch 为 base
+的开放 PR 自动 retarget 到父 PR 原来的 base，这是 stacked PR 逐层进入 `master`
+的接力点。
+
+`master` 的保护规则还必须保持：
+
+- `strict: true`，PR 分支必须包含最新 `master`；
+- 至少 1 个 approving review；
+- `dismiss_stale_reviews: true`，任何新提交都会撤销旧 approval；
+- `enforce_admins: true`，管理员也不能跳过这些规则；自动化不使用 `--admin`。
+
+2026-07-30 已通过 GitHub API 启用 `dismiss_stale_reviews`。可用下面的只读命令复核，
+不要仅依据文档推断线上设置：
+
+```bash
+gh api repos/jwj1342/LangerFace/branches/master/protection \
+  --jq '{strict:.required_status_checks.strict,
+         dismiss_stale_reviews:.required_pull_request_reviews.dismiss_stale_reviews,
+         approvals:.required_pull_request_reviews.required_approving_review_count,
+         checks:.required_status_checks.contexts,
+         enforce_admins:.enforce_admins.enabled}'
+gh api repos/jwj1342/LangerFace/rulesets
+```
+
+维护者为允许自动接力的 PR 添加 `automerge:stack` 标签。
+[`.github/workflows/automerge-approved.yml`](../../.github/workflows/automerge-approved.yml)
+会在以下时机扫描：
+
+- PR 打标、Ready、更新或 base 变化；
+- reviewer 提交或撤回 review；
+- 每 5 分钟兜底轮询；
+- 维护者手动 `workflow_dispatch`。
+
+策略实现位于 [`tools/automerge_policy.mjs`](../../tools/automerge_policy.mjs)，约束为：
+
+1. 只选择 `baseRefName == master`、非 Draft、带 `automerge:stack` 且尚未启用
+   Auto-merge 的 PR。子 PR 在仍指向临时父分支时不会被合并。
+2. 调用 `gh pr merge --auto --squash --match-head-commit <SHA>`，不使用
+   `--admin`。实际合并仍由 GitHub 原生 Auto-merge 等待 branch protection：
+   必需 checks 全绿且至少 1 个 approval。
+3. 如果 PR 因 `strict: true` 落后于 `master`，先调用 GitHub Update branch API，
+   并用 `expected_head_sha` 防止并发覆盖；本轮不会同时启用 Auto-merge。新 head
+   重新通过 CI 和审核后，下一轮才登记自动合并。
+4. 单个 PR 更新或登记失败不会中断后续 PR；脚本会尝试完全部候选，再汇总失败并让
+   workflow 以非零状态结束，便于按 PR 排障。
+5. `pull_request_target` 场景只从受保护的默认分支 checkout
+   `tools/automerge_policy.mjs`，不读取或执行 PR head 代码；checkout credential
+   不持久化。
+6. workflow 的 job 权限只提升到 `contents: write` 和
+   `pull-requests: write`，不允许机器人提交 approving review。
+7. GitHub 在 PR 切换 base 时会取消旧 Auto-merge 请求；workflow 在子 PR
+   retarget 到 `master` 后重新启用，避免把它提前合进临时父分支。
+
+首次引入该 workflow 时，受信任的策略脚本尚未存在于默认分支。此时 workflow
+会明确记录 notice 并安全跳过策略执行，而不是尝试运行 PR head 中的脚本或报告
+`MODULE_NOT_FOUND`；合并部署后，定时轮询会从 `master` 读取脚本并开始正常处理。
+
+Branch protection 的 required checks 是显式 allowlist，不会因为 workflow 新增 job
+自动扩充。新增文档同步或其他合并门禁时，必须等该 job 已在默认分支
+存在、所有仍指向 `master` 的开放 PR 都能产生该 check 后，再把它加入 required
+contexts；在完成设置更新前，不得把新 job 仅写成“必需”而实际仍为 optional。
+
+### 启用、暂停和排障
+
+启用：
+
+```bash
+gh pr edit <PR号> --add-label 'automerge:stack'
+```
+
+如果 PR 已经直接指向 `master`，也可立即登记原生 Auto-merge：
+
+```bash
+gh pr merge <PR号> --auto --squash
+```
+
+暂停时需要同时移除授权标签和已有的原生请求：
+
+```bash
+gh pr edit <PR号> --remove-label 'automerge:stack'
+gh pr merge <PR号> --disable-auto
+```
+
+PR 没有自动前进时依次检查：
+
+1. PR 是否 Ready、带 `automerge:stack`，当前 base 是否确实为 `master`。
+2. GitHub 合并框是否显示 Auto-merge 已启用；若没有，手动运行
+   `Auto-merge approved PRs` workflow 或等待下一次 5 分钟轮询。
+3. `master` 的必需 checks 是否全部成功、是否已有满足 branch protection 的
+   approving review、是否存在冲突或待更新分支。
+4. Repository Actions 设置是否允许 workflow 请求
+   `contents: write` / `pull-requests: write`；不要用 admin bypass 解决权限或 CI
+   问题。
 
 ## 日常发布流程
 
