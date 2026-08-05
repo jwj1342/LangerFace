@@ -119,7 +119,7 @@ assert.ok(js.includes("导出隐私预检未通过"), "browser preflight blocks 
 assert.ok(exportPrivacy.includes("raw_media_flag_true"), "browser preflight catches raw media flags");
 assert.ok(exportPrivacy.includes("secret_value_present"), "browser preflight catches unredacted secrets");
 assert.ok(exportPrivacy.includes("pii_pattern_present"), "browser preflight catches direct PII patterns");
-assert.ok(exportPrivacy.includes('!lowerLeaf.endsWith("_at")'), "browser preflight does not flag timestamps as phone numbers");
+assert.ok(exportPrivacy.includes("isAllowedMetadataTimestamp"), "browser preflight only exempts contract-defined metadata timestamps");
 assert.ok(js.includes("summarizeTumorBoundary"), "workbench renders deterministic boundary summaries");
 assert.ok(tools.includes("units_per_mm"), "tumor boundary summary exports coordinate-to-mm scale for audit");
 assert.ok(tools.includes("summary_axis"), "tumor boundary summary exports summary axis for audit");
