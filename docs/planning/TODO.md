@@ -22,7 +22,7 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
       · Ready PR #121；共享金标覆盖 atlas、低置信、FLAME `points3d` 和 ±180° 轴向 wrap。
       · Ready PR #119；补齐可编辑尖端角、轮廓重算、guardrail 与 provenance。
 - [ ] 3D 路线可行性裁决 — [#40](https://github.com/jwj1342/LangerFace/issues/40)
-      · Ready PR #122；裁决 2D-first + 3D 离线资产/标注/研究预览。
+      · Ready PR #122；建议 2D-first + 3D 离线资产/标注/研究预览，等待 #40 owner 正式确认。
 - [x] 修复 React 受控输入 snapshot echo — [#109](https://github.com/jwj1342/LangerFace/issues/109)
       · Ready PR #119；Chromium 回归覆盖输入保持。
 - [x] 删除 Agentic/Provider 出域路径 — [#111](https://github.com/jwj1342/LangerFace/issues/111)
