@@ -27,15 +27,20 @@ import { countMetric, logError } from "./logger";
 import { createCanvasRecordingController, type CanvasRecordingController, type RecordingExtraCanvas } from "./canvasRecording";
 import { recordingState, reconState, renderState, sourceState } from "./liveState";
 import {
+  adjustRefineImageZoom,
   beginRefinePointer,
   commitRefineForLive,
   endRefinePointer,
   exportRefine,
   isRefineActive,
   moveRefinePointer,
+  nudgeSelected,
   resetRefineToAuto,
   setAxisVisible,
   setRefineMode,
+  setRefineNudgeStep,
+  setRefinePointCount,
+  setRefineSpread,
   setRefineAvailability,
   setSymmetryEnabled,
   toggleRefine2d,
@@ -224,6 +229,7 @@ function applyStagedIncisionOverlay(): void {
 
 // ── UI 绑定 ───────────────────────────────────────────────────────────────────
 function refreshStaticImage(): void {
+  if (sourceState.paused && redrawPausedFrame()) return;
   if (sourceState.sourceKind === "image") requestFrame();
 }
 
@@ -278,8 +284,11 @@ function endImageDrag(e: PointerEvent): void {
 }
 
 function handleMainWheel(e: WheelEvent): void {
-  if (sourceState.sourceKind === "image") {
-    if (zoomImageViewAt(e.clientX, e.clientY, e.deltaY)) e.preventDefault();
+  if (sourceState.sourceKind === "image" || isRefineActive()) {
+    if (zoomImageViewAt(e.clientX, e.clientY, e.deltaY)) {
+      if (isRefineActive()) updateRefineUi();
+      e.preventDefault();
+    }
     return;
   }
   if (!adjustFocusZoom(e.deltaY)) return;
@@ -446,14 +455,24 @@ function bindLiveEvents(signal: AbortSignal): void {
   els.refine2d.addEventListener("click", () => runLiveAction("refine_toggle", toggleRefine2d), { signal });
   els.refineView.addEventListener("click", () => runLiveAction("refine_view", () => setRefineMode("view")), { signal });
   els.refineDrag.addEventListener("click", () => runLiveAction("refine_drag", () => setRefineMode("drag")), { signal });
+  els.refinePoint.addEventListener("click", () => runLiveAction("refine_point", () => setRefineMode("point")), { signal });
   els.refineErase.addEventListener("click", () => runLiveAction("refine_erase", () => setRefineMode("erase")), { signal });
   els.refineUndo.addEventListener("click", () => runLiveAction("refine_undo", undoRefine), { signal });
   els.refineExport.addEventListener("click", () => runLiveAction("refine_export", exportRefine), { signal });
+  els.refineZoomOut.addEventListener("click", () => runLiveAction("refine_zoom_out", () => adjustRefineImageZoom("out")), { signal });
+  els.refineZoomReset.addEventListener("click", () => runLiveAction("refine_zoom_reset", () => adjustRefineImageZoom("reset")), { signal });
+  els.refineZoomIn.addEventListener("click", () => runLiveAction("refine_zoom_in", () => adjustRefineImageZoom("in")), { signal });
   els.refineSymmetry.addEventListener("change", (event) => runLiveAction("refine_symmetry", () => setSymmetryEnabled((event.target as HTMLInputElement).checked)), { signal });
   els.refineAxis.addEventListener("change", (event) => runLiveAction("refine_axis", () => setAxisVisible((event.target as HTMLInputElement).checked)), { signal });
+  els.refineSpread.addEventListener("input", (event) => runLiveAction("refine_spread", () => setRefineSpread((event.target as HTMLInputElement).value)), { signal });
+  els.refinePointCount.addEventListener("input", (event) => runLiveAction("refine_point_count", () => setRefinePointCount((event.target as HTMLInputElement).value)), { signal });
+  els.refineNudgeStep.addEventListener("change", (event) => runLiveAction("refine_nudge_step", () => setRefineNudgeStep((event.target as HTMLSelectElement).value)), { signal });
+  for (const button of els.refineNudgeButtons) {
+    button.addEventListener("click", () => runLiveAction("refine_nudge", () => nudgeSelected(button.dataset.refineNudge || "")), { signal });
+  }
   els.refineReset.addEventListener("click", () => runLiveAction("refine_reset", resetRefineToAuto), { signal });
   window.addEventListener("langerface:refine2d-redraw", () => {
-    if (!redrawPausedFrame()) refreshStaticImage();
+    refreshStaticImage();
   }, { signal });
   if (isReactManagedWorkbench()) {
     bindWindowControllerEvents([

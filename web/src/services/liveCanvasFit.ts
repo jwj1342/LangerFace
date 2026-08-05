@@ -51,6 +51,24 @@ export function resetImageView({ apply = true }: ResetImageViewOptions = {}): vo
   if (apply) applyImageViewStyle();
 }
 
+export function setRefineCanvasViewActive(active: boolean): void {
+  els.canvas.classList.toggle("refine-image-source", active);
+  if (active) {
+    fitCanvasDisplayToStage({ resetView: !renderState.imageView.baseWidth });
+    return;
+  }
+  if (!els.canvas.classList.contains("image-source")) clearCanvasDisplayFit();
+}
+
+export function stepImageViewZoom(direction: -1 | 1): boolean {
+  const wrap = els.mainWrap.getBoundingClientRect();
+  return zoomImageViewAt(
+    wrap.left + wrap.width / 2,
+    wrap.top + wrap.height / 2,
+    direction > 0 ? -120 : 120,
+  );
+}
+
 export function zoomImageViewAt(clientX: number, clientY: number, deltaY: number): boolean {
   const view = renderState.imageView;
   if (!view.baseWidth || !view.baseHeight) return false;
