@@ -22,7 +22,7 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
       · Ready PR #121；共享金标覆盖 atlas、低置信、FLAME `points3d` 和 ±180° 轴向 wrap。
       · Ready PR #119；补齐可编辑尖端角、轮廓重算、guardrail 与 provenance。
 - [ ] 3D 路线可行性裁决 — [#40](https://github.com/jwj1342/LangerFace/issues/40)
-      · Ready PR #122；裁决 2D-first + 3D 离线资产/标注/研究预览。
+      · Ready PR #122；建议 2D-first + 3D 离线资产/标注/研究预览，等待 #40 owner 正式确认。
 - [x] 修复 React 受控输入 snapshot echo — [#109](https://github.com/jwj1342/LangerFace/issues/109)
       · Ready PR #119；Chromium 回归覆盖输入保持。
 - [x] 删除 Agentic/Provider 出域路径 — [#111](https://github.com/jwj1342/LangerFace/issues/111)
@@ -43,10 +43,10 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
       · 两套运行时须一起改，改任一侧都会让 test_forehead_visibility_parity 变红。
 - [x] 闭合模拟页按钮对比度与浏览器守卫覆盖 — [#146](https://github.com/jwj1342/LangerFace/issues/146)
       · 等待具体控件/状态截图；修复时把 `/surgery` 纳入半透明背景合成后的 e2e 对比度断言。
-- [ ] 切口设计迁移到个体化 MediaPipe RSTL，并移除 FLAME 运行时依赖 — [#158](https://github.com/jwj1342/LangerFace/issues/158)
-      · Ready PR #159；切口主输入改为 `/personalized` 交接的个体化 atlas，并保留标准 RSTL 降级与 provenance / warning。
-- [ ] 统一公开工作流的蓝色临床 UI 主题 — [#160](https://github.com/jwj1342/LangerFace/issues/160)
-      · Ready PR #161；统一 React 路由与迁移页面的主题 token，绿色仅保留成功、在线和证据语义。
+- [x] 切口设计迁移到个体化 MediaPipe RSTL，并移除 FLAME 运行时依赖 — [#158](https://github.com/jwj1342/LangerFace/issues/158)
+      · PR #159 已合并；切口主输入改为 `/personalized` 交接的个体化 atlas，并保留标准 RSTL 降级与 provenance / warning。
+- [x] 统一公开工作流的蓝色临床 UI 主题 — [#160](https://github.com/jwj1342/LangerFace/issues/160)
+      · PR #161 已合并；统一 React 路由与迁移页面的主题 token，绿色仅保留成功、在线和证据语义。
 
 ## 文档与架构
 

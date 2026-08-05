@@ -13,6 +13,10 @@ const controls = readFileSync(join(root, "web", "src", "components", "SurgeryCon
 assert.ok(html.includes("/app/surgery"), "legacy surgery page redirects to the React surgery route");
 assert.ok(!html.includes("surgery_main.js"), "legacy surgery page no longer mounts the legacy controller");
 assert.ok(route.includes("SurgeryR3FScene"), "React surgery route renders the R3F closure scene");
+assert.ok(
+  route.includes("仅用于观察标准脸上的定性张力变化，不保存病例"),
+  "the visible surgery route keeps the qualitative research-demo boundary",
+);
 assert.ok(scene.includes('id="surgeryCanvas"'), "React surgery scene exposes the canvas id");
 assert.ok(controls.includes('id="btnAlong"'), "React surgery controls expose the along-RSTL action");
 assert.equal((controls.match(/id="btnAlong"/g) || []).length, 1, "React surgery controls have exactly one cut action");

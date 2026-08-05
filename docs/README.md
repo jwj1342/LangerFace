@@ -5,7 +5,7 @@
 | 目录 | 一句话 | 篇数 |
 |---|---|---|
 | [`onboarding/`](#onboarding--上手与协作) | 我要把它跑起来、并按规矩提交 | 4 |
-| [`architecture/`](#architecture--架构与算法) | 它是怎么实现的、公式是什么 | 2 |
+| [`architecture/`](#architecture--架构与算法) | 它是怎么实现的、公式是什么 | 3 |
 | [`tracks/`](#tracks--技术轨与功能专题) | 某一条技术路线的设计与现状 | 4 |
 | [`quality/`](#quality--质量与运维) | 怎么证明它没坏、怎么部署和观测 | 4 |
 | [`clinical/`](#clinical--临床边界与合规) | 医学上能说什么、数据边界在哪 | 3 |
@@ -19,7 +19,7 @@
 
 ## `architecture/` — 架构与算法
 
-**这个目录回答「代码为什么这么组织、某个数字是怎么算出来的」，是两篇长文，占全部文档篇幅的四成。** [ARCHITECTURE.md](architecture/ARCHITECTURE.md) 是**模块契约与坐标系**的权威来源：React 路由与唯一 TypeScript service 运行时、关键点与标准脸模型、2D 重心坐标映射、3D 路线（网页入口已由 #108 关闭、runtime 保留）、图谱格式与生成、资产清单、构建与 Vercel 部署边界、网页 3D 标注、HeadSpace 离线管线。[METHODS_AND_IMPLEMENTATION_SUMMARY.md](architecture/METHODS_AND_IMPLEMENTATION_SUMMARY.md) 是**数学推导的集中地**：重心映射的仿射不变性、One-Euro、背面剔除与遮挡、方向场流线生成、Umeyama、FLAME 线性拟合、软体闭合、切口几何（3:1 长宽比、30° 尖端角、cubic Hermite 轮廓）。两者分工是「契约在前者、公式在后者」；模块该在哪、测试怎么跑不写在这里。
+**这个目录回答「代码为什么这么组织、某个数字是怎么算出来的」。** [ARCHITECTURE.md](architecture/ARCHITECTURE.md) 是**模块契约与坐标系**的权威来源：React 路由与唯一 TypeScript service 运行时、关键点与标准脸模型、2D 重心坐标映射、3D 路线（网页入口已由 #108 关闭、runtime 保留）、图谱格式与生成、资产清单、构建与 Vercel 部署边界、网页 3D 标注、HeadSpace 离线管线。[METHODS_AND_IMPLEMENTATION_SUMMARY.md](architecture/METHODS_AND_IMPLEMENTATION_SUMMARY.md) 是**数学推导的集中地**：重心映射的仿射不变性、One-Euro、背面剔除与遮挡、方向场流线生成、Umeyama、FLAME 线性拟合、软体闭合、切口几何（3:1 长宽比、30° 尖端角、cubic Hermite 轮廓）。[ADR_3D_ROUTE_FEASIBILITY.md](architecture/ADR_3D_ROUTE_FEASIBILITY.md) 提供实时 3D 路线的工程评估：2D-first、3D 只作离线资产/标注/研究预览的建议仍待 #40 owner 正式确认。模块契约在 ARCHITECTURE、公式在 METHODS、路线建议在 ADR。
 
 ## `tracks/` — 技术轨与功能专题
 

@@ -133,7 +133,7 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 - 🔬 **RSTL 主流程 + Langer 对照资产**：网页主 demo 当前只暴露 RSTL；Langer 图谱仍保留在资产、CLI 和标注器中用于对照 / 教学。
 - 🖐️ **遮挡处理**：转头时背面线条隐藏；**手挡在脸前时，手覆盖处不画线**（贴合手形掩膜，指缝保留）。
 - 🔍 **关键区域放大窗**：主画面下方 6 个放大窗（额·眉间 / 双眼周 / 鼻·鼻唇沟 / 口周 / 颏部）同屏显示细节。
-- 🚫 **3D / FLAME 网页入口已关闭**：3D 关键点重建、FLAME 实时孪生和三维资产预览的用户入口已下线（#108 第一阶段）；底层 runtime 仍保留在 `web/src/services/mode3d.ts` / `flameFit.ts`，标注器仍可加载头模资产，离线 FLAME 拟合走 `tools/fit_flame_to_landmarks.py`。#40 / PR #122 将路线收敛为 2D-first + 3D 离线资产/标注/研究预览。
+- 🚫 **3D / FLAME 网页入口已关闭**：3D 关键点重建、FLAME 实时孪生和三维资产预览的用户入口已下线（#108 第一阶段）；底层 runtime 仍保留在 `web/src/services/mode3d.ts` / `flameFit.ts`，标注器仍可加载头模资产，离线 FLAME 拟合走 `tools/fit_flame_to_landmarks.py`。PR #122 建议将路线收敛为 2D-first + 3D 离线资产/标注/研究预览，仍待 #40 owner 正式确认。
 - ✍️ **网页 3D 标注**：在浏览器里于标准脸 / 3D 头模表面手绘 RSTL/Langer 候选线，可导入 JSON/OBJ/PLY 头模和 3D Slicer `.mrk.json` 曲线，导出 `validated:false` 的图谱草案（`[tri,u,v]`）或 xyz 折线；临床复核与置 `validated:true` 仍走 Python/评审流程，见 [网页 3D 标注与图谱草案导出](docs/architecture/ARCHITECTURE.md#12-网页-3d-线标注与图谱草案导出)。
 - 🧰 **无状态研究工具入口**：站点根 `/` 是 React 工具入口（`/app` 保留为兼容地址），只负责进入实时 2D、个性化 2D、切口候选和图谱维护等独立工具，不创建、恢复或保存病例。
 - 🧭 **切口 workflow 工作台**：推荐先从 `/personalized` 生成 YOLO/V6 个体化 RSTL，再进入 `/app/incision`；工作台固定使用 MediaPipe 468 表面，个体化 RSTL 是方向首选，标准 RSTL 只在缺失或校验失败时明确降级，不加载 FLAME。医生可放置皮下 / 皮表肿物、编辑和审阅确定性候选，并把批准结果发送到实时页叠加。
@@ -400,6 +400,7 @@ Stage 2 切口 workflow 只在浏览器本地处理肿物参数、标准化坐�
 | **架构 / 数据** — `docs/architecture/` | |
 | [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | 核心算法、坐标系、2D/3D 路线、网页 3D 标注、HeadSpace 离线管线、Stage 2 路线、资产与部署 |
 | [METHODS_AND_IMPLEMENTATION_SUMMARY.md](docs/architecture/METHODS_AND_IMPLEMENTATION_SUMMARY.md) | 各核心算法的**数学公式与推导**集中参考（重心映射 / One-Euro / 遮挡 / 流线生成 / Umeyama / FLAME / 软体 / 切口几何）；模块契约见 ARCHITECTURE，测试见 CONTRIBUTING |
+| [ADR_3D_ROUTE_FEASIBILITY.md](docs/architecture/ADR_3D_ROUTE_FEASIBILITY.md) | 实时 3D 路线的算力、部署与质量 gate；2D-first + 3D 离线资产/研究查看建议，等待 #40 owner 确认 |
 | **技术轨 / 功能专题** — `docs/tracks/` | |
 | [PERSONALIZED_RSTL.md](docs/tracks/PERSONALIZED_RSTL.md) | `/personalized` 个性化 RSTL 的输入、YOLO/V6 阈值依据、失败降级、隐私边界与图谱契约 |
 | [FLAME_3D_TRACK.md](docs/tracks/FLAME_3D_TRACK.md) | 3D FLAME 配准/标注与许可边界，以及 FLAME 与当前切口工作台的隔离契约 |

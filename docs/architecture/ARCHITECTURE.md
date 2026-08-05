@@ -30,6 +30,12 @@ Python 与浏览器两套等价几何实现共享同一份图谱与三角拓扑�
   黄色表示等待 / 警告，红色表示危险 / 失败，不能再把语义色当主按钮色。`test_clinical_theme_consistency.ts`
   锁定跨入口 token、旧绿色残留和关键文字的 WCAG AA 对比度。
 
+- **视觉主题契约**：公开主路径统一使用 `web/clinical-theme.css` 的深色临床界面与蓝色主操作色
+  （`--clinical-accent: #0f62fe`）。React 入口通过 `web/src/styles.css` 导入同一份 token；`/personalized`、
+  `/current/` 与 `/v6-review` 也必须消费该主题，不能各自重新定义品牌色。绿色只表示成功、在线或皱纹证据，
+  黄色表示等待 / 警告，红色表示危险 / 失败，不能再把语义色当主按钮色。`test_clinical_theme_consistency.ts`
+  锁定跨入口 token、旧绿色残留和关键文字的 WCAG AA 对比度。
+
 > 关键不变式：`web/src/services/geometry*.ts` 的映射/遮挡/平滑必须与 Python 端**逐点一致**，由
 > `tools/test_web_mapping.ts` 持续对拍保证（误差 < 1e-2 px、可见性 0 不一致）。
 
@@ -89,8 +95,10 @@ P = u·V0 + v·V1 + w·V2
 > PR #108 关闭的是**本节描述的这条实时 3D 路线**的用户入口：实时页的「3D 面部重建」下拉项、
 > FLAME 实时孪生、以及三维资产预览页（`/three-preview`，已在 PR #110 删除）。这些 runtime 代码仍保留在
 > `web/src/services/mode3d.ts` / `projection3d.ts` / `three3d.ts`，但没有界面能进入。
-> #40 / PR #122 将路线收敛为 2D-first，3D 只保留离线资产、标注和研究预览，见
-> [FLAME_3D_TRACK.md](../tracks/FLAME_3D_TRACK.md)。
+> #40 尚待 owner 正式确认；PR #122 的工程建议是 **2D-first + 3D 离线预处理/研究查看**。
+> 在确认前实时 3D 用户入口仍不恢复，残留 runtime
+> 待共享依赖拆分后清理。量化 gate 与重启条件见 [ADR_3D_ROUTE_FEASIBILITY.md](ADR_3D_ROUTE_FEASIBILITY.md)，
+> FLAME 技术轨的现状与资产边界见 [FLAME_3D_TRACK.md](../tracks/FLAME_3D_TRACK.md)。
 >
 > **仍保留且可从界面进入的 3D 功能**：标准图谱生产 / 复核用的 3D 标注工具 `/annotate`
 > （路径：首页「图谱库管理」→ `/settings/atlas` → 打开图谱标注工具；`/app/annotate` 为兼容地址），
