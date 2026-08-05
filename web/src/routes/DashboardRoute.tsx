@@ -54,7 +54,7 @@ export function DashboardRoute() {
   });
 
   return (
-    <ReactPage>
+    <ReactPage className="dark-workbench-page dashboard-workbench-page">
       <ReactShell>
         <ReactShellSidebar>
           <WorkbenchBrand

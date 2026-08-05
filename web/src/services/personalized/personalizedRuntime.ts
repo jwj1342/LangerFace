@@ -45,6 +45,10 @@ import { smoothProjectedCurveV2 } from "./prstlPersonalizationV2.ts";
 import { dataSource, type PreviewAtlasPayload } from "../dataSource.ts";
 import { WrinkleYoloOnnx, fuseStrictUnion } from "./yoloWrinkleOnnx.ts";
 import { refineV6 } from "./v6RstlRefinement.ts";
+import {
+  createPersonalizedRouteLifecycle,
+  type PersonalizedRuntimeLease,
+} from "./personalizedRouteLifecycle.ts";
 import personalizedAtlasUrl from "../../../assets/atlas_rstl.json?url";
 import faceLandmarkerUrl from "../../../assets/face_landmarker.task?url";
 import trianglesUrl from "../../../assets/triangles.json?url";
@@ -187,11 +191,13 @@ function collectElements() {
   coach: requiredElement<HTMLElement>("coach"), coachTitle: requiredElement<HTMLElement>("coachTitle"), coachSub: requiredElement<HTMLElement>("coachSub"), coachBar: requiredElement<HTMLElement>("coachBar"),
   };
 }
-const els = collectElements();
-let ctx: CanvasRenderingContext2D = canvas2d(els.view);
-let uiAbortController: AbortController | null = null;
+let els = {} as ReturnType<typeof collectElements>;
+let ctx = null as unknown as CanvasRenderingContext2D;
+const routeLifecycle = createPersonalizedRouteLifecycle((kind, error) => {
+  console.warn(`[personalized] failed to release ${kind}`, error);
+});
+let runtimeLease: PersonalizedRuntimeLease | null = null;
 
-let landmarker: FaceLandmarker | null = null;
 let triangles: Triangle[] | null = null;
 let atlasLines: AtlasLine[] | null = null;
 let smoother = new OneEuro({ minCutoff: 1.8, beta: 0.04 });
@@ -200,7 +206,6 @@ let sess: RuntimeSession = null!;
 let t0 = performance.now(), frames = 0;
 let lastEvidenceT = 0, processing = false;
 let retainedMediaUrls: string[] = [];
-let wrinkleYolo: InstanceType<typeof WrinkleYoloOnnx> | null = null;
 /** Survives sess=null so the completed V6 atlas can enter incision planning. */
 let personalizedAtlasStaged = false;
 let personalizedActiveAtlas: (PreviewAtlasPayload & RuntimeSession) | null = null;
@@ -480,23 +485,34 @@ async function fetchJsonAsset<T>(url: string, label: string): Promise<T> {
 }
 
 async function ensureModels() {
-  if (landmarker) return;
+  const lease = runtimeLease;
+  if (!lease?.isActive()) throw new Error("个性化工作台已卸载，取消模型加载");
+  if (lease.get<FaceLandmarker>("landmarker")) return;
   els.badge.textContent = "加载模型";
   els.badge.classList.add("warn");
   const [tri, rstl] = await Promise.all([
     fetchJsonAsset<Triangle[]>(trianglesUrl, "面部拓扑"),
     fetchJsonAsset<{ lines: AtlasLine[] }>(personalizedAtlasUrl, "个性化图谱"),
   ]);
+  if (!lease.isActive()) throw new Error("个性化工作台已卸载，丢弃过期模型加载");
   triangles = tri;
   atlasLines = rstl.lines;
   const resolver = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
+  if (!lease.isActive()) throw new Error("个性化工作台已卸载，丢弃过期模型加载");
   const build = (d: "GPU" | "CPU") => FaceLandmarker.createFromOptions(resolver, {
     baseOptions: { modelAssetPath: faceLandmarkerUrl, delegate: d },
     runningMode: "VIDEO", numFaces: 1,
     outputFaceBlendshapes: true,
   });
-  try { landmarker = await build("GPU"); }
-  catch { landmarker = await build("CPU"); }
+  let created: FaceLandmarker;
+  try { created = await build("GPU"); }
+  catch {
+    if (!lease.isActive()) throw new Error("个性化工作台已卸载，取消 CPU 模型回退");
+    created = await build("CPU");
+  }
+  if (!lease.adopt("landmarker", created)) {
+    throw new Error("个性化工作台已卸载，已释放过期 FaceLandmarker");
+  }
   els.badge.textContent = "模型就绪";
   els.badge.classList.remove("warn");
 }
@@ -1113,6 +1129,22 @@ async function stopClipRecording(reason = "completed"): Promise<RecordedClip | n
   return clip;
 }
 
+function disposeActiveRecording(): void {
+  const active = sess?.activeRecording as ActiveRecording | null | undefined;
+  if (!active) return;
+  sess.activeRecording = null;
+  const recorder = active.recorder;
+  if (recorder) {
+    recorder.ondataavailable = null;
+    recorder.onerror = null;
+    if (recorder.state !== "inactive") {
+      try { recorder.stop(); } catch (_) { /* already stopped */ }
+    }
+  }
+  active.chunks.length = 0;
+  active.frames.length = 0;
+}
+
 function appendCaptureSample({
   bs, alignedMesh, registration, pose, poseQuality, sourceFaceWidth, detectedFace = true,
 }: {
@@ -1531,10 +1563,17 @@ function attachCurveBary(curves: Array<RuntimeSession & { pts: Point2[] }>): voi
   }
 }
 
-async function ensureWrinkleYolo(): Promise<InstanceType<typeof WrinkleYoloOnnx>> {
-  if (!wrinkleYolo) wrinkleYolo = new WrinkleYoloOnnx({ confidenceThreshold: YOLO_CONFIDENCE });
-  await wrinkleYolo.load();
-  return wrinkleYolo;
+async function ensureWrinkleYolo(
+  lease: PersonalizedRuntimeLease,
+): Promise<InstanceType<typeof WrinkleYoloOnnx>> {
+  const existing = lease.get<InstanceType<typeof WrinkleYoloOnnx>>("wrinkleYolo");
+  if (existing) return existing;
+  const created = new WrinkleYoloOnnx({ confidenceThreshold: YOLO_CONFIDENCE });
+  await created.load();
+  if (!lease.adopt("wrinkleYolo", created)) {
+    throw new Error("个性化工作台已卸载，已释放过期 YOLO session");
+  }
+  return created;
 }
 
 function applyResidualFlowToDetection(
@@ -1772,12 +1811,15 @@ function buildV6Payload(
 }
 
 async function runLocalYoloV6(session: RuntimeSession): Promise<RuntimeSession> {
+  const lease = runtimeLease;
+  if (!lease?.isActive() || sess !== session) throw new Error("采集会话已结束，取消 YOLO / V6");
   const samples = (session.yoloSamples || []).filter((sample: RuntimeSession) => sample?.imageData?.data) as Array<RuntimeSession & { imageData: ImageData; expression: ActionName | "neutral" }>;
   if (samples.length < 2 || !samples.some((sample: RuntimeSession) => sample.expression === "neutral")) {
     throw new Error("至少需要中性帧和一个已接受的表情轮次才能运行 YOLO + V6");
   }
   setLocalPipelineStatus("正在本机加载皱纹 YOLO…", 4);
-  const model = await ensureWrinkleYolo();
+  const model = await ensureWrinkleYolo(lease);
+  if (!lease.isActive() || sess !== session) throw new Error("采集会话已结束，丢弃过期 YOLO 模型");
   const detections: RuntimeSession[] = [];
   for (let index = 0; index < samples.length; index++) {
     const sample = samples[index];
@@ -1789,7 +1831,9 @@ async function runLocalYoloV6(session: RuntimeSession): Promise<RuntimeSession> 
       ...sample,
       regionGate: buildExpressionRegionGate(sample.expression, session),
     }));
+    if (!lease.isActive() || sess !== session) throw new Error("采集会话已结束，丢弃过期 YOLO 结果");
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    if (!lease.isActive() || sess !== session) throw new Error("采集会话已结束，取消剩余 YOLO 推理");
   }
 
   setLocalPipelineStatus("正在对所有表情执行严格像素并集…", 68);
@@ -1803,6 +1847,7 @@ async function runLocalYoloV6(session: RuntimeSession): Promise<RuntimeSession> 
     consolidationRadiusPx,
     consolidationDirectionToleranceDegrees: 28,
   });
+  if (!lease.isActive() || sess !== session) throw new Error("采集会话已结束，丢弃过期并集结果");
   // fused.mask 始终保留逐像素严格并集，供审计；显示与 V6 使用相邻同向
   // 重复皱纹合并后的 mask，避免不同表情的轻微错位形成双线。
   const wrinkleMask = fused.consolidatedMask || fused.mask;
@@ -1824,7 +1869,7 @@ async function runLocalYoloV6(session: RuntimeSession): Promise<RuntimeSession> 
     size: SIZE,
     faceWidthPx: canonicalFaceWidth(session),
   });
-  if (sess !== session) throw new Error("采集会话已结束，已丢弃过期微调结果");
+  if (!lease.isActive() || sess !== session) throw new Error("采集会话已结束，已丢弃过期微调结果");
   const curves = normalizeV6Curves(refined?.curves || refined?.lines || refined, seeds);
   if (!atlasLines || curves.length !== seeds.length || curves.length !== atlasLines.length) {
     throw new Error(`V6 必须保持 ${atlasLines?.length || 0} 条曲线，实际得到 ${curves.length} 条`);
@@ -2488,8 +2533,9 @@ function tick(): void {
   let lmPx: Point2[] | null = null;
   const now = performance.now() / 1000;
   try {
-    if (!landmarker) throw new Error("FaceLandmarker 尚未加载");
-    const res = landmarker.detectForVideo(els.video, performance.now());
+    const activeLandmarker = runtimeLease?.get<FaceLandmarker>("landmarker");
+    if (!activeLandmarker) throw new Error("FaceLandmarker 尚未加载");
+    const res = activeLandmarker.detectForVideo(els.video, performance.now());
     const face = res.faceLandmarks?.[0];
     const bs = blendDict(res.faceBlendshapes?.[0]?.categories);
     if (face) {
@@ -3049,11 +3095,11 @@ function downloadCanvas(canvas: HTMLCanvasElement, filename: string): void {
 }
 
 export function mountPersonalizedWorkbench() {
-  uiAbortController?.abort();
+  disposePersonalizedWorkbench();
+  runtimeLease = routeLifecycle.mount();
   Object.assign(els, collectElements());
   ctx = canvas2d(els.view);
-  uiAbortController = new AbortController();
-  const options = { signal: uiAbortController.signal };
+  const options = { signal: runtimeLease.signal };
 
   els.start.addEventListener("click", () => { void onStartClick(); }, options);
   els.stop.addEventListener("click", stopCapture, options);
@@ -3077,10 +3123,13 @@ export function mountPersonalizedWorkbench() {
 }
 
 export function disposePersonalizedWorkbench() {
-  uiAbortController?.abort();
-  uiAbortController = null;
+  disposeActiveRecording();
+  runtimeLease = null;
+  routeLifecycle.dispose();
   looping = false;
   processing = false;
+  sess = null!;
+  smoother = new OneEuro({ minCutoff: 1.8, beta: 0.04 });
   if (stream) {
     stream.getTracks().forEach((track) => track.stop());
     stream = null;

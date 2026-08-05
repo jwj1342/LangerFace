@@ -34,6 +34,8 @@ assert.doesNotMatch(v6Styles, /^(?:\s*:root|\s*body|\s*h1|\s*\.button)\s*\{/m,
   "lazy V6 route styles must stay scoped and must not leak into other SPA routes");
 assert.doesNotMatch(v6Styles, /--green:|#38e3a1/,
   "V6 review uses blue for actions and keeps green only as semantic/scientific data color");
+assert.match(dashboard, /<ReactPage className="dark-workbench-page dashboard-workbench-page">/,
+  "the dashboard shell must use the same dark theme as the tool workbenches");
 assert.match(dashboard, /text-blue-300/);
 assert.doesNotMatch(dashboard, /text-emerald-300/);
 
