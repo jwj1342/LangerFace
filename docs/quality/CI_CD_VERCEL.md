@@ -161,9 +161,21 @@ Required status checks 建议包含：
 | `python-tests (3.11)` | `.github/workflows/ci.yml` matrix |
 | `python-tests (3.12)` | `.github/workflows/ci.yml` matrix |
 | `js-tests` | `.github/workflows/ci.yml` |
+| `browser-tests` | `.github/workflows/ci.yml` Playwright 浏览器回归 |
 | Vercel Production Deployment check | Vercel GitHub 集成在 `master` 生产部署时生成，具体名称以 GitHub UI 显示为准 |
 
 实际 check 名称由 GitHub UI 决定。第一次 PR 跑完后，在 Branch protection 页面选择已经出现的 check，不要手写猜名称。
+
+截至 2026-08-04，线上 required contexts 为 `lint`、三个 Python matrix、
+`js-tests` 和 `browser-tests`；`strict`、过期审批撤销和管理员同样受保护规则约束均已启用。
+管理员状态可从上面的 protection API 回读；仓库当前没有 Ruleset，因此也没有通过
+Ruleset 配置的 merge queue 或 bypass actor。
+
+`TODO issue sync / check` 是条件性、非阻塞审计，不属于 Auto-merge 的 required
+contexts。它会在 Issue 状态变化、定时任务，以及修改 TODO / 同步脚本 / 自身 workflow
+的 PR 上运行；新开或重开 Issue 会在 PR 之外改变其结果，因此不能把该条件性 check
+描述成稳定的逐 PR 合并门禁。TODO owner 仍应在失败时及时同步
+[`docs/planning/TODO.md`](../planning/TODO.md)，但缺少该 check 不阻止原生 Auto-merge。
 
 ## GitHub Auto-merge 与 stacked PR
 
@@ -177,7 +189,7 @@ Required status checks 建议包含：
 - `strict: true`，PR 分支必须包含最新 `master`；
 - 至少 1 个 approving review；
 - `dismiss_stale_reviews: true`，任何新提交都会撤销旧 approval；
-- 不使用 admin bypass。
+- `enforce_admins: true`，管理员也不能跳过这些规则；自动化不使用 `--admin`。
 
 2026-07-30 已通过 GitHub API 启用 `dismiss_stale_reviews`。可用下面的只读命令复核，
 不要仅依据文档推断线上设置：
@@ -187,7 +199,9 @@ gh api repos/jwj1342/LangerFace/branches/master/protection \
   --jq '{strict:.required_status_checks.strict,
          dismiss_stale_reviews:.required_pull_request_reviews.dismiss_stale_reviews,
          approvals:.required_pull_request_reviews.required_approving_review_count,
-         checks:.required_status_checks.contexts}'
+         checks:.required_status_checks.contexts,
+         enforce_admins:.enforce_admins.enabled}'
+gh api repos/jwj1342/LangerFace/rulesets
 ```
 
 维护者为允许自动接力的 PR 添加 `automerge:stack` 标签。
@@ -224,7 +238,7 @@ gh api repos/jwj1342/LangerFace/branches/master/protection \
 `MODULE_NOT_FOUND`；合并部署后，定时轮询会从 `master` 读取脚本并开始正常处理。
 
 Branch protection 的 required checks 是显式 allowlist，不会因为 workflow 新增 job
-自动扩充。新增 `browser-tests`、文档同步或其他合并门禁时，必须等该 job 已在默认分支
+自动扩充。新增文档同步或其他合并门禁时，必须等该 job 已在默认分支
 存在、所有仍指向 `master` 的开放 PR 都能产生该 check 后，再把它加入 required
 contexts；在完成设置更新前，不得把新 job 仅写成“必需”而实际仍为 optional。
 

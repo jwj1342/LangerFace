@@ -139,6 +139,8 @@ PR 上应关注这些 checks：
 | `lint` | Python lint / import 排序 |
 | `python-tests (3.10/3.11/3.12)` | Python 测试矩阵 |
 | `js-tests` | Vite build + JS/Python 几何对拍 + 标注模型测试 |
+| `browser-tests` | Playwright 跨路由、交互和计算样式回归；是 `master` 合并门禁 |
+| `TODO issue sync / check` | 条件性、非阻塞审计；只在 Issue 事件、定时任务或相关文件变更时出现 |
 | `Vercel` | Production 部署状态；临时 Preview 只在维护者手动创建时出现 |
 | `Vercel Preview Comments` | 手动创建 Preview 时，Vercel 可能在 PR 中发布 Preview 链接 |
 

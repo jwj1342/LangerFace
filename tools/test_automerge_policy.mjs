@@ -164,6 +164,8 @@ assert.equal(
 assert.match(loggedErrors[0], /#116/, "failure log identifies the affected PR");
 
 const workflow = fs.readFileSync(".github/workflows/automerge-approved.yml", "utf8");
+const ciGuide = fs.readFileSync("docs/quality/CI_CD_VERCEL.md", "utf8");
+const contributing = fs.readFileSync("docs/onboarding/CONTRIBUTING.md", "utf8");
 assert.match(workflow, /pull_request_target:/);
 assert.match(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
 assert.match(workflow, /persist-credentials: false/);
@@ -175,5 +177,15 @@ assert.match(workflow, /contents: write/);
 assert.doesNotMatch(workflow, /pull_request\.head/);
 assert.doesNotMatch(workflow, /--admin/);
 assert.doesNotMatch(workflow, /^\s+- closed\s*$/m);
+assert.match(ciGuide, /\| `browser-tests` \| `\.github\/workflows\/ci\.yml` Playwright 浏览器回归 \|/,
+  "operations guide records browser-tests as a required branch-protection check");
+assert.match(ciGuide, /`TODO issue sync \/ check` 是条件性、非阻塞审计/,
+  "operations guide must not present the conditional TODO audit as a stable merge gate");
+assert.match(ciGuide, /`enforce_admins: true`/,
+  "operations guide records that administrators are subject to branch protection");
+assert.match(contributing, /`browser-tests` \| Playwright[^\n]*合并门禁/,
+  "contributor checklist identifies the browser regression merge gate");
+assert.match(contributing, /`TODO issue sync \/ check` \| 条件性、非阻塞审计/,
+  "contributor checklist distinguishes the conditional TODO audit");
 
 console.log("test_automerge_policy: eligibility, branch update, failure isolation, and trusted checkout passed");
