@@ -1233,7 +1233,7 @@ function renderFinalExports() {
     const lines = top.map((r) =>
       `<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;margin:2px 0">
         <span>${r.name || "line"}</span>
-        <span style="color:#0c8460;font-weight:700">Δ ${r.meanPx.toFixed(1)}px</span>
+        <span style="color:#a6c8ff;font-weight:700">Δ ${r.meanPx.toFixed(1)}px</span>
       </div>`).join("");
     els.compareSummary.innerHTML =
       `<div style="font-size:13px;font-weight:700;margin-bottom:2px">最终曲线 ${curves.length}/${seeds.length} · 直接证据 ${refinedLines} 条 · 连续场移动 ${movedLines} 条</div>
