@@ -37,6 +37,10 @@ import { parseMeshFile } from "./meshIo";
 import { parseSlicerCurveFile } from "./slicerCurve";
 import { topologyMeta } from "./topologyRegistry";
 import {
+  createAnnotationSessionGuard,
+  type AnnotationSessionToken,
+} from "./annotationSession";
+import {
   readAnnotateDrawCommand,
   readAnnotateLibraryCommand,
   readAnnotateMeshCommand,
@@ -75,10 +79,9 @@ let els = {} as AnnotateDomElements;
 let viewer = null as unknown as Annotator3DInstance;
 let model = null as unknown as AnnotationModelInstance;
 let onCanonical = false;   // 是否在标准脸拓扑上标注（决定能否导出图谱）
-let mounted = false;
 let frameId = 0;
 let abortController: AbortController | null = null;
-let activeSession = 0;
+const activeSession = createAnnotationSessionGuard();
 
 let bundledFlameBasis: FlameBasis | null = null;
 
@@ -87,7 +90,7 @@ function isAnnotationPoint(point: AnnotationPoint | null): point is AnnotationPo
 }
 
 function publishAnnotateState(reason = "state_update"): void {
-  if (!mounted || typeof window === "undefined" || !els?.hint) return;
+  if (!activeSession.isMounted() || typeof window === "undefined" || !els?.hint) return;
   dispatchControllerEvent(ANNOTATE_CONTROLLER_STATE_EVENT, buildAnnotateControllerSnapshot({
     reason,
     hint: els.hint?.textContent || "",
@@ -114,7 +117,8 @@ async function loadBundledFlameStandard(): Promise<FlameMesh> {
 
 // ── 网格加载 ──────────────────────────────────────────────────────────────────
 async function loadCanonical(): Promise<void> {
-  const session = activeSession;
+  const session = activeSession.current();
+  if (session === null) return;
   setHint("加载标准三维面部模型…");
   let mesh: FlameMesh;
   try {
@@ -157,7 +161,8 @@ const fittedFlameAvailable = () =>
   Boolean(flameUrl("topology_flame_2023") && flameUrl("flame_fitted_vertices"));
 
 async function loadFlameMesh(vertsName: string, label: string): Promise<void> {
-  const session = activeSession;
+  const session = activeSession.current();
+  if (session === null) return;
   const vurl = flameUrl(vertsName);
   const turl = flameUrl("topology_flame_2023");
   if (!vurl || !turl) {
@@ -199,7 +204,8 @@ async function fetchJSON<T = unknown>(url: string, label: string): Promise<T> {
 
 async function loadMeshFile(file?: File): Promise<void> {
   if (!file) return;
-  const session = activeSession;
+  const session = activeSession.current();
+  if (session === null) return;
   setHint(`正在读取 ${file.name} ...`);
   let mesh: Awaited<ReturnType<typeof parseMeshFile>>;
   try {
@@ -218,7 +224,8 @@ async function loadMeshFile(file?: File): Promise<void> {
 
 async function loadSlicerFile(file?: File): Promise<void> {
   if (!file) return;
-  const session = activeSession;
+  const session = activeSession.current();
+  if (session === null) return;
   if (!viewer.hasMesh()) {
     setHint("请先加载标准脸或上传头模，再导入 Slicer 曲线。");
     return;
@@ -558,20 +565,19 @@ function refresh(): void {
 
 // ── 渲染循环 + 自适应 ─────────────────────────────────────────────────────────
 function tick(): void {
-  if (!mounted || !viewer || !els?.stage) return;
+  if (!activeSession.isMounted() || !viewer || !els?.stage) return;
   const r = (els.stage.parentElement ?? els.stage).getBoundingClientRect();
   viewer.resize(Math.max(2, r.width | 0), Math.max(2, r.height | 0));
   viewer.render();
   frameId = requestAnimationFrame(tick);
 }
 
-function isActiveSession(session: number): boolean {
-  return mounted && session === activeSession;
+function isActiveSession(session: AnnotationSessionToken): boolean {
+  return activeSession.isActive(session);
 }
 
 export function disposeAnnotateWorkbench() {
-  mounted = false;
-  activeSession += 1;
+  activeSession.dispose();
   if (frameId) cancelAnimationFrame(frameId);
   frameId = 0;
   abortController?.abort?.();
@@ -589,8 +595,7 @@ export function mountAnnotateWorkbench(root: ParentNode | Document = document) {
   model = new AnnotationModel(els.system.value);
   viewer.setAnnotation(model);
   onCanonical = false;
-  mounted = true;
-  activeSession += 1;
+  const bootSession = activeSession.mount();
   abortController = new AbortController();
   bindAnnotateEvents();
   if (!isReactManagedWorkbench()) {
@@ -599,7 +604,6 @@ export function mountAnnotateWorkbench(root: ParentNode | Document = document) {
   }
   refresh();
   setHint("点「加载标准脸」开始，或上传头模 JSON / OBJ / PLY。");
-  const bootSession = activeSession;
   loadCanonical().catch((e) => {
     if (isActiveSession(bootSession)) setHint("标准脸加载失败：" + errorMessage(e));
   });
