@@ -47,6 +47,8 @@ import { WrinkleYoloOnnx, fuseStrictUnion } from "./yoloWrinkleOnnx.ts";
 import { refineV6 } from "./v6RstlRefinement.ts";
 import {
   createPersonalizedRouteLifecycle,
+  requestCameraStreamForLease,
+  stopMediaStream,
   type PersonalizedRuntimeLease,
 } from "./personalizedRouteLifecycle.ts";
 import personalizedAtlasUrl from "../../../assets/atlas_rstl.json?url";
@@ -484,9 +486,8 @@ async function fetchJsonAsset<T>(url: string, label: string): Promise<T> {
   }
 }
 
-async function ensureModels() {
-  const lease = runtimeLease;
-  if (!lease?.isActive()) throw new Error("个性化工作台已卸载，取消模型加载");
+async function ensureModels(lease: PersonalizedRuntimeLease) {
+  if (!lease.isActive()) throw new Error("个性化工作台已卸载，取消模型加载");
   if (lease.get<FaceLandmarker>("landmarker")) return;
   els.badge.textContent = "加载模型";
   els.badge.classList.add("warn");
@@ -2897,6 +2898,17 @@ async function onStartClick() {
 }
 
 async function startCapture() {
+  const lease = runtimeLease;
+  const video = els.video;
+  if (!lease?.isActive()) return;
+  let cameraStream: MediaStream | null = null;
+  const releaseStaleStartup = () => {
+    if (!cameraStream) return;
+    stopMediaStream(cameraStream);
+    if (video.srcObject === cameraStream) video.srcObject = null;
+    if (runtimeLease === lease && stream === cameraStream) stream = null;
+    cameraStream = null;
+  };
   els.start.disabled = true;
   setMsg("请求摄像头权限…");
   els.boot.textContent = "请允许摄像头权限";
@@ -2910,21 +2922,39 @@ async function startCapture() {
       { video: { facingMode: "user" }, audio: false },
       { video: true, audio: false },
     ];
-    let err = null;
-    for (const c of trials) {
-      try { stream = await navigator.mediaDevices.getUserMedia(c); break; }
-      catch (e) { err = e; }
+    cameraStream = await requestCameraStreamForLease(
+      lease,
+      trials,
+      (constraints) => navigator.mediaDevices.getUserMedia(constraints),
+    );
+    if (!cameraStream || !lease.isActive()) {
+      releaseStaleStartup();
+      return;
     }
-    if (!stream) throw err || new Error("无法打开摄像头");
-    els.video.srcObject = stream;
-    els.video.muted = true;
-    await els.video.play();
-    for (let i = 0; i < 40 && !els.video.videoWidth; i++) await new Promise((r) => setTimeout(r, 50));
-    if (!els.video.videoWidth) throw new Error("摄像头无画面");
+    stream = cameraStream;
+    video.srcObject = cameraStream;
+    video.muted = true;
+    await video.play();
+    if (!lease.isActive()) {
+      releaseStaleStartup();
+      return;
+    }
+    for (let i = 0; i < 40 && !video.videoWidth; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      if (!lease.isActive()) {
+        releaseStaleStartup();
+        return;
+      }
+    }
+    if (!video.videoWidth) throw new Error("摄像头无画面");
 
     setLive(true);
     els.boot.textContent = "加载模型中…";
-    await ensureModels();
+    await ensureModels(lease);
+    if (!lease.isActive()) {
+      releaseStaleStartup();
+      return;
+    }
 
     sess = createSessionState(SIZE);
     sess.algorithmVersion = BOTTOM_UP_PERSONALIZATION_VERSION;
@@ -2954,6 +2984,10 @@ async function startCapture() {
     };
     recordDebugEvent("session_started", { camera: sess.captureSettings });
     await startClipRecording("neutral", 1, "neutral_reference");
+    if (!lease.isActive()) {
+      releaseStaleStartup();
+      return;
+    }
     const masks = buildMasks(SIZE);
     sess.skin = masks.skin;
     sess.forbidden = masks.forbidden;
@@ -2979,9 +3013,17 @@ async function startCapture() {
     frames = 0;
     requestAnimationFrame(tick);
   } catch (e) {
+    if (!lease.isActive()) {
+      releaseStaleStartup();
+      return;
+    }
     console.error(e);
     await stopClipRecording("startup_failed");
-    if (stream) { stream.getTracks().forEach((track) => track.stop()); stream = null; }
+    if (!lease.isActive()) {
+      releaseStaleStartup();
+      return;
+    }
+    releaseStaleStartup();
     if (els.recordDebugMedia) els.recordDebugMedia.disabled = false;
     els.start.disabled = false;
     syncStartButton();

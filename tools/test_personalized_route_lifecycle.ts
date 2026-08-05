@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   createPersonalizedRouteLifecycle,
+  requestCameraStreamForLease,
   type PersonalizedRuntimeResource,
 } from "../web/src/services/personalized/personalizedRouteLifecycle.ts";
 
@@ -59,4 +60,52 @@ assert.equal(third.isActive(), true, "the newest route generation remains active
 lifecycle.dispose();
 lifecycle.dispose();
 
-console.log("test_personalized_route_lifecycle: enter/leave/re-enter ownership passed");
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+function fakeStream() {
+  let stopCount = 0;
+  return {
+    stream: {
+      getTracks() {
+        return [{ stop() { stopCount += 1; } }];
+      },
+    },
+    stopCount: () => stopCount,
+  };
+}
+
+const cameraLifecycle = createPersonalizedRouteLifecycle();
+const delayedLease = cameraLifecycle.mount();
+const delayedPermission = deferred<ReturnType<typeof fakeStream>["stream"]>();
+const staleCamera = fakeStream();
+const delayedRequest = requestCameraStreamForLease(
+  delayedLease,
+  [{ video: true }],
+  () => delayedPermission.promise,
+);
+
+cameraLifecycle.dispose();
+const reenteredLease = cameraLifecycle.mount();
+const currentCamera = fakeStream();
+const currentRequest = requestCameraStreamForLease(
+  reenteredLease,
+  [{ video: true }],
+  async () => currentCamera.stream,
+);
+delayedPermission.resolve(staleCamera.stream);
+
+assert.equal(await delayedRequest, null,
+  "a permission result arriving after leave -> re-enter cannot enter the new generation");
+assert.equal(staleCamera.stopCount(), 1,
+  "a stale getUserMedia result stops its tracks before the caller can publish it globally");
+assert.equal(await currentRequest, currentCamera.stream,
+  "the re-entered route receives only its own camera stream");
+assert.equal(currentCamera.stopCount(), 0,
+  "the current generation camera remains active");
+cameraLifecycle.dispose();
+
+console.log("test_personalized_route_lifecycle: resource and delayed-camera ownership passed");

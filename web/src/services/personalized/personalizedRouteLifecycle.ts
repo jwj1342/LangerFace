@@ -17,6 +17,37 @@ export interface PersonalizedRouteLifecycle {
   dispose(): void;
 }
 
+export interface StoppableMediaStream {
+  getTracks(): readonly { stop(): void }[];
+}
+
+export function stopMediaStream(stream: StoppableMediaStream): void {
+  for (const track of stream.getTracks()) track.stop();
+}
+
+export async function requestCameraStreamForLease<T extends StoppableMediaStream>(
+  lease: Pick<PersonalizedRuntimeLease, "isActive">,
+  constraints: readonly MediaStreamConstraints[],
+  getUserMedia: (constraints: MediaStreamConstraints) => Promise<T>,
+): Promise<T | null> {
+  let lastError: unknown = new Error("无法打开摄像头");
+  for (const candidateConstraints of constraints) {
+    if (!lease.isActive()) return null;
+    try {
+      const candidate = await getUserMedia(candidateConstraints);
+      if (!lease.isActive()) {
+        stopMediaStream(candidate);
+        return null;
+      }
+      return candidate;
+    } catch (error) {
+      lastError = error;
+      if (!lease.isActive()) return null;
+    }
+  }
+  throw lastError;
+}
+
 type ReleaseErrorHandler = (kind: PersonalizedRuntimeResourceKind, error: unknown) => void;
 
 export function createPersonalizedRouteLifecycle(
