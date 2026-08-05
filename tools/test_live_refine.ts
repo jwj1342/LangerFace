@@ -7,6 +7,7 @@ import {
   curvePointWindow,
   curveEraseTargets,
   deformCurveWide,
+  explicitSymmetryPartnerIndex,
   mapRefineViewportPoint,
   moveCurvePoints,
   stabilizeCurveToReference,
@@ -25,6 +26,19 @@ const transported = applyCurveRefinementTransport(nextFrame, transport, { width:
 assert.ok(transported[0].pts[1][1] > 50, "frozen-frame edit must scale onto a later live frame");
 assert.deepEqual(curveEraseTargets(2, 7, true), [2, 7], "symmetry erase must include the partner curve");
 assert.deepEqual(curveEraseTargets(2, 7, false), [2], "independent erase must affect only the selected curve");
+assert.equal(explicitSymmetryPartnerIndex([
+  { name: "brow_left_main", pts: [[10, 10]] },
+  { name: "nearby_unpaired", pts: [[12, 10]] },
+  { name: "brow_right_main", pts: [[90, 10]] },
+], 0), 2, "explicit left/right names must resolve their declared mirror");
+assert.equal(explicitSymmetryPartnerIndex([
+  { name: "curve_a", region: "brow", pts: [[10, 10]] },
+  { name: "curve_b", region: "brow", pts: [[12, 10]] },
+], 0), null, "nearby unpaired curves must never be guessed as symmetry partners");
+assert.equal(explicitSymmetryPartnerIndex([
+  { name: "curve_a", symmetryPairId: "pair-1", pts: [[10, 10]] },
+  { name: "curve_b", symmetryPairId: "pair-1", pts: [[90, 10]] },
+], 0), 1, "symmetry pair ids must remain opt-in linkage contracts");
 
 const largeDrag = deformCurveWide(
   [[0, 40], [25, 40], [50, 40], [75, 40], [100, 40]],

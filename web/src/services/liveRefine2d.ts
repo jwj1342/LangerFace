@@ -9,6 +9,7 @@ import {
   curvePointWindow,
   curveEraseTargets,
   deformCurveWide,
+  explicitSymmetryPartnerIndex,
   mapRefineViewportPoint,
   moveCurvePoints,
   stabilizeCurveToReference,
@@ -197,7 +198,7 @@ export function resetRefineForNewSource(): void {
   s.spread = 0.28;
   s.pointCount = 1;
   s.nudgeStep = 0.5;
-  s.symmetry = true;
+  s.symmetry = false;
   s.showAxis = true;
   s.lines = null;
   s.latestAutoLines = null;
@@ -464,60 +465,8 @@ function movePoint(pick: RefinePick, offset: readonly [number, number]): [number
   return moved && anchor ? [moved[0] - anchor[0], moved[1] - anchor[1]] : [0, 0];
 }
 
-function lineCentroid(line: EditableRefineLine | null | undefined): [number, number] {
-  const pts = line?.pts || [];
-  if (!pts.length) return [0, 0];
-  const sum = pts.reduce<[number, number]>(
-    (acc, point) => [acc[0] + point[0], acc[1] + point[1]],
-    [0, 0],
-  );
-  return [sum[0] / pts.length, sum[1] / pts.length];
-}
-
-function mirroredName(name = ""): string {
-  if (name.includes("_left_")) return name.replace("_left_", "_right_");
-  if (name.includes("_right_")) return name.replace("_right_", "_left_");
-  if (name.endsWith("_l")) return `${name.slice(0, -2)}_r`;
-  if (name.endsWith("_r")) return `${name.slice(0, -2)}_l`;
-  if (name.includes("left")) return name.replace("left", "right");
-  if (name.includes("right")) return name.replace("right", "left");
-  return "";
-}
-
 function findSymmetryPartner(lineIndex: number): number | null {
-  const s = state();
-  const lines = s.lines;
-  const line = lines?.[lineIndex];
-  if (!line || line.hidden) return null;
-  if (line.symmetryRole === "midline" || line.symmetryRole === "bilateral") return null;
-  if (line.symmetryPairId) {
-    const explicit = lines.findIndex((candidate, index) =>
-      index !== lineIndex && !candidate.hidden && candidate.symmetryPairId === line.symmetryPairId);
-    if (explicit >= 0) return explicit;
-  }
-  const name = mirroredName(line.name);
-  if (name) {
-    const byName = lines.findIndex((candidate, index) =>
-      index !== lineIndex && !candidate.hidden && candidate.name === name);
-    if (byName >= 0) return byName;
-  }
-
-  const axis = faceAxisX();
-  const source = lineCentroid(line);
-  const mirrored: [number, number] = [2 * axis - source[0], source[1]];
-  let best: { index: number; score: number } | null = null;
-  for (let index = 0; index < lines.length; index++) {
-    const candidate = lines[index];
-    if (!candidate || index === lineIndex || candidate.hidden) continue;
-    if (line.region && candidate.region && line.region !== candidate.region) continue;
-    const c = lineCentroid(candidate);
-    if ((source[0] - axis) * (c[0] - axis) > 0) continue;
-    const centroidScore = Math.hypot(c[0] - mirrored[0], c[1] - mirrored[1]);
-    const countScore = Math.abs((candidate.pts?.length || 0) - (line.pts?.length || 0)) * 0.6;
-    const score = centroidScore + countScore;
-    if (!best || score < best.score) best = { index, score };
-  }
-  return best && best.score < els.canvas.width * 0.16 ? best.index : null;
+  return explicitSymmetryPartnerIndex(state().lines, lineIndex);
 }
 
 export function symmetryPartnerIndex(): number | null {

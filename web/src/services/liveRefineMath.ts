@@ -451,3 +451,38 @@ export function curveEraseTargets(
   }
   return [...new Set(targets.filter(Number.isInteger))];
 }
+
+function mirroredRefineLineName(name = ""): string {
+  if (name.includes("_left_")) return name.replace("_left_", "_right_");
+  if (name.includes("_right_")) return name.replace("_right_", "_left_");
+  if (name.endsWith("_l")) return `${name.slice(0, -2)}_r`;
+  if (name.endsWith("_r")) return `${name.slice(0, -2)}_l`;
+  if (name.includes("left")) return name.replace("left", "right");
+  if (name.includes("right")) return name.replace("right", "left");
+  return "";
+}
+
+/** Resolve only declared symmetry pairs; never guess from spatial proximity. */
+export function explicitSymmetryPartnerIndex(
+  lines: readonly RefineLine[] | null | undefined,
+  lineIndex: number,
+): number | null {
+  const line = lines?.[lineIndex];
+  if (!line || line.hidden || line.symmetryRole === "midline" || line.symmetryRole === "bilateral") {
+    return null;
+  }
+  if (line.symmetryPairId) {
+    const byPairId = lines?.findIndex((candidate, index) => (
+      index !== lineIndex
+      && !candidate.hidden
+      && candidate.symmetryPairId === line.symmetryPairId
+    ));
+    if (typeof byPairId === "number" && byPairId >= 0) return byPairId;
+  }
+  const mirroredName = mirroredRefineLineName(line.name);
+  if (!mirroredName) return null;
+  const byName = lines?.findIndex((candidate, index) => (
+    index !== lineIndex && !candidate.hidden && candidate.name === mirroredName
+  ));
+  return typeof byName === "number" && byName >= 0 ? byName : null;
+}
