@@ -79,28 +79,19 @@ bary 迁移保证线条落在解剖对应位置、方向随曲面形变。但「
 - **Sprint 3 ✅（模式 A 关键点）**：`langerface.flame` 纯 numpy 线性形状拟合（FLAME 线性基最小二乘 + 项目 Umeyama，CPU 离线，**无需 PyTorch/GPU**）；`tools/fit_flame_to_landmarks.py` 用官方 `mediapipe_landmark_embedding.npz`（105 点）把 FLAME 拟合到 MediaPipe 关键点 → 个体 FLAME。真模型实测：5023 顶点、105 关键点、残差 ~1.6mm。合成单测验证 β 恢复 + `transfer_points` 线随形变迁移。
 - **Sprint 4 ✅（个体可视化·初版）**：标注器「加载个体 FLAME（拟合）」加载 `flame_fitted_vertices.json`，可视化拟合后的个体脸。
 - **Sprint 5 ✅（PR #88，经典 RSTL 图谱→FLAME 草案注册）**：`tools/register_rstl_atlas_to_flame.py` 默认从本地 `RSTL/RSTL PRSgo.png` 经典正面图谱抽取 RSTL 线段，再使用 `assets/flame_basis.npz` 中的 FLAME neutral、三角面与官方 MediaPipe embedding 注册为 gitignored `local_outputs/atlas_rstl_flame.json`（`topologyId:"flame-2023"`）。本地 `RSTL/` 经典图谱资料作为 provenance bundle 记录；输出仍为 `validated:false`，需要 #2 临床复核。
-- **切口工作台补线 ✅**：`/app/incision` 现在默认优先加载 `flame-2023` neutral 头模（由 `web/assets/flame_basis.bin` 生成），并把 MediaPipe RSTL 草案转换成 FLAME 表面的 `points3d` 研究预览线；失败时回退 `mediapipe-468`。该工作台预览不替代正式 `flame-2023` 医生图谱，且 FLAME 候选暂不直接进入实时 MediaPipe 叠加，契约统一见 §10。
+- **切口工作台迁出 FLAME ✅**：`/app/incision` 已固定到 `mediapipe-468`，优先使用 `/personalized` 产出的 YOLO/V6 个体化 RSTL，标准 RSTL 仅作显式降级；切口运行时不再加载 FLAME basis 或执行 MediaPipe→FLAME 预览转换。FLAME 仅留在独立离线研究 / 标注范围。
 - **Sprint 6（暂缓）**：把医生复核后的 flame-2023 标准线**渲染到个体脸上**（载入已存图谱 + 在个体网格 `transfer_points` 重心采样）；**模式 B 3D 扫描配准**后端；眼周放射线/贴面平滑验收 fixture；`snapToSurface` 空间索引（5023 顶点）。重新启动须满足 TODO 的 3D 路线重启条件。
 
-## 10. 切口工作台的 FLAME 资产边界
+## 10. 与切口工作台的边界
 
-`/incision`（兼容地址 `/app/incision`）默认尝试从已入仓的 `web/assets/flame_basis.bin` 生成
-`flame-2023` neutral mesh；失败时必须回退 `mediapipe-468`，并把原因写入 UI、snapshot 和审阅导出。
-这一工作台集成受以下契约约束：
+`/incision`（兼容地址 `/app/incision`）不再是 FLAME consumer。切口工作台只接受 `mediapipe-468` RSTL，
+优先消费 `/personalized` 的 YOLO/V6 个体化图谱，并在没有合格个体化图谱时明确降级到标准先验。
 
-- MediaPipe atlas 的 `[tri,u,v]` 不能直接套到 FLAME 三角面。当前只把 MediaPipe RSTL 草案转换成
-  FLAME neutral 上、标记为 `validated:false` 的 `points3d` 研究预览。
-- `dataSource` 负责拓扑资产边界，`flameHeadAssets.ts` 负责无 DOM 的 basis 加载、neutral mesh 和预览线转换，
-  `incisionRuntime.ts` 只负责编排与发布低频 `headAsset` snapshot。
-- 基于 FLAME topology 的候选不得直接发送到 MediaPipe 实时叠加。review gate 会阻断，直到存在显式拓扑映射
-  或独立 FLAME overlay 路线。
-- JSON/Markdown 审阅导出必须保留 `head_asset`、拓扑版本、网格规模、预览线来源和 warning；UI 不把
-  顶点、三角面或 Three.js 对象放入 Zustand。
-- `test_asset_loader.ts` 锁定 5023 顶点 / 9976 三角面资产契约，`test_incision_tools.ts` 锁定
-  `points3d` 方向查询，浏览器回归锁定候选编辑和 review gate。
-
-这只是头模与 topology gate，不把预览线置为 `validated:true`，不实现患者个体 FLAME 拟合，也不替代 #2
-临床校验。
+- `flameHeadAssets.ts`、`standardFaceAssets.ts`、离线拟合工具和 3D 标注器仍属于独立研究范围；它们不是
+  切口运行时依赖，也不能向切口页暂存 `flame-2023` 图谱。
+- 切口审阅导出继续保留实际 MediaPipe 表面、图谱拓扑、provenance、个体化状态和 warning，便于复现
+  “使用了个体化证据”还是“降级到了标准先验”。
+- FLAME 后续是否继续保留由 3D 路线单独决策；不会阻塞或改变 2D-first 的个体化 RSTL → 切口 → 实时叠加链路。
 
 ## 11. 端到端怎么跑（本地，dev-only）
 

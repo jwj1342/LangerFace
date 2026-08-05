@@ -93,15 +93,6 @@
   .boot{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
         color:#9aa3b2;font-size:15px;background:rgba(0,0,0,.35);z-index:2}
   .boot.hidden{display:none}
-  .live-workspace{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;background:#0c0f14}
-  .live-workspace[hidden]{display:none}
-  .live-workspace-bar{height:52px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
-                      gap:12px;padding:0 16px;background:#11151c;border-bottom:1px solid #26303a;color:#eef3f7}
-  .live-workspace-title{display:flex;align-items:baseline;gap:10px;min-width:0}
-  .live-workspace-title strong{font-size:15px;white-space:nowrap}
-  .live-workspace-title span{font-size:12px;color:#8fd9bd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .live-workspace-back{width:auto;min-width:112px;padding:8px 12px;background:#202833;border-color:#35404d;color:#eef3f7}
-  .live-workspace-frame{display:block;width:100%;height:100%;min-height:0;flex:1;border:0;background:#eef0ea}
   @media(max-width:900px){
     .app{grid-template-columns:1fr;grid-template-rows:minmax(240px,46dvh) 1fr}
     .sidebar{border-right:0;border-bottom:1px solid var(--line)}
@@ -179,7 +170,7 @@
         <canvas id="wrinkleEvidenceCanvas" width="320" height="320" style="width:100%;border-radius:10px;background:#000;image-rendering:pixelated"></canvas>
         <button class="btn" id="wrinkleEvidenceDownloadBtn" type="button" style="margin-top:8px">下载 V6 证据图 PNG</button>
       </div>
-      <button class="btn btn-primary" id="usePersonalizedBtn" disabled>进入实时 2D 工作区（自动应用个性化 RSTL）</button>
+      <button class="btn btn-primary" id="usePersonalizedBtn" disabled>进入切口设计（应用个性化 RSTL）</button>
       <div class="exports" id="exports" style="margin-top:8px"><span class="hint">完成后可下载对比图</span></div>
     </div>
     <p class="disclaimer">local YOLO strict-union + RSTL V6 refinement — experimental, not a surgical instruction</p>
@@ -208,17 +199,6 @@
     </div>
   </main>
 </div>
-<section class="live-workspace" id="liveWorkspace" hidden aria-label="个性化实时 2D 工作区">
-  <header class="live-workspace-bar">
-    <div class="live-workspace-title">
-      <strong>个性化实时 2D 工作区</strong>
-      <span>V6 个性化 Atlas 已自动加载 · 所有处理仍在本机完成</span>
-    </div>
-    <button class="btn live-workspace-back" id="closeLiveWorkspaceBtn" type="button">查看采集结果</button>
-  </header>
-  <iframe class="live-workspace-frame" id="liveWorkspaceFrame" title="实时 2D RSTL"
-          allow="camera; fullscreen" referrerpolicy="same-origin"></iframe>
-</section>
 <script type="module" src="compat/personalized/personalized.js?v=20260717-camera-only-preview-v1"></script>
 </body>
 </html>

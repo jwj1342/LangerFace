@@ -12,6 +12,8 @@ const currentPage = await readFile(new URL("current/index.html", web), "utf8");
 const currentMain = await readFile(new URL("current/main.js", web), "utf8");
 const currentRender = await readFile(new URL("current/render.js", web), "utf8");
 const liveSource = await readFile(new URL("src/services/liveRuntime.ts", web), "utf8");
+const incisionRuntime = await readFile(new URL("src/services/incisionRuntime.ts", web), "utf8");
+const incisionAtlasSource = await readFile(new URL("src/services/incisionAtlasSource.ts", web), "utf8");
 const dataSource = await readFile(new URL("src/services/dataSource.ts", web), "utf8");
 const vercelConfig = JSON.parse(await readFile(new URL("vercel.json", web), "utf8"));
 const atlas = JSON.parse(await readFile(new URL("assets/atlas_rstl.json", web), "utf8"));
@@ -53,18 +55,26 @@ assert.match(source, /skinMask: sess\?\.skin/);
 assert.match(source, /forbiddenMask: sess\?\.forbidden/);
 assert.match(source, /cross_expression_operation: "strict_union"/);
 assert.match(source, /dataSource\.stagePreviewAtlas\(activeAtlas\)/);
-assert.match(page, /id="liveWorkspace"/);
-assert.match(page, /id="liveWorkspaceFrame"/);
-assert.match(source, /async function openLiveWorkspace\(\)/,
-  "personalized results must open the complete live 2D UI in the same page");
-assert.match(source, /liveWorkspaceFrame\.src = `\/app\/live\?embedded=personalized/,
-  "the current React live UI must be reused instead of copied");
+assert.doesNotMatch(page, /id="liveWorkspace"/);
+assert.doesNotMatch(page, /id="liveWorkspaceFrame"/);
+assert.match(source, /async function openIncisionWorkspace\(\)/,
+  "personalized results must continue into the incision workbench");
+assert.match(source, /location\.assign\(`\/app\/incision\?source=personalized/,
+  "the personalized route must hand its RSTL atlas to incision design");
 assert.doesNotMatch(source, /location\.href = "index\.html"/,
   "the personalized flow must not navigate back to the initial page");
 assert.match(source, /stream\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/,
-  "the capture camera must be released before the live workspace starts");
+  "the capture camera must be released before the incision workspace starts");
 assert.match(dataSource, /const PREVIEW_ATLAS_KEY = "langerface\.previewAtlas"/,
-  "the capture and React live UI must share the local preview-atlas session key");
+  "personalized capture and incision design must share the transient atlas key");
+assert.match(incisionRuntime, /dataSource\.takePreviewAtlas\(\)/,
+  "incision design must consume the staged personalized atlas exactly once");
+assert.match(incisionAtlasSource, /isPersonalizedRstlAtlas/,
+  "incision design must distinguish personalized RSTL from unrelated staged atlases");
+assert.match(incisionAtlasSource, /mediapipe_personalized/,
+  "the accepted personalized atlas must become the primary MediaPipe incision source");
+assert.doesNotMatch(incisionRuntime, /flame-2023|loadFlameBasisAsset|mediaPipeAtlasToFlamePreviewAtlas/,
+  "incision design must not depend on FLAME");
 assert.match(liveSource, /provenanceText\.includes\("local-yolo"\)/,
   "the live UI must recognize the string provenance emitted by the browser V6 pipeline");
 assert.match(liveSource, /\? "个性化 V6"/,
