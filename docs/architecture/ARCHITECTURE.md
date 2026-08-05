@@ -84,8 +84,10 @@ P = u·V0 + v·V1 + w·V2
 > PR #108 关闭的是**本节描述的这条实时 3D 路线**的用户入口：实时页的「3D 面部重建」下拉项、
 > FLAME 实时孪生、以及三维资产预览页（`/three-preview`，已在 PR #110 删除）。这些 runtime 代码仍保留在
 > `web/src/services/mode3d.ts` / `projection3d.ts` / `three3d.ts`，但没有界面能进入。
-> #40 / PR #122 将路线收敛为 2D-first，3D 只保留离线资产、标注和研究预览，见
-> [FLAME_3D_TRACK.md](../tracks/FLAME_3D_TRACK.md)。
+> #40 尚待 owner 正式确认；PR #122 的工程建议是 **2D-first + 3D 离线预处理/研究查看**。
+> 在确认前实时 3D 用户入口仍不恢复，残留 runtime
+> 待共享依赖拆分后清理。量化 gate 与重启条件见 [ADR_3D_ROUTE_FEASIBILITY.md](ADR_3D_ROUTE_FEASIBILITY.md)，
+> FLAME 技术轨的现状与资产边界见 [FLAME_3D_TRACK.md](../tracks/FLAME_3D_TRACK.md)。
 >
 > **仍保留且可从界面进入的 3D 功能**：标准图谱生产 / 复核用的 3D 标注工具 `/annotate`
 > （路径：首页「图谱库管理」→ `/settings/atlas` → 打开图谱标注工具；`/app/annotate` 为兼容地址），
