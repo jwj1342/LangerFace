@@ -205,6 +205,12 @@ assert.ok(!js.includes('event === "react_plan"'), "workbench does not consume mo
 assert.ok(incisionReviewRecordsService.includes("工作流执行事件"), "markdown report includes workflow execution event status");
 assert.ok(js.includes("完整 workflow trace 已写入 DevTools Console"), "sidebar points reviewers to console for full workflow trace");
 assert.ok(js.includes("浏览器确定性 workflow 已更新候选"), "workbench reports browser workflow updates");
+assert.ok(js.includes("const requestId = ++S.workflowRequestId"),
+  "workflow requests receive monotonically increasing ids");
+assert.ok(js.includes("if (requestId !== S.workflowRequestId) return"),
+  "stale automatic previews cannot overwrite a newer explicit generation");
+assert.ok(js.includes("S.activeExplicitWorkflowCount += 1"),
+  "automatic previews do not lock the explicit generation button");
 assert.ok(incisionReviewRecordsService.includes("建议覆盖项"), "markdown report includes suggested override details");
 assert.ok(js.includes("protective_direction"), "workbench displays protective direction guardrail suggestions");
 assert.ok(js.includes("directionSourceLabel"), "workbench labels RSTL direction source");

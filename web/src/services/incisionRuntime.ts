@@ -1569,11 +1569,16 @@ function stageLiveOverlay() {
 
 async function runWorkflow({ countGeneration = true }: { countGeneration?: boolean } = {}) {
   if (!S.verts) return;
-  els.run.disabled = true;
+  const requestId = ++S.workflowRequestId;
+  if (countGeneration) {
+    S.activeExplicitWorkflowCount += 1;
+    els.run.disabled = true;
+  }
   els.stageStatus.textContent = "Worker 确定性 workflow 生成中…";
   try {
     const tumor = tumorInput();
     const result = await planWorkflowForCurrentTumor(tumor);
+    if (requestId !== S.workflowRequestId) return;
     S.baseResult = result;
     if (countGeneration) S.generationCount += 1;
     resetEditControls();
@@ -1581,7 +1586,10 @@ async function runWorkflow({ countGeneration = true }: { countGeneration?: boole
     resetReviewControls();
     renderResult(result);
   } finally {
-    els.run.disabled = false;
+    if (countGeneration) {
+      S.activeExplicitWorkflowCount = Math.max(0, S.activeExplicitWorkflowCount - 1);
+      els.run.disabled = S.activeExplicitWorkflowCount > 0;
+    }
   }
 }
 
