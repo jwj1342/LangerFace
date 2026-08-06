@@ -10,6 +10,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pull-request-closing-keyword-guard:
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: node tools/test_pr_closing_keywords.mjs
+      - run: node tools/check_pr_closing_keywords.mjs
+
   lint:
     runs-on: ubuntu-latest
     steps:
