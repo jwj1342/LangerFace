@@ -4,7 +4,6 @@ import { validateAtlas } from "./atlasContract.ts";
 import { assetUrls } from "./assetLoader.ts";
 import { CDN, TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.ts";
 import { dataSource } from "./dataSource.ts";
-import { els } from "./liveDom.ts";
 import { noseTriangles } from "./geometryAtlas.ts";
 import type { Triangle } from "./softBody.ts";
 import { countMetric, logInfo, logWarn, setAssetVersions } from "./logger.ts";
@@ -106,8 +105,6 @@ async function initializeReady(): Promise<void> {
     }
   }
 
-  els.badge.textContent = "模型就绪";
-  els.badge.classList.remove("loading");
   logInfo("模型与图谱加载完成。", {
     triangles: tri.length,
     rstlLines: rstl.lines.length,

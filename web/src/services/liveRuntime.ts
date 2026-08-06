@@ -25,7 +25,8 @@ import {
 import { dataSource } from "./dataSource";
 import { countMetric, logError } from "./logger";
 import { createCanvasRecordingController, type CanvasRecordingController, type RecordingExtraCanvas } from "./canvasRecording";
-import { recordingState, reconState, renderState, sourceState } from "./liveState";
+import { modelState, recordingState, reconState, renderState, sourceState } from "./liveState";
+import { createPhotoPlanningController } from "./photoPlanningController";
 import {
   adjustRefineImageZoom,
   beginRefinePointer,
@@ -542,6 +543,8 @@ export function disposeLiveWorkbench() {
     stopTwin();
     stopSource();
   }
+  sourceState.planning2d?.dispose();
+  sourceState.planning2d = null;
   if (reconState.scan) reconState.scan.active = false;
   if (reconState.viewerRAF != null) cancelAnimationFrame(reconState.viewerRAF);
   reconState.viewerRAF = null;
@@ -554,6 +557,7 @@ export function disposeLiveWorkbench() {
 export function mountLiveWorkbench(root: ParentNode | Document = document) {
   disposeLiveWorkbench();
   bindDom(root);
+  sourceState.planning2d = createPhotoPlanningController({ owner: "live" });
   mounted = true;
   activeSession += 1;
   abortController = new AbortController();
@@ -575,6 +579,10 @@ export function mountLiveWorkbench(root: ParentNode | Document = document) {
   const session = activeSession;
   ensureReady().then(() => {
     if (!isActiveSession(session)) return;
+    els.badge.textContent = "模型就绪";
+    els.badge.classList.remove("loading");
+    sourceState.planning2d?.setTopology(modelState.triangles || []);
+    sourceState.planning2d?.setDetectorLease({ detector: modelState.imageLandmarker || modelState.landmarker });
     applyStagedAtlas();
     applyStagedIncisionOverlay();
     scheduleLiveState("model_ready");

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
-import { compileIncisionOverlay } from "./incisionOverlay.ts";
+import { compileIncisionOverlay, pointToSurfaceRef } from "./incisionOverlay.ts";
+import { createPhotoPlanningController } from "./photoPlanningController";
 import {
   applyCandidateEdit,
   workflowTraceGate,
@@ -378,6 +379,8 @@ async function boot() {
   const { head, atlas, headAsset } = await loadMediaPipeIncisionAssets();
   if (!S.mounted) return;
   S.verts = head.vertices; S.tris = head.triangles; S.atlas = atlas; S.headAsset = headAsset; S.assetWarnings = headAsset.warnings;
+  S.planning2d?.setTopology(S.tris);
+  S.planning2d?.setOverlaySummary({ rstlLineCount: atlas.lines?.length || 0 });
   S.normals = vertexNormals(S.verts, S.tris);
   S.meanEdge = meanMeshEdgeLength(S.verts, S.tris);
   S.unitsPerMm = unitsPerMmFromVertices(S.verts);
@@ -673,6 +676,19 @@ function tumorBoundaryPoints(): Vec3[] {
   return ellipseBoundaryPoints();
 }
 
+function syncPhotoPlanningSelection() {
+  if (!S.planning2d || !S.verts.length || !S.tris.length) return;
+  const centerRef = pointToSurfaceRef(S.verts[S.lesion], S.verts, S.tris);
+  const boundaryRefs = tumorBoundaryPoints()
+    .map((point) => pointToSurfaceRef(point, S.verts, S.tris))
+    .filter((ref): ref is NonNullable<typeof ref> => ref !== null);
+  S.planning2d.setSelection({ centerRef, boundaryRefs });
+  S.planning2d.setOverlaySummary({
+    tumorVisible: centerRef !== null,
+    candidatePointCount: S.result?.candidate?.polyline?.length || 0,
+  });
+}
+
 function setLesion(i: number) {
   S.lesion = i;
   const center = S.verts[i], normal = S.normals[i];
@@ -681,6 +697,7 @@ function setLesion(i: number) {
   updateTumorRing();
   els.pickState.textContent = `当前点位：顶点 #${i}`;
   updateAnatomyPreview();
+  syncPhotoPlanningSelection();
 }
 
 function updateTumorRing() {
@@ -709,6 +726,7 @@ function updateTumorRing() {
   S.boundaryLine.visible = tumor.kind === "cutaneous" && boundary.length >= 2;
   bold.dispose();
   updateBoundaryStatus();
+  syncPhotoPlanningSelection();
 }
 
 function drawCandidate(result: DynamicRecord) {
@@ -731,6 +749,7 @@ function drawCandidate(result: DynamicRecord) {
       h.position.set(hp[0], hp[1], hp[2]);
     }
   }
+  S.planning2d?.setOverlaySummary({ candidatePointCount: result.candidate.polyline?.length || 0 });
 }
 
 function updateFormVisibility() {
@@ -1733,12 +1752,15 @@ export function disposeIncisionWorkbench() {
   S.reactCommandCleanup?.();
   S.reactCommandCleanup = null;
   S.head?.dispose?.();
+  S.planning2d?.dispose();
+  S.planning2d = null;
 }
 
 export function mountIncisionWorkbench(root: ParentNode | Document = document) {
   disposeIncisionWorkbench();
   els = collectIncisionElements(root);
   S = createIncisionControllerState();
+  S.planning2d = createPhotoPlanningController({ owner: "incision" });
   S.mounted = true;
   bindWorkbenchEvents();
   boot().catch((err) => {

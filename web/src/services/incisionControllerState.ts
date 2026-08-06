@@ -4,6 +4,7 @@ import { IncisionEditHistory } from "./incisionEditHistory";
 import type { IncisionDomCleanup } from "./incisionDomBindings";
 import type { IncisionHeadAssetState } from "./incisionSnapshots";
 import type { WorkflowWorkerClient } from "./workflowWorkerClient";
+import type { PhotoPlanningController } from "./photoPlanningController";
 import { Head3D } from "./three3d.ts";
 import type { Triangle, Vec3 } from "./softBody";
 
@@ -16,6 +17,7 @@ export interface IncisionRuntimeState {
   mounted: boolean;
   frameId: number;
   domEventCleanup: IncisionDomCleanup | null;
+  planning2d: PhotoPlanningController | null;
   verts: Vec3[];
   tris: Triangle[];
   atlas: DynamicRecord | null;
@@ -51,6 +53,7 @@ export function createIncisionControllerState(): IncisionRuntimeState {
     mounted: false,
     frameId: 0,
     domEventCleanup: null,
+    planning2d: null,
     verts: [],
     tris: [],
     atlas: null,
