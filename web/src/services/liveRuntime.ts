@@ -24,6 +24,7 @@ import {
 } from "./liveSnapshots";
 import { dataSource } from "./dataSource";
 import { countMetric, logError } from "./logger";
+import { LiveActionScheduler } from "./liveActionScheduler";
 import { createCanvasRecordingController, type CanvasRecordingController, type RecordingExtraCanvas } from "./canvasRecording";
 import { modelState, recordingState, reconState, renderState, sourceState } from "./liveState";
 import { createPhotoPlanningController } from "./photoPlanningController";
@@ -92,11 +93,11 @@ let resizeCleanup: (() => void) | null = null;
 let abortController: AbortController | null = null;
 let mounted = false;
 let activeSession = 0;
-let liveStateTimer: ReturnType<typeof setTimeout> | 0 = 0;
-
-function isThenable(value: unknown): value is PromiseLike<unknown> {
-  return typeof value === "object" && value !== null && "then" in value && typeof value.then === "function";
-}
+const liveActions = new LiveActionScheduler({
+  currentSession: () => activeSession,
+  isActive: (session) => isActiveSession(session),
+  publish: (reason) => publishLiveState(reason),
+});
 
 function eventValue(event: Event | ValueControlEvent): unknown {
   return (event.target as { value?: unknown } | null)?.value;
@@ -146,29 +147,11 @@ function publishLiveState(reason = "state_update"): void {
 }
 
 function scheduleLiveState(reason = "state_update"): void {
-  if (!mounted) return;
-  if (liveStateTimer) clearTimeout(liveStateTimer);
-  liveStateTimer = setTimeout(() => {
-    liveStateTimer = 0;
-    publishLiveState(reason);
-  }, 0);
+  liveActions.schedule(reason);
 }
 
 function runLiveAction(reason: string, action: () => unknown): unknown {
-  try {
-    const result = action();
-    scheduleLiveState(reason);
-    if (isThenable(result)) {
-      result.then(
-        () => scheduleLiveState(`${reason}_done`),
-        () => scheduleLiveState(`${reason}_failed`),
-      );
-    }
-    return result;
-  } catch (err) {
-    scheduleLiveState(`${reason}_failed`);
-    throw err;
-  }
+  return liveActions.run(reason, action);
 }
 
 function syncPreviewControls(): void {
@@ -575,8 +558,7 @@ function isActiveSession(session: number): boolean {
 export function disposeLiveWorkbench() {
   mounted = false;
   activeSession += 1;
-  if (liveStateTimer) clearTimeout(liveStateTimer);
-  liveStateTimer = 0;
+  liveActions.dispose();
   abortController?.abort?.();
   abortController = null;
   resizeCleanup?.();

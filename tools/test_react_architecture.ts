@@ -156,6 +156,7 @@ const incisionToolsBarrel = read("src/services/incisionTools.ts");
 const three3dService = read("src/services/three3d.ts");
 const exportPrivacyService = read("src/services/exportPrivacy.ts");
 const liveController = read("src/services/liveRuntime.ts");
+const liveActionSchedulerService = read("src/services/liveActionScheduler.ts");
 const liveDomService = read("src/services/liveDom.ts");
 const liveUiService = read("src/services/liveUi.ts");
 const liveStateService = read("src/services/liveState.ts");
@@ -167,6 +168,7 @@ const liveImageSourceService = read("src/services/imageSource.ts");
 const assetLoaderService = read("src/services/assetLoader.ts");
 const liveRuntimeDependencyTypes = [
   "src/services/cameraSource.ts",
+  "src/services/liveActionScheduler.ts",
   "src/services/liveDom.ts",
   "src/services/liveCanvasFit.ts",
   "src/services/dataSource.ts",
@@ -2226,6 +2228,13 @@ for (const rel of liveRuntimeDependencyTypes) {
   assert.ok(fs.existsSync(path.join(web, rel)), `live runtime dependency boundary ${rel} should be typed`);
 }
 assert.ok(!liveController.includes("// @ts-nocheck"), "live runtime should run under strict TypeScript checking");
+assert.ok(liveController.includes("./liveActionScheduler"), "live runtime delegates async state publication ownership");
+assert.ok(liveActionSchedulerService.includes("class LiveActionScheduler"), "live action scheduler owns coalesced async state publication");
+assert.ok(liveActionSchedulerService.includes("isActive(session)"), "live action scheduler checks session ownership before publication");
+assert.ok(!/(?:document|window|HTMLElement|PointerEvent|THREE)/.test(liveActionSchedulerService), "live action scheduler stays DOM and renderer independent");
+assert.ok(!liveController.includes("function isThenable"), "live runtime does not implement promise scheduling inline");
+assert.ok(!liveController.includes("liveStateTimer"), "live runtime does not own state publication timers");
+assert.ok(liveController.split("\n").length <= 630, "live runtime stays a thin orchestration layer");
 assert.ok(liveController.includes("interface ImageDragState"), "live runtime types its route-local drag state");
 assert.ok(!liveController.includes("function controllerEvent"), "live runtime delegates browser command parsing to typed schemas");
 assert.ok(workbenchCommandSchemasService.includes("readLiveRenderCommand"), "workbench command schemas validate live render payloads");
