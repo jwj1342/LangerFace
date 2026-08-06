@@ -52,7 +52,7 @@ assert.deepEqual(loaded, session, "route remount restores the complete logical w
 assert.equal(tumorContextsMatch(loaded!.result!.tumor, loaded!.tumor), true);
 assert.equal(tumorContextsMatch(loaded!.tumor, { ...loaded!.tumor, center: [0.5, 0.5, 0.5] }), false);
 
-const restoredForm = importedTumorFormState(loaded!.saved[0].tumor, {
+const tumorControls = {
   diameterMin: 1,
   diameterMax: 80,
   depthMin: 1,
@@ -61,13 +61,29 @@ const restoredForm = importedTumorFormState(loaded!.saved[0].tumor, {
   marginMin: 0,
   marginMax: 20,
   authorFallback: "fallback",
-});
+};
+const restoredForm = importedTumorFormState(loaded!.saved[0].tumor, tumorControls);
 assert.equal(restoredForm.kind, "cutaneous");
 assert.equal(restoredForm.diameterValue, "18");
 assert.equal(restoredForm.marginValue, "4");
 assert.equal(restoredForm.boundaryMode, "freehand");
 assert.deepEqual(restoredForm.boundaryPoints, tumor.boundary,
   "loading a saved candidate restores its center-independent freehand boundary");
+
+const invalidImport = {
+  tumor: {
+    kind: "cutaneous",
+    center: [0.25, 0.5],
+    diameter_mm: -4,
+  },
+};
+const invalidImportBefore = structuredClone(invalidImport);
+assert.throws(
+  () => importedTumorFormState(invalidImport, tumorControls),
+  /center must be a 3D point/,
+  "invalid tumor payloads fail before a form state can be applied",
+);
+assert.deepEqual(invalidImport, invalidImportBefore, "failed normalization does not mutate the imported payload");
 
 const validResult = { trace: [
   { action: "summarize_tumor_input_quality" },
