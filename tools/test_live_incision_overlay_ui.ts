@@ -32,7 +32,7 @@ assert.ok(liveUi.includes("切口叠加 QA"), "React live page labels visible ov
 assert.ok(source.includes('setSource(prepared.source, "image"'), "uploaded photos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "video"'), "uploaded videos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "camera"'), "camera frames enter the shared live render source");
-assert.ok(loop.includes('sourceState.sourceKind !== "image"'), "video and camera sources schedule continuous overlay frames");
+assert.match(loop, /if \((?:sourceState\.sourceKind|sourceKind) !== "image"\) requestFrame\(\)/, "video and camera sources schedule continuous overlay frames");
 assert.ok(loop.includes("eyeBlinkLeft"), "pipeline extracts left blink blendshape for overlay quality gate");
 assert.ok(loop.includes("eyeBlinkRight"), "pipeline extracts right blink blendshape for overlay quality gate");
 assert.ok(loop.includes("jawOpen"), "pipeline extracts jaw-open blendshape for overlay quality gate");
