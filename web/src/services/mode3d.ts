@@ -1,7 +1,7 @@
 // 3D 重建（Beta）：转头扫描/示例重建 → 旋转查看 → 相似变换投影回实时画面。
 import { RIGID3D } from "./constants.ts";
 import { assetUrls } from "./assetLoader.ts";
-import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./cameraSource.ts";
+import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream, stopCameraStream } from "./cameraSource.ts";
 import { dataSource } from "./dataSource.ts";
 import { ctx as boundCtx, els } from "./liveDom.ts";
 import { toPixels } from "./geometryAtlas.ts";
@@ -13,6 +13,7 @@ import { countMetric, logWarn, recordEvent, recordMetricSample, setDiagnosticSec
 import { ensureReady } from "./pipelineModels.ts";
 import { showCameraPlaceholder, startCamera, stopSource } from "./pipelineSource.ts";
 import { modelState, reconState, renderState, sourceState } from "./liveState.ts";
+import { LiveScanLifecycle } from "./liveScanLifecycle.ts";
 import { setLive, setMsg } from "./liveUi.ts";
 
 type AnyRecord = Record<string, any>;
@@ -63,6 +64,19 @@ const SCAN_TARGET_FRAMES = 40;
 const YAW_DISPLAY_SPAN = 0.5;
 let flameDemoLines: FlameAtlasLine[] | null = null;
 let flameDemoOverlayContext: FlameOverlayContext | null = null;
+
+const scanLifecycle = new LiveScanLifecycle({
+  releaseStream(stream) {
+    if (els.video?.srcObject === stream) els.video.srcObject = null;
+    stopCameraStream(stream as MediaStream);
+  },
+});
+
+export function stopScan(): void {
+  scanLifecycle.stop();
+  if (reconState.scan) reconState.scan.active = false;
+  reconState.scan = null;
+}
 
 async function fetchCanonicalRef(): Promise<Vec3[]> {
   if (canonicalRef) return canonicalRef;
@@ -529,6 +543,7 @@ function viewerLoop(): void {
 
 export function setMode3d(m: string): void {
   stopTwin();  // 离开实时孪生：取消其 RAF + 撤销分屏
+  stopScan();
   if (m === "project" && !reconState.reconProjectable) {
     setMsg("FLAME 示例脸仅支持 3D 旋转查看；投影回实时画面请使用「转头扫描」。");
     return;
@@ -553,6 +568,7 @@ export function setMode3d(m: string): void {
 }
 
 export async function loadDemoRecon(): Promise<void> {
+  stopScan();
   els.scanPanel.classList.add("hidden"); els.scanToast.classList.add("hidden");
   els.reconStatus.textContent = "加载 FLAME 标准示例脸（无需摄像头）…";
   try {
@@ -583,12 +599,25 @@ export async function loadDemoRecon(): Promise<void> {
 }
 
 export async function startScan(): Promise<void> {
-  els.reconStatus.textContent = "加载模型…"; await ensureReady();
-  const ref = await fetchCanonicalRef(); const refRigid = RIGID3D.map((i) => ref[i]);
+  stopScan();
+  const generation = scanLifecycle.begin();
+  els.reconStatus.textContent = "加载模型…";
   try {
+    await ensureReady();
+    if (!scanLifecycle.isActive(generation)) return;
+    const ref = await fetchCanonicalRef();
+    if (!scanLifecycle.isActive(generation)) return;
+    const refRigid = RIGID3D.map((i) => ref[i]);
     const stream = await openCameraStream(CAMERA_CONSTRAINTS);
-    stopSource(); els.video.srcObject = stream; await els.video.play();
+    if (!scanLifecycle.adoptStream(generation, stream)) return;
+    stopSource();
+    els.video.srcObject = stream;
+    await els.video.play();
+    if (!scanLifecycle.isActive(generation)) return;
+    beginScanLoop(generation, refRigid);
   } catch (e) {
+    if (!scanLifecycle.isActive(generation)) return;
+    stopScan();
     const detail = describeCameraError(e);
     countMetric(`scan.cameraOpenFailure.${detail.reason}`);
     logWarn("3D 扫描无法开启摄像头。", { reason: detail.reason, error: e });
@@ -596,8 +625,10 @@ export async function startScan(): Promise<void> {
     els.canvas.classList.remove("hidden"); els.three.classList.add("hidden");
     showCameraPlaceholder(detail.message);
     setMsg(detail.message); setLive(false, "3D Beta");
-    return;
   }
+}
+
+function beginScanLoop(generation: number, refRigid: Vec3[]): void {
   els.canvas.width = els.video.videoWidth || 1280;
   els.canvas.height = els.video.videoHeight || 720;
   els.canvas.classList.remove("hidden"); els.three.classList.add("hidden");
@@ -608,9 +639,18 @@ export async function startScan(): Promise<void> {
   const t0 = performance.now(); let ymin = 1e9, ymax = -1e9;
   reconState.scan = { active: true };
   const tick = () => {
-    if (!reconState.scan || !reconState.scan.active) return;
+    if (!scanLifecycle.isActive(generation) || !reconState.scan?.active) return;
     const t = performance.now();
-    const res = modelState.landmarker.detectForVideo(els.video, t);
+    let res: AnyRecord;
+    try {
+      res = modelState.landmarker.detectForVideo(els.video, t);
+    } catch (error) {
+      countMetric("scan.frameFailure");
+      logWarn("3D 扫描帧检测失败。", error);
+      els.reconStatus.textContent = "扫描帧处理失败，请重新开始扫描。";
+      stopScan();
+      return;
+    }
     const secs = (t - t0) / 1000;
     if (res.faceLandmarks && res.faceLandmarks.length) {
       const lm = toPixels(res.faceLandmarks[0], els.video.videoWidth, els.video.videoHeight).slice(0, 468) as Vec3[];
@@ -634,9 +674,9 @@ export async function startScan(): Promise<void> {
     if (secs > SCAN_TARGET_SECS && collected.length > SCAN_TARGET_FRAMES) {
       els.reconStatus.textContent = `请继续向左 / 右转头：当前偏航跨度 ${yawSpan.toFixed(2)}，需达到 ${YAW_SPAN_MIN} 才能完成（${secs.toFixed(1)}s，已采 ${collected.length} 帧）`;
     }
-    requestAnimationFrame(tick);
+    scanLifecycle.schedule(generation, tick);
   };
-  requestAnimationFrame(tick);
+  scanLifecycle.schedule(generation, tick);
 }
 
 function sampleFrameColors(lm: Vec3[]): ColorFrame {
@@ -711,7 +751,7 @@ function finishScan(
   lowDepthConfidence = false,
   durationMs: number | null = null,
 ): void {
-  reconState.scan = null;
+  stopScan();
   els.scanPanel.classList.add("hidden"); els.scanToast.classList.add("hidden");
   const N = collected.length, V = 468, verts: Vec3[] = [];
   const med = (k: number[]): number => { k.sort((a: number, b: number) => a - b); return k[(k.length - 1) >> 1]; };
@@ -749,6 +789,7 @@ function finishScan(
 
 export function enterRoute(route: "2d" | "3d"): void {
   stopTwin();
+  stopScan();
   reconState.route = route;
   els.scanPanel.classList.add("hidden"); els.scanToast.classList.add("hidden");
   if (route === "3d") {
@@ -760,7 +801,6 @@ export function enterRoute(route: "2d" | "3d"): void {
     setMsg(reconState.reconVerts ? null : "3D Beta：请先扫描人脸重建"); setLive(false, "3D Beta");
     if (reconState.reconVerts) buildViewer();
   } else {
-    reconState.scan = null;
     if (reconState.viewerRAF != null) cancelAnimationFrame(reconState.viewerRAF);
     els.route3dPanel.classList.add("hidden"); els.badge.classList.remove("beta");
     els.threeDWorkflowCard?.classList.add("hidden");

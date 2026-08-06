@@ -2,7 +2,7 @@
 import { bindDom, clearDomBinding, els } from "./liveDom.ts";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./liveCanvasFit.ts";
 import { validateIncisionOverlay } from "./incisionOverlay.ts";
-import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, stopTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.ts";
+import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, stopScan, stopTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.ts";
 import { ensureReady, handleFile, redrawPausedFrame, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.ts";
 import { adjustFocusZoom, buildZoomCards } from "./render2d.ts";
 import {
@@ -566,6 +566,7 @@ export function disposeLiveWorkbench() {
   recordingController?.stop?.();
   recordingController = null;
   recordingState.recorder = null;
+  stopScan();
   if (hasBoundLiveDom()) {
     stopTwin();
     stopSource();

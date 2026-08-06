@@ -158,6 +158,7 @@ const exportPrivacyService = read("src/services/exportPrivacy.ts");
 const liveController = read("src/services/liveRuntime.ts");
 const liveActionSchedulerService = read("src/services/liveActionScheduler.ts");
 const liveFrameSchedulerService = read("src/services/liveFrameScheduler.ts");
+const liveScanLifecycleService = read("src/services/liveScanLifecycle.ts");
 const livePipelineService = read("src/services/pipeline.ts");
 const livePipelineLoopService = read("src/services/pipelineLoop.ts");
 const livePipelineSourceService = read("src/services/pipelineSource.ts");
@@ -174,6 +175,7 @@ const liveRuntimeDependencyTypes = [
   "src/services/cameraSource.ts",
   "src/services/liveActionScheduler.ts",
   "src/services/liveFrameScheduler.ts",
+  "src/services/liveScanLifecycle.ts",
   "src/services/liveDom.ts",
   "src/services/liveCanvasFit.ts",
   "src/services/dataSource.ts",
@@ -2247,6 +2249,10 @@ assert.ok(livePipelineSourceService.includes("cancelFrame()"), "stopping a live 
 assert.ok(livePipelineSourceService.includes("sourceLayoutScheduler.cancel()"), "source changes cancel pending image layout frames");
 assert.ok(!livePipelineSourceService.includes("requestAnimationFrame"), "image layout refreshes cannot outlive their source through raw RAF callbacks");
 assert.ok(!livePipelineService.includes("requestAnimationFrame"), "atlas redraws cannot bypass live frame coalescing");
+assert.ok(liveScanLifecycleService.includes("class LiveScanLifecycle"), "3D scan lifecycle owns session, frame, and stream resources");
+assert.ok(liveScanLifecycleService.includes("adoptStream"), "3D scan lifecycle rejects stale camera stream handoffs");
+assert.ok(!/(?:document|window|HTMLElement|HTMLVideoElement|THREE|MediaPipe)/.test(liveScanLifecycleService),
+  "3D scan lifecycle stays DOM, renderer, and detector independent");
 assert.ok(liveController.split("\n").length <= 630, "live runtime stays a thin orchestration layer");
 assert.ok(liveController.includes("interface ImageDragState"), "live runtime types its route-local drag state");
 assert.ok(!liveController.includes("function controllerEvent"), "live runtime delegates browser command parsing to typed schemas");

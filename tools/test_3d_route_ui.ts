@@ -43,5 +43,10 @@ assert.ok(liveRuntime.includes('if (reconState.mode3d === "project") setMode3d("
 assert.ok(mode3d.includes('els.project3d.textContent = m === "project" ? "返回 3D 模型" : "投影到画面"'),
   "retained legacy controller keeps the projection button label in sync");
 assert.ok(mode3d.includes("3D Beta：请先扫描人脸重建"), "retained 3D runtime hint remains available for the follow-up cleanup list");
+assert.ok(mode3d.includes("export function stopScan"), "3D scan exposes one lifecycle cleanup boundary");
+assert.ok(mode3d.includes("new LiveScanLifecycle"), "3D scan delegates session, frame, and stream ownership");
+assert.ok(mode3d.includes("scanLifecycle.adoptStream"), "3D scan rejects and releases stale camera streams");
+assert.ok(mode3d.includes("scanLifecycle.schedule(generation, tick)"), "3D scan schedules cancellable frames through its lifecycle");
+assert.ok(liveRuntime.includes("stopScan();"), "live route disposal releases 3D scan resources");
 
 console.log("test_3d_route_ui: public 3D route closure assertions passed");
