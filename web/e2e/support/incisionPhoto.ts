@@ -7,9 +7,13 @@ const FACE_PAIR_JPEG = readFileSync(new URL(
   import.meta.url,
 )).toString("base64");
 
-export async function uploadGeneratedPhoto(page: Page, mode: "single" | "multiple" | "blank") {
-  await page.evaluate(async ({ base64, uploadMode }) => {
-    const input = document.querySelector<HTMLInputElement>("#incisionPhotoInput");
+export async function uploadGeneratedPhoto(
+  page: Page,
+  mode: "single" | "multiple" | "blank",
+  inputSelector = "#incisionPhotoInput",
+) {
+  await page.evaluate(async ({ base64, uploadMode, selector }) => {
+    const input = document.querySelector<HTMLInputElement>(selector);
     if (!input) throw new Error("incision photo input is missing");
 
     let file: File;
@@ -53,7 +57,7 @@ export async function uploadGeneratedPhoto(page: Page, mode: "single" | "multipl
     transfer.items.add(file);
     input.files = transfer.files;
     input.dispatchEvent(new Event("change", { bubbles: true }));
-  }, { base64: FACE_PAIR_JPEG, uploadMode: mode });
+  }, { base64: FACE_PAIR_JPEG, uploadMode: mode, selector: inputSelector });
 }
 
 export async function findPhotoEndpointHandles(page: Page) {

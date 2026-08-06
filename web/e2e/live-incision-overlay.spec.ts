@@ -1,5 +1,3 @@
-import path from "node:path";
-
 import { expect, test } from "@playwright/test";
 
 import { dragFirstPhotoEndpoint, uploadGeneratedPhoto } from "./support/incisionPhoto";
@@ -63,7 +61,7 @@ test("approved incision reaches the live photo renderer with visible feedback", 
   await expect(page.locator("#liveIncisionOverlayCard")).toBeVisible({ timeout: 60_000 });
   await expect(page.locator("#liveIncisionOverlayState")).toContainText(/已载入|等待画面/);
 
-  await page.locator("#fileInput").setInputFiles(path.resolve("compat/personalized/v6_demo/id_001/rstl_before_after.jpg"));
+  await uploadGeneratedPhoto(page, "single", "#fileInput");
   await expect(page.locator("#incisionOverlayQaState")).not.toHaveText("等待画面", { timeout: 60_000 });
   const candidatePixelsWithOverlay = await expect.poll(() => page.evaluate(candidatePixelCount), {
     message: "the live canvas must contain the green/cyan incision candidate stroke",
