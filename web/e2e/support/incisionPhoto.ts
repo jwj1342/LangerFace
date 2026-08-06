@@ -6,6 +6,11 @@ const FACE_PAIR_JPEG = readFileSync(new URL(
   "../../compat/personalized/v6_demo/id_003/rstl_before_after.jpg",
   import.meta.url,
 )).toString("base64");
+// VP8 fixture derived from the first authorized face above; pre-encoding keeps CI decoding deterministic.
+const FACE_VIDEO_WEBM = readFileSync(new URL(
+  "../fixtures/authorized-demo-face.webm.base64",
+  import.meta.url,
+), "utf8").trim();
 
 export async function uploadGeneratedPhoto(
   page: Page,
@@ -61,50 +66,15 @@ export async function uploadGeneratedPhoto(
 }
 
 export async function uploadGeneratedVideo(page: Page, inputSelector = "#fileInput") {
-  await page.evaluate(async ({ base64, selector }) => {
+  await page.evaluate(({ base64, selector }) => {
     const input = document.querySelector<HTMLInputElement>(selector);
     if (!input) throw new Error("live media input is missing");
-    if (typeof MediaRecorder === "undefined") throw new Error("MediaRecorder is unavailable");
-
     const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
-    const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/jpeg" }));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.floor(bitmap.width / 2);
-    canvas.height = bitmap.height;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("video fixture context is missing");
-    const stream = canvas.captureStream(15);
-    const mimeType = ["video/webm;codecs=vp8", "video/webm"]
-      .find((value) => MediaRecorder.isTypeSupported(value));
-    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-    const chunks: BlobPart[] = [];
-    recorder.addEventListener("dataavailable", (event) => {
-      if (event.data.size > 0) chunks.push(event.data);
-    });
-    const stopped = new Promise<void>((resolve, reject) => {
-      recorder.addEventListener("stop", () => resolve(), { once: true });
-      recorder.addEventListener("error", () => reject(recorder.error || new Error("video fixture recording failed")), { once: true });
-    });
-
-    recorder.start(100);
-    for (let frame = 0; frame < 18; frame += 1) {
-      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
-      context.fillStyle = frame % 2 === 0 ? "#101820" : "#111921";
-      context.fillRect(canvas.width - 2, canvas.height - 2, 2, 2);
-      await new Promise((resolve) => setTimeout(resolve, 67));
-    }
-    recorder.stop();
-    await stopped;
-    stream.getTracks().forEach((track) => track.stop());
-    bitmap.close();
-
-    const blob = new Blob(chunks, { type: mimeType || "video/webm" });
-    if (blob.size === 0) throw new Error("video fixture is empty");
     const transfer = new DataTransfer();
-    transfer.items.add(new File([blob], "authorized-demo-face.webm", { type: "video/webm" }));
+    transfer.items.add(new File([bytes], "authorized-demo-face.webm", { type: "video/webm" }));
     input.files = transfer.files;
     input.dispatchEvent(new Event("change", { bubbles: true }));
-  }, { base64: FACE_PAIR_JPEG, selector: inputSelector });
+  }, { base64: FACE_VIDEO_WEBM, selector: inputSelector });
 }
 
 export async function installGeneratedCamera(page: Page) {
