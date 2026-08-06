@@ -101,22 +101,31 @@ export function loop(): void {
       );
       sourceState.imageDetectionAttempts = outcome.attempts;
       const result = outcome.result;
-      sourceState.imageCacheLM = (result?.faceLandmarks && result.faceLandmarks[0]) ? toPixels(result.faceLandmarks[0], width, height) : null;
+      const imageFaces = result?.faceLandmarks || [];
+      sourceState.imageCacheLM = imageFaces.length === 1 ? toPixels(imageFaces[0], width, height) : null;
       sourceState.planning2d?.setDetection({
         sourceRevision: sourceState.planning2d.sourceRevision(),
         status: sourceState.imageCacheLM ? "ready" : "failed",
         landmarks: sourceState.imageCacheLM,
         attempts: outcome.attempts,
-        reason: sourceState.imageCacheLM ? "" : outcome.error ? "detection_error" : "no_face",
+        reason: sourceState.imageCacheLM
+          ? ""
+          : imageFaces.length > 1
+            ? "multiple_faces"
+            : outcome.error
+              ? "detection_error"
+              : "no_face",
       });
       updateFaceExpression(result?.faceBlendshapes);
       sourceState.imageHulls = detectHands(timeMs, width, height);
       if (!sourceState.imageCacheLM) {
         countMetric("faceLandmarker.noFaceImage");
         if (outcome.error) logWarn("静态图片检测失败。", outcome.error);
-        setMsg(outcome.error
-          ? `图片检测失败（已尝试 ${outcome.attempts} 次）。请重新上传；若仍失败，请换一张正面清晰的照片。`
-          : `未检测到人脸（已尝试 ${outcome.attempts} 次）。请换用正面、清晰、光线充足的照片后重新上传。`);
+        setMsg(imageFaces.length > 1
+          ? "检测到多张人脸。请上传仅包含一位受试者的照片。"
+          : outcome.error
+            ? `图片检测失败（已尝试 ${outcome.attempts} 次）。请重新上传；若仍失败，请换一张正面清晰的照片。`
+            : `未检测到人脸（已尝试 ${outcome.attempts} 次）。请换用正面、清晰、光线充足的照片后重新上传。`);
       }
     } else if (renderState.handOcc && sourceState.imageHulls === null) {
       sourceState.imageHulls = detectHands(timeMs, width, height);

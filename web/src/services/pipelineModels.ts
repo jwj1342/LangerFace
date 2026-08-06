@@ -130,7 +130,7 @@ async function initializeImageReady(): Promise<void> {
   const build = (delegate: Delegate) => FaceLandmarker.createFromOptions(visionResolver!, {
     baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
     runningMode: "IMAGE",
-    numFaces: 1,
+    numFaces: 2,
     outputFaceBlendshapes: true,
     minFaceDetectionConfidence: 0.5,
     minFacePresenceConfidence: 0.5,
