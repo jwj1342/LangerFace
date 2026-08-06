@@ -57,6 +57,64 @@ async function uploadGeneratedPhoto(page: Page, mode: "single" | "multiple" | "b
   }, { base64: FACE_PAIR_JPEG, uploadMode: mode });
 }
 
+async function findPhotoEndpointHandles(page: Page) {
+  return page.locator("#incisionPhotoCanvas").evaluate((canvas: HTMLCanvasElement) => {
+    const context = canvas.getContext("2d");
+    const rect = canvas.getBoundingClientRect();
+    if (!context) return [];
+    const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+    const step = 2;
+    const cols = Math.floor(canvas.width / step);
+    const rows = Math.floor(canvas.height / step);
+    const matches = new Uint8Array(cols * rows);
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < cols; col += 1) {
+        const offset = ((row * step) * canvas.width + col * step) * 4;
+        const red = data[offset];
+        const green = data[offset + 1];
+        const blue = data[offset + 2];
+        if (red >= 246 && red <= 250 && green >= 248 && green <= 252 && blue >= 250) {
+          matches[row * cols + col] = 1;
+        }
+      }
+    }
+    const components: Array<{ count: number; x: number; y: number }> = [];
+    const queue: number[] = [];
+    for (let start = 0; start < matches.length; start += 1) {
+      if (!matches[start]) continue;
+      matches[start] = 0;
+      queue.push(start);
+      let cursor = 0;
+      let count = 0;
+      let sumX = 0;
+      let sumY = 0;
+      while (cursor < queue.length) {
+        const current = queue[cursor++];
+        const row = Math.floor(current / cols);
+        const col = current % cols;
+        count += 1;
+        sumX += col * step;
+        sumY += row * step;
+        for (const neighbor of [current - 1, current + 1, current - cols, current + cols]) {
+          if (neighbor < 0 || neighbor >= matches.length || !matches[neighbor]) continue;
+          if ((neighbor === current - 1 || neighbor === current + 1) && Math.floor(neighbor / cols) !== row) continue;
+          matches[neighbor] = 0;
+          queue.push(neighbor);
+        }
+      }
+      queue.length = 0;
+      if (count >= 18) components.push({ count, x: sumX / count, y: sumY / count });
+    }
+    return components
+      .sort((first, second) => second.count - first.count)
+      .slice(0, 2)
+      .map((component) => ({
+        x: rect.left + component.x / canvas.width * rect.width,
+        y: rect.top + component.y / canvas.height * rect.height,
+      }));
+  });
+}
+
 test("patient photo is the mobile incision canvas and reuploads fail safely", async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -91,6 +149,30 @@ test("patient photo is the mobile incision canvas and reuploads fail safely", as
   expect(evidence.height).toBeGreaterThan(0);
   expect(evidence.cyan, "photo canvas should contain visible cyan RSTL pixels").toBeGreaterThan(20);
 
+  await expect(page.locator("#stageStatus")).toContainText("第 1 次生成");
+  await page.locator("#diameterMm").focus();
+  await page.locator("#diameterMm").press("ArrowRight");
+  await expect(page.locator("#stageStatus")).toContainText("第 1 次生成");
+  await page.locator("#runWorkflowBtn").click();
+  await expect(page.locator("#stageStatus")).toContainText("第 2 次生成");
+
+  const endpointHandles = await findPhotoEndpointHandles(page);
+  expect(endpointHandles).toHaveLength(2);
+  const lengthBefore = Number(await page.locator("#lengthScale").inputValue());
+  await page.locator("#reviewDecision").selectOption("approved_for_discussion");
+  const [firstHandle, secondHandle] = endpointHandles;
+  await page.mouse.move(firstHandle.x, firstHandle.y);
+  await page.mouse.down();
+  await page.mouse.move(
+    firstHandle.x + (secondHandle.x - firstHandle.x) * 0.22,
+    firstHandle.y + (secondHandle.y - firstHandle.y) * 0.22,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await expect.poll(async () => Number(await page.locator("#lengthScale").inputValue())).not.toBe(lengthBefore);
+  await expect(page.locator("#editHistoryState")).toContainText("已提交");
+  await expect(page.locator("#reviewDecision")).toHaveValue("pending_clinician_confirmation");
+
   const box = await photoCanvas.boundingBox();
   expect(box).not.toBeNull();
   expect(box!.width).toBeLessThanOrEqual(390);
@@ -108,6 +190,10 @@ test("patient photo is the mobile incision canvas and reuploads fail safely", as
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("incision-photo-desktop.png"), fullPage: true });
+
+  await page.locator("#tumorKind").selectOption("cutaneous");
+  await expect(page.locator("#candidateType")).toHaveText("梭形");
+  await expect(page.locator("#stageStatus")).toContainText("第 2 次生成");
 
   const serializedSnapshots = await page.evaluate(() => JSON.stringify(
     (window as Window & { __photoSnapshots?: unknown[] }).__photoSnapshots || [],

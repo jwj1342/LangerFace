@@ -10,6 +10,7 @@ export interface IncisionPhotoGeometry {
   center: Vec3 | null;
   boundary: Vec3[];
   candidate: Vec3[];
+  endpoints: Vec3[];
 }
 
 export interface IncisionPhotoRenderInput {
@@ -24,6 +25,8 @@ export interface IncisionPhotoRenderInput {
   centerRef: SurfaceRef | null;
   boundaryRefs: SurfaceRef[];
   candidateRefs: SurfaceRef[];
+  endpointRefs: SurfaceRef[];
+  endpointRadius?: number;
 }
 
 export function validateIncisionPhotoFile(file: Pick<File, "type" | "size">): string | null {
@@ -58,13 +61,29 @@ export function buildIncisionPhotoGeometry({
   centerRef,
   boundaryRefs,
   candidateRefs,
+  endpointRefs,
 }: Omit<IncisionPhotoRenderInput, "context" | "source" | "sourceWidth" | "sourceHeight" | "devicePixelRatio">): IncisionPhotoGeometry {
   return {
     rstl: mapAtlas(atlasLines, landmarks, triangles),
     center: centerRef ? mapSurfaceRefs([centerRef], landmarks, triangles).pts[0] || null : null,
     boundary: mapSurfaceRefs(boundaryRefs, landmarks, triangles).pts,
     candidate: mapSurfaceRefs(candidateRefs, landmarks, triangles).pts,
+    endpoints: mapSurfaceRefs(endpointRefs, landmarks, triangles).pts,
   };
+}
+
+export function nearestPhotoEndpointHandle(
+  point: { x: number; y: number },
+  endpoints: readonly { x: number; y: number }[],
+  radiusCssPx = 12,
+): number | null {
+  let nearest: { index: number; distance: number } | null = null;
+  for (let index = 0; index < endpoints.length; index += 1) {
+    const endpoint = endpoints[index];
+    const distance = Math.hypot(point.x - endpoint.x, point.y - endpoint.y);
+    if (distance <= radiusCssPx && (!nearest || distance < nearest.distance)) nearest = { index, distance };
+  }
+  return nearest?.index ?? null;
 }
 
 function drawPath(
@@ -108,8 +127,8 @@ export function renderIncisionPhotoPlanning(input: IncisionPhotoRenderInput): In
     drawPath(context, line.pts, "rgba(103, 232, 249, 0.92)", 2);
   }
   if (geometry.boundary.length >= 2) {
-    drawPath(context, geometry.boundary, "rgba(3, 7, 18, 0.92)", 6, geometry.boundary.length >= 3);
-    drawPath(context, geometry.boundary, "#facc15", 3, geometry.boundary.length >= 3);
+    drawPath(context, geometry.boundary, "rgba(3, 7, 18, 0.92)", 6, geometry.boundary.length >= 6);
+    drawPath(context, geometry.boundary, "#facc15", 3, geometry.boundary.length >= 6);
   }
   if (geometry.candidate.length >= 2) {
     drawPath(context, geometry.candidate, "rgba(3, 7, 18, 0.95)", 8);
@@ -121,6 +140,20 @@ export function renderIncisionPhotoPlanning(input: IncisionPhotoRenderInput): In
     context.fillStyle = "#f43f5e";
     context.strokeStyle = "rgba(3, 7, 18, 0.95)";
     context.lineWidth = 3;
+    context.fill();
+    context.stroke();
+  }
+  const endpointRadius = Math.max(4, input.endpointRadius || 9);
+  for (const endpoint of geometry.endpoints) {
+    context.beginPath();
+    context.arc(endpoint[0], endpoint[1], endpointRadius + 3, 0, Math.PI * 2);
+    context.fillStyle = "rgba(3, 7, 18, 0.96)";
+    context.fill();
+    context.beginPath();
+    context.arc(endpoint[0], endpoint[1], endpointRadius, 0, Math.PI * 2);
+    context.fillStyle = "#f8fafc";
+    context.strokeStyle = "#34d399";
+    context.lineWidth = Math.max(3, endpointRadius * 0.28);
     context.fill();
     context.stroke();
   }

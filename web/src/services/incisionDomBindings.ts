@@ -57,6 +57,9 @@ export interface IncisionDomEventHandlers {
   onTumorFile(file?: File): void;
   onSecondaryCueFile(file?: File): void;
   onPhotoFile(file?: File): void;
+  photoEndpointHandleFromEvent(event: PointerEvent): number | null;
+  dragPhotoEndpoint(event: PointerEvent, handle: number): void;
+  commitPhotoEndpointDrag(): void;
   onPhotoPick(event: PointerEvent): void;
   onPhotoPan(deltaX: number, deltaY: number): void;
   onPhotoZoom(event: WheelEvent): void;
@@ -208,11 +211,24 @@ export function bindIncisionDomEvents({
   }) as EventListener, { passive: false });
 
   listen(elements.photoCanvas, "pointerdown", ((event: PointerEvent) => {
-    photoDrag = { x: event.clientX, y: event.clientY, moved: 0, id: event.pointerId };
+    photoDrag = {
+      x: event.clientX,
+      y: event.clientY,
+      moved: 0,
+      id: event.pointerId,
+      handle: handlers.photoEndpointHandleFromEvent(event),
+    };
     elements.photoCanvas.setPointerCapture(event.pointerId);
   }) as EventListener);
   listen(elements.photoCanvas, "pointermove", ((event: PointerEvent) => {
     if (!photoDrag || event.pointerId !== photoDrag.id) return;
+    if (photoDrag.handle != null) {
+      handlers.dragPhotoEndpoint(event, photoDrag.handle);
+      photoDrag.moved += Math.abs(event.clientX - photoDrag.x) + Math.abs(event.clientY - photoDrag.y);
+      photoDrag.x = event.clientX;
+      photoDrag.y = event.clientY;
+      return;
+    }
     const deltaX = event.clientX - photoDrag.x;
     const deltaY = event.clientY - photoDrag.y;
     photoDrag.moved += Math.abs(deltaX) + Math.abs(deltaY);
@@ -221,7 +237,9 @@ export function bindIncisionDomEvents({
     photoDrag.y = event.clientY;
   }) as EventListener);
   listen(elements.photoCanvas, "pointerup", ((event: PointerEvent) => {
-    if (photoDrag && event.pointerId === photoDrag.id && photoDrag.moved < 6) handlers.onPhotoPick(event);
+    const endpointDrag = photoDrag?.handle != null;
+    if (photoDrag && event.pointerId === photoDrag.id && photoDrag.moved < 6 && !endpointDrag) handlers.onPhotoPick(event);
+    if (endpointDrag && (photoDrag?.moved || 0) >= 1) handlers.commitPhotoEndpointDrag();
     photoDrag = null;
   }) as EventListener);
   listen(elements.photoCanvas, "pointercancel", (() => {
