@@ -1405,7 +1405,7 @@ assert.ok(incisionStagePanel.includes("useIncisionStore"), "React incision stage
 assert.ok(incisionStagePanel.includes("StageShell"), "React incision stage uses the shared stage shell primitive");
 assert.ok(incisionStagePanel.includes("StageViewport"), "React incision stage uses the shared stage viewport primitive");
 assert.ok(incisionStagePanel.includes("StageActions"), "React incision stage uses the shared stage actions primitive");
-assert.ok(incisionStagePanel.includes("StageLink"), "React incision stage uses the shared stage link primitive");
+assert.ok(!incisionStagePanel.includes("StageLink"), "React incision stage keeps maintenance navigation out of the clinical canvas");
 assert.ok(incisionStagePanel.includes("StageStatus"), "React incision stage uses the shared stage status primitive");
 assert.ok(incisionStagePanel.includes("StageMeta"), "React incision stage uses the shared stage metadata primitive");
 assert.ok(incisionStagePanel.includes("Legend"), "React incision stage uses the shared legend primitive");
@@ -1675,7 +1675,7 @@ assert.ok(reviewPanel.includes("ButtonRow"), "React review panel uses the shared
 assert.ok(reviewPanel.includes("WorkbenchCard"), "React review panel uses the shared shadcn-style workbench card primitive");
 assert.ok(reviewPanel.includes('variant="workbenchPrimary"'), "React review panel keeps primary workbench button styling through Button variants");
 assert.ok(incisionWorkbench.includes('to="/"'), "React incision workbench returns to the stateless tool launcher");
-assert.ok(incisionStagePanel.includes('to="/settings/atlas"'), "React incision stage routes atlas maintenance through settings");
+assert.ok(!incisionStagePanel.includes('to="/settings/atlas"'), "React incision stage hides atlas maintenance from the clinical workflow");
 assert.ok(!incisionStagePanel.includes('to="/annotate"'), "React incision stage should not bypass atlas settings");
 for (const dependencyType of incisionRuntimeDependencyTypes) {
   assert.ok(

@@ -1027,6 +1027,10 @@
     display: none;
   }
 
+  .incision-workbench #incisionPhotoCanvas[data-active="true"] ~ .incision-stage-boundary {
+    display: none;
+  }
+
   .incision-workbench .incision-photo-endpoint-layer {
     position: absolute;
     inset: 0;

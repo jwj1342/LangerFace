@@ -64,6 +64,13 @@ async function findPhotoEndpointHandles(page: Page) {
   }));
 }
 
+async function explicitGenerationCount(page: Page) {
+  const status = await page.locator("#stageStatus").textContent() || "";
+  const match = status.match(/第\s*(\d+)\s*次生成/);
+  if (!match) throw new Error(`generation count is missing from stage status: ${status}`);
+  return Number(match[1]);
+}
+
 test("patient photo is the mobile incision canvas and reuploads fail safely", async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -98,12 +105,12 @@ test("patient photo is the mobile incision canvas and reuploads fail safely", as
   expect(evidence.height).toBeGreaterThan(0);
   expect(evidence.cyan, "photo canvas should contain visible cyan RSTL pixels").toBeGreaterThan(20);
 
-  await expect(page.locator("#stageStatus")).toContainText("第 1 次生成");
+  const generationBefore = await explicitGenerationCount(page);
   await page.locator("#diameterMm").focus();
   await page.locator("#diameterMm").press("ArrowRight");
-  await expect(page.locator("#stageStatus")).toContainText("第 1 次生成");
+  await expect.poll(() => explicitGenerationCount(page)).toBe(generationBefore);
   await page.locator("#runWorkflowBtn").click();
-  await expect(page.locator("#stageStatus")).toContainText("第 2 次生成");
+  await expect.poll(() => explicitGenerationCount(page)).toBe(generationBefore + 1);
 
   const lengthBefore = Number(await page.locator("#lengthScale").inputValue());
   await page.locator("#reviewDecision").selectOption("approved_for_discussion");
@@ -143,7 +150,7 @@ test("patient photo is the mobile incision canvas and reuploads fail safely", as
 
   await page.locator("#tumorKind").selectOption("cutaneous");
   await expect(page.locator("#candidateType")).toHaveText("梭形");
-  await expect(page.locator("#stageStatus")).toContainText("第 2 次生成");
+  await expect.poll(() => explicitGenerationCount(page)).toBe(generationBefore + 1);
 
   const serializedSnapshots = await page.evaluate(() => JSON.stringify(
     (window as Window & { __photoSnapshots?: unknown[] }).__photoSnapshots || [],
