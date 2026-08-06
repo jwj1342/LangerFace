@@ -23,6 +23,22 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
       · Ready PR #119；补齐可编辑尖端角、轮廓重算、guardrail 与 provenance。
 - [ ] 3D 路线可行性裁决 — [#40](https://github.com/jwj1342/LangerFace/issues/40)
       · Ready PR #122；建议 2D-first + 3D 离线资产/标注/研究预览，等待 #40 owner 正式确认。
+- [ ] Epic：2D 静态照片切口规划交付闭环 — [#167](https://github.com/jwj1342/LangerFace/issues/167)
+      · 主实现汇总在 PR #166；代码与浏览器测试已完成，等待 required review。真实媒体与人工验收仍由 #171 / #172 跟踪。
+- [ ] 2D 规划画布：患者静态照片作为切口工作台主坐标系 — [#168](https://github.com/jwj1342/LangerFace/issues/168)
+      · PR #166 已实现照片主画布、共享拓扑和个体化 RSTL / 肿物 / 候选叠加，合并后自动关闭。
+- [ ] 2D 病灶与候选交互：照片上标记、生成和直接微调 — [#169](https://github.com/jwj1342/LangerFace/issues/169)
+      · PR #166 已实现病灶交互、候选端点拖动、历史同步和 stale workflow 隔离，合并后自动关闭。
+- [ ] 单页工作流：统一照片规划、候选审阅、导出与实时叠加状态 — [#170](https://github.com/jwj1342/LangerFace/issues/170)
+      · PR #166 已完成 workspace 恢复、审阅门禁、实时状态和清除/返回流程；保留 issue 继续核对端到端交付。
+- [ ] 2D RSTL 手动兜底验收与质量边界 — [#171](https://github.com/jwj1342/LangerFace/issues/171)
+      · PR #166 已补交叉/密度质量门禁；PR #186 修复单帧皱纹细化在 live transport 中位移归零。仍缺 3 张授权照片的 before/after 人工评审证据。
+- [ ] 真实媒体验收：照片、视频与摄像头切口叠加稳定性证据 — [#172](https://github.com/jwj1342/LangerFace/issues/172)
+      · PR #166 已补严格设备矩阵审计；仍缺 2 段固定视频和 1 个固定摄像头的真实 evidence/audit，不能用合成值替代。
+- [ ] 肿物检测适配契约：允许未来 detector 接入但不引入训练 — [#173](https://github.com/jwj1342/LangerFace/issues/173)
+      · PR #166 已加入本地 adapter contract、payload 校验和无远程 SDK/训练依赖门禁，合并后自动关闭。
+- [ ] 抽取 live/incision 共用的 2D 照片规划 controller 与坐标服务 — [#174](https://github.com/jwj1342/LangerFace/issues/174)
+      · PR #166 已抽取共享 typed controller，同时保持原始媒体和 landmarks 不进入低频 snapshot，合并后自动关闭。
 - [x] 修复 React 受控输入 snapshot echo — [#109](https://github.com/jwj1342/LangerFace/issues/109)
       · Ready PR #119；Chromium 回归覆盖输入保持。
 - [x] 删除 Agentic/Provider 出域路径 — [#111](https://github.com/jwj1342/LangerFace/issues/111)
