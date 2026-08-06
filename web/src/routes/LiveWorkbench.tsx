@@ -6,6 +6,7 @@ import { LiveSourceControlsPanel } from "../components/LiveSourceControlsPanel";
 import { LiveQualityPanel } from "../components/LiveQualityPanel";
 import { LiveIncisionOverlayPanel } from "../components/LiveIncisionOverlayPanel";
 import { LiveRefinePanel } from "../components/LiveRefinePanel";
+import { LiveWrinklePanel } from "../components/LiveWrinklePanel";
 import { LiveStagePanel } from "../components/LiveStagePanel";
 import { LiveStatePanel } from "../components/LiveStatePanel";
 import { Disclaimer, WorkbenchLayout } from "../components/WorkbenchLayout";
@@ -45,6 +46,8 @@ export function LiveWorkbench() {
       <LiveSourceControlsPanel />
 
       <LiveIncisionOverlayPanel />
+
+      <LiveWrinklePanel />
 
       <LiveRefinePanel />
 

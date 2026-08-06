@@ -8,6 +8,12 @@ export interface LiveDomElements {
   cam: HTMLButtonElement;
   pause: HTMLButtonElement;
   export: HTMLButtonElement;
+  wrinkleDisplayMode: HTMLSelectElement;
+  wrinkleDetect: HTMLButtonElement;
+  wrinkleAutoRefine: HTMLButtonElement;
+  wrinkleRestore: HTMLButtonElement;
+  wrinkleStatus: HTMLElement;
+  wrinkleSummary: HTMLElement;
   refine2d: HTMLButtonElement;
   refine2dPanel: HTMLElement;
   refine2dStatus: HTMLElement;
@@ -110,6 +116,12 @@ function collectElements(root: ParentNode | Document): LiveDomElements {
     cam: elementById<HTMLButtonElement>(root, "camBtn") as HTMLButtonElement,
     pause: elementById<HTMLButtonElement>(root, "pauseBtn") as HTMLButtonElement,
     export: elementById<HTMLButtonElement>(root, "exportBtn") as HTMLButtonElement,
+    wrinkleDisplayMode: elementById<HTMLSelectElement>(root, "wrinkleDisplayMode") as HTMLSelectElement,
+    wrinkleDetect: elementById<HTMLButtonElement>(root, "wrinkleDetectBtn") as HTMLButtonElement,
+    wrinkleAutoRefine: elementById<HTMLButtonElement>(root, "wrinkleAutoRefineBtn") as HTMLButtonElement,
+    wrinkleRestore: elementById<HTMLButtonElement>(root, "wrinkleRestoreBtn") as HTMLButtonElement,
+    wrinkleStatus: elementById<HTMLElement>(root, "wrinkleStatus") as HTMLElement,
+    wrinkleSummary: elementById<HTMLElement>(root, "wrinkleSummary") as HTMLElement,
     refine2d: elementById<HTMLButtonElement>(root, "refine2dBtn") as HTMLButtonElement,
     refine2dPanel: elementById<HTMLElement>(root, "refine2dPanel") as HTMLElement,
     refine2dStatus: elementById<HTMLElement>(root, "refine2dStatus") as HTMLElement,

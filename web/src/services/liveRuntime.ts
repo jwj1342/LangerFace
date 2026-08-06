@@ -54,6 +54,15 @@ import {
   readLiveRouteCommand,
   readLiveSourceCommand,
 } from "./workbenchCommandSchemas";
+import {
+  analyzeCurrentWrinkles,
+  applyWrinkleGuidedRefinement,
+  disposeLiveWrinkleAnalysis,
+  resetLiveWrinkleAnalysis,
+  restoreStandardRstl,
+  setWrinkleDisplayMode,
+  updateWrinkleUi,
+} from "./liveWrinkleAnalysis.ts";
 
 interface ImageDragState {
   pointerId: number;
@@ -323,15 +332,16 @@ function handlePauseToggle(): void {
     els.pause.textContent = "▶ 继续实时";
     els.pause.setAttribute("aria-pressed", "true");
     setLive(false, "已定格 · 可微调");
-    setMsg("已定格当前帧。可拖动、擦除或对称调整曲线；继续实时后微调结果会自动跟随人脸。");
+    setMsg("已定格当前帧，正在本机检测皱纹。可选择自动微调、医生手动微调，或自动后继续手动调整。");
     redrawPausedFrame();
     setRefineAvailability();
-    if (!isRefineActive()) toggleRefine2d();
+    void analyzeCurrentWrinkles();
     return;
   }
   sourceState.paused = false;
   sourceState.frozenFrame = null;
   const refinementCommitted = commitRefineForLive();
+  resetLiveWrinkleAnalysis();
   els.pause.textContent = sourceState.sourceKind === "camera" ? "📷 定格微调" : "⏸ 暂停";
   els.pause.setAttribute("aria-pressed", "false");
   setMsg(refinementCommitted ? "已返回实时画面，当前微调曲线会继续跟随人脸。" : null);
@@ -464,6 +474,18 @@ function handleReactRouteCommand(event: Event): void {
 
 function bindLiveEvents(signal: AbortSignal): void {
   els.file.addEventListener("change", (e) => runLiveAction("file_source", () => handleFile((e.target as HTMLInputElement | null)?.files?.[0])), { signal });
+  els.wrinkleDisplayMode.addEventListener("change", (event) => {
+    runLiveAction("wrinkle_display_mode", () => setWrinkleDisplayMode((event.target as HTMLSelectElement).value));
+  }, { signal });
+  els.wrinkleDetect.addEventListener("click", () => {
+    runLiveAction("wrinkle_detect", () => analyzeCurrentWrinkles({ force: true }));
+  }, { signal });
+  els.wrinkleAutoRefine.addEventListener("click", () => {
+    runLiveAction("wrinkle_auto_refine", applyWrinkleGuidedRefinement);
+  }, { signal });
+  els.wrinkleRestore.addEventListener("click", () => {
+    runLiveAction("wrinkle_restore_standard", restoreStandardRstl);
+  }, { signal });
   els.refine2d.addEventListener("click", () => runLiveAction("refine_toggle", toggleRefine2d), { signal });
   els.refineView.addEventListener("click", () => runLiveAction("refine_view", () => setRefineMode("view")), { signal });
   els.refineDrag.addEventListener("click", () => runLiveAction("refine_drag", () => setRefineMode("drag")), { signal });
@@ -486,6 +508,7 @@ function bindLiveEvents(signal: AbortSignal): void {
   window.addEventListener("langerface:refine2d-redraw", () => {
     refreshStaticImage();
   }, { signal });
+  window.addEventListener("langerface:refine2d-state", updateWrinkleUi, { signal });
   if (isReactManagedWorkbench()) {
     bindWindowControllerEvents([
       [LIVE_SOURCE_REACT_COMMAND_EVENT, handleReactSourceCommand],
@@ -556,6 +579,7 @@ export function disposeLiveWorkbench() {
   }
   sourceState.planning2d?.dispose();
   sourceState.planning2d = null;
+  void disposeLiveWrinkleAnalysis();
   if (reconState.scan) reconState.scan.active = false;
   if (reconState.viewerRAF != null) cancelAnimationFrame(reconState.viewerRAF);
   reconState.viewerRAF = null;
@@ -578,6 +602,7 @@ export function mountLiveWorkbench(root: ParentNode | Document = document) {
   imageDrag = null;
   bindLiveEvents(abortController.signal);
   updateRefineUi();
+  updateWrinkleUi();
   buildZoomCards(refreshStaticImage);
   resizeCleanup = observeCanvasStageResize(() => {
     if (sourceState.sourceKind === "image") fitCanvasDisplayToStage();
