@@ -141,6 +141,7 @@ const annotationModelService = read("src/services/annotationModel.ts");
 const flameFitService = read("src/services/flameFit.ts");
 const annotateViewerService = read("src/services/annotateViewer.ts");
 const controller = read("src/services/incisionRuntime.ts");
+const incisionCommandRouterService = read("src/services/incisionCommandRouter.ts");
 const incisionDomService = read("src/services/incisionDom.ts");
 const incisionDomBindingsService = read("src/services/incisionDomBindings.ts");
 const incisionControllerStateService = read("src/services/incisionControllerState.ts");
@@ -199,6 +200,7 @@ const incisionRuntimeDependencyTypes = [
   "src/services/exportPrivacy.ts",
   "src/services/incisionClinicalCopy.ts",
   "src/services/incisionControllerState.ts",
+  "src/services/incisionCommandRouter.ts",
   "src/services/incisionDom.ts",
   "src/services/incisionDomBindings.ts",
   "src/services/incisionReviewPolicy.ts",
@@ -1449,7 +1451,7 @@ assert.ok(
   "incision tumor command bridge preserves the latest React control value",
 );
 assert.ok(
-  controller.includes("applyReactTumorControlValue(els, command, detail.value)") &&
+  controller.includes("applyTumorControl: (command, value) => applyReactTumorControlValue(els, command, value)") &&
     incisionDomBindingsService.includes("function tumorCommandControl(") &&
     incisionDomBindingsService.includes("applyReactTumorControlValue"),
   "incision runtime applies validated React tumor values before publishing snapshots",
@@ -1464,7 +1466,7 @@ assert.ok(
   editPanel.includes('preview("lengthScale", value)') &&
     editPanel.includes('commit("lengthScale", event.currentTarget.value)') &&
     controllerCommand.includes("controlId?: IncisionEditControlId") &&
-    controller.includes("applyReactEditControlValue(els, detail.controlId, detail.value)"),
+    controller.includes("applyEditControl: (controlId, value) => applyReactEditControlValue(els, controlId, value)"),
   "React clinician edit controls preserve their latest values across synchronous runtime previews",
 );
 assert.ok(
@@ -1640,7 +1642,7 @@ for (const controlId of [
 assert.ok(
   controllerCommand.includes("controlId?: IncisionEditControlId") &&
     controllerCommandsHook.includes("dispatchIncisionEditCommand(command, controlId, value)") &&
-    controller.includes("applyReactEditControlValue(els, detail.controlId, detail.value)") &&
+    controller.includes("applyEditControl: (controlId, value) => applyReactEditControlValue(els, controlId, value)") &&
     incisionDomBindingsService.includes("function editCommandControl(") &&
     incisionDomBindingsService.includes("applyReactControlValue("),
   "incision edit command bridge applies validated React values before publishing snapshots",
@@ -1705,7 +1707,7 @@ assert.ok(incisionReviewRecordsService.includes("buildIncisionReviewRecord"), "i
 assert.ok(incisionReviewRecordsService.includes("buildIncisionReviewReport"), "incision review record service owns markdown report construction");
 assert.ok(controller.includes("./incisionReviewRecords"), "incision runtime delegates review records and reports");
 assert.ok(!controller.includes("function candidateEditSession"), "incision runtime does not build edit sessions inline");
-assert.ok(controller.split("\n").length <= 1900, "incision runtime remains below the 1900-line God Object threshold");
+assert.ok(controller.split("\n").length <= 1770, "incision runtime remains below the 1770-line God Object threshold");
 assert.ok(incisionControllerStateService.includes("interface IncisionRuntimeState"), "incision state service types long-lived renderer/workflow state");
 assert.ok(incisionControllerStateService.includes("createIncisionControllerState"), "incision state service owns fresh mount state");
 assert.ok(controller.includes("createIncisionControllerState"), "incision runtime resets state through the state service");
@@ -1727,24 +1729,26 @@ assert.ok(controller.includes("export function disposeIncisionWorkbench"), "inci
 assert.ok(controller.includes("INCISION_TUMOR_REACT_COMMAND_EVENT"), "incision controller listens for React tumor input commands");
 assert.ok(controller.includes("../lib/controllerEvents"), "incision controller imports event names from the shared module");
 assert.ok(controller.includes("../lib/controllerCommand"), "incision controller imports the shared command binding module");
-assert.ok(controller.includes("./incisionCommandSchemas"), "incision controller imports payload-aware command schemas");
+assert.ok(controller.includes("./incisionCommandRouter"), "incision controller delegates React commands to the typed command router");
+assert.ok(incisionCommandRouterService.includes("./incisionCommandSchemas.ts"), "incision command router imports payload-aware command schemas");
+assert.ok(!/(?:document|window|HTMLElement|PointerEvent|THREE)/.test(incisionCommandRouterService), "incision command router remains independent of browser and rendering globals");
 assert.ok(controller.includes("bindWindowControllerEvents"), "incision controller binds React command events through the shared helper");
 assert.ok(controller.includes("reactCommandCleanup"), "incision controller stores a single React command cleanup handle");
 assert.ok(!controller.includes("window.addEventListener(INCISION"), "incision controller does not register React command listeners one-by-one");
-assert.ok(controller.includes("readIncisionTumorCommand(event)"), "incision tumor handler validates command names and payloads");
-assert.ok(controller.includes("readIncisionSecondaryCueCommand(event)"), "incision secondary cue handler validates incoming command names");
-assert.ok(controller.includes("readIncisionEditCommand(event)"), "incision edit handler validates incoming command names");
-assert.ok(controller.includes("readIncisionReviewCommand(event)"), "incision review handler validates incoming command names");
-assert.ok(controller.includes("readIncisionLibraryCommand(event)"), "incision library handler validates command names and candidate ids");
+assert.ok(incisionCommandRouterService.includes("readIncisionTumorCommand(event)"), "incision tumor handler validates command names and payloads");
+assert.ok(incisionCommandRouterService.includes("readIncisionSecondaryCueCommand(event)"), "incision secondary cue handler validates incoming command names");
+assert.ok(incisionCommandRouterService.includes("readIncisionEditCommand(event)"), "incision edit handler validates incoming command names and payloads");
+assert.ok(incisionCommandRouterService.includes("readIncisionReviewCommand(event)"), "incision review handler validates incoming command names");
+assert.ok(incisionCommandRouterService.includes("readIncisionLibraryCommand(event)"), "incision library handler validates command names and candidate ids");
 assert.ok(!controller.includes("window.removeEventListener(INCISION"), "incision controller does not remove React command listeners one-by-one");
 assert.ok(!controller.includes("event?.detail?.command"), "incision controller does not read raw command detail directly");
-assert.ok(controller.includes("handleReactTumorCommand"), "incision controller routes React tumor commands to existing tumor workflow functions");
+assert.ok(controller.includes("incisionCommands.handleTumorEvent(event)"), "incision controller routes React tumor commands through the command router");
 assert.ok(controller.includes("./tumorInput"), "incision controller consumes the shared typed tumor input service");
 assert.ok(controller.includes("buildTumorInput({"), "incision controller delegates TumorInput construction to the shared service");
 assert.ok(controller.includes("buildTumorFormSnapshot({"), "incision controller delegates tumor snapshot normalization to the shared service");
 assert.ok(controller.includes("importedTumorFormState(payload"), "incision controller delegates imported tumor normalization to the shared service");
 assert.ok(controller.includes("INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT"), "incision controller listens for React secondary cue commands");
-assert.ok(controller.includes("handleReactSecondaryCueCommand"), "incision controller routes React secondary cue commands to existing cue workflow functions");
+assert.ok(controller.includes("incisionCommands.handleSecondaryCueEvent(event)"), "incision controller routes React secondary cue commands through the command router");
 assert.ok(controller.includes("currentResultViewSnapshot"), "incision controller publishes candidate result view state for React rendering");
 assert.ok(controller.includes("currentSavedCandidateSummaries"), "incision controller publishes saved candidate summaries for React rendering");
 assert.ok(controller.includes("currentPrivacyAuditSnapshot"), "incision controller publishes privacy audit state for React rendering");
@@ -1766,11 +1770,11 @@ assert.ok(incisionSnapshotsService.includes("../lib/controllerSnapshotSchemas"),
 assert.ok(controller.includes("./incisionSnapshots"), "incision controller consumes the shared typed snapshot service");
 assert.ok(controller.includes("buildIncisionControllerSnapshot({"), "incision controller delegates React snapshot construction to the shared service");
 assert.ok(controller.includes("INCISION_REVIEW_REACT_COMMAND_EVENT"), "incision controller listens for React review commands");
-assert.ok(controller.includes("handleReactReviewCommand"), "incision controller routes React review commands to existing review workflow functions");
+assert.ok(controller.includes("incisionCommands.handleReviewEvent(event)"), "incision controller routes React review commands through the command router");
 assert.ok(controller.includes("INCISION_EDIT_REACT_COMMAND_EVENT"), "incision controller listens for React edit commands");
-assert.ok(controller.includes("handleReactEditCommand"), "incision controller routes React edit commands to existing edit workflow functions");
+assert.ok(controller.includes("incisionCommands.handleEditEvent(event)"), "incision controller routes React edit commands through the command router");
 assert.ok(controller.includes("INCISION_LIBRARY_REACT_COMMAND_EVENT"), "incision controller listens for React candidate library commands");
-assert.ok(controller.includes("handleReactLibraryCommand"), "incision controller routes React library commands to existing save/export workflow functions");
+assert.ok(controller.includes("incisionCommands.handleLibraryEvent(event)"), "incision controller routes React library commands through the command router");
 assert.ok(controller.includes("../lib/reactManagedWorkbench"), "incision controller imports the shared React-managed flag helper");
 assert.ok(controller.includes("isReactManagedWorkbench()"), "incision controller can branch between React and compatibility workbench handling");
 assert.ok(!controller.includes("window.__LANGERFACE_REACT_MANAGED__"), "incision controller does not touch the managed flag directly");

@@ -56,8 +56,32 @@ assert.deepEqual(
 );
 
 assert.deepEqual(
-  readIncisionEditCommand(event({ command: "commit_edit" })),
-  { command: "commit_edit" },
+  readIncisionEditCommand(event({ command: "commit_edit", controlId: "lengthScale", value: "110" })),
+  { command: "commit_edit", controlId: "lengthScale", value: "110" },
+);
+assert.equal(
+  readIncisionEditCommand(event({ command: "preview_edit" })),
+  null,
+);
+assert.equal(
+  readIncisionEditCommand(event({ command: "preview_edit", controlId: "__proto__", value: "1" })),
+  null,
+);
+assert.equal(
+  readIncisionEditCommand(event({ command: "commit_edit", controlId: "lengthScale", value: "NaN" })),
+  null,
+);
+assert.deepEqual(
+  readIncisionEditCommand(event({ command: "commit_reason", controlId: "editReason", value: "manual clinician preference" })),
+  { command: "commit_reason", controlId: "editReason", value: "manual clinician preference" },
+);
+assert.equal(
+  readIncisionEditCommand(event({ command: "commit_reason", controlId: "editReason", value: "unreviewed reason" })),
+  null,
+);
+assert.deepEqual(
+  readIncisionEditCommand(event({ command: "undo_edit" })),
+  { command: "undo_edit" },
 );
 assert.equal(
   readIncisionEditCommand(event({ command: "provider_connect" })),

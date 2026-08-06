@@ -7,6 +7,7 @@ import {
   readControllerCommandDetail,
   type ControllerCommandDetail,
   type IncisionEditCommand,
+  type IncisionEditControlId,
   type IncisionLibraryCommand,
   type IncisionReviewCommand,
   type IncisionSecondaryCueCommand,
@@ -25,6 +26,12 @@ export interface IncisionLibraryCommandDetail
   id?: string;
 }
 
+export interface IncisionEditCommandDetail
+  extends ControllerCommandDetail<IncisionEditCommand> {
+  controlId?: IncisionEditControlId;
+  value?: string;
+}
+
 const NUMERIC_TUMOR_COMMANDS = new Set<IncisionTumorCommand>([
   "diameter_input",
   "diameter_changed",
@@ -34,6 +41,23 @@ const NUMERIC_TUMOR_COMMANDS = new Set<IncisionTumorCommand>([
   "margin_changed",
   "ellipse_ratio_input",
   "ellipse_ratio_changed",
+]);
+
+const NUMERIC_EDIT_CONTROLS = new Set<IncisionEditControlId>([
+  "angleOffsetDeg",
+  "lengthScale",
+  "widthScale",
+  "tipAngleDeg",
+  "shiftAlongMm",
+  "shiftPerpMm",
+]);
+
+const EDIT_REASONS = new Set([
+  "",
+  "manual scar camouflage",
+  "manual free-margin protection",
+  "manual subunit boundary alignment",
+  "manual clinician preference",
 ]);
 
 function eventDetail(event: CommandEvent): { detail?: unknown } {
@@ -84,8 +108,26 @@ export function readIncisionSecondaryCueCommand(
 
 export function readIncisionEditCommand(
   event: CommandEvent,
-): ControllerCommandDetail<IncisionEditCommand> | null {
-  return readControllerCommandDetail(eventDetail(event), INCISION_EDIT_COMMANDS);
+): IncisionEditCommandDetail | null {
+  const detail = readControllerCommandDetail(eventDetail(event), INCISION_EDIT_COMMANDS);
+  if (!detail) return null;
+  if (detail.command === "preview_edit" || detail.command === "commit_edit") {
+    return (
+      typeof detail.controlId === "string"
+      && NUMERIC_EDIT_CONTROLS.has(detail.controlId as IncisionEditControlId)
+      && typeof detail.value === "string"
+      && detail.value !== ""
+      && Number.isFinite(Number(detail.value))
+    ) ? detail as IncisionEditCommandDetail : null;
+  }
+  if (detail.command === "commit_reason") {
+    return detail.controlId === "editReason"
+      && typeof detail.value === "string"
+      && EDIT_REASONS.has(detail.value)
+      ? detail as IncisionEditCommandDetail
+      : null;
+  }
+  return detail as IncisionEditCommandDetail;
 }
 
 export function readIncisionReviewCommand(

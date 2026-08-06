@@ -97,13 +97,7 @@ import {
   buildIncisionResultPresentation,
   type IncisionTextPresentation,
 } from "./incisionPresenter";
-import {
-  readIncisionEditCommand,
-  readIncisionLibraryCommand,
-  readIncisionReviewCommand,
-  readIncisionSecondaryCueCommand,
-  readIncisionTumorCommand,
-} from "./incisionCommandSchemas";
+import { IncisionCommandRouter } from "./incisionCommandRouter";
 import {
   pickEndpointHandle,
   pickFaceSurface,
@@ -823,81 +817,6 @@ function clearBoundaryPoints() {
   publishIncisionState("tumor_boundary_clear");
 }
 
-function handleReactTumorCommand(event: Event) {
-  const detail = readIncisionTumorCommand(event);
-  if (!detail) return;
-  const { command } = detail;
-  applyReactTumorControlValue(els, command, detail.value);
-  if (command === "kind_changed") {
-    S.boundaryActive = false;
-    updateFormVisibility();
-    publishIncisionState("tumor_kind_changed");
-    previewWorkflow();
-    return;
-  }
-  if (command === "diameter_input") {
-    updateTumorRing();
-    publishIncisionState("tumor_diameter_input");
-    return;
-  }
-  if (command === "depth_input" || command === "author_changed") {
-    publishIncisionState(command);
-    return;
-  }
-  if (command === "margin_input" || command === "ellipse_ratio_input") {
-    updateTumorRing();
-    publishIncisionState(command);
-    return;
-  }
-  if (command === "diameter_changed" || command === "depth_changed" || command === "margin_changed" || command === "ellipse_ratio_changed") {
-    previewWorkflow();
-    return;
-  }
-  if (command === "boundary_mode_changed") {
-    S.boundaryActive = false;
-    updateFormVisibility();
-    publishIncisionState("tumor_boundary_mode_changed");
-    previewWorkflow();
-    return;
-  }
-  if (command === "toggle_boundary") {
-    toggleBoundaryDrawing();
-    return;
-  }
-  if (command === "clear_boundary") {
-    clearBoundaryPoints();
-    return;
-  }
-  if (command === "export_tumor") {
-    exportTumorJson();
-    return;
-  }
-  if (command === "import_tumor") {
-    els.tumorImportFile.click();
-    return;
-  }
-  if (command === "run_workflow") {
-    runWorkflow({ countGeneration: true });
-  }
-}
-
-function handleReactSecondaryCueCommand(event: Event) {
-  const detail = readIncisionSecondaryCueCommand(event);
-  if (!detail) return;
-  const { command } = detail;
-  if (command === "import_secondary_cue") {
-    els.secondaryCueImportFile.click();
-    return;
-  }
-  if (command === "clear_secondary_cue") {
-    clearSecondaryCues();
-    return;
-  }
-  if (command === "secondary_cue_confirmed") {
-    setSecondaryCueConfirmedFromControl();
-  }
-}
-
 function fmt(x: unknown, digits = 1): string {
   return Number.isFinite(Number(x)) ? Number(x).toFixed(digits) : "—";
 }
@@ -1018,37 +937,6 @@ function resetEditToToolSuggestion() {
   resetEditTimeline();
   invalidateReviewAfterGeometryChange("已恢复工具建议，审阅状态已回到待医生确认。");
   renderResult(S.baseResult);
-}
-
-function handleReactEditCommand(event: Event) {
-  const detail = readIncisionEditCommand(event);
-  if (!detail) return;
-  const { command } = detail;
-  applyReactEditControlValue(els, detail.controlId, detail.value);
-  if (command === "preview_edit") {
-    applyEditControls();
-    return;
-  }
-  if (command === "commit_edit") {
-    commitEditSnapshot("control_change");
-    return;
-  }
-  if (command === "commit_reason") {
-    applyEditControls();
-    commitEditSnapshot("reason_change");
-    return;
-  }
-  if (command === "undo_edit") {
-    undoEditSnapshot();
-    return;
-  }
-  if (command === "redo_edit") {
-    redoEditSnapshot();
-    return;
-  }
-  if (command === "reset_edit") {
-    resetEditToToolSuggestion();
-  }
 }
 
 function updateEditVisibility(result: DynamicRecord) {
@@ -1380,60 +1268,6 @@ function makeVariantCandidates() {
   }
   els.stageStatus.textContent = "已生成 3 个方向备选、复跑 guardrails，并更新工程排序";
   renderSaved();
-}
-
-function handleReactReviewCommand(event: Event) {
-  const detail = readIncisionReviewCommand(event);
-  if (!detail) return;
-  const { command } = detail;
-  if (command === "review_state_changed") {
-    updateReviewStateUI();
-    return;
-  }
-  if (command === "save_review") {
-    saveReviewRecord();
-  }
-}
-
-function handleReactLibraryCommand(event: Event) {
-  const detail = readIncisionLibraryCommand(event);
-  if (!detail) return;
-  const { command, id } = detail;
-  if (command === "save_current") {
-    saveCurrentCandidate();
-    return;
-  }
-  if (command === "make_variants") {
-    makeVariantCandidates();
-    return;
-  }
-  if (command === "clear_saved") {
-    clearSavedCandidates();
-    return;
-  }
-  if (command === "load_candidate") {
-    loadSavedCandidate(String(id || ""));
-    return;
-  }
-  if (command === "remove_candidate") {
-    removeSavedCandidate(String(id || ""));
-    return;
-  }
-  if (command === "export_json") {
-    exportReviewJson();
-    return;
-  }
-  if (command === "export_report") {
-    exportReport();
-    return;
-  }
-  if (command === "export_png") {
-    exportScreenshot();
-    return;
-  }
-  if (command === "stage_live_overlay") {
-    stageLiveOverlay();
-  }
 }
 
 function exportReviewJson() {
@@ -1837,13 +1671,47 @@ function renderLoop() {
   S.frameId = requestAnimationFrame(renderLoop);
 }
 
+const incisionCommands = new IncisionCommandRouter({
+  applyTumorControl: (command, value) => applyReactTumorControlValue(els, command, value),
+  setBoundaryInactive: () => { S.boundaryActive = false; },
+  updateFormVisibility,
+  publish: publishIncisionState,
+  previewWorkflow,
+  updateTumorRing,
+  toggleBoundaryDrawing,
+  clearBoundaryPoints,
+  exportTumor: exportTumorJson,
+  importTumor: () => els.tumorImportFile.click(),
+  runWorkflow: () => runWorkflow({ countGeneration: true }),
+  importSecondaryCue: () => els.secondaryCueImportFile.click(),
+  clearSecondaryCue: clearSecondaryCues,
+  confirmSecondaryCue: setSecondaryCueConfirmedFromControl,
+  applyEditControl: (controlId, value) => applyReactEditControlValue(els, controlId, value),
+  applyEditControls,
+  commitEdit: commitEditSnapshot,
+  undoEdit: undoEditSnapshot,
+  redoEdit: redoEditSnapshot,
+  resetEdit: resetEditToToolSuggestion,
+  updateReviewState: updateReviewStateUI,
+  saveReview: saveReviewRecord,
+  saveCurrentCandidate,
+  makeVariants: makeVariantCandidates,
+  clearSaved: clearSavedCandidates,
+  loadCandidate: loadSavedCandidate,
+  removeCandidate: removeSavedCandidate,
+  exportJson: exportReviewJson,
+  exportReport,
+  exportPng: exportScreenshot,
+  stageLiveOverlay,
+});
+
 function bindReactWorkbenchCommands() {
   S.reactCommandCleanup = bindWindowControllerEvents([
-    [INCISION_TUMOR_REACT_COMMAND_EVENT, handleReactTumorCommand],
-    [INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT, handleReactSecondaryCueCommand],
-    [INCISION_EDIT_REACT_COMMAND_EVENT, handleReactEditCommand],
-    [INCISION_REVIEW_REACT_COMMAND_EVENT, handleReactReviewCommand],
-    [INCISION_LIBRARY_REACT_COMMAND_EVENT, handleReactLibraryCommand],
+    [INCISION_TUMOR_REACT_COMMAND_EVENT, (event) => { incisionCommands.handleTumorEvent(event); }],
+    [INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT, (event) => { incisionCommands.handleSecondaryCueEvent(event); }],
+    [INCISION_EDIT_REACT_COMMAND_EVENT, (event) => { incisionCommands.handleEditEvent(event); }],
+    [INCISION_REVIEW_REACT_COMMAND_EVENT, (event) => { incisionCommands.handleReviewEvent(event); }],
+    [INCISION_LIBRARY_REACT_COMMAND_EVENT, (event) => { incisionCommands.handleLibraryEvent(event); }],
   ]);
 }
 
