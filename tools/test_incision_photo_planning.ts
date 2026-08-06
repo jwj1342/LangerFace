@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   buildIncisionPhotoGeometry,
+  nearestPhotoEndpointHandle,
   pointsToSurfaceRefs,
   surfaceRefToModelPoint,
   validateIncisionPhotoFile,
@@ -35,12 +36,14 @@ const geometry = buildIncisionPhotoGeometry({
   centerRef: refs[0],
   boundaryRefs: refs,
   candidateRefs: refs,
+  endpointRefs: refs,
 });
 assert.equal(geometry.rstl.length, 1);
 assert.equal(geometry.rstl[0].pts.length, 2);
 assert.ok(geometry.center);
 assert.equal(geometry.boundary.length, 2);
 assert.equal(geometry.candidate.length, 2);
+assert.equal(geometry.endpoints.length, 2);
 assert.ok(Math.abs(geometry.center[0] - 200) < 1e-6);
 assert.ok(Math.abs(geometry.center[1] - 200) < 1e-6);
 
@@ -49,5 +52,8 @@ assert.equal(validateIncisionPhotoFile({ type: "image/png", size: 1024 }), null)
 assert.match(validateIncisionPhotoFile({ type: "image/webp", size: 1024 }) || "", /JPEG.*PNG/);
 assert.match(validateIncisionPhotoFile({ type: "image/jpeg", size: 0 }) || "", /为空/);
 assert.match(validateIncisionPhotoFile({ type: "image/jpeg", size: 21 * 1024 * 1024 }) || "", /20 MB/);
+
+assert.equal(nearestPhotoEndpointHandle({ x: 108, y: 103 }, [{ x: 100, y: 100 }, { x: 300, y: 300 }], 12), 0);
+assert.equal(nearestPhotoEndpointHandle({ x: 200, y: 200 }, [{ x: 100, y: 100 }, { x: 300, y: 300 }], 12), null);
 
 console.log("test_incision_photo_planning: file gate and surface-ref projection passed");

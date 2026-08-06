@@ -3,6 +3,7 @@ import type { IncisionRuntimeState } from "./incisionControllerState";
 import type { IncisionDomElements } from "./incisionDom";
 import type { SurfaceRef } from "./incisionOverlay";
 import {
+  nearestPhotoEndpointHandle,
   pointsToSurfaceRefs,
   renderIncisionPhotoPlanning,
   surfaceRefToModelPoint,
@@ -23,6 +24,8 @@ interface IncisionPhotoRuntimeOptions {
   updateTumorRing(): void;
   runWorkflow(): void | Promise<void>;
   publishState(reason: string): void;
+  dragEndpoint(point: [number, number, number], index: number): void;
+  commitEndpointDrag(): void;
 }
 
 export interface IncisionPhotoRuntime {
@@ -32,6 +35,9 @@ export interface IncisionPhotoRuntime {
   resetView(): void;
   load(file?: File): Promise<void>;
   pick(event: PointerEvent): void;
+  endpointHandleFromEvent(event: PointerEvent): number | null;
+  dragEndpoint(event: PointerEvent, index: number): void;
+  commitEndpointDrag(): void;
   pan(deltaX: number, deltaY: number): void;
   zoom(event: WheelEvent): void;
   toggleMirror(): void;
@@ -52,8 +58,23 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     updateTumorRing,
     runWorkflow,
     publishState,
+    dragEndpoint,
+    commitEndpointDrag,
   } = options;
   let disposed = false;
+
+  const updateEndpointHandles = () => {
+    const wrapRect = elements.wrap.getBoundingClientRect();
+    const refs = pointsToSurfaceRefs(state.result?.candidate?.endpoints || [], state.verts, state.tris);
+    const points = refs.map((ref) => state.planning2d?.surfaceRefToClient(ref) || null);
+    elements.photoEndpointHandles.forEach((handle, index) => {
+      const point = state.photoView.active ? points[index] : null;
+      handle.hidden = !point;
+      if (!point) return;
+      handle.style.left = `${point.x - wrapRect.left}px`;
+      handle.style.top = `${point.y - wrapRect.top}px`;
+    });
+  };
 
   const setStatus = (message: string, tone: "idle" | "loading" | "ready" | "warning" = "idle") => {
     elements.photoStatus.textContent = message;
@@ -85,6 +106,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     elements.photoCanvas.style.setProperty("--incision-photo-pan-x", `${Math.round(state.photoView.offsetX)}px`);
     elements.photoCanvas.style.setProperty("--incision-photo-pan-y", `${Math.round(state.photoView.offsetY)}px`);
     elements.photoCanvas.style.setProperty("--incision-photo-mirror", state.photoView.mirror ? "-1" : "1");
+    updateEndpointHandles();
   };
 
   const render = () => {
@@ -96,6 +118,10 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     const dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
     elements.photoCanvas.width = Math.max(1, Math.round(frame.width * dpr));
     elements.photoCanvas.height = Math.max(1, Math.round(frame.height * dpr));
+    const endpointRefs = pointsToSurfaceRefs(state.result?.candidate?.endpoints || [], state.verts, state.tris);
+    const sourceToCssScale = frame.transform?.displayWidth
+      ? frame.transform.displayWidth / frame.width
+      : 1;
     const geometry = renderIncisionPhotoPlanning({
       context,
       source: frame.source as CanvasImageSource,
@@ -108,6 +134,8 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
       centerRef: state.lesionRef,
       boundaryRefs: frame.selection.boundaryRefs,
       candidateRefs: pointsToSurfaceRefs(state.result?.candidate?.polyline || [], state.verts, state.tris),
+      endpointRefs,
+      endpointRadius: 14 / Math.max(sourceToCssScale, 0.05),
     });
     state.planning2d.setOverlaySummary({
       rstlLineCount: geometry.rstl.length,
@@ -136,6 +164,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
       render();
       elements.stageStatus.textContent = "患者照片规划：点击面部定位，拖拽平移，滚轮缩放";
     } else {
+      updateEndpointHandles();
       elements.stageStatus.textContent = "标准表面规划：拖拽旋转 · 滚轮缩放 · 点击定位";
       setStatus("标准表面模式；上传 JPEG 或 PNG 可进入患者照片规划", "idle");
     }
@@ -266,6 +295,25 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
       setLesion(nearestVertex(point), ref);
       void runWorkflow();
     },
+    endpointHandleFromEvent(event) {
+      if (!state.photoView.active || !state.planning2d) return null;
+      const refs = pointsToSurfaceRefs(state.result?.candidate?.endpoints || [], state.verts, state.tris);
+      const endpoints = refs
+        .map((ref) => state.planning2d?.surfaceRefToClient(ref))
+        .filter((point): point is { x: number; y: number } => point !== null && point !== undefined);
+      return nearestPhotoEndpointHandle(
+        { x: event.clientX, y: event.clientY },
+        endpoints,
+        event.pointerType === "touch" ? 20 : 14,
+      );
+    },
+    dragEndpoint(event, index) {
+      const ref = state.planning2d?.pickSurfaceRef({ x: event.clientX, y: event.clientY });
+      if (!ref) return;
+      const point = surfaceRefToModelPoint(ref, state.verts, state.tris);
+      if (point) dragEndpoint(point, index);
+    },
+    commitEndpointDrag,
     pan(deltaX, deltaY) {
       if (!state.photoView.active) return;
       state.photoView.offsetX += deltaX;

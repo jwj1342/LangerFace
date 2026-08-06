@@ -59,6 +59,8 @@ export interface IncisionRuntimeState {
   editHistory: IncisionEditHistory;
   lastConsoleTraceSignature: string;
   generationCount: number;
+  workflowRequestId: number;
+  activeExplicitWorkflowCount: number;
 }
 
 export function createIncisionControllerState(): IncisionRuntimeState {
@@ -105,5 +107,7 @@ export function createIncisionControllerState(): IncisionRuntimeState {
     editHistory: new IncisionEditHistory(),
     lastConsoleTraceSignature: "",
     generationCount: 0,
+    workflowRequestId: 0,
+    activeExplicitWorkflowCount: 0,
   };
 }

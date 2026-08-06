@@ -57,6 +57,10 @@ export interface IncisionDomEventHandlers {
   onTumorFile(file?: File): void;
   onSecondaryCueFile(file?: File): void;
   onPhotoFile(file?: File): void;
+  preparePhotoInteraction(): void;
+  photoEndpointHandleFromEvent(event: PointerEvent): number | null;
+  dragPhotoEndpoint(event: PointerEvent, handle: number): void;
+  commitPhotoEndpointDrag(): void;
   onPhotoPick(event: PointerEvent): void;
   onPhotoPan(deltaX: number, deltaY: number): void;
   onPhotoZoom(event: WheelEvent): void;
@@ -165,6 +169,7 @@ export function bindIncisionDomEvents({
 
   let drag: PointerDragState | null = null;
   let photoDrag: PointerDragState | null = null;
+  let photoHandleDrag: PointerDragState | null = null;
   listen(elements.canvas, "pointerdown", ((event: PointerEvent) => {
     const handle = handlers.endpointHandleFromEvent(event);
     drag = {
@@ -208,11 +213,25 @@ export function bindIncisionDomEvents({
   }) as EventListener, { passive: false });
 
   listen(elements.photoCanvas, "pointerdown", ((event: PointerEvent) => {
-    photoDrag = { x: event.clientX, y: event.clientY, moved: 0, id: event.pointerId };
+    handlers.preparePhotoInteraction();
+    photoDrag = {
+      x: event.clientX,
+      y: event.clientY,
+      moved: 0,
+      id: event.pointerId,
+      handle: handlers.photoEndpointHandleFromEvent(event),
+    };
     elements.photoCanvas.setPointerCapture(event.pointerId);
   }) as EventListener);
   listen(elements.photoCanvas, "pointermove", ((event: PointerEvent) => {
     if (!photoDrag || event.pointerId !== photoDrag.id) return;
+    if (photoDrag.handle != null) {
+      handlers.dragPhotoEndpoint(event, photoDrag.handle);
+      photoDrag.moved += Math.abs(event.clientX - photoDrag.x) + Math.abs(event.clientY - photoDrag.y);
+      photoDrag.x = event.clientX;
+      photoDrag.y = event.clientY;
+      return;
+    }
     const deltaX = event.clientX - photoDrag.x;
     const deltaY = event.clientY - photoDrag.y;
     photoDrag.moved += Math.abs(deltaX) + Math.abs(deltaY);
@@ -221,7 +240,9 @@ export function bindIncisionDomEvents({
     photoDrag.y = event.clientY;
   }) as EventListener);
   listen(elements.photoCanvas, "pointerup", ((event: PointerEvent) => {
-    if (photoDrag && event.pointerId === photoDrag.id && photoDrag.moved < 6) handlers.onPhotoPick(event);
+    const endpointDrag = photoDrag?.handle != null;
+    if (photoDrag && event.pointerId === photoDrag.id && photoDrag.moved < 6 && !endpointDrag) handlers.onPhotoPick(event);
+    if (endpointDrag && (photoDrag?.moved || 0) >= 1) handlers.commitPhotoEndpointDrag();
     photoDrag = null;
   }) as EventListener);
   listen(elements.photoCanvas, "pointercancel", (() => {
@@ -231,6 +252,29 @@ export function bindIncisionDomEvents({
     event.preventDefault();
     handlers.onPhotoZoom(event);
   }) as EventListener, { passive: false });
+
+  elements.photoEndpointHandles.forEach((handle) => {
+    const handleIndex = Number(handle.dataset.endpointIndex);
+    listen(handle, "pointerdown", ((event: PointerEvent) => {
+      handlers.preparePhotoInteraction();
+      photoHandleDrag = { x: event.clientX, y: event.clientY, moved: 0, id: event.pointerId, handle: handleIndex };
+      handle.setPointerCapture(event.pointerId);
+    }) as EventListener);
+    listen(handle, "pointermove", ((event: PointerEvent) => {
+      if (!photoHandleDrag || event.pointerId !== photoHandleDrag.id) return;
+      handlers.dragPhotoEndpoint(event, handleIndex);
+      photoHandleDrag.moved += Math.abs(event.clientX - photoHandleDrag.x) + Math.abs(event.clientY - photoHandleDrag.y);
+      photoHandleDrag.x = event.clientX;
+      photoHandleDrag.y = event.clientY;
+    }) as EventListener);
+    listen(handle, "pointerup", ((event: PointerEvent) => {
+      if (photoHandleDrag && event.pointerId === photoHandleDrag.id && photoHandleDrag.moved >= 1) {
+        handlers.commitPhotoEndpointDrag();
+      }
+      photoHandleDrag = null;
+    }) as EventListener);
+    listen(handle, "pointercancel", (() => { photoHandleDrag = null; }) as EventListener);
+  });
 
   if (!reactManaged) {
     const stateRoot = elements.canvas.closest(".app");
@@ -318,6 +362,7 @@ export function bindIncisionDomEvents({
   return () => {
     drag = null;
     photoDrag = null;
+    photoHandleDrag = null;
     for (const cleanup of cleanups.splice(0).reverse()) cleanup();
   };
 }

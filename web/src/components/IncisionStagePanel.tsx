@@ -44,6 +44,10 @@ export function IncisionStagePanel() {
       <StageViewport>
         <canvas id="incisionCanvas"></canvas>
         <StageCanvas id="incisionPhotoCanvas" aria-label="患者照片切口规划画布" />
+        <div className="incision-photo-endpoint-layer" role="group" aria-label="候选切口端点">
+          <button className="incision-photo-endpoint-handle" type="button" data-endpoint-index="0" aria-label="拖动候选切口起点" title="拖动候选切口起点" hidden />
+          <button className="incision-photo-endpoint-handle" type="button" data-endpoint-index="1" aria-label="拖动候选切口终点" title="拖动候选切口终点" hidden />
+        </div>
         <div id="incisionPhotoStatus" className="photo-planning-status" role="status" aria-live="polite">
           上传 JPEG 或 PNG 照片后在患者面部直接规划
         </div>

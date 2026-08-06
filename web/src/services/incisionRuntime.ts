@@ -811,7 +811,7 @@ function toggleBoundaryDrawing() {
   S.boundaryActive = !S.boundaryActive;
   els.startBoundary.textContent = S.boundaryActive ? "结束轮廓" : "开始轮廓";
   els.pickState.textContent = S.boundaryActive ? "请在脸上连续点击皮表肿物边界点。" : `自由轮廓点：${S.boundaryPoints.length} 个`;
-  if (!S.boundaryActive && S.boundaryPoints.length >= 3) runWorkflow();
+  if (!S.boundaryActive && S.boundaryPoints.length >= 3) previewWorkflow();
   publishIncisionState("tumor_boundary_toggle");
 }
 
@@ -820,7 +820,7 @@ function clearBoundaryPoints() {
   S.boundaryRefs = [];
   updateTumorRing();
   els.pickState.textContent = "自由轮廓已清空。";
-  runWorkflow();
+  previewWorkflow();
   publishIncisionState("tumor_boundary_clear");
 }
 
@@ -833,7 +833,7 @@ function handleReactTumorCommand(event: Event) {
     S.boundaryActive = false;
     updateFormVisibility();
     publishIncisionState("tumor_kind_changed");
-    runWorkflow();
+    previewWorkflow();
     return;
   }
   if (command === "diameter_input") {
@@ -851,14 +851,14 @@ function handleReactTumorCommand(event: Event) {
     return;
   }
   if (command === "diameter_changed" || command === "depth_changed" || command === "margin_changed" || command === "ellipse_ratio_changed") {
-    runWorkflow();
+    previewWorkflow();
     return;
   }
   if (command === "boundary_mode_changed") {
     S.boundaryActive = false;
     updateFormVisibility();
     publishIncisionState("tumor_boundary_mode_changed");
-    runWorkflow();
+    previewWorkflow();
     return;
   }
   if (command === "toggle_boundary") {
@@ -1567,22 +1567,34 @@ function stageLiveOverlay() {
   els.stageStatus.textContent = "已发送到实时叠加；返回实时显示后上传照片、视频或开启摄像头查看。";
 }
 
-async function runWorkflow() {
+async function runWorkflow({ countGeneration = true }: { countGeneration?: boolean } = {}) {
   if (!S.verts) return;
-  els.run.disabled = true;
+  const requestId = ++S.workflowRequestId;
+  if (countGeneration) {
+    S.activeExplicitWorkflowCount += 1;
+    els.run.disabled = true;
+  }
   els.stageStatus.textContent = "Worker 确定性 workflow 生成中…";
   try {
     const tumor = tumorInput();
     const result = await planWorkflowForCurrentTumor(tumor);
+    if (requestId !== S.workflowRequestId) return;
     S.baseResult = result;
-    S.generationCount += 1;
+    if (countGeneration) S.generationCount += 1;
     resetEditControls();
     resetEditTimeline();
     resetReviewControls();
     renderResult(result);
   } finally {
-    els.run.disabled = false;
+    if (countGeneration) {
+      S.activeExplicitWorkflowCount = Math.max(0, S.activeExplicitWorkflowCount - 1);
+      els.run.disabled = S.activeExplicitWorkflowCount > 0;
+    }
   }
+}
+
+function previewWorkflow() {
+  return runWorkflow({ countGeneration: false });
 }
 
 function ensureWorkflowWorker() {
@@ -1659,19 +1671,22 @@ function setEditFromGeometry(center: VectorLike, axis: VectorLike, lengthMm: num
   applyEditControls();
 }
 
-function dragEndpointTo(e: PointerEvent, idx: number) {
+function dragEndpointToPoint(point: VectorLike, idx: number) {
   if (!S.result?.candidate?.endpoints) return;
-  const hit = facePointFromEvent(e);
-  if (!hit) return;
   const candidate = S.result.candidate;
   const current = candidate.endpoints;
   const center = candidate.center || S.result.tumor.center;
-  const handleVector = sub(hit.point, center);
+  const handleVector = sub(point, center);
   const axis = len(handleVector) > 1e-6
     ? norm(idx === 0 ? mul(handleVector, -1) : handleVector)
     : norm(candidate.axis || sub(current[1], current[0]));
   const lengthMm = Math.max(1, len(handleVector) * 2 / S.unitsPerMm);
   setEditFromGeometry(center, axis, lengthMm);
+}
+
+function dragEndpointTo(e: PointerEvent, idx: number) {
+  const hit = facePointFromEvent(e);
+  if (hit) dragEndpointToPoint(hit.point, idx);
 }
 
 function pick(e: PointerEvent) {
@@ -1694,7 +1709,7 @@ function pick(e: PointerEvent) {
     if (d < bd) { bd = d; best = vi; }
   }
   setLesion(best, pointToSurfaceRef(hit.point, S.verts, S.tris));
-  runWorkflow();
+  previewWorkflow();
 }
 
 function bindWorkbenchEvents() {
@@ -1716,28 +1731,28 @@ function bindWorkbenchEvents() {
       commitEndpointDrag: () => commitEditSnapshot("endpoint_drag"),
       zoomHead: (direction) => S.head?.zoom(direction > 0 ? 1.1 : 0.9),
       publishState: publishIncisionState,
-      onTumorKindChange: () => { updateFormVisibility(); runWorkflow(); },
+      onTumorKindChange: () => { updateFormVisibility(); previewWorkflow(); },
       onDiameterInput: () => {
         els.diameterVal.textContent = els.diameter.value;
         updateTumorRing();
       },
-      onDiameterChange: runWorkflow,
+      onDiameterChange: previewWorkflow,
       onDepthInput: () => { els.depthVal.textContent = els.depth.value; },
-      onDepthChange: runWorkflow,
+      onDepthChange: previewWorkflow,
       onMarginInput: () => {
         els.marginVal.textContent = els.margin.value;
         updateTumorRing();
       },
-      onMarginChange: runWorkflow,
+      onMarginChange: previewWorkflow,
       onEllipseRatioInput: () => {
         els.ellipseRatioVal.textContent = `${els.ellipseRatio.value}%`;
         updateTumorRing();
       },
-      onEllipseRatioChange: runWorkflow,
+      onEllipseRatioChange: previewWorkflow,
       onBoundaryModeChange: () => {
         S.boundaryActive = false;
         updateFormVisibility();
-        runWorkflow();
+        previewWorkflow();
       },
       onRunWorkflow: runWorkflow,
       onToggleBoundary: toggleBoundaryDrawing,
@@ -1770,6 +1785,10 @@ function bindWorkbenchEvents() {
       onTumorFile: importTumorFile,
       onSecondaryCueFile: importSecondaryCueFile,
       onPhotoFile: (file) => { void photoRuntime?.load(file); },
+      preparePhotoInteraction: () => photoRuntime?.fit(),
+      photoEndpointHandleFromEvent: (event) => photoRuntime?.endpointHandleFromEvent(event) ?? null,
+      dragPhotoEndpoint: (event, handle) => photoRuntime?.dragEndpoint(event, handle),
+      commitPhotoEndpointDrag: () => photoRuntime?.commitEndpointDrag(),
       onPhotoPick: (event) => photoRuntime?.pick(event),
       onPhotoPan: (deltaX, deltaY) => photoRuntime?.pan(deltaX, deltaY),
       onPhotoZoom: (event) => photoRuntime?.zoom(event),
@@ -1826,8 +1845,10 @@ export function mountIncisionWorkbench(root: ParentNode | Document = document) {
     nearestVertex,
     setLesion,
     updateTumorRing,
-    runWorkflow,
+    runWorkflow: previewWorkflow,
     publishState: publishIncisionState,
+    dragEndpoint: dragEndpointToPoint,
+    commitEndpointDrag: () => commitEditSnapshot("photo_endpoint_drag"),
   });
   S.mounted = true;
   bindWorkbenchEvents();
