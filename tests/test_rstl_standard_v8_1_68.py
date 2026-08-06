@@ -31,6 +31,7 @@ NEW_V68_LINES = {
 
 def _atlas_payload(canonical: CanonicalFaceModel, reference_path: Path, output: Path) -> dict:
     reference = json.loads(reference_path.read_text(encoding="utf-8"))
+    assert reference["atlasVersion"] == "8.1.68"
     atlas = build(canonical, reference)
     atlas.save(str(output))
     return json.loads(output.read_text(encoding="utf-8"))

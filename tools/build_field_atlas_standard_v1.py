@@ -34,7 +34,7 @@ from langerface.config import (  # noqa: E402
 from langerface.geometry import CanonicalFaceModel  # noqa: E402
 from langerface.lines import Atlas, AtlasLine, atlas_line_from_points2d  # noqa: E402
 
-REFERENCE = REPO / "assets" / "rstl_standard_reference_v1.json"
+REFERENCE = REPO / "assets" / "rstl_standard_reference_v8_1_68.json"
 OUTPUT = REPO / "assets" / "atlas_rstl_standard_v8.json"
 STANDARD_ATLAS_VERSION = "8.1.68"
 CENTER_X = 0.5
@@ -4340,7 +4340,7 @@ def build(canonical: CanonicalFaceModel, reference: dict) -> Atlas:
         return Atlas(
             system=SYSTEM_RSTL,
             version=ATLAS_VERSION,
-            atlas_version=STANDARD_ATLAS_VERSION,
+            atlas_version=str(reference.get("atlasVersion") or STANDARD_ATLAS_VERSION),
             topology_id=TOPOLOGY_ID,
             topology_version=TOPOLOGY_VERSION,
             provenance=(

@@ -17,6 +17,7 @@ from langerface.geometry import CanonicalFaceModel  # noqa: E402
 def test_v8_1_67_remains_reproducible_as_the_frozen_v68_baseline(tmp_path):
     reference_path = ROOT / "assets" / "rstl_standard_reference_v8_1_67.json"
     reference = json.loads(reference_path.read_text(encoding="utf-8"))
+    assert reference["atlasVersion"] == "8.1.67"
     constraints = reference["extraction"]["doctorConstraints"]
     assert "foreheadAdditionalDownwardShiftV64" in constraints
     assert "lateralCanthusShortArcsV65" not in constraints

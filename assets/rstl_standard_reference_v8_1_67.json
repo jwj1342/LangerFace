@@ -1,6 +1,7 @@
 {
  "schema": "rstl-standard-reference/v1",
  "version": "1.8.1.32",
+ "atlasVersion": "8.1.67",
  "coordinateSystem": "doctor-diagram-face-frame-normalized",
  "authoritativeImages": [
   "../langer线-cc/standard_1.png",
