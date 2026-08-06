@@ -2,10 +2,13 @@
 @import "../clinical-theme.css";
 
 .live-refine-panel{display:flex;min-width:0;flex-direction:column;gap:9px;padding-top:4px}
-.btn-row.live-refine-modes{grid-template-columns:repeat(3,minmax(0,1fr))}
+.btn-row.live-refine-modes{grid-template-columns:repeat(4,minmax(0,1fr))}
 .live-refine-modes .btn{min-width:0;padding-inline:5px;font-size:12px}
 .live-refine-status,.live-refine-range,.live-refine-nudge-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px}
 .live-refine-status span:last-child,.live-refine-range output{color:var(--ink);font-weight:700}
+.live-refine-quality{padding:8px;border:1px solid var(--line);border-radius:4px;color:var(--muted);font-size:12px;line-height:1.45}
+.live-refine-quality[data-state="ok"]{border-color:#237a57;color:#8fd8b8;background:#102b21}
+.live-refine-quality[data-state="warning"]{border-color:#b7791f;color:#ffd58a;background:#33250e}
 .live-refine-zoom,.live-refine-point-count{display:flex;min-width:0;flex-direction:column;gap:7px;padding:9px;border:1px solid var(--line);border-radius:4px}
 .live-refine-point-count.hidden{display:none}
 .btn-row.live-refine-zoom-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
