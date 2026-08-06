@@ -748,7 +748,7 @@ function buildArtifacts({ file, sourceSha256, atlas, modelManifest, detection, f
     },
     prior: {
       baseline: "rstl_v8_1_68",
-      atlasVersion: atlas.version,
+      atlasVersion: atlas.atlasVersion,
       curveCount: atlas.lines.length,
       pointCount: atlas.lines.reduce((sum, line) => sum + line.points.length, 0),
       requiredRegion: "lateral_canthus_short_arc_v65",

@@ -80,6 +80,10 @@ assert.match(source, /stabilizeForeheadMask/);
 assert.match(source, /disableRuntimeExpansion:\s*!runtimeExpansion/,
   "the exported forehead curves must retain the v68 runtime transform");
 assert.match(source, /baseline:\s*"rstl_v8_1_68"/);
+assert.match(source, /atlasVersion:\s*atlas\.atlasVersion/,
+  "the export must record the atlas content version");
+assert.doesNotMatch(source, /atlasVersion:\s*atlas\.version/,
+  "the export must not substitute the JSON schema version for the atlas content version");
 assert.match(source, /requestedVersion\s*===\s*"v8"\s*\?\s*"v8"\s*:\s*"v7"/);
 assert.match(source, /intervalAwareAnchorSharing:\s*true/);
 assert.match(source, /adherenceRetryAttempts:\s*10/);
@@ -112,6 +116,7 @@ for (const filename of [
 }
 
 assert.equal(atlas.validated, false);
+assert.equal(atlas.atlasVersion, "8.1.68");
 assert.equal(atlas.lines.length, 141);
 assert.equal(atlas.lines.reduce((sum, line) => sum + line.points.length, 0), 14_804);
 assert.equal(atlas.lines.filter((line) => line.region === "lateral_canthus_short_arc_v65").length, 8);

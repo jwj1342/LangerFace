@@ -108,6 +108,8 @@ def test_v8_1_68_adds_lateral_canthus_arcs_and_extends_under_eye_lines(tmp_path)
     official = json.loads((ROOT / "assets" / "atlas_rstl.json").read_text(encoding="utf-8"))
 
     assert official["validated"] is False
+    assert official["atlasVersion"] == "8.1.68"
+    assert v68_payload["atlasVersion"] == "8.1.68"
     assert len(official["lines"]) == 141
     assert sum(len(line["points"]) for line in official["lines"]) == 14804
     assert official["lines"][-1]["name"] == "standard_field_0165_left"

@@ -36,7 +36,7 @@ from langerface.lines import Atlas, AtlasLine, atlas_line_from_points2d  # noqa:
 
 REFERENCE = REPO / "assets" / "rstl_standard_reference_v1.json"
 OUTPUT = REPO / "assets" / "atlas_rstl_standard_v8.json"
-STANDARD_ATLAS_VERSION = "8.1.67"
+STANDARD_ATLAS_VERSION = "8.1.68"
 CENTER_X = 0.5
 _FACE_POLYGON: np.ndarray | None = None
 _FOREHEAD_MIN_Y = 0.060
