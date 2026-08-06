@@ -104,6 +104,7 @@ export interface LiveRefine2dState {
   showAxis: boolean;
   lines: EditableRefineLine[] | null;
   latestAutoLines: EditableRefineLine[] | null;
+  liveBaselineLines: EditableRefineLine[] | null;
   liveTransport: CurveRefinementTransport | null;
   selected: RefinePick | null;
   dirty: boolean;
@@ -190,6 +191,7 @@ export const renderState: LiveRenderState = {
     showAxis: true,
     lines: null,
     latestAutoLines: null,
+    liveBaselineLines: null,
     liveTransport: null,
     selected: null,
     dirty: false,

@@ -140,6 +140,9 @@ export function setLatestAutoLines(mapped: readonly RefineLine[]): void {
   if (!s.latestAutoLines?.length || (!s.active && !s.lines && !s.liveTransport)) {
     s.latestAutoLines = cloneLines(mapped);
   }
+  if (sourceState.paused && !s.liveBaselineLines?.length) {
+    s.liveBaselineLines = cloneLines(mapped);
+  }
   if (s.active && !s.lines) {
     s.lines = cloneLines(mapped);
     s.selected = null;
@@ -161,13 +164,31 @@ export function replaceStaticRefineBaseline(mapped: readonly RefineLine[]): void
   const s = state();
   s.latestAutoLines = cloneLines(mapped);
   s.lines = cloneLines(mapped);
+  if (!sourceState.paused) s.liveBaselineLines = null;
   s.liveTransport = null;
   s.selected = null;
   s.dirty = false;
+  s.quality = null;
   s.undoStack = [];
   s.drag = null;
   updateRefineUi();
   requestRefineFrame();
+}
+
+/** Start one frozen-frame edit session without carrying stale frame geometry. */
+export function beginFrozenRefineSession(): void {
+  const s = state();
+  s.active = false;
+  s.mode = "view";
+  s.lines = null;
+  s.latestAutoLines = null;
+  s.liveBaselineLines = null;
+  s.selected = null;
+  s.dirty = false;
+  s.quality = null;
+  s.undoStack = [];
+  s.drag = null;
+  setRefineCanvasViewActive(false);
 }
 
 export function hasManualRefineChanges(): boolean {
@@ -195,9 +216,10 @@ export function getDisplayLines(
 /** Commit current frozen-frame edits for transport to subsequent live frames. */
 export function commitRefineForLive(): boolean {
   const s = state();
-  if (!s.latestAutoLines?.length || !s.lines?.length) return false;
+  const liveBaseline = s.liveBaselineLines || s.latestAutoLines;
+  if (!liveBaseline?.length || !s.lines?.length) return false;
   s.liveTransport = {
-    ...buildCurveRefinementTransport(s.latestAutoLines, s.lines),
+    ...buildCurveRefinementTransport(liveBaseline, s.lines),
     system: renderState.system,
     committedAt: new Date().toISOString(),
   };
@@ -260,6 +282,7 @@ export function resetRefineForNewSource(): void {
   s.showAxis = true;
   s.lines = null;
   s.latestAutoLines = null;
+  s.liveBaselineLines = null;
   s.liveTransport = null;
   s.selected = null;
   s.dirty = false;

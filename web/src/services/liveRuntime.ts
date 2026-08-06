@@ -29,6 +29,7 @@ import { modelState, recordingState, reconState, renderState, sourceState } from
 import { createPhotoPlanningController } from "./photoPlanningController";
 import {
   adjustRefineImageZoom,
+  beginFrozenRefineSession,
   beginRefinePointer,
   commitRefineForLive,
   endRefinePointer,
@@ -36,6 +37,7 @@ import {
   isRefineActive,
   moveRefinePointer,
   nudgeSelected,
+  resetRefineForNewSource,
   resetRefineToAuto,
   setAxisVisible,
   setRefineMode,
@@ -206,6 +208,8 @@ function applyStagedAtlas(): void {
     count: atlas.lines.length,
   };
   els.tmpl.value = atlas.system;
+  resetRefineForNewSource();
+  resetLiveWrinkleAnalysis();
   syncPreviewControls();
   if (!sourceState.running) {
     setMsg(provenanceSource === "个性化 V6"
@@ -329,6 +333,7 @@ function handlePauseToggle(): void {
     frozen.getContext("2d")?.drawImage(sourceState.source as CanvasImageSource, 0, 0, frozen.width, frozen.height);
     sourceState.frozenFrame = frozen;
     sourceState.paused = true;
+    beginFrozenRefineSession();
     els.pause.textContent = "▶ 继续实时";
     els.pause.setAttribute("aria-pressed", "true");
     setLive(false, "已定格 · 可微调");
@@ -350,7 +355,11 @@ function handlePauseToggle(): void {
 }
 
 function handleTemplateChange(e: Event | ValueControlEvent): void {
-  renderState.system = String(eventValue(e) ?? ""); syncPreviewControls(); refreshStaticImage();
+  renderState.system = String(eventValue(e) ?? "");
+  resetRefineForNewSource();
+  resetLiveWrinkleAnalysis();
+  syncPreviewControls();
+  refreshStaticImage();
 }
 
 function handleDensityInput(e: Event | ValueControlEvent): void {
@@ -397,6 +406,8 @@ function restoreAtlasPreview(): void {
     return;
   }
   previewSystem = null; previewMeta = null;
+  resetRefineForNewSource();
+  resetLiveWrinkleAnalysis();
   syncPreviewControls();
   setMsg(null);
 }

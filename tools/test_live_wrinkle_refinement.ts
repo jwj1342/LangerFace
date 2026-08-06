@@ -29,5 +29,25 @@ const runtime = fs.readFileSync(
 assert.match(runtime, /analyzeCurrentWrinkles/);
 assert.match(runtime, /applyWrinkleGuidedRefinement/);
 assert.doesNotMatch(runtime, /if \(!isRefineActive\(\)\) toggleRefine2d\(\)/);
+assert.match(runtime, /beginFrozenRefineSession\(\)/,
+  "every frozen frame must start a fresh geometry session");
+assert.match(runtime, /function handleTemplateChange[\s\S]*resetRefineForNewSource\(\);[\s\S]*resetLiveWrinkleAnalysis\(\);/,
+  "changing the atlas must invalidate refinement and wrinkle results from the previous geometry");
+
+const refineRuntime = fs.readFileSync(
+  new URL("../web/src/services/liveRefine2d.ts", import.meta.url),
+  "utf8",
+);
+assert.match(refineRuntime, /s\.liveBaselineLines \|\| s\.latestAutoLines/,
+  "live transport must use the standard frozen-frame baseline when wrinkle guidance replaces the reset baseline");
+assert.match(refineRuntime, /s\.liveBaselineLines = null;[\s\S]*s\.selected = null;[\s\S]*s\.dirty = false;/,
+  "a later freeze must discard stale baseline geometry and manual state");
+
+const analysisRuntime = fs.readFileSync(
+  new URL("../web/src/services/liveWrinkleAnalysis.ts", import.meta.url),
+  "utf8",
+);
+assert.match(analysisRuntime, /await Promise\.allSettled\(\[\.\.\.activeAnalyses\]\);[\s\S]*await current\?\.close\(\)/,
+  "route disposal must wait for active model work before releasing the ONNX session");
 
 console.log("single-frame wrinkle display and refinement tests passed");

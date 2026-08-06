@@ -75,6 +75,7 @@ const state: WrinkleAnalysisState = {
 };
 
 let yolo: YoloWrinkleOnnx | null = null;
+const activeAnalyses = new Set<Promise<void>>();
 
 const cloneMappedLines = (lines: readonly MappedAtlasLine[]): EditableRefineLine[] => (
   lines.map((line) => ({
@@ -231,7 +232,8 @@ export function updateWrinkleUi(): void {
   els.wrinkleDetect.disabled = !frameReady || busy;
   els.wrinkleDetect.textContent = state.status === "error" ? "重试皱纹检测" : "重新检测皱纹";
   els.wrinkleAutoRefine.disabled = !analysisReady || hasManualRefineChanges() || state.status === "applied";
-  els.wrinkleRestore.disabled = !state.standardLines || state.status !== "applied";
+  els.wrinkleRestore.disabled = !state.standardLines
+    || (state.status !== "applied" && !hasManualRefineChanges());
   if (state.status === "error") {
     els.wrinkleSummary.textContent = state.error || "请重试，或更换正面、清晰、光线均匀的照片。";
   } else if (analysisReady) {
@@ -265,7 +267,7 @@ export function getWrinkleEvidenceLines(): readonly LiveWrinkleEvidenceLine[] {
   return state.evidenceLines;
 }
 
-export async function analyzeCurrentWrinkles({ force = false }: { force?: boolean } = {}): Promise<void> {
+async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } = {}): Promise<void> {
   if (!isWrinkleFrameReady()) {
     updateWrinkleUi();
     return;
@@ -368,6 +370,16 @@ export async function analyzeCurrentWrinkles({ force = false }: { force?: boolea
   }
 }
 
+export function analyzeCurrentWrinkles(options: { force?: boolean } = {}): Promise<void> {
+  const analysis = runCurrentWrinkleAnalysis(options);
+  activeAnalyses.add(analysis);
+  analysis.then(
+    () => activeAnalyses.delete(analysis),
+    () => activeAnalyses.delete(analysis),
+  );
+  return analysis;
+}
+
 export function applyWrinkleGuidedRefinement(): void {
   if (!state.autoRefinedLines || (state.status !== "ready" && state.status !== "applied")) return;
   if (hasManualRefineChanges()) {
@@ -404,5 +416,6 @@ export async function disposeLiveWrinkleAnalysis(): Promise<void> {
   resetLiveWrinkleAnalysis();
   const current = yolo;
   yolo = null;
+  await Promise.allSettled([...activeAnalyses]);
   await current?.close();
 }
