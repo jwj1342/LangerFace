@@ -99,6 +99,10 @@ import {
 } from "./incisionPresenter";
 import { IncisionCommandRouter } from "./incisionCommandRouter";
 import {
+  createIncisionSessionGuard,
+  type IncisionSessionToken,
+} from "./incisionSession";
+import {
   pickEndpointHandle,
   pickFaceSurface,
   signedAngleDegrees,
@@ -144,6 +148,11 @@ function errorMessage(error: unknown): string {
 let els = {} as IncisionDomElements;
 let S: IncisionRuntimeState = createIncisionControllerState();
 let photoRuntime: IncisionPhotoRuntime | null = null;
+const activeSession = createIncisionSessionGuard();
+
+function isActiveSession(session: IncisionSessionToken): boolean {
+  return S.mounted && activeSession.isActive(session);
+}
 
 function currentTumorFormSnapshot() {
   return buildTumorFormSnapshot({
@@ -394,10 +403,13 @@ function headAssetSnapshot({
   };
 }
 
-async function loadMediaPipeIncisionAssets() {
+async function loadMediaPipeIncisionAssets(session: IncisionSessionToken) {
+  const updateActiveAssetLoading = (event: DynamicRecord) => {
+    if (isActiveSession(session)) updateAssetLoading(event);
+  };
   const [head, standardAtlas] = await Promise.all([
-    dataSource.getHeadMesh("mediapipe-468", { onProgress: updateAssetLoading }),
-    dataSource.loadAtlas("rstl", { onProgress: updateAssetLoading }),
+    dataSource.getHeadMesh("mediapipe-468", { onProgress: updateActiveAssetLoading }),
+    dataSource.loadAtlas("rstl", { onProgress: updateActiveAssetLoading }),
   ]);
   const resolved = resolveIncisionAtlas({
     personalizedAtlas: dataSource.takePreviewAtlas(),
@@ -418,9 +430,9 @@ async function loadMediaPipeIncisionAssets() {
   };
 }
 
-async function boot() {
-  const { head, atlas, headAsset } = await loadMediaPipeIncisionAssets();
-  if (!S.mounted) return;
+async function boot(session: IncisionSessionToken) {
+  const { head, atlas, headAsset } = await loadMediaPipeIncisionAssets(session);
+  if (!isActiveSession(session)) return;
   S.verts = head.vertices; S.tris = head.triangles; S.atlas = atlas; S.headAsset = headAsset; S.assetWarnings = headAsset.warnings;
   S.planning2d?.setTopology(S.tris);
   S.planning2d?.setOverlaySummary({ rstlLineCount: atlas.lines?.length || 0 });
@@ -1716,6 +1728,7 @@ function bindReactWorkbenchCommands() {
 }
 
 export function disposeIncisionWorkbench() {
+  activeSession.dispose();
   persistWorkspaceSession();
   S.mounted = false;
   photoRuntime?.dispose();
@@ -1751,16 +1764,20 @@ export function mountIncisionWorkbench(root: ParentNode | Document = document) {
     commitEndpointDrag: () => commitEditSnapshot("photo_endpoint_drag"),
   });
   S.mounted = true;
+  const session = activeSession.mount();
   bindWorkbenchEvents();
   photoRuntime.setMode(false);
-  boot().catch((err) => {
-    if (!S.mounted) return;
-    els.stageStatus.textContent = "加载失败：" + err.message;
+  boot(session).catch((error) => {
+    if (!isActiveSession(session)) return;
+    const message = errorMessage(error);
+    els.stageStatus.textContent = "加载失败：" + message;
     if (els.assetLoadingText) {
-      els.assetLoadingText.textContent = `资产加载失败：${err.message}`;
+      els.assetLoadingText.textContent = `资产加载失败：${message}`;
     }
     publishIncisionState("asset_load_failed");
-    console.error(err);
+    console.error(error);
   });
-  return disposeIncisionWorkbench;
+  return () => {
+    if (isActiveSession(session)) disposeIncisionWorkbench();
+  };
 }

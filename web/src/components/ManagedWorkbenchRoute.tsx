@@ -8,7 +8,6 @@ type ManagedWorkbenchWorkspace = Extract<Workspace, "annotate" | "incision" | "l
 
 interface ManagedWorkbenchRouteProps<TModule> {
   children: ReactNode;
-  dispose?: (module: TModule) => void;
   failedStatus: string;
   legacyNotice?: string;
   loadModule: () => Promise<TModule>;
@@ -21,7 +20,6 @@ interface ManagedWorkbenchRouteProps<TModule> {
 
 export function ManagedWorkbenchRoute<TModule>({
   children,
-  dispose,
   failedStatus,
   legacyNotice,
   loadModule,
@@ -34,7 +32,6 @@ export function ManagedWorkbenchRoute<TModule>({
   const hostRef = useRef<HTMLDivElement | null>(null);
 
   useManagedWorkbenchController({
-    dispose,
     failedStatus,
     hostRef,
     loadingStatus,

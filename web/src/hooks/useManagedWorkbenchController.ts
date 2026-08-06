@@ -16,7 +16,6 @@ interface ManagedWorkbenchControllerOptions<TModule> {
   unloadedStatus: string;
   loadModule: () => Promise<TModule>;
   mount: (module: TModule, root: HTMLElement) => () => void;
-  dispose?: (module: TModule) => void;
 }
 
 export function useManagedWorkbenchController<TModule>({
@@ -28,7 +27,6 @@ export function useManagedWorkbenchController<TModule>({
   unloadedStatus,
   loadModule,
   mount,
-  dispose,
 }: ManagedWorkbenchControllerOptions<TModule>) {
   const setActiveWorkspace = useAppStore((state) => state.setActiveWorkspace);
   const setRouteStatus = useAppStore((state) => state.setRouteStatus);
@@ -45,10 +43,8 @@ export function useManagedWorkbenchController<TModule>({
 
       enableReactManagedWorkbench();
       const module = await loadModule();
-      if (disposed || !hostRef.current) {
-        dispose?.(module);
-        return;
-      }
+      // An unmounted import owns no resources; a module-global disposer could tear down a newer mount.
+      if (disposed || !hostRef.current) return;
       cleanup = mount(module, hostRef.current);
       setRouteStatus(mountedStatus);
     }
@@ -66,7 +62,6 @@ export function useManagedWorkbenchController<TModule>({
       setRouteStatus(unloadedStatus);
     };
   }, [
-    dispose,
     failedStatus,
     hostRef,
     loadModule,
