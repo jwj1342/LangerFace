@@ -56,10 +56,37 @@ test("approved incision reaches photo, uploaded video, and MediaStream camera re
   await page.locator("#saveReviewBtn").click();
   await expect(page.locator("#savedCount")).toHaveText("1");
 
-  const reviewDownloadPromise = page.waitForEvent("download");
+  await page.evaluate(() => {
+    const state = window as typeof window & {
+      __capturedReviewDownload?: { filename: string; href: string };
+      __originalAnchorClick?: typeof HTMLAnchorElement.prototype.click;
+    };
+    state.__originalAnchorClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function captureReviewDownload() {
+      state.__capturedReviewDownload = { filename: this.download, href: this.href };
+    };
+  });
   await page.locator("#exportJsonBtn").click();
-  const reviewDownload = await reviewDownloadPromise;
-  expect(reviewDownload.suggestedFilename()).toMatch(/^incision_review_\d+\.json$/);
+  await expect.poll(() => page.evaluate(() => Boolean((window as typeof window & {
+    __capturedReviewDownload?: unknown;
+  }).__capturedReviewDownload))).toBe(true);
+  const reviewDownload = await page.evaluate(async () => {
+    const state = window as typeof window & {
+      __capturedReviewDownload?: { filename: string; href: string };
+      __originalAnchorClick?: typeof HTMLAnchorElement.prototype.click;
+    };
+    const captured = state.__capturedReviewDownload;
+    if (!captured) throw new Error("review export was not captured");
+    const text = await fetch(captured.href).then((response) => response.text());
+    if (state.__originalAnchorClick) HTMLAnchorElement.prototype.click = state.__originalAnchorClick;
+    return { filename: captured.filename, text };
+  });
+  expect(reviewDownload.filename).toMatch(/^incision_review_\d+\.json$/);
+  expect(JSON.parse(reviewDownload.text)).toMatchObject({
+    saved: [expect.objectContaining({
+      review: expect.objectContaining({ reviewer: "E2E clinician" }),
+    })],
+  });
 
   await page.locator("#stageLiveOverlayBtn").click();
   await expect(page).toHaveURL(/\/live\?incisionOverlay=staged$/);
@@ -81,6 +108,9 @@ test("approved incision reaches photo, uploaded video, and MediaStream camera re
   await page.locator("#meshPts").uncheck();
   await uploadGeneratedVideo(page);
   await expect(page.locator("#livePill")).toContainText("视频", { timeout: 60_000 });
+  await expect.poll(() => page.locator("#video").evaluate((video: HTMLVideoElement) => video.readyState), {
+    message: "the uploaded WebM must decode a current frame",
+  }).toBeGreaterThanOrEqual(2);
   await expect(page.locator("#incisionOverlayQaState")).not.toHaveText("等待画面", { timeout: 60_000 });
   await expect.poll(() => page.evaluate(candidatePixelCount), {
     message: "the uploaded WebM path must draw the staged incision candidate",
@@ -88,10 +118,8 @@ test("approved incision reaches photo, uploaded video, and MediaStream camera re
   const uploadedVideoState = await page.locator("#video").evaluate((video: HTMLVideoElement) => ({
     hasObjectUrl: video.currentSrc.startsWith("blob:"),
     hasStream: video.srcObject instanceof MediaStream,
-    readyState: video.readyState,
   }));
   expect(uploadedVideoState).toMatchObject({ hasObjectUrl: true, hasStream: false });
-  expect(uploadedVideoState.readyState).toBeGreaterThanOrEqual(2);
 
   // This deterministic MediaStream covers the browser camera pipeline; fixed-device evidence remains manual.
   await installGeneratedCamera(page);
