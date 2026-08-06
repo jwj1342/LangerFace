@@ -1,7 +1,7 @@
 {
  "schema": "rstl-standard-reference/v1",
  "version": "1.8.1.32",
- "atlasVersion": "8.1.67",
+ "atlasVersion": "8.1.68",
  "coordinateSystem": "doctor-diagram-face-frame-normalized",
  "authoritativeImages": [
   "../langer线-cc/standard_1.png",
@@ -1368,6 +1368,14 @@
     "preservation": "retain exact x coordinates, crown rise, curve shape, arc length, layer ordering, adjacent spacing, and all non-forehead curves",
     "verification": "require exactly the fourteen forehead lines to change relative to v8.1.66, an additional dy=+0.025 at every point, unchanged interlayer geometry, and zero visible intersections on both mapped reference faces",
     "reason": "user-marked v8.1.66 male close-up: the lowest forehead line remains too far above the eyebrows and the complete bundle should move farther downward toward the blue guide"
+   },
+   "lateralCanthusShortArcsV65": {
+    "baseline": "preserve v8.1.67 except for extending the lateral starts of the two infraorbital waves and the upper-cheek bridge, then add four symmetric short arcs per side between the facial edge and outer canthus",
+    "newLines": "append four nested half-face arcs spanning canonical x=0.030 through x=0.190 and mirror them exactly without joining across the midline; each line follows the four user-marked steeper lateral-to-medial blue guides",
+    "existingLineAdjustment": "rebuild the outer prefix of the three under-eye half-curves from canonical x=0.030 to x=0.235 with horizontal outer tangents, ordered outer levels 0.390/0.410/0.427, and C1 transitions into the retained v8.1.67 bodies; keep all nasal-turn lines unchanged",
+    "topology": "the short arcs remain mutually ordered above the extended infraorbital bundle; separation is maintained by vertical layering rather than truncating the under-eye lines, with no crossings, shared endpoints, eye-aperture intrusion, or rendered-stroke adhesion",
+    "verification": "require eight new symmetric lateral-canthus curves, exactly three existing cross-face curves to change, all other v8.1.67 lines to remain point-identical, and zero canonical or mapped intersections on both reference faces",
+    "reason": "user-marked v8.1.68 close-up: rotate and extend the eye-corner family along the blue guides, and continue the under-eye lines outward to the facial edge along the green guides"
    }
   }
  },

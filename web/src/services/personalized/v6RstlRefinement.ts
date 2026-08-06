@@ -7,7 +7,7 @@
  */
 
 export const V6_RSTL_ALGORITHM =
-  "interval-guarded-continuous-polyline-rstl-refinement-6.0";
+  "interval-guarded-continuous-polyline-rstl-refinement-6.1";
 
 const SOFT_LINK_FACE_RATIO = 0.013;
 const PARALLEL_DEDUP_FACE_RATIO = 0.006;
@@ -35,6 +35,7 @@ export interface V6Seed {
 }
 
 export interface V6RefinementOptions {
+  [key: string]: any;
   parallelDedupRadiusPx?: number;
   softLinkDistancePx?: number;
   tangentWindowPx?: number;
@@ -103,13 +104,17 @@ interface MatchGroup {
   directLength: number;
   coverage: number;
   influence: number;
-  summary: Record<string, number | boolean>;
+  meanDistance: number;
+  projectionArcStart: number;
+  projectionArcEnd: number;
+  summary: Record<string, any>;
 }
 
 interface MatchingResult {
   acceptedGroups: MatchGroup[];
+  supportedGroups: MatchGroup[];
   curveSupportRecords: Array<Record<string, number | boolean | string>>;
-  groupRecords: Array<Record<string, number | boolean>>;
+  groupRecords: Array<Record<string, any>>;
   bandRadius: number;
   candidatePairCount: number;
   directionRejectedPairCount: number;
@@ -122,6 +127,16 @@ interface CurveRefineResult {
   points: Point2[];
   supportScore: number;
   rollbackReason: string | null;
+}
+
+interface RefinedState {
+  [key: string]: any;
+  results: any[];
+  guardEvents: any[];
+  anchorGuardEvents: any[];
+  bundleRecords: any[];
+  bundleSpacingGuardEvents: any[];
+  bundleSpacingFailedAnchorPairs: Set<string>;
 }
 
 export interface RefineV6Input {
@@ -324,6 +339,7 @@ function mergeTrendPaths(
   paths: Point2[][],
   maximumGap: number,
   maximumTurnDegrees = SOFT_LINK_TURN_DEGREES,
+  endpointSampleSpan = 4,
 ): Array<Omit<Trend, "metrics">> {
   interface EndpointInfo {
     pathIndex: number;
@@ -336,9 +352,9 @@ function mergeTrendPaths(
   const endpointInfo = new Map<string, EndpointInfo>();
   paths.forEach((path, pathIndex) => {
     endpointInfo.set(`${pathIndex}:0`, { pathIndex, endpoint: 0,
-      point: path[0], outward: endpointDirection(path, 0) });
+      point: path[0], outward: endpointDirection(path, 0, endpointSampleSpan) });
     endpointInfo.set(`${pathIndex}:1`, { pathIndex, endpoint: 1,
-      point: path[path.length - 1], outward: endpointDirection(path, 1) });
+      point: path[path.length - 1], outward: endpointDirection(path, 1, endpointSampleSpan) });
   });
   const cosine = Math.cos(maximumTurnDegrees * Math.PI / 180);
   const endpoints = [...endpointInfo.values()];
@@ -599,7 +615,7 @@ function matchTrendsToCurves(
   }
 
   const acceptedGroups: MatchGroup[] = [];
-  const groupRecords: Array<Record<string, number | boolean>> = [];
+  const groupRecords: Array<Record<string, any>> = [];
   for (const [key, records] of groups) {
     records.sort((a, b) => a.pointOrder - b.pointOrder);
     const [trendIndexText, curveIndexText] = key.split(":");
@@ -616,12 +632,14 @@ function matchTrendsToCurves(
     const direction = records.reduce((sum, record) => sum + record.alignment ** 2, 0) /
       records.length;
     const meanDistance = records.reduce((sum, record) => sum + record.distance, 0) / records.length;
+    const projectionArcStart = Math.min(...records.map((record) => record.projectionArc));
+    const projectionArcEnd = Math.max(...records.map((record) => record.projectionArc));
     const distanceWeight = Math.exp(-0.5 * (meanDistance / Math.max(2, bandRadius * 0.55)) ** 2);
     const coverageWeight = (1 - Math.exp(-directLength / Math.max(2, 0.010 * faceWidth))) *
       Math.sqrt(clamp(coverage));
     const influence = distanceWeight * direction * Math.sqrt(Math.max(0, coverageWeight * continuity));
     const accepted = records.length >= 2 && directLength >= 0.75 && influence >= 0.025;
-    const summary = {
+    const summary: Record<string, any> = {
       wrinkle_segment_id: trendIndex,
       rstl_curve_index: curveIndex,
       direct_match_point_count: records.length,
@@ -630,11 +648,23 @@ function matchTrendsToCurves(
       sample_coverage: coverage,
       continuity,
       curve_influence: influence,
+      mean_match_distance_px: meanDistance,
       accepted,
     };
+    if (options.globalLengthAwareMatching === true) {
+      const baseAssignmentScore = influence /
+        (1 + meanDistance / Math.max(1, bandRadius));
+      const evidenceLengthWeight = Math.sqrt(clamp(directLength / faceWidth));
+      summary.base_assignment_score = baseAssignmentScore;
+      summary.evidence_length_weight = evidenceLengthWeight;
+      summary.assignment_score = baseAssignmentScore * evidenceLengthWeight;
+      if (options.intervalAwareAnchorSharing === true) {
+        summary.projection_arc_interval_px = [projectionArcStart, projectionArcEnd];
+      }
+    }
     groupRecords.push(summary);
     if (accepted) acceptedGroups.push({ trendIndex, curveIndex, records, directLength,
-      coverage, influence, summary });
+      coverage, influence, meanDistance, projectionArcStart, projectionArcEnd, summary });
   }
 
   const byCurve = new Map<number, MatchGroup[]>();
@@ -669,11 +699,217 @@ function matchTrendsToCurves(
         "L/face_width>=0.006 and coverage>=0.50 and points>=3",
     });
   }
+  const excludedTrendCurvePairs = new Set(options.excludedTrendCurvePairs || []);
+  const excludedTrendCurvePairReasons = options.excludedTrendCurvePairReasons || {};
+  const curveEligibleGroups = acceptedGroups.filter((group) =>
+    acceptedCurves.has(group.curveIndex) &&
+    !excludedTrendCurvePairs.has(`${group.trendIndex}:${group.curveIndex}`));
+  let selectedGroups = curveEligibleGroups;
+  if (options.oneToOneTrendCurveMatching === true) {
+    if (options.globalLengthAwareMatching === true) {
+      selectedGroups = maximumWeightTrendCurveAssignment(curveEligibleGroups);
+      if (options.intervalAwareAnchorSharing === true) {
+        selectedGroups = expandIntervalCompatibleAssignments(
+          selectedGroups, curveEligibleGroups,
+          options.anchorIntervalPaddingPx ?? Math.max(2, 0.010 * faceWidth),
+        );
+      }
+    } else {
+      const ranked = curveEligibleGroups.map((group) => ({
+        group,
+        score: group.influence / (1 + group.meanDistance / Math.max(1, bandRadius)),
+      })).sort((left, right) => right.score - left.score ||
+        left.group.meanDistance - right.group.meanDistance ||
+        left.group.trendIndex - right.group.trendIndex ||
+        left.group.curveIndex - right.group.curveIndex);
+      const usedTrends = new Set(), usedCurves = new Set();
+      selectedGroups = [];
+      for (const candidate of ranked) {
+        const group = candidate.group;
+        if (usedTrends.has(group.trendIndex) || usedCurves.has(group.curveIndex)) continue;
+        usedTrends.add(group.trendIndex);
+        usedCurves.add(group.curveIndex);
+        selectedGroups.push(group);
+      }
+    }
+  } else if (options.exclusiveTrendMatching === true) {
+    const groupsByTrend = new Map();
+    for (const group of curveEligibleGroups) {
+      if (!groupsByTrend.has(group.trendIndex)) groupsByTrend.set(group.trendIndex, []);
+      groupsByTrend.get(group.trendIndex).push(group);
+    }
+    selectedGroups = [...groupsByTrend.values()].map((groupsForTrend) =>
+      [...groupsForTrend].sort((left, right) => {
+        const leftScore = left.influence /
+          (1 + left.meanDistance / Math.max(1, bandRadius));
+        const rightScore = right.influence /
+          (1 + right.meanDistance / Math.max(1, bandRadius));
+        return rightScore - leftScore || left.meanDistance - right.meanDistance ||
+          left.curveIndex - right.curveIndex;
+      })[0]);
+  }
+  const selectedRecords = new Set(selectedGroups.map((group) => group.summary));
+  const selectedCountByCurve = new Map();
+  for (const group of selectedGroups) {
+    selectedCountByCurve.set(group.curveIndex,
+      (selectedCountByCurve.get(group.curveIndex) || 0) + 1);
+  }
+  for (const record of groupRecords) {
+    const curveSupportPassed = acceptedCurves.has(record.rstl_curve_index);
+    record.segment_support_passed = record.accepted;
+    record.curve_support_passed = curveSupportPassed;
+    record.selected_for_wrinkle = selectedRecords.has(record);
+    record.provisional_accepted = record.accepted && curveSupportPassed && record.selected_for_wrinkle;
+    record.final_accepted = record.provisional_accepted;
+    record.final_status = record.final_accepted ? "accepted" : "rejected_before_refinement";
+    if (options.intervalAwareAnchorSharing === true && record.selected_for_wrinkle) {
+      record.anchor_interval_shared = (selectedCountByCurve.get(record.rstl_curve_index) || 0) > 1;
+    }
+    const candidateGroup = acceptedGroups.find((group) => group.summary === record);
+    const selectedCurveElsewhere = options.oneToOneTrendCurveMatching === true &&
+      selectedGroups.some((group) => group.curveIndex === record.rstl_curve_index &&
+        group.trendIndex !== record.wrinkle_segment_id &&
+        (!options.intervalAwareAnchorSharing || !candidateGroup ||
+          anchorIntervalsConflict(group, candidateGroup,
+            options.anchorIntervalPaddingPx ?? Math.max(2, 0.010 * faceWidth))));
+    const candidateRetryExcluded = excludedTrendCurvePairs.has(
+      `${record.wrinkle_segment_id}:${record.rstl_curve_index}`,
+    );
+    const candidateRetryReason = excludedTrendCurvePairReasons[
+      `${record.wrinkle_segment_id}:${record.rstl_curve_index}`
+    ] || "topology_retry_excluded";
+    record.rejection_reason = record.final_accepted ? null :
+      !record.segment_support_passed ? "insufficient_segment_support" :
+        !record.curve_support_passed ? "insufficient_curve_support" :
+          candidateRetryExcluded ? candidateRetryReason :
+          selectedCurveElsewhere ? "curve_reserved_for_better_wrinkle" :
+            "better_curve_match_selected";
+  }
   return {
-    acceptedGroups: acceptedGroups.filter((group) => acceptedCurves.has(group.curveIndex)),
+    acceptedGroups: selectedGroups,
+    supportedGroups: acceptedGroups.filter((group) => acceptedCurves.has(group.curveIndex)),
     curveSupportRecords, groupRecords, bandRadius,
     candidatePairCount, directionRejectedPairCount,
   };
+}
+
+function anchorIntervalsConflict(first: MatchGroup, second: MatchGroup, padding: number): boolean {
+  return first.projectionArcStart - padding <= second.projectionArcEnd + padding &&
+    second.projectionArcStart - padding <= first.projectionArcEnd + padding;
+}
+
+function groupAssignmentScore(group: MatchGroup): number {
+  return Number(group.summary.assignment_score) || 0;
+}
+
+function expandIntervalCompatibleAssignments(
+  initial: MatchGroup[], eligibleGroups: MatchGroup[], padding: number,
+): MatchGroup[] {
+  let selected = [...initial];
+  const ranked = [...eligibleGroups].sort((left, right) =>
+    groupAssignmentScore(right) - groupAssignmentScore(left) ||
+    left.meanDistance - right.meanDistance ||
+    left.trendIndex - right.trendIndex ||
+    left.curveIndex - right.curveIndex);
+  let changed = true, pass = 0;
+  while (changed && pass < ranked.length) {
+    changed = false;
+    pass += 1;
+    for (const candidate of ranked) {
+      const existingIndex = selected.findIndex((group) =>
+        group.trendIndex === candidate.trendIndex);
+      const existing = existingIndex >= 0 ? selected[existingIndex] : null;
+      if (existing && groupAssignmentScore(candidate) <= groupAssignmentScore(existing) + EPSILON) {
+        continue;
+      }
+      const conflicts = selected.some((group, index) =>
+        index !== existingIndex && group.curveIndex === candidate.curveIndex &&
+        anchorIntervalsConflict(group, candidate, padding));
+      if (conflicts) continue;
+      if (existingIndex >= 0) selected[existingIndex] = candidate;
+      else selected.push(candidate);
+      changed = true;
+    }
+  }
+  return selected.sort((left, right) => left.trendIndex - right.trendIndex ||
+    left.curveIndex - right.curveIndex);
+}
+
+function maximumWeightTrendCurveAssignment(groups: MatchGroup[]): MatchGroup[] {
+  if (!groups.length) return [];
+  const trendIndices = [...new Set(groups.map((group) => group.trendIndex))]
+    .sort((left, right) => left - right);
+  const curveIndices = [...new Set(groups.map((group) => group.curveIndex))]
+    .sort((left, right) => left - right);
+  const groupByPair = new Map(groups.map((group) => [
+    `${group.trendIndex}:${group.curveIndex}`, group,
+  ]));
+  const rowCount = trendIndices.length;
+  const columnCount = curveIndices.length + rowCount;
+  const forbiddenCost = 1e6;
+  const costs = trendIndices.map((trendIndex) => [
+    ...curveIndices.map((curveIndex) => {
+      const group = groupByPair.get(`${trendIndex}:${curveIndex}`);
+      return group ? -group.summary.assignment_score : forbiddenCost;
+    }),
+    ...Array(rowCount).fill(0),
+  ]);
+
+  // Rectangular Hungarian algorithm. One private zero-weight dummy column per
+  // trend permits leaving a wrinkle unmatched when no eligible pair exists.
+  const u = new Float64Array(rowCount + 1);
+  const v = new Float64Array(columnCount + 1);
+  const p = new Int32Array(columnCount + 1);
+  const way = new Int32Array(columnCount + 1);
+  for (let row = 1; row <= rowCount; row += 1) {
+    p[0] = row;
+    let column0 = 0;
+    const minimum = new Float64Array(columnCount + 1);
+    minimum.fill(Infinity);
+    const used = new Uint8Array(columnCount + 1);
+    do {
+      used[column0] = 1;
+      const row0 = p[column0];
+      let delta = Infinity, column1 = 0;
+      for (let column = 1; column <= columnCount; column += 1) {
+        if (used[column]) continue;
+        const reduced = costs[row0 - 1][column - 1] - u[row0] - v[column];
+        if (reduced < minimum[column]) {
+          minimum[column] = reduced;
+          way[column] = column0;
+        }
+        if (minimum[column] < delta) {
+          delta = minimum[column];
+          column1 = column;
+        }
+      }
+      for (let column = 0; column <= columnCount; column += 1) {
+        if (used[column]) {
+          u[p[column]] += delta;
+          v[column] -= delta;
+        } else {
+          minimum[column] -= delta;
+        }
+      }
+      column0 = column1;
+    } while (p[column0] !== 0);
+    do {
+      const column1 = way[column0];
+      p[column0] = p[column1];
+      column0 = column1;
+    } while (column0 !== 0);
+  }
+
+  const selected: MatchGroup[] = [];
+  for (let column = 1; column <= curveIndices.length; column += 1) {
+    if (!p[column]) continue;
+    const group = groupByPair.get(
+      `${trendIndices[p[column] - 1]}:${curveIndices[column - 1]}`,
+    );
+    if (group) selected.push(group);
+  }
+  return selected.sort((left, right) => left.trendIndex - right.trendIndex ||
+    left.curveIndex - right.curveIndex);
 }
 
 function intervalIndices(
@@ -715,6 +951,7 @@ function solveInterval(
   start: number,
   end: number,
   passes = 48,
+  dataAttractionStrength = 4.5,
 ): Float64Array {
   const length = end - start;
   const output = new Float64Array(length);
@@ -732,7 +969,7 @@ function solveInterval(
   for (let pass = 0; pass < passes; pass += 1) {
     const next = new Float64Array(output);
     for (let local = 1; local < length - 1; local += 1) {
-      const data = 4.5 * normalizedSupport[local];
+      const data = dataAttractionStrength * normalizedSupport[local];
       next[local] = (data * raw[start + local] + 1.2 * output[local] +
         1.1 * (output[local - 1] + output[local + 1])) / (data + 3.4);
     }
@@ -762,16 +999,199 @@ function pointsFromOffsets(curve: CurveGeometry, offsets: NumericField): Point2[
   ]);
 }
 
+function axialDirectionDifferenceDegrees(first: Point2, second: Point2): number {
+  if (!(first?.[0] || first?.[1]) || !(second?.[0] || second?.[1])) return 90;
+  const cosine = clamp(Math.abs(first[0] * second[0] + first[1] * second[1]), -1, 1);
+  return Math.acos(cosine) * 180 / Math.PI;
+}
+
+function pointToPolylineMatch(
+  point: Point2, polyline: Point2[],
+): { distance: number; tangent: Point2 } {
+  let best = { distance: Infinity, tangent: [0, 0] as Point2 };
+  for (let index = 0; index < polyline.length - 1; index += 1) {
+    const start = polyline[index], end = polyline[index + 1];
+    const dx = end[0] - start[0], dy = end[1] - start[1];
+    const lengthSquared = dx * dx + dy * dy;
+    const fraction = lengthSquared > EPSILON ? clamp(
+      ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / lengthSquared,
+    ) : 0;
+    const projectionX = start[0] + fraction * dx;
+    const projectionY = start[1] + fraction * dy;
+    const distance = Math.hypot(point[0] - projectionX, point[1] - projectionY);
+    if (distance < best.distance) {
+      best = { distance, tangent: normalize2(dx, dy) };
+    }
+  }
+  return Number.isFinite(best.distance) ? best : { distance: 0, tangent: [0, 0] };
+}
+
+function minimumPolylineDistance(first: Point2[], second: Point2[]): number {
+  let minimum = Infinity;
+  for (const point of first) minimum = Math.min(minimum, pointToPolylineMatch(point, second).distance);
+  for (const point of second) minimum = Math.min(minimum, pointToPolylineMatch(point, first).distance);
+  return Number.isFinite(minimum) ? minimum : 0;
+}
+
+function trajectoryAdherence(
+  trends: Trend[], matching: MatchingResult, curves: CurveGeometry[], outputCurves: any[],
+  faceWidth: number, options: V6RefinementOptions, applyGate = false,
+) {
+  const records = [], finalDistances = [], priorDistances = [];
+  const rejectedCurveIndices = new Set<number>(), alreadyAlignedCurveIndices = new Set<number>();
+  const rejectedTrendCurvePairs = new Set<string>();
+  const meanThreshold = options.adherenceMeanThresholdPx ?? Math.max(2, 0.0035 * faceWidth);
+  const baseP90Threshold = options.adherenceP90ThresholdPx ?? Math.max(4, 0.0065 * faceWidth);
+  const directionSoftThreshold = options.adherenceDirectionSoftDegrees ??
+    (options.shortWrinkleQuantizationTolerance === true ? 25 :
+      (options.adherenceDirectionP90Degrees ?? 25));
+  const directionThreshold = options.adherenceDirectionHardDegrees ??
+    (options.adherenceDirectionP90Degrees ?? 25);
+  const minimumImprovement = options.minimumAdherenceImprovementPx ??
+    Math.max(0.10, 0.0005 * faceWidth);
+  for (const group of matching.acceptedGroups) {
+    const pointOrders = [...new Set(group.records.map((record) => record.pointOrder))];
+    const points = pointOrders.map((pointOrder) => trends[group.trendIndex].points[pointOrder]);
+    const wrinkleTangents = pointOrders.map((pointOrder) =>
+      trends[group.trendIndex].metrics.tangents[pointOrder]);
+    const prior = curves[group.curveIndex].prior;
+    const final = outputCurves[group.curveIndex].pts;
+    const beforeMatches = points.map((point) => pointToPolylineMatch(point, prior));
+    const afterMatches = points.map((point) => pointToPolylineMatch(point, final));
+    const before = beforeMatches.map((match) => match.distance);
+    const after = afterMatches.map((match) => match.distance);
+    const beforeDirections = beforeMatches.map((match, index) =>
+      axialDirectionDifferenceDegrees(match.tangent, wrinkleTangents[index]));
+    const afterDirections = afterMatches.map((match, index) =>
+      axialDirectionDifferenceDegrees(match.tangent, wrinkleTangents[index]));
+    const priorMean = before.reduce((sum, value) => sum + value, 0) / Math.max(1, before.length);
+    const finalMean = after.reduce((sum, value) => sum + value, 0) / Math.max(1, after.length);
+    const priorP90 = percentile(before, 0.9), finalP90 = percentile(after, 0.9);
+    const priorDirectionP90 = percentile(beforeDirections, 0.9);
+    const finalDirectionP90 = percentile(afterDirections, 0.9);
+    const shortTrend = options.shortWrinkleQuantizationTolerance === true &&
+      group.directLength / faceWidth < (options.shortWrinkleMaximumLengthRatio ?? 0.12);
+    const quantizationTolerance = shortTrend ?
+      (options.shortWrinkleP90TolerancePx ?? Math.max(0.5, 0.001 * faceWidth)) : 0;
+    const p90Threshold = baseP90Threshold + quantizationTolerance;
+    const moved = outputCurves[group.curveIndex].normalOffsetsPx
+      .some((value: number) => Math.abs(value) > 0.05);
+    if (applyGate && options.postAdherenceGate === true) {
+      const alreadyAligned = priorMean <= meanThreshold && priorP90 <= p90Threshold &&
+        priorDirectionP90 <= directionThreshold;
+      const improved = priorMean - finalMean >= minimumImprovement;
+      const passedDistance = finalMean <= meanThreshold && finalP90 <= p90Threshold;
+      const passedDirection = finalDirectionP90 <= directionThreshold;
+      let status = "accepted", rejectionReason = null;
+      if (alreadyAligned) {
+        status = "already_aligned";
+        alreadyAlignedCurveIndices.add(group.curveIndex);
+      } else if (outputCurves[group.curveIndex].rollbackReason || !moved) {
+        status = "rejected_after_guard";
+        rejectionReason = outputCurves[group.curveIndex].rollbackReason || "no_effect_after_guard";
+      } else if (!improved) {
+        status = "rejected_no_improvement";
+        rejectionReason = "minimum_adherence_improvement_not_met";
+      } else if (!passedDistance) {
+        status = finalMean > meanThreshold ? "rejected_mean_distance" : "rejected_p90_distance";
+        rejectionReason = status;
+      } else if (!passedDirection) {
+        status = "rejected_direction_adherence";
+        rejectionReason = status;
+      }
+      const accepted = status === "accepted" || status === "already_aligned";
+      group.summary.final_status = status;
+      group.summary.final_accepted = accepted;
+      group.summary.rejection_reason = rejectionReason;
+      group.summary.candidate_prior_mean_distance_px = priorMean;
+      group.summary.candidate_final_mean_distance_px = finalMean;
+      group.summary.candidate_final_p90_distance_px = finalP90;
+      group.summary.candidate_final_direction_p90_degrees = finalDirectionP90;
+      if (accepted && finalDirectionP90 > directionSoftThreshold) {
+        group.summary.direction_soft_zone = true;
+        group.summary.direction_soft_penalty = clamp(
+          (directionThreshold - finalDirectionP90) /
+          Math.max(EPSILON, directionThreshold - directionSoftThreshold),
+        );
+      }
+      if (options.shortWrinkleQuantizationTolerance === true) {
+        group.summary.short_wrinkle_quantization_tolerance_px = quantizationTolerance;
+      }
+      if (!accepted) {
+        rejectedCurveIndices.add(group.curveIndex);
+        rejectedTrendCurvePairs.add(`${group.trendIndex}:${group.curveIndex}`);
+      }
+    }
+    const status = group.summary.final_status ||
+      (group.summary.final_accepted ? "accepted" : "rejected_before_refinement");
+    const accepted = status === "accepted" || status === "already_aligned";
+    if (accepted) {
+      priorDistances.push(...before);
+      finalDistances.push(...after);
+    }
+    records.push({
+      wrinkle_segment_id: group.trendIndex,
+      rstl_curve_index: group.curveIndex,
+      sample_count: points.length,
+      final_status: status,
+      final_accepted: accepted,
+      prior_mean_distance_px: priorMean,
+      prior_p90_distance_px: priorP90,
+      final_mean_distance_px: finalMean,
+      final_median_distance_px: percentile(after, 0.5),
+      final_p90_distance_px: finalP90,
+      prior_direction_p90_degrees: priorDirectionP90,
+      final_direction_p90_degrees: finalDirectionP90,
+      mean_distance_threshold_px: meanThreshold,
+      p90_distance_threshold_px: p90Threshold,
+      direction_p90_threshold_degrees: directionThreshold,
+      ...(options.shortWrinkleQuantizationTolerance === true ? {
+        base_p90_distance_threshold_px: baseP90Threshold,
+        short_wrinkle_quantization_tolerance_px: quantizationTolerance,
+        short_wrinkle_gate_applied: shortTrend,
+        direction_soft_threshold_degrees: directionSoftThreshold,
+        direction_soft_zone: finalDirectionP90 > directionSoftThreshold &&
+          finalDirectionP90 <= directionThreshold,
+      } : {}),
+      minimum_improvement_px: minimumImprovement,
+      candidate_prior_mean_distance_px:
+        group.summary.candidate_prior_mean_distance_px ?? priorMean,
+      candidate_final_mean_distance_px:
+        group.summary.candidate_final_mean_distance_px ?? finalMean,
+      candidate_final_p90_distance_px:
+        group.summary.candidate_final_p90_distance_px ?? finalP90,
+      candidate_final_direction_p90_degrees:
+        group.summary.candidate_final_direction_p90_degrees ?? finalDirectionP90,
+    });
+  }
+  return {
+    records,
+    rejectedCurveIndices,
+    rejectedTrendCurvePairs,
+    alreadyAlignedCurveIndices,
+    priorMean: priorDistances.reduce((sum, value) => sum + value, 0) /
+      Math.max(1, priorDistances.length),
+    finalMean: finalDistances.reduce((sum, value) => sum + value, 0) /
+      Math.max(1, finalDistances.length),
+    finalP90: percentile(finalDistances, 0.9),
+    acceptedCount: records.filter((record) => record.final_status === "accepted").length,
+    alreadyAlignedCount: records.filter((record) => record.final_status === "already_aligned").length,
+    rejectedCount: records.filter((record) => !record.final_accepted).length,
+    meanThreshold,
+    p90Threshold: baseP90Threshold,
+    directionThreshold,
+    directionSoftThreshold,
+  };
+}
+
 function geometryGuard(
-  curve: CurveGeometry,
-  offsets: Float64Array,
-  intervals: Interval[],
-  size: number,
+  curve: CurveGeometry, offsets: Float64Array, intervals: Interval[], size: number,
   options: V6RefinementOptions,
-): { scaled: number; rolledBack: number } {
+) {
   const priorTurns = turnAngles(curve.prior);
   const maximumChange = (options.maxCurvatureChangeDegrees ?? 18) * Math.PI / 180;
   let scaled = 0, rolledBack = 0;
+  const events = [];
   for (const [start, end] of intervals) {
     const original = offsets.slice(start, end);
     let scale = 1, accepted = false;
@@ -795,9 +1215,15 @@ function geometryGuard(
     if (!accepted) {
       for (let index = start; index < end; index += 1) offsets[index] = 0;
       rolledBack += 1;
-    } else if (scale < 0.999) scaled += 1;
+      events.push({ interval: [start, end], status: "rolled_back", scale: 0 });
+    } else if (scale < 0.999) {
+      scaled += 1;
+      events.push({ interval: [start, end], status: "scaled", scale });
+    } else {
+      events.push({ interval: [start, end], status: "accepted", scale: 1 });
+    }
   }
-  return { scaled, rolledBack };
+  return { scaled, rolledBack, events };
 }
 
 function orientation(a: Point2, b: Point2, c: Point2): number {
@@ -919,7 +1345,17 @@ function refineCurves(
   const transitionLength = options.transitionLengthPx ?? TRANSITION_FACE_RATIO * faceWidth;
   const maximumDisplacement = options.maxDisplacementPx ?? MAX_DISPLACEMENT_FACE_RATIO * faceWidth;
   const p90Limit = options.p90LimitPx ?? P90_FACE_RATIO * faceWidth;
-  const guardEvents: Array<Record<string, number | string | Interval>> = [];
+  const targetGap = Math.max(0, Number(options.targetGapPx) || 0);
+  const dataAttractionStrength = Math.max(
+    0.1, Number(options.dataAttractionStrength) || 4.5,
+  );
+  const wrinkleDominantCoreStrength = clamp(
+    Number(options.wrinkleDominantCoreStrength) || 0,
+  );
+  const wrinkleDominantCoreSupportRatio = clamp(
+    Number(options.wrinkleDominantCoreSupportRatio) || 0.16, 0.02, 0.80,
+  );
+  const guardEvents: any[] = [];
   let geometryScaled = 0, geometryRolledBack = 0;
 
   const results = curves.map((curve, curveIndex) => {
@@ -935,11 +1371,13 @@ function refineCurves(
           if (distance > spreadRadius) continue;
           const kernel = Math.exp(-0.5 * (distance / spreadSigma) ** 2);
           const support = evidence.score * group.influence * kernel;
-          if (evidence.normalOffset >= 0) {
-            positiveNumerator[index] += support * evidence.normalOffset;
+          const targetOffset = Math.sign(evidence.normalOffset) *
+            Math.max(0, Math.abs(evidence.normalOffset) - targetGap);
+          if (targetOffset >= 0) {
+            positiveNumerator[index] += support * targetOffset;
             positiveSupport[index] += support;
           } else {
-            negativeNumerator[index] += support * Math.abs(evidence.normalOffset);
+            negativeNumerator[index] += support * Math.abs(targetOffset);
             negativeSupport[index] += support;
           }
         }
@@ -960,7 +1398,22 @@ function refineCurves(
     const intervals = intervalIndices(support, curve.vertexArc, transitionLength);
     const offsets = new Float64Array(raw.length);
     for (const [start, end] of intervals) {
-      offsets.set(solveInterval(raw, support, start, end, options.smoothingPasses ?? 48), start);
+      const solved = solveInterval(
+        raw, support, start, end, options.smoothingPasses ?? 48, dataAttractionStrength,
+      );
+      offsets.set(solved, start);
+      if (wrinkleDominantCoreStrength > 0) {
+        let maximumSupport = 0;
+        for (let index = start; index < end; index += 1) {
+          maximumSupport = Math.max(maximumSupport, support[index]);
+        }
+        const coreThreshold = maximumSupport * wrinkleDominantCoreSupportRatio;
+        for (let index = start + 1; index < end - 1; index += 1) {
+          if (!(support[index] >= coreThreshold) || Math.abs(raw[index]) <= 0.05) continue;
+          offsets[index] = (1 - wrinkleDominantCoreStrength) * offsets[index] +
+            wrinkleDominantCoreStrength * raw[index];
+        }
+      }
       const active = [];
       for (let index = start; index < end; index += 1) {
         if (Math.abs(offsets[index]) > 0.05) active.push(Math.abs(offsets[index]));
@@ -984,11 +1437,420 @@ function refineCurves(
       curve, offsets, intervals,
       points: pointsFromOffsets(curve, offsets),
       supportScore: curveGroups.reduce((sum, group) => sum + group.influence, 0),
+      geometryGuardEvents: geometry.events,
       rollbackReason: null,
     };
   });
   return { results, guardEvents, p90Limit, maximumDisplacement,
-    geometryScaled, geometryRolledBack };
+    geometryScaled, geometryRolledBack, wrinkleDominantCoreStrength,
+    wrinkleDominantCoreSupportRatio,
+    anchorGuardEvents: [...guardEvents],
+    anchorGeometryScaled: geometryScaled,
+    anchorGeometryRolledBack: geometryRolledBack,
+    bundleRecords: [],
+  };
+}
+
+function nearestCurveVertex(point: Point2, curve: CurveGeometry) {
+  let bestIndex = 0, bestDistance = Infinity;
+  for (let index = 0; index < curve.prior.length; index += 1) {
+    const distance = Math.hypot(
+      point[0] - curve.prior[index][0], point[1] - curve.prior[index][1],
+    );
+    if (distance < bestDistance) {
+      bestIndex = index;
+      bestDistance = distance;
+    }
+  }
+  return { index: bestIndex, distance: bestDistance };
+}
+
+function meanSignedCurveSeparation(anchor: CurveGeometry, follower: CurveGeometry) {
+  let signed = 0, absolute = 0, count = 0;
+  const first = Math.floor(follower.prior.length * 0.12);
+  const last = Math.max(first + 1, Math.ceil(follower.prior.length * 0.88));
+  const step = Math.max(1, Math.floor((last - first) / 18));
+  for (let index = first; index < last; index += step) {
+    const point = follower.prior[index];
+    const nearest = nearestCurveVertex(point, anchor);
+    const anchorPoint = anchor.prior[nearest.index];
+    const anchorNormal = anchor.normals[nearest.index];
+    const value = (point[0] - anchorPoint[0]) * anchorNormal[0] +
+      (point[1] - anchorPoint[1]) * anchorNormal[1];
+    signed += value;
+    absolute += Math.abs(value);
+    count += 1;
+  }
+  return {
+    signed: count ? signed / count : 0,
+    absolute: count ? absolute / count : Infinity,
+  };
+}
+
+function selectBundleFollowerContributions(
+  curves: CurveGeometry[], matching: MatchingResult, faceWidth: number,
+  options: V6RefinementOptions,
+) {
+  const primaryCurveIndices = new Set(matching.acceptedGroups.map((group) => group.curveIndex));
+  const radius = options.bundlePropagationRadiusPx ?? Math.max(4, 0.050 * faceWidth);
+  const countPerSide = Math.max(
+    0, Math.min(3, Number(options.bundleFollowerCountPerSide) || 1),
+  );
+  const denseRegion = String(options.bundleDenseFollowerRegion || "");
+  const denseCountPerSide = Math.max(
+    countPerSide,
+    Math.min(3, Number(options.bundleDenseFollowerCountPerSide) || countPerSide),
+  );
+  const contributions = [];
+  for (const primary of matching.acceptedGroups) {
+    const anchor = curves[primary.curveIndex];
+    const candidates = [];
+    for (const group of matching.supportedGroups || []) {
+      if (group.trendIndex !== primary.trendIndex || group.curveIndex === primary.curveIndex ||
+          primaryCurveIndices.has(group.curveIndex)) continue;
+      const follower = curves[group.curveIndex];
+      if ((follower.seed.region || "") !== (anchor.seed.region || "")) continue;
+      const separation = meanSignedCurveSeparation(anchor, follower);
+      if (!(separation.absolute <= radius)) continue;
+      candidates.push({
+        trendIndex: primary.trendIndex,
+        anchorCurveIndex: primary.curveIndex,
+        followerCurveIndex: group.curveIndex,
+        influence: group.influence,
+        meanMatchDistance: group.meanDistance,
+        separationPx: separation.absolute,
+        side: separation.signed < 0 ? -1 : 1,
+      });
+    }
+    for (const side of [-1, 1]) {
+      const selectedCount = (anchor.seed.region || "") === denseRegion ?
+        denseCountPerSide : countPerSide;
+      const selected = candidates.filter((candidate) => candidate.side === side)
+        .sort((left, right) => left.separationPx - right.separationPx ||
+          right.influence - left.influence ||
+          left.followerCurveIndex - right.followerCurveIndex)
+        .slice(0, selectedCount);
+      contributions.push(...selected);
+    }
+  }
+  return { contributions, primaryCurveIndices, radius, countPerSide,
+    denseRegion, denseCountPerSide };
+}
+
+export function resolveBundleContributions(
+  candidates: any[], conflictDegrees = 25, dominanceRatio = 1.5,
+) {
+  let conflict = false;
+  for (let first = 0; first < candidates.length && !conflict; first += 1) {
+    for (let second = first + 1; second < candidates.length; second += 1) {
+      if (axialDirectionDifferenceDegrees(
+        candidates[first].tangent, candidates[second].tangent,
+      ) > conflictDegrees) {
+        conflict = true;
+        break;
+      }
+    }
+  }
+  if (!conflict) return { active: candidates, status: "compatible" };
+  const ranked = [...candidates].sort((left, right) => right.weight - left.weight ||
+    left.trendIndex - right.trendIndex);
+  if (ranked.length > 1 && ranked[0].weight >= ranked[1].weight * dominanceRatio) {
+    return { active: [ranked[0]], status: "dominant_source" };
+  }
+  return { active: [], status: "ambiguous_prior" };
+}
+
+function applyBundlePropagation(
+  curves: CurveGeometry[], matching: MatchingResult, refined: RefinedState, faceWidth: number,
+  size: number, options: V6RefinementOptions,
+) {
+  refined.guardEvents = [...refined.anchorGuardEvents];
+  refined.geometryScaled = refined.anchorGeometryScaled;
+  refined.geometryRolledBack = refined.anchorGeometryRolledBack;
+  refined.bundleRecords = [];
+  refined.bundleSpacingGuardEvents = [];
+  refined.bundleSpacingFailedAnchorPairs = new Set();
+  if (options.bundlePropagation !== true) return refined;
+
+  const selection = selectBundleFollowerContributions(curves, matching, faceWidth, options);
+  const grouped = new Map<number, any[]>();
+  for (const contribution of selection.contributions) {
+    if (!grouped.has(contribution.followerCurveIndex)) {
+      grouped.set(contribution.followerCurveIndex, []);
+    }
+    grouped.get(contribution.followerCurveIndex)!.push(contribution);
+  }
+  for (let curveIndex = 0; curveIndex < refined.results.length; curveIndex += 1) {
+    if (selection.primaryCurveIndices.has(curveIndex)) continue;
+    const result = refined.results[curveIndex];
+    result.offsets.fill(0);
+    result.points = result.curve.prior.map((point: Point2) => [...point]);
+    result.intervals = [];
+    result.geometryGuardEvents = [];
+    result.rollbackReason = null;
+    result.supportScore = 0;
+    result.bundleFollowerSources = [];
+  }
+
+  const strength = clamp(Number(options.bundleFollowerStrength) || 0.85, 0, 1);
+  const conflictDegrees = Math.max(
+    0, Math.min(90, Number(options.bundleDirectionConflictDegrees) || 25),
+  );
+  const dominanceRatio = Math.max(1, Number(options.bundleConflictDominanceRatio) || 1.5);
+  const transitionLength = options.bundleTransitionLengthPx ??
+    options.transitionLengthPx ?? TRANSITION_FACE_RATIO * faceWidth;
+  const dataStrength = Math.max(0.1, Number(options.bundleDataAttractionStrength) || 8);
+  const smoothingPasses = Math.max(
+    1, Math.min(64, Number(options.bundleSmoothingPasses) || 16),
+  );
+  const topologyPriority = clamp(Number(options.bundleFollowerTopologyPriority) || 0.25, 0.01, 0.9);
+
+  for (const [curveIndex, contributions] of grouped) {
+    const result = refined.results[curveIndex];
+    const follower = curves[curveIndex];
+    const raw = new Float64Array(follower.prior.length);
+    const support = new Float64Array(follower.prior.length);
+    let conflictPointCount = 0, dominatedConflictPointCount = 0;
+    const sourceWeightTotals = new Map<number, number>();
+    for (let pointIndex = 0; pointIndex < follower.prior.length; pointIndex += 1) {
+      const point = follower.prior[pointIndex];
+      const followerNormal = follower.normals[pointIndex];
+      const candidates = [];
+      for (const contribution of contributions) {
+        const anchorResult = refined.results[contribution.anchorCurveIndex];
+        if (anchorResult.rollbackReason) continue;
+        const anchor = curves[contribution.anchorCurveIndex];
+        const nearest = nearestCurveVertex(point, anchor);
+        const anchorOffset = anchorResult.offsets[nearest.index];
+        if (Math.abs(anchorOffset) <= 0.05) continue;
+        const anchorNormal = anchor.normals[nearest.index];
+        const projectedOffset = anchorOffset * (
+          anchorNormal[0] * followerNormal[0] + anchorNormal[1] * followerNormal[1]
+        );
+        const weight = contribution.influence * Math.exp(
+          -0.5 * (nearest.distance / selection.radius) ** 2,
+        );
+        if (!(weight > 1e-6) || !Number.isFinite(projectedOffset)) continue;
+        candidates.push({
+          ...contribution,
+          weight,
+          projectedOffset,
+          tangent: [-anchorNormal[1], anchorNormal[0]],
+        });
+      }
+      const resolution = resolveBundleContributions(
+        candidates, conflictDegrees, dominanceRatio,
+      );
+      const active = resolution.active;
+      if (resolution.status === "dominant_source") dominatedConflictPointCount += 1;
+      if (resolution.status === "ambiguous_prior") {
+        conflictPointCount += 1;
+        continue;
+      }
+      const totalWeight = active.reduce((sum, candidate) => sum + candidate.weight, 0);
+      if (!(totalWeight > 0)) continue;
+      const normalizedOffset = active.reduce((sum, candidate) =>
+        sum + candidate.weight * candidate.projectedOffset, 0) / totalWeight;
+      raw[pointIndex] = clamp(
+        strength * normalizedOffset,
+        -refined.maximumDisplacement,
+        refined.maximumDisplacement,
+      );
+      if (Math.abs(raw[pointIndex]) > 0.05) support[pointIndex] = totalWeight;
+      for (const candidate of active) {
+        sourceWeightTotals.set(candidate.trendIndex,
+          (sourceWeightTotals.get(candidate.trendIndex) || 0) + candidate.weight / totalWeight);
+      }
+    }
+
+    const intervals = intervalIndices(support, follower.vertexArc, transitionLength);
+    const offsets = new Float64Array(follower.prior.length);
+    for (const [start, end] of intervals) {
+      offsets.set(solveInterval(
+        raw, support, start, end, smoothingPasses, dataStrength,
+      ), start);
+      const activeOffsets = [];
+      for (let index = start; index < end; index += 1) {
+        if (Math.abs(offsets[index]) > 0.05) activeOffsets.push(Math.abs(offsets[index]));
+      }
+      const statistic = activeOffsets.length < 8 ?
+        Math.sqrt(activeOffsets.reduce((sum, value) => sum + value * value, 0) /
+          Math.max(1, activeOffsets.length)) : percentile(activeOffsets, 0.9);
+      const scale = statistic > refined.p90Limit ? refined.p90Limit / statistic : 1;
+      if (scale < 1) {
+        for (let index = start; index < end; index += 1) offsets[index] *= scale;
+        refined.guardEvents.push({
+          curve_index: curveIndex,
+          interval: [start, end],
+          source: "bundle_follower",
+          active_point_count: activeOffsets.length,
+          statistic: activeOffsets.length < 8 ? "rms_for_small_interval" : "p90",
+          before_limit_px: statistic,
+          limit_px: refined.p90Limit,
+          scale,
+        });
+      }
+    }
+    let geometry = geometryGuard(follower, offsets, intervals, size, options);
+    const activeTrendIndices = [...sourceWeightTotals.keys()].map(Number);
+    const activeTrendSet = new Set<number>(activeTrendIndices);
+    const activeAnchorCurveIndices = [...new Set(contributions
+      .filter((item) => activeTrendSet.has(item.trendIndex))
+      .map((item) => item.anchorCurveIndex))];
+    let spacingGuardScale = 1;
+    let spacingGuardMode = "none";
+    const minimumSpacingRatio = Number(options.bundleMinimumSpacingRatio) || 0;
+    if (minimumSpacingRatio > 0 && activeAnchorCurveIndices.length) {
+      const spacingForOffsets = (candidateOffsets: NumericField): number => {
+        const points = pointsFromOffsets(follower, candidateOffsets);
+        return Math.min(...activeAnchorCurveIndices.map((anchorCurveIndex) => {
+          const anchor = curves[anchorCurveIndex];
+          const anchorResult = refined.results[anchorCurveIndex];
+          const priorMinimum = minimumPolylineDistance(follower.prior, anchor.prior);
+          const finalMinimum = minimumPolylineDistance(points, anchorResult.points);
+          return finalMinimum / Math.max(EPSILON, priorMinimum);
+        }));
+      };
+      const originalOffsets = new Float64Array(offsets);
+      const spacingAtScale = (scale: number): number => spacingForOffsets(
+        Float64Array.from(originalOffsets, (value) => value * scale),
+      );
+      const beforeRatio = spacingAtScale(1);
+      if (beforeRatio < minimumSpacingRatio) {
+        spacingGuardScale = 0;
+        let guardedSpacingRatio = spacingAtScale(0);
+        let selectedOffsets = new Float64Array(offsets.length);
+        const activeOffsets = [...originalOffsets].map(Math.abs).filter((value) => value > 0.05);
+        const offsetStatistic = activeOffsets.length < 8 ?
+          Math.sqrt(activeOffsets.reduce((sum, value) => sum + value * value, 0) /
+            Math.max(1, activeOffsets.length)) : percentile(activeOffsets, 0.9);
+        const maximumOffset = activeOffsets.length ? Math.max(...activeOffsets) : 0;
+        const maximumScale = Math.min(
+          1.5,
+          maximumOffset > EPSILON ? refined.maximumDisplacement / maximumOffset : 1.5,
+          offsetStatistic > EPSILON ? refined.p90Limit / offsetStatistic : 1.5,
+        );
+        const scales = [];
+        for (let step = 1; step <= 20; step += 1) {
+          scales.push(1 - step / 20);
+          if (1 + step / 20 <= maximumScale + EPSILON) scales.push(1 + step / 20);
+        }
+        for (const scale of scales) {
+          const ratio = spacingAtScale(scale);
+          if (ratio < minimumSpacingRatio) continue;
+          spacingGuardScale = scale;
+          guardedSpacingRatio = ratio;
+          selectedOffsets = Float64Array.from(originalOffsets, (value) => value * scale);
+          spacingGuardMode = "uniform_scale";
+          break;
+        }
+        if (spacingGuardMode === "none") {
+          const coherentOffsets = new Float64Array(follower.prior.length);
+          for (let pointIndex = 0; pointIndex < follower.prior.length; pointIndex += 1) {
+            const point = follower.prior[pointIndex];
+            const followerNormal = follower.normals[pointIndex];
+            let numerator = 0, denominator = 0;
+            for (const anchorCurveIndex of activeAnchorCurveIndices) {
+              const anchor = curves[anchorCurveIndex];
+              const anchorResult = refined.results[anchorCurveIndex];
+              const nearest = nearestCurveVertex(point, anchor);
+              const anchorNormal = anchor.normals[nearest.index];
+              const projected = anchorResult.offsets[nearest.index] *
+                (anchorNormal[0] * followerNormal[0] + anchorNormal[1] * followerNormal[1]);
+              const weight = Math.exp(-0.5 * (nearest.distance / selection.radius) ** 2);
+              numerator += weight * projected;
+              denominator += weight;
+            }
+            coherentOffsets[pointIndex] = denominator > EPSILON ? clamp(
+              numerator / denominator,
+              -refined.maximumDisplacement,
+              refined.maximumDisplacement,
+            ) : 0;
+          }
+          for (const blend of [0.25, 0.50, 0.75, 1]) {
+            const candidate = Float64Array.from(originalOffsets, (value, index) =>
+              (1 - blend) * value + blend * coherentOffsets[index]);
+            const candidateActive = [...candidate].map(Math.abs)
+              .filter((value) => value > 0.05);
+            const candidateStatistic = candidateActive.length < 8 ?
+              Math.sqrt(candidateActive.reduce((sum, value) => sum + value * value, 0) /
+                Math.max(1, candidateActive.length)) : percentile(candidateActive, 0.9);
+            if (candidateStatistic > refined.p90Limit + EPSILON) continue;
+            const candidateGeometry = geometryGuard(follower, candidate, intervals, size, options);
+            const ratio = spacingForOffsets(candidate);
+            if (ratio < minimumSpacingRatio) continue;
+            selectedOffsets = candidate;
+            guardedSpacingRatio = ratio;
+            spacingGuardScale = 1;
+            spacingGuardMode = "coherent_anchor_field";
+            geometry = candidateGeometry;
+            break;
+          }
+        }
+        offsets.set(selectedOffsets);
+        if (spacingGuardMode === "none" && guardedSpacingRatio < minimumSpacingRatio) {
+          for (const contribution of contributions) {
+            if (!activeTrendSet.has(contribution.trendIndex)) continue;
+            refined.bundleSpacingFailedAnchorPairs.add(
+              `${contribution.trendIndex}:${contribution.anchorCurveIndex}`,
+            );
+          }
+        }
+        refined.bundleSpacingGuardEvents.push({
+          curve_index: curveIndex,
+          source_anchor_curve_indices: activeAnchorCurveIndices,
+          before_spacing_ratio: beforeRatio,
+          minimum_spacing_ratio: minimumSpacingRatio,
+          applied_scale: spacingGuardScale,
+          mode: spacingGuardMode,
+          final_spacing_ratio: guardedSpacingRatio,
+        });
+      }
+    }
+    refined.geometryScaled += geometry.scaled;
+    refined.geometryRolledBack += geometry.rolledBack;
+    result.offsets = offsets;
+    result.intervals = intervals;
+    result.points = pointsFromOffsets(follower, offsets);
+    result.supportScore = topologyPriority * Math.min(
+      1, contributions.reduce((sum, contribution) => sum + contribution.influence, 0),
+    );
+    result.geometryGuardEvents = geometry.events;
+    result.bundleFollowerSources = contributions.map((contribution) => ({ ...contribution }));
+    refined.bundleRecords.push({
+      rstl_curve_index: curveIndex,
+      source_wrinkle_segment_ids: activeTrendIndices,
+      source_anchor_curve_indices: [...new Set(contributions
+        .filter((item) => activeTrendSet.has(item.trendIndex))
+        .map((item) => item.anchorCurveIndex))],
+      candidate_source_wrinkle_segment_ids: [...new Set(
+        contributions.map((item) => item.trendIndex),
+      )],
+      candidate_source_anchor_curve_indices: [...new Set(
+        contributions.map((item) => item.anchorCurveIndex),
+      )],
+      selected_neighbor_records: contributions.map((item) => ({ ...item })),
+      normalized_multi_source_weights: true,
+      conflict_point_count: conflictPointCount,
+      dominant_source_conflict_point_count: dominatedConflictPointCount,
+      source_normalized_weight_totals: Object.fromEntries(sourceWeightTotals),
+      ...(minimumSpacingRatio > 0 ? {
+        spacing_guard_scale: spacingGuardScale,
+        spacing_guard_mode: spacingGuardMode,
+      } : {}),
+    });
+  }
+  return refined;
+}
+
+function refineAnchorsAndBundle(
+  curves: CurveGeometry[], matching: MatchingResult, faceWidth: number, size: number,
+  options: V6RefinementOptions,
+): RefinedState {
+  const refined = refineCurves(curves, matching, faceWidth, size, options);
+  return applyBundlePropagation(
+    curves, matching, refined as unknown as RefinedState, faceWidth, size, options,
+  );
 }
 
 /**
@@ -1016,45 +1878,194 @@ export function refineV6({
     rawSkeleton, confidence, directionQ, size, duplicateRadius,
   );
   const skeleton = deduplicated.skeleton;
-  const softLinkDistance = options.softLinkDistancePx ?? SOFT_LINK_FACE_RATIO * faceWidth;
+  const logicalGrouping = options.logicalTrendGrouping === true;
+  const softLinkDistance = options.softLinkDistancePx ??
+    (logicalGrouping ? 0.030 : SOFT_LINK_FACE_RATIO) * faceWidth;
+  const softLinkTurnDegrees = options.softLinkTurnDegrees ??
+    (logicalGrouping ? 18 : SOFT_LINK_TURN_DEGREES);
+  const softLinkTangentSpan = options.softLinkTangentSpanPx ??
+    (logicalGrouping ? Math.max(4, Math.round(0.020 * faceWidth)) : 4);
   const tangentWindow = options.tangentWindowPx ?? SOFT_LINK_FACE_RATIO * faceWidth;
   const rawPaths = orderedSkeletonPaths(skeleton, size);
-  const trends = mergeTrendPaths(rawPaths, softLinkDistance).map((trend) => ({
+  const trends = mergeTrendPaths(
+    rawPaths, softLinkDistance, softLinkTurnDegrees, softLinkTangentSpan,
+  ).map((trend) => ({
     ...trend,
     metrics: polylineMetrics(trend.points, tangentWindow, directionQ, size),
   }));
   const curves = seeds.map((seed) => buildCurveGeometry(seed, tangentWindow));
-  const matching = matchTrendsToCurves(
+  let matching = matchTrendsToCurves(
     trends, curves, confidence, size, faceWidth, options,
   );
-  const refined = refineCurves(curves, matching, faceWidth, size, options);
-  const intersection = rollbackNewIntersections(
+  let refined = refineAnchorsAndBundle(curves, matching, faceWidth, size, options);
+  let intersection = rollbackNewIntersections(
     refined.results, curves.map((curve) => curve.prior),
   );
+  const topologyRetryRecords = [];
+  const excludedTrendCurvePairs = new Set();
+  const excludedTrendCurvePairReasons = new Map();
+  const topologyRetryAttempts = Math.max(
+    0, Math.min(6, Number(options.topologyRetryAttempts) || 0),
+  );
+  for (let attempt = 1; attempt <= topologyRetryAttempts; attempt += 1) {
+    const failedGroups = matching.acceptedGroups.filter((group) =>
+      intersection.rolledBack.has(group.curveIndex) &&
+      String(refined.results[group.curveIndex]?.rollbackReason || "").startsWith(
+        "new_curve_intersection:",
+      ));
+    if (!failedGroups.length) break;
+    let added = 0;
+    for (const group of failedGroups) {
+      const key = `${group.trendIndex}:${group.curveIndex}`;
+      if (excludedTrendCurvePairs.has(key)) continue;
+      excludedTrendCurvePairs.add(key);
+      excludedTrendCurvePairReasons.set(key, "topology_retry_excluded");
+      topologyRetryRecords.push({
+        attempt,
+        wrinkle_segment_id: group.trendIndex,
+        excluded_rstl_curve_index: group.curveIndex,
+        reason: refined.results[group.curveIndex].rollbackReason,
+      });
+      added += 1;
+    }
+    if (!added) break;
+    matching = matchTrendsToCurves(
+      trends, curves, confidence, size, faceWidth,
+      { ...options, excludedTrendCurvePairs: [...excludedTrendCurvePairs],
+        excludedTrendCurvePairReasons: Object.fromEntries(excludedTrendCurvePairReasons) },
+    );
+    refined = refineAnchorsAndBundle(curves, matching, faceWidth, size, options);
+    intersection = rollbackNewIntersections(
+      refined.results, curves.map((curve) => curve.prior),
+    );
+  }
 
-  const outputCurves = refined.results.map((result, curveIndex) => ({
+  const makeOutputCurves = (): any[] => refined.results.map((result: any, curveIndex: number) => ({
     ...result.curve.seed,
-    pts: result.points.map((point) => [...point]),
-    priorPts: result.curve.prior.map((point) => [...point]),
+    pts: result.points.map((point: Point2) => [...point]),
+    priorPts: result.curve.prior.map((point: Point2) => [...point]),
     normalOffsetsPx: Array.from(result.offsets),
-    affectedIntervals: result.intervals.map((interval) => [...interval]),
+    affectedIntervals: result.intervals.map((interval: Interval) => [...interval]),
+    geometryGuardEvents: result.geometryGuardEvents.map((event: any) => ({ ...event })),
     rollbackReason: result.rollbackReason,
+    bundleFollowerSources: (result.bundleFollowerSources || []).map((source: any) => ({ ...source })),
     curveIndex,
   }));
+  let outputCurves = makeOutputCurves();
+  let candidateAdherence = trajectoryAdherence(
+    trends, matching, curves, outputCurves, faceWidth, options, true,
+  );
+  const adherenceRetryRecords = [];
+  const adherenceRetryAttempts = Math.max(
+    0, Math.min(12, Number(options.adherenceRetryAttempts) || 0),
+  );
+  for (let attempt = 1; attempt <= adherenceRetryAttempts; attempt += 1) {
+    const spacingFailedPairs = refined.bundleSpacingFailedAnchorPairs || new Set();
+    const failedPairs = [...new Set([
+      ...candidateAdherence.rejectedTrendCurvePairs,
+      ...spacingFailedPairs,
+    ])];
+    if (!failedPairs.length) break;
+    let added = 0;
+    for (const key of failedPairs) {
+      if (excludedTrendCurvePairs.has(key)) continue;
+      const group = matching.acceptedGroups.find((candidate) =>
+        `${candidate.trendIndex}:${candidate.curveIndex}` === key);
+      excludedTrendCurvePairs.add(key);
+      excludedTrendCurvePairReasons.set(key, "adherence_retry_excluded");
+      adherenceRetryRecords.push({
+        attempt,
+        wrinkle_segment_id: group?.trendIndex ?? Number(key.split(":")[0]),
+        excluded_rstl_curve_index: group?.curveIndex ?? Number(key.split(":")[1]),
+        reason: spacingFailedPairs.has(key) ? "bundle_spacing_guard_failed" :
+          group?.summary?.rejection_reason || "post_adherence_gate_rejected",
+      });
+      added += 1;
+    }
+    if (!added) break;
+    matching = matchTrendsToCurves(
+      trends, curves, confidence, size, faceWidth,
+      { ...options, excludedTrendCurvePairs: [...excludedTrendCurvePairs],
+        excludedTrendCurvePairReasons: Object.fromEntries(excludedTrendCurvePairReasons) },
+    );
+    refined = refineAnchorsAndBundle(curves, matching, faceWidth, size, options);
+    intersection = rollbackNewIntersections(
+      refined.results, curves.map((curve) => curve.prior),
+    );
+    outputCurves = makeOutputCurves();
+    candidateAdherence = trajectoryAdherence(
+      trends, matching, curves, outputCurves, faceWidth, options, true,
+    );
+  }
+  const postAdherenceRollback = new Set();
+  if (options.postAdherenceGate === true) {
+    for (const curveIndex of candidateAdherence.rejectedCurveIndices) {
+      const result = refined.results[curveIndex];
+      result.offsets.fill(0);
+      result.points = result.curve.prior.map((point: Point2) => [...point]);
+      result.rollbackReason = result.rollbackReason || "post_adherence_gate_rejected";
+      postAdherenceRollback.add(curveIndex);
+    }
+    for (const curveIndex of candidateAdherence.alreadyAlignedCurveIndices) {
+      const result = refined.results[curveIndex];
+      result.offsets.fill(0);
+      result.points = result.curve.prior.map((point: Point2) => [...point]);
+    }
+    if (options.bundlePropagation === true) {
+      applyBundlePropagation(curves, matching, refined, faceWidth, size, options);
+      intersection = rollbackNewIntersections(
+        refined.results, curves.map((curve) => curve.prior),
+      );
+    }
+    outputCurves = makeOutputCurves();
+  }
+  const adherence = trajectoryAdherence(
+    trends, matching, curves, outputCurves, faceWidth, options, false,
+  );
   const outputLines = outputCurves.map((curve) => ({
     name: curve.name,
     region: curve.region,
-    points_prior_xy: curve.priorPts.map((point) => [...point]),
-    points_xy: curve.pts.map((point) => [...point]),
+    points_prior_xy: curve.priorPts.map((point: Point2) => [...point]),
+    points_xy: curve.pts.map((point: Point2) => [...point]),
     normal_offsets_px: [...curve.normalOffsetsPx],
-    affected_intervals: curve.affectedIntervals.map((interval) => [...interval]),
+    affected_intervals: curve.affectedIntervals.map((interval: Interval) => [...interval]),
     rollback_reason: curve.rollbackReason,
+    ...(curve.bundleFollowerSources.length ? {
+      bundle_follower_sources: curve.bundleFollowerSources.map((source: any) => ({ ...source })),
+    } : {}),
   }));
   const movedPointCount = outputCurves.reduce((sum, curve) => sum +
-    curve.normalOffsetsPx.filter((value) => Math.abs(value) > 0.05).length, 0);
+    curve.normalOffsetsPx.filter((value: number) => Math.abs(value) > 0.05).length, 0);
   const movedCurveCount = outputCurves.filter((curve) =>
-    curve.normalOffsetsPx.some((value) => Math.abs(value) > 0.05)).length;
+    curve.normalOffsetsPx.some((value: number) => Math.abs(value) > 0.05)).length;
   const pointCount = outputCurves.reduce((sum, curve) => sum + curve.pts.length, 0);
+  const bundleFollowerRecords = (refined.bundleRecords || []).map((record) => {
+    const curve = outputCurves[record.rstl_curve_index];
+    const movedPoints = curve.normalOffsetsPx.filter((value: number) => Math.abs(value) > 0.05);
+    const spacingRecords = record.source_anchor_curve_indices.map((anchorCurveIndex: number) => {
+      const anchor = outputCurves[anchorCurveIndex];
+      const priorMinimum = minimumPolylineDistance(curve.priorPts, anchor.priorPts);
+      const finalMinimum = minimumPolylineDistance(curve.pts, anchor.pts);
+      return {
+        anchor_curve_index: anchorCurveIndex,
+        prior_minimum_spacing_px: priorMinimum,
+        final_minimum_spacing_px: finalMinimum,
+        final_to_prior_spacing_ratio: finalMinimum / Math.max(EPSILON, priorMinimum),
+      };
+    });
+    return {
+      ...record,
+      spacing_records: spacingRecords,
+      minimum_spacing_ratio: spacingRecords.length ? Math.min(
+        ...spacingRecords.map((item: any) => item.final_to_prior_spacing_ratio),
+      ) : 1,
+      final_moved_point_count: movedPoints.length,
+      final_maximum_displacement_px: movedPoints.length ? Math.max(...movedPoints.map(Math.abs)) : 0,
+      final_status: curve.rollbackReason ? "rolled_back" :
+        movedPoints.length ? "propagated" : "no_effect",
+      rollback_reason: curve.rollbackReason,
+    };
+  });
   const diagnostics = {
     algorithm: V6_RSTL_ALGORITHM,
     parameter_mode: "soft_linked_curve_supported_interval_guarded_browser",
@@ -1072,7 +2083,8 @@ export function refineV6({
     parallel_duplicate_suppression_radius_ratio_face_width: PARALLEL_DEDUP_FACE_RATIO,
     parallel_duplicate_suppression_radius_px: duplicateRadius,
     soft_link_count: trends.reduce((sum, trend) => sum + trend.softLinkCount, 0),
-    soft_link_distance_ratio_face_width: SOFT_LINK_FACE_RATIO,
+    soft_link_distance_ratio_face_width: logicalGrouping ?
+      softLinkDistance / faceWidth : SOFT_LINK_FACE_RATIO,
     soft_link_max_gap_px: softLinkDistance,
     wrinkle_tangent_window_ratio_face_width: SOFT_LINK_FACE_RATIO,
     wrinkle_tangent_window_px: tangentWindow,
@@ -1081,20 +2093,159 @@ export function refineV6({
     direction_rejected_pair_count: matching.directionRejectedPairCount,
     curve_influence_records: matching.groupRecords,
     curve_support_records: matching.curveSupportRecords,
+    exclusive_trend_matching: options.exclusiveTrendMatching === true,
+    one_to_one_trend_curve_matching: options.oneToOneTrendCurveMatching === true,
+    ...(logicalGrouping ? {
+      logical_wrinkle_grouping_enabled: true,
+      logical_wrinkle_fragment_max_gap_ratio_face_width: softLinkDistance / faceWidth,
+      logical_wrinkle_fragment_max_gap_px: softLinkDistance,
+      logical_wrinkle_fragment_max_turn_degrees: softLinkTurnDegrees,
+      logical_wrinkle_endpoint_tangent_span_px: softLinkTangentSpan,
+      logical_wrinkle_composite_count: trends.filter((trend) => trend.sourcePathCount > 1).length,
+      logical_wrinkle_grouped_fragment_count: trends.reduce(
+        (sum, trend) => sum + Math.max(0, trend.sourcePathCount - 1), 0,
+      ),
+      global_length_aware_matching: options.globalLengthAwareMatching === true,
+    } : {}),
+    ...(options.intervalAwareAnchorSharing === true ? {
+      interval_aware_anchor_sharing: true,
+      anchor_interval_padding_px: options.anchorIntervalPaddingPx ??
+        Math.max(2, 0.010 * faceWidth),
+      shared_primary_anchor_curve_count: [...new Set(matching.acceptedGroups
+        .filter((group) => group.summary.final_accepted &&
+          matching.acceptedGroups.some((other) => other !== group &&
+            other.summary.final_accepted && other.curveIndex === group.curveIndex))
+        .map((group) => group.curveIndex))].length,
+    } : {}),
+    post_adherence_gate: options.postAdherenceGate === true,
+    target_wrinkle_gap_px: Math.max(0, Number(options.targetGapPx) || 0),
+    trajectory_data_attraction_strength: Math.max(
+      0.1, Number(options.dataAttractionStrength) || 4.5,
+    ),
+    trajectory_adherence_prior_mean_distance_px: adherence.priorMean,
+    trajectory_adherence_final_mean_distance_px: adherence.finalMean,
+    trajectory_adherence_final_p90_distance_px: adherence.finalP90,
+    trajectory_adherence_records: adherence.records,
+    trajectory_adherence_accepted_count: adherence.acceptedCount,
+    trajectory_adherence_already_aligned_count: adherence.alreadyAlignedCount,
+    trajectory_adherence_rejected_count: adherence.rejectedCount,
+    trajectory_adherence_mean_threshold_px: adherence.meanThreshold,
+    trajectory_adherence_p90_threshold_px: adherence.p90Threshold,
+    trajectory_adherence_direction_p90_threshold_degrees: adherence.directionThreshold,
+    ...(options.shortWrinkleQuantizationTolerance === true ? {
+      trajectory_adherence_direction_soft_threshold_degrees:
+        adherence.directionSoftThreshold,
+      short_wrinkle_quantization_tolerance_enabled: true,
+    } : {}),
+    post_adherence_rollback_curve_count: postAdherenceRollback.size,
+    wrinkle_dominant_core_strength: refined.wrinkleDominantCoreStrength,
+    wrinkle_dominant_core_support_ratio: refined.wrinkleDominantCoreSupportRatio,
     displacement_p90_guard_scope: "curve_affected_interval",
-    displacement_p90_limit_ratio_face_width: P90_FACE_RATIO,
+    displacement_p90_limit_ratio_face_width: refined.p90Limit / faceWidth,
     displacement_p90_limit_px: refined.p90Limit,
     displacement_p90_scaled_interval_count: refined.guardEvents.length,
     displacement_p90_interval_events: refined.guardEvents,
     maximum_displacement_px: refined.maximumDisplacement,
+    maximum_displacement_ratio_face_width: refined.maximumDisplacement / faceWidth,
     geometry_guard_scaled_interval_count: refined.geometryScaled,
     geometry_guard_rollback_interval_count: refined.geometryRolledBack,
     intersection_rollback_curve_count: intersection.rolledBack.size,
+    topology_candidate_retry_enabled: topologyRetryAttempts > 0,
+    topology_candidate_retry_max_attempts: topologyRetryAttempts,
+    topology_candidate_retry_count: topologyRetryRecords.length,
+    topology_candidate_retry_records: topologyRetryRecords,
+    ...(adherenceRetryAttempts > 0 ? {
+      adherence_candidate_retry_enabled: true,
+      adherence_candidate_retry_max_attempts: adherenceRetryAttempts,
+      adherence_candidate_retry_count: adherenceRetryRecords.length,
+      adherence_candidate_retry_records: adherenceRetryRecords,
+    } : {}),
     post_export_new_intersection_pair_count: intersection.newPairs.length,
     post_export_new_self_cross_curve_count: intersection.newSelf,
     topology_contract_preserved: outputCurves.length === seeds.length &&
       outputCurves.every((curve, index) => curve.pts.length === curvePriorPoints(seeds[index]).length),
     normal_displacement_only: true,
+    ...(options.bundlePropagation === true ? {
+      bundle_propagation_enabled: true,
+      bundle_primary_anchor_curve_indices: matching.acceptedGroups
+        .filter((group) => group.summary.final_accepted)
+        .map((group) => group.curveIndex),
+      bundle_candidate_anchor_curve_indices: matching.acceptedGroups
+        .map((group) => group.curveIndex),
+      bundle_follower_strength: clamp(Number(options.bundleFollowerStrength) || 0.85, 0, 1),
+      bundle_propagation_radius_px: options.bundlePropagationRadiusPx ??
+        Math.max(4, 0.050 * faceWidth),
+      bundle_follower_count_per_side: Math.max(
+        0, Math.min(3, Number(options.bundleFollowerCountPerSide) || 1),
+      ),
+      ...(options.bundleDenseFollowerRegion ? {
+        bundle_dense_follower_region: String(options.bundleDenseFollowerRegion),
+        bundle_dense_follower_count_per_side: Math.max(
+          1, Math.min(3, Number(options.bundleDenseFollowerCountPerSide) || 1),
+        ),
+      } : {}),
+      bundle_multi_source_weights_normalized: true,
+      bundle_follower_records: bundleFollowerRecords,
+      bundle_follower_candidate_curve_count: bundleFollowerRecords.length,
+      bundle_follower_moved_curve_count: bundleFollowerRecords
+        .filter((record) => record.final_status === "propagated").length,
+      bundle_follower_rollback_curve_count: bundleFollowerRecords
+        .filter((record) => record.final_status === "rolled_back").length,
+      bundle_multi_source_follower_curve_count: bundleFollowerRecords
+        .filter((record) => record.source_wrinkle_segment_ids.length > 1).length,
+      bundle_ambiguous_conflict_point_count: bundleFollowerRecords.reduce(
+        (sum, record) => sum + record.conflict_point_count, 0,
+      ),
+      bundle_dominant_source_conflict_point_count: bundleFollowerRecords.reduce(
+        (sum, record) => sum + record.dominant_source_conflict_point_count, 0,
+      ),
+      bundle_minimum_spacing_ratio: bundleFollowerRecords.length ? Math.min(
+        ...bundleFollowerRecords.map((record) => record.minimum_spacing_ratio),
+      ) : 1,
+      ...(Number(options.bundleMinimumSpacingRatio) > 0 ? {
+        bundle_spacing_guard_minimum_ratio: Number(options.bundleMinimumSpacingRatio),
+        bundle_spacing_guard_event_count: refined.bundleSpacingGuardEvents.length,
+        bundle_spacing_guard_events: refined.bundleSpacingGuardEvents.map((event) => ({
+          ...event,
+        })),
+      } : {}),
+    } : {}),
   };
-  return { curves: outputCurves, lines: outputLines, diagnostics, wrinkleSkeleton: skeleton };
+  const recordsByTrend = new Map();
+  for (const record of matching.groupRecords) {
+    const trendIndex = Number(record.wrinkle_segment_id);
+    if (!recordsByTrend.has(trendIndex)) recordsByTrend.set(trendIndex, []);
+    recordsByTrend.get(trendIndex).push(record);
+  }
+  const audit = {
+    wrinkleTrends: trends.map((trend, trendIndex) => {
+      const records = recordsByTrend.get(trendIndex) || [];
+      const accepted = records.filter((record: any) => record.final_accepted);
+      const provisional = records.filter((record: any) => record.provisional_accepted);
+      const finalStatus = accepted[0]?.final_status || provisional[0]?.final_status ||
+        "rejected_before_refinement";
+      return {
+        id: trendIndex,
+        points: trend.points.map((point) => [...point]),
+        sourcePathCount: trend.sourcePathCount,
+        softLinkCount: trend.softLinkCount,
+        arcLengthPx: trend.metrics.length,
+        directArcLengthPx: trend.metrics.directLength,
+        finalAccepted: accepted.length > 0,
+        finalStatus,
+        acceptedCurveIndices: accepted.map((record: any) => record.rstl_curve_index),
+        candidateCurveIndices: provisional.map((record: any) => record.rstl_curve_index),
+        rejectionReason: accepted.length ? null : provisional[0]?.rejection_reason ||
+          (records.length ? records.some((record: any) => record.segment_support_passed)
+            ? "insufficient_curve_support" : "insufficient_segment_support"
+            : "no_nearby_direction_compatible_curve"),
+      };
+    }),
+    matchRecords: matching.groupRecords.map((record) => ({ ...record })),
+    curveSupportRecords: matching.curveSupportRecords.map((record) => ({ ...record })),
+    ...(options.bundlePropagation === true ? {
+      bundleFollowerRecords: bundleFollowerRecords.map((record) => ({ ...record })),
+    } : {}),
+  };
+  return { curves: outputCurves, lines: outputLines, diagnostics, audit, wrinkleSkeleton: skeleton };
 }

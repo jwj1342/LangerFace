@@ -21,6 +21,7 @@ export interface AtlasLine {
   name?: string;
   region?: string;
   disableRuntimeExpansion?: boolean;
+  postExpansionOffsetsFaceRatioSparse?: Array<[number, number, number]>;
   points?: AtlasPoint[];
 }
 
@@ -216,6 +217,24 @@ function extendForeheadBridge(points: Vec3[], landmarksPx: Vec3[], layerRank: nu
   return out;
 }
 
+function applyPostExpansionOffsets(
+  points: Vec3[], line: AtlasLine, landmarksPx: Vec3[],
+): Vec3[] {
+  const offsets = line.postExpansionOffsetsFaceRatioSparse;
+  if (!offsets?.length || landmarksPx.length === 0) return points;
+  const xs = landmarksPx.map((point) => point[0]).filter(Number.isFinite);
+  const faceWidth = xs.length ? Math.max(...xs) - Math.min(...xs) : 0;
+  if (!(faceWidth > 0)) return points;
+  const out = points.map((point) => [...point] as Vec3);
+  for (const [pointIndex, dxRatio, dyRatio] of offsets) {
+    if (!Number.isInteger(pointIndex) || pointIndex < 0 || pointIndex >= out.length ||
+        !Number.isFinite(dxRatio) || !Number.isFinite(dyRatio)) continue;
+    out[pointIndex][0] += dxRatio * faceWidth;
+    out[pointIndex][1] += dyRatio * faceWidth;
+  }
+  return out;
+}
+
 export function toPixels(landmarks: NormalizedLandmark[], width: number, height: number): Vec3[] {
   const out = new Array<Vec3>(landmarks.length);
   for (let i = 0; i < landmarks.length; i++) {
@@ -267,6 +286,7 @@ export function mapAtlas(
     } else if (useBridgeExpansion) {
       mappedPoints = extendForeheadBridge(pts, landmarksPx, bridgeRanks.get(line) ?? 0);
     }
+    mappedPoints = applyPostExpansionOffsets(mappedPoints, line, landmarksPx);
     result.push({ name: line.name || "unnamed_curve", region: line.region || "", pts: mappedPoints, tris });
   }
   return result;
