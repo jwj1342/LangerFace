@@ -31,6 +31,8 @@ const MEDIA_KEY_HINTS = [
 const SECONDARY_CUE_FORBIDDEN_TRUE = ["used_for_geometry"];
 const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 const PHONE_RE = /(^|[^\d])(?:\+?\d[\d .()\-]{8,}\d)(?!\d)/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ISO_UTC_MILLISECONDS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 export interface ExportPrivacyViolation {
   code: string;
@@ -62,6 +64,63 @@ function looksLikeEmbeddedMedia(text: string): boolean {
   if (/^data:(image|video|application\/dicom)\//i.test(text)) return true;
   if (text.length < 256 || text.length % 4 !== 0) return false;
   return /^[A-Za-z0-9+/]+={0,2}$/.test(text) && /^(\/9j\/|iVBORw0KGgo|R0lGOD|UklGR|RElDTQ)/.test(text);
+}
+
+function isStrictUuid(text: string): boolean {
+  return UUID_RE.test(text);
+}
+
+function isStrictIsoUtcTimestamp(text: string): boolean {
+  if (!ISO_UTC_MILLISECONDS_RE.test(text)) return false;
+  const timestamp = Date.parse(text);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === text;
+}
+
+function objectRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function reviewExportRecordAtPath(payload: unknown, path: string[]): Record<string, unknown> | null {
+  const exportPayload = objectRecord(payload);
+  if (exportPayload?.schema_version !== "incision-review-export/v0.4") return null;
+  const record = path[0] === "current"
+    ? exportPayload.current
+    : path[0] === "saved" && /^\d+$/.test(path[1] || "")
+      ? (Array.isArray(exportPayload.saved) ? exportPayload.saved[Number(path[1])] : null)
+      : null;
+  const reviewRecord = objectRecord(record);
+  return reviewRecord?.schema_version === "incision-review-record/v0.4" ? reviewRecord : null;
+}
+
+function isAllowedMetadataUuid(payload: unknown, path: string[], text: string): boolean {
+  if (!isStrictUuid(text) || !reviewExportRecordAtPath(payload, path)) return false;
+  const recordOffset = path[0] === "saved" ? 2 : 1;
+  return path.length === recordOffset + 1 && path[recordOffset] === "id";
+}
+
+function isAllowedMetadataTimestamp(payload: unknown, path: string[], text: string): boolean {
+  if (!isStrictIsoUtcTimestamp(text)) return false;
+  const exportPayload = objectRecord(payload);
+  if (exportPayload?.schema_version !== "incision-review-export/v0.4") return false;
+  if (path.length === 1 && path[0] === "exported_at") return true;
+  if (!reviewExportRecordAtPath(payload, path)) return false;
+  const recordOffset = path[0] === "saved" ? 2 : 1;
+  if (path.length === recordOffset + 1 && path[recordOffset] === "created_at") return true;
+  if (
+    path.length === recordOffset + 2
+    && path[recordOffset] === "review"
+    && path[recordOffset + 1] === "reviewed_at"
+  ) return true;
+  return path.length === recordOffset + 3
+    && path[recordOffset] === "audit_events"
+    && /^\d+$/.test(path[recordOffset + 1])
+    && path[recordOffset + 2] === "at";
+}
+
+function isAllowedMetadataValue(payload: unknown, path: string[], text: string): boolean {
+  return isAllowedMetadataUuid(payload, path, text) || isAllowedMetadataTimestamp(payload, path, text);
 }
 
 export function auditExportPayload(payload: unknown): ExportPrivacyAudit {
@@ -99,7 +158,7 @@ export function auditExportPayload(payload: unknown): ExportPrivacyAudit {
     if (pathContains(lowerPath, PII_KEY_HINTS) && text) {
       violations.push({ code: "pii_field_present", path: path.join(".") });
     }
-    if (text && !lowerLeaf.endsWith("_at") && (EMAIL_RE.test(text) || PHONE_RE.test(text))) {
+    if (text && !isAllowedMetadataValue(payload, path, text) && (EMAIL_RE.test(text) || PHONE_RE.test(text))) {
       violations.push({ code: "pii_pattern_present", path: path.join(".") });
     }
     if (text && pathContains(lowerPath, MEDIA_KEY_HINTS) && looksLikeEmbeddedMedia(text)) {

@@ -7,6 +7,8 @@ function safeReviewExport() {
     schema_version: "incision-review-export/v0.4",
     exported_at: "2026-06-25T12:34:56.000Z",
     current: {
+      id: "12345678-1234-4234-8234-123456789012",
+      created_at: "2026-06-25T12:34:56.000Z",
       schema_version: "incision-review-record/v0.4",
       credentials: { token_present: true, token: "[redacted]" },
       privacy_audit: {
@@ -19,8 +21,19 @@ function safeReviewExport() {
         used_for_geometry: false,
         outputs: { cue_overlay: "review-overlay.png" },
       },
+      review: { reviewed_at: "2026-06-25T12:34:56.000Z" },
+      audit_events: [{
+        event: "candidate_saved",
+        at: "2026-06-25T12:34:56.000Z",
+      }],
     },
-    saved: [],
+    saved: [{
+      id: "12345678-1234-4234-8234-123456789013",
+      schema_version: "incision-review-record/v0.4",
+      created_at: "2026-06-25T12:34:56.000Z",
+      review: { reviewed_at: "2026-06-25T12:34:56.000Z" },
+      audit_events: [{ at: "2026-06-25T12:34:56.000Z" }],
+    }],
   };
 }
 
@@ -46,9 +59,38 @@ assert.ok(codes.has("pii_pattern_present"));
 assert.ok(codes.has("secondary_cue_used_for_geometry_true"));
 assert.ok(codes.has("embedded_media_payload"));
 
-const timestampOnly = safeReviewExport();
-timestampOnly.current.reviewed_at = "2026-06-25T12:34:56.000Z";
-report = auditExportPayload(timestampOnly);
-assert.equal(report.passed, true, "timestamp fields should not be mistaken for phone numbers");
+const malformedMetadata = safeReviewExport();
+malformedMetadata.current.id = "12345678-1234-0234-1234-123456789012";
+malformedMetadata.current.audit_events[0].at = "2026-06-25T12:34:56.000+1 555 010 9999";
+report = auditExportPayload(malformedMetadata);
+assert.equal(report.passed, false, "malformed UUID and timestamp values must not receive metadata exemptions");
+assert.ok(report.violations.some((item) => item.path === "current.id" && item.code === "pii_pattern_present"));
+assert.ok(report.violations.some((item) => item.path === "current.audit_events.0.at" && item.code === "pii_pattern_present"));
+
+const untrustedTimestampPath = safeReviewExport();
+untrustedTimestampPath.current.review.notes_at = "2026-06-25T12:34:56.000Z";
+untrustedTimestampPath.current.review.audit = { at: "2026-06-25T12:34:56.000Z" };
+report = auditExportPayload(untrustedTimestampPath);
+assert.equal(report.passed, false, "only contract-defined metadata paths may exempt timestamps");
+assert.ok(report.violations.some((item) => item.path === "current.review.notes_at" && item.code === "pii_pattern_present"));
+assert.ok(report.violations.some((item) => item.path === "current.review.audit.at" && item.code === "pii_pattern_present"));
+
+const freeTextPhone = safeReviewExport();
+freeTextPhone.current.review.notes = "可联系 +1 555 010 9999 复核";
+report = auditExportPayload(freeTextPhone);
+assert.equal(report.passed, false, "free text phone numbers must remain blocked");
+assert.ok(report.violations.some((item) => item.path === "current.review.notes" && item.code === "pii_pattern_present"));
+
+report = auditExportPayload({
+  current: { id: null, audit_events: [null, { at: null }], values: [null, false, []] },
+  saved: [],
+});
+assert.equal(report.passed, true, "null values and nested arrays must remain exportable");
+
+const nestedAuditPii = safeReviewExport();
+nestedAuditPii.current.audit_events.push({ metadata: { note: "请联系 +1 555 010 9999" } });
+report = auditExportPayload(nestedAuditPii);
+assert.equal(report.passed, false, "nested audit objects must remain recursively scanned");
+assert.ok(report.violations.some((item) => item.path === "current.audit_events.1.metadata.note" && item.code === "pii_pattern_present"));
 
 console.log("test_export_privacy: browser export privacy preflight assertions passed");
