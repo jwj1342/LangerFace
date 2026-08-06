@@ -106,11 +106,14 @@ test("approved incision reaches photo, uploaded video, and MediaStream camera re
   }).toBeGreaterThan(keypointsBefore + 100);
 
   await page.locator("#meshPts").uncheck();
-  await uploadGeneratedVideo(page);
+  const uploadedVideoFrame = await uploadGeneratedVideo(page);
+  expect(uploadedVideoFrame).toMatchObject({
+    width: 512,
+    height: 512,
+  });
+  expect(uploadedVideoFrame.presentedFrames).toBeGreaterThanOrEqual(1);
+  expect(uploadedVideoFrame.mediaTime).toBeGreaterThanOrEqual(0);
   await expect(page.locator("#livePill")).toContainText("视频", { timeout: 60_000 });
-  await expect.poll(() => page.locator("#video").evaluate((video: HTMLVideoElement) => video.readyState), {
-    message: "the uploaded WebM must decode a current frame",
-  }).toBeGreaterThanOrEqual(2);
   await expect(page.locator("#incisionOverlayQaState")).not.toHaveText("等待画面", { timeout: 60_000 });
   await expect.poll(() => page.evaluate(candidatePixelCount), {
     message: "the uploaded WebM path must draw the staged incision candidate",
