@@ -44,6 +44,7 @@ const annotateDraw = read("src/components/AnnotateDrawPanel.tsx");
 const annotateLineLibrary = read("src/components/AnnotateLineLibraryPanel.tsx");
 const annotateRuntime = read("src/services/annotateRuntime.ts");
 const annotationMeshService = read("src/services/annotationMeshService.ts");
+const annotationSlicerImport = read("src/services/annotationSlicerImport.ts");
 const annotateViewer = read("src/services/annotateViewer.ts");
 const standardFaceAssets = read("src/services/standardFaceAssets.ts");
 const dashboardRoute = read("src/routes/DashboardRoute.tsx");
@@ -360,6 +361,13 @@ includesAll(annotationMeshService, [
   "loadFlame",
   "loadFile",
 ], "3D annotation mesh sources");
+
+includesAll(annotationSlicerImport, [
+  "parseSlicerCurveFile",
+  "prepareAnnotationSlicerImport",
+  "snapToSurface",
+  "exportable",
+], "3D annotation Slicer import preparation");
 
 includesAll(annotateViewer, [
   "preserveDrawingBuffer: true",

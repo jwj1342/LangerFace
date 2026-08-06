@@ -34,6 +34,7 @@ import {
   type AnnotationDragState,
 } from "./annotationInteraction";
 import { AnnotationLineService } from "./annotationLineService";
+import { prepareAnnotationSlicerImport } from "./annotationSlicerImport";
 import {
   AnnotationMeshService,
   type AnnotationFlameAssetName,
@@ -41,7 +42,6 @@ import {
   type AnnotationMeshResult,
 } from "./annotationMeshService";
 import { dataSource } from "./dataSource";
-import { parseSlicerCurveFile } from "./slicerCurve";
 import {
   createAnnotationSessionGuard,
   type AnnotationSessionToken,
@@ -67,10 +67,6 @@ let onCanonical = false;   // 是否在标准脸拓扑上标注（决定能否�
 let frameId = 0;
 let abortController: AbortController | null = null;
 const activeSession = createAnnotationSessionGuard();
-
-function isAnnotationPoint(point: AnnotationPoint | null): point is AnnotationPoint {
-  return point !== null;
-}
 
 function publishAnnotateState(reason = "state_update"): void {
   if (!activeSession.isMounted() || typeof window === "undefined" || !els?.hint) return;
@@ -174,25 +170,21 @@ async function loadSlicerFile(file?: File): Promise<void> {
   }
   const spacing = Number(els.resampleSpacing.value) || 2;
   setHint(`正在导入 ${file.name} 并按 ${spacing} 重采样 ...`);
-  let curves: Awaited<ReturnType<typeof parseSlicerCurveFile>>;
+  let prepared: Awaited<ReturnType<typeof prepareAnnotationSlicerImport>>;
   try {
-    curves = await parseSlicerCurveFile(file, { spacing });
+    prepared = await prepareAnnotationSlicerImport(file, {
+      spacing,
+      exportable: onCanonical,
+      snapToSurface: (point) => viewer.snapToSurface(point),
+    });
   } catch (err) {
     if (isActiveSession(session)) setHint("Slicer 曲线导入失败：" + errorMessage(err));
     return;
   }
   if (!isActiveSession(session)) return;
-  let imported = 0, points = 0;
-  for (const curve of curves) {
-    const snapped = curve.points.map((p) => viewer.snapToSurface(p)).filter(isAnnotationPoint);
-    if (snapped.length < 2) continue;
-    for (const pt of snapped) pt.exportable = onCanonical;
-    model.addLine({ name: curve.name, region: curve.region, controls: snapped });
-    imported += 1;
-    points += snapped.length;
-  }
+  for (const line of prepared.lines) model.addLine(line);
   viewer.rebuildLines();
-  setHint(`已导入 ${imported} 条 Slicer 曲线，生成 ${points} 个表面采样点。`);
+  setHint(`已导入 ${prepared.lines.length} 条 Slicer 曲线，生成 ${prepared.pointCount} 个表面采样点。`);
   refresh();
 }
 
