@@ -10,11 +10,13 @@ import type { Triangle, Vec3 } from "./softBody.ts";
 import { facesArray, fitExpression, fitShape, flameForward, loadFlameBasis } from "./flameFit.ts";
 import type { FlameBasis } from "./flameFit.ts";
 import { countMetric, logWarn, recordEvent, recordMetricSample, setDiagnosticSection } from "./logger.ts";
+import { bindHead3DControls, Head3DResourceLifecycle } from "./head3dController.ts";
 import { ensureReady } from "./pipelineModels.ts";
 import { showCameraPlaceholder, startCamera, stopSource } from "./pipelineSource.ts";
 import { modelState, reconState, renderState, sourceState } from "./liveState.ts";
 import { LiveScanLifecycle } from "./liveScanLifecycle.ts";
 import { setLive, setMsg } from "./liveUi.ts";
+import type { Head3D } from "./three3d.ts";
 
 type AnyRecord = Record<string, any>;
 type ColorFrame = Vec3[];
@@ -64,6 +66,7 @@ const SCAN_TARGET_FRAMES = 40;
 const YAW_DISPLAY_SPAN = 0.5;
 let flameDemoLines: FlameAtlasLine[] | null = null;
 let flameDemoOverlayContext: FlameOverlayContext | null = null;
+const head3dLifecycle = new Head3DResourceLifecycle<Head3D>();
 
 const scanLifecycle = new LiveScanLifecycle({
   releaseStream(stream) {
@@ -85,30 +88,34 @@ async function fetchCanonicalRef(): Promise<Vec3[]> {
   return canonicalRef;
 }
 
-async function ensureHead3D(): Promise<void> {
-  if (reconState.head3d) return;
-  const mod = await import("./three3d.ts");
-  reconState.head3d = new mod.Head3D(els.three);
-  let drag = false, px = 0, py = 0;
-  els.three.addEventListener("pointerdown", (e) => { drag = true; px = e.clientX; py = e.clientY; els.three.setPointerCapture(e.pointerId); });
-  els.three.addEventListener("pointermove", (e) => {
-    if (!drag) return;
-    reconState.rot.y += (e.clientX - px) * 0.01;
-    reconState.rot.x = Math.max(-1.2, Math.min(1.2, reconState.rot.x + (e.clientY - py) * 0.01));
-    px = e.clientX; py = e.clientY;
+async function ensureHead3D(generation = head3dLifecycle.capture()): Promise<Head3D | null> {
+  const head = await head3dLifecycle.ensure(generation, async (isActive) => {
+    const mod = await import("./three3d.ts");
+    if (!isActive()) return null;
+    const surface = els.three;
+    if (!surface) return null;
+    const resource = new mod.Head3D(surface);
+    try {
+      const cleanup = bindHead3DControls(surface, {
+        rotate(deltaX, deltaY) {
+          reconState.rot.y += deltaX * 0.01;
+          reconState.rot.x = Math.max(-1.2, Math.min(1.2, reconState.rot.x + deltaY * 0.01));
+        },
+        zoom: (factor) => resource.zoom(factor),
+        reset: resetView3d,
+      });
+      return { resource, cleanup };
+    } catch (error) {
+      resource.dispose();
+      throw error;
+    }
   });
-  els.three.addEventListener("pointerup", () => { drag = false; });
-  els.three.addEventListener("pointercancel", () => { drag = false; });
-  els.three.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    reconState.head3d?.zoom(Math.exp(Math.max(-160, Math.min(160, e.deltaY || 0)) * 0.001));
-  }, { passive: false });
-  els.three.addEventListener("dblclick", resetView3d);
+  if (head && head3dLifecycle.isActive(generation)) reconState.head3d = head;
+  return head;
 }
 
-async function buildViewer(): Promise<void> {
-  await ensureHead3D();
-  const head = reconState.head3d;
+async function buildViewer(generation = head3dLifecycle.capture()): Promise<void> {
+  const head = await ensureHead3D(generation);
   if (!head) return;
   const disp = reconState.reconDisplaySpace === "screen"
     ? (reconState.reconVerts as Vec3[]).map((p: Vec3): Vec3 => [p[0], -p[1], -p[2]])  // MediaPipe 重建：翻成 y 上供查看
@@ -245,21 +252,28 @@ let twinTexturedMesh = false;
 export function stopTwin(): void {
   if (twinRAF != null) cancelAnimationFrame(twinRAF);
   twinRAF = null;
-  els.mainWrap.classList.remove("twin");
+  els.mainWrap?.classList.remove("twin");
 }
 
 // 「▶ 实时孪生」：加载基(一次) → 分屏 + 开摄像头(左) → 右 FLAME 头随头姿转 + 每帧本地表情/张嘴拟合。
 export async function startTwin(): Promise<void> {
+  const generation = head3dLifecycle.capture();
   els.reconStatus.textContent = "加载 FLAME 基（约 6.9MB，仅首次）…";
   try {
     if (!reconState.flameBasis) reconState.flameBasis = await loadFlameBasis(assetUrls.flameBasis);
+    if (!head3dLifecycle.isActive(generation)) return;
     if (!canonicalRef) await fetchCanonicalRef();
+    if (!head3dLifecycle.isActive(generation)) return;
   } catch (err) {
+    if (!head3dLifecycle.isActive(generation)) return;
     els.reconStatus.textContent = "FLAME 基加载失败：" + errorMessage(err);
     return;
   }
   const basis = reconState.flameBasis as FlameBasis;
-  twinFaces = facesArray(basis);
+  const faces = facesArray(basis);
+  const head = await ensureHead3D(generation);
+  if (!head || !head3dLifecycle.isActive(generation)) return;
+  twinFaces = faces;
   twinMeshReady = false; twinTexturedMesh = false;
   reconState.flameBeta = null;  // 身份待首帧拟合
   reconState.twinMode = "individual";
@@ -267,10 +281,8 @@ export async function startTwin(): Promise<void> {
   els.twinTexture.checked = false; reconState.twinTexture = false;
   els.flameHeadToggleWrap.style.display = "";
   els.twinTextureWrap.style.display = "";
-
-  await ensureHead3D();
-  reconState.head3d?.setGeometry(
-    flameForward(basis, ZERO_BETA, new Float64Array(basis.NE), 0), twinFaces, [], { showSurface: true, bands: false });
+  head.setGeometry(
+    flameForward(basis, ZERO_BETA, new Float64Array(basis.NE), 0), faces, [], { showSurface: true, bands: false });
   twinMeshReady = true;
 
   reconState.route = "3d"; reconState.mode3d = "twin";
@@ -278,6 +290,7 @@ export async function startTwin(): Promise<void> {
   els.canvas.classList.remove("hidden"); els.three.classList.remove("hidden");
   setLive(true, "实时孪生");
   await startCamera();  // 复用主管线：画左侧人脸 + 每帧更新 sourceState.lastLM / jawOpen
+  if (!head3dLifecycle.isActive(generation)) return;
   if (twinRAF != null) cancelAnimationFrame(twinRAF);
   twinLoop();
 }
@@ -541,6 +554,21 @@ function viewerLoop(): void {
   reconState.viewerRAF = requestAnimationFrame(viewerLoop);
 }
 
+function disposeHead3D(): void {
+  if (reconState.viewerRAF != null) cancelAnimationFrame(reconState.viewerRAF);
+  reconState.viewerRAF = null;
+  head3dLifecycle.dispose();
+  reconState.head3d = null;
+}
+
+export function disposeMode3d(): void {
+  stopTwin();
+  stopScan();
+  disposeHead3D();
+  reconState.route = "2d";
+  reconState.mode3d = "view";
+}
+
 export function setMode3d(m: string): void {
   stopTwin();  // 离开实时孪生：取消其 RAF + 撤销分屏
   stopScan();
@@ -568,34 +596,40 @@ export function setMode3d(m: string): void {
 }
 
 export async function loadDemoRecon(): Promise<void> {
+  const generation = head3dLifecycle.capture();
   stopScan();
   els.scanPanel.classList.add("hidden"); els.scanToast.classList.add("hidden");
   els.reconStatus.textContent = "加载 FLAME 标准示例脸（无需摄像头）…";
   try {
     if (!reconState.flameBasis) reconState.flameBasis = await loadFlameBasis(assetUrls.flameBasis);
   } catch (err) {
+    if (!head3dLifecycle.isActive(generation)) return;
     els.reconStatus.textContent = "FLAME 示例脸加载失败：" + errorMessage(err);
     return;
   }
+  if (!head3dLifecycle.isActive(generation)) return;
   const basis = reconState.flameBasis as FlameBasis;
-  reconState.reconVerts = flameForward(basis, ZERO_BETA, new Float64Array(basis.NE), 0);
-  reconState.reconFaces = facesArray(basis);
+  const demoVerts = flameForward(basis, ZERO_BETA, new Float64Array(basis.NE), 0);
+  const demoFaces = facesArray(basis);
   if (!flameDemoLines || !flameDemoOverlayContext) {
     const [head, atlas] = await Promise.all([
       dataSource.getHeadMesh("mediapipe-468"),
       dataSource.loadAtlas("rstl"),
     ]);
+    if (!head3dLifecycle.isActive(generation)) return;
     flameDemoOverlayContext = { canonical: head.vertices, triangles: head.triangles };
     if (!flameDemoLines) {
-      flameDemoLines = mediaPipeAtlasToFlameLines(atlas, head.vertices, head.triangles, reconState.reconVerts, basis);
+      flameDemoLines = mediaPipeAtlasToFlameLines(atlas, head.vertices, head.triangles, demoVerts, basis);
     }
   }
+  reconState.reconVerts = demoVerts;
+  reconState.reconFaces = demoFaces;
   reconState.reconAtlasLines = flameDemoLines;
   reconState.reconColors = null;
   reconState.reconProjectable = false;
   reconState.reconDisplaySpace = "model";
   els.reconStatus.textContent = `FLAME 标准示例脸就绪：${basis.NV} 顶点 / ${basis.NF} 三角面，已叠加 RSTL 线。可旋转查看；投影回实时画面请用「转头扫描」。`;
-  await buildViewer();
+  await buildViewer(generation);
 }
 
 export async function startScan(): Promise<void> {
@@ -784,7 +818,7 @@ function finishScan(
   els.reconStatus.textContent = lowDepthConfidence
     ? `重建完成（深度置信度低：偏航跨度 ${(ymax - ymin).toFixed(2)} < ${YAW_SPAN_MIN}，缺侧脸视角，深度不可靠）：${N} 帧。可旋转查看，或投影到画面。`
     : `重建完成：${N} 帧，偏航 ${ymin.toFixed(2)}~${ymax.toFixed(2)}。可旋转查看，或投影到画面。`;
-  buildViewer();
+  void buildViewer();
 }
 
 export function enterRoute(route: "2d" | "3d"): void {
@@ -801,7 +835,7 @@ export function enterRoute(route: "2d" | "3d"): void {
     setMsg(reconState.reconVerts ? null : "3D Beta：请先扫描人脸重建"); setLive(false, "3D Beta");
     if (reconState.reconVerts) buildViewer();
   } else {
-    if (reconState.viewerRAF != null) cancelAnimationFrame(reconState.viewerRAF);
+    disposeHead3D();
     els.route3dPanel.classList.add("hidden"); els.badge.classList.remove("beta");
     els.threeDWorkflowCard?.classList.add("hidden");
     if (els.routeModeHint) els.routeModeHint.textContent = "当前是 2D 实时贴合模式，只显示稳定主流程。";

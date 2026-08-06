@@ -2,7 +2,7 @@
 import { bindDom, clearDomBinding, els } from "./liveDom.ts";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./liveCanvasFit.ts";
 import { validateIncisionOverlay } from "./incisionOverlay.ts";
-import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, stopScan, stopTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.ts";
+import { disposeMode3d, enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.ts";
 import { ensureReady, handleFile, redrawPausedFrame, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.ts";
 import { adjustFocusZoom, buildZoomCards } from "./render2d.ts";
 import {
@@ -566,19 +566,13 @@ export function disposeLiveWorkbench() {
   recordingController?.stop?.();
   recordingController = null;
   recordingState.recorder = null;
-  stopScan();
+  disposeMode3d();
   if (hasBoundLiveDom()) {
-    stopTwin();
     stopSource();
   }
   sourceState.planning2d?.dispose();
   sourceState.planning2d = null;
   void disposeLiveWrinkleAnalysis();
-  if (reconState.scan) reconState.scan.active = false;
-  if (reconState.viewerRAF != null) cancelAnimationFrame(reconState.viewerRAF);
-  reconState.viewerRAF = null;
-  reconState.head3d?.dispose?.();
-  reconState.head3d = null;
   imageDrag = null;
   clearDomBinding();
 }

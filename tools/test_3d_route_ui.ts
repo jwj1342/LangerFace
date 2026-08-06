@@ -47,6 +47,12 @@ assert.ok(mode3d.includes("export function stopScan"), "3D scan exposes one life
 assert.ok(mode3d.includes("new LiveScanLifecycle"), "3D scan delegates session, frame, and stream ownership");
 assert.ok(mode3d.includes("scanLifecycle.adoptStream"), "3D scan rejects and releases stale camera streams");
 assert.ok(mode3d.includes("scanLifecycle.schedule(generation, tick)"), "3D scan schedules cancellable frames through its lifecycle");
-assert.ok(liveRuntime.includes("stopScan();"), "live route disposal releases 3D scan resources");
+assert.ok(mode3d.includes("new Head3DResourceLifecycle"), "3D renderer initialization is bound to the active route session");
+assert.ok(mode3d.includes("bindHead3DControls"), "3D canvas controls expose one cleanup boundary");
+assert.ok(mode3d.includes("export function disposeMode3d"), "3D mode exposes one complete route cleanup boundary");
+assert.ok(mode3d.includes('reconState.route = "2d"') && mode3d.includes('reconState.mode3d = "view"'),
+  "3D route disposal restores the public 2D/view initial state");
+assert.ok(mode3d.includes("await buildViewer(generation)"), "async demo reconstruction cannot create a viewer in a later route session");
+assert.ok(liveRuntime.includes("disposeMode3d();"), "live route disposal releases all 3D resources");
 
 console.log("test_3d_route_ui: public 3D route closure assertions passed");

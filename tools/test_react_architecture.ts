@@ -159,6 +159,8 @@ const liveController = read("src/services/liveRuntime.ts");
 const liveActionSchedulerService = read("src/services/liveActionScheduler.ts");
 const liveFrameSchedulerService = read("src/services/liveFrameScheduler.ts");
 const liveScanLifecycleService = read("src/services/liveScanLifecycle.ts");
+const head3dControllerService = read("src/services/head3dController.ts");
+const mode3dService = read("src/services/mode3d.ts");
 const livePipelineService = read("src/services/pipeline.ts");
 const livePipelineLoopService = read("src/services/pipelineLoop.ts");
 const livePipelineSourceService = read("src/services/pipelineSource.ts");
@@ -176,6 +178,7 @@ const liveRuntimeDependencyTypes = [
   "src/services/liveActionScheduler.ts",
   "src/services/liveFrameScheduler.ts",
   "src/services/liveScanLifecycle.ts",
+  "src/services/head3dController.ts",
   "src/services/liveDom.ts",
   "src/services/liveCanvasFit.ts",
   "src/services/dataSource.ts",
@@ -2253,6 +2256,12 @@ assert.ok(liveScanLifecycleService.includes("class LiveScanLifecycle"), "3D scan
 assert.ok(liveScanLifecycleService.includes("adoptStream"), "3D scan lifecycle rejects stale camera stream handoffs");
 assert.ok(!/(?:document|window|HTMLElement|HTMLVideoElement|THREE|MediaPipe)/.test(liveScanLifecycleService),
   "3D scan lifecycle stays DOM, renderer, and detector independent");
+assert.ok(head3dControllerService.includes("class Head3DResourceLifecycle"),
+  "3D renderer ownership is isolated in a typed lifecycle service");
+assert.ok(head3dControllerService.includes("removeEventListener"),
+  "3D canvas controls remove every listener at the route boundary");
+assert.ok(!/(?:document|window|THREE|MediaPipe)/.test(head3dControllerService),
+  "3D controller lifecycle stays independent of globals and renderer implementations");
 assert.ok(liveController.split("\n").length <= 630, "live runtime stays a thin orchestration layer");
 assert.ok(liveController.includes("interface ImageDragState"), "live runtime types its route-local drag state");
 assert.ok(!liveController.includes("function controllerEvent"), "live runtime delegates browser command parsing to typed schemas");
@@ -2327,7 +2336,9 @@ assert.ok(liveController.includes("function hasBoundLiveDom"), "live controller 
 assert.ok(liveController.includes("abortController?.abort"), "live controller aborts DOM listeners on dispose");
 assert.ok(liveController.includes("resizeCleanup?.()"), "live controller disconnects resize observers on dispose");
 assert.ok(liveController.includes("stopSource()"), "live controller stops camera/media sources on dispose");
-assert.ok(liveController.includes("stopTwin()"), "live controller stops twin RAF on dispose");
+assert.ok(liveController.includes("disposeMode3d()"), "live controller delegates complete 3D cleanup on dispose");
+assert.ok(mode3dService.includes("export function disposeMode3d"), "3D mode owns its route cleanup boundary");
+assert.ok(mode3dService.includes("head3dLifecycle.dispose()"), "3D mode invalidates pending renderer creation on dispose");
 assert.ok(liveController.includes("../lib/reactManagedWorkbench"), "live controller imports the shared React-managed flag helper");
 assert.ok(!liveController.includes('document.getElementById("canvas")'), "live runtime no longer auto-mounts from legacy HTML");
 assert.ok(!liveController.includes("window.__LANGERFACE_REACT_MANAGED__"), "live controller does not touch the managed flag directly");
