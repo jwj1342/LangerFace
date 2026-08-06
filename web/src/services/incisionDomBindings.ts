@@ -57,6 +57,7 @@ export interface IncisionDomEventHandlers {
   onTumorFile(file?: File): void;
   onSecondaryCueFile(file?: File): void;
   onPhotoFile(file?: File): void;
+  preparePhotoInteraction(): void;
   photoEndpointHandleFromEvent(event: PointerEvent): number | null;
   dragPhotoEndpoint(event: PointerEvent, handle: number): void;
   commitPhotoEndpointDrag(): void;
@@ -212,6 +213,7 @@ export function bindIncisionDomEvents({
   }) as EventListener, { passive: false });
 
   listen(elements.photoCanvas, "pointerdown", ((event: PointerEvent) => {
+    handlers.preparePhotoInteraction();
     photoDrag = {
       x: event.clientX,
       y: event.clientY,
@@ -254,6 +256,7 @@ export function bindIncisionDomEvents({
   elements.photoEndpointHandles.forEach((handle) => {
     const handleIndex = Number(handle.dataset.endpointIndex);
     listen(handle, "pointerdown", ((event: PointerEvent) => {
+      handlers.preparePhotoInteraction();
       photoHandleDrag = { x: event.clientX, y: event.clientY, moved: 0, id: event.pointerId, handle: handleIndex };
       handle.setPointerCapture(event.pointerId);
     }) as EventListener);

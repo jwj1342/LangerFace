@@ -1785,6 +1785,7 @@ function bindWorkbenchEvents() {
       onTumorFile: importTumorFile,
       onSecondaryCueFile: importSecondaryCueFile,
       onPhotoFile: (file) => { void photoRuntime?.load(file); },
+      preparePhotoInteraction: () => photoRuntime?.fit(),
       photoEndpointHandleFromEvent: (event) => photoRuntime?.endpointHandleFromEvent(event) ?? null,
       dragPhotoEndpoint: (event, handle) => photoRuntime?.dragEndpoint(event, handle),
       commitPhotoEndpointDrag: () => photoRuntime?.commitEndpointDrag(),
