@@ -1027,6 +1027,32 @@
     display: none;
   }
 
+  .incision-workbench .incision-photo-endpoint-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  .incision-workbench .incision-photo-endpoint-handle {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    transform: translate(-50%, -50%);
+    border: 3px solid #34d399;
+    border-radius: 50%;
+    background: #f8fafc;
+    box-shadow: 0 0 0 3px rgb(3 7 18 / 0.96);
+    cursor: grab;
+    pointer-events: auto;
+    touch-action: none;
+  }
+
+  .incision-workbench .incision-photo-endpoint-handle:active {
+    cursor: grabbing;
+  }
+
   .incision-workbench .photo-planning-status {
     position: absolute;
     z-index: 3;

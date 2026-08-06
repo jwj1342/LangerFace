@@ -63,6 +63,19 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
   } = options;
   let disposed = false;
 
+  const updateEndpointHandles = () => {
+    const wrapRect = elements.wrap.getBoundingClientRect();
+    const refs = pointsToSurfaceRefs(state.result?.candidate?.endpoints || [], state.verts, state.tris);
+    const points = refs.map((ref) => state.planning2d?.surfaceRefToClient(ref) || null);
+    elements.photoEndpointHandles.forEach((handle, index) => {
+      const point = state.photoView.active ? points[index] : null;
+      handle.hidden = !point;
+      if (!point) return;
+      handle.style.left = `${point.x - wrapRect.left}px`;
+      handle.style.top = `${point.y - wrapRect.top}px`;
+    });
+  };
+
   const setStatus = (message: string, tone: "idle" | "loading" | "ready" | "warning" = "idle") => {
     elements.photoStatus.textContent = message;
     elements.photoStatus.dataset.tone = tone;
@@ -93,6 +106,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     elements.photoCanvas.style.setProperty("--incision-photo-pan-x", `${Math.round(state.photoView.offsetX)}px`);
     elements.photoCanvas.style.setProperty("--incision-photo-pan-y", `${Math.round(state.photoView.offsetY)}px`);
     elements.photoCanvas.style.setProperty("--incision-photo-mirror", state.photoView.mirror ? "-1" : "1");
+    updateEndpointHandles();
   };
 
   const render = () => {
@@ -150,6 +164,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
       render();
       elements.stageStatus.textContent = "患者照片规划：点击面部定位，拖拽平移，滚轮缩放";
     } else {
+      updateEndpointHandles();
       elements.stageStatus.textContent = "标准表面规划：拖拽旋转 · 滚轮缩放 · 点击定位";
       setStatus("标准表面模式；上传 JPEG 或 PNG 可进入患者照片规划", "idle");
     }

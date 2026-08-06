@@ -168,6 +168,7 @@ export function bindIncisionDomEvents({
 
   let drag: PointerDragState | null = null;
   let photoDrag: PointerDragState | null = null;
+  let photoHandleDrag: PointerDragState | null = null;
   listen(elements.canvas, "pointerdown", ((event: PointerEvent) => {
     const handle = handlers.endpointHandleFromEvent(event);
     drag = {
@@ -249,6 +250,28 @@ export function bindIncisionDomEvents({
     event.preventDefault();
     handlers.onPhotoZoom(event);
   }) as EventListener, { passive: false });
+
+  elements.photoEndpointHandles.forEach((handle) => {
+    const handleIndex = Number(handle.dataset.endpointIndex);
+    listen(handle, "pointerdown", ((event: PointerEvent) => {
+      photoHandleDrag = { x: event.clientX, y: event.clientY, moved: 0, id: event.pointerId, handle: handleIndex };
+      handle.setPointerCapture(event.pointerId);
+    }) as EventListener);
+    listen(handle, "pointermove", ((event: PointerEvent) => {
+      if (!photoHandleDrag || event.pointerId !== photoHandleDrag.id) return;
+      handlers.dragPhotoEndpoint(event, handleIndex);
+      photoHandleDrag.moved += Math.abs(event.clientX - photoHandleDrag.x) + Math.abs(event.clientY - photoHandleDrag.y);
+      photoHandleDrag.x = event.clientX;
+      photoHandleDrag.y = event.clientY;
+    }) as EventListener);
+    listen(handle, "pointerup", ((event: PointerEvent) => {
+      if (photoHandleDrag && event.pointerId === photoHandleDrag.id && photoHandleDrag.moved >= 1) {
+        handlers.commitPhotoEndpointDrag();
+      }
+      photoHandleDrag = null;
+    }) as EventListener);
+    listen(handle, "pointercancel", (() => { photoHandleDrag = null; }) as EventListener);
+  });
 
   if (!reactManaged) {
     const stateRoot = elements.canvas.closest(".app");
@@ -336,6 +359,7 @@ export function bindIncisionDomEvents({
   return () => {
     drag = null;
     photoDrag = null;
+    photoHandleDrag = null;
     for (const cleanup of cleanups.splice(0).reverse()) cleanup();
   };
 }

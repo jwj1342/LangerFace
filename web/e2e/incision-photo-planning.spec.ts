@@ -58,104 +58,10 @@ async function uploadGeneratedPhoto(page: Page, mode: "single" | "multiple" | "b
 }
 
 async function findPhotoEndpointHandles(page: Page) {
-  return page.locator("#incisionPhotoCanvas").evaluate((canvas: HTMLCanvasElement) => {
-    const context = canvas.getContext("2d");
-    const rect = canvas.getBoundingClientRect();
-    if (!context) return [];
-    const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
-    const step = 2;
-    const cols = Math.floor(canvas.width / step);
-    const rows = Math.floor(canvas.height / step);
-    const matches = new Uint8Array(cols * rows);
-    for (let row = 0; row < rows; row += 1) {
-      for (let col = 0; col < cols; col += 1) {
-        const offset = ((row * step) * canvas.width + col * step) * 4;
-        const red = data[offset];
-        const green = data[offset + 1];
-        const blue = data[offset + 2];
-        if (red >= 246 && red <= 250 && green >= 248 && green <= 252 && blue >= 250) {
-          matches[row * cols + col] = 1;
-        }
-      }
-    }
-    const components: Array<{
-      count: number;
-      x: number;
-      y: number;
-      minX: number;
-      maxX: number;
-      minY: number;
-      maxY: number;
-    }> = [];
-    const queue: number[] = [];
-    for (let start = 0; start < matches.length; start += 1) {
-      if (!matches[start]) continue;
-      matches[start] = 0;
-      queue.push(start);
-      let cursor = 0;
-      let count = 0;
-      let sumX = 0;
-      let sumY = 0;
-      let minX = Infinity;
-      let maxX = -Infinity;
-      let minY = Infinity;
-      let maxY = -Infinity;
-      while (cursor < queue.length) {
-        const current = queue[cursor++];
-        const row = Math.floor(current / cols);
-        const col = current % cols;
-        count += 1;
-        sumX += col * step;
-        sumY += row * step;
-        minX = Math.min(minX, col * step);
-        maxX = Math.max(maxX, col * step);
-        minY = Math.min(minY, row * step);
-        maxY = Math.max(maxY, row * step);
-        for (const neighbor of [current - 1, current + 1, current - cols, current + cols]) {
-          if (neighbor < 0 || neighbor >= matches.length || !matches[neighbor]) continue;
-          if ((neighbor === current - 1 || neighbor === current + 1) && Math.floor(neighbor / cols) !== row) continue;
-          matches[neighbor] = 0;
-          queue.push(neighbor);
-        }
-      }
-      queue.length = 0;
-      if (count >= 18) components.push({ count, x: sumX / count, y: sumY / count, minX, maxX, minY, maxY });
-    }
-    return components
-      .map((component) => {
-        const width = component.maxX - component.minX + step;
-        const height = component.maxY - component.minY + step;
-        const radius = Math.max(width, height) / 2;
-        let greenRingPixels = 0;
-        for (let y = Math.max(0, Math.floor(component.y - radius - 12)); y <= Math.min(canvas.height - 1, Math.ceil(component.y + radius + 12)); y += step) {
-          for (let x = Math.max(0, Math.floor(component.x - radius - 12)); x <= Math.min(canvas.width - 1, Math.ceil(component.x + radius + 12)); x += step) {
-            const distance = Math.hypot(x - component.x, y - component.y);
-            if (distance < radius - 4 || distance > radius + 12) continue;
-            const offset = (y * canvas.width + x) * 4;
-            const red = data[offset];
-            const green = data[offset + 1];
-            const blue = data[offset + 2];
-            if (green >= 150 && green > red + 55 && green > blue + 20) greenRingPixels += 1;
-          }
-        }
-        return { ...component, width, height, greenRingPixels };
-      })
-      .filter((component) => (
-        component.width >= 8
-        && component.width <= 160
-        && component.height >= 8
-        && component.height <= 160
-        && component.width / component.height >= 0.7
-        && component.width / component.height <= 1.3
-        && component.greenRingPixels >= 4
-      ))
-      .sort((first, second) => second.greenRingPixels - first.greenRingPixels || second.count - first.count)
-      .slice(0, 2)
-      .map((component) => ({
-        x: rect.left + component.x / canvas.width * rect.width,
-        y: rect.top + component.y / canvas.height * rect.height,
-      }));
-  });
+  return page.locator(".incision-photo-endpoint-handle:not([hidden])").evaluateAll((handles) => handles.map((handle) => {
+    const rect = handle.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  }));
 }
 
 test("patient photo is the mobile incision canvas and reuploads fail safely", async ({ page }, testInfo) => {
