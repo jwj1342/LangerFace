@@ -13,7 +13,6 @@ import {
 } from "../lib/controllerCommand";
 import { AnnotationModel, type AnnotationLine, type AnnotationPoint } from "./annotationModel";
 import type { Triangle, Vec3 } from "./softBody";
-import { isReactManagedWorkbench } from "../lib/reactManagedWorkbench";
 import {
   annotateFileFromEvent,
   collectAnnotateElements,
@@ -26,10 +25,16 @@ import {
   type AnnotationExportKind,
 } from "./annotationExport";
 import {
-  ANNOTATE_SYSTEM_LABELS as SYSTEM_LABELS,
   buildAnnotateControllerSnapshot,
-  controlsOf,
 } from "./annotateSnapshots";
+import {
+  annotationNdcPoint,
+  annotationZoomFactor,
+  beginAnnotationDrag,
+  updateAnnotationDrag,
+  type AnnotationDragState,
+} from "./annotationInteraction";
+import { AnnotationLineService } from "./annotationLineService";
 import { assetUrls } from "./assetLoader";
 import { dataSource } from "./dataSource";
 import { facesArray, flameForward, loadFlameBasis, type FlameBasis } from "./flameFit";
@@ -45,15 +50,6 @@ import {
   readAnnotateLibraryCommand,
   readAnnotateMeshCommand,
 } from "./workbenchCommandSchemas";
-
-interface DragState {
-  x: number;
-  y: number;
-  startX: number;
-  startY: number;
-  moved: boolean;
-  axis: "yaw" | "pitch" | "free" | null;
-}
 
 interface FlameMesh {
   verts: Vec3[];
@@ -78,6 +74,7 @@ function errorMessage(error: unknown): string {
 let els = {} as AnnotateDomElements;
 let viewer = null as unknown as Annotator3DInstance;
 let model = null as unknown as AnnotationModelInstance;
+let lineService = null as unknown as AnnotationLineService;
 let onCanonical = false;   // 是否在标准脸拓扑上标注（决定能否导出图谱）
 let frameId = 0;
 let abortController: AbortController | null = null;
@@ -255,61 +252,40 @@ async function loadSlicerFile(file?: File): Promise<void> {
 }
 
 // ── 指针交互：拖拽旋转 vs 点击落点 ────────────────────────────────────────────
-let drag: DragState | null = null;
+let drag: AnnotationDragState | null = null;
 function bindAnnotateEvents(): void {
   const signal = abortController?.signal;
   if (!signal) return;
   els.stage.addEventListener("pointerdown", (e: PointerEvent) => {
-  drag = {
-    x: e.clientX, y: e.clientY,
-    startX: e.clientX, startY: e.clientY,
-    moved: false, axis: null,
-  };
-  els.stage.setPointerCapture(e.pointerId);
+    drag = beginAnnotationDrag(e.clientX, e.clientY);
+    els.stage.setPointerCapture(e.pointerId);
   }, { signal });
   els.stage.addEventListener("pointermove", (e: PointerEvent) => {
-  if (!drag) return;
-  let dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-  const totalDx = e.clientX - drag.startX, totalDy = e.clientY - drag.startY;
-  if (!drag.moved && Math.hypot(totalDx, totalDy) > 4) drag.moved = true;
-  if (!drag.axis && drag.moved && Math.hypot(totalDx, totalDy) > 10) {
-    drag.axis = Math.abs(totalDx) >= Math.abs(totalDy) * 1.25 ? "yaw"
-      : Math.abs(totalDy) >= Math.abs(totalDx) * 1.25 ? "pitch"
-      : "free";
-  }
-  if (drag.axis === "yaw") dy = 0;
-  if (drag.axis === "pitch") dx = 0;
-  if (drag.moved) { viewer.orbit(dx, dy); drag.x = e.clientX; drag.y = e.clientY; }
+    if (!drag) return;
+    const update = updateAnnotationDrag(drag, e.clientX, e.clientY);
+    drag = update.state;
+    if (update.orbit) viewer.orbit(update.orbit.dx, update.orbit.dy);
   }, { signal });
   els.stage.addEventListener("pointerup", (e: PointerEvent) => {
-  if (drag && !drag.moved) addPointAt(e);
-  drag = null;
+    const isClick = Boolean(drag && !drag.moved);
+    drag = null;
+    if (els.stage.hasPointerCapture(e.pointerId)) els.stage.releasePointerCapture(e.pointerId);
+    if (isClick) addPointAt(e);
+  }, { signal });
+  els.stage.addEventListener("pointercancel", (e: PointerEvent) => {
+    drag = null;
+    if (els.stage.hasPointerCapture(e.pointerId)) els.stage.releasePointerCapture(e.pointerId);
   }, { signal });
   els.stage.addEventListener("wheel", (e: WheelEvent) => {
-  e.preventDefault();
-  const delta = Math.max(-180, Math.min(180, e.deltaY || 0));
-  viewer.zoom(Math.exp(delta * 0.00055));
+    e.preventDefault();
+    viewer.zoom(annotationZoomFactor(e.deltaY));
   }, { passive: false, signal });
 
-  if (isReactManagedWorkbench()) {
-    bindWindowControllerEvents([
-      [ANNOTATE_MESH_REACT_COMMAND_EVENT, handleReactMeshCommand],
-      [ANNOTATE_DRAW_REACT_COMMAND_EVENT, handleReactDrawCommand],
-      [ANNOTATE_LIBRARY_REACT_COMMAND_EVENT, handleReactLineLibraryCommand],
-    ], { signal });
-  } else {
-    els.system.addEventListener("change", () => { model.system = els.system.value; refresh(); }, { signal });
-    els.btnNew.addEventListener("click", startLineFromInputs, { signal });
-    els.btnUndo.addEventListener("click", undoLast, { signal });
-    els.btnFinish.addEventListener("click", saveCurrentLine, { signal });
-    els.btnClear.addEventListener("click", () => { if (confirm("清空所有线？")) clearLines(); }, { signal });
-    els.exAtlas.addEventListener("click", () => exportAnnotation("atlas"), { signal });
-    els.exXyz.addEventListener("click", () => exportAnnotation("xyz"), { signal });
-    els.setActive.addEventListener("click", previewActiveAtlas, { signal });
-    els.loadCanonical.addEventListener("click", loadCanonical, { signal });
-    els.loadFlame.addEventListener("click", loadFlame, { signal });
-    els.loadFittedFlame.addEventListener("click", loadFittedFlame, { signal });
-  }
+  bindWindowControllerEvents([
+    [ANNOTATE_MESH_REACT_COMMAND_EVENT, handleReactMeshCommand],
+    [ANNOTATE_DRAW_REACT_COMMAND_EVENT, handleReactDrawCommand],
+    [ANNOTATE_LIBRARY_REACT_COMMAND_EVENT, handleReactLineLibraryCommand],
+  ], { signal });
   els.meshFile.addEventListener("change", (e) => loadMeshFile(annotateFileFromEvent(e)), { signal });
   els.slicerFile.addEventListener("change", (e) => loadSlicerFile(annotateFileFromEvent(e)), { signal });
 
@@ -323,9 +299,8 @@ function bindAnnotateEvents(): void {
 
 function addPointAt(e: PointerEvent): void {
   const r = els.stage.getBoundingClientRect();
-  const ndcX = ((e.clientX - r.left) / r.width) * 2 - 1;
-  const ndcY = -(((e.clientY - r.top) / r.height) * 2 - 1);
-  const hit = viewer.raycast(ndcX, ndcY);
+  const ndc = annotationNdcPoint(e.clientX, e.clientY, r);
+  const hit = viewer.raycast(ndc.x, ndc.y);
   if (!hit) return;
   if (!model.current) startLineFromInputs();
   hit.exportable = onCanonical;   // 自定义头模仍用 tri/bary 贴面连线，但不能导出项目图谱
@@ -336,21 +311,17 @@ function addPointAt(e: PointerEvent): void {
 }
 
 function lineDraft(): { name: string; region: string } {
-  const next = model.lines.length + 1;
-  return {
-    name: els.name.value.trim() || `${model.system}_${String(next).padStart(2, "0")}`,
-    region: els.region.value.trim(),
-  };
+  return lineService.draft(els.name.value, els.region.value);
 }
 
 function startLineFromInputs(): boolean {
-  if (model.current) {
+  const draft = lineDraft();
+  const result = lineService.start(draft);
+  if (result.status === "blocked") {
     setHint("当前线正在绘制；请先保存当前线，或撤销点后继续。");
     return false;
   }
-  const draft = lineDraft();
-  model.startLine(draft);
-  syncInputsFromLine(model.current);
+  syncInputsFromLine(result.line);
   viewer.rebuildLines();
   setHint(`正在绘制 ${draft.name}：在 3D 脸表面点击添加点，至少 2 个点后保存。`);
   refresh();
@@ -372,33 +343,30 @@ function handleReactDrawCommand(event: Event): void {
 }
 
 function saveCurrentLine(): void {
-  if (!model.current) {
+  const result = lineService.save();
+  if (result.status === "no_current") {
     setHint("请先点击“开始一条线”，或直接在脸表面点击开始。");
     return;
   }
-  const controlCount = controlsOf(model.current).length;
-  if (controlCount < 2) {
+  if (result.status === "too_short") {
     setHint("当前线至少需要 2 个点才能保存。");
     return;
   }
-  const saved = model.finishLine();
   viewer.rebuildLines();
   els.name.value = "";
-  setHint(`已保存 ${saved?.name || "当前线"}。继续填写下一条线并点击“开始一条线”。`);
+  setHint(`已保存 ${result.line.name || "当前线"}。继续填写下一条线并点击“开始一条线”。`);
   refresh();
 }
 
 function undoLast(): void {
-  if (model.current && controlsOf(model.current).length) {
-    model.undoPoint();
-    setHint(`已撤销当前线的上一个点，剩余 ${controlsOf(model.current).length} 个控制点。`);
-  } else if (model.current) {
-    model.cancelLine();
+  const result = lineService.undo();
+  if (result.status === "point") {
+    setHint(`已撤销当前线的上一个点，剩余 ${result.remaining} 个控制点。`);
+  } else if (result.status === "cancelled") {
     setHint("已取消当前空线。");
-  } else if (model.lines.length) {
-    model.current = model.lines.pop() ?? null;
-    syncInputsFromLine(model.current);
-    setHint(`已恢复 ${model.current?.name || "上一条线"}，可继续编辑或重新保存。`);
+  } else if (result.status === "restored") {
+    syncInputsFromLine(result.line);
+    setHint(`已恢复 ${result.line.name || "上一条线"}，可继续编辑或重新保存。`);
   } else {
     setHint("没有可撤销的标注。");
   }
@@ -407,28 +375,26 @@ function undoLast(): void {
 }
 
 function restoreLine(i: number): void {
-  if (model.current && model.current.points.length) {
+  const result = lineService.restore(i);
+  if (result.status === "blocked") {
     setHint("请先保存或撤销当前线，再编辑已保存线。");
     return;
   }
-  if (model.current) model.cancelLine();
-  const [line] = model.lines.splice(i, 1);
-  if (!line) return;
-  model.current = line;
-  syncInputsFromLine(line);
+  if (result.status === "missing") return;
+  syncInputsFromLine(result.line);
   viewer.rebuildLines();
-  setHint(`正在编辑 ${line.name}。修改后点击“保存当前线”。`);
+  setHint(`正在编辑 ${result.line.name}。修改后点击“保存当前线”。`);
   refresh();
 }
 
 function clearLines(): void {
-  model.clear();
+  lineService.clear();
   viewer.rebuildLines();
   refresh();
 }
 
 function deleteLine(i: number): void {
-  model.deleteLine(i);
+  lineService.delete(i);
   viewer.rebuildLines();
   refresh();
 }
@@ -486,7 +452,7 @@ function previewActiveAtlas(): void {
     setHint("预览失败：浏览器无法暂存图谱。请检查站点存储权限。");
     return;
   }
-  location.href = isReactManagedWorkbench() ? "/app/live" : "index.html";
+  location.href = "/app/live";
 }
 
 // ── UI 刷新 ───────────────────────────────────────────────────────────────────
@@ -497,69 +463,8 @@ function setHint(t: string): void {
   }
 }
 
-function renderLegacyLineList(): void {
-  els.list.innerHTML = "";
-  if (!model.lines.length) {
-    const empty = document.createElement("div");
-    empty.className = "line-empty";
-    empty.textContent = "还没有保存的线。";
-    els.list.appendChild(empty);
-  }
-  model.lines.forEach((ln: AnnotationLine, i: number) => {
-    const row = document.createElement("div");
-    row.className = "line-row";
-    row.classList.toggle("has-warning", Boolean(ln.fallback));
-    const main = document.createElement("div");
-    main.className = "line-main";
-    const title = document.createElement("strong");
-    title.textContent = `${i + 1}. ${ln.name}`;
-    const meta = document.createElement("span");
-    meta.className = "line-meta";
-    meta.textContent = `${SYSTEM_LABELS[model.system]}${ln.region ? " · " + ln.region : ""} · ${controlsOf(ln).length} 控制点 · ${ln.points.length} 路径点${ln.fallback ? " · 贴面 fallback" : ""}`;
-    main.appendChild(title);
-    main.appendChild(meta);
-    if (ln.fallback) {
-      const warning = document.createElement("span");
-      warning.className = "line-warning";
-      warning.textContent = "需复核：该线存在退回直线连接，可能穿面";
-      main.appendChild(warning);
-    }
-    const actions = document.createElement("div");
-    actions.className = "line-actions";
-    const edit = document.createElement("button");
-    edit.textContent = "编辑"; edit.className = "mini";
-    edit.onclick = () => restoreLine(i);
-    const del = document.createElement("button");
-    del.textContent = "删除"; del.className = "mini del";
-    del.onclick = () => deleteLine(i);
-    actions.appendChild(edit);
-    actions.appendChild(del);
-    row.appendChild(main);
-    row.appendChild(actions);
-    els.list.appendChild(row);
-  });
-}
-
 function refresh(): void {
   if (!model || !els?.status) return;
-  const curPts = controlsOf(model.current).length;
-  const currentFallback = Boolean(model.current?.fallback);
-  if (!isReactManagedWorkbench()) {
-    els.current.classList.toggle("active", Boolean(model.current));
-    els.current.classList.toggle("warning", currentFallback);
-    els.current.textContent = model.current
-      ? `正在绘制：${model.current.name} · ${SYSTEM_LABELS[model.system]} · ${curPts} 点${curPts < 2 ? "（至少 2 点可保存）" : ""}${currentFallback ? " · 贴面路由已退回直线，需复核可能穿面" : ""}`
-      : "当前没有正在绘制的线。点击“开始一条线”，或直接在脸表面点击开始。";
-    els.btnNew.disabled = Boolean(model.current);
-    els.btnFinish.disabled = !model.current;
-    els.btnUndo.disabled = !(model.current || model.lines.length);
-    els.status.textContent = `${model.lines.length} 条`;
-    els.exAtlas.disabled = !(model.lines.length && onCanonical);
-    // 「设为活动图谱并预览」是 2D MediaPipe 实时轨入口；FLAME 图谱（独立 3D 轨）不走 2D 预览。
-    els.setActive.disabled = !(model.lines.length && onCanonical && model.topologyId === "mediapipe-468");
-    els.exXyz.disabled = !model.lines.length;
-    renderLegacyLineList();
-  }
   publishAnnotateState("refresh");
 }
 
@@ -585,6 +490,7 @@ export function disposeAnnotateWorkbench() {
   viewer?.dispose?.();
   viewer = null as unknown as Annotator3DInstance;
   model = null as unknown as AnnotationModelInstance;
+  lineService = null as unknown as AnnotationLineService;
   drag = null;
 }
 
@@ -593,15 +499,12 @@ export function mountAnnotateWorkbench(root: ParentNode | Document = document) {
   els = collectAnnotateElements(root);
   viewer = new Annotator3D(els.stage);
   model = new AnnotationModel(els.system.value);
+  lineService = new AnnotationLineService(model);
   viewer.setAnnotation(model);
   onCanonical = false;
   const bootSession = activeSession.mount();
   abortController = new AbortController();
   bindAnnotateEvents();
-  if (!isReactManagedWorkbench()) {
-    if (!flameAvailable()) els.loadFlame.style.display = "none";
-    if (!fittedFlameAvailable()) els.loadFittedFlame.style.display = "none";
-  }
   refresh();
   setHint("点「加载标准脸」开始，或上传头模 JSON / OBJ / PLY。");
   loadCanonical().catch((e) => {
