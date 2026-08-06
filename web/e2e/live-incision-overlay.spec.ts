@@ -2,6 +2,8 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
+import { dragFirstPhotoEndpoint, uploadGeneratedPhoto } from "./support/incisionPhoto";
+
 function candidatePixelCount() {
   const canvas = document.querySelector<HTMLCanvasElement>("#canvas");
   const context = canvas?.getContext("2d");
@@ -38,11 +40,23 @@ test("approved incision reaches the live photo renderer with visible feedback", 
   await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
   await expect(page.locator("#candidateType")).not.toHaveText("—");
 
+  await uploadGeneratedPhoto(page, "single");
+  await expect(page.locator("#incisionPhotoStatus")).toContainText(/照片规划.*候选已叠加/, { timeout: 45_000 });
+  const lengthBefore = Number(await page.locator("#lengthScale").inputValue());
+  await dragFirstPhotoEndpoint(page);
+  await expect.poll(async () => Number(await page.locator("#lengthScale").inputValue())).not.toBe(lengthBefore);
+  await expect(page.locator("#editHistoryState")).toContainText("已提交");
+
   await page.locator("#reviewerName").fill("E2E clinician");
   await page.locator("#reviewNotes").fill("Browser handoff verification");
   await page.locator("#reviewDecision").selectOption("approved_for_discussion");
   await page.locator("#saveReviewBtn").click();
   await expect(page.locator("#savedCount")).toHaveText("1");
+
+  const reviewDownloadPromise = page.waitForEvent("download");
+  await page.locator("#exportJsonBtn").click();
+  const reviewDownload = await reviewDownloadPromise;
+  expect(reviewDownload.suggestedFilename()).toMatch(/^incision_review_\d+\.json$/);
 
   await page.locator("#stageLiveOverlayBtn").click();
   await expect(page).toHaveURL(/\/live\?incisionOverlay=staged$/);
@@ -66,4 +80,11 @@ test("approved incision reaches the live photo renderer with visible feedback", 
   await expect.poll(() => page.evaluate(candidatePixelCount), {
     message: "clearing the overlay must remove candidate pixels without replacing the source image",
   }).toBeLessThan(candidatePixelsWithOverlay - 8);
+
+  await page.getByRole("link", { name: "进入切口规划" }).click();
+  await expect(page).toHaveURL(/\/incision$/);
+  await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
+  await expect(page.locator("#candidateType")).not.toHaveText("—");
+  await expect(page.locator("#savedCount")).toHaveText("1");
+  await expect(page.locator("#reviewDecision")).toHaveValue("approved_for_discussion");
 });
