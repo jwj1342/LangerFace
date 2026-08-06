@@ -157,6 +157,10 @@ const three3dService = read("src/services/three3d.ts");
 const exportPrivacyService = read("src/services/exportPrivacy.ts");
 const liveController = read("src/services/liveRuntime.ts");
 const liveActionSchedulerService = read("src/services/liveActionScheduler.ts");
+const liveFrameSchedulerService = read("src/services/liveFrameScheduler.ts");
+const livePipelineService = read("src/services/pipeline.ts");
+const livePipelineLoopService = read("src/services/pipelineLoop.ts");
+const livePipelineSourceService = read("src/services/pipelineSource.ts");
 const liveDomService = read("src/services/liveDom.ts");
 const liveUiService = read("src/services/liveUi.ts");
 const liveStateService = read("src/services/liveState.ts");
@@ -169,6 +173,7 @@ const assetLoaderService = read("src/services/assetLoader.ts");
 const liveRuntimeDependencyTypes = [
   "src/services/cameraSource.ts",
   "src/services/liveActionScheduler.ts",
+  "src/services/liveFrameScheduler.ts",
   "src/services/liveDom.ts",
   "src/services/liveCanvasFit.ts",
   "src/services/dataSource.ts",
@@ -2234,6 +2239,12 @@ assert.ok(liveActionSchedulerService.includes("isActive(session)"), "live action
 assert.ok(!/(?:document|window|HTMLElement|PointerEvent|THREE)/.test(liveActionSchedulerService), "live action scheduler stays DOM and renderer independent");
 assert.ok(!liveController.includes("function isThenable"), "live runtime does not implement promise scheduling inline");
 assert.ok(!liveController.includes("liveStateTimer"), "live runtime does not own state publication timers");
+assert.ok(liveFrameSchedulerService.includes("class LiveFrameScheduler"), "live frame scheduler owns RAF coalescing and cancellation");
+assert.ok(!/(?:document|window|HTMLElement|PointerEvent|THREE|MediaPipe)/.test(liveFrameSchedulerService),
+  "live frame scheduler stays DOM, renderer, and detector independent");
+assert.ok(livePipelineLoopService.includes("new LiveFrameScheduler"), "live pipeline loop delegates RAF ownership to the scheduler");
+assert.ok(livePipelineSourceService.includes("cancelFrame()"), "stopping a live source cancels its pending render frame");
+assert.ok(!livePipelineService.includes("requestAnimationFrame"), "atlas redraws cannot bypass live frame coalescing");
 assert.ok(liveController.split("\n").length <= 630, "live runtime stays a thin orchestration layer");
 assert.ok(liveController.includes("interface ImageDragState"), "live runtime types its route-local drag state");
 assert.ok(!liveController.includes("function controllerEvent"), "live runtime delegates browser command parsing to typed schemas");

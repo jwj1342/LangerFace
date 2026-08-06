@@ -18,6 +18,7 @@ import {
   type StaticImageDetector,
 } from "./staticImageDetection.ts";
 import { analyzeCurrentWrinkles } from "./liveWrinkleAnalysis.ts";
+import { LiveFrameScheduler } from "./liveFrameScheduler.ts";
 
 interface VideoDetector {
   detectForVideo: (source: unknown, timeMs: number) => {
@@ -54,8 +55,8 @@ export function detectHands(timeMs: number, width: number, height: number): Hand
 let fpsEMA = 0;
 let lastT = performance.now();
 let drawFailureLogged = false;
-let frameScheduled = false;
 let frameMetricsSeen = 0;
+const frameScheduler = new LiveFrameScheduler();
 
 function blendshapeScore(categories: BlendshapeCategory[] | undefined, names: string[]): number {
   if (!Array.isArray(categories)) return 0;
@@ -74,13 +75,15 @@ function updateFaceExpression(faceBlendshapes: Array<{ categories?: BlendshapeCa
 }
 
 export function requestFrame(): void {
-  if (!sourceState.running || sourceState.paused || frameScheduled) return;
-  frameScheduled = true;
-  requestAnimationFrame(loop);
+  if (!sourceState.running || sourceState.paused) return;
+  frameScheduler.request(loop);
+}
+
+export function cancelFrame(): void {
+  frameScheduler.cancel();
 }
 
 export function loop(): void {
-  frameScheduled = false;
   if (!sourceState.running || sourceState.paused) return;
   if (!ctx) return;
   const source = currentLiveSource() as (CanvasImageSource & { currentTime?: number }) | null;

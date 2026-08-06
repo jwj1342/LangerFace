@@ -13,7 +13,7 @@ import {
 import { resetRefineForNewSource } from "./liveRefine2d";
 import { resetLiveWrinkleAnalysis } from "./liveWrinkleAnalysis.ts";
 import { setLive, setMsg } from "./liveUi.ts";
-import { requestFrame } from "./pipelineLoop.ts";
+import { cancelFrame, requestFrame } from "./pipelineLoop.ts";
 import { ensureImageReady, ensureReady } from "./pipelineModels.ts";
 
 type SourceKind = "camera" | "video" | "image";
@@ -187,6 +187,7 @@ export function setSource(
 
 export function stopSource({ preserveOperation = false }: { preserveOperation?: boolean } = {}): void {
   if (!preserveOperation) sourceOperationId += 1;
+  cancelFrame();
   sourceState.planning2d?.clearSource();
   els.video.srcObject = null;
   els.video.removeAttribute("src");
