@@ -1,5 +1,5 @@
 import { clearCanvasDisplayFit, fitCanvasDisplayToStage } from "./liveCanvasFit.ts";
-import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./cameraSource.ts";
+import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream, stopCameraStream } from "./cameraSource.ts";
 import { ctx, els } from "./liveDom.ts";
 import { prepareImageSource } from "./imageSource.ts";
 import { countMetric, logWarn } from "./logger.ts";
@@ -23,6 +23,14 @@ const sourceLayoutScheduler = new LiveFrameScheduler();
 
 export async function startCamera(): Promise<void> {
   const operationId = ++sourceOperationId;
+  let pendingStream: MediaStream | null = null;
+  const releasePendingStream = (): void => {
+    const stream = pendingStream;
+    if (!stream) return;
+    if (els.video?.srcObject === stream) els.video.srcObject = null;
+    stopCameraStream(stream);
+    pendingStream = null;
+  };
   if (currentLiveSourceKind() === "camera") {
     stopSource();
     setLive(false, "待机");
@@ -34,19 +42,27 @@ export async function startCamera(): Promise<void> {
     await ensureReady();
     if (operationId !== sourceOperationId) return;
     setMsg("请求摄像头权限…");
-    const stream = await openCameraStream(CAMERA_CONSTRAINTS);
+    pendingStream = await openCameraStream(CAMERA_CONSTRAINTS);
     if (operationId !== sourceOperationId) {
-      stream.getTracks().forEach((track) => track.stop());
+      releasePendingStream();
       return;
     }
     stopSource({ preserveOperation: true });
-    els.video.srcObject = stream;
+    els.video.srcObject = pendingStream;
     await els.video.play();
+    if (operationId !== sourceOperationId) {
+      releasePendingStream();
+      return;
+    }
+    const stream = pendingStream;
+    if (!stream) return;
     setSource(els.video, "camera", els.video.videoWidth, els.video.videoHeight, {
-      release: () => stream.getTracks().forEach((track) => track.stop()),
+      release: () => stopCameraStream(stream),
     });
+    pendingStream = null;
     els.cam.setAttribute("aria-pressed", "true");
   } catch (error) {
+    releasePendingStream();
     if (operationId !== sourceOperationId) return;
     const detail = describeCameraError(error);
     countMetric(`camera.openFailure.${detail.reason}`);

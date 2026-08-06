@@ -31,6 +31,10 @@ export async function openCameraStream(constraints: MediaStreamConstraints = CAM
   return navigator.mediaDevices.getUserMedia(constraints);
 }
 
+export function stopCameraStream(stream: Pick<MediaStream, "getTracks"> | null | undefined): void {
+  for (const track of stream?.getTracks() || []) track.stop();
+}
+
 export function describeCameraError(error: unknown): CameraErrorDescription {
   const err = error as { name?: string; message?: string } | null | undefined;
   const name = err?.name || "";
