@@ -1,4 +1,8 @@
-import { StageActions, StageLink, StageMeta, StageShell, StageStatus, StageViewport } from "./StageShell";
+import { Box, FlipHorizontal2, RotateCcw, Upload } from "lucide-react";
+
+import { StageActions, StageCanvas, StageLink, StageMeta, StageShell, StageStatus, StageViewport } from "./StageShell";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import { CanvasLegendItem, Legend } from "./ui/legend";
 import { AssetLoadingOverlay } from "./ui/loading-overlay";
 import { useIncisionStore, type IncisionAssetLoadingState } from "../stores/incisionStore";
@@ -19,6 +23,19 @@ export function IncisionStagePanel() {
           <StageStatus active>{snapshot?.headAsset.statusLabel || "个体化 RSTL 规划"}</StageStatus>
           <StageActions>
             <StageMeta id="stageStatus">{snapshot?.stageStatus || "拖拽旋转 · 滚轮缩放 · 点击定位"}</StageMeta>
+            <Button asChild size="sm" title="上传患者静态照片">
+              <label htmlFor="incisionPhotoInput"><Upload size={15} />照片</label>
+            </Button>
+            <Input id="incisionPhotoInput" type="file" accept="image/jpeg,image/png" hidden />
+            <Button id="incisionPhotoMirrorBtn" size="sm" type="button" title="水平镜像照片" aria-pressed="false">
+              <FlipHorizontal2 size={15} /><span className="photo-action-label">镜像</span>
+            </Button>
+            <Button id="incisionPhotoResetBtn" size="sm" type="button" title="重置照片缩放与位置">
+              <RotateCcw size={15} /><span className="photo-action-label">复位</span>
+            </Button>
+            <Button id="incisionSurfaceModeBtn" size="sm" type="button" title="切换到标准三维规划表面">
+              <Box size={15} /><span className="photo-action-label">标准表面</span>
+            </Button>
             <StageLink variant="meta" to="/settings/atlas">图谱库管理</StageLink>
           </StageActions>
         </>
@@ -26,6 +43,10 @@ export function IncisionStagePanel() {
     >
       <StageViewport>
         <canvas id="incisionCanvas"></canvas>
+        <StageCanvas id="incisionPhotoCanvas" aria-label="患者照片切口规划画布" />
+        <div id="incisionPhotoStatus" className="photo-planning-status" role="status" aria-live="polite">
+          上传 JPEG 或 PNG 照片后在患者面部直接规划
+        </div>
         <AssetLoadingOverlay
           id="assetLoading"
           heading="正在加载切口规划资产"

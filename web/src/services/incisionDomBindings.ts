@@ -56,6 +56,13 @@ export interface IncisionDomEventHandlers {
   onStageLiveOverlay(): void;
   onTumorFile(file?: File): void;
   onSecondaryCueFile(file?: File): void;
+  onPhotoFile(file?: File): void;
+  onPhotoPick(event: PointerEvent): void;
+  onPhotoPan(deltaX: number, deltaY: number): void;
+  onPhotoZoom(event: WheelEvent): void;
+  onPhotoMirror(): void;
+  onPhotoReset(): void;
+  onSurfaceMode(): void;
   onResize(): void;
 }
 
@@ -157,6 +164,7 @@ export function bindIncisionDomEvents({
   };
 
   let drag: PointerDragState | null = null;
+  let photoDrag: PointerDragState | null = null;
   listen(elements.canvas, "pointerdown", ((event: PointerEvent) => {
     const handle = handlers.endpointHandleFromEvent(event);
     drag = {
@@ -197,6 +205,31 @@ export function bindIncisionDomEvents({
   listen(elements.canvas, "wheel", ((event: WheelEvent) => {
     event.preventDefault();
     handlers.zoomHead(event.deltaY);
+  }) as EventListener, { passive: false });
+
+  listen(elements.photoCanvas, "pointerdown", ((event: PointerEvent) => {
+    photoDrag = { x: event.clientX, y: event.clientY, moved: 0, id: event.pointerId };
+    elements.photoCanvas.setPointerCapture(event.pointerId);
+  }) as EventListener);
+  listen(elements.photoCanvas, "pointermove", ((event: PointerEvent) => {
+    if (!photoDrag || event.pointerId !== photoDrag.id) return;
+    const deltaX = event.clientX - photoDrag.x;
+    const deltaY = event.clientY - photoDrag.y;
+    photoDrag.moved += Math.abs(deltaX) + Math.abs(deltaY);
+    if (photoDrag.moved >= 6) handlers.onPhotoPan(deltaX, deltaY);
+    photoDrag.x = event.clientX;
+    photoDrag.y = event.clientY;
+  }) as EventListener);
+  listen(elements.photoCanvas, "pointerup", ((event: PointerEvent) => {
+    if (photoDrag && event.pointerId === photoDrag.id && photoDrag.moved < 6) handlers.onPhotoPick(event);
+    photoDrag = null;
+  }) as EventListener);
+  listen(elements.photoCanvas, "pointercancel", (() => {
+    photoDrag = null;
+  }) as EventListener);
+  listen(elements.photoCanvas, "wheel", ((event: WheelEvent) => {
+    event.preventDefault();
+    handlers.onPhotoZoom(event);
   }) as EventListener, { passive: false });
 
   if (!reactManaged) {
@@ -271,6 +304,12 @@ export function bindIncisionDomEvents({
   listen(elements.secondaryCueImportFile, "change", ((event: Event) => {
     handlers.onSecondaryCueFile(fileFromEvent(event));
   }) as EventListener);
+  listen(elements.photoInput, "change", ((event: Event) => {
+    handlers.onPhotoFile(fileFromEvent(event));
+  }) as EventListener);
+  action(elements.photoMirror, "click", handlers.onPhotoMirror);
+  action(elements.photoReset, "click", handlers.onPhotoReset);
+  action(elements.surfaceMode, "click", handlers.onSurfaceMode);
 
   const resizeObserver = new ResizeObserver(() => handlers.onResize());
   resizeObserver.observe(elements.wrap);
@@ -278,6 +317,7 @@ export function bindIncisionDomEvents({
 
   return () => {
     drag = null;
+    photoDrag = null;
     for (const cleanup of cleanups.splice(0).reverse()) cleanup();
   };
 }

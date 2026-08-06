@@ -2,6 +2,12 @@ import { requireScopedElement, requireScopedQuery } from "../lib/scopedDom";
 
 export interface IncisionDomElements extends Record<string, any> {
   canvas: HTMLCanvasElement;
+  photoCanvas: HTMLCanvasElement;
+  photoInput: HTMLInputElement;
+  photoMirror: HTMLButtonElement;
+  photoReset: HTMLButtonElement;
+  surfaceMode: HTMLButtonElement;
+  photoStatus: HTMLElement;
   wrap: HTMLElement;
   assetLoading: HTMLElement;
   assetLoadingText: HTMLElement;
@@ -98,6 +104,12 @@ const byId = <T extends Element = HTMLElement>(root: ParentNode | Document, id: 
 export function collectIncisionElements(root: ParentNode | Document = document): IncisionDomElements {
   return {
     canvas: byId<HTMLCanvasElement>(root, "incisionCanvas"),
+    photoCanvas: byId<HTMLCanvasElement>(root, "incisionPhotoCanvas"),
+    photoInput: byId<HTMLInputElement>(root, "incisionPhotoInput"),
+    photoMirror: byId<HTMLButtonElement>(root, "incisionPhotoMirrorBtn"),
+    photoReset: byId<HTMLButtonElement>(root, "incisionPhotoResetBtn"),
+    surfaceMode: byId<HTMLButtonElement>(root, "incisionSurfaceModeBtn"),
+    photoStatus: byId(root, "incisionPhotoStatus"),
     wrap: requireScopedQuery<HTMLElement>(root, ".main-wrap"),
     assetLoading: byId(root, "assetLoading"),
     assetLoadingText: byId(root, "assetLoadingText"),

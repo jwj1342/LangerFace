@@ -996,6 +996,69 @@
     background: #111820;
   }
 
+  .incision-workbench #incisionPhotoCanvas {
+    --incision-photo-zoom: 1;
+    --incision-photo-pan-x: 0px;
+    --incision-photo-pan-y: 0px;
+    --incision-photo-mirror: 1;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: 1;
+    display: block;
+    max-width: none;
+    max-height: none;
+    transform: translate(-50%, -50%)
+      translate(var(--incision-photo-pan-x), var(--incision-photo-pan-y))
+      scale(var(--incision-photo-zoom))
+      scaleX(var(--incision-photo-mirror));
+    transform-origin: center;
+    background: #090d12;
+    cursor: crosshair;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .incision-workbench #incisionPhotoCanvas:active {
+    cursor: grabbing;
+  }
+
+  .incision-workbench #incisionPhotoCanvas:not([data-active="true"]) {
+    display: none;
+  }
+
+  .incision-workbench .photo-planning-status {
+    position: absolute;
+    z-index: 3;
+    top: 16px;
+    left: 16px;
+    max-width: min(560px, calc(100% - 32px));
+    padding: 8px 10px;
+    border: 1px solid rgb(255 255 255 / 0.16);
+    border-radius: 4px;
+    background: rgb(7 10 15 / 0.86);
+    color: #dbe4ee;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.4;
+    pointer-events: none;
+  }
+
+  .incision-workbench .photo-planning-status[data-tone="ready"] {
+    border-color: rgb(52 211 153 / 0.55);
+    color: #a7f3d0;
+  }
+
+  .incision-workbench .photo-planning-status[data-tone="loading"] {
+    border-color: rgb(103 232 249 / 0.55);
+    color: #a5f3fc;
+  }
+
+  .incision-workbench .photo-planning-status[data-tone="warning"] {
+    border-color: rgb(250 204 21 / 0.65);
+    color: #fde68a;
+  }
+
   .clinical-compat-workbench {
     --bg: var(--clinical-dark-bg);
     --side: var(--clinical-dark-sidebar);
@@ -1688,9 +1751,14 @@ body:has(.dark-workbench-page) {
     grid-row: 2;
   }
 
-  .incision-workbench #incisionCanvas {
+  .incision-workbench #incisionCanvas,
+  .incision-workbench #incisionPhotoCanvas {
     position: absolute;
     min-height: 0;
+  }
+
+  .incision-workbench .photo-action-label {
+    display: none;
   }
 
   .incision-workbench .stage-top {

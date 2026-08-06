@@ -5,6 +5,7 @@ import type { IncisionDomCleanup } from "./incisionDomBindings";
 import type { IncisionHeadAssetState } from "./incisionSnapshots";
 import type { WorkflowWorkerClient } from "./workflowWorkerClient";
 import type { PhotoPlanningController } from "./photoPlanningController";
+import type { SurfaceRef } from "./incisionOverlay";
 import { Head3D } from "./three3d.ts";
 import type { Triangle, Vec3 } from "./softBody";
 
@@ -13,11 +14,21 @@ type ControllerCleanup = () => void;
 type IncisionMesh = THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>;
 type IncisionLine = THREE.Line<THREE.BufferGeometry, THREE.Material | THREE.Material[]>;
 
+export interface IncisionPhotoViewState {
+  active: boolean;
+  operationId: number;
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
+  mirror: boolean;
+}
+
 export interface IncisionRuntimeState {
   mounted: boolean;
   frameId: number;
   domEventCleanup: IncisionDomCleanup | null;
   planning2d: PhotoPlanningController | null;
+  photoView: IncisionPhotoViewState;
   verts: Vec3[];
   tris: Triangle[];
   atlas: DynamicRecord | null;
@@ -34,7 +45,9 @@ export interface IncisionRuntimeState {
   endpointHandles: IncisionMesh[];
   raycaster: THREE.Raycaster;
   lesion: number;
+  lesionRef: SurfaceRef | null;
   boundaryPoints: Vec3[];
+  boundaryRefs: SurfaceRef[];
   boundaryActive: boolean;
   saved: DynamicRecord[];
   result: any;
@@ -54,6 +67,14 @@ export function createIncisionControllerState(): IncisionRuntimeState {
     frameId: 0,
     domEventCleanup: null,
     planning2d: null,
+    photoView: {
+      active: false,
+      operationId: 0,
+      zoom: 1,
+      offsetX: 0,
+      offsetY: 0,
+      mirror: false,
+    },
     verts: [],
     tris: [],
     atlas: null,
@@ -70,7 +91,9 @@ export function createIncisionControllerState(): IncisionRuntimeState {
     endpointHandles: [],
     raycaster: new THREE.Raycaster(),
     lesion: 0,
+    lesionRef: null,
     boundaryPoints: [],
+    boundaryRefs: [],
     boundaryActive: false,
     saved: [],
     result: null,
