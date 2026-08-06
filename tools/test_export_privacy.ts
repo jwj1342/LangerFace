@@ -21,7 +21,7 @@ function safeReviewExport() {
         used_for_geometry: false,
         outputs: { cue_overlay: "review-overlay.png" },
       },
-      review: {},
+      review: { reviewed_at: "2026-06-25T12:34:56.000Z" },
       audit_events: [{
         event: "candidate_saved",
         at: "2026-06-25T12:34:56.000Z",
@@ -31,6 +31,7 @@ function safeReviewExport() {
       id: "12345678-1234-4234-8234-123456789013",
       schema_version: "incision-review-record/v0.4",
       created_at: "2026-06-25T12:34:56.000Z",
+      review: { reviewed_at: "2026-06-25T12:34:56.000Z" },
       audit_events: [{ at: "2026-06-25T12:34:56.000Z" }],
     }],
   };

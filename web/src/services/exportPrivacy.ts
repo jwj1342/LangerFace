@@ -108,6 +108,11 @@ function isAllowedMetadataTimestamp(payload: unknown, path: string[], text: stri
   if (!reviewExportRecordAtPath(payload, path)) return false;
   const recordOffset = path[0] === "saved" ? 2 : 1;
   if (path.length === recordOffset + 1 && path[recordOffset] === "created_at") return true;
+  if (
+    path.length === recordOffset + 2
+    && path[recordOffset] === "review"
+    && path[recordOffset + 1] === "reviewed_at"
+  ) return true;
   return path.length === recordOffset + 3
     && path[recordOffset] === "audit_events"
     && /^\d+$/.test(path[recordOffset + 1])
