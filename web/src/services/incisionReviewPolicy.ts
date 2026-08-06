@@ -46,6 +46,33 @@ export function assessReviewReadiness({
   return { ok: true, message: "" };
 }
 
+export function reviewForCandidateRecord({
+  review,
+  result,
+  forceDraft = false,
+}: {
+  review: AnyRecord;
+  result: AnyRecord | null | undefined;
+  forceDraft?: boolean;
+}) {
+  const readiness = assessReviewReadiness({
+    status: review.status || "pending_clinician_confirmation",
+    result,
+    reviewer: String(review.reviewer || ""),
+    notes: String(review.notes || ""),
+  });
+  if (!forceDraft && readiness.ok) return { review, readiness, downgraded: false };
+  return {
+    review: {
+      ...review,
+      status: "pending_clinician_confirmation",
+      reviewed_at: null,
+    },
+    readiness,
+    downgraded: review.status !== "pending_clinician_confirmation",
+  };
+}
+
 export function buildReviewGate({
   review,
   result,

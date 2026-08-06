@@ -58,6 +58,7 @@ import {
   buildTumorInput,
   importedTumorFormState,
   numericControlValue,
+  shouldClearFreehandBoundaryOnLesionRepick,
 } from "./tumorInput";
 import { dataSource } from "./dataSource";
 import type { HeadMeshPayload } from "./dataSource";
@@ -119,7 +120,14 @@ import type { VectorLike } from "./incisionSceneGeometry";
 import {
   assessReviewReadiness,
   buildReviewGate,
+  reviewForCandidateRecord,
 } from "./incisionReviewPolicy";
+import {
+  buildIncisionWorkspaceSession,
+  loadIncisionWorkspaceSession,
+  saveIncisionWorkspaceSession,
+  tumorContextsMatch,
+} from "./incisionWorkspaceSession";
 import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
 import { createWorkflowWorkerClient } from "./workflowWorkerClient";
 import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.ts";
@@ -198,6 +206,39 @@ function currentReviewSnapshot() {
     reviewer: els.reviewerName?.value?.trim?.() || "",
     notesPresent: Boolean(els.reviewNotes?.value?.trim?.()),
   });
+}
+
+function persistWorkspaceSession() {
+  if (!S.mounted || !S.verts.length || !els.tumorKind) return false;
+  const tumor = tumorInput();
+  const resultMatchesTumor = tumorContextsMatch(S.result?.tumor, tumor);
+  return saveIncisionWorkspaceSession(buildIncisionWorkspaceSession({
+    tumor,
+    result: resultMatchesTumor ? S.result : null,
+    baseResult: resultMatchesTumor ? S.baseResult : null,
+    saved: S.saved,
+    review: currentReviewMetadata(),
+    generationCount: S.generationCount,
+  }));
+}
+
+function restoreWorkspaceSession() {
+  const session = loadIncisionWorkspaceSession();
+  if (!session) return false;
+  applyTumorContext(session.tumor);
+  S.saved = session.saved;
+  S.generationCount = session.generationCount;
+  S.baseResult = session.baseResult;
+  setReviewControls(session.review);
+  renderSaved();
+  if (session.result && tumorContextsMatch(session.result.tumor, session.tumor)) {
+    renderResult(session.result);
+    els.stageStatus.textContent = "已恢复切口候选、审阅状态和候选库";
+  } else {
+    runWorkflow();
+  }
+  publishIncisionState("workspace_session_restored");
+  return true;
 }
 
 function currentEditSnapshot() {
@@ -426,10 +467,11 @@ async function boot() {
   }
 
   renderSecondaryCuePanel();
-  setLesion(defaultLesion());
+  const restored = restoreWorkspaceSession();
+  if (!restored) setLesion(defaultLesion());
   fitSize();
   renderLoop();
-  runWorkflow();
+  if (!restored) runWorkflow();
   hideAssetLoading();
 }
 
@@ -717,6 +759,7 @@ function updateTumorRing() {
 
 function drawCandidate(result: DynamicRecord) {
   if (!S.candidateLine) return;
+  S.candidateLine.visible = true;
   const old = S.candidateLine.geometry;
   S.candidateLine.geometry = buildPolylineGeometry(
     result.candidate.polyline,
@@ -1119,9 +1162,21 @@ function reviewGate(review: DynamicRecord, result: DynamicRecord) {
   });
 }
 
-function reviewRecord(result: DynamicRecord = S.result, label = "候选") {
+function reviewRecord(
+  result: DynamicRecord = S.result,
+  label = "候选",
+  { forceDraft = false }: { forceDraft?: boolean } = {},
+) {
   const createdAt = new Date().toISOString();
-  const review = currentReviewMetadata(createdAt);
+  const normalized = reviewForCandidateRecord({
+    review: currentReviewMetadata(createdAt),
+    result,
+    forceDraft,
+  });
+  const review = {
+    ...normalized.review,
+    label: reviewStatusLabel(normalized.review.status),
+  };
   const gate = reviewGate(review, result);
   return buildIncisionReviewRecord({
     result,
@@ -1189,10 +1244,13 @@ function renderSaved() {
 function loadSavedCandidate(id: string) {
   const rec = S.saved.find((item) => item.id === id);
   if (!rec) return;
+  applyTumorContext(rec.tumor);
   S.baseResult = rec;
+  resetEditControls();
+  resetEditTimeline();
   setReviewControls(rec.review || { status: rec.review_status });
   renderResult(rec);
-  els.stageStatus.textContent = "已载入候选草案";
+  els.stageStatus.textContent = "已载入候选草案及其完整肿物上下文";
   publishIncisionState("saved_candidate_loaded");
 }
 
@@ -1211,11 +1269,27 @@ function clearSavedCandidates() {
   renderSaved();
 }
 
-function saveCurrentCandidate(label = "医生候选") {
-  if (!S.result) return;
-  S.saved.push(reviewRecord(S.result, `${label} ${S.saved.length + 1}`));
-  els.stageStatus.textContent = "候选已保存到审阅列表";
+function saveCurrentCandidate(
+  label = "医生候选",
+  { allowDraftFallback = true }: { allowDraftFallback?: boolean } = {},
+) {
+  if (!S.result) return false;
+  const status = els.reviewDecision.value || "pending_clinician_confirmation";
+  const readiness = reviewReadiness(status);
+  if (!readiness.ok && !allowDraftFallback) {
+    els.stageStatus.textContent = readiness.message;
+    return false;
+  }
+  S.saved.push(reviewRecord(
+    S.result,
+    `${label} ${S.saved.length + 1}`,
+    { forceDraft: !readiness.ok },
+  ));
+  els.stageStatus.textContent = readiness.ok
+    ? "候选已保存到审阅列表"
+    : `${readiness.message}；已按待确认草案保存。`;
   renderSaved();
+  return true;
 }
 
 function saveReviewRecord() {
@@ -1225,7 +1299,7 @@ function saveReviewRecord() {
     els.stageStatus.textContent = readiness.message;
     return;
   }
-  saveCurrentCandidate("审阅候选");
+  saveCurrentCandidate("审阅候选", { allowDraftFallback: false });
 }
 
 function directionForWorkflowAlternative(baseDirection: DynamicRecord = {}, alternative: DynamicRecord = {}) {
@@ -1269,7 +1343,11 @@ function makeVariantCandidates() {
   if (workflowAlternatives.length) {
     for (const alternative of workflowAlternatives) {
       const result = workflowAlternativeResult(S.result, alternative);
-      S.saved.push(reviewRecord(result, alternative.label || `浏览器备选 ${S.saved.length + 1}`));
+      S.saved.push(reviewRecord(
+        result,
+        alternative.label || `浏览器备选 ${S.saved.length + 1}`,
+        { forceDraft: true },
+      ));
     }
     els.stageStatus.textContent = `已保存 ${workflowAlternatives.length} 个浏览器方向备选，并保留各自保护规则、敏感结构复核和工程排序`;
     renderSaved();
@@ -1282,7 +1360,7 @@ function makeVariantCandidates() {
   ];
   for (const v of variants) {
     const result = applyCandidateEdit(S.baseResult, v, S.normals[S.lesion], S.unitsPerMm, S.verts);
-    S.saved.push(reviewRecord(result, `备选 ${S.saved.length + 1}`));
+    S.saved.push(reviewRecord(result, `备选 ${S.saved.length + 1}`, { forceDraft: true }));
   }
   els.stageStatus.textContent = "已生成 3 个方向备选、复跑 guardrails，并更新工程排序";
   renderSaved();
@@ -1370,7 +1448,7 @@ function exportTumorJson() {
   els.stageStatus.textContent = "已导出肿物输入 JSON";
 }
 
-function applyImportedTumor(payload: unknown) {
+function applyTumorContext(payload: unknown) {
   const imported = importedTumorFormState(payload, {
     diameterMin: Number(els.diameter.min),
     diameterMax: Number(els.diameter.max),
@@ -1397,6 +1475,11 @@ function applyImportedTumor(payload: unknown) {
   setLesion(nearestVertex(tumor.center));
   updateFormVisibility();
   els.pickState.textContent = imported.pickState;
+  return tumor;
+}
+
+function applyImportedTumor(payload: unknown) {
+  applyTumorContext(payload);
   publishIncisionState("tumor_imported");
   runWorkflow();
 }
@@ -1483,16 +1566,22 @@ function stageLiveOverlay() {
   }
   els.stageStatus.textContent = "切口候选已暂存，正在进入实时叠加。";
   publishIncisionState("live_overlay_staged");
+  persistWorkspaceSession();
   window.location.assign("/live?incisionOverlay=staged");
 }
 
 async function runWorkflow({ countGeneration = false }: { countGeneration?: boolean } = {}) {
   if (!S.verts) return;
+  const requestId = ++S.workflowRequestId;
+  S.result = null;
+  S.baseResult = null;
+  if (S.candidateLine) S.candidateLine.visible = false;
   els.run.disabled = true;
   els.stageStatus.textContent = "Worker 确定性 workflow 生成中…";
   try {
     const tumor = tumorInput();
     const result = await planWorkflowForCurrentTumor(tumor);
+    if (requestId !== S.workflowRequestId) return;
     S.baseResult = result;
     if (countGeneration) S.generationCount += 1;
     resetEditControls();
@@ -1500,7 +1589,7 @@ async function runWorkflow({ countGeneration = false }: { countGeneration?: bool
     resetReviewControls();
     renderResult(result);
   } finally {
-    els.run.disabled = false;
+    if (requestId === S.workflowRequestId) els.run.disabled = false;
   }
 }
 
@@ -1610,7 +1699,20 @@ function pick(e: PointerEvent) {
     const d = len(sub(S.verts[vi], lp));
     if (d < bd) { bd = d; best = vi; }
   }
+  const clearedFreehandBoundary = shouldClearFreehandBoundaryOnLesionRepick({
+    kind: els.tumorKind.value,
+    boundaryMode: els.boundaryMode.value,
+    boundaryPointCount: S.boundaryPoints.length,
+  });
+  if (clearedFreehandBoundary) {
+    S.boundaryPoints = [];
+    S.boundaryActive = false;
+    els.startBoundary.textContent = "开始轮廓";
+  }
   setLesion(best);
+  if (clearedFreehandBoundary) {
+    els.pickState.textContent = `当前点位：顶点 #${best}；原自由轮廓已清空，请按新病灶重新绘制。`;
+  }
   runWorkflow();
 }
 
@@ -1706,6 +1808,7 @@ function bindReactWorkbenchCommands() {
 }
 
 export function disposeIncisionWorkbench() {
+  persistWorkspaceSession();
   S.mounted = false;
   if (S.frameId) cancelAnimationFrame(S.frameId);
   S.domEventCleanup?.();

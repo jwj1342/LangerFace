@@ -35,6 +35,7 @@ const tools = [
 ].join("\n");
 const exportPrivacy = fs.readFileSync("src/services/exportPrivacy.ts", "utf8");
 const tumorInputService = fs.readFileSync("src/services/tumorInput.ts", "utf8");
+const workspaceSessionService = fs.readFileSync("src/services/incisionWorkspaceSession.ts", "utf8");
 const incisionSnapshotsService = fs.readFileSync("src/services/incisionSnapshots.ts", "utf8");
 const incisionReviewRecordsService = fs.readFileSync("src/services/incisionReviewRecords.ts", "utf8");
 const controllerSnapshotSchemas = fs.readFileSync("src/lib/controllerSnapshotSchemas.ts", "utf8");
@@ -103,6 +104,13 @@ assert.ok(tumorInputService.includes("buildTumorFormSnapshot"), "shared tumor in
 assert.ok(tumorInputService.includes("importedTumorFormState"), "shared tumor input service owns imported tumor form normalization");
 assert.ok(js.includes("./tumorInput"), "workbench consumes the shared typed tumor input service");
 assert.ok(js.includes("importedTumorFormState(payload"), "workbench delegates imported tumor payloads to the shared service");
+assert.ok(js.includes("applyTumorContext(rec.tumor)"), "loading a saved candidate restores its complete tumor context");
+assert.ok(js.includes("reviewForCandidateRecord"), "every candidate record uses the shared review gate");
+assert.ok(js.includes("forceDraft: !readiness.ok"), "invalid confirmation saves are explicitly downgraded to drafts");
+assert.ok(js.includes("shouldClearFreehandBoundaryOnLesionRepick"), "lesion repicks clear stale freehand boundaries");
+assert.ok(workspaceSessionService.includes("incision-workspace-session/v1"), "route round trips persist a versioned incision workspace session");
+assert.ok(js.includes("restoreWorkspaceSession"), "the incision runtime restores the logical workspace after remount");
+assert.ok(js.includes("workflowRequestId"), "stale asynchronous workflow results cannot replace a newer tumor context");
 assert.ok(incisionSnapshotsService.includes("buildIncisionControllerSnapshot"), "shared incision snapshot service owns React snapshot construction");
 assert.ok(incisionSnapshotsService.includes("buildIncisionSavedCandidateSummaries"), "shared incision snapshot service owns saved candidate summaries");
 assert.ok(incisionSnapshotsService.includes("IncisionPlanResultLike"), "shared incision snapshot service types candidate result inputs");
