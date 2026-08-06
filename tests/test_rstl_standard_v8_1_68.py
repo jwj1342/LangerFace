@@ -31,7 +31,6 @@ NEW_V68_LINES = {
 
 def _atlas_payload(canonical: CanonicalFaceModel, reference_path: Path, output: Path) -> dict:
     reference = json.loads(reference_path.read_text(encoding="utf-8"))
-    assert reference["atlasVersion"] == "8.1.68"
     atlas = build(canonical, reference)
     atlas.save(str(output))
     return json.loads(output.read_text(encoding="utf-8"))
@@ -101,9 +100,11 @@ def test_v8_1_68_adds_lateral_canthus_arcs_and_extends_under_eye_lines(tmp_path)
         ROOT / "assets" / "rstl_standard_reference_v8_1_67.json",
         tmp_path / "atlas_v67.json",
     )
+    v68_reference_path = ROOT / "assets" / "rstl_standard_reference_v8_1_68.json"
+    assert json.loads(v68_reference_path.read_text(encoding="utf-8"))["atlasVersion"] == "8.1.68"
     v68_payload = _atlas_payload(
         canonical,
-        ROOT / "assets" / "rstl_standard_reference_v8_1_68.json",
+        v68_reference_path,
         tmp_path / "atlas_v68.json",
     )
     official = json.loads((ROOT / "assets" / "atlas_rstl.json").read_text(encoding="utf-8"))
