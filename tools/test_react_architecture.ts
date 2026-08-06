@@ -160,6 +160,7 @@ const liveActionSchedulerService = read("src/services/liveActionScheduler.ts");
 const liveFrameSchedulerService = read("src/services/liveFrameScheduler.ts");
 const liveScanLifecycleService = read("src/services/liveScanLifecycle.ts");
 const head3dControllerService = read("src/services/head3dController.ts");
+const liveCanvasInteractionService = read("src/services/liveCanvasInteraction.ts");
 const mode3dService = read("src/services/mode3d.ts");
 const livePipelineService = read("src/services/pipeline.ts");
 const livePipelineLoopService = read("src/services/pipelineLoop.ts");
@@ -179,6 +180,7 @@ const liveRuntimeDependencyTypes = [
   "src/services/liveFrameScheduler.ts",
   "src/services/liveScanLifecycle.ts",
   "src/services/head3dController.ts",
+  "src/services/liveCanvasInteraction.ts",
   "src/services/liveDom.ts",
   "src/services/liveCanvasFit.ts",
   "src/services/dataSource.ts",
@@ -2262,8 +2264,15 @@ assert.ok(head3dControllerService.includes("removeEventListener"),
   "3D canvas controls remove every listener at the route boundary");
 assert.ok(!/(?:document|window|THREE|MediaPipe)/.test(head3dControllerService),
   "3D controller lifecycle stays independent of globals and renderer implementations");
-assert.ok(liveController.split("\n").length <= 630, "live runtime stays a thin orchestration layer");
-assert.ok(liveController.includes("interface ImageDragState"), "live runtime types its route-local drag state");
+assert.ok(liveController.includes("./liveCanvasInteraction"), "live runtime delegates pointer and wheel ownership");
+assert.ok(liveCanvasInteractionService.includes("bindLiveCanvasInteractions"),
+  "live canvas interaction service owns its listener lifecycle");
+assert.ok(liveCanvasInteractionService.includes("lostpointercapture"),
+  "live canvas interaction service cleans up browser-lost pointer capture");
+assert.ok(!/(?:document|window|THREE|MediaPipe)/.test(liveCanvasInteractionService),
+  "live canvas interaction service stays independent of globals, renderers, and detectors");
+assert.ok(liveController.split("\n").length <= 580, "live runtime stays a thin orchestration layer");
+assert.ok(!liveController.includes("interface ImageDragState"), "live runtime does not own route-local pointer state");
 assert.ok(!liveController.includes("function controllerEvent"), "live runtime delegates browser command parsing to typed schemas");
 assert.ok(workbenchCommandSchemasService.includes("readLiveRenderCommand"), "workbench command schemas validate live render payloads");
 assert.ok(workbenchCommandSchemasService.includes("readAnnotateLibraryCommand"), "workbench command schemas validate annotation library payloads");

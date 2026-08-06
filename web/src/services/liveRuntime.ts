@@ -25,6 +25,7 @@ import {
 import { dataSource } from "./dataSource";
 import { countMetric, logError } from "./logger";
 import { LiveActionScheduler } from "./liveActionScheduler";
+import { bindLiveCanvasInteractions } from "./liveCanvasInteraction";
 import { createCanvasRecordingController, type CanvasRecordingController, type RecordingExtraCanvas } from "./canvasRecording";
 import { modelState, recordingState, reconState, renderState, sourceState } from "./liveState";
 import { createPhotoPlanningController } from "./photoPlanningController";
@@ -67,12 +68,6 @@ import {
   updateWrinkleUi,
 } from "./liveWrinkleAnalysis.ts";
 
-interface ImageDragState {
-  pointerId: number;
-  x: number;
-  y: number;
-}
-
 interface ValueControlEvent {
   target: {
     value: unknown;
@@ -88,7 +83,6 @@ interface CheckedControlEvent {
 let previewSystem: string | null = null;
 let previewMeta: { source: string; validated: boolean; count: number } | null = null;
 let recordingController: CanvasRecordingController | null = null;
-let imageDrag: ImageDragState | null = null;
 let resizeCleanup: (() => void) | null = null;
 let abortController: AbortController | null = null;
 let mounted = false;
@@ -254,53 +248,6 @@ function visibleRecordingCanvases(): RecordingExtraCanvas[] {
     extras.push({ label: "3D 视图", canvas: els.three });
   }
   return extras;
-}
-
-function startImageDrag(e: PointerEvent): void {
-  if (isRefineActive()) {
-    if (beginRefinePointer(e)) e.preventDefault();
-    return;
-  }
-  if (sourceState.sourceKind !== "image" || e.button !== 0) return;
-  imageDrag = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
-  els.mainWrap.classList.add("dragging");
-  els.mainWrap.setPointerCapture(e.pointerId);
-}
-
-function moveImageDrag(e: PointerEvent): void {
-  if (isRefineActive()) {
-    if (moveRefinePointer(e)) e.preventDefault();
-    return;
-  }
-  if (!imageDrag || e.pointerId !== imageDrag.pointerId) return;
-  panImageViewBy(e.clientX - imageDrag.x, e.clientY - imageDrag.y);
-  imageDrag.x = e.clientX;
-  imageDrag.y = e.clientY;
-  e.preventDefault();
-}
-
-function endImageDrag(e: PointerEvent): void {
-  if (isRefineActive()) {
-    if (endRefinePointer(e)) e.preventDefault();
-    return;
-  }
-  if (!imageDrag || e.pointerId !== imageDrag.pointerId) return;
-  imageDrag = null;
-  els.mainWrap.classList.remove("dragging");
-  if (els.mainWrap.hasPointerCapture(e.pointerId)) els.mainWrap.releasePointerCapture(e.pointerId);
-}
-
-function handleMainWheel(e: WheelEvent): void {
-  if (sourceState.sourceKind === "image" || isRefineActive()) {
-    if (zoomImageViewAt(e.clientX, e.clientY, e.deltaY)) {
-      if (isRefineActive()) updateRefineUi();
-      e.preventDefault();
-    }
-    return;
-  }
-  if (!adjustFocusZoom(e.deltaY)) return;
-  e.preventDefault();
-  refreshStaticImage();
 }
 
 function handlePauseToggle(): void {
@@ -544,11 +491,18 @@ function bindLiveEvents(signal: AbortSignal): void {
     els.twinTexture.addEventListener("change", () => runLiveAction("toggle_twin_texture", toggleTwinTexture), { signal });
   }
 
-  els.mainWrap.addEventListener("pointerdown", startImageDrag, { signal });
-  els.mainWrap.addEventListener("pointermove", moveImageDrag, { signal });
-  els.mainWrap.addEventListener("pointerup", endImageDrag, { signal });
-  els.mainWrap.addEventListener("pointercancel", endImageDrag, { signal });
-  els.mainWrap.addEventListener("wheel", handleMainWheel, { passive: false, signal });
+  bindLiveCanvasInteractions(els.mainWrap, {
+    isRefineActive,
+    beginRefinePointer,
+    moveRefinePointer,
+    endRefinePointer,
+    sourceKind: () => sourceState.sourceKind,
+    panImageViewBy,
+    zoomImageViewAt,
+    adjustFocusZoom,
+    updateRefineUi,
+    refreshStaticImage,
+  }, { signal });
 }
 
 function isActiveSession(session: number): boolean {
@@ -573,7 +527,6 @@ export function disposeLiveWorkbench() {
   sourceState.planning2d?.dispose();
   sourceState.planning2d = null;
   void disposeLiveWrinkleAnalysis();
-  imageDrag = null;
   clearDomBinding();
 }
 
@@ -587,7 +540,6 @@ export function mountLiveWorkbench(root: ParentNode | Document = document) {
   previewSystem = null;
   previewMeta = null;
   recordingController = null;
-  imageDrag = null;
   bindLiveEvents(abortController.signal);
   updateRefineUi();
   updateWrinkleUi();
