@@ -5,6 +5,7 @@ import { prepareImageSource } from "./imageSource.ts";
 import { countMetric, logWarn } from "./logger.ts";
 import { renderState, sourceState } from "./liveState.ts";
 import { resetRefineForNewSource } from "./liveRefine2d";
+import { resetLiveWrinkleAnalysis } from "./liveWrinkleAnalysis.ts";
 import { setLive, setMsg } from "./liveUi.ts";
 import { requestFrame } from "./pipelineLoop.ts";
 import { ensureImageReady, ensureReady } from "./pipelineModels.ts";
@@ -124,6 +125,7 @@ export function setSource(src: CanvasImageSource, kind: SourceKind, width?: numb
   }
   renderState.smoother.reset();
   resetRefineForNewSource();
+  resetLiveWrinkleAnalysis();
   sourceState.presence = 0;
   sourceState.lastLM = null;
   sourceState.imageCacheLM = null;
@@ -173,6 +175,7 @@ export function stopSource({ preserveOperation = false }: { preserveOperation?: 
   sourceState.qualityGate = null;
   sourceState.localRegionQuality = null;
   resetRefineForNewSource();
+  resetLiveWrinkleAnalysis();
   els.pause.disabled = true;
   els.pause.textContent = "📷 定格微调";
 }
