@@ -106,7 +106,7 @@ export function buildIncisionReviewRecord(
   const traceGate = workflowTraceGate(result);
   return {
     schema_version: "incision-review-record/v0.4",
-    id: input.id || `candidate_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+    id: input.id || globalThis.crypto.randomUUID(),
     label: input.label || "候选",
     created_at: createdAt,
     tumor: result.tumor,

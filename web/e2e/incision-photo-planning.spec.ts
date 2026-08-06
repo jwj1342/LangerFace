@@ -6,6 +6,7 @@ import { dragFirstPhotoEndpoint, uploadGeneratedPhoto } from "./support/incision
 async function explicitGenerationCount(page: Page) {
   const status = await page.locator("#stageStatus").textContent() || "";
   if (status.includes("自动预览")) return 0;
+  if (status.includes("生成中")) return -1;
   const match = status.match(/已明确生成\s*(\d+)\s*次/);
   if (!match) throw new Error(`generation count is missing from stage status: ${status}`);
   return Number(match[1]);
