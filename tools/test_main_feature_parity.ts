@@ -20,6 +20,7 @@ const liveRouteControls = read("src/components/LiveRouteControlsPanel.tsx");
 const liveControllerBridge = read("src/hooks/useLiveControllerBridge.ts");
 const liveDom = read("src/services/liveDom.ts");
 const liveRuntime = read("src/services/liveRuntime.ts");
+const liveCommandRouter = read("src/services/liveCommandRouter.ts");
 const pipelineSource = read("src/services/pipelineSource.ts");
 const controllerCommand = read("src/lib/controllerCommand.ts");
 const mode3d = read("src/services/mode3d.ts");
@@ -117,8 +118,15 @@ includesAll(liveRuntime, [
   "els.upload.addEventListener",
   "els.file.click",
   "setIncisionOverlayQa",
-  "readLiveSourceCommand",
+  "LiveCommandRouter",
 ], "live runtime bridge");
+includesAll(liveCommandRouter, [
+  "readLiveSourceCommand(event)",
+  "readLiveRenderCommand(event)",
+  "readLiveRouteCommand(event)",
+  'case "camera_toggle"',
+  'case "project_3d"',
+], "live command router");
 
 includesAll(liveControllerBridge, [
   "useLiveControllerBridge",
