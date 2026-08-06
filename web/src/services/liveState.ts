@@ -7,6 +7,7 @@ import type {
   CurveRefinementTransport,
   RefineLine,
   RefinePoint,
+  RefineQualityReport,
   RefineViewportCrop,
 } from "./liveRefineMath";
 
@@ -105,6 +106,7 @@ export interface LiveRefine2dState {
   liveTransport: CurveRefinementTransport | null;
   selected: RefinePick | null;
   dirty: boolean;
+  quality: RefineQualityReport | null;
   undoStack: RefineHistoryEntry[];
   drag: RefineDrag | null;
 }
@@ -189,6 +191,7 @@ export const renderState: LiveRenderState = {
     liveTransport: null,
     selected: null,
     dirty: false,
+    quality: null,
     undoStack: [],
     drag: null,
   },
