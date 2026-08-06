@@ -105,10 +105,11 @@ test("patient photo is the mobile incision canvas and reuploads fail safely", as
   await page.locator("#runWorkflowBtn").click();
   await expect(page.locator("#stageStatus")).toContainText("第 2 次生成");
 
-  const endpointHandles = await findPhotoEndpointHandles(page);
-  expect(endpointHandles).toHaveLength(2);
   const lengthBefore = Number(await page.locator("#lengthScale").inputValue());
   await page.locator("#reviewDecision").selectOption("approved_for_discussion");
+  await photoCanvas.scrollIntoViewIfNeeded();
+  const endpointHandles = await findPhotoEndpointHandles(page);
+  expect(endpointHandles).toHaveLength(2);
   const [firstHandle, secondHandle] = endpointHandles;
   await page.mouse.move(firstHandle.x, firstHandle.y);
   await page.mouse.down();
