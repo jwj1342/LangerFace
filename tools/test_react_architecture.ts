@@ -2244,6 +2244,8 @@ assert.ok(!/(?:document|window|HTMLElement|PointerEvent|THREE|MediaPipe)/.test(l
   "live frame scheduler stays DOM, renderer, and detector independent");
 assert.ok(livePipelineLoopService.includes("new LiveFrameScheduler"), "live pipeline loop delegates RAF ownership to the scheduler");
 assert.ok(livePipelineSourceService.includes("cancelFrame()"), "stopping a live source cancels its pending render frame");
+assert.ok(livePipelineSourceService.includes("sourceLayoutScheduler.cancel()"), "source changes cancel pending image layout frames");
+assert.ok(!livePipelineSourceService.includes("requestAnimationFrame"), "image layout refreshes cannot outlive their source through raw RAF callbacks");
 assert.ok(!livePipelineService.includes("requestAnimationFrame"), "atlas redraws cannot bypass live frame coalescing");
 assert.ok(liveController.split("\n").length <= 630, "live runtime stays a thin orchestration layer");
 assert.ok(liveController.includes("interface ImageDragState"), "live runtime types its route-local drag state");

@@ -11,6 +11,7 @@ import {
   sourceState,
 } from "./liveState.ts";
 import { resetRefineForNewSource } from "./liveRefine2d";
+import { LiveFrameScheduler } from "./liveFrameScheduler.ts";
 import { resetLiveWrinkleAnalysis } from "./liveWrinkleAnalysis.ts";
 import { setLive, setMsg } from "./liveUi.ts";
 import { cancelFrame, requestFrame } from "./pipelineLoop.ts";
@@ -18,6 +19,7 @@ import { ensureImageReady, ensureReady } from "./pipelineModels.ts";
 
 type SourceKind = "camera" | "video" | "image";
 let sourceOperationId = 0;
+const sourceLayoutScheduler = new LiveFrameScheduler();
 
 export async function startCamera(): Promise<void> {
   const operationId = ++sourceOperationId;
@@ -155,8 +157,13 @@ export function setSource(
   els.canvas.classList.toggle("image-source", kind === "image");
   if (kind === "image") {
     fitCanvasDisplayToStage({ resetView: true });
-    requestAnimationFrame(() => fitCanvasDisplayToStage({ resetView: true }));
+    sourceLayoutScheduler.request(() => {
+      if (sourceState.running && currentLiveSourceKind() === "image") {
+        fitCanvasDisplayToStage({ resetView: true });
+      }
+    });
   } else {
+    sourceLayoutScheduler.cancel();
     clearCanvasDisplayFit();
   }
   renderState.smoother.reset();
@@ -188,6 +195,7 @@ export function setSource(
 export function stopSource({ preserveOperation = false }: { preserveOperation?: boolean } = {}): void {
   if (!preserveOperation) sourceOperationId += 1;
   cancelFrame();
+  sourceLayoutScheduler.cancel();
   sourceState.planning2d?.clearSource();
   els.video.srcObject = null;
   els.video.removeAttribute("src");
