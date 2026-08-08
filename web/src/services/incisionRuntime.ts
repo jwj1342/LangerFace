@@ -100,6 +100,7 @@ import {
 import { IncisionCommandRouter } from "./incisionCommandRouter";
 import {
   createIncisionSessionGuard,
+  loadIncisionSessionAssets,
   type IncisionSessionToken,
 } from "./incisionSession";
 import {
@@ -407,12 +408,15 @@ async function loadMediaPipeIncisionAssets(session: IncisionSessionToken) {
   const updateActiveAssetLoading = (event: DynamicRecord) => {
     if (isActiveSession(session)) updateAssetLoading(event);
   };
-  const [head, standardAtlas] = await Promise.all([
-    dataSource.getHeadMesh("mediapipe-468", { onProgress: updateActiveAssetLoading }),
-    dataSource.loadAtlas("rstl", { onProgress: updateActiveAssetLoading }),
-  ]);
+  const assets = await loadIncisionSessionAssets(session, isActiveSession, {
+    loadHead: () => dataSource.getHeadMesh("mediapipe-468", { onProgress: updateActiveAssetLoading }),
+    loadStandardAtlas: () => dataSource.loadAtlas("rstl", { onProgress: updateActiveAssetLoading }),
+    takePreviewAtlas: () => dataSource.takePreviewAtlas(),
+  });
+  if (!assets) return null;
+  const { head, standardAtlas, personalizedAtlas } = assets;
   const resolved = resolveIncisionAtlas({
-    personalizedAtlas: dataSource.takePreviewAtlas(),
+    personalizedAtlas,
     standardAtlas,
     triangleCount: head.triangles.length,
   });
@@ -431,7 +435,9 @@ async function loadMediaPipeIncisionAssets(session: IncisionSessionToken) {
 }
 
 async function boot(session: IncisionSessionToken) {
-  const { head, atlas, headAsset } = await loadMediaPipeIncisionAssets(session);
+  const assets = await loadMediaPipeIncisionAssets(session);
+  if (!assets) return;
+  const { head, atlas, headAsset } = assets;
   if (!isActiveSession(session)) return;
   S.verts = head.vertices; S.tris = head.triangles; S.atlas = atlas; S.headAsset = headAsset; S.assetWarnings = headAsset.warnings;
   S.planning2d?.setTopology(S.tris);
