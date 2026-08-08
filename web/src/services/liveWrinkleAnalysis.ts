@@ -1,12 +1,16 @@
+import { FaceLandmarker } from "@mediapipe/tasks-vision";
+import visionWasmLoaderUrl from "../../node_modules/@mediapipe/tasks-vision/wasm/vision_wasm_internal.js?url";
+import visionWasmBinaryUrl from "../../node_modules/@mediapipe/tasks-vision/wasm/vision_wasm_internal.wasm?url";
+import faceLandmarkerUrl from "../../assets/face_landmarker.task?url";
+
 import { els } from "./liveDom.ts";
-import { mapAtlas, type MappedAtlasLine } from "./geometryAtlas.ts";
+import { mapAtlas, toPixels, type MappedAtlasLine } from "./geometryAtlas.ts";
 import { countMetric, logWarn } from "./logger.ts";
 import {
   hasManualRefineChanges,
   replaceStaticRefineBaseline,
 } from "./liveRefine2d.ts";
 import { modelState, renderState, sourceState, type EditableRefineLine } from "./liveState.ts";
-import { projectVerts } from "./projection3d.ts";
 import type { Vec3 } from "./softBody.ts";
 import {
   fromWrinkleWorkingPoint,
@@ -57,6 +61,8 @@ interface WrinkleAnalysisState {
   movedPointCount: number;
   fineLineCount: number;
   sourceComponentCount: number;
+  diagnostics: Record<string, any> | null;
+  audit: Record<string, any> | null;
   error: string | null;
 }
 
@@ -71,10 +77,13 @@ const state: WrinkleAnalysisState = {
   movedPointCount: 0,
   fineLineCount: 0,
   sourceComponentCount: 0,
+  diagnostics: null,
+  audit: null,
   error: null,
 };
 
 let yolo: YoloWrinkleOnnx | null = null;
+let wrinkleFaceLandmarker: FaceLandmarker | null = null;
 
 const cloneMappedLines = (lines: readonly MappedAtlasLine[]): EditableRefineLine[] => (
   lines.map((line) => ({
@@ -88,17 +97,40 @@ const cloneMappedLines = (lines: readonly MappedAtlasLine[]): EditableRefineLine
   }))
 );
 
-function currentLandmarks(): Vec3[] | null {
-  const landmarks = sourceState.sourceKind === "image"
-    ? sourceState.imageCacheLM
-    : sourceState.lastLM;
-  return Array.isArray(landmarks) ? projectVerts(landmarks as Vec3[]) : null;
-}
-
 function currentPixelSource(): CanvasImageSource | null {
   if (sourceState.sourceKind === "image") return sourceState.source as CanvasImageSource | null;
   if (sourceState.paused) return sourceState.frozenFrame;
   return null;
+}
+
+async function ensureWrinkleFaceLandmarker(): Promise<FaceLandmarker> {
+  if (wrinkleFaceLandmarker) return wrinkleFaceLandmarker;
+  wrinkleFaceLandmarker = await FaceLandmarker.createFromOptions(
+    { wasmLoaderPath: visionWasmLoaderUrl, wasmBinaryPath: visionWasmBinaryUrl },
+    {
+      baseOptions: { modelAssetPath: faceLandmarkerUrl, delegate: "CPU" },
+      runningMode: "IMAGE",
+      numFaces: 1,
+      minFaceDetectionConfidence: 0.5,
+      minFacePresenceConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+      outputFaceBlendshapes: false,
+      outputFacialTransformationMatrixes: false,
+    },
+  );
+  return wrinkleFaceLandmarker;
+}
+
+async function detectV9ReferenceLandmarks(
+  source: CanvasImageSource,
+  width: number,
+  height: number,
+): Promise<Vec3[]> {
+  const detector = await ensureWrinkleFaceLandmarker();
+  const result = detector.detect(source as Parameters<FaceLandmarker["detect"]>[0]);
+  const normalized = result.faceLandmarks?.[0];
+  if (!normalized?.length) throw new Error("CPU 精确模式未检测到单一正面人脸");
+  return toPixels(normalized, width, height).map((point) => [point[0], point[1], 0] as Vec3);
 }
 
 export function isWrinkleFrameReady(): boolean {
@@ -265,6 +297,34 @@ export function getWrinkleEvidenceLines(): readonly LiveWrinkleEvidenceLine[] {
   return state.evidenceLines;
 }
 
+/**
+ * Numeric-only research diagnostics for deterministic browser regression.
+ * This intentionally excludes source pixels and YOLO masks.
+ */
+export function getLiveWrinkleAnalysisDebugSnapshot() {
+  return {
+    status: state.status,
+    fineLineCount: state.fineLineCount,
+    sourceComponentCount: state.sourceComponentCount,
+    movedCurveCount: state.movedCurveCount,
+    movedPointCount: state.movedPointCount,
+    faceLandmarkerDelegate: "CPU",
+    faceLandmarkerRunningMode: "IMAGE",
+    diagnostics: state.diagnostics ? { ...state.diagnostics } : null,
+    audit: state.audit ? { ...state.audit } : null,
+    standardLines: state.standardLines?.map((line) => ({
+      name: line.name,
+      region: line.region,
+      pts: line.pts.map((point) => [point[0], point[1]]),
+    })) || null,
+    autoRefinedLines: state.autoRefinedLines?.map((line) => ({
+      name: line.name,
+      region: line.region,
+      pts: line.pts.map((point) => [point[0], point[1]]),
+    })) || null,
+  };
+}
+
 export async function analyzeCurrentWrinkles({ force = false }: { force?: boolean } = {}): Promise<void> {
   if (!isWrinkleFrameReady()) {
     updateWrinkleUi();
@@ -272,18 +332,26 @@ export async function analyzeCurrentWrinkles({ force = false }: { force?: boolea
   }
   if (!force && state.status !== "idle" && state.status !== "error") return;
   const source = currentPixelSource();
-  const landmarks = currentLandmarks();
-  if (!source || !landmarks?.length) return;
+  if (!source) return;
   const generation = ++state.generation;
   state.evidenceLines = [];
   state.autoRefinedLines = null;
-  state.standardLines = currentStandardLines(landmarks);
+  state.standardLines = null;
   state.movedCurveCount = 0;
   state.movedPointCount = 0;
   state.fineLineCount = 0;
   state.sourceComponentCount = 0;
+  state.diagnostics = null;
+  state.audit = null;
   updateStatus("loading");
   try {
+    const landmarks = await detectV9ReferenceLandmarks(
+      source,
+      els.canvas.width,
+      els.canvas.height,
+    );
+    if (generation !== state.generation) return;
+    state.standardLines = currentStandardLines(landmarks);
     const working = buildWrinkleWorkingFrame(source, els.canvas.width, els.canvas.height);
     const workLandmarks = landmarks.map((point) => {
       const [x, y] = toWrinkleWorkingPoint(point, working);
@@ -356,6 +424,8 @@ export async function analyzeCurrentWrinkles({ force = false }: { force?: boolea
     state.sourceComponentCount = evidence.summary.sourceConnectedComponents;
     state.movedCurveCount = Number(refined.diagnostics.moved_curve_count) || 0;
     state.movedPointCount = Number(refined.diagnostics.moved_point_count) || 0;
+    state.diagnostics = refined.diagnostics;
+    state.audit = refined.audit;
     updateStatus("ready");
     countMetric("wrinkle.singleFrame.ready");
     window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
@@ -396,6 +466,8 @@ export function resetLiveWrinkleAnalysis(): void {
   state.movedPointCount = 0;
   state.fineLineCount = 0;
   state.sourceComponentCount = 0;
+  state.diagnostics = null;
+  state.audit = null;
   state.error = null;
   updateWrinkleUi();
 }
@@ -403,6 +475,9 @@ export function resetLiveWrinkleAnalysis(): void {
 export async function disposeLiveWrinkleAnalysis(): Promise<void> {
   resetLiveWrinkleAnalysis();
   const current = yolo;
+  const currentLandmarker = wrinkleFaceLandmarker;
   yolo = null;
+  wrinkleFaceLandmarker = null;
   await current?.close();
+  currentLandmarker?.close();
 }

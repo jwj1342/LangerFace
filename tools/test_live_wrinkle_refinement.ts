@@ -30,4 +30,13 @@ assert.match(runtime, /analyzeCurrentWrinkles/);
 assert.match(runtime, /applyWrinkleGuidedRefinement/);
 assert.doesNotMatch(runtime, /if \(!isRefineActive\(\)\) toggleRefine2d\(\)/);
 
+const analysis = fs.readFileSync(
+  new URL("../web/src/services/liveWrinkleAnalysis.ts", import.meta.url),
+  "utf8",
+);
+assert.match(analysis, /delegate: "CPU"/);
+assert.match(analysis, /runningMode: "IMAGE"/);
+assert.match(analysis, /outputFaceBlendshapes: false/);
+assert.match(analysis, /detectV9ReferenceLandmarks/);
+
 console.log("single-frame wrinkle display and refinement tests passed");
