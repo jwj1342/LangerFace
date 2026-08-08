@@ -1735,6 +1735,7 @@ function pick(e: PointerEvent) {
   });
   if (clearedFreehandBoundary) {
     S.boundaryPoints = [];
+    S.boundaryRefs = [];
     S.boundaryActive = false;
     els.startBoundary.textContent = "开始轮廓";
   }

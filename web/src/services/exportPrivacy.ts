@@ -94,8 +94,30 @@ function reviewExportRecordAtPath(payload: unknown, path: string[]): Record<stri
   return reviewRecord?.schema_version === "incision-review-record/v0.4" ? reviewRecord : null;
 }
 
+function candidateComparisonReferencesReviewRecord(payload: unknown, path: string[], text: string): boolean {
+  const exportPayload = objectRecord(payload);
+  if (
+    exportPayload?.schema_version !== "incision-review-export/v0.4"
+    || path.length !== 3
+    || path[0] !== "candidate_comparison"
+    || !/^\d+$/.test(path[1])
+    || path[2] !== "id"
+  ) return false;
+  const comparison = Array.isArray(exportPayload.candidate_comparison)
+    ? objectRecord(exportPayload.candidate_comparison[Number(path[1])])
+    : null;
+  if (comparison?.id !== text) return false;
+  const records = [exportPayload.current, ...(Array.isArray(exportPayload.saved) ? exportPayload.saved : [])];
+  return records.some((record) => {
+    const reviewRecord = objectRecord(record);
+    return reviewRecord?.schema_version === "incision-review-record/v0.4" && reviewRecord.id === text;
+  });
+}
+
 function isAllowedMetadataUuid(payload: unknown, path: string[], text: string): boolean {
-  if (!isStrictUuid(text) || !reviewExportRecordAtPath(payload, path)) return false;
+  if (!isStrictUuid(text)) return false;
+  if (candidateComparisonReferencesReviewRecord(payload, path, text)) return true;
+  if (!reviewExportRecordAtPath(payload, path)) return false;
   const recordOffset = path[0] === "saved" ? 2 : 1;
   return path.length === recordOffset + 1 && path[recordOffset] === "id";
 }

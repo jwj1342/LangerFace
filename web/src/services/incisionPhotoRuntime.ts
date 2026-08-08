@@ -13,6 +13,7 @@ import { prepareImageSource } from "./imageSource";
 import { modelState } from "./liveState";
 import { ensureImageReady } from "./pipelineModels";
 import { detectStaticImageWithRetries } from "./staticImageDetection";
+import { shouldClearFreehandBoundaryOnLesionRepick } from "./tumorInput";
 
 interface IncisionPhotoRuntimeOptions {
   elements: IncisionDomElements;
@@ -292,7 +293,21 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
         publishState("tumor_boundary_point");
         return;
       }
+      const clearedFreehandBoundary = shouldClearFreehandBoundaryOnLesionRepick({
+        kind: elements.tumorKind.value,
+        boundaryMode: elements.boundaryMode.value,
+        boundaryPointCount: state.boundaryPoints.length,
+      });
+      if (clearedFreehandBoundary) {
+        state.boundaryPoints = [];
+        state.boundaryRefs = [];
+        state.boundaryActive = false;
+        elements.startBoundary.textContent = "开始轮廓";
+      }
       setLesion(nearestVertex(point), ref);
+      if (clearedFreehandBoundary) {
+        elements.pickState.textContent = "已选择新病灶中心；原自由轮廓已清空，请重新绘制。";
+      }
       void runWorkflow();
     },
     endpointHandleFromEvent(event) {
