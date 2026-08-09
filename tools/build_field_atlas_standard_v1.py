@@ -34,9 +34,9 @@ from langerface.config import (  # noqa: E402
 from langerface.geometry import CanonicalFaceModel  # noqa: E402
 from langerface.lines import Atlas, AtlasLine, atlas_line_from_points2d  # noqa: E402
 
-REFERENCE = REPO / "assets" / "rstl_standard_reference_v8_1_68.json"
+REFERENCE = REPO / "assets" / "rstl_standard_reference_v8_1_69.json"
 OUTPUT = REPO / "assets" / "atlas_rstl_standard_v8.json"
-STANDARD_ATLAS_VERSION = "8.1.68"
+STANDARD_ATLAS_VERSION = "8.1.69"
 CENTER_X = 0.5
 _FACE_POLYGON: np.ndarray | None = None
 _FOREHEAD_MIN_Y = 0.060
@@ -123,6 +123,7 @@ _FOREHEAD_FOURTEEN_ARCHED_DENSITY_V62 = False
 _FOREHEAD_RIGID_DOWNWARD_SHIFT_V63 = False
 _FOREHEAD_ADDITIONAL_DOWNWARD_SHIFT_V64 = False
 _LATERAL_CANTHUS_SHORT_ARCS_V65 = False
+_SUPRAORBITAL_BROW_SHORT_ARCS_V66 = False
 
 _NASAL_BUNDLE_LAYER_SPACING_V30 = 0.015
 _NASAL_BUNDLE_OUTER_X_STEP_V30 = 0.004
@@ -209,6 +210,8 @@ _LATERAL_CANTHUS_UNDEREYE_START_X_V65 = 0.030
 _LATERAL_CANTHUS_UNDEREYE_BLEND_X_V65 = 0.235
 _LATERAL_CANTHUS_UNDEREYE_OUTER_Y_V65 = (0.390, 0.410, 0.427)
 _LATERAL_CANTHUS_SHORT_ARC_REGION_V65 = "lateral_canthus_short_arc_v65"
+_SUPRAORBITAL_LATERAL_SHORT_ARC_REGION_V66 = "supraorbital_lateral_short_arc_v66"
+_SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V66 = "supraorbital_medial_short_arc_v66"
 _CHEEK_GAP_BRIDGE_SHIFT_V54 = 0.006
 _CHEEK_GAP_BRIDGE_WINDOW_V54 = (0.26, 0.48)
 _CHEEK_GAP_BRIDGE_ROOT_OFFSET_V54 = 0.010
@@ -3298,6 +3301,53 @@ def _add_lateral_canthus_short_arcs_v65(curves: list[Curve]) -> list[Curve]:
     return revised + short_arcs
 
 
+def _add_supraorbital_brow_short_arcs_v66(curves: list[Curve]) -> list[Curve]:
+    """Fill the brow-to-forehead corridor with two independent short-arc bundles."""
+    lateral: list[Curve] = []
+    for rank in range(4):
+        offset = 0.008 * rank
+        controls = np.asarray(
+            (
+                (0.035, 0.205 + offset),
+                (0.072, 0.193 + offset),
+                (0.122, 0.184 + offset),
+                (0.170, 0.184 + offset),
+            ),
+            dtype=np.float64,
+        )
+        lateral.append(
+            Curve(
+                _SUPRAORBITAL_LATERAL_SHORT_ARC_REGION_V66,
+                resample(_cubic_bezier(*controls, 72), spacing=0.0035),
+            )
+        )
+
+    medial: list[Curve] = []
+    for rank in range(5):
+        controls = np.asarray(
+            (
+                (0.270 + 0.024 * rank, 0.242 - 0.004 * rank),
+                (0.262 + 0.024 * rank, 0.224 - 0.004 * rank),
+                (0.296 + 0.024 * rank, 0.193 - 0.0035 * rank),
+                (0.305 + 0.024 * rank, 0.188 - 0.0035 * rank),
+            ),
+            dtype=np.float64,
+        )
+        medial.append(
+            Curve(
+                _SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V66,
+                resample(_cubic_bezier(*controls, 72), spacing=0.0035),
+            )
+        )
+
+    print(
+        "[supraorbital-brow-short-arcs] "
+        f"lateral_half_lines={len(lateral)} medial_half_lines={len(medial)} "
+        "mirrored=true"
+    )
+    return list(curves) + lateral + medial
+
+
 def _densify_and_extend_orbital_brow_v59(curves: list[Curve]) -> list[Curve]:
     """Rebuild seven evenly spaced brow layers and extend both endpoint families."""
     indices = [
@@ -4035,6 +4085,8 @@ def trace_standard_streamlines(
         curves = _shift_forehead_arches_rigidly_downward_v63(curves)
     if _LATERAL_CANTHUS_SHORT_ARCS_V65:
         curves = _add_lateral_canthus_short_arcs_v65(curves)
+    if _SUPRAORBITAL_BROW_SHORT_ARCS_V66:
+        curves = _add_supraorbital_brow_short_arcs_v66(curves)
     return curves
 
 
@@ -4126,6 +4178,7 @@ def build(canonical: CanonicalFaceModel, reference: dict) -> Atlas:
         global _FOREHEAD_RIGID_DOWNWARD_SHIFT_V63
         global _FOREHEAD_ADDITIONAL_DOWNWARD_SHIFT_V64
         global _LATERAL_CANTHUS_SHORT_ARCS_V65
+        global _SUPRAORBITAL_BROW_SHORT_ARCS_V66
         constraints = reference.get("extraction", {}).get("doctorConstraints", {})
         _FOREHEAD_MIN_Y = 0.012 if "foreheadUpperExtension" in constraints else 0.060
         _NOSE_ROOT_HORIZONTAL_PATCH = "noseRootHorizontalPatch" in constraints
@@ -4292,6 +4345,9 @@ def build(canonical: CanonicalFaceModel, reference: dict) -> Atlas:
         )
         _LATERAL_CANTHUS_SHORT_ARCS_V65 = (
             "lateralCanthusShortArcsV65" in constraints
+        )
+        _SUPRAORBITAL_BROW_SHORT_ARCS_V66 = (
+            "supraorbitalBrowShortArcsV66" in constraints
         )
         projected_norm = (canonical.project_front() - canonical.face_frame()[0]) / canonical.face_frame()[1]
         _FACE_POLYGON = cv2.convexHull(projected_norm.astype(np.float32))
