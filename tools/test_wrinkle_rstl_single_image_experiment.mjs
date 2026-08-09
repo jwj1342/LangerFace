@@ -79,7 +79,7 @@ assert.match(source, /buildHeadVisibility/);
 assert.match(source, /stabilizeForeheadMask/);
 assert.match(source, /disableRuntimeExpansion:\s*!runtimeExpansion/,
   "the exported forehead curves must retain the v69 runtime transform");
-assert.match(source, /baseline:\s*"rstl_v8_1_69"/);
+assert.match(source, /baseline:\s*"rstl_v8_1_70"/);
 assert.match(source, /atlasVersion:\s*atlas\.atlasVersion/,
   "the export must record the atlas content version");
 assert.doesNotMatch(source, /atlasVersion:\s*atlas\.version/,
@@ -94,10 +94,10 @@ assert.match(source, /bundleMinimumSpacingRatio:\s*0\.65/);
 assert.match(source, /bundleDenseFollowerRegion:\s*"lateral_canthus_short_arc_v65"/);
 assert.match(source, /bundleDenseFollowerCountPerSide:\s*3/);
 assert.match(source, /lateral_canthus_short_arc_v65/);
-assert.match(source, /supraorbital_lateral_short_arc_v66/);
-assert.match(source, /supraorbital_medial_short_arc_v66/);
+assert.match(source, /supraorbital_lateral_short_arc_v67/);
+assert.match(source, /supraorbital_medial_short_arc_v67/);
 assert.match(source, /atlas\.lines\.length\s*!==\s*159/);
-assert.match(source, /pointCount\s*!==\s*15_272/);
+assert.match(source, /pointCount\s*!==\s*15_282/);
 assert.match(source, /replay_p90_error_px/,
   "the personalized atlas must audit replay against the refined canonical curves");
 assert.match(source, /replay_p90_error_px > 0\.10/);
@@ -118,11 +118,11 @@ for (const filename of [
 }
 
 assert.equal(atlas.validated, false);
-assert.equal(atlas.atlasVersion, "8.1.69");
+assert.equal(atlas.atlasVersion, "8.1.70");
 assert.equal(atlas.lines.length, 159);
-assert.equal(atlas.lines.reduce((sum, line) => sum + line.points.length, 0), 15_272);
+assert.equal(atlas.lines.reduce((sum, line) => sum + line.points.length, 0), 15_282);
 assert.equal(atlas.lines.filter((line) => line.region === "lateral_canthus_short_arc_v65").length, 8);
-assert.equal(atlas.lines.filter((line) => line.region === "supraorbital_lateral_short_arc_v66").length, 8);
-assert.equal(atlas.lines.filter((line) => line.region === "supraorbital_medial_short_arc_v66").length, 10);
+assert.equal(atlas.lines.filter((line) => line.region === "supraorbital_lateral_short_arc_v67").length, 8);
+assert.equal(atlas.lines.filter((line) => line.region === "supraorbital_medial_short_arc_v67").length, 10);
 
 console.log("single-image wrinkle/RSTL experiment contract tests passed");

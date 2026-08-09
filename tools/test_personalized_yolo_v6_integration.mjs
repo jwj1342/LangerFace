@@ -20,8 +20,8 @@ const dataSource = await readFile(new URL("src/services/dataSource.ts", web), "u
 const vercelConfig = JSON.parse(await readFile(new URL("vercel.json", web), "utf8"));
 const atlas = JSON.parse(await readFile(new URL("assets/atlas_rstl.json", web), "utf8"));
 
-assert.equal(atlas.lines.length, 159, "the capture flow must use the latest v8.1.69 atlas");
-assert.equal(atlas.lines.reduce((count, line) => count + line.points.length, 0), 15_272,
+assert.equal(atlas.lines.length, 159, "the capture flow must use the latest v8.1.70 atlas");
+assert.equal(atlas.lines.reduce((count, line) => count + line.points.length, 0), 15_282,
   "the latest atlas point topology must be preserved");
 assert.equal(atlas.lines.at(-1)?.name, "standard_field_0174_left",
   "the latest atlas tail must be present");

@@ -176,7 +176,7 @@ includesAll(render2d, [
   "renderState",
 ], "2D render overlay support");
 
-assert.ok(typedConstants.includes('rstl: "#c800c8"'), "live constants must use the v8.1.69 reference magenta");
+assert.ok(typedConstants.includes('rstl: "#c800c8"'), "live constants must use the v8.1.70 reference magenta");
 assert.ok(
   render2d.includes("Math.max(2, W / 1300)"),
   "typed live RSTL strokes must use the two-pixel reference minimum",
@@ -203,7 +203,7 @@ includesAll(render2d, [
   "buildHeadVisibility",
   "stabilizeForeheadMask",
   "headVisible(p) && skinVisible(p)",
-], "live v8.1.69 forehead visibility integration");
+], "live v8.1.70 forehead visibility integration");
 includesAll(foreheadVisibility, [
   "skinColorMatchesReferences",
   "distance <= 26",

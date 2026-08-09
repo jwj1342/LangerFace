@@ -49,6 +49,31 @@ export interface MapAtlasOptions {
 
 const FOREHEAD_LOWER_LONG_ARC_REGION = "forehead_lower_long_arc_v13";
 const FOREHEAD_BRIDGE_ARC_REGION = "forehead_bridge_arc_v15";
+const SUPRAORBITAL_SHORT_ARC_REGIONS_V67 = new Set([
+  "supraorbital_lateral_short_arc_v67",
+  "supraorbital_medial_short_arc_v67",
+]);
+const SUPRAORBITAL_UPWARD_SHIFT_FACE_HEIGHT_V67 = 0.080;
+
+function raiseSupraorbitalShortArc(points: Vec3[], landmarksPx: Vec3[]): Vec3[] {
+  if (points.length === 0 || landmarksPx.length <= 10) return points;
+  const anchor = landmarksPx[9];
+  const top = landmarksPx[10];
+  const axisX = top[0] - anchor[0];
+  const axisY = top[1] - anchor[1];
+  const axisNorm = Math.hypot(axisX, axisY);
+  const landmarkYs = landmarksPx.map((point) => point[1]);
+  const faceHeight = Math.max(...landmarkYs) - Math.min(...landmarkYs);
+  if (axisNorm <= 1e-9 || faceHeight <= 1e-9) return points;
+  const shift = SUPRAORBITAL_UPWARD_SHIFT_FACE_HEIGHT_V67 * faceHeight;
+  const unitX = axisX / axisNorm;
+  const unitY = axisY / axisNorm;
+  return points.map((point) => [
+    point[0] + shift * unitX,
+    point[1] + shift * unitY,
+    point[2],
+  ]);
+}
 
 function extendForeheadLowerLongArc(points: Vec3[], landmarksPx: Vec3[]): Vec3[] {
   if (points.length === 0 || landmarksPx.length <= 10) return points;
@@ -285,6 +310,8 @@ export function mapAtlas(
       mappedPoints = extendForeheadLowerLongArc(pts, landmarksPx);
     } else if (useBridgeExpansion) {
       mappedPoints = extendForeheadBridge(pts, landmarksPx, bridgeRanks.get(line) ?? 0);
+    } else if (SUPRAORBITAL_SHORT_ARC_REGIONS_V67.has(line.region || "")) {
+      mappedPoints = raiseSupraorbitalShortArc(pts, landmarksPx);
     }
     mappedPoints = applyPostExpansionOffsets(mappedPoints, line, landmarksPx);
     result.push({ name: line.name || "unnamed_curve", region: line.region || "", pts: mappedPoints, tris });
