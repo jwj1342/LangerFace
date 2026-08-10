@@ -83,10 +83,7 @@ import {
   neutralIncisionEdit,
   type IncisionEdit,
 } from "./incisionEditHistory";
-import {
-  createIncisionControllerState,
-  type IncisionRuntimeState,
-} from "./incisionControllerState";
+import { createIncisionControllerState, resetIncisionBoundaryState, type IncisionRuntimeState } from "./incisionControllerState";
 import {
   buildCandidateEditSession,
   buildIncisionReviewRecord,
@@ -655,7 +652,7 @@ function updateBoundaryStatus() {
   const summary = boundarySummaryFor(tumor);
   els.boundaryStatus.classList.toggle("warn", Boolean(summary.warnings?.length));
   if (tumor.kind !== "cutaneous") {
-    els.boundaryStatus.textContent = "皮表边界：仅皮表肿物启用";
+    els.boundaryStatus.textContent = `皮下范围：直径估计 ${fmt(tumor.diameter_mm)} mm（非真实边界）`;
     return;
   }
   if (!summary.boundary_used) {
@@ -731,7 +728,7 @@ function syncPhotoPlanningSelection() {
 function setLesion(i: number, centerRef: SurfaceRef | null = null) {
   S.lesion = i;
   S.lesionRef = centerRef || pointToSurfaceRef(S.verts[i], S.verts, S.tris);
-  const center = S.verts[i], normal = S.normals[i];
+  const center = (S.lesionRef && surfaceRefToModelPoint(S.lesionRef, S.verts, S.tris)) || S.verts[i], normal = S.normals[i];
   const markerPoint = add(center, mul(normal, S.meanEdge * 0.34));
   S.marker?.position.set(markerPoint[0], markerPoint[1], markerPoint[2]);
   updateTumorRing();
@@ -829,7 +826,7 @@ function handleReactTumorCommand(event: Event) {
   const { command } = detail;
   applyReactTumorControlValue(els, command, detail.value);
   if (command === "kind_changed") {
-    S.boundaryActive = false;
+    resetIncisionBoundaryState(S); els.startBoundary.textContent = "开始轮廓";
     updateFormVisibility();
     publishIncisionState("tumor_kind_changed");
     previewWorkflow();
@@ -1484,12 +1481,12 @@ function applyTumorContext(payload: unknown) {
   els.margin.value = imported.marginValue;
   els.marginVal.textContent = imported.marginValue;
   els.tumorAuthor.value = imported.author;
-  S.boundaryPoints = imported.boundaryPoints;
+  S.boundaryPoints = tumor.kind === "cutaneous" ? imported.boundaryPoints : [];
   S.boundaryRefs = pointsToSurfaceRefs(S.boundaryPoints, S.verts, S.tris);
   if (tumor.kind === "cutaneous") els.boundaryMode.value = imported.boundaryMode;
   S.boundaryActive = false;
   els.startBoundary.textContent = "开始轮廓";
-  setLesion(nearestVertex(tumor.center));
+  setLesion(nearestVertex(tumor.center), pointToSurfaceRef(tumor.center, S.verts, S.tris));
   updateFormVisibility();
   els.pickState.textContent = imported.pickState;
   return tumor;

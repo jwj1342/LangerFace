@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import {
+  buildSubcutaneousDiameterEstimateRefs,
   buildIncisionPhotoGeometry,
   nearestPhotoEndpointHandle,
   pointsToSurfaceRefs,
@@ -28,12 +29,24 @@ const firstModelPoint = surfaceRefToModelPoint(refs[0], vertices, triangles);
 assert.ok(firstModelPoint);
 assert.ok(Math.abs(firstModelPoint[0] - 0.25) < 1e-8);
 assert.ok(Math.abs(firstModelPoint[1] - 0.25) < 1e-8);
+const diameterEstimateRefs = buildSubcutaneousDiameterEstimateRefs({
+  centerRef: refs[0],
+  lesionIndex: 0,
+  diameterMm: 0.5,
+  unitsPerMm: 1,
+  vertices,
+  normals: vertices.map(() => [0, 0, 1] as Vec3),
+  triangles,
+  samples: 16,
+});
+assert.equal(diameterEstimateRefs.length, 17, "subcutaneous diameter estimate is encoded as a closed surface-ref ring");
 
 const geometry = buildIncisionPhotoGeometry({
   landmarks,
   triangles,
   atlasLines: [{ name: "bilateral", region: "cheek", points: [[0, 0.5, 0.25], [1, 0.25, 0.5]] }],
   centerRef: refs[0],
+  diameterEstimateRefs,
   boundaryRefs: refs,
   candidateRefs: refs,
   endpointRefs: refs,
@@ -41,6 +54,7 @@ const geometry = buildIncisionPhotoGeometry({
 assert.equal(geometry.rstl.length, 1);
 assert.equal(geometry.rstl[0].pts.length, 2);
 assert.ok(geometry.center);
+assert.equal(geometry.diameterEstimate.length, 17);
 assert.equal(geometry.boundary.length, 2);
 assert.equal(geometry.candidate.length, 2);
 assert.equal(geometry.endpoints.length, 2);
