@@ -1807,6 +1807,8 @@ function bindWorkbenchEvents() {
       onTumorFile: importTumorFile,
       onSecondaryCueFile: importSecondaryCueFile,
       onPhotoFile: (file) => { void photoRuntime?.load(file); },
+      onControlledMarkerDetect: () => photoRuntime?.beginControlledMarkerDetection(),
+      onControlledMarkerConfirm: () => { void photoRuntime?.confirmControlledMarkerDetection(); },
       preparePhotoInteraction: () => photoRuntime?.fit(),
       photoEndpointHandleFromEvent: (event) => photoRuntime?.endpointHandleFromEvent(event) ?? null,
       dragPhotoEndpoint: (event, handle) => photoRuntime?.dragEndpoint(event, handle),
