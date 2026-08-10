@@ -76,4 +76,28 @@ await assert.rejects(
   "parse failures remain visible to the runtime error presenter",
 );
 
+let meshIsCurrent = true;
+let staleSnapCalls = 0;
+await assert.rejects(
+  prepareAnnotationSlicerImport(
+    { name: "stale.mrk.json" } as File,
+    {
+      spacing: 2,
+      exportable: true,
+      parseFile: async () => {
+        meshIsCurrent = false;
+        return [curves[0]];
+      },
+      isCurrent: () => meshIsCurrent,
+      snapToSurface: (xyz) => {
+        staleSnapCalls += 1;
+        return { xyz };
+      },
+    },
+  ),
+  /头模已变化/,
+  "an import parsed against a replaced mesh is rejected",
+);
+assert.equal(staleSnapCalls, 0, "stale imports stop before snapping points to the replacement mesh");
+
 console.log("test_annotation_slicer_import OK");
