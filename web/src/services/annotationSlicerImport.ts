@@ -17,6 +17,7 @@ export interface PrepareAnnotationSlicerImportOptions {
   exportable: boolean;
   snapToSurface: (point: ParsedSlicerCurve["points"][number]) => AnnotationPoint | null;
   parseFile?: typeof parseSlicerCurveFile;
+  isCurrent?: () => boolean;
 }
 
 export async function prepareAnnotationSlicerImport(
@@ -26,9 +27,11 @@ export async function prepareAnnotationSlicerImport(
     exportable,
     snapToSurface,
     parseFile = parseSlicerCurveFile,
+    isCurrent,
   }: PrepareAnnotationSlicerImportOptions,
 ): Promise<AnnotationSlicerImportResult> {
   const curves = await parseFile(file, { spacing });
+  if (isCurrent && !isCurrent()) throw new Error("导入期间头模已变化，请重新导入");
   const lines: PreparedAnnotationCurve[] = [];
   let pointCount = 0;
 

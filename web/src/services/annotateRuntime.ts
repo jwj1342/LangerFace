@@ -170,12 +170,14 @@ async function loadSlicerFile(file?: File): Promise<void> {
   }
   const spacing = Number(els.resampleSpacing.value) || 2;
   setHint(`正在导入 ${file.name} 并按 ${spacing} 重采样 ...`);
+  const sourceMesh = viewer.mesh, exportable = onCanonical;
   let prepared: Awaited<ReturnType<typeof prepareAnnotationSlicerImport>>;
   try {
     prepared = await prepareAnnotationSlicerImport(file, {
       spacing,
-      exportable: onCanonical,
+      exportable,
       snapToSurface: (point) => viewer.snapToSurface(point),
+      isCurrent: () => viewer.mesh === sourceMesh && onCanonical === exportable,
     });
   } catch (err) {
     if (isActiveSession(session)) setHint("Slicer 曲线导入失败：" + errorMessage(err));
