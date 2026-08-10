@@ -34,6 +34,7 @@ const tools = [
   fs.readFileSync("src/services/incisionWorkflowTools.ts", "utf8"),
 ].join("\n");
 const exportPrivacy = fs.readFileSync("src/services/exportPrivacy.ts", "utf8");
+const photoRuntime = fs.readFileSync("src/services/incisionPhotoRuntime.ts", "utf8");
 const tumorInputService = fs.readFileSync("src/services/tumorInput.ts", "utf8");
 const workspaceSessionService = fs.readFileSync("src/services/incisionWorkspaceSession.ts", "utf8");
 const incisionSnapshotsService = fs.readFileSync("src/services/incisionSnapshots.ts", "utf8");
@@ -108,6 +109,14 @@ assert.ok(js.includes("applyTumorContext(rec.tumor)"), "loading a saved candidat
 assert.ok(js.includes("reviewForCandidateRecord"), "every candidate record uses the shared review gate");
 assert.ok(js.includes("forceDraft: !readiness.ok"), "invalid confirmation saves are explicitly downgraded to drafts");
 assert.ok(js.includes("shouldClearFreehandBoundaryOnLesionRepick"), "lesion repicks clear stale freehand boundaries");
+assert.ok(js.includes("resetIncisionBoundaryState"), "tumor kind changes clear incompatible boundary state");
+assert.ok(
+  js.includes("pointToSurfaceRef(tumor.center, S.verts, S.tris)"),
+  "imported tumor centers retain their exact surface reference instead of snapping to a vertex",
+);
+assert.ok(photoRuntime.includes("shouldClearFreehandBoundaryOnLesionRepick"), "photo lesion repicks use the shared boundary reset policy");
+assert.ok(photoRuntime.includes("state.boundaryPoints = []") && photoRuntime.includes("state.boundaryRefs = []"),
+  "photo lesion repicks clear stale freehand points and surface references");
 assert.ok(workspaceSessionService.includes("incision-workspace-session/v1"), "route round trips persist a versioned incision workspace session");
 assert.ok(js.includes("restoreWorkspaceSession"), "the incision runtime restores the logical workspace after remount");
 assert.ok(js.includes("workflowRequestId"), "stale asynchronous workflow results cannot replace a newer tumor context");

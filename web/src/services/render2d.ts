@@ -17,6 +17,7 @@ import { pointInHandMasks, type HandMask, type Point2 } from "./geometryOccluder
 import {
   buildForeheadSkinVisibility,
   buildHeadVisibility,
+  EXTENDED_FOREHEAD_REGIONS,
   stabilizeForeheadMask,
 } from "./foreheadVisibility.ts";
 import type { Triangle, Vec3 } from "./softBody.ts";
@@ -110,13 +111,6 @@ const isIncisionZoomRegion = (region: RenderRegion): region is IncisionZoomRegio
 const focusScratch = document.createElement("canvas");
 const focusCtx = focusScratch.getContext("2d") as CanvasRenderingContext2D;
 const focusZoomRange = { min: 1, max: 4.5 };
-// 这些 region 的线在 mapAtlas 之后被主动外推到面部网格之外（METHODS §5.1），
-// 显示期必须按头部包络 + 肤色再裁一次；这里是 React live 的唯一生产渲染路径。
-const EXTENDED_FOREHEAD_REGIONS = new Set([
-  "forehead_lower_long_arc_v13",
-  "forehead_bridge_arc_v15",
-]);
-
 /** 读取当前帧像素供肤色判定使用；跨源画布读取失败时返回 null（退化为不按肤色裁剪）。 */
 function readFrameImageData(W: number, H: number): ImageData | null {
   if (!(W > 0 && H > 0)) return null;
