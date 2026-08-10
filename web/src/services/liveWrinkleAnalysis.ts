@@ -6,7 +6,6 @@ import {
   replaceStaticRefineBaseline,
 } from "./liveRefine2d.ts";
 import { modelState, renderState, sourceState, type EditableRefineLine } from "./liveState.ts";
-import { projectVerts } from "./projection3d.ts";
 import type { Vec3 } from "./softBody.ts";
 import {
   fromWrinkleWorkingPoint,
@@ -93,7 +92,7 @@ function currentLandmarks(): Vec3[] | null {
   const landmarks = sourceState.sourceKind === "image"
     ? sourceState.imageCacheLM
     : sourceState.lastLM;
-  return Array.isArray(landmarks) ? projectVerts(landmarks as Vec3[]) : null;
+  return Array.isArray(landmarks) ? landmarks as Vec3[] : null;
 }
 
 function currentPixelSource(): CanvasImageSource | null {

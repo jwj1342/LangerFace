@@ -158,10 +158,7 @@ const exportPrivacyService = read("src/services/exportPrivacy.ts");
 const liveController = read("src/services/liveRuntime.ts");
 const liveActionSchedulerService = read("src/services/liveActionScheduler.ts");
 const liveFrameSchedulerService = read("src/services/liveFrameScheduler.ts");
-const liveScanLifecycleService = read("src/services/liveScanLifecycle.ts");
-const head3dControllerService = read("src/services/head3dController.ts");
 const liveCanvasInteractionService = read("src/services/liveCanvasInteraction.ts");
-const mode3dService = read("src/services/mode3d.ts");
 const livePipelineService = read("src/services/pipeline.ts");
 const livePipelineLoopService = read("src/services/pipelineLoop.ts");
 const livePipelineSourceService = read("src/services/pipelineSource.ts");
@@ -178,8 +175,6 @@ const liveRuntimeDependencyTypes = [
   "src/services/cameraSource.ts",
   "src/services/liveActionScheduler.ts",
   "src/services/liveFrameScheduler.ts",
-  "src/services/liveScanLifecycle.ts",
-  "src/services/head3dController.ts",
   "src/services/liveCanvasInteraction.ts",
   "src/services/liveDom.ts",
   "src/services/liveCanvasFit.ts",
@@ -187,7 +182,6 @@ const liveRuntimeDependencyTypes = [
   "src/services/canvasRecording.ts",
   "src/services/imageSource.ts",
   "src/services/logger.ts",
-  "src/services/mode3d.ts",
   "src/services/pipeline.ts",
   "src/services/render2d.ts",
   "src/services/liveState.ts",
@@ -793,7 +787,6 @@ assert.ok(controllerCommand.includes("window.removeEventListener"), "React contr
 for (const helperName of [
   "dispatchLiveSourceCommand",
   "dispatchLiveRenderCommand",
-  "dispatchLiveRouteCommand",
   "dispatchAnnotateMeshCommand",
   "dispatchAnnotateDrawCommand",
   "dispatchAnnotateLibraryCommand",
@@ -813,7 +806,6 @@ assert.ok(controllerCommandsHook.includes("useCallback"), "React controller comm
 for (const commandType of [
   "LiveSourceCommand",
   "LiveRenderCommand",
-  "LiveRouteCommand",
   "AnnotateMeshCommand",
   "AnnotateDrawCommand",
   "AnnotateLibraryCommand",
@@ -828,7 +820,6 @@ for (const commandType of [
 for (const commandSet of [
   "LIVE_SOURCE_COMMANDS",
   "LIVE_RENDER_COMMANDS",
-  "LIVE_ROUTE_COMMANDS",
   "ANNOTATE_MESH_COMMANDS",
   "ANNOTATE_DRAW_COMMANDS",
   "ANNOTATE_LIBRARY_COMMANDS",
@@ -844,7 +835,6 @@ for (const eventName of [
   "LIVE_CONTROLLER_STATE_EVENT",
   "LIVE_SOURCE_REACT_COMMAND_EVENT",
   "LIVE_RENDER_REACT_COMMAND_EVENT",
-  "LIVE_ROUTE_REACT_COMMAND_EVENT",
   "ANNOTATE_CONTROLLER_STATE_EVENT",
   "ANNOTATE_MESH_REACT_COMMAND_EVENT",
   "ANNOTATE_DRAW_REACT_COMMAND_EVENT",
@@ -2045,29 +2035,6 @@ for (const id of [
   assert.ok(source.includes(`id="${id}"`), `React live surface exposes #${id}`);
 }
 for (const id of [
-  "routeSel",
-  "routeModeHint",
-  "route3dPanel",
-  "reconDemoBtn",
-  "reconScanBtn",
-  "reconStatus",
-  "scanPanel",
-  "scanProgressVal",
-  "scanProgressBar",
-  "scanYawVal",
-  "view3dBtn",
-  "project3dBtn",
-  "reset3dBtn",
-  "cloudFitFlameBtn",
-  "flameHeadToggleWrap",
-  "flameStdToggle",
-  "twinTextureWrap",
-  "twinTextureToggle",
-  "threeDWorkflowCard",
-]) {
-  assert.ok(exposesId(liveRouteControlsPanel, id), `React live route controls expose #${id}`);
-}
-for (const id of [
   "liveInputCard",
   "uploadBtn",
   "fileInput",
@@ -2114,8 +2081,6 @@ for (const id of [
   "fps",
   "video",
   "canvas",
-  "three",
-  "scanToast",
   "overlayMsg",
   "zoomStrip",
 ]) {
@@ -2137,9 +2102,8 @@ assert.ok(liveStagePanel.includes("StageStatus"), "React live stage uses the sha
 assert.ok(liveStagePanel.includes("StageMeta"), "React live stage uses the shared stage metadata primitive");
 assert.ok(liveStagePanel.includes("StageCanvas"), "React live stage uses the shared stage canvas primitive");
 assert.ok(liveStagePanel.includes('<StageCanvas id="canvas" mirror'), "React live stage mirrors the 2D canvas through StageCanvas props");
-assert.ok(liveStagePanel.includes('<StageCanvas id="three" visible={false}'), "React live stage hides the 3D canvas through StageCanvas visible");
-assert.ok(liveStagePanel.includes("StageToast"), "React live stage uses the shared stage toast primitive");
-assert.ok(liveStagePanel.includes('<StageToast id="scanToast" visible={false}>'), "React live stage hides the scan toast through StageToast visible");
+assert.ok(!liveStagePanel.includes('id="three"'), "React live stage does not retain a hidden 3D canvas");
+assert.ok(!liveStagePanel.includes("StageToast"), "React live stage does not retain scan-only feedback");
 assert.ok(liveStagePanel.includes("StageOverlayMessage"), "React live stage uses the shared stage overlay message primitive");
 assert.ok(liveStagePanel.includes("StageZoomStrip"), "React live stage uses the shared stage zoom strip primitive");
 assert.deepEqual(
@@ -2159,7 +2123,7 @@ for (const className of ["hidden", "overlay-qa", "overlay-qa-top"]) {
     `React live quality panel should use live feedback primitives instead of hand-written ${className} class wrappers`,
   );
 }
-assert.ok(liveRouteControlsPanel.includes("useLiveControllerCommands"), "React live route controls use typed live command callbacks");
+assert.ok(!liveRouteControlsPanel.includes("useLiveControllerCommands"), "fixed 2D mode does not expose route command callbacks");
 assert.ok(liveSourceControlsPanel.includes("useLiveControllerCommands"), "React live source controls use typed live command callbacks");
 assert.ok(liveRenderControlsPanel.includes("useLiveControllerCommands"), "React live render controls use typed live command callbacks");
 assert.ok(!liveRouteControlsPanel.includes("dispatchLiveRouteCommand"), "React live route controls do not import low-level command dispatch helpers directly");
@@ -2173,26 +2137,16 @@ assert.deepEqual(
   [],
   "React live control panels should use visible props instead of hand-written hidden class toggles",
 );
-assert.ok(liveRouteControlsPanel.includes("useLiveStore"), "React live route controls read low-frequency route and recon state from Zustand");
+assert.ok(!liveRouteControlsPanel.includes("useLiveStore"), "fixed 2D mode does not retain route or reconstruction state");
 assert.ok(liveSourceControlsPanel.includes("useLiveStore"), "React live source controls read low-frequency source state from Zustand");
 assert.ok(liveRenderControlsPanel.includes("useLiveStore"), "React live render controls read low-frequency render state from Zustand");
-assert.ok(liveRouteControlsPanel.includes("扫描人脸重建"), "React 3D route exposes scanning as the primary reconstruction entry");
-assert.ok(liveRouteControlsPanel.includes('projectionLabel = mode3d === "project" ? "返回 3D 模型" : "投影到画面"'), "React 3D route projection button toggles back to model view");
-assert.ok(!liveRouteControlsPanel.includes("用示例脸"), "React 3D route no longer advertises the sample face entry");
-assert.ok(liveSourceControlsPanel.includes('visible={route !== "3d"}'), "React live source card hides during the 3D route");
+assert.ok(liveRouteControlsPanel.includes("2D 实时贴合"), "React Live surface declares the supported 2D runtime");
+assert.ok(!/扫描人脸重建|投影到画面|用示例脸|实时 3D/.test(liveRouteControlsPanel), "React Live surface contains no retired 3D affordances");
+assert.ok(!liveSourceControlsPanel.includes('route !== "3d"'), "React live source card has no retired route gate");
 assert.ok(liveWorkbench.includes("Button asChild"), "React live workbench uses shared Button asChild for Router links");
 assert.ok(liveWorkbench.includes("Label"), "React live workbench uses the shared shadcn-style label primitive");
-assert.ok(liveRouteControlsPanel.includes("Button"), "React live route controls use the shared shadcn-style button primitive");
-assert.ok(liveRouteControlsPanel.includes("ButtonRow"), "React live route controls use the shared shadcn-style button row primitive");
-assert.ok(liveRouteControlsPanel.includes("CheckboxField"), "React live route controls use the shared shadcn-style checkbox field primitive");
 assert.ok(liveRouteControlsPanel.includes("Label"), "React live route controls use the shared shadcn-style label primitive");
-assert.ok(liveRouteControlsPanel.includes("ProgressBar"), "React live route controls use the shared shadcn-style progress primitive");
-assert.ok(liveRouteControlsPanel.includes("Select"), "React live route controls use the shared shadcn-style select primitive");
 assert.ok(liveRouteControlsPanel.includes("<Card"), "React live route controls use the shared shadcn-style card primitive");
-assert.ok(liveRouteControlsPanel.includes('<FieldGroup id="route3dPanel" className="live-stack" visible={is3d}>'), "React live route controls show 3D route panel through FieldGroup visible");
-assert.ok(liveRouteControlsPanel.includes('<LiveScanPanel id="scanPanel" visible={scanning}>'), "React live route controls show scan progress through LiveScanPanel visible");
-assert.ok(liveRouteControlsPanel.includes("LiveScanRow"), "React live route controls use shared scan row primitive");
-assert.ok(liveRouteControlsPanel.includes("LiveYawMeter"), "React live route controls use shared yaw meter primitive");
 for (const className of ["scan-panel", "scan-row", "yaw-meter"]) {
   assert.deepEqual(
     liveScanFeedbackConsumersWithRawClass(className),
@@ -2200,10 +2154,6 @@ for (const className of ["scan-panel", "scan-row", "yaw-meter"]) {
     `React live route controls should use live feedback primitives instead of hand-written ${className} class wrappers`,
   );
 }
-assert.ok(liveRouteControlsPanel.includes('hiddenClassName="live-hidden-inline"'), "React live route controls preserve inline twin option hiding through CheckboxField");
-assert.ok(liveRouteControlsPanel.includes('<Card id="threeDWorkflowCard" visible={is3d}>'), "React live route controls show 3D workflow card through Card visible");
-assert.ok(liveRouteControlsPanel.includes("Button asChild"), "React live route controls use shared Button asChild for Router links");
-assert.ok(liveRouteControlsPanel.includes('variant="workbenchPrimary"'), "React live route controls keep primary workbench button styling through Button variants");
 assert.ok(liveSourceControlsPanel.includes("Button"), "React live source controls use the shared shadcn-style button primitive");
 assert.ok(liveSourceControlsPanel.includes("ButtonRow"), "React live source controls use the shared shadcn-style button row primitive");
 assert.ok(liveSourceControlsPanel.includes("Input"), "React live source controls use the shared shadcn-style input primitive");
@@ -2227,8 +2177,6 @@ assert.ok(liveSnapshotsService.includes("buildLiveControllerSnapshot"), "shared 
 assert.ok(liveSnapshotsService.includes("liveTextOf"), "shared live snapshot service owns text normalization helpers");
 assert.ok(liveSnapshotsService.includes("visibleLiveTextOf"), "shared live snapshot service owns visible text normalization helpers");
 assert.ok(liveSnapshotsService.includes("../lib/controllerSnapshotSchemas"), "shared live snapshot service re-exports the lightweight schema version");
-assert.ok(liveRouteControlsPanel.includes('to="/settings/atlas"'), "React live route controls route atlas maintenance through settings");
-assert.ok(!liveRouteControlsPanel.includes('to="/annotate"'), "React live route controls should not bypass atlas settings");
 assert.ok(liveWorkbench.includes('to="/incision"'), "React live workbench links to the React incision route");
 assert.ok(!fs.existsSync(path.join(web, "dom.js")), "legacy dom.js facade has been removed after TypeScript service migration");
 assert.ok(!fs.existsSync(path.join(web, "dom.d.ts")), "legacy DOM declaration facade has been removed after TypeScript service migration");
@@ -2254,16 +2202,9 @@ assert.ok(livePipelineSourceService.includes("cancelFrame()"), "stopping a live 
 assert.ok(livePipelineSourceService.includes("sourceLayoutScheduler.cancel()"), "source changes cancel pending image layout frames");
 assert.ok(!livePipelineSourceService.includes("requestAnimationFrame"), "image layout refreshes cannot outlive their source through raw RAF callbacks");
 assert.ok(!livePipelineService.includes("requestAnimationFrame"), "atlas redraws cannot bypass live frame coalescing");
-assert.ok(liveScanLifecycleService.includes("class LiveScanLifecycle"), "3D scan lifecycle owns session, frame, and stream resources");
-assert.ok(liveScanLifecycleService.includes("adoptStream"), "3D scan lifecycle rejects stale camera stream handoffs");
-assert.ok(!/(?:document|window|HTMLElement|HTMLVideoElement|THREE|MediaPipe)/.test(liveScanLifecycleService),
-  "3D scan lifecycle stays DOM, renderer, and detector independent");
-assert.ok(head3dControllerService.includes("class Head3DResourceLifecycle"),
-  "3D renderer ownership is isolated in a typed lifecycle service");
-assert.ok(head3dControllerService.includes("removeEventListener"),
-  "3D canvas controls remove every listener at the route boundary");
-assert.ok(!/(?:document|window|THREE|MediaPipe)/.test(head3dControllerService),
-  "3D controller lifecycle stays independent of globals and renderer implementations");
+for (const retired of ["mode3d.ts", "projection3d.ts", "liveScanLifecycle.ts"]) {
+  assert.ok(!fs.existsSync(path.join(web, "src/services", retired)), `${retired} is removed from the Live runtime`);
+}
 assert.ok(liveController.includes("./liveCanvasInteraction"), "live runtime delegates pointer and wheel ownership");
 assert.ok(liveCanvasInteractionService.includes("bindLiveCanvasInteractions"),
   "live canvas interaction service owns its listener lifecycle");
@@ -2318,7 +2259,7 @@ assert.ok(liveController.includes("export function mountLiveWorkbench"), "live c
 assert.ok(liveController.includes("export function disposeLiveWorkbench"), "live controller exposes a dispose lifecycle");
 assert.ok(liveController.includes("LIVE_CONTROLLER_STATE_EVENT"), "live controller declares a React state bridge event");
 assert.ok(liveController.includes("../lib/controllerEvents"), "live controller imports event names from the shared module");
-assert.ok(liveController.includes("LIVE_ROUTE_REACT_COMMAND_EVENT"), "live controller declares a React route command bridge event");
+assert.ok(!liveController.includes("LIVE_ROUTE_REACT_COMMAND_EVENT"), "live controller has no retired 3D route command bridge");
 assert.ok(liveController.includes("LIVE_SOURCE_REACT_COMMAND_EVENT"), "live controller declares a React source command bridge event");
 assert.ok(liveController.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "live controller declares a React render command bridge event");
 assert.ok(liveController.includes("../lib/controllerCommand"), "live controller imports the shared command binding module");
@@ -2327,9 +2268,9 @@ assert.ok(liveController.includes("bindWindowControllerEvents"), "live controlle
 assert.ok(!liveController.includes("window.addEventListener(LIVE"), "live controller does not register React command listeners one-by-one");
 assert.ok(liveController.includes("readLiveSourceCommand(event)"), "live source handler validates incoming command names");
 assert.ok(liveController.includes("readLiveRenderCommand(event)"), "live render handler validates command names and payloads");
-assert.ok(liveController.includes("readLiveRouteCommand(event)"), "live route handler validates command names and route values");
+assert.ok(!liveController.includes("readLiveRouteCommand"), "live controller has no retired route command schema");
 assert.ok(!liveController.includes("event.detail || {}"), "live controller does not read raw command detail directly");
-assert.ok(liveController.includes("handleReactRouteCommand"), "live controller routes React route commands to existing 3D workflow functions");
+assert.ok(!liveController.includes("handleReactRouteCommand"), "live controller cannot enter the retired 3D workflow");
 assert.ok(liveController.includes("handleReactSourceCommand"), "live controller routes React source commands to existing workflow functions");
 assert.ok(liveController.includes("handleReactRenderCommand"), "live controller routes React render commands to existing workflow functions");
 assert.ok(liveController.includes("./liveSnapshots"), "live controller consumes the shared typed snapshot service");
@@ -2345,9 +2286,7 @@ assert.ok(liveController.includes("function hasBoundLiveDom"), "live controller 
 assert.ok(liveController.includes("abortController?.abort"), "live controller aborts DOM listeners on dispose");
 assert.ok(liveController.includes("resizeCleanup?.()"), "live controller disconnects resize observers on dispose");
 assert.ok(liveController.includes("stopSource()"), "live controller stops camera/media sources on dispose");
-assert.ok(liveController.includes("disposeMode3d()"), "live controller delegates complete 3D cleanup on dispose");
-assert.ok(mode3dService.includes("export function disposeMode3d"), "3D mode owns its route cleanup boundary");
-assert.ok(mode3dService.includes("head3dLifecycle.dispose()"), "3D mode invalidates pending renderer creation on dispose");
+assert.ok(!/stopTwin|startTwin|startScan|reconState/.test(liveController), "live controller owns no 3D scan or twin resources");
 assert.ok(liveController.includes("../lib/reactManagedWorkbench"), "live controller imports the shared React-managed flag helper");
 assert.ok(!liveController.includes('document.getElementById("canvas")'), "live runtime no longer auto-mounts from legacy HTML");
 assert.ok(!liveController.includes("window.__LANGERFACE_REACT_MANAGED__"), "live controller does not touch the managed flag directly");
