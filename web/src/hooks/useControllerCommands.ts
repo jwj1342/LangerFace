@@ -11,7 +11,6 @@ import {
   type IncisionSecondaryCueCommand,
   type IncisionTumorCommand,
   type LiveRenderCommand,
-  type LiveRouteCommand,
   type LiveSourceCommand,
   dispatchAnnotateDrawCommand,
   dispatchAnnotateLibraryCommand,
@@ -22,7 +21,6 @@ import {
   dispatchIncisionSecondaryCueCommand,
   dispatchIncisionTumorCommand,
   dispatchLiveRenderCommand,
-  dispatchLiveRouteCommand,
   dispatchLiveSourceCommand,
 } from "../lib/controllerCommand";
 
@@ -33,11 +31,7 @@ export function useLiveControllerCommands() {
   const render = useCallback((command: LiveRenderCommand, value?: string | number | boolean) => {
     dispatchLiveRenderCommand(command, value);
   }, []);
-  const route = useCallback((command: LiveRouteCommand, value?: string | boolean) => {
-    dispatchLiveRouteCommand(command, value);
-  }, []);
-
-  return useMemo(() => ({ render, route, source }), [render, route, source]);
+  return useMemo(() => ({ render, source }), [render, source]);
 }
 
 export function useAnnotateControllerCommands() {

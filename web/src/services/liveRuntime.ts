@@ -2,13 +2,11 @@
 import { bindDom, clearDomBinding, els } from "./liveDom.ts";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./liveCanvasFit.ts";
 import { validateIncisionOverlay } from "./incisionOverlay.ts";
-import { enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, stopScan, stopTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.ts";
 import { ensureReady, handleFile, redrawPausedFrame, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.ts";
 import { adjustFocusZoom, buildZoomCards } from "./render2d.ts";
 import {
   LIVE_CONTROLLER_STATE_EVENT,
   LIVE_RENDER_REACT_COMMAND_EVENT,
-  LIVE_ROUTE_REACT_COMMAND_EVENT,
   LIVE_SOURCE_REACT_COMMAND_EVENT,
 } from "../lib/controllerEvents";
 import {
@@ -26,7 +24,7 @@ import { dataSource } from "./dataSource";
 import { countMetric, logError } from "./logger";
 import { LiveActionScheduler } from "./liveActionScheduler";
 import { createCanvasRecordingController, type CanvasRecordingController, type RecordingExtraCanvas } from "./canvasRecording";
-import { modelState, recordingState, reconState, renderState, sourceState } from "./liveState";
+import { modelState, recordingState, renderState, sourceState } from "./liveState";
 import { createPhotoPlanningController } from "./photoPlanningController";
 import {
   adjustRefineImageZoom,
@@ -54,7 +52,6 @@ import {
 import { setIncisionOverlayQa, setLive, setMsg, setProvenance, smoothLabel } from "./liveUi";
 import {
   readLiveRenderCommand,
-  readLiveRouteCommand,
   readLiveSourceCommand,
 } from "./workbenchCommandSchemas";
 import {
@@ -121,9 +118,6 @@ function publishLiveState(reason = "state_update"): void {
     sourceRunning: sourceState.running,
     sourcePaused: sourceState.paused,
     liveLabel: els.live?.dataset?.k || liveTextOf(els.live) || "待机",
-    route: reconState.route,
-    mode3d: reconState.mode3d,
-    routeHint: liveTextOf(els.routeModeHint),
     renderSystem: renderState.system,
     densityFrac: renderState.densityFrac,
     smoothLabel: liveTextOf(els.smoothVal),
@@ -132,12 +126,6 @@ function publishLiveState(reason = "state_update"): void {
     zoom: renderState.zoom,
     meshPts: renderState.meshPts,
     bands: renderState.bands,
-    has3dModel: Boolean(reconState.reconVerts || reconState.flameFit || reconState.flameNeutral),
-    projectable: reconState.reconProjectable,
-    scanActive: reconState.scan?.active,
-    twinMode: reconState.twinMode,
-    twinTexture: reconState.twinTexture,
-    reconStatus: liveTextOf(els.reconStatus),
     previewSystem,
     previewMeta,
     incisionOverlayLoaded: Boolean(renderState.incisionOverlay),
@@ -249,9 +237,6 @@ function visibleRecordingCanvases(): RecordingExtraCanvas[] {
       const label = zc.card?.querySelector(".tag")?.textContent || "细节放大窗";
       extras.push({ label, canvas: zc.canvas });
     });
-  }
-  if (els.three && !els.three.classList.contains("hidden") && els.three.width && els.three.height) {
-    extras.push({ label: "3D 视图", canvas: els.three });
   }
   return extras;
 }
@@ -445,27 +430,6 @@ function handleReactRenderCommand(event: Event): void {
   if (command === "clear_incision_overlay") runLiveAction("clear_incision_overlay", clearIncisionOverlay);
 }
 
-function handleReactRouteCommand(event: Event): void {
-  const detail = readLiveRouteCommand(event);
-  if (!detail) return;
-  const { command, value } = detail;
-  if (command === "route_change") runLiveAction("route_change", () => enterRoute(value === "3d" ? "3d" : "2d"));
-  if (command === "load_demo_recon") runLiveAction("load_demo_recon", loadDemoRecon);
-  if (command === "start_scan") runLiveAction("start_scan", startScan);
-  if (command === "view_3d") runLiveAction("view_3d", () => { if (reconState.reconVerts) setMode3d("view"); });
-  if (command === "project_3d") {
-    runLiveAction("project_3d", () => {
-      if (!reconState.reconVerts) return;
-      if (reconState.mode3d === "project") setMode3d("view");
-      else if (reconState.reconProjectable) setMode3d("project");
-    });
-  }
-  if (command === "reset_3d") runLiveAction("reset_3d", resetView3d);
-  if (command === "start_twin") runLiveAction("start_twin", startTwin);
-  if (command === "toggle_twin_head") runLiveAction("toggle_twin_head", toggleTwinHead);
-  if (command === "toggle_twin_texture") runLiveAction("toggle_twin_texture", toggleTwinTexture);
-}
-
 function bindLiveEvents(signal: AbortSignal): void {
   els.file.addEventListener("change", (e) => runLiveAction("file_source", () => handleFile((e.target as HTMLInputElement | null)?.files?.[0])), { signal });
   els.wrinkleDisplayMode.addEventListener("change", (event) => {
@@ -507,7 +471,6 @@ function bindLiveEvents(signal: AbortSignal): void {
     bindWindowControllerEvents([
       [LIVE_SOURCE_REACT_COMMAND_EVENT, handleReactSourceCommand],
       [LIVE_RENDER_REACT_COMMAND_EVENT, handleReactRenderCommand],
-      [LIVE_ROUTE_REACT_COMMAND_EVENT, handleReactRouteCommand],
     ], { signal });
   } else {
     els.upload.addEventListener("click", () => els.file.click(), { signal });
@@ -526,22 +489,6 @@ function bindLiveEvents(signal: AbortSignal): void {
     els.restoreAtlas.addEventListener("click", () => runLiveAction("restore_atlas", restoreAtlasPreview), { signal });
     els.export.addEventListener("click", () => runLiveAction("recording_toggle", toggleRecording), { signal });
 
-    // 3D Beta 路线绑定
-    els.routeSel.addEventListener("change", (e) => runLiveAction("route_change", () => enterRoute(String(eventValue(e)) === "3d" ? "3d" : "2d")), { signal });
-    els.reconDemo.addEventListener("click", () => runLiveAction("load_demo_recon", loadDemoRecon), { signal });
-    els.reconScan.addEventListener("click", () => runLiveAction("start_scan", startScan), { signal });
-    els.view3d.addEventListener("click", () => runLiveAction("view_3d", () => { if (reconState.reconVerts) setMode3d("view"); }), { signal });
-    els.project3d.addEventListener("click", () => {
-      runLiveAction("project_3d", () => {
-        if (!reconState.reconVerts) return;
-        if (reconState.mode3d === "project") setMode3d("view");
-        else if (reconState.reconProjectable) setMode3d("project");
-      });
-    }, { signal });
-    els.reset3d.addEventListener("click", () => runLiveAction("reset_3d", resetView3d), { signal });
-    els.cloudFitFlame.addEventListener("click", () => runLiveAction("start_twin", startTwin), { signal });
-    els.flameStd.addEventListener("change", () => runLiveAction("toggle_twin_head", toggleTwinHead), { signal });
-    els.twinTexture.addEventListener("change", () => runLiveAction("toggle_twin_texture", toggleTwinTexture), { signal });
   }
 
   els.mainWrap.addEventListener("pointerdown", startImageDrag, { signal });
@@ -566,19 +513,12 @@ export function disposeLiveWorkbench() {
   recordingController?.stop?.();
   recordingController = null;
   recordingState.recorder = null;
-  stopScan();
   if (hasBoundLiveDom()) {
-    stopTwin();
     stopSource();
   }
   sourceState.planning2d?.dispose();
   sourceState.planning2d = null;
   void disposeLiveWrinkleAnalysis();
-  if (reconState.scan) reconState.scan.active = false;
-  if (reconState.viewerRAF != null) cancelAnimationFrame(reconState.viewerRAF);
-  reconState.viewerRAF = null;
-  reconState.head3d?.dispose?.();
-  reconState.head3d = null;
   imageDrag = null;
   clearDomBinding();
 }
