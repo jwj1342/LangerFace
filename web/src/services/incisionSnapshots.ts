@@ -1,4 +1,5 @@
 import { INCISION_SNAPSHOT_SCHEMA_VERSION } from "../lib/controllerSnapshotSchemas";
+import type { RstlSourceContract } from "./rstlSourceContract";
 
 export { INCISION_SNAPSHOT_SCHEMA_VERSION };
 
@@ -61,6 +62,7 @@ export interface IncisionHeadAssetState {
   atlasLineCount: number;
   mode: "mediapipe_personalized" | "mediapipe_standard" | "unknown";
   atlasProvenance: string | null;
+  atlasContract: RstlSourceContract | null;
   statusLabel: string;
   warnings: string[];
 }
