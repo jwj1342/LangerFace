@@ -147,11 +147,9 @@ let els = {} as IncisionDomElements;
 let S: IncisionRuntimeState = createIncisionControllerState();
 let photoRuntime: IncisionPhotoRuntime | null = null;
 const activeSession = createIncisionSessionGuard();
-
 function isActiveSession(session: IncisionSessionToken): boolean {
   return S.mounted && activeSession.isActive(session);
 }
-
 function currentTumorFormSnapshot() {
   return buildTumorFormSnapshot({
     kind: els.tumorKind?.value,
