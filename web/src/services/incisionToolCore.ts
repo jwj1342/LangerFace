@@ -5,6 +5,7 @@ import {
   SENSITIVE_ANCHORS,
   SENSITIVE_MARGIN_SEGMENTS,
 } from "./incisionToolRules.ts";
+import { inspectPathPolygonRelation, resamplePolyline2d, type Point2 } from "./incisionPathGeometry.ts";
 
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];
@@ -181,17 +182,105 @@ export function candidatePoints(candidate: AnyRecord): Vec3[] {
     .filter((p: Vec3) => p.every(Number.isFinite));
 }
 
-export function annotateCandidateSensitiveDistances<T extends AnyRecord>(candidate: T, verts: ArrayLike<number>[], faceHeightMm = 180): T {
-  const points = candidatePoints(candidate);
-  if (!points.length || !Array.isArray(verts) || !verts.length) return candidate;
+function candidateRawPoints(candidate: AnyRecord): unknown[] {
+  const raw = candidate.polyline || candidate.outline || candidate.endpoints || [];
+  return Array.isArray(raw) ? raw : [];
+}
+
+function normalizedCandidatePath(candidate: AnyRecord, verts: ArrayLike<number>[]): Point2[] {
   const { lo, hi } = bbox(verts);
   const span = [Math.max(hi[0] - lo[0], 1e-9), Math.max(hi[1] - lo[1], 1e-9)];
+  return candidatePoints(candidate).map((point) => [
+    (point[0] - lo[0]) / span[0],
+    (point[1] - lo[1]) / span[1],
+  ]);
+}
+
+function validSurfaceRef(ref: AnyRecord): boolean {
+  if (!ref || !Number.isInteger(ref.tri) || ref.tri < 0) return false;
+  const weights = [Number(ref.u), Number(ref.v), Number(ref.w ?? 1 - Number(ref.u) - Number(ref.v))];
+  return weights.every(Number.isFinite)
+    && Math.abs(weights.reduce((sum, value) => sum + value, 0) - 1) <= 1e-4
+    && weights.every((value) => value >= -1e-4 && value <= 1 + 1e-4);
+}
+
+export function annotateCandidateEngineeringViolations<T extends AnyRecord>(candidate: T, verts: ArrayLike<number>[]): T {
+  const rawPoints = candidateRawPoints(candidate);
+  const path = normalizedCandidatePath(candidate, verts);
+  const violations: AnyRecord[] = [];
+  if (rawPoints.length < 2 || path.length !== rawPoints.length) {
+    violations.push({
+      code: "invalid_candidate_geometry",
+      location: null,
+      recovery: "Regenerate the candidate with at least two finite 3D path points.",
+    });
+  }
+  const outsideIndex = path.findIndex(([x, y]) => x < -1e-6 || x > 1 + 1e-6 || y < -1e-6 || y > 1 + 1e-6);
+  if (outsideIndex >= 0) {
+    violations.push({
+      code: "candidate_outside_canonical_surface",
+      location: { path_index: outsideIndex, normalized_xy: path[outsideIndex] },
+      recovery: "Move or regenerate the candidate inside the canonical face surface bounds.",
+    });
+  }
+  const refs = candidate.surface_refs || candidate.polyline_refs;
+  if (Array.isArray(refs) && (refs.length < 2 || refs.some((ref: AnyRecord) => !validSurfaceRef(ref)))) {
+    violations.push({
+      code: "invalid_candidate_surface_refs",
+      location: null,
+      recovery: "Reproject the complete candidate path onto the active topology before review.",
+    });
+  } else if (candidate.surface_refs_required === true && !Array.isArray(refs)) {
+    violations.push({
+      code: "missing_candidate_surface_refs",
+      location: null,
+      recovery: "Generate surface references for the complete candidate path before review.",
+    });
+  }
+  for (const zone of Array.isArray(candidate.engineering_exclusion_zones) ? candidate.engineering_exclusion_zones : []) {
+    const polygon = Array.isArray(zone?.polygon)
+      ? zone.polygon.filter((point: unknown) => Array.isArray(point) && point.length >= 2 && point.slice(0, 2).every(Number.isFinite))
+        .map((point: number[]) => [Number(point[0]), Number(point[1])] as Point2)
+      : [];
+    if (polygon.length < 3 || path.length < 2) continue;
+    const relation = inspectPathPolygonRelation(path, polygon, { closedPath: candidate.type === "fusiform" });
+    if (!relation.intersects) continue;
+    violations.push({
+      code: String(zone.code || "candidate_intersects_engineering_exclusion_zone"),
+      location: { zone_id: zone.id || null, relation },
+      recovery: String(zone.recovery || "Move or regenerate the candidate outside the engineering exclusion zone."),
+    });
+  }
+  const mutable = candidate as AnyRecord;
+  mutable.hard_violations = violations;
+  mutable.hard_violation_count = violations.length;
+  mutable.engineering_guardrails = {
+    schema_version: "engineering-geometry-guardrails/v0.1",
+    passed: violations.length === 0,
+    hard_violation_count: violations.length,
+    hard_violations: violations,
+    coordinate_space: "canonical_model_normalized_xy",
+    clinical_boundary: "Engineering geometry checks do not define clinical safety margins or anatomy.",
+  };
+  return candidate;
+}
+
+export function annotateCandidateSensitiveDistances<T extends AnyRecord>(candidate: T, verts: ArrayLike<number>[], faceHeightMm = 180): T {
+  const points = candidatePoints(candidate);
+  if (!Array.isArray(verts) || !verts.length) return candidate;
+  annotateCandidateEngineeringViolations(candidate, verts);
+  if (!points.length) return candidate;
+  const normalized = normalizedCandidatePath(candidate, verts);
+  const sampled = resamplePolyline2d(normalized, 0.005, candidate.type === "fusiform");
   let best: { distance: number; landmark: string; point: Vec3 | null } = { distance: Infinity, landmark: "", point: null };
-  for (const point of points) {
-    const nx = clamp((point[0] - lo[0]) / span[0], 0, 1);
-    const ny = clamp((point[1] - lo[1]) / span[1], 0, 1);
+  for (const [index, point] of sampled.entries()) {
+    const nx = point[0];
+    const ny = point[1];
     for (const [landmark, distance] of sensitiveMarginDistances([nx, ny], faceHeightMm)) {
-      if (distance < best.distance) best = { distance, landmark, point };
+      if (distance < best.distance) {
+        const original = points[Math.min(points.length - 1, Math.round(index * (points.length - 1) / Math.max(1, sampled.length - 1)))];
+        best = { distance, landmark, point: original || null };
+      }
     }
   }
   if (!Number.isFinite(best.distance)) return candidate;
