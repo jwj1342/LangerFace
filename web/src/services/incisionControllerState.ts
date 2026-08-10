@@ -111,3 +111,11 @@ export function createIncisionControllerState(): IncisionRuntimeState {
     activeExplicitWorkflowCount: 0,
   };
 }
+
+export function resetIncisionBoundaryState(
+  state: Pick<IncisionRuntimeState, "boundaryPoints" | "boundaryRefs" | "boundaryActive">,
+): void {
+  state.boundaryPoints = [];
+  state.boundaryRefs = [];
+  state.boundaryActive = false;
+}
