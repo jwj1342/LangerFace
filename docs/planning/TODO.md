@@ -16,6 +16,17 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
 - [ ] 临床医生校验线图谱并置 `validated:true`（Stage 1 出口）— [#2](https://github.com/jwj1342/LangerFace/issues/2)
       · 当前 PR 补齐逐线 JSON/CSV、源哈希门禁和结构化签署，并修复标注保存误置 validated/丢失既有线；只有受控临床流程中的医生能完成最终签署。
 
+## 2D 静态照片切口规划交付
+
+- [ ] Epic：2D 静态照片切口规划交付闭环（会议目标对齐）— [#167](https://github.com/jwj1342/LangerFace/issues/167)
+- [ ] 2D 规划画布：让患者静态照片成为切口工作台主坐标系 — [#168](https://github.com/jwj1342/LangerFace/issues/168)
+- [ ] 2D 病灶与候选交互：在患者照片上完成标记、生成和直接微调 — [#169](https://github.com/jwj1342/LangerFace/issues/169)
+- [ ] 单页工作流：统一照片规划、候选审阅、导出与实时叠加状态 — [#170](https://github.com/jwj1342/LangerFace/issues/170)
+- [ ] 2D RSTL 手动兜底：验收拖点平滑、擦除撤销、密度与交叉质量 — [#171](https://github.com/jwj1342/LangerFace/issues/171)
+- [ ] 真实媒体验收：照片、视频与摄像头切口叠加的稳定性证据 — [#172](https://github.com/jwj1342/LangerFace/issues/172)
+- [ ] 肿物检测适配契约：允许未来 detector 接入但不引入训练 — [#173](https://github.com/jwj1342/LangerFace/issues/173)
+- [ ] 重构：抽取 live/incision 共用的 2D 照片规划 controller 与坐标服务 — [#174](https://github.com/jwj1342/LangerFace/issues/174)
+
 ## 待合并的独立修复 / 功能
 
 - [x] RSTL 局部方向服务 Python/TypeScript parity — [#13](https://github.com/jwj1342/LangerFace/issues/13)
