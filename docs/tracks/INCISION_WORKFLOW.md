@@ -23,7 +23,6 @@ surface 数据；故意更换图谱点、拓扑、版本或来源时，比较器
 “同源”不表示两个页面的最终像素必须完全相同。mirror、contain、pan、zoom、DPR、线密度和额头可见性
 裁切属于显示阶段；它们可以产生可解释的像素差异，但不得静默改变 atlas、topology、provenance 或
 surface refs。所有当前图谱仍保留 `validated:false`，同源回归只证明工程数据链一致，不构成医学验证。
-
 ### 受控标记定位 baseline
 
 照片页的“受控标记”只在用户点击的局部 ROI 内用亮度阈值和连通域寻找黑点、贴纸或手绘标记。结果先进入
