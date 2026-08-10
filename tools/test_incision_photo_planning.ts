@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 
 import {
+  buildSubcutaneousDiameterEstimateRefs,
   buildIncisionPhotoGeometry,
   nearestPhotoEndpointHandle,
   pointsToSurfaceRefs,
   surfaceRefToModelPoint,
   validateIncisionPhotoFile,
+  visibleIncisionPhotoRstlRuns,
 } from "../web/src/services/incisionPhotoPlanning.ts";
 import type { Triangle, Vec3 } from "../web/src/services/softBody.ts";
 
@@ -28,12 +30,24 @@ const firstModelPoint = surfaceRefToModelPoint(refs[0], vertices, triangles);
 assert.ok(firstModelPoint);
 assert.ok(Math.abs(firstModelPoint[0] - 0.25) < 1e-8);
 assert.ok(Math.abs(firstModelPoint[1] - 0.25) < 1e-8);
+const diameterEstimateRefs = buildSubcutaneousDiameterEstimateRefs({
+  centerRef: refs[0],
+  lesionIndex: 0,
+  diameterMm: 0.5,
+  unitsPerMm: 1,
+  vertices,
+  normals: vertices.map(() => [0, 0, 1] as Vec3),
+  triangles,
+  samples: 16,
+});
+assert.equal(diameterEstimateRefs.length, 17, "subcutaneous diameter estimate is encoded as a closed surface-ref ring");
 
 const geometry = buildIncisionPhotoGeometry({
   landmarks,
   triangles,
   atlasLines: [{ name: "bilateral", region: "cheek", points: [[0, 0.5, 0.25], [1, 0.25, 0.5]] }],
   centerRef: refs[0],
+  diameterEstimateRefs,
   boundaryRefs: refs,
   candidateRefs: refs,
   endpointRefs: refs,
@@ -41,11 +55,32 @@ const geometry = buildIncisionPhotoGeometry({
 assert.equal(geometry.rstl.length, 1);
 assert.equal(geometry.rstl[0].pts.length, 2);
 assert.ok(geometry.center);
+assert.equal(geometry.diameterEstimate.length, 17);
 assert.equal(geometry.boundary.length, 2);
 assert.equal(geometry.candidate.length, 2);
 assert.equal(geometry.endpoints.length, 2);
 assert.ok(Math.abs(geometry.center[0] - 200) < 1e-6);
 assert.ok(Math.abs(geometry.center[1] - 200) < 1e-6);
+
+const faceLandmarks = Array.from({ length: 478 }, () => [50, 50, 0] as Vec3);
+faceLandmarks[1] = [0, 100, 0];
+faceLandmarks[2] = [100, 100, 0];
+faceLandmarks[10] = [50, 10, 0];
+const clippedForeheadRuns = visibleIncisionPhotoRstlRuns({
+  name: "extended-forehead",
+  region: "forehead_bridge_arc_v15",
+  pts: [[50, -40, 0], [50, 10, 0], [50, 20, 0], [50, 80, 0]],
+  tris: [0, 0, 0, 0],
+}, faceLandmarks);
+assert.deepEqual(clippedForeheadRuns, [[[50, 10, 0], [50, 20, 0]]],
+  "photo planning clips extended forehead RSTL to the head envelope");
+const cheekRuns = visibleIncisionPhotoRstlRuns({
+  name: "cheek",
+  region: "cheek",
+  pts: [[-20, 20, 0], [120, 20, 0]],
+  tris: [0, 0],
+}, faceLandmarks);
+assert.equal(cheekRuns.length, 1, "ordinary face lines are not changed by the forehead-only clip");
 
 assert.equal(validateIncisionPhotoFile({ type: "image/jpeg", size: 1024 }), null);
 assert.equal(validateIncisionPhotoFile({ type: "image/png", size: 1024 }), null);
