@@ -9,6 +9,11 @@ export type Rgb = [number, number, number];
 export type Lab = [number, number, number];
 export type VisibilityPredicate = (point: Vec3 | undefined) => boolean;
 
+export const EXTENDED_FOREHEAD_REGIONS = new Set([
+  "forehead_lower_long_arc_v13",
+  "forehead_bridge_arc_v15",
+]);
+
 /** 以 (x, y) 为中心、边长 2*radius+1 的方块内的平均 RGB；越界像素跳过。 */
 export function meanPatch(
   image: ImageData | null,
