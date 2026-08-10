@@ -55,6 +55,8 @@ export interface IncisionDomEventHandlers {
   onTumorFile(file?: File): void;
   onSecondaryCueFile(file?: File): void;
   onPhotoFile(file?: File): void;
+  onControlledMarkerDetect(): void;
+  onControlledMarkerConfirm(): void;
   preparePhotoInteraction(): void;
   photoEndpointHandleFromEvent(event: PointerEvent): number | null;
   dragPhotoEndpoint(event: PointerEvent, handle: number): void;
@@ -347,6 +349,8 @@ export function bindIncisionDomEvents({
   listen(elements.photoInput, "change", ((event: Event) => {
     handlers.onPhotoFile(fileFromEvent(event));
   }) as EventListener);
+  action(elements.controlledMarkerDetect, "click", handlers.onControlledMarkerDetect);
+  action(elements.controlledMarkerConfirm, "click", handlers.onControlledMarkerConfirm);
   action(elements.photoMirror, "click", handlers.onPhotoMirror);
   action(elements.photoReset, "click", handlers.onPhotoReset);
   action(elements.surfaceMode, "click", handlers.onSurfaceMode);
