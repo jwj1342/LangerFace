@@ -109,6 +109,11 @@ assert.ok(js.includes("applyTumorContext(rec.tumor)"), "loading a saved candidat
 assert.ok(js.includes("reviewForCandidateRecord"), "every candidate record uses the shared review gate");
 assert.ok(js.includes("forceDraft: !readiness.ok"), "invalid confirmation saves are explicitly downgraded to drafts");
 assert.ok(js.includes("shouldClearFreehandBoundaryOnLesionRepick"), "lesion repicks clear stale freehand boundaries");
+assert.ok(js.includes("resetIncisionBoundaryState"), "tumor kind changes clear incompatible boundary state");
+assert.ok(
+  js.includes("pointToSurfaceRef(tumor.center, S.verts, S.tris)"),
+  "imported tumor centers retain their exact surface reference instead of snapping to a vertex",
+);
 assert.ok(photoRuntime.includes("shouldClearFreehandBoundaryOnLesionRepick"), "photo lesion repicks use the shared boundary reset policy");
 assert.ok(photoRuntime.includes("state.boundaryPoints = []") && photoRuntime.includes("state.boundaryRefs = []"),
   "photo lesion repicks clear stale freehand points and surface references");

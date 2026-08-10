@@ -8,6 +8,7 @@ export const INCISION_PHOTO_TYPES = new Set(["image/jpeg", "image/png"]);
 export interface IncisionPhotoGeometry {
   rstl: MappedAtlasLine[];
   center: Vec3 | null;
+  diameterEstimate: Vec3[];
   boundary: Vec3[];
   candidate: Vec3[];
   endpoints: Vec3[];
@@ -23,6 +24,7 @@ export interface IncisionPhotoRenderInput {
   triangles: Triangle[];
   atlasLines: AtlasLine[] | unknown;
   centerRef: SurfaceRef | null;
+  diameterEstimateRefs?: SurfaceRef[];
   boundaryRefs: SurfaceRef[];
   candidateRefs: SurfaceRef[];
   endpointRefs: SurfaceRef[];
@@ -54,11 +56,68 @@ export function surfaceRefToModelPoint(
   return mapSurfaceRefs([ref], vertices, triangles).pts[0] || null;
 }
 
+const addPoint = (first: Vec3, second: Vec3): Vec3 => [
+  first[0] + second[0],
+  first[1] + second[1],
+  first[2] + second[2],
+];
+const scalePoint = (point: Vec3, scale: number): Vec3 => [
+  point[0] * scale,
+  point[1] * scale,
+  point[2] * scale,
+];
+const crossPoint = (first: Vec3, second: Vec3): Vec3 => [
+  first[1] * second[2] - first[2] * second[1],
+  first[2] * second[0] - first[0] * second[2],
+  first[0] * second[1] - first[1] * second[0],
+];
+const normalizePoint = (point: Vec3): Vec3 => {
+  const length = Math.hypot(...point);
+  return length > 1e-9 ? scalePoint(point, 1 / length) : [1, 0, 0];
+};
+
+export function buildSubcutaneousDiameterEstimateRefs({
+  centerRef,
+  lesionIndex,
+  diameterMm,
+  unitsPerMm,
+  vertices,
+  normals,
+  triangles,
+  samples = 48,
+}: {
+  centerRef: SurfaceRef | null;
+  lesionIndex: number;
+  diameterMm: number;
+  unitsPerMm: number;
+  vertices: Vec3[];
+  normals: Vec3[];
+  triangles: Triangle[];
+  samples?: number;
+}): SurfaceRef[] {
+  const center = centerRef ? surfaceRefToModelPoint(centerRef, vertices, triangles) : vertices[lesionIndex];
+  const normal = normals[lesionIndex];
+  const radius = Number(diameterMm) * Number(unitsPerMm) / 2;
+  if (!center || !normal || !(radius > 0) || samples < 8) return [];
+  const u = normalizePoint(crossPoint(normal, [0, 1, 0]));
+  const v = normalizePoint(crossPoint(normal, u));
+  const points: Vec3[] = [];
+  for (let index = 0; index <= samples; index += 1) {
+    const angle = index / samples * Math.PI * 2;
+    points.push(addPoint(
+      addPoint(center, scalePoint(u, Math.cos(angle) * radius)),
+      scalePoint(v, Math.sin(angle) * radius),
+    ));
+  }
+  return pointsToSurfaceRefs(points, vertices, triangles);
+}
+
 export function buildIncisionPhotoGeometry({
   landmarks,
   triangles,
   atlasLines,
   centerRef,
+  diameterEstimateRefs = [],
   boundaryRefs,
   candidateRefs,
   endpointRefs,
@@ -66,6 +125,7 @@ export function buildIncisionPhotoGeometry({
   return {
     rstl: mapAtlas(atlasLines, landmarks, triangles),
     center: centerRef ? mapSurfaceRefs([centerRef], landmarks, triangles).pts[0] || null : null,
+    diameterEstimate: mapSurfaceRefs(diameterEstimateRefs, landmarks, triangles).pts,
     boundary: mapSurfaceRefs(boundaryRefs, landmarks, triangles).pts,
     candidate: mapSurfaceRefs(candidateRefs, landmarks, triangles).pts,
     endpoints: mapSurfaceRefs(endpointRefs, landmarks, triangles).pts,
@@ -125,6 +185,12 @@ export function renderIncisionPhotoPlanning(input: IncisionPhotoRenderInput): In
   for (const line of geometry.rstl) {
     drawPath(context, line.pts, "rgba(3, 7, 18, 0.88)", 4.5);
     drawPath(context, line.pts, "rgba(103, 232, 249, 0.92)", 2);
+  }
+  if (geometry.diameterEstimate.length >= 2) {
+    context.setLineDash([8, 6]);
+    drawPath(context, geometry.diameterEstimate, "rgba(3, 7, 18, 0.92)", 6, true);
+    drawPath(context, geometry.diameterEstimate, "#facc15", 3, true);
+    context.setLineDash([]);
   }
   if (geometry.boundary.length >= 2) {
     drawPath(context, geometry.boundary, "rgba(3, 7, 18, 0.92)", 6, geometry.boundary.length >= 6);

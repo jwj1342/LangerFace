@@ -3,6 +3,7 @@ import type { IncisionRuntimeState } from "./incisionControllerState";
 import type { IncisionDomElements } from "./incisionDom";
 import type { SurfaceRef } from "./incisionOverlay";
 import {
+  buildSubcutaneousDiameterEstimateRefs,
   nearestPhotoEndpointHandle,
   pointsToSurfaceRefs,
   renderIncisionPhotoPlanning,
@@ -120,6 +121,17 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     elements.photoCanvas.width = Math.max(1, Math.round(frame.width * dpr));
     elements.photoCanvas.height = Math.max(1, Math.round(frame.height * dpr));
     const endpointRefs = pointsToSurfaceRefs(state.result?.candidate?.endpoints || [], state.verts, state.tris);
+    const diameterEstimateRefs = elements.tumorKind.value === "subcutaneous"
+      ? buildSubcutaneousDiameterEstimateRefs({
+        centerRef: state.lesionRef,
+        lesionIndex: state.lesion,
+        diameterMm: Number(elements.diameter.value),
+        unitsPerMm: state.unitsPerMm,
+        vertices: state.verts,
+        normals: state.normals,
+        triangles: state.tris,
+      })
+      : [];
     const sourceToCssScale = frame.transform?.displayWidth
       ? frame.transform.displayWidth / frame.width
       : 1;
@@ -133,6 +145,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
       triangles: state.tris,
       atlasLines: state.atlas.lines || [],
       centerRef: state.lesionRef,
+      diameterEstimateRefs,
       boundaryRefs: frame.selection.boundaryRefs,
       candidateRefs: pointsToSurfaceRefs(state.result?.candidate?.polyline || [], state.verts, state.tris),
       endpointRefs,
