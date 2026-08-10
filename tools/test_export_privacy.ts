@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import { auditExportPayload } from "../web/src/services/exportPrivacy.ts";
 
 function safeReviewExport() {
+  const currentId = "293816ca-49aa-4029-92d4-b53174095200";
   return {
     schema_version: "incision-review-export/v0.4",
     exported_at: "2026-06-25T12:34:56.000Z",
     current: {
-      id: "12345678-1234-4234-8234-123456789012",
+      id: currentId,
       created_at: "2026-06-25T12:34:56.000Z",
       schema_version: "incision-review-record/v0.4",
       credentials: { token_present: true, token: "[redacted]" },
@@ -34,6 +35,7 @@ function safeReviewExport() {
       review: { reviewed_at: "2026-06-25T12:34:56.000Z" },
       audit_events: [{ at: "2026-06-25T12:34:56.000Z" }],
     }],
+    candidate_comparison: [{ id: currentId, rank: 1, label: "主候选", score: 9.2 }],
   };
 }
 
@@ -92,5 +94,11 @@ nestedAuditPii.current.audit_events.push({ metadata: { note: "请联系 +1 555 0
 report = auditExportPayload(nestedAuditPii);
 assert.equal(report.passed, false, "nested audit objects must remain recursively scanned");
 assert.ok(report.violations.some((item) => item.path === "current.audit_events.1.metadata.note" && item.code === "pii_pattern_present"));
+
+const unlinkedComparisonId = safeReviewExport();
+unlinkedComparisonId.candidate_comparison[0].id = "293816ca-49aa-4029-92d4-b53174095201";
+report = auditExportPayload(unlinkedComparisonId);
+assert.equal(report.passed, false, "candidate comparison UUID exemptions require a matching review record");
+assert.ok(report.violations.some((item) => item.path === "candidate_comparison.0.id" && item.code === "pii_pattern_present"));
 
 console.log("test_export_privacy: browser export privacy preflight assertions passed");

@@ -137,6 +137,7 @@ export interface YoloWrinkleConstructorOptions extends YoloOptions {
   executionProviders?: string[];
   wasmPaths?: string | Record<string, string>;
   verifySha256?: boolean;
+  expectedModelBytes?: number;
   fetchImpl?: typeof fetch;
   runtime?: OrtRuntimeLike | null;
   session?: InferenceSessionLike | null;
@@ -814,10 +815,15 @@ export class YoloWrinkleOnnx {
   executionProviders: string[];
   wasmPaths: string | Record<string, string> | undefined;
   verifySha256: boolean;
+  expectedModelBytes: number;
   fetchImpl: typeof fetch | undefined;
   runtime: OrtRuntimeLike | null;
   session: InferenceSessionLike | null;
   modelBytes: Uint8Array | null;
+  private loadPromise: Promise<this> | null = null;
+  private closePromise: Promise<void> | null = null;
+  private sessionTail: Promise<void> = Promise.resolve();
+  private loadProgressListeners: Set<(progress: ModelProgress) => void> | null = null;
 
   constructor(options: YoloWrinkleConstructorOptions = {}) {
     this.chunkUrls = options.chunkUrls || DEFAULT_MODEL_CHUNK_URLS;
@@ -831,19 +837,26 @@ export class YoloWrinkleOnnx {
     // 生产默认校验内容哈希，而不是只比总字节数：分片拼接错位或资产被替换时
     // 必须直接失败。仅测试可显式传 false 跳过。
     this.verifySha256 = options.verifySha256 !== false;
+    this.expectedModelBytes = options.expectedModelBytes ?? YOLO_WRINKLE_MODEL_BYTES;
     this.fetchImpl = options.fetchImpl;
     this.runtime = options.runtime || null;
     this.session = options.session || null;
     this.modelBytes = null;
   }
 
-  async load(onProgress?: (progress: ModelProgress) => void): Promise<this> {
+  private enqueueSessionOperation<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.sessionTail.then(operation);
+    this.sessionTail = result.then(() => undefined, () => undefined);
+    return result;
+  }
+
+  private async loadSession(onProgress?: (progress: ModelProgress) => void): Promise<this> {
     if (this.session) return this;
     const runtime = this.runtime || await import("onnxruntime-web/wasm") as unknown as OrtRuntimeLike;
     if (this.wasmPaths && runtime.env?.wasm) runtime.env.wasm.wasmPaths = this.wasmPaths;
     const bytes = await fetchBinaryChunks(this.chunkUrls, {
       fetchImpl: this.fetchImpl,
-      expectedBytes: YOLO_WRINKLE_MODEL_BYTES,
+      expectedBytes: this.expectedModelBytes,
       onProgress,
     });
     if (this.verifySha256) {
@@ -861,8 +874,37 @@ export class YoloWrinkleOnnx {
     return this;
   }
 
-  async infer(imageData: ImageData, options: YoloOptions = {}) {
-    await this.load(options.onModelProgress);
+  load(onProgress?: (progress: ModelProgress) => void): Promise<this> {
+    if (this.closePromise) return this.closePromise.then(() => this.load(onProgress));
+    if (this.session) return Promise.resolve(this);
+    if (!this.loadPromise) {
+      const listeners = new Set<(progress: ModelProgress) => void>();
+      this.loadProgressListeners = listeners;
+      let operation: Promise<this>;
+      operation = this.enqueueSessionOperation(() => this.loadSession((progress) => {
+        for (const listener of listeners) listener(progress);
+      })).finally(() => {
+        if (this.loadPromise === operation) {
+          this.loadPromise = null;
+          this.loadProgressListeners = null;
+        }
+      });
+      this.loadPromise = operation;
+    }
+    const operation = this.loadPromise;
+    const listeners = this.loadProgressListeners;
+    if (onProgress) listeners?.add(onProgress);
+    return operation.finally(() => {
+      if (onProgress) listeners?.delete(onProgress);
+    });
+  }
+
+  infer(imageData: ImageData, options: YoloOptions = {}) {
+    return this.enqueueSessionOperation(() => this.inferExclusive(imageData, options));
+  }
+
+  private async inferExclusive(imageData: ImageData, options: YoloOptions = {}) {
+    await this.loadSession(options.onModelProgress);
     const prepared = preprocessImageData(imageData, this.inputSize);
     if (!this.session || !this.runtime) throw new Error("YOLO session failed to initialize");
     const inputName = this.session.inputNames?.[0] || "images";
@@ -959,9 +1001,18 @@ export class YoloWrinkleOnnx {
   }
 
   async close(): Promise<void> {
-    await this.session?.release?.();
-    this.session = null;
-    this.modelBytes = null;
+    if (this.closePromise) return this.closePromise;
+    let operation: Promise<void>;
+    operation = this.enqueueSessionOperation(async () => {
+      const session = this.session;
+      this.session = null;
+      this.modelBytes = null;
+      await session?.release?.();
+    }).finally(() => {
+      if (this.closePromise === operation) this.closePromise = null;
+    });
+    this.closePromise = operation;
+    return operation;
   }
 }
 

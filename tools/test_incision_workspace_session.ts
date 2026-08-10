@@ -110,6 +110,21 @@ assert.equal(shouldClearFreehandBoundaryOnLesionRepick({
   boundaryMode: "ellipse",
   boundaryPointCount: 7,
 }), false);
+const importedSubcutaneous = importedTumorFormState({
+  ...tumor,
+  kind: "subcutaneous",
+  depth_mm: 5,
+}, {
+  diameterMin: 1,
+  diameterMax: 80,
+  depthMin: 1,
+  depthMax: 50,
+  depthFallback: 4,
+  marginMin: 0,
+  marginMax: 20,
+  authorFallback: "fallback",
+});
+assert.deepEqual(importedSubcutaneous.boundaryPoints, [], "subcutaneous imports discard incompatible skin-boundary state");
 
 storage.setItem("langerface:incision-workspace-session:v1", "{invalid");
 assert.equal(loadIncisionWorkspaceSession(storage), null, "corrupt session state fails closed");
