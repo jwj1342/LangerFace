@@ -1,4 +1,5 @@
-import { mapAtlas, type AtlasLine, type MappedAtlasLine } from "./geometryAtlas.ts";
+import { mapAtlas, visibleRuns, type AtlasLine, type MappedAtlasLine } from "./geometryAtlas.ts";
+import { buildHeadVisibility, EXTENDED_FOREHEAD_REGIONS } from "./foreheadVisibility.ts";
 import { mapSurfaceRefs, pointToSurfaceRef, type SurfaceRef } from "./incisionOverlay.ts";
 import type { Triangle, Vec3 } from "./softBody.ts";
 
@@ -86,6 +87,16 @@ export function nearestPhotoEndpointHandle(
   return nearest?.index ?? null;
 }
 
+export function visibleIncisionPhotoRstlRuns(
+  line: MappedAtlasLine,
+  landmarks: Vec3[],
+): Vec3[][] {
+  if (line.pts.length < 2) return [];
+  if (!EXTENDED_FOREHEAD_REGIONS.has(line.region)) return [line.pts];
+  const headVisible = buildHeadVisibility(landmarks);
+  return visibleRuns(line.pts, line.pts.map((point) => headVisible(point) ? 1 : 0));
+}
+
 function drawPath(
   context: CanvasRenderingContext2D,
   points: readonly Vec3[],
@@ -123,8 +134,10 @@ export function renderIncisionPhotoPlanning(input: IncisionPhotoRenderInput): In
   context.drawImage(source, 0, 0, sourceWidth, sourceHeight);
 
   for (const line of geometry.rstl) {
-    drawPath(context, line.pts, "rgba(3, 7, 18, 0.88)", 4.5);
-    drawPath(context, line.pts, "rgba(103, 232, 249, 0.92)", 2);
+    for (const run of visibleIncisionPhotoRstlRuns(line, input.landmarks)) {
+      drawPath(context, run, "rgba(3, 7, 18, 0.88)", 4.5);
+      drawPath(context, run, "rgba(103, 232, 249, 0.92)", 2);
+    }
   }
   if (geometry.boundary.length >= 2) {
     drawPath(context, geometry.boundary, "rgba(3, 7, 18, 0.92)", 6, geometry.boundary.length >= 6);
