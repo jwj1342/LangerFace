@@ -2,13 +2,11 @@
 import { bindDom, clearDomBinding, els } from "./liveDom.ts";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./liveCanvasFit.ts";
 import { validateIncisionOverlay } from "./incisionOverlay.ts";
-import { disposeMode3d, enterRoute, loadDemoRecon, resetView3d, setMode3d, startScan, startTwin, toggleTwinHead, toggleTwinTexture } from "./mode3d.ts";
 import { ensureReady, handleFile, redrawPausedFrame, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.ts";
 import { adjustFocusZoom, buildZoomCards } from "./render2d.ts";
 import {
   LIVE_CONTROLLER_STATE_EVENT,
   LIVE_RENDER_REACT_COMMAND_EVENT,
-  LIVE_ROUTE_REACT_COMMAND_EVENT,
   LIVE_SOURCE_REACT_COMMAND_EVENT,
 } from "../lib/controllerEvents";
 import {
@@ -28,7 +26,7 @@ import { LiveActionScheduler } from "./liveActionScheduler";
 import { bindLiveCanvasInteractions } from "./liveCanvasInteraction";
 import { LiveCommandRouter } from "./liveCommandRouter";
 import { createCanvasRecordingController, type CanvasRecordingController, type RecordingExtraCanvas } from "./canvasRecording";
-import { modelState, recordingState, reconState, renderState, sourceState } from "./liveState";
+import { modelState, recordingState, renderState, sourceState } from "./liveState";
 import { createPhotoPlanningController } from "./photoPlanningController";
 import {
   adjustRefineImageZoom,
@@ -111,9 +109,6 @@ function publishLiveState(reason = "state_update"): void {
     sourceRunning: sourceState.running,
     sourcePaused: sourceState.paused,
     liveLabel: els.live?.dataset?.k || liveTextOf(els.live) || "待机",
-    route: reconState.route,
-    mode3d: reconState.mode3d,
-    routeHint: liveTextOf(els.routeModeHint),
     renderSystem: renderState.system,
     densityFrac: renderState.densityFrac,
     smoothLabel: liveTextOf(els.smoothVal),
@@ -122,12 +117,6 @@ function publishLiveState(reason = "state_update"): void {
     zoom: renderState.zoom,
     meshPts: renderState.meshPts,
     bands: renderState.bands,
-    has3dModel: Boolean(reconState.reconVerts || reconState.flameFit || reconState.flameNeutral),
-    projectable: reconState.reconProjectable,
-    scanActive: reconState.scan?.active,
-    twinMode: reconState.twinMode,
-    twinTexture: reconState.twinTexture,
-    reconStatus: liveTextOf(els.reconStatus),
     previewSystem,
     previewMeta,
     incisionOverlayLoaded: Boolean(renderState.incisionOverlay),
@@ -239,9 +228,6 @@ function visibleRecordingCanvases(): RecordingExtraCanvas[] {
       const label = zc.card?.querySelector(".tag")?.textContent || "细节放大窗";
       extras.push({ label, canvas: zc.canvas });
     });
-  }
-  if (els.three && !els.three.classList.contains("hidden") && els.three.width && els.three.height) {
-    extras.push({ label: "3D 视图", canvas: els.three });
   }
   return extras;
 }
@@ -373,21 +359,6 @@ const liveCommands = new LiveCommandRouter({
   },
   restoreAtlas: restoreAtlasPreview,
   clearIncisionOverlay,
-  routeChange: enterRoute,
-  loadDemoRecon,
-  startScan,
-  view3d: () => {
-    if (reconState.reconVerts) setMode3d("view");
-  },
-  project3d: () => {
-    if (!reconState.reconVerts) return;
-    if (reconState.mode3d === "project") setMode3d("view");
-    else if (reconState.reconProjectable) setMode3d("project");
-  },
-  reset3d: resetView3d,
-  startTwin,
-  toggleTwinHead,
-  toggleTwinTexture,
 });
 
 function bindLiveEvents(signal: AbortSignal): void {
@@ -431,7 +402,6 @@ function bindLiveEvents(signal: AbortSignal): void {
     bindWindowControllerEvents([
       [LIVE_SOURCE_REACT_COMMAND_EVENT, (event) => { liveCommands.handleSourceEvent(event); }],
       [LIVE_RENDER_REACT_COMMAND_EVENT, (event) => { liveCommands.handleRenderEvent(event); }],
-      [LIVE_ROUTE_REACT_COMMAND_EVENT, (event) => { liveCommands.handleRouteEvent(event); }],
     ], { signal });
   } else {
     els.upload.addEventListener("click", () => liveCommands.source("upload_source"), { signal });
@@ -449,17 +419,6 @@ function bindLiveEvents(signal: AbortSignal): void {
     els.meshPts.addEventListener("change", (e) => liveCommands.render("mesh_points_toggle", eventChecked(e)), { signal });
     els.restoreAtlas.addEventListener("click", () => liveCommands.render("restore_atlas"), { signal });
     els.export.addEventListener("click", () => liveCommands.source("recording_toggle"), { signal });
-
-    // 3D Beta 路线绑定
-    els.routeSel.addEventListener("change", (e) => liveCommands.route("route_change", eventValue(e)), { signal });
-    els.reconDemo.addEventListener("click", () => liveCommands.route("load_demo_recon"), { signal });
-    els.reconScan.addEventListener("click", () => liveCommands.route("start_scan"), { signal });
-    els.view3d.addEventListener("click", () => liveCommands.route("view_3d"), { signal });
-    els.project3d.addEventListener("click", () => liveCommands.route("project_3d"), { signal });
-    els.reset3d.addEventListener("click", () => liveCommands.route("reset_3d"), { signal });
-    els.cloudFitFlame.addEventListener("click", () => liveCommands.route("start_twin"), { signal });
-    els.flameStd.addEventListener("change", () => liveCommands.route("toggle_twin_head"), { signal });
-    els.twinTexture.addEventListener("change", () => liveCommands.route("toggle_twin_texture"), { signal });
   }
 
   bindLiveCanvasInteractions(els.mainWrap, {
@@ -491,7 +450,6 @@ export function disposeLiveWorkbench() {
   recordingController?.stop?.();
   recordingController = null;
   recordingState.recorder = null;
-  disposeMode3d();
   if (hasBoundLiveDom()) {
     stopSource();
   }

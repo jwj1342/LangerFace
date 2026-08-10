@@ -3,7 +3,6 @@ import { toPixels, type NormalizedLandmark } from "./geometryAtlas.ts";
 import { buildHandMasks, type HandMask } from "./geometryOccluders.ts";
 import type { Vec3 } from "./softBody.ts";
 import { countMetric, logWarn, recordMetricSample } from "./logger.ts";
-import { projectVerts } from "./projection3d.ts";
 import { clearZooms, draw, drawFocusedRegion, drawZooms, updateStats } from "./render2d.ts";
 import {
   currentLiveSource,
@@ -168,7 +167,7 @@ export function loop(): void {
 
   let lineCount = 0;
   if (landmarks && sourceState.presence > 0) {
-    const displayLandmarks = projectVerts(landmarks);
+    const displayLandmarks = landmarks;
     try {
       lineCount = draw(displayLandmarks, width, height, hulls);
       drawZooms(displayLandmarks, width);
@@ -217,7 +216,7 @@ export function redrawPausedFrame(): boolean {
   const width = els.canvas.width;
   const height = els.canvas.height;
   ctx.drawImage(sourceState.frozenFrame, 0, 0, width, height);
-  const landmarks = sourceState.lastLM ? projectVerts(sourceState.lastLM as Vec3[]) : null;
+  const landmarks = sourceState.lastLM ? sourceState.lastLM as Vec3[] : null;
   let lineCount = 0;
   if (landmarks && sourceState.presence > 0) {
     lineCount = draw(landmarks, width, height, sourceState.lastHulls as HandMask[]);

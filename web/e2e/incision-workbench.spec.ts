@@ -280,7 +280,7 @@ test("live workbench controls use the same readable clinical theme", async ({ pa
   await page.goto("/live");
   await expect(page.locator("#templateSel")).toBeVisible();
 
-  for (const selector of ["#templateSel", "#routeSel", "#uploadBtn", "#camBtn"]) {
+  for (const selector of ["#templateSel", "#uploadBtn", "#camBtn", "#exportBtn"]) {
     expect(await contrastRatio(page.locator(selector)), `${selector} contrast`).toBeGreaterThanOrEqual(4.5);
   }
 });

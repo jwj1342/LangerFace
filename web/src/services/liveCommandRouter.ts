@@ -1,16 +1,13 @@
 import type {
   LiveRenderCommand,
-  LiveRouteCommand,
   LiveSourceCommand,
 } from "../lib/controllerCommand.ts";
 import {
   readLiveRenderCommand,
-  readLiveRouteCommand,
   readLiveSourceCommand,
 } from "./workbenchCommandSchemas.ts";
 
 type LiveCommandEvent = Event | { detail?: unknown } | null | undefined;
-type LiveRoute = "2d" | "3d";
 type LiveTemplate = "rstl" | "langer";
 
 export interface LiveCommandActions {
@@ -26,15 +23,6 @@ export interface LiveCommandActions {
   meshPointsToggle(value: boolean): unknown;
   restoreAtlas(): unknown;
   clearIncisionOverlay(): unknown;
-  routeChange(value: LiveRoute): unknown;
-  loadDemoRecon(): unknown;
-  startScan(): unknown;
-  view3d(): unknown;
-  project3d(): unknown;
-  reset3d(): unknown;
-  startTwin(): unknown;
-  toggleTwinHead(): unknown;
-  toggleTwinTexture(): unknown;
 }
 
 function percentage(value: unknown): number | null {
@@ -98,30 +86,6 @@ export class LiveCommandRouter {
     }
   }
 
-  route(command: LiveRouteCommand, value?: unknown): boolean {
-    switch (command) {
-      case "route_change":
-        if (value !== "2d" && value !== "3d") return false;
-        return this.execute(command, () => this.actions.routeChange(value));
-      case "load_demo_recon":
-        return this.execute(command, () => this.actions.loadDemoRecon());
-      case "start_scan":
-        return this.execute(command, () => this.actions.startScan());
-      case "view_3d":
-        return this.execute(command, () => this.actions.view3d());
-      case "project_3d":
-        return this.execute(command, () => this.actions.project3d());
-      case "reset_3d":
-        return this.execute(command, () => this.actions.reset3d());
-      case "start_twin":
-        return this.execute(command, () => this.actions.startTwin());
-      case "toggle_twin_head":
-        return this.execute(command, () => this.actions.toggleTwinHead());
-      case "toggle_twin_texture":
-        return this.execute(command, () => this.actions.toggleTwinTexture());
-    }
-  }
-
   handleSourceEvent(event: LiveCommandEvent): boolean {
     const detail = readLiveSourceCommand(event);
     return detail ? this.source(detail.command) : false;
@@ -130,10 +94,5 @@ export class LiveCommandRouter {
   handleRenderEvent(event: LiveCommandEvent): boolean {
     const detail = readLiveRenderCommand(event);
     return detail ? this.render(detail.command, detail.value) : false;
-  }
-
-  handleRouteEvent(event: LiveCommandEvent): boolean {
-    const detail = readLiveRouteCommand(event);
-    return detail ? this.route(detail.command, detail.value) : false;
   }
 }
