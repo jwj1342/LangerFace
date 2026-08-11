@@ -138,6 +138,8 @@ const annotateDomService = read("src/services/annotateDom.ts");
 const annotationExportService = read("src/services/annotationExport.ts");
 const annotationInteractionService = read("src/services/annotationInteraction.ts");
 const annotationLineService = read("src/services/annotationLineService.ts");
+const annotationMeshService = read("src/services/annotationMeshService.ts");
+const annotationSlicerImportService = read("src/services/annotationSlicerImport.ts");
 const workbenchCommandSchemasService = read("src/services/workbenchCommandSchemas.ts");
 const annotationModelService = read("src/services/annotationModel.ts");
 const flameFitService = read("src/services/flameFit.ts");
@@ -187,6 +189,8 @@ const annotateRuntimeDependencyTypes = [
   "src/services/annotationExport.ts",
   "src/services/annotationInteraction.ts",
   "src/services/annotationLineService.ts",
+  "src/services/annotationMeshService.ts",
+  "src/services/annotationSlicerImport.ts",
   "src/services/annotationModel.ts",
   "src/services/annotateViewer.ts",
   "src/services/assetLoader.ts",
@@ -1980,8 +1984,18 @@ assert.ok(annotationLineService.includes("class AnnotationLineService"), "annota
 assert.ok(!/(?:document|window|HTMLElement|PointerEvent|THREE)/.test(annotationLineService), "annotation line service stays DOM and renderer independent");
 assert.ok(annotateRuntime.includes("./annotationInteraction"), "annotation runtime delegates pointer math to the interaction service");
 assert.ok(annotateRuntime.includes("./annotationLineService"), "annotation runtime delegates line state transitions to the line service");
+assert.ok(annotateRuntime.includes("./annotationMeshService"), "annotation runtime delegates mesh source loading to the mesh service");
+assert.ok(annotationMeshService.includes("class AnnotationMeshService"), "annotation mesh service owns source loading and fallback behavior");
+assert.ok(annotationMeshService.includes("bundledMeshPromise"), "annotation mesh service reuses concurrent bundled mesh loads");
+assert.ok(!/(?:document|window|HTMLElement|PointerEvent|THREE)/.test(annotationMeshService), "annotation mesh service stays DOM and renderer independent");
+assert.ok(!annotateRuntime.includes("loadFlameBasis"), "annotation runtime does not load FLAME basis assets directly");
+assert.ok(!annotateRuntime.includes("parseMeshFile"), "annotation runtime does not parse uploaded meshes directly");
+assert.ok(annotateRuntime.includes("./annotationSlicerImport"), "annotation runtime delegates Slicer parsing and snapping preparation");
+assert.ok(annotationSlicerImportService.includes("prepareAnnotationSlicerImport"), "annotation Slicer service prepares snapped line controls");
+assert.ok(!/(?:document|window|HTMLElement|PointerEvent|THREE)/.test(annotationSlicerImportService), "annotation Slicer service stays DOM and renderer independent");
+assert.ok(!annotateRuntime.includes("parseSlicerCurveFile"), "annotation runtime does not parse Slicer payloads directly");
 assert.ok(annotateRuntime.includes('"pointercancel"'), "annotation runtime clears interrupted pointer gestures");
-assert.ok(annotateRuntime.split("\n").length <= 520, "annotation runtime stays a thin orchestration layer");
+assert.ok(annotateRuntime.split("\n").length <= 455, "annotation runtime stays a thin orchestration layer");
 assert.ok(!annotateRuntime.includes("function controllerEvent"), "annotation runtime delegates browser command parsing to typed schemas");
 assert.ok(!fs.existsSync(path.join(web, "annotate_model.js")), "legacy annotate_model.js facade has been removed after TypeScript service migration");
 assert.ok(!fs.existsSync(path.join(web, "annotate_model.d.ts")), "legacy annotation model declaration facade has been removed after TypeScript service migration");

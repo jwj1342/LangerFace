@@ -12,7 +12,6 @@ import {
   dispatchControllerEvent,
 } from "../lib/controllerCommand";
 import { AnnotationModel, type AnnotationLine, type AnnotationPoint } from "./annotationModel";
-import type { Triangle, Vec3 } from "./softBody";
 import {
   annotateFileFromEvent,
   collectAnnotateElements,
@@ -35,12 +34,14 @@ import {
   type AnnotationDragState,
 } from "./annotationInteraction";
 import { AnnotationLineService } from "./annotationLineService";
-import { assetUrls } from "./assetLoader";
+import { prepareAnnotationSlicerImport } from "./annotationSlicerImport";
+import {
+  AnnotationMeshService,
+  type AnnotationFlameAssetName,
+  type AnnotationFlameSource,
+  type AnnotationMeshResult,
+} from "./annotationMeshService";
 import { dataSource } from "./dataSource";
-import { facesArray, flameForward, loadFlameBasis, type FlameBasis } from "./flameFit";
-import { parseMeshFile } from "./meshIo";
-import { parseSlicerCurveFile } from "./slicerCurve";
-import { topologyMeta } from "./topologyRegistry";
 import {
   createAnnotationSessionGuard,
   type AnnotationSessionToken,
@@ -50,19 +51,6 @@ import {
   readAnnotateLibraryCommand,
   readAnnotateMeshCommand,
 } from "./workbenchCommandSchemas";
-
-interface FlameMesh {
-  verts: Vec3[];
-  tris: Triangle[];
-}
-
-interface MeshTopologyPayload {
-  topologyId?: string;
-  topologyVersion?: string;
-  triangles: Triangle[];
-  vertexCount?: number;
-}
-
 
 type AnnotationModelInstance = InstanceType<typeof AnnotationModel>;
 type Annotator3DInstance = InstanceType<typeof Annotator3D>;
@@ -80,12 +68,6 @@ let frameId = 0;
 let abortController: AbortController | null = null;
 const activeSession = createAnnotationSessionGuard();
 
-let bundledFlameBasis: FlameBasis | null = null;
-
-function isAnnotationPoint(point: AnnotationPoint | null): point is AnnotationPoint {
-  return point !== null;
-}
-
 function publishAnnotateState(reason = "state_update"): void {
   if (!activeSession.isMounted() || typeof window === "undefined" || !els?.hint) return;
   dispatchControllerEvent(ANNOTATE_CONTROLLER_STATE_EVENT, buildAnnotateControllerSnapshot({
@@ -101,102 +83,65 @@ function publishAnnotateState(reason = "state_update"): void {
   }));
 }
 
-async function loadBundledFlameStandard(): Promise<FlameMesh> {
-  if (!bundledFlameBasis) bundledFlameBasis = await loadFlameBasis(assetUrls.flameBasis);
-  const verts = flameForward(
-    bundledFlameBasis,
-    new Float64Array(bundledFlameBasis.NS),
-    new Float64Array(bundledFlameBasis.NE),
-    0,
-  );
-  return { verts, tris: facesArray(bundledFlameBasis) };
-}
-
 // ── 网格加载 ──────────────────────────────────────────────────────────────────
-async function loadCanonical(): Promise<void> {
-  const session = activeSession.current();
-  if (session === null) return;
-  setHint("加载标准三维面部模型…");
-  let mesh: FlameMesh;
-  try {
-    mesh = await loadBundledFlameStandard();
-  } catch (err) {
-    if (!isActiveSession(session)) return;
-    setHint("标准三维面部模型加载失败，回退到基础标准脸：" + errorMessage(err));
-    const head = await dataSource.getHeadMesh("mediapipe-468");
-    if (!isActiveSession(session)) return;
-    model.setTopology(head.topology);
-    viewer.setMesh(head.vertices, head.triangles, { showSurface: true });
-    onCanonical = true;
-    els.drawMode.textContent = "基础标准图谱";
-    setHint("已回退到基础标准脸；可导出待复核图谱草案。");
-    refresh();
-    return;
-  }
-  if (!isActiveSession(session)) return;
-  const meta = topologyMeta("flame-2023");
-  if (!meta) throw new Error("缺少 FLAME 拓扑登记");
-  model.setTopology({ topologyId: meta.id, topologyVersion: meta.version });
-  viewer.setMesh(mesh.verts, mesh.tris, { showSurface: true });
-  onCanonical = true;
-  els.drawMode.textContent = "高精度标准图谱";
-  setHint(`在标准三维面部模型上点击落点（${mesh.verts.length} 个采样点）；导出可得待复核图谱草案。`);
-  refresh();
-}
-
 // FLAME 资产为 dev-local（gitignore）：用 import.meta.glob 在构建期按存在与否解析，
 // 缺失（CI / 生产构建）时 glob 为空 → FLAME 入口自动隐藏，绝不影响构建。
 const FLAME_URLS = import.meta.glob(
   "../../assets/{topology_flame_2023,flame_neutral_vertices,flame_fitted_vertices}.json",
   { query: "?url", import: "default", eager: true },
 ) as Record<string, string>;
-const flameUrl = (name: string) => FLAME_URLS[`../../assets/${name}.json`] || null;
-const flameAvailable = () =>
-  Boolean(flameUrl("topology_flame_2023") && flameUrl("flame_neutral_vertices"));
-// 个体（拟合后）FLAME 头：tools/fit_flame_to_landmarks.py 离线产出 flame_fitted_vertices.json。
-const fittedFlameAvailable = () =>
-  Boolean(flameUrl("topology_flame_2023") && flameUrl("flame_fitted_vertices"));
+const meshService = new AnnotationMeshService({
+  flameAssetUrl: (name: AnnotationFlameAssetName) => FLAME_URLS[`../../assets/${name}.json`] || null,
+});
+const flameAvailable = () => meshService.flameAvailable("neutral");
+const fittedFlameAvailable = () => meshService.flameAvailable("fitted");
 
-async function loadFlameMesh(vertsName: string, label: string): Promise<void> {
-  const session = activeSession.current();
-  if (session === null) return;
-  const vurl = flameUrl(vertsName);
-  const turl = flameUrl("topology_flame_2023");
-  if (!vurl || !turl) {
-    setHint("FLAME 资产未生成（dev-local）。本地放好 assets/flame/flame2023_Open.pkl 后运行 tools/export_flame_topology.py（个体网格再跑 fit_flame_to_landmarks.py）。");
-    return;
-  }
-  setHint(`加载 ${label}…`);
-  const [verts, topology] = await Promise.all([
-    fetchJSON<Vec3[]>(vurl, label),
-    fetchJSON<MeshTopologyPayload>(turl, "FLAME 拓扑"),
-  ]);
-  if (!isActiveSession(session)) return;
-  const meta = topologyMeta("flame-2023");
-  if (!meta) throw new Error("缺少 FLAME 拓扑登记");
-  model.setTopology({ topologyId: meta.id, topologyVersion: meta.version });
-  viewer.setMesh(verts, topology.triangles, { showSurface: true });
-  onCanonical = true;
-  els.drawMode.textContent = label;
-  setHint(`在 ${label} 上点击落点（${topology.vertexCount} 顶点）；导出得 flame-2023 图谱(tri,u,v)。`);
+function applyAnnotationMesh(mesh: AnnotationMeshResult): void {
+  if (mesh.topology) model.setTopology(mesh.topology);
+  viewer.setMesh(mesh.vertices, mesh.triangles, { showSurface: true, colors: mesh.colors });
+  onCanonical = mesh.canonical;
+  els.drawMode.textContent = mesh.modeLabel;
+  setHint(mesh.hint);
   refresh();
 }
-const loadFlame = () => loadFlameMesh("flame_neutral_vertices", topologyMeta("flame-2023")?.label ?? "高精度三维头模");
-const loadFittedFlame = () => loadFlameMesh("flame_fitted_vertices", "FLAME 个体（拟合）");
+
+async function loadCanonical(): Promise<void> {
+  const session = activeSession.current();
+  if (session === null) return;
+  setHint("加载标准三维面部模型…");
+  const mesh = await meshService.loadCanonical();
+  if (!isActiveSession(session)) return;
+  applyAnnotationMesh(mesh);
+}
+
+async function loadFlame(source: AnnotationFlameSource): Promise<void> {
+  const session = activeSession.current();
+  if (session === null) return;
+  const label = meshService.flameLabel(source);
+  setHint(`加载 ${label}…`);
+  const result = await meshService.loadFlame(source);
+  if (!isActiveSession(session)) return;
+  if (result.status === "unavailable") {
+    setHint(result.message);
+    return;
+  }
+  applyAnnotationMesh(result.mesh);
+}
+
+function runMeshLoad(task: Promise<void>, label: string): void {
+  const session = activeSession.current();
+  task.catch((error) => {
+    if (session !== null && isActiveSession(session)) setHint(`${label}加载失败：${errorMessage(error)}`);
+  });
+}
 
 function handleReactMeshCommand(event: Event): void {
   const detail = readAnnotateMeshCommand(event);
   if (!detail) return;
   const { command } = detail;
-  if (command === "load_canonical") loadCanonical();
-  if (command === "load_flame") loadFlame();
-  if (command === "load_fitted_flame") loadFittedFlame();
-}
-
-async function fetchJSON<T = unknown>(url: string, label: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${label}加载失败：HTTP ${res.status}`);
-  return res.json();
+  if (command === "load_canonical") runMeshLoad(loadCanonical(), "标准脸");
+  if (command === "load_flame") runMeshLoad(loadFlame("neutral"), "高精度三维头模");
+  if (command === "load_fitted_flame") runMeshLoad(loadFlame("fitted"), "FLAME 个体（拟合）");
 }
 
 async function loadMeshFile(file?: File): Promise<void> {
@@ -204,19 +149,15 @@ async function loadMeshFile(file?: File): Promise<void> {
   const session = activeSession.current();
   if (session === null) return;
   setHint(`正在读取 ${file.name} ...`);
-  let mesh: Awaited<ReturnType<typeof parseMeshFile>>;
+  let mesh: AnnotationMeshResult;
   try {
-    mesh = await parseMeshFile(file);
+    mesh = await meshService.loadFile(file);
   } catch (err) {
-    setHint("头模加载失败：" + errorMessage(err));
+    if (isActiveSession(session)) setHint("头模加载失败：" + errorMessage(err));
     return;
   }
   if (!isActiveSession(session)) return;
-  viewer.setMesh(mesh.vertices, mesh.triangles, { showSurface: true, colors: mesh.colors });
-  onCanonical = false;
-  els.drawMode.textContent = "自定义头模";
-  setHint(`已载入 ${file.name}：${mesh.vertices.length} 顶点 / ${mesh.triangles.length} 三角面。导出为 xyz 折线。`);
-  refresh();
+  applyAnnotationMesh(mesh);
 }
 
 async function loadSlicerFile(file?: File): Promise<void> {
@@ -229,25 +170,23 @@ async function loadSlicerFile(file?: File): Promise<void> {
   }
   const spacing = Number(els.resampleSpacing.value) || 2;
   setHint(`正在导入 ${file.name} 并按 ${spacing} 重采样 ...`);
-  let curves: Awaited<ReturnType<typeof parseSlicerCurveFile>>;
+  const sourceMesh = viewer.mesh, exportable = onCanonical;
+  let prepared: Awaited<ReturnType<typeof prepareAnnotationSlicerImport>>;
   try {
-    curves = await parseSlicerCurveFile(file, { spacing });
+    prepared = await prepareAnnotationSlicerImport(file, {
+      spacing,
+      exportable,
+      snapToSurface: (point) => viewer.snapToSurface(point),
+      isCurrent: () => viewer.mesh === sourceMesh && onCanonical === exportable,
+    });
   } catch (err) {
-    setHint("Slicer 曲线导入失败：" + errorMessage(err));
+    if (isActiveSession(session)) setHint("Slicer 曲线导入失败：" + errorMessage(err));
     return;
   }
   if (!isActiveSession(session)) return;
-  let imported = 0, points = 0;
-  for (const curve of curves) {
-    const snapped = curve.points.map((p) => viewer.snapToSurface(p)).filter(isAnnotationPoint);
-    if (snapped.length < 2) continue;
-    for (const pt of snapped) pt.exportable = onCanonical;
-    model.addLine({ name: curve.name, region: curve.region, controls: snapped });
-    imported += 1;
-    points += snapped.length;
-  }
+  for (const line of prepared.lines) model.addLine(line);
   viewer.rebuildLines();
-  setHint(`已导入 ${imported} 条 Slicer 曲线，生成 ${points} 个表面采样点。`);
+  setHint(`已导入 ${prepared.lines.length} 条 Slicer 曲线，生成 ${prepared.pointCount} 个表面采样点。`);
   refresh();
 }
 
