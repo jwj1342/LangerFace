@@ -37,6 +37,13 @@ const highGuardrails = buildGuardrailDetailsPresentation({
 });
 assert.deepEqual(highGuardrails.classNames, ["danger"]);
 
+const hardGuardrails = buildGuardrailDetailsPresentation({
+  hard_violations: [{ code: "candidate_outside_canonical_surface", recovery: "重新生成候选" }],
+  warnings: [],
+});
+assert.match(hardGuardrails.text, /工程硬阻断：candidate_outside_canonical_surface（重新生成候选）/);
+assert.deepEqual(hardGuardrails.classNames, ["danger"]);
+
 const failedGate = buildWorkflowGatePresentation({
   passed: false,
   observed_actions: ["classify_region"],

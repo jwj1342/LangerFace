@@ -1,4 +1,4 @@
-import { Box, FlipHorizontal2, RotateCcw, Upload } from "lucide-react";
+import { Box, CheckCircle2, FlipHorizontal2, RotateCcw, ScanSearch, Upload } from "lucide-react";
 
 import { StageActions, StageCanvas, StageMeta, StageShell, StageStatus, StageViewport } from "./StageShell";
 import { Button } from "./ui/button";
@@ -27,6 +27,12 @@ export function IncisionStagePanel() {
               <label htmlFor="incisionPhotoInput"><Upload size={15} />照片</label>
             </Button>
             <Input id="incisionPhotoInput" type="file" accept="image/jpeg,image/png" hidden />
+            <Button id="controlledMarkerDetectBtn" size="sm" type="button" title="在照片上点击黑点、贴纸或手绘标记">
+              <ScanSearch size={15} /><span className="photo-action-label">受控标记</span>
+            </Button>
+            <Button id="controlledMarkerConfirmBtn" size="sm" type="button" title="确认定位草案并使用当前人工参数">
+              <CheckCircle2 size={15} /><span className="photo-action-label">确认定位</span>
+            </Button>
             <Button id="incisionPhotoMirrorBtn" size="sm" type="button" title="水平镜像照片" aria-pressed="false">
               <FlipHorizontal2 size={15} /><span className="photo-action-label">镜像</span>
             </Button>

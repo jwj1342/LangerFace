@@ -654,6 +654,7 @@ function appendProtectiveDirectionOverride(
 export function evaluateGuardrails(candidate: IncisionCandidate, anatomy: AnyRecord, rules: IncisionRules = DEFAULT_RULES): AnyRecord {
   const cfg = rules.guardrails;
   const warnings: AnyRecord[] = [], suggested_overrides: AnyRecord[] = [];
+  const hardViolations = Array.isArray(candidate.hard_violations) ? candidate.hard_violations : [];
   if ((candidate.direction_confidence || 0) < cfg.low_direction_confidence) {
     const reasons = candidate.provenance?.direction_confidence_reasons || [];
     warnings.push({
@@ -853,8 +854,11 @@ export function evaluateGuardrails(candidate: IncisionCandidate, anatomy: AnyRec
     if (!reason) suggested_overrides.push({ kind: "override_reason_required", reason: "Candidate long axis deviates from local RSTL." });
   }
   return {
-    passed: !warnings.some((w) => w.severity === "high"),
+    passed: hardViolations.length === 0 && !warnings.some((w) => w.severity === "high"),
+    hard_violation_count: hardViolations.length,
+    hard_violations: hardViolations,
     warnings,
     suggested_overrides,
+    clinical_boundary: "Hard violations cover engineering-invalid geometry only; medical-sensitive findings remain clinician-review warnings.",
   };
 }

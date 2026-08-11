@@ -71,7 +71,7 @@ import {
 import { dataSource } from "./dataSource";
 import type { HeadMeshPayload } from "./dataSource";
 import { auditExportPayload } from "./exportPrivacy";
-import { resolveIncisionAtlas, type IncisionAtlasMode } from "./incisionAtlasSource";
+import { resolveIncisionAtlas, type IncisionAtlasResolution } from "./incisionAtlasSource";
 import {
   buildReviewExportPayload,
   buildTumorExportPayload,
@@ -195,6 +195,7 @@ function currentHeadAssetSnapshot(): IncisionHeadAssetState {
     atlasLineCount: 0,
     mode: "unknown",
     atlasProvenance: null,
+    atlasContract: null,
     statusLabel: "资产加载中",
     warnings: [],
   };
@@ -363,17 +364,11 @@ function nearestVertex(point: unknown): number {
 function headAssetSnapshot({
   head,
   atlas,
-  mode,
-  atlasProvenance,
-  statusLabel,
-  warnings,
+  resolved,
 }: {
   head: HeadMeshPayload;
   atlas: DynamicRecord;
-  mode: IncisionAtlasMode;
-  atlasProvenance: string;
-  statusLabel: string;
-  warnings: string[];
+  resolved: IncisionAtlasResolution;
 }): IncisionHeadAssetState {
   return {
     id: head.id,
@@ -384,10 +379,11 @@ function headAssetSnapshot({
     triangleCount: head.triangles.length,
     atlasTopologyId: typeof atlas?.topologyId === "string" ? atlas.topologyId : null,
     atlasLineCount: Array.isArray(atlas?.lines) ? atlas.lines.length : 0,
-    mode,
-    atlasProvenance,
-    statusLabel,
-    warnings,
+    mode: resolved.mode,
+    atlasProvenance: resolved.provenance,
+    atlasContract: resolved.contract,
+    statusLabel: resolved.statusLabel,
+    warnings: resolved.warnings,
   };
 }
 
@@ -407,10 +403,7 @@ async function loadMediaPipeIncisionAssets() {
     headAsset: headAssetSnapshot({
       head,
       atlas: resolved.atlas as DynamicRecord,
-      mode: resolved.mode,
-      atlasProvenance: resolved.provenance,
-      statusLabel: resolved.statusLabel,
-      warnings: resolved.warnings,
+      resolved,
     }),
   };
 }
@@ -1648,6 +1641,8 @@ function bindWorkbenchEvents() {
       onTumorFile: importTumorFile,
       onSecondaryCueFile: importSecondaryCueFile,
       onPhotoFile: (file) => { void photoRuntime?.load(file); },
+      onControlledMarkerDetect: () => photoRuntime?.beginControlledMarkerDetection(),
+      onControlledMarkerConfirm: () => { void photoRuntime?.confirmControlledMarkerDetection(); },
       preparePhotoInteraction: () => photoRuntime?.fit(),
       photoEndpointHandleFromEvent: (event) => photoRuntime?.endpointHandleFromEvent(event) ?? null,
       dragPhotoEndpoint: (event, handle) => photoRuntime?.dragEndpoint(event, handle),
@@ -1671,10 +1666,6 @@ function renderLoop() {
 
 const incisionCommands = new IncisionCommandRouter({
   applyTumorControl: (command, value) => applyReactTumorControlValue(els, command, value),
-  resetBoundaryForTumorKind: () => {
-    resetIncisionBoundaryState(S);
-    els.startBoundary.textContent = "开始轮廓";
-  },
   setBoundaryInactive: () => { S.boundaryActive = false; },
   updateFormVisibility,
   publish: publishIncisionState,
