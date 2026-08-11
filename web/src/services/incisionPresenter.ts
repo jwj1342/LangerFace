@@ -28,6 +28,7 @@ export interface IncisionSuggestedOverride {
 
 export interface IncisionGuardrailsPresentationInput {
   passed?: boolean;
+  hard_violations?: Array<{ code?: unknown; recovery?: unknown }>;
   warnings?: IncisionGuardrailWarning[];
   suggested_overrides?: IncisionSuggestedOverride[];
 }
@@ -127,20 +128,25 @@ export function buildGuardrailDetailsPresentation(
   guardrails: IncisionGuardrailsPresentationInput = {},
   tumorQuality: IncisionTumorQualityPresentationInput = {},
 ): IncisionTextPresentation {
+  const hardViolations = guardrails.hard_violations || [];
   const warnings = guardrails.warnings || [];
   const overrides = guardrails.suggested_overrides || [];
   let text = !warnings.length
     ? "保护提示：未发现需要复核的规则项。"
     : `保护提示：${warnings.map((warning) => `${guardrailLabel(warning.code)}（${severityLabel(warning.severity)}）`).join("；")}`;
   if (overrides.length) text += `\n建议：${overrides.map(overrideAdviceLabel).join(" · ")}`;
+  if (hardViolations.length) {
+    text = `工程硬阻断：${hardViolations.map((item) => `${String(item.code || "unknown")}（${String(item.recovery || "修复候选几何后重试")}）`).join("；")}\n${text}`;
+  }
   if (tumorQuality.warning_count) {
     text += `\n肿物输入：${(tumorQuality.warnings || []).map((warning) => `${guardrailLabel(warning.code)}（${severityLabel(warning.severity)}）`).join("；")}`;
   }
   const classNames = [
     ...(warnings.some((warning) => warning.severity === "medium") ? ["warn"] : []),
     ...(warnings.some((warning) => warning.severity === "high") ? ["danger"] : []),
+    ...(hardViolations.length ? ["danger"] : []),
   ];
-  return { text, classNames };
+  return { text, classNames: [...new Set(classNames)] };
 }
 
 export function buildDirectionSourcePresentation(input: {

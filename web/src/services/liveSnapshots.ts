@@ -1,4 +1,5 @@
 import { LIVE_SNAPSHOT_SCHEMA_VERSION } from "../lib/controllerSnapshotSchemas";
+import type { RstlSourceContract } from "./rstlSourceContract";
 
 export { LIVE_SNAPSHOT_SCHEMA_VERSION };
 
@@ -50,6 +51,7 @@ export interface LiveControllerSnapshot {
   source: LiveSourceState;
   render: LiveRenderSettings;
   atlasPreview: LiveAtlasPreviewState;
+  atlasContract: RstlSourceContract | null;
   incisionOverlay: LiveIncisionOverlayState;
   recording: boolean;
   updatedAt: string;
@@ -77,6 +79,7 @@ export interface LiveSnapshotInput {
     validated?: boolean | null;
     count?: number | null;
   } | null;
+  atlasContract?: RstlSourceContract | null;
   incisionOverlayLoaded?: boolean;
   incisionOverlayQaLabel?: string | null;
   recording?: boolean;
@@ -115,6 +118,7 @@ export function buildLiveControllerSnapshot({
   bands = false,
   previewSystem = null,
   previewMeta = null,
+  atlasContract = null,
   incisionOverlayLoaded = false,
   incisionOverlayQaLabel = null,
   recording = false,
@@ -147,6 +151,7 @@ export function buildLiveControllerSnapshot({
       validated: previewMeta ? previewMeta.validated === true : null,
       count: Number.isFinite(previewMeta?.count) ? Number(previewMeta?.count) : null,
     },
+    atlasContract,
     incisionOverlay: {
       loaded: Boolean(incisionOverlayLoaded),
       qaLabel: incisionOverlayQaLabel || null,

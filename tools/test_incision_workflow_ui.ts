@@ -35,6 +35,7 @@ const tools = [
 ].join("\n");
 const exportPrivacy = fs.readFileSync("src/services/exportPrivacy.ts", "utf8");
 const photoRuntime = fs.readFileSync("src/services/incisionPhotoRuntime.ts", "utf8");
+const controlledMarkerDetection = fs.readFileSync("src/services/controlledMarkerDetection.ts", "utf8");
 const tumorInputService = fs.readFileSync("src/services/tumorInput.ts", "utf8");
 const workspaceSessionService = fs.readFileSync("src/services/incisionWorkspaceSession.ts", "utf8");
 const incisionSnapshotsService = fs.readFileSync("src/services/incisionSnapshots.ts", "utf8");
@@ -56,6 +57,8 @@ assert.ok(html.includes('id="anatomyPreview"'), "workbench exposes live anatomy 
 assert.ok(html.includes('id="exportTumorBtn"'), "workbench exposes tumor export button");
 assert.ok(html.includes('id="importTumorBtn"'), "workbench exposes tumor import button");
 assert.ok(html.includes('id="tumorImportFile"'), "workbench exposes hidden tumor import file input");
+assert.ok(html.includes('id="controlledMarkerDetectBtn"'), "photo workbench exposes seeded controlled-marker detection");
+assert.ok(html.includes('id="controlledMarkerConfirmBtn"'), "photo workbench requires a separate marker confirmation action");
 assert.ok(html.includes('id="secondaryCueState"'), "workbench exposes secondary cue status");
 assert.ok(html.includes('id="importSecondaryCueBtn"'), "workbench exposes secondary cue import action");
 assert.ok(html.includes('id="secondaryCueImportFile"'), "workbench exposes hidden secondary cue import file input");
@@ -117,6 +120,9 @@ assert.ok(
 assert.ok(photoRuntime.includes("shouldClearFreehandBoundaryOnLesionRepick"), "photo lesion repicks use the shared boundary reset policy");
 assert.ok(photoRuntime.includes("state.boundaryPoints = []") && photoRuntime.includes("state.boundaryRefs = []"),
   "photo lesion repicks clear stale freehand points and surface references");
+assert.ok(photoRuntime.includes("normalizeLesionDetectionAdapter"), "controlled marker results enter the shared lesion adapter");
+assert.ok(photoRuntime.includes("confirmed.eligible_for_candidate"), "invalid confirmed marker inputs cannot generate candidates");
+assert.ok(controlledMarkerDetection.includes("network_request_made: false"), "controlled marker detection records local-only execution");
 assert.ok(workspaceSessionService.includes("incision-workspace-session/v1"), "route round trips persist a versioned incision workspace session");
 assert.ok(js.includes("restoreWorkspaceSession"), "the incision runtime restores the logical workspace after remount");
 assert.ok(js.includes("workflowRequestId"), "stale asynchronous workflow results cannot replace a newer tumor context");
