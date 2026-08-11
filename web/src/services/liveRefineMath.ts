@@ -39,6 +39,29 @@ export interface RefineViewportCrop {
   sh: number;
 }
 
+export type RefineQualityWarningCode =
+  | "invalid_coordinate"
+  | "new_self_intersection"
+  | "new_curve_intersection"
+  | "new_dense_spacing";
+
+export interface RefineQualityWarning {
+  code: RefineQualityWarningCode;
+  lineNames: string[];
+  minimumDistancePx?: number;
+}
+
+export interface RefineQualityReport {
+  ok: boolean;
+  checkedLineCount: number;
+  minimumSpacingPx: number;
+  warnings: RefineQualityWarning[];
+}
+
+export interface RefineQualityOptions {
+  minimumSpacingPx?: number;
+}
+
 /** Map a point from the visible focused canvas back into full-frame coordinates. */
 export function mapRefineViewportPoint(
   point: readonly [number, number],
@@ -53,6 +76,139 @@ export function mapRefineViewportPoint(
 }
 
 const clamp = (value: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, value));
+
+type Segment = { a: RefinePoint; b: RefinePoint };
+
+function lineLabel(line: RefineLine, index: number): string {
+  return line.name || `curve_${index + 1}`;
+}
+
+function lineSegments(line: RefineLine): Segment[] {
+  const segments: Segment[] = [];
+  for (let index = 1; index < (line.pts || []).length; index++) {
+    segments.push({ a: line.pts[index - 1], b: line.pts[index] });
+  }
+  return segments;
+}
+
+function orientation(a: RefinePoint, b: RefinePoint, c: RefinePoint): number {
+  return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+}
+
+function pointOnSegment(point: RefinePoint, segment: Segment): boolean {
+  const epsilon = 1e-7;
+  return Math.abs(orientation(segment.a, segment.b, point)) <= epsilon
+    && point[0] >= Math.min(segment.a[0], segment.b[0]) - epsilon
+    && point[0] <= Math.max(segment.a[0], segment.b[0]) + epsilon
+    && point[1] >= Math.min(segment.a[1], segment.b[1]) - epsilon
+    && point[1] <= Math.max(segment.a[1], segment.b[1]) + epsilon;
+}
+
+function segmentsIntersect(first: Segment, second: Segment): boolean {
+  const o1 = orientation(first.a, first.b, second.a);
+  const o2 = orientation(first.a, first.b, second.b);
+  const o3 = orientation(second.a, second.b, first.a);
+  const o4 = orientation(second.a, second.b, first.b);
+  if (((o1 > 0 && o2 < 0) || (o1 < 0 && o2 > 0))
+      && ((o3 > 0 && o4 < 0) || (o3 < 0 && o4 > 0))) return true;
+  return pointOnSegment(second.a, first) || pointOnSegment(second.b, first)
+    || pointOnSegment(first.a, second) || pointOnSegment(first.b, second);
+}
+
+function pointSegmentDistance(point: RefinePoint, segment: Segment): number {
+  const dx = segment.b[0] - segment.a[0];
+  const dy = segment.b[1] - segment.a[1];
+  const denominator = dx * dx + dy * dy;
+  if (denominator < 1e-12) return Math.hypot(point[0] - segment.a[0], point[1] - segment.a[1]);
+  const position = clamp(
+    ((point[0] - segment.a[0]) * dx + (point[1] - segment.a[1]) * dy) / denominator,
+    0,
+    1,
+  );
+  return Math.hypot(
+    point[0] - (segment.a[0] + position * dx),
+    point[1] - (segment.a[1] + position * dy),
+  );
+}
+
+function segmentDistance(first: Segment, second: Segment): number {
+  if (segmentsIntersect(first, second)) return 0;
+  return Math.min(
+    pointSegmentDistance(first.a, second),
+    pointSegmentDistance(first.b, second),
+    pointSegmentDistance(second.a, first),
+    pointSegmentDistance(second.b, first),
+  );
+}
+
+function hasSelfIntersection(line: RefineLine): boolean {
+  const segments = lineSegments(line);
+  for (let first = 0; first < segments.length; first++) {
+    for (let second = first + 2; second < segments.length; second++) {
+      if (segmentsIntersect(segments[first], segments[second])) return true;
+    }
+  }
+  return false;
+}
+
+function linePairDistance(first: RefineLine, second: RefineLine): number {
+  const firstSegments = lineSegments(first);
+  const secondSegments = lineSegments(second);
+  let minimum = Infinity;
+  for (const a of firstSegments) for (const b of secondSegments) {
+    minimum = Math.min(minimum, segmentDistance(a, b));
+    if (minimum === 0) return 0;
+  }
+  return minimum;
+}
+
+/** Compare an edited curve set with its automatic baseline and report only newly introduced risks. */
+export function assessRefineLineQuality(
+  automaticLines: readonly RefineLine[] | null | undefined,
+  editedLines: readonly RefineLine[] | null | undefined,
+  options: RefineQualityOptions = {},
+): RefineQualityReport {
+  const minimumSpacingPx = Math.max(0.5, Number(options.minimumSpacingPx) || 6);
+  const visible = (editedLines || []).filter((line) => !line.hidden);
+  const baselineByName = new Map((automaticLines || []).map((line, index) => [lineLabel(line, index), line]));
+  const warnings: RefineQualityWarning[] = [];
+
+  visible.forEach((line, index) => {
+    const name = lineLabel(line, index);
+    if ((line.pts || []).some((point) => !Number.isFinite(point[0]) || !Number.isFinite(point[1]))) {
+      warnings.push({ code: "invalid_coordinate", lineNames: [name] });
+      return;
+    }
+    const baseline = baselineByName.get(name);
+    if (hasSelfIntersection(line) && !hasSelfIntersection(baseline || { pts: [] })) {
+      warnings.push({ code: "new_self_intersection", lineNames: [name] });
+    }
+  });
+
+  for (let first = 0; first < visible.length; first++) {
+    const firstName = lineLabel(visible[first], first);
+    const baselineFirst = baselineByName.get(firstName);
+    if (!baselineFirst) continue;
+    for (let second = first + 1; second < visible.length; second++) {
+      const secondName = lineLabel(visible[second], second);
+      const baselineSecond = baselineByName.get(secondName);
+      if (!baselineSecond) continue;
+      const currentDistance = linePairDistance(visible[first], visible[second]);
+      const baselineDistance = linePairDistance(baselineFirst, baselineSecond);
+      if (currentDistance === 0 && baselineDistance > 0) {
+        warnings.push({ code: "new_curve_intersection", lineNames: [firstName, secondName] });
+      } else if (currentDistance > 0 && currentDistance < minimumSpacingPx
+          && baselineDistance >= minimumSpacingPx * 1.5) {
+        warnings.push({
+          code: "new_dense_spacing",
+          lineNames: [firstName, secondName],
+          minimumDistancePx: Math.round(currentDistance * 100) / 100,
+        });
+      }
+    }
+  }
+  return { ok: warnings.length === 0, checkedLineCount: visible.length, minimumSpacingPx, warnings };
+}
 
 function normalizedArcPositions(points: readonly RefinePoint[]): number[] {
   if (!points?.length) return [];

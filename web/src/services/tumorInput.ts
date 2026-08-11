@@ -80,6 +80,20 @@ export function normalizeTumorBoundaryMode(kind?: string, boundaryMode?: string)
   return boundaryMode === "freehand" ? "freehand" : "ellipse";
 }
 
+export function shouldClearFreehandBoundaryOnLesionRepick({
+  kind,
+  boundaryMode,
+  boundaryPointCount,
+}: {
+  kind?: string;
+  boundaryMode?: string;
+  boundaryPointCount?: number;
+}): boolean {
+  return normalizeTumorKind(kind) === "cutaneous"
+    && normalizeTumorBoundaryMode(kind, boundaryMode) === "freehand"
+    && Number(boundaryPointCount || 0) > 0;
+}
+
 export function buildTumorInput({
   kind,
   center,

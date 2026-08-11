@@ -7,6 +7,7 @@ const liveUi = [
   fs.readFileSync("src/routes/LiveWorkbench.tsx", "utf8"),
   fs.readFileSync("src/components/LiveSourceControlsPanel.tsx", "utf8"),
   fs.readFileSync("src/components/LiveQualityPanel.tsx", "utf8"),
+  fs.readFileSync("src/components/LiveIncisionOverlayPanel.tsx", "utf8"),
 ].join("\n");
 const main = fs.readFileSync("src/services/liveRuntime.ts", "utf8");
 const render = fs.readFileSync("src/services/render2d.ts", "utf8");
@@ -25,17 +26,20 @@ assert.ok(liveUi.includes('accept="image/*,video/*"'), "React live page accepts 
 assert.ok(liveUi.includes('id="camBtn"'), "React live page exposes camera entry for realtime overlay");
 assert.ok(liveUi.includes('id="exportBtn"'), "React live page exposes export action");
 assert.ok(liveUi.includes('id="incisionOverlayQa"'), "React live page exposes visible incision overlay QA state");
+assert.ok(liveUi.includes('id="liveIncisionOverlayCard"'), "React live page visibly confirms that an incision overlay is loaded");
+assert.ok(liveUi.includes('id="clearIncisionOverlayBtn"'), "React live page can explicitly clear a staged incision overlay");
 assert.ok(liveUi.includes("切口叠加 QA"), "React live page labels visible overlay QA as engineering state");
 assert.ok(source.includes('setSource(prepared.source, "image"'), "uploaded photos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "video"'), "uploaded videos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "camera"'), "camera frames enter the shared live render source");
-assert.ok(loop.includes('sourceState.sourceKind !== "image"'), "video and camera sources schedule continuous overlay frames");
+assert.match(loop, /if \((?:sourceState\.sourceKind|sourceKind) !== "image"\) requestFrame\(\)/, "video and camera sources schedule continuous overlay frames");
 assert.ok(loop.includes("eyeBlinkLeft"), "pipeline extracts left blink blendshape for overlay quality gate");
 assert.ok(loop.includes("eyeBlinkRight"), "pipeline extracts right blink blendshape for overlay quality gate");
 assert.ok(loop.includes("jawOpen"), "pipeline extracts jaw-open blendshape for overlay quality gate");
 assert.ok(main.includes("applyStagedIncisionOverlay"), "live page loads staged incision overlay payloads");
 assert.ok(main.includes("validateIncisionOverlay(overlay)"), "live page validates incision overlay payloads before rendering");
 assert.ok(main.includes("renderState.incisionOverlay = overlay"), "live page stores validated incision overlay in render state");
+assert.ok(main.includes("renderState.incisionOverlay = null"), "live page clears an incision overlay without affecting the RSTL atlas");
 assert.ok(main.includes("./liveSnapshots"), "live page consumes the shared live snapshot service");
 assert.ok(main.includes("buildLiveControllerSnapshot({"), "live page delegates React snapshot construction to the shared service");
 assert.ok(liveSnapshots.includes("../lib/controllerSnapshotSchemas"), "shared live snapshot service reuses the lightweight React snapshot schema module");
@@ -53,6 +57,8 @@ assert.ok(exporter.includes("createCompositeSource(extras)"), "export controller
 assert.ok(exporter.includes("drawContain(g, extra.canvas"), "export controller draws extra canvases into recording");
 assert.ok(exporter.includes('mimeType: "video/webm"'), "export controller records playable webm output");
 assert.ok(render.includes("drawIncisionOverlay(lm"), "renderer draws incision overlay on every frame");
+assert.ok(render.includes('color: "#07111f"'), "renderer gives the candidate line a dark contrast outline");
+assert.ok(render.includes("lineWidth: baseWidth * 1.75"), "renderer gives the candidate line a visible foreground stroke");
 assert.ok(render.includes("estimateFacePoseQuality"), "renderer estimates pose quality before drawing incision overlay");
 assert.ok(poseQuality.includes("incision-overlay-pose-gate/v0.2"), "renderer exports a versioned incision overlay pose gate");
 assert.ok(poseQuality.includes("rapid_frame_motion"), "pose gate blocks rapid frame-to-frame motion");

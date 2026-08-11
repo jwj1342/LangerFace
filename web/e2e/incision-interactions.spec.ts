@@ -46,7 +46,7 @@ async function waitForWorkbench(page: Page) {
   await page.goto("/app/incision");
   await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
   await expect(page.locator("#candidateType")).not.toHaveText("—");
-  await expect(page.locator("#stageStatus")).toContainText("第 1 次生成");
+  await expect(page.locator("#stageStatus")).toContainText("自动预览");
 }
 
 async function clearCapturedSnapshots(page: Page) {
@@ -153,7 +153,7 @@ test("clinician edit sliders retain real mouse drags after the controller echo",
   await saveEvidenceScreenshot(page, testInfo, "browser-slider-drag.png");
 });
 
-test("same parameters can generate a second candidate with visible feedback", async ({ page }, testInfo) => {
+test("only the explicit generation button increments the candidate generation count", async ({ page }, testInfo) => {
   await waitForWorkbench(page);
 
   const parameterIds = ["tumorKind", "diameterMm", "tumorAuthor", "depthMm"];
@@ -162,7 +162,16 @@ test("same parameters can generate a second candidate with visible feedback", as
   );
 
   await page.locator("#runWorkflowBtn").click();
-  await expect(page.locator("#stageStatus")).toContainText("第 2 次生成");
+  await expect(page.locator("#stageStatus")).toContainText("已明确生成 1 次");
+
+  await page.locator("#tumorKind").selectOption("cutaneous");
+  await expect(page.locator("#stageStatus")).toContainText("已明确生成 1 次");
+  await expect(page.locator("#stageStatus")).not.toContainText("已明确生成 2 次");
+  await page.locator("#tumorKind").selectOption("subcutaneous");
+  await expect(page.locator("#stageStatus")).toContainText("已明确生成 1 次");
+
+  await page.locator("#runWorkflowBtn").click();
+  await expect(page.locator("#stageStatus")).toContainText("已明确生成 2 次");
 
   const parametersAfter = await page.locator(parameterIds.map((id) => `#${id}`).join(",")).evaluateAll(
     (elements) => elements.map((element) => (element as HTMLInputElement | HTMLSelectElement).value),

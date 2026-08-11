@@ -106,7 +106,7 @@ export function buildIncisionReviewRecord(
   const traceGate = workflowTraceGate(result);
   return {
     schema_version: "incision-review-record/v0.4",
-    id: input.id || `candidate_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+    id: input.id || globalThis.crypto.randomUUID(),
     label: input.label || "候选",
     created_at: createdAt,
     tumor: result.tumor,
@@ -190,6 +190,9 @@ function reviewRecordMarkdown(record: AnyRecord, index: number): string {
   const warningLines = (record.guardrails.warnings || [])
     .map((warning: AnyRecord) => `  - ${warning.code} [${warning.severity}] ${warning.message || ""}`)
     .join("\n") || "  - 无";
+  const hardViolationLines = (record.guardrails.hard_violations || record.candidate.hard_violations || [])
+    .map((violation: AnyRecord) => `  - ${violation.code || "unknown"}；位置 ${JSON.stringify(violation.location || null)}；恢复 ${violation.recovery || "修复候选几何后重试"}`)
+    .join("\n") || "  - 无";
   const overrideLines = (record.guardrails.suggested_overrides || [])
     .map((override: AnyRecord) => `  - ${override.kind}: ${override.reason || ""}`)
     .join("\n") || "  - 无";
@@ -260,6 +263,7 @@ function reviewRecordMarkdown(record: AnyRecord, index: number): string {
       ? `- 最近敏感游离缘：${metrics.sensitive_free_margin_nearest || "—"}，${formatNumber(metrics.sensitive_free_margin_min_distance_mm)} mm`
       : null,
     `- Guardrails：${record.guardrails.passed ? "通过" : "需医生复核"}`,
+    `- 工程硬阻断：\n${hardViolationLines}`,
     `- 警告：\n${warningLines}`,
     `- 建议覆盖项：\n${overrideLines}`,
     `- 审阅门槛：approval_ready=${Boolean(record.review_gate?.approval_ready)}；live_overlay_ready=${Boolean(record.review_gate?.live_overlay_ready)}；workflow_trace_gate=${Boolean(record.review_gate?.workflow_trace_gate_passed)}；high=${(record.review_gate?.high_guardrail_codes || []).join(", ") || "无"}`,
