@@ -7,14 +7,12 @@ type IncisionRuntime = typeof import("../services/incisionRuntime");
 const loadIncisionRuntime = () => import("../services/incisionRuntime");
 const mountIncisionRuntime = (runtime: IncisionRuntime, root: HTMLElement) =>
   runtime.mountIncisionWorkbench(root);
-const disposeIncisionRuntime = (runtime: IncisionRuntime) => runtime.disposeIncisionWorkbench();
 
 export function IncisionRoute() {
   useIncisionControllerBridge();
 
   return (
     <ManagedWorkbenchRoute
-      dispose={disposeIncisionRuntime}
       failedStatus="切口工作台加载失败"
       loadModule={loadIncisionRuntime}
       loadingStatus="加载切口工作台"

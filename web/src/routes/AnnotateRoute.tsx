@@ -7,14 +7,12 @@ type AnnotateRuntime = typeof import("../services/annotateRuntime");
 const loadAnnotateRuntime = () => import("../services/annotateRuntime");
 const mountAnnotateRuntime = (runtime: AnnotateRuntime, root: HTMLElement) =>
   runtime.mountAnnotateWorkbench(root);
-const disposeAnnotateRuntime = (runtime: AnnotateRuntime) => runtime.disposeAnnotateWorkbench();
 
 export function AnnotateRoute() {
   useAnnotateControllerBridge();
 
   return (
     <ManagedWorkbenchRoute
-      dispose={disposeAnnotateRuntime}
       failedStatus="3D 标注加载失败"
       legacyNotice="图谱管理工具：用于标准图谱生产和复核，不保存患者或病例信息。"
       loadModule={loadAnnotateRuntime}
