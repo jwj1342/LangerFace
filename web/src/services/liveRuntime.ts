@@ -119,6 +119,7 @@ function publishLiveState(reason = "state_update"): void {
     bands: renderState.bands,
     previewSystem,
     previewMeta,
+    atlasContract: modelState.atlasContracts[renderState.system] || null,
     incisionOverlayLoaded: Boolean(renderState.incisionOverlay),
     incisionOverlayQaLabel: liveTextOf(els.incisionOverlayQaState) || null,
     recording: Boolean(recordingState.recorder),
