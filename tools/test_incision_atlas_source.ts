@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 
 import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "../web/src/services/constants.ts";
 import { resolveIncisionAtlas } from "../web/src/services/incisionAtlasSource.ts";
+import {
+  buildRstlSourceContract,
+  compareRstlSourceContracts,
+} from "../web/src/services/rstlSourceContract.ts";
 
 function atlas(overrides: Record<string, unknown> = {}) {
   return {
@@ -26,6 +30,9 @@ const standardAtlas = atlas();
   assert.equal(result.atlas, personalizedAtlas);
   assert.equal(result.mode, "mediapipe_personalized");
   assert.match(result.statusLabel, /个体化 RSTL/);
+  assert.equal(result.contract.provenance, "local-yolo-v8s-seg + browser-v6");
+  assert.equal(result.contract.line_count, 1);
+  assert.equal(result.contract.point_count, 2);
 }
 
 {
@@ -53,5 +60,23 @@ assert.throws(
   () => resolveIncisionAtlas({ personalizedAtlas: null, standardAtlas: atlas({ lines: [] }), triangleCount: 2 }),
   /标准 RSTL 图谱校验失败/,
 );
+
+{
+  const baseline = buildRstlSourceContract(standardAtlas, { provenance: "same-source" });
+  const same = buildRstlSourceContract(structuredClone(standardAtlas), { provenance: "same-source" });
+  assert.deepEqual(compareRstlSourceContracts(baseline, same), { compatible: true, mismatch_codes: [] });
+
+  const changedGeometry = buildRstlSourceContract(atlas({
+    lines: [{ name: "test", points: [[0, 0.2, 0.3], [1, 0.4, 0.2]] }],
+  }), { provenance: "same-source" });
+  assert.deepEqual(compareRstlSourceContracts(baseline, changedGeometry).mismatch_codes, [
+    "geometry_fingerprint_mismatch",
+  ]);
+
+  const changedSource = buildRstlSourceContract(atlas({ topologyVersion: "other" }), { provenance: "other-source" });
+  const mismatches = compareRstlSourceContracts(baseline, changedSource).mismatch_codes;
+  assert.ok(mismatches.includes("topology_version_mismatch"));
+  assert.ok(mismatches.includes("provenance_mismatch"));
+}
 
 console.log("ok: incision atlas source prioritizes personalized MediaPipe RSTL");
