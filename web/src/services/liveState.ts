@@ -4,6 +4,7 @@ import type { CanvasRecordingController } from "./canvasRecording";
 import type { IncisionOverlayPayload } from "./dataSource";
 import type { Vec3 } from "./softBody";
 import type { PhotoPlanningController } from "./photoPlanningController";
+import type { RstlSourceContract } from "./rstlSourceContract";
 import type {
   CurveRefinementTransport,
   RefineLine,
@@ -24,6 +25,8 @@ export interface LiveModelState {
   noseTris: any;
   atlases: Record<string, any>;
   officialAtlases: Record<string, any>;
+  atlasContracts: Record<string, RstlSourceContract>;
+  officialAtlasContracts: Record<string, RstlSourceContract>;
   [key: string]: unknown;
 }
 
@@ -170,6 +173,8 @@ export const modelState: LiveModelState = {
   noseTris: null,
   atlases: {},
   officialAtlases: {},
+  atlasContracts: {},
+  officialAtlasContracts: {},
 };
 
 export const renderState: LiveRenderState = {
