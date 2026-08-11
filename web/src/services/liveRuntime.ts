@@ -25,7 +25,8 @@ import {
 import { dataSource } from "./dataSource";
 import { countMetric, logError } from "./logger";
 import { createCanvasRecordingController, type CanvasRecordingController, type RecordingExtraCanvas } from "./canvasRecording";
-import { recordingState, reconState, renderState, sourceState } from "./liveState";
+import { modelState, recordingState, reconState, renderState, sourceState } from "./liveState";
+import { createPhotoPlanningController } from "./photoPlanningController";
 import {
   adjustRefineImageZoom,
   beginRefinePointer,
@@ -127,6 +128,7 @@ function publishLiveState(reason = "state_update"): void {
     reconStatus: liveTextOf(els.reconStatus),
     previewSystem,
     previewMeta,
+    atlasContract: modelState.atlasContracts[renderState.system] || null,
     incisionOverlayLoaded: Boolean(renderState.incisionOverlay),
     incisionOverlayQaLabel: liveTextOf(els.incisionOverlayQaState) || null,
     recording: Boolean(recordingState.recorder),
@@ -225,6 +227,16 @@ function applyStagedIncisionOverlay(): void {
   const riskText = highCodes.length ? `；高风险项 ${highCodes.join("、")}` : "";
   setMsg(`已载入切口候选叠加（${reviewLabel}${riskText}）。上传照片、视频或开启摄像头后，会随 RSTL 一起显示。`);
   scheduleLiveState("staged_incision_overlay");
+}
+
+function clearIncisionOverlay(): void {
+  dataSource.clearIncisionOverlay();
+  renderState.incisionOverlay = null;
+  setIncisionOverlayQa(null);
+  buildZoomCards(refreshStaticImage);
+  refreshStaticImage();
+  setMsg("已清除本次切口候选叠加。RSTL 显示不受影响。");
+  scheduleLiveState("incision_overlay_cleared");
 }
 
 // ── UI 绑定 ───────────────────────────────────────────────────────────────────
@@ -427,6 +439,7 @@ function handleReactRenderCommand(event: Event): void {
     });
   }
   if (command === "restore_atlas") runLiveAction("restore_atlas", restoreAtlasPreview);
+  if (command === "clear_incision_overlay") runLiveAction("clear_incision_overlay", clearIncisionOverlay);
 }
 
 function handleReactRouteCommand(event: Event): void {
@@ -542,6 +555,8 @@ export function disposeLiveWorkbench() {
     stopTwin();
     stopSource();
   }
+  sourceState.planning2d?.dispose();
+  sourceState.planning2d = null;
   if (reconState.scan) reconState.scan.active = false;
   if (reconState.viewerRAF != null) cancelAnimationFrame(reconState.viewerRAF);
   reconState.viewerRAF = null;
@@ -554,6 +569,7 @@ export function disposeLiveWorkbench() {
 export function mountLiveWorkbench(root: ParentNode | Document = document) {
   disposeLiveWorkbench();
   bindDom(root);
+  sourceState.planning2d = createPhotoPlanningController({ owner: "live" });
   mounted = true;
   activeSession += 1;
   abortController = new AbortController();
@@ -575,6 +591,10 @@ export function mountLiveWorkbench(root: ParentNode | Document = document) {
   const session = activeSession;
   ensureReady().then(() => {
     if (!isActiveSession(session)) return;
+    els.badge.textContent = "模型就绪";
+    els.badge.classList.remove("loading");
+    sourceState.planning2d?.setTopology(modelState.triangles || []);
+    sourceState.planning2d?.setDetectorLease({ detector: modelState.imageLandmarker || modelState.landmarker });
     applyStagedAtlas();
     applyStagedIncisionOverlay();
     scheduleLiveState("model_ready");

@@ -158,7 +158,7 @@ test("active controls remain readable and clinician sliders retain edits", async
   test.setTimeout(120_000);
   await waitForWorkbench(page);
 
-  for (const selector of ["#tumorKind", "#reviewerName", "#runWorkflowBtn", "#approveCandidateBtn", "#exportJsonBtn"]) {
+  for (const selector of ["#tumorKind", "#reviewerName", "#runWorkflowBtn", "#saveReviewBtn", "#exportJsonBtn"]) {
     expect(await contrastRatio(page.locator(selector)), `${selector} contrast`).toBeGreaterThanOrEqual(4.5);
   }
   expect(
@@ -186,6 +186,7 @@ test("active controls remain readable and clinician sliders retain edits", async
   );
   await expect(angle).toHaveValue("1");
   await expect(page.locator("#editStatus")).toHaveText("已调整");
+  expect(await contrastRatio(page.locator("#editStatus")), "#editStatus contrast").toBeGreaterThanOrEqual(4.5);
   await dragRangeAndRetainValue(page, angle, 0.75, "angleOffsetDeg");
 
   await page.locator("#tumorKind").selectOption("cutaneous");
@@ -201,6 +202,16 @@ test("active controls remain readable and clinician sliders retain edits", async
   );
   await expect(tipAngle).toHaveValue("31");
   await expect(page.locator("#candidateTipAngle")).toContainText("31.0°");
+
+  for (const [value, label] of [
+    ["approved_for_discussion", "已确认研究候选"],
+    ["needs_revision", "退回修改"],
+    ["rejected_by_clinician", "医生已否决"],
+  ]) {
+    await page.locator("#reviewDecision").selectOption(value);
+    await expect(page.locator("#reviewState")).toHaveText(label);
+    expect(await contrastRatio(page.locator("#reviewState")), `#reviewState ${value} contrast`).toBeGreaterThanOrEqual(4.5);
+  }
 });
 
 test("route remount removes and rebinds one canvas listener set", async ({ page }) => {

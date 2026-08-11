@@ -25,6 +25,7 @@ export const LIVE_RENDER_COMMANDS = [
   "mirror_toggle",
   "mesh_points_toggle",
   "restore_atlas",
+  "clear_incision_overlay",
 ] as const;
 export const LIVE_ROUTE_COMMANDS = [
   "route_change",
@@ -86,8 +87,6 @@ export const INCISION_EDIT_COMMANDS = [
 ] as const;
 export const INCISION_REVIEW_COMMANDS = [
   "review_state_changed",
-  "approve_candidate",
-  "reject_candidate",
   "save_review",
 ] as const;
 export const INCISION_LIBRARY_COMMANDS = [

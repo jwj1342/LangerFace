@@ -2,6 +2,15 @@ import { requireScopedElement, requireScopedQuery } from "../lib/scopedDom";
 
 export interface IncisionDomElements extends Record<string, any> {
   canvas: HTMLCanvasElement;
+  photoCanvas: HTMLCanvasElement;
+  photoEndpointHandles: NodeListOf<HTMLButtonElement>;
+  photoInput: HTMLInputElement;
+  controlledMarkerDetect: HTMLButtonElement;
+  controlledMarkerConfirm: HTMLButtonElement;
+  photoMirror: HTMLButtonElement;
+  photoReset: HTMLButtonElement;
+  surfaceMode: HTMLButtonElement;
+  photoStatus: HTMLElement;
   wrap: HTMLElement;
   assetLoading: HTMLElement;
   assetLoadingText: HTMLElement;
@@ -74,8 +83,6 @@ export interface IncisionDomElements extends Record<string, any> {
   reviewDecision: HTMLSelectElement;
   reviewNotes: HTMLTextAreaElement;
   reviewState: HTMLElement;
-  approveCandidate: HTMLButtonElement;
-  rejectCandidate: HTMLButtonElement;
   saveReview: HTMLButtonElement;
   saveCandidate: HTMLButtonElement;
   makeVariants: HTMLButtonElement;
@@ -98,6 +105,15 @@ const byId = <T extends Element = HTMLElement>(root: ParentNode | Document, id: 
 export function collectIncisionElements(root: ParentNode | Document = document): IncisionDomElements {
   return {
     canvas: byId<HTMLCanvasElement>(root, "incisionCanvas"),
+    photoCanvas: byId<HTMLCanvasElement>(root, "incisionPhotoCanvas"),
+    photoEndpointHandles: root.querySelectorAll<HTMLButtonElement>(".incision-photo-endpoint-handle"),
+    photoInput: byId<HTMLInputElement>(root, "incisionPhotoInput"),
+    controlledMarkerDetect: byId<HTMLButtonElement>(root, "controlledMarkerDetectBtn"),
+    controlledMarkerConfirm: byId<HTMLButtonElement>(root, "controlledMarkerConfirmBtn"),
+    photoMirror: byId<HTMLButtonElement>(root, "incisionPhotoMirrorBtn"),
+    photoReset: byId<HTMLButtonElement>(root, "incisionPhotoResetBtn"),
+    surfaceMode: byId<HTMLButtonElement>(root, "incisionSurfaceModeBtn"),
+    photoStatus: byId(root, "incisionPhotoStatus"),
     wrap: requireScopedQuery<HTMLElement>(root, ".main-wrap"),
     assetLoading: byId(root, "assetLoading"),
     assetLoadingText: byId(root, "assetLoadingText"),
@@ -170,8 +186,6 @@ export function collectIncisionElements(root: ParentNode | Document = document):
     reviewDecision: byId(root, "reviewDecision"),
     reviewNotes: byId(root, "reviewNotes"),
     reviewState: byId(root, "reviewState"),
-    approveCandidate: byId(root, "approveCandidateBtn"),
-    rejectCandidate: byId(root, "rejectCandidateBtn"),
     saveReview: byId(root, "saveReviewBtn"),
     saveCandidate: byId(root, "saveCandidateBtn"),
     makeVariants: byId(root, "makeVariantsBtn"),

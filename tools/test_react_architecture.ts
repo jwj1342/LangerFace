@@ -1413,7 +1413,8 @@ assert.ok(incisionStagePanel.includes("useIncisionStore"), "React incision stage
 assert.ok(incisionStagePanel.includes("StageShell"), "React incision stage uses the shared stage shell primitive");
 assert.ok(incisionStagePanel.includes("StageViewport"), "React incision stage uses the shared stage viewport primitive");
 assert.ok(incisionStagePanel.includes("StageActions"), "React incision stage uses the shared stage actions primitive");
-assert.ok(incisionStagePanel.includes("StageLink"), "React incision stage uses the shared stage link primitive");
+assert.ok(!incisionStagePanel.includes("StageLink"), "React incision stage keeps maintenance navigation out of the clinical canvas");
+assert.ok(incisionStagePanel.includes("不是患者三维重建"), "React incision stage labels the standard planning surface boundary");
 assert.ok(incisionStagePanel.includes("StageStatus"), "React incision stage uses the shared stage status primitive");
 assert.ok(incisionStagePanel.includes("StageMeta"), "React incision stage uses the shared stage metadata primitive");
 assert.ok(incisionStagePanel.includes("Legend"), "React incision stage uses the shared legend primitive");
@@ -1476,9 +1477,10 @@ assert.ok(
 );
 assert.ok(
   controller.includes("S.generationCount += 1") &&
+  controller.includes("countGeneration: true") &&
   controller.includes("buildIncisionResultPresentation") &&
-  incisionPresenterService.includes("第 ${input.generationCount} 次生成"),
-  "incision runtime exposes observable feedback for repeated candidate generation",
+  incisionPresenterService.includes("已明确生成 ${input.generationCount} 次"),
+  "incision runtime counts only explicit candidate generation while preserving automatic previews",
 );
 assert.ok(
   incisionPresenterService.includes("BuildIncisionResultPresentationInput") &&
@@ -1663,12 +1665,12 @@ for (const id of [
   "reviewerName",
   "reviewDecision",
   "reviewNotes",
-  "approveCandidateBtn",
-  "rejectCandidateBtn",
   "saveReviewBtn",
 ]) {
   assert.ok(reviewPanel.includes(`id="${id}"`), `React review panel exposes #${id}`);
 }
+assert.ok(!reviewPanel.includes('id="approveCandidateBtn"'), "React review panel removes the duplicate approval action");
+assert.ok(!reviewPanel.includes('id="rejectCandidateBtn"'), "React review panel removes the duplicate rejection action");
 assert.ok(incisionWorkbench.includes("ReviewControlsPanel"), "React incision workbench renders the review controls as a React component");
 assert.ok(reviewPanel.includes("useIncisionControllerCommands"), "React review panel uses typed incision command callbacks");
 assert.ok(!reviewPanel.includes("dispatchIncisionReviewCommand"), "React review panel does not import low-level command dispatch helpers directly");
@@ -1679,11 +1681,11 @@ assert.ok(reviewPanel.includes("Label"), "React review panel uses the shared sha
 assert.ok(reviewPanel.includes("Select"), "React review panel uses the shared shadcn-style select primitive");
 assert.ok(reviewPanel.includes("Textarea"), "React review panel uses the shared shadcn-style textarea primitive");
 assert.ok(reviewPanel.includes("Button"), "React review panel uses the shared shadcn-style button primitive");
-assert.ok(reviewPanel.includes("ButtonRow"), "React review panel uses the shared shadcn-style button row primitive");
+assert.ok(!reviewPanel.includes("ButtonRow"), "React review panel exposes one unambiguous save action without a redundant button row");
 assert.ok(reviewPanel.includes("WorkbenchCard"), "React review panel uses the shared shadcn-style workbench card primitive");
 assert.ok(reviewPanel.includes('variant="workbenchPrimary"'), "React review panel keeps primary workbench button styling through Button variants");
 assert.ok(incisionWorkbench.includes('to="/"'), "React incision workbench returns to the stateless tool launcher");
-assert.ok(incisionStagePanel.includes('to="/settings/atlas"'), "React incision stage routes atlas maintenance through settings");
+assert.ok(!incisionStagePanel.includes('to="/settings/atlas"'), "React incision stage hides atlas maintenance from the clinical workflow");
 assert.ok(!incisionStagePanel.includes('to="/annotate"'), "React incision stage should not bypass atlas settings");
 for (const dependencyType of incisionRuntimeDependencyTypes) {
   assert.ok(
