@@ -217,7 +217,7 @@ export function applyCandidateEdit(
 }
 
 function shortCandidate(candidate: AnyRecord): AnyRecord {
-  const keys = ["id", "type", "tumor_kind", "center", "axis", "endpoints", "length_mm", "width_mm", "tip_angle_deg", "direction_confidence", "metrics"];
+  const keys = ["id", "type", "tumor_kind", "center", "axis", "endpoints", "length_mm", "width_mm", "tip_angle_deg", "direction_confidence", "metrics", "hard_violation_count", "hard_violations"];
   return Object.fromEntries(keys.filter((k) => k in candidate).map((k) => [k, candidate[k]]));
 }
 

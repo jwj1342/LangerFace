@@ -22,11 +22,11 @@ export function SecondaryCuePanel() {
   return (
     <WorkbenchCard>
       <CardHeader>
-        <span>辅助线索</span>
+        <span>高级研究辅助线索</span>
         <span id="secondaryCueState">{cue?.stateLabel || "未导入"}</span>
       </CardHeader>
       <WorkbenchNote id="secondaryCueSummary">
-        {cue?.summary || "仅展示自然皱襞、皱纹和皮表肿物边界的低置信度线索；不会自动改变肿物边界或候选切口。"}
+        {cue?.summary || "仅用于导入研究 JSON 并展示低置信度线索；不会自动改变肿物边界或候选切口，常规切口流程可跳过。"}
       </WorkbenchNote>
       <ButtonRow className="two-cols">
         <Button variant="workbench" id="importSecondaryCueBtn" type="button" onClick={() => commands.secondaryCue("import_secondary_cue")}>导入线索</Button>

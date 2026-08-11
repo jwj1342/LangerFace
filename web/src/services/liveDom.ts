@@ -11,6 +11,7 @@ export interface LiveDomElements {
   refine2d: HTMLButtonElement;
   refine2dPanel: HTMLElement;
   refine2dStatus: HTMLElement;
+  refine2dQuality: HTMLElement;
   refineView: HTMLButtonElement;
   refineDrag: HTMLButtonElement;
   refinePoint: HTMLButtonElement;
@@ -112,6 +113,7 @@ function collectElements(root: ParentNode | Document): LiveDomElements {
     refine2d: elementById<HTMLButtonElement>(root, "refine2dBtn") as HTMLButtonElement,
     refine2dPanel: elementById<HTMLElement>(root, "refine2dPanel") as HTMLElement,
     refine2dStatus: elementById<HTMLElement>(root, "refine2dStatus") as HTMLElement,
+    refine2dQuality: elementById<HTMLElement>(root, "refine2dQuality") as HTMLElement,
     refineView: elementById<HTMLButtonElement>(root, "refineViewBtn") as HTMLButtonElement,
     refineDrag: elementById<HTMLButtonElement>(root, "refineDragBtn") as HTMLButtonElement,
     refinePoint: elementById<HTMLButtonElement>(root, "refinePointBtn") as HTMLButtonElement,

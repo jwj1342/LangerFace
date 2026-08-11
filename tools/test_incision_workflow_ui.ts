@@ -34,7 +34,10 @@ const tools = [
   fs.readFileSync("src/services/incisionWorkflowTools.ts", "utf8"),
 ].join("\n");
 const exportPrivacy = fs.readFileSync("src/services/exportPrivacy.ts", "utf8");
+const photoRuntime = fs.readFileSync("src/services/incisionPhotoRuntime.ts", "utf8");
+const controlledMarkerDetection = fs.readFileSync("src/services/controlledMarkerDetection.ts", "utf8");
 const tumorInputService = fs.readFileSync("src/services/tumorInput.ts", "utf8");
+const workspaceSessionService = fs.readFileSync("src/services/incisionWorkspaceSession.ts", "utf8");
 const incisionSnapshotsService = fs.readFileSync("src/services/incisionSnapshots.ts", "utf8");
 const incisionReviewRecordsService = fs.readFileSync("src/services/incisionReviewRecords.ts", "utf8");
 const controllerSnapshotSchemas = fs.readFileSync("src/lib/controllerSnapshotSchemas.ts", "utf8");
@@ -54,6 +57,8 @@ assert.ok(html.includes('id="anatomyPreview"'), "workbench exposes live anatomy 
 assert.ok(html.includes('id="exportTumorBtn"'), "workbench exposes tumor export button");
 assert.ok(html.includes('id="importTumorBtn"'), "workbench exposes tumor import button");
 assert.ok(html.includes('id="tumorImportFile"'), "workbench exposes hidden tumor import file input");
+assert.ok(html.includes('id="controlledMarkerDetectBtn"'), "photo workbench exposes seeded controlled-marker detection");
+assert.ok(html.includes('id="controlledMarkerConfirmBtn"'), "photo workbench requires a separate marker confirmation action");
 assert.ok(html.includes('id="secondaryCueState"'), "workbench exposes secondary cue status");
 assert.ok(html.includes('id="importSecondaryCueBtn"'), "workbench exposes secondary cue import action");
 assert.ok(html.includes('id="secondaryCueImportFile"'), "workbench exposes hidden secondary cue import file input");
@@ -86,8 +91,9 @@ assert.ok(html.includes('id="workflowComparison"'), "workbench exposes browser w
 assert.ok(html.includes("snapshot?.headAsset.statusLabel"), "workbench stage shows the active head asset status");
 assert.ok(html.includes('label="RSTL 来源"'), "workbench state panel exposes the active RSTL source");
 assert.ok(html.includes('label="模型版本"'), "workbench state panel exposes the active model version without topology jargon");
-assert.ok(html.includes('id="approveCandidateBtn"'), "workbench exposes candidate approval action");
-assert.ok(html.includes('id="rejectCandidateBtn"'), "workbench exposes candidate rejection action");
+assert.ok(!html.includes('id="approveCandidateBtn"'), "workbench removes duplicate candidate approval action");
+assert.ok(!html.includes('id="rejectCandidateBtn"'), "workbench removes duplicate candidate rejection action");
+assert.ok(html.includes("保存所选审阅状态"), "workbench saves the selected review state with one clear action");
 assert.ok(html.includes('id="candidateWidth"'), "workbench exposes fusiform width and ratio metric");
 assert.ok(html.includes('id="candidateTipAngle"'), "workbench exposes fusiform tip angle metric");
 assert.ok(html.includes('id="candidateRstlDeviation"'), "workbench exposes RSTL direction-deviation metric");
@@ -102,6 +108,24 @@ assert.ok(tumorInputService.includes("buildTumorFormSnapshot"), "shared tumor in
 assert.ok(tumorInputService.includes("importedTumorFormState"), "shared tumor input service owns imported tumor form normalization");
 assert.ok(js.includes("./tumorInput"), "workbench consumes the shared typed tumor input service");
 assert.ok(js.includes("importedTumorFormState(payload"), "workbench delegates imported tumor payloads to the shared service");
+assert.ok(js.includes("applyTumorContext(rec.tumor)"), "loading a saved candidate restores its complete tumor context");
+assert.ok(js.includes("reviewForCandidateRecord"), "every candidate record uses the shared review gate");
+assert.ok(js.includes("forceDraft: !readiness.ok"), "invalid confirmation saves are explicitly downgraded to drafts");
+assert.ok(js.includes("shouldClearFreehandBoundaryOnLesionRepick"), "lesion repicks clear stale freehand boundaries");
+assert.ok(js.includes("resetIncisionBoundaryState"), "tumor kind changes clear incompatible boundary state");
+assert.ok(
+  js.includes("pointToSurfaceRef(tumor.center, S.verts, S.tris)"),
+  "imported tumor centers retain their exact surface reference instead of snapping to a vertex",
+);
+assert.ok(photoRuntime.includes("shouldClearFreehandBoundaryOnLesionRepick"), "photo lesion repicks use the shared boundary reset policy");
+assert.ok(photoRuntime.includes("state.boundaryPoints = []") && photoRuntime.includes("state.boundaryRefs = []"),
+  "photo lesion repicks clear stale freehand points and surface references");
+assert.ok(photoRuntime.includes("normalizeLesionDetectionAdapter"), "controlled marker results enter the shared lesion adapter");
+assert.ok(photoRuntime.includes("confirmed.eligible_for_candidate"), "invalid confirmed marker inputs cannot generate candidates");
+assert.ok(controlledMarkerDetection.includes("network_request_made: false"), "controlled marker detection records local-only execution");
+assert.ok(workspaceSessionService.includes("incision-workspace-session/v1"), "route round trips persist a versioned incision workspace session");
+assert.ok(js.includes("restoreWorkspaceSession"), "the incision runtime restores the logical workspace after remount");
+assert.ok(js.includes("workflowRequestId"), "stale asynchronous workflow results cannot replace a newer tumor context");
 assert.ok(incisionSnapshotsService.includes("buildIncisionControllerSnapshot"), "shared incision snapshot service owns React snapshot construction");
 assert.ok(incisionSnapshotsService.includes("buildIncisionSavedCandidateSummaries"), "shared incision snapshot service owns saved candidate summaries");
 assert.ok(incisionSnapshotsService.includes("IncisionPlanResultLike"), "shared incision snapshot service types candidate result inputs");
@@ -205,6 +229,12 @@ assert.ok(!js.includes('event === "react_plan"'), "workbench does not consume mo
 assert.ok(incisionReviewRecordsService.includes("工作流执行事件"), "markdown report includes workflow execution event status");
 assert.ok(js.includes("完整 workflow trace 已写入 DevTools Console"), "sidebar points reviewers to console for full workflow trace");
 assert.ok(js.includes("浏览器确定性 workflow 已更新候选"), "workbench reports browser workflow updates");
+assert.ok(js.includes("const requestId = ++S.workflowRequestId"),
+  "workflow requests receive monotonically increasing ids");
+assert.ok(js.includes("if (requestId !== S.workflowRequestId) return"),
+  "stale automatic previews cannot overwrite a newer explicit generation");
+assert.ok(js.includes("S.activeExplicitWorkflowCount += 1"),
+  "automatic previews do not lock the explicit generation button");
 assert.ok(incisionReviewRecordsService.includes("建议覆盖项"), "markdown report includes suggested override details");
 assert.ok(js.includes("protective_direction"), "workbench displays protective direction guardrail suggestions");
 assert.ok(js.includes("directionSourceLabel"), "workbench labels RSTL direction source");
@@ -216,6 +246,9 @@ assert.ok(incisionReviewRecordsService.includes("RSTL 来源"), "markdown report
 assert.ok(incisionReviewRecordsService.includes("最近敏感游离缘"), "markdown report includes sensitive free-margin distance");
 assert.ok(incisionReviewRecordsService.includes("候选版本"), "markdown report includes candidate version provenance");
 assert.ok(js.includes("发送到实时叠加前，请先确认当前候选草案"), "live overlay requires candidate approval");
+assert.ok(js.includes('window.location.assign("/live?incisionOverlay=staged")'), "successful overlay handoff navigates to the live workbench");
+assert.ok(js.includes("atlas.lines || []"), "incision stage renders the complete bilateral RSTL atlas");
+assert.ok(!js.includes("i % 2 === 0"), "incision stage never drops one side through index thinning");
 assert.ok(reviewPolicy.includes("当前候选有高风险保护提示"), "high-risk approval requires review notes");
 
 console.log("test_incision_workflow_ui: tumor boundary IO and review workflow assertions passed");
