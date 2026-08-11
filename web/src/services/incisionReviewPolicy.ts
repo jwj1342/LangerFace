@@ -2,6 +2,21 @@ import { workflowTraceGate } from "./incisionWorkflowTools.ts";
 
 type AnyRecord = Record<string, any>;
 
+function hardViolations(result: AnyRecord | null | undefined): AnyRecord[] {
+  const values = [
+    result?.guardrails?.hard_violations,
+    result?.candidate?.hard_violations,
+    result?.hard_violations,
+  ].flatMap((source) => Array.isArray(source) ? source : []);
+  const seen = new Set<string>();
+  return values.filter((item: AnyRecord) => {
+    const key = JSON.stringify([item?.code || "unknown", item?.location || null]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function summarizeGuardrails(guardrails: AnyRecord = {}) {
   const warnings = Array.isArray(guardrails.warnings) ? guardrails.warnings : [];
   const high = warnings.filter((warning: AnyRecord) => warning.severity === "high");
@@ -34,6 +49,11 @@ export function assessReviewReadiness({
 }) {
   if (!result) return { ok: false, message: "没有可审阅的候选" };
   if (status !== "approved_for_discussion") return { ok: true, message: "" };
+
+  const violations = hardViolations(result);
+  if (violations.length > 0) {
+    return { ok: false, message: `候选存在 ${violations.length} 项不可覆盖的工程几何错误；请修复后再确认。` };
+  }
 
   const traceGate = workflowTraceGate(result);
   if (!traceGate.passed) {
@@ -90,7 +110,9 @@ export function buildReviewGate({
   const notesRequired = reviewerRequired && summary.high_count > 0;
   const reviewerPresent = Boolean(review.reviewer);
   const notesPresent = Boolean(review.notes);
+  const violations = hardViolations(result);
   const approvalReady = review.status === "approved_for_discussion"
+    && violations.length === 0
     && traceGate.passed
     && (!reviewerRequired || reviewerPresent)
     && (!notesRequired || notesPresent);
@@ -101,16 +123,20 @@ export function buildReviewGate({
     notes_required_for_high_guardrails: notesRequired,
     notes_present: notesPresent,
     high_guardrail_codes: summary.high_codes,
+    hard_violation_count: violations.length,
+    hard_violation_codes: violations.map((item: AnyRecord) => item.code).filter(Boolean),
     workflow_trace_gate_passed: traceGate.passed,
     workflow_trace_gate_missing: traceGate.missing_actions.map((item: AnyRecord) => item.key),
     approval_ready: approvalReady,
     live_overlay_ready: liveOverlayReady,
-    live_overlay_blocked_reason: null,
+    live_overlay_blocked_reason: violations.length > 0 ? "engineering_hard_violation" : null,
     active_topology_id: topologyId || null,
     active_topology_version: topologyVersion || null,
     reason: liveOverlayReady
       ? "approved_candidate_ready_for_research_overlay"
-      : traceGate.passed
+      : violations.length > 0
+        ? "engineering_hard_violation"
+        : traceGate.passed
         ? "pending_clinician_confirmation_or_missing_required_review_context"
         : "workflow_trace_gate_failed",
   };
