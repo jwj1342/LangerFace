@@ -55,31 +55,7 @@ export interface LiveDomElements {
   zoom: HTMLInputElement;
   zoomStrip: HTMLElement;
   meshPts: HTMLInputElement;
-  routeSel: HTMLSelectElement;
-  route3dPanel: HTMLElement;
-  reconDemo: HTMLButtonElement;
-  routeModeHint: HTMLElement;
-  threeDWorkflowCard: HTMLElement;
   incisionWorkflowCard: HTMLElement;
-  reconScan: HTMLButtonElement;
-  view3d: HTMLButtonElement;
-  project3d: HTMLButtonElement;
-  reset3d: HTMLButtonElement;
-  cloudFitFlame: HTMLButtonElement;
-  flameStd: HTMLInputElement;
-  flameHeadToggleWrap: HTMLElement;
-  twinTexture: HTMLInputElement;
-  twinTextureWrap: HTMLElement;
-  scanPanel: HTMLElement;
-  scanProgressVal: HTMLElement;
-  scanProgressBar: HTMLElement;
-  scanYawVal: HTMLElement;
-  scanYawLeft: HTMLElement;
-  scanYawMid: HTMLElement;
-  scanYawRight: HTMLElement;
-  scanToast: HTMLElement;
-  reconStatus: HTMLElement;
-  three: HTMLCanvasElement;
   badge: HTMLElement;
   live: HTMLElement;
   fps: HTMLElement;
@@ -163,31 +139,7 @@ function collectElements(root: ParentNode | Document): LiveDomElements {
     zoom: elementById<HTMLInputElement>(root, "zoom") as HTMLInputElement,
     zoomStrip: elementById<HTMLElement>(root, "zoomStrip") as HTMLElement,
     meshPts: elementById<HTMLInputElement>(root, "meshPts") as HTMLInputElement,
-    routeSel: elementById<HTMLSelectElement>(root, "routeSel") as HTMLSelectElement,
-    route3dPanel: elementById<HTMLElement>(root, "route3dPanel") as HTMLElement,
-    reconDemo: elementById<HTMLButtonElement>(root, "reconDemoBtn") as HTMLButtonElement,
-    routeModeHint: elementById<HTMLElement>(root, "routeModeHint") as HTMLElement,
-    threeDWorkflowCard: elementById<HTMLElement>(root, "threeDWorkflowCard") as HTMLElement,
     incisionWorkflowCard: elementById<HTMLElement>(root, "incisionWorkflowCard") as HTMLElement,
-    reconScan: elementById<HTMLButtonElement>(root, "reconScanBtn") as HTMLButtonElement,
-    view3d: elementById<HTMLButtonElement>(root, "view3dBtn") as HTMLButtonElement,
-    project3d: elementById<HTMLButtonElement>(root, "project3dBtn") as HTMLButtonElement,
-    reset3d: elementById<HTMLButtonElement>(root, "reset3dBtn") as HTMLButtonElement,
-    cloudFitFlame: elementById<HTMLButtonElement>(root, "cloudFitFlameBtn") as HTMLButtonElement,
-    flameStd: elementById<HTMLInputElement>(root, "flameStdToggle") as HTMLInputElement,
-    flameHeadToggleWrap: elementById<HTMLElement>(root, "flameHeadToggleWrap") as HTMLElement,
-    twinTexture: elementById<HTMLInputElement>(root, "twinTextureToggle") as HTMLInputElement,
-    twinTextureWrap: elementById<HTMLElement>(root, "twinTextureWrap") as HTMLElement,
-    scanPanel: elementById<HTMLElement>(root, "scanPanel") as HTMLElement,
-    scanProgressVal: elementById<HTMLElement>(root, "scanProgressVal") as HTMLElement,
-    scanProgressBar: elementById<HTMLElement>(root, "scanProgressBar") as HTMLElement,
-    scanYawVal: elementById<HTMLElement>(root, "scanYawVal") as HTMLElement,
-    scanYawLeft: elementById<HTMLElement>(root, "scanYawLeft") as HTMLElement,
-    scanYawMid: elementById<HTMLElement>(root, "scanYawMid") as HTMLElement,
-    scanYawRight: elementById<HTMLElement>(root, "scanYawRight") as HTMLElement,
-    scanToast: elementById<HTMLElement>(root, "scanToast") as HTMLElement,
-    reconStatus: elementById<HTMLElement>(root, "reconStatus") as HTMLElement,
-    three: elementById<HTMLCanvasElement>(root, "three") as HTMLCanvasElement,
     badge: elementById<HTMLElement>(root, "modelBadge") as HTMLElement,
     live: elementById<HTMLElement>(root, "livePill") as HTMLElement,
     fps: elementById<HTMLElement>(root, "fps") as HTMLElement,

@@ -13,8 +13,6 @@ import type {
   RefineViewportCrop,
 } from "./liveRefineMath";
 
-type AnyRecord = Record<string, any>;
-
 export interface LiveModelState {
   landmarker: any;
   imageLandmarker: any;
@@ -142,28 +140,6 @@ export interface LiveRecordingState {
   recorder: CanvasRecordingController | null;
 }
 
-export interface LiveReconState {
-  route: "2d" | "3d";
-  head3d: AnyRecord | null;
-  reconVerts: any;
-  reconFaces: any;
-  reconAtlasLines: any;
-  reconColors: any;
-  reconProjectable: boolean;
-  reconDisplaySpace: string;
-  mode3d: string;
-  viewerRAF: number | null;
-  rot: { x: number; y: number };
-  scan: AnyRecord | null;
-  flameFit: any;
-  flameNeutral: any;
-  flameBasis: any;
-  flameBeta: any;
-  twinMode: string;
-  twinTexture: boolean;
-  [key: string]: unknown;
-}
-
 export const modelState: LiveModelState = {
   landmarker: null,
   imageLandmarker: null,
@@ -260,25 +236,4 @@ export function currentLiveSourceKind(): "camera" | "video" | "image" | null {
 
 export const recordingState: LiveRecordingState = {
   recorder: null,
-};
-
-export const reconState: LiveReconState = {
-  route: "2d",
-  head3d: null,
-  reconVerts: null,
-  reconFaces: null,
-  reconAtlasLines: null,
-  reconColors: null,
-  reconProjectable: false,
-  reconDisplaySpace: "screen",
-  mode3d: "view",
-  viewerRAF: null,
-  rot: { x: 0, y: 0 },
-  scan: null,
-  flameFit: null,
-  flameNeutral: null,
-  flameBasis: null,
-  flameBeta: null,
-  twinMode: "individual",
-  twinTexture: false,
 };

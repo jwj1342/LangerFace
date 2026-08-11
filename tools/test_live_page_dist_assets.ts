@@ -135,7 +135,6 @@ try {
     [/^topology_mediapipe_468.*\.json$/, "MediaPipe topology JSON"],
     [/^canonical_vertices.*\.json$/, "canonical vertices JSON"],
     [/^triangles.*\.json$/, "triangles JSON"],
-    [/^recon_demo.*\.json$/, "3D reconstruction demo JSON"],
     [/^flame_basis.*\.bin$/, "FLAME basis binary"],
     [/^workflow\.worker.*\.js$/, "React workflow Comlink worker"],
   ];

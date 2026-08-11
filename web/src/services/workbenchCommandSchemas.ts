@@ -3,7 +3,6 @@ import {
   ANNOTATE_LIBRARY_COMMANDS,
   ANNOTATE_MESH_COMMANDS,
   LIVE_RENDER_COMMANDS,
-  LIVE_ROUTE_COMMANDS,
   LIVE_SOURCE_COMMANDS,
   readControllerCommandDetail,
   type AnnotateDrawCommand,
@@ -11,7 +10,6 @@ import {
   type AnnotateMeshCommand,
   type ControllerCommandDetail,
   type LiveRenderCommand,
-  type LiveRouteCommand,
   type LiveSourceCommand,
 } from "../lib/controllerCommand.ts";
 
@@ -20,11 +18,6 @@ type CommandEvent = Event | { detail?: unknown } | null | undefined;
 export interface LiveRenderCommandDetail
   extends ControllerCommandDetail<LiveRenderCommand> {
   value?: string | number | boolean;
-}
-
-export interface LiveRouteCommandDetail
-  extends ControllerCommandDetail<LiveRouteCommand> {
-  value?: string | boolean;
 }
 
 export interface AnnotateDrawCommandDetail
@@ -75,19 +68,6 @@ export function readLiveRenderCommand(
   if (detail.command === "mirror_toggle" || detail.command === "mesh_points_toggle") {
     return typeof detail.value === "boolean"
       ? detail as LiveRenderCommandDetail
-      : null;
-  }
-  return detail;
-}
-
-export function readLiveRouteCommand(
-  event: CommandEvent,
-): LiveRouteCommandDetail | null {
-  const detail = readControllerCommandDetail(eventDetail(event), LIVE_ROUTE_COMMANDS);
-  if (!detail) return null;
-  if (detail.command === "route_change") {
-    return detail.value === "2d" || detail.value === "3d"
-      ? detail as LiveRouteCommandDetail
       : null;
   }
   return detail;

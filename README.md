@@ -52,12 +52,12 @@ LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它
 |---|---|---|---|
 | 资产与医学知识层 | 已实现 | 标准脸、三角拓扑、MediaPipe 模型、RSTL 主图谱与 Langer 对照图谱 | `assets/`, `web/assets/` |
 | 感知层 | 已实现 | 从图片、视频、摄像头中提取 478 个 3D 人脸关键点；网页端还检测手部遮挡 | `src/langerface/detection/`, `web/src/services/pipeline.ts` |
-| 配准与几何层 | 已实现 | 2D 重心坐标贴合；3D Beta Umeyama 关键点网格重建与刚性配准；FLAME 关键点拟合实验；离线 HeadSpace 多视角加权 Sim3 配准 | `src/langerface/geometry/`, `src/langerface/registration/`, `src/langerface/flame.py`, `web/src/services/geometry*.ts`, `web/src/services/projection3d.ts`, `tools/reconstruct_3d.py`, `tools/headspace/` |
+| 配准与几何层 | 已实现 | Live 2D 重心坐标贴合；FLAME 关键点拟合实验与 HeadSpace 多视角加权 Sim3 配准仅作离线研究 | `src/langerface/geometry/`, `src/langerface/registration/`, `src/langerface/flame.py`, `web/src/services/geometry*.ts`, `tools/reconstruct_3d.py`, `tools/headspace/` |
 | 面部标注 / 图谱层 | 已实现 | 生成、读取、校验和映射 RSTL/Langer 线条；网页 3D 标注只产出待复核草案，临床校验由 Python/评审流程完成 | `src/langerface/lines/`, `web/src/services/annotationModel.ts`, `web/src/services/annotateViewer.ts`, `web/src/services/annotateRuntime.ts`, `tools/annotate_atlas.py`, `tools/digitize_from_diagram.py` |
 | 肿物模拟层 | Stage 2 功能切片（#14） | 表示脸部肿物的位置、大小、深度、安全切缘和与皮肤表面的关系；当前支持手动中心点、椭圆 / 自由轮廓、来源作者和 JSON 导入导出，自动分割与临床复核仍待补 | `web/src/services/incisionCandidateTools.ts`, `web/src/services/tumorInput.ts`, `web/src/services/incisionRuntime.ts`, `web/src/services/incisionReviewPolicy.ts` |
 | 切口设计层 | Stage 2 工程闭环（#11-#22/#83/#85） | 由浏览器本地确定性 workflow 优先消费 YOLO/V6 个体化 MediaPipe RSTL（标准 RSTL 仅作显式降级），再综合肿物约束、安全切缘、敏感结构、医生编辑、审阅导出和 2D 实时叠加；不依赖 FLAME，只做决策辅助 | `assets/clinical_rules_face_incision.json`, `assets/incision_workflow_schema.json`, `web/src/services/incision*.ts` |
-| 渲染与交互层 | 已实现 / 扩展中 | 2D Canvas 叠加、3D 查看、遮挡、放大窗、录制导出和 UI 控制 | `src/langerface/rendering/`, `web/src/services/liveRuntime.ts`, `web/src/services/render2d.ts`, `web/src/services/three3d.ts` |
-| 实验演示层 | 入口已关闭 / 保留代码 | FLAME 实时孪生（无网页入口）；RSTL 切除 -> 闭合定性软体演示（`/surgery`） | `web/src/services/flameFit.ts`, `web/src/services/mode3d.ts`, `web/src/routes/SurgeryRoute.tsx`, `web/src/services/softBody.ts` |
+| 渲染与交互层 | 已实现 / 扩展中 | Live 2D Canvas 叠加、遮挡、放大窗、录制导出；独立标注/模拟工具保留 3D 查看 | `src/langerface/rendering/`, `web/src/services/liveRuntime.ts`, `web/src/services/render2d.ts`, `web/src/services/three3d.ts` |
+| 实验演示层 | 独立工具 | RSTL 切除 -> 闭合定性软体演示（`/surgery`）；不接入 Live runtime | `web/src/routes/SurgeryRoute.tsx`, `web/src/services/softBody.ts` |
 
 整体数据流：
 
@@ -79,7 +79,7 @@ flowchart LR
   Register --> Recon[3D 关键点网格重建 Beta]
   Recon --> Map
 
-  Register --> Flame[FLAME 拟合 / 实时孪生实验]
+  Register --> Flame[FLAME 离线拟合 / 标注研究]
   Flame --> Render
 
   Register --> Tumor[Stage 2: 肿物模拟]
@@ -133,7 +133,7 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 - 🔬 **RSTL 主流程 + Langer 对照资产**：网页主 demo 当前只暴露 RSTL；Langer 图谱仍保留在资产、CLI 和标注器中用于对照 / 教学。
 - 🖐️ **遮挡处理**：转头时背面线条隐藏；**手挡在脸前时，手覆盖处不画线**（贴合手形掩膜，指缝保留）。
 - 🔍 **关键区域放大窗**：主画面下方 6 个放大窗（额·眉间 / 双眼周 / 鼻·鼻唇沟 / 口周 / 颏部）同屏显示细节。
-- 🚫 **3D / FLAME 网页入口已关闭**：3D 关键点重建、FLAME 实时孪生和三维资产预览的用户入口已下线（#108 第一阶段）；底层 runtime 仍保留在 `web/src/services/mode3d.ts` / `flameFit.ts`，标注器仍可加载头模资产，离线 FLAME 拟合走 `tools/fit_flame_to_landmarks.py`。PR #122 建议将路线收敛为 2D-first + 3D 离线资产/标注/研究预览，仍待 #40 owner 正式确认。
+- 🚫 **Live 3D runtime 已删除**：实时扫描重建、FLAME 孪生、投影命令、隐藏控制器状态和示例重建资产均不再随 Live 工作台发布。`/live` 固定使用 MediaPipe 个体化 RSTL；`/annotate`、`/surgery` 与 `tools/fit_flame_to_landmarks.py` 等离线/独立研究工具不受影响。
 - ✍️ **网页 3D 标注**：在浏览器里于标准脸 / 3D 头模表面手绘 RSTL/Langer 候选线，可导入 JSON/OBJ/PLY 头模和 3D Slicer `.mrk.json` 曲线，导出 `validated:false` 的图谱草案（`[tri,u,v]`）或 xyz 折线；临床复核与置 `validated:true` 仍走 Python/评审流程，见 [网页 3D 标注与图谱草案导出](docs/architecture/ARCHITECTURE.md#12-网页-3d-线标注与图谱草案导出)。
 - 🧰 **无状态研究工具入口**：站点根 `/` 是 React 工具入口（`/app` 保留为兼容地址），只负责进入实时 2D、个性化 2D、切口候选和图谱维护等独立工具，不创建、恢复或保存病例。
 - 🧭 **切口 workflow 工作台**：推荐先从 `/personalized` 生成 YOLO/V6 个体化 RSTL，再进入 `/app/incision`；工作台固定使用 MediaPipe 468 表面，个体化 RSTL 是方向首选，标准 RSTL 只在缺失或校验失败时明确降级，不加载 FLAME。医生可放置皮下 / 皮表肿物、编辑和审阅确定性候选，并把批准结果发送到实时页叠加。
@@ -167,21 +167,9 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 
 ## 技术路线
 
-用户可见的只有 **2D 贴合**一条；下表第二列保留 3D 关键点重建的设计记录，其网页入口已关闭，仅作为内部 runtime 与离线轨存在。
+Live 只有 **2D 贴合**一条运行时路线：每帧把图谱按重心坐标贴到 MediaPipe 脸网格，z 仅用于背面剔除。个体化由 YOLO/V6 皱纹证据生成的 RSTL 草案提供，切口 workflow 消费同一个 `mediapipe-468` 表面；两者都不加载 FLAME。
 
-| | **2D 贴合（默认）** | **3D 关键点网格重建（Beta）** |
-|---|---|---|
-| 思路 | 每帧把图谱按重心坐标贴到当前帧脸网格（2.5D：用 3D 关键点，z 仅用于背面剔除）| 多帧转头扫描得到**468 点个体关键点网格**，线贴到该网格表面，实时把网格刚性配准到活体脸再投影 |
-| 个性化 | 隐式（逐帧跟随真实关键点）| 显式（重建出中性关键点网格，可旋转查看；深度依赖足够偏航覆盖）|
-| 表情 | 线随表情自然形变 | 刚性配准，线不随表情抖动（更像稳定的"皮肤张力图"）|
-| 遮挡 | 背面剔除（启发式）| 渲染时 z 缓冲精确自遮挡 |
-| 成熟度 | 稳定、已大量验证 | Beta：示例重建+旋转查看已验证；在线扫描有偏航覆盖门控，投影仍需摄像头实测 |
-| 实现 | Canvas 2D | Three.js（WebGL）|
-
-3D 重建流程：每帧 478 关键点 → 用相似变换(Umeyama)对齐到统一参考系 → **各顶点取中位数**得到稳定中性脸 →
-图谱按重心坐标贴到该网格 → Three.js 渲染（可旋转）/ 每帧 Umeyama 刚性配准到活体脸投影（z 缓冲遮挡）。
-
-FLAME 实时孪生（`web/src/services/flameFit.ts` / `web/src/services/mode3d.ts`）的入口已关闭；RSTL 切除闭合定性演示仍可从 `/surgery` 打开。3D 按 #40 / PR #122 仅保留离线资产、标注和研究预览；切口工作台已彻底移除 FLAME 运行时依赖，固定走 MediaPipe 个体化 RSTL。
+曾经保留的 3D 扫描、刚性投影和 FLAME 实时孪生 runtime 已删除。3D 仅存在于 `/annotate`、`/surgery` 以及离线重建/拟合工具等独立研究边界，不与 Live 会话共享状态。
 
 ---
 
@@ -210,8 +198,8 @@ python3 tools/build_field_atlas_standard_v1.py \
 #    MediaPipe/atlas/topology 资产由此从 assets/ 派生；改了图谱/几何务必重跑此步（CI 有一致性门禁）
 python3 tools/export_web_assets.py
 
-# 5)（可选）用示例视频重建一个 3D 头，供 3D Beta 直接体验
-python3 tools/reconstruct_3d.py local_media/IMG_3458.MOV    # -> web/assets/recon_demo.json
+# 5)（可选）离线研究：用示例视频重建一个 3D 头（不会进入网页发布资产）
+python3 tools/reconstruct_3d.py local_media/IMG_3458.MOV    # -> local_outputs/recon_demo.json
 
 # 6) 测试 / 构建
 pytest -q                         # Python 端
@@ -363,8 +351,7 @@ Stage 2 的切口候选必须受以下边界约束：
 - **外部遮挡**：已支持**手部**（贴合手形掩膜，指缝保留）；**器械、纱布、口罩**等暂不识别。
 - **强光 / 阴影 / 低分辨率**：降低关键点置信度，触发淡出。
 - **多张脸**：网页端 Face Landmarker 当前配置为单脸追踪；多人同框时只处理首个检测结果，快速进出画面时可能错配。
-- **3D Beta**：当前在线重建是 468 点关键点网格，不是稠密患者头模；刚性配准不随表情形变；在线扫描 / 实时投影需摄像头实测；尚未做非刚性配准与网格导出。
-- **FLAME 实验**：实时孪生入口已关闭；本地/兜底拟合 basis、标注和研究预览保留。医生 FLAME 标准线迁移到个体头、Mode-B 扫描配准等不在当前路线内，重启须满足 TODO 的 3D gate。
+- **3D / FLAME 研究**：Live 扫描、投影和实时孪生 runtime 已删除；离线拟合 basis、标注和研究预览保留。医生 FLAME 标准线迁移到个体头、Mode-B 扫描配准等不在当前路线内，重启须满足独立的 3D gate。
 - **切除闭合演示**：`/app/surgery` 是独立的标准脸定性表面软体研究演示，只解释沿 RSTL 闭合的张力直觉，不创建病例，也不能替代真实软组织 FEM、患者个体化建模或正式候选审阅。
 
 ### 数据与隐私
@@ -379,7 +366,7 @@ Stage 2 切口 workflow 只在浏览器本地处理肿物参数、标准化坐�
 
 - **CI**：push 到 `master` / `refactor/**` 或发 PR 时，[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 跑四个并行 job —— `lint`（`ruff check .`）、`python-tests`（`pytest`，**Python 3.10 / 3.11 / 3.12** 矩阵，不装 mediapipe）、`js-tests`（**Node 24**：`npm ci` + `npm run build` + `npm test` 对拍 Web TypeScript 几何与 Python 一致）、`browser-tests`（Chromium 上运行生产构建的 `/surgery` UI/对比度回归）。提交前可装 `pre-commit`（[`.pre-commit-config.yaml`](.pre-commit-config.yaml)）做本地预检。
 - **CD**：网页是 Vite 构建的**纯静态站点**（`web/dist/`，全程浏览器运行、无后端），经 Vercel Git 集成自动部署（自动 HTTPS → 线上摄像头可用），Vercel Project 的 Root Directory 设为 `web`。
-- **隐私**：`web/assets/recon_demo.json` 是示例视频重建出的 468 点关键点网格，随站点**公开**；不想公开就把它加入 [`web/.vercelignore`](web/.vercelignore)（"用示例重建"按钮失效，仍可"转头扫描"）。
+- **隐私**：离线重建默认写入 gitignored 的 `local_outputs/recon_demo.json`，不会随 Vercel 站点发布；真实患者头模仍不得提交到仓库。
 
 > Vercel Project 设置、Production URL、branch protection 必需检查、Preview 访问策略、手动部署 fallback 与排障清单，全部见 **[CI/CD 与 Vercel 部署指南](docs/quality/CI_CD_VERCEL.md)**。
 
