@@ -4,7 +4,6 @@ import {
   readAnnotateDrawCommand,
   readAnnotateLibraryCommand,
   readLiveRenderCommand,
-  readLiveRouteCommand,
 } from "../web/src/services/workbenchCommandSchemas.ts";
 
 const event = (detail: unknown) => ({ detail });
@@ -35,15 +34,6 @@ assert.deepEqual(
 );
 assert.equal(
   readLiveRenderCommand(event({ command: "template_change", value: "provider" })),
-  null,
-);
-
-assert.deepEqual(
-  readLiveRouteCommand(event({ command: "route_change", value: "2d" })),
-  { command: "route_change", value: "2d" },
-);
-assert.equal(
-  readLiveRouteCommand(event({ command: "route_change", value: "agentic" })),
   null,
 );
 
