@@ -10,6 +10,8 @@ import {
   visibleIncisionPhotoRstlRuns,
 } from "../web/src/services/incisionPhotoPlanning.ts";
 import type { Triangle, Vec3 } from "../web/src/services/softBody.ts";
+import { mapAtlas } from "../web/src/services/geometryAtlas.ts";
+import { buildRstlSourceContract, compareRstlSourceContracts } from "../web/src/services/rstlSourceContract.ts";
 
 const vertices: Vec3[] = [
   [0, 0, 0],
@@ -61,6 +63,32 @@ assert.equal(geometry.candidate.length, 2);
 assert.equal(geometry.endpoints.length, 2);
 assert.ok(Math.abs(geometry.center[0] - 200) < 1e-6);
 assert.ok(Math.abs(geometry.center[1] - 200) < 1e-6);
+
+{
+  const sharedAtlas = {
+    system: "rstl",
+    version: "golden-v1",
+    topologyId: "mediapipe-468",
+    topologyVersion: "mediapipe-468-v1",
+    provenance: "synthetic-golden-sample",
+    validated: false,
+    lines: [{ name: "bilateral", region: "cheek", points: [[0, 0.5, 0.25], [1, 0.25, 0.5]] }],
+  };
+  const liveMapped = mapAtlas(sharedAtlas.lines, landmarks, triangles);
+  const incisionMapped = buildIncisionPhotoGeometry({
+    landmarks,
+    triangles,
+    atlasLines: sharedAtlas.lines,
+    centerRef: null,
+    boundaryRefs: [],
+    candidateRefs: [],
+    endpointRefs: [],
+  }).rstl;
+  assert.deepEqual(incisionMapped, liveMapped, "live and incision paths preserve the same surface mapping");
+  const liveContract = buildRstlSourceContract(sharedAtlas);
+  const incisionContract = buildRstlSourceContract(structuredClone(sharedAtlas));
+  assert.equal(compareRstlSourceContracts(liveContract, incisionContract).compatible, true);
+}
 
 const faceLandmarks = Array.from({ length: 478 }, () => [50, 50, 0] as Vec3);
 faceLandmarks[1] = [0, 100, 0];

@@ -13,7 +13,6 @@ const record = (name: string, ...values: unknown[]) => {
 
 const actions: IncisionCommandActions = {
   applyTumorControl: (command, value) => record("applyTumorControl", command, value),
-  resetBoundaryForTumorKind: () => record("resetBoundaryForTumorKind"),
   setBoundaryInactive: () => record("setBoundaryInactive"),
   updateFormVisibility: () => record("updateFormVisibility"),
   publish: (reason) => record("publish", reason),
@@ -61,7 +60,7 @@ const expectDispatch = (
 const tumor = router.handleTumorEvent.bind(router);
 expectDispatch(tumor, { command: "kind_changed", value: "cutaneous" }, [
   ["applyTumorControl", "kind_changed", "cutaneous"],
-  ["resetBoundaryForTumorKind"],
+  ["setBoundaryInactive"],
   ["updateFormVisibility"],
   ["publish", "tumor_kind_changed"],
   ["previewWorkflow"],

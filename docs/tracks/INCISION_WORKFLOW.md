@@ -13,6 +13,25 @@
 - 工作台固定使用 `mediapipe-468` 面部表面，不加载 FLAME basis，也不把 MediaPipe 图谱转换到 FLAME。
 - `incisionAtlasSource.ts` 优先接收 `/personalized` 暂存的 YOLO/V6 个体化 RSTL；仅在缺失、来源不符或
   拓扑校验失败时使用内置标准 RSTL，并把降级原因写入 UI、snapshot 和审阅导出。
+
+### 跨页面同源契约
+
+实时页与切口页通过 `rstl-source-contract/v0.1` 报告当前图谱的 system、atlas/topology 版本、
+provenance、`validated` 状态、线/点数量和确定性几何指纹。契约相同表示两条链路消费了同一份可追溯
+surface 数据；故意更换图谱点、拓扑、版本或来源时，比较器会返回结构化 mismatch code。
+
+“同源”不表示两个页面的最终像素必须完全相同。mirror、contain、pan、zoom、DPR、线密度和额头可见性
+裁切属于显示阶段；它们可以产生可解释的像素差异，但不得静默改变 atlas、topology、provenance 或
+surface refs。所有当前图谱仍保留 `validated:false`，同源回归只证明工程数据链一致，不构成医学验证。
+### 受控标记定位 baseline
+
+照片页的“受控标记”只在用户点击的局部 ROI 内用亮度阈值和连通域寻找黑点、贴纸或手绘标记。结果先进入
+`lesion-detection-adapter/v0.1` 草案，界面只预览中心和可选边界；使用者核对肿物类型、直径、深度或
+切缘后点击“确认定位”，才允许生成候选。检测全程在浏览器本地执行，不保留或导出原始像素。
+
+该 baseline 用于验证“受控目标 -> surface refs -> 切口候选”的工程链路，不能识别真实病灶的性质、
+边界、深度或切缘，也不能把眉毛、鼻孔、头发等深色区域当作无需人工确认的病灶。
+
 - 运行时不读取模型密钥，不请求远程模型，也不把原始照片、视频帧、摄像头画面或纹理发送到外部服务。
 
 工作台把医生需要先看的候选摘要、保护规则和验证边界保持为默认可见；workflow trace、工具门控与候选比较收进默认折叠的技术详情。移动端先展示可定位病灶的三维视图，再进入长表单。
