@@ -8,6 +8,7 @@ import { noseTriangles } from "./geometryAtlas.ts";
 import type { Triangle } from "./softBody.ts";
 import { countMetric, logInfo, logWarn, setAssetVersions } from "./logger.ts";
 import { modelState } from "./liveState.ts";
+import { buildRstlSourceContract } from "./rstlSourceContract.ts";
 
 type Delegate = "GPU" | "CPU";
 type TopologyPayload = {
@@ -56,6 +57,10 @@ async function initializeReady(): Promise<void> {
   modelState.atlases.langer = loadAtlas("langer", langer);
   modelState.officialAtlases.rstl = modelState.atlases.rstl;
   modelState.officialAtlases.langer = modelState.atlases.langer;
+  modelState.atlasContracts.rstl = buildRstlSourceContract(rstl, { provenance: "bundled_standard_rstl_prior" });
+  modelState.atlasContracts.langer = buildRstlSourceContract(langer, { provenance: "bundled_standard_langer_prior" });
+  modelState.officialAtlasContracts.rstl = modelState.atlasContracts.rstl;
+  modelState.officialAtlasContracts.langer = modelState.atlasContracts.langer;
   setAssetVersions({
     topology: topologyId,
     topologyVersion,
