@@ -28,11 +28,11 @@ import {
 } from "./annotateSnapshots";
 import {
   annotationNdcPoint,
-  annotationZoomFactor,
-  beginAnnotationDrag,
-  updateAnnotationDrag,
-  type AnnotationDragState,
 } from "./annotationInteraction";
+import {
+  bindAnnotationPointerInteractions,
+  type AnnotationPointerPosition,
+} from "./annotationPointerController";
 import { AnnotationLineService } from "./annotationLineService";
 import { prepareAnnotationSlicerImport } from "./annotationSlicerImport";
 import {
@@ -190,35 +190,14 @@ async function loadSlicerFile(file?: File): Promise<void> {
   refresh();
 }
 
-// ── 指针交互：拖拽旋转 vs 点击落点 ────────────────────────────────────────────
-let drag: AnnotationDragState | null = null;
 function bindAnnotateEvents(): void {
   const signal = abortController?.signal;
   if (!signal) return;
-  els.stage.addEventListener("pointerdown", (e: PointerEvent) => {
-    drag = beginAnnotationDrag(e.clientX, e.clientY);
-    els.stage.setPointerCapture(e.pointerId);
+  bindAnnotationPointerInteractions(els.stage, {
+    orbit: (dx, dy) => viewer.orbit(dx, dy),
+    zoom: (factor) => viewer.zoom(factor),
+    addPoint: addPointAt,
   }, { signal });
-  els.stage.addEventListener("pointermove", (e: PointerEvent) => {
-    if (!drag) return;
-    const update = updateAnnotationDrag(drag, e.clientX, e.clientY);
-    drag = update.state;
-    if (update.orbit) viewer.orbit(update.orbit.dx, update.orbit.dy);
-  }, { signal });
-  els.stage.addEventListener("pointerup", (e: PointerEvent) => {
-    const isClick = Boolean(drag && !drag.moved);
-    drag = null;
-    if (els.stage.hasPointerCapture(e.pointerId)) els.stage.releasePointerCapture(e.pointerId);
-    if (isClick) addPointAt(e);
-  }, { signal });
-  els.stage.addEventListener("pointercancel", (e: PointerEvent) => {
-    drag = null;
-    if (els.stage.hasPointerCapture(e.pointerId)) els.stage.releasePointerCapture(e.pointerId);
-  }, { signal });
-  els.stage.addEventListener("wheel", (e: WheelEvent) => {
-    e.preventDefault();
-    viewer.zoom(annotationZoomFactor(e.deltaY));
-  }, { passive: false, signal });
 
   bindWindowControllerEvents([
     [ANNOTATE_MESH_REACT_COMMAND_EVENT, handleReactMeshCommand],
@@ -236,7 +215,7 @@ function bindAnnotateEvents(): void {
   }, { signal });
 }
 
-function addPointAt(e: PointerEvent): void {
+function addPointAt(e: AnnotationPointerPosition): void {
   const r = els.stage.getBoundingClientRect();
   const ndc = annotationNdcPoint(e.clientX, e.clientY, r);
   const hit = viewer.raycast(ndc.x, ndc.y);
@@ -430,7 +409,6 @@ export function disposeAnnotateWorkbench() {
   viewer = null as unknown as Annotator3DInstance;
   model = null as unknown as AnnotationModelInstance;
   lineService = null as unknown as AnnotationLineService;
-  drag = null;
 }
 
 export function mountAnnotateWorkbench(root: ParentNode | Document = document) {

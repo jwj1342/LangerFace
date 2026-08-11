@@ -137,6 +137,7 @@ const annotateRuntime = read("src/services/annotateRuntime.ts");
 const annotateDomService = read("src/services/annotateDom.ts");
 const annotationExportService = read("src/services/annotationExport.ts");
 const annotationInteractionService = read("src/services/annotationInteraction.ts");
+const annotationPointerControllerService = read("src/services/annotationPointerController.ts");
 const annotationLineService = read("src/services/annotationLineService.ts");
 const annotationMeshService = read("src/services/annotationMeshService.ts");
 const annotationSlicerImportService = read("src/services/annotationSlicerImport.ts");
@@ -188,6 +189,7 @@ const annotateRuntimeDependencyTypes = [
   "src/services/annotateDom.ts",
   "src/services/annotationExport.ts",
   "src/services/annotationInteraction.ts",
+  "src/services/annotationPointerController.ts",
   "src/services/annotationLineService.ts",
   "src/services/annotationMeshService.ts",
   "src/services/annotationSlicerImport.ts",
@@ -1980,6 +1982,13 @@ assert.ok(annotationInteractionService.includes("updateAnnotationDrag"), "annota
 assert.ok(annotationInteractionService.includes("annotationNdcPoint"), "annotation interaction service owns viewport coordinate mapping");
 assert.ok(annotationInteractionService.includes("annotationZoomFactor"), "annotation interaction service owns bounded wheel zoom math");
 assert.ok(!/(?:document|window|HTMLElement|PointerEvent|THREE)/.test(annotationInteractionService), "annotation interaction service stays DOM and renderer independent");
+assert.ok(annotateRuntime.includes("./annotationPointerController"), "annotation runtime delegates pointer lifecycle ownership");
+assert.ok(annotationPointerControllerService.includes("bindAnnotationPointerInteractions"), "annotation pointer controller owns event binding");
+assert.ok(annotationPointerControllerService.includes("lostpointercapture"), "annotation pointer controller clears browser-lost capture");
+assert.ok(annotationPointerControllerService.includes("releasePointerCapture"), "annotation pointer controller releases capture on route cleanup");
+assert.ok(annotationPointerControllerService.includes("activePointerId !== null"), "annotation pointer controller rejects concurrent gestures");
+assert.ok(!/(?:document|window|THREE|MediaPipe)/.test(annotationPointerControllerService),
+  "annotation pointer controller stays independent of globals, renderers, and detectors");
 assert.ok(annotationLineService.includes("class AnnotationLineService"), "annotation line service owns line editing transitions");
 assert.ok(!/(?:document|window|HTMLElement|PointerEvent|THREE)/.test(annotationLineService), "annotation line service stays DOM and renderer independent");
 assert.ok(annotateRuntime.includes("./annotationInteraction"), "annotation runtime delegates pointer math to the interaction service");
@@ -1994,8 +2003,9 @@ assert.ok(annotateRuntime.includes("./annotationSlicerImport"), "annotation runt
 assert.ok(annotationSlicerImportService.includes("prepareAnnotationSlicerImport"), "annotation Slicer service prepares snapped line controls");
 assert.ok(!/(?:document|window|HTMLElement|PointerEvent|THREE)/.test(annotationSlicerImportService), "annotation Slicer service stays DOM and renderer independent");
 assert.ok(!annotateRuntime.includes("parseSlicerCurveFile"), "annotation runtime does not parse Slicer payloads directly");
-assert.ok(annotateRuntime.includes('"pointercancel"'), "annotation runtime clears interrupted pointer gestures");
-assert.ok(annotateRuntime.split("\n").length <= 455, "annotation runtime stays a thin orchestration layer");
+assert.ok(!annotateRuntime.includes("let drag:"), "annotation runtime does not own route-local pointer state");
+assert.ok(annotationPointerControllerService.includes('"pointercancel"'), "annotation pointer controller clears interrupted pointer gestures");
+assert.ok(annotateRuntime.split("\n").length <= 435, "annotation runtime stays a thin orchestration layer");
 assert.ok(!annotateRuntime.includes("function controllerEvent"), "annotation runtime delegates browser command parsing to typed schemas");
 assert.ok(!fs.existsSync(path.join(web, "annotate_model.js")), "legacy annotate_model.js facade has been removed after TypeScript service migration");
 assert.ok(!fs.existsSync(path.join(web, "annotate_model.d.ts")), "legacy annotation model declaration facade has been removed after TypeScript service migration");
