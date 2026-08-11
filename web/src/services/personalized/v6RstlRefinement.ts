@@ -7,7 +7,7 @@
  */
 
 export const V6_RSTL_ALGORITHM =
-  "interval-guarded-continuous-polyline-rstl-refinement-6.1";
+  "curvature-constrained-normal-offset-rstl-refinement-6.2";
 
 const SOFT_LINK_FACE_RATIO = 0.013;
 const PARALLEL_DEDUP_FACE_RATIO = 0.006;
@@ -47,6 +47,15 @@ export interface V6RefinementOptions {
   p90LimitPx?: number;
   smoothingPasses?: number;
   maxCurvatureChangeDegrees?: number;
+  curvatureFairing?: boolean;
+  curvatureFairingPasses?: number;
+  curvatureFairingMaximumTurnDegrees?: number;
+  curvatureFairingStrictMaximumTurnDegrees?: number;
+  curvatureFairingBaselineSlackDegrees?: number;
+  curvatureFairingMaterialTurnDegrees?: number;
+  curvatureFairingMaximumAddedSignChanges?: number;
+  curvatureFairingEndpointTangentChangeDegrees?: number;
+  curvatureFairingStrictRegion?: string;
 }
 
 interface PolylineMetrics {
@@ -990,6 +999,246 @@ function turnAngles(points: Point2[]): Float64Array {
     output[index] = Math.acos(clamp(first[0] * second[0] + first[1] * second[1], -1, 1));
   }
   return output;
+}
+
+interface CurvatureMetrics {
+  maximumTurnDegrees: number;
+  materialSignChanges: number;
+  turnVariationDegrees: number;
+}
+
+function signedTurnAnglesDegrees(points: Point2[]): Float64Array {
+  const output = new Float64Array(points.length);
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const first = normalize2(points[index][0] - points[index - 1][0],
+      points[index][1] - points[index - 1][1]);
+    const second = normalize2(points[index + 1][0] - points[index][0],
+      points[index + 1][1] - points[index][1]);
+    output[index] = Math.atan2(
+      first[0] * second[1] - first[1] * second[0],
+      clamp(first[0] * second[0] + first[1] * second[1], -1, 1),
+    ) * 180 / Math.PI;
+  }
+  return output;
+}
+
+function curvatureMetrics(points: Point2[], materialTurnDegrees: number): CurvatureMetrics {
+  const turns = signedTurnAnglesDegrees(points);
+  let maximumTurnDegrees = 0, materialSignChanges = 0, turnVariationDegrees = 0;
+  let priorMaterialSign = 0, previousTurn = 0, hasPreviousTurn = false;
+  for (let index = 1; index < turns.length - 1; index += 1) {
+    const turn = turns[index];
+    maximumTurnDegrees = Math.max(maximumTurnDegrees, Math.abs(turn));
+    if (hasPreviousTurn) turnVariationDegrees += Math.abs(turn - previousTurn);
+    previousTurn = turn;
+    hasPreviousTurn = true;
+    if (Math.abs(turn) < materialTurnDegrees) continue;
+    const sign = Math.sign(turn);
+    if (priorMaterialSign && sign !== priorMaterialSign) materialSignChanges += 1;
+    priorMaterialSign = sign;
+  }
+  return { maximumTurnDegrees, materialSignChanges, turnVariationDegrees };
+}
+
+function directedAngleDegrees(first: Point2, second: Point2): number {
+  if (!(first[0] || first[1]) || !(second[0] || second[1])) return 0;
+  return Math.acos(clamp(first[0] * second[0] + first[1] * second[1], -1, 1)) *
+    180 / Math.PI;
+}
+
+function endpointTangentChangeDegrees(prior: Point2[], candidate: Point2[]): number {
+  if (prior.length < 2 || candidate.length < 2) return 0;
+  const priorStart = normalize2(prior[1][0] - prior[0][0], prior[1][1] - prior[0][1]);
+  const finalStart = normalize2(candidate[1][0] - candidate[0][0],
+    candidate[1][1] - candidate[0][1]);
+  const last = prior.length - 1;
+  const priorEnd = normalize2(prior[last][0] - prior[last - 1][0],
+    prior[last][1] - prior[last - 1][1]);
+  const finalEnd = normalize2(candidate[last][0] - candidate[last - 1][0],
+    candidate[last][1] - candidate[last - 1][1]);
+  return Math.max(
+    directedAngleDegrees(priorStart, finalStart),
+    directedAngleDegrees(priorEnd, finalEnd),
+  );
+}
+
+function fairNormalOffsets(
+  curve: CurveGeometry,
+  source: Float64Array,
+  intervals: Interval[],
+  passes: number,
+  dataWeight: number,
+): Float64Array {
+  const output = new Float64Array(source);
+  for (const [start, end] of intervals) {
+    if (end - start < 3) continue;
+    const intervalArc = Math.max(EPSILON,
+      curve.vertexArc[end - 1] - curve.vertexArc[start]);
+    const sampleSpans = [];
+    for (let index = start + 1; index < end; index += 1) {
+      sampleSpans.push(curve.vertexArc[index] - curve.vertexArc[index - 1]);
+    }
+    const taperArc = Math.max(EPSILON, Math.min(
+      intervalArc * 0.30,
+      percentile(sampleSpans, 0.5) * 6,
+    ));
+    const original = new Float64Array(end - start);
+    for (let index = start; index < end; index += 1) {
+      const edgeDistance = Math.min(
+        curve.vertexArc[index] - curve.vertexArc[start],
+        curve.vertexArc[end - 1] - curve.vertexArc[index],
+      );
+      const parameter = clamp(edgeDistance / taperArc);
+      const envelope = parameter * parameter * (3 - 2 * parameter);
+      original[index - start] = source[index] * envelope;
+      output[index] = original[index - start];
+    }
+    for (let pass = 0; pass < passes; pass += 1) {
+      const next = new Float64Array(output);
+      for (let index = start + 1; index < end - 1; index += 1) {
+        const previousSpan = Math.max(EPSILON,
+          curve.vertexArc[index] - curve.vertexArc[index - 1]);
+        const nextSpan = Math.max(EPSILON,
+          curve.vertexArc[index + 1] - curve.vertexArc[index]);
+        const arcLinear = (
+          nextSpan * output[index - 1] + previousSpan * output[index + 1]
+        ) / (previousSpan + nextSpan);
+        next[index] = dataWeight * original[index - start] + (1 - dataWeight) * arcLinear;
+      }
+      output.set(next);
+      output[start] = 0;
+      output[end - 1] = 0;
+    }
+  }
+  return output;
+}
+
+function applyCurvatureFairing(
+  results: any[], size: number, options: V6RefinementOptions,
+) {
+  const events: any[] = [];
+  if (options.curvatureFairing !== true) {
+    return { events, appliedCurveCount: 0, rollbackCurveCount: 0 };
+  }
+  const passes = Math.max(1, Math.min(96, Number(options.curvatureFairingPasses) || 32));
+  const materialTurn = Math.max(0.1,
+    Number(options.curvatureFairingMaterialTurnDegrees) || 0.5);
+  const standardMaximumTurn = Math.max(1,
+    Number(options.curvatureFairingMaximumTurnDegrees) || 8);
+  const strictMaximumTurn = Math.max(1,
+    Number(options.curvatureFairingStrictMaximumTurnDegrees) || 6);
+  const baselineSlack = Math.max(0,
+    Number(options.curvatureFairingBaselineSlackDegrees) || 2);
+  const maximumAddedSignChanges = Math.max(0,
+    Math.round(Number(options.curvatureFairingMaximumAddedSignChanges) || 2));
+  const maximumEndpointTangentChange = Math.max(0.1,
+    Number(options.curvatureFairingEndpointTangentChangeDegrees) || 45);
+  const strictRegion = String(options.curvatureFairingStrictRegion ||
+    "lateral_canthus_short_arc_v65");
+  let appliedCurveCount = 0, rollbackCurveCount = 0;
+
+  for (let curveIndex = 0; curveIndex < results.length; curveIndex += 1) {
+    const result = results[curveIndex];
+    const moved = result.offsets.some((value: number) => Math.abs(value) > 0.05);
+    if (!moved || result.rollbackReason || !result.intervals.length) continue;
+    const strict = String(result.curve.seed.region || "") === strictRegion;
+    const priorMetrics = curvatureMetrics(result.curve.prior, materialTurn);
+    const beforeMetrics = curvatureMetrics(result.points, materialTurn);
+    const maximumTurn = Math.max(
+      strict ? strictMaximumTurn : standardMaximumTurn,
+      priorMetrics.maximumTurnDegrees + baselineSlack,
+    );
+    const maximumSignChanges = priorMetrics.materialSignChanges + maximumAddedSignChanges;
+    const originalOffsets = new Float64Array(result.offsets);
+    let selected: Float64Array | null = null;
+    let selectedMetrics: CurvatureMetrics | null = null;
+    let selectedDataWeight: number | null = null;
+    let selectedScale: number | null = null;
+    let selectedEndpointChange = 0;
+    let bestAttempt: any = null;
+
+    const dataWeights = [0.65, 0.48, 0.34, 0.22, 0.13, 0.07, 0.03, 0.015];
+    for (const scale of [1, 0.90, 0.80, 0.70, 0.60, 0.50, 0.40, 0.30, 0.20, 0.10]) {
+      for (const dataWeight of dataWeights) {
+        const fairedOffsets = fairNormalOffsets(
+          result.curve, originalOffsets, result.intervals, passes, dataWeight,
+        );
+        const candidateOffsets = Float64Array.from(fairedOffsets,
+          (value) => value * scale);
+        const candidatePoints = pointsFromOffsets(result.curve, candidateOffsets);
+        const metrics = curvatureMetrics(candidatePoints, materialTurn);
+        const endpointChange = endpointTangentChangeDegrees(result.curve.prior, candidatePoints);
+        const insideCanvas = candidatePoints.every((point) =>
+          point[0] >= 0 && point[1] >= 0 && point[0] < size && point[1] < size);
+        const attempt = {
+          data_weight: dataWeight,
+          displacement_scale: scale,
+          inside_canvas: insideCanvas,
+          endpoint_tangent_change_degrees: endpointChange,
+          metrics,
+        };
+        const violation = (insideCanvas ? 0 : 1000) +
+          Math.max(0, metrics.maximumTurnDegrees - maximumTurn) +
+          2 * Math.max(0, metrics.materialSignChanges - maximumSignChanges) +
+          Math.max(0, endpointChange - maximumEndpointTangentChange);
+        if (!bestAttempt || violation < bestAttempt.violation) {
+          bestAttempt = { ...attempt, violation };
+        }
+        if (!insideCanvas || metrics.maximumTurnDegrees > maximumTurn + 1e-6 ||
+            metrics.materialSignChanges > maximumSignChanges ||
+            endpointChange > maximumEndpointTangentChange + 1e-6) continue;
+        selected = candidateOffsets;
+        selectedMetrics = metrics;
+        selectedDataWeight = dataWeight;
+        selectedScale = scale;
+        selectedEndpointChange = endpointChange;
+        break;
+      }
+      if (selected) break;
+    }
+
+    if (selected && selectedMetrics) {
+      result.offsets = selected;
+      result.points = pointsFromOffsets(result.curve, selected);
+      appliedCurveCount += 1;
+      events.push({
+        curve_index: curveIndex,
+        curve_name: result.curve.seed.name,
+        region: result.curve.seed.region,
+        status: "faired",
+        strict_region_gate: strict,
+        passes,
+        data_weight: selectedDataWeight,
+        displacement_scale: selectedScale,
+        maximum_turn_limit_degrees: maximumTurn,
+        maximum_sign_changes: maximumSignChanges,
+        endpoint_tangent_change_degrees: selectedEndpointChange,
+        prior: priorMetrics,
+        before: beforeMetrics,
+        after: selectedMetrics,
+      });
+      continue;
+    }
+
+    result.offsets.fill(0);
+    result.points = result.curve.prior.map((point: Point2) => [...point]);
+    result.rollbackReason = "curvature_fairing_gate_rejected";
+    rollbackCurveCount += 1;
+    events.push({
+      curve_index: curveIndex,
+      curve_name: result.curve.seed.name,
+      region: result.curve.seed.region,
+      status: "rolled_back",
+      strict_region_gate: strict,
+      passes,
+      maximum_turn_limit_degrees: maximumTurn,
+      maximum_sign_changes: maximumSignChanges,
+      prior: priorMetrics,
+      before: beforeMetrics,
+      best_attempt: bestAttempt,
+    });
+  }
+  return { events, appliedCurveCount, rollbackCurveCount };
 }
 
 function pointsFromOffsets(curve: CurveGeometry, offsets: NumericField): Point2[] {
@@ -2019,6 +2268,30 @@ export function refineV6({
     }
     outputCurves = makeOutputCurves();
   }
+  const curvatureFairing = applyCurvatureFairing(refined.results, size, options);
+  if (options.curvatureFairing === true) {
+    intersection = rollbackNewIntersections(
+      refined.results, curves.map((curve) => curve.prior),
+    );
+    outputCurves = makeOutputCurves();
+  }
+  const postFairingAdherenceRollback = new Set<number>();
+  if (options.postAdherenceGate === true && options.curvatureFairing === true) {
+    const postFairingCandidateAdherence = trajectoryAdherence(
+      trends, matching, curves, outputCurves, faceWidth, options, true,
+    );
+    for (const curveIndex of postFairingCandidateAdherence.rejectedCurveIndices) {
+      const result = refined.results[curveIndex];
+      result.offsets.fill(0);
+      result.points = result.curve.prior.map((point: Point2) => [...point]);
+      result.rollbackReason = result.rollbackReason || "post_fairing_adherence_gate_rejected";
+      postFairingAdherenceRollback.add(curveIndex);
+    }
+    intersection = rollbackNewIntersections(
+      refined.results, curves.map((curve) => curve.prior),
+    );
+    outputCurves = makeOutputCurves();
+  }
   const adherence = trajectoryAdherence(
     trends, matching, curves, outputCurves, faceWidth, options, false,
   );
@@ -2138,6 +2411,12 @@ export function refineV6({
       short_wrinkle_quantization_tolerance_enabled: true,
     } : {}),
     post_adherence_rollback_curve_count: postAdherenceRollback.size,
+    curvature_fairing_enabled: options.curvatureFairing === true,
+    curvature_fairing_space: "standard_curve_scalar_normal_offset",
+    curvature_fairing_applied_curve_count: curvatureFairing.appliedCurveCount,
+    curvature_fairing_rollback_curve_count: curvatureFairing.rollbackCurveCount,
+    curvature_fairing_events: curvatureFairing.events,
+    post_fairing_adherence_rollback_curve_count: postFairingAdherenceRollback.size,
     wrinkle_dominant_core_strength: refined.wrinkleDominantCoreStrength,
     wrinkle_dominant_core_support_ratio: refined.wrinkleDominantCoreSupportRatio,
     displacement_p90_guard_scope: "curve_affected_interval",

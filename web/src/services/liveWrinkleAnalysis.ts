@@ -221,12 +221,22 @@ function v9Options(faceWidth: number) {
     bundleMinimumSpacingRatio: 0.65,
     bundleDenseFollowerRegion: "lateral_canthus_short_arc_v65",
     bundleDenseFollowerCountPerSide: 3,
+    curvatureFairing: true,
+    curvatureFairingPasses: 32,
+    curvatureFairingMaximumTurnDegrees: 8,
+    curvatureFairingStrictMaximumTurnDegrees: 6,
+    curvatureFairingBaselineSlackDegrees: 2,
+    curvatureFairingMaterialTurnDegrees: 0.5,
+    curvatureFairingMaximumAddedSignChanges: 2,
+    curvatureFairingEndpointTangentChangeDegrees: 45,
+    curvatureFairingStrictRegion: "lateral_canthus_short_arc_v65",
   };
 }
 
 function assertRefinementGate(diagnostics: Record<string, any>): void {
   if (
     diagnostics.algorithm !== V6_RSTL_ALGORITHM
+    || diagnostics.curvature_fairing_enabled !== true
     || diagnostics.topology_contract_preserved !== true
     || diagnostics.post_export_new_intersection_pair_count !== 0
     || diagnostics.post_export_new_self_cross_curve_count !== 0

@@ -61,8 +61,8 @@ const BUNDLE_PROPAGATION = true;
 const LOGICAL_WRINKLE_GROUPING = true;
 const V8_EYE_GUIDANCE = EXPERIMENT_VERSION === "v8";
 $("experimentSubtitle").textContent = V8_EYE_GUIDANCE ?
-  "v8.1.70 · 本地 YOLO · 区间主锚+门禁重分配 v8 · validated=false" :
-  "v8.1.70 · 本地 YOLO · 逻辑皱纹+全局主锚 v7 · validated=false";
+  "v8.1.74 · 本地 YOLO · 曲率受限法向微调 6.2 · validated=false" :
+  "v8.1.74 · 本地 YOLO · 逻辑皱纹+全局主锚 v7 · validated=false";
 
 const canvases = Object.freeze({
   "01_prior_rstl.png": $("priorCanvas"),
@@ -371,7 +371,7 @@ function drawPrior(imageData, seeds, visibility) {
     strokePolyline(context, curve.pts, COLORS.refined, width, [],
       lineVisibility(curve.pts, curve.region, visibility));
   }
-  drawLegend(context, [{ label: "v8.1.70 prior", color: COLORS.refined }]);
+  drawLegend(context, [{ label: "v8.1.74 prior", color: COLORS.refined }]);
 }
 
 function drawEvidence(imageData, fineEvidence) {
@@ -653,8 +653,8 @@ function buildActiveAtlas(atlas, curves, refMesh, triangles, diagnostics) {
     atlas: {
       system: "rstl",
       version: V8_EYE_GUIDANCE ?
-        "v8.1.70-single-image-v8-complete-fine-lines" :
-        "v8.1.70-single-image-v7-complete-fine-lines-v7",
+        "v8.1.74-single-image-v8-curvature-fairing-6.2" :
+        "v8.1.74-single-image-v7-complete-fine-lines-v7",
       topologyId: atlas.topologyId,
       topologyVersion: atlas.topologyVersion,
       provenance: V8_EYE_GUIDANCE ?
@@ -747,7 +747,7 @@ function buildArtifacts({ file, sourceSha256, atlas, modelManifest, detection, f
       barycentricFallbackPointCount: fallbackPointCount,
     },
     prior: {
-      baseline: "rstl_v8_1_70",
+      baseline: "rstl_v8_1_74",
       atlasVersion: atlas.atlasVersion,
       curveCount: atlas.lines.length,
       pointCount: atlas.lines.reduce((sum, line) => sum + line.points.length, 0),
@@ -881,16 +881,17 @@ async function runExperiment(file, fineLineFile = null) {
       sourceSha256.toUpperCase()) {
     throw new Error("细线 JSON 不属于当前人脸图片");
   }
-  if (atlas.validated !== false || atlas.lines.length !== 159 ||
+  if (atlas.validated !== false || atlas.atlasVersion !== "8.1.74" ||
+      atlas.lines.length !== 159 ||
       !atlas.lines.some((line) => line.region === "lateral_canthus_short_arc_v65") ||
-      !atlas.lines.some((line) => line.region === "supraorbital_lateral_short_arc_v67") ||
-      !atlas.lines.some((line) => line.region === "supraorbital_medial_short_arc_v67")) {
+      !atlas.lines.some((line) => line.region === "supraorbital_lateral_short_arc_v66") ||
+      !atlas.lines.some((line) => line.region === "supraorbital_medial_short_arc_v69")) {
     throw new Error(
-      "RSTL atlas 必须是 validated=false 的 v8.1.70 159 曲线版本",
+      "RSTL atlas 必须是 validated=false 的 v8.1.74 159 曲线版本",
     );
   }
   const pointCount = atlas.lines.reduce((sum, line) => sum + line.points.length, 0);
-  if (pointCount !== 15_282) throw new Error(`RSTL atlas 点数异常：${pointCount}`);
+  if (pointCount !== 15_222) throw new Error(`RSTL atlas 点数异常：${pointCount}`);
 
   setStatus("正在本机定位人脸并建立统一坐标…");
   const landmarker = await ensureFaceLandmarker();
@@ -976,6 +977,15 @@ async function runExperiment(file, fineLineFile = null) {
       p90LimitPx: workingFaceWidth * 0.030,
       maxDisplacementPx: workingFaceWidth * 0.045,
       maxCurvatureChangeDegrees: 60,
+      curvatureFairing: true,
+      curvatureFairingPasses: 32,
+      curvatureFairingMaximumTurnDegrees: 8,
+      curvatureFairingStrictMaximumTurnDegrees: 6,
+      curvatureFairingBaselineSlackDegrees: 2,
+      curvatureFairingMaterialTurnDegrees: 0.5,
+      curvatureFairingMaximumAddedSignChanges: 2,
+      curvatureFairingEndpointTangentChangeDegrees: 45,
+      curvatureFairingStrictRegion: "lateral_canthus_short_arc_v65",
       ...(BUNDLE_PROPAGATION ? {
         bundlePropagation: true,
         bundleFollowerCountPerSide: 1,
@@ -995,6 +1005,7 @@ async function runExperiment(file, fineLineFile = null) {
     },
   });
   if (!refined.diagnostics.topology_contract_preserved ||
+      refined.diagnostics.curvature_fairing_enabled !== true ||
       refined.diagnostics.post_export_new_intersection_pair_count !== 0 ||
       refined.diagnostics.post_export_new_self_cross_curve_count !== 0 ||
       (BUNDLE_PROPAGATION && refined.diagnostics.bundle_minimum_spacing_ratio < 0.65)) {
