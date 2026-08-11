@@ -159,6 +159,7 @@ const liveController = read("src/services/liveRuntime.ts");
 const liveActionSchedulerService = read("src/services/liveActionScheduler.ts");
 const liveFrameSchedulerService = read("src/services/liveFrameScheduler.ts");
 const liveCanvasInteractionService = read("src/services/liveCanvasInteraction.ts");
+const liveCommandRouterService = read("src/services/liveCommandRouter.ts");
 const livePipelineService = read("src/services/pipeline.ts");
 const livePipelineLoopService = read("src/services/pipelineLoop.ts");
 const livePipelineSourceService = read("src/services/pipelineSource.ts");
@@ -176,6 +177,7 @@ const liveRuntimeDependencyTypes = [
   "src/services/liveActionScheduler.ts",
   "src/services/liveFrameScheduler.ts",
   "src/services/liveCanvasInteraction.ts",
+  "src/services/liveCommandRouter.ts",
   "src/services/liveDom.ts",
   "src/services/liveCanvasFit.ts",
   "src/services/dataSource.ts",
@@ -2212,7 +2214,7 @@ assert.ok(liveCanvasInteractionService.includes("lostpointercapture"),
   "live canvas interaction service cleans up browser-lost pointer capture");
 assert.ok(!/(?:document|window|THREE|MediaPipe)/.test(liveCanvasInteractionService),
   "live canvas interaction service stays independent of globals, renderers, and detectors");
-assert.ok(liveController.split("\n").length <= 580, "live runtime stays a thin orchestration layer");
+assert.ok(liveController.split("\n").length <= 550, "live runtime stays a thin orchestration layer");
 assert.ok(!liveController.includes("interface ImageDragState"), "live runtime does not own route-local pointer state");
 assert.ok(!liveController.includes("function controllerEvent"), "live runtime delegates browser command parsing to typed schemas");
 assert.ok(workbenchCommandSchemasService.includes("readLiveRenderCommand"), "workbench command schemas validate live render payloads");
@@ -2263,16 +2265,20 @@ assert.ok(!liveController.includes("LIVE_ROUTE_REACT_COMMAND_EVENT"), "live cont
 assert.ok(liveController.includes("LIVE_SOURCE_REACT_COMMAND_EVENT"), "live controller declares a React source command bridge event");
 assert.ok(liveController.includes("LIVE_RENDER_REACT_COMMAND_EVENT"), "live controller declares a React render command bridge event");
 assert.ok(liveController.includes("../lib/controllerCommand"), "live controller imports the shared command binding module");
-assert.ok(liveController.includes("./workbenchCommandSchemas"), "live controller imports payload-aware command schemas");
+assert.ok(liveController.includes("./liveCommandRouter"), "live controller delegates shared React and DOM command dispatch");
+assert.ok(liveCommandRouterService.includes("./workbenchCommandSchemas"), "live command router imports payload-aware command schemas");
 assert.ok(liveController.includes("bindWindowControllerEvents"), "live controller binds React command events through the shared helper");
 assert.ok(!liveController.includes("window.addEventListener(LIVE"), "live controller does not register React command listeners one-by-one");
-assert.ok(liveController.includes("readLiveSourceCommand(event)"), "live source handler validates incoming command names");
-assert.ok(liveController.includes("readLiveRenderCommand(event)"), "live render handler validates command names and payloads");
-assert.ok(!liveController.includes("readLiveRouteCommand"), "live controller has no retired route command schema");
+assert.ok(liveCommandRouterService.includes("readLiveSourceCommand(event)"), "live source handler validates incoming command names");
+assert.ok(liveCommandRouterService.includes("readLiveRenderCommand(event)"), "live render handler validates command names and payloads");
+assert.ok(!liveCommandRouterService.includes("readLiveRouteCommand"), "live command router has no retired route command schema");
+assert.ok(!/(?:document|window)\./.test(liveCommandRouterService), "live command router stays independent of global DOM state");
 assert.ok(!liveController.includes("event.detail || {}"), "live controller does not read raw command detail directly");
-assert.ok(!liveController.includes("handleReactRouteCommand"), "live controller cannot enter the retired 3D workflow");
-assert.ok(liveController.includes("handleReactSourceCommand"), "live controller routes React source commands to existing workflow functions");
-assert.ok(liveController.includes("handleReactRenderCommand"), "live controller routes React render commands to existing workflow functions");
+assert.ok(liveController.includes("liveCommands.handleSourceEvent(event)"), "live controller routes React source commands through the shared router");
+assert.ok(liveController.includes("liveCommands.handleRenderEvent(event)"), "live controller routes React render commands through the shared router");
+assert.ok(liveController.includes('liveCommands.source("camera_toggle")'), "compatibility source controls reuse the shared command router");
+assert.ok(liveController.includes('liveCommands.render("mirror_toggle"'), "compatibility render controls reuse the shared command router");
+assert.ok(!liveController.includes("liveCommands.route("), "live controller cannot enter the retired 3D workflow");
 assert.ok(liveController.includes("./liveSnapshots"), "live controller consumes the shared typed snapshot service");
 assert.ok(liveController.includes("buildLiveControllerSnapshot({"), "live controller delegates React snapshot construction to the shared service");
 assert.ok(!liveController.includes("function textOf"), "live controller no longer owns snapshot text normalization");

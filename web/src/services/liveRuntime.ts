@@ -24,6 +24,7 @@ import { dataSource } from "./dataSource";
 import { countMetric, logError } from "./logger";
 import { LiveActionScheduler } from "./liveActionScheduler";
 import { bindLiveCanvasInteractions } from "./liveCanvasInteraction";
+import { LiveCommandRouter } from "./liveCommandRouter";
 import { createCanvasRecordingController, type CanvasRecordingController, type RecordingExtraCanvas } from "./canvasRecording";
 import { modelState, recordingState, renderState, sourceState } from "./liveState";
 import { createPhotoPlanningController } from "./photoPlanningController";
@@ -51,10 +52,6 @@ import {
   updateRefineUi,
 } from "./liveRefine2d";
 import { setIncisionOverlayQa, setLive, setMsg, setProvenance, smoothLabel } from "./liveUi";
-import {
-  readLiveRenderCommand,
-  readLiveSourceCommand,
-} from "./workbenchCommandSchemas";
 import {
   analyzeCurrentWrinkles,
   applyWrinkleGuidedRefinement,
@@ -347,36 +344,23 @@ function toggleRecording(): void {
   recordingController.toggle();
 }
 
-function handleReactSourceCommand(event: Event): void {
-  const detail = readLiveSourceCommand(event);
-  if (!detail) return;
-  const { command } = detail;
-  if (command === "upload_source") {
-    els.file.click();
-    return;
-  }
-  if (command === "camera_toggle") runLiveAction("camera_toggle", startCamera);
-  if (command === "pause_toggle") runLiveAction("pause_toggle", handlePauseToggle);
-  if (command === "recording_toggle") runLiveAction("recording_toggle", toggleRecording);
-}
-
-function handleReactRenderCommand(event: Event): void {
-  const detail = readLiveRenderCommand(event);
-  if (!detail) return;
-  const { command, value } = detail;
-  if (command === "template_change") runLiveAction("template_change", () => handleTemplateChange(valueEvent(value)));
-  if (command === "density_input") runLiveAction("density_input", () => handleDensityInput(valueEvent(Number(value))));
-  if (command === "opacity_input") runLiveAction("opacity_input", () => handleOpacityInput(valueEvent(Number(value))));
-  if (command === "mirror_toggle") runLiveAction("mirror_toggle", () => handleMirrorChange(checkedEvent(Boolean(value))));
-  if (command === "mesh_points_toggle") {
-    runLiveAction("mesh_points_toggle", () => {
-      renderState.meshPts = Boolean(value);
-      refreshStaticImage();
-    });
-  }
-  if (command === "restore_atlas") runLiveAction("restore_atlas", restoreAtlasPreview);
-  if (command === "clear_incision_overlay") runLiveAction("clear_incision_overlay", clearIncisionOverlay);
-}
+const liveCommands = new LiveCommandRouter({
+  run: runLiveAction,
+  uploadSource: () => els.file.click(),
+  cameraToggle: startCamera,
+  pauseToggle: handlePauseToggle,
+  recordingToggle: toggleRecording,
+  templateChange: (value) => handleTemplateChange(valueEvent(value)),
+  densityInput: (value) => handleDensityInput(valueEvent(value)),
+  opacityInput: (value) => handleOpacityInput(valueEvent(value)),
+  mirrorToggle: (value) => handleMirrorChange(checkedEvent(value)),
+  meshPointsToggle: (value) => {
+    renderState.meshPts = value;
+    refreshStaticImage();
+  },
+  restoreAtlas: restoreAtlasPreview,
+  clearIncisionOverlay,
+});
 
 function bindLiveEvents(signal: AbortSignal): void {
   els.file.addEventListener("change", (e) => runLiveAction("file_source", () => handleFile((e.target as HTMLInputElement | null)?.files?.[0])), { signal });
@@ -417,26 +401,25 @@ function bindLiveEvents(signal: AbortSignal): void {
   window.addEventListener("langerface:refine2d-state", updateWrinkleUi, { signal });
   if (isReactManagedWorkbench()) {
     bindWindowControllerEvents([
-      [LIVE_SOURCE_REACT_COMMAND_EVENT, handleReactSourceCommand],
-      [LIVE_RENDER_REACT_COMMAND_EVENT, handleReactRenderCommand],
+      [LIVE_SOURCE_REACT_COMMAND_EVENT, (event) => { liveCommands.handleSourceEvent(event); }],
+      [LIVE_RENDER_REACT_COMMAND_EVENT, (event) => { liveCommands.handleRenderEvent(event); }],
     ], { signal });
   } else {
-    els.upload.addEventListener("click", () => els.file.click(), { signal });
-    els.cam.addEventListener("click", () => runLiveAction("camera_toggle", startCamera), { signal });
-    els.pause.addEventListener("click", () => runLiveAction("pause_toggle", handlePauseToggle), { signal });
-    els.tmpl.addEventListener("change", (e) => runLiveAction("template_change", () => handleTemplateChange(e)), { signal });
-    els.density.addEventListener("input", (e) => runLiveAction("density_input", () => handleDensityInput(e)), { signal });
+    els.upload.addEventListener("click", () => liveCommands.source("upload_source"), { signal });
+    els.cam.addEventListener("click", () => liveCommands.source("camera_toggle"), { signal });
+    els.pause.addEventListener("click", () => liveCommands.source("pause_toggle"), { signal });
+    els.tmpl.addEventListener("change", (e) => liveCommands.render("template_change", eventValue(e)), { signal });
+    els.density.addEventListener("input", (e) => liveCommands.render("density_input", eventValue(e)), { signal });
     els.smooth.addEventListener("input", (e) => runLiveAction("smooth_input", () => handleSmoothInput(e)), { signal });
-    els.opacity.addEventListener("input", (e) => runLiveAction("opacity_input", () => handleOpacityInput(e)), { signal });
+    els.opacity.addEventListener("input", (e) => liveCommands.render("opacity_input", eventValue(e)), { signal });
     els.clip.addEventListener("change", (e) => runLiveAction("clip_toggle", () => { renderState.clip = eventChecked(e); refreshStaticImage(); }), { signal });
     els.handOcc.addEventListener("change", (e) => runLiveAction("hand_occlusion_toggle", () => handleHandOccChange(e)), { signal });
-    els.mirror.addEventListener("change", (e) => runLiveAction("mirror_toggle", () => handleMirrorChange(e)), { signal });
+    els.mirror.addEventListener("change", (e) => liveCommands.render("mirror_toggle", eventChecked(e)), { signal });
     els.bands.addEventListener("change", (e) => runLiveAction("bands_toggle", () => { renderState.bands = eventChecked(e); refreshStaticImage(); }), { signal });
     els.zoom.addEventListener("change", (e) => runLiveAction("zoom_toggle", () => { renderState.zoom = eventChecked(e); els.zoomStrip.classList.toggle("hidden", !renderState.zoom); refreshStaticImage(); }), { signal });
-    els.meshPts.addEventListener("change", (e) => runLiveAction("mesh_points_toggle", () => { renderState.meshPts = eventChecked(e); refreshStaticImage(); }), { signal });
-    els.restoreAtlas.addEventListener("click", () => runLiveAction("restore_atlas", restoreAtlasPreview), { signal });
-    els.export.addEventListener("click", () => runLiveAction("recording_toggle", toggleRecording), { signal });
-
+    els.meshPts.addEventListener("change", (e) => liveCommands.render("mesh_points_toggle", eventChecked(e)), { signal });
+    els.restoreAtlas.addEventListener("click", () => liveCommands.render("restore_atlas"), { signal });
+    els.export.addEventListener("click", () => liveCommands.source("recording_toggle"), { signal });
   }
 
   bindLiveCanvasInteractions(els.mainWrap, {
