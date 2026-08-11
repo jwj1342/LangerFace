@@ -24,6 +24,13 @@ Python 与浏览器两套等价几何实现共享同一份图谱与三角拓扑�
   重新出现 `.js` 源运行时，以及用 `@ts-nocheck` / `@ts-ignore` / `@ts-expect-error` 绕过类型迁移。
   `web/compat/personalized/` 仅保留 ONNX 分片与 V6 示例等静态资产。
 
+- **共享 2D 规划控制器**：`web/src/services/photoPlanningController.ts` 是 live 与 incision 的媒体源、检测快照、
+  screen/canvas/source/surface 坐标、选择和 overlay 摘要边界。原始媒体与逐点 landmarks 只保留在 controller
+  frame state，不进入 React/Zustand 或低频 snapshot；snapshot 明确记录不含 raw media/landmarks。route 每次 mount
+  创建独立 controller，source replacement 与 dispose 负责释放媒体、detector lease 和待执行 render frame。
+  `tools/test_photo_planning_controller.ts` 覆盖 mirror、zoom、pan、DPR 1/2、重心引用往返、过期检测隔离及
+  mount → source change → dispose → remount，禁止 live 重新建立第二个 raw-media owner。
+
 - **视觉主题契约**：公开主路径统一使用 `web/clinical-theme.css` 的深色临床界面与蓝色主操作色
   （`--clinical-accent: #0f62fe`）。React 入口通过 `web/src/styles.css` 导入同一份 token；`/personalized`、
   `/current/` 与 `/v6-review` 也必须消费该主题，不能各自重新定义品牌色。绿色只表示成功、在线或皱纹证据，

@@ -1,6 +1,6 @@
 import { fitContainSize, type FitContainResult } from "./fitMath";
 import { els } from "./liveDom";
-import { renderState } from "./liveState";
+import { renderState, sourceState } from "./liveState";
 
 export { fitContainSize };
 export type CanvasFitResult = FitContainResult;
@@ -41,6 +41,7 @@ export function clearCanvasDisplayFit(): void {
   els.canvas.style.removeProperty("--img-zoom");
   els.canvas.style.removeProperty("--img-pan-x");
   els.canvas.style.removeProperty("--img-pan-y");
+  sourceState.planning2d?.setView(null);
 }
 
 export function resetImageView({ apply = true }: ResetImageViewOptions = {}): void {
@@ -107,6 +108,20 @@ export function applyImageViewStyle(): void {
   els.canvas.style.setProperty("--img-zoom", `${view.zoom}`);
   els.canvas.style.setProperty("--img-pan-x", `${Math.round(view.offsetX)}px`);
   els.canvas.style.setProperty("--img-pan-y", `${Math.round(view.offsetY)}px`);
+  const wrap = els.mainWrap.getBoundingClientRect();
+  sourceState.planning2d?.setView({
+    viewportLeft: wrap.left,
+    viewportTop: wrap.top,
+    viewportWidth: wrap.width,
+    viewportHeight: wrap.height,
+    canvasWidth: els.canvas.width,
+    canvasHeight: els.canvas.height,
+    zoom: view.zoom,
+    offsetX: view.offsetX,
+    offsetY: view.offsetY,
+    mirror: renderState.mirror,
+    devicePixelRatio: globalThis.devicePixelRatio || 1,
+  });
 }
 
 function clampImageViewOffset(): void {

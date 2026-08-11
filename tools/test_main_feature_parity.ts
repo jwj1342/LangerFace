@@ -197,8 +197,10 @@ assert.doesNotMatch(
 );
 // #141：外推的额头线必须在唯一的 TypeScript 运行时再按头部包络与肤色裁剪。
 assert.ok(
-  render2d.includes('"forehead_lower_long_arc_v13"') && render2d.includes('"forehead_bridge_arc_v15"'),
-  "live renderer must gate the extended forehead regions by name",
+  foreheadVisibility.includes('"forehead_lower_long_arc_v13"')
+    && foreheadVisibility.includes('"forehead_bridge_arc_v15"')
+    && render2d.includes("EXTENDED_FOREHEAD_REGIONS"),
+  "live renderer must use the shared extended-forehead region gate",
 );
 includesAll(render2d, [
   "buildForeheadSkinVisibility",
@@ -285,10 +287,10 @@ includesAll(reviewControls, [
   'id="reviewerName"',
   'id="reviewDecision"',
   'id="reviewNotes"',
-  'id="approveCandidateBtn"',
-  'id="rejectCandidateBtn"',
   'id="saveReviewBtn"',
 ], "doctor review controls");
+assert.ok(!reviewControls.includes('id="approveCandidateBtn"'), "review panel removes duplicate approval button");
+assert.ok(!reviewControls.includes('id="rejectCandidateBtn"'), "review panel removes duplicate rejection button");
 
 includesAll(incisionRuntime, [
   "mountIncisionWorkbench",
