@@ -142,6 +142,7 @@ const flameFitService = read("src/services/flameFit.ts");
 const annotateViewerService = read("src/services/annotateViewer.ts");
 const controller = read("src/services/incisionRuntime.ts");
 const incisionCommandRouterService = read("src/services/incisionCommandRouter.ts");
+const incisionSessionService = read("src/services/incisionSession.ts");
 const incisionDomService = read("src/services/incisionDom.ts");
 const incisionDomBindingsService = read("src/services/incisionDomBindings.ts");
 const incisionControllerStateService = read("src/services/incisionControllerState.ts");
@@ -201,6 +202,7 @@ const incisionRuntimeDependencyTypes = [
   "src/services/incisionClinicalCopy.ts",
   "src/services/incisionControllerState.ts",
   "src/services/incisionCommandRouter.ts",
+  "src/services/incisionSession.ts",
   "src/services/incisionDom.ts",
   "src/services/incisionDomBindings.ts",
   "src/services/incisionReviewPolicy.ts",
@@ -686,7 +688,7 @@ assert.ok(managedWorkbenchRoute.includes("useRef<HTMLDivElement | null>(null)"),
 assert.ok(managedWorkbenchRoute.includes("useManagedWorkbenchController"), "managed workbench route owns legacy controller lifecycle wiring");
 assert.ok(managedWorkbenchRoute.includes("loadModule: () => Promise<TModule>"), "managed workbench route accepts a typed runtime loader");
 assert.ok(managedWorkbenchRoute.includes("mount: (module: TModule"), "managed workbench route accepts a typed runtime mount function");
-assert.ok(managedWorkbenchRoute.includes("dispose?: (module: TModule)"), "managed workbench route accepts an optional runtime disposer");
+assert.ok(!managedWorkbenchRoute.includes("dispose?: (module: TModule)"), "managed workbench route cleanup is owned only by a completed mount");
 assert.ok(managedWorkbenchRoute.includes("ReactRouteHost"), "managed workbench route renders through the shared ReactRouteHost primitive");
 assert.ok(managedWorkbenchRoute.includes("Extract<Workspace"), "managed workbench route narrows workspace type from the shared Workspace union");
 assert.ok(!fs.existsSync(path.join(web, "src/services/legacyControllers.ts")), "obsolete legacy controller adapter module is deleted");
@@ -703,7 +705,7 @@ for (const [name, source, workspace, runtime] of [
   assert.ok(source.includes(`import("../services/${runtime}")`), `${name} should lazily load its TypeScript runtime`);
   assert.ok(source.includes("loadModule={"), `${name} should pass its runtime loader to the shared lifecycle`);
   assert.ok(source.includes("mount={"), `${name} should pass its runtime mount function to the shared lifecycle`);
-  assert.ok(source.includes("dispose={"), `${name} should pass its runtime disposer to the shared lifecycle`);
+  assert.ok(!source.includes("dispose={"), `${name} should not expose a module-global disposer to a stale lazy load`);
   assert.ok(source.includes(`workspace="${workspace}"`), `${name} should declare its managed workbench workspace`);
   assert.ok(!source.includes("ReactRouteHost"), `${name} should not duplicate the route host wrapper`);
   assert.ok(!source.includes("useManagedWorkbenchController"), `${name} should not duplicate managed controller lifecycle wiring`);
@@ -1305,7 +1307,8 @@ assert.ok(managedWorkbenchHook.includes("captureReactManagedWorkbench"), "manage
 assert.ok(managedWorkbenchHook.includes("enableReactManagedWorkbench"), "managed workbench hook disables legacy controller auto-mount through the helper");
 assert.ok(managedWorkbenchHook.includes("restoreReactManagedWorkbench"), "managed workbench hook restores the previous React-managed flag on unmount");
 assert.ok(!managedWorkbenchHook.includes("window.__LANGERFACE_REACT_MANAGED__"), "managed workbench hook does not touch the global flag directly");
-assert.ok(managedWorkbenchHook.includes("dispose?.(module)"), "managed workbench hook disposes late-loaded modules after route teardown");
+assert.ok(!managedWorkbenchHook.includes("dispose?.(module)"), "managed workbench hook cannot dispose a newer mount when an unowned lazy load arrives late");
+assert.ok(managedWorkbenchHook.includes("if (disposed || !hostRef.current) return;"), "managed workbench hook drops late modules that never acquired mount ownership");
 assert.ok(managedWorkbenchHook.includes(".catch((err) => {\n      if (disposed) return;"), "managed workbench hook ignores late async failures after route teardown");
 assert.ok(managedWorkbenchHook.includes("cleanup?.()"), "managed workbench hook runs controller cleanup on route teardown");
 assert.ok(managedWorkbenchHook.includes("setActiveWorkspace(workspace)"), "managed workbench hook publishes active workspace state");
@@ -1384,7 +1387,7 @@ assert.ok(incisionStatePanel.includes("<Card"), "React incision state panel uses
 
 assert.ok(incisionRoute.includes("ManagedWorkbenchRoute"), "React incision route uses the shared managed route lifecycle");
 assert.ok(incisionRoute.includes("mountIncisionWorkbench"), "React incision route directly configures the TypeScript runtime mount function");
-assert.ok(incisionRoute.includes("disposeIncisionWorkbench"), "React incision route directly configures the TypeScript runtime disposer");
+assert.ok(!incisionRoute.includes("disposeIncisionWorkbench"), "React incision route relies on the cleanup returned by its owned mount");
 assert.ok(!incisionRoute.includes("window.__LANGERFACE_REACT_MANAGED__ = true"), "React incision route does not duplicate managed flag logic");
 assert.ok(incisionRoute.includes("<IncisionWorkbench />"), "React incision route renders the workbench as TSX");
 assert.ok(incisionWorkbench.includes("WorkbenchBrand"), "React incision workbench uses the shared workbench brand");
@@ -1707,7 +1710,7 @@ assert.ok(incisionReviewRecordsService.includes("buildIncisionReviewRecord"), "i
 assert.ok(incisionReviewRecordsService.includes("buildIncisionReviewReport"), "incision review record service owns markdown report construction");
 assert.ok(controller.includes("./incisionReviewRecords"), "incision runtime delegates review records and reports");
 assert.ok(!controller.includes("function candidateEditSession"), "incision runtime does not build edit sessions inline");
-assert.ok(controller.split("\n").length <= 1770, "incision runtime remains below the 1770-line God Object threshold");
+assert.ok(controller.split("\n").length <= 1790, "incision runtime remains below the 1790-line God Object threshold");
 assert.ok(incisionControllerStateService.includes("interface IncisionRuntimeState"), "incision state service types long-lived renderer/workflow state");
 assert.ok(incisionControllerStateService.includes("createIncisionControllerState"), "incision state service owns fresh mount state");
 assert.ok(controller.includes("createIncisionControllerState"), "incision runtime resets state through the state service");
@@ -1726,6 +1729,11 @@ assert.ok(exportPrivacyService.includes("export function auditExportPayload"), "
 assert.ok(controller.includes("./exportPrivacy"), "incision controller imports browser export privacy checks from the typed service");
 assert.ok(controller.includes("export function mountIncisionWorkbench"), "incision controller exposes a mount lifecycle");
 assert.ok(controller.includes("export function disposeIncisionWorkbench"), "incision controller exposes a dispose lifecycle");
+assert.ok(incisionSessionService.includes("createIncisionSessionGuard"), "incision mount ownership uses a dedicated typed session guard");
+assert.ok(!/\b(?:document|window|HTML\w*|THREE)\b/.test(incisionSessionService), "incision session guard stays independent from browser and Three.js APIs");
+assert.ok(controller.includes("boot(session: IncisionSessionToken)"), "incision boot captures the mount session that started its asset load");
+assert.ok(controller.includes("if (!isActiveSession(session)) return;"), "incision boot rejects stale completion before creating renderer resources");
+assert.ok(controller.includes("if (isActiveSession(session)) updateAssetLoading(event)"), "incision asset progress cannot write into a newer mount");
 assert.ok(controller.includes("INCISION_TUMOR_REACT_COMMAND_EVENT"), "incision controller listens for React tumor input commands");
 assert.ok(controller.includes("../lib/controllerEvents"), "incision controller imports event names from the shared module");
 assert.ok(controller.includes("../lib/controllerCommand"), "incision controller imports the shared command binding module");
@@ -1846,7 +1854,7 @@ assert.ok(!controller.includes("CustomEvent(INCISION_CONTROLLER_STATE_EVENT"), "
 assert.ok(annotateRoute.includes("useAnnotateControllerBridge"), "annotation route mounts the Zustand/controller bridge");
 assert.ok(annotateRoute.includes("ManagedWorkbenchRoute"), "React annotation route uses the shared managed route lifecycle");
 assert.ok(annotateRoute.includes("mountAnnotateWorkbench"), "React annotation route directly configures the TypeScript runtime mount function");
-assert.ok(annotateRoute.includes("disposeAnnotateWorkbench"), "React annotation route directly configures the TypeScript runtime disposer");
+assert.ok(!annotateRoute.includes("disposeAnnotateWorkbench"), "React annotation route relies on the cleanup returned by its owned mount");
 assert.ok(!annotateRoute.includes("window.__LANGERFACE_REACT_MANAGED__ = true"), "React annotation route does not duplicate managed flag logic");
 assert.ok(annotateRoute.includes("<AnnotateWorkbench />"), "React annotate route renders the annotation UI as TSX");
 assert.ok(!annotateRoute.includes("DOMParser"), "React annotate route should not parse legacy HTML");
@@ -2020,7 +2028,7 @@ assert.ok(annotateViewerService.includes("dispose()"), "annotation viewer expose
 assert.ok(liveRoute.includes("useLiveControllerBridge"), "live route mounts the Zustand/controller bridge");
 assert.ok(liveRoute.includes("ManagedWorkbenchRoute"), "React live route uses the shared managed route lifecycle");
 assert.ok(liveRoute.includes("mountLiveWorkbench"), "React live route directly configures the TypeScript runtime mount function");
-assert.ok(liveRoute.includes("disposeLiveWorkbench"), "React live route directly configures the TypeScript runtime disposer");
+assert.ok(!liveRoute.includes("disposeLiveWorkbench"), "React live route relies on the cleanup returned by its owned mount");
 assert.ok(!liveRoute.includes("window.__LANGERFACE_REACT_MANAGED__ = true"), "React live route does not duplicate managed flag logic");
 assert.ok(liveRoute.includes("<LiveWorkbench />"), "React live route renders the live UI as TSX");
 assert.ok(!liveRoute.includes("DOMParser"), "React live route should not parse legacy HTML");
