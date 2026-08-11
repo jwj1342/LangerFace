@@ -29,9 +29,9 @@ export function PersonalizedWorkbench() {
             </div>
             <label className="personalized-debug-option">
               <input id="recordDebugMedia" type="checkbox" />
-              <span>记录静息及每个表情每轮的视频与同步关键点数据（默认关闭）</span>
+              <span>保存本轮调试视频（不影响采集是否成功，开始采集后不可更改）</span>
             </label>
-            <div className="personalized-privacy-note">默认只保留聚合诊断，不录制人脸视频。勾选后需再次确认：录制只用于算法调试，视频与关键点仅留在当前标签页内存中。</div>
+            <div className="personalized-privacy-note">默认只保留聚合诊断。勾选仅增加可下载的调试视频，不改变表情识别或质量门控；视频与关键点只留在当前标签页内存中。</div>
             <div className="personalized-privacy-note">人脸图像、YOLO 推理和 V6 微调全部在当前浏览器本地完成，不上传服务器。</div>
             <button className="personalized-button" id="debugBtn" type="button" disabled>导出采集数据 JSON（含关键点）</button>
             <div id="debugMediaStatus" className="personalized-hint">尚未开始调试录制</div>
@@ -60,6 +60,7 @@ export function PersonalizedWorkbench() {
               <EvidenceCanvas title="V6 去重/骨架证据图" hint="V6 实际用于曲线匹配的单次骨架证据；原始严格并集仍单独保留。" canvasId="wrinkleEvidenceCanvas" buttonId="wrinkleEvidenceDownloadBtn" buttonLabel="下载 V6 证据图 PNG" />
             </div>
             <button className="personalized-button primary" id="usePersonalizedBtn" type="button" disabled>进入切口设计（应用个性化 RSTL）</button>
+            <a className="personalized-button personalized-nav-button" href="/">返回研究工具入口</a>
             <div className="personalized-exports" id="exports"><span className="personalized-hint">完成后可下载对比图</span></div>
           </div>
           <p className="personalized-disclaimer">local YOLO strict-union + RSTL V6 refinement — experimental, not a surgical instruction</p>

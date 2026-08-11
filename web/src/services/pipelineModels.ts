@@ -4,11 +4,11 @@ import { validateAtlas } from "./atlasContract.ts";
 import { assetUrls } from "./assetLoader.ts";
 import { CDN, TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.ts";
 import { dataSource } from "./dataSource.ts";
-import { els } from "./liveDom.ts";
 import { noseTriangles } from "./geometryAtlas.ts";
 import type { Triangle } from "./softBody.ts";
 import { countMetric, logInfo, logWarn, setAssetVersions } from "./logger.ts";
 import { modelState } from "./liveState.ts";
+import { buildRstlSourceContract } from "./rstlSourceContract.ts";
 
 type Delegate = "GPU" | "CPU";
 type TopologyPayload = {
@@ -57,6 +57,10 @@ async function initializeReady(): Promise<void> {
   modelState.atlases.langer = loadAtlas("langer", langer);
   modelState.officialAtlases.rstl = modelState.atlases.rstl;
   modelState.officialAtlases.langer = modelState.atlases.langer;
+  modelState.atlasContracts.rstl = buildRstlSourceContract(rstl, { provenance: "bundled_standard_rstl_prior" });
+  modelState.atlasContracts.langer = buildRstlSourceContract(langer, { provenance: "bundled_standard_langer_prior" });
+  modelState.officialAtlasContracts.rstl = modelState.atlasContracts.rstl;
+  modelState.officialAtlasContracts.langer = modelState.atlasContracts.langer;
   setAssetVersions({
     topology: topologyId,
     topologyVersion,
@@ -106,8 +110,6 @@ async function initializeReady(): Promise<void> {
     }
   }
 
-  els.badge.textContent = "模型就绪";
-  els.badge.classList.remove("loading");
   logInfo("模型与图谱加载完成。", {
     triangles: tri.length,
     rstlLines: rstl.lines.length,
@@ -133,7 +135,7 @@ async function initializeImageReady(): Promise<void> {
   const build = (delegate: Delegate) => FaceLandmarker.createFromOptions(visionResolver!, {
     baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
     runningMode: "IMAGE",
-    numFaces: 1,
+    numFaces: 2,
     outputFaceBlendshapes: true,
     minFaceDetectionConfidence: 0.5,
     minFacePresenceConfidence: 0.5,

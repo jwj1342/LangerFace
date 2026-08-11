@@ -7,6 +7,7 @@ import {
   findSensitiveStructureInspection,
   formatRecoveredFailureSummary,
 } from "../web/src/services/incisionReviewRecords.ts";
+import { auditExportPayload } from "../web/src/services/exportPrivacy.ts";
 
 const result = {
   tumor: { kind: "subcutaneous", diameter_mm: 12, margin_mm: 0, author: "clinician" },
@@ -92,6 +93,33 @@ assert.equal(record.id, "candidate-fixture");
 assert.equal(record.audit_events.length, 1);
 assert.equal(record.audit_events[0].actor, "clinician");
 assert.equal(record.candidate_edit_session.edit_count, 1);
+
+const generatedRecord = buildIncisionReviewRecord({
+  result,
+  label: "当前候选",
+  createdAt: "2026-07-29T00:00:00.000Z",
+  review: { status: "pending_clinician_confirmation", reviewer: "", notes: "" },
+  reviewGate: {
+    approval_ready: false,
+    live_overlay_ready: false,
+    workflow_trace_gate_passed: false,
+    high_guardrail_codes: [],
+  },
+  tumorQuality: result.tumor_quality,
+  tumorBoundarySummary: { boundary_used: false },
+  headAsset: { topologyId: "mediapipe-468", topologyVersion: "mediapipe-468-v1" },
+  secondaryCues: { present: false, used_for_geometry: false },
+  candidateEditSession: editSession,
+  sensitiveStructureInspection: findSensitiveStructureInspection(result),
+  privacyAudit: { raw_image_sent: false },
+});
+assert.match(generatedRecord.id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+assert.equal(auditExportPayload({
+  schema_version: "incision-review-export/v0.4",
+  exported_at: "2026-07-29T00:00:00.000Z",
+  current: generatedRecord,
+  saved: [],
+}).passed, true, "default review record metadata passes export privacy preflight");
 
 const report = buildIncisionReviewReport([record], 1234);
 assert.equal(report.filename, "incision_report_1234.md");

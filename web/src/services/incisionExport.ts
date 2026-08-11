@@ -65,7 +65,7 @@ export function downloadText(
   anchor.href = URL.createObjectURL(blob);
   anchor.download = filename;
   anchor.click();
-  URL.revokeObjectURL(anchor.href);
+  setTimeout(() => URL.revokeObjectURL(anchor.href), 1000);
 }
 
 export function downloadCanvasPng(canvas: HTMLCanvasElement, filename: string): void {
