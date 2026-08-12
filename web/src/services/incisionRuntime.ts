@@ -10,6 +10,7 @@ import {
   workflowTraceGate,
   classifyRegion,
   compareCandidateRecords,
+  tumorPointEngineeringExclusionMessage,
   summarizeTumorBoundary,
   summarizeTumorInputQuality,
   unitsPerMmFromVertices,
@@ -1025,17 +1026,17 @@ function tumorQualityFor(result: DynamicRecord = S.result) {
   if (!result?.tumor) return { warnings: [], warning_count: 0, passed: true };
   return result.tumor_quality || summarizeTumorInputQuality(result.tumor);
 }
-
 function applyTextPresentation(element: HTMLElement, presentation: IncisionTextPresentation) {
   element.textContent = presentation.text;
   if (presentation.title !== undefined) element.title = presentation.title;
   element.classList.toggle("warn", Boolean(presentation.classNames?.includes("warn")));
   element.classList.toggle("danger", Boolean(presentation.classNames?.includes("danger")));
 }
-
 function renderResult(result: DynamicRecord) {
   S.result = result;
-  drawCandidate(result);
+  const tumorInputInvalid = result?.tumor_engineering_validation?.passed === false;
+  (S.tumorRing?.material as THREE.LineBasicMaterial | undefined)?.color.set(tumorInputInvalid ? 0xef4444 : 0xfacc15);
+  (S.boundaryLine?.material as THREE.LineBasicMaterial | undefined)?.color.set(tumorInputInvalid ? 0xef4444 : 0xfb7185); drawCandidate(result);
   const tumorQuality = tumorQualityFor(result);
   const presentation = buildIncisionResultPresentation({
     result,
@@ -1570,6 +1571,7 @@ function pick(e: PointerEvent) {
     return;
   }
   const lp = hit.point;
+  const openingMessage = tumorPointEngineeringExclusionMessage(lp, S.verts); if (openingMessage) { els.pickState.textContent = openingMessage; return; }
   let best = hit.face.a, bd = Infinity;
   for (const vi of [hit.face.a, hit.face.b, hit.face.c]) {
     const d = len(sub(S.verts[vi], lp));
@@ -1592,7 +1594,6 @@ function pick(e: PointerEvent) {
   }
   previewWorkflow();
 }
-
 function bindWorkbenchEvents() {
   const reactManaged = isReactManagedWorkbench();
   if (reactManaged) bindReactWorkbenchCommands();

@@ -8,6 +8,8 @@ import {
   annotateCandidateEngineeringViolations,
   annotateCandidateSensitiveDistances,
   buildMediaPipeEngineeringExclusionZones,
+  inspectTumorEngineeringExclusions,
+  inspectTumorPointEngineeringExclusion,
 } from "../web/src/services/incisionToolCore.ts";
 import { assessReviewReadiness, buildReviewGate } from "../web/src/services/incisionReviewPolicy.ts";
 
@@ -103,6 +105,30 @@ for (const [zoneId, polyline] of [
     item.code === "candidate_intersects_non_skin_opening" && item.location.zone_id === zoneId));
 }
 assert.match(topologyZones[0].clinical_boundary, /engineering exclusions only/);
+const invalidCenter = inspectTumorPointEngineeringExclusion([3.7, 6, 0], mediapipeVerts);
+assert.equal(invalidCenter?.zone_id, "left-eye-opening", "lesion centers inside an eye opening are rejected");
+assert.equal(inspectTumorPointEngineeringExclusion([3.7, 6.6, 0], mediapipeVerts)?.zone_id, "left-eye-opening",
+  "lesion centers just outside the raw eyelid loop remain covered by the engineering projection buffer");
+assert.equal(inspectTumorPointEngineeringExclusion([5, 5, 0], mediapipeVerts), null);
+
+const invalidBoundary = inspectTumorEngineeringExclusions({
+  kind: "cutaneous",
+  center: [3.7, 6.9, 0],
+  diameter_mm: 8,
+  boundary: [[3.1, 6.9, 0], [3.7, 6.3, 0], [4.3, 6.9, 0], [3.7, 7.4, 0]],
+}, mediapipeVerts);
+assert.equal(invalidBoundary.passed, false);
+assert.ok(invalidBoundary.violations.some((item) =>
+  item.code === "tumor_boundary_intersects_non_skin_opening" && item.location.zone_id === "left-eye-opening"));
+
+const invalidDiameter = inspectTumorEngineeringExclusions({
+  kind: "subcutaneous",
+  center: [3.7, 6.9, 0],
+  diameter_mm: 24,
+  boundary: [],
+}, mediapipeVerts);
+assert.equal(invalidDiameter.passed, false);
+assert.ok(invalidDiameter.violations.some((item) => item.code === "tumor_diameter_intersects_non_skin_opening"));
 const projectionBufferCandidate = { type: "linear", polyline: [[2, 6.6, 0], [5, 6.6, 0]] };
 annotateCandidateEngineeringViolations(projectionBufferCandidate, mediapipeVerts);
 assert.ok(projectionBufferCandidate.hard_violations.some((item) =>

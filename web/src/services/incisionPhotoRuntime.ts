@@ -22,6 +22,10 @@ import { sourcePointToSurfaceRef } from "./photoPlanningController";
 import { ensureImageReady } from "./pipelineModels";
 import { detectStaticImageWithRetries } from "./staticImageDetection";
 import { shouldClearFreehandBoundaryOnLesionRepick } from "./tumorInput";
+import {
+  inspectTumorEngineeringExclusions,
+  tumorPointEngineeringExclusionMessage,
+} from "./incisionToolCore";
 
 interface IncisionPhotoRuntimeOptions {
   elements: IncisionDomElements;
@@ -188,6 +192,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
         : pointsToSurfaceRefs(state.result?.candidate?.polyline || [], state.verts, state.tris),
       endpointRefs: markerDraftActive || candidateDisplayBlocked ? [] : endpointRefs,
       endpointRadius: 14 / Math.max(sourceToCssScale, 0.05),
+      tumorInputInvalid: state.result?.tumor_engineering_validation?.passed === false,
     });
     state.planning2d.setOverlaySummary({
       rstlLineCount: geometry.rstl.length,
@@ -372,6 +377,11 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
         if (!confirmed.eligible_for_candidate) {
           throw new Error("当前类型、范围或参数尚未通过输入质量检查");
         }
+        if (!confirmed.tumor) throw new Error("受控标记未形成有效肿物输入");
+        const tumorEngineeringValidation = inspectTumorEngineeringExclusions(confirmed.tumor, state.verts);
+        if (!tumorEngineeringValidation.passed) {
+          throw new Error("病灶中心或范围进入眼裂/口裂等非皮肤开口，请重新定位或调整范围");
+        }
         clearTransientPlanning();
         if (kind === "cutaneous" && elements.boundaryMode.value === "freehand") {
           state.boundaryRefs = [...confirmed.geometry.boundary_refs];
@@ -476,6 +486,8 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
         publishState("tumor_boundary_point");
         return;
       }
+      const openingMessage = tumorPointEngineeringExclusionMessage(point, state.verts);
+      if (openingMessage) { setStatus(openingMessage, "warning"); return; }
       const clearedFreehandBoundary = shouldClearFreehandBoundaryOnLesionRepick({
         kind: elements.tumorKind.value,
         boundaryMode: elements.boundaryMode.value,

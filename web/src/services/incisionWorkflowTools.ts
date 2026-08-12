@@ -12,6 +12,7 @@ import {
   annotateCandidateSensitiveDistances,
   classifyRegion,
   editRecordIsActive,
+  inspectTumorEngineeringExclusions,
   mul,
   norm,
   queryDirection,
@@ -43,6 +44,8 @@ export function rotateInPlane(axis: Vec3, normal: Vec3, angleDeg: number): Vec3 
   const p = tangentPerp(axis, normal);
   return norm(add(mul(axis, Math.cos(a)), mul(p, Math.sin(a))));
 }
+
+export const DEFAULT_SAFE_DIRECTION_SEARCH_OFFSETS_DEG = [0, -10, 10, -20, 20, -30, 30];
 
 function clonePlan<T>(plan: T): T {
   return JSON.parse(JSON.stringify(plan));
@@ -640,7 +643,7 @@ export function planIncisionWorkflow({
   tris,
   atlas,
   normal = [0, 0, 1],
-  angleOffsetsDeg = [-10, 0, 10],
+  angleOffsetsDeg = DEFAULT_SAFE_DIRECTION_SEARCH_OFFSETS_DEG,
   rules = DEFAULT_RULES,
 }: {
   tumor?: Partial<TumorInput> & AnyRecord;
@@ -670,7 +673,7 @@ export function planIncisionWorkflow({
         source: variant.source,
         variant_source: variant.variant_source,
       })),
-      boundary: "方向备选由浏览器本地确定性工具按固定角度参数生成。",
+      boundary: "方向备选由浏览器本地确定性工具按固定工程搜索角度生成；该范围不是医学安全角度标准。",
     },
     "探索附近方向偏移，供审阅面板比较确定性候选。",
   ));
@@ -825,6 +828,19 @@ export function planIncisionWorkflow({
     result.selected_candidate_id = null;
     result.candidate_display_blocked = true;
     result.candidate_selection_reason = "all_direction_variants_have_engineering_hard_violations";
+  }
+  const tumorEngineeringValidation = inspectTumorEngineeringExclusions(tumor, verts);
+  result.tumor_engineering_validation = tumorEngineeringValidation;
+  result.trace.push(traceStep(
+    "validate_tumor_engineering_exclusions",
+    { tumor },
+    tumorEngineeringValidation,
+    "校验病灶中心、边界或直径投影是否进入明确的非皮肤开口。",
+  ));
+  if (!tumorEngineeringValidation.passed) {
+    result.selected_candidate_id = null;
+    result.candidate_display_blocked = true;
+    result.candidate_selection_reason = "tumor_input_intersects_non_skin_opening";
   }
   result.trace.push(traceStep(
     "compare_candidates",

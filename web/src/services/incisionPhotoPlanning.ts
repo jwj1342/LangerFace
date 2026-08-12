@@ -1,16 +1,27 @@
-import { mapAtlas, visibleRuns, type AtlasLine, type MappedAtlasLine } from "./geometryAtlas.ts";
+import { mapAtlas, type AtlasLine, type MappedAtlasLine } from "./geometryAtlas.ts";
 import {
   buildForeheadSkinVisibility,
-  buildHeadVisibility,
-  EXTENDED_FOREHEAD_REGIONS,
-  stabilizeForeheadMask,
   type VisibilityPredicate,
 } from "./foreheadVisibility.ts";
 import { mapSurfaceRefs, pointToSurfaceRef, type SurfaceRef } from "./incisionOverlay.ts";
+import { buildRstlRenderPlan, standardRstlStrokeWidth } from "./rstlRenderPlan.ts";
 import type { Triangle, Vec3 } from "./softBody.ts";
 
 export const INCISION_PHOTO_MAX_BYTES = 20 * 1024 * 1024;
 export const INCISION_PHOTO_TYPES = new Set(["image/jpeg", "image/png"]);
+
+export function incisionPhotoStrokeWidths(sourceWidth: number) {
+  const rstl = standardRstlStrokeWidth(sourceWidth);
+  const candidate = Math.max(0.75, rstl * 0.5);
+  const boundary = Math.max(0.75, rstl * 0.45);
+  return {
+    rstl,
+    candidate,
+    candidateHalo: candidate + Math.max(0.5, candidate * 0.5),
+    boundary,
+    boundaryHalo: boundary + Math.max(0.5, boundary * 0.5),
+  };
+}
 
 export interface IncisionPhotoGeometry {
   rstl: MappedAtlasLine[];
@@ -36,6 +47,7 @@ export interface IncisionPhotoRenderInput {
   candidateRefs: SurfaceRef[];
   endpointRefs: SurfaceRef[];
   endpointRadius?: number;
+  tumorInputInvalid?: boolean;
 }
 
 export function validateIncisionPhotoFile(file: Pick<File, "type" | "size">): string | null {
@@ -153,19 +165,6 @@ export function nearestPhotoEndpointHandle(
   return nearest?.index ?? null;
 }
 
-export function visibleIncisionPhotoRstlRuns(
-  line: MappedAtlasLine,
-  landmarks: Vec3[],
-  skinVisible: VisibilityPredicate = () => true,
-): Vec3[][] {
-  if (line.pts.length < 2) return [];
-  if (!EXTENDED_FOREHEAD_REGIONS.has(line.region)) return [line.pts];
-  const headVisible = buildHeadVisibility(landmarks);
-  const rawMask = line.pts.map((point) => headVisible(point) && skinVisible(point));
-  const mask = rawMask.length >= 8 ? stabilizeForeheadMask(rawMask) : rawMask;
-  return visibleRuns(line.pts, mask.map((visible) => visible ? 1 : 0));
-}
-
 function canvasForeheadSkinVisibility(
   context: CanvasRenderingContext2D,
   sourceWidth: number,
@@ -224,30 +223,39 @@ export function renderIncisionPhotoPlanning(input: IncisionPhotoRenderInput): In
   } = input;
   const dpr = Math.max(1, Number.isFinite(devicePixelRatio) ? devicePixelRatio : 1);
   const geometry = buildIncisionPhotoGeometry(input);
+  const strokeWidths = incisionPhotoStrokeWidths(sourceWidth);
 
   context.setTransform(dpr, 0, 0, dpr, 0, 0);
   context.clearRect(0, 0, sourceWidth, sourceHeight);
   context.drawImage(source, 0, 0, sourceWidth, sourceHeight);
   const skinVisible = canvasForeheadSkinVisibility(context, sourceWidth, sourceHeight, input.landmarks);
 
-  for (const line of geometry.rstl) {
-    for (const run of visibleIncisionPhotoRstlRuns(line, input.landmarks, skinVisible)) {
-      drawPath(context, run, "rgba(103, 232, 249, 0.95)", Math.max(2, sourceWidth / 1300));
+  const rstlRenderPlan = buildRstlRenderPlan({
+    lines: geometry.rstl,
+    landmarks: input.landmarks,
+    triangles: input.triangles,
+    clip: true,
+    densityFraction: 1,
+    skinVisible,
+  });
+  for (const entry of rstlRenderPlan) {
+    for (const run of entry.runs) {
+      drawPath(context, run, "rgba(103, 232, 249, 0.95)", strokeWidths.rstl);
     }
   }
   if (geometry.diameterEstimate.length >= 2) {
     context.setLineDash([8, 6]);
-    drawPath(context, geometry.diameterEstimate, "rgba(3, 7, 18, 0.92)", 6, true);
-    drawPath(context, geometry.diameterEstimate, "#facc15", 3, true);
+    drawPath(context, geometry.diameterEstimate, "rgba(3, 7, 18, 0.88)", strokeWidths.boundaryHalo, true);
+    drawPath(context, geometry.diameterEstimate, input.tumorInputInvalid ? "#ef4444" : "#facc15", strokeWidths.boundary, true);
     context.setLineDash([]);
   }
   if (geometry.boundary.length >= 2) {
-    drawPath(context, geometry.boundary, "rgba(3, 7, 18, 0.92)", 6, geometry.boundary.length >= 6);
-    drawPath(context, geometry.boundary, "#facc15", 3, geometry.boundary.length >= 6);
+    drawPath(context, geometry.boundary, "rgba(3, 7, 18, 0.88)", strokeWidths.boundaryHalo, geometry.boundary.length >= 6);
+    drawPath(context, geometry.boundary, input.tumorInputInvalid ? "#ef4444" : "#facc15", strokeWidths.boundary, geometry.boundary.length >= 6);
   }
   if (geometry.candidate.length >= 2) {
-    drawPath(context, geometry.candidate, "rgba(3, 7, 18, 0.95)", 8);
-    drawPath(context, geometry.candidate, "#34d399", 4);
+    drawPath(context, geometry.candidate, "rgba(3, 7, 18, 0.9)", strokeWidths.candidateHalo);
+    drawPath(context, geometry.candidate, "#34d399", strokeWidths.candidate);
   }
   if (geometry.center) {
     context.beginPath();

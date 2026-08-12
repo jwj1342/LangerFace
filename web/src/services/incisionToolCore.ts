@@ -7,6 +7,7 @@ import {
 } from "./incisionToolRules.ts";
 import {
   inspectPathPolygonRelation,
+  pointInPolygon2d,
   resamplePolyline2d,
   segmentsIntersect2d,
   type Point2,
@@ -264,6 +265,101 @@ export function buildMediaPipeEngineeringExclusionZones(verts: ArrayLike<number>
       clinical_boundary: "This topology opening and projection buffer are engineering exclusions only; they do not define a medical safety margin.",
     }];
   });
+}
+
+function normalizedModelPoint(point: ArrayLike<number>, verts: ArrayLike<number>[]): Point2 | null {
+  if (!point || point.length < 2 || !Number.isFinite(point[0]) || !Number.isFinite(point[1])) return null;
+  const { lo, hi } = bbox(verts);
+  const width = hi[0] - lo[0], height = hi[1] - lo[1];
+  if (!(width > 1e-9) || !(height > 1e-9)) return null;
+  return [(point[0] - lo[0]) / width, (point[1] - lo[1]) / height];
+}
+
+export function inspectTumorPointEngineeringExclusion(
+  point: ArrayLike<number>,
+  verts: ArrayLike<number>[],
+): AnyRecord | null {
+  const normalized = normalizedModelPoint(point, verts);
+  if (!normalized) return null;
+  for (const zone of buildMediaPipeEngineeringExclusionZones(verts)) {
+    if (!pointInPolygon2d(normalized, zone.polygon as Point2[])) continue;
+    return {
+      code: "tumor_center_inside_non_skin_opening",
+      zone_id: zone.id,
+      zone_source: zone.source,
+      normalized_xy: normalized,
+      recovery: "Choose a lesion center on visible skin outside the mapped face opening.",
+      clinical_boundary: zone.clinical_boundary,
+    };
+  }
+  return null;
+}
+
+export function tumorPointEngineeringExclusionMessage(
+  point: ArrayLike<number>,
+  verts: ArrayLike<number>[],
+): string | null {
+  const opening = inspectTumorPointEngineeringExclusion(point, verts);
+  if (!opening) return null;
+  const label = opening.zone_id === "oral-opening" ? "口裂" : "眼裂";
+  return `该位置落在${label}等非皮肤开口，不能作为病灶中心；请在可见皮肤上重新选择。`;
+}
+
+function normalizedTumorFootprint(tumor: AnyRecord, verts: ArrayLike<number>[]): {
+  source: "boundary" | "diameter";
+  points: Point2[];
+} | null {
+  const boundary = Array.isArray(tumor?.boundary)
+    ? tumor.boundary.map((point: ArrayLike<number>) => normalizedModelPoint(point, verts)).filter(Boolean) as Point2[]
+    : [];
+  if (boundary.length >= 3) return { source: "boundary", points: boundary };
+  const center = normalizedModelPoint(tumor?.center, verts);
+  const diameterMm = Number(tumor?.diameter_mm);
+  if (!center || !(diameterMm > 0)) return null;
+  const { lo, hi } = bbox(verts);
+  const radiusModel = diameterMm * unitsPerMmFromVertices(verts) / 2;
+  const radiusX = radiusModel / Math.max(hi[0] - lo[0], 1e-9);
+  const radiusY = radiusModel / Math.max(hi[1] - lo[1], 1e-9);
+  const points = Array.from({ length: 48 }, (_, index) => {
+    const angle = index / 48 * Math.PI * 2;
+    return [center[0] + Math.cos(angle) * radiusX, center[1] + Math.sin(angle) * radiusY] as Point2;
+  });
+  return { source: "diameter", points };
+}
+
+export function inspectTumorEngineeringExclusions(tumor: AnyRecord, verts: ArrayLike<number>[]): AnyRecord {
+  const violations: AnyRecord[] = [];
+  const centerViolation = inspectTumorPointEngineeringExclusion(tumor?.center, verts);
+  if (centerViolation) {
+    violations.push({
+      code: centerViolation.code,
+      location: centerViolation,
+      recovery: centerViolation.recovery,
+    });
+  }
+  const footprint = normalizedTumorFootprint(tumor, verts);
+  if (footprint) {
+    for (const zone of buildMediaPipeEngineeringExclusionZones(verts)) {
+      const relation = inspectPathPolygonRelation(footprint.points, zone.polygon as Point2[], { closedPath: true });
+      if (!relation.intersects) continue;
+      violations.push({
+        code: footprint.source === "boundary"
+          ? "tumor_boundary_intersects_non_skin_opening"
+          : "tumor_diameter_intersects_non_skin_opening",
+        location: { zone_id: zone.id, zone_source: zone.source, relation },
+        recovery: footprint.source === "boundary"
+          ? "Keep the recorded boundary as evidence, then redraw it outside the mapped face opening."
+          : "Keep the recorded diameter as evidence, then move the center or correct the diameter before generating a candidate.",
+      });
+    }
+  }
+  return {
+    schema_version: "tumor-engineering-exclusions/v0.1",
+    passed: violations.length === 0,
+    violations,
+    footprint_source: footprint?.source || null,
+    clinical_boundary: "MediaPipe topology openings are engineering exclusions only; they do not define a medical safety margin.",
+  };
 }
 
 function validSurfaceRef(ref: AnyRecord): boolean {

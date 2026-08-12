@@ -567,8 +567,8 @@ ok(workflow.trace.length > plan.trace.length, "browser workflow runs additional 
 ok(workflow.trace.some((step) => step.action === "propose_direction_variants"),
   "browser workflow proposes deterministic direction variants");
 ok(workflow.trace.at(-1).action === "compare_candidates", "browser workflow compares candidates after variant generation");
-ok(workflow.candidate_alternatives.length === 3, "browser workflow returns three direction candidates");
-ok(workflow.candidate_comparison.length === 3, "browser workflow returns deterministic candidate comparison");
+ok(workflow.candidate_alternatives.length === 7, "browser workflow searches seven bounded direction candidates");
+ok(workflow.candidate_comparison.length === 7, "browser workflow returns deterministic candidate comparison");
 ok(workflow.selected_candidate_id != null && workflow.candidate_display_blocked === false,
   "browser workflow selects a hard-guardrail-safe candidate for display");
 ok(workflow.workflow_trace_gate.passed === true, "browser workflow trace gate passes");
@@ -576,12 +576,32 @@ ok(workflow.workflow_plan_audit.passed === true, "browser deterministic workflow
 ok(workflow.workflow_execution_events.passed === true, "browser workflow execution events pass");
 ok(workflow.workflow_execution_events.tool_event_count === workflow.trace.length,
   "browser workflow execution events cover every trace step");
-ok(workflow.workflow_audit.candidate_count === 3,
+ok(workflow.workflow_audit.candidate_count === 7,
   "browser workflow orchestration audit counts candidate alternatives");
 ok(!("provider" in workflow) && !("llm" in workflow),
   "browser workflow exports no remote model or provider state");
 ok(typeof workflow.summary === "string" && typeof workflow.next_step === "string",
   "browser workflow keeps local summary and next-step copy");
+
+const openingVerts = Array.from({ length: 468 }, () => [5, 5, 0]);
+openingVerts[0] = [0, 0, 0]; openingVerts[1] = [10, 0, 0];
+openingVerts[2] = [0, 10, 0]; openingVerts[3] = [10, 10, 0];
+const openingTriangles = [[0, 1, 2], [1, 3, 2]];
+const leftEyeLoop = [33, 160, 158, 133, 153, 144];
+const leftEyePoints = [[3, 6, 0], [3.5, 6.5, 0], [4, 6.5, 0], [4.5, 6, 0], [4, 5.5, 0], [3.5, 5.5, 0]];
+leftEyeLoop.forEach((vertexIndex, index) => { openingVerts[vertexIndex] = leftEyePoints[index]; });
+const openingWorkflow = T.planIncisionWorkflow({
+  tumor: { kind: "subcutaneous", center: [3.7, 6, 0], diameter_mm: 8, depth_mm: 4 },
+  verts: openingVerts,
+  tris: openingTriangles,
+  atlas: { lines: [{ points3d: [[2, 6.8, 0], [5, 6.8, 0]] }] },
+});
+ok(openingWorkflow.tumor_engineering_validation.passed === false,
+  "workflow records invalid lesion input at a non-skin opening");
+ok(openingWorkflow.selected_candidate_id === null && openingWorkflow.candidate_display_blocked === true,
+  "invalid lesion input overrides candidate selection and hides the candidate");
+ok(openingWorkflow.candidate_selection_reason === "tumor_input_intersects_non_skin_opening",
+  "workflow explains why the candidate is blocked");
 
 const incompleteQuality = T.summarizeTumorInputQuality({
   kind: "subcutaneous",

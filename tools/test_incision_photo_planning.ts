@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import {
   buildSubcutaneousDiameterEstimateRefs,
   buildIncisionPhotoGeometry,
+  incisionPhotoStrokeWidths,
   nearestPhotoEndpointHandle,
   pointsToSurfaceRefs,
   surfaceRefToModelPoint,
   validateIncisionPhotoFile,
-  visibleIncisionPhotoRstlRuns,
 } from "../web/src/services/incisionPhotoPlanning.ts";
 import type { Triangle, Vec3 } from "../web/src/services/softBody.ts";
 import { mapAtlas } from "../web/src/services/geometryAtlas.ts";
@@ -90,34 +90,6 @@ assert.ok(Math.abs(geometry.center[1] - 200) < 1e-6);
   assert.equal(compareRstlSourceContracts(liveContract, incisionContract).compatible, true);
 }
 
-const faceLandmarks = Array.from({ length: 478 }, () => [50, 50, 0] as Vec3);
-faceLandmarks[1] = [0, 100, 0];
-faceLandmarks[2] = [100, 100, 0];
-faceLandmarks[10] = [50, 10, 0];
-const clippedForeheadRuns = visibleIncisionPhotoRstlRuns({
-  name: "extended-forehead",
-  region: "forehead_bridge_arc_v15",
-  pts: [[50, -40, 0], [50, 10, 0], [50, 20, 0], [50, 80, 0]],
-  tris: [0, 0, 0, 0],
-}, faceLandmarks);
-assert.deepEqual(clippedForeheadRuns, [[[50, 10, 0], [50, 20, 0]]],
-  "photo planning clips extended forehead RSTL to the head envelope");
-const hairClippedRuns = visibleIncisionPhotoRstlRuns({
-  name: "extended-forehead-hair",
-  region: "forehead_bridge_arc_v15",
-  pts: [[50, 10, 0], [50, 20, 0], [50, 30, 0], [50, 40, 0], [50, 50, 0]],
-  tris: [0, 0, 0, 0, 0],
-}, faceLandmarks, (point) => Boolean(point && point[1] >= 30));
-assert.deepEqual(hairClippedRuns, [[[50, 30, 0], [50, 40, 0], [50, 50, 0]]],
-  "photo planning applies the same forehead skin visibility predicate used by live rendering");
-const cheekRuns = visibleIncisionPhotoRstlRuns({
-  name: "cheek",
-  region: "cheek",
-  pts: [[-20, 20, 0], [120, 20, 0]],
-  tris: [0, 0],
-}, faceLandmarks);
-assert.equal(cheekRuns.length, 1, "ordinary face lines are not changed by the forehead-only clip");
-
 assert.equal(validateIncisionPhotoFile({ type: "image/jpeg", size: 1024 }), null);
 assert.equal(validateIncisionPhotoFile({ type: "image/png", size: 1024 }), null);
 assert.match(validateIncisionPhotoFile({ type: "image/webp", size: 1024 }) || "", /JPEG.*PNG/);
@@ -126,5 +98,14 @@ assert.match(validateIncisionPhotoFile({ type: "image/jpeg", size: 21 * 1024 * 1
 
 assert.equal(nearestPhotoEndpointHandle({ x: 108, y: 103 }, [{ x: 100, y: 100 }, { x: 300, y: 300 }], 12), 0);
 assert.equal(nearestPhotoEndpointHandle({ x: 200, y: 200 }, [{ x: 100, y: 100 }, { x: 300, y: 300 }], 12), null);
+
+const strokeWidths = incisionPhotoStrokeWidths(1300);
+assert.equal(strokeWidths.rstl, 2);
+assert.ok(strokeWidths.candidate <= strokeWidths.rstl * 0.5,
+  "candidate reference line stays at most half the RSTL width");
+assert.ok(strokeWidths.boundary < strokeWidths.rstl,
+  "lesion boundary is thinner than the RSTL reference layer");
+assert.ok(strokeWidths.candidateHalo < 2,
+  "contrast halo no longer produces the former toy-like 8px stroke");
 
 console.log("test_incision_photo_planning: file gate and surface-ref projection passed");
