@@ -76,10 +76,23 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
   let controlledMarkerSeedMode = false;
   let controlledMarkerDraft: LesionDetectionAdapterDraft | null = null;
 
-  const resetControlledMarker = () => {
+  const setControlledMarkerActionState = (active: boolean) => {
+    elements.controlledMarkerDetect.setAttribute("aria-pressed", String(active));
+    elements.controlledMarkerDetect.title = active
+      ? "取消当前受控标记定位草案"
+      : "在照片上点击黑点、贴纸或手绘标记";
+    const label = elements.controlledMarkerDetect.querySelector<HTMLElement>("[data-marker-action-label]");
+    if (label) label.textContent = active ? "取消定位" : "受控标记";
+  };
+
+  const resetControlledMarker = ({ restoreSelection = false } = {}) => {
     controlledMarkerSeedMode = false;
     controlledMarkerDraft = null;
     elements.controlledMarkerConfirm.disabled = true;
+    setControlledMarkerActionState(false);
+    if (restoreSelection) {
+      state.planning2d?.setSelection({ centerRef: state.lesionRef, boundaryRefs: state.boundaryRefs });
+    }
   };
 
   const updateEndpointHandles = () => {
@@ -138,7 +151,8 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     elements.photoCanvas.width = Math.max(1, Math.round(frame.width * dpr));
     elements.photoCanvas.height = Math.max(1, Math.round(frame.height * dpr));
     const endpointRefs = pointsToSurfaceRefs(state.result?.candidate?.endpoints || [], state.verts, state.tris);
-    const diameterEstimateRefs = elements.tumorKind.value === "subcutaneous"
+    const markerDraftActive = controlledMarkerDraft !== null;
+    const diameterEstimateRefs = !markerDraftActive && elements.tumorKind.value === "subcutaneous"
       ? buildSubcutaneousDiameterEstimateRefs({
         centerRef: state.lesionRef,
         lesionIndex: state.lesion,
@@ -161,11 +175,11 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
       landmarks: [...frame.landmarks],
       triangles: state.tris,
       atlasLines: state.atlas.lines || [],
-      centerRef: state.lesionRef,
+      centerRef: controlledMarkerDraft?.geometry.center_ref || state.lesionRef,
       diameterEstimateRefs,
-      boundaryRefs: frame.selection.boundaryRefs,
-      candidateRefs: pointsToSurfaceRefs(state.result?.candidate?.polyline || [], state.verts, state.tris),
-      endpointRefs,
+      boundaryRefs: controlledMarkerDraft?.geometry.boundary_refs || frame.selection.boundaryRefs,
+      candidateRefs: markerDraftActive ? [] : pointsToSurfaceRefs(state.result?.candidate?.polyline || [], state.verts, state.tris),
+      endpointRefs: markerDraftActive ? [] : endpointRefs,
       endpointRadius: 14 / Math.max(sourceToCssScale, 0.05),
     });
     state.planning2d.setOverlaySummary({
@@ -181,6 +195,9 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
   };
 
   const setMode = (active: boolean) => {
+    if (!active && (controlledMarkerSeedMode || controlledMarkerDraft)) {
+      resetControlledMarker({ restoreSelection: true });
+    }
     state.photoView.active = active && Boolean(state.planning2d?.getFrameState().source);
     elements.canvas.classList.toggle("hidden", state.photoView.active);
     elements.photoCanvas.dataset.active = String(state.photoView.active);
@@ -316,9 +333,17 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
         setStatus("请先上传并成功检测一张单人正脸照片。", "warning");
         return;
       }
+      if (controlledMarkerSeedMode || controlledMarkerDraft) {
+        resetControlledMarker({ restoreSelection: true });
+        render();
+        setStatus("已取消受控标记定位；未确认草案已清除。", "idle");
+        publishState("controlled_marker_cancelled");
+        return;
+      }
       controlledMarkerSeedMode = true;
       controlledMarkerDraft = null;
       elements.controlledMarkerConfirm.disabled = true;
+      setControlledMarkerActionState(true);
       setStatus("受控标记定位：请点击照片中的黑点、贴纸或手绘标记中心。", "loading");
     },
     async confirmControlledMarkerDetection() {
@@ -345,7 +370,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
         }
         setLesion(nearestVertex(confirmed.geometry.center), confirmed.geometry.center_ref);
         updateTumorRing();
-        resetControlledMarker();
+        resetControlledMarker({ restoreSelection: true });
         await runWorkflow();
         render();
         setStatus("受控标记定位已由人工确认，并已使用当前参数生成候选。", "ready");
@@ -360,6 +385,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
         const frame = state.planning2d?.getFrameState();
         const seed = state.planning2d?.clientToSource({ x: event.clientX, y: event.clientY });
         if (!frame?.source || !frame.landmarks?.length || !seed) {
+          resetControlledMarker({ restoreSelection: true });
           setStatus("该点击无法映射到照片，请重新进入受控标记定位。", "warning");
           return;
         }
@@ -368,12 +394,14 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
         canvas.height = frame.height;
         const context = canvas.getContext("2d", { willReadFrequently: true });
         if (!context) {
+          resetControlledMarker({ restoreSelection: true });
           setStatus("浏览器无法读取本地照片像素。", "warning");
           return;
         }
         context.drawImage(frame.source as CanvasImageSource, 0, 0, frame.width, frame.height);
         const detection = detectControlledMarker(context.getImageData(0, 0, frame.width, frame.height), seed);
         if (!detection.ok || !detection.center) {
+          resetControlledMarker({ restoreSelection: true });
           setStatus(`未定位到受控标记：${detection.failure_code || "unknown"}。请更准确点击标记中心。`, "warning");
           return;
         }
@@ -383,6 +411,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
           .filter((ref): ref is SurfaceRef => ref !== null);
         const kind = elements.tumorKind.value === "cutaneous" ? "cutaneous" : "subcutaneous";
         if (!centerRef || (kind === "cutaneous" && boundaryRefs.length < 3)) {
+          resetControlledMarker({ restoreSelection: true });
           setStatus("标记位于不可映射区域或跨出面部表面，请在面部标记中心重试。", "warning");
           return;
         }
@@ -407,10 +436,9 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
             vertices: state.verts,
             triangles: state.tris,
           });
-          clearTransientPlanning();
-          setLesion(nearestVertex(controlledMarkerDraft.geometry.center), centerRef);
           state.planning2d?.setSelection({ centerRef, boundaryRefs });
           elements.controlledMarkerConfirm.disabled = false;
+          setControlledMarkerActionState(true);
           render();
           setStatus(
             `已生成受控标记定位草案（置信度 ${Math.round(detection.confidence * 100)}%），请核对类型和参数后点击“确认定位”。`,
@@ -502,6 +530,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
       fit();
     },
     dispose() {
+      resetControlledMarker();
       disposed = true;
       state.photoView.operationId += 1;
     },

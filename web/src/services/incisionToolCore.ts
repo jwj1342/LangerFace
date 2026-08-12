@@ -29,6 +29,16 @@ type RegionConfidenceInput = {
   boundaryMargin: number;
 };
 
+const MEDIAPIPE_FACE_VERTEX_COUNT = 468;
+const MEDIAPIPE_ENGINEERING_OPENINGS = [
+  { id: "left-eye-opening", indices: [33, 160, 158, 133, 153, 144] },
+  { id: "right-eye-opening", indices: [362, 385, 387, 263, 373, 380] },
+  {
+    id: "oral-opening",
+    indices: [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95],
+  },
+] as const;
+
 export interface DirectionResult extends AnyRecord {
   point: Vec3;
   vector: Vec3;
@@ -196,6 +206,40 @@ function normalizedCandidatePath(candidate: AnyRecord, verts: ArrayLike<number>[
   ]);
 }
 
+function polygonArea2d(points: Point2[]): number {
+  return points.reduce((area, point, index) => {
+    const next = points[(index + 1) % points.length];
+    return area + point[0] * next[1] - next[0] * point[1];
+  }, 0) / 2;
+}
+
+export function buildMediaPipeEngineeringExclusionZones(verts: ArrayLike<number>[]): AnyRecord[] {
+  if (!Array.isArray(verts) || verts.length < MEDIAPIPE_FACE_VERTEX_COUNT) return [];
+  const { lo, hi } = bbox(verts);
+  const span = [hi[0] - lo[0], hi[1] - lo[1]];
+  if (!span.every((value) => Number.isFinite(value) && value > 1e-9)) return [];
+
+  return MEDIAPIPE_ENGINEERING_OPENINGS.flatMap(({ id, indices }) => {
+    const vertices = indices.map((index) => verts[index]);
+    if (vertices.some((vertex) => !vertex || vertex.length < 2 || !Number.isFinite(vertex[0]) || !Number.isFinite(vertex[1]))) {
+      return [];
+    }
+    const polygon = vertices.map((vertex) => [
+      (vertex[0] - lo[0]) / span[0],
+      (vertex[1] - lo[1]) / span[1],
+    ] as Point2);
+    if (Math.abs(polygonArea2d(polygon)) <= 1e-6) return [];
+    return [{
+      id,
+      code: "candidate_intersects_non_skin_opening",
+      polygon,
+      source: "mediapipe-468-topology-loop",
+      recovery: "Move or regenerate the candidate so its complete path stays outside the mapped face opening.",
+      clinical_boundary: "This topology opening is an engineering exclusion only; it does not define a medical safety margin.",
+    }];
+  });
+}
+
 function validSurfaceRef(ref: AnyRecord): boolean {
   if (!ref || !Number.isInteger(ref.tri) || ref.tri < 0) return false;
   const weights = [Number(ref.u), Number(ref.v), Number(ref.w ?? 1 - Number(ref.u) - Number(ref.v))];
@@ -237,7 +281,12 @@ export function annotateCandidateEngineeringViolations<T extends AnyRecord>(cand
       recovery: "Generate surface references for the complete candidate path before review.",
     });
   }
-  for (const zone of Array.isArray(candidate.engineering_exclusion_zones) ? candidate.engineering_exclusion_zones : []) {
+  const zonesById = new Map<string, AnyRecord>();
+  for (const zone of buildMediaPipeEngineeringExclusionZones(verts)) zonesById.set(String(zone.id), zone);
+  for (const [index, zone] of (Array.isArray(candidate.engineering_exclusion_zones) ? candidate.engineering_exclusion_zones : []).entries()) {
+    zonesById.set(String(zone?.id || `candidate-zone-${index}`), zone);
+  }
+  for (const zone of zonesById.values()) {
     const polygon = Array.isArray(zone?.polygon)
       ? zone.polygon.filter((point: unknown) => Array.isArray(point) && point.length >= 2 && point.slice(0, 2).every(Number.isFinite))
         .map((point: number[]) => [Number(point[0]), Number(point[1])] as Point2)
@@ -247,7 +296,7 @@ export function annotateCandidateEngineeringViolations<T extends AnyRecord>(cand
     if (!relation.intersects) continue;
     violations.push({
       code: String(zone.code || "candidate_intersects_engineering_exclusion_zone"),
-      location: { zone_id: zone.id || null, relation },
+      location: { zone_id: zone.id || null, zone_source: zone.source || "candidate", relation },
       recovery: String(zone.recovery || "Move or regenerate the candidate outside the engineering exclusion zone."),
     });
   }

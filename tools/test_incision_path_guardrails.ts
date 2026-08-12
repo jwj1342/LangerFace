@@ -7,6 +7,7 @@ import {
 import {
   annotateCandidateEngineeringViolations,
   annotateCandidateSensitiveDistances,
+  buildMediaPipeEngineeringExclusionZones,
 } from "../web/src/services/incisionToolCore.ts";
 import { assessReviewReadiness, buildReviewGate } from "../web/src/services/incisionReviewPolicy.ts";
 
@@ -60,6 +61,36 @@ const exclusionCandidate = {
 };
 annotateCandidateEngineeringViolations(exclusionCandidate, verts);
 assert.equal(exclusionCandidate.hard_violations[0].code, "candidate_intersects_non_skin_opening");
+
+const mediapipeVerts = Array.from({ length: 468 }, () => [5, 5, 0]);
+mediapipeVerts[0] = [0, 0, 0];
+mediapipeVerts[1] = [10, 0, 0];
+mediapipeVerts[2] = [0, 10, 0];
+mediapipeVerts[3] = [10, 10, 0];
+const leftEye = [33, 160, 158, 133, 153, 144];
+const leftEyePolygon = [[3, 6, 0], [3.5, 6.5, 0], [4, 6.5, 0], [4.5, 6, 0], [4, 5.5, 0], [3.5, 5.5, 0]];
+leftEye.forEach((vertexIndex, index) => { mediapipeVerts[vertexIndex] = leftEyePolygon[index]; });
+const rightEye = [362, 385, 387, 263, 373, 380];
+const rightEyePolygon = [[6, 6, 0], [6.5, 6.5, 0], [7, 6.5, 0], [7.5, 6, 0], [7, 5.5, 0], [6.5, 5.5, 0]];
+rightEye.forEach((vertexIndex, index) => { mediapipeVerts[vertexIndex] = rightEyePolygon[index]; });
+const oralOpening = [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95];
+oralOpening.forEach((vertexIndex, index) => {
+  const angle = (Math.PI * 2 * index) / oralOpening.length;
+  mediapipeVerts[vertexIndex] = [5 + Math.cos(angle) * 1.5, 3 + Math.sin(angle) * 0.6, 0];
+});
+const topologyZones = buildMediaPipeEngineeringExclusionZones(mediapipeVerts);
+assert.deepEqual(topologyZones.map((zone) => zone.id), ["left-eye-opening", "right-eye-opening", "oral-opening"]);
+for (const [zoneId, polyline] of [
+  ["left-eye-opening", [[2, 6, 0], [5, 6, 0]]],
+  ["right-eye-opening", [[5.5, 6, 0], [8, 6, 0]]],
+  ["oral-opening", [[3, 3, 0], [7, 3, 0]]],
+] as const) {
+  const topologyOpeningCandidate = { type: "linear", polyline };
+  annotateCandidateEngineeringViolations(topologyOpeningCandidate, mediapipeVerts);
+  assert.ok(topologyOpeningCandidate.hard_violations.some((item) =>
+    item.code === "candidate_intersects_non_skin_opening" && item.location.zone_id === zoneId));
+}
+assert.match(topologyZones[0].clinical_boundary, /engineering exclusion only/);
 
 const requiredActions = [
   "summarize_tumor_input_quality",

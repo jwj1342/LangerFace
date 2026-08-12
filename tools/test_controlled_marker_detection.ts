@@ -72,4 +72,14 @@ const source = fs.readFileSync("src/services/controlledMarkerDetection.ts", "utf
 assert.doesNotMatch(source, /\bdocument\b|\bwindow\b|\bfetch\s*\(|axios|onnxruntime|mediapipe/i,
   "controlled marker detector must stay pure, local, and SDK-independent");
 
-console.log("test_controlled_marker_detection: seeded ROI, multiple, empty, tiny, and low-contrast cases passed");
+const runtimeSource = fs.readFileSync("src/services/incisionPhotoRuntime.ts", "utf8");
+assert.ok(runtimeSource.includes('publishState("controlled_marker_cancelled")'), "marker action supports explicit cancellation");
+assert.ok(runtimeSource.includes("resetControlledMarker({ restoreSelection: true })"), "cancel and exit restore the confirmed selection");
+assert.ok(runtimeSource.includes("markerDraftActive ? [] : endpointRefs"), "unconfirmed marker drafts hide stale candidate handles");
+assert.doesNotMatch(
+  runtimeSource.match(/controlledMarkerDraft = normalizeLesionDetectionAdapter[\s\S]*?publishState\("controlled_marker_draft"\)/)?.[0] || "",
+  /setLesion\(/,
+  "a marker draft must not replace the confirmed lesion before confirmation",
+);
+
+console.log("test_controlled_marker_detection: seeded ROI, failure cases, and draft lifecycle contracts passed");
