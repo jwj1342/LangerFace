@@ -136,6 +136,11 @@ const incisionSnapshotsService = read("src/services/incisionSnapshots.ts");
 const annotateRuntime = read("src/services/annotateRuntime.ts");
 const annotateDomService = read("src/services/annotateDom.ts");
 const annotationExportService = read("src/services/annotationExport.ts");
+const annotationInteractionService = read("src/services/annotationInteraction.ts");
+const annotationPointerControllerService = read("src/services/annotationPointerController.ts");
+const annotationLineService = read("src/services/annotationLineService.ts");
+const annotationMeshService = read("src/services/annotationMeshService.ts");
+const annotationSlicerImportService = read("src/services/annotationSlicerImport.ts");
 const workbenchCommandSchemasService = read("src/services/workbenchCommandSchemas.ts");
 const annotationModelService = read("src/services/annotationModel.ts");
 const flameFitService = read("src/services/flameFit.ts");
@@ -183,6 +188,11 @@ const liveRuntimeDependencyTypes = [
 const annotateRuntimeDependencyTypes = [
   "src/services/annotateDom.ts",
   "src/services/annotationExport.ts",
+  "src/services/annotationInteraction.ts",
+  "src/services/annotationPointerController.ts",
+  "src/services/annotationLineService.ts",
+  "src/services/annotationMeshService.ts",
+  "src/services/annotationSlicerImport.ts",
   "src/services/annotationModel.ts",
   "src/services/annotateViewer.ts",
   "src/services/assetLoader.ts",
@@ -1967,7 +1977,35 @@ assert.ok(annotationExportService.includes("downloadAnnotationExport"), "annotat
 assert.ok(annotationExportService.includes("URL.revokeObjectURL"), "annotation export service releases object URLs");
 assert.ok(annotateRuntime.includes("./annotationExport"), "annotation runtime delegates export construction and download");
 assert.ok(!annotateRuntime.includes("new Blob"), "annotation runtime does not construct export blobs directly");
-assert.ok(annotateRuntime.includes("interface DragState"), "annotation runtime types pointer drag state");
+assert.ok(annotationInteractionService.includes("interface AnnotationDragState"), "annotation interaction service types pointer drag state");
+assert.ok(annotationInteractionService.includes("updateAnnotationDrag"), "annotation interaction service owns drag threshold and axis locking");
+assert.ok(annotationInteractionService.includes("annotationNdcPoint"), "annotation interaction service owns viewport coordinate mapping");
+assert.ok(annotationInteractionService.includes("annotationZoomFactor"), "annotation interaction service owns bounded wheel zoom math");
+assert.ok(!/(?:document|window|HTMLElement|PointerEvent|THREE)/.test(annotationInteractionService), "annotation interaction service stays DOM and renderer independent");
+assert.ok(annotateRuntime.includes("./annotationPointerController"), "annotation runtime delegates pointer lifecycle ownership");
+assert.ok(annotationPointerControllerService.includes("bindAnnotationPointerInteractions"), "annotation pointer controller owns event binding");
+assert.ok(annotationPointerControllerService.includes("lostpointercapture"), "annotation pointer controller clears browser-lost capture");
+assert.ok(annotationPointerControllerService.includes("releasePointerCapture"), "annotation pointer controller releases capture on route cleanup");
+assert.ok(annotationPointerControllerService.includes("activePointerId !== null"), "annotation pointer controller rejects concurrent gestures");
+assert.ok(!/(?:document|window|THREE|MediaPipe)/.test(annotationPointerControllerService),
+  "annotation pointer controller stays independent of globals, renderers, and detectors");
+assert.ok(annotationLineService.includes("class AnnotationLineService"), "annotation line service owns line editing transitions");
+assert.ok(!/(?:document|window|HTMLElement|PointerEvent|THREE)/.test(annotationLineService), "annotation line service stays DOM and renderer independent");
+assert.ok(annotateRuntime.includes("./annotationInteraction"), "annotation runtime delegates pointer math to the interaction service");
+assert.ok(annotateRuntime.includes("./annotationLineService"), "annotation runtime delegates line state transitions to the line service");
+assert.ok(annotateRuntime.includes("./annotationMeshService"), "annotation runtime delegates mesh source loading to the mesh service");
+assert.ok(annotationMeshService.includes("class AnnotationMeshService"), "annotation mesh service owns source loading and fallback behavior");
+assert.ok(annotationMeshService.includes("bundledMeshPromise"), "annotation mesh service reuses concurrent bundled mesh loads");
+assert.ok(!/(?:document|window|HTMLElement|PointerEvent|THREE)/.test(annotationMeshService), "annotation mesh service stays DOM and renderer independent");
+assert.ok(!annotateRuntime.includes("loadFlameBasis"), "annotation runtime does not load FLAME basis assets directly");
+assert.ok(!annotateRuntime.includes("parseMeshFile"), "annotation runtime does not parse uploaded meshes directly");
+assert.ok(annotateRuntime.includes("./annotationSlicerImport"), "annotation runtime delegates Slicer parsing and snapping preparation");
+assert.ok(annotationSlicerImportService.includes("prepareAnnotationSlicerImport"), "annotation Slicer service prepares snapped line controls");
+assert.ok(!/(?:document|window|HTMLElement|PointerEvent|THREE)/.test(annotationSlicerImportService), "annotation Slicer service stays DOM and renderer independent");
+assert.ok(!annotateRuntime.includes("parseSlicerCurveFile"), "annotation runtime does not parse Slicer payloads directly");
+assert.ok(!annotateRuntime.includes("let drag:"), "annotation runtime does not own route-local pointer state");
+assert.ok(annotationPointerControllerService.includes('"pointercancel"'), "annotation pointer controller clears interrupted pointer gestures");
+assert.ok(annotateRuntime.split("\n").length <= 435, "annotation runtime stays a thin orchestration layer");
 assert.ok(!annotateRuntime.includes("function controllerEvent"), "annotation runtime delegates browser command parsing to typed schemas");
 assert.ok(!fs.existsSync(path.join(web, "annotate_model.js")), "legacy annotate_model.js facade has been removed after TypeScript service migration");
 assert.ok(!fs.existsSync(path.join(web, "annotate_model.d.ts")), "legacy annotation model declaration facade has been removed after TypeScript service migration");
@@ -2000,9 +2038,11 @@ assert.ok(annotateRuntime.includes("./annotateSnapshots"), "annotation runtime c
 assert.ok(annotateRuntime.includes("buildAnnotateControllerSnapshot({"), "annotation runtime delegates React snapshot construction to the shared service");
 assert.ok(!annotateRuntime.includes("function currentDraftSnapshot"), "annotation runtime no longer owns current-line snapshot construction");
 assert.ok(!annotateRuntime.includes("function savedSummarySnapshot"), "annotation runtime no longer owns saved-line snapshot construction");
-assert.ok(annotateRuntime.includes("renderLegacyLineList"), "annotation runtime keeps legacy saved line DOM rendering isolated");
-assert.ok(annotateRuntime.includes("../lib/reactManagedWorkbench"), "annotation runtime imports the shared React-managed flag helper");
-assert.ok(annotateRuntime.includes("!isReactManagedWorkbench()"), "legacy annotation HTML still owns direct saved line handlers outside React");
+assert.ok(!annotateRuntime.includes("renderLegacyLineList"), "annotation runtime no longer owns dead legacy line DOM rendering");
+assert.ok(!annotateRuntime.includes("../lib/reactManagedWorkbench"), "annotation runtime has one React-managed execution path");
+assert.ok(!annotateRuntime.includes("isReactManagedWorkbench"), "annotation runtime no longer branches into dead legacy controls");
+assert.ok(!annotateRuntime.includes("document.createElement"), "annotation runtime does not build legacy UI nodes");
+assert.ok(!annotateRuntime.includes("confirm("), "annotation runtime does not use native legacy confirmations");
 assert.ok(!annotateRuntime.includes("window.__LANGERFACE_REACT_MANAGED__"), "annotation runtime does not touch the managed flag directly");
 assert.ok(annotateSnapshotsService.includes("../lib/controllerSnapshotSchemas"), "shared annotation snapshot service re-exports the lightweight schema version");
 assert.ok(annotateRuntime.includes("dispatchControllerEvent(ANNOTATE_CONTROLLER_STATE_EVENT"), "annotation runtime emits state snapshots through the shared browser event helper");
@@ -2010,7 +2050,7 @@ assert.ok(!annotateRuntime.includes("CustomEvent(ANNOTATE_CONTROLLER_STATE_EVENT
 assert.ok(annotateRuntime.includes("cancelAnimationFrame"), "annotation runtime cancels its render loop on dispose");
 assert.ok(annotateRuntime.includes("abortController?.abort"), "annotation runtime aborts DOM listeners on dispose");
 assert.ok(annotateRuntime.includes("activeSession"), "annotation runtime guards async loaders across SPA unmounts");
-assert.ok(annotateRuntime.includes('"/app/live"'), "annotation preview jumps back to the React live route when managed by React");
+assert.ok(annotateRuntime.includes('location.href = "/app/live"'), "annotation preview always returns to the React live route");
 assert.ok(!annotateRuntime.includes('document.getElementById("stage")'), "annotation runtime no longer auto-mounts from legacy HTML");
 assert.ok(annotateViewerService.includes("dispose()"), "annotation viewer exposes a WebGL dispose lifecycle");
 assert.ok(liveRoute.includes("useLiveControllerBridge"), "live route mounts the Zustand/controller bridge");
