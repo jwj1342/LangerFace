@@ -21,14 +21,14 @@ assert.ok(!compatibilityHtml.includes("annotate_main.js"), "legacy annotation HT
 assert.ok(annotateUi.includes('id="currentState"'), "React annotation page exposes current drawing state");
 assert.ok(annotateUi.includes('id="lineList"'), "React annotation page exposes saved line list");
 assert.ok(
-  js.includes("贴面路由已退回直线，需复核可能穿面"),
+  annotateUi.includes("贴面路由已退回直线，需复核可能穿面"),
   "current drawing state warns when surface routing falls back",
 );
 assert.ok(
-  js.includes("需复核：该线存在退回直线连接，可能穿面"),
+  annotateSnapshots.includes("需复核：该线存在退回直线连接，可能穿面"),
   "saved line list warns when a line contains fallback routing",
 );
-assert.ok(js.includes("has-warning"), "saved line warning class is wired in JS");
+assert.ok(annotateUi.includes("warn={line.fallback}"), "saved line warning state is wired through React");
 assert.ok(annotateSnapshots.includes("buildAnnotateSavedSummary"), "React saved-line summaries come from the shared annotation snapshot service");
 assert.ok(annotateSnapshots.includes("需复核：该线存在退回直线连接，可能穿面"), "shared annotation snapshot service preserves saved-line fallback warning text");
 assert.ok(js.includes("./annotateSnapshots"), "annotation controller consumes the shared annotation snapshot service");
