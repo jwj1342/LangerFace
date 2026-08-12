@@ -102,6 +102,14 @@ const clippedForeheadRuns = visibleIncisionPhotoRstlRuns({
 }, faceLandmarks);
 assert.deepEqual(clippedForeheadRuns, [[[50, 10, 0], [50, 20, 0]]],
   "photo planning clips extended forehead RSTL to the head envelope");
+const hairClippedRuns = visibleIncisionPhotoRstlRuns({
+  name: "extended-forehead-hair",
+  region: "forehead_bridge_arc_v15",
+  pts: [[50, 10, 0], [50, 20, 0], [50, 30, 0], [50, 40, 0], [50, 50, 0]],
+  tris: [0, 0, 0, 0, 0],
+}, faceLandmarks, (point) => Boolean(point && point[1] >= 30));
+assert.deepEqual(hairClippedRuns, [[[50, 30, 0], [50, 40, 0], [50, 50, 0]]],
+  "photo planning applies the same forehead skin visibility predicate used by live rendering");
 const cheekRuns = visibleIncisionPhotoRstlRuns({
   name: "cheek",
   region: "cheek",

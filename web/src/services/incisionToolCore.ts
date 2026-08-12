@@ -5,7 +5,12 @@ import {
   SENSITIVE_ANCHORS,
   SENSITIVE_MARGIN_SEGMENTS,
 } from "./incisionToolRules.ts";
-import { inspectPathPolygonRelation, resamplePolyline2d, type Point2 } from "./incisionPathGeometry.ts";
+import {
+  inspectPathPolygonRelation,
+  resamplePolyline2d,
+  segmentsIntersect2d,
+  type Point2,
+} from "./incisionPathGeometry.ts";
 
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];
@@ -31,11 +36,12 @@ type RegionConfidenceInput = {
 
 const MEDIAPIPE_FACE_VERTEX_COUNT = 468;
 const MEDIAPIPE_ENGINEERING_OPENINGS = [
-  { id: "left-eye-opening", indices: [33, 160, 158, 133, 153, 144] },
-  { id: "right-eye-opening", indices: [362, 385, 387, 263, 373, 380] },
+  { id: "left-eye-opening", indices: [33, 160, 158, 133, 153, 144], projectionBufferScale: 1.35 },
+  { id: "right-eye-opening", indices: [362, 385, 387, 263, 373, 380], projectionBufferScale: 1.35 },
   {
     id: "oral-opening",
     indices: [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95],
+    projectionBufferScale: 1,
   },
 ] as const;
 
@@ -206,6 +212,15 @@ function normalizedCandidatePath(candidate: AnyRecord, verts: ArrayLike<number>[
   ]);
 }
 
+function pathSegments(points: Point2[], closed: boolean): Array<[Point2, Point2]> {
+  const segments: Array<[Point2, Point2]> = [];
+  for (let index = 1; index < points.length; index += 1) {
+    segments.push([points[index - 1], points[index]]);
+  }
+  if (closed && points.length > 2) segments.push([points.at(-1) as Point2, points[0]]);
+  return segments;
+}
+
 function polygonArea2d(points: Point2[]): number {
   return points.reduce((area, point, index) => {
     const next = points[(index + 1) % points.length];
@@ -219,23 +234,34 @@ export function buildMediaPipeEngineeringExclusionZones(verts: ArrayLike<number>
   const span = [hi[0] - lo[0], hi[1] - lo[1]];
   if (!span.every((value) => Number.isFinite(value) && value > 1e-9)) return [];
 
-  return MEDIAPIPE_ENGINEERING_OPENINGS.flatMap(({ id, indices }) => {
+  return MEDIAPIPE_ENGINEERING_OPENINGS.flatMap(({ id, indices, projectionBufferScale }) => {
     const vertices = indices.map((index) => verts[index]);
     if (vertices.some((vertex) => !vertex || vertex.length < 2 || !Number.isFinite(vertex[0]) || !Number.isFinite(vertex[1]))) {
       return [];
     }
-    const polygon = vertices.map((vertex) => [
+    const rawPolygon = vertices.map((vertex) => [
       (vertex[0] - lo[0]) / span[0],
       (vertex[1] - lo[1]) / span[1],
+    ] as Point2);
+    const center = rawPolygon.reduce((sum, point) => [
+      sum[0] + point[0] / rawPolygon.length,
+      sum[1] + point[1] / rawPolygon.length,
+    ], [0, 0] as Point2);
+    const polygon = rawPolygon.map((point) => [
+      center[0] + (point[0] - center[0]) * projectionBufferScale,
+      center[1] + (point[1] - center[1]) * projectionBufferScale,
     ] as Point2);
     if (Math.abs(polygonArea2d(polygon)) <= 1e-6) return [];
     return [{
       id,
       code: "candidate_intersects_non_skin_opening",
       polygon,
-      source: "mediapipe-468-topology-loop",
+      source: projectionBufferScale > 1
+        ? "mediapipe-468-topology-loop-with-projection-buffer"
+        : "mediapipe-468-topology-loop",
+      projection_buffer_scale: projectionBufferScale,
       recovery: "Move or regenerate the candidate so its complete path stays outside the mapped face opening.",
-      clinical_boundary: "This topology opening is an engineering exclusion only; it does not define a medical safety margin.",
+      clinical_boundary: "This topology opening and projection buffer are engineering exclusions only; they do not define a medical safety margin.",
     }];
   });
 }
@@ -298,6 +324,23 @@ export function annotateCandidateEngineeringViolations<T extends AnyRecord>(cand
       code: String(zone.code || "candidate_intersects_engineering_exclusion_zone"),
       location: { zone_id: zone.id || null, zone_source: zone.source || "candidate", relation },
       recovery: String(zone.recovery || "Move or regenerate the candidate outside the engineering exclusion zone."),
+    });
+  }
+  const candidateSegments = pathSegments(path, candidate.type === "fusiform");
+  for (const [marginId, rawMargin] of Object.entries(SENSITIVE_MARGIN_SEGMENTS)) {
+    const margin = rawMargin as Point2[];
+    if (margin.length < 2) continue;
+    const crossingIndex = candidateSegments.findIndex(([start, end]) =>
+      segmentsIntersect2d(start, end, margin[0], margin[1]));
+    if (crossingIndex < 0) continue;
+    violations.push({
+      code: "candidate_crosses_sensitive_free_margin",
+      location: {
+        margin_id: marginId,
+        path_segment_index: crossingIndex,
+        source: "existing-normalized-sensitive-margin-segment",
+      },
+      recovery: "Regenerate or edit the candidate so it does not cross the mapped sensitive free margin.",
     });
   }
   const mutable = candidate as AnyRecord;

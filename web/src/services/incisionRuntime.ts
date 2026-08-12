@@ -771,6 +771,13 @@ function updateTumorRing() {
 
 function drawCandidate(result: DynamicRecord) {
   if (!S.candidateLine) return;
+  if (result.candidate_display_blocked) {
+    S.candidateLine.visible = false;
+    for (const handle of S.endpointHandles) handle.visible = false;
+    S.planning2d?.setOverlaySummary({ candidatePointCount: 0 });
+    photoRuntime?.render();
+    return;
+  }
   S.candidateLine.visible = true;
   const old = S.candidateLine.geometry;
   S.candidateLine.geometry = buildPolylineGeometry(

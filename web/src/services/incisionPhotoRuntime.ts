@@ -97,7 +97,9 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
 
   const updateEndpointHandles = () => {
     const wrapRect = elements.wrap.getBoundingClientRect();
-    const refs = pointsToSurfaceRefs(state.result?.candidate?.endpoints || [], state.verts, state.tris);
+    const refs = state.result?.candidate_display_blocked
+      ? []
+      : pointsToSurfaceRefs(state.result?.candidate?.endpoints || [], state.verts, state.tris);
     const points = refs.map((ref) => state.planning2d?.surfaceRefToClient(ref) || null);
     elements.photoEndpointHandles.forEach((handle, index) => {
       const point = state.photoView.active ? points[index] : null;
@@ -150,7 +152,10 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     const dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
     elements.photoCanvas.width = Math.max(1, Math.round(frame.width * dpr));
     elements.photoCanvas.height = Math.max(1, Math.round(frame.height * dpr));
-    const endpointRefs = pointsToSurfaceRefs(state.result?.candidate?.endpoints || [], state.verts, state.tris);
+    const candidateDisplayBlocked = Boolean(state.result?.candidate_display_blocked);
+    const endpointRefs = candidateDisplayBlocked
+      ? []
+      : pointsToSurfaceRefs(state.result?.candidate?.endpoints || [], state.verts, state.tris);
     const markerDraftActive = controlledMarkerDraft !== null;
     const diameterEstimateRefs = !markerDraftActive && elements.tumorKind.value === "subcutaneous"
       ? buildSubcutaneousDiameterEstimateRefs({
@@ -178,8 +183,10 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
       centerRef: controlledMarkerDraft?.geometry.center_ref || state.lesionRef,
       diameterEstimateRefs,
       boundaryRefs: controlledMarkerDraft?.geometry.boundary_refs || frame.selection.boundaryRefs,
-      candidateRefs: markerDraftActive ? [] : pointsToSurfaceRefs(state.result?.candidate?.polyline || [], state.verts, state.tris),
-      endpointRefs: markerDraftActive ? [] : endpointRefs,
+      candidateRefs: markerDraftActive || candidateDisplayBlocked
+        ? []
+        : pointsToSurfaceRefs(state.result?.candidate?.polyline || [], state.verts, state.tris),
+      endpointRefs: markerDraftActive || candidateDisplayBlocked ? [] : endpointRefs,
       endpointRadius: 14 / Math.max(sourceToCssScale, 0.05),
     });
     state.planning2d.setOverlaySummary({
@@ -189,7 +196,9 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     });
     fit();
     setStatus(
-      `照片规划 · RSTL ${geometry.rstl.length} 条 · ${geometry.candidate.length ? "候选已叠加" : "点击面部设置病灶"}`,
+      `照片规划 · RSTL ${geometry.rstl.length} 条 · ${candidateDisplayBlocked
+        ? "候选因工程硬阻断未显示"
+        : geometry.candidate.length ? "候选已叠加" : "点击面部设置病灶"}`,
       "ready",
     );
   };

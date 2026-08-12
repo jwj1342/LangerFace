@@ -1,5 +1,11 @@
 import { mapAtlas, visibleRuns, type AtlasLine, type MappedAtlasLine } from "./geometryAtlas.ts";
-import { buildHeadVisibility, EXTENDED_FOREHEAD_REGIONS } from "./foreheadVisibility.ts";
+import {
+  buildForeheadSkinVisibility,
+  buildHeadVisibility,
+  EXTENDED_FOREHEAD_REGIONS,
+  stabilizeForeheadMask,
+  type VisibilityPredicate,
+} from "./foreheadVisibility.ts";
 import { mapSurfaceRefs, pointToSurfaceRef, type SurfaceRef } from "./incisionOverlay.ts";
 import type { Triangle, Vec3 } from "./softBody.ts";
 
@@ -150,11 +156,41 @@ export function nearestPhotoEndpointHandle(
 export function visibleIncisionPhotoRstlRuns(
   line: MappedAtlasLine,
   landmarks: Vec3[],
+  skinVisible: VisibilityPredicate = () => true,
 ): Vec3[][] {
   if (line.pts.length < 2) return [];
   if (!EXTENDED_FOREHEAD_REGIONS.has(line.region)) return [line.pts];
   const headVisible = buildHeadVisibility(landmarks);
-  return visibleRuns(line.pts, line.pts.map((point) => headVisible(point) ? 1 : 0));
+  const rawMask = line.pts.map((point) => headVisible(point) && skinVisible(point));
+  const mask = rawMask.length >= 8 ? stabilizeForeheadMask(rawMask) : rawMask;
+  return visibleRuns(line.pts, mask.map((visible) => visible ? 1 : 0));
+}
+
+function canvasForeheadSkinVisibility(
+  context: CanvasRenderingContext2D,
+  sourceWidth: number,
+  sourceHeight: number,
+  landmarks: Vec3[],
+): VisibilityPredicate {
+  try {
+    const pixelWidth = context.canvas.width;
+    const pixelHeight = context.canvas.height;
+    if (pixelWidth <= 0 || pixelHeight <= 0 || sourceWidth <= 0 || sourceHeight <= 0) return () => true;
+    const scaleX = pixelWidth / sourceWidth;
+    const scaleY = pixelHeight / sourceHeight;
+    const pixels = context.getImageData(0, 0, pixelWidth, pixelHeight);
+    const scaledLandmarks = landmarks.map((point) => [
+      point[0] * scaleX,
+      point[1] * scaleY,
+      point[2],
+    ] as Vec3);
+    const visible = buildForeheadSkinVisibility(pixels, pixelWidth, pixelHeight, scaledLandmarks);
+    return (point) => point
+      ? visible([point[0] * scaleX, point[1] * scaleY, point[2]])
+      : false;
+  } catch {
+    return () => true;
+  }
 }
 
 function drawPath(
@@ -192,11 +228,11 @@ export function renderIncisionPhotoPlanning(input: IncisionPhotoRenderInput): In
   context.setTransform(dpr, 0, 0, dpr, 0, 0);
   context.clearRect(0, 0, sourceWidth, sourceHeight);
   context.drawImage(source, 0, 0, sourceWidth, sourceHeight);
+  const skinVisible = canvasForeheadSkinVisibility(context, sourceWidth, sourceHeight, input.landmarks);
 
   for (const line of geometry.rstl) {
-    for (const run of visibleIncisionPhotoRstlRuns(line, input.landmarks)) {
-      drawPath(context, run, "rgba(3, 7, 18, 0.88)", 4.5);
-      drawPath(context, run, "rgba(103, 232, 249, 0.92)", 2);
+    for (const run of visibleIncisionPhotoRstlRuns(line, input.landmarks, skinVisible)) {
+      drawPath(context, run, "rgba(103, 232, 249, 0.95)", Math.max(2, sourceWidth / 1300));
     }
   }
   if (geometry.diameterEstimate.length >= 2) {

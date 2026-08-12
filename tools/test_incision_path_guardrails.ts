@@ -46,7 +46,7 @@ assert.ok(Math.abs(
     - denseCandidate.metrics.sensitive_free_margin_min_distance_mm,
 ) < 1e-9, "sensitive distance is stable across path sampling densities");
 
-const outsideCandidate = { type: "linear", polyline: [[-1, 5, 0], [5, 5, 0]], metrics: {} };
+const outsideCandidate = { type: "linear", polyline: [[-1, 8, 0], [5, 8, 0]], metrics: {} };
 annotateCandidateEngineeringViolations(outsideCandidate, verts);
 assert.deepEqual(outsideCandidate.hard_violations.map((item) => item.code), ["candidate_outside_canonical_surface"]);
 
@@ -61,6 +61,16 @@ const exclusionCandidate = {
 };
 annotateCandidateEngineeringViolations(exclusionCandidate, verts);
 assert.equal(exclusionCandidate.hard_violations[0].code, "candidate_intersects_non_skin_opening");
+
+for (const [marginId, polyline] of [
+  ["left_nasal_ala_margin", [[2, 4.8, 0], [6, 4.8, 0]]],
+  ["lip_vermilion_margin", [[5, 2, 0], [5, 4, 0]]],
+] as const) {
+  const freeMarginCandidate = { type: "linear", polyline };
+  annotateCandidateEngineeringViolations(freeMarginCandidate, verts);
+  assert.ok(freeMarginCandidate.hard_violations.some((item) =>
+    item.code === "candidate_crosses_sensitive_free_margin" && item.location.margin_id === marginId));
+}
 
 const mediapipeVerts = Array.from({ length: 468 }, () => [5, 5, 0]);
 mediapipeVerts[0] = [0, 0, 0];
@@ -80,6 +90,8 @@ oralOpening.forEach((vertexIndex, index) => {
 });
 const topologyZones = buildMediaPipeEngineeringExclusionZones(mediapipeVerts);
 assert.deepEqual(topologyZones.map((zone) => zone.id), ["left-eye-opening", "right-eye-opening", "oral-opening"]);
+assert.equal(topologyZones[0].projection_buffer_scale, 1.35,
+  "eye opening keeps a conservative engineering-only projection buffer");
 for (const [zoneId, polyline] of [
   ["left-eye-opening", [[2, 6, 0], [5, 6, 0]]],
   ["right-eye-opening", [[5.5, 6, 0], [8, 6, 0]]],
@@ -90,7 +102,12 @@ for (const [zoneId, polyline] of [
   assert.ok(topologyOpeningCandidate.hard_violations.some((item) =>
     item.code === "candidate_intersects_non_skin_opening" && item.location.zone_id === zoneId));
 }
-assert.match(topologyZones[0].clinical_boundary, /engineering exclusion only/);
+assert.match(topologyZones[0].clinical_boundary, /engineering exclusions only/);
+const projectionBufferCandidate = { type: "linear", polyline: [[2, 6.6, 0], [5, 6.6, 0]] };
+annotateCandidateEngineeringViolations(projectionBufferCandidate, mediapipeVerts);
+assert.ok(projectionBufferCandidate.hard_violations.some((item) =>
+  item.location?.zone_id === "left-eye-opening"),
+"eye projection buffer catches a path just outside the raw eyelid loop");
 
 const requiredActions = [
   "summarize_tumor_input_quality",

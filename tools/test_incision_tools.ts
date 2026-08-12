@@ -569,6 +569,8 @@ ok(workflow.trace.some((step) => step.action === "propose_direction_variants"),
 ok(workflow.trace.at(-1).action === "compare_candidates", "browser workflow compares candidates after variant generation");
 ok(workflow.candidate_alternatives.length === 3, "browser workflow returns three direction candidates");
 ok(workflow.candidate_comparison.length === 3, "browser workflow returns deterministic candidate comparison");
+ok(workflow.selected_candidate_id != null && workflow.candidate_display_blocked === false,
+  "browser workflow selects a hard-guardrail-safe candidate for display");
 ok(workflow.workflow_trace_gate.passed === true, "browser workflow trace gate passes");
 ok(workflow.workflow_plan_audit.passed === true, "browser deterministic workflow audit plan passes");
 ok(workflow.workflow_execution_events.passed === true, "browser workflow execution events pass");
@@ -688,5 +690,21 @@ ok(comparison[1].reasons.some((r) => r.includes("high guardrail")), "candidate c
 ok(comparison[1].score_breakdown.sensitive_free_margin_threshold_mm === 16,
   "candidate comparison records per-structure sensitive-margin threshold");
 ok(comparison[0].clinical_boundary.includes("不是临床推荐"), "candidate comparison records clinical boundary");
+
+const hardBlockedComparison = T.compareCandidateRecords([
+  {
+    id: "blocked-baseline",
+    candidate: { type: "linear", hard_violation_count: 1, metrics: { rstl_deviation_deg: 0 } },
+    guardrails: { hard_violation_count: 1, warnings: [] },
+  },
+  {
+    id: "safe-offset",
+    candidate: { type: "linear", hard_violation_count: 0, metrics: { rstl_deviation_deg: 20 } },
+    guardrails: { hard_violation_count: 0, warnings: [] },
+  },
+]);
+ok(hardBlockedComparison[0].id === "safe-offset", "engineering hard blocks always rank after safe variants");
+ok(hardBlockedComparison[1].reasons.some((reason) => reason.includes("工程硬阻断")),
+  "candidate comparison explains engineering hard blocks");
 
 console.log(`test_incision_tools: ${passed} assertions passed`);

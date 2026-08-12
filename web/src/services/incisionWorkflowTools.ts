@@ -794,6 +794,7 @@ export function planIncisionWorkflow({
       label,
       angle_offset_deg: offset,
       candidate: variantCandidate,
+      direction: variant,
       guardrails: variantGuardrails,
       preview: variantPreview,
       sensitive_structure_inspection: variantSensitiveInspection,
@@ -804,6 +805,27 @@ export function planIncisionWorkflow({
 
   result.candidate_alternatives = candidateRecords;
   result.candidate_comparison = compareCandidateRecords(candidateRecords, rules);
+  const rankedCandidateIds = result.candidate_comparison.map((item: AnyRecord) => item.id);
+  const safeCandidate = rankedCandidateIds
+    .map((id: string) => candidateRecords.find((record) => record.id === id))
+    .find((record: AnyRecord) => Number(record?.candidate?.hard_violation_count || 0) === 0);
+  if (safeCandidate) {
+    result.candidate = safeCandidate.candidate;
+    result.original_candidate = safeCandidate.candidate;
+    result.direction = safeCandidate.direction;
+    result.guardrails = safeCandidate.guardrails;
+    result.preview = safeCandidate.preview;
+    result.sensitive_structure_inspection = safeCandidate.sensitive_structure_inspection;
+    result.selected_candidate_id = safeCandidate.id;
+    result.candidate_display_blocked = false;
+    result.candidate_selection_reason = safeCandidate.angle_offset_deg === 0
+      ? "baseline_candidate_passed_engineering_hard_guardrails"
+      : "lowest_scoring_safe_direction_variant_selected";
+  } else {
+    result.selected_candidate_id = null;
+    result.candidate_display_blocked = true;
+    result.candidate_selection_reason = "all_direction_variants_have_engineering_hard_violations";
+  }
   result.trace.push(traceStep(
     "compare_candidates",
     { candidate_ids: candidateRecords.map((record) => record.id) },
@@ -841,6 +863,7 @@ function comparisonReasons({
   sensitiveDistance,
   sensitiveThreshold,
   candidateType,
+  hardViolationCount,
 }: {
   severity: { high: number; medium: number; low: number };
   metrics: AnyRecord;
@@ -848,8 +871,10 @@ function comparisonReasons({
   sensitiveDistance: number;
   sensitiveThreshold: number;
   candidateType: string;
+  hardViolationCount: number;
 }): string[] {
   const reasons: string[] = [];
+  if (hardViolationCount) reasons.push(`${hardViolationCount} 个工程硬阻断`);
   if (reviewStatus === "rejected_by_clinician") reasons.push("医生已否决");
   if (severity.high) reasons.push(`${severity.high} 个 high guardrail`);
   if (severity.medium) reasons.push(`${severity.medium} 个 medium guardrail`);
@@ -878,6 +903,10 @@ export function compareCandidateRecords(records: AnyRecord[] = [], rules: Incisi
       const metrics = candidate.metrics || {};
       const severity = warningSeverityCounts(record.guardrails);
       const reviewStatus = record.review_status || record.review?.status || "pending_clinician_confirmation";
+      const hardViolationCount = Math.max(
+        finiteOr(candidate.hard_violation_count, 0),
+        finiteOr(record.guardrails?.hard_violation_count, 0),
+      );
       const sensitiveDistance = finiteOr(metrics.sensitive_free_margin_min_distance_mm, Infinity);
       const sensitiveThreshold = Number.isFinite(sensitiveDistance)
         ? freeMarginDistanceThresholdMm(
@@ -890,6 +919,7 @@ export function compareCandidateRecords(records: AnyRecord[] = [], rules: Incisi
         ? Math.max(0, sensitiveThreshold - sensitiveDistance) * 5
         : 0;
       const score =
+        hardViolationCount * 100000 +
         severity.high * 100 +
         severity.medium * 25 +
         severity.low * 5 +
@@ -908,6 +938,7 @@ export function compareCandidateRecords(records: AnyRecord[] = [], rules: Incisi
         score,
         score_breakdown: {
           high_guardrails: severity.high,
+          hard_violations: hardViolationCount,
           medium_guardrails: severity.medium,
           rstl_deviation_deg: finiteOr(metrics.rstl_deviation_deg, 0),
           diameter_coverage_deficit_mm: finiteOr(metrics.diameter_coverage_deficit_mm, 0),
@@ -924,6 +955,7 @@ export function compareCandidateRecords(records: AnyRecord[] = [], rules: Incisi
           sensitiveDistance,
           sensitiveThreshold,
           candidateType: candidate.type,
+          hardViolationCount,
         }),
       };
     })

@@ -127,6 +127,8 @@ assert.ok(photoRuntime.includes("state.boundaryPoints = []") && photoRuntime.inc
   "photo lesion repicks clear stale freehand points and surface references");
 assert.ok(photoRuntime.includes("normalizeLesionDetectionAdapter"), "controlled marker results enter the shared lesion adapter");
 assert.ok(photoRuntime.includes("confirmed.eligible_for_candidate"), "invalid confirmed marker inputs cannot generate candidates");
+assert.ok(photoRuntime.includes("state.result?.candidate_display_blocked"),
+  "photo planning hides endpoint handles when every candidate has an engineering hard block");
 assert.ok(controlledMarkerDetection.includes("network_request_made: false"), "controlled marker detection records local-only execution");
 assert.ok(workspaceSessionService.includes("incision-workspace-session/v1"), "route round trips persist a versioned incision workspace session");
 assert.ok(js.includes("restoreWorkspaceSession"), "the incision runtime restores the logical workspace after remount");
