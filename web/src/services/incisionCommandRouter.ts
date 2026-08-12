@@ -18,6 +18,7 @@ type IncisionCommandEvent = Event | { detail?: unknown } | null | undefined;
 
 export interface IncisionCommandActions {
   applyTumorControl(command: IncisionTumorCommand, value?: string | number): unknown;
+  resetBoundaryForTumorKind(): unknown;
   setBoundaryInactive(): unknown;
   updateFormVisibility(): unknown;
   publish(reason: string): unknown;
@@ -64,7 +65,7 @@ export class IncisionCommandRouter {
     this.actions.applyTumorControl(command, value);
     switch (command) {
       case "kind_changed":
-        this.actions.setBoundaryInactive();
+        this.actions.resetBoundaryForTumorKind();
         this.actions.updateFormVisibility();
         this.actions.publish("tumor_kind_changed");
         this.actions.previewWorkflow();

@@ -1682,6 +1682,10 @@ function renderLoop() {
 
 const incisionCommands = new IncisionCommandRouter({
   applyTumorControl: (command, value) => applyReactTumorControlValue(els, command, value),
+  resetBoundaryForTumorKind: () => {
+    resetIncisionBoundaryState(S);
+    els.startBoundary.textContent = "开始轮廓";
+  },
   setBoundaryInactive: () => { S.boundaryActive = false; },
   updateFormVisibility,
   publish: publishIncisionState,

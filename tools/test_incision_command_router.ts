@@ -4,6 +4,7 @@ import {
   IncisionCommandRouter,
   type IncisionCommandActions,
 } from "../web/src/services/incisionCommandRouter.ts";
+import { resetIncisionBoundaryState } from "../web/src/services/incisionBoundaryState.ts";
 
 type Call = [string, ...unknown[]];
 const calls: Call[] = [];
@@ -13,6 +14,7 @@ const record = (name: string, ...values: unknown[]) => {
 
 const actions: IncisionCommandActions = {
   applyTumorControl: (command, value) => record("applyTumorControl", command, value),
+  resetBoundaryForTumorKind: () => record("resetBoundaryForTumorKind"),
   setBoundaryInactive: () => record("setBoundaryInactive"),
   updateFormVisibility: () => record("updateFormVisibility"),
   publish: (reason) => record("publish", reason),
@@ -60,11 +62,21 @@ const expectDispatch = (
 const tumor = router.handleTumorEvent.bind(router);
 expectDispatch(tumor, { command: "kind_changed", value: "cutaneous" }, [
   ["applyTumorControl", "kind_changed", "cutaneous"],
-  ["setBoundaryInactive"],
+  ["resetBoundaryForTumorKind"],
   ["updateFormVisibility"],
   ["publish", "tumor_kind_changed"],
   ["previewWorkflow"],
 ]);
+
+const boundaryState = {
+  boundaryPoints: [[1, 2, 3] as [number, number, number]],
+  boundaryRefs: [{ tri: 1, u: 1, v: 0, w: 0 }],
+  boundaryActive: true,
+};
+resetIncisionBoundaryState(boundaryState);
+assert.deepEqual(boundaryState.boundaryPoints, [], "tumor kind reset clears incompatible boundary points");
+assert.deepEqual(boundaryState.boundaryRefs, [], "tumor kind reset clears incompatible surface refs");
+assert.equal(boundaryState.boundaryActive, false, "tumor kind reset stops active boundary drawing");
 expectDispatch(tumor, { command: "diameter_input", value: "12" }, [
   ["applyTumorControl", "diameter_input", "12"], ["updateTumorRing"], ["publish", "tumor_diameter_input"],
 ]);

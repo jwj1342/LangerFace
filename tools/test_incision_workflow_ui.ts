@@ -114,6 +114,11 @@ assert.ok(js.includes("forceDraft: !readiness.ok"), "invalid confirmation saves 
 assert.ok(js.includes("shouldClearFreehandBoundaryOnLesionRepick"), "lesion repicks clear stale freehand boundaries");
 assert.ok(js.includes("resetIncisionBoundaryState"), "tumor kind changes clear incompatible boundary state");
 assert.ok(
+  js.includes("resetBoundaryForTumorKind: () =>")
+    && js.includes('els.startBoundary.textContent = "开始轮廓"'),
+  "tumor kind changes reset both boundary geometry and drawing controls",
+);
+assert.ok(
   js.includes("pointToSurfaceRef(tumor.center, S.verts, S.tris)"),
   "imported tumor centers retain their exact surface reference instead of snapping to a vertex",
 );
