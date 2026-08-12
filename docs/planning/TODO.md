@@ -21,8 +21,6 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
 - [x] RSTL 局部方向服务 Python/TypeScript parity — [#13](https://github.com/jwj1342/LangerFace/issues/13)
       · Ready PR #121；共享金标覆盖 atlas、低置信、FLAME `points3d` 和 ±180° 轴向 wrap。
       · Ready PR #119；补齐可编辑尖端角、轮廓重算、guardrail 与 provenance。
-- [ ] 3D 路线可行性裁决 — [#40](https://github.com/jwj1342/LangerFace/issues/40)
-      · Ready PR #122；建议 2D-first + 3D 离线资产/标注/研究预览，等待 #40 owner 正式确认。
 - [ ] Epic：2D 静态照片切口规划交付闭环 — [#167](https://github.com/jwj1342/LangerFace/issues/167)
       · 主实现 PR #166 已合并；真实媒体、人工验收及切口 2A 剩余门禁由 #171 / #172 / #209–#212 跟踪。
 - [ ] 单页工作流：统一照片规划、候选审阅、导出与实时叠加状态 — [#170](https://github.com/jwj1342/LangerFace/issues/170)
