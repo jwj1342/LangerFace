@@ -13,7 +13,6 @@ export interface FineWrinkleLine {
   lengthPx: number;
   points: Point2[];
 }
-
 export interface FineWrinkleRejection {
   sourceComponentId: string;
   class: string;
@@ -612,5 +611,4 @@ export function extractFineWrinkleLines(
     rasterPixelCount: renderedLinePixels,
   };
 }
-
 

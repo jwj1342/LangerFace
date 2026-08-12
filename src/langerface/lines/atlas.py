@@ -28,12 +28,18 @@ import numpy as np
 from ..config.constants import TOPOLOGY_ID, TOPOLOGY_VERSION
 
 
+def _rounded_coordinate(value: float) -> float:
+    rounded = round(float(value), 6)
+    return 0.0 if rounded == 0 else rounded
+
+
 @dataclass
 class AtlasLine:
     name: str
     region: str
     points: np.ndarray  # (N, 3) = [tri_index(float), u, v]
     disable_runtime_expansion: bool = False
+    post_map_smoothing_passes: int = 0
 
     def tris(self) -> np.ndarray:
         return self.points[:, 0].astype(np.int64)
@@ -68,6 +74,9 @@ class Atlas:
                 region=ln.get("region", ""),
                 points=np.asarray(ln["points"], dtype=np.float64).reshape(-1, 3),
                 disable_runtime_expansion=ln.get("disableRuntimeExpansion") is True,
+                post_map_smoothing_passes=max(
+                    0, min(32, int(ln.get("postMapSmoothingPasses", 0)))
+                ),
             )
             for ln in data["lines"]
         ]
@@ -106,7 +115,12 @@ class Atlas:
                         if ln.disable_runtime_expansion
                         else {}
                     ),
-                    "points": [[int(round(p[0])), round(float(p[1]), 6), round(float(p[2]), 6)]
+                    **(
+                        {"postMapSmoothingPasses": ln.post_map_smoothing_passes}
+                        if ln.post_map_smoothing_passes > 0
+                        else {}
+                    ),
+                    "points": [[int(round(p[0])), _rounded_coordinate(p[1]), _rounded_coordinate(p[2])]
                                for p in ln.points],
                 }
                 for ln in self.lines

@@ -81,6 +81,17 @@ const analysisRuntime = fs.readFileSync(
   new URL("../web/src/services/liveWrinkleAnalysis.ts", import.meta.url),
   "utf8",
 );
+assert.match(analysisRuntime, /delegate: "CPU"/,
+  "single-frame refinement must use deterministic CPU landmarks");
+assert.match(analysisRuntime, /runningMode: "IMAGE"/,
+  "single-frame refinement must not reuse the live VIDEO detector");
+assert.match(analysisRuntime, /outputFaceBlendshapes: false/);
+assert.match(analysisRuntime, /detectV9ReferenceLandmarks/,
+  "v9 refinement must remap the atlas from the dedicated reference landmarks");
+assert.match(analysisRuntime, /state\.evidenceLines = evidence\.lines\.map[\s\S]*const refined = refineV6/,
+  "validated wrinkle evidence must be committed before refinement safety gates run");
+assert.match(analysisRuntime, /if \(state\.evidenceLines\.length > 0\)[\s\S]*updateStatus\("evidence", message\)/,
+  "a rejected refinement must retain wrinkle evidence and report a non-fatal evidence state");
 assert.match(analysisRuntime, /await Promise\.allSettled\(\[\.\.\.activeAnalyses\]\);[\s\S]*await current\?\.close\(\)/,
   "route disposal must wait for active model work before releasing the ONNX session");
 assert.match(analysisRuntime, /const detection = await model\.detect[\s\S]*if \(generation !== state\.generation\) return;/,
