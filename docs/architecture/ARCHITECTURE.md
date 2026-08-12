@@ -14,15 +14,22 @@ Python 与浏览器两套等价几何实现共享同一份图谱与三角拓扑�
 - **Python 库 `src/langerface/`**：分层核心库 + console scripts + **验证基准（ground truth）** + 3D 重建离线工具。
 - **浏览器客户端 `web/`**：Vite 8 + React + TypeScript + MediaPipe Tasks Vision + `web/src/services/geometry*.ts`
   （Python 几何的忠实移植，按 atlas / smoothing / occluders / transform / pose-quality 子系统分模块）
-  + `web/src/services/three3d.ts` / R3F 组件（3D Beta）。实时、本地、不上传。
+  + `web/src/services/three3d.ts` / R3F 组件（仅供独立标注与模拟工具）。实时、本地、不上传。
   前端低频 UI 状态由 React/Zustand 管理，实时工作台状态在 `web/src/services/liveState.ts`
-  分片；`pipeline.ts` 不依赖 `mode3d.ts`，3D 实时投影通过无 DOM 的 `projection3d.ts` 适配，避免模块环。
+  分片；Live runtime 固定走 MediaPipe 2D 贴合，不包含扫描重建、3D 投影或 FLAME 孪生状态。
   `AnnotateRoute` / `IncisionRoute` / `LiveRoute` / `PersonalizedRoute` / `V6ReviewRoute` 直接按需加载并挂载各自 TypeScript runtime，
   共享 `ManagedWorkbenchRoute` 的 mount/dispose 生命周期；不再经过 `legacyControllers.ts` 转发层。
   个性化算法与手动 2D 微调已迁入 `web/src/services/personalized/`、`liveRefine2d.ts`，DOM、Canvas、
   MediaPipe 与 ONNX 边界均进入严格 TypeScript 检查。`tools/test_web_architecture.ts` 同时禁止 `web/`
   重新出现 `.js` 源运行时，以及用 `@ts-nocheck` / `@ts-ignore` / `@ts-expect-error` 绕过类型迁移。
   `web/compat/personalized/` 仅保留 ONNX 分片与 V6 示例等静态资产。
+
+- **共享 2D 规划控制器**：`web/src/services/photoPlanningController.ts` 是 live 与 incision 的媒体源、检测快照、
+  screen/canvas/source/surface 坐标、选择和 overlay 摘要边界。原始媒体与逐点 landmarks 只保留在 controller
+  frame state，不进入 React/Zustand 或低频 snapshot；snapshot 明确记录不含 raw media/landmarks。route 每次 mount
+  创建独立 controller，source replacement 与 dispose 负责释放媒体、detector lease 和待执行 render frame。
+  `tools/test_photo_planning_controller.ts` 覆盖 mirror、zoom、pan、DPR 1/2、重心引用往返、过期检测隔离及
+  mount → source change → dispose → remount，禁止 live 重新建立第二个 raw-media owner。
 
 - **视觉主题契约**：公开主路径统一使用 `web/clinical-theme.css` 的深色临床界面与蓝色主操作色
   （`--clinical-accent: #0f62fe`）。React 入口通过 `web/src/styles.css` 导入同一份 token；`/personalized`、
@@ -90,39 +97,17 @@ P = u·V0 + v·V1 + w·V2
 
 ---
 
-## 4. 3D 路线（Beta，**网页入口已关闭**）
+## 4. 3D 边界（Live runtime 已删除）
 
-> PR #108 关闭的是**本节描述的这条实时 3D 路线**的用户入口：实时页的「3D 面部重建」下拉项、
-> FLAME 实时孪生、以及三维资产预览页（`/three-preview`，已在 PR #110 删除）。这些 runtime 代码仍保留在
-> `web/src/services/mode3d.ts` / `projection3d.ts` / `three3d.ts`，但没有界面能进入。
-> #40 尚待 owner 正式确认；PR #122 的工程建议是 **2D-first + 3D 离线预处理/研究查看**。
-> 在确认前实时 3D 用户入口仍不恢复，残留 runtime
-> 待共享依赖拆分后清理。量化 gate 与重启条件见 [ADR_3D_ROUTE_FEASIBILITY.md](ADR_3D_ROUTE_FEASIBILITY.md)，
-> FLAME 技术轨的现状与资产边界见 [FLAME_3D_TRACK.md](../tracks/FLAME_3D_TRACK.md)。
->
-> **仍保留且可从界面进入的 3D 功能**：标准图谱生产 / 复核用的 3D 标注工具 `/annotate`
-> （路径：首页「图谱库管理」→ `/settings/atlas` → 打开图谱标注工具；`/app/annotate` 为兼容地址），
-> 见 §12；以及 `/surgery` 的 R3F 闭合演示。两者都不属于本节的实时重建路线。
+Live 工作台不再发布实时 3D 路线。扫描重建、刚性投影、FLAME 实时孪生、相关浏览器命令和低频快照状态均已删除；`/live` 只消费 MediaPipe landmarks 与个体化 RSTL。
 
-### 4.1 重建个性化 3D 人头
-离线：[`tools/reconstruct_3d.py`](../../tools/reconstruct_3d.py)；在线：`web/src/services/mode3d.ts: startScan/finishScan`。
-- 每帧取 478→前 468 关键点；用 **Umeyama 相似变换**（scale+rot+trans）把该帧网格的**刚性锚点**
-  （眼角、鼻梁、轮廓极值等 16 点 `RIGID3D`）对齐到统一参考系（标准脸翻到关键点手性）。
-- 对齐后的网格**逐顶点取中位数** → 稳定的个性化中性脸（中位数对表情/抖动/遮挡鲁棒）。
-- 坐标统一在**屏幕手性**（x 右 / y 下 / z 入屏），便于实时配准；查看时前端翻 y/z 成 y 上。
-- Umeyama 实现：`web/src/services/geometryTransform.ts: umeyama/applySim`（3×3 对称特征分解 Jacobi → SVD → R, c, t），
-  由 `tools/test_umeyama.ts` 验证（恢复已知变换误差 ~1e-13）。
+仍保留的 3D 能力有明确的独立边界：
 
-### 4.2 把线贴到 3D 头并查看
-[`web/src/services/three3d.ts`](../../web/src/services/three3d.ts)（Three.js 0.184，由 Vite 打包，按需动态加载）：
-- 头网格 = 重建顶点 + 898 三角面，皮肤材质 + 光照。
-- 线条 = 图谱重心坐标 → 重建顶点上的 3D 点，**沿插值法向微抬**避免 z-fighting，按高度分色。
-- `depthTest` + 头网格深度 → 旋转时背面线条被头自动遮挡。鼠标拖拽旋转。
+- `/annotate` 使用 `web/src/services/three3d.ts` 生产和复核标准图谱草案；
+- `/surgery` 使用 R3F 展示定性闭合模拟；
+- `tools/reconstruct_3d.py`、`tools/fit_flame_to_landmarks.py` 和 `tools/headspace/` 只作离线研究/资产预处理。
 
-### 4.3 实时配准投影
-`web/src/services/mode3d.ts: projectVerts`（投影模式）：每帧用 `RIGID3D` 锚点做 `umeyama(重建网格 → 当前帧活体关键点)`，
-把整套重建顶点刚性变换到屏幕空间，再走 2D 的 `draw`（含背面剔除/手部遮挡）。
-线条来自**稳定的重建网格**，不随表情抖动。
+这些工具不与 Live 会话共享媒体源、landmarks、controller 状态或病例数据。历史评估与重启门槛见 [ADR_3D_ROUTE_FEASIBILITY.md](ADR_3D_ROUTE_FEASIBILITY.md)，FLAME 资产和许可边界见 [FLAME_3D_TRACK.md](../tracks/FLAME_3D_TRACK.md)。
 
 ---
 
@@ -176,7 +161,6 @@ P = u·V0 + v·V1 + w·V2
 | `atlas_rstl.json` / `atlas_langer.json` | 本项目生成；RSTL 由正式参考输入确定性生成，Langer 为对照资产 | 线条图谱；RSTL `atlasVersion=8.1.67`，两者 `validated:false` |
 | `rstl_standard_reference_v8_1_67.json` (~1.7M) | 医生标准图结构化提取与约束 | 正式 RSTL v8.1.67 的可复现生成输入 |
 | `triangles.json` / `canonical_vertices.json` | 由 obj 导出 | 网页端拓扑/几何 |
-| `recon_demo.json` | 示例视频重建 | 3D Beta 直接体验 |
 | `flame_basis.npz` + `flame_basis.NOTICE.md` (~3.5M) | CC BY 4.0 可再分发的紧凑 FLAME 派生 basis | 离线 FLAME 拟合；署名和来源以 NOTICE 为准 |
 | `web/assets/flame_basis.bin` (~6.9M) | 由 `tools/build_flame_basis.py` 从同一 basis 生成 | 浏览器标注、切口 3D 研究预览所需的身份/表情/jaw basis |
 | `assets/models/*.pth` (~69M) | CC BY-NC-SA 4.0 衍生 checkpoint | Python 皱纹/辅助线索研究；非商业、非临床发布资产 |
@@ -228,8 +212,8 @@ P = u·V0 + v·V1 + w·V2
    → 需要 Langer 对照时再跑 `build_field_atlas.py`，并注意它会覆盖 RSTL 图谱 → `export_web_assets.py`。
 3.（可选）`reconstruct_3d.py` 生成 3D 示例。
 4. `pytest` + `cd web && npm test` 全绿；`cd web && npm run build` 可生产构建。
-5. `cd web && npm run dev` → 浏览器打开 Vite 地址，验证 2D 实时；实时 3D 重建 / FLAME 孪生入口已由 #108 关闭，
-   但 `/annotate` 的 3D 标注工具与 `/surgery` 闭合演示仍可从界面进入（见 §4 与 §12）。
+5. `cd web && npm run dev` → 浏览器打开 Vite 地址，验证 2D 实时；Live 3D runtime 已删除，
+   `/annotate` 的 3D 标注工具与 `/surgery` 闭合演示仍可从界面进入（见 §4 与 §12）。
 6. `annotate_atlas.py` 只保存 `validated:false` 编辑草案；完成独立逐线临床复核、
    来源记录和显式签署后，才允许由受控 finalize 流程生成 `validated:true` 候选资产。
 
@@ -419,7 +403,7 @@ Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部
 | 皮表梭形切口 | `web/src/services/incisionCandidateTools.ts` | 生成梭形候选，约束比例、尖端角和平滑对称 | #16 |
 | 敏感结构 guardrails | `web/src/services/incisionCandidateTools.ts` | 下睑、唇红缘、鼻翼、鼻尖、口角等风险提示、分结构 draft 距离阈值、`protective_direction` 保护性方向建议和方向例外 | #17 |
 | 医生审阅 UI | `web/src/services/incisionRuntime.ts`, `web/src/components/*Review*.tsx` | 候选解释、编辑、版本化 provenance、覆盖、导出 | #18 |
-| AR / 视频叠加 | `web/src/services/render2d.ts`, `web/src/services/projection3d.ts` | 把肿物和切口候选投射回照片、视频、实时视图 | #19 |
+| AR / 视频叠加 | `web/src/services/render2d.ts`, `web/src/services/pipelineLoop.ts` | 直接通过 MediaPipe 表面引用把肿物和切口候选叠加回照片、视频、实时视图 | #19 |
 | 验证指标 | `docs/quality/VALIDATION.md` | 角度误差、稳定性、医生接受率、失败分类 | #20 |
 | 隐私 / 审计 | `docs/clinical/PRIVACY_AND_AUDIT.md` | 敏感数据边界、审计记录、受限存储 | #21 |
 | AI 次级依据 | `tools/`, future model scripts | 皱襞/皱纹/肿物边界候选识别 | #22 |

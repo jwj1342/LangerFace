@@ -1,21 +1,37 @@
 import { clearCanvasDisplayFit, fitCanvasDisplayToStage } from "./liveCanvasFit.ts";
-import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./cameraSource.ts";
+import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream, stopCameraStream } from "./cameraSource.ts";
 import { ctx, els } from "./liveDom.ts";
 import { prepareImageSource } from "./imageSource.ts";
 import { countMetric, logWarn } from "./logger.ts";
-import { renderState, sourceState } from "./liveState.ts";
+import {
+  currentLiveSource,
+  currentLiveSourceKind,
+  modelState,
+  renderState,
+  sourceState,
+} from "./liveState.ts";
 import { resetRefineForNewSource } from "./liveRefine2d";
+import { LiveFrameScheduler } from "./liveFrameScheduler.ts";
 import { resetLiveWrinkleAnalysis } from "./liveWrinkleAnalysis.ts";
 import { setLive, setMsg } from "./liveUi.ts";
-import { requestFrame } from "./pipelineLoop.ts";
+import { cancelFrame, requestFrame } from "./pipelineLoop.ts";
 import { ensureImageReady, ensureReady } from "./pipelineModels.ts";
 
 type SourceKind = "camera" | "video" | "image";
 let sourceOperationId = 0;
+const sourceLayoutScheduler = new LiveFrameScheduler();
 
 export async function startCamera(): Promise<void> {
   const operationId = ++sourceOperationId;
-  if (sourceState.sourceKind === "camera") {
+  let pendingStream: MediaStream | null = null;
+  const releasePendingStream = (): void => {
+    const stream = pendingStream;
+    if (!stream) return;
+    if (els.video?.srcObject === stream) els.video.srcObject = null;
+    stopCameraStream(stream);
+    pendingStream = null;
+  };
+  if (currentLiveSourceKind() === "camera") {
     stopSource();
     setLive(false, "待机");
     els.cam.setAttribute("aria-pressed", "false");
@@ -26,23 +42,33 @@ export async function startCamera(): Promise<void> {
     await ensureReady();
     if (operationId !== sourceOperationId) return;
     setMsg("请求摄像头权限…");
-    const stream = await openCameraStream(CAMERA_CONSTRAINTS);
+    pendingStream = await openCameraStream(CAMERA_CONSTRAINTS);
     if (operationId !== sourceOperationId) {
-      stream.getTracks().forEach((track) => track.stop());
+      releasePendingStream();
       return;
     }
     stopSource({ preserveOperation: true });
-    els.video.srcObject = stream;
+    els.video.srcObject = pendingStream;
     await els.video.play();
-    setSource(els.video, "camera", els.video.videoWidth, els.video.videoHeight);
+    if (operationId !== sourceOperationId) {
+      releasePendingStream();
+      return;
+    }
+    const stream = pendingStream;
+    if (!stream) return;
+    setSource(els.video, "camera", els.video.videoWidth, els.video.videoHeight, {
+      release: () => stopCameraStream(stream),
+    });
+    pendingStream = null;
     els.cam.setAttribute("aria-pressed", "true");
   } catch (error) {
+    releasePendingStream();
     if (operationId !== sourceOperationId) return;
     const detail = describeCameraError(error);
     countMetric(`camera.openFailure.${detail.reason}`);
     logWarn("无法开启摄像头。", { reason: detail.reason, error });
     els.cam.setAttribute("aria-pressed", "false");
-    if (!sourceState.source) {
+    if (!currentLiveSource()) {
       showCameraPlaceholder(detail.message);
       setLive(false, "待机");
     }
@@ -70,6 +96,7 @@ export function showCameraPlaceholder(message = ""): void {
 export async function handleFile(file?: File): Promise<void> {
   if (!file) return;
   const operationId = ++sourceOperationId;
+  let pendingObjectUrl: string | null = null;
   els.file.value = "";
   stopSource({ preserveOperation: true });
   setLive(false, "待机");
@@ -80,6 +107,7 @@ export async function handleFile(file?: File): Promise<void> {
     if (operationId !== sourceOperationId) return;
 
     const url = URL.createObjectURL(file);
+    pendingObjectUrl = url;
     if (file.type.startsWith("image/")) {
       try {
         const img = new Image();
@@ -91,6 +119,7 @@ export async function handleFile(file?: File): Promise<void> {
         if (prepared.scaled) setMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
       } finally {
         URL.revokeObjectURL(url);
+        pendingObjectUrl = null;
       }
     } else {
       els.video.srcObject = null;
@@ -98,7 +127,10 @@ export async function handleFile(file?: File): Promise<void> {
       els.video.loop = true;
       await els.video.play();
       if (operationId !== sourceOperationId) return;
-      setSource(els.video, "video", els.video.videoWidth, els.video.videoHeight);
+      setSource(els.video, "video", els.video.videoWidth, els.video.videoHeight, {
+        release: () => URL.revokeObjectURL(url),
+      });
+      pendingObjectUrl = null;
     }
     els.cam.setAttribute("aria-pressed", "false");
   } catch (error) {
@@ -107,20 +139,47 @@ export async function handleFile(file?: File): Promise<void> {
     logWarn("上传文件加载失败。", error);
     setLive(false, "待机");
     setMsg("无法读取或检测该文件。请重新上传；若仍失败，请换用受支持的清晰图片或视频。");
+  } finally {
+    if (pendingObjectUrl) URL.revokeObjectURL(pendingObjectUrl);
   }
 }
 
-export function setSource(src: CanvasImageSource, kind: SourceKind, width?: number, height?: number): void {
-  sourceState.source = src;
-  sourceState.sourceKind = kind;
-  els.canvas.width = width || 1280;
-  els.canvas.height = height || 720;
+export function setSource(
+  src: CanvasImageSource,
+  kind: SourceKind,
+  width?: number,
+  height?: number,
+  { release }: { release?: () => void } = {},
+): void {
+  const planning2d = sourceState.planning2d;
+  if (!planning2d) throw new Error("live photo planning controller is not mounted");
+  const sourceWidth = width || 1280;
+  const sourceHeight = height || 720;
+  const revision = planning2d.replaceSource({
+    source: src,
+    kind,
+    width: sourceWidth,
+    height: sourceHeight,
+    release,
+  });
+  planning2d.setTopology(modelState.triangles || []);
+  planning2d.setDetectorLease({
+    detector: kind === "image" ? modelState.imageLandmarker : modelState.landmarker,
+  });
+  planning2d.setDetection({ sourceRevision: revision, status: "detecting" });
+  els.canvas.width = sourceWidth;
+  els.canvas.height = sourceHeight;
   els.mainWrap.classList.toggle("image-viewer", kind === "image");
   els.canvas.classList.toggle("image-source", kind === "image");
   if (kind === "image") {
     fitCanvasDisplayToStage({ resetView: true });
-    requestAnimationFrame(() => fitCanvasDisplayToStage({ resetView: true }));
+    sourceLayoutScheduler.request(() => {
+      if (sourceState.running && currentLiveSourceKind() === "image") {
+        fitCanvasDisplayToStage({ resetView: true });
+      }
+    });
   } else {
+    sourceLayoutScheduler.cancel();
     clearCanvasDisplayFit();
   }
   renderState.smoother.reset();
@@ -151,12 +210,11 @@ export function setSource(src: CanvasImageSource, kind: SourceKind, width?: numb
 
 export function stopSource({ preserveOperation = false }: { preserveOperation?: boolean } = {}): void {
   if (!preserveOperation) sourceOperationId += 1;
-  const mediaStream = els.video.srcObject as MediaStream | null;
-  if (mediaStream) mediaStream.getTracks().forEach((track) => track.stop());
+  cancelFrame();
+  sourceLayoutScheduler.cancel();
+  sourceState.planning2d?.clearSource();
   els.video.srcObject = null;
   els.video.removeAttribute("src");
-  sourceState.source = null;
-  sourceState.sourceKind = null;
   sourceState.running = false;
   sourceState.paused = false;
   sourceState.frozenFrame = null;

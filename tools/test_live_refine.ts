@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import {
+  assessRefineLineQuality,
   applyMirroredCurveDelta,
   applyCurveRefinementTransport,
   buildCurveRefinementTransport,
@@ -12,6 +13,42 @@ import {
   moveCurvePoints,
   stabilizeCurveToReference,
 } from "../web/src/services/liveRefineMath.ts";
+
+const cleanQuality = assessRefineLineQuality(
+  [{ name: "upper", pts: [[0, 0], [20, 0]] }, { name: "lower", pts: [[0, 20], [20, 20]] }],
+  [{ name: "upper", pts: [[0, 1], [20, 1]] }, { name: "lower", pts: [[0, 20], [20, 20]] }],
+  { minimumSpacingPx: 6 },
+);
+assert.equal(cleanQuality.ok, true, "small safe edits must pass the post-edit quality review");
+
+const selfIntersectionQuality = assessRefineLineQuality(
+  [{ name: "loop", pts: [[0, 0], [10, 0], [20, 0], [30, 0]] }],
+  [{ name: "loop", pts: [[0, 0], [20, 20], [0, 20], [20, 0]] }],
+);
+assert.deepEqual(selfIntersectionQuality.warnings.map((warning) => warning.code), ["new_self_intersection"],
+  "a newly introduced self-intersection must require review");
+
+const crossingQuality = assessRefineLineQuality(
+  [{ name: "a", pts: [[0, 0], [20, 0]] }, { name: "b", pts: [[0, 20], [20, 20]] }],
+  [{ name: "a", pts: [[0, 0], [20, 0]] }, { name: "b", pts: [[10, -10], [10, 10]] }],
+);
+assert.ok(crossingQuality.warnings.some((warning) => warning.code === "new_curve_intersection"),
+  "a new crossing between edited curves must require review");
+
+const denseQuality = assessRefineLineQuality(
+  [{ name: "a", pts: [[0, 0], [20, 0]] }, { name: "b", pts: [[0, 20], [20, 20]] }],
+  [{ name: "a", pts: [[0, 0], [20, 0]] }, { name: "b", pts: [[0, 4], [20, 4]] }],
+  { minimumSpacingPx: 6 },
+);
+assert.ok(denseQuality.warnings.some((warning) => warning.code === "new_dense_spacing"),
+  "a newly over-dense neighbouring curve pair must require review");
+
+const preExistingCrossing = assessRefineLineQuality(
+  [{ name: "a", pts: [[0, 0], [20, 20]] }, { name: "b", pts: [[0, 20], [20, 0]] }],
+  [{ name: "a", pts: [[0, 0], [20, 20]] }, { name: "b", pts: [[1, 20], [20, 1]] }],
+);
+assert.equal(preExistingCrossing.ok, true,
+  "pre-existing atlas crossings must not be mislabeled as risks introduced by the edit");
 
 const automatic = [{ name: "left", pts: [[10, 20, 0], [20, 20, 0], [30, 20, 0]] }];
 const deformed = deformCurveWide(automatic[0].pts, 1, [20, 28], { width: 100, height: 100 });

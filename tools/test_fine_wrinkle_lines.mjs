@@ -68,5 +68,3 @@ function paintRect(mask, width, x0, y0, x1, y1) {
 }
 
 console.log("automatic fine wrinkle line extraction tests passed");
-
-

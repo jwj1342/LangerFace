@@ -32,6 +32,7 @@ type AnalysisStatus =
   | "loading"
   | "detecting"
   | "refining"
+  | "evidence"
   | "ready"
   | "applied"
   | "error";
@@ -84,6 +85,7 @@ const state: WrinkleAnalysisState = {
 
 let yolo: YoloWrinkleOnnx | null = null;
 let wrinkleFaceLandmarker: FaceLandmarker | null = null;
+const activeAnalyses = new Set<Promise<void>>();
 
 const cloneMappedLines = (lines: readonly MappedAtlasLine[]): EditableRefineLine[] => (
   lines.map((line) => ({
@@ -256,6 +258,7 @@ function statusLabel(): string {
   if (state.status === "loading") return "正在加载 YOLO 模型";
   if (state.status === "detecting") return "正在检测皱纹";
   if (state.status === "refining") return "正在计算自动微调";
+  if (state.status === "evidence") return "皱纹已检测 · 自动微调未通过门禁";
   if (state.status === "ready") return "检测完成 · 待选择";
   if (state.status === "applied") return "已应用皱纹引导微调";
   if (state.status === "error") return "检测失败";
@@ -273,9 +276,12 @@ export function updateWrinkleUi(): void {
   els.wrinkleDetect.disabled = !frameReady || busy;
   els.wrinkleDetect.textContent = state.status === "error" ? "重试皱纹检测" : "重新检测皱纹";
   els.wrinkleAutoRefine.disabled = !analysisReady || hasManualRefineChanges() || state.status === "applied";
-  els.wrinkleRestore.disabled = !state.standardLines || state.status !== "applied";
+  els.wrinkleRestore.disabled = !state.standardLines
+    || (state.status !== "applied" && !hasManualRefineChanges());
   if (state.status === "error") {
     els.wrinkleSummary.textContent = state.error || "请重试，或更换正面、清晰、光线均匀的照片。";
+  } else if (state.status === "evidence") {
+    els.wrinkleSummary.textContent = `已绘制 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域）；${state.error || "自动微调未通过安全门禁"}，标准 RSTL 保持不变。`;
   } else if (analysisReady) {
     const moved = `自动识别 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域），可引导调整 ${state.movedCurveCount} 条 RSTL / ${state.movedPointCount} 个点。`;
     els.wrinkleSummary.textContent = hasManualRefineChanges()
@@ -335,7 +341,7 @@ export function getLiveWrinkleAnalysisDebugSnapshot() {
   };
 }
 
-export async function analyzeCurrentWrinkles({ force = false }: { force?: boolean } = {}): Promise<void> {
+async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } = {}): Promise<void> {
   if (!isWrinkleFrameReady()) {
     updateWrinkleUi();
     return;
@@ -396,6 +402,14 @@ export async function analyzeCurrentWrinkles({ force = false }: { force?: boolea
     if (!evidence.lines.length || !evidence.validation.passed) {
       throw new Error("未提取到通过质量门禁的细皱纹线");
     }
+    state.evidenceLines = evidence.lines.map((line: FineWrinkleLine) => ({
+      id: line.id,
+      className: line.class,
+      points: line.points.map((point) => fromWrinkleWorkingPoint(point, working)),
+    }));
+    state.fineLineCount = evidence.summary.fineLineCount;
+    state.sourceComponentCount = evidence.summary.sourceConnectedComponents;
+    window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
     updateStatus("refining");
     const refined = refineV6({
       seeds,
@@ -407,15 +421,12 @@ export async function analyzeCurrentWrinkles({ force = false }: { force?: boolea
       options: v9Options(faceWidth),
     });
     if (generation !== state.generation) return;
+    state.diagnostics = refined.diagnostics;
+    state.audit = refined.audit;
     assertRefinementGate(refined.diagnostics);
     if (refined.curves.length !== state.standardLines.length) {
       throw new Error("皱纹引导结果未保持 RSTL 曲线数量");
     }
-    state.evidenceLines = evidence.lines.map((line: FineWrinkleLine) => ({
-      id: line.id,
-      className: line.class,
-      points: line.points.map((point) => fromWrinkleWorkingPoint(point, working)),
-    }));
     state.autoRefinedLines = state.standardLines.map((line, index) => {
       const points = refined.curves[index]?.pts;
       if (!Array.isArray(points) || points.length !== line.pts.length) {
@@ -430,22 +441,32 @@ export async function analyzeCurrentWrinkles({ force = false }: { force?: boolea
         }),
       };
     });
-    state.fineLineCount = evidence.summary.fineLineCount;
-    state.sourceComponentCount = evidence.summary.sourceConnectedComponents;
     state.movedCurveCount = Number(refined.diagnostics.moved_curve_count) || 0;
     state.movedPointCount = Number(refined.diagnostics.moved_point_count) || 0;
-    state.diagnostics = refined.diagnostics;
-    state.audit = refined.audit;
     updateStatus("ready");
     countMetric("wrinkle.singleFrame.ready");
     window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
   } catch (error) {
     if (generation !== state.generation) return;
     const message = error instanceof Error ? error.message : "未知错误";
+    if (state.evidenceLines.length > 0) {
+      logWarn("皱纹已检测，但自动微调未通过安全门禁。", error);
+      countMetric("wrinkle.singleFrame.gateRejected");
+      updateStatus("evidence", message);
+      window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
+      return;
+    }
     logWarn("单帧皱纹检测或自动微调失败。", error);
     countMetric("wrinkle.singleFrame.failure");
     updateStatus("error", message);
   }
+}
+
+export function analyzeCurrentWrinkles(options: { force?: boolean } = {}): Promise<void> {
+  const analysis = runCurrentWrinkleAnalysis(options);
+  activeAnalyses.add(analysis);
+  void analysis.finally(() => activeAnalyses.delete(analysis));
+  return analysis;
 }
 
 export function applyWrinkleGuidedRefinement(): void {
@@ -488,6 +509,7 @@ export async function disposeLiveWrinkleAnalysis(): Promise<void> {
   const currentLandmarker = wrinkleFaceLandmarker;
   yolo = null;
   wrinkleFaceLandmarker = null;
+  await Promise.allSettled([...activeAnalyses]);
   await current?.close();
   currentLandmarker?.close();
 }

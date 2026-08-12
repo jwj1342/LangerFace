@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useLiveControllerCommands } from "../hooks/useControllerCommands";
 import { useLiveStore } from "../stores/liveStore";
@@ -18,8 +18,13 @@ export function LiveRenderControlsPanel() {
   const atlasPreview = snapshot?.atlasPreview;
   const [density, setDensity] = useState(render?.densityPct || 100);
   const [opacity, setOpacity] = useState(render?.opacityPct || 60);
-  const mirror = render?.mirror ?? true;
-  const meshPts = render?.meshPts ?? false;
+  const controllerMirror = render?.mirror ?? true;
+  const controllerMeshPts = render?.meshPts ?? false;
+  const [mirror, setMirror] = useState(controllerMirror);
+  const [meshPts, setMeshPts] = useState(controllerMeshPts);
+
+  useEffect(() => setMirror(controllerMirror), [controllerMirror]);
+  useEffect(() => setMeshPts(controllerMeshPts), [controllerMeshPts]);
 
   return (
     <>
@@ -80,7 +85,11 @@ export function LiveRenderControlsPanel() {
           checkboxProps={{
             id: "mirror",
             checked: mirror,
-            onChange: (event) => commands.render("mirror_toggle", event.currentTarget.checked),
+            onChange: (event) => {
+              const checked = event.currentTarget.checked;
+              setMirror(checked);
+              commands.render("mirror_toggle", checked);
+            },
           }}
         >
           镜像（自拍视角）
@@ -91,10 +100,14 @@ export function LiveRenderControlsPanel() {
           checkboxProps={{
             id: "meshPts",
             checked: meshPts,
-            onChange: (event) => commands.render("mesh_points_toggle", event.currentTarget.checked),
+            onChange: (event) => {
+              const checked = event.currentTarget.checked;
+              setMeshPts(checked);
+              commands.render("mesh_points_toggle", checked);
+            },
           }}
         >
-          显示网格采样点
+          显示人脸关键点（白色圆点）
         </CheckboxField>
       </Card>
     </>

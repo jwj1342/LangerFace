@@ -48,16 +48,10 @@ def test_v8_1_73_smooths_only_lateral_canthus_terminals(tmp_path):
 
     v72_payload = _atlas_payload(canonical, v72_path, tmp_path / "atlas_v72.json")
     v73_payload = _atlas_payload(canonical, v73_path, tmp_path / "atlas_v73.json")
-    official = json.loads((ROOT / "assets" / "atlas_rstl.json").read_text(encoding="utf-8"))
-
-    assert official == v73_payload
-    assert official["atlasVersion"] == "8.1.73"
-    assert official["validated"] is False
-    assert len(official["lines"]) == 159
-    assert sum(len(line["points"]) for line in official["lines"]) == 15_222
-    assert (ROOT / "web" / "assets" / "atlas_rstl.json").read_bytes() == (
-        ROOT / "assets" / "atlas_rstl.json"
-    ).read_bytes()
+    assert v73_payload["atlasVersion"] == "8.1.73"
+    assert v73_payload["validated"] is False
+    assert len(v73_payload["lines"]) == 159
+    assert sum(len(line["points"]) for line in v73_payload["lines"]) == 15_222
 
     v72_by_name = {line["name"]: line for line in v72_payload["lines"]}
     v73_by_name = {line["name"]: line for line in v73_payload["lines"]}

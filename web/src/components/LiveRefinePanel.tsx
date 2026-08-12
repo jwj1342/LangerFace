@@ -13,6 +13,7 @@ export function LiveRefinePanel() {
       <Button variant="workbench" id="refine2dBtn" type="button" disabled aria-pressed="false">医生手动微调（2D）</Button>
       <div className="live-refine-panel hidden" id="refine2dPanel">
         <div className="live-refine-status"><span>当前状态</span><span id="refine2dStatus">未开始</span></div>
+        <div className="live-refine-quality" id="refine2dQuality" data-state="idle" role="status">质量检查将在修改后运行。</div>
         <ButtonRow className="live-refine-modes">
           <Button variant="workbench" id="refineViewBtn" type="button" aria-pressed="true">查看</Button>
           <Button variant="workbench" id="refineDragBtn" type="button">拖线</Button>

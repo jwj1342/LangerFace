@@ -7,10 +7,10 @@ const liveUi = [
   fs.readFileSync("src/routes/LiveWorkbench.tsx", "utf8"),
   fs.readFileSync("src/components/LiveSourceControlsPanel.tsx", "utf8"),
   fs.readFileSync("src/components/LiveQualityPanel.tsx", "utf8"),
+  fs.readFileSync("src/components/LiveIncisionOverlayPanel.tsx", "utf8"),
 ].join("\n");
 const main = fs.readFileSync("src/services/liveRuntime.ts", "utf8");
 const render = fs.readFileSync("src/services/render2d.ts", "utf8");
-const mode3d = fs.readFileSync("src/services/mode3d.ts", "utf8");
 const three3d = fs.readFileSync("src/services/three3d.ts", "utf8");
 const source = fs.readFileSync("src/services/pipelineSource.ts", "utf8");
 const loop = fs.readFileSync("src/services/pipelineLoop.ts", "utf8");
@@ -25,34 +25,39 @@ assert.ok(liveUi.includes('accept="image/*,video/*"'), "React live page accepts 
 assert.ok(liveUi.includes('id="camBtn"'), "React live page exposes camera entry for realtime overlay");
 assert.ok(liveUi.includes('id="exportBtn"'), "React live page exposes export action");
 assert.ok(liveUi.includes('id="incisionOverlayQa"'), "React live page exposes visible incision overlay QA state");
+assert.ok(liveUi.includes('id="liveIncisionOverlayCard"'), "React live page visibly confirms that an incision overlay is loaded");
+assert.ok(liveUi.includes('id="clearIncisionOverlayBtn"'), "React live page can explicitly clear a staged incision overlay");
 assert.ok(liveUi.includes("切口叠加 QA"), "React live page labels visible overlay QA as engineering state");
 assert.ok(source.includes('setSource(prepared.source, "image"'), "uploaded photos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "video"'), "uploaded videos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "camera"'), "camera frames enter the shared live render source");
-assert.ok(loop.includes('sourceState.sourceKind !== "image"'), "video and camera sources schedule continuous overlay frames");
+assert.match(loop, /if \((?:sourceState\.sourceKind|sourceKind) !== "image"\) requestFrame\(\)/, "video and camera sources schedule continuous overlay frames");
 assert.ok(loop.includes("eyeBlinkLeft"), "pipeline extracts left blink blendshape for overlay quality gate");
 assert.ok(loop.includes("eyeBlinkRight"), "pipeline extracts right blink blendshape for overlay quality gate");
 assert.ok(loop.includes("jawOpen"), "pipeline extracts jaw-open blendshape for overlay quality gate");
 assert.ok(main.includes("applyStagedIncisionOverlay"), "live page loads staged incision overlay payloads");
 assert.ok(main.includes("validateIncisionOverlay(overlay)"), "live page validates incision overlay payloads before rendering");
 assert.ok(main.includes("renderState.incisionOverlay = overlay"), "live page stores validated incision overlay in render state");
+assert.ok(main.includes("renderState.incisionOverlay = null"), "live page clears an incision overlay without affecting the RSTL atlas");
 assert.ok(main.includes("./liveSnapshots"), "live page consumes the shared live snapshot service");
 assert.ok(main.includes("buildLiveControllerSnapshot({"), "live page delegates React snapshot construction to the shared service");
 assert.ok(liveSnapshots.includes("../lib/controllerSnapshotSchemas"), "shared live snapshot service reuses the lightweight React snapshot schema module");
-assert.ok(controllerSnapshotSchemas.includes("react-live-controller-snapshot/v0.1"), "shared snapshot schema module owns the live React snapshot schema");
+assert.ok(controllerSnapshotSchemas.includes("react-live-controller-snapshot/v0.2"), "shared snapshot schema module owns the 2D-only live React snapshot schema");
 assert.ok(liveSnapshots.includes("buildLiveControllerSnapshot"), "shared live snapshot service builds low-frequency live controller snapshots");
 assert.ok(main.includes("setIncisionOverlayQa"), "live page shows pending overlay QA feedback after loading a candidate");
 assert.ok(main.includes("上传照片、视频或开启摄像头后，会随 RSTL 一起显示"), "live page gives explicit overlay feedback");
 assert.ok(main.includes("buildZoomCards(refreshStaticImage)"), "live page rebuilds zoom cards after loading incision overlay");
 assert.ok(main.includes("createCanvasRecordingController"), "live page uses the tested canvas export controller");
 assert.ok(main.includes("canvas: els.canvas"), "live page exports the rendered main canvas, including incision overlay");
-assert.ok(main.includes("getExtraCanvases: visibleRecordingCanvases"), "live page includes zoom/3D canvases in composite export");
-assert.ok(main.includes('label: "3D 视图"'), "live page labels the 3D view in export");
+assert.ok(main.includes("getExtraCanvases: visibleRecordingCanvases"), "live page includes visible zoom canvases in composite export");
+assert.ok(!main.includes('label: "3D 视图"'), "live export has no retired 3D canvas");
 assert.ok(exporter.includes("sourceCanvas.captureStream(fps)"), "export controller records the selected source canvas stream");
-assert.ok(exporter.includes("createCompositeSource(extras)"), "export controller can compose detail and 3D canvases");
+assert.ok(exporter.includes("createCompositeSource(extras)"), "export controller can compose detail canvases");
 assert.ok(exporter.includes("drawContain(g, extra.canvas"), "export controller draws extra canvases into recording");
 assert.ok(exporter.includes('mimeType: "video/webm"'), "export controller records playable webm output");
 assert.ok(render.includes("drawIncisionOverlay(lm"), "renderer draws incision overlay on every frame");
+assert.ok(render.includes('color: "#07111f"'), "renderer gives the candidate line a dark contrast outline");
+assert.ok(render.includes("lineWidth: baseWidth * 1.75"), "renderer gives the candidate line a visible foreground stroke");
 assert.ok(render.includes("estimateFacePoseQuality"), "renderer estimates pose quality before drawing incision overlay");
 assert.ok(poseQuality.includes("incision-overlay-pose-gate/v0.2"), "renderer exports a versioned incision overlay pose gate");
 assert.ok(poseQuality.includes("rapid_frame_motion"), "pose gate blocks rapid frame-to-frame motion");
@@ -103,9 +108,6 @@ assert.ok(three3d.includes("setIncisionOverlay("), "3D viewer can render incisio
 assert.ok(three3d.includes("setIncisionOverlayPoints("), "3D viewer can render mapped overlay points");
 assert.ok(three3d.includes("tumor_boundary_points"), "3D viewer renders tumor boundary points");
 assert.ok(three3d.includes("candidate_points"), "3D viewer renders candidate incision points");
-assert.ok(mode3d.includes("applyIncisionOverlayToViewer(disp, faces)"), "3D route applies incision overlay after building viewer geometry");
-assert.ok(mode3d.includes("mediaPipeOverlayToFlamePoints"), "3D route maps MediaPipe incision refs onto FLAME demo view");
-assert.ok(mode3d.includes("incision_overlay_3d_view"), "3D route publishes sanitized overlay view diagnostics");
-assert.ok(mode3d.includes("exported_raw_pixels: false"), "3D overlay diagnostics do not export raw pixels");
+assert.ok(!fs.existsSync("src/services/mode3d.ts"), "Live overlay no longer ships the retired 3D runtime");
 
 console.log("test_live_incision_overlay_ui: live overlay UI assertions passed");

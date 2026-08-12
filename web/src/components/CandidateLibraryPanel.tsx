@@ -15,6 +15,7 @@ export function CandidateLibraryPanel() {
   const hasCandidate = Boolean(snapshot?.candidate);
   const hasSaved = saved.length > 0;
   const [confirmClear, setConfirmClear] = useState(false);
+  const [activeCandidateId, setActiveCandidateId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hasSaved) setConfirmClear(false);
@@ -59,17 +60,28 @@ export function CandidateLibraryPanel() {
         <Button variant="workbench" id="exportReportBtn" type="button" disabled={!hasCandidate && !hasSaved} onClick={() => commands.library("export_report")}>导出报告</Button>
         <Button variant="workbench" id="exportPngBtn" type="button" disabled={!hasCandidate} onClick={() => commands.library("export_png")}>导出截图</Button>
       </ButtonRow>
-      <Button variant="workbench" id="stageLiveOverlayBtn" type="button" disabled={!hasCandidate} onClick={() => commands.library("stage_live_overlay")}>发送到实时叠加</Button>
+      <Button variant="workbenchPrimary" id="stageLiveOverlayBtn" type="button" disabled={!hasCandidate} onClick={() => commands.library("stage_live_overlay")}>进入实时叠加</Button>
+      <Hint id="liveOverlayHandoffStatus" aria-live="polite">{snapshot?.stageStatus || "确认候选并填写审阅信息后，可进入照片、视频或摄像头叠加。"}</Hint>
       <CandidateList id="candidateList">
         {saved.map((item) => (
-          <CandidateRow key={item.id}>
+          <CandidateRow key={item.id} className={activeCandidateId === item.id ? "active" : undefined}>
             <CandidateRowTop>
               <span>{item.title}</span>
               <CandidateRowStatus danger={item.statusDanger}>{item.statusLabel}</CandidateRowStatus>
             </CandidateRowTop>
             <CandidateRowMeta>{item.meta}</CandidateRowMeta>
             <ButtonRow className="two-cols">
-              <Button variant="workbench" type="button" onClick={() => commands.library("load_candidate", item.id)}>载入</Button>
+              <Button
+                variant="workbench"
+                type="button"
+                aria-pressed={activeCandidateId === item.id}
+                onClick={() => {
+                  setActiveCandidateId(item.id);
+                  commands.library("load_candidate", item.id);
+                }}
+              >
+                {activeCandidateId === item.id ? "已载入" : "载入"}
+              </Button>
               <Button variant="workbench" type="button" onClick={() => commands.library("remove_candidate", item.id)}>删除</Button>
             </ButtonRow>
           </CandidateRow>

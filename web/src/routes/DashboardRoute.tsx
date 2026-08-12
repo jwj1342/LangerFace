@@ -75,19 +75,19 @@ export function DashboardRoute() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader><span>维护与诊断</span><Settings size={16} /></CardHeader>
-            <CardContent>
+          <details className="settings-disclosure">
+            <summary><Settings size={16} /> 仅维护人员</summary>
+            <div className="settings-disclosure-body">
               <ReactShellNavLink to="/settings/atlas">
-                <span>图谱库管理</span>
+                <span>图谱生产与复核</span>
                 <PenLine size={16} />
               </ReactShellNavLink>
               <ReactShellNavLink to="/settings/developer">
-                <span>开发者诊断</span>
+                <span>开发运行时诊断</span>
                 <Boxes size={16} />
               </ReactShellNavLink>
-            </CardContent>
-          </Card>
+            </div>
+          </details>
 
           <Hint>
             本入口不创建、恢复或保存病例。照片、视频和摄像头画面只由对应工具在当前浏览器会话中处理。

@@ -100,6 +100,10 @@ def test_v8_1_74_fairs_only_mapped_lateral_canthus_arcs(tmp_path):
         assert _maximum_turn_degrees(new_points) < 0.35 * _maximum_turn_degrees(old_points)
         assert not _has_self_intersection(new_points)
 
+    mapped_v73_points = {name: line.pts[:, :2] for name, line in mapped_v73.items()}
+    mapped_v74_points = {name: line.pts[:, :2] for name, line in mapped_v74.items()}
+    face_span = float(np.ptp(np.vstack(list(mapped_v74_points.values())), axis=0).max())
+    crossing_cell_size = max(face_span * 0.025, 1e-6)
     assert _crossing_pairs(
-        {name: line.pts[:, :2] for name, line in mapped_v74.items()}
-    ) == _crossing_pairs({name: line.pts[:, :2] for name, line in mapped_v73.items()})
+        mapped_v74_points, cell_size=crossing_cell_size
+    ) == _crossing_pairs(mapped_v73_points, cell_size=crossing_cell_size)

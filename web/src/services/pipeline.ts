@@ -1,16 +1,17 @@
 import { resolveAtlasForInjection } from "./atlasContract.ts";
 import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.ts";
 import { logWarn } from "./logger.ts";
-import { loop } from "./pipelineLoop.ts";
-import { modelState, renderState, sourceState } from "./liveState.ts";
+import { requestFrame } from "./pipelineLoop.ts";
+import { modelState, renderState } from "./liveState.ts";
 import type { Triangle } from "./softBody";
+import { buildRstlSourceContract } from "./rstlSourceContract.ts";
 
 export { ensureReady } from "./pipelineModels.ts";
 export { handleFile, setSource, showCameraPlaceholder, startCamera, stopSource } from "./pipelineSource.ts";
-export { detectHands, loop, redrawPausedFrame, requestFrame } from "./pipelineLoop.ts";
+export { cancelFrame, detectHands, loop, redrawPausedFrame, requestFrame } from "./pipelineLoop.ts";
 
 function requestRedraw(): void {
-  if (sourceState.running && !sourceState.paused) requestAnimationFrame(loop);
+  requestFrame();
 }
 
 function isSupportedAtlasSystem(system: string): system is "rstl" | "langer" {
@@ -40,6 +41,20 @@ export function setActiveAtlas(system: string, atlasOrLines: unknown): boolean {
     return false;
   }
   modelState.atlases[system] = res.lineList;
+  const payload = atlasOrLines && typeof atlasOrLines === "object" && !Array.isArray(atlasOrLines)
+    ? atlasOrLines
+    : {
+      system,
+      topologyId: expectedTopologyId,
+      topologyVersion: expectedTopologyVersion,
+      provenance: "runtime_lines_unattributed",
+      lines: res.lineList,
+    };
+  modelState.atlasContracts[system] = buildRstlSourceContract(payload, {
+    provenance: "runtime_lines_unattributed",
+    topologyId: expectedTopologyId,
+    topologyVersion: expectedTopologyVersion,
+  });
   renderState.system = system;
   requestRedraw();
   return true;
@@ -51,6 +66,7 @@ export function restoreOfficialAtlas(system: string): boolean {
     return false;
   }
   modelState.atlases[system] = modelState.officialAtlases[system];
+  modelState.atlasContracts[system] = modelState.officialAtlasContracts[system];
   requestRedraw();
   return true;
 }

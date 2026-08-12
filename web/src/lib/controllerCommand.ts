@@ -8,7 +8,6 @@ import {
   INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT,
   INCISION_TUMOR_REACT_COMMAND_EVENT,
   LIVE_RENDER_REACT_COMMAND_EVENT,
-  LIVE_ROUTE_REACT_COMMAND_EVENT,
   LIVE_SOURCE_REACT_COMMAND_EVENT,
 } from "./controllerEvents.ts";
 
@@ -25,17 +24,7 @@ export const LIVE_RENDER_COMMANDS = [
   "mirror_toggle",
   "mesh_points_toggle",
   "restore_atlas",
-] as const;
-export const LIVE_ROUTE_COMMANDS = [
-  "route_change",
-  "load_demo_recon",
-  "start_scan",
-  "view_3d",
-  "project_3d",
-  "reset_3d",
-  "start_twin",
-  "toggle_twin_head",
-  "toggle_twin_texture",
+  "clear_incision_overlay",
 ] as const;
 
 export const ANNOTATE_MESH_COMMANDS = [
@@ -86,8 +75,6 @@ export const INCISION_EDIT_COMMANDS = [
 ] as const;
 export const INCISION_REVIEW_COMMANDS = [
   "review_state_changed",
-  "approve_candidate",
-  "reject_candidate",
   "save_review",
 ] as const;
 export const INCISION_LIBRARY_COMMANDS = [
@@ -104,7 +91,6 @@ export const INCISION_LIBRARY_COMMANDS = [
 
 export type LiveSourceCommand = (typeof LIVE_SOURCE_COMMANDS)[number];
 export type LiveRenderCommand = (typeof LIVE_RENDER_COMMANDS)[number];
-export type LiveRouteCommand = (typeof LIVE_ROUTE_COMMANDS)[number];
 export type AnnotateMeshCommand = (typeof ANNOTATE_MESH_COMMANDS)[number];
 export type AnnotateDrawCommand = (typeof ANNOTATE_DRAW_COMMANDS)[number];
 export type AnnotateLibraryCommand = (typeof ANNOTATE_LIBRARY_COMMANDS)[number];
@@ -173,9 +159,6 @@ export function dispatchLiveRenderCommand(command: LiveRenderCommand, value?: st
   dispatchControllerCommand(LIVE_RENDER_REACT_COMMAND_EVENT, { command, value });
 }
 
-export function dispatchLiveRouteCommand(command: LiveRouteCommand, value?: string | boolean) {
-  dispatchControllerCommand(LIVE_ROUTE_REACT_COMMAND_EVENT, { command, value });
-}
 
 export function dispatchAnnotateMeshCommand(command: AnnotateMeshCommand) {
   dispatchControllerCommand(ANNOTATE_MESH_REACT_COMMAND_EVENT, { command });

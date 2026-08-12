@@ -59,8 +59,9 @@ def _segments_intersect(a: np.ndarray, b: np.ndarray, c: np.ndarray, d: np.ndarr
     return o1 * o2 < -1e-12 and o3 * o4 < -1e-12
 
 
-def _crossing_pairs(curves: dict[str, np.ndarray]) -> set[tuple[str, str]]:
-    cell_size = 0.025
+def _crossing_pairs(
+    curves: dict[str, np.ndarray], cell_size: float = 0.025
+) -> set[tuple[str, str]]:
     grid: dict[tuple[int, int], list[tuple[str, int, np.ndarray, np.ndarray]]] = {}
     checked: set[tuple[str, int, str, int]] = set()
     crossings: set[tuple[str, str]] = set()
@@ -99,18 +100,11 @@ def test_v8_1_70_moves_short_arcs_above_brows_and_reverses_transition(tmp_path):
     v70_reference = ROOT / "assets" / "rstl_standard_reference_v8_1_70.json"
     assert json.loads(v70_reference.read_text(encoding="utf-8"))["atlasVersion"] == "8.1.70"
     v70_payload = _atlas_payload(canonical, v70_reference, tmp_path / "atlas_v70.json")
-    official = json.loads((ROOT / "assets" / "atlas_rstl.json").read_text(encoding="utf-8"))
-
-    assert official["validated"] is False
-    assert official["atlasVersion"] == "8.1.70"
+    assert v70_payload["validated"] is False
     assert v70_payload["atlasVersion"] == "8.1.70"
-    assert len(official["lines"]) == 159
-    assert sum(len(line["points"]) for line in official["lines"]) == 15282
-    assert official["lines"][-1]["name"] == "standard_field_0174_left"
-    assert official == v70_payload
-    assert (ROOT / "web" / "assets" / "atlas_rstl.json").read_bytes() == (
-        ROOT / "assets" / "atlas_rstl.json"
-    ).read_bytes()
+    assert len(v70_payload["lines"]) == 159
+    assert sum(len(line["points"]) for line in v70_payload["lines"]) == 15282
+    assert v70_payload["lines"][-1]["name"] == "standard_field_0174_left"
 
     v69_by_name = {line["name"]: line for line in v69_payload["lines"]}
     v70_by_name = {line["name"]: line for line in v70_payload["lines"]}
@@ -121,8 +115,8 @@ def test_v8_1_70_moves_short_arcs_above_brows_and_reverses_transition(tmp_path):
         if name not in CORRECTED_V70_LINES
     )
     assert all(v70_by_name[name] != v69_by_name[name] for name in CORRECTED_V70_LINES)
-    assert sum(line["region"] == LATERAL_REGION for line in official["lines"]) == 8
-    assert sum(line["region"] == MEDIAL_REGION for line in official["lines"]) == 10
+    assert sum(line["region"] == LATERAL_REGION for line in v70_payload["lines"]) == 8
+    assert sum(line["region"] == MEDIAL_REGION for line in v70_payload["lines"]) == 10
 
     v69_norm = _normalized_lines(canonical, Atlas.load(str(tmp_path / "atlas_v69.json")))
     v70_norm = _normalized_lines(canonical, Atlas.load(str(tmp_path / "atlas_v70.json")))

@@ -3,6 +3,7 @@ import { resetImageView, setRefineCanvasViewActive, stepImageViewZoom } from "./
 import type { MappedAtlasLine } from "./geometryAtlas.ts";
 import type { Vec3 } from "./softBody";
 import {
+  assessRefineLineQuality,
   applyCurveRefinementTransport,
   applyMirroredCurveDelta,
   buildCurveRefinementTransport,
@@ -94,8 +95,41 @@ function captureHistory(label: string): void {
 function markDirty(message: string): void {
   const s = state();
   s.dirty = true;
+  refreshRefineQuality();
   els.refine2dHint.textContent = message;
   updateRefineUi();
+}
+
+function refreshRefineQuality(): void {
+  const s = state();
+  if (!s.lines?.length || !s.latestAutoLines?.length) {
+    s.quality = null;
+    return;
+  }
+  const rect = els.canvas.getBoundingClientRect();
+  const canvasPerCssPixel = Math.max(
+    els.canvas.width / Math.max(1, rect.width),
+    els.canvas.height / Math.max(1, rect.height),
+  );
+  s.quality = assessRefineLineQuality(s.latestAutoLines, s.lines, {
+    minimumSpacingPx: 6 * canvasPerCssPixel,
+  });
+}
+
+function qualityMessage(): string {
+  const report = state().quality;
+  if (!report) return "质量检查将在修改后运行。";
+  if (report.ok) return `质量检查通过：${report.checkedLineCount} 条可见曲线未发现新增交叉或过密。`;
+  const counts = new Map<string, number>();
+  for (const warning of report.warnings) counts.set(warning.code, (counts.get(warning.code) || 0) + 1);
+  const labels: Record<string, string> = {
+    invalid_coordinate: "无效坐标",
+    new_self_intersection: "自交",
+    new_curve_intersection: "曲线交叉",
+    new_dense_spacing: "邻线过密",
+  };
+  const summary = [...counts].map(([code, count]) => `${labels[code] || code} ${count} 处`).join("；");
+  return `需要复核：检测到新增${summary}。请调整、撤销或在导出前由医生确认。`;
 }
 
 export function setLatestAutoLines(mapped: readonly RefineLine[]): void {
@@ -105,6 +139,9 @@ export function setLatestAutoLines(mapped: readonly RefineLine[]): void {
   // never move the baseline underneath an in-progress gesture.
   if (!s.latestAutoLines?.length || (!s.active && !s.lines && !s.liveTransport)) {
     s.latestAutoLines = cloneLines(mapped);
+  }
+  if (sourceState.paused && !s.liveBaselineLines?.length) {
+    s.liveBaselineLines = cloneLines(mapped);
   }
   if (s.active && !s.lines) {
     s.lines = cloneLines(mapped);
@@ -127,13 +164,31 @@ export function replaceStaticRefineBaseline(mapped: readonly RefineLine[]): void
   const s = state();
   s.latestAutoLines = cloneLines(mapped);
   s.lines = cloneLines(mapped);
+  if (!sourceState.paused) s.liveBaselineLines = null;
   s.liveTransport = null;
   s.selected = null;
   s.dirty = false;
+  s.quality = null;
   s.undoStack = [];
   s.drag = null;
   updateRefineUi();
   requestRefineFrame();
+}
+
+/** Start one frozen-frame edit session without carrying stale frame geometry. */
+export function beginFrozenRefineSession(): void {
+  const s = state();
+  s.active = false;
+  s.mode = "view";
+  s.lines = null;
+  s.latestAutoLines = null;
+  s.liveBaselineLines = null;
+  s.selected = null;
+  s.dirty = false;
+  s.quality = null;
+  s.undoStack = [];
+  s.drag = null;
+  setRefineCanvasViewActive(false);
 }
 
 export function hasManualRefineChanges(): boolean {
@@ -161,9 +216,10 @@ export function getDisplayLines(
 /** Commit current frozen-frame edits for transport to subsequent live frames. */
 export function commitRefineForLive(): boolean {
   const s = state();
-  if (!s.latestAutoLines?.length || !s.lines?.length) return false;
+  const liveBaseline = s.liveBaselineLines || s.latestAutoLines;
+  if (!liveBaseline?.length || !s.lines?.length) return false;
   s.liveTransport = {
-    ...buildCurveRefinementTransport(s.latestAutoLines, s.lines),
+    ...buildCurveRefinementTransport(liveBaseline, s.lines),
     system: renderState.system,
     committedAt: new Date().toISOString(),
   };
@@ -226,9 +282,11 @@ export function resetRefineForNewSource(): void {
   s.showAxis = true;
   s.lines = null;
   s.latestAutoLines = null;
+  s.liveBaselineLines = null;
   s.liveTransport = null;
   s.selected = null;
   s.dirty = false;
+  s.quality = null;
   s.undoStack = [];
   s.drag = null;
   setRefineCanvasViewActive(false);
@@ -247,6 +305,8 @@ export function updateRefineUi(): void {
   els.refine2dStatus.textContent = !s.active
     ? "未开始"
     : s.dirty ? "已修改" : "查看中";
+  els.refine2dQuality.textContent = qualityMessage();
+  els.refine2dQuality.dataset.state = !s.quality ? "idle" : s.quality.ok ? "ok" : "warning";
   const modeButtons: Array<[HTMLButtonElement, RefineMode]> = [
     [els.refineView, "view"],
     [els.refineDrag, "drag"],
@@ -688,6 +748,7 @@ export function undoRefine(): void {
   s.lines = cloneLines(entry.lines);
   s.selected = null;
   s.dirty = true;
+  refreshRefineQuality();
   els.refine2dHint.textContent = `已撤销：${entry.label}`;
   updateRefineUi();
   requestRefineFrame();
@@ -717,10 +778,43 @@ export function exportRefine(): void {
 
 function buildExportPayload() {
   const s = state();
+  refreshRefineQuality();
+  const automaticByName = new Map((s.latestAutoLines || []).map((line) => [line.name, line]));
+  const modifiedLineNames: string[] = [];
+  let movedPointCount = 0;
+  for (const line of s.lines || []) {
+    const automatic = automaticByName.get(line.name);
+    if (!automatic) continue;
+    let lineChanged = Boolean(line.hidden) !== Boolean(automatic.hidden);
+    for (let index = 0; index < line.pts.length; index++) {
+      const point = line.pts[index];
+      const baseline = automatic.pts[index];
+      if (!baseline || Math.hypot(point[0] - baseline[0], point[1] - baseline[1]) > 0.01) {
+        movedPointCount += 1;
+        lineChanged = true;
+      }
+    }
+    if (lineChanged) modifiedLineNames.push(line.name);
+  }
+  const hiddenLineNames = (s.lines || []).filter((line) => line.hidden).map((line) => line.name);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     source: "web/index.html 2d-fit doctor refinement",
     generatedAt: new Date().toISOString(),
+    provenance: {
+      sourceKind: sourceState.sourceKind || "unknown",
+      editor: "langerface_live_2d_refine",
+      coordinateSpace: "source_canvas_pixels",
+      automaticBaselinePreserved: Boolean(s.latestAutoLines?.length),
+      rawMediaIncluded: false,
+    },
+    modificationSummary: {
+      modifiedLineCount: modifiedLineNames.length,
+      modifiedLineNames,
+      movedPointCount,
+      hiddenLineCount: hiddenLineNames.length,
+    },
+    qualityReview: s.quality,
     imageSize: { width: els.canvas.width, height: els.canvas.height },
     mirroredView: renderState.mirror,
     system: renderState.system,
@@ -735,6 +829,6 @@ function buildExportPayload() {
       symmetryPairId: line.symmetryPairId || "",
       points: line.pts.map((point) => [Math.round(point[0] * 100) / 100, Math.round(point[1] * 100) / 100]),
     })),
-    hiddenLines: (s.lines || []).filter((line) => line.hidden).map((line) => line.name),
+    hiddenLines: hiddenLineNames,
   };
 }

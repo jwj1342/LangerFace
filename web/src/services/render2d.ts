@@ -17,6 +17,7 @@ import { pointInHandMasks, type HandMask, type Point2 } from "./geometryOccluder
 import {
   buildForeheadSkinVisibility,
   buildHeadVisibility,
+  EXTENDED_FOREHEAD_REGIONS,
   stabilizeForeheadMask,
 } from "./foreheadVisibility.ts";
 import type { Triangle, Vec3 } from "./softBody.ts";
@@ -115,13 +116,6 @@ const isIncisionZoomRegion = (region: RenderRegion): region is IncisionZoomRegio
 const focusScratch = document.createElement("canvas");
 const focusCtx = focusScratch.getContext("2d") as CanvasRenderingContext2D;
 const focusZoomRange = { min: 1, max: 4.5 };
-// 这些 region 的线在 mapAtlas 之后被主动外推到面部网格之外（METHODS §5.1），
-// 显示期必须按头部包络 + 肤色再裁一次；这里是 React live 的唯一生产渲染路径。
-const EXTENDED_FOREHEAD_REGIONS = new Set([
-  "forehead_lower_long_arc_v13",
-  "forehead_bridge_arc_v15",
-]);
-
 /** 读取当前帧像素供肤色判定使用；跨源画布读取失败时返回 null（退化为不按肤色裁剪）。 */
 function readFrameImageData(W: number, H: number): ImageData | null {
   if (!(W > 0 && H > 0)) return null;
@@ -341,10 +335,16 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
     }
   }
   if (canDrawAtlas && renderState.meshPts) {
-    ctx.globalAlpha = Math.min(1, renderState.opacity); ctx.fillStyle = "rgba(255,255,255,.55)";
-    for (let i = 0; i < lm.length; i += 2) {
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = "#d0e2ff";
+    ctx.strokeStyle = "#07111f";
+    ctx.lineWidth = Math.max(1, W / 1000);
+    for (let i = 0; i < lm.length; i += 1) {
       if (hasMasks && pointInHandMasks(toPoint2(lm[i]), masks)) continue;
-      ctx.beginPath(); ctx.arc(lm[i][0], lm[i][1], Math.max(1, W / 1100), 0, 6.283); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(lm[i][0], lm[i][1], Math.max(2, W / 650), 0, 6.283);
+      ctx.fill();
+      ctx.stroke();
     }
   }
   drawIncisionOverlay(lm, W, H, masks, vis, innerMouth, frameQualityGate, localRegionQuality, localRegionMasks);
@@ -860,9 +860,14 @@ function drawIncisionOverlay(
     lineWidth: baseWidth,
     dash: [baseWidth * 3, baseWidth * 2],
   }, localRegionMasks);
-  strokeOverlayRefs(surfaceRefs(overlay.candidate?.polyline_refs), lm, masks, vis, innerMouth, {
+  const candidateRefs = surfaceRefs(overlay.candidate?.polyline_refs);
+  strokeOverlayRefs(candidateRefs, lm, masks, vis, innerMouth, {
+    color: "#07111f",
+    lineWidth: baseWidth * 3.4,
+  }, localRegionMasks);
+  strokeOverlayRefs(candidateRefs, lm, masks, vis, innerMouth, {
     color: overlay.candidate_type === "linear" ? "#22c55e" : "#5eead4",
-    lineWidth: baseWidth * 1.35,
+    lineWidth: baseWidth * 1.75,
   }, localRegionMasks);
   const center = mapSurfaceRefs(optionalSurfaceRef(overlay.tumor?.center_ref), lm, modelTriangles()).pts[0];
   const centerLocalAction = localActionForPoints([center], localRegionMasks);

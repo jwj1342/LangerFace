@@ -3,14 +3,15 @@ import type { LiveZoomCard } from "./render2d.ts";
 import type { CanvasRecordingController } from "./canvasRecording";
 import type { IncisionOverlayPayload } from "./dataSource";
 import type { Vec3 } from "./softBody";
+import type { PhotoPlanningController } from "./photoPlanningController";
+import type { RstlSourceContract } from "./rstlSourceContract";
 import type {
   CurveRefinementTransport,
   RefineLine,
   RefinePoint,
+  RefineQualityReport,
   RefineViewportCrop,
 } from "./liveRefineMath";
-
-type AnyRecord = Record<string, any>;
 
 export interface LiveModelState {
   landmarker: any;
@@ -22,6 +23,8 @@ export interface LiveModelState {
   noseTris: any;
   atlases: Record<string, any>;
   officialAtlases: Record<string, any>;
+  atlasContracts: Record<string, RstlSourceContract>;
+  officialAtlasContracts: Record<string, RstlSourceContract>;
   [key: string]: unknown;
 }
 
@@ -102,16 +105,19 @@ export interface LiveRefine2dState {
   showAxis: boolean;
   lines: EditableRefineLine[] | null;
   latestAutoLines: EditableRefineLine[] | null;
+  liveBaselineLines: EditableRefineLine[] | null;
   liveTransport: CurveRefinementTransport | null;
   selected: RefinePick | null;
   dirty: boolean;
+  quality: RefineQualityReport | null;
   undoStack: RefineHistoryEntry[];
   drag: RefineDrag | null;
 }
 
 export interface LiveSourceState {
-  source: any;
-  sourceKind: "camera" | "video" | "image" | null;
+  planning2d: PhotoPlanningController | null;
+  readonly source: unknown | null;
+  readonly sourceKind: "camera" | "video" | "image" | null;
   running: boolean;
   paused: boolean;
   presence: number;
@@ -134,28 +140,6 @@ export interface LiveRecordingState {
   recorder: CanvasRecordingController | null;
 }
 
-export interface LiveReconState {
-  route: "2d" | "3d";
-  head3d: AnyRecord | null;
-  reconVerts: any;
-  reconFaces: any;
-  reconAtlasLines: any;
-  reconColors: any;
-  reconProjectable: boolean;
-  reconDisplaySpace: string;
-  mode3d: string;
-  viewerRAF: number | null;
-  rot: { x: number; y: number };
-  scan: AnyRecord | null;
-  flameFit: any;
-  flameNeutral: any;
-  flameBasis: any;
-  flameBeta: any;
-  twinMode: string;
-  twinTexture: boolean;
-  [key: string]: unknown;
-}
-
 export const modelState: LiveModelState = {
   landmarker: null,
   imageLandmarker: null,
@@ -166,6 +150,8 @@ export const modelState: LiveModelState = {
   noseTris: null,
   atlases: {},
   officialAtlases: {},
+  atlasContracts: {},
+  officialAtlasContracts: {},
 };
 
 export const renderState: LiveRenderState = {
@@ -186,9 +172,11 @@ export const renderState: LiveRenderState = {
     showAxis: true,
     lines: null,
     latestAutoLines: null,
+    liveBaselineLines: null,
     liveTransport: null,
     selected: null,
     dirty: false,
+    quality: null,
     undoStack: [],
     drag: null,
   },
@@ -214,8 +202,13 @@ export const renderState: LiveRenderState = {
 };
 
 export const sourceState: LiveSourceState = {
-  source: null,
-  sourceKind: null,
+  planning2d: null,
+  get source() {
+    return this.planning2d?.getFrameState().source ?? null;
+  },
+  get sourceKind() {
+    return this.planning2d?.getFrameState().kind ?? null;
+  },
   running: false,
   paused: false,
   presence: 0,
@@ -233,27 +226,14 @@ export const sourceState: LiveSourceState = {
   lastHulls: [],
 };
 
+export function currentLiveSource(): unknown | null {
+  return sourceState.planning2d?.getFrameState().source ?? null;
+}
+
+export function currentLiveSourceKind(): "camera" | "video" | "image" | null {
+  return sourceState.planning2d?.getFrameState().kind ?? null;
+}
+
 export const recordingState: LiveRecordingState = {
   recorder: null,
-};
-
-export const reconState: LiveReconState = {
-  route: "2d",
-  head3d: null,
-  reconVerts: null,
-  reconFaces: null,
-  reconAtlasLines: null,
-  reconColors: null,
-  reconProjectable: false,
-  reconDisplaySpace: "screen",
-  mode3d: "view",
-  viewerRAF: null,
-  rot: { x: 0, y: 0 },
-  scan: null,
-  flameFit: null,
-  flameNeutral: null,
-  flameBasis: null,
-  flameBeta: null,
-  twinMode: "individual",
-  twinTexture: false,
 };
