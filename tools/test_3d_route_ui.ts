@@ -14,6 +14,7 @@ const liveState = read("web/src/services/liveState.ts");
 const controllerCommand = read("web/src/lib/controllerCommand.ts");
 const app = read("web/src/App.tsx");
 const annotateRuntime = read("web/src/services/annotateRuntime.ts");
+const annotationMeshService = read("web/src/services/annotationMeshService.ts");
 const incisionRuntime = read("web/src/services/incisionRuntime.ts");
 const surgeryRoute = read("web/src/routes/SurgeryRoute.tsx");
 
@@ -39,7 +40,8 @@ assert.ok(!/mode3d|projection3d|liveScanLifecycle|reconState|LIVE_ROUTE/.test(li
 assert.ok(!/LiveReconState|reconState/.test(liveState), "Live state owns no 3D reconstruction resources");
 assert.ok(!/LIVE_ROUTE|load_demo_recon|start_scan|view_3d|project_3d|start_twin/.test(controllerCommand), "controller API exposes no Live 3D commands");
 
-assert.ok(annotateRuntime.includes("loadFlameBasis"), "offline FLAME-backed annotation remains available");
+assert.ok(annotateRuntime.includes("AnnotationMeshService"), "annotation runtime keeps the extracted mesh service");
+assert.ok(annotationMeshService.includes("loadFlameBasis"), "offline FLAME-backed annotation remains available");
 assert.ok(incisionRuntime.includes("mountIncisionWorkbench"), "incision workflow remains available");
 assert.ok(surgeryRoute.includes("SurgeryWorkbench"), "surgery workflow remains available");
 
