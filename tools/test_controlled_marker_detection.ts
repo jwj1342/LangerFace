@@ -104,7 +104,7 @@ assert.ok(runtimeSource.includes("keepControlledMarkerRetry"),
   "failed marker clicks retain marker mode so the user can retry directly");
 assert.ok(runtimeSource.includes("projectedCandidate !== state.result?.candidate"),
   "endpoint visibility is bound to the candidate whose photo projection was validated");
-assert.ok(runtimeSource.includes("controlledMarkerSeedMode = false;\n          state.planning2d?.setSelection"),
+assert.match(runtimeSource, /controlledMarkerSeedMode = false;\s*state\.planning2d\?\.setSelection/,
   "marker mode exits only after a valid draft has been produced");
 assert.doesNotMatch(
   runtimeSource.match(/controlledMarkerDraft = normalizeLesionDetectionAdapter[\s\S]*?publishState\("controlled_marker_draft"\)/)?.[0] || "",
