@@ -1,7 +1,6 @@
 export const LIVE_CONTROLLER_STATE_EVENT = "langerface:live-state";
 export const LIVE_SOURCE_REACT_COMMAND_EVENT = "langerface:live-source-react-command";
 export const LIVE_RENDER_REACT_COMMAND_EVENT = "langerface:live-render-react-command";
-export const LIVE_ROUTE_REACT_COMMAND_EVENT = "langerface:live-route-react-command";
 
 export const ANNOTATE_CONTROLLER_STATE_EVENT = "langerface:annotate-state";
 export const ANNOTATE_MESH_REACT_COMMAND_EVENT = "langerface:annotate-mesh-react-command";

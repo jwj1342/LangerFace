@@ -42,7 +42,7 @@
 | 标签 | 覆盖范围 | 对应代码 |
 |---|---|---|
 | `area: web` | 网页前端与 UI。 | `web/*`（页面、交互、查看器、录制 / 导出） |
-| `area: 3d` | 3D 重建 / 扫描 / 查看 / 3D 标注。 | `mode3d`, `three3d`, `projection3d`, `annotate_*` |
+| `area: 3d` | 离线 3D 重建、研究查看与 3D 标注；不含 Live runtime。 | `three3d`, `annotate_*`, `tools/reconstruct_3d.py`, `tools/headspace/` |
 | `area: atlas` | 张力线图谱 / RSTL·Langer / 重心映射 / 468 点迁移。 | `lines/`, `assets/atlas_*`, `mapping`, atlas 工具脚本 |
 | `area: pipeline` | 实时检测→映射→渲染，以及 Python 核心管线。 | `pipeline`, `render`, `detection`, `occlusion`, `src/langerface` 核心 |
 | `area: clinical` | 临床规则 / Stage 2 / 切口生成 / 验证数据与合规。 | `tumor/`·`incision/`（规划）、验证数据集、隐私合规 |

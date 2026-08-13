@@ -4,7 +4,7 @@
 把每帧网格刚性对齐到统一参考系（标准脸朝向），再对各顶点取**中位数**得到稳定的个性化中性脸。
 中位数对表情/抖动/遮挡更鲁棒。线条图谱按重心坐标贴到该网格上即"贴到 3D 人头"。
 
-  python3 tools/reconstruct_3d.py [video]   # 默认 local_media/IMG_3458.MOV -> web/assets/recon_demo.json
+  python3 tools/reconstruct_3d.py [video]   # 默认 local_media/IMG_3458.MOV -> local_outputs/recon_demo.json
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from langerface.geometry import CanonicalFaceModel
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOCAL_MEDIA = os.path.join(REPO, "local_media")
-OUT = os.path.join(REPO, "web", "assets", "recon_demo.json")
+OUT = os.path.join(REPO, "local_outputs", "recon_demo.json")
 # 刚性锚点（随表情变化小）：眼角、鼻梁、面部轮廓极值等
 RIGID = [33, 263, 133, 362, 168, 6, 195, 5, 4, 1, 10, 152, 234, 454, 127, 356]
 
@@ -87,6 +87,7 @@ def main():
         "yaw_max": round(float(np.max(yaws)), 3),
         "source": os.path.basename(video),
     }
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w") as f:
         json.dump(data, f)
     print(f"[ok] 重建完成：{len(aligned)} 帧, yaw [{data['yaw_min']}, {data['yaw_max']}] -> {OUT}")
