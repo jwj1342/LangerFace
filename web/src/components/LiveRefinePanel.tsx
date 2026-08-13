@@ -9,7 +9,8 @@ export function LiveRefinePanel() {
   return (
     <Card id="liveRefineCard">
       <Label>医生 2D 微调</Label>
-      <Button variant="workbench" id="refine2dBtn" type="button" disabled aria-pressed="false">2D 结果微调</Button>
+      <Hint className="live-inline-top">手动拖动、隐藏或逐点调整当前结果；可单独使用，也可在皱纹引导自动微调后继续复核。</Hint>
+      <Button variant="workbench" id="refine2dBtn" type="button" disabled aria-pressed="false">医生手动微调（2D）</Button>
       <div className="live-refine-panel hidden" id="refine2dPanel">
         <div className="live-refine-status"><span>当前状态</span><span id="refine2dStatus">未开始</span></div>
         <div className="live-refine-quality" id="refine2dQuality" data-state="idle" role="status">质量检查将在修改后运行。</div>

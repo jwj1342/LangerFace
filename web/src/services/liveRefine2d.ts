@@ -137,7 +137,12 @@ export function setLatestAutoLines(mapped: readonly RefineLine[]): void {
   // The automatic result is the safety reference for the whole edit session.
   // Keep it frozen while refining; redraws, focus changes, and zoom changes must
   // never move the baseline underneath an in-progress gesture.
-  if (!s.active || !s.latestAutoLines?.length) s.latestAutoLines = cloneLines(mapped);
+  if (!s.latestAutoLines?.length || (!s.active && !s.lines && !s.liveTransport)) {
+    s.latestAutoLines = cloneLines(mapped);
+  }
+  if (sourceState.paused && !s.liveBaselineLines?.length) {
+    s.liveBaselineLines = cloneLines(mapped);
+  }
   if (s.active && !s.lines) {
     s.lines = cloneLines(mapped);
     s.selected = null;
@@ -148,6 +153,46 @@ export function setLatestAutoLines(mapped: readonly RefineLine[]): void {
       height: els.canvas.height,
     }));
   }
+}
+
+/**
+ * Replace the static-frame automatic baseline (standard or wrinkle-guided).
+ * Keeping both arrays in lockstep lets a doctor start manual refinement after
+ * automatic refinement without changing the safety/reset reference.
+ */
+export function replaceStaticRefineBaseline(mapped: readonly RefineLine[]): void {
+  const s = state();
+  s.latestAutoLines = cloneLines(mapped);
+  s.lines = cloneLines(mapped);
+  if (!sourceState.paused) s.liveBaselineLines = null;
+  s.liveTransport = null;
+  s.selected = null;
+  s.dirty = false;
+  s.quality = null;
+  s.undoStack = [];
+  s.drag = null;
+  updateRefineUi();
+  requestRefineFrame();
+}
+
+/** Start one frozen-frame edit session without carrying stale frame geometry. */
+export function beginFrozenRefineSession(): void {
+  const s = state();
+  s.active = false;
+  s.mode = "view";
+  s.lines = null;
+  s.latestAutoLines = null;
+  s.liveBaselineLines = null;
+  s.selected = null;
+  s.dirty = false;
+  s.quality = null;
+  s.undoStack = [];
+  s.drag = null;
+  setRefineCanvasViewActive(false);
+}
+
+export function hasManualRefineChanges(): boolean {
+  return state().dirty;
 }
 
 export function getDisplayLines(
@@ -171,9 +216,10 @@ export function getDisplayLines(
 /** Commit current frozen-frame edits for transport to subsequent live frames. */
 export function commitRefineForLive(): boolean {
   const s = state();
-  if (!s.latestAutoLines?.length || !s.lines?.length) return false;
+  const liveBaseline = s.liveBaselineLines || s.latestAutoLines;
+  if (!liveBaseline?.length || !s.lines?.length) return false;
   s.liveTransport = {
-    ...buildCurveRefinementTransport(s.latestAutoLines, s.lines),
+    ...buildCurveRefinementTransport(liveBaseline, s.lines),
     system: renderState.system,
     committedAt: new Date().toISOString(),
   };
@@ -236,6 +282,7 @@ export function resetRefineForNewSource(): void {
   s.showAxis = true;
   s.lines = null;
   s.latestAutoLines = null;
+  s.liveBaselineLines = null;
   s.liveTransport = null;
   s.selected = null;
   s.dirty = false;
@@ -250,7 +297,7 @@ export function resetRefineForNewSource(): void {
 export function updateRefineUi(): void {
   const s = state();
   els.refine2d.setAttribute("aria-pressed", String(s.active));
-  els.refine2d.textContent = s.active ? "退出 2D 微调" : "2D 结果微调";
+  els.refine2d.textContent = s.active ? "退出医生手动微调" : "医生手动微调（2D）";
   els.refine2dPanel.classList.toggle("hidden", !s.active);
   els.mainWrap.classList.toggle("refining", s.active);
   els.mainWrap.classList.toggle("refine-drag", s.active && s.mode === "drag");
@@ -290,6 +337,7 @@ export function updateRefineUi(): void {
   }
   els.refineSymmetry.checked = s.symmetry;
   els.refineAxis.checked = s.showAxis;
+  window.dispatchEvent(new CustomEvent("langerface:refine2d-state"));
 }
 
 export function toggleRefine2d(): void {

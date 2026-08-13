@@ -1,5 +1,5 @@
 import { clearCanvasDisplayFit, fitCanvasDisplayToStage } from "./liveCanvasFit.ts";
-import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream } from "./cameraSource.ts";
+import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream, stopCameraStream } from "./cameraSource.ts";
 import { ctx, els } from "./liveDom.ts";
 import { prepareImageSource } from "./imageSource.ts";
 import { countMetric, logWarn } from "./logger.ts";
@@ -11,15 +11,26 @@ import {
   sourceState,
 } from "./liveState.ts";
 import { resetRefineForNewSource } from "./liveRefine2d";
+import { LiveFrameScheduler } from "./liveFrameScheduler.ts";
+import { resetLiveWrinkleAnalysis } from "./liveWrinkleAnalysis.ts";
 import { setLive, setMsg } from "./liveUi.ts";
-import { requestFrame } from "./pipelineLoop.ts";
+import { cancelFrame, requestFrame } from "./pipelineLoop.ts";
 import { ensureImageReady, ensureReady } from "./pipelineModels.ts";
 
 type SourceKind = "camera" | "video" | "image";
 let sourceOperationId = 0;
+const sourceLayoutScheduler = new LiveFrameScheduler();
 
 export async function startCamera(): Promise<void> {
   const operationId = ++sourceOperationId;
+  let pendingStream: MediaStream | null = null;
+  const releasePendingStream = (): void => {
+    const stream = pendingStream;
+    if (!stream) return;
+    if (els.video?.srcObject === stream) els.video.srcObject = null;
+    stopCameraStream(stream);
+    pendingStream = null;
+  };
   if (currentLiveSourceKind() === "camera") {
     stopSource();
     setLive(false, "待机");
@@ -31,19 +42,27 @@ export async function startCamera(): Promise<void> {
     await ensureReady();
     if (operationId !== sourceOperationId) return;
     setMsg("请求摄像头权限…");
-    const stream = await openCameraStream(CAMERA_CONSTRAINTS);
+    pendingStream = await openCameraStream(CAMERA_CONSTRAINTS);
     if (operationId !== sourceOperationId) {
-      stream.getTracks().forEach((track) => track.stop());
+      releasePendingStream();
       return;
     }
     stopSource({ preserveOperation: true });
-    els.video.srcObject = stream;
+    els.video.srcObject = pendingStream;
     await els.video.play();
+    if (operationId !== sourceOperationId) {
+      releasePendingStream();
+      return;
+    }
+    const stream = pendingStream;
+    if (!stream) return;
     setSource(els.video, "camera", els.video.videoWidth, els.video.videoHeight, {
-      release: () => stream.getTracks().forEach((track) => track.stop()),
+      release: () => stopCameraStream(stream),
     });
+    pendingStream = null;
     els.cam.setAttribute("aria-pressed", "true");
   } catch (error) {
+    releasePendingStream();
     if (operationId !== sourceOperationId) return;
     const detail = describeCameraError(error);
     countMetric(`camera.openFailure.${detail.reason}`);
@@ -154,12 +173,18 @@ export function setSource(
   els.canvas.classList.toggle("image-source", kind === "image");
   if (kind === "image") {
     fitCanvasDisplayToStage({ resetView: true });
-    requestAnimationFrame(() => fitCanvasDisplayToStage({ resetView: true }));
+    sourceLayoutScheduler.request(() => {
+      if (sourceState.running && currentLiveSourceKind() === "image") {
+        fitCanvasDisplayToStage({ resetView: true });
+      }
+    });
   } else {
+    sourceLayoutScheduler.cancel();
     clearCanvasDisplayFit();
   }
   renderState.smoother.reset();
   resetRefineForNewSource();
+  resetLiveWrinkleAnalysis();
   sourceState.presence = 0;
   sourceState.lastLM = null;
   sourceState.imageCacheLM = null;
@@ -185,6 +210,8 @@ export function setSource(
 
 export function stopSource({ preserveOperation = false }: { preserveOperation?: boolean } = {}): void {
   if (!preserveOperation) sourceOperationId += 1;
+  cancelFrame();
+  sourceLayoutScheduler.cancel();
   sourceState.planning2d?.clearSource();
   els.video.srcObject = null;
   els.video.removeAttribute("src");
@@ -206,6 +233,7 @@ export function stopSource({ preserveOperation = false }: { preserveOperation?: 
   sourceState.qualityGate = null;
   sourceState.localRegionQuality = null;
   resetRefineForNewSource();
+  resetLiveWrinkleAnalysis();
   els.pause.disabled = true;
   els.pause.textContent = "📷 定格微调";
 }
