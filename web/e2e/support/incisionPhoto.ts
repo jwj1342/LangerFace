@@ -65,6 +65,14 @@ export async function uploadGeneratedPhoto(
   }, { base64: FACE_PAIR_JPEG, uploadMode: mode, selector: inputSelector });
 }
 
+export async function pickSafePhotoCheek(page: Page) {
+  const canvas = page.locator("#incisionPhotoCanvas");
+  await expect(canvas).toHaveAttribute("data-active", "true");
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("incision photo canvas has no layout box");
+  await canvas.click({ position: { x: box.width * 0.72, y: box.height * 0.5 } });
+}
+
 export async function uploadGeneratedVideo(page: Page, inputSelector = "#fileInput") {
   return page.evaluate(async ({ base64, selector }) => {
     const input = document.querySelector<HTMLInputElement>(selector);

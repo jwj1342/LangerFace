@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import {
   dragFirstPhotoEndpoint,
   installGeneratedCamera,
+  pickSafePhotoCheek,
   uploadGeneratedPhoto,
   uploadGeneratedVideo,
 } from "./support/incisionPhoto";
@@ -44,6 +45,7 @@ test("approved incision reaches photo, uploaded video, and MediaStream camera re
   await expect(page.locator("#candidateType")).not.toHaveText("—");
 
   await uploadGeneratedPhoto(page, "single");
+  await pickSafePhotoCheek(page);
   await expect(page.locator("#incisionPhotoStatus")).toContainText(/照片规划.*候选已叠加/, { timeout: 45_000 });
   const lengthBefore = Number(await page.locator("#lengthScale").inputValue());
   await dragFirstPhotoEndpoint(page);
