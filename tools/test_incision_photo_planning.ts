@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import {
   buildSubcutaneousDiameterEstimateRefs,
   buildIncisionPhotoGeometry,
+  candidateEndpointSurfaceRefs,
+  incisionPhotoEndpointRadius,
   incisionPhotoStrokeWidths,
+  inspectPhotoCandidateProjection,
   nearestPhotoEndpointHandle,
   pointsToSurfaceRefs,
   surfaceRefToModelPoint,
@@ -32,6 +35,46 @@ const firstModelPoint = surfaceRefToModelPoint(refs[0], vertices, triangles);
 assert.ok(firstModelPoint);
 assert.ok(Math.abs(firstModelPoint[0] - 0.25) < 1e-8);
 assert.ok(Math.abs(firstModelPoint[1] - 0.25) < 1e-8);
+
+const layeredVertices: Vec3[] = [
+  [0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0],
+  [0, 0, 0.01], [1, 0, 0.01], [0, 1, 0.01], [1, 1, 0.01],
+];
+const layeredTriangles: Triangle[] = [[0, 1, 2], [1, 3, 2], [4, 5, 6], [5, 7, 6]];
+const continuousRefs = pointsToSurfaceRefs([
+  [0.2, 0.2, 0], [0.4, 0.4, 0.01], [0.6, 0.6, 0], [0.8, 0.8, 0.01],
+], layeredVertices, layeredTriangles);
+assert.equal(continuousRefs.length, 4);
+assert.ok(continuousRefs.every((ref) => ref.tri < 2),
+  "candidate projection stays on one connected surface instead of jumping to a nearby disconnected layer");
+const alignedEndpointRefs = candidateEndpointSurfaceRefs(
+  [[0.2, 0.2, 0], [0.4, 0.4, 0.01], [0.6, 0.6, 0], [0.8, 0.8, 0.01]],
+  continuousRefs,
+  [[0.2, 0.2, 0], [0.8, 0.8, 0.01]],
+  layeredVertices,
+  layeredTriangles,
+);
+assert.deepEqual(alignedEndpointRefs, [continuousRefs[0], continuousRefs[3]],
+  "visible endpoint controls reuse the projected candidate tips instead of a second projection path");
+assert.equal(inspectPhotoCandidateProjection([
+  [0, 0, 0], [2, 1, 0], [4, 0, 0], [2, -1, 0], [0, 0, 0],
+], "fusiform").valid, false, "collapsed low-sample fusiform projection is rejected");
+assert.equal(inspectPhotoCandidateProjection([
+  [0, 0, 0], [1, 0.7, 0], [2, 1, 0], [3, 0.7, 0], [4, 0, 0],
+  [3, -0.7, 0], [2, -1, 0], [1, -0.7, 0], [0, 0, 0],
+], "fusiform").valid, true, "continuous tapered fusiform projection remains renderable");
+const foldedProjection = inspectPhotoCandidateProjection([
+  [0, 0, 0], [1, 0.7, 0], [3, 1, 0], [2, 0.7, 0], [4, 0, 0],
+  [2, -0.7, 0], [3, -1, 0], [1, -0.7, 0], [0, 0, 0],
+], "fusiform");
+assert.equal(foldedProjection.valid, false, "a locally folded fusiform projection is rejected");
+assert.ok(foldedProjection.reasonCodes.includes("candidate_projection_local_fold"));
+const pinchedProjection = inspectPhotoCandidateProjection([
+  [0, 0, 0], [1, 0.7, 0], [2, 0.04, 0], [3, 0.7, 0], [4, 0, 0],
+  [3, -0.7, 0], [2, -0.04, 0], [1, -0.7, 0], [0, 0, 0],
+], "fusiform");
+assert.equal(pinchedProjection.valid, false, "a pinched fusiform projection is rejected before display");
+assert.ok(pinchedProjection.reasonCodes.includes("candidate_projection_pinched"));
 const diameterEstimateRefs = buildSubcutaneousDiameterEstimateRefs({
   centerRef: refs[0],
   lesionIndex: 0,
@@ -107,5 +150,7 @@ assert.ok(strokeWidths.boundary < strokeWidths.rstl,
   "lesion boundary is thinner than the RSTL reference layer");
 assert.ok(strokeWidths.candidateHalo < 2,
   "contrast halo no longer produces the former toy-like 8px stroke");
+assert.equal(incisionPhotoEndpointRadius(strokeWidths.candidate) * 2, strokeWidths.candidate * 1.5,
+  "visible endpoint diameter stays at 1.5 times the candidate line width");
 
 console.log("test_incision_photo_planning: file gate and surface-ref projection passed");

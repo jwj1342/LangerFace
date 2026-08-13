@@ -25,7 +25,6 @@ const pipelineSource = read("src/services/pipelineSource.ts");
 const controllerCommand = read("src/lib/controllerCommand.ts");
 const sharedThree3d = read("src/services/three3d.ts");
 const render2d = read("src/services/render2d.ts");
-const rstlRenderPlan = read("src/services/rstlRenderPlan.ts");
 const typedConstants = read("src/services/constants.ts");
 const liveState = read("src/services/liveState.ts");
 const liveRenderControls = read("src/components/LiveRenderControlsPanel.tsx");
@@ -149,19 +148,18 @@ includesAll(render2d, [
 
 assert.ok(typedConstants.includes('rstl: "#c800c8"'), "live constants must use the v8.1.70 reference magenta");
 assert.ok(
-  render2d.includes("standardRstlStrokeWidth(W)")
-    && rstlRenderPlan.includes("Math.max(2, Number(canvasWidth) / 1300)"),
+  render2d.includes("Math.max(2, W / 1300)"),
   "typed live RSTL strokes must use the two-pixel reference minimum",
 );
 // #141：modelState.atlases 存的是 lines 数组，写成 atlas?.lines 会恒为 undefined，
 // 密度筛选拿到空集后整页一条线都不画。正反向各一条，回退任一侧都会红。
 assert.match(
-  rstlRenderPlan,
-  /lineIndicesForDensity\(lines, densityFraction\)/,
+  render2d,
+  /lineIndicesForDensity\(\s*displayLines \|\| \[\],\s*renderState\.densityFrac,?\s*\)/,
   "typed live must apply density selection to the displayed atlas line array",
 );
 assert.doesNotMatch(
-  rstlRenderPlan,
+  render2d,
   /lineIndicesForDensity\(\s*\w*\?\.lines/,
   "typed live must not treat the atlas line array as an atlas payload",
 );
@@ -169,16 +167,15 @@ assert.doesNotMatch(
 assert.ok(
   foreheadVisibility.includes('"forehead_lower_long_arc_v13"')
     && foreheadVisibility.includes('"forehead_bridge_arc_v15"')
-    && render2d.includes("buildRstlRenderPlan")
-    && rstlRenderPlan.includes("EXTENDED_FOREHEAD_REGIONS"),
+    && render2d.includes("EXTENDED_FOREHEAD_REGIONS"),
   "live renderer must use the shared extended-forehead region gate",
 );
-includesAll(rstlRenderPlan, [
+includesAll(render2d, [
+  "buildForeheadSkinVisibility",
   "buildHeadVisibility",
   "stabilizeForeheadMask",
-  "headVisible(point) && skinVisible(point)",
+  "headVisible(p) && skinVisible(p)",
 ], "live v8.1.70 forehead visibility integration");
-assert.ok(render2d.includes("buildForeheadSkinVisibility"), "live renderer supplies frame skin visibility to the shared plan");
 includesAll(foreheadVisibility, [
   "skinColorMatchesReferences",
   "distance <= 26",

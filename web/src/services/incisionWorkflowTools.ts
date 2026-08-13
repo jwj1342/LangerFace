@@ -45,7 +45,7 @@ export function rotateInPlane(axis: Vec3, normal: Vec3, angleDeg: number): Vec3 
   return norm(add(mul(axis, Math.cos(a)), mul(p, Math.sin(a))));
 }
 
-export const DEFAULT_SAFE_DIRECTION_SEARCH_OFFSETS_DEG = [0, -10, 10, -20, 20, -30, 30];
+export const DEFAULT_SAFE_DIRECTION_SEARCH_OFFSETS_DEG = [0, -10, 10];
 
 function clonePlan<T>(plan: T): T {
   return JSON.parse(JSON.stringify(plan));
@@ -516,6 +516,10 @@ export function candidateForDirection(
     ? generateLinearIncision(tumor, direction, unitsPerMm, rules)
     : generateFusiformIncision(tumor, direction, unitsPerMm, normal, rules);
   annotateCandidateSensitiveDistances(candidate, verts);
+  candidate.metrics = {
+    ...(candidate.metrics || {}),
+    rstl_deviation_deg: Math.abs(Number(direction.angle_offset_deg || 0)),
+  };
   candidate.provenance = {
     ...(candidate.provenance || {}),
     direction_variant_angle_offset_deg: direction.angle_offset_deg || 0,
@@ -808,10 +812,14 @@ export function planIncisionWorkflow({
 
   result.candidate_alternatives = candidateRecords;
   result.candidate_comparison = compareCandidateRecords(candidateRecords, rules);
-  const rankedCandidateIds = result.candidate_comparison.map((item: AnyRecord) => item.id);
-  const safeCandidate = rankedCandidateIds
-    .map((id: string) => candidateRecords.find((record) => record.id === id))
-    .find((record: AnyRecord) => Number(record?.candidate?.hard_violation_count || 0) === 0);
+  const baselineCandidate = candidateRecords.find((record) => Number(record.angle_offset_deg) === 0);
+  const baselineSafe = baselineCandidate && Number(baselineCandidate.candidate?.hard_violation_count || 0) === 0
+    ? baselineCandidate
+    : null;
+  const nearestSafeVariant = candidateRecords
+    .filter((record) => Number(record.candidate?.hard_violation_count || 0) === 0)
+    .sort((first, second) => Math.abs(Number(first.angle_offset_deg)) - Math.abs(Number(second.angle_offset_deg)))[0] || null;
+  const safeCandidate = baselineSafe || nearestSafeVariant;
   if (safeCandidate) {
     result.candidate = safeCandidate.candidate;
     result.original_candidate = safeCandidate.candidate;
@@ -823,11 +831,28 @@ export function planIncisionWorkflow({
     result.candidate_display_blocked = false;
     result.candidate_selection_reason = safeCandidate.angle_offset_deg === 0
       ? "baseline_candidate_passed_engineering_hard_guardrails"
-      : "lowest_scoring_safe_direction_variant_selected";
+      : "nearest_safe_direction_variant_selected_after_baseline_block";
+    result.candidate_selection_explanation = safeCandidate.angle_offset_deg === 0
+      ? {
+        baseline_preserved: true,
+        direction_changed_for_margin: false,
+        angle_offset_deg: 0,
+      }
+      : {
+        baseline_preserved: false,
+        direction_changed_for_margin: false,
+        angle_offset_deg: safeCandidate.angle_offset_deg,
+        reason: "baseline_intersects_engineering_non_skin_opening",
+      };
   } else {
     result.selected_candidate_id = null;
     result.candidate_display_blocked = true;
     result.candidate_selection_reason = "all_direction_variants_have_engineering_hard_violations";
+    result.candidate_selection_explanation = {
+      baseline_preserved: false,
+      direction_changed_for_margin: false,
+      attempted_angle_offsets_deg: angleOffsetsDeg,
+    };
   }
   const tumorEngineeringValidation = inspectTumorEngineeringExclusions(tumor, verts);
   result.tumor_engineering_validation = tumorEngineeringValidation;

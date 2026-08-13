@@ -70,8 +70,9 @@ for (const [marginId, polyline] of [
 ] as const) {
   const freeMarginCandidate = { type: "linear", polyline };
   annotateCandidateEngineeringViolations(freeMarginCandidate, verts);
-  assert.ok(freeMarginCandidate.hard_violations.some((item) =>
-    item.code === "candidate_crosses_sensitive_free_margin" && item.location.margin_id === marginId));
+  assert.ok(!freeMarginCandidate.hard_violations.some((item) =>
+    item.code === "candidate_crosses_sensitive_free_margin"),
+  `${marginId} remains a reviewable sensitive guide instead of a non-skin-opening hard block`);
 }
 
 const mediapipeVerts = Array.from({ length: 468 }, () => [5, 5, 0]);
@@ -91,9 +92,15 @@ oralOpening.forEach((vertexIndex, index) => {
   mediapipeVerts[vertexIndex] = [5 + Math.cos(angle) * 1.5, 3 + Math.sin(angle) * 0.6, 0];
 });
 const topologyZones = buildMediaPipeEngineeringExclusionZones(mediapipeVerts);
-assert.deepEqual(topologyZones.map((zone) => zone.id), ["left-eye-opening", "right-eye-opening", "oral-opening"]);
-assert.equal(topologyZones[0].projection_buffer_scale, 1.35,
-  "eye opening keeps a conservative engineering-only projection buffer");
+assert.deepEqual(topologyZones.map((zone) => zone.id), [
+  "left-eye-opening",
+  "right-eye-opening",
+  "oral-opening",
+  "left-nostril-opening",
+  "right-nostril-opening",
+]);
+assert.equal(topologyZones[0].projection_buffer_scale, 1,
+  "eye opening hard gate follows the topology loop without an unvalidated expansion buffer");
 for (const [zoneId, polyline] of [
   ["left-eye-opening", [[2, 6, 0], [5, 6, 0]]],
   ["right-eye-opening", [[5.5, 6, 0], [8, 6, 0]]],
@@ -107,9 +114,19 @@ for (const [zoneId, polyline] of [
 assert.match(topologyZones[0].clinical_boundary, /engineering exclusions only/);
 const invalidCenter = inspectTumorPointEngineeringExclusion([3.7, 6, 0], mediapipeVerts);
 assert.equal(invalidCenter?.zone_id, "left-eye-opening", "lesion centers inside an eye opening are rejected");
-assert.equal(inspectTumorPointEngineeringExclusion([3.7, 6.6, 0], mediapipeVerts)?.zone_id, "left-eye-opening",
-  "lesion centers just outside the raw eyelid loop remain covered by the engineering projection buffer");
+assert.equal(inspectTumorPointEngineeringExclusion([3.7, 6.6, 0], mediapipeVerts), null,
+  "visible eyelid skin just outside the topology opening is not rejected by an expansion buffer");
 assert.equal(inspectTumorPointEngineeringExclusion([5, 5, 0], mediapipeVerts), null);
+assert.equal(inspectTumorPointEngineeringExclusion([4.05, 5.3, 0], mediapipeVerts)?.zone_id,
+  "left-nostril-opening", "lesion centers inside the audited nostril aperture are rejected");
+assert.equal(inspectTumorPointEngineeringExclusion([3.65, 5.3, 0], mediapipeVerts), null,
+  "visible nasal-ala skin outside the aperture is not rejected");
+const nostrilCrossingCandidate = { type: "linear", polyline: [[3.8, 5.3, 0], [4.3, 5.3, 0]] };
+annotateCandidateEngineeringViolations(nostrilCrossingCandidate, mediapipeVerts);
+assert.ok(nostrilCrossingCandidate.hard_violations.some((item) =>
+  item.code === "candidate_intersects_non_skin_opening"
+    && item.location?.zone_id === "left-nostril-opening"),
+"a complete candidate path crossing a nostril aperture is hard-blocked");
 
 const invalidBoundary = inspectTumorEngineeringExclusions({
   kind: "cutaneous",
@@ -131,9 +148,9 @@ assert.equal(invalidDiameter.passed, false);
 assert.ok(invalidDiameter.violations.some((item) => item.code === "tumor_diameter_intersects_non_skin_opening"));
 const projectionBufferCandidate = { type: "linear", polyline: [[2, 6.6, 0], [5, 6.6, 0]] };
 annotateCandidateEngineeringViolations(projectionBufferCandidate, mediapipeVerts);
-assert.ok(projectionBufferCandidate.hard_violations.some((item) =>
+assert.ok(!projectionBufferCandidate.hard_violations.some((item) =>
   item.location?.zone_id === "left-eye-opening"),
-"eye projection buffer catches a path just outside the raw eyelid loop");
+"a path on visible eyelid skin remains reviewable when it does not cross the eye opening");
 
 const requiredActions = [
   "summarize_tumor_input_quality",

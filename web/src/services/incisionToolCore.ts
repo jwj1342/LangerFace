@@ -9,7 +9,6 @@ import {
   inspectPathPolygonRelation,
   pointInPolygon2d,
   resamplePolyline2d,
-  segmentsIntersect2d,
   type Point2,
 } from "./incisionPathGeometry.ts";
 
@@ -36,14 +35,22 @@ type RegionConfidenceInput = {
 };
 
 const MEDIAPIPE_FACE_VERTEX_COUNT = 468;
-const MEDIAPIPE_ENGINEERING_OPENINGS = [
-  { id: "left-eye-opening", indices: [33, 160, 158, 133, 153, 144], projectionBufferScale: 1.35 },
-  { id: "right-eye-opening", indices: [362, 385, 387, 263, 373, 380], projectionBufferScale: 1.35 },
+const MEDIAPIPE_TOPOLOGY_OPENINGS = [
+  { id: "left-eye-opening", indices: [33, 160, 158, 133, 153, 144], projectionBufferScale: 1 },
+  { id: "right-eye-opening", indices: [362, 385, 387, 263, 373, 380], projectionBufferScale: 1 },
   {
     id: "oral-opening",
     indices: [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95],
     projectionBufferScale: 1,
   },
+] as const;
+
+// Reuse the audited standard-atlas nostril aperture mask (v9) in normalized
+// face coordinates. It is an engineering non-skin opening, not a clinical
+// safety margin, and deliberately does not cover the surrounding nasal ala.
+const STANDARD_RSTL_NOSTRIL_APERTURES = [
+  { id: "left-nostril-opening", center: [0.405, 0.53] as Point2, radii: [0.034, 0.052] as Point2 },
+  { id: "right-nostril-opening", center: [0.595, 0.53] as Point2, radii: [0.034, 0.052] as Point2 },
 ] as const;
 
 export interface DirectionResult extends AnyRecord {
@@ -213,15 +220,6 @@ function normalizedCandidatePath(candidate: AnyRecord, verts: ArrayLike<number>[
   ]);
 }
 
-function pathSegments(points: Point2[], closed: boolean): Array<[Point2, Point2]> {
-  const segments: Array<[Point2, Point2]> = [];
-  for (let index = 1; index < points.length; index += 1) {
-    segments.push([points[index - 1], points[index]]);
-  }
-  if (closed && points.length > 2) segments.push([points.at(-1) as Point2, points[0]]);
-  return segments;
-}
-
 function polygonArea2d(points: Point2[]): number {
   return points.reduce((area, point, index) => {
     const next = points[(index + 1) % points.length];
@@ -235,7 +233,7 @@ export function buildMediaPipeEngineeringExclusionZones(verts: ArrayLike<number>
   const span = [hi[0] - lo[0], hi[1] - lo[1]];
   if (!span.every((value) => Number.isFinite(value) && value > 1e-9)) return [];
 
-  return MEDIAPIPE_ENGINEERING_OPENINGS.flatMap(({ id, indices, projectionBufferScale }) => {
+  const topologyZones = MEDIAPIPE_TOPOLOGY_OPENINGS.flatMap(({ id, indices, projectionBufferScale }) => {
     const vertices = indices.map((index) => verts[index]);
     if (vertices.some((vertex) => !vertex || vertex.length < 2 || !Number.isFinite(vertex[0]) || !Number.isFinite(vertex[1]))) {
       return [];
@@ -265,6 +263,19 @@ export function buildMediaPipeEngineeringExclusionZones(verts: ArrayLike<number>
       clinical_boundary: "This topology opening and projection buffer are engineering exclusions only; they do not define a medical safety margin.",
     }];
   });
+  const nostrilZones = STANDARD_RSTL_NOSTRIL_APERTURES.map(({ id, center, radii }) => ({
+    id,
+    code: "candidate_intersects_non_skin_opening",
+    polygon: Array.from({ length: 32 }, (_, index) => {
+      const angle = index / 32 * Math.PI * 2;
+      return [center[0] + Math.cos(angle) * radii[0], center[1] + Math.sin(angle) * radii[1]] as Point2;
+    }),
+    source: "standard-rstl-v1-nostril-aperture-mask-v9",
+    projection_buffer_scale: 1,
+    recovery: "Move or regenerate the candidate so its complete path stays outside the mapped nostril opening.",
+    clinical_boundary: "This nostril aperture is an engineering exclusion only; it does not define a medical safety margin.",
+  }));
+  return [...topologyZones, ...nostrilZones];
 }
 
 function normalizedModelPoint(point: ArrayLike<number>, verts: ArrayLike<number>[]): Point2 | null {
@@ -301,7 +312,9 @@ export function tumorPointEngineeringExclusionMessage(
 ): string | null {
   const opening = inspectTumorPointEngineeringExclusion(point, verts);
   if (!opening) return null;
-  const label = opening.zone_id === "oral-opening" ? "口裂" : "眼裂";
+  const label = opening.zone_id === "oral-opening"
+    ? "口裂"
+    : String(opening.zone_id).includes("nostril") ? "鼻孔" : "眼裂";
   return `该位置落在${label}等非皮肤开口，不能作为病灶中心；请在可见皮肤上重新选择。`;
 }
 
@@ -422,23 +435,6 @@ export function annotateCandidateEngineeringViolations<T extends AnyRecord>(cand
       recovery: String(zone.recovery || "Move or regenerate the candidate outside the engineering exclusion zone."),
     });
   }
-  const candidateSegments = pathSegments(path, candidate.type === "fusiform");
-  for (const [marginId, rawMargin] of Object.entries(SENSITIVE_MARGIN_SEGMENTS)) {
-    const margin = rawMargin as Point2[];
-    if (margin.length < 2) continue;
-    const crossingIndex = candidateSegments.findIndex(([start, end]) =>
-      segmentsIntersect2d(start, end, margin[0], margin[1]));
-    if (crossingIndex < 0) continue;
-    violations.push({
-      code: "candidate_crosses_sensitive_free_margin",
-      location: {
-        margin_id: marginId,
-        path_segment_index: crossingIndex,
-        source: "existing-normalized-sensitive-margin-segment",
-      },
-      recovery: "Regenerate or edit the candidate so it does not cross the mapped sensitive free margin.",
-    });
-  }
   const mutable = candidate as AnyRecord;
   mutable.hard_violations = violations;
   mutable.hard_violation_count = violations.length;
@@ -482,9 +478,14 @@ export function annotateCandidateSensitiveDistances<T extends AnyRecord>(candida
   return candidate;
 }
 
-function atlasSamples(verts: ArrayLike<number>[], tris: Triangle[], atlas: AtlasPayload): { pts: Vec3[]; tans: Vec3[] } {
-  const pts: Vec3[] = [], tans: Vec3[] = [];
-  for (const line of atlas.lines || []) {
+function atlasSamples(verts: ArrayLike<number>[], tris: Triangle[], atlas: AtlasPayload): {
+  pts: Vec3[];
+  tans: Vec3[];
+  lineIds: number[];
+  sampleIndices: number[];
+} {
+  const pts: Vec3[] = [], tans: Vec3[] = [], lineIds: number[] = [], sampleIndices: number[] = [];
+  for (const [lineId, line] of (atlas.lines || []).entries()) {
     const P: Vec3[] = [];
     if (Array.isArray(line.points3d) && line.points3d.length) {
       for (const point of line.points3d) {
@@ -523,9 +524,11 @@ function atlasSamples(verts: ArrayLike<number>[], tris: Triangle[], atlas: Atlas
       if (Math.hypot(...delta) <= 1e-12) continue;
       pts.push(P[i]);
       tans.push(norm(delta));
+      lineIds.push(lineId);
+      sampleIndices.push(i);
     }
   }
-  return { pts, tans };
+  return { pts, tans, lineIds, sampleIndices };
 }
 
 function axisAngleDiffDeg(a: number, b: number): number {
@@ -548,7 +551,7 @@ export function queryDirection(point: Vec3, verts: ArrayLike<number>[], tris: Tr
   const personalized = atlasProvenance.toLowerCase().includes("local-yolo")
     || atlasProvenance.toLowerCase().includes("personalized_rstl")
     || String(atlas.personalization?.algorithm || atlas.diagnostics?.algorithm || "").toLowerCase().includes("rstl-refinement");
-  const { pts, tans } = atlasSamples(verts, tris, atlas);
+  const { pts, tans, lineIds, sampleIndices } = atlasSamples(verts, tris, atlas);
   if (!pts.length) {
     const emptyAtlas = !Array.isArray(atlas.lines) || atlas.lines.length === 0;
     return {
@@ -575,7 +578,17 @@ export function queryDirection(point: Vec3, verts: ArrayLike<number>[], tris: Tr
   const diag = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
   const nearest = Math.sqrt(bd);
   const maxDistance = Math.max(diag * 0.18, 1e-9);
-  const order = dist2.map((d, i) => [d, i] as [number, number]).sort((a, b) => a[0] - b[0]).slice(0, Math.min(7, dist2.length));
+  const sourceLineId = lineIds[best];
+  const sourceSampleIndex = sampleIndices[best];
+  const order = dist2
+    .map((d, i) => [d, i] as [number, number])
+    .filter(([, i]) => lineIds[i] === sourceLineId && Math.abs(sampleIndices[i] - sourceSampleIndex) <= 2)
+    .sort((a, b) => {
+      const sampleDelta = Math.abs(sampleIndices[a[1]] - sourceSampleIndex)
+        - Math.abs(sampleIndices[b[1]] - sourceSampleIndex);
+      return sampleDelta || a[0] - b[0];
+    })
+    .slice(0, 5);
   const ref = tans[best];
   let acc: Vec3 = [0, 0, 0], weightSum = 0;
   const signed: Vec3[] = [];
@@ -590,7 +603,7 @@ export function queryDirection(point: Vec3, verts: ArrayLike<number>[], tris: Tr
   const vector = canonicalAxis(norm(mul(acc, 1 / Math.max(weightSum, 1e-9))));
   const spread = axialAngularSpreadDeg(signed, vector);
   const confidenceReasons: string[] = [];
-  if (order.length < Math.min(3, 7)) confidenceReasons.push("low_support_count");
+  if (order.length < 2) confidenceReasons.push("low_support_count");
   if (nearest >= maxDistance) confidenceReasons.push("nearest_atlas_support_far");
   else if (nearest >= maxDistance * 0.6) confidenceReasons.push("nearest_atlas_support_sparse");
   if (spread > 90) confidenceReasons.push("high_angular_spread");
@@ -606,6 +619,8 @@ export function queryDirection(point: Vec3, verts: ArrayLike<number>[], tris: Tr
     support_count: order.length,
     angular_spread_deg: spread,
     confidence_reasons: confidenceReasons,
+    source_line_index: sourceLineId,
+    source_sample_index: sourceSampleIndex,
   };
 }
 

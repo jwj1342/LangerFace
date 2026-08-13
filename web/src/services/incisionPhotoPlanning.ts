@@ -3,8 +3,9 @@ import {
   buildForeheadSkinVisibility,
   type VisibilityPredicate,
 } from "./foreheadVisibility.ts";
-import { mapSurfaceRefs, pointToSurfaceRef, type SurfaceRef } from "./incisionOverlay.ts";
+import { mapSurfaceRefs, pointToSurfaceRef, polylineToSurfaceRefs, type SurfaceRef } from "./incisionOverlay.ts";
 import { buildRstlRenderPlan, standardRstlStrokeWidth } from "./rstlRenderPlan.ts";
+import { segmentsIntersect2d, type Point2 } from "./incisionPathGeometry.ts";
 import type { Triangle, Vec3 } from "./softBody.ts";
 
 export const INCISION_PHOTO_MAX_BYTES = 20 * 1024 * 1024;
@@ -23,6 +24,9 @@ export function incisionPhotoStrokeWidths(sourceWidth: number) {
   };
 }
 
+export const incisionPhotoEndpointRadius = (candidateStrokeWidth: number): number =>
+  Math.max(0.5, candidateStrokeWidth * 0.75);
+
 export interface IncisionPhotoGeometry {
   rstl: MappedAtlasLine[];
   center: Vec3 | null;
@@ -30,6 +34,10 @@ export interface IncisionPhotoGeometry {
   boundary: Vec3[];
   candidate: Vec3[];
   endpoints: Vec3[];
+  candidateProjection: {
+    valid: boolean;
+    reasonCodes: string[];
+  };
 }
 
 export interface IncisionPhotoRenderInput {
@@ -48,6 +56,99 @@ export interface IncisionPhotoRenderInput {
   endpointRefs: SurfaceRef[];
   endpointRadius?: number;
   tumorInputInvalid?: boolean;
+  candidateType?: string;
+}
+
+export function inspectPhotoCandidateProjection(
+  points: readonly Vec3[],
+  candidateType?: string,
+): { valid: boolean; reasonCodes: string[] } {
+  if (candidateType !== "fusiform" || points.length === 0) return { valid: true, reasonCodes: [] };
+  const polygon = points.map((point) => [point[0], point[1]] as Point2);
+  if (polygon.length > 1 && Math.hypot(
+    polygon[0][0] - polygon.at(-1)![0],
+    polygon[0][1] - polygon.at(-1)![1],
+  ) < 1e-6) polygon.pop();
+  const reasonCodes: string[] = [];
+  const unique = new Set(polygon.map((point) => `${point[0].toFixed(4)}:${point[1].toFixed(4)}`));
+  if (unique.size < 6) reasonCodes.push("candidate_projection_collapsed");
+  const area = Math.abs(polygon.reduce((sum, point, index) => {
+    const next = polygon[(index + 1) % polygon.length];
+    return sum + point[0] * next[1] - next[0] * point[1];
+  }, 0) / 2);
+  if (!(area >= 1)) reasonCodes.push("candidate_projection_degenerate_area");
+  const segmentLengths = polygon.map((point, index) => {
+    const next = polygon[(index + 1) % polygon.length];
+    return Math.hypot(next[0] - point[0], next[1] - point[1]);
+  }).filter((length) => length > 1e-6).sort((a, b) => a - b);
+  const median = segmentLengths[Math.floor(segmentLengths.length / 2)] || 0;
+  if (median > 0 && (segmentLengths.at(-1) || 0) > median * 12) {
+    reasonCodes.push("candidate_projection_discontinuous");
+  }
+  for (let first = 0; first < polygon.length; first += 1) {
+    const firstNext = (first + 1) % polygon.length;
+    for (let second = first + 1; second < polygon.length; second += 1) {
+      const secondNext = (second + 1) % polygon.length;
+      if (first === second || firstNext === second || secondNext === first) continue;
+      if (segmentsIntersect2d(polygon[first], polygon[firstNext], polygon[second], polygon[secondNext])) {
+        reasonCodes.push("candidate_projection_self_intersection");
+        first = polygon.length;
+        break;
+      }
+    }
+  }
+
+  // A generated fusiform has two corresponding sides between the same tips.
+  // Validate those sides separately so pinches and local reversals that stop
+  // just short of a literal self-intersection are still rejected.
+  if (polygon.length >= 8 && polygon.length % 2 === 0) {
+    const farTipIndex = polygon.length / 2;
+    const upper = polygon.slice(0, farTipIndex + 1);
+    const lower = [polygon[0], ...polygon.slice(farTipIndex + 1).reverse(), polygon[farTipIndex]];
+    const widths = upper.map((point, index) => Math.hypot(
+      point[0] - lower[index][0],
+      point[1] - lower[index][1],
+    ));
+    const maxWidth = Math.max(...widths);
+    const centralWidths = widths.slice(
+      Math.max(1, Math.floor(widths.length * 0.25)),
+      Math.min(widths.length - 1, Math.ceil(widths.length * 0.75)),
+    );
+    if (maxWidth > 1 && centralWidths.length && Math.min(...centralWidths) < maxWidth * 0.12) {
+      reasonCodes.push("candidate_projection_pinched");
+    }
+
+    const tipAxis = [
+      polygon[farTipIndex][0] - polygon[0][0],
+      polygon[farTipIndex][1] - polygon[0][1],
+    ];
+    const tipAxisLength2 = tipAxis[0] ** 2 + tipAxis[1] ** 2;
+    if (tipAxisLength2 > 1) {
+      const centerlineProgress = upper.map((point, index) => {
+        const midpoint = [(point[0] + lower[index][0]) / 2, (point[1] + lower[index][1]) / 2];
+        return ((midpoint[0] - polygon[0][0]) * tipAxis[0]
+          + (midpoint[1] - polygon[0][1]) * tipAxis[1]) / tipAxisLength2;
+      });
+      if (centerlineProgress.some((value, index) => index > 1
+        && index < centerlineProgress.length - 1
+        && value < centerlineProgress[index - 1] - 0.04)) {
+        reasonCodes.push("candidate_projection_local_fold");
+      }
+    }
+
+    for (const side of [upper, lower]) {
+      for (let index = 2; index < side.length - 2; index += 1) {
+        const before = [side[index][0] - side[index - 1][0], side[index][1] - side[index - 1][1]];
+        const after = [side[index + 1][0] - side[index][0], side[index + 1][1] - side[index][1]];
+        const denom = Math.hypot(...before) * Math.hypot(...after);
+        if (denom > 1e-6 && (before[0] * after[0] + before[1] * after[1]) / denom < -0.2) {
+          reasonCodes.push("candidate_projection_local_fold");
+          break;
+        }
+      }
+    }
+  }
+  return { valid: reasonCodes.length === 0, reasonCodes: [...new Set(reasonCodes)] };
 }
 
 export function validateIncisionPhotoFile(file: Pick<File, "type" | "size">): string | null {
@@ -62,9 +163,36 @@ export function pointsToSurfaceRefs(
   vertices: Vec3[],
   triangles: Triangle[],
 ): SurfaceRef[] {
-  return (points || [])
-    .map((point) => pointToSurfaceRef(point, vertices, triangles))
-    .filter((ref): ref is SurfaceRef => ref !== null);
+  return polylineToSurfaceRefs(points, vertices, triangles);
+}
+
+export function candidateEndpointSurfaceRefs(
+  candidatePoints: readonly Vec3[],
+  candidateRefs: readonly SurfaceRef[],
+  endpoints: readonly Vec3[],
+  vertices: Vec3[],
+  triangles: Triangle[],
+): SurfaceRef[] {
+  return endpoints.flatMap((endpoint) => {
+    if (candidatePoints.length === candidateRefs.length && candidatePoints.length > 0) {
+      let nearestIndex = 0;
+      let nearestDistance = Infinity;
+      candidatePoints.forEach((point, index) => {
+        const distance = Math.hypot(
+          point[0] - endpoint[0],
+          point[1] - endpoint[1],
+          point[2] - endpoint[2],
+        );
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestIndex = index;
+        }
+      });
+      return [candidateRefs[nearestIndex]];
+    }
+    const ref = pointToSurfaceRef(endpoint, vertices, triangles);
+    return ref ? [ref] : [];
+  });
 }
 
 export function surfaceRefToModelPoint(
@@ -140,14 +268,17 @@ export function buildIncisionPhotoGeometry({
   boundaryRefs,
   candidateRefs,
   endpointRefs,
+  candidateType,
 }: Omit<IncisionPhotoRenderInput, "context" | "source" | "sourceWidth" | "sourceHeight" | "devicePixelRatio">): IncisionPhotoGeometry {
+  const candidate = mapSurfaceRefs(candidateRefs, landmarks, triangles).pts;
   return {
     rstl: mapAtlas(atlasLines, landmarks, triangles),
     center: centerRef ? mapSurfaceRefs([centerRef], landmarks, triangles).pts[0] || null : null,
     diameterEstimate: mapSurfaceRefs(diameterEstimateRefs, landmarks, triangles).pts,
     boundary: mapSurfaceRefs(boundaryRefs, landmarks, triangles).pts,
-    candidate: mapSurfaceRefs(candidateRefs, landmarks, triangles).pts,
+    candidate,
     endpoints: mapSurfaceRefs(endpointRefs, landmarks, triangles).pts,
+    candidateProjection: inspectPhotoCandidateProjection(candidate, candidateType),
   };
 }
 
@@ -253,7 +384,7 @@ export function renderIncisionPhotoPlanning(input: IncisionPhotoRenderInput): In
     drawPath(context, geometry.boundary, "rgba(3, 7, 18, 0.88)", strokeWidths.boundaryHalo, geometry.boundary.length >= 6);
     drawPath(context, geometry.boundary, input.tumorInputInvalid ? "#ef4444" : "#facc15", strokeWidths.boundary, geometry.boundary.length >= 6);
   }
-  if (geometry.candidate.length >= 2) {
+  if (geometry.candidate.length >= 2 && geometry.candidateProjection.valid) {
     drawPath(context, geometry.candidate, "rgba(3, 7, 18, 0.9)", strokeWidths.candidateHalo);
     drawPath(context, geometry.candidate, "#34d399", strokeWidths.candidate);
   }
@@ -266,19 +397,18 @@ export function renderIncisionPhotoPlanning(input: IncisionPhotoRenderInput): In
     context.fill();
     context.stroke();
   }
-  const endpointRadius = Math.max(4, input.endpointRadius || 9);
-  for (const endpoint of geometry.endpoints) {
+  const endpointRadius = input.endpointRadius == null
+    ? incisionPhotoEndpointRadius(strokeWidths.candidate)
+    : Math.max(0.5, input.endpointRadius);
+  for (const endpoint of geometry.candidateProjection.valid ? geometry.endpoints : []) {
     context.beginPath();
-    context.arc(endpoint[0], endpoint[1], endpointRadius + 3, 0, Math.PI * 2);
+    context.arc(endpoint[0], endpoint[1], endpointRadius + strokeWidths.candidate * 0.5, 0, Math.PI * 2);
     context.fillStyle = "rgba(3, 7, 18, 0.96)";
     context.fill();
     context.beginPath();
     context.arc(endpoint[0], endpoint[1], endpointRadius, 0, Math.PI * 2);
     context.fillStyle = "#f8fafc";
-    context.strokeStyle = "#34d399";
-    context.lineWidth = Math.max(3, endpointRadius * 0.28);
     context.fill();
-    context.stroke();
   }
   context.setTransform(1, 0, 0, 1, 0, 0);
   return geometry;

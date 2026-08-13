@@ -16,12 +16,15 @@ import {
 import { pointInHandMasks, type HandMask, type Point2 } from "./geometryOccluders.ts";
 import {
   buildForeheadSkinVisibility,
+  buildHeadVisibility,
+  EXTENDED_FOREHEAD_REGIONS,
+  stabilizeForeheadMask,
 } from "./foreheadVisibility.ts";
 import type { Triangle, Vec3 } from "./softBody.ts";
 import { mapSurfaceRefs, measureIncisionOverlayJitter, measureIncisionOverlayRegistration } from "./incisionOverlay.ts";
 import type { SurfaceRef } from "./incisionOverlay.ts";
 import { countMetric, recordMetricSample, setDiagnosticSection } from "./logger.ts";
-import { buildRstlRenderPlan, standardRstlStrokeWidth } from "./rstlRenderPlan.ts";
+import { lineIndicesForDensity } from "./lineDensity.ts";
 import {
   getDisplayLines,
   isRefineActive,
@@ -183,13 +186,12 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   // 不是 atlas payload。名字写成 atlasLines 是因为写成 atlas 时曾经诱发过 `atlas?.lines` 这个
   // 恒为 undefined 的取值，导致密度筛选返回空集、整页一条线都不画（#141）。
   const atlasLines = modelState.atlases[renderState.system];
-  // 切口 overlay 仍使用这组遮挡上下文；RSTL 主层由共享 render plan 计算。
   const vis = renderState.clip
     ? visibleTriangles(lm, modelTriangles(), modelNoseTris(), undefined, {
       minTriangleAreaPx2: LIVE_OCCLUSION_MIN_TRIANGLE_AREA_PX2,
     })
     : null;
-  const innerMouth = innerMouthTriangles(modelTriangles());
+  const innerMouth = innerMouthTriangles(modelTriangles()); // 口裂三角面（张嘴会落进口内/牙齿），永久排除
   const mapped = mapAtlas(atlasLines, lm, modelTriangles());
   if (sourceState.sourceKind === "image" || sourceState.paused) setLatestAutoLines(mapped);
   const refineActive = isRefineActive();
@@ -200,36 +202,26 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   const pointWindow = pointMode ? selectedPointWindow() : null;
   const symmetryPartner = refineActive ? symmetryPartnerIndex() : null;
   const bb = faceBBox(lm);
+  const visibleLineIndices = refineActive ? null : lineIndicesForDensity(displayLines || [], renderState.densityFrac);
   const hasMasks = masks.length > 0;
   // 外推的额头弧线要按头部包络 + 肤色再裁一次，否则会画到头发/背景/脸外（#141）
   const foreheadImage = readFrameImageData(W, H);
   const skinVisible = buildForeheadSkinVisibility(foreheadImage, W, H, lm);
+  const headVisible = buildHeadVisibility(lm);
   const frameQualityGate = estimateRenderQualityGate(lm, W, H);
   const canDrawAtlas = sourceState.sourceKind === "image" || frameQualityGate.passed;
   const localRegionQuality = frameQualityGate.local_region_quality;
   const localRegionMasks = buildLocalRegionMasks(lm, localRegionQuality);
-  const rstlRenderPlan = buildRstlRenderPlan({
-    lines: displayLines,
-    landmarks: lm,
-    triangles: modelTriangles(),
-    clip: renderState.clip,
-    densityFraction: refineActive ? 1 : renderState.densityFrac,
-    handMasks: masks,
-    skinVisible,
-    minTriangleAreaPx2: LIVE_OCCLUSION_MIN_TRIANGLE_AREA_PX2,
-    pointVisible: (point) => localActionForPoints([point], localRegionMasks).action !== "freeze",
-    triangleVisibility: vis,
-    innerMouthTriangleIndices: innerMouth,
-  });
 
   ctx.save();
-  ctx.globalAlpha = renderState.opacity; ctx.lineWidth = standardRstlStrokeWidth(W);
+  ctx.globalAlpha = renderState.opacity; ctx.lineWidth = Math.max(2, W / 1300);
   ctx.lineJoin = "round"; ctx.lineCap = "round";
   let count = 0;
   if (canDrawAtlas && shouldDrawRstlLayer()) {
-    for (const entry of rstlRenderPlan) {
-      const li = entry.lineIndex;
-      const ln = entry.line;
+    for (let li = 0; li < displayLines.length; li++) {
+      if (visibleLineIndices && !visibleLineIndices.has(li)) continue;
+      const ln = displayLines[li];
+      if (ln.hidden) continue;
       const isSelected = refineActive && li === selectedLine;
       const isPartner = refineActive && li === symmetryPartner;
       if (renderState.bands) {
@@ -244,12 +236,28 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
         ctx.lineWidth = Math.max(2, W / 680);
         ctx.setLineDash([8, 6]);
       } else {
-        ctx.lineWidth = standardRstlStrokeWidth(W);
+        ctx.lineWidth = Math.max(2, W / 1300);
       }
+      // 每点可见性 = 朝向相机(背面剔除) 且 不属于口裂三角面 且 不在前方手部凸包内
+      // 外推的额头弧线额外要求落在头部包络内且采样点是皮肤，再做一次段稳定化（#141）
+      const extendedForehead = EXTENDED_FOREHEAD_REGIONS.has(ln.region);
+      let onVisibleSkin: boolean[] = ln.pts.map(() => true);
+      if (extendedForehead) {
+        onVisibleSkin = stabilizeForeheadMask(
+          ln.pts.map((p) => headVisible(p) && skinVisible(p)),
+        );
+      }
+      const mask = ln.pts.map((p, i) => {
+        const v = vis ? vis[ln.tris[i]] : 1;
+        if (innerMouth.has(ln.tris[i])) return 0; // 口裂三角面无论朝向都排除（#38）
+        if (!onVisibleSkin[i]) return 0;
+        if (localActionForPoints([p], localRegionMasks).action === "freeze") return 0;
+        return v && !(hasMasks && pointInHandMasks(toPoint2(p), masks)) ? 1 : 0;
+      });
       const localLineAction = localActionForPoints(ln.pts, localRegionMasks.filter((region: LocalRegionMask) => region.action === "dim"));
       const savedAlpha = ctx.globalAlpha;
       if (localLineAction.action === "dim") ctx.globalAlpha = savedAlpha * localLineAction.opacityScale;
-      for (const run of entry.runs) {
+      for (const run of visibleRuns(ln.pts, mask)) {
         ctx.beginPath(); ctx.moveTo(run[0][0], run[0][1]);
         for (let i = 1; i < run.length; i++) ctx.lineTo(run[i][0], run[i][1]);
         ctx.stroke();
