@@ -478,14 +478,9 @@ export function annotateCandidateSensitiveDistances<T extends AnyRecord>(candida
   return candidate;
 }
 
-function atlasSamples(verts: ArrayLike<number>[], tris: Triangle[], atlas: AtlasPayload): {
-  pts: Vec3[];
-  tans: Vec3[];
-  lineIds: number[];
-  sampleIndices: number[];
-} {
-  const pts: Vec3[] = [], tans: Vec3[] = [], lineIds: number[] = [], sampleIndices: number[] = [];
-  for (const [lineId, line] of (atlas.lines || []).entries()) {
+function atlasSamples(verts: ArrayLike<number>[], tris: Triangle[], atlas: AtlasPayload): { pts: Vec3[]; tans: Vec3[] } {
+  const pts: Vec3[] = [], tans: Vec3[] = [];
+  for (const line of atlas.lines || []) {
     const P: Vec3[] = [];
     if (Array.isArray(line.points3d) && line.points3d.length) {
       for (const point of line.points3d) {
@@ -524,11 +519,9 @@ function atlasSamples(verts: ArrayLike<number>[], tris: Triangle[], atlas: Atlas
       if (Math.hypot(...delta) <= 1e-12) continue;
       pts.push(P[i]);
       tans.push(norm(delta));
-      lineIds.push(lineId);
-      sampleIndices.push(i);
     }
   }
-  return { pts, tans, lineIds, sampleIndices };
+  return { pts, tans };
 }
 
 function axisAngleDiffDeg(a: number, b: number): number {
@@ -551,7 +544,7 @@ export function queryDirection(point: Vec3, verts: ArrayLike<number>[], tris: Tr
   const personalized = atlasProvenance.toLowerCase().includes("local-yolo")
     || atlasProvenance.toLowerCase().includes("personalized_rstl")
     || String(atlas.personalization?.algorithm || atlas.diagnostics?.algorithm || "").toLowerCase().includes("rstl-refinement");
-  const { pts, tans, lineIds, sampleIndices } = atlasSamples(verts, tris, atlas);
+  const { pts, tans } = atlasSamples(verts, tris, atlas);
   if (!pts.length) {
     const emptyAtlas = !Array.isArray(atlas.lines) || atlas.lines.length === 0;
     return {
@@ -578,18 +571,12 @@ export function queryDirection(point: Vec3, verts: ArrayLike<number>[], tris: Tr
   const diag = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
   const nearest = Math.sqrt(bd);
   const maxDistance = Math.max(diag * 0.18, 1e-9);
-  const sourceLineId = lineIds[best];
-  const sourceSampleIndex = sampleIndices[best];
+  const ref = tans[best];
   const order = dist2
     .map((d, i) => [d, i] as [number, number])
-    .filter(([, i]) => lineIds[i] === sourceLineId && Math.abs(sampleIndices[i] - sourceSampleIndex) <= 2)
-    .sort((a, b) => {
-      const sampleDelta = Math.abs(sampleIndices[a[1]] - sourceSampleIndex)
-        - Math.abs(sampleIndices[b[1]] - sourceSampleIndex);
-      return sampleDelta || a[0] - b[0];
-    })
-    .slice(0, 5);
-  const ref = tans[best];
+    .filter(([, i]) => Math.abs(dot(tans[i], ref)) >= Math.SQRT1_2)
+    .sort((a, b) => a[0] - b[0])
+    .slice(0, Math.min(7, dist2.length));
   let acc: Vec3 = [0, 0, 0], weightSum = 0;
   const signed: Vec3[] = [];
   for (const [d2, i] of order) {
@@ -603,7 +590,7 @@ export function queryDirection(point: Vec3, verts: ArrayLike<number>[], tris: Tr
   const vector = canonicalAxis(norm(mul(acc, 1 / Math.max(weightSum, 1e-9))));
   const spread = axialAngularSpreadDeg(signed, vector);
   const confidenceReasons: string[] = [];
-  if (order.length < 2) confidenceReasons.push("low_support_count");
+  if (order.length < Math.min(3, 7)) confidenceReasons.push("low_support_count");
   if (nearest >= maxDistance) confidenceReasons.push("nearest_atlas_support_far");
   else if (nearest >= maxDistance * 0.6) confidenceReasons.push("nearest_atlas_support_sparse");
   if (spread > 90) confidenceReasons.push("high_angular_spread");
@@ -619,8 +606,6 @@ export function queryDirection(point: Vec3, verts: ArrayLike<number>[], tris: Tr
     support_count: order.length,
     angular_spread_deg: spread,
     confidence_reasons: confidenceReasons,
-    source_line_index: sourceLineId,
-    source_sample_index: sourceSampleIndex,
   };
 }
 

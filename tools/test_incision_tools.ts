@@ -170,7 +170,7 @@ const crossingBundlesDirection = T.queryDirection([5, 5, 0], verts, tris, {
 ok(Math.abs(crossingBundlesDirection.vector[1]) > 0.99,
   "queryDirection follows the nearest RSTL line instead of averaging a crossing bundle");
 ok(crossingBundlesDirection.support_count <= 3,
-  "queryDirection local support stays within the selected source line");
+  "queryDirection excludes directionally incompatible crossing support");
 
 const wrapVerts = [
   [0.2, 0.0035, 0],
