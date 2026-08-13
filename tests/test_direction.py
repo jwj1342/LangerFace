@@ -136,7 +136,15 @@ def test_python_direction_service_excludes_crossing_bundle_support():
             "system": "rstl",
             "lines": [
                 {"name": "local_vertical", "points3d": [[5, 4.9, 0], [5, 5, 0], [5, 5.1, 0]]},
-                {"name": "nearby_horizontal", "points3d": [[4.96, 5.002, 0], [4.98, 5.002, 0], [5.02, 5.002, 0], [5.04, 5.002, 0]]},
+                {
+                    "name": "nearby_horizontal",
+                    "points3d": [
+                        [4.96, 5.002, 0],
+                        [4.98, 5.002, 0],
+                        [5.02, 5.002, 0],
+                        [5.04, 5.002, 0],
+                    ],
+                },
             ],
         },
     )
