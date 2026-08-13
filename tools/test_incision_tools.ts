@@ -1,7 +1,11 @@
 // Dependency-free tests for the TypeScript incision workflow services.
 import fs from "node:fs";
 
-import { __incisionToolsForTests as T } from "../web/src/services/incisionTools.ts";
+import {
+  __incisionToolsForTests as T,
+  annotateCandidateEngineeringViolations,
+  buildMediaPipeEngineeringExclusionZones,
+} from "../web/src/services/incisionTools.ts";
 
 let passed = 0;
 function ok(cond, msg) {
@@ -156,6 +160,18 @@ const point3dDirection = T.queryDirection([4, 1, 0], verts, tris, point3dAtlas);
 ok(point3dDirection.confidence > 0.8, "queryDirection consumes FLAME preview points3d atlas samples");
 ok(Math.abs(point3dDirection.vector[0]) > 0.95, "points3d atlas tangent drives the RSTL direction");
 
+const crossingBundlesDirection = T.queryDirection([5, 5, 0], verts, tris, {
+  system: "rstl",
+  lines: [
+    { name: "local_vertical", points3d: [[5, 4.9, 0], [5, 5, 0], [5, 5.1, 0]] },
+    { name: "nearby_horizontal", points3d: [[4.96, 5.002, 0], [4.98, 5.002, 0], [5.02, 5.002, 0], [5.04, 5.002, 0]] },
+  ],
+});
+ok(Math.abs(crossingBundlesDirection.vector[1]) > 0.99,
+  "queryDirection follows the nearest RSTL line instead of averaging a crossing bundle");
+ok(crossingBundlesDirection.support_count <= 3,
+  "queryDirection excludes directionally incompatible crossing support");
+
 const wrapVerts = [
   [0.2, 0.0035, 0],
   [0, 0, 0],
@@ -173,7 +189,7 @@ const wrapAtlas = {
   ],
 };
 const wrapDirection = T.queryDirection([0, 0, 0], wrapVerts, wrapTris, wrapAtlas);
-ok(wrapDirection.support_count >= 4, "queryDirection keeps wrapped-angle support samples");
+ok(wrapDirection.support_count >= 2, "queryDirection keeps local wrapped-angle support samples");
 ok(wrapDirection.angular_spread_deg < 3, "queryDirection treats 179/-179 as low axial spread");
 ok(wrapDirection.confidence > 0.9, "queryDirection does not penalize confidence across axial angle wrap");
 
@@ -567,8 +583,10 @@ ok(workflow.trace.length > plan.trace.length, "browser workflow runs additional 
 ok(workflow.trace.some((step) => step.action === "propose_direction_variants"),
   "browser workflow proposes deterministic direction variants");
 ok(workflow.trace.at(-1).action === "compare_candidates", "browser workflow compares candidates after variant generation");
-ok(workflow.candidate_alternatives.length === 3, "browser workflow returns three direction candidates");
+ok(workflow.candidate_alternatives.length === 3, "browser workflow searches only the recorded baseline and +/-10 degree directions");
 ok(workflow.candidate_comparison.length === 3, "browser workflow returns deterministic candidate comparison");
+ok(workflow.selected_candidate_id != null && workflow.candidate_display_blocked === false,
+  "browser workflow selects a hard-guardrail-safe candidate for display");
 ok(workflow.workflow_trace_gate.passed === true, "browser workflow trace gate passes");
 ok(workflow.workflow_plan_audit.passed === true, "browser deterministic workflow audit plan passes");
 ok(workflow.workflow_execution_events.passed === true, "browser workflow execution events pass");
@@ -580,6 +598,56 @@ ok(!("provider" in workflow) && !("llm" in workflow),
   "browser workflow exports no remote model or provider state");
 ok(typeof workflow.summary === "string" && typeof workflow.next_step === "string",
   "browser workflow keeps local summary and next-step copy");
+
+const marginDirectionPlans = [0, 2].map((marginMm) => T.planIncisionWorkflow({
+  tumor: {
+    kind: "cutaneous",
+    center: [7, 5, 0],
+    diameter_mm: 8,
+    margin_mm: marginMm,
+    boundary: [[6.7, 5, 0], [7, 5.3, 0], [7.3, 5, 0], [7, 4.7, 0]],
+  },
+  verts,
+  tris,
+  atlas,
+}));
+ok(marginDirectionPlans.every((item) => item.selected_candidate_id === "browser_baseline"),
+  "safe-margin changes keep the RSTL baseline candidate when it remains outside hard openings");
+ok(near(marginDirectionPlans[0].direction.angle_deg, marginDirectionPlans[1].direction.angle_deg),
+  "safe-margin changes do not rotate an otherwise safe incision direction");
+
+const openingVerts = Array.from({ length: 468 }, () => [5, 5, 0]);
+openingVerts[0] = [0, 0, 0]; openingVerts[1] = [10, 0, 0];
+openingVerts[2] = [0, 10, 0]; openingVerts[3] = [10, 10, 0];
+const openingTriangles = [[0, 1, 2], [1, 3, 2]];
+const leftEyeLoop = [33, 160, 158, 133, 153, 144];
+const leftEyePoints = [[3, 6, 0], [3.5, 6.5, 0], [4, 6.5, 0], [4.5, 6, 0], [4, 5.5, 0], [3.5, 5.5, 0]];
+leftEyeLoop.forEach((vertexIndex, index) => { openingVerts[vertexIndex] = leftEyePoints[index]; });
+const eyeZones = buildMediaPipeEngineeringExclusionZones(openingVerts)
+  .filter((zone) => zone.id.includes("eye"));
+ok(eyeZones.length >= 1 && eyeZones.every((zone) => zone.projection_buffer_scale === 1),
+  "eye hard exclusions use the actual topology opening without an unvalidated expansion buffer");
+const openingWorkflow = T.planIncisionWorkflow({
+  tumor: { kind: "subcutaneous", center: [3.7, 6, 0], diameter_mm: 8, depth_mm: 4 },
+  verts: openingVerts,
+  tris: openingTriangles,
+  atlas: { lines: [{ points3d: [[2, 6.8, 0], [5, 6.8, 0]] }] },
+});
+ok(openingWorkflow.tumor_engineering_validation.passed === false,
+  "workflow records invalid lesion input at a non-skin opening");
+ok(openingWorkflow.selected_candidate_id === null && openingWorkflow.candidate_display_blocked === true,
+  "invalid lesion input overrides candidate selection and hides the candidate");
+ok(openingWorkflow.candidate_selection_reason === "tumor_input_intersects_non_skin_opening",
+  "workflow explains why the candidate is blocked");
+
+const marginCrossingCandidate = {
+  type: "linear",
+  polyline: [[2, 5.8, 0], [4.2, 6, 0]],
+  metrics: {},
+};
+annotateCandidateEngineeringViolations(marginCrossingCandidate, verts);
+ok(!marginCrossingCandidate.hard_violations.some((item) => item.code === "candidate_crosses_sensitive_free_margin"),
+  "crossing a heuristic sensitive-margin guide is reviewable and not an opening-level hard block");
 
 const incompleteQuality = T.summarizeTumorInputQuality({
   kind: "subcutaneous",
@@ -688,5 +756,21 @@ ok(comparison[1].reasons.some((r) => r.includes("high guardrail")), "candidate c
 ok(comparison[1].score_breakdown.sensitive_free_margin_threshold_mm === 16,
   "candidate comparison records per-structure sensitive-margin threshold");
 ok(comparison[0].clinical_boundary.includes("不是临床推荐"), "candidate comparison records clinical boundary");
+
+const hardBlockedComparison = T.compareCandidateRecords([
+  {
+    id: "blocked-baseline",
+    candidate: { type: "linear", hard_violation_count: 1, metrics: { rstl_deviation_deg: 0 } },
+    guardrails: { hard_violation_count: 1, warnings: [] },
+  },
+  {
+    id: "safe-offset",
+    candidate: { type: "linear", hard_violation_count: 0, metrics: { rstl_deviation_deg: 20 } },
+    guardrails: { hard_violation_count: 0, warnings: [] },
+  },
+]);
+ok(hardBlockedComparison[0].id === "safe-offset", "engineering hard blocks always rank after safe variants");
+ok(hardBlockedComparison[1].reasons.some((reason) => reason.includes("工程硬阻断")),
+  "candidate comparison explains engineering hard blocks");
 
 console.log(`test_incision_tools: ${passed} assertions passed`);

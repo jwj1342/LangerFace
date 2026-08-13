@@ -124,9 +124,19 @@ function closestPointOnTriangle(p: Vec3, a: Vec3, b: Vec3, c: Vec3): ClosestPoin
 }
 
 export function pointToSurfaceRef(point: Vec3, verts: Vec3[], tris: Triangle[]): SurfaceRef | null {
+  return pointToSurfaceRefWithin(point, verts, tris, tris.map((_, index) => index));
+}
+
+function pointToSurfaceRefWithin(
+  point: Vec3,
+  verts: Vec3[],
+  tris: Triangle[],
+  triangleIndices: readonly number[],
+): SurfaceRef | null {
   let best: SurfaceRefCandidate | null = null;
-  for (let i = 0; i < tris.length; i++) {
+  for (const i of triangleIndices) {
     const tri = tris[i];
+    if (!tri) continue;
     const hit = closestPointOnTriangle(point, verts[tri[0]], verts[tri[1]], verts[tri[2]]);
     const d2 = len2(sub(point, hit.point));
     if (!best || d2 < best.d2) best = { tri: i, weights: hit.weights, d2 };
@@ -141,13 +151,71 @@ export function pointToSurfaceRef(point: Vec3, verts: Vec3[], tris: Triangle[]):
   };
 }
 
+function buildTriangleAdjacency(tris: Triangle[]): number[][] {
+  const adjacency = tris.map(() => new Set<number>());
+  const edgeOwners = new Map<string, number[]>();
+  tris.forEach((tri, triangleIndex) => {
+    const edges = [[tri[0], tri[1]], [tri[1], tri[2]], [tri[2], tri[0]]];
+    for (const edge of edges) {
+      const key = edge[0] < edge[1] ? `${edge[0]}:${edge[1]}` : `${edge[1]}:${edge[0]}`;
+      const owners = edgeOwners.get(key) || [];
+      owners.push(triangleIndex);
+      edgeOwners.set(key, owners);
+    }
+  });
+  for (const owners of edgeOwners.values()) {
+    for (const first of owners) for (const second of owners) {
+      if (first !== second) adjacency[first].add(second);
+    }
+  }
+  return adjacency.map((neighbors) => [...neighbors]);
+}
+
+function nearbyTriangles(start: number, adjacency: number[][], depth: number): number[] {
+  const visited = new Set<number>([start]);
+  let frontier = [start];
+  for (let level = 0; level < depth && frontier.length; level += 1) {
+    const next: number[] = [];
+    for (const triangleIndex of frontier) {
+      for (const neighbor of adjacency[triangleIndex] || []) {
+        if (visited.has(neighbor)) continue;
+        visited.add(neighbor);
+        next.push(neighbor);
+      }
+    }
+    frontier = next;
+  }
+  return [...visited];
+}
+
+export function polylineToSurfaceRefs(
+  points: readonly Vec3[] | null | undefined,
+  verts: Vec3[],
+  tris: Triangle[],
+  neighborDepth = 4,
+): SurfaceRef[] {
+  if (!points?.length || !tris.length) return [];
+  const first = pointToSurfaceRef(points[0], verts, tris);
+  if (!first) return [];
+  const refs = [first];
+  const adjacency = buildTriangleAdjacency(tris);
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = refs[refs.length - 1];
+    const candidates = nearbyTriangles(previous.tri, adjacency, neighborDepth);
+    const ref = pointToSurfaceRefWithin(points[index], verts, tris, candidates);
+    if (!ref) return [];
+    refs.push(ref);
+  }
+  return refs;
+}
+
 function isSurfaceRef(value: SurfaceRef | null): value is SurfaceRef {
   return value !== null;
 }
 
 function refsFromPolyline(points: unknown, verts: Vec3[], tris: Triangle[]): SurfaceRef[] {
   if (!Array.isArray(points)) return [];
-  return points.map((point) => pointToSurfaceRef(point as Vec3, verts, tris)).filter(isSurfaceRef);
+  return polylineToSurfaceRefs(points as Vec3[], verts, tris).filter(isSurfaceRef);
 }
 
 function codesBySeverity(guardrails: AnyRecord | null | undefined, severity: string): string[] {

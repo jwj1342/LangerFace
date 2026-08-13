@@ -9,6 +9,8 @@ import type { SurfaceRef } from "./incisionOverlay";
 import { Head3D } from "./three3d.ts";
 import type { Triangle, Vec3 } from "./softBody";
 
+export { resetIncisionBoundaryState } from "./incisionBoundaryState";
+
 type DynamicRecord = Record<string, any>;
 type ControllerCleanup = () => void;
 type IncisionMesh = THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>;
@@ -110,12 +112,4 @@ export function createIncisionControllerState(): IncisionRuntimeState {
     workflowRequestId: 0,
     activeExplicitWorkflowCount: 0,
   };
-}
-
-export function resetIncisionBoundaryState(
-  state: Pick<IncisionRuntimeState, "boundaryPoints" | "boundaryRefs" | "boundaryActive">,
-): void {
-  state.boundaryPoints = [];
-  state.boundaryRefs = [];
-  state.boundaryActive = false;
 }

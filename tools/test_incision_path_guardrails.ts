@@ -7,6 +7,9 @@ import {
 import {
   annotateCandidateEngineeringViolations,
   annotateCandidateSensitiveDistances,
+  buildMediaPipeEngineeringExclusionZones,
+  inspectTumorEngineeringExclusions,
+  inspectTumorPointEngineeringExclusion,
 } from "../web/src/services/incisionToolCore.ts";
 import { assessReviewReadiness, buildReviewGate } from "../web/src/services/incisionReviewPolicy.ts";
 
@@ -45,7 +48,7 @@ assert.ok(Math.abs(
     - denseCandidate.metrics.sensitive_free_margin_min_distance_mm,
 ) < 1e-9, "sensitive distance is stable across path sampling densities");
 
-const outsideCandidate = { type: "linear", polyline: [[-1, 5, 0], [5, 5, 0]], metrics: {} };
+const outsideCandidate = { type: "linear", polyline: [[-1, 8, 0], [5, 8, 0]], metrics: {} };
 annotateCandidateEngineeringViolations(outsideCandidate, verts);
 assert.deepEqual(outsideCandidate.hard_violations.map((item) => item.code), ["candidate_outside_canonical_surface"]);
 
@@ -60,6 +63,94 @@ const exclusionCandidate = {
 };
 annotateCandidateEngineeringViolations(exclusionCandidate, verts);
 assert.equal(exclusionCandidate.hard_violations[0].code, "candidate_intersects_non_skin_opening");
+
+for (const [marginId, polyline] of [
+  ["left_nasal_ala_margin", [[2, 4.8, 0], [6, 4.8, 0]]],
+  ["lip_vermilion_margin", [[5, 2, 0], [5, 4, 0]]],
+] as const) {
+  const freeMarginCandidate = { type: "linear", polyline };
+  annotateCandidateEngineeringViolations(freeMarginCandidate, verts);
+  assert.ok(!freeMarginCandidate.hard_violations.some((item) =>
+    item.code === "candidate_crosses_sensitive_free_margin"),
+  `${marginId} remains a reviewable sensitive guide instead of a non-skin-opening hard block`);
+}
+
+const mediapipeVerts = Array.from({ length: 468 }, () => [5, 5, 0]);
+mediapipeVerts[0] = [0, 0, 0];
+mediapipeVerts[1] = [10, 0, 0];
+mediapipeVerts[2] = [0, 10, 0];
+mediapipeVerts[3] = [10, 10, 0];
+const leftEye = [33, 160, 158, 133, 153, 144];
+const leftEyePolygon = [[3, 6, 0], [3.5, 6.5, 0], [4, 6.5, 0], [4.5, 6, 0], [4, 5.5, 0], [3.5, 5.5, 0]];
+leftEye.forEach((vertexIndex, index) => { mediapipeVerts[vertexIndex] = leftEyePolygon[index]; });
+const rightEye = [362, 385, 387, 263, 373, 380];
+const rightEyePolygon = [[6, 6, 0], [6.5, 6.5, 0], [7, 6.5, 0], [7.5, 6, 0], [7, 5.5, 0], [6.5, 5.5, 0]];
+rightEye.forEach((vertexIndex, index) => { mediapipeVerts[vertexIndex] = rightEyePolygon[index]; });
+const oralOpening = [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95];
+oralOpening.forEach((vertexIndex, index) => {
+  const angle = (Math.PI * 2 * index) / oralOpening.length;
+  mediapipeVerts[vertexIndex] = [5 + Math.cos(angle) * 1.5, 3 + Math.sin(angle) * 0.6, 0];
+});
+const topologyZones = buildMediaPipeEngineeringExclusionZones(mediapipeVerts);
+assert.deepEqual(topologyZones.map((zone) => zone.id), [
+  "left-eye-opening",
+  "right-eye-opening",
+  "oral-opening",
+  "left-nostril-opening",
+  "right-nostril-opening",
+]);
+assert.equal(topologyZones[0].projection_buffer_scale, 1,
+  "eye opening hard gate follows the topology loop without an unvalidated expansion buffer");
+for (const [zoneId, polyline] of [
+  ["left-eye-opening", [[2, 6, 0], [5, 6, 0]]],
+  ["right-eye-opening", [[5.5, 6, 0], [8, 6, 0]]],
+  ["oral-opening", [[3, 3, 0], [7, 3, 0]]],
+] as const) {
+  const topologyOpeningCandidate = { type: "linear", polyline };
+  annotateCandidateEngineeringViolations(topologyOpeningCandidate, mediapipeVerts);
+  assert.ok(topologyOpeningCandidate.hard_violations.some((item) =>
+    item.code === "candidate_intersects_non_skin_opening" && item.location.zone_id === zoneId));
+}
+assert.match(topologyZones[0].clinical_boundary, /engineering exclusions only/);
+const invalidCenter = inspectTumorPointEngineeringExclusion([3.7, 6, 0], mediapipeVerts);
+assert.equal(invalidCenter?.zone_id, "left-eye-opening", "lesion centers inside an eye opening are rejected");
+assert.equal(inspectTumorPointEngineeringExclusion([3.7, 6.6, 0], mediapipeVerts), null,
+  "visible eyelid skin just outside the topology opening is not rejected by an expansion buffer");
+assert.equal(inspectTumorPointEngineeringExclusion([5, 5, 0], mediapipeVerts), null);
+assert.equal(inspectTumorPointEngineeringExclusion([4.05, 5.3, 0], mediapipeVerts)?.zone_id,
+  "left-nostril-opening", "lesion centers inside the audited nostril aperture are rejected");
+assert.equal(inspectTumorPointEngineeringExclusion([3.65, 5.3, 0], mediapipeVerts), null,
+  "visible nasal-ala skin outside the aperture is not rejected");
+const nostrilCrossingCandidate = { type: "linear", polyline: [[3.8, 5.3, 0], [4.3, 5.3, 0]] };
+annotateCandidateEngineeringViolations(nostrilCrossingCandidate, mediapipeVerts);
+assert.ok(nostrilCrossingCandidate.hard_violations.some((item) =>
+  item.code === "candidate_intersects_non_skin_opening"
+    && item.location?.zone_id === "left-nostril-opening"),
+"a complete candidate path crossing a nostril aperture is hard-blocked");
+
+const invalidBoundary = inspectTumorEngineeringExclusions({
+  kind: "cutaneous",
+  center: [3.7, 6.9, 0],
+  diameter_mm: 8,
+  boundary: [[3.1, 6.9, 0], [3.7, 6.3, 0], [4.3, 6.9, 0], [3.7, 7.4, 0]],
+}, mediapipeVerts);
+assert.equal(invalidBoundary.passed, false);
+assert.ok(invalidBoundary.violations.some((item) =>
+  item.code === "tumor_boundary_intersects_non_skin_opening" && item.location.zone_id === "left-eye-opening"));
+
+const invalidDiameter = inspectTumorEngineeringExclusions({
+  kind: "subcutaneous",
+  center: [3.7, 6.9, 0],
+  diameter_mm: 24,
+  boundary: [],
+}, mediapipeVerts);
+assert.equal(invalidDiameter.passed, false);
+assert.ok(invalidDiameter.violations.some((item) => item.code === "tumor_diameter_intersects_non_skin_opening"));
+const projectionBufferCandidate = { type: "linear", polyline: [[2, 6.6, 0], [5, 6.6, 0]] };
+annotateCandidateEngineeringViolations(projectionBufferCandidate, mediapipeVerts);
+assert.ok(!projectionBufferCandidate.hard_violations.some((item) =>
+  item.location?.zone_id === "left-eye-opening"),
+"a path on visible eyelid skin remains reviewable when it does not cross the eye opening");
 
 const requiredActions = [
   "summarize_tumor_input_quality",

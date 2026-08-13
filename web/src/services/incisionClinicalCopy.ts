@@ -74,6 +74,14 @@ const REASON_LABELS: Record<string, string> = {
 };
 
 const GUARDRAIL_LABELS: Record<string, string> = {
+  candidate_intersects_non_skin_opening: "候选切口经过眼裂、口裂或鼻孔",
+  candidate_outside_canonical_surface: "候选切口超出可用面部表面",
+  invalid_candidate_geometry: "候选切口几何无效",
+  invalid_candidate_surface_refs: "候选切口表面映射无效",
+  missing_candidate_surface_refs: "候选切口缺少表面映射",
+  tumor_boundary_intersects_non_skin_opening: "肿物边界进入眼裂、口裂或鼻孔",
+  tumor_center_inside_non_skin_opening: "病灶中心位于眼裂、口裂或鼻孔",
+  tumor_diameter_intersects_non_skin_opening: "肿物直径范围进入眼裂、口裂或鼻孔",
   boundary_center_shift: "肿物边界中心偏移较大",
   candidate_near_sensitive_free_margin: "候选切口靠近敏感游离缘",
   cutaneous_boundary_center_shift: "皮表边界中心偏移较大",
@@ -146,6 +154,40 @@ export const guardrailLabel = (value: unknown) => labelOf(GUARDRAIL_LABELS, valu
 export const directionSourceLabel = (value: unknown) => labelOf(DIRECTION_SOURCE_LABELS, value);
 export const directionHintLabel = (value: unknown) => labelOf(DIRECTION_HINT_LABELS, value);
 export const overrideLabel = (value: unknown) => labelOf(OVERRIDE_LABELS, value, "请医生复核");
+
+const ENGINEERING_RECOVERY_LABELS: Record<string, string> = {
+  candidate_intersects_non_skin_opening: "移动病灶或调整范围，确保完整候选不经过非皮肤开口",
+  candidate_outside_canonical_surface: "缩小范围或调整位置后重试；仍失败时返回标准表面复核",
+  invalid_candidate_geometry: "重新生成候选几何",
+  invalid_candidate_surface_refs: "重新建立候选的面部表面映射",
+  missing_candidate_surface_refs: "完成候选的面部表面映射后再复核",
+  tumor_boundary_intersects_non_skin_opening: "保留原始记录，并把肿物边界重画到可见皮肤内",
+  tumor_center_inside_non_skin_opening: "在可见皮肤上重新选择病灶中心",
+  tumor_diameter_intersects_non_skin_opening: "缩小不准确的范围，或把病灶中心移到可见皮肤",
+};
+
+export const engineeringRecoveryLabel = (value: unknown) =>
+  labelOf(ENGINEERING_RECOVERY_LABELS, value, "调整病灶或候选后重试");
+
+export function engineeringBlockMessage(result: Record<string, any> | null | undefined): string {
+  const tumorViolations = Array.isArray(result?.tumor_engineering_validation?.violations)
+    ? result.tumor_engineering_validation.violations
+    : [];
+  const candidateViolations = Array.isArray(result?.candidate_alternatives)
+    ? result.candidate_alternatives.flatMap((record: Record<string, any>) => record?.candidate?.hard_violations || [])
+    : result?.candidate?.hard_violations || [];
+  const codes = [...new Set([...tumorViolations, ...candidateViolations]
+    .map((item: Record<string, any>) => String(item?.code || ""))
+    .filter(Boolean))];
+  if (!codes.length) return "候选未显示：允许的方向均未通过工程门禁；请调整病灶位置或范围后重试。";
+  const violations = [...tumorViolations, ...candidateViolations];
+  const hasNostrilOpening = violations.some((item: Record<string, any>) =>
+    String(item?.location?.zone_id || item?.zone_id || "").includes("nostril"));
+  const reasons = [...new Set(codes.map((code) => hasNostrilOpening && code.includes("non_skin_opening")
+    ? "候选或肿物范围进入鼻孔等非皮肤开口"
+    : guardrailLabel(code)))];
+  return `候选未显示：${reasons.join("、")}；${engineeringRecoveryLabel(codes[0])}。`;
+}
 
 export function rulesReviewLabel(reviewStatus: unknown) {
   return reviewStatus === "draft_not_clinically_validated"
