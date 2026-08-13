@@ -168,7 +168,6 @@ function currentTumorFormSnapshot() {
     anatomyPreviewWarn: Boolean(els.anatomyPreview?.classList?.contains("warn")),
   });
 }
-
 function currentSecondaryCueSnapshot() {
   return buildIncisionSecondaryCueSnapshot({
     present: Boolean(S.secondaryCues),
@@ -177,14 +176,12 @@ function currentSecondaryCueSnapshot() {
     manualConfirmed: Boolean(els.secondaryCueConfirmed?.checked),
   });
 }
-
 function currentPrivacyAuditSnapshot() {
   return buildIncisionPrivacyAuditSnapshot({
     stateLabel: els.privacyState?.textContent || "本地几何",
     message: els.privacyAudit?.textContent || "所有切口 workflow 均在浏览器本地执行，不配置或调用远程模型。",
   });
 }
-
 function currentAssetLoadingSnapshot() {
   return buildIncisionAssetLoadingSnapshot({
     visible: !els.assetLoading?.classList?.contains("hidden"),
