@@ -1,4 +1,4 @@
-export const CONTROLLED_MARKER_DETECTOR_VERSION = "0.1";
+export const CONTROLLED_MARKER_DETECTOR_VERSION = "0.2";
 
 export interface MarkerImageData {
   width: number;
@@ -88,6 +88,19 @@ function sampleBoundary(points: MarkerPoint[], maxPoints = 24): MarkerPoint[] {
   return Array.from({ length: maxPoints }, (_, index) => hull[Math.floor(index * hull.length / maxPoints)]);
 }
 
+function pointInPolygon(point: MarkerPoint, polygon: MarkerPoint[]): boolean {
+  if (polygon.length < 3) return false;
+  let inside = false;
+  for (let current = 0, previous = polygon.length - 1; current < polygon.length; previous = current++) {
+    const a = polygon[current];
+    const b = polygon[previous];
+    const crosses = (a.y > point.y) !== (b.y > point.y)
+      && point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
 export function detectControlledMarker(
   image: MarkerImageData,
   seed: MarkerPoint,
@@ -171,10 +184,13 @@ export function detectControlledMarker(
   const selected = candidates
     .map((component) => ({
       component,
+      containsSeed: pointInPolygon(seed, convexHull(component.pixels)),
       distance: Math.min(...component.pixels.map((point) => Math.hypot(point.x - seed.x, point.y - seed.y))),
     }))
-    .filter((entry) => entry.distance <= seedSnapRadius)
-    .sort((a, b) => a.distance - b.distance || b.component.pixels.length - a.component.pixels.length)[0]?.component;
+    .filter((entry) => entry.containsSeed || entry.distance <= seedSnapRadius)
+    .sort((a, b) => Number(b.containsSeed) - Number(a.containsSeed)
+      || a.distance - b.distance
+      || b.component.pixels.length - a.component.pixels.length)[0]?.component;
   if (!selected) return failure(components.length ? "component_too_small" : "no_dark_component");
   const maxArea = roiWidth * roiHeight * maxAreaFraction;
   if (selected.pixels.length > maxArea) return failure("component_too_large");

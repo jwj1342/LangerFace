@@ -10,6 +10,7 @@ import {
   workflowTraceGate,
   classifyRegion,
   compareCandidateRecords,
+  tumorPointEngineeringExclusionMessage,
   summarizeTumorBoundary,
   summarizeTumorInputQuality,
   unitsPerMmFromVertices,
@@ -94,13 +95,12 @@ import {
   buildIncisionResultPresentation,
   type IncisionTextPresentation,
 } from "./incisionPresenter";
+import { IncisionCommandRouter } from "./incisionCommandRouter";
 import {
-  readIncisionEditCommand,
-  readIncisionLibraryCommand,
-  readIncisionReviewCommand,
-  readIncisionSecondaryCueCommand,
-  readIncisionTumorCommand,
-} from "./incisionCommandSchemas";
+  createIncisionSessionGuard,
+  loadIncisionSessionAssets,
+  type IncisionSessionToken,
+} from "./incisionSession";
 import {
   pickEndpointHandle,
   pickFaceSurface,
@@ -147,7 +147,10 @@ function errorMessage(error: unknown): string {
 let els = {} as IncisionDomElements;
 let S: IncisionRuntimeState = createIncisionControllerState();
 let photoRuntime: IncisionPhotoRuntime | null = null;
-
+const activeSession = createIncisionSessionGuard();
+function isActiveSession(session: IncisionSessionToken): boolean {
+  return S.mounted && activeSession.isActive(session);
+}
 function currentTumorFormSnapshot() {
   return buildTumorFormSnapshot({
     kind: els.tumorKind?.value,
@@ -165,7 +168,6 @@ function currentTumorFormSnapshot() {
     anatomyPreviewWarn: Boolean(els.anatomyPreview?.classList?.contains("warn")),
   });
 }
-
 function currentSecondaryCueSnapshot() {
   return buildIncisionSecondaryCueSnapshot({
     present: Boolean(S.secondaryCues),
@@ -174,14 +176,12 @@ function currentSecondaryCueSnapshot() {
     manualConfirmed: Boolean(els.secondaryCueConfirmed?.checked),
   });
 }
-
 function currentPrivacyAuditSnapshot() {
   return buildIncisionPrivacyAuditSnapshot({
     stateLabel: els.privacyState?.textContent || "本地几何",
     message: els.privacyAudit?.textContent || "所有切口 workflow 均在浏览器本地执行，不配置或调用远程模型。",
   });
 }
-
 function currentAssetLoadingSnapshot() {
   return buildIncisionAssetLoadingSnapshot({
     visible: !els.assetLoading?.classList?.contains("hidden"),
@@ -393,13 +393,19 @@ function headAssetSnapshot({
   };
 }
 
-async function loadMediaPipeIncisionAssets() {
-  const [head, standardAtlas] = await Promise.all([
-    dataSource.getHeadMesh("mediapipe-468", { onProgress: updateAssetLoading }),
-    dataSource.loadAtlas("rstl", { onProgress: updateAssetLoading }),
-  ]);
+async function loadMediaPipeIncisionAssets(session: IncisionSessionToken) {
+  const updateActiveAssetLoading = (event: DynamicRecord) => {
+    if (isActiveSession(session)) updateAssetLoading(event);
+  };
+  const assets = await loadIncisionSessionAssets(session, isActiveSession, {
+    loadHead: () => dataSource.getHeadMesh("mediapipe-468", { onProgress: updateActiveAssetLoading }),
+    loadStandardAtlas: () => dataSource.loadAtlas("rstl", { onProgress: updateActiveAssetLoading }),
+    takePreviewAtlas: () => dataSource.takePreviewAtlas(),
+  });
+  if (!assets) return null;
+  const { head, standardAtlas, personalizedAtlas } = assets;
   const resolved = resolveIncisionAtlas({
-    personalizedAtlas: dataSource.takePreviewAtlas(),
+    personalizedAtlas,
     standardAtlas,
     triangleCount: head.triangles.length,
   });
@@ -414,9 +420,11 @@ async function loadMediaPipeIncisionAssets() {
   };
 }
 
-async function boot() {
-  const { head, atlas, headAsset } = await loadMediaPipeIncisionAssets();
-  if (!S.mounted) return;
+async function boot(session: IncisionSessionToken) {
+  const assets = await loadMediaPipeIncisionAssets(session);
+  if (!assets) return;
+  const { head, atlas, headAsset } = assets;
+  if (!isActiveSession(session)) return;
   S.verts = head.vertices; S.tris = head.triangles; S.atlas = atlas; S.headAsset = headAsset; S.assetWarnings = headAsset.warnings;
   S.planning2d?.setTopology(S.tris);
   S.planning2d?.setOverlaySummary({ rstlLineCount: atlas.lines?.length || 0 });
@@ -761,6 +769,13 @@ function updateTumorRing() {
 
 function drawCandidate(result: DynamicRecord) {
   if (!S.candidateLine) return;
+  if (result.candidate_display_blocked) {
+    S.candidateLine.visible = false;
+    for (const handle of S.endpointHandles) handle.visible = false;
+    S.planning2d?.setOverlaySummary({ candidatePointCount: 0 });
+    photoRuntime?.render();
+    return;
+  }
   S.candidateLine.visible = true;
   const old = S.candidateLine.geometry;
   S.candidateLine.geometry = buildPolylineGeometry(
@@ -811,81 +826,6 @@ function clearBoundaryPoints() {
   els.pickState.textContent = "自由轮廓已清空。";
   previewWorkflow();
   publishIncisionState("tumor_boundary_clear");
-}
-
-function handleReactTumorCommand(event: Event) {
-  const detail = readIncisionTumorCommand(event);
-  if (!detail) return;
-  const { command } = detail;
-  applyReactTumorControlValue(els, command, detail.value);
-  if (command === "kind_changed") {
-    resetIncisionBoundaryState(S); els.startBoundary.textContent = "开始轮廓";
-    updateFormVisibility();
-    publishIncisionState("tumor_kind_changed");
-    previewWorkflow();
-    return;
-  }
-  if (command === "diameter_input") {
-    updateTumorRing();
-    publishIncisionState("tumor_diameter_input");
-    return;
-  }
-  if (command === "depth_input" || command === "author_changed") {
-    publishIncisionState(command);
-    return;
-  }
-  if (command === "margin_input" || command === "ellipse_ratio_input") {
-    updateTumorRing();
-    publishIncisionState(command);
-    return;
-  }
-  if (command === "diameter_changed" || command === "depth_changed" || command === "margin_changed" || command === "ellipse_ratio_changed") {
-    previewWorkflow();
-    return;
-  }
-  if (command === "boundary_mode_changed") {
-    S.boundaryActive = false;
-    updateFormVisibility();
-    publishIncisionState("tumor_boundary_mode_changed");
-    previewWorkflow();
-    return;
-  }
-  if (command === "toggle_boundary") {
-    toggleBoundaryDrawing();
-    return;
-  }
-  if (command === "clear_boundary") {
-    clearBoundaryPoints();
-    return;
-  }
-  if (command === "export_tumor") {
-    exportTumorJson();
-    return;
-  }
-  if (command === "import_tumor") {
-    els.tumorImportFile.click();
-    return;
-  }
-  if (command === "run_workflow") {
-    runWorkflow({ countGeneration: true });
-  }
-}
-
-function handleReactSecondaryCueCommand(event: Event) {
-  const detail = readIncisionSecondaryCueCommand(event);
-  if (!detail) return;
-  const { command } = detail;
-  if (command === "import_secondary_cue") {
-    els.secondaryCueImportFile.click();
-    return;
-  }
-  if (command === "clear_secondary_cue") {
-    clearSecondaryCues();
-    return;
-  }
-  if (command === "secondary_cue_confirmed") {
-    setSecondaryCueConfirmedFromControl();
-  }
 }
 
 function fmt(x: unknown, digits = 1): string {
@@ -1010,37 +950,6 @@ function resetEditToToolSuggestion() {
   renderResult(S.baseResult);
 }
 
-function handleReactEditCommand(event: Event) {
-  const detail = readIncisionEditCommand(event);
-  if (!detail) return;
-  const { command } = detail;
-  applyReactEditControlValue(els, detail.controlId, detail.value);
-  if (command === "preview_edit") {
-    applyEditControls();
-    return;
-  }
-  if (command === "commit_edit") {
-    commitEditSnapshot("control_change");
-    return;
-  }
-  if (command === "commit_reason") {
-    applyEditControls();
-    commitEditSnapshot("reason_change");
-    return;
-  }
-  if (command === "undo_edit") {
-    undoEditSnapshot();
-    return;
-  }
-  if (command === "redo_edit") {
-    redoEditSnapshot();
-    return;
-  }
-  if (command === "reset_edit") {
-    resetEditToToolSuggestion();
-  }
-}
-
 function updateEditVisibility(result: DynamicRecord) {
   const fusiform = result?.candidate?.type === "fusiform";
   els.widthScaleWrap.classList.toggle("hidden", !fusiform);
@@ -1114,17 +1023,17 @@ function tumorQualityFor(result: DynamicRecord = S.result) {
   if (!result?.tumor) return { warnings: [], warning_count: 0, passed: true };
   return result.tumor_quality || summarizeTumorInputQuality(result.tumor);
 }
-
 function applyTextPresentation(element: HTMLElement, presentation: IncisionTextPresentation) {
   element.textContent = presentation.text;
   if (presentation.title !== undefined) element.title = presentation.title;
   element.classList.toggle("warn", Boolean(presentation.classNames?.includes("warn")));
   element.classList.toggle("danger", Boolean(presentation.classNames?.includes("danger")));
 }
-
 function renderResult(result: DynamicRecord) {
   S.result = result;
-  drawCandidate(result);
+  const tumorInputInvalid = result?.tumor_engineering_validation?.passed === false;
+  (S.tumorRing?.material as THREE.LineBasicMaterial | undefined)?.color.set(tumorInputInvalid ? 0xef4444 : 0xfacc15);
+  (S.boundaryLine?.material as THREE.LineBasicMaterial | undefined)?.color.set(tumorInputInvalid ? 0xef4444 : 0xfb7185); drawCandidate(result);
   const tumorQuality = tumorQualityFor(result);
   const presentation = buildIncisionResultPresentation({
     result,
@@ -1370,60 +1279,6 @@ function makeVariantCandidates() {
   }
   els.stageStatus.textContent = "已生成 3 个方向备选、复跑 guardrails，并更新工程排序";
   renderSaved();
-}
-
-function handleReactReviewCommand(event: Event) {
-  const detail = readIncisionReviewCommand(event);
-  if (!detail) return;
-  const { command } = detail;
-  if (command === "review_state_changed") {
-    updateReviewStateUI();
-    return;
-  }
-  if (command === "save_review") {
-    saveReviewRecord();
-  }
-}
-
-function handleReactLibraryCommand(event: Event) {
-  const detail = readIncisionLibraryCommand(event);
-  if (!detail) return;
-  const { command, id } = detail;
-  if (command === "save_current") {
-    saveCurrentCandidate();
-    return;
-  }
-  if (command === "make_variants") {
-    makeVariantCandidates();
-    return;
-  }
-  if (command === "clear_saved") {
-    clearSavedCandidates();
-    return;
-  }
-  if (command === "load_candidate") {
-    loadSavedCandidate(String(id || ""));
-    return;
-  }
-  if (command === "remove_candidate") {
-    removeSavedCandidate(String(id || ""));
-    return;
-  }
-  if (command === "export_json") {
-    exportReviewJson();
-    return;
-  }
-  if (command === "export_report") {
-    exportReport();
-    return;
-  }
-  if (command === "export_png") {
-    exportScreenshot();
-    return;
-  }
-  if (command === "stage_live_overlay") {
-    stageLiveOverlay();
-  }
 }
 
 function exportReviewJson() {
@@ -1713,6 +1568,7 @@ function pick(e: PointerEvent) {
     return;
   }
   const lp = hit.point;
+  const openingMessage = tumorPointEngineeringExclusionMessage(lp, S.verts); if (openingMessage) { els.pickState.textContent = openingMessage; return; }
   let best = hit.face.a, bd = Infinity;
   for (const vi of [hit.face.a, hit.face.b, hit.face.c]) {
     const d = len(sub(S.verts[vi], lp));
@@ -1735,7 +1591,6 @@ function pick(e: PointerEvent) {
   }
   previewWorkflow();
 }
-
 function bindWorkbenchEvents() {
   const reactManaged = isReactManagedWorkbench();
   if (reactManaged) bindReactWorkbenchCommands();
@@ -1830,17 +1685,56 @@ function renderLoop() {
   S.frameId = requestAnimationFrame(renderLoop);
 }
 
+const incisionCommands = new IncisionCommandRouter({
+  applyTumorControl: (command, value) => applyReactTumorControlValue(els, command, value),
+  resetBoundaryForTumorKind: () => {
+    resetIncisionBoundaryState(S);
+    els.startBoundary.textContent = "开始轮廓";
+  },
+  setBoundaryInactive: () => { S.boundaryActive = false; },
+  updateFormVisibility,
+  publish: publishIncisionState,
+  previewWorkflow,
+  updateTumorRing,
+  toggleBoundaryDrawing,
+  clearBoundaryPoints,
+  exportTumor: exportTumorJson,
+  importTumor: () => els.tumorImportFile.click(),
+  runWorkflow: () => runWorkflow({ countGeneration: true }),
+  importSecondaryCue: () => els.secondaryCueImportFile.click(),
+  clearSecondaryCue: clearSecondaryCues,
+  confirmSecondaryCue: setSecondaryCueConfirmedFromControl,
+  applyEditControl: (controlId, value) => applyReactEditControlValue(els, controlId, value),
+  applyEditControls,
+  commitEdit: commitEditSnapshot,
+  undoEdit: undoEditSnapshot,
+  redoEdit: redoEditSnapshot,
+  resetEdit: resetEditToToolSuggestion,
+  updateReviewState: updateReviewStateUI,
+  saveReview: saveReviewRecord,
+  saveCurrentCandidate,
+  makeVariants: makeVariantCandidates,
+  clearSaved: clearSavedCandidates,
+  loadCandidate: loadSavedCandidate,
+  removeCandidate: removeSavedCandidate,
+  exportJson: exportReviewJson,
+  exportReport,
+  exportPng: exportScreenshot,
+  stageLiveOverlay,
+});
+
 function bindReactWorkbenchCommands() {
   S.reactCommandCleanup = bindWindowControllerEvents([
-    [INCISION_TUMOR_REACT_COMMAND_EVENT, handleReactTumorCommand],
-    [INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT, handleReactSecondaryCueCommand],
-    [INCISION_EDIT_REACT_COMMAND_EVENT, handleReactEditCommand],
-    [INCISION_REVIEW_REACT_COMMAND_EVENT, handleReactReviewCommand],
-    [INCISION_LIBRARY_REACT_COMMAND_EVENT, handleReactLibraryCommand],
+    [INCISION_TUMOR_REACT_COMMAND_EVENT, (event) => { incisionCommands.handleTumorEvent(event); }],
+    [INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT, (event) => { incisionCommands.handleSecondaryCueEvent(event); }],
+    [INCISION_EDIT_REACT_COMMAND_EVENT, (event) => { incisionCommands.handleEditEvent(event); }],
+    [INCISION_REVIEW_REACT_COMMAND_EVENT, (event) => { incisionCommands.handleReviewEvent(event); }],
+    [INCISION_LIBRARY_REACT_COMMAND_EVENT, (event) => { incisionCommands.handleLibraryEvent(event); }],
   ]);
 }
 
 export function disposeIncisionWorkbench() {
+  activeSession.dispose();
   persistWorkspaceSession();
   S.mounted = false;
   photoRuntime?.dispose();
@@ -1876,16 +1770,20 @@ export function mountIncisionWorkbench(root: ParentNode | Document = document) {
     commitEndpointDrag: () => commitEditSnapshot("photo_endpoint_drag"),
   });
   S.mounted = true;
+  const session = activeSession.mount();
   bindWorkbenchEvents();
   photoRuntime.setMode(false);
-  boot().catch((err) => {
-    if (!S.mounted) return;
-    els.stageStatus.textContent = "加载失败：" + err.message;
+  boot(session).catch((error) => {
+    if (!isActiveSession(session)) return;
+    const message = errorMessage(error);
+    els.stageStatus.textContent = "加载失败：" + message;
     if (els.assetLoadingText) {
-      els.assetLoadingText.textContent = `资产加载失败：${err.message}`;
+      els.assetLoadingText.textContent = `资产加载失败：${message}`;
     }
     publishIncisionState("asset_load_failed");
-    console.error(err);
+    console.error(error);
   });
-  return disposeIncisionWorkbench;
+  return () => {
+    if (isActiveSession(session)) disposeIncisionWorkbench();
+  };
 }

@@ -26,6 +26,19 @@ function disk(target: ReturnType<typeof image>, cx: number, cy: number, radius: 
   }
 }
 
+function ring(target: ReturnType<typeof image>, cx: number, cy: number, radius: number, thickness = 3, value = 20) {
+  for (let y = 0; y < target.height; y += 1) {
+    for (let x = 0; x < target.width; x += 1) {
+      const distance = Math.hypot(x - cx, y - cy);
+      if (Math.abs(distance - radius) > thickness / 2) continue;
+      const index = (y * target.width + x) * 4;
+      target.data[index] = value;
+      target.data[index + 1] = value;
+      target.data[index + 2] = value;
+    }
+  }
+}
+
 {
   const target = image();
   disk(target, 48, 46, 8);
@@ -36,6 +49,16 @@ function disk(target: ReturnType<typeof image>, cx: number, cy: number, radius: 
   assert.ok(result.confidence > 0.8);
   assert.deepEqual(result.audit, { local_only: true, raw_media_retained: false, network_request_made: false });
   assert.equal("data" in result, false, "detector result must not retain raw pixels");
+}
+
+{
+  const target = image();
+  ring(target, 48, 46, 18, 4);
+  const result = detectControlledMarker(target, { x: 48, y: 46 });
+  assert.equal(result.ok, true, "a click inside a hollow marker selects the enclosing component");
+  assert.ok(result.center && Math.hypot(result.center.x - 48, result.center.y - 46) < 0.5);
+  assert.ok((result.bbox?.width || 0) >= 35 && (result.bbox?.height || 0) >= 35,
+    "hollow marker extraction keeps the complete outline instead of a nearby arc");
 }
 
 {
@@ -72,4 +95,21 @@ const source = fs.readFileSync("src/services/controlledMarkerDetection.ts", "utf
 assert.doesNotMatch(source, /\bdocument\b|\bwindow\b|\bfetch\s*\(|axios|onnxruntime|mediapipe/i,
   "controlled marker detector must stay pure, local, and SDK-independent");
 
-console.log("test_controlled_marker_detection: seeded ROI, multiple, empty, tiny, and low-contrast cases passed");
+const runtimeSource = fs.readFileSync("src/services/incisionPhotoRuntime.ts", "utf8");
+assert.ok(runtimeSource.includes('publishState("controlled_marker_cancelled")'), "marker action supports explicit cancellation");
+assert.ok(runtimeSource.includes("resetControlledMarker({ restoreSelection: true })"), "cancel and exit restore the confirmed selection");
+assert.ok(runtimeSource.includes("markerDraftActive || candidateDisplayBlocked ? [] : endpointRefs"),
+  "unconfirmed marker drafts and blocked candidates hide stale candidate handles");
+assert.ok(runtimeSource.includes("keepControlledMarkerRetry"),
+  "failed marker clicks retain marker mode so the user can retry directly");
+assert.ok(runtimeSource.includes("projectedCandidate !== state.result?.candidate"),
+  "endpoint visibility is bound to the candidate whose photo projection was validated");
+assert.match(runtimeSource, /controlledMarkerSeedMode = false;\s*state\.planning2d\?\.setSelection/,
+  "marker mode exits only after a valid draft has been produced");
+assert.doesNotMatch(
+  runtimeSource.match(/controlledMarkerDraft = normalizeLesionDetectionAdapter[\s\S]*?publishState\("controlled_marker_draft"\)/)?.[0] || "",
+  /setLesion\(/,
+  "a marker draft must not replace the confirmed lesion before confirmation",
+);
+
+console.log("test_controlled_marker_detection: seeded ROI, failure cases, and draft lifecycle contracts passed");
