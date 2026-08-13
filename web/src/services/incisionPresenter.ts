@@ -1,6 +1,7 @@
 import {
   directionHintLabel,
   directionSourceLabel,
+  engineeringRecoveryLabel,
   guardrailLabel,
   overrideLabel,
   reasonLabel,
@@ -136,7 +137,7 @@ export function buildGuardrailDetailsPresentation(
     : `保护提示：${warnings.map((warning) => `${guardrailLabel(warning.code)}（${severityLabel(warning.severity)}）`).join("；")}`;
   if (overrides.length) text += `\n建议：${overrides.map(overrideAdviceLabel).join(" · ")}`;
   if (hardViolations.length) {
-    text = `工程硬阻断：${hardViolations.map((item) => `${String(item.code || "unknown")}（${String(item.recovery || "修复候选几何后重试")}）`).join("；")}\n${text}`;
+    text = `工程硬阻断：${hardViolations.map((item) => `${guardrailLabel(item.code)}（${engineeringRecoveryLabel(item.code)}）`).join("；")}\n${text}`;
   }
   if (tumorQuality.warning_count) {
     text += `\n肿物输入：${(tumorQuality.warnings || []).map((warning) => `${guardrailLabel(warning.code)}（${severityLabel(warning.severity)}）`).join("；")}`;

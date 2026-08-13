@@ -42,6 +42,29 @@ function meanVerticalDistance(points, wrinkle, x0, x1) {
   return distances.reduce((sum, value) => sum + value, 0) / Math.max(1, distances.length);
 }
 
+function signedTurnDegrees(points) {
+  return points.map((point, pointIndex) => {
+    if (pointIndex === 0 || pointIndex === points.length - 1) return 0;
+    const first = [
+      point[0] - points[pointIndex - 1][0],
+      point[1] - points[pointIndex - 1][1],
+    ];
+    const second = [
+      points[pointIndex + 1][0] - point[0],
+      points[pointIndex + 1][1] - point[1],
+    ];
+    const firstLength = Math.hypot(...first), secondLength = Math.hypot(...second);
+    const cross = first[0] * second[1] - first[1] * second[0];
+    const dot = first[0] * second[0] + first[1] * second[1];
+    return Math.atan2(cross / (firstLength * secondLength), dot / (firstLength * secondLength)) *
+      180 / Math.PI;
+  });
+}
+
+function maximumTurnDegrees(points) {
+  return Math.max(...signedTurnDegrees(points).map(Math.abs));
+}
+
 // Compatible sources blend, a clearly stronger conflicting source wins, and
 // an ambiguous directional conflict conservatively retains the prior.
 {
@@ -179,6 +202,57 @@ function meanVerticalDistance(points, wrinkle, x0, x1) {
   assert.ok(result.audit.wrinkleTrends.every((trend) => !trend.finalAccepted));
   assert.ok(result.audit.wrinkleTrends.some((trend) =>
     ["insufficient_segment_support", "insufficient_curve_support"].includes(trend.rejectionReason)));
+}
+
+// Refinement 6.2 fairs the scalar normal-offset field after trajectory fitting.
+// A rasterized wavy wrinkle must remain adopted without leaving high-frequency
+// angular kinks in the exported RSTL, and both curve endpoints stay fixed.
+{
+  const seed = horizontalSeed("curvature-fairing", 30, 8, 87, 1);
+  const wrinkle = Array.from({ length: 57 }, (_, offset) => [
+    20 + offset,
+    38 + Math.round(3 * Math.sin(offset / 18)),
+  ]);
+  const fields = evidence([wrinkle]);
+  const result = refineV6({
+    seeds: [seed],
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 180,
+    options: {
+      oneToOneTrendCurveMatching: true,
+      postAdherenceGate: true,
+      targetGapPx: 1.5,
+      dataAttractionStrength: 20,
+      wrinkleDominantCoreStrength: 0.95,
+      smoothingPasses: 12,
+      searchRadiusPx: 16,
+      p90LimitPx: 18,
+      maxDisplacementPx: 24,
+      maxCurvatureChangeDegrees: 60,
+      curvatureFairing: true,
+      curvatureFairingPasses: 32,
+      curvatureFairingMaximumTurnDegrees: 8,
+      curvatureFairingStrictMaximumTurnDegrees: 6,
+      curvatureFairingStrictRegion: "test",
+      curvatureFairingBaselineSlackDegrees: 2,
+      curvatureFairingMaximumAddedSignChanges: 2,
+      curvatureFairingEndpointTangentChangeDegrees: 45,
+    },
+  });
+  const event = result.diagnostics.curvature_fairing_events.find((candidate) =>
+    candidate.curve_name === seed.name);
+  assert.equal(result.diagnostics.curvature_fairing_enabled, true);
+  assert.equal(event?.status, "faired", JSON.stringify(event));
+  assert.ok(result.curves[0].normalOffsetsPx.some((value) => Math.abs(value) > 0.05));
+  assert.ok(maximumTurnDegrees(result.curves[0].pts) <= 6 + 1e-6);
+  assert.deepEqual(result.curves[0].pts[0], seed.pts[0]);
+  assert.deepEqual(result.curves[0].pts.at(-1), seed.pts.at(-1));
+  assert.equal(result.diagnostics.post_fairing_adherence_rollback_curve_count, 0);
+  assert.equal(result.diagnostics.post_export_new_intersection_pair_count, 0);
+  assert.equal(result.diagnostics.post_export_new_self_cross_curve_count, 0);
 }
 
 // V3 assigns parallel wrinkles to distinct nearby RSTL curves instead of

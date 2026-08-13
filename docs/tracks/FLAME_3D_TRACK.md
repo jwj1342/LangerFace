@@ -3,8 +3,8 @@
 本文是 FLAME 离线拟合、浏览器标注/研究预览、拓扑守卫、资产来源与许可边界的单一说明。
 
 > 当前工程边界：**2D-first；FLAME 仅保留离线资产、标注和研究预览**。逐 sprint 明细见 §9；路线建议见
-> [3D 路线 ADR](../architecture/ADR_3D_ROUTE_FEASIBILITY.md)。PR #108 已关闭全部实时 3D 网页入口，
-> 残留 runtime 只在共享依赖拆分前保留；#40 的最终决策仍待 owner 正式确认。关联：#2（临床校验，OPEN）、#40（决策待确认）、
+> [3D 路线 ADR](../architecture/ADR_3D_ROUTE_FEASIBILITY.md)。实时 3D 网页入口及其 Live runtime 均已删除；
+> 本轨只保留离线资产、标注和研究预览。关联：#2（临床校验，OPEN）、#40（路线决策）、
 > #65（拓扑守卫，已关闭）、PR #88（RSTL-on-FLAME 草案注册，已合并）。
 
 ## 1. 定位：与 2D MediaPipe 轨**独立双轨**

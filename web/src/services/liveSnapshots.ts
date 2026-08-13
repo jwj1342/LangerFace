@@ -20,12 +20,6 @@ export interface LiveSourceState {
   liveLabel: string;
 }
 
-export interface LiveRouteState {
-  route: "2d" | "3d" | string;
-  mode3d: string;
-  hint: string;
-}
-
 export interface LiveRenderSettings {
   system: string;
   densityPct: number;
@@ -35,15 +29,6 @@ export interface LiveRenderSettings {
   zoom: boolean;
   meshPts: boolean;
   bands: boolean;
-}
-
-export interface LiveReconState {
-  has3dModel: boolean;
-  projectable: boolean;
-  scanActive: boolean;
-  twinMode: string;
-  twinTexture: boolean;
-  status: string;
 }
 
 export interface LiveAtlasPreviewState {
@@ -64,9 +49,7 @@ export interface LiveControllerSnapshot {
   modelBadge: string;
   overlayMessage: string;
   source: LiveSourceState;
-  route: LiveRouteState;
   render: LiveRenderSettings;
-  recon: LiveReconState;
   atlasPreview: LiveAtlasPreviewState;
   atlasContract: RstlSourceContract | null;
   incisionOverlay: LiveIncisionOverlayState;
@@ -82,9 +65,6 @@ export interface LiveSnapshotInput {
   sourceRunning?: boolean;
   sourcePaused?: boolean;
   liveLabel?: string;
-  route?: string;
-  mode3d?: string;
-  routeHint?: string;
   renderSystem?: string;
   densityFrac?: number;
   smoothLabel?: string;
@@ -93,12 +73,6 @@ export interface LiveSnapshotInput {
   zoom?: boolean;
   meshPts?: boolean;
   bands?: boolean;
-  has3dModel?: boolean;
-  projectable?: boolean;
-  scanActive?: boolean;
-  twinMode?: string;
-  twinTexture?: boolean;
-  reconStatus?: string;
   previewSystem?: string | null;
   previewMeta?: {
     source?: string | null;
@@ -134,9 +108,6 @@ export function buildLiveControllerSnapshot({
   sourceRunning = false,
   sourcePaused = false,
   liveLabel = "待机",
-  route = "2d",
-  mode3d = "",
-  routeHint = "",
   renderSystem = "",
   densityFrac = 0,
   smoothLabel = "",
@@ -145,12 +116,6 @@ export function buildLiveControllerSnapshot({
   zoom = false,
   meshPts = false,
   bands = false,
-  has3dModel = false,
-  projectable = false,
-  scanActive = false,
-  twinMode = "",
-  twinTexture = false,
-  reconStatus = "",
   previewSystem = null,
   previewMeta = null,
   atlasContract = null,
@@ -170,11 +135,6 @@ export function buildLiveControllerSnapshot({
       paused: Boolean(sourcePaused),
       liveLabel: liveLabel || "待机",
     },
-    route: {
-      route,
-      mode3d,
-      hint: routeHint,
-    },
     render: {
       system: renderSystem,
       densityPct: pctFromFraction(densityFrac),
@@ -184,14 +144,6 @@ export function buildLiveControllerSnapshot({
       zoom: Boolean(zoom),
       meshPts: Boolean(meshPts),
       bands: Boolean(bands),
-    },
-    recon: {
-      has3dModel: Boolean(has3dModel),
-      projectable: Boolean(projectable),
-      scanActive: Boolean(scanActive),
-      twinMode,
-      twinTexture: Boolean(twinTexture),
-      status: reconStatus,
     },
     atlasPreview: {
       active: Boolean(previewSystem && previewMeta && renderSystem === previewSystem),

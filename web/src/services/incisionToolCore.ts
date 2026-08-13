@@ -5,7 +5,12 @@ import {
   SENSITIVE_ANCHORS,
   SENSITIVE_MARGIN_SEGMENTS,
 } from "./incisionToolRules.ts";
-import { inspectPathPolygonRelation, resamplePolyline2d, type Point2 } from "./incisionPathGeometry.ts";
+import {
+  inspectPathPolygonRelation,
+  pointInPolygon2d,
+  resamplePolyline2d,
+  type Point2,
+} from "./incisionPathGeometry.ts";
 
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];
@@ -28,6 +33,25 @@ type RegionConfidenceInput = {
   nearbyLandmarks: string[];
   boundaryMargin: number;
 };
+
+const MEDIAPIPE_FACE_VERTEX_COUNT = 468;
+const MEDIAPIPE_TOPOLOGY_OPENINGS = [
+  { id: "left-eye-opening", indices: [33, 160, 158, 133, 153, 144], projectionBufferScale: 1 },
+  { id: "right-eye-opening", indices: [362, 385, 387, 263, 373, 380], projectionBufferScale: 1 },
+  {
+    id: "oral-opening",
+    indices: [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95],
+    projectionBufferScale: 1,
+  },
+] as const;
+
+// Reuse the audited standard-atlas nostril aperture mask (v9) in normalized
+// face coordinates. It is an engineering non-skin opening, not a clinical
+// safety margin, and deliberately does not cover the surrounding nasal ala.
+const STANDARD_RSTL_NOSTRIL_APERTURES = [
+  { id: "left-nostril-opening", center: [0.405, 0.53] as Point2, radii: [0.034, 0.052] as Point2 },
+  { id: "right-nostril-opening", center: [0.595, 0.53] as Point2, radii: [0.034, 0.052] as Point2 },
+] as const;
 
 export interface DirectionResult extends AnyRecord {
   point: Vec3;
@@ -196,6 +220,161 @@ function normalizedCandidatePath(candidate: AnyRecord, verts: ArrayLike<number>[
   ]);
 }
 
+function polygonArea2d(points: Point2[]): number {
+  return points.reduce((area, point, index) => {
+    const next = points[(index + 1) % points.length];
+    return area + point[0] * next[1] - next[0] * point[1];
+  }, 0) / 2;
+}
+
+export function buildMediaPipeEngineeringExclusionZones(verts: ArrayLike<number>[]): AnyRecord[] {
+  if (!Array.isArray(verts) || verts.length < MEDIAPIPE_FACE_VERTEX_COUNT) return [];
+  const { lo, hi } = bbox(verts);
+  const span = [hi[0] - lo[0], hi[1] - lo[1]];
+  if (!span.every((value) => Number.isFinite(value) && value > 1e-9)) return [];
+
+  const topologyZones = MEDIAPIPE_TOPOLOGY_OPENINGS.flatMap(({ id, indices, projectionBufferScale }) => {
+    const vertices = indices.map((index) => verts[index]);
+    if (vertices.some((vertex) => !vertex || vertex.length < 2 || !Number.isFinite(vertex[0]) || !Number.isFinite(vertex[1]))) {
+      return [];
+    }
+    const rawPolygon = vertices.map((vertex) => [
+      (vertex[0] - lo[0]) / span[0],
+      (vertex[1] - lo[1]) / span[1],
+    ] as Point2);
+    const center = rawPolygon.reduce((sum, point) => [
+      sum[0] + point[0] / rawPolygon.length,
+      sum[1] + point[1] / rawPolygon.length,
+    ], [0, 0] as Point2);
+    const polygon = rawPolygon.map((point) => [
+      center[0] + (point[0] - center[0]) * projectionBufferScale,
+      center[1] + (point[1] - center[1]) * projectionBufferScale,
+    ] as Point2);
+    if (Math.abs(polygonArea2d(polygon)) <= 1e-6) return [];
+    return [{
+      id,
+      code: "candidate_intersects_non_skin_opening",
+      polygon,
+      source: projectionBufferScale > 1
+        ? "mediapipe-468-topology-loop-with-projection-buffer"
+        : "mediapipe-468-topology-loop",
+      projection_buffer_scale: projectionBufferScale,
+      recovery: "Move or regenerate the candidate so its complete path stays outside the mapped face opening.",
+      clinical_boundary: "This topology opening and projection buffer are engineering exclusions only; they do not define a medical safety margin.",
+    }];
+  });
+  const nostrilZones = STANDARD_RSTL_NOSTRIL_APERTURES.map(({ id, center, radii }) => ({
+    id,
+    code: "candidate_intersects_non_skin_opening",
+    polygon: Array.from({ length: 32 }, (_, index) => {
+      const angle = index / 32 * Math.PI * 2;
+      return [center[0] + Math.cos(angle) * radii[0], center[1] + Math.sin(angle) * radii[1]] as Point2;
+    }),
+    source: "standard-rstl-v1-nostril-aperture-mask-v9",
+    projection_buffer_scale: 1,
+    recovery: "Move or regenerate the candidate so its complete path stays outside the mapped nostril opening.",
+    clinical_boundary: "This nostril aperture is an engineering exclusion only; it does not define a medical safety margin.",
+  }));
+  return [...topologyZones, ...nostrilZones];
+}
+
+function normalizedModelPoint(point: ArrayLike<number>, verts: ArrayLike<number>[]): Point2 | null {
+  if (!point || point.length < 2 || !Number.isFinite(point[0]) || !Number.isFinite(point[1])) return null;
+  const { lo, hi } = bbox(verts);
+  const width = hi[0] - lo[0], height = hi[1] - lo[1];
+  if (!(width > 1e-9) || !(height > 1e-9)) return null;
+  return [(point[0] - lo[0]) / width, (point[1] - lo[1]) / height];
+}
+
+export function inspectTumorPointEngineeringExclusion(
+  point: ArrayLike<number>,
+  verts: ArrayLike<number>[],
+): AnyRecord | null {
+  const normalized = normalizedModelPoint(point, verts);
+  if (!normalized) return null;
+  for (const zone of buildMediaPipeEngineeringExclusionZones(verts)) {
+    if (!pointInPolygon2d(normalized, zone.polygon as Point2[])) continue;
+    return {
+      code: "tumor_center_inside_non_skin_opening",
+      zone_id: zone.id,
+      zone_source: zone.source,
+      normalized_xy: normalized,
+      recovery: "Choose a lesion center on visible skin outside the mapped face opening.",
+      clinical_boundary: zone.clinical_boundary,
+    };
+  }
+  return null;
+}
+
+export function tumorPointEngineeringExclusionMessage(
+  point: ArrayLike<number>,
+  verts: ArrayLike<number>[],
+): string | null {
+  const opening = inspectTumorPointEngineeringExclusion(point, verts);
+  if (!opening) return null;
+  const label = opening.zone_id === "oral-opening"
+    ? "口裂"
+    : String(opening.zone_id).includes("nostril") ? "鼻孔" : "眼裂";
+  return `该位置落在${label}等非皮肤开口，不能作为病灶中心；请在可见皮肤上重新选择。`;
+}
+
+function normalizedTumorFootprint(tumor: AnyRecord, verts: ArrayLike<number>[]): {
+  source: "boundary" | "diameter";
+  points: Point2[];
+} | null {
+  const boundary = Array.isArray(tumor?.boundary)
+    ? tumor.boundary.map((point: ArrayLike<number>) => normalizedModelPoint(point, verts)).filter(Boolean) as Point2[]
+    : [];
+  if (boundary.length >= 3) return { source: "boundary", points: boundary };
+  const center = normalizedModelPoint(tumor?.center, verts);
+  const diameterMm = Number(tumor?.diameter_mm);
+  if (!center || !(diameterMm > 0)) return null;
+  const { lo, hi } = bbox(verts);
+  const radiusModel = diameterMm * unitsPerMmFromVertices(verts) / 2;
+  const radiusX = radiusModel / Math.max(hi[0] - lo[0], 1e-9);
+  const radiusY = radiusModel / Math.max(hi[1] - lo[1], 1e-9);
+  const points = Array.from({ length: 48 }, (_, index) => {
+    const angle = index / 48 * Math.PI * 2;
+    return [center[0] + Math.cos(angle) * radiusX, center[1] + Math.sin(angle) * radiusY] as Point2;
+  });
+  return { source: "diameter", points };
+}
+
+export function inspectTumorEngineeringExclusions(tumor: AnyRecord, verts: ArrayLike<number>[]): AnyRecord {
+  const violations: AnyRecord[] = [];
+  const centerViolation = inspectTumorPointEngineeringExclusion(tumor?.center, verts);
+  if (centerViolation) {
+    violations.push({
+      code: centerViolation.code,
+      location: centerViolation,
+      recovery: centerViolation.recovery,
+    });
+  }
+  const footprint = normalizedTumorFootprint(tumor, verts);
+  if (footprint) {
+    for (const zone of buildMediaPipeEngineeringExclusionZones(verts)) {
+      const relation = inspectPathPolygonRelation(footprint.points, zone.polygon as Point2[], { closedPath: true });
+      if (!relation.intersects) continue;
+      violations.push({
+        code: footprint.source === "boundary"
+          ? "tumor_boundary_intersects_non_skin_opening"
+          : "tumor_diameter_intersects_non_skin_opening",
+        location: { zone_id: zone.id, zone_source: zone.source, relation },
+        recovery: footprint.source === "boundary"
+          ? "Keep the recorded boundary as evidence, then redraw it outside the mapped face opening."
+          : "Keep the recorded diameter as evidence, then move the center or correct the diameter before generating a candidate.",
+      });
+    }
+  }
+  return {
+    schema_version: "tumor-engineering-exclusions/v0.1",
+    passed: violations.length === 0,
+    violations,
+    footprint_source: footprint?.source || null,
+    clinical_boundary: "MediaPipe topology openings are engineering exclusions only; they do not define a medical safety margin.",
+  };
+}
+
 function validSurfaceRef(ref: AnyRecord): boolean {
   if (!ref || !Number.isInteger(ref.tri) || ref.tri < 0) return false;
   const weights = [Number(ref.u), Number(ref.v), Number(ref.w ?? 1 - Number(ref.u) - Number(ref.v))];
@@ -237,7 +416,12 @@ export function annotateCandidateEngineeringViolations<T extends AnyRecord>(cand
       recovery: "Generate surface references for the complete candidate path before review.",
     });
   }
-  for (const zone of Array.isArray(candidate.engineering_exclusion_zones) ? candidate.engineering_exclusion_zones : []) {
+  const zonesById = new Map<string, AnyRecord>();
+  for (const zone of buildMediaPipeEngineeringExclusionZones(verts)) zonesById.set(String(zone.id), zone);
+  for (const [index, zone] of (Array.isArray(candidate.engineering_exclusion_zones) ? candidate.engineering_exclusion_zones : []).entries()) {
+    zonesById.set(String(zone?.id || `candidate-zone-${index}`), zone);
+  }
+  for (const zone of zonesById.values()) {
     const polygon = Array.isArray(zone?.polygon)
       ? zone.polygon.filter((point: unknown) => Array.isArray(point) && point.length >= 2 && point.slice(0, 2).every(Number.isFinite))
         .map((point: number[]) => [Number(point[0]), Number(point[1])] as Point2)
@@ -247,7 +431,7 @@ export function annotateCandidateEngineeringViolations<T extends AnyRecord>(cand
     if (!relation.intersects) continue;
     violations.push({
       code: String(zone.code || "candidate_intersects_engineering_exclusion_zone"),
-      location: { zone_id: zone.id || null, relation },
+      location: { zone_id: zone.id || null, zone_source: zone.source || "candidate", relation },
       recovery: String(zone.recovery || "Move or regenerate the candidate outside the engineering exclusion zone."),
     });
   }
@@ -387,8 +571,12 @@ export function queryDirection(point: Vec3, verts: ArrayLike<number>[], tris: Tr
   const diag = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
   const nearest = Math.sqrt(bd);
   const maxDistance = Math.max(diag * 0.18, 1e-9);
-  const order = dist2.map((d, i) => [d, i] as [number, number]).sort((a, b) => a[0] - b[0]).slice(0, Math.min(7, dist2.length));
   const ref = tans[best];
+  const order = dist2
+    .map((d, i) => [d, i] as [number, number])
+    .filter(([, i]) => Math.abs(dot(tans[i], ref)) >= Math.SQRT1_2)
+    .sort((a, b) => a[0] - b[0])
+    .slice(0, Math.min(7, dist2.length));
   let acc: Vec3 = [0, 0, 0], weightSum = 0;
   const signed: Vec3[] = [];
   for (const [d2, i] of order) {

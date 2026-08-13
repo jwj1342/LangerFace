@@ -15,6 +15,53 @@ from .atlas import Atlas
 
 FOREHEAD_LOWER_LONG_ARC_REGION = "forehead_lower_long_arc_v13"
 FOREHEAD_BRIDGE_ARC_REGION = "forehead_bridge_arc_v15"
+SUPRAORBITAL_SHORT_ARC_REGIONS_V67 = frozenset(
+    {
+        "supraorbital_lateral_short_arc_v67",
+        "supraorbital_medial_short_arc_v67",
+    }
+)
+SUPRAORBITAL_UPWARD_SHIFT_FACE_HEIGHT_V67 = 0.080
+SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V68 = "supraorbital_medial_short_arc_v68"
+SUPRAORBITAL_MEDIAL_UPWARD_SHIFT_FACE_HEIGHT_V68 = 0.040
+SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V69 = "supraorbital_medial_short_arc_v69"
+SUPRAORBITAL_MEDIAL_UPWARD_SHIFT_FACE_HEIGHT_V69 = 0.045
+
+
+def _raise_supraorbital_short_arc(
+    points: np.ndarray,
+    landmarks_px: np.ndarray,
+    shift_face_height: float,
+) -> np.ndarray:
+    """Translate a local brow arc along the detected facial upward axis."""
+    if len(points) == 0 or len(landmarks_px) <= 10:
+        return points
+    anchor = landmarks_px[9, :2]
+    axis = landmarks_px[10, :2] - anchor
+    axis_norm = float(np.linalg.norm(axis))
+    face_height = float(np.ptp(landmarks_px[:, 1]))
+    if axis_norm <= 1e-9 or face_height <= 1e-9:
+        return points
+    axis /= axis_norm
+    out = points.copy()
+    out[:, :2] += (
+        shift_face_height * face_height * axis
+    )
+    return out
+
+
+def _smooth_mapped_curve(points: np.ndarray, passes: int) -> np.ndarray:
+    """Fair mapped x/y coordinates while preserving both curve endpoints."""
+    out = points.copy()
+    for _ in range(max(0, min(32, int(passes)))):
+        if len(out) < 3:
+            break
+        smoothed = out.copy()
+        smoothed[1:-1, :2] = (
+            0.25 * out[:-2, :2] + 0.5 * out[1:-1, :2] + 0.25 * out[2:, :2]
+        )
+        out = smoothed
+    return out
 
 
 def _extend_forehead_lower_long_arc(
@@ -184,5 +231,25 @@ def map_atlas(
                 landmarks_px,
                 forehead_bridge_ranks.get(ln.name, 0.0),
             )
+        elif ln.region in SUPRAORBITAL_SHORT_ARC_REGIONS_V67:
+            pts = _raise_supraorbital_short_arc(
+                pts,
+                landmarks_px,
+                SUPRAORBITAL_UPWARD_SHIFT_FACE_HEIGHT_V67,
+            )
+        elif ln.region == SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V68:
+            pts = _raise_supraorbital_short_arc(
+                pts,
+                landmarks_px,
+                SUPRAORBITAL_MEDIAL_UPWARD_SHIFT_FACE_HEIGHT_V68,
+            )
+        elif ln.region == SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V69:
+            pts = _raise_supraorbital_short_arc(
+                pts,
+                landmarks_px,
+                SUPRAORBITAL_MEDIAL_UPWARD_SHIFT_FACE_HEIGHT_V69,
+            )
+        if ln.post_map_smoothing_passes > 0:
+            pts = _smooth_mapped_curve(pts, ln.post_map_smoothing_passes)
         out.append(MappedLine(name=ln.name, region=ln.region, pts=pts, tris=tris))
     return out

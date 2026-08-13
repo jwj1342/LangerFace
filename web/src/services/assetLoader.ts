@@ -5,7 +5,6 @@ export const assetNames = {
   flameBasis: "flame_basis.bin",
   faceLandmarkerTask: "face_landmarker.task",
   handLandmarkerTask: "hand_landmarker.task",
-  reconDemo: "recon_demo.json",
   topology: "topology_mediapipe_468.json",
   triangles: "triangles.json",
 } as const;

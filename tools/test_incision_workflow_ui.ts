@@ -114,6 +114,11 @@ assert.ok(js.includes("forceDraft: !readiness.ok"), "invalid confirmation saves 
 assert.ok(js.includes("shouldClearFreehandBoundaryOnLesionRepick"), "lesion repicks clear stale freehand boundaries");
 assert.ok(js.includes("resetIncisionBoundaryState"), "tumor kind changes clear incompatible boundary state");
 assert.ok(
+  js.includes("resetBoundaryForTumorKind: () =>")
+    && js.includes('els.startBoundary.textContent = "开始轮廓"'),
+  "tumor kind changes reset both boundary geometry and drawing controls",
+);
+assert.ok(
   js.includes("pointToSurfaceRef(tumor.center, S.verts, S.tris)"),
   "imported tumor centers retain their exact surface reference instead of snapping to a vertex",
 );
@@ -122,6 +127,8 @@ assert.ok(photoRuntime.includes("state.boundaryPoints = []") && photoRuntime.inc
   "photo lesion repicks clear stale freehand points and surface references");
 assert.ok(photoRuntime.includes("normalizeLesionDetectionAdapter"), "controlled marker results enter the shared lesion adapter");
 assert.ok(photoRuntime.includes("confirmed.eligible_for_candidate"), "invalid confirmed marker inputs cannot generate candidates");
+assert.ok(photoRuntime.includes("state.result?.candidate_display_blocked"),
+  "photo planning hides endpoint handles when every candidate has an engineering hard block");
 assert.ok(controlledMarkerDetection.includes("network_request_made: false"), "controlled marker detection records local-only execution");
 assert.ok(workspaceSessionService.includes("incision-workspace-session/v1"), "route round trips persist a versioned incision workspace session");
 assert.ok(js.includes("restoreWorkspaceSession"), "the incision runtime restores the logical workspace after remount");

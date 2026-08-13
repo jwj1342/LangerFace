@@ -56,6 +56,16 @@ def test_roundtrip(tmp_path):
     assert b.lines[0].disable_runtime_expansion is True
 
 
+def test_save_normalizes_negative_zero(tmp_path):
+    atlas = Atlas(system="rstl", lines=[
+        AtlasLine("l0", "forehead", np.array([[0, -1e-12, 0.25], [1, 0.5, -1e-12]])),
+    ])
+    output = tmp_path / "atlas.json"
+    atlas.save(str(output))
+
+    assert "-0.0" not in output.read_text(encoding="utf-8")
+
+
 def test_validate_catches_topology_mismatch():
     a = Atlas(system="rstl", topology_id="flame-2023", lines=[
         AtlasLine("l0", "forehead", np.array([[0, 0.5, 0.3], [1, 0.2, 0.2]], dtype=float)),

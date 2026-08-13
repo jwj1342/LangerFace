@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
-import { dragFirstPhotoEndpoint, uploadGeneratedPhoto } from "./support/incisionPhoto";
+import { dragFirstPhotoEndpoint, pickSafePhotoCheek, uploadGeneratedPhoto } from "./support/incisionPhoto";
 
 async function explicitGenerationCount(page: Page) {
   const status = await page.locator("#stageStatus").textContent() || "";
@@ -26,6 +26,7 @@ test("patient photo is the mobile incision canvas and reuploads fail safely", as
   await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
 
   await uploadGeneratedPhoto(page, "single");
+  await pickSafePhotoCheek(page);
   const photoCanvas = page.locator("#incisionPhotoCanvas");
   const status = page.locator("#incisionPhotoStatus");
   await expect(status).toContainText(/照片规划.*RSTL.*候选已叠加/, { timeout: 45_000 });

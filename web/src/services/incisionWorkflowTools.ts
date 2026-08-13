@@ -12,6 +12,7 @@ import {
   annotateCandidateSensitiveDistances,
   classifyRegion,
   editRecordIsActive,
+  inspectTumorEngineeringExclusions,
   mul,
   norm,
   queryDirection,
@@ -43,6 +44,8 @@ export function rotateInPlane(axis: Vec3, normal: Vec3, angleDeg: number): Vec3 
   const p = tangentPerp(axis, normal);
   return norm(add(mul(axis, Math.cos(a)), mul(p, Math.sin(a))));
 }
+
+export const DEFAULT_SAFE_DIRECTION_SEARCH_OFFSETS_DEG = [0, -10, 10];
 
 function clonePlan<T>(plan: T): T {
   return JSON.parse(JSON.stringify(plan));
@@ -513,6 +516,10 @@ export function candidateForDirection(
     ? generateLinearIncision(tumor, direction, unitsPerMm, rules)
     : generateFusiformIncision(tumor, direction, unitsPerMm, normal, rules);
   annotateCandidateSensitiveDistances(candidate, verts);
+  candidate.metrics = {
+    ...(candidate.metrics || {}),
+    rstl_deviation_deg: Math.abs(Number(direction.angle_offset_deg || 0)),
+  };
   candidate.provenance = {
     ...(candidate.provenance || {}),
     direction_variant_angle_offset_deg: direction.angle_offset_deg || 0,
@@ -640,7 +647,7 @@ export function planIncisionWorkflow({
   tris,
   atlas,
   normal = [0, 0, 1],
-  angleOffsetsDeg = [-10, 0, 10],
+  angleOffsetsDeg = DEFAULT_SAFE_DIRECTION_SEARCH_OFFSETS_DEG,
   rules = DEFAULT_RULES,
 }: {
   tumor?: Partial<TumorInput> & AnyRecord;
@@ -670,7 +677,7 @@ export function planIncisionWorkflow({
         source: variant.source,
         variant_source: variant.variant_source,
       })),
-      boundary: "方向备选由浏览器本地确定性工具按固定角度参数生成。",
+      boundary: "方向备选由浏览器本地确定性工具按固定工程搜索角度生成；该范围不是医学安全角度标准。",
     },
     "探索附近方向偏移，供审阅面板比较确定性候选。",
   ));
@@ -794,6 +801,7 @@ export function planIncisionWorkflow({
       label,
       angle_offset_deg: offset,
       candidate: variantCandidate,
+      direction: variant,
       guardrails: variantGuardrails,
       preview: variantPreview,
       sensitive_structure_inspection: variantSensitiveInspection,
@@ -804,6 +812,61 @@ export function planIncisionWorkflow({
 
   result.candidate_alternatives = candidateRecords;
   result.candidate_comparison = compareCandidateRecords(candidateRecords, rules);
+  const baselineCandidate = candidateRecords.find((record) => Number(record.angle_offset_deg) === 0);
+  const baselineSafe = baselineCandidate && Number(baselineCandidate.candidate?.hard_violation_count || 0) === 0
+    ? baselineCandidate
+    : null;
+  const nearestSafeVariant = candidateRecords
+    .filter((record) => Number(record.candidate?.hard_violation_count || 0) === 0)
+    .sort((first, second) => Math.abs(Number(first.angle_offset_deg)) - Math.abs(Number(second.angle_offset_deg)))[0] || null;
+  const safeCandidate = baselineSafe || nearestSafeVariant;
+  if (safeCandidate) {
+    result.candidate = safeCandidate.candidate;
+    result.original_candidate = safeCandidate.candidate;
+    result.direction = safeCandidate.direction;
+    result.guardrails = safeCandidate.guardrails;
+    result.preview = safeCandidate.preview;
+    result.sensitive_structure_inspection = safeCandidate.sensitive_structure_inspection;
+    result.selected_candidate_id = safeCandidate.id;
+    result.candidate_display_blocked = false;
+    result.candidate_selection_reason = safeCandidate.angle_offset_deg === 0
+      ? "baseline_candidate_passed_engineering_hard_guardrails"
+      : "nearest_safe_direction_variant_selected_after_baseline_block";
+    result.candidate_selection_explanation = safeCandidate.angle_offset_deg === 0
+      ? {
+        baseline_preserved: true,
+        direction_changed_for_margin: false,
+        angle_offset_deg: 0,
+      }
+      : {
+        baseline_preserved: false,
+        direction_changed_for_margin: false,
+        angle_offset_deg: safeCandidate.angle_offset_deg,
+        reason: "baseline_intersects_engineering_non_skin_opening",
+      };
+  } else {
+    result.selected_candidate_id = null;
+    result.candidate_display_blocked = true;
+    result.candidate_selection_reason = "all_direction_variants_have_engineering_hard_violations";
+    result.candidate_selection_explanation = {
+      baseline_preserved: false,
+      direction_changed_for_margin: false,
+      attempted_angle_offsets_deg: angleOffsetsDeg,
+    };
+  }
+  const tumorEngineeringValidation = inspectTumorEngineeringExclusions(tumor, verts);
+  result.tumor_engineering_validation = tumorEngineeringValidation;
+  result.trace.push(traceStep(
+    "validate_tumor_engineering_exclusions",
+    { tumor },
+    tumorEngineeringValidation,
+    "校验病灶中心、边界或直径投影是否进入明确的非皮肤开口。",
+  ));
+  if (!tumorEngineeringValidation.passed) {
+    result.selected_candidate_id = null;
+    result.candidate_display_blocked = true;
+    result.candidate_selection_reason = "tumor_input_intersects_non_skin_opening";
+  }
   result.trace.push(traceStep(
     "compare_candidates",
     { candidate_ids: candidateRecords.map((record) => record.id) },
@@ -841,6 +904,7 @@ function comparisonReasons({
   sensitiveDistance,
   sensitiveThreshold,
   candidateType,
+  hardViolationCount,
 }: {
   severity: { high: number; medium: number; low: number };
   metrics: AnyRecord;
@@ -848,8 +912,10 @@ function comparisonReasons({
   sensitiveDistance: number;
   sensitiveThreshold: number;
   candidateType: string;
+  hardViolationCount: number;
 }): string[] {
   const reasons: string[] = [];
+  if (hardViolationCount) reasons.push(`${hardViolationCount} 个工程硬阻断`);
   if (reviewStatus === "rejected_by_clinician") reasons.push("医生已否决");
   if (severity.high) reasons.push(`${severity.high} 个 high guardrail`);
   if (severity.medium) reasons.push(`${severity.medium} 个 medium guardrail`);
@@ -878,6 +944,10 @@ export function compareCandidateRecords(records: AnyRecord[] = [], rules: Incisi
       const metrics = candidate.metrics || {};
       const severity = warningSeverityCounts(record.guardrails);
       const reviewStatus = record.review_status || record.review?.status || "pending_clinician_confirmation";
+      const hardViolationCount = Math.max(
+        finiteOr(candidate.hard_violation_count, 0),
+        finiteOr(record.guardrails?.hard_violation_count, 0),
+      );
       const sensitiveDistance = finiteOr(metrics.sensitive_free_margin_min_distance_mm, Infinity);
       const sensitiveThreshold = Number.isFinite(sensitiveDistance)
         ? freeMarginDistanceThresholdMm(
@@ -890,6 +960,7 @@ export function compareCandidateRecords(records: AnyRecord[] = [], rules: Incisi
         ? Math.max(0, sensitiveThreshold - sensitiveDistance) * 5
         : 0;
       const score =
+        hardViolationCount * 100000 +
         severity.high * 100 +
         severity.medium * 25 +
         severity.low * 5 +
@@ -908,6 +979,7 @@ export function compareCandidateRecords(records: AnyRecord[] = [], rules: Incisi
         score,
         score_breakdown: {
           high_guardrails: severity.high,
+          hard_violations: hardViolationCount,
           medium_guardrails: severity.medium,
           rstl_deviation_deg: finiteOr(metrics.rstl_deviation_deg, 0),
           diameter_coverage_deficit_mm: finiteOr(metrics.diameter_coverage_deficit_mm, 0),
@@ -924,6 +996,7 @@ export function compareCandidateRecords(records: AnyRecord[] = [], rules: Incisi
           sensitiveDistance,
           sensitiveThreshold,
           candidateType: candidate.type,
+          hardViolationCount,
         }),
       };
     })

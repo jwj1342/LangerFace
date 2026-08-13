@@ -186,8 +186,10 @@ def query_direction(
     diagonal = float(np.linalg.norm(verts.max(axis=0) - verts.min(axis=0)))
     nearest = float(np.sqrt(distances_squared[best]))
     max_distance = max(diagonal * 0.18, 1e-9)
-    order = np.argsort(distances_squared, kind="stable")[: min(7, len(distances_squared))]
     reference = sample_tangents[best]
+    compatible = np.flatnonzero(np.abs(sample_tangents @ reference) >= np.sqrt(0.5))
+    compatible_order = np.argsort(distances_squared[compatible], kind="stable")
+    order = compatible[compatible_order[: min(7, len(compatible))]]
 
     signed: list[np.ndarray] = []
     weighted = np.zeros(3, dtype=np.float64)

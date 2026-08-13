@@ -1,6 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-import { dragFirstPhotoEndpoint, uploadGeneratedPhoto } from "./support/incisionPhoto";
+import {
+  dragFirstPhotoEndpoint,
+  installGeneratedCamera,
+  pickSafePhotoCheek,
+  uploadGeneratedPhoto,
+  uploadGeneratedVideo,
+} from "./support/incisionPhoto";
 
 function candidatePixelCount() {
   const canvas = document.querySelector<HTMLCanvasElement>("#canvas");
@@ -32,13 +38,14 @@ function keypointPixelCount() {
   return count;
 }
 
-test("approved incision reaches the live photo renderer with visible feedback", async ({ page }) => {
-  test.setTimeout(120_000);
+test("approved incision reaches photo, uploaded video, and MediaStream camera renderers", async ({ page }) => {
+  test.setTimeout(180_000);
   await page.goto("/app/incision");
   await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
   await expect(page.locator("#candidateType")).not.toHaveText("—");
 
   await uploadGeneratedPhoto(page, "single");
+  await pickSafePhotoCheek(page);
   await expect(page.locator("#incisionPhotoStatus")).toContainText(/照片规划.*候选已叠加/, { timeout: 45_000 });
   const lengthBefore = Number(await page.locator("#lengthScale").inputValue());
   await dragFirstPhotoEndpoint(page);
@@ -51,10 +58,37 @@ test("approved incision reaches the live photo renderer with visible feedback", 
   await page.locator("#saveReviewBtn").click();
   await expect(page.locator("#savedCount")).toHaveText("1");
 
-  const reviewDownloadPromise = page.waitForEvent("download");
+  await page.evaluate(() => {
+    const state = window as typeof window & {
+      __capturedReviewDownload?: { filename: string; href: string };
+      __originalAnchorClick?: typeof HTMLAnchorElement.prototype.click;
+    };
+    state.__originalAnchorClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function captureReviewDownload() {
+      state.__capturedReviewDownload = { filename: this.download, href: this.href };
+    };
+  });
   await page.locator("#exportJsonBtn").click();
-  const reviewDownload = await reviewDownloadPromise;
-  expect(reviewDownload.suggestedFilename()).toMatch(/^incision_review_\d+\.json$/);
+  await expect.poll(() => page.evaluate(() => Boolean((window as typeof window & {
+    __capturedReviewDownload?: unknown;
+  }).__capturedReviewDownload))).toBe(true);
+  const reviewDownload = await page.evaluate(async () => {
+    const state = window as typeof window & {
+      __capturedReviewDownload?: { filename: string; href: string };
+      __originalAnchorClick?: typeof HTMLAnchorElement.prototype.click;
+    };
+    const captured = state.__capturedReviewDownload;
+    if (!captured) throw new Error("review export was not captured");
+    const text = await fetch(captured.href).then((response) => response.text());
+    if (state.__originalAnchorClick) HTMLAnchorElement.prototype.click = state.__originalAnchorClick;
+    return { filename: captured.filename, text };
+  });
+  expect(reviewDownload.filename).toMatch(/^incision_review_\d+\.json$/);
+  expect(JSON.parse(reviewDownload.text)).toMatchObject({
+    saved: [expect.objectContaining({
+      review: expect.objectContaining({ reviewer: "E2E clinician" }),
+    })],
+  });
 
   await page.locator("#stageLiveOverlayBtn").click();
   await expect(page).toHaveURL(/\/live\?incisionOverlay=staged$/);
@@ -63,9 +97,9 @@ test("approved incision reaches the live photo renderer with visible feedback", 
 
   await uploadGeneratedPhoto(page, "single", "#fileInput");
   await expect(page.locator("#incisionOverlayQaState")).not.toHaveText("等待画面", { timeout: 60_000 });
-  const candidatePixelsWithOverlay = await expect.poll(() => page.evaluate(candidatePixelCount), {
+  await expect.poll(() => page.evaluate(candidatePixelCount), {
     message: "the live canvas must contain the green/cyan incision candidate stroke",
-  }).toBeGreaterThan(8).then(() => page.evaluate(candidatePixelCount));
+  }).toBeGreaterThan(8);
 
   const keypointsBefore = await page.evaluate(keypointPixelCount);
   await page.locator("#meshPts").check();
@@ -73,11 +107,47 @@ test("approved incision reaches the live photo renderer with visible feedback", 
     message: "the visible face-keypoint toggle must add high-contrast point pixels",
   }).toBeGreaterThan(keypointsBefore + 100);
 
+  await page.locator("#meshPts").uncheck();
+  const uploadedVideoFrame = await uploadGeneratedVideo(page);
+  expect(uploadedVideoFrame).toMatchObject({
+    width: 512,
+    height: 512,
+  });
+  expect(uploadedVideoFrame.presentedFrames).toBeGreaterThanOrEqual(1);
+  expect(uploadedVideoFrame.mediaTime).toBeGreaterThanOrEqual(0);
+  await expect(page.locator("#livePill")).toContainText("视频", { timeout: 60_000 });
+  await expect(page.locator("#incisionOverlayQaState")).not.toHaveText("等待画面", { timeout: 60_000 });
+  await expect.poll(() => page.evaluate(candidatePixelCount), {
+    message: "the uploaded WebM path must draw the staged incision candidate",
+  }).toBeGreaterThan(8);
+  const uploadedVideoState = await page.locator("#video").evaluate((video: HTMLVideoElement) => ({
+    hasObjectUrl: video.currentSrc.startsWith("blob:"),
+    hasStream: video.srcObject instanceof MediaStream,
+  }));
+  expect(uploadedVideoState).toMatchObject({ hasObjectUrl: true, hasStream: false });
+
+  // This deterministic MediaStream covers the browser camera pipeline; fixed-device evidence remains manual.
+  await installGeneratedCamera(page);
+  await page.locator("#camBtn").click();
+  await expect(page.locator("#livePill")).toContainText("实时摄像头", { timeout: 60_000 });
+  await expect(page.locator("#incisionOverlayQaState")).not.toHaveText("等待画面", { timeout: 60_000 });
+  const candidatePixelsWithCamera = await expect.poll(() => page.evaluate(candidatePixelCount), {
+    message: "the MediaStream camera path must draw the staged incision candidate",
+  }).toBeGreaterThan(8).then(() => page.evaluate(candidatePixelCount));
+  const cameraState = await page.locator("#video").evaluate((video: HTMLVideoElement) => ({
+    hasStream: video.srcObject instanceof MediaStream,
+    liveTracks: video.srcObject instanceof MediaStream
+      ? video.srcObject.getVideoTracks().filter((track) => track.readyState === "live").length
+      : 0,
+  }));
+  expect(cameraState).toEqual({ hasStream: true, liveTracks: 1 });
+
   await page.locator("#clearIncisionOverlayBtn").click();
   await expect(page.locator("#liveIncisionOverlayCard")).toBeHidden();
   await expect.poll(() => page.evaluate(candidatePixelCount), {
     message: "clearing the overlay must remove candidate pixels without replacing the source image",
-  }).toBeLessThan(candidatePixelsWithOverlay - 8);
+  }).toBeLessThan(candidatePixelsWithCamera - 8);
+  await expect(page.locator("#livePill")).toContainText("实时摄像头");
 
   await page.getByRole("link", { name: "进入切口规划" }).click();
   await expect(page).toHaveURL(/\/incision$/);

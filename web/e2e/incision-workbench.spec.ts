@@ -214,6 +214,55 @@ test("active controls remain readable and clinician sliders retain edits", async
   }
 });
 
+test("invalid tumor imports report errors without mutating the active plan", async ({ page }) => {
+  await waitForWorkbench(page);
+  await page.locator("#reviewerName").fill("Import safety reviewer");
+  await page.locator("#reviewDecision").selectOption("needs_revision");
+
+  const activePlanState = () => page.evaluate(() => {
+    const value = (id: string) => (document.getElementById(id) as HTMLInputElement | HTMLSelectElement).value;
+    const text = (id: string) => document.getElementById(id)?.textContent || "";
+    return {
+      tumorKind: value("tumorKind"),
+      diameter: value("diameterMm"),
+      depth: value("depthMm"),
+      margin: value("marginMm"),
+      author: value("tumorAuthor"),
+      boundaryMode: value("boundaryMode"),
+      candidateType: text("candidateType"),
+      candidateLength: text("candidateLength"),
+      reviewDecision: value("reviewDecision"),
+      reviewerName: value("reviewerName"),
+    };
+  });
+  const before = await activePlanState();
+  const input = page.locator("#tumorImportFile");
+
+  await input.setInputFiles({
+    name: "malformed-tumor.json",
+    mimeType: "application/json",
+    buffer: Buffer.from('{"tumor":'),
+  });
+  await expect(page.locator("#stageStatus")).toContainText("导入肿物失败");
+  await expect(input).toHaveValue("");
+  expect(await activePlanState()).toEqual(before);
+
+  await input.setInputFiles({
+    name: "invalid-tumor-schema.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({
+      tumor: {
+        kind: "cutaneous",
+        center: [0, 1],
+        diameter_mm: -4,
+      },
+    })),
+  });
+  await expect(page.locator("#stageStatus")).toContainText("导入肿物失败");
+  await expect(input).toHaveValue("");
+  expect(await activePlanState()).toEqual(before);
+});
+
 test("route remount removes and rebinds one canvas listener set", async ({ page }) => {
   await page.addInitScript(() => {
     const tracked = new Set(["pointerdown", "pointermove", "pointerup", "pointercancel", "wheel"]);
@@ -280,7 +329,7 @@ test("live workbench controls use the same readable clinical theme", async ({ pa
   await page.goto("/live");
   await expect(page.locator("#templateSel")).toBeVisible();
 
-  for (const selector of ["#templateSel", "#routeSel", "#uploadBtn", "#camBtn"]) {
+  for (const selector of ["#templateSel", "#uploadBtn", "#camBtn", "#exportBtn"]) {
     expect(await contrastRatio(page.locator(selector)), `${selector} contrast`).toBeGreaterThanOrEqual(4.5);
   }
 });
