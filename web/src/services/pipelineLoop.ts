@@ -3,7 +3,6 @@ import { toPixels, type NormalizedLandmark } from "./geometryAtlas.ts";
 import { buildHandMasks, type HandMask } from "./geometryOccluders.ts";
 import type { Vec3 } from "./softBody.ts";
 import { countMetric, logWarn, recordMetricSample } from "./logger.ts";
-import { projectVerts } from "./projection3d.ts";
 import { clearZooms, draw, drawFocusedRegion, drawZooms, updateStats } from "./render2d.ts";
 import {
   currentLiveSource,
@@ -17,6 +16,8 @@ import {
   detectStaticImageWithRetries,
   type StaticImageDetector,
 } from "./staticImageDetection.ts";
+import { analyzeCurrentWrinkles } from "./liveWrinkleAnalysis.ts";
+import { LiveFrameScheduler } from "./liveFrameScheduler.ts";
 
 interface VideoDetector {
   detectForVideo: (source: unknown, timeMs: number) => {
@@ -53,8 +54,8 @@ export function detectHands(timeMs: number, width: number, height: number): Hand
 let fpsEMA = 0;
 let lastT = performance.now();
 let drawFailureLogged = false;
-let frameScheduled = false;
 let frameMetricsSeen = 0;
+const frameScheduler = new LiveFrameScheduler();
 
 function blendshapeScore(categories: BlendshapeCategory[] | undefined, names: string[]): number {
   if (!Array.isArray(categories)) return 0;
@@ -73,13 +74,15 @@ function updateFaceExpression(faceBlendshapes: Array<{ categories?: BlendshapeCa
 }
 
 export function requestFrame(): void {
-  if (!sourceState.running || sourceState.paused || frameScheduled) return;
-  frameScheduled = true;
-  requestAnimationFrame(loop);
+  if (!sourceState.running || sourceState.paused) return;
+  frameScheduler.request(loop);
+}
+
+export function cancelFrame(): void {
+  frameScheduler.cancel();
 }
 
 export function loop(): void {
-  frameScheduled = false;
   if (!sourceState.running || sourceState.paused) return;
   if (!ctx) return;
   const source = currentLiveSource() as (CanvasImageSource & { currentTime?: number }) | null;
@@ -164,12 +167,13 @@ export function loop(): void {
 
   let lineCount = 0;
   if (landmarks && sourceState.presence > 0) {
-    const displayLandmarks = projectVerts(landmarks);
+    const displayLandmarks = landmarks;
     try {
       lineCount = draw(displayLandmarks, width, height, hulls);
       drawZooms(displayLandmarks, width);
       drawFocusedRegion(displayLandmarks, width, height);
       drawFailureLogged = false;
+      if (sourceState.sourceKind === "image") void analyzeCurrentWrinkles();
     } catch (error) {
       if (!drawFailureLogged) logWarn("渲染图谱失败，本帧已跳过。", error);
       drawFailureLogged = true;
@@ -212,7 +216,7 @@ export function redrawPausedFrame(): boolean {
   const width = els.canvas.width;
   const height = els.canvas.height;
   ctx.drawImage(sourceState.frozenFrame, 0, 0, width, height);
-  const landmarks = sourceState.lastLM ? projectVerts(sourceState.lastLM as Vec3[]) : null;
+  const landmarks = sourceState.lastLM ? sourceState.lastLM as Vec3[] : null;
   let lineCount = 0;
   if (landmarks && sourceState.presence > 0) {
     lineCount = draw(landmarks, width, height, sourceState.lastHulls as HandMask[]);

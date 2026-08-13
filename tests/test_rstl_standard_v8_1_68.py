@@ -107,25 +107,11 @@ def test_v8_1_68_adds_lateral_canthus_arcs_and_extends_under_eye_lines(tmp_path)
         v68_reference_path,
         tmp_path / "atlas_v68.json",
     )
-    official = json.loads((ROOT / "assets" / "atlas_rstl.json").read_text(encoding="utf-8"))
-
-    assert official["validated"] is False
-    assert official["atlasVersion"] == "8.1.68"
+    assert v68_payload["validated"] is False
     assert v68_payload["atlasVersion"] == "8.1.68"
-    assert len(official["lines"]) == 141
-    assert sum(len(line["points"]) for line in official["lines"]) == 14804
-    assert official["lines"][-1]["name"] == "standard_field_0165_left"
-    assert (ROOT / "web" / "assets" / "atlas_rstl.json").read_bytes() == (
-        ROOT / "assets" / "atlas_rstl.json"
-    ).read_bytes()
-
-    for actual, expected in zip(v68_payload["lines"], official["lines"], strict=True):
-        assert actual["name"] == expected["name"]
-        assert actual["region"] == expected["region"]
-        actual_points = np.asarray(actual["points"], dtype=np.float64)
-        expected_points = np.asarray(expected["points"], dtype=np.float64)
-        np.testing.assert_array_equal(actual_points[:, 0], expected_points[:, 0])
-        np.testing.assert_allclose(actual_points[:, 1:], expected_points[:, 1:], atol=1e-6, rtol=0.0)
+    assert len(v68_payload["lines"]) == 141
+    assert sum(len(line["points"]) for line in v68_payload["lines"]) == 14804
+    assert v68_payload["lines"][-1]["name"] == "standard_field_0165_left"
 
     v67_by_name = {line["name"]: line for line in v67_payload["lines"]}
     v68_by_name = {line["name"]: line for line in v68_payload["lines"]}

@@ -125,16 +125,7 @@ surface refs；导出只保留计数、阈值、RMS/P95/max、bbox 和失败原�
 该 section 只用于 PR preview、多人审阅和回归复现。候选切换或 overlay 被清除时，运行期
 section 会同步重置，避免导出旧候选的 QA 结果。
 
-3D Beta 查看器还会在存在候选 overlay 且重建头可用时写入：
-
-- `incision_overlay_3d_view.schema_version = "incision-overlay-3d-view-diagnostics/v0.1"`
-- `raw_image_sent=false`、`exported_raw_pixels=false`
-- `mapping_mode`：`mediapipe_468_surface_refs` 或 `mediapipe_468_refs_to_flame_demo_nearest_surface`
-- 当前 overlay 的候选类型、肿物类型、审阅状态和 `live_overlay_ready`
-- viewer render summary：是否渲染、候选线点数、肿物边界点数、肿物中心是否渲染
-
-FLAME 示例头上的切口 overlay 只是把 MediaPipe surface refs 映射到示例 FLAME 头的工程预览，
-不是患者个体化临床 AR 配准。
+Live 3D 查看器及 `incision_overlay_3d_view` 诊断已随实时 3D runtime 删除。切口 overlay 的运行期证据只描述 MediaPipe 2D 配准，不再产生示例头或 FLAME 映射诊断。
 
 ## 资产版本
 

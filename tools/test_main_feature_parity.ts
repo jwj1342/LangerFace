@@ -20,9 +20,9 @@ const liveRouteControls = read("src/components/LiveRouteControlsPanel.tsx");
 const liveControllerBridge = read("src/hooks/useLiveControllerBridge.ts");
 const liveDom = read("src/services/liveDom.ts");
 const liveRuntime = read("src/services/liveRuntime.ts");
+const liveCommandRouter = read("src/services/liveCommandRouter.ts");
 const pipelineSource = read("src/services/pipelineSource.ts");
 const controllerCommand = read("src/lib/controllerCommand.ts");
-const mode3d = read("src/services/mode3d.ts");
 const sharedThree3d = read("src/services/three3d.ts");
 const render2d = read("src/services/render2d.ts");
 const typedConstants = read("src/services/constants.ts");
@@ -75,7 +75,6 @@ assert.ok(!settingsRoute.includes("ProviderConfigPanel"), "developer settings sh
 includesAll(liveStage, [
   'id="video"',
   'id="canvas"',
-  'id="three"',
   'id="overlayMsg"',
   'id="zoomStrip"',
 ], "live viewport");
@@ -91,26 +90,8 @@ includesAll(liveSourceControls, [
   'commands.source("camera_toggle")',
 ], "live acquisition controls");
 
-includesAll(liveRouteControls, [
-  'id="routeSel"',
-  'id="route3dPanel"',
-  'id="reconScanBtn"',
-  'commands.route("start_scan")',
-  'id="project3dBtn"',
-  'commands.route("project_3d")',
-  'id="scanPanel"',
-  'id="scanProgressVal"',
-  'id="scanYawVal"',
-  'id="view3dBtn"',
-  'id="reset3dBtn"',
-  'id="cloudFitFlameBtn"',
-  'commands.route("start_twin")',
-  'id: "flameStdToggle"',
-  'commands.route("toggle_twin_head"',
-  'id: "twinTextureToggle"',
-  'commands.route("toggle_twin_texture"',
-], "retained live 3D compatibility controls");
-assert.ok(!liveRouteControls.includes('<option value="3d">'), "live mode selector should not expose the 3D reconstruction mode");
+assert.ok(liveRouteControls.includes("2D 实时贴合"), "Live workbench declares its only supported runtime mode");
+assert.ok(!/3D|recon|twin|route_change/.test(liveRouteControls), "Live controls do not retain hidden 3D commands");
 
 includesAll(liveRuntime, [
   "mountLiveWorkbench",
@@ -119,8 +100,14 @@ includesAll(liveRuntime, [
   "els.upload.addEventListener",
   "els.file.click",
   "setIncisionOverlayQa",
-  "readLiveSourceCommand",
+  "LiveCommandRouter",
 ], "live runtime bridge");
+includesAll(liveCommandRouter, [
+  "readLiveSourceCommand(event)",
+  "readLiveRenderCommand(event)",
+  'case "camera_toggle"',
+  'case "clear_incision_overlay"',
+], "live command router");
 
 includesAll(liveControllerBridge, [
   "useLiveControllerBridge",
@@ -139,19 +126,9 @@ includesAll(pipelineSource, [
   'setSource(els.video, "video"',
 ], "live image/video upload pipeline");
 
-includesAll(mode3d, [
-  "startScan",
-  "finishScan",
-  "setMode3d",
-  "loadDemoRecon",
-  "startTwin",
-  "toggleTwinHead",
-  "toggleTwinTexture",
-  "projectColors",
-  "sampleFrameColors",
-  "mergeVertexColors",
-  "reconState.twinTexture",
-], "3D reconstruction runtime");
+for (const retiredLiveRuntime of ["mode3d.ts", "projection3d.ts", "liveScanLifecycle.ts"]) {
+  assert.ok(!fs.existsSync(path.join(process.cwd(), "src/services", retiredLiveRuntime)), `${retiredLiveRuntime} is removed from Live`);
+}
 
 includesAll(sharedThree3d, [
   "preserveDrawingBuffer: true",
@@ -161,16 +138,7 @@ includesAll(sharedThree3d, [
   "Float32BufferAttribute",
 ], "shared Three.js viewer visual QA support");
 
-includesAll(controllerCommand, [
-  '"load_demo_recon"',
-  '"start_scan"',
-  '"view_3d"',
-  '"project_3d"',
-  '"reset_3d"',
-  '"start_twin"',
-  '"toggle_twin_head"',
-  '"toggle_twin_texture"',
-], "3D reconstruction controller commands");
+assert.ok(!/load_demo_recon|start_scan|view_3d|project_3d|start_twin/.test(controllerCommand), "Live controller commands exclude retired 3D actions");
 
 includesAll(render2d, [
   "INCISION_ZOOM_REGION",
@@ -178,7 +146,7 @@ includesAll(render2d, [
   "renderState",
 ], "2D render overlay support");
 
-assert.ok(typedConstants.includes('rstl: "#c800c8"'), "live constants must use the v8.1.68 reference magenta");
+assert.ok(typedConstants.includes('rstl: "#c800c8"'), "live constants must use the v8.1.70 reference magenta");
 assert.ok(
   render2d.includes("Math.max(2, W / 1300)"),
   "typed live RSTL strokes must use the two-pixel reference minimum",
@@ -207,7 +175,7 @@ includesAll(render2d, [
   "buildHeadVisibility",
   "stabilizeForeheadMask",
   "headVisible(p) && skinVisible(p)",
-], "live v8.1.68 forehead visibility integration");
+], "live v8.1.70 forehead visibility integration");
 includesAll(foreheadVisibility, [
   "skinColorMatchesReferences",
   "distance <= 26",

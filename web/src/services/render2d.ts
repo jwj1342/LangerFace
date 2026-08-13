@@ -41,6 +41,11 @@ import {
 import { modelState, renderState, sourceState } from "./liveState.ts";
 import { setIncisionOverlayQa, setLive } from "./liveUi.ts";
 import type { IncisionOverlayPayload } from "./dataSource";
+import {
+  getWrinkleEvidenceLines,
+  shouldDrawRstlLayer,
+  shouldDrawWrinkleLayer,
+} from "./liveWrinkleAnalysis.ts";
 
 type AnyRecord = Record<string, any>;
 type IncisionZoomRegion = { kind: "incision_overlay" };
@@ -212,7 +217,7 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   ctx.globalAlpha = renderState.opacity; ctx.lineWidth = Math.max(2, W / 1300);
   ctx.lineJoin = "round"; ctx.lineCap = "round";
   let count = 0;
-  if (canDrawAtlas) {
+  if (canDrawAtlas && shouldDrawRstlLayer()) {
     for (let li = 0; li < displayLines.length; li++) {
       if (visibleLineIndices && !visibleLineIndices.has(li)) continue;
       const ln = displayLines[li];
@@ -261,6 +266,29 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
       ctx.globalAlpha = savedAlpha;
       count++;
     }
+  }
+  if (canDrawAtlas && shouldDrawWrinkleLayer()) {
+    const evidenceColors: Record<string, string> = {
+      forehead: "#ff9f1c",
+      frown: "#ff4d6d",
+      wrinkle: "#00d4ff",
+    };
+    ctx.save();
+    ctx.globalAlpha = 0.96;
+    ctx.lineWidth = Math.max(2.4, W / 620);
+    ctx.setLineDash([]);
+    for (const line of getWrinkleEvidenceLines()) {
+      if (line.points.length < 2) continue;
+      ctx.strokeStyle = evidenceColors[line.className] || "#ff832b";
+      ctx.beginPath();
+      ctx.moveTo(line.points[0][0], line.points[0][1]);
+      for (let index = 1; index < line.points.length; index++) {
+        ctx.lineTo(line.points[index][0], line.points[index][1]);
+      }
+      ctx.stroke();
+      count++;
+    }
+    ctx.restore();
   }
   if (showSymmetryAxis()) {
     const axis = symmetryAxisX();

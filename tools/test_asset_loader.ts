@@ -192,7 +192,6 @@ await withAssetBase(createHtmlFallbackAssetServer(), async () => {
 
 for (const rel of [
   "web/src/services/pipelineModels.ts",
-  "web/src/services/mode3d.ts",
   "web/src/services/annotateRuntime.ts",
   "web/src/services/standardFaceAssets.ts",
 ]) {
