@@ -45,6 +45,11 @@ const MEDIAPIPE_TOPOLOGY_OPENINGS = [
   },
 ] as const;
 
+const MEDIAPIPE_OUTER_LIP_LOOP = [
+  61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291,
+  375, 321, 405, 314, 17, 84, 181, 91, 146,
+] as const;
+
 // Reuse the audited standard-atlas nostril aperture mask (v9) in normalized
 // face coordinates. It is an engineering non-skin opening, not a clinical
 // safety margin, and deliberately does not cover the surrounding nasal ala.
@@ -275,7 +280,26 @@ export function buildMediaPipeEngineeringExclusionZones(verts: ArrayLike<number>
     recovery: "Move or regenerate the candidate so its complete path stays outside the mapped nostril opening.",
     clinical_boundary: "This nostril aperture is an engineering exclusion only; it does not define a medical safety margin.",
   }));
-  return [...topologyZones, ...nostrilZones];
+  const outerLipVertices = MEDIAPIPE_OUTER_LIP_LOOP.map((index) => verts[index]);
+  const outerLipPolygon = outerLipVertices.some((vertex) => !vertex || vertex.length < 2)
+    ? []
+    : outerLipVertices.map((vertex) => [
+      (vertex[0] - lo[0]) / span[0],
+      (vertex[1] - lo[1]) / span[1],
+    ] as Point2);
+  const vermilionZones = outerLipPolygon.length < 3 || Math.abs(polygonArea2d(outerLipPolygon)) <= 1e-6
+    ? []
+    : [{
+      id: "default-vermilion-protection",
+      code: "candidate_intersects_default_vermilion_protection",
+      polygon: outerLipPolygon,
+      source: "mediapipe-468-outer-lip-loop",
+      projection_buffer_scale: 1,
+      applies_to_tumor: false,
+      recovery: "Use a dedicated lip workflow or record an explicit clinician override before allowing a candidate to cross the vermilion.",
+      clinical_boundary: "This is a conservative default-workflow protection, not a claim that clinically indicated lip incisions are prohibited.",
+    }];
+  return [...topologyZones, ...nostrilZones, ...vermilionZones];
 }
 
 function normalizedModelPoint(point: ArrayLike<number>, verts: ArrayLike<number>[]): Point2 | null {
@@ -293,6 +317,7 @@ export function inspectTumorPointEngineeringExclusion(
   const normalized = normalizedModelPoint(point, verts);
   if (!normalized) return null;
   for (const zone of buildMediaPipeEngineeringExclusionZones(verts)) {
+    if (zone.applies_to_tumor === false) continue;
     if (!pointInPolygon2d(normalized, zone.polygon as Point2[])) continue;
     return {
       code: "tumor_center_inside_non_skin_opening",
@@ -353,6 +378,7 @@ export function inspectTumorEngineeringExclusions(tumor: AnyRecord, verts: Array
   const footprint = normalizedTumorFootprint(tumor, verts);
   if (footprint) {
     for (const zone of buildMediaPipeEngineeringExclusionZones(verts)) {
+      if (zone.applies_to_tumor === false) continue;
       const relation = inspectPathPolygonRelation(footprint.points, zone.polygon as Point2[], { closedPath: true });
       if (!relation.intersects) continue;
       violations.push({
@@ -395,6 +421,16 @@ export function annotateCandidateEngineeringViolations<T extends AnyRecord>(cand
     });
   }
   const outsideIndex = path.findIndex(([x, y]) => x < -1e-6 || x > 1 + 1e-6 || y < -1e-6 || y > 1 + 1e-6);
+  const surfaceDiagnostics = {
+    schema_version: "candidate-surface-diagnostics/v0.1",
+    surface_refs_present: Array.isArray(candidate.surface_refs || candidate.polyline_refs),
+    surface_ref_count: Array.isArray(candidate.surface_refs || candidate.polyline_refs)
+      ? (candidate.surface_refs || candidate.polyline_refs).length : 0,
+    first_out_of_bounds: outsideIndex >= 0
+      ? { path_index: outsideIndex, normalized_xy: path[outsideIndex] }
+      : null,
+    reason_codes: outsideIndex >= 0 ? ["candidate_outside_canonical_surface"] : [],
+  };
   if (outsideIndex >= 0) {
     violations.push({
       code: "candidate_outside_canonical_surface",
@@ -445,6 +481,7 @@ export function annotateCandidateEngineeringViolations<T extends AnyRecord>(cand
     hard_violations: violations,
     coordinate_space: "canonical_model_normalized_xy",
     clinical_boundary: "Engineering geometry checks do not define clinical safety margins or anatomy.",
+    surface_diagnostics: surfaceDiagnostics,
   };
   return candidate;
 }

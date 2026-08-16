@@ -3,6 +3,11 @@ import type {
   summarizeTumorInputQuality,
   TumorInput,
 } from "../services/incisionTools.ts";
+import type {
+  ControlledMarkerDetection,
+  MarkerImageData,
+  MarkerPoint,
+} from "../services/controlledMarkerDetection.ts";
 
 export type WorkflowVec3 = [number, number, number];
 export type WorkflowTriangle = [number, number, number];
@@ -31,4 +36,5 @@ export interface WorkflowWorkerApi {
   diagnostics: () => WorkflowWorkerDiagnostics;
   summarizeTumorInput: (tumor: TumorInput) => WorkflowTumorQuality;
   planIncision: (request: PlanIncisionRequest) => WorkflowPlanResult;
+  detectControlledMarker: (image: MarkerImageData, seed: MarkerPoint) => ControlledMarkerDetection;
 }

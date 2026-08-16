@@ -68,6 +68,7 @@ import {
   importedTumorFormState,
   numericControlValue,
   shouldClearFreehandBoundaryOnLesionRepick,
+  withControlledMarkerProvenance,
 } from "./tumorInput";
 import { dataSource } from "./dataSource";
 import type { HeadMeshPayload } from "./dataSource";
@@ -84,7 +85,7 @@ import {
   neutralIncisionEdit,
   type IncisionEdit,
 } from "./incisionEditHistory";
-import { createIncisionControllerState, resetIncisionBoundaryState, type IncisionRuntimeState } from "./incisionControllerState";
+import { applyNormalizedLesionCenterState, createIncisionControllerState, keepUnpickedPhotoSelectionEmpty, resetIncisionBoundaryState, resetUnpickedPhotoPlanningState, type IncisionRuntimeState } from "./incisionControllerState";
 import {
   buildCandidateEditSession,
   buildIncisionReviewRecord,
@@ -137,12 +138,11 @@ import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
 import { createWorkflowWorkerClient } from "./workflowWorkerClient";
 import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.ts";
 import type { Vec3 } from "./softBody";
-
 type DynamicRecord = Record<string, any>;
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+function setStageStatus(message: string, tone: "normal" | "warning" = "normal") { if (!els.stageStatus) return; els.stageStatus.textContent = message; els.stageStatus.dataset.tone = tone; }
 
 let els = {} as IncisionDomElements;
 let S: IncisionRuntimeState = createIncisionControllerState();
@@ -240,7 +240,7 @@ function restoreWorkspaceSession() {
   renderSaved();
   if (session.result && tumorContextsMatch(session.result.tumor, session.tumor)) {
     renderResult(session.result);
-    els.stageStatus.textContent = "已恢复切口候选、审阅状态和候选库";
+    setStageStatus("已恢复切口候选、审阅状态和候选库");
   } else {
     runWorkflow();
   }
@@ -300,6 +300,7 @@ function publishIncisionState(reason = "state_update") {
   dispatchControllerEvent(INCISION_CONTROLLER_STATE_EVENT, buildIncisionControllerSnapshot({
     reason,
     stageStatus: els.stageStatus?.textContent || "",
+    stageStatusTone: els.stageStatus?.dataset.tone === "warning" ? "warning" : "normal",
     assetLoading: currentAssetLoadingSnapshot(),
     headAsset: currentHeadAssetSnapshot(),
     tumor: currentTumorFormSnapshot(),
@@ -332,7 +333,7 @@ function updateAssetLoading(evt: DynamicRecord = {}): void {
     els.assetLoadingText.textContent = `${label}${evt.phase === "done" ? " 已加载" : " 加载中"}${progress}`;
   }
   if (els.stageStatus) {
-    els.stageStatus.textContent = `正在从 ${assetBaseUrl()} 加载 ${label}${progress}`;
+    setStageStatus(`正在从 ${assetBaseUrl()} 加载 ${label}${progress}`);
   }
   publishIncisionState("asset_loading");
 }
@@ -495,6 +496,7 @@ function clearTransientPlanningForPhoto() {
   S.boundaryPoints = [];
   S.boundaryRefs = [];
   S.boundaryActive = false;
+  S.controlledBoundaryActive = false;
   S.lesionRef = null;
   S.result = null;
   S.baseResult = null;
@@ -560,9 +562,7 @@ function renderSecondaryCuePanel() {
 
 function setSecondaryCueConfirmedFromControl() {
   renderSecondaryCuePanel();
-  els.stageStatus.textContent = els.secondaryCueConfirmed?.checked
-    ? "辅助线索已标记为人工确认；仍不参与候选几何。"
-    : "辅助线索人工确认已取消；仍不参与候选几何。";
+  setStageStatus(els.secondaryCueConfirmed?.checked ? "辅助线索已标记为人工确认；仍不参与候选几何。" : "辅助线索人工确认已取消；仍不参与候选几何。");
   publishIncisionState("secondary_cue_confirmed");
 }
 
@@ -612,7 +612,7 @@ function invalidateReviewAfterGeometryChange(message = "候选几何已变化，
   if (els.reviewDecision.value !== "pending_clinician_confirmation") {
     els.reviewDecision.value = "pending_clinician_confirmation";
     updateReviewStateUI();
-    els.stageStatus.textContent = message;
+    setStageStatus(message, "warning");
   }
 }
 
@@ -620,7 +620,7 @@ function exportPreflightPasses(payload: unknown, label: string) {
   const report = auditExportPayload(payload);
   if (report.passed) return true;
   const preview = report.violations.slice(0, 3).map((v) => `${v.code}@${v.path}`).join("；");
-  els.stageStatus.textContent = `${label}已阻断：隐私预检发现 ${report.violation_count} 个问题：${preview}`;
+  setStageStatus(`${label}已阻断：隐私预检发现 ${report.violation_count} 个问题：${preview}`, "warning");
   els.privacyAudit.textContent = "导出隐私预检未通过；请移除原始媒体、明文密钥或直接身份字段后再导出。";
   els.privacyState.textContent = "导出已阻断";
   publishIncisionState("privacy_preflight_failed");
@@ -628,16 +628,16 @@ function exportPreflightPasses(payload: unknown, label: string) {
 }
 
 function tumorInput() {
-  return buildTumorInput({
+  return withControlledMarkerProvenance(buildTumorInput({
     kind: els.tumorKind.value,
     center: (S.lesionRef && surfaceRefToModelPoint(S.lesionRef, S.verts, S.tris)) || S.verts[S.lesion],
     diameterMm: numericControlValue(els.diameter),
     depthMm: numericControlValue(els.depth),
     marginMm: numericControlValue(els.margin),
     boundary: tumorBoundaryPoints(),
-    boundaryMode: els.boundaryMode.value,
+    boundaryMode: S.controlledBoundaryActive ? "freehand" : els.boundaryMode.value,
     author: els.tumorAuthor.value,
-  });
+  }), S.controlledBoundaryActive);
 }
 
 function boundarySummaryFor(tumor: TumorInput = tumorInput(), result = S.result) {
@@ -703,16 +703,18 @@ function ellipseBoundaryPoints(samples = 32): Vec3[] {
 
 function tumorBoundaryPoints(): Vec3[] {
   if (els.tumorKind.value !== "cutaneous") return [];
+  if (S.controlledBoundaryActive && S.boundaryPoints.length >= 3) return S.boundaryPoints;
   if (els.boundaryMode.value === "freehand" && S.boundaryPoints.length >= 3) return S.boundaryPoints;
   return ellipseBoundaryPoints();
 }
 
 function syncPhotoPlanningSelection() {
   if (!S.planning2d || !S.verts.length || !S.tris.length) return;
+  if (keepUnpickedPhotoSelectionEmpty(S)) { photoRuntime?.render(); return; }
   const centerRef = S.lesionRef || pointToSurfaceRef(S.verts[S.lesion], S.verts, S.tris);
   S.lesionRef = centerRef;
   const boundaryPoints = tumorBoundaryPoints();
-  const usePhotoRefs = els.boundaryMode.value === "freehand"
+  const usePhotoRefs = (S.controlledBoundaryActive || els.boundaryMode.value === "freehand")
     && S.boundaryPoints.length >= 3
     && S.boundaryRefs.length === S.boundaryPoints.length;
   const boundaryRefs = usePhotoRefs
@@ -907,7 +909,7 @@ function renderEditHistoryState() {
 }
 
 function commitEditSnapshot(interaction = "control_change") {
-  if (!S.editHistory.commit(currentEditBase(), interaction)) {
+  if (!S.editHistory.commitTransaction(currentEditBase(), interaction)) {
     renderEditHistoryState();
     return;
   }
@@ -1031,6 +1033,7 @@ function applyTextPresentation(element: HTMLElement, presentation: IncisionTextP
 }
 function renderResult(result: DynamicRecord) {
   S.result = result;
+  if (applyNormalizedLesionCenterState(S, result)) { updateTumorRing(); updateAnatomyPreview(); }
   const tumorInputInvalid = result?.tumor_engineering_validation?.passed === false;
   (S.tumorRing?.material as THREE.LineBasicMaterial | undefined)?.color.set(tumorInputInvalid ? 0xef4444 : 0xfacc15);
   (S.boundaryLine?.material as THREE.LineBasicMaterial | undefined)?.color.set(tumorInputInvalid ? 0xef4444 : 0xfb7185); drawCandidate(result);
@@ -1064,7 +1067,7 @@ function renderResult(result: DynamicRecord) {
   updateEditVisibility(result);
   els.privacyState.textContent = presentation.privacyState;
   els.privacyAudit.textContent = presentation.privacyAudit;
-  els.stageStatus.textContent = presentation.stageStatus;
+  setStageStatus(presentation.stageStatus, S.result?.candidate_display_blocked || !S.result?.guardrails?.passed ? "warning" : "normal");
   publishIncisionState("candidate_result");
 }
 
@@ -1165,7 +1168,7 @@ function loadSavedCandidate(id: string) {
   resetEditTimeline();
   setReviewControls(rec.review || { status: rec.review_status });
   renderResult(rec);
-  els.stageStatus.textContent = "已载入候选草案及其完整肿物上下文";
+  setStageStatus("已载入候选草案及其完整肿物上下文");
   publishIncisionState("saved_candidate_loaded");
 }
 
@@ -1173,14 +1176,14 @@ function removeSavedCandidate(id: string) {
   const before = S.saved.length;
   S.saved = S.saved.filter((item) => item.id !== id);
   if (S.saved.length !== before) {
-    els.stageStatus.textContent = "候选已从候选库删除";
+    setStageStatus("候选已从候选库删除");
     renderSaved();
   }
 }
 
 function clearSavedCandidates() {
   S.saved = [];
-  els.stageStatus.textContent = "候选库已清空";
+  setStageStatus("候选库已清空");
   renderSaved();
 }
 
@@ -1192,7 +1195,7 @@ function saveCurrentCandidate(
   const status = els.reviewDecision.value || "pending_clinician_confirmation";
   const readiness = reviewReadiness(status);
   if (!readiness.ok && !allowDraftFallback) {
-    els.stageStatus.textContent = readiness.message;
+    setStageStatus(readiness.message, "warning");
     return false;
   }
   S.saved.push(reviewRecord(
@@ -1200,9 +1203,7 @@ function saveCurrentCandidate(
     `${label} ${S.saved.length + 1}`,
     { forceDraft: !readiness.ok },
   ));
-  els.stageStatus.textContent = readiness.ok
-    ? "候选已保存到审阅列表"
-    : `${readiness.message}；已按待确认草案保存。`;
+  setStageStatus(readiness.ok ? "候选已保存到审阅列表" : `${readiness.message}；已按待确认草案保存。`, readiness.ok ? "normal" : "warning");
   renderSaved();
   return true;
 }
@@ -1211,7 +1212,7 @@ function saveReviewRecord() {
   const status = els.reviewDecision.value || "pending_clinician_confirmation";
   const readiness = reviewReadiness(status);
   if (!readiness.ok) {
-    els.stageStatus.textContent = readiness.message;
+    setStageStatus(readiness.message, "warning");
     return;
   }
   saveCurrentCandidate("审阅候选", { allowDraftFallback: false });
@@ -1264,7 +1265,7 @@ function makeVariantCandidates() {
         { forceDraft: true },
       ));
     }
-    els.stageStatus.textContent = `已保存 ${workflowAlternatives.length} 个浏览器方向备选，并保留各自保护规则、敏感结构复核和工程排序`;
+    setStageStatus(`已保存 ${workflowAlternatives.length} 个浏览器方向备选，并保留各自保护规则、敏感结构复核和工程排序`);
     renderSaved();
     return;
   }
@@ -1277,13 +1278,13 @@ function makeVariantCandidates() {
     const result = applyCandidateEdit(S.baseResult, v, S.normals[S.lesion], S.unitsPerMm, S.verts);
     S.saved.push(reviewRecord(result, `备选 ${S.saved.length + 1}`, { forceDraft: true }));
   }
-  els.stageStatus.textContent = "已生成 3 个方向备选、复跑 guardrails，并更新工程排序";
+  setStageStatus("已生成 3 个方向备选、复跑 guardrails，并更新工程排序");
   renderSaved();
 }
 
 function exportReviewJson() {
   if (!S.result && !S.saved.length) {
-    els.stageStatus.textContent = "没有可导出的候选";
+    setStageStatus("没有可导出的候选", "warning");
     return;
   }
   const current = S.result ? reviewRecord(S.result, "当前候选") : null;
@@ -1306,7 +1307,7 @@ function exportTumorJson() {
   });
   if (!exportPreflightPasses(payload, "肿物输入 JSON 导出")) return;
   downloadText(`tumor_input_${Date.now()}.json`, JSON.stringify(payload, null, 2));
-  els.stageStatus.textContent = "已导出肿物输入 JSON";
+  setStageStatus("已导出肿物输入 JSON");
 }
 
 function applyTumorContext(payload: unknown) {
@@ -1351,9 +1352,9 @@ async function importTumorFile(file?: File) {
   try {
     const payload = JSON.parse(await file.text());
     applyImportedTumor(payload);
-    els.stageStatus.textContent = "已导入肿物输入并重新生成候选";
+    setStageStatus("已导入肿物输入并重新生成候选");
   } catch (err) {
-    els.stageStatus.textContent = `导入肿物失败：${errorMessage(err)}`;
+    setStageStatus(`导入肿物失败：${errorMessage(err)}`, "warning");
   } finally {
     els.tumorImportFile.value = "";
   }
@@ -1366,10 +1367,10 @@ async function importSecondaryCueFile(file?: File) {
     S.secondaryCues = normalizeSecondaryCuePayload(payload);
     if (els.secondaryCueConfirmed) els.secondaryCueConfirmed.checked = false;
     renderSecondaryCuePanel();
-    els.stageStatus.textContent = "已导入低置信辅助线索；候选几何未改变。";
+    setStageStatus("已导入低置信辅助线索；候选几何未改变。");
     publishIncisionState("secondary_cue_imported");
   } catch (err) {
-    els.stageStatus.textContent = `导入辅助线索失败：${errorMessage(err)}`;
+    setStageStatus(`导入辅助线索失败：${errorMessage(err)}`, "warning");
     publishIncisionState("secondary_cue_import_failed");
   } finally {
     els.secondaryCueImportFile.value = "";
@@ -1380,13 +1381,13 @@ function clearSecondaryCues() {
   S.secondaryCues = null;
   if (els.secondaryCueConfirmed) els.secondaryCueConfirmed.checked = false;
   renderSecondaryCuePanel();
-  els.stageStatus.textContent = "已清空辅助线索；候选几何未改变。";
+  setStageStatus("已清空辅助线索；候选几何未改变。");
   publishIncisionState("secondary_cue_cleared");
 }
 
 function exportReport() {
   if (!S.result && !S.saved.length) {
-    els.stageStatus.textContent = "没有可导出的候选";
+    setStageStatus("没有可导出的候选", "warning");
     return;
   }
   const rows = (S.saved.length ? S.saved : [reviewRecord(S.result, "当前候选")]).filter(Boolean) as DynamicRecord[];
@@ -1396,7 +1397,7 @@ function exportReport() {
 
 function exportScreenshot() {
   if (!S.result) {
-    els.stageStatus.textContent = "没有可截图的候选";
+    setStageStatus("没有可截图的候选", "warning");
     return;
   }
   downloadCanvasPng(els.canvas, `incision_candidate_${Date.now()}.png`);
@@ -1404,29 +1405,29 @@ function exportScreenshot() {
 
 function stageLiveOverlay() {
   if (!S.result) {
-    els.stageStatus.textContent = "没有可发送的候选";
+    setStageStatus("没有可发送的候选", "warning");
     return;
   }
   if (els.reviewDecision.value === "rejected_by_clinician") {
-    els.stageStatus.textContent = "当前候选已被否决，不发送到实时叠加。";
+    setStageStatus("当前候选已被否决，不发送到实时叠加。", "warning");
     return;
   }
   if (els.reviewDecision.value !== "approved_for_discussion") {
-    els.stageStatus.textContent = "发送到实时叠加前，请先确认当前候选草案。";
+    setStageStatus("发送到实时叠加前，请先确认当前候选草案。", "warning");
     return;
   }
   const readiness = reviewReadiness("approved_for_discussion");
   if (!readiness.ok) {
-    els.stageStatus.textContent = readiness.message;
+    setStageStatus(readiness.message, "warning");
     return;
   }
   const overlay = compileIncisionOverlay(reviewRecord(S.result, "实时叠加候选"), S.verts, S.tris);
   if (!overlay || !dataSource.stageIncisionOverlay(overlay)) {
-    els.stageStatus.textContent = "切口候选叠加暂存失败";
+    setStageStatus("切口候选叠加暂存失败", "warning");
     publishIncisionState("live_overlay_stage_failed");
     return;
   }
-  els.stageStatus.textContent = "切口候选已暂存，正在进入实时叠加。";
+  setStageStatus("切口候选已暂存，正在进入实时叠加。");
   publishIncisionState("live_overlay_staged");
   persistWorkspaceSession();
   window.location.assign("/live?incisionOverlay=staged");
@@ -1434,12 +1435,13 @@ function stageLiveOverlay() {
 
 async function runWorkflow({ countGeneration = false }: { countGeneration?: boolean } = {}) {
   if (!S.verts) return;
+  if (resetUnpickedPhotoPlanningState(S)) { photoRuntime?.render(); setStageStatus("患者照片规划：尚未选择病灶位置"); publishIncisionState("photo_lesion_selection_required"); return; }
   const requestId = ++S.workflowRequestId;
   if (countGeneration) {
     S.activeExplicitWorkflowCount += 1;
     els.run.disabled = true;
   }
-  els.stageStatus.textContent = "Worker 确定性 workflow 生成中…";
+  setStageStatus("Worker 确定性 workflow 生成中…");
   try {
     const tumor = tumorInput();
     const result = await planWorkflowForCurrentTumor(tumor);
@@ -1487,7 +1489,7 @@ async function planWorkflowForCurrentTumor(tumor: TumorInput) {
     S.workflowWorkerFailed = true;
     S.workflowWorker = null;
     console.warn("[LangerFace] workflow worker failed; using main-thread fallback", execution.error);
-    if (execution.statusMessage) els.stageStatus.textContent = execution.statusMessage;
+    if (execution.statusMessage) setStageStatus(execution.statusMessage, "warning");
   }
   return execution.result;
 }
@@ -1663,7 +1665,6 @@ function bindWorkbenchEvents() {
       onSecondaryCueFile: importSecondaryCueFile,
       onPhotoFile: (file) => { void photoRuntime?.load(file); },
       onControlledMarkerDetect: () => photoRuntime?.beginControlledMarkerDetection(),
-      onControlledMarkerConfirm: () => { void photoRuntime?.confirmControlledMarkerDetection(); },
       preparePhotoInteraction: () => photoRuntime?.fit(),
       photoEndpointHandleFromEvent: (event) => photoRuntime?.endpointHandleFromEvent(event) ?? null,
       dragPhotoEndpoint: (event, handle) => photoRuntime?.dragEndpoint(event, handle),
@@ -1760,7 +1761,6 @@ export function mountIncisionWorkbench(root: ParentNode | Document = document) {
     elements: els,
     state: S,
     clearTransientPlanning: clearTransientPlanningForPhoto,
-    defaultLesion,
     nearestVertex,
     setLesion,
     updateTumorRing,
@@ -1776,7 +1776,7 @@ export function mountIncisionWorkbench(root: ParentNode | Document = document) {
   boot(session).catch((error) => {
     if (!isActiveSession(session)) return;
     const message = errorMessage(error);
-    els.stageStatus.textContent = "加载失败：" + message;
+    setStageStatus("加载失败：" + message, "warning");
     if (els.assetLoadingText) {
       els.assetLoadingText.textContent = `资产加载失败：${message}`;
     }

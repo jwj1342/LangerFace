@@ -114,6 +114,8 @@ const GUARDRAIL_LABELS: Record<string, string> = {
 const DIRECTION_SOURCE_LABELS: Record<string, string> = {
   rstl_atlas_weighted_nearest: "局部 RSTL 图谱",
   personalized_rstl_atlas_weighted_nearest: "个体化 RSTL（YOLO/V6 皱纹证据）",
+  rstl_atlas_nearest_segment: "最近 RSTL 线段局部切线",
+  personalized_rstl_atlas_nearest_segment: "个体化 RSTL 最近线段局部切线",
   rstl_atlas_empty: "RSTL 图谱无可用支持点",
   rstl_atlas_no_valid_direction_support: "RSTL 图谱记录无有效方向支持",
 };
@@ -200,3 +202,28 @@ export function severityLabel(severity: unknown) {
   if (severity === "medium") return "需复核";
   return "提示";
 }
+
+export function controlledMarkerFailureMessage(
+  detection: Pick<ControlledMarkerDetection, "failure_code" | "diagnostics">,
+): string {
+  const stage = String(detection.diagnostics?.failure_stage || "");
+  if (detection.failure_code === "invalid_image") return "照片暂时无法读取，请重新上传后再试。";
+  if (detection.failure_code === "seed_outside_image") return "当前点击位置不在照片范围内，请在模拟肿物范围内重新点击。";
+  if (detection.failure_code === "ambiguous_candidates") {
+    return "当前区域有多个可能的肿物范围，请只保留一个模拟肿物曲线后再试。";
+  }
+  if (detection.failure_code === "component_too_large" || stage === "marker_area_invalid") {
+    return "当前识别范围过大，模拟肿物曲线可能与附近的深色区域连在一起，请重新绘制后再试。";
+  }
+  if (detection.failure_code === "low_contrast" || stage === "marker_contrast_low") {
+    return "模拟肿物曲线颜色较浅，请加深后再试。";
+  }
+  if (stage === "seed_region_leaks_to_roi_border") {
+    return "当前点击区域没有形成完整的肿物范围，请补齐模拟肿物曲线后再试。";
+  }
+  if (stage === "boundary_support_low" || stage === "boundary_support_missing") {
+    return "模拟肿物曲线可能较浅或留有较大开口，请加深或补齐后再试。";
+  }
+  return "当前点击区域未识别到肿物，请在模拟肿物范围内重新点击。";
+}
+import type { ControlledMarkerDetection } from "./controlledMarkerDetection";

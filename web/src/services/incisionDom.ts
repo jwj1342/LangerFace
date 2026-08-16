@@ -3,10 +3,10 @@ import { requireScopedElement, requireScopedQuery } from "../lib/scopedDom";
 export interface IncisionDomElements extends Record<string, any> {
   canvas: HTMLCanvasElement;
   photoCanvas: HTMLCanvasElement;
+  photoCandidateCanvas: HTMLCanvasElement;
   photoEndpointHandles: NodeListOf<HTMLButtonElement>;
   photoInput: HTMLInputElement;
   controlledMarkerDetect: HTMLButtonElement;
-  controlledMarkerConfirm: HTMLButtonElement;
   photoMirror: HTMLButtonElement;
   photoReset: HTMLButtonElement;
   surfaceMode: HTMLButtonElement;
@@ -106,10 +106,10 @@ export function collectIncisionElements(root: ParentNode | Document = document):
   return {
     canvas: byId<HTMLCanvasElement>(root, "incisionCanvas"),
     photoCanvas: byId<HTMLCanvasElement>(root, "incisionPhotoCanvas"),
+    photoCandidateCanvas: byId<HTMLCanvasElement>(root, "incisionCandidateCanvas"),
     photoEndpointHandles: root.querySelectorAll<HTMLButtonElement>(".incision-photo-endpoint-handle"),
     photoInput: byId<HTMLInputElement>(root, "incisionPhotoInput"),
     controlledMarkerDetect: byId<HTMLButtonElement>(root, "controlledMarkerDetectBtn"),
-    controlledMarkerConfirm: byId<HTMLButtonElement>(root, "controlledMarkerConfirmBtn"),
     photoMirror: byId<HTMLButtonElement>(root, "incisionPhotoMirrorBtn"),
     photoReset: byId<HTMLButtonElement>(root, "incisionPhotoResetBtn"),
     surfaceMode: byId<HTMLButtonElement>(root, "incisionSurfaceModeBtn"),

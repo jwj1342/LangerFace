@@ -12,6 +12,7 @@ import {
   sourcePointToSurfaceRef,
   surfaceRefToSourcePoint,
 } from "../web/src/services/photoPlanningController.ts";
+import { buildForeheadSurfaceLandmarks } from "../web/src/services/incisionPhotoPlanning.ts";
 import type { Triangle, Vec3 } from "../web/src/services/softBody.ts";
 
 const close = (actual: number, expected: number, tolerance = 1e-6) => {
@@ -69,6 +70,25 @@ close(mapped.x, 250);
 close(mapped.y, 125);
 assert.equal(sourcePointToSurfaceRef({ x: -5, y: -5 }, landmarks, triangles), null);
 
+const foreheadLandmarks = Array.from({ length: 468 }, () => [500, 300, 0] as Vec3);
+foreheadLandmarks[9] = [500, 260, 0];
+foreheadLandmarks[10] = [500, 180, 0];
+foreheadLandmarks[109] = [430, 190, 0];
+foreheadLandmarks[338] = [570, 190, 0];
+foreheadLandmarks[108] = [450, 230, 0];
+const foreheadTriangles: Triangle[] = [[109, 108, 10]];
+const expandedForeheadLandmarks = buildForeheadSurfaceLandmarks(foreheadLandmarks);
+assert.ok(expandedForeheadLandmarks[10][1] < foreheadLandmarks[10][1],
+  "photo surface extends the forehead contour upward from the detected top boundary");
+const expandedOnlyPoint = {
+  x: (expandedForeheadLandmarks[109][0] + expandedForeheadLandmarks[108][0] + expandedForeheadLandmarks[10][0]) / 3,
+  y: (expandedForeheadLandmarks[109][1] + expandedForeheadLandmarks[108][1] + expandedForeheadLandmarks[10][1]) / 3,
+};
+assert.equal(sourcePointToSurfaceRef(expandedOnlyPoint, foreheadLandmarks, foreheadTriangles), null,
+  "the synthetic point is outside the raw MediaPipe forehead triangle");
+assert.ok(sourcePointToSurfaceRef(expandedOnlyPoint, expandedForeheadLandmarks, foreheadTriangles),
+  "the same visible forehead point is pickable on the controlled extended surface");
+
 let nextFrameId = 1;
 const scheduled = new Map<number, () => void>();
 const snapshots: unknown[] = [];
@@ -105,6 +125,7 @@ assert.equal(controller.setDetection({
   sourceRevision: firstRevision,
   status: "ready",
   landmarks,
+  surfaceLandmarks: landmarks,
   attempts: 1,
 }), true);
 controller.setView({

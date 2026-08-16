@@ -246,6 +246,12 @@ const fusiform = T.generateFusiformIncision(
 ok(fusiform.type === "fusiform", "fusiform candidate generated");
 ok(near(fusiform.width_mm, 12), "fusiform width includes margins");
 ok(near(fusiform.length_mm, 36), "fusiform length uses 3:1 default");
+ok(near(fusiform.metrics.length_ratio_basis_mm, fusiform.width_mm),
+  "fusiform exposes the current engineering denominator without changing geometry");
+ok(fusiform.metrics.length_ratio_basis === "lesion_perp_diameter_plus_bilateral_margin",
+  "fusiform labels the current 3:1 denominator explicitly");
+ok(fusiform.metrics.clinical_ratio_basis_status === "requires_clinician_confirmation",
+  "fusiform records that the clinical denominator still requires clinician confirmation");
 ok(near(fusiform.tip_angle_deg, 30, 1e-9), "fusiform tip angle follows configured rule");
 ok(fusiform.metrics.profile === "cubic_hermite_tip_angle_constrained", "fusiform records constrained profile");
 ok(near(fusiform.metrics.tip_angle_error_deg, 0, 1e-9), "fusiform records near-zero tip angle error");
@@ -284,6 +290,48 @@ ok(boundaryFusiform.metrics.boundary_envelope_min_margin_mm >= 0,
   "fusiform records non-negative boundary envelope margin for contained freehand boundary");
 ok(boundaryFusiform.metrics.boundary_envelope_outside_count === 0,
   "fusiform records zero outside points for contained freehand boundary");
+
+const controlledMarkerTumor = {
+  ...boundaryTumor,
+  center: [0, 0, 0],
+  diameter_mm: 8,
+  margin_mm: 1,
+  boundary: [[1, 1, 0], [7, 1, 0], [7, 3, 0], [4, 5, 0], [1, 3, 0]],
+  boundary_mode: "controlled_marker",
+  boundary_source: "controlled_marker_confirmed",
+};
+const controlledMarkerFusiform = T.generateFusiformIncision(
+  controlledMarkerTumor,
+  { vector: [1, 0, 0], confidence: 0.9 },
+  0.1,
+  [0, 0, 1],
+);
+ok(controlledMarkerFusiform.metrics.lesion_normalization_applied === true,
+  "controlled marker uses the explicit lesion-normalization contract");
+ok(controlledMarkerFusiform.metrics.boundary_drives_candidate_geometry === false,
+  "controlled marker raw boundary supplies center and scale without directly deforming the standard fusiform");
+ok(near(
+  controlledMarkerFusiform.width_mm,
+  controlledMarkerFusiform.metrics.planning_diameter_mm + controlledMarkerTumor.margin_mm * 2,
+), "controlled marker fusiform width uses the enclosing class-round diameter plus bilateral margin");
+ok(controlledMarkerFusiform.metrics.boundary_envelope_length_expansion_iterations === 0
+  && controlledMarkerFusiform.metrics.boundary_envelope_width_expansion_iterations === 0,
+"controlled marker raw outline cannot trigger automatic candidate expansion");
+ok(controlledMarkerFusiform.metrics.planning_diameter_mm === controlledMarkerFusiform.metrics.detected_enclosing_diameter_mm,
+  "controlled marker candidate scale comes from the detected region's enclosing class-round diameter");
+ok(controlledMarkerFusiform.metrics.clinical_scale_source === "controlled_marker_enclosing_circle",
+  "controlled marker candidate records the detected region as the scale source");
+ok(controlledMarkerFusiform.metrics.operator_diameter_mm === controlledMarkerTumor.diameter_mm,
+  "the former operator diameter remains available as an audit value");
+const controlledMarkerWithDifferentManualDiameter = T.generateFusiformIncision(
+  { ...controlledMarkerTumor, diameter_mm: 30 },
+  { vector: [1, 0, 0], confidence: 0.9 },
+  0.1,
+  [0, 0, 1],
+);
+ok(near(controlledMarkerWithDifferentManualDiameter.width_mm, controlledMarkerFusiform.width_mm)
+  && near(controlledMarkerWithDifferentManualDiameter.length_mm, controlledMarkerFusiform.length_mm),
+"changing the manual diameter does not resize a controlled cutaneous candidate");
 const editedBoundaryFusiform = T.applyCandidateEdit({
   tumor: boundaryTumor,
   candidate: boundaryFusiform,
@@ -562,6 +610,8 @@ ok(plan.sensitive_structure_inspection.schema_version === "sensitive-structure-i
 ok(plan.sensitive_structure_inspection.candidate_free_margin_distance_mm != null,
   "sensitive structure inspection records generated candidate distance");
 ok(plan.workflow_mode === "deterministic_single_candidate", "plan records trace mode");
+ok(plan.direction.source === "rstl_atlas_nearest_segment",
+  "incision workflow consumes the nearest RSTL segment without changing the shared direction service");
 ok(T.TOOL_SCHEMAS.some((s) => s.name === "summarize_tumor_input_quality"),
   "tool schemas include tumor input quality");
 ok(T.TOOL_SCHEMAS.some((s) => s.name === "inspect_sensitive_structures"),
@@ -598,6 +648,27 @@ ok(!("provider" in workflow) && !("llm" in workflow),
   "browser workflow exports no remote model or provider state");
 ok(typeof workflow.summary === "string" && typeof workflow.next_step === "string",
   "browser workflow keeps local summary and next-step copy");
+
+const normalizedControlledPlan = T.planIncisionDeterministic({
+  tumor: controlledMarkerTumor,
+  verts,
+  tris,
+  atlas: {
+    lines: [
+      { name: "near_normalized_center_vertical", points3d: [[4, 1, 0], [4, 4, 0]] },
+      { name: "near_raw_seed_horizontal", points3d: [[0, 0, 0], [2, 0, 0]] },
+    ],
+  },
+});
+ok(normalizedControlledPlan.tumor_normalization.applied === true,
+  "workflow exposes the controlled-marker lesion normalization contract");
+ok(Math.hypot(...normalizedControlledPlan.tumor.center) > 1,
+  "workflow replaces the raw clicked seed with the enclosed-area planning center");
+ok(normalizedControlledPlan.direction.line_id === "near_normalized_center_vertical"
+  && Math.abs(normalizedControlledPlan.direction.vector[1]) > 0.99,
+"workflow queries RSTL at the normalized lesion center, not at the raw click seed");
+ok(normalizedControlledPlan.candidate.metrics.boundary_drives_candidate_geometry === false,
+  "normalized workflow keeps raw marker geometry out of standard candidate dimensions");
 
 const marginDirectionPlans = [0, 2].map((marginMm) => T.planIncisionWorkflow({
   tumor: {

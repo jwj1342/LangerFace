@@ -4,6 +4,7 @@ import {
   planIncisionWorkflow,
   summarizeTumorInputQuality,
 } from "../services/incisionTools.ts";
+import { detectControlledMarker } from "../services/controlledMarkerDetection.ts";
 import type { AnyRecord } from "../services/incisionToolCore.ts";
 import type { WorkflowWorkerApi } from "./workflowWorkerContract";
 
@@ -14,7 +15,7 @@ const api: WorkflowWorkerApi = {
       worker: "browser-comlink-workflow",
       thread: "web_worker",
       handles_high_frequency_render_state: false,
-      supported_tools: ["summarize_tumor_input_quality", "plan_incision_workflow"],
+      supported_tools: ["summarize_tumor_input_quality", "plan_incision_workflow", "detect_controlled_marker"],
     };
   },
 
@@ -31,6 +32,10 @@ const api: WorkflowWorkerApi = {
       normal: request.normal,
       angleOffsetsDeg: request.angleOffsetsDeg,
     });
+  },
+
+  detectControlledMarker(image, seed) {
+    return detectControlledMarker(image, seed);
   },
 };
 

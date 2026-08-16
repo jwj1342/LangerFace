@@ -9,6 +9,7 @@ interface PointerDragState {
   moved: number;
   id: number;
   handle?: number | null;
+  pickOnly?: boolean;
 }
 
 export interface IncisionDomEventHandlers {
@@ -56,7 +57,6 @@ export interface IncisionDomEventHandlers {
   onSecondaryCueFile(file?: File): void;
   onPhotoFile(file?: File): void;
   onControlledMarkerDetect(): void;
-  onControlledMarkerConfirm(): void;
   preparePhotoInteraction(): void;
   photoEndpointHandleFromEvent(event: PointerEvent): number | null;
   dragPhotoEndpoint(event: PointerEvent, handle: number): void;
@@ -214,17 +214,25 @@ export function bindIncisionDomEvents({
 
   listen(elements.photoCanvas, "pointerdown", ((event: PointerEvent) => {
     handlers.preparePhotoInteraction();
+    const pickOnly = elements.controlledMarkerDetect.getAttribute("aria-pressed") === "true";
     photoDrag = {
       x: event.clientX,
       y: event.clientY,
       moved: 0,
       id: event.pointerId,
-      handle: handlers.photoEndpointHandleFromEvent(event),
+      handle: pickOnly ? null : handlers.photoEndpointHandleFromEvent(event),
+      pickOnly,
     };
     elements.photoCanvas.setPointerCapture(event.pointerId);
   }) as EventListener);
   listen(elements.photoCanvas, "pointermove", ((event: PointerEvent) => {
     if (!photoDrag || event.pointerId !== photoDrag.id) return;
+    if (photoDrag.pickOnly) {
+      photoDrag.moved += Math.abs(event.clientX - photoDrag.x) + Math.abs(event.clientY - photoDrag.y);
+      photoDrag.x = event.clientX;
+      photoDrag.y = event.clientY;
+      return;
+    }
     if (photoDrag.handle != null) {
       handlers.dragPhotoEndpoint(event, photoDrag.handle);
       photoDrag.moved += Math.abs(event.clientX - photoDrag.x) + Math.abs(event.clientY - photoDrag.y);
@@ -241,7 +249,8 @@ export function bindIncisionDomEvents({
   }) as EventListener);
   listen(elements.photoCanvas, "pointerup", ((event: PointerEvent) => {
     const endpointDrag = photoDrag?.handle != null;
-    if (photoDrag && event.pointerId === photoDrag.id && photoDrag.moved < 6 && !endpointDrag) handlers.onPhotoPick(event);
+    if (photoDrag && event.pointerId === photoDrag.id
+      && (photoDrag.pickOnly || photoDrag.moved < 6) && !endpointDrag) handlers.onPhotoPick(event);
     if (endpointDrag && (photoDrag?.moved || 0) >= 1) handlers.commitPhotoEndpointDrag();
     photoDrag = null;
   }) as EventListener);
@@ -350,7 +359,6 @@ export function bindIncisionDomEvents({
     handlers.onPhotoFile(fileFromEvent(event));
   }) as EventListener);
   action(elements.controlledMarkerDetect, "click", handlers.onControlledMarkerDetect);
-  action(elements.controlledMarkerConfirm, "click", handlers.onControlledMarkerConfirm);
   action(elements.photoMirror, "click", handlers.onPhotoMirror);
   action(elements.photoReset, "click", handlers.onPhotoReset);
   action(elements.surfaceMode, "click", handlers.onSurfaceMode);

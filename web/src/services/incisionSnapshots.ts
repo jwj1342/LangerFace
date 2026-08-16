@@ -146,6 +146,7 @@ export interface IncisionControllerSnapshot {
   schema_version: typeof INCISION_SNAPSHOT_SCHEMA_VERSION;
   reason: string;
   stageStatus: string;
+  stageStatusTone?: "normal" | "warning";
   assetLoading: IncisionAssetLoadingState;
   headAsset: IncisionHeadAssetState;
   tumor: IncisionTumorState;
@@ -418,6 +419,7 @@ export function buildIncisionSavedCandidateSummaries({
 export function buildIncisionControllerSnapshot({
   reason = "state_update",
   stageStatus = "",
+  stageStatusTone = "normal",
   assetLoading,
   headAsset,
   tumor,
@@ -436,6 +438,7 @@ export function buildIncisionControllerSnapshot({
     schema_version: INCISION_SNAPSHOT_SCHEMA_VERSION,
     reason,
     stageStatus,
+    stageStatusTone,
     assetLoading,
     headAsset,
     tumor,

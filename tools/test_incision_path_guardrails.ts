@@ -91,6 +91,11 @@ oralOpening.forEach((vertexIndex, index) => {
   const angle = (Math.PI * 2 * index) / oralOpening.length;
   mediapipeVerts[vertexIndex] = [5 + Math.cos(angle) * 1.5, 3 + Math.sin(angle) * 0.6, 0];
 });
+const outerLip = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146];
+outerLip.forEach((vertexIndex, index) => {
+  const angle = (Math.PI * 2 * index) / outerLip.length;
+  mediapipeVerts[vertexIndex] = [5 + Math.cos(angle) * 2, 3 + Math.sin(angle), 0];
+});
 const topologyZones = buildMediaPipeEngineeringExclusionZones(mediapipeVerts);
 assert.deepEqual(topologyZones.map((zone) => zone.id), [
   "left-eye-opening",
@@ -98,6 +103,7 @@ assert.deepEqual(topologyZones.map((zone) => zone.id), [
   "oral-opening",
   "left-nostril-opening",
   "right-nostril-opening",
+  "default-vermilion-protection",
 ]);
 assert.equal(topologyZones[0].projection_buffer_scale, 1,
   "eye opening hard gate follows the topology loop without an unvalidated expansion buffer");
@@ -117,6 +123,8 @@ assert.equal(invalidCenter?.zone_id, "left-eye-opening", "lesion centers inside 
 assert.equal(inspectTumorPointEngineeringExclusion([3.7, 6.6, 0], mediapipeVerts), null,
   "visible eyelid skin just outside the topology opening is not rejected by an expansion buffer");
 assert.equal(inspectTumorPointEngineeringExclusion([5, 5, 0], mediapipeVerts), null);
+assert.equal(inspectTumorPointEngineeringExclusion([5, 2.2, 0], mediapipeVerts), null,
+  "the conservative vermilion candidate gate does not prohibit a lip lesion center");
 assert.equal(inspectTumorPointEngineeringExclusion([4.05, 5.3, 0], mediapipeVerts)?.zone_id,
   "left-nostril-opening", "lesion centers inside the audited nostril aperture are rejected");
 assert.equal(inspectTumorPointEngineeringExclusion([3.65, 5.3, 0], mediapipeVerts), null,
@@ -127,6 +135,12 @@ assert.ok(nostrilCrossingCandidate.hard_violations.some((item) =>
   item.code === "candidate_intersects_non_skin_opening"
     && item.location?.zone_id === "left-nostril-opening"),
 "a complete candidate path crossing a nostril aperture is hard-blocked");
+const vermilionCrossingCandidate = { type: "linear", polyline: [[2.5, 2.2, 0], [7.5, 2.2, 0]] };
+annotateCandidateEngineeringViolations(vermilionCrossingCandidate, mediapipeVerts);
+assert.ok(vermilionCrossingCandidate.hard_violations.some((item) =>
+  item.code === "candidate_intersects_default_vermilion_protection"
+    && item.location?.zone_id === "default-vermilion-protection"),
+"the generic workflow blocks a candidate crossing vermilion until a dedicated flow or override exists");
 
 const invalidBoundary = inspectTumorEngineeringExclusions({
   kind: "cutaneous",

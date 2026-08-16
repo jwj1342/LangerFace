@@ -12,6 +12,27 @@ async function explicitGenerationCount(page: Page) {
   return Number(match[1]);
 }
 
+async function candidateOverlayEvidence(page: Page) {
+  return page.locator("#incisionCandidateCanvas").evaluate((canvas: HTMLCanvasElement) => {
+    const context = canvas.getContext("2d");
+    if (!context) return { nonTransparent: 0, solidCore: 0, matteBlue: 0, width: 0, height: 0 };
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let nonTransparent = 0;
+    let solidCore = 0;
+    let matteBlue = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      const alpha = pixels[index + 3];
+      if (alpha > 0) nonTransparent += 1;
+      if (alpha >= 220) solidCore += 1;
+      if (alpha > 80 && pixels[index] < 24 && pixels[index + 1] >= 36
+        && pixels[index + 1] <= 84 && pixels[index + 2] >= 90 && pixels[index + 2] <= 145) {
+        matteBlue += 1;
+      }
+    }
+    return { nonTransparent, solidCore, matteBlue, width: canvas.width, height: canvas.height };
+  });
+}
+
 test("patient photo is the mobile incision canvas and reuploads fail safely", async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -32,20 +53,25 @@ test("patient photo is the mobile incision canvas and reuploads fail safely", as
   await expect(status).toContainText(/照片规划.*RSTL.*候选已叠加/, { timeout: 45_000 });
   await expect(photoCanvas).toHaveAttribute("data-active", "true");
   await expect(page.locator("#incisionCanvas")).toHaveClass(/hidden/);
+  await expect.poll(async () => (await candidateOverlayEvidence(page)).nonTransparent).toBeGreaterThan(4);
+  const initialCandidateEvidence = await candidateOverlayEvidence(page);
+  expect(initialCandidateEvidence.solidCore,
+    "screen-space candidate overlay should contain opaque core pixels instead of only gray partial coverage")
+    .toBeGreaterThan(0);
 
   const evidence = await photoCanvas.evaluate((canvas: HTMLCanvasElement) => {
     const context = canvas.getContext("2d");
-    if (!context) return { cyan: 0, width: 0, height: 0 };
+    if (!context) return { pinkRstl: 0, width: 0, height: 0 };
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-    let cyan = 0;
+    let pinkRstl = 0;
     for (let index = 0; index < pixels.length; index += 16) {
-      if (pixels[index] < 150 && pixels[index + 1] > 170 && pixels[index + 2] > 170) cyan += 1;
+      if (pixels[index] > 180 && pixels[index + 1] < 140 && pixels[index + 2] > 140) pinkRstl += 1;
     }
-    return { cyan, width: canvas.width, height: canvas.height };
+    return { pinkRstl, width: canvas.width, height: canvas.height };
   });
   expect(evidence.width).toBeGreaterThan(0);
   expect(evidence.height).toBeGreaterThan(0);
-  expect(evidence.cyan, "photo canvas should contain visible cyan RSTL pixels").toBeGreaterThan(20);
+  expect(evidence.pinkRstl, "photo canvas should contain visible shared pink RSTL pixels").toBeGreaterThan(20);
 
   const generationBefore = await explicitGenerationCount(page);
   await page.locator("#diameterMm").focus();
@@ -79,9 +105,12 @@ test("patient photo is the mobile incision canvas and reuploads fail safely", as
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("incision-photo-desktop.png"), fullPage: true });
 
+  await page.locator("#diameterMm").fill("4");
   await page.locator("#tumorKind").selectOption("cutaneous");
   await expect(page.locator("#candidateType")).toHaveText("梭形");
   await expect.poll(() => explicitGenerationCount(page)).toBe(generationBefore + 1);
+  await expect.poll(async () => (await candidateOverlayEvidence(page)).matteBlue).toBeGreaterThan(4);
+  await page.screenshot({ path: testInfo.outputPath("incision-photo-fusiform.png"), fullPage: true });
 
   const serializedSnapshots = await page.evaluate(() => JSON.stringify(
     (window as Window & { __photoSnapshots?: unknown[] }).__photoSnapshots || [],

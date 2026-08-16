@@ -1,23 +1,33 @@
+import * as Comlink from "comlink";
+
 import { toPixels } from "./geometryAtlas";
-import { engineeringBlockMessage } from "./incisionClinicalCopy";
+import { controlledMarkerFailureMessage, engineeringBlockMessage } from "./incisionClinicalCopy";
 import { CONTROLLED_MARKER_DETECTOR_VERSION, detectControlledMarker } from "./controlledMarkerDetection";
+import type { ControlledMarkerDetection } from "./controlledMarkerDetection";
 import type { IncisionRuntimeState } from "./incisionControllerState";
 import type { IncisionDomElements } from "./incisionDom";
 import {
   confirmLesionDetectionDraft,
   normalizeLesionDetectionAdapter,
-  type LesionDetectionAdapterDraft,
 } from "./lesionDetectionAdapter";
 import type { SurfaceRef } from "./incisionOverlay";
 import {
+  buildForeheadSurfaceLandmarks,
   buildSubcutaneousDiameterEstimateRefs,
+  incisionPhotoLayerContract,
+  incisionPhotoSkinVisibility,
+  incisionPhotoStatusPresentation,
   candidateEndpointSurfaceRefs,
+  drawFusiformRenderMode,
   nearestPhotoEndpointHandle,
   pointsToSurfaceRefs,
   renderIncisionPhotoPlanning,
   surfaceRefToModelPoint,
   validateIncisionPhotoFile,
+  type FusiformFitDiagnostics,
+  type SurfaceProjectedFusiformFit,
 } from "./incisionPhotoPlanning";
+import { incisionCandidateScreenStyle } from "./incisionOverlayStyle";
 import { prepareImageSource } from "./imageSource";
 import { modelState } from "./liveState";
 import { sourcePointToSurfaceRef } from "./photoPlanningController";
@@ -28,12 +38,12 @@ import {
   inspectTumorEngineeringExclusions,
   tumorPointEngineeringExclusionMessage,
 } from "./incisionToolCore";
+import type { Vec3 } from "./softBody";
 
 interface IncisionPhotoRuntimeOptions {
   elements: IncisionDomElements;
   state: IncisionRuntimeState;
   clearTransientPlanning(): void;
-  defaultLesion(): number;
   nearestVertex(point: unknown): number;
   setLesion(index: number, centerRef?: SurfaceRef | null): void;
   updateTumorRing(): void;
@@ -50,7 +60,6 @@ export interface IncisionPhotoRuntime {
   resetView(): void;
   load(file?: File): Promise<void>;
   beginControlledMarkerDetection(): void;
-  confirmControlledMarkerDetection(): Promise<void>;
   pick(event: PointerEvent): void;
   endpointHandleFromEvent(event: PointerEvent): number | null;
   dragEndpoint(event: PointerEvent, index: number): void;
@@ -64,12 +73,70 @@ export interface IncisionPhotoRuntime {
 const errorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error);
 const clamp = (value: number, low: number, high: number): number => Math.max(low, Math.min(high, value));
 
+function controlledMarkerFingerprint(detection: ControlledMarkerDetection): string {
+  const bbox = detection.bbox;
+  if (!bbox || !detection.boundary.length) return "unavailable";
+  let hash = 2166136261;
+  for (const point of detection.boundary) {
+    const normalizedX = Math.round((point.x - bbox.x) / Math.max(1, bbox.width) * 255);
+    const normalizedY = Math.round((point.y - bbox.y) / Math.max(1, bbox.height) * 255);
+    for (const value of [normalizedX, normalizedY]) {
+      hash ^= value & 0xff;
+      hash = Math.imul(hash, 16777619) >>> 0;
+    }
+  }
+  return `cm-${bbox.width}x${bbox.height}-${detection.area_px}-${hash.toString(16).padStart(8, "0")}`;
+}
+
+function controlledMarkerPlanningAudit(
+  detection: ControlledMarkerDetection,
+  result: Record<string, any> | null | undefined,
+  projection: { valid: boolean; reasonCodes: string[] },
+): Record<string, unknown> {
+  const normalization = result?.tumor_normalization || {};
+  const direction = result?.direction || {};
+  const candidate = result?.candidate || {};
+  return {
+    detector_version: CONTROLLED_MARKER_DETECTOR_VERSION,
+    marker: {
+      fingerprint: controlledMarkerFingerprint(detection),
+      geometry_mode: detection.geometry_mode,
+      area_px: detection.area_px,
+      bbox_size_px: detection.bbox ? [detection.bbox.width, detection.bbox.height] : null,
+      boundary_point_count: detection.boundary.length,
+      repair_radius: detection.diagnostics?.repair_radius ?? 0,
+      warnings: detection.warnings,
+    },
+    normalization: {
+      status: normalization.status ?? null,
+      planning_diameter_mm: normalization.planning_diameter_mm ?? null,
+      detected_enclosing_diameter_mm: normalization.detected_enclosing_diameter_mm ?? null,
+      detected_center_shift_mm: normalization.detected_center_shift_mm ?? null,
+    },
+    direction: {
+      line_id: direction.line_id ?? null,
+      line_index: direction.line_index ?? null,
+      segment_index: direction.segment_index ?? null,
+      angle_deg: direction.angle_deg ?? null,
+      confidence: direction.confidence ?? null,
+    },
+    candidate: {
+      type: candidate.type ?? null,
+      length_mm: candidate.length_mm ?? null,
+      width_mm: candidate.width_mm ?? null,
+      axis: Array.isArray(candidate.axis) ? candidate.axis.map((value: number) => Number(value.toFixed(6))) : null,
+      display_blocked: result?.candidate_display_blocked === true,
+    },
+    photo_projection: projection,
+    raw_media_retained: false,
+  };
+}
+
 export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions): IncisionPhotoRuntime {
   const {
     elements,
     state,
     clearTransientPlanning,
-    defaultLesion,
     nearestVertex,
     setLesion,
     updateTumorRing,
@@ -80,23 +147,46 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
   } = options;
   let disposed = false;
   let controlledMarkerSeedMode = false;
-  let controlledMarkerDraft: LesionDetectionAdapterDraft | null = null;
+  let controlledMarkerBusy = false;
+  let controlledMarkerRequestId = 0;
   let candidatePhotoProjectionValid = false;
   let projectedCandidate: unknown = null;
+  let latestPhotoEndpointSources: { x: number; y: number }[] = [];
+  let latestCandidateOverlay: {
+    candidate: Vec3[];
+    fit: SurfaceProjectedFusiformFit | null;
+    candidateType: string;
+    valid: boolean;
+  } = { candidate: [], fit: null, candidateType: "", valid: false };
+  let latestCandidateProjection = {
+    valid: false,
+    reasonCodes: [] as string[],
+    surfaceConstrained: false,
+    sourceReasonCodes: [] as string[],
+    smoothingMode: "notApplicable" as "globalBezier" | "segmentedBezier" | "sourceFallback" | "notApplicable",
+    smoothingDiagnostics: null as FusiformFitDiagnostics | null,
+  };
 
   const setControlledMarkerActionState = (active: boolean) => {
     elements.controlledMarkerDetect.setAttribute("aria-pressed", String(active));
     elements.controlledMarkerDetect.title = active
-      ? "取消当前受控标记定位草案"
+      ? "退出受控标记模式"
       : "在照片上点击黑点、贴纸或手绘标记";
     const label = elements.controlledMarkerDetect.querySelector<HTMLElement>("[data-marker-action-label]");
-    if (label) label.textContent = active ? "取消定位" : "受控标记";
+    if (label) label.textContent = active ? "退出标记" : "受控标记";
+    elements.photoCanvas.dataset.controlledMarker = String(active);
+  };
+
+  const setControlledMarkerBusy = (busy: boolean) => {
+    controlledMarkerBusy = busy;
+    elements.photoCanvas.setAttribute("aria-busy", String(busy));
+    elements.controlledMarkerDetect.setAttribute("aria-busy", String(busy));
   };
 
   const resetControlledMarker = ({ restoreSelection = false } = {}) => {
+    controlledMarkerRequestId += 1;
+    setControlledMarkerBusy(false);
     controlledMarkerSeedMode = false;
-    controlledMarkerDraft = null;
-    elements.controlledMarkerConfirm.disabled = true;
     setControlledMarkerActionState(false);
     if (restoreSelection) {
       state.planning2d?.setSelection({ centerRef: state.lesionRef, boundaryRefs: state.boundaryRefs });
@@ -105,22 +195,11 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
 
   const updateEndpointHandles = () => {
     const wrapRect = elements.wrap.getBoundingClientRect();
-    const candidatePoints = state.result?.candidate?.polyline || [];
-    const candidateRefs = pointsToSurfaceRefs(candidatePoints, state.verts, state.tris);
-    const refs = state.result?.candidate_display_blocked
-      || controlledMarkerSeedMode
-      || controlledMarkerDraft
+    const points = state.result?.candidate_display_blocked
       || !candidatePhotoProjectionValid
       || projectedCandidate !== state.result?.candidate
       ? []
-      : candidateEndpointSurfaceRefs(
-        candidatePoints,
-        candidateRefs,
-        state.result?.candidate?.endpoints || [],
-        state.verts,
-        state.tris,
-      );
-    const points = refs.map((ref) => state.planning2d?.surfaceRefToClient(ref) || null);
+      : latestPhotoEndpointSources.map((point) => state.planning2d?.sourceToClient(point) || null);
     elements.photoEndpointHandles.forEach((handle, index) => {
       const point = state.photoView.active ? points[index] : null;
       handle.hidden = !point;
@@ -130,19 +209,96 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     });
   };
 
+  const renderCandidateOverlay = () => {
+    const canvas = elements.photoCandidateCanvas;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const rect = elements.wrap.getBoundingClientRect();
+    const dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
+    const backingWidth = Math.max(1, Math.round(rect.width * dpr));
+    const backingHeight = Math.max(1, Math.round(rect.height * dpr));
+    if (canvas.width !== backingWidth) canvas.width = backingWidth;
+    if (canvas.height !== backingHeight) canvas.height = backingHeight;
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    context.clearRect(0, 0, rect.width, rect.height);
+    if (!state.photoView.active || !state.planning2d || !latestCandidateOverlay.valid
+      || latestCandidateOverlay.candidate.length < 2) return;
+
+    const mapPoint = (point: Vec3): Vec3 | null => {
+      const mapped = state.planning2d?.sourceToClient({ x: point[0], y: point[1] });
+      return mapped ? [mapped.x - rect.left, mapped.y - rect.top, point[2]] : null;
+    };
+    const candidate = latestCandidateOverlay.candidate.map(mapPoint);
+    if (candidate.some((point) => point === null)) return;
+    const mappedCandidate = candidate as Vec3[];
+    const sourceFit = latestCandidateOverlay.fit;
+    let mappedFit: SurfaceProjectedFusiformFit | null = null;
+    if (sourceFit) {
+      const upperCurve = sourceFit.upperCurve.map(mapPoint);
+      const lowerCurve = sourceFit.lowerCurve.map(mapPoint);
+      const upperCurves = sourceFit.upperCurves.map((curve) => curve.map(mapPoint));
+      const lowerCurves = sourceFit.lowerCurves.map((curve) => curve.map(mapPoint));
+      const sourceOutline = sourceFit.sourceOutline.map(mapPoint);
+      const outline = sourceFit.outline.map(mapPoint);
+      const allCurvePoints = [...upperCurves.flat(), ...lowerCurves.flat()];
+      if (![...upperCurve, ...lowerCurve, ...allCurvePoints, ...sourceOutline, ...outline]
+        .some((point) => point === null)) {
+        mappedFit = {
+          ...sourceFit,
+          upperCurve: upperCurve as SurfaceProjectedFusiformFit["upperCurve"],
+          lowerCurve: lowerCurve as SurfaceProjectedFusiformFit["lowerCurve"],
+          upperCurves: upperCurves as SurfaceProjectedFusiformFit["upperCurves"],
+          lowerCurves: lowerCurves as SurfaceProjectedFusiformFit["lowerCurves"],
+          sourceOutline: sourceOutline as Vec3[],
+          outline: outline as Vec3[],
+        };
+      }
+    }
+    const style = incisionCandidateScreenStyle(latestCandidateOverlay.candidateType);
+    if (latestCandidateOverlay.candidateType === "fusiform") {
+      drawFusiformRenderMode(
+        context,
+        mappedCandidate,
+        mappedFit,
+        mappedFit
+          ? mappedFit.strategy === "segmented_c1" ? "segmentedBezierDirect" : "globalBezierDirect"
+          : "raw",
+        style.color,
+        style.lineWidth,
+      );
+      return;
+    }
+    context.beginPath();
+    context.moveTo(mappedCandidate[0][0], mappedCandidate[0][1]);
+    mappedCandidate.slice(1).forEach((point) => context.lineTo(point[0], point[1]));
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.strokeStyle = style.haloColor;
+    context.lineWidth = style.haloWidth;
+    context.stroke();
+    context.strokeStyle = style.color;
+    context.lineWidth = style.lineWidth;
+    context.stroke();
+  };
+
   const setStatus = (message: string, tone: "idle" | "loading" | "ready" | "warning" = "idle") => {
     elements.photoStatus.textContent = message;
     elements.photoStatus.dataset.tone = tone;
   };
 
+  const setStageStatus = (message: string, tone: "normal" | "warning" = "normal") => {
+    elements.stageStatus.textContent = message;
+    elements.stageStatus.dataset.tone = tone;
+  };
+
   const keepControlledMarkerRetry = (message: string) => {
     controlledMarkerSeedMode = true;
-    controlledMarkerDraft = null;
     candidatePhotoProjectionValid = false;
     projectedCandidate = null;
-    elements.controlledMarkerConfirm.disabled = true;
+    latestCandidateOverlay.valid = false;
     setControlledMarkerActionState(true);
     updateEndpointHandles();
+    renderCandidateOverlay();
     if (message) setStatus(message, "warning");
   };
 
@@ -172,6 +328,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     elements.photoCanvas.style.setProperty("--incision-photo-pan-y", `${Math.round(state.photoView.offsetY)}px`);
     elements.photoCanvas.style.setProperty("--incision-photo-mirror", state.photoView.mirror ? "-1" : "1");
     updateEndpointHandles();
+    renderCandidateOverlay();
   };
 
   const render = () => {
@@ -183,10 +340,15 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     const dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
     elements.photoCanvas.width = Math.max(1, Math.round(frame.width * dpr));
     elements.photoCanvas.height = Math.max(1, Math.round(frame.height * dpr));
+    const viewport = elements.wrap.getBoundingClientRect();
+    const containScale = Math.min(
+      viewport.width / Math.max(1, frame.width),
+      viewport.height / Math.max(1, frame.height),
+    );
+    const displayScale = containScale > 0 ? containScale * state.photoView.zoom : undefined;
     const candidateDisplayBlocked = Boolean(state.result?.candidate_display_blocked);
-    const markerDraftActive = controlledMarkerDraft !== null;
     const candidatePoints = state.result?.candidate?.polyline || [];
-    const candidateRefs = markerDraftActive || candidateDisplayBlocked
+    const candidateRefs = candidateDisplayBlocked
       ? []
       : pointsToSurfaceRefs(candidatePoints, state.verts, state.tris);
     const endpointRefs = candidateEndpointSurfaceRefs(
@@ -196,7 +358,11 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
       state.verts,
       state.tris,
     );
-    const diameterEstimateRefs = !markerDraftActive && elements.tumorKind.value === "subcutaneous"
+    const layerContract = incisionPhotoLayerContract(
+      elements.tumorKind.value,
+      state.result?.candidate?.type,
+    );
+    const diameterEstimateRefs = layerContract.showDiameterEstimate && state.lesionRef
       ? buildSubcutaneousDiameterEstimateRefs({
         centerRef: state.lesionRef,
         lesionIndex: state.lesion,
@@ -213,42 +379,66 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
       sourceWidth: frame.width,
       sourceHeight: frame.height,
       devicePixelRatio: dpr,
+      displayScale,
       landmarks: [...frame.landmarks],
+      surfaceLandmarks: frame.surfaceLandmarks ? [...frame.surfaceLandmarks] : [...frame.landmarks],
       triangles: state.tris,
       atlasLines: state.atlas.lines || [],
-      centerRef: controlledMarkerDraft?.geometry.center_ref || state.lesionRef,
+      centerRef: state.lesionRef,
       diameterEstimateRefs,
-      boundaryRefs: controlledMarkerDraft?.geometry.boundary_refs || frame.selection.boundaryRefs,
+      boundaryRefs: frame.selection.boundaryRefs,
       candidateRefs,
-      endpointRefs: markerDraftActive || candidateDisplayBlocked ? [] : endpointRefs,
+      endpointRefs: candidateDisplayBlocked ? [] : endpointRefs,
       tumorInputInvalid: state.result?.tumor_engineering_validation?.passed === false,
       candidateType: state.result?.candidate?.type,
+      drawCandidate: false,
     });
     state.planning2d.setOverlaySummary({
       rstlLineCount: geometry.rstl.length,
       tumorVisible: geometry.center !== null,
       candidatePointCount: geometry.candidateProjection.valid ? geometry.candidate.length : 0,
     });
-    candidatePhotoProjectionValid = !markerDraftActive
-      && !candidateDisplayBlocked
+    if (state.result?.candidate?.metrics && geometry.projectedRstlDeviationDeg != null) {
+      state.result.candidate.metrics.projected_rstl_deviation_deg = geometry.projectedRstlDeviationDeg;
+    }
+    candidatePhotoProjectionValid = !candidateDisplayBlocked
       && geometry.candidateProjection.valid;
+    latestPhotoEndpointSources = candidatePhotoProjectionValid
+      ? geometry.endpoints.map((point) => ({ x: point[0], y: point[1] }))
+      : [];
+    latestCandidateOverlay = {
+      candidate: geometry.candidate.map((point) => [...point] as Vec3),
+      fit: geometry.fusiformRendering || null,
+      candidateType: state.result?.candidate?.type || "",
+      valid: candidatePhotoProjectionValid,
+    };
+    latestCandidateProjection = {
+      valid: geometry.candidateProjection.valid,
+      reasonCodes: [...geometry.candidateProjection.reasonCodes],
+      surfaceConstrained: geometry.candidateProjection.surfaceConstrained === true,
+      sourceReasonCodes: [...(geometry.candidateProjection.sourceReasonCodes || [])],
+      smoothingMode: geometry.candidateProjection.smoothingMode || "notApplicable",
+      smoothingDiagnostics: geometry.candidateProjection.smoothingDiagnostics || null,
+    };
     projectedCandidate = candidatePhotoProjectionValid ? state.result?.candidate : null;
     fit();
     if (!geometry.candidateProjection.valid) {
       elements.photoEndpointHandles.forEach((handle) => { handle.hidden = true; });
     }
-    setStatus(
-      `照片规划 · RSTL ${geometry.rstl.length} 条 · ${candidateDisplayBlocked
-        ? engineeringBlockMessage(state.result)
-        : !geometry.candidateProjection.valid
-          ? "候选未显示：照片投影后的梭形轮廓失真；请移动病灶或调整范围后重试。"
-        : geometry.candidate.length ? "候选已叠加" : "点击面部设置病灶"}`,
-      "ready",
-    );
+    const status = incisionPhotoStatusPresentation({
+      rstlLineCount: geometry.rstl.length,
+      candidateDisplayBlocked,
+      engineeringBlockMessage: engineeringBlockMessage(state.result),
+      candidateProjectionValid: geometry.candidateProjection.valid,
+      candidatePointCount: geometry.candidate.length,
+      candidateSmoothingMode: geometry.candidateProjection.smoothingMode,
+      projectedRstlDeviationDeg: geometry.projectedRstlDeviationDeg,
+    });
+    setStatus(status.message, status.tone);
   };
 
   const setMode = (active: boolean) => {
-    if (!active && (controlledMarkerSeedMode || controlledMarkerDraft)) {
+    if (!active && controlledMarkerSeedMode) {
       resetControlledMarker({ restoreSelection: true });
     }
     state.photoView.active = active && Boolean(state.planning2d?.getFrameState().source);
@@ -258,19 +448,19 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     elements.photoReset.disabled = !state.photoView.active;
     elements.surfaceMode.disabled = !state.planning2d?.getFrameState().source;
     elements.controlledMarkerDetect.disabled = !state.photoView.active;
-    elements.controlledMarkerConfirm.disabled = !state.photoView.active || !controlledMarkerDraft;
     elements.surfaceMode.title = state.photoView.active
       ? "切换到标准三维规划表面"
       : "返回患者照片规划";
     if (state.photoView.active) {
       fit();
       render();
-      elements.stageStatus.textContent = "患者照片规划：点击面部定位，拖拽平移，滚轮缩放";
+      setStageStatus("患者照片规划：点击面部定位，拖拽平移，滚轮缩放");
     } else {
       updateEndpointHandles();
-      elements.stageStatus.textContent = "标准表面规划：拖拽旋转 · 滚轮缩放 · 点击定位";
+      setStageStatus("标准表面规划：拖拽旋转 · 滚轮缩放 · 点击定位");
       setStatus("标准表面模式；上传 JPEG 或 PNG 可进入患者照片规划", "idle");
     }
+    renderCandidateOverlay();
   };
 
   const resetView = () => {
@@ -292,13 +482,13 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
         setMode(false);
       }
       setStatus(validationError, "warning");
-      elements.stageStatus.textContent = validationError;
+      setStageStatus(validationError, "warning");
       return;
     }
     if (!state.verts.length || !state.tris.length || !state.atlas) {
       const message = "切口规划资产仍在加载，请稍后重新选择照片。";
       setStatus(message, "warning");
-      elements.stageStatus.textContent = message;
+      setStageStatus(message, "warning");
       return;
     }
     const operationId = ++state.photoView.operationId;
@@ -307,7 +497,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     clearTransientPlanning();
     setMode(false);
     setStatus("正在本地加载模型并检测照片…", "loading");
-    elements.stageStatus.textContent = "患者照片检测中…";
+    setStageStatus("患者照片检测中…");
     let objectUrl: string | null = null;
     try {
       await ensureImageReady();
@@ -354,21 +544,28 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
             ? "照片检测失败；请重新上传清晰正脸照片。"
             : "未检测到人脸；请更换正面、清晰、光线充足的照片。";
         setStatus(message, "warning");
-        elements.stageStatus.textContent = message;
+        setStageStatus(message, "warning");
         return;
       }
       const landmarks = toPixels(faces[0], prepared.width, prepared.height);
-      state.planning2d.setDetection({ sourceRevision: revision, status: "ready", landmarks, attempts: outcome.attempts });
+      state.planning2d.setDetection({
+        sourceRevision: revision,
+        status: "ready",
+        landmarks,
+        surfaceLandmarks: buildForeheadSurfaceLandmarks(landmarks),
+        attempts: outcome.attempts,
+      });
       resetView();
-      setLesion(defaultLesion(), null);
+      state.planning2d.setSelection({ centerRef: null, boundaryRefs: [] });
       setMode(true);
-      await runWorkflow();
       render();
+      setStatus("照片已载入；请点击面部定位病灶，或开启受控标记识别。", "idle");
+      setStageStatus("患者照片规划：尚未选择病灶位置");
     } catch (error) {
       if (disposed || !state.mounted || operationId !== state.photoView.operationId) return;
       const message = `照片加载失败：${errorMessage(error)}`;
       setStatus(message, "warning");
-      elements.stageStatus.textContent = message;
+      setStageStatus(message, "warning");
     } finally {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     }
@@ -386,62 +583,23 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
         setStatus("请先上传并成功检测一张单人正脸照片。", "warning");
         return;
       }
-      if (controlledMarkerSeedMode || controlledMarkerDraft) {
+      if (controlledMarkerSeedMode) {
         resetControlledMarker({ restoreSelection: true });
         render();
-        setStatus("已取消受控标记定位；未确认草案已清除。", "idle");
+        setStatus("已退出受控标记模式；当前已生成的病灶和候选保持不变。", "idle");
         publishState("controlled_marker_cancelled");
         return;
       }
       controlledMarkerSeedMode = true;
-      controlledMarkerDraft = null;
-      candidatePhotoProjectionValid = false;
-      projectedCandidate = null;
-      elements.controlledMarkerConfirm.disabled = true;
       setControlledMarkerActionState(true);
-      updateEndpointHandles();
-      setStatus("受控标记定位：请点击照片中的黑点、贴纸或手绘标记中心。", "loading");
-    },
-    async confirmControlledMarkerDetection() {
-      if (!controlledMarkerDraft) {
-        setStatus("当前没有待确认的受控标记定位草案。", "warning");
-        return;
-      }
-      try {
-        const kind = elements.tumorKind.value === "cutaneous" ? "cutaneous" : "subcutaneous";
-        const confirmed = confirmLesionDetectionDraft(controlledMarkerDraft, {
-          kind,
-          diameter_mm: Number(elements.diameter.value),
-          depth_mm: kind === "subcutaneous" ? Number(elements.depth.value) : null,
-          margin_mm: kind === "cutaneous" ? Number(elements.margin.value) : 0,
-          boundary_mode: kind === "cutaneous" && elements.boundaryMode.value === "freehand" ? "freehand" : "ellipse",
-        }, elements.tumorAuthor.value);
-        if (!confirmed.eligible_for_candidate) {
-          throw new Error("当前类型、范围或参数尚未通过输入质量检查");
-        }
-        if (!confirmed.tumor) throw new Error("受控标记未形成有效肿物输入");
-        const tumorEngineeringValidation = inspectTumorEngineeringExclusions(confirmed.tumor, state.verts);
-        if (!tumorEngineeringValidation.passed) {
-          throw new Error("病灶中心或范围进入眼裂、口裂或鼻孔等非皮肤开口，请重新定位或调整范围");
-        }
-        clearTransientPlanning();
-        if (kind === "cutaneous" && elements.boundaryMode.value === "freehand") {
-          state.boundaryRefs = [...confirmed.geometry.boundary_refs];
-          state.boundaryPoints = [...confirmed.geometry.boundary];
-        }
-        setLesion(nearestVertex(confirmed.geometry.center), confirmed.geometry.center_ref);
-        updateTumorRing();
-        resetControlledMarker({ restoreSelection: true });
-        await runWorkflow();
-        render();
-        setStatus("受控标记定位已由人工确认，并已使用当前参数生成候选。", "ready");
-        publishState("controlled_marker_confirmed");
-      } catch (error) {
-        setStatus(`确认受控标记失败：${errorMessage(error)}`, "warning");
-      }
+      setStatus("受控标记已开启：请在模拟肿物范围内点击。识别成功后会自动生成候选切口。", "loading");
     },
     pick(event) {
       if (controlledMarkerSeedMode) {
+        if (controlledMarkerBusy) {
+          setStatus("正在识别模拟肿物，请稍候。需要取消时可点击“退出标记”。", "loading");
+          return;
+        }
         const frame = state.planning2d?.getFrameState();
         const seed = state.planning2d?.clientToSource({ x: event.clientX, y: event.clientY });
         if (!frame?.source || !frame.landmarks?.length || !seed) {
@@ -449,6 +607,12 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
           setStatus("该点击无法映射到照片，请直接在面部标记中心重试。", "warning");
           return;
         }
+        const photoLandmarks = frame.landmarks;
+        const kind = elements.tumorKind.value === "cutaneous" ? "cutaneous" : "subcutaneous";
+        const diameterMm = Number(elements.diameter.value);
+        const depthMm = Number(elements.depth.value);
+        const marginMm = Number(elements.margin.value);
+        const author = elements.tumorAuthor.value;
         const canvas = document.createElement("canvas");
         canvas.width = frame.width;
         canvas.height = frame.height;
@@ -459,36 +623,77 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
           return;
         }
         context.drawImage(frame.source as CanvasImageSource, 0, 0, frame.width, frame.height);
-        const detection = detectControlledMarker(context.getImageData(0, 0, frame.width, frame.height), seed);
-        if (!detection.ok || !detection.center) {
-          keepControlledMarkerRetry("");
-          setStatus(`未定位到受控标记：${detection.failure_code || "unknown"}。当前模式已保留，请直接点击标记中心重试。`, "warning");
-          return;
-        }
-        const centerRef = sourcePointToSurfaceRef(detection.center, frame.landmarks, frame.triangles);
-        const boundaryRefs = detection.boundary
-          .map((point) => sourcePointToSurfaceRef(point, frame.landmarks!, frame.triangles))
-          .filter((ref): ref is SurfaceRef => ref !== null);
-        const kind = elements.tumorKind.value === "cutaneous" ? "cutaneous" : "subcutaneous";
-        if (!centerRef || (kind === "cutaneous" && boundaryRefs.length < 3)) {
-          keepControlledMarkerRetry("");
-          setStatus("标记位于不可映射区域或跨出面部表面，请在面部标记中心重试。", "warning");
-          return;
-        }
-        try {
-          controlledMarkerDraft = normalizeLesionDetectionAdapter({
+        const imageData = context.getImageData(0, 0, frame.width, frame.height);
+        const requestId = ++controlledMarkerRequestId;
+        setControlledMarkerBusy(true);
+        setStatus("正在识别模拟肿物，请稍候。需要取消时可点击“退出标记”。", "loading");
+        const worker = state.workflowWorker;
+        const detectionRequest = worker
+          ? worker.api.detectControlledMarker(Comlink.transfer({
+            width: imageData.width,
+            height: imageData.height,
+            data: imageData.data,
+          }, [imageData.data.buffer]), seed)
+          : new Promise<ReturnType<typeof detectControlledMarker>>((resolve) => {
+            requestAnimationFrame(() => resolve(detectControlledMarker(imageData, seed)));
+          });
+        void Promise.resolve(detectionRequest).then(async (detection) => {
+          if (disposed || requestId !== controlledMarkerRequestId || !controlledMarkerSeedMode) return;
+          if (!detection.ok || !detection.center) {
+            keepControlledMarkerRetry("");
+            console.info("[LangerFace] controlled marker not recognized", {
+              failure_code: detection.failure_code,
+              diagnostics: detection.diagnostics,
+              warnings: detection.warnings,
+            });
+            setStatus(`${controlledMarkerFailureMessage(detection)}受控标记仍保持开启，可直接重试。`, "warning");
+            return;
+          }
+          if (elements.tumorKind.value !== kind
+            || Number(elements.diameter.value) !== diameterMm
+            || Number(elements.depth.value) !== depthMm
+            || Number(elements.margin.value) !== marginMm) {
+            keepControlledMarkerRetry("");
+            setStatus("识别期间肿物类型或参数发生变化；为避免套用旧结果，请重新点击标记。", "warning");
+            return;
+          }
+          if (kind === "cutaneous" && detection.geometry_mode !== "enclosed_region") {
+            keepControlledMarkerRetry("");
+            console.info("[LangerFace] controlled marker stroke-only result rejected", {
+              geometry_mode: detection.geometry_mode,
+              seed_relation: detection.seed_relation,
+              marker_fingerprint: controlledMarkerFingerprint(detection),
+              raw_media_retained: false,
+            });
+            setStatus(
+              "当前点击处只识别到黑色笔画，没有识别到由曲线围出的肿物范围。请在模拟肿物曲线内部重试。",
+              "warning",
+            );
+            return;
+          }
+          const projectionLandmarks = frame.surfaceLandmarks || photoLandmarks;
+          const centerRef = sourcePointToSurfaceRef(detection.center, projectionLandmarks, frame.triangles);
+          const boundaryRefs = detection.boundary
+            .map((point) => sourcePointToSurfaceRef(point, projectionLandmarks, frame.triangles))
+            .filter((ref): ref is SurfaceRef => ref !== null);
+          if (!centerRef || (kind === "cutaneous" && boundaryRefs.length < 3)) {
+            keepControlledMarkerRetry("");
+            setStatus("标记位于不可映射区域或跨出面部表面，请在面部标记中心重试。", "warning");
+            return;
+          }
+          const draft = normalizeLesionDetectionAdapter({
             schema: "lesion-detection-adapter/v0.1",
             source: "detector",
             kind,
             topology: { id: state.headAsset?.topologyId, version: state.headAsset?.topologyVersion },
             center_ref: centerRef,
             boundary_refs: kind === "cutaneous" ? boundaryRefs : [],
-            diameter_mm: Number(elements.diameter.value),
-            depth_mm: kind === "subcutaneous" ? Number(elements.depth.value) : null,
-            margin_mm: kind === "cutaneous" ? Number(elements.margin.value) : 0,
+            diameter_mm: diameterMm,
+            depth_mm: kind === "subcutaneous" ? depthMm : null,
+            margin_mm: kind === "cutaneous" ? marginMm : 0,
             confidence: detection.confidence,
             units: "mm",
-            model: { name: "controlled-marker-connected-component", version: CONTROLLED_MARKER_DETECTOR_VERSION },
+            model: { name: "controlled-marker-barrier-segmentation", version: CONTROLLED_MARKER_DETECTOR_VERSION },
             warnings: detection.warnings,
           }, {
             topologyId: state.headAsset?.topologyId,
@@ -496,27 +701,90 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
             vertices: state.verts,
             triangles: state.tris,
           });
-          controlledMarkerSeedMode = false;
-          state.planning2d?.setSelection({ centerRef, boundaryRefs });
-          elements.controlledMarkerConfirm.disabled = false;
-          setControlledMarkerActionState(true);
+          const confirmed = confirmLesionDetectionDraft(draft, {
+            kind,
+            diameter_mm: diameterMm,
+            depth_mm: kind === "subcutaneous" ? depthMm : null,
+            margin_mm: kind === "cutaneous" ? marginMm : 0,
+            boundary_mode: kind === "cutaneous" ? "controlled_marker" : "ellipse",
+            boundary_source: kind === "cutaneous" ? "controlled_marker_confirmed" : "detector_confirmed",
+          }, author);
+          if (!confirmed.eligible_for_candidate || !confirmed.tumor) {
+            throw new Error("当前类型、范围或参数尚未通过输入质量检查");
+          }
+          const tumorEngineeringValidation = inspectTumorEngineeringExclusions(confirmed.tumor, state.verts);
+          if (!tumorEngineeringValidation.passed) {
+            throw new Error("病灶中心或范围进入眼裂、口裂或鼻孔等非皮肤开口，请在标记内其他位置重试");
+          }
+          clearTransientPlanning();
+          state.controlledBoundaryActive = kind === "cutaneous";
+          if (state.controlledBoundaryActive) {
+            state.boundaryRefs = [...confirmed.geometry.boundary_refs];
+            state.boundaryPoints = [...confirmed.geometry.boundary];
+          }
+          setLesion(nearestVertex(confirmed.geometry.center), confirmed.geometry.center_ref);
+          updateTumorRing();
+          state.planning2d?.setSelection({
+            centerRef: confirmed.geometry.center_ref,
+            boundaryRefs: state.controlledBoundaryActive ? confirmed.geometry.boundary_refs : [],
+          });
+          await Promise.resolve(runWorkflow());
+          if (disposed || requestId !== controlledMarkerRequestId || !controlledMarkerSeedMode || !state.mounted) return;
           render();
-          setStatus(
-            `已生成受控标记定位草案（置信度 ${Math.round(detection.confidence * 100)}%），请核对类型和参数后点击“确认定位”。`,
-            detection.warnings.length ? "warning" : "ready",
+          setControlledMarkerActionState(true);
+          console.info(
+            "[LangerFace] controlled marker planning audit",
+            controlledMarkerPlanningAudit(detection, state.result, latestCandidateProjection),
           );
-          publishState("controlled_marker_draft");
-        } catch (error) {
+          const candidatePointCount = state.result?.candidate?.polyline?.length || 0;
+          const candidateBlocked = state.result?.candidate_display_blocked === true;
+          const candidateVisible = candidatePointCount >= 2 && !candidateBlocked && candidatePhotoProjectionValid;
+          if (!candidateVisible) {
+            const reason = candidateBlocked
+              ? engineeringBlockMessage(state.result)
+              : candidatePointCount < 2
+                ? "系统未能生成可用的切口线"
+                : "切口线未能完整显示在照片上";
+            setStatus(
+              `已识别模拟肿物，但没有显示候选切口：${reason}。受控标记仍保持开启，请调整后重试。`,
+              "warning",
+            );
+            publishState("controlled_marker_candidate_hidden");
+            return;
+          }
+          setStatus(kind === "cutaneous"
+            ? "已识别模拟肿物并生成候选切口。黄色线表示识别范围，切口大小已根据识别结果自动调整。可继续点击其他位置复核，或点击“退出标记”。"
+            : "已识别位置并生成候选切口。可继续点击其他位置复核，或点击“退出标记”。",
+          detection.warnings.length ? "warning" : "ready");
+          publishState("controlled_marker_applied");
+        }).catch((error) => {
+          if (disposed || requestId !== controlledMarkerRequestId || !controlledMarkerSeedMode) return;
           keepControlledMarkerRetry("");
-          setStatus(`受控标记草稿无效：${errorMessage(error)}。当前模式已保留，请直接重试。`, "warning");
-        }
+          setStatus(`本次识别未能完成：${errorMessage(error)}。受控标记仍保持开启，可直接重试。`, "warning");
+        }).finally(() => {
+          if (requestId === controlledMarkerRequestId) setControlledMarkerBusy(false);
+        });
         return;
       }
-      resetControlledMarker();
+      const sourcePoint = state.planning2d?.clientToSource({ x: event.clientX, y: event.clientY });
+      const frame = state.planning2d?.getFrameState();
       const ref = state.planning2d?.pickSurfaceRef({ x: event.clientX, y: event.clientY });
       if (!ref) {
         setStatus("该位置不在人脸表面，请点击检测到的面部区域。", "warning");
         return;
+      }
+      const rawSurfaceRef = sourcePoint && frame?.landmarks
+        ? sourcePointToSurfaceRef(sourcePoint, frame.landmarks, frame.triangles)
+        : null;
+      if (!rawSurfaceRef && sourcePoint && frame?.landmarks) {
+        const context = elements.photoCanvas.getContext("2d");
+        const skinVisible = context
+          ? incisionPhotoSkinVisibility(context, frame.width, frame.height, [...frame.landmarks])
+          : () => true;
+        if (!skinVisible([sourcePoint.x, sourcePoint.y, 0])) {
+          setStatus("该位置不在可见额头皮肤区域，请避开头发和背景后重试。", "warning");
+          return;
+        }
       }
       const point = surfaceRefToModelPoint(ref, state.verts, state.tris);
       if (!point) return;
@@ -535,10 +803,11 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
         boundaryMode: elements.boundaryMode.value,
         boundaryPointCount: state.boundaryPoints.length,
       });
-      if (clearedFreehandBoundary) {
+      if (clearedFreehandBoundary || state.controlledBoundaryActive) {
         state.boundaryPoints = [];
         state.boundaryRefs = [];
         state.boundaryActive = false;
+        state.controlledBoundaryActive = false;
         elements.startBoundary.textContent = "开始轮廓";
       }
       setLesion(nearestVertex(point), ref);
@@ -548,10 +817,12 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
       void runWorkflow();
     },
     endpointHandleFromEvent(event) {
+      if (controlledMarkerSeedMode) return null;
       if (!state.photoView.active || !state.planning2d) return null;
-      const refs = pointsToSurfaceRefs(state.result?.candidate?.endpoints || [], state.verts, state.tris);
-      const endpoints = refs
-        .map((ref) => state.planning2d?.surfaceRefToClient(ref))
+      if (state.result?.candidate_display_blocked || !candidatePhotoProjectionValid
+        || projectedCandidate !== state.result?.candidate) return null;
+      const endpoints = latestPhotoEndpointSources
+        .map((point) => state.planning2d?.sourceToClient(point))
         .filter((point): point is { x: number; y: number } => point !== null && point !== undefined);
       return nearestPhotoEndpointHandle(
         { x: event.clientX, y: event.clientY },
@@ -567,7 +838,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     },
     commitEndpointDrag,
     pan(deltaX, deltaY) {
-      if (!state.photoView.active) return;
+      if (!state.photoView.active || controlledMarkerSeedMode) return;
       state.photoView.offsetX += deltaX;
       state.photoView.offsetY += deltaY;
       fit();

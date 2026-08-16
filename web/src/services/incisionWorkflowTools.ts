@@ -20,6 +20,8 @@ import {
   unitsPerMmFromVertices,
   versionedEditProvenance,
 } from "./incisionToolCore.ts";
+import { queryIncisionLocalRstlDirection } from "./incisionLocalRstlDirection.ts";
+import { normalizePlanningLesion } from "./incisionLesionNormalization.ts";
 import {
   type IncisionCandidate,
   type IncisionRules,
@@ -590,12 +592,16 @@ export function planIncisionDeterministic({
   atlas: AnyRecord;
   normal?: Vec3;
 }): AnyRecord {
-  const tumor = validateTumor(tumorInput);
+  const validatedTumor = validateTumor(tumorInput);
+  const unitsPerMm = unitsPerMmFromVertices(verts);
+  const tumorNormalization = normalizePlanningLesion(validatedTumor, unitsPerMm, normal);
+  const tumor = tumorNormalization.applied
+    ? { ...validatedTumor, center: tumorNormalization.planning_center }
+    : validatedTumor;
   const tumorQuality = summarizeTumorInputQuality(tumor);
   const anatomy = classifyRegion(tumor.center, verts);
-  const direction = queryDirection(tumor.center, verts, tris, atlas);
+  const direction = queryIncisionLocalRstlDirection(tumor.center, verts, tris, atlas);
   const preCandidateSensitiveInspection = inspectSensitiveStructures(anatomy);
-  const unitsPerMm = unitsPerMmFromVertices(verts);
   const candidate = tumor.kind === "subcutaneous"
     ? generateLinearIncision(tumor, direction, unitsPerMm)
     : generateFusiformIncision(tumor, direction, unitsPerMm, normal);
@@ -608,7 +614,7 @@ export function planIncisionDeterministic({
       summary: "检查肿物输入来源、作者、单位、深度、切缘和边界完整性。",
       action: "summarize_tumor_input_quality",
       input: { tumor },
-      observation: tumorQuality,
+      observation: { ...tumorQuality, lesion_normalization: tumorNormalization },
     },
     { summary: "定位病灶所在面部分区。", action: "classify_region", input: { point: tumor.center }, observation: anatomy },
     { summary: "查询局部 RSTL 方向。", action: "query_rstl_direction", input: { point: tumor.center, source: "rstl_atlas" }, observation: direction },
@@ -628,6 +634,7 @@ export function planIncisionDeterministic({
     workflow_mode: "deterministic_single_candidate",
     tool_schemas: TOOL_SCHEMAS,
     tumor,
+    tumor_normalization: tumorNormalization,
     tumor_quality: tumorQuality,
     anatomy,
     direction,

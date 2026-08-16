@@ -56,6 +56,7 @@ export interface IncisionResultPresentationInput {
       length_to_width_ratio?: unknown;
       tip_angle_error_deg?: unknown;
       rstl_deviation_deg?: unknown;
+      projected_rstl_deviation_deg?: unknown;
     };
   };
   direction?: {
@@ -226,6 +227,7 @@ export function buildIncisionResultPresentation(
   const directionReasons = direction.confidence_reasons || [];
   const regionReasons = anatomy.confidence_reasons || [];
   const rstlDeviation = metrics.rstl_deviation_deg;
+  const projectedRstlDeviation = metrics.projected_rstl_deviation_deg;
   const edited = candidate.edited ? " · 已记录医生调整" : "";
   const headLabel = input.headStatusLabel ? ` · ${input.headStatusLabel}` : "";
   const generationLabel = input.generationCount ? ` · 已明确生成 ${input.generationCount} 次` : " · 自动预览";
@@ -240,7 +242,9 @@ export function buildIncisionResultPresentation(
       ? `${formatMetric(candidate.tip_angle_deg)}° · 误差 ${formatMetric(metrics.tip_angle_error_deg)}°`
       : "—",
     candidateRstlDeviation: typeof rstlDeviation === "number" && Number.isFinite(rstlDeviation)
-      ? `${formatMetric(rstlDeviation)}°`
+      ? `${formatMetric(rstlDeviation)}°${typeof projectedRstlDeviation === "number" && Number.isFinite(projectedRstlDeviation)
+        ? ` · 照片 ${formatMetric(projectedRstlDeviation)}°`
+        : ""}`
       : "—",
     directionConfidence: {
       text: `${Math.round((Number(direction.confidence) || 0) * 100)}%${directionReasons.length ? ` · ${directionReasons.map(reasonLabel).join("、")}` : ""}`,
