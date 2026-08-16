@@ -21,6 +21,19 @@ const landmarks = [
   [100, 100, 0],
 ];
 
+const closedModelPolyline = [
+  [1, 1, 0],
+  [9, 1, 0],
+  [9, 9, 0],
+  [1, 9, 0],
+  [1, 1, 0],
+];
+const closedSurfaceRefs = T.polylineToSurfaceRefs(closedModelPolyline, verts, tris, 1);
+assert.equal(closedSurfaceRefs.length, closedModelPolyline.length,
+  "closed polylines retain their explicit closure point after surface mapping");
+assert.deepEqual(closedSurfaceRefs.at(-1), closedSurfaceRefs[0],
+  "the mapped closure reuses the first surface ref instead of independently re-projecting it");
+
 const record = {
   label: "测试候选",
   tumor: {

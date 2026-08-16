@@ -38,7 +38,7 @@ import {
   inspectTumorEngineeringExclusions,
   tumorPointEngineeringExclusionMessage,
 } from "./incisionToolCore";
-import type { Vec3 } from "./softBody";
+import type { Triangle, Vec3 } from "./softBody";
 
 interface IncisionPhotoRuntimeOptions {
   elements: IncisionDomElements;
@@ -60,6 +60,9 @@ export interface IncisionPhotoRuntime {
   resetView(): void;
   load(file?: File): Promise<void>;
   beginControlledMarkerDetection(): void;
+  updateControlledMarkerScan(userAdjusted?: boolean): void;
+  moveControlledMarkerScan(event: PointerEvent): void;
+  hideControlledMarkerScan(): void;
   pick(event: PointerEvent): void;
   endpointHandleFromEvent(event: PointerEvent): number | null;
   dragEndpoint(event: PointerEvent, index: number): void;
@@ -72,6 +75,38 @@ export interface IncisionPhotoRuntime {
 
 const errorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error);
 const clamp = (value: number, low: number, high: number): number => Math.max(low, Math.min(high, value));
+
+function localPhotoPixelsPerMm(
+  point: { x: number; y: number },
+  photoLandmarks: readonly Vec3[],
+  triangles: readonly Triangle[],
+  modelVertices: readonly Vec3[],
+  unitsPerMm: number,
+): number | null {
+  if (!(unitsPerMm > 0)) return null;
+  const ref = sourcePointToSurfaceRef(point, photoLandmarks, triangles);
+  const triangle = ref ? triangles[ref.tri] : null;
+  if (!triangle) return null;
+  const ratios: number[] = [];
+  for (const [firstIndex, secondIndex] of [[0, 1], [1, 2], [2, 0]] as const) {
+    const firstPhoto = photoLandmarks[triangle[firstIndex]];
+    const secondPhoto = photoLandmarks[triangle[secondIndex]];
+    const firstModel = modelVertices[triangle[firstIndex]];
+    const secondModel = modelVertices[triangle[secondIndex]];
+    if (!firstPhoto || !secondPhoto || !firstModel || !secondModel) continue;
+    const photoLength = Math.hypot(firstPhoto[0] - secondPhoto[0], firstPhoto[1] - secondPhoto[1]);
+    const modelLength = Math.hypot(
+      firstModel[0] - secondModel[0],
+      firstModel[1] - secondModel[1],
+      firstModel[2] - secondModel[2],
+    );
+    const physicalLengthMm = modelLength / unitsPerMm;
+    if (photoLength > 0 && physicalLengthMm > 1e-6) ratios.push(photoLength / physicalLengthMm);
+  }
+  if (!ratios.length) return null;
+  ratios.sort((first, second) => first - second);
+  return ratios[Math.floor(ratios.length / 2)];
+}
 
 function controlledMarkerFingerprint(detection: ControlledMarkerDetection): string {
   const bbox = detection.bbox;
@@ -104,6 +139,7 @@ function controlledMarkerPlanningAudit(
       area_px: detection.area_px,
       bbox_size_px: detection.bbox ? [detection.bbox.width, detection.bbox.height] : null,
       boundary_point_count: detection.boundary.length,
+      scan: detection.scan ?? null,
       repair_radius: detection.diagnostics?.repair_radius ?? 0,
       warnings: detection.warnings,
     },
@@ -149,6 +185,8 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
   let controlledMarkerSeedMode = false;
   let controlledMarkerBusy = false;
   let controlledMarkerRequestId = 0;
+  let controlledMarkerScanUserAdjusted = false;
+  let controlledMarkerPointer: { x: number; y: number } | null = null;
   let candidatePhotoProjectionValid = false;
   let projectedCandidate: unknown = null;
   let latestPhotoEndpointSources: { x: number; y: number }[] = [];
@@ -163,7 +201,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     reasonCodes: [] as string[],
     surfaceConstrained: false,
     sourceReasonCodes: [] as string[],
-    smoothingMode: "notApplicable" as "globalBezier" | "segmentedBezier" | "sourceFallback" | "notApplicable",
+    smoothingMode: "notApplicable" as "photoCanonical" | "globalBezier" | "segmentedBezier" | "sourceFallback" | "notApplicable",
     smoothingDiagnostics: null as FusiformFitDiagnostics | null,
   };
 
@@ -175,6 +213,64 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     const label = elements.controlledMarkerDetect.querySelector<HTMLElement>("[data-marker-action-label]");
     if (label) label.textContent = active ? "退出标记" : "受控标记";
     elements.photoCanvas.dataset.controlledMarker = String(active);
+    elements.controlledMarkerScanControl.hidden = !active;
+    if (!active) elements.controlledMarkerScanOverlay.hidden = true;
+  };
+
+  const recommendedScanDiameterMm = () => {
+    const lesionDiameterMm = Math.max(0, Number(elements.diameter.value) || 0);
+    return clamp(Math.ceil(Math.max(10, lesionDiameterMm * 1.5) / 5) * 5, 10, 60);
+  };
+
+  const controlledMarkerScanDiameterMm = () => clamp(
+    Number(elements.controlledMarkerScanDiameter.value) || recommendedScanDiameterMm(),
+    10,
+    60,
+  );
+
+  const syncControlledMarkerScanControl = (useRecommendation: boolean) => {
+    if (useRecommendation && !controlledMarkerScanUserAdjusted) {
+      elements.controlledMarkerScanDiameter.value = String(recommendedScanDiameterMm());
+    }
+    const diameterMm = controlledMarkerScanDiameterMm();
+    elements.controlledMarkerScanDiameter.value = String(diameterMm);
+    elements.controlledMarkerScanValue.textContent = `${diameterMm} mm`;
+    elements.controlledMarkerScanOverlayLabel.textContent = `扫描 ${diameterMm} mm`;
+  };
+
+  const positionControlledMarkerScan = (clientPoint: { x: number; y: number } | null) => {
+    controlledMarkerPointer = clientPoint;
+    if (!controlledMarkerSeedMode || !clientPoint) {
+      elements.controlledMarkerScanOverlay.hidden = true;
+      return;
+    }
+    const sourcePoint = state.planning2d?.clientToSource(clientPoint);
+    const frame = state.planning2d?.getFrameState();
+    const projectionLandmarks = frame?.surfaceLandmarks || frame?.landmarks;
+    if (!sourcePoint || !frame?.source || !projectionLandmarks?.length) {
+      elements.controlledMarkerScanOverlay.hidden = true;
+      return;
+    }
+    const pixelsPerMm = localPhotoPixelsPerMm(
+      sourcePoint,
+      projectionLandmarks,
+      frame.triangles,
+      state.verts,
+      state.unitsPerMm,
+    );
+    if (!(pixelsPerMm && pixelsPerMm > 0)) {
+      elements.controlledMarkerScanOverlay.hidden = true;
+      return;
+    }
+    const photoRect = elements.photoCanvas.getBoundingClientRect();
+    const wrapRect = elements.wrap.getBoundingClientRect();
+    const sourceDiameterPx = controlledMarkerScanDiameterMm() * pixelsPerMm;
+    const displayDiameterPx = sourceDiameterPx * photoRect.width / Math.max(1, frame.width);
+    elements.controlledMarkerScanOverlay.style.left = `${clientPoint.x - wrapRect.left}px`;
+    elements.controlledMarkerScanOverlay.style.top = `${clientPoint.y - wrapRect.top}px`;
+    elements.controlledMarkerScanOverlay.style.width = `${displayDiameterPx}px`;
+    elements.controlledMarkerScanOverlay.style.height = `${displayDiameterPx}px`;
+    elements.controlledMarkerScanOverlay.hidden = false;
   };
 
   const setControlledMarkerBusy = (busy: boolean) => {
@@ -188,6 +284,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     setControlledMarkerBusy(false);
     controlledMarkerSeedMode = false;
     setControlledMarkerActionState(false);
+    controlledMarkerPointer = null;
     if (restoreSelection) {
       state.planning2d?.setSelection({ centerRef: state.lesionRef, boundaryRefs: state.boundaryRefs });
     }
@@ -329,6 +426,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     elements.photoCanvas.style.setProperty("--incision-photo-mirror", state.photoView.mirror ? "-1" : "1");
     updateEndpointHandles();
     renderCandidateOverlay();
+    positionControlledMarkerScan(controlledMarkerPointer);
   };
 
   const render = () => {
@@ -391,6 +489,12 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
       endpointRefs: candidateDisplayBlocked ? [] : endpointRefs,
       tumorInputInvalid: state.result?.tumor_engineering_validation?.passed === false,
       candidateType: state.result?.candidate?.type,
+      candidateAspectRatio: state.result?.candidate?.type === "fusiform"
+        ? Number(state.result.candidate.length_mm) / Math.max(1e-9, Number(state.result.candidate.width_mm))
+        : undefined,
+      candidateTipAngleDeg: state.result?.candidate?.type === "fusiform"
+        ? Number(state.result.candidate.tip_angle_deg)
+        : undefined,
       drawCandidate: false,
     });
     state.planning2d.setOverlaySummary({
@@ -398,8 +502,19 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
       tumorVisible: geometry.center !== null,
       candidatePointCount: geometry.candidateProjection.valid ? geometry.candidate.length : 0,
     });
-    if (state.result?.candidate?.metrics && geometry.projectedRstlDeviationDeg != null) {
-      state.result.candidate.metrics.projected_rstl_deviation_deg = geometry.projectedRstlDeviationDeg;
+    if (state.result?.candidate?.metrics) {
+      state.result.candidate.metrics.photo_lesion_to_planning_center_px = geometry.lesionToPlanningCenterPx;
+      state.result.candidate.metrics.photo_geometry_mode = geometry.candidateProjection.smoothingMode;
+      state.result.candidate.metrics.photo_canonical_scale = geometry.candidateProjection.smoothingDiagnostics?.photoCanonicalScale ?? null;
+      state.result.candidate.metrics.photo_boundary_outside_count = geometry.candidateProjection.smoothingDiagnostics?.photoBoundaryOutsideCount ?? null;
+      state.result.candidate.metrics.photo_surface_outside_count = geometry.candidateProjection.smoothingDiagnostics?.photoSurfaceOutsideCount ?? null;
+      state.result.candidate.metrics.photo_surface_mesh_outside_count = geometry.candidateProjection.smoothingDiagnostics?.photoSurfaceMeshOutsideCount ?? null;
+      state.result.candidate.metrics.photo_head_outside_count = geometry.candidateProjection.smoothingDiagnostics?.photoHeadOutsideCount ?? null;
+      state.result.candidate.metrics.photo_skin_outside_count = geometry.candidateProjection.smoothingDiagnostics?.photoSkinOutsideCount ?? null;
+      state.result.candidate.metrics.photo_canonical_axis_source = geometry.candidateProjection.smoothingDiagnostics?.photoCanonicalAxisSource ?? null;
+      if (geometry.projectedRstlDeviationDeg != null) {
+        state.result.candidate.metrics.projected_rstl_deviation_deg = geometry.projectedRstlDeviationDeg;
+      }
     }
     candidatePhotoProjectionValid = !candidateDisplayBlocked
       && geometry.candidateProjection.valid;
@@ -590,14 +705,41 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
         publishState("controlled_marker_cancelled");
         return;
       }
-      controlledMarkerSeedMode = true;
-      setControlledMarkerActionState(true);
-      setStatus("受控标记已开启：请在模拟肿物范围内点击。识别成功后会自动生成候选切口。", "loading");
+      syncControlledMarkerScanControl(true);
+      // Entering a new scan is a fresh visual attempt. Keep the last accepted
+      // result in controller state so cancelling can restore it, but hide its
+      // center, boundary and candidate while the next scan is pending. This
+      // prevents a failed click from making an old yellow contour look like the
+      // current detection result.
+      state.planning2d?.setSelection({ centerRef: null, boundaryRefs: [] });
+      keepControlledMarkerRetry("");
+      render();
+      setStatus(
+        `受控标记已开启：鼠标圆形扫描面当前为 ${controlledMarkerScanDiameterMm()} mm。请让扫描面覆盖完整肿物边界后点击。`,
+        "loading",
+      );
+    },
+    updateControlledMarkerScan(userAdjusted = true) {
+      if (userAdjusted) controlledMarkerScanUserAdjusted = true;
+      syncControlledMarkerScanControl(!userAdjusted);
+      positionControlledMarkerScan(controlledMarkerPointer);
+      if (controlledMarkerSeedMode && !controlledMarkerBusy) {
+        setStatus(
+          `受控标记已开启：鼠标圆形扫描面当前为 ${controlledMarkerScanDiameterMm()} mm。请让扫描面覆盖完整肿物边界后点击。`,
+          "loading",
+        );
+      }
+    },
+    moveControlledMarkerScan(event) {
+      positionControlledMarkerScan({ x: event.clientX, y: event.clientY });
+    },
+    hideControlledMarkerScan() {
+      positionControlledMarkerScan(null);
     },
     pick(event) {
       if (controlledMarkerSeedMode) {
         if (controlledMarkerBusy) {
-          setStatus("正在识别模拟肿物，请稍候。需要取消时可点击“退出标记”。", "loading");
+          setStatus("正在识别肿物边界，请稍候。需要取消时可点击“退出标记”。", "loading");
           return;
         }
         const frame = state.planning2d?.getFrameState();
@@ -608,11 +750,39 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
           return;
         }
         const photoLandmarks = frame.landmarks;
+        const projectionLandmarks = frame.surfaceLandmarks || photoLandmarks;
         const kind = elements.tumorKind.value === "cutaneous" ? "cutaneous" : "subcutaneous";
         const diameterMm = Number(elements.diameter.value);
         const depthMm = Number(elements.depth.value);
         const marginMm = Number(elements.margin.value);
         const author = elements.tumorAuthor.value;
+        const scanDiameterMm = controlledMarkerScanDiameterMm();
+        const pixelsPerMm = localPhotoPixelsPerMm(
+          seed,
+          projectionLandmarks,
+          frame.triangles,
+          state.verts,
+          state.unitsPerMm,
+        );
+        if (!(pixelsPerMm && pixelsPerMm > 0)) {
+          keepControlledMarkerRetry("");
+          setStatus("当前点击位置无法建立毫米扫描尺度，请在面部肿物边界内部重新点击。", "warning");
+          return;
+        }
+        const minimumScanDiameterMm = clamp(Math.ceil(Math.max(10, diameterMm * 1.2) / 5) * 5, 10, 60);
+        if (scanDiameterMm < minimumScanDiameterMm) {
+          keepControlledMarkerRetry("");
+          setStatus(
+            `当前 ${scanDiameterMm} mm 扫描面小于肿物直径所需覆盖范围，请扩大到至少 ${minimumScanDiameterMm} mm 后重试。`,
+            "warning",
+          );
+          return;
+        }
+        const detectionOptions = {
+          roiRadius: Math.max(8, Math.round(scanDiameterMm * pixelsPerMm / 2)),
+          expectedDiameterPx: Math.max(1, diameterMm * pixelsPerMm),
+          scanDiameterMm,
+        };
         const canvas = document.createElement("canvas");
         canvas.width = frame.width;
         canvas.height = frame.height;
@@ -626,16 +796,16 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
         const imageData = context.getImageData(0, 0, frame.width, frame.height);
         const requestId = ++controlledMarkerRequestId;
         setControlledMarkerBusy(true);
-        setStatus("正在识别模拟肿物，请稍候。需要取消时可点击“退出标记”。", "loading");
+        setStatus("正在识别肿物边界，请稍候。需要取消时可点击“退出标记”。", "loading");
         const worker = state.workflowWorker;
         const detectionRequest = worker
           ? worker.api.detectControlledMarker(Comlink.transfer({
             width: imageData.width,
             height: imageData.height,
             data: imageData.data,
-          }, [imageData.data.buffer]), seed)
+          }, [imageData.data.buffer]), seed, detectionOptions)
           : new Promise<ReturnType<typeof detectControlledMarker>>((resolve) => {
-            requestAnimationFrame(() => resolve(detectControlledMarker(imageData, seed)));
+            requestAnimationFrame(() => resolve(detectControlledMarker(imageData, seed, detectionOptions)));
           });
         void Promise.resolve(detectionRequest).then(async (detection) => {
           if (disposed || requestId !== controlledMarkerRequestId || !controlledMarkerSeedMode) return;
@@ -643,6 +813,10 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
             keepControlledMarkerRetry("");
             console.info("[LangerFace] controlled marker not recognized", {
               failure_code: detection.failure_code,
+              seed,
+              bbox: detection.bbox,
+              area_px: detection.area_px,
+              scan: detection.scan,
               diagnostics: detection.diagnostics,
               warnings: detection.warnings,
             });
@@ -666,12 +840,11 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
               raw_media_retained: false,
             });
             setStatus(
-              "当前点击处只识别到黑色笔画，没有识别到由曲线围出的肿物范围。请在模拟肿物曲线内部重试。",
+              "当前点击处只识别到黑色笔画，没有识别到由曲线围出的肿物范围。请在肿物边界内部重试。",
               "warning",
             );
             return;
           }
-          const projectionLandmarks = frame.surfaceLandmarks || photoLandmarks;
           const centerRef = sourcePointToSurfaceRef(detection.center, projectionLandmarks, frame.triangles);
           const boundaryRefs = detection.boundary
             .map((point) => sourcePointToSurfaceRef(point, projectionLandmarks, frame.triangles))
@@ -746,16 +919,28 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
                 ? "系统未能生成可用的切口线"
                 : "切口线未能完整显示在照片上";
             setStatus(
-              `已识别模拟肿物，但没有显示候选切口：${reason}。受控标记仍保持开启，请调整后重试。`,
+              `已识别肿物边界，但没有显示候选切口：${reason}。受控标记仍保持开启，请调整后重试。`,
               "warning",
             );
             publishState("controlled_marker_candidate_hidden");
             return;
           }
+          if (kind === "cutaneous" && latestCandidateProjection.smoothingMode === "sourceFallback") {
+            setStatus(
+              "已识别肿物边界，但候选切口未通过平滑与尖端拓扑校正。当前线条仅供检查，请重新点击复核。",
+              "warning",
+            );
+            publishState("controlled_marker_candidate_needs_review");
+            return;
+          }
+          const diameterAdjusted = kind === "cutaneous"
+            && detection.warnings.includes("operator_diameter_mismatch");
           setStatus(kind === "cutaneous"
-            ? "已识别模拟肿物并生成候选切口。黄色线表示识别范围，切口大小已根据识别结果自动调整。可继续点击其他位置复核，或点击“退出标记”。"
+            ? diameterAdjusted
+              ? "已识别肿物边界并生成候选切口。识别范围与填写直径有差异，切口已按黄色识别范围自动调整。可继续点击其他位置复核，或点击“退出标记”。"
+              : "已识别肿物边界并生成候选切口。黄色线表示识别范围，切口大小已根据识别结果自动调整。可继续点击其他位置复核，或点击“退出标记”。"
             : "已识别位置并生成候选切口。可继续点击其他位置复核，或点击“退出标记”。",
-          detection.warnings.length ? "warning" : "ready");
+          "ready");
           publishState("controlled_marker_applied");
         }).catch((error) => {
           if (disposed || requestId !== controlledMarkerRequestId || !controlledMarkerSeedMode) return;
@@ -865,6 +1050,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     },
     dispose() {
       resetControlledMarker();
+      positionControlledMarkerScan(null);
       disposed = true;
       state.photoView.operationId += 1;
     },

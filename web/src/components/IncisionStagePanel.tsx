@@ -34,6 +34,18 @@ export function IncisionStagePanel() {
             <Button id="controlledMarkerDetectBtn" size="sm" type="button" title="在照片上点击黑点、贴纸或手绘标记" aria-pressed="false">
               <ScanSearch size={15} /><span className="photo-action-label" data-marker-action-label>受控标记</span>
             </Button>
+            <label className="controlled-marker-scan-control" htmlFor="controlledMarkerScanDiameter" hidden>
+              <span>扫描 <output id="controlledMarkerScanValue">10 mm</output></span>
+              <Input
+                id="controlledMarkerScanDiameter"
+                type="range"
+                min="10"
+                max="60"
+                step="5"
+                defaultValue="10"
+                aria-label="受控标记扫描直径"
+              />
+            </label>
             <Button id="incisionPhotoMirrorBtn" size="sm" type="button" title="水平镜像照片" aria-pressed="false">
               <FlipHorizontal2 size={15} /><span className="photo-action-label">镜像</span>
             </Button>
@@ -51,6 +63,9 @@ export function IncisionStagePanel() {
         <canvas id="incisionCanvas"></canvas>
         <StageCanvas id="incisionPhotoCanvas" aria-label="患者照片切口规划画布" />
         <canvas id="incisionCandidateCanvas" aria-hidden="true"></canvas>
+        <div id="controlledMarkerScanOverlay" className="controlled-marker-scan-overlay" aria-hidden="true" hidden>
+          <span id="controlledMarkerScanOverlayLabel">扫描 10 mm</span>
+        </div>
         <div className="incision-photo-endpoint-layer" role="group" aria-label="候选切口端点">
           <button className="incision-photo-endpoint-handle" type="button" data-endpoint-index="0" aria-label="拖动候选切口起点" title="拖动候选切口起点" hidden />
           <button className="incision-photo-endpoint-handle" type="button" data-endpoint-index="1" aria-label="拖动候选切口终点" title="拖动候选切口终点" hidden />

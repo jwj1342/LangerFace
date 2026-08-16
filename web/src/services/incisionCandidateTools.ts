@@ -235,6 +235,10 @@ export function boundaryProfile(tumor: TumorInput, axis: Vec3, perp: Vec3, units
   const maxAxis = Math.max(...centroidProjected.map((point) => point[0]));
   const minPerp = Math.min(...centroidProjected.map((point) => point[1]));
   const maxPerp = Math.max(...centroidProjected.map((point) => point[1]));
+  const selectedCenterProjected = boundary.map((point) => {
+    const delta = sub(point, tumor.center);
+    return [dot(delta, axis), dot(delta, perp)] as Vec2;
+  });
   const envelopeCenter = add(
     add(center, mul(axis, (minAxis + maxAxis) / 2)),
     mul(perp, (minPerp + maxPerp) / 2),
@@ -248,6 +252,8 @@ export function boundaryProfile(tumor: TumorInput, axis: Vec3, perp: Vec3, units
     envelope_center: envelopeCenter,
     axis_diameter_mm: (maxAxis - minAxis) / unitsPerMm,
     perp_diameter_mm: (maxPerp - minPerp) / unitsPerMm,
+    selected_center_axis_diameter_mm: 2 * Math.max(...selectedCenterProjected.map((point) => Math.abs(point[0]))) / unitsPerMm,
+    selected_center_perp_diameter_mm: 2 * Math.max(...selectedCenterProjected.map((point) => Math.abs(point[1]))) / unitsPerMm,
     area_mm2: areaMm2,
     area_ratio_to_diameter_disk: areaMm2 / Math.max(nominalDiskAreaMm2, 1e-9),
     self_intersection: polygonSelfIntersects(projected),
@@ -444,15 +450,16 @@ export function generateFusiformIncision(
     ? { ...tumor, diameter_mm: planningDiameterMm }
     : tumor;
   const boundary = boundaryProfile(planningTumor, axis, perp, unitsPerMm);
-  const boundaryDrivesCandidateGeometry = Boolean(boundary) && !lesionNormalization.applied;
-  const center = lesionNormalization.applied
-    ? lesionNormalization.planning_center
-    : boundary?.envelope_center || boundary?.center || tumor.center;
+  const boundaryDrivesCandidateGeometry = Boolean(boundary);
+  // Keep one authoritative center from detection through planning and display.
+  // An asymmetric boundary is handled by symmetric extent growth, never by
+  // silently replacing the lesion center with a centroid or envelope midpoint.
+  const center = lesionNormalization.planning_center;
   const lesionAxisMm = boundaryDrivesCandidateGeometry
-    ? Math.max(planningDiameterMm, Number(boundary?.axis_diameter_mm || 0))
+    ? Math.max(planningDiameterMm, Number(boundary?.selected_center_axis_diameter_mm || 0))
     : planningDiameterMm;
   const lesionWidthMm = boundaryDrivesCandidateGeometry
-    ? Math.max(planningDiameterMm, Number(boundary?.perp_diameter_mm || 0))
+    ? Math.max(planningDiameterMm, Number(boundary?.selected_center_perp_diameter_mm || 0))
     : planningDiameterMm;
   const requestedWidthMm = lesionWidthMm + 2 * tumor.margin_mm;
   let widthMm = requestedWidthMm;
@@ -487,14 +494,28 @@ export function generateFusiformIncision(
       boundaryUsed: Boolean(boundary),
     });
     if (!boundaryDrivesCandidateGeometry || Number(outlineMetrics.boundary_envelope_outside_count || 0) === 0) break;
+    const upperProjected = projectToAxisPlane(upper, center, axis, perp);
+    const boundaryProjected = projectToAxisPlane(planningTumor.boundary, center, axis, perp);
+    const outside = boundaryProjected.filter(([x, y]) => interpolateHalfWidth(x, upperProjected) < Math.abs(y) - 1e-7);
+    const halfLengthUnits = lengthMm * unitsPerMm * 0.5;
+    const nearTaperedTip = outside.some(([x]) => Math.abs(x) >= halfLengthUnits * 0.88);
+    const maxWidthMm = Math.min(requestedWidthMm * 2, lengthMm / 2.2);
+    // Grow the dimension that actually caused the miss. The previous loop
+    // always exhausted length first, so a mostly perpendicular lesion could
+    // become an 80 mm candidate while still remaining too narrow.
+    if (!nearTaperedTip && widthMm < maxWidthMm - 1e-9) {
+      widthMm = Math.min(maxWidthMm, Math.max(widthMm + 0.5, widthMm * 1.1));
+      envelopeWidthExpansionIterations += 1;
+      continue;
+    }
     const nextLengthMm = Math.min(cfg.max_length_mm, Math.max(lengthMm + 1, lengthMm * 1.08));
     if (nextLengthMm > lengthMm + 1e-9) {
       lengthMm = nextLengthMm;
       envelopeExpansionIterations += 1;
       continue;
     }
-    if (envelopeWidthExpansionIterations >= 8 || widthMm >= requestedWidthMm * 1.25) break;
-    widthMm = Math.min(requestedWidthMm * 1.25, widthMm * 1.04);
+    if (widthMm >= maxWidthMm - 1e-9) break;
+    widthMm = Math.min(maxWidthMm, Math.max(widthMm + 0.5, widthMm * 1.1));
     envelopeWidthExpansionIterations += 1;
   } while (envelopeExpansionIterations + envelopeWidthExpansionIterations < 32);
   const halfL = lengthMm * unitsPerMm * 0.5;
@@ -545,6 +566,7 @@ export function generateFusiformIncision(
       detected_equivalent_diameter_mm: lesionNormalization.detected_equivalent_diameter_mm,
       detected_enclosing_diameter_mm: lesionNormalization.detected_enclosing_diameter_mm,
       detected_lesion_compactness: lesionNormalization.detected_compactness,
+      detected_boundary_centroid: lesionNormalization.detected_centroid,
       detected_center_shift_mm: lesionNormalization.detected_center_shift_mm,
       detected_to_planning_diameter_ratio: lesionNormalization.detected_to_planning_diameter_ratio,
       planning_diameter_mm: lesionNormalization.planning_diameter_mm,
@@ -553,6 +575,8 @@ export function generateFusiformIncision(
       boundary_point_count: boundary?.point_count || tumor.boundary.length,
       boundary_axis_diameter_mm: boundary?.axis_diameter_mm || null,
       boundary_perp_diameter_mm: boundary?.perp_diameter_mm || null,
+      boundary_selected_center_axis_diameter_mm: boundary?.selected_center_axis_diameter_mm || null,
+      boundary_selected_center_perp_diameter_mm: boundary?.selected_center_perp_diameter_mm || null,
       boundary_area_mm2: boundary?.area_mm2 || null,
       boundary_area_ratio_to_diameter_disk: boundary?.area_ratio_to_diameter_disk || null,
       boundary_self_intersection: Boolean(boundary?.self_intersection),

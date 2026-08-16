@@ -57,6 +57,9 @@ export interface IncisionDomEventHandlers {
   onSecondaryCueFile(file?: File): void;
   onPhotoFile(file?: File): void;
   onControlledMarkerDetect(): void;
+  onControlledMarkerScanInput(): void;
+  onControlledMarkerPointerMove(event: PointerEvent): void;
+  onControlledMarkerPointerLeave(): void;
   preparePhotoInteraction(): void;
   photoEndpointHandleFromEvent(event: PointerEvent): number | null;
   dragPhotoEndpoint(event: PointerEvent, handle: number): void;
@@ -226,6 +229,7 @@ export function bindIncisionDomEvents({
     elements.photoCanvas.setPointerCapture(event.pointerId);
   }) as EventListener);
   listen(elements.photoCanvas, "pointermove", ((event: PointerEvent) => {
+    handlers.onControlledMarkerPointerMove(event);
     if (!photoDrag || event.pointerId !== photoDrag.id) return;
     if (photoDrag.pickOnly) {
       photoDrag.moved += Math.abs(event.clientX - photoDrag.x) + Math.abs(event.clientY - photoDrag.y);
@@ -256,6 +260,9 @@ export function bindIncisionDomEvents({
   }) as EventListener);
   listen(elements.photoCanvas, "pointercancel", (() => {
     photoDrag = null;
+  }) as EventListener);
+  listen(elements.photoCanvas, "pointerleave", (() => {
+    handlers.onControlledMarkerPointerLeave();
   }) as EventListener);
   listen(elements.photoCanvas, "wheel", ((event: WheelEvent) => {
     event.preventDefault();
@@ -359,6 +366,7 @@ export function bindIncisionDomEvents({
     handlers.onPhotoFile(fileFromEvent(event));
   }) as EventListener);
   action(elements.controlledMarkerDetect, "click", handlers.onControlledMarkerDetect);
+  action(elements.controlledMarkerScanDiameter, "input", handlers.onControlledMarkerScanInput);
   action(elements.photoMirror, "click", handlers.onPhotoMirror);
   action(elements.photoReset, "click", handlers.onPhotoReset);
   action(elements.surfaceMode, "click", handlers.onSurfaceMode);

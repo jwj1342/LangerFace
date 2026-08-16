@@ -16,8 +16,11 @@ const controlled = normalizePlanningLesion({
 assert.equal(controlled.schema, INCISION_LESION_NORMALIZATION_SCHEMA);
 assert.equal(controlled.applied, true);
 assert.equal(controlled.status, "normalized");
-assert.equal(controlled.boundary_role, "planning_scale_and_center");
-assert.deepEqual(controlled.planning_center.map((value) => Number(value.toFixed(9))), [2, 2, 0]);
+assert.equal(controlled.boundary_role, "planning_scale");
+assert.deepEqual(controlled.planning_center, [0, 0, 0],
+  "boundary measurements cannot replace the detector-confirmed lesion center");
+assert.deepEqual(controlled.detected_centroid?.map((value) => Number(value.toFixed(9))), [2, 2, 0],
+  "the boundary centroid remains available for audit without becoming the planning center");
 assert.ok(Math.abs(controlled.planning_diameter_mm - (controlled.detected_enclosing_diameter_mm || 0)) < 1e-9,
   "controlled cutaneous planning uses a class-round diameter that encloses the detected region");
 assert.ok(controlled.planning_diameter_mm > (controlled.detected_equivalent_diameter_mm || 0),

@@ -15,6 +15,9 @@ function ok(cond, msg) {
 function near(a, b, eps = 1e-9) {
   return Math.abs(a - b) <= eps;
 }
+function vectorNear(actual, wanted, eps = 1e-12) {
+  return actual.length === wanted.length && actual.every((value, index) => near(value, wanted[index], eps));
+}
 function sub(a, b) {
   return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 }
@@ -56,8 +59,6 @@ for (const fixture of fusiformParity.cases) {
     rules,
   );
   const expected = fixture.expected;
-  const vectorNear = (actual, wanted) =>
-    actual.length === wanted.length && actual.every((value, index) => near(value, wanted[index], 1e-12));
   ok(vectorNear(candidate.center, expected.center), `${fixture.name}: center matches shared golden`);
   ok(vectorNear(candidate.axis, expected.axis), `${fixture.name}: axis matches shared golden`);
   ok(vectorNear(candidate.width_axis, expected.width_axis), `${fixture.name}: width axis matches shared golden`);
@@ -283,7 +284,8 @@ ok(boundaryQuality.warnings.some((w) => w.code === "sparse_cutaneous_boundary_in
   "tumor input quality flags sparse freehand boundary");
 const boundaryFusiform = T.generateFusiformIncision(boundaryTumor, { vector: [1, 0, 0], confidence: 0.9 }, 0.1, [0, 0, 1]);
 ok(boundaryFusiform.metrics.boundary_used === true, "fusiform candidate records boundary use");
-ok(boundaryFusiform.center[0] > 4, "fusiform candidate recenters to boundary centroid");
+ok(vectorNear(boundaryFusiform.center, boundaryTumor.center),
+  "fusiform candidate remains centered on the selected lesion center");
 ok(boundaryFusiform.length_mm >= boundaryFusiform.metrics.boundary_axis_diameter_mm + 2,
   "fusiform length covers freehand boundary plus margin");
 ok(boundaryFusiform.metrics.boundary_envelope_min_margin_mm >= 0,
@@ -293,10 +295,10 @@ ok(boundaryFusiform.metrics.boundary_envelope_outside_count === 0,
 
 const controlledMarkerTumor = {
   ...boundaryTumor,
-  center: [0, 0, 0],
+  center: [3.8, 2, 0],
   diameter_mm: 8,
   margin_mm: 1,
-  boundary: [[1, 1, 0], [7, 1, 0], [7, 3, 0], [4, 5, 0], [1, 3, 0]],
+  boundary: [[3.7, 1.8, 0], [4.3, 1.8, 0], [4.3, 2, 0], [4, 2.2, 0], [3.7, 2, 0]],
   boundary_mode: "controlled_marker",
   boundary_source: "controlled_marker_confirmed",
 };
@@ -308,15 +310,18 @@ const controlledMarkerFusiform = T.generateFusiformIncision(
 );
 ok(controlledMarkerFusiform.metrics.lesion_normalization_applied === true,
   "controlled marker uses the explicit lesion-normalization contract");
-ok(controlledMarkerFusiform.metrics.boundary_drives_candidate_geometry === false,
-  "controlled marker raw boundary supplies center and scale without directly deforming the standard fusiform");
-ok(near(
-  controlledMarkerFusiform.width_mm,
-  controlledMarkerFusiform.metrics.planning_diameter_mm + controlledMarkerTumor.margin_mm * 2,
-), "controlled marker fusiform width uses the enclosing class-round diameter plus bilateral margin");
-ok(controlledMarkerFusiform.metrics.boundary_envelope_length_expansion_iterations === 0
-  && controlledMarkerFusiform.metrics.boundary_envelope_width_expansion_iterations === 0,
-"controlled marker raw outline cannot trigger automatic candidate expansion");
+ok(controlledMarkerFusiform.metrics.boundary_drives_candidate_geometry === true,
+  "controlled marker boundary drives envelope centering and containment without deforming the standard fusiform profile");
+ok(controlledMarkerFusiform.width_mm
+  >= controlledMarkerFusiform.metrics.planning_diameter_mm + controlledMarkerTumor.margin_mm * 2,
+"controlled marker fusiform width starts from the enclosing class-round diameter plus bilateral margin and may expand for full tapered-envelope coverage");
+ok(controlledMarkerFusiform.metrics.boundary_envelope_outside_count === 0,
+  "controlled marker fusiform encloses every detected boundary point");
+ok(controlledMarkerFusiform.metrics.outline_self_intersection === false
+  && controlledMarkerFusiform.metrics.outline_half_width_monotone === true,
+"controlled marker envelope correction preserves a simple, smoothly tapered fusiform");
+ok(vectorNear(controlledMarkerFusiform.center, controlledMarkerTumor.center),
+  "controlled marker keeps the detector-confirmed center while symmetric expansion contains the boundary");
 ok(controlledMarkerFusiform.metrics.planning_diameter_mm === controlledMarkerFusiform.metrics.detected_enclosing_diameter_mm,
   "controlled marker candidate scale comes from the detected region's enclosing class-round diameter");
 ok(controlledMarkerFusiform.metrics.clinical_scale_source === "controlled_marker_enclosing_circle",
@@ -332,6 +337,31 @@ const controlledMarkerWithDifferentManualDiameter = T.generateFusiformIncision(
 ok(near(controlledMarkerWithDifferentManualDiameter.width_mm, controlledMarkerFusiform.width_mm)
   && near(controlledMarkerWithDifferentManualDiameter.length_mm, controlledMarkerFusiform.length_mm),
 "changing the manual diameter does not resize a controlled cutaneous candidate");
+const longAsymmetricControlledMarker = T.generateFusiformIncision({
+  ...controlledMarkerTumor,
+  center: [0, 0, 0],
+  boundary: [[-2, -4, 0], [1, -5, 0], [12, -1, 0], [15, 0, 0], [12, 1, 0], [1, 5, 0], [-2, 4, 0]],
+}, { vector: [1, 0, 0], confidence: 0.9 }, 1, [0, 0, 1]);
+ok(vectorNear(longAsymmetricControlledMarker.center, [0, 0, 0]),
+  "a long one-sided lesion expands the fusiform instead of moving its authoritative center");
+ok(longAsymmetricControlledMarker.metrics.boundary_envelope_outside_count === 0,
+  "the smooth fusiform fully contains a long asymmetric controlled boundary");
+ok(longAsymmetricControlledMarker.metrics.outline_self_intersection === false
+  && longAsymmetricControlledMarker.metrics.outline_half_width_monotone === true,
+"full asymmetric coverage preserves a simple and smoothly tapered outline");
+const perpendicularCornerFusiform = T.generateFusiformIncision({
+  ...boundaryTumor,
+  center: [0, 0, 0],
+  diameter_mm: 8,
+  margin_mm: 1,
+  boundary: [[-12, -12, 0], [12, -12, 0], [12, 12, 0], [-12, 12, 0]],
+}, { vector: [1, 0, 0], confidence: 0.9 }, 1, [0, 0, 1]);
+ok(perpendicularCornerFusiform.metrics.boundary_envelope_width_expanded === true,
+  "a perpendicular tapered-envelope miss expands width instead of blindly exhausting candidate length");
+ok(perpendicularCornerFusiform.metrics.boundary_envelope_length_expansion_iterations === 0,
+  "perpendicular coverage correction preserves an already sufficient long axis");
+ok(perpendicularCornerFusiform.metrics.boundary_envelope_outside_count === 0,
+  "dimension-aware envelope growth contains every boundary corner around the fixed center");
 const editedBoundaryFusiform = T.applyCandidateEdit({
   tumor: boundaryTumor,
   candidate: boundaryFusiform,
@@ -383,14 +413,15 @@ const envelopeFusiform = T.generateFusiformIncision(
   [0, 0, 1],
   envelopeRules,
 );
-ok(envelopeFusiform.metrics.boundary_envelope_min_margin_mm < 0,
-  "fusiform records negative boundary envelope margin when contour falls outside tapered outline");
-ok(envelopeFusiform.metrics.boundary_envelope_outside_count === 4,
-  "fusiform counts boundary points outside tapered outline");
+ok(envelopeFusiform.metrics.boundary_envelope_min_margin_mm >= 0,
+  "dimension-aware expansion contains a rectangular boundary when the configured length limit permits it");
+ok(envelopeFusiform.metrics.boundary_envelope_outside_count === 0,
+  "the expanded standard fusiform leaves no rectangular boundary point outside");
+ok(envelopeFusiform.length_mm / envelopeFusiform.width_mm >= 2.2 - 1e-9,
+  "automatic coverage never flattens the candidate below the minimum fusiform aspect ratio");
 const envelopeGuard = T.evaluateGuardrails(envelopeFusiform, { region: "cheek", confidence: 0.8 }, envelopeRules);
-ok(envelopeGuard.passed === false, "boundary outside fusiform envelope fails guardrails");
-ok(envelopeGuard.warnings.some((w) => w.code === "fusiform_boundary_outside_envelope"),
-  "guardrails flag boundary outside fusiform envelope");
+ok(envelopeGuard.warnings.every((w) => w.code !== "fusiform_boundary_outside_envelope"),
+  "a fully contained expanded envelope does not retain a stale outside-boundary warning");
 
 const coverageRules = structuredClone(T.DEFAULT_RULES);
 coverageRules.fusiform_cutaneous.max_length_mm = 40;
@@ -408,6 +439,10 @@ const clampedFusiform = T.generateFusiformIncision(
 );
 ok(clampedFusiform.metrics.axis_coverage_deficit_mm > 0, "fusiform records boundary axis coverage deficit");
 ok(clampedFusiform.metrics.length_clamped_by_max === true, "fusiform records max-length clamp");
+annotateCandidateEngineeringViolations(clampedFusiform, verts);
+ok(clampedFusiform.hard_violations.some((item) => item.code === "candidate_does_not_cover_lesion_axis"
+  || item.code === "candidate_does_not_enclose_lesion_boundary"),
+"an incomplete fusiform envelope becomes a hard display violation instead of showing a clipped candidate");
 const coverageGuard = T.evaluateGuardrails(clampedFusiform, { region: "cheek", confidence: 0.8 }, coverageRules);
 ok(coverageGuard.passed === false, "boundary coverage deficit fails guardrails");
 ok(coverageGuard.warnings.some((w) => w.code === "fusiform_axis_coverage_deficit"),
@@ -655,20 +690,39 @@ const normalizedControlledPlan = T.planIncisionDeterministic({
   tris,
   atlas: {
     lines: [
-      { name: "near_normalized_center_vertical", points3d: [[4, 1, 0], [4, 4, 0]] },
-      { name: "near_raw_seed_horizontal", points3d: [[0, 0, 0], [2, 0, 0]] },
+      { name: "near_boundary_centroid_vertical", points3d: [[4, 1, 0], [4, 4, 0]] },
+      { name: "through_detector_center_horizontal", points3d: [[3.5, 2, 0], [3.95, 2, 0]] },
     ],
   },
 });
 ok(normalizedControlledPlan.tumor_normalization.applied === true,
   "workflow exposes the controlled-marker lesion normalization contract");
-ok(Math.hypot(...normalizedControlledPlan.tumor.center) > 1,
-  "workflow replaces the raw clicked seed with the enclosed-area planning center");
-ok(normalizedControlledPlan.direction.line_id === "near_normalized_center_vertical"
-  && Math.abs(normalizedControlledPlan.direction.vector[1]) > 0.99,
-"workflow queries RSTL at the normalized lesion center, not at the raw click seed");
-ok(normalizedControlledPlan.candidate.metrics.boundary_drives_candidate_geometry === false,
-  "normalized workflow keeps raw marker geometry out of standard candidate dimensions");
+ok(vectorNear(normalizedControlledPlan.tumor.center, controlledMarkerTumor.center),
+  "workflow preserves the detector-confirmed lesion center after boundary normalization");
+ok(normalizedControlledPlan.direction.line_id === "through_detector_center_horizontal"
+  && Math.abs(normalizedControlledPlan.direction.vector[0]) > 0.99,
+"workflow queries RSTL at the stable detector-confirmed center");
+ok(normalizedControlledPlan.candidate.metrics.boundary_drives_candidate_geometry === true
+  && normalizedControlledPlan.candidate.metrics.boundary_envelope_outside_count === 0,
+  "normalized workflow uses the detected envelope to center and fully contain the lesion");
+
+const photoDirectionOverridePlan = T.planIncisionDeterministic({
+  tumor: controlledMarkerTumor,
+  verts,
+  tris,
+  atlas: { lines: [{ name: "model_horizontal", points3d: [[3.5, 2, 0], [4, 2, 0]] }] },
+  directionOverride: {
+    vector: [0, 1, 0],
+    confidence: 0.92,
+    source: "photo_projected_rstl_nearest_segment",
+    line_id: "displayed_vertical",
+  },
+});
+ok(photoDirectionOverridePlan.direction_override_applied === true,
+  "workflow records that the photo-projected nearest RSTL tangent drove planning");
+ok(photoDirectionOverridePlan.direction.source === "photo_projected_rstl_nearest_segment"
+  && Math.abs(photoDirectionOverridePlan.candidate.axis[1]) > 0.99,
+"the candidate generator and guardrails consume the photo-derived direction instead of only warning afterwards");
 
 const marginDirectionPlans = [0, 2].map((marginMm) => T.planIncisionWorkflow({
   tumor: {

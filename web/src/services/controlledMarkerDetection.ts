@@ -1,4 +1,4 @@
-export const CONTROLLED_MARKER_DETECTOR_VERSION = "0.12";
+export const CONTROLLED_MARKER_DETECTOR_VERSION = "0.18";
 
 export interface MarkerImageData {
   width: number;
@@ -19,6 +19,9 @@ export type ControlledMarkerFailureCode =
   | "component_too_large"
   | "ambiguous_candidates"
   | "seed_not_enclosed"
+  | "scan_range_too_small"
+  | "edge_discontinuous"
+  | "unstable_enclosure"
   | "low_contrast";
 
 export type ControlledMarkerSeedRelation = "enclosed" | "on_marker" | "near_marker";
@@ -37,15 +40,29 @@ export interface ControlledMarkerDetection {
   confidence: number;
   candidate_count: number;
   warnings: string[];
+  scan?: {
+    diameter_mm: number | null;
+    radius_px: number;
+    expected_diameter_px: number | null;
+  };
   diagnostics?: {
-    method: "seed_first_barrier";
-    roi_radius: number;
-    local_window_radius: number;
-    repair_radius: number;
-    boundary_support_ratio: number;
-    repair_fraction: number;
+    method?: "seed_first_barrier" | "radial_seed_boundary";
+    roi_radius?: number;
+    local_window_radius?: number;
+    repair_radius?: number;
+    boundary_support_ratio?: number;
+    repair_fraction?: number;
     seed_relocated_px?: number;
     failure_stage?: string;
+    angular_support_ratio?: number;
+    maximum_gap_degrees?: number;
+    detected_diameter_px?: number;
+    expected_diameter_px?: number;
+    detected_to_expected_diameter_ratio?: number;
+    scan_probe_count?: number;
+    scan_probe_success_count?: number;
+    scan_probe_consensus_count?: number;
+    scan_probe_group_sizes?: number[];
   };
   audit: {
     local_only: true;
@@ -73,6 +90,26 @@ const clamp = (value: number, low: number, high: number): number => Math.max(low
 const luma = (data: ArrayLike<number>, index: number): number => (
   0.2126 * Number(data[index]) + 0.7152 * Number(data[index + 1]) + 0.0722 * Number(data[index + 2])
 );
+
+function insideScanCircle(x: number, y: number, centerX: number, centerY: number, radius: number): boolean {
+  return (x - centerX) ** 2 + (y - centerY) ** 2 <= radius ** 2;
+}
+
+function clearOutsideScanCircle(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  centerX: number,
+  centerY: number,
+  radius: number,
+): Uint8Array {
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (!insideScanCircle(x, y, centerX, centerY, radius)) mask[y * width + x] = 0;
+    }
+  }
+  return mask;
+}
 
 function robustBackgroundLuma(values: readonly number[]): number {
   if (!values.length) return 0;
@@ -210,47 +247,29 @@ function repairBarrier(mask: Uint8Array, width: number, height: number, radius: 
   return repaired;
 }
 
-function bridgeSingleStrokeGap(
-  mask: Uint8Array,
+const STROKE_DIRECTIONS = [
+  [1, 0], [-1, 0], [0, 1], [0, -1],
+  [1, 1], [1, -1], [-1, 1], [-1, -1],
+] as const;
+
+function skeletonNeighbours(
+  skeleton: Uint8Array,
   width: number,
   height: number,
-  seedX: number,
-  seedY: number,
-  maxGapPx = 14,
-): Uint8Array | null {
-  const visited = new Uint8Array(mask.length);
-  const viable: number[][] = [];
-  const directions = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
-  for (let start = 0; start < mask.length; start += 1) {
-    if (!mask[start] || visited[start]) continue;
-    const queue = [start];
-    const component: number[] = [];
-    visited[start] = 1;
-    let minX = width, minY = height, maxX = 0, maxY = 0;
-    for (let head = 0; head < queue.length; head += 1) {
-      const current = queue[head];
-      component.push(current);
-      const x = current % width;
-      const y = Math.floor(current / width);
-      minX = Math.min(minX, x); minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
-      for (const [dx, dy] of directions) {
-        const nx = x + dx, ny = y + dy;
-        if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-        const next = ny * width + nx;
-        if (!mask[next] || visited[next]) continue;
-        visited[next] = 1;
-        queue.push(next);
-      }
-    }
-    if (component.length >= 12 && seedX >= minX && seedX <= maxX && seedY >= minY && seedY <= maxY) {
-      viable.push(component);
-    }
-  }
-  if (viable.length !== 1) return null;
+  index: number,
+): number[] {
+  const x = index % width;
+  const y = Math.floor(index / width);
+  return STROKE_DIRECTIONS.flatMap(([dx, dy]) => {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (nx < 0 || nx >= width || ny < 0 || ny >= height) return [];
+    const next = ny * width + nx;
+    return skeleton[next] ? [next] : [];
+  });
+}
 
-  const stroke = new Uint8Array(mask.length);
-  for (const index of viable[0]) stroke[index] = 1;
+function thinStrokeMask(stroke: Uint8Array, width: number, height: number): Uint8Array {
   const skeleton = stroke.slice();
   let changed = true;
   let iterations = 0;
@@ -272,8 +291,8 @@ function bridgeSingleStrokeGap(
           const count = neighbours.reduce((sum, value) => sum + value, 0);
           if (count < 2 || count > 6) continue;
           let transitions = 0;
-          for (let n = 0; n < 8; n += 1) {
-            if (!neighbours[n] && neighbours[(n + 1) % 8]) transitions += 1;
+          for (let neighbour = 0; neighbour < 8; neighbour += 1) {
+            if (!neighbours[neighbour] && neighbours[(neighbour + 1) % 8]) transitions += 1;
           }
           if (transitions !== 1) continue;
           const [p2, , p4, , p6, , p8] = neighbours;
@@ -286,60 +305,410 @@ function bridgeSingleStrokeGap(
       for (const index of remove) skeleton[index] = 0;
     }
   }
+  return skeleton;
+}
 
-  const skeletonNeighbours = (index: number): number[] => {
-    const x = index % width, y = Math.floor(index / width);
-    return directions.flatMap(([dx, dy]) => {
-      const nx = x + dx, ny = y + dy;
-      if (nx < 0 || nx >= width || ny < 0 || ny >= height) return [];
-      const next = ny * width + nx;
-      return skeleton[next] ? [next] : [];
-    });
+function principalSkeletonPath(
+  skeleton: Uint8Array,
+  width: number,
+  height: number,
+): { pixels: number[]; first: number; second: number; firstInward: number; secondInward: number } | null {
+  const pixels = Array.from(skeleton.keys()).filter((index) => skeleton[index]);
+  const endpoints = pixels.filter((index) => skeletonNeighbours(skeleton, width, height, index).length === 1);
+  if (endpoints.length < 2 || endpoints.length > 12) return null;
+  if (endpoints.length === 2) {
+    const firstInward = endpointInwardIndex(skeleton, width, height, endpoints[0]);
+    const secondInward = endpointInwardIndex(skeleton, width, height, endpoints[1]);
+    return firstInward === null || secondInward === null ? null : {
+      pixels,
+      first: endpoints[0],
+      second: endpoints[1],
+      firstInward,
+      secondInward,
+    };
+  }
+
+  let bestPath: number[] = [];
+  for (const start of endpoints) {
+    const distance = new Int32Array(skeleton.length);
+    distance.fill(-1);
+    const previous = new Int32Array(skeleton.length);
+    previous.fill(-1);
+    const queue = new Int32Array(pixels.length);
+    let head = 0;
+    let tail = 0;
+    distance[start] = 0;
+    queue[tail++] = start;
+    while (head < tail) {
+      const current = queue[head++];
+      for (const next of skeletonNeighbours(skeleton, width, height, current)) {
+        if (distance[next] >= 0) continue;
+        distance[next] = distance[current] + 1;
+        previous[next] = current;
+        queue[tail++] = next;
+      }
+    }
+    for (const end of endpoints) {
+      if (distance[end] < 0 || distance[end] + 1 <= bestPath.length) continue;
+      const path: number[] = [];
+      for (let current = end; current >= 0; current = previous[current]) {
+        path.push(current);
+        if (current === start) break;
+      }
+      if (path[path.length - 1] === start) bestPath = path.reverse();
+    }
+  }
+  // A noisy fork may be ignored only when one observed path explains most of
+  // the component. Comparable branches are genuinely ambiguous continuations.
+  if (bestPath.length < 8 || bestPath.length / Math.max(1, pixels.length) < 0.5) return null;
+  return {
+    pixels: bestPath,
+    first: bestPath[0],
+    second: bestPath[bestPath.length - 1],
+    firstInward: bestPath[Math.min(5, bestPath.length - 1)],
+    secondInward: bestPath[Math.max(0, bestPath.length - 6)],
   };
-  const skeletonPixels = Array.from(skeleton.keys()).filter((index) => skeleton[index]);
-  const endpoints = skeletonPixels.filter((index) => skeletonNeighbours(index).length === 1);
-  if (endpoints.length !== 2) return null;
-  const [first, second] = endpoints;
+}
+
+function endpointInwardIndex(
+  skeleton: Uint8Array,
+  width: number,
+  height: number,
+  endpoint: number,
+): number | null {
+  let previous = -1;
+  let current = endpoint;
+  for (let step = 0; step < 6; step += 1) {
+    const next = skeletonNeighbours(skeleton, width, height, current)
+      .filter((index) => index !== previous);
+    if (next.length !== 1) break;
+    previous = current;
+    current = next[0];
+  }
+  return current === endpoint ? null : current;
+}
+
+function drawStrokeBridge(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  first: MarkerPoint,
+  second: MarkerPoint,
+): void {
+  const gapX = second.x - first.x;
+  const gapY = second.y - first.y;
+  const steps = Math.max(Math.abs(gapX), Math.abs(gapY));
+  for (let step = 0; step <= steps; step += 1) {
+    const x = Math.round(first.x + gapX * step / Math.max(1, steps));
+    const y = Math.round(first.y + gapY * step / Math.max(1, steps));
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height) mask[ny * width + nx] = 1;
+      }
+    }
+  }
+}
+
+function bridgeSingleStrokeGap(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  seedX: number,
+  seedY: number,
+  maxGapPx = 14,
+): Uint8Array | null {
+  const visited = new Uint8Array(mask.length);
+  const viable: number[][] = [];
+  for (let start = 0; start < mask.length; start += 1) {
+    if (!mask[start] || visited[start]) continue;
+    const queue = [start];
+    const component: number[] = [];
+    visited[start] = 1;
+    let minX = width, minY = height, maxX = 0, maxY = 0;
+    for (let head = 0; head < queue.length; head += 1) {
+      const current = queue[head];
+      component.push(current);
+      const x = current % width;
+      const y = Math.floor(current / width);
+      minX = Math.min(minX, x); minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+      for (const [dx, dy] of STROKE_DIRECTIONS) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+        const next = ny * width + nx;
+        if (!mask[next] || visited[next]) continue;
+        visited[next] = 1;
+        queue.push(next);
+      }
+    }
+    if (component.length >= 12 && seedX >= minX && seedX <= maxX && seedY >= minY && seedY <= maxY) {
+      viable.push(component);
+    }
+  }
+  if (viable.length !== 1) return null;
+
+  const stroke = new Uint8Array(mask.length);
+  for (const index of viable[0]) stroke[index] = 1;
+  const skeleton = thinStrokeMask(stroke, width, height);
+  const principal = principalSkeletonPath(skeleton, width, height);
+  if (!principal) return null;
+  const skeletonPixels = principal.pixels;
+  const first = principal.first;
+  const second = principal.second;
   const firstPoint = { x: first % width, y: Math.floor(first / width) };
   const secondPoint = { x: second % width, y: Math.floor(second / width) };
   const gap = Math.hypot(secondPoint.x - firstPoint.x, secondPoint.y - firstPoint.y);
-  if (gap < 2 || gap > maxGapPx || gap / Math.max(1, skeletonPixels.length) > 0.2) return null;
+  // A bridge is only a bounded pen interruption, not permission to invent a
+  // missing side of the lesion. Relative path length keeps the limit meaningful
+  // for both small and large outlines even when the absolute scan is 60 mm.
+  if (gap < 2 || gap > maxGapPx || gap / Math.max(1, skeletonPixels.length) > 0.12) return null;
 
-  const inwardPoint = (endpoint: number): MarkerPoint | null => {
-    let previous = -1;
-    let current = endpoint;
-    for (let step = 0; step < 6; step += 1) {
-      const next = skeletonNeighbours(current).find((index) => index !== previous);
-      if (next === undefined) break;
-      previous = current;
-      current = next;
-    }
-    return current === endpoint ? null : { x: current % width, y: Math.floor(current / width) };
+  const firstInner = {
+    x: principal.firstInward % width,
+    y: Math.floor(principal.firstInward / width),
   };
-  const firstInner = inwardPoint(first), secondInner = inwardPoint(second);
-  if (!firstInner || !secondInner) return null;
+  const secondInner = {
+    x: principal.secondInward % width,
+    y: Math.floor(principal.secondInward / width),
+  };
   const unitDot = (ax: number, ay: number, bx: number, by: number) => (
     (ax * bx + ay * by) / Math.max(1e-9, Math.hypot(ax, ay) * Math.hypot(bx, by))
   );
   const gapX = secondPoint.x - firstPoint.x, gapY = secondPoint.y - firstPoint.y;
-  if (unitDot(firstInner.x - firstPoint.x, firstInner.y - firstPoint.y, gapX, gapY) > -0.25
-    || unitDot(secondInner.x - secondPoint.x, secondInner.y - secondPoint.y, -gapX, -gapY) > -0.25) {
+  // Smooth curves normally continue almost directly across a gap, while a
+  // polygon corner legitimately turns. Allow a bounded corner turn here; the
+  // enclosure and observed-boundary support gates below still reject a bridge
+  // that invents most of a missing side.
+  if (unitDot(firstInner.x - firstPoint.x, firstInner.y - firstPoint.y, gapX, gapY) > 0.35
+    || unitDot(secondInner.x - secondPoint.x, secondInner.y - secondPoint.y, -gapX, -gapY) > 0.35) {
     return null;
   }
 
   const repaired = mask.slice();
-  const steps = Math.max(Math.abs(gapX), Math.abs(gapY));
-  for (let step = 0; step <= steps; step += 1) {
-    const x = Math.round(firstPoint.x + gapX * step / Math.max(1, steps));
-    const y = Math.round(firstPoint.y + gapY * step / Math.max(1, steps));
-    for (let dy = -1; dy <= 1; dy += 1) {
-      for (let dx = -1; dx <= 1; dx += 1) {
-        const nx = x + dx, ny = y + dy;
-        if (nx >= 0 && nx < width && ny >= 0 && ny < height) repaired[ny * width + nx] = 1;
+  drawStrokeBridge(repaired, width, height, firstPoint, secondPoint);
+  return repaired;
+}
+
+interface OpenStrokeEndpoint {
+  fragment: number;
+  index: number;
+  point: MarkerPoint;
+  inward: MarkerPoint;
+}
+
+interface OpenStrokeFragment {
+  component: number[];
+  skeleton: Uint8Array;
+  skeletonPixels: number[];
+  endpoints: OpenStrokeEndpoint[];
+  bbox: { minX: number; minY: number; maxX: number; maxY: number };
+}
+
+function bridgeStrokeFragments(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  seedX: number,
+  seedY: number,
+  maxGapPx: number,
+): Uint8Array | null {
+  const visited = new Uint8Array(mask.length);
+  const rawComponents: Array<{ pixels: number[]; bbox: OpenStrokeFragment["bbox"] }> = [];
+  for (let start = 0; start < mask.length; start += 1) {
+    if (!mask[start] || visited[start]) continue;
+    const queue = [start];
+    const pixels: number[] = [];
+    visited[start] = 1;
+    let minX = width, minY = height, maxX = 0, maxY = 0;
+    for (let head = 0; head < queue.length; head += 1) {
+      const current = queue[head];
+      pixels.push(current);
+      const x = current % width;
+      const y = Math.floor(current / width);
+      minX = Math.min(minX, x); minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+      for (const [dx, dy] of STROKE_DIRECTIONS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+        const next = ny * width + nx;
+        if (!mask[next] || visited[next]) continue;
+        visited[next] = 1;
+        queue.push(next);
       }
     }
+    if (pixels.length >= 12) rawComponents.push({ pixels, bbox: { minX, minY, maxX, maxY } });
   }
-  return repaired;
+
+  const fragments: OpenStrokeFragment[] = [];
+  for (const raw of rawComponents) {
+    const stroke = new Uint8Array(mask.length);
+    raw.pixels.forEach((index) => { stroke[index] = 1; });
+    const skeleton = thinStrokeMask(stroke, width, height);
+    const principal = principalSkeletonPath(skeleton, width, height);
+    if (!principal) continue;
+    const skeletonPixels = principal.pixels;
+    const endpointIndices = [principal.first, principal.second];
+    const inwardIndices = [principal.firstInward, principal.secondInward];
+    const fragmentIndex = fragments.length;
+    const endpoints = endpointIndices.map((index, endpointIndex): OpenStrokeEndpoint => {
+      const inwardIndex = inwardIndices[endpointIndex];
+      return {
+        fragment: fragmentIndex,
+        index,
+        point: { x: index % width, y: Math.floor(index / width) },
+        inward: { x: inwardIndex % width, y: Math.floor(inwardIndex / width) },
+      };
+    });
+    fragments.push({ component: raw.pixels, skeleton, skeletonPixels, endpoints, bbox: raw.bbox });
+  }
+  if (fragments.length < 2) return null;
+
+  // Facial texture can create many tiny open components. Keep only a bounded
+  // set of substantial strokes; closure is attempted on two or three pieces,
+  // never by globally joining every dark fragment in the scan area.
+  const largestSkeleton = Math.max(...fragments.map((fragment) => fragment.skeletonPixels.length));
+  const ranked = fragments
+    .filter((fragment) => fragment.skeletonPixels.length >= Math.max(8, largestSkeleton * 0.16))
+    .sort((first, second) => second.skeletonPixels.length - first.skeletonPixels.length)
+    .slice(0, 6);
+
+  const subsets: OpenStrokeFragment[][] = [];
+  const choose = (start: number, size: number, selected: OpenStrokeFragment[]) => {
+    if (selected.length === size) {
+      subsets.push([...selected]);
+      return;
+    }
+    for (let index = start; index < ranked.length; index += 1) {
+      selected.push(ranked[index]);
+      choose(index + 1, size, selected);
+      selected.pop();
+    }
+  };
+  choose(0, 2, []);
+  choose(0, 3, []);
+
+  const dot = (ax: number, ay: number, bx: number, by: number) => (
+    (ax * bx + ay * by) / Math.max(1e-9, Math.hypot(ax, ay) * Math.hypot(bx, by))
+  );
+  interface Pair { first: OpenStrokeEndpoint; second: OpenStrokeEndpoint; gap: number; alignment: number }
+  interface Candidate {
+    repaired: Uint8Array;
+    score: number;
+    regionCount: number;
+    regionBbox: { minX: number; minY: number; maxX: number; maxY: number };
+  }
+  const candidates: Candidate[] = [];
+
+  for (const subset of subsets) {
+    const minX = Math.min(...subset.map((fragment) => fragment.bbox.minX));
+    const minY = Math.min(...subset.map((fragment) => fragment.bbox.minY));
+    const maxX = Math.max(...subset.map((fragment) => fragment.bbox.maxX));
+    const maxY = Math.max(...subset.map((fragment) => fragment.bbox.maxY));
+    if (seedX < minX || seedX > maxX || seedY < minY || seedY > maxY) continue;
+
+    // Endpoint fragment ids are rebuilt for the selected subset so that every
+    // accepted pair necessarily joins two different observed stroke pieces.
+    const endpoints = subset.flatMap((fragment, fragmentIndex) => fragment.endpoints.map((endpoint) => ({
+      ...endpoint,
+      fragment: fragmentIndex,
+    })));
+    const matchings: Pair[][] = [];
+    const pairRemaining = (remaining: OpenStrokeEndpoint[], pairs: Pair[]) => {
+      if (!remaining.length) {
+        matchings.push([...pairs]);
+        return;
+      }
+      const first = remaining[0];
+      for (let index = 1; index < remaining.length; index += 1) {
+        const second = remaining[index];
+        if (first.fragment === second.fragment) continue;
+        const gapX = second.point.x - first.point.x;
+        const gapY = second.point.y - first.point.y;
+        const gap = Math.hypot(gapX, gapY);
+        if (gap < 2 || gap > maxGapPx) continue;
+        const firstAlignment = dot(
+          first.inward.x - first.point.x,
+          first.inward.y - first.point.y,
+          gapX,
+          gapY,
+        );
+        const secondAlignment = dot(
+          second.inward.x - second.point.x,
+          second.inward.y - second.point.y,
+          -gapX,
+          -gapY,
+        );
+        if (firstAlignment > 0.35 || secondAlignment > 0.35) continue;
+        pairs.push({
+          first,
+          second,
+          gap,
+          alignment: (firstAlignment + secondAlignment + 2) / 4,
+        });
+        pairRemaining(
+          remaining.filter((_endpoint, remainingIndex) => remainingIndex !== 0 && remainingIndex !== index),
+          pairs,
+        );
+        pairs.pop();
+      }
+    };
+    pairRemaining(endpoints, []);
+
+    const totalSkeleton = subset.reduce((sum, fragment) => sum + fragment.skeletonPixels.length, 0);
+    for (const matching of matchings) {
+      const totalGap = matching.reduce((sum, pair) => sum + pair.gap, 0);
+      if (totalGap / Math.max(1, totalSkeleton) > 0.28) continue;
+      const repaired = new Uint8Array(mask.length);
+      subset.forEach((fragment) => fragment.component.forEach((index) => { repaired[index] = 1; }));
+      matching.forEach((pair) => drawStrokeBridge(repaired, width, height, pair.first.point, pair.second.point));
+      const enclosed = enclosedRegionNearSeed(
+        repaired,
+        width,
+        height,
+        seedY * width + seedX,
+        16,
+        width * height * 0.65,
+        4,
+      );
+      if (!enclosed) continue;
+      const alignmentPenalty = matching.reduce((sum, pair) => sum + pair.alignment, 0)
+        / Math.max(1, matching.length);
+      let regionMinX = width, regionMinY = height, regionMaxX = 0, regionMaxY = 0;
+      for (let index = 0; index < enclosed.mask.length; index += 1) {
+        if (!enclosed.mask[index]) continue;
+        const x = index % width;
+        const y = Math.floor(index / width);
+        regionMinX = Math.min(regionMinX, x); regionMinY = Math.min(regionMinY, y);
+        regionMaxX = Math.max(regionMaxX, x); regionMaxY = Math.max(regionMaxY, y);
+      }
+      candidates.push({
+        repaired,
+        score: totalGap / Math.max(1, totalSkeleton) + alignmentPenalty * 0.08 + subset.length * 0.005,
+        regionCount: enclosed.count,
+        regionBbox: { minX: regionMinX, minY: regionMinY, maxX: regionMaxX, maxY: regionMaxY },
+      });
+    }
+  }
+  if (!candidates.length) return null;
+  candidates.sort((first, second) => first.score - second.score || second.regionCount - first.regionCount);
+  const best = candidates[0];
+  const bboxOverlap = (first: Candidate["regionBbox"], second: Candidate["regionBbox"]): number => {
+    const intersectionWidth = Math.max(0, Math.min(first.maxX, second.maxX) - Math.max(first.minX, second.minX) + 1);
+    const intersectionHeight = Math.max(0, Math.min(first.maxY, second.maxY) - Math.max(first.minY, second.minY) + 1);
+    const intersection = intersectionWidth * intersectionHeight;
+    const firstArea = (first.maxX - first.minX + 1) * (first.maxY - first.minY + 1);
+    const secondArea = (second.maxX - second.minX + 1) * (second.maxY - second.minY + 1);
+    return intersection / Math.max(1, firstArea + secondArea - intersection);
+  };
+  const competing = candidates.find((candidate, index) => index > 0 && (
+    Math.abs(candidate.regionCount - best.regionCount) / Math.max(1, best.regionCount) > 0.12
+    || bboxOverlap(candidate.regionBbox, best.regionBbox) < 0.72
+  ));
+  if (competing && competing.score <= best.score * 1.12 + 0.015) return null;
+  return best.repaired;
 }
 
 function adaptiveDarkBarrier(
@@ -351,7 +720,7 @@ function adaptiveDarkBarrier(
   backgroundLuma: number,
   darkThreshold: number,
   minContrast: number,
-): { mask: Uint8Array; localWindowRadius: number } {
+): { mask: Uint8Array; localWindowRadius: number; strongMask: Uint8Array; weakMask: Uint8Array } {
   const imageWidth = Math.floor(image.width);
   const lumas = new Float32Array(width * height);
   const stride = width + 1;
@@ -368,7 +737,12 @@ function adaptiveDarkBarrier(
   const localWindowRadius = clamp(Math.round(Math.min(width, height) * 0.025), 5, 13);
   const strong = new Uint8Array(width * height);
   const weak = new Uint8Array(width * height);
-  const weakContrast = Math.max(10, minContrast * 0.45);
+  // Preserve a faint continuation when it is physically connected to a
+  // clearly dark marker response. Real pen strokes can vary substantially in
+  // pressure and lighting across one outline; the strong-mask hysteresis below
+  // still prevents an isolated low-contrast skin texture from entering the
+  // barrier on its own.
+  const weakContrast = Math.max(3.5, minContrast * 0.15);
   for (let y = 0; y < height; y += 1) {
     const top = Math.max(0, y - localWindowRadius);
     const bottom = Math.min(height - 1, y + localWindowRadius);
@@ -389,7 +763,7 @@ function adaptiveDarkBarrier(
       strong[index] = Number(isStrong);
       weak[index] = Number(isStrong || (
         localContrast >= weakContrast
-        && value <= backgroundLuma - Math.max(6, weakContrast * 0.5)
+        && value <= backgroundLuma - Math.max(3, weakContrast * 0.4)
       ));
     }
   }
@@ -401,8 +775,13 @@ function adaptiveDarkBarrier(
   const queue = new Int32Array(width * height);
   let head = 0;
   let tail = 0;
+  const strongNeighborhood = binaryWindow(strong, width, height, 4, false);
   for (let index = 0; index < strong.length; index += 1) {
-    if (!strong[index]) continue;
+    // JPEG ringing and uneven pen pressure can leave a one-pixel break exactly
+    // where a dark stroke becomes faint. Seed a weak component when it lies
+    // within four pixels of strong evidence, then keep following only weak-mask
+    // pixels. Isolated facial texture still has no strong anchor.
+    if (!weak[index] || !strongNeighborhood[index]) continue;
     retained[index] = 1;
     queue[tail++] = index;
   }
@@ -423,7 +802,193 @@ function adaptiveDarkBarrier(
       }
     }
   }
-  return { mask: retained, localWindowRadius };
+  return { mask: retained, localWindowRadius, strongMask: strong, weakMask: weak };
+}
+
+function median(values: readonly number[]): number {
+  if (!values.length) return 0;
+  const ordered = [...values].sort((first, second) => first - second);
+  const middle = Math.floor(ordered.length / 2);
+  return ordered.length % 2 ? ordered[middle] : (ordered[middle - 1] + ordered[middle]) / 2;
+}
+
+function maximumCircularMissingRun(values: readonly (number | null)[]): number {
+  if (!values.length || values.every((value) => value !== null)) return 0;
+  if (values.every((value) => value === null)) return values.length;
+  const doubled = [...values, ...values];
+  let longest = 0;
+  let current = 0;
+  for (const value of doubled) {
+    current = value === null ? current + 1 : 0;
+    longest = Math.max(longest, current);
+  }
+  return Math.min(values.length, longest);
+}
+
+function polygonCentroid(points: readonly MarkerPoint[]): MarkerPoint {
+  let twiceArea = 0;
+  let weightedX = 0;
+  let weightedY = 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    const cross = current.x * next.y - next.x * current.y;
+    twiceArea += cross;
+    weightedX += (current.x + next.x) * cross;
+    weightedY += (current.y + next.y) * cross;
+  }
+  if (Math.abs(twiceArea) < 1e-9) {
+    return points.reduce((total, point) => ({
+      x: total.x + point.x / points.length,
+      y: total.y + point.y / points.length,
+    }), { x: 0, y: 0 });
+  }
+  return { x: weightedX / (3 * twiceArea), y: weightedY / (3 * twiceArea) };
+}
+
+function radialBoundaryRecovery(
+  image: MarkerImageData,
+  seed: MarkerPoint,
+  roiRadius: number,
+  x0: number,
+  y0: number,
+  roiWidth: number,
+  roiHeight: number,
+  adaptiveMask: Uint8Array,
+  backgroundLuma: number,
+  minContrast: number,
+  expectedDiameterPx: number,
+  minAreaPx: number,
+  localWindowRadius: number,
+): { detection: ControlledMarkerDetection | null; supportRatio: number; maximumGapDegrees: number } {
+  const rayCount = 96;
+  const maximumRadius = Math.max(4, Math.floor(roiRadius * 0.86));
+  const expectedRadius = expectedDiameterPx > 0
+    ? clamp(expectedDiameterPx / 2, 4, maximumRadius)
+    : maximumRadius * 0.45;
+  const minimumRadius = clamp(Math.round(expectedRadius * 0.2), 2, Math.max(2, maximumRadius - 2));
+  const maximumStrokeRun = Math.max(10, Math.round(expectedRadius * 0.55));
+  const localSeedX = seed.x - x0;
+  const localSeedY = seed.y - y0;
+  const radii: Array<number | null> = [];
+  const contrasts: number[] = [];
+  const isDarkNearby = (x: number, y: number): boolean => {
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx >= 0 && nx < roiWidth && ny >= 0 && ny < roiHeight
+          && adaptiveMask[ny * roiWidth + nx]) return true;
+      }
+    }
+    return false;
+  };
+
+  for (let ray = 0; ray < rayCount; ray += 1) {
+    const angle = ray * Math.PI * 2 / rayCount;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const runs: Array<{ start: number; end: number; contrast: number }> = [];
+    let runStart = -1;
+    let runContrast = 0;
+    for (let radius = minimumRadius; radius <= maximumRadius; radius += 1) {
+      const x = Math.round(localSeedX + cos * radius);
+      const y = Math.round(localSeedY + sin * radius);
+      const dark = x >= 0 && x < roiWidth && y >= 0 && y < roiHeight && isDarkNearby(x, y);
+      if (dark) {
+        if (runStart < 0) runStart = radius;
+        const imageX = clamp(x0 + x, 0, Math.floor(image.width) - 1);
+        const imageY = clamp(y0 + y, 0, Math.floor(image.height) - 1);
+        runContrast = Math.max(
+          runContrast,
+          backgroundLuma - luma(image.data, (imageY * Math.floor(image.width) + imageX) * 4),
+        );
+      }
+      if ((!dark || radius === maximumRadius) && runStart >= 0) {
+        const runEnd = dark && radius === maximumRadius ? radius : radius - 1;
+        runs.push({ start: runStart, end: runEnd, contrast: runContrast });
+        runStart = -1;
+        runContrast = 0;
+      }
+    }
+    const selected = runs
+      .filter((run) => run.end - run.start + 1 <= maximumStrokeRun && run.contrast >= minContrast * 0.7)
+      .sort((first, second) => first.start - second.start || second.contrast - first.contrast)[0];
+    radii.push(selected ? (selected.start + selected.end) / 2 : null);
+    if (selected) contrasts.push(selected.contrast);
+  }
+
+  const initialMedian = median(radii.filter((radius): radius is number => radius !== null));
+  for (let index = 0; index < radii.length; index += 1) {
+    const radius = radii[index];
+    if (radius !== null && (radius < initialMedian * 0.25 || radius > initialMedian * 2.2)) radii[index] = null;
+  }
+  const supported = radii.filter((radius) => radius !== null).length;
+  const supportRatio = supported / rayCount;
+  const maximumMissingRun = maximumCircularMissingRun(radii);
+  const maximumGapDegrees = maximumMissingRun * 360 / rayCount;
+  if (supportRatio < 0.82 || maximumMissingRun > 6) {
+    return { detection: null, supportRatio, maximumGapDegrees };
+  }
+
+  const filled: Array<number | null> = [...radii];
+  for (let index = 0; index < filled.length; index += 1) {
+    if (filled[index] !== null) continue;
+    let previous = (index - 1 + rayCount) % rayCount;
+    let next = (index + 1) % rayCount;
+    while (radii[previous] === null) previous = (previous - 1 + rayCount) % rayCount;
+    while (radii[next] === null) next = (next + 1) % rayCount;
+    const span = (next - previous + rayCount) % rayCount;
+    const offset = (index - previous + rayCount) % rayCount;
+    filled[index] = Number(radii[previous])
+      + (Number(radii[next]) - Number(radii[previous])) * offset / Math.max(1, span);
+  }
+  const complete = filled.map((radius) => Number(radius));
+  const smoothed = complete.map((_radius, index) => median([
+    complete[(index - 1 + rayCount) % rayCount],
+    complete[index],
+    complete[(index + 1) % rayCount],
+  ]));
+  const boundary = smoothed.map((radius, ray) => {
+    const angle = ray * Math.PI * 2 / rayCount;
+    return { x: seed.x + Math.cos(angle) * radius, y: seed.y + Math.sin(angle) * radius };
+  });
+  const area = Math.abs(polygonArea(boundary));
+  if (area < Math.max(minAreaPx * 4, 16) || !pointInPolygon(seed, boundary)) {
+    return { detection: null, supportRatio, maximumGapDegrees };
+  }
+  const bbox = pixelExtent(boundary, seed).bbox;
+  const center = polygonCentroid(boundary);
+  return {
+    detection: {
+      ok: true,
+      failure_code: null,
+      center,
+      boundary,
+      area_px: Math.round(area),
+      bbox,
+      geometry_mode: "enclosed_region",
+      seed_relation: "enclosed",
+      marker_area_px: supported,
+      marker_bbox: bbox,
+      confidence: clamp(supportRatio * median(contrasts) / 96, 0, 1),
+      candidate_count: 1,
+      warnings: ["radial_boundary_recovered"],
+      diagnostics: {
+        method: "radial_seed_boundary",
+        roi_radius: roiRadius,
+        local_window_radius: localWindowRadius,
+        repair_radius: 0,
+        boundary_support_ratio: supportRatio,
+        repair_fraction: 1 - supportRatio,
+        angular_support_ratio: supportRatio,
+        maximum_gap_degrees: maximumGapDegrees,
+      },
+      audit: { local_only: true, raw_media_retained: false, network_request_made: false },
+    },
+    supportRatio,
+    maximumGapDegrees,
+  };
 }
 
 function extractComponents(
@@ -753,6 +1318,7 @@ function seedFirstBarrierDetection(
   minContrast: number,
   minAreaPx: number,
   maxAreaFraction: number,
+  expectedDiameterPx: number,
 ): ControlledMarkerDetection | null {
   const adaptive = adaptiveDarkBarrier(
     image,
@@ -766,6 +1332,7 @@ function seedFirstBarrierDetection(
   );
   const seedX = clamp(Math.round(seed.x) - x0, 0, roiWidth - 1);
   const seedY = clamp(Math.round(seed.y) - y0, 0, roiHeight - 1);
+  clearOutsideScanCircle(adaptive.mask, roiWidth, roiHeight, seedX, seedY, roiRadius);
   const seedIndex = seedY * roiWidth + seedX;
   const regionLimit = roiWidth * roiHeight * 0.65;
   const markerLimit = roiWidth * roiHeight * maxAreaFraction;
@@ -775,6 +1342,7 @@ function seedFirstBarrierDetection(
     repairRadius: 0,
     boundarySupportRatio: 0,
   };
+  const acceptedEnclosures: ControlledMarkerDetection[] = [];
   const noteFailure = (priority: number, stage: string, repairRadius: number, boundarySupportRatio = 0) => {
     if (priority < bestFailure.priority) return;
     bestFailure = { priority, stage, repairRadius, boundarySupportRatio };
@@ -793,13 +1361,37 @@ function seedFirstBarrierDetection(
         roiHeight,
         seedX,
         seedY,
-        clamp(Math.round(Math.min(roiWidth, roiHeight) * 0.06), 14, 24),
+        clamp(
+          Math.round(expectedDiameterPx > 0
+            ? expectedDiameterPx * 0.55
+            : Math.min(roiWidth, roiHeight) * 0.12),
+          14,
+          Math.min(40, Math.max(14, Math.round(roiRadius * 0.55))),
+        ),
+      ),
+    },
+    {
+      repairRadius: 6,
+      build: () => bridgeStrokeFragments(
+        adaptive.mask,
+        roiWidth,
+        roiHeight,
+        seedX,
+        seedY,
+        clamp(
+          Math.round(expectedDiameterPx > 0
+            ? expectedDiameterPx * 0.55
+            : Math.min(roiWidth, roiHeight) * 0.12),
+          14,
+          Math.min(40, Math.max(14, Math.round(roiRadius * 0.55))),
+        ),
       ),
     },
   ];
   for (const { repairRadius, build } of repairAttempts) {
     const repaired = build();
     if (!repaired) continue;
+    clearOutsideScanCircle(repaired, roiWidth, roiHeight, seedX, seedY, roiRadius);
     const selectedRegion = enclosedRegionNearSeed(
       repaired,
       roiWidth,
@@ -823,6 +1415,15 @@ function seedFirstBarrierDetection(
     const boundary = componentOuterBoundary(regionPixels);
     if (boundary.length < 3) {
       noteFailure(2, "region_boundary_invalid", repairRadius);
+      continue;
+    }
+    const geometryExtent = pixelExtent(regionPixels, seed);
+    const detectedDiameterPx = Math.max(geometryExtent.bbox.width, geometryExtent.bbox.height);
+    // A tiny pore or hole in a thick pen stroke can be the first formally
+    // enclosed region near the seed. Do not return it and prevent the later
+    // endpoint-repair passes from finding the complete marked contour.
+    if (expectedDiameterPx > 0 && detectedDiameterPx < expectedDiameterPx * 0.35) {
+      noteFailure(3, "local_enclosure_too_small", repairRadius);
       continue;
     }
 
@@ -892,13 +1493,12 @@ function seedFirstBarrierDetection(
       continue;
     }
 
-    const geometryExtent = pixelExtent(regionPixels, seed);
     const markerExtent = pixelExtent(markerPixels, seed);
     const center = regionPixels.reduce((total, point) => ({
       x: total.x + point.x / regionPixels.length,
       y: total.y + point.y / regionPixels.length,
     }), { x: 0, y: 0 });
-    return {
+    acceptedEnclosures.push({
       ok: true,
       failure_code: null,
       center,
@@ -912,8 +1512,10 @@ function seedFirstBarrierDetection(
       confidence: clamp(contrast / 96 * boundarySupportRatio, 0, 1),
       candidate_count: supportingComponents.length,
       warnings: [
-        ...(repairRadius > 3
-          ? ["barrier_repaired", "single_gap_trend_repaired"]
+        ...(repairRadius >= 6
+          ? ["barrier_repaired", "multi_fragment_endpoint_repaired"]
+          : repairRadius > 3
+            ? ["barrier_repaired", "single_gap_trend_repaired"]
           : repairRadius ? ["barrier_repaired"] : []),
         ...(selectedRegion.relocatedPx > 0 ? ["seed_relocated_from_marker_stroke"] : []),
       ],
@@ -927,7 +1529,46 @@ function seedFirstBarrierDetection(
         seed_relocated_px: selectedRegion.relocatedPx,
       },
       audit: { local_only: true, raw_media_retained: false, network_request_made: false },
-    };
+    });
+  }
+  if (acceptedEnclosures.length) {
+    // A thick or uneven stroke can contain several small, formally closed
+    // pockets before the endpoint-repair passes reconstruct the complete
+    // outline. Returning the first pocket makes the result depend on a
+    // one-pixel seed shift. Compare every safe enclosure produced by the
+    // bounded repair attempts and prefer the largest supported region inside
+    // the same scan surface.
+    acceptedEnclosures.sort((first, second) => second.area_px - first.area_px);
+    const selected = acceptedEnclosures[0];
+    if (acceptedEnclosures.length > 1) {
+      selected.warnings = [...new Set([...selected.warnings, "representative_enclosure_selected"])];
+    }
+    return selected;
+  }
+  const radial = radialBoundaryRecovery(
+    image,
+    seed,
+    roiRadius,
+    x0,
+    y0,
+    roiWidth,
+    roiHeight,
+    adaptive.mask,
+    backgroundLuma,
+    minContrast,
+    expectedDiameterPx,
+    minAreaPx,
+    adaptive.localWindowRadius,
+  );
+  // The radial probe remains diagnostic-only. Angular interpolation cannot
+  // prove that the two pixels surrounding a gap are the real stroke endpoints;
+  // promoting it to a successful boundary produced plausible-looking but
+  // incorrect closures on real photographs. Only the endpoint/barrier path
+  // above is allowed to create a planning boundary.
+  if (radial.detection) {
+    noteFailure(8, "radial_boundary_requires_endpoint_confirmation", 0, radial.supportRatio);
+  } else if (radial.supportRatio > 0) {
+    noteFailure(8, "radial_boundary_incomplete", 0, radial.supportRatio);
   }
   const rejected = failure("seed_not_enclosed");
   rejected.warnings = [`seed_not_enclosed:${bestFailure.stage}`];
@@ -939,11 +1580,13 @@ function seedFirstBarrierDetection(
     boundary_support_ratio: bestFailure.boundarySupportRatio,
     repair_fraction: 1 - bestFailure.boundarySupportRatio,
     failure_stage: bestFailure.stage,
+    angular_support_ratio: radial.supportRatio,
+    maximum_gap_degrees: radial.maximumGapDegrees,
   };
   return rejected;
 }
 
-interface ControlledMarkerOptions {
+export interface ControlledMarkerOptions {
   roiRadius?: number;
   seedSnapRadius?: number;
   minAreaPx?: number;
@@ -951,6 +1594,8 @@ interface ControlledMarkerOptions {
   minContrast?: number;
   enableSeedFirstBarrier?: boolean;
   canonicalizeFromDetectedCenter?: boolean;
+  expectedDiameterPx?: number;
+  scanDiameterMm?: number;
 }
 
 function detectControlledMarkerInRoi(
@@ -968,6 +1613,18 @@ function detectControlledMarkerInRoi(
   const width = Math.floor(image.width);
   const height = Math.floor(image.height);
   const seedSnapRadius = options.seedSnapRadius ?? Math.max(10, Math.round(roiRadius * 0.08));
+  // In controlled mode the pointer represents a circular search surface, not
+  // a single-pixel seed. Keep the strict snap radius for direct clicks, but
+  // allow a complete enclosed candidate whose boundary lies nearby inside the
+  // scan surface to participate in selection.
+  const scanCandidateRadius = options.roiRadius === undefined
+    ? seedSnapRadius
+    : Math.max(seedSnapRadius, Math.round(roiRadius * 0.6));
+  const expectedDiameterPx = Number(options.expectedDiameterPx || 0);
+  const isExpectedSizeCandidate = (candidate: MarkerCandidate) => expectedDiameterPx <= 0
+    || Math.max(candidate.bbox.width, candidate.bbox.height) >= expectedDiameterPx * 0.35;
+  const isScanSurfaceCandidate = (candidate: MarkerCandidate) => candidate.enclosed
+    && isExpectedSizeCandidate(candidate);
   if (width <= 0 || height <= 0 || image.data.length < width * height * 4) return failure("invalid_image");
   if (!Number.isFinite(seed.x) || !Number.isFinite(seed.y) || seed.x < 0 || seed.x >= width || seed.y < 0 || seed.y >= height) {
     return failure("seed_outside_image");
@@ -979,9 +1636,15 @@ function detectControlledMarkerInRoi(
   const y1 = clamp(Math.ceil(seed.y + roiRadius), 0, height - 1);
   const roiWidth = x1 - x0 + 1;
   const roiHeight = y1 - y0 + 1;
+  const localSeedX = seed.x - x0;
+  const localSeedY = seed.y - y0;
   const roiLumas: number[] = [];
   for (let y = y0; y <= y1; y += 1) {
-    for (let x = x0; x <= x1; x += 1) roiLumas.push(luma(image.data, (y * width + x) * 4));
+    for (let x = x0; x <= x1; x += 1) {
+      if (insideScanCircle(x - x0, y - y0, localSeedX, localSeedY, roiRadius)) {
+        roiLumas.push(luma(image.data, (y * width + x) * 4));
+      }
+    }
   }
   // A marker near the face edge shares its ROI with hair, ears, clothing or
   // background. The upper local percentile represents the skin field without
@@ -991,7 +1654,10 @@ function detectControlledMarkerInRoi(
   const dark = new Uint8Array(roiWidth * roiHeight);
   for (let y = y0; y <= y1; y += 1) {
     for (let x = x0; x <= x1; x += 1) {
-      if (luma(image.data, (y * width + x) * 4) <= darkThreshold) dark[(y - y0) * roiWidth + x - x0] = 1;
+      if (insideScanCircle(x - x0, y - y0, localSeedX, localSeedY, roiRadius)
+        && luma(image.data, (y * width + x) * 4) <= darkThreshold) {
+        dark[(y - y0) * roiWidth + x - x0] = 1;
+      }
     }
   }
   let seedFirstResult: ControlledMarkerDetection | null | undefined;
@@ -1011,6 +1677,7 @@ function detectControlledMarkerInRoi(
         minContrast,
         minAreaPx,
         maxAreaFraction,
+        Number(options.expectedDiameterPx || 0),
       );
     }
     return seedFirstResult;
@@ -1030,7 +1697,12 @@ function detectControlledMarkerInRoi(
   // eroded away before it can be recognised. Only fall back to a small,
   // bounded strict closing pass when the original contour cannot form a candidate.
   const rawComponents = extractComponents(dark, roiWidth, roiHeight, x0, y0, image);
-  const rawCandidates = findRelevantCandidates(rawComponents, seed, seedSnapRadius, minAreaPx);
+  const rawDirectCandidates = findRelevantCandidates(rawComponents, seed, seedSnapRadius, minAreaPx);
+  const rawExpectedCandidates = rawDirectCandidates.filter(isExpectedSizeCandidate);
+  const rawCandidates = rawExpectedCandidates.length
+    ? rawExpectedCandidates
+    : findRelevantCandidates(rawComponents, seed, scanCandidateRadius, minAreaPx)
+      .filter(isScanSurfaceCandidate);
   let repairedComponents: PixelComponent[] = [];
   let repairedCandidates: MarkerCandidate[] = [];
   const hasSeedSizedComponent = rawComponents.some((component) => {
@@ -1067,7 +1739,12 @@ function detectControlledMarkerInRoi(
       y0,
       image,
     );
-    repairedCandidates = findRelevantCandidates(repairedComponents, seed, seedSnapRadius, minAreaPx);
+    const directCandidates = findRelevantCandidates(repairedComponents, seed, seedSnapRadius, minAreaPx)
+      .filter(isExpectedSizeCandidate);
+    repairedCandidates = directCandidates.length
+      ? directCandidates
+      : findRelevantCandidates(repairedComponents, seed, scanCandidateRadius, minAreaPx)
+        .filter(isScanSurfaceCandidate);
     if (!repairedCandidates.length) {
       repairedComponents = extractComponents(
         repairBarrier(dark, roiWidth, roiHeight, 2),
@@ -1077,7 +1754,12 @@ function detectControlledMarkerInRoi(
         y0,
         image,
       );
-      repairedCandidates = findRelevantCandidates(repairedComponents, seed, seedSnapRadius, minAreaPx);
+      const directCandidates = findRelevantCandidates(repairedComponents, seed, seedSnapRadius, minAreaPx)
+        .filter(isExpectedSizeCandidate);
+      repairedCandidates = directCandidates.length
+        ? directCandidates
+        : findRelevantCandidates(repairedComponents, seed, scanCandidateRadius, minAreaPx)
+          .filter(isScanSurfaceCandidate);
     }
     if (!repairedCandidates.length) {
       repairedComponents = extractComponents(
@@ -1088,7 +1770,12 @@ function detectControlledMarkerInRoi(
         y0,
         image,
       );
-      repairedCandidates = findRelevantCandidates(repairedComponents, seed, seedSnapRadius, minAreaPx);
+      const directCandidates = findRelevantCandidates(repairedComponents, seed, seedSnapRadius, minAreaPx)
+        .filter(isExpectedSizeCandidate);
+      repairedCandidates = directCandidates.length
+        ? directCandidates
+        : findRelevantCandidates(repairedComponents, seed, scanCandidateRadius, minAreaPx)
+          .filter(isScanSurfaceCandidate);
     }
   }
   const relevantCandidates = rawCandidates.length ? rawCandidates : repairedCandidates;
@@ -1123,7 +1810,11 @@ function detectControlledMarkerInRoi(
   // very small miss outside a closed pen line, or a click directly on a filled
   // marker. The previous ROI-scaled snap radius could accept an unrelated mole
   // or shadow several dozen pixels away and then report a false success.
-  const permittedMiss = selected.enclosed ? Math.min(seedSnapRadius, 6) : 2;
+  const permittedMiss = selected.enclosed
+    ? options.roiRadius === undefined
+      ? Math.min(seedSnapRadius, 6)
+      : scanCandidateRadius
+    : 2;
   if (!selectedSeedEnclosure && selected.distance > permittedMiss) {
     return fallbackOrFailure("seed_not_enclosed", relevantCandidates.length);
   }
@@ -1151,6 +1842,10 @@ function detectControlledMarkerInRoi(
   const geometryPixels = enclosedRegion?.pixels || selected.component.pixels;
   const geometryBoundary = enclosedRegion?.boundary || selected.boundary;
   const geometryBbox = enclosedRegion?.bbox || selected.bbox;
+  const geometryDiameterPx = Math.max(geometryBbox.width, geometryBbox.height);
+  if (expectedDiameterPx > 0 && geometryDiameterPx < expectedDiameterPx * 0.35) {
+    return fallbackOrFailure("component_too_small", relevantCandidates.length);
+  }
   const xs = geometryPixels.map((point) => point.x);
   const ys = geometryPixels.map((point) => point.y);
   const center = {
@@ -1204,6 +1899,234 @@ function compatibleCanonicalRegion(
   return overlap >= 0.55 && centerDistance <= referenceSize * 0.2 && areaRatio <= 1.6;
 }
 
+function rejectedScanResult(
+  code: Extract<ControlledMarkerFailureCode, "scan_range_too_small" | "edge_discontinuous" | "unstable_enclosure">,
+  source: ControlledMarkerDetection,
+): ControlledMarkerDetection {
+  const rejected = failure(code, source.candidate_count);
+  rejected.diagnostics = source.diagnostics;
+  rejected.warnings = [code, ...source.warnings.filter((warning) => warning !== code)];
+  return rejected;
+}
+
+function classifyScanFailure(
+  image: MarkerImageData,
+  seed: MarkerPoint,
+  options: ControlledMarkerOptions,
+  roiRadius: number,
+  result: ControlledMarkerDetection,
+): ControlledMarkerDetection {
+  if (result.ok || !["no_dark_component", "component_too_small", "seed_not_enclosed"].includes(result.failure_code || "")) {
+    return result;
+  }
+  const expectedDiameterPx = Number(options.expectedDiameterPx || 0);
+  if (expectedDiameterPx > roiRadius * 1.7) return rejectedScanResult("scan_range_too_small", result);
+
+  const width = Math.floor(image.width);
+  const height = Math.floor(image.height);
+  const x0 = clamp(Math.floor(seed.x - roiRadius), 0, width - 1);
+  const y0 = clamp(Math.floor(seed.y - roiRadius), 0, height - 1);
+  const x1 = clamp(Math.ceil(seed.x + roiRadius), 0, width - 1);
+  const y1 = clamp(Math.ceil(seed.y + roiRadius), 0, height - 1);
+  const localLumas: number[] = [];
+  for (let y = y0; y <= y1; y += 1) {
+    for (let x = x0; x <= x1; x += 1) {
+      if (insideScanCircle(x, y, seed.x, seed.y, roiRadius)) {
+        localLumas.push(luma(image.data, (y * width + x) * 4));
+      }
+    }
+  }
+  const threshold = Math.min(160, robustBackgroundLuma(localLumas) - Number(options.minContrast ?? 24));
+  const darkPoints: MarkerPoint[] = [];
+  for (let y = y0; y <= y1; y += 1) {
+    for (let x = x0; x <= x1; x += 1) {
+      if (insideScanCircle(x, y, seed.x, seed.y, roiRadius)
+        && luma(image.data, (y * width + x) * 4) <= threshold) {
+        darkPoints.push({ x, y });
+      }
+    }
+  }
+  if (darkPoints.length < Math.max(12, Number(options.minAreaPx ?? 9))) return result;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const point of darkPoints) {
+    minX = Math.min(minX, point.x);
+    minY = Math.min(minY, point.y);
+    maxX = Math.max(maxX, point.x);
+    maxY = Math.max(maxY, point.y);
+  }
+  const surroundsSeed = seed.x >= minX && seed.x <= maxX && seed.y >= minY && seed.y <= maxY;
+  if (!surroundsSeed) return result;
+  // Once the configured scan already exceeds the operator-entered lesion
+  // diameter, an unrelated wrinkle, nostril or hair at the circular edge must
+  // not turn a broken target outline into the misleading "enlarge scan" result.
+  // Coverage is decided from the explicit size prior above; remaining dark
+  // evidence around the click is an internal continuity problem.
+  return rejectedScanResult("edge_discontinuous", result);
+}
+
+function validateScanSuccess(
+  result: ControlledMarkerDetection,
+  seed: MarkerPoint,
+  options: ControlledMarkerOptions,
+  roiRadius: number,
+): ControlledMarkerDetection {
+  if (!result.ok || !result.bbox || !result.boundary.length) return result;
+  const maximumBoundaryRadius = Math.max(
+    ...result.boundary.map((point) => Math.hypot(point.x - seed.x, point.y - seed.y)),
+  );
+  if (maximumBoundaryRadius >= roiRadius * 0.88) {
+    return rejectedScanResult("scan_range_too_small", result);
+  }
+  const expectedDiameterPx = Number(options.expectedDiameterPx || 0);
+  const detectedDiameterPx = Math.max(result.bbox.width, result.bbox.height);
+  if (expectedDiameterPx > 0) {
+    result.diagnostics = {
+      ...(result.diagnostics || {}),
+      detected_diameter_px: detectedDiameterPx,
+      expected_diameter_px: expectedDiameterPx,
+      detected_to_expected_diameter_ratio: detectedDiameterPx / expectedDiameterPx,
+    };
+  }
+  if (expectedDiameterPx > 0 && detectedDiameterPx < expectedDiameterPx * 0.35) {
+    return rejectedScanResult("unstable_enclosure", result);
+  }
+  if (expectedDiameterPx > 0 && detectedDiameterPx > expectedDiameterPx * 2.75) {
+    return rejectedScanResult("unstable_enclosure", result);
+  }
+  if (expectedDiameterPx > 0
+    && (detectedDiameterPx < expectedDiameterPx * 0.6 || detectedDiameterPx > expectedDiameterPx * 1.8)) {
+    result.warnings = [...new Set([...result.warnings, "operator_diameter_mismatch"])];
+  }
+  return result;
+}
+
+function recoverBySeedNeighborhoodConsensus(
+  image: MarkerImageData,
+  seed: MarkerPoint,
+  options: ControlledMarkerOptions,
+  roiRadius: number,
+  sourceResult: ControlledMarkerDetection,
+): ControlledMarkerDetection {
+  const expectedDiameterPx = Number(options.expectedDiameterPx || 0);
+  const sourceDiameterPx = sourceResult.bbox
+    ? Math.max(sourceResult.bbox.width, sourceResult.bbox.height)
+    : 0;
+  const sourceNeedsStabilityCheck = sourceResult.ok && (
+    sourceResult.warnings.some((warning) => [
+      "canonical_seed_unstable",
+      "seed_relocated_from_marker_stroke",
+      "operator_diameter_mismatch",
+    ].includes(warning))
+    || (expectedDiameterPx > 0 && sourceDiameterPx < expectedDiameterPx)
+  );
+  if (!sourceNeedsStabilityCheck && (sourceResult.ok || ![
+    "component_too_small",
+    "component_too_large",
+    "seed_not_enclosed",
+    "edge_discontinuous",
+    "unstable_enclosure",
+  ].includes(sourceResult.failure_code || ""))) return sourceResult;
+
+  const step = clamp(Math.round(roiRadius * 0.0625), 4, 8);
+  const probeDistances = [...new Set([
+    step,
+    step * 2,
+    Math.round(roiRadius * 0.25),
+    Math.round(roiRadius * 0.4),
+  ].map((distance) => clamp(distance, 4, Math.max(4, Math.round(roiRadius * 0.45)))))];
+  const directions: Array<[number, number]> = [
+    [-1, 0], [1, 0], [0, -1], [0, 1],
+    [-1, -1], [1, -1], [-1, 1], [1, 1],
+  ];
+  const offsets: Array<[number, number]> = probeDistances.flatMap((distance) => directions
+    .map(([dx, dy]) => [dx * distance, dy * distance] as [number, number]));
+  const width = Math.floor(image.width);
+  const height = Math.floor(image.height);
+  const successes: ControlledMarkerDetection[] = sourceResult.ok
+    && sourceResult.geometry_mode === "enclosed_region"
+    && sourceResult.boundary.length
+    ? [sourceResult]
+    : [];
+  for (const [dx, dy] of offsets) {
+    const neighbourSeed = { x: seed.x + dx, y: seed.y + dy };
+    if (neighbourSeed.x < 0 || neighbourSeed.x >= width || neighbourSeed.y < 0 || neighbourSeed.y >= height) continue;
+    let candidate = detectControlledMarkerInRoi(
+      image,
+      neighbourSeed,
+      { ...options, canonicalizeFromDetectedCenter: false },
+      roiRadius,
+    );
+    candidate = validateScanSuccess(candidate, seed, options, roiRadius);
+    if (!candidate.ok || candidate.geometry_mode !== "enclosed_region" || !candidate.boundary.length) continue;
+    successes.push(candidate);
+  }
+  if (successes.length < 2) {
+    sourceResult.diagnostics = {
+      ...(sourceResult.diagnostics || {}),
+      scan_probe_count: offsets.length,
+      scan_probe_success_count: successes.length,
+    };
+    return sourceNeedsStabilityCheck
+      ? rejectedScanResult("unstable_enclosure", sourceResult)
+      : sourceResult;
+  }
+
+  const groups: ControlledMarkerDetection[][] = [];
+  for (const candidate of successes) {
+    const group = groups.find((entries) => compatibleCanonicalRegion(entries[0], candidate));
+    if (group) group.push(candidate);
+    else groups.push([candidate]);
+  }
+  groups.sort((first, second) => second.length - first.length);
+  const supportedGroups = groups.filter((group) => group.length >= 2);
+  if (!supportedGroups.length) {
+    sourceResult.diagnostics = {
+      ...(sourceResult.diagnostics || {}),
+      scan_probe_count: offsets.length,
+      scan_probe_success_count: successes.length,
+      scan_probe_group_sizes: groups.map((group) => group.length),
+    };
+    return sourceNeedsStabilityCheck
+      ? rejectedScanResult("unstable_enclosure", sourceResult)
+      : sourceResult;
+  }
+  // Completeness is a property of the scan surface, not of the exact pointer
+  // pixel. Among regions with meaningful probe support, prefer the group whose
+  // median enclosed area is largest; this prevents a frequently sampled pore
+  // or one-sided stroke pocket from defeating the complete outline.
+  const medianArea = (group: ControlledMarkerDetection[]): number => {
+    const areas = group.map((entry) => entry.area_px).sort((a, b) => a - b);
+    return areas[Math.floor(areas.length / 2)] || 0;
+  };
+  supportedGroups.sort((first, second) => medianArea(second) - medianArea(first)
+    || second.length - first.length);
+  const selectedGroup = supportedGroups[0];
+  const selected = selectedGroup
+    .sort((first, second) => second.area_px - first.area_px)[0];
+  selected.warnings = [...new Set([...selected.warnings, "seed_neighborhood_consensus"])];
+  selected.diagnostics = {
+    ...(selected.diagnostics || {}),
+    scan_probe_count: offsets.length,
+    scan_probe_success_count: successes.length,
+    scan_probe_consensus_count: selectedGroup.length,
+    scan_probe_group_sizes: groups.map((group) => group.length),
+  };
+  return selected;
+}
+
+function attachScanMetadata(
+  result: ControlledMarkerDetection,
+  options: ControlledMarkerOptions,
+  roiRadius: number,
+): ControlledMarkerDetection {
+  result.scan = {
+    diameter_mm: Number.isFinite(Number(options.scanDiameterMm)) ? Number(options.scanDiameterMm) : null,
+    radius_px: roiRadius,
+    expected_diameter_px: Number.isFinite(Number(options.expectedDiameterPx)) ? Number(options.expectedDiameterPx) : null,
+  };
+  return result;
+}
+
 export function detectControlledMarker(
   image: MarkerImageData,
   seed: MarkerPoint,
@@ -1218,12 +2141,41 @@ export function detectControlledMarker(
   }
 
   if (options.roiRadius !== undefined) {
-    return detectControlledMarkerInRoi(
+    const roiRadius = clamp(Math.round(options.roiRadius), 1, Math.max(width, height));
+    let result = detectControlledMarkerInRoi(
       image,
       seed,
       options,
-      clamp(Math.round(options.roiRadius), 1, Math.max(width, height)),
+      roiRadius,
     );
+    if (result.ok
+      && result.geometry_mode === "enclosed_region"
+      && result.center
+      && result.bbox
+      && options.canonicalizeFromDetectedCenter !== false
+      && Math.hypot(result.center.x - seed.x, result.center.y - seed.y) > 0.5) {
+      const canonical = detectControlledMarkerInRoi(
+        image,
+        result.center,
+        { ...options, canonicalizeFromDetectedCenter: false },
+        roiRadius,
+      );
+      if (!compatibleCanonicalRegion(result, canonical)) {
+        // A closed region already proven to be wholly inside the scan must not
+        // be discarded only because re-seeding from its centroid follows a
+        // different weak-stroke repair path. Preserve the first enclosure and
+        // retain the disagreement as audit evidence; scan containment and size
+        // validation still run below.
+        result.warnings = [...new Set([...result.warnings, "canonical_seed_unstable"])];
+      } else {
+        canonical.warnings = [...new Set([...canonical.warnings, "canonical_seed_refined"])];
+        result = canonical;
+      }
+    }
+    result = classifyScanFailure(image, seed, options, roiRadius, result);
+    result = validateScanSuccess(result, seed, options, roiRadius);
+    result = recoverBySeedNeighborhoodConsensus(image, seed, options, roiRadius, result);
+    return attachScanMetadata(result, options, roiRadius);
   }
 
   const shortSide = Math.min(width, height);
@@ -1296,3 +2248,8 @@ export function detectControlledMarker(
   }
   return bestRetryableFailure || failure("no_dark_component");
 }
+
+export const __controlledMarkerForTests = {
+  adaptiveDarkBarrier,
+  bridgeSingleStrokeGap,
+};

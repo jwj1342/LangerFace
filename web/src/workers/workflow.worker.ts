@@ -31,11 +31,12 @@ const api: WorkflowWorkerApi = {
       atlas: request.atlas as AnyRecord,
       normal: request.normal,
       angleOffsetsDeg: request.angleOffsetsDeg,
+      directionOverride: request.directionOverride,
     });
   },
 
-  detectControlledMarker(image, seed) {
-    return detectControlledMarker(image, seed);
+  detectControlledMarker(image, seed, options) {
+    return detectControlledMarker(image, seed, options);
   },
 };
 

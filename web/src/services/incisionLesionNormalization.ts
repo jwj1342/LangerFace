@@ -10,7 +10,7 @@ import {
   type Vec3,
 } from "./incisionToolCore.ts";
 
-export const INCISION_LESION_NORMALIZATION_SCHEMA = "incision-lesion-normalization/v0.1";
+export const INCISION_LESION_NORMALIZATION_SCHEMA = "incision-lesion-normalization/v0.2";
 
 export interface PlanningLesionInput {
   center: Vec3;
@@ -24,7 +24,7 @@ export interface PlanningLesionNormalization {
   schema: typeof INCISION_LESION_NORMALIZATION_SCHEMA;
   applied: boolean;
   status: "normalized" | "not_applicable" | "insufficient_boundary" | "degenerate_boundary";
-  boundary_role: "planning_geometry" | "planning_scale_and_center" | "audit_only" | "unavailable";
+  boundary_role: "planning_geometry" | "planning_scale" | "audit_only" | "unavailable";
   boundary_point_count: number;
   planning_center: Vec3;
   planning_diameter_mm: number;
@@ -32,6 +32,7 @@ export interface PlanningLesionNormalization {
   detected_equivalent_diameter_mm: number | null;
   detected_enclosing_diameter_mm: number | null;
   detected_compactness: number | null;
+  detected_centroid: Vec3 | null;
   detected_center_shift_mm: number | null;
   detected_to_planning_diameter_ratio: number | null;
   clinical_scale_source: "operator_input" | "controlled_marker_enclosing_circle";
@@ -166,14 +167,18 @@ export function normalizePlanningLesion(
         : boundary.length < 3
           ? "insufficient_boundary"
           : "degenerate_boundary",
-    boundary_role: boundary.length < 3 ? "unavailable" : applied ? "planning_scale_and_center" : "planning_geometry",
+    // The detector-confirmed center is the stable lesion/planning anchor. A
+    // boundary-derived centroid is useful for scale and audit, but must not
+    // silently move the visible lesion or the incision axis after detection.
+    boundary_role: boundary.length < 3 ? "unavailable" : applied ? "planning_scale" : "planning_geometry",
     boundary_point_count: boundary.length,
-    planning_center: applied ? measurements.center : input.center,
+    planning_center: input.center,
     planning_diameter_mm: planningDiameter,
     detected_area_mm2: measurements.areaMm2,
     detected_equivalent_diameter_mm: equivalentDiameter,
     detected_enclosing_diameter_mm: enclosingDiameter,
     detected_compactness: measurements.compactness,
+    detected_centroid: measurements.valid ? measurements.center : null,
     detected_center_shift_mm: measurements.centerShiftMm,
     detected_to_planning_diameter_ratio: equivalentDiameter == null || !(planningDiameter > 0)
       ? null

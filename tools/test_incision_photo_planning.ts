@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildSubcutaneousDiameterEstimateRefs,
   buildIncisionPhotoGeometry,
+  buildPhotoSurfaceCanonicalFusiform,
   candidateEndpointSurfaceRefs,
   diagnoseSurfaceProjectedFusiformFit,
   drawFusiformRenderMode,
@@ -14,12 +15,15 @@ import {
   inspectPhotoCandidateProjection,
   nearestPhotoEndpointHandle,
   pointsToSurfaceRefs,
+  projectedRstlDeviation,
+  queryIncisionPhotoRstlDirection,
   smoothSurfaceProjectedFusiform,
   surfaceRefToModelPoint,
   validateIncisionPhotoFile,
 } from "../web/src/services/incisionPhotoPlanning.ts";
 import type { Triangle, Vec3 } from "../web/src/services/softBody.ts";
 import { mapAtlas } from "../web/src/services/geometryAtlas.ts";
+import { mapSurfaceRefs } from "../web/src/services/incisionOverlay.ts";
 import { buildRstlSourceContract, compareRstlSourceContracts } from "../web/src/services/rstlSourceContract.ts";
 
 const vertices: Vec3[] = [
@@ -261,6 +265,112 @@ assert.equal(surfaceGeometry.candidateProjection.surfaceConstrained, true);
 assert.equal(surfaceGeometry.candidateProjection.valid, true);
 assert.equal(surfaceGeometry.candidateProjection.smoothingMode, "globalBezier");
 assert.equal(surfaceGeometry.candidateProjection.smoothingDiagnostics?.ok, true);
+
+const photoCanonicalBoundaryRefs = pointsToSurfaceRefs([
+  [0.46, 0.39, 0], [0.54, 0.39, 0], [0.54, 0.61, 0], [0.46, 0.61, 0],
+], vertices, triangles);
+const photoCanonicalGeometry = buildIncisionPhotoGeometry({
+  landmarks,
+  triangles,
+  atlasLines: [],
+  centerRef: surfaceCenterRefs[0],
+  boundaryRefs: photoCanonicalBoundaryRefs,
+  candidateRefs: surfaceCandidateRefs,
+  endpointRefs: surfaceEndpointRefs,
+  candidateType: "fusiform",
+  candidateAspectRatio: 4,
+  candidateTipAngleDeg: 30,
+});
+assert.equal(photoCanonicalGeometry.candidateProjection.smoothingMode, "photoCanonical",
+  "product geometry prefers a standard photo-space fusiform when every point maps to visible facial surface");
+assert.equal(photoCanonicalGeometry.candidateProjection.valid, true);
+assert.equal(photoCanonicalGeometry.candidateProjection.smoothingDiagnostics?.photoBoundaryOutsideCount, 0,
+  "the standard photo geometry expands symmetrically until every projected lesion-boundary point is enclosed");
+assert.equal(photoCanonicalGeometry.candidateProjection.smoothingDiagnostics?.photoSurfaceOutsideCount, 0,
+  "the standard photo geometry is accepted only while all samples remain on visible facial triangles");
+assert.ok((photoCanonicalGeometry.candidateProjection.smoothingDiagnostics?.photoCanonicalScale || 1) > 1,
+  "photo-space coverage correction is explicit and auditable instead of silently clipping the boundary");
+assert.ok(Math.abs(
+  (photoCanonicalGeometry.endpoints[0][0] + photoCanonicalGeometry.endpoints[1][0]) * 0.5
+    - photoCanonicalGeometry.center![0],
+) < 1e-6 && Math.abs(
+  (photoCanonicalGeometry.endpoints[0][1] + photoCanonicalGeometry.endpoints[1][1]) * 0.5
+    - photoCanonicalGeometry.center![1],
+) < 1e-6, "photo-canonical tips remain symmetric around the detector-confirmed center");
+assert.ok(Math.abs(
+  Number(photoCanonicalGeometry.candidateProjection.smoothingDiagnostics?.candidateLength)
+    / Number(photoCanonicalGeometry.candidateProjection.smoothingDiagnostics?.maxWidth) - 4,
+) < 1e-6, "photo-canonical correction preserves the candidate's requested aspect ratio");
+
+const foreheadGapLandmarks = Array.from({ length: 468 }, () => [200, 250, 0] as Vec3);
+foreheadGapLandmarks[0] = [100, 220, 0];
+foreheadGapLandmarks[1] = [300, 220, 0];
+foreheadGapLandmarks[2] = [100, 400, 0];
+foreheadGapLandmarks[10] = [200, 80, 0];
+for (const index of [9, 8, 107, 336]) foreheadGapLandmarks[index] = [200, 200, 0];
+const foreheadGapFit = buildPhotoSurfaceCanonicalFusiform({
+  sourceCandidate: surfaceProjectedFusiform,
+  sourceEndpoints: [[120, 160, 0], [280, 160, 0]],
+  center: [200, 160, 0],
+  boundary: [[190, 150, 0], [210, 150, 0], [210, 170, 0], [190, 170, 0]],
+  aspectRatio: 4,
+  tipAngleDeg: 30,
+  landmarks: foreheadGapLandmarks,
+  triangles: [[0, 1, 2]],
+  skinVisible: () => true,
+  axisHint: [1, 0],
+});
+assert.ok(foreheadGapFit.fit,
+  "an upper-forehead outline may bridge MediaPipe's known mesh cutoff when it remains inside the head envelope");
+assert.ok((foreheadGapFit.diagnostics.photoSurfaceMeshOutsideCount || 0) > 0);
+assert.equal(foreheadGapFit.diagnostics.photoSurfaceOutsideCount, 0,
+  "the forehead-only fallback is auditable instead of silently disabling the mesh gate");
+assert.equal(foreheadGapFit.diagnostics.photoCanonicalAxisSource, "nearest_projected_rstl");
+const lowerFaceMeshGapFit = buildPhotoSurfaceCanonicalFusiform({
+  sourceCandidate: surfaceProjectedFusiform,
+  sourceEndpoints: [[120, 320, 0], [280, 320, 0]],
+  center: [200, 320, 0],
+  boundary: [[190, 310, 0], [210, 310, 0], [210, 330, 0], [190, 330, 0]],
+  aspectRatio: 4,
+  tipAngleDeg: 30,
+  landmarks: foreheadGapLandmarks,
+  triangles: [[0, 1, 2]],
+  skinVisible: () => true,
+  axisHint: [1, 0],
+});
+assert.equal(lowerFaceMeshGapFit.fit, null,
+  "mesh gaps below the forehead are not reclassified as skin because they may be eyes, nostrils or mouth");
+assert.equal(lowerFaceMeshGapFit.diagnostics.reason, "photo_surface_exit");
+
+const offCenterSelectionRefs = pointsToSurfaceRefs([[0.42, 0.5, 0]], vertices, triangles);
+const offCenterSurfaceGeometry = buildIncisionPhotoGeometry({
+  landmarks,
+  triangles,
+  atlasLines: [],
+  centerRef: offCenterSelectionRefs[0],
+  boundaryRefs: [],
+  candidateRefs: surfaceCandidateRefs,
+  endpointRefs: surfaceEndpointRefs,
+  candidateType: "fusiform",
+});
+assert.equal(offCenterSurfaceGeometry.candidateProjection.smoothingDiagnostics?.ok, true,
+  "photo smoothing preserves the enclosing candidate midpoint when the lesion centroid is asymmetric");
+assert.ok(["globalBezier", "segmentedBezier"].includes(offCenterSurfaceGeometry.candidateProjection.smoothingMode || ""),
+  "a bounded surface fit may use either direct cubic strategy without redefining the lesion center");
+const offCenterCandidate = offCenterSurfaceGeometry.candidate;
+const offCenterFarTipIndex = (offCenterCandidate.length - 1) / 2;
+const offCenterExpectedMidpointX = (
+  offCenterSurfaceGeometry.endpoints[0][0] + offCenterSurfaceGeometry.endpoints[1][0]
+) * 0.5;
+assert.ok(Math.abs(offCenterSurfaceGeometry.center![0] - 268) < 1e-6,
+  "the visible lesion center remains the detector-confirmed point instead of moving to the fusiform midpoint");
+assert.ok(Math.abs(offCenterSurfaceGeometry.planningCenter![0] - offCenterExpectedMidpointX) < 1e-6);
+assert.ok((offCenterSurfaceGeometry.lesionToPlanningCenterPx || 0) > 1,
+  "an imported or stale candidate-center mismatch remains explicit in geometry diagnostics");
+assert.ok(Math.abs(
+  (offCenterCandidate[0][0] + offCenterCandidate[offCenterFarTipIndex][0]) * 0.5
+    - offCenterExpectedMidpointX,
+) < 1e-6, "the smoothed candidate is not pulled back toward the off-center selection point");
 assert.ok(surfaceGeometry.fusiformRendering, "successful fusiform geometry exposes direct-render cubic controls");
 const surfaceGeometryFarTip = (surfaceGeometry.candidate.length - 1) / 2;
 assert.deepEqual(surfaceGeometry.endpoints, [surfaceGeometry.candidate[0], surfaceGeometry.candidate[surfaceGeometryFarTip]],
@@ -289,7 +399,7 @@ assert.ok(surfaceGeometry.candidate.every((point) => point[0] >= sourceMinX - 1e
 "rendered smoothing cannot expand beyond the original surface-projected envelope");
 
 const offCenterRefs = pointsToSurfaceRefs([[0.1, 0.1, 0]], vertices, triangles);
-const rejectedSmoothingGeometry = buildIncisionPhotoGeometry({
+const farOffSelectionGeometry = buildIncisionPhotoGeometry({
   landmarks,
   triangles,
   atlasLines: [],
@@ -299,10 +409,42 @@ const rejectedSmoothingGeometry = buildIncisionPhotoGeometry({
   endpointRefs: surfaceEndpointRefs,
   candidateType: "fusiform",
 });
-assert.equal(rejectedSmoothingGeometry.candidateProjection.valid, true,
-  "a valid source candidate remains visible when the optional bounded global fit fails");
-assert.equal(rejectedSmoothingGeometry.candidateProjection.smoothingMode, "sourceFallback");
-assert.equal(rejectedSmoothingGeometry.candidateProjection.smoothingDiagnostics?.reason, "center_shift_exceeded");
+assert.equal(farOffSelectionGeometry.candidateProjection.valid, true,
+  "a valid source candidate remains visible when the selection centroid is far from its geometric center");
+assert.equal(farOffSelectionGeometry.center?.[0], 140,
+  "even a large legacy mismatch cannot overwrite the visible lesion center");
+assert.ok((farOffSelectionGeometry.lesionToPlanningCenterPx || 0) > 100);
+
+{
+  const centerRef = pointsToSurfaceRefs([[0.25, 0.25, 0]], vertices, triangles)[0];
+  const displayedAtlas = [{
+    name: "displayed_local_rstl",
+    region: "cheek",
+    points: [[0, 0.65, 0.10], [0, 0.35, 0.40]] as [number, number, number][],
+    postExpansionOffsetsFaceRatioSparse: [[0, 0, 0.05], [1, 0, -0.05]] as [number, number, number][],
+  }];
+  const direction = queryIncisionPhotoRstlDirection({
+    centerRef,
+    vertices,
+    landmarks,
+    surfaceLandmarks: landmarks,
+    triangles,
+    atlasLines: displayedAtlas,
+  });
+  assert.equal(direction?.source, "photo_projected_rstl_nearest_segment");
+  assert.equal(direction?.line_id, "displayed_local_rstl");
+  const modelCenter = surfaceRefToModelPoint(centerRef, vertices, triangles)!;
+  const axis = direction?.vector as Vec3;
+  const epsilon = 0.05;
+  const axisRefs = pointsToSurfaceRefs([
+    [modelCenter[0] - axis[0] * epsilon, modelCenter[1] - axis[1] * epsilon, 0],
+    [modelCenter[0] + axis[0] * epsilon, modelCenter[1] + axis[1] * epsilon, 0],
+  ], vertices, triangles);
+  const projectedEndpoints = mapSurfaceRefs(axisRefs, landmarks, triangles).pts;
+  const mappedRstl = mapAtlas(displayedAtlas, landmarks, triangles);
+  assert.ok((projectedRstlDeviation(mapSurfaceRefs([centerRef], landmarks, triangles).pts[0], projectedEndpoints, mappedRstl) || 0) < 1e-4,
+    "the inverse local surface mapping makes the generated center axis parallel to the nearest displayed RSTL tangent");
+}
 
 {
   const surfaceLandmarks = landmarks.map(([x, y, z]) => [x, y + x * 0.2, z] as Vec3);

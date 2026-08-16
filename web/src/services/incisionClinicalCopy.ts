@@ -208,22 +208,31 @@ export function controlledMarkerFailureMessage(
 ): string {
   const stage = String(detection.diagnostics?.failure_stage || "");
   if (detection.failure_code === "invalid_image") return "照片暂时无法读取，请重新上传后再试。";
-  if (detection.failure_code === "seed_outside_image") return "当前点击位置不在照片范围内，请在模拟肿物范围内重新点击。";
+  if (detection.failure_code === "seed_outside_image") return "当前点击位置不在照片范围内，请在肿物边界内部重新点击。";
   if (detection.failure_code === "ambiguous_candidates") {
-    return "当前区域有多个可能的肿物范围，请只保留一个模拟肿物曲线后再试。";
+    return "当前区域有多个可能的肿物范围，请只保留一个肿物边界后再试。";
+  }
+  if (detection.failure_code === "scan_range_too_small") {
+    return "扫描面没有完整覆盖肿物边界，请扩大扫描直径后再试。";
+  }
+  if (detection.failure_code === "edge_discontinuous") {
+    return "扫描面已覆盖相关曲线，但肿物边缘仍不连续；请补齐边缘，或在候选补线可确认时再继续。";
+  }
+  if (detection.failure_code === "unstable_enclosure") {
+    return "当前只识别到局部小轮廓，结果不足以代表完整肿物；请调整扫描范围或重新描绘边缘。";
   }
   if (detection.failure_code === "component_too_large" || stage === "marker_area_invalid") {
-    return "当前识别范围过大，模拟肿物曲线可能与附近的深色区域连在一起，请重新绘制后再试。";
+    return "当前识别范围过大，肿物边界可能与附近的深色区域连在一起，请重新绘制后再试。";
   }
   if (detection.failure_code === "low_contrast" || stage === "marker_contrast_low") {
-    return "模拟肿物曲线颜色较浅，请加深后再试。";
+    return "肿物边界颜色较浅，请加深后再试。";
   }
   if (stage === "seed_region_leaks_to_roi_border") {
-    return "当前点击区域没有形成完整的肿物范围，请补齐模拟肿物曲线后再试。";
+    return "当前点击区域没有形成完整的肿物范围，请补齐肿物边界后再试。";
   }
   if (stage === "boundary_support_low" || stage === "boundary_support_missing") {
-    return "模拟肿物曲线可能较浅或留有较大开口，请加深或补齐后再试。";
+    return "肿物边界可能较浅或留有较大开口，请加深或补齐后再试。";
   }
-  return "当前点击区域未识别到肿物，请在模拟肿物范围内重新点击。";
+  return "当前点击区域未识别到肿物，请在肿物边界内部重新点击。";
 }
 import type { ControlledMarkerDetection } from "./controlledMarkerDetection";

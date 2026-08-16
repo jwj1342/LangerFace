@@ -5,12 +5,26 @@ import type {
 } from "../services/incisionTools.ts";
 import type {
   ControlledMarkerDetection,
+  ControlledMarkerOptions,
   MarkerImageData,
   MarkerPoint,
 } from "../services/controlledMarkerDetection.ts";
 
 export type WorkflowVec3 = [number, number, number];
 export type WorkflowTriangle = [number, number, number];
+
+export interface WorkflowDirectionOverride {
+  point?: WorkflowVec3;
+  vector: WorkflowVec3;
+  angle_deg?: number;
+  confidence?: number;
+  source?: string;
+  nearest_distance?: number | null;
+  support_count?: number;
+  angular_spread_deg?: number;
+  confidence_reasons?: string[];
+  [key: string]: unknown;
+}
 
 export type WorkflowTumorQuality = ReturnType<typeof summarizeTumorInputQuality>;
 export type WorkflowPlanResult = ReturnType<typeof planIncisionWorkflow>;
@@ -22,6 +36,7 @@ export interface PlanIncisionRequest {
   atlas: unknown;
   normal?: WorkflowVec3;
   angleOffsetsDeg?: number[];
+  directionOverride?: WorkflowDirectionOverride | null;
 }
 
 export interface WorkflowWorkerDiagnostics {
@@ -36,5 +51,9 @@ export interface WorkflowWorkerApi {
   diagnostics: () => WorkflowWorkerDiagnostics;
   summarizeTumorInput: (tumor: TumorInput) => WorkflowTumorQuality;
   planIncision: (request: PlanIncisionRequest) => WorkflowPlanResult;
-  detectControlledMarker: (image: MarkerImageData, seed: MarkerPoint) => ControlledMarkerDetection;
+  detectControlledMarker: (
+    image: MarkerImageData,
+    seed: MarkerPoint,
+    options?: ControlledMarkerOptions,
+  ) => ControlledMarkerDetection;
 }

@@ -7,6 +7,11 @@ export interface IncisionDomElements extends Record<string, any> {
   photoEndpointHandles: NodeListOf<HTMLButtonElement>;
   photoInput: HTMLInputElement;
   controlledMarkerDetect: HTMLButtonElement;
+  controlledMarkerScanControl: HTMLElement;
+  controlledMarkerScanDiameter: HTMLInputElement;
+  controlledMarkerScanValue: HTMLOutputElement;
+  controlledMarkerScanOverlay: HTMLElement;
+  controlledMarkerScanOverlayLabel: HTMLElement;
   photoMirror: HTMLButtonElement;
   photoReset: HTMLButtonElement;
   surfaceMode: HTMLButtonElement;
@@ -110,6 +115,11 @@ export function collectIncisionElements(root: ParentNode | Document = document):
     photoEndpointHandles: root.querySelectorAll<HTMLButtonElement>(".incision-photo-endpoint-handle"),
     photoInput: byId<HTMLInputElement>(root, "incisionPhotoInput"),
     controlledMarkerDetect: byId<HTMLButtonElement>(root, "controlledMarkerDetectBtn"),
+    controlledMarkerScanControl: requireScopedQuery<HTMLElement>(root, ".controlled-marker-scan-control"),
+    controlledMarkerScanDiameter: byId<HTMLInputElement>(root, "controlledMarkerScanDiameter"),
+    controlledMarkerScanValue: byId<HTMLOutputElement>(root, "controlledMarkerScanValue"),
+    controlledMarkerScanOverlay: byId(root, "controlledMarkerScanOverlay"),
+    controlledMarkerScanOverlayLabel: byId(root, "controlledMarkerScanOverlayLabel"),
     photoMirror: byId<HTMLButtonElement>(root, "incisionPhotoMirrorBtn"),
     photoReset: byId<HTMLButtonElement>(root, "incisionPhotoResetBtn"),
     surfaceMode: byId<HTMLButtonElement>(root, "incisionSurfaceModeBtn"),

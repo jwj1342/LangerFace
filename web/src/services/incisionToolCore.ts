@@ -413,6 +413,25 @@ export function annotateCandidateEngineeringViolations<T extends AnyRecord>(cand
   const rawPoints = candidateRawPoints(candidate);
   const path = normalizedCandidatePath(candidate, verts);
   const violations: AnyRecord[] = [];
+  const boundaryOutsideCount = Number(candidate.metrics?.boundary_envelope_outside_count || 0);
+  if (candidate.type === "fusiform" && boundaryOutsideCount > 0) {
+    violations.push({
+      code: "candidate_does_not_enclose_lesion_boundary",
+      location: {
+        outside_boundary_point_count: boundaryOutsideCount,
+        minimum_envelope_margin_mm: candidate.metrics?.boundary_envelope_min_margin_mm ?? null,
+      },
+      recovery: "Regenerate a smooth fusiform that encloses every recorded lesion boundary point.",
+    });
+  }
+  const axisCoverageDeficitMm = Number(candidate.metrics?.axis_coverage_deficit_mm || 0);
+  if (candidate.type === "fusiform" && axisCoverageDeficitMm > 1e-6) {
+    violations.push({
+      code: "candidate_does_not_cover_lesion_axis",
+      location: { axis_coverage_deficit_mm: axisCoverageDeficitMm },
+      recovery: "Increase the fusiform length or reduce the lesion extent only after correcting the recorded boundary.",
+    });
+  }
   if (rawPoints.length < 2 || path.length !== rawPoints.length) {
     violations.push({
       code: "invalid_candidate_geometry",

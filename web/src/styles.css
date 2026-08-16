@@ -586,6 +586,31 @@
     gap: 12px;
   }
 
+  .incision-workbench .controlled-marker-scan-control {
+    display: grid;
+    grid-template-columns: auto 96px;
+    align-items: center;
+    gap: 8px;
+    min-width: 178px;
+    color: #dbeafe;
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .incision-workbench .controlled-marker-scan-control[hidden] {
+    display: none;
+  }
+
+  .incision-workbench #controlledMarkerScanDiameter {
+    width: 96px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    accent-color: #38bdf8;
+  }
+
   .incision-workbench #stageStatus {
     min-width: 0;
     max-width: min(760px, 48vw);
@@ -1064,6 +1089,37 @@
     pointer-events: none;
   }
 
+  .incision-workbench .controlled-marker-scan-overlay {
+    position: absolute;
+    z-index: 4;
+    box-sizing: border-box;
+    transform: translate(-50%, -50%);
+    border: 2px solid rgb(56 189 248 / 0.92);
+    border-radius: 50%;
+    background: rgb(56 189 248 / 0.08);
+    box-shadow: 0 0 0 1px rgb(8 15 24 / 0.9), inset 0 0 0 1px rgb(255 255 255 / 0.18);
+    pointer-events: none;
+  }
+
+  .incision-workbench .controlled-marker-scan-overlay[hidden] {
+    display: none;
+  }
+
+  .incision-workbench .controlled-marker-scan-overlay > span {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 6px);
+    transform: translateX(-50%);
+    padding: 3px 6px;
+    border-radius: 4px;
+    background: rgb(8 15 24 / 0.88);
+    color: #e0f2fe;
+    font-size: 11px;
+    font-weight: 750;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
   .incision-workbench #incisionPhotoCanvas[data-active="true"] ~ .incision-stage-boundary {
     display: none;
   }
@@ -1088,6 +1144,11 @@
     cursor: grab;
     pointer-events: auto;
     touch-action: none;
+  }
+
+  .incision-workbench #incisionPhotoCanvas[data-controlled-marker="true"]
+    ~ .incision-photo-endpoint-layer .incision-photo-endpoint-handle {
+    pointer-events: none;
   }
 
   .incision-workbench .incision-photo-endpoint-handle::after {

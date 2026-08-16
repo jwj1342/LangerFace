@@ -3,7 +3,11 @@ import * as THREE from "three";
 import { compileIncisionOverlay, pointToSurfaceRef } from "./incisionOverlay.ts";
 import { createPhotoPlanningController } from "./photoPlanningController";
 import type { SurfaceRef } from "./incisionOverlay.ts";
-import { pointsToSurfaceRefs, surfaceRefToModelPoint } from "./incisionPhotoPlanning";
+import {
+  pointsToSurfaceRefs,
+  queryIncisionPhotoRstlDirection,
+  surfaceRefToModelPoint,
+} from "./incisionPhotoPlanning";
 import { createIncisionPhotoRuntime, type IncisionPhotoRuntime } from "./incisionPhotoRuntime";
 import {
   applyCandidateEdit,
@@ -1476,12 +1480,24 @@ function ensureWorkflowWorker() {
 }
 
 async function planWorkflowForCurrentTumor(tumor: TumorInput) {
+  const frame = S.planning2d?.getFrameState();
+  const directionOverride = frame?.source && frame.landmarks?.length && S.lesionRef
+    ? queryIncisionPhotoRstlDirection({
+      centerRef: S.lesionRef,
+      vertices: S.verts,
+      landmarks: frame.landmarks,
+      surfaceLandmarks: frame.surfaceLandmarks,
+      triangles: S.tris,
+      atlasLines: S.atlas?.lines || [],
+    })
+    : null;
   const request = {
     tumor,
     verts: S.verts,
     tris: S.tris,
     atlas: S.atlas,
     normal: S.normals[S.lesion],
+    directionOverride,
   };
   const worker = ensureWorkflowWorker();
   const execution = await planIncisionWithWorkflowFallback({ client: worker, request });
@@ -1614,8 +1630,7 @@ function bindWorkbenchEvents() {
       publishState: publishIncisionState,
       onTumorKindChange: () => { updateFormVisibility(); previewWorkflow(); },
       onDiameterInput: () => {
-        els.diameterVal.textContent = els.diameter.value;
-        updateTumorRing();
+        els.diameterVal.textContent = els.diameter.value; updateTumorRing(); photoRuntime?.updateControlledMarkerScan(false);
       },
       onDiameterChange: previewWorkflow,
       onDepthInput: () => { els.depthVal.textContent = els.depth.value; },
@@ -1665,6 +1680,7 @@ function bindWorkbenchEvents() {
       onSecondaryCueFile: importSecondaryCueFile,
       onPhotoFile: (file) => { void photoRuntime?.load(file); },
       onControlledMarkerDetect: () => photoRuntime?.beginControlledMarkerDetection(),
+      onControlledMarkerScanInput: () => photoRuntime?.updateControlledMarkerScan(true), onControlledMarkerPointerMove: (event) => photoRuntime?.moveControlledMarkerScan(event), onControlledMarkerPointerLeave: () => photoRuntime?.hideControlledMarkerScan(),
       preparePhotoInteraction: () => photoRuntime?.fit(),
       photoEndpointHandleFromEvent: (event) => photoRuntime?.endpointHandleFromEvent(event) ?? null,
       dragPhotoEndpoint: (event, handle) => photoRuntime?.dragEndpoint(event, handle),

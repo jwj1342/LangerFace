@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 
 const compatibilityHtml = fs.readFileSync("incision_workflow.html", "utf8");
 const legacyAgenticCompatibilityHtml = fs.readFileSync("incision_agent.html", "utf8");
+const tumorInputPanel = fs.readFileSync("src/components/TumorInputPanel.tsx", "utf8");
 function normalizeTsxContracts(source) {
   return source.replace(/id:\s*"([^"]+)"/g, 'id="$1"');
 }
@@ -12,7 +13,7 @@ const html = normalizeTsxContracts([
   fs.readFileSync("src/routes/IncisionWorkbench.tsx", "utf8"),
   fs.readFileSync("src/components/IncisionStatePanel.tsx", "utf8"),
   fs.readFileSync("src/components/IncisionStagePanel.tsx", "utf8"),
-  fs.readFileSync("src/components/TumorInputPanel.tsx", "utf8"),
+  tumorInputPanel,
   fs.readFileSync("src/components/SecondaryCuePanel.tsx", "utf8"),
   fs.readFileSync("src/components/CandidateResultPanel.tsx", "utf8"),
   fs.readFileSync("src/components/EditControlsPanel.tsx", "utf8"),
@@ -60,6 +61,9 @@ assert.ok(html.includes('id="exportTumorBtn"'), "workbench exposes tumor export 
 assert.ok(html.includes('id="importTumorBtn"'), "workbench exposes tumor import button");
 assert.ok(html.includes('id="tumorImportFile"'), "workbench exposes hidden tumor import file input");
 assert.ok(html.includes('id="controlledMarkerDetectBtn"'), "photo workbench exposes seeded controlled-marker detection");
+assert.ok(tumorInputPanel.includes('useState("cutaneous")')
+  && tumorInputPanel.includes('tumor.kind || "cutaneous"'),
+"cutaneous fusiform planning is the page default before and after the first runtime snapshot");
 assert.ok(!html.includes('id="controlledMarkerConfirmBtn"'), "controlled marker applies on click without a second confirmation action");
 assert.ok(html.includes('id="secondaryCueState"'), "workbench exposes secondary cue status");
 assert.ok(html.includes('id="importSecondaryCueBtn"'), "workbench exposes secondary cue import action");

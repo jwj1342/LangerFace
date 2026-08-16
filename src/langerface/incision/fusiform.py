@@ -213,6 +213,7 @@ def _boundary_profile(
         return None
     center = np.mean(boundary, axis=0)
     projected = _project(boundary, center, axis, perpendicular)
+    selected_center_projected = _project(boundary, tumor_center, axis, perpendicular)
     max_axis = float(np.max(np.abs(projected[:, 0])))
     max_perpendicular = float(np.max(np.abs(projected[:, 1])))
     area_mm2 = _polygon_area(projected) / units_per_mm**2
@@ -222,6 +223,12 @@ def _boundary_profile(
         "center": center,
         "axis_diameter_mm": 2.0 * max_axis / units_per_mm,
         "perp_diameter_mm": 2.0 * max_perpendicular / units_per_mm,
+        "selected_center_axis_diameter_mm": (
+            2.0 * float(np.max(np.abs(selected_center_projected[:, 0]))) / units_per_mm
+        ),
+        "selected_center_perp_diameter_mm": (
+            2.0 * float(np.max(np.abs(selected_center_projected[:, 1]))) / units_per_mm
+        ),
         "area_mm2": area_mm2,
         "area_ratio_to_diameter_disk": area_mm2 / max(nominal_disk_area_mm2, 1e-9),
         "self_intersection": _polygon_self_intersects(projected),
@@ -338,46 +345,80 @@ def generate_fusiform_incision(
         perpendicular,
         units_per_mm,
     )
-    center = boundary_summary["center"] if boundary_summary else tumor_center
+    # The detector-confirmed center is authoritative. An asymmetric boundary
+    # grows the symmetric candidate; it never silently moves that center.
+    center = tumor_center
     lesion_axis_mm = max(
         diameter_mm,
-        float(boundary_summary["axis_diameter_mm"]) if boundary_summary else 0.0,
+        float(boundary_summary["selected_center_axis_diameter_mm"]) if boundary_summary else 0.0,
     )
     lesion_width_mm = max(
         diameter_mm,
-        float(boundary_summary["perp_diameter_mm"]) if boundary_summary else 0.0,
+        float(boundary_summary["selected_center_perp_diameter_mm"]) if boundary_summary else 0.0,
     )
-    width_mm = lesion_width_mm + 2.0 * margin_mm
+    requested_width_mm = lesion_width_mm + 2.0 * margin_mm
+    width_mm = requested_width_mm
     axis_coverage_mm = lesion_axis_mm + 2.0 * margin_mm
     ratio_length_mm = width_mm * cfg.length_to_width_ratio
     target_length_mm = max(ratio_length_mm, axis_coverage_mm)
     length_mm = _clamp(target_length_mm, cfg.min_length_mm, cfg.max_length_mm)
     axis_coverage_deficit_mm = max(0.0, axis_coverage_mm - length_mm)
 
+    envelope_length_iterations = 0
+    envelope_width_iterations = 0
+    while True:
+        half_length = length_mm * units_per_mm * 0.5
+        half_width = width_mm * units_per_mm * 0.5
+        profile = fusiform_profile(
+            center,
+            axis,
+            perpendicular,
+            half_length,
+            half_width,
+            cfg.samples,
+            cfg.tip_angle_deg,
+        )
+        upper = np.asarray(profile["upper"], dtype=np.float64)
+        lower = np.asarray(profile["lower"], dtype=np.float64)
+        outline = np.concatenate((upper, lower[1:-1][::-1]), axis=0)
+        outline_metrics = _outline_metrics(
+            upper,
+            lower,
+            outline,
+            boundary,
+            center,
+            axis,
+            perpendicular,
+            units_per_mm,
+        )
+        if not boundary_summary or int(outline_metrics["boundary_envelope_outside_count"]) == 0:
+            break
+        upper_projected = _project(upper, center, axis, perpendicular)
+        boundary_projected = _project(boundary, center, axis, perpendicular)
+        outside = [
+            (float(x), float(y))
+            for x, y in boundary_projected
+            if _interpolate_half_width(float(x), upper_projected) < abs(float(y)) - 1e-7
+        ]
+        near_tapered_tip = any(abs(x) >= half_length * 0.88 for x, _ in outside)
+        maximum_width_mm = min(requested_width_mm * 2.0, length_mm / 2.2)
+        if not near_tapered_tip and width_mm < maximum_width_mm - 1e-9:
+            width_mm = min(maximum_width_mm, max(width_mm + 0.5, width_mm * 1.1))
+            envelope_width_iterations += 1
+        else:
+            next_length_mm = min(cfg.max_length_mm, max(length_mm + 1.0, length_mm * 1.08))
+            if next_length_mm > length_mm + 1e-9:
+                length_mm = next_length_mm
+                envelope_length_iterations += 1
+            elif width_mm < maximum_width_mm - 1e-9:
+                width_mm = min(maximum_width_mm, max(width_mm + 0.5, width_mm * 1.1))
+                envelope_width_iterations += 1
+            else:
+                break
+        if envelope_length_iterations + envelope_width_iterations >= 32:
+            break
     half_length = length_mm * units_per_mm * 0.5
-    half_width = width_mm * units_per_mm * 0.5
-    profile = fusiform_profile(
-        center,
-        axis,
-        perpendicular,
-        half_length,
-        half_width,
-        cfg.samples,
-        cfg.tip_angle_deg,
-    )
-    upper = np.asarray(profile["upper"], dtype=np.float64)
-    lower = np.asarray(profile["lower"], dtype=np.float64)
-    outline = np.concatenate((upper, lower[1:-1][::-1]), axis=0)
-    outline_metrics = _outline_metrics(
-        upper,
-        lower,
-        outline,
-        boundary,
-        center,
-        axis,
-        perpendicular,
-        units_per_mm,
-    )
+    axis_coverage_deficit_mm = max(0.0, axis_coverage_mm - length_mm)
     endpoints = [center - axis * half_length, center + axis * half_length]
     metrics = {
         "rstl_deviation_deg": 0.0,
@@ -386,6 +427,9 @@ def generate_fusiform_incision(
         "diameter_mm": diameter_mm,
         "margin_mm": margin_mm,
         "length_target_mm": target_length_mm,
+        "boundary_envelope_length_expansion_iterations": envelope_length_iterations,
+        "boundary_envelope_width_expansion_iterations": envelope_width_iterations,
+        "boundary_envelope_width_expanded": width_mm > requested_width_mm + 1e-9,
         "length_ratio_target_mm": ratio_length_mm,
         "axis_coverage_required_mm": axis_coverage_mm,
         "axis_coverage_deficit_mm": axis_coverage_deficit_mm,
@@ -398,6 +442,12 @@ def generate_fusiform_incision(
         ),
         "boundary_perp_diameter_mm": (
             float(boundary_summary["perp_diameter_mm"]) if boundary_summary else None
+        ),
+        "boundary_selected_center_axis_diameter_mm": (
+            float(boundary_summary["selected_center_axis_diameter_mm"]) if boundary_summary else None
+        ),
+        "boundary_selected_center_perp_diameter_mm": (
+            float(boundary_summary["selected_center_perp_diameter_mm"]) if boundary_summary else None
         ),
         "boundary_area_mm2": float(boundary_summary["area_mm2"]) if boundary_summary else None,
         "boundary_area_ratio_to_diameter_disk": (

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
-import { detectControlledMarker } from "../web/src/services/controlledMarkerDetection.ts";
+import {
+  __controlledMarkerForTests as controlledMarkerInternals,
+  detectControlledMarker,
+} from "../web/src/services/controlledMarkerDetection.ts";
 
 function image(width = 96, height = 96, value = 210) {
   const data = new Uint8ClampedArray(width * height * 4);
@@ -118,6 +121,34 @@ function irregularRing(target: ReturnType<typeof image>, cx: number, cy: number,
   }
 }
 
+function angularSampledIrregularRing(target: ReturnType<typeof image>, cx: number, cy: number, value = 20) {
+  for (let index = 0; index < 96; index += 1) {
+    if (index % 19 === 0) continue;
+    const angle = index * Math.PI * 2 / 96;
+    const radius = 32 + 4 * Math.sin(angle * 3) + 2 * Math.cos(angle * 5);
+    disk(target, Math.round(cx + Math.cos(angle) * radius), Math.round(cy + Math.sin(angle) * radius), 0.55, value);
+  }
+}
+
+function faintIrregularRingWithGap(target: ReturnType<typeof image>, cx: number, cy: number) {
+  const background = Number(target.data[0]);
+  for (let y = 0; y < target.height; y += 1) {
+    for (let x = 0; x < target.width; x += 1) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const angle = Math.atan2(dy, dx);
+      const radius = 32 + 4 * Math.sin(angle * 3) + 2 * Math.cos(angle * 5);
+      if (Math.abs(Math.hypot(dx, dy) - radius) > 2) continue;
+      if (Math.abs(angle) < 0.09) continue;
+      const value = angle > -2.4 && angle < -0.35 ? background - 20 : 24;
+      const index = (y * target.width + x) * 4;
+      target.data[index] = value;
+      target.data[index + 1] = value;
+      target.data[index + 2] = value;
+    }
+  }
+}
+
 function ringWithGap(target: ReturnType<typeof image>, cx: number, cy: number, gapRadians: number, thickness = 4, value = 20) {
   for (let y = 0; y < target.height; y += 1) {
     for (let x = 0; x < target.width; x += 1) {
@@ -162,6 +193,38 @@ function rectangle(target: ReturnType<typeof image>, x0: number, y0: number, x1:
       target.data[index + 2] = value;
     }
   }
+}
+
+function strokeLine(
+  target: ReturnType<typeof image>,
+  first: [number, number],
+  second: [number, number],
+  thickness = 3,
+  value = 20,
+) {
+  const steps = Math.max(Math.abs(second[0] - first[0]), Math.abs(second[1] - first[1]));
+  for (let step = 0; step <= steps; step += 1) {
+    disk(
+      target,
+      Math.round(first[0] + (second[0] - first[0]) * step / Math.max(1, steps)),
+      Math.round(first[1] + (second[1] - first[1]) * step / Math.max(1, steps)),
+      thickness / 2,
+      value,
+    );
+  }
+}
+
+function openTriangle(target: ReturnType<typeof image>) {
+  strokeLine(target, [18, 92], [60, 18], 4);
+  strokeLine(target, [18, 92], [102, 92], 4);
+  strokeLine(target, [60, 18], [88, 68], 4);
+}
+
+function fragmentedOpenTriangle(target: ReturnType<typeof image>) {
+  strokeLine(target, [76, 32], [38, 116], 3);
+  strokeLine(target, [86, 35], [122, 116], 3);
+  strokeLine(target, [45, 125], [116, 125], 3);
+  strokeLine(target, [89, 42], [93, 39], 2);
 }
 
 {
@@ -292,7 +355,7 @@ function rectangle(target: ReturnType<typeof image>, x0: number, y0: number, x1:
     assert.ok((result.diagnostics?.boundary_support_ratio || 0) >= 0.55,
       "v0.9 success reports enough original dark-line support instead of an invented enclosure");
   }
-  assert.deepEqual(results.map((result) => result.bbox), [results[0].bbox, results[0].bbox],
+  assert.deepEqual(results.map((result) => result.bbox), results.map(() => results[0].bbox),
     "local-contrast enclosure remains stable for off-centre interior seeds");
 }
 
@@ -359,6 +422,38 @@ function rectangle(target: ReturnType<typeof image>, x0: number, y0: number, x1:
 }
 
 {
+  const target = image(160, 160);
+  fragmentedOpenTriangle(target);
+  const results = [
+    detectControlledMarker(
+      target,
+      { x: 80, y: 88 },
+      { roiRadius: 70, expectedDiameterPx: 100, scanDiameterMm: 50 },
+    ),
+    detectControlledMarker(
+      target,
+      { x: 72, y: 92 },
+      { roiRadius: 70, expectedDiameterPx: 100, scanDiameterMm: 50 },
+    ),
+    detectControlledMarker(
+      target,
+      { x: 88, y: 92 },
+      { roiRadius: 70, expectedDiameterPx: 100, scanDiameterMm: 50 },
+    ),
+  ];
+  for (const result of results) {
+    assert.equal(result.ok, true,
+      `two bounded gaps across three observed stroke fragments are joined by endpoint evidence: ${JSON.stringify(result)}`);
+    assert.equal(result.geometry_mode, "enclosed_region");
+    assert.ok(result.warnings.includes("multi_fragment_endpoint_repaired"));
+    assert.ok((result.diagnostics?.boundary_support_ratio || 0) >= 0.72,
+      "multi-fragment closure remains mostly supported by observed stroke pixels");
+  }
+  assert.deepEqual(results.map((result) => result.bbox), results.map(() => results[0].bbox),
+    "bounded multi-fragment closure is independent from the initial interior click");
+}
+
+{
   const target = image();
   fragmentedRing(target, 48, 48);
   const result = detectControlledMarker(target, { x: 48, y: 48 });
@@ -374,6 +469,131 @@ function rectangle(target: ReturnType<typeof image>, x0: number, y0: number, x1:
   const result = detectControlledMarker(target, { x: 48, y: 48 });
   assert.equal(result.ok, false, "a large open contour is rejected instead of being invented closed");
   assert.equal(result.failure_code, "component_too_small");
+}
+
+{
+  const target = image(120, 120);
+  openTriangle(target);
+  ring(target, 48, 58, 4, 2);
+  ring(target, 70, 58, 4, 2);
+  const options = { roiRadius: 52, expectedDiameterPx: 58, scanDiameterMm: 30 };
+  const first = detectControlledMarker(target, { x: 48, y: 58 }, options);
+  const second = detectControlledMarker(target, { x: 70, y: 58 }, options);
+  for (const result of [first, second]) {
+    assert.ok(!result.ok || (result.bbox && Math.max(result.bbox.width, result.bbox.height) >= 58 * 0.35),
+      "an open outer triangle can be recovered, but a click-local enclosed artifact cannot be promoted as the lesion");
+    if (result.ok) assert.equal(result.geometry_mode, "enclosed_region");
+    else assert.equal(result.failure_code, "unstable_enclosure");
+    assert.equal(result.scan?.diameter_mm, 30);
+  }
+}
+
+{
+  const target = image(120, 120);
+  ring(target, 60, 60, 24, 3);
+  const result = detectControlledMarker(
+    target,
+    { x: 60, y: 60 },
+    { roiRadius: 26, expectedDiameterPx: 48, scanDiameterMm: 20 },
+  );
+  assert.equal(result.ok, false, "a contour reaching the circular scan edge asks for a larger scan area");
+  assert.equal(result.failure_code, "scan_range_too_small");
+}
+
+{
+  const target = image(120, 120);
+  ring(target, 70, 60, 12, 3);
+  const result = detectControlledMarker(
+    target,
+    { x: 45, y: 60 },
+    { roiRadius: 50, expectedDiameterPx: 24, scanDiameterMm: 35 },
+  );
+  assert.equal(result.ok, true,
+    `a complete closed contour inside the circular scan surface is found even when the click is outside it: ${JSON.stringify(result)}`);
+  assert.equal(result.geometry_mode, "enclosed_region");
+  assert.ok(result.center && Math.abs(result.center.x - 70) < 2,
+    "scan-surface selection recenters on the enclosed contour instead of the pointer seed");
+}
+
+{
+  const target = image(120, 120);
+  ringWithGap(target, 60, 60, 0.9);
+  const result = detectControlledMarker(
+    target,
+    { x: 60, y: 60 },
+    { roiRadius: 40, expectedDiameterPx: 36, scanDiameterMm: 30 },
+  );
+  assert.equal(result.ok, false, "an internal large gap remains rejected after the scan covers the complete stroke");
+  assert.equal(result.failure_code, "edge_discontinuous");
+}
+
+{
+  const target = image(120, 120);
+  ring(target, 60, 60, 18, 3);
+  const result = detectControlledMarker(
+    target,
+    { x: 60, y: 60 },
+    { roiRadius: 30, expectedDiameterPx: 36, scanDiameterMm: 25 },
+  );
+  assert.equal(result.ok, true, "a complete contour comfortably inside the circular scan remains accepted");
+  assert.equal(result.geometry_mode, "enclosed_region");
+}
+
+{
+  const target = image(160, 160, 205);
+  faintIrregularRingWithGap(target, 80, 80);
+  const adaptive = controlledMarkerInternals.adaptiveDarkBarrier(target, 22, 22, 117, 117, 205, 160, 24);
+  const faintSamples = Array.from({ length: 36 }, (_value, index) => -2.35 + index * 1.9 / 35);
+  const sampleMaskSupport = (mask: Uint8Array) => faintSamples.filter((angle) => {
+      const radius = 32 + 4 * Math.sin(angle * 3) + 2 * Math.cos(angle * 5);
+      const x = Math.round(80 + Math.cos(angle) * radius) - 22;
+      const y = Math.round(80 + Math.sin(angle) * radius) - 22;
+      return mask[y * 117 + x] === 1;
+    }).length;
+  const faintSupport = sampleMaskSupport(adaptive.mask);
+  const faintWeakSupport = sampleMaskSupport(adaptive.weakMask);
+  assert.ok(faintSupport >= 28,
+    `faint stroke continuation remains anchored to its dark neighbours: retained=${faintSupport}/36 weak=${faintWeakSupport}/36`);
+  const result = detectControlledMarker(
+    target,
+    { x: 80, y: 80 },
+    { roiRadius: 58, expectedDiameterPx: 64, scanDiameterMm: 40 },
+  );
+  assert.equal(result.ok, true,
+    `a visually closed irregular edge with compression-sized pixel gaps is recovered: ${JSON.stringify(result)}`);
+  assert.equal(result.geometry_mode, "enclosed_region");
+  assert.ok(result.bbox && result.bbox.width >= 58 && result.bbox.width <= 76,
+    "recovered boundary stays near the clicked target instead of expanding to the scan circle");
+  assert.equal(result.diagnostics?.method, "seed_first_barrier");
+  assert.ok(Number(result.diagnostics?.repair_radius || 0) > 0,
+    "the real-like faint fixture requires a bounded barrier repair");
+  assert.ok(!result.warnings.includes("radial_boundary_recovered"),
+    "the real-like faint fixture is never recovered by angular interpolation");
+  const shiftedResults = [76, 84].map((x) => detectControlledMarker(
+    target,
+    { x, y: 80 },
+    { roiRadius: 58, expectedDiameterPx: 64, scanDiameterMm: 40 },
+  ));
+  for (const shifted of shiftedResults) {
+    assert.equal(shifted.ok, true,
+      "small pointer movement inside one scan surface keeps the faint irregular outline detectable");
+    assert.ok(shifted.bbox && shifted.bbox.width >= 58 && shifted.bbox.width <= 76,
+      "neighboring scan seeds keep the complete irregular outline instead of a local pocket");
+  }
+}
+
+{
+  const target = image(160, 160, 205);
+  angularSampledIrregularRing(target, 80, 80, 24);
+  const result = detectControlledMarker(
+    target,
+    { x: 80, y: 80 },
+    { roiRadius: 58, expectedDiameterPx: 64, scanDiameterMm: 40 },
+  );
+  assert.equal(result.ok, false,
+    "angular samples without traceable stroke endpoints cannot be promoted to a planning boundary");
+  assert.ok(["edge_discontinuous", "unstable_enclosure"].includes(result.failure_code || ""),
+    "endpoint-less angular samples remain rejected by continuity or enclosure stability checks");
 }
 
 {
@@ -517,6 +737,7 @@ const domBindingsSource = fs.readFileSync("src/services/incisionDomBindings.ts",
 const workerSource = fs.readFileSync("src/workers/workflow.worker.ts", "utf8");
 const stylesSource = fs.readFileSync("src/styles.css", "utf8");
 const clinicalCopySource = fs.readFileSync("src/services/incisionClinicalCopy.ts", "utf8");
+const stagePanelSource = fs.readFileSync("src/components/IncisionStagePanel.tsx", "utf8");
 assert.ok(runtimeSource.includes('publishState("controlled_marker_cancelled")'), "marker action supports explicit cancellation");
 assert.ok(runtimeSource.includes("resetControlledMarker({ restoreSelection: true })"), "cancel and exit restore the confirmed selection");
 assert.ok(runtimeSource.includes("candidateDisplayBlocked ? [] : endpointRefs"),
@@ -528,11 +749,32 @@ assert.ok(runtimeSource.includes("projectedCandidate !== state.result?.candidate
 assert.ok(runtimeSource.includes('publishState("controlled_marker_applied")'),
   "a successful marker click immediately applies the detected lesion and candidate");
 assert.ok(runtimeSource.includes("Comlink.transfer")
-  && workerSource.includes("detectControlledMarker(image, seed)"),
+  && workerSource.includes("detectControlledMarker(image, seed, options)"),
 "controlled-marker pixel analysis runs in the existing local workflow worker instead of blocking pointer release");
+assert.ok(stagePanelSource.includes('id="controlledMarkerScanDiameter"')
+  && stagePanelSource.includes('id="controlledMarkerScanOverlay"')
+  && stagePanelSource.includes('max="60"')
+  && runtimeSource.includes("localPhotoPixelsPerMm")
+  && runtimeSource.includes("expectedDiameterPx")
+  && stylesSource.includes("controlled-marker-scan-overlay"),
+"controlled mode exposes a millimetre-labelled circular scan area backed by local photo scale");
+assert.ok(clinicalCopySource.includes('detection.failure_code === "scan_range_too_small"')
+  && clinicalCopySource.includes('detection.failure_code === "edge_discontinuous"')
+  && clinicalCopySource.includes('detection.failure_code === "unstable_enclosure"'),
+"scan coverage, discontinuous edges, and click-local false enclosures have separate clinician-facing recovery messages");
 assert.ok(runtimeSource.includes("candidateVisible")
   && runtimeSource.includes('publishState("controlled_marker_candidate_hidden")'),
 "success feedback requires an actually visible projected candidate");
+assert.ok(runtimeSource.includes('smoothingMode === "sourceFallback"')
+  && runtimeSource.includes('publishState("controlled_marker_candidate_needs_review")'),
+"a fallback-shaped candidate remains yellow instead of reporting green success");
+assert.ok(runtimeSource.includes('const diameterAdjusted = kind === "cutaneous"')
+  && runtimeSource.includes("识别范围与填写直径有差异，切口已按黄色识别范围自动调整")
+  && !runtimeSource.includes('publishState("controlled_marker_diameter_needs_review")'),
+"a visible valid candidate stays green when only the operator-entered diameter differs");
+assert.ok(runtimeSource.includes("state.planning2d?.setSelection({ centerRef: null, boundaryRefs: [] })")
+  && runtimeSource.includes('keepControlledMarkerRetry("")'),
+"a fresh scan hides the last accepted yellow boundary and candidate until the new result is known");
 assert.ok(runtimeSource.includes("controlled marker planning audit")
   && runtimeSource.includes("geometry.candidateProjection.reasonCodes")
   && runtimeSource.includes("raw_media_retained: false"),
@@ -541,8 +783,9 @@ assert.ok(runtimeSource.includes("controlled marker stroke-only result rejected"
   && runtimeSource.includes("当前点击处只识别到黑色笔画"),
 "cutaneous controlled-marker mode cannot report a local pen stroke as a lesion boundary");
 assert.ok(stylesSource.includes('#incisionPhotoCanvas[data-controlled-marker="true"]')
-  && stylesSource.includes('#incisionPhotoCanvas[aria-busy="true"]'),
-"controlled-marker and processing cursors override the photo drag hand cursor");
+  && stylesSource.includes('#incisionPhotoCanvas[aria-busy="true"]')
+  && stylesSource.includes('~ .incision-photo-endpoint-layer .incision-photo-endpoint-handle'),
+"controlled-marker mode owns the full scan surface instead of leaving stale endpoint hit targets above it");
 assert.ok(runtimeSource.includes("state.controlledBoundaryActive = kind === \"cutaneous\""),
   "controlled cutaneous boundaries are independent from the manual boundary-mode dropdown");
 assert.ok(domBindingsSource.includes('getAttribute("aria-pressed") === "true"')
@@ -551,12 +794,15 @@ assert.ok(domBindingsSource.includes('getAttribute("aria-pressed") === "true"')
   && runtimeSource.includes("!state.photoView.active || controlledMarkerSeedMode"),
 "controlled-marker picking suppresses photo panning and endpoint hit-testing while the toggle is active");
 assert.ok(runtimeSource.includes("黄色线表示识别范围")
-  && runtimeSource.includes("切口大小已根据识别结果自动调整"),
+  && runtimeSource.includes("切口大小已根据识别结果自动调整")
+  && runtimeSource.includes('"ready");'),
 "successful controlled-marker feedback explains the visible result in doctor-readable language");
 assert.ok(clinicalCopySource.includes("当前点击区域未识别到肿物")
-  && clinicalCopySource.includes("模拟肿物曲线可能较浅或留有较大开口")
+  && clinicalCopySource.includes("肿物边界可能较浅或留有较大开口")
   && !runtimeSource.includes("ROI ${"),
 "failure feedback keeps engineering diagnostics out of the clinician-facing status area");
+assert.doesNotMatch(`${runtimeSource}\n${clinicalCopySource}`, /模拟/,
+  "controlled-marker clinician-facing prompts do not expose simulation wording");
 assert.doesNotMatch(runtimeSource, /confirmControlledMarkerDetection|controlledMarkerDraft/,
   "controlled marker no longer requires a second confirmation action");
 

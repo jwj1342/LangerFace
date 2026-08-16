@@ -16,7 +16,7 @@ import { RangeInput } from "./ui/slider";
 export function TumorInputPanel() {
   const commands = useIncisionControllerCommands();
   const snapshot = useIncisionStore((state) => state.snapshot);
-  const [kind, setKind] = useState("subcutaneous");
+  const [kind, setKind] = useState("cutaneous");
   const [diameter, setDiameter] = useState("12");
   const [author, setAuthor] = useState("clinician");
   const [depth, setDepth] = useState("6");
@@ -34,7 +34,7 @@ export function TumorInputPanel() {
   useEffect(() => {
     const tumor = snapshot?.tumor;
     if (!tumor) return;
-    setKind(tumor.kind || "subcutaneous");
+    setKind(tumor.kind || "cutaneous");
     if (tumor.author) setAuthor(tumor.author);
     if (tumor.diameterMm != null) setDiameter(String(tumor.diameterMm));
     if (tumor.kind === "subcutaneous" && tumor.depthMm != null) setDepth(String(tumor.depthMm));
