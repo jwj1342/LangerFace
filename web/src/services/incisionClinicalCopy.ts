@@ -75,6 +75,8 @@ const REASON_LABELS: Record<string, string> = {
 
 const GUARDRAIL_LABELS: Record<string, string> = {
   candidate_intersects_non_skin_opening: "候选切口经过眼裂、口裂或鼻孔",
+  candidate_intersects_default_vermilion_protection: "候选切口进入默认唇红保护区域",
+  candidate_intersects_engineering_exclusion_zone: "候选切口进入不可规划的面部区域",
   candidate_outside_canonical_surface: "候选切口超出可用面部表面",
   invalid_candidate_geometry: "候选切口几何无效",
   invalid_candidate_surface_refs: "候选切口表面映射无效",
@@ -159,7 +161,9 @@ export const overrideLabel = (value: unknown) => labelOf(OVERRIDE_LABELS, value,
 
 const ENGINEERING_RECOVERY_LABELS: Record<string, string> = {
   candidate_intersects_non_skin_opening: "移动病灶或调整范围，确保完整候选不经过非皮肤开口",
-  candidate_outside_canonical_surface: "缩小范围或调整位置后重试；仍失败时返回标准表面复核",
+  candidate_intersects_default_vermilion_protection: "调整位置或范围，确保完整候选避开唇红保护区域",
+  candidate_intersects_engineering_exclusion_zone: "调整病灶位置或范围，避开不可规划区域后重试",
+  candidate_outside_canonical_surface: "缩小范围或调整位置后重试；仍失败时由医生结合查体采用传统方法规划",
   invalid_candidate_geometry: "重新生成候选几何",
   invalid_candidate_surface_refs: "重新建立候选的面部表面映射",
   missing_candidate_surface_refs: "完成候选的面部表面映射后再复核",
@@ -210,16 +214,16 @@ export function controlledMarkerFailureMessage(
   if (detection.failure_code === "invalid_image") return "照片暂时无法读取，请重新上传后再试。";
   if (detection.failure_code === "seed_outside_image") return "当前点击位置不在照片范围内，请在肿物边界内部重新点击。";
   if (detection.failure_code === "ambiguous_candidates") {
-    return "当前区域有多个可能的肿物范围，请只保留一个肿物边界后再试。";
+    return "当前区域有多个可能的肿物范围，请适当缩小扫描范围，使扫描面内只保留一个肿物边界后再试。";
   }
   if (detection.failure_code === "scan_range_too_small") {
-    return "扫描面没有完整覆盖肿物边界，请扩大扫描直径后再试。";
+    return "当前未形成完整肿物边界，请扩大扫描范围或补线后重试。";
   }
   if (detection.failure_code === "edge_discontinuous") {
-    return "扫描面已覆盖相关曲线，但肿物边缘仍不连续；请补齐边缘，或在候选补线可确认时再继续。";
+    return "当前肿物边缘仍不连续，请扩大扫描范围或补线后重试。";
   }
   if (detection.failure_code === "unstable_enclosure") {
-    return "当前只识别到局部小轮廓，结果不足以代表完整肿物；请调整扫描范围或重新描绘边缘。";
+    return "当前只识别到局部轮廓，结果不足以代表完整肿物；请扩大扫描范围或补线后重试。";
   }
   if (detection.failure_code === "component_too_large" || stage === "marker_area_invalid") {
     return "当前识别范围过大，肿物边界可能与附近的深色区域连在一起，请重新绘制后再试。";
@@ -228,10 +232,10 @@ export function controlledMarkerFailureMessage(
     return "肿物边界颜色较浅，请加深后再试。";
   }
   if (stage === "seed_region_leaks_to_roi_border") {
-    return "当前点击区域没有形成完整的肿物范围，请补齐肿物边界后再试。";
+    return "当前点击区域没有形成完整肿物范围，请扩大扫描范围或补线后重试。";
   }
   if (stage === "boundary_support_low" || stage === "boundary_support_missing") {
-    return "肿物边界可能较浅或留有较大开口，请加深或补齐后再试。";
+    return "肿物边界可能较浅或留有较大开口，请扩大扫描范围或补线后重试。";
   }
   return "当前点击区域未识别到肿物，请在肿物边界内部重新点击。";
 }

@@ -9,7 +9,7 @@ import {
 } from "./support/incisionPhoto";
 
 const MARKER_A: ControlledMarkerFixture = { xRatio: 0.30, yRatio: 0.48, radiusRatio: 0.035 };
-const MARKER_B: ControlledMarkerFixture = { xRatio: 0.70, yRatio: 0.48, radiusRatio: 0.035 };
+const MARKER_B: ControlledMarkerFixture = { xRatio: 0.70, yRatio: 0.58, radiusRatio: 0.035 };
 
 function handleMidpoint(handles: { x: number; y: number }[]) {
   expect(handles).toHaveLength(2);
@@ -39,6 +39,31 @@ test("changing tumor kind before a photo pick does not create a default lesion",
     .toBe(before);
 });
 
+test("switching to a subcutaneous tumor exits controlled marking and restores linear photo picking", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.goto("/app/incision");
+  await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
+
+  await page.locator("#tumorKind").selectOption("cutaneous");
+  await uploadGeneratedPhoto(page, "single");
+  const canvas = page.locator("#incisionPhotoCanvas");
+  const markerToggle = page.locator("#controlledMarkerDetectBtn");
+  await expect(canvas).toHaveAttribute("data-active", "true", { timeout: 45_000 });
+  await markerToggle.click();
+  await expect(markerToggle).toHaveAttribute("aria-pressed", "true");
+
+  await page.locator("#tumorKind").selectOption("subcutaneous");
+  await expect(markerToggle).toHaveAttribute("aria-pressed", "false");
+  await expect(markerToggle).toBeDisabled();
+  await expect(canvas).toHaveAttribute("data-controlled-marker", "false");
+  await expect(canvas).toHaveAttribute("data-controlled-marker-repair", "false");
+
+  await clickPhotoRatio(page, { xRatio: 0.68, yRatio: 0.58 });
+  await expect(page.locator("#candidateType")).toContainText("线性切口", { timeout: 45_000 });
+  await expect.poll(() => findPhotoEndpointHandles(page)).toHaveLength(2);
+});
+
 test("a second controlled-marker click replaces the previous result before reporting success", async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1440, height: 960 });
@@ -59,7 +84,7 @@ test("a second controlled-marker click replaces the previous result before repor
   await expect(canvas).toHaveCSS("cursor", "crosshair");
 
   await clickPhotoRatio(page, MARKER_A);
-  await expect(status).toContainText("已识别模拟肿物并生成候选切口", { timeout: 45_000 });
+  await expect(status).toContainText("已识别肿物边界并生成候选切口", { timeout: 45_000 });
   await expect(canvas).toHaveAttribute("aria-busy", "false");
   await expect(canvas).toHaveCSS("cursor", "crosshair");
   const firstPickState = await page.locator("#pickState").textContent();
@@ -71,8 +96,8 @@ test("a second controlled-marker click replaces the previous result before repor
     y: element.style.getPropertyValue("--incision-photo-pan-y"),
   }));
   await clickPhotoRatio(page, MARKER_B);
-  await expect(status).toContainText("正在识别模拟肿物");
-  await expect(status).toContainText("已识别模拟肿物并生成候选切口", { timeout: 45_000 });
+  await expect(status).toContainText("正在识别肿物边界");
+  await expect(status).toContainText("已识别肿物边界并生成候选切口", { timeout: 45_000 });
   await expect(canvas).toHaveAttribute("aria-busy", "false");
 
   const secondPickState = await page.locator("#pickState").textContent();
@@ -99,7 +124,7 @@ test("a second controlled-marker click replaces the previous result before repor
   await page.mouse.down();
   await page.mouse.move(markerBX + 10, markerBY + 6, { steps: 4 });
   await page.mouse.up();
-  await expect(status).toContainText("已识别模拟肿物并生成候选切口", { timeout: 45_000 });
+  await expect(canvas).toHaveAttribute("aria-busy", "false", { timeout: 45_000 });
   const panAfterPointerMotion = await canvas.evaluate((element) => ({
     x: element.style.getPropertyValue("--incision-photo-pan-x"),
     y: element.style.getPropertyValue("--incision-photo-pan-y"),

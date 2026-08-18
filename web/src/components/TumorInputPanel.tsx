@@ -20,7 +20,7 @@ export function TumorInputPanel() {
   const [diameter, setDiameter] = useState("12");
   const [author, setAuthor] = useState("clinician");
   const [depth, setDepth] = useState("6");
-  const [margin, setMargin] = useState("2");
+  const [margin, setMargin] = useState("0");
   const [boundaryMode, setBoundaryMode] = useState("ellipse");
   const [ellipseRatio, setEllipseRatio] = useState("70");
   const [boundaryActive, setBoundaryActive] = useState(false);

@@ -57,6 +57,12 @@ export interface IncisionResultPresentationInput {
       tip_angle_error_deg?: unknown;
       rstl_deviation_deg?: unknown;
       projected_rstl_deviation_deg?: unknown;
+      photo_reference_candidate?: unknown;
+      photo_visibility_limited_candidate?: unknown;
+      photo_visible_fraction?: unknown;
+      photo_reference_aspect_ratio?: unknown;
+      photo_reference_length_scale?: unknown;
+      photo_canonical_scale?: unknown;
     };
   };
   direction?: {
@@ -117,6 +123,46 @@ export interface BuildIncisionResultPresentationInput {
 
 function formatMetric(value: unknown, digits = 1): string {
   return Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : "—";
+}
+
+export function buildCandidateMetricPresentation(result: IncisionResultPresentationInput) {
+  const candidate = result.candidate || {};
+  const metrics = candidate.metrics || {};
+  const referenceRatio = Number(metrics.photo_reference_aspect_ratio);
+  const isVisibilityLimited = metrics.photo_visibility_limited_candidate === true;
+  const isReference = metrics.photo_reference_candidate === true
+    && Number.isFinite(referenceRatio) && referenceRatio > 1;
+  const photoScale = isReference && Number(metrics.photo_canonical_scale) > 0
+    ? Number(metrics.photo_canonical_scale) : 1;
+  const lengthScale = isReference && Number(metrics.photo_reference_length_scale) > 0
+    ? Number(metrics.photo_reference_length_scale) : 1;
+  const length = Number(candidate.length_mm) * photoScale * lengthScale;
+  const width = Number(candidate.width_mm) * photoScale;
+  const rawRatio = Number(metrics.length_to_width_ratio);
+  const displayedRatio = isReference
+    ? referenceRatio
+    : Number.isFinite(rawRatio) && rawRatio > 1
+      ? rawRatio
+      : Number(candidate.length_mm) / Math.max(1e-9, Number(candidate.width_mm));
+  return {
+    candidateType: isVisibilityLimited
+      ? "视野受限参考"
+      : isReference ? "受限参考" : candidate.type === "linear" ? "线性" : "梭形",
+    candidateLength: `${formatMetric(isReference ? length : candidate.length_mm)} mm`,
+    candidateWidth: candidate.type === "fusiform"
+      ? `${formatMetric(isReference ? width : candidate.width_mm)} mm / ${formatMetric(
+        displayedRatio,
+        2,
+      )}:1${isReference || isVisibilityLimited ? "（黄色参考）" : ""}`
+      : "—",
+    candidateTipAngle: candidate.type === "fusiform"
+      ? `${formatMetric(candidate.tip_angle_deg)}° · 误差 ${formatMetric(metrics.tip_angle_error_deg)}°`
+      : "—",
+    isReference,
+    isVisibilityLimited,
+    displayedRatio,
+    referenceRatio,
+  };
 }
 
 function overrideAdviceLabel(override: IncisionSuggestedOverride): string {
@@ -228,19 +274,12 @@ export function buildIncisionResultPresentation(
   const regionReasons = anatomy.confidence_reasons || [];
   const rstlDeviation = metrics.rstl_deviation_deg;
   const projectedRstlDeviation = metrics.projected_rstl_deviation_deg;
-  const edited = candidate.edited ? " · 已记录医生调整" : "";
-  const headLabel = input.headStatusLabel ? ` · ${input.headStatusLabel}` : "";
-  const generationLabel = input.generationCount ? ` · 已明确生成 ${input.generationCount} 次` : " · 自动预览";
-
+  const candidateMetrics = buildCandidateMetricPresentation(result);
   return {
-    candidateType: candidate.type === "linear" ? "线性" : "梭形",
-    candidateLength: `${formatMetric(candidate.length_mm)} mm`,
-    candidateWidth: candidate.type === "fusiform"
-      ? `${formatMetric(candidate.width_mm)} mm / ${formatMetric(metrics.length_to_width_ratio, 2)}:1`
-      : "—",
-    candidateTipAngle: candidate.type === "fusiform"
-      ? `${formatMetric(candidate.tip_angle_deg)}° · 误差 ${formatMetric(metrics.tip_angle_error_deg)}°`
-      : "—",
+    candidateType: candidateMetrics.candidateType,
+    candidateLength: candidateMetrics.candidateLength,
+    candidateWidth: candidateMetrics.candidateWidth,
+    candidateTipAngle: candidateMetrics.candidateTipAngle,
     candidateRstlDeviation: typeof rstlDeviation === "number" && Number.isFinite(rstlDeviation)
       ? `${formatMetric(rstlDeviation)}°${typeof projectedRstlDeviation === "number" && Number.isFinite(projectedRstlDeviation)
         ? ` · 照片 ${formatMetric(projectedRstlDeviation)}°`
@@ -259,10 +298,25 @@ export function buildIncisionResultPresentation(
     directionSource: buildDirectionSourcePresentation({ result, secondaryCuesPresent: input.secondaryCuesPresent }),
     workflowGate: buildWorkflowGatePresentation(input.workflowGate),
     workflowComparison: buildWorkflowComparisonPresentation(result),
-    workflowSummary: String(result.summary || "已生成候选。"),
-    nextStep: String(result.next_step || "医生审阅、编辑或拒绝该候选。"),
+    workflowSummary: candidateMetrics.isVisibilityLimited
+      ? Math.abs(candidateMetrics.displayedRatio - 3) <= 0.05
+        ? `当前显示视野受限的标准参考投影；完整方案保持 3:1，当前照片可见约 ${Math.round(
+          Number(metrics.photo_visible_fraction || 0) * 100,
+        )}%。`
+        : `当前显示视野受限的非标准比例参考；完整方案为 ${formatMetric(
+          candidateMetrics.displayedRatio,
+          2,
+        )}:1，当前照片可见约 ${Math.round(Number(metrics.photo_visible_fraction || 0) * 100)}%。`
+      : candidateMetrics.isReference
+      ? `当前显示 ${formatMetric(candidateMetrics.referenceRatio, 2)}:1 黄色受限参考；原定 3:1 候选未通过可用面部区域门禁。`
+      : String(result.summary || "已生成候选。"),
+    nextStep: candidateMetrics.isVisibilityLimited
+      ? "请补充另一视角并复核隐藏区域；完成前不能确认或进入实时叠加。"
+      : candidateMetrics.isReference
+      ? "该参考不满足项目原定比例；请医生结合查体在本页记录原因，不能直接确认或发送实时叠加。"
+      : String(result.next_step || "医生审阅、编辑或拒绝该候选。"),
     privacyState: "浏览器本地",
     privacyAudit: `不上传原始影像；${input.privacyAudit.local_workflow_fields?.length || 0} 类抽象字段只在浏览器确定性 workflow 内处理，不配置或调用远程模型。${input.privacyAudit.secondary_cues_present ? " 辅助线索仅随审阅导出，不参与几何。" : ""}`,
-    stageStatus: `浏览器确定性 workflow 已更新候选${generationLabel}${edited}${headLabel}`,
+    stageStatus: "",
   };
 }

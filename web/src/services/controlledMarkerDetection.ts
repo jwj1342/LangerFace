@@ -1,4 +1,4 @@
-export const CONTROLLED_MARKER_DETECTOR_VERSION = "0.18";
+export const CONTROLLED_MARKER_DETECTOR_VERSION = "0.23";
 
 export interface MarkerImageData {
   width: number;
@@ -46,7 +46,7 @@ export interface ControlledMarkerDetection {
     expected_diameter_px: number | null;
   };
   diagnostics?: {
-    method?: "seed_first_barrier" | "radial_seed_boundary";
+    method?: "seed_first_barrier" | "radial_seed_boundary" | "low_contrast_near_circular";
     roi_radius?: number;
     local_window_radius?: number;
     repair_radius?: number;
@@ -63,6 +63,26 @@ export interface ControlledMarkerDetection {
     scan_probe_success_count?: number;
     scan_probe_consensus_count?: number;
     scan_probe_group_sizes?: number[];
+    ridge_contrast?: number;
+    radial_variation_ratio?: number;
+    shape_compactness?: number;
+    boundary_smoothing?: "periodic_constrained" | "raw_fallback";
+    boundary_smoothing_scale?: number;
+    boundary_smoothing_area_ratio?: number;
+    boundary_smoothing_passes?: number;
+    boundary_smoothing_outside_ratio?: number;
+    boundary_smoothing_max_miss_ratio?: number;
+    boundary_regularization?: "convex_hull";
+    boundary_regularization_area_ratio?: number;
+    boundary_regularization_solidity?: number;
+    boundary_regularization_p90_displacement_ratio?: number;
+    boundary_regularization_max_displacement_ratio?: number;
+    boundary_stroke_reconciliation?: "radial_ridge" | "bounded_marker_bbox";
+    boundary_stroke_scale?: number;
+    boundary_stroke_scale_x?: number;
+    boundary_stroke_scale_y?: number;
+    boundary_stroke_area_ratio?: number;
+    boundary_stroke_center_shift_ratio?: number;
   };
   audit: {
     local_only: true;
@@ -846,6 +866,253 @@ function polygonCentroid(points: readonly MarkerPoint[]): MarkerPoint {
   return { x: weightedX / (3 * twiceArea), y: weightedY / (3 * twiceArea) };
 }
 
+function sampledLuma(image: MarkerImageData, x: number, y: number): number {
+  const width = Math.floor(image.width);
+  const height = Math.floor(image.height);
+  const clampedX = clamp(x, 0, width - 1);
+  const clampedY = clamp(y, 0, height - 1);
+  const x0 = Math.floor(clampedX);
+  const y0 = Math.floor(clampedY);
+  const x1 = Math.min(width - 1, x0 + 1);
+  const y1 = Math.min(height - 1, y0 + 1);
+  const fx = clampedX - x0;
+  const fy = clampedY - y0;
+  const value = (px: number, py: number) => luma(image.data, (py * width + px) * 4);
+  return value(x0, y0) * (1 - fx) * (1 - fy)
+    + value(x1, y0) * fx * (1 - fy)
+    + value(x0, y1) * (1 - fx) * fy
+    + value(x1, y1) * fx * fy;
+}
+
+function percentile(values: readonly number[], fraction: number): number {
+  if (!values.length) return 0;
+  const ordered = [...values].sort((first, second) => first - second);
+  return ordered[clamp(Math.round((ordered.length - 1) * fraction), 0, ordered.length - 1)];
+}
+
+function weakNearCircularBoundaryRecovery(
+  image: MarkerImageData,
+  seed: MarkerPoint,
+  roiRadius: number,
+  expectedDiameterPx: number,
+  minAreaPx: number,
+  minContrast: number,
+): ControlledMarkerDetection | null {
+  // This path is intentionally unavailable without the explicit controlled-
+  // scan size prior. A permissive whole-photo weak-edge search would promote
+  // wrinkles, pigmentation and illumination boundaries to lesion contours.
+  if (!(expectedDiameterPx >= 8) || roiRadius < 8) return null;
+
+  const rayCount = 96;
+  const maximumRadius = Math.floor(roiRadius * 0.82);
+  const expectedRadius = clamp(expectedDiameterPx / 2, 4, maximumRadius);
+  const minimumSearchRadius = clamp(
+    Math.floor(expectedRadius * 0.55),
+    3,
+    Math.max(3, maximumRadius - 3),
+  );
+  const maximumSearchRadius = clamp(
+    Math.ceil(expectedRadius * 1.65),
+    minimumSearchRadius + 3,
+    maximumRadius,
+  );
+  if (maximumSearchRadius <= minimumSearchRadius) return null;
+
+  const normalOffset = clamp(expectedRadius * 0.13, 2.5, 5);
+  const samplingMargin = maximumSearchRadius + normalOffset + 3;
+  if (seed.x < samplingMargin || seed.y < samplingMargin
+    || seed.x > Math.floor(image.width) - 1 - samplingMargin
+    || seed.y > Math.floor(image.height) - 1 - samplingMargin) {
+    return null;
+  }
+  const minimumRidgeContrast = Math.max(4, minContrast * 0.18);
+  interface RidgeSample { radius: number; contrast: number; score: number }
+  const raySamples: RidgeSample[][] = [];
+  for (let ray = 0; ray < rayCount; ray += 1) {
+    const angle = ray * Math.PI * 2 / rayCount;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const tangentX = -sin;
+    const tangentY = cos;
+    const sample = (radius: number, tangentOffset: number): number => sampledLuma(
+      image,
+      seed.x + cos * radius + tangentX * tangentOffset,
+      seed.y + sin * radius + tangentY * tangentOffset,
+    );
+    const ridgeAt = (radius: number, tangentOffset: number) => {
+      const stroke = sample(radius, tangentOffset);
+      const inner = median([
+        sample(radius - normalOffset - 0.75, tangentOffset),
+        sample(radius - normalOffset + 0.75, tangentOffset),
+      ]);
+      const outer = median([
+        sample(radius + normalOffset - 0.75, tangentOffset),
+        sample(radius + normalOffset + 0.75, tangentOffset),
+      ]);
+      return { innerContrast: inner - stroke, outerContrast: outer - stroke };
+    };
+    const tangentSpan = clamp(expectedRadius * 0.055, 1.4, 2.25);
+    const samples: RidgeSample[] = [];
+    for (let radius = minimumSearchRadius; radius <= maximumSearchRadius; radius += 1) {
+      const centerRidge = ridgeAt(radius, 0);
+      const previousRidge = ridgeAt(radius, -tangentSpan);
+      const nextRidge = ridgeAt(radius, tangentSpan);
+      // A pen line is a thin dark ridge with brighter skin on both sides. Using
+      // the weaker side rejects broad shadows and one-sided illumination steps.
+      // Requiring the same response immediately along the tangent prevents a
+      // circular arrangement of disconnected pores or compression speckles
+      // from masquerading as one drawn outline.
+      const ridgeContrast = Math.min(
+        centerRidge.innerContrast,
+        centerRidge.outerContrast,
+        previousRidge.innerContrast,
+        previousRidge.outerContrast,
+        nextRidge.innerContrast,
+        nextRidge.outerContrast,
+      );
+      if (ridgeContrast < minimumRidgeContrast) continue;
+      const asymmetryPenalty = Math.abs(centerRidge.innerContrast - centerRidge.outerContrast) * 0.12;
+      samples.push({
+        radius,
+        contrast: ridgeContrast,
+        score: ridgeContrast - asymmetryPenalty,
+      });
+    }
+    raySamples.push(samples);
+  }
+
+  const shapeBand = Math.max(3, expectedRadius * 0.24);
+  let dominantRadius = 0;
+  let dominantSupport = -1;
+  let dominantScore = Number.NEGATIVE_INFINITY;
+  for (let radius = minimumSearchRadius; radius <= maximumSearchRadius; radius += 1) {
+    const selected = raySamples.map((samples) => samples
+      .filter((sample) => Math.abs(sample.radius - radius) <= shapeBand)
+      .sort((first, second) => second.score - first.score)[0] || null);
+    const supported = selected.filter((sample): sample is RidgeSample => sample !== null);
+    const score = supported.reduce((total, sample) => total + sample.score, 0)
+      - Math.abs(radius - expectedRadius) / Math.max(1, expectedRadius) * rayCount * 0.15;
+    if (supported.length > dominantSupport || (supported.length === dominantSupport && score > dominantScore)) {
+      dominantRadius = radius;
+      dominantSupport = supported.length;
+      dominantScore = score;
+    }
+  }
+  if (dominantSupport < rayCount * 0.8) return null;
+
+  const selectedRadii: Array<number | null> = [];
+  const selectedContrasts: number[] = [];
+  for (const samples of raySamples) {
+    const selected = samples
+      .filter((sample) => Math.abs(sample.radius - dominantRadius) <= shapeBand)
+      .sort((first, second) => second.score - first.score)[0] || null;
+    selectedRadii.push(selected?.radius ?? null);
+    if (selected) selectedContrasts.push(selected.contrast);
+  }
+  const observedRadii = selectedRadii.filter((radius): radius is number => radius !== null);
+  const radiusMedian = median(observedRadii);
+  const maximumRadialDeviation = Math.max(3, radiusMedian * 0.27);
+  for (let index = 0; index < selectedRadii.length; index += 1) {
+    const radius = selectedRadii[index];
+    if (radius !== null && Math.abs(radius - radiusMedian) > maximumRadialDeviation) selectedRadii[index] = null;
+  }
+  const supportedCount = selectedRadii.filter((radius) => radius !== null).length;
+  const supportRatio = supportedCount / rayCount;
+  const maximumMissingRun = maximumCircularMissingRun(selectedRadii);
+  if (supportRatio < 0.8 || maximumMissingRun > 4) return null;
+
+  const radialDeviations = selectedRadii
+    .filter((radius): radius is number => radius !== null)
+    .map((radius) => Math.abs(radius - radiusMedian));
+  const radialVariationRatio = median(radialDeviations) / Math.max(1, radiusMedian);
+  if (radialVariationRatio > 0.16) return null;
+  const neighbourJumps: number[] = [];
+  for (let index = 0; index < selectedRadii.length; index += 1) {
+    const current = selectedRadii[index];
+    const next = selectedRadii[(index + 1) % rayCount];
+    if (current !== null && next !== null) neighbourJumps.push(Math.abs(current - next) / Math.max(1, radiusMedian));
+  }
+  if (percentile(neighbourJumps, 0.9) > 0.2) return null;
+
+  const filled = [...selectedRadii];
+  for (let index = 0; index < filled.length; index += 1) {
+    if (filled[index] !== null) continue;
+    let previous = (index - 1 + rayCount) % rayCount;
+    let next = (index + 1) % rayCount;
+    while (selectedRadii[previous] === null) previous = (previous - 1 + rayCount) % rayCount;
+    while (selectedRadii[next] === null) next = (next + 1) % rayCount;
+    const span = (next - previous + rayCount) % rayCount;
+    const offset = (index - previous + rayCount) % rayCount;
+    filled[index] = Number(selectedRadii[previous])
+      + (Number(selectedRadii[next]) - Number(selectedRadii[previous])) * offset / Math.max(1, span);
+  }
+  const complete = filled.map((radius) => Number(radius));
+  const smoothed = complete.map((_radius, index) => median([
+    complete[(index - 2 + rayCount) % rayCount],
+    complete[(index - 1 + rayCount) % rayCount],
+    complete[index],
+    complete[(index + 1) % rayCount],
+    complete[(index + 2) % rayCount],
+  ]));
+  const boundary = smoothed.map((radius, ray) => {
+    const angle = ray * Math.PI * 2 / rayCount;
+    return { x: seed.x + Math.cos(angle) * radius, y: seed.y + Math.sin(angle) * radius };
+  });
+  const area = Math.abs(polygonArea(boundary));
+  const perimeter = boundary.reduce((total, point, index) => {
+    const next = boundary[(index + 1) % boundary.length];
+    return total + Math.hypot(next.x - point.x, next.y - point.y);
+  }, 0);
+  const compactness = 4 * Math.PI * area / Math.max(1, perimeter ** 2);
+  const bbox = pixelExtent(boundary, seed).bbox;
+  const aspectRatio = Math.max(bbox.width, bbox.height) / Math.max(1, Math.min(bbox.width, bbox.height));
+  const detectedDiameterPx = Math.max(bbox.width, bbox.height);
+  const medianRidgeContrast = median(selectedContrasts);
+  if (area < Math.max(minAreaPx * 4, 16)
+    || !pointInPolygon(seed, boundary)
+    || compactness < 0.72
+    || aspectRatio > 1.45
+    || detectedDiameterPx < expectedDiameterPx * 0.6
+    || detectedDiameterPx > expectedDiameterPx * 1.7
+    || medianRidgeContrast < minimumRidgeContrast * 1.15) {
+    return null;
+  }
+
+  const center = polygonCentroid(boundary);
+  return {
+    ok: true,
+    failure_code: null,
+    center,
+    boundary,
+    area_px: Math.round(area),
+    bbox,
+    geometry_mode: "enclosed_region",
+    seed_relation: "enclosed",
+    marker_area_px: supportedCount,
+    marker_bbox: bbox,
+    // Keep the result deliberately below a high-confidence direct enclosure;
+    // the runtime surfaces it as a yellow candidate that must be checked.
+    confidence: clamp(supportRatio * medianRidgeContrast / Math.max(36, minContrast * 1.5), 0, 0.58),
+    candidate_count: 1,
+    warnings: ["low_contrast_near_circular_recovered"],
+    diagnostics: {
+      method: "low_contrast_near_circular",
+      roi_radius: roiRadius,
+      boundary_support_ratio: supportRatio,
+      repair_fraction: 1 - supportRatio,
+      angular_support_ratio: supportRatio,
+      maximum_gap_degrees: maximumMissingRun * 360 / rayCount,
+      detected_diameter_px: detectedDiameterPx,
+      expected_diameter_px: expectedDiameterPx,
+      detected_to_expected_diameter_ratio: detectedDiameterPx / expectedDiameterPx,
+      ridge_contrast: medianRidgeContrast,
+      radial_variation_ratio: radialVariationRatio,
+      shape_compactness: compactness,
+    },
+    audit: { local_only: true, raw_media_retained: false, network_request_made: false },
+  };
+}
+
 function radialBoundaryRecovery(
   image: MarkerImageData,
   seed: MarkerPoint,
@@ -1208,6 +1475,530 @@ function pointInPolygon(point: MarkerPoint, polygon: MarkerPoint[]): boolean {
   return inside;
 }
 
+function pointToSegmentDistance(point: MarkerPoint, start: MarkerPoint, end: MarkerPoint): number {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared <= 1e-12) return Math.hypot(point.x - start.x, point.y - start.y);
+  const t = clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared, 0, 1);
+  return Math.hypot(point.x - (start.x + dx * t), point.y - (start.y + dy * t));
+}
+
+function resampleClosedBoundary(points: MarkerPoint[], count: number): MarkerPoint[] {
+  const unique: MarkerPoint[] = [];
+  const seen = new Set<string>();
+  for (const point of points) {
+    const key = `${point.x.toFixed(6)},${point.y.toFixed(6)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(point);
+  }
+  if (unique.length < 3 || count < 8) return [];
+  const lengths = unique.map((point, index) => Math.hypot(
+    unique[(index + 1) % unique.length].x - point.x,
+    unique[(index + 1) % unique.length].y - point.y,
+  ));
+  const perimeter = lengths.reduce((sum, length) => sum + length, 0);
+  if (!(perimeter > 1e-6)) return [];
+  const output: MarkerPoint[] = [];
+  let segment = 0;
+  let segmentStartDistance = 0;
+  for (let sample = 0; sample < count; sample += 1) {
+    const targetDistance = perimeter * sample / count;
+    while (segment < lengths.length - 1
+      && segmentStartDistance + lengths[segment] < targetDistance) {
+      segmentStartDistance += lengths[segment];
+      segment += 1;
+    }
+    const start = unique[segment];
+    const end = unique[(segment + 1) % unique.length];
+    const t = lengths[segment] > 1e-9
+      ? (targetDistance - segmentStartDistance) / lengths[segment]
+      : 0;
+    output.push({
+      x: start.x + (end.x - start.x) * t,
+      y: start.y + (end.y - start.y) * t,
+    });
+  }
+  return output;
+}
+
+function periodicBoundarySmooth(points: MarkerPoint[], passes = 3): MarkerPoint[] {
+  let smoothed = points.map((point) => ({ ...point }));
+  for (let pass = 0; pass < passes; pass += 1) {
+    smoothed = smoothed.map((point, index, source) => {
+      const previous = source[(index - 1 + source.length) % source.length];
+      const next = source[(index + 1) % source.length];
+      return {
+        x: previous.x * 0.25 + point.x * 0.5 + next.x * 0.25,
+        y: previous.y * 0.25 + point.y * 0.5 + next.y * 0.25,
+      };
+    });
+  }
+  return smoothed;
+}
+
+function boundarySelfIntersects(points: MarkerPoint[]): boolean {
+  const epsilon = 1e-8;
+  const orient = (a: MarkerPoint, b: MarkerPoint, c: MarkerPoint) =>
+    (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const onSegment = (point: MarkerPoint, start: MarkerPoint, end: MarkerPoint) =>
+    point.x >= Math.min(start.x, end.x) - epsilon
+    && point.x <= Math.max(start.x, end.x) + epsilon
+    && point.y >= Math.min(start.y, end.y) - epsilon
+    && point.y <= Math.max(start.y, end.y) + epsilon;
+  const intersects = (a: MarkerPoint, b: MarkerPoint, c: MarkerPoint, d: MarkerPoint) => {
+    const abC = orient(a, b, c);
+    const abD = orient(a, b, d);
+    const cdA = orient(c, d, a);
+    const cdB = orient(c, d, b);
+    if (abC * abD < -epsilon && cdA * cdB < -epsilon) return true;
+    return (Math.abs(abC) <= epsilon && onSegment(c, a, b))
+      || (Math.abs(abD) <= epsilon && onSegment(d, a, b))
+      || (Math.abs(cdA) <= epsilon && onSegment(a, c, d))
+      || (Math.abs(cdB) <= epsilon && onSegment(b, c, d));
+  };
+  for (let first = 0; first < points.length; first += 1) {
+    const firstNext = (first + 1) % points.length;
+    for (let second = first + 1; second < points.length; second += 1) {
+      const secondNext = (second + 1) % points.length;
+      if (first === second || firstNext === second || secondNext === first) continue;
+      if (intersects(points[first], points[firstNext], points[second], points[secondNext])) return true;
+    }
+  }
+  return false;
+}
+
+function boundaryMissDistances(candidate: MarkerPoint[], original: MarkerPoint[]): number[] {
+  return original.map((point) => {
+    if (pointInPolygon(point, candidate)) return 0;
+    const distance = candidate.reduce((closest, start, index) => Math.min(
+      closest,
+      pointToSegmentDistance(point, start, candidate[(index + 1) % candidate.length]),
+    ), Number.POSITIVE_INFINITY);
+    return distance <= 0.35 ? 0 : distance;
+  });
+}
+
+function boundaryNearestDistances(candidate: MarkerPoint[], reference: MarkerPoint[]): number[] {
+  return candidate.map((point) => reference.reduce((closest, start, index) => Math.min(
+    closest,
+    pointToSegmentDistance(point, start, reference[(index + 1) % reference.length]),
+  ), Number.POSITIVE_INFINITY));
+}
+
+function convexBoundaryHull(points: MarkerPoint[]): MarkerPoint[] {
+  const ordered = [...new Map(points.map((point) => [`${point.x},${point.y}`, point])).values()]
+    .sort((first, second) => first.x - second.x || first.y - second.y);
+  if (ordered.length < 3) return ordered;
+  const cross = (origin: MarkerPoint, first: MarkerPoint, second: MarkerPoint) =>
+    (first.x - origin.x) * (second.y - origin.y) - (first.y - origin.y) * (second.x - origin.x);
+  const buildHalf = (source: MarkerPoint[]) => {
+    const half: MarkerPoint[] = [];
+    for (const point of source) {
+      while (half.length >= 2 && cross(half[half.length - 2], half[half.length - 1], point) <= 0) half.pop();
+      half.push(point);
+    }
+    return half;
+  };
+  const lower = buildHalf(ordered);
+  const upper = buildHalf([...ordered].reverse());
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+interface BoundarySmoothingAttempt {
+  boundary: MarkerPoint[];
+  scale: number;
+  passes: number;
+  misses: number[];
+  sourceArea: number;
+}
+
+function attemptPeriodicBoundarySmoothing(
+  source: MarkerPoint[],
+  coverageReference: MarkerPoint[],
+  equivalentRadius: number,
+): BoundarySmoothingAttempt | null {
+  const sourceArea = Math.abs(polygonArea(source));
+  const resampled = resampleClosedBoundary(source, 48);
+  if (!(sourceArea > 1e-6) || resampled.length < 8) return null;
+  const center = polygonCentroid(source);
+  const typicalMissLimit = Math.max(0.6, equivalentRadius * 0.025);
+  const maximumMissLimit = Math.max(1.5, equivalentRadius * 0.07);
+  for (const passes of [8, 7, 6, 5, 4, 3]) {
+    const smoothed = periodicBoundarySmooth(resampled, passes);
+    const smoothedArea = Math.abs(polygonArea(smoothed));
+    if (!(smoothedArea > 1e-6)) continue;
+    const areaPreservingScale = Math.sqrt(sourceArea / smoothedArea);
+    for (let padding = 1; padding <= 1.06 + 1e-9; padding += 0.005) {
+      const scale = areaPreservingScale * padding;
+      const expanded = smoothed.map((point) => ({
+        x: center.x + (point.x - center.x) * scale,
+        y: center.y + (point.y - center.y) * scale,
+      }));
+      const misses = boundaryMissDistances(expanded, coverageReference);
+      const outsideRatio = misses.filter((distance) => distance > 0).length / misses.length;
+      const areaRatio = Math.abs(polygonArea(expanded)) / sourceArea;
+      if (outsideRatio <= 0.22
+        && percentile(misses, 0.9) <= typicalMissLimit
+        && Math.max(...misses) <= maximumMissLimit
+        && areaRatio >= 0.98
+        && areaRatio <= 1.13
+        && !boundarySelfIntersects(expanded)
+        && pointInPolygon(center, expanded)) {
+        return { boundary: expanded, scale, passes, misses, sourceArea };
+      }
+    }
+  }
+  return null;
+}
+
+function finalizeControlledMarkerBoundary(result: ControlledMarkerDetection): ControlledMarkerDetection {
+  if (!result.ok || result.geometry_mode !== "enclosed_region" || result.boundary.length < 8) return result;
+  const original = result.boundary;
+  const originalArea = Math.abs(polygonArea(original));
+  const perimeter = original.reduce((sum, point, index) => sum + Math.hypot(
+    original[(index + 1) % original.length].x - point.x,
+    original[(index + 1) % original.length].y - point.y,
+  ), 0);
+  const extent = pixelExtent(original).bbox;
+  const aspectRatio = Math.max(extent.width, extent.height) / Math.max(1, Math.min(extent.width, extent.height));
+  const compactness = perimeter > 0 ? 4 * Math.PI * originalArea / (perimeter * perimeter) : 0;
+  const extentFillRatio = originalArea / Math.max(1, extent.width * extent.height);
+  // Compactness falls sharply precisely when a raster outline contains short
+  // pixel-scale spikes. Use the filled extent plus aspect ratio to keep this
+  // cleanup limited to the current near-circular scope without excluding the
+  // rough boundaries it is intended to repair.
+  if (!(originalArea > 0) || aspectRatio > 1.8 || extentFillRatio < 0.42) return result;
+
+  const equivalentRadius = Math.sqrt(originalArea / Math.PI);
+  let attempt = attemptPeriodicBoundarySmoothing(original, original, equivalentRadius);
+  let regularization: "convex_hull" | null = null;
+  let regularizationAreaRatio = 1;
+  let solidity = 1;
+  let regularizationDisplacements: number[] = [];
+  if (!attempt) {
+    const hull = convexBoundaryHull(original);
+    const hullArea = Math.abs(polygonArea(hull));
+    const hullPerimeter = hull.reduce((sum, point, index) => sum + Math.hypot(
+      hull[(index + 1) % hull.length].x - point.x,
+      hull[(index + 1) % hull.length].y - point.y,
+    ), 0);
+    const hullCompactness = hullPerimeter > 0 ? 4 * Math.PI * hullArea / (hullPerimeter * hullPerimeter) : 0;
+    const hullExtent = pixelExtent(hull).bbox;
+    const hullAspectRatio = Math.max(hullExtent.width, hullExtent.height)
+      / Math.max(1, Math.min(hullExtent.width, hullExtent.height));
+    const originalCenter = polygonCentroid(original);
+    const hullCenter = polygonCentroid(hull);
+    regularizationAreaRatio = hullArea / originalArea;
+    solidity = originalArea / Math.max(1e-6, hullArea);
+    // This fallback is limited to the current near-circular scope. It fills
+    // short inward raster pockets, but cannot expand beyond the detected bbox,
+    // move the region centre materially, or turn a deeply concave shape into a
+    // plausible-looking circle.
+    if (hull.length >= 8
+      && hullAspectRatio <= 1.8
+      && hullCompactness >= 0.75
+      && regularizationAreaRatio <= 1.45
+      && solidity >= 0.69
+      && Math.hypot(hullCenter.x - originalCenter.x, hullCenter.y - originalCenter.y)
+        <= Math.max(2, equivalentRadius * 0.25)) {
+      attempt = attemptPeriodicBoundarySmoothing(hull, original, equivalentRadius);
+      if (attempt && Math.abs(polygonArea(attempt.boundary)) / originalArea <= 1.45) {
+        regularizationDisplacements = boundaryNearestDistances(attempt.boundary, original);
+        // A few large displacements are expected when the raw raster contains
+        // an internal retrace. Distributed displacements are different: they
+        // indicate that the source itself is repeatedly concave, so replacing
+        // it with its convex hull would alter the detected shape rather than
+        // clean a local extraction defect.
+        const p90DisplacementRatio = percentile(regularizationDisplacements, 0.9)
+          / Math.max(1, equivalentRadius);
+        if (p90DisplacementRatio <= 0.12) regularization = "convex_hull";
+        else attempt = null;
+      } else {
+        attempt = null;
+      }
+    }
+  }
+  if (!attempt) {
+    result.diagnostics = {
+      ...(result.diagnostics || {}),
+      boundary_smoothing: "raw_fallback",
+      shape_compactness: Number(compactness.toFixed(3)),
+    };
+    return result;
+  }
+  const areaRatio = Math.abs(polygonArea(attempt.boundary)) / originalArea;
+  const outsideRatio = attempt.misses.filter((distance) => distance > 0).length / attempt.misses.length;
+  const maximumMissRatio = Math.max(...attempt.misses) / Math.max(1, equivalentRadius);
+  result.boundary = attempt.boundary;
+  result.warnings = [...new Set([
+    ...result.warnings,
+    "boundary_periodic_smoothed",
+    ...(regularization ? ["boundary_near_circular_convex_regularized"] : []),
+  ])];
+  result.diagnostics = {
+    ...(result.diagnostics || {}),
+    boundary_smoothing: "periodic_constrained",
+    boundary_smoothing_scale: Number(attempt.scale.toFixed(3)),
+    boundary_smoothing_area_ratio: Number(areaRatio.toFixed(3)),
+    boundary_smoothing_passes: attempt.passes,
+    boundary_smoothing_outside_ratio: Number(outsideRatio.toFixed(3)),
+    boundary_smoothing_max_miss_ratio: Number(maximumMissRatio.toFixed(3)),
+    shape_compactness: Number(compactness.toFixed(3)),
+    ...(regularization ? {
+      boundary_regularization: regularization,
+      boundary_regularization_area_ratio: Number(regularizationAreaRatio.toFixed(3)),
+      boundary_regularization_solidity: Number(solidity.toFixed(3)),
+      boundary_regularization_p90_displacement_ratio: Number(
+        (percentile(regularizationDisplacements, 0.9) / Math.max(1, equivalentRadius)).toFixed(3),
+      ),
+      boundary_regularization_max_displacement_ratio: Number(
+        (Math.max(...regularizationDisplacements) / Math.max(1, equivalentRadius)).toFixed(3),
+      ),
+    } : {}),
+  };
+  return result;
+}
+
+function boundaryCoordinateExtent(points: readonly MarkerPoint[]) {
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  return {
+    minX: Math.min(...xs),
+    minY: Math.min(...ys),
+    maxX: Math.max(...xs),
+    maxY: Math.max(...ys),
+  };
+}
+
+function scaleBoundaryToMarkerExtent(
+  source: readonly MarkerPoint[],
+  markerBbox: { x: number; y: number; width: number; height: number },
+  maximumScale: number,
+): { boundary: MarkerPoint[]; scaleX: number; scaleY: number } | null {
+  if (source.length < 8 || markerBbox.width <= 0 || markerBbox.height <= 0) return null;
+  const sourceCenter = polygonCentroid(source);
+  const targetCenter = {
+    x: markerBbox.x + (markerBbox.width - 1) / 2,
+    y: markerBbox.y + (markerBbox.height - 1) / 2,
+  };
+  const extent = boundaryCoordinateExtent(source);
+  const sourceLeft = Math.max(sourceCenter.x - extent.minX, 1e-6);
+  const sourceRight = Math.max(extent.maxX - sourceCenter.x, 1e-6);
+  const sourceTop = Math.max(sourceCenter.y - extent.minY, 1e-6);
+  const sourceBottom = Math.max(extent.maxY - sourceCenter.y, 1e-6);
+  const targetMaxX = markerBbox.x + markerBbox.width - 1;
+  const targetMaxY = markerBbox.y + markerBbox.height - 1;
+  // Match the centres of the outermost marker pixels on all four sides. Each
+  // side is evaluated separately because a valid tilted outline need not be
+  // symmetric about its polygon centroid.
+  const scaleX = Math.max(
+    1,
+    (targetCenter.x - markerBbox.x) / sourceLeft,
+    (targetMaxX - targetCenter.x) / sourceRight,
+  );
+  const scaleY = Math.max(
+    1,
+    (targetCenter.y - markerBbox.y) / sourceTop,
+    (targetMaxY - targetCenter.y) / sourceBottom,
+  );
+  if (scaleX > maximumScale || scaleY > maximumScale) return null;
+  return {
+    scaleX,
+    scaleY,
+    boundary: source.map((point) => ({
+      x: targetCenter.x + (point.x - sourceCenter.x) * scaleX,
+      y: targetCenter.y + (point.y - sourceCenter.y) * scaleY,
+    })),
+  };
+}
+
+function reconcileMarkerStrokeCoverage(
+  image: MarkerImageData,
+  seed: MarkerPoint,
+  options: ControlledMarkerOptions,
+  roiRadius: number,
+  result: ControlledMarkerDetection,
+): ControlledMarkerDetection {
+  const expectedDiameterPx = Number(options.expectedDiameterPx || 0);
+  if (!result.ok
+    || result.geometry_mode !== "enclosed_region"
+    || !result.center
+    || !result.marker_bbox
+    || result.boundary.length < 8
+    || !(expectedDiameterPx >= 8)) return result;
+
+  const originalBoundary = result.boundary;
+  const originalArea = Math.abs(polygonArea(originalBoundary));
+  if (!(originalArea > 1e-6)) return result;
+  const equivalentRadius = Math.sqrt(originalArea / Math.PI);
+  const markerBbox = result.marker_bbox;
+  const markerDiameter = Math.max(markerBbox.width, markerBbox.height);
+  const markerAspect = markerDiameter / Math.max(1, Math.min(markerBbox.width, markerBbox.height));
+  const markerCenter = {
+    x: markerBbox.x + (markerBbox.width - 1) / 2,
+    y: markerBbox.y + (markerBbox.height - 1) / 2,
+  };
+  const markerCenterShiftRatio = Math.hypot(
+    markerCenter.x - result.center.x,
+    markerCenter.y - result.center.y,
+  ) / Math.max(1, equivalentRadius);
+  const originalExtent = boundaryCoordinateExtent(originalBoundary);
+  const originalExtentArea = Math.max(
+    1,
+    (originalExtent.maxX - originalExtent.minX) * (originalExtent.maxY - originalExtent.minY),
+  );
+  const markerExtentAreaRatio = markerBbox.width * markerBbox.height / originalExtentArea;
+  // A marker component much larger than the entered lesion scale usually
+  // means that the pen line has touched a wrinkle, shadow or hair. Do not even
+  // launch the more permissive ridge probes for that component.
+  if (markerDiameter < expectedDiameterPx * 0.35
+    || markerDiameter > expectedDiameterPx * 1.25
+    || markerAspect > 1.8) return result;
+
+  let reconciliation: "radial_ridge" | "bounded_marker_bbox" = "bounded_marker_bbox";
+  // A close, centred marker component is the least ambiguous witness and is
+  // also the cheapest path. This covers a smooth but slightly inset result
+  // without launching the more permissive radial search.
+  let scaled = markerExtentAreaRatio <= 1.3 && markerCenterShiftRatio <= 0.15
+    ? scaleBoundaryToMarkerExtent(originalBoundary, markerBbox, 1.14)
+    : null;
+  if (!scaled) {
+    reconciliation = "radial_ridge";
+    const ridgeProbeStep = clamp(Math.round(expectedDiameterPx * 0.1), 3, 6);
+    const ridgeSeeds: MarkerPoint[] = [
+      result.center,
+      { x: result.center.x, y: result.center.y - ridgeProbeStep },
+      { x: result.center.x, y: result.center.y + ridgeProbeStep },
+      { x: result.center.x - ridgeProbeStep, y: result.center.y },
+      { x: result.center.x + ridgeProbeStep, y: result.center.y },
+      seed,
+    ];
+    const compatibleRidges: Array<{
+      boundary: MarkerPoint[];
+      area: number;
+      compactness: number;
+      scaleX: number;
+      scaleY: number;
+    }> = [];
+    for (const ridgeSeed of ridgeSeeds) {
+      const ridge = weakNearCircularBoundaryRecovery(
+        image,
+        ridgeSeed,
+        roiRadius,
+        expectedDiameterPx,
+        Number(options.minAreaPx ?? 9),
+        Number(options.minContrast ?? 24),
+      );
+      if (!ridge?.ok || !ridge.center || ridge.boundary.length < 8) continue;
+      const finalizedRidge = finalizeControlledMarkerBoundary(ridge);
+      const ridgeCenter = polygonCentroid(finalizedRidge.boundary);
+      const rawRidgeExtent = boundaryCoordinateExtent(finalizedRidge.boundary);
+      // The radial sampler follows the darkest centre of a pen stroke. Judge
+      // containment on the displayed, antialias-padded boundary instead of
+      // rejecting a valid ridge because its centreline misses the old inner
+      // enclosure by a sub-pixel amount.
+      const ridgePaddingPx = clamp(expectedDiameterPx * 0.015, 0.75, 1.5);
+      const scaleX = 1 + ridgePaddingPx * 2 / Math.max(
+        1,
+        rawRidgeExtent.maxX - rawRidgeExtent.minX,
+      );
+      const scaleY = 1 + ridgePaddingPx * 2 / Math.max(
+        1,
+        rawRidgeExtent.maxY - rawRidgeExtent.minY,
+      );
+      const paddedBoundary = finalizedRidge.boundary.map((point) => ({
+        x: ridgeCenter.x + (point.x - ridgeCenter.x) * scaleX,
+        y: ridgeCenter.y + (point.y - ridgeCenter.y) * scaleY,
+      }));
+      const ridgeArea = Math.abs(polygonArea(paddedBoundary));
+      const ridgeExtent = boundaryCoordinateExtent(paddedBoundary);
+      const ridgeAspect = Math.max(
+        ridgeExtent.maxX - ridgeExtent.minX,
+        ridgeExtent.maxY - ridgeExtent.minY,
+      ) / Math.max(1, Math.min(
+        ridgeExtent.maxX - ridgeExtent.minX,
+        ridgeExtent.maxY - ridgeExtent.minY,
+      ));
+      const ridgePerimeter = paddedBoundary.reduce((sum, point, index) => sum + Math.hypot(
+        paddedBoundary[(index + 1) % paddedBoundary.length].x - point.x,
+        paddedBoundary[(index + 1) % paddedBoundary.length].y - point.y,
+      ), 0);
+      const ridgeCompactness = 4 * Math.PI * ridgeArea / Math.max(1, ridgePerimeter ** 2);
+      const ridgeMisses = boundaryMissDistances(paddedBoundary, originalBoundary);
+      const ridgeOutsideRatio = ridgeMisses.filter((distance) => distance > 0).length
+        / ridgeMisses.length;
+      const ridgeCenterShiftRatio = Math.hypot(
+        ridgeCenter.x - result.center.x,
+        ridgeCenter.y - result.center.y,
+      ) / Math.max(1, equivalentRadius);
+      if (ridgeArea / originalArea >= 1.02
+        && ridgeArea / originalArea <= 1.75
+        && ridgeAspect <= 1.6
+        && ridgeCompactness >= 0.75
+        && ridgeOutsideRatio <= 0.1
+        && percentile(ridgeMisses, 0.9) <= Math.max(0.6, equivalentRadius * 0.025)
+        && Math.max(...ridgeMisses) <= Math.max(1.5, equivalentRadius * 0.07)
+        && ridgeCenterShiftRatio <= 0.4) {
+        compatibleRidges.push({
+          boundary: paddedBoundary,
+          area: ridgeArea,
+          compactness: ridgeCompactness,
+          scaleX,
+          scaleY,
+        });
+      }
+    }
+
+    compatibleRidges.sort((first, second) => second.compactness - first.compactness
+      || second.area - first.area);
+    if (compatibleRidges.length) {
+      const selected = compatibleRidges[0];
+      scaled = {
+        boundary: selected.boundary,
+        scaleX: selected.scaleX,
+        scaleY: selected.scaleY,
+      };
+    }
+  }
+  if (!scaled) return result;
+  const candidateArea = Math.abs(polygonArea(scaled.boundary));
+  const candidateCenter = polygonCentroid(scaled.boundary);
+  const candidateAreaRatio = candidateArea / originalArea;
+  const originalMisses = boundaryMissDistances(scaled.boundary, originalBoundary);
+  const outsideRatio = originalMisses.filter((distance) => distance > 0).length / originalMisses.length;
+  if (candidateAreaRatio < 1.02
+    || candidateAreaRatio > 1.75
+    || outsideRatio > 0.1
+    || percentile(originalMisses, 0.9) > Math.max(0.6, equivalentRadius * 0.025)
+    || Math.max(...originalMisses) > Math.max(1.5, equivalentRadius * 0.07)
+    || boundarySelfIntersects(scaled.boundary)
+    || !pointInPolygon(candidateCenter, scaled.boundary)
+    || scaled.boundary.some((point) => Math.hypot(point.x - seed.x, point.y - seed.y) > roiRadius - 1)) {
+    return result;
+  }
+
+  const resultCenterBeforeReconciliation = result.center;
+  result.boundary = scaled.boundary;
+  result.center = candidateCenter;
+  result.area_px = Math.round(candidateArea);
+  result.bbox = pixelExtent(scaled.boundary).bbox;
+  result.diagnostics = {
+    ...(result.diagnostics || {}),
+    boundary_stroke_reconciliation: reconciliation,
+    boundary_stroke_scale: Number(Math.max(scaled.scaleX, scaled.scaleY).toFixed(3)),
+    boundary_stroke_scale_x: Number(scaled.scaleX.toFixed(3)),
+    boundary_stroke_scale_y: Number(scaled.scaleY.toFixed(3)),
+    boundary_stroke_area_ratio: Number(candidateAreaRatio.toFixed(3)),
+    boundary_stroke_center_shift_ratio: Number((Math.hypot(
+      candidateCenter.x - resultCenterBeforeReconciliation.x,
+      candidateCenter.y - resultCenterBeforeReconciliation.y,
+    ) / Math.max(1, equivalentRadius)).toFixed(3)),
+  };
+  return result;
+}
+
 function findRelevantCandidates(
   components: PixelComponent[],
   seed: MarkerPoint,
@@ -1542,6 +2333,42 @@ function seedFirstBarrierDetection(
     const selected = acceptedEnclosures[0];
     if (acceptedEnclosures.length > 1) {
       selected.warnings = [...new Set([...selected.warnings, "representative_enclosure_selected"])];
+    }
+    return selected;
+  }
+  const weakProbeStep = clamp(Math.round(expectedDiameterPx * 0.07), 3, 6);
+  const weakProbeOffsets: Array<[number, number]> = [
+    [0, 0],
+    [-weakProbeStep, 0], [weakProbeStep, 0], [0, -weakProbeStep], [0, weakProbeStep],
+  ];
+  const weakNearCircularCandidates = weakProbeOffsets
+    .map(([dx, dy]) => weakNearCircularBoundaryRecovery(
+      image,
+      { x: seed.x + dx, y: seed.y + dy },
+      roiRadius,
+      expectedDiameterPx,
+      minAreaPx,
+      minContrast,
+    ))
+    .filter((candidate): candidate is ControlledMarkerDetection => Boolean(
+      candidate?.center
+      && candidate.boundary.length
+      && pointInPolygon(seed, candidate.boundary)
+      && Math.max(...candidate.boundary.map((point) => Math.hypot(point.x - seed.x, point.y - seed.y))) < roiRadius * 0.88,
+    ));
+  if (weakNearCircularCandidates.length) {
+    weakNearCircularCandidates.sort((first, second) => (
+      Number(second.diagnostics?.boundary_support_ratio || 0)
+        - Number(first.diagnostics?.boundary_support_ratio || 0)
+      || Number(first.diagnostics?.radial_variation_ratio || 1)
+        - Number(second.diagnostics?.radial_variation_ratio || 1)
+      || Math.hypot(Number(first.center?.x) - seed.x, Number(first.center?.y) - seed.y)
+        - Math.hypot(Number(second.center?.x) - seed.x, Number(second.center?.y) - seed.y)
+    ));
+    const selected = weakNearCircularCandidates[0];
+    selected.candidate_count = weakNearCircularCandidates.length;
+    if (Math.hypot(Number(selected.center?.x) - seed.x, Number(selected.center?.y) - seed.y) > 0.5) {
+      selected.warnings = [...new Set([...selected.warnings, "weak_center_refined"])];
     }
     return selected;
   }
@@ -2175,6 +3002,8 @@ export function detectControlledMarker(
     result = classifyScanFailure(image, seed, options, roiRadius, result);
     result = validateScanSuccess(result, seed, options, roiRadius);
     result = recoverBySeedNeighborhoodConsensus(image, seed, options, roiRadius, result);
+    result = finalizeControlledMarkerBoundary(result);
+    result = reconcileMarkerStrokeCoverage(image, seed, options, roiRadius, result);
     return attachScanMetadata(result, options, roiRadius);
   }
 
@@ -2241,15 +3070,20 @@ export function detectControlledMarker(
       );
       if (compatibleCanonicalRegion(selected, canonical)) {
         canonical.warnings = [...new Set([...canonical.warnings, "canonical_seed_refined"])];
-        return canonical;
+        return finalizeControlledMarkerBoundary(canonical);
       }
     }
-    return selected;
+    return finalizeControlledMarkerBoundary(selected);
   }
   return bestRetryableFailure || failure("no_dark_component");
 }
 
 export const __controlledMarkerForTests = {
   adaptiveDarkBarrier,
+  boundarySelfIntersects,
   bridgeSingleStrokeGap,
+  componentOuterBoundary,
+  finalizeControlledMarkerBoundary,
+  reconcileMarkerStrokeCoverage,
+  weakNearCircularBoundaryRecovery,
 };

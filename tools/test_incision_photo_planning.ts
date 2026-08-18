@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 
 import {
+  attemptConstrainedPhotoReferences,
+  buildPhotoSpaceDiameterEstimate,
   buildSubcutaneousDiameterEstimateRefs,
   buildIncisionPhotoGeometry,
   buildPhotoSurfaceCanonicalFusiform,
@@ -204,6 +206,24 @@ assert.ok(surfaceSmoothedFusiform!.every((point) => point[0] >= 0 && point[0] <=
     "sampled polyline mode exposes the global fit samples without changing them again");
   assert.ok((counts.get("sampledLocalCubic")?.cubic || 0) > 2,
     "legacy local-cubic mode remains available only for A/B diagnosis");
+  calls.length = 0;
+  const visibilityLimitedFit = {
+    ...surfaceFusiformFit!,
+    visibleSegments: [surfaceFusiformFit!.outline.slice(2, 8)],
+  };
+  drawFusiformRenderMode(
+    context,
+    visibilityLimitedFit.outline,
+    visibilityLimitedFit,
+    "segmentedBezierDirect",
+    "#000",
+    1,
+  );
+  assert.equal(calls.filter((call) => call === "closePath").length, 0,
+    "view-limited rendering never reconnects an open visible run across the hidden region");
+  assert.equal(calls.filter((call) => call === "bezierCurveTo").length, 0,
+    "view-limited rendering draws only prevalidated visible samples instead of extrapolating hidden curves");
+  assert.ok(calls.filter((call) => call === "lineTo").length >= 2);
 }
 const pinchedProjection = inspectPhotoCandidateProjection([
   [0, 0, 0], [1, 0.7, 0], [2, 0.04, 0], [3, 0.7, 0], [4, 0, 0],
@@ -222,6 +242,17 @@ const diameterEstimateRefs = buildSubcutaneousDiameterEstimateRefs({
   samples: 16,
 });
 assert.equal(diameterEstimateRefs.length, 17, "subcutaneous diameter estimate is encoded as a closed surface-ref ring");
+const photoDiameterEstimate = buildPhotoSpaceDiameterEstimate([220, 140, 0], 12, 4, 48);
+const secondPhotoDiameterEstimate = buildPhotoSpaceDiameterEstimate([420, 360, 0], 12, 4, 48);
+assert.equal(photoDiameterEstimate.length, 49,
+  "the subcutaneous photo indicator is encoded as a closed photo-space circle");
+assert.ok(photoDiameterEstimate.every((point) => Math.abs(Math.hypot(point[0] - 220, point[1] - 140) - 24) < 1e-6),
+  "the photo-space diameter indicator keeps the entered diameter circular at every face location");
+assert.ok(secondPhotoDiameterEstimate.every((point, index) => {
+  const reference = photoDiameterEstimate[index];
+  return Math.abs((point[0] - 420) - (reference[0] - 220)) < 1e-9
+    && Math.abs((point[1] - 360) - (reference[1] - 140)) < 1e-9;
+}), "equal entered diameters produce the same photo-space circle on the forehead and cheek");
 
 const geometry = buildIncisionPhotoGeometry({
   landmarks,
@@ -229,6 +260,8 @@ const geometry = buildIncisionPhotoGeometry({
   atlasLines: [{ name: "bilateral", region: "cheek", points: [[0, 0.5, 0.25], [1, 0.25, 0.5]] }],
   centerRef: refs[0],
   diameterEstimateRefs,
+  photoDiameterEstimateMm: 0.5,
+  photoPixelsPerMm: 80,
   boundaryRefs: refs,
   candidateRefs: refs,
   endpointRefs: refs,
@@ -236,7 +269,10 @@ const geometry = buildIncisionPhotoGeometry({
 assert.equal(geometry.rstl.length, 1);
 assert.equal(geometry.rstl[0].pts.length, 2);
 assert.ok(geometry.center);
-assert.equal(geometry.diameterEstimate.length, 17);
+assert.equal(geometry.diameterEstimate.length, 49);
+assert.ok(geometry.diameterEstimate.every((point) => Math.abs(
+  Math.hypot(point[0] - geometry.center![0], point[1] - geometry.center![1]) - 20,
+) < 1e-6), "photo rendering prefers a stable screen-space circle over the distorted tangent-plane projection");
 assert.equal(geometry.boundary.length, 2);
 assert.equal(geometry.candidate.length, 2);
 assert.equal(geometry.endpoints.length, 2);
@@ -301,6 +337,54 @@ assert.ok(Math.abs(
   Number(photoCanonicalGeometry.candidateProjection.smoothingDiagnostics?.candidateLength)
     / Number(photoCanonicalGeometry.candidateProjection.smoothingDiagnostics?.maxWidth) - 4,
 ) < 1e-6, "photo-canonical correction preserves the candidate's requested aspect ratio");
+const photoCanonicalUpper = photoCanonicalGeometry.fusiformRendering!.outline.slice(0, 33);
+const photoCanonicalHalfLength = Number(photoCanonicalGeometry.candidateProjection.smoothingDiagnostics?.candidateLength) / 2;
+const photoCanonicalHalfWidth = Number(photoCanonicalGeometry.candidateProjection.smoothingDiagnostics?.maxWidth) / 2;
+const quarterProfilePoint = photoCanonicalUpper.reduce((best, point) => (
+  Math.abs(point[0] - (photoCanonicalGeometry.center![0] - photoCanonicalHalfLength / 2))
+    < Math.abs(best[0] - (photoCanonicalGeometry.center![0] - photoCanonicalHalfLength / 2)) ? point : best
+));
+const quarterProfileFullness = Math.abs(quarterProfilePoint[1] - photoCanonicalGeometry.center![1])
+  / photoCanonicalHalfWidth;
+assert.ok(quarterProfileFullness > 0.74,
+  `photo-canonical fusiform moves curvature away from the crown while filling the quarter profile (${quarterProfileFullness})`);
+const photoCanonicalUpperCurves = photoCanonicalGeometry.fusiformRendering!.upperCurves;
+const cubicSecondDerivative = (curve: Vec3[], atEnd: boolean) => atEnd
+  ? [0, 1].map((axis) => 6 * (curve[3][axis] - 2 * curve[2][axis] + curve[1][axis]))
+  : [0, 1].map((axis) => 6 * (curve[2][axis] - 2 * curve[1][axis] + curve[0][axis]));
+for (let index = 0; index < photoCanonicalUpperCurves.length - 1; index += 1) {
+  const previousSecond = cubicSecondDerivative(photoCanonicalUpperCurves[index], true);
+  const nextSecond = cubicSecondDerivative(photoCanonicalUpperCurves[index + 1], false);
+  assert.ok(Math.hypot(
+    previousSecond[0] - nextSecond[0],
+    previousSecond[1] - nextSecond[1],
+  ) < 1e-6, `photo-canonical segment ${index + 1} preserves curvature continuity`);
+}
+const crownSecondDerivative = cubicSecondDerivative(photoCanonicalUpperCurves[1], true);
+const normalizedCrownCurvature = Math.abs(crownSecondDerivative[1]) / photoCanonicalHalfWidth / (0.5 ** 2);
+assert.ok(normalizedCrownCurvature < 1.2,
+  `the widest crown remains gently rounded instead of retaining the former diamond-like bend (${normalizedCrownCurvature})`);
+const firstPhotoCanonicalCurve = photoCanonicalUpperCurves[0];
+const tipHalfAngleDeg = Math.atan2(
+  Math.abs(firstPhotoCanonicalCurve[1][1] - firstPhotoCanonicalCurve[0][1]),
+  Math.abs(firstPhotoCanonicalCurve[1][0] - firstPhotoCanonicalCurve[0][0]),
+) * 180 / Math.PI;
+assert.ok(Math.abs(tipHalfAngleDeg * 2 - 30) < 1e-6,
+  "curvature smoothing preserves the requested 30-degree included tip angle");
+const photoCanonicalWidths = photoCanonicalUpper.map((point) => Math.abs(
+  point[1] - photoCanonicalGeometry.center![1],
+));
+const widestIndex = photoCanonicalWidths.indexOf(Math.max(...photoCanonicalWidths));
+assert.equal(widestIndex, Math.floor(photoCanonicalWidths.length / 2),
+  "the smoother profile keeps one unique maximum at the lesion center");
+for (let index = 1; index <= widestIndex; index += 1) {
+  assert.ok(photoCanonicalWidths[index] >= photoCanonicalWidths[index - 1] - 1e-6,
+    "the smoother profile expands monotonically from the first tip");
+}
+for (let index = widestIndex + 1; index < photoCanonicalWidths.length; index += 1) {
+  assert.ok(photoCanonicalWidths[index] <= photoCanonicalWidths[index - 1] + 1e-6,
+    "the smoother profile tapers monotonically to the second tip");
+}
 
 const foreheadGapLandmarks = Array.from({ length: 468 }, () => [200, 250, 0] as Vec3);
 foreheadGapLandmarks[0] = [100, 220, 0];
@@ -340,7 +424,150 @@ const lowerFaceMeshGapFit = buildPhotoSurfaceCanonicalFusiform({
 });
 assert.equal(lowerFaceMeshGapFit.fit, null,
   "mesh gaps below the forehead are not reclassified as skin because they may be eyes, nostrils or mouth");
+assert.equal(lowerFaceMeshGapFit.visibilityLimitedFit, null,
+  "an internal lower-face mesh gap cannot be relabelled as a harmless view occlusion");
 assert.equal(lowerFaceMeshGapFit.diagnostics.reason, "photo_surface_exit");
+
+const silhouetteLandmarks = Array.from({ length: 468 }, () => [200, 250, 0] as Vec3);
+silhouetteLandmarks[0] = [100, 150, 0];
+silhouetteLandmarks[1] = [300, 150, 0];
+silhouetteLandmarks[2] = [300, 350, 0];
+silhouetteLandmarks[3] = [100, 350, 0];
+silhouetteLandmarks[10] = [200, 150, 0];
+for (const index of [9, 8, 107, 336]) silhouetteLandmarks[index] = [200, 150, 0];
+const visibilityLimitedSource = Array.from({ length: 13 }, (_, index) => {
+  const angle = index / 12 * Math.PI * 2;
+  return [260 + Math.cos(angle) * 120, 250 + Math.sin(angle) * 40, 0] as Vec3;
+});
+const visibilityLimitedInput = {
+  sourceCandidate: visibilityLimitedSource,
+  sourceEndpoints: [[140, 250, 0], [380, 250, 0]] as Vec3[],
+  center: [260, 250, 0] as Vec3,
+  boundary: [[248, 240, 0], [272, 240, 0], [272, 260, 0], [248, 260, 0]] as Vec3[],
+  aspectRatio: 3,
+  tipAngleDeg: 30,
+  landmarks: silhouetteLandmarks,
+  triangles: [[0, 1, 2], [0, 2, 3]] as [number, number, number][],
+  skinVisible: () => true,
+  axisHint: [1, 0] as const,
+};
+const visibilityLimitedStandard = buildPhotoSurfaceCanonicalFusiform(visibilityLimitedInput);
+assert.equal(visibilityLimitedStandard.fit, null,
+  "a standard candidate is not falsely classified as fully visible at the face silhouette");
+assert.ok(visibilityLimitedStandard.visibilityLimitedFit,
+  "one contiguous hidden tip may retain the complete standard geometry as a view-limited reference");
+assert.equal(visibilityLimitedStandard.diagnostics.photoVisibilityLimitedEligible, true);
+assert.equal(visibilityLimitedStandard.visibilityLimitedFit?.visibleSegments?.length, 1,
+  "view clipping produces one open visible run instead of reconnecting across the hidden face region");
+assert.ok(Number(visibilityLimitedStandard.diagnostics.photoVisibleFraction) >= 0.55
+  && Number(visibilityLimitedStandard.diagnostics.photoVisibleFraction) < 1);
+assert.equal(inspectPhotoCandidateProjection(
+  visibilityLimitedStandard.visibilityLimitedFit!.outline,
+  "fusiform",
+).valid, true, "the complete hidden-plus-visible geometry passes self-intersection, pinch and fold gates before clipping");
+assert.ok(Math.abs(
+  Number(visibilityLimitedStandard.diagnostics.candidateLength)
+    / Number(visibilityLimitedStandard.diagnostics.maxWidth) - 3,
+) < 1e-6, "view clipping does not change the underlying standard 3:1 geometry");
+assert.ok(Math.abs(
+  (visibilityLimitedStandard.endpoints[0][0] + visibilityLimitedStandard.endpoints[1][0]) * 0.5 - 260,
+) < 1e-6, "hidden geometry remains symmetric around the detector-confirmed lesion center");
+const belowReferenceFloorVisibility = buildPhotoSurfaceCanonicalFusiform({
+  ...visibilityLimitedInput,
+  aspectRatio: 2.1,
+});
+assert.equal(belowReferenceFloorVisibility.visibilityLimitedFit, null,
+  "view clipping cannot bypass the existing 2.2:1 lower floor for nonstandard references");
+const skippedRatiosForVisibilityLimited = attemptConstrainedPhotoReferences({
+  input: visibilityLimitedInput,
+  standardAttempt: visibilityLimitedStandard,
+  standardAspectRatio: 3,
+  minimumLengthScale: 0.5,
+});
+assert.deepEqual(skippedRatiosForVisibilityLimited.attempts, [],
+  "a valid standard view-limited reference is preferred over shortening the candidate ratio");
+const bothTipsHiddenSource = Array.from({ length: 13 }, (_, index) => {
+  const angle = index / 12 * Math.PI * 2;
+  return [200 + Math.cos(angle) * 120, 250 + Math.sin(angle) * 40, 0] as Vec3;
+});
+const bothTipsHidden = buildPhotoSurfaceCanonicalFusiform({
+  ...visibilityLimitedInput,
+  sourceCandidate: bothTipsHiddenSource,
+  sourceEndpoints: [[80, 250, 0], [320, 250, 0]],
+  center: [200, 250, 0],
+  boundary: [[188, 240, 0], [212, 240, 0], [212, 260, 0], [188, 260, 0]],
+});
+assert.equal(bothTipsHidden.visibilityLimitedFit, null,
+  "two disconnected hidden tips are not presented as one trustworthy view-limited segment");
+assert.ok(Number(bothTipsHidden.diagnostics.photoVisibleSegmentCount) > 1,
+  "multiple visible runs remain explicit in diagnostics instead of being joined across hidden regions");
+
+const constrainedLandmarks: Vec3[] = [
+  [100, 150, 0], [300, 150, 0], [300, 350, 0], [100, 350, 0],
+];
+const constrainedSource = Array.from({ length: 13 }, (_, index) => {
+  const angle = index / 12 * Math.PI * 2;
+  return [200 + Math.cos(angle) * 120, 250 + Math.sin(angle) * 40, 0] as Vec3;
+});
+const constrainedInput = {
+  sourceCandidate: constrainedSource,
+  sourceEndpoints: [[80, 250, 0], [320, 250, 0]] as Vec3[],
+  center: [200, 250, 0] as Vec3,
+  boundary: [[185, 240, 0], [215, 240, 0], [215, 260, 0], [185, 260, 0]] as Vec3[],
+  aspectRatio: 3,
+  tipAngleDeg: 30,
+  landmarks: constrainedLandmarks,
+  triangles: [[0, 1, 2], [0, 2, 3]] as [number, number, number][],
+  skinVisible: () => true,
+  axisHint: [1, 0] as const,
+};
+const constrainedStandard = buildPhotoSurfaceCanonicalFusiform(constrainedInput);
+assert.equal(constrainedStandard.diagnostics.reason, "photo_surface_exit",
+  "the standard 3:1 plan remains blocked when it leaves usable facial surface");
+assert.equal(constrainedStandard.visibilityLimitedFit, null,
+  "an interior mesh exit cannot bypass the surface gate through view clipping");
+const constrainedReference = buildPhotoSurfaceCanonicalFusiform({
+  ...constrainedInput,
+  referenceAspectRatio: 2.2,
+  minimumLengthScale: 0.5,
+});
+assert.ok(constrainedReference.fit,
+  "a bounded 2.2:1 reference can be shown when it remains on surface and still covers the target boundary");
+assert.equal(constrainedReference.diagnostics.photoCanonicalReference, true);
+assert.ok(Math.abs(Number(constrainedReference.diagnostics.photoCanonicalAspectRatio) - 2.2) < 1e-6);
+assert.equal(constrainedReference.diagnostics.photoBoundaryOutsideCount, 0);
+const constrainedSequence = attemptConstrainedPhotoReferences({
+  input: constrainedInput,
+  standardAttempt: constrainedStandard,
+  standardAspectRatio: 3,
+  minimumLengthScale: 0.5,
+});
+assert.deepEqual(
+  constrainedSequence.attempts.map((attempt) => attempt.aspectRatio),
+  [2.8, 2.6, 2.4, 2.2].slice(0, constrainedSequence.attempts.length),
+  "surface-limited recovery tries the 2.8-to-2.2 sequence in order until one ratio fits",
+);
+assert.equal(constrainedSequence.attempts.at(-1)?.ok, true);
+assert.ok(constrainedSequence.fitAttempt?.fit,
+  "the first passing constrained ratio is retained with auditable preceding failures");
+const narrowLandmarks = [...constrainedLandmarks];
+narrowLandmarks[0] = [160, 190, 0];
+narrowLandmarks[1] = [240, 190, 0];
+narrowLandmarks[2] = [240, 310, 0];
+narrowLandmarks[3] = [160, 310, 0];
+const alwaysOutsideInput = { ...constrainedInput, landmarks: narrowLandmarks, skinVisible: () => false };
+const alwaysOutsideStandard = buildPhotoSurfaceCanonicalFusiform(alwaysOutsideInput);
+const allFailedConstrainedSequence = attemptConstrainedPhotoReferences({
+  input: alwaysOutsideInput,
+  standardAttempt: alwaysOutsideStandard,
+  standardAspectRatio: 3,
+  minimumLengthScale: 0.5,
+});
+assert.deepEqual(allFailedConstrainedSequence.attempts.map((attempt) => attempt.aspectRatio), [2.8, 2.6, 2.4, 2.2]);
+assert.ok(allFailedConstrainedSequence.attempts.every((attempt) => !attempt.ok
+  && attempt.reason === "photo_surface_exit"));
+assert.equal(allFailedConstrainedSequence.fitAttempt, null,
+  "when every constrained ratio still leaves usable facial skin, all four failures remain explicit");
 
 const offCenterSelectionRefs = pointsToSurfaceRefs([[0.42, 0.5, 0]], vertices, triangles);
 const offCenterSurfaceGeometry = buildIncisionPhotoGeometry({
@@ -354,23 +581,24 @@ const offCenterSurfaceGeometry = buildIncisionPhotoGeometry({
   candidateType: "fusiform",
 });
 assert.equal(offCenterSurfaceGeometry.candidateProjection.smoothingDiagnostics?.ok, true,
-  "photo smoothing preserves the enclosing candidate midpoint when the lesion centroid is asymmetric");
+  "photo fallback is revalidated after centering an asymmetric projected candidate");
 assert.ok(["globalBezier", "segmentedBezier"].includes(offCenterSurfaceGeometry.candidateProjection.smoothingMode || ""),
-  "a bounded surface fit may use either direct cubic strategy without redefining the lesion center");
+  "a bounded centered fallback may use either direct cubic strategy");
 const offCenterCandidate = offCenterSurfaceGeometry.candidate;
 const offCenterFarTipIndex = (offCenterCandidate.length - 1) / 2;
-const offCenterExpectedMidpointX = (
+const offCenterRenderedMidpointX = (
   offCenterSurfaceGeometry.endpoints[0][0] + offCenterSurfaceGeometry.endpoints[1][0]
 ) * 0.5;
 assert.ok(Math.abs(offCenterSurfaceGeometry.center![0] - 268) < 1e-6,
   "the visible lesion center remains the detector-confirmed point instead of moving to the fusiform midpoint");
-assert.ok(Math.abs(offCenterSurfaceGeometry.planningCenter![0] - offCenterExpectedMidpointX) < 1e-6);
-assert.ok((offCenterSurfaceGeometry.lesionToPlanningCenterPx || 0) > 1,
-  "an imported or stale candidate-center mismatch remains explicit in geometry diagnostics");
+assert.ok(Math.abs(offCenterSurfaceGeometry.planningCenter![0] - offCenterSurfaceGeometry.center![0]) < 1e-6);
+assert.ok(Math.abs(offCenterSurfaceGeometry.lesionToPlanningCenterPx || 0) < 1e-6,
+  "a displayed fallback cannot retain an imported or stale candidate-center mismatch");
 assert.ok(Math.abs(
   (offCenterCandidate[0][0] + offCenterCandidate[offCenterFarTipIndex][0]) * 0.5
-    - offCenterExpectedMidpointX,
-) < 1e-6, "the smoothed candidate is not pulled back toward the off-center selection point");
+    - offCenterSurfaceGeometry.center![0],
+) < 1e-6 && Math.abs(offCenterRenderedMidpointX - offCenterSurfaceGeometry.center![0]) < 1e-6,
+"both rendered tips and the smoothed outline remain symmetric around the detector-confirmed center");
 assert.ok(surfaceGeometry.fusiformRendering, "successful fusiform geometry exposes direct-render cubic controls");
 const surfaceGeometryFarTip = (surfaceGeometry.candidate.length - 1) / 2;
 assert.deepEqual(surfaceGeometry.endpoints, [surfaceGeometry.candidate[0], surfaceGeometry.candidate[surfaceGeometryFarTip]],
@@ -410,10 +638,30 @@ const farOffSelectionGeometry = buildIncisionPhotoGeometry({
   candidateType: "fusiform",
 });
 assert.equal(farOffSelectionGeometry.candidateProjection.valid, true,
-  "a valid source candidate remains visible when the selection centroid is far from its geometric center");
+  "a recentered fallback may remain visible in the explicitly supported upper-forehead envelope");
 assert.equal(farOffSelectionGeometry.center?.[0], 140,
   "even a large legacy mismatch cannot overwrite the visible lesion center");
-assert.ok((farOffSelectionGeometry.lesionToPlanningCenterPx || 0) > 100);
+assert.ok(Math.abs(farOffSelectionGeometry.planningCenter![0] - farOffSelectionGeometry.center![0]) < 1e-6);
+assert.ok(Math.abs(farOffSelectionGeometry.lesionToPlanningCenterPx || 0) < 1e-6);
+assert.ok(Math.abs(
+  (farOffSelectionGeometry.endpoints[0][0] + farOffSelectionGeometry.endpoints[1][0]) * 0.5
+    - farOffSelectionGeometry.center![0],
+) < 1e-6, "even a large legacy mismatch is corrected before a fallback is displayed");
+
+const lowerEdgeSelectionRefs = pointsToSurfaceRefs([[0.5, 0.92, 0]], vertices, triangles);
+const lowerEdgeSurfaceGeometry = buildIncisionPhotoGeometry({
+  landmarks,
+  triangles,
+  atlasLines: [],
+  centerRef: lowerEdgeSelectionRefs[0],
+  boundaryRefs: [],
+  candidateRefs: surfaceCandidateRefs,
+  endpointRefs: surfaceEndpointRefs,
+  candidateType: "fusiform",
+});
+assert.equal(lowerEdgeSurfaceGeometry.candidateProjection.valid, false,
+  "centering a fallback cannot bypass the usable lower-face surface gate");
+assert.ok(lowerEdgeSurfaceGeometry.candidateProjection.reasonCodes.includes("candidate_surface_exit"));
 
 {
   const centerRef = pointsToSurfaceRefs([[0.25, 0.25, 0]], vertices, triangles)[0];
@@ -444,6 +692,27 @@ assert.ok((farOffSelectionGeometry.lesionToPlanningCenterPx || 0) > 100);
   const mappedRstl = mapAtlas(displayedAtlas, landmarks, triangles);
   assert.ok((projectedRstlDeviation(mapSurfaceRefs([centerRef], landmarks, triangles).pts[0], projectedEndpoints, mappedRstl) || 0) < 1e-4,
     "the inverse local surface mapping makes the generated center axis parallel to the nearest displayed RSTL tangent");
+
+  const photoFallbackAligned = buildIncisionPhotoGeometry({
+    landmarks,
+    triangles,
+    atlasLines: displayedAtlas,
+    centerRef: offCenterSelectionRefs[0],
+    boundaryRefs: [],
+    candidateRefs: surfaceCandidateRefs,
+    endpointRefs: surfaceEndpointRefs,
+    candidateType: "fusiform",
+  });
+  assert.equal(photoFallbackAligned.candidateProjection.valid, true);
+  assert.ok((photoFallbackAligned.projectedRstlDeviationDeg || 0) < 1e-4,
+    "the centered photo fallback uses the nearest displayed RSTL tangent instead of retaining a stale source axis");
+  assert.ok(Math.abs(
+    (photoFallbackAligned.endpoints[0][0] + photoFallbackAligned.endpoints[1][0]) * 0.5
+      - photoFallbackAligned.center![0],
+  ) < 1e-6 && Math.abs(
+    (photoFallbackAligned.endpoints[0][1] + photoFallbackAligned.endpoints[1][1]) * 0.5
+      - photoFallbackAligned.center![1],
+  ) < 1e-6, "RSTL alignment does not sacrifice endpoint symmetry around the lesion center");
 }
 
 {
@@ -561,6 +830,39 @@ const sourceFallbackStatus = incisionPhotoStatusPresentation({
 });
 assert.equal(sourceFallbackStatus.tone, "warning");
 assert.match(sourceFallbackStatus.message, /未完成平滑校正/);
+const constrainedReferenceStatus = incisionPhotoStatusPresentation({
+  rstlLineCount: 159,
+  candidateDisplayBlocked: false,
+  engineeringBlockMessage: "",
+  candidateProjectionValid: true,
+  candidatePointCount: 20,
+  candidateSmoothingMode: "constrainedReference",
+  candidateReferenceAspectRatio: 2.4,
+});
+assert.equal(constrainedReferenceStatus.tone, "warning");
+assert.match(constrainedReferenceStatus.message, /受限参考候选.*2\.40:1.*不满足项目原定比例/);
+const visibilityLimitedStatus = incisionPhotoStatusPresentation({
+  rstlLineCount: 159,
+  candidateDisplayBlocked: false,
+  engineeringBlockMessage: "",
+  candidateProjectionValid: true,
+  candidatePointCount: 20,
+  candidateSmoothingMode: "limitedVisibility",
+  candidateReferenceAspectRatio: 3,
+});
+assert.equal(visibilityLimitedStatus.tone, "warning");
+assert.match(visibilityLimitedStatus.message, /已识别肿物边界.*视野受限参考.*另一视角复核/);
+const nonstandardVisibilityLimitedStatus = incisionPhotoStatusPresentation({
+  rstlLineCount: 159,
+  candidateDisplayBlocked: false,
+  engineeringBlockMessage: "",
+  candidateProjectionValid: true,
+  candidatePointCount: 20,
+  candidateSmoothingMode: "limitedVisibility",
+  candidateReferenceAspectRatio: 2.8,
+});
+assert.equal(nonstandardVisibilityLimitedStatus.tone, "warning");
+assert.match(nonstandardVisibilityLimitedStatus.message, /视野受限的非标准比例参考.*2\.80:1.*另一视角复核/);
 assert.equal(incisionPhotoStatusPresentation({
   rstlLineCount: 159,
   candidateDisplayBlocked: false,

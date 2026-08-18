@@ -16,7 +16,7 @@ const actions: IncisionCommandActions = {
   applyTumorControl: (command, value) => record("applyTumorControl", command, value),
   resetBoundaryForTumorKind: () => record("resetBoundaryForTumorKind"),
   setBoundaryInactive: () => record("setBoundaryInactive"),
-  updateFormVisibility: () => record("updateFormVisibility"),
+  updateFormVisibility: (kind) => record("updateFormVisibility", ...(kind ? [kind] : [])),
   publish: (reason) => record("publish", reason),
   previewWorkflow: () => record("previewWorkflow"),
   updateTumorRing: () => record("updateTumorRing"),
@@ -63,7 +63,7 @@ const tumor = router.handleTumorEvent.bind(router);
 expectDispatch(tumor, { command: "kind_changed", value: "cutaneous" }, [
   ["applyTumorControl", "kind_changed", "cutaneous"],
   ["resetBoundaryForTumorKind"],
-  ["updateFormVisibility"],
+  ["updateFormVisibility", "cutaneous"],
   ["publish", "tumor_kind_changed"],
   ["previewWorkflow"],
 ]);
@@ -72,11 +72,14 @@ const boundaryState = {
   boundaryPoints: [[1, 2, 3] as [number, number, number]],
   boundaryRefs: [{ tri: 1, u: 1, v: 0, w: 0 }],
   boundaryActive: true,
+  controlledBoundaryActive: true,
 };
 resetIncisionBoundaryState(boundaryState);
 assert.deepEqual(boundaryState.boundaryPoints, [], "tumor kind reset clears incompatible boundary points");
 assert.deepEqual(boundaryState.boundaryRefs, [], "tumor kind reset clears incompatible surface refs");
 assert.equal(boundaryState.boundaryActive, false, "tumor kind reset stops active boundary drawing");
+assert.equal(boundaryState.controlledBoundaryActive, false,
+  "tumor kind reset clears the accepted controlled-marker boundary mode");
 expectDispatch(tumor, { command: "diameter_input", value: "12" }, [
   ["applyTumorControl", "diameter_input", "12"], ["updateTumorRing"], ["publish", "tumor_diameter_input"],
 ]);

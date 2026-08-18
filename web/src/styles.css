@@ -603,12 +603,59 @@
   }
 
   .incision-workbench #controlledMarkerScanDiameter {
+    --scan-progress: 16.6667%;
+    --scan-thumb-offset: -4.6667px;
+    appearance: none;
     width: 96px;
     height: 18px;
     padding: 0;
     border: 0;
+    border-radius: 3px;
+    background: linear-gradient(
+      to right,
+      #0f62fe 0,
+      #0f62fe var(--scan-progress),
+      #efefef var(--scan-progress),
+      #efefef 100%
+    ) center / 100% 6px no-repeat;
+    cursor: pointer;
+    overflow: visible;
+  }
+
+  .incision-workbench #controlledMarkerScanDiameter::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 6px;
+    border: 0;
+    border-radius: 3px;
     background: transparent;
-    accent-color: #38bdf8;
+  }
+
+  .incision-workbench #controlledMarkerScanDiameter::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -4px;
+    border: 0;
+    border-radius: 50%;
+    background: #0f62fe;
+    transform: translateX(var(--scan-thumb-offset));
+  }
+
+  .incision-workbench #controlledMarkerScanDiameter::-moz-range-track {
+    width: 100%;
+    height: 6px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+  }
+
+  .incision-workbench #controlledMarkerScanDiameter::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border: 0;
+    border-radius: 50%;
+    background: #0f62fe;
+    transform: translateX(var(--scan-thumb-offset));
   }
 
   .incision-workbench #stageStatus {
@@ -624,6 +671,10 @@
 
   .incision-workbench #stageStatus[data-tone="warning"] {
     color: #fde68a;
+  }
+
+  .incision-workbench #stageStatus:empty {
+    display: none;
   }
 
   .incision-workbench .workbench-note {
@@ -1069,6 +1120,37 @@
   .incision-workbench #incisionPhotoCanvas[data-controlled-marker="true"],
   .incision-workbench #incisionPhotoCanvas[data-controlled-marker="true"]:active {
     cursor: crosshair;
+  }
+
+  .incision-workbench #incisionPhotoCanvas[data-controlled-marker-repair="true"],
+  .incision-workbench #incisionPhotoCanvas[data-controlled-marker-repair="true"]:active {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M4 20l4.2-1 10.7-10.7-3.2-3.2L5 15.8z' fill='%2322d3ee' stroke='%23070a0f' stroke-width='1.5'/%3E%3C/svg%3E") 3 21, crosshair;
+  }
+
+  @keyframes controlled-marker-recovery-attention {
+    0%, 100% {
+      border-color: rgb(71 85 105 / 0.85);
+      box-shadow: none;
+    }
+    50% {
+      border-color: #facc15;
+      box-shadow: 0 0 0 2px rgb(250 204 21 / 0.28), 0 0 12px rgb(250 204 21 / 0.32);
+    }
+  }
+
+  .incision-workbench .controlled-marker-scan-control.controlled-marker-recovery-attention,
+  .incision-workbench #controlledMarkerRepairBtn.controlled-marker-recovery-attention:not(:disabled) {
+    border-radius: 6px;
+    animation: controlled-marker-recovery-attention 1s ease-in-out 2;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .incision-workbench .controlled-marker-scan-control.controlled-marker-recovery-attention,
+    .incision-workbench #controlledMarkerRepairBtn.controlled-marker-recovery-attention:not(:disabled) {
+      animation: none;
+      border-color: #facc15;
+      box-shadow: 0 0 0 2px rgb(250 204 21 / 0.28);
+    }
   }
 
   .incision-workbench #incisionPhotoCanvas[aria-busy="true"],
@@ -1744,6 +1826,27 @@
 .dark-workbench-page input[type=checkbox],
 .dark-workbench-page .check input {
   accent-color: var(--clinical-accent);
+}
+
+/* Keep the controlled-marker scan rail on its compact established style.
+   This unlayered override must follow the generic dark input background. */
+.incision-workbench #controlledMarkerScanDiameter {
+  width: 96px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background-color: transparent;
+  background-image: linear-gradient(
+    to right,
+    #0f62fe 0,
+    #0f62fe var(--scan-progress),
+    #efefef var(--scan-progress),
+    #efefef 100%
+  );
+  background-position: center;
+  background-size: 100% 6px;
+  background-repeat: no-repeat;
 }
 
 /* These unlayered overrides intentionally follow legacy style imports.

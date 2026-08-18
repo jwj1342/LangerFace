@@ -107,6 +107,8 @@ finalize 门禁中强制校验，并把固定声明及 `affirmed:true` 持久化
 
 Stage 2 涉及肿物模拟和候选切口，只能在医生审阅路径中评估：
 
+当前方案 B 的产品阶段验收集只包含单个、轮廓清楚、整体近似圆形（允许轻度椭圆）的皮表肿物，明显狭长椭圆不自动纳入，并应覆盖人物、部位、角度、大小、光照和轮廓清晰度变化。复杂不规则、明显缺口、人工补线和实心黑点必须另列为兼容性/研究结果，不得与阶段验收通过率混算。开发集与独立验收集必须分离；任何已参与阈值或规则调优的样本不得继续充当独立验收样本。
+
 | 目标 | 指标 | 说明 |
 | --- | --- | --- |
 | 肿物输入一致性 | 中心/直径/边界误差 | 与人工边界或超声直径对比 |
@@ -114,6 +116,7 @@ Stage 2 涉及肿物模拟和候选切口，只能在医生审阅路径中评估
 | 皱纹 / 自然皱襞辅助线索 | recall、precision、角度误差 | 作为 RSTL 外的次级候选依据，必须人工确认 |
 | 切口方向 | RSTL 偏角 | 候选长轴与局部 RSTL 方向差 |
 | 梭形几何 | 长宽比、尖端角、平滑性 | 皮表肿物候选必须报告 |
+| 方案 B 阶段验收 | 识别成功率、中心偏差、边界覆盖、梭形规则与人工结论 | 只汇总近似圆形（允许轻度椭圆）的皮表肿物；复杂兼容组单列，不混算 |
 | 敏感结构保护 | 警告召回率 | 下睑、唇红缘、鼻翼等风险区域 |
 | 医生审阅 | 接受率、修改次数、覆盖原因 | 系统建议不能绕过医生确认 |
 | 照片 / 视频 / 实时叠加 | overlay 注册质量 | 当前帧 landmarks 能否稳定映射 `incision-overlay/v0.1` surface refs；记录 mapped point count、候选线点数、退化三角形、出画面点、bbox diagonal / frame fraction |
@@ -121,6 +124,16 @@ Stage 2 涉及肿物模拟和候选切口，只能在医生审阅路径中评估
 | 照片 / 视频 / 实时叠加 | overlay 可见 QA 反馈 | 实时页“切口叠加 QA”按实际 pose gate / local region gate / registration / stability 结果显示等待画面、姿态需复核、局部需复核、已投射、投射需复核、抖动需复核或叠加稳定；低 presence、偏航过大、快速帧间运动、明显张口/眨眼或近共线退化三角会阻止候选叠加；视频/摄像头主 RSTL 线束也会在 pose gate 失败时暂停绘制，质量条显示“需复核”，眼眉/口周局部高形变会触发 `rstl-local-region-quality-gate/v0.1` 并降透明或断开局部线条，质量条显示“局部复核” |
 | 照片 / 视频 / 实时叠加 | preview 诊断导出 | `window.exportLangerfaceDiagnostics()` 的 `sections.incision_overlay_runtime` 保存 pose gate、local region gate、最近一帧 registration 与最近 8 帧滚动 stability 摘要；只含 QA 数值、阈值和失败原因，不含照片/视频帧、canvas 像素或 landmark 坐标 |
 | 照片 / 视频 / 实时叠加 | #19 工程验收门禁 | `tools/build_incision_overlay_acceptance_evidence.ts` 把脱敏 photo/video/camera diagnostics、视频复放 QA、webm 导出契约和资源 QA 打包为标准 evidence；`tools/audit_incision_overlay_acceptance.ts` 检查照片投射、视频复放/导出、摄像头稳定、浏览器 runtime error、资源 404 和 evidence 脱敏是否同时满足 |
+
+### 实时叠加自动化分层与本地资源门禁
+
+切口识别或候选几何改动必须考虑实时叠加，但不应在每次小修改后重复运行完整浏览器矩阵：
+
+1. 开发中优先运行定向几何、门禁、叠加和离线复放测试，及时发现中心偏移、自交、折叠、覆盖、RSTL 方向及表面引用回归。
+2. 每个切口识别/生成算法修改完成时，把单样本无头实时叠加链列为最终必选验证：照片规划与审阅后，依次核对实时页的照片、生成视频和模拟摄像头叠加。当前 `web/e2e/live-incision-overlay.spec.ts` 已覆盖这条浏览器交接链，但其规划前置使用受控候选，尚不能替代“典型近圆肿物自动识别 → 候选生成 → 审阅 → 实时叠加”的完整样本回归；后续应增加一份稳定、脱敏且不进入阈值调优的专用夹具。
+3. 本地执行上述无头链时使用单 worker，例如 `npx playwright test e2e/live-incision-overlay.spec.ts --workers=1`。该步骤涉及 Chromium、MediaPipe/WebGL、视频和模拟摄像头，属于高资源验证；必须安排在轻量验证通过后的收尾阶段，并在执行前说明预计负载、持续时间和停止条件，取得操作者当次明确授权。
+4. 全量 `npm run test:browser`、真实图集批量回放、完整视频/摄像头或多浏览器/设备矩阵只在里程碑、阶段验收或发布前运行，同样需要高资源授权。若高资源步骤本身是复现故障或选择修复方案的必要输入，可提前执行，但必须先说明原因并单独请求授权。
+5. 2026-08-18 本机曾在图片批量回放后以 6 个并发 Playwright worker 启动 MediaPipe/WebGL；同期 Windows Search 筛选器主机无响应并被系统终止。缺少进程级历史遥测，不能把卡顿唯一归因于自动化，但本机后续不得默认使用本地多 worker 媒体回归。
 
 当前公开仓库只提供合成样例原型，见 [WRINKLE_LESION_CUES.md](../clinical/WRINKLE_LESION_CUES.md) 和
 `tools/prototype_wrinkle_lesion_cues.py`。该脚本输出 `metrics.json`，字段包括：

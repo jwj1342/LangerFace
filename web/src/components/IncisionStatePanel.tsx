@@ -28,6 +28,10 @@ function formatModelVersion(snapshot: ReturnType<typeof useIncisionStore.getStat
 export function IncisionStatePanel() {
   const snapshot = useIncisionStore((state) => state.snapshot);
   const candidate = snapshot?.candidate;
+  const candidateLabel = snapshot?.resultView.candidateType === "受限参考"
+    || snapshot?.resultView.candidateType === "视野受限参考"
+    ? `${snapshot.resultView.candidateType} · ${snapshot.resultView.candidateLength}`
+    : candidate ? `${candidateTypeLabel(candidate.type)} · ${candidate.lengthMm?.toFixed(1) ?? "—"} mm` : "—";
 
   return (
     <Card className="incision-state-panel">
@@ -39,7 +43,7 @@ export function IncisionStatePanel() {
         <KeyValueItem label="RSTL 来源" value={snapshot?.headAsset.statusLabel || "加载中"} />
         <KeyValueItem label="模型版本" value={formatModelVersion(snapshot)} />
         <KeyValueItem label="肿物" value={snapshot ? `${tumorKindLabel(snapshot.tumor.kind)} · ${snapshot.tumor.diameterMm ?? "—"} mm` : "—"} />
-        <KeyValueItem label="候选" value={candidate ? `${candidateTypeLabel(candidate.type)} · ${candidate.lengthMm?.toFixed(1) ?? "—"} mm` : "—"} />
+        <KeyValueItem label="候选" value={candidateLabel} />
         <KeyValueItem label="执行模式" value="本地确定性 workflow" />
         <KeyValueItem label="审阅" value={reviewStatusLabel(snapshot?.review.status)} />
         <KeyValueItem

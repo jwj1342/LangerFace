@@ -806,14 +806,15 @@ function drawCandidate(result: DynamicRecord) {
   photoRuntime?.render();
 }
 
-function updateFormVisibility() {
-  const cutaneous = els.tumorKind.value === "cutaneous";
+function updateFormVisibility(kindOverride?: "subcutaneous" | "cutaneous") {
+  const kind = kindOverride || (els.tumorKind.value === "cutaneous" ? "cutaneous" : "subcutaneous");
+  const cutaneous = kind === "cutaneous";
   els.depthWrap.classList.toggle("hidden", cutaneous);
   els.marginWrap.classList.toggle("hidden", !cutaneous);
   els.boundaryWrap.classList.toggle("hidden", !cutaneous);
   els.ellipseWrap.classList.toggle("hidden", !cutaneous || els.boundaryMode.value !== "ellipse");
   els.freehandControls.classList.toggle("hidden", !cutaneous || els.boundaryMode.value !== "freehand");
-  updateTumorRing();
+  photoRuntime?.syncTumorKindGuard(kind); updateTumorRing();
   updateAnatomyPreview();
 }
 
@@ -1680,7 +1681,7 @@ function bindWorkbenchEvents() {
       onSecondaryCueFile: importSecondaryCueFile,
       onPhotoFile: (file) => { void photoRuntime?.load(file); },
       onControlledMarkerDetect: () => photoRuntime?.beginControlledMarkerDetection(),
-      onControlledMarkerScanInput: () => photoRuntime?.updateControlledMarkerScan(true), onControlledMarkerPointerMove: (event) => photoRuntime?.moveControlledMarkerScan(event), onControlledMarkerPointerLeave: () => photoRuntime?.hideControlledMarkerScan(),
+      onControlledMarkerScanInput: () => photoRuntime?.updateControlledMarkerScan(true), onControlledMarkerRepair: () => photoRuntime?.toggleControlledMarkerRepair(), onControlledMarkerRepairUndo: () => photoRuntime?.undoControlledMarkerRepair(), onControlledMarkerRepairClear: () => photoRuntime?.clearControlledMarkerRepairStrokes(), onControlledMarkerRepairPointerDown: (event) => photoRuntime?.beginControlledMarkerRepairStroke(event) ?? false, onControlledMarkerRepairPointerMove: (event) => photoRuntime?.moveControlledMarkerRepairStroke(event), onControlledMarkerRepairPointerUp: (event) => photoRuntime?.endControlledMarkerRepairStroke(event), onControlledMarkerRepairPointerCancel: () => photoRuntime?.cancelControlledMarkerRepairStroke(), onControlledMarkerPointerMove: (event) => photoRuntime?.moveControlledMarkerScan(event), onControlledMarkerPointerLeave: () => photoRuntime?.hideControlledMarkerScan(),
       preparePhotoInteraction: () => photoRuntime?.fit(),
       photoEndpointHandleFromEvent: (event) => photoRuntime?.endpointHandleFromEvent(event) ?? null,
       dragPhotoEndpoint: (event, handle) => photoRuntime?.dragEndpoint(event, handle),

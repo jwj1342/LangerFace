@@ -187,6 +187,43 @@ assert.equal(assessReviewReadiness({
   notes: "reviewed warning",
 }).ok, true, "clinical warnings retain the documented review path");
 
+const referenceCandidateResult = structuredClone(clinicalWarningResult);
+referenceCandidateResult.candidate.metrics = { photo_reference_candidate: true };
+const referenceReadiness = assessReviewReadiness({
+  status: "approved_for_discussion",
+  result: referenceCandidateResult,
+  reviewer: "doctor",
+  notes: "reviewed warning",
+});
+assert.equal(referenceReadiness.ok, false, "a nonstandard reference candidate cannot be approved as a standard candidate");
+assert.match(referenceReadiness.message, /受限参考候选.*不能直接确认/);
+const referenceGate = buildReviewGate({
+  review: { status: "approved_for_discussion", reviewer: "doctor", notes: "reviewed warning" },
+  result: referenceCandidateResult,
+});
+assert.equal(referenceGate.approval_ready, false);
+assert.equal(referenceGate.live_overlay_ready, false);
+assert.equal(referenceGate.live_overlay_blocked_reason, "nonstandard_reference_candidate");
+
+const visibilityLimitedCandidateResult = structuredClone(clinicalWarningResult);
+visibilityLimitedCandidateResult.candidate.metrics = { photo_visibility_limited_candidate: true };
+const visibilityLimitedReadiness = assessReviewReadiness({
+  status: "approved_for_discussion",
+  result: visibilityLimitedCandidateResult,
+  reviewer: "doctor",
+  notes: "reviewed visible segment",
+});
+assert.equal(visibilityLimitedReadiness.ok, false,
+  "a view-limited reference cannot be approved without the hidden region being reviewed");
+assert.match(visibilityLimitedReadiness.message, /视野受限参考.*另一视角.*方可确认或进入实时叠加/);
+const visibilityLimitedGate = buildReviewGate({
+  review: { status: "approved_for_discussion", reviewer: "doctor", notes: "reviewed visible segment" },
+  result: visibilityLimitedCandidateResult,
+});
+assert.equal(visibilityLimitedGate.approval_ready, false);
+assert.equal(visibilityLimitedGate.live_overlay_ready, false);
+assert.equal(visibilityLimitedGate.live_overlay_blocked_reason, "visibility_limited_reference_candidate");
+
 const hardResult = {
   ...clinicalWarningResult,
   candidate: { polyline: [[-1, 5, 0], [5, 5, 0]], hard_violations: outsideCandidate.hard_violations },

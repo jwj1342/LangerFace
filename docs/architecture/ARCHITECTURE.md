@@ -372,6 +372,8 @@ tools/headspace/data/            # 本地，被 .gitignore 忽略
 
 Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部皮肤肿物术前切口候选设计”。系统仍然坚持一个边界：**算法只生成可解释候选与风险提示，最终切口由临床医生确认**。
 
+当前产品范围采用方案 B：主开发与阶段联合验收只覆盖单个、轮廓清楚、整体近似圆形（允许轻度椭圆）的皮表肿物，明显狭长椭圆不自动纳入。下文自由轮廓、包络和异常门禁仍是底层架构兼容能力，保留是为了不破坏既有输入、审计和回归契约，不表示当前产品承诺处理任意复杂不规则肿物。
+
 ### 14.1 临床输入与输出
 
 输入分三类：
@@ -409,7 +411,7 @@ Stage 2 目标是把当前“面部 RSTL / Langer 线迁移”扩展为“面部
 | AI 次级依据 | `tools/`, future model scripts | 皱襞/皱纹/肿物边界候选识别 | #22 |
 
 切口工作台的面部表面固定走 `dataSource.getHeadMesh("mediapipe-468")`。它优先消费
-`/personalized` 暂存的 YOLO/V6 个体化 RSTL；缺失、来源不符或拓扑校验失败时，才明确降级到内置
+`/personalized` 暂存的 YOLO/V6 个体化 RSTL；缺失、来源不符或拓扑校验失败时，切换到内置
 MediaPipe 标准 RSTL。切口运行时不加载 FLAME basis，也不做 MediaPipe→FLAME 预览转换。
 个体化草案保持 `validated:false`，guardrails 与医生审阅仍是必经门槛；与 FLAME 的隔离边界见
 [FLAME_3D_TRACK.md §10](../tracks/FLAME_3D_TRACK.md#10-与切口工作台的边界)。
@@ -462,7 +464,7 @@ candidate = segment(center, axis, length)
 
 #### 皮表肿物
 
-皮表肿物生成梭形候选。医生给出的当前默认规则是：长轴平行 RSTL；长轴与类圆化后的肿物直径按 3:1 控制；两端尖角默认 30°；两侧弧线对称平滑，从最宽处向两端逐渐收窄至尖点。当前实现使用对称 cubic Hermite profile：端点切线由 `tip_angle_deg` 决定，中点达到最大宽度且切线水平，导出 `tip_angle_target_deg`、`tip_angle_estimated_deg` 和 `tip_angle_error_deg`。Python `src/langerface/incision/fusiform.py` 与 Web `incisionCandidateTools.ts` 共用 `tests/fixtures/fusiform_candidates.json` 金标，防止规则和曲线跨语言漂移。同时导出 `boundary_point_count`、`boundary_area_mm2`、`boundary_self_intersection`、`boundary_center_shift_mm`、`axis_coverage_required_mm`、`axis_coverage_deficit_mm`、`outline_area_mm2`、`outline_half_width_monotone`、`outline_symmetry_max_error_mm`、`outline_self_intersection`、`boundary_envelope_min_margin_mm` 与 `boundary_envelope_outside_count`；当自由轮廓点数过少、面积退化、自交、边界中心明显偏离选中肿物中心、候选 outline 自交 / 非单调收窄、自由轮廓点落在实际梭形包络之外，或最大长度规则导致候选短于边界加切缘覆盖需求时，guardrails 必须提示医生复核。肿物输入还会先经过 `summarize_tumor_input_quality`，把缺作者、非 mm 单位、缺皮下深度、缺皮表切缘或边界过稀记录到 trace、审阅 JSON 和报告中。
+皮表肿物生成梭形候选。医生给出的当前默认规则是：长轴平行 RSTL；长轴与类圆化后的肿物直径按 3:1 控制；两端尖角默认 30°；两侧弧线对称平滑，从最宽处向两端逐渐收窄至尖点。当前阶段验收输入是近似圆形（允许轻度椭圆）病灶，复杂或明显狭长的自由轮廓只走兼容性路径。当前实现使用对称 cubic Hermite profile：端点切线由 `tip_angle_deg` 决定，中点达到最大宽度且切线水平，导出 `tip_angle_target_deg`、`tip_angle_estimated_deg` 和 `tip_angle_error_deg`。Python `src/langerface/incision/fusiform.py` 与 Web `incisionCandidateTools.ts` 共用 `tests/fixtures/fusiform_candidates.json` 金标，防止规则和曲线跨语言漂移。同时导出 `boundary_point_count`、`boundary_area_mm2`、`boundary_self_intersection`、`boundary_center_shift_mm`、`axis_coverage_required_mm`、`axis_coverage_deficit_mm`、`outline_area_mm2`、`outline_half_width_monotone`、`outline_symmetry_max_error_mm`、`outline_self_intersection`、`boundary_envelope_min_margin_mm` 与 `boundary_envelope_outside_count`；当自由轮廓点数过少、面积退化、自交、边界中心明显偏离选中肿物中心、候选 outline 自交 / 非单调收窄、自由轮廓点落在实际梭形包络之外，或最大长度规则导致候选短于边界加切缘覆盖需求时，guardrails 必须提示医生复核。肿物输入还会先经过 `summarize_tumor_input_quality`，把缺作者、非 mm 单位、缺皮下深度、缺皮表切缘或边界过稀记录到 trace、审阅 JSON 和报告中。
 
 实现时要把这些写成**参数化临床规则**，不要硬编码为不可变数学常量。原因是 3:1 与 30°在几何上并不总能同时严格成立；工程上应显示实际指标，让医生在比例、尖端角、邻近解剖结构和可直接拉拢缝合之间做判断。
 
