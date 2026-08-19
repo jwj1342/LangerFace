@@ -426,6 +426,44 @@
     min-height: 100dvh;
   }
 
+  .react-workflow-host {
+    min-height: 100dvh;
+  }
+
+  .workflow-workbench.app {
+    grid-template-columns: clamp(240px, 17vw, 280px) minmax(640px, 1fr) clamp(280px, 20vw, 340px);
+  }
+
+  .workflow-workbench > .workflow-live-rail {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .workflow-workbench > .stage {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .workflow-workbench > .workflow-incision-rail {
+    grid-column: 3;
+    grid-row: 1;
+    border-right: 0;
+    border-left: 1px solid var(--clinical-dark-border);
+  }
+
+  .workflow-workbench .stage-body {
+    gap: 8px;
+    padding: 10px 12px 12px;
+  }
+
+  .workflow-workbench .zoom-strip {
+    max-height: clamp(112px, 18dvh, 168px);
+  }
+
+  .workflow-workbench .zoom-card {
+    max-width: 158px;
+  }
+
   .live-workbench.app {
     grid-template-columns: minmax(340px, 380px) 1fr;
   }
@@ -2020,6 +2058,33 @@ body:has(.dark-workbench-page) {
   .settings-panel-grid,
   .settings-panel-grid-wide {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1180px) {
+  .workflow-workbench.app {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(520px, 72dvh) auto auto;
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .workflow-workbench > .stage {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 520px;
+  }
+
+  .workflow-workbench > .workflow-live-rail {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .workflow-workbench > .workflow-incision-rail {
+    grid-column: 1;
+    grid-row: 3;
+    border-top: 1px solid var(--clinical-dark-border);
+    border-left: 0;
   }
 }
 
