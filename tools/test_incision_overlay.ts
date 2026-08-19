@@ -1,6 +1,11 @@
 // Dependency-free tests for canonical incision overlay projection.
 import assert from "node:assert/strict";
 import { __incisionOverlayForTests as T } from "../web/src/services/incisionOverlay.ts";
+import {
+  incisionCandidateScreenStyle,
+  incisionOverlayStyle,
+  visibleCandidateSourceWidth,
+} from "../web/src/services/incisionOverlayStyle.ts";
 
 const verts = [
   [0, 0, 0],
@@ -15,6 +20,19 @@ const landmarks = [
   [0, 100, 0],
   [100, 100, 0],
 ];
+
+const closedModelPolyline = [
+  [1, 1, 0],
+  [9, 1, 0],
+  [9, 9, 0],
+  [1, 9, 0],
+  [1, 1, 0],
+];
+const closedSurfaceRefs = T.polylineToSurfaceRefs(closedModelPolyline, verts, tris, 1);
+assert.equal(closedSurfaceRefs.length, closedModelPolyline.length,
+  "closed polylines retain their explicit closure point after surface mapping");
+assert.deepEqual(closedSurfaceRefs.at(-1), closedSurfaceRefs[0],
+  "the mapped closure reuses the first surface ref instead of independently re-projecting it");
 
 const record = {
   label: "测试候选",
@@ -146,5 +164,42 @@ assert.equal(
   false,
   "not-ready overlay payloads are rejected",
 );
+
+for (const tumorKind of ["cutaneous", "subcutaneous"] as const) {
+  for (const inputMode of ["ordinary", "controlled-marker"] as const) {
+    const candidateType = tumorKind === "cutaneous" ? "fusiform" : "linear";
+    const styles = (["photo", "video", "camera"] as const).map((media) => ({
+      media,
+      inputMode,
+      style: incisionOverlayStyle(1300, candidateType),
+    }));
+    assert.deepEqual(styles[0].style, styles[1].style,
+      `${tumorKind}/${inputMode}: photo and video share candidate presentation tokens`);
+    assert.deepEqual(styles[1].style, styles[2].style,
+      `${tumorKind}/${inputMode}: video and camera share candidate presentation tokens`);
+    assert.ok(Math.abs(styles[0].style.candidate.lineWidth - styles[0].style.rstlLineWidth / 6) < 1e-9);
+    if (tumorKind === "cutaneous") {
+      assert.equal(styles[0].style.candidate.color, "#003b73",
+        "fusiform candidate uses an opaque matte cobalt ink stroke");
+      assert.equal(styles[0].style.candidate.haloColor, "#003b73",
+        "fusiform candidate does not mix a wider dark under-stroke into the thin line");
+      assert.equal(styles[0].style.candidate.haloWidth, styles[0].style.candidate.lineWidth,
+        "repeated fusiform stroke increases pixel coverage without increasing nominal width");
+    }
+  }
+}
+
+assert.equal(visibleCandidateSourceWidth(0.3, 2, undefined), 0.3,
+  "non-photo media retain the shared nominal candidate width");
+assert.equal(visibleCandidateSourceWidth(0.3, 2, 1), 1,
+  "photo rendering raises a subpixel source stroke to the one CSS-pixel visibility floor");
+assert.equal(visibleCandidateSourceWidth(0.3, 2, 0.5), 1,
+  "extreme downscaling remains capped at half the RSTL width instead of producing a thick sticker outline");
+assert.deepEqual(incisionCandidateScreenStyle("fusiform"), {
+  color: "#003b73",
+  lineWidth: 1,
+  haloColor: "#003b73",
+  haloWidth: 1,
+}, "photo fusiform uses an opaque one-CSS-pixel screen-space stroke without a glow halo");
 
 console.log("test_incision_overlay: projection contract assertions passed");

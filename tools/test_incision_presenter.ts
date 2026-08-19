@@ -43,7 +43,7 @@ const hardGuardrails = buildGuardrailDetailsPresentation({
   warnings: [],
 });
 assert.match(hardGuardrails.text,
-  /工程硬阻断：候选切口超出可用面部表面（缩小范围或调整位置后重试；仍失败时返回标准表面复核）/);
+  /工程硬阻断：候选切口超出可用面部表面（缩小范围或调整位置后重试；仍失败时由医生结合查体采用传统方法规划）/);
 assert.deepEqual(hardGuardrails.classNames, ["danger"]);
 
 assert.equal(engineeringBlockMessage({
@@ -66,6 +66,12 @@ assert.equal(engineeringBlockMessage({
   ],
 }), "候选未显示：候选或肿物范围进入鼻孔等非皮肤开口；移动病灶或调整范围，确保完整候选不经过非皮肤开口。",
 "repeated candidate failures do not duplicate the same user-facing reason");
+assert.equal(engineeringBlockMessage({
+  candidate_alternatives: [{
+    candidate: { hard_violations: [{ code: "candidate_intersects_default_vermilion_protection" }] },
+  }],
+}), "候选未显示：候选切口进入默认唇红保护区域；调整位置或范围，确保完整候选避开唇红保护区域。",
+"the vermilion hard gate is described professionally without exposing an internal English code");
 
 const failedGate = buildWorkflowGatePresentation({
   passed: false,
@@ -117,6 +123,83 @@ assert.match(presentation.guardrailDetails.text, /肿物输入：缺少记录者
 assert.match(presentation.directionSource.text, /皱襞\/边界辅助线索：只读审阅，不参与几何/);
 assert.match(presentation.directionSource.text, /医生人工覆盖已记录/);
 assert.deepEqual(presentation.directionSource.classNames, ["warn"]);
-assert.equal(presentation.stageStatus, "浏览器确定性 workflow 已更新候选 · 已明确生成 2 次 · 已记录医生调整 · 标准脸");
+assert.equal(presentation.stageStatus, "已明确生成 2 次");
+
+const referencePresentation = buildIncisionResultPresentation({
+  ...structuredClone({
+    result: {
+      candidate: {
+        type: "fusiform",
+        length_mm: 75,
+        width_mm: 25,
+        tip_angle_deg: 30,
+        metrics: {
+          length_to_width_ratio: 3,
+          tip_angle_error_deg: 0,
+          photo_reference_candidate: true,
+          photo_reference_aspect_ratio: 2.8,
+          photo_reference_length_scale: 2.8 / 3,
+          photo_canonical_scale: 1,
+        },
+      },
+      direction: {}, anatomy: {}, guardrails: {},
+    },
+  }),
+  workflowGate: { passed: false, observed_actions: [], missing_actions: [] },
+  tumorQuality: {}, secondaryCuesPresent: false, generationCount: 0,
+  privacyAudit: { local_workflow_fields: [], secondary_cues_present: false },
+});
+assert.equal(referencePresentation.candidateType, "受限参考");
+assert.equal(referencePresentation.candidateLength, "70.0 mm");
+assert.equal(referencePresentation.candidateWidth, "25.0 mm / 2.80:1（黄色参考）");
+assert.match(referencePresentation.workflowSummary, /2.80:1 黄色受限参考/);
+assert.match(referencePresentation.nextStep, /不能直接确认或发送实时叠加/);
+
+const visibilityLimitedPresentation = buildIncisionResultPresentation({
+  ...structuredClone({
+    result: {
+      candidate: {
+        type: "fusiform",
+        length_mm: 75,
+        width_mm: 25,
+        tip_angle_deg: 30,
+        metrics: {
+          length_to_width_ratio: 3,
+          tip_angle_error_deg: 0,
+          photo_visibility_limited_candidate: true,
+          photo_visible_fraction: 0.68,
+        },
+      },
+      direction: {}, anatomy: {}, guardrails: {},
+    },
+  }),
+  workflowGate: { passed: false, observed_actions: [], missing_actions: [] },
+  tumorQuality: {}, secondaryCuesPresent: false, generationCount: 0,
+  privacyAudit: { local_workflow_fields: [], secondary_cues_present: false },
+});
+assert.equal(visibilityLimitedPresentation.candidateType, "视野受限参考");
+assert.equal(visibilityLimitedPresentation.candidateWidth, "25.0 mm / 3.00:1（黄色参考）");
+assert.match(visibilityLimitedPresentation.workflowSummary, /标准参考投影.*3:1.*68%/);
+assert.match(visibilityLimitedPresentation.nextStep, /另一视角.*不能确认或进入实时叠加/);
+
+const nonstandardVisibilityLimitedPresentation = buildIncisionResultPresentation({
+  ...structuredClone({
+    result: {
+      candidate: {
+        type: "fusiform", length_mm: 70, width_mm: 25, tip_angle_deg: 30,
+        metrics: {
+          length_to_width_ratio: 2.8,
+          photo_visibility_limited_candidate: true,
+          photo_visible_fraction: 0.6,
+        },
+      },
+      direction: {}, anatomy: {}, guardrails: {},
+    },
+  }),
+  workflowGate: { passed: false, observed_actions: [], missing_actions: [] },
+  tumorQuality: {}, secondaryCuesPresent: false, generationCount: 0,
+  privacyAudit: { local_workflow_fields: [], secondary_cues_present: false },
+});
+assert.match(nonstandardVisibilityLimitedPresentation.workflowSummary, /非标准比例参考.*2\.80:1.*60%/);
 
 console.log("test_incision_presenter: pure guardrail, workflow, candidate, and tumor-quality presentations passed");

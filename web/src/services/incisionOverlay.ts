@@ -195,17 +195,28 @@ export function polylineToSurfaceRefs(
   neighborDepth = 4,
 ): SurfaceRef[] {
   if (!points?.length || !tris.length) return [];
-  const first = pointToSurfaceRef(points[0], verts, tris);
+  const isClosed = points.length > 2 && Math.hypot(
+    points[0][0] - points[points.length - 1][0],
+    points[0][1] - points[points.length - 1][1],
+    points[0][2] - points[points.length - 1][2],
+  ) <= 1e-8;
+  const sourcePoints = isClosed ? points.slice(0, -1) : points;
+  const first = pointToSurfaceRef(sourcePoints[0], verts, tris);
   if (!first) return [];
   const refs = [first];
   const adjacency = buildTriangleAdjacency(tris);
-  for (let index = 1; index < points.length; index += 1) {
+  for (let index = 1; index < sourcePoints.length; index += 1) {
     const previous = refs[refs.length - 1];
     const candidates = nearbyTriangles(previous.tri, adjacency, neighborDepth);
-    const ref = pointToSurfaceRefWithin(points[index], verts, tris, candidates);
+    const ref = pointToSurfaceRefWithin(sourcePoints[index], verts, tris, candidates);
     if (!ref) return [];
     refs.push(ref);
   }
+  // A closed model-space polyline must stay closed after surface projection.
+  // Re-projecting its duplicate final point from the previous face triangle can
+  // select a different barycentric location and turn an even fusiform polygon
+  // into an odd, invalid topology.
+  if (isClosed) refs.push(first);
   return refs;
 }
 
@@ -677,5 +688,6 @@ export const __incisionOverlayForTests = {
   measureIncisionOverlayRegistration,
   measureIncisionOverlayJitter,
   pointToSurfaceRef,
+  polylineToSurfaceRefs,
   validateIncisionOverlay,
 };

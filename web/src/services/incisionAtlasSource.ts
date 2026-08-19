@@ -69,12 +69,12 @@ export function resolveIncisionAtlas({
   if (standardIssues.length) {
     throw new Error(`标准 RSTL 图谱校验失败：${standardIssues.join("；")}`);
   }
-  warnings.push("未检测到可用的个体化 RSTL；当前明确降级为标准先验。建议先完成个性化采集再设计切口。");
+  warnings.push("当前使用 MediaPipe 标准 RSTL；个体化 RSTL 需完成相应采集后启用。");
   const provenance = "bundled_standard_rstl_prior";
   return {
     atlas: standardAtlas,
     mode: "mediapipe_standard",
-    statusLabel: "MediaPipe 标准 RSTL · 降级模式",
+    statusLabel: "MediaPipe 标准 RSTL",
     warnings,
     provenance,
     contract: buildRstlSourceContract(standardAtlas, { provenance }),

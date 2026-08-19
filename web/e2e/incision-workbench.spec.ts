@@ -354,6 +354,7 @@ test("mobile layout shows the 3D stage before the long review form", async ({ pa
 
 test("clinical summary hides internal codes and exposes the rule validation boundary", async ({ page }) => {
   await waitForWorkbench(page);
+  await page.locator("#tumorKind").selectOption("subcutaneous");
 
   const state = page.locator(".incision-state-panel");
   await expect(state).toContainText("皮下肿物");

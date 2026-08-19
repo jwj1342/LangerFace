@@ -10,6 +10,7 @@ import {
 import {
   importedTumorFormState,
   shouldClearFreehandBoundaryOnLesionRepick,
+  withControlledMarkerProvenance,
 } from "../web/src/services/tumorInput.ts";
 
 class MemoryStorage {
@@ -126,6 +127,10 @@ assert.equal(shouldClearFreehandBoundaryOnLesionRepick({
   boundaryMode: "ellipse",
   boundaryPointCount: 7,
 }), false);
+const controlledMarkerTumor = withControlledMarkerProvenance(tumor, true);
+assert.equal(controlledMarkerTumor.boundary_mode, "controlled_marker");
+assert.equal(controlledMarkerTumor.boundary_source, "controlled_marker_confirmed");
+assert.equal(controlledMarkerTumor.source, "detector_confirmed");
 const importedSubcutaneous = importedTumorFormState({
   ...tumor,
   kind: "subcutaneous",

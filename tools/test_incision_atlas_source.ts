@@ -39,7 +39,8 @@ const standardAtlas = atlas();
   const result = resolveIncisionAtlas({ personalizedAtlas: null, standardAtlas, triangleCount: 2 });
   assert.equal(result.atlas, standardAtlas);
   assert.equal(result.mode, "mediapipe_standard");
-  assert.match(result.warnings.join("；"), /降级为标准先验/);
+  assert.equal(result.statusLabel, "MediaPipe 标准 RSTL");
+  assert.match(result.warnings.join("；"), /当前使用 MediaPipe 标准 RSTL/);
 }
 
 {

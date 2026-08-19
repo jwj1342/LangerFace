@@ -11,6 +11,7 @@ import {
   add,
   annotateCandidateSensitiveDistances,
   classifyRegion,
+  clamp,
   editRecordIsActive,
   inspectTumorEngineeringExclusions,
   mul,
@@ -20,6 +21,8 @@ import {
   unitsPerMmFromVertices,
   versionedEditProvenance,
 } from "./incisionToolCore.ts";
+import { queryIncisionLocalRstlDirection } from "./incisionLocalRstlDirection.ts";
+import { normalizePlanningLesion } from "./incisionLesionNormalization.ts";
 import {
   type IncisionCandidate,
   type IncisionRules,
@@ -46,6 +49,28 @@ export function rotateInPlane(axis: Vec3, normal: Vec3, angleDeg: number): Vec3 
 }
 
 export const DEFAULT_SAFE_DIRECTION_SEARCH_OFFSETS_DEG = [0, -10, 10];
+
+function normalizedDirectionOverride(
+  value: (Partial<DirectionResult> & AnyRecord) | null | undefined,
+  point: Vec3,
+): (DirectionResult & AnyRecord) | null {
+  if (!value || !Array.isArray(value.vector) || value.vector.length !== 3) return null;
+  const raw = value.vector.map(Number) as Vec3;
+  if (!raw.every(Number.isFinite) || Math.hypot(...raw) <= 1e-9) return null;
+  const vector = norm(raw);
+  return {
+    ...value,
+    point,
+    vector,
+    angle_deg: Math.atan2(vector[1], vector[0]) * 180 / Math.PI,
+    confidence: clamp(Number(value.confidence ?? 0), 0, 1),
+    source: String(value.source || "photo_projected_rstl_nearest_segment"),
+    nearest_distance: value.nearest_distance == null ? null : Number(value.nearest_distance),
+    support_count: Math.max(1, Number(value.support_count || 1)),
+    angular_spread_deg: Math.max(0, Number(value.angular_spread_deg || 0)),
+    confidence_reasons: Array.isArray(value.confidence_reasons) ? value.confidence_reasons.map(String) : [],
+  };
+}
 
 function clonePlan<T>(plan: T): T {
   return JSON.parse(JSON.stringify(plan));
@@ -583,19 +608,25 @@ export function planIncisionDeterministic({
   tris,
   atlas,
   normal = [0, 0, 1],
+  directionOverride = null,
 }: {
   tumor: Partial<TumorInput> & AnyRecord;
   verts: Vec3[];
   tris: Vec3[];
   atlas: AnyRecord;
   normal?: Vec3;
+  directionOverride?: (Partial<DirectionResult> & AnyRecord) | null;
 }): AnyRecord {
-  const tumor = validateTumor(tumorInput);
+  const validatedTumor = validateTumor(tumorInput);
+  const unitsPerMm = unitsPerMmFromVertices(verts);
+  const tumorNormalization = normalizePlanningLesion(validatedTumor, unitsPerMm, normal);
+  const tumor = { ...validatedTumor, center: tumorNormalization.planning_center };
   const tumorQuality = summarizeTumorInputQuality(tumor);
   const anatomy = classifyRegion(tumor.center, verts);
-  const direction = queryDirection(tumor.center, verts, tris, atlas);
+  const overriddenDirection = normalizedDirectionOverride(directionOverride, tumor.center);
+  const direction = overriddenDirection
+    || queryIncisionLocalRstlDirection(tumor.center, verts, tris, atlas);
   const preCandidateSensitiveInspection = inspectSensitiveStructures(anatomy);
-  const unitsPerMm = unitsPerMmFromVertices(verts);
   const candidate = tumor.kind === "subcutaneous"
     ? generateLinearIncision(tumor, direction, unitsPerMm)
     : generateFusiformIncision(tumor, direction, unitsPerMm, normal);
@@ -608,7 +639,7 @@ export function planIncisionDeterministic({
       summary: "检查肿物输入来源、作者、单位、深度、切缘和边界完整性。",
       action: "summarize_tumor_input_quality",
       input: { tumor },
-      observation: tumorQuality,
+      observation: { ...tumorQuality, lesion_normalization: tumorNormalization },
     },
     { summary: "定位病灶所在面部分区。", action: "classify_region", input: { point: tumor.center }, observation: anatomy },
     { summary: "查询局部 RSTL 方向。", action: "query_rstl_direction", input: { point: tumor.center, source: "rstl_atlas" }, observation: direction },
@@ -628,6 +659,8 @@ export function planIncisionDeterministic({
     workflow_mode: "deterministic_single_candidate",
     tool_schemas: TOOL_SCHEMAS,
     tumor,
+    tumor_normalization: tumorNormalization,
+    direction_override_applied: Boolean(overriddenDirection),
     tumor_quality: tumorQuality,
     anatomy,
     direction,
@@ -649,6 +682,7 @@ export function planIncisionWorkflow({
   normal = [0, 0, 1],
   angleOffsetsDeg = DEFAULT_SAFE_DIRECTION_SEARCH_OFFSETS_DEG,
   rules = DEFAULT_RULES,
+  directionOverride = null,
 }: {
   tumor?: Partial<TumorInput> & AnyRecord;
   verts?: Vec3[];
@@ -657,11 +691,12 @@ export function planIncisionWorkflow({
   normal?: Vec3;
   angleOffsetsDeg?: number[];
   rules?: IncisionRules;
+  directionOverride?: (Partial<DirectionResult> & AnyRecord) | null;
 } = {}): AnyRecord {
   if (!tumorInput || !verts || !tris || !atlas) {
     throw new Error("planIncisionWorkflow requires tumor, verts, tris, and atlas");
   }
-  const result = planIncisionDeterministic({ tumor: tumorInput, verts, tris, atlas, normal });
+  const result = planIncisionDeterministic({ tumor: tumorInput, verts, tris, atlas, normal, directionOverride });
   result.workflow_mode = "deterministic_multi_candidate";
   const tumor = result.tumor;
   const unitsPerMm = unitsPerMmFromVertices(verts);

@@ -62,4 +62,43 @@ assert.deepEqual(history.summary(neutral), {
   canRedo: false,
 });
 
+const transactionHistory = new IncisionEditHistory();
+assert.equal(transactionHistory.commitTransaction(
+  angleEdit,
+  "control_change",
+  "2026-07-29T01:00:00.000Z",
+), true);
+const shiftedTransactionEdit = { ...angleEdit, shift_perp_mm: 2 };
+assert.equal(transactionHistory.commitTransaction(
+  shiftedTransactionEdit,
+  "photo_endpoint_drag",
+  "2026-07-29T01:00:00.500Z",
+), true);
+assert.equal(transactionHistory.commitTransaction(
+  { ...shiftedTransactionEdit, reason: "clinician adjustment" },
+  "reason_change",
+  "2026-07-29T01:00:01.000Z",
+), true);
+const completedTransaction = { ...shiftedTransactionEdit, reason: "clinician adjustment" };
+assert.equal(transactionHistory.summary(completedTransaction).committedCount, 1,
+  "consecutive parameter and endpoint edits plus a reason remain one atomic transaction");
+assert.deepEqual(transactionHistory.entriesFor(completedTransaction).map((entry) => ({
+  interaction: entry.interaction,
+  reason: entry.reason,
+  angle: entry.angle_offset_deg,
+  shiftPerp: entry.shift_perp_mm,
+})), [{
+  interaction: "reason_change",
+  reason: "clinician adjustment",
+  angle: 12,
+  shiftPerp: 2,
+}], "the atomic provenance entry retains parameters, reason, and interaction");
+assert.equal("committed_at" in transactionHistory.entriesFor(completedTransaction)[0], false,
+  "commit time stays internal so the privacy export gate does not treat it as direct identity data");
+
+const nextTransaction = { ...completedTransaction, length_scale: 1.1 };
+assert.equal(transactionHistory.commitTransaction(nextTransaction, "control_change"), true);
+assert.equal(transactionHistory.summary(nextTransaction).committedCount, 2,
+  "a new adjustment after a reason starts a new undoable transaction");
+
 console.log("test_incision_edit_history: commit, preview, undo/redo, and branch truncation passed");

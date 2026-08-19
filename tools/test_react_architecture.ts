@@ -1492,8 +1492,10 @@ assert.ok(
   controller.includes("S.generationCount += 1") &&
   controller.includes("countGeneration: true") &&
   controller.includes("buildIncisionResultPresentation") &&
-  incisionPresenterService.includes("已明确生成 ${input.generationCount} 次"),
-  "incision runtime counts only explicit candidate generation while preserving automatic previews",
+  incisionPresenterService.includes("已明确生成 ${input.generationCount} 次") &&
+  incisionPresenterService.includes("stageStatus: generationLabel") &&
+  !incisionPresenterService.includes("自动预览"),
+  "incision runtime counts only explicit candidate generation without the removed automatic-preview banner",
 );
 assert.ok(
   incisionPresenterService.includes("BuildIncisionResultPresentationInput") &&
@@ -1785,6 +1787,7 @@ assert.ok(!controller.includes("INCISION_PROVIDER_REACT_STATE_EVENT"), "incision
 assert.ok(!controller.includes("./providerConfig"), "incision controller has no provider configuration dependency");
 assert.ok(incisionSnapshotsService.includes("buildIncisionControllerSnapshot"), "shared incision snapshot service builds typed controller snapshots");
 assert.ok(incisionSnapshotsService.includes("buildIncisionResultViewSnapshot"), "shared incision snapshot service builds candidate result view snapshots");
+assert.ok(incisionSnapshotsService.includes("buildIncisionHeadAssetSnapshot"), "shared incision snapshot service builds head asset snapshots");
 assert.ok(incisionSnapshotsService.includes("buildIncisionSavedCandidateSummaries"), "shared incision snapshot service builds saved candidate summaries");
 assert.ok(incisionSnapshotsService.includes("IncisionPlanResultLike"), "shared incision snapshot service types candidate result inputs");
 assert.ok(incisionSnapshotsService.includes("IncisionSavedCandidateRecordLike"), "shared incision snapshot service types saved candidate record inputs");

@@ -23,6 +23,7 @@ import {
 import type { Triangle, Vec3 } from "./softBody.ts";
 import { mapSurfaceRefs, measureIncisionOverlayJitter, measureIncisionOverlayRegistration } from "./incisionOverlay.ts";
 import type { SurfaceRef } from "./incisionOverlay.ts";
+import { incisionOverlayStyle } from "./incisionOverlayStyle.ts";
 import { countMetric, recordMetricSample, setDiagnosticSection } from "./logger.ts";
 import { lineIndicesForDensity } from "./lineDensity.ts";
 import {
@@ -854,20 +855,20 @@ function drawIncisionOverlay(
   if (!poseGate.passed) return;
   ctx.save();
   ctx.globalAlpha = 0.98;
-  const baseWidth = Math.max(2, W / 520);
+  const overlayStyle = incisionOverlayStyle(W, overlay.candidate_type);
   strokeOverlayRefs(surfaceRefs(overlay.tumor?.boundary_refs), lm, masks, vis, innerMouth, {
-    color: "#facc15",
-    lineWidth: baseWidth,
-    dash: [baseWidth * 3, baseWidth * 2],
+    color: overlayStyle.boundary.color,
+    lineWidth: overlayStyle.boundary.lineWidth,
+    dash: [overlayStyle.boundary.lineWidth * 3, overlayStyle.boundary.lineWidth * 2],
   }, localRegionMasks);
   const candidateRefs = surfaceRefs(overlay.candidate?.polyline_refs);
   strokeOverlayRefs(candidateRefs, lm, masks, vis, innerMouth, {
-    color: "#07111f",
-    lineWidth: baseWidth * 3.4,
+    color: overlayStyle.candidate.haloColor,
+    lineWidth: overlayStyle.candidate.haloWidth,
   }, localRegionMasks);
   strokeOverlayRefs(candidateRefs, lm, masks, vis, innerMouth, {
-    color: overlay.candidate_type === "linear" ? "#22c55e" : "#5eead4",
-    lineWidth: baseWidth * 1.75,
+    color: overlayStyle.candidate.color,
+    lineWidth: overlayStyle.candidate.lineWidth,
   }, localRegionMasks);
   const center = mapSurfaceRefs(optionalSurfaceRef(overlay.tumor?.center_ref), lm, modelTriangles()).pts[0];
   const centerLocalAction = localActionForPoints([center], localRegionMasks);
@@ -875,11 +876,12 @@ function drawIncisionOverlay(
   if (center && centerLocalAction.action !== "freeze" && !centerOccluded) {
     const savedAlpha = ctx.globalAlpha;
     if (centerLocalAction.action === "dim") ctx.globalAlpha = savedAlpha * centerLocalAction.opacityScale;
-    ctx.fillStyle = "#facc15";
+    const cssScale = Math.max(0.1, els.canvas.getBoundingClientRect().width / Math.max(W, 1));
+    ctx.fillStyle = "#f43f5e";
     ctx.strokeStyle = "#111820";
-    ctx.lineWidth = Math.max(1, W / 900);
+    ctx.lineWidth = 2 / cssScale;
     ctx.beginPath();
-    ctx.arc(center[0], center[1], Math.max(4, W / 180), 0, Math.PI * 2);
+    ctx.arc(center[0], center[1], 5 / cssScale, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.globalAlpha = savedAlpha;

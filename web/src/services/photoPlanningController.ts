@@ -107,6 +107,7 @@ export interface PhotoPlanningFrameState {
   width: number;
   height: number;
   landmarks: readonly Vec3[] | null;
+  surfaceLandmarks: readonly Vec3[] | null;
   triangles: readonly Triangle[];
   transform: PhotoPlanningTransform | null;
   selection: PhotoPlanningSelection;
@@ -137,6 +138,7 @@ export interface PhotoPlanningController {
     sourceRevision: number;
     status: PhotoPlanningDetectionStatus;
     landmarks?: readonly Vec3[] | null;
+    surfaceLandmarks?: readonly Vec3[] | null;
     attempts?: number;
     reason?: string;
   }): boolean;
@@ -359,6 +361,7 @@ export function createPhotoPlanningController({
   let activeSource: ActiveSource | null = null;
   let detectorLease: PhotoPlanningDetectorLease | null = null;
   let landmarks: readonly Vec3[] | null = null;
+  let surfaceLandmarks: readonly Vec3[] | null = null;
   let triangles: readonly Triangle[] = [];
   let transform: PhotoPlanningTransform | null = null;
   let selection = cloneSelection(EMPTY_SELECTION);
@@ -383,6 +386,7 @@ export function createPhotoPlanningController({
     width: activeSource?.width ?? 0,
     height: activeSource?.height ?? 0,
     landmarks,
+    surfaceLandmarks,
     triangles,
     transform,
     selection: cloneSelection(selection),
@@ -441,6 +445,7 @@ export function createPhotoPlanningController({
 
   const resetForSource = () => {
     landmarks = null;
+    surfaceLandmarks = null;
     transform = null;
     selection = cloneSelection(EMPTY_SELECTION);
     overlay = { ...EMPTY_OVERLAY };
@@ -495,6 +500,7 @@ export function createPhotoPlanningController({
     setDetection(input) {
       if (disposed || input.sourceRevision !== revision || !activeSource) return false;
       landmarks = input.landmarks ?? null;
+      surfaceLandmarks = input.surfaceLandmarks ?? landmarks;
       detection = {
         status: input.status,
         sourceRevision: input.sourceRevision,
@@ -556,11 +562,11 @@ export function createPhotoPlanningController({
     pickSurfaceRef(point) {
       if (!transform || !landmarks?.length || !triangles.length) return null;
       const sourcePoint = clientPointToSource(point, transform);
-      return sourcePoint ? sourcePointToSurfaceRef(sourcePoint, landmarks, triangles) : null;
+      return sourcePoint ? sourcePointToSurfaceRef(sourcePoint, surfaceLandmarks || landmarks, triangles) : null;
     },
     surfaceRefToClient(ref) {
       if (!transform || !landmarks?.length || !triangles.length) return null;
-      const sourcePoint = surfaceRefToSourcePoint(ref, landmarks, triangles);
+      const sourcePoint = surfaceRefToSourcePoint(ref, surfaceLandmarks || landmarks, triangles);
       return sourcePoint ? sourcePointToClient(sourcePoint, transform) : null;
     },
     getFrameState: frameState,

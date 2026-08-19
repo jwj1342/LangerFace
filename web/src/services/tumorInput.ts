@@ -122,6 +122,16 @@ export function buildTumorInput({
   };
 }
 
+export function withControlledMarkerProvenance(input: TumorInput, active: boolean): TumorInput {
+  if (!active || input.kind !== "cutaneous") return input;
+  return {
+    ...input,
+    boundary_mode: "controlled_marker",
+    boundary_source: "controlled_marker_confirmed",
+    source: "detector_confirmed",
+  };
+}
+
 export function buildTumorFormSnapshot(input: TumorSnapshotInput): TumorFormSnapshot {
   const kind = normalizeTumorKind(input.kind);
   return {
