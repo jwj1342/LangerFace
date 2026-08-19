@@ -56,6 +56,7 @@ import {
   buildIncisionCandidateSnapshot,
   buildIncisionControllerSnapshot,
   buildIncisionEditSnapshot,
+  buildIncisionHeadAssetSnapshot,
   buildIncisionPrivacyAuditSnapshot,
   buildIncisionResultViewSnapshot,
   buildIncisionReviewSnapshot,
@@ -75,9 +76,8 @@ import {
   withControlledMarkerProvenance,
 } from "./tumorInput";
 import { dataSource } from "./dataSource";
-import type { HeadMeshPayload } from "./dataSource";
 import { auditExportPayload } from "./exportPrivacy";
-import { resolveIncisionAtlas, type IncisionAtlasResolution } from "./incisionAtlasSource";
+import { resolveIncisionAtlas } from "./incisionAtlasSource";
 import {
   buildReviewExportPayload,
   buildTumorExportPayload,
@@ -372,32 +372,6 @@ function nearestVertex(point: unknown): number {
   return best;
 }
 
-function headAssetSnapshot({
-  head,
-  atlas,
-  resolved,
-}: {
-  head: HeadMeshPayload;
-  atlas: DynamicRecord;
-  resolved: IncisionAtlasResolution;
-}): IncisionHeadAssetState {
-  return {
-    id: head.id,
-    label: head.label,
-    topologyId: head.topologyId,
-    topologyVersion: head.topologyVersion,
-    vertexCount: head.vertices.length,
-    triangleCount: head.triangles.length,
-    atlasTopologyId: typeof atlas?.topologyId === "string" ? atlas.topologyId : null,
-    atlasLineCount: Array.isArray(atlas?.lines) ? atlas.lines.length : 0,
-    mode: resolved.mode,
-    atlasProvenance: resolved.provenance,
-    atlasContract: resolved.contract,
-    statusLabel: resolved.statusLabel,
-    warnings: resolved.warnings,
-  };
-}
-
 async function loadMediaPipeIncisionAssets(session: IncisionSessionToken) {
   const updateActiveAssetLoading = (event: DynamicRecord) => {
     if (isActiveSession(session)) updateAssetLoading(event);
@@ -417,7 +391,7 @@ async function loadMediaPipeIncisionAssets(session: IncisionSessionToken) {
   return {
     head,
     atlas: resolved.atlas as DynamicRecord,
-    headAsset: headAssetSnapshot({
+    headAsset: buildIncisionHeadAssetSnapshot({
       head,
       atlas: resolved.atlas as DynamicRecord,
       resolved,

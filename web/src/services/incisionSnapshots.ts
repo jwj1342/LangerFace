@@ -278,6 +278,45 @@ export function buildIncisionAssetLoadingSnapshot({
   };
 }
 
+export function buildIncisionHeadAssetSnapshot({
+  head,
+  atlas,
+  resolved,
+}: {
+  head: {
+    id: string;
+    label: string;
+    topologyId: string;
+    topologyVersion: string;
+    vertices: unknown[];
+    triangles: unknown[];
+  };
+  atlas?: { topologyId?: unknown; lines?: unknown } | null;
+  resolved: {
+    mode: IncisionHeadAssetState["mode"];
+    provenance: string | null;
+    contract: RstlSourceContract | null;
+    statusLabel: string;
+    warnings: string[];
+  };
+}): IncisionHeadAssetState {
+  return {
+    id: head.id,
+    label: head.label,
+    topologyId: head.topologyId,
+    topologyVersion: head.topologyVersion,
+    vertexCount: head.vertices.length,
+    triangleCount: head.triangles.length,
+    atlasTopologyId: typeof atlas?.topologyId === "string" ? atlas.topologyId : null,
+    atlasLineCount: Array.isArray(atlas?.lines) ? atlas.lines.length : 0,
+    mode: resolved.mode,
+    atlasProvenance: resolved.provenance,
+    atlasContract: resolved.contract,
+    statusLabel: resolved.statusLabel,
+    warnings: resolved.warnings,
+  };
+}
+
 export function buildIncisionReviewSnapshot({
   status = "pending_clinician_confirmation",
   reviewer = "",
