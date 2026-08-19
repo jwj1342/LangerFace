@@ -1912,11 +1912,11 @@ function fitBoundaryToOuterStrokeBand(
   let padding = filled;
   for (const radius of [2, 1]) {
     padding = padding.map((_value, index, values) => {
-      const window: number[] = [];
+      const neighborhood: number[] = [];
       for (let offset = -radius; offset <= radius; offset += 1) {
-        window.push(values[(index + offset + values.length) % values.length]);
+        neighborhood.push(values[(index + offset + values.length) % values.length]);
       }
-      return median(window);
+      return median(neighborhood);
     });
   }
   const robustMaximum = Math.min(maximumProbePx, percentile(supported, 0.75) + 0.75);
