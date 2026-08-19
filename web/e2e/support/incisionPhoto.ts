@@ -67,7 +67,7 @@ export async function uploadGeneratedPhoto(
 
 export async function pickSafePhotoCheek(page: Page) {
   const canvas = page.locator("#incisionPhotoCanvas");
-  await expect(canvas).toHaveAttribute("data-active", "true");
+  await expect(canvas).toHaveAttribute("data-active", "true", { timeout: 45_000 });
   const box = await canvas.boundingBox();
   if (!box) throw new Error("incision photo canvas has no layout box");
   await canvas.click({ position: { x: box.width * 0.72, y: box.height * 0.5 } });

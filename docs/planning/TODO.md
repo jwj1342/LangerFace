@@ -16,24 +16,27 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
 - [ ] 临床医生校验线图谱并置 `validated:true`（Stage 1 出口）— [#2](https://github.com/jwj1342/LangerFace/issues/2)
       · 当前 PR 补齐逐线 JSON/CSV、源哈希门禁和结构化签署，并修复标注保存误置 validated/丢失既有线；只有受控临床流程中的医生能完成最终签署。
 
-## 2D 静态照片切口规划交付
-
-- [ ] Epic：2D 静态照片切口规划交付闭环（会议目标对齐）— [#167](https://github.com/jwj1342/LangerFace/issues/167)
-- [ ] 2D 规划画布：让患者静态照片成为切口工作台主坐标系 — [#168](https://github.com/jwj1342/LangerFace/issues/168)
-- [ ] 2D 病灶与候选交互：在患者照片上完成标记、生成和直接微调 — [#169](https://github.com/jwj1342/LangerFace/issues/169)
-- [ ] 单页工作流：统一照片规划、候选审阅、导出与实时叠加状态 — [#170](https://github.com/jwj1342/LangerFace/issues/170)
-- [ ] 2D RSTL 手动兜底：验收拖点平滑、擦除撤销、密度与交叉质量 — [#171](https://github.com/jwj1342/LangerFace/issues/171)
-- [ ] 真实媒体验收：照片、视频与摄像头切口叠加的稳定性证据 — [#172](https://github.com/jwj1342/LangerFace/issues/172)
-- [ ] 肿物检测适配契约：允许未来 detector 接入但不引入训练 — [#173](https://github.com/jwj1342/LangerFace/issues/173)
-- [ ] 重构：抽取 live/incision 共用的 2D 照片规划 controller 与坐标服务 — [#174](https://github.com/jwj1342/LangerFace/issues/174)
-
 ## 待合并的独立修复 / 功能
 
 - [x] RSTL 局部方向服务 Python/TypeScript parity — [#13](https://github.com/jwj1342/LangerFace/issues/13)
       · Ready PR #121；共享金标覆盖 atlas、低置信、FLAME `points3d` 和 ±180° 轴向 wrap。
       · Ready PR #119；补齐可编辑尖端角、轮廓重算、guardrail 与 provenance。
-- [ ] 3D 路线可行性裁决 — [#40](https://github.com/jwj1342/LangerFace/issues/40)
-      · Ready PR #122；建议 2D-first + 3D 离线资产/标注/研究预览，等待 #40 owner 正式确认。
+- [ ] Epic：2D 静态照片切口规划交付闭环 — [#167](https://github.com/jwj1342/LangerFace/issues/167)
+      · 主实现 PR #166 已合并；真实媒体、人工验收及切口 2A 剩余门禁由 #171 / #172 / #209–#212 跟踪。
+- [ ] 单页工作流：统一照片规划、候选审阅、导出与实时叠加状态 — [#170](https://github.com/jwj1342/LangerFace/issues/170)
+      · PR #166 已完成 workspace 恢复、审阅门禁、实时状态和清除/返回流程；保留 issue 继续核对端到端交付。
+- [ ] 2D RSTL 手动兜底验收与质量边界 — [#171](https://github.com/jwj1342/LangerFace/issues/171)
+      · PR #166 已补交叉/密度质量门禁；PR #186 修复单帧皱纹细化在 live transport 中位移归零。仍缺 3 张授权照片的 before/after 人工评审证据。
+- [ ] 真实媒体验收：照片、视频与摄像头切口叠加稳定性证据 — [#172](https://github.com/jwj1342/LangerFace/issues/172)
+      · PR #166 已补严格设备矩阵审计；仍缺 2 段固定视频和 1 个固定摄像头的真实 evidence/audit，不能用合成值替代。
+- [ ] RSTL 跨页面同源与坐标契约回归 — [#209](https://github.com/jwj1342/LangerFace/issues/209)
+      · PR #213 已随 #166 合并确定性 source contract；仍需补齐 mirror、pan/zoom、DPR、display filter 与浏览器跨页一致性回归。
+- [ ] 受控黑点/贴纸病灶定位 baseline — [#210](https://github.com/jwj1342/LangerFace/issues/210)
+      · PR #214 已随 #166 合并本地草案与显式确认链路；仍需浏览器交互矩阵及取消/退出隐私清理验收。
+- [ ] 候选全路径敏感区域相交与工程防越界 — [#211](https://github.com/jwj1342/LangerFace/issues/211)
+      · PR #215 已随 #166 合并工程 hard violation 基础；仍需 transform 浏览器矩阵、可信工程排除区接线及 #212 边界确认。
+- [ ] 临床 Gate：确认切口敏感结构阈值、硬阻断与覆盖规则 — [#212](https://github.com/jwj1342/LangerFace/issues/212)
+      · 等待领域专家形成可核验决策表；未知值保持 draft，不由工程实现猜测医学阈值。
 - [x] 修复 React 受控输入 snapshot echo — [#109](https://github.com/jwj1342/LangerFace/issues/109)
       · Ready PR #119；Chromium 回归覆盖输入保持。
 - [x] 删除 Agentic/Provider 出域路径 — [#111](https://github.com/jwj1342/LangerFace/issues/111)
