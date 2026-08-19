@@ -1,4 +1,4 @@
-export const CONTROLLED_MARKER_DETECTOR_VERSION = "0.23";
+export const CONTROLLED_MARKER_DETECTOR_VERSION = "0.26";
 
 export interface MarkerImageData {
   width: number;
@@ -77,12 +77,16 @@ export interface ControlledMarkerDetection {
     boundary_regularization_solidity?: number;
     boundary_regularization_p90_displacement_ratio?: number;
     boundary_regularization_max_displacement_ratio?: number;
-    boundary_stroke_reconciliation?: "radial_ridge" | "bounded_marker_bbox";
+    boundary_stroke_reconciliation?: "radial_ridge" | "bounded_marker_bbox" | "normal_stroke_band";
     boundary_stroke_scale?: number;
     boundary_stroke_scale_x?: number;
     boundary_stroke_scale_y?: number;
     boundary_stroke_area_ratio?: number;
     boundary_stroke_center_shift_ratio?: number;
+    boundary_stroke_padding_px?: number;
+    boundary_stroke_support_ratio?: number;
+    boundary_stroke_coverage_ratio?: number;
+    boundary_stroke_reverse_p90_px?: number;
   };
   audit: {
     local_only: true;
@@ -1814,6 +1818,131 @@ function scaleBoundaryToMarkerExtent(
   };
 }
 
+interface NormalStrokeBandFit {
+  boundary: MarkerPoint[];
+  medianPaddingPx: number;
+  supportRatio: number;
+  coverageRatio: number;
+  reverseP90Px: number;
+}
+
+function fitBoundaryToOuterStrokeBand(
+  image: MarkerImageData,
+  source: MarkerPoint[],
+  seed: MarkerPoint,
+  roiRadius: number,
+  expectedDiameterPx: number,
+  minContrast: number,
+): NormalStrokeBandFit | null {
+  const boundary = resampleClosedBoundary(source, 48);
+  if (boundary.length < 8) return null;
+  const width = Math.floor(image.width);
+  const height = Math.floor(image.height);
+  const roiLumas: number[] = [];
+  const x0 = clamp(Math.floor(seed.x - roiRadius), 0, width - 1);
+  const y0 = clamp(Math.floor(seed.y - roiRadius), 0, height - 1);
+  const x1 = clamp(Math.ceil(seed.x + roiRadius), 0, width - 1);
+  const y1 = clamp(Math.ceil(seed.y + roiRadius), 0, height - 1);
+  for (let y = y0; y <= y1; y += 1) {
+    for (let x = x0; x <= x1; x += 1) {
+      if (insideScanCircle(x, y, seed.x, seed.y, roiRadius)) {
+        roiLumas.push(luma(image.data, (y * width + x) * 4));
+      }
+    }
+  }
+  const backgroundLuma = robustBackgroundLuma(roiLumas);
+  const darkThreshold = Math.min(165, backgroundLuma - Math.max(18, minContrast * 0.8));
+  const center = polygonCentroid(boundary);
+  const maximumProbePx = clamp(expectedDiameterPx * 0.06, 2.5, 4);
+  const normals: MarkerPoint[] = [];
+  const reaches: Array<number | null> = [];
+
+  for (let index = 0; index < boundary.length; index += 1) {
+    const point = boundary[index];
+    const previous = boundary[(index - 2 + boundary.length) % boundary.length];
+    const next = boundary[(index + 2) % boundary.length];
+    const tangentX = next.x - previous.x;
+    const tangentY = next.y - previous.y;
+    const tangentLength = Math.hypot(tangentX, tangentY);
+    if (tangentLength < 1e-6) return null;
+    let normalX = -tangentY / tangentLength;
+    let normalY = tangentX / tangentLength;
+    if (normalX * (point.x - center.x) + normalY * (point.y - center.y) < 0) {
+      normalX *= -1;
+      normalY *= -1;
+    }
+    normals.push({ x: normalX, y: normalY });
+    let firstDark: number | null = null;
+    let lastDark: number | null = null;
+    let lightRun = 0;
+    for (let distance = -1.5; distance <= maximumProbePx; distance += 0.5) {
+      const isDark = sampledLuma(image, point.x + normalX * distance, point.y + normalY * distance)
+        <= darkThreshold;
+      if (isDark) {
+        if (firstDark === null) firstDark = distance;
+        lastDark = distance;
+        lightRun = 0;
+      } else if (firstDark !== null) {
+        lightRun += 0.5;
+        if (lightRun > 1) break;
+      }
+    }
+    reaches.push(firstDark !== null && firstDark <= 0.75 && lastDark !== null && lastDark >= -0.5
+      ? clamp(lastDark + 0.5, 0, maximumProbePx)
+      : null);
+  }
+  const supported = reaches.filter((value): value is number => value !== null);
+  const supportRatio = supported.length / reaches.length;
+  if (supportRatio < 0.48 || maximumCircularMissingRun(reaches) > Math.floor(reaches.length * 0.25)) {
+    return null;
+  }
+
+  const typicalPadding = median(supported);
+  const filled = reaches.map((reach, index) => {
+    if (reach !== null) return reach;
+    const neighbours: number[] = [];
+    for (let offset = 1; offset <= 4; offset += 1) {
+      for (const direction of [-1, 1]) {
+        const nearby = reaches[(index + direction * offset + reaches.length) % reaches.length];
+        if (nearby !== null) neighbours.push(nearby);
+      }
+    }
+    return neighbours.length >= 2 ? median(neighbours) : Math.min(0.75, typicalPadding);
+  });
+  let padding = filled;
+  for (const radius of [2, 1]) {
+    padding = padding.map((_value, index, values) => {
+      const window: number[] = [];
+      for (let offset = -radius; offset <= radius; offset += 1) {
+        window.push(values[(index + offset + values.length) % values.length]);
+      }
+      return median(window);
+    });
+  }
+  const robustMaximum = Math.min(maximumProbePx, percentile(supported, 0.75) + 0.75);
+  padding = padding.map((value) => clamp(value, 0, robustMaximum));
+
+  const supportedIndices = reaches
+    .map((reach, index) => ({ reach, index }))
+    .filter((entry): entry is { reach: number; index: number } => entry.reach !== null);
+  const coverageRatio = supportedIndices.filter(({ reach, index }) => padding[index] + 0.5 >= reach).length
+    / supportedIndices.length;
+  const reverseDistances = supportedIndices.map(({ reach, index }) => Math.max(0, padding[index] - reach));
+  const reverseP90Px = percentile(reverseDistances, 0.9);
+  if (coverageRatio < 0.78 || reverseP90Px > Math.max(0.9, expectedDiameterPx * 0.025)) return null;
+
+  return {
+    boundary: boundary.map((point, index) => ({
+      x: point.x + normals[index].x * padding[index],
+      y: point.y + normals[index].y * padding[index],
+    })),
+    medianPaddingPx: median(padding),
+    supportRatio,
+    coverageRatio,
+    reverseP90Px,
+  };
+}
+
 function reconcileMarkerStrokeCoverage(
   image: MarkerImageData,
   seed: MarkerPoint,
@@ -1857,13 +1986,42 @@ function reconcileMarkerStrokeCoverage(
     || markerDiameter > expectedDiameterPx * 1.25
     || markerAspect > 1.8) return result;
 
-  let reconciliation: "radial_ridge" | "bounded_marker_bbox" = "bounded_marker_bbox";
+  let reconciliation: "radial_ridge" | "bounded_marker_bbox" | "normal_stroke_band" = "bounded_marker_bbox";
   // A close, centred marker component is the least ambiguous witness and is
   // also the cheapest path. This covers a smooth but slightly inset result
   // without launching the more permissive radial search.
-  let scaled = markerExtentAreaRatio <= 1.3 && markerCenterShiftRatio <= 0.15
-    ? scaleBoundaryToMarkerExtent(originalBoundary, markerBbox, 1.14)
+  const boundedMarker = markerExtentAreaRatio <= 1.3 && markerCenterShiftRatio <= 0.15
+    ? scaleBoundaryToMarkerExtent(originalBoundary, markerBbox, 1.18)
     : null;
+  let scaled = boundedMarker;
+  let normalFit: NormalStrokeBandFit | null = null;
+  if (boundedMarker) {
+    normalFit = fitBoundaryToOuterStrokeBand(
+      image,
+      // Measure from the accepted inner enclosure. The bbox-aligned fallback
+      // can already sit outside a tilted stroke between its cardinal extrema.
+      originalBoundary,
+      seed,
+      roiRadius,
+      expectedDiameterPx,
+      Number(options.minContrast ?? 24),
+    );
+    const expandedExtent = normalFit ? boundaryCoordinateExtent(normalFit.boundary) : null;
+    const originalWidth = Math.max(1, originalExtent.maxX - originalExtent.minX);
+    const originalHeight = Math.max(1, originalExtent.maxY - originalExtent.minY);
+    const expandedScaleX = expandedExtent
+      ? (expandedExtent.maxX - expandedExtent.minX) / originalWidth
+      : Number.POSITIVE_INFINITY;
+    const expandedScaleY = expandedExtent
+      ? (expandedExtent.maxY - expandedExtent.minY) / originalHeight
+      : Number.POSITIVE_INFINITY;
+    if (normalFit && expandedScaleX <= 1.26 && expandedScaleY <= 1.26) {
+      scaled = { boundary: normalFit.boundary, scaleX: expandedScaleX, scaleY: expandedScaleY };
+      reconciliation = "normal_stroke_band";
+    } else {
+      normalFit = null;
+    }
+  }
   if (!scaled) {
     reconciliation = "radial_ridge";
     const ridgeProbeStep = clamp(Math.round(expectedDiameterPx * 0.1), 3, 6);
@@ -1962,27 +2120,40 @@ function reconcileMarkerStrokeCoverage(
       };
     }
   }
-  if (!scaled) return result;
-  const candidateArea = Math.abs(polygonArea(scaled.boundary));
-  const candidateCenter = polygonCentroid(scaled.boundary);
-  const candidateAreaRatio = candidateArea / originalArea;
-  const originalMisses = boundaryMissDistances(scaled.boundary, originalBoundary);
-  const outsideRatio = originalMisses.filter((distance) => distance > 0).length / originalMisses.length;
-  if (candidateAreaRatio < 1.02
-    || candidateAreaRatio > 1.75
-    || outsideRatio > 0.1
-    || percentile(originalMisses, 0.9) > Math.max(0.6, equivalentRadius * 0.025)
-    || Math.max(...originalMisses) > Math.max(1.5, equivalentRadius * 0.07)
-    || boundarySelfIntersects(scaled.boundary)
-    || !pointInPolygon(candidateCenter, scaled.boundary)
-    || scaled.boundary.some((point) => Math.hypot(point.x - seed.x, point.y - seed.y) > roiRadius - 1)) {
-    return result;
+  const evaluateCandidate = (candidate: { boundary: MarkerPoint[]; scaleX: number; scaleY: number }) => {
+    const area = Math.abs(polygonArea(candidate.boundary));
+    const center = polygonCentroid(candidate.boundary);
+    const areaRatio = area / originalArea;
+    const misses = boundaryMissDistances(candidate.boundary, originalBoundary);
+    const outsideRatio = misses.filter((distance) => distance > 0).length / misses.length;
+    const centerShiftRatio = Math.hypot(center.x - result.center!.x, center.y - result.center!.y)
+      / Math.max(1, equivalentRadius);
+    const valid = areaRatio >= 1.02
+      && areaRatio <= 1.75
+      && outsideRatio <= 0.1
+      && percentile(misses, 0.9) <= Math.max(0.6, equivalentRadius * 0.025)
+      && Math.max(...misses) <= Math.max(1.5, equivalentRadius * 0.07)
+      && centerShiftRatio <= (reconciliation === "radial_ridge" ? 0.4 : 0.12)
+      && !boundarySelfIntersects(candidate.boundary)
+      && pointInPolygon(reconciliation === "radial_ridge" ? center : result.center!, candidate.boundary)
+      && !candidate.boundary.some((point) => Math.hypot(point.x - seed.x, point.y - seed.y) > roiRadius - 1);
+    return valid ? { area, center, areaRatio, centerShiftRatio } : null;
+  };
+  let candidateMetrics = scaled ? evaluateCandidate(scaled) : null;
+  if (!candidateMetrics && reconciliation === "normal_stroke_band" && boundedMarker) {
+    scaled = boundedMarker;
+    reconciliation = "bounded_marker_bbox";
+    normalFit = null;
+    candidateMetrics = evaluateCandidate(scaled);
   }
+  if (!scaled || !candidateMetrics) return result;
 
   const resultCenterBeforeReconciliation = result.center;
   result.boundary = scaled.boundary;
-  result.center = candidateCenter;
-  result.area_px = Math.round(candidateArea);
+  result.center = reconciliation === "radial_ridge"
+    ? candidateMetrics.center
+    : resultCenterBeforeReconciliation;
+  result.area_px = Math.round(candidateMetrics.area);
   result.bbox = pixelExtent(scaled.boundary).bbox;
   result.diagnostics = {
     ...(result.diagnostics || {}),
@@ -1990,11 +2161,14 @@ function reconcileMarkerStrokeCoverage(
     boundary_stroke_scale: Number(Math.max(scaled.scaleX, scaled.scaleY).toFixed(3)),
     boundary_stroke_scale_x: Number(scaled.scaleX.toFixed(3)),
     boundary_stroke_scale_y: Number(scaled.scaleY.toFixed(3)),
-    boundary_stroke_area_ratio: Number(candidateAreaRatio.toFixed(3)),
-    boundary_stroke_center_shift_ratio: Number((Math.hypot(
-      candidateCenter.x - resultCenterBeforeReconciliation.x,
-      candidateCenter.y - resultCenterBeforeReconciliation.y,
-    ) / Math.max(1, equivalentRadius)).toFixed(3)),
+    boundary_stroke_area_ratio: Number(candidateMetrics.areaRatio.toFixed(3)),
+    boundary_stroke_padding_px: Number((normalFit?.medianPaddingPx ?? 0).toFixed(3)),
+    boundary_stroke_center_shift_ratio: Number(candidateMetrics.centerShiftRatio.toFixed(3)),
+    ...(normalFit ? {
+      boundary_stroke_support_ratio: Number(normalFit.supportRatio.toFixed(3)),
+      boundary_stroke_coverage_ratio: Number(normalFit.coverageRatio.toFixed(3)),
+      boundary_stroke_reverse_p90_px: Number(normalFit.reverseP90Px.toFixed(3)),
+    } : {}),
   };
   return result;
 }

@@ -25,8 +25,8 @@ assert.ok(!compatibilityHtml.includes("main.js"), "legacy live HTML no longer mo
 assert.ok(liveUi.includes('accept="image/*,video/*"'), "React live page accepts uploaded photos and videos");
 assert.ok(liveUi.includes('id="camBtn"'), "React live page exposes camera entry for realtime overlay");
 assert.ok(liveUi.includes('id="exportBtn"'), "React live page exposes export action");
-assert.ok(!liveRoute.includes("LiveIncisionOverlayPanel"),
-  "live page does not inject the incision overlay card into the collaborator-owned layout");
+assert.ok(liveRoute.includes("LiveIncisionOverlayPanel"),
+  "live page mounts the incision overlay card in the shared React layout");
 assert.ok(source.includes('setSource(prepared.source, "image"'), "uploaded photos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "video"'), "uploaded videos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "camera"'), "camera frames enter the shared live render source");

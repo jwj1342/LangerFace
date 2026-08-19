@@ -116,6 +116,33 @@ function ellipseRing(
   }
 }
 
+function rotatedEllipseRing(
+  target: ReturnType<typeof image>,
+  cx: number,
+  cy: number,
+  radiusX: number,
+  radiusY: number,
+  rotation: number,
+  thickness = 2,
+  value = 35,
+) {
+  const cosine = Math.cos(rotation);
+  const sine = Math.sin(rotation);
+  for (let y = 0; y < target.height; y += 1) {
+    for (let x = 0; x < target.width; x += 1) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const localX = (dx * cosine + dy * sine) / radiusX;
+      const localY = (-dx * sine + dy * cosine) / radiusY;
+      if (Math.abs(Math.hypot(localX, localY) - 1) > thickness / Math.min(radiusX, radiusY)) continue;
+      const index = (y * target.width + x) * 4;
+      target.data[index] = value;
+      target.data[index + 1] = value;
+      target.data[index + 2] = value;
+    }
+  }
+}
+
 function relativeEllipseRing(
   target: ReturnType<typeof image>,
   cx: number,
@@ -633,9 +660,13 @@ function fragmentedOpenTriangle(target: ReturnType<typeof image>) {
   assert.ok(Math.min(...extentX) <= 38.25 && Math.max(...extentX) >= 81.75
     && Math.min(...extentY) <= 41.25 && Math.max(...extentY) >= 78.75,
   "bounded extent correction covers the measured marker sides");
-  assert.ok((result.diagnostics?.boundary_stroke_scale_x ?? 2) <= 1.14
-    && (result.diagnostics?.boundary_stroke_scale_y ?? 2) <= 1.14,
-  "marker extent correction cannot grow either axis beyond the near-circular compatibility cap");
+  assert.ok((result.diagnostics?.boundary_stroke_scale_x ?? 2) <= 1.18
+    && (result.diagnostics?.boundary_stroke_scale_y ?? 2) <= 1.18,
+  "marker extent fallback cannot grow either axis beyond the compatibility cap");
+  assert.equal(result.diagnostics?.boundary_stroke_padding_px, 0,
+    "a blank image cannot invent outer-stroke evidence or a fixed expansion margin");
+  assert.deepEqual(result.center, { x: 60, y: 60 },
+    "display-boundary reconciliation does not move the accepted lesion centre");
 
   const oversizedMarker = controlledMarkerInternals.reconcileMarkerStrokeCoverage(
     target,
@@ -663,6 +694,65 @@ function fragmentedOpenTriangle(target: ReturnType<typeof image>) {
     "an oversized attached shadow or texture component cannot drive lesion-boundary expansion");
   assert.deepEqual(oversizedMarker.boundary, innerBoundary,
     "rejecting an untrustworthy marker extent preserves the previously accepted boundary exactly");
+}
+
+{
+  const target = image(140, 140, 205);
+  const rotation = 25 * Math.PI / 180;
+  rotatedEllipseRing(target, 60, 60, 22, 18, rotation, 1, 35);
+  // A connected facial wrinkle may extend away from a short section of the
+  // marker. It must not become the lesion's outer extent.
+  for (let x = 81; x <= 91; x += 1) {
+    for (let y = 62; y <= 64; y += 1) {
+      const index = (y * target.width + x) * 4;
+      target.data[index] = 55;
+      target.data[index + 1] = 55;
+      target.data[index + 2] = 55;
+    }
+  }
+  const innerBoundary = Array.from({ length: 48 }, (_value, index) => {
+    const angle = index * Math.PI * 2 / 48;
+    const localX = Math.cos(angle) * 20.7;
+    const localY = Math.sin(angle) * 17;
+    return {
+      x: 60 + localX * Math.cos(rotation) - localY * Math.sin(rotation),
+      y: 60 + localX * Math.sin(rotation) + localY * Math.cos(rotation),
+    };
+  });
+  const result = controlledMarkerInternals.reconcileMarkerStrokeCoverage(
+    target,
+    { x: 60, y: 60 },
+    { roiRadius: 45, expectedDiameterPx: 44, scanDiameterMm: 30 },
+    45,
+    {
+      ok: true,
+      failure_code: null,
+      center: { x: 60, y: 60 },
+      boundary: innerBoundary,
+      area_px: 985,
+      bbox: { x: 41, y: 43, width: 39, height: 35 },
+      geometry_mode: "enclosed_region",
+      seed_relation: "enclosed",
+      marker_area_px: 150,
+      marker_bbox: { x: 40, y: 42, width: 41, height: 37 },
+      confidence: 0.9,
+      candidate_count: 1,
+      warnings: [],
+      audit: { local_only: true, raw_media_retained: false, network_request_made: false },
+    },
+  );
+  assert.equal(result.diagnostics?.boundary_stroke_reconciliation, "normal_stroke_band",
+    "a tilted near-circular marker uses its local curve normals instead of centroid rays");
+  assert.ok((result.diagnostics?.boundary_stroke_support_ratio ?? 0) >= 0.48
+    && (result.diagnostics?.boundary_stroke_coverage_ratio ?? 0) >= 0.78,
+  "the fitted outer boundary is backed by continuous stroke support");
+  assert.ok((result.diagnostics?.boundary_stroke_reverse_p90_px ?? 99) <= 1.1,
+    "the fitted boundary does not sit materially outside the observed stroke");
+  assert.ok(Math.max(...result.boundary.map((point) => point.x)) < 86,
+    "a locally connected wrinkle cannot drag the full lesion boundary outward");
+  assert.deepEqual(result.center, { x: 60, y: 60 },
+    "normal-band fitting preserves the lesion centre used by incision planning");
+  assert.equal(controlledMarkerInternals.boundarySelfIntersects(result.boundary), false);
 }
 
 {

@@ -123,7 +123,7 @@ assert.match(presentation.guardrailDetails.text, /肿物输入：缺少记录者
 assert.match(presentation.directionSource.text, /皱襞\/边界辅助线索：只读审阅，不参与几何/);
 assert.match(presentation.directionSource.text, /医生人工覆盖已记录/);
 assert.deepEqual(presentation.directionSource.classNames, ["warn"]);
-assert.equal(presentation.stageStatus, "");
+assert.equal(presentation.stageStatus, "已明确生成 2 次");
 
 const referencePresentation = buildIncisionResultPresentation({
   ...structuredClone({

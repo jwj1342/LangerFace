@@ -18,6 +18,7 @@ function walk(dir, predicate, out = []) {
 const allLegacyJs = walk(root, (file) => file.endsWith(".js"))
   .filter((file) => !file.includes(`${path.sep}node_modules${path.sep}`))
   .filter((file) => !file.includes(`${path.sep}dist${path.sep}`))
+  .filter((file) => !file.includes(`${path.sep}output${path.sep}`))
   .map((file) => path.relative(root, file).split(path.sep).join("/"));
 
 if (allLegacyJs.length) {

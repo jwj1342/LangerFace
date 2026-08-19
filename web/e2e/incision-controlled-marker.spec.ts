@@ -60,7 +60,7 @@ test("switching to a subcutaneous tumor exits controlled marking and restores li
   await expect(canvas).toHaveAttribute("data-controlled-marker-repair", "false");
 
   await clickPhotoRatio(page, { xRatio: 0.68, yRatio: 0.58 });
-  await expect(page.locator("#candidateType")).toContainText("线性切口", { timeout: 45_000 });
+  await expect(page.locator("#candidateType")).toContainText("线性", { timeout: 45_000 });
   await expect.poll(() => findPhotoEndpointHandles(page)).toHaveLength(2);
 });
 

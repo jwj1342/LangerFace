@@ -1492,8 +1492,10 @@ assert.ok(
   controller.includes("S.generationCount += 1") &&
   controller.includes("countGeneration: true") &&
   controller.includes("buildIncisionResultPresentation") &&
-  incisionPresenterService.includes("已明确生成 ${input.generationCount} 次"),
-  "incision runtime counts only explicit candidate generation while preserving automatic previews",
+  incisionPresenterService.includes("已明确生成 ${input.generationCount} 次") &&
+  incisionPresenterService.includes("stageStatus: generationLabel") &&
+  !incisionPresenterService.includes("自动预览"),
+  "incision runtime counts only explicit candidate generation without the removed automatic-preview banner",
 );
 assert.ok(
   incisionPresenterService.includes("BuildIncisionResultPresentationInput") &&

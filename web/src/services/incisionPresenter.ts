@@ -274,6 +274,7 @@ export function buildIncisionResultPresentation(
   const regionReasons = anatomy.confidence_reasons || [];
   const rstlDeviation = metrics.rstl_deviation_deg;
   const projectedRstlDeviation = metrics.projected_rstl_deviation_deg;
+  const generationLabel = input.generationCount ? `已明确生成 ${input.generationCount} 次` : "";
   const candidateMetrics = buildCandidateMetricPresentation(result);
   return {
     candidateType: candidateMetrics.candidateType,
@@ -317,6 +318,6 @@ export function buildIncisionResultPresentation(
       : String(result.next_step || "医生审阅、编辑或拒绝该候选。"),
     privacyState: "浏览器本地",
     privacyAudit: `不上传原始影像；${input.privacyAudit.local_workflow_fields?.length || 0} 类抽象字段只在浏览器确定性 workflow 内处理，不配置或调用远程模型。${input.privacyAudit.secondary_cues_present ? " 辅助线索仅随审阅导出，不参与几何。" : ""}`,
-    stageStatus: "",
+    stageStatus: generationLabel,
   };
 }

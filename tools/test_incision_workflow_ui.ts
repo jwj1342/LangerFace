@@ -70,6 +70,10 @@ assert.ok(tumorInputPanel.includes('useState("cutaneous")')
   && tumorInputPanel.includes('tumor.kind || "cutaneous"'),
 "cutaneous fusiform planning is the page default before and after the first runtime snapshot");
 assert.ok(
+  tumorInputPanel.indexOf('<option value="cutaneous">') < tumorInputPanel.indexOf('<option value="subcutaneous">'),
+  "cutaneous fusiform planning is also the first runtime select option",
+);
+assert.ok(
   tumorInputPanel.includes('const [margin, setMargin] = useState("0")'),
   "cutaneous safety margin defaults to zero until a clinician explicitly sets an expansion",
 );

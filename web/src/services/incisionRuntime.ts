@@ -482,7 +482,7 @@ async function boot(session: IncisionSessionToken) {
 
   renderSecondaryCuePanel();
   const restored = restoreWorkspaceSession();
-  if (!restored) setLesion(defaultLesion());
+  if (!restored) { els.tumorKind.value = "cutaneous"; setLesion(defaultLesion()); }
   fitSize();
   renderLoop();
   if (!restored) runWorkflow();

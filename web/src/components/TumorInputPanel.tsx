@@ -73,8 +73,8 @@ export function TumorInputPanel() {
           commands.tumor("kind_changed", value);
         }}
       >
-        <option value="subcutaneous">皮下肿物 · 线性切口</option>
         <option value="cutaneous">皮表肿物 · 梭形切口</option>
+        <option value="subcutaneous">皮下肿物 · 线性切口</option>
       </Select>
       <FieldGroup>
         <Label htmlFor="diameterMm">直径 mm <FieldValue id="diameterVal">{diameter}</FieldValue></Label>
