@@ -586,6 +586,97 @@
     gap: 12px;
   }
 
+  .incision-workbench .controlled-marker-scan-control {
+    display: grid;
+    grid-template-columns: auto 96px;
+    align-items: center;
+    gap: 8px;
+    min-width: 178px;
+    color: #dbeafe;
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .incision-workbench .controlled-marker-scan-control[hidden] {
+    display: none;
+  }
+
+  .incision-workbench #controlledMarkerScanDiameter {
+    --scan-progress: 16.6667%;
+    --scan-thumb-offset: -4.6667px;
+    appearance: none;
+    width: 96px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: linear-gradient(
+      to right,
+      #0f62fe 0,
+      #0f62fe var(--scan-progress),
+      #efefef var(--scan-progress),
+      #efefef 100%
+    ) center / 100% 6px no-repeat;
+    cursor: pointer;
+    overflow: visible;
+  }
+
+  .incision-workbench #controlledMarkerScanDiameter::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 6px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+  }
+
+  .incision-workbench #controlledMarkerScanDiameter::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -4px;
+    border: 0;
+    border-radius: 50%;
+    background: #0f62fe;
+    transform: translateX(var(--scan-thumb-offset));
+  }
+
+  .incision-workbench #controlledMarkerScanDiameter::-moz-range-track {
+    width: 100%;
+    height: 6px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+  }
+
+  .incision-workbench #controlledMarkerScanDiameter::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border: 0;
+    border-radius: 50%;
+    background: #0f62fe;
+    transform: translateX(var(--scan-thumb-offset));
+  }
+
+  .incision-workbench #stageStatus {
+    min-width: 0;
+    max-width: min(760px, 48vw);
+    color: #dbe4ee;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .incision-workbench #stageStatus[data-tone="warning"] {
+    color: #fde68a;
+  }
+
+  .incision-workbench #stageStatus:empty {
+    display: none;
+  }
+
   .incision-workbench .workbench-note {
     font-size: 11px;
     color: var(--muted);
@@ -1026,8 +1117,89 @@
     cursor: grabbing;
   }
 
+  .incision-workbench #incisionPhotoCanvas[data-controlled-marker="true"],
+  .incision-workbench #incisionPhotoCanvas[data-controlled-marker="true"]:active {
+    cursor: crosshair;
+  }
+
+  .incision-workbench #incisionPhotoCanvas[data-controlled-marker-repair="true"],
+  .incision-workbench #incisionPhotoCanvas[data-controlled-marker-repair="true"]:active {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M4 20l4.2-1 10.7-10.7-3.2-3.2L5 15.8z' fill='%2322d3ee' stroke='%23070a0f' stroke-width='1.5'/%3E%3C/svg%3E") 3 21, crosshair;
+  }
+
+  @keyframes controlled-marker-recovery-attention {
+    0%, 100% {
+      border-color: rgb(71 85 105 / 0.85);
+      box-shadow: none;
+    }
+    50% {
+      border-color: #facc15;
+      box-shadow: 0 0 0 2px rgb(250 204 21 / 0.28), 0 0 12px rgb(250 204 21 / 0.32);
+    }
+  }
+
+  .incision-workbench .controlled-marker-scan-control.controlled-marker-recovery-attention,
+  .incision-workbench #controlledMarkerRepairBtn.controlled-marker-recovery-attention:not(:disabled) {
+    border-radius: 6px;
+    animation: controlled-marker-recovery-attention 1s ease-in-out 2;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .incision-workbench .controlled-marker-scan-control.controlled-marker-recovery-attention,
+    .incision-workbench #controlledMarkerRepairBtn.controlled-marker-recovery-attention:not(:disabled) {
+      animation: none;
+      border-color: #facc15;
+      box-shadow: 0 0 0 2px rgb(250 204 21 / 0.28);
+    }
+  }
+
+  .incision-workbench #incisionPhotoCanvas[aria-busy="true"],
+  .incision-workbench #incisionPhotoCanvas[aria-busy="true"]:active {
+    cursor: progress;
+  }
+
   .incision-workbench #incisionPhotoCanvas:not([data-active="true"]) {
     display: none;
+  }
+
+  .incision-workbench #incisionCandidateCanvas {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .incision-workbench .controlled-marker-scan-overlay {
+    position: absolute;
+    z-index: 4;
+    box-sizing: border-box;
+    transform: translate(-50%, -50%);
+    border: 2px solid rgb(56 189 248 / 0.92);
+    border-radius: 50%;
+    background: rgb(56 189 248 / 0.08);
+    box-shadow: 0 0 0 1px rgb(8 15 24 / 0.9), inset 0 0 0 1px rgb(255 255 255 / 0.18);
+    pointer-events: none;
+  }
+
+  .incision-workbench .controlled-marker-scan-overlay[hidden] {
+    display: none;
+  }
+
+  .incision-workbench .controlled-marker-scan-overlay > span {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 6px);
+    transform: translateX(-50%);
+    padding: 3px 6px;
+    border-radius: 4px;
+    background: rgb(8 15 24 / 0.88);
+    color: #e0f2fe;
+    font-size: 11px;
+    font-weight: 750;
+    line-height: 1;
+    white-space: nowrap;
   }
 
   .incision-workbench #incisionPhotoCanvas[data-active="true"] ~ .incision-stage-boundary {
@@ -1037,7 +1209,7 @@
   .incision-workbench .incision-photo-endpoint-layer {
     position: absolute;
     inset: 0;
-    z-index: 2;
+    z-index: 3;
     pointer-events: none;
   }
 
@@ -1056,13 +1228,38 @@
     touch-action: none;
   }
 
+  .incision-workbench #incisionPhotoCanvas[data-controlled-marker="true"]
+    ~ .incision-photo-endpoint-layer .incision-photo-endpoint-handle {
+    pointer-events: none;
+  }
+
+  .incision-workbench .incision-photo-endpoint-handle::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 6px;
+    height: 6px;
+    transform: translate(-50%, -50%);
+    border: 1.5px solid #0f172a;
+    border-radius: 50%;
+    background: #f8fafc;
+    box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.9);
+    box-sizing: border-box;
+  }
+
+  .incision-workbench .incision-photo-endpoint-handle:focus-visible::after,
+  .incision-workbench .incision-photo-endpoint-handle:hover::after {
+    box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.95);
+  }
+
   .incision-workbench .incision-photo-endpoint-handle:active {
     cursor: grabbing;
   }
 
   .incision-workbench .photo-planning-status {
     position: absolute;
-    z-index: 3;
+    z-index: 4;
     top: 16px;
     left: 16px;
     max-width: min(560px, calc(100% - 32px));
@@ -1631,6 +1828,27 @@
   accent-color: var(--clinical-accent);
 }
 
+/* Keep the controlled-marker scan rail on its compact established style.
+   This unlayered override must follow the generic dark input background. */
+.incision-workbench #controlledMarkerScanDiameter {
+  width: 96px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background-color: transparent;
+  background-image: linear-gradient(
+    to right,
+    #0f62fe 0,
+    #0f62fe var(--scan-progress),
+    #efefef var(--scan-progress),
+    #efefef 100%
+  );
+  background-position: center;
+  background-size: 100% 6px;
+  background-repeat: no-repeat;
+}
+
 /* These unlayered overrides intentionally follow legacy style imports.
    They keep active clinical controls visually distinct from disabled controls. */
 .clinical-compat-workbench input:not([type="range"]):not([type="checkbox"]),
@@ -1837,15 +2055,27 @@ body:has(.dark-workbench-page) {
   .incision-workbench .stage-top {
     gap: 8px;
     padding-inline: 12px;
+    height: auto;
+    min-height: 56px;
+    align-items: flex-start;
   }
 
   .incision-workbench .stage-actions {
     min-width: 0;
     gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .incision-workbench .stage-top {
+    flex-wrap: wrap;
   }
 
   .incision-workbench #stageStatus {
-    display: none;
+    display: block;
+    order: -1;
+    flex: 1 0 100%;
+    max-width: none;
+    padding: 2px 0 0;
   }
 
   .incision-workbench .metric-grid {
@@ -1892,4 +2122,26 @@ body:has(.dark-workbench-page) {
   background: var(--clinical-accent);
   color: #f4f7fb;
   box-shadow: none;
+}
+
+.clinical-compat-workbench.incision-workbench #stageStatus {
+  color: #dbe4ee;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.clinical-compat-workbench.incision-workbench #stageStatus[data-tone="warning"] {
+  color: #fde68a;
+}
+
+@media (max-width: 680px) {
+  .clinical-compat-workbench.incision-workbench .stage-top {
+    height: auto;
+    flex: 0 0 auto;
+    min-height: 56px;
+    align-items: flex-start;
+  }
 }

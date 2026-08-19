@@ -3,10 +3,19 @@ import { requireScopedElement, requireScopedQuery } from "../lib/scopedDom";
 export interface IncisionDomElements extends Record<string, any> {
   canvas: HTMLCanvasElement;
   photoCanvas: HTMLCanvasElement;
+  photoCandidateCanvas: HTMLCanvasElement;
   photoEndpointHandles: NodeListOf<HTMLButtonElement>;
+  photoUploadLabel: HTMLLabelElement;
   photoInput: HTMLInputElement;
   controlledMarkerDetect: HTMLButtonElement;
-  controlledMarkerConfirm: HTMLButtonElement;
+  controlledMarkerScanControl: HTMLElement;
+  controlledMarkerScanDiameter: HTMLInputElement;
+  controlledMarkerScanValue: HTMLOutputElement;
+  controlledMarkerRepair: HTMLButtonElement;
+  controlledMarkerRepairUndo: HTMLButtonElement;
+  controlledMarkerRepairClear: HTMLButtonElement;
+  controlledMarkerScanOverlay: HTMLElement;
+  controlledMarkerScanOverlayLabel: HTMLElement;
   photoMirror: HTMLButtonElement;
   photoReset: HTMLButtonElement;
   surfaceMode: HTMLButtonElement;
@@ -106,10 +115,19 @@ export function collectIncisionElements(root: ParentNode | Document = document):
   return {
     canvas: byId<HTMLCanvasElement>(root, "incisionCanvas"),
     photoCanvas: byId<HTMLCanvasElement>(root, "incisionPhotoCanvas"),
+    photoCandidateCanvas: byId<HTMLCanvasElement>(root, "incisionCandidateCanvas"),
     photoEndpointHandles: root.querySelectorAll<HTMLButtonElement>(".incision-photo-endpoint-handle"),
+    photoUploadLabel: byId<HTMLLabelElement>(root, "incisionPhotoUploadLabel"),
     photoInput: byId<HTMLInputElement>(root, "incisionPhotoInput"),
     controlledMarkerDetect: byId<HTMLButtonElement>(root, "controlledMarkerDetectBtn"),
-    controlledMarkerConfirm: byId<HTMLButtonElement>(root, "controlledMarkerConfirmBtn"),
+    controlledMarkerScanControl: requireScopedQuery<HTMLElement>(root, ".controlled-marker-scan-control"),
+    controlledMarkerScanDiameter: byId<HTMLInputElement>(root, "controlledMarkerScanDiameter"),
+    controlledMarkerScanValue: byId<HTMLOutputElement>(root, "controlledMarkerScanValue"),
+    controlledMarkerRepair: byId<HTMLButtonElement>(root, "controlledMarkerRepairBtn"),
+    controlledMarkerRepairUndo: byId<HTMLButtonElement>(root, "controlledMarkerRepairUndoBtn"),
+    controlledMarkerRepairClear: byId<HTMLButtonElement>(root, "controlledMarkerRepairClearBtn"),
+    controlledMarkerScanOverlay: byId(root, "controlledMarkerScanOverlay"),
+    controlledMarkerScanOverlayLabel: byId(root, "controlledMarkerScanOverlayLabel"),
     photoMirror: byId<HTMLButtonElement>(root, "incisionPhotoMirrorBtn"),
     photoReset: byId<HTMLButtonElement>(root, "incisionPhotoResetBtn"),
     surfaceMode: byId<HTMLButtonElement>(root, "incisionSurfaceModeBtn"),

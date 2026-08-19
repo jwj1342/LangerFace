@@ -16,11 +16,11 @@ import { RangeInput } from "./ui/slider";
 export function TumorInputPanel() {
   const commands = useIncisionControllerCommands();
   const snapshot = useIncisionStore((state) => state.snapshot);
-  const [kind, setKind] = useState("subcutaneous");
+  const [kind, setKind] = useState("cutaneous");
   const [diameter, setDiameter] = useState("12");
   const [author, setAuthor] = useState("clinician");
   const [depth, setDepth] = useState("6");
-  const [margin, setMargin] = useState("2");
+  const [margin, setMargin] = useState("0");
   const [boundaryMode, setBoundaryMode] = useState("ellipse");
   const [ellipseRatio, setEllipseRatio] = useState("70");
   const [boundaryActive, setBoundaryActive] = useState(false);
@@ -34,7 +34,7 @@ export function TumorInputPanel() {
   useEffect(() => {
     const tumor = snapshot?.tumor;
     if (!tumor) return;
-    setKind(tumor.kind || "subcutaneous");
+    setKind(tumor.kind || "cutaneous");
     if (tumor.author) setAuthor(tumor.author);
     if (tumor.diameterMm != null) setDiameter(String(tumor.diameterMm));
     if (tumor.kind === "subcutaneous" && tumor.depthMm != null) setDepth(String(tumor.depthMm));
@@ -73,8 +73,8 @@ export function TumorInputPanel() {
           commands.tumor("kind_changed", value);
         }}
       >
-        <option value="subcutaneous">皮下肿物 · 线性切口</option>
         <option value="cutaneous">皮表肿物 · 梭形切口</option>
+        <option value="subcutaneous">皮下肿物 · 线性切口</option>
       </Select>
       <FieldGroup>
         <Label htmlFor="diameterMm">直径 mm <FieldValue id="diameterVal">{diameter}</FieldValue></Label>

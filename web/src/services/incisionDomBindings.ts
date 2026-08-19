@@ -9,6 +9,8 @@ interface PointerDragState {
   moved: number;
   id: number;
   handle?: number | null;
+  pickOnly?: boolean;
+  repairStroke?: boolean;
 }
 
 export interface IncisionDomEventHandlers {
@@ -56,7 +58,16 @@ export interface IncisionDomEventHandlers {
   onSecondaryCueFile(file?: File): void;
   onPhotoFile(file?: File): void;
   onControlledMarkerDetect(): void;
-  onControlledMarkerConfirm(): void;
+  onControlledMarkerScanInput(): void;
+  onControlledMarkerRepair(): void;
+  onControlledMarkerRepairUndo(): void;
+  onControlledMarkerRepairClear(): void;
+  onControlledMarkerRepairPointerDown(event: PointerEvent): boolean;
+  onControlledMarkerRepairPointerMove(event: PointerEvent): void;
+  onControlledMarkerRepairPointerUp(event: PointerEvent): void;
+  onControlledMarkerRepairPointerCancel(): void;
+  onControlledMarkerPointerMove(event: PointerEvent): void;
+  onControlledMarkerPointerLeave(): void;
   preparePhotoInteraction(): void;
   photoEndpointHandleFromEvent(event: PointerEvent): number | null;
   dragPhotoEndpoint(event: PointerEvent, handle: number): void;
@@ -214,17 +225,35 @@ export function bindIncisionDomEvents({
 
   listen(elements.photoCanvas, "pointerdown", ((event: PointerEvent) => {
     handlers.preparePhotoInteraction();
+    const repairStroke = handlers.onControlledMarkerRepairPointerDown(event);
+    const pickOnly = elements.controlledMarkerDetect.getAttribute("aria-pressed") === "true";
     photoDrag = {
       x: event.clientX,
       y: event.clientY,
       moved: 0,
       id: event.pointerId,
-      handle: handlers.photoEndpointHandleFromEvent(event),
+      handle: pickOnly ? null : handlers.photoEndpointHandleFromEvent(event),
+      pickOnly,
+      repairStroke,
     };
     elements.photoCanvas.setPointerCapture(event.pointerId);
   }) as EventListener);
   listen(elements.photoCanvas, "pointermove", ((event: PointerEvent) => {
+    handlers.onControlledMarkerPointerMove(event);
     if (!photoDrag || event.pointerId !== photoDrag.id) return;
+    if (photoDrag.repairStroke) {
+      handlers.onControlledMarkerRepairPointerMove(event);
+      photoDrag.moved += Math.abs(event.clientX - photoDrag.x) + Math.abs(event.clientY - photoDrag.y);
+      photoDrag.x = event.clientX;
+      photoDrag.y = event.clientY;
+      return;
+    }
+    if (photoDrag.pickOnly) {
+      photoDrag.moved += Math.abs(event.clientX - photoDrag.x) + Math.abs(event.clientY - photoDrag.y);
+      photoDrag.x = event.clientX;
+      photoDrag.y = event.clientY;
+      return;
+    }
     if (photoDrag.handle != null) {
       handlers.dragPhotoEndpoint(event, photoDrag.handle);
       photoDrag.moved += Math.abs(event.clientX - photoDrag.x) + Math.abs(event.clientY - photoDrag.y);
@@ -241,12 +270,22 @@ export function bindIncisionDomEvents({
   }) as EventListener);
   listen(elements.photoCanvas, "pointerup", ((event: PointerEvent) => {
     const endpointDrag = photoDrag?.handle != null;
-    if (photoDrag && event.pointerId === photoDrag.id && photoDrag.moved < 6 && !endpointDrag) handlers.onPhotoPick(event);
+    if (photoDrag?.repairStroke && event.pointerId === photoDrag.id) {
+      handlers.onControlledMarkerRepairPointerUp(event);
+      photoDrag = null;
+      return;
+    }
+    if (photoDrag && event.pointerId === photoDrag.id
+      && (photoDrag.pickOnly || photoDrag.moved < 6) && !endpointDrag) handlers.onPhotoPick(event);
     if (endpointDrag && (photoDrag?.moved || 0) >= 1) handlers.commitPhotoEndpointDrag();
     photoDrag = null;
   }) as EventListener);
   listen(elements.photoCanvas, "pointercancel", (() => {
+    if (photoDrag?.repairStroke) handlers.onControlledMarkerRepairPointerCancel();
     photoDrag = null;
+  }) as EventListener);
+  listen(elements.photoCanvas, "pointerleave", (() => {
+    handlers.onControlledMarkerPointerLeave();
   }) as EventListener);
   listen(elements.photoCanvas, "wheel", ((event: WheelEvent) => {
     event.preventDefault();
@@ -350,7 +389,10 @@ export function bindIncisionDomEvents({
     handlers.onPhotoFile(fileFromEvent(event));
   }) as EventListener);
   action(elements.controlledMarkerDetect, "click", handlers.onControlledMarkerDetect);
-  action(elements.controlledMarkerConfirm, "click", handlers.onControlledMarkerConfirm);
+  action(elements.controlledMarkerScanDiameter, "input", handlers.onControlledMarkerScanInput);
+  action(elements.controlledMarkerRepair, "click", handlers.onControlledMarkerRepair);
+  action(elements.controlledMarkerRepairUndo, "click", handlers.onControlledMarkerRepairUndo);
+  action(elements.controlledMarkerRepairClear, "click", handlers.onControlledMarkerRepairClear);
   action(elements.photoMirror, "click", handlers.onPhotoMirror);
   action(elements.photoReset, "click", handlers.onPhotoReset);
   action(elements.surfaceMode, "click", handlers.onSurfaceMode);

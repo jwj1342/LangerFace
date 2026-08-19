@@ -46,7 +46,7 @@ async function waitForWorkbench(page: Page) {
   await page.goto("/app/incision");
   await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
   await expect(page.locator("#candidateType")).not.toHaveText("—");
-  await expect(page.locator("#stageStatus")).toContainText("自动预览");
+  await expect(page.locator("#stageStatus")).toHaveText("");
 }
 
 async function clearCapturedSnapshots(page: Page) {
@@ -164,11 +164,13 @@ test("only the explicit generation button increments the candidate generation co
   await page.locator("#runWorkflowBtn").click();
   await expect(page.locator("#stageStatus")).toContainText("已明确生成 1 次");
 
+  const initialTumorKind = String(parametersBefore[0]);
   await page.locator("#tumorKind").selectOption("cutaneous");
   await expect(page.locator("#stageStatus")).toContainText("已明确生成 1 次");
   await expect(page.locator("#stageStatus")).not.toContainText("已明确生成 2 次");
   await page.locator("#tumorKind").selectOption("subcutaneous");
   await expect(page.locator("#stageStatus")).toContainText("已明确生成 1 次");
+  await page.locator("#tumorKind").selectOption(initialTumorKind);
 
   await page.locator("#runWorkflowBtn").click();
   await expect(page.locator("#stageStatus")).toContainText("已明确生成 2 次");

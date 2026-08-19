@@ -11,6 +11,8 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
 产品承诺、明确暂缓项与未来重启条件由
 [`clinical/PRODUCT_BOUNDARIES.md`](../clinical/PRODUCT_BOUNDARIES.md) 维护；本文只跟踪 open issue 状态。
 
+当前 Stage 2 执行口径采用方案 B：主开发与阶段联合验收只覆盖近似圆形（允许轻度椭圆）的皮表肿物，明显狭长椭圆不自动纳入，优先收敛规范梭形视觉、完整覆盖、RSTL 方向和既有医学边界。复杂不规则、明显缺口、补线与自由轮廓能力保留但不再驱动主线排期；黑痣/黑点识别没有新授权。若 GitHub issue 的宽范围文字与此口径不同，不得据此自动扩大当前任务，须先获得新的范围确认。
+
 ## 临床出口
 
 - [ ] 临床医生校验线图谱并置 `validated:true`（Stage 1 出口）— [#2](https://github.com/jwj1342/LangerFace/issues/2)

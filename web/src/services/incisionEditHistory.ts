@@ -68,6 +68,22 @@ export function incisionEditsEqual(
   );
 }
 
+function incisionEditParametersEqual(
+  first: Partial<IncisionEdit>,
+  second: Partial<IncisionEdit>,
+): boolean {
+  return incisionEditsEqual(
+    { ...first, reason: "" },
+    { ...second, reason: "" },
+  );
+}
+
+const EDIT_TRANSACTION_DRAFT_INTERACTIONS = new Set([
+  "control_change",
+  "endpoint_drag",
+  "photo_endpoint_drag",
+]);
+
 export function incisionEditIsActive(
   edit: Partial<IncisionEdit> = neutralIncisionEdit(),
 ): boolean {
@@ -100,7 +116,7 @@ export class IncisionEditHistory {
     const committedSource = rawCommitted.some((entry) => incisionEditIsActive(entry))
       ? rawCommitted
       : rawCommitted.filter((entry) => incisionEditIsActive(entry));
-    const committed = committedSource.map((entry, index) => ({
+    const committed: IncisionEditHistoryEntry[] = committedSource.map((entry, index) => ({
       ...cloneIncisionEdit(entry),
       source: "web/incision_workflow",
       interaction: entry.interaction || "committed_control_edit",
@@ -149,6 +165,35 @@ export class IncisionEditHistory {
     this.timeline.push(entry);
     this.cursor = this.timeline.length - 1;
     return true;
+  }
+
+  commitTransaction(
+    edit: Partial<IncisionEdit>,
+    interaction = "control_change",
+    committedAt = new Date().toISOString(),
+  ): boolean {
+    const entry: IncisionEditHistoryEntry = {
+      ...cloneIncisionEdit(edit),
+      interaction,
+      committed_at: committedAt,
+    };
+    const current = this.timeline[this.cursor] || neutralIncisionEdit();
+    if (incisionEditsEqual(entry, current)) return false;
+
+    const currentInteraction = String(current.interaction || "");
+    const canUpdateDraft = EDIT_TRANSACTION_DRAFT_INTERACTIONS.has(interaction)
+      && this.cursor > 0
+      && EDIT_TRANSACTION_DRAFT_INTERACTIONS.has(currentInteraction);
+    const canCoalesceReason = interaction === "reason_change"
+      && this.cursor > 0
+      && (EDIT_TRANSACTION_DRAFT_INTERACTIONS.has(currentInteraction) || currentInteraction === "reason_change")
+      && incisionEditParametersEqual(entry, current);
+    if (canUpdateDraft || canCoalesceReason) {
+      this.timeline = this.timeline.slice(0, this.cursor + 1);
+      this.timeline[this.cursor] = entry;
+      return true;
+    }
+    return this.commit(edit, interaction, committedAt);
   }
 
   undo(): IncisionEdit | null {

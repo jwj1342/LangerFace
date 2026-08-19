@@ -20,7 +20,7 @@ export interface IncisionCommandActions {
   applyTumorControl(command: IncisionTumorCommand, value?: string | number): unknown;
   resetBoundaryForTumorKind(): unknown;
   setBoundaryInactive(): unknown;
-  updateFormVisibility(): unknown;
+  updateFormVisibility(kind?: "subcutaneous" | "cutaneous"): unknown;
   publish(reason: string): unknown;
   previewWorkflow(): unknown;
   updateTumorRing(): unknown;
@@ -66,7 +66,7 @@ export class IncisionCommandRouter {
     switch (command) {
       case "kind_changed":
         this.actions.resetBoundaryForTumorKind();
-        this.actions.updateFormVisibility();
+        this.actions.updateFormVisibility(value as "subcutaneous" | "cutaneous");
         this.actions.publish("tumor_kind_changed");
         this.actions.previewWorkflow();
         return true;

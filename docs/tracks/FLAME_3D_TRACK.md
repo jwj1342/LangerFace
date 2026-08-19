@@ -85,7 +85,7 @@ bary 迁移保证线条落在解剖对应位置、方向随曲面形变。但「
 ## 10. 与切口工作台的边界
 
 `/incision`（兼容地址 `/app/incision`）不再是 FLAME consumer。切口工作台只接受 `mediapipe-468` RSTL，
-优先消费 `/personalized` 的 YOLO/V6 个体化图谱，并在没有合格个体化图谱时明确降级到标准先验。
+优先消费 `/personalized` 的 YOLO/V6 个体化图谱；没有合格个体化图谱时切换到标准先验，并保留来源记录。
 
 - `flameHeadAssets.ts`、`standardFaceAssets.ts`、离线拟合工具和 3D 标注器仍属于独立研究范围；它们不是
   切口运行时依赖，也不能向切口页暂存 `flame-2023` 图谱。

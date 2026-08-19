@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 
 const compatibilityHtml = fs.readFileSync("incision_workflow.html", "utf8");
 const legacyAgenticCompatibilityHtml = fs.readFileSync("incision_agent.html", "utf8");
+const tumorInputPanel = fs.readFileSync("src/components/TumorInputPanel.tsx", "utf8");
 function normalizeTsxContracts(source) {
   return source.replace(/id:\s*"([^"]+)"/g, 'id="$1"');
 }
@@ -12,7 +13,7 @@ const html = normalizeTsxContracts([
   fs.readFileSync("src/routes/IncisionWorkbench.tsx", "utf8"),
   fs.readFileSync("src/components/IncisionStatePanel.tsx", "utf8"),
   fs.readFileSync("src/components/IncisionStagePanel.tsx", "utf8"),
-  fs.readFileSync("src/components/TumorInputPanel.tsx", "utf8"),
+  tumorInputPanel,
   fs.readFileSync("src/components/SecondaryCuePanel.tsx", "utf8"),
   fs.readFileSync("src/components/CandidateResultPanel.tsx", "utf8"),
   fs.readFileSync("src/components/EditControlsPanel.tsx", "utf8"),
@@ -26,6 +27,8 @@ const js = [
 ].join("\n");
 const clinicalCopy = fs.readFileSync("src/services/incisionClinicalCopy.ts", "utf8");
 const reviewPolicy = fs.readFileSync("src/services/incisionReviewPolicy.ts", "utf8");
+const snapshots = fs.readFileSync("src/services/incisionSnapshots.ts", "utf8");
+const styles = fs.readFileSync("src/styles.css", "utf8");
 const atlasSource = fs.readFileSync("src/services/incisionAtlasSource.ts", "utf8");
 const tools = [
   fs.readFileSync("src/services/incisionToolRules.ts", "utf8"),
@@ -58,7 +61,23 @@ assert.ok(html.includes('id="exportTumorBtn"'), "workbench exposes tumor export 
 assert.ok(html.includes('id="importTumorBtn"'), "workbench exposes tumor import button");
 assert.ok(html.includes('id="tumorImportFile"'), "workbench exposes hidden tumor import file input");
 assert.ok(html.includes('id="controlledMarkerDetectBtn"'), "photo workbench exposes seeded controlled-marker detection");
-assert.ok(html.includes('id="controlledMarkerConfirmBtn"'), "photo workbench requires a separate marker confirmation action");
+assert.ok(html.includes('id="controlledMarkerRepairBtn"')
+  && html.includes('id="controlledMarkerRepairUndoBtn"')
+  && html.includes('id="controlledMarkerRepairClearBtn"')
+  && html.includes("人工补线"),
+"photo workbench exposes persistent repair, undo, and clear actions for incomplete visible boundaries");
+assert.ok(tumorInputPanel.includes('useState("cutaneous")')
+  && tumorInputPanel.includes('tumor.kind || "cutaneous"'),
+"cutaneous fusiform planning is the page default before and after the first runtime snapshot");
+assert.ok(
+  tumorInputPanel.indexOf('<option value="cutaneous">') < tumorInputPanel.indexOf('<option value="subcutaneous">'),
+  "cutaneous fusiform planning is also the first runtime select option",
+);
+assert.ok(
+  tumorInputPanel.includes('const [margin, setMargin] = useState("0")'),
+  "cutaneous safety margin defaults to zero until a clinician explicitly sets an expansion",
+);
+assert.ok(!html.includes('id="controlledMarkerConfirmBtn"'), "controlled marker applies on click without a second confirmation action");
 assert.ok(html.includes('id="secondaryCueState"'), "workbench exposes secondary cue status");
 assert.ok(html.includes('id="importSecondaryCueBtn"'), "workbench exposes secondary cue import action");
 assert.ok(html.includes('id="secondaryCueImportFile"'), "workbench exposes hidden secondary cue import file input");
@@ -126,7 +145,16 @@ assert.ok(photoRuntime.includes("shouldClearFreehandBoundaryOnLesionRepick"), "p
 assert.ok(photoRuntime.includes("state.boundaryPoints = []") && photoRuntime.includes("state.boundaryRefs = []"),
   "photo lesion repicks clear stale freehand points and surface references");
 assert.ok(photoRuntime.includes("normalizeLesionDetectionAdapter"), "controlled marker results enter the shared lesion adapter");
+assert.ok(photoRuntime.includes("manual_boundary_repair")
+  && photoRuntime.includes("drawControlledMarkerRepairs")
+  && photoRuntime.includes("clearControlledMarkerRepairStrokes")
+  && photoRuntime.includes("promptControlledMarkerRecovery")
+  && photoRuntime.includes("请勿凭空改写肿物边界"),
+"manual repair is persistent, locally composited, explicitly clearable, and recorded in provenance warnings");
 assert.ok(photoRuntime.includes("confirmed.eligible_for_candidate"), "invalid confirmed marker inputs cannot generate candidates");
+assert.ok(photoRuntime.includes("syncTumorKindGuard")
+  && js.includes("photoRuntime?.syncTumorKindGuard(kind)"),
+"tumor-kind changes and imported subcutaneous records immediately synchronize the controlled-marker gate");
 assert.ok(photoRuntime.includes("state.result?.candidate_display_blocked"),
   "photo planning hides endpoint handles when every candidate has an engineering hard block");
 assert.ok(controlledMarkerDetection.includes("network_request_made: false"), "controlled marker detection records local-only execution");
@@ -134,6 +162,13 @@ assert.ok(workspaceSessionService.includes("incision-workspace-session/v1"), "ro
 assert.ok(js.includes("restoreWorkspaceSession"), "the incision runtime restores the logical workspace after remount");
 assert.ok(js.includes("workflowRequestId"), "stale asynchronous workflow results cannot replace a newer tumor context");
 assert.ok(incisionSnapshotsService.includes("buildIncisionControllerSnapshot"), "shared incision snapshot service owns React snapshot construction");
+assert.ok(snapshots.includes("stageStatusTone"), "incision snapshots carry explicit normal/warning status semantics");
+assert.ok(html.includes('data-tone={snapshot?.stageStatusTone || "normal"}'), "incision stage renders the global status tone");
+assert.ok(js.includes("stageStatusTone: els.stageStatus?.dataset.tone"), "runtime publishes the global status tone");
+assert.ok(styles.includes('#stageStatus[data-tone="warning"]') && styles.includes("font-size: 14px"),
+  "global warning status is visually prominent and readable");
+assert.ok(styles.includes('#stageStatus:empty') && styles.includes("display: none"),
+  "empty global status is hidden without removing the live status element");
 assert.ok(incisionSnapshotsService.includes("buildIncisionSavedCandidateSummaries"), "shared incision snapshot service owns saved candidate summaries");
 assert.ok(incisionSnapshotsService.includes("IncisionPlanResultLike"), "shared incision snapshot service types candidate result inputs");
 assert.ok(incisionSnapshotsService.includes("IncisionSavedCandidateRecordLike"), "shared incision snapshot service types saved candidate record inputs");
@@ -235,7 +270,7 @@ assert.ok(!js.includes('event === "execution_event"'), "workbench does not consu
 assert.ok(!js.includes('event === "react_plan"'), "workbench does not consume model planning events");
 assert.ok(incisionReviewRecordsService.includes("工作流执行事件"), "markdown report includes workflow execution event status");
 assert.ok(js.includes("完整 workflow trace 已写入 DevTools Console"), "sidebar points reviewers to console for full workflow trace");
-assert.ok(js.includes("浏览器确定性 workflow 已更新候选"), "workbench reports browser workflow updates");
+assert.ok(!js.includes("浏览器确定性 workflow 已更新候选"), "workbench omits redundant browser workflow update copy");
 assert.ok(js.includes("const requestId = ++S.workflowRequestId"),
   "workflow requests receive monotonically increasing ids");
 assert.ok(js.includes("if (requestId !== S.workflowRequestId) return"),

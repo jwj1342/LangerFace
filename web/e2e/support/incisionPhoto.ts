@@ -12,6 +12,12 @@ const FACE_VIDEO_WEBM = readFileSync(new URL(
   import.meta.url,
 ), "utf8").trim();
 
+export interface ControlledMarkerFixture {
+  xRatio: number;
+  yRatio: number;
+  radiusRatio?: number;
+}
+
 export async function uploadGeneratedPhoto(
   page: Page,
   mode: "single" | "multiple" | "blank",
@@ -63,6 +69,65 @@ export async function uploadGeneratedPhoto(
     input.files = transfer.files;
     input.dispatchEvent(new Event("change", { bubbles: true }));
   }, { base64: FACE_PAIR_JPEG, uploadMode: mode, selector: inputSelector });
+}
+
+export async function uploadGeneratedPhotoWithControlledMarkers(
+  page: Page,
+  markers: ControlledMarkerFixture[],
+  inputSelector = "#incisionPhotoInput",
+) {
+  await page.evaluate(async ({ base64, markerFixtures, selector }) => {
+    const input = document.querySelector<HTMLInputElement>(selector);
+    if (!input) throw new Error("incision photo input is missing");
+
+    const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/jpeg" }));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.floor(bitmap.width / 2);
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("controlled-marker fixture context is missing");
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+
+    for (const marker of markerFixtures) {
+      const radius = Math.max(14, canvas.width * (marker.radiusRatio ?? 0.043));
+      context.save();
+      context.beginPath();
+      context.ellipse(
+        canvas.width * marker.xRatio,
+        canvas.height * marker.yRatio,
+        radius,
+        radius * 0.82,
+        0.12,
+        0,
+        Math.PI * 2,
+      );
+      context.strokeStyle = "#160d0a";
+      context.lineWidth = Math.max(5, canvas.width * 0.008);
+      context.lineCap = "round";
+      context.lineJoin = "round";
+      context.stroke();
+      context.restore();
+    }
+
+    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(
+      (value) => value ? resolve(value) : reject(new Error("controlled-marker PNG encoding failed")),
+      "image/png",
+    ));
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([blob], "controlled-marker-face.png", { type: "image/png" }));
+    input.files = transfer.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }, { base64: FACE_PAIR_JPEG, markerFixtures: markers, selector: inputSelector });
+}
+
+export async function clickPhotoRatio(page: Page, point: { xRatio: number; yRatio: number }) {
+  const canvas = page.locator("#incisionPhotoCanvas");
+  await expect(canvas).toHaveAttribute("data-active", "true");
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("incision photo canvas has no layout box");
+  await canvas.click({ position: { x: box.width * point.xRatio, y: box.height * point.yRatio } });
 }
 
 export async function pickSafePhotoCheek(page: Page) {

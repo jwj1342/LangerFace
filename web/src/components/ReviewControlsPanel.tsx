@@ -72,7 +72,7 @@ export function ReviewControlsPanel() {
       >
         保存所选审阅状态
       </Button>
-      <WorkbenchNote>确认只代表进入研究审阅记录，不是手术指令；候选几何一旦调整，审阅状态会回到待确认。</WorkbenchNote>
+      <WorkbenchNote>确认只代表进入研究审阅记录，不是手术指令；候选几何一旦调整，审阅状态会回到待确认。非标准比例参考需记录皮肤松弛度及自然对合情况；视野受限参考需补充另一视角并复核隐藏区域。两类结果均只保存为待确认草案，不进入实时叠加。</WorkbenchNote>
     </WorkbenchCard>
   );
 }

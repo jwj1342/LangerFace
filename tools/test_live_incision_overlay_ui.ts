@@ -3,14 +3,15 @@ import fs from "node:fs";
 import assert from "node:assert/strict";
 
 const compatibilityHtml = fs.readFileSync("index.html", "utf8");
+const liveRoute = fs.readFileSync("src/routes/LiveWorkbench.tsx", "utf8");
 const liveUi = [
-  fs.readFileSync("src/routes/LiveWorkbench.tsx", "utf8"),
+  liveRoute,
   fs.readFileSync("src/components/LiveSourceControlsPanel.tsx", "utf8"),
   fs.readFileSync("src/components/LiveQualityPanel.tsx", "utf8"),
-  fs.readFileSync("src/components/LiveIncisionOverlayPanel.tsx", "utf8"),
 ].join("\n");
 const main = fs.readFileSync("src/services/liveRuntime.ts", "utf8");
 const render = fs.readFileSync("src/services/render2d.ts", "utf8");
+const overlayStyle = fs.readFileSync("src/services/incisionOverlayStyle.ts", "utf8");
 const three3d = fs.readFileSync("src/services/three3d.ts", "utf8");
 const source = fs.readFileSync("src/services/pipelineSource.ts", "utf8");
 const loop = fs.readFileSync("src/services/pipelineLoop.ts", "utf8");
@@ -24,10 +25,8 @@ assert.ok(!compatibilityHtml.includes("main.js"), "legacy live HTML no longer mo
 assert.ok(liveUi.includes('accept="image/*,video/*"'), "React live page accepts uploaded photos and videos");
 assert.ok(liveUi.includes('id="camBtn"'), "React live page exposes camera entry for realtime overlay");
 assert.ok(liveUi.includes('id="exportBtn"'), "React live page exposes export action");
-assert.ok(liveUi.includes('id="incisionOverlayQa"'), "React live page exposes visible incision overlay QA state");
-assert.ok(liveUi.includes('id="liveIncisionOverlayCard"'), "React live page visibly confirms that an incision overlay is loaded");
-assert.ok(liveUi.includes('id="clearIncisionOverlayBtn"'), "React live page can explicitly clear a staged incision overlay");
-assert.ok(liveUi.includes("切口叠加 QA"), "React live page labels visible overlay QA as engineering state");
+assert.ok(liveRoute.includes("LiveIncisionOverlayPanel"),
+  "live page mounts the incision overlay card in the shared React layout");
 assert.ok(source.includes('setSource(prepared.source, "image"'), "uploaded photos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "video"'), "uploaded videos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "camera"'), "camera frames enter the shared live render source");
@@ -56,8 +55,16 @@ assert.ok(exporter.includes("createCompositeSource(extras)"), "export controller
 assert.ok(exporter.includes("drawContain(g, extra.canvas"), "export controller draws extra canvases into recording");
 assert.ok(exporter.includes('mimeType: "video/webm"'), "export controller records playable webm output");
 assert.ok(render.includes("drawIncisionOverlay(lm"), "renderer draws incision overlay on every frame");
-assert.ok(render.includes('color: "#07111f"'), "renderer gives the candidate line a dark contrast outline");
-assert.ok(render.includes("lineWidth: baseWidth * 1.75"), "renderer gives the candidate line a visible foreground stroke");
+assert.ok(render.includes("incisionOverlayStyle(W, overlay.candidate_type)"),
+  "renderer reads candidate presentation from the shared cross-media style contract");
+assert.ok(render.includes("overlayStyle.candidate.haloColor"),
+  "renderer gives the candidate line the shared dark contrast halo");
+assert.ok(render.includes("overlayStyle.candidate.lineWidth"),
+  "renderer gives the candidate line the shared foreground width");
+assert.ok(overlayStyle.includes("nominalCandidateLineWidth = Math.max(0.3, rstlLineWidth / 6)"),
+  "shared live media retain the nominal one-sixth RSTL candidate width");
+assert.ok(overlayStyle.includes("visibleCandidateSourceWidth"),
+  "photo-only rendering may enforce a bounded final-display visibility floor without changing RSTL");
 assert.ok(render.includes("estimateFacePoseQuality"), "renderer estimates pose quality before drawing incision overlay");
 assert.ok(poseQuality.includes("incision-overlay-pose-gate/v0.2"), "renderer exports a versioned incision overlay pose gate");
 assert.ok(poseQuality.includes("rapid_frame_motion"), "pose gate blocks rapid frame-to-frame motion");

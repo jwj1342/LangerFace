@@ -43,9 +43,10 @@ export function LiveWorkbench() {
 
       <LiveStatePanel />
 
+      <LiveIncisionOverlayPanel />
+
       <LiveSourceControlsPanel />
 
-      <LiveIncisionOverlayPanel />
 
       <LiveWrinklePanel />
 
