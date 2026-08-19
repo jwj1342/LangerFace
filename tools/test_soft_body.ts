@@ -12,6 +12,7 @@ import { rstlDirField } from "../web/src/services/rstlField.ts";
 
 const web = join(dirname(fileURLToPath(import.meta.url)), "..", "web");
 const load = (f) => JSON.parse(readFileSync(join(web, "assets", f), "utf8"));
+const softBodySource = readFileSync(join(web, "src", "services", "softBody.ts"), "utf8");
 const verts = load("canonical_vertices.json");
 const tris = load("triangles.json");
 const atlas = load("atlas_rstl.json");
@@ -85,10 +86,14 @@ assert.ok(wins >= Math.ceil(centers.length * 0.6), "多数切除中心应满足�
 
 // ── 切除确实移除顶点、闭合让伤口收缩 ──────────────────────────────────────────
 const sb = buildSoftBody(verts, tris, dir, { anchored });
+assert.ok(sb.force instanceof Float64Array && sb.force.length === N * 3, "力状态使用定长 typed array");
+const forceBuffer = sb.force;
 const removed = excise(sb, verts, verts[centers[0]], dir[centers[0]], LA, LB);
 assert.ok(removed >= 1, `切除应移除顶点（${removed}）`);
 const ringBefore = ringSpan(sb, centers[0]);
 stepSoftBody(sb, 600);
+assert.equal(sb.force, forceBuffer, "沉降迭代复用同一力缓冲，不按帧分配顶点数组");
+assert.doesNotMatch(softBodySource, /sb\.pos\.map\(/, "stepSoftBody 不按迭代创建逐顶点临时数组");
 const ringAfter = ringSpan(sb, centers[0]);
 assert.ok(ringAfter < ringBefore, `闭合应让伤口邻域收拢（${ringBefore.toFixed(3)}→${ringAfter.toFixed(3)}）`);
 
