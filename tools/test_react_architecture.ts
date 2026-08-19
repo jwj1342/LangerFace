@@ -103,6 +103,7 @@ const workflowWorkerProbeHook = read("src/hooks/useWorkflowWorkerProbe.ts");
 const liveBridge = read("src/hooks/useLiveControllerBridge.ts");
 const liveStatePanel = read("src/components/LiveStatePanel.tsx");
 const liveRouteControlsPanel = read("src/components/LiveRouteControlsPanel.tsx");
+const liveControlRail = read("src/components/LiveControlRail.tsx");
 const liveSourceControlsPanel = read("src/components/LiveSourceControlsPanel.tsx");
 const liveRenderControlsPanel = read("src/components/LiveRenderControlsPanel.tsx");
 const liveQualityPanel = read("src/components/LiveQualityPanel.tsx");
@@ -883,7 +884,8 @@ assert.ok(workbenchLayout.includes("type WorkbenchLayoutWorkspace"), "React Work
 assert.ok(workbenchLayout.includes("Extract<Workspace"), "React WorkbenchLayout keeps a narrowed workbench workspace type from the shared Workspace union");
 assert.ok(workbenchLayout.includes("workspace: WorkbenchLayoutWorkspace"), "React WorkbenchLayout requires a typed workspace prop");
 assert.ok(workbenchLayout.includes("`${workspace}-workbench`"), "React WorkbenchLayout derives workspace shell classes centrally");
-assert.ok(workbenchLayout.includes('className="sidebar"'), "React WorkbenchLayout preserves the legacy sidebar class");
+assert.ok(workbenchLayout.includes('cn("sidebar", sidebarClassName)'), "React WorkbenchLayout preserves the legacy sidebar class through its shared primitive");
+assert.ok(workbenchLayout.includes("secondarySidebar"), "React WorkbenchLayout supports an optional shared trailing sidebar");
 assert.ok(workbenchLayout.includes('cn("disclaimer"'), "React Disclaimer preserves the legacy disclaimer class");
 for (const [name, source, workspace] of [
   ["AnnotateWorkbench.tsx", annotateWorkbench, "annotate"],
@@ -2088,7 +2090,7 @@ for (const id of [
   "modelBadge",
   "overlayMsg",
 ]) {
-  const source = id === "modelBadge" ? liveWorkbench : liveStagePanel;
+  const source = id === "modelBadge" ? liveControlRail : liveStagePanel;
   assert.ok(source.includes(`id="${id}"`), `React live surface exposes #${id}`);
 }
 for (const id of [
@@ -2143,16 +2145,17 @@ for (const id of [
 ]) {
   assert.ok(liveStagePanel.includes(`id="${id}"`), `React live stage exposes #${id}`);
 }
-assert.ok(liveWorkbench.includes("LiveStatePanel"), "React live workbench renders the controller state panel");
-assert.ok(liveWorkbench.includes("WorkbenchBrand"), "React live workbench uses the shared workbench brand");
-assert.ok(liveWorkbench.includes("Card"), "React live workbench uses the shared shadcn-style card primitive");
-assert.ok(liveWorkbench.includes("LiveRouteControlsPanel"), "React live workbench renders route controls as a React component");
-assert.ok(liveWorkbench.includes("LiveSourceControlsPanel"), "React live workbench renders source controls as a React component");
-assert.ok(liveWorkbench.includes("LiveRenderControlsPanel"), "React live workbench renders render controls as a React component");
-assert.ok(liveWorkbench.includes("LiveQualityPanel"), "React live workbench renders quality and overlay QA as a React component");
+assert.ok(liveWorkbench.includes("LiveControlRail"), "React live workbench renders the shared live control rail");
+assert.ok(liveControlRail.includes("LiveStatePanel"), "React live control rail renders the controller state panel");
+assert.ok(liveControlRail.includes("WorkbenchBrand"), "React live control rail uses the shared workbench brand");
+assert.ok(liveControlRail.includes("Card"), "React live control rail uses the shared shadcn-style card primitive");
+assert.ok(liveControlRail.includes("LiveRouteControlsPanel"), "React live control rail renders route controls as a React component");
+assert.ok(liveControlRail.includes("LiveSourceControlsPanel"), "React live control rail renders source controls as a React component");
+assert.ok(liveControlRail.includes("LiveRenderControlsPanel"), "React live control rail renders render controls as a React component");
+assert.ok(liveControlRail.includes("LiveQualityPanel"), "React live control rail renders quality and overlay QA as a React component");
 assert.ok(liveWorkbench.includes("LiveStagePanel"), "React live workbench renders the stage shell as a React component");
 assert.ok(liveWorkbench.includes("WorkbenchLayout"), "React live workbench uses the shared workbench layout shell");
-assert.ok(liveWorkbench.includes("Disclaimer"), "React live workbench uses the shared disclaimer primitive");
+assert.ok(liveControlRail.includes("Disclaimer"), "React live control rail uses the shared disclaimer primitive");
 assert.ok(liveStagePanel.includes("StageShell"), "React live stage uses the shared stage shell primitive");
 assert.ok(liveStagePanel.includes("StageViewport"), "React live stage uses the shared stage viewport primitive");
 assert.ok(liveStagePanel.includes("StageStatus"), "React live stage uses the shared stage status primitive");
@@ -2200,8 +2203,8 @@ assert.ok(liveRenderControlsPanel.includes("useLiveStore"), "React live render c
 assert.ok(liveRouteControlsPanel.includes("2D 实时贴合"), "React Live surface declares the supported 2D runtime");
 assert.ok(!/扫描人脸重建|投影到画面|用示例脸|实时 3D/.test(liveRouteControlsPanel), "React Live surface contains no retired 3D affordances");
 assert.ok(!liveSourceControlsPanel.includes('route !== "3d"'), "React live source card has no retired route gate");
-assert.ok(liveWorkbench.includes("Button asChild"), "React live workbench uses shared Button asChild for Router links");
-assert.ok(liveWorkbench.includes("Label"), "React live workbench uses the shared shadcn-style label primitive");
+assert.ok(liveControlRail.includes("Button asChild"), "React live control rail uses shared Button asChild for Router links");
+assert.ok(liveControlRail.includes("Label"), "React live control rail uses the shared shadcn-style label primitive");
 assert.ok(liveRouteControlsPanel.includes("Label"), "React live route controls use the shared shadcn-style label primitive");
 assert.ok(liveRouteControlsPanel.includes("<Card"), "React live route controls use the shared shadcn-style card primitive");
 for (const className of ["scan-panel", "scan-row", "yaw-meter"]) {
@@ -2234,7 +2237,7 @@ assert.ok(liveSnapshotsService.includes("buildLiveControllerSnapshot"), "shared 
 assert.ok(liveSnapshotsService.includes("liveTextOf"), "shared live snapshot service owns text normalization helpers");
 assert.ok(liveSnapshotsService.includes("visibleLiveTextOf"), "shared live snapshot service owns visible text normalization helpers");
 assert.ok(liveSnapshotsService.includes("../lib/controllerSnapshotSchemas"), "shared live snapshot service re-exports the lightweight schema version");
-assert.ok(liveWorkbench.includes('to="/incision"'), "React live workbench links to the React incision route");
+assert.ok(liveControlRail.includes('to="/incision"'), "React live control rail links to the React incision route");
 assert.ok(!fs.existsSync(path.join(web, "dom.js")), "legacy dom.js facade has been removed after TypeScript service migration");
 assert.ok(!fs.existsSync(path.join(web, "dom.d.ts")), "legacy DOM declaration facade has been removed after TypeScript service migration");
 assert.ok(liveDomService.includes("export function bindDom"), "TypeScript live DOM service can rebind element references for SPA route mounts");

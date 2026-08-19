@@ -4,8 +4,10 @@ import assert from "node:assert/strict";
 
 const compatibilityHtml = fs.readFileSync("index.html", "utf8");
 const liveRoute = fs.readFileSync("src/routes/LiveWorkbench.tsx", "utf8");
+const liveControlRail = fs.readFileSync("src/components/LiveControlRail.tsx", "utf8");
 const liveUi = [
   liveRoute,
+  liveControlRail,
   fs.readFileSync("src/components/LiveSourceControlsPanel.tsx", "utf8"),
   fs.readFileSync("src/components/LiveQualityPanel.tsx", "utf8"),
 ].join("\n");
@@ -25,8 +27,10 @@ assert.ok(!compatibilityHtml.includes("main.js"), "legacy live HTML no longer mo
 assert.ok(liveUi.includes('accept="image/*,video/*"'), "React live page accepts uploaded photos and videos");
 assert.ok(liveUi.includes('id="camBtn"'), "React live page exposes camera entry for realtime overlay");
 assert.ok(liveUi.includes('id="exportBtn"'), "React live page exposes export action");
-assert.ok(liveRoute.includes("LiveIncisionOverlayPanel"),
-  "live page mounts the incision overlay card in the shared React layout");
+assert.ok(liveRoute.includes("LiveControlRail"),
+  "live page mounts the shared live control rail");
+assert.ok(liveControlRail.includes("LiveIncisionOverlayPanel"),
+  "shared live control rail mounts the incision overlay card");
 assert.ok(source.includes('setSource(prepared.source, "image"'), "uploaded photos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "video"'), "uploaded videos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "camera"'), "camera frames enter the shared live render source");
