@@ -55,6 +55,7 @@ includesAll(app, [
   'path="/settings/developer"',
   'path="/live"',
   'path="/incision"',
+  'path="/personalized"',
   'path="/annotate"',
   'path="/surgery"',
 ], "router");
@@ -355,11 +356,13 @@ includesAll(standardFaceAssets, [
 
 includesAll(dashboardRoute, [
   'to: "/live"',
-  'to: "/personalized"',
   'to: "/incision"',
-  "不创建、恢复或保存病例",
+  'to: "/app/workflow"',
+  "合并工作流（开发中）",
   "不维护病例大厅、患者档案、历史记录或云端病例库",
 ], "stateless tool launcher");
+assert.ok(!dashboardRoute.includes('to: "/personalized"'), "dashboard hides the personalized capture entry");
+assert.ok(!dashboardRoute.includes("ReactShellSidebar"), "dashboard keeps only the central tool channels");
 assert.ok(!dashboardRoute.includes('to: "/three-preview"'), "dashboard should not expose the public 3D preview card");
 
 for (const forbidden of [

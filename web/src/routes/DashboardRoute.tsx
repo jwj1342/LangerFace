@@ -1,10 +1,7 @@
 import {
   Activity,
-  Boxes,
-  PenLine,
   Scissors,
-  Settings,
-  Sparkles,
+  Workflow,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -12,16 +9,11 @@ import {
   ReactPage,
   ReactShell,
   ReactShellMain,
-  ReactShellNavLink,
-  ReactShellSidebar,
 } from "../components/ReactShell";
-import { WorkbenchBrand } from "../components/WorkbenchBrand";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { Hint } from "../components/ui/hint";
-import { RouteStatus } from "../components/ui/status-badge";
 import { useReactRouteLifecycle } from "../hooks/useReactRouteLifecycle";
-import { useAppStore } from "../stores/appStore";
 
 const TOOLS = [
   {
@@ -31,22 +23,20 @@ const TOOLS = [
     icon: Activity,
   },
   {
-    title: "个性化 RSTL",
-    description: "在浏览器本地完成多表情采集、皱纹分割与 V6 微调。",
-    to: "/personalized",
-    icon: Sparkles,
-  },
-  {
     title: "切口候选研究工具",
     description: "独立运行的候选生成、编辑和审阅原型；不保存病例记录。",
     to: "/incision",
     icon: Scissors,
   },
+  {
+    title: "合并工作流（开发中）",
+    description: "进入当前页面功能合并版本，集中查看张力线与切口工作区。",
+    to: "/app/workflow",
+    icon: Workflow,
+  },
 ] as const;
 
 export function DashboardRoute() {
-  const routeStatus = useAppStore((state) => state.routeStatus);
-
   useReactRouteLifecycle({
     workspace: "dashboard",
     mountedStatus: "研究工具入口已就绪",
@@ -55,56 +45,18 @@ export function DashboardRoute() {
 
   return (
     <ReactPage className="dark-workbench-page dashboard-workbench-page">
-      <ReactShell>
-        <ReactShellSidebar>
-          <WorkbenchBrand
-            eyebrow="RESEARCH TOOLKIT"
-            title="面部皮肤张力线研究工具"
-            action={<RouteStatus>{routeStatus}</RouteStatus>}
-          />
-
-          <Card>
-            <CardHeader><span>主要入口</span><Activity size={16} /></CardHeader>
-            <CardContent>
-              <Button asChild variant="workbenchPrimary">
-                <Link to="/live"><Activity size={16} />打开实时 2D</Link>
-              </Button>
-              <Button asChild variant="workbench">
-                <Link to="/personalized"><Sparkles size={16} />开始个性化采集</Link>
-              </Button>
-            </CardContent>
-          </Card>
-
-          <details className="settings-disclosure">
-            <summary><Settings size={16} /> 仅维护人员</summary>
-            <div className="settings-disclosure-body">
-              <ReactShellNavLink to="/settings/atlas">
-                <span>图谱生产与复核</span>
-                <PenLine size={16} />
-              </ReactShellNavLink>
-              <ReactShellNavLink to="/settings/developer">
-                <span>开发运行时诊断</span>
-                <Boxes size={16} />
-              </ReactShellNavLink>
-            </div>
-          </details>
-
-          <Hint>
-            本入口不创建、恢复或保存病例。照片、视频和摄像头画面只由对应工具在当前浏览器会话中处理。
-          </Hint>
-        </ReactShellSidebar>
-
+      <ReactShell className="dashboard-shell">
         <ReactShellMain className="overflow-auto bg-slate-950 p-6">
           <div className="mx-auto grid w-full max-w-5xl gap-5">
             <section className="rounded-xl border border-slate-700 bg-slate-900 p-6 text-slate-100">
               <span className="text-xs font-bold tracking-[0.18em] text-blue-300">STATELESS WORKBENCH</span>
               <h2 className="mt-3 text-2xl font-bold">选择一个独立工具开始</h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-                当前阶段聚焦 2D 张力线显示和浏览器本地个性化。工具之间只传递短期预览数据，不维护病例大厅、患者档案、历史记录或云端病例库。
+                当前阶段聚焦 2D 张力线显示和切口候选研究。工具之间只传递短期预览数据，不维护病例大厅、患者档案、历史记录或云端病例库。
               </p>
             </section>
 
-            <section className="grid gap-4 md:grid-cols-2" aria-label="研究工具">
+            <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3" aria-label="研究工具">
               {TOOLS.map(({ title, description, icon: Icon, to }) => (
                 <Card key={title}>
                   <CardHeader><span>{title}</span><Icon size={17} /></CardHeader>

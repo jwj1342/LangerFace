@@ -23,6 +23,7 @@ export interface IncisionTumorState {
   diameterMm: number | null;
   depthMm: number | null;
   marginMm: number | null;
+  ellipseRatio?: number | null;
   boundaryMode: string;
   boundaryActive: boolean;
   boundaryPointCount: number;
@@ -142,11 +143,24 @@ export interface IncisionWorkflowRuntime {
   error: string | null;
 }
 
+export interface WorkflowIncisionToolState {
+  photoReady: boolean;
+  selectionMode: boolean;
+  controlledMarkerMode: boolean;
+  markerBusy: boolean;
+  repairAvailable: boolean;
+  repairMode: boolean;
+  repairCount: number;
+  scanDiameterMm: number;
+  minimumScanDiameterMm?: number;
+}
+
 export interface IncisionControllerSnapshot {
   schema_version: typeof INCISION_SNAPSHOT_SCHEMA_VERSION;
   reason: string;
   stageStatus: string;
   stageStatusTone?: "normal" | "warning";
+  stageBusy?: boolean;
   assetLoading: IncisionAssetLoadingState;
   headAsset: IncisionHeadAssetState;
   tumor: IncisionTumorState;
@@ -159,6 +173,7 @@ export interface IncisionControllerSnapshot {
   savedCandidates: IncisionSavedCandidateSummary[];
   workflowRuntime: IncisionWorkflowRuntime | null;
   savedCount: number;
+  workflowTools?: WorkflowIncisionToolState;
   updatedAt: string;
 }
 
@@ -459,6 +474,7 @@ export function buildIncisionControllerSnapshot({
   reason = "state_update",
   stageStatus = "",
   stageStatusTone = "normal",
+  stageBusy = false,
   assetLoading,
   headAsset,
   tumor,
@@ -471,6 +487,7 @@ export function buildIncisionControllerSnapshot({
   savedCandidates = [],
   workflowRuntime = null,
   savedCount = 0,
+  workflowTools,
   updatedAt = new Date().toISOString(),
 }: Omit<IncisionControllerSnapshot, "schema_version" | "updatedAt"> & { updatedAt?: string }): IncisionControllerSnapshot {
   return {
@@ -478,6 +495,7 @@ export function buildIncisionControllerSnapshot({
     reason,
     stageStatus,
     stageStatusTone,
+    stageBusy,
     assetLoading,
     headAsset,
     tumor,
@@ -490,6 +508,7 @@ export function buildIncisionControllerSnapshot({
     savedCandidates,
     workflowRuntime,
     savedCount,
+    ...(workflowTools ? { workflowTools } : {}),
     updatedAt,
   };
 }

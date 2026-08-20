@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   attemptConstrainedPhotoReferences,
+  buildPhotoSpaceLinearCandidate,
   buildPhotoSpaceDiameterEstimate,
   buildSubcutaneousDiameterEstimateRefs,
   buildIncisionPhotoGeometry,
@@ -254,6 +255,32 @@ assert.ok(secondPhotoDiameterEstimate.every((point, index) => {
     && Math.abs((point[1] - 360) - (reference[1] - 140)) < 1e-9;
 }), "equal entered diameters produce the same photo-space circle on the forehead and cheek");
 
+const firstPhotoLinear = buildPhotoSpaceLinearCandidate({
+  center: [220, 140, 0],
+  lengthMm: 15,
+  pixelsPerMm: 2,
+  axisHint: [1, 0],
+});
+const secondPhotoLinear = buildPhotoSpaceLinearCandidate({
+  center: [420, 360, 0],
+  lengthMm: 15,
+  pixelsPerMm: 2,
+  axisHint: [1, 0],
+});
+for (const [candidate, center] of [
+  [firstPhotoLinear, [220, 140, 0]],
+  [secondPhotoLinear, [420, 360, 0]],
+] as const) {
+  assert.ok(candidate, "a valid millimetre length and photo scale produce a linear photo candidate");
+  assert.ok(Math.abs(Math.hypot(
+    candidate.endpoints[1][0] - candidate.endpoints[0][0],
+    candidate.endpoints[1][1] - candidate.endpoints[0][1],
+  ) - 30) < 1e-9, "the photo-space line keeps the requested millimetre length at every face location");
+  assert.ok(Math.abs((candidate.endpoints[0][0] + candidate.endpoints[1][0]) * 0.5 - center[0]) < 1e-9);
+  assert.ok(Math.abs((candidate.endpoints[0][1] + candidate.endpoints[1][1]) * 0.5 - center[1]) < 1e-9,
+    "the linear incision stays centered on the detected lesion");
+}
+
 const geometry = buildIncisionPhotoGeometry({
   landmarks,
   triangles,
@@ -278,6 +305,43 @@ assert.equal(geometry.candidate.length, 2);
 assert.equal(geometry.endpoints.length, 2);
 assert.ok(Math.abs(geometry.center[0] - 200) < 1e-6);
 assert.ok(Math.abs(geometry.center[1] - 200) < 1e-6);
+
+const stableLinearGeometry = buildIncisionPhotoGeometry({
+  landmarks,
+  triangles,
+  atlasLines: [],
+  centerRef: refs[0],
+  boundaryRefs: [],
+  candidateRefs: refs,
+  endpointRefs: refs,
+  candidateType: "linear",
+  candidateLengthMm: 15,
+  photoPixelsPerMm: 2,
+});
+assert.ok(Math.abs(Math.hypot(
+  stableLinearGeometry.endpoints[1][0] - stableLinearGeometry.endpoints[0][0],
+  stableLinearGeometry.endpoints[1][1] - stableLinearGeometry.endpoints[0][1],
+) - 30) < 1e-9, "integrated photo geometry renders equal linear lengths with the stable photo scale");
+assert.ok(Math.abs(stableLinearGeometry.planningCenter![0] - stableLinearGeometry.center![0]) < 1e-9
+  && Math.abs(stableLinearGeometry.planningCenter![1] - stableLinearGeometry.center![1]) < 1e-9,
+"the integrated linear candidate passes through the lesion center");
+
+const directPhotoBoundary: Vec3[] = [
+  [180, 188, 0], [200, 184, 0], [220, 188, 0], [224, 200, 0],
+  [220, 212, 0], [200, 216, 0], [180, 212, 0], [176, 200, 0],
+];
+const directPhotoBoundaryGeometry = buildIncisionPhotoGeometry({
+  landmarks,
+  triangles,
+  atlasLines: [],
+  centerRef: refs[0],
+  boundaryRefs: refs,
+  photoBoundary: directPhotoBoundary,
+  candidateRefs: refs,
+  endpointRefs: refs,
+});
+assert.deepEqual(directPhotoBoundaryGeometry.boundary, directPhotoBoundary,
+  "a stable photo-space cutaneous outline does not fall back to a face-curvature-distorted surface projection");
 
 const surfaceCandidateModel: Vec3[] = [
   [0.1, 0.5, 0], [0.25, 0.42, 0], [0.4, 0.34, 0], [0.5, 0.32, 0],
@@ -410,6 +474,34 @@ assert.ok((foreheadGapFit.diagnostics.photoSurfaceMeshOutsideCount || 0) > 0);
 assert.equal(foreheadGapFit.diagnostics.photoSurfaceOutsideCount, 0,
   "the forehead-only fallback is auditable instead of silently disabling the mesh gate");
 assert.equal(foreheadGapFit.diagnostics.photoCanonicalAxisSource, "nearest_projected_rstl");
+const skinSupportedUpperForeheadFit = buildPhotoSurfaceCanonicalFusiform({
+  sourceCandidate: surfaceProjectedFusiform,
+  sourceEndpoints: [[220, 120, 0], [380, 120, 0]],
+  center: [300, 120, 0],
+  boundary: [[292, 112, 0], [308, 112, 0], [308, 128, 0], [292, 128, 0]],
+  aspectRatio: 4,
+  tipAngleDeg: 30,
+  landmarks: foreheadGapLandmarks,
+  triangles: [[0, 1, 2]],
+  skinVisible: () => true,
+  axisHint: [1, 0],
+});
+assert.ok(skinSupportedUpperForeheadFit.fit,
+  "reliable photo-skin evidence may extend an upper-forehead candidate beyond the fixed head ellipse");
+const unsupportedUpperForeheadFit = buildPhotoSurfaceCanonicalFusiform({
+  sourceCandidate: surfaceProjectedFusiform,
+  sourceEndpoints: [[220, 120, 0], [380, 120, 0]],
+  center: [300, 120, 0],
+  boundary: [[292, 112, 0], [308, 112, 0], [308, 128, 0], [292, 128, 0]],
+  aspectRatio: 4,
+  tipAngleDeg: 30,
+  landmarks: foreheadGapLandmarks,
+  triangles: [[0, 1, 2]],
+  skinVisible: () => false,
+  axisHint: [1, 0],
+});
+assert.equal(unsupportedUpperForeheadFit.fit, null,
+  "the upper-forehead extension remains blocked without either mesh, head-envelope or photo-skin evidence");
 const lowerFaceMeshGapFit = buildPhotoSurfaceCanonicalFusiform({
   sourceCandidate: surfaceProjectedFusiform,
   sourceEndpoints: [[120, 320, 0], [280, 320, 0]],

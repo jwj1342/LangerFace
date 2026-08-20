@@ -1,9 +1,11 @@
-import { Scissors } from "lucide-react";
-import { Link } from "react-router-dom";
-
+import { CandidateLibraryPanel } from "./CandidateLibraryPanel";
+import { CandidateResultPanel } from "./CandidateResultPanel";
+import { PrivacyAuditPanel } from "./PrivacyAuditPanel";
+import { ReviewControlsPanel } from "./ReviewControlsPanel";
+import { SecondaryCuePanel } from "./SecondaryCuePanel";
+import { TumorInputPanel } from "./TumorInputPanel";
 import { WorkbenchBrand } from "./WorkbenchBrand";
-import { Button } from "./ui/button";
-import { Card, CardHeader, CardHeaderTitle } from "./ui/card";
+import { Disclaimer } from "./WorkbenchLayout";
 import { StatusBadge } from "./ui/status-badge";
 
 export function WorkflowIncisionRail() {
@@ -12,17 +14,15 @@ export function WorkflowIncisionRail() {
       <WorkbenchBrand
         eyebrow="切口研究工具"
         title="切口规划与候选审阅"
-        action={<StatusBadge>接线阶段</StatusBadge>}
+        action={<StatusBadge>单页工作流</StatusBadge>}
       />
-      <Card>
-        <CardHeader>
-          <CardHeaderTitle><Scissors size={14} /> 切口操作台</CardHeaderTitle>
-          <span>兼容入口</span>
-        </CardHeader>
-        <Button asChild variant="workbenchPrimary">
-          <Link to="/app/incision">打开独立切口工作台</Link>
-        </Button>
-      </Card>
+      <TumorInputPanel showDepthControl={false} />
+      <SecondaryCuePanel />
+      <CandidateResultPanel showWorkflowGuidance={false} />
+      <ReviewControlsPanel />
+      <CandidateLibraryPanel automaticOverlay showHandoffStatus={false} />
+      <PrivacyAuditPanel />
+      <Disclaimer>临床辅助设计：候选切口由规则工具生成，仅供执业医师结合查体审阅确认；不替代最终手术决策。</Disclaimer>
     </>
   );
 }

@@ -19,9 +19,15 @@ import { StatusBadge } from "./ui/status-badge";
 
 interface LiveControlRailProps {
   showIncisionEntry?: boolean;
+  showStatusOverview?: boolean;
+  showPersonalizedHint?: boolean;
 }
 
-export function LiveControlRail({ showIncisionEntry = true }: LiveControlRailProps) {
+export function LiveControlRail({
+  showIncisionEntry = true,
+  showStatusOverview = true,
+  showPersonalizedHint = true,
+}: LiveControlRailProps) {
   return (
     <>
       <WorkbenchBrand
@@ -30,7 +36,7 @@ export function LiveControlRail({ showIncisionEntry = true }: LiveControlRailPro
         action={<StatusBadge className="loading" id="modelBadge">模型加载中...</StatusBadge>}
       />
 
-      <LiveRouteControlsPanel />
+      {showStatusOverview ? <LiveRouteControlsPanel /> : null}
 
       <Card id="incisionWorkflowCard" visible={showIncisionEntry}>
         <div>
@@ -42,10 +48,10 @@ export function LiveControlRail({ showIncisionEntry = true }: LiveControlRailPro
         </Button>
       </Card>
 
-      <LiveStatePanel />
+      {showStatusOverview ? <LiveStatePanel /> : null}
       <LiveIncisionOverlayPanel />
       <LiveSourceControlsPanel />
-      <LiveWrinklePanel />
+      <LiveWrinklePanel showAdvancedCaptureHint={showPersonalizedHint} />
       <LiveRefinePanel />
       <LiveRenderControlsPanel />
       <LiveQualityPanel />

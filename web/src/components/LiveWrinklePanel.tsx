@@ -7,7 +7,7 @@ import { Hint } from "./ui/hint";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
 
-export function LiveWrinklePanel() {
+export function LiveWrinklePanel({ showAdvancedCaptureHint = true }: { showAdvancedCaptureHint?: boolean }) {
   return (
     <Card id="liveWrinkleCard">
       <div>
@@ -37,7 +37,7 @@ export function LiveWrinklePanel() {
       </Button>
       <Hint>
         自动微调不会打开医生手动编辑器；应用后仍可使用下方“医生手动微调（2D）”继续调整。
-        如需多表情严格并集研究流程，可进入 <Link to="/personalized">高级多表情采集</Link>。
+        {showAdvancedCaptureHint ? <>如需多表情严格并集研究流程，可进入 <Link to="/personalized">高级多表情采集</Link>。</> : null}
       </Hint>
     </Card>
   );

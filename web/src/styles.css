@@ -430,30 +430,142 @@
     min-height: 100dvh;
   }
 
-  .workflow-workbench.app {
-    grid-template-columns: clamp(240px, 17vw, 280px) minmax(640px, 1fr) clamp(280px, 20vw, 340px);
-  }
-
-  .workflow-workbench > .workflow-live-rail {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .workflow-workbench > .stage {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .workflow-workbench > .workflow-incision-rail {
-    grid-column: 3;
-    grid-row: 1;
-    border-right: 0;
-    border-left: 1px solid var(--clinical-dark-border);
-  }
-
   .workflow-workbench .stage-body {
     gap: 8px;
     padding: 10px 12px 12px;
+  }
+
+  .workflow-canvas-tools {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 6px;
+    overflow-x: auto;
+    color: #e8eef5;
+    background: rgb(12 19 27 / 88%);
+    border: 1px solid rgb(190 205 218 / 32%);
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgb(0 0 0 / 24%);
+    backdrop-filter: blur(8px);
+  }
+
+  .workflow-workbench .stage-top {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, auto) auto;
+    gap: 12px;
+    padding-inline: 12px;
+  }
+
+  .workflow-workbench .workflow-stage-status {
+    min-width: 0;
+    color: #dbe4ee;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workflow-workbench .workflow-stage-status[data-tone="warning"] {
+    color: #fde68a;
+  }
+
+  .workflow-workbench .workflow-stage-actions {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    justify-self: end;
+    overflow: hidden;
+  }
+
+  .workflow-canvas-tools > * {
+    flex: 0 0 auto;
+  }
+
+  .workflow-workbench .main-wrap.image-viewer {
+    cursor: crosshair !important;
+  }
+
+  .workflow-workbench .main-wrap.image-viewer.dragging {
+    cursor: grabbing !important;
+  }
+
+  .workflow-marker-scan {
+    display: grid;
+    grid-template-columns: max-content 92px;
+    align-items: center;
+    gap: 7px;
+    min-height: 32px;
+    padding: 0 8px;
+    font-size: 11px;
+    color: #d8e4ed;
+    border-right: 1px solid rgb(190 205 218 / 24%);
+    border-left: 1px solid rgb(190 205 218 / 24%);
+  }
+
+  .workflow-marker-scan input {
+    width: 92px;
+  }
+
+  .workflow-incision-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .workflow-incision-overlay [data-workflow-boundary] {
+    fill: rgb(250 204 21 / 12%);
+    stroke: #facc15;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-incision-overlay [data-workflow-candidate] {
+    fill: none;
+    stroke: #003b73;
+    stroke-width: 1;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-incision-overlay [data-workflow-center] {
+    fill: #f43f5e;
+    stroke: #0b1118;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-repair-stroke {
+    fill: none;
+    stroke: #f8fafc;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 5 4;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-incision-overlay [data-workflow-marker-scan-circle] {
+    fill: rgb(56 189 248 / 8%);
+    stroke: rgb(56 189 248 / 92%);
+    stroke-width: 2;
+    stroke-dasharray: 7 5;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-incision-overlay [data-workflow-marker-scan-label] {
+    fill: #e0f2fe;
+    stroke: rgb(8 15 24 / 92%);
+    stroke-width: 3;
+    paint-order: stroke fill;
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: 0;
   }
 
   .workflow-workbench .zoom-strip {
@@ -1945,6 +2057,70 @@
   margin-inline: 0;
 }
 
+.workflow-workbench.app {
+  grid-template-columns: clamp(320px, 21.25vw, 340px) minmax(640px, 1fr) clamp(320px, 21.25vw, 340px);
+}
+
+.workflow-workbench .stage-top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, auto) auto;
+}
+
+/* This must remain outside @layer so the warning tone wins over the imported
+   clinical workbench's generic .fps color. */
+.workflow-workbench .workflow-stage-status[data-tone="warning"] {
+  color: #fde68a;
+}
+
+.workflow-workbench .workflow-stage-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.workflow-workbench .workflow-stage-status > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workflow-workbench .workflow-stage-spinner {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  border: 2px solid rgb(226 232 240 / 36%);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: workflow-stage-spin 0.8s linear infinite;
+}
+
+@keyframes workflow-stage-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-workbench .workflow-stage-spinner {
+    animation: none;
+  }
+}
+
+.workflow-workbench > .workflow-live-rail {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.workflow-workbench > .stage {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.workflow-workbench > .workflow-incision-rail {
+  grid-column: 3;
+  grid-row: 1;
+  border-right: 0;
+  border-left: 1px solid var(--clinical-dark-border);
+}
+
 .incision-workbench > .sidebar {
   grid-column: 1;
   grid-row: 1;
@@ -1993,6 +2169,10 @@ body:has(.dark-workbench-page) {
   height: 100%;
   min-height: 0;
   overflow: hidden;
+}
+
+.dashboard-workbench-page .react-shell.dashboard-shell {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .dark-workbench-page .react-shell-sidebar {
@@ -2061,7 +2241,40 @@ body:has(.dark-workbench-page) {
   }
 }
 
-@media (max-width: 1180px) {
+@media (min-width: 1281px) and (max-width: 1760px) {
+  .workflow-workbench .stage-top {
+    display: grid;
+    grid-template-areas:
+      "live-status incision-status fps"
+      "workflow-actions workflow-actions workflow-actions";
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    height: auto;
+    min-height: 92px;
+    padding-block: 6px;
+    row-gap: 6px;
+  }
+
+  .workflow-workbench .stage-top > #livePill {
+    grid-area: live-status;
+  }
+
+  .workflow-workbench .workflow-stage-status {
+    grid-area: incision-status;
+  }
+
+  .workflow-workbench .workflow-stage-actions {
+    grid-area: workflow-actions;
+    width: 100%;
+    justify-content: flex-end;
+    overflow: visible;
+  }
+
+  .workflow-workbench .stage-top > #fps {
+    grid-area: fps;
+  }
+}
+
+@media (max-width: 1280px) {
   .workflow-workbench.app {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(520px, 72dvh) auto auto;

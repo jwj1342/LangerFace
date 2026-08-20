@@ -224,7 +224,9 @@ export interface IncisionPhotoRenderInput {
   diameterEstimateRefs?: SurfaceRef[];
   photoDiameterEstimateMm?: number;
   photoPixelsPerMm?: number;
+  candidateLengthMm?: number;
   boundaryRefs: SurfaceRef[];
+  photoBoundary?: Vec3[];
   candidateRefs: SurfaceRef[];
   endpointRefs: SurfaceRef[];
   endpointRadius?: number;
@@ -284,10 +286,10 @@ function validatePhotoSurfacePoints(
   });
   // MediaPipe's face triangles end before parts of the visible upper forehead.
   // Only that known upper-forehead gap may use the conservative head envelope;
-  // mesh gaps around the eyes, nostrils and mouth remain rejected. The source-
-  // photo skin vote is retained as an audit signal, not a hard gate, because
-  // the intentionally dark controlled-marker stroke otherwise causes false
-  // rejection of an enclosing incision.
+  // mesh gaps around the eyes, nostrils and mouth remain rejected. Only points
+  // above the forehead floor may use a conservative 3-of-5 source-photo skin
+  // vote to extend beyond the fixed head envelope; lower-face gaps never gain
+  // that fallback because they may be non-skin openings.
   const headVisible = buildHeadVisibility(landmarks);
   const xs = landmarks.map((point) => point?.[0]).filter(Number.isFinite) as number[];
   const ys = landmarks.map((point) => point?.[1]).filter(Number.isFinite) as number[];
@@ -316,9 +318,10 @@ function validatePhotoSurfacePoints(
     const meshVisible = visibleSurface.some(([first, second, third]) =>
       pointInsidePhotoTriangle(point, first, second, third));
     const headEnvelopeVisible = headVisible(point);
+    const photoSkinVisible = neighborhoodSkinVisible(point);
     const acceptedUpperForeheadGap = !meshVisible
       && point[1] <= foreheadFloor
-      && headEnvelopeVisible;
+      && (headEnvelopeVisible || photoSkinVisible);
     return {
       point,
       meshVisible,
@@ -1618,6 +1621,44 @@ export function buildPhotoSpaceDiameterEstimate(
   });
 }
 
+export function buildPhotoSpaceLinearCandidate({
+  center,
+  lengthMm,
+  pixelsPerMm,
+  axisHint,
+  sourceEndpoints = [],
+}: {
+  center: Vec3 | null;
+  lengthMm: number;
+  pixelsPerMm: number;
+  axisHint?: readonly number[] | null;
+  sourceEndpoints?: readonly Vec3[];
+}): { candidate: Vec3[]; endpoints: [Vec3, Vec3] } | null {
+  const lengthPx = Number(lengthMm) * Number(pixelsPerMm);
+  if (!center || !(lengthPx > 0) || !Number.isFinite(lengthPx)) return null;
+  const sourceAxis = sourceEndpoints.length >= 2
+    ? [
+      sourceEndpoints[1][0] - sourceEndpoints[0][0],
+      sourceEndpoints[1][1] - sourceEndpoints[0][1],
+    ]
+    : null;
+  const requestedAxis = axisHint && axisHint.length >= 2
+    ? [Number(axisHint[0]), Number(axisHint[1])]
+    : sourceAxis;
+  const axisLength = requestedAxis ? Math.hypot(requestedAxis[0], requestedAxis[1]) : 0;
+  if (!(axisLength > 1e-9) || !Number.isFinite(axisLength)) return null;
+  const halfAxis = [
+    requestedAxis![0] / axisLength * lengthPx * 0.5,
+    requestedAxis![1] / axisLength * lengthPx * 0.5,
+  ];
+  const first: Vec3 = [center[0] - halfAxis[0], center[1] - halfAxis[1], center[2]];
+  const second: Vec3 = [center[0] + halfAxis[0], center[1] + halfAxis[1], center[2]];
+  return {
+    candidate: [first, [...center] as Vec3, second],
+    endpoints: [first, second],
+  };
+}
+
 export function buildIncisionPhotoGeometry({
   landmarks,
   surfaceLandmarks,
@@ -1627,7 +1668,9 @@ export function buildIncisionPhotoGeometry({
   diameterEstimateRefs = [],
   photoDiameterEstimateMm,
   photoPixelsPerMm,
+  candidateLengthMm,
   boundaryRefs,
+  photoBoundary,
   candidateRefs,
   endpointRefs,
   candidateType,
@@ -1663,10 +1706,21 @@ export function buildIncisionPhotoGeometry({
   // or imported candidate does not, keep that offset auditable instead of
   // moving the red point after the async workflow finishes.
   const candidateSmoothingCenter = detectedCenter || planningCenter;
-  const boundary = mapSurfaceRefs(boundaryRefs, photoLandmarks, triangles).pts;
+  const boundary = photoBoundary?.length
+    ? photoBoundary.map((point) => [...point] as Vec3)
+    : mapSurfaceRefs(boundaryRefs, photoLandmarks, triangles).pts;
   const sourceProjection = inspectPhotoCandidateProjection(sourceCandidate, candidateType);
   const nearestPhotoRstl = candidateSmoothingCenter
     ? nearestProjectedRstlSegment(candidateSmoothingCenter, directionReferenceRstl)
+    : null;
+  const photoLinearCandidate = candidateType === "linear"
+    ? buildPhotoSpaceLinearCandidate({
+      center: candidateSmoothingCenter,
+      lengthMm: Number(candidateLengthMm),
+      pixelsPerMm: Number(photoPixelsPerMm),
+      axisHint: nearestPhotoRstl?.axis || null,
+      sourceEndpoints,
+    })
     : null;
   const photoCanonicalInput = {
     sourceCandidate,
@@ -1780,12 +1834,13 @@ export function buildIncisionPhotoGeometry({
     ? inspectPhotoCandidateProjection(surfaceSmoothedCandidate, candidateType)
     : null;
   const useSurfaceSmoothedCandidate = Boolean(surfaceSmoothedCandidate && surfaceSmoothedProjection?.valid);
-  const candidate = useSurfaceSmoothedCandidate ? surfaceSmoothedCandidate! : sourceCandidate;
+  const candidate = photoLinearCandidate?.candidate
+    || (useSurfaceSmoothedCandidate ? surfaceSmoothedCandidate! : sourceCandidate);
   const endpoints = usePhotoCanonical
     ? selectedPhotoCanonicalAttempt!.endpoints
     : useCenteredFallback
       ? fallbackEndpoints
-      : candidateType === "fusiform" ? [] : sourceEndpoints;
+      : candidateType === "fusiform" ? [] : photoLinearCandidate?.endpoints || sourceEndpoints;
   // The bounded global fit is an optional visual improvement. If it cannot be
   // produced, keep a medically gated source candidate visible instead of
   // turning a valid plan into an empty overlay.
@@ -1803,7 +1858,9 @@ export function buildIncisionPhotoGeometry({
               : "candidate_center_or_direction_unresolved",
         ])],
       }
-      : sourceProjection;
+      : photoLinearCandidate
+        ? inspectPhotoCandidateProjection(photoLinearCandidate.candidate, candidateType)
+        : sourceProjection;
   const renderedPlanningCenter = endpoints.length >= 2
     ? [
       (endpoints[0][0] + endpoints[1][0]) * 0.5,

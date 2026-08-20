@@ -12,9 +12,9 @@ export function WorkflowLayout({ liveRail, stage, incisionRail }: WorkflowLayout
   return (
     <WorkbenchLayout
       secondarySidebar={incisionRail}
-      secondarySidebarClassName="workflow-incision-rail"
+      secondarySidebarClassName="workflow-incision-rail incision-workbench"
       secondarySidebarLabel="切口规划操作台"
-      sidebarClassName="workflow-live-rail"
+      sidebarClassName="workflow-live-rail live-workbench"
       sidebarLabel="实时 RSTL 操作台"
       stage={stage}
       workspace="workflow"

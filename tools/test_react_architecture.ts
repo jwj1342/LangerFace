@@ -686,7 +686,7 @@ assert.ok(!app.includes('to="/annotate" replace'), "atlas settings is no longer 
 assert.ok(!app.includes('to="/three-preview" replace'), "developer settings is no longer a direct redirect to the R3F preview");
 assert.ok(dashboardRoute.includes("useReactRouteLifecycle"), "React dashboard uses the shared pure route lifecycle hook");
 assert.ok(dashboardRoute.includes('workspace: "dashboard"'), "React dashboard publishes its active workspace");
-assert.ok(dashboardRoute.includes("WorkbenchBrand"), "React dashboard uses the shared workbench brand");
+assert.ok(!dashboardRoute.includes("WorkbenchBrand"), "React dashboard omits the removed sidebar brand");
 assert.ok(dashboardRoute.includes("Card"), "React dashboard uses the shared shadcn-style card component");
 assert.ok(workbenchBrand.includes('className="brand"'), "React shell uses a shared workbench brand component");
 assert.ok(workbenchBrand.includes('className="brand-top"'), "shared workbench brand keeps the existing brand-top structure");
@@ -737,16 +737,18 @@ assert.ok(surgeryRoute.includes("ReactRouteHost"), "SurgeryRoute should render t
 assert.ok(surgeryRoute.includes('workspace="surgery"'), "SurgeryRoute should declare its ReactRouteHost workspace");
 assert.ok(!surgeryRoute.includes('className="react-surgery-host"'), "SurgeryRoute should not hand-write its route host class");
 assert.ok(app.includes("ReactPage"), "React route fallback uses the shared React page primitive");
-assert.ok(dashboardRoute.includes("ReactShellNavLink"), "React dashboard uses shared shell nav links");
+assert.ok(!dashboardRoute.includes("ReactShellNavLink"), "React dashboard omits the removed sidebar shortcuts");
 assert.ok(!dashboardRoute.includes("ReactShellExternalLink"), "React dashboard should not send users back to legacy HTML entrypoints");
 assert.ok(!dashboardRoute.includes("/index.html"), "React dashboard should not link to the legacy live HTML entrypoint");
-for (const route of ["/live", "/incision"]) {
+for (const route of ["/live", "/incision", "/app/workflow"]) {
   assert.ok(dashboardRoute.includes(`to: "${route}"`), `React dashboard exposes stateless tool route ${route}`);
 }
+assert.ok(dashboardRoute.includes("合并工作流（开发中）"), "React dashboard labels the merged workflow entry as unfinished");
 assert.ok(!dashboardRoute.includes('to: "/three-preview"'), "React dashboard should not expose the public R3F preview card");
-assert.ok(dashboardRoute.includes('to: "/personalized"'), "React dashboard exposes the personalized browser tool as an SPA route");
+assert.ok(app.includes('path="/personalized"'), "React Router preserves the legacy personalized browser tool route");
+assert.ok(!dashboardRoute.includes('to: "/personalized"'), "React dashboard hides the personalized browser tool entry");
 assert.ok(!dashboardRoute.includes("/cases"), "React dashboard does not expose a case lobby");
-assert.ok(dashboardRoute.includes("不创建、恢复或保存病例"), "React dashboard states the no-case-storage boundary");
+assert.ok(dashboardRoute.includes("不维护病例大厅、患者档案、历史记录或云端病例库"), "React dashboard states the no-case-storage boundary");
 for (const [name, html, expected] of [
   ["annotate.html", legacyAnnotateHtml, ["/app/annotate"]],
   ["incision_workflow.html", legacyIncisionHtml, ["/app/incision"]],
@@ -998,7 +1000,8 @@ assert.deepEqual(
   "React incision form panels should use FieldGroup/ButtonRow visible and native hidden inputs instead of hand-written hidden classes",
 );
 assert.ok(tumorPanel.includes("FieldGroup"), "React tumor input panel uses FieldGroup for conditional tumor fields");
-assert.ok(tumorPanel.includes('id="depthWrap" visible={!cutaneous}'), "React tumor input panel shows depth only for subcutaneous lesions through FieldGroup visible");
+assert.ok(tumorPanel.includes('showDepthControl = true'), "React tumor input panel preserves the standalone depth-control default");
+assert.ok(tumorPanel.includes('id="depthWrap" visible={!cutaneous && showDepthControl}'), "React tumor input panel can hide the non-operative workflow depth control without deleting its data contract");
 assert.ok(tumorPanel.includes('id="marginWrap" visible={cutaneous}'), "React tumor input panel shows cutaneous margin through FieldGroup visible");
 assert.ok(tumorPanel.includes('id="ellipseWrap" visible={cutaneous && boundaryMode === "ellipse"}'), "React tumor input panel shows ellipse controls through FieldGroup visible");
 assert.ok(tumorPanel.includes('id="freehandControls" visible={freehand}'), "React tumor input panel shows freehand controls through ButtonRow visible");
@@ -1645,6 +1648,11 @@ for (const id of [
 }
 assert.ok(incisionStore.includes("IncisionEditState"), "incision Zustand store keeps typed edit state");
 assert.ok(incisionWorkbench.includes("EditControlsPanel"), "React incision workbench renders the edit controls as a React component");
+assert.match(
+  incisionWorkbench,
+  /<div hidden>\s*<EditControlsPanel\s*\/>\s*<\/div>/,
+  "React incision workbench keeps the edit controls mounted but hidden",
+);
 assert.ok(editPanel.includes("useIncisionControllerCommands"), "React edit panel uses typed incision command callbacks");
 assert.ok(!editPanel.includes("dispatchIncisionEditCommand"), "React edit panel does not import low-level command dispatch helpers directly");
 assert.ok(!editPanel.includes("../lib/controllerEvents"), "React edit panel does not import controller event names directly");

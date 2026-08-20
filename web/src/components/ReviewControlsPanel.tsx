@@ -49,7 +49,7 @@ export function ReviewControlsPanel() {
       </div>
       <Select
         id="reviewDecision"
-        defaultValue="pending_clinician_confirmation"
+        value={status}
         onChange={(event) => {
           setStatus(event.currentTarget.value);
           commands.review("review_state_changed");

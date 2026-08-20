@@ -118,8 +118,11 @@ for (const forbidden of [
 assert.ok(!liveRefinePanel.includes("refineSaveBtn"), "live UI should not offer persistent refinement save");
 assert.ok(!deploymentDoc.includes("VITE_API_BASE_URL"), "deployment docs should not direct the frontend to a removed case API");
 assert.ok(!deploymentDoc.includes("Worker API、D1、R2"), "deployment docs should not retain the removed case backend plan");
-assert.ok(dashboard.includes("不创建、恢复或保存病例"), "tool launcher should state the no-case-storage boundary");
-assert.ok(dashboard.includes('to: "/personalized"'), "personalized 2D tool should remain available");
+assert.ok(dashboard.includes("不维护病例大厅、患者档案、历史记录或云端病例库"), "tool launcher should state the no-case-storage boundary");
+assert.ok(app.includes('path="/personalized"'), "legacy personalized route should remain available directly");
+assert.ok(!dashboard.includes('to: "/personalized"'), "tool launcher should hide personalized capture");
 assert.ok(dashboard.includes('to: "/live"'), "live 2D tool should remain available");
+assert.ok(dashboard.includes('to: "/incision"'), "incision tool should remain available");
+assert.ok(dashboard.includes('to: "/app/workflow"'), "merged workflow development entry should remain available");
 
 console.log("No-case-feature boundary checks passed.");

@@ -13,7 +13,11 @@ import { FieldValue, Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
 
-export function TumorInputPanel() {
+export interface TumorInputPanelProps {
+  showDepthControl?: boolean;
+}
+
+export function TumorInputPanel({ showDepthControl = true }: TumorInputPanelProps) {
   const commands = useIncisionControllerCommands();
   const snapshot = useIncisionStore((state) => state.snapshot);
   const [kind, setKind] = useState("cutaneous");
@@ -39,6 +43,7 @@ export function TumorInputPanel() {
     if (tumor.diameterMm != null) setDiameter(String(tumor.diameterMm));
     if (tumor.kind === "subcutaneous" && tumor.depthMm != null) setDepth(String(tumor.depthMm));
     if (tumor.kind === "cutaneous" && tumor.marginMm != null) setMargin(String(tumor.marginMm));
+    if (tumor.kind === "cutaneous" && tumor.ellipseRatio != null) setEllipseRatio(String(tumor.ellipseRatio));
     if (tumor.kind === "cutaneous" && (tumor.boundaryMode === "ellipse" || tumor.boundaryMode === "freehand")) {
       setBoundaryMode(tumor.boundaryMode);
     }
@@ -106,7 +111,7 @@ export function TumorInputPanel() {
           }}
         />
       </FieldGroup>
-      <FieldGroup id="depthWrap" visible={!cutaneous}>
+      <FieldGroup id="depthWrap" visible={!cutaneous && showDepthControl}>
         <Label htmlFor="depthMm">深度 mm <FieldValue id="depthVal">{depth}</FieldValue></Label>
         <RangeInput
           id="depthMm"
