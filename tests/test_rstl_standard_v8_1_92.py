@@ -18,7 +18,6 @@ from test_rstl_standard_v8_1_89 import (
     TARGET_NAMES,
     TARGET_REGION,
     TARGET_SOURCE_ORDER,
-    _temporal_boundary_outward,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -126,13 +125,6 @@ def test_v8_1_92_extends_orbital_brow_tails_inside_visible_temple(tmp_path):
                 )
                 assert maxima == 1
 
-                boundary_outward = _temporal_boundary_outward(
-                    landmarks,
-                    side,
-                    new_prefix[0],
-                    outward_axis,
-                    down_axis,
-                )
                 endpoint_outward = float(new_prefix[0] @ outward_axis)
                 join_outward = float(new_prefix[-1] @ outward_axis)
                 assert endpoint_outward >= join_outward - 1e-6

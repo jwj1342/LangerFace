@@ -59,8 +59,9 @@ def _segments_intersect(a: np.ndarray, b: np.ndarray, c: np.ndarray, d: np.ndarr
     return o1 * o2 < -1e-12 and o3 * o4 < -1e-12
 
 
-def _crossing_pairs(curves: dict[str, np.ndarray]) -> set[tuple[str, str]]:
-    cell_size = 0.025
+def _crossing_pairs(
+    curves: dict[str, np.ndarray], *, cell_size: float = 0.025
+) -> set[tuple[str, str]]:
     grid: dict[tuple[int, int], list[tuple[str, int, np.ndarray, np.ndarray]]] = {}
     checked: set[tuple[str, int, str, int]] = set()
     crossings: set[tuple[str, str]] = set()
