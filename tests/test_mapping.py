@@ -55,6 +55,75 @@ def test_affine_invariance():
     assert np.allclose(mapped2, expected2, atol=1e-9)
 
 
+def test_post_map_cubic_fairing_preserves_endpoints_and_removes_local_dents():
+    landmarks = np.asarray(
+        [[0.0, 10.0, 0.0], [20.0, 10.7, 0.0], [40.0, 8.8, 0.0],
+         [60.0, 6.4, 0.0], [80.0, 5.2, 0.0], [100.0, 0.0, 0.0]],
+        dtype=float,
+    )
+    triangles = np.asarray([[index, index, index] for index in range(len(landmarks))])
+    points = np.asarray([[index, 1.0, 0.0] for index in range(len(landmarks))], dtype=float)
+    line = AtlasLine(
+        "smooth",
+        "lateral_canthus_short_arc_v65",
+        points,
+        post_map_cubic_fairing=True,
+    )
+    mapped = map_atlas(Atlas(system="rstl", lines=[line]), landmarks, triangles)[0].pts
+
+    np.testing.assert_array_equal(mapped[[0, -1], :2], landmarks[[0, -1], :2])
+    segment_slopes = np.diff(mapped[:, 1]) / np.diff(mapped[:, 0])
+    assert np.all(np.diff(segment_slopes) < 0.0)
+    assert np.max(np.abs(np.diff(segment_slopes, n=2))) < 0.02
+
+
+def test_post_map_temporal_cubic_extends_beyond_mesh_with_a_smooth_join():
+    landmarks = np.asarray(
+        [[0.0, 0.0, 0.0], [25.0, 0.0, 0.0], [50.0, 0.0, 0.0],
+         [75.0, 0.0, 0.0], [100.0, 0.0, 0.0], [125.0, 0.0, 0.0]],
+        dtype=float,
+    )
+    triangles = np.asarray([[index, index, index] for index in range(len(landmarks))])
+    points = np.asarray([[index, 1.0, 0.0] for index in range(len(landmarks))], dtype=float)
+    line = AtlasLine(
+        "standard_field_0105_right",
+        "orbital_brow_upturn_v11",
+        points,
+        post_map_temporal_cubic_face_ratio=(
+            3,
+            (0.80, -0.20),
+            (0.55, 0.20),
+            (0.25, 0.0),
+        ),
+    )
+    mapped = map_atlas(Atlas(system="rstl", lines=[line]), landmarks, triangles)[0].pts
+
+    np.testing.assert_allclose(mapped[0, :2], [-25.0, -2.5], atol=1e-9)
+    np.testing.assert_array_equal(mapped[3:], landmarks[3:])
+    incoming = mapped[3, :2] - mapped[2, :2]
+    outgoing = mapped[4, :2] - mapped[3, :2]
+    cosine = float(incoming @ outgoing / (np.linalg.norm(incoming) * np.linalg.norm(outgoing)))
+    assert cosine > 0.999
+
+
+def test_v69_supraorbital_arc_is_not_shifted_twice_after_atlas_reflow():
+    landmarks = np.asarray(
+        [[0.0, 0.0, 0.0], [25.0, 5.0, 0.0], [50.0, 10.0, 0.0]],
+        dtype=float,
+    )
+    triangles = np.asarray([[index, index, index] for index in range(3)])
+    points = np.asarray([[index, 1.0, 0.0] for index in range(3)], dtype=float)
+    line = AtlasLine(
+        "standard_field_0170_right",
+        "supraorbital_medial_short_arc_v69",
+        points,
+    )
+
+    mapped = map_atlas(Atlas(system="rstl", lines=[line]), landmarks, triangles)[0].pts
+
+    np.testing.assert_array_equal(mapped, landmarks)
+
+
 def test_forehead_bridge_v15_has_the_reviewed_arch_and_even_layer_offsets():
     landmarks = np.full((11, 3), [50.0, 50.0, 0.0], dtype=float)
     landmarks[0] = [30.0, 40.0, 0.0]
