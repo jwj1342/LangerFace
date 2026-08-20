@@ -7,6 +7,8 @@ import {
 } from "./constantsGenerated.ts";
 import type { Triangle, Vec3 } from "./softBody";
 
+type Vec2 = [number, number];
+
 export { NOSE_TIP };
 
 export interface NormalizedLandmark {
@@ -23,6 +25,10 @@ export interface AtlasLine {
   disableRuntimeExpansion?: boolean;
   postExpansionOffsetsFaceRatioSparse?: Array<[number, number, number]>;
   postMapSmoothingPasses?: number;
+  postMapCubicFairing?: boolean;
+  postMapTemporalCubicFaceRatio?: [number, Vec2, Vec2, Vec2];
+  postMapTemporalAbsoluteEndpoint?: boolean;
+  postMapTemporalBoundaryMarginFaceRatio?: number;
   points?: AtlasPoint[];
 }
 
@@ -57,8 +63,6 @@ const SUPRAORBITAL_SHORT_ARC_REGIONS_V67 = new Set([
 const SUPRAORBITAL_UPWARD_SHIFT_FACE_HEIGHT_V67 = 0.080;
 const SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V68 = "supraorbital_medial_short_arc_v68";
 const SUPRAORBITAL_MEDIAL_UPWARD_SHIFT_FACE_HEIGHT_V68 = 0.040;
-const SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V69 = "supraorbital_medial_short_arc_v69";
-const SUPRAORBITAL_MEDIAL_UPWARD_SHIFT_FACE_HEIGHT_V69 = 0.045;
 
 function raiseSupraorbitalShortArc(
   points: Vec3[], landmarksPx: Vec3[], shiftFaceHeight: number,
@@ -92,6 +96,101 @@ function smoothMappedCurve(points: Vec3[], passes: number): Vec3[] {
       smoothed[index][1] = 0.25 * out[index - 1][1] + 0.5 * out[index][1] + 0.25 * out[index + 1][1];
     }
     out = smoothed;
+  }
+  return out;
+}
+
+function fairMappedCurveCubic(points: Vec3[]): Vec3[] {
+  const out = points.map((point) => [...point] as Vec3);
+  if (out.length < 4) return out;
+  const cumulative = new Array<number>(out.length).fill(0);
+  for (let index = 1; index < out.length; index += 1) {
+    cumulative[index] = cumulative[index - 1] + Math.hypot(
+      out[index][0] - out[index - 1][0],
+      out[index][1] - out[index - 1][1],
+    );
+  }
+  const length = cumulative.at(-1) ?? 0;
+  if (!(length > 1e-9)) return out;
+  const source = out.map((point) => [point[0], point[1]]);
+  let a11 = 0;
+  let a12 = 0;
+  let a22 = 0;
+  const r1 = [0, 0];
+  const r2 = [0, 0];
+  const basis = cumulative.map((distance, index) => {
+    const t = distance / length;
+    const oneMinusT = 1 - t;
+    const b0 = oneMinusT ** 3;
+    const b1 = 3 * oneMinusT ** 2 * t;
+    const b2 = 3 * oneMinusT * t ** 2;
+    const b3 = t ** 3;
+    a11 += b1 * b1;
+    a12 += b1 * b2;
+    a22 += b2 * b2;
+    for (let axis = 0; axis < 2; axis += 1) {
+      const residual = out[index][axis] - b0 * out[0][axis] - b3 * out.at(-1)![axis];
+      r1[axis] += b1 * residual;
+      r2[axis] += b2 * residual;
+    }
+    return [b0, b1, b2, b3];
+  });
+  const determinant = a11 * a22 - a12 * a12;
+  if (Math.abs(determinant) <= 1e-12) return out;
+  const control1 = r1.map((value, axis) => (
+    (a22 * value - a12 * r2[axis]) / determinant
+  ));
+  const control2 = r2.map((value, axis) => (
+    (a11 * value - a12 * r1[axis]) / determinant
+  ));
+  for (let index = 1; index < out.length - 1; index += 1) {
+    const [b0, b1, b2, b3] = basis[index];
+    for (let axis = 0; axis < 2; axis += 1) {
+      out[index][axis] = b0 * out[0][axis] + b1 * control1[axis]
+        + b2 * control2[axis] + b3 * out.at(-1)![axis];
+    }
+  }
+  let hasClockwiseTurn = false;
+  let hasCounterclockwiseTurn = false;
+  for (let index = 0; index < out.length - 2; index += 1) {
+    const firstX = out[index + 1][0] - out[index][0];
+    const firstY = out[index + 1][1] - out[index][1];
+    const secondX = out[index + 2][0] - out[index + 1][0];
+    const secondY = out[index + 2][1] - out[index + 1][1];
+    const scale = Math.hypot(firstX, firstY) * Math.hypot(secondX, secondY);
+    const turnSine = scale > 1e-12
+      ? (firstX * secondY - firstY * secondX) / scale
+      : 0;
+    hasClockwiseTurn ||= turnSine < -1e-6;
+    hasCounterclockwiseTurn ||= turnSine > 1e-6;
+  }
+  if (hasClockwiseTurn && hasCounterclockwiseTurn) {
+    let denominator = 0;
+    const numerator = [0, 0];
+    const quadraticBasis = cumulative.map((distance, index) => {
+      const t = distance / length;
+      const oneMinusT = 1 - t;
+      const q0 = oneMinusT ** 2;
+      const q1 = 2 * oneMinusT * t;
+      const q2 = t ** 2;
+      denominator += q1 * q1;
+      for (let axis = 0; axis < 2; axis += 1) {
+        const residual = source[index][axis]
+          - q0 * source[0][axis] - q2 * source.at(-1)![axis];
+        numerator[axis] += q1 * residual;
+      }
+      return [q0, q1, q2];
+    });
+    if (denominator > 1e-12) {
+      const control = numerator.map((value) => value / denominator);
+      for (let index = 1; index < out.length - 1; index += 1) {
+        const [q0, q1, q2] = quadraticBasis[index];
+        for (let axis = 0; axis < 2; axis += 1) {
+          out[index][axis] = q0 * source[0][axis] + q1 * control[axis]
+            + q2 * source.at(-1)![axis];
+        }
+      }
+    }
   }
   return out;
 }
@@ -281,6 +380,244 @@ function applyPostExpansionOffsets(
   return out;
 }
 
+function sampleXyByArclength(points: Vec2[], count: number): Vec2[] {
+  if (count <= 1) return points.slice(0, 1);
+  const cumulative = [0];
+  for (let index = 1; index < points.length; index++) {
+    cumulative.push(cumulative[index - 1] + Math.hypot(
+      points[index][0] - points[index - 1][0],
+      points[index][1] - points[index - 1][1],
+    ));
+  }
+  const total = cumulative[cumulative.length - 1];
+  if (!(total > 1e-9)) return Array.from({ length: count }, () => [...points[0]] as Vec2);
+  const result: Vec2[] = [];
+  let segment = 0;
+  for (let index = 0; index < count; index++) {
+    const target = total * index / (count - 1);
+    while (segment + 1 < cumulative.length - 1 && cumulative[segment + 1] < target) {
+      segment += 1;
+    }
+    const span = cumulative[segment + 1] - cumulative[segment];
+    const ratio = span > 1e-12 ? (target - cumulative[segment]) / span : 0;
+    result.push([
+      points[segment][0] + ratio * (points[segment + 1][0] - points[segment][0]),
+      points[segment][1] + ratio * (points[segment + 1][1] - points[segment][1]),
+    ]);
+  }
+  return result;
+}
+
+function applyTemporalCubicFaceRatio(
+  points: Vec3[], landmarksPx: Vec3[], lineName: string,
+  specification?: [number, Vec2, Vec2, Vec2],
+  absoluteEndpoint = false,
+  boundaryMarginFaceRatio = 0.02,
+): Vec3[] {
+  if (!specification || points.length < 5 || landmarksPx.length === 0) return points;
+  const [joinIndex, firstOffset, secondOffset, tangentHandleOffset] = specification;
+  if (!Number.isInteger(joinIndex) || joinIndex < 2 || joinIndex >= points.length - 2) return points;
+  const xs = landmarksPx.map((point) => point[0]).filter(Number.isFinite);
+  const faceWidth = xs.length ? Math.max(...xs) - Math.min(...xs) : 0;
+  if (!(faceWidth > 1e-9)) return points;
+
+  const out = points.map((point) => [...point] as Vec3);
+  const join: Vec2 = [out[joinIndex][0], out[joinIndex][1]];
+  let rightAxis: Vec2 = [1, 0];
+  if (landmarksPx.length > 263) {
+    rightAxis = [
+      landmarksPx[263][0] - landmarksPx[33][0],
+      landmarksPx[263][1] - landmarksPx[33][1],
+    ];
+  }
+  const rightNorm = Math.hypot(rightAxis[0], rightAxis[1]);
+  if (!(rightNorm > 1e-9)) return points;
+  rightAxis = [rightAxis[0] / rightNorm, rightAxis[1] / rightNorm];
+  let downAxis: Vec2 = landmarksPx.length > 152
+    ? [
+        landmarksPx[152][0] - landmarksPx[10][0],
+        landmarksPx[152][1] - landmarksPx[10][1],
+      ]
+    : [0, 1];
+  const downProjection = downAxis[0] * rightAxis[0] + downAxis[1] * rightAxis[1];
+  downAxis = [
+    downAxis[0] - downProjection * rightAxis[0],
+    downAxis[1] - downProjection * rightAxis[1],
+  ];
+  const downNorm = Math.hypot(downAxis[0], downAxis[1]);
+  if (!(downNorm > 1e-9)) return points;
+  downAxis = [downAxis[0] / downNorm, downAxis[1] / downNorm];
+  const outwardAxis: Vec2 = lineName.endsWith("_left")
+    ? rightAxis
+    : [-rightAxis[0], -rightAxis[1]];
+  const oldOutwardDistance = (
+    (out[0][0] - join[0]) * outwardAxis[0]
+    + (out[0][1] - join[1]) * outwardAxis[1]
+  ) / faceWidth;
+  const requestedOutwardDistance = absoluteEndpoint
+    ? Math.min(0.22, Math.max(0, firstOffset[0]))
+    : Math.min(0.22, Math.max(firstOffset[0], oldOutwardDistance + 0.03));
+  let targetOutwardDistance = requestedOutwardDistance;
+  if (absoluteEndpoint && landmarksPx.length > 389) {
+    const boundaryIndices = lineName.endsWith("_left")
+      ? [356, 389, 251, 284, 332, 297, 338, 10]
+      : [127, 162, 21, 54, 103, 67, 109, 10];
+    const boundaryDown = boundaryIndices.map((index) => (
+      landmarksPx[index][0] * downAxis[0] + landmarksPx[index][1] * downAxis[1]
+    ));
+    const boundaryOutward = boundaryIndices.map((index) => (
+      landmarksPx[index][0] * outwardAxis[0] + landmarksPx[index][1] * outwardAxis[1]
+    ));
+    const endpointDown = join[0] * downAxis[0] + join[1] * downAxis[1]
+      + faceWidth * firstOffset[1];
+    const outwardCandidates: number[] = [];
+    for (let index = 0; index < boundaryIndices.length - 1; index++) {
+      const down0 = boundaryDown[index];
+      const down1 = boundaryDown[index + 1];
+      if (endpointDown < Math.min(down0, down1) || endpointDown > Math.max(down0, down1)) {
+        continue;
+      }
+      const ratio = Math.abs(down1 - down0) > 1e-9
+        ? (endpointDown - down0) / (down1 - down0)
+        : 0.5;
+      outwardCandidates.push(
+        boundaryOutward[index]
+        + ratio * (boundaryOutward[index + 1] - boundaryOutward[index]),
+      );
+    }
+    let boundaryOutwardAtEndpoint: number;
+    if (outwardCandidates.length) {
+      boundaryOutwardAtEndpoint = Math.max(...outwardCandidates);
+    } else {
+      let nearestIndex = 0;
+      for (let index = 1; index < boundaryDown.length; index++) {
+        if (Math.abs(boundaryDown[index] - endpointDown)
+          < Math.abs(boundaryDown[nearestIndex] - endpointDown)) {
+          nearestIndex = index;
+        }
+      }
+      boundaryOutwardAtEndpoint = boundaryOutward[nearestIndex];
+    }
+    const boundaryMargin = Math.min(0.1, Math.max(-0.05, boundaryMarginFaceRatio));
+    const boundaryLimit = (
+      boundaryOutwardAtEndpoint
+      - boundaryMargin * faceWidth
+      - join[0] * outwardAxis[0]
+      - join[1] * outwardAxis[1]
+    ) / faceWidth;
+    targetOutwardDistance = Math.min(targetOutwardDistance, Math.max(0, boundaryLimit));
+  }
+  const outwardExtra = Math.max(0, targetOutwardDistance - firstOffset[0]);
+  const localOffset = (offset: Vec2, extraScale: number): Vec2 => [
+    faceWidth * (
+      (offset[0] + extraScale * outwardExtra) * outwardAxis[0]
+      + offset[1] * downAxis[0]
+    ),
+    faceWidth * (
+      (offset[0] + extraScale * outwardExtra) * outwardAxis[1]
+      + offset[1] * downAxis[1]
+    ),
+  ];
+  const firstDelta: Vec2 = absoluteEndpoint
+    ? [
+        faceWidth * (
+          targetOutwardDistance * outwardAxis[0] + firstOffset[1] * downAxis[0]
+        ),
+        faceWidth * (
+          targetOutwardDistance * outwardAxis[1] + firstOffset[1] * downAxis[1]
+        ),
+      ]
+    : localOffset(firstOffset, 1);
+  let secondOutwardDistance = secondOffset[0] + 0.55 * outwardExtra;
+  const boundaryClamped = absoluteEndpoint
+    && targetOutwardDistance < requestedOutwardDistance - 1e-9;
+  if (boundaryClamped) {
+    secondOutwardDistance = Math.min(secondOutwardDistance, 0.70 * targetOutwardDistance);
+  }
+  const secondDelta: Vec2 = [
+    faceWidth * (
+      secondOutwardDistance * outwardAxis[0] + secondOffset[1] * downAxis[0]
+    ),
+    faceWidth * (
+      secondOutwardDistance * outwardAxis[1] + secondOffset[1] * downAxis[1]
+    ),
+  ];
+  let first: Vec2 = [join[0] + firstDelta[0], join[1] + firstDelta[1]];
+  let second: Vec2 = [join[0] + secondDelta[0], join[1] + secondDelta[1]];
+  const endpointDelta: Vec2 = [first[0] - out[0][0], first[1] - out[0][1]];
+  const outwardExtension = endpointDelta[0] * outwardAxis[0] + endpointDelta[1] * outwardAxis[1];
+  const outwardCorrection = absoluteEndpoint
+    ? 0
+    : Math.max(0, 0.03 * faceWidth - outwardExtension);
+  const upwardShift = endpointDelta[0] * downAxis[0] + endpointDelta[1] * downAxis[1];
+  const downCorrection = !absoluteEndpoint && upwardShift < -0.02 * faceWidth
+    ? -0.02 * faceWidth - upwardShift
+    : 0;
+  const correction: Vec2 = [
+    outwardCorrection * outwardAxis[0] + downCorrection * downAxis[0],
+    outwardCorrection * outwardAxis[1] + downCorrection * downAxis[1],
+  ];
+  first = [first[0] + correction[0], first[1] + correction[1]];
+  second = [second[0] + 0.55 * correction[0], second[1] + 0.55 * correction[1]];
+  let outgoing: Vec2 = [
+    out[joinIndex + 1][0] - join[0],
+    out[joinIndex + 1][1] - join[1],
+  ];
+  const outgoingNorm = Math.hypot(outgoing[0], outgoing[1]);
+  if (!(outgoingNorm > 1e-9)) return points;
+  outgoing = [outgoing[0] / outgoingNorm, outgoing[1] / outgoingNorm];
+  const controlTangent: Vec2 = [
+    out[joinIndex + 1][0] - out[joinIndex - 1][0],
+    out[joinIndex + 1][1] - out[joinIndex - 1][1],
+  ];
+  const controlTangentNorm = Math.hypot(controlTangent[0], controlTangent[1]);
+  if (!(controlTangentNorm > 1e-9)) return points;
+  const handleLength = faceWidth * Math.hypot(tangentHandleOffset[0], tangentHandleOffset[1]);
+  const third: Vec2 = [
+    join[0] - handleLength * controlTangent[0] / controlTangentNorm,
+    join[1] - handleLength * controlTangent[1] / controlTangentNorm,
+  ];
+  if (boundaryClamped) {
+    const thirdOutwardDistance = (
+      (third[0] - join[0]) * outwardAxis[0]
+      + (third[1] - join[1]) * outwardAxis[1]
+    ) / faceWidth;
+    const clampedThirdOutwardDistance = Math.min(
+      Math.max(0, thirdOutwardDistance),
+      0.70 * secondOutwardDistance,
+    );
+    const thirdCorrection = faceWidth
+      * (clampedThirdOutwardDistance - thirdOutwardDistance);
+    third[0] += thirdCorrection * outwardAxis[0];
+    third[1] += thirdCorrection * outwardAxis[1];
+  }
+  const dense: Vec2[] = [];
+  for (let index = 0; index < 192; index++) {
+    const t = index / 191;
+    const oneMinus = 1 - t;
+    dense.push([
+      oneMinus ** 3 * first[0] + 3 * oneMinus ** 2 * t * second[0]
+        + 3 * oneMinus * t ** 2 * third[0] + t ** 3 * join[0],
+      oneMinus ** 3 * first[1] + 3 * oneMinus ** 2 * t * second[1]
+        + 3 * oneMinus * t ** 2 * third[1] + t ** 3 * join[1],
+    ]);
+  }
+  const prefix = sampleXyByArclength(dense, joinIndex + 1);
+  const terminalSegmentLength = Math.hypot(
+    prefix[prefix.length - 1][0] - prefix[prefix.length - 2][0],
+    prefix[prefix.length - 1][1] - prefix[prefix.length - 2][1],
+  );
+  prefix[prefix.length - 2] = [
+    join[0] - terminalSegmentLength * outgoing[0],
+    join[1] - terminalSegmentLength * outgoing[1],
+  ];
+  for (let index = 0; index <= joinIndex; index++) {
+    out[index][0] = prefix[index][0];
+    out[index][1] = prefix[index][1];
+  }
+  return out;
+}
+
 export function toPixels(landmarks: NormalizedLandmark[], width: number, height: number): Vec3[] {
   const out = new Array<Vec3>(landmarks.length);
   for (let i = 0; i < landmarks.length; i++) {
@@ -343,15 +680,20 @@ export function mapAtlas(
         landmarksPx,
         SUPRAORBITAL_MEDIAL_UPWARD_SHIFT_FACE_HEIGHT_V68,
       );
-    } else if (line.region === SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V69) {
-      mappedPoints = raiseSupraorbitalShortArc(
-        pts,
-        landmarksPx,
-        SUPRAORBITAL_MEDIAL_UPWARD_SHIFT_FACE_HEIGHT_V69,
-      );
     }
+    mappedPoints = applyTemporalCubicFaceRatio(
+      mappedPoints,
+      landmarksPx,
+      line.name || "",
+      line.postMapTemporalCubicFaceRatio,
+      line.postMapTemporalAbsoluteEndpoint === true,
+      line.postMapTemporalBoundaryMarginFaceRatio ?? 0.02,
+    );
     mappedPoints = applyPostExpansionOffsets(mappedPoints, line, landmarksPx);
     mappedPoints = smoothMappedCurve(mappedPoints, line.postMapSmoothingPasses ?? 0);
+    if (line.postMapCubicFairing === true) {
+      mappedPoints = fairMappedCurveCubic(mappedPoints);
+    }
     result.push({ name: line.name || "unnamed_curve", region: line.region || "", pts: mappedPoints, tris });
   }
   return result;

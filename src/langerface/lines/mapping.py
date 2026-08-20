@@ -24,8 +24,6 @@ SUPRAORBITAL_SHORT_ARC_REGIONS_V67 = frozenset(
 SUPRAORBITAL_UPWARD_SHIFT_FACE_HEIGHT_V67 = 0.080
 SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V68 = "supraorbital_medial_short_arc_v68"
 SUPRAORBITAL_MEDIAL_UPWARD_SHIFT_FACE_HEIGHT_V68 = 0.040
-SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V69 = "supraorbital_medial_short_arc_v69"
-SUPRAORBITAL_MEDIAL_UPWARD_SHIFT_FACE_HEIGHT_V69 = 0.045
 
 
 def _raise_supraorbital_short_arc(
@@ -61,6 +59,262 @@ def _smooth_mapped_curve(points: np.ndarray, passes: int) -> np.ndarray:
             0.25 * out[:-2, :2] + 0.5 * out[1:-1, :2] + 0.25 * out[2:, :2]
         )
         out = smoothed
+    return out
+
+
+def _fair_mapped_curve_cubic(points: np.ndarray) -> np.ndarray:
+    """Fit one fixed-endpoint cubic to mapped x/y coordinates."""
+    out = points.copy()
+    if len(out) < 4:
+        return out
+    segment = np.linalg.norm(np.diff(out[:, :2], axis=0), axis=1)
+    cumulative = np.r_[0.0, np.cumsum(segment)]
+    length = float(cumulative[-1])
+    if length <= 1e-9:
+        return out
+    source_xy = out[:, :2].copy()
+    t = cumulative / length
+    one_minus_t = 1.0 - t
+    b0 = one_minus_t**3
+    b1 = 3.0 * one_minus_t**2 * t
+    b2 = 3.0 * one_minus_t * t**2
+    b3 = t**3
+    residual = out[:, :2] - b0[:, None] * out[0, :2] - b3[:, None] * out[-1, :2]
+    a11 = float(b1 @ b1)
+    a12 = float(b1 @ b2)
+    a22 = float(b2 @ b2)
+    determinant = a11 * a22 - a12 * a12
+    if abs(determinant) <= 1e-12:
+        return out
+    r1 = b1 @ residual
+    r2 = b2 @ residual
+    control1 = (a22 * r1 - a12 * r2) / determinant
+    control2 = (a11 * r2 - a12 * r1) / determinant
+    out[:, :2] = (
+        b0[:, None] * out[0, :2]
+        + b1[:, None] * control1
+        + b2[:, None] * control2
+        + b3[:, None] * out[-1, :2]
+    )
+    segments = np.diff(out[:, :2], axis=0)
+    turn_cross = (
+        segments[:-1, 0] * segments[1:, 1]
+        - segments[:-1, 1] * segments[1:, 0]
+    )
+    turn_scale = np.linalg.norm(segments[:-1], axis=1) * np.linalg.norm(
+        segments[1:], axis=1
+    )
+    turn_sine = turn_cross / np.maximum(turn_scale, 1e-12)
+    if np.any(turn_sine < -1e-6) and np.any(turn_sine > 1e-6):
+        q0 = one_minus_t**2
+        q1 = 2.0 * one_minus_t * t
+        q2 = t**2
+        quadratic_residual = (
+            source_xy - q0[:, None] * source_xy[0] - q2[:, None] * source_xy[-1]
+        )
+        denominator = float(q1 @ q1)
+        if denominator > 1e-12:
+            control = (q1 @ quadratic_residual) / denominator
+            out[:, :2] = (
+                q0[:, None] * source_xy[0]
+                + q1[:, None] * control
+                + q2[:, None] * source_xy[-1]
+            )
+    out[0, :2] = points[0, :2]
+    out[-1, :2] = points[-1, :2]
+    return out
+
+
+def _sample_xy_by_arclength(points: np.ndarray, count: int) -> np.ndarray:
+    if count <= 1:
+        return points[:1].copy()
+    segment_lengths = np.linalg.norm(np.diff(points, axis=0), axis=1)
+    cumulative = np.r_[0.0, np.cumsum(segment_lengths)]
+    if cumulative[-1] <= 1e-9:
+        return np.repeat(points[:1], count, axis=0)
+    targets = np.linspace(0.0, cumulative[-1], count)
+    return np.column_stack(
+        [np.interp(targets, cumulative, points[:, axis]) for axis in range(2)]
+    )
+
+
+def _apply_temporal_cubic_face_ratio(
+    points: np.ndarray,
+    landmarks_px: np.ndarray,
+    line_name: str,
+    specification: tuple[
+        int,
+        tuple[float, float],
+        tuple[float, float],
+        tuple[float, float],
+    ] | None,
+    absolute_endpoint: bool,
+    boundary_margin_face_ratio: float,
+) -> np.ndarray:
+    """Rebuild a temporal prefix beyond the mesh while retaining a smooth join."""
+    if specification is None or len(points) < 5 or len(landmarks_px) == 0:
+        return points
+    join_index, first_offset, second_offset, tangent_handle_offset = specification
+    if join_index < 2 or join_index >= len(points) - 2:
+        return points
+    face_width = float(np.ptp(landmarks_px[:, 0]))
+    if face_width <= 1e-9:
+        return points
+
+    out = points.copy()
+    join = out[join_index, :2].copy()
+    if len(landmarks_px) > 263:
+        right_axis = landmarks_px[263, :2] - landmarks_px[33, :2]
+        right_axis_norm = float(np.linalg.norm(right_axis))
+    else:
+        right_axis = np.asarray((1.0, 0.0), dtype=np.float64)
+        right_axis_norm = 1.0
+    if right_axis_norm <= 1e-9:
+        return points
+    right_axis /= right_axis_norm
+    if len(landmarks_px) > 152:
+        down_axis = landmarks_px[152, :2] - landmarks_px[10, :2]
+        down_axis -= float(down_axis @ right_axis) * right_axis
+        down_axis_norm = float(np.linalg.norm(down_axis))
+    else:
+        down_axis = np.asarray((0.0, 1.0), dtype=np.float64)
+        down_axis_norm = 1.0
+    if down_axis_norm <= 1e-9:
+        return points
+    down_axis /= down_axis_norm
+    outward_axis = right_axis if line_name.endswith("_left") else -right_axis
+
+    old_outward_distance = float((out[0, :2] - join) @ outward_axis) / face_width
+    requested_outward_distance = (
+        min(0.22, max(0.0, first_offset[0]))
+        if absolute_endpoint
+        else min(0.22, max(first_offset[0], old_outward_distance + 0.03))
+    )
+    target_outward_distance = requested_outward_distance
+    if absolute_endpoint and len(landmarks_px) > 389:
+        boundary_indices = (
+            (356, 389, 251, 284, 332, 297, 338, 10)
+            if line_name.endswith("_left")
+            else (127, 162, 21, 54, 103, 67, 109, 10)
+        )
+        boundary_points = landmarks_px[list(boundary_indices), :2]
+        boundary_down = boundary_points @ down_axis
+        boundary_outward = boundary_points @ outward_axis
+        endpoint_down = float(join @ down_axis) + face_width * first_offset[1]
+        outward_candidates: list[float] = []
+        for boundary_segment_index in range(len(boundary_indices) - 1):
+            down0 = float(boundary_down[boundary_segment_index])
+            down1 = float(boundary_down[boundary_segment_index + 1])
+            if endpoint_down < min(down0, down1) or endpoint_down > max(down0, down1):
+                continue
+            ratio = (
+                (endpoint_down - down0) / (down1 - down0)
+                if abs(down1 - down0) > 1e-9
+                else 0.5
+            )
+            outward_candidates.append(
+                float(boundary_outward[boundary_segment_index])
+                + ratio
+                * float(
+                    boundary_outward[boundary_segment_index + 1]
+                    - boundary_outward[boundary_segment_index]
+                )
+            )
+        if outward_candidates:
+            boundary_outward_at_endpoint = max(outward_candidates)
+        else:
+            nearest_index = int(np.argmin(np.abs(boundary_down - endpoint_down)))
+            boundary_outward_at_endpoint = float(boundary_outward[nearest_index])
+        # Negative margins allow a small, explicit outset beyond MediaPipe's
+        # inner face oval while remaining bounded by the atlas contract.
+        boundary_margin = min(0.1, max(-0.05, boundary_margin_face_ratio))
+        boundary_limit = (
+            boundary_outward_at_endpoint
+            - boundary_margin * face_width
+            - float(join @ outward_axis)
+        ) / face_width
+        target_outward_distance = min(
+            target_outward_distance,
+            max(0.0, boundary_limit),
+        )
+    outward_extra = max(0.0, target_outward_distance - first_offset[0])
+
+    def local_offset(offset: tuple[float, float], extra_scale: float) -> np.ndarray:
+        outward, down = offset
+        return face_width * (
+            (outward + extra_scale * outward_extra) * outward_axis
+            + down * down_axis
+        )
+
+    first = join + (
+        face_width
+        * (
+            target_outward_distance * outward_axis
+            + first_offset[1] * down_axis
+        )
+        if absolute_endpoint
+        else local_offset(first_offset, 1.0)
+    )
+    second_outward_distance = second_offset[0] + 0.55 * outward_extra
+    boundary_clamped = (
+        absolute_endpoint
+        and target_outward_distance < requested_outward_distance - 1e-9
+    )
+    if boundary_clamped:
+        second_outward_distance = min(
+            second_outward_distance,
+            0.70 * target_outward_distance,
+        )
+    second = join + face_width * (
+        second_outward_distance * outward_axis
+        + second_offset[1] * down_axis
+    )
+    old_endpoint = out[0, :2]
+    endpoint_delta = first - old_endpoint
+    outward_extension = float(endpoint_delta @ outward_axis)
+    correction = (
+        np.zeros(2, dtype=np.float64)
+        if absolute_endpoint
+        else max(0.0, 0.03 * face_width - outward_extension) * outward_axis
+    )
+    upward_shift = float(endpoint_delta @ down_axis)
+    if not absolute_endpoint and upward_shift < -0.02 * face_width:
+        correction += (-0.02 * face_width - upward_shift) * down_axis
+    first += correction
+    second += 0.55 * correction
+    handle_length = face_width * float(np.linalg.norm(tangent_handle_offset))
+    outgoing = out[join_index + 1, :2] - join
+    outgoing_norm = float(np.linalg.norm(outgoing))
+    if outgoing_norm <= 1e-9:
+        return points
+    outgoing /= outgoing_norm
+    control_tangent = out[join_index + 1, :2] - out[join_index - 1, :2]
+    control_tangent_norm = float(np.linalg.norm(control_tangent))
+    if control_tangent_norm <= 1e-9:
+        return points
+    third = join - handle_length * control_tangent / control_tangent_norm
+    if boundary_clamped:
+        third_outward_distance = float((third - join) @ outward_axis) / face_width
+        clamped_third_outward_distance = min(
+            max(0.0, third_outward_distance),
+            0.70 * second_outward_distance,
+        )
+        third += face_width * (
+            clamped_third_outward_distance - third_outward_distance
+        ) * outward_axis
+
+    t = np.linspace(0.0, 1.0, 192)
+    one_minus = 1.0 - t
+    dense = (
+        (one_minus**3)[:, None] * first
+        + (3.0 * one_minus**2 * t)[:, None] * second
+        + (3.0 * one_minus * t**2)[:, None] * third
+        + (t**3)[:, None] * join
+    )
+    prefix = _sample_xy_by_arclength(dense, join_index + 1)
+    terminal_segment_length = float(np.linalg.norm(prefix[-1] - prefix[-2]))
+    prefix[-2] = join - terminal_segment_length * outgoing
+    out[: join_index + 1, :2] = prefix
     return out
 
 
@@ -243,13 +497,17 @@ def map_atlas(
                 landmarks_px,
                 SUPRAORBITAL_MEDIAL_UPWARD_SHIFT_FACE_HEIGHT_V68,
             )
-        elif ln.region == SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V69:
-            pts = _raise_supraorbital_short_arc(
-                pts,
-                landmarks_px,
-                SUPRAORBITAL_MEDIAL_UPWARD_SHIFT_FACE_HEIGHT_V69,
-            )
+        pts = _apply_temporal_cubic_face_ratio(
+            pts,
+            landmarks_px,
+            ln.name,
+            ln.post_map_temporal_cubic_face_ratio,
+            ln.post_map_temporal_absolute_endpoint,
+            ln.post_map_temporal_boundary_margin_face_ratio,
+        )
         if ln.post_map_smoothing_passes > 0:
             pts = _smooth_mapped_curve(pts, ln.post_map_smoothing_passes)
+        if ln.post_map_cubic_fairing:
+            pts = _fair_mapped_curve_cubic(pts)
         out.append(MappedLine(name=ln.name, region=ln.region, pts=pts, tris=tris))
     return out

@@ -101,8 +101,8 @@ assert.match(source, /curvature_fairing_enabled/);
 assert.match(source, /lateral_canthus_short_arc_v65/);
 assert.match(source, /supraorbital_lateral_short_arc_v66/);
 assert.match(source, /supraorbital_medial_short_arc_v69/);
-assert.match(source, /atlas\.lines\.length\s*!==\s*159/);
-assert.match(source, /pointCount\s*!==\s*15_222/);
+assert.match(source, /atlas\.lines\.length\s*!==\s*204/);
+assert.match(source, /pointCount\s*!==\s*19_030/);
 assert.match(source, /replay_p90_error_px/,
   "the personalized atlas must audit replay against the refined canonical curves");
 assert.match(source, /replay_p90_error_px > 0\.10/);
@@ -123,11 +123,11 @@ for (const filename of [
 }
 
 assert.equal(atlas.validated, false);
-assert.equal(atlas.atlasVersion, "8.1.74");
-assert.equal(atlas.lines.length, 159);
-assert.equal(atlas.lines.reduce((sum, line) => sum + line.points.length, 0), 15_222);
-assert.equal(atlas.lines.filter((line) => line.region === "lateral_canthus_short_arc_v65").length, 8);
-assert.equal(atlas.lines.filter((line) => line.region === "supraorbital_lateral_short_arc_v66").length, 8);
+assert.equal(atlas.atlasVersion, "8.1.96");
+assert.equal(atlas.lines.length, 204);
+assert.equal(atlas.lines.reduce((sum, line) => sum + line.points.length, 0), 19_030);
+assert.equal(atlas.lines.filter((line) => line.region === "lateral_canthus_short_arc_v65").length, 10);
+assert.equal(atlas.lines.filter((line) => line.region === "supraorbital_lateral_short_arc_v66").length, 0);
 assert.equal(atlas.lines.filter((line) => line.region === "supraorbital_medial_short_arc_v69").length, 10);
 
 console.log("single-image wrinkle/RSTL experiment contract tests passed");

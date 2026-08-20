@@ -33,6 +33,16 @@ def test_roundtrip(tmp_path):
             "forehead",
             np.array([[0, 0.5, 0.3], [1, 0.2, 0.2]], dtype=float),
             disable_runtime_expansion=True,
+            post_map_smoothing_passes=32,
+            post_map_cubic_fairing=True,
+            post_map_temporal_cubic_face_ratio=(
+                1,
+                (-0.17, -0.04),
+                (-0.14, 0.04),
+                (-0.06, 0.01),
+            ),
+            post_map_temporal_absolute_endpoint=True,
+            post_map_temporal_boundary_margin_face_ratio=-0.012,
         ),
     ],
         atlas_version="8.1.67",
@@ -54,6 +64,16 @@ def test_roundtrip(tmp_path):
     }
     assert len(b.lines) == 1 and b.lines[0].points.shape == (2, 3)
     assert b.lines[0].disable_runtime_expansion is True
+    assert b.lines[0].post_map_smoothing_passes == 32
+    assert b.lines[0].post_map_cubic_fairing is True
+    assert b.lines[0].post_map_temporal_cubic_face_ratio == (
+        1,
+        (-0.17, -0.04),
+        (-0.14, 0.04),
+        (-0.06, 0.01),
+    )
+    assert b.lines[0].post_map_temporal_absolute_endpoint is True
+    assert b.lines[0].post_map_temporal_boundary_margin_face_ratio == -0.012
 
 
 def test_save_normalizes_negative_zero(tmp_path):

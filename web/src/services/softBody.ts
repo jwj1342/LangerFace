@@ -14,6 +14,7 @@ export interface SoftBody {
   rest0: Vec3[];
   pos: Vec3[];
   vel: Vec3[];
+  force: Float64Array;
   anchored: Uint8Array;
   removed: Uint8Array;
   tetherMask: Float32Array;
@@ -73,6 +74,7 @@ export function buildSoftBody(
     rest0: verts.map((point) => point.slice() as Vec3),
     pos: verts.map((point) => point.slice() as Vec3),
     vel: verts.map(() => [0, 0, 0] as Vec3),
+    force: new Float64Array(count * 3),
     anchored: opts.anchored || new Uint8Array(count),
     removed: new Uint8Array(count),
     tetherMask: new Float32Array(count).fill(1),
@@ -85,29 +87,36 @@ export function buildSoftBody(
 
 export function stepSoftBody(sb: SoftBody, iters = 1): void {
   const dt = sb.dt;
+  const force = sb.force;
   for (let iter = 0; iter < iters; iter++) {
-    const force = sb.pos.map(() => [0, 0, 0] as Vec3);
+    force.fill(0);
     for (const spring of sb.springs) {
       if (sb.removed[spring.a] || sb.removed[spring.b]) continue;
       const pa = sb.pos[spring.a];
       const pb = sb.pos[spring.b];
-      const delta = sub(pb, pa);
-      const length = len(delta) || 1e-9;
+      const dx = pb[0] - pa[0];
+      const dy = pb[1] - pa[1];
+      const dz = pb[2] - pa[2];
+      const length = Math.hypot(dx, dy, dz) || 1e-9;
       const f = sb.stiffness * spring.k * (length - spring.rest) / length;
-      for (let x = 0; x < 3; x++) {
-        const fx = f * delta[x];
-        force[spring.a][x] += fx;
-        force[spring.b][x] -= fx;
-      }
+      const ai = spring.a * 3;
+      const bi = spring.b * 3;
+      force[ai] += f * dx;
+      force[ai + 1] += f * dy;
+      force[ai + 2] += f * dz;
+      force[bi] -= f * dx;
+      force[bi + 1] -= f * dy;
+      force[bi + 2] -= f * dz;
     }
     for (let i = 0; i < sb.N; i++) {
       const tether = sb.tether * sb.tetherMask[i];
       if (tether === 0) continue;
       const rest = sb.rest0[i];
       const point = sb.pos[i];
-      force[i][0] += tether * (rest[0] - point[0]);
-      force[i][1] += tether * (rest[1] - point[1]);
-      force[i][2] += tether * (rest[2] - point[2]);
+      const offset = i * 3;
+      force[offset] += tether * (rest[0] - point[0]);
+      force[offset + 1] += tether * (rest[1] - point[1]);
+      force[offset + 2] += tether * (rest[2] - point[2]);
     }
     for (let i = 0; i < sb.N; i++) {
       if (sb.anchored[i] || sb.removed[i]) {
@@ -116,8 +125,9 @@ export function stepSoftBody(sb: SoftBody, iters = 1): void {
         sb.vel[i][2] = 0;
         continue;
       }
+      const offset = i * 3;
       for (let x = 0; x < 3; x++) {
-        sb.vel[i][x] = (sb.vel[i][x] + force[i][x] * dt) * sb.damping;
+        sb.vel[i][x] = (sb.vel[i][x] + force[offset + x] * dt) * sb.damping;
         sb.pos[i][x] += sb.vel[i][x] * dt;
       }
     }
