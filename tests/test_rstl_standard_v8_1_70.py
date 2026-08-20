@@ -60,7 +60,7 @@ def _segments_intersect(a: np.ndarray, b: np.ndarray, c: np.ndarray, d: np.ndarr
 
 
 def _crossing_pairs(
-    curves: dict[str, np.ndarray], cell_size: float = 0.025
+    curves: dict[str, np.ndarray], *, cell_size: float = 0.025
 ) -> set[tuple[str, str]]:
     grid: dict[tuple[int, int], list[tuple[str, int, np.ndarray, np.ndarray]]] = {}
     checked: set[tuple[str, int, str, int]] = set()
@@ -100,6 +100,7 @@ def test_v8_1_70_moves_short_arcs_above_brows_and_reverses_transition(tmp_path):
     v70_reference = ROOT / "assets" / "rstl_standard_reference_v8_1_70.json"
     assert json.loads(v70_reference.read_text(encoding="utf-8"))["atlasVersion"] == "8.1.70"
     v70_payload = _atlas_payload(canonical, v70_reference, tmp_path / "atlas_v70.json")
+
     assert v70_payload["validated"] is False
     assert v70_payload["atlasVersion"] == "8.1.70"
     assert len(v70_payload["lines"]) == 159

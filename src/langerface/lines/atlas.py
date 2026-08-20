@@ -40,6 +40,15 @@ class AtlasLine:
     points: np.ndarray  # (N, 3) = [tri_index(float), u, v]
     disable_runtime_expansion: bool = False
     post_map_smoothing_passes: int = 0
+    post_map_cubic_fairing: bool = False
+    post_map_temporal_cubic_face_ratio: tuple[
+        int,
+        tuple[float, float],
+        tuple[float, float],
+        tuple[float, float],
+    ] | None = None
+    post_map_temporal_absolute_endpoint: bool = False
+    post_map_temporal_boundary_margin_face_ratio: float = 0.02
 
     def tris(self) -> np.ndarray:
         return self.points[:, 0].astype(np.int64)
@@ -76,6 +85,27 @@ class Atlas:
                 disable_runtime_expansion=ln.get("disableRuntimeExpansion") is True,
                 post_map_smoothing_passes=max(
                     0, min(32, int(ln.get("postMapSmoothingPasses", 0)))
+                ),
+                post_map_cubic_fairing=ln.get("postMapCubicFairing") is True,
+                post_map_temporal_cubic_face_ratio=(
+                    (
+                        int(ln["postMapTemporalCubicFaceRatio"][0]),
+                        tuple(map(float, ln["postMapTemporalCubicFaceRatio"][1])),
+                        tuple(map(float, ln["postMapTemporalCubicFaceRatio"][2])),
+                        tuple(map(float, ln["postMapTemporalCubicFaceRatio"][3])),
+                    )
+                    if len(ln.get("postMapTemporalCubicFaceRatio", ())) == 4
+                    else None
+                ),
+                post_map_temporal_absolute_endpoint=(
+                    ln.get("postMapTemporalAbsoluteEndpoint") is True
+                ),
+                post_map_temporal_boundary_margin_face_ratio=max(
+                    -0.05,
+                    min(
+                        0.1,
+                        float(ln.get("postMapTemporalBoundaryMarginFaceRatio", 0.02)),
+                    ),
                 ),
             )
             for ln in data["lines"]
@@ -118,6 +148,42 @@ class Atlas:
                     **(
                         {"postMapSmoothingPasses": ln.post_map_smoothing_passes}
                         if ln.post_map_smoothing_passes > 0
+                        else {}
+                    ),
+                    **(
+                        {"postMapCubicFairing": True}
+                        if ln.post_map_cubic_fairing
+                        else {}
+                    ),
+                    **(
+                        {
+                            "postMapTemporalCubicFaceRatio": [
+                                ln.post_map_temporal_cubic_face_ratio[0],
+                                *[
+                                    [round(float(x), 8), round(float(y), 8)]
+                                    for x, y in ln.post_map_temporal_cubic_face_ratio[1:]
+                                ],
+                            ]
+                        }
+                        if ln.post_map_temporal_cubic_face_ratio is not None
+                        else {}
+                    ),
+                    **(
+                        {"postMapTemporalAbsoluteEndpoint": True}
+                        if ln.post_map_temporal_absolute_endpoint
+                        else {}
+                    ),
+                    **(
+                        {
+                            "postMapTemporalBoundaryMarginFaceRatio": round(
+                                float(ln.post_map_temporal_boundary_margin_face_ratio),
+                                8,
+                            )
+                        }
+                        if abs(
+                            ln.post_map_temporal_boundary_margin_face_ratio - 0.02
+                        )
+                        > 1e-12
                         else {}
                     ),
                     "points": [[int(round(p[0])), _rounded_coordinate(p[1]), _rounded_coordinate(p[2])]

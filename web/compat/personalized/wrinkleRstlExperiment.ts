@@ -61,8 +61,8 @@ const BUNDLE_PROPAGATION = true;
 const LOGICAL_WRINKLE_GROUPING = true;
 const V8_EYE_GUIDANCE = EXPERIMENT_VERSION === "v8";
 $("experimentSubtitle").textContent = V8_EYE_GUIDANCE ?
-  "v8.1.74 · 本地 YOLO · 曲率受限法向微调 6.2 · validated=false" :
-  "v8.1.74 · 本地 YOLO · 逻辑皱纹+全局主锚 v7 · validated=false";
+  "v8.1.96 · 本地 YOLO · 曲率受限法向微调 6.2 · validated=false" :
+  "v8.1.96 · 本地 YOLO · 逻辑皱纹+全局主锚 v7 · validated=false";
 
 const canvases = Object.freeze({
   "01_prior_rstl.png": $("priorCanvas"),
@@ -146,6 +146,16 @@ async function ensureWrinkleYolo() {
     );
   });
   return wrinkleYolo;
+}
+
+async function detectLandmarksFile(file) {
+  if (!file) throw new Error("请选择图片文件");
+  const image = await loadImage(file);
+  const detector = await ensureFaceLandmarker();
+  const result = detector.detect(image);
+  const landmarks = result.faceLandmarks?.[0];
+  if (!landmarks?.length) throw new Error("未检测到单一正面人脸");
+  return landmarks.map((point) => [point.x, point.y, point.z]);
 }
 
 function loadImage(file) {
@@ -371,7 +381,7 @@ function drawPrior(imageData, seeds, visibility) {
     strokePolyline(context, curve.pts, COLORS.refined, width, [],
       lineVisibility(curve.pts, curve.region, visibility));
   }
-  drawLegend(context, [{ label: "v8.1.74 prior", color: COLORS.refined }]);
+  drawLegend(context, [{ label: "v8.1.96 prior", color: COLORS.refined }]);
 }
 
 function drawEvidence(imageData, fineEvidence) {
@@ -653,8 +663,8 @@ function buildActiveAtlas(atlas, curves, refMesh, triangles, diagnostics) {
     atlas: {
       system: "rstl",
       version: V8_EYE_GUIDANCE ?
-        "v8.1.74-single-image-v8-curvature-fairing-6.2" :
-        "v8.1.74-single-image-v7-complete-fine-lines-v7",
+        "v8.1.96-single-image-v8-curvature-fairing-6.2" :
+        "v8.1.96-single-image-v7-complete-fine-lines-v7",
       topologyId: atlas.topologyId,
       topologyVersion: atlas.topologyVersion,
       provenance: V8_EYE_GUIDANCE ?
@@ -881,17 +891,17 @@ async function runExperiment(file, fineLineFile = null) {
       sourceSha256.toUpperCase()) {
     throw new Error("细线 JSON 不属于当前人脸图片");
   }
-  if (atlas.validated !== false || atlas.atlasVersion !== "8.1.74" ||
-      atlas.lines.length !== 159 ||
+  if (atlas.validated !== false || atlas.atlasVersion !== "8.1.96" ||
+      atlas.lines.length !== 204 ||
       !atlas.lines.some((line) => line.region === "lateral_canthus_short_arc_v65") ||
-      !atlas.lines.some((line) => line.region === "supraorbital_lateral_short_arc_v66") ||
+      atlas.lines.some((line) => line.region === "supraorbital_lateral_short_arc_v66") ||
       !atlas.lines.some((line) => line.region === "supraorbital_medial_short_arc_v69")) {
     throw new Error(
-      "RSTL atlas 必须是 validated=false 的 v8.1.74 159 曲线版本",
+      "RSTL atlas 必须是 validated=false 的 v8.1.96 204 曲线版本",
     );
   }
   const pointCount = atlas.lines.reduce((sum, line) => sum + line.points.length, 0);
-  if (pointCount !== 15_222) throw new Error(`RSTL atlas 点数异常：${pointCount}`);
+  if (pointCount !== 19_030) throw new Error(`RSTL atlas 点数异常：${pointCount}`);
 
   setStatus("正在本机定位人脸并建立统一坐标…");
   const landmarker = await ensureFaceLandmarker();
@@ -912,9 +922,9 @@ async function runExperiment(file, fineLineFile = null) {
     id,
     pts: line.pts.map((point) => [point[0], point[1]]),
   }));
-  if (seeds.length !== 159 || seeds.some((line, index) =>
+  if (seeds.length !== 204 || seeds.some((line, index) =>
     line.pts.length !== atlas.lines[index].points.length)) {
-    throw new Error("映射后的 RSTL 未保持 159 条 / 15282 点拓扑");
+    throw new Error("映射后的 RSTL 未保持 204 条 / 19030 点拓扑");
   }
   const displayVisibility = buildDisplayVisibility(workingImage, refMesh);
   drawPrior(workingImage, seeds, displayVisibility);
@@ -1105,6 +1115,7 @@ for (const canvas of Object.values(canvases)) {
 
 window.__wrinkleRstlExperiment = {
   runFile: runExperiment,
+  detectLandmarksFile,
   exportAll,
   artifactData,
   getState: () => experiment,
