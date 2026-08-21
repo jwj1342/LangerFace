@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 const htmlUrl = new URL("../web/compat/personalized/wrinkle_rstl_experiment.html", import.meta.url);
 const sourceUrl = new URL("../web/compat/personalized/wrinkleRstlExperiment.ts", import.meta.url);
 const viteUrl = new URL("../web/vite.config.ts", import.meta.url);
-const atlasUrl = new URL("../web/assets/atlas_rstl.json", import.meta.url);
+const atlasUrl = new URL("../assets/atlas_rstl_standard_v8.json", import.meta.url);
 
 const [html, source, vite, atlas] = await Promise.all([
   readFile(htmlUrl, "utf8"),
@@ -19,6 +19,10 @@ for (const id of [
 ]) {
   assert.match(html, new RegExp(`id=["']${id}["']`), `missing experiment control ${id}`);
 }
+
+assert.match(html, /01 原始 v8\.1\.96 RSTL/);
+assert.doesNotMatch(html, /v8\.1\.70/,
+  "the experiment page must not advertise the obsolete RSTL version");
 
 assert.match(vite, /wrinkleRstlExperiment/);
 assert.match(source, /vision_wasm_internal\.js\?url/);
@@ -63,7 +67,13 @@ assert.match(source, /bundle_minimum_spacing_ratio\s*<\s*0\.65/);
 assert.match(source, /bundle_multi_source_weights_normalized/);
 assert.match(source, /audit\.bundleFollowerRecords/);
 assert.match(source, /COLORS\.follower/);
-assert.match(source, /wrinkle_extraction_experiment_v1/);
+assert.match(source, /fineLineExtractionVersion\(fineLineSource\.payload\)/);
+assert.match(source, /payload\.summary\?\.sourceSchemaVersion/,
+  "centerline provenance must preserve paired-edge v10 source metadata");
+assert.match(source, /payload\.method\?\.adapter/,
+  "centerline provenance must fall back to the input adapter");
+assert.doesNotMatch(source, /extractionVersion:\s*"wrinkle_extraction_experiment_v1"/,
+  "centerline provenance must not be hard-coded to the obsolete v1 experiment");
 assert.match(source, /buildFineLineEvidence/);
 assert.match(source, /drawEvidence\(workingImage, fineEvidence\)/);
 assert.match(source, /strokePolyline\(context, line\.points, COLORS\.wrinkleFine, 1\)/,
@@ -72,14 +82,35 @@ assert.doesNotMatch(source, /skinMask:\s*skin/,
   "the v4 experiment must not erode frozen fine-line evidence with the old brow disk");
 assert.match(source, /adherenceMeanThresholdPx/);
 assert.match(source, /adherenceP90ThresholdPx/);
-assert.match(source, /const seeds = mapAtlas\(atlas\.lines, mesh3, triangles\)\.map/,
-  "the experiment prior must use the same v69 runtime forehead mapping as the live page");
+assert.match(source, /const seeds = mapAtlas\(atlas\.lines, mesh3, triangles, \{/,
+  "the experiment prior must use the standard v8.1.96 runtime mapping");
+assert.match(source, /expandForehead:\s*RSTL_EXPERIMENT_CONTRACT\.expandForehead/,
+  "the standard forehead mapping option must be explicit and contract-controlled");
+assert.match(source, /preservePriorGeometry:\s*true/);
+assert.match(source, /displayClippingOnly:\s*true/);
+assert.match(source, /lineColor:\s*"rgba\(200, 0, 200, 0\.6\)"/);
+assert.match(source, /snapshotSeedGeometry\(seeds\)/);
+assert.match(source, /assertSeedGeometryPreserved\(seeds, seedGeometrySnapshot, "原始 RSTL 绘制后"\)/);
+assert.match(source, /assertSeedGeometryPreserved\(seeds, seedGeometrySnapshot, "皱纹引导微调后"\)/);
+assert.doesNotMatch(source, /fitForeheadCurvesToVisibleBand/,
+  "visibility clipping must never remap or compress existing forehead curves");
+assert.match(source, /WRINKLE_PHOTO_SHA256/);
+assert.match(source, /sourceSha256\.toLowerCase\(\) === WRINKLE_PHOTO_SHA256/,
+  "the hand-reviewed hairline must be gated to the exact wrinkle.png input");
+assert.match(source, /generic_forehead_skin_v1/,
+  "other input images must fall back to generic per-image forehead visibility");
+assert.match(source, /CONTINUOUS_FACE_DISPLAY_REGIONS[\s\S]*supraorbital_medial_short_arc_v69/,
+  "medial supraorbital arcs must be rendered as continuous face curves");
+assert.match(source, /continuousFaceDisplay \|\| visibility\.skinVisible\(point\)/,
+  "continuous face curves must not be fragmented by the forehead skin-color mask");
+assert.match(source, /getVisualizationSnapshot/,
+  "the visualization runner must expose pre-export prior and refined curves");
 assert.match(source, /buildForeheadSkinVisibility/);
 assert.match(source, /buildHeadVisibility/);
 assert.match(source, /stabilizeForeheadMask/);
 assert.match(source, /disableRuntimeExpansion:\s*!runtimeExpansion/,
   "the exported forehead curves must retain the v69 runtime transform");
-assert.match(source, /baseline:\s*"rstl_v8_1_74"/);
+assert.match(source, /baseline:\s*"rstl_v8_1_96"/);
 assert.match(source, /atlasVersion:\s*atlas\.atlasVersion/,
   "the export must record the atlas content version");
 assert.doesNotMatch(source, /atlasVersion:\s*atlas\.version/,
@@ -99,10 +130,13 @@ assert.match(source, /curvatureFairingStrictMaximumTurnDegrees:\s*6/);
 assert.match(source, /curvatureFairingMaximumAddedSignChanges:\s*2/);
 assert.match(source, /curvature_fairing_enabled/);
 assert.match(source, /lateral_canthus_short_arc_v65/);
-assert.match(source, /supraorbital_lateral_short_arc_v66/);
 assert.match(source, /supraorbital_medial_short_arc_v69/);
-assert.match(source, /atlas\.lines\.length\s*!==\s*159/);
-assert.match(source, /pointCount\s*!==\s*15_222/);
+assert.match(source, /brow_temporal_fan_v94/);
+assert.match(source, /cheek_alar_gap_fill_v95/);
+assert.match(source, /curveCount:\s*204/);
+assert.match(source, /pointCount:\s*19_030/);
+assert.match(source, /atlas\.lines\.length\s*!==\s*RSTL_EXPERIMENT_CONTRACT\.curveCount/);
+assert.match(source, /pointCount\s*!==\s*RSTL_EXPERIMENT_CONTRACT\.pointCount/);
 assert.match(source, /replay_p90_error_px/,
   "the personalized atlas must audit replay against the refined canonical curves");
 assert.match(source, /replay_p90_error_px > 0\.10/);
@@ -123,11 +157,12 @@ for (const filename of [
 }
 
 assert.equal(atlas.validated, false);
-assert.equal(atlas.atlasVersion, "8.1.74");
-assert.equal(atlas.lines.length, 159);
-assert.equal(atlas.lines.reduce((sum, line) => sum + line.points.length, 0), 15_222);
-assert.equal(atlas.lines.filter((line) => line.region === "lateral_canthus_short_arc_v65").length, 8);
-assert.equal(atlas.lines.filter((line) => line.region === "supraorbital_lateral_short_arc_v66").length, 8);
+assert.equal(atlas.atlasVersion, "8.1.96");
+assert.equal(atlas.lines.length, 204);
+assert.equal(atlas.lines.reduce((sum, line) => sum + line.points.length, 0), 19_030);
+assert.equal(atlas.lines.filter((line) => line.region === "lateral_canthus_short_arc_v65").length, 10);
 assert.equal(atlas.lines.filter((line) => line.region === "supraorbital_medial_short_arc_v69").length, 10);
+assert.equal(atlas.lines.filter((line) => line.region === "brow_temporal_fan_v94").length, 10);
+assert.equal(atlas.lines.filter((line) => line.region === "cheek_alar_gap_fill_v95").length, 4);
 
 console.log("single-image wrinkle/RSTL experiment contract tests passed");

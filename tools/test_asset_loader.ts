@@ -236,6 +236,10 @@ for (const rel of ["web/src/services/pipelineModels.ts"]) {
   let rejectFaceAttempt = true;
   const faceModel = { kind: "face" };
   const handModel = { kind: "hand" };
+  const standardRstlLines = Array.from({ length: 204 }, (_, lineIndex) => ({
+    name: `rstl-line-${lineIndex}`,
+    points: Array.from({ length: lineIndex < 58 ? 94 : 93 }, () => [0, 0.2, 0.2]),
+  }));
 
   try {
     modelState.landmarker = null;
@@ -265,9 +269,12 @@ for (const rel of ["web/src/services/pipelineModels.ts"]) {
       return {
         system,
         version: "0.2",
+        ...(system === "rstl" ? { atlasVersion: "8.1.96", validated: false } : {}),
         topologyId: "mediapipe-468",
         topologyVersion: "mediapipe-canonical-468-v1",
-        lines: [{ name: `${system}-line`, points: [[0, 0.2, 0.2], [0, 0.3, 0.2]] }],
+        lines: system === "rstl"
+          ? standardRstlLines
+          : [{ name: `${system}-line`, points: [[0, 0.2, 0.2], [0, 0.3, 0.2]] }],
       };
     };
     FilesetResolver.forVisionTasks = async () => {

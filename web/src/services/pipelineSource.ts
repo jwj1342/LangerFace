@@ -13,13 +13,20 @@ import {
 import { resetRefineForNewSource } from "./liveRefine2d";
 import { LiveFrameScheduler } from "./liveFrameScheduler.ts";
 import { resetLiveWrinkleAnalysis } from "./liveWrinkleAnalysis.ts";
-import { setLive, setMsg } from "./liveUi.ts";
+import { setLive, setMsg, setTransientMsg } from "./liveUi.ts";
 import { cancelFrame, requestFrame } from "./pipelineLoop.ts";
 import { ensureImageReady, ensureReady } from "./pipelineModels.ts";
 
 type SourceKind = "camera" | "video" | "image";
 let sourceOperationId = 0;
 const sourceLayoutScheduler = new LiveFrameScheduler();
+
+async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  return [...new Uint8Array(digest)]
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 export async function startCamera(): Promise<void> {
   const operationId = ++sourceOperationId;
@@ -102,6 +109,9 @@ export async function handleFile(file?: File): Promise<void> {
   setLive(false, "待机");
   setMsg(file.type.startsWith("image/") ? "加载图片检测模型…" : "加载模型…");
   try {
+    const sourceSha256Promise = file.type.startsWith("image/")
+      ? file.arrayBuffer().then(sha256Hex)
+      : Promise.resolve(null);
     await ensureReady();
     if (file.type.startsWith("image/")) await ensureImageReady();
     if (operationId !== sourceOperationId) return;
@@ -115,8 +125,12 @@ export async function handleFile(file?: File): Promise<void> {
         await img.decode();
         if (operationId !== sourceOperationId) return;
         const prepared = prepareImageSource(img);
+        sourceState.sourceSha256 = await sourceSha256Promise;
+        if (operationId !== sourceOperationId) return;
         setSource(prepared.source, "image", prepared.width, prepared.height);
-        if (prepared.scaled) setMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
+        if (prepared.scaled) {
+          setTransientMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
+        }
       } finally {
         URL.revokeObjectURL(url);
         pendingObjectUrl = null;
@@ -216,6 +230,7 @@ export function stopSource({ preserveOperation = false }: { preserveOperation?: 
   els.video.srcObject = null;
   els.video.removeAttribute("src");
   sourceState.running = false;
+  sourceState.sourceSha256 = null;
   sourceState.paused = false;
   sourceState.frozenFrame = null;
   sourceState.lastHulls = [];

@@ -20,11 +20,11 @@ const dataSource = await readFile(new URL("src/services/dataSource.ts", web), "u
 const vercelConfig = JSON.parse(await readFile(new URL("vercel.json", web), "utf8"));
 const atlas = JSON.parse(await readFile(new URL("assets/atlas_rstl.json", web), "utf8"));
 
-assert.equal(atlas.atlasVersion, "8.1.74", "the capture flow must use the accepted v8.1.74 atlas");
-assert.equal(atlas.lines.length, 159, "the capture flow must preserve all v8.1.74 curves");
-assert.equal(atlas.lines.reduce((count, line) => count + line.points.length, 0), 15_222,
+assert.equal(atlas.atlasVersion, "8.1.96", "the capture flow must use the standard v8.1.96 atlas");
+assert.equal(atlas.lines.length, 204, "the capture flow must preserve all v8.1.96 curves");
+assert.equal(atlas.lines.reduce((count, line) => count + line.points.length, 0), 19_030,
   "the latest atlas point topology must be preserved");
-assert.equal(atlas.lines.at(-1)?.name, "standard_field_0174_left",
+assert.equal(atlas.lines.at(-1)?.name, "standard_field_0207_left",
   "the latest atlas tail must be present");
 assert.match(source, /from "\.\/yoloWrinkleOnnx\.ts"/);
 assert.match(source, /from "\.\/v6RstlRefinement\.ts"/);
@@ -82,8 +82,10 @@ assert.match(liveSource, /provenanceText\.includes\("local-yolo"\)/,
   "the live UI must recognize the string provenance emitted by the browser V6 pipeline");
 assert.match(liveSource, /\? "个性化 V6"/,
   "the live UI must preserve personalized provenance instead of labeling every preview as annotation");
-assert.match(source, /expandForehead: false/,
-  "personalized canonical mapping must not apply the legacy forehead expansion twice");
+assert.match(source, /expandForehead: RSTL_STANDARD_CONTRACT\.expandForehead/,
+  "personalized canonical mapping must use the standard v8.1.96 forehead mapping");
+assert.match(source, /assertStandardRstlAtlas\(rstl\)/,
+  "personalized capture must reject stale or partial RSTL assets");
 assert.match(source, /disableRuntimeExpansion: true/,
   "the staged personalized atlas must keep legacy expansion disabled in the live renderer");
 assert.doesNotMatch(source, /warpPriorCurvesWithHessian/,

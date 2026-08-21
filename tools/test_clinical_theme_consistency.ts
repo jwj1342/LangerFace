@@ -15,6 +15,17 @@ assert.match(theme, /--clinical-success:\s*#42be65/);
 assert.match(theme, /--clinical-dark-bg:\s*#090b0f/);
 assert.match(appStyles, /@import "\.\.\/clinical-theme\.css"/,
   "the React app must consume the shared clinical tokens");
+const finalClinicalButtonOverride = appStyles.lastIndexOf("\n.clinical-compat-workbench .btn {");
+const refineModeSelectedOverride = appStyles.indexOf(
+  '.clinical-compat-workbench .live-refine-modes .btn[aria-pressed="true"]:not(:disabled) {',
+);
+assert.ok(refineModeSelectedOverride > finalClinicalButtonOverride,
+  "manual refinement mode highlight must follow the final generic clinical button override");
+assert.match(
+  appStyles.slice(refineModeSelectedOverride),
+  /background:\s*var\(--clinical-accent\);[\s\S]*?color:\s*#fff;/,
+  "the selected manual refinement mode must have an obvious high-contrast active state",
+);
 
 assert.match(personalized, /--p-accent:var\(--clinical-accent\)/);
 assert.match(personalized, /\.personalized-button\.primary\{background:var\(--p-accent\)/);

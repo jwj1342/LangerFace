@@ -9,7 +9,9 @@ import { mapAtlas, toPixels } from "../../src/services/geometryAtlas.ts";
 import {
   buildForeheadSkinVisibility,
   buildHeadVisibility,
+  buildWrinklePhotoForeheadVisibility,
   stabilizeForeheadMask,
+  WRINKLE_PHOTO_SHA256,
 } from "../../src/services/foreheadVisibility.ts";
 import { pointToBary } from "../../src/services/personalized/prstlPipeline.ts";
 import { refineV6 } from "../../src/services/personalized/v6RstlRefinement.ts";
@@ -22,7 +24,7 @@ import {
   fuseStrictUnion,
 } from "../../src/services/personalized/yoloWrinkleOnnx.ts";
 
-import atlasUrl from "../../assets/atlas_rstl.json?url";
+import atlasUrl from "../../../assets/atlas_rstl_standard_v8.json?url";
 import faceLandmarkerUrl from "../../assets/face_landmarker.task?url";
 import trianglesUrl from "../../assets/triangles.json?url";
 import modelManifestUrl from "./model/wrinkle-yolov8s-seg-640.json?url";
@@ -61,8 +63,8 @@ const BUNDLE_PROPAGATION = true;
 const LOGICAL_WRINKLE_GROUPING = true;
 const V8_EYE_GUIDANCE = EXPERIMENT_VERSION === "v8";
 $("experimentSubtitle").textContent = V8_EYE_GUIDANCE ?
-  "v8.1.74 · 本地 YOLO · 曲率受限法向微调 6.2 · validated=false" :
-  "v8.1.74 · 本地 YOLO · 逻辑皱纹+全局主锚 v7 · validated=false";
+  "v8.1.96 · 本地 YOLO · 曲率受限法向微调 6.2 · validated=false" :
+  "v8.1.96 · 本地 YOLO · 逻辑皱纹+全局主锚 v7 · validated=false";
 
 const canvases = Object.freeze({
   "01_prior_rstl.png": $("priorCanvas"),
@@ -73,10 +75,20 @@ const canvases = Object.freeze({
   "06_displacement_audit.png": $("displacementCanvas"),
 });
 
+const RSTL_EXPERIMENT_CONTRACT = Object.freeze({
+  atlasVersion: "8.1.96",
+  curveCount: 204,
+  pointCount: 19_030,
+  expandForehead: true,
+  preservePriorGeometry: true,
+  displayClippingOnly: true,
+  lineColor: "rgba(200, 0, 200, 0.6)",
+});
+
 const COLORS = Object.freeze({
   prior: "rgba(75, 85, 99, 0.82)",
   priorStrong: "#007a8a",
-  refined: "#c2185b",
+  refined: RSTL_EXPERIMENT_CONTRACT.lineColor,
   accepted: "#00875a",
   rejected: "#b45309",
   follower: "#2563eb",
@@ -91,10 +103,15 @@ const EXTENDED_FOREHEAD_REGIONS = new Set([
   "forehead_bridge_arc_v15",
 ]);
 
+const CONTINUOUS_FACE_DISPLAY_REGIONS = new Set([
+  "supraorbital_medial_short_arc_v69",
+]);
+
 let faceLandmarker = null;
 let wrinkleYolo = null;
 let assetsPromise = null;
 let experiment = null;
+let visualizationSnapshot = null;
 
 const MAX_WORKING_SIZE = 1280;
 
@@ -130,6 +147,16 @@ async function ensureFaceLandmarker() {
     },
   );
   return faceLandmarker;
+}
+
+async function detectLandmarksFile(file) {
+  if (!file) throw new Error("请选择图片文件");
+  const image = await loadImage(file);
+  const landmarker = await ensureFaceLandmarker();
+  const result = landmarker.detect(image);
+  const landmarks = result.faceLandmarks?.[0];
+  if (!landmarks?.length) throw new Error("未检测到单一正面人脸");
+  return landmarks.map((point) => [point.x, point.y, point.z]);
 }
 
 async function ensureWrinkleYolo() {
@@ -171,7 +198,7 @@ async function sha256Hex(buffer) {
 }
 
 async function loadFineLineSource(file) {
-  if (!file) throw new Error("请选择提取 v1 的 wrinkle_fine_lines.json");
+  if (!file) throw new Error("请选择 wrinkle_fine_lines JSON");
   const buffer = await file.arrayBuffer();
   let payload;
   try {
@@ -180,6 +207,13 @@ async function loadFineLineSource(file) {
     throw new Error("无法解析细线 JSON");
   }
   return { filename: file.name, sha256: await sha256Hex(buffer), payload };
+}
+
+function fineLineExtractionVersion(payload) {
+  return payload.summary?.sourceSchemaVersion ||
+    payload.method?.adapter ||
+    payload.schemaVersion ||
+    "unknown";
 }
 
 function faceWidth(mesh, fallbackSize = 320) {
@@ -323,10 +357,18 @@ function strokePolyline(context, points, color, width = 1, dash = [], visibility
   context.restore();
 }
 
-function buildDisplayVisibility(imageData, mesh) {
+function buildDisplayVisibility(imageData, mesh, sourceSha256) {
+  const useWrinklePhotoHairline =
+    sourceSha256.toLowerCase() === WRINKLE_PHOTO_SHA256;
   return {
     faceOval: FACE_OVAL.map((index) => mesh[index]).filter(Boolean),
     headVisible: buildHeadVisibility(mesh),
+    foreheadVisible: useWrinklePhotoHairline
+      ? buildWrinklePhotoForeheadVisibility(imageData.width, imageData.height)
+      : null,
+    visibilityProfile: useWrinklePhotoHairline
+      ? "wrinkle_photo_hairline_v1"
+      : "generic_forehead_skin_v1",
     skinVisible: buildForeheadSkinVisibility(
       imageData, imageData.width, imageData.height, mesh,
     ),
@@ -335,11 +377,43 @@ function buildDisplayVisibility(imageData, mesh) {
 
 function lineVisibility(points, region, visibility) {
   const extendedForehead = EXTENDED_FOREHEAD_REGIONS.has(region);
-  let mask = points.map((point) => extendedForehead
-    ? visibility.headVisible(point) && visibility.skinVisible(point)
-    : pointInPolygon(point, visibility.faceOval) && visibility.skinVisible(point));
+  const continuousFaceDisplay = CONTINUOUS_FACE_DISPLAY_REGIONS.has(region);
+  let mask = points.map((point) => {
+    if (extendedForehead) {
+      return visibility.headVisible(point) && (
+      visibility.foreheadVisible
+        ? visibility.foreheadVisible(point)
+        : visibility.skinVisible(point)
+      );
+    }
+    const insideFace = pointInPolygon(point, visibility.faceOval);
+    return insideFace && (continuousFaceDisplay || visibility.skinVisible(point));
+  });
   if (extendedForehead) mask = stabilizeForeheadMask(mask);
   return mask;
+}
+
+function snapshotSeedGeometry(seeds) {
+  return seeds.map((curve) => curve.pts.map((point) => [point[0], point[1]]));
+}
+
+function assertSeedGeometryPreserved(seeds, snapshot, stage) {
+  if (seeds.length !== snapshot.length) {
+    throw new Error(`${stage}: 原始 RSTL 曲线数量被修改`);
+  }
+  for (let curveIndex = 0; curveIndex < seeds.length; curveIndex += 1) {
+    const points = seeds[curveIndex].pts;
+    const expected = snapshot[curveIndex];
+    if (points.length !== expected.length) {
+      throw new Error(`${stage}: 原始 RSTL 第 ${curveIndex} 条曲线点数被修改`);
+    }
+    for (let pointIndex = 0; pointIndex < points.length; pointIndex += 1) {
+      if (points[pointIndex][0] !== expected[pointIndex][0] ||
+          points[pointIndex][1] !== expected[pointIndex][1]) {
+        throw new Error(`${stage}: 原始 RSTL 第 ${curveIndex} 条曲线坐标被修改`);
+      }
+    }
+  }
 }
 
 function drawLegend(context, entries) {
@@ -371,7 +445,7 @@ function drawPrior(imageData, seeds, visibility) {
     strokePolyline(context, curve.pts, COLORS.refined, width, [],
       lineVisibility(curve.pts, curve.region, visibility));
   }
-  drawLegend(context, [{ label: "v8.1.74 prior", color: COLORS.refined }]);
+  drawLegend(context, [{ label: "v8.1.96 prior", color: COLORS.refined }]);
 }
 
 function drawEvidence(imageData, fineEvidence) {
@@ -653,8 +727,8 @@ function buildActiveAtlas(atlas, curves, refMesh, triangles, diagnostics) {
     atlas: {
       system: "rstl",
       version: V8_EYE_GUIDANCE ?
-        "v8.1.74-single-image-v8-curvature-fairing-6.2" :
-        "v8.1.74-single-image-v7-complete-fine-lines-v7",
+        "v8.1.96-single-image-v8-curvature-fairing-6.2" :
+        "v8.1.96-single-image-v7-complete-fine-lines-v7",
       topologyId: atlas.topologyId,
       topologyVersion: atlas.topologyVersion,
       provenance: V8_EYE_GUIDANCE ?
@@ -699,7 +773,8 @@ function buildArtifacts({ file, sourceSha256, atlas, modelManifest, detection, f
       filename: fineLineSource.filename,
       sha256: fineLineSource.sha256,
       schemaVersion: fineLineSource.payload.schemaVersion,
-      extractionVersion: "wrinkle_extraction_experiment_v1",
+      extractionVersion: fineLineExtractionVersion(fineLineSource.payload),
+      adapter: fineLineSource.payload.method?.adapter || null,
       fineLineCount: fineEvidence.lines.length,
       rasterPixelCount: fineEvidence.rasterPixelCount,
       sourceImageSha256Matches: String(fineLineSource.payload.source?.imageSha256 || "")
@@ -747,10 +822,16 @@ function buildArtifacts({ file, sourceSha256, atlas, modelManifest, detection, f
       barycentricFallbackPointCount: fallbackPointCount,
     },
     prior: {
-      baseline: "rstl_v8_1_74",
+      baseline: "rstl_v8_1_96",
       atlasVersion: atlas.atlasVersion,
       curveCount: atlas.lines.length,
       pointCount: atlas.lines.reduce((sum, line) => sum + line.points.length, 0),
+      experimentContract: {
+        ...RSTL_EXPERIMENT_CONTRACT,
+        visibilityProfile: sourceSha256.toLowerCase() === WRINKLE_PHOTO_SHA256
+          ? "wrinkle_photo_hairline_v1"
+          : "generic_forehead_skin_v1",
+      },
       requiredRegion: "lateral_canthus_short_arc_v65",
     },
     coordinateSpace: {
@@ -881,17 +962,21 @@ async function runExperiment(file, fineLineFile = null) {
       sourceSha256.toUpperCase()) {
     throw new Error("细线 JSON 不属于当前人脸图片");
   }
-  if (atlas.validated !== false || atlas.atlasVersion !== "8.1.74" ||
-      atlas.lines.length !== 159 ||
+  if (atlas.validated !== false ||
+      atlas.atlasVersion !== RSTL_EXPERIMENT_CONTRACT.atlasVersion ||
+      atlas.lines.length !== RSTL_EXPERIMENT_CONTRACT.curveCount ||
       !atlas.lines.some((line) => line.region === "lateral_canthus_short_arc_v65") ||
-      !atlas.lines.some((line) => line.region === "supraorbital_lateral_short_arc_v66") ||
-      !atlas.lines.some((line) => line.region === "supraorbital_medial_short_arc_v69")) {
+      !atlas.lines.some((line) => line.region === "supraorbital_medial_short_arc_v69") ||
+      !atlas.lines.some((line) => line.region === "brow_temporal_fan_v94") ||
+      !atlas.lines.some((line) => line.region === "cheek_alar_gap_fill_v95")) {
     throw new Error(
-      "RSTL atlas 必须是 validated=false 的 v8.1.74 159 曲线版本",
+      "RSTL atlas 必须是 validated=false 的 v8.1.96 204 曲线版本",
     );
   }
   const pointCount = atlas.lines.reduce((sum, line) => sum + line.points.length, 0);
-  if (pointCount !== 15_222) throw new Error(`RSTL atlas 点数异常：${pointCount}`);
+  if (pointCount !== RSTL_EXPERIMENT_CONTRACT.pointCount) {
+    throw new Error(`RSTL atlas 点数异常：${pointCount}`);
+  }
 
   setStatus("正在本机定位人脸并建立统一坐标…");
   const landmarker = await ensureFaceLandmarker();
@@ -906,18 +991,23 @@ async function runExperiment(file, fineLineFile = null) {
     point[1] * working.scale + working.offsetY,
   ]);
   const mesh3 = refMesh.map((point) => [point[0], point[1], 0]);
-  const seeds = mapAtlas(atlas.lines, mesh3, triangles).map((line, id) => ({
+  const seeds = mapAtlas(atlas.lines, mesh3, triangles, {
+    expandForehead: RSTL_EXPERIMENT_CONTRACT.expandForehead,
+  }).map((line, id) => ({
     name: line.name,
     region: line.region || atlas.lines[id]?.region || "",
     id,
+    tris: [...line.tris],
     pts: line.pts.map((point) => [point[0], point[1]]),
   }));
-  if (seeds.length !== 159 || seeds.some((line, index) =>
+  if (seeds.length !== 204 || seeds.some((line, index) =>
     line.pts.length !== atlas.lines[index].points.length)) {
-    throw new Error("映射后的 RSTL 未保持 159 条 / 15282 点拓扑");
+    throw new Error("映射后的 RSTL 未保持 204 条 / 19030 点拓扑");
   }
-  const displayVisibility = buildDisplayVisibility(workingImage, refMesh);
+  const seedGeometrySnapshot = snapshotSeedGeometry(seeds);
+  const displayVisibility = buildDisplayVisibility(workingImage, refMesh, sourceSha256);
   drawPrior(workingImage, seeds, displayVisibility);
+  assertSeedGeometryPreserved(seeds, seedGeometrySnapshot, "原始 RSTL 绘制后");
 
   setStatus("正在本机运行固定 YOLO 模型…");
   const model = await ensureWrinkleYolo();
@@ -1004,6 +1094,7 @@ async function runExperiment(file, fineLineFile = null) {
       } : {}),
     },
   });
+  assertSeedGeometryPreserved(seeds, seedGeometrySnapshot, "皱纹引导微调后");
   if (!refined.diagnostics.topology_contract_preserved ||
       refined.diagnostics.curvature_fairing_enabled !== true ||
       refined.diagnostics.post_export_new_intersection_pair_count !== 0 ||
@@ -1026,6 +1117,25 @@ async function runExperiment(file, fineLineFile = null) {
   drawDisplacements(
     workingImage, curves, refined.diagnostics.maximum_displacement_px, displayVisibility,
   );
+  visualizationSnapshot = {
+    workingSize: working.size,
+    refMesh: refMesh.map((point) => [...point]),
+    seeds: seeds.map((curve) => ({
+      name: curve.name,
+      region: curve.region,
+      id: curve.id,
+      tris: [...curve.tris],
+      pts: curve.pts.map((point) => [...point]),
+    })),
+    curves: curves.map((curve) => ({
+      name: curve.name,
+      region: curve.region,
+      id: curve.id,
+      tris: [...(seeds[curve.id]?.tris || [])],
+      pts: curve.pts.map((point) => [...point]),
+    })),
+    diagnostics: refined.diagnostics,
+  };
 
   const { atlas: activeAtlas, fallbackPointCount, replayDiagnostics } = buildActiveAtlas(
     atlas, curves, refMesh, triangles, refined.diagnostics,
@@ -1105,7 +1215,9 @@ for (const canvas of Object.values(canvases)) {
 
 window.__wrinkleRstlExperiment = {
   runFile: runExperiment,
+  detectLandmarksFile,
   exportAll,
   artifactData,
   getState: () => experiment,
+  getVisualizationSnapshot: () => visualizationSnapshot,
 };
