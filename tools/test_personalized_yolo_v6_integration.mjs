@@ -46,6 +46,10 @@ assert.match(source, /consolidationRadiusPx/,
   "cross-expression strict union exposes a direction-aware deghosted mask");
 assert.match(source, /fused\?\.consolidatedMask \|\| fused\?\.mask/,
   "V6 consumes the consolidated view while retaining the exact union for audit");
+assert.match(source, /nearestSingleCurveMatching: true/,
+  "personalized V6 must assign each wrinkle only to its nearest eligible RSTL");
+assert.match(source, /bundlePropagation: false/,
+  "personalized V6 must not propagate one wrinkle to neighboring RSTL curves");
 assert.match(source, /soft_floor_with_confidence_weight/,
   "diagnostics must identify the softened expression-region gate");
 assert.match(source, /SQUINT_QUALITY_THRESHOLDS/,

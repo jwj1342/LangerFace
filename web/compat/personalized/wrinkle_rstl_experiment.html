@@ -106,11 +106,10 @@
     <div class="header-inner">
       <div>
         <h1>皱纹引导 RSTL 单图实验</h1>
-        <p id="experimentSubtitle" class="subtitle">v8.1.96 · 本地 YOLO · 曲率受限法向微调 6.2 · validated=false</p>
+        <p id="experimentSubtitle" class="subtitle">v8.1.96 · v10 皱纹检测 · v9 主锚最近单线微调 6.3 · validated=false</p>
       </div>
       <div class="controls">
         <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp">
-        <input id="fineLineInput" type="file" accept="application/json,.json">
         <button id="runButton" type="button">运行实验</button>
         <button id="exportButton" class="secondary" type="button" disabled>导出全部</button>
       </div>
@@ -123,11 +122,14 @@
     </div>
     <section class="grid" aria-label="实验结果">
       <figure><figcaption>01 原始 v8.1.96 RSTL</figcaption><div class="canvas-wrap"><canvas id="priorCanvas" width="320" height="320"></canvas></div></figure>
-      <figure><figcaption>02 本地 YOLO 皱纹证据</figcaption><div class="canvas-wrap"><canvas id="evidenceCanvas" width="320" height="320"></canvas></div></figure>
+      <figure><figcaption>02 最新 v10 皱纹中心线</figcaption><div class="canvas-wrap"><canvas id="evidenceCanvas" width="320" height="320"></canvas></div></figure>
       <figure><figcaption>03 皱纹采用与拒绝</figcaption><div class="canvas-wrap"><canvas id="decisionCanvas" width="320" height="320"></canvas></div></figure>
       <figure><figcaption>04 微调后的 RSTL</figcaption><div class="canvas-wrap"><canvas id="refinedCanvas" width="320" height="320"></canvas></div></figure>
       <figure><figcaption>05 调整前后对比</figcaption><div class="canvas-wrap"><canvas id="compareCanvas" width="320" height="320"></canvas></div></figure>
       <figure><figcaption>06 位移审计</figcaption><div class="canvas-wrap"><canvas id="displacementCanvas" width="320" height="320"></canvas></div></figure>
+      <figure><figcaption>07 鼻根保留线与整理范围审计</figcaption><div class="canvas-wrap"><canvas id="noseRootAuditCanvas" width="320" height="320"></canvas></div></figure>
+      <figure><figcaption>08 鼻根整理前局部</figcaption><div class="canvas-wrap"><canvas id="noseRootBeforeCanvas" width="320" height="320"></canvas></div></figure>
+      <figure><figcaption>09 鼻根整理后局部</figcaption><div class="canvas-wrap"><canvas id="noseRootAfterCanvas" width="320" height="320"></canvas></div></figure>
     </section>
   </main>
   <script type="module" src="./wrinkleRstlExperiment.ts"></script>

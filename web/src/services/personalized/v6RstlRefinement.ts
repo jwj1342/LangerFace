@@ -7,7 +7,7 @@
  */
 
 export const V6_RSTL_ALGORITHM =
-  "curvature-constrained-normal-offset-rstl-refinement-6.2";
+  "nearest-single-curve-normal-offset-rstl-refinement-6.3";
 
 const SOFT_LINK_FACE_RATIO = 0.013;
 const PARALLEL_DEDUP_FACE_RATIO = 0.006;
@@ -36,6 +36,7 @@ export interface V6Seed {
 
 export interface V6RefinementOptions {
   [key: string]: any;
+  nearestSingleCurveMatching?: boolean;
   parallelDedupRadiusPx?: number;
   softLinkDistancePx?: number;
   tangentWindowPx?: number;
@@ -710,11 +711,31 @@ function matchTrendsToCurves(
   }
   const excludedTrendCurvePairs = new Set(options.excludedTrendCurvePairs || []);
   const excludedTrendCurvePairReasons = options.excludedTrendCurvePairReasons || {};
-  const curveEligibleGroups = acceptedGroups.filter((group) =>
-    acceptedCurves.has(group.curveIndex) &&
+  const supportedCurveGroups = acceptedGroups.filter((group) =>
+    acceptedCurves.has(group.curveIndex));
+  const curveEligibleGroups = supportedCurveGroups.filter((group) =>
     !excludedTrendCurvePairs.has(`${group.trendIndex}:${group.curveIndex}`));
   let selectedGroups = curveEligibleGroups;
-  if (options.oneToOneTrendCurveMatching === true) {
+  const nearestGroupsByTrend = new Map<number, MatchGroup>();
+  if (options.nearestSingleCurveMatching !== false) {
+    const groupsByTrend = new Map<number, MatchGroup[]>();
+    for (const group of supportedCurveGroups) {
+      const candidates = groupsByTrend.get(group.trendIndex) || [];
+      candidates.push(group);
+      groupsByTrend.set(group.trendIndex, candidates);
+    }
+    for (const [trendIndex, candidates] of groupsByTrend) {
+      const nearest = [...candidates].sort((left, right) =>
+        left.meanDistance - right.meanDistance ||
+        right.influence - left.influence ||
+        left.curveIndex - right.curveIndex)[0];
+      nearestGroupsByTrend.set(trendIndex, nearest);
+    }
+    // Safety exclusions reject the nearest pair without reassigning the
+    // wrinkle to a farther RSTL curve.
+    selectedGroups = [...nearestGroupsByTrend.values()].filter((group) =>
+      !excludedTrendCurvePairs.has(`${group.trendIndex}:${group.curveIndex}`));
+  } else if (options.oneToOneTrendCurveMatching === true) {
     if (options.globalLengthAwareMatching === true) {
       selectedGroups = maximumWeightTrendCurveAssignment(curveEligibleGroups);
       if (options.intervalAwareAnchorSharing === true) {
@@ -768,6 +789,12 @@ function matchTrendsToCurves(
     record.segment_support_passed = record.accepted;
     record.curve_support_passed = curveSupportPassed;
     record.selected_for_wrinkle = selectedRecords.has(record);
+    const nearestGroup = nearestGroupsByTrend.get(record.wrinkle_segment_id);
+    if (options.nearestSingleCurveMatching !== false && nearestGroup) {
+      record.nearest_rstl_curve_index = nearestGroup.curveIndex;
+      record.nearest_mean_match_distance_px = nearestGroup.meanDistance;
+      record.is_nearest_rstl_curve = record.rstl_curve_index === nearestGroup.curveIndex;
+    }
     record.provisional_accepted = record.accepted && curveSupportPassed && record.selected_for_wrinkle;
     record.final_accepted = record.provisional_accepted;
     record.final_status = record.final_accepted ? "accepted" : "rejected_before_refinement";
@@ -775,7 +802,8 @@ function matchTrendsToCurves(
       record.anchor_interval_shared = (selectedCountByCurve.get(record.rstl_curve_index) || 0) > 1;
     }
     const candidateGroup = acceptedGroups.find((group) => group.summary === record);
-    const selectedCurveElsewhere = options.oneToOneTrendCurveMatching === true &&
+    const selectedCurveElsewhere = options.nearestSingleCurveMatching === false &&
+      options.oneToOneTrendCurveMatching === true &&
       selectedGroups.some((group) => group.curveIndex === record.rstl_curve_index &&
         group.trendIndex !== record.wrinkle_segment_id &&
         (!options.intervalAwareAnchorSharing || !candidateGroup ||
@@ -792,7 +820,8 @@ function matchTrendsToCurves(
         !record.curve_support_passed ? "insufficient_curve_support" :
           candidateRetryExcluded ? candidateRetryReason :
           selectedCurveElsewhere ? "curve_reserved_for_better_wrinkle" :
-            "better_curve_match_selected";
+            options.nearestSingleCurveMatching !== false && nearestGroup ?
+              "not_nearest_rstl_curve" : "better_curve_match_selected";
   }
   return {
     acceptedGroups: selectedGroups,
@@ -2116,6 +2145,14 @@ export function refineV6({
   if (!Number.isInteger(size) || size < 4) throw new Error("size must be an integer >= 4");
   if (!Array.isArray(seeds)) throw new Error("seeds must be an array");
   if (!(Number(faceWidthPx) > 0)) throw new Error("faceWidthPx must be positive");
+  const nearestSingleCurveMatching = options.nearestSingleCurveMatching !== false;
+  const bundlePropagationSuppressed = nearestSingleCurveMatching &&
+    options.bundlePropagation === true;
+  options = {
+    ...options,
+    nearestSingleCurveMatching,
+    ...(nearestSingleCurveMatching ? { bundlePropagation: false } : {}),
+  };
   const faceWidth = Number(faceWidthPx), length = size * size;
   const binary = normalizeMask(wrinkleMask, length);
   const confidence = normalizeScalarField(confidenceMap, length, 1);
@@ -2366,6 +2403,17 @@ export function refineV6({
     direction_rejected_pair_count: matching.directionRejectedPairCount,
     curve_influence_records: matching.groupRecords,
     curve_support_records: matching.curveSupportRecords,
+    nearest_single_curve_matching: nearestSingleCurveMatching,
+    maximum_selected_rstl_curves_per_wrinkle: matching.groupRecords.reduce(
+      (maximum, record) => record.selected_for_wrinkle
+        ? Math.max(maximum, matching.groupRecords.filter((candidate) =>
+          candidate.wrinkle_segment_id === record.wrinkle_segment_id &&
+          candidate.selected_for_wrinkle).length)
+        : maximum,
+      0,
+    ),
+    bundle_propagation_suppressed_by_nearest_single_curve:
+      bundlePropagationSuppressed,
     exclusive_trend_matching: options.exclusiveTrendMatching === true,
     one_to_one_trend_curve_matching: options.oneToOneTrendCurveMatching === true,
     ...(logicalGrouping ? {

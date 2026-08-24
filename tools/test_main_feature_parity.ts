@@ -174,8 +174,11 @@ includesAll(render2d, [
   "buildForeheadSkinVisibility",
   "buildHeadVisibility",
   "stabilizeForeheadMask",
-  "headVisible(p) && skinVisible(p)",
-], "live v8.1.70 forehead visibility integration");
+  "sourceSpecificForeheadVisible",
+  "headVisible(p) && (",
+  "? sourceSpecificForeheadVisible(p)",
+  ": skinVisible(p)",
+], "live v8.1.96 forehead visibility integration");
 includesAll(foreheadVisibility, [
   "skinColorMatchesReferences",
   "distance <= 26",

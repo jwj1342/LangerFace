@@ -247,15 +247,11 @@ export async function preloadLiveWrinkleModel(): Promise<boolean> {
 
 function v9Options(faceWidth: number) {
   return {
-    exclusiveTrendMatching: true,
-    oneToOneTrendCurveMatching: true,
+    nearestSingleCurveMatching: true,
     logicalTrendGrouping: true,
     softLinkDistancePx: faceWidth * 0.030,
     softLinkTurnDegrees: 18,
     softLinkTangentSpanPx: Math.round(faceWidth * 0.020),
-    globalLengthAwareMatching: true,
-    intervalAwareAnchorSharing: true,
-    anchorIntervalPaddingPx: faceWidth * 0.010,
     adherenceRetryAttempts: 10,
     shortWrinkleQuantizationTolerance: true,
     shortWrinkleMaximumLengthRatio: 0.12,
@@ -273,18 +269,6 @@ function v9Options(faceWidth: number) {
     p90LimitPx: faceWidth * 0.030,
     maxDisplacementPx: faceWidth * 0.045,
     maxCurvatureChangeDegrees: 60,
-    bundlePropagation: true,
-    bundleFollowerCountPerSide: 1,
-    bundleFollowerStrength: 0.85,
-    bundlePropagationRadiusPx: faceWidth * 0.050,
-    bundleDirectionConflictDegrees: 25,
-    bundleConflictDominanceRatio: 1.5,
-    bundleDataAttractionStrength: 8,
-    bundleSmoothingPasses: 16,
-    bundleFollowerTopologyPriority: 0.25,
-    bundleMinimumSpacingRatio: 0.65,
-    bundleDenseFollowerRegion: "lateral_canthus_short_arc_v65",
-    bundleDenseFollowerCountPerSide: 3,
     curvatureFairing: true,
     curvatureFairingPasses: 32,
     curvatureFairingMaximumTurnDegrees: 8,
@@ -300,11 +284,14 @@ function v9Options(faceWidth: number) {
 function assertRefinementGate(diagnostics: Record<string, any>): void {
   if (
     diagnostics.algorithm !== V6_RSTL_ALGORITHM
+    || diagnostics.nearest_single_curve_matching !== true
+    || Number(diagnostics.maximum_selected_rstl_curves_per_wrinkle) > 1
+    || diagnostics.bundle_propagation_enabled === true
+    || Number(diagnostics.bundle_follower_moved_curve_count || 0) > 0
     || diagnostics.curvature_fairing_enabled !== true
     || diagnostics.topology_contract_preserved !== true
     || diagnostics.post_export_new_intersection_pair_count !== 0
     || diagnostics.post_export_new_self_cross_curve_count !== 0
-    || Number(diagnostics.bundle_minimum_spacing_ratio) < 0.65
   ) {
     throw new Error("皱纹引导结果未通过拓扑、交叉或线束间距门禁");
   }

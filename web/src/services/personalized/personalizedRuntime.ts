@@ -1875,6 +1875,10 @@ async function runLocalYoloV6(session: RuntimeSession): Promise<RuntimeSession> 
     directionQ,
     size: SIZE,
     faceWidthPx: canonicalFaceWidth(session),
+    options: {
+      nearestSingleCurveMatching: true,
+      bundlePropagation: false,
+    },
   });
   if (!lease.isActive() || sess !== session) throw new Error("采集会话已结束，已丢弃过期微调结果");
   const curves = normalizeV6Curves(refined?.curves || refined?.lines || refined, seeds);

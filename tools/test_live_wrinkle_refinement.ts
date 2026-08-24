@@ -97,6 +97,14 @@ assert.match(analysisRuntime, /state\.evidenceSource = "wrinkle-v10"/,
   "the canonical wrinkle.png run must report v10 evidence provenance");
 assert.match(analysisRuntime, /state\.evidenceLines = evidenceLines\.map[\s\S]*const refined = refineV6/,
   "validated wrinkle evidence must be committed before refinement safety gates run");
+assert.match(analysisRuntime, /nearestSingleCurveMatching: true/,
+  "live refinement must assign each wrinkle only to its nearest eligible RSTL");
+assert.doesNotMatch(analysisRuntime, /bundlePropagation: true/,
+  "live refinement must not propagate one wrinkle to neighboring RSTL curves");
+assert.match(analysisRuntime, /maximum_selected_rstl_curves_per_wrinkle\) > 1/,
+  "the live safety gate must reject multi-RSTL assignment for one wrinkle");
+assert.match(analysisRuntime, /bundle_follower_moved_curve_count \|\| 0\) > 0/,
+  "the live safety gate must reject bundle follower movement");
 assert.match(analysisRuntime, /if \(state\.evidenceLines\.length > 0\)[\s\S]*updateStatus\("evidence", message\)/,
   "a rejected refinement must retain wrinkle evidence and report a non-fatal evidence state");
 assert.match(analysisRuntime, /await Promise\.allSettled\(\[\.\.\.activeAnalyses\]\);[\s\S]*await current\?\.close\(\)/,

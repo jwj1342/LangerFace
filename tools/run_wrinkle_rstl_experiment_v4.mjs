@@ -12,14 +12,12 @@ const { chromium } = playwright;
 const repositoryRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const projectRoot = resolve(repositoryRoot, "..");
 const sourcePath = resolve(projectRoot, "langer线-cc/wrinkle.png");
-const fineLinePath = process.env.WRINKLE_FINE_LINE_PATH ?
-  resolve(process.env.WRINKLE_FINE_LINE_PATH) :
-  resolve(projectRoot, "langer线-cc/wrinkle_extraction_experiment_v1/wrinkle_fine_lines.json");
 const requestedVersion = process.env.WRINKLE_EXPERIMENT_VERSION;
 const experimentVersion = ["v7", "v8"].includes(requestedVersion) ? requestedVersion : "v8";
+const refinementMode = process.env.WRINKLE_REFINEMENT_MODE === "v9" ? "v9" : "current";
 const outputDirectory = process.env.WRINKLE_EXPERIMENT_OUTPUT ?
   resolve(process.env.WRINKLE_EXPERIMENT_OUTPUT) :
-  resolve(projectRoot, `langer线-cc/wrinkle_rstl_experiment_${experimentVersion}`);
+  resolve(projectRoot, `langer线-cc/wrinkle_rstl_experiment_${experimentVersion}_${refinementMode}`);
 const baseUrl = process.env.WRINKLE_EXPERIMENT_URL || "http://127.0.0.1:5174";
 const visualizationOnly = process.env.WRINKLE_VISUALIZATION_ONLY === "1";
 const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
@@ -40,11 +38,11 @@ page.on("pageerror", (error) => browserMessages.push(`pageerror: ${error.message
 
 try {
   await page.goto(
-    `${baseUrl}/compat/personalized/wrinkle_rstl_experiment.html?version=${experimentVersion}`,
+    `${baseUrl}/compat/personalized/wrinkle_rstl_experiment.html?` +
+      `version=${experimentVersion}&refinement=${refinementMode}`,
     { waitUntil: "networkidle", timeout: 60_000 },
   );
   await page.locator("#imageInput").setInputFiles(sourcePath);
-  await page.locator("#fineLineInput").setInputFiles(fineLinePath);
   await page.locator("#runButton").click();
   await page.waitForFunction(
     () => {
