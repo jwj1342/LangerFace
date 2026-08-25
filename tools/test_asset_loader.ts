@@ -10,6 +10,17 @@ import { els } from "../web/src/services/liveDom.ts";
 import { modelState } from "../web/src/services/liveState.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const assetConfigSource = readFileSync(join(root, "src/langerface/config/assets.py"), "utf8");
+assert.match(
+  assetConfigSource,
+  /assets\/rstl_standard_reference_v8_1_67\.json assets\/atlas_rstl\.json/,
+  "missing-asset recovery must use the direction-field reference as generator input",
+);
+assert.doesNotMatch(
+  assetConfigSource,
+  /assets\/atlas_rstl_standard_v8\.json assets\/atlas_rstl\.json/,
+  "a generated atlas cannot be passed back as the direction-field reference",
+);
 const {
   FaceLandmarker,
   FilesetResolver,

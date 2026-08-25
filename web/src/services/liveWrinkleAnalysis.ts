@@ -2,11 +2,10 @@ import { FaceLandmarker } from "@mediapipe/tasks-vision";
 import visionWasmLoaderUrl from "../../node_modules/@mediapipe/tasks-vision/wasm/vision_wasm_internal.js?url";
 import visionWasmBinaryUrl from "../../node_modules/@mediapipe/tasks-vision/wasm/vision_wasm_internal.wasm?url";
 import faceLandmarkerUrl from "../../assets/face_landmarker.task?url";
-import wrinkleV10FineLinesUrl from "../../assets/wrinkle_fine_lines_v10_wrinkle.json?url";
 
 import { els } from "./liveDom.ts";
 import { mapAtlas, toPixels, type MappedAtlasLine } from "./geometryAtlas.ts";
-import { countMetric, logInfo, logWarn, recordMetricSample } from "./logger.ts";
+import { countMetric, logWarn } from "./logger.ts";
 import {
   hasManualRefineChanges,
   replaceStaticRefineBaseline,
@@ -20,17 +19,11 @@ import {
 import {
   extractFineWrinkleLines,
 } from "./personalized/fineWrinkleLines.ts";
-import {
-  buildPrecomputedFineWrinkleEvidence,
-  type PrecomputedFineWrinkleEvidence,
-  type PrecomputedFineWrinklePayload,
-} from "./personalized/precomputedFineWrinkleEvidence.ts";
 import { refineV6, V6_RSTL_ALGORITHM } from "./personalized/v6RstlRefinement.ts";
 import {
   YoloWrinkleOnnx,
   YOLO_WRINKLE_CONFIDENCE,
 } from "./personalized/yoloWrinkleOnnx.ts";
-import { WRINKLE_PHOTO_SHA256 } from "./foreheadVisibility.ts";
 import { RSTL_STANDARD_CONTRACT } from "./rstlStandardContract.ts";
 
 export type WrinkleDisplayMode = "rstl" | "wrinkles" | "both";
@@ -69,7 +62,7 @@ interface WrinkleAnalysisState {
   movedPointCount: number;
   fineLineCount: number;
   sourceComponentCount: number;
-  evidenceSource: "browser-yolo" | "wrinkle-v10" | null;
+  evidenceSource: "browser-yolo" | null;
   diagnostics: Record<string, any> | null;
   audit: Record<string, any> | null;
   error: string | null;
@@ -189,60 +182,9 @@ function currentStandardLines(landmarks: Vec3[]): EditableRefineLine[] {
   }));
 }
 
-let wrinkleV10EvidencePromise: Promise<PrecomputedFineWrinklePayload> | null = null;
-
-async function loadWrinkleV10Evidence(): Promise<PrecomputedFineWrinklePayload> {
-  wrinkleV10EvidencePromise ||= fetch(wrinkleV10FineLinesUrl).then(async (response) => {
-    if (!response.ok) throw new Error(`Unable to load wrinkle v10 evidence (${response.status})`);
-    return response.json() as Promise<PrecomputedFineWrinklePayload>;
-  }).catch((error) => {
-    wrinkleV10EvidencePromise = null;
-    throw error;
-  });
-  return wrinkleV10EvidencePromise;
-}
-
-async function canonicalWrinkleV10Evidence(
-  size: number,
-): Promise<PrecomputedFineWrinkleEvidence | null> {
-  if (sourceState.sourceSha256?.toLowerCase() !== WRINKLE_PHOTO_SHA256) return null;
-  const payload = await loadWrinkleV10Evidence();
-  return buildPrecomputedFineWrinkleEvidence(payload, size, WRINKLE_PHOTO_SHA256);
-}
-
 function yoloInstance(): YoloWrinkleOnnx {
   yolo ||= new YoloWrinkleOnnx({ confidenceThreshold: YOLO_WRINKLE_CONFIDENCE });
   return yolo;
-}
-
-export async function preloadLiveWrinkleModel(): Promise<boolean> {
-  const model = yoloInstance();
-  const startedAt = performance.now();
-  try {
-    await model.load();
-    if (model !== yolo) {
-      await model.close();
-      return false;
-    }
-    const durationMs = performance.now() - startedAt;
-    const stats = model.lastLoadStats;
-    countMetric("wrinkle.modelPreload.ready");
-    recordMetricSample("wrinkle.modelPreload.durationMs", durationMs, {
-      persistentCacheHits: stats?.persistentCacheHits ?? 0,
-      totalChunks: stats?.totalChunks ?? 0,
-    });
-    logInfo("皱纹 YOLO 已在浏览器空闲阶段准备完成。", {
-      durationMs: Math.round(durationMs),
-      persistentCacheHits: stats?.persistentCacheHits ?? 0,
-      totalChunks: stats?.totalChunks ?? 0,
-    });
-    return true;
-  } catch (error) {
-    if (model !== yolo) return false;
-    countMetric("wrinkle.modelPreload.failure");
-    logWarn("皱纹 YOLO 后台预热失败，将在用户检测时重试。", error);
-    return false;
-  }
 }
 
 function v9Options(faceWidth: number) {
@@ -433,32 +375,24 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
     const xs = workLandmarks.map((point) => point[0]);
     const faceWidth = Math.max(...xs) - Math.min(...xs);
     updateStatus("detecting");
-    const canonicalEvidence = await canonicalWrinkleV10Evidence(working.size);
+    const model = yoloInstance();
+    await model.load((progress) => {
+      if (generation !== state.generation) return;
+      const percent = Math.round(progress.loadedChunks / Math.max(1, progress.totalChunks) * 100);
+      els.wrinkleSummary.textContent = `正在本机加载 YOLO 模型：${percent}%`;
+    });
     if (generation !== state.generation) return;
-    let evidence: ReturnType<typeof extractFineWrinkleLines> | PrecomputedFineWrinkleEvidence;
-    if (canonicalEvidence) {
-      evidence = canonicalEvidence;
-      state.evidenceSource = "wrinkle-v10";
-    } else {
-      const model = yoloInstance();
-      await model.load((progress) => {
-        if (generation !== state.generation) return;
-        const percent = Math.round(progress.loadedChunks / Math.max(1, progress.totalChunks) * 100);
-        els.wrinkleSummary.textContent = `正在本机加载 YOLO 模型：${percent}%`;
-      });
-      if (generation !== state.generation) return;
-      const detection = await model.detect(working.imageData, {
-        confidenceThreshold: YOLO_WRINKLE_CONFIDENCE,
-      });
-      if (generation !== state.generation) return;
-      evidence = extractFineWrinkleLines(
-        detection.classMasks,
-        working.size,
-        working.size,
-        { minimumLineLengthPx: 20, resampleSpacingPx: 1, maximumSkeletonIterations: 96 },
-      );
-      state.evidenceSource = "browser-yolo";
-    }
+    const detection = await model.detect(working.imageData, {
+      confidenceThreshold: YOLO_WRINKLE_CONFIDENCE,
+    });
+    if (generation !== state.generation) return;
+    const evidence = extractFineWrinkleLines(
+      detection.classMasks,
+      working.size,
+      working.size,
+      { minimumLineLengthPx: 20, resampleSpacingPx: 1, maximumSkeletonIterations: 96 },
+    );
+    state.evidenceSource = "browser-yolo";
     if (!evidence.lines.length || ("validation" in evidence && !evidence.validation.passed)) {
       throw new Error("未提取到通过质量门禁的细皱纹线");
     }

@@ -68,6 +68,22 @@ assert.match(runtime, /beginFrozenRefineSession\(\)/,
   "every frozen frame must start a fresh geometry session");
 assert.match(runtime, /function handleTemplateChange[\s\S]*resetRefineForNewSource\(\);[\s\S]*resetLiveWrinkleAnalysis\(\);/,
   "changing the atlas must invalidate refinement and wrinkle results from the previous geometry");
+assert.doesNotMatch(runtime, /preloadLiveWrinkleModel|scheduleWrinkleModelPreload|requestIdleCallback/,
+  "the 47 MB wrinkle model must remain lazy until the user requests wrinkle detection");
+
+const pipelineSource = fs.readFileSync(
+  new URL("../web/src/services/pipelineSource.ts", import.meta.url),
+  "utf8",
+);
+assert.doesNotMatch(pipelineSource, /sourceSha256|crypto\.subtle\.digest\(\s*"SHA-256"/,
+  "the shared upload path must not hash every image for one experiment sample");
+
+const renderRuntime = fs.readFileSync(
+  new URL("../web/src/services/render2d.ts", import.meta.url),
+  "utf8",
+);
+assert.doesNotMatch(renderRuntime, /WRINKLE_PHOTO_SHA256|sourceSpecificForeheadVisible/,
+  "the shared RSTL renderer must not switch geometry visibility for one image hash");
 
 const refineRuntime = fs.readFileSync(
   new URL("../web/src/services/liveRefine2d.ts", import.meta.url),
@@ -91,10 +107,13 @@ assert.match(analysisRuntime, /detectV9ReferenceLandmarks/,
   "v9 refinement must remap the atlas from the dedicated reference landmarks");
 assert.match(analysisRuntime, /expandForehead: RSTL_STANDARD_CONTRACT\.expandForehead/,
   "live wrinkle refinement must use the same v8.1.96 forehead mapping as the experiment");
-assert.match(analysisRuntime, /sourceState\.sourceSha256\?\.toLowerCase\(\) !== WRINKLE_PHOTO_SHA256/,
-  "v10 evidence must be restricted to the exact wrinkle.png content hash");
-assert.match(analysisRuntime, /state\.evidenceSource = "wrinkle-v10"/,
-  "the canonical wrinkle.png run must report v10 evidence provenance");
+assert.doesNotMatch(
+  analysisRuntime,
+  /WRINKLE_PHOTO_SHA256|canonicalWrinkleV10Evidence|wrinkleV10FineLinesUrl|state\.evidenceSource = "wrinkle-v10"/,
+  "single-image precomputed evidence must stay in the explicit compat experiment, not the shared live detector",
+);
+assert.match(analysisRuntime, /await model\.load[\s\S]*const detection = await model\.detect/,
+  "the shared live detector must lazily load the general YOLO path after an explicit analysis request");
 assert.match(analysisRuntime, /state\.evidenceLines = evidenceLines\.map[\s\S]*const refined = refineV6/,
   "validated wrinkle evidence must be committed before refinement safety gates run");
 assert.match(analysisRuntime, /nearestSingleCurveMatching: true/,
@@ -113,6 +132,8 @@ assert.match(analysisRuntime, /const detection = await model\.detect[\s\S]*if \(
   "a source generation change must reject stale inference results");
 
 {
+  // The helper and checked-in evidence remain available to the explicit
+  // single-image compat experiment; this block does not authorize live-page use.
   const payload = JSON.parse(fs.readFileSync(
     new URL("../web/assets/wrinkle_fine_lines_v10_wrinkle.json", import.meta.url),
     "utf8",

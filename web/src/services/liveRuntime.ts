@@ -64,7 +64,6 @@ import {
   analyzeCurrentWrinkles,
   applyWrinkleGuidedRefinement,
   disposeLiveWrinkleAnalysis,
-  preloadLiveWrinkleModel,
   resetLiveWrinkleAnalysis,
   restoreStandardRstl,
   setWrinkleDisplayMode,
@@ -95,7 +94,6 @@ const liveActions = new LiveActionScheduler({
   isActive: (session) => isActiveSession(session),
   publish: (reason) => publishLiveState(reason),
 });
-let wrinklePreloadCleanup: (() => void) | null = null;
 
 function eventValue(event: Event | ValueControlEvent): unknown {
   return (event.target as { value?: unknown } | null)?.value;
@@ -450,32 +448,6 @@ function isActiveSession(session: number): boolean {
   return mounted && session === activeSession;
 }
 
-function scheduleWrinkleModelPreload(session: number): void {
-  wrinklePreloadCleanup?.();
-  wrinklePreloadCleanup = null;
-  const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
-  if (connection?.saveData) {
-    countMetric("wrinkle.modelPreload.saveDataSkipped");
-    return;
-  }
-  const run = () => {
-    wrinklePreloadCleanup = null;
-    if (!isActiveSession(session)) return;
-    void preloadLiveWrinkleModel();
-  };
-  const idleWindow = window as Window & {
-    requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
-    cancelIdleCallback?: (handle: number) => void;
-  };
-  if (idleWindow.requestIdleCallback && idleWindow.cancelIdleCallback) {
-    const handle = idleWindow.requestIdleCallback(run, { timeout: 2_500 });
-    wrinklePreloadCleanup = () => idleWindow.cancelIdleCallback?.(handle);
-    return;
-  }
-  const handle = setTimeout(run, 750);
-  wrinklePreloadCleanup = () => clearTimeout(handle);
-}
-
 export function disposeLiveWorkbench() {
   mounted = false;
   activeSession += 1;
@@ -484,8 +456,6 @@ export function disposeLiveWorkbench() {
   abortController = null;
   resizeCleanup?.();
   resizeCleanup = null;
-  wrinklePreloadCleanup?.();
-  wrinklePreloadCleanup = null;
   recordingController?.stop?.();
   recordingController = null;
   recordingState.recorder = null;
@@ -531,7 +501,6 @@ export function mountLiveWorkbench(root: ParentNode | Document = document) {
     applyStagedAtlas();
     applyStagedIncisionOverlay();
     scheduleLiveState("model_ready");
-    scheduleWrinkleModelPreload(session);
   }).catch((e) => {
     if (!isActiveSession(session)) return;
     countMetric("bootstrap.loadFailure");

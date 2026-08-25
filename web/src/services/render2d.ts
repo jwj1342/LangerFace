@@ -17,10 +17,8 @@ import { pointInHandMasks, type HandMask, type Point2 } from "./geometryOccluder
 import {
   buildForeheadSkinVisibility,
   buildHeadVisibility,
-  buildWrinklePhotoForeheadVisibility,
   EXTENDED_FOREHEAD_REGIONS,
   stabilizeForeheadMask,
-  WRINKLE_PHOTO_SHA256,
 } from "./foreheadVisibility.ts";
 import type { Triangle, Vec3 } from "./softBody.ts";
 import { mapSurfaceRefs, measureIncisionOverlayJitter, measureIncisionOverlayRegistration } from "./incisionOverlay.ts";
@@ -211,10 +209,6 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   const foreheadImage = readFrameImageData(W, H);
   const skinVisible = buildForeheadSkinVisibility(foreheadImage, W, H, lm);
   const headVisible = buildHeadVisibility(lm);
-  const sourceSpecificForeheadVisible = sourceState.sourceSha256?.toLowerCase()
-    === WRINKLE_PHOTO_SHA256
-    ? buildWrinklePhotoForeheadVisibility(W, H)
-    : null;
   const frameQualityGate = estimateRenderQualityGate(lm, W, H);
   const canDrawAtlas = sourceState.sourceKind === "image" || frameQualityGate.passed;
   const localRegionQuality = frameQualityGate.local_region_quality;
@@ -251,11 +245,7 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
       let onVisibleSkin: boolean[] = ln.pts.map(() => true);
       if (extendedForehead) {
         onVisibleSkin = stabilizeForeheadMask(
-          ln.pts.map((p) => headVisible(p) && (
-            sourceSpecificForeheadVisible
-              ? sourceSpecificForeheadVisible(p)
-              : skinVisible(p)
-          )),
+          ln.pts.map((p) => headVisible(p) && skinVisible(p)),
         );
       }
       const mask = ln.pts.map((p, i) => {
