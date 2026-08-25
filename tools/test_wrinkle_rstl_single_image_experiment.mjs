@@ -192,6 +192,7 @@ assert.match(refinementSource, /planar_warp_smooth_topology_search_rejected/);
 assert.match(refinementSource, /minimumMaterialSignChangeSpacingPx/);
 assert.match(source, /v10_nearest_single_curve_v9_anchor_trajectory_v8/);
 assert.match(source, /lateral_canthus_short_arc_v65/);
+assert.match(source, /supraorbital_lateral_short_arc_v66/);
 assert.match(source, /supraorbital_medial_short_arc_v69/);
 assert.match(source, /brow_temporal_fan_v94/);
 assert.match(source, /cheek_alar_gap_fill_v95/);
@@ -259,6 +260,7 @@ assert.equal(fineLines.summary.sourceSchemaVersion,
   "langerface.wrinkle-paired-edge.v10-forehead-recall-experiment");
 assert.equal(fineLines.lines.length, 26);
 assert.equal(atlas.lines.filter((line) => line.region === "lateral_canthus_short_arc_v65").length, 10);
+assert.equal(atlas.lines.filter((line) => line.region === "supraorbital_lateral_short_arc_v66").length, 0);
 assert.equal(atlas.lines.filter((line) => line.region === "supraorbital_medial_short_arc_v69").length, 10);
 assert.equal(atlas.lines.filter((line) => line.region === "brow_temporal_fan_v94").length, 10);
 assert.equal(atlas.lines.filter((line) => line.region === "cheek_alar_gap_fill_v95").length, 4);

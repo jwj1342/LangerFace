@@ -50,15 +50,10 @@ def test_v8_1_74_fairs_only_mapped_lateral_canthus_arcs(tmp_path):
     v74_path = ROOT / "assets" / "rstl_standard_reference_v8_1_74.json"
     v73_payload = _atlas_payload(canonical, v73_path, tmp_path / "atlas_v73.json")
     v74_payload = _atlas_payload(canonical, v74_path, tmp_path / "atlas_v74.json")
-    official = json.loads((ROOT / "assets" / "atlas_rstl.json").read_text(encoding="utf-8"))
 
-    assert official == v74_payload
-    assert official["atlasVersion"] == "8.1.74"
-    assert len(official["lines"]) == 159
-    assert sum(len(line["points"]) for line in official["lines"]) == 15_222
-    assert (ROOT / "web" / "assets" / "atlas_rstl.json").read_bytes() == (
-        ROOT / "assets" / "atlas_rstl.json"
-    ).read_bytes()
+    assert v74_payload["atlasVersion"] == "8.1.74"
+    assert len(v74_payload["lines"]) == 159
+    assert sum(len(line["points"]) for line in v74_payload["lines"]) == 15_222
 
     v73_by_name = {line["name"]: line for line in v73_payload["lines"]}
     v74_by_name = {line["name"]: line for line in v74_payload["lines"]}
@@ -68,7 +63,7 @@ def test_v8_1_74_fairs_only_mapped_lateral_canthus_arcs(tmp_path):
         for name in v73_by_name
     )
     assert {
-        line["name"] for line in official["lines"] if line.get("postMapSmoothingPasses")
+        line["name"] for line in v74_payload["lines"] if line.get("postMapSmoothingPasses")
     } == FAIRED_LINES
     for name in FAIRED_LINES:
         assert v74_by_name[name]["region"] == REGION

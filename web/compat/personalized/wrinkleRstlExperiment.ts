@@ -1166,6 +1166,7 @@ async function runExperiment(file) {
       atlas.atlasVersion !== RSTL_EXPERIMENT_CONTRACT.atlasVersion ||
       atlas.lines.length !== RSTL_EXPERIMENT_CONTRACT.curveCount ||
       !atlas.lines.some((line) => line.region === "lateral_canthus_short_arc_v65") ||
+      atlas.lines.some((line) => line.region === "supraorbital_lateral_short_arc_v66") ||
       !atlas.lines.some((line) => line.region === "supraorbital_medial_short_arc_v69") ||
       !atlas.lines.some((line) => line.region === "brow_temporal_fan_v94") ||
       !atlas.lines.some((line) => line.region === "cheek_alar_gap_fill_v95")) {

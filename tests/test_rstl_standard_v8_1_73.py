@@ -48,6 +48,7 @@ def test_v8_1_73_smooths_only_lateral_canthus_terminals(tmp_path):
 
     v72_payload = _atlas_payload(canonical, v72_path, tmp_path / "atlas_v72.json")
     v73_payload = _atlas_payload(canonical, v73_path, tmp_path / "atlas_v73.json")
+
     assert v73_payload["atlasVersion"] == "8.1.73"
     assert v73_payload["validated"] is False
     assert len(v73_payload["lines"]) == 159

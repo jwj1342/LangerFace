@@ -34,9 +34,9 @@ from langerface.config import (  # noqa: E402
 from langerface.geometry import CanonicalFaceModel  # noqa: E402
 from langerface.lines import Atlas, AtlasLine, atlas_line_from_points2d  # noqa: E402
 
-REFERENCE = REPO / "assets" / "rstl_standard_reference_v8_1_74.json"
+REFERENCE = REPO / "assets" / "rstl_standard_reference_v8_1_96.json"
 OUTPUT = REPO / "assets" / "atlas_rstl_standard_v8.json"
-STANDARD_ATLAS_VERSION = "8.1.74"
+STANDARD_ATLAS_VERSION = "8.1.96"
 CENTER_X = 0.5
 _FACE_POLYGON: np.ndarray | None = None
 _FOREHEAD_MIN_Y = 0.060
@@ -129,6 +129,179 @@ _SUPRAORBITAL_BROW_CORRIDOR_CORRECTION_V68 = False
 _SUPRAORBITAL_BROW_GENTLE_TURN_V69 = False
 _LATERAL_CANTHUS_TERMINAL_SMOOTHING_V70 = False
 _LATERAL_CANTHUS_POST_MAP_FAIRING_V71 = False
+_OVERALL_DENSITY_INCREASE_V72 = False
+_OVERALL_SPACING_EQUALIZATION_V73 = False
+_REMAINING_SPACING_EQUALIZATION_V74 = False
+_CHEEK_ALAR_ENDPOINT_EQUALIZATION_V75 = False
+_CHEEK_ALAR_ENDPOINT_FULL_REFLOW_V76 = False
+_BROW_DENSITY_RESTORE_V77 = False
+_BROW_DENSITY_RESTORE_SOURCE_INDICES_V77 = frozenset({191, 192, 199, 200})
+_LATERAL_CANTHUS_RED_GUIDE_DIRECTION_V78 = False
+_LATERAL_CANTHUS_RED_GUIDE_SOURCE_INDICES_V78 = frozenset({162, 163, 164, 165, 189})
+_LATERAL_CANTHUS_STRONG_UPWARD_ARC_V79 = False
+_LATERAL_CANTHUS_RED_ENDPOINT_REFLOW_V80 = False
+_SUPRAORBITAL_LATERAL_SHORT_ARC_REMOVAL_V81 = False
+_SUPRAORBITAL_MEDIAL_BLUE_GUIDE_REFLOW_V82 = False
+_SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_V83 = False
+_ORBITAL_BROW_TEMPORAL_BLUE_EXTENSION_V84 = False
+_ORBITAL_BROW_TEMPORAL_ENDPOINT_FAN_V88 = False
+_ORBITAL_BROW_TEMPORAL_SPOON_RETURN_V89 = False
+_ORBITAL_BROW_TEMPORAL_DEEPER_LONGER_V90 = False
+_ORBITAL_BROW_TEMPORAL_STRONGER_LONGER_V91 = False
+_ORBITAL_BROW_TEMPORAL_HEAD_SAFE_EXTENSION_V92 = False
+_FOREHEAD_STRONGER_ARCH_V93 = False
+_BROW_TEMPORAL_FAN_V94 = False
+_BROW_TEMPORAL_FAN_REGION_V94 = "brow_temporal_fan_v94"
+_CHEEK_ALAR_GAP_FILL_V95 = False
+_CHEEK_ALAR_GAP_FILL_REGION_V95 = "cheek_alar_gap_fill_v95"
+_CHEEK_ALAR_UNIFORM_ROOT_REFLOW_V96 = False
+_LATERAL_CANTHUS_RED_ENDPOINT_CONTROLS_V80 = {
+    162: ((0.02536133, 0.33959522), (0.08038487, 0.34810966),
+          (0.13256964, 0.32702339), (0.18208276, 0.30616066)),
+    163: ((0.02724463, 0.35130943), (0.08323750, 0.36063271),
+          (0.13583415, 0.33890034), (0.18429380, 0.31326194)),
+    189: ((0.02823385, 0.35754889), (0.08438685, 0.36418019),
+          (0.13854660, 0.34615113), (0.18595273, 0.31715107)),
+    164: ((0.02922307, 0.36378835), (0.08553621, 0.36772767),
+          (0.14125905, 0.35340192), (0.18761166, 0.32104020)),
+    165: ((0.03568015, 0.37606463), (0.09181039, 0.38026743),
+          (0.14797553, 0.36431047), (0.19123276, 0.32771086)),
+}
+_LATERAL_CANTHUS_POINT_COUNTS_V80 = {162: 46, 163: 46, 164: 47, 165: 47, 189: 46}
+_SUPRAORBITAL_MEDIAL_BLUE_GUIDE_SOURCE_INDICES_V82 = frozenset({170, 171, 172, 173})
+_SUPRAORBITAL_MEDIAL_BLUE_GUIDE_POINT_COUNTS_V82 = {170: 13, 171: 15, 172: 13, 173: 15}
+_SUPRAORBITAL_MEDIAL_BLUE_GUIDE_CONTROLS_V82 = {
+    170: ((0.27802357, 0.17537155), (0.28148642, 0.16216299),
+          (0.29122389, 0.15342315), (0.28886528, 0.13833661)),
+    171: ((0.32395078, 0.16780453), (0.32423974, 0.15520105),
+          (0.33333372, 0.14506592), (0.32761016, 0.12977303)),
+    172: ((0.35407048, 0.17200927), (0.35536219, 0.15669523),
+          (0.36574856, 0.14246117), (0.36420109, 0.12738149)),
+    173: ((0.38103080, 0.17213136), (0.38222184, 0.15958581),
+          (0.38973473, 0.14937641), (0.38997888, 0.13549884)),
+}
+_SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_SOURCE_INDICES_V83 = frozenset(
+    {170, 171, 172, 173, 174}
+)
+_SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_POINT_COUNTS_V83 = {
+    170: 13,
+    171: 15,
+    172: 13,
+    173: 15,
+    174: 13,
+}
+_SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_CONTROLS_V83 = {
+    170: ((0.33022687, 0.16992551), (0.33908455, 0.15498750),
+          (0.34172975, 0.13709274), (0.34029564, 0.11889115)),
+    171: ((0.34695715, 0.16807539), (0.35445099, 0.15275296),
+          (0.36096911, 0.13399875), (0.36044397, 0.11654325)),
+    172: ((0.36494020, 0.17149350), (0.37683381, 0.15666996),
+          (0.37810264, 0.13599814), (0.37758166, 0.11494451)),
+    173: ((0.38185873, 0.17647242), (0.39291617, 0.15852017),
+          (0.39323775, 0.13522177), (0.39223393, 0.11288267)),
+    174: ((0.39384753, 0.17575120), (0.40852032, 0.16193886),
+          (0.40717084, 0.13925278), (0.40654285, 0.11741626)),
+}
+_ORBITAL_BROW_TEMPORAL_SOURCE_ORDER_V84 = (105, 106, 154, 107, 155, 108, 109)
+_ORBITAL_BROW_TEMPORAL_SOURCE_INDICES_V84 = frozenset(
+    _ORBITAL_BROW_TEMPORAL_SOURCE_ORDER_V84
+)
+_ORBITAL_BROW_TEMPORAL_POST_MAP_CUBICS_V84 = {
+    105: (38, (0.17152306, -0.04147965), (0.14266382, 0.03000000),
+          (0.06340271, 0.01230641)),
+    106: (38, (0.16833146, -0.03350305), (0.14036977, 0.04092456),
+          (0.05900855, 0.01082246)),
+    154: (38, (0.16673546, -0.02632413), (0.13648561, 0.03820201),
+          (0.05608175, 0.01225077)),
+    107: (38, (0.16673504, -0.01994289), (0.13101133, 0.03378806),
+          (0.05474731, 0.01467541)),
+    155: (38, (0.16779834, -0.01409342), (0.12969507, 0.03483615),
+          (0.05022794, 0.02643808)),
+    108: (39, (0.16939359, -0.00983927), (0.12812827, 0.03420403),
+          (0.05002546, 0.02907413)),
+    109: (39, (0.17152079, -0.00718046), (0.12631092, 0.03189171),
+          (0.05116183, 0.02919214)),
+}
+_ORBITAL_BROW_TEMPORAL_POST_MAP_CUBICS_V88 = {
+    105: (38, (0.17152306, -0.00765000), (0.14266382, 0.03000000),
+          (0.06340271, 0.01230641)),
+    106: (38, (0.17250000, -0.00316000), (0.14036977, 0.04092456),
+          (0.05900855, 0.01082246)),
+    154: (38, (0.17450000, -0.00016000), (0.13648561, 0.03820201),
+          (0.05608175, 0.01225077)),
+    107: (38, (0.17650000, 0.00184000), (0.13101133, 0.03378806),
+          (0.05474731, 0.01467541)),
+    155: (38, (0.17900000, 0.00564000), (0.12969507, 0.03483615),
+          (0.05022794, 0.02643808)),
+    108: (39, (0.18200000, 0.01064000), (0.12812827, 0.03420403),
+          (0.05002546, 0.02907413)),
+    109: (39, (0.18500000, 0.01324000), (0.12631092, 0.03189171),
+          (0.05116183, 0.02919214)),
+}
+_ORBITAL_BROW_TEMPORAL_POST_MAP_CUBICS_V89 = {
+    105: (45, (0.12600000, -0.00550000), (0.06000000, 0.04000000),
+          (0.06340271, 0.01230641)),
+    106: (45, (0.12300000, 0.00030000), (0.06100000, 0.04200000),
+          (0.05900855, 0.01082246)),
+    154: (45, (0.12000000, 0.00530000), (0.06200000, 0.04400000),
+          (0.05608175, 0.01225077)),
+    107: (45, (0.11700000, 0.00850000), (0.06300000, 0.04600000),
+          (0.05474731, 0.01467541)),
+    155: (45, (0.11400000, 0.01320000), (0.06400000, 0.04800000),
+          (0.05022794, 0.02643808)),
+    108: (45, (0.11100000, 0.01850000), (0.06500000, 0.05000000),
+          (0.05002546, 0.02907413)),
+    109: (45, (0.10800000, 0.02330000), (0.06600000, 0.05200000),
+          (0.05116183, 0.02919214)),
+}
+_ORBITAL_BROW_TEMPORAL_POST_MAP_CUBICS_V90 = {
+    105: (45, (0.13800000, -0.00550000), (0.06000000, 0.04800000),
+          (0.06340271, 0.01230641)),
+    106: (45, (0.13500000, 0.00030000), (0.06100000, 0.05000000),
+          (0.05900855, 0.01082246)),
+    154: (45, (0.13200000, 0.00530000), (0.06200000, 0.05200000),
+          (0.05608175, 0.01225077)),
+    107: (45, (0.12900000, 0.00850000), (0.06300000, 0.05400000),
+          (0.05474731, 0.01467541)),
+    155: (45, (0.12600000, 0.01320000), (0.06400000, 0.05600000),
+          (0.05022794, 0.02643808)),
+    108: (45, (0.12300000, 0.01850000), (0.06500000, 0.05800000),
+          (0.05002546, 0.02907413)),
+    109: (45, (0.12000000, 0.02330000), (0.06600000, 0.06000000),
+          (0.05116183, 0.02919214)),
+}
+_ORBITAL_BROW_TEMPORAL_POST_MAP_CUBICS_V91 = {
+    105: (45, (0.15000000, -0.00550000), (0.06000000, 0.06200000),
+          (0.06340271, 0.01230641)),
+    106: (45, (0.14700000, 0.00030000), (0.06100000, 0.06400000),
+          (0.05900855, 0.01082246)),
+    154: (45, (0.14400000, 0.00530000), (0.06200000, 0.06600000),
+          (0.05608175, 0.01225077)),
+    107: (45, (0.14100000, 0.00850000), (0.06300000, 0.06800000),
+          (0.05474731, 0.01467541)),
+    155: (45, (0.13800000, 0.01320000), (0.06400000, 0.07000000),
+          (0.05022794, 0.02643808)),
+    108: (45, (0.13500000, 0.01850000), (0.06500000, 0.07200000),
+          (0.05002546, 0.02907413)),
+    109: (45, (0.13200000, 0.02330000), (0.06600000, 0.07400000),
+          (0.05116183, 0.02919214)),
+}
+_ORBITAL_BROW_TEMPORAL_POST_MAP_CUBICS_V92 = {
+    105: (45, (0.17400000, -0.00550000), (0.06000000, 0.06200000),
+          (0.06340271, 0.01230641)),
+    106: (45, (0.17100000, 0.00030000), (0.06100000, 0.06400000),
+          (0.05900855, 0.01082246)),
+    154: (45, (0.16800000, 0.00530000), (0.06200000, 0.06600000),
+          (0.05608175, 0.01225077)),
+    107: (45, (0.16500000, 0.00850000), (0.06300000, 0.06800000),
+          (0.05474731, 0.01467541)),
+    155: (45, (0.16200000, 0.01320000), (0.06400000, 0.07000000),
+          (0.05022794, 0.02643808)),
+    108: (45, (0.15900000, 0.01850000), (0.06500000, 0.07200000),
+          (0.05002546, 0.02907413)),
+    109: (45, (0.15600000, 0.02330000), (0.06600000, 0.07400000),
+          (0.05116183, 0.02919214)),
+}
 
 _NASAL_BUNDLE_LAYER_SPACING_V30 = 0.015
 _NASAL_BUNDLE_OUTER_X_STEP_V30 = 0.004
@@ -207,6 +380,34 @@ _FOREHEAD_ARCHED_LEVELS_V62 = (
     0.155000,
 )
 _FOREHEAD_ARCHED_CROWN_RISE_V62 = 0.030
+_FOREHEAD_STRONGER_CROWN_RISE_V93 = 0.045
+_FOREHEAD_STRONGER_ARCH_POINT_COUNTS_V93 = {
+    88: 77,
+    89: 101,
+    90: 117,
+    91: 129,
+    92: 140,
+    93: 149,
+    112: 157,
+    113: 160,
+    156: 91,
+    157: 110,
+    158: 124,
+    159: 135,
+    160: 144,
+    161: 153,
+    185: 84,
+    186: 96,
+    187: 106,
+    188: 113,
+}
+_BROW_TEMPORAL_FAN_CONTROLS_V94 = (
+    ((0.035, 0.170), (0.090, 0.155), (0.205, 0.152), (0.276, 0.165)),
+    ((0.035, 0.180), (0.082, 0.165), (0.150, 0.170), (0.205, 0.180)),
+    ((0.037, 0.190), (0.080, 0.175), (0.132, 0.185), (0.187, 0.195)),
+    ((0.041, 0.200), (0.075, 0.185), (0.110, 0.195), (0.158, 0.210)),
+    ((0.052, 0.210), (0.078, 0.195), (0.105, 0.207), (0.140, 0.225)),
+)
 _FOREHEAD_RIGID_DOWNWARD_AMOUNT_V63 = 0.012
 _FOREHEAD_TOTAL_DOWNWARD_AMOUNT_V64 = 0.037
 _LATERAL_CANTHUS_NEW_START_X_V65 = 0.030
@@ -221,6 +422,171 @@ _SUPRAORBITAL_LATERAL_SHORT_ARC_REGION_V67 = "supraorbital_lateral_short_arc_v67
 _SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V67 = "supraorbital_medial_short_arc_v67"
 _SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V68 = "supraorbital_medial_short_arc_v68"
 _SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V69 = "supraorbital_medial_short_arc_v69"
+_OVERALL_DENSITY_REGIONS_V72 = frozenset({
+    "cheek_gap_density_v53",
+    "cheek_long_arc_fan_v24",
+    "cheek_lower_divergent_arc_v44",
+    "cheek_nasal_transition_density_v56",
+    "chin",
+    "forehead_bridge_arc_v15",
+    "lateral_canthus_short_arc_v65",
+    "nose_root_cross_v9",
+    "nose_side_downturn_v9",
+    "orbital_brow_upturn_v11",
+    "perioral_commissure_radial_v50",
+    "perioral_commissure_swirl_v49",
+    "philtrum_nasal_base_v10",
+    "supraorbital_lateral_short_arc_v66",
+    "supraorbital_medial_short_arc_v69",
+})
+_OVERALL_DENSITY_MIN_MEDIAN_GAP_V72 = 0.006
+_OVERALL_DENSITY_SAMPLE_COUNT_V72 = 96
+# These v8.1.74 source-pair rules are the widest audited gaps that remain
+# crossing-free on both the canonical face and the accepted mapped-face fixture.
+_OVERALL_DENSITY_GAP_RULES_V72 = {
+    "cheek_gap_density_v53": ((150, 151, 0.5, 0.0, 0.0),),
+    "cheek_long_arc_fan_v24": (
+        (121, 120, 0.5, 0.10, 0.0),
+        (122, 121, 0.5, 0.10, 0.0),
+        (117, 116, 2.0 / 3.0, 0.0, 0.0),
+    ),
+    "cheek_lower_divergent_arc_v44": ((138, 137, 0.5, 0.10, 0.0),),
+    "cheek_nasal_transition_density_v56": ((152, 153, 0.5, 0.10, 0.0),),
+    "chin": (
+        (65, 67, 0.5, 0.0, 0.0),
+        (74, 60, 0.5, 0.0, 0.0),
+        (60, 61, 0.5, 0.0, 0.0),
+        (67, 68, 0.5, 0.0, 0.0),
+    ),
+    "forehead_bridge_arc_v15": (
+        (88, 156, 0.5, 0.0, 0.0),
+        (156, 89, 0.5, 0.0, 0.0),
+        (89, 157, 0.5, 0.0, 0.0),
+        (157, 90, 0.5, 0.0, 0.0),
+    ),
+    "lateral_canthus_short_arc_v65": ((163, 164, 0.5, 0.0, 0.0),),
+    "nose_root_cross_v9": ((103, 104, 0.5, 0.0, 0.0),),
+    "orbital_brow_upturn_v11": (
+        (106, 154, 0.5, 0.0, 0.05),
+        (154, 107, 0.5, 0.0, 0.05),
+    ),
+    "perioral_commissure_radial_v50": (
+        (145, 146, 0.5, 0.0, 0.0),
+        (147, 148, 0.5, 0.0, 0.0),
+    ),
+    "perioral_commissure_swirl_v49": (
+        (141, 140, 0.5, 0.0, 0.0),
+        (142, 141, 0.5, 0.0, 0.0),
+    ),
+    "philtrum_nasal_base_v10": (
+        (20, 0, 0.5, 0.0, 0.0),
+        (17, 18, 0.5, 0.0, 0.0),
+    ),
+    "supraorbital_medial_short_arc_v69": (
+        (170, 171, 0.5, 0.0, 0.0),
+        (172, 173, 0.5, 0.0, 0.0),
+    ),
+}
+_OVERALL_SPACING_EQUALIZATION_RULES_V73 = {
+    "cheek_long_arc_fan_v24": (0.55, 0.20),
+    "chin": (0.65, 0.18),
+    "forehead_bridge_arc_v15": (0.55, 0.22),
+    "lateral_canthus_short_arc_v65": (0.65, 0.15),
+    "nose_side_downturn_v9": (0.55, 0.20),
+    "orbital_brow_upturn_v11": (0.55, 0.25),
+    "perioral_commissure_radial_v50": (0.55, 0.20),
+    "perioral_commissure_swirl_v49": (0.55, 0.20),
+    "philtrum_nasal_base_v10": (0.65, 0.20),
+    "supraorbital_medial_short_arc_v69": (0.55, 0.18),
+}
+_OVERALL_SPACING_FROZEN_SOURCE_INDICES_V73 = frozenset({96, 119, 121, 178, 180})
+_REMAINING_SPACING_EQUALIZATION_RULES_V74 = {
+    "cheek_long_arc_fan_v24": (0.20, 0.20),
+    "forehead_bridge_arc_v15": (0.35, 0.22),
+    "nose_side_downturn_v9": (0.25, 0.20),
+    "orbital_brow_upturn_v11": (0.80, 0.25),
+    "perioral_commissure_swirl_v49": (0.40, 0.20),
+    "supraorbital_medial_short_arc_v69": (0.45, 0.18),
+}
+_REMAINING_SPACING_SOURCE_STRENGTHS_V74 = {
+    96: 0.0,
+    114: 0.0,
+    115: 0.0,
+    119: 0.5,
+    120: 0.5,
+    122: 0.0,
+    140: 0.0,
+    178: 0.0,
+}
+_REMAINING_SPACING_SOURCE_WINDOWS_V74: dict[int, tuple[float, float]] = {}
+_REMAINING_SPACING_PROPAGATION_V74: tuple[tuple[int, int, float], ...] = ()
+_REMAINING_SPACING_ANCHORS_V74 = {
+    "cheek_long_arc_fan_v24": 178,
+    "nose_side_downturn_v9": 96,
+    "perioral_commissure_swirl_v49": 140,
+}
+_CHEEK_ALAR_ENDPOINT_REGIONS_V75 = frozenset({
+    _CHEEK_LONG_ARC_FAN_REGION_V24,
+    _CHEEK_LONG_ARC_DENSITY_REGION_V41,
+    _CHEEK_LOWER_DIVERGENT_ARC_REGION_V44,
+})
+_CHEEK_ALAR_ENDPOINT_BOUNDARY_V75 = (
+    (0.409000, 0.446357),
+    (0.409000, 0.516000),
+    (0.405000, 0.529000),
+    (0.393000, 0.543000),
+    (0.375000, 0.570000),
+)
+_CHEEK_ALAR_ENDPOINT_ORDER_V75 = (
+    114,
+    115,
+    116,
+    178,
+    135,
+    117,
+    118,
+    119,
+    120,
+    176,
+    121,
+    177,
+    122,
+    137,
+    179,
+    138,
+)
+_CHEEK_ALAR_ENDPOINT_FROZEN_V75 = frozenset({
+    115,
+    117,
+    118,
+    119,
+    135,
+    178,
+})
+_CHEEK_ALAR_ENDPOINT_DISTANCE_OFFSETS_V75 = {
+    120: -0.004,
+    176: -0.004,
+    177: 0.006,
+    122: 0.002,
+}
+_CHEEK_ALAR_ENDPOINT_DISTANCE_OFFSETS_V76 = dict(_CHEEK_ALAR_ENDPOINT_DISTANCE_OFFSETS_V75)
+for _source_index_v76 in (116, 120, 121, 122, 137, 176, 177, 179):
+    _CHEEK_ALAR_ENDPOINT_DISTANCE_OFFSETS_V76[_source_index_v76] = (
+        _CHEEK_ALAR_ENDPOINT_DISTANCE_OFFSETS_V75.get(_source_index_v76, 0.0) + 0.001
+    )
+_CHEEK_ALAR_ENDPOINT_DISTANCE_OFFSETS_V76.update({114: 0.0025, 138: -0.001})
+_CHEEK_ALAR_ENDPOINT_STRENGTHS_V76 = {
+    115: 0.0,
+}
+_CHEEK_ALAR_ENDPOINT_LOCAL_DELTAS_V76 = {
+    115: (-0.002, 0.0),
+}
+_CHEEK_ALAR_ENDPOINT_DEFORMED_PREFIX_V76 = frozenset({115, 119, 135})
+_CHEEK_ALAR_ENDPOINT_DEFORMED_PREFIX_FRACTIONS_V76 = {
+    115: 0.20,
+    119: 0.10,
+}
+_CHEEK_ALAR_ENDPOINT_JOIN_X_V75 = 0.360
 _CHEEK_GAP_BRIDGE_SHIFT_V54 = 0.006
 _CHEEK_GAP_BRIDGE_WINDOW_V54 = (0.26, 0.48)
 _CHEEK_GAP_BRIDGE_ROOT_OFFSET_V54 = 0.010
@@ -378,6 +744,588 @@ def mirror(points: np.ndarray) -> np.ndarray:
     out = points.copy()
     out[:, 0] = 1.0 - out[:, 0]
     return out
+
+
+def _sample_by_normalized_arclength_v72(points: np.ndarray, count: int) -> np.ndarray:
+    segment = np.linalg.norm(np.diff(points, axis=0), axis=1)
+    cumulative = np.r_[0.0, np.cumsum(segment)]
+    length = float(cumulative[-1])
+    if length <= 1e-10:
+        return np.repeat(points[:1], count, axis=0)
+    target = np.linspace(0.0, length, count)
+    return np.column_stack(
+        [np.interp(target, cumulative, points[:, axis]) for axis in range(2)]
+    )
+
+
+def _align_curve_endpoints_v72(reference: np.ndarray, candidate: np.ndarray) -> np.ndarray:
+    direct = np.linalg.norm(reference[0] - candidate[0]) + np.linalg.norm(
+        reference[-1] - candidate[-1]
+    )
+    reversed_distance = np.linalg.norm(reference[0] - candidate[-1]) + np.linalg.norm(
+        reference[-1] - candidate[0]
+    )
+    return candidate if direct <= reversed_distance else candidate[::-1]
+
+
+def _density_topology_kind_v72(curve: Curve) -> str:
+    points = curve.points
+    endpoint_distance = min(abs(points[0, 0] - CENTER_X), abs(points[-1, 0] - CENTER_X))
+    horizontal_span = float(np.ptp(points[:, 0]))
+    if (
+        curve.region != "nose_side_downturn_v9"
+        and endpoint_distance < 0.008
+        and horizontal_span > 0.035
+    ):
+        return "cross_midline"
+    return "mirrored_half_face"
+
+
+def _order_density_family_v72(curves: list[Curve]) -> list[Curve]:
+    sampled = [
+        _sample_by_normalized_arclength_v72(curve.points, _OVERALL_DENSITY_SAMPLE_COUNT_V72)
+        for curve in curves
+    ]
+    reference_index = int(
+        np.argmax([np.linalg.norm(points[-1] - points[0]) for points in sampled])
+    )
+    reference = sampled[reference_index]
+    aligned = [_align_curve_endpoints_v72(reference, points) for points in sampled]
+    tangents = np.asarray([points[-1] - points[0] for points in aligned])
+    tangent_lengths = np.linalg.norm(tangents, axis=1)
+    valid = tangent_lengths > 1e-10
+    tangents[valid] /= tangent_lengths[valid, None]
+    average_tangent = np.sum(tangents[valid], axis=0)
+    if np.linalg.norm(average_tangent) <= 1e-10:
+        centered = np.vstack([points - np.mean(points, axis=0) for points in aligned])
+        _, _, axes = np.linalg.svd(centered, full_matrices=False)
+        average_tangent = axes[0]
+    average_tangent /= np.linalg.norm(average_tangent)
+    normal = np.array([-average_tangent[1], average_tangent[0]])
+    order = np.argsort([float(np.mean(points, axis=0) @ normal) for points in aligned])
+    return [curves[int(index)] for index in order]
+
+
+def _increase_overall_density_v72(curves: list[Curve]) -> list[Curve]:
+    source_indices = {id(curve): index for index, curve in enumerate(curves)}
+    grouped: dict[tuple[str, str], list[Curve]] = {}
+    for curve in curves:
+        if curve.region in _OVERALL_DENSITY_REGIONS_V72:
+            key = (curve.region, _density_topology_kind_v72(curve))
+            grouped.setdefault(key, []).append(curve)
+
+    additions: list[Curve] = []
+    for key in sorted(grouped):
+        family = _order_density_family_v72(grouped[key])
+        if len(family) < 2:
+            continue
+        gaps: dict[frozenset[int], tuple[float, int, np.ndarray, np.ndarray]] = {}
+        for first, second in zip(family[:-1], family[1:]):
+            count = max(
+                _OVERALL_DENSITY_SAMPLE_COUNT_V72,
+                len(first.points),
+                len(second.points),
+            )
+            first_points = _sample_by_normalized_arclength_v72(first.points, count)
+            second_points = _sample_by_normalized_arclength_v72(second.points, count)
+            second_points = _align_curve_endpoints_v72(first_points, second_points)
+            median_gap = float(np.median(np.linalg.norm(first_points - second_points, axis=1)))
+            pair = frozenset((source_indices[id(first)], source_indices[id(second)]))
+            gaps[pair] = (
+                median_gap,
+                source_indices[id(first)],
+                first_points,
+                second_points,
+            )
+
+        rules = _OVERALL_DENSITY_GAP_RULES_V72.get(key[0], ())
+        for first_index, second_index, weight, trim_start, trim_end in rules:
+            gap = gaps.get(frozenset((first_index, second_index)))
+            if gap is None:
+                continue
+            median_gap, ordered_first_index, first_points, second_points = gap
+            if median_gap < _OVERALL_DENSITY_MIN_MEDIAN_GAP_V72:
+                continue
+            if ordered_first_index == second_index:
+                weight = 1.0 - weight
+            blended = (1.0 - weight) * first_points + weight * second_points
+            start = int(round(trim_start * (len(blended) - 1)))
+            stop = len(blended) - int(round(trim_end * (len(blended) - 1)))
+            additions.append(Curve(key[0], resample(blended[start:stop], spacing=0.0035)))
+    return [*curves, *additions]
+
+
+def _endpoint_taper_v73(count: int, fraction: float) -> np.ndarray:
+    if fraction <= 0.0:
+        return np.ones(count, dtype=np.float64)
+    position = np.linspace(0.0, 1.0, count)
+    distance = np.minimum(position, 1.0 - position)
+    scaled = np.clip(distance / fraction, 0.0, 1.0)
+    return scaled * scaled * (3.0 - 2.0 * scaled)
+
+
+def _equalize_overall_spacing_v73(curves: list[Curve]) -> list[Curve]:
+    source_indices = {id(curve): index for index, curve in enumerate(curves)}
+    grouped: dict[tuple[str, str], list[Curve]] = {}
+    for curve in curves:
+        if curve.region in _OVERALL_SPACING_EQUALIZATION_RULES_V73:
+            key = (curve.region, _density_topology_kind_v72(curve))
+            grouped.setdefault(key, []).append(curve)
+
+    replacements: dict[int, Curve] = {}
+    for key in sorted(grouped):
+        family = _order_density_family_v72(grouped[key])
+        if len(family) < 3:
+            continue
+        strength, taper_fraction = _OVERALL_SPACING_EQUALIZATION_RULES_V73[key[0]]
+        sampled = [
+            _sample_by_normalized_arclength_v72(
+                curve.points,
+                _OVERALL_DENSITY_SAMPLE_COUNT_V72,
+            )
+            for curve in family
+        ]
+        reference = sampled[int(np.argmax([np.linalg.norm(p[-1] - p[0]) for p in sampled]))]
+        aligned = [_align_curve_endpoints_v72(reference, points) for points in sampled]
+        targets = np.asarray(aligned).copy()
+        anchor_indices = [0]
+        anchor_indices.extend(
+            index
+            for index, curve in enumerate(family[1:-1], start=1)
+            if source_indices[id(curve)] in _OVERALL_SPACING_FROZEN_SOURCE_INDICES_V73
+        )
+        anchor_indices.append(len(family) - 1)
+        for first_anchor, second_anchor in zip(anchor_indices[:-1], anchor_indices[1:]):
+            if second_anchor - first_anchor < 2:
+                continue
+            for sample_index in range(_OVERALL_DENSITY_SAMPLE_COUNT_V72):
+                cross_section = np.asarray(
+                    [
+                        aligned[index][sample_index]
+                        for index in range(first_anchor, second_anchor + 1)
+                    ]
+                )
+                segment = np.linalg.norm(np.diff(cross_section, axis=0), axis=1)
+                cumulative = np.r_[0.0, np.cumsum(segment)]
+                if cumulative[-1] <= 1e-10:
+                    continue
+                target_distance = np.linspace(
+                    0.0,
+                    cumulative[-1],
+                    second_anchor - first_anchor + 1,
+                )
+                targets[first_anchor : second_anchor + 1, sample_index] = np.column_stack(
+                    [
+                        np.interp(target_distance, cumulative, cross_section[:, axis])
+                        for axis in range(2)
+                    ]
+                )
+
+        for index, curve in enumerate(family[1:-1], start=1):
+            if source_indices[id(curve)] in _OVERALL_SPACING_FROZEN_SOURCE_INDICES_V73:
+                continue
+            displacement = strength * (targets[index] - aligned[index])
+            taper = _endpoint_taper_v73(len(displacement), taper_fraction)
+            displacement *= taper[:, None]
+            if aligned[index] is not sampled[index]:
+                displacement = displacement[::-1]
+            segment = np.linalg.norm(np.diff(curve.points, axis=0), axis=1)
+            cumulative = np.r_[0.0, np.cumsum(segment)]
+            if cumulative[-1] <= 1e-10:
+                continue
+            position = cumulative / cumulative[-1]
+            sample_position = np.linspace(0.0, 1.0, len(displacement))
+            interpolated = np.column_stack(
+                [
+                    np.interp(position, sample_position, displacement[:, axis])
+                    for axis in range(2)
+                ]
+            )
+            points = curve.points + interpolated
+            replacements[id(curve)] = Curve(curve.region, points)
+
+    return [replacements.get(id(curve), curve) for curve in curves]
+
+
+def _equalize_remaining_spacing_v74(curves: list[Curve]) -> list[Curve]:
+    source_indices = {id(curve): index for index, curve in enumerate(curves)}
+    grouped: dict[tuple[str, str], list[Curve]] = {}
+    for curve in curves:
+        if curve.region in _REMAINING_SPACING_EQUALIZATION_RULES_V74:
+            key = (curve.region, _density_topology_kind_v72(curve))
+            grouped.setdefault(key, []).append(curve)
+
+    replacements: dict[int, Curve] = {}
+    for key in sorted(grouped):
+        family = _order_density_family_v72(grouped[key])
+        if len(family) < 3:
+            continue
+        strength, taper_fraction = _REMAINING_SPACING_EQUALIZATION_RULES_V74[key[0]]
+        sampled = [
+            _sample_by_normalized_arclength_v72(
+                curve.points,
+                _OVERALL_DENSITY_SAMPLE_COUNT_V72,
+            )
+            for curve in family
+        ]
+        reference = sampled[int(np.argmax([np.linalg.norm(p[-1] - p[0]) for p in sampled]))]
+        aligned = [_align_curve_endpoints_v72(reference, points) for points in sampled]
+        targets = np.asarray(aligned).copy()
+        anchor_source_index = _REMAINING_SPACING_ANCHORS_V74.get(key[0])
+        anchor_index = next(
+            (
+                index
+                for index, curve in enumerate(family)
+                if source_indices[id(curve)] == anchor_source_index
+            ),
+            None,
+        )
+        for sample_index in range(_OVERALL_DENSITY_SAMPLE_COUNT_V72):
+            cross_section = np.asarray([points[sample_index] for points in aligned])
+            segment = np.linalg.norm(np.diff(cross_section, axis=0), axis=1)
+            cumulative = np.r_[0.0, np.cumsum(segment)]
+            if cumulative[-1] <= 1e-10:
+                continue
+            if anchor_index is not None:
+                gap = cumulative[-1] / (len(family) - 1)
+                target_distance = cumulative[anchor_index] + gap * (
+                    np.arange(len(family)) - anchor_index
+                )
+            else:
+                target_distance = np.linspace(0.0, cumulative[-1], len(family))
+            target_points = np.column_stack(
+                [
+                    np.interp(target_distance, cumulative, cross_section[:, axis])
+                    for axis in range(2)
+                ]
+            )
+            after = target_distance > cumulative[-1]
+            if np.any(after) and segment[-1] > 1e-10:
+                direction = (cross_section[-1] - cross_section[-2]) / segment[-1]
+                target_points[after] = cross_section[-1] + (
+                    target_distance[after] - cumulative[-1]
+                )[:, None] * direction
+            before = target_distance < 0.0
+            if np.any(before) and segment[0] > 1e-10:
+                direction = (cross_section[1] - cross_section[0]) / segment[0]
+                target_points[before] = cross_section[0] + target_distance[before, None] * direction
+            targets[:, sample_index] = target_points
+
+        if anchor_index is not None:
+            movable = enumerate(family)
+        else:
+            movable = enumerate(family[1:-1], start=1)
+        for index, curve in movable:
+            source_index = source_indices[id(curve)]
+            curve_strength = _REMAINING_SPACING_SOURCE_STRENGTHS_V74.get(source_index, 1.0)
+            displacement = strength * curve_strength * (targets[index] - aligned[index])
+            taper = _endpoint_taper_v73(len(displacement), taper_fraction)
+            displacement *= taper[:, None]
+            if aligned[index] is not sampled[index]:
+                displacement = displacement[::-1]
+            window = _REMAINING_SPACING_SOURCE_WINDOWS_V74.get(source_index)
+            if window is not None:
+                start, stop = window
+                position = np.linspace(0.0, 1.0, len(displacement))
+                scaled = np.clip((position - start) / (stop - start), 0.0, 1.0)
+                displacement *= (scaled * scaled * (3.0 - 2.0 * scaled))[:, None]
+            segment = np.linalg.norm(np.diff(curve.points, axis=0), axis=1)
+            cumulative = np.r_[0.0, np.cumsum(segment)]
+            if cumulative[-1] <= 1e-10:
+                continue
+            position = cumulative / cumulative[-1]
+            sample_position = np.linspace(0.0, 1.0, len(displacement))
+            interpolated = np.column_stack(
+                [
+                    np.interp(position, sample_position, displacement[:, axis])
+                    for axis in range(2)
+                ]
+            )
+            replacements[id(curve)] = Curve(curve.region, curve.points + interpolated)
+
+    for source_index, target_index, scale in _REMAINING_SPACING_PROPAGATION_V74:
+        source = curves[source_index]
+        source_replacement = replacements.get(id(source))
+        if source_replacement is None:
+            continue
+        target = curves[target_index]
+        target_current = replacements.get(id(target), target)
+        source_old = _sample_by_normalized_arclength_v72(
+            source.points,
+            _OVERALL_DENSITY_SAMPLE_COUNT_V72,
+        )
+        source_new = _sample_by_normalized_arclength_v72(
+            source_replacement.points,
+            _OVERALL_DENSITY_SAMPLE_COUNT_V72,
+        )
+        displacement = _align_curve_endpoints_v72(source_old, source_new) - source_old
+        target_sampled = _sample_by_normalized_arclength_v72(
+            target_current.points,
+            _OVERALL_DENSITY_SAMPLE_COUNT_V72,
+        )
+        if _align_curve_endpoints_v72(source_old, target_sampled) is not target_sampled:
+            displacement = displacement[::-1]
+        segment = np.linalg.norm(np.diff(target_current.points, axis=0), axis=1)
+        cumulative = np.r_[0.0, np.cumsum(segment)]
+        if cumulative[-1] <= 1e-10:
+            continue
+        position = cumulative / cumulative[-1]
+        sample_position = np.linspace(0.0, 1.0, len(displacement))
+        interpolated = np.column_stack(
+            [
+                np.interp(position, sample_position, displacement[:, axis])
+                for axis in range(2)
+            ]
+        )
+        taper = _endpoint_taper_v73(len(target_current.points), 0.20)
+        replacements[id(target)] = Curve(
+            target.region,
+            target_current.points + scale * taper[:, None] * interpolated,
+        )
+
+    return [replacements.get(id(curve), curve) for curve in curves]
+
+
+def _equalize_cheek_alar_endpoints_v75(curves: list[Curve]) -> list[Curve]:
+    """Redistribute cheek-fan nasal endpoints along the audited alar boundary."""
+    indices = [
+        index
+        for index, curve in enumerate(curves)
+        if curve.region in _CHEEK_ALAR_ENDPOINT_REGIONS_V75
+    ]
+    if len(indices) != 16:
+        raise RuntimeError(f"expected sixteen cheek alar endpoints, found {len(indices)}")
+
+    if set(indices) != set(_CHEEK_ALAR_ENDPOINT_ORDER_V75):
+        raise RuntimeError("cheek alar endpoint topology changed unexpectedly")
+
+    oriented: dict[int, tuple[np.ndarray, bool]] = {}
+    revised = list(curves)
+    for index in indices:
+        points = resample(curves[index].points)
+        reverse = float(points[0, 0]) < float(points[-1, 0])
+        nasal_first = points[::-1].copy() if reverse else points.copy()
+        oriented[index] = (nasal_first, reverse)
+        revised[index] = Curve(curves[index].region, points)
+    ordered = list(_CHEEK_ALAR_ENDPOINT_ORDER_V75)
+
+    boundary = np.asarray(_CHEEK_ALAR_ENDPOINT_BOUNDARY_V75, dtype=np.float64)
+    boundary_segment = np.linalg.norm(np.diff(boundary, axis=0), axis=1)
+    boundary_cumulative = np.r_[0.0, np.cumsum(boundary_segment)]
+    target_distance = np.linspace(0.0, boundary_cumulative[-1], len(ordered))
+    distance_offsets = (
+        _CHEEK_ALAR_ENDPOINT_DISTANCE_OFFSETS_V76
+        if _CHEEK_ALAR_ENDPOINT_FULL_REFLOW_V76
+        else _CHEEK_ALAR_ENDPOINT_DISTANCE_OFFSETS_V75
+    )
+    target_distance += np.asarray(
+        [
+            distance_offsets.get(index, 0.0)
+            for index in ordered
+        ]
+    )
+    targets = np.column_stack(
+        [
+            np.interp(target_distance, boundary_cumulative, boundary[:, axis])
+            for axis in range(2)
+        ]
+    )
+
+    actual_targets = targets.copy()
+    old_endpoints: list[np.ndarray] = []
+    for rank, (index, target) in enumerate(zip(ordered, targets, strict=True)):
+        nasal_first, reverse = oriented[index]
+        old_endpoints.append(nasal_first[0].copy())
+        if not _CHEEK_ALAR_ENDPOINT_FULL_REFLOW_V76 and index in _CHEEK_ALAR_ENDPOINT_FROZEN_V75:
+            actual_targets[rank] = nasal_first[0]
+            continue
+        if _CHEEK_ALAR_ENDPOINT_FULL_REFLOW_V76:
+            strength = _CHEEK_ALAR_ENDPOINT_STRENGTHS_V76.get(index, 1.0)
+            target = nasal_first[0] + strength * (target - nasal_first[0])
+            target += np.asarray(
+                _CHEEK_ALAR_ENDPOINT_LOCAL_DELTAS_V76.get(index, (0.0, 0.0)),
+                dtype=np.float64,
+            )
+            actual_targets[rank] = target
+        crossing = np.flatnonzero(nasal_first[:, 0] <= _CHEEK_ALAR_ENDPOINT_JOIN_X_V75)
+        if not len(crossing):
+            raise RuntimeError(f"cheek curve {index} does not reach the endpoint join section")
+        crossing_index = max(2, int(crossing[0]))
+        if (
+            _CHEEK_ALAR_ENDPOINT_FULL_REFLOW_V76
+            and index in _CHEEK_ALAR_ENDPOINT_DEFORMED_PREFIX_V76
+        ):
+            deform_fraction = _CHEEK_ALAR_ENDPOINT_DEFORMED_PREFIX_FRACTIONS_V76.get(
+                index,
+                1.0,
+            )
+            deform_stop = min(
+                crossing_index,
+                max(4, int(math.ceil(crossing_index * deform_fraction))),
+            )
+            prefix = nasal_first[: deform_stop + 1].copy()
+            position = np.linspace(0.0, 1.0, len(prefix))
+            weight = 1.0 - (3.0 * position**2 - 2.0 * position**3)
+            prefix += weight[:, None] * (target - nasal_first[0])
+            adjusted = np.vstack([prefix, nasal_first[deform_stop + 1 :]])
+            if reverse:
+                adjusted = adjusted[::-1]
+            revised[index] = Curve(curves[index].region, adjusted)
+            continue
+        before = nasal_first[crossing_index - 1]
+        after = nasal_first[crossing_index]
+        denominator = float(before[0] - after[0])
+        if denominator <= 1e-10:
+            raise RuntimeError(f"cheek curve {index} is not monotone at the endpoint join")
+        fraction = float(
+            (before[0] - _CHEEK_ALAR_ENDPOINT_JOIN_X_V75) / denominator
+        )
+        join = before + fraction * (after - before)
+        chord = join - target
+        chord_length = float(np.linalg.norm(chord))
+        first_control = target + chord / 3.0
+        second_control = target + 2.0 * chord / 3.0
+        prefix = _cubic_bezier(
+            target,
+            first_control,
+            second_control,
+            join,
+            max(12, int(math.ceil(chord_length / 0.0015))),
+        )
+        adjusted = np.vstack([prefix, nasal_first[crossing_index:]])
+        if reverse:
+            adjusted = adjusted[::-1]
+        revised[index] = Curve(curves[index].region, adjusted)
+
+    old_gaps = np.linalg.norm(np.diff(np.asarray(old_endpoints), axis=0), axis=1)
+    new_gaps = np.linalg.norm(np.diff(actual_targets, axis=0), axis=1)
+    old_cv = float(np.std(old_gaps) / np.mean(old_gaps))
+    new_cv = float(np.std(new_gaps) / np.mean(new_gaps))
+    print(
+        "[cheek-alar-endpoint-equalization] half_lines=16 "
+        f"old_cv={old_cv:.6f} new_cv={new_cv:.6f} "
+        f"join_x={_CHEEK_ALAR_ENDPOINT_JOIN_X_V75:.3f}"
+    )
+    return revised
+
+
+def _reshape_lateral_canthus_to_red_guide_v78(curves: list[Curve]) -> list[Curve]:
+    """Delay the outer-canthus turn, then rise continuously toward the eye."""
+    indices = {
+        index
+        for index, curve in enumerate(curves)
+        if curve.region == _LATERAL_CANTHUS_SHORT_ARC_REGION_V65
+    }
+    if indices != _LATERAL_CANTHUS_RED_GUIDE_SOURCE_INDICES_V78:
+        raise RuntimeError(
+            "lateral canthus source topology changed unexpectedly: "
+            f"expected {sorted(_LATERAL_CANTHUS_RED_GUIDE_SOURCE_INDICES_V78)}, "
+            f"found {sorted(indices)}"
+        )
+
+    revised = list(curves)
+    for index in sorted(indices):
+        source = curves[index].points
+        reverse = float(source[0, 0]) > float(source[-1, 0])
+        oriented = source[::-1].copy() if reverse else source.copy()
+        start = oriented[0]
+        end = oriented[-1]
+        span_x = float(end[0] - start[0])
+        rise = float(start[1] - end[1])
+        if span_x <= 1e-6 or rise <= 1e-6:
+            raise RuntimeError(f"lateral canthus curve {index} has an invalid direction")
+
+        if _LATERAL_CANTHUS_RED_ENDPOINT_REFLOW_V80:
+            controls = np.asarray(
+                _LATERAL_CANTHUS_RED_ENDPOINT_CONTROLS_V80[index],
+                dtype=np.float64,
+            )
+        else:
+            eye_control_rise = 0.65 if _LATERAL_CANTHUS_STRONG_UPWARD_ARC_V79 else 0.30
+            temporal_control_x = 0.32 if _LATERAL_CANTHUS_STRONG_UPWARD_ARC_V79 else 0.28
+            controls = np.asarray(
+                (
+                    start,
+                    (start[0] + temporal_control_x * span_x, start[1]),
+                    (start[0] + 0.72 * span_x, end[1] + eye_control_rise * rise),
+                    end,
+                ),
+                dtype=np.float64,
+            )
+        bezier = _cubic_bezier(*controls, 120)
+        if _LATERAL_CANTHUS_RED_ENDPOINT_REFLOW_V80:
+            points = _sample_by_normalized_arclength_v72(
+                bezier,
+                _LATERAL_CANTHUS_POINT_COUNTS_V80[index],
+            )
+        elif _LATERAL_CANTHUS_STRONG_UPWARD_ARC_V79:
+            previous_controls = np.asarray(
+                (
+                    start,
+                    (start[0] + 0.28 * span_x, start[1]),
+                    (start[0] + 0.72 * span_x, end[1] + 0.30 * rise),
+                    end,
+                ),
+                dtype=np.float64,
+            )
+            previous_count = len(
+                resample(
+                    resample(_cubic_bezier(*previous_controls, 120), spacing=0.0035)
+                )
+            )
+            points = _sample_by_normalized_arclength_v72(bezier, previous_count)
+        else:
+            points = resample(bezier, spacing=0.0035)
+        if reverse:
+            points = points[::-1]
+        revised[index] = Curve(curves[index].region, points)
+    return revised
+
+
+def _reshape_supraorbital_medial_to_blue_guide_v82(
+    curves: list[Curve],
+) -> list[Curve]:
+    """Move only the four user-marked medial short arcs above the eyebrow."""
+    revised = list(curves)
+    for index in sorted(_SUPRAORBITAL_MEDIAL_BLUE_GUIDE_SOURCE_INDICES_V82):
+        if curves[index].region != _SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V69:
+            raise RuntimeError(
+                f"supraorbital medial source {index} changed unexpectedly: "
+                f"{curves[index].region}"
+            )
+        controls = np.asarray(
+            _SUPRAORBITAL_MEDIAL_BLUE_GUIDE_CONTROLS_V82[index],
+            dtype=np.float64,
+        )
+        points = _sample_by_normalized_arclength_v72(
+            _cubic_bezier(*controls, 120),
+            _SUPRAORBITAL_MEDIAL_BLUE_GUIDE_POINT_COUNTS_V82[index],
+        )
+        revised[index] = Curve(curves[index].region, points)
+    return revised
+
+
+def _reshape_supraorbital_medial_curve_to_vertical_v83(
+    curves: list[Curve],
+) -> list[Curve]:
+    """Keep all five medial brow arcs above hair and turn them vertical medially."""
+    revised = list(curves)
+    for index in sorted(_SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_SOURCE_INDICES_V83):
+        if curves[index].region != _SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V69:
+            raise RuntimeError(
+                f"supraorbital medial source {index} changed unexpectedly: "
+                f"{curves[index].region}"
+            )
+        controls = np.asarray(
+            _SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_CONTROLS_V83[index],
+            dtype=np.float64,
+        )
+        points = _sample_by_normalized_arclength_v72(
+            _cubic_bezier(*controls, 120),
+            _SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_POINT_COUNTS_V83[index],
+        )
+        revised[index] = Curve(curves[index].region, points)
+    return revised
 
 
 class RasterDirectionField:
@@ -3396,6 +4344,140 @@ def _add_supraorbital_brow_short_arcs_v66(curves: list[Curve]) -> list[Curve]:
     return list(curves) + lateral + medial
 
 
+def _add_brow_temporal_fan_v94(curves: list[Curve]) -> list[Curve]:
+    """Add five user-guided half-curves for bilateral temporal brow fans."""
+    additions = [
+        Curve(
+            _BROW_TEMPORAL_FAN_REGION_V94,
+            resample(_cubic_bezier(*np.asarray(controls), 96), spacing=0.0035),
+        )
+        for controls in _BROW_TEMPORAL_FAN_CONTROLS_V94
+    ]
+    print(f"[brow-temporal-fan] new_half_lines={len(additions)} mirrored=true")
+    return list(curves) + additions
+
+
+def _add_cheek_alar_gap_fill_v95(curves: list[Curve]) -> list[Curve]:
+    """Add two full alar-origin curves inside the lower-cheek transition gap."""
+
+    def medial_to_lateral(points: np.ndarray) -> np.ndarray:
+        return points if float(points[0, 0]) > float(points[-1, 0]) else points[::-1]
+
+    def parameterized(points: np.ndarray) -> np.ndarray:
+        oriented = medial_to_lateral(points)
+        arclength = np.r_[
+            0.0,
+            np.cumsum(np.linalg.norm(np.diff(oriented, axis=0), axis=1)),
+        ]
+        arclength /= arclength[-1]
+        t = np.linspace(0.0, 1.0, _CHEEK_DENSITY_SAMPLES_V41)
+        return np.column_stack(
+            [np.interp(t, arclength, oriented[:, axis]) for axis in range(2)]
+        )
+
+    fan = [
+        curve for curve in curves if curve.region == _CHEEK_LONG_ARC_FAN_REGION_V24
+    ]
+    divergent = [
+        curve
+        for curve in curves
+        if curve.region == _CHEEK_LOWER_DIVERGENT_ARC_REGION_V44
+    ]
+    if len(fan) < 9 or len(divergent) < 2:
+        raise RuntimeError(
+            "expected the established cheek fan and lower divergent bundle"
+        )
+
+    upper = parameterized(
+        max(fan, key=lambda curve: float(medial_to_lateral(curve.points)[0, 1])).points
+    )
+    lower = parameterized(
+        min(
+            divergent,
+            key=lambda curve: float(medial_to_lateral(curve.points)[0, 1]),
+        ).points
+    )
+    t = np.linspace(0.0, 1.0, _CHEEK_DENSITY_SAMPLES_V41)
+    easing = t * t * (3.0 - 2.0 * t)
+    additions: list[Curve] = []
+    for root_fraction, body_fraction in ((0.28, 1.0 / 3.0), (0.72, 2.0 / 3.0)):
+        blend = root_fraction + (body_fraction - root_fraction) * easing
+        points = upper + blend[:, None] * (lower - upper)
+        additions.append(
+            Curve(
+                _CHEEK_ALAR_GAP_FILL_REGION_V95,
+                resample(points, spacing=0.0035),
+            )
+        )
+
+    print(
+        "[cheek-alar-gap-fill] new_half_lines=2 mirrored=true "
+        "root_fractions=(0.28,0.72) full_alar_origin=true"
+    )
+    return list(curves) + additions
+
+
+def _equalize_cheek_alar_roots_v96(curves: list[Curve]) -> list[Curve]:
+    """Redistribute the complete cheek bundle uniformly along the alar boundary."""
+    target_regions = {
+        _CHEEK_LONG_ARC_FAN_REGION_V24,
+        _CHEEK_LONG_ARC_DENSITY_REGION_V41,
+        _CHEEK_LOWER_DIVERGENT_ARC_REGION_V44,
+        _CHEEK_ALAR_GAP_FILL_REGION_V95,
+    }
+    indices = [
+        index for index, curve in enumerate(curves) if curve.region in target_regions
+    ]
+    if len(indices) != 18:
+        raise RuntimeError(f"expected eighteen active cheek-root curves, found {len(indices)}")
+
+    def root_and_orientation(index: int) -> tuple[np.ndarray, bool]:
+        points = curves[index].points
+        reverse = float(points[0, 0]) < float(points[-1, 0])
+        oriented = points[::-1] if reverse else points
+        return oriented[0].copy(), reverse
+
+    ordered = sorted(indices, key=lambda index: float(root_and_orientation(index)[0][1]))
+    roots = [root_and_orientation(index)[0] for index in ordered]
+    first = roots[0]
+    last = roots[-1]
+    boundary_middle = [
+        np.asarray(point, dtype=np.float64)
+        for point in _CHEEK_ALAR_ENDPOINT_BOUNDARY_V75
+        if float(first[1]) < point[1] < float(last[1])
+    ]
+    boundary = np.vstack([first, *boundary_middle, last])
+    boundary_arc = np.r_[
+        0.0,
+        np.cumsum(np.linalg.norm(np.diff(boundary, axis=0), axis=1)),
+    ]
+    target_arc = np.linspace(0.0, boundary_arc[-1], len(ordered))
+    targets = np.column_stack(
+        [np.interp(target_arc, boundary_arc, boundary[:, axis]) for axis in range(2)]
+    )
+
+    revised = list(curves)
+    for index, target in zip(ordered, targets, strict=True):
+        points = curves[index].points.copy()
+        root, reverse = root_and_orientation(index)
+        oriented = points[::-1] if reverse else points
+        segment = np.linalg.norm(np.diff(oriented, axis=0), axis=1)
+        fraction = np.r_[0.0, np.cumsum(segment)]
+        fraction /= fraction[-1]
+        local = np.clip(fraction / 0.18, 0.0, 1.0)
+        taper = np.cos(0.5 * np.pi * local) ** 2
+        oriented += taper[:, None] * (target - root)
+        revised[index] = Curve(curves[index].region, points)
+
+    target_gaps = np.linalg.norm(np.diff(targets, axis=0), axis=1)
+    print(
+        "[cheek-alar-uniform-root-reflow] half_lines=18 "
+        f"root_gap_range=({target_gaps.min():.6f},{target_gaps.max():.6f}) "
+        "fixed_outer_roots=true unchanged_after_fraction=0.18"
+    )
+    return revised
+
+
 def _densify_and_extend_orbital_brow_v59(curves: list[Curve]) -> list[Curve]:
     """Rebuild seven evenly spaced brow layers and extend both endpoint families."""
     indices = [
@@ -3560,6 +4642,12 @@ def _rebuild_forehead_fourteen_arches_v62(curves: list[Curve]) -> list[Curve]:
     def outer_y(index: int) -> float:
         return float(np.max(curves[index].points[:, 1]))
 
+    crown_rise = (
+        _FOREHEAD_STRONGER_CROWN_RISE_V93
+        if _FOREHEAD_STRONGER_ARCH_V93
+        else _FOREHEAD_ARCHED_CROWN_RISE_V62
+    )
+
     def arch(level: float) -> Curve:
         vertical = (level - 0.515) / 0.505
         outer_x = (
@@ -3570,7 +4658,7 @@ def _rebuild_forehead_fourteen_arches_v62(curves: list[Curve]) -> list[Curve]:
         x = np.linspace(outer_x, CENTER_X, 180)
         t = (x - outer_x) / (CENTER_X - outer_x)
         easing = 0.5 - 0.5 * np.cos(np.pi * t)
-        y = level - _FOREHEAD_ARCHED_CROWN_RISE_V62 * easing
+        y = level - crown_rise * easing
         return Curve(
             "forehead_bridge_arc_v15",
             resample(np.column_stack([x, y]), spacing=0.0035),
@@ -3587,7 +4675,7 @@ def _rebuild_forehead_fourteen_arches_v62(curves: list[Curve]) -> list[Curve]:
         "[forehead-fourteen-arched-density] original_half_lines=8 new_half_lines=6 "
         f"level_range=({_FOREHEAD_ARCHED_LEVELS_V62[0]}, "
         f"{_FOREHEAD_ARCHED_LEVELS_V62[-1]}) "
-        f"crown_rise={_FOREHEAD_ARCHED_CROWN_RISE_V62:.3f}"
+        f"crown_rise={crown_rise:.3f}"
     )
     return revised
 
@@ -4135,13 +5223,75 @@ def trace_standard_streamlines(
         curves = _add_lateral_canthus_short_arcs_v65(curves)
     if _SUPRAORBITAL_BROW_SHORT_ARCS_V66:
         curves = _add_supraorbital_brow_short_arcs_v66(curves)
+    if _OVERALL_DENSITY_INCREASE_V72:
+        curves = _increase_overall_density_v72(curves)
+    if _OVERALL_SPACING_EQUALIZATION_V73:
+        curves = _equalize_overall_spacing_v73(curves)
+    if _REMAINING_SPACING_EQUALIZATION_V74:
+        curves = _equalize_remaining_spacing_v74(curves)
+    if _CHEEK_ALAR_ENDPOINT_EQUALIZATION_V75:
+        curves = _equalize_cheek_alar_endpoints_v75(curves)
+    if _LATERAL_CANTHUS_RED_GUIDE_DIRECTION_V78:
+        curves = _reshape_lateral_canthus_to_red_guide_v78(curves)
+    if _SUPRAORBITAL_MEDIAL_BLUE_GUIDE_REFLOW_V82:
+        curves = _reshape_supraorbital_medial_to_blue_guide_v82(curves)
+    if _SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_V83:
+        curves = _reshape_supraorbital_medial_curve_to_vertical_v83(curves)
+    if _BROW_TEMPORAL_FAN_V94:
+        curves = _add_brow_temporal_fan_v94(curves)
+    if _CHEEK_ALAR_GAP_FILL_V95:
+        curves = _add_cheek_alar_gap_fill_v95(curves)
+    if _CHEEK_ALAR_UNIFORM_ROOT_REFLOW_V96:
+        curves = _equalize_cheek_alar_roots_v96(curves)
     return curves
 
 
 def _atlas_line(canonical: CanonicalFaceModel, name: str, curve: Curve) -> AtlasLine:
+    forehead_source_index = next(
+        (
+            index
+            for index in _FOREHEAD_STRONGER_ARCH_POINT_COUNTS_V93
+            if f"_{index:04d}_" in name
+        ),
+        None,
+    )
     points = (
+        _sample_by_normalized_arclength_v72(
+            curve.points,
+            _FOREHEAD_STRONGER_ARCH_POINT_COUNTS_V93[forehead_source_index],
+        )
+        if (
+            _FOREHEAD_STRONGER_ARCH_V93
+            and curve.region == "forehead_bridge_arc_v15"
+            and forehead_source_index is not None
+        )
+        else
         curve.points
-        if curve.region in {
+        if (
+            _CHEEK_ALAR_ENDPOINT_EQUALIZATION_V75
+            and curve.region in _CHEEK_ALAR_ENDPOINT_REGIONS_V75
+        )
+        or (
+            _LATERAL_CANTHUS_STRONG_UPWARD_ARC_V79
+            and curve.region == _LATERAL_CANTHUS_SHORT_ARC_REGION_V65
+        )
+        or (
+            _SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_V83
+            and curve.region == _SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V69
+            and any(
+                f"_{index:04d}_" in name
+                for index in _SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_SOURCE_INDICES_V83
+            )
+        )
+        or (
+            _SUPRAORBITAL_MEDIAL_BLUE_GUIDE_REFLOW_V82
+            and curve.region == _SUPRAORBITAL_MEDIAL_SHORT_ARC_REGION_V69
+            and any(
+                f"_{index:04d}_" in name
+                for index in _SUPRAORBITAL_MEDIAL_BLUE_GUIDE_SOURCE_INDICES_V82
+            )
+        )
+        or curve.region in {
             "perioral_continuous_fan_v37",
             "perioral_vortex_fan_v38",
             _PERIORAL_COMMISSURE_SWIRL_REGION_V49,
@@ -4157,10 +5307,63 @@ def _atlas_line(canonical: CanonicalFaceModel, name: str, curve: Curve) -> Atlas
         proj=canonical.project_front(),
     )
     if (
+        _ORBITAL_BROW_TEMPORAL_BLUE_EXTENSION_V84
+        and curve.region == "orbital_brow_upturn_v11"
+    ):
+        source_index = next(
+            (
+                index
+                for index in _ORBITAL_BROW_TEMPORAL_SOURCE_INDICES_V84
+                if f"_{index:04d}_" in name
+            ),
+            None,
+        )
+        if source_index is not None:
+            specifications = (
+                _ORBITAL_BROW_TEMPORAL_POST_MAP_CUBICS_V92
+                if _ORBITAL_BROW_TEMPORAL_HEAD_SAFE_EXTENSION_V92
+                else _ORBITAL_BROW_TEMPORAL_POST_MAP_CUBICS_V91
+                if _ORBITAL_BROW_TEMPORAL_STRONGER_LONGER_V91
+                else _ORBITAL_BROW_TEMPORAL_POST_MAP_CUBICS_V90
+                if _ORBITAL_BROW_TEMPORAL_DEEPER_LONGER_V90
+                else _ORBITAL_BROW_TEMPORAL_POST_MAP_CUBICS_V89
+                if _ORBITAL_BROW_TEMPORAL_SPOON_RETURN_V89
+                else _ORBITAL_BROW_TEMPORAL_POST_MAP_CUBICS_V88
+                if _ORBITAL_BROW_TEMPORAL_ENDPOINT_FAN_V88
+                else _ORBITAL_BROW_TEMPORAL_POST_MAP_CUBICS_V84
+            )
+            join_index, *offsets = specifications[source_index]
+            line.post_map_temporal_cubic_face_ratio = (
+                join_index,
+                offsets[0],
+                offsets[1],
+                offsets[2],
+            )
+            line.post_map_temporal_absolute_endpoint = (
+                _ORBITAL_BROW_TEMPORAL_SPOON_RETURN_V89
+                or _ORBITAL_BROW_TEMPORAL_DEEPER_LONGER_V90
+                or _ORBITAL_BROW_TEMPORAL_STRONGER_LONGER_V91
+                or _ORBITAL_BROW_TEMPORAL_HEAD_SAFE_EXTENSION_V92
+            )
+            line.post_map_temporal_boundary_margin_face_ratio = (
+                -0.012
+                if _ORBITAL_BROW_TEMPORAL_HEAD_SAFE_EXTENSION_V92
+                else 0.01
+                if _ORBITAL_BROW_TEMPORAL_STRONGER_LONGER_V91
+                else 0.02
+            )
+    if (
         _LATERAL_CANTHUS_POST_MAP_FAIRING_V71
         and curve.region == _LATERAL_CANTHUS_SHORT_ARC_REGION_V65
     ):
-        line.post_map_smoothing_passes = 12
+        line.post_map_smoothing_passes = (
+            32
+            if _LATERAL_CANTHUS_RED_ENDPOINT_REFLOW_V80
+            else 24
+            if _LATERAL_CANTHUS_RED_GUIDE_DIRECTION_V78
+            else 12
+        )
+        line.post_map_cubic_fairing = _LATERAL_CANTHUS_RED_ENDPOINT_REFLOW_V80
     return line
 
 
@@ -4238,6 +5441,28 @@ def build(canonical: CanonicalFaceModel, reference: dict) -> Atlas:
         global _SUPRAORBITAL_BROW_GENTLE_TURN_V69
         global _LATERAL_CANTHUS_TERMINAL_SMOOTHING_V70
         global _LATERAL_CANTHUS_POST_MAP_FAIRING_V71
+        global _OVERALL_DENSITY_INCREASE_V72
+        global _OVERALL_SPACING_EQUALIZATION_V73
+        global _REMAINING_SPACING_EQUALIZATION_V74
+        global _CHEEK_ALAR_ENDPOINT_EQUALIZATION_V75
+        global _CHEEK_ALAR_ENDPOINT_FULL_REFLOW_V76
+        global _BROW_DENSITY_RESTORE_V77
+        global _LATERAL_CANTHUS_RED_GUIDE_DIRECTION_V78
+        global _LATERAL_CANTHUS_STRONG_UPWARD_ARC_V79
+        global _LATERAL_CANTHUS_RED_ENDPOINT_REFLOW_V80
+        global _SUPRAORBITAL_LATERAL_SHORT_ARC_REMOVAL_V81
+        global _SUPRAORBITAL_MEDIAL_BLUE_GUIDE_REFLOW_V82
+        global _SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_V83
+        global _ORBITAL_BROW_TEMPORAL_BLUE_EXTENSION_V84
+        global _ORBITAL_BROW_TEMPORAL_ENDPOINT_FAN_V88
+        global _ORBITAL_BROW_TEMPORAL_SPOON_RETURN_V89
+        global _ORBITAL_BROW_TEMPORAL_DEEPER_LONGER_V90
+        global _ORBITAL_BROW_TEMPORAL_STRONGER_LONGER_V91
+        global _ORBITAL_BROW_TEMPORAL_HEAD_SAFE_EXTENSION_V92
+        global _FOREHEAD_STRONGER_ARCH_V93
+        global _BROW_TEMPORAL_FAN_V94
+        global _CHEEK_ALAR_GAP_FILL_V95
+        global _CHEEK_ALAR_UNIFORM_ROOT_REFLOW_V96
         constraints = reference.get("extraction", {}).get("doctorConstraints", {})
         _FOREHEAD_MIN_Y = 0.012 if "foreheadUpperExtension" in constraints else 0.060
         _NOSE_ROOT_HORIZONTAL_PATCH = "noseRootHorizontalPatch" in constraints
@@ -4423,12 +5648,79 @@ def build(canonical: CanonicalFaceModel, reference: dict) -> Atlas:
         _LATERAL_CANTHUS_POST_MAP_FAIRING_V71 = (
             "lateralCanthusPostMapFairingV71" in constraints
         )
+        _OVERALL_DENSITY_INCREASE_V72 = "overallDensityIncreaseV72" in constraints
+        _OVERALL_SPACING_EQUALIZATION_V73 = (
+            "overallSpacingEqualizationV73" in constraints
+        )
+        _REMAINING_SPACING_EQUALIZATION_V74 = (
+            "remainingSpacingEqualizationV74" in constraints
+        )
+        _CHEEK_ALAR_ENDPOINT_EQUALIZATION_V75 = (
+            "cheekAlarEndpointEqualizationV75" in constraints
+        )
+        _CHEEK_ALAR_ENDPOINT_FULL_REFLOW_V76 = (
+            "cheekAlarEndpointFullReflowV76" in constraints
+        )
+        _BROW_DENSITY_RESTORE_V77 = "browDensityRestoreV77" in constraints
+        _LATERAL_CANTHUS_RED_GUIDE_DIRECTION_V78 = (
+            "lateralCanthusRedGuideDirectionV78" in constraints
+        )
+        _LATERAL_CANTHUS_STRONG_UPWARD_ARC_V79 = (
+            "lateralCanthusStrongUpwardArcV79" in constraints
+        )
+        _LATERAL_CANTHUS_RED_ENDPOINT_REFLOW_V80 = (
+            "lateralCanthusRedEndpointReflowV80" in constraints
+        )
+        _SUPRAORBITAL_LATERAL_SHORT_ARC_REMOVAL_V81 = (
+            "supraorbitalLateralShortArcRemovalV81" in constraints
+        )
+        _SUPRAORBITAL_MEDIAL_BLUE_GUIDE_REFLOW_V82 = (
+            "supraorbitalMedialBlueGuideReflowV82" in constraints
+        )
+        _SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_V83 = (
+            "supraorbitalMedialCurveToVerticalV83" in constraints
+        )
+        _ORBITAL_BROW_TEMPORAL_BLUE_EXTENSION_V84 = (
+            "orbitalBrowTemporalBlueExtensionV84" in constraints
+        )
+        _ORBITAL_BROW_TEMPORAL_ENDPOINT_FAN_V88 = (
+            "orbitalBrowTemporalEndpointFanV88" in constraints
+        )
+        _ORBITAL_BROW_TEMPORAL_SPOON_RETURN_V89 = (
+            "orbitalBrowTemporalSpoonReturnV89" in constraints
+        )
+        _ORBITAL_BROW_TEMPORAL_DEEPER_LONGER_V90 = (
+            "orbitalBrowTemporalDeeperLongerV90" in constraints
+        )
+        _ORBITAL_BROW_TEMPORAL_STRONGER_LONGER_V91 = (
+            "orbitalBrowTemporalStrongerLongerV91" in constraints
+        )
+        _ORBITAL_BROW_TEMPORAL_HEAD_SAFE_EXTENSION_V92 = (
+            "orbitalBrowTemporalHeadSafeExtensionV92" in constraints
+        )
+        _FOREHEAD_STRONGER_ARCH_V93 = "foreheadStrongerArchV93" in constraints
+        _BROW_TEMPORAL_FAN_V94 = "browTemporalFanV94" in constraints
+        _CHEEK_ALAR_GAP_FILL_V95 = "cheekAlarGapFillV95" in constraints
+        _CHEEK_ALAR_UNIFORM_ROOT_REFLOW_V96 = (
+            "cheekAlarUniformRootReflowV96" in constraints
+        )
         projected_norm = (canonical.project_front() - canonical.face_frame()[0]) / canonical.face_frame()[1]
         _FACE_POLYGON = cv2.convexHull(projected_norm.astype(np.float32))
         field = RasterDirectionField(reference["directionField"])
         source_curves = trace_standard_streamlines(field)
         lines: list[AtlasLine] = []
         for i, curve in enumerate(source_curves):
+            if _BROW_DENSITY_RESTORE_V77 and i in _BROW_DENSITY_RESTORE_SOURCE_INDICES_V77:
+                continue
+            if (
+                _SUPRAORBITAL_LATERAL_SHORT_ARC_REMOVAL_V81
+                and curve.region
+                in {
+                    _SUPRAORBITAL_LATERAL_SHORT_ARC_REGION_V66,
+                    _SUPRAORBITAL_LATERAL_SHORT_ARC_REGION_V67,
+                }
+            ):
+                continue
             if curve.region in {
                 _REMOVED_ORBITAL_NASAL_FRAGMENT_V18,
                 _REMOVED_ORBITAL_NASAL_BUNDLE_V19,

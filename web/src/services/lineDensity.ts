@@ -59,6 +59,30 @@ function evenlySpacedGroupIndices(groupCount: number, selectedCount: number): nu
   return indices;
 }
 
+function groupsClosestToLineTarget(groups: number[][], density: number): number[] {
+  const totalLineCount = groups.reduce((sum, group) => sum + group.length, 0);
+  const targetLineCount = Math.max(1, Math.round(totalLineCount * density));
+  const idealGroupCount = groups.length * density;
+  let bestIndices: number[] = [];
+  let bestLineError = Number.POSITIVE_INFINITY;
+  let bestGroupError = Number.POSITIVE_INFINITY;
+  for (let selectedCount = 1; selectedCount <= groups.length; selectedCount++) {
+    const indices = evenlySpacedGroupIndices(groups.length, selectedCount);
+    const lineCount = indices.reduce((sum, index) => sum + groups[index].length, 0);
+    const lineError = Math.abs(lineCount - targetLineCount);
+    const groupError = Math.abs(selectedCount - idealGroupCount);
+    if (
+      lineError < bestLineError ||
+      (lineError === bestLineError && groupError < bestGroupError)
+    ) {
+      bestIndices = indices;
+      bestLineError = lineError;
+      bestGroupError = groupError;
+    }
+  }
+  return bestIndices;
+}
+
 // Density is applied to complete symmetry groups so paired left/right curves
 // appear and disappear together at every density setting.
 export function lineIndicesForDensity(lines: AtlasLine[], densityFraction: number): Set<number> {
@@ -68,9 +92,8 @@ export function lineIndicesForDensity(lines: AtlasLine[], densityFraction: numbe
   if (density >= 0.999) return new Set(lines.map((_, index) => index));
 
   const groups = symmetryGroups(lines);
-  const selectedGroupCount = Math.max(1, Math.round(groups.length * density));
   const visible = new Set<number>();
-  for (const groupIndex of evenlySpacedGroupIndices(groups.length, selectedGroupCount)) {
+  for (const groupIndex of groupsClosestToLineTarget(groups, density)) {
     for (const lineIndex of groups[groupIndex]) visible.add(lineIndex);
   }
   return visible;

@@ -20,12 +20,14 @@ const dataSource = await readFile(new URL("src/services/dataSource.ts", web), "u
 const vercelConfig = JSON.parse(await readFile(new URL("vercel.json", web), "utf8"));
 const atlas = JSON.parse(await readFile(new URL("assets/atlas_rstl.json", web), "utf8"));
 
-assert.equal(atlas.atlasVersion, "8.1.96", "the capture flow must use the standard v8.1.96 atlas");
+assert.equal(atlas.atlasVersion, "8.1.96", "the capture flow must use the accepted v8.1.96 atlas");
 assert.equal(atlas.lines.length, 204, "the capture flow must preserve all v8.1.96 curves");
 assert.equal(atlas.lines.reduce((count, line) => count + line.points.length, 0), 19_030,
   "the latest atlas point topology must be preserved");
 assert.equal(atlas.lines.at(-1)?.name, "standard_field_0207_left",
   "the latest atlas tail must be present");
+assert.equal(atlas.lines.filter((line) => line.region === "cheek_alar_gap_fill_v95").length, 4,
+  "the bilateral full-length alar-origin additions must be present");
 assert.match(source, /from "\.\/yoloWrinkleOnnx\.ts"/);
 assert.match(source, /from "\.\/v6RstlRefinement\.ts"/);
 assert.match(source, /from "\.\.\/\.\.\/\.\.\/assets\/atlas_rstl\.json\?url"/);
