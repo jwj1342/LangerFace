@@ -5,6 +5,8 @@ import {
   resolveBundleContributions,
   V6_RSTL_ALGORITHM,
 } from "../web/src/services/personalized/v6RstlRefinement.ts";
+import { refineV6 as refineV9Smooth } from
+  "../web/src/services/personalized/v6RstlRefinementV9.ts";
 import { mapAtlas } from "../web/src/services/geometryAtlas.ts";
 
 const size = 96;
@@ -134,8 +136,7 @@ function maximumTurnDegrees(points) {
   assert.ok(result.audit.matchRecords.some((record) => record.final_accepted));
 }
 
-// A wrinkle chooses one best curve instead of weakly pulling every parallel
-// RSTL in the search band.
+// A wrinkle guides only its nearest eligible RSTL in the search band.
 {
   const seeds = [horizontalSeed("closest", 30), horizontalSeed("neighbor", 38)];
   const fields = evidence([rangeLine(20, 74, 33)]);
@@ -143,7 +144,6 @@ function maximumTurnDegrees(points) {
     seeds, wrinkleMask: fields.mask, confidenceMap: fields.confidence,
     directionQ: fields.q, size, faceWidthPx: 180,
     options: {
-      exclusiveTrendMatching: true,
       p90LimitPx: 8,
       maxDisplacementPx: 12,
     },
@@ -152,7 +152,56 @@ function maximumTurnDegrees(points) {
   assert.deepEqual(result.curves[1].pts, seeds[1].pts);
   assert.deepEqual(result.audit.wrinkleTrends[0].acceptedCurveIndices, [0]);
   assert.ok(result.audit.matchRecords.some((record) =>
-    record.rstl_curve_index === 1 && record.rejection_reason === "better_curve_match_selected"));
+    record.rstl_curve_index === 1 && record.rejection_reason === "not_nearest_rstl_curve"));
+  assert.equal(result.diagnostics.nearest_single_curve_matching, true);
+  assert.equal(result.diagnostics.maximum_selected_rstl_curves_per_wrinkle, 1);
+}
+
+// Distance is the primary assignment rule even when a farther, longer RSTL
+// has stronger coverage and would win the legacy global score.
+{
+  const seeds = [
+    horizontalSeed("near-short", 30, 24, 56, 1),
+    horizontalSeed("far-long", 36),
+  ];
+  const fields = evidence([rangeLine(20, 74, 32)]);
+  const result = refineV6({
+    seeds, wrinkleMask: fields.mask, confidenceMap: fields.confidence,
+    directionQ: fields.q, size, faceWidthPx: 180,
+    options: { searchRadiusPx: 16, p90LimitPx: 12, maxDisplacementPx: 18 },
+  });
+  const selected = result.audit.matchRecords.filter((record) => record.provisional_accepted);
+  assert.equal(selected.length, 1);
+  assert.equal(selected[0].rstl_curve_index, 0);
+  assert.equal(selected[0].is_nearest_rstl_curve, true);
+  assert.equal(selected[0].nearest_rstl_curve_index, 0);
+  assert.ok(result.audit.matchRecords.some((record) =>
+    record.rstl_curve_index === 1 && record.curve_influence > selected[0].curve_influence));
+}
+
+// Separate wrinkles may share the same nearest RSTL. The single-curve rule is
+// per wrinkle and must not reserve a curve globally for only one wrinkle.
+{
+  const fields = evidence([
+    rangeLine(12, 31, 35),
+    rangeLine(64, 83, 35),
+  ]);
+  const result = refineV6({
+    seeds: [horizontalSeed("shared-nearest", 30)],
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 180,
+    options: { searchRadiusPx: 16 },
+  });
+  const accepted = result.audit.matchRecords.filter((record) => record.provisional_accepted);
+  assert.equal(accepted.length, 2);
+  assert.equal(new Set(accepted.map((record) => record.wrinkle_segment_id)).size, 2);
+  assert.deepEqual([...new Set(accepted.map((record) => record.rstl_curve_index))], [0]);
+  assert.ok(result.audit.wrinkleTrends.every((trend) =>
+    trend.acceptedCurveIndices.length <= 1));
+  assert.equal(result.diagnostics.maximum_selected_rstl_curves_per_wrinkle, 1);
 }
 
 // With a stronger data term, the selected RSTL follows the wrinkle's changing
@@ -204,7 +253,7 @@ function maximumTurnDegrees(points) {
     ["insufficient_segment_support", "insufficient_curve_support"].includes(trend.rejectionReason)));
 }
 
-// Refinement 6.2 fairs the scalar normal-offset field after trajectory fitting.
+// Refinement 6.5 fairs the scalar normal-offset field after trajectory fitting.
 // A rasterized wavy wrinkle must remain adopted without leaving high-frequency
 // angular kinks in the exported RSTL, and both curve endpoints stay fixed.
 {
@@ -255,6 +304,238 @@ function maximumTurnDegrees(points) {
   assert.equal(result.diagnostics.post_export_new_self_cross_curve_count, 0);
 }
 
+// The exact 6.1-derived path must reject sharp corners before export.
+{
+  const seed = horizontalSeed("v9-smooth-contract", 30, 8, 87, 1);
+  const wrinkle = Array.from({ length: 57 }, (_, offset) => [
+    20 + offset,
+    38 + Math.round(3 * Math.sin(offset / 18)),
+  ]);
+  const fields = evidence([wrinkle]);
+  const result = refineV9Smooth({
+    seeds: [seed],
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 180,
+    options: {
+      oneToOneTrendCurveMatching: true,
+      targetGapPx: 1.5,
+      dataAttractionStrength: 20,
+      wrinkleDominantCoreStrength: 0.95,
+      smoothingPasses: 12,
+      searchRadiusPx: 16,
+      p90LimitPx: 18,
+      maxDisplacementPx: 24,
+      maxCurvatureChangeDegrees: 60,
+      curvatureFairing: true,
+      curvatureFairingPasses: 64,
+      curvatureFairingMaximumTurnDegrees: 4,
+      curvatureFairingStrictMaximumTurnDegrees: 3,
+      curvatureFairingStrictRegion: "test",
+      curvatureFairingBaselineSlackDegrees: 0.75,
+      curvatureFairingMaterialTurnDegrees: 0.35,
+      curvatureFairingMaximumAddedSignChanges: 0,
+      curvatureFairingEndpointTangentChangeDegrees: 20,
+    },
+  });
+  const event = result.diagnostics.curvature_fairing_events.find((candidate) =>
+    candidate.curve_name === seed.name);
+  assert.equal(result.diagnostics.algorithm,
+    "regional-wrinkle-guided-smooth-rstl-refinement-7.2");
+  assert.equal(result.diagnostics.curvature_fairing_contract_preserved, true);
+  assert.equal(event?.status, "faired", JSON.stringify(event));
+  assert.ok(result.curves[0].normalOffsetsPx.some((value) => Math.abs(value) > 0.05));
+  assert.ok(maximumTurnDegrees(result.curves[0].pts) <=
+    event.maximum_turn_limit_degrees + 1e-6);
+  assert.ok(event.after.materialSignChanges <= event.prior.materialSignChanges);
+  assert.deepEqual(result.curves[0].pts[0], seed.pts[0]);
+  assert.deepEqual(result.curves[0].pts.at(-1), seed.pts.at(-1));
+  assert.equal(result.diagnostics.post_export_new_intersection_pair_count, 0);
+  assert.equal(result.diagnostics.post_export_new_self_cross_curve_count, 0);
+}
+
+// Each wrinkle owns its nearest curve on both sides. A curve eligible for two
+// wrinkles belongs exclusively to the wrinkle with the smaller mean distance.
+{
+  const seeds = [
+    horizontalSeed("upper-first", 24),
+    horizontalSeed("lower-first", 35),
+    horizontalSeed("shared-nearer-second", 40),
+    horizontalSeed("lower-second", 54),
+  ];
+  const fields = evidence([rangeLine(20, 74, 30), rangeLine(20, 74, 48)]);
+  const result = refineV9Smooth({
+    seeds,
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 180,
+    options: {
+      twoSidedNearestMatching: true,
+      logicalTrendGrouping: true,
+      searchRadiusPx: 14,
+      p90LimitPx: 18,
+      maxDisplacementPx: 24,
+      smoothingPasses: 12,
+    },
+  });
+  const selected = result.audit.matchRecords.filter((record) => record.selected_for_wrinkle);
+  assert.equal(selected.length, 4, JSON.stringify(selected));
+  assert.equal(new Set(selected.map((record) => record.rstl_curve_index)).size, 4);
+  for (const trendId of [0, 1]) {
+    const trendRecords = selected.filter((record) => record.wrinkle_segment_id === trendId);
+    assert.deepEqual(new Set(trendRecords.map((record) => record.wrinkle_side)),
+      new Set(["upper", "lower"]));
+  }
+  assert.equal(selected.find((record) => record.rstl_curve_index === 2)?.wrinkle_segment_id, 1);
+  assert.equal(result.diagnostics.two_sided_nearest_matching, true);
+  assert.equal(result.diagnostics.maximum_selected_rstl_curves_per_wrinkle, 2);
+  assert.equal(result.diagnostics.curve_unique_wrinkle_ownership, true);
+  assert.equal(result.diagnostics.wrinkle_with_both_sides_selected_count, 2);
+  assert.equal(result.diagnostics.wrinkle_with_single_side_selected_count, 0);
+}
+
+// A wrinkle with only one eligible side cannot reserve that curve and starve
+// another wrinkle that can form a complete upper/lower pair.
+{
+  const seeds = [
+    horizontalSeed("shared-upper", 24),
+    horizontalSeed("complete-lower", 54),
+  ];
+  const fields = evidence([rangeLine(20, 74, 30), rangeLine(20, 74, 42)]);
+  const result = refineV9Smooth({
+    seeds,
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 180,
+    options: {
+      twoSidedNearestMatching: true,
+      logicalTrendGrouping: true,
+      searchRadiusPx: 20,
+      p90LimitPx: 18,
+      maxDisplacementPx: 24,
+      smoothingPasses: 12,
+    },
+  });
+  const selected = result.audit.matchRecords.filter((record) => record.selected_for_wrinkle);
+  assert.equal(selected.length, 2, JSON.stringify(selected));
+  assert.equal(new Set(selected.map((record) => record.wrinkle_segment_id)).size, 1);
+  assert.deepEqual(new Set(selected.map((record) => record.wrinkle_side)),
+    new Set(["upper", "lower"]));
+  assert.equal(result.diagnostics.wrinkle_with_both_sides_selected_count, 1);
+  assert.equal(result.diagnostics.wrinkle_with_single_side_selected_count, 0);
+}
+
+// Forehead wrinkles use one nearest unique RSTL each, matching the annotated
+// forehead target without collapsing two RSTL curves onto one wrinkle.
+{
+  const seeds = [
+    horizontalSeed("forehead-upper", 24),
+    horizontalSeed("forehead-middle", 42),
+    horizontalSeed("forehead-lower", 60),
+  ].map((seed) => ({ ...seed, region: "forehead_bridge_arc_v15" }));
+  const fields = evidence([rangeLine(20, 74, 30), rangeLine(20, 74, 48)]);
+  const result = refineV9Smooth({
+    seeds,
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 180,
+    options: {
+      twoSidedNearestMatching: true,
+      foreheadNearestSingleCurveMatching: true,
+      logicalTrendGrouping: true,
+      searchRadiusPx: 16,
+      p90LimitPx: 18,
+      maxDisplacementPx: 24,
+      smoothingPasses: 12,
+    },
+  });
+  const selected = result.audit.matchRecords.filter((record) => record.selected_for_wrinkle);
+  assert.equal(selected.length, 2, JSON.stringify(selected));
+  assert.equal(new Set(selected.map((record) => record.wrinkle_segment_id)).size, 2);
+  assert.equal(new Set(selected.map((record) => record.rstl_curve_index)).size, 2);
+  assert.ok(selected.every((record) => record.forehead_single_curve_selected === true));
+  assert.equal(result.diagnostics.forehead_nearest_single_curve_matching, true);
+  assert.equal(result.diagnostics.forehead_single_curve_selected_count, 2);
+  assert.equal(result.diagnostics.wrinkle_with_single_side_selected_count, 0);
+}
+
+// Forehead anchors retain their wrinkle adherence while the surrounding layer
+// follows a monotone displacement field instead of leaving a compressed row
+// beside an oversized empty band.
+{
+  const seeds = [18, 28, 38, 48, 58, 68, 78].map((y, index) => ({
+    ...horizontalSeed(`forehead-layer-${index}`, y, 8, 87, 1),
+    region: "forehead_bridge_arc_v15",
+  }));
+  const fields = evidence([rangeLine(20, 74, 64)]);
+  const options = {
+    twoSidedNearestMatching: true,
+    foreheadNearestSingleCurveMatching: true,
+    logicalTrendGrouping: true,
+    postAdherenceGate: true,
+    targetGapPx: 1,
+    dataAttractionStrength: 20,
+    wrinkleDominantCoreStrength: 0.95,
+    smoothingPasses: 12,
+    searchRadiusPx: 16,
+    p90LimitPx: 18,
+    maxDisplacementPx: 24,
+    maxCurvatureChangeDegrees: 60,
+    foreheadAdherenceMeanThresholdPx: 2,
+    foreheadAdherenceP90ThresholdPx: 4,
+  };
+  const baseline = refineV9Smooth({
+    seeds,
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 180,
+    options,
+  });
+  const coherent = refineV9Smooth({
+    seeds,
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 180,
+    options: {
+      ...options,
+      foreheadBundleCoherence: true,
+      foreheadBundleMinimumSpacingRatio: 0.65,
+      foreheadBundleMaximumSpacingRatio: 1.45,
+      foreheadBundleMaximumTurnDegrees: 8,
+      foreheadBundleMaximumAddedSignChanges: 6,
+      foreheadBundleMinimumReversalSpacingPx: 12,
+    },
+  });
+  const diagnostics = coherent.diagnostics.forehead_bundle_coherence;
+  assert.equal(diagnostics.applied, true, JSON.stringify(diagnostics));
+  assert.equal(diagnostics.anchorCurveIndices.length, 1);
+  const anchorIndex = diagnostics.anchorCurveIndices[0];
+  assert.deepEqual(coherent.curves[anchorIndex].pts, baseline.curves[anchorIndex].pts,
+    "field coherence must not alter the wrinkle-adherent anchor");
+  assert.equal(diagnostics.anchorReplayMaximumErrorPx, 0);
+  assert.ok(diagnostics.movedFollowerCurveCount >= 2);
+  assert.ok(diagnostics.afterSpacing.minimumRatio >= 0.65 - 1e-6);
+  assert.ok(diagnostics.afterSpacing.maximumRatio <= 1.45 + 1e-6);
+  assert.equal(diagnostics.afterSpacing.orderPreserved, true);
+  assert.ok(diagnostics.maximumTurnDegrees <= 8 + 1e-6);
+  assert.equal(diagnostics.newIntersectionPairs.length, 0);
+  assert.equal(diagnostics.newSelfCrossCurveCount, 0);
+  assert.equal(coherent.diagnostics.post_export_new_intersection_pair_count, 0);
+  assert.equal(coherent.diagnostics.post_export_new_self_cross_curve_count, 0);
+}
+
 // V3 assigns parallel wrinkles to distinct nearby RSTL curves instead of
 // allowing several wrinkle trends to compete for the same curve.
 {
@@ -294,6 +575,7 @@ function maximumTurnDegrees(points) {
     faceWidthPx: 180,
     options: {
       oneToOneTrendCurveMatching: true,
+      nearestSingleCurveMatching: false,
       bundlePropagation: true,
       bundlePropagationRadiusPx: 16,
       bundleFollowerCountPerSide: 1,
@@ -323,6 +605,40 @@ function maximumTurnDegrees(points) {
   assert.equal(result.diagnostics.topology_contract_preserved, true);
 }
 
+// Product-default nearest matching suppresses bundle propagation even when a
+// stale caller explicitly requests it, so one wrinkle cannot move followers.
+{
+  const seeds = [
+    horizontalSeed("nearest-anchor", 30),
+    horizontalSeed("upper-follower", 24),
+    horizontalSeed("lower-follower", 36),
+  ];
+  const fields = evidence([rangeLine(18, 76, 32)]);
+  const result = refineV6({
+    seeds,
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 180,
+    options: {
+      bundlePropagation: true,
+      bundlePropagationRadiusPx: 16,
+      bundleFollowerCountPerSide: 1,
+      searchRadiusPx: 16,
+      p90LimitPx: 18,
+      maxDisplacementPx: 24,
+    },
+  });
+  assert.ok(result.curves[0].normalOffsetsPx.some((value) => Math.abs(value) > 0.05));
+  assert.deepEqual(result.curves[1].pts, seeds[1].pts);
+  assert.deepEqual(result.curves[2].pts, seeds[2].pts);
+  assert.equal(result.diagnostics.bundle_propagation_suppressed_by_nearest_single_curve, true);
+  assert.equal(result.diagnostics.maximum_selected_rstl_curves_per_wrinkle, 1);
+  assert.equal(result.diagnostics.bundle_follower_moved_curve_count, undefined);
+  assert.equal(result.diagnostics.bundle_propagation_enabled, undefined);
+}
+
 // Two adjacent wrinkles may both influence one in-between follower. Their
 // normalized contributions are solved once, so displacement cannot double.
 {
@@ -341,6 +657,7 @@ function maximumTurnDegrees(points) {
     faceWidthPx: 180,
     options: {
       oneToOneTrendCurveMatching: true,
+      nearestSingleCurveMatching: false,
       bundlePropagation: true,
       bundlePropagationRadiusPx: 16,
       bundleFollowerCountPerSide: 1,
@@ -516,6 +833,7 @@ function maximumTurnDegrees(points) {
     faceWidthPx: 180,
     options: {
       oneToOneTrendCurveMatching: true,
+      nearestSingleCurveMatching: false,
       globalLengthAwareMatching: true,
       searchRadiusPx: 16,
       p90LimitPx: 18,
@@ -547,6 +865,7 @@ function maximumTurnDegrees(points) {
     faceWidthPx: 180,
     options: {
       oneToOneTrendCurveMatching: true,
+      nearestSingleCurveMatching: false,
       globalLengthAwareMatching: true,
       intervalAwareAnchorSharing: true,
       anchorIntervalPaddingPx: 3,
@@ -576,6 +895,7 @@ function maximumTurnDegrees(points) {
     faceWidthPx: 180,
     options: {
       oneToOneTrendCurveMatching: true,
+      nearestSingleCurveMatching: false,
       globalLengthAwareMatching: true,
       intervalAwareAnchorSharing: true,
       anchorIntervalPaddingPx: 3,
@@ -678,8 +998,8 @@ function maximumTurnDegrees(points) {
   assert.equal(result.diagnostics.topology_contract_preserved, true);
 }
 
-// V4 excludes a preferred wrinkle/curve pair that creates a new crossing and
-// retries the one-to-one assignment with the next topology-safe candidate.
+// If the nearest RSTL fails topology, the wrinkle is rejected instead of being
+// reassigned to the second-nearest curve.
 {
   const preferred = horizontalSeed("preferred", 30);
   const fallback = horizontalSeed("fallback", 36);
@@ -709,11 +1029,11 @@ function maximumTurnDegrees(points) {
     },
   });
   assert.deepEqual(result.curves[0].pts, preferred.pts);
-  assert.ok(result.curves[1].normalOffsetsPx.some((value) => Math.abs(value) > 0.05));
+  assert.deepEqual(result.curves[1].pts, fallback.pts);
   assert.equal(result.diagnostics.topology_candidate_retry_count, 1);
   assert.equal(result.diagnostics.topology_candidate_retry_records[0].excluded_rstl_curve_index, 0);
-  assert.deepEqual(result.audit.wrinkleTrends[0].acceptedCurveIndices, [1]);
-  assert.equal(result.audit.wrinkleTrends[0].finalStatus, "accepted");
+  assert.deepEqual(result.audit.wrinkleTrends[0].acceptedCurveIndices, []);
+  assert.notEqual(result.audit.wrinkleTrends[0].finalStatus, "accepted");
   assert.equal(result.diagnostics.post_export_new_intersection_pair_count, 0);
   assert.equal(result.diagnostics.post_export_new_self_cross_curve_count, 0);
   assert.equal(result.diagnostics.topology_contract_preserved, true);

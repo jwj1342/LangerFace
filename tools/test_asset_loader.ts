@@ -10,6 +10,17 @@ import { els } from "../web/src/services/liveDom.ts";
 import { modelState } from "../web/src/services/liveState.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const assetConfigSource = readFileSync(join(root, "src/langerface/config/assets.py"), "utf8");
+assert.match(
+  assetConfigSource,
+  /assets\/rstl_standard_reference_v8_1_67\.json assets\/atlas_rstl\.json/,
+  "missing-asset recovery must use the direction-field reference as generator input",
+);
+assert.doesNotMatch(
+  assetConfigSource,
+  /assets\/atlas_rstl_standard_v8\.json assets\/atlas_rstl\.json/,
+  "a generated atlas cannot be passed back as the direction-field reference",
+);
 const {
   FaceLandmarker,
   FilesetResolver,
@@ -236,6 +247,10 @@ for (const rel of ["web/src/services/pipelineModels.ts"]) {
   let rejectFaceAttempt = true;
   const faceModel = { kind: "face" };
   const handModel = { kind: "hand" };
+  const standardRstlLines = Array.from({ length: 204 }, (_, lineIndex) => ({
+    name: `rstl-line-${lineIndex}`,
+    points: Array.from({ length: lineIndex < 58 ? 94 : 93 }, () => [0, 0.2, 0.2]),
+  }));
 
   try {
     modelState.landmarker = null;
@@ -265,9 +280,12 @@ for (const rel of ["web/src/services/pipelineModels.ts"]) {
       return {
         system,
         version: "0.2",
+        ...(system === "rstl" ? { atlasVersion: "8.1.96", validated: false } : {}),
         topologyId: "mediapipe-468",
         topologyVersion: "mediapipe-canonical-468-v1",
-        lines: [{ name: `${system}-line`, points: [[0, 0.2, 0.2], [0, 0.3, 0.2]] }],
+        lines: system === "rstl"
+          ? standardRstlLines
+          : [{ name: `${system}-line`, points: [[0, 0.2, 0.2], [0, 0.3, 0.2]] }],
       };
     };
     FilesetResolver.forVisionTasks = async () => {

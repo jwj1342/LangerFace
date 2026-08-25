@@ -175,7 +175,12 @@ includesAll(render2d, [
   "buildHeadVisibility",
   "stabilizeForeheadMask",
   "headVisible(p) && skinVisible(p)",
-], "live v8.1.70 forehead visibility integration");
+], "live v8.1.96 forehead visibility integration");
+assert.doesNotMatch(
+  render2d,
+  /sourceSpecificForeheadVisible|WRINKLE_PHOTO_SHA256/,
+  "single-image hairline calibration must stay in the explicit compat experiment",
+);
 includesAll(foreheadVisibility, [
   "skinColorMatchesReferences",
   "distance <= 26",

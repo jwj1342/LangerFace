@@ -6,6 +6,13 @@
  * `YoloWrinkleOnnx` loads onnxruntime-web lazily when inference is requested.
  */
 
+import {
+  deleteModelAssetCache,
+  fetchCachedModelAsset,
+  pruneVersionedModelCaches,
+  type ModelAssetCacheStorage,
+} from "./modelAssetCache.ts";
+
 export const YOLO_WRINKLE_ONNX_VERSION = "yolov8-seg-browser-0.1.0";
 export const YOLO_WRINKLE_CLASSES = Object.freeze(["forehead", "frown", "wrinkle"]);
 export const YOLO_WRINKLE_INPUT_SIZE = 640;
@@ -15,6 +22,8 @@ export const YOLO_WRINKLE_CONFIDENCE = 0.07;
 export const YOLO_WRINKLE_MODEL_BYTES = 47_378_404;
 export const YOLO_WRINKLE_MODEL_SHA256 =
   "4BB6ECD9C5FDDDDF1A4559813FB40293F6AE552EA1287912219157B91408A744";
+export const YOLO_WRINKLE_MODEL_CACHE_PREFIX = "langerface-yolo-wrinkle-";
+export const YOLO_WRINKLE_MODEL_CACHE_NAME = `${YOLO_WRINKLE_MODEL_CACHE_PREFIX}${YOLO_WRINKLE_MODEL_SHA256.slice(0, 16).toLowerCase()}`;
 
 // `new URL(..., import.meta.url)` works in Node tests, Vite development and
 // Vite production builds without teaching Node how to import the binary parts.
@@ -63,6 +72,8 @@ interface ModelProgress {
   loadedChunks: number;
   totalChunks: number;
   loadedBytes: number;
+  persistentCacheHits: number;
+  source: "persistent-cache" | "network";
 }
 
 interface FetchChunkOptions {
@@ -71,6 +82,8 @@ interface FetchChunkOptions {
   cache?: RequestCache;
   onProgress?: (progress: ModelProgress) => void;
   expectedBytes?: number;
+  persistentCacheName?: string;
+  cacheStorage?: ModelAssetCacheStorage | null;
 }
 
 interface YoloOptions {
@@ -137,10 +150,13 @@ export interface YoloWrinkleConstructorOptions extends YoloOptions {
   executionProviders?: string[];
   wasmPaths?: string | Record<string, string>;
   verifySha256?: boolean;
-  expectedModelBytes?: number;
   fetchImpl?: typeof fetch;
   runtime?: OrtRuntimeLike | null;
   session?: InferenceSessionLike | null;
+  persistentCache?: boolean;
+  cacheStorage?: ModelAssetCacheStorage | null;
+  expectedModelBytes?: number;
+  expectedModelSha256?: string;
 }
 
 const clamp = (value: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, value));
@@ -173,14 +189,33 @@ export async function fetchBinaryChunks(urls: readonly string[], options: FetchC
   const maximumBytes = options.maximumBytes ?? 128 * 1024 * 1024;
   const chunks: Uint8Array[] = [];
   let total = 0;
+  let persistentCacheHits = 0;
   for (const url of urls) {
-    const response = await fetchImpl(url, { cache: options.cache || "force-cache" });
+    const loaded = options.persistentCacheName
+      ? await fetchCachedModelAsset(url, {
+        cacheName: options.persistentCacheName,
+        cacheStorage: options.cacheStorage,
+        fetchImpl,
+        requestCache: options.cache || "no-cache",
+      })
+      : {
+        response: await fetchImpl(url, { cache: options.cache || "force-cache" }),
+        source: "network" as const,
+      };
+    const { response } = loaded;
     if (!response?.ok) throw new Error(`Failed to load model chunk ${url}: HTTP ${response?.status ?? "unknown"}`);
     const chunk = new Uint8Array(await response.arrayBuffer());
     total += chunk.byteLength;
+    if (loaded.source === "persistent-cache") persistentCacheHits += 1;
     if (total > maximumBytes) throw new Error(`Model chunks exceed ${maximumBytes} bytes`);
     chunks.push(chunk);
-    options.onProgress?.({ loadedChunks: chunks.length, totalChunks: urls.length, loadedBytes: total });
+    options.onProgress?.({
+      loadedChunks: chunks.length,
+      totalChunks: urls.length,
+      loadedBytes: total,
+      persistentCacheHits,
+      source: loaded.source,
+    });
   }
   if (options.expectedBytes != null && total !== options.expectedBytes) {
     throw new Error(`Model byte length mismatch: received ${total}, expected ${options.expectedBytes}`);
@@ -820,10 +855,15 @@ export class YoloWrinkleOnnx {
   runtime: OrtRuntimeLike | null;
   session: InferenceSessionLike | null;
   modelBytes: Uint8Array | null;
+  persistentCache: boolean;
+  cacheStorage: ModelAssetCacheStorage | null | undefined;
+  expectedModelSha256: string;
+  lastLoadStats: ModelProgress | null;
   private loadPromise: Promise<this> | null = null;
   private closePromise: Promise<void> | null = null;
   private sessionTail: Promise<void> = Promise.resolve();
   private loadProgressListeners: Set<(progress: ModelProgress) => void> | null = null;
+  private loadGeneration = 0;
 
   constructor(options: YoloWrinkleConstructorOptions = {}) {
     this.chunkUrls = options.chunkUrls || DEFAULT_MODEL_CHUNK_URLS;
@@ -837,11 +877,15 @@ export class YoloWrinkleOnnx {
     // 生产默认校验内容哈希，而不是只比总字节数：分片拼接错位或资产被替换时
     // 必须直接失败。仅测试可显式传 false 跳过。
     this.verifySha256 = options.verifySha256 !== false;
-    this.expectedModelBytes = options.expectedModelBytes ?? YOLO_WRINKLE_MODEL_BYTES;
     this.fetchImpl = options.fetchImpl;
     this.runtime = options.runtime || null;
     this.session = options.session || null;
     this.modelBytes = null;
+    this.persistentCache = options.persistentCache ?? !options.fetchImpl;
+    this.cacheStorage = options.cacheStorage;
+    this.expectedModelBytes = options.expectedModelBytes ?? YOLO_WRINKLE_MODEL_BYTES;
+    this.expectedModelSha256 = options.expectedModelSha256 ?? YOLO_WRINKLE_MODEL_SHA256;
+    this.lastLoadStats = null;
   }
 
   private enqueueSessionOperation<T>(operation: () => Promise<T>): Promise<T> {
@@ -852,22 +896,59 @@ export class YoloWrinkleOnnx {
 
   private async loadSession(onProgress?: (progress: ModelProgress) => void): Promise<this> {
     if (this.session) return this;
+    const generation = this.loadGeneration;
     const runtime = this.runtime || await import("onnxruntime-web/wasm") as unknown as OrtRuntimeLike;
     if (this.wasmPaths && runtime.env?.wasm) runtime.env.wasm.wasmPaths = this.wasmPaths;
-    const bytes = await fetchBinaryChunks(this.chunkUrls, {
-      fetchImpl: this.fetchImpl,
-      expectedBytes: this.expectedModelBytes,
-      onProgress,
-    });
-    if (this.verifySha256) {
-      const actual = await sha256Hex(bytes);
-      if (actual !== YOLO_WRINKLE_MODEL_SHA256) throw new Error(`Model SHA-256 mismatch: ${actual}`);
+    if (this.persistentCache) {
+      await pruneVersionedModelCaches(
+        YOLO_WRINKLE_MODEL_CACHE_PREFIX,
+        YOLO_WRINKLE_MODEL_CACHE_NAME,
+        this.cacheStorage,
+      );
     }
-    this.runtime = runtime;
-    this.session = await runtime.InferenceSession.create(bytes, {
+    let latestProgress: ModelProgress | null = null;
+    let bytes: Uint8Array | null = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      latestProgress = null;
+      let persistentCacheHits = 0;
+      try {
+        bytes = await fetchBinaryChunks(this.chunkUrls, {
+          fetchImpl: this.fetchImpl,
+          expectedBytes: this.expectedModelBytes,
+          persistentCacheName: this.persistentCache ? YOLO_WRINKLE_MODEL_CACHE_NAME : undefined,
+          cacheStorage: this.cacheStorage,
+          cache: attempt === 0 ? "no-cache" : "reload",
+          onProgress: (progress) => {
+            latestProgress = progress;
+            persistentCacheHits = progress.persistentCacheHits;
+            onProgress?.(progress);
+          },
+        });
+        if (this.verifySha256) {
+          const actual = await sha256Hex(bytes);
+          if (actual !== this.expectedModelSha256) throw new Error(`Model SHA-256 mismatch: ${actual}`);
+        }
+        break;
+      } catch (error) {
+        if (attempt === 0 && this.persistentCache && persistentCacheHits > 0) {
+          await deleteModelAssetCache(YOLO_WRINKLE_MODEL_CACHE_NAME, this.cacheStorage);
+          continue;
+        }
+        throw error;
+      }
+    }
+    if (!bytes) throw new Error("YOLO model bytes are unavailable");
+    const session = await runtime.InferenceSession.create(bytes, {
       executionProviders: this.executionProviders,
       graphOptimizationLevel: "all",
     });
+    if (generation !== this.loadGeneration) {
+      await session.release?.();
+      throw new Error("YOLO model load was cancelled");
+    }
+    this.runtime = runtime;
+    this.session = session;
+    this.lastLoadStats = latestProgress;
     // InferenceSession owns the compiled model; do not retain another 47 MB
     // copy in browser memory after initialization.
     this.modelBytes = null;
@@ -1001,12 +1082,14 @@ export class YoloWrinkleOnnx {
   }
 
   async close(): Promise<void> {
+    this.loadGeneration += 1;
     if (this.closePromise) return this.closePromise;
     let operation: Promise<void>;
     operation = this.enqueueSessionOperation(async () => {
       const session = this.session;
       this.session = null;
       this.modelBytes = null;
+      this.lastLoadStats = null;
       await session?.release?.();
     }).finally(() => {
       if (this.closePromise === operation) this.closePromise = null;
