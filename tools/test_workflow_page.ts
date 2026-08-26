@@ -385,6 +385,16 @@ assert.match(styles, /@media \(min-width:\s*1281px\) and \(max-width:\s*1760px\)
   "intermediate desktop widths keep the complete tool strip in a second header row instead of clipping actions");
 assert.match(styles, /@media \(max-width:\s*1280px\)\s*{[\s\S]*?\.workflow-workbench\.app\s*{[\s\S]*?grid-template-columns:\s*1fr;/, "workflow collapses before its readable three-column minimum can overflow");
 
+assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench\.app\s*\{[^}]*grid-template-rows:\s*auto auto auto;[^}]*overflow-x:\s*hidden;/,
+  "phone workflow rows grow with their content instead of overlapping the following control rail");
+assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.stage-body\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/,
+  "phone workflow stage contains its canvas and focus cards instead of spilling over the next section");
+assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.main-wrap\s*\{[^}]*flex:\s*0 0 clamp\(300px,\s*54dvh,\s*480px\);/,
+  "phone workflow keeps the shared face canvas prominent without consuming an unbounded viewport height");
+assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.zoom-strip\s*\{[^}]*overflow-x:\s*auto;[^}]*scroll-snap-type:\s*x mandatory;/,
+  "phone focus previews form a readable horizontal snap rail");
+assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.zoom-card\s*\{[^}]*flex:\s*0 0 clamp\(152px,\s*44vw,\s*184px\);[^}]*scroll-snap-align:\s*start;/,
+  "phone focus previews keep a stable touch target instead of shrinking into three equal columns");
 const clickIntent = beginWorkflowPointerIntent(1, 0, 10, 10);
 updateWorkflowPointerIntent(clickIntent, 1, 13, 13);
 assert.equal(completesWorkflowCanvasClick(clickIntent, 1), true, "small pointer jitter remains a lesion-selection click");
