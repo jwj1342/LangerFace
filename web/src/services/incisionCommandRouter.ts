@@ -74,6 +74,9 @@ export class IncisionCommandRouter {
         this.actions.updateTumorRing();
         this.actions.publish("tumor_diameter_input");
         return true;
+      case "diameter_inactive_hint":
+        this.actions.publish(command);
+        return true;
       case "depth_input":
       case "author_changed":
         this.actions.publish(command);

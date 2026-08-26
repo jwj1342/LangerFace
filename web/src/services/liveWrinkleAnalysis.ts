@@ -262,7 +262,7 @@ function statusLabel(): string {
   if (state.status === "ready") return "检测完成 · 待选择";
   if (state.status === "applied") return "已应用皱纹引导微调";
   if (state.status === "error") return "检测失败";
-  return isWrinkleFrameReady() ? "等待自动检测" : "等待照片或定格帧";
+  return isWrinkleFrameReady() ? "等待手动检测" : "等待照片或定格帧";
 }
 
 export function updateWrinkleUi(): void {
@@ -274,7 +274,7 @@ export function updateWrinkleUi(): void {
   els.wrinkleDisplayMode.value = state.displayMode;
   els.wrinkleDisplayMode.disabled = !frameReady;
   els.wrinkleDetect.disabled = !frameReady || busy;
-  els.wrinkleDetect.textContent = state.status === "error" ? "重试皱纹检测" : "重新检测皱纹";
+  els.wrinkleDetect.textContent = state.status === "error" ? "重试皱纹检测" : "检测皱纹";
   els.wrinkleAutoRefine.disabled = !analysisReady || hasManualRefineChanges() || state.status === "applied";
   els.wrinkleRestore.disabled = !state.standardLines
     || (state.status !== "applied" && !hasManualRefineChanges());
@@ -290,7 +290,7 @@ export function updateWrinkleUi(): void {
   } else if (busy) {
     els.wrinkleSummary.textContent = "处理完全在当前浏览器中进行，不上传原始照片。";
   } else {
-    els.wrinkleSummary.textContent = "标准 RSTL 会先显示，皱纹检测在后台完成。";
+    els.wrinkleSummary.textContent = "标准 RSTL 已显示；如需皱纹研究辅助，请点击“检测皱纹”。";
   }
 }
 

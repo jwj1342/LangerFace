@@ -16,7 +16,7 @@ import {
   detectStaticImageWithRetries,
   type StaticImageDetector,
 } from "./staticImageDetection.ts";
-import { analyzeCurrentWrinkles } from "./liveWrinkleAnalysis.ts";
+import { updateWrinkleUi } from "./liveWrinkleAnalysis.ts";
 import { LiveFrameScheduler } from "./liveFrameScheduler.ts";
 
 interface VideoDetector {
@@ -98,14 +98,19 @@ export function loop(): void {
   if (sourceKind === "image") {
     if (!sourceState.imageDetectionComplete) {
       sourceState.imageDetectionComplete = true;
+      const detectionStartedAt = performance.now();
       const outcome = detectStaticImageWithRetries(
         modelState.imageLandmarker as StaticImageDetector | null,
         source,
       );
+      recordMetricSample("source.imageFaceDetectionMs", performance.now() - detectionStartedAt, {
+        attempts: outcome.attempts,
+      });
       sourceState.imageDetectionAttempts = outcome.attempts;
       const result = outcome.result;
       const imageFaces = result?.faceLandmarks || [];
       sourceState.imageCacheLM = imageFaces.length === 1 ? toPixels(imageFaces[0], width, height) : null;
+      updateWrinkleUi();
       sourceState.planning2d?.setDetection({
         sourceRevision: sourceState.planning2d.sourceRevision(),
         status: sourceState.imageCacheLM ? "ready" : "failed",
@@ -173,7 +178,6 @@ export function loop(): void {
       drawZooms(displayLandmarks, width);
       drawFocusedRegion(displayLandmarks, width, height);
       drawFailureLogged = false;
-      if (sourceState.sourceKind === "image") void analyzeCurrentWrinkles();
     } catch (error) {
       if (!drawFailureLogged) logWarn("渲染图谱失败，本帧已跳过。", error);
       drawFailureLogged = true;

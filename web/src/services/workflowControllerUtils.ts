@@ -1,6 +1,10 @@
-import { inspectPathPolygonRelation, type Point2 } from "./incisionPathGeometry.ts";
+import { inspectPathPolygonRelation, segmentsIntersect2d, type Point2 } from "./incisionPathGeometry.ts";
 import { buildMediaPipeEngineeringExclusionZones } from "./incisionToolCore.ts";
-import type { IncisionPhotoGeometry, SurfaceProjectedFusiformFit } from "./incisionPhotoPlanning";
+import {
+  PHOTO_VISIBILITY_LIMITED_MIN_VISIBLE_FRACTION,
+  type IncisionPhotoGeometry,
+  type SurfaceProjectedFusiformFit,
+} from "./incisionPhotoPlanning.ts";
 import type { Vec3 } from "./softBody";
 
 export interface WorkflowPointerIntent {
@@ -11,6 +15,18 @@ export interface WorkflowPointerIntent {
 }
 
 const CLICK_DRAG_THRESHOLD_PX = 5;
+
+export function workflowFocusViewportPoint(
+  point: { x: number; y: number },
+  viewport: { width: number; height: number },
+  crop: { sx: number; sy: number; sw: number; sh: number } | null | undefined,
+): { x: number; y: number } {
+  if (!crop) return { x: point.x, y: point.y };
+  return {
+    x: (point.x - crop.sx) * viewport.width / Math.max(1, crop.sw),
+    y: (point.y - crop.sy) * viewport.height / Math.max(1, crop.sh),
+  };
+}
 
 export function beginWorkflowPointerIntent(
   pointerId: number,
@@ -56,6 +72,134 @@ export function workflowCandidateDisplayAllowed(
   projectionValid: boolean,
 ): boolean {
   return projectionValid && result?.candidate_display_blocked !== true;
+}
+
+export function workflowDiagnosticCandidateVisible(
+  result: Record<string, any> | null | undefined,
+  projectionValid: boolean,
+  candidatePointCount: number,
+  photoOpeningIntersection?: string | null,
+): boolean {
+  return candidatePointCount >= 2
+    && (result?.candidate_display_blocked === true || !projectionValid)
+    && workflowSensitiveOpeningDiagnosticEligible(result, photoOpeningIntersection);
+}
+
+function displayedCandidateHardViolationCodes(result: Record<string, any> | null | undefined): string[] {
+  const displayedViolations = Array.isArray(result?.candidate?.hard_violations)
+    ? result.candidate.hard_violations
+    : [];
+  const codes = displayedViolations
+    .map((item: Record<string, any>) => String(item?.code || ""))
+    .filter(Boolean);
+  return [...new Set<string>(codes)];
+}
+
+export function workflowSensitiveOpeningDiagnosticEligible(
+  result: Record<string, any> | null | undefined,
+  photoOpeningIntersection?: string | null,
+): boolean {
+  const candidateCodes = displayedCandidateHardViolationCodes(result);
+  const tumorCodes = Array.isArray(result?.tumor_engineering_validation?.violations)
+    ? result.tumor_engineering_validation.violations
+      .map((item: Record<string, any>) => String(item?.code || ""))
+      .filter(Boolean)
+    : [];
+  const photoOpening = String(photoOpeningIntersection || "");
+  return candidateCodes.concat(tumorCodes).some((code) => code.includes("non_skin_opening"))
+    || /(?:eye|oral|mouth|nostril)-opening/.test(photoOpening);
+}
+
+export function workflowPhotoSurfaceReferenceRecoveryEligible(
+  result: Record<string, any> | null | undefined,
+): boolean {
+  const codes = displayedCandidateHardViolationCodes(result);
+  return result?.candidate_display_blocked === true
+    && result?.tumor_engineering_validation?.passed !== false
+    && codes.length > 0
+    && codes.every((code) => code === "candidate_outside_canonical_surface");
+}
+
+export function workflowVisibilityLimitedReferenceDisplayActive({
+  canonicalSurfaceOnly,
+  projectionValid,
+  smoothingMode,
+  visibilityLimited,
+  hiddenPointCount,
+  visibleFraction,
+  openingIntersection,
+}: {
+  canonicalSurfaceOnly: boolean;
+  projectionValid: boolean;
+  smoothingMode?: string | null;
+  visibilityLimited?: boolean | null;
+  hiddenPointCount?: number | null;
+  visibleFraction?: number | null;
+  openingIntersection?: string | null;
+}): boolean {
+  const hidden = Number(hiddenPointCount);
+  const visible = Number(visibleFraction);
+  return canonicalSurfaceOnly
+    && projectionValid
+    && smoothingMode === "limitedVisibility"
+    && visibilityLimited === true
+    && Number.isFinite(hidden)
+    && hidden > 0
+    && Number.isFinite(visible)
+    && visible >= PHOTO_VISIBILITY_LIMITED_MIN_VISIBLE_FRACTION
+    && !openingIntersection
+    && visible < 1;
+}
+
+export function workflowUpperForeheadSurfaceRecoveryActive({
+  canonicalSurfaceOnly,
+  projectionValid,
+  smoothingMode,
+  meshOutsideCount,
+  surfaceOutsideCount,
+  rstlSupportedMeshOutsideCount,
+  upperForeheadPointCount,
+  pointCount,
+}: {
+  canonicalSurfaceOnly: boolean;
+  projectionValid: boolean;
+  smoothingMode?: string | null;
+  meshOutsideCount?: number | null;
+  surfaceOutsideCount?: number | null;
+  rstlSupportedMeshOutsideCount?: number | null;
+  upperForeheadPointCount?: number | null;
+  pointCount?: number | null;
+}): boolean {
+  const meshOutside = Number(meshOutsideCount);
+  const surfaceOutside = Number(surfaceOutsideCount);
+  const rstlSupported = Number(rstlSupportedMeshOutsideCount);
+  const upperForehead = Number(upperForeheadPointCount);
+  const total = Number(pointCount);
+  const hasRstlSupportedGap = meshOutside > 0 && rstlSupported === meshOutside;
+  const fullyContainedUpperForehead = meshOutside === 0
+    && Number.isFinite(total)
+    && total > 0
+    && upperForehead === total;
+  return canonicalSurfaceOnly
+    && projectionValid
+    && smoothingMode === "photoCanonical"
+    && Number.isFinite(meshOutside)
+    && surfaceOutside === 0
+    && (hasRstlSupportedGap || fullyContainedUpperForehead);
+}
+
+const WORKFLOW_PROJECTION_STATUS_REASONS = new Set([
+  "candidate_result",
+  "candidate_loaded",
+  "workflow_photo_readiness_changed",
+]);
+
+export function workflowProjectionStatusMayOverride(
+  reason: string,
+  currentStatus: string,
+): boolean {
+  return WORKFLOW_PROJECTION_STATUS_REASONS.has(reason)
+    || /候选已生成|候选生成并等待审阅/.test(currentStatus);
 }
 
 export function minimumWorkflowMarkerScanDiameterMm(diameterMm: number): number {
@@ -150,6 +294,353 @@ export interface SvgPoint {
   y: number;
 }
 
+export interface WorkflowFreehandSample {
+  source: SvgPoint;
+  display: SvgPoint;
+}
+
+export type WorkflowBoundaryMode = "ellipse" | "freehand";
+
+export function workflowBoundaryModeTransition(
+  mode: WorkflowBoundaryMode,
+  action: "select" | "clear",
+): { boundaryActive: boolean; clearCenter: boolean; mayGenerateCandidate: boolean } {
+  if (mode === "freehand") {
+    return { boundaryActive: true, clearCenter: true, mayGenerateCandidate: false };
+  }
+  return {
+    boundaryActive: false,
+    clearCenter: action === "clear",
+    mayGenerateCandidate: action === "select",
+  };
+}
+
+function workflowPointDistance(first: SvgPoint, second: SvgPoint): number {
+  return Math.hypot(first.x - second.x, first.y - second.y);
+}
+
+function workflowBoundaryArea(points: readonly SvgPoint[]): number {
+  return points.reduce((area, point, index) => {
+    const next = points[(index + 1) % points.length];
+    return area + point.x * next.y - next.x * point.y;
+  }, 0) / 2;
+}
+
+export function workflowBoundaryCentroid(points: readonly SvgPoint[]): SvgPoint | null {
+  if (points.length < 3) return null;
+  let twiceArea = 0;
+  let weightedX = 0;
+  let weightedY = 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    const cross = current.x * next.y - next.x * current.y;
+    twiceArea += cross;
+    weightedX += (current.x + next.x) * cross;
+    weightedY += (current.y + next.y) * cross;
+  }
+  if (Math.abs(twiceArea) < 1e-9) {
+    const average = points.reduce((sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }), { x: 0, y: 0 });
+    return { x: average.x / points.length, y: average.y / points.length };
+  }
+  return {
+    x: weightedX / (3 * twiceArea),
+    y: weightedY / (3 * twiceArea),
+  };
+}
+
+function workflowBoundarySelfIntersects(points: readonly SvgPoint[]): boolean {
+  if (points.length < 4) return false;
+  const source = points.map((point) => [point.x, point.y] as Point2);
+  for (let first = 0; first < source.length; first += 1) {
+    const firstNext = (first + 1) % source.length;
+    for (let second = first + 1; second < source.length; second += 1) {
+      const secondNext = (second + 1) % source.length;
+      if (first === second || firstNext === second || secondNext === first) continue;
+      if (segmentsIntersect2d(source[first], source[firstNext], source[second], source[secondNext])) return true;
+    }
+  }
+  return false;
+}
+
+function workflowBoundaryHasNonAdjacentTouch(points: readonly SvgPoint[], tolerancePx = 1e-6): boolean {
+  for (let first = 0; first < points.length; first += 1) {
+    for (let second = first + 1; second < points.length; second += 1) {
+      const adjacent = second === first + 1 || (first === 0 && second === points.length - 1);
+      if (!adjacent && workflowPointDistance(points[first], points[second]) <= tolerancePx) return true;
+    }
+  }
+  return false;
+}
+
+export function workflowFreehandBoundaryClosed(
+  displayPoints: readonly SvgPoint[],
+  closureThresholdPx = 16,
+): boolean {
+  return displayPoints.length >= 8
+    && workflowPointDistance(displayPoints[0], displayPoints[displayPoints.length - 1]) <= closureThresholdPx;
+}
+
+export function workflowFreehandContinuationAllowed(
+  displayPoints: readonly SvgPoint[],
+  nextStart: SvgPoint,
+  continuationThresholdPx = 20,
+): boolean {
+  return !displayPoints.length
+    || workflowPointDistance(displayPoints[displayPoints.length - 1], nextStart) <= continuationThresholdPx;
+}
+
+function workflowSegmentIntersection(
+  firstStart: SvgPoint,
+  firstEnd: SvgPoint,
+  secondStart: SvgPoint,
+  secondEnd: SvgPoint,
+): { point: SvgPoint; firstRatio: number; secondRatio: number } | null {
+  const firstX = firstEnd.x - firstStart.x;
+  const firstY = firstEnd.y - firstStart.y;
+  const secondX = secondEnd.x - secondStart.x;
+  const secondY = secondEnd.y - secondStart.y;
+  const denominator = firstX * secondY - firstY * secondX;
+  if (Math.abs(denominator) < 1e-9) return null;
+  const offsetX = secondStart.x - firstStart.x;
+  const offsetY = secondStart.y - firstStart.y;
+  const firstRatio = (offsetX * secondY - offsetY * secondX) / denominator;
+  const secondRatio = (offsetX * firstY - offsetY * firstX) / denominator;
+  if (firstRatio < -1e-9 || firstRatio > 1 + 1e-9 || secondRatio < -1e-9 || secondRatio > 1 + 1e-9) return null;
+  return {
+    point: {
+      x: firstStart.x + firstX * firstRatio,
+      y: firstStart.y + firstY * firstRatio,
+    },
+    firstRatio,
+    secondRatio,
+  };
+}
+
+function workflowInterpolatePoint(first: SvgPoint, second: SvgPoint, ratio: number): SvgPoint {
+  return {
+    x: first.x + (second.x - first.x) * ratio,
+    y: first.y + (second.y - first.y) * ratio,
+  };
+}
+
+function workflowBoundaryPerimeter(points: readonly SvgPoint[]): number {
+  return points.reduce((perimeter, point, index) => (
+    perimeter + workflowPointDistance(point, points[(index + 1) % points.length])
+  ), 0);
+}
+
+function workflowAdaptiveEndpointClosureThreshold(
+  points: readonly SvgPoint[],
+  minimumPx: number,
+  maximumPx = 48,
+): number {
+  if (points.length < 3) return minimumPx;
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const minimumSpan = Math.min(
+    Math.max(...xs) - Math.min(...xs),
+    Math.max(...ys) - Math.min(...ys),
+  );
+  const openPathLength = points.slice(1).reduce((length, point, index) => (
+    length + workflowPointDistance(points[index], point)
+  ), 0);
+  return Math.max(minimumPx, Math.min(maximumPx, openPathLength * 0.18, minimumSpan * 0.7));
+}
+
+export function workflowPhotoBoundaryEnclosingDiameterMm(
+  center: SvgPoint,
+  boundary: readonly SvgPoint[],
+  pixelsPerMm: number,
+): number | null {
+  if (![center.x, center.y, pixelsPerMm].every(Number.isFinite) || !(pixelsPerMm > 0)) return null;
+  const distances = boundary
+    .filter((point) => [point.x, point.y].every(Number.isFinite))
+    .map((point) => workflowPointDistance(center, point));
+  if (distances.length < 3) return null;
+  const radiusPx = Math.max(...distances);
+  return radiusPx > 0 ? radiusPx * 2 / pixelsPerMm : null;
+}
+
+export function recoverWorkflowFreehandBoundary(
+  samples: readonly WorkflowFreehandSample[],
+  closureThresholdPx = 24,
+  outputSamples = 48,
+): SvgPoint[] {
+  const valid = samples.filter(({ source, display }) => (
+    [source.x, source.y, display.x, display.y].every(Number.isFinite)
+  ));
+  if (valid.length < 8) return [];
+
+  type LoopCandidate = { source: SvgPoint[]; display: SvgPoint[]; score: number };
+  const candidates: LoopCandidate[] = [];
+  const addCandidate = (
+    source: SvgPoint[],
+    display: SvgPoint[],
+    closureGapPx: number,
+    startIndex: number,
+    acceptedClosureThresholdPx = closureThresholdPx,
+  ) => {
+    const normalized: Array<{ source: SvgPoint; display: SvgPoint }> = [];
+    for (let index = 0; index < display.length; index += 1) {
+      const previous = normalized.at(-1);
+      if (!previous || workflowPointDistance(previous.display, display[index]) > 1e-6) {
+        normalized.push({ source: source[index], display: display[index] });
+      }
+    }
+    if (normalized.length > 2
+      && workflowPointDistance(normalized[0].display, normalized[normalized.length - 1].display) <= 1e-6) {
+      normalized.pop();
+    }
+    const normalizedDisplay = normalized.map((sample) => sample.display);
+    const normalizedSource = normalized.map((sample) => sample.source);
+    if (normalizedDisplay.length < 8
+      || workflowBoundarySelfIntersects(normalizedDisplay)
+      || workflowBoundaryHasNonAdjacentTouch(normalizedDisplay)) return;
+    const area = Math.abs(workflowBoundaryArea(normalizedDisplay));
+    const perimeter = workflowBoundaryPerimeter(normalizedDisplay);
+    if (!(area > 16) || !(perimeter > acceptedClosureThresholdPx * 2)) return;
+    const normalizedGap = Math.min(1, Math.max(0, closureGapPx) / acceptedClosureThresholdPx);
+    const closureConfidence = 1 / (1 + 8 * normalizedGap * normalizedGap);
+    const compactness = Math.min(1, 4 * Math.PI * area / (perimeter * perimeter));
+    const shapeConfidence = 0.25 + compactness * 0.75;
+    const temporalConfidence = 1 / Math.sqrt(1 + Math.max(0, startIndex));
+    candidates.push({
+      source: normalizedSource,
+      display: normalizedDisplay,
+      score: area * closureConfidence * shapeConfidence * temporalConfidence,
+    });
+  };
+
+  for (let first = 0; first < valid.length - 2; first += 1) {
+    for (let second = first + 2; second < valid.length - 1; second += 1) {
+      const intersection = workflowSegmentIntersection(
+        valid[first].display,
+        valid[first + 1].display,
+        valid[second].display,
+        valid[second + 1].display,
+      );
+      if (!intersection || second - first + 2 < 8) continue;
+      const displayIntersection = intersection.point;
+      const firstSourceIntersection = workflowInterpolatePoint(
+        valid[first].source,
+        valid[first + 1].source,
+        intersection.firstRatio,
+      );
+      const secondSourceIntersection = workflowInterpolatePoint(
+        valid[second].source,
+        valid[second + 1].source,
+        intersection.secondRatio,
+      );
+      addCandidate(
+        [firstSourceIntersection, ...valid.slice(first + 1, second + 1).map(({ source }) => source), secondSourceIntersection],
+        [displayIntersection, ...valid.slice(first + 1, second + 1).map(({ display }) => display), displayIntersection],
+        0,
+        first,
+      );
+    }
+  }
+
+  for (let first = 0; first <= valid.length - 8; first += 1) {
+    for (let second = first + 7; second < valid.length; second += 1) {
+      const selectedDisplay = valid.slice(first, second + 1).map(({ display }) => display);
+      const acceptedClosureThresholdPx = workflowAdaptiveEndpointClosureThreshold(
+        selectedDisplay,
+        closureThresholdPx,
+      );
+      const closureGap = workflowPointDistance(valid[first].display, valid[second].display);
+      if (closureGap > acceptedClosureThresholdPx) continue;
+      addCandidate(
+        valid.slice(first, second + 1).map(({ source }) => source),
+        selectedDisplay,
+        closureGap,
+        first,
+        acceptedClosureThresholdPx,
+      );
+    }
+  }
+
+  const selected = candidates.sort((first, second) => second.score - first.score)[0];
+  return selected ? smoothWorkflowClosedBoundary(selected.source, outputSamples) : [];
+}
+
+function resampleWorkflowClosedBoundary(points: readonly SvgPoint[], count: number): SvgPoint[] {
+  const unique: SvgPoint[] = [];
+  for (const point of points) {
+    const previous = unique[unique.length - 1];
+    if (!previous || workflowPointDistance(previous, point) > 1e-6) unique.push({ ...point });
+  }
+  if (unique.length > 2 && workflowPointDistance(unique[0], unique[unique.length - 1]) <= 1e-6) unique.pop();
+  if (unique.length < 3 || count < 8) return [];
+  const lengths = unique.map((point, index) => workflowPointDistance(point, unique[(index + 1) % unique.length]));
+  const perimeter = lengths.reduce((sum, length) => sum + length, 0);
+  if (!(perimeter > 1e-6)) return [];
+  const result: SvgPoint[] = [];
+  let segment = 0;
+  let segmentStart = 0;
+  for (let sample = 0; sample < count; sample += 1) {
+    const target = perimeter * sample / count;
+    while (segment < lengths.length - 1 && segmentStart + lengths[segment] < target) {
+      segmentStart += lengths[segment];
+      segment += 1;
+    }
+    const start = unique[segment];
+    const end = unique[(segment + 1) % unique.length];
+    const ratio = lengths[segment] > 1e-9 ? (target - segmentStart) / lengths[segment] : 0;
+    result.push({
+      x: start.x + (end.x - start.x) * ratio,
+      y: start.y + (end.y - start.y) * ratio,
+    });
+  }
+  return result;
+}
+
+export function smoothWorkflowClosedBoundary(
+  points: readonly SvgPoint[],
+  samples = 48,
+  passes = 3,
+): SvgPoint[] {
+  const resampled = resampleWorkflowClosedBoundary(points, samples);
+  const sourceArea = Math.abs(workflowBoundaryArea(resampled));
+  if (resampled.length < 8 || !(sourceArea > 1) || workflowBoundarySelfIntersects(resampled)) return [];
+  let smoothed = resampled.map((point) => ({ ...point }));
+  for (let pass = 0; pass < Math.max(0, passes); pass += 1) {
+    smoothed = smoothed.map((point, index, source) => {
+      const previous = source[(index - 1 + source.length) % source.length];
+      const next = source[(index + 1) % source.length];
+      return {
+        x: previous.x * 0.25 + point.x * 0.5 + next.x * 0.25,
+        y: previous.y * 0.25 + point.y * 0.5 + next.y * 0.25,
+      };
+    });
+  }
+  const smoothedArea = Math.abs(workflowBoundaryArea(smoothed));
+  if (!(smoothedArea > 1)) return [];
+  const center = resampled.reduce((sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }), { x: 0, y: 0 });
+  center.x /= resampled.length;
+  center.y /= resampled.length;
+  const scale = Math.sqrt(sourceArea / smoothedArea);
+  const areaPreserved = smoothed.map((point) => ({
+    x: center.x + (point.x - center.x) * scale,
+    y: center.y + (point.y - center.y) * scale,
+  }));
+  return workflowBoundarySelfIntersects(areaPreserved) ? [] : areaPreserved;
+}
+
+export function workflowClosedBoundarySvgPath(points: readonly SvgPoint[]): string {
+  if (points.length < 3) return "";
+  const midpoint = (first: SvgPoint, second: SvgPoint): SvgPoint => ({
+    x: (first.x + second.x) / 2,
+    y: (first.y + second.y) / 2,
+  });
+  const start = midpoint(points[points.length - 1], points[0]);
+  const commands = points.map((point, index) => {
+    const end = midpoint(point, points[(index + 1) % points.length]);
+    return `Q ${svgPoint(point)} ${svgPoint(end)}`;
+  });
+  return `M ${svgPoint(start)} ${commands.join(" ")} Z`;
+}
+
 export function workflowPhotoEllipseBoundary({
   center,
   diameterMm,
@@ -216,7 +707,7 @@ export function workflowPhotoOpeningIntersection(
     (point.x - minX) / width,
     (point.y - minY) / height,
   ] as Point2);
-  for (const zone of buildMediaPipeEngineeringExclusionZones([...photoLandmarks])) {
+  for (const zone of buildMediaPipeEngineeringExclusionZones([...photoLandmarks], "image_y_down")) {
     if (zone.applies_to_tumor === false || !Array.isArray(zone.polygon)) continue;
     const relation = inspectPathPolygonRelation(normalizedFootprint, zone.polygon as Point2[], { closedPath: true });
     if (relation.intersects) return String(zone.id || "non-skin-opening");

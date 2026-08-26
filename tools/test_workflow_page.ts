@@ -9,6 +9,17 @@ import {
   minimumWorkflowMarkerScanDiameterMm,
   updateWorkflowPointerIntent,
   workflowCandidateDisplayAllowed,
+  workflowDiagnosticCandidateVisible,
+  workflowProjectionStatusMayOverride,
+  workflowPhotoSurfaceReferenceRecoveryEligible,
+  workflowVisibilityLimitedReferenceDisplayActive,
+  workflowUpperForeheadSurfaceRecoveryActive,
+  workflowBoundaryCentroid,
+  workflowBoundaryModeTransition,
+  workflowClosedBoundarySvgPath,
+  workflowFreehandBoundaryClosed,
+  workflowFreehandContinuationAllowed,
+  workflowFocusViewportPoint,
   workflowFusiformSvgPath,
   workflowInvalidationNeedsLiveFrame,
   workflowLiveOverlayChanged,
@@ -16,17 +27,21 @@ import {
   workflowMarkerScanDiameterForTumor,
   workflowCenteredLinearPath,
   workflowPhotoCircleFootprint,
+  workflowPhotoBoundaryEnclosingDiameterMm,
   workflowPhotoEllipseBoundary,
   workflowPhotoOpeningIntersection,
   workflowPhotoTumorOpeningIntersection,
   workflowPhotoTumorOutline,
   workflowScanCircleGeometry,
+  recoverWorkflowFreehandBoundary,
+  smoothWorkflowClosedBoundary,
   workflowSubcutaneousLengthLimit,
 } from "../web/src/services/workflowControllerUtils.ts";
 import { svgOverlayExportViewBox } from "../web/src/services/incisionExport.ts";
 import { incisionCandidateScreenStyle } from "../web/src/services/incisionOverlayStyle.ts";
 import { buildPhotoSpaceDiameterEstimate, type SurfaceProjectedFusiformFit } from "../web/src/services/incisionPhotoPlanning.ts";
 import type { Vec3 } from "../web/src/services/softBody.ts";
+import { tumorDiameterParameterInactive } from "../web/src/services/tumorInput.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (relative: string) => fs.readFileSync(path.join(root, relative), "utf8");
@@ -37,17 +52,25 @@ const workbench = read("web/src/routes/WorkflowWorkbench.tsx");
 const canvasTools = read("web/src/components/WorkflowCanvasTools.tsx");
 const stageStatus = read("web/src/components/WorkflowStageStatus.tsx");
 const incisionRail = read("web/src/components/WorkflowIncisionRail.tsx");
+const standaloneIncision = read("web/src/routes/IncisionWorkbench.tsx");
 const candidateResultPanel = read("web/src/components/CandidateResultPanel.tsx");
 const candidateLibraryPanel = read("web/src/components/CandidateLibraryPanel.tsx");
+const incisionSnapshots = read("web/src/services/incisionSnapshots.ts");
 const tumorInputPanel = read("web/src/components/TumorInputPanel.tsx");
+const reviewControlsPanel = read("web/src/components/ReviewControlsPanel.tsx");
 const liveRail = read("web/src/components/LiveControlRail.tsx");
 const liveSourceControls = read("web/src/components/LiveSourceControlsPanel.tsx");
 const liveRenderControls = read("web/src/components/LiveRenderControlsPanel.tsx");
 const liveCanvasFit = read("web/src/services/liveCanvasFit.ts");
+const incisionExport = read("web/src/services/incisionExport.ts");
+const reviewPolicy = read("web/src/services/incisionReviewPolicy.ts");
 const controller = read("web/src/services/workflowIncisionController.ts");
+const render2d = read("web/src/services/render2d.ts");
+const photoPlanning = read("web/src/services/incisionPhotoPlanning.ts");
 const layout = read("web/src/components/WorkflowLayout.tsx");
 const sharedLayout = read("web/src/components/WorkbenchLayout.tsx");
 const styles = read("web/src/styles.css");
+const persistentTooltip = read("web/src/components/ui/persistent-tooltip.tsx");
 
 assert.match(app, /path="\/app\/workflow"\s+element={<WorkflowRoute\s*\/>}/, "workflow route stays inside the React SPA");
 assert.match(route, /import\("\.\.\/services\/liveRuntime"\)/, "workflow route reuses the live media runtime");
@@ -61,6 +84,10 @@ assert.match(stageStatus, /snapshot\?\.stageStatus/, "workflow stage status rend
 assert.match(stageStatus, /snapshot\?\.stageBusy/, "workflow stage status consumes the incision-only busy state");
 assert.match(stageStatus, /workflow-stage-spinner/, "workflow renders an explicit waiting animation for incision work");
 assert.match(stageStatus, /aria-busy={busy}/, "workflow exposes waiting state to assistive technology");
+assert.match(styles, /\.workflow-workbench \.workflow-stage-status\s*\{[^}]*white-space:\s*normal;[^}]*overflow:\s*visible;/s,
+  "workflow canvas status wraps instead of truncating operator guidance");
+assert.match(styles, /\.workflow-workbench \.workflow-stage-status > span:last-child\s*\{[^}]*overflow:\s*visible;[^}]*text-overflow:\s*clip;/s,
+  "the status text child does not reintroduce ellipsis truncation");
 assert.match(workbench, /<LiveControlRail[\s\S]*?showIncisionEntry={false}[\s\S]*?showStatusOverview={false}[\s\S]*?showPersonalizedHint={false}[\s\S]*?\/>/,
   "workflow hides its duplicate RSTL status overview and personalized hint without changing the standalone rail");
 assert.match(liveRail, /showStatusOverview\s*=\s*true/, "the standalone RSTL page retains its status overview by default");
@@ -86,27 +113,125 @@ assert.match(controller, /workflowFusiformSvgPath\(geometry\.fusiformRendering/,
 assert.match(canvasTools, /data-workflow-marker-scan-circle/, "workflow restores the controlled-marker circular scan feedback");
 assert.match(canvasTools, /data-workflow-marker-scan-label/, "workflow scan circle reports its millimetre diameter");
 assert.match(controller, /workflowScanCircleGeometry/, "workflow scan feedback follows the shared source-to-client transform");
-assert.match(canvasTools, /disabled={markerUnavailable}/, "controlled-marker entry stays unavailable until a cutaneous photo is ready");
+assert.match(canvasTools, /snapshot\?\.tumor\.boundaryMode === "freehand"/,
+  "manual freehand is an explicit controlled-marker unavailable state");
+assert.match(canvasTools, /aria-disabled={markerUnavailable}/,
+  "the unavailable controlled-marker entry exposes its semantic disabled state");
+assert.match(canvasTools, /disabled={markerHardUnavailable}/,
+  "only prerequisites without an actionable mode change use native disabled semantics");
+assert.match(canvasTools, /FREEHAND_MARKER_DISABLED_MESSAGE/,
+  "hover and click guidance share the reviewed freehand-mode explanation");
+assert.match(canvasTools, /aria-describedby={freehandMarkerUnavailable \? "freehandMarkerDisabledTooltip" : undefined}/,
+  "the freehand marker trigger describes its persistent custom tooltip");
+assert.match(canvasTools, /<PersistentTooltip[\s\S]*?id="freehandMarkerDisabledTooltip"[\s\S]*?message={FREEHAND_MARKER_DISABLED_MESSAGE}/,
+  "the controlled-marker explanation uses the shared persistent tooltip layer");
+assert.doesNotMatch(canvasTools, /freehandMarkerUnavailable[\s\S]{0,120}\? FREEHAND_MARKER_DISABLED_MESSAGE[\s\S]{0,120}: !cutaneous/,
+  "the freehand marker no longer relies on a transient native title tooltip");
 assert.match(canvasTools, /tools\?\.markerBusy \|\| !tools\?\.repairAvailable/, "repair cannot change detector inputs while a request is running");
-assert.match(controller, /photoReady:\s*workflowPhotoReady\(state\)/, "workflow snapshots expose shared-photo readiness to the merged toolbar");
+assert.match(controller, /const photoReady = workflowPhotoReady\(state\)/, "workflow snapshots expose shared-photo readiness to the merged toolbar");
+assert.match(controller, /workflowPhotoReady\(state\) !== state\.lastPublishedPhotoReady[\s\S]*?workflow_photo_readiness_changed/,
+  "a newly detected photo republishes toolbar readiness without requiring a canvas click");
 assert.match(controller, /minimumWorkflowMarkerScanDiameterMm/, "workflow restores the standalone minimum scan-coverage precondition");
 assert.match(controller, /workflowMarkerRequestStillCurrent/, "workflow discards controlled-marker results computed from stale parameters");
 assert.match(controller, /stablePhotoPixelsPerMm/, "workflow reuses the standalone face-wide controlled-marker scale");
 assert.match(controller, /workflowPhotoEllipseBoundary/, "workflow default cutaneous boundaries are constructed in current photo coordinates");
+assert.match(controller, /boundaryMode:\s*"ellipse",/, "workflow starts cutaneous planning in ellipse mode");
+assert.match(tumorInputPanel, /useState\("ellipse"\)/, "the React panel shows ellipse mode before its first controller snapshot");
+assert.match(controller, /diameterMm:\s*8,/, "workflow starts with the requested 8 mm cutaneous diameter");
+assert.match(tumorInputPanel, /useState\("8"\)/, "the React slider displays 8 mm before its first controller snapshot");
+assert.match(tumorInputPanel, /disabled={diameterDisabled}/,
+  "the diameter slider is physically disabled while boundary geometry overrides it");
+assert.match(tumorInputPanel, /id="diameterMm"[\s\S]*?min="2"[\s\S]*?max="40"/,
+  "the simulated lesion diameter can be reduced to the requested 2 mm minimum");
+assert.match(tumorInputPanel, /diameter-field-disabled/,
+  "the disabled diameter control has an explicit grey visual state");
+assert.match(tumorInputPanel, /aria-describedby="diameterDisabledTooltip"/,
+  "the disabled diameter trigger describes its persistent custom tooltip");
+assert.match(tumorInputPanel, /<PersistentTooltip[\s\S]*?id="diameterDisabledTooltip"[\s\S]*?message={TUMOR_DIAMETER_DISABLED_MESSAGE}/,
+  "the diameter explanation uses the shared persistent tooltip layer");
+assert.doesNotMatch(tumorInputPanel, /title={diameterDisabled \? TUMOR_DIAMETER_DISABLED_MESSAGE/,
+  "the disabled diameter no longer relies on a transient native title tooltip");
+assert.match(persistentTooltip, /role="tooltip"/,
+  "the shared persistent hint is exposed with tooltip semantics");
+assert.match(persistentTooltip, /TOOLTIP_RELEASE_DISMISS_MS\s*=\s*2_000/,
+  "click and touch guidance share the reviewed two-second release timeout");
+assert.match(persistentTooltip, /setTimeout\([\s\S]*?setActivated\(false\)[\s\S]*?setInteractionSuppressed\(true\)[\s\S]*?TOOLTIP_RELEASE_DISMISS_MS/,
+  "an activated hint closes two seconds after release and suppresses stale hover or focus");
+assert.match(persistentTooltip, /onFocus:[\s\S]*?if \(pointerFocusRef\.current\) return;[\s\S]*?setFocused\(true\)/,
+  "keyboard focus stays supported while pointer-generated focus is ignored");
+assert.match(persistentTooltip, /onPointerDown:[\s\S]*?pointerFocusRef\.current = true;[\s\S]*?setFocused\(false\)/,
+  "pointer-generated focus cannot keep a released tooltip open");
+assert.match(canvasTools, /onPointerDown={markerTooltip\.onPointerDown}[\s\S]*?markerTooltip\.showForRelease\(\)/,
+  "the controlled-marker hint covers press and release-driven mouse or touch activation");
+assert.match(tumorInputPanel, /onPointerDown={diameterTooltip\.onPointerDown}[\s\S]*?diameterTooltip\.showForRelease\(\)/,
+  "the diameter hint covers press and release-driven mouse or touch activation");
+assert.match(styles, /\.persistent-disabled-tooltip\s*\{[^}]*position:\s*fixed;[^}]*max-width:[^}]*white-space:\s*normal;/s,
+  "persistent hints escape clipped toolbars and wrap within the viewport");
+assert.match(controller, /stateLabel:\s*"设备本地"[\s\S]*?原始照片仅在当前设备中处理，不随候选记录上传；记录仅保留 \$\{privacyAudit\(state\)\.local_workflow_fields\.length\} 类必要参数。/,
+  "the workflow privacy card uses device-neutral local-processing copy");
+assert.doesNotMatch(controller.slice(controller.indexOf("privacyAudit: buildIncisionPrivacyAuditSnapshot"), controller.indexOf("review: buildIncisionReviewSnapshot")), /浏览器/,
+  "the workflow privacy snapshot does not limit its promise to a browser");
+assert.equal(tumorDiameterParameterInactive({ kind: "cutaneous", boundaryMode: "freehand" }), true,
+  "manual freehand disables the operator diameter");
+assert.equal(tumorDiameterParameterInactive({ kind: "cutaneous", boundaryMode: "ellipse", controlledMarkerMode: true }), true,
+  "controlled-marker acquisition disables the operator diameter before and after detection");
+assert.equal(tumorDiameterParameterInactive({ kind: "cutaneous", boundaryMode: "ellipse" }), false,
+  "switching back to ellipse restores the diameter control");
+assert.equal(tumorDiameterParameterInactive({ kind: "subcutaneous", boundaryMode: "freehand", controlledMarkerMode: true }), false,
+  "subcutaneous diameter remains operative");
+assert.match(controller, /case "diameter_input":\s*case "diameter_changed":[\s\S]*?tumorDiameterParameterInactive[\s\S]*?break;/,
+  "stale diameter events are ignored while a drawn or detected boundary owns candidate scale");
+assert.match(controller, /if \(!state\.markerMode && state\.controlledBoundary\)[\s\S]*?state\.boundaryMode = "ellipse";[\s\S]*?resetFreehandPhotoBoundary\(state, true\)/,
+  "exiting a confirmed controlled marker returns to ellipse mode and restores diameter semantics");
 assert.match(controller, /ellipseRatio:\s*state\.kind === "cutaneous" \? state\.ellipseRatio : null/,
   "the merged snapshot exposes the actual near-circular default instead of leaving the slider at its legacy 70% label");
 assert.match(tumorInputPanel, /tumor\.ellipseRatio != null\) setEllipseRatio/,
   "the cutaneous ellipse control stays synchronized with the merged controller default");
+assert.match(controller, /ellipseRatio:\s*100,/, "the merged controller defaults cutaneous boundaries to a circle");
+assert.match(tumorInputPanel, /useState\("100"\)/, "the ellipse slider displays the circular default before the first snapshot");
+assert.match(tumorInputPanel, /轮廓纵\/横比例[\s\S]*?min="40"[\s\S]*?max="200"/,
+  "the unambiguous vertical-to-horizontal ratio supports either axis becoming visually longer");
+assert.equal((reviewControlsPanel.match(/<option\s/g) || []).length, 2,
+  "the current review selector exposes only pending and confirm-draft choices");
+assert.match(reviewControlsPanel, /待医生确认[\s\S]*确认候选草案/,
+  "the two visible review choices retain their requested Chinese labels");
+assert.doesNotMatch(reviewControlsPanel, /status === "approved_for_discussion"[\s\S]*?return "approved"/,
+  "confirmed research status uses the same clear text and background style as pending review");
+assert.match(controller, /function buildRecord[\s\S]*?if \(!rawReview\.reviewer\) return null;/,
+  "candidate-record construction itself rejects a missing reviewer instead of relying only on the visible button path");
+assert.match(reviewControlsPanel, /id="reviewerName"[\s\S]*?reviewerAttentionRequired[\s\S]*?aria-invalid/,
+  "a missing-reviewer block is repeated as an accessible local highlight on the reviewer input");
+assert.match(reviewControlsPanel, /id="reviewDecision"[\s\S]*?decisionAttentionRequired[\s\S]*?aria-invalid/,
+  "a limited-visibility confirmation block highlights the nearby review-decision control");
+assert.match(styles, /@keyframes workflow-review-attention[\s\S]*?prefers-reduced-motion/,
+  "review attention has a breathing cue with a reduced-motion fallback");
+assert.match(controller, /reviewAttention:\s*"reviewer"/,
+  "missing reviewer paths publish a reviewer-specific attention reason");
+assert.match(reviewPolicy, /photo_visibility_limited_candidate[\s\S]*?attention:\s*"decision"/,
+  "limited-visibility approval blocks publish a decision-specific attention reason through the shared policy");
+assert.match(controller, /state\.reviewAttention = readiness\.attention/,
+  "the workflow publishes the shared policy's nearby-control attention reason");
+assert.match(controller, /function prepareControlledMarkerAttempt[\s\S]*?state\.centerRef = null;[\s\S]*?state\.boundaryRefs = \[\];[\s\S]*?invalidateCandidate/,
+  "a new controlled-marker attempt removes the previous lesion and candidate before reporting a new failure");
+assert.match(controller, /照片估算最大直径 \$\{state\.controlledBoundaryPhotoDiameterMm\.toFixed\(1\)\}/,
+  "controlled-marker feedback reports the preserved photo scale instead of the distorted face-edge surface extent");
 assert.match(controller, /photoDiameterEstimateMm:\s*layerContract\.showDiameterEstimate\s*\?\s*state\.diameterMm/, "workflow restores the standalone subcutaneous diameter estimate input");
 assert.match(controller, /candidateLengthMm:\s*Number\(candidate\.length_mm\)/,
   "the merged photo renderer consumes the computed linear length instead of re-projecting a curved standard face");
 assert.match(controller, /incisionPhotoStatusPresentation\(/,
   "the merged canvas status reuses the standalone photo projection status contract");
-assert.match(incisionRail, /<TumorInputPanel\s+showDepthControl={false}\s*\/>/, "workflow hides the currently non-operative depth control");
+assert.match(incisionRail, /<TumorInputPanel\s+showDepthControl={false}\s+continuousFreehand\s*\/>/,
+  "workflow hides the non-operative depth control and explicitly enables continuous freehand drawing");
 assert.match(tumorInputPanel, /showDepthControl\s*=\s*true/, "the standalone incision page retains its legacy depth-control default");
 assert.match(tumorInputPanel, /visible={!cutaneous\s*&&\s*showDepthControl}/, "depth data remains mounted behind an explicit presentation boundary");
 assert.match(controller, /controlledMarkerScale\?\.sourceRevision === frame\.revision/, "workflow caches one marker scale per photo revision");
 assert.match(controller, /state\.controlledMarkerScale = null;[\s\S]*?state\.photoFrameRevision = frame\.revision/, "a new photo revision invalidates the cached marker scale");
+assert.match(controller, /function resetWorkflowForSourceChange\([\s\S]*?state\.centerRef = null;[\s\S]*?state\.boundaryRefs = \[\];[\s\S]*?invalidateCandidate\(state[\s\S]*?setSelection\(\{ centerRef: null, boundaryRefs: \[\] \}\)/,
+  "a new media revision clears the current lesion, boundary and candidate from the shared canvas");
+assert.match(controller, /function resetWorkflowForSourceChange\([\s\S]*?clearWorkflowDraftOverlay\(state\)/,
+  "source replacement synchronously removes stale boundary and candidate SVG paths before new landmarks arrive");
+assert.match(controller, /revision !== state\.lastSourceRevision[\s\S]*?resetWorkflowForSourceChange\(state, revision\)/,
+  "the live-source bridge resets all media-bound incision state when an upload replaces the photo");
 assert.match(controller, /downloadCanvasWithSvgOverlayPng/, "workflow screenshot export includes the merged SVG drawing layer");
 assert.match(controller, /async function importTumor[\s\S]*?resetMarkerRepair\(state\);[\s\S]*?state\.markerMode = false;/,
   "tumor import cancels an in-flight marker request before replacing planning state");
@@ -127,6 +252,10 @@ const controlledMarkerHandler = controller.slice(
   controller.indexOf("async function runControlledMarker"),
   controller.indexOf("function pathData"),
 );
+assert.doesNotMatch(controlledMarkerHandler, /state\.boundaryMode = "freehand"/,
+  "a successful controlled-marker result keeps the visible acquisition mode on ellipse");
+assert.match(controller, /case "controlled_marker":[\s\S]*?state\.boundaryMode === "freehand"[\s\S]*?FREEHAND_MARKER_DISABLED_MESSAGE[\s\S]*?return;/,
+  "clicking the visually disabled marker control in freehand mode publishes its reason without starting acquisition");
 assert.match(controlledMarkerHandler, /controlledMarkerPixelsPerMm\(state, frame, seed, photoProjection\.surfaceLandmarks\)/,
   "controlled-marker detection uses the same stable scale as its scan circle");
 assert.ok(
@@ -141,9 +270,11 @@ assert.ok(
 );
 assert.ok(
   controlledMarkerHandler.lastIndexOf("workflowPhotoOpeningIntersection")
-    < controlledMarkerHandler.indexOf("sourcePointToSurfaceRef(detection.center"),
+    < controlledMarkerHandler.indexOf("workflowSurfaceRefAtSource(state, frame, detection.center"),
   "the detected photo footprint is checked before surface snapping can erase opening information",
 );
+assert.match(controlledMarkerHandler, /detection\.boundary[\s\S]*?workflowSurfaceRefAtSource\(state, frame, point\)/,
+  "controlled-marker boundaries share the bounded outer-face recovery used by ordinary photo picks");
 assert.match(liveRail, /<LiveSourceControlsPanel\s*\/>/, "workflow receives the existing Live upload controls through its only left rail");
 assert.match(liveRail, /<LiveRenderControlsPanel\s*\/>/, "workflow receives the existing Live mirror control through its only left rail");
 assert.match(liveSourceControls, /commands\.source\("upload_source"\)/, "the shared photo upload dispatches the single Live source command");
@@ -152,7 +283,6 @@ assert.doesNotMatch(canvasTools, /upload_source|mirror_toggle/, "the incision ov
 assert.match(liveCanvasFit, /mirror:\s*renderState\.mirror/, "shared planning coordinates consume the current Live mirror state");
 for (const panel of [
   "TumorInputPanel",
-  "SecondaryCuePanel",
   "CandidateResultPanel",
   "ReviewControlsPanel",
   "CandidateLibraryPanel",
@@ -160,16 +290,64 @@ for (const panel of [
 ]) {
   assert.match(incisionRail, new RegExp(`<${panel}\\b`), `workflow incision rail includes ${panel}`);
 }
+assert.doesNotMatch(incisionRail, /SecondaryCuePanel|高级研究辅助线索/,
+  "the merged workflow no longer mounts the retired advanced research cue panel");
+assert.match(standaloneIncision, /hidden aria-hidden="true" data-retired-secondary-cue-compatibility>[\s\S]*?<SecondaryCuePanel/,
+  "the standalone page keeps the retired cue DOM as a hidden runtime compatibility layer");
+assert.match(tumorInputPanel, /continuousFreehand\s*=\s*false/,
+  "the standalone incision page keeps its historical point-by-point freehand contract by default");
+assert.match(tumorInputPanel, /id="runWorkflowBtn"[\s\S]*?>重新计算候选<\/Button>/,
+  "the explicit workflow action is named as a recalculation rather than an unexplained first-time generation");
+assert.match(tumorInputPanel, /自由轮廓鼠绘/,
+  "the merged panel names the continuous interaction as freehand drawing rather than discrete points");
 assert.doesNotMatch(incisionRail, /IncisionStatePanel/,
   "workflow removes the duplicate incision state card while the standalone incision page keeps it");
 assert.match(incisionRail, /<CandidateResultPanel\s+showWorkflowGuidance={false}\s*\/>/,
   "workflow keeps the candidate result card but hides duplicate generated/review guidance");
-assert.match(incisionRail, /<CandidateLibraryPanel\s+automaticOverlay\s+showHandoffStatus={false}\s*\/>/,
-  "workflow removes the second copy of canvas handoff status from the candidate library");
+assert.match(incisionRail, /<CandidateLibraryPanel[\s\S]*?automaticOverlay[\s\S]*?showHandoffStatus={false}[\s\S]*?showDirectionVariants={false}[\s\S]*?showJsonExport={false}[\s\S]*?showSaveAndExportActions={false}[\s\S]*?showCandidateRowActions[\s\S]*?\/>/,
+  "workflow hides redundant top-level actions while retaining each record's load and delete controls");
 assert.match(candidateResultPanel, /showWorkflowGuidance\s*=\s*true/,
   "standalone candidate results retain their existing guidance by default");
 assert.match(candidateLibraryPanel, /showHandoffStatus\s*=\s*true/,
   "standalone candidate library retains its existing handoff status by default");
+assert.match(candidateLibraryPanel, /showDirectionVariants\s*=\s*true/,
+  "standalone candidate library retains its historical direction-variant action by default");
+assert.match(candidateLibraryPanel, /showJsonExport\s*=\s*true/,
+  "standalone candidate library retains its historical review JSON action by default");
+assert.match(candidateLibraryPanel, /showSaveAndExportActions\s*=\s*true/,
+  "standalone candidate library retains its historical save and export actions by default");
+assert.match(candidateLibraryPanel, /showCandidateRowActions\s*=\s*true/,
+  "standalone candidate library retains its historical candidate-row actions by default");
+assert.match(controller, /function saveReview[\s\S]*?state\.saved = \[\.\.\.state\.saved\.filter\(\(item\) => item\.id !== record\.id\), record\];/,
+  "saving the selected review state also persists the reviewed candidate in the library");
+assert.match(controller, /candidate:\s*diagnosticCandidateVisible\s*\?\s*null\s*:\s*buildIncisionCandidateSnapshot\(state\.result\)/,
+  "a red diagnostic outline is not exposed as a current candidate or counted by candidate actions");
+assert.match(controller, /assessDiagnosticReviewAcknowledgement[\s\S]*?diagnostic_review_acknowledged/,
+  "red diagnostic review uses the shared note gate and a non-candidate acknowledgement path");
+assert.match(reviewControlsPanel, /id="reviewNotes"[\s\S]*?notesAttentionRequired[\s\S]*?aria-invalid/,
+  "a missing diagnostic or high-risk review note is highlighted at the nearby notes field");
+assert.match(controller, /红色虚线表示候选进入敏感开口，已阻断且不会保存；请调整位置或范围。/,
+  "the red diagnostic canvas warning is concise and explicitly says it is not saved");
+assert.match(controller, /无法导出肿物：请先在中央照片上选择肿物位置。/,
+  "tumor export explains its required position instead of appearing unresponsive");
+assert.match(controller, /已触发肿物输入 JSON 下载。文件不包含原始照片。[\s\S]*?publish\(state, "tumor_exported"\)/,
+  "successful tumor export publishes visible completion feedback");
+assert.match(incisionExport, /host\.append\(anchor\);[\s\S]*?anchor\.click\(\);[\s\S]*?anchor\.remove\(\);/,
+  "text export mounts a temporary download anchor for browser-compatible activation and then removes it");
+assert.match(controller, /肿物导出失败：[\s\S]*?publish\(state, "tumor_export_failed"\)/,
+  "tumor export reports synchronous browser download failures instead of appearing unresponsive");
+assert.match(controller, /const visible = frame\?\.kind === "image" && Boolean\(frame\.landmarks\?\.length\);/,
+  "photo candidate rendering does not switch away from the workflow SVG when review status activates the live overlay");
+assert.match(controller, /focused_photo_edit_blocked/,
+  "focused local views reject edits so full-face remains the only geometry authoring source");
+assert.match(render2d, /sourceState\.sourceKind === "image" && renderState\.workflowPhotoOverlay/,
+  "the live canvas avoids double-drawing an approved candidate while the workflow SVG owns photo rendering");
+assert.match(render2d, /CustomEvent\("langerface:focus-crop-changed"\)/,
+  "focus crop changes publish an explicit redraw signal for the workflow SVG");
+assert.match(controller, /addEventListener\("langerface:focus-crop-changed"[\s\S]*?scheduleOverlayDraw/,
+  "the workflow SVG redraws after the canvas focus crop has been computed");
+assert.match(canvasTools, /aria-label="切口标注图例"[\s\S]*?病灶中心[\s\S]*?肿物范围[\s\S]*?候选切口[\s\S]*?端点控制/,
+  "workflow restores the four-item canvas legend in the shared stage");
 assert.doesNotMatch(incisionRail, /打开独立切口工作台/, "workflow no longer substitutes navigation for incision controls");
 assert.doesNotMatch(controller, /createPhotoPlanningController|incisionRuntime|sessionStorage/, "workflow incision controller owns no canvas runtime or page handoff storage");
 assert.match(controller, /sourceState\.planning2d\?\.getFrameState\(\)/, "workflow incision controller consumes the shared live planning frame");
@@ -186,6 +364,10 @@ assert.match(styles, /grid-template-columns:\s*clamp\(320px,\s*21\.25vw,\s*340px
 assert.match(styles, /\.workflow-workbench \.zoom-strip\s*{[^}]*max-height:/s, "zoom strip is bounded so it cannot crowd out the main face canvas");
 assert.match(styles, /\.workflow-incision-overlay \[data-workflow-candidate\]\s*{[^}]*stroke:\s*#003b73;[^}]*stroke-width:\s*1;/s,
   "workflow restores the legacy matte dark-blue one-CSS-pixel candidate stroke");
+assert.match(canvasTools, /data-workflow-diagnostic-candidate/,
+  "the merged SVG owns a separate display-only diagnostic candidate layer");
+assert.match(styles, /\[data-workflow-diagnostic-candidate\]\s*{[^}]*stroke:\s*#ef4444;[^}]*stroke-dasharray:/s,
+  "a rejected diagnostic candidate is a distinct red dashed line without restyling the valid candidate");
 assert.match(styles, /\.workflow-incision-overlay \[data-workflow-marker-scan-circle\]\s*{[^}]*border-radius|\.workflow-incision-overlay \[data-workflow-marker-scan-circle\]\s*{[^}]*stroke:/s,
   "workflow scan feedback has an explicit visible circular stroke");
 const unlayeredOverrides = styles.indexOf("/* Critical, unlayered overrides");
@@ -206,6 +388,20 @@ assert.match(styles, /@media \(max-width:\s*1280px\)\s*{[\s\S]*?\.workflow-workb
 const clickIntent = beginWorkflowPointerIntent(1, 0, 10, 10);
 updateWorkflowPointerIntent(clickIntent, 1, 13, 13);
 assert.equal(completesWorkflowCanvasClick(clickIntent, 1), true, "small pointer jitter remains a lesion-selection click");
+assert.deepEqual(
+  workflowFocusViewportPoint(
+    { x: 400, y: 260 },
+    { width: 1000, height: 800 },
+    { sx: 200, sy: 100, sw: 400, sh: 320 },
+  ),
+  { x: 500, y: 400 },
+  "the same surface-projected source point is reprojected into the focused crop viewport",
+);
+assert.deepEqual(
+  workflowFocusViewportPoint({ x: 400, y: 260 }, { width: 1000, height: 800 }, null),
+  { x: 400, y: 260 },
+  "full-face view keeps source coordinates unchanged",
+);
 const dragIntent = beginWorkflowPointerIntent(2, 0, 10, 10);
 updateWorkflowPointerIntent(dragIntent, 2, 18, 10);
 assert.equal(completesWorkflowCanvasClick(dragIntent, 2), false, "canvas panning is not misread as lesion selection");
@@ -220,6 +416,218 @@ assert.equal(workflowCandidateDisplayAllowed({ candidate_display_blocked: true }
   "hard-blocked candidates never reach the merged draft renderer");
 assert.equal(workflowCandidateDisplayAllowed({ candidate_display_blocked: false }, true), true,
   "valid projected candidates remain visible");
+assert.equal(workflowDiagnosticCandidateVisible({
+  candidate_display_blocked: true,
+  candidate: { hard_violations: [{ code: "candidate_outside_canonical_surface" }] },
+} as any, true, 40), false,
+"a general face-surface exit never borrows the red style reserved for sensitive openings");
+assert.equal(workflowDiagnosticCandidateVisible({
+  candidate_display_blocked: true,
+  candidate: { hard_violations: [{ code: "candidate_intersects_non_skin_opening" }] },
+} as any, true, 40), true,
+"an eye, mouth or nostril opening rejection remains available to the red diagnostic renderer");
+assert.equal(workflowDiagnosticCandidateVisible({ candidate_display_blocked: true }, true, 40, "left-nostril-opening"), true,
+  "a photo-space nostril crossing independently qualifies for the sensitive red diagnostic layer");
+assert.equal(workflowDiagnosticCandidateVisible({ candidate_display_blocked: false }, false, 40), false,
+  "a generic failed photo projection is withheld instead of being colored as a sensitive-opening diagnosis");
+assert.equal(workflowDiagnosticCandidateVisible({ candidate_display_blocked: false }, true, 40), false,
+  "a valid candidate never receives the red diagnostic style");
+assert.equal(workflowDiagnosticCandidateVisible({ candidate_display_blocked: true }, false, 0), false,
+  "the diagnostic layer does not invent geometry when no candidate points exist");
+assert.equal(workflowUpperForeheadSurfaceRecoveryActive({
+  canonicalSurfaceOnly: true,
+  projectionValid: true,
+  smoothingMode: "photoCanonical",
+  meshOutsideCount: 8,
+  surfaceOutsideCount: 0,
+  rstlSupportedMeshOutsideCount: 8,
+}), true, "a fully RSTL-supported upper-forehead mesh gap can recover the photo display gate");
+assert.equal(workflowUpperForeheadSurfaceRecoveryActive({
+  canonicalSurfaceOnly: true,
+  projectionValid: true,
+  smoothingMode: "photoCanonical",
+  meshOutsideCount: 0,
+  surfaceOutsideCount: 0,
+  rstlSupportedMeshOutsideCount: 0,
+  upperForeheadPointCount: 72,
+  pointCount: 72,
+} as any), true,
+"a lower safe-forehead candidate already contained by the extended photo mesh does not fail merely because it has zero mesh-outside points");
+assert.equal(workflowPhotoSurfaceReferenceRecoveryEligible({
+  candidate_display_blocked: true,
+  tumor_engineering_validation: { passed: true },
+  candidate: { hard_violations: [{ code: "candidate_outside_canonical_surface" }] },
+  candidate_alternatives: [{
+    candidate: { hard_violations: [{ code: "candidate_intersects_non_skin_opening" }] },
+  }],
+}), true,
+"upper-forehead recovery audits the displayed primary candidate instead of inheriting unrelated hidden-variant failures");
+assert.equal(workflowPhotoSurfaceReferenceRecoveryEligible({
+  candidate_display_blocked: true,
+  tumor_engineering_validation: { passed: true },
+  candidate: { hard_violations: [
+    { code: "candidate_outside_canonical_surface" },
+    { code: "candidate_intersects_non_skin_opening" },
+  ] },
+}), false, "a real opening violation on the displayed candidate still blocks forehead recovery");
+assert.equal(workflowVisibilityLimitedReferenceDisplayActive({
+  canonicalSurfaceOnly: true,
+  projectionValid: true,
+  smoothingMode: "limitedVisibility",
+  visibilityLimited: true,
+  hiddenPointCount: 9,
+  visibleFraction: 0.68,
+}), true, "a geometry-vetted single hidden tip uses the blue view-limited reference layer");
+assert.equal(workflowVisibilityLimitedReferenceDisplayActive({
+  canonicalSurfaceOnly: false,
+  projectionValid: true,
+  smoothingMode: "limitedVisibility",
+  visibilityLimited: true,
+  hiddenPointCount: 9,
+  visibleFraction: 0.68,
+}), false, "sensitive-opening failures cannot borrow the view-limited blue reference path");
+assert.equal(workflowVisibilityLimitedReferenceDisplayActive({
+  canonicalSurfaceOnly: true,
+  projectionValid: true,
+  smoothingMode: "limitedVisibility",
+  visibilityLimited: true,
+  hiddenPointCount: 9,
+  visibleFraction: 0.5,
+  openingIntersection: "left-nostril-opening",
+}), false, "a full candidate crossing an eye, mouth or nostril cannot borrow the blue view-limited path");
+assert.equal(workflowVisibilityLimitedReferenceDisplayActive({
+  canonicalSurfaceOnly: true,
+  projectionValid: true,
+  smoothingMode: "limitedVisibility",
+  visibilityLimited: true,
+  hiddenPointCount: 9,
+  visibleFraction: 0.5,
+  openingIntersection: null,
+}), true, "approximately half-visible geometry remains eligible when the full candidate avoids photo openings");
+assert.match(controller, /photo_visibility_limited_candidate = visibilityLimitedReference[\s\S]*?photo_visible_fraction = geometry\.candidateProjection\.visibleFraction/,
+  "the merged workflow publishes the established visibility-reference metrics used by review and presenter gates");
+assert.match(controller, /state\.kind === "cutaneous" && candidate\.type === "fusiform"/,
+  "controlled and freehand fusiform candidates receive the same stable photo metric scale as ellipse candidates");
+assert.match(controller, /candidateDisplayBlocked = \(state\.result\.candidate_display_blocked === true && !displayRecoveryActive\)[\s\S]*?Boolean\(photoOpeningIntersection\)/,
+  "a photo-space sensitive opening blocks the blue layer even when model-space projection looked valid");
+for (const unsafeRecovery of [
+  { canonicalSurfaceOnly: false, projectionValid: true, smoothingMode: "photoCanonical", meshOutsideCount: 8, surfaceOutsideCount: 0, rstlSupportedMeshOutsideCount: 8 },
+  { canonicalSurfaceOnly: true, projectionValid: false, smoothingMode: "photoCanonical", meshOutsideCount: 8, surfaceOutsideCount: 0, rstlSupportedMeshOutsideCount: 8 },
+  { canonicalSurfaceOnly: true, projectionValid: true, smoothingMode: "photoCanonical", meshOutsideCount: 8, surfaceOutsideCount: 1, rstlSupportedMeshOutsideCount: 8 },
+  { canonicalSurfaceOnly: true, projectionValid: true, smoothingMode: "photoCanonical", meshOutsideCount: 8, surfaceOutsideCount: 0, rstlSupportedMeshOutsideCount: 7 },
+  { canonicalSurfaceOnly: true, projectionValid: true, smoothingMode: "constrainedReference", meshOutsideCount: 8, surfaceOutsideCount: 0, rstlSupportedMeshOutsideCount: 8 },
+]) {
+  assert.equal(workflowUpperForeheadSurfaceRecoveryActive(unsafeRecovery), false,
+    "other hard violations, invalid projections, incomplete RSTL support, and nonstandard references stay blocked");
+}
+assert.match(controller, /geometry\.candidateProjection\.valid\s*\?\s*geometry\.candidate\.length\s*:\s*geometry\.diagnosticCandidate\.length/,
+  "diagnostic visibility counts the actual rejected geometry rather than the undersized source fallback");
+assert.match(controller, /geometry\?\.candidateProjection\.valid[\s\S]*?geometry\?\.diagnosticCandidate \|\| \[\][\s\S]*?geometry\?\.diagnosticFusiformRendering/,
+  "the red path switches to the separate rejected fit whenever photo projection fails");
+assert.match(photoPlanning, /const projectionGateReason[\s\S]*?diagnosticFusiformRendering[\s\S]*?"photo_surface_exit"/,
+  "the reported failure reason stays tied to the actual rejected outline shown in red");
+assert.match(controller, /红色虚线表示候选进入敏感开口，已阻断且不会保存/,
+  "the status reserves the red line for a sensitive non-skin opening instead of a general face-surface exit");
+assert.match(controller, /无法完整覆盖肿物边界，因此不显示容易误解的红色轮廓/,
+  "a boundary-coverage failure produces a precise warning without drawing an undersized candidate");
+assert.equal(workflowProjectionStatusMayOverride("candidate_result", "候选已生成并等待审阅"), true,
+  "a new candidate result may publish its projection or diagnostic status");
+assert.equal(workflowProjectionStatusMayOverride("workflow_photo_readiness_changed", "照片状态变化"), true,
+  "a photo projection refresh may publish the candidate projection status");
+assert.equal(workflowProjectionStatusMayOverride("tumor_opening_photo_rejected", "识别范围进入眼裂"), false,
+  "an opening rejection cannot be overwritten by an older red diagnostic candidate");
+assert.equal(workflowProjectionStatusMayOverride("freehand_boundary_open", "轮廓尚未闭合"), false,
+  "a freehand interaction warning cannot be overwritten by candidate presentation");
+const freehandPointerUpSource = controller.slice(
+  controller.indexOf("function handleFreehandPointerUp"),
+  controller.indexOf("function handleCanvasPointerDown"),
+);
+assert.doesNotMatch(freehandPointerUpSource, /recoverWorkflowFreehandBoundary|runWorkflow\(/,
+  "pointer-up only pauses sampling; it cannot recognize the boundary or generate a candidate before explicit completion");
+assert.match(controller, /case "toggle_boundary":[\s\S]*?finalizeWorkflowFreehandBoundary\(state\)/,
+  "the explicit end-drawing command owns freehand recognition and candidate generation");
+assert.match(controller, /boundaryMode === "freehand"[\s\S]*?当前已有自由轮廓肿物边界[\s\S]*?再次点击“开始描绘”[\s\S]*?切换为“椭圆近似”[\s\S]*?freehand_inactive_canvas_click_blocked/,
+  "an inactive freehand mode explains how to redraw or return to ellipse simulation without ambiguous mode language");
+const closedDisplayStroke = [
+  { x: 10, y: 10 }, { x: 20, y: 8 }, { x: 30, y: 10 }, { x: 32, y: 20 },
+  { x: 30, y: 30 }, { x: 20, y: 32 }, { x: 10, y: 30 }, { x: 11, y: 11 },
+];
+assert.equal(workflowFreehandBoundaryClosed(closedDisplayStroke), true,
+  "a continuous stroke closes only when enough samples return to the visible starting point");
+assert.equal(workflowFreehandBoundaryClosed([...closedDisplayStroke.slice(0, -1), { x: 40, y: 40 }]), false,
+  "an open freehand stroke is not silently joined across a visible gap");
+assert.equal(workflowFreehandContinuationAllowed(closedDisplayStroke.slice(0, -1), { x: 18, y: 31 }), true,
+  "a follow-up stroke may continue near the previous endpoint");
+assert.equal(workflowFreehandContinuationAllowed(closedDisplayStroke.slice(0, -1), { x: 80, y: 80 }), false,
+  "a remote follow-up stroke cannot insert an unreviewed straight gap");
+const roughBoundary = [
+  { x: 10, y: 10 }, { x: 18, y: 9 }, { x: 20, y: 10 }, { x: 30, y: 10 },
+  { x: 31, y: 18 }, { x: 30, y: 20 }, { x: 30, y: 30 }, { x: 22, y: 31 },
+  { x: 20, y: 30 }, { x: 10, y: 30 }, { x: 9, y: 22 }, { x: 10, y: 20 },
+];
+const smoothedBoundary = smoothWorkflowClosedBoundary(roughBoundary);
+assert.equal(smoothedBoundary.length, 48, "a valid mouse-drawn loop is resampled to a stable smooth closed boundary");
+const smoothBoundaryPath = workflowClosedBoundarySvgPath(smoothedBoundary);
+assert.match(smoothBoundaryPath, /^M .* Q .* Z$/, "tumor boundaries render as a smooth closed quadratic path");
+assert.doesNotMatch(smoothBoundaryPath, / L /, "the final tumor boundary is not downgraded to a jagged polygon");
+const tailedFreehandStroke = [
+  { x: -14, y: 10 }, { x: 0, y: 10 }, { x: 0, y: 0 }, { x: 10, y: -2 },
+  { x: 20, y: 0 }, { x: 24, y: 10 }, { x: 20, y: 20 }, { x: 10, y: 22 },
+  { x: 0, y: 20 }, { x: 0, y: 10 }, { x: -4, y: 5 },
+];
+const recoveredFreehand = recoverWorkflowFreehandBoundary(
+  tailedFreehandStroke.map((point) => ({ source: point, display: point })),
+);
+assert.equal(recoveredFreehand.length, 48,
+  "freehand recovery extracts and smooths the main loop from a stroke that crosses itself after an entry tail");
+assert.ok(Math.min(...recoveredFreehand.map((point) => point.x)) > -2,
+  "the recovered main loop trims the protruding entry and exit tail instead of smoothing it into the lesion");
+const recoveredCenter = workflowBoundaryCentroid(recoveredFreehand);
+assert.ok(recoveredCenter && Math.abs(recoveredCenter.x - 10) < 1 && Math.abs(recoveredCenter.y - 10) < 1,
+  "the recovered loop supplies a new planning center instead of retaining the pre-freehand click");
+const nearClosedStroke = [
+  { x: 0, y: 0 }, { x: 10, y: -3 }, { x: 20, y: 0 }, { x: 24, y: 10 },
+  { x: 20, y: 20 }, { x: 10, y: 23 }, { x: 0, y: 20 }, { x: -4, y: 10 }, { x: 5, y: 4 },
+];
+assert.equal(recoverWorkflowFreehandBoundary(
+  nearClosedStroke.map((point) => ({ source: point, display: point })),
+).length, 48, "a visually closed stroke may recover within the display tolerance without pixel-perfect endpoint alignment");
+const proportionallyNearClosedStroke = [
+  { x: 0, y: 0 }, { x: 30, y: -15 }, { x: 60, y: 0 }, { x: 75, y: 30 },
+  { x: 60, y: 60 }, { x: 30, y: 75 }, { x: 0, y: 60 }, { x: -15, y: 30 }, { x: -6, y: 36 },
+];
+assert.equal(recoverWorkflowFreehandBoundary(
+  proportionallyNearClosedStroke.map((point) => ({ source: point, display: point })),
+).length, 48, "a short endpoint gap is judged against the full drawn loop instead of a fixed 24-pixel cutoff");
+const openHorseshoeStroke = [
+  { x: -20, y: 0 }, { x: -30, y: 20 }, { x: -20, y: 40 }, { x: 0, y: 50 },
+  { x: 20, y: 40 }, { x: 30, y: 20 }, { x: 26, y: 8 }, { x: 20, y: 0 },
+];
+assert.equal(recoverWorkflowFreehandBoundary(
+  openHorseshoeStroke.map((point) => ({ source: point, display: point })),
+).length, 0, "an obviously open horseshoe is not force-closed by the adaptive endpoint tolerance");
+assert.equal(workflowPhotoBoundaryEnclosingDiameterMm(
+  { x: 100, y: 80 },
+  [{ x: 90, y: 80 }, { x: 100, y: 70 }, { x: 110, y: 80 }, { x: 100, y: 90 }],
+  2,
+), 10, "controlled-marker planning preserves the photo-space enclosing diameter before face-edge surface snapping");
+const mainLoopWithCrossedSpike = [
+  { x: 0, y: 0 }, { x: 10, y: -3 }, { x: 20, y: 0 }, { x: 24, y: 10 },
+  { x: 20, y: 20 }, { x: 10, y: 23 }, { x: 0, y: 20 }, { x: -4, y: 10 }, { x: 2, y: 2 },
+  { x: 8, y: 2 }, { x: 14, y: -5 }, { x: 22, y: -5 }, { x: 28, y: 2 },
+  { x: 28, y: 10 }, { x: 22, y: 17 }, { x: 14, y: 17 }, { x: 8, y: 10 }, { x: 8, y: 2 },
+];
+const recoveredMainOverSpike = recoverWorkflowFreehandBoundary(
+  mainLoopWithCrossedSpike.map((point) => ({ source: point, display: point })),
+);
+assert.ok(recoveredMainOverSpike.length === 48 && Math.max(...recoveredMainOverSpike.map((point) => point.x)) < 26,
+  "a small exact crossed spike cannot outrank a substantially larger near-closed lesion loop");
+assert.deepEqual(workflowBoundaryModeTransition("freehand", "select"), {
+  boundaryActive: true, clearCenter: true, mayGenerateCandidate: false,
+}, "switching into freehand mode invalidates the ellipse center and cannot regenerate the old candidate");
+assert.deepEqual(workflowBoundaryModeTransition("freehand", "clear"), {
+  boundaryActive: true, clearCenter: true, mayGenerateCandidate: false,
+}, "clearing a freehand boundary keeps drawing active while preventing the old ellipse candidate from returning");
 const scanCircle = workflowScanCircleGeometry({
   sourcePoint: { x: 100, y: 80 },
   scanDiameterMm: 20,
@@ -276,6 +684,15 @@ const mildEllipseSpan = ellipseSpan(workflowPhotoEllipseBoundary({
 assert.ok(Math.abs(mildEllipseSpan.width - 28) < 1e-9
   && Math.abs(mildEllipseSpan.height - 25.2) < 1e-9,
 "the merged-page default can represent a near-circular cutaneous lesion without a strong 70% flattening");
+const verticalEllipseSpan = ellipseSpan(workflowPhotoEllipseBoundary({
+  center: { x: 100, y: 80 },
+  diameterMm: 14,
+  ellipseRatio: 150,
+  pixelsPerMm: 2,
+}));
+assert.ok(Math.abs(verticalEllipseSpan.width - 28) < 1e-9
+  && Math.abs(verticalEllipseSpan.height - 42) < 1e-9,
+"a ratio above 100 percent makes the vertical reference axis longer without pretending it is a fixed minor axis");
 
 assert.deepEqual(
   workflowCenteredLinearPath([[0, 0, 0], [10, 0, 0]], [5, 1, 0]),
@@ -323,6 +740,23 @@ assert.equal(
   null,
   "a scan footprint on mapped skin remains eligible",
 );
+assert.equal(
+  workflowPhotoOpeningIntersection(workflowPhotoCircleFootprint({ x: 40.5, y: 53 }, 1), projectedLandmarks),
+  "left-nostril-opening",
+  "photo-space nostril masks retain the established image-y-down location",
+);
+assert.equal(
+  workflowPhotoOpeningIntersection(workflowPhotoCircleFootprint({ x: 40.5, y: 46 }, 1), projectedLandmarks),
+  null,
+  "visible nasal-bridge skin above the photographed nostril aperture remains selectable",
+);
+
+assert.match(incisionSnapshots, /reviewerLabel:\s*`审阅人：\$\{rec\.review\?\.reviewer \|\| "未填写"\}`/,
+  "candidate summaries expose their own reviewer instead of the current review form");
+assert.match(incisionSnapshots, /reviewNotesLabel:\s*`审阅备注：\$\{rec\.review\?\.notes \|\| "无"\}`/,
+  "candidate summaries use 无 for an empty record-level review note");
+assert.match(candidateLibraryPanel, /item\.reviewerLabel[\s\S]*?item\.reviewNotesLabel/,
+  "candidate rows render reviewer and notes as record-level metadata");
 const closedMouthLandmarks = projectedLandmarks.map((point) => [...point] as Vec3);
 const upperInnerLip = [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308];
 const lowerInnerLip = [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308];

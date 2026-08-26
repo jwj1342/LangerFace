@@ -72,6 +72,9 @@ export interface IncisionReviewState {
   status: string;
   reviewer: string;
   notesPresent: boolean;
+  reviewerAttentionRequired: boolean;
+  decisionAttentionRequired: boolean;
+  notesAttentionRequired: boolean;
 }
 
 export interface IncisionEditState {
@@ -134,6 +137,8 @@ export interface IncisionSavedCandidateSummary {
   statusLabel: string;
   statusDanger: boolean;
   meta: string;
+  reviewerLabel: string;
+  reviewNotesLabel: string;
 }
 
 export interface IncisionWorkflowRuntime {
@@ -221,6 +226,7 @@ export interface IncisionSavedCandidateRecordLike {
   } | null;
   review?: {
     reviewer?: string;
+    notes?: string;
   } | null;
   review_status?: string;
   guardrails?: {
@@ -336,11 +342,17 @@ export function buildIncisionReviewSnapshot({
   status = "pending_clinician_confirmation",
   reviewer = "",
   notesPresent = false,
+  reviewerAttentionRequired = false,
+  decisionAttentionRequired = false,
+  notesAttentionRequired = false,
 }: Partial<IncisionReviewState>): IncisionReviewState {
   return {
     status,
     reviewer: reviewer.trim(),
     notesPresent: Boolean(notesPresent),
+    reviewerAttentionRequired: Boolean(reviewerAttentionRequired),
+    decisionAttentionRequired: Boolean(decisionAttentionRequired),
+    notesAttentionRequired: Boolean(notesAttentionRequired),
   };
 }
 
@@ -455,7 +467,6 @@ export function buildIncisionSavedCandidateSummaries({
   const comparisonById = new Map(comparisons.map((comparison) => [comparison.id, comparison]));
   return records.map((rec) => {
     const comparison = comparisonById.get(rec.id);
-    const reviewer = rec.review?.reviewer ? ` · 审阅人 ${rec.review.reviewer}` : "";
     const guardrails = rec.guardrails?.passed ? "guardrails 通过" : "guardrails 需复核";
     const rank = comparison
       ? `工程排序 #${comparison.rank} · 分 ${formatIncisionMetric(comparison.score, 1)} · ${(comparison.reasons || []).slice(0, 2).join("；")} · `
@@ -465,7 +476,9 @@ export function buildIncisionSavedCandidateSummaries({
       title: `${rec.label} · ${rec.candidate?.type === "linear" ? "线性" : "梭形"}`,
       statusLabel: reviewStatusLabel(rec.review_status),
       statusDanger: rec.review_status === "rejected_by_clinician" || !rec.guardrails?.passed,
-      meta: `${rank}长度 ${formatIncisionMetric(rec.candidate?.length_mm)} mm · 区域 ${rec.anatomy?.region || "—"} · ${guardrails}${reviewer} · ${rec.created_at}`,
+      meta: `${rank}长度 ${formatIncisionMetric(rec.candidate?.length_mm)} mm · 区域 ${rec.anatomy?.region || "—"} · ${guardrails} · ${rec.created_at}`,
+      reviewerLabel: `审阅人：${rec.review?.reviewer || "未填写"}`,
+      reviewNotesLabel: `审阅备注：${rec.review?.notes || "无"}`,
     };
   });
 }

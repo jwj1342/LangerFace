@@ -1,5 +1,5 @@
 export const DEFAULT_RULES = {
-  version: "0.3-deterministic-incision-workflow",
+  version: "0.4-deterministic-incision-workflow",
   review_status: "draft_not_clinically_validated",
   last_reviewed_at: "2026-06-24",
   linear_subcutaneous: {
@@ -10,7 +10,7 @@ export const DEFAULT_RULES = {
   fusiform_cutaneous: {
     length_to_width_ratio: 3,
     tip_angle_deg: 30,
-    min_length_mm: 12,
+    min_length_mm: 6,
     max_length_mm: 80,
     samples: 56,
   },

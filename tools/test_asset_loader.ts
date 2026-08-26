@@ -12,7 +12,6 @@ import { modelState } from "../web/src/services/liveState.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const {
   FaceLandmarker,
-  FilesetResolver,
   HandLandmarker,
 } = await import(pathToFileURL(join(
   root,
@@ -208,12 +207,17 @@ for (const rel of ["web/src/services/pipelineModels.ts"]) {
     `${rel} shares the complete initialization attempt`);
   assert.match(source, /readyPromise = null;\s*throw error;/,
     `${rel} clears a failed attempt before retry`);
+  assert.match(source, /vision_wasm_internal\.js/,
+    `${rel} bundles the MediaPipe WASM loader locally`);
+  assert.match(source, /vision_wasm_internal\.wasm/,
+    `${rel} bundles the MediaPipe WASM binary locally`);
+  assert.doesNotMatch(source, /FilesetResolver\.forVisionTasks\([^)]*CDN/,
+    `${rel} does not make photo readiness depend on the public MediaPipe CDN`);
 }
 
 {
   const originalLoadTopology = dataSource.loadTopology;
   const originalLoadAtlas = dataSource.loadAtlas;
-  const originalForVisionTasks = FilesetResolver.forVisionTasks;
   const originalCreateFace = FaceLandmarker.createFromOptions;
   const originalCreateHand = HandLandmarker.createFromOptions;
   const originalBadge = els.badge;
@@ -221,7 +225,9 @@ for (const rel of ["web/src/services/pipelineModels.ts"]) {
   const originalConsoleWarn = console.warn;
   const originalModelState = {
     landmarker: modelState.landmarker,
+    imageLandmarker: modelState.imageLandmarker,
     handLandmarker: modelState.handLandmarker,
+    imageHandLandmarker: modelState.imageHandLandmarker,
     topology: modelState.topology,
     triangles: modelState.triangles,
     noseTris: modelState.noseTris,
@@ -230,16 +236,19 @@ for (const rel of ["web/src/services/pipelineModels.ts"]) {
   };
   let topologyLoads = 0;
   let atlasLoads = 0;
-  let resolverLoads = 0;
   const faceDelegates: string[] = [];
   const handDelegates: string[] = [];
+  const faceRunningModes: string[] = [];
+  const handRunningModes: string[] = [];
   let rejectFaceAttempt = true;
   const faceModel = { kind: "face" };
   const handModel = { kind: "hand" };
 
   try {
     modelState.landmarker = null;
+    modelState.imageLandmarker = null;
     modelState.handLandmarker = null;
+    modelState.imageHandLandmarker = null;
     modelState.topology = null;
     modelState.triangles = null;
     modelState.noseTris = null;
@@ -270,39 +279,52 @@ for (const rel of ["web/src/services/pipelineModels.ts"]) {
         lines: [{ name: `${system}-line`, points: [[0, 0.2, 0.2], [0, 0.3, 0.2]] }],
       };
     };
-    FilesetResolver.forVisionTasks = async () => {
-      resolverLoads += 1;
-      return {} as never;
-    };
     FaceLandmarker.createFromOptions = async (
       _resolver: unknown,
-      options: { baseOptions?: { delegate?: unknown } },
+      options: { baseOptions?: { delegate?: unknown }; runningMode?: unknown },
     ) => {
       const delegate = String(options.baseOptions?.delegate);
       faceDelegates.push(delegate);
+      faceRunningModes.push(String(options.runningMode));
       if (rejectFaceAttempt) throw new Error(`${delegate} initialization failed`);
       return faceModel as never;
     };
     HandLandmarker.createFromOptions = async (
       _resolver: unknown,
-      options: { baseOptions?: { delegate?: unknown } },
+      options: { baseOptions?: { delegate?: unknown }; runningMode?: unknown },
     ) => {
       handDelegates.push(String(options.baseOptions?.delegate));
+      handRunningModes.push(String(options.runningMode));
       return handModel as never;
     };
 
     const moduleUrl = new URL("../web/src/services/pipelineModels.ts", import.meta.url);
     moduleUrl.searchParams.set("single-flight-test", String(Date.now()));
-    const { ensureReady } = await import(moduleUrl.href);
+    const { ensureImageReady, ensureReady } = await import(moduleUrl.href);
 
+    rejectFaceAttempt = false;
+    const imageReadyA = ensureImageReady();
+    const imageReadyB = ensureImageReady();
+    assert.strictEqual(imageReadyB, imageReadyA, "concurrent photo callers share one IMAGE initialization promise");
+    await imageReadyA;
+    assert.deepEqual(faceRunningModes, ["IMAGE"], "photo readiness creates only one IMAGE face detector");
+    assert.deepEqual(handRunningModes, ["IMAGE"], "photo readiness creates only one IMAGE hand detector");
+    assert.equal(modelState.landmarker, null, "photo readiness does not create the unused VIDEO face detector");
+    assert.equal(modelState.handLandmarker, null, "photo readiness does not create the unused VIDEO hand detector");
+    faceDelegates.length = 0;
+    handDelegates.length = 0;
+    faceRunningModes.length = 0;
+    handRunningModes.length = 0;
+
+    rejectFaceAttempt = true;
     const failedA = ensureReady();
     const failedB = ensureReady();
     assert.strictEqual(failedB, failedA, "concurrent callers share the failed initialization promise");
     await assert.rejects(failedA, /CPU initialization failed/);
     assert.deepEqual(faceDelegates, ["GPU", "CPU"], "GPU fallback runs once for one shared attempt");
+    assert.deepEqual(faceRunningModes, ["VIDEO", "VIDEO"], "continuous-frame retry remains isolated to VIDEO mode");
     assert.equal(topologyLoads, 1, "shared failed attempt loads topology once");
     assert.equal(atlasLoads, 2, "shared failed attempt loads each atlas once");
-    assert.equal(resolverLoads, 1, "shared failed attempt creates one fileset resolver");
 
     rejectFaceAttempt = false;
     const retryA = ensureReady();
@@ -318,7 +340,6 @@ for (const rel of ["web/src/services/pipelineModels.ts"]) {
   } finally {
     dataSource.loadTopology = originalLoadTopology;
     dataSource.loadAtlas = originalLoadAtlas;
-    FilesetResolver.forVisionTasks = originalForVisionTasks;
     FaceLandmarker.createFromOptions = originalCreateFace;
     HandLandmarker.createFromOptions = originalCreateHand;
     console.info = originalConsoleInfo;

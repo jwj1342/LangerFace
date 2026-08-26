@@ -2,7 +2,7 @@ import { clearCanvasDisplayFit, fitCanvasDisplayToStage } from "./liveCanvasFit.
 import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream, stopCameraStream } from "./cameraSource.ts";
 import { ctx, els } from "./liveDom.ts";
 import { prepareImageSource } from "./imageSource.ts";
-import { countMetric, logWarn } from "./logger.ts";
+import { countMetric, logWarn, recordMetricSample } from "./logger.ts";
 import {
   currentLiveSource,
   currentLiveSourceKind,
@@ -95,33 +95,50 @@ export function showCameraPlaceholder(message = ""): void {
 
 export async function handleFile(file?: File): Promise<void> {
   if (!file) return;
+  const startedAt = performance.now();
   const operationId = ++sourceOperationId;
+  const imageFile = file.type.startsWith("image/");
   let pendingObjectUrl: string | null = null;
   els.file.value = "";
   stopSource({ preserveOperation: true });
   setLive(false, "待机");
-  setMsg(file.type.startsWith("image/") ? "加载图片检测模型…" : "加载模型…");
+  setMsg(imageFile ? "图片加载中" : "加载模型…", 0, imageFile);
   try {
-    await ensureReady();
-    if (file.type.startsWith("image/")) await ensureImageReady();
-    if (operationId !== sourceOperationId) return;
-
     const url = URL.createObjectURL(file);
     pendingObjectUrl = url;
-    if (file.type.startsWith("image/")) {
+    if (imageFile) {
       try {
         const img = new Image();
         img.src = url;
-        await img.decode();
+        let modelReadyAt = startedAt;
+        let decodedAt = startedAt;
+        const modelReady = ensureImageReady().then(() => {
+          modelReadyAt = performance.now();
+        });
+        const decoded = img.decode().then(() => {
+          decodedAt = performance.now();
+        });
+        await Promise.all([modelReady, decoded]);
         if (operationId !== sourceOperationId) return;
         const prepared = prepareImageSource(img);
         setSource(prepared.source, "image", prepared.width, prepared.height);
-        if (prepared.scaled) setMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
+        const sourceSetAt = performance.now();
+        recordMetricSample("source.imageModelWaitMs", modelReadyAt - startedAt, { bytes: file.size });
+        recordMetricSample("source.imageDecodeMs", decodedAt - startedAt, { bytes: file.size });
+        recordMetricSample("source.imageUploadToSourceSetMs", sourceSetAt - startedAt, {
+          bytes: file.size,
+          width: prepared.width,
+          height: prepared.height,
+          scaled: prepared.scaled,
+        });
+        if (prepared.scaled) setMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`, 3000);
       } finally {
         URL.revokeObjectURL(url);
         pendingObjectUrl = null;
       }
     } else {
+      await ensureReady();
+      if (operationId !== sourceOperationId) return;
       els.video.srcObject = null;
       els.video.src = url;
       els.video.loop = true;
@@ -210,6 +227,7 @@ export function setSource(
 
 export function stopSource({ preserveOperation = false }: { preserveOperation?: boolean } = {}): void {
   if (!preserveOperation) sourceOperationId += 1;
+  if (!preserveOperation) setMsg(null);
   cancelFrame();
   sourceLayoutScheduler.cancel();
   sourceState.planning2d?.clearSource();

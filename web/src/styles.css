@@ -482,12 +482,27 @@
     flex: 0 0 auto;
   }
 
+  .workflow-canvas-tools .workflow-disabled-action[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .workflow-canvas-tools .workflow-disabled-action[aria-disabled="true"]:hover {
+    border-color: #3e4b59;
+    background: #151b23;
+  }
+
   .workflow-workbench .main-wrap.image-viewer {
     cursor: crosshair !important;
   }
 
   .workflow-workbench .main-wrap.image-viewer.dragging {
     cursor: grabbing !important;
+  }
+
+  .workflow-workbench .main-wrap[data-workflow-pointer-mode="freehand"],
+  .workflow-workbench .main-wrap[data-workflow-pointer-mode="freehand"] * {
+    cursor: crosshair !important;
   }
 
   .workflow-marker-scan {
@@ -533,6 +548,16 @@
     vector-effect: non-scaling-stroke;
   }
 
+  .workflow-incision-overlay [data-workflow-diagnostic-candidate] {
+    fill: none;
+    stroke: #ef4444;
+    stroke-width: 1.5;
+    stroke-dasharray: 7 5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
   .workflow-incision-overlay [data-workflow-center] {
     fill: #f43f5e;
     stroke: #0b1118;
@@ -554,7 +579,6 @@
     fill: rgb(56 189 248 / 8%);
     stroke: rgb(56 189 248 / 92%);
     stroke-width: 2;
-    stroke-dasharray: 7 5;
     vector-effect: non-scaling-stroke;
   }
 
@@ -1124,7 +1148,8 @@
     font-weight: 700;
   }
 
-  .incision-workbench .canvas-legend {
+  .incision-workbench .canvas-legend,
+  .workflow-workbench .canvas-legend {
     position: absolute;
     left: 16px;
     bottom: 16px;
@@ -1187,14 +1212,16 @@
     animation: asset-spin 0.9s linear infinite;
   }
 
-  .incision-workbench .legend-item {
+  .incision-workbench .legend-item,
+  .workflow-workbench .legend-item {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     white-space: nowrap;
   }
 
-  .incision-workbench .legend-swatch {
+  .incision-workbench .legend-swatch,
+  .workflow-workbench .legend-swatch {
     width: 10px;
     height: 10px;
     border-radius: 999px;
@@ -1202,16 +1229,19 @@
     border: 1px solid rgba(255, 255, 255, 0.32);
   }
 
-  .incision-workbench .legend-swatch.center {
+  .incision-workbench .legend-swatch.center,
+  .workflow-workbench .legend-swatch.center {
     background: #f43f5e;
   }
 
-  .incision-workbench .legend-swatch.ring {
+  .incision-workbench .legend-swatch.ring,
+  .workflow-workbench .legend-swatch.ring {
     background: transparent;
     border-color: #facc15;
   }
 
-  .incision-workbench .legend-swatch.line {
+  .incision-workbench .legend-swatch.line,
+  .workflow-workbench .legend-swatch.line {
     width: 18px;
     height: 3px;
     border-radius: 999px;
@@ -1219,7 +1249,8 @@
     border: 0;
   }
 
-  .incision-workbench .legend-swatch.handle {
+  .incision-workbench .legend-swatch.handle,
+  .workflow-workbench .legend-swatch.handle {
     background: #34d399;
   }
 
@@ -1300,6 +1331,31 @@
       animation: none;
       border-color: #facc15;
       box-shadow: 0 0 0 2px rgb(250 204 21 / 0.28);
+    }
+  }
+
+  @keyframes workflow-review-attention {
+    0%, 100% {
+      border-color: rgb(71 85 105 / 0.9);
+      box-shadow: 0 0 0 1px rgb(250 204 21 / 0.18);
+    }
+    50% {
+      border-color: #facc15;
+      box-shadow: 0 0 0 3px rgb(250 204 21 / 0.32), 0 0 16px rgb(250 204 21 / 0.4);
+    }
+  }
+
+  .incision-workbench .workflow-review-attention,
+  .workflow-workbench .workflow-review-attention {
+    animation: workflow-review-attention 1.15s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .incision-workbench .workflow-review-attention,
+    .workflow-workbench .workflow-review-attention {
+      animation: none;
+      border-color: #facc15;
+      box-shadow: 0 0 0 3px rgb(250 204 21 / 0.3);
     }
   }
 
@@ -1978,6 +2034,58 @@
   accent-color: var(--clinical-accent);
 }
 
+.workflow-workbench .diameter-field-disabled {
+  position: relative;
+  color: #7f8b99;
+  opacity: 0.72;
+}
+
+.workflow-workbench .diameter-disabled-hint-target {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  cursor: not-allowed;
+}
+
+.workflow-workbench .diameter-disabled-hint-target:focus-visible {
+  outline: 2px solid rgb(56 189 248 / 88%);
+  outline-offset: 2px;
+}
+
+.persistent-disabled-tooltip {
+  position: fixed;
+  z-index: 10000;
+  width: max-content;
+  max-width: min(560px, calc(100vw - 24px));
+  padding: 8px 10px;
+  color: #7f1d1d;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  background: #fff7f6;
+  border: 1px solid #f0a6a0;
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 28%);
+}
+
+.workflow-workbench .diameter-field-disabled .field-label,
+.workflow-workbench .diameter-field-disabled output {
+  color: #7f8b99;
+}
+
+.workflow-workbench #diameterMm:disabled {
+  cursor: not-allowed;
+  accent-color: #6b7280;
+  filter: grayscale(1);
+}
+
 /* Keep the controlled-marker scan rail on its compact established style.
    This unlayered override must follow the generic dark input background. */
 .incision-workbench #controlledMarkerScanDiameter {
@@ -2064,6 +2172,9 @@
 .workflow-workbench .stage-top {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) minmax(0, auto) auto;
+  min-height: 56px;
+  height: auto;
+  padding-block: 6px;
 }
 
 /* This must remain outside @layer so the warning tone wins over the imported
@@ -2076,12 +2187,18 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .workflow-workbench .workflow-stage-status > span:last-child {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .workflow-workbench .workflow-stage-spinner {
@@ -2094,12 +2211,31 @@
   animation: workflow-stage-spin 0.8s linear infinite;
 }
 
+.clinical-compat-workbench .overlay-msg.image-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #f4f7fb;
+}
+
+.clinical-compat-workbench .overlay-msg.image-loading::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border: 2px solid rgb(226 232 240 / 36%);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: workflow-stage-spin 0.8s linear infinite;
+}
+
 @keyframes workflow-stage-spin {
   to { transform: rotate(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .workflow-workbench .workflow-stage-spinner {
+  .workflow-workbench .workflow-stage-spinner,
+  .clinical-compat-workbench .overlay-msg.image-loading::before {
     animation: none;
   }
 }

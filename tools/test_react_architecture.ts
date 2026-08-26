@@ -94,6 +94,7 @@ const tumorPanel = read("src/components/TumorInputPanel.tsx");
 const secondaryCuePanel = read("src/components/SecondaryCuePanel.tsx");
 const candidateResultPanel = read("src/components/CandidateResultPanel.tsx");
 const candidateLibraryPanel = read("src/components/CandidateLibraryPanel.tsx");
+const workflowIncisionRail = read("src/components/WorkflowIncisionRail.tsx");
 const privacyAuditPanel = read("src/components/PrivacyAuditPanel.tsx");
 const editPanel = read("src/components/EditControlsPanel.tsx");
 const reviewPanel = read("src/components/ReviewControlsPanel.tsx");
@@ -1540,7 +1541,10 @@ for (const id of [
   assert.ok(exposesId(secondaryCuePanel, id), `React secondary cue panel exposes #${id}`);
 }
 assert.ok(incisionStore.includes("IncisionSecondaryCueState"), "incision Zustand store keeps typed secondary cue state");
-assert.ok(incisionWorkbench.includes("SecondaryCuePanel"), "React incision workbench renders the secondary cue controls as a React component");
+assert.ok(incisionWorkbench.includes("SecondaryCuePanel")
+  && incisionWorkbench.includes("data-retired-secondary-cue-compatibility")
+  && incisionWorkbench.includes('aria-hidden="true"'),
+"React incision workbench retains the retired cue DOM only as a hidden controller compatibility layer");
 assert.ok(secondaryCuePanel.includes("useIncisionControllerCommands"), "React secondary cue panel uses typed incision command callbacks");
 assert.ok(!secondaryCuePanel.includes("dispatchIncisionSecondaryCueCommand"), "React secondary cue panel does not import low-level command dispatch helpers directly");
 assert.ok(!secondaryCuePanel.includes("../lib/controllerEvents"), "React secondary cue panel does not import controller event names directly");
@@ -1595,6 +1599,12 @@ assert.ok(candidateLibraryPanel.includes("useState"), "React candidate library o
 assert.ok(candidateLibraryPanel.includes("confirmClear"), "React candidate library renders a controlled clear confirmation state");
 assert.ok(!candidateLibraryPanel.includes("window.confirm"), "React candidate library does not use browser-native confirm dialogs");
 assert.ok(candidateLibraryPanel.includes("Button"), "React candidate library uses the shared shadcn-style button primitive");
+assert.ok(workflowIncisionRail.includes("showDirectionVariants={false}")
+  && workflowIncisionRail.includes("showJsonExport={false}")
+  && workflowIncisionRail.includes("showSaveAndExportActions={false}")
+  && workflowIncisionRail.includes("showCandidateRowActions")
+  && !workflowIncisionRail.includes("showCandidateRowActions={false}"),
+"merged workflow hides redundant top-level actions and retains record-level load/delete controls");
 assert.ok(candidateLibraryPanel.includes("ButtonRow"), "React candidate library uses the shared shadcn-style button row primitive");
 assert.ok(candidateLibraryPanel.includes("CandidateList"), "React candidate library uses the shared candidate list primitive");
 assert.ok(candidateLibraryPanel.includes("CandidateRow"), "React candidate library uses the shared candidate row primitive");

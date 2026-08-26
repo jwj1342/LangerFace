@@ -14,6 +14,7 @@ export interface IncisionOverlayQaState {
 }
 
 let testEls: LiveDomElements | null = null;
+let messageAutoHideTimer: ReturnType<typeof setTimeout> | null = null;
 
 const els = (): LiveDomElements => testEls ?? boundEls;
 
@@ -21,13 +22,26 @@ export function __setLiveUiElementsForTests(elements: LiveDomElements | null): v
   testEls = elements;
 }
 
-export function setMsg(message: string | null): void {
+export function setMsg(message: string | null, autoHideMs = 0, imageLoading = false): void {
   const ui = els();
+  if (messageAutoHideTimer) {
+    clearTimeout(messageAutoHideTimer);
+    messageAutoHideTimer = null;
+  }
   if (message == null) {
     ui.msg.classList.add("hidden");
+    ui.msg.classList.remove("image-loading");
   } else {
     ui.msg.textContent = message;
     ui.msg.classList.remove("hidden");
+    ui.msg.classList.toggle("image-loading", imageLoading);
+    if (autoHideMs > 0) {
+      messageAutoHideTimer = setTimeout(() => {
+        ui.msg.classList.add("hidden");
+        ui.msg.classList.remove("image-loading");
+        messageAutoHideTimer = null;
+      }, autoHideMs);
+    }
   }
 }
 

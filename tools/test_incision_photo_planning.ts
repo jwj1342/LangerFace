@@ -18,8 +18,10 @@ import {
   inspectPhotoCandidateProjection,
   nearestPhotoEndpointHandle,
   pointsToSurfaceRefs,
+  projectedRstlUpperForeheadSupportsPoint,
   projectedRstlDeviation,
   queryIncisionPhotoRstlDirection,
+  recoverPhotoFaceEdgeSurfaceRef,
   smoothSurfaceProjectedFusiform,
   surfaceRefToModelPoint,
   validateIncisionPhotoFile,
@@ -48,6 +50,33 @@ const firstModelPoint = surfaceRefToModelPoint(refs[0], vertices, triangles);
 assert.ok(firstModelPoint);
 assert.ok(Math.abs(firstModelPoint[0] - 0.25) < 1e-8);
 assert.ok(Math.abs(firstModelPoint[1] - 0.25) < 1e-8);
+
+const pickFaceOvalIndices = [
+  10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378,
+  400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
+] as const;
+const edgeLandmarks = Array.from({ length: 468 }, () => [50, 50, 0] as Vec3);
+pickFaceOvalIndices.forEach((landmarkIndex, order) => {
+  const angle = order / pickFaceOvalIndices.length * Math.PI * 2;
+  edgeLandmarks[landmarkIndex] = [50 + Math.cos(angle) * 40, 50 + Math.sin(angle) * 40, 0];
+});
+const edgeTriangles = pickFaceOvalIndices.map((landmarkIndex, order) => [
+  1,
+  landmarkIndex,
+  pickFaceOvalIndices[(order + 1) % pickFaceOvalIndices.length],
+] as Triangle);
+const narrowEdgeRecovery = recoverPhotoFaceEdgeSurfaceRef(
+  { x: 92, y: 50 }, edgeLandmarks, edgeTriangles,
+);
+assert.ok(narrowEdgeRecovery, "a point in the narrow visible face-edge band recovers to the outer oval");
+const recoveredEdgePoint = mapSurfaceRefs([narrowEdgeRecovery.ref], edgeLandmarks, edgeTriangles).pts[0];
+assert.ok(recoveredEdgePoint);
+assert.ok(Math.hypot(recoveredEdgePoint[0] - 90, recoveredEdgePoint[1] - 50) < 0.5,
+  "face-edge recovery snaps to the nearest outer-oval surface point");
+assert.equal(recoverPhotoFaceEdgeSurfaceRef({ x: 98, y: 50 }, edgeLandmarks, edgeTriangles), null,
+  "a point beyond the bounded edge band remains rejected as hair or background");
+assert.equal(recoverPhotoFaceEdgeSurfaceRef({ x: 50, y: 50 }, edgeLandmarks, []), null,
+  "an internal mesh gap cannot borrow the distant outer-face recovery band");
 
 const layeredVertices: Vec3[] = [
   [0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0],
@@ -502,6 +531,34 @@ const unsupportedUpperForeheadFit = buildPhotoSurfaceCanonicalFusiform({
 });
 assert.equal(unsupportedUpperForeheadFit.fit, null,
   "the upper-forehead extension remains blocked without either mesh, head-envelope or photo-skin evidence");
+const upperForeheadRstl = [{ pts: [[200, 100, 0], [400, 100, 0]] as Vec3[] }];
+assert.equal(projectedRstlUpperForeheadSupportsPoint([300, 120, 0], upperForeheadRstl), true,
+  "a point below the locally topmost visible RSTL is supported by the requested forehead boundary");
+assert.equal(projectedRstlUpperForeheadSupportsPoint([300, 90, 0], upperForeheadRstl), false,
+  "a point crossing above the locally topmost visible RSTL remains blocked");
+assert.equal(projectedRstlUpperForeheadSupportsPoint([450, 120, 0], upperForeheadRstl), false,
+  "RSTL support does not extrapolate beyond an actually visible line segment");
+const rstlSupportedUpperForeheadFit = buildPhotoSurfaceCanonicalFusiform({
+  sourceCandidate: surfaceProjectedFusiform,
+  sourceEndpoints: [[220, 120, 0], [380, 120, 0]],
+  center: [300, 120, 0],
+  boundary: [[292, 112, 0], [308, 112, 0], [308, 128, 0], [292, 128, 0]],
+  aspectRatio: 4,
+  tipAngleDeg: 30,
+  landmarks: foreheadGapLandmarks,
+  triangles: [[0, 1, 2]],
+  skinVisible: () => false,
+  rstlBoundaryVisible: (point) => projectedRstlUpperForeheadSupportsPoint(point, upperForeheadRstl),
+  axisHint: [1, 0],
+});
+assert.ok(rstlSupportedUpperForeheadFit.fit,
+  "a forehead candidate may bridge the MediaPipe cutoff when its full outline stays below the local outer RSTL");
+assert.ok(Number(rstlSupportedUpperForeheadFit.diagnostics.photoSurfaceMeshOutsideCount) > 0);
+assert.equal(
+  rstlSupportedUpperForeheadFit.diagnostics.photoRstlSupportedMeshOutsideCount,
+  rstlSupportedUpperForeheadFit.diagnostics.photoSurfaceMeshOutsideCount,
+  "every recovered mesh-outside point is explicitly attributable to the local upper RSTL",
+);
 const lowerFaceMeshGapFit = buildPhotoSurfaceCanonicalFusiform({
   sourceCandidate: surfaceProjectedFusiform,
   sourceEndpoints: [[120, 320, 0], [280, 320, 0]],
@@ -516,9 +573,28 @@ const lowerFaceMeshGapFit = buildPhotoSurfaceCanonicalFusiform({
 });
 assert.equal(lowerFaceMeshGapFit.fit, null,
   "mesh gaps below the forehead are not reclassified as skin because they may be eyes, nostrils or mouth");
+assert.ok(lowerFaceMeshGapFit.diagnosticFit,
+  "a surface-rejected diagnostic retains the actual boundary-enclosing geometry that failed the gate");
+assert.equal(lowerFaceMeshGapFit.diagnostics.photoBoundaryOutsideCount, 0,
+  "the rejected audit geometry exists only after the lesion boundary has been fully enclosed");
 assert.equal(lowerFaceMeshGapFit.visibilityLimitedFit, null,
   "an internal lower-face mesh gap cannot be relabelled as a harmless view occlusion");
 assert.equal(lowerFaceMeshGapFit.diagnostics.reason, "photo_surface_exit");
+const boundaryNotEnclosedFit = buildPhotoSurfaceCanonicalFusiform({
+  sourceCandidate: surfaceProjectedFusiform,
+  sourceEndpoints: [[120, 320, 0], [280, 320, 0]],
+  center: [200, 320, 0],
+  boundary: [[20, 140, 0], [380, 140, 0], [380, 500, 0], [20, 500, 0]],
+  aspectRatio: 4,
+  tipAngleDeg: 30,
+  landmarks: foreheadGapLandmarks,
+  triangles: [[0, 1, 2]],
+  skinVisible: () => true,
+  axisHint: [1, 0],
+});
+assert.equal(boundaryNotEnclosedFit.diagnostics.reason, "photo_boundary_not_enclosed");
+assert.equal(boundaryNotEnclosedFit.diagnosticFit, null,
+  "an outline that cannot enclose the lesion is withheld instead of being shown as an undersized red candidate");
 
 const silhouetteLandmarks = Array.from({ length: 468 }, () => [200, 250, 0] as Vec3);
 silhouetteLandmarks[0] = [100, 150, 0];
@@ -527,6 +603,22 @@ silhouetteLandmarks[2] = [300, 350, 0];
 silhouetteLandmarks[3] = [100, 350, 0];
 silhouetteLandmarks[10] = [200, 150, 0];
 for (const index of [9, 8, 107, 336]) silhouetteLandmarks[index] = [200, 150, 0];
+const faceOvalIndices = [
+  10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378,
+  400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
+];
+faceOvalIndices.forEach((landmarkIndex, index) => {
+  const angle = index / faceOvalIndices.length * Math.PI * 2 - Math.PI / 2;
+  silhouetteLandmarks[landmarkIndex] = [
+    200 + Math.cos(angle) * 100,
+    250 + Math.sin(angle) * 100,
+    0,
+  ];
+});
+// A lower-jaw photo can have a conservative head ellipse that extends beyond
+// the actual triangulated face surface. That ellipse must not decide whether a
+// single clipped tip is a legitimate view-limited reference.
+silhouetteLandmarks[467] = [400, 450, 0];
 const visibilityLimitedSource = Array.from({ length: 13 }, (_, index) => {
   const angle = index / 12 * Math.PI * 2;
   return [260 + Math.cos(angle) * 120, 250 + Math.sin(angle) * 40, 0] as Vec3;
@@ -564,6 +656,70 @@ assert.ok(Math.abs(
 assert.ok(Math.abs(
   (visibilityLimitedStandard.endpoints[0][0] + visibilityLimitedStandard.endpoints[1][0]) * 0.5 - 260,
 ) < 1e-6, "hidden geometry remains symmetric around the detector-confirmed lesion center");
+assert.ok(Number(visibilityLimitedStandard.diagnostics.photoHeadOutsideCount)
+  < Number(visibilityLimitedStandard.diagnostics.photoSurfaceOutsideCount),
+"the fixture proves that the fixed head ellipse overestimates the visible lower-jaw surface");
+const halfVisibleReference = buildPhotoSurfaceCanonicalFusiform({
+  ...visibilityLimitedInput,
+  sourceCandidate: Array.from({ length: 13 }, (_, index) => {
+    const angle = index / 12 * Math.PI * 2;
+    return [298 + Math.cos(angle) * 120, 250 + Math.sin(angle) * 40, 0] as Vec3;
+  }),
+  sourceEndpoints: [[178, 250, 0], [418, 250, 0]],
+  center: [298, 250, 0],
+  boundary: [[286, 246, 0], [298, 246, 0], [298, 254, 0], [286, 254, 0]],
+});
+assert.ok(Number(halfVisibleReference.diagnostics.photoVisibleFraction) >= 0.45
+  && Number(halfVisibleReference.diagnostics.photoVisibleFraction) < 0.55,
+"the regression fixture keeps approximately half of the standard fusiform visible");
+assert.ok(halfVisibleReference.visibilityLimitedFit,
+  "an approximately half-visible candidate with one hidden tip remains a blue view-limited reference");
+const sideClippedReference = buildPhotoSurfaceCanonicalFusiform({
+  ...visibilityLimitedInput,
+  sourceCandidate: Array.from({ length: 13 }, (_, index) => {
+    const angle = index / 12 * Math.PI * 2;
+    return [295 + Math.cos(angle) * 30, 250 + Math.sin(angle) * 80, 0] as Vec3;
+  }),
+  sourceEndpoints: [[295, 170, 0], [295, 330, 0]],
+  center: [295, 250, 0],
+  boundary: [[287, 240, 0], [298, 240, 0], [298, 260, 0], [287, 260, 0]],
+  axisHint: [0, 1],
+});
+assert.equal(sideClippedReference.diagnostics.photoHiddenTipCount, 0,
+  "the face-edge fixture keeps both lengthwise tips visible while one lateral half leaves the face");
+assert.ok(sideClippedReference.visibilityLimitedFit,
+  "a single side-clipped half remains a view-limited reference even when neither lengthwise tip is hidden");
+const boundaryAndCandidateClippedReference = buildPhotoSurfaceCanonicalFusiform({
+  ...visibilityLimitedInput,
+  sourceCandidate: Array.from({ length: 13 }, (_, index) => {
+    const angle = index / 12 * Math.PI * 2;
+    return [295 + Math.cos(angle) * 30, 250 + Math.sin(angle) * 80, 0] as Vec3;
+  }),
+  sourceEndpoints: [[295, 170, 0], [295, 330, 0]],
+  center: [295, 250, 0],
+  boundary: [[287, 240, 0], [307, 240, 0], [307, 260, 0], [287, 260, 0]],
+  axisHint: [0, 1],
+});
+assert.ok(Number(boundaryAndCandidateClippedReference.diagnostics.photoBoundaryOutsideCount) === 0,
+  "the canonical outline still fully encloses the recorded lesion geometry before visibility clipping");
+assert.ok(boundaryAndCandidateClippedReference.visibilityLimitedFit,
+  "a lesion boundary touching the outer face silhouette uses the same blue view-limited reference instead of an internal-gap rejection");
+const metricLengthReference = buildPhotoSurfaceCanonicalFusiform({
+  ...visibilityLimitedInput,
+  sourceCandidate: Array.from({ length: 13 }, (_, index) => {
+    const angle = index / 12 * Math.PI * 2;
+    return [200 + Math.cos(angle) * 10, 250 + Math.sin(angle) * 3, 0] as Vec3;
+  }),
+  sourceEndpoints: [[190, 250, 0], [210, 250, 0]],
+  center: [200, 250, 0],
+  boundary: [[180, 235, 0], [220, 235, 0], [220, 265, 0], [180, 265, 0]],
+  axisHint: [1, 0],
+  candidateLengthPx: 180,
+} as any);
+assert.ok(metricLengthReference.fit,
+  "a face-edge endpoint projection cannot shrink a declared photo candidate until it no longer encloses the lesion boundary");
+assert.ok(Number(metricLengthReference.diagnostics.candidateLength) >= 180,
+  "photo canonical geometry keeps at least the metric candidate length supplied by the workflow");
 const belowReferenceFloorVisibility = buildPhotoSurfaceCanonicalFusiform({
   ...visibilityLimitedInput,
   aspectRatio: 2.1,
@@ -616,6 +772,8 @@ const constrainedInput = {
 const constrainedStandard = buildPhotoSurfaceCanonicalFusiform(constrainedInput);
 assert.equal(constrainedStandard.diagnostics.reason, "photo_surface_exit",
   "the standard 3:1 plan remains blocked when it leaves usable facial surface");
+assert.ok(constrainedStandard.diagnosticFit,
+  "the rejected standard plan remains available as auditable geometry without implying a red display entitlement");
 assert.equal(constrainedStandard.visibilityLimitedFit, null,
   "an interior mesh exit cannot bypass the surface gate through view clipping");
 const constrainedReference = buildPhotoSurfaceCanonicalFusiform({
@@ -754,6 +912,13 @@ const lowerEdgeSurfaceGeometry = buildIncisionPhotoGeometry({
 assert.equal(lowerEdgeSurfaceGeometry.candidateProjection.valid, false,
   "centering a fallback cannot bypass the usable lower-face surface gate");
 assert.ok(lowerEdgeSurfaceGeometry.candidateProjection.reasonCodes.includes("candidate_surface_exit"));
+assert.ok(lowerEdgeSurfaceGeometry.diagnosticCandidate.length >= 8,
+  "an integrated surface failure exposes the actual rejected fit instead of the raw source candidate");
+assert.equal(
+  lowerEdgeSurfaceGeometry.diagnosticCandidate,
+  lowerEdgeSurfaceGeometry.diagnosticFusiformRendering?.outline,
+  "the diagnostic renderer and diagnostic point set share one rejected geometry",
+);
 
 {
   const centerRef = pointsToSurfaceRefs([[0.25, 0.25, 0]], vertices, triangles)[0];
@@ -943,7 +1108,11 @@ const visibilityLimitedStatus = incisionPhotoStatusPresentation({
   candidateReferenceAspectRatio: 3,
 });
 assert.equal(visibilityLimitedStatus.tone, "warning");
-assert.match(visibilityLimitedStatus.message, /已识别肿物边界.*视野受限参考.*另一视角复核/);
+assert.equal(
+  visibilityLimitedStatus.message,
+  "已识别肿物边界，当前为视野受限参考，不能确认完整长度及不可见区域，请结合另一视角复核",
+  "the canvas warning matches the agreed view-limited wording exactly",
+);
 const nonstandardVisibilityLimitedStatus = incisionPhotoStatusPresentation({
   rstlLineCount: 159,
   candidateDisplayBlocked: false,

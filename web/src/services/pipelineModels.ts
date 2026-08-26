@@ -1,16 +1,17 @@
-import { FaceLandmarker, FilesetResolver, HandLandmarker } from "@mediapipe/tasks-vision";
+import { FaceLandmarker, HandLandmarker } from "@mediapipe/tasks-vision";
 
 import { validateAtlas } from "./atlasContract.ts";
 import { assetUrls } from "./assetLoader.ts";
-import { CDN, TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.ts";
+import { TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constants.ts";
 import { dataSource } from "./dataSource.ts";
 import { noseTriangles } from "./geometryAtlas.ts";
 import type { Triangle } from "./softBody.ts";
-import { countMetric, logInfo, logWarn, setAssetVersions } from "./logger.ts";
+import { countMetric, logInfo, logWarn, recordMetricSample, setAssetVersions } from "./logger.ts";
 import { modelState } from "./liveState.ts";
 import { buildRstlSourceContract } from "./rstlSourceContract.ts";
 
 type Delegate = "GPU" | "CPU";
+type VisionWasmFileset = Parameters<typeof FaceLandmarker.createFromOptions>[0];
 type TopologyPayload = {
   topologyId?: string;
   topologyVersion?: string;
@@ -24,9 +25,21 @@ type AtlasPayload = {
 
 let readyPromise: Promise<void> | null = null;
 let imageReadyPromise: Promise<void> | null = null;
-let visionResolver: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>> | null = null;
+let assetsReadyPromise: Promise<void> | null = null;
+const localVisionWasmFileset: VisionWasmFileset = {
+  wasmLoaderPath: new URL(
+    "../../node_modules/@mediapipe/tasks-vision/wasm/vision_wasm_internal.js",
+    import.meta.url,
+  ).href,
+  wasmBinaryPath: new URL(
+    "../../node_modules/@mediapipe/tasks-vision/wasm/vision_wasm_internal.wasm",
+    import.meta.url,
+  ).href,
+};
+let visionResolver: VisionWasmFileset | null = null;
 
-async function initializeReady(): Promise<void> {
+async function initializeAssetsReady(): Promise<void> {
+  const startedAt = performance.now();
   const [topologyRaw, rstlRaw, langerRaw] = await Promise.all([
     dataSource.loadTopology("mediapipe-468"),
     dataSource.loadAtlas("rstl"),
@@ -70,8 +83,30 @@ async function initializeReady(): Promise<void> {
     faceLandmarker: "mediapipe/tasks-vision@0.10.35",
     handLandmarker: "mediapipe/tasks-vision@0.10.35",
   });
-  const resolver = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
-  visionResolver = resolver;
+  visionResolver = localVisionWasmFileset;
+  recordMetricSample("model.assetsAndVisionReadyMs", performance.now() - startedAt);
+  logInfo("图谱与 MediaPipe Vision 运行时加载完成。", {
+    triangles: tri.length,
+    rstlLines: rstl.lines.length,
+    langerLines: langer.lines.length,
+  });
+}
+
+export function ensureAssetsReady(): Promise<void> {
+  if (assetsReadyPromise) return assetsReadyPromise;
+  if (visionResolver && modelState.triangles?.length) return Promise.resolve();
+  assetsReadyPromise = initializeAssetsReady().catch((error: unknown) => {
+    assetsReadyPromise = null;
+    visionResolver = null;
+    throw error;
+  });
+  return assetsReadyPromise;
+}
+
+async function initializeReady(): Promise<void> {
+  await ensureAssetsReady();
+  if (!visionResolver) throw new Error("MediaPipe Vision 运行时尚未就绪");
+  const resolver = visionResolver;
   const build = (delegate: Delegate) => FaceLandmarker.createFromOptions(resolver, {
     baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
     runningMode: "VIDEO",
@@ -110,10 +145,7 @@ async function initializeReady(): Promise<void> {
     }
   }
 
-  logInfo("模型与图谱加载完成。", {
-    triangles: tri.length,
-    rstlLines: rstl.lines.length,
-    langerLines: langer.lines.length,
+  logInfo("连续帧 MediaPipe 模型加载完成。", {
     handOcclusionReady: Boolean(modelState.handLandmarker),
   });
 }
@@ -128,10 +160,9 @@ export function ensureReady(): Promise<void> {
   return readyPromise;
 }
 
-async function initializeImageReady(): Promise<void> {
-  await ensureReady();
+async function initializeImageFaceReady(): Promise<void> {
+  if (modelState.imageLandmarker) return;
   if (!visionResolver) throw new Error("MediaPipe Vision 运行时尚未就绪");
-
   const build = (delegate: Delegate) => FaceLandmarker.createFromOptions(visionResolver!, {
     baseOptions: { modelAssetPath: assetUrls.faceLandmarkerTask, delegate },
     runningMode: "IMAGE",
@@ -147,7 +178,11 @@ async function initializeImageReady(): Promise<void> {
     logWarn("静态图片 Face Landmarker GPU 初始化失败，回退到 CPU。", error);
     modelState.imageLandmarker = await build("CPU");
   }
+}
 
+async function initializeImageHandReady(): Promise<void> {
+  if (modelState.imageHandLandmarker) return;
+  if (!visionResolver) throw new Error("MediaPipe Vision 运行时尚未就绪");
   const buildHand = (delegate: Delegate) => HandLandmarker.createFromOptions(visionResolver!, {
     baseOptions: { modelAssetPath: assetUrls.handLandmarkerTask, delegate },
     runningMode: "IMAGE",
@@ -167,6 +202,23 @@ async function initializeImageReady(): Promise<void> {
       logWarn("静态图片手部模型加载失败，照片手部遮挡功能将暂不可用。", err);
     }
   }
+}
+
+async function initializeImageReady(): Promise<void> {
+  const startedAt = performance.now();
+  await ensureAssetsReady();
+  const modelStartedAt = performance.now();
+  await Promise.all([
+    initializeImageFaceReady(),
+    initializeImageHandReady(),
+  ]);
+  const completedAt = performance.now();
+  recordMetricSample("model.imageFaceAndHandReadyMs", completedAt - modelStartedAt);
+  recordMetricSample("model.imageColdReadyMs", completedAt - startedAt);
+  logInfo("静态图片 MediaPipe 模型加载完成。", {
+    handOcclusionReady: Boolean(modelState.imageHandLandmarker),
+    elapsedMs: Math.round(completedAt - startedAt),
+  });
 }
 
 export function ensureImageReady(): Promise<void> {

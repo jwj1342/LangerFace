@@ -27,10 +27,13 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
       · 主实现 PR #166 已合并；真实媒体、人工验收及切口 2A 剩余门禁由 #171 / #172 / #209–#212 跟踪。
 - [ ] 单页工作流：统一照片规划、候选审阅、导出与实时叠加状态 — [#170](https://github.com/jwj1342/LangerFace/issues/170)
       · PR #166 已完成 workspace 恢复、审阅门禁、实时状态和清除/返回流程；保留 issue 继续核对端到端交付。
+      · 2026-08-21 组会补充：先完成皱纹识别和 RSTL 自动/手动微调并冻结最终版本，再允许生成切口。候选必须记录所消费的 RSTL revision；最终 RSTL 解冻、换源或 revision 变化后旧候选失效并要求重新计算。
+      · 页面进一步精简等待张医生查看真实页面后的具体反馈；除会议已提出的独立上传视频入口外，不预判其他删除项。
 - [ ] 2D RSTL 手动兜底验收与质量边界 — [#171](https://github.com/jwj1342/LangerFace/issues/171)
       · PR #166 已补交叉/密度质量门禁；PR #186 修复单帧皱纹细化在 live transport 中位移归零。仍缺 3 张授权照片的 before/after 人工评审证据。
 - [ ] 真实媒体验收：照片、视频与摄像头切口叠加稳定性证据 — [#172](https://github.com/jwj1342/LangerFace/issues/172)
       · PR #166 已补严格设备矩阵审计；仍缺 2 段固定视频和 1 个固定摄像头的真实 evidence/audit，不能用合成值替代。
+      · 2026-08-21 会议建议移除临床可见的独立上传视频入口；在团队正式调整本 issue 的验收定义前，保留底层连续帧、离线回放与摄像头共享渲染链，不把“隐藏入口”误写为“视频技术链已删除”或“原验收已取消”。
 - [ ] RSTL 跨页面同源与坐标契约回归 — [#209](https://github.com/jwj1342/LangerFace/issues/209)
       · PR #213 已随 #166 合并确定性 source contract；仍需补齐 mirror、pan/zoom、DPR、display filter 与浏览器跨页一致性回归。
 - [ ] 受控黑点/贴纸病灶定位 baseline — [#210](https://github.com/jwj1342/LangerFace/issues/210)
@@ -71,7 +74,7 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
 - [x] 皮下肿物切口生成：按超声直径生成平行 RSTL 的线性切口 — [#15](https://github.com/jwj1342/LangerFace/issues/15)
       · 本 PR 已支持 RSTL 轴向线性候选、端点/长度编辑、目标长度 metrics、最大长度截断记录和直径覆盖不足 high guardrail
 - [x] 皮表肿物梭形切口生成器：长轴、比例、尖端角与平滑对称约束 — [#16](https://github.com/jwj1342/LangerFace/issues/16)
-      · 已支持边界投影覆盖、面积/自交质量指标、3:1 默认长宽比、cubic Hermite 轮廓、30° 默认尖端角目标和实际误差 metrics；Python `langerface.incision` 与 Web 生成器共用金标，测试覆盖比例、端点角、中点 C1 连续、对称单调收窄、面积和自由轮廓包络；医生可调整梭形宽度、长度、方向、中心和尖端角，系统会重算 outline/envelope 指标、复跑 guardrails，并把尖端角覆盖写入 edit history 与导出 provenance；真实病例曲线调参仍需医生 review
+      · 已支持边界投影覆盖、面积/自交质量指标、3:1 默认长宽比、cubic Hermite 轮廓、30° 默认尖端角目标和实际误差 metrics；皮表最小候选长度为 6 mm，零切缘的 2/3/4 mm 模拟肿物分别生成 6/9/12 mm；Python `langerface.incision` 与 Web 生成器共用规则版本和金标，测试覆盖比例、端点角、中点 C1 连续、对称单调收窄、面积和自由轮廓包络；医生可调整梭形宽度、长度、方向、中心和尖端角，系统会重算 outline/envelope 指标、复跑 guardrails，并把尖端角覆盖写入 edit history 与导出 provenance；真实病例曲线调参仍需医生 review
 - [x] 敏感结构保护规则：下睑、唇红缘、鼻翼等游离边缘风险提示与方向例外 — [#17](https://github.com/jwj1342/LangerFace/issues/17)
       · 本 PR 已支持敏感区提示、中心点和候选几何到敏感锚点/简化游离缘线段的距离筛查，并按下睑、唇红缘、鼻翼、鼻尖、口角使用 draft 阈值表；命中敏感结构时会输出 `protective_direction` 保护性方向建议并要求医生记录覆盖原因；JS 合约测试会比较 `free_margin_distance_thresholds_mm` 与 `protective_direction_hints`，防止浏览器实现和 JSON 资产不一致；真实解剖边界、阈值和保护性方向仍需临床确认
 

@@ -13,7 +13,7 @@ export function LiveWrinklePanel({ showAdvancedCaptureHint = true }: { showAdvan
       <div>
         <Label htmlFor="wrinkleDisplayMode">皱纹检测与自动微调</Label>
         <Hint className="live-inline-top">
-          上传照片或定格摄像头后，YOLO 会在本机自动检测皱纹。检测结果仅作研究辅助，不替代医生判断。
+          上传照片或定格摄像头后先显示标准 RSTL；点击“检测皱纹”后才会开始本机 YOLO。检测结果仅作研究辅助，不替代医生判断。
         </Hint>
       </div>
       <Select id="wrinkleDisplayMode" defaultValue="both" disabled aria-label="画面叠加内容">
@@ -25,9 +25,9 @@ export function LiveWrinklePanel({ showAdvancedCaptureHint = true }: { showAdvan
         <span>检测状态</span>
         <span id="wrinkleStatus">等待照片或定格帧</span>
       </div>
-      <Hint id="wrinkleSummary">标准 RSTL 会先显示，皱纹检测在后台完成。</Hint>
+      <Hint id="wrinkleSummary">标准 RSTL 会先显示；YOLO 不会因上传照片而自动启动。</Hint>
       <ButtonRow>
-        <Button variant="workbench" id="wrinkleDetectBtn" type="button" disabled>重新检测皱纹</Button>
+        <Button variant="workbench" id="wrinkleDetectBtn" type="button" disabled>检测皱纹</Button>
         <Button variant="workbenchPrimary" id="wrinkleAutoRefineBtn" type="button" disabled>
           皱纹引导自动微调
         </Button>

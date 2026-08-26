@@ -83,6 +83,9 @@ assert.equal(boundaryState.controlledBoundaryActive, false,
 expectDispatch(tumor, { command: "diameter_input", value: "12" }, [
   ["applyTumorControl", "diameter_input", "12"], ["updateTumorRing"], ["publish", "tumor_diameter_input"],
 ]);
+expectDispatch(tumor, { command: "diameter_inactive_hint" }, [
+  ["applyTumorControl", "diameter_inactive_hint", undefined], ["publish", "diameter_inactive_hint"],
+]);
 for (const command of ["depth_input", "author_changed"] as const) {
   expectDispatch(tumor, { command, value: command === "depth_input" ? "6" : "clinician" }, [
     ["applyTumorControl", command, command === "depth_input" ? "6" : "clinician"], ["publish", command],

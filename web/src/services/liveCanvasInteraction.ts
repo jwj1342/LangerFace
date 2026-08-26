@@ -1,5 +1,6 @@
 export interface LiveCanvasInteractionCallbacks {
   isRefineActive(): boolean;
+  isImagePointerInteractionBlocked?(): boolean;
   beginRefinePointer(event: PointerEvent): boolean;
   moveRefinePointer(event: PointerEvent): boolean;
   endRefinePointer(event: PointerEvent): boolean;
@@ -45,6 +46,10 @@ export function bindLiveCanvasInteractions(
       if (callbacks.beginRefinePointer(event)) event.preventDefault();
       return;
     }
+    if (callbacks.isImagePointerInteractionBlocked?.()) {
+      clearImageDrag();
+      return;
+    }
     if (callbacks.sourceKind() !== "image" || event.button !== 0 || imageDrag) return;
     imageDrag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
     surface.classList.add("dragging");
@@ -54,6 +59,10 @@ export function bindLiveCanvasInteractions(
   const pointerMove = (event: PointerEvent): void => {
     if (callbacks.isRefineActive()) {
       if (callbacks.moveRefinePointer(event)) event.preventDefault();
+      return;
+    }
+    if (callbacks.isImagePointerInteractionBlocked?.()) {
+      clearImageDrag();
       return;
     }
     if (!imageDrag || event.pointerId !== imageDrag.pointerId) return;

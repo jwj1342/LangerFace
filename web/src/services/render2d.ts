@@ -853,6 +853,7 @@ function drawIncisionOverlay(
   updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stability, poseGate, localRegionQuality);
   updateIncisionOverlayQa(registration, stability, poseGate, localRegionQuality);
   if (!poseGate.passed) return;
+  if (sourceState.sourceKind === "image" && renderState.workflowPhotoOverlay) return;
   ctx.save();
   ctx.globalAlpha = 0.98;
   const overlayStyle = incisionOverlayStyle(W, overlay.candidate_type);
@@ -925,7 +926,7 @@ export function buildZoomCards(onSelect: () => void = () => {}): void {
 
 export function setFocusRegion(region: RenderRegion): void {
   renderState.focusRegion = region;
-  renderState.focusCrop = null;
+  setFocusCrop(null);
   syncFocusCards();
 }
 
@@ -1016,20 +1017,34 @@ function zoomRegionBounds(lm: Vec3[], region: RenderRegion): Bounds | null {
 export function drawFocusedRegion(lm: Vec3[] | null, W: number, H: number): void {
   const region = renderState.focusRegion as RenderRegion;
   if (!region || !lm) {
-    renderState.focusCrop = null;
+    setFocusCrop(null);
     return;
   }
   const crop = focusCropRect(lm, region, W, H);
   if (!crop) {
-    renderState.focusCrop = null;
+    setFocusCrop(null);
     return;
   }
-  renderState.focusCrop = crop;
+  setFocusCrop(crop);
 
   focusScratch.width = W;
   focusScratch.height = H;
   focusCtx.drawImage(els.canvas, 0, 0);
   ctx.drawImage(focusScratch, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, W, H);
+}
+
+function setFocusCrop(crop: { sx: number; sy: number; sw: number; sh: number } | null): void {
+  const previous = renderState.focusCrop;
+  const changed = previous === null || crop === null
+    ? previous !== crop
+    : Math.abs(previous.sx - crop.sx) > 0.01
+      || Math.abs(previous.sy - crop.sy) > 0.01
+      || Math.abs(previous.sw - crop.sw) > 0.01
+      || Math.abs(previous.sh - crop.sh) > 0.01;
+  renderState.focusCrop = crop;
+  if (changed && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("langerface:focus-crop-changed"));
+  }
 }
 
 function focusCropRect(lm: Vec3[], region: RenderRegion, W: number, H: number): { sx: number; sy: number; sw: number; sh: number } | null {

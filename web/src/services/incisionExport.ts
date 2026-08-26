@@ -62,10 +62,18 @@ export function downloadText(
 ): void {
   const blob = new Blob([text], { type });
   const anchor = document.createElement("a");
-  anchor.href = URL.createObjectURL(blob);
+  const objectUrl = URL.createObjectURL(blob);
+  anchor.href = objectUrl;
   anchor.download = filename;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(anchor.href), 1000);
+  anchor.hidden = true;
+  const host = document.body || document.documentElement;
+  host.append(anchor);
+  try {
+    anchor.click();
+  } finally {
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  }
 }
 
 export function downloadCanvasPng(canvas: HTMLCanvasElement, filename: string): void {

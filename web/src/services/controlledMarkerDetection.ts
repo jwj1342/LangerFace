@@ -1,4 +1,4 @@
-export const CONTROLLED_MARKER_DETECTOR_VERSION = "0.26";
+export const CONTROLLED_MARKER_DETECTOR_VERSION = "0.32";
 
 export interface MarkerImageData {
   width: number;
@@ -46,7 +46,7 @@ export interface ControlledMarkerDetection {
     expected_diameter_px: number | null;
   };
   diagnostics?: {
-    method?: "seed_first_barrier" | "radial_seed_boundary" | "low_contrast_near_circular";
+    method?: "seed_first_barrier" | "radial_seed_boundary" | "low_contrast_near_circular" | "connected_outer_marker_envelope";
     roi_radius?: number;
     local_window_radius?: number;
     repair_radius?: number;
@@ -63,6 +63,7 @@ export interface ControlledMarkerDetection {
     scan_probe_success_count?: number;
     scan_probe_consensus_count?: number;
     scan_probe_group_sizes?: number[];
+    divided_enclosure_count?: number;
     ridge_contrast?: number;
     radial_variation_ratio?: number;
     shape_compactness?: number;
@@ -902,27 +903,28 @@ function weakNearCircularBoundaryRecovery(
   minAreaPx: number,
   minContrast: number,
 ): ControlledMarkerDetection | null {
-  // This path is intentionally unavailable without the explicit controlled-
-  // scan size prior. A permissive whole-photo weak-edge search would promote
-  // wrinkles, pigmentation and illumination boundaries to lesion contours.
+  // Keep weak-ridge recovery exclusive to the explicit controlled-scan path.
+  // Its diameter value selects probe spacing and remains audit metadata, but
+  // no longer restricts the observed closed ridge to that same size.
   if (!(expectedDiameterPx >= 8) || roiRadius < 8) return null;
 
   const rayCount = 96;
-  const maximumRadius = Math.floor(roiRadius * 0.82);
-  const expectedRadius = clamp(expectedDiameterPx / 2, 4, maximumRadius);
-  const minimumSearchRadius = clamp(
-    Math.floor(expectedRadius * 0.55),
-    3,
-    Math.max(3, maximumRadius - 3),
-  );
-  const maximumSearchRadius = clamp(
-    Math.ceil(expectedRadius * 1.65),
-    minimumSearchRadius + 3,
-    maximumRadius,
-  );
+  // Match the downstream scan-containment gate. Reserving an additional 18%
+  // here made a correctly covered real marker unreachable even though its
+  // boundary still satisfied the public 88% scan margin.
+  const maximumRadius = Math.floor(roiRadius * 0.88);
+  const expectedRadius = Number.isFinite(expectedDiameterPx) && expectedDiameterPx > 0
+    ? clamp(expectedDiameterPx / 2, 4, maximumRadius)
+    : null;
+  const minimumSearchRadius = 3;
+  const maximumSearchRadius = maximumRadius;
   if (maximumSearchRadius <= minimumSearchRadius) return null;
 
-  const normalOffset = clamp(expectedRadius * 0.13, 2.5, 5);
+  const referenceProbeRadius = Math.max(expectedRadius ?? 0, roiRadius * 0.5);
+  // Sample beyond a visibly thick marker stroke. The former 2.5 px lower
+  // bound could leave both reference samples inside a low-contrast 4 px line,
+  // making a complete scan-contained outline look locally flat.
+  const normalOffset = clamp(referenceProbeRadius * 0.16, 4, 6);
   const samplingMargin = maximumSearchRadius + normalOffset + 3;
   if (seed.x < samplingMargin || seed.y < samplingMargin
     || seed.x > Math.floor(image.width) - 1 - samplingMargin
@@ -955,7 +957,7 @@ function weakNearCircularBoundaryRecovery(
       ]);
       return { innerContrast: inner - stroke, outerContrast: outer - stroke };
     };
-    const tangentSpan = clamp(expectedRadius * 0.055, 1.4, 2.25);
+    const tangentSpan = clamp(referenceProbeRadius * 0.055, 1.4, 2.25);
     const samples: RidgeSample[] = [];
     for (let radius = minimumSearchRadius; radius <= maximumSearchRadius; radius += 1) {
       const centerRidge = ridgeAt(radius, 0);
@@ -985,25 +987,36 @@ function weakNearCircularBoundaryRecovery(
     raySamples.push(samples);
   }
 
-  const shapeBand = Math.max(3, expectedRadius * 0.24);
-  let dominantRadius = 0;
-  let dominantSupport = -1;
-  let dominantScore = Number.NEGATIVE_INFINITY;
+  const radiusHypotheses: Array<{ radius: number; support: number; score: number }> = [];
   for (let radius = minimumSearchRadius; radius <= maximumSearchRadius; radius += 1) {
+    const radiusShapeBand = Math.max(3, radius * 0.24);
     const selected = raySamples.map((samples) => samples
-      .filter((sample) => Math.abs(sample.radius - radius) <= shapeBand)
+      .filter((sample) => Math.abs(sample.radius - radius) <= radiusShapeBand)
       .sort((first, second) => second.score - first.score)[0] || null);
     const supported = selected.filter((sample): sample is RidgeSample => sample !== null);
-    const score = supported.reduce((total, sample) => total + sample.score, 0)
-      - Math.abs(radius - expectedRadius) / Math.max(1, expectedRadius) * rayCount * 0.15;
-    if (supported.length > dominantSupport || (supported.length === dominantSupport && score > dominantScore)) {
-      dominantRadius = radius;
-      dominantSupport = supported.length;
-      dominantScore = score;
-    }
+    const score = supported.reduce((total, sample) => total + sample.score, 0);
+    radiusHypotheses.push({ radius, support: supported.length, score });
   }
-  if (dominantSupport < rayCount * 0.8) return null;
+  const rankHypotheses = (values: Array<{ radius: number; support: number; score: number }>) => [...values]
+    .sort((first, second) => second.support - first.support || second.score - first.score)[0] || null;
+  const preferredHypothesis = expectedRadius === null ? null : rankHypotheses(radiusHypotheses.filter((entry) => (
+    entry.radius >= expectedRadius * 0.55 && entry.radius <= expectedRadius * 1.65
+  )));
+  const scanHypothesis = rankHypotheses(radiusHypotheses);
+  const dominantHypothesis = preferredHypothesis
+    && preferredHypothesis.support >= rayCount * 0.75
+    && preferredHypothesis.support >= Number(scanHypothesis?.support || 0) - 2
+    ? preferredHypothesis
+    : scanHypothesis;
+  const dominantRadius = dominantHypothesis?.radius || 0;
+  const dominantSupport = dominantHypothesis?.support || 0;
+  // Real pen strokes over facial texture can lose a few consecutive tangent
+  // probes even though the visible ridge is closed. Keep the relaxation
+  // bounded to 22.5 degrees; the continuity, shape and compactness gates below
+  // still reject open strokes, shadows and wrinkle collections.
+  if (dominantSupport < rayCount * 0.75) return null;
 
+  const shapeBand = Math.max(3, dominantRadius * 0.24);
   const selectedRadii: Array<number | null> = [];
   const selectedContrasts: number[] = [];
   for (const samples of raySamples) {
@@ -1023,7 +1036,7 @@ function weakNearCircularBoundaryRecovery(
   const supportedCount = selectedRadii.filter((radius) => radius !== null).length;
   const supportRatio = supportedCount / rayCount;
   const maximumMissingRun = maximumCircularMissingRun(selectedRadii);
-  if (supportRatio < 0.8 || maximumMissingRun > 4) return null;
+  if (supportRatio < 0.75 || maximumMissingRun > 6) return null;
 
   const radialDeviations = selectedRadii
     .filter((radius): radius is number => radius !== null)
@@ -1076,8 +1089,6 @@ function weakNearCircularBoundaryRecovery(
     || !pointInPolygon(seed, boundary)
     || compactness < 0.72
     || aspectRatio > 1.45
-    || detectedDiameterPx < expectedDiameterPx * 0.6
-    || detectedDiameterPx > expectedDiameterPx * 1.7
     || medianRidgeContrast < minimumRidgeContrast * 1.15) {
     return null;
   }
@@ -1107,14 +1118,46 @@ function weakNearCircularBoundaryRecovery(
       angular_support_ratio: supportRatio,
       maximum_gap_degrees: maximumMissingRun * 360 / rayCount,
       detected_diameter_px: detectedDiameterPx,
-      expected_diameter_px: expectedDiameterPx,
-      detected_to_expected_diameter_ratio: detectedDiameterPx / expectedDiameterPx,
+      expected_diameter_px: expectedDiameterPx > 0 ? expectedDiameterPx : undefined,
+      detected_to_expected_diameter_ratio: expectedDiameterPx > 0
+        ? detectedDiameterPx / expectedDiameterPx
+        : undefined,
       ridge_contrast: medianRidgeContrast,
       radial_variation_ratio: radialVariationRatio,
       shape_compactness: compactness,
     },
     audit: { local_only: true, raw_media_retained: false, network_request_made: false },
   };
+}
+
+function hasCompetingOuterStrokeEvidence(
+  components: readonly PixelComponent[],
+  selected: MarkerCandidate,
+  seed: MarkerPoint,
+  selectedDiameterPx: number,
+): boolean {
+  const minimumRadius = Math.max(4, selectedDiameterPx * 0.7);
+  return components.some((component) => {
+    if (component === selected.component || component.pixels.length < Math.max(24, selected.component.pixels.length)) {
+      return false;
+    }
+    const extent = pixelExtent(component.pixels, seed);
+    const containsSeed = seed.x >= extent.bbox.x && seed.x < extent.bbox.x + extent.bbox.width
+      && seed.y >= extent.bbox.y && seed.y < extent.bbox.y + extent.bbox.height;
+    if (!containsSeed
+      || Math.max(extent.bbox.width, extent.bbox.height) < selectedDiameterPx * 1.6) return false;
+    const sectors = new Set<number>();
+    const quadrants = new Set<number>();
+    for (const point of component.pixels) {
+      const dx = point.x - seed.x;
+      const dy = point.y - seed.y;
+      if (Math.hypot(dx, dy) < minimumRadius) continue;
+      const angle = (Math.atan2(dy, dx) + Math.PI * 2) % (Math.PI * 2);
+      sectors.add(Math.floor(angle / (Math.PI * 2) * 16) % 16);
+      quadrants.add((dx >= 0 ? 1 : 0) + (dy >= 0 ? 2 : 0));
+    }
+    return sectors.size >= 8 && quadrants.size >= 3;
+  });
 }
 
 function radialBoundaryRecovery(
@@ -1352,6 +1395,13 @@ interface EnclosedRegion {
   distance: number;
 }
 
+interface DividedMarkerEnvelope {
+  areaPx: number;
+  bbox: { x: number; y: number; width: number; height: number };
+  boundary: MarkerPoint[];
+  center: MarkerPoint;
+}
+
 function enclosedBackgroundRegions(
   points: MarkerPoint[],
   bbox: { x: number; y: number; width: number; height: number },
@@ -1421,6 +1471,111 @@ function enclosedBackgroundRegions(
     }
   }
   return regions;
+}
+
+function recoverDividedMarkerEnvelope(
+  candidate: MarkerCandidate,
+  regions: readonly EnclosedRegion[],
+  seed: MarkerPoint,
+  roiRadius: number,
+  minAreaPx: number,
+): DividedMarkerEnvelope | null {
+  const substantialRegions = regions
+    .filter((region) => region.pixels.length >= Math.max(minAreaPx * 4, 16))
+    .sort((first, second) => second.pixels.length - first.pixels.length);
+  if (substantialRegions.length < 2) return null;
+  const anchorRegion = substantialRegions.find((region) => region.containsSeed) || substantialRegions[0];
+  const maximumNeighbourDistance = anchorRegion.distance + Math.max(
+    6,
+    Math.min(roiRadius * 0.35, Math.sqrt(anchorRegion.pixels.length / Math.PI)),
+  );
+  const mergedRegions = substantialRegions.filter((region) => (
+    region === anchorRegion || region.distance <= maximumNeighbourDistance
+  ));
+  if (mergedRegions.length < 2) return null;
+
+  const markerBoundary = candidate.boundary;
+  if (markerBoundary.length < 8
+    || boundarySelfIntersects(markerBoundary)
+    || !pointInPolygon(seed, markerBoundary)) return null;
+  // Prefer the original outer contour points that are directly supported by
+  // the enclosed lesion pockets. This closes an attached open spur at its base
+  // without convexly filling a genuine inward contour. The convex envelope is
+  // retained only when the sampled outer contour has too little local support.
+  const regionBoundaryPoints = mergedRegions.flatMap((region) => region.boundary);
+  const equivalentRadius = Math.sqrt(
+    mergedRegions.reduce((sum, region) => sum + region.pixels.length, 0) / Math.PI,
+  );
+  const markerSupportDistances = markerBoundary.map((point) => regionBoundaryPoints.reduce(
+    (closest, reference) => Math.min(closest, Math.hypot(point.x - reference.x, point.y - reference.y)),
+    Number.POSITIVE_INFINITY,
+  ));
+  const supportDistance = Math.min(
+    Math.max(4, Math.min(roiRadius * 0.14, equivalentRadius * 0.28)),
+    Math.max(2.5, percentile(markerSupportDistances, 0.6) + 0.25),
+  );
+  const regionExtent = boundaryCoordinateExtent(regionBoundaryPoints);
+  const markerExtent = boundaryCoordinateExtent(markerBoundary);
+  const extensionLimit = Math.max(6, supportDistance * 1.25);
+  const hasUnsupportedExtension = regionExtent.minX - markerExtent.minX > extensionLimit
+    || markerExtent.maxX - regionExtent.maxX > extensionLimit
+    || regionExtent.minY - markerExtent.minY > extensionLimit
+    || markerExtent.maxY - regionExtent.maxY > extensionLimit;
+  const extentPadding = hasUnsupportedExtension
+    ? Math.max(1.5, Math.min(3, supportDistance * 0.35))
+    : Math.max(4, Math.min(6, supportDistance));
+  const supportedMarkerPoints = hasUnsupportedExtension
+    ? markerBoundary.filter((point, index) => (
+      markerSupportDistances[index] <= supportDistance
+      && point.x >= regionExtent.minX - extentPadding
+      && point.x <= regionExtent.maxX + extentPadding
+      && point.y >= regionExtent.minY - extentPadding
+      && point.y <= regionExtent.maxY + extentPadding
+    ))
+    : markerBoundary;
+  const supportedBoundary = supportedMarkerPoints.length >= Math.max(8, Math.ceil(markerBoundary.length * 0.6))
+    ? resampleClosedBoundary(supportedMarkerPoints, 48)
+    : [];
+  const supportMisses = supportedBoundary.length >= 8
+    ? mergedRegions.flatMap((region) => boundaryMissDistances(supportedBoundary, region.boundary))
+    : [];
+  const supportedBoundaryValid = supportedBoundary.length >= 8
+    && !boundarySelfIntersects(supportedBoundary)
+    && pointInPolygon(seed, supportedBoundary)
+    && (!hasUnsupportedExtension || (
+      supportMisses.filter((distance) => distance > 0).length / Math.max(1, supportMisses.length) <= 0.12
+      && Math.max(0, ...supportMisses) <= Math.max(2, supportDistance * 0.5)
+    ));
+  const boundary = supportedBoundaryValid
+    ? supportedBoundary
+    : resampleClosedBoundary(convexBoundaryHull(regionBoundaryPoints), 48);
+  if (boundary.length < 8
+    || boundarySelfIntersects(boundary)
+    || !pointInPolygon(seed, boundary)
+    || boundary.some((point) => Math.hypot(point.x - seed.x, point.y - seed.y) >= roiRadius * 0.88)) return null;
+  const extent = pixelExtent(boundary, seed).bbox;
+
+  const areaPx = Math.abs(polygonArea(boundary));
+  const perimeter = boundary.reduce((sum, point, index) => {
+    const next = boundary[(index + 1) % boundary.length];
+    return sum + Math.hypot(next.x - point.x, next.y - point.y);
+  }, 0);
+  const compactness = 4 * Math.PI * areaPx / Math.max(1, perimeter ** 2);
+  const aspectRatio = Math.max(extent.width, extent.height) / Math.max(1, Math.min(extent.width, extent.height));
+  const enclosedSupportRatio = mergedRegions.reduce((sum, region) => sum + region.pixels.length, 0)
+    / Math.max(1, areaPx);
+  const secondarySupportRatio = mergedRegions[1].pixels.length / Math.max(1, areaPx);
+  if (compactness < 0.55
+    || aspectRatio > 1.8
+    || enclosedSupportRatio < 0.55
+    || secondarySupportRatio < 0.08) return null;
+
+  return {
+    areaPx,
+    bbox: extent,
+    boundary,
+    center: polygonCentroid(boundary),
+  };
 }
 
 function componentOuterBoundary(points: MarkerPoint[], maxPoints = 48): MarkerPoint[] {
@@ -1979,12 +2134,47 @@ function reconcileMarkerStrokeCoverage(
     (originalExtent.maxX - originalExtent.minX) * (originalExtent.maxY - originalExtent.minY),
   );
   const markerExtentAreaRatio = markerBbox.width * markerBbox.height / originalExtentArea;
+  const resultAspect = Math.max(result.bbox!.width, result.bbox!.height)
+    / Math.max(1, Math.min(result.bbox!.width, result.bbox!.height));
+  if (resultAspect > 1.8) {
+    const recovered = weakNearCircularBoundaryRecovery(
+      image,
+      seed,
+      roiRadius,
+      expectedDiameterPx,
+      Number(options.minAreaPx ?? 9),
+      Number(options.minContrast ?? 24),
+    );
+    if (recovered) return finalizeControlledMarkerBoundary(recovered);
+    return rejectedScanResult("unstable_enclosure", result);
+  }
   // A marker component much larger than the entered lesion scale usually
   // means that the pen line has touched a wrinkle, shadow or hair. Do not even
   // launch the more permissive ridge probes for that component.
-  if (markerDiameter < expectedDiameterPx * 0.35
+  const dividedEnvelope = result.diagnostics?.method === "connected_outer_marker_envelope";
+  // The divided-region recovery has already removed unsupported attachments
+  // from the connected dark stroke. Re-fitting it to that same full stroke can
+  // reintroduce the wrinkle/shadow spur that recovery intentionally excluded.
+  if (dividedEnvelope) return result;
+  if (!dividedEnvelope && (
+    markerDiameter < expectedDiameterPx * 0.35
     || markerDiameter > expectedDiameterPx * 1.25
-    || markerAspect > 1.8) return result;
+  )) return result;
+  if (markerAspect > 1.8) {
+    const circularRecovery = weakNearCircularBoundaryRecovery(
+      image,
+      seed,
+      roiRadius,
+      expectedDiameterPx,
+      Number(options.minAreaPx ?? 9),
+      Number(options.minContrast ?? 24),
+    );
+    if (circularRecovery) return finalizeControlledMarkerBoundary(circularRecovery);
+    // In controlled near-circular mode, a very flat enclosure inside the
+    // operator's scan is more likely to be skin texture than the drawn marker.
+    // A clear rejection is safer than silently planning from that inner shape.
+    return rejectedScanResult("unstable_enclosure", result);
+  }
 
   let reconciliation: "radial_ridge" | "bounded_marker_bbox" | "normal_stroke_band" = "bounded_marker_bbox";
   // A close, centred marker component is the least ambiguous witness and is
@@ -2622,10 +2812,7 @@ function detectControlledMarkerInRoi(
     ? seedSnapRadius
     : Math.max(seedSnapRadius, Math.round(roiRadius * 0.6));
   const expectedDiameterPx = Number(options.expectedDiameterPx || 0);
-  const isExpectedSizeCandidate = (candidate: MarkerCandidate) => expectedDiameterPx <= 0
-    || Math.max(candidate.bbox.width, candidate.bbox.height) >= expectedDiameterPx * 0.35;
-  const isScanSurfaceCandidate = (candidate: MarkerCandidate) => candidate.enclosed
-    && isExpectedSizeCandidate(candidate);
+  const isScanSurfaceCandidate = (candidate: MarkerCandidate) => candidate.enclosed;
   if (width <= 0 || height <= 0 || image.data.length < width * height * 4) return failure("invalid_image");
   if (!Number.isFinite(seed.x) || !Number.isFinite(seed.y) || seed.x < 0 || seed.x >= width || seed.y < 0 || seed.y >= height) {
     return failure("seed_outside_image");
@@ -2699,9 +2886,8 @@ function detectControlledMarkerInRoi(
   // bounded strict closing pass when the original contour cannot form a candidate.
   const rawComponents = extractComponents(dark, roiWidth, roiHeight, x0, y0, image);
   const rawDirectCandidates = findRelevantCandidates(rawComponents, seed, seedSnapRadius, minAreaPx);
-  const rawExpectedCandidates = rawDirectCandidates.filter(isExpectedSizeCandidate);
-  const rawCandidates = rawExpectedCandidates.length
-    ? rawExpectedCandidates
+  const rawCandidates = rawDirectCandidates.length
+    ? rawDirectCandidates
     : findRelevantCandidates(rawComponents, seed, scanCandidateRadius, minAreaPx)
       .filter(isScanSurfaceCandidate);
   let repairedComponents: PixelComponent[] = [];
@@ -2740,8 +2926,7 @@ function detectControlledMarkerInRoi(
       y0,
       image,
     );
-    const directCandidates = findRelevantCandidates(repairedComponents, seed, seedSnapRadius, minAreaPx)
-      .filter(isExpectedSizeCandidate);
+    const directCandidates = findRelevantCandidates(repairedComponents, seed, seedSnapRadius, minAreaPx);
     repairedCandidates = directCandidates.length
       ? directCandidates
       : findRelevantCandidates(repairedComponents, seed, scanCandidateRadius, minAreaPx)
@@ -2755,8 +2940,7 @@ function detectControlledMarkerInRoi(
         y0,
         image,
       );
-      const directCandidates = findRelevantCandidates(repairedComponents, seed, seedSnapRadius, minAreaPx)
-        .filter(isExpectedSizeCandidate);
+      const directCandidates = findRelevantCandidates(repairedComponents, seed, seedSnapRadius, minAreaPx);
       repairedCandidates = directCandidates.length
         ? directCandidates
         : findRelevantCandidates(repairedComponents, seed, scanCandidateRadius, minAreaPx)
@@ -2771,8 +2955,7 @@ function detectControlledMarkerInRoi(
         y0,
         image,
       );
-      const directCandidates = findRelevantCandidates(repairedComponents, seed, seedSnapRadius, minAreaPx)
-        .filter(isExpectedSizeCandidate);
+      const directCandidates = findRelevantCandidates(repairedComponents, seed, seedSnapRadius, minAreaPx);
       repairedCandidates = directCandidates.length
         ? directCandidates
         : findRelevantCandidates(repairedComponents, seed, scanCandidateRadius, minAreaPx)
@@ -2840,26 +3023,58 @@ function detectControlledMarkerInRoi(
   if (selected.enclosed && !enclosedRegion) {
     return fallbackOrFailure("component_too_small", relevantCandidates.length);
   }
+  const dividedMarkerEnvelope = enclosedRegion
+    ? recoverDividedMarkerEnvelope(selected, enclosedRegions, seed, roiRadius, minAreaPx)
+    : null;
   const geometryPixels = enclosedRegion?.pixels || selected.component.pixels;
-  const geometryBoundary = enclosedRegion?.boundary || selected.boundary;
-  const geometryBbox = enclosedRegion?.bbox || selected.bbox;
+  const geometryBoundary = dividedMarkerEnvelope?.boundary || enclosedRegion?.boundary || selected.boundary;
+  const geometryBbox = dividedMarkerEnvelope?.bbox || enclosedRegion?.bbox || selected.bbox;
   const geometryDiameterPx = Math.max(geometryBbox.width, geometryBbox.height);
-  if (expectedDiameterPx > 0 && geometryDiameterPx < expectedDiameterPx * 0.35) {
-    return fallbackOrFailure("component_too_small", relevantCandidates.length);
+  const markerDiameterPx = Math.max(selected.bbox.width, selected.bbox.height);
+  if (enclosedRegion
+    && expectedDiameterPx > 0
+    && geometryDiameterPx < expectedDiameterPx * 0.7
+    && markerDiameterPx > Math.max(geometryDiameterPx * 2.5, geometryDiameterPx + 8)) {
+    const rejected = failure("unstable_enclosure", relevantCandidates.length);
+    rejected.diagnostics = {
+      method: "seed_first_barrier",
+      roi_radius: roiRadius,
+      detected_diameter_px: geometryDiameterPx,
+      expected_diameter_px: expectedDiameterPx || undefined,
+      detected_to_expected_diameter_ratio: expectedDiameterPx > 0
+        ? geometryDiameterPx / expectedDiameterPx
+        : undefined,
+      failure_stage: "enclosure_disproportionate_to_marker_extent",
+    };
+    return rejected;
+  }
+  if (expectedDiameterPx > 0
+    && geometryDiameterPx < expectedDiameterPx * 0.7
+    && hasCompetingOuterStrokeEvidence(components, selected, seed, geometryDiameterPx)) {
+    const rejected = failure("unstable_enclosure", relevantCandidates.length);
+    rejected.diagnostics = {
+      method: "seed_first_barrier",
+      roi_radius: roiRadius,
+      detected_diameter_px: geometryDiameterPx,
+      expected_diameter_px: expectedDiameterPx,
+      detected_to_expected_diameter_ratio: geometryDiameterPx / expectedDiameterPx,
+      failure_stage: "smaller_enclosure_with_outer_stroke_evidence",
+    };
+    return rejected;
   }
   const xs = geometryPixels.map((point) => point.x);
   const ys = geometryPixels.map((point) => point.y);
-  const center = {
+  const center = dividedMarkerEnvelope?.center || {
     x: xs.reduce((sum, value) => sum + value, 0) / xs.length,
     y: ys.reduce((sum, value) => sum + value, 0) / ys.length,
   };
-  const warnings: string[] = [];
+  const warnings: string[] = dividedMarkerEnvelope ? ["divided_marker_outer_envelope"] : [];
   return {
     ok: true,
     failure_code: null,
     center,
     boundary: geometryBoundary,
-    area_px: geometryPixels.length,
+    area_px: dividedMarkerEnvelope ? Math.round(dividedMarkerEnvelope.areaPx) : geometryPixels.length,
     bbox: geometryBbox,
     geometry_mode: enclosedRegion ? "enclosed_region" : "dark_component",
     seed_relation: enclosedRegion?.containsSeed
@@ -2868,10 +3083,15 @@ function detectControlledMarkerInRoi(
         ? "on_marker"
         : "near_marker",
     marker_area_px: selected.component.pixels.length,
-    marker_bbox: selected.bbox,
+    marker_bbox: dividedMarkerEnvelope?.bbox || selected.bbox,
     confidence: clamp(contrast / 96, 0, 1),
     candidate_count: relevantCandidates.length,
     warnings,
+    diagnostics: dividedMarkerEnvelope ? {
+      method: "connected_outer_marker_envelope",
+      roi_radius: roiRadius,
+      divided_enclosure_count: enclosedRegions.length,
+    } : undefined,
     audit: { local_only: true, raw_media_retained: false, network_request_made: false },
   };
 }
@@ -2988,12 +3208,6 @@ function validateScanSuccess(
       detected_to_expected_diameter_ratio: detectedDiameterPx / expectedDiameterPx,
     };
   }
-  if (expectedDiameterPx > 0 && detectedDiameterPx < expectedDiameterPx * 0.35) {
-    return rejectedScanResult("unstable_enclosure", result);
-  }
-  if (expectedDiameterPx > 0 && detectedDiameterPx > expectedDiameterPx * 2.75) {
-    return rejectedScanResult("unstable_enclosure", result);
-  }
   if (expectedDiameterPx > 0
     && (detectedDiameterPx < expectedDiameterPx * 0.6 || detectedDiameterPx > expectedDiameterPx * 1.8)) {
     result.warnings = [...new Set([...result.warnings, "operator_diameter_mismatch"])];
@@ -3009,16 +3223,15 @@ function recoverBySeedNeighborhoodConsensus(
   sourceResult: ControlledMarkerDetection,
 ): ControlledMarkerDetection {
   const expectedDiameterPx = Number(options.expectedDiameterPx || 0);
-  const sourceDiameterPx = sourceResult.bbox
-    ? Math.max(sourceResult.bbox.width, sourceResult.bbox.height)
-    : 0;
+  const sourceRejectsLocalEnclosure = [
+    "smaller_enclosure_with_outer_stroke_evidence",
+    "enclosure_disproportionate_to_marker_extent",
+  ].includes(String(sourceResult.diagnostics?.failure_stage || ""));
   const sourceNeedsStabilityCheck = sourceResult.ok && (
     sourceResult.warnings.some((warning) => [
       "canonical_seed_unstable",
       "seed_relocated_from_marker_stroke",
-      "operator_diameter_mismatch",
     ].includes(warning))
-    || (expectedDiameterPx > 0 && sourceDiameterPx < expectedDiameterPx)
   );
   if (!sourceNeedsStabilityCheck && (sourceResult.ok || ![
     "component_too_small",
@@ -3058,6 +3271,20 @@ function recoverBySeedNeighborhoodConsensus(
       roiRadius,
     );
     candidate = validateScanSuccess(candidate, seed, options, roiRadius);
+    if (!candidate.ok && (sourceRejectsLocalEnclosure || sourceNeedsStabilityCheck)) {
+      const weakOuterBoundary = weakNearCircularBoundaryRecovery(
+        image,
+        neighbourSeed,
+        roiRadius,
+        expectedDiameterPx,
+        Number(options.minAreaPx ?? 9),
+        Number(options.minContrast ?? 24),
+      );
+      if (weakOuterBoundary?.boundary.length
+        && pointInPolygon(seed, weakOuterBoundary.boundary)) {
+        candidate = validateScanSuccess(weakOuterBoundary, seed, options, roiRadius);
+      }
+    }
     if (!candidate.ok || candidate.geometry_mode !== "enclosed_region" || !candidate.boundary.length) continue;
     successes.push(candidate);
   }
@@ -3104,6 +3331,21 @@ function recoverBySeedNeighborhoodConsensus(
   const selectedGroup = supportedGroups[0];
   const selected = selectedGroup
     .sort((first, second) => second.area_px - first.area_px)[0];
+  const selectedDiameterPx = selected.bbox
+    ? Math.max(selected.bbox.width, selected.bbox.height)
+    : 0;
+  if (sourceRejectsLocalEnclosure
+    && expectedDiameterPx > 0
+    && selectedDiameterPx < expectedDiameterPx * 0.7) {
+    sourceResult.diagnostics = {
+      ...(sourceResult.diagnostics || {}),
+      scan_probe_count: offsets.length,
+      scan_probe_success_count: successes.length,
+      scan_probe_consensus_count: selectedGroup.length,
+      scan_probe_group_sizes: groups.map((group) => group.length),
+    };
+    return sourceResult;
+  }
   selected.warnings = [...new Set([...selected.warnings, "seed_neighborhood_consensus"])];
   selected.diagnostics = {
     ...(selected.diagnostics || {}),
@@ -3258,6 +3500,7 @@ export const __controlledMarkerForTests = {
   bridgeSingleStrokeGap,
   componentOuterBoundary,
   finalizeControlledMarkerBoundary,
+  recoverDividedMarkerEnvelope,
   reconcileMarkerStrokeCoverage,
   weakNearCircularBoundaryRecovery,
 };

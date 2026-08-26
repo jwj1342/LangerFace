@@ -6,7 +6,7 @@ import { modelState, renderState } from "./liveState.ts";
 import type { Triangle } from "./softBody";
 import { buildRstlSourceContract } from "./rstlSourceContract.ts";
 
-export { ensureReady } from "./pipelineModels.ts";
+export { ensureAssetsReady, ensureImageReady, ensureReady } from "./pipelineModels.ts";
 export { handleFile, setSource, showCameraPlaceholder, startCamera, stopSource } from "./pipelineSource.ts";
 export { cancelFrame, detectHands, loop, redrawPausedFrame, requestFrame } from "./pipelineLoop.ts";
 

@@ -2,7 +2,7 @@
 import { bindDom, clearDomBinding, els } from "./liveDom.ts";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./liveCanvasFit.ts";
 import { validateIncisionOverlay } from "./incisionOverlay.ts";
-import { ensureReady, handleFile, redrawPausedFrame, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.ts";
+import { ensureImageReady, handleFile, redrawPausedFrame, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.ts";
 import { adjustFocusZoom, buildZoomCards } from "./render2d.ts";
 import {
   LIVE_CONTROLLER_STATE_EVENT,
@@ -424,6 +424,7 @@ function bindLiveEvents(signal: AbortSignal): void {
 
   bindLiveCanvasInteractions(els.mainWrap, {
     isRefineActive,
+    isImagePointerInteractionBlocked: () => Boolean(els.mainWrap.dataset.workflowPointerMode),
     beginRefinePointer,
     moveRefinePointer,
     endRefinePointer,
@@ -481,11 +482,11 @@ export function mountLiveWorkbench(root: ParentNode | Document = document) {
   configureLandmarkSmoothing();
   scheduleLiveState("mounted");
 
-  // 预加载模型并反馈状态
+  // 合并页优先预热静态图片模型；视频/摄像头模型在对应媒体首次使用时再加载。
   const session = activeSession;
-  ensureReady().then(() => {
+  ensureImageReady().then(() => {
     if (!isActiveSession(session)) return;
-    els.badge.textContent = "模型就绪";
+    els.badge.textContent = "照片模型就绪";
     els.badge.classList.remove("loading");
     sourceState.planning2d?.setTopology(modelState.triangles || []);
     sourceState.planning2d?.setDetectorLease({ detector: modelState.imageLandmarker || modelState.landmarker });

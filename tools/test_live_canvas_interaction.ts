@@ -63,6 +63,7 @@ const surface = new FakeSurface();
 const abortController = new AbortController();
 let sourceKind = "image";
 let refineActive = false;
+let imagePointerBlocked = false;
 let refineBegins = 0;
 let refineMoves = 0;
 let refineEnds = 0;
@@ -74,6 +75,7 @@ const focusZooms: number[] = [];
 
 bindLiveCanvasInteractions(surface as unknown as HTMLElement, {
   isRefineActive: () => refineActive,
+  isImagePointerInteractionBlocked: () => imagePointerBlocked,
   beginRefinePointer: () => { refineBegins += 1; return true; },
   moveRefinePointer: () => { refineMoves += 1; return true; },
   endRefinePointer: () => { refineEnds += 1; return true; },
@@ -100,6 +102,12 @@ surface.emit("lostpointercapture", captureLost);
 assert.equal(surface.classes.has("dragging"), false);
 surface.emit("pointermove", event({ clientX: 30, clientY: 40 }));
 assert.deepEqual(pans, [[8, 5]], "lost capture ends image panning");
+
+imagePointerBlocked = true;
+surface.emit("pointerdown", event({ pointerId: 9 }));
+assert.equal(surface.classes.has("dragging"), false, "an active incision pointer tool blocks shared-photo panning");
+assert.equal(surface.captured.has(9), false, "a blocked image pointer cannot steal capture from freehand drawing");
+imagePointerBlocked = false;
 
 const imageWheel = event({ clientX: 30, clientY: 40, deltaY: -120 });
 surface.emit("wheel", imageWheel);

@@ -48,6 +48,24 @@ assert.equal(els.msg.classList.has("hidden"), false);
 setMsg(null);
 assert.equal(els.msg.classList.has("hidden"), true);
 
+setMsg("图片加载中", 0, true);
+assert.equal(els.msg.classList.has("image-loading"), true);
+setMsg("加载失败");
+assert.equal(els.msg.classList.has("image-loading"), false,
+  "a terminal message clears the image-loading animation state");
+
+setMsg("temporary", 10);
+assert.equal(els.msg.classList.has("hidden"), false);
+await new Promise((resolve) => setTimeout(resolve, 15));
+assert.equal(els.msg.classList.has("hidden"), true);
+assert.equal(els.msg.classList.has("image-loading"), false);
+
+setMsg("old temporary", 10);
+setMsg("new persistent");
+await new Promise((resolve) => setTimeout(resolve, 15));
+assert.equal(els.msg.textContent, "new persistent");
+assert.equal(els.msg.classList.has("hidden"), false);
+
 setLive(true, "实时摄像头");
 assert.equal(els.live.dataset.k, "实时摄像头");
 assert.equal(els.live.classList.has("on"), true);

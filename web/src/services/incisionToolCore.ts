@@ -51,8 +51,10 @@ const MEDIAPIPE_OUTER_LIP_LOOP = [
 ] as const;
 
 // Reuse the audited standard-atlas nostril aperture mask (v9) in normalized
-// face coordinates. It is an engineering non-skin opening, not a clinical
-// safety margin, and deliberately does not cover the surrounding nasal ala.
+// image coordinates (Y points down). Canonical model coordinates point Y up,
+// so callers in model space must invert only the aperture centre's Y value.
+// This is an engineering non-skin opening, not a clinical safety margin, and
+// deliberately does not cover the surrounding nasal ala.
 const STANDARD_RSTL_NOSTRIL_APERTURES = [
   { id: "left-nostril-opening", center: [0.405, 0.53] as Point2, radii: [0.034, 0.052] as Point2 },
   { id: "right-nostril-opening", center: [0.595, 0.53] as Point2, radii: [0.034, 0.052] as Point2 },
@@ -232,7 +234,12 @@ function polygonArea2d(points: Point2[]): number {
   }, 0) / 2;
 }
 
-export function buildMediaPipeEngineeringExclusionZones(verts: ArrayLike<number>[]): AnyRecord[] {
+export type EngineeringExclusionCoordinateSpace = "model_y_up" | "image_y_down";
+
+export function buildMediaPipeEngineeringExclusionZones(
+  verts: ArrayLike<number>[],
+  coordinateSpace: EngineeringExclusionCoordinateSpace = "model_y_up",
+): AnyRecord[] {
   if (!Array.isArray(verts) || verts.length < MEDIAPIPE_FACE_VERTEX_COUNT) return [];
   const { lo, hi } = bbox(verts);
   const span = [hi[0] - lo[0], hi[1] - lo[1]];
@@ -268,18 +275,28 @@ export function buildMediaPipeEngineeringExclusionZones(verts: ArrayLike<number>
       clinical_boundary: "This topology opening and projection buffer are engineering exclusions only; they do not define a medical safety margin.",
     }];
   });
-  const nostrilZones = STANDARD_RSTL_NOSTRIL_APERTURES.map(({ id, center, radii }) => ({
-    id,
-    code: "candidate_intersects_non_skin_opening",
-    polygon: Array.from({ length: 32 }, (_, index) => {
-      const angle = index / 32 * Math.PI * 2;
-      return [center[0] + Math.cos(angle) * radii[0], center[1] + Math.sin(angle) * radii[1]] as Point2;
-    }),
-    source: "standard-rstl-v1-nostril-aperture-mask-v9",
-    projection_buffer_scale: 1,
-    recovery: "Move or regenerate the candidate so its complete path stays outside the mapped nostril opening.",
-    clinical_boundary: "This nostril aperture is an engineering exclusion only; it does not define a medical safety margin.",
-  }));
+  const nostrilZones = STANDARD_RSTL_NOSTRIL_APERTURES.map(({ id, center, radii }) => {
+    const apertureCenter: Point2 = [
+      center[0],
+      coordinateSpace === "model_y_up" ? 1 - center[1] : center[1],
+    ];
+    return {
+      id,
+      code: "candidate_intersects_non_skin_opening",
+      polygon: Array.from({ length: 32 }, (_, index) => {
+        const angle = index / 32 * Math.PI * 2;
+        return [
+          apertureCenter[0] + Math.cos(angle) * radii[0],
+          apertureCenter[1] + Math.sin(angle) * radii[1],
+        ] as Point2;
+      }),
+      source: "standard-rstl-v1-nostril-aperture-mask-v9",
+      coordinate_space: coordinateSpace,
+      projection_buffer_scale: 1,
+      recovery: "Move or regenerate the candidate so its complete path stays outside the mapped nostril opening.",
+      clinical_boundary: "This nostril aperture is an engineering exclusion only; it does not define a medical safety margin.",
+    };
+  });
   const outerLipVertices = MEDIAPIPE_OUTER_LIP_LOOP.map((index) => verts[index]);
   const outerLipPolygon = outerLipVertices.some((vertex) => !vertex || vertex.length < 2)
     ? []
