@@ -115,6 +115,25 @@
 | `sessionStorage` 不可用 | 预览图谱暂存失败并提示，不静默丢数据 |
 | 预览图谱解析或拓扑校验失败 | 切口工作台拒绝该草案，切换并显示“MediaPipe 标准 RSTL”，且不因无效数据中断启动 |
 
+### 4.1 受控单图复放与直接鱼尾纹实验
+
+`web/package.json` 暴露两个研究命令；它们不包含真实人脸原图或浏览器冻结产物，也不会从网络下载这些材料：
+
+| 命令 | 必需的受控本地输入 | 可选配置 |
+|---|---|---|
+| `npm run local:wrinkle` | `WRINKLE_LOCAL_INPUT`、`WRINKLE_LOCAL_BASELINE` | `WRINKLE_LOCAL_OUTPUT`、`WRINKLE_LOCAL_PYTHON` |
+| `npm run experiment:direct-crows` | `WRINKLE_CROWS_INPUT`、`WRINKLE_CROWS_BASELINE` | `WRINKLE_CROWS_FINE_LINES`、`WRINKLE_CROWS_OUTPUT`、`WRINKLE_CROWS_PYTHON` |
+
+输入图片必须与冻结基线的 `sourceImage.sha256` 对应；默认单图复放还固定核对已审阅实验图片的 SHA-256、
+YOLO 检测框和汇总诊断。runner 会逐文件记录并复核复制产物的 SHA-256，但不会重新运行
+FaceLandmarker/canvas 几何，因此 manifest 使用 `verificationStatus: engineering_replay_verified`，同时保持
+`validated:false` / `clinicalValidation:false`。直接鱼尾纹实验从受控源图按改写后的完整 `lines` 重绘，
+不能把新线叠到已有 RSTL PNG 上冒充“替换”。
+
+Python 默认使用 Windows 的 `python` 或 POSIX 的 `python3`；特殊环境通过对应的 `*_PYTHON` 变量指定。
+解释器必须能导入项目核心依赖 `numpy` 与 `cv2`。所有输入和输出放在受控存储或仓库已忽略的
+`local_media/`、`local_outputs/` 中，不得提交真实人脸材料。
+
 ## 5. 隐私边界
 
 - 摄像头帧、YOLO 推理、严格并集融合、V6 微调**全部在当前浏览器本地完成**，不上传服务器，无推理后端。

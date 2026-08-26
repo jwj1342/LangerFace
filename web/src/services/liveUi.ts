@@ -14,20 +14,26 @@ export interface IncisionOverlayQaState {
 }
 
 let testEls: LiveDomElements | null = null;
-let messageAutoHideTimer: ReturnType<typeof setTimeout> | null = null;
+let transientMessageTimer: ReturnType<typeof setTimeout> | null = null;
+
+export const LIVE_TRANSIENT_MESSAGE_DURATION_MS = 2_000;
 
 const els = (): LiveDomElements => testEls ?? boundEls;
 
 export function __setLiveUiElementsForTests(elements: LiveDomElements | null): void {
+  clearLiveUiMessageTimer();
   testEls = elements;
 }
 
+export function clearLiveUiMessageTimer(): void {
+  if (transientMessageTimer == null) return;
+  clearTimeout(transientMessageTimer);
+  transientMessageTimer = null;
+}
+
 export function setMsg(message: string | null, autoHideMs = 0, imageLoading = false): void {
+  clearLiveUiMessageTimer();
   const ui = els();
-  if (messageAutoHideTimer) {
-    clearTimeout(messageAutoHideTimer);
-    messageAutoHideTimer = null;
-  }
   if (message == null) {
     ui.msg.classList.add("hidden");
     ui.msg.classList.remove("image-loading");
@@ -36,13 +42,21 @@ export function setMsg(message: string | null, autoHideMs = 0, imageLoading = fa
     ui.msg.classList.remove("hidden");
     ui.msg.classList.toggle("image-loading", imageLoading);
     if (autoHideMs > 0) {
-      messageAutoHideTimer = setTimeout(() => {
-        ui.msg.classList.add("hidden");
-        ui.msg.classList.remove("image-loading");
-        messageAutoHideTimer = null;
-      }, autoHideMs);
+      const messageElement = ui.msg;
+      transientMessageTimer = setTimeout(() => {
+        transientMessageTimer = null;
+        messageElement.classList.add("hidden");
+        messageElement.classList.remove("image-loading");
+      }, Math.max(0, autoHideMs));
     }
   }
+}
+
+export function setTransientMsg(
+  message: string,
+  durationMs = LIVE_TRANSIENT_MESSAGE_DURATION_MS,
+): void {
+  setMsg(message, durationMs);
 }
 
 export function setLive(on: boolean, label: string): void {

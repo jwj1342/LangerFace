@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import type { LiveDomElements } from "../web/src/services/liveDom.ts";
 import {
   __setLiveUiElementsForTests,
+  clearLiveUiMessageTimer,
+  LIVE_TRANSIENT_MESSAGE_DURATION_MS,
   setIncisionOverlayQa,
   setLive,
   setMsg,
   setProvenance,
+  setTransientMsg,
   smoothLabel,
 } from "../web/src/services/liveUi.ts";
 
@@ -64,6 +67,33 @@ setMsg("old temporary", 10);
 setMsg("new persistent");
 await new Promise((resolve) => setTimeout(resolve, 15));
 assert.equal(els.msg.textContent, "new persistent");
+
+assert.equal(LIVE_TRANSIENT_MESSAGE_DURATION_MS, 2_000);
+setTransientMsg("temporary", 10);
+assert.equal(els.msg.textContent, "temporary");
+assert.equal(els.msg.classList.has("hidden"), false);
+await new Promise((resolve) => setTimeout(resolve, 20));
+assert.equal(els.msg.classList.has("hidden"), true);
+
+setTransientMsg("first", 20);
+await new Promise((resolve) => setTimeout(resolve, 5));
+setTransientMsg("second", 30);
+await new Promise((resolve) => setTimeout(resolve, 20));
+assert.equal(els.msg.textContent, "second");
+assert.equal(els.msg.classList.has("hidden"), false);
+await new Promise((resolve) => setTimeout(resolve, 20));
+assert.equal(els.msg.classList.has("hidden"), true);
+
+setTransientMsg("temporary before persistent", 10);
+setMsg("persistent");
+await new Promise((resolve) => setTimeout(resolve, 20));
+assert.equal(els.msg.textContent, "persistent");
+assert.equal(els.msg.classList.has("hidden"), false);
+
+setTransientMsg("temporary before dispose", 10);
+clearLiveUiMessageTimer();
+await new Promise((resolve) => setTimeout(resolve, 20));
+assert.equal(els.msg.textContent, "temporary before dispose");
 assert.equal(els.msg.classList.has("hidden"), false);
 
 setLive(true, "实时摄像头");

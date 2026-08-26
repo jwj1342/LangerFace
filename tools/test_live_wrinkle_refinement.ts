@@ -6,6 +6,7 @@ import {
   toWrinkleWorkingPoint,
 } from "../web/src/services/liveWrinkleMath.ts";
 import { YoloWrinkleOnnx } from "../web/src/services/personalized/yoloWrinkleOnnx.ts";
+import { buildPrecomputedFineWrinkleEvidence } from "../web/src/services/personalized/precomputedFineWrinkleEvidence.ts";
 
 const waitUntil = async (predicate: () => boolean, message: string): Promise<void> => {
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -67,6 +68,22 @@ assert.match(runtime, /beginFrozenRefineSession\(\)/,
   "every frozen frame must start a fresh geometry session");
 assert.match(runtime, /function handleTemplateChange[\s\S]*resetRefineForNewSource\(\);[\s\S]*resetLiveWrinkleAnalysis\(\);/,
   "changing the atlas must invalidate refinement and wrinkle results from the previous geometry");
+assert.doesNotMatch(runtime, /preloadLiveWrinkleModel|scheduleWrinkleModelPreload|requestIdleCallback/,
+  "the 47 MB wrinkle model must remain lazy until the user requests wrinkle detection");
+
+const pipelineSource = fs.readFileSync(
+  new URL("../web/src/services/pipelineSource.ts", import.meta.url),
+  "utf8",
+);
+assert.doesNotMatch(pipelineSource, /sourceSha256|crypto\.subtle\.digest\(\s*"SHA-256"/,
+  "the shared upload path must not hash every image for one experiment sample");
+
+const renderRuntime = fs.readFileSync(
+  new URL("../web/src/services/render2d.ts", import.meta.url),
+  "utf8",
+);
+assert.doesNotMatch(renderRuntime, /WRINKLE_PHOTO_SHA256|sourceSpecificForeheadVisible/,
+  "the shared RSTL renderer must not switch geometry visibility for one image hash");
 
 const refineRuntime = fs.readFileSync(
   new URL("../web/src/services/liveRefine2d.ts", import.meta.url),
@@ -88,14 +105,49 @@ assert.match(analysisRuntime, /runningMode: "IMAGE"/,
 assert.match(analysisRuntime, /outputFaceBlendshapes: false/);
 assert.match(analysisRuntime, /detectV9ReferenceLandmarks/,
   "v9 refinement must remap the atlas from the dedicated reference landmarks");
-assert.match(analysisRuntime, /state\.evidenceLines = evidence\.lines\.map[\s\S]*const refined = refineV6/,
+assert.match(analysisRuntime, /expandForehead: RSTL_STANDARD_CONTRACT\.expandForehead/,
+  "live wrinkle refinement must use the same v8.1.96 forehead mapping as the experiment");
+assert.doesNotMatch(
+  analysisRuntime,
+  /WRINKLE_PHOTO_SHA256|canonicalWrinkleV10Evidence|wrinkleV10FineLinesUrl|state\.evidenceSource = "wrinkle-v10"/,
+  "single-image precomputed evidence must stay in the explicit compat experiment, not the shared live detector",
+);
+assert.match(analysisRuntime, /await model\.load[\s\S]*const detection = await model\.detect/,
+  "the shared live detector must lazily load the general YOLO path after an explicit analysis request");
+assert.match(analysisRuntime, /state\.evidenceLines = evidenceLines\.map[\s\S]*const refined = refineV6/,
   "validated wrinkle evidence must be committed before refinement safety gates run");
+assert.match(analysisRuntime, /nearestSingleCurveMatching: true/,
+  "live refinement must assign each wrinkle only to its nearest eligible RSTL");
+assert.doesNotMatch(analysisRuntime, /bundlePropagation: true/,
+  "live refinement must not propagate one wrinkle to neighboring RSTL curves");
+assert.match(analysisRuntime, /maximum_selected_rstl_curves_per_wrinkle\) > 1/,
+  "the live safety gate must reject multi-RSTL assignment for one wrinkle");
+assert.match(analysisRuntime, /bundle_follower_moved_curve_count \|\| 0\) > 0/,
+  "the live safety gate must reject bundle follower movement");
 assert.match(analysisRuntime, /if \(state\.evidenceLines\.length > 0\)[\s\S]*updateStatus\("evidence", message\)/,
   "a rejected refinement must retain wrinkle evidence and report a non-fatal evidence state");
 assert.match(analysisRuntime, /await Promise\.allSettled\(\[\.\.\.activeAnalyses\]\);[\s\S]*await current\?\.close\(\)/,
   "route disposal must wait for active model work before releasing the ONNX session");
 assert.match(analysisRuntime, /const detection = await model\.detect[\s\S]*if \(generation !== state\.generation\) return;/,
   "a source generation change must reject stale inference results");
+
+{
+  // The helper and checked-in evidence remain available to the explicit
+  // single-image compat experiment; this block does not authorize live-page use.
+  const payload = JSON.parse(fs.readFileSync(
+    new URL("../web/assets/wrinkle_fine_lines_v10_wrinkle.json", import.meta.url),
+    "utf8",
+  ));
+  const evidence = buildPrecomputedFineWrinkleEvidence(
+    payload,
+    1254,
+    "1c6a677ea8aa2ebccd871ea39a7507ae64d9f64e83b03c389f6b18854fae5458",
+  );
+  assert.equal(evidence.lines.length, 26, "the canonical v10 evidence must preserve all centerlines");
+  assert.ok(evidence.rasterPixelCount > 0);
+  assert.throws(() => buildPrecomputedFineWrinkleEvidence(payload, 1254, "different-image"),
+    /different image/, "precomputed evidence cannot be reused for another image hash");
+}
 
 {
   let fetchCalls = 0;

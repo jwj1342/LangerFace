@@ -6,7 +6,7 @@
 {
   "system": "rstl",
   "version": "0.1",
-  "atlasVersion": "8.1.67",
+  "atlasVersion": "8.1.96",
   "topologyId": "mediapipe-468",
   "topologyVersion": "mediapipe-canonical-468-v1",
   "provenance": "...",

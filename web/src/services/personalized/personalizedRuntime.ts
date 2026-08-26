@@ -54,6 +54,7 @@ import {
 import personalizedAtlasUrl from "../../../assets/atlas_rstl.json?url";
 import faceLandmarkerUrl from "../../../assets/face_landmarker.task?url";
 import trianglesUrl from "../../../assets/triangles.json?url";
+import { assertStandardRstlAtlas, RSTL_STANDARD_CONTRACT } from "../rstlStandardContract.ts";
 
 // ── 1. 常量与 DOM ───────────────────────────────────────────────────────────
 const CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35";
@@ -493,9 +494,14 @@ async function ensureModels(lease: PersonalizedRuntimeLease) {
   els.badge.classList.add("warn");
   const [tri, rstl] = await Promise.all([
     fetchJsonAsset<Triangle[]>(trianglesUrl, "面部拓扑"),
-    fetchJsonAsset<{ lines: AtlasLine[] }>(personalizedAtlasUrl, "个性化图谱"),
+    fetchJsonAsset<{
+      atlasVersion: string;
+      validated: boolean;
+      lines: AtlasLine[];
+    }>(personalizedAtlasUrl, "个性化图谱"),
   ]);
   if (!lease.isActive()) throw new Error("个性化工作台已卸载，丢弃过期模型加载");
+  assertStandardRstlAtlas(rstl);
   triangles = tri;
   atlasLines = rstl.lines;
   const resolver = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
@@ -1869,6 +1875,10 @@ async function runLocalYoloV6(session: RuntimeSession): Promise<RuntimeSession> 
     directionQ,
     size: SIZE,
     faceWidthPx: canonicalFaceWidth(session),
+    options: {
+      nearestSingleCurveMatching: true,
+      bundlePropagation: false,
+    },
   });
   if (!lease.isActive() || sess !== session) throw new Error("采集会话已结束，已丢弃过期微调结果");
   const curves = normalizeV6Curves(refined?.curves || refined?.lines || refined, seeds);
@@ -2706,8 +2716,9 @@ function runSession(lmPx: Point2[], bs: BlendshapeDict, now: number): void {
         const masks = buildMasksFromMesh(sess.refMesh, SIZE);
         sess.skin = masks.skin;
         sess.forbidden = masks.forbidden;
-        const prior = rasterizePrior(loadedAtlas, sess.refMesh, loadedTriangles, SIZE, { expandForehead: false });
-        const topologySeeds = mapAtlas(loadedAtlas, mesh3, loadedTriangles, { expandForehead: false }).map((line, id) => ({
+        const mappingOptions = { expandForehead: RSTL_STANDARD_CONTRACT.expandForehead };
+        const prior = rasterizePrior(loadedAtlas, sess.refMesh, loadedTriangles, SIZE, mappingOptions);
+        const topologySeeds = mapAtlas(loadedAtlas, mesh3, loadedTriangles, mappingOptions).map((line, id) => ({
           name: line.name,
           region: line.region || loadedAtlas[id]?.region || "",
           id,

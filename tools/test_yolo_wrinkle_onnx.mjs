@@ -4,6 +4,8 @@ import {
   DEFAULT_MODEL_CHUNK_URLS,
   WrinkleYoloOnnx,
   YoloWrinkleOnnx,
+  YOLO_WRINKLE_MODEL_CACHE_NAME,
+  YOLO_WRINKLE_MODEL_CACHE_PREFIX,
   applyAnatomicalGates,
   boxIou,
   classAwareNms,
@@ -17,11 +19,41 @@ import {
   preprocessImageData,
   skeletonizeBinary,
 } from "../web/src/services/personalized/yoloWrinkleOnnx.ts";
+import {
+  fetchCachedModelAsset,
+  pruneVersionedModelCaches,
+} from "../web/src/services/personalized/modelAssetCache.ts";
 
 assert.equal(DEFAULT_MODEL_CHUNK_URLS.length, 4);
 assert.ok(DEFAULT_MODEL_CHUNK_URLS.every((url) => /\.onnx\.part0[0-3]$/.test(url)));
 assert.equal(WrinkleYoloOnnx, YoloWrinkleOnnx);
 assert.equal(typeof YoloWrinkleOnnx.prototype.detect, "function");
+assert.ok(YOLO_WRINKLE_MODEL_CACHE_NAME.startsWith(YOLO_WRINKLE_MODEL_CACHE_PREFIX));
+
+function createMemoryCacheStorage(initialNames = []) {
+  const stores = new Map(initialNames.map((name) => [name, new Map()]));
+  return {
+    stores,
+    async open(name) {
+      if (!stores.has(name)) stores.set(name, new Map());
+      const store = stores.get(name);
+      return {
+        async match(url) {
+          return store.get(String(url))?.clone();
+        },
+        async put(url, response) {
+          store.set(String(url), response.clone());
+        },
+      };
+    },
+    async keys() {
+      return [...stores.keys()];
+    },
+    async delete(name) {
+      return stores.delete(name);
+    },
+  };
+}
 
 {
   const responses = [new Uint8Array([1, 2]), new Uint8Array([3, 4, 5])];
@@ -31,6 +63,181 @@ assert.equal(typeof YoloWrinkleOnnx.prototype.detect, "function");
     fetchImpl: async () => ({ ok: true, arrayBuffer: async () => responses[call++].buffer }),
   });
   assert.deepEqual([...bytes], [1, 2, 3, 4, 5]);
+}
+
+{
+  const cacheStorage = createMemoryCacheStorage();
+  const payloads = {
+    part0: new Uint8Array([1, 2]),
+    part1: new Uint8Array([3, 4, 5]),
+  };
+  let fetchCount = 0;
+  const fetchImpl = async (url) => {
+    fetchCount += 1;
+    return new Response(payloads[url], { status: 200 });
+  };
+  const progress = [];
+  const first = await fetchBinaryChunks(["part0", "part1"], {
+    expectedBytes: 5,
+    fetchImpl,
+    persistentCacheName: "model-v1",
+    cacheStorage,
+    onProgress: (current) => progress.push(current),
+  });
+  assert.deepEqual([...first], [1, 2, 3, 4, 5]);
+  assert.equal(fetchCount, 2);
+  assert.equal(progress.at(-1).persistentCacheHits, 0);
+
+  progress.length = 0;
+  const second = await fetchBinaryChunks(["part0", "part1"], {
+    expectedBytes: 5,
+    fetchImpl,
+    persistentCacheName: "model-v1",
+    cacheStorage,
+    onProgress: (current) => progress.push(current),
+  });
+  assert.deepEqual([...second], [...first]);
+  assert.equal(fetchCount, 2, "second load is served entirely from persistent cache");
+  assert.equal(progress.at(-1).persistentCacheHits, 2);
+
+  await fetchBinaryChunks(["part0", "part1"], {
+    expectedBytes: 5,
+    fetchImpl,
+    persistentCacheName: "model-v2",
+    cacheStorage,
+  });
+  assert.equal(fetchCount, 4, "a new model version uses an isolated cache");
+}
+
+{
+  let fetchCount = 0;
+  const loaded = await fetchCachedModelAsset("part0", {
+    cacheName: "unavailable-cache",
+    cacheStorage: { async open() { throw new Error("cache unavailable"); } },
+    fetchImpl: async () => {
+      fetchCount += 1;
+      return new Response(new Uint8Array([9]), { status: 200 });
+    },
+  });
+  assert.equal(loaded.source, "network");
+  assert.equal(fetchCount, 1, "cache API failure falls back to one network request");
+}
+
+{
+  const active = `${YOLO_WRINKLE_MODEL_CACHE_PREFIX}active`;
+  const old = `${YOLO_WRINKLE_MODEL_CACHE_PREFIX}old`;
+  const cacheStorage = createMemoryCacheStorage([active, old, "unrelated-cache"]);
+  await pruneVersionedModelCaches(YOLO_WRINKLE_MODEL_CACHE_PREFIX, active, cacheStorage);
+  assert.deepEqual([...cacheStorage.stores.keys()].sort(), [active, "unrelated-cache"].sort());
+}
+
+{
+  const cacheStorage = createMemoryCacheStorage();
+  const cache = await cacheStorage.open(YOLO_WRINKLE_MODEL_CACHE_NAME);
+  await cache.put("part0", new Response(new Uint8Array([9]), { status: 200 }));
+  let fetchCount = 0;
+  let releaseCount = 0;
+  const runtime = {
+    Tensor: class {},
+    InferenceSession: {
+      async create() {
+        return {
+          async run() { return {}; },
+          async release() { releaseCount += 1; },
+        };
+      },
+    },
+  };
+  const model = new YoloWrinkleOnnx({
+    chunkUrls: ["part0"],
+    expectedModelBytes: 2,
+    verifySha256: false,
+    persistentCache: true,
+    cacheStorage,
+    runtime,
+    fetchImpl: async () => {
+      fetchCount += 1;
+      return new Response(new Uint8Array([1, 2]), { status: 200 });
+    },
+  });
+  await model.load();
+  assert.equal(fetchCount, 1, "invalid cached bytes are evicted before one network retry");
+  assert.equal(model.lastLoadStats.persistentCacheHits, 0);
+  await model.close();
+  assert.equal(releaseCount, 1);
+}
+
+{
+  let fetchCount = 0;
+  let createCount = 0;
+  let releaseCount = 0;
+  const runtime = {
+    Tensor: class {},
+    InferenceSession: {
+      async create() {
+        createCount += 1;
+        return {
+          inputNames: ["images"],
+          async run() { return {}; },
+          async release() { releaseCount += 1; },
+        };
+      },
+    },
+  };
+  const model = new YoloWrinkleOnnx({
+    chunkUrls: ["part0"],
+    expectedModelBytes: 2,
+    verifySha256: false,
+    persistentCache: false,
+    runtime,
+    fetchImpl: async () => {
+      fetchCount += 1;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return new Response(new Uint8Array([1, 2]), { status: 200 });
+    },
+  });
+  await Promise.all([model.load(), model.load()]);
+  assert.equal(fetchCount, 1, "concurrent callers share one chunk fetch");
+  assert.equal(createCount, 1, "concurrent callers share one ONNX session creation");
+  await model.close();
+  assert.equal(releaseCount, 1);
+}
+
+{
+  let createStarted;
+  const createStartedPromise = new Promise((resolve) => { createStarted = resolve; });
+  let finishCreate;
+  const finishCreatePromise = new Promise((resolve) => { finishCreate = resolve; });
+  let releaseCount = 0;
+  const runtime = {
+    Tensor: class {},
+    InferenceSession: {
+      async create() {
+        createStarted();
+        await finishCreatePromise;
+        return {
+          async run() { return {}; },
+          async release() { releaseCount += 1; },
+        };
+      },
+    },
+  };
+  const model = new YoloWrinkleOnnx({
+    chunkUrls: ["part0"],
+    expectedModelBytes: 1,
+    verifySha256: false,
+    persistentCache: false,
+    runtime,
+    fetchImpl: async () => new Response(new Uint8Array([1]), { status: 200 }),
+  });
+  const loading = model.load();
+  await createStartedPromise;
+  const closing = model.close();
+  finishCreate();
+  await assert.rejects(loading, /cancelled/);
+  await closing;
+  assert.equal(releaseCount, 1, "a session completed after route disposal is released immediately");
+  assert.equal(model.session, null);
 }
 
 {

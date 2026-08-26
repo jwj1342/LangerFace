@@ -18,7 +18,7 @@ import {
 import { resetRefineForNewSource } from "./liveRefine2d";
 import { LiveFrameScheduler } from "./liveFrameScheduler.ts";
 import { resetLiveWrinkleAnalysis } from "./liveWrinkleAnalysis.ts";
-import { setLive, setMsg } from "./liveUi.ts";
+import { setLive, setMsg, setTransientMsg } from "./liveUi.ts";
 import { cancelFrame, requestFrame } from "./pipelineLoop.ts";
 import { ensureImageReady, ensureReady } from "./pipelineModels.ts";
 
@@ -145,7 +145,9 @@ export async function handleFile(file?: File): Promise<void> {
           height: prepared.height,
           scaled: prepared.scaled,
         });
-        if (prepared.scaled) setMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`, 3000);
+        if (prepared.scaled) {
+          setTransientMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
+        }
       } finally {
         URL.revokeObjectURL(url);
         pendingObjectUrl = null;

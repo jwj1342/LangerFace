@@ -9,6 +9,7 @@ import type { Triangle } from "./softBody.ts";
 import { countMetric, logInfo, logWarn, recordMetricSample, setAssetVersions } from "./logger.ts";
 import { modelState } from "./liveState.ts";
 import { buildRstlSourceContract } from "./rstlSourceContract.ts";
+import { assertStandardRstlAtlas } from "./rstlStandardContract.ts";
 
 type Delegate = "GPU" | "CPU";
 type VisionWasmFileset = Parameters<typeof FaceLandmarker.createFromOptions>[0];
@@ -61,6 +62,7 @@ async function initializeAssetsReady(): Promise<void> {
       logWarn(`图谱 ${system} 校验失败。`, { issues });
       throw new Error(`图谱 ${system} 校验失败：${issues.join("；")}`);
     }
+    if (system === "rstl") assertStandardRstlAtlas(atlas);
     return atlas.lines;
   };
   modelState.topology = { ...(Array.isArray(topology) ? {} : topology), topologyId, topologyVersion, triangles: tri };

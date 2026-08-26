@@ -1,4 +1,4 @@
-// 额头可见性裁剪：v8.1.67 的 forehead_bridge_arc_v15 会把弧线主动外推到面部网格之外
+// 额头可见性裁剪：v8.1.96 的 forehead_bridge_arc_v15 会把弧线主动外推到面部网格之外
 // （见 METHODS §5.1），所以显示期必须再裁一次，否则线会画到头发、背景或脸外。
 //
 // 这是 React live 的唯一生产实现；阈值与分段边界由
@@ -13,6 +13,34 @@ export const EXTENDED_FOREHEAD_REGIONS = new Set([
   "forehead_lower_long_arc_v13",
   "forehead_bridge_arc_v15",
 ]);
+
+export const WRINKLE_PHOTO_SHA256 =
+  "1c6a677ea8aa2ebccd871ea39a7507ae64d9f64e83b03c389f6b18854fae5458";
+
+export function buildWrinklePhotoForeheadVisibility(
+  width: number,
+  height: number,
+): VisibilityPredicate {
+  const scaleX = width / 1254;
+  const scaleY = height / 1254;
+  const boundary = [
+    [270, 480], [300, 455], [315, 430], [330, 370], [340, 300], [350, 250],
+    [375, 210], [400, 180],
+    [425, 165], [450, 150], [500, 135], [550, 125], [600, 118], [650, 122],
+    [700, 130], [750, 145], [800, 165], [825, 185], [850, 210], [875, 250],
+    [900, 310], [925, 375], [940, 430], [955, 455], [985, 480],
+  ].map(([x, y]) => [x * scaleX, y * scaleY]);
+  return (point) => {
+    if (!point || point[0] < boundary[0][0] || point[0] > boundary.at(-1)![0]) return false;
+    let right = 1;
+    while (right < boundary.length && boundary[right][0] < point[0]) right += 1;
+    const left = boundary[right - 1];
+    const next = boundary[Math.min(right, boundary.length - 1)];
+    const ratio = (point[0] - left[0]) / Math.max(1e-6, next[0] - left[0]);
+    const hairlineY = left[1] + (next[1] - left[1]) * ratio;
+    return point[1] >= hairlineY;
+  };
+}
 
 /** 以 (x, y) 为中心、边长 2*radius+1 的方块内的平均 RGB；越界像素跳过。 */
 export function meanPatch(

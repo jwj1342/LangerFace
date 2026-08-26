@@ -48,6 +48,10 @@ assert.match(source, /consolidationRadiusPx/,
   "cross-expression strict union exposes a direction-aware deghosted mask");
 assert.match(source, /fused\?\.consolidatedMask \|\| fused\?\.mask/,
   "V6 consumes the consolidated view while retaining the exact union for audit");
+assert.match(source, /nearestSingleCurveMatching: true/,
+  "personalized V6 must assign each wrinkle only to its nearest eligible RSTL");
+assert.match(source, /bundlePropagation: false/,
+  "personalized V6 must not propagate one wrinkle to neighboring RSTL curves");
 assert.match(source, /soft_floor_with_confidence_weight/,
   "diagnostics must identify the softened expression-region gate");
 assert.match(source, /SQUINT_QUALITY_THRESHOLDS/,
@@ -84,8 +88,10 @@ assert.match(liveSource, /provenanceText\.includes\("local-yolo"\)/,
   "the live UI must recognize the string provenance emitted by the browser V6 pipeline");
 assert.match(liveSource, /\? "个性化 V6"/,
   "the live UI must preserve personalized provenance instead of labeling every preview as annotation");
-assert.match(source, /expandForehead: false/,
-  "personalized canonical mapping must not apply the legacy forehead expansion twice");
+assert.match(source, /expandForehead: RSTL_STANDARD_CONTRACT\.expandForehead/,
+  "personalized canonical mapping must use the standard v8.1.96 forehead mapping");
+assert.match(source, /assertStandardRstlAtlas\(rstl\)/,
+  "personalized capture must reject stale or partial RSTL assets");
 assert.match(source, /disableRuntimeExpansion: true/,
   "the staged personalized atlas must keep legacy expansion disabled in the live renderer");
 assert.doesNotMatch(source, /warpPriorCurvesWithHessian/,

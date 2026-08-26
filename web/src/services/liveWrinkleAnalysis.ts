@@ -18,13 +18,13 @@ import {
 } from "./liveWrinkleMath.ts";
 import {
   extractFineWrinkleLines,
-  type FineWrinkleLine,
 } from "./personalized/fineWrinkleLines.ts";
 import { refineV6, V6_RSTL_ALGORITHM } from "./personalized/v6RstlRefinement.ts";
 import {
   YoloWrinkleOnnx,
   YOLO_WRINKLE_CONFIDENCE,
 } from "./personalized/yoloWrinkleOnnx.ts";
+import { RSTL_STANDARD_CONTRACT } from "./rstlStandardContract.ts";
 
 export type WrinkleDisplayMode = "rstl" | "wrinkles" | "both";
 type AnalysisStatus =
@@ -62,6 +62,7 @@ interface WrinkleAnalysisState {
   movedPointCount: number;
   fineLineCount: number;
   sourceComponentCount: number;
+  evidenceSource: "browser-yolo" | null;
   diagnostics: Record<string, any> | null;
   audit: Record<string, any> | null;
   error: string | null;
@@ -78,6 +79,7 @@ const state: WrinkleAnalysisState = {
   movedPointCount: 0,
   fineLineCount: 0,
   sourceComponentCount: 0,
+  evidenceSource: null,
   diagnostics: null,
   audit: null,
   error: null,
@@ -175,7 +177,9 @@ export function buildWrinkleWorkingFrame(
 
 function currentStandardLines(landmarks: Vec3[]): EditableRefineLine[] {
   const atlasLines = modelState.atlases.rstl;
-  return cloneMappedLines(mapAtlas(atlasLines, landmarks, modelState.triangles as any[]));
+  return cloneMappedLines(mapAtlas(atlasLines, landmarks, modelState.triangles as any[], {
+    expandForehead: RSTL_STANDARD_CONTRACT.expandForehead,
+  }));
 }
 
 function yoloInstance(): YoloWrinkleOnnx {
@@ -185,15 +189,11 @@ function yoloInstance(): YoloWrinkleOnnx {
 
 function v9Options(faceWidth: number) {
   return {
-    exclusiveTrendMatching: true,
-    oneToOneTrendCurveMatching: true,
+    nearestSingleCurveMatching: true,
     logicalTrendGrouping: true,
     softLinkDistancePx: faceWidth * 0.030,
     softLinkTurnDegrees: 18,
     softLinkTangentSpanPx: Math.round(faceWidth * 0.020),
-    globalLengthAwareMatching: true,
-    intervalAwareAnchorSharing: true,
-    anchorIntervalPaddingPx: faceWidth * 0.010,
     adherenceRetryAttempts: 10,
     shortWrinkleQuantizationTolerance: true,
     shortWrinkleMaximumLengthRatio: 0.12,
@@ -211,18 +211,6 @@ function v9Options(faceWidth: number) {
     p90LimitPx: faceWidth * 0.030,
     maxDisplacementPx: faceWidth * 0.045,
     maxCurvatureChangeDegrees: 60,
-    bundlePropagation: true,
-    bundleFollowerCountPerSide: 1,
-    bundleFollowerStrength: 0.85,
-    bundlePropagationRadiusPx: faceWidth * 0.050,
-    bundleDirectionConflictDegrees: 25,
-    bundleConflictDominanceRatio: 1.5,
-    bundleDataAttractionStrength: 8,
-    bundleSmoothingPasses: 16,
-    bundleFollowerTopologyPriority: 0.25,
-    bundleMinimumSpacingRatio: 0.65,
-    bundleDenseFollowerRegion: "lateral_canthus_short_arc_v65",
-    bundleDenseFollowerCountPerSide: 3,
     curvatureFairing: true,
     curvatureFairingPasses: 32,
     curvatureFairingMaximumTurnDegrees: 8,
@@ -238,11 +226,14 @@ function v9Options(faceWidth: number) {
 function assertRefinementGate(diagnostics: Record<string, any>): void {
   if (
     diagnostics.algorithm !== V6_RSTL_ALGORITHM
+    || diagnostics.nearest_single_curve_matching !== true
+    || Number(diagnostics.maximum_selected_rstl_curves_per_wrinkle) > 1
+    || diagnostics.bundle_propagation_enabled === true
+    || Number(diagnostics.bundle_follower_moved_curve_count || 0) > 0
     || diagnostics.curvature_fairing_enabled !== true
     || diagnostics.topology_contract_preserved !== true
     || diagnostics.post_export_new_intersection_pair_count !== 0
     || diagnostics.post_export_new_self_cross_curve_count !== 0
-    || Number(diagnostics.bundle_minimum_spacing_ratio) < 0.65
   ) {
     throw new Error("皱纹引导结果未通过拓扑、交叉或线束间距门禁");
   }
@@ -322,6 +313,7 @@ export function getLiveWrinkleAnalysisDebugSnapshot() {
     status: state.status,
     fineLineCount: state.fineLineCount,
     sourceComponentCount: state.sourceComponentCount,
+    evidenceSource: state.evidenceSource,
     movedCurveCount: state.movedCurveCount,
     movedPointCount: state.movedPointCount,
     faceLandmarkerDelegate: "CPU",
@@ -357,6 +349,7 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
   state.movedPointCount = 0;
   state.fineLineCount = 0;
   state.sourceComponentCount = 0;
+  state.evidenceSource = null;
   state.diagnostics = null;
   state.audit = null;
   updateStatus("loading");
@@ -381,6 +374,7 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
     }));
     const xs = workLandmarks.map((point) => point[0]);
     const faceWidth = Math.max(...xs) - Math.min(...xs);
+    updateStatus("detecting");
     const model = yoloInstance();
     await model.load((progress) => {
       if (generation !== state.generation) return;
@@ -388,7 +382,6 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
       els.wrinkleSummary.textContent = `正在本机加载 YOLO 模型：${percent}%`;
     });
     if (generation !== state.generation) return;
-    updateStatus("detecting");
     const detection = await model.detect(working.imageData, {
       confidenceThreshold: YOLO_WRINKLE_CONFIDENCE,
     });
@@ -399,16 +392,25 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
       working.size,
       { minimumLineLengthPx: 20, resampleSpacingPx: 1, maximumSkeletonIterations: 96 },
     );
-    if (!evidence.lines.length || !evidence.validation.passed) {
+    state.evidenceSource = "browser-yolo";
+    if (!evidence.lines.length || ("validation" in evidence && !evidence.validation.passed)) {
       throw new Error("未提取到通过质量门禁的细皱纹线");
     }
-    state.evidenceLines = evidence.lines.map((line: FineWrinkleLine) => ({
+    const evidenceLines = evidence.lines as Array<{
+      id: string;
+      class: string;
+      points: Array<[number, number]>;
+    }>;
+    const evidenceSummary = evidence.summary as Record<string, unknown>;
+    state.evidenceLines = evidenceLines.map((line) => ({
       id: line.id,
       className: line.class,
       points: line.points.map((point) => fromWrinkleWorkingPoint(point, working)),
     }));
-    state.fineLineCount = evidence.summary.fineLineCount;
-    state.sourceComponentCount = evidence.summary.sourceConnectedComponents;
+    state.fineLineCount = evidenceLines.length;
+    state.sourceComponentCount = Number(evidenceSummary.sourceConnectedComponents)
+      || Number(evidenceSummary.lineCount)
+      || evidenceLines.length;
     window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
     updateStatus("refining");
     const refined = refineV6({
@@ -497,6 +499,7 @@ export function resetLiveWrinkleAnalysis(): void {
   state.movedPointCount = 0;
   state.fineLineCount = 0;
   state.sourceComponentCount = 0;
+  state.evidenceSource = null;
   state.diagnostics = null;
   state.audit = null;
   state.error = null;
