@@ -1,7 +1,42 @@
 export const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
-  video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
+  video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: { exact: "environment" } },
   audio: false,
 };
+
+export type CameraFacingMode = "environment" | "user" | "unknown";
+export type CameraConstraintLevel = "environment_exact" | "environment_ideal" | "generic";
+
+export interface CameraConstraintCandidate {
+  constraintLevel: CameraConstraintLevel;
+  constraints: MediaStreamConstraints;
+}
+
+export interface CameraOpenResult {
+  stream: MediaStream;
+  facingMode: CameraFacingMode;
+  constraintLevel: CameraConstraintLevel;
+}
+
+export type CameraStreamRequest = (constraints: MediaStreamConstraints) => Promise<MediaStream>;
+export type CameraRetryGuard = () => boolean;
+
+export const CAMERA_CONSTRAINT_CANDIDATES: readonly CameraConstraintCandidate[] = [
+  {
+    constraintLevel: "environment_exact",
+    constraints: CAMERA_CONSTRAINTS,
+  },
+  {
+    constraintLevel: "environment_ideal",
+    constraints: {
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: { ideal: "environment" } },
+      audio: false,
+    },
+  },
+  {
+    constraintLevel: "generic",
+    constraints: { video: true, audio: false },
+  },
+];
 
 export interface CameraErrorDescription {
   reason: "permission_denied" | "camera_busy" | "no_device" | "insecure_context" | "unknown";
@@ -29,6 +64,46 @@ export async function openCameraStream(constraints: MediaStreamConstraints = CAM
     throw cameraError("MediaDevicesUnavailable", "navigator.mediaDevices.getUserMedia is unavailable.");
   }
   return navigator.mediaDevices.getUserMedia(constraints);
+}
+
+export function isCameraSelectionFallbackError(error: unknown): boolean {
+  const name = (error as { name?: string } | null | undefined)?.name || "";
+  return name === "OverconstrainedError"
+    || name === "ConstraintNotSatisfiedError"
+    || name === "NotFoundError"
+    || name === "DevicesNotFoundError";
+}
+
+export function cameraFacingModeFromStream(
+  stream: Pick<MediaStream, "getVideoTracks">,
+): CameraFacingMode {
+  try {
+    const facingMode = stream.getVideoTracks()[0]?.getSettings().facingMode;
+    return facingMode === "environment" || facingMode === "user" ? facingMode : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+export async function openPreferredCameraStream(
+  request: CameraStreamRequest = openCameraStream,
+  canRetry: CameraRetryGuard = () => true,
+): Promise<CameraOpenResult> {
+  for (let index = 0; index < CAMERA_CONSTRAINT_CANDIDATES.length; index += 1) {
+    const candidate = CAMERA_CONSTRAINT_CANDIDATES[index];
+    try {
+      const stream = await request(candidate.constraints);
+      return {
+        stream,
+        facingMode: cameraFacingModeFromStream(stream),
+        constraintLevel: candidate.constraintLevel,
+      };
+    } catch (error) {
+      const hasNextCandidate = index < CAMERA_CONSTRAINT_CANDIDATES.length - 1;
+      if (!hasNextCandidate || !isCameraSelectionFallbackError(error) || !canRetry()) throw error;
+    }
+  }
+  throw cameraError("NotFoundError", "No camera constraint candidate succeeded.");
 }
 
 export function stopCameraStream(stream: Pick<MediaStream, "getTracks"> | null | undefined): void {

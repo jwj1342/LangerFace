@@ -307,6 +307,7 @@ function handleHandOccChange(e: Event | CheckedControlEvent): void {
 
 function handleMirrorChange(e: Event | CheckedControlEvent): void {
   renderState.mirror = eventChecked(e);
+  els.mirror.checked = renderState.mirror;
   els.canvas.classList.toggle("mirror", renderState.mirror);
   renderState.zoomCards.forEach((zc: LiveZoomCard) => zc.canvas.classList.toggle("mirror", renderState.mirror));
   refreshStaticImage();
@@ -347,7 +348,11 @@ function toggleRecording(): void {
 const liveCommands = new LiveCommandRouter({
   run: runLiveAction,
   uploadSource: () => els.file.click(),
-  cameraToggle: startCamera,
+  cameraToggle: () => startCamera({
+    onFacingMode() {
+      handleMirrorChange(checkedEvent(false));
+    },
+  }),
   pauseToggle: handlePauseToggle,
   recordingToggle: toggleRecording,
   templateChange: (value) => handleTemplateChange(valueEvent(value)),

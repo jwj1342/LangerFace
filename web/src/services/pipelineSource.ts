@@ -1,5 +1,10 @@
 import { clearCanvasDisplayFit, fitCanvasDisplayToStage } from "./liveCanvasFit.ts";
-import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream, stopCameraStream } from "./cameraSource.ts";
+import {
+  describeCameraError,
+  openPreferredCameraStream,
+  stopCameraStream,
+  type CameraFacingMode,
+} from "./cameraSource.ts";
 import { ctx, els } from "./liveDom.ts";
 import { prepareImageSource } from "./imageSource.ts";
 import { countMetric, logWarn, recordMetricSample } from "./logger.ts";
@@ -21,7 +26,11 @@ type SourceKind = "camera" | "video" | "image";
 let sourceOperationId = 0;
 const sourceLayoutScheduler = new LiveFrameScheduler();
 
-export async function startCamera(): Promise<void> {
+export interface StartCameraOptions {
+  onFacingMode?: (facingMode: CameraFacingMode) => void;
+}
+
+export async function startCamera(options: StartCameraOptions = {}): Promise<void> {
   const operationId = ++sourceOperationId;
   let pendingStream: MediaStream | null = null;
   const releasePendingStream = (): void => {
@@ -42,7 +51,11 @@ export async function startCamera(): Promise<void> {
     await ensureReady();
     if (operationId !== sourceOperationId) return;
     setMsg("请求摄像头权限…");
-    pendingStream = await openCameraStream(CAMERA_CONSTRAINTS);
+    const openedCamera = await openPreferredCameraStream(
+      undefined,
+      () => operationId === sourceOperationId,
+    );
+    pendingStream = openedCamera.stream;
     if (operationId !== sourceOperationId) {
       releasePendingStream();
       return;
@@ -54,6 +67,7 @@ export async function startCamera(): Promise<void> {
       releasePendingStream();
       return;
     }
+    options.onFacingMode?.(openedCamera.facingMode);
     const stream = pendingStream;
     if (!stream) return;
     setSource(els.video, "camera", els.video.videoWidth, els.video.videoHeight, {
