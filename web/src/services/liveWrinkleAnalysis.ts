@@ -2,7 +2,6 @@ import { FaceLandmarker } from "@mediapipe/tasks-vision";
 import visionWasmLoaderUrl from "../../node_modules/@mediapipe/tasks-vision/wasm/vision_wasm_internal.js?url";
 import visionWasmBinaryUrl from "../../node_modules/@mediapipe/tasks-vision/wasm/vision_wasm_internal.wasm?url";
 import faceLandmarkerUrl from "../../assets/face_landmarker.task?url";
-import wrinkleV10FineLinesUrl from "../../assets/wrinkle_fine_lines_v10_wrinkle.json?url";
 
 import { els } from "./liveDom.ts";
 import { mapAtlas, toPixels, type MappedAtlasLine } from "./geometryAtlas.ts";
@@ -17,32 +16,15 @@ import {
   fromWrinkleWorkingPoint,
   toWrinkleWorkingPoint,
 } from "./liveWrinkleMath.ts";
+import { V6_RSTL_ALGORITHM } from "./personalized/v6RstlRefinementV9.ts";
+import { runGeneralLiveWrinklePipeline } from "./personalized/liveWrinklePipeline.ts";
 import {
-  extractFineWrinkleLines,
-} from "./personalized/fineWrinkleLines.ts";
-import {
-  buildPrecomputedFineWrinkleEvidence,
-  type PrecomputedFineWrinkleEvidence,
-  type PrecomputedFineWrinklePayload,
-} from "./personalized/precomputedFineWrinkleEvidence.ts";
-import { refineV6, V6_RSTL_ALGORITHM } from "./personalized/v6RstlRefinementV9.ts";
-import {
-  buildDirectNoseDorsumRstl,
-  DIRECT_NOSE_DORSUM_FINE_LINE_IDS,
-} from "./personalized/directNoseDorsumRstl.ts";
-import {
-  buildNoseRootIntersectionVisibilityPlan,
-  noseRootVisibilityDiagnostic,
-} from "./personalized/noseRootIntersectionVisibility.ts";
-import {
-  latestV9RstlRefinementOptions,
   LATEST_WRINKLE_REFINEMENT_PROFILE,
 } from "./personalized/v9RstlRefinementProfile.ts";
 import {
   YoloWrinkleOnnx,
   YOLO_WRINKLE_CONFIDENCE,
 } from "./personalized/yoloWrinkleOnnx.ts";
-import { WRINKLE_PHOTO_SHA256 } from "./foreheadVisibility.ts";
 import { RSTL_STANDARD_CONTRACT } from "./rstlStandardContract.ts";
 
 export type WrinkleDisplayMode = "rstl" | "wrinkles" | "both";
@@ -81,7 +63,7 @@ interface WrinkleAnalysisState {
   movedPointCount: number;
   fineLineCount: number;
   sourceComponentCount: number;
-  evidenceSource: "browser-yolo" | "wrinkle-v10" | null;
+  evidenceSource: "browser-yolo" | null;
   diagnostics: Record<string, any> | null;
   audit: Record<string, any> | null;
   error: string | null;
@@ -106,16 +88,7 @@ const state: WrinkleAnalysisState = {
 
 let yolo: YoloWrinkleOnnx | null = null;
 let wrinkleFaceLandmarker: FaceLandmarker | null = null;
-let wrinkleV10EvidencePromise: Promise<PrecomputedFineWrinklePayload> | null = null;
-const sourceHashPromises = new WeakMap<File, Promise<string>>();
 const activeAnalyses = new Set<Promise<void>>();
-
-const LEFT_EYE_CONTOUR = [
-  33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246,
-];
-const RIGHT_EYE_CONTOUR = [
-  362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398,
-];
 
 const cloneMappedLines = (lines: readonly MappedAtlasLine[]): EditableRefineLine[] => (
   lines.map((line) => ({
@@ -216,68 +189,6 @@ function yoloInstance(): YoloWrinkleOnnx {
   return yolo;
 }
 
-async function sha256File(file: File): Promise<string> {
-  let pending = sourceHashPromises.get(file);
-  if (!pending) {
-    pending = file.arrayBuffer().then(async (buffer) => {
-      const digest = await crypto.subtle.digest("SHA-256", buffer);
-      return [...new Uint8Array(digest)]
-        .map((value) => value.toString(16).padStart(2, "0"))
-        .join("");
-    });
-    sourceHashPromises.set(file, pending);
-  }
-  return pending;
-}
-
-async function loadWrinkleV10Evidence(): Promise<PrecomputedFineWrinklePayload> {
-  wrinkleV10EvidencePromise ||= fetch(wrinkleV10FineLinesUrl).then(async (response) => {
-    if (!response.ok) throw new Error(`Unable to load wrinkle v10 evidence (${response.status})`);
-    return response.json() as Promise<PrecomputedFineWrinklePayload>;
-  }).catch((error) => {
-    wrinkleV10EvidencePromise = null;
-    throw error;
-  });
-  return wrinkleV10EvidencePromise;
-}
-
-function withoutDirectNoseDorsumLines(
-  payload: PrecomputedFineWrinklePayload,
-): PrecomputedFineWrinklePayload {
-  const excluded = new Set<string>(DIRECT_NOSE_DORSUM_FINE_LINE_IDS);
-  return {
-    ...payload,
-    lines: (payload.lines || []).filter((line) => {
-      const id = line && typeof line === "object"
-        ? String((line as { id?: unknown }).id || "")
-        : "";
-      return !excluded.has(id);
-    }),
-  };
-}
-
-interface CanonicalWrinkleV10Evidence {
-  display: PrecomputedFineWrinkleEvidence;
-  guidance: PrecomputedFineWrinkleEvidence;
-}
-
-async function canonicalWrinkleV10Evidence(
-  size: number,
-): Promise<CanonicalWrinkleV10Evidence | null> {
-  const sourceFile = sourceState.sourceFile;
-  if (sourceState.sourceKind !== "image" || !sourceFile) return null;
-  if ((await sha256File(sourceFile)).toLowerCase() !== WRINKLE_PHOTO_SHA256) return null;
-  const payload = await loadWrinkleV10Evidence();
-  return {
-    display: buildPrecomputedFineWrinkleEvidence(payload, size, WRINKLE_PHOTO_SHA256),
-    guidance: buildPrecomputedFineWrinkleEvidence(
-      withoutDirectNoseDorsumLines(payload),
-      size,
-      WRINKLE_PHOTO_SHA256,
-    ),
-  };
-}
-
 function assertRefinementGate(diagnostics: Record<string, any>): void {
   if (
     diagnostics.algorithm !== V6_RSTL_ALGORITHM
@@ -334,9 +245,7 @@ export function updateWrinkleUi(): void {
   } else if (state.status === "evidence") {
     els.wrinkleSummary.textContent = `已绘制 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域）；${state.error || "自动微调未通过安全门禁"}，标准 RSTL 保持不变。`;
   } else if (analysisReady) {
-    const evidenceVersion = state.evidenceSource === "wrinkle-v10"
-      ? "v10 受控皱纹证据"
-      : "浏览器 YOLO 通用检测";
+    const evidenceVersion = "浏览器 YOLO 实时检测";
     const moved = `RSTL v${RSTL_STANDARD_CONTRACT.atlasVersion} · ${evidenceVersion} · V9 7.2；` +
       `识别 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域），` +
       `可引导调整 ${state.movedCurveCount} 条 RSTL / ${state.movedPointCount} 个点。`;
@@ -443,68 +352,37 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
     const xs = workLandmarks.map((point) => point[0]);
     const faceWidth = Math.max(...xs) - Math.min(...xs);
     updateStatus("detecting");
-    const canonicalEvidence = await canonicalWrinkleV10Evidence(working.size);
-    if (generation !== state.generation) return;
-    let displayEvidence: ReturnType<typeof extractFineWrinkleLines> |
-      PrecomputedFineWrinkleEvidence;
-    let guidanceEvidence: ReturnType<typeof extractFineWrinkleLines> |
-      PrecomputedFineWrinkleEvidence;
-    if (canonicalEvidence) {
-      displayEvidence = canonicalEvidence.display;
-      guidanceEvidence = canonicalEvidence.guidance;
-      state.evidenceSource = "wrinkle-v10";
-    } else {
-      const model = yoloInstance();
-      await model.load((progress) => {
+    const pipeline = await runGeneralLiveWrinklePipeline({
+      detector: yoloInstance(),
+      imageData: working.imageData,
+      seeds,
+      size: working.size,
+      faceWidthPx: faceWidth,
+      assertCurrent: () => {
+        if (generation !== state.generation) throw new Error("皱纹分析已被新输入取代");
+      },
+      onModelProgress: (progress) => {
         if (generation !== state.generation) return;
         const percent = Math.round(progress.loadedChunks / Math.max(1, progress.totalChunks) * 100);
         els.wrinkleSummary.textContent = `正在本机加载 YOLO 模型：${percent}%`;
-      });
-      if (generation !== state.generation) return;
-      const detection = await model.detect(working.imageData, {
-        confidenceThreshold: YOLO_WRINKLE_CONFIDENCE,
-      });
-      if (generation !== state.generation) return;
-      displayEvidence = extractFineWrinkleLines(
-        detection.classMasks,
-        working.size,
-        working.size,
-        { minimumLineLengthPx: 20, resampleSpacingPx: 1, maximumSkeletonIterations: 96 },
-      );
-      guidanceEvidence = displayEvidence;
-      state.evidenceSource = "browser-yolo";
-    }
-    if (!displayEvidence.lines.length ||
-        ("validation" in displayEvidence && !displayEvidence.validation.passed)) {
-      throw new Error("未提取到通过质量门禁的细皱纹线");
-    }
-    const evidenceLines = displayEvidence.lines as Array<{
-      id: string;
-      class: string;
-      points: Array<[number, number]>;
-    }>;
-    const evidenceSummary = displayEvidence.summary as Record<string, unknown>;
-    state.evidenceLines = evidenceLines.map((line) => ({
-      id: line.id,
-      className: line.class,
-      points: line.points.map((point) => fromWrinkleWorkingPoint(point, working)),
-    }));
-    state.fineLineCount = evidenceLines.length;
-    state.sourceComponentCount = Number(evidenceSummary.sourceConnectedComponents)
-      || Number(evidenceSummary.lineCount)
-      || evidenceLines.length;
-    window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
-    updateStatus("refining");
-    const refined = refineV6({
-      seeds,
-      wrinkleMask: guidanceEvidence.mask,
-      confidenceMap: guidanceEvidence.confidence,
-      directionQ: guidanceEvidence.directionQ,
-      size: working.size,
-      faceWidthPx: faceWidth,
-      options: latestV9RstlRefinementOptions(faceWidth),
+      },
+      onEvidence: (evidence) => {
+        state.evidenceSource = "browser-yolo";
+        state.evidenceLines = evidence.lines.map((line) => ({
+          id: line.id,
+          className: line.class,
+          points: line.points.map((point) => fromWrinkleWorkingPoint(point, working)),
+        }));
+        state.fineLineCount = evidence.lines.length;
+        state.sourceComponentCount = evidence.summary.sourceConnectedComponents
+          || evidence.summary.fineLineCount
+          || evidence.lines.length;
+        window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
+        updateStatus("refining");
+      },
     });
     if (generation !== state.generation) return;
+    const { refined } = pipeline;
     assertRefinementGate(refined.diagnostics);
     if (refined.curves.length !== state.standardLines.length) {
       throw new Error("皱纹引导结果未保持 RSTL 曲线数量");
@@ -523,78 +401,13 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
         }),
       };
     });
-    let directNoseCurveCount = 0;
-    if (canonicalEvidence) {
-      const directNose = buildDirectNoseDorsumRstl({
-        fineLines: canonicalEvidence.display.lines,
-        faceWidthPx: faceWidth,
-        eyePolygons: [LEFT_EYE_CONTOUR, RIGHT_EYE_CONTOUR].map((indices) =>
-          indices.map((index) => workLandmarks[index])
-            .filter(Boolean)
-            .map((point) => [point[0], point[1]] as [number, number])),
-        existingCurves: refined.curves,
-        maximumTurnLimitDegrees: 8,
-        auditExistingCurveIntersections: true,
-      });
-      directNoseCurveCount = directNose.curves.length;
-      if (directNoseCurveCount !== DIRECT_NOSE_DORSUM_FINE_LINE_IDS.length) {
-        throw new Error("鼻背皱纹未生成完整的直接 RSTL 曲线");
-      }
-      const allWorkingCurves = [...refined.curves, ...directNose.curves.map((curve, offset) => ({
-        ...curve,
-        id: refined.curves.length + offset,
-        curveIndex: refined.curves.length + offset,
-      }))];
-      const visibilityPlan = buildNoseRootIntersectionVisibilityPlan({
-        curves: allWorkingCurves,
-        faceWidthPx: faceWidth,
-      });
-      if (visibilityPlan.hiddenCurveCount !== 4 ||
-          visibilityPlan.contracts.visiblePreservedDirectIntersectionCount !== 0) {
-        throw new Error("鼻根交叉段隐藏规则未通过门禁");
-      }
-      for (const record of visibilityPlan.hiddenCurves) {
-        const line = autoRefinedLines[record.curveIndex];
-        if (line) line.hiddenPointRuns = record.hiddenPointRuns.map((run) => [run[0], run[1]]);
-      }
-      for (const curve of directNose.curves) {
-        autoRefinedLines.push({
-          name: curve.name,
-          region: curve.region,
-          symmetryRole: "",
-          symmetryPairId: "",
-          hidden: false,
-          hiddenPointRuns: [],
-          tris: [],
-          pts: curve.pts.map((point) => {
-            const [x, y] = fromWrinkleWorkingPoint(point, working);
-            return [x, y, 0] as Vec3;
-          }),
-        });
-      }
-      Object.assign(refined.diagnostics, {
-        algorithm: "regional-wrinkle-guided-plus-direct-nose-rstl-intersection-only-7.6",
-        regional_refinement_algorithm: V6_RSTL_ALGORITHM,
-        refinement_profile: LATEST_WRINKLE_REFINEMENT_PROFILE,
-        source_nose_dorsum_wrinkles_excluded_from_refinement: true,
-        direct_nose_dorsum_rstl: directNose.diagnostics,
-        direct_nose_dorsum_generated_curve_count: directNoseCurveCount,
-        nose_root_intersection_visibility: noseRootVisibilityDiagnostic(visibilityPlan),
-      });
-      Object.assign(refined.audit, {
-        directNoseDorsumRstl: directNose.diagnostics,
-        noseRootIntersectionVisibility: noseRootVisibilityDiagnostic(visibilityPlan),
-      });
-    } else {
-      Object.assign(refined.diagnostics, {
-        refinement_profile: LATEST_WRINKLE_REFINEMENT_PROFILE,
-      });
-    }
+    Object.assign(refined.diagnostics, {
+      refinement_profile: LATEST_WRINKLE_REFINEMENT_PROFILE,
+    });
     state.autoRefinedLines = autoRefinedLines;
     state.diagnostics = refined.diagnostics;
     state.audit = refined.audit;
-    state.movedCurveCount = (Number(refined.diagnostics.moved_curve_count) || 0) +
-      directNoseCurveCount;
+    state.movedCurveCount = Number(refined.diagnostics.moved_curve_count) || 0;
     state.movedPointCount = Number(refined.diagnostics.moved_point_count) || 0;
     updateStatus("ready");
     countMetric("wrinkle.singleFrame.ready");

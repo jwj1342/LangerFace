@@ -1,47 +1,118 @@
 #!/usr/bin/env node
 
 /**
- * Checkout/deployment guard for the latest wrinkle pipeline.
- * This checks source contracts rather than GitHub branch names: a colleague
- * may deploy from a tarball, a detached commit, or a pull request.
+ * Checkout/deployment guard for the released wrinkle pipeline. Version checks
+ * use imported runtime values, while the behavior probe proves that an input
+ * reaches detection, centerline extraction and V9 refinement.
  */
 
+import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { runGeneralLiveWrinklePipeline } from
+  "../web/src/services/personalized/liveWrinklePipeline.ts";
+import { V6_RSTL_ALGORITHM } from
+  "../web/src/services/personalized/v6RstlRefinementV9.ts";
+import { LATEST_WRINKLE_REFINEMENT_PROFILE } from
+  "../web/src/services/personalized/v9RstlRefinementProfile.ts";
+import { YOLO_WRINKLE_ONNX_VERSION } from
+  "../web/src/services/personalized/yoloWrinkleOnnx.ts";
+import {
+  assertStandardRstlAtlas,
+  RSTL_STANDARD_CONTRACT,
+} from "../web/src/services/rstlStandardContract.ts";
+import { WRINKLE_PIPELINE_VERSION } from
+  "../web/src/services/wrinklePipelineVersion.ts";
+
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const files = {
+const paths = {
   live: resolve(root, "web/src/services/liveWrinkleAnalysis.ts"),
+  pipeline: resolve(root, "web/src/services/personalized/liveWrinklePipeline.ts"),
   runtime: resolve(root, "web/src/services/personalized/personalizedRuntime.ts"),
   experiment: resolve(root, "web/compat/personalized/wrinkleRstlExperiment.ts"),
-  profile: resolve(root, "web/src/services/personalized/v9RstlRefinementProfile.ts"),
   atlas: resolve(root, "web/assets/atlas_rstl.json"),
 };
+const [live, pipeline, runtime, experiment, atlasText] = await Promise.all([
+  readFile(paths.live, "utf8"),
+  readFile(paths.pipeline, "utf8"),
+  readFile(paths.runtime, "utf8"),
+  readFile(paths.experiment, "utf8"),
+  readFile(paths.atlas, "utf8"),
+]);
 
-const source = Object.fromEntries(await Promise.all(
-  Object.entries(files).map(async ([name, file]) => [name, await readFile(file, "utf8")]),
-));
-const checks = [
-  ["RSTL atlas v8.1.96", /\"atlasVersion\":\s*\"8\.1\.96\"/.test(source.atlas)],
-  ["live V9 implementation", /v6RstlRefinementV9\.ts/.test(source.live)],
-  ["personalized V9 implementation", /v6RstlRefinementV9\.ts/.test(source.runtime)],
-  ["live v10 evidence", /wrinkle_fine_lines_v10_wrinkle\.json/.test(source.live)],
-  ["shared V9 profile", /v9-regional-smooth-7\.2/.test(source.profile)],
-  ["experiment defaults to V9", /requestedRefinement !== \"legacy\"/.test(source.experiment)],
-  ["experiment uses latest v10 evidence", /wrinkle_fine_lines_v10_wrinkle\.json/.test(source.experiment)],
+const atlas = JSON.parse(atlasText);
+assertStandardRstlAtlas(atlas);
+assert.equal(WRINKLE_PIPELINE_VERSION.rstlAtlas, RSTL_STANDARD_CONTRACT.atlasVersion);
+assert.equal(WRINKLE_PIPELINE_VERSION.wrinkleDetection, YOLO_WRINKLE_ONNX_VERSION);
+assert.equal(WRINKLE_PIPELINE_VERSION.refinementProfile, LATEST_WRINKLE_REFINEMENT_PROFILE);
+assert.equal(WRINKLE_PIPELINE_VERSION.refinementMode, "general_yolo_v9_7_2");
+
+const forbiddenLiveTokens = [
+  "WRINKLE_PHOTO_SHA256",
+  "canonicalWrinkleV10Evidence",
+  "wrinkleV10FineLinesUrl",
+  "buildPrecomputedFineWrinkleEvidence",
+  "wrinkle-v10",
+  "DIRECT_NOSE_DORSUM_FINE_LINE_IDS",
 ];
-const failed = checks.filter(([, passed]) => !passed).map(([label]) => label);
-if (failed.length) {
-  console.error("最新皱纹流水线校验失败：");
-  for (const label of failed) console.error(`- ${label}`);
-  process.exitCode = 1;
-} else {
-  console.log(JSON.stringify({
-    status: "latest_wrinkle_pipeline_verified",
-    rstl: "v8.1.96",
-    detection: "v10",
-    refinement: "v9-regional-smooth-7.2",
-    checks: checks.length,
-  }, null, 2));
+for (const token of forbiddenLiveTokens) {
+  assert.ok(!live.includes(token), `released live path contains controlled-image token: ${token}`);
+  assert.ok(!pipeline.includes(token), `general pipeline contains controlled-image token: ${token}`);
 }
+assert.match(live, /runGeneralLiveWrinklePipeline\(\{/);
+assert.match(pipeline,
+  /await detector\.load[\s\S]*await detector\.detect[\s\S]*extractFineWrinkleLines[\s\S]*refineV6/);
+assert.match(runtime, /v6RstlRefinementV9\.ts/);
+assert.match(experiment, /requestedRefinement !== "legacy"/);
+assert.match(experiment, /wrinkle_fine_lines_v10_wrinkle\.json/,
+  "v10 controlled evidence must remain available only to the explicit experiment");
+
+const size = 64;
+let loadCalls = 0;
+let detectCalls = 0;
+const forehead = new Uint8Array(size * size);
+for (let x = 5; x <= 58; x += 1) forehead[24 * size + x] = 1;
+const probe = await runGeneralLiveWrinklePipeline({
+  detector: {
+    async load() { loadCalls += 1; },
+    async detect() {
+      detectCalls += 1;
+      return {
+        version: YOLO_WRINKLE_ONNX_VERSION,
+        classMasks: {
+          forehead,
+          frown: new Uint8Array(size * size),
+          wrinkle: new Uint8Array(size * size),
+        },
+      };
+    },
+  },
+  imageData: {
+    width: size,
+    height: size,
+    data: new Uint8ClampedArray(size * size * 4),
+  },
+  seeds: [{
+    name: "deployment-probe",
+    region: "forehead",
+    pts: Array.from({ length: 12 }, (_, index) => [5 + index * 5, 26]),
+  }],
+  size,
+  faceWidthPx: 52,
+});
+assert.equal(loadCalls, 1);
+assert.equal(detectCalls, 1);
+assert.equal(probe.evidence.lines.length, 1);
+assert.equal(probe.refined.diagnostics.algorithm, V6_RSTL_ALGORITHM);
+assert.equal(probe.refinementProfile, LATEST_WRINKLE_REFINEMENT_PROFILE);
+
+console.log(JSON.stringify({
+  status: "latest_wrinkle_pipeline_verified",
+  rstl: RSTL_STANDARD_CONTRACT.atlasVersion,
+  detection: YOLO_WRINKLE_ONNX_VERSION,
+  refinement: LATEST_WRINKLE_REFINEMENT_PROFILE,
+  inputPolicy: "every_input_runs_general_detection_and_refinement",
+  controlledEvidenceScope: "compat_experiment_only",
+}, null, 2));

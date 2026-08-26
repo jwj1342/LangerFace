@@ -1,3 +1,6 @@
+import { LATEST_WRINKLE_REFINEMENT_PROFILE } from "./personalized/v9RstlRefinementProfile.ts";
+import { YOLO_WRINKLE_ONNX_VERSION } from "./personalized/yoloWrinkleOnnx.ts";
+
 /**
  * Single source of truth for the released single-frame wrinkle pipeline.
  * Keep these identifiers stable so a local checkout can be verified before
@@ -5,9 +8,10 @@
  */
 export const WRINKLE_PIPELINE_VERSION = Object.freeze({
   rstlAtlas: "8.1.96",
-  wrinkleDetection: "v10",
-  refinementProfile: "v9-regional-smooth-7.2",
-  refinementMode: "v10_three_region_guided_direct_nose_v7_2",
+  wrinkleDetection: YOLO_WRINKLE_ONNX_VERSION,
+  refinementProfile: LATEST_WRINKLE_REFINEMENT_PROFILE,
+  refinementMode: "general_yolo_v9_7_2",
+  controlledExperimentEvidence: "paired-edge-v10",
   schemaVersion: "langerface.wrinkle-pipeline.v1",
 });
 

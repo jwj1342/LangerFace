@@ -17,7 +17,7 @@ export function LiveWrinklePanel() {
           上传照片或定格摄像头后，YOLO 会在本机自动检测皱纹。检测结果仅作研究辅助，不替代医生判断。
         </Hint>
         <Hint className="live-inline-top">
-          当前部署：{WRINKLE_PIPELINE_DISPLAY}（v10 受控单图证据 / 通用 YOLO 回退）
+          当前部署：{WRINKLE_PIPELINE_DISPLAY}（每张输入均重新检测与微调）
         </Hint>
       </div>
       <Select id="wrinkleDisplayMode" defaultValue="both" disabled aria-label="画面叠加内容">
@@ -42,7 +42,7 @@ export function LiveWrinklePanel() {
       <Hint>
         自动微调不会打开医生手动编辑器；应用后仍可使用下方“医生手动微调（2D）”继续调整。
         如需复现受控单图的完整审计图，可打开 <a href="/compat/personalized/wrinkle_rstl_experiment.html">
-          v8.1.96 / v10 / V9 单图实验
+          v8.1.96 / v10 受控证据 / V9 单图实验
         </a>；多表情严格并集流程请进入 <Link to="/personalized">高级多表情采集</Link>。
       </Hint>
     </Card>
