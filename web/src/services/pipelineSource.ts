@@ -115,7 +115,7 @@ export async function handleFile(file?: File): Promise<void> {
         await img.decode();
         if (operationId !== sourceOperationId) return;
         const prepared = prepareImageSource(img);
-        setSource(prepared.source, "image", prepared.width, prepared.height);
+        setSource(prepared.source, "image", prepared.width, prepared.height, { sourceFile: file });
         if (prepared.scaled) {
           setTransientMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
         }
@@ -151,7 +151,7 @@ export function setSource(
   kind: SourceKind,
   width?: number,
   height?: number,
-  { release }: { release?: () => void } = {},
+  { release, sourceFile = null }: { release?: () => void; sourceFile?: File | null } = {},
 ): void {
   const planning2d = sourceState.planning2d;
   if (!planning2d) throw new Error("live photo planning controller is not mounted");
@@ -187,6 +187,7 @@ export function setSource(
   renderState.smoother.reset();
   resetRefineForNewSource();
   resetLiveWrinkleAnalysis();
+  sourceState.sourceFile = kind === "image" ? sourceFile : null;
   sourceState.presence = 0;
   sourceState.lastLM = null;
   sourceState.imageCacheLM = null;
@@ -220,6 +221,7 @@ export function stopSource({ preserveOperation = false }: { preserveOperation?: 
   sourceState.running = false;
   sourceState.paused = false;
   sourceState.frozenFrame = null;
+  sourceState.sourceFile = null;
   sourceState.lastHulls = [];
   els.mainWrap.classList.remove("image-viewer");
   els.canvas.classList.remove("image-source");

@@ -29,7 +29,8 @@ assert.equal(atlas.lines.at(-1)?.name, "standard_field_0207_left",
 assert.equal(atlas.lines.filter((line) => line.region === "cheek_alar_gap_fill_v95").length, 4,
   "the bilateral full-length alar-origin additions must be present");
 assert.match(source, /from "\.\/yoloWrinkleOnnx\.ts"/);
-assert.match(source, /from "\.\/v6RstlRefinement\.ts"/);
+assert.match(source, /from "\.\/v6RstlRefinementV9\.ts"/);
+assert.match(source, /from "\.\/v9RstlRefinementProfile\.ts"/);
 assert.match(source, /from "\.\.\/\.\.\/\.\.\/assets\/atlas_rstl\.json\?url"/);
 assert.match(source, /confidenceThreshold: YOLO_CONFIDENCE/);
 assert.match(source, /const CYCLES_REQUIRED = 1;/,
@@ -48,10 +49,8 @@ assert.match(source, /consolidationRadiusPx/,
   "cross-expression strict union exposes a direction-aware deghosted mask");
 assert.match(source, /fused\?\.consolidatedMask \|\| fused\?\.mask/,
   "V6 consumes the consolidated view while retaining the exact union for audit");
-assert.match(source, /nearestSingleCurveMatching: true/,
-  "personalized V6 must assign each wrinkle only to its nearest eligible RSTL");
-assert.match(source, /bundlePropagation: false/,
-  "personalized V6 must not propagate one wrinkle to neighboring RSTL curves");
+assert.match(source, /latestV9RstlRefinementOptions\(canonicalFaceWidth\(session\)\)/,
+  "personalized capture must consume the shared latest V9 parameter profile");
 assert.match(source, /soft_floor_with_confidence_weight/,
   "diagnostics must identify the softened expression-region gate");
 assert.match(source, /SQUINT_QUALITY_THRESHOLDS/,

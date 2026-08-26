@@ -75,8 +75,10 @@ const statusElement = $("status");
 const summaryElement = $("summary");
 const searchParams = new URLSearchParams(window.location.search);
 const requestedVersion = searchParams.get("version");
-const EXPERIMENT_VERSION = requestedVersion === "v8" ? "v8" : "v7";
-const V9_REFINEMENT_REPLAY = searchParams.get("refinement") === "v9";
+const EXPERIMENT_VERSION = requestedVersion === "v7" ? "v7" : "v8";
+const requestedRefinement = searchParams.get("refinement");
+const V9_REFINEMENT_REPLAY = requestedRefinement === "v9" ||
+  (requestedRefinement !== "legacy" && EXPERIMENT_VERSION === "v8");
 const TWO_SIDED_NEAREST_MATCHING = V9_REFINEMENT_REPLAY;
 const BUNDLE_PROPAGATION = false;
 const LOGICAL_WRINKLE_GROUPING = true;

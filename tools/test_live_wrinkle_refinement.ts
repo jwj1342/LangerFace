@@ -77,6 +77,11 @@ const pipelineSource = fs.readFileSync(
 );
 assert.doesNotMatch(pipelineSource, /sourceSha256|crypto\.subtle\.digest\(\s*"SHA-256"/,
   "the shared upload path must not hash every image for one experiment sample");
+assert.match(pipelineSource, /sourceFile: file/,
+  "the original image file must remain available for lazy analysis-time provenance checks");
+assert.match(pipelineSource,
+  /sourceState\.sourceFile = kind === "image" \? sourceFile : null;[\s\S]*export function stopSource[\s\S]*sourceState\.sourceFile = null;/,
+  "the controlled-image file must survive source setup and be cleared when the source stops");
 
 const renderRuntime = fs.readFileSync(
   new URL("../web/src/services/render2d.ts", import.meta.url),
@@ -84,6 +89,8 @@ const renderRuntime = fs.readFileSync(
 );
 assert.doesNotMatch(renderRuntime, /WRINKLE_PHOTO_SHA256|sourceSpecificForeheadVisible/,
   "the shared RSTL renderer must not switch geometry visibility for one image hash");
+assert.match(renderRuntime, /ln\.hiddenPointRuns\?\.some/,
+  "the deployed renderer must honor the latest nose-root intersection visibility gaps");
 
 const refineRuntime = fs.readFileSync(
   new URL("../web/src/services/liveRefine2d.ts", import.meta.url),
@@ -107,21 +114,25 @@ assert.match(analysisRuntime, /detectV9ReferenceLandmarks/,
   "v9 refinement must remap the atlas from the dedicated reference landmarks");
 assert.match(analysisRuntime, /expandForehead: RSTL_STANDARD_CONTRACT\.expandForehead/,
   "live wrinkle refinement must use the same v8.1.96 forehead mapping as the experiment");
-assert.doesNotMatch(
-  analysisRuntime,
-  /WRINKLE_PHOTO_SHA256|canonicalWrinkleV10Evidence|wrinkleV10FineLinesUrl|state\.evidenceSource = "wrinkle-v10"/,
-  "single-image precomputed evidence must stay in the explicit compat experiment, not the shared live detector",
-);
+assert.match(analysisRuntime, /from "\.\/personalized\/v6RstlRefinementV9\.ts"/,
+  "the deployed live page must execute the latest V9 refinement implementation");
+assert.match(analysisRuntime,
+  /sourceState\.sourceFile[\s\S]*sha256File\(sourceFile\)[\s\S]*WRINKLE_PHOTO_SHA256/,
+  "v10 evidence must be selected lazily and only for the exact controlled image hash");
+assert.match(analysisRuntime, /state\.evidenceSource = "wrinkle-v10"/,
+  "the controlled wrinkle.png run must expose v10 evidence provenance");
+assert.match(analysisRuntime, /buildDirectNoseDorsumRstl\([\s\S]*buildNoseRootIntersectionVisibilityPlan\(/,
+  "the deployed controlled-image path must generate direct nose RSTL and apply its visibility plan");
 assert.match(analysisRuntime, /await model\.load[\s\S]*const detection = await model\.detect/,
   "the shared live detector must lazily load the general YOLO path after an explicit analysis request");
 assert.match(analysisRuntime, /state\.evidenceLines = evidenceLines\.map[\s\S]*const refined = refineV6/,
   "validated wrinkle evidence must be committed before refinement safety gates run");
-assert.match(analysisRuntime, /nearestSingleCurveMatching: true/,
-  "live refinement must assign each wrinkle only to its nearest eligible RSTL");
+assert.match(analysisRuntime, /latestV9RstlRefinementOptions\(faceWidth\)/,
+  "live refinement must consume the shared latest V9 parameter profile");
 assert.doesNotMatch(analysisRuntime, /bundlePropagation: true/,
   "live refinement must not propagate one wrinkle to neighboring RSTL curves");
-assert.match(analysisRuntime, /maximum_selected_rstl_curves_per_wrinkle\) > 1/,
-  "the live safety gate must reject multi-RSTL assignment for one wrinkle");
+assert.match(analysisRuntime, /maximum_selected_rstl_curves_per_wrinkle\) > 2/,
+  "the V9 live safety gate must reject more than the intended bilateral assignment");
 assert.match(analysisRuntime, /bundle_follower_moved_curve_count \|\| 0\) > 0/,
   "the live safety gate must reject bundle follower movement");
 assert.match(analysisRuntime, /if \(state\.evidenceLines\.length > 0\)[\s\S]*updateStatus\("evidence", message\)/,
