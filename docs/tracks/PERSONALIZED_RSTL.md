@@ -127,8 +127,8 @@ npm ci
 npm run verify:latest-wrinkle
 ```
 
-该校验应报告 `latest_wrinkle_pipeline_verified`、RSTL `v8.1.96`、检测 `v10`、微调
-`v9-regional-smooth-7.2`。PR #221 的合并快照不满足这项校验；最新修复由当前分支和 PR #222 承载。
+该校验应报告 `latest_wrinkle_pipeline_verified`、RSTL `v8.1.96`、通用浏览器检测器
+`yolov8-seg-browser-0.1.0`、微调 `v9-regional-smooth-7.2`；受控 paired-edge v10 证据仅保留在 compat 实验路径中。PR #221 的合并快照不满足这项校验；最新修复由当前分支和 PR #222 承载。
 
 | 命令 | 必需的受控本地输入 | 可选配置 |
 |---|---|---|

@@ -62,6 +62,13 @@ for (const token of forbiddenLiveTokens) {
   assert.ok(!pipeline.includes(token), `general pipeline contains controlled-image token: ${token}`);
 }
 assert.match(live, /runGeneralLiveWrinklePipeline\(\{/);
+assert.match(live, /onnxruntime-web\/dist\/ort-wasm-simd-threaded\.mjs\?url/,
+  "released live path must bundle the ONNX Runtime WASM module explicitly");
+assert.match(live, /onnxruntime-web\/dist\/ort-wasm-simd-threaded\.wasm\?url/,
+  "released live path must bundle the ONNX Runtime WASM binary explicitly");
+assert.match(live,
+  /wasmPaths:\s*\{\s*mjs:\s*ortWasmModuleUrl,\s*wasm:\s*ortWasmBinaryUrl\s*\}/,
+  "released detector must use the bundled ONNX Runtime WASM assets");
 assert.match(pipeline,
   /await detector\.load[\s\S]*await detector\.detect[\s\S]*extractFineWrinkleLines[\s\S]*refineV6/);
 assert.match(runtime, /v6RstlRefinementV9\.ts/);

@@ -122,6 +122,15 @@ assert.match(analysisRuntime, /expandForehead: RSTL_STANDARD_CONTRACT\.expandFor
   "live wrinkle refinement must use the same v8.1.96 forehead mapping as the experiment");
 assert.match(analysisRuntime, /from "\.\/personalized\/v6RstlRefinementV9\.ts"/,
   "the deployed live page must execute the latest V9 refinement implementation");
+assert.match(analysisRuntime,
+  /onnxruntime-web\/dist\/ort-wasm-simd-threaded\.mjs\?url/,
+  "the deployed live page must bundle the ONNX Runtime WASM module explicitly");
+assert.match(analysisRuntime,
+  /onnxruntime-web\/dist\/ort-wasm-simd-threaded\.wasm\?url/,
+  "the deployed live page must bundle the ONNX Runtime WASM binary explicitly");
+assert.match(analysisRuntime,
+  /wasmPaths:\s*\{\s*mjs:\s*ortWasmModuleUrl,\s*wasm:\s*ortWasmBinaryUrl\s*\}/,
+  "the deployed detector must use the bundled ONNX Runtime WASM assets");
 assert.doesNotMatch(analysisRuntime,
   /WRINKLE_PHOTO_SHA256|canonicalWrinkleV10Evidence|wrinkleV10FineLinesUrl|buildPrecomputedFineWrinkleEvidence|wrinkle-v10|DIRECT_NOSE_DORSUM_FINE_LINE_IDS/,
   "the released live path must never select precomputed evidence for one image");

@@ -228,7 +228,7 @@ npm run dev                      # Vite dev server，默认 http://127.0.0.1:517
 完整变量、目录和命令见 [个性化 RSTL：受控单图复放](docs/tracks/PERSONALIZED_RSTL.md#41-受控单图复放与直接鱼尾纹实验)。
 
 部署或交接前先在 `web/` 目录运行 `npm run verify:latest-wrinkle`。它会检查当前检出是否确实包含
-RSTL v8.1.96、v10 皱纹检测和 V9 `v9-regional-smooth-7.2` 微调；PR 编号或分支名称本身不能证明版本正确。
+RSTL v8.1.96、通用浏览器检测器 `yolov8-seg-browser-0.1.0` 和 V9 `v9-regional-smooth-7.2` 微调；受控 paired-edge v10 证据仅保留在 compat 实验路径中。PR 编号或分支名称本身不能证明版本正确。
 
 ---
 
