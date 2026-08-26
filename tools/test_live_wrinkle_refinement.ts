@@ -114,6 +114,15 @@ assert.doesNotMatch(
 );
 assert.match(analysisRuntime, /await model\.load[\s\S]*const detection = await model\.detect/,
   "the shared live detector must lazily load the general YOLO path after an explicit analysis request");
+assert.match(analysisRuntime, /ort-wasm-simd-threaded\.mjs\?url/,
+  "the shared live detector must bundle the ONNX runtime module URL explicitly");
+assert.match(analysisRuntime, /ort-wasm-simd-threaded\.wasm\?url/,
+  "the shared live detector must bundle the ONNX runtime binary URL explicitly");
+assert.match(
+  analysisRuntime,
+  /wasmPaths:\s*\{\s*mjs:\s*ortWasmModuleUrl,\s*wasm:\s*ortWasmBinaryUrl\s*\}/,
+  "the shared live detector must not rely on worktree-relative Vite optimizer WASM paths",
+);
 assert.match(analysisRuntime, /state\.evidenceLines = evidenceLines\.map[\s\S]*const refined = refineV6/,
   "validated wrinkle evidence must be committed before refinement safety gates run");
 assert.match(analysisRuntime, /nearestSingleCurveMatching: true/,
@@ -130,6 +139,15 @@ assert.match(analysisRuntime, /await Promise\.allSettled\(\[\.\.\.activeAnalyses
   "route disposal must wait for active model work before releasing the ONNX session");
 assert.match(analysisRuntime, /const detection = await model\.detect[\s\S]*if \(generation !== state\.generation\) return;/,
   "a source generation change must reject stale inference results");
+
+const webPackage = JSON.parse(fs.readFileSync(
+  new URL("../web/package.json", import.meta.url),
+  "utf8",
+));
+assert.equal(webPackage.scripts.predev, "node ../tools/check_web_dependency_isolation.mjs",
+  "the dev server must reject dependencies shared across worktrees");
+assert.match(webPackage.scripts.dev, /vite --force\b/,
+  "the dev server must rebuild optimizer output instead of reusing copied worktree caches");
 
 {
   // The helper and checked-in evidence remain available to the explicit

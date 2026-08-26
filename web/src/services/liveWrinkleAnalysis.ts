@@ -1,6 +1,8 @@
 import { FaceLandmarker } from "@mediapipe/tasks-vision";
 import visionWasmLoaderUrl from "../../node_modules/@mediapipe/tasks-vision/wasm/vision_wasm_internal.js?url";
 import visionWasmBinaryUrl from "../../node_modules/@mediapipe/tasks-vision/wasm/vision_wasm_internal.wasm?url";
+import ortWasmModuleUrl from "../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs?url";
+import ortWasmBinaryUrl from "../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm?url";
 import faceLandmarkerUrl from "../../assets/face_landmarker.task?url";
 
 import { els } from "./liveDom.ts";
@@ -183,7 +185,10 @@ function currentStandardLines(landmarks: Vec3[]): EditableRefineLine[] {
 }
 
 function yoloInstance(): YoloWrinkleOnnx {
-  yolo ||= new YoloWrinkleOnnx({ confidenceThreshold: YOLO_WRINKLE_CONFIDENCE });
+  yolo ||= new YoloWrinkleOnnx({
+    confidenceThreshold: YOLO_WRINKLE_CONFIDENCE,
+    wasmPaths: { mjs: ortWasmModuleUrl, wasm: ortWasmBinaryUrl },
+  });
   return yolo;
 }
 

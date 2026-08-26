@@ -45,6 +45,18 @@ cd web
 npm run dev
 ```
 
+### Git worktree 依赖隔离
+
+每个活跃 worktree 都必须在自己的 `web` 目录执行 `npm ci`，不得把 `node_modules`
+软链、Junction 或复制到另一个 worktree，也不得跨 worktree 复用 `node_modules/.vite`。
+Vite 的依赖优化产物可能包含绝对资源路径；跨目录复用会让 WASM、Worker 或模型运行时
+继续请求旧 worktree，即使 Git 代码已经成功同步。
+
+`npm run dev` 会先执行依赖隔离检查，并强制重建 Vite optimizer 缓存。若检查报告
+`node_modules` 指向其他 worktree，只移除当前 worktree 的链接，再在当前 `web` 目录运行
+`npm ci`；不要删除链接实际指向的依赖目录。远端代码合并后，如果 `web/package.json` 或
+`web/package-lock.json` 有变化，也应在当前 worktree 重新运行 `npm ci`。
+
 ## Preview / 部署访问
 
 本地环境只负责开发、构建和测试。PR/Production 发布流程见

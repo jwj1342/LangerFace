@@ -8,7 +8,8 @@
     "npm": ">=11.0.0"
   },
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "predev": "node ../tools/check_web_dependency_isolation.mjs",
+    "dev": "vite --force --host 127.0.0.1",
     "local:wrinkle": "node ../tools/run_wrinkle_rstl_local.mjs",
     "experiment:direct-crows": "node ../tools/run_crows_feet_direct_rstl_experiment.mjs",
     "build": "vite build",
