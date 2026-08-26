@@ -80,6 +80,8 @@ export interface V6RefinementOptions {
   curvatureFairingCrowsFeetMaximumMeanAdherencePx?: number;
   curvatureFairingCrowsFeetMaximumP90AdherencePx?: number;
   curvatureFairingCrowsFeetMinimumReversalSpacingPx?: number;
+  curvatureFairingCrowsFeetMaximumDirectionP90Degrees?: number;
+  curvatureFairingCrowsFeetDirectionWeight?: number;
   foreheadAdherenceMeanThresholdPx?: number;
   foreheadAdherenceP90ThresholdPx?: number;
   glabellarAdherenceMeanThresholdPx?: number;
@@ -90,8 +92,17 @@ export interface V6RefinementOptions {
   noseBridgeAdherenceP90ThresholdPx?: number;
   crowsFeetAdherenceMeanThresholdPx?: number;
   crowsFeetAdherenceP90ThresholdPx?: number;
+  crowsFeetAdherenceDirectionP90Degrees?: number;
   crowsFeetMaximumDisplacementPx?: number;
   crowsFeetTransitionLengthPx?: number;
+  crowsFeetRetainAlignedRefinement?: boolean;
+  crowsFeetNeighborCoherence?: boolean;
+  crowsFeetNeighborCountPerAnchor?: number;
+  crowsFeetNeighborRadiusPx?: number;
+  crowsFeetNeighborStrength?: number;
+  crowsFeetNeighborMinimumSpacingRatio?: number;
+  crowsFeetNeighborMaximumTurnDegrees?: number;
+  crowsFeetDirectionalBundleMinimumPriorDirectionDegrees?: number;
   regionalCandidateFamilyFiltering?: boolean;
   foreheadBundleCoherence?: boolean;
   foreheadBundleMinimumSpacingRatio?: number;
@@ -150,6 +161,7 @@ interface MatchRecord {
   confidence: number;
   normalOffset: number;
   wrinklePoint: Point2;
+  wrinkleTangent: Point2;
   projectionArc: number;
   directArc: number;
 }
@@ -661,6 +673,7 @@ function matchTrendsToCurves(
                 (segment.normal[1] > EPSILON ||
                  (Math.abs(segment.normal[1]) <= EPSILON && segment.normal[0] >= 0) ? 1 : -1),
               wrinklePoint: [...point],
+              wrinkleTangent: [...wrinkleTangent],
               projectionArc: segment.arcStart + fraction * segment.length,
               directArc: metrics.directArc[pointOrder],
             };
@@ -1917,6 +1930,152 @@ function guidedRigidEnvelopeTrajectory(
     fittedScale };
 }
 
+function curveTangentAtArc(curve: CurveGeometry, arc: number): Point2 {
+  if (!curve.segments.length) return [1, 0];
+  let selected = curve.segments[0];
+  let bestDistance = Math.abs(arc - selected.arcStart);
+  for (const segment of curve.segments) {
+    const distance = Math.abs(arc - (segment.arcStart + segment.length * 0.5));
+    if (distance < bestDistance) {
+      selected = segment;
+      bestDistance = distance;
+    }
+  }
+  return [...selected.tangent];
+}
+
+function guidedDirectionalEnvelopeTrajectory(
+  curve: CurveGeometry,
+  records: MatchRecord[],
+  taperArcPx: number,
+  maximumDisplacementPx: number,
+  maximumRotationDegrees: number,
+): { points: Point2[]; normalOffsets: Float64Array; rotationDegrees: number } {
+  const normalOffsets = new Float64Array(curve.prior.length);
+  if (!records.length) {
+    return { points: curve.prior.map((point) => [...point]), normalOffsets,
+      rotationDegrees: 0 };
+  }
+  let weightSum = 0, sourceX = 0, sourceY = 0, targetX = 0, targetY = 0;
+  let angleSum = 0;
+  const pairs = records.map((record) => {
+    const source = pointAtCurveArc(curve, record.projectionArc);
+    const sourceTangent = curveTangentAtArc(curve, record.projectionArc);
+    const targetTangent = record.wrinkleTangent;
+    const weight = Math.max(EPSILON, record.score * record.confidence);
+    let angle = Math.atan2(
+      sourceTangent[0] * targetTangent[1] - sourceTangent[1] * targetTangent[0],
+      sourceTangent[0] * targetTangent[0] + sourceTangent[1] * targetTangent[1],
+    );
+    while (angle > Math.PI * 0.5) angle -= Math.PI;
+    while (angle < -Math.PI * 0.5) angle += Math.PI;
+    weightSum += weight;
+    sourceX += weight * source[0];
+    sourceY += weight * source[1];
+    targetX += weight * record.wrinklePoint[0];
+    targetY += weight * record.wrinklePoint[1];
+    angleSum += weight * angle;
+    return { source, weight };
+  });
+  sourceX /= Math.max(EPSILON, weightSum);
+  sourceY /= Math.max(EPSILON, weightSum);
+  targetX /= Math.max(EPSILON, weightSum);
+  targetY /= Math.max(EPSILON, weightSum);
+  const maximumRotation = Math.max(0, maximumRotationDegrees) * Math.PI / 180;
+  const rotation = clamp(angleSum / Math.max(EPSILON, weightSum),
+    -maximumRotation, maximumRotation);
+  const curveLength = curve.vertexArc[curve.vertexArc.length - 1];
+  const rawMinimumArc = Math.min(...records.map((record) => record.projectionArc));
+  const minimumArc = Math.max(rawMinimumArc, Math.min(20, curveLength * 0.25));
+  const maximumArc = Math.max(...records.map((record) => record.projectionArc));
+  const leadingTaper = Math.max(1, Math.min(taperArcPx, minimumArc));
+  const trailingTaper = Math.max(1, Math.min(taperArcPx, curveLength - maximumArc));
+  const envelopeAtArc = (arc: number) => arc < minimumArc ?
+    curvatureContinuousEnvelope((arc - (minimumArc - leadingTaper)) / leadingTaper) :
+    arc > maximumArc ?
+      curvatureContinuousEnvelope(((maximumArc + trailingTaper) - arc) / trailingTaper) : 1;
+
+  // Integrate the rotation along the original segments. This keeps the
+  // tangent field continuous, unlike rotating every point and then clipping
+  // its displacement independently at the taper boundaries.
+  const integrated = [curve.prior[0].map((value) => value) as Point2];
+  for (let index = 0; index < curve.segments.length; index += 1) {
+    const segment = curve.segments[index];
+    const localRotation = rotation * envelopeAtArc(segment.arcStart + 0.5 * segment.length);
+    const cosine = Math.cos(localRotation), sine = Math.sin(localRotation);
+    const tangent: Point2 = [
+      cosine * segment.tangent[0] - sine * segment.tangent[1],
+      sine * segment.tangent[0] + cosine * segment.tangent[1],
+    ];
+    const previous = integrated[index];
+    integrated.push([
+      previous[0] + segment.length * tangent[0],
+      previous[1] + segment.length * tangent[1],
+    ]);
+  }
+  const centerArc = 0.5 * (minimumArc + maximumArc);
+  let centerIndex = 1;
+  while (centerIndex < curve.vertexArc.length && curve.vertexArc[centerIndex] < centerArc) {
+    centerIndex += 1;
+  }
+  centerIndex = Math.min(centerIndex, curve.vertexArc.length - 1);
+  const centerStartArc = curve.vertexArc[centerIndex - 1];
+  const centerSpan = Math.max(EPSILON, curve.vertexArc[centerIndex] - centerStartArc);
+  const centerFraction = clamp((centerArc - centerStartArc) / centerSpan);
+  const integratedCenter: Point2 = [
+    integrated[centerIndex - 1][0] + centerFraction *
+      (integrated[centerIndex][0] - integrated[centerIndex - 1][0]),
+    integrated[centerIndex - 1][1] + centerFraction *
+      (integrated[centerIndex][1] - integrated[centerIndex - 1][1]),
+  ];
+  const translation: Point2 = [
+    targetX - integratedCenter[0],
+    targetY - integratedCenter[1],
+  ];
+  const rawDisplacements = integrated.map((point, index): Point2 => {
+    const envelope = envelopeAtArc(curve.vertexArc[index]);
+    return [
+      envelope * (point[0] - curve.prior[index][0] + translation[0]),
+      envelope * (point[1] - curve.prior[index][1] + translation[1]),
+    ];
+  });
+  const maximumRawDisplacement = rawDisplacements.reduce((maximum, delta) =>
+    Math.max(maximum, Math.hypot(delta[0], delta[1])), 0);
+  const displacementScale = maximumRawDisplacement > maximumDisplacementPx ?
+    maximumDisplacementPx / maximumRawDisplacement : 1;
+  const rawPoints = curve.prior.map((point, index): Point2 => {
+    const dx = rawDisplacements[index][0] * displacementScale;
+    const dy = rawDisplacements[index][1] * displacementScale;
+    normalOffsets[index] = dx * curve.normals[index][0] +
+      dy * curve.normals[index][1];
+    return [point[0] + dx, point[1] + dy];
+  });
+  const points = smoothDirectionalPolyline(rawPoints, 64);
+  for (let index = 0; index < points.length; index += 1) {
+    normalOffsets[index] = (points[index][0] - curve.prior[index][0]) *
+      curve.normals[index][0] + (points[index][1] - curve.prior[index][1]) *
+      curve.normals[index][1];
+  }
+  return { points, normalOffsets, rotationDegrees: rotation * 180 / Math.PI };
+}
+
+function smoothDirectionalPolyline(points: Point2[], passes: number): Point2[] {
+  let output = points.map((point) => [...point] as Point2);
+  for (let pass = 0; pass < passes; pass += 1) {
+    const next = output.map((point) => [...point] as Point2);
+    for (let index = 1; index < output.length - 1; index += 1) {
+      next[index] = [
+        0.28 * output[index - 1][0] + 0.44 * output[index][0] +
+          0.28 * output[index + 1][0],
+        0.28 * output[index - 1][1] + 0.44 * output[index][1] +
+          0.28 * output[index + 1][1],
+      ];
+    }
+    output = next;
+  }
+  return output;
+}
+
 function suppressShortCurvatureReversals(
   curve: CurveGeometry,
   source: Float64Array,
@@ -1993,6 +2152,7 @@ function applyCurvatureFairing(
   const defaultMaximumP90Adherence = Math.max(0.5,
     Number(options.curvatureFairingMaximumP90AdherencePx) || Infinity);
   let appliedCurveCount = 0, rollbackCurveCount = 0;
+  const priorFairingPairs = intersectionPairs(results.map((result) => result.curve.prior));
 
   for (let curveIndex = 0; curveIndex < results.length; curveIndex += 1) {
     const result = results[curveIndex];
@@ -2063,6 +2223,11 @@ function applyCurvatureFairing(
             defaultMaximumP90Adherence, 0.5) : forehead ?
             explicitPositive(options.curvatureFairingForeheadMaximumP90AdherencePx,
               defaultMaximumP90Adherence, 0.5) : defaultMaximumP90Adherence;
+    const maximumDirectionP90 = guidedRegion === "crows_feet" ?
+      explicitPositive(options.curvatureFairingCrowsFeetMaximumDirectionP90Degrees,
+        32, 1) : Infinity;
+    const directionWeight = guidedRegion === "crows_feet" ?
+      Math.max(0, Number(options.curvatureFairingCrowsFeetDirectionWeight) || 0.75) : 0;
     const regionMaximumAddedSignChanges = Math.max(0, Math.round(Number(
       guidedRegion === "glabellar" ?
         options.curvatureFairingGlabellarMaximumAddedSignChanges :
@@ -2101,13 +2266,17 @@ function applyCurvatureFairing(
     let selectedModeCount: number | null = null;
     let selectedEndpointChange = 0;
     let selectedAdherence: { mean: number; p90: number } | null = null;
+    let selectedDirectionAdherence: { mean: number; p90: number } | null = null;
     let selectedPoints: Point2[] | null = null;
     let selectedRegionalCartesianDisplacement = false;
     let selectedScore = Infinity;
     let bestAttempt: any = null;
+    const directionalCandidateAudit: any[] = [];
 
     const targetPoints = (result.matchGroups || []).flatMap((group: MatchGroup) =>
       group.records.map((record) => record.wrinklePoint));
+    const targetRecords = (result.matchGroups || []).flatMap((group: MatchGroup) =>
+      group.records);
     const adherenceFor = (points: Point2[]) => {
       const distances = targetPoints.map((point: Point2) =>
         pointToPolylineMatch(point, points).distance);
@@ -2115,6 +2284,18 @@ function applyCurvatureFairing(
         mean: distances.reduce((sum: number, value: number) => sum + value, 0) /
           Math.max(1, distances.length),
         p90: percentile(distances, 0.9),
+      };
+    };
+    const directionAdherenceFor = (points: Point2[]) => {
+      const directions: number[] = targetRecords.map((record: MatchRecord) =>
+        axialDirectionDifferenceDegrees(
+          pointToPolylineMatch(record.wrinklePoint, points).tangent,
+          record.wrinkleTangent,
+        ));
+      return {
+        mean: directions.reduce((sum, value) => sum + value, 0) /
+          Math.max(1, directions.length),
+        p90: percentile(directions, 0.9),
       };
     };
     const beforeAdherence = adherenceFor(result.points);
@@ -2134,8 +2315,20 @@ function applyCurvatureFairing(
       const insideCanvas = candidatePoints.every((point) =>
         point[0] >= 0 && point[1] >= 0 && point[0] < size && point[1] < size);
       const candidateAdherence = adherenceFor(candidatePoints);
+      const candidateDirection = directionAdherenceFor(candidatePoints);
+      let newIntersectionPairs: string[] = [];
+      let topologyPassed = true;
+      if (guidedRegion === "crows_feet" && metadata.directional_target === true) {
+        const candidateCurves = results.map((other, otherIndex) =>
+          otherIndex === curveIndex ? candidatePoints : other.points);
+        newIntersectionPairs = newIntersectionPairsForCurve(
+          candidateCurves, priorFairingPairs, curveIndex,
+        );
+        topologyPassed = newIntersectionPairs.length === 0 && !selfCrosses(candidatePoints);
+      }
       const adherencePassed = candidateAdherence.mean <= maximumMeanAdherence + 1e-6 &&
         candidateAdherence.p90 <= maximumP90Adherence + 1e-6;
+      const directionPassed = candidateDirection.p90 <= maximumDirectionP90 + 1e-6;
       const newShortCurvatureReversal = enforceShortReversalGate && !priorHasShortReversal &&
         metrics.minimumMaterialSignChangeSpacingPx !== null &&
         metrics.minimumMaterialSignChangeSpacingPx < minimumReversalSpacingPx;
@@ -2144,6 +2337,9 @@ function applyCurvatureFairing(
         inside_canvas: insideCanvas,
         endpoint_tangent_change_degrees: endpointChange,
         adherence: candidateAdherence,
+        direction_adherence: candidateDirection,
+        new_intersection_pairs: newIntersectionPairs,
+        topology_passed: topologyPassed,
         metrics,
         new_short_curvature_reversal: newShortCurvatureReversal,
       };
@@ -2153,13 +2349,15 @@ function applyCurvatureFairing(
         (newShortCurvatureReversal ? 4 : 0) +
         Math.max(0, endpointChange - regionalMaximumEndpointTangentChange) +
         4 * Math.max(0, candidateAdherence.mean - maximumMeanAdherence) +
-        Math.max(0, candidateAdherence.p90 - maximumP90Adherence);
+        Math.max(0, candidateAdherence.p90 - maximumP90Adherence) +
+        directionWeight * Math.max(0, candidateDirection.p90 - maximumDirectionP90);
       if (!bestAttempt || violation < bestAttempt.violation) {
         bestAttempt = { ...attempt, violation };
       }
       if (!metadata.short_curvature_repair && !metadata.regional_cartesian_displacement &&
           enforceShortReversalGate && insideCanvas &&
           adherencePassed &&
+          directionPassed &&
           metrics.maximumTurnDegrees <= maximumTurn + 1e-6 &&
           (metrics.materialSignChanges > maximumSignChanges || newShortCurvatureReversal) &&
           endpointChange <= regionalMaximumEndpointTangentChange + 1e-6) {
@@ -2173,11 +2371,54 @@ function applyCurvatureFairing(
           minimum_reversal_spacing_px: minimumReversalSpacingPx,
         });
       }
-      if (!insideCanvas || metrics.maximumTurnDegrees > maximumTurn + 1e-6 ||
-          metrics.materialSignChanges > maximumSignChanges ||
-          newShortCurvatureReversal ||
-          endpointChange > regionalMaximumEndpointTangentChange + 1e-6 ||
-          !adherencePassed) return;
+      const candidateRejected = !insideCanvas || metrics.maximumTurnDegrees > maximumTurn + 1e-6 ||
+        metrics.materialSignChanges > maximumSignChanges ||
+        newShortCurvatureReversal ||
+        endpointChange > regionalMaximumEndpointTangentChange + 1e-6 ||
+        !topologyPassed ||
+        !adherencePassed || !directionPassed;
+      if (candidateRejected) {
+        if (metadata.directional_target === true &&
+            (curveIndex === 134 || curveIndex === 137) &&
+            directionalCandidateAudit.length < 256) {
+          directionalCandidateAudit.push({
+            maximum_rotation_degrees: metadata.maximum_rotation_degrees,
+            fitted_rotation_degrees: metadata.fitted_rotation_degrees,
+            displacement_scale: metadata.displacement_scale,
+            taper_arc_px: metadata.taper_arc_px,
+            adherence_mean_px: candidateAdherence.mean,
+            adherence_p90_px: candidateAdherence.p90,
+            direction_p90_degrees: candidateDirection.p90,
+            maximum_turn_degrees: metrics.maximumTurnDegrees,
+            material_sign_changes: metrics.materialSignChanges,
+            endpoint_tangent_change_degrees: endpointChange,
+            new_intersection_pairs: newIntersectionPairs,
+            topology_passed: topologyPassed,
+            inside_canvas: insideCanvas,
+            new_short_curvature_reversal: newShortCurvatureReversal,
+            adherence_passed: adherencePassed,
+            direction_passed: directionPassed,
+          accepted_by_gates: false,
+          ...(curveIndex === 134 && metadata.directional_target === true &&
+            metadata.maximum_rotation_degrees === 24 &&
+            Number(metadata.taper_arc_px) > 100 && metadata.displacement_scale === 1 ?
+            { candidate_points: candidatePoints.map((point) => [...point]) } : {}),
+          rejection_reasons: [
+              ...(insideCanvas ? [] : ["outside_canvas"]),
+              ...(metrics.maximumTurnDegrees > maximumTurn + 1e-6 ? ["curvature"] : []),
+              ...(metrics.materialSignChanges > maximumSignChanges ? ["sign_changes"] : []),
+              ...(newShortCurvatureReversal ? ["short_reversal"] : []),
+              ...(endpointChange > regionalMaximumEndpointTangentChange + 1e-6 ?
+                ["endpoint_tangent"] : []),
+              ...(!topologyPassed ? ["topology"] : []),
+              ...(candidateAdherence.mean > maximumMeanAdherence + 1e-6 ? ["mean_adherence"] : []),
+              ...(candidateAdherence.p90 > maximumP90Adherence + 1e-6 ? ["p90_adherence"] : []),
+              ...(candidateDirection.p90 > maximumDirectionP90 + 1e-6 ? ["direction"] : []),
+            ],
+          });
+        }
+        return;
+      }
       let squaredOffsetError = 0;
       for (let index = 0; index < originalOffsets.length; index += 1) {
         squaredOffsetError += (candidateOffsets[index] - originalOffsets[index]) ** 2;
@@ -2185,7 +2426,36 @@ function applyCurvatureFairing(
       const offsetRmsError = Math.sqrt(squaredOffsetError /
         Math.max(1, originalOffsets.length));
       const score = candidateAdherence.mean + 0.15 * candidateAdherence.p90 +
+        directionWeight * candidateDirection.p90 +
         0.01 * offsetRmsError;
+      if (metadata.directional_target === true &&
+          (curveIndex === 134 || curveIndex === 137) &&
+          directionalCandidateAudit.length < 256) {
+        directionalCandidateAudit.push({
+          maximum_rotation_degrees: metadata.maximum_rotation_degrees,
+          fitted_rotation_degrees: metadata.fitted_rotation_degrees,
+          displacement_scale: metadata.displacement_scale,
+          taper_arc_px: metadata.taper_arc_px,
+          adherence_mean_px: candidateAdherence.mean,
+          adherence_p90_px: candidateAdherence.p90,
+          direction_p90_degrees: candidateDirection.p90,
+          maximum_turn_degrees: metrics.maximumTurnDegrees,
+          material_sign_changes: metrics.materialSignChanges,
+          endpoint_tangent_change_degrees: endpointChange,
+          new_intersection_pairs: newIntersectionPairs,
+          topology_passed: topologyPassed,
+          inside_canvas: insideCanvas,
+          new_short_curvature_reversal: newShortCurvatureReversal,
+          adherence_passed: adherencePassed,
+          direction_passed: directionPassed,
+          accepted_by_gates: true,
+          score,
+          ...(curveIndex === 134 && metadata.directional_target === true &&
+            metadata.maximum_rotation_degrees === 24 &&
+            Number(metadata.taper_arc_px) > 100 && metadata.displacement_scale === 1 ?
+            { candidate_points: candidatePoints.map((point) => [...point]) } : {}),
+        });
+      }
       if (score >= selectedScore - 1e-9) return;
       selected = candidateOffsets;
       selectedMetrics = metrics;
@@ -2197,6 +2467,7 @@ function applyCurvatureFairing(
       selectedModeCount = metadata.mode_count ?? null;
       selectedEndpointChange = endpointChange;
       selectedAdherence = candidateAdherence;
+      selectedDirectionAdherence = candidateDirection;
       selectedPoints = candidatePoints;
       selectedRegionalCartesianDisplacement = metadata.regional_cartesian_displacement === true;
       selectedScore = score;
@@ -2232,7 +2503,9 @@ function applyCurvatureFairing(
       }
       if (guidedRegion === "glabellar" || guidedRegion === "crows_feet") {
         for (const taperScale of [1, 2, 4]) {
-          for (const maximumRotationDegrees of [12, 24]) {
+          const rotationCandidates = guidedRegion === "crows_feet" ?
+            [12, 24, 36, 45] : [12, 24];
+          for (const maximumRotationDegrees of rotationCandidates) {
             for (const maximumScaleChange of [0, 0.20, 0.50, 0.70]) {
               const trajectory = guidedRigidEnvelopeTrajectory(
                 result.curve, directRecords, baseTaperArc * taperScale,
@@ -2260,6 +2533,37 @@ function applyCurvatureFairing(
                   points,
                 );
               }
+            }
+          }
+        }
+      }
+      if (guidedRegion === "crows_feet") {
+        for (const taperScale of [1, 2, 4]) {
+          for (const maximumRotationDegrees of [12, 24, 36, 45]) {
+            const trajectory = guidedDirectionalEnvelopeTrajectory(
+              result.curve, directRecords, baseTaperArc * taperScale,
+              maximumRegionalDisplacement, maximumRotationDegrees,
+            );
+            for (const scale of [1, 0.90, 0.75, 0.60]) {
+              const points = trajectory.points.map((point: Point2, index: number): Point2 => [
+                result.curve.prior[index][0] +
+                  scale * (point[0] - result.curve.prior[index][0]),
+                result.curve.prior[index][1] +
+                  scale * (point[1] - result.curve.prior[index][1]),
+              ]);
+              evaluateCandidate(
+                Float64Array.from(trajectory.normalOffsets, (value) => value * scale),
+                {
+                  method: "regional_guided_directional_envelope",
+                  taper_arc_px: baseTaperArc * taperScale,
+                  maximum_rotation_degrees: maximumRotationDegrees,
+                  fitted_rotation_degrees: trajectory.rotationDegrees,
+                  displacement_scale: scale,
+                  regional_cartesian_displacement: true,
+                  directional_target: true,
+                },
+                points,
+              );
             }
           }
         }
@@ -2346,6 +2650,16 @@ function applyCurvatureFairing(
         curve_name: result.curve.seed.name,
         region: result.curve.seed.region,
         guided_region: guidedRegion,
+        direct_record_projection_arc_range: regionalRecords.length ? {
+          minimum: Math.min(...regionalRecords.map((record: MatchRecord) => record.projectionArc)),
+          maximum: Math.max(...regionalRecords.map((record: MatchRecord) => record.projectionArc)),
+        } : null,
+        direct_record_wrinkle_bounds: regionalRecords.length ? {
+          min_x: Math.min(...regionalRecords.map((record: MatchRecord) => record.wrinklePoint[0])),
+          max_x: Math.max(...regionalRecords.map((record: MatchRecord) => record.wrinklePoint[0])),
+          min_y: Math.min(...regionalRecords.map((record: MatchRecord) => record.wrinklePoint[1])),
+          max_y: Math.max(...regionalRecords.map((record: MatchRecord) => record.wrinklePoint[1])),
+        } : null,
         status: "faired",
         strict_region_gate: strict,
         smoothing_method: selectedSmoothingMethod,
@@ -2361,11 +2675,15 @@ function applyCurvatureFairing(
         endpoint_tangent_change_degrees: selectedEndpointChange,
         adherence_before_fairing: beforeAdherence,
         adherence_after_fairing: selectedAdherence,
+        direction_adherence_after_fairing: selectedDirectionAdherence,
+        maximum_direction_p90_degrees: maximumDirectionP90,
+        direction_weight: directionWeight,
         maximum_mean_adherence_px: maximumMeanAdherence,
         maximum_p90_adherence_px: maximumP90Adherence,
         prior: priorMetrics,
         before: beforeMetrics,
         after: selectedMetrics,
+        directional_candidate_audit: directionalCandidateAudit,
       });
       continue;
     }
@@ -2386,6 +2704,9 @@ function applyCurvatureFairing(
       maximum_sign_changes: maximumSignChanges,
       minimum_reversal_spacing_px: minimumReversalSpacingPx,
       adherence_before_fairing: beforeAdherence,
+      direction_adherence_after_fairing: null,
+      maximum_direction_p90_degrees: maximumDirectionP90,
+      direction_weight: directionWeight,
       maximum_mean_adherence_px: maximumMeanAdherence,
       maximum_p90_adherence_px: maximumP90Adherence,
       prior: priorMetrics,
@@ -2473,6 +2794,13 @@ function trajectoryAdherence(
             baseP90Threshold, 0.5) : forehead ?
             explicitPositive(options.foreheadAdherenceP90ThresholdPx,
               baseP90Threshold, 0.5) : baseP90Threshold;
+    const groupDirectionThreshold = guidedRegion === "crows_feet" ?
+      explicitPositive(options.crowsFeetAdherenceDirectionP90Degrees,
+        directionThreshold, 1) : directionThreshold;
+    const groupDirectionSoftThreshold = guidedRegion === "crows_feet" ?
+      Math.min(groupDirectionThreshold, explicitPositive(
+        options.adherenceDirectionSoftDegrees, directionSoftThreshold, 1,
+      )) : directionSoftThreshold;
     const pointOrders = [...new Set(group.records.map((record) => record.pointOrder))];
     const points = pointOrders.map((pointOrder) => trends[group.trendIndex].points[pointOrder]);
     const wrinkleTangents = pointOrders.map((pointOrder) =>
@@ -2501,12 +2829,15 @@ function trajectoryAdherence(
       .some((value: number) => Math.abs(value) > 0.05);
     if (applyGate && options.postAdherenceGate === true) {
       const alreadyAligned = priorMean <= groupMeanThreshold && priorP90 <= p90Threshold &&
-        priorDirectionP90 <= directionThreshold;
+        priorDirectionP90 <= groupDirectionThreshold;
       const improved = priorMean - finalMean >= minimumImprovement;
       const passedDistance = finalMean <= groupMeanThreshold && finalP90 <= p90Threshold;
-      const passedDirection = finalDirectionP90 <= directionThreshold;
+      const passedDirection = finalDirectionP90 <= groupDirectionThreshold;
+      const retainAlignedRegionalRefinement = guidedRegion === "crows_feet" &&
+        options.crowsFeetRetainAlignedRefinement === true && moved && improved &&
+        passedDistance && passedDirection;
       let status = "accepted", rejectionReason = null;
-      if (alreadyAligned) {
+      if (alreadyAligned && !retainAlignedRegionalRefinement) {
         status = "already_aligned";
         alreadyAlignedCurveIndices.add(group.curveIndex);
       } else if (outputCurves[group.curveIndex].rollbackReason || !moved) {
@@ -2531,11 +2862,13 @@ function trajectoryAdherence(
       group.summary.candidate_final_mean_distance_px = finalMean;
       group.summary.candidate_final_p90_distance_px = finalP90;
       group.summary.candidate_final_direction_p90_degrees = finalDirectionP90;
-      if (accepted && finalDirectionP90 > directionSoftThreshold) {
+      group.summary.prior_was_already_aligned = alreadyAligned;
+      group.summary.aligned_refinement_retained = retainAlignedRegionalRefinement;
+      if (accepted && finalDirectionP90 > groupDirectionSoftThreshold) {
         group.summary.direction_soft_zone = true;
         group.summary.direction_soft_penalty = clamp(
-          (directionThreshold - finalDirectionP90) /
-          Math.max(EPSILON, directionThreshold - directionSoftThreshold),
+          (groupDirectionThreshold - finalDirectionP90) /
+          Math.max(EPSILON, groupDirectionThreshold - groupDirectionSoftThreshold),
         );
       }
       if (options.shortWrinkleQuantizationTolerance === true) {
@@ -2569,12 +2902,12 @@ function trajectoryAdherence(
       final_direction_p90_degrees: finalDirectionP90,
       mean_distance_threshold_px: groupMeanThreshold,
       p90_distance_threshold_px: p90Threshold,
-      direction_p90_threshold_degrees: directionThreshold,
+      direction_p90_threshold_degrees: groupDirectionThreshold,
       ...(options.shortWrinkleQuantizationTolerance === true ? {
         base_p90_distance_threshold_px: groupBaseP90Threshold,
         short_wrinkle_quantization_tolerance_px: quantizationTolerance,
         short_wrinkle_gate_applied: shortTrend,
-        direction_soft_threshold_degrees: directionSoftThreshold,
+        direction_soft_threshold_degrees: groupDirectionSoftThreshold,
         direction_soft_zone: finalDirectionP90 > directionSoftThreshold &&
           finalDirectionP90 <= directionThreshold,
       } : {}),
@@ -2710,6 +3043,23 @@ function intersectionPairs(curves: Point2[][]): Set<string> {
       if (!boundsOverlap(bounds[first], bounds[second])) continue;
       if (curvesCross(curves[first], curves[second])) pairs.add(`${first}:${second}`);
     }
+  }
+  return pairs;
+}
+
+function newIntersectionPairsForCurve(
+  curves: Point2[][], priorPairs: Set<string>, changedCurveIndex: number,
+): string[] {
+  const changed = curves[changedCurveIndex];
+  const changedBounds = curveBounds(changed);
+  const pairs: string[] = [];
+  for (let other = 0; other < curves.length; other += 1) {
+    if (other === changedCurveIndex) continue;
+    const first = Math.min(changedCurveIndex, other);
+    const second = Math.max(changedCurveIndex, other);
+    if (priorPairs.has(`${first}:${second}`) ||
+        !boundsOverlap(changedBounds, curveBounds(curves[other]))) continue;
+    if (curvesCross(changed, curves[other])) pairs.push(`${first}:${second}`);
   }
   return pairs;
 }
@@ -4255,6 +4605,524 @@ function applyForeheadBundleCoherence(
   };
 }
 
+function applyCrowsFeetNeighborCoherence(
+  curves: CurveGeometry[], matching: MatchingResult, refined: RefinedState,
+  size: number, faceWidth: number, options: V6RefinementOptions,
+) {
+  const disabled = {
+    enabled: options.crowsFeetNeighborCoherence === true,
+    applied: false,
+    reason: "disabled",
+    anchorCurveIndices: [] as number[],
+    followerCurveIndices: [] as number[],
+    rejectedFollowerRecords: [] as any[],
+  };
+  if (options.crowsFeetNeighborCoherence !== true) return disabled;
+
+  const isCrowCurve = (curve: CurveGeometry): boolean => {
+    const region = String(curve.seed.region || "");
+    return region === "lateral_canthus_short_arc_v65" ||
+      region === "cheek_gap_density_v53";
+  };
+  const crowCurveIndices = curves.map((curve, index) => ({ curve, index }))
+    .filter(({ curve }) => isCrowCurve(curve)).map(({ index }) => index);
+  const anchorCurveIndices = [...new Set(matching.acceptedGroups
+    .filter((group) => group.summary.final_accepted === true &&
+      group.summary.guided_region === "crows_feet" &&
+      !refined.results[group.curveIndex].rollbackReason &&
+      refined.results[group.curveIndex].points.some((point: Point2, pointIndex: number) =>
+        Math.hypot(
+          point[0] - curves[group.curveIndex].prior[pointIndex][0],
+          point[1] - curves[group.curveIndex].prior[pointIndex][1],
+        ) > 0.05))
+    .map((group) => group.curveIndex))];
+  if (!anchorCurveIndices.length || !crowCurveIndices.length) {
+    return { ...disabled, reason: "insufficient_crows_feet_anchors",
+      anchorCurveIndices };
+  }
+
+  const anchorSet = new Set(anchorCurveIndices);
+  const countPerAnchor = Math.max(0, Math.min(3, Math.round(Number(
+    options.crowsFeetNeighborCountPerAnchor ?? 1,
+  ))));
+  const radius = explicitPositive(options.crowsFeetNeighborRadiusPx,
+    faceWidth * 0.030, 6);
+  const strength = clamp(Number(options.crowsFeetNeighborStrength ?? 0.28), 0, 1);
+  const minimumSpacingRatio = explicitPositive(
+    options.crowsFeetNeighborMinimumSpacingRatio, 0.70, 0.1,
+  );
+  const maximumTurnDegrees = explicitPositive(
+    options.crowsFeetNeighborMaximumTurnDegrees, 10, 1,
+  );
+  const materialTurn = Math.max(0.1,
+    Number(options.curvatureFairingMaterialTurnDegrees) || 0.35);
+  const minimumReversalSpacingPx = Math.max(5, faceWidth * 0.008);
+  const priorPoints = curves.map((curve) => curve.prior);
+  const workingPoints: Point2[][] = refined.results.map((result: any) =>
+    result.points.map((point: Point2) => [...point]));
+  const priorPairs = intersectionPairs(priorPoints);
+  const priorSelf = priorPoints.map(selfCrosses);
+  const candidateByFollower = new Map<number, any>();
+  const meanX = (curve: CurveGeometry): number => curve.prior.reduce(
+    (sum, point) => sum + point[0], 0,
+  ) / Math.max(1, curve.prior.length);
+  const sideCompatible = (anchor: CurveGeometry, follower: CurveGeometry): boolean => {
+    const anchorSide = Math.sign(meanX(anchor) - size * 0.5);
+    const followerSide = Math.sign(meanX(follower) - size * 0.5);
+    return anchorSide === 0 || followerSide === 0 || anchorSide === followerSide;
+  };
+
+  for (const anchorCurveIndex of anchorCurveIndices) {
+    const anchor = curves[anchorCurveIndex];
+    const neighbors = crowCurveIndices.filter((followerCurveIndex) =>
+      !anchorSet.has(followerCurveIndex) &&
+      sideCompatible(anchor, curves[followerCurveIndex]),
+    ).map((followerCurveIndex) => ({
+      followerCurveIndex,
+      distance: minimumPolylineDistance(
+        curves[anchorCurveIndex].prior, curves[followerCurveIndex].prior,
+      ),
+    })).filter((candidate) => candidate.distance <= radius)
+      .sort((left, right) => left.distance - right.distance ||
+        left.followerCurveIndex - right.followerCurveIndex)
+      .slice(0, countPerAnchor);
+    for (const neighbor of neighbors) {
+      const prior = candidateByFollower.get(neighbor.followerCurveIndex);
+      if (!prior || neighbor.distance < prior.distance) {
+        candidateByFollower.set(neighbor.followerCurveIndex, {
+          ...neighbor, anchorCurveIndex,
+        });
+      }
+    }
+  }
+  const followerCurveIndices = [...candidateByFollower.keys()].sort((left, right) =>
+    (candidateByFollower.get(left).distance - candidateByFollower.get(right).distance) ||
+    left - right);
+  if (!followerCurveIndices.length) {
+    return { ...disabled, reason: "no_eligible_crows_feet_neighbors",
+      anchorCurveIndices, followerCurveIndices };
+  }
+
+  const rejectedFollowerRecords: any[] = [];
+  let movedFollowerCurveCount = 0, movedFollowerPointCount = 0;
+  for (const followerCurveIndex of followerCurveIndices) {
+    const candidate = candidateByFollower.get(followerCurveIndex);
+    const follower = curves[followerCurveIndex];
+    const anchor = curves[candidate.anchorCurveIndex];
+    const anchorResult = refined.results[candidate.anchorCurveIndex];
+    const raw = new Float64Array(follower.prior.length);
+    for (let pointIndex = 0; pointIndex < follower.prior.length; pointIndex += 1) {
+      const nearest = nearestCurveVertex(follower.prior[pointIndex], anchor);
+      const anchorPrior = anchor.prior[nearest.index];
+      const anchorFinal = anchorResult.points[nearest.index];
+      const displacement: Point2 = [
+        anchorFinal[0] - anchorPrior[0], anchorFinal[1] - anchorPrior[1],
+      ];
+      const distanceWeight = Math.exp(-0.5 * (nearest.distance / radius) ** 2);
+      raw[pointIndex] = strength * distanceWeight * (
+        displacement[0] * follower.normals[pointIndex][0] +
+        displacement[1] * follower.normals[pointIndex][1]);
+    }
+    const smoothed = gaussianFairNormalOffsets(
+      follower, raw, [[0, raw.length]], Math.max(3, faceWidth * 0.012), false,
+    );
+    const priorSpacing = minimumPolylineDistance(follower.prior, anchor.prior);
+    const rejectionReasons: string[] = [];
+    let accepted: { scale: number; offsets: Float64Array; points: Point2[]; spacing: number } | null = null;
+    for (const scale of [1, 0.85, 0.70, 0.55, 0.40, 0.25]) {
+      const offsets = Float64Array.from(smoothed, (value) => value * scale);
+      const points = pointsFromOffsets(follower, offsets);
+      if (points.some((point) => point[0] < 0 || point[1] < 0 ||
+          point[0] >= size || point[1] >= size)) {
+        rejectionReasons.push(`${scale}:out_of_bounds`);
+        continue;
+      }
+      const metrics = curvatureMetrics(points, materialTurn);
+      const priorMetrics = curvatureMetrics(follower.prior, materialTurn);
+      const newShortReversal = priorMetrics.minimumMaterialSignChangeSpacingPx === null ||
+        priorMetrics.minimumMaterialSignChangeSpacingPx >= minimumReversalSpacingPx;
+      const candidateShortReversal = metrics.minimumMaterialSignChangeSpacingPx !== null &&
+        metrics.minimumMaterialSignChangeSpacingPx < minimumReversalSpacingPx;
+      if (metrics.maximumTurnDegrees > Math.max(
+        maximumTurnDegrees, priorMetrics.maximumTurnDegrees + 1,
+      ) + 1e-6 || (newShortReversal && candidateShortReversal) ||
+          endpointTangentChangeDegrees(follower.prior, points) > 45) {
+        rejectionReasons.push(`${scale}:curvature`);
+        continue;
+      }
+      const finalSpacing = minimumPolylineDistance(points,
+        workingPoints[candidate.anchorCurveIndex]);
+      const spacingRatio = finalSpacing / Math.max(EPSILON, priorSpacing);
+      if (spacingRatio < minimumSpacingRatio - 1e-6) {
+        rejectionReasons.push(`${scale}:spacing_${spacingRatio.toFixed(3)}`);
+        continue;
+      }
+      const candidatePoints = workingPoints.map((layer) =>
+        layer.map((point) => [...point] as Point2));
+      candidatePoints[followerCurveIndex] = points;
+      const newPairs = newIntersectionPairsForCurve(
+        candidatePoints, priorPairs, followerCurveIndex,
+      );
+      const newSelf = !priorSelf[followerCurveIndex] && selfCrosses(points);
+      if (newPairs.length || newSelf) {
+        rejectionReasons.push(`${scale}:topology_${newPairs.join(",") || "self"}`);
+        continue;
+      }
+      accepted = { scale, offsets, points, spacing: spacingRatio };
+      break;
+    }
+    if (!accepted) {
+      rejectedFollowerRecords.push({
+        follower_curve_index: followerCurveIndex,
+        anchor_curve_index: candidate.anchorCurveIndex,
+        prior_spacing_px: priorSpacing,
+        reason: "topology_or_smoothness_gate_rejected",
+        scale_attempts: rejectionReasons,
+      });
+      continue;
+    }
+    const result = refined.results[followerCurveIndex];
+    result.offsets = accepted.offsets;
+    result.points = accepted.points;
+    result.intervals = activeOffsetIntervals(accepted.offsets);
+    result.rollbackReason = null;
+    result.supportScore = Math.max(result.supportScore || 0, 0.12);
+    result.bundleFollowerSources = [{
+      source_wrinkle_segment_ids: matching.acceptedGroups
+        .filter((group) => group.curveIndex === candidate.anchorCurveIndex)
+        .map((group) => group.trendIndex),
+      source_anchor_curve_indices: [candidate.anchorCurveIndex],
+      influence: strength,
+      separationPx: candidate.distance,
+      coherence_only: true,
+    }];
+    workingPoints[followerCurveIndex] = accepted.points;
+    const movedPoints = accepted.offsets.filter((value) => Math.abs(value) > 0.05).length;
+    if (movedPoints) {
+      movedFollowerCurveCount += 1;
+      movedFollowerPointCount += movedPoints;
+    }
+  }
+  return {
+    enabled: true,
+    applied: movedFollowerCurveCount > 0,
+    reason: movedFollowerCurveCount > 0 ? null : "all_neighbor_candidates_rejected",
+    anchorCurveIndices,
+    followerCurveIndices,
+    movedFollowerCurveCount,
+    movedFollowerPointCount,
+    neighborRadiusPx: radius,
+    neighborStrength: strength,
+    minimumSpacingRatio,
+    rejectedFollowerRecords,
+    finalNewIntersectionPairs: [...intersectionPairs(workingPoints)]
+      .filter((pair) => !priorPairs.has(pair)),
+    finalNewSelfCrossCurveCount: workingPoints.reduce((count, points, index) =>
+      count + (!priorSelf[index] && selfCrosses(points) ? 1 : 0), 0),
+  };
+}
+
+function applyCrowsFeetDirectionalBundle(
+  curves: CurveGeometry[], matching: MatchingResult, refined: RefinedState,
+  size: number, faceWidth: number, options: V6RefinementOptions,
+) {
+  const disabled = {
+    enabled: options.crowsFeetNeighborCoherence === true,
+    applied: false,
+    reason: "disabled",
+    anchorCurveIndices: [] as number[],
+    followerCurveIndices: [] as number[],
+    attempts: [] as any[],
+  };
+  if (options.crowsFeetNeighborCoherence !== true) return disabled;
+
+  const isCrowCurve = (curve: CurveGeometry): boolean => {
+    const region = String(curve.seed.region || "");
+    return region === "lateral_canthus_short_arc_v65" ||
+      region === "cheek_gap_density_v53";
+  };
+  const directionP90 = (points: Point2[], records: MatchRecord[]): number => percentile(
+    records.map((record) => axialDirectionDifferenceDegrees(
+      pointToPolylineMatch(record.wrinklePoint, points).tangent,
+      record.wrinkleTangent,
+    )),
+    0.9,
+  );
+  const acceptedCrowGroups = matching.acceptedGroups.filter((group) =>
+    group.summary.final_accepted === true &&
+    group.summary.guided_region === "crows_feet" &&
+    !refined.results[group.curveIndex].rollbackReason);
+  const anchorSet = new Set(acceptedCrowGroups.map((group) => group.curveIndex));
+  const minimumPriorDirection = explicitPositive(
+    options.crowsFeetDirectionalBundleMinimumPriorDirectionDegrees, 20, 1,
+  );
+  const directionalGroups = acceptedCrowGroups.map((group) => {
+    const priorDirection = directionP90(curves[group.curveIndex].prior, group.records);
+    const finalDirection = directionP90(refined.results[group.curveIndex].points, group.records);
+    const longDirectionalSupport = group.records.length >= 40 && priorDirection >= 20;
+    return { group, priorDirection, finalDirection, longDirectionalSupport };
+  }).filter(({ priorDirection, finalDirection, longDirectionalSupport }) =>
+    priorDirection >= minimumPriorDirection &&
+    (priorDirection - finalDirection >= 8 ||
+      longDirectionalSupport))
+    .sort((left, right) => Number(right.longDirectionalSupport) -
+      Number(left.longDirectionalSupport) || right.priorDirection - left.priorDirection ||
+      left.group.curveIndex - right.group.curveIndex);
+  if (!directionalGroups.length) {
+    return { ...disabled, reason: "no_directionally_misaligned_anchor" };
+  }
+
+  const crowCurveIndices = curves.map((curve, index) => ({ curve, index }))
+    .filter(({ curve }) => isCrowCurve(curve)).map(({ index }) => index);
+  const priorPoints = curves.map((curve) => curve.prior);
+  const priorPairs = intersectionPairs(priorPoints);
+  const priorSelf = priorPoints.map(selfCrosses);
+  const workingPoints: Point2[][] = refined.results.map((result: any) =>
+    result.points.map((point: Point2) => [...point]));
+  const meanX = (curve: CurveGeometry): number => curve.prior.reduce(
+    (sum, point) => sum + point[0], 0,
+  ) / Math.max(1, curve.prior.length);
+  const sideCompatible = (anchor: CurveGeometry, follower: CurveGeometry): boolean => {
+    const anchorSide = Math.sign(meanX(anchor) - size * 0.5);
+    const followerSide = Math.sign(meanX(follower) - size * 0.5);
+    return anchorSide === 0 || followerSide === 0 || anchorSide === followerSide;
+  };
+  const followerCount = Math.max(1, Math.min(3, Math.round(Number(
+    options.crowsFeetNeighborCountPerAnchor ?? 2,
+  ))));
+  const radius = explicitPositive(options.crowsFeetNeighborRadiusPx,
+    faceWidth * 0.045, 8);
+  const minimumSpacingRatio = explicitPositive(
+    options.crowsFeetNeighborMinimumSpacingRatio, 0.70, 0.1,
+  );
+  const maximumTurnDegrees = explicitPositive(
+    options.crowsFeetNeighborMaximumTurnDegrees, 10, 1,
+  );
+  const materialTurn = Math.max(0.1,
+    Number(options.curvatureFairingMaterialTurnDegrees) || 0.35);
+  const claimedFollowers = new Set<number>();
+  const attempts: any[] = [];
+  const appliedAnchors: number[] = [];
+  const appliedFollowers: number[] = [];
+
+  const displacementAtFraction = (
+    anchor: CurveGeometry, anchorPoints: Point2[], fraction: number,
+  ): Point2 => {
+    const targetArc = clamp(fraction) * Math.max(EPSILON,
+      anchor.vertexArc[anchor.vertexArc.length - 1]);
+    let index = 0;
+    while (index < anchor.vertexArc.length - 2 &&
+           anchor.vertexArc[index + 1] < targetArc) index += 1;
+    const span = Math.max(EPSILON,
+      anchor.vertexArc[index + 1] - anchor.vertexArc[index]);
+    const local = clamp((targetArc - anchor.vertexArc[index]) / span);
+    const priorX = anchor.prior[index][0] + local *
+      (anchor.prior[index + 1][0] - anchor.prior[index][0]);
+    const priorY = anchor.prior[index][1] + local *
+      (anchor.prior[index + 1][1] - anchor.prior[index][1]);
+    const finalX = anchorPoints[index][0] + local *
+      (anchorPoints[index + 1][0] - anchorPoints[index][0]);
+    const finalY = anchorPoints[index][1] + local *
+      (anchorPoints[index + 1][1] - anchorPoints[index][1]);
+    return [finalX - priorX, finalY - priorY];
+  };
+
+  for (const directional of directionalGroups) {
+    const anchorCurveIndex = directional.group.curveIndex;
+    const anchor = curves[anchorCurveIndex];
+    const anchorPoints = workingPoints[anchorCurveIndex];
+    // A long, coherent diagonal wrinkle should propagate through a local
+    // line bundle even when its measured angle is modest. The previous
+    // angle-only shortcut reduced the left crow's-feet side to one weak
+    // follower, making the directional change visually disappear.
+    const imageLeftAnchor = meanX(anchor) < size * 0.5;
+    const localFollowerCount = directional.longDirectionalSupport ?
+      followerCount : (directional.priorDirection < 45 ? 1 : followerCount);
+    const rankedFollowers = crowCurveIndices.filter((curveIndex) =>
+      !anchorSet.has(curveIndex) && !claimedFollowers.has(curveIndex) &&
+      sideCompatible(anchor, curves[curveIndex]),
+    ).map((curveIndex) => ({
+      curveIndex,
+      distance: minimumPolylineDistance(anchor.prior, curves[curveIndex].prior),
+    })).filter(({ distance }) => distance <= radius)
+      .sort((left, right) => left.distance - right.distance ||
+        left.curveIndex - right.curveIndex);
+    const followers: Array<{ curveIndex: number; distance: number }> = [];
+    // The left-side propagation below is mostly rigid, so existing narrow
+    // gaps remain stable and do not need to exclude adjacent lines here.
+    const minimumFollowerSeparation = 0;
+    for (const candidate of rankedFollowers) {
+      if (followers.length >= localFollowerCount) break;
+      if (minimumFollowerSeparation > 0 && followers.some((selected) =>
+        minimumPolylineDistance(
+          curves[selected.curveIndex].prior, curves[candidate.curveIndex].prior,
+        ) < minimumFollowerSeparation)) continue;
+      followers.push(candidate);
+    }
+    if (!followers.length) continue;
+
+    // The image-left crow's-feet field is already close in its anchor
+    // direction, so its visible guidance comes primarily from how strongly
+    // the neighboring lines inherit the anchor's 2-D displacement. Give
+    // that side a bounded boost; all geometry gates below still decide the
+    // accepted scale.
+    const leftSidePropagationBoost = imageLeftAnchor ? 3 : 1;
+    const leftAnchorWarpScale = imageLeftAnchor && directional.longDirectionalSupport ? 1.6 : 1;
+    const warpedAnchorPoints = leftAnchorWarpScale === 1 ? anchorPoints : anchorPoints.map(
+      (point, pointIndex): Point2 => [
+        anchor.prior[pointIndex][0] + leftAnchorWarpScale *
+          (point[0] - anchor.prior[pointIndex][0]),
+        anchor.prior[pointIndex][1] + leftAnchorWarpScale *
+          (point[1] - anchor.prior[pointIndex][1]),
+      ],
+    );
+    const sharedLeftDisplacement = imageLeftAnchor ?
+      displacementAtFraction(anchor, warpedAnchorPoints, 0.5) : null;
+
+    let selected: any = null;
+    const scaleAttempts: any[] = [];
+    for (const scale of [1, 0.92, 0.84, 0.76, 0.68, 0.60, 0.50, 0.40]) {
+      const candidatePoints = workingPoints.slice();
+      const candidateOffsets = new Map<number, Float64Array>();
+      const curvatureFailures: number[] = [];
+      candidatePoints[anchorCurveIndex] = warpedAnchorPoints;
+      if (leftAnchorWarpScale !== 1) {
+        const priorMetrics = curvatureMetrics(anchor.prior, materialTurn);
+        const metrics = curvatureMetrics(warpedAnchorPoints, materialTurn);
+        if (metrics.maximumTurnDegrees > Math.max(
+          maximumTurnDegrees, priorMetrics.maximumTurnDegrees + 3,
+        ) + 1e-6 || endpointTangentChangeDegrees(anchor.prior, warpedAnchorPoints) > 50) {
+          curvatureFailures.push(anchorCurveIndex);
+        }
+      }
+      for (let rank = 0; rank < followers.length; rank += 1) {
+        const followerIndex = followers[rank].curveIndex;
+        const follower = curves[followerIndex];
+        const strength = scale * leftSidePropagationBoost *
+          Math.max(0.55, 0.92 - 0.16 * rank);
+        const points = follower.prior.map((point, pointIndex): Point2 => {
+          const fraction = follower.vertexArc[pointIndex] /
+            Math.max(EPSILON, follower.vertexArc[follower.vertexArc.length - 1]);
+          const localDisplacement = displacementAtFraction(anchor, warpedAnchorPoints, fraction);
+          const displacement = sharedLeftDisplacement ? [
+            0.68 * sharedLeftDisplacement[0] + 0.32 * localDisplacement[0],
+            0.68 * sharedLeftDisplacement[1] + 0.32 * localDisplacement[1],
+          ] as Point2 : localDisplacement;
+          return [point[0] + strength * displacement[0],
+            point[1] + strength * displacement[1]];
+        });
+        const offsets = Float64Array.from(points, (point, pointIndex) =>
+          (point[0] - follower.prior[pointIndex][0]) * follower.normals[pointIndex][0] +
+          (point[1] - follower.prior[pointIndex][1]) * follower.normals[pointIndex][1]);
+        const priorMetrics = curvatureMetrics(follower.prior, materialTurn);
+        const metrics = curvatureMetrics(points, materialTurn);
+        if (metrics.maximumTurnDegrees > Math.max(
+          maximumTurnDegrees, priorMetrics.maximumTurnDegrees + 3,
+        ) + 1e-6 || endpointTangentChangeDegrees(follower.prior, points) > 50) {
+          curvatureFailures.push(followerIndex);
+        }
+        candidatePoints[followerIndex] = points;
+        candidateOffsets.set(followerIndex, offsets);
+      }
+      const bundleIndices = [anchorCurveIndex, ...followers.map(({ curveIndex }) => curveIndex)];
+      let minimumObservedSpacingRatio = Infinity;
+      for (let first = 0; first < bundleIndices.length; first += 1) {
+        for (let second = first + 1; second < bundleIndices.length; second += 1) {
+          const priorSpacing = minimumPolylineDistance(
+            priorPoints[bundleIndices[first]], priorPoints[bundleIndices[second]],
+          );
+          const finalSpacing = minimumPolylineDistance(
+            candidatePoints[bundleIndices[first]], candidatePoints[bundleIndices[second]],
+          );
+          minimumObservedSpacingRatio = Math.min(minimumObservedSpacingRatio,
+            finalSpacing / Math.max(EPSILON, priorSpacing));
+        }
+      }
+      const newPairs = [...new Set([anchorCurveIndex, ...followers.map(({ curveIndex }) =>
+        curveIndex)].flatMap((curveIndex) =>
+        newIntersectionPairsForCurve(candidatePoints, priorPairs, curveIndex)))];
+      const newSelf = bundleIndices.filter((curveIndex) =>
+        !priorSelf[curveIndex] && selfCrosses(candidatePoints[curveIndex]));
+      const insideCanvas = bundleIndices.every((curveIndex) =>
+        candidatePoints[curveIndex].every((point) =>
+          point[0] >= 0 && point[1] >= 0 && point[0] < size && point[1] < size));
+      const accepted = insideCanvas && !curvatureFailures.length && !newPairs.length &&
+        !newSelf.length && minimumObservedSpacingRatio >= minimumSpacingRatio - 1e-6;
+      scaleAttempts.push({ scale, accepted, minimum_spacing_ratio: minimumObservedSpacingRatio,
+        curvature_failure_curve_indices: curvatureFailures,
+        new_intersection_pairs: newPairs,
+        new_self_cross_curve_indices: newSelf,
+        inside_canvas: insideCanvas });
+      if (accepted) {
+        selected = { scale, candidatePoints, candidateOffsets,
+          minimumObservedSpacingRatio };
+        break;
+      }
+    }
+    attempts.push({ anchor_curve_index: anchorCurveIndex,
+      follower_curve_indices: followers.map(({ curveIndex }) => curveIndex),
+      left_side_propagation_boost: leftSidePropagationBoost,
+      minimum_follower_separation_px: minimumFollowerSeparation,
+      left_anchor_warp_scale: leftAnchorWarpScale,
+      prior_direction_p90_degrees: directional.priorDirection,
+      anchor_final_direction_p90_degrees: directional.finalDirection,
+      accepted: selected !== null,
+      selected_scale: selected?.scale ?? null,
+      minimum_spacing_ratio: selected?.minimumObservedSpacingRatio ?? null,
+      scale_attempts: scaleAttempts });
+    if (!selected) continue;
+
+    appliedAnchors.push(anchorCurveIndex);
+    if (leftAnchorWarpScale !== 1) {
+      const anchorResult = refined.results[anchorCurveIndex];
+      const anchorOffsets = Float64Array.from(warpedAnchorPoints, (point, pointIndex) =>
+        (point[0] - anchor.prior[pointIndex][0]) * anchor.normals[pointIndex][0] +
+        (point[1] - anchor.prior[pointIndex][1]) * anchor.normals[pointIndex][1]);
+      anchorResult.points = warpedAnchorPoints;
+      anchorResult.offsets = anchorOffsets;
+      anchorResult.intervals = activeOffsetIntervals(anchorOffsets);
+      anchorResult.rollbackReason = null;
+      workingPoints[anchorCurveIndex] = warpedAnchorPoints;
+    }
+    for (const follower of followers) {
+      const followerIndex = follower.curveIndex;
+      const result = refined.results[followerIndex];
+      result.points = selected.candidatePoints[followerIndex];
+      result.offsets = selected.candidateOffsets.get(followerIndex);
+      result.intervals = activeOffsetIntervals(result.offsets);
+      result.rollbackReason = null;
+      result.supportScore = Math.max(result.supportScore || 0, 0.18);
+      result.bundleFollowerSources = [{
+        source_wrinkle_segment_ids: [directional.group.trendIndex],
+        source_anchor_curve_indices: [anchorCurveIndex],
+        influence: selected.scale,
+        separationPx: follower.distance,
+        coherence_only: true,
+        directional_bundle: true,
+      }];
+      workingPoints[followerIndex] = result.points;
+      claimedFollowers.add(followerIndex);
+      appliedFollowers.push(followerIndex);
+    }
+  }
+
+  return {
+    enabled: true,
+    applied: appliedFollowers.length > 0,
+    reason: appliedFollowers.length ? null : "directional_bundle_gate_rejected",
+    anchorCurveIndices: appliedAnchors,
+    followerCurveIndices: appliedFollowers,
+    movedFollowerCurveCount: appliedFollowers.length,
+    neighborRadiusPx: radius,
+    minimumSpacingRatio,
+    attempts,
+    finalNewIntersectionPairs: [...new Set(appliedFollowers.flatMap((curveIndex) =>
+      newIntersectionPairsForCurve(workingPoints, priorPairs, curveIndex)))],
+    finalNewSelfCrossCurveCount: workingPoints.reduce((count, points, index) =>
+      count + (!priorSelf[index] && selfCrosses(points) ? 1 : 0), 0),
+  };
+}
+
 function refineAnchorsAndBundle(
   curves: CurveGeometry[], matching: MatchingResult, faceWidth: number, size: number,
   options: V6RefinementOptions,
@@ -4440,6 +5308,20 @@ export function refineV6({
     );
   }
   const postAdherenceRollback = new Set();
+  let crowsFeetBundleCoherence: any = {
+    enabled: options.crowsFeetNeighborCoherence === true,
+    applied: false,
+    reason: "disabled",
+    anchorCurveIndices: [],
+    followerCurveIndices: [],
+  };
+  let crowsFeetDirectionalBundle: any = {
+    enabled: options.crowsFeetNeighborCoherence === true,
+    applied: false,
+    reason: "disabled",
+    anchorCurveIndices: [],
+    followerCurveIndices: [],
+  };
   if (options.postAdherenceGate === true) {
     for (const curveIndex of candidateAdherence.rejectedCurveIndices) {
       const result = refined.results[curveIndex];
@@ -4461,6 +5343,24 @@ export function refineV6({
         refined.results, curves.map((curve) => curve.prior),
       );
     }
+    outputCurves = makeOutputCurves();
+  }
+  crowsFeetBundleCoherence = applyCrowsFeetNeighborCoherence(
+    curves, matching, refined, size, faceWidth, options,
+  );
+  if (crowsFeetBundleCoherence.applied === true) {
+    intersection = rollbackNewIntersections(
+      refined.results, curves.map((curve) => curve.prior),
+    );
+    outputCurves = makeOutputCurves();
+  }
+  crowsFeetDirectionalBundle = applyCrowsFeetDirectionalBundle(
+    curves, matching, refined, size, faceWidth, options,
+  );
+  if (crowsFeetDirectionalBundle.applied === true) {
+    intersection = rollbackNewIntersections(
+      refined.results, curves.map((curve) => curve.prior),
+    );
     outputCurves = makeOutputCurves();
   }
   const foreheadBundleCoherence = applyForeheadBundleCoherence(
@@ -4557,6 +5457,28 @@ export function refineV6({
     face_width_px: faceWidth,
     input_mask_was_skeletonized: wasSkeletonized,
     wrinkle_segment_count: trends.length,
+    wrinkle_trend_geometry: trends.map((trend, trendIndex) => {
+      const xs = trend.points.map((point) => point[0]);
+      const ys = trend.points.map((point) => point[1]);
+      const centerX = xs.reduce((sum, value) => sum + value, 0) /
+        Math.max(1, xs.length);
+      const centerY = ys.reduce((sum, value) => sum + value, 0) /
+        Math.max(1, ys.length);
+      return {
+        trend_index: trendIndex,
+        point_count: trend.points.length,
+        center_x: centerX,
+        center_y: centerY,
+        span_x: Math.max(...xs) - Math.min(...xs),
+        span_y: Math.max(...ys) - Math.min(...ys),
+        length_px: trend.metrics.length,
+        direction_degrees: Math.atan2(
+          trend.points[trend.points.length - 1][1] - trend.points[0][1],
+          trend.points[trend.points.length - 1][0] - trend.points[0][0],
+        ) * 180 / Math.PI,
+        classified_guided_region: classifyGuidedWrinkleRegion(trend, size, faceWidth),
+      };
+    }),
     raw_skeleton_path_count: rawPaths.length,
     parallel_duplicate_skeleton_pixels_removed: deduplicated.removed,
     parallel_duplicate_suppression_radius_ratio_face_width: PARALLEL_DEDUP_FACE_RATIO,
@@ -4590,6 +5512,8 @@ export function refineV6({
     nose_bridge_ordered_cross_selected_count: completeFinalNoseBridgeTrends.size,
     nose_bridge_planar_warp: noseBridgePlanarWarp,
     forehead_bundle_coherence: foreheadBundleCoherence,
+    crows_feet_bundle_coherence: crowsFeetBundleCoherence,
+    crows_feet_directional_bundle: crowsFeetDirectionalBundle,
     glabellar_single_curve_selected_count: regionalSelectedCounts.glabellar,
     nose_bridge_single_curve_selected_count: regionalSelectedCounts.nose_bridge,
     crows_feet_single_curve_selected_count: regionalSelectedCounts.crows_feet,

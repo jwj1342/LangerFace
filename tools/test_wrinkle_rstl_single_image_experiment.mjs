@@ -179,7 +179,7 @@ assert.match(source, /forehead_bundle_coherence\?\.applied\s*!==\s*true/,
 assert.match(source, /curvatureFairingGlabellarMaximumTurnDegrees:\s*8/);
 assert.doesNotMatch(source, /curvatureFairingNoseBridgeMaximumTurnDegrees:/,
   "nose-dorsum wrinkles must not configure deformation fairing");
-assert.match(source, /curvatureFairingCrowsFeetMaximumTurnDegrees:\s*7/);
+assert.match(source, /curvatureFairingCrowsFeetMaximumTurnDegrees:\s*9/);
 assert.match(source, /glabellarAdherenceMeanThresholdPx:\s*2\.6/);
 assert.doesNotMatch(source, /noseBridgeAdherenceMeanThresholdPx:/,
   "nose-dorsum wrinkles must not configure deformation adherence");

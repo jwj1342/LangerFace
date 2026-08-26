@@ -32,6 +32,23 @@ function evidence(lines, confidenceValue = 1) {
   return { mask, confidence, q };
 }
 
+function directionalEvidence(lines, confidenceValue = 1) {
+  const fields = evidence(lines, confidenceValue);
+  for (const line of lines) {
+    for (let pointIndex = 0; pointIndex < line.length; pointIndex += 1) {
+      const previous = line[Math.max(0, pointIndex - 1)];
+      const next = line[Math.min(line.length - 1, pointIndex + 1)];
+      const length = Math.hypot(next[0] - previous[0], next[1] - previous[1]) || 1;
+      const [x, y] = line[pointIndex];
+      const tangentX = (next[0] - previous[0]) / length;
+      const tangentY = (next[1] - previous[1]) / length;
+      fields.q[index(x, y) * 2] = tangentX * tangentX - tangentY * tangentY;
+      fields.q[index(x, y) * 2 + 1] = 2 * tangentX * tangentY;
+    }
+  }
+  return fields;
+}
+
 function rangeLine(x0, x1, y) {
   return Array.from({ length: x1 - x0 + 1 }, (_, offset) => [x0 + offset, y]);
 }
@@ -534,6 +551,129 @@ function maximumTurnDegrees(points) {
   assert.equal(diagnostics.newSelfCrossCurveCount, 0);
   assert.equal(coherent.diagnostics.post_export_new_intersection_pair_count, 0);
   assert.equal(coherent.diagnostics.post_export_new_self_cross_curve_count, 0);
+}
+
+// Crow's-feet anchors retain a meaningful refinement even when the prior was
+// already inside the adherence threshold, and only a nearby same-side line is
+// allowed to follow the anchor's low-frequency displacement. Topology remains
+// a hard gate for the follower candidate.
+{
+  const seeds = [32, 40, 48].map((y, index) => ({
+    ...horizontalSeed(`crow-feet-layer-${index}`, y, 50, 90, 1),
+    region: "lateral_canthus_short_arc_v65",
+  }));
+  const fields = evidence([rangeLine(54, 88, 42)]);
+  const result = refineV9Smooth({
+    seeds,
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 80,
+    options: {
+      twoSidedNearestMatching: true,
+      regionalNearestSingleCurveMatching: true,
+      regionalCandidateFamilyFiltering: true,
+      postAdherenceGate: true,
+      targetGapPx: 0,
+      searchRadiusPx: 16,
+      p90LimitPx: 18,
+      maxDisplacementPx: 24,
+      crowsFeetRetainAlignedRefinement: true,
+      crowsFeetNeighborCoherence: true,
+      crowsFeetNeighborCountPerAnchor: 1,
+      crowsFeetNeighborRadiusPx: 16,
+      crowsFeetNeighborStrength: 0.28,
+      crowsFeetNeighborMinimumSpacingRatio: 0.70,
+      crowsFeetNeighborMaximumTurnDegrees: 10,
+    },
+  });
+  const coherence = result.diagnostics.crows_feet_bundle_coherence;
+  assert.equal(result.diagnostics.crows_feet_single_curve_selected_count, 1);
+  assert.equal(coherence.applied, true, JSON.stringify(coherence));
+  assert.ok(coherence.movedFollowerCurveCount >= 1, JSON.stringify(coherence));
+  const anchorIndex = coherence.anchorCurveIndices[0];
+  const followerIndex = coherence.followerCurveIndices.find((index) => index !== anchorIndex);
+  assert.ok(Number.isInteger(followerIndex));
+  const anchorMove = Math.max(...result.curves[anchorIndex].normalOffsetsPx.map(Math.abs));
+  const followerMove = Math.max(...result.curves[followerIndex].normalOffsetsPx.map(Math.abs));
+  assert.ok(anchorMove > 0.05);
+  assert.ok(followerMove > 0.05 && followerMove < anchorMove,
+    `neighbor coherence should be lower amplitude (${followerMove} < ${anchorMove})`);
+  assert.equal(result.diagnostics.post_export_new_intersection_pair_count, 0);
+  assert.equal(result.diagnostics.post_export_new_self_cross_curve_count, 0);
+}
+
+// A strongly diagonal crow's-feet wrinkle redirects an ordered local RSTL
+// bundle. The two followers inherit progressively less Cartesian displacement
+// while the bundle spacing and topology contracts remain intact.
+{
+  const seeds = [48, 66, 80].map((y, layer) => ({
+    ...horizontalSeed(`directional-crow-layer-${layer}`, y, 48, 90, 1),
+    region: "lateral_canthus_short_arc_v65",
+  }));
+  const wrinkle = Array.from({ length: 35 }, (_, offset) => [
+    54 + offset,
+    57 - Math.round(0.6 * offset),
+  ]);
+  const fields = directionalEvidence([wrinkle]);
+  const result = refineV9Smooth({
+    seeds,
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 80,
+    options: {
+      twoSidedNearestMatching: true,
+      regionalNearestSingleCurveMatching: true,
+      regionalCandidateFamilyFiltering: true,
+      directionToleranceDegrees: 75,
+      postAdherenceGate: true,
+      targetGapPx: 0.75,
+      searchRadiusPx: 24,
+      p90LimitPx: 24,
+      maxDisplacementPx: 36,
+      crowsFeetAdherenceMeanThresholdPx: 5,
+      crowsFeetAdherenceP90ThresholdPx: 9,
+      crowsFeetAdherenceDirectionP90Degrees: 40,
+      crowsFeetMaximumDisplacementPx: 36,
+      crowsFeetTransitionLengthPx: 24,
+      crowsFeetRetainAlignedRefinement: true,
+      crowsFeetNeighborCoherence: true,
+      crowsFeetNeighborCountPerAnchor: 2,
+      crowsFeetNeighborRadiusPx: 34,
+      crowsFeetNeighborMinimumSpacingRatio: 0.70,
+      crowsFeetNeighborMaximumTurnDegrees: 12,
+      crowsFeetDirectionalBundleMinimumPriorDirectionDegrees: 28,
+      curvatureFairing: true,
+      curvatureFairingPasses: 48,
+      curvatureFairingCrowsFeetMaximumTurnDegrees: 12,
+      curvatureFairingCrowsFeetMaximumMeanAdherencePx: 5,
+      curvatureFairingCrowsFeetMaximumP90AdherencePx: 9,
+      curvatureFairingCrowsFeetMaximumDirectionP90Degrees: 40,
+      curvatureFairingCrowsFeetDirectionWeight: 2,
+    },
+  });
+  const bundle = result.diagnostics.crows_feet_directional_bundle;
+  assert.equal(bundle.applied, true, JSON.stringify(bundle));
+  assert.equal(bundle.anchorCurveIndices.length, 1);
+  assert.equal(bundle.followerCurveIndices.length, 2);
+  assert.ok(bundle.attempts[0].anchor_final_direction_p90_degrees <
+    bundle.attempts[0].prior_direction_p90_degrees - 8);
+  const anchorMove = Math.max(...result.curves[bundle.anchorCurveIndices[0]].normalOffsetsPx
+    .map(Math.abs));
+  const followerMoves = bundle.followerCurveIndices.map((curveIndex) =>
+    Math.max(...result.curves[curveIndex].normalOffsetsPx.map(Math.abs)));
+  assert.ok(followerMoves[0] > followerMoves[1] && followerMoves[1] > 0.05,
+    JSON.stringify({ anchorMove, followerMoves }));
+  assert.ok(followerMoves[0] < anchorMove);
+  assert.ok(bundle.attempts[0].minimum_spacing_ratio >= 0.70);
+  assert.equal(bundle.finalNewIntersectionPairs.length, 0);
+  assert.equal(bundle.finalNewSelfCrossCurveCount, 0);
+  assert.equal(result.diagnostics.post_export_new_intersection_pair_count, 0);
+  assert.equal(result.diagnostics.post_export_new_self_cross_curve_count, 0);
+  for (const curve of result.curves) assert.ok(maximumTurnDegrees(curve.pts) <= 12 + 1e-6);
 }
 
 // V3 assigns parallel wrinkles to distinct nearby RSTL curves instead of
