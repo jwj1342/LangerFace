@@ -15,9 +15,13 @@ const noseRootVisibilitySourceUrl = new URL(
 const viteUrl = new URL("../web/vite.config.ts", import.meta.url);
 const atlasUrl = new URL("../assets/atlas_rstl_standard_v8.json", import.meta.url);
 const fineLinesUrl = new URL("../web/assets/wrinkle_fine_lines_v10_wrinkle.json", import.meta.url);
+const localRunnerUrl = new URL("../tools/run_wrinkle_rstl_local.mjs", import.meta.url);
+const directCrowsRunnerUrl = new URL(
+  "../tools/run_crows_feet_direct_rstl_experiment.mjs", import.meta.url,
+);
 
 const [html, source, refinementSource, directNoseSource, noseRootVisibilitySource,
-  vite, atlas, fineLines] = await Promise.all([
+  vite, atlas, fineLines, localRunner, directCrowsRunner] = await Promise.all([
   readFile(htmlUrl, "utf8"),
   readFile(sourceUrl, "utf8"),
   readFile(refinementSourceUrl, "utf8"),
@@ -26,6 +30,8 @@ const [html, source, refinementSource, directNoseSource, noseRootVisibilitySourc
   readFile(viteUrl, "utf8"),
   readFile(atlasUrl, "utf8").then(JSON.parse),
   readFile(fineLinesUrl, "utf8").then(JSON.parse),
+  readFile(localRunnerUrl, "utf8"),
+  readFile(directCrowsRunnerUrl, "utf8"),
 ]);
 
 for (const id of [
@@ -264,5 +270,32 @@ assert.equal(atlas.lines.filter((line) => line.region === "supraorbital_lateral_
 assert.equal(atlas.lines.filter((line) => line.region === "supraorbital_medial_short_arc_v69").length, 10);
 assert.equal(atlas.lines.filter((line) => line.region === "brow_temporal_fan_v94").length, 10);
 assert.equal(atlas.lines.filter((line) => line.region === "cheek_alar_gap_fill_v95").length, 4);
+
+assert.match(localRunner, /WRINKLE_LOCAL_INPUT/);
+assert.match(localRunner, /WRINKLE_LOCAL_BASELINE/);
+assert.match(localRunner, /WRINKLE_LOCAL_PYTHON/);
+assert.match(localRunner, /pathToFileURL/,
+  "local file URLs must be portable across Windows and POSIX");
+assert.match(localRunner, /artifactSha256:\s*frozenArtifactSha256/,
+  "the replay manifest must record every copied artifact hash");
+assert.match(localRunner, /assertEqual\(atlas\.validated,\s*false/,
+  "the local runner must reject a clinically validated personalized atlas claim");
+assert.match(localRunner, /validated:\s*false/);
+assert.doesNotMatch(localRunner, /validated:\s*true/);
+assert.doesNotMatch(localRunner, /\/opt\/anaconda3/,
+  "the local runner must not hard-code one developer's Python environment");
+
+assert.match(directCrowsRunner, /WRINKLE_CROWS_INPUT/);
+assert.match(directCrowsRunner, /WRINKLE_CROWS_BASELINE/);
+assert.match(directCrowsRunner, /WRINKLE_CROWS_FINE_LINES/);
+assert.match(directCrowsRunner, /WRINKLE_CROWS_PYTHON/);
+assert.match(directCrowsRunner, /validated:\s*false/);
+assert.match(directCrowsRunner, /for line in payload\['lines'\]/,
+  "the direct experiment must render the complete rewritten geometry");
+assert.match(directCrowsRunner,
+  /\], \[sourceImage, resolve\(outputDir, outputName\),/,
+  "the direct output must be rendered from the original image, not the old overlay");
+assert.doesNotMatch(directCrowsRunner, /\/opt\/anaconda3/,
+  "the direct experiment must not hard-code one developer's Python environment");
 
 console.log("single-image wrinkle/RSTL experiment contract tests passed");

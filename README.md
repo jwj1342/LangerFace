@@ -222,6 +222,11 @@ npm run dev                      # Vite dev server，默认 http://127.0.0.1:517
 
 浏览器打开 Vite 提示的本地地址 → 点「摄像头」→ 允许权限。首次加载会从 CDN 下载 MediaPipe wasm（数秒）。
 
+单图皱纹/RSTL runner 只用于受控研究复放。真实人脸原图和浏览器冻结产物不会随公开仓库分发；运行前必须
+通过 `WRINKLE_LOCAL_INPUT` / `WRINKLE_LOCAL_BASELINE` 或 `WRINKLE_CROWS_INPUT` /
+`WRINKLE_CROWS_BASELINE` 指向本地受控材料。输出始终保持 `validated:false`，工程复放成功不等于临床验证。
+完整变量、目录和命令见 [个性化 RSTL：受控单图复放](docs/tracks/PERSONALIZED_RSTL.md#41-受控单图复放与直接鱼尾纹实验)。
+
 ---
 
 ## 使用方式

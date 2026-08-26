@@ -102,4 +102,9 @@ npm run test:browser
 - `web/dist/`：Vite 构建输出。该目录被 git 忽略。
 - `web/node_modules/`：npm 依赖。该目录被 git 忽略。
 
+受控单图皱纹/RSTL 复放依赖真实输入和浏览器冻结产物时，必须用 `WRINKLE_LOCAL_*` 或
+`WRINKLE_CROWS_*` 环境变量指向上述本地目录；仓库不分发这些隐私材料。两个 runner 默认调用
+Windows 的 `python` 或 POSIX 的 `python3`，特殊环境用 `WRINKLE_LOCAL_PYTHON` /
+`WRINKLE_CROWS_PYTHON` 指定已安装 `numpy` 与 `cv2` 的解释器。
+
 不要把真实人脸影像、视频、日志或临时调试输出提交到仓库。
