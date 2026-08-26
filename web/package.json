@@ -11,6 +11,7 @@
     "dev": "vite --host 127.0.0.1",
     "local:wrinkle": "node ../tools/run_wrinkle_rstl_local.mjs",
     "experiment:direct-crows": "node ../tools/run_crows_feet_direct_rstl_experiment.mjs",
+    "verify:latest-wrinkle": "node ../tools/verify_latest_wrinkle_pipeline.mjs",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "visual:react:parity": "node ../tools/capture_react_feature_parity.ts",

@@ -119,6 +119,17 @@
 
 `web/package.json` 暴露两个研究命令；它们不包含真实人脸原图或浏览器冻结产物，也不会从网络下载这些材料：
 
+先确认检出的是最新流水线：
+
+```bash
+cd web
+npm ci
+npm run verify:latest-wrinkle
+```
+
+该校验应报告 `latest_wrinkle_pipeline_verified`、RSTL `v8.1.96`、检测 `v10`、微调
+`v9-regional-smooth-7.2`。PR #221 的合并快照不满足这项校验；最新修复由当前分支和 PR #222 承载。
+
 | 命令 | 必需的受控本地输入 | 可选配置 |
 |---|---|---|
 | `npm run local:wrinkle` | `WRINKLE_LOCAL_INPUT`、`WRINKLE_LOCAL_BASELINE` | `WRINKLE_LOCAL_OUTPUT`、`WRINKLE_LOCAL_PYTHON` |

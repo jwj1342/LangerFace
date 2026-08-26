@@ -227,6 +227,9 @@ npm run dev                      # Vite dev server，默认 http://127.0.0.1:517
 `WRINKLE_CROWS_BASELINE` 指向本地受控材料。输出始终保持 `validated:false`，工程复放成功不等于临床验证。
 完整变量、目录和命令见 [个性化 RSTL：受控单图复放](docs/tracks/PERSONALIZED_RSTL.md#41-受控单图复放与直接鱼尾纹实验)。
 
+部署或交接前先在 `web/` 目录运行 `npm run verify:latest-wrinkle`。它会检查当前检出是否确实包含
+RSTL v8.1.96、v10 皱纹检测和 V9 `v9-regional-smooth-7.2` 微调；PR 编号或分支名称本身不能证明版本正确。
+
 ---
 
 ## 使用方式

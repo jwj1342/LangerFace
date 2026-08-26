@@ -6,6 +6,7 @@ import { Card } from "./ui/card";
 import { Hint } from "./ui/hint";
 import { Label } from "./ui/label";
 import { Select } from "./ui/select";
+import { WRINKLE_PIPELINE_DISPLAY } from "../services/wrinklePipelineVersion.ts";
 
 export function LiveWrinklePanel() {
   return (
@@ -16,7 +17,7 @@ export function LiveWrinklePanel() {
           上传照片或定格摄像头后，YOLO 会在本机自动检测皱纹。检测结果仅作研究辅助，不替代医生判断。
         </Hint>
         <Hint className="live-inline-top">
-          当前部署：RSTL v8.1.96 · v10 受控单图证据 / 通用 YOLO 回退 · V9 7.2 平滑微调
+          当前部署：{WRINKLE_PIPELINE_DISPLAY}（v10 受控单图证据 / 通用 YOLO 回退）
         </Hint>
       </div>
       <Select id="wrinkleDisplayMode" defaultValue="both" disabled aria-label="画面叠加内容">
