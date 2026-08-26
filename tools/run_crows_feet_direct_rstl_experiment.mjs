@@ -1,0 +1,223 @@
+#!/usr/bin/env node
+
+import { mkdir, readFile, writeFile, copyFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { basename, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const projectRoot = resolve(repoRoot, "..");
+const sourceImage = resolve(process.env.WRINKLE_CROWS_INPUT ||
+  resolve(projectRoot, "langer线-cc/wrinkle.png"));
+const baselineDir = resolve(process.env.WRINKLE_CROWS_BASELINE ||
+  resolve(projectRoot, "langer线-cc/wrinkle_rstl_crows_feet_bundle_v22_v9"));
+const outputDir = resolve(process.env.WRINKLE_CROWS_OUTPUT ||
+  resolve(projectRoot, "langer线-cc/wrinkle_rstl_direct_crows_feet_v5"));
+const fineLinePath = resolve(process.env.WRINKLE_CROWS_FINE_LINES ||
+  resolve(repoRoot, "web/assets/wrinkle_fine_lines_v10_wrinkle.json"));
+const python = process.env.WRINKLE_CROWS_PYTHON ||
+  (process.platform === "win32" ? "python" : "python3");
+const outputName = "04_direct_crows_feet_rstl.png";
+const baselineOutputName = "03_baseline_v9_rstl.png";
+const comparisonName = "05_baseline_vs_direct.png";
+
+function fail(message) {
+  throw new Error(`[direct-crows] ${message}`);
+}
+
+function requireFile(file, label, hint) {
+  if (existsSync(file)) return;
+  fail(`${label}不存在：${file}。${hint}`);
+}
+
+function runPython(label, statements, args) {
+  const result = spawnSync(python, ["-c", statements.join(";"), ...args],
+    { maxBuffer: 8 * 1024 * 1024 });
+  if (result.error) fail(`无法启动 ${label}（${python}）：${result.error.message}`);
+  if (result.status !== 0) fail(`${label}失败：${result.stderr.toString().trim()}`);
+}
+
+function sha256(bytes) {
+  return createHash("sha256").update(bytes).digest("hex").toUpperCase();
+}
+
+if (!existsSync(baselineDir)) {
+  fail(`冻结基线目录不存在：${baselineDir}。请设置 WRINKLE_CROWS_BASELINE`);
+}
+requireFile(sourceImage, "源图片", "请设置 WRINKLE_CROWS_INPUT 指向受控本地图片");
+requireFile(resolve(baselineDir, "wrinkle_rstl_refinement.json"), "冻结几何",
+  "基线目录必须包含浏览器实验导出的 wrinkle_rstl_refinement.json");
+requireFile(resolve(baselineDir, "04_refined_rstl.png"), "冻结基线图",
+  "基线目录必须包含浏览器实验导出的 04_refined_rstl.png");
+requireFile(fineLinePath, "v10 皱纹中心线", "请设置 WRINKLE_CROWS_FINE_LINES");
+if (existsSync(outputDir)) throw new Error(`拒绝覆盖已有输出目录：${outputDir}`);
+
+const baseline = JSON.parse(await readFile(resolve(baselineDir, "wrinkle_rstl_refinement.json"), "utf8"));
+if (!Array.isArray(baseline.lines) || !baseline.prior?.atlasVersion ||
+    !baseline.sourceImage?.sha256) {
+  fail("冻结几何缺少 lines、prior.atlasVersion 或 sourceImage.sha256 契约字段");
+}
+const sourceSha256 = sha256(await readFile(sourceImage));
+if (String(baseline.sourceImage.sha256).toUpperCase() !== sourceSha256) {
+  fail(`源图片与冻结基线不匹配：实际 ${sourceSha256}，基线 ${baseline.sourceImage.sha256}`);
+}
+const fineLines = JSON.parse(await readFile(fineLinePath, "utf8")).lines;
+const lines = baseline.lines.map((line) => ({
+  name: line.name,
+  region: line.region,
+  points: line.points_xy.map(([x, y]) => [x, y]),
+}));
+
+function center(points) {
+  return points.reduce((sum, point) => [sum[0] + point[0], sum[1] + point[1]], [0, 0])
+    .map((value) => value / points.length);
+}
+function length(points) {
+  let total = 0;
+  for (let i = 1; i < points.length; i += 1) total += Math.hypot(
+    points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+  return total;
+}
+function smooth(points, sigma = 2.75) {
+  const radius = Math.ceil(3 * sigma);
+  return points.map((_, index) => {
+    let x = 0, y = 0, weight = 0;
+    for (let j = Math.max(0, index - radius); j <= Math.min(points.length - 1, index + radius); j += 1) {
+      const w = Math.exp(-0.5 * ((j - index) / sigma) ** 2);
+      x += points[j][0] * w;
+      y += points[j][1] * w;
+      weight += w;
+    }
+    return [x / weight, y / weight];
+  });
+}
+function resample(points, count) {
+  const cumulative = [0];
+  for (let i = 1; i < points.length; i += 1) cumulative.push(cumulative[i - 1] + Math.hypot(
+    points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]));
+  const total = cumulative.at(-1) || 0;
+  return Array.from({ length: count }, (_, outputIndex) => {
+    const target = total * outputIndex / Math.max(1, count - 1);
+    let index = 1;
+    while (index < cumulative.length && cumulative[index] < target) index += 1;
+    const left = Math.max(0, index - 1), span = cumulative[index] - cumulative[left] || 1;
+    const t = (target - cumulative[left]) / span;
+    return [
+      points[left][0] + (points[Math.min(index, points.length - 1)][0] - points[left][0]) * t,
+      points[left][1] + (points[Math.min(index, points.length - 1)][1] - points[left][1]) * t,
+    ];
+  });
+}
+function maximumTurn(points) {
+  let maximum = 0;
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const a = [points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]];
+    const b = [points[i + 1][0] - points[i][0], points[i + 1][1] - points[i][1]];
+    const denominator = Math.hypot(...a) * Math.hypot(...b);
+    if (denominator < 1e-8) continue;
+    maximum = Math.max(maximum, Math.acos(Math.max(-1, Math.min(1,
+      (a[0] * b[0] + a[1] * b[1]) / denominator))) * 180 / Math.PI);
+  }
+  return maximum;
+}
+
+const NOSE_DORSUM_IDS = new Set(["paired-edge-v10-022", "paired-edge-v10-023", "paired-edge-v10-024"]);
+const candidates = fineLines.filter((line) => line.class === "wrinkle" && !NOSE_DORSUM_IDS.has(line.id)).map((line) => ({
+  id: line.id,
+  points: line.points.map(([x, y]) => [x, y]),
+  center: center(line.points),
+  length: length(line.points),
+}));
+const oldIndices = lines.map((line, index) => ({ index, line, center: center(line.points) }))
+  .filter(({ line }) => line.region === "lateral_canthus_short_arc_v65");
+const leftOld = oldIndices.filter(({ center: point }) => point[0] < 600).sort((a, b) => a.center[1] - b.center[1]);
+const rightOld = oldIndices.filter(({ center: point }) => point[0] >= 600).sort((a, b) => a.center[1] - b.center[1]);
+const leftFine = candidates.filter(({ center: point }) => point[0] < 600).sort((a, b) => b.length - a.length).slice(0, leftOld.length)
+  .sort((a, b) => a.center[1] - b.center[1]);
+const rightFine = candidates.filter(({ center: point }) => point[0] > 700).sort((a, b) => b.length - a.length).slice(0, rightOld.length)
+  .sort((a, b) => a.center[1] - b.center[1]);
+if (leftFine.length !== leftOld.length || rightFine.length !== rightOld.length) {
+  throw new Error(`鱼尾纹替换配对数量异常：左 ${leftFine.length}/${leftOld.length}，右 ${rightFine.length}/${rightOld.length}`);
+}
+
+const replacements = [...leftOld.map((old, i) => [old, leftFine[i]]), ...rightOld.map((old, i) => [old, rightFine[i]])]
+  .map(([old, fine]) => {
+    const direct = resample(smooth(fine.points), old.line.points.length);
+    const turn = maximumTurn(direct);
+    if (turn > 35) throw new Error(`${fine.id} 平滑转角门禁失败：${turn.toFixed(2)}°`);
+    lines[old.index].points = direct;
+    return {
+      curveIndex: old.index,
+      curveName: old.line.name,
+      sourceFineLineId: fine.id,
+      sourceCenter: fine.center,
+      sourceLengthPx: fine.length,
+      outputPointCount: direct.length,
+      outputLengthPx: length(direct),
+      maximumTurnDegrees: turn,
+      generatedFromWrinkle: true,
+    };
+  });
+
+await mkdir(outputDir, { recursive: false });
+await writeFile(resolve(outputDir, "direct_crows_feet_geometry.json"), `${JSON.stringify({
+  schemaVersion: "langerface.direct-crows-feet-rstl.v1",
+  validated: false,
+  clinicalValidation: false,
+  sourceImage: { ...baseline.sourceImage, sha256: sourceSha256 },
+  baseline: { directory: basename(baselineDir), atlasVersion: baseline.prior.atlasVersion },
+  policy: {
+    description: "Replace the ten lateral-canthus RSTL arcs nearest the two crow-feet fields with smoothed v10 wrinkle centerlines.",
+    replacementCount: replacements.length,
+    maximumTurnGateDegrees: 35,
+  },
+  replacements,
+  lines,
+}, null, 2)}\n`);
+
+// Render the complete rewritten geometry on the original image. Drawing only
+// replacement curves over 04_refined_rstl.png would leave the old crow-feet
+// curves visible underneath and would not be a real replacement comparison.
+runPython("RSTL PNG 渲染", [
+  "import cv2,json,numpy as np,sys",
+  "src,out,geo=sys.argv[1],sys.argv[2],sys.argv[3]",
+  "payload=json.load(open(geo,encoding='utf-8'))",
+  "im=cv2.imdecode(np.fromfile(src,dtype=np.uint8),cv2.IMREAD_COLOR)",
+  "assert im is not None, 'unable to decode source image'",
+  "[cv2.polylines(im,[np.rint(np.asarray(line['points'],dtype=np.float64)).astype(np.int32).reshape(-1,1,2)],False,(200,0,200),2,lineType=cv2.LINE_AA) for line in payload['lines'] if len(line['points'])>=2]",
+  "ok,encoded=cv2.imencode('.png',im)",
+  "assert ok, 'unable to encode output image'",
+  "encoded.tofile(out)",
+], [sourceImage, resolve(outputDir, outputName),
+  resolve(outputDir, "direct_crows_feet_geometry.json")]);
+await copyFile(resolve(baselineDir, "04_refined_rstl.png"), resolve(outputDir, baselineOutputName));
+runPython("对照图渲染", [
+  "import cv2,numpy as np,sys",
+  "left,right,out=sys.argv[1],sys.argv[2],sys.argv[3]",
+  "a=cv2.imdecode(np.fromfile(left,dtype=np.uint8),cv2.IMREAD_COLOR)",
+  "b=cv2.imdecode(np.fromfile(right,dtype=np.uint8),cv2.IMREAD_COLOR)",
+  "assert a is not None and b is not None and a.shape[0]==b.shape[0], 'comparison image mismatch'",
+  "canvas=cv2.hconcat([a,b])",
+  "cv2.rectangle(canvas,(0,0),(210,34),(62,50,45),-1)",
+  "cv2.putText(canvas,'baseline V9',(10,23),cv2.FONT_HERSHEY_SIMPLEX,0.5,(255,255,255),1,cv2.LINE_AA)",
+  "cv2.rectangle(canvas,(a.shape[1],0),(a.shape[1]+240,34),(62,50,45),-1)",
+  "cv2.putText(canvas,'direct crow-feet',(a.shape[1]+10,23),cv2.FONT_HERSHEY_SIMPLEX,0.5,(255,255,255),1,cv2.LINE_AA)",
+  "ok,encoded=cv2.imencode('.png',canvas)",
+  "assert ok, 'unable to encode comparison image'",
+  "encoded.tofile(out)",
+], [resolve(outputDir, baselineOutputName), resolve(outputDir, outputName),
+  resolve(outputDir, comparisonName)]);
+
+await writeFile(resolve(outputDir, "README.txt"), [
+  "鱼尾纹直接生成 RSTL 对照实验",
+  "",
+  "工程状态：validated:false；本结果不是临床验证结论。",
+  "本实验仅替换左右鱼尾纹区域各 5 条旧 lateral_canthus_short_arc_v65 曲线。",
+  "替换线来自 v10 皱纹中心线，经 Gaussian 平滑和弧长重采样；不修改额头、眉间、鼻背纹或面部其他区域。",
+  `结果图：${outputName}（在受控源图上按改写后的完整几何重绘，旧鱼尾纹线不会残留）`,
+  `并排对照：${comparisonName}`,
+  "",
+].join("\n"));
+console.log(JSON.stringify({ outputDir, outputName, replacements }, null, 2));
