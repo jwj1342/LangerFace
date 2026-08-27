@@ -11,6 +11,7 @@ export const WRINKLE_PIPELINE_VERSION = Object.freeze({
   wrinkleDetection: YOLO_WRINKLE_ONNX_VERSION,
   refinementProfile: LATEST_WRINKLE_REFINEMENT_PROFILE,
   refinementMode: "general_yolo_v9_7_2",
+  executionThread: "web_worker",
   controlledExperimentEvidence: "paired-edge-v10",
   schemaVersion: "langerface.wrinkle-pipeline.v1",
 });

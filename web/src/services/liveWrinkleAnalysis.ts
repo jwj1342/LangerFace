@@ -17,15 +17,16 @@ import {
   toWrinkleWorkingPoint,
 } from "./liveWrinkleMath.ts";
 import { V6_RSTL_ALGORITHM } from "./personalized/v6RstlRefinementV9.ts";
-import { runGeneralLiveWrinklePipeline } from "./personalized/liveWrinklePipeline.ts";
+import {
+  createLiveWrinklePipelineWorkerClient,
+  type LiveWrinklePipelineWorkerClient,
+} from "./personalized/liveWrinklePipelineWorkerClient.ts";
 import {
   LATEST_WRINKLE_REFINEMENT_PROFILE,
 } from "./personalized/v9RstlRefinementProfile.ts";
-import {
-  YoloWrinkleOnnx,
-  YOLO_WRINKLE_CONFIDENCE,
-} from "./personalized/yoloWrinkleOnnx.ts";
 import { RSTL_STANDARD_CONTRACT } from "./rstlStandardContract.ts";
+import type { LiveWrinkleWorkerEvidence } from
+  "../workers/liveWrinklePipelineWorkerContract.ts";
 
 export type WrinkleDisplayMode = "rstl" | "wrinkles" | "both";
 type AnalysisStatus =
@@ -86,7 +87,7 @@ const state: WrinkleAnalysisState = {
   error: null,
 };
 
-let yolo: YoloWrinkleOnnx | null = null;
+let wrinkleWorker: LiveWrinklePipelineWorkerClient | null = null;
 let wrinkleFaceLandmarker: FaceLandmarker | null = null;
 const activeAnalyses = new Set<Promise<void>>();
 
@@ -184,9 +185,15 @@ function currentStandardLines(landmarks: Vec3[]): EditableRefineLine[] {
   }));
 }
 
-function yoloInstance(): YoloWrinkleOnnx {
-  yolo ||= new YoloWrinkleOnnx({ confidenceThreshold: YOLO_WRINKLE_CONFIDENCE });
-  return yolo;
+function wrinkleWorkerInstance(): LiveWrinklePipelineWorkerClient {
+  wrinkleWorker ||= createLiveWrinklePipelineWorkerClient();
+  return wrinkleWorker;
+}
+
+function terminateWrinkleWorker(): void {
+  const current = wrinkleWorker;
+  wrinkleWorker = null;
+  current?.dispose();
 }
 
 function assertRefinementGate(diagnostics: Record<string, any>): void {
@@ -286,6 +293,7 @@ export function getLiveWrinkleAnalysisDebugSnapshot() {
   return {
     atlasVersion: RSTL_STANDARD_CONTRACT.atlasVersion,
     refinementProfile: LATEST_WRINKLE_REFINEMENT_PROFILE,
+    executionThread: "web_worker",
     status: state.status,
     fineLineCount: state.fineLineCount,
     sourceComponentCount: state.sourceComponentCount,
@@ -352,36 +360,43 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
     const xs = workLandmarks.map((point) => point[0]);
     const faceWidth = Math.max(...xs) - Math.min(...xs);
     updateStatus("detecting");
-    const pipeline = await runGeneralLiveWrinklePipeline({
-      detector: yoloInstance(),
+    let pipelineCompleted = false;
+    let evidenceCommitted = false;
+    const commitEvidence = (evidence: LiveWrinkleWorkerEvidence) => {
+      if (generation !== state.generation || evidenceCommitted) return;
+      evidenceCommitted = true;
+      state.evidenceSource = "browser-yolo";
+      state.evidenceLines = evidence.lines.map((line) => ({
+        id: line.id,
+        className: line.class,
+        points: line.points.map((point) => fromWrinkleWorkingPoint(point, working)),
+      }));
+      state.fineLineCount = evidence.lines.length;
+      state.sourceComponentCount = evidence.summary.sourceConnectedComponents
+        || evidence.summary.fineLineCount
+        || evidence.lines.length;
+      window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
+      updateStatus("refining");
+    };
+    const pipeline = await wrinkleWorkerInstance().analyze({
       imageData: working.imageData,
       seeds,
       size: working.size,
       faceWidthPx: faceWidth,
-      assertCurrent: () => {
-        if (generation !== state.generation) throw new Error("皱纹分析已被新输入取代");
-      },
-      onModelProgress: (progress) => {
+    }, (event) => {
+      if (pipelineCompleted) return;
+      if (event.type === "model-progress") {
         if (generation !== state.generation) return;
+        const { progress } = event;
         const percent = Math.round(progress.loadedChunks / Math.max(1, progress.totalChunks) * 100);
         els.wrinkleSummary.textContent = `正在本机加载 YOLO 模型：${percent}%`;
-      },
-      onEvidence: (evidence) => {
-        state.evidenceSource = "browser-yolo";
-        state.evidenceLines = evidence.lines.map((line) => ({
-          id: line.id,
-          className: line.class,
-          points: line.points.map((point) => fromWrinkleWorkingPoint(point, working)),
-        }));
-        state.fineLineCount = evidence.lines.length;
-        state.sourceComponentCount = evidence.summary.sourceConnectedComponents
-          || evidence.summary.fineLineCount
-          || evidence.lines.length;
-        window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
-        updateStatus("refining");
-      },
+        return;
+      }
+      commitEvidence(event.evidence);
     });
     if (generation !== state.generation) return;
+    pipelineCompleted = true;
+    commitEvidence(pipeline.evidence);
     const { refined } = pipeline;
     assertRefinementGate(refined.diagnostics);
     if (refined.curves.length !== state.standardLines.length) {
@@ -455,6 +470,7 @@ export function restoreStandardRstl(): void {
 
 export function resetLiveWrinkleAnalysis(): void {
   state.generation += 1;
+  terminateWrinkleWorker();
   state.status = "idle";
   state.evidenceLines = [];
   state.standardLines = null;
@@ -472,11 +488,8 @@ export function resetLiveWrinkleAnalysis(): void {
 
 export async function disposeLiveWrinkleAnalysis(): Promise<void> {
   resetLiveWrinkleAnalysis();
-  const current = yolo;
   const currentLandmarker = wrinkleFaceLandmarker;
-  yolo = null;
   wrinkleFaceLandmarker = null;
   await Promise.allSettled([...activeAnalyses]);
-  await current?.close();
   currentLandmarker?.close();
 }

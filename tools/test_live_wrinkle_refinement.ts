@@ -121,13 +121,16 @@ assert.match(analysisRuntime, /detectV9ReferenceLandmarks/,
 assert.match(analysisRuntime, /expandForehead: RSTL_STANDARD_CONTRACT\.expandForehead/,
   "live wrinkle refinement must use the same v8.1.96 forehead mapping as the experiment");
 assert.match(analysisRuntime, /from "\.\/personalized\/v6RstlRefinementV9\.ts"/,
-  "the deployed live page must execute the latest V9 refinement implementation");
+  "the deployed live page must gate results with the latest V9 algorithm identifier");
 assert.doesNotMatch(analysisRuntime,
   /WRINKLE_PHOTO_SHA256|canonicalWrinkleV10Evidence|wrinkleV10FineLinesUrl|buildPrecomputedFineWrinkleEvidence|wrinkle-v10|DIRECT_NOSE_DORSUM_FINE_LINE_IDS/,
   "the released live path must never select precomputed evidence for one image");
-assert.match(analysisRuntime, /runGeneralLiveWrinklePipeline\(\{/,
-  "the deployed live page must route every source through the general detector pipeline");
-assert.match(analysisRuntime, /onEvidence:[\s\S]*state\.evidenceLines = evidence\.lines\.map[\s\S]*assertRefinementGate/,
+assert.match(analysisRuntime,
+  /createLiveWrinklePipelineWorkerClient[\s\S]*wrinkleWorkerInstance\(\)\.analyze\(\{/,
+  "the deployed live page must route every source through the non-blocking worker client");
+assert.doesNotMatch(analysisRuntime, /runGeneralLiveWrinklePipeline|new YoloWrinkleOnnx/,
+  "YOLO, centerline extraction and V9 refinement must not execute on the live page thread");
+assert.match(analysisRuntime, /commitEvidence[\s\S]*state\.evidenceLines = evidence\.lines\.map[\s\S]*assertRefinementGate/,
   "validated wrinkle evidence must be committed before refinement safety gates run");
 assert.doesNotMatch(analysisRuntime, /bundlePropagation: true/,
   "live refinement must not propagate one wrinkle to neighboring RSTL curves");
@@ -137,10 +140,34 @@ assert.match(analysisRuntime, /bundle_follower_moved_curve_count \|\| 0\) > 0/,
   "the live safety gate must reject bundle follower movement");
 assert.match(analysisRuntime, /if \(state\.evidenceLines\.length > 0\)[\s\S]*updateStatus\("evidence", message\)/,
   "a rejected refinement must retain wrinkle evidence and report a non-fatal evidence state");
-assert.match(analysisRuntime, /await Promise\.allSettled\(\[\.\.\.activeAnalyses\]\);[\s\S]*await current\?\.close\(\)/,
-  "route disposal must wait for active model work before releasing the ONNX session");
-assert.match(analysisRuntime, /assertCurrent:[\s\S]*generation !== state\.generation/,
-  "a source generation change must reject stale pipeline results");
+assert.match(analysisRuntime, /resetLiveWrinkleAnalysis\(\);[\s\S]*await Promise\.allSettled\(\[\.\.\.activeAnalyses\]\)/,
+  "route disposal must terminate worker work before awaiting active analysis cleanup");
+assert.match(analysisRuntime, /state\.generation \+= 1;[\s\S]*terminateWrinkleWorker\(\)/,
+  "a source generation change must terminate stale worker computation");
+
+const workerRuntime = fs.readFileSync(
+  new URL("../web/src/workers/liveWrinklePipeline.worker.ts", import.meta.url),
+  "utf8",
+);
+const workerClientRuntime = fs.readFileSync(
+  new URL("../web/src/services/personalized/liveWrinklePipelineWorkerClient.ts", import.meta.url),
+  "utf8",
+);
+assert.match(workerRuntime,
+  /runGeneralLiveWrinklePipeline\(\{[\s\S]*imageData:[\s\S]*seeds: request\.seeds[\s\S]*size: request\.size[\s\S]*faceWidthPx: request\.faceWidthPx/,
+  "the worker must call the unchanged general pipeline with the original pixels, seeds and scale");
+assert.match(workerRuntime, /new YoloWrinkleOnnx\([\s\S]*YOLO_WRINKLE_CONFIDENCE/,
+  "the worker must use the same released YOLO model and confidence threshold");
+assert.match(workerRuntime, /Comlink\.expose\(api\)/,
+  "the wrinkle pipeline must be exposed from a real Web Worker boundary");
+assert.doesNotMatch(workerRuntime,
+  /maximumSize|minimumLineLengthPx|resampleSpacingPx|latestV9RstlRefinementOptions/,
+  "the worker boundary must not override any detection, extraction or refinement parameter");
+assert.match(workerClientRuntime, /new Worker\(new URL/);
+assert.match(workerClientRuntime, /Comlink\.transfer\(request, \[request\.pixels\.buffer as ArrayBuffer\]\)/,
+  "the full-resolution input must be transferred without a main-thread copy or resize");
+assert.match(workerClientRuntime, /worker\.terminate\(\)/,
+  "source replacement must be able to terminate stale CPU work immediately");
 
 const generalPipelineRuntime = fs.readFileSync(
   new URL("../web/src/services/personalized/liveWrinklePipeline.ts", import.meta.url),
