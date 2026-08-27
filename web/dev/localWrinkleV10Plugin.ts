@@ -228,6 +228,10 @@ export class PersistentDetector {
   }
 }
 
+export interface LocalWrinkleV10PluginOptions {
+  detector?: Pick<PersistentDetector, "start" | "run" | "close">;
+}
+
 async function readRequest(req: NodeJS.ReadableStream): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let total = 0;
@@ -242,8 +246,8 @@ async function readRequest(req: NodeJS.ReadableStream): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-export function localWrinkleV10Plugin(): Plugin {
-  const detector = new PersistentDetector();
+export function localWrinkleV10Plugin(options: LocalWrinkleV10PluginOptions = {}): Plugin {
+  const detector = options.detector || new PersistentDetector();
   const configure = (server: LocalViteServer) => {
     void detector.start().catch(() => undefined);
     server.httpServer?.once("close", () => detector.close());
