@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
+import collections
 import hashlib
+import hmac
 import json
 import os
 import secrets
 import sys
 import tempfile
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 REPO = Path(__file__).resolve().parents[2]
@@ -28,6 +34,9 @@ CHECKPOINT_SHA256 = "e301b8f70c8239c01504a0616b61acdf9ab9b5796f513d6e7294d4fa52b
 MAXIMUM_REQUEST_BYTES = 32 * 1024 * 1024
 REQUEST_TIMEOUT_SECONDS = 45.0
 STARTUP_TIMEOUT_SECONDS = 120.0
+TICKET_AUDIENCE = "langerface-wrinkle-v10"
+TICKET_RATE_LIMIT = 6
+TICKET_RATE_WINDOW_SECONDS = 60
 
 
 class DetectorProcess:
@@ -133,6 +142,96 @@ class DetectorProcess:
 detector = DetectorProcess()
 
 
+class TicketAuthorizer:
+    def __init__(self) -> None:
+        self.used: dict[str, int] = {}
+        self.requests: dict[str, collections.deque[float]] = {}
+
+    def reset(self) -> None:
+        self.used.clear()
+        self.requests.clear()
+
+    def _ticket_payload(self, token: str) -> dict[str, object]:
+        secret = os.environ.get("WRINKLE_V10_TICKET_SECRET", "")
+        if not secret:
+            raise HTTPException(503, "V10 ticket verification is not configured")
+        try:
+            encoded, supplied_signature = token.split(".", 1)
+            expected_signature = hmac.new(
+                secret.encode("utf-8"), encoded.encode("ascii"), hashlib.sha256,
+            ).digest()
+            supplied = base64.urlsafe_b64decode(
+                supplied_signature + "=" * (-len(supplied_signature) % 4),
+            )
+            if not hmac.compare_digest(supplied, expected_signature):
+                raise ValueError("signature")
+            decoded = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+            payload = json.loads(decoded)
+            if not isinstance(payload, dict):
+                raise ValueError("payload")
+        except (binascii.Error, TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise HTTPException(401, "Invalid V10 detection ticket") from error
+        return payload
+
+    def authorize(self, request: Request) -> str:
+        supplied = request.headers.get("authorization", "")
+        if not supplied.startswith("Bearer "):
+            raise HTTPException(401, "Unauthorized")
+        token = supplied.removeprefix("Bearer ")
+        service_token = os.environ.get("WRINKLE_V10_SERVICE_TOKEN", "")
+        if service_token and secrets.compare_digest(token, service_token):
+            return "service-token"
+
+        payload = self._ticket_payload(token)
+        now = int(time.time())
+        origin = request.headers.get("origin", "").rstrip("/")
+        try:
+            issued_at = int(payload.get("iat", 0))
+            expires_at = int(payload.get("exp", 0))
+            maximum_bytes = int(payload.get("maxBytes", 0))
+        except (TypeError, ValueError) as error:
+            raise HTTPException(401, "Invalid V10 detection ticket claims") from error
+        if (
+            payload.get("v") != 1
+            or payload.get("aud") != TICKET_AUDIENCE
+            or payload.get("scope") != "detect"
+            or not isinstance(payload.get("sub"), str)
+            or not isinstance(payload.get("jti"), str)
+            or payload.get("origin") != origin
+            or issued_at > now + 10
+            or expires_at < now
+            or expires_at - issued_at > 120
+            or maximum_bytes != MAXIMUM_REQUEST_BYTES
+        ):
+            raise HTTPException(401, "Invalid or expired V10 detection ticket")
+
+        jti = str(payload["jti"])
+        for used_jti, expiry in list(self.used.items()):
+            if expiry < now:
+                self.used.pop(used_jti, None)
+        if jti in self.used:
+            raise HTTPException(401, "V10 detection ticket was already used")
+
+        subject = str(payload["sub"])
+        cutoff = time.monotonic() - TICKET_RATE_WINDOW_SECONDS
+        for stored_subject, stored_history in list(self.requests.items()):
+            while stored_history and stored_history[0] < cutoff:
+                stored_history.popleft()
+            if not stored_history:
+                self.requests.pop(stored_subject, None)
+        history = self.requests.setdefault(subject, collections.deque())
+        while history and history[0] < cutoff:
+            history.popleft()
+        if len(history) >= TICKET_RATE_LIMIT:
+            raise HTTPException(429, "V10 detection rate limit exceeded; retry later")
+        history.append(time.monotonic())
+        self.used[jti] = expires_at
+        return subject
+
+
+ticket_authorizer = TicketAuthorizer()
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     await detector.start()
@@ -147,6 +246,18 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
     lifespan=lifespan,
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        origin.strip().rstrip("/")
+        for origin in os.environ.get("WRINKLE_V10_ALLOWED_ORIGINS", "").split(",")
+        if origin.strip()
+    ],
+    allow_credentials=False,
+    allow_methods=["POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+    max_age=600,
 )
 
 
@@ -167,13 +278,6 @@ def capability() -> dict[str, object]:
     }
 
 
-def authorize(request: Request) -> None:
-    expected = os.environ.get("WRINKLE_V10_SERVICE_TOKEN", "")
-    supplied = request.headers.get("authorization", "")
-    if not expected or not secrets.compare_digest(supplied, f"Bearer {expected}"):
-        raise HTTPException(401, "Unauthorized")
-
-
 @app.get("/health")
 async def health() -> JSONResponse:
     if detector.process is None or detector.process.returncode is not None:
@@ -183,7 +287,7 @@ async def health() -> JSONResponse:
 
 @app.post("/v1/detect")
 async def detect(request: Request) -> Response:
-    authorize(request)
+    ticket_authorizer.authorize(request)
     chunks: list[bytes] = []
     size = 0
     async for chunk in request.stream():

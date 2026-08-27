@@ -266,6 +266,10 @@ export function localWrinkleV10Plugin(): Plugin {
               checkpointSha256: WRINKLE_V10_CHECKPOINT_SHA256,
               processingLocation: "host_machine",
               ready: true,
+              directDetectUrl: WRINKLE_V10_ENDPOINT,
+              accessToken: null,
+              expiresAt: null,
+              maximumRequestBytes: MAXIMUM_REQUEST_BYTES,
             }));
           } catch (error) {
             res.statusCode = 503;

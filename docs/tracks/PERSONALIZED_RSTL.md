@@ -147,8 +147,9 @@ Python 默认使用 Windows 的 `python` 或 POSIX 的 `python3`；特殊环境�
 
 ## 5. 隐私边界
 
-- 摄像头帧、YOLO 推理和 V9 微调在浏览器 Worker 中完成；V10 四区域检测由 Vite 启动的
-  本地 Python 进程完成。原始图像数据只在当前电脑内部传递，不上传远程服务器。
+- 摄像头帧、YOLO 推理和 V9 微调在浏览器 Worker 中完成。Vite 本地入口的 V10 由提供网页的
+  Python 进程完成；Vercel 入口在用户手动点击检测后取得 90 秒单次令牌，并把当前工作帧直接发送到
+  页面标示的远程 V10 服务。Vercel Function 不接收图像正文，远程临时文件在请求结束后删除。
 - **不写入** `localStorage` / `IndexedDB` 任何患者衍生数据（图像、线条、掩膜、审阅记录）。
   `localStorage` 只用于非患者配置（例如资产 base URL）。
 - 跨页只经 `sessionStorage` 的 `langerface.previewAtlas` 传一次性预览图谱，

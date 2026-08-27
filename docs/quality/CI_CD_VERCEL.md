@@ -295,9 +295,18 @@ Vercel [Deployment Protection](https://vercel.com/docs/deployment-protection) �
 
 ## 环境变量
 
-当前纯静态前端不需要 Vercel 环境变量。
-当前产品边界不包含病例后端、Worker API、D1/R2 数据库或远端病例数据源。若仅为诊断面板增加公开配置，仍要记住 Vite 会把
-`VITE_` 前缀变量注入浏览器端，任何私钥或平台 token 都不能放进 `VITE_*`。
+V10 受控部署需要以下服务端环境变量；它们不得使用 `VITE_` 前缀，也不得进入浏览器 bundle：
+
+| 变量 | Vercel | V10 服务 | 用途 |
+|---|---|---|---|
+| `WRINKLE_V10_SERVICE_URL` | 必需 | - | Vercel ticket broker 检查 health 并返回直连地址 |
+| `WRINKLE_V10_TICKET_SECRET` | 必需 | 必需，同值 | HMAC 签发/验证 90 秒单次令牌 |
+| `WRINKLE_V10_ALLOWED_ORIGINS` | 必需 | 必需 | 逗号分隔的精确受控网页来源 |
+| `WRINKLE_V10_SERVICE_TOKEN` | - | 运维 smoke test 可选 | 不提供给浏览器的内部服务令牌 |
+
+生产与含受限影像的 Preview 必须启用 Vercel Deployment Protection 或等效终端用户认证。网页主体仍是
+静态 Vite 构建；`web/api/wrinkle-v10.mjs` 仅处理小型授权响应，不接收图像。任何私钥或平台 token 都不能
+放进 `VITE_*`。当前产品边界仍不包含病例后端、D1/R2 病例数据库或远端病例持久化。
 
 ## 什么时候改用 GitHub Actions 部署到 Vercel
 

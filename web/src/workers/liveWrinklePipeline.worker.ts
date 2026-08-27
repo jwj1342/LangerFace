@@ -25,12 +25,13 @@ import {
   YOLO_WRINKLE_ONNX_VERSION,
 } from "../services/personalized/yoloWrinkleOnnx.ts";
 import {
-  parseWrinkleV10ProviderCapability,
+  parseWrinkleV10ProviderSession,
   WRINKLE_V10_CHECKPOINT_SHA256,
   WRINKLE_V10_ENDPOINT,
   WRINKLE_V10_HEALTH_TIMEOUT_MS,
   WRINKLE_V10_REQUEST_TIMEOUT_MS,
   type WrinkleV10ProviderCapability,
+  type WrinkleV10ProviderSession,
 } from "../services/personalized/wrinkleV10Provider.ts";
 import type {
   LiveWrinklePipelineWorkerApi,
@@ -70,7 +71,6 @@ const detector = new YoloWrinkleOnnx({
   confidenceThreshold: YOLO_WRINKLE_CONFIDENCE,
   wasmPaths: { mjs: ortWasmModuleUrl, wasm: ortWasmBinaryUrl },
 });
-let providerCapabilityPromise: Promise<WrinkleV10ProviderCapability> | null = null;
 
 async function fetchWithTimeout(
   url: string,
@@ -90,25 +90,19 @@ async function fetchWithTimeout(
   }
 }
 
-async function providerCapability(): Promise<WrinkleV10ProviderCapability> {
-  providerCapabilityPromise ||= (async () => {
-    const response = await fetchWithTimeout(
-      WRINKLE_V10_ENDPOINT,
-      { method: "GET", headers: { Accept: "application/json" }, cache: "no-store" },
-      WRINKLE_V10_HEALTH_TIMEOUT_MS,
-      "V10 检测服务健康检查超时",
-    );
-    const payload = await response.json().catch(() => null);
-    if (!response.ok) {
-      const message = (payload as { error?: string } | null)?.error;
-      throw new Error(message || `V10 检测服务不可用（HTTP ${response.status}）`);
-    }
-    return parseWrinkleV10ProviderCapability(payload);
-  })().catch((error) => {
-    providerCapabilityPromise = null;
-    throw error;
-  });
-  return providerCapabilityPromise;
+async function providerSession(): Promise<WrinkleV10ProviderSession> {
+  const response = await fetchWithTimeout(
+    WRINKLE_V10_ENDPOINT,
+    { method: "GET", headers: { Accept: "application/json" }, cache: "no-store" },
+    WRINKLE_V10_HEALTH_TIMEOUT_MS,
+    "V10 检测服务健康检查超时",
+  );
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = (payload as { error?: string } | null)?.error;
+    throw new Error(message || `V10 检测服务不可用（HTTP ${response.status}）`);
+  }
+  return parseWrinkleV10ProviderSession(payload);
 }
 
 function emit(
@@ -143,24 +137,35 @@ function requestBody(
 async function dynamicFourRegionDetection(
   request: LiveWrinkleWorkerRequest,
   baselineLines: LiveWrinkleWorkerEvidence["lines"],
-  provider: WrinkleV10ProviderCapability,
+  session: WrinkleV10ProviderSession,
 ): Promise<DynamicFourRegionPayload> {
+  const body = requestBody(request, baselineLines);
+  if (body.byteLength > session.maximumRequestBytes) {
+    throw new Error("V10 检测请求超过服务声明的 32 MB 上限");
+  }
+  const headers: Record<string, string> = {
+    "Content-Type": "application/octet-stream",
+    Accept: "application/json",
+  };
+  if (session.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
   const response = await fetchWithTimeout(
-    WRINKLE_V10_ENDPOINT,
+    session.directDetectUrl,
     {
       method: "POST",
-      headers: { "Content-Type": "application/octet-stream", Accept: "application/json" },
-      body: requestBody(request, baselineLines).buffer as ArrayBuffer,
+      headers,
+      body: body.buffer as ArrayBuffer,
     },
     WRINKLE_V10_REQUEST_TIMEOUT_MS,
     "V10 四区域检测超过 45 秒，任务已取消",
   );
   const payload = await response.json().catch(() => null) as
-    (DynamicFourRegionPayload & { error?: string }) | null;
+    (DynamicFourRegionPayload & { error?: string; detail?: string }) | null;
   if (!payload) throw new Error(`V10 检测服务返回了无效响应（HTTP ${response.status}）`);
-  if (!response.ok) throw new Error(payload.error || `四区域检测服务返回 HTTP ${response.status}`);
+  if (!response.ok) {
+    throw new Error(payload.error || payload.detail || `四区域检测服务返回 HTTP ${response.status}`);
+  }
   if (payload.schemaVersion !== "langerface.wrinkle-fine-lines.v1"
-      || payload.detectorVersion !== provider.detectorVersion
+      || payload.detectorVersion !== session.capability.detectorVersion
       || payload.checkpointSha256 !== WRINKLE_V10_CHECKPOINT_SHA256
       || !Array.isArray(payload.lines) || !payload.lines.length) {
     throw new Error("四区域检测服务返回了无效中心线数据");
@@ -239,8 +244,6 @@ function appendDirectNoseCurves(
 const api: LiveWrinklePipelineWorkerApi = {
   async analyze(request, onEvent) {
     const totalStart = performance.now();
-    const provider = await providerCapability();
-    if (onEvent) await onEvent({ type: "provider-ready", capability: provider });
     const modelLoadStart = performance.now();
     await detector.load((progress) => emit(onEvent, { type: "model-progress", progress }));
     const modelLoadMs = performance.now() - modelLoadStart;
@@ -265,9 +268,14 @@ const api: LiveWrinklePipelineWorkerApi = {
       throw new Error("实时 YOLO 未提取到可供 V10 使用的基础中心线");
     }
     const baselineExtractionMs = performance.now() - baselineStart;
+    // Acquire the short-lived direct-upload ticket only after local model work,
+    // so slow first-load devices cannot expire it before the image POST begins.
+    const session = await providerSession();
+    const provider = session.capability;
+    if (onEvent) await onEvent({ type: "provider-ready", capability: provider });
     emit(onEvent, { type: "pipeline-progress", stage: "four-region" });
     const fourRegionStart = performance.now();
-    const payload = await dynamicFourRegionDetection(request, baseline.lines, provider);
+    const payload = await dynamicFourRegionDetection(request, baseline.lines, session);
     const fourRegionDetectionMs = performance.now() - fourRegionStart;
     const evidenceStart = performance.now();
     const displayEvidence = buildPrecomputedFineWrinkleEvidence(

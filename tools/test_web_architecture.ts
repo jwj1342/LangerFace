@@ -48,8 +48,8 @@ if (suppressedTypeScript.length) {
 console.log("ok: web TypeScript 无 @ts-nocheck / @ts-ignore / @ts-expect-error（owner #95）");
 
 // #110 仍禁止将 FLAME 拟合或其他计算后端放回 Vercel。V10 皱纹检测
-// 经审计后只允许一个同源代理：它不执行模型，只在服务端保存 token，并且有
-// 请求体、超时和上游边界。任何其他 web/api 文件仍视为架构回归。
+// 经审计后只允许一个短期令牌 broker：它不执行模型、不接收图像，只签发
+// 来源绑定的单次令牌。任何其他 web/api 文件仍视为架构回归。
 const allowedServerlessFiles = new Set(["api/wrinkle-v10.mjs"]);
 const apiRoot = path.join(root, "api");
 const serverlessFiles = fs.existsSync(apiRoot)
@@ -69,7 +69,7 @@ if (functionEntries.some((entry) => entry !== "api/wrinkle-v10.mjs")) {
   console.error("FAIL web/vercel.json declares a function outside the audited V10 proxy boundary.");
   process.exit(1);
 }
-console.log("ok: 前端只包含经审计的 V10 同源代理，无 FLAME/通用计算后端");
+console.log("ok: 前端只包含经审计的 V10 短期令牌 broker，无图像代理或通用计算后端");
 
 // 运行时资产（atlas / topology / triangles / .task / .bin）文件名固定，绝不能被
 // immutable 长缓存钉住：否则图谱更新后回访用户会长期停在旧版本而毫无提示。

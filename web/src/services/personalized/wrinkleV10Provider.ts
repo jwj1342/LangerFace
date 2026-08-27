@@ -17,6 +17,14 @@ export interface WrinkleV10ProviderCapability {
   ready: true;
 }
 
+export interface WrinkleV10ProviderSession {
+  capability: WrinkleV10ProviderCapability;
+  directDetectUrl: string;
+  accessToken: string | null;
+  expiresAt: number | null;
+  maximumRequestBytes: number;
+}
+
 export function parseWrinkleV10ProviderCapability(
   value: unknown,
 ): WrinkleV10ProviderCapability {
@@ -32,6 +40,26 @@ export function parseWrinkleV10ProviderCapability(
     throw new Error("V10 检测服务版本或能力声明无效");
   }
   return candidate as WrinkleV10ProviderCapability;
+}
+
+export function parseWrinkleV10ProviderSession(value: unknown): WrinkleV10ProviderSession {
+  const candidate = value as Record<string, unknown> | null;
+  const capability = parseWrinkleV10ProviderCapability(value);
+  const directDetectUrl = typeof candidate?.directDetectUrl === "string"
+    ? candidate.directDetectUrl
+    : "";
+  const accessToken = typeof candidate?.accessToken === "string" && candidate.accessToken
+    ? candidate.accessToken
+    : null;
+  const expiresAt = Number.isFinite(candidate?.expiresAt) ? Number(candidate?.expiresAt) : null;
+  const maximumRequestBytes = Number(candidate?.maximumRequestBytes);
+  if (!directDetectUrl
+      || !Number.isInteger(maximumRequestBytes)
+      || maximumRequestBytes < 8 * 1024 * 1024
+      || (capability.processingLocation === "remote_service" && (!accessToken || !expiresAt))) {
+    throw new Error("V10 检测服务未提供有效的直连授权");
+  }
+  return { capability, directDetectUrl, accessToken, expiresAt, maximumRequestBytes };
 }
 
 function isLoopbackHostname(hostname: string): boolean {

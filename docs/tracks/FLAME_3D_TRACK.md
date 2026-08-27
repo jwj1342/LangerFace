@@ -57,7 +57,7 @@
 
 ## 6. 部署形态（详见 #40 / PR #122）
 
-所有 FLAME 拟合**离线**跑（你的 HPC/本机；CPU 即可，连 GPU 都非必需）→ 导出「个体 FLAME 网格 + 迁移后的张力线」为**静态资产** → Vercel 前端只做渲染。**FLAME 生产侧仍然零后端、零 GPU**。曾经存在的 `web/api/fit.py`（Vercel Python 云函数 + `flame_basis.npz`）已在「工程债及废弃代码清洗」中删除：它是无鉴权、CORS `*`、无请求体上限的公开算力面，与本节的边界矛盾；离线拟合仍走 `tools/fit_flame_to_landmarks.py`，基文件移到 `assets/flame_basis.npz` 仅供离线工具使用。线上 V10 四区域皱纹检测是一个明确的例外：`web/api/wrinkle-v10.mjs` 只是有体积上限和超时的同源代理，模型运算由带 token 鉴权的独立 V10 服务执行；它不得扩展为 FLAME 拟合或通用算力端点。
+所有 FLAME 拟合**离线**跑（你的 HPC/本机；CPU 即可，连 GPU 都非必需）→ 导出「个体 FLAME 网格 + 迁移后的张力线」为**静态资产** → Vercel 前端只做渲染。**FLAME 生产侧仍然零后端、零 GPU**。曾经存在的 `web/api/fit.py`（Vercel Python 云函数 + `flame_basis.npz`）已在「工程债及废弃代码清洗」中删除：它是无鉴权、CORS `*`、无请求体上限的公开算力面，与本节的边界矛盾；离线拟合仍走 `tools/fit_flame_to_landmarks.py`，基文件移到 `assets/flame_basis.npz` 仅供离线工具使用。线上 V10 四区域皱纹检测是一个明确的例外：`web/api/wrinkle-v10.mjs` 只签发短期单次令牌，不转发图像；浏览器把工作帧直达有来源校验、限流、超时和 32 MB 上限的独立 V10 服务。该边界不得扩展为 FLAME 拟合或通用算力端点。
 
 ## 7. License 边界（硬约束）
 

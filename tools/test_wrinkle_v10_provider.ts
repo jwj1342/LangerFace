@@ -4,6 +4,7 @@ import { Readable } from "node:stream";
 import proxyHandler from "../web/api/wrinkle-v10.mjs";
 import {
   parseWrinkleV10ProviderCapability,
+  parseWrinkleV10ProviderSession,
   wrinkleV10ProcessingLocationLabel,
   WRINKLE_V10_CHECKPOINT_SHA256,
   WRINKLE_V10_DETECTOR_VERSION,
@@ -63,41 +64,46 @@ class FakeResponse {
 function fakeRequest(method: string, body: Buffer = Buffer.alloc(0)) {
   const request = Readable.from(body.length ? [body] : [] as Buffer[]) as Readable & {
     method: string;
+    headers: Record<string, string>;
   };
   request.method = method;
+  request.headers = {
+    host: "preview.example.test",
+    origin: "https://preview.example.test",
+    "user-agent": "synthetic-provider-test",
+    "x-forwarded-for": "192.0.2.10",
+    "x-forwarded-proto": "https",
+  };
   return request;
 }
 
 process.env.WRINKLE_V10_SERVICE_URL = "https://v10.internal";
-process.env.WRINKLE_V10_SERVICE_TOKEN = "secret-token";
+process.env.WRINKLE_V10_TICKET_SECRET = "ticket-secret-at-least-32-random-bytes";
+process.env.WRINKLE_V10_ALLOWED_ORIGINS = "https://preview.example.test";
 const originalFetch = globalThis.fetch;
 try {
-  let authorization = "";
   globalThis.fetch = async (input, init) => {
     const url = String(input);
     if (url.endsWith("/health")) {
       return new Response(JSON.stringify(capability), { status: 200 });
     }
-    authorization = String((init?.headers as Record<string, string>)?.Authorization || "");
-    return new Response(JSON.stringify({ detectorVersion: WRINKLE_V10_DETECTOR_VERSION }), {
-      status: 200,
-    });
+    throw new Error(`unexpected fetch ${url} ${init?.method || "GET"}`);
   };
   const healthResponse = new FakeResponse();
   await proxyHandler(fakeRequest("GET"), healthResponse);
   assert.equal(healthResponse.statusCode, 200);
-  assert.equal(JSON.parse(Buffer.from(healthResponse.payload).toString()).detectorVersion,
-    WRINKLE_V10_DETECTOR_VERSION);
+  const session = parseWrinkleV10ProviderSession(healthResponse.payload);
+  assert.equal(session.capability.detectorVersion, WRINKLE_V10_DETECTOR_VERSION);
+  assert.equal(session.directDetectUrl, "https://v10.internal/v1/detect");
+  assert.ok(session.accessToken?.includes("."));
+  assert.equal(session.maximumRequestBytes, 32 * 1024 * 1024);
+  assert.ok(JSON.stringify(healthResponse.payload).length < 4_096,
+    "the Vercel ticket response must remain far below the platform body limit");
 
   const detectResponse = new FakeResponse();
   await proxyHandler(fakeRequest("POST", Buffer.from("synthetic")), detectResponse);
-  assert.equal(detectResponse.statusCode, 200);
-  assert.equal(authorization, "Bearer secret-token");
-
-  // A 1280x1280 RGBA frame is larger than 4 MiB; the proxy must accept it.
-  const largeDetectResponse = new FakeResponse();
-  await proxyHandler(fakeRequest("POST", Buffer.alloc(5 * 1024 * 1024)), largeDetectResponse);
-  assert.equal(largeDetectResponse.statusCode, 200);
+  assert.equal(detectResponse.statusCode, 405,
+    "large image bodies must never enter the Vercel function");
 
   globalThis.fetch = async () => { throw new Error("upstream unavailable"); };
   const failedResponse = new FakeResponse();

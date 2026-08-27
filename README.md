@@ -40,7 +40,7 @@ LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它
 2. **核心算法层**：`src/langerface/` 与 `web/src/services/geometry*.ts` 实现关键点输入、重心坐标映射、平滑、遮挡、渲染与 3D 配准。
 3. **用户界面层**：`web/` 提供唯一正式前端；`src/langerface/apps/` 只保留 CLI 和 OpenCV webcam 入口。
 
-当前主线是 **Stage 1：稳定显示面部 RSTL 皮肤张力线**。Stage 2 已进入受限工程闭环：围绕医生手动输入的面部皮肤肿物，按结构化临床规则生成可解释、可编辑、可审阅的候选切口线，并可把候选短期传递到照片 / 视频 / 摄像头实时叠加层。2026-08-17 当前产品开发与阶段联合验收进一步限定为单个、轮廓清楚、整体近似圆形（允许轻度椭圆）的皮表肿物；明显狭长椭圆不自动纳入，自由轮廓、有限缺口与人工补线仍作为兼容能力保留，不承诺任意复杂形状。当前明确不实现病例大厅、患者档案、历史记录、病例级本地持久化或云端病例系统；完整 Stage 2 仍需真实肿物边界标注、3D/AR 个体化叠加与临床验证。项目不训练自定义医学模型，不上传用户图像，也不声称自动给出手术方案。
+当前主线是 **Stage 1：稳定显示面部 RSTL 皮肤张力线**。Stage 2 已进入受限工程闭环：围绕医生手动输入的面部皮肤肿物，按结构化临床规则生成可解释、可编辑、可审阅的候选切口线，并可把候选短期传递到照片 / 视频 / 摄像头实时叠加层。2026-08-17 当前产品开发与阶段联合验收进一步限定为单个、轮廓清楚、整体近似圆形（允许轻度椭圆）的皮表肿物；明显狭长椭圆不自动纳入，自由轮廓、有限缺口与人工补线仍作为兼容能力保留，不承诺任意复杂形状。当前明确不实现病例大厅、患者档案、历史记录、病例级本地持久化或云端病例系统；完整 Stage 2 仍需真实肿物边界标注、3D/AR 个体化叠加与临床验证。项目不声称自动给出手术方案。标准 RSTL、MediaPipe 和浏览器 YOLO 在当前设备运行；用户手动启动线上 V10 四区域检测时，当前工作帧会发送到页面明确标示的受控 V10 服务，任务结束后临时文件删除。
 
 ---
 
@@ -143,7 +143,7 @@ Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.
 - 🧭 **切口 workflow 工作台**：推荐先从 `/personalized` 生成 YOLO/V6 个体化 RSTL，再进入 `/app/incision`；工作台固定使用 MediaPipe 468 表面，个体化 RSTL 是方向首选，缺失或校验失败时切换到标准 RSTL 并记录来源，不加载 FLAME。医生可放置皮下 / 皮表肿物、编辑和审阅确定性候选，并把批准结果发送到实时页叠加。
 - 🔬 **RSTL 切除 -> 闭合演示（Beta）**：`/surgery` 作为独立研究演示保留，用于解释沿 RSTL 闭合的张力直觉，不是 FEM、不是患者个体化建模，也不是自动候选生成模块。
 - 🎛️ **实时控制**：主界面暴露数据源、线密度、透明度、镜像和网格采样点；平滑、背面剔除、手部遮挡、分区着色和放大窗为底层支持或默认能力，部分调试开关当前隐藏。
-- 🔒 **全程本地运行**，不上传任何画面（隐私友好）。
+- 🔒 **本地优先、位置透明**：标准 RSTL 始终在浏览器计算；本地 Vite 的 V10 在提供网页的电脑处理，Vercel 版 V10 在页面标示的受控远程服务处理。
 
 ---
 
@@ -371,7 +371,7 @@ Stage 2 的切口候选必须受以下边界约束：
 
 ### 数据与隐私
 
-病人面部影像属敏感个人信息。本工具默认**本地运行，不上传任何数据**。Vite 前端默认用于本地研究演示；如需对外暴露，请自行加访问控制与合规审查（HIPAA / GDPR / 《个人信息保护法》）。
+病人面部影像属敏感个人信息。本工具默认本地优先。标准 RSTL、MediaPipe、浏览器 YOLO、切口 workflow 和手动编辑在当前设备处理；通过 Tailscale 使用本地 Vite 时，V10 工作帧会发送到提供网页的局域网电脑；在 Vercel 受控部署中，用户点击“检测皱纹”后，工作帧会凭 90 秒单次令牌直接发送到远程 V10 服务。Vercel Function 不接收图像正文，远程服务不持久化工作帧并在任务结束后清理临时目录。真实部署必须启用访问控制并完成合规审查（HIPAA / GDPR / 《个人信息保护法》）。
 
 Stage 2 切口 workflow 只在浏览器本地处理肿物参数、标准化坐标、候选切口、工具调用 trace 和审阅记录；导出 JSON / 报告草案不默认包含原始照片、视频帧、摄像头画面或纹理。自然皱襞 / 病灶辅助线索只允许以低置信摘要和 metrics 进入医生审阅，不自动改变切口几何。运行时没有远程模型配置、访问密钥或模型请求。详细边界见 [`docs/clinical/PRIVACY_AND_AUDIT.md`](docs/clinical/PRIVACY_AND_AUDIT.md)。
 
@@ -380,7 +380,7 @@ Stage 2 切口 workflow 只在浏览器本地处理肿物参数、标准化坐�
 ## 持续集成与部署（CI/CD）
 
 - **CI**：push 到 `master` / `refactor/**` 或发 PR 时，[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 跑四个并行 job —— `lint`（`ruff check .`）、`python-tests`（`pytest`，**Python 3.10 / 3.11 / 3.12** 矩阵，不装 mediapipe）、`js-tests`（**Node 24**：`npm ci` + `npm run build` + `npm test` 对拍 Web TypeScript 几何与 Python 一致）、`browser-tests`（Chromium 上运行生产构建的 `/surgery` UI/对比度回归）。提交前可装 `pre-commit`（[`.pre-commit-config.yaml`](.pre-commit-config.yaml)）做本地预检。
-- **CD**：网页是 Vite 构建的**纯静态站点**（`web/dist/`，全程浏览器运行、无后端），经 Vercel Git 集成自动部署（自动 HTTPS → 线上摄像头可用），Vercel Project 的 Root Directory 设为 `web`。
+- **CD**：网页主体是 Vite 静态构建（`web/dist/`），经 Vercel Git 集成部署；唯一 Vercel Function `web/api/wrinkle-v10.mjs` 只签发小型短期令牌和检查 provider 能力，不接收图像。32 MB 上限的图像请求由浏览器直达独立 V10 服务。Vercel Project 的 Root Directory 设为 `web`。
 - **隐私**：离线重建默认写入 gitignored 的 `local_outputs/recon_demo.json`，不会随 Vercel 站点发布；真实患者头模仍不得提交到仓库。
 
 > Vercel Project 设置、Production URL、branch protection 必需检查、Preview 访问策略、手动部署 fallback 与排障清单，全部见 **[CI/CD 与 Vercel 部署指南](docs/quality/CI_CD_VERCEL.md)**。
