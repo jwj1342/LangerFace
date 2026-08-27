@@ -20,6 +20,7 @@ const liveRouteControls = read("src/components/LiveRouteControlsPanel.tsx");
 const liveControllerBridge = read("src/hooks/useLiveControllerBridge.ts");
 const liveDom = read("src/services/liveDom.ts");
 const liveRuntime = read("src/services/liveRuntime.ts");
+const liveRefine2d = read("src/services/liveRefine2d.ts");
 const liveCommandRouter = read("src/services/liveCommandRouter.ts");
 const pipelineSource = read("src/services/pipelineSource.ts");
 const controllerCommand = read("src/lib/controllerCommand.ts");
@@ -83,13 +84,30 @@ includesAll(liveStage, [
 includesAll(liveSourceControls, [
   'id="uploadBtn"',
   'id="fileInput"',
-  'accept="image/*,video/*"',
+  'accept="image/*"',
   'id="camBtn"',
   'id="pauseBtn"',
   'id="exportBtn"',
   'commands.source("upload_source")',
   'commands.source("camera_toggle")',
 ], "live acquisition controls");
+includesAll(liveSourceControls, [
+  'paused ? "▶ 继续" : "⏸ 暂停"',
+], "pause/resume control labels");
+includesAll(pipelineSource, [
+  'els.pause.textContent = "⏸ 暂停"',
+], "runtime pause control reset label");
+includesAll(liveRuntime, [
+  'els.pause.textContent = "▶ 继续"',
+  'els.pause.textContent = "⏸ 暂停"',
+], "runtime pause/resume control labels");
+assert.ok(![pipelineSource, liveRuntime, liveRefine2d].some((source) => source.includes("定格微调")),
+  "camera pause control and dependent guidance must not rename pause/resume as refinement");
+assert.ok(!liveRuntime.includes("继续实时"), "camera resume control must retain the established concise label");
+assert.equal(liveRuntime.match(/analyzeCurrentWrinkles\(/g)?.length, 1,
+  "wrinkle analysis must start only from the explicit detect button, never from pause/resume");
+assert.ok(liveRuntime.includes("可点击“检测皱纹”"),
+  "paused-camera guidance must preserve explicit wrinkle detection semantics");
 
 assert.ok(liveRouteControls.includes("2D 实时贴合"), "Live workbench declares its only supported runtime mode");
 assert.ok(!/3D|recon|twin|route_change/.test(liveRouteControls), "Live controls do not retain hidden 3D commands");
@@ -124,8 +142,10 @@ includesAll(pipelineSource, [
   "handleFile",
   "URL.createObjectURL(file)",
   'file.type.startsWith("image/")',
-  'setSource(els.video, "video"',
-], "live image/video upload pipeline");
+  "仅支持上传照片；如需连续画面请开启摄像头。",
+  'setSource(prepared.source, "image"',
+], "live photo upload pipeline");
+assert.ok(!pipelineSource.includes('setSource(els.video, "video"'), "file upload pipeline does not accept videos");
 
 for (const retiredLiveRuntime of ["mode3d.ts", "projection3d.ts", "liveScanLifecycle.ts"]) {
   assert.ok(!fs.existsSync(path.join(process.cwd(), "src/services", retiredLiveRuntime)), `${retiredLiveRuntime} is removed from Live`);

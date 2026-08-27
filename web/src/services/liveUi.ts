@@ -93,7 +93,7 @@ export function setIncisionOverlayQa(state: IncisionOverlayQaState | null = null
   if (tone === "ok") ui.incisionOverlayQa.classList.add("ok");
   if (tone === "warn") ui.incisionOverlayQa.classList.add("warn");
   ui.incisionOverlayQaState.textContent = state.label || "等待画面";
-  ui.incisionOverlayQaDetail.textContent = state.detail || "上传照片、视频或开启摄像头后开始检查。";
+  ui.incisionOverlayQaDetail.textContent = state.detail || "上传照片或开启摄像头后开始检查。";
 }
 
 export function smoothLabel(value: number): string {

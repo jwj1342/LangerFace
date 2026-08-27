@@ -1,6 +1,7 @@
 import { LiveControlRail, LiveStagePanel } from "../components/LiveControlRail";
 import { WorkflowIncisionRail } from "../components/WorkflowIncisionRail";
 import { WorkflowLayout } from "../components/WorkflowLayout";
+import { MobileCanvasQualityBadge, MobileWorkflowControls } from "../components/MobileWorkflowControls";
 import { WorkflowCanvasOverlay, WorkflowCanvasTools } from "../components/WorkflowCanvasTools";
 import { WorkflowStageStatus } from "../components/WorkflowStageStatus";
 
@@ -16,6 +17,8 @@ export function WorkflowWorkbench() {
       )}
       stage={(
         <LiveStagePanel
+          mobileControls={<MobileWorkflowControls />}
+          mobileOverlay={<MobileCanvasQualityBadge />}
           workflowActions={<WorkflowCanvasTools />}
           workflowOverlay={<WorkflowCanvasOverlay />}
           workflowStatus={<WorkflowStageStatus />}

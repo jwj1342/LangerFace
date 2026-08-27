@@ -18,7 +18,7 @@ import { useReactRouteLifecycle } from "../hooks/useReactRouteLifecycle";
 const TOOLS = [
   {
     title: "实时 2D 张力线",
-    description: "摄像头、照片或视频上的 RSTL 实时叠加与微调。",
+    description: "摄像头或照片上的 RSTL 实时叠加与微调。",
     to: "/live",
     icon: Activity,
   },

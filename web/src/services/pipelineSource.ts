@@ -109,60 +109,49 @@ export function showCameraPlaceholder(message = ""): void {
 
 export async function handleFile(file?: File): Promise<void> {
   if (!file) return;
+  els.file.value = "";
+  if (!file.type.startsWith("image/")) {
+    setTransientMsg("仅支持上传照片；如需连续画面请开启摄像头。");
+    return;
+  }
   const startedAt = performance.now();
   const operationId = ++sourceOperationId;
-  const imageFile = file.type.startsWith("image/");
   let pendingObjectUrl: string | null = null;
-  els.file.value = "";
   stopSource({ preserveOperation: true });
   setLive(false, "待机");
-  setMsg(imageFile ? "图片加载中" : "加载模型…", 0, imageFile);
+  setMsg("图片加载中", 0, true);
   try {
     const url = URL.createObjectURL(file);
     pendingObjectUrl = url;
-    if (imageFile) {
-      try {
-        const img = new Image();
-        img.src = url;
-        let modelReadyAt = startedAt;
-        let decodedAt = startedAt;
-        const modelReady = ensureImageReady().then(() => {
-          modelReadyAt = performance.now();
-        });
-        const decoded = img.decode().then(() => {
-          decodedAt = performance.now();
-        });
-        await Promise.all([modelReady, decoded]);
-        if (operationId !== sourceOperationId) return;
-        const prepared = prepareImageSource(img);
-        setSource(prepared.source, "image", prepared.width, prepared.height);
-        const sourceSetAt = performance.now();
-        recordMetricSample("source.imageModelWaitMs", modelReadyAt - startedAt, { bytes: file.size });
-        recordMetricSample("source.imageDecodeMs", decodedAt - startedAt, { bytes: file.size });
-        recordMetricSample("source.imageUploadToSourceSetMs", sourceSetAt - startedAt, {
-          bytes: file.size,
-          width: prepared.width,
-          height: prepared.height,
-          scaled: prepared.scaled,
-        });
-        if (prepared.scaled) {
-          setTransientMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
-        }
-      } finally {
-        URL.revokeObjectURL(url);
-        pendingObjectUrl = null;
-      }
-    } else {
-      await ensureReady();
-      if (operationId !== sourceOperationId) return;
-      els.video.srcObject = null;
-      els.video.src = url;
-      els.video.loop = true;
-      await els.video.play();
-      if (operationId !== sourceOperationId) return;
-      setSource(els.video, "video", els.video.videoWidth, els.video.videoHeight, {
-        release: () => URL.revokeObjectURL(url),
+    try {
+      const img = new Image();
+      img.src = url;
+      let modelReadyAt = startedAt;
+      let decodedAt = startedAt;
+      const modelReady = ensureImageReady().then(() => {
+        modelReadyAt = performance.now();
       });
+      const decoded = img.decode().then(() => {
+        decodedAt = performance.now();
+      });
+      await Promise.all([modelReady, decoded]);
+      if (operationId !== sourceOperationId) return;
+      const prepared = prepareImageSource(img);
+      setSource(prepared.source, "image", prepared.width, prepared.height);
+      const sourceSetAt = performance.now();
+      recordMetricSample("source.imageModelWaitMs", modelReadyAt - startedAt, { bytes: file.size });
+      recordMetricSample("source.imageDecodeMs", decodedAt - startedAt, { bytes: file.size });
+      recordMetricSample("source.imageUploadToSourceSetMs", sourceSetAt - startedAt, {
+        bytes: file.size,
+        width: prepared.width,
+        height: prepared.height,
+        scaled: prepared.scaled,
+      });
+      if (prepared.scaled) {
+        setTransientMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
+      }
+    } finally {
+      URL.revokeObjectURL(url);
       pendingObjectUrl = null;
     }
     els.cam.setAttribute("aria-pressed", "false");
@@ -171,7 +160,7 @@ export async function handleFile(file?: File): Promise<void> {
     countMetric("source.fileLoadFailure");
     logWarn("上传文件加载失败。", error);
     setLive(false, "待机");
-    setMsg("无法读取或检测该文件。请重新上传；若仍失败，请换用受支持的清晰图片或视频。");
+    setMsg("无法读取或检测该照片。请重新上传；若仍失败，请换用受支持的清晰照片。");
   } finally {
     if (pendingObjectUrl) URL.revokeObjectURL(pendingObjectUrl);
   }
@@ -235,7 +224,7 @@ export function setSource(
   sourceState.paused = false;
   els.pause.disabled = kind === "image";
   els.export.disabled = false;
-  els.pause.textContent = kind === "camera" ? "📷 定格微调" : "⏸ 暂停";
+  els.pause.textContent = "⏸ 暂停";
   setMsg(null);
   setLive(true, kind === "camera" ? "实时摄像头" : kind === "video" ? "视频" : "照片");
   requestFrame();
@@ -269,5 +258,5 @@ export function stopSource({ preserveOperation = false }: { preserveOperation?: 
   resetRefineForNewSource();
   resetLiveWrinkleAnalysis();
   els.pause.disabled = true;
-  els.pause.textContent = "📷 定格微调";
+  els.pause.textContent = "⏸ 暂停";
 }

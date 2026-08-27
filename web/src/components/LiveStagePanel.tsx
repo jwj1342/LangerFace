@@ -11,12 +11,14 @@ import {
 import type { ReactNode } from "react";
 
 interface LiveStagePanelProps {
+  mobileControls?: ReactNode;
+  mobileOverlay?: ReactNode;
   workflowActions?: ReactNode;
   workflowOverlay?: ReactNode;
   workflowStatus?: ReactNode;
 }
 
-export function LiveStagePanel({ workflowActions, workflowOverlay, workflowStatus }: LiveStagePanelProps = {}) {
+export function LiveStagePanel({ mobileControls, mobileOverlay, workflowActions, workflowOverlay, workflowStatus }: LiveStagePanelProps = {}) {
   return (
     <StageShell
       top={(
@@ -32,8 +34,10 @@ export function LiveStagePanel({ workflowActions, workflowOverlay, workflowStatu
         <video id="video" playsInline autoPlay muted />
         <StageCanvas id="canvas" mirror width="1280" height="720" />
         {workflowOverlay}
-        <StageOverlayMessage id="overlayMsg">点击「摄像头」或「上传照片 / 视频」开始</StageOverlayMessage>
+        {mobileOverlay}
+        <StageOverlayMessage id="overlayMsg">点击「摄像头」或「上传照片」开始</StageOverlayMessage>
       </StageViewport>
+      {mobileControls}
       <StageZoomStrip id="zoomStrip" />
     </StageShell>
   );

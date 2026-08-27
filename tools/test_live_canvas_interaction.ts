@@ -49,6 +49,7 @@ const event = (values: Record<string, unknown> = {}) => {
   let prevented = false;
   return {
     pointerId: 7,
+    pointerType: "mouse",
     button: 0,
     clientX: 10,
     clientY: 20,
@@ -145,6 +146,53 @@ assert.equal(surface.classes.has("dragging"), false, "route disposal clears tran
 assert.equal(surface.captured.has(11), false, "route disposal releases active pointer capture");
 surface.emit("pointermove", event({ pointerId: 11, clientX: 50 }));
 assert.deepEqual(pans, [[8, 5]], "disposed interactions cannot mutate a later route session");
+
+const pinchSurface = new FakeSurface();
+const pinchAbortController = new AbortController();
+const pinchZoomFactors: Array<[number, number, number]> = [];
+const pinchPans: Array<[number, number]> = [];
+const pinchGestures: Array<[number, number, number, number, number]> = [];
+let pinchViewChanges = 0;
+bindLiveCanvasInteractions(pinchSurface as unknown as HTMLElement, {
+  isRefineActive: () => false,
+  isImagePointerInteractionBlocked: () => true,
+  isMobileTouchImageGestureEnabled: () => true,
+  beginRefinePointer: () => false,
+  moveRefinePointer: () => false,
+  endRefinePointer: () => false,
+  sourceKind: () => "image",
+  panImageViewBy: (x, y) => { pinchPans.push([x, y]); },
+  zoomImageViewAt: () => false,
+  zoomImageViewByFactorAt: (x, y, factor) => { pinchZoomFactors.push([x, y, factor]); return true; },
+  transformImageViewGesture: (previousX, previousY, nextX, nextY, factor) => {
+    pinchGestures.push([previousX, previousY, nextX, nextY, factor]);
+    return true;
+  },
+  adjustFocusZoom: () => false,
+  updateRefineUi: () => undefined,
+  refreshStaticImage: () => undefined,
+  onImageViewChanged: () => { pinchViewChanges += 1; },
+}, { signal: pinchAbortController.signal });
+
+pinchSurface.emit("pointerdown", event({ pointerId: 21, pointerType: "touch", clientX: 20, clientY: 30 }));
+pinchSurface.emit("pointerdown", event({ pointerId: 22, pointerType: "touch", clientX: 40, clientY: 30 }));
+assert.deepEqual([...pinchSurface.captured].sort(), [21, 22], "mobile pinch captures both touch pointers even while marker placement blocks one-finger panning");
+const pinchMove = event({ pointerId: 22, pointerType: "touch", clientX: 60, clientY: 30 });
+pinchSurface.emit("pointermove", pinchMove);
+assert.equal(pinchMove.wasPrevented(), true);
+assert.deepEqual(pinchGestures, [[30, 30, 40, 30, 2]],
+  "a mixed pinch passes its previous and next centres to one atomic image transform");
+assert.deepEqual(pinchZoomFactors, [], "the atomic gesture path must not also apply a second zoom");
+assert.deepEqual(pinchPans, [], "the atomic gesture path must not also apply a second pan");
+assert.equal(pinchViewChanges, 1, "mobile pinch requests an aligned workflow-overlay redraw");
+pinchSurface.emit("pointerup", event({ pointerId: 22, pointerType: "touch", clientX: 60, clientY: 30 }));
+pinchSurface.emit("pointerup", event({ pointerId: 21, pointerType: "touch", clientX: 20, clientY: 30 }));
+assert.equal(pinchSurface.captured.size, 0, "ending a mobile pinch releases both touch pointers");
+pinchSurface.emit("pointerdown", event({ pointerId: 23, pointerType: "mouse" }));
+assert.equal(pinchSurface.captured.has(23), false, "desktop mouse input remains blocked by the workflow marker tool");
+assert.equal(pinchGestures.length, 1, "desktop mouse input never enters the mobile pinch path");
+pinchAbortController.abort();
+assert.equal(pinchSurface.listenerCount(), 0);
 
 const abortedSurface = new FakeSurface();
 bindLiveCanvasInteractions(abortedSurface as unknown as HTMLElement, {

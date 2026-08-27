@@ -93,6 +93,8 @@ export const INCISION_LIBRARY_COMMANDS = [
 export const WORKFLOW_INCISION_TOOL_COMMANDS = [
   "select_lesion",
   "controlled_marker",
+  "confirm_controlled_marker",
+  "cancel_controlled_marker",
   "repair_marker",
   "undo_repair",
   "clear_repair",

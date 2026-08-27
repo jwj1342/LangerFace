@@ -258,12 +258,12 @@ export function TumorInputPanel({
         </Button>
       </ButtonRow>
       <BoundaryStatus warn={boundaryStatusWarn} id="boundaryStatus">{boundaryStatus}</BoundaryStatus>
-      <ButtonRow className="two-cols">
+      <ButtonRow className="two-cols workflow-tumor-transfer-actions">
         <Button variant="workbench" id="exportTumorBtn" type="button" onClick={() => commands.tumor("export_tumor")}>导出肿物</Button>
         <Button variant="workbench" id="importTumorBtn" type="button" onClick={() => commands.tumor("import_tumor")}>导入肿物</Button>
       </ButtonRow>
       <Input id="tumorImportFile" hidden type="file" accept="application/json,.json" />
-      <Button variant="workbenchPrimary" id="runWorkflowBtn" type="button" onClick={() => commands.tumor("run_workflow")}>重新计算候选</Button>
+      <Button className="workflow-recalculate-action" variant="workbenchPrimary" id="runWorkflowBtn" type="button" onClick={() => commands.tumor("run_workflow")}>重新计算候选</Button>
       <WorkbenchNote id="pickState">{freehand ? boundaryHint : pickState}</WorkbenchNote>
       <AnatomyPreview warn={anatomyPreviewWarn} id="anatomyPreview">{anatomyPreview}</AnatomyPreview>
     </WorkbenchCard>

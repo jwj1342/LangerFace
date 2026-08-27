@@ -153,6 +153,7 @@ export interface WorkflowIncisionToolState {
   selectionMode: boolean;
   controlledMarkerMode: boolean;
   markerBusy: boolean;
+  mobileMarkerPlacementReady: boolean;
   repairAvailable: boolean;
   repairMode: boolean;
   repairCount: number;

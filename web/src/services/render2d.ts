@@ -40,6 +40,7 @@ import {
   symmetryPartnerIndex,
 } from "./liveRefine2d";
 import { modelState, renderState, sourceState } from "./liveState.ts";
+import { mobileIncisionCandidateVisible } from "./mobileWorkflowVisibility.ts";
 import { setIncisionOverlayQa, setLive } from "./liveUi.ts";
 import type { IncisionOverlayPayload } from "./dataSource";
 import {
@@ -863,14 +864,16 @@ function drawIncisionOverlay(
     dash: [overlayStyle.boundary.lineWidth * 3, overlayStyle.boundary.lineWidth * 2],
   }, localRegionMasks);
   const candidateRefs = surfaceRefs(overlay.candidate?.polyline_refs);
-  strokeOverlayRefs(candidateRefs, lm, masks, vis, innerMouth, {
-    color: overlayStyle.candidate.haloColor,
-    lineWidth: overlayStyle.candidate.haloWidth,
-  }, localRegionMasks);
-  strokeOverlayRefs(candidateRefs, lm, masks, vis, innerMouth, {
-    color: overlayStyle.candidate.color,
-    lineWidth: overlayStyle.candidate.lineWidth,
-  }, localRegionMasks);
+  if (mobileIncisionCandidateVisible()) {
+    strokeOverlayRefs(candidateRefs, lm, masks, vis, innerMouth, {
+      color: overlayStyle.candidate.haloColor,
+      lineWidth: overlayStyle.candidate.haloWidth,
+    }, localRegionMasks);
+    strokeOverlayRefs(candidateRefs, lm, masks, vis, innerMouth, {
+      color: overlayStyle.candidate.color,
+      lineWidth: overlayStyle.candidate.lineWidth,
+    }, localRegionMasks);
+  }
   const center = mapSurfaceRefs(optionalSurfaceRef(overlay.tumor?.center_ref), lm, modelTriangles()).pts[0];
   const centerLocalAction = localActionForPoints([center], localRegionMasks);
   const centerOccluded = Boolean(center && masks.length && pointInHandMasks(toPoint2(center), masks));

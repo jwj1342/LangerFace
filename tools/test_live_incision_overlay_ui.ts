@@ -24,7 +24,8 @@ const controllerSnapshotSchemas = fs.readFileSync("src/lib/controllerSnapshotSch
 
 assert.ok(compatibilityHtml.includes("/src/main.tsx"), "root HTML mounts the React tool launcher");
 assert.ok(!compatibilityHtml.includes("main.js"), "legacy live HTML no longer mounts the live controller directly");
-assert.ok(liveUi.includes('accept="image/*,video/*"'), "React live page accepts uploaded photos and videos");
+assert.ok(liveUi.includes('accept="image/*"'), "React live page accepts uploaded photos");
+assert.ok(!liveUi.includes("video/*"), "React live page does not expose uploaded video files");
 assert.ok(liveUi.includes('id="camBtn"'), "React live page exposes camera entry for realtime overlay");
 assert.ok(liveUi.includes('id="exportBtn"'), "React live page exposes export action");
 assert.ok(liveRoute.includes("LiveControlRail"),
@@ -32,7 +33,8 @@ assert.ok(liveRoute.includes("LiveControlRail"),
 assert.ok(liveControlRail.includes("LiveIncisionOverlayPanel"),
   "shared live control rail mounts the incision overlay card");
 assert.ok(source.includes('setSource(prepared.source, "image"'), "uploaded photos enter the shared live render source");
-assert.ok(source.includes('setSource(els.video, "video"'), "uploaded videos enter the shared live render source");
+assert.ok(source.includes("仅支持上传照片；如需连续画面请开启摄像头。"), "uploaded videos are rejected before changing the active source");
+assert.ok(!source.includes('setSource(els.video, "video"'), "uploaded videos cannot enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "camera"'), "camera frames enter the shared live render source");
 assert.match(loop, /if \((?:sourceState\.sourceKind|sourceKind) !== "image"\) requestFrame\(\)/, "video and camera sources schedule continuous overlay frames");
 assert.ok(loop.includes("eyeBlinkLeft"), "pipeline extracts left blink blendshape for overlay quality gate");
@@ -48,7 +50,7 @@ assert.ok(liveSnapshots.includes("../lib/controllerSnapshotSchemas"), "shared li
 assert.ok(controllerSnapshotSchemas.includes("react-live-controller-snapshot/v0.2"), "shared snapshot schema module owns the 2D-only live React snapshot schema");
 assert.ok(liveSnapshots.includes("buildLiveControllerSnapshot"), "shared live snapshot service builds low-frequency live controller snapshots");
 assert.ok(main.includes("setIncisionOverlayQa"), "live page shows pending overlay QA feedback after loading a candidate");
-assert.ok(main.includes("上传照片、视频或开启摄像头后，会随 RSTL 一起显示"), "live page gives explicit overlay feedback");
+assert.ok(main.includes("上传照片或开启摄像头后，会随 RSTL 一起显示"), "live page gives explicit overlay feedback");
 assert.ok(main.includes("buildZoomCards(refreshStaticImage)"), "live page rebuilds zoom cards after loading incision overlay");
 assert.ok(main.includes("createCanvasRecordingController"), "live page uses the tested canvas export controller");
 assert.ok(main.includes("canvas: els.canvas"), "live page exports the rendered main canvas, including incision overlay");

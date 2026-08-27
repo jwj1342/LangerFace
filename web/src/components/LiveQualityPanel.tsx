@@ -27,7 +27,7 @@ export function LiveQualityPanel() {
           <span>切口叠加 QA</span>
           <span id="incisionOverlayQaState">等待画面</span>
         </LiveOverlayQaHeader>
-        <p id="incisionOverlayQaDetail">上传照片、视频或开启摄像头后开始检查。</p>
+        <p id="incisionOverlayQaDetail">上传照片或开启摄像头后开始检查。</p>
       </LiveOverlayQa>
       <Hint>姿态与光照自适应 · 全程本地运行，不上传任何画面</Hint>
     </Card>

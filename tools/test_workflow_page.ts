@@ -49,6 +49,8 @@ const read = (relative: string) => fs.readFileSync(path.join(root, relative), "u
 const app = read("web/src/App.tsx");
 const route = read("web/src/routes/WorkflowRoute.tsx");
 const workbench = read("web/src/routes/WorkflowWorkbench.tsx");
+const mobileControls = read("web/src/components/MobileWorkflowControls.tsx");
+const mobileVisibility = read("web/src/services/mobileWorkflowVisibility.ts");
 const canvasTools = read("web/src/components/WorkflowCanvasTools.tsx");
 const stageStatus = read("web/src/components/WorkflowStageStatus.tsx");
 const incisionRail = read("web/src/components/WorkflowIncisionRail.tsx");
@@ -62,6 +64,9 @@ const liveRail = read("web/src/components/LiveControlRail.tsx");
 const liveSourceControls = read("web/src/components/LiveSourceControlsPanel.tsx");
 const liveRenderControls = read("web/src/components/LiveRenderControlsPanel.tsx");
 const liveCanvasFit = read("web/src/services/liveCanvasFit.ts");
+const liveCanvasInteraction = read("web/src/services/liveCanvasInteraction.ts");
+const liveRuntime = read("web/src/services/liveRuntime.ts");
+const controllerCommand = read("web/src/lib/controllerCommand.ts");
 const incisionExport = read("web/src/services/incisionExport.ts");
 const reviewPolicy = read("web/src/services/incisionReviewPolicy.ts");
 const controller = read("web/src/services/workflowIncisionController.ts");
@@ -80,6 +85,10 @@ assert.equal((workbench.match(/<LiveStagePanel\b/g) || []).length, 1, "workflow 
 assert.match(workbench, /workflowActions={<WorkflowCanvasTools\s*\/>}/, "workflow places incision actions in the shared stage header");
 assert.match(workbench, /workflowOverlay={<WorkflowCanvasOverlay\s*\/>}/, "workflow keeps only the incision drawing layer over the shared canvas");
 assert.match(workbench, /workflowStatus={<WorkflowStageStatus\s*\/>}/, "workflow places incision status in the shared stage header");
+assert.match(workbench, /mobileControls={<MobileWorkflowControls\s*\/>}/,
+  "workflow mounts one phone-only control dock beside the shared canvas");
+assert.match(workbench, /mobileOverlay={<MobileCanvasQualityBadge\s*\/>}/,
+  "workflow mounts the phone quality reference at the canvas edge");
 assert.match(stageStatus, /snapshot\?\.stageStatus/, "workflow stage status renders the current incision result or warning");
 assert.match(stageStatus, /snapshot\?\.stageBusy/, "workflow stage status consumes the incision-only busy state");
 assert.match(stageStatus, /workflow-stage-spinner/, "workflow renders an explicit waiting animation for incision work");
@@ -101,6 +110,22 @@ assert.doesNotMatch(canvasTools, /Undo2|commands\.tool\("undo_repair"\)/, "workf
 for (const expectedControl of ["受控标记", "补线", "清除补线", "复位"]) {
   assert.match(canvasTools, new RegExp(expectedControl), `workflow keeps the explicit ${expectedControl} control`);
 }
+assert.match(canvasTools, /workflow-mobile-marker-confirm/, "workflow renders a mobile-only controlled-marker confirmation action");
+assert.match(canvasTools, /commands\.tool\("confirm_controlled_marker"\)/, "mobile marker confirmation uses the typed workflow command bridge");
+assert.match(canvasTools, /commands\.tool\("cancel_controlled_marker"\)[\s\S]*?取消识别/,
+  "controlled-marker detection exposes one explicit cancellation action");
+assert.match(canvasTools, /disabled=\{markerHardUnavailable \|\| markerBusy\}[\s\S]*?disabled=\{markerBusy\}[\s\S]*?scan_diameter_changed/,
+  "marker exit and scan-size changes are frozen while recognition is running");
+assert.match(canvasTools, /disabled=\{markerBusy\}[\s\S]*?commands\.tool\("reset_view"\)/,
+  "image reset is frozen while recognition is running");
+assert.match(controllerCommand, /"confirm_controlled_marker"/, "the mobile marker confirmation command is part of the typed command allowlist");
+assert.match(controllerCommand, /"cancel_controlled_marker"/, "explicit marker cancellation is part of the typed command allowlist");
+assert.match(styles, /\.workflow-canvas-tools \.workflow-mobile-marker-confirm\s*\{[^}]*display:\s*none;/s,
+  "the controlled-marker confirmation action stays hidden from the desktop toolbar");
+assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-mobile-marker-confirm\s*\{[^}]*display:\s*inline-flex;/s,
+  "the controlled-marker confirmation action is exposed only on narrow coarse-pointer devices");
+assert.match(styles, /@media \(max-width:\s*560px\)[\s\S]*?\.main-wrap\.image-viewer\s*\{[^}]*touch-action:\s*none;/s,
+  "only the mobile workflow image owns browser touch gestures");
 assert.match(canvasTools, /commands\.tool\("clear_repair"\)/, "the text clear-repair control keeps its existing command");
 assert.match(canvasTools, /commands\.tool\("reset_view"\)/, "the reset control uses the workflow tool contract");
 assert.match(controller, /resetImageView\(\)/, "workflow reset reuses the existing Live image-view state");
@@ -115,10 +140,10 @@ assert.match(canvasTools, /data-workflow-marker-scan-label/, "workflow scan circ
 assert.match(controller, /workflowScanCircleGeometry/, "workflow scan feedback follows the shared source-to-client transform");
 assert.match(canvasTools, /snapshot\?\.tumor\.boundaryMode === "freehand"/,
   "manual freehand is an explicit controlled-marker unavailable state");
-assert.match(canvasTools, /aria-disabled={markerUnavailable}/,
-  "the unavailable controlled-marker entry exposes its semantic disabled state");
-assert.match(canvasTools, /disabled={markerHardUnavailable}/,
-  "only prerequisites without an actionable mode change use native disabled semantics");
+assert.match(canvasTools, /aria-disabled={markerUnavailable \|\| markerBusy}/,
+  "the unavailable or busy controlled-marker entry exposes its semantic disabled state");
+assert.match(canvasTools, /disabled={markerHardUnavailable \|\| markerBusy}/,
+  "only hard prerequisites or an active recognition use native disabled semantics");
 assert.match(canvasTools, /FREEHAND_MARKER_DISABLED_MESSAGE/,
   "hover and click guidance share the reviewed freehand-mode explanation");
 assert.match(canvasTools, /aria-describedby={freehandMarkerUnavailable \? "freehandMarkerDisabledTooltip" : undefined}/,
@@ -127,7 +152,8 @@ assert.match(canvasTools, /<PersistentTooltip[\s\S]*?id="freehandMarkerDisabledT
   "the controlled-marker explanation uses the shared persistent tooltip layer");
 assert.doesNotMatch(canvasTools, /freehandMarkerUnavailable[\s\S]{0,120}\? FREEHAND_MARKER_DISABLED_MESSAGE[\s\S]{0,120}: !cutaneous/,
   "the freehand marker no longer relies on a transient native title tooltip");
-assert.match(canvasTools, /tools\?\.markerBusy \|\| !tools\?\.repairAvailable/, "repair cannot change detector inputs while a request is running");
+assert.match(canvasTools, /disabled={markerBusy \|\| !tools\?\.repairAvailable}/,
+  "repair cannot change detector inputs while a request is running");
 assert.match(controller, /const photoReady = workflowPhotoReady\(state\)/, "workflow snapshots expose shared-photo readiness to the merged toolbar");
 assert.match(controller, /workflowPhotoReady\(state\) !== state\.lastPublishedPhotoReady[\s\S]*?workflow_photo_readiness_changed/,
   "a newly detected photo republishes toolbar readiness without requiring a canvas click");
@@ -248,6 +274,44 @@ const pointerHandler = controller.slice(
 );
 assert.ok(pointerHandler.indexOf("if (state.markerMode)") < pointerHandler.indexOf("workflowSurfaceRefAtSource"),
   "controlled-marker detection starts from photo coordinates before surface-hit validation");
+assert.match(pointerHandler, /if \(mobileMarkerTouch\) \{\s*event\.preventDefault\(\);\s*return;\s*\}[\s\S]*?const sourcePoint = planning\.clientToSource/,
+  "mobile marker touches return before desktop point mapping so pinch fingers cannot publish false selection errors");
+assert.match(pointerHandler, /if \(state\.markerMode\) \{[\s\S]*?void runControlledMarker\(state, sourcePoint\)/,
+  "desktop marker clicks retain their immediate click-to-detect branch");
+assert.match(controller, /case "confirm_controlled_marker":[\s\S]*?mobileWorkflowViewportActive\(\)[\s\S]*?state\.markerPendingSeed[\s\S]*?runControlledMarker\(state, seed\)/,
+  "only the mobile confirmation command can run a pending touch placement");
+const mobileMarkerConfirmation = controller.slice(
+  controller.indexOf('case "confirm_controlled_marker"'),
+  controller.indexOf('case "cancel_controlled_marker"'),
+);
+assert.doesNotMatch(mobileMarkerConfirmation, /state\.markerPendingSeed\s*=\s*null/,
+  "mobile confirmation does not discard the retry location before the attempt can preserve it");
+assert.match(controller, /const mobileRetrySeed = mobileWorkflowViewportActive\(\) && state\.markerPendingSeed[\s\S]*?if \(mobileRetrySeed\) state\.markerPendingSeed = null;[\s\S]*?state\.markerBusy = true;/,
+  "a mobile attempt remembers its location while keeping the confirmation disabled during recognition");
+assert.match(controller, /function completeControlledMarkerAttempt[\s\S]*?state\.markerBusy = false;[\s\S]*?state\.markerPendingSeed = \{ \.\.\.mobileRetrySeed \};[\s\S]*?state\.markerPointerSource = \{ \.\.\.mobileRetrySeed \};/,
+  "a completed mobile attempt restores the same retry location and scan-circle position");
+assert.match(controller, /await runWorkflow\(state\);[\s\S]*?requestId !== state\.markerRequestId[\s\S]*?completeControlledMarkerAttempt\(state, mobileRetrySeed\)[\s\S]*?controlled_marker_applied/,
+  "successful recognition restores the retry location only after candidate generation and stale-request checks");
+assert.match(controller, /function blockMarkerBusyPointer[\s\S]*?state\.markerBusy[\s\S]*?claimWorkflowPointer\(event\)[\s\S]*?handleCanvasPointerDown[\s\S]*?blockMarkerBusyPointer\(state, event\)/,
+  "ordinary canvas input is claimed before it can change a running marker request");
+assert.match(controller, /function markerBusyToolbarPointer[\s\S]*?closest\("\.workflow-canvas-tools"\)[\s\S]*?handleCanvasPointerDown[\s\S]*?markerBusyToolbarPointer\(state, event\)[\s\S]*?blockMarkerBusyPointer\(state, event\)/,
+  "the explicit cancellation control stays reachable before busy canvas input is claimed");
+assert.match(controller, /function cancelControlledMarker[\s\S]*?state\.markerRequestId \+= 1;[\s\S]*?state\.markerBusy = false;[\s\S]*?state\.markerPendingSeed = state\.markerMode \? \{ \.\.\.seed \} : null;/,
+  "explicit cancellation invalidates the in-flight result and restores the mobile confirmation seed");
+assert.match(controller, /case "cancel_controlled_marker":[\s\S]*?cancelControlledMarker\(state\)/,
+  "the typed cancellation command owns marker cancellation");
+assert.match(styles, /workflow-marker-busy="true"[\s\S]*?\.workflow-incision-rail,[\s\S]*?\.zoom-strip\s*\{[^}]*pointer-events:\s*none;/,
+  "non-cancel planning controls and focus cards cannot receive accidental pointer input while recognition runs");
+assert.match(liveRuntime, /isMobileTouchImageGestureEnabled:[\s\S]*?\.workflow-workbench[\s\S]*?max-width: 560px[\s\S]*?pointer: coarse[\s\S]*?hover: none[\s\S]*?pointerMode === "marker"/,
+  "pinch gestures are gated to the mobile workflow and do not alter desktop or standalone Live input");
+assert.match(liveRuntime, /transformImageViewGesture/,
+  "the mobile workflow uses one atomic pinch transform so combined pan and zoom stay aligned");
+assert.match(liveCanvasInteraction, /callbacks\.transformImageViewGesture[\s\S]*?pinch\.centerX[\s\S]*?nextPinch\.centerX[\s\S]*?ratio/,
+  "the mobile gesture bridge preserves both pinch centres and the exact scale ratio");
+assert.match(controller, /MOBILE_WORKFLOW_MEDIA_QUERY\s*=\s*"\(max-width: 560px\) and \(pointer: coarse\) and \(hover: none\)"/,
+  "mobile marker placement and confirmation share the same narrow touch-device gate");
+assert.match(liveCanvasInteraction, /event\.pointerType === "touch"[\s\S]*?touchPoints\.size >= 2/,
+  "shared image interaction requires two touch pointers before entering pinch mode");
 const controlledMarkerHandler = controller.slice(
   controller.indexOf("async function runControlledMarker"),
   controller.indexOf("function pathData"),
@@ -298,6 +362,10 @@ assert.match(tumorInputPanel, /continuousFreehand\s*=\s*false/,
   "the standalone incision page keeps its historical point-by-point freehand contract by default");
 assert.match(tumorInputPanel, /id="runWorkflowBtn"[\s\S]*?>重新计算候选<\/Button>/,
   "the explicit workflow action is named as a recalculation rather than an unexplained first-time generation");
+assert.match(tumorInputPanel, /workflow-tumor-transfer-actions[\s\S]*?id="exportTumorBtn"[\s\S]*?id="importTumorBtn"/,
+  "tumor import and export share one presentation-only mobile visibility hook");
+assert.match(tumorInputPanel, /className="workflow-recalculate-action"[\s\S]*?id="runWorkflowBtn"/,
+  "candidate recalculation has a presentation-only mobile visibility hook");
 assert.match(tumorInputPanel, /自由轮廓鼠绘/,
   "the merged panel names the continuous interaction as freehand drawing rather than discrete points");
 assert.doesNotMatch(incisionRail, /IncisionStatePanel/,
@@ -393,8 +461,34 @@ assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workb
   "phone workflow keeps the shared face canvas prominent without consuming an unbounded viewport height");
 assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.zoom-strip\s*\{[^}]*overflow-x:\s*auto;[^}]*scroll-snap-type:\s*x mandatory;/,
   "phone focus previews form a readable horizontal snap rail");
-assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.zoom-card\s*\{[^}]*flex:\s*0 0 clamp\(152px,\s*44vw,\s*184px\);[^}]*scroll-snap-align:\s*start;/,
-  "phone focus previews keep a stable touch target instead of shrinking into three equal columns");
+assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-tumor-transfer-actions,[\s\S]*?\.workflow-recalculate-action\s*\{[^}]*display:\s*none;/,
+  "phone workflow hides tumor transfer and manual recalculation without removing their desktop actions");
+assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-stage-status\s*\{[^}]*block-size:\s*56px;[^}]*overflow-y:\s*auto;/,
+  "phone workflow reserves a stable status row so recognition copy cannot move the face canvas");
+assert.match(styles, /--workflow-mobile-zoom-card-size:\s*calc\(\(100vw - 44px\) \/ 3\)[\s\S]*?\.workflow-workbench \.zoom-card\s*\{[^}]*flex:\s*0 0 var\(--workflow-mobile-zoom-card-size\);[^}]*min-width:\s*var\(--workflow-mobile-zoom-card-size\);[^}]*max-width:\s*var\(--workflow-mobile-zoom-card-size\);/,
+  "phone focus previews fit three cards inside one viewport while retaining the horizontal rail for later regions");
+assert.match(styles, /\.mobile-workflow-dock,[\s\S]*?\.mobile-canvas-quality\s*\{\s*display:\s*none;/,
+  "the new mobile UI stays absent from the desktop presentation by default");
+assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.mobile-workflow-dock\s*\{[^}]*display:\s*grid;/,
+  "the compact input and layer dock is exposed only on phone-class coarse pointers");
+assert.match(mobileControls, /upload_source[\s\S]*?camera_toggle[\s\S]*?pause_toggle[\s\S]*?recording_toggle/,
+  "the mobile dock retains photo, rear-camera, pause and export command paths");
+assert.match(mobileControls, /if \(!nextRstl && !nextWrinkles\) return;/,
+  "mobile RSTL and wrinkle switches cannot accidentally hide both protected overlays");
+assert.match(mobileControls, /preview_edit", "lengthScale"[\s\S]*?preview_edit", "widthScale"/,
+  "mobile margin adjustment changes fusiform length and width together");
+assert.match(mobileControls, /min="100"[\s\S]*?max="150"/,
+  "mobile margin adjustment only enlarges the tool suggestion within the existing upper bound");
+assert.match(controller, /function handleMobileEditCommand[\s\S]*?if \(!mobileWorkflowViewportActive\(\)\) return;/,
+  "workflow candidate editing rejects the phone UI event outside the mobile viewport contract");
+assert.match(controller, /state\.edit\.angle_offset_deg = Math\.max\(-35,[\s\S]*?state\.edit\.length_scale = Math\.max\(1,[\s\S]*?state\.edit\.width_scale = Math\.max\(1,/,
+  "workflow clamps the two mobile-only adjustment dimensions before applying the existing candidate editor");
+assert.match(mobileVisibility, /let incisionCandidateVisible = true;[\s\S]*?resetMobileWorkflowVisibility[\s\S]*?incisionCandidateVisible = true;/,
+  "the incision layer defaults to visible and resets when the mobile workflow unmounts");
+assert.match(render2d, /if \(mobileIncisionCandidateVisible\(\)\)\s*\{[\s\S]*?overlayStyle\.candidate\.haloColor[\s\S]*?overlayStyle\.candidate\.color/,
+  "the mobile visibility gate wraps only candidate strokes while retaining lesion boundary and center drawing");
+assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\[data-workflow-boundary\][\s\S]*?stroke:\s*#fde047;[\s\S]*?\[data-workflow-candidate\][\s\S]*?stroke:\s*#67e8f9;[\s\S]*?\[data-workflow-center\][\s\S]*?fill:\s*#fb7185;/,
+  "phone drawing marks use the requested bright, thin clinical legend colors without restyling desktop");
 const clickIntent = beginWorkflowPointerIntent(1, 0, 10, 10);
 updateWorkflowPointerIntent(clickIntent, 1, 13, 13);
 assert.equal(completesWorkflowCanvasClick(clickIntent, 1), true, "small pointer jitter remains a lesion-selection click");

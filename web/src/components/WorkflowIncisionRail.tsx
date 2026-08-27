@@ -1,5 +1,6 @@
 import { CandidateLibraryPanel } from "./CandidateLibraryPanel";
 import { CandidateResultPanel } from "./CandidateResultPanel";
+import { MobileCandidateAdjustPanel } from "./MobileWorkflowControls";
 import { PrivacyAuditPanel } from "./PrivacyAuditPanel";
 import { ReviewControlsPanel } from "./ReviewControlsPanel";
 import { TumorInputPanel } from "./TumorInputPanel";
@@ -17,6 +18,7 @@ export function WorkflowIncisionRail() {
       />
       <TumorInputPanel showDepthControl={false} continuousFreehand />
       <CandidateResultPanel showWorkflowGuidance={false} />
+      <MobileCandidateAdjustPanel />
       <ReviewControlsPanel />
       <CandidateLibraryPanel
         automaticOverlay

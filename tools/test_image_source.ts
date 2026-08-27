@@ -116,8 +116,10 @@ for (const rel of ["web/src/services/pipelineSource.ts"]) {
   assert.match(source, /imageDetectionComplete = false/, `${rel} resets per-image detection completion`);
   assert.match(source, /imageDetectionAttempts = 0/, `${rel} resets per-image attempt state`);
   assert.match(source, /operationId !== sourceOperationId/, `${rel} prevents stale uploads from replacing a newer source`);
-  assert.match(source, /setMsg\(imageFile \? "图片加载中" : "加载模型…", 0, imageFile\)/,
+  assert.match(source, /setMsg\("图片加载中", 0, true\)/,
     `${rel} exposes an explicit image-loading state on the central canvas`);
+  assert.match(source, /if \(!file\.type\.startsWith\("image\/"\)\) \{[\s\S]*?return;[\s\S]*?const startedAt/,
+    `${rel} rejects non-photo files before stopping or replacing the active source`);
   assert.match(source, /const modelReady = ensureImageReady\(\)\.then[\s\S]*?const decoded = img\.decode\(\)\.then[\s\S]*?await Promise\.all\(\[modelReady, decoded\]\)/,
     `${rel} overlaps image decoding with cached static-model initialization while timing both stages`);
   assert.doesNotMatch(source, /await ensureReady\(\);\s*if \(imageFile\) await ensureImageReady\(\)/,

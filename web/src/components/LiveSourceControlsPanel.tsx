@@ -15,8 +15,8 @@ export function LiveSourceControlsPanel() {
 
   return (
     <Card id="liveInputCard">
-      <Button variant="workbenchPrimary" id="uploadBtn" type="button" onClick={() => commands.source("upload_source")}>⬆&nbsp; 上传照片 / 视频</Button>
-      <Input type="file" id="fileInput" accept="image/*,video/*" hidden />
+      <Button variant="workbenchPrimary" id="uploadBtn" type="button" onClick={() => commands.source("upload_source")}>⬆&nbsp; 上传照片</Button>
+      <Input type="file" id="fileInput" accept="image/*" hidden />
       <ButtonRow>
         <Button variant="workbench" id="camBtn" type="button" aria-pressed={running && snapshot?.source.kind === "camera"} onClick={() => commands.source("camera_toggle")}>◉ 摄像头</Button>
         <Button variant="workbench" id="pauseBtn" type="button" disabled={!running} onClick={() => commands.source("pause_toggle")}>{paused ? "▶ 继续" : "⏸ 暂停"}</Button>

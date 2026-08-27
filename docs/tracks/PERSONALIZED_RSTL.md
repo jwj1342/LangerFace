@@ -11,7 +11,7 @@
 
 ## 1. 为什么要个性化
 
-标准 RSTL 图谱（`assets/atlas_rstl.json`，当前 v8.1.67 / 133 条 / 14,315 点 / `topologyId: mediapipe-468`）
+标准 RSTL 图谱（`assets/atlas_rstl.json`，当前 v8.1.96 / 204 条 / 19,030 点 / `topologyId: mediapipe-468`）
 是**标准脸**上的先验。重心坐标映射能让它随身份和表情形变，但它不知道**这个人**的皱纹实际长在哪里。
 个性化的目标就是：用本人可观测的皱纹证据，在**受约束的范围内**把标准线往真实皮纹上拉一点，
 而不是重新生成一套线。
@@ -130,9 +130,17 @@ FaceLandmarker/canvas 几何，因此 manifest 使用 `verificationStatus: engin
 `validated:false` / `clinicalValidation:false`。直接鱼尾纹实验从受控源图按改写后的完整 `lines` 重绘，
 不能把新线叠到已有 RSTL PNG 上冒充“替换”。
 
+这些命令证明的是“冻结实验材料可被审计复放”，不证明 `/personalized`、`/app/workflow` 或其他正式产品入口
+会从原图重新计算出同样几何。做同步或效果验收时，必须另外锁定正式入口、同一原始输入、算法/profile、
+模型与资产指纹、预处理/参数和关键诊断，再执行产品入口对拍；不能把 runner 成功、模型加载或静态测试通过
+写成“正式产品效果等价”。单图预计算或输入哈希特判只可留作实验基准，不得接回共享运行路径冒充通用修复。
+
 Python 默认使用 Windows 的 `python` 或 POSIX 的 `python3`；特殊环境通过对应的 `*_PYTHON` 变量指定。
 解释器必须能导入项目核心依赖 `numpy` 与 `cv2`。所有输入和输出放在受控存储或仓库已忽略的
 `local_media/`、`local_outputs/` 中，不得提交真实人脸材料。
+需要运行浏览器实验脚本时，用 `WRINKLE_EXPERIMENT_INPUT` 指向受控原图；可用
+`WRINKLE_EXPERIMENT_CHROME` 显式指定本机 Chrome。未指定浏览器时，macOS 只在默认 Chrome 路径存在时
+使用它，其他环境回退到 Playwright 管理的 Chromium。输入文件与显式 Chrome 路径都会在浏览器启动前校验。
 
 ## 5. 隐私边界
 

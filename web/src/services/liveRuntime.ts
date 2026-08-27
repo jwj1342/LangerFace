@@ -1,6 +1,6 @@
 // Live workbench runtime: wires DOM events and model bootstrap under the React route adapter.
 import { bindDom, clearDomBinding, els } from "./liveDom.ts";
-import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./liveCanvasFit.ts";
+import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, transformImageViewGesture, zoomImageViewAt, zoomImageViewByFactorAt } from "./liveCanvasFit.ts";
 import { validateIncisionOverlay } from "./incisionOverlay.ts";
 import { ensureImageReady, handleFile, redrawPausedFrame, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.ts";
 import { adjustFocusZoom, buildZoomCards } from "./render2d.ts";
@@ -202,13 +202,13 @@ function applyStagedIncisionOverlay(): void {
   renderState.incisionOverlay = overlay;
   setIncisionOverlayQa({
     label: "等待画面",
-    detail: "上传照片、视频或开启摄像头后开始检查。",
+    detail: "上传照片或开启摄像头后开始检查。",
   });
   buildZoomCards(refreshStaticImage);
   const highCodes = overlay.guardrail_summary?.high_codes || overlay.review_gate?.high_guardrail_codes || [];
   const reviewLabel = overlay.review?.status === "approved_for_discussion" ? "已确认候选草案" : "待复核候选";
   const riskText = highCodes.length ? `；高风险项 ${highCodes.join("、")}` : "";
-  setMsg(`已载入切口候选叠加（${reviewLabel}${riskText}）。上传照片、视频或开启摄像头后，会随 RSTL 一起显示。`);
+  setMsg(`已载入切口候选叠加（${reviewLabel}${riskText}）。上传照片或开启摄像头后，会随 RSTL 一起显示。`);
   scheduleLiveState("staged_incision_overlay");
 }
 
@@ -255,20 +255,19 @@ function handlePauseToggle(): void {
     sourceState.frozenFrame = frozen;
     sourceState.paused = true;
     beginFrozenRefineSession();
-    els.pause.textContent = "▶ 继续实时";
+    els.pause.textContent = "▶ 继续";
     els.pause.setAttribute("aria-pressed", "true");
     setLive(false, "已定格 · 可微调");
-    setTransientMsg("已定格当前帧，正在本机检测皱纹。可选择自动微调、医生手动微调，或自动后继续手动调整。");
+    setTransientMsg("已暂停当前画面。可点击“检测皱纹”，或使用“医生手动微调（2D）”继续处理。");
     redrawPausedFrame();
     setRefineAvailability();
-    void analyzeCurrentWrinkles();
     return;
   }
   sourceState.paused = false;
   sourceState.frozenFrame = null;
   const refinementCommitted = commitRefineForLive();
   resetLiveWrinkleAnalysis();
-  els.pause.textContent = sourceState.sourceKind === "camera" ? "📷 定格微调" : "⏸ 暂停";
+  els.pause.textContent = "⏸ 暂停";
   els.pause.setAttribute("aria-pressed", "false");
   setMsg(refinementCommitted ? "已返回实时画面，当前微调曲线会继续跟随人脸。" : null);
   setLive(true, sourceState.sourceKind === "camera" ? "实时摄像头" : "视频");
@@ -438,15 +437,26 @@ function bindLiveEvents(signal: AbortSignal): void {
   bindLiveCanvasInteractions(els.mainWrap, {
     isRefineActive,
     isImagePointerInteractionBlocked: () => Boolean(els.mainWrap.dataset.workflowPointerMode),
+    isMobileTouchImageGestureEnabled: () => {
+      const pointerMode = els.mainWrap.dataset.workflowPointerMode || "";
+      return Boolean(
+        els.mainWrap.closest(".workflow-workbench")
+        && window.matchMedia("(max-width: 560px) and (pointer: coarse) and (hover: none)").matches
+        && (!pointerMode || pointerMode === "marker")
+      );
+    },
     beginRefinePointer,
     moveRefinePointer,
     endRefinePointer,
     sourceKind: () => sourceState.sourceKind,
     panImageViewBy,
     zoomImageViewAt,
+    zoomImageViewByFactorAt,
+    transformImageViewGesture,
     adjustFocusZoom,
     updateRefineUi,
     refreshStaticImage,
+    onImageViewChanged: () => window.dispatchEvent(new Event("langerface:image-view-changed")),
   }, { signal });
 }
 

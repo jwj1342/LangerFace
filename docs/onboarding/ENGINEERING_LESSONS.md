@@ -22,7 +22,7 @@ git 用这个 symlink 覆盖了本地真实的 `node_modules` 目录，导致本
 **规则（务必遵守）**：
 - ❌ **永远不要用 `git add -A` / `git add .` 提交**。逐个 `git add <明确的文件/目录>`，只暂存你真正改的东西。
 - `.gitignore` 想同时挡住「目录」和「同名符号链接」，用**不带尾斜杠**的 `node_modules`，别用 `node_modules/`。
-- 在 worktree 里用 symlink 复用 `node_modules` 没问题，但它必须被 gitignore **且**绝不能被 `-A` 误收。
+- 不跨 worktree 用 symlink/junction 共享 `node_modules`。除误提交风险外，共享目录还会让一个 worktree 实际加载另一个 worktree 的 Vite、ONNX Runtime、WASM 文件或缓存，造成“代码来自当前分支、运行时来自别处”的隐蔽串用。每个活跃 worktree 使用自己的锁文件对应依赖；安装或恢复依赖前先核对目标绝对路径。
 - 提交前先 `git status --short` 扫一眼有没有意外的 symlink / 临时文件 / 大文件。
 
 ---
@@ -78,8 +78,7 @@ master 受保护：**1 个 approval + 5 个必需检查**（`lint` / `python-tes
 - **cv2 / Lmod 约束**：模块版本、dummy-wheel 原因和当前本地测试基线只在
   [ENVIRONMENT «Compute Canada / Alliance 集群环境»](ENVIRONMENT.md#compute-canada--alliance-集群环境) 维护；
   这里不复制可能随集群升级漂移的失败数量。
-- **web**：在 worktree 里 `ln -sfn <主仓库>/web/node_modules <worktree>/web/node_modules` 复用依赖，避免重装；
-  但见教训 #1——这个 symlink 绝不能被 `git add -A` 收进去。
+- **web**：每个活跃 worktree 使用自己的 `web/node_modules`，并与该 worktree 的 lockfile 保持一致；不要用 symlink/junction 指向其他 worktree。运行前可用包管理器的锁文件安装模式恢复依赖，避免 Vite、ONNX Runtime、WASM 与缓存跨基线串用。
 
 ---
 
@@ -139,6 +138,21 @@ master 受保护：**1 个 approval + 5 个必需检查**（`lint` / `python-tes
 4. 为成功、失败、边界、并发/过期和清理各保留可执行行为测试；源码存在性检查只作为附加架构门禁。
 5. 对关键测试做一次反证：临时移除门禁、交换调用顺序或传入错误坐标，确认测试确实会失败；否则该测试不能作为迁移等价证据。
 6. 最后才做真实媒体和端到端人工验收，并把尚未自动化的观察项明确保留为风险，不能用“主流程已通”代替功能等价声明。
+
+---
+
+## 8. 冻结单图实验成功，不等于正式产品入口效果正确
+
+**现象**：受控单图实验展示了额头多条 RSTL 随皱纹弯曲的明显效果；代码合入并在集成页恢复模型加载后，页面也显示“已应用皱纹引导微调”，但只调整了少量 RSTL，实际效果与实验截图明显不同。
+
+**根因**：两条链路语义不同。单图 runner 复放了绑定特定原图 SHA-256 的冻结几何，实验入口使用区域化 V9 profile 和预计算细纹；正式产品入口使用通用 YOLO 骨架证据与更保守的 V6 profile。代码、模型和实验产物都在仓库中，不代表正式入口会重新算出同一结果。
+
+**规则**：
+
+1. 同步前冻结来源与效果等价包：正式目标入口、同一原始输入指纹、参考 Commit/入口、算法/profile、模型/资产/运行时指纹、预处理/参数、关键诊断和预期视觉结果。
+2. 明确标注结果来自正式重算、实验/compat、本地 runner、冻结产物复放还是单样本特例；后四类不能直接充当正式产品效果证据。
+3. “文件已合并”“模型可加载”“测试通过”和“效果等价”分开验收。最后一项必须在目标产品入口用同一输入重新计算，对拍诊断与画面；未做时写“运行已恢复、效果待验收”。
+4. 不把单图预计算或输入哈希特判接回共享产品路径来追截图。要产品化实验效果，必须把可推广的证据生成与 profile 接入正式入口，并补相邻输入反例和真实素材回归。
 
 ---
 
