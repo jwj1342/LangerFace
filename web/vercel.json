@@ -4,6 +4,11 @@
   "buildCommand": "npm run build",
   "ignoreCommand": "node scripts/vercel-ignore-build.ts",
   "outputDirectory": "dist",
+  "functions": {
+    "api/wrinkle-v10.mjs": {
+      "maxDuration": 60
+    }
+  },
   "git": {
     "deploymentEnabled": {
       "*": false,

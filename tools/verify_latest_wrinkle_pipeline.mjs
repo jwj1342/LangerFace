@@ -77,7 +77,7 @@ assert.ok(!live.includes("runGeneralLiveWrinklePipeline"),
   "released live page must not execute the CPU-heavy pipeline on its own thread");
 assert.match(worker,
   /detector\.detect[\s\S]*extractFineWrinkleLines[\s\S]*dynamicFourRegionDetection[\s\S]*refineV6/);
-assert.match(worker, /\/api\/local-wrinkle-v10/);
+assert.match(worker, /WRINKLE_V10_ENDPOINT/);
 assert.match(worker, /buildDirectNoseDorsumRstl/);
 assert.match(worker, /buildNoseRootIntersectionVisibilityPlan/);
 assert.match(worker, /Comlink\.expose\(api\)/);

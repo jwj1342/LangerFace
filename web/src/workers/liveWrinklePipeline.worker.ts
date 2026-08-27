@@ -24,6 +24,14 @@ import {
   YOLO_WRINKLE_CONFIDENCE,
   YOLO_WRINKLE_ONNX_VERSION,
 } from "../services/personalized/yoloWrinkleOnnx.ts";
+import {
+  parseWrinkleV10ProviderCapability,
+  WRINKLE_V10_CHECKPOINT_SHA256,
+  WRINKLE_V10_ENDPOINT,
+  WRINKLE_V10_HEALTH_TIMEOUT_MS,
+  WRINKLE_V10_REQUEST_TIMEOUT_MS,
+  type WrinkleV10ProviderCapability,
+} from "../services/personalized/wrinkleV10Provider.ts";
 import type {
   LiveWrinklePipelineWorkerApi,
   LiveWrinkleWorkerCurve,
@@ -33,7 +41,6 @@ import type {
   LiveWrinkleWorkerRequest,
 } from "./liveWrinklePipelineWorkerContract.ts";
 
-const FOUR_REGION_ENDPOINT = "/api/local-wrinkle-v10";
 const LEFT_EYE_CONTOUR = [
   33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246,
 ];
@@ -50,6 +57,7 @@ interface DynamicFineLine {
 
 interface DynamicFourRegionPayload extends PrecomputedFineWrinklePayload {
   detectorVersion: string;
+  checkpointSha256: string;
   source: {
     imageSha256: string;
     width: number;
@@ -62,6 +70,46 @@ const detector = new YoloWrinkleOnnx({
   confidenceThreshold: YOLO_WRINKLE_CONFIDENCE,
   wasmPaths: { mjs: ortWasmModuleUrl, wasm: ortWasmBinaryUrl },
 });
+let providerCapabilityPromise: Promise<WrinkleV10ProviderCapability> | null = null;
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+  timeoutMessage: string,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(timeoutMessage), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(timeoutMessage);
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function providerCapability(): Promise<WrinkleV10ProviderCapability> {
+  providerCapabilityPromise ||= (async () => {
+    const response = await fetchWithTimeout(
+      WRINKLE_V10_ENDPOINT,
+      { method: "GET", headers: { Accept: "application/json" }, cache: "no-store" },
+      WRINKLE_V10_HEALTH_TIMEOUT_MS,
+      "V10 检测服务健康检查超时",
+    );
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message = (payload as { error?: string } | null)?.error;
+      throw new Error(message || `V10 检测服务不可用（HTTP ${response.status}）`);
+    }
+    return parseWrinkleV10ProviderCapability(payload);
+  })().catch((error) => {
+    providerCapabilityPromise = null;
+    throw error;
+  });
+  return providerCapabilityPromise;
+}
 
 function emit(
   onEvent: LiveWrinkleWorkerEventSink | undefined,
@@ -95,15 +143,25 @@ function requestBody(
 async function dynamicFourRegionDetection(
   request: LiveWrinkleWorkerRequest,
   baselineLines: LiveWrinkleWorkerEvidence["lines"],
+  provider: WrinkleV10ProviderCapability,
 ): Promise<DynamicFourRegionPayload> {
-  const response = await fetch(FOUR_REGION_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/octet-stream" },
-    body: requestBody(request, baselineLines).buffer as ArrayBuffer,
-  });
-  const payload = await response.json() as DynamicFourRegionPayload & { error?: string };
+  const response = await fetchWithTimeout(
+    WRINKLE_V10_ENDPOINT,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream", Accept: "application/json" },
+      body: requestBody(request, baselineLines).buffer as ArrayBuffer,
+    },
+    WRINKLE_V10_REQUEST_TIMEOUT_MS,
+    "V10 四区域检测超过 45 秒，任务已取消",
+  );
+  const payload = await response.json().catch(() => null) as
+    (DynamicFourRegionPayload & { error?: string }) | null;
+  if (!payload) throw new Error(`V10 检测服务返回了无效响应（HTTP ${response.status}）`);
   if (!response.ok) throw new Error(payload.error || `四区域检测服务返回 HTTP ${response.status}`);
   if (payload.schemaVersion !== "langerface.wrinkle-fine-lines.v1"
+      || payload.detectorVersion !== provider.detectorVersion
+      || payload.checkpointSha256 !== WRINKLE_V10_CHECKPOINT_SHA256
       || !Array.isArray(payload.lines) || !payload.lines.length) {
     throw new Error("四区域检测服务返回了无效中心线数据");
   }
@@ -181,6 +239,8 @@ function appendDirectNoseCurves(
 const api: LiveWrinklePipelineWorkerApi = {
   async analyze(request, onEvent) {
     const totalStart = performance.now();
+    const provider = await providerCapability();
+    if (onEvent) await onEvent({ type: "provider-ready", capability: provider });
     const modelLoadStart = performance.now();
     await detector.load((progress) => emit(onEvent, { type: "model-progress", progress }));
     const modelLoadMs = performance.now() - modelLoadStart;
@@ -207,7 +267,7 @@ const api: LiveWrinklePipelineWorkerApi = {
     const baselineExtractionMs = performance.now() - baselineStart;
     emit(onEvent, { type: "pipeline-progress", stage: "four-region" });
     const fourRegionStart = performance.now();
-    const payload = await dynamicFourRegionDetection(request, baseline.lines);
+    const payload = await dynamicFourRegionDetection(request, baseline.lines, provider);
     const fourRegionDetectionMs = performance.now() - fourRegionStart;
     const evidenceStart = performance.now();
     const displayEvidence = buildPrecomputedFineWrinkleEvidence(
@@ -249,6 +309,7 @@ const api: LiveWrinklePipelineWorkerApi = {
       executionThread: "web_worker",
       detectorVersion: payload.detectorVersion,
       refinementProfile: LATEST_WRINKLE_REFINEMENT_PROFILE,
+      provider,
       timings: {
         modelLoadMs,
         yoloDetectionMs,

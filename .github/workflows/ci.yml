@@ -60,6 +60,18 @@ jobs:
           git diff --exit-code web/src/services/constantsGenerated.ts \
             || (echo '::error::web/src/services/constantsGenerated.ts 与 constants.py 不同步，请运行  python tools/gen_web_constants.py' && exit 1)
 
+  wrinkle-provider-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev,wrinkle]"
+      - name: Exercise the provider contract and start the real V10 process/checkpoint
+        run: pytest -q tests/test_wrinkle_v10_service.py
+
   js-tests:
     runs-on: ubuntu-latest
     steps:

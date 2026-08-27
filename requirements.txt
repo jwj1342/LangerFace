@@ -9,7 +9,11 @@ opencv-python>=4.9      # 视频 I/O 与抗锯齿折线渲染
 numpy>=1.26
 matplotlib>=3.8         # annotate_atlas.py 交互式图谱标注/校验工具
 torch>=2.2              # V10 四区域皱纹检测
+scipy>=1.12             # paired-edge V10 数值滤波
+fastapi>=0.116,<1       # 线上 V10 provider API
+uvicorn>=0.35,<1        # 线上 V10 provider server
 
 # 开发
 pytest>=8.0             # 测试
 ruff>=0.5               # lint
+httpx>=0.28             # provider ASGI 契约测试

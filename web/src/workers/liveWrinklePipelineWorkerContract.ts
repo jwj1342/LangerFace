@@ -1,6 +1,8 @@
 import type { V6Seed } from "../services/personalized/v6RstlRefinementV9.ts";
 import type { LiveWrinkleModelProgress } from
   "../services/personalized/liveWrinklePipeline.ts";
+import type { WrinkleV10ProviderCapability } from
+  "../services/personalized/wrinkleV10Provider.ts";
 
 export interface LiveWrinkleWorkerRequest {
   pixels: Uint8ClampedArray;
@@ -24,6 +26,7 @@ export interface LiveWrinkleWorkerEvidence {
 
 export type LiveWrinkleWorkerEvent =
   | { type: "model-progress"; progress: LiveWrinkleModelProgress }
+  | { type: "provider-ready"; capability: WrinkleV10ProviderCapability }
   | { type: "pipeline-progress"; stage: "four-region" | "refining" }
   | { type: "evidence"; evidence: LiveWrinkleWorkerEvidence };
 
@@ -53,6 +56,7 @@ export interface LiveWrinkleWorkerResult {
   executionThread: "web_worker";
   detectorVersion: string;
   refinementProfile: string;
+  provider: WrinkleV10ProviderCapability;
   timings: LiveWrinkleWorkerTimings;
   evidence: LiveWrinkleWorkerEvidence;
   refined: {

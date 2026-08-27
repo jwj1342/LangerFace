@@ -14,10 +14,15 @@ export function LiveWrinklePanel() {
       <div>
         <Label htmlFor="wrinkleDisplayMode">皱纹检测与自动微调</Label>
         <Hint className="live-inline-top">
-          上传照片或定格摄像头后，系统会在本机自动检测皱纹。检测结果仅作研究辅助，不替代医生判断。
+          上传照片或定格摄像头后先显示标准 RSTL；点击“检测皱纹”后才会启动 V10。检测结果仅作研究辅助，不替代医生判断。
         </Hint>
         <Hint className="live-inline-top">
           当前部署：{WRINKLE_PIPELINE_DISPLAY}（每张输入均重新检测与微调，后台 Worker 执行）
+        </Hint>
+        <Hint className="live-inline-top">
+          点击检测后，当前图片的像素数据会发送到页面标示的 V10 处理位置。
+          通过 Tailscale 访问时会发送到提供网页的电脑；线上部署会发送到远程 V10 服务。
+          任务结束后临时文件会自动删除。
         </Hint>
       </div>
       <Select id="wrinkleDisplayMode" defaultValue="both" disabled aria-label="画面叠加内容">
@@ -29,9 +34,9 @@ export function LiveWrinklePanel() {
         <span>检测状态</span>
         <span id="wrinkleStatus">等待照片或定格帧</span>
       </div>
-      <Hint id="wrinkleSummary">标准 RSTL 会先显示，皱纹检测和微调在后台完成。</Hint>
+      <Hint id="wrinkleSummary">标准 RSTL 会先显示；点击后会先显示实际处理位置。</Hint>
       <ButtonRow>
-        <Button variant="workbench" id="wrinkleDetectBtn" type="button" disabled>重新检测皱纹</Button>
+        <Button variant="workbench" id="wrinkleDetectBtn" type="button" disabled>检测皱纹</Button>
         <Button variant="workbenchPrimary" id="wrinkleAutoRefineBtn" type="button" disabled>
           皱纹引导自动微调
         </Button>

@@ -16,7 +16,6 @@ import {
   detectStaticImageWithRetries,
   type StaticImageDetector,
 } from "./staticImageDetection.ts";
-import { analyzeCurrentWrinkles } from "./liveWrinkleAnalysis.ts";
 import { LiveFrameScheduler } from "./liveFrameScheduler.ts";
 
 interface VideoDetector {
@@ -173,7 +172,6 @@ export function loop(): void {
       drawZooms(displayLandmarks, width);
       drawFocusedRegion(displayLandmarks, width, height);
       drawFailureLogged = false;
-      if (sourceState.sourceKind === "image") void analyzeCurrentWrinkles();
     } catch (error) {
       if (!drawFailureLogged) logWarn("渲染图谱失败，本帧已跳过。", error);
       drawFailureLogged = true;

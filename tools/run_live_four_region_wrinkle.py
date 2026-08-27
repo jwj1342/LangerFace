@@ -164,6 +164,7 @@ def response_payload(
     source_sha256: str,
     width: int,
     height: int,
+    checkpoint_sha256: str,
 ) -> dict:
     class_counts = {name: 0 for name in CLASS_MAP}
     lines = []
@@ -196,6 +197,7 @@ def response_payload(
     return {
         "schemaVersion": "langerface.wrinkle-fine-lines.v1",
         "detectorVersion": "paired-edge-v10-dynamic-four-region-1.0",
+        "checkpointSha256": checkpoint_sha256,
         "source": {
             "imageSha256": source_sha256,
             "width": width,
@@ -253,7 +255,13 @@ def run(args: argparse.Namespace) -> None:
     result = json.loads((paired_output / "paired_edge_fusion.json").read_text(encoding="utf-8"))
     _, _, anatomy = paired.experiment_regions(landmarks, width, height)
     recover_glabellar_pair(result, float(anatomy["centerX"]), float(anatomy["faceWidthPx"]))
-    response = response_payload(result, source_sha256, width, height)
+    response = response_payload(
+        result,
+        source_sha256,
+        width,
+        height,
+        hashlib.sha256(args.checkpoint.read_bytes()).hexdigest(),
+    )
     (args.output / "response.json").write_text(
         json.dumps(response, ensure_ascii=False),
         encoding="utf-8",
@@ -265,6 +273,12 @@ def serve(checkpoint: Path) -> None:
     # Load the immutable checkpoint before the first request so all images use
     # the same warm model path without paying initialization latency on upload.
     four_class.warm_unet(checkpoint)
+    sys.stdout.write(json.dumps({
+        "type": "ready",
+        "detectorVersion": "paired-edge-v10-dynamic-four-region-1.0",
+        "checkpointSha256": hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
+    }) + "\n")
+    sys.stdout.flush()
     for raw_line in sys.stdin:
         request_id = None
         try:

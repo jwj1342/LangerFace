@@ -24,6 +24,10 @@ import {
 import {
   LATEST_WRINKLE_REFINEMENT_PROFILE,
 } from "./personalized/v9RstlRefinementProfile.ts";
+import {
+  wrinkleV10ProcessingLocationLabel,
+  type WrinkleV10ProviderCapability,
+} from "./personalized/wrinkleV10Provider.ts";
 import { RSTL_STANDARD_CONTRACT } from "./rstlStandardContract.ts";
 import type { LiveWrinkleWorkerEvidence } from
   "../workers/liveWrinklePipelineWorkerContract.ts";
@@ -70,6 +74,7 @@ interface WrinkleAnalysisState {
   diagnostics: Record<string, any> | null;
   audit: Record<string, any> | null;
   timings: LiveWrinkleWorkerTimings | null;
+  provider: WrinkleV10ProviderCapability | null;
   error: string | null;
 }
 
@@ -88,6 +93,7 @@ const state: WrinkleAnalysisState = {
   diagnostics: null,
   audit: null,
   timings: null,
+  provider: null,
   error: null,
 };
 
@@ -236,7 +242,7 @@ function statusLabel(): string {
   if (state.status === "ready") return "检测完成 · 待选择";
   if (state.status === "applied") return "已应用皱纹引导微调";
   if (state.status === "error") return "检测失败";
-  return isWrinkleFrameReady() ? "等待自动检测" : "等待照片或定格帧";
+  return isWrinkleFrameReady() ? "等待手动检测" : "等待照片或定格帧";
 }
 
 export function updateWrinkleUi(): void {
@@ -244,11 +250,17 @@ export function updateWrinkleUi(): void {
   const frameReady = isWrinkleFrameReady();
   const analysisReady = state.status === "ready" || state.status === "applied";
   const busy = state.status === "loading" || state.status === "detecting" || state.status === "refining";
+  const processingLocation = wrinkleV10ProcessingLocationLabel(
+    state.provider,
+    window.location.hostname,
+  );
   els.wrinkleStatus.textContent = statusLabel();
   els.wrinkleDisplayMode.value = state.displayMode;
   els.wrinkleDisplayMode.disabled = !frameReady;
   els.wrinkleDetect.disabled = !frameReady || busy;
-  els.wrinkleDetect.textContent = state.status === "error" ? "重试皱纹检测" : "重新检测皱纹";
+  els.wrinkleDetect.textContent = state.status === "error"
+    ? "重试皱纹检测"
+    : state.status === "idle" ? "检测皱纹" : "重新检测皱纹";
   els.wrinkleAutoRefine.disabled = !analysisReady || hasManualRefineChanges() || state.status === "applied";
   els.wrinkleRestore.disabled = !state.standardLines
     || (state.status !== "applied" && !hasManualRefineChanges());
@@ -258,16 +270,18 @@ export function updateWrinkleUi(): void {
     els.wrinkleSummary.textContent = `已绘制 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域）；${state.error || "自动微调未通过安全门禁"}，标准 RSTL 保持不变。`;
   } else if (analysisReady) {
     const evidenceVersion = "V10 四区域实时检测";
-    const moved = `RSTL v${RSTL_STANDARD_CONTRACT.atlasVersion} · ${evidenceVersion} · V9 7.2；` +
+    const moved = `RSTL v${RSTL_STANDARD_CONTRACT.atlasVersion} · ${evidenceVersion} · V9 7.2 · ${processingLocation}；` +
       `识别 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域），` +
       `可引导调整 ${state.movedCurveCount} 条 RSTL / ${state.movedPointCount} 个点。`;
     els.wrinkleSummary.textContent = hasManualRefineChanges()
       ? `${moved} 已有医生手动修改，自动应用已锁定；可恢复后重新应用。`
       : moved;
   } else if (busy) {
-    els.wrinkleSummary.textContent = "正在本机后台运行四区域检测，原始照片不会离开本机。";
+    els.wrinkleSummary.textContent = state.provider
+      ? `正在${processingLocation}运行 V10 四区域检测。`
+      : "正在检查 V10 检测服务和实际处理位置。";
   } else {
-    els.wrinkleSummary.textContent = "标准 RSTL 会先显示，皱纹检测在后台完成。";
+    els.wrinkleSummary.textContent = "标准 RSTL 已显示；点击“检测皱纹”后才会检查处理位置并启动 V10。";
   }
 }
 
@@ -310,6 +324,7 @@ export function getLiveWrinkleAnalysisDebugSnapshot() {
     diagnostics: state.diagnostics ? { ...state.diagnostics } : null,
     audit: state.audit ? { ...state.audit } : null,
     timings: state.timings ? { ...state.timings } : null,
+    provider: state.provider ? { ...state.provider } : null,
     evidenceLines: state.evidenceLines.map((line) => ({
       id: line.id,
       className: line.className,
@@ -362,6 +377,7 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
   state.diagnostics = null;
   state.audit = null;
   state.timings = null;
+  state.provider = null;
   updateStatus("loading");
   try {
     const landmarks = await detectV9ReferenceLandmarks(
@@ -419,13 +435,21 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
         if (generation !== state.generation) return;
         const { progress } = event;
         const percent = Math.round(progress.loadedChunks / Math.max(1, progress.totalChunks) * 100);
-        els.wrinkleSummary.textContent = `正在本机加载 YOLO 模型：${percent}%`;
+        els.wrinkleSummary.textContent = `正在当前设备加载 YOLO 模型：${percent}%`;
+        return;
+      }
+      if (event.type === "provider-ready") {
+        if (generation !== state.generation) return;
+        state.provider = event.capability;
+        updateWrinkleUi();
+        publishDebugSnapshot();
         return;
       }
       if (event.type === "pipeline-progress") {
         if (generation !== state.generation) return;
         els.wrinkleSummary.textContent = event.stage === "four-region"
-          ? "正在本机后台运行 V10 四区域检测……"
+          ? `正在${wrinkleV10ProcessingLocationLabel(state.provider, window.location.hostname)}` +
+            "运行 V10 四区域检测……"
           : "四区域检测完成，正在运行 V9 7.2 微调……";
         return;
       }
@@ -479,6 +503,7 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
     state.diagnostics = refined.diagnostics;
     state.audit = refined.audit;
     state.timings = pipeline.timings;
+    state.provider = pipeline.provider;
     state.movedCurveCount = (Number(refined.diagnostics.moved_curve_count) || 0)
       + Number(refined.diagnostics.direct_nose_dorsum_generated_curve_count || 0);
     state.movedPointCount = Number(refined.diagnostics.moved_point_count) || 0;
@@ -541,6 +566,7 @@ export function resetLiveWrinkleAnalysis(): void {
   state.diagnostics = null;
   state.audit = null;
   state.timings = null;
+  state.provider = null;
   state.error = null;
   updateWrinkleUi();
   publishDebugSnapshot();

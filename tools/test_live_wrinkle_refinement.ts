@@ -65,6 +65,15 @@ assert.match(panel, /只显示皱纹/);
 assert.match(panel, /RSTL 与皱纹同时显示/);
 assert.match(panel, /皱纹引导自动微调/);
 assert.match(panel, /医生手动微调（2D）/);
+assert.match(panel, /Tailscale[\s\S]*远程 V10 服务/,
+  "the wrinkle panel must disclose local-network and remote pixel processing");
+
+const qualityPanel = fs.readFileSync(
+  new URL("../web/src/components/LiveQualityPanel.tsx", import.meta.url),
+  "utf8",
+);
+assert.doesNotMatch(qualityPanel, /全程本地运行|不上传任何画面/,
+  "the live page must not contradict the V10 processing-location disclosure");
 
 const runtime = fs.readFileSync(
   new URL("../web/src/services/liveRuntime.ts", import.meta.url),
@@ -182,8 +191,8 @@ assert.match(workerRuntime,
   "the worker must run live YOLO, dynamic four-region detection and V9 refinement in order");
 assert.match(workerRuntime, /new YoloWrinkleOnnx\([\s\S]*YOLO_WRINKLE_CONFIDENCE/,
   "the worker must use the same released YOLO model and confidence threshold");
-assert.match(workerRuntime, /\/api\/local-wrinkle-v10/,
-  "the worker must request per-image V10 evidence from the local background detector");
+assert.match(workerRuntime, /WRINKLE_V10_ENDPOINT/,
+  "the worker must request per-image V10 evidence from the unified provider");
 assert.match(workerRuntime, /buildDirectNoseDorsumRstl/,
   "nasal-dorsum wrinkles must generate direct RSTL curves");
 assert.match(workerRuntime, /buildNoseRootIntersectionVisibilityPlan/,
