@@ -94,6 +94,11 @@ try {
   assert.equal(detectResponse.statusCode, 200);
   assert.equal(authorization, "Bearer secret-token");
 
+  // A 1280x1280 RGBA frame is larger than 4 MiB; the proxy must accept it.
+  const largeDetectResponse = new FakeResponse();
+  await proxyHandler(fakeRequest("POST", Buffer.alloc(5 * 1024 * 1024)), largeDetectResponse);
+  assert.equal(largeDetectResponse.statusCode, 200);
+
   globalThis.fetch = async () => { throw new Error("upstream unavailable"); };
   const failedResponse = new FakeResponse();
   await proxyHandler(fakeRequest("GET"), failedResponse);

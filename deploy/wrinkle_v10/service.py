@@ -24,7 +24,8 @@ CHECKPOINT = Path(os.environ.get(
 PROVIDER_SCHEMA = "langerface.wrinkle-v10-provider.v1"
 DETECTOR_VERSION = "paired-edge-v10-dynamic-four-region-1.0"
 CHECKPOINT_SHA256 = "e301b8f70c8239c01504a0616b61acdf9ab9b5796f513d6e7294d4fa52b6a6c2"
-MAXIMUM_REQUEST_BYTES = 4 * 1024 * 1024
+# The browser sends lossless RGBA pixels; a 1280x1280 frame is over 6 MiB.
+MAXIMUM_REQUEST_BYTES = 32 * 1024 * 1024
 REQUEST_TIMEOUT_SECONDS = 45.0
 STARTUP_TIMEOUT_SECONDS = 120.0
 
@@ -188,7 +189,7 @@ async def detect(request: Request) -> Response:
     async for chunk in request.stream():
         size += len(chunk)
         if size > MAXIMUM_REQUEST_BYTES:
-            raise HTTPException(413, "V10 request must be between 1 byte and 4 MB")
+            raise HTTPException(413, "V10 request must be between 1 byte and 32 MB")
         chunks.append(chunk)
     body = b"".join(chunks)
     if not body:

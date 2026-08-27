@@ -406,6 +406,10 @@ function bindLiveEvents(signal: AbortSignal): void {
     refreshStaticImage();
   }, { signal });
   window.addEventListener("langerface:refine2d-state", updateWrinkleUi, { signal });
+  window.addEventListener("langerface:source-frame-ready", () => {
+    updateWrinkleUi();
+    setRefineAvailability();
+  }, { signal });
   if (isReactManagedWorkbench()) {
     bindWindowControllerEvents([
       [LIVE_SOURCE_REACT_COMMAND_EVENT, (event) => { liveCommands.handleSourceEvent(event); }],

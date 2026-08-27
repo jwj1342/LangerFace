@@ -13,7 +13,9 @@ import {
   WRINKLE_V10_REQUEST_TIMEOUT_MS,
 } from "../src/services/personalized/wrinkleV10Provider.ts";
 
-const MAXIMUM_REQUEST_BYTES = 4 * 1024 * 1024;
+// The live worker sends lossless RGBA pixels. A 1280x1280 frame is already
+// over 6 MiB before metadata, so keep the transport guard above that size.
+const MAXIMUM_REQUEST_BYTES = 32 * 1024 * 1024;
 
 export class LocalProviderError extends Error {
   readonly statusCode: number;
@@ -233,7 +235,7 @@ async function readRequest(req: NodeJS.ReadableStream): Promise<Buffer> {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     total += buffer.length;
     if (total > MAXIMUM_REQUEST_BYTES) {
-      throw new LocalProviderError("皱纹检测请求超过 4 MB 限制", 413);
+      throw new LocalProviderError("皱纹检测请求超过 32 MB 限制", 413);
     }
     chunks.push(buffer);
   }

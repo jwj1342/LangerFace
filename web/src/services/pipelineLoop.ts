@@ -135,6 +135,12 @@ export function loop(): void {
     landmarks = sourceState.imageCacheLM as Vec3[] | null;
     hulls = renderState.handOcc ? (sourceState.imageHulls as HandMask[] | null) || [] : [];
     sourceState.presence = landmarks ? 1 : 0;
+    // Static image detection runs inside the render loop. Notify controls after
+    // the cached landmarks are committed so wrinkle/refine buttons reflect the
+    // ready state without starting wrinkle analysis automatically.
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("langerface:source-frame-ready"));
+    }
   } else if (source.currentTime !== undefined) {
     const landmarker = modelState.landmarker as VideoDetector | null;
     const result = landmarker?.detectForVideo(source, timeMs);

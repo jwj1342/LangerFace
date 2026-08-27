@@ -1,4 +1,5 @@
-const MAXIMUM_REQUEST_BYTES = 4 * 1024 * 1024;
+// The worker sends lossless RGBA pixels; 1280x1280 requires over 6 MiB.
+const MAXIMUM_REQUEST_BYTES = 32 * 1024 * 1024;
 const HEALTH_TIMEOUT_MS = 5_000;
 const DETECTION_TIMEOUT_MS = 50_000;
 
@@ -17,7 +18,7 @@ async function requestBody(request) {
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.length;
-    if (size > MAXIMUM_REQUEST_BYTES) throw Object.assign(new Error("V10 请求超过 4 MB"), { statusCode: 413 });
+    if (size > MAXIMUM_REQUEST_BYTES) throw Object.assign(new Error("V10 请求超过 32 MB"), { statusCode: 413 });
     chunks.push(buffer);
   }
   return Buffer.concat(chunks);
