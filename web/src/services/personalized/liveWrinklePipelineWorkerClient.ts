@@ -12,6 +12,7 @@ export interface LiveWrinkleWorkerAnalysisInput {
   seeds: V6Seed[];
   size: number;
   faceWidthPx: number;
+  landmarks: Array<[number, number, number]>;
 }
 
 export interface LiveWrinklePipelineWorkerClient {
@@ -40,6 +41,7 @@ export function createLiveWrinklePipelineWorkerClient(): LiveWrinklePipelineWork
         seeds: input.seeds,
         size: input.size,
         faceWidthPx: input.faceWidthPx,
+        landmarks: input.landmarks,
       };
       const eventSink = onEvent ? Comlink.proxy(onEvent) : undefined;
       return api.analyze(

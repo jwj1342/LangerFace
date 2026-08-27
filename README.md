@@ -183,7 +183,7 @@ Live 只有 **2D 贴合**一条运行时路线：每帧把图谱按重心坐标�
 在 Compute Canada / Alliance 集群上，前端开发可先运行 `module load nodejs/24.15.0`。
 
 ```bash
-# 1) 依赖
+# 1) 依赖（包含 V10 四区域检测所需的 PyTorch）
 pip install -e ".[all]"
 
 # 2) 下载 MediaPipe 资产到 assets/（标准脸 obj + 人脸/手部关键点模型，单一权威源）
@@ -220,7 +220,10 @@ cd web
 npm run dev                      # Vite dev server，默认 http://127.0.0.1:5173
 ```
 
-浏览器打开 Vite 提示的本地地址 → 点「摄像头」→ 允许权限。首次加载会从 CDN 下载 MediaPipe wasm（数秒）。
+如果需要指定已安装 `numpy` / `opencv-python` / `torch` 的 Python，启动前设置
+`LANGERFACE_WRINKLE_PYTHON=/absolute/path/to/python` 。不设置时会优先使用当前虚拟环境，再尝试
+`python3` / `python`。浏览器打开 Vite 提示的本地地址 → 上传照片或点「摄像头」。
+首次加载会从 CDN 下载 MediaPipe wasm（数秒）；V10 checkpoint 已跟随仓库分发。
 
 单图皱纹/RSTL runner 只用于受控研究复放。真实人脸原图和浏览器冻结产物不会随公开仓库分发；运行前必须
 通过 `WRINKLE_LOCAL_INPUT` / `WRINKLE_LOCAL_BASELINE` 或 `WRINKLE_CROWS_INPUT` /

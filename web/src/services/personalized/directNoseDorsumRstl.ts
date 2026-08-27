@@ -166,6 +166,7 @@ function polylineIntersectionCount(
 
 export function buildDirectNoseDorsumRstl({
   fineLines,
+  sourceFineLineIds = DIRECT_NOSE_DORSUM_FINE_LINE_IDS,
   faceWidthPx,
   eyePolygons = [],
   existingCurves = [],
@@ -173,6 +174,7 @@ export function buildDirectNoseDorsumRstl({
   auditExistingCurveIntersections = false,
 }: {
   fineLines: readonly NoseDorsumFineLine[];
+  sourceFineLineIds?: readonly string[];
   faceWidthPx: number;
   eyePolygons?: readonly (readonly Point2[])[];
   existingCurves?: readonly ExistingRstlCurve[];
@@ -180,8 +182,9 @@ export function buildDirectNoseDorsumRstl({
   auditExistingCurveIntersections?: boolean;
 }): DirectNoseDorsumResult {
   if (!(faceWidthPx > 0)) throw new Error("faceWidthPx must be positive");
+  if (!sourceFineLineIds.length) throw new Error("nose-dorsum fine line ids must not be empty");
   const byId = new Map(fineLines.map((line) => [String(line.id || ""), line]));
-  const selected = DIRECT_NOSE_DORSUM_FINE_LINE_IDS.map((id) => {
+  const selected = sourceFineLineIds.map((id) => {
     const source = byId.get(id);
     const points = normalizePoints(source?.points);
     if (points.length < 8) throw new Error(`missing valid nose-dorsum fine line ${id}`);

@@ -4,6 +4,8 @@ import { cpSync, readFileSync } from "node:fs";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
+import { localWrinkleV10Plugin } from "./dev/localWrinkleV10Plugin.ts";
+
 function shouldServeSpaIndex(url = "") {
   const pathname = url.split("?")[0] || "";
   if (pathname === "/") return true;
@@ -32,6 +34,7 @@ export default defineConfig({
   assetsInclude: ["**/*.task"],
   plugins: [
     tailwindcss(),
+    localWrinkleV10Plugin(),
     {
       name: "app-spa-history-fallback",
       configureServer(server) {

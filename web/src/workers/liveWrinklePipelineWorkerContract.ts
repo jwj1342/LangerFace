@@ -1,9 +1,4 @@
-import type { FineWrinkleExtraction } from
-  "../services/personalized/fineWrinkleLines.ts";
-import type {
-  refineV6,
-  V6Seed,
-} from "../services/personalized/v6RstlRefinementV9.ts";
+import type { V6Seed } from "../services/personalized/v6RstlRefinementV9.ts";
 import type { LiveWrinkleModelProgress } from
   "../services/personalized/liveWrinklePipeline.ts";
 
@@ -14,29 +9,58 @@ export interface LiveWrinkleWorkerRequest {
   seeds: V6Seed[];
   size: number;
   faceWidthPx: number;
+  landmarks: Array<[number, number, number]>;
 }
 
 export interface LiveWrinkleWorkerEvidence {
-  lines: FineWrinkleExtraction["lines"];
-  summary: FineWrinkleExtraction["summary"];
+  lines: Array<{
+    id: string;
+    class: string;
+    anatomicalClass?: string;
+    points: Array<[number, number]>;
+  }>;
+  summary: Record<string, unknown>;
 }
 
 export type LiveWrinkleWorkerEvent =
   | { type: "model-progress"; progress: LiveWrinkleModelProgress }
+  | { type: "pipeline-progress"; stage: "four-region" | "refining" }
   | { type: "evidence"; evidence: LiveWrinkleWorkerEvidence };
 
 export type LiveWrinkleWorkerEventSink = (
   event: LiveWrinkleWorkerEvent,
 ) => void | Promise<void>;
 
-type RefinedPipelineResult = ReturnType<typeof refineV6>;
+export interface LiveWrinkleWorkerCurve {
+  name: string;
+  region?: string;
+  pts: Array<[number, number]>;
+  hiddenPointRuns?: Array<[number, number]>;
+}
+
+export interface LiveWrinkleWorkerTimings {
+  modelLoadMs: number;
+  yoloDetectionMs: number;
+  baselineExtractionMs: number;
+  fourRegionDetectionMs: number;
+  evidenceBuildMs: number;
+  refinementMs: number;
+  noseAndVisibilityMs: number;
+  totalMs: number;
+}
 
 export interface LiveWrinkleWorkerResult {
   executionThread: "web_worker";
   detectorVersion: string;
   refinementProfile: string;
+  timings: LiveWrinkleWorkerTimings;
   evidence: LiveWrinkleWorkerEvidence;
-  refined: Pick<RefinedPipelineResult, "curves" | "diagnostics" | "audit">;
+  refined: {
+    curves: LiveWrinkleWorkerCurve[];
+    diagnostics: Record<string, unknown>;
+    audit: Record<string, unknown>;
+    standardCurveCount: number;
+  };
 }
 
 export interface LiveWrinklePipelineWorkerApi {

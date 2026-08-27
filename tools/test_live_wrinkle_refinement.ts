@@ -132,6 +132,9 @@ assert.doesNotMatch(analysisRuntime, /runGeneralLiveWrinklePipeline|new YoloWrin
   "YOLO, centerline extraction and V9 refinement must not execute on the live page thread");
 assert.match(analysisRuntime, /commitEvidence[\s\S]*state\.evidenceLines = evidence\.lines\.map[\s\S]*assertRefinementGate/,
   "validated wrinkle evidence must be committed before refinement safety gates run");
+assert.match(analysisRuntime,
+  /if \(event\.type === "evidence"\) return;[\s\S]*pipelineCompleted = true;[\s\S]*commitEvidence\(pipeline\.evidence\);[\s\S]*updateStatus\("ready"\)/,
+  "wrinkle evidence and its auto-refined result must become visible atomically");
 assert.doesNotMatch(analysisRuntime, /bundlePropagation: true/,
   "live refinement must not propagate one wrinkle to neighboring RSTL curves");
 assert.match(analysisRuntime, /maximum_selected_rstl_curves_per_wrinkle\) > 2/,
@@ -153,21 +156,49 @@ const workerClientRuntime = fs.readFileSync(
   new URL("../web/src/services/personalized/liveWrinklePipelineWorkerClient.ts", import.meta.url),
   "utf8",
 );
+const localDetectorPlugin = fs.readFileSync(
+  new URL("../web/dev/localWrinkleV10Plugin.ts", import.meta.url),
+  "utf8",
+);
+const liveFourRegionDetector = fs.readFileSync(
+  new URL("./run_live_four_region_wrinkle.py", import.meta.url),
+  "utf8",
+);
+const fourRegionExperiment = fs.readFileSync(
+  new URL("./run_wrinkle_four_class_experiment.py", import.meta.url),
+  "utf8",
+);
 assert.match(workerRuntime,
-  /runGeneralLiveWrinklePipeline\(\{[\s\S]*imageData:[\s\S]*seeds: request\.seeds[\s\S]*size: request\.size[\s\S]*faceWidthPx: request\.faceWidthPx/,
-  "the worker must call the unchanged general pipeline with the original pixels, seeds and scale");
+  /detector\.detect[\s\S]*extractFineWrinkleLines[\s\S]*dynamicFourRegionDetection[\s\S]*refineV6/,
+  "the worker must run live YOLO, dynamic four-region detection and V9 refinement in order");
 assert.match(workerRuntime, /new YoloWrinkleOnnx\([\s\S]*YOLO_WRINKLE_CONFIDENCE/,
   "the worker must use the same released YOLO model and confidence threshold");
+assert.match(workerRuntime, /\/api\/local-wrinkle-v10/,
+  "the worker must request per-image V10 evidence from the local background detector");
+assert.match(workerRuntime, /buildDirectNoseDorsumRstl/,
+  "nasal-dorsum wrinkles must generate direct RSTL curves");
+assert.match(workerRuntime, /buildNoseRootIntersectionVisibilityPlan/,
+  "direct nasal RSTL must retain the reviewed intersection visibility rule");
 assert.match(workerRuntime, /Comlink\.expose\(api\)/,
   "the wrinkle pipeline must be exposed from a real Web Worker boundary");
-assert.doesNotMatch(workerRuntime,
-  /maximumSize|minimumLineLengthPx|resampleSpacingPx|latestV9RstlRefinementOptions/,
-  "the worker boundary must not override any detection, extraction or refinement parameter");
+assert.match(workerRuntime, /fourRegionDetectionMs[\s\S]*refinementMs[\s\S]*totalMs/,
+  "the worker must report stage timings for reproducible performance regression");
+assert.match(workerRuntime, /minimumLineLengthPx: 20/);
+assert.match(workerRuntime, /latestV9RstlRefinementOptions\(request\.faceWidthPx\)/);
 assert.match(workerClientRuntime, /new Worker\(new URL/);
 assert.match(workerClientRuntime, /Comlink\.transfer\(request, \[request\.pixels\.buffer as ArrayBuffer\]\)/,
   "the full-resolution input must be transferred without a main-thread copy or resize");
 assert.match(workerClientRuntime, /worker\.terminate\(\)/,
   "source replacement must be able to terminate stale CPU work immediately");
+assert.match(localDetectorPlugin,
+  /class PersistentDetector[\s\S]*"--serve"[\s\S]*detector\.start\(\)/,
+  "the local V10 bridge must keep one prewarmed Python detector alive");
+assert.match(liveFourRegionDetector,
+  /def serve\([\s\S]*four_class\.warm_unet\(checkpoint\)[\s\S]*for raw_line in sys\.stdin/,
+  "the Python detector must warm the immutable UNet before accepting requests");
+assert.match(fourRegionExperiment,
+  /_UNET_CACHE[\s\S]*def warm_unet\([\s\S]*def run_unet\([\s\S]*_cached_unet/,
+  "the four-region detector must reuse the exact loaded checkpoint between images");
 
 const generalPipelineRuntime = fs.readFileSync(
   new URL("../web/src/services/personalized/liveWrinklePipeline.ts", import.meta.url),

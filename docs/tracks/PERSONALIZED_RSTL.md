@@ -147,7 +147,8 @@ Python 默认使用 Windows 的 `python` 或 POSIX 的 `python3`；特殊环境�
 
 ## 5. 隐私边界
 
-- 摄像头帧、YOLO 推理、严格并集融合、V6 微调**全部在当前浏览器本地完成**，不上传服务器，无推理后端。
+- 摄像头帧、YOLO 推理和 V9 微调在浏览器 Worker 中完成；V10 四区域检测由 Vite 启动的
+  本地 Python 进程完成。原始图像数据只在当前电脑内部传递，不上传远程服务器。
 - **不写入** `localStorage` / `IndexedDB` 任何患者衍生数据（图像、线条、掩膜、审阅记录）。
   `localStorage` 只用于非患者配置（例如资产 base URL）。
 - 跨页只经 `sessionStorage` 的 `langerface.previewAtlas` 传一次性预览图谱，
