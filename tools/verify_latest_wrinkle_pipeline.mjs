@@ -83,6 +83,13 @@ assert.match(worker, /buildNoseRootIntersectionVisibilityPlan/);
 assert.match(worker, /Comlink\.expose\(api\)/);
 assert.match(workerClient, /new Worker\(new URL/);
 assert.match(workerClient, /Comlink\.transfer/);
+assert.match(worker, /onnxruntime-web\/dist\/ort-wasm-simd-threaded\.mjs\?url/,
+  "released worker must bundle the ONNX Runtime WASM module explicitly");
+assert.match(worker, /onnxruntime-web\/dist\/ort-wasm-simd-threaded\.wasm\?url/,
+  "released worker must bundle the ONNX Runtime WASM binary explicitly");
+assert.match(worker,
+  /wasmPaths:\s*\{\s*mjs:\s*ortWasmModuleUrl,\s*wasm:\s*ortWasmBinaryUrl\s*\}/,
+  "released worker detector must use the bundled ONNX Runtime WASM assets");
 assert.match(pipeline,
   /await detector\.load[\s\S]*await detector\.detect[\s\S]*extractFineWrinkleLines[\s\S]*refineV6/);
 assert.match(runtime, /v6RstlRefinementV9\.ts/);

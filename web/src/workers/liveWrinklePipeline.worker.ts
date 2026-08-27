@@ -1,4 +1,6 @@
 import * as Comlink from "comlink";
+import ortWasmModuleUrl from "../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs?url";
+import ortWasmBinaryUrl from "../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm?url";
 
 import { buildDirectNoseDorsumRstl } from
   "../services/personalized/directNoseDorsumRstl.ts";
@@ -56,7 +58,10 @@ interface DynamicFourRegionPayload extends PrecomputedFineWrinklePayload {
   lines: DynamicFineLine[];
 }
 
-const detector = new YoloWrinkleOnnx({ confidenceThreshold: YOLO_WRINKLE_CONFIDENCE });
+const detector = new YoloWrinkleOnnx({
+  confidenceThreshold: YOLO_WRINKLE_CONFIDENCE,
+  wasmPaths: { mjs: ortWasmModuleUrl, wasm: ortWasmBinaryUrl },
+});
 
 function emit(
   onEvent: LiveWrinkleWorkerEventSink | undefined,

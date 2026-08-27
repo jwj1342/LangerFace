@@ -127,8 +127,8 @@ npm ci
 npm run verify:latest-wrinkle
 ```
 
-该校验应报告 `latest_wrinkle_pipeline_verified`、RSTL `v8.1.96`、检测 `v10`、微调
-`v9-regional-smooth-7.2`。PR #221 的合并快照不满足这项校验；最新修复由当前分支和 PR #222 承载。
+该校验应报告 `latest_wrinkle_pipeline_verified`、RSTL `v8.1.96`、V10 四区域检测和微调
+`v9-regional-smooth-7.2`。PR #221 的合并快照不满足这项校验；后续 PR 必须同时携带本地检测桥接和 Worker 流水线。
 
 | 命令 | 必需的受控本地输入 | 可选配置 |
 |---|---|---|

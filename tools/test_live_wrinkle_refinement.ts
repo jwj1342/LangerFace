@@ -152,6 +152,15 @@ const workerRuntime = fs.readFileSync(
   new URL("../web/src/workers/liveWrinklePipeline.worker.ts", import.meta.url),
   "utf8",
 );
+assert.match(workerRuntime,
+  /onnxruntime-web\/dist\/ort-wasm-simd-threaded\.mjs\?url/,
+  "the deployed worker must bundle the ONNX Runtime WASM module explicitly");
+assert.match(workerRuntime,
+  /onnxruntime-web\/dist\/ort-wasm-simd-threaded\.wasm\?url/,
+  "the deployed worker must bundle the ONNX Runtime WASM binary explicitly");
+assert.match(workerRuntime,
+  /wasmPaths:\s*\{\s*mjs:\s*ortWasmModuleUrl,\s*wasm:\s*ortWasmBinaryUrl\s*\}/,
+  "the deployed worker detector must use the bundled ONNX Runtime WASM assets");
 const workerClientRuntime = fs.readFileSync(
   new URL("../web/src/services/personalized/liveWrinklePipelineWorkerClient.ts", import.meta.url),
   "utf8",
