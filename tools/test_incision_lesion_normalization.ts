@@ -37,11 +37,21 @@ const manualFreehand = normalizePlanningLesion({
   boundary_mode: "freehand",
   boundary_source: "manual_freehand",
 }, 0.1);
-assert.equal(manualFreehand.applied, false, "manual freehand behavior stays outside controlled-marker normalization");
-assert.equal(manualFreehand.status, "not_applicable");
+assert.equal(manualFreehand.applied, true, "manual freehand uses the same boundary-scale contract as controlled marker");
+assert.equal(manualFreehand.status, "normalized");
 assert.deepEqual(manualFreehand.planning_center, [0, 0, 0]);
-assert.equal(manualFreehand.planning_diameter_mm, 12, "ordinary planning still uses the operator diameter");
-assert.equal(manualFreehand.clinical_scale_source, "operator_input");
+assert.ok(Math.abs(manualFreehand.planning_diameter_mm - (manualFreehand.detected_enclosing_diameter_mm || 0)) < 1e-9,
+  "manual freehand scale comes from the drawn boundary rather than the operator slider");
+assert.equal(manualFreehand.clinical_scale_source, "manual_freehand_enclosing_circle");
+const manualFreehandWithDifferentSlider = normalizePlanningLesion({
+  center: [0, 0, 0],
+  boundary: [[1, 1, 0], [3, 1, 0], [3, 3, 0], [1, 3, 0]],
+  diameter_mm: 36,
+  boundary_mode: "freehand",
+  boundary_source: "manual_freehand",
+}, 0.1);
+assert.equal(manualFreehandWithDifferentSlider.planning_diameter_mm, manualFreehand.planning_diameter_mm,
+  "changing the disabled diameter slider cannot resize manual-freehand planning");
 
 const degenerate = normalizePlanningLesion({
   center: [1, 2, 3],
@@ -55,4 +65,4 @@ assert.deepEqual(degenerate.planning_center, [1, 2, 3]);
 assert.equal(degenerate.detected_equivalent_diameter_mm, null);
 assert.equal(degenerate.detected_enclosing_diameter_mm, null);
 
-console.log("test_incision_lesion_normalization: controlled-marker planning geometry and clinical-scale boundary passed");
+console.log("test_incision_lesion_normalization: controlled-marker and manual-freehand boundary scale passed");

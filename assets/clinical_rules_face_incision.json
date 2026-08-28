@@ -1,5 +1,5 @@
 {
-  "version": "0.3-deterministic-incision-workflow",
+  "version": "0.4-deterministic-incision-workflow",
   "review_status": "draft_not_clinically_validated",
   "last_reviewed_at": "2026-06-24",
   "source": "Stage 2 clinical planning notes and clinician-provided rules; requires formal clinical review before validated use.",
@@ -55,7 +55,7 @@
   "fusiform_cutaneous": {
     "length_to_width_ratio": 3.0,
     "tip_angle_deg": 30.0,
-    "min_length_mm": 12.0,
+    "min_length_mm": 6.0,
     "max_length_mm": 80.0,
     "max_rstl_deviation_deg": 15.0,
     "samples": 56,

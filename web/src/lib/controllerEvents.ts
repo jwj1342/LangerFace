@@ -13,3 +13,4 @@ export const INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT = "langerface:incision-s
 export const INCISION_EDIT_REACT_COMMAND_EVENT = "langerface:incision-edit-react-command";
 export const INCISION_REVIEW_REACT_COMMAND_EVENT = "langerface:incision-review-react-command";
 export const INCISION_LIBRARY_REACT_COMMAND_EVENT = "langerface:incision-library-react-command";
+export const WORKFLOW_INCISION_TOOL_REACT_COMMAND_EVENT = "langerface:workflow-incision-tool-react-command";

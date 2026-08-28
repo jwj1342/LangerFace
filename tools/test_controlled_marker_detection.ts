@@ -332,6 +332,254 @@ function fragmentedOpenTriangle(target: ReturnType<typeof image>) {
 }
 
 {
+  const target = texturedGradientImage(220, 190, 145, 218);
+  // The operator's outer loop is complete and wholly inside the scan. A
+  // connected retrace across its interior must not make one internal pocket
+  // look like the complete lesion boundary.
+  ellipseRing(target, 122, 98, 43, 36, 4, 28);
+  strokeLine(target, [91, 74], [151, 124], 4, 28);
+  rectangle(target, 0, 0, 42, 189, 28);
+  const options = { roiRadius: 72, expectedDiameterPx: 58, scanDiameterMm: 20 };
+  const results = [
+    detectControlledMarker(target, { x: 122, y: 98 }, options),
+    detectControlledMarker(target, { x: 114, y: 105 }, options),
+  ];
+  for (const result of results) {
+    assert.equal(result.ok, true,
+      `a complete scan-contained outer loop wins over its connected interior retrace: ${JSON.stringify(result)}`);
+    assert.equal(result.geometry_mode, "enclosed_region");
+    assert.ok((result.bbox?.width || 0) >= 80 && (result.bbox?.height || 0) >= 66,
+      `the recovered lesion follows the complete outer loop instead of one divided pocket: ${JSON.stringify(result)}`);
+  }
+}
+
+{
+  const target = texturedGradientImage(220, 190, 145, 218);
+  // Face-edge regression: an internal retrace divides the real closed lesion,
+  // while an attached wrinkle/shadow continues outside it. Recover both inner
+  // pockets without promoting the open external attachment into the lesion.
+  ellipseRing(target, 122, 98, 43, 36, 4, 28);
+  strokeLine(target, [91, 74], [151, 124], 4, 28);
+  strokeLine(target, [164, 102], [185, 119], 4, 28);
+  rectangle(target, 0, 0, 42, 189, 28);
+  const result = detectControlledMarker(
+    target,
+    { x: 122, y: 98 },
+    { roiRadius: 76, expectedDiameterPx: 58, scanDiameterMm: 20 },
+  );
+  assert.equal(result.ok, true,
+    `a complete divided lesion remains detectable beside a connected face-edge attachment: ${JSON.stringify(result)}`);
+  assert.ok(Math.max(...result.boundary.map((point) => point.x)) <= 168,
+    `the open attachment is excluded from the recovered lesion boundary: ${JSON.stringify(result)}`);
+  assert.ok((result.bbox?.width || 0) <= 92,
+    `face-edge attachment cannot inflate the lesion extent: ${JSON.stringify(result)}`);
+}
+
+{
+  const cx = 122;
+  const cy = 98;
+  const lesionPoints: Array<{ x: number; y: number }> = [];
+  const leftPixels: Array<{ x: number; y: number }> = [];
+  const rightPixels: Array<{ x: number; y: number }> = [];
+  const remotePocketPixels: Array<{ x: number; y: number }> = [];
+  for (let y = 62; y <= 134; y += 1) {
+    for (let x = 79; x <= 165; x += 1) {
+      if (((x - cx) / 42) ** 2 + ((y - cy) / 35) ** 2 > 0.92) continue;
+      lesionPoints.push({ x, y });
+      if (x <= cx - 2) leftPixels.push({ x, y });
+      if (x >= cx + 2) rightPixels.push({ x, y });
+    }
+  }
+  for (let y = 89; y <= 107; y += 1) {
+    for (let x = 173; x <= 184; x += 1) remotePocketPixels.push({ x, y });
+  }
+  const region = (pixels: Array<{ x: number; y: number }>, containsSeed: boolean) => {
+    const xs = pixels.map((point) => point.x);
+    const ys = pixels.map((point) => point.y);
+    return {
+      pixels,
+      boundary: controlledMarkerInternals.componentOuterBoundary(pixels),
+      bbox: {
+        x: Math.min(...xs),
+        y: Math.min(...ys),
+        width: Math.max(...xs) - Math.min(...xs) + 1,
+        height: Math.max(...ys) - Math.min(...ys) + 1,
+      },
+      containsSeed,
+      distance: containsSeed
+        ? 0
+        : Math.hypot(
+          cx < Math.min(...xs) ? Math.min(...xs) - cx : cx > Math.max(...xs) ? cx - Math.max(...xs) : 0,
+          cy < Math.min(...ys) ? Math.min(...ys) - cy : cy > Math.max(...ys) ? cy - Math.max(...ys) : 0,
+        ),
+    };
+  };
+  const candidateBoundary = Array.from({ length: 48 }, (_value, index) => {
+    const angle = index * Math.PI * 2 / 48;
+    const radiusX = index === 0 ? 64 : 43;
+    return {
+      x: cx + Math.cos(angle) * radiusX,
+      y: cy + Math.sin(angle) * 36,
+    };
+  });
+  const recovered = controlledMarkerInternals.recoverDividedMarkerEnvelope(
+    {
+      component: { pixels: lesionPoints, meanLuma: 28 },
+      boundary: candidateBoundary,
+      bbox: { x: 79, y: 62, width: 108, height: 73 },
+      containsSeed: true,
+      distance: 0,
+      enclosed: true,
+      compact: true,
+    },
+    [region(leftPixels, true), region(rightPixels, false), region(remotePocketPixels, false)],
+    { x: cx, y: cy },
+    76,
+    9,
+  );
+  assert.ok(recovered, "two substantial inner pockets reconstruct one complete lesion envelope");
+  assert.ok(Math.max(...recovered.boundary.map((point) => point.x)) <= 166,
+    `an exterior connected spur is excluded from the merged inner envelope: ${JSON.stringify(recovered)}`);
+  assert.ok(recovered.bbox.width <= 88,
+    `the merged bbox follows the enclosed lesion rather than the attached face-edge spur: ${JSON.stringify(recovered)}`);
+}
+
+{
+  const seed = { x: 122, y: 96 };
+  const lesionBoundary = [
+    { x: 82, y: 72 }, { x: 102, y: 64 }, { x: 142, y: 64 },
+    { x: 162, y: 72 }, { x: 166, y: 116 }, { x: 144, y: 136 },
+    { x: 122, y: 116 }, { x: 100, y: 136 }, { x: 78, y: 116 },
+  ];
+  const inside = (point: { x: number; y: number }) => {
+    let value = false;
+    for (let current = 0, previous = lesionBoundary.length - 1;
+      current < lesionBoundary.length; previous = current++) {
+      const a = lesionBoundary[current];
+      const b = lesionBoundary[previous];
+      if ((a.y > point.y) !== (b.y > point.y)
+        && point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x) value = !value;
+    }
+    return value;
+  };
+  const leftPixels: Array<{ x: number; y: number }> = [];
+  const rightPixels: Array<{ x: number; y: number }> = [];
+  for (let y = 64; y <= 136; y += 1) {
+    for (let x = 78; x <= 166; x += 1) {
+      if (!inside({ x, y })) continue;
+      if (x <= 120) leftPixels.push({ x, y });
+      if (x >= 124) rightPixels.push({ x, y });
+    }
+  }
+  const region = (pixels: Array<{ x: number; y: number }>, containsSeed: boolean) => {
+    const xs = pixels.map((point) => point.x);
+    const ys = pixels.map((point) => point.y);
+    return {
+      pixels,
+      boundary: controlledMarkerInternals.componentOuterBoundary(pixels),
+      bbox: {
+        x: Math.min(...xs), y: Math.min(...ys),
+        width: Math.max(...xs) - Math.min(...xs) + 1,
+        height: Math.max(...ys) - Math.min(...ys) + 1,
+      },
+      containsSeed,
+      distance: containsSeed ? 0 : 3,
+    };
+  };
+  const recovered = controlledMarkerInternals.recoverDividedMarkerEnvelope(
+    {
+      component: { pixels: [...leftPixels, ...rightPixels], meanLuma: 28 },
+      boundary: lesionBoundary,
+      bbox: { x: 78, y: 64, width: 89, height: 73 },
+      containsSeed: true,
+      distance: 0,
+      enclosed: true,
+      compact: true,
+    },
+    [region(leftPixels, true), region(rightPixels, false)],
+    seed,
+    76,
+    9,
+  );
+  assert.ok(recovered, "two divided pockets recover one complete concave lesion");
+  const notch = { x: 122, y: 116 };
+  const notchDistance = recovered.boundary.reduce((closest, start, index) => {
+    const end = recovered.boundary[(index + 1) % recovered.boundary.length];
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const lengthSquared = dx * dx + dy * dy;
+    const t = lengthSquared > 0
+      ? Math.max(0, Math.min(1, ((notch.x - start.x) * dx + (notch.y - start.y) * dy) / lengthSquared))
+      : 0;
+    return Math.min(closest, Math.hypot(
+      notch.x - (start.x + dx * t),
+      notch.y - (start.y + dy * t),
+    ));
+  }, Number.POSITIVE_INFINITY);
+  assert.ok(notchDistance <= 5,
+    `divided recovery preserves the drawn inward contour instead of convexly adding tissue: ${JSON.stringify(recovered)}`);
+}
+
+function relativeStrokeLine(
+  target: ReturnType<typeof image>,
+  first: [number, number],
+  second: [number, number],
+  contrast: number,
+  thickness = 3,
+) {
+  const steps = Math.max(Math.abs(second[0] - first[0]), Math.abs(second[1] - first[1]));
+  for (let step = 0; step <= steps; step += 1) {
+    const cx = Math.round(first[0] + (second[0] - first[0]) * step / Math.max(1, steps));
+    const cy = Math.round(first[1] + (second[1] - first[1]) * step / Math.max(1, steps));
+    for (let y = Math.max(0, Math.floor(cy - thickness)); y <= Math.min(target.height - 1, Math.ceil(cy + thickness)); y += 1) {
+      for (let x = Math.max(0, Math.floor(cx - thickness)); x <= Math.min(target.width - 1, Math.ceil(cx + thickness)); x += 1) {
+        if (Math.hypot(x - cx, y - cy) > thickness / 2) continue;
+        const index = (y * target.width + x) * 4;
+        for (let channel = 0; channel < 3; channel += 1) {
+          target.data[index + channel] = Math.max(0, target.data[index + channel] - contrast);
+        }
+      }
+    }
+  }
+}
+
+{
+  const target = texturedGradientImage(220, 190, 165, 218);
+  // Attachment-shaped regression: the complete low-contrast outer loop is
+  // wholly inside the controlled scan, while one faint internal stroke divides
+  // its interior. The detector must keep the outer lesion envelope.
+  relativeEllipseRing(target, 122, 98, 43, 36, 12, 4);
+  relativeStrokeLine(target, [93, 75], [150, 122], 12, 4);
+  rectangle(target, 0, 0, 42, 189, 55);
+  const options = { roiRadius: 72, expectedDiameterPx: 58, scanDiameterMm: 20 };
+  const results = [
+    detectControlledMarker(target, { x: 122, y: 98 }, options),
+    detectControlledMarker(target, { x: 114, y: 105 }, options),
+  ];
+  for (const result of results) {
+    assert.equal(result.ok, true,
+      `a scan-contained low-contrast outer loop wins over its internal dark stroke: ${JSON.stringify(result)}`);
+    assert.equal(result.geometry_mode, "enclosed_region");
+    assert.ok((result.bbox?.width || 0) >= 80 && (result.bbox?.height || 0) >= 66,
+      `low contrast does not collapse the complete lesion to one internal pocket: ${JSON.stringify(result)}`);
+  }
+}
+
+{
+  const target = image(120, 120);
+  ringWithGap(target, 60, 60, 1.1, 4);
+  strokeLine(target, [51, 45], [51, 75], 4);
+  strokeLine(target, [61, 42], [61, 78], 4);
+  const result = detectControlledMarker(
+    target,
+    { x: 56, y: 60 },
+    { roiRadius: 45, expectedDiameterPx: 36, scanDiameterMm: 20 },
+  );
+  assert.equal(result.ok, false,
+    "two local pockets inside a visibly open outer loop cannot be promoted to a complete lesion envelope");
+}
+
+{
   const target = image();
   ring(target, 48, 46, 18, 1);
   const result = detectControlledMarker(target, { x: 48, y: 46 });
@@ -605,6 +853,32 @@ function fragmentedOpenTriangle(target: ReturnType<typeof image>) {
 
 {
   const target = image(120, 120);
+  ring(target, 60, 60, 11, 3);
+  const result = detectControlledMarker(
+    target,
+    { x: 60, y: 60 },
+    { roiRadius: 40, expectedDiameterPx: 36, scanDiameterMm: 30 },
+  );
+  assert.equal(result.ok, true,
+    "a complete observed enclosure is not rejected by the disabled operator-diameter value");
+  assert.equal(result.geometry_mode, "enclosed_region");
+}
+
+{
+  const target = image(120, 120);
+  ring(target, 60, 60, 6, 2);
+  const result = detectControlledMarker(
+    target,
+    { x: 60, y: 60 },
+    { roiRadius: 40, expectedDiameterPx: 32, scanDiameterMm: 20 },
+  );
+  assert.equal(result.ok, true,
+    "a complete small marker remains valid when the disabled operator diameter is larger than the observed boundary");
+  assert.equal(result.geometry_mode, "enclosed_region");
+}
+
+{
+  const target = image(120, 120);
   ring(target, 60, 60, 18, 3);
   const result = detectControlledMarker(
     target,
@@ -830,6 +1104,36 @@ function fragmentedOpenTriangle(target: ReturnType<typeof image>) {
 
 {
   const target = texturedGradientImage(180, 160, 195, 218);
+  relativeEllipseRing(target, 90, 80, 28, 24, 10, 2, Math.PI / 10);
+  const result = detectControlledMarker(
+    target,
+    { x: 90, y: 80 },
+    { roiRadius: 58, expectedDiameterPx: 56, scanDiameterMm: 30 },
+  );
+  assert.equal(result.ok, true,
+    "a texture-obscured short arc remains recoverable under the bounded near-circular prior");
+  assert.ok(result.warnings.includes("low_contrast_near_circular_recovered"),
+    "the bounded weak recovery remains explicit for clinician review");
+  assert.ok((result.diagnostics?.maximum_gap_degrees || 0) <= 22.5,
+    "weak recovery never interpolates beyond the reviewed angular gap bound");
+}
+
+{
+  const target = texturedGradientImage(180, 160, 195, 218);
+  relativeEllipseRing(target, 90, 80, 28, 24, 10, 2, Math.PI / 10);
+  const result = detectControlledMarker(
+    target,
+    { x: 90, y: 80 },
+    { roiRadius: 58, expectedDiameterPx: 16, scanDiameterMm: 20 },
+  );
+  assert.equal(result.ok, true,
+    "a complete marker inside the scan stays recoverable when its actual size exceeds the disabled diameter value");
+  assert.ok(result.bbox && result.bbox.width >= 50,
+    "recovery follows the observed outer marker instead of the stale diameter prior");
+}
+
+{
+  const target = texturedGradientImage(180, 160, 195, 218);
   broadAnnularShadow(target, 90, 80, 28, 12, 12);
   const result = detectControlledMarker(
     target,
@@ -838,6 +1142,39 @@ function fragmentedOpenTriangle(target: ReturnType<typeof image>) {
   );
   assert.equal(result.ok, false,
     "a broad low-contrast illumination band is not promoted by the thin-ridge recovery path");
+}
+
+{
+  const target = texturedGradientImage(180, 160, 195, 218);
+  const flatBoundary = Array.from({ length: 48 }, (_value, index) => {
+    const angle = index * Math.PI * 2 / 48;
+    return { x: 90 + Math.cos(angle) * 30, y: 80 + Math.sin(angle) * 10 };
+  });
+  const result = controlledMarkerInternals.reconcileMarkerStrokeCoverage(
+    target,
+    { x: 90, y: 80 },
+    { roiRadius: 58, expectedDiameterPx: 60, scanDiameterMm: 30 },
+    58,
+    {
+      ok: true,
+      failure_code: null,
+      center: { x: 90, y: 80 },
+      boundary: flatBoundary,
+      area_px: 940,
+      bbox: { x: 60, y: 70, width: 61, height: 21 },
+      geometry_mode: "enclosed_region",
+      seed_relation: "enclosed",
+      marker_area_px: 140,
+      marker_bbox: { x: 50, y: 40, width: 81, height: 81 },
+      confidence: 0.8,
+      candidate_count: 1,
+      warnings: [],
+      audit: { local_only: true, raw_media_retained: false, network_request_made: false },
+    },
+  );
+  assert.equal(result.ok, false,
+    "a very flat inner skin enclosure cannot be returned as a successful near-circular controlled marker");
+  assert.equal(result.failure_code, "unstable_enclosure");
 }
 
 {
@@ -1305,7 +1642,7 @@ assert.ok(runtimeSource.includes('smoothingMode === "sourceFallback"')
 assert.ok(runtimeSource.includes('smoothingMode === "constrainedReference"')
   && runtimeSource.includes('publishState("controlled_marker_reference_candidate")')
   && runtimeSource.includes("该结果不满足项目原定比例")
-  && runtimeSource.includes("photoSurfaceReferenceRecoveryEligible")
+  && runtimeSource.includes("workflowPhotoSurfaceReferenceRecoveryEligible")
   && runtimeSource.includes("referenceAttemptFailureDetail"),
 "surface-only blocks may attempt an auditable non-3:1 reference while all failures remain explicit and yellow");
 assert.ok(runtimeSource.includes('smoothingMode === "limitedVisibility"')

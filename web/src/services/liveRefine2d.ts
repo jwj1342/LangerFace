@@ -271,7 +271,7 @@ export function setRefineAvailability(): void {
   const ready = sourceState.running && (staticImageReady || frozenLiveReady);
   els.refine2d.disabled = !ready;
   if (!ready && !state().active) {
-    els.refine2dHint.textContent = "上传正脸照片，或在摄像头中点击“定格微调”，即可调整当前结果。";
+    els.refine2dHint.textContent = "上传正脸照片，或在摄像头中点击“暂停”，即可调整当前结果。";
   }
 }
 

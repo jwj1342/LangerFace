@@ -16,6 +16,8 @@ export interface ControlledMarkerFixture {
   xRatio: number;
   yRatio: number;
   radiusRatio?: number;
+  interiorRetrace?: boolean;
+  strokeOpacity?: number;
 }
 
 export async function uploadGeneratedPhoto(
@@ -92,14 +94,18 @@ export async function uploadGeneratedPhotoWithControlledMarkers(
 
     for (const marker of markerFixtures) {
       const radius = Math.max(14, canvas.width * (marker.radiusRatio ?? 0.043));
+      const centerX = canvas.width * marker.xRatio;
+      const centerY = canvas.height * marker.yRatio;
+      const radiusY = radius * 0.82;
+      const rotation = 0.12;
       context.save();
       context.beginPath();
       context.ellipse(
-        canvas.width * marker.xRatio,
-        canvas.height * marker.yRatio,
+        centerX,
+        centerY,
         radius,
-        radius * 0.82,
-        0.12,
+        radiusY,
+        rotation,
         0,
         Math.PI * 2,
       );
@@ -107,7 +113,23 @@ export async function uploadGeneratedPhotoWithControlledMarkers(
       context.lineWidth = Math.max(5, canvas.width * 0.008);
       context.lineCap = "round";
       context.lineJoin = "round";
+      context.globalAlpha = marker.strokeOpacity ?? 1;
       context.stroke();
+      if (marker.interiorRetrace) {
+        const chordAngle = 0.7;
+        const endpoint = (angle: number) => ({
+          x: centerX + radius * Math.cos(angle) * Math.cos(rotation)
+            - radiusY * Math.sin(angle) * Math.sin(rotation),
+          y: centerY + radius * Math.cos(angle) * Math.sin(rotation)
+            + radiusY * Math.sin(angle) * Math.cos(rotation),
+        });
+        const first = endpoint(chordAngle);
+        const second = endpoint(chordAngle + Math.PI);
+        context.beginPath();
+        context.moveTo(first.x, first.y);
+        context.lineTo(second.x, second.y);
+        context.stroke();
+      }
       context.restore();
     }
 

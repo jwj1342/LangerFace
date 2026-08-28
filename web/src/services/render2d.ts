@@ -40,6 +40,11 @@ import {
   symmetryPartnerIndex,
 } from "./liveRefine2d";
 import { modelState, renderState, sourceState } from "./liveState.ts";
+import {
+  mobileIncisionCandidateVisible,
+  mobileRstlLayerVisible,
+  mobileWrinkleLayerVisible,
+} from "./mobileWorkflowVisibility.ts";
 import { setIncisionOverlayQa, setLive } from "./liveUi.ts";
 import type { IncisionOverlayPayload } from "./dataSource";
 import {
@@ -218,7 +223,7 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   ctx.globalAlpha = renderState.opacity; ctx.lineWidth = Math.max(2, W / 1300);
   ctx.lineJoin = "round"; ctx.lineCap = "round";
   let count = 0;
-  if (canDrawAtlas && shouldDrawRstlLayer()) {
+  if (canDrawAtlas && shouldDrawRstlLayer() && mobileRstlLayerVisible()) {
     for (let li = 0; li < displayLines.length; li++) {
       if (visibleLineIndices && !visibleLineIndices.has(li)) continue;
       const ln = displayLines[li];
@@ -271,7 +276,7 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
       count++;
     }
   }
-  if (canDrawAtlas && shouldDrawWrinkleLayer()) {
+  if (canDrawAtlas && shouldDrawWrinkleLayer() && mobileWrinkleLayerVisible()) {
     const evidenceColors: Record<string, string> = {
       forehead: "#ff9f1c",
       frown: "#ff4d6d",
@@ -856,6 +861,7 @@ function drawIncisionOverlay(
   updateIncisionOverlayRuntimeDiagnostics(overlay, registration, stability, poseGate, localRegionQuality);
   updateIncisionOverlayQa(registration, stability, poseGate, localRegionQuality);
   if (!poseGate.passed) return;
+  if (sourceState.sourceKind === "image" && renderState.workflowPhotoOverlay) return;
   ctx.save();
   ctx.globalAlpha = 0.98;
   const overlayStyle = incisionOverlayStyle(W, overlay.candidate_type);
@@ -865,14 +871,16 @@ function drawIncisionOverlay(
     dash: [overlayStyle.boundary.lineWidth * 3, overlayStyle.boundary.lineWidth * 2],
   }, localRegionMasks);
   const candidateRefs = surfaceRefs(overlay.candidate?.polyline_refs);
-  strokeOverlayRefs(candidateRefs, lm, masks, vis, innerMouth, {
-    color: overlayStyle.candidate.haloColor,
-    lineWidth: overlayStyle.candidate.haloWidth,
-  }, localRegionMasks);
-  strokeOverlayRefs(candidateRefs, lm, masks, vis, innerMouth, {
-    color: overlayStyle.candidate.color,
-    lineWidth: overlayStyle.candidate.lineWidth,
-  }, localRegionMasks);
+  if (mobileIncisionCandidateVisible()) {
+    strokeOverlayRefs(candidateRefs, lm, masks, vis, innerMouth, {
+      color: overlayStyle.candidate.haloColor,
+      lineWidth: overlayStyle.candidate.haloWidth,
+    }, localRegionMasks);
+    strokeOverlayRefs(candidateRefs, lm, masks, vis, innerMouth, {
+      color: overlayStyle.candidate.color,
+      lineWidth: overlayStyle.candidate.lineWidth,
+    }, localRegionMasks);
+  }
   const center = mapSurfaceRefs(optionalSurfaceRef(overlay.tumor?.center_ref), lm, modelTriangles()).pts[0];
   const centerLocalAction = localActionForPoints([center], localRegionMasks);
   const centerOccluded = Boolean(center && masks.length && pointInHandMasks(toPoint2(center), masks));
@@ -928,7 +936,7 @@ export function buildZoomCards(onSelect: () => void = () => {}): void {
 
 export function setFocusRegion(region: RenderRegion): void {
   renderState.focusRegion = region;
-  renderState.focusCrop = null;
+  setFocusCrop(null);
   syncFocusCards();
 }
 
@@ -1019,20 +1027,34 @@ function zoomRegionBounds(lm: Vec3[], region: RenderRegion): Bounds | null {
 export function drawFocusedRegion(lm: Vec3[] | null, W: number, H: number): void {
   const region = renderState.focusRegion as RenderRegion;
   if (!region || !lm) {
-    renderState.focusCrop = null;
+    setFocusCrop(null);
     return;
   }
   const crop = focusCropRect(lm, region, W, H);
   if (!crop) {
-    renderState.focusCrop = null;
+    setFocusCrop(null);
     return;
   }
-  renderState.focusCrop = crop;
+  setFocusCrop(crop);
 
   focusScratch.width = W;
   focusScratch.height = H;
   focusCtx.drawImage(els.canvas, 0, 0);
   ctx.drawImage(focusScratch, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, W, H);
+}
+
+function setFocusCrop(crop: { sx: number; sy: number; sw: number; sh: number } | null): void {
+  const previous = renderState.focusCrop;
+  const changed = previous === null || crop === null
+    ? previous !== crop
+    : Math.abs(previous.sx - crop.sx) > 0.01
+      || Math.abs(previous.sy - crop.sy) > 0.01
+      || Math.abs(previous.sw - crop.sw) > 0.01
+      || Math.abs(previous.sh - crop.sh) > 0.01;
+  renderState.focusCrop = crop;
+  if (changed && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("langerface:focus-crop-changed"));
+  }
 }
 
 function focusCropRect(lm: Vec3[], region: RenderRegion, W: number, H: number): { sx: number; sy: number; sw: number; sh: number } | null {

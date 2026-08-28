@@ -40,6 +40,7 @@ import {
   inspectTumorEngineeringExclusions,
   tumorPointEngineeringExclusionMessage,
 } from "./incisionToolCore";
+import { workflowPhotoSurfaceReferenceRecoveryEligible } from "./workflowControllerUtils";
 import type { Triangle, Vec3 } from "./softBody";
 
 interface IncisionPhotoRuntimeOptions {
@@ -158,24 +159,6 @@ export function stablePhotoPixelsPerMm(
   // old pointer-local scale without shrinking the scan ROI below most facial
   // regions. It remains fixed for the current photo revision.
   return ratios[Math.floor((ratios.length - 1) * 0.8)];
-}
-
-function candidateHardViolationCodes(result: Record<string, any> | null | undefined): string[] {
-  const violations = Array.isArray(result?.candidate_alternatives)
-    ? result.candidate_alternatives.flatMap((record: Record<string, any>) => record?.candidate?.hard_violations || [])
-    : result?.candidate?.hard_violations || [];
-  const codes: string[] = violations
-    .map((item: Record<string, any>) => String(item?.code || ""))
-    .filter((code: string) => Boolean(code));
-  return [...new Set<string>(codes)];
-}
-
-export function photoSurfaceReferenceRecoveryEligible(result: Record<string, any> | null | undefined): boolean {
-  const codes = candidateHardViolationCodes(result);
-  return result?.candidate_display_blocked === true
-    && result?.tumor_engineering_validation?.passed !== false
-    && codes.length > 0
-    && codes.every((code) => code === "candidate_outside_canonical_surface");
 }
 
 const stripTerminalPunctuation = (value: string): string => value.trim().replace(/[。；;，,：:\s]+$/u, "");
@@ -760,7 +743,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     );
     const displayScale = containScale > 0 ? containScale * state.photoView.zoom : undefined;
     const candidateDisplayBlocked = Boolean(state.result?.candidate_display_blocked);
-    const surfaceReferenceRecoveryEligible = photoSurfaceReferenceRecoveryEligible(state.result);
+    const surfaceReferenceRecoveryEligible = workflowPhotoSurfaceReferenceRecoveryEligible(state.result);
     const candidatePoints = state.result?.candidate?.polyline || [];
     const candidateRefs = candidateDisplayBlocked && !surfaceReferenceRecoveryEligible
       ? []
@@ -1273,7 +1256,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
         controlledMarkerPlanningAudit(detection, state.result, latestCandidateProjection),
       );
       const candidatePointCount = state.result?.candidate?.polyline?.length || 0;
-      const surfaceReferenceRecoveryEligible = photoSurfaceReferenceRecoveryEligible(state.result);
+      const surfaceReferenceRecoveryEligible = workflowPhotoSurfaceReferenceRecoveryEligible(state.result);
       const surfaceReferenceRecoveryActive = surfaceReferenceRecoveryEligible
         && (latestCandidateProjection.smoothingMode === "constrainedReference"
           || latestCandidateProjection.smoothingMode === "limitedVisibility");

@@ -292,6 +292,15 @@ assert.doesNotMatch(generalPipelineRuntime,
   assert.equal(second.refinementProfile, LATEST_WRINKLE_REFINEMENT_PROFILE);
 }
 
+const webPackage = JSON.parse(fs.readFileSync(
+  new URL("../web/package.json", import.meta.url),
+  "utf8",
+));
+assert.equal(webPackage.scripts.predev, "node ../tools/check_web_dependency_isolation.mjs",
+  "the dev server must reject dependencies shared across worktrees");
+assert.match(webPackage.scripts.dev, /vite --force\b/,
+  "the dev server must rebuild optimizer output instead of reusing copied worktree caches");
+
 {
   // The helper and checked-in evidence remain available to the explicit
   // single-image compat experiment; this block does not authorize live-page use.

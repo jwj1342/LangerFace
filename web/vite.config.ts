@@ -98,6 +98,7 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 5173,
     strictPort: false,
+    allowedHosts: ["desktop-dt8rar6.tail505a98.ts.net"],
     fs: {
       allow: [resolve(import.meta.dirname, "..")],
     },

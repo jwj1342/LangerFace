@@ -13,10 +13,69 @@ import { mapSurfaceRefs, pointToSurfaceRef, polylineToSurfaceRefs, type SurfaceR
 import { buildRstlRenderPlan } from "./rstlRenderPlan.ts";
 import { incisionOverlayStyle } from "./incisionOverlayStyle.ts";
 import { pointInPolygon2d, segmentsIntersect2d, type Point2 } from "./incisionPathGeometry.ts";
+import { sourcePointToSurfaceRef } from "./photoPlanningController.ts";
 import type { Triangle, Vec3 } from "./softBody.ts";
 
 export const INCISION_PHOTO_MAX_BYTES = 20 * 1024 * 1024;
 export const INCISION_PHOTO_TYPES = new Set(["image/jpeg", "image/png"]);
+export const PHOTO_VISIBILITY_LIMITED_MIN_VISIBLE_FRACTION = 0.45;
+export const PHOTO_FACE_EDGE_RECOVERY_MAX_WIDTH_FRACTION = 0.055;
+const MEDIAPIPE_FACE_OVAL = [
+  10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378,
+  400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
+] as const;
+
+export interface PhotoFaceEdgeSurfaceRecovery {
+  ref: SurfaceRef;
+  distancePx: number;
+  maxDistancePx: number;
+  snappedPoint: Vec3;
+}
+
+export function recoverPhotoFaceEdgeSurfaceRef(
+  point: { x: number; y: number },
+  landmarks: readonly Vec3[],
+  triangles: readonly Triangle[],
+  maxDistancePx?: number,
+): PhotoFaceEdgeSurfaceRecovery | null {
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !triangles.length) return null;
+  const oval = MEDIAPIPE_FACE_OVAL
+    .map((index) => landmarks[index])
+    .filter((entry): entry is Vec3 => Boolean(entry));
+  if (oval.length !== MEDIAPIPE_FACE_OVAL.length) return null;
+  const polygon = oval.map((entry) => [entry[0], entry[1]] as Point2);
+  if (pointInPolygon2d([point.x, point.y], polygon)) return null;
+  const xs = oval.map((entry) => entry[0]);
+  const boundedDistance = maxDistancePx == null
+    ? Math.max(2, (Math.max(...xs) - Math.min(...xs)) * PHOTO_FACE_EDGE_RECOVERY_MAX_WIDTH_FRACTION)
+    : Math.max(0, Number(maxDistancePx));
+  if (!(boundedDistance > 0)) return null;
+
+  let nearest: { point: Vec3; distance: number } | null = null;
+  for (let index = 0; index < oval.length; index += 1) {
+    const first = oval[index];
+    const second = oval[(index + 1) % oval.length];
+    const dx = second[0] - first[0];
+    const dy = second[1] - first[1];
+    const lengthSquared = dx * dx + dy * dy;
+    const ratio = lengthSquared > 1e-9
+      ? Math.max(0, Math.min(1, ((point.x - first[0]) * dx + (point.y - first[1]) * dy) / lengthSquared))
+      : 0;
+    const snapped: Vec3 = [first[0] + dx * ratio, first[1] + dy * ratio, first[2] + (second[2] - first[2]) * ratio];
+    const distance = Math.hypot(point.x - snapped[0], point.y - snapped[1]);
+    if (!nearest || distance < nearest.distance) nearest = { point: snapped, distance };
+  }
+  if (!nearest || nearest.distance > boundedDistance) return null;
+  const ref = sourcePointToSurfaceRef(
+    { x: nearest.point[0], y: nearest.point[1] }, landmarks, triangles, 1e-3,
+  );
+  return ref ? {
+    ref,
+    distancePx: nearest.distance,
+    maxDistancePx: boundedDistance,
+    snappedPoint: nearest.point,
+  } : null;
+}
 
 export function incisionPhotoStrokeWidths(sourceWidth: number) {
   const style = incisionOverlayStyle(sourceWidth);
@@ -78,8 +137,8 @@ export function incisionPhotoStatusPresentation({
       : candidatePointCount > 0
         ? candidateSmoothingMode === "limitedVisibility"
           ? limitedVisibilityIsStandard
-            ? "已识别肿物边界。当前为视野受限参考，不能确认完整长度及不可见区域，请结合另一视角复核"
-            : `已识别肿物边界。当前为视野受限的非标准比例参考（${limitedVisibilityRatio.toFixed(2)}:1），不能确认完整长度及不可见区域，请结合另一视角复核`
+            ? "已识别肿物边界，当前为视野受限参考，不能确认完整长度及不可见区域，请结合另一视角复核"
+            : `已识别肿物边界，当前为视野受限的非标准比例参考（${limitedVisibilityRatio.toFixed(2)}:1），不能确认完整长度及不可见区域，请结合另一视角复核`
           : candidateSmoothingMode === "constrainedReference"
           ? `受限参考候选已显示：原定 3:1 梭形超出可用面部区域，当前按 ${Number(candidateReferenceAspectRatio || 0).toFixed(2)}:1 显示；该结果不满足项目原定比例，只供医生评估约束原因`
           : candidateSmoothingMode === "sourceFallback"
@@ -89,7 +148,9 @@ export function incisionPhotoStatusPresentation({
           : "候选已叠加"
         : "点击面部设置病灶";
   return {
-    message: `照片规划 · RSTL ${rstlLineCount} 条 · ${detail}`,
+    message: candidateSmoothingMode === "limitedVisibility" && candidatePointCount > 0
+      ? detail
+      : `照片规划 · RSTL ${rstlLineCount} 条 · ${detail}`,
     tone: candidateDisplayBlocked
       || !candidateProjectionValid
       || projectedDirectionNeedsReview
@@ -109,6 +170,7 @@ export interface IncisionPhotoGeometry {
   diameterEstimate: Vec3[];
   boundary: Vec3[];
   candidate: Vec3[];
+  diagnosticCandidate: Vec3[];
   endpoints: Vec3[];
   candidateProjection: {
     valid: boolean;
@@ -125,6 +187,7 @@ export interface IncisionPhotoGeometry {
     hiddenPointCount?: number;
   };
   fusiformRendering?: SurfaceProjectedFusiformFit | null;
+  diagnosticFusiformRendering?: SurfaceProjectedFusiformFit | null;
   projectedRstlDeviationDeg: number | null;
 }
 
@@ -175,6 +238,12 @@ export interface FusiformFitDiagnostics {
   photoBoundaryOutsideCount?: number;
   photoSurfaceOutsideCount?: number;
   photoSurfaceMeshOutsideCount?: number;
+  photoRstlSupportedMeshOutsideCount?: number;
+  photoSurfacePointCount?: number;
+  photoRstlSupportedUpperForeheadPointCount?: number;
+  photoSilhouetteOutsideCount?: number;
+  photoBoundarySurfaceOutsideCount?: number;
+  photoBoundarySilhouetteOutsideCount?: number;
   photoHeadOutsideCount?: number;
   photoSkinOutsideCount?: number;
   photoCanonicalAxisSource?: "nearest_projected_rstl" | "source_endpoints";
@@ -185,6 +254,7 @@ export interface FusiformFitDiagnostics {
   photoVisibilityLimitedEligible?: boolean;
   photoVisibleFraction?: number;
   photoVisibleSegmentCount?: number;
+  photoHiddenTipCount?: number;
 }
 
 export interface PhotoReferenceAttemptDiagnostics {
@@ -200,6 +270,7 @@ export interface PhotoReferenceAttemptDiagnostics {
 
 export interface PhotoSurfaceCanonicalFusiformAttempt {
   fit: SurfaceProjectedFusiformFit | null;
+  diagnosticFit: SurfaceProjectedFusiformFit | null;
   visibilityLimitedFit: SurfaceProjectedFusiformFit | null;
   endpoints: Vec3[];
   diagnostics: FusiformFitDiagnostics;
@@ -224,7 +295,9 @@ export interface IncisionPhotoRenderInput {
   diameterEstimateRefs?: SurfaceRef[];
   photoDiameterEstimateMm?: number;
   photoPixelsPerMm?: number;
+  candidateLengthMm?: number;
   boundaryRefs: SurfaceRef[];
+  photoBoundary?: Vec3[];
   candidateRefs: SurfaceRef[];
   endpointRefs: SurfaceRef[];
   endpointRadius?: number;
@@ -260,13 +333,47 @@ function pointInsidePhotoTriangle(point: Vec3, first: Vec3, second: Vec3, third:
   return firstWeight >= tolerance && secondWeight >= tolerance && thirdWeight >= tolerance;
 }
 
+export function projectedRstlUpperForeheadSupportsPoint(
+  point: readonly number[],
+  rstl: readonly Pick<MappedAtlasLine, "pts">[],
+  tolerancePx = 1.5,
+): boolean {
+  if (point.length < 2 || !Number.isFinite(point[0]) || !Number.isFinite(point[1])) return false;
+  const intersections: number[] = [];
+  for (const line of rstl) {
+    for (let index = 0; index < line.pts.length - 1; index += 1) {
+      const first = line.pts[index];
+      const second = line.pts[index + 1];
+      if (!first || !second) continue;
+      const minX = Math.min(first[0], second[0]) - tolerancePx;
+      const maxX = Math.max(first[0], second[0]) + tolerancePx;
+      if (point[0] < minX || point[0] > maxX) continue;
+      const dx = second[0] - first[0];
+      if (Math.abs(dx) <= 1e-6) {
+        if (Math.abs(point[0] - first[0]) <= tolerancePx) intersections.push(Math.min(first[1], second[1]));
+        continue;
+      }
+      const ratio = (point[0] - first[0]) / dx;
+      if (ratio < -1e-6 || ratio > 1 + 1e-6) continue;
+      intersections.push(first[1] + (second[1] - first[1]) * ratio);
+    }
+  }
+  if (!intersections.length) return false;
+  const topmostRstlY = Math.min(...intersections);
+  return point[1] >= topmostRstlY - tolerancePx;
+}
+
 function validatePhotoSurfacePoints(
   points: readonly Vec3[],
   landmarks: Vec3[],
   triangles: Triangle[],
   skinVisible?: VisibilityPredicate,
+  rstlBoundaryVisible?: VisibilityPredicate,
 ): {
   meshOutsideCount: number;
+  rstlSupportedMeshOutsideCount: number;
+  rstlSupportedUpperForeheadPointCount: number;
+  silhouetteOutsideCount: number;
   headOutsideCount: number;
   skinOutsideCount: number;
   outsideCount: number;
@@ -284,10 +391,10 @@ function validatePhotoSurfacePoints(
   });
   // MediaPipe's face triangles end before parts of the visible upper forehead.
   // Only that known upper-forehead gap may use the conservative head envelope;
-  // mesh gaps around the eyes, nostrils and mouth remain rejected. The source-
-  // photo skin vote is retained as an audit signal, not a hard gate, because
-  // the intentionally dark controlled-marker stroke otherwise causes false
-  // rejection of an enclosing incision.
+  // mesh gaps around the eyes, nostrils and mouth remain rejected. Only points
+  // above the forehead floor may use a conservative 3-of-5 source-photo skin
+  // vote to extend beyond the fixed head envelope; lower-face gaps never gain
+  // that fallback because they may be non-skin openings.
   const headVisible = buildHeadVisibility(landmarks);
   const xs = landmarks.map((point) => point?.[0]).filter(Number.isFinite) as number[];
   const ys = landmarks.map((point) => point?.[1]).filter(Number.isFinite) as number[];
@@ -300,6 +407,17 @@ function validatePhotoSurfacePoints(
     ? browYs.reduce((sum, value) => sum + value, 0) / browYs.length
     : (ys.length ? Math.min(...ys) + faceHeight * 0.4 : -Infinity);
   const foreheadFloor = browLine + Math.max(8, faceHeight * 0.018);
+  const faceOval = MEDIAPIPE_FACE_OVAL
+    .map((index) => landmarks[index])
+    .filter((point): point is Vec3 => Boolean(point));
+  const faceOvalPolygon = faceOval.map((entry) => [entry[0], entry[1]] as Point2);
+  const faceOvalArea = faceOval.length >= 3
+    ? Math.abs(faceOval.reduce((sum, point, index) => {
+      const next = faceOval[(index + 1) % faceOval.length];
+      return sum + point[0] * next[1] - next[0] * point[1];
+    }, 0)) / 2
+    : 0;
+  const hasFaceOval = faceOval.length === MEDIAPIPE_FACE_OVAL.length && faceOvalArea >= 4;
   // The controlled-marker stroke itself is intentionally dark and may sit only
   // a few pixels inside the enclosing incision. Probe beyond that thin stroke;
   // a genuine hair/background point still fails the 3-of-5 neighbourhood vote.
@@ -316,17 +434,31 @@ function validatePhotoSurfacePoints(
     const meshVisible = visibleSurface.some(([first, second, third]) =>
       pointInsidePhotoTriangle(point, first, second, third));
     const headEnvelopeVisible = headVisible(point);
+    const photoSkinVisible = neighborhoodSkinVisible(point);
+    const rstlEdgeVisible = Boolean(rstlBoundaryVisible?.(point));
+    const inUpperForeheadBand = point[1] <= foreheadFloor;
     const acceptedUpperForeheadGap = !meshVisible
-      && point[1] <= foreheadFloor
-      && headEnvelopeVisible;
+      && inUpperForeheadBand
+      && (headEnvelopeVisible || photoSkinVisible || rstlEdgeVisible);
+    const silhouetteOutside = !meshVisible
+      && !acceptedUpperForeheadGap
+      && hasFaceOval
+      && !pointInPolygon2d([point[0], point[1]], faceOvalPolygon);
     return {
       point,
       meshVisible,
       headEnvelopeVisible,
+      rstlSupportedUpperForehead: inUpperForeheadBand && rstlEdgeVisible,
+      silhouetteOutside,
       visible: meshVisible || acceptedUpperForeheadGap,
     };
   });
   const meshOutside = classifications.filter((entry) => !entry.meshVisible);
+  const rstlSupportedMeshOutsideCount = meshOutside.filter((entry) =>
+    rstlBoundaryVisible?.(entry.point)).length;
+  const rstlSupportedUpperForeheadPointCount = classifications.filter((entry) =>
+    entry.rstlSupportedUpperForehead).length;
+  const silhouetteOutsideCount = classifications.filter((entry) => entry.silhouetteOutside).length;
   const headOutsideCount = meshOutside.filter((entry) => !entry.headEnvelopeVisible).length;
   const skinOutsideCount = skinVisible
     ? meshOutside.filter((entry) => !neighborhoodSkinVisible(entry.point)).length
@@ -335,6 +467,9 @@ function validatePhotoSurfacePoints(
   const outsideCount = visibleMask.filter((visible) => !visible).length;
   return {
     meshOutsideCount: meshOutside.length,
+    rstlSupportedMeshOutsideCount,
+    rstlSupportedUpperForeheadPointCount,
+    silhouetteOutsideCount,
     headOutsideCount,
     skinOutsideCount,
     outsideCount,
@@ -433,9 +568,11 @@ export function buildPhotoSurfaceCanonicalFusiform({
   landmarks,
   triangles,
   skinVisible,
+  rstlBoundaryVisible,
   axisHint,
   referenceAspectRatio,
   minimumLengthScale = 0,
+  candidateLengthPx,
 }: {
   sourceCandidate: Vec3[];
   sourceEndpoints: Vec3[];
@@ -446,9 +583,11 @@ export function buildPhotoSurfaceCanonicalFusiform({
   landmarks: Vec3[];
   triangles: Triangle[];
   skinVisible?: VisibilityPredicate;
+  rstlBoundaryVisible?: VisibilityPredicate;
   axisHint?: readonly [number, number] | null;
   referenceAspectRatio?: number | null;
   minimumLengthScale?: number;
+  candidateLengthPx?: number;
 }): PhotoSurfaceCanonicalFusiformAttempt {
   const diagnostics: FusiformFitDiagnostics = {
     ok: false,
@@ -477,6 +616,7 @@ export function buildPhotoSurfaceCanonicalFusiform({
   };
   const fail = (reason: FusiformFitFailureReason) => ({
     fit: null,
+    diagnosticFit: null,
     visibilityLimitedFit: null,
     endpoints: sourceEndpoints,
     diagnostics: { ...diagnostics, reason, photoCanonicalReason: reason },
@@ -503,7 +643,10 @@ export function buildPhotoSurfaceCanonicalFusiform({
       delta[0] * perpendicular[0] + delta[1] * perpendicular[1]] as const;
   };
   const endpointCoordinates = sourceEndpoints.map(project);
-  const sourceHalfLength = Math.max(1, ...endpointCoordinates.map(([value]) => Math.abs(value)));
+  const metricHalfLength = Number.isFinite(Number(candidateLengthPx)) && Number(candidateLengthPx) > 0
+    ? Number(candidateLengthPx) / 2
+    : 0;
+  const sourceHalfLength = Math.max(1, metricHalfLength, ...endpointCoordinates.map(([value]) => Math.abs(value)));
   const standardRatio = Math.max(1.8, Math.min(6, Number(aspectRatio)));
   const requestedReferenceRatio = referenceAspectRatio == null
     ? standardRatio
@@ -597,12 +740,18 @@ export function buildPhotoSurfaceCanonicalFusiform({
     medianSegment: segmentLengths[Math.floor(segmentLengths.length / 2)] || 0,
   };
   const surfaceValidation = validatePhotoSurfacePoints(
-    outline.slice(0, -1), landmarks, triangles, skinVisible,
+    outline.slice(0, -1), landmarks, triangles, skinVisible, rstlBoundaryVisible,
   );
   const boundarySurfaceValidation = validatePhotoSurfacePoints(
-    boundary, landmarks, triangles, skinVisible,
+    boundary, landmarks, triangles, skinVisible, rstlBoundaryVisible,
   );
   diagnostics.photoSurfaceMeshOutsideCount = surfaceValidation.meshOutsideCount;
+  diagnostics.photoRstlSupportedMeshOutsideCount = surfaceValidation.rstlSupportedMeshOutsideCount;
+  diagnostics.photoSurfacePointCount = surfaceValidation.visibleMask.length;
+  diagnostics.photoRstlSupportedUpperForeheadPointCount = surfaceValidation.rstlSupportedUpperForeheadPointCount;
+  diagnostics.photoSilhouetteOutsideCount = surfaceValidation.silhouetteOutsideCount;
+  diagnostics.photoBoundarySurfaceOutsideCount = boundarySurfaceValidation.outsideCount;
+  diagnostics.photoBoundarySilhouetteOutsideCount = boundarySurfaceValidation.silhouetteOutsideCount;
   diagnostics.photoHeadOutsideCount = surfaceValidation.headOutsideCount;
   diagnostics.photoSkinOutsideCount = surfaceValidation.skinOutsideCount;
   diagnostics.photoSurfaceOutsideCount = surfaceValidation.outsideCount;
@@ -613,22 +762,37 @@ export function buildPhotoSurfaceCanonicalFusiform({
   const visibleSegmentCount = circularRunCount(surfaceValidation.visibleMask, true);
   const hiddenSegmentCount = circularRunCount(surfaceValidation.visibleMask, false);
   const visibleSegments = circularVisibleSegments(outline.slice(0, -1), surfaceValidation.visibleMask);
+  const tipVisibility = [
+    surfaceValidation.visibleMask[0],
+    surfaceValidation.visibleMask[upper.length - 1],
+  ];
+  const hiddenTipCount = tipVisibility.filter((visible) => visible === false).length;
+  const boundaryVisibleSegmentCount = circularRunCount(boundarySurfaceValidation.visibleMask, true);
+  const boundaryHiddenSegmentCount = circularRunCount(boundarySurfaceValidation.visibleMask, false);
+  const candidateHiddenOnlyAtSilhouette = surfaceValidation.silhouetteOutsideCount
+    === surfaceValidation.outsideCount;
+  const boundaryHiddenOnlyAtSilhouette = boundarySurfaceValidation.outsideCount === 0
+    || (boundarySurfaceValidation.silhouetteOutsideCount === boundarySurfaceValidation.outsideCount
+      && boundaryVisibleSegmentCount === 1
+      && boundaryHiddenSegmentCount === 1);
   const visibilityLimitedEligible = referenceAspectRatio == null
     && ratio >= 2.2 - 1e-6
     && surfaceValidation.outsideCount > 0
-    && surfaceValidation.headOutsideCount === surfaceValidation.outsideCount
-    && boundarySurfaceValidation.outsideCount === 0
+    && candidateHiddenOnlyAtSilhouette
+    && boundaryHiddenOnlyAtSilhouette
     && hiddenSegmentCount === 1
     && visibleSegmentCount === 1
-    && visibleFraction >= 0.55
+    && visibleFraction >= PHOTO_VISIBILITY_LIMITED_MIN_VISIBLE_FRACTION
     && visibleSegments.length === 1
     && visibleSegments[0].length >= 8;
   diagnostics.photoVisibleFraction = visibleFraction;
   diagnostics.photoVisibleSegmentCount = visibleSegmentCount;
+  diagnostics.photoHiddenTipCount = hiddenTipCount;
   diagnostics.photoVisibilityLimitedEligible = visibilityLimitedEligible;
   if (surfaceValidation.outsideCount > 0) {
     return {
       fit: null,
+      diagnosticFit: fullFit,
       visibilityLimitedFit: visibilityLimitedEligible
         ? { ...fullFit, visibleSegments }
         : null,
@@ -647,6 +811,7 @@ export function buildPhotoSurfaceCanonicalFusiform({
     endpoints: [start, end],
     diagnostics,
     fit: fullFit,
+    diagnosticFit: null,
     visibilityLimitedFit: null,
   };
 }
@@ -1618,6 +1783,44 @@ export function buildPhotoSpaceDiameterEstimate(
   });
 }
 
+export function buildPhotoSpaceLinearCandidate({
+  center,
+  lengthMm,
+  pixelsPerMm,
+  axisHint,
+  sourceEndpoints = [],
+}: {
+  center: Vec3 | null;
+  lengthMm: number;
+  pixelsPerMm: number;
+  axisHint?: readonly number[] | null;
+  sourceEndpoints?: readonly Vec3[];
+}): { candidate: Vec3[]; endpoints: [Vec3, Vec3] } | null {
+  const lengthPx = Number(lengthMm) * Number(pixelsPerMm);
+  if (!center || !(lengthPx > 0) || !Number.isFinite(lengthPx)) return null;
+  const sourceAxis = sourceEndpoints.length >= 2
+    ? [
+      sourceEndpoints[1][0] - sourceEndpoints[0][0],
+      sourceEndpoints[1][1] - sourceEndpoints[0][1],
+    ]
+    : null;
+  const requestedAxis = axisHint && axisHint.length >= 2
+    ? [Number(axisHint[0]), Number(axisHint[1])]
+    : sourceAxis;
+  const axisLength = requestedAxis ? Math.hypot(requestedAxis[0], requestedAxis[1]) : 0;
+  if (!(axisLength > 1e-9) || !Number.isFinite(axisLength)) return null;
+  const halfAxis = [
+    requestedAxis![0] / axisLength * lengthPx * 0.5,
+    requestedAxis![1] / axisLength * lengthPx * 0.5,
+  ];
+  const first: Vec3 = [center[0] - halfAxis[0], center[1] - halfAxis[1], center[2]];
+  const second: Vec3 = [center[0] + halfAxis[0], center[1] + halfAxis[1], center[2]];
+  return {
+    candidate: [first, [...center] as Vec3, second],
+    endpoints: [first, second],
+  };
+}
+
 export function buildIncisionPhotoGeometry({
   landmarks,
   surfaceLandmarks,
@@ -1627,7 +1830,9 @@ export function buildIncisionPhotoGeometry({
   diameterEstimateRefs = [],
   photoDiameterEstimateMm,
   photoPixelsPerMm,
+  candidateLengthMm,
   boundaryRefs,
+  photoBoundary,
   candidateRefs,
   endpointRefs,
   candidateType,
@@ -1644,6 +1849,9 @@ export function buildIncisionPhotoGeometry({
   // and candidate/lesion projection.
   const rstl = mapAtlas(atlasLines, landmarks, triangles);
   const directionReferenceRstl = visibleProjectedRstlLines(rstl, landmarks, triangles);
+  const rstlBoundaryVisible: VisibilityPredicate = (point) => Boolean(
+    point && projectedRstlUpperForeheadSupportsPoint(point, directionReferenceRstl),
+  );
   const sourceEndpoints = mapSurfaceRefs(endpointRefs, photoLandmarks, triangles).pts;
   const detectedCenter = centerRef ? mapSurfaceRefs([centerRef], photoLandmarks, triangles).pts[0] || null : null;
   const photoDiameterEstimate = buildPhotoSpaceDiameterEstimate(
@@ -1663,10 +1871,21 @@ export function buildIncisionPhotoGeometry({
   // or imported candidate does not, keep that offset auditable instead of
   // moving the red point after the async workflow finishes.
   const candidateSmoothingCenter = detectedCenter || planningCenter;
-  const boundary = mapSurfaceRefs(boundaryRefs, photoLandmarks, triangles).pts;
+  const boundary = photoBoundary?.length
+    ? photoBoundary.map((point) => [...point] as Vec3)
+    : mapSurfaceRefs(boundaryRefs, photoLandmarks, triangles).pts;
   const sourceProjection = inspectPhotoCandidateProjection(sourceCandidate, candidateType);
   const nearestPhotoRstl = candidateSmoothingCenter
     ? nearestProjectedRstlSegment(candidateSmoothingCenter, directionReferenceRstl)
+    : null;
+  const photoLinearCandidate = candidateType === "linear"
+    ? buildPhotoSpaceLinearCandidate({
+      center: candidateSmoothingCenter,
+      lengthMm: Number(candidateLengthMm),
+      pixelsPerMm: Number(photoPixelsPerMm),
+      axisHint: nearestPhotoRstl?.axis || null,
+      sourceEndpoints,
+    })
     : null;
   const photoCanonicalInput = {
     sourceCandidate,
@@ -1678,7 +1897,11 @@ export function buildIncisionPhotoGeometry({
     landmarks: photoLandmarks,
     triangles,
     skinVisible: candidateSkinVisible,
+    rstlBoundaryVisible,
     axisHint: nearestPhotoRstl?.axis || null,
+    candidateLengthPx: Number(candidateLengthMm) > 0 && Number(photoPixelsPerMm) > 0
+      ? Number(candidateLengthMm) * Number(photoPixelsPerMm)
+      : undefined,
   };
   const standardPhotoCanonicalAttempt = candidateType === "fusiform" && candidateAspectRatio != null
     ? buildPhotoSurfaceCanonicalFusiform(photoCanonicalInput)
@@ -1726,6 +1949,7 @@ export function buildIncisionPhotoGeometry({
   const fallbackSurfaceValidation = fallbackOutline
     ? validatePhotoSurfacePoints(
       fallbackOutline.slice(0, -1), photoLandmarks, triangles, candidateSkinVisible,
+      rstlBoundaryVisible,
     )
     : null;
   const fallbackBoundaryOutsideCount = fallbackOutline
@@ -1780,12 +2004,34 @@ export function buildIncisionPhotoGeometry({
     ? inspectPhotoCandidateProjection(surfaceSmoothedCandidate, candidateType)
     : null;
   const useSurfaceSmoothedCandidate = Boolean(surfaceSmoothedCandidate && surfaceSmoothedProjection?.valid);
-  const candidate = useSurfaceSmoothedCandidate ? surfaceSmoothedCandidate! : sourceCandidate;
+  // Keep the actual rejected outline available for auditing. The controller
+  // decides whether it may enter the red layer; general face-surface exits are
+  // withheld there because red is reserved for sensitive non-skin openings.
+  // Never fall back to an undersized raw outline.
+  const canonicalDiagnosticFit = !useSurfaceSmoothedCandidate
+    && standardPhotoCanonicalAttempt?.diagnostics.reason === "photo_surface_exit"
+    ? standardPhotoCanonicalAttempt.diagnosticFit
+    : null;
+  const fallbackDiagnosticFit = !canonicalDiagnosticFit
+    && !useSurfaceSmoothedCandidate
+    && fallbackGateReason === "photo_surface_exit"
+    && fallbackBoundaryOutsideCount === 0
+    ? rawFusiformFitAttempt?.fit || null
+    : null;
+  const diagnosticFusiformRendering = canonicalDiagnosticFit || fallbackDiagnosticFit || null;
+  const diagnosticCandidate = diagnosticFusiformRendering?.outline || [];
+  const projectionGateReason: FusiformFitFailureReason | null = diagnosticFusiformRendering
+    ? "photo_surface_exit"
+    : standardPhotoCanonicalAttempt?.diagnostics.reason === "photo_boundary_not_enclosed"
+      ? "photo_boundary_not_enclosed"
+      : fallbackGateReason;
+  const candidate = photoLinearCandidate?.candidate
+    || (useSurfaceSmoothedCandidate ? surfaceSmoothedCandidate! : sourceCandidate);
   const endpoints = usePhotoCanonical
     ? selectedPhotoCanonicalAttempt!.endpoints
     : useCenteredFallback
       ? fallbackEndpoints
-      : candidateType === "fusiform" ? [] : sourceEndpoints;
+      : candidateType === "fusiform" ? [] : photoLinearCandidate?.endpoints || sourceEndpoints;
   // The bounded global fit is an optional visual improvement. If it cannot be
   // produced, keep a medically gated source candidate visible instead of
   // turning a valid plan into an empty overlay.
@@ -1796,14 +2042,16 @@ export function buildIncisionPhotoGeometry({
         valid: false,
         reasonCodes: [...new Set([
           ...sourceProjection.reasonCodes,
-          fallbackGateReason === "photo_boundary_not_enclosed"
+          projectionGateReason === "photo_boundary_not_enclosed"
             ? "candidate_boundary_not_enclosed"
-            : fallbackGateReason === "photo_surface_exit"
+            : projectionGateReason === "photo_surface_exit"
               ? "candidate_surface_exit"
               : "candidate_center_or_direction_unresolved",
         ])],
       }
-      : sourceProjection;
+      : photoLinearCandidate
+        ? inspectPhotoCandidateProjection(photoLinearCandidate.candidate, candidateType)
+        : sourceProjection;
   const renderedPlanningCenter = endpoints.length >= 2
     ? [
       (endpoints[0][0] + endpoints[1][0]) * 0.5,
@@ -1826,6 +2074,7 @@ export function buildIncisionPhotoGeometry({
       : mapSurfaceRefs(diameterEstimateRefs, photoLandmarks, triangles).pts,
     boundary,
     candidate,
+    diagnosticCandidate,
     endpoints,
     candidateProjection: {
       ...candidateProjection,
@@ -1852,6 +2101,12 @@ export function buildIncisionPhotoGeometry({
             photoBoundaryOutsideCount: selectedPhotoCanonicalAttempt.diagnostics.photoBoundaryOutsideCount,
             photoSurfaceOutsideCount: selectedPhotoCanonicalAttempt.diagnostics.photoSurfaceOutsideCount,
             photoSurfaceMeshOutsideCount: selectedPhotoCanonicalAttempt.diagnostics.photoSurfaceMeshOutsideCount,
+            photoRstlSupportedMeshOutsideCount: selectedPhotoCanonicalAttempt.diagnostics.photoRstlSupportedMeshOutsideCount,
+            photoSurfacePointCount: selectedPhotoCanonicalAttempt.diagnostics.photoSurfacePointCount,
+            photoRstlSupportedUpperForeheadPointCount: selectedPhotoCanonicalAttempt.diagnostics.photoRstlSupportedUpperForeheadPointCount,
+            photoSilhouetteOutsideCount: selectedPhotoCanonicalAttempt.diagnostics.photoSilhouetteOutsideCount,
+            photoBoundarySurfaceOutsideCount: selectedPhotoCanonicalAttempt.diagnostics.photoBoundarySurfaceOutsideCount,
+            photoBoundarySilhouetteOutsideCount: selectedPhotoCanonicalAttempt.diagnostics.photoBoundarySilhouetteOutsideCount,
             photoHeadOutsideCount: selectedPhotoCanonicalAttempt.diagnostics.photoHeadOutsideCount,
             photoSkinOutsideCount: selectedPhotoCanonicalAttempt.diagnostics.photoSkinOutsideCount,
             photoCanonicalAxisSource: selectedPhotoCanonicalAttempt.diagnostics.photoCanonicalAxisSource,
@@ -1875,6 +2130,7 @@ export function buildIncisionPhotoGeometry({
         : 0,
     },
     fusiformRendering: useSurfaceSmoothedCandidate ? fusiformRendering : null,
+    diagnosticFusiformRendering,
     projectedRstlDeviationDeg: projectedRstlDeviation(detectedCenter, endpoints, directionReferenceRstl),
   };
 }
