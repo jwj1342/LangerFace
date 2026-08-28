@@ -177,9 +177,11 @@ Live 工作台不再发布实时 3D 路线。扫描重建、刚性投影、FLAME
 
 ## 9. 网页开发、构建与部署
 
-- 本地开发：`cd web && npm run dev`，Vite 默认监听 `http://127.0.0.1:5173`。
+- 本地开发：`cd web && npm run doctor:wrinkle && npm run dev`，Vite 默认监听 `http://127.0.0.1:5173`。
 - 生产构建：`cd web && npm ci && npm run build`，输出 `web/dist/`。
 - 生产预览：`cd web && npm run preview`，Vite 默认监听 `http://127.0.0.1:4173`。
+- Vite dev/preview 会挂载本地 Python V10 API；普通静态服务器托管 `dist/` 时不会挂载该 API，
+  不能用于本地四区域皱纹检测。
 - Vite 只有 **1 个 Rollup 入口**：`web/index.html`。`/live`、`/personalized`、`/v6-review` 与 `/app/*`
   均由 React Router 处理；历史 `/current/*` 在 SPA 内重定向到 `/live`。`annotate.html`、`incision_workflow.html`、`incision_agent.html`、`surgery.html`
   只作为轻量兼容跳转页复制进 `dist/`，不再作为 Rollup 多入口应用构建。

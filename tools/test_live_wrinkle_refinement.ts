@@ -4,6 +4,8 @@ import fs from "node:fs";
 import {
   fromWrinkleWorkingPoint,
   toWrinkleWorkingPoint,
+  wrinkleSourceSize,
+  wrinkleWorkingTransform,
 } from "../web/src/services/liveWrinkleMath.ts";
 import { runGeneralLiveWrinklePipeline } from
   "../web/src/services/personalized/liveWrinklePipeline.ts";
@@ -50,11 +52,40 @@ class FakeTensor {
   dispose(): void {}
 }
 
-const transform = { scale: 0.5, offsetX: 12, offsetY: 38 };
+const transform = {
+  scale: 0.5,
+  offsetX: 12,
+  offsetY: 38,
+};
 const sourcePoint = [320, 180] as const;
 const workingPoint = toWrinkleWorkingPoint(sourcePoint, transform);
 assert.deepEqual(workingPoint, [172, 128]);
 assert.deepEqual(fromWrinkleWorkingPoint(workingPoint, transform), sourcePoint);
+
+assert.deepEqual(
+  wrinkleSourceSize({ naturalWidth: 3024, naturalHeight: 4032, width: 640, height: 480 } as any),
+  { width: 3024, height: 4032 },
+  "uploaded images must use intrinsic pixels instead of responsive display dimensions",
+);
+assert.deepEqual(
+  wrinkleSourceSize({ videoWidth: 1920, videoHeight: 1080, width: 640, height: 360 } as any),
+  { width: 1920, height: 1080 },
+  "video sources must use their intrinsic frame dimensions",
+);
+const portraitTransform = wrinkleWorkingTransform(3024, 4032);
+assert.deepEqual(portraitTransform, {
+  size: 1280,
+  scale: 1280 / 4032,
+  targetWidth: 960,
+  targetHeight: 1280,
+  offsetX: 160,
+  offsetY: 0,
+});
+assert.deepEqual(
+  wrinkleWorkingTransform(3024, 4032),
+  portraitTransform,
+  "the same source must produce the same working frame regardless of viewport size",
+);
 
 const panel = fs.readFileSync(
   new URL("../web/src/components/LiveWrinklePanel.tsx", import.meta.url),
@@ -127,6 +158,14 @@ assert.match(analysisRuntime, /runningMode: "IMAGE"/,
 assert.match(analysisRuntime, /outputFaceBlendshapes: false/);
 assert.match(analysisRuntime, /detectV9ReferenceLandmarks/,
   "v9 refinement must remap the atlas from the dedicated reference landmarks");
+assert.match(analysisRuntime,
+  /const sourceSize = wrinkleSourceSize\(source\)[\s\S]*detectV9ReferenceLandmarks\([\s\S]*sourceSize\.width,[\s\S]*sourceSize\.height,[\s\S]*buildWrinkleWorkingFrame\(source, sourceSize\.width, sourceSize\.height\)/,
+  "wrinkle pixels and landmarks must use intrinsic source dimensions on every viewport");
+assert.doesNotMatch(analysisRuntime,
+  /detectV9ReferenceLandmarks\([\s\S]{0,160}els\.canvas\.(?:width|height)|buildWrinkleWorkingFrame\(source, els\.canvas/,
+  "responsive canvas dimensions must not change the wrinkle algorithm input");
+assert.match(analysisRuntime, /workingRgbaSha256[\s\S]*landmarksSha256[\s\S]*standardRstlSha256/,
+  "the debug snapshot must expose privacy-safe reproducibility fingerprints");
 assert.match(analysisRuntime, /expandForehead: RSTL_STANDARD_CONTRACT\.expandForehead/,
   "live wrinkle refinement must use the same v8.1.96 forehead mapping as the experiment");
 assert.match(analysisRuntime, /from "\.\/personalized\/v6RstlRefinementV9\.ts"/,
@@ -161,6 +200,8 @@ const workerRuntime = fs.readFileSync(
   new URL("../web/src/workers/liveWrinklePipeline.worker.ts", import.meta.url),
   "utf8",
 );
+assert.match(workerRuntime, /browserBaselineSha256[\s\S]*v10InputImageSha256/,
+  "the worker must expose baseline and V10 input fingerprints for cross-machine comparison");
 assert.match(workerRuntime,
   /onnxruntime-web\/dist\/ort-wasm-simd-threaded\.mjs\?url/,
   "the deployed worker must bundle the ONNX Runtime WASM module explicitly");
@@ -170,6 +211,14 @@ assert.match(workerRuntime,
 assert.match(workerRuntime,
   /wasmPaths:\s*\{\s*mjs:\s*ortWasmModuleUrl,\s*wasm:\s*ortWasmBinaryUrl\s*\}/,
   "the deployed worker detector must use the bundled ONNX Runtime WASM assets");
+const yoloRuntime = fs.readFileSync(
+  new URL("../web/src/services/personalized/yoloWrinkleOnnx.ts", import.meta.url),
+  "utf8",
+);
+assert.match(yoloRuntime, /runtime\.env\.wasm\.numThreads = 1/,
+  "browser YOLO must use one WASM thread on every machine");
+assert.match(yoloRuntime, /runtime\.env\.wasm\.proxy = false/,
+  "browser YOLO must not vary execution through a proxy worker");
 const workerClientRuntime = fs.readFileSync(
   new URL("../web/src/services/personalized/liveWrinklePipelineWorkerClient.ts", import.meta.url),
   "utf8",
@@ -195,6 +244,8 @@ assert.match(workerRuntime, /WRINKLE_V10_ENDPOINT/,
   "the worker must request per-image V10 evidence from the unified provider");
 assert.match(workerRuntime, /buildDirectNoseDorsumRstl/,
   "nasal-dorsum wrinkles must generate direct RSTL curves");
+assert.doesNotMatch(workerRuntime, /noseLines\.length\s*!==\s*3|鼻背纹应生成 3 条/,
+  "live direct generation must follow the current image instead of requiring three nose wrinkles");
 assert.match(workerRuntime, /buildNoseRootIntersectionVisibilityPlan/,
   "direct nasal RSTL must retain the reviewed intersection visibility rule");
 assert.match(workerRuntime, /Comlink\.expose\(api\)/,

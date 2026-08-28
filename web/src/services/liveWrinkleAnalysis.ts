@@ -15,6 +15,8 @@ import type { Vec3 } from "./softBody.ts";
 import {
   fromWrinkleWorkingPoint,
   toWrinkleWorkingPoint,
+  wrinkleSourceSize,
+  wrinkleWorkingTransform,
 } from "./liveWrinkleMath.ts";
 import { V6_RSTL_ALGORITHM } from "./personalized/v6RstlRefinementV9.ts";
 import {
@@ -75,6 +77,7 @@ interface WrinkleAnalysisState {
   audit: Record<string, any> | null;
   timings: LiveWrinkleWorkerTimings | null;
   provider: WrinkleV10ProviderCapability | null;
+  reproducibility: Record<string, unknown> | null;
   error: string | null;
 }
 
@@ -94,6 +97,7 @@ const state: WrinkleAnalysisState = {
   audit: null,
   timings: null,
   provider: null,
+  reproducibility: null,
   error: null,
 };
 
@@ -163,14 +167,8 @@ export function buildWrinkleWorkingFrame(
   height: number,
   maximumSize = 1280,
 ): WorkingFrame {
-  const maximum = Math.max(width, height);
-  if (!(maximum > 0)) throw new Error("皱纹检测画面尺寸无效");
-  const size = Math.max(4, Math.min(maximumSize, Math.round(maximum)));
-  const scale = size / maximum;
-  const targetWidth = width * scale;
-  const targetHeight = height * scale;
-  const offsetX = (size - targetWidth) / 2;
-  const offsetY = (size - targetHeight) / 2;
+  const { size, scale, targetWidth, targetHeight, offsetX, offsetY } =
+    wrinkleWorkingTransform(width, height, maximumSize);
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -186,6 +184,21 @@ export function buildWrinkleWorkingFrame(
     offsetX,
     offsetY,
   };
+}
+
+async function sha256Hex(value: Uint8Array | Uint8ClampedArray | string): Promise<string> {
+  const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
+  if (!globalThis.crypto?.subtle) return "unavailable-in-insecure-context";
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes.slice().buffer);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function numericFingerprint(value: unknown): Promise<string> {
+  return sha256Hex(JSON.stringify(value, (_key, item) => (
+    typeof item === "number" && Number.isFinite(item) ? Number(item.toFixed(6)) : item
+  )));
 }
 
 function currentStandardLines(landmarks: Vec3[]): EditableRefineLine[] {
@@ -325,6 +338,8 @@ export function getLiveWrinkleAnalysisDebugSnapshot() {
     audit: state.audit ? { ...state.audit } : null,
     timings: state.timings ? { ...state.timings } : null,
     provider: state.provider ? { ...state.provider } : null,
+    reproducibility: state.reproducibility ? { ...state.reproducibility } : null,
+    error: state.error,
     evidenceLines: state.evidenceLines.map((line) => ({
       id: line.id,
       className: line.className,
@@ -378,16 +393,18 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
   state.audit = null;
   state.timings = null;
   state.provider = null;
+  state.reproducibility = null;
   updateStatus("loading");
   try {
+    const sourceSize = wrinkleSourceSize(source);
     const landmarks = await detectV9ReferenceLandmarks(
       source,
-      els.canvas.width,
-      els.canvas.height,
+      sourceSize.width,
+      sourceSize.height,
     );
     if (generation !== state.generation) return;
     state.standardLines = currentStandardLines(landmarks);
-    const working = buildWrinkleWorkingFrame(source, els.canvas.width, els.canvas.height);
+    const working = buildWrinkleWorkingFrame(source, sourceSize.width, sourceSize.height);
     const workLandmarks = landmarks.map((point) => {
       const [x, y] = toWrinkleWorkingPoint(point, working);
       return [x, y, (point[2] || 0) * working.scale] as Vec3;
@@ -398,6 +415,21 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
       region: line.region,
       pts: line.pts.map((point) => toWrinkleWorkingPoint(point, working)),
     }));
+    const [workingRgbaSha256, landmarksSha256, standardRstlSha256] = await Promise.all([
+      sha256Hex(working.imageData.data),
+      numericFingerprint(workLandmarks),
+      numericFingerprint(seeds),
+    ]);
+    if (generation !== state.generation) return;
+    state.reproducibility = {
+      sourceWidth: sourceSize.width,
+      sourceHeight: sourceSize.height,
+      workingSize: working.size,
+      workingRgbaSha256,
+      landmarksSha256,
+      standardRstlSha256,
+    };
+    publishDebugSnapshot();
     const xs = workLandmarks.map((point) => point[0]);
     const faceWidth = Math.max(...xs) - Math.min(...xs);
     updateStatus("detecting");
@@ -416,6 +448,12 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
       state.sourceComponentCount = Number(evidence.summary.sourceConnectedComponents)
         || Number(evidence.summary.fineLineCount)
         || evidence.lines.length;
+      state.reproducibility = {
+        ...(state.reproducibility || {}),
+        browserBaselineSha256: evidence.summary.browserBaselineSha256,
+        v10InputImageSha256: evidence.summary.v10InputImageSha256,
+        lineCountByAnatomicalClass: evidence.summary.lineCountByAnatomicalClass,
+      };
       window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
       updateStatus("refining");
     };
@@ -567,6 +605,7 @@ export function resetLiveWrinkleAnalysis(): void {
   state.audit = null;
   state.timings = null;
   state.provider = null;
+  state.reproducibility = null;
   state.error = null;
   updateWrinkleUi();
   publishDebugSnapshot();

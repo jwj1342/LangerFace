@@ -1,8 +1,13 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { accessSync, constants, existsSync } from "node:fs";
+import {
+  spawn,
+  spawnSync,
+  type ChildProcessWithoutNullStreams,
+} from "node:child_process";
+import { createHash } from "node:crypto";
+import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { posix, resolve, win32 } from "node:path";
 
 import type { Plugin, PreviewServer, ViteDevServer } from "vite";
 import {
@@ -16,6 +21,32 @@ import {
 // The live worker sends lossless RGBA pixels. A 1280x1280 frame is already
 // over 6 MiB before metadata, so keep the transport guard above that size.
 const MAXIMUM_REQUEST_BYTES = 32 * 1024 * 1024;
+const REPOSITORY_ROOT = resolve(import.meta.dirname, "../..");
+const CHECKPOINT_PATH = resolve(
+  REPOSITORY_ROOT,
+  "assets/models/wrinkle_unet_patient_finetuned.pth",
+);
+const REQUIRED_PYTHON_MODULES = ["numpy", "cv2", "scipy", "torch"] as const;
+const EXPECTED_PYTHON_DEPENDENCIES: Record<string, string> = {
+  numpy: "2.2.6",
+  cv2: "4.12.0",
+  scipy: "1.15.3",
+  torch: "2.9.1",
+};
+
+export interface PythonCandidateOptions {
+  environment?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  repositoryRoot?: string;
+}
+
+export interface LocalWrinkleRuntime {
+  python: string;
+  pythonVersion: string;
+  dependencies: Record<string, string>;
+  checkpoint: string;
+  checkpointSha256: string;
+}
 
 export class LocalProviderError extends Error {
   readonly statusCode: number;
@@ -26,26 +57,150 @@ export class LocalProviderError extends Error {
   }
 }
 
-function pythonExecutable(): string {
-  const configured = process.env.LANGERFACE_WRINKLE_PYTHON;
-  const virtualEnvironment = process.env.VIRTUAL_ENV;
-  const candidates = [
-    configured,
-    virtualEnvironment
-      ? join(virtualEnvironment, process.platform === "win32" ? "Scripts/python.exe" : "bin/python")
-      : undefined,
-    "/opt/anaconda3/envs/sod/bin/python",
-    "/opt/anaconda3/envs/longerface/bin/python",
+function unique(values: Array<string | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))];
+}
+
+export function pythonCandidates(options: PythonCandidateOptions = {}): string[] {
+  const environment = options.environment ?? process.env;
+  const platform = options.platform ?? process.platform;
+  const repositoryRoot = options.repositoryRoot ?? REPOSITORY_ROOT;
+  const path = platform === "win32" ? win32 : posix;
+  const executable = platform === "win32" ? ["Scripts", "python.exe"] : ["bin", "python"];
+  return unique([
+    environment.LANGERFACE_WRINKLE_PYTHON,
+    environment.VIRTUAL_ENV ? path.join(environment.VIRTUAL_ENV, ...executable) : undefined,
+    path.join(repositoryRoot, ".venv", ...executable),
     "python3",
     "python",
-  ].filter((value): value is string => Boolean(value));
-  for (const candidate of candidates) {
-    if (!candidate.includes("/") || existsSync(candidate)) {
-      if (candidate.includes("/")) accessSync(candidate, constants.X_OK);
-      return candidate;
-    }
+  ]);
+}
+
+function setupCommand(repositoryRoot = REPOSITORY_ROOT, platform = process.platform): string {
+  if (platform === "win32") {
+    return `cd /d "${repositoryRoot}" && py -3.12 -m venv .venv && .venv\\Scripts\\python.exe -m pip install -c requirements-wrinkle-lock.txt -e ".[wrinkle]"`;
   }
-  throw new Error("未找到可运行四区域皱纹检测的 Python 环境");
+  return `cd "${repositoryRoot}" && python3 -m venv .venv && .venv/bin/python -m pip install -c requirements-wrinkle-lock.txt -e ".[wrinkle]"`;
+}
+
+function candidateExists(candidate: string): boolean {
+  const isPath = candidate.includes("/") || candidate.includes("\\");
+  if (!isPath) return true;
+  if (!existsSync(candidate)) return false;
+  try {
+    accessSync(candidate, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function inspectPython(candidate: string): {
+  version: string;
+  dependencies: Record<string, string>;
+  issues: string[];
+} | null {
+  if (!candidateExists(candidate)) return null;
+  const probe = [
+    "import importlib,json,sys",
+    `modules=${JSON.stringify([...REQUIRED_PYTHON_MODULES])}`,
+    "versions={}",
+    "errors={}",
+    "for name in modules:",
+    "    try:",
+    "        module=importlib.import_module(name)",
+    "        versions[name]=str(getattr(module,'__version__','installed'))",
+    "    except Exception as error:",
+    "        errors[name]=f'{type(error).__name__}: {error}'",
+    "print(json.dumps({'version':list(sys.version_info[:3]),'versions':versions,'errors':errors}))",
+  ].join("\n");
+  const result = spawnSync(candidate, ["-c", probe], {
+    encoding: "utf8",
+    timeout: 30_000,
+    windowsHide: true,
+  });
+  if (result.error || result.status !== 0) {
+    const detail = result.error?.message || result.stderr.trim() || `exit ${result.status}`;
+    return { version: "unknown", dependencies: {}, issues: [detail] };
+  }
+  try {
+    const payload = JSON.parse(result.stdout.trim()) as {
+      version?: number[];
+      versions?: Record<string, string>;
+      errors?: Record<string, string>;
+    };
+    const version = payload.version ?? [];
+    const issues = Object.entries(payload.errors ?? {})
+      .map(([name, detail]) => `${name}: ${detail}`);
+    for (const [name, expected] of Object.entries(EXPECTED_PYTHON_DEPENDENCIES)) {
+      const actual = (payload.versions?.[name] ?? "").split("+")[0];
+      if (actual && actual !== expected) {
+        issues.push(`${name}: 需要 ${expected}，当前为 ${payload.versions![name]}`);
+      }
+    }
+    if (version.length < 2 || version[0] !== 3 || version[1] < 10 || version[1] > 12) {
+      issues.unshift(`需要 Python 3.10-3.12，当前为 ${version.join(".") || "unknown"}`);
+    }
+    return {
+      version: version.join("."),
+      dependencies: payload.versions ?? {},
+      issues,
+    };
+  } catch {
+    return { version: "unknown", dependencies: {}, issues: ["无法读取 Python 环境信息"] };
+  }
+}
+
+export function inspectLocalWrinkleRuntime(
+  options: PythonCandidateOptions = {},
+): LocalWrinkleRuntime {
+  if (!existsSync(CHECKPOINT_PATH)) {
+    throw new Error(`V10 checkpoint 缺失：${CHECKPOINT_PATH}`);
+  }
+  const checkpointSha256 = createHash("sha256")
+    .update(readFileSync(CHECKPOINT_PATH))
+    .digest("hex");
+  if (checkpointSha256 !== WRINKLE_V10_CHECKPOINT_SHA256) {
+    throw new Error(
+      `V10 checkpoint 哈希不匹配：期望 ${WRINKLE_V10_CHECKPOINT_SHA256}，实际 ${checkpointSha256}`,
+    );
+  }
+
+  const configured = (options.environment ?? process.env).LANGERFACE_WRINKLE_PYTHON;
+  const failures: string[] = [];
+  for (const candidate of pythonCandidates(options)) {
+    const inspected = inspectPython(candidate);
+    if (!inspected) {
+      failures.push(`${candidate}: 不可运行`);
+      if (configured === candidate) break;
+      continue;
+    }
+    if (inspected.issues.length) {
+      failures.push(`${candidate}: ${inspected.issues.join("; ")}`);
+      if (configured === candidate) break;
+      continue;
+    }
+    return {
+      python: candidate,
+      pythonVersion: inspected.version,
+      dependencies: inspected.dependencies,
+      checkpoint: CHECKPOINT_PATH,
+      checkpointSha256,
+    };
+  }
+  throw new Error(
+    `本地 V10 环境未就绪。${failures.join("；") || "未找到 Python 3.10-3.12"}。\n`
+    + `请运行：${setupCommand(options.repositoryRoot, options.platform)}`,
+  );
+}
+
+function detectorFailure(reason: unknown, stderr: string): Error {
+  const fallback = reason instanceof Error ? reason.message : String(reason);
+  const pythonDetail = stderr.trim();
+  return new Error(
+    `四区域皱纹检测服务中断：${pythonDetail || fallback}\n`
+    + `运行 npm run doctor:wrinkle 检查环境；若未就绪，请运行：${setupCommand()}`,
+  );
 }
 
 type LocalViteServer = Pick<ViteDevServer | PreviewServer, "httpServer" | "middlewares">;
@@ -73,11 +228,12 @@ export class PersistentDetector {
 
   private ensureProcess(): ChildProcessWithoutNullStreams {
     if (this.child && this.child.exitCode === null) return this.child;
-    const child = this.options.spawnDetector?.() || spawn(pythonExecutable(), [
+    const runtime = this.options.spawnDetector ? null : inspectLocalWrinkleRuntime();
+    const child = this.options.spawnDetector?.() || spawn(runtime!.python, [
         resolve(import.meta.dirname, "../../tools/run_live_four_region_wrinkle.py"),
         "--serve",
       ], {
-        cwd: resolve(import.meta.dirname, "../.."),
+        cwd: REPOSITORY_ROOT,
         env: {
           ...process.env,
           MPLCONFIGDIR: resolve(tmpdir(), "langerface-matplotlib"),
@@ -106,8 +262,7 @@ export class PersistentDetector {
     const fail = (reason: unknown) => {
       if (this.child !== child) return;
       this.child = null;
-      const detail = reason instanceof Error ? reason.message : String(reason);
-      const error = new Error(`四区域皱纹检测服务中断：${detail || this.stderr}`);
+      const error = detectorFailure(reason, this.stderr);
       this.readyPromise = null;
       this.settleReady?.(error);
       for (const pending of [...this.pending.values()]) pending.finish(error);
