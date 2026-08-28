@@ -18,12 +18,14 @@ import { Label } from "./ui/label";
 import { StatusBadge } from "./ui/status-badge";
 
 interface LiveControlRailProps {
+  moveQualityToMobileStage?: boolean;
   showIncisionEntry?: boolean;
   showStatusOverview?: boolean;
   showPersonalizedHint?: boolean;
 }
 
 export function LiveControlRail({
+  moveQualityToMobileStage = false,
   showIncisionEntry = true,
   showStatusOverview = true,
   showPersonalizedHint = true,
@@ -54,7 +56,7 @@ export function LiveControlRail({
       <LiveWrinklePanel showAdvancedCaptureHint={showPersonalizedHint} />
       <LiveRefinePanel />
       <LiveRenderControlsPanel />
-      <LiveQualityPanel />
+      <LiveQualityPanel mobilePortalSelector={moveQualityToMobileStage ? ".workflow-workbench .main-wrap" : undefined} />
 
       <Disclaimer>
         内置图谱为示意性首版（未经临床验证），方向参考 Borges RSTL。

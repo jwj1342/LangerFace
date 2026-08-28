@@ -1920,6 +1920,7 @@ function drawDraftOverlay(state: WorkflowIncisionState) {
   diagnosticCandidatePath?.setAttribute("d", diagnosticCandidateVisible ? diagnosticCandidatePathData : "");
   if (center && centerCircle) {
     centerCircle.style.display = "";
+    centerCircle.setAttribute("r", mobileWorkflowViewportActive() ? "4" : "6");
     centerCircle.setAttribute("cx", String(center.x));
     centerCircle.setAttribute("cy", String(center.y));
   } else if (centerCircle) {

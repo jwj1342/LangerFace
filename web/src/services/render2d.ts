@@ -40,7 +40,11 @@ import {
   symmetryPartnerIndex,
 } from "./liveRefine2d";
 import { modelState, renderState, sourceState } from "./liveState.ts";
-import { mobileIncisionCandidateVisible } from "./mobileWorkflowVisibility.ts";
+import {
+  mobileIncisionCandidateVisible,
+  mobileRstlLayerVisible,
+  mobileWrinkleLayerVisible,
+} from "./mobileWorkflowVisibility.ts";
 import { setIncisionOverlayQa, setLive } from "./liveUi.ts";
 import type { IncisionOverlayPayload } from "./dataSource";
 import {
@@ -219,7 +223,7 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   ctx.globalAlpha = renderState.opacity; ctx.lineWidth = Math.max(2, W / 1300);
   ctx.lineJoin = "round"; ctx.lineCap = "round";
   let count = 0;
-  if (canDrawAtlas && shouldDrawRstlLayer()) {
+  if (canDrawAtlas && shouldDrawRstlLayer() && mobileRstlLayerVisible()) {
     for (let li = 0; li < displayLines.length; li++) {
       if (visibleLineIndices && !visibleLineIndices.has(li)) continue;
       const ln = displayLines[li];
@@ -269,7 +273,7 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
       count++;
     }
   }
-  if (canDrawAtlas && shouldDrawWrinkleLayer()) {
+  if (canDrawAtlas && shouldDrawWrinkleLayer() && mobileWrinkleLayerVisible()) {
     const evidenceColors: Record<string, string> = {
       forehead: "#ff9f1c",
       frown: "#ff4d6d",

@@ -374,7 +374,7 @@ const liveCommands = new LiveCommandRouter({
   clearIncisionOverlay,
 });
 
-function bindLiveEvents(signal: AbortSignal): void {
+function bindLiveEvents(signal: AbortSignal, root: ParentNode | Document): void {
   els.file.addEventListener("change", (e) => runLiveAction("file_source", () => handleFile((e.target as HTMLInputElement | null)?.files?.[0])), { signal });
   els.wrinkleDisplayMode.addEventListener("change", (event) => {
     runLiveAction("wrinkle_display_mode", () => setWrinkleDisplayMode((event.target as HTMLSelectElement).value));
@@ -409,6 +409,9 @@ function bindLiveEvents(signal: AbortSignal): void {
   els.refineReset.addEventListener("click", () => runLiveAction("refine_reset", resetRefineToAuto), { signal });
   window.addEventListener("langerface:refine2d-redraw", () => {
     refreshStaticImage();
+  }, { signal });
+  window.addEventListener("langerface:live-quality-relocated", () => {
+    bindDom(root);
   }, { signal });
   window.addEventListener("langerface:refine2d-state", updateWrinkleUi, { signal });
   if (isReactManagedWorkbench()) {
@@ -495,7 +498,7 @@ export function mountLiveWorkbench(root: ParentNode | Document = document) {
   previewSystem = null;
   previewMeta = null;
   recordingController = null;
-  bindLiveEvents(abortController.signal);
+  bindLiveEvents(abortController.signal, root);
   updateRefineUi();
   updateWrinkleUi();
   buildZoomCards(refreshStaticImage);

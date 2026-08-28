@@ -35,7 +35,7 @@ export function WorkflowCanvasTools() {
           aria-busy={markerBusy}
           aria-pressed={markerMode}
           aria-describedby={freehandMarkerUnavailable ? "freehandMarkerDisabledTooltip" : undefined}
-          className={freehandMarkerUnavailable ? "workflow-disabled-action" : undefined}
+          className={`workflow-marker-toggle${freehandMarkerUnavailable ? " workflow-disabled-action" : ""}`}
           title={freehandMarkerUnavailable
             ? undefined
             : !cutaneous

@@ -17,8 +17,8 @@ export function WorkflowIncisionRail() {
         action={<StatusBadge>单页工作流</StatusBadge>}
       />
       <TumorInputPanel showDepthControl={false} continuousFreehand />
-      <CandidateResultPanel showWorkflowGuidance={false} />
       <MobileCandidateAdjustPanel />
+      <CandidateResultPanel showWorkflowGuidance={false} />
       <ReviewControlsPanel />
       <CandidateLibraryPanel
         automaticOverlay

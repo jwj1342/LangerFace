@@ -1,10 +1,12 @@
 import { Camera, Download, ImagePlus, Pause, Play, RotateCw, ScanLine } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useIncisionControllerCommands, useLiveControllerCommands } from "../hooks/useControllerCommands";
 import {
   resetMobileWorkflowVisibility,
   setMobileIncisionCandidateVisible,
+  setMobileRstlLayerVisible,
+  setMobileWrinkleLayerVisible,
 } from "../services/mobileWorkflowVisibility";
 import { useIncisionStore } from "../stores/incisionStore";
 import { useLiveStore } from "../stores/liveStore";
@@ -33,34 +35,12 @@ function writeWrinkleDisplayMode(mode: WrinkleDisplayMode) {
   select.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-export function MobileCanvasQualityBadge() {
-  const [quality, setQuality] = useState("未开始 0%");
-
-  useEffect(() => {
-    const source = document.querySelector<HTMLElement>("#qualityVal");
-    if (!source) return;
-    const sync = () => setQuality(source.textContent?.trim() || "未开始 0%");
-    sync();
-    const observer = new MutationObserver(sync);
-    observer.observe(source, { characterData: true, childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <aside className="mobile-canvas-quality" aria-label="画面质量参考" aria-live="polite">
-      <span>跟踪质量参考</span>
-      <strong>{quality}</strong>
-      <small>受分辨率与光线影响</small>
-    </aside>
-  );
-}
-
 export function MobileWorkflowControls() {
   const liveCommands = useLiveControllerCommands();
   const liveSnapshot = useLiveStore((state) => state.snapshot);
-  const [mode, setMode] = useState<WrinkleDisplayMode>("both");
+  const [rstlVisible, setRstlVisible] = useState(true);
+  const [wrinklesVisible, setWrinklesVisible] = useState(true);
   const [incisionVisible, setIncisionVisible] = useState(true);
-  const flags = useMemo(() => displayModeFlags(mode), [mode]);
   const running = Boolean(liveSnapshot?.source.running);
   const paused = Boolean(liveSnapshot?.source.paused);
   const recording = Boolean(liveSnapshot?.recording);
@@ -68,11 +48,23 @@ export function MobileWorkflowControls() {
 
   useEffect(() => {
     const select = document.querySelector<HTMLSelectElement>("#wrinkleDisplayMode");
-    const sync = () => setMode(readWrinkleDisplayMode());
+    const sync = () => {
+      const flags = displayModeFlags(readWrinkleDisplayMode());
+      setRstlVisible(flags.rstl);
+      setWrinklesVisible(flags.wrinkles);
+    };
     sync();
     select?.addEventListener("change", sync);
     return () => select?.removeEventListener("change", sync);
   }, []);
+
+  useEffect(() => {
+    setMobileRstlLayerVisible(rstlVisible);
+  }, [rstlVisible]);
+
+  useEffect(() => {
+    setMobileWrinkleLayerVisible(wrinklesVisible);
+  }, [wrinklesVisible]);
 
   useEffect(() => {
     setMobileIncisionCandidateVisible(incisionVisible);
@@ -81,14 +73,16 @@ export function MobileWorkflowControls() {
   useEffect(() => resetMobileWorkflowVisibility, []);
 
   const toggleWrinkleLayer = (layer: "rstl" | "wrinkles") => {
-    const nextRstl = layer === "rstl" ? !flags.rstl : flags.rstl;
-    const nextWrinkles = layer === "wrinkles" ? !flags.wrinkles : flags.wrinkles;
-    if (!nextRstl && !nextWrinkles) return;
-    const nextMode: WrinkleDisplayMode = nextRstl && nextWrinkles
-      ? "both"
-      : nextRstl ? "rstl" : "wrinkles";
-    setMode(nextMode);
-    writeWrinkleDisplayMode(nextMode);
+    const nextRstl = layer === "rstl" ? !rstlVisible : rstlVisible;
+    const nextWrinkles = layer === "wrinkles" ? !wrinklesVisible : wrinklesVisible;
+    setRstlVisible(nextRstl);
+    setWrinklesVisible(nextWrinkles);
+    if (nextRstl || nextWrinkles) {
+      const nextMode: WrinkleDisplayMode = nextRstl && nextWrinkles
+        ? "both"
+        : nextRstl ? "rstl" : "wrinkles";
+      writeWrinkleDisplayMode(nextMode);
+    }
   };
 
   return (
@@ -127,14 +121,14 @@ export function MobileWorkflowControls() {
       <div className="mobile-workflow-section">
         <div className="mobile-workflow-heading">
           <span>叠加图层</span>
-          <small>至少保留一项 RSTL / 皱纹</small>
+          <small>可全部隐藏，结果仍会保留</small>
         </div>
         <div className="mobile-layer-grid">
           <Button
             variant="workbench"
             type="button"
             className="mobile-layer-toggle"
-            aria-pressed={flags.rstl}
+            aria-pressed={rstlVisible}
             onClick={() => toggleWrinkleLayer("rstl")}
           >
             RSTL
@@ -143,7 +137,7 @@ export function MobileWorkflowControls() {
             variant="workbench"
             type="button"
             className="mobile-layer-toggle"
-            aria-pressed={flags.wrinkles}
+            aria-pressed={wrinklesVisible}
             onClick={() => toggleWrinkleLayer("wrinkles")}
           >
             皱纹

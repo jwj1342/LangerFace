@@ -61,6 +61,7 @@ const incisionSnapshots = read("web/src/services/incisionSnapshots.ts");
 const tumorInputPanel = read("web/src/components/TumorInputPanel.tsx");
 const reviewControlsPanel = read("web/src/components/ReviewControlsPanel.tsx");
 const liveRail = read("web/src/components/LiveControlRail.tsx");
+const liveQualityPanel = read("web/src/components/LiveQualityPanel.tsx");
 const liveSourceControls = read("web/src/components/LiveSourceControlsPanel.tsx");
 const liveRenderControls = read("web/src/components/LiveRenderControlsPanel.tsx");
 const liveCanvasFit = read("web/src/services/liveCanvasFit.ts");
@@ -87,8 +88,18 @@ assert.match(workbench, /workflowOverlay={<WorkflowCanvasOverlay\s*\/>}/, "workf
 assert.match(workbench, /workflowStatus={<WorkflowStageStatus\s*\/>}/, "workflow places incision status in the shared stage header");
 assert.match(workbench, /mobileControls={<MobileWorkflowControls\s*\/>}/,
   "workflow mounts one phone-only control dock beside the shared canvas");
-assert.match(workbench, /mobileOverlay={<MobileCanvasQualityBadge\s*\/>}/,
-  "workflow mounts the phone quality reference at the canvas edge");
+assert.match(workbench, /<LiveControlRail[\s\S]*?moveQualityToMobileStage/,
+  "workflow moves its existing quality panel to the phone canvas instead of mounting a duplicate badge");
+assert.doesNotMatch(workbench, /MobileCanvasQualityBadge|mobileOverlay=/,
+  "workflow no longer creates a second quality readout beside the original panel");
+assert.match(liveQualityPanel, /createPortal\(panel, mobileTarget\)/,
+  "the original quality panel moves to the phone canvas while retaining its existing DOM ids and updates");
+assert.match(liveQualityPanel, /langerface:live-quality-relocated/,
+  "quality relocation announces its DOM move so the running renderer can refresh cached element references");
+assert.match(liveRuntime, /langerface:live-quality-relocated[\s\S]*?bindDom\(root\)/,
+  "the live runtime safely rebinds its original quality DOM references after a responsive relocation");
+assert.match(liveQualityPanel, /mobileTarget \? "跟踪质量参考" : "追踪质量"[\s\S]*?id="qualityVal"[\s\S]*?id:\s*"qualityBar"[\s\S]*?受分辨率与光线影响/,
+  "the moved panel exposes the requested three-line phone copy and the existing dynamic quality scale");
 assert.match(stageStatus, /snapshot\?\.stageStatus/, "workflow stage status renders the current incision result or warning");
 assert.match(stageStatus, /snapshot\?\.stageBusy/, "workflow stage status consumes the incision-only busy state");
 assert.match(stageStatus, /workflow-stage-spinner/, "workflow renders an explicit waiting animation for incision work");
@@ -136,7 +147,7 @@ assert.match(controller, /buildForeheadSurfaceLandmarks\(frame\.landmarks\)/, "w
 assert.match(controller, /buildIncisionPhotoGeometry\(/, "workflow candidate drafts reuse the established photo geometry and smoothing gates");
 assert.match(controller, /workflowFusiformSvgPath\(geometry\.fusiformRendering/, "workflow draws the established smooth fusiform fit instead of the raw model polyline");
 assert.match(canvasTools, /data-workflow-marker-scan-circle/, "workflow restores the controlled-marker circular scan feedback");
-assert.match(canvasTools, /data-workflow-marker-scan-label/, "workflow scan circle reports its millimetre diameter");
+assert.match(canvasTools, /data-workflow-marker-scan-label/, "workflow retains the desktop scan-diameter annotation source");
 assert.match(controller, /workflowScanCircleGeometry/, "workflow scan feedback follows the shared source-to-client transform");
 assert.match(canvasTools, /snapshot\?\.tumor\.boundaryMode === "freehand"/,
   "manual freehand is an explicit controlled-marker unavailable state");
@@ -467,14 +478,22 @@ assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) an
   "phone workflow reserves a stable status row so recognition copy cannot move the face canvas");
 assert.match(styles, /--workflow-mobile-zoom-card-size:\s*calc\(\(100vw - 44px\) \/ 3\)[\s\S]*?\.workflow-workbench \.zoom-card\s*\{[^}]*flex:\s*0 0 var\(--workflow-mobile-zoom-card-size\);[^}]*min-width:\s*var\(--workflow-mobile-zoom-card-size\);[^}]*max-width:\s*var\(--workflow-mobile-zoom-card-size\);/,
   "phone focus previews fit three cards inside one viewport while retaining the horizontal rail for later regions");
-assert.match(styles, /\.mobile-workflow-dock,[\s\S]*?\.mobile-canvas-quality\s*\{\s*display:\s*none;/,
-  "the new mobile UI stays absent from the desktop presentation by default");
+assert.match(liveQualityPanel, /MOBILE_WORKFLOW_MEDIA_QUERY[\s\S]*?media\.matches \? document\.querySelector\(mobilePortalSelector\) : null/,
+  "quality relocation is gated to phone-class coarse-pointer viewports and leaves desktop placement unchanged");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.mobile-workflow-dock\s*\{[^}]*display:\s*grid;/,
   "the compact input and layer dock is exposed only on phone-class coarse pointers");
 assert.match(mobileControls, /upload_source[\s\S]*?camera_toggle[\s\S]*?pause_toggle[\s\S]*?recording_toggle/,
   "the mobile dock retains photo, rear-camera, pause and export command paths");
-assert.match(mobileControls, /if \(!nextRstl && !nextWrinkles\) return;/,
-  "mobile RSTL and wrinkle switches cannot accidentally hide both protected overlays");
+assert.doesNotMatch(mobileControls, /if \(!nextRstl && !nextWrinkles\) return;/,
+  "mobile operators may hide RSTL and wrinkles together to inspect the unmodified source image");
+assert.match(mobileControls, /setMobileRstlLayerVisible\(rstlVisible\)[\s\S]*?setMobileWrinkleLayerVisible\(wrinklesVisible\)[\s\S]*?setMobileIncisionCandidateVisible\(incisionVisible\)/,
+  "all three phone overlay switches have independent display-only visibility gates");
+assert.match(styles, /\.workflow-canvas-tools\s*\{[^}]*flex-wrap:\s*wrap;[^}]*width:\s*100%;[^}]*overflow:\s*visible;/,
+  "the phone marker toolbar wraps instead of clipping the recognition action outside the viewport");
+assert.match(styles, /\.workflow-marker-scan\s*\{[^}]*order:\s*3;[^}]*width:\s*100%;/,
+  "the scan-diameter control receives a full-width phone row after the primary marker actions");
+assert.match(styles, /\[data-workflow-marker-scan-label\]\s*\{[^}]*display:\s*none;/,
+  "the face-obscuring scan-diameter label is hidden only inside the phone media query");
 assert.match(mobileControls, /preview_edit", "lengthScale"[\s\S]*?preview_edit", "widthScale"/,
   "mobile margin adjustment changes fusiform length and width together");
 assert.match(mobileControls, /min="100"[\s\S]*?max="150"/,
@@ -483,10 +502,23 @@ assert.match(controller, /function handleMobileEditCommand[\s\S]*?if \(!mobileWo
   "workflow candidate editing rejects the phone UI event outside the mobile viewport contract");
 assert.match(controller, /state\.edit\.angle_offset_deg = Math\.max\(-35,[\s\S]*?state\.edit\.length_scale = Math\.max\(1,[\s\S]*?state\.edit\.width_scale = Math\.max\(1,/,
   "workflow clamps the two mobile-only adjustment dimensions before applying the existing candidate editor");
-assert.match(mobileVisibility, /let incisionCandidateVisible = true;[\s\S]*?resetMobileWorkflowVisibility[\s\S]*?incisionCandidateVisible = true;/,
-  "the incision layer defaults to visible and resets when the mobile workflow unmounts");
+assert.match(mobileVisibility, /let rstlLayerVisible = true;[\s\S]*?let wrinkleLayerVisible = true;[\s\S]*?let incisionCandidateVisible = true;/,
+  "all phone display layers default to visible");
+assert.match(mobileVisibility, /resetMobileWorkflowVisibility[\s\S]*?rstlLayerVisible = true;[\s\S]*?wrinkleLayerVisible = true;[\s\S]*?incisionCandidateVisible = true;/,
+  "all phone display layers reset when the mobile workflow unmounts");
+assert.match(mobileVisibility, /return !mobileWorkflowViewportActive\(\) \|\| rstlLayerVisible;[\s\S]*?return !mobileWorkflowViewportActive\(\) \|\| wrinkleLayerVisible;[\s\S]*?return !mobileWorkflowViewportActive\(\) \|\| incisionCandidateVisible;/,
+  "phone visibility choices cannot suppress any desktop overlay after a viewport change");
+assert.match(render2d, /shouldDrawRstlLayer\(\) && mobileRstlLayerVisible\(\)[\s\S]*?shouldDrawWrinkleLayer\(\) && mobileWrinkleLayerVisible\(\)/,
+  "RSTL and wrinkle generation retain their established gates and add only phone display suppression");
 assert.match(render2d, /if \(mobileIncisionCandidateVisible\(\)\)\s*\{[\s\S]*?overlayStyle\.candidate\.haloColor[\s\S]*?overlayStyle\.candidate\.color/,
   "the mobile visibility gate wraps only candidate strokes while retaining lesion boundary and center drawing");
+assert.ok(
+  incisionRail.indexOf("<TumorInputPanel") < incisionRail.indexOf("<MobileCandidateAdjustPanel")
+    && incisionRail.indexOf("<MobileCandidateAdjustPanel") < incisionRail.indexOf("<CandidateResultPanel"),
+  "the phone candidate adjustment panel follows the main parameter panel and precedes candidate results",
+);
+assert.match(controller, /centerCircle\.setAttribute\("r", mobileWorkflowViewportActive\(\) \? "4" : "6"\)/,
+  "the lesion center becomes finer only on the phone workflow and keeps the desktop radius");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\[data-workflow-boundary\][\s\S]*?stroke:\s*#fde047;[\s\S]*?\[data-workflow-candidate\][\s\S]*?stroke:\s*#67e8f9;[\s\S]*?\[data-workflow-center\][\s\S]*?fill:\s*#fb7185;/,
   "phone drawing marks use the requested bright, thin clinical legend colors without restyling desktop");
 const clickIntent = beginWorkflowPointerIntent(1, 0, 10, 10);

@@ -2619,8 +2619,7 @@ body:has(.dark-workbench-page) {
 }
 
 .mobile-workflow-dock,
-.mobile-candidate-adjust,
-.mobile-canvas-quality {
+.mobile-candidate-adjust {
   display: none;
 }
 
@@ -2655,6 +2654,46 @@ body:has(.dark-workbench-page) {
 
   .workflow-workbench .workflow-canvas-tools .workflow-mobile-marker-confirm {
     display: inline-flex;
+  }
+
+  .workflow-workbench .workflow-stage-actions {
+    overflow: visible;
+  }
+
+  .workflow-workbench .workflow-canvas-tools {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    overflow: visible;
+  }
+
+  .workflow-workbench .workflow-canvas-tools > .btn {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+    order: 5;
+  }
+
+  .workflow-workbench .workflow-canvas-tools .workflow-marker-toggle {
+    order: 1;
+  }
+
+  .workflow-workbench .workflow-canvas-tools .workflow-mobile-marker-confirm {
+    order: 2;
+  }
+
+  .workflow-workbench .workflow-canvas-tools .workflow-marker-scan {
+    order: 3;
+    grid-template-columns: max-content minmax(96px, 1fr);
+    width: 100%;
+    border: 0;
+  }
+
+  .workflow-workbench .workflow-canvas-tools .workflow-marker-scan input {
+    width: 100%;
+  }
+
+  .workflow-workbench .workflow-canvas-tools .workflow-marker-cancel {
+    order: 4;
   }
 
   .workflow-workbench #liveInputCard {
@@ -2738,7 +2777,7 @@ body:has(.dark-workbench-page) {
     right: 9px;
     z-index: 7;
     display: grid;
-    gap: 1px;
+    gap: 4px;
     max-width: min(164px, 46vw);
     padding: 7px 9px;
     color: #cbd5e1;
@@ -2750,18 +2789,45 @@ body:has(.dark-workbench-page) {
     pointer-events: none;
   }
 
-  .workflow-workbench .mobile-canvas-quality > span,
-  .workflow-workbench .mobile-canvas-quality > small {
+  .workflow-workbench .mobile-canvas-quality > div {
+    display: grid;
+    gap: 4px;
+  }
+
+  .workflow-workbench .mobile-canvas-quality .quality-top {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1px;
+    padding: 0;
+    border: 0;
+  }
+
+  .workflow-workbench .mobile-canvas-quality .quality-top > span:first-child,
+  .workflow-workbench .mobile-canvas-quality .hint {
     color: #94a3b8;
     font-size: 9px;
     line-height: 1.25;
   }
 
-  .workflow-workbench .mobile-canvas-quality > strong {
+  .workflow-workbench .mobile-canvas-quality #qualityVal {
     color: #e0f2fe;
     font-size: 12px;
     font-variant-numeric: tabular-nums;
     line-height: 1.35;
+  }
+
+  .workflow-workbench .mobile-canvas-quality .bar {
+    height: 3px;
+    margin-top: 3px;
+  }
+
+  .workflow-workbench .mobile-canvas-quality .stat-grid,
+  .workflow-workbench .mobile-canvas-quality .overlay-qa {
+    display: none;
+  }
+
+  .workflow-workbench .workflow-incision-overlay [data-workflow-marker-scan-label] {
+    display: none;
   }
 
   .workflow-workbench .mobile-candidate-adjust {
@@ -2819,7 +2885,7 @@ body:has(.dark-workbench-page) {
   .workflow-workbench .workflow-incision-overlay [data-workflow-boundary] {
     fill: rgb(253 224 71 / 9%);
     stroke: #fde047;
-    stroke-width: 1.35;
+    stroke-width: 0.85;
     stroke-linecap: round;
     stroke-linejoin: round;
     filter: drop-shadow(0 0 2px rgb(253 224 71 / 74%));
@@ -2827,14 +2893,18 @@ body:has(.dark-workbench-page) {
 
   .workflow-workbench .workflow-incision-overlay [data-workflow-candidate] {
     stroke: #67e8f9;
-    stroke-width: 1.25;
+    stroke-width: 0.8;
     filter: drop-shadow(0 0 2px rgb(103 232 249 / 78%));
+  }
+
+  .workflow-workbench .workflow-incision-overlay [data-workflow-diagnostic-candidate] {
+    stroke-width: 0.9;
   }
 
   .workflow-workbench .workflow-incision-overlay [data-workflow-center] {
     fill: #fb7185;
     stroke: #fff1f2;
-    stroke-width: 1.25;
+    stroke-width: 0.8;
     filter: drop-shadow(0 0 2px rgb(251 113 133 / 78%));
   }
 
