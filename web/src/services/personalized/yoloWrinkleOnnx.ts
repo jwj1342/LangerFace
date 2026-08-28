@@ -137,7 +137,13 @@ interface InferenceSessionLike {
 }
 
 interface OrtRuntimeLike {
-  env?: { wasm?: { wasmPaths?: string | Record<string, string> } };
+  env?: {
+    wasm?: {
+      wasmPaths?: string | Record<string, string>;
+      numThreads?: number;
+      proxy?: boolean;
+    };
+  };
   Tensor: new (type: string, data: Float32Array, dims: readonly number[]) => TensorLike;
   InferenceSession: {
     create(bytes: Uint8Array, options: Record<string, unknown>): Promise<InferenceSessionLike>;
@@ -898,7 +904,11 @@ export class YoloWrinkleOnnx {
     if (this.session) return this;
     const generation = this.loadGeneration;
     const runtime = this.runtime || await import("onnxruntime-web/wasm") as unknown as OrtRuntimeLike;
-    if (this.wasmPaths && runtime.env?.wasm) runtime.env.wasm.wasmPaths = this.wasmPaths;
+    if (runtime.env?.wasm) {
+      runtime.env.wasm.numThreads = 1;
+      runtime.env.wasm.proxy = false;
+      if (this.wasmPaths) runtime.env.wasm.wasmPaths = this.wasmPaths;
+    }
     if (this.persistentCache) {
       await pruneVersionedModelCaches(
         YOLO_WRINKLE_MODEL_CACHE_PREFIX,
