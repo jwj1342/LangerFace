@@ -249,7 +249,10 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
         );
       }
       const mask = ln.pts.map((p, i) => {
-        const v = vis ? vis[ln.tris[i]] : 1;
+        if (ln.hiddenPointRuns?.some(([start, length]) =>
+          i >= start && i < start + length)) return 0;
+        const triangleIndex = ln.tris[i];
+        const v = vis && Number.isInteger(triangleIndex) ? vis[triangleIndex] : 1;
         if (innerMouth.has(ln.tris[i])) return 0; // 口裂三角面无论朝向都排除（#38）
         if (!onVisibleSkin[i]) return 0;
         if (localActionForPoints([p], localRegionMasks).action === "freeze") return 0;

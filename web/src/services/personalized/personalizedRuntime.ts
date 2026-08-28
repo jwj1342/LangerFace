@@ -2,7 +2,7 @@
  * 表情 atlas 微调 Demo — 浏览器引导采集 UI / 会话
  *
  * 文档：docs/tracks/PERSONALIZED_RSTL.md
- * 算法：采集/质控 ./prstlPipeline；皱纹检测 ./yoloWrinkleOnnx；个性化 ./v6RstlRefinement
+ * 算法：采集/质控 ./prstlPipeline；皱纹检测 ./yoloWrinkleOnnx；个性化 ./v6RstlRefinementV9
  * 定位：非个体 RSTL 测量
  *
  * 分区：
@@ -44,7 +44,8 @@ import {
 import { smoothProjectedCurveV2 } from "./prstlPersonalizationV2.ts";
 import { dataSource, type PreviewAtlasPayload } from "../dataSource.ts";
 import { WrinkleYoloOnnx, fuseStrictUnion } from "./yoloWrinkleOnnx.ts";
-import { refineV6 } from "./v6RstlRefinement.ts";
+import { refineV6 } from "./v6RstlRefinementV9.ts";
+import { latestV9RstlRefinementOptions } from "./v9RstlRefinementProfile.ts";
 import {
   createPersonalizedRouteLifecycle,
   requestCameraStreamForLease,
@@ -339,7 +340,7 @@ function updateGuide() {
     }
   } else if (sess.stage === "done") {
     els.guideTitle.textContent = "采集完成 · 对比结果";
-    els.guideSub.textContent = "绿色=皱纹严格并集，灰色=初始 RSTL，洋红=V6 个性化 RSTL，青色=法向位移";
+    els.guideSub.textContent = "绿色=皱纹严格并集，灰色=初始 RSTL，洋红=V9 个性化 RSTL，青色=法向位移";
     els.coach.classList.add("hidden");
     setMeters(0, 1);
   }
@@ -636,7 +637,7 @@ function drawLegend(
   cctx.lineWidth = 3;
   cctx.beginPath(); cctx.moveTo(x, y - 3); cctx.lineTo(x + 14, y - 3); cctx.stroke();
   cctx.fillStyle = "#fce7f3";
-  cctx.fillText(`洋红：V6 个性化 RSTL（${lineCount} 条）`, x + 20, y);
+  cctx.fillText(`洋红：V9 个性化 RSTL（${lineCount} 条）`, x + 20, y);
   cctx.strokeStyle = "rgba(150,160,175,0.85)";
   cctx.beginPath(); cctx.moveTo(x, y + 15); cctx.lineTo(x + 14, y + 15); cctx.stroke();
   cctx.fillStyle = "#cbd5e1";
@@ -1446,7 +1447,7 @@ function renderFinalExports(): void {
     links.push(`<a href="${els.wrinkleEvidenceCanvas.toDataURL("image/png")}" download="wrinkle_v6_evidence.png">下载 V6 去重骨架证据图</a>`);
   }
 
-  // 并排：左初始 atlas（灰）右最终 V6 个性化（洋红）
+  // 并排：左初始 atlas（灰）右最终 V9 个性化（洋红）
   try {
     const sideC = document.createElement("canvas");
     sideC.width = SIZE * 2 + 12;
@@ -1547,7 +1548,7 @@ function renderFinalExports(): void {
   links.push(`<a download="curves_compare.json" href="${URL.createObjectURL(blob)}">下载对比 JSON</a>`);
   if (sess?.v6Result?.payload) {
     const v6Blob = new Blob([JSON.stringify(sess.v6Result.payload, null, 2)], { type: "application/json" });
-    links.push(`<a download="personalized_rstl.json" href="${URL.createObjectURL(v6Blob)}">下载 V6 个性化 RSTL JSON</a>`);
+    links.push(`<a download="personalized_rstl.json" href="${URL.createObjectURL(v6Blob)}">下载 V9 个性化 RSTL JSON</a>`);
   }
   if (sess?.v6Result?.activeAtlas) {
     const atlasBlob = new Blob([JSON.stringify(sess.v6Result.activeAtlas, null, 2)], { type: "application/json" });
@@ -1819,7 +1820,7 @@ function buildV6Payload(
 
 async function runLocalYoloV6(session: RuntimeSession): Promise<RuntimeSession> {
   const lease = runtimeLease;
-  if (!lease?.isActive() || sess !== session) throw new Error("采集会话已结束，取消 YOLO / V6");
+  if (!lease?.isActive() || sess !== session) throw new Error("采集会话已结束，取消 YOLO / V9");
   const samples = (session.yoloSamples || []).filter((sample: RuntimeSession) => sample?.imageData?.data) as Array<RuntimeSession & { imageData: ImageData; expression: ActionName | "neutral" }>;
   if (samples.length < 2 || !samples.some((sample: RuntimeSession) => sample.expression === "neutral")) {
     throw new Error("至少需要中性帧和一个已接受的表情轮次才能运行 YOLO + V6");
@@ -1866,7 +1867,7 @@ async function runLocalYoloV6(session: RuntimeSession): Promise<RuntimeSession> 
   const confidenceMap = fused.confidence || null;
   const directionQ = fused.directionQ || null;
 
-  setLocalPipelineStatus("正在按皱纹位置与走势执行 RSTL V6 局部法向微调…", 76);
+  setLocalPipelineStatus("正在按皱纹位置与走势执行 RSTL V9 局部法向微调…", 76);
   const seeds = session.displaySeeds || session.seeds || [];
   const refined = await refineV6({
     seeds,
@@ -1875,19 +1876,16 @@ async function runLocalYoloV6(session: RuntimeSession): Promise<RuntimeSession> 
     directionQ,
     size: SIZE,
     faceWidthPx: canonicalFaceWidth(session),
-    options: {
-      nearestSingleCurveMatching: true,
-      bundlePropagation: false,
-    },
+    options: latestV9RstlRefinementOptions(canonicalFaceWidth(session)),
   });
   if (!lease.isActive() || sess !== session) throw new Error("采集会话已结束，已丢弃过期微调结果");
   const curves = normalizeV6Curves(refined?.curves || refined?.lines || refined, seeds);
   if (!atlasLines || curves.length !== seeds.length || curves.length !== atlasLines.length) {
-    throw new Error(`V6 必须保持 ${atlasLines?.length || 0} 条曲线，实际得到 ${curves.length} 条`);
+    throw new Error(`V9 必须保持 ${atlasLines?.length || 0} 条曲线，实际得到 ${curves.length} 条`);
   }
   session.curves = curves;
   session.algorithmVersion = refined?.diagnostics?.algorithm || "interval-guarded-continuous-polyline-rstl-refinement-6.0";
-  session.parameterVersion = "yolo-conf007-softgate008-smile-reg030-flow014-deghost014-v6-p90-010";
+  session.parameterVersion = "v9-regional-smooth-7.2";
   attachCurveBary(session.curves);
   const evidenceMask = refined?.wrinkleSkeleton || null;
   session.optimizationDiagnostics = {
@@ -1930,8 +1928,8 @@ async function runLocalYoloV6(session: RuntimeSession): Promise<RuntimeSession> 
   renderFinalExports();
   setLocalPipelineStatus(
     staged
-      ? "完成：V6 个性化 Atlas 已暂存，可进入切口设计。"
-      : "V6 已完成，但浏览器无法暂存切口规划 Atlas；仍可下载结果。",
+      ? "完成：V9 个性化 Atlas 已暂存，可进入切口设计。"
+      : "V9 已完成，但浏览器无法暂存切口规划 Atlas；仍可下载结果。",
     100,
     staged ? "success" : "warning",
   );
@@ -1949,8 +1947,8 @@ function finishExports() {
     const message = error instanceof Error ? error.message : String(error);
     if (sess === session) {
       renderFinalExports();
-      setLocalPipelineStatus(`本地 YOLO / V6 失败：${message}`, 0, "error");
-      setMsg(`本地 YOLO / V6 失败：${message}`, true);
+      setLocalPipelineStatus(`本地 YOLO / V9 失败：${message}`, 0, "error");
+      setMsg(`本地 YOLO / V9 失败：${message}`, true);
     }
     return null;
   });
@@ -2981,7 +2979,7 @@ async function startCapture() {
     if (els.wrinkleSemanticDownload) els.wrinkleSemanticDownload.disabled = true;
     if (els.wrinkleAlignmentDownload) els.wrinkleAlignmentDownload.disabled = true;
     if (els.wrinkleEvidenceDownload) els.wrinkleEvidenceDownload.disabled = true;
-    setLocalPipelineStatus("采集完成后将在本机运行 YOLO 0.07 与 V6。", 0);
+    setLocalPipelineStatus("采集完成后将在本机运行 YOLO 0.07 与 V9。", 0);
     releaseMediaUrls();
     if (els.debugMediaExports) els.debugMediaExports.innerHTML = "";
     sess.recordingEnabled = consentToDebugRecording();
@@ -3169,7 +3167,7 @@ export function mountPersonalizedWorkbench() {
 
   updateGuide();
   setMeters(0, 0);
-  setLocalPipelineStatus("采集完成后将在本机运行 YOLO 0.07 与 V6。", 0);
+    setLocalPipelineStatus("采集完成后将在本机运行 YOLO 0.07 与 V9。", 0);
   els.badge.textContent = "就绪";
   els.badge.classList.remove("warn");
   setMsg("点击「开始采集」开启摄像头；每完成一步需再点一次进入下一步。");

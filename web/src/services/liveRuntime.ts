@@ -258,10 +258,9 @@ function handlePauseToggle(): void {
     els.pause.textContent = "▶ 继续实时";
     els.pause.setAttribute("aria-pressed", "true");
     setLive(false, "已定格 · 可微调");
-    setTransientMsg("已定格当前帧，正在本机检测皱纹。可选择自动微调、医生手动微调，或自动后继续手动调整。");
+    setTransientMsg("已定格当前帧。如需皱纹引导，请手动点击“检测皱纹”。");
     redrawPausedFrame();
     setRefineAvailability();
-    void analyzeCurrentWrinkles();
     return;
   }
   sourceState.paused = false;
@@ -407,6 +406,10 @@ function bindLiveEvents(signal: AbortSignal): void {
     refreshStaticImage();
   }, { signal });
   window.addEventListener("langerface:refine2d-state", updateWrinkleUi, { signal });
+  window.addEventListener("langerface:source-frame-ready", () => {
+    updateWrinkleUi();
+    setRefineAvailability();
+  }, { signal });
   if (isReactManagedWorkbench()) {
     bindWindowControllerEvents([
       [LIVE_SOURCE_REACT_COMMAND_EVENT, (event) => { liveCommands.handleSourceEvent(event); }],

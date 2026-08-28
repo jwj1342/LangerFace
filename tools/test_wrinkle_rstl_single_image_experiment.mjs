@@ -163,7 +163,10 @@ assert.match(source, /atlasVersion:\s*atlas\.atlasVersion/,
   "the export must record the atlas content version");
 assert.doesNotMatch(source, /atlasVersion:\s*atlas\.version/,
   "the export must not substitute the JSON schema version for the atlas content version");
-assert.match(source, /requestedVersion\s*===\s*"v8"\s*\?\s*"v8"\s*:\s*"v7"/);
+assert.match(source, /requestedVersion\s*===\s*"v7"\s*\?\s*"v7"\s*:\s*"v8"/,
+  "the deployed experiment must default to the latest v8 path without query parameters");
+assert.match(source, /requestedRefinement\s*!==\s*"legacy"[\s\S]*EXPERIMENT_VERSION\s*===\s*"v8"/,
+  "the default v8 experiment must execute V9 unless legacy mode is explicit");
 assert.match(source, /adherenceRetryAttempts:\s*10/);
 assert.match(source, /shortWrinkleQuantizationTolerance:\s*true/);
 assert.match(source, /adherenceDirectionSoftDegrees:\s*25/);

@@ -222,15 +222,38 @@ def build_unet(torch):
     return UNet()
 
 
-def run_unet(image_bgr: np.ndarray, texture: np.ndarray, checkpoint_path: Path):
+_UNET_CACHE: dict[tuple[str, int], tuple[object, int, dict]] = {}
+
+
+def _cached_unet(checkpoint_path: Path):
     import torch
 
+    resolved = checkpoint_path.resolve()
+    key = (str(resolved), resolved.stat().st_mtime_ns)
+    cached = _UNET_CACHE.get(key)
+    if cached is not None:
+        return cached
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
     size = int(checkpoint.get("imgSize", 512))
     model = build_unet(torch)
     state = {key.removeprefix("module."): value for key, value in checkpoint["model"].items()}
     model.load_state_dict(state, strict=True)
     model.eval()
+    metadata = {key: value for key, value in checkpoint.items() if key != "model"}
+    cached = (model, size, metadata)
+    _UNET_CACHE.clear()
+    _UNET_CACHE[key] = cached
+    return cached
+
+
+def warm_unet(checkpoint_path: Path) -> None:
+    _cached_unet(checkpoint_path)
+
+
+def run_unet(image_bgr: np.ndarray, texture: np.ndarray, checkpoint_path: Path):
+    import torch
+
+    model, size, metadata = _cached_unet(checkpoint_path)
     image = cv2.resize(image_bgr, (size, size), interpolation=cv2.INTER_AREA)
     resized_texture = cv2.resize(texture, (size, size), interpolation=cv2.INTER_AREA)
     rgb = image[:, :, ::-1].astype(np.float32) / 255.0
@@ -245,7 +268,6 @@ def run_unet(image_bgr: np.ndarray, texture: np.ndarray, checkpoint_path: Path):
         (image_bgr.shape[1], image_bgr.shape[0]),
         interpolation=cv2.INTER_LINEAR,
     )
-    metadata = {key: value for key, value in checkpoint.items() if key != "model"}
     return probability.astype(np.float32), metadata
 
 

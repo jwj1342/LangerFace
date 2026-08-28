@@ -21,8 +21,14 @@ dependencies = [
 # Kept optional so the core lib + test suite install without it (tests inject fakes).
 mediapipe = ["mediapipe>=0.10.14"]   # Face Landmarker: 478 3D landmarks (image/video/live)
 annotate = ["matplotlib>=3.8"]        # interactive atlas annotation/validation tools
-dev = ["pytest>=8.0", "ruff>=0.5"]
-all = ["langerface[mediapipe,annotate,dev]"]
+wrinkle = [
+    "torch>=2.2",
+    "scipy>=1.12",
+    "fastapi>=0.116,<1",
+    "uvicorn>=0.35,<1",
+]                                           # local/remote V10 four-region provider
+dev = ["pytest>=8.0", "ruff>=0.5", "httpx>=0.28"]
+all = ["langerface[mediapipe,annotate,wrinkle,dev]"]
 
 [project.scripts]
 langerface = "langerface.apps.cli:main"

@@ -623,12 +623,8 @@ for (const legacyEntry of [
 }
 assert.deepEqual(
   vercelConfig.git?.deploymentEnabled,
-  {
-    "*": false,
-    "**": false,
-    master: true,
-  },
-  "Vercel should only auto-deploy production from master",
+  false,
+  "Vercel Git deployment must remain disabled until public deployment issue #224 is completed",
 );
 assert.equal(vercelConfig.installCommand, "npm ci", "Vercel should install from the committed npm lockfile");
 assert.equal(

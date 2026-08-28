@@ -34,6 +34,7 @@ const cloneLines = (lines: readonly RefineLine[] | null | undefined): EditableRe
   symmetryRole: line.symmetryRole || "",
   symmetryPairId: line.symmetryPairId || "",
   hidden: Boolean(line.hidden),
+  hiddenPointRuns: (line.hiddenPointRuns || []).map((run) => [run[0], run[1]]),
   tris: [...(line.tris || [])],
   pts: (line.pts || []).map((point) => [point[0], point[1], point[2] || 0] as Vec3),
 }))
@@ -197,7 +198,10 @@ export function hasManualRefineChanges(): boolean {
 
 export function getDisplayLines(
   mapped: readonly MappedAtlasLine[],
-): Array<MappedAtlasLine & { hidden?: boolean }> {
+): Array<MappedAtlasLine & {
+  hidden?: boolean;
+  hiddenPointRuns?: Array<[number, number]>;
+}> {
   const s = state();
   if (s.active) {
     if (!s.lines) setLatestAutoLines(mapped);

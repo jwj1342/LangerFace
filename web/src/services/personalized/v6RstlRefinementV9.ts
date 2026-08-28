@@ -141,6 +141,10 @@ interface CurveSegment {
   tangent: Point2;
   normal: Point2;
   arcStart: number;
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
 }
 
 interface CurveGeometry {
@@ -230,13 +234,42 @@ function normalize2(x: number, y: number): Point2 {
   return length > EPSILON ? [x / length, y / length] : [0, 0];
 }
 
+function selectKth(values: number[], index: number): number {
+  let left = 0, right = values.length - 1;
+  while (left < right) {
+    const pivot = values[(left + right) >> 1];
+    let lower = left, upper = right;
+    while (lower <= upper) {
+      while (values[lower] < pivot) lower += 1;
+      while (values[upper] > pivot) upper -= 1;
+      if (lower <= upper) {
+        const value = values[lower];
+        values[lower] = values[upper];
+        values[upper] = value;
+        lower += 1;
+        upper -= 1;
+      }
+    }
+    if (index <= upper) right = upper;
+    else if (index >= lower) left = lower;
+    else return values[index];
+  }
+  return values[index];
+}
+
 function percentile(values: readonly number[], fraction: number): number {
   if (!values.length) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const position = clamp(fraction) * (sorted.length - 1);
+  const position = clamp(fraction) * (values.length - 1);
   const lower = Math.floor(position), upper = Math.ceil(position);
   const mix = position - lower;
-  return sorted[lower] * (1 - mix) + sorted[upper] * mix;
+  if (values.length < 64) {
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted[lower] * (1 - mix) + sorted[upper] * mix;
+  }
+  const selected = [...values];
+  const lowerValue = selectKth(selected, lower);
+  const upperValue = lower === upper ? lowerValue : selectKth(selected, upper);
+  return lowerValue * (1 - mix) + upperValue * mix;
 }
 
 function fieldLength(field: NumericField | null | undefined): number {
@@ -617,6 +650,10 @@ function buildCurveGeometry(seed: V6Seed, tangentWindowPixels: number): CurveGeo
     segments.push({
       index, start: prior[index], dx, dy, length, lengthSquared: length * length,
       tangent, normal: [-tangent[1], tangent[0]], arcStart: metrics.arc[index],
+      minX: Math.min(prior[index][0], prior[index + 1][0]),
+      minY: Math.min(prior[index][1], prior[index + 1][1]),
+      maxX: Math.max(prior[index][0], prior[index + 1][0]),
+      maxY: Math.max(prior[index][1], prior[index + 1][1]),
     });
   }
   return { seed, prior, normals, vertexArc: metrics.arc, segments };
@@ -631,11 +668,13 @@ function matchTrendsToCurves(
   options: V6RefinementOptions,
 ): MatchingResult {
   const bandRadius = options.searchRadiusPx ?? Math.max(3, SEARCH_FACE_RATIO * faceWidth);
+  const bandRadiusSquared = bandRadius * bandRadius;
   const normalScale = Math.max(2, bandRadius * 0.45);
   const directionCosine = Math.cos(
     (options.directionToleranceDegrees ?? DIRECTION_TOLERANCE_DEGREES) * Math.PI / 180,
   );
   const groups = new Map<string, MatchRecord[]>();
+  const matchingBounds = curves.map((curve) => curveBounds(curve.prior));
   let candidatePairCount = 0, directionRejectedPairCount = 0;
   for (let trendIndex = 0; trendIndex < trends.length; trendIndex += 1) {
     const trend = trends[trendIndex];
@@ -645,8 +684,14 @@ function matchTrendsToCurves(
       const wrinkleConfidence = confidenceAt(confidence, point, size);
       if (!(wrinkleConfidence > 0) || !(wrinkleTangent[0] || wrinkleTangent[1])) continue;
       for (let curveIndex = 0; curveIndex < curves.length; curveIndex += 1) {
+        const bounds = matchingBounds[curveIndex];
+        if (point[0] < bounds.minX - bandRadius || point[0] > bounds.maxX + bandRadius ||
+            point[1] < bounds.minY - bandRadius || point[1] > bounds.maxY + bandRadius) continue;
         let best: MatchRecord | null = null;
         for (const segment of curves[curveIndex].segments) {
+          if (point[0] < segment.minX - bandRadius || point[0] > segment.maxX + bandRadius ||
+              point[1] < segment.minY - bandRadius ||
+              point[1] > segment.maxY + bandRadius) continue;
           const fromX = point[0] - segment.start[0];
           const fromY = point[1] - segment.start[1];
           const fraction = clamp((fromX * segment.dx + fromY * segment.dy) /
@@ -654,8 +699,9 @@ function matchTrendsToCurves(
           const projection = [segment.start[0] + fraction * segment.dx,
             segment.start[1] + fraction * segment.dy];
           const deltaX = point[0] - projection[0], deltaY = point[1] - projection[1];
+          const distanceSquared = deltaX * deltaX + deltaY * deltaY;
+          if (distanceSquared > bandRadiusSquared) continue;
           const distance = Math.hypot(deltaX, deltaY);
-          if (distance > bandRadius) continue;
           candidatePairCount += 1;
           const alignment = Math.abs(segment.tangent[0] * wrinkleTangent[0] +
             segment.tangent[1] * wrinkleTangent[1]);
@@ -2273,32 +2319,34 @@ function applyCurvatureFairing(
     let bestAttempt: any = null;
     const directionalCandidateAudit: any[] = [];
 
-    const targetPoints = (result.matchGroups || []).flatMap((group: MatchGroup) =>
-      group.records.map((record) => record.wrinklePoint));
     const targetRecords = (result.matchGroups || []).flatMap((group: MatchGroup) =>
       group.records);
-    const adherenceFor = (points: Point2[]) => {
-      const distances = targetPoints.map((point: Point2) =>
-        pointToPolylineMatch(point, points).distance);
-      return {
-        mean: distances.reduce((sum: number, value: number) => sum + value, 0) /
-          Math.max(1, distances.length),
-        p90: percentile(distances, 0.9),
-      };
-    };
-    const directionAdherenceFor = (points: Point2[]) => {
-      const directions: number[] = targetRecords.map((record: MatchRecord) =>
-        axialDirectionDifferenceDegrees(
-          pointToPolylineMatch(record.wrinklePoint, points).tangent,
+    const candidateFitFor = (points: Point2[]) => {
+      const distances: number[] = [];
+      const directions: number[] = [];
+      const matchSegments = polylineMatchSegments(points);
+      for (const record of targetRecords) {
+        const match = pointToPolylineMatch(record.wrinklePoint, points, matchSegments);
+        distances.push(match.distance);
+        directions.push(axialDirectionDifferenceDegrees(
+          match.tangent,
           record.wrinkleTangent,
         ));
+      }
       return {
-        mean: directions.reduce((sum, value) => sum + value, 0) /
-          Math.max(1, directions.length),
-        p90: percentile(directions, 0.9),
+        adherence: {
+          mean: distances.reduce((sum: number, value: number) => sum + value, 0) /
+            Math.max(1, distances.length),
+          p90: percentile(distances, 0.9),
+        },
+        direction: {
+          mean: directions.reduce((sum, value) => sum + value, 0) /
+            Math.max(1, directions.length),
+          p90: percentile(directions, 0.9),
+        },
       };
     };
-    const beforeAdherence = adherenceFor(result.points);
+    const beforeAdherence = candidateFitFor(result.points).adherence;
     const passCounts = [...new Set([2, 4, 8, 12, 16, 24, 32, 48, passes]
       .filter((candidate) => candidate <= passes))].sort((left, right) => left - right);
     const dataWeights = [0.90, 0.78, 0.65, 0.55, 0.48, 0.40, 0.34, 0.28,
@@ -2314,8 +2362,9 @@ function applyCurvatureFairing(
       const endpointChange = endpointTangentChangeDegrees(result.curve.prior, candidatePoints);
       const insideCanvas = candidatePoints.every((point) =>
         point[0] >= 0 && point[1] >= 0 && point[0] < size && point[1] < size);
-      const candidateAdherence = adherenceFor(candidatePoints);
-      const candidateDirection = directionAdherenceFor(candidatePoints);
+      const candidateFit = candidateFitFor(candidatePoints);
+      const candidateAdherence = candidateFit.adherence;
+      const candidateDirection = candidateFit.direction;
       let newIntersectionPairs: string[] = [];
       let topologyPassed = true;
       if (guidedRegion === "crows_feet" && metadata.directional_target === true) {
@@ -2730,31 +2779,70 @@ function axialDirectionDifferenceDegrees(first: Point2, second: Point2): number 
   return Math.acos(cosine) * 180 / Math.PI;
 }
 
-function pointToPolylineMatch(
-  point: Point2, polyline: Point2[],
-): { distance: number; tangent: Point2 } {
-  let best = { distance: Infinity, tangent: [0, 0] as Point2 };
-  for (let index = 0; index < polyline.length - 1; index += 1) {
+interface PolylineMatchSegment {
+  start: Point2;
+  dx: number;
+  dy: number;
+  lengthSquared: number;
+}
+
+function polylineMatchSegments(polyline: Point2[]): PolylineMatchSegment[] {
+  const segments = new Array<PolylineMatchSegment>(Math.max(0, polyline.length - 1));
+  for (let index = 0; index < segments.length; index += 1) {
     const start = polyline[index], end = polyline[index + 1];
     const dx = end[0] - start[0], dy = end[1] - start[1];
-    const lengthSquared = dx * dx + dy * dy;
-    const fraction = lengthSquared > EPSILON ? clamp(
-      ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / lengthSquared,
+    segments[index] = {
+      start,
+      dx,
+      dy,
+      lengthSquared: dx * dx + dy * dy,
+    };
+  }
+  return segments;
+}
+
+function pointToPolylineMatch(
+  point: Point2, polyline: Point2[], segments = polylineMatchSegments(polyline),
+): { distance: number; tangent: Point2 } {
+  let bestDistanceSquared = Infinity;
+  let bestDeltaX = 0;
+  let bestDeltaY = 0;
+  let bestDx = 0;
+  let bestDy = 0;
+  for (const segment of segments) {
+    const fraction = segment.lengthSquared > EPSILON ? clamp(
+      ((point[0] - segment.start[0]) * segment.dx +
+       (point[1] - segment.start[1]) * segment.dy) / segment.lengthSquared,
     ) : 0;
-    const projectionX = start[0] + fraction * dx;
-    const projectionY = start[1] + fraction * dy;
-    const distance = Math.hypot(point[0] - projectionX, point[1] - projectionY);
-    if (distance < best.distance) {
-      best = { distance, tangent: normalize2(dx, dy) };
+    const projectionX = segment.start[0] + fraction * segment.dx;
+    const projectionY = segment.start[1] + fraction * segment.dy;
+    const deltaX = point[0] - projectionX;
+    const deltaY = point[1] - projectionY;
+    const distanceSquared = deltaX * deltaX + deltaY * deltaY;
+    if (distanceSquared < bestDistanceSquared) {
+      bestDistanceSquared = distanceSquared;
+      bestDeltaX = deltaX;
+      bestDeltaY = deltaY;
+      bestDx = segment.dx;
+      bestDy = segment.dy;
     }
   }
-  return Number.isFinite(best.distance) ? best : { distance: 0, tangent: [0, 0] };
+  return Number.isFinite(bestDistanceSquared) ? {
+    distance: Math.hypot(bestDeltaX, bestDeltaY),
+    tangent: normalize2(bestDx, bestDy),
+  } : { distance: 0, tangent: [0, 0] };
 }
 
 function minimumPolylineDistance(first: Point2[], second: Point2[]): number {
   let minimum = Infinity;
-  for (const point of first) minimum = Math.min(minimum, pointToPolylineMatch(point, second).distance);
-  for (const point of second) minimum = Math.min(minimum, pointToPolylineMatch(point, first).distance);
+  const firstSegments = polylineMatchSegments(first);
+  const secondSegments = polylineMatchSegments(second);
+  for (const point of first) {
+    minimum = Math.min(minimum, pointToPolylineMatch(point, second, secondSegments).distance);
+  }
+  for (const point of second) {
+    minimum = Math.min(minimum, pointToPolylineMatch(point, first, firstSegments).distance);
+  }
   return Number.isFinite(minimum) ? minimum : 0;
 }
 
@@ -2774,6 +2862,8 @@ function trajectoryAdherence(
     (options.adherenceDirectionP90Degrees ?? 25);
   const minimumImprovement = options.minimumAdherenceImprovementPx ??
     Math.max(0.10, 0.0005 * faceWidth);
+  const priorMatchSegments = curves.map((curve) => polylineMatchSegments(curve.prior));
+  const finalMatchSegments = outputCurves.map((curve) => polylineMatchSegments(curve.pts));
   for (const group of matching.acceptedGroups) {
     const forehead = String(curves[group.curveIndex].seed.region || "").includes("forehead");
     const guidedRegion = group.summary.guided_region as GuidedWrinkleRegion | undefined;
@@ -2807,8 +2897,10 @@ function trajectoryAdherence(
       trends[group.trendIndex].metrics.tangents[pointOrder]);
     const prior = curves[group.curveIndex].prior;
     const final = outputCurves[group.curveIndex].pts;
-    const beforeMatches = points.map((point) => pointToPolylineMatch(point, prior));
-    const afterMatches = points.map((point) => pointToPolylineMatch(point, final));
+    const beforeMatches = points.map((point) =>
+      pointToPolylineMatch(point, prior, priorMatchSegments[group.curveIndex]));
+    const afterMatches = points.map((point) =>
+      pointToPolylineMatch(point, final, finalMatchSegments[group.curveIndex]));
     const before = beforeMatches.map((match) => match.distance);
     const after = afterMatches.map((match) => match.distance);
     const beforeDirections = beforeMatches.map((match, index) =>
@@ -2989,11 +3081,38 @@ function orientation(a: Point2, b: Point2, c: Point2): number {
     (b[1] - a[1]) * (c[0] - a[0]);
 }
 
-function segmentsCross(a: Point2, b: Point2, c: Point2, d: Point2): boolean {
-  if (Math.max(a[0], b[0]) <= Math.min(c[0], d[0]) + 1e-7 ||
-      Math.max(c[0], d[0]) <= Math.min(a[0], b[0]) + 1e-7 ||
-      Math.max(a[1], b[1]) <= Math.min(c[1], d[1]) + 1e-7 ||
-      Math.max(c[1], d[1]) <= Math.min(a[1], b[1]) + 1e-7) return false;
+interface BoundedSegment {
+  start: Point2;
+  end: Point2;
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+function boundedSegments(points: Point2[]): BoundedSegment[] {
+  const segments = new Array<BoundedSegment>(Math.max(0, points.length - 1));
+  for (let index = 0; index < segments.length; index += 1) {
+    const start = points[index], end = points[index + 1];
+    segments[index] = {
+      start,
+      end,
+      minX: Math.min(start[0], end[0]),
+      minY: Math.min(start[1], end[1]),
+      maxX: Math.max(start[0], end[0]),
+      maxY: Math.max(start[1], end[1]),
+    };
+  }
+  return segments;
+}
+
+function boundedSegmentsCross(firstSegment: BoundedSegment, secondSegment: BoundedSegment): boolean {
+  if (firstSegment.maxX <= secondSegment.minX + 1e-7 ||
+      secondSegment.maxX <= firstSegment.minX + 1e-7 ||
+      firstSegment.maxY <= secondSegment.minY + 1e-7 ||
+      secondSegment.maxY <= firstSegment.minY + 1e-7) return false;
+  const a = firstSegment.start, b = firstSegment.end;
+  const c = secondSegment.start, d = secondSegment.end;
   const first = orientation(a, b, c), second = orientation(a, b, d);
   const third = orientation(c, d, a), fourth = orientation(c, d, b);
   return first * second < -1e-7 && third * fourth < -1e-7;
@@ -3016,20 +3135,24 @@ function boundsOverlap(first: Bounds, second: Bounds): boolean {
 }
 
 function selfCrosses(points: Point2[]): boolean {
-  for (let first = 0; first < points.length - 1; first += 1) {
-    for (let second = first + 2; second < points.length - 1; second += 1) {
-      if (segmentsCross(points[first], points[first + 1],
-        points[second], points[second + 1])) return true;
+  const segments = boundedSegments(points);
+  for (let first = 0; first < segments.length; first += 1) {
+    for (let second = first + 2; second < segments.length; second += 1) {
+      if (boundedSegmentsCross(segments[first], segments[second])) return true;
     }
   }
   return false;
 }
 
-function curvesCross(first: Point2[], second: Point2[]): boolean {
-  if (!boundsOverlap(curveBounds(first), curveBounds(second))) return false;
-  for (let a = 0; a < first.length - 1; a += 1) {
-    for (let b = 0; b < second.length - 1; b += 1) {
-      if (segmentsCross(first[a], first[a + 1], second[b], second[b + 1])) return true;
+function curvesCross(
+  first: Point2[], second: Point2[],
+  firstBounds = curveBounds(first), secondBounds = curveBounds(second),
+  firstSegments = boundedSegments(first), secondSegments = boundedSegments(second),
+): boolean {
+  if (!boundsOverlap(firstBounds, secondBounds)) return false;
+  for (const firstSegment of firstSegments) {
+    for (const secondSegment of secondSegments) {
+      if (boundedSegmentsCross(firstSegment, secondSegment)) return true;
     }
   }
   return false;
@@ -3038,10 +3161,14 @@ function curvesCross(first: Point2[], second: Point2[]): boolean {
 function intersectionPairs(curves: Point2[][]): Set<string> {
   const pairs = new Set<string>();
   const bounds = curves.map(curveBounds);
+  const segments = curves.map(boundedSegments);
   for (let first = 0; first < curves.length; first += 1) {
     for (let second = first + 1; second < curves.length; second += 1) {
       if (!boundsOverlap(bounds[first], bounds[second])) continue;
-      if (curvesCross(curves[first], curves[second])) pairs.add(`${first}:${second}`);
+      if (curvesCross(curves[first], curves[second], bounds[first], bounds[second],
+        segments[first], segments[second])) {
+        pairs.add(`${first}:${second}`);
+      }
     }
   }
   return pairs;
@@ -3052,14 +3179,20 @@ function newIntersectionPairsForCurve(
 ): string[] {
   const changed = curves[changedCurveIndex];
   const changedBounds = curveBounds(changed);
+  const bounds = curves.map((curve, index) =>
+    index === changedCurveIndex ? changedBounds : curveBounds(curve));
+  const segments = curves.map(boundedSegments);
   const pairs: string[] = [];
   for (let other = 0; other < curves.length; other += 1) {
     if (other === changedCurveIndex) continue;
     const first = Math.min(changedCurveIndex, other);
     const second = Math.max(changedCurveIndex, other);
     if (priorPairs.has(`${first}:${second}`) ||
-        !boundsOverlap(changedBounds, curveBounds(curves[other]))) continue;
-    if (curvesCross(changed, curves[other])) pairs.push(`${first}:${second}`);
+        !boundsOverlap(changedBounds, bounds[other])) continue;
+    if (curvesCross(changed, curves[other], changedBounds, bounds[other],
+      segments[changedCurveIndex], segments[other])) {
+      pairs.push(`${first}:${second}`);
+    }
   }
   return pairs;
 }

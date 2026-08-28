@@ -47,22 +47,29 @@ if (suppressedTypeScript.length) {
 }
 console.log("ok: web TypeScript 无 @ts-nocheck / @ts-ignore / @ts-expect-error（owner #95）");
 
-// #110：静态前端不得再出现 serverless 函数。web/api/fit.py 曾是线上无鉴权、
-// CORS *、无请求体上限的公开算力端点，删除后需要围栏，避免它无声回流。
-const forbiddenBackendPaths = ["api", "requirements.txt"];
-const resurrected = forbiddenBackendPaths.filter((rel) => fs.existsSync(path.join(root, rel)));
-if (resurrected.length) {
-  console.error("FAIL the static frontend must not ship a serverless backend again:");
-  for (const rel of resurrected) console.error(`  - web/${rel}`);
-  console.error("  见 docs/tracks/FLAME_3D_TRACK.md「生产侧零后端、零 GPU」；离线拟合走 tools/fit_flame_to_landmarks.py。");
+// #110 仍禁止将 FLAME 拟合或其他计算后端放回 Vercel。V10 皱纹检测
+// 经审计后只允许一个短期令牌 broker：它不执行模型、不接收图像，只签发
+// 来源绑定的单次令牌。任何其他 web/api 文件仍视为架构回归。
+const allowedServerlessFiles = new Set(["api/wrinkle-v10.mjs"]);
+const apiRoot = path.join(root, "api");
+const serverlessFiles = fs.existsSync(apiRoot)
+  ? walk(apiRoot, () => true).map((file) => path.relative(root, file).split(path.sep).join("/"))
+  : [];
+const unexpectedServerlessFiles = serverlessFiles.filter((file) => !allowedServerlessFiles.has(file));
+if (unexpectedServerlessFiles.length || fs.existsSync(path.join(root, "requirements.txt"))) {
+  console.error("FAIL web contains a serverless backend outside the audited V10 proxy boundary:");
+  for (const rel of unexpectedServerlessFiles) console.error(`  - web/${rel}`);
+  if (fs.existsSync(path.join(root, "requirements.txt"))) console.error("  - web/requirements.txt");
+  console.error("  FLAME 拟合仍必须离线走 tools/fit_flame_to_landmarks.py。");
   process.exit(1);
 }
 const vercelConfig = JSON.parse(fs.readFileSync(path.join(root, "vercel.json"), "utf8"));
-if (vercelConfig.functions) {
-  console.error("FAIL web/vercel.json declares a functions block; the frontend must stay purely static.");
+const functionEntries = Object.keys(vercelConfig.functions || {});
+if (functionEntries.some((entry) => entry !== "api/wrinkle-v10.mjs")) {
+  console.error("FAIL web/vercel.json declares a function outside the audited V10 proxy boundary.");
   process.exit(1);
 }
-console.log("ok: 前端保持零 serverless 函数（无 web/api、无 requirements.txt、vercel.json 无 functions）");
+console.log("ok: 前端只包含经审计的 V10 短期令牌 broker，无图像代理或通用计算后端");
 
 // 运行时资产（atlas / topology / triangles / .task / .bin）文件名固定，绝不能被
 // immutable 长缓存钉住：否则图谱更新后回访用户会长期停在旧版本而毫无提示。

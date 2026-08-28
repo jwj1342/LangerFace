@@ -16,7 +16,6 @@ import {
   detectStaticImageWithRetries,
   type StaticImageDetector,
 } from "./staticImageDetection.ts";
-import { analyzeCurrentWrinkles } from "./liveWrinkleAnalysis.ts";
 import { LiveFrameScheduler } from "./liveFrameScheduler.ts";
 
 interface VideoDetector {
@@ -136,6 +135,12 @@ export function loop(): void {
     landmarks = sourceState.imageCacheLM as Vec3[] | null;
     hulls = renderState.handOcc ? (sourceState.imageHulls as HandMask[] | null) || [] : [];
     sourceState.presence = landmarks ? 1 : 0;
+    // Static image detection runs inside the render loop. Notify controls after
+    // the cached landmarks are committed so wrinkle/refine buttons reflect the
+    // ready state without starting wrinkle analysis automatically.
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("langerface:source-frame-ready"));
+    }
   } else if (source.currentTime !== undefined) {
     const landmarker = modelState.landmarker as VideoDetector | null;
     const result = landmarker?.detectForVideo(source, timeMs);
@@ -173,7 +178,6 @@ export function loop(): void {
       drawZooms(displayLandmarks, width);
       drawFocusedRegion(displayLandmarks, width, height);
       drawFailureLogged = false;
-      if (sourceState.sourceKind === "image") void analyzeCurrentWrinkles();
     } catch (error) {
       if (!drawFailureLogged) logWarn("渲染图谱失败，本帧已跳过。", error);
       drawFailureLogged = true;

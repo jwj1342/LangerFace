@@ -69,6 +69,7 @@ export interface EditableRefineLine extends RefineLine {
   symmetryRole: string;
   symmetryPairId: string;
   hidden: boolean;
+  hiddenPointRuns: Array<[number, number]>;
   tris: number[];
   pts: Vec3[];
 }

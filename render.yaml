@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: langerface-wrinkle-v10
+    runtime: docker
+    dockerfilePath: ./deploy/wrinkle_v10/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: WRINKLE_V10_SERVICE_TOKEN
+        generateValue: true
+      - key: WRINKLE_V10_TICKET_SECRET
+        generateValue: true
+      - key: WRINKLE_V10_ALLOWED_ORIGINS
+        value: https://langer-face.vercel.app

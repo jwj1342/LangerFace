@@ -4,12 +4,13 @@
   "buildCommand": "npm run build",
   "ignoreCommand": "node scripts/vercel-ignore-build.ts",
   "outputDirectory": "dist",
-  "git": {
-    "deploymentEnabled": {
-      "*": false,
-      "**": false,
-      "master": true
+  "functions": {
+    "api/wrinkle-v10.mjs": {
+      "maxDuration": 60
     }
+  },
+  "git": {
+    "deploymentEnabled": false
   },
   "github": {
     "autoJobCancelation": true

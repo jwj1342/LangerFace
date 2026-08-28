@@ -8,6 +8,7 @@ export interface RefineLine {
   symmetryPairId?: string;
   tris?: number[];
   hidden?: boolean;
+  hiddenPointRuns?: Array<[number, number]>;
 }
 
 export interface CurveRefinementTransportLine {

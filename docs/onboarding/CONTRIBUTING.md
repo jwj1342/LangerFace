@@ -91,7 +91,7 @@ ruff check .                 # 代码风格
 
 ## PR / Preview 工作流
 
-本项目采用 **GitHub Actions 做质量门禁，Vercel Git 集成做网页 Preview / Production 部署**。日常协作不要手动 `npx vercel deploy --prod`；按 PR 流程走，避免绕过测试和审阅。
+本项目采用 **GitHub Actions 做质量门禁**。当前所有 Vercel Git 自动部署均已关闭；正式公网部署及恢复流程由 [#224](https://github.com/jwj1342/LangerFace/issues/224) 单独跟踪。日常协作不要手动 `npx vercel deploy --prod`，避免绕过测试和审阅。
 
 推荐流程：
 
@@ -103,10 +103,9 @@ ruff check .                 # 代码风格
    cd web && npm run build && npm test && npm run test:browser
    ```
 3. push 分支并创建 PR。可以先开 Draft PR。
-4. 等 GitHub Actions 自动运行；默认不要为每个 PR 自动创建 Vercel Preview。
-5. 如需线上人工验收，由维护者用 Vercel Dashboard 或 CLI 手动创建一次 Preview，再打开对应链接检查。
-6. checks 全绿、必要的 Preview 验收通过、且至少 1 个 reviewer approval 后，把 Draft PR 标记为 ready。需要自动合并时，由维护者添加 `automerge:stack` 标签；GitHub 会在保护规则满足后 squash merge，不需要 reviewer 再点 Merge。
-7. 合并到 `master` 后，Vercel 自动发布 Production。
+4. 等 GitHub Actions 自动运行；当前不会创建 Vercel Preview。
+5. checks 全绿且至少 1 个 reviewer approval 后，把 Draft PR 标记为 ready。需要自动合并时，由维护者添加 `automerge:stack` 标签；GitHub 会在保护规则满足后 squash merge，不需要 reviewer 再点 Merge。
+6. 合并到 `master` 不会触发 Vercel；如需恢复 Preview 或 Production，必须在 #224 中完成资源、访问控制和真实部署验证后单独启用。
 
 PR 描述必须保留“技术资料 / 临床依据”小节。凡涉及医学规则、CV/AI 算法、模型、数据集、部署平台或隐私边界的改动，应在 PR 中列出使用的资料链接、医生团队说明、关联 issue 和设计文档；若不适用，也要显式写“不适用”。这样 reviewer 不需要反向猜测实现依据。
 
@@ -141,10 +140,10 @@ PR 上应关注这些 checks：
 | `js-tests` | Vite build + JS/Python 几何对拍 + 标注模型测试 |
 | `browser-tests` | Playwright 跨路由、交互和计算样式回归；是 `master` 合并门禁 |
 | `TODO issue sync / check` | 条件性、非阻塞审计；只在 Issue 事件、定时任务或相关文件变更时出现 |
-| `Vercel` | Production 部署状态；临时 Preview 只在维护者手动创建时出现 |
-| `Vercel Preview Comments` | 手动创建 Preview 时，Vercel 可能在 PR 中发布 Preview 链接 |
+| `Vercel` | 当前 Git 自动部署关闭，不应作为普通 PR 或 `master` 合并门禁 |
+| `Vercel Preview Comments` | 当前不自动产生；恢复策略由 #224 跟踪 |
 
-Vercel Preview 只在维护者按需手动创建时服务当前开发分支；当前策略见 [CI/CD 与 Vercel 部署指南](../quality/CI_CD_VERCEL.md#自动部署范围与限流控制)。普通 feature / integration 分支仍跑 GitHub Actions 质量门禁，但不会自动创建 Vercel Preview，避免长 PR 高频 push 打满 Vercel 限流或继续累积 GitHub deployment records。
+当前任何分支都不会自动创建 Vercel Preview 或 Production；普通 feature / integration 分支和 `master` 仍运行 GitHub Actions 质量门禁。恢复线上验收策略前，先完成 #224。
 
 Preview 人工验收清单：
 
@@ -212,7 +211,7 @@ Preview protection、协作者/外部评审/自动化三种访问方式、Produc
 - 新增模块即补单元测试；纯逻辑测试不要依赖资产或 mediapipe。
 - 不提交大二进制 / 人脸影像（`.gitignore` 已拦截，pre-commit 兜底）。
 - 用 `git add <明确路径>` 暂存，**不要** `git add -A` / `.`（避免误提交 `node_modules` symlink 等本地产物，见下）。
-- 分支开发 + PR；CI、Vercel Preview、至少 1 个 reviewer approval 和必要的人工验收需通过后再合并。
+- 分支开发 + PR；CI、至少 1 个 reviewer approval 和必要的本地人工验收需通过后再合并。公网验收恢复后再按 #224 的结论更新本条。
 
 > 多人并行改本仓库踩过的坑（`git add -A` 误提交、伞状 PR 合并后批量过期、分支保护与合并机制、
 > 登录节点测试、行为保持式重构纪律）已沉淀到 [工程教训 (ENGINEERING_LESSONS.md)](ENGINEERING_LESSONS.md)，提交前值得过一遍速查清单。
