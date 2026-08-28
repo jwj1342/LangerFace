@@ -190,9 +190,6 @@ function appendDirectNoseCurves(
   refined: ReturnType<typeof refineV6>,
 ) {
   const noseLines = payload.lines.filter((line) => line.anatomicalClass === "nasal_dorsum");
-  if (noseLines.length !== 3) {
-    throw new Error(`鼻背纹应生成 3 条直接 RSTL，实际检测到 ${noseLines.length} 条`);
-  }
   const landmarks = pixelLandmarks(request);
   const directNose = buildDirectNoseDorsumRstl({
     fineLines: noseLines,

@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { posix, resolve, win32 } from "node:path";
 
 import type { Plugin, PreviewServer, ViteDevServer } from "vite";
 import {
@@ -65,11 +65,12 @@ export function pythonCandidates(options: PythonCandidateOptions = {}): string[]
   const environment = options.environment ?? process.env;
   const platform = options.platform ?? process.platform;
   const repositoryRoot = options.repositoryRoot ?? REPOSITORY_ROOT;
-  const executable = platform === "win32" ? "Scripts/python.exe" : "bin/python";
+  const path = platform === "win32" ? win32 : posix;
+  const executable = platform === "win32" ? ["Scripts", "python.exe"] : ["bin", "python"];
   return unique([
     environment.LANGERFACE_WRINKLE_PYTHON,
-    environment.VIRTUAL_ENV ? join(environment.VIRTUAL_ENV, executable) : undefined,
-    join(repositoryRoot, ".venv", executable),
+    environment.VIRTUAL_ENV ? path.join(environment.VIRTUAL_ENV, ...executable) : undefined,
+    path.join(repositoryRoot, ".venv", ...executable),
     "python3",
     "python",
   ]);
@@ -77,7 +78,7 @@ export function pythonCandidates(options: PythonCandidateOptions = {}): string[]
 
 function setupCommand(repositoryRoot = REPOSITORY_ROOT, platform = process.platform): string {
   if (platform === "win32") {
-    return `cd "${repositoryRoot}" && py -3.12 -m venv .venv && .venv\\Scripts\\python.exe -m pip install -c requirements-wrinkle-lock.txt -e ".[wrinkle]"`;
+    return `cd /d "${repositoryRoot}" && py -3.12 -m venv .venv && .venv\\Scripts\\python.exe -m pip install -c requirements-wrinkle-lock.txt -e ".[wrinkle]"`;
   }
   return `cd "${repositoryRoot}" && python3 -m venv .venv && .venv/bin/python -m pip install -c requirements-wrinkle-lock.txt -e ".[wrinkle]"`;
 }

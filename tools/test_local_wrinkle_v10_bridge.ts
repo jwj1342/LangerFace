@@ -88,6 +88,16 @@ assert.deepEqual(configuredCandidates.slice(0, 3), [
   "/work/LangerFace/.venv/bin/python",
 ]);
 
+const windowsCandidates = pythonCandidates({
+  environment: { VIRTUAL_ENV: "C:\\active\\venv" },
+  platform: "win32",
+  repositoryRoot: "C:\\work\\LangerFace",
+});
+assert.deepEqual(windowsCandidates.slice(0, 2), [
+  "C:\\active\\venv\\Scripts\\python.exe",
+  "C:\\work\\LangerFace\\.venv\\Scripts\\python.exe",
+]);
+
 assert.throws(
   () => inspectLocalWrinkleRuntime({
     environment: { LANGERFACE_WRINKLE_PYTHON: "/missing/python" },

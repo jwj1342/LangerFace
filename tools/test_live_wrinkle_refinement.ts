@@ -195,6 +195,8 @@ assert.match(workerRuntime, /WRINKLE_V10_ENDPOINT/,
   "the worker must request per-image V10 evidence from the unified provider");
 assert.match(workerRuntime, /buildDirectNoseDorsumRstl/,
   "nasal-dorsum wrinkles must generate direct RSTL curves");
+assert.doesNotMatch(workerRuntime, /noseLines\.length\s*!==\s*3|鼻背纹应生成 3 条/,
+  "live direct generation must follow the current image instead of requiring three nose wrinkles");
 assert.match(workerRuntime, /buildNoseRootIntersectionVisibilityPlan/,
   "direct nasal RSTL must retain the reviewed intersection visibility rule");
 assert.match(workerRuntime, /Comlink\.expose\(api\)/,
