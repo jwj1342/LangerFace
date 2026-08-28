@@ -16,10 +16,12 @@ import {
   workflowUpperForeheadSurfaceRecoveryActive,
   workflowBoundaryCentroid,
   workflowBoundaryModeTransition,
+  workflowControlledMarkerCrop,
   workflowClosedBoundarySvgPath,
   workflowFreehandBoundaryClosed,
   workflowFreehandContinuationAllowed,
   workflowFocusViewportPoint,
+  workflowFusiformPlaneNormal,
   workflowFusiformSvgPath,
   workflowInvalidationNeedsLiveFrame,
   workflowLiveOverlayChanged,
@@ -71,6 +73,7 @@ const controllerCommand = read("web/src/lib/controllerCommand.ts");
 const incisionExport = read("web/src/services/incisionExport.ts");
 const reviewPolicy = read("web/src/services/incisionReviewPolicy.ts");
 const controller = read("web/src/services/workflowIncisionController.ts");
+const pipelineLoop = read("web/src/services/pipelineLoop.ts");
 const render2d = read("web/src/services/render2d.ts");
 const photoPlanning = read("web/src/services/incisionPhotoPlanning.ts");
 const layout = read("web/src/components/WorkflowLayout.tsx");
@@ -333,6 +336,10 @@ assert.match(controller, /case "controlled_marker":[\s\S]*?state\.boundaryMode =
   "clicking the visually disabled marker control in freehand mode publishes its reason without starting acquisition");
 assert.match(controlledMarkerHandler, /controlledMarkerPixelsPerMm\(state, frame, seed, photoProjection\.surfaceLandmarks\)/,
   "controlled-marker detection uses the same stable scale as its scan circle");
+assert.match(controlledMarkerHandler, /workflowControlledMarkerCrop\([\s\S]*?context\.getImageData\(0, 0, crop\.width, crop\.height\)/,
+  "controlled-marker detection reads only the bounded scan crop instead of copying the full phone photo");
+assert.match(controlledMarkerHandler, /detectControlledMarker\(image, crop\.seed, options\)[\s\S]*?translateControlledMarkerDetection\(localDetection, \{ x: crop\.x, y: crop\.y \}\)/,
+  "cropped detector coordinates are translated back to the unchanged source-photo space");
 assert.ok(
   controlledMarkerHandler.indexOf("setSelection({ centerRef: null, boundaryRefs: [] })")
     < controlledMarkerHandler.indexOf("detectControlledMarker"),
@@ -494,14 +501,28 @@ assert.match(styles, /\.workflow-marker-scan\s*\{[^}]*order:\s*3;[^}]*width:\s*1
   "the scan-diameter control receives a full-width phone row after the primary marker actions");
 assert.match(styles, /\[data-workflow-marker-scan-label\]\s*\{[^}]*display:\s*none;/,
   "the face-obscuring scan-diameter label is hidden only inside the phone media query");
-assert.match(mobileControls, /preview_edit", "lengthScale"[\s\S]*?preview_edit", "widthScale"/,
-  "mobile margin adjustment changes fusiform length and width together");
+assert.match(mobileControls, /preview_edit", "uniformScale"[\s\S]*?commit_edit", "uniformScale"/,
+  "mobile margin adjustment changes fusiform length and width atomically");
 assert.match(mobileControls, /min="100"[\s\S]*?max="150"/,
   "mobile margin adjustment only enlarges the tool suggestion within the existing upper bound");
 assert.match(controller, /function handleMobileEditCommand[\s\S]*?if \(!mobileWorkflowViewportActive\(\)\) return;/,
   "workflow candidate editing rejects the phone UI event outside the mobile viewport contract");
 assert.match(controller, /state\.edit\.angle_offset_deg = Math\.max\(-35,[\s\S]*?state\.edit\.length_scale = Math\.max\(1,[\s\S]*?state\.edit\.width_scale = Math\.max\(1,/,
   "workflow clamps the two mobile-only adjustment dimensions before applying the existing candidate editor");
+assert.match(controller, /workflowFusiformPlaneNormal\(state\.baseResult\.candidate, fallbackNormal\)/,
+  "mobile direction adjustment rotates in the candidate's original plane instead of a potentially different nearby mesh plane");
+assert.match(controller, /scheduleMobileCandidateEdit[\s\S]*?requestAnimationFrame[\s\S]*?cancelMobileEditPreview/,
+  "mobile adjustment previews are coalesced to one expensive candidate rebuild per display frame");
+assert.match(mobileControls, /梭形整体缩放[\s\S]*?不替代以毫米记录的医学安全切缘/,
+  "mobile copy distinguishes geometric scaling from the clinical margin parameter");
+assert.match(controller, /liveParameterCommands[\s\S]*?candidateRecomputeTimer = window\.setTimeout[\s\S]*?runWorkflow\(state, false, true\)/,
+  "continuous tumor-parameter input keeps the visible candidate and debounces live recomputation");
+assert.match(controller, /committedParameterCommands[\s\S]*?runWorkflow\(state, false, true\)/,
+  "committed tumor-parameter changes replace the retained candidate atomically");
+assert.match(pipelineLoop, /setOverlaySummary\(renderState\.workflowPhotoOverlay[\s\S]*?\? \{ rstlLineCount: lineCount \}/,
+  "RSTL redraws retain the workflow draft summary instead of clearing the lesion and incision candidate");
+assert.match(controller, /frame\.transform\?\.viewportLeft \?\? rect\.left[\s\S]*?frame\.transform\?\.viewportTop \?\? rect\.top/,
+  "workflow overlays use the same cached viewport origin as their source mapping while mobile controls reflow");
 assert.match(mobileVisibility, /let rstlLayerVisible = true;[\s\S]*?let wrinkleLayerVisible = true;[\s\S]*?let incisionCandidateVisible = true;/,
   "all phone display layers default to visible");
 assert.match(mobileVisibility, /resetMobileWorkflowVisibility[\s\S]*?rstlLayerVisible = true;[\s\S]*?wrinkleLayerVisible = true;[\s\S]*?incisionCandidateVisible = true;/,
@@ -772,6 +793,30 @@ const scanCircle = workflowScanCircleGeometry({
 });
 assert.deepEqual(scanCircle, { center: { x: 60, y: 60 }, radius: 10 },
   "scan diameter follows the current display transform instead of using stale source pixels");
+assert.deepEqual(
+  workflowFusiformPlaneNormal({ axis: [1, 0, 0], width_axis: [0, 1, 0] }, [0, 1, 0]),
+  [0, 0, 1],
+  "fusiform editing preserves the candidate's own geometric plane even when the nearby mesh normal differs",
+);
+assert.deepEqual(
+  workflowFusiformPlaneNormal({ axis: [1, 0, 0], width_axis: [2, 0, 0] }, [0, 0, -2]),
+  [0, 0, -1],
+  "degenerate candidate plane data falls back to a normalized surface normal",
+);
+assert.deepEqual(workflowControlledMarkerCrop({
+  frameWidth: 1280,
+  frameHeight: 1280,
+  seed: { x: 640, y: 640 },
+  roiRadius: 120,
+}), { x: 516, y: 516, width: 249, height: 249, seed: { x: 124, y: 124 } },
+"controlled-marker crops include the scan radius plus a bounded safety margin");
+assert.deepEqual(workflowControlledMarkerCrop({
+  frameWidth: 320,
+  frameHeight: 240,
+  seed: { x: 3, y: 2 },
+  roiRadius: 30,
+}), { x: 0, y: 0, width: 38, height: 37, seed: { x: 3, y: 2 } },
+"controlled-marker crops clamp safely at phone-photo edges without moving the seed");
 assert.equal(minimumWorkflowMarkerScanDiameterMm(12), 15, "controlled-marker scan covers at least 1.2 times the lesion diameter");
 assert.equal(minimumWorkflowMarkerScanDiameterMm(40), 50, "scan coverage rounds upward in the legacy five-millimetre steps");
 assert.equal(minimumWorkflowMarkerScanDiameterMm(100), 60, "scan coverage respects the established maximum");

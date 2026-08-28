@@ -45,6 +45,7 @@ const NUMERIC_TUMOR_COMMANDS = new Set<IncisionTumorCommand>([
 
 const NUMERIC_EDIT_CONTROLS = new Set<IncisionEditControlId>([
   "angleOffsetDeg",
+  "uniformScale",
   "lengthScale",
   "widthScale",
   "tipAngleDeg",

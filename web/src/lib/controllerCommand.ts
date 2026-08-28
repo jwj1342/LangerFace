@@ -112,6 +112,7 @@ export type IncisionSecondaryCueCommand = (typeof INCISION_SECONDARY_CUE_COMMAND
 export type IncisionEditCommand = (typeof INCISION_EDIT_COMMANDS)[number];
 export type IncisionEditControlId =
   | "angleOffsetDeg"
+  | "uniformScale"
   | "lengthScale"
   | "widthScale"
   | "tipAngleDeg"

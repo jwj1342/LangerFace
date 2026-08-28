@@ -1,5 +1,5 @@
 import { inspectPathPolygonRelation, segmentsIntersect2d, type Point2 } from "./incisionPathGeometry.ts";
-import { buildMediaPipeEngineeringExclusionZones } from "./incisionToolCore.ts";
+import { buildMediaPipeEngineeringExclusionZones, cross, norm } from "./incisionToolCore.ts";
 import {
   PHOTO_VISIBILITY_LIMITED_MIN_VISIBLE_FRACTION,
   type IncisionPhotoGeometry,
@@ -65,6 +65,20 @@ export function workflowLiveOverlayChanged(
 
 export function workflowInvalidationNeedsLiveFrame(hadActiveOverlay: boolean): boolean {
   return hadActiveOverlay;
+}
+
+export function workflowFusiformPlaneNormal(
+  candidate: { axis?: ArrayLike<number>; width_axis?: ArrayLike<number> } | null | undefined,
+  fallback: ArrayLike<number> = [0, 0, 1],
+): Vec3 {
+  const axis = candidate?.axis;
+  const widthAxis = candidate?.width_axis;
+  if (axis?.length === 3 && widthAxis?.length === 3) {
+    const planeNormal = cross(axis, widthAxis);
+    if (Math.hypot(...planeNormal) > 1e-9) return norm(planeNormal);
+  }
+  const fallbackNormal = norm(fallback);
+  return Math.hypot(...fallbackNormal) > 1e-9 ? fallbackNormal : [0, 0, 1];
 }
 
 export function workflowCandidateDisplayAllowed(
@@ -292,6 +306,44 @@ export function workflowScanCircleGeometry({
 export interface SvgPoint {
   x: number;
   y: number;
+}
+
+export interface WorkflowControlledMarkerCrop {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  seed: SvgPoint;
+}
+
+export function workflowControlledMarkerCrop({
+  frameWidth,
+  frameHeight,
+  seed,
+  roiRadius,
+  padding = 4,
+}: {
+  frameWidth: number;
+  frameHeight: number;
+  seed: SvgPoint;
+  roiRadius: number;
+  padding?: number;
+}): WorkflowControlledMarkerCrop {
+  const width = Math.max(1, Math.floor(frameWidth));
+  const height = Math.max(1, Math.floor(frameHeight));
+  const radius = Math.max(1, Math.ceil(roiRadius));
+  const safePadding = Math.max(0, Math.ceil(padding));
+  const left = Math.max(0, Math.floor(seed.x - radius - safePadding));
+  const top = Math.max(0, Math.floor(seed.y - radius - safePadding));
+  const right = Math.min(width, Math.ceil(seed.x + radius + safePadding + 1));
+  const bottom = Math.min(height, Math.ceil(seed.y + radius + safePadding + 1));
+  return {
+    x: left,
+    y: top,
+    width: Math.max(1, right - left),
+    height: Math.max(1, bottom - top),
+    seed: { x: seed.x - left, y: seed.y - top },
+  };
 }
 
 export interface WorkflowFreehandSample {

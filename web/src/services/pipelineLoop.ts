@@ -192,11 +192,14 @@ export function loop(): void {
   }
   updateStats(landmarks, width, height, lineCount);
   const incisionOverlay = renderState.incisionOverlay as Record<string, any> | null;
-  sourceState.planning2d?.setOverlaySummary({
-    rstlLineCount: lineCount,
-    tumorVisible: Boolean(incisionOverlay?.tumor?.center_ref),
-    candidatePointCount: incisionOverlay?.candidate?.polyline_refs?.length || 0,
-  });
+  const planning = sourceState.planning2d;
+  planning?.setOverlaySummary(renderState.workflowPhotoOverlay
+    ? { rstlLineCount: lineCount }
+    : {
+      rstlLineCount: lineCount,
+      tumorVisible: Boolean(incisionOverlay?.tumor?.center_ref),
+      candidatePointCount: incisionOverlay?.candidate?.polyline_refs?.length || 0,
+    });
 
   const now = performance.now();
   fpsEMA = fpsEMA ? fpsEMA * 0.9 + (1000 / Math.max(1, now - lastT)) * 0.1 : 30;

@@ -1,4 +1,4 @@
-export const CONTROLLED_MARKER_DETECTOR_VERSION = "0.32";
+export const CONTROLLED_MARKER_DETECTOR_VERSION = "0.33";
 
 export interface MarkerImageData {
   width: number;
@@ -93,6 +93,26 @@ export interface ControlledMarkerDetection {
     local_only: true;
     raw_media_retained: false;
     network_request_made: false;
+  };
+}
+
+export function translateControlledMarkerDetection(
+  result: ControlledMarkerDetection,
+  offset: MarkerPoint,
+): ControlledMarkerDetection {
+  const translatePoint = (point: MarkerPoint): MarkerPoint => ({
+    x: point.x + offset.x,
+    y: point.y + offset.y,
+  });
+  const translateBox = (box: ControlledMarkerDetection["bbox"]): ControlledMarkerDetection["bbox"] => box
+    ? { ...box, x: box.x + offset.x, y: box.y + offset.y }
+    : null;
+  return {
+    ...result,
+    center: result.center ? translatePoint(result.center) : null,
+    boundary: result.boundary.map(translatePoint),
+    bbox: translateBox(result.bbox),
+    marker_bbox: translateBox(result.marker_bbox),
   };
 }
 
@@ -2360,7 +2380,10 @@ function reconcileMarkerStrokeCoverage(
       boundary_stroke_reverse_p90_px: Number(normalFit.reverseP90Px.toFixed(3)),
     } : {}),
   };
-  return result;
+  // Stroke reconciliation can replace the already-smoothed boundary. Re-run
+  // the same bounded finalizer so the last stage cannot reintroduce raster
+  // notches into the current near-circular lesion scope.
+  return finalizeControlledMarkerBoundary(result);
 }
 
 function findRelevantCandidates(

@@ -4,8 +4,10 @@ import fs from "node:fs";
 import {
   __controlledMarkerForTests as controlledMarkerInternals,
   detectControlledMarker,
+  translateControlledMarkerDetection,
 } from "../web/src/services/controlledMarkerDetection.ts";
 import { controlledMarkerFailureMessage } from "../web/src/services/incisionClinicalCopy.ts";
+import { workflowControlledMarkerCrop } from "../web/src/services/workflowControllerUtils.ts";
 
 function image(width = 96, height = 96, value = 210) {
   const data = new Uint8ClampedArray(width * height * 4);
@@ -16,6 +18,29 @@ function image(width = 96, height = 96, value = 210) {
     data[index * 4 + 3] = 255;
   }
   return { width, height, data };
+}
+
+{
+  const translated = translateControlledMarkerDetection({
+    ok: true,
+    failure_code: null,
+    center: { x: 12, y: 14 },
+    boundary: [{ x: 8, y: 9 }, { x: 16, y: 9 }, { x: 16, y: 17 }],
+    area_px: 32,
+    bbox: { x: 8, y: 9, width: 9, height: 9 },
+    geometry_mode: "enclosed_region",
+    seed_relation: "enclosed",
+    marker_area_px: 40,
+    marker_bbox: { x: 7, y: 8, width: 11, height: 11 },
+    confidence: 0.9,
+    candidate_count: 1,
+    warnings: [],
+    audit: { local_only: true, raw_media_retained: false, network_request_made: false },
+  }, { x: 100, y: 50 });
+  assert.deepEqual(translated.center, { x: 112, y: 64 });
+  assert.deepEqual(translated.boundary[0], { x: 108, y: 59 });
+  assert.deepEqual(translated.bbox, { x: 108, y: 59, width: 9, height: 9 });
+  assert.deepEqual(translated.marker_bbox, { x: 107, y: 58, width: 11, height: 11 });
 }
 
 function horizontalGradientImage(width: number, height: number, left: number, right: number) {
@@ -91,6 +116,43 @@ function ring(target: ReturnType<typeof image>, cx: number, cy: number, radius: 
       target.data[index + 2] = value;
     }
   }
+}
+
+{
+  const target = image(160, 140);
+  ring(target, 80, 70, 22, 3, 20);
+  const options = { roiRadius: 40, expectedDiameterPx: 44, scanDiameterMm: 30 };
+  const full = detectControlledMarker(target, { x: 80, y: 70 }, options);
+  const crop = workflowControlledMarkerCrop({
+    frameWidth: target.width,
+    frameHeight: target.height,
+    seed: { x: 80, y: 70 },
+    roiRadius: options.roiRadius,
+  });
+  const cropped = image(crop.width, crop.height, 0);
+  for (let y = 0; y < crop.height; y += 1) {
+    for (let x = 0; x < crop.width; x += 1) {
+      const sourceIndex = ((crop.y + y) * target.width + crop.x + x) * 4;
+      const targetIndex = (y * crop.width + x) * 4;
+      for (let channel = 0; channel < 4; channel += 1) {
+        cropped.data[targetIndex + channel] = target.data[sourceIndex + channel];
+      }
+    }
+  }
+  const translated = translateControlledMarkerDetection(
+    detectControlledMarker(cropped, crop.seed, options),
+    { x: crop.x, y: crop.y },
+  );
+  assert.equal(translated.ok, full.ok, "ROI cropping preserves controlled-marker success state");
+  assert.ok(full.center && translated.center
+    && Math.hypot(full.center.x - translated.center.x, full.center.y - translated.center.y) < 0.01,
+  "ROI cropping preserves the detected source-space centre");
+  assert.ok(full.bbox && translated.bbox
+    && ["x", "y", "width", "height"].every((key) => Math.abs(
+      translated.bbox?.[key as keyof typeof translated.bbox] as number
+      - (full.bbox?.[key as keyof typeof full.bbox] as number),
+    ) < 1e-6),
+  "ROI cropping preserves the detected source-space bounds");
 }
 
 function ellipseRing(
@@ -929,6 +991,8 @@ function relativeStrokeLine(
   );
   assert.equal(result.diagnostics?.boundary_stroke_reconciliation, "bounded_marker_bbox",
     "when a ridge witness is unavailable, only a small scale-bounded marker extent correction is permitted");
+  assert.equal(result.diagnostics?.boundary_smoothing, "periodic_constrained",
+    "stroke reconciliation cannot bypass the bounded final smoothing stage");
   const extentX = result.boundary.map((point) => point.x);
   const extentY = result.boundary.map((point) => point.y);
   assert.ok(Math.min(...extentX) <= 38.25 && Math.max(...extentX) >= 81.75

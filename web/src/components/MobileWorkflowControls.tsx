@@ -172,12 +172,10 @@ export function MobileCandidateAdjustPanel() {
   }, [edit?.angleOffsetDeg, edit?.lengthScalePct, edit?.widthScalePct]);
 
   const previewUniformScale = (value: string) => {
-    commands.edit("preview_edit", "lengthScale", value);
-    commands.edit("preview_edit", "widthScale", value);
+    commands.edit("preview_edit", "uniformScale", value);
   };
   const commitUniformScale = (value: string) => {
-    commands.edit("commit_edit", "lengthScale", value);
-    commands.edit("commit_edit", "widthScale", value);
+    commands.edit("commit_edit", "uniformScale", value);
   };
 
   return (
@@ -190,7 +188,7 @@ export function MobileCandidateAdjustPanel() {
         <ScanLine size={18} aria-hidden="true" />
       </header>
       <div className="mobile-adjust-field">
-        <Label htmlFor="mobileFusiformScale">切缘范围 <FieldValue>{scalePct}%</FieldValue></Label>
+        <Label htmlFor="mobileFusiformScale">梭形整体缩放 <FieldValue>{scalePct}%</FieldValue></Label>
         <RangeInput
           id="mobileFusiformScale"
           min="100"
@@ -208,7 +206,7 @@ export function MobileCandidateAdjustPanel() {
           onBlur={(event) => commitUniformScale(event.currentTarget.value)}
           onChange={(event) => setScalePct(event.currentTarget.value)}
         />
-        <small>长度和宽度等比放大，不移动中心、不改变当前方向。</small>
+        <small>长度和宽度等比放大；这是草案几何调整，不替代以毫米记录的医学安全切缘。</small>
       </div>
       <div className="mobile-adjust-field">
         <Label htmlFor="mobileFusiformAngle">切口方向 <FieldValue>{Number(angleDeg) > 0 ? "+" : ""}{angleDeg}°</FieldValue></Label>
