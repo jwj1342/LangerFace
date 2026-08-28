@@ -202,8 +202,8 @@ Live 工作台不再发布实时 3D 路线。扫描重建、刚性投影、FLAME
 - `web/api/wrinkle-v10.mjs` 只返回 provider 能力和短期单次令牌；最大产品尺寸的 RGBA 请求不经过
   Vercel Function，而是由浏览器直达独立 V10 服务，因此不受 Function 4.5 MB 请求体限制。
 - 线上：见 [CI/CD 与 Vercel 部署指南](../quality/CI_CD_VERCEL.md#production-url) 中的 Production URL。
-- 推荐使用 Vercel Git 集成自动部署，GitHub Actions 负责质量门禁；Vercel Project 的 Root Directory 设为 `web`。操作手册见 [CI/CD 与 Vercel 部署指南](../quality/CI_CD_VERCEL.md)。
-- 更新：改 `web/` 后（动了几何/图谱/3D 资产先 `export_web_assets.py`）发 PR；CI 与 Vercel Preview 通过后合并到 `master`，由 Vercel 自动发布生产环境。
+- GitHub Actions 负责质量门禁；Vercel Git 自动部署当前关闭，后续恢复时 Project Root Directory 仍应设为 `web`。操作手册见 [CI/CD 与 Vercel 部署指南](../quality/CI_CD_VERCEL.md)。
+- 更新：改 `web/` 后（动了几何/图谱/3D 资产先 `export_web_assets.py`）发 PR；CI 与本地验收通过后合并到 `master`。当前合并不会触发 Vercel，公网部署恢复由 #224 跟踪。
 
 ---
 

@@ -380,7 +380,7 @@ Stage 2 切口 workflow 只在浏览器本地处理肿物参数、标准化坐�
 ## 持续集成与部署（CI/CD）
 
 - **CI**：push 到 `master` / `refactor/**` 或发 PR 时，[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 跑四个并行 job —— `lint`（`ruff check .`）、`python-tests`（`pytest`，**Python 3.10 / 3.11 / 3.12** 矩阵，不装 mediapipe）、`js-tests`（**Node 24**：`npm ci` + `npm run build` + `npm test` 对拍 Web TypeScript 几何与 Python 一致）、`browser-tests`（Chromium 上运行生产构建的 `/surgery` UI/对比度回归）。提交前可装 `pre-commit`（[`.pre-commit-config.yaml`](.pre-commit-config.yaml)）做本地预检。
-- **CD**：网页主体是 Vite 静态构建（`web/dist/`），经 Vercel Git 集成部署；唯一 Vercel Function `web/api/wrinkle-v10.mjs` 只签发小型短期令牌和检查 provider 能力，不接收图像。32 MB 上限的图像请求由浏览器直达独立 V10 服务。Vercel Project 的 Root Directory 设为 `web`。
+- **CD**：当前通过 `web/vercel.json` 关闭所有 Vercel Git 自动部署，合并到 `master` 不会发布公网版本；恢复正式公网部署及其验证统一由 [#224](https://github.com/jwj1342/LangerFace/issues/224) 跟踪。网页仍可在本地构建为 `web/dist/`；预留的 Vercel Function `web/api/wrinkle-v10.mjs` 只签发小型短期令牌和检查 provider 能力，不接收图像。
 - **隐私**：离线重建默认写入 gitignored 的 `local_outputs/recon_demo.json`，不会随 Vercel 站点发布；真实患者头模仍不得提交到仓库。
 
 > Vercel Project 设置、Production URL、branch protection 必需检查、Preview 访问策略、手动部署 fallback 与排障清单，全部见 **[CI/CD 与 Vercel 部署指南](docs/quality/CI_CD_VERCEL.md)**。

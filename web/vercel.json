@@ -10,11 +10,7 @@
     }
   },
   "git": {
-    "deploymentEnabled": {
-      "*": false,
-      "**": false,
-      "master": true
-    }
+    "deploymentEnabled": false
   },
   "github": {
     "autoJobCancelation": true
