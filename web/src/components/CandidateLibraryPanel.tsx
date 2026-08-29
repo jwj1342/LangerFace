@@ -116,7 +116,7 @@ export function CandidateLibraryPanel({
             </CandidateRowMeta>
             {showCandidateRowActions ? (
               <ButtonRow
-                className={`candidate-row-actions ${showReviewTransitions && item.reviewTransitionLabel ? "three-cols" : "two-cols"}`}
+                className={`candidate-actions ${showReviewTransitions && item.reviewTransitionLabel ? "three-cols" : "two-cols"}`}
               >
                 <Button
                   variant="workbench"

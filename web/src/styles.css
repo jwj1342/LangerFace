@@ -1328,11 +1328,11 @@
     grid-template-columns: 1fr 1fr 1fr;
   }
 
-  .incision-workbench .candidate-row-actions.three-cols {
+  .incision-workbench .candidate-actions.three-cols {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .incision-workbench .candidate-row-actions.three-cols .btn {
+  .incision-workbench .candidate-actions.three-cols .btn {
     min-width: 0;
     padding-inline: 4px;
     font-size: clamp(10px, 2.8vw, 12px);

@@ -486,7 +486,7 @@ assert.match(candidateLibraryPanel, /showReviewTransitions\s*=\s*false/,
   "review status transitions stay scoped to the merged workflow controller that implements the gate");
 assert.match(candidateLibraryPanel, /toggle_candidate_review_status/,
   "saved candidate cards expose the guarded pending/approved transition command");
-assert.match(candidateLibraryPanel, /candidate-row-actions[\s\S]*?three-cols[\s\S]*?load_candidate[\s\S]*?remove_candidate[\s\S]*?toggle_candidate_review_status/,
+assert.match(candidateLibraryPanel, /candidate-actions[\s\S]*?three-cols[\s\S]*?load_candidate[\s\S]*?remove_candidate[\s\S]*?toggle_candidate_review_status/,
   "candidate load, delete, and review-transition actions share one equal-width row in the requested order");
 assert.match(candidateLibraryPanel, /candidate-overlay-status[\s\S]*?overlayStatusLabel/,
   "saved candidate cards keep the live-overlay eligibility explanation visible");

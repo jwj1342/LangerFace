@@ -101,6 +101,8 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
 
 ## 维护 / 部署
 
+- [ ] 完成 V10 公网部署与生产链路验证 — [#224](https://github.com/jwj1342/LangerFace/issues/224)
+      · 当前暂不启用可能产生费用的公网运行资源；后续需独立批准承载完整 V10 的受控服务，并验证短期令牌、限流、超时、临时数据清理、监控和回滚。未完成前不得宣称远程生产链路已部署或验证。
 - [ ] 清理 Vercel 历史 Deployment，保持 GitHub / Vercel UI 只突出 `master` production 和当前远端 branch head
       · 2026-06-26 已完成 GitHub Deployments records 清理：从 309 条降到 44 条，保留 37 条 Production 和 7 条当前远端 branch HEAD Preview。Vercel 侧已确认实际项目为 team `team_hKrCHY2HEmfQcq5Jfs8sYznn`、project `prj_IZ6vLQva5NQtCU3DfYNNaOWRzZM2`（本地 `web/.vercel/project.json` 里的旧 `orgId/projectId` 不匹配当前 token 可访问项目）。Vercel 初始 dry-run 为 311 条，计划保留 37 条 production + 7 条 branch-head preview，删除 267 条旧 preview/canceled deployment；第一轮已删除 203 条，1 条已提前删除，随后触发 `now-rm` 429 限流（约 10 分钟 / 200 次 remove），第二轮在用户要求暂停时中断。下次继续前不要复用旧删除列表，先重新 list deployments、重新按 production + branch-head 规则 dry-run，再删除剩余旧 preview。不要把 Vercel 删除动作放进 CI；清理完成后撤销本次暴露过的 Vercel token。
 
