@@ -7,6 +7,7 @@ import {
 } from "./cameraSource.ts";
 import { ctx, els } from "./liveDom.ts";
 import { prepareImageSource } from "./imageSource.ts";
+import { confirmLikelyScreenshotUpload } from "./imageUploadPreflight.ts";
 import { countMetric, logWarn, recordMetricSample } from "./logger.ts";
 import {
   currentLiveSource,
@@ -21,6 +22,7 @@ import { resetLiveWrinkleAnalysis } from "./liveWrinkleAnalysis.ts";
 import { setLive, setMsg, setTransientMsg } from "./liveUi.ts";
 import { cancelFrame, requestFrame } from "./pipelineLoop.ts";
 import { ensureImageReady, ensureReady } from "./pipelineModels.ts";
+import { buildWorkflowDraftPhoto, saveWorkflowDraftPhoto } from "./workflowDraftSession.ts";
 
 type SourceKind = "camera" | "video" | "image";
 let sourceOperationId = 0;
@@ -107,7 +109,10 @@ export function showCameraPlaceholder(message = ""): void {
   ctx.restore();
 }
 
-export async function handleFile(file?: File): Promise<void> {
+export async function handleFile(
+  file?: File,
+  { suppressScreenshotWarning = false }: { suppressScreenshotWarning?: boolean } = {},
+): Promise<void> {
   if (!file) return;
   els.file.value = "";
   if (!file.type.startsWith("image/")) {
@@ -117,9 +122,14 @@ export async function handleFile(file?: File): Promise<void> {
   const startedAt = performance.now();
   const operationId = ++sourceOperationId;
   let pendingObjectUrl: string | null = null;
-  stopSource({ preserveOperation: true });
-  setLive(false, "待机");
-  setMsg("图片加载中", 0, true);
+  let sourceReplaced = false;
+  const workflowUpload = Boolean(document.querySelector(".workflow-workbench"));
+  if (!workflowUpload) {
+    stopSource({ preserveOperation: true });
+    sourceReplaced = true;
+    setLive(false, "待机");
+    setMsg("图片加载中", 0, true);
+  }
   try {
     const url = URL.createObjectURL(file);
     pendingObjectUrl = url;
@@ -136,8 +146,26 @@ export async function handleFile(file?: File): Promise<void> {
       });
       await Promise.all([modelReady, decoded]);
       if (operationId !== sourceOperationId) return;
+      const dimensions = {
+        width: img.naturalWidth || img.width,
+        height: img.naturalHeight || img.height,
+      };
+      if (workflowUpload && !suppressScreenshotWarning && !confirmLikelyScreenshotUpload(file, dimensions)) {
+        setTransientMsg("已取消疑似手机截图；请重新选择不包含网页界面的原始人像。", 4_000);
+        return;
+      }
+      if (workflowUpload) {
+        stopSource({ preserveOperation: true });
+        sourceReplaced = true;
+        setLive(false, "待机");
+        setMsg("图片加载中", 0, true);
+      }
       const prepared = prepareImageSource(img);
       setSource(prepared.source, "image", prepared.width, prepared.height);
+      if (workflowUpload) {
+        const draftPhoto = buildWorkflowDraftPhoto(file, prepared.source, prepared.width, prepared.height);
+        if (draftPhoto) saveWorkflowDraftPhoto(draftPhoto);
+      }
       const sourceSetAt = performance.now();
       recordMetricSample("source.imageModelWaitMs", modelReadyAt - startedAt, { bytes: file.size });
       recordMetricSample("source.imageDecodeMs", decodedAt - startedAt, { bytes: file.size });
@@ -159,8 +187,12 @@ export async function handleFile(file?: File): Promise<void> {
     if (operationId !== sourceOperationId) return;
     countMetric("source.fileLoadFailure");
     logWarn("上传文件加载失败。", error);
-    setLive(false, "待机");
-    setMsg("无法读取或检测该照片。请重新上传；若仍失败，请换用受支持的清晰照片。");
+    if (sourceReplaced) {
+      setLive(false, "待机");
+      setMsg("无法读取或检测该照片。请重新上传；若仍失败，请换用受支持的清晰照片。");
+    } else {
+      setTransientMsg("无法读取该照片；当前画面未被替换。请重新选择受支持的清晰照片。", 4_000);
+    }
   } finally {
     if (pendingObjectUrl) URL.revokeObjectURL(pendingObjectUrl);
   }

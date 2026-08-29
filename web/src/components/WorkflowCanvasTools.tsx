@@ -25,7 +25,13 @@ export function WorkflowCanvasTools() {
   const markerBusy = tools?.markerBusy || false;
 
   return (
-    <div className="workflow-canvas-tools" role="toolbar" aria-label="切口画布工具">
+    <div
+      className="workflow-canvas-tools"
+      role="toolbar"
+      aria-label="切口画布工具"
+      data-marker-mode={String(markerMode)}
+      data-marker-busy={String(markerBusy)}
+    >
         <Button
           ref={markerTooltip.anchorRef}
           size="sm"
@@ -102,6 +108,7 @@ export function WorkflowCanvasTools() {
           </>
         ) : null}
         <Button
+          className="workflow-repair-toggle"
           size="sm"
           type="button"
           disabled={markerBusy || !tools?.repairAvailable}
@@ -112,6 +119,7 @@ export function WorkflowCanvasTools() {
           <PencilLine size={15} /><span>补线</span>
         </Button>
         <Button
+          className="workflow-clear-repair"
           size="sm"
           type="button"
           disabled={markerBusy || !tools?.repairCount}
@@ -121,6 +129,7 @@ export function WorkflowCanvasTools() {
           <span>清除补线</span>
         </Button>
         <Button
+          className="workflow-reset-view"
           size="sm"
           type="button"
           disabled={markerBusy}
@@ -150,8 +159,6 @@ export function WorkflowCanvasOverlay() {
       <Legend variant="canvas" aria-label="切口标注图例">
         <CanvasLegendItem swatchClassName="center">病灶中心</CanvasLegendItem>
         <CanvasLegendItem swatchClassName="ring">肿物范围</CanvasLegendItem>
-        <CanvasLegendItem swatchClassName="line">候选切口</CanvasLegendItem>
-        <CanvasLegendItem swatchClassName="handle">端点控制</CanvasLegendItem>
       </Legend>
     </>
   );

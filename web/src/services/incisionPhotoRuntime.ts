@@ -2,7 +2,7 @@ import * as Comlink from "comlink";
 
 import { toPixels } from "./geometryAtlas";
 import { controlledMarkerFailureMessage, engineeringBlockMessage } from "./incisionClinicalCopy";
-import { CONTROLLED_MARKER_DETECTOR_VERSION, detectControlledMarker } from "./controlledMarkerDetection";
+import { CONTROLLED_MARKER_DETECTOR_VERSION, detectControlledMarker } from "./controlledMarkerDetectionProfile";
 import type { ControlledMarkerDetection } from "./controlledMarkerDetection";
 import type { IncisionRuntimeState } from "./incisionControllerState";
 import type { IncisionDomElements } from "./incisionDom";

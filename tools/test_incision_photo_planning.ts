@@ -430,6 +430,51 @@ assert.ok(Math.abs(
   Number(photoCanonicalGeometry.candidateProjection.smoothingDiagnostics?.candidateLength)
     / Number(photoCanonicalGeometry.candidateProjection.smoothingDiagnostics?.maxWidth) - 4,
 ) < 1e-6, "photo-canonical correction preserves the candidate's requested aspect ratio");
+const diagonalRstl = [{
+  name: "diagonal-local-rstl",
+  region: "cheek",
+  disableRuntimeExpansion: true,
+  points: [[0, 1, 0], [1, 0, 1]] as Array<[number, number, number]>,
+}];
+const defaultDirectionGeometry = buildIncisionPhotoGeometry({
+  landmarks,
+  triangles,
+  atlasLines: diagonalRstl,
+  centerRef: surfaceCenterRefs[0],
+  boundaryRefs: [],
+  candidateRefs: surfaceCandidateRefs,
+  endpointRefs: surfaceEndpointRefs,
+  candidateType: "fusiform",
+  candidateAspectRatio: 4,
+  candidateTipAngleDeg: 30,
+});
+const editedDirectionGeometry = buildIncisionPhotoGeometry({
+  landmarks,
+  triangles,
+  atlasLines: diagonalRstl,
+  centerRef: surfaceCenterRefs[0],
+  boundaryRefs: [],
+  candidateRefs: surfaceCandidateRefs,
+  endpointRefs: surfaceEndpointRefs,
+  candidateType: "fusiform",
+  candidateAspectRatio: 4,
+  candidateTipAngleDeg: 30,
+  candidateDirectionEdited: true,
+});
+const defaultDirectionDelta = [
+  defaultDirectionGeometry.endpoints[1][0] - defaultDirectionGeometry.endpoints[0][0],
+  defaultDirectionGeometry.endpoints[1][1] - defaultDirectionGeometry.endpoints[0][1],
+];
+const editedDirectionDelta = [
+  editedDirectionGeometry.endpoints[1][0] - editedDirectionGeometry.endpoints[0][0],
+  editedDirectionGeometry.endpoints[1][1] - editedDirectionGeometry.endpoints[0][1],
+];
+assert.ok(Math.abs(Math.abs(defaultDirectionDelta[0]) - Math.abs(defaultDirectionDelta[1])) < 1e-6,
+  "an untouched candidate retains the existing nearest-RSTL photo alignment");
+assert.ok(Math.abs(editedDirectionDelta[1]) < Math.abs(editedDirectionDelta[0]) * 0.01,
+  "a clinician direction edit remains visible instead of being overwritten by photo RSTL alignment");
+assert.equal(editedDirectionGeometry.candidateProjection.smoothingDiagnostics?.photoCanonicalAxisSource, "source_endpoints",
+  "direction-edited photo geometry records the candidate endpoints as its axis source");
 const photoCanonicalUpper = photoCanonicalGeometry.fusiformRendering!.outline.slice(0, 33);
 const photoCanonicalHalfLength = Number(photoCanonicalGeometry.candidateProjection.smoothingDiagnostics?.candidateLength) / 2;
 const photoCanonicalHalfWidth = Number(photoCanonicalGeometry.candidateProjection.smoothingDiagnostics?.maxWidth) / 2;
@@ -720,6 +765,23 @@ assert.ok(metricLengthReference.fit,
   "a face-edge endpoint projection cannot shrink a declared photo candidate until it no longer encloses the lesion boundary");
 assert.ok(Number(metricLengthReference.diagnostics.candidateLength) >= 180,
   "photo canonical geometry keeps at least the metric candidate length supplied by the workflow");
+const metricLengthWithLongLegacyEndpoints = buildPhotoSurfaceCanonicalFusiform({
+  ...visibilityLimitedInput,
+  sourceCandidate: Array.from({ length: 13 }, (_, index) => {
+    const angle = index / 12 * Math.PI * 2;
+    return [200 + Math.cos(angle) * 130, 250 + Math.sin(angle) * 30, 0] as Vec3;
+  }),
+  sourceEndpoints: [[70, 250, 0], [330, 250, 0]],
+  center: [200, 250, 0],
+  boundary: [[180, 235, 0], [220, 235, 0], [220, 265, 0], [180, 265, 0]],
+  axisHint: [1, 0],
+  candidateLengthPx: 180,
+} as any);
+assert.ok(metricLengthWithLongLegacyEndpoints.fit);
+assert.ok(Math.abs(
+  Number(metricLengthWithLongLegacyEndpoints.diagnostics.candidateLength)
+    - Number(metricLengthReference.diagnostics.candidateLength),
+) < 1e-6, "the same calibrated millimetre length stays visually stable when legacy 3D endpoints vary by location");
 const belowReferenceFloorVisibility = buildPhotoSurfaceCanonicalFusiform({
   ...visibilityLimitedInput,
   aspectRatio: 2.1,
@@ -970,6 +1032,40 @@ assert.equal(
     (photoFallbackAligned.endpoints[0][1] + photoFallbackAligned.endpoints[1][1]) * 0.5
       - photoFallbackAligned.center![1],
   ) < 1e-6, "RSTL alignment does not sacrifice endpoint symmetry around the lesion center");
+
+  const finalProjectedRstl = [{
+    name: "wrinkle_guided_current_rstl",
+    region: "cheek",
+    pts: [[0.05, 0.25, 0], [0.45, 0.25, 0]] as Vec3[],
+    tris: [],
+    hidden: false,
+    hiddenPointRuns: [],
+  }];
+  const guidedDirection = queryIncisionPhotoRstlDirection({
+    centerRef,
+    vertices,
+    landmarks,
+    surfaceLandmarks: landmarks,
+    triangles,
+    atlasLines: displayedAtlas,
+    projectedRstlLines: finalProjectedRstl,
+  });
+  assert.equal(guidedDirection?.line_id, "wrinkle_guided_current_rstl");
+  assert.ok(Math.abs(Number(guidedDirection?.projected_axis?.[1])) < 1e-9,
+    "candidate generation consumes the latest displayed RSTL snapshot instead of the standard atlas beneath it");
+  const guidedGeometry = buildIncisionPhotoGeometry({
+    landmarks,
+    triangles,
+    atlasLines: displayedAtlas,
+    projectedRstlLines: finalProjectedRstl,
+    centerRef,
+    boundaryRefs: [],
+    candidateRefs: surfaceCandidateRefs,
+    endpointRefs: surfaceEndpointRefs,
+    candidateType: "fusiform",
+  });
+  assert.ok((guidedGeometry.projectedRstlDeviationDeg || 0) < 1e-4,
+    "photo rendering and workflow generation use the same final projected RSTL direction");
 }
 
 {

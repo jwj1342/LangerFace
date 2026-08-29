@@ -291,6 +291,7 @@ export interface IncisionPhotoRenderInput {
   surfaceLandmarks?: Vec3[];
   triangles: Triangle[];
   atlasLines: AtlasLine[] | unknown;
+  projectedRstlLines?: readonly ProjectedRstlLineInput[] | null;
   centerRef: SurfaceRef | null;
   diameterEstimateRefs?: SurfaceRef[];
   photoDiameterEstimateMm?: number;
@@ -306,10 +307,20 @@ export interface IncisionPhotoRenderInput {
   candidateAspectRatio?: number;
   candidateAxisCoverageRatio?: number;
   candidateTipAngleDeg?: number;
+  candidateDirectionEdited?: boolean;
   candidateSkinVisible?: VisibilityPredicate;
   displayScale?: number;
   fusiformRenderMode?: FusiformRenderMode;
   drawCandidate?: boolean;
+}
+
+export interface ProjectedRstlLineInput {
+  name?: string;
+  region?: string;
+  pts: readonly Vec3[];
+  tris?: readonly number[];
+  hidden?: boolean;
+  hiddenPointRuns?: readonly (readonly [number, number])[];
 }
 
 function photoCubicPoint(curve: IncisionPhotoCubic, t: number): Vec3 {
@@ -570,6 +581,7 @@ export function buildPhotoSurfaceCanonicalFusiform({
   skinVisible,
   rstlBoundaryVisible,
   axisHint,
+  axisHintSource,
   referenceAspectRatio,
   minimumLengthScale = 0,
   candidateLengthPx,
@@ -585,6 +597,7 @@ export function buildPhotoSurfaceCanonicalFusiform({
   skinVisible?: VisibilityPredicate;
   rstlBoundaryVisible?: VisibilityPredicate;
   axisHint?: readonly [number, number] | null;
+  axisHintSource?: "nearest_projected_rstl" | "source_endpoints";
   referenceAspectRatio?: number | null;
   minimumLengthScale?: number;
   candidateLengthPx?: number;
@@ -611,7 +624,7 @@ export function buildPhotoSurfaceCanonicalFusiform({
     photoSurfaceMeshOutsideCount: 0,
     photoHeadOutsideCount: 0,
     photoSkinOutsideCount: 0,
-    photoCanonicalAxisSource: axisHint ? "nearest_projected_rstl" : "source_endpoints",
+    photoCanonicalAxisSource: axisHintSource || (axisHint ? "nearest_projected_rstl" : "source_endpoints"),
     photoCanonicalReference: referenceAspectRatio != null,
   };
   const fail = (reason: FusiformFitFailureReason) => ({
@@ -646,7 +659,13 @@ export function buildPhotoSurfaceCanonicalFusiform({
   const metricHalfLength = Number.isFinite(Number(candidateLengthPx)) && Number(candidateLengthPx) > 0
     ? Number(candidateLengthPx) / 2
     : 0;
-  const sourceHalfLength = Math.max(1, metricHalfLength, ...endpointCoordinates.map(([value]) => Math.abs(value)));
+  // Once the workflow supplies a calibrated photo-space length, that metric is
+  // authoritative. The projected 3D endpoints are still useful as a fallback,
+  // but allowing them to enlarge the metric length made an unchanged 6 mm
+  // candidate appear at different sizes at different positions on one photo.
+  const sourceHalfLength = metricHalfLength > 0
+    ? Math.max(1, metricHalfLength)
+    : Math.max(1, ...endpointCoordinates.map(([value]) => Math.abs(value)));
   const standardRatio = Math.max(1.8, Math.min(6, Number(aspectRatio)));
   const requestedReferenceRatio = referenceAspectRatio == null
     ? standardRatio
@@ -1826,6 +1845,7 @@ export function buildIncisionPhotoGeometry({
   surfaceLandmarks,
   triangles,
   atlasLines,
+  projectedRstlLines,
   centerRef,
   diameterEstimateRefs = [],
   photoDiameterEstimateMm,
@@ -1839,6 +1859,7 @@ export function buildIncisionPhotoGeometry({
   candidateAspectRatio,
   candidateAxisCoverageRatio,
   candidateTipAngleDeg,
+  candidateDirectionEdited = false,
   candidateSkinVisible,
 }: Omit<IncisionPhotoRenderInput, "context" | "source" | "sourceWidth" | "sourceHeight" | "devicePixelRatio">): IncisionPhotoGeometry {
   const photoLandmarks = surfaceLandmarks || landmarks;
@@ -1848,7 +1869,9 @@ export function buildIncisionPhotoGeometry({
   // the live 2D renderer; the extended surface is only for incision picking
   // and candidate/lesion projection.
   const rstl = mapAtlas(atlasLines, landmarks, triangles);
-  const directionReferenceRstl = visibleProjectedRstlLines(rstl, landmarks, triangles);
+  const directionReferenceRstl = projectedRstlLines?.length
+    ? visibleCurrentProjectedRstlLines(projectedRstlLines, landmarks, triangles)
+    : visibleProjectedRstlLines(rstl, landmarks, triangles);
   const rstlBoundaryVisible: VisibilityPredicate = (point) => Boolean(
     point && projectedRstlUpperForeheadSupportsPoint(point, directionReferenceRstl),
   );
@@ -1878,6 +1901,19 @@ export function buildIncisionPhotoGeometry({
   const nearestPhotoRstl = candidateSmoothingCenter
     ? nearestProjectedRstlSegment(candidateSmoothingCenter, directionReferenceRstl)
     : null;
+  const sourceEndpointAxis = sourceEndpoints.length >= 2
+    ? [
+      sourceEndpoints[1][0] - sourceEndpoints[0][0],
+      sourceEndpoints[1][1] - sourceEndpoints[0][1],
+    ] as [number, number]
+    : null;
+  const useEditedCandidateAxis = candidateDirectionEdited
+    && Boolean(sourceEndpointAxis && Math.hypot(...sourceEndpointAxis) > 1e-6);
+  const candidateAxisHint = useEditedCandidateAxis ? sourceEndpointAxis : nearestPhotoRstl?.axis || null;
+  const candidateAxisHintSource: "nearest_projected_rstl" | "source_endpoints" = useEditedCandidateAxis
+    || !nearestPhotoRstl
+    ? "source_endpoints"
+    : "nearest_projected_rstl";
   const photoLinearCandidate = candidateType === "linear"
     ? buildPhotoSpaceLinearCandidate({
       center: candidateSmoothingCenter,
@@ -1898,7 +1934,8 @@ export function buildIncisionPhotoGeometry({
     triangles,
     skinVisible: candidateSkinVisible,
     rstlBoundaryVisible,
-    axisHint: nearestPhotoRstl?.axis || null,
+    axisHint: candidateAxisHint,
+    axisHintSource: candidateAxisHintSource,
     candidateLengthPx: Number(candidateLengthMm) > 0 && Number(photoPixelsPerMm) > 0
       ? Number(candidateLengthMm) * Number(photoPixelsPerMm)
       : undefined,
@@ -1932,14 +1969,15 @@ export function buildIncisionPhotoGeometry({
   // the middle of the curve toward the detected lesion. That could leave the
   // endpoint midpoint off-center and make one half visibly longer. Before the
   // fallback is fitted, rigidly align the whole source candidate to the lesion
-  // center and the nearest projected RSTL direction. It is accepted only after
-  // coverage and visible-surface gates are rerun below.
+  // center and either the clinician-edited candidate axis or the nearest
+  // projected RSTL direction. It is accepted only after coverage and
+  // visible-surface gates are rerun below.
   const alignedFallbackSource = candidateType === "fusiform" && !usePhotoCanonical
     ? alignPhotoCandidateToCenterAndAxis({
       candidate: sourceCandidate,
       endpoints: sourceEndpoints,
       center: candidateSmoothingCenter,
-      axisHint: nearestPhotoRstl?.axis || null,
+      axisHint: candidateAxisHint,
     })
     : null;
   const rawFusiformFitAttempt = alignedFallbackSource
@@ -1977,7 +2015,7 @@ export function buildIncisionPhotoGeometry({
       : (fallbackSurfaceValidation?.outsideCount || 0) > 0
         ? "photo_surface_exit"
         : fallbackEndpointMidpointError > 1e-6
-          || (fallbackRstlDeviation != null && fallbackRstlDeviation > 1e-3)
+          || (!useEditedCandidateAxis && fallbackRstlDeviation != null && fallbackRstlDeviation > 1e-3)
           ? "invalid_sampling"
           : null;
   const useCenteredFallback = !usePhotoCanonical && fallbackGateReason == null;
@@ -1994,7 +2032,7 @@ export function buildIncisionPhotoGeometry({
         photoSurfaceMeshOutsideCount: fallbackSurfaceValidation?.meshOutsideCount ?? 0,
         photoHeadOutsideCount: fallbackSurfaceValidation?.headOutsideCount ?? 0,
         photoSkinOutsideCount: fallbackSurfaceValidation?.skinOutsideCount ?? 0,
-        photoCanonicalAxisSource: nearestPhotoRstl ? "nearest_projected_rstl" : "source_endpoints",
+        photoCanonicalAxisSource: candidateAxisHintSource,
       },
     } satisfies SurfaceProjectedFusiformFitAttempt
     : null;
@@ -2167,6 +2205,57 @@ export interface NearestProjectedRstlSegment {
 
 type VisibleProjectedRstlLine = MappedAtlasLine & { sourceLineIndex: number };
 
+function visibleCurrentProjectedRstlLines(
+  lines: readonly ProjectedRstlLineInput[],
+  landmarks: Vec3[],
+  triangles: Triangle[],
+): VisibleProjectedRstlLine[] {
+  const visibleRuns: VisibleProjectedRstlLine[] = [];
+  lines.forEach((line, sourceLineIndex) => {
+    if (line.hidden || line.pts.length < 2) return;
+    const hiddenIndices = new Set<number>();
+    for (const [start, length] of line.hiddenPointRuns || []) {
+      const first = Math.max(0, Math.floor(Number(start)));
+      const end = Math.min(line.pts.length, first + Math.max(0, Math.floor(Number(length))));
+      for (let index = first; index < end; index += 1) hiddenIndices.add(index);
+    }
+    let runStart = 0;
+    for (let index = 0; index <= line.pts.length; index += 1) {
+      if (index < line.pts.length && !hiddenIndices.has(index)) continue;
+      if (index - runStart >= 2) {
+        const pts = line.pts.slice(runStart, index).map((point) => [...point] as Vec3);
+        const tris = line.tris?.slice(runStart, index).map(Number) || [];
+        const mapped: MappedAtlasLine = {
+          name: line.name || `projected-rstl-${sourceLineIndex}`,
+          region: line.region || "unknown",
+          pts,
+          tris,
+        };
+        // Current refine lines are already in photo coordinates. Preserve the
+        // live renderer's clipping when triangle provenance is available; a
+        // provenance-free line is treated as an explicitly visible snapshot.
+        const plannedRuns = tris.length === pts.length
+          ? buildRstlRenderPlan({
+            lines: [mapped],
+            landmarks,
+            triangles,
+            clip: true,
+            densityFraction: 1,
+          }).flatMap((entry) => entry.runs)
+          : [pts];
+        visibleRuns.push(...plannedRuns.filter((run) => run.length >= 2).map((run) => ({
+          ...mapped,
+          pts: run,
+          tris: [],
+          sourceLineIndex,
+        })));
+      }
+      runStart = index + 1;
+    }
+  });
+  return visibleRuns;
+}
+
 function visibleProjectedRstlLines(
   rstl: MappedAtlasLine[],
   landmarks: Vec3[],
@@ -2246,6 +2335,7 @@ export function queryIncisionPhotoRstlDirection({
   surfaceLandmarks,
   triangles,
   atlasLines,
+  projectedRstlLines,
 }: {
   centerRef: SurfaceRef | null;
   vertices: Vec3[];
@@ -2253,6 +2343,7 @@ export function queryIncisionPhotoRstlDirection({
   surfaceLandmarks?: readonly Vec3[] | null;
   triangles: Triangle[];
   atlasLines: AtlasLine[] | unknown;
+  projectedRstlLines?: readonly ProjectedRstlLineInput[] | null;
 }): IncisionPhotoRstlDirection | null {
   if (!centerRef) return null;
   const triangle = triangles[centerRef.tri];
@@ -2262,8 +2353,9 @@ export function queryIncisionPhotoRstlDirection({
   const modelCenter = mapSurfaceRefs([centerRef], vertices, triangles).pts[0];
   if (!center || !modelCenter) return null;
   const sourceLandmarks = [...landmarks] as Vec3[];
-  const mappedRstl = mapAtlas(atlasLines, sourceLandmarks, triangles);
-  const visibleRstl = visibleProjectedRstlLines(mappedRstl, sourceLandmarks, triangles);
+  const visibleRstl = projectedRstlLines?.length
+    ? visibleCurrentProjectedRstlLines(projectedRstlLines, sourceLandmarks, triangles)
+    : visibleProjectedRstlLines(mapAtlas(atlasLines, sourceLandmarks, triangles), sourceLandmarks, triangles);
   const nearest = nearestProjectedRstlSegment(center, visibleRstl);
   if (!nearest) return null;
   const selectedVisibleLine = visibleRstl[nearest.lineIndex];

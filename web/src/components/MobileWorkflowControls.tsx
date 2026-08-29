@@ -161,7 +161,7 @@ export function MobileCandidateAdjustPanel() {
   const commands = useIncisionControllerCommands();
   const snapshot = useIncisionStore((state) => state.snapshot);
   const edit = snapshot?.edit;
-  const candidateReady = snapshot?.candidate?.type === "fusiform";
+  const candidateReady = Boolean(edit?.widthScaleVisible);
   const [scalePct, setScalePct] = useState("100");
   const [angleDeg, setAngleDeg] = useState("0");
 

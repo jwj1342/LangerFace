@@ -5,11 +5,36 @@ import { fileURLToPath } from "node:url";
 
 import { fitImageToMaxSide, MAX_IMAGE_SOURCE_DIM } from "../web/src/services/imageSource.ts";
 import {
+  confirmLikelyScreenshotUpload,
+  likelyMobileScreenshot,
+} from "../web/src/services/imageUploadPreflight.ts";
+import {
   detectStaticImageWithRetries,
   STATIC_IMAGE_MAX_ATTEMPTS,
 } from "../web/src/services/staticImageDetection.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+{
+  assert.equal(likelyMobileScreenshot({ width: 1080, height: 2376 }), true,
+    "a common tall phone screenshot is warned before upload");
+  assert.equal(likelyMobileScreenshot({ width: 3024, height: 4032 }), false,
+    "a normal 3:4 portrait photo is not treated as a screenshot");
+  assert.equal(likelyMobileScreenshot({ width: 1080, height: 1920 }), false,
+    "the warning stays conservative at the exact 16:9 boundary");
+  let warning = "";
+  const accepted = confirmLikelyScreenshotUpload(
+    { name: "网页截图.jpg" },
+    { width: 1080, height: 2376 },
+    (message) => {
+      warning = message;
+      return false;
+    },
+  );
+  assert.equal(accepted, false);
+  assert.match(warning, /画中画/);
+  assert.match(warning, /1080×2376/);
+}
 
 {
   const fit = fitImageToMaxSide(6000, 4000);
@@ -118,6 +143,12 @@ for (const rel of ["web/src/services/pipelineSource.ts"]) {
   assert.match(source, /operationId !== sourceOperationId/, `${rel} prevents stale uploads from replacing a newer source`);
   assert.match(source, /setMsg\("图片加载中", 0, true\)/,
     `${rel} exposes an explicit image-loading state on the central canvas`);
+  assert.match(source, /const workflowUpload = Boolean\(document\.querySelector\("\.workflow-workbench"\)\)/,
+    `${rel} scopes screenshot warnings and temporary face-photo drafts to the merged workflow`);
+  assert.match(source, /if \(!workflowUpload\) \{[\s\S]*?stopSource\(\{ preserveOperation: true \}\)[\s\S]*?setMsg\("图片加载中", 0, true\)/,
+    `${rel} preserves the established source-replacement order outside the workflow route`);
+  assert.match(source, /if \(workflowUpload && !suppressScreenshotWarning/,
+    `${rel} does not change the protected standalone RSTL upload interaction`);
   assert.match(source, /if \(!file\.type\.startsWith\("image\/"\)\) \{[\s\S]*?return;[\s\S]*?const startedAt/,
     `${rel} rejects non-photo files before stopping or replacing the active source`);
   assert.match(source, /const modelReady = ensureImageReady\(\)\.then[\s\S]*?const decoded = img\.decode\(\)\.then[\s\S]*?await Promise\.all\(\[modelReady, decoded\]\)/,

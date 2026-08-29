@@ -21,6 +21,7 @@ import {
   workflowFreehandBoundaryClosed,
   workflowFreehandContinuationAllowed,
   workflowFocusViewportPoint,
+  workflowFusiformEditBase,
   workflowFusiformPlaneNormal,
   workflowFusiformSvgPath,
   workflowInvalidationNeedsLiveFrame,
@@ -34,6 +35,7 @@ import {
   workflowPhotoOpeningIntersection,
   workflowPhotoTumorOpeningIntersection,
   workflowPhotoTumorOutline,
+  workflowPlanningClientPoint,
   workflowScanCircleGeometry,
   recoverWorkflowFreehandBoundary,
   smoothWorkflowClosedBoundary,
@@ -52,6 +54,9 @@ const app = read("web/src/App.tsx");
 const route = read("web/src/routes/WorkflowRoute.tsx");
 const workbench = read("web/src/routes/WorkflowWorkbench.tsx");
 const mobileControls = read("web/src/components/MobileWorkflowControls.tsx");
+const liveStagePanel = read("web/src/components/LiveStagePanel.tsx");
+const workflowDraftRecovery = read("web/src/components/WorkflowDraftRecovery.tsx");
+const workflowDraftSession = read("web/src/services/workflowDraftSession.ts");
 const mobileVisibility = read("web/src/services/mobileWorkflowVisibility.ts");
 const canvasTools = read("web/src/components/WorkflowCanvasTools.tsx");
 const stageStatus = read("web/src/components/WorkflowStageStatus.tsx");
@@ -86,6 +91,56 @@ assert.match(route, /import\("\.\.\/services\/liveRuntime"\)/, "workflow route r
 assert.match(route, /import\("\.\.\/services\/workflowIncisionController"\)/, "workflow route mounts the canvas-free incision controller");
 assert.doesNotMatch(route, /incisionRuntime/, "workflow route must not mount the legacy incision runtime beside liveRuntime");
 assert.equal((workbench.match(/<LiveStagePanel\b/g) || []).length, 1, "workflow renders one visible live stage");
+assert.match(liveStagePanel, /workflow-mobile-scroll-zone[\s\S]*?从这里向上滑动，查看更多操作/,
+  "mobile workflow keeps a dedicated page-scroll touch target outside the shared canvas");
+assert.match(styles, /\.workflow-workbench \.workflow-mobile-scroll-zone\s*{[^}]*flex:\s*0 0 56px;[^}]*touch-action:\s*pan-y;/s,
+  "the mobile scroll target is finger-sized and explicitly permits vertical page panning");
+assert.match(controller, /dataset\.workflowMarkerMode = String\(state\.markerMode\)/,
+  "the workflow root exposes controlled-marker mode for mobile layout containment");
+assert.match(controller, /delete state\.root\.dataset\.workflowMarkerMode/,
+  "disposing the workflow controller removes its controlled-marker layout state");
+assert.doesNotMatch(styles, /workflow-marker-mode="true"[^}]*\.main-wrap\s*{[^}]*flex-basis:/s,
+  "controlled-marker mode does not resize the shared face canvas");
+assert.doesNotMatch(styles, /workflow-marker-mode="true"[^}]*\.workflow-mobile-scroll-zone\s*{[^}]*order:/s,
+  "controlled-marker mode keeps the page-scroll prompt after the shared canvas");
+assert.match(styles, /"live-status incision-status fps"[\s\S]*?"workflow-actions workflow-actions workflow-actions"/,
+  "phone workflow moves the incision status beside the live photo pill");
+assert.match(styles, /grid-template-rows:\s*repeat\(2, 40px\);[\s\S]*?block-size:\s*104px;/,
+  "phone workflow reserves the same two-row tool slot before and during controlled marking");
+assert.match(canvasTools, /data-marker-mode={String\(markerMode\)}[\s\S]*?data-marker-busy={String\(markerBusy\)}/,
+  "phone tool layout exposes marker state without changing command semantics");
+assert.match(styles, /#wrinkleSummary\s*{[^}]*overflow-wrap:\s*anywhere;[^}]*word-break:\s*break-word;/s,
+  "long local V10 runtime errors wrap inside the mobile workflow rail instead of widening the shared canvas");
+assert.match(mobileControls, /const candidateReady = Boolean\(edit\?\.widthScaleVisible\)/,
+  "mobile candidate editing follows the controller capability instead of the intentionally hidden candidate summary");
+const fusiformBase = { candidate: { type: "fusiform", id: "base" } };
+assert.equal(
+  workflowFusiformEditBase({ candidate: { type: "fusiform", id: "edited" } }, fusiformBase),
+  fusiformBase,
+  "mobile candidate editing uses the stored unedited fusiform baseline when it is available",
+);
+const recoveredFusiformBase = workflowFusiformEditBase({
+  candidate: { type: "fusiform", id: "edited" },
+  original_candidate: { type: "fusiform", id: "original" },
+}, null);
+assert.equal(recoveredFusiformBase?.candidate?.id, "original",
+  "a restored fusiform candidate recovers its editable baseline from original_candidate");
+assert.equal(workflowFusiformEditBase({ candidate: { type: "linear" } }, fusiformBase), null,
+  "the mobile fusiform controls remain unavailable for linear candidates");
+assert.match(controller, /widthScaleVisible: Boolean\(workflowFusiformEditBase\(state\.result, state\.baseResult\)\)/,
+  "the mobile adjustment capability follows the recoverable current fusiform instead of requiring one internal state path");
+assert.match(controller, /const baseResult = workflowFusiformEditBase\(state\.result, state\.baseResult\)[\s\S]*?state\.baseResult = baseResult[\s\S]*?applyCandidateEdit\(baseResult/,
+  "mobile edit commands restore a recoverable fusiform baseline before applying the adjustment");
+assert.match(workflowDraftRecovery, /仅保存在这个浏览器标签页，30 分钟后过期；不会上传服务器。/,
+  "temporary face-photo recovery states its session-only privacy boundary next to the controls");
+assert.match(workflowDraftRecovery, /if \(!draft \|\| sourceKind === "image"\) return null;/,
+  "temporary saving stays silent while the current photo is active");
+assert.doesNotMatch(workflowDraftRecovery, /当前照片已临时保存|当前页面已临时保存/,
+  "the active-page temporary-save notice is not rendered");
+assert.match(workflowDraftSession, /globalThis\.sessionStorage/,
+  "workflow recovery stays within the current browser-tab session");
+assert.doesNotMatch(workflowDraftSession, /indexedDB|localStorage/,
+  "workflow recovery cannot grow into a persistent browser case database");
 assert.match(workbench, /workflowActions={<WorkflowCanvasTools\s*\/>}/, "workflow places incision actions in the shared stage header");
 assert.match(workbench, /workflowOverlay={<WorkflowCanvasOverlay\s*\/>}/, "workflow keeps only the incision drawing layer over the shared canvas");
 assert.match(workbench, /workflowStatus={<WorkflowStageStatus\s*\/>}/, "workflow places incision status in the shared stage header");
@@ -148,6 +203,10 @@ assert.match(controller, /workflowInvalidationNeedsLiveFrame/, "workflow invalid
 assert.match(controller, /completesWorkflowCanvasClick[\s\S]*?state\.centerRef = ref;[\s\S]*?void runWorkflow\(state\)/, "a direct canvas click selects the lesion center and starts workflow generation");
 assert.match(controller, /buildForeheadSurfaceLandmarks\(frame\.landmarks\)/, "workflow restores the legacy extended forehead picking surface");
 assert.match(controller, /buildIncisionPhotoGeometry\(/, "workflow candidate drafts reuse the established photo geometry and smoothing gates");
+assert.match(controller, /buildIncisionPhotoGeometry\([\s\S]*?projectedRstlLines: activeProjectedRstlLines\(\)/,
+  "photo rendering consumes the same final projected RSTL snapshot shown on the canvas");
+assert.match(controller, /queryIncisionPhotoRstlDirection\([\s\S]*?projectedRstlLines/,
+  "candidate generation queries the current projected RSTL snapshot instead of only the base atlas");
 assert.match(controller, /workflowFusiformSvgPath\(geometry\.fusiformRendering/, "workflow draws the established smooth fusiform fit instead of the raw model polyline");
 assert.match(canvasTools, /data-workflow-marker-scan-circle/, "workflow restores the controlled-marker circular scan feedback");
 assert.match(canvasTools, /data-workflow-marker-scan-label/, "workflow retains the desktop scan-diameter annotation source");
@@ -245,6 +304,14 @@ assert.match(reviewControlsPanel, /id="reviewDecision"[\s\S]*?decisionAttentionR
   "a limited-visibility confirmation block highlights the nearby review-decision control");
 assert.match(styles, /@keyframes workflow-review-attention[\s\S]*?prefers-reduced-motion/,
   "review attention has a breathing cue with a reduced-motion fallback");
+assert.match(styles, /animation:\s*workflow-review-attention\s+0\.85s\s+ease-in-out\s+2;/,
+  "review attention breathes exactly twice instead of flashing forever");
+assert.match(reviewControlsPanel, /REVIEW_SAVE_NOTICE_REASONS[\s\S]*?review_blocked[\s\S]*?review_missing_candidate[\s\S]*?diagnostic_review_blocked[\s\S]*?diagnostic_review_acknowledged/,
+  "review save notices cover every non-persisting save outcome without reacting to unrelated warnings");
+assert.match(reviewControlsPanel, /id="reviewSaveFeedback"[\s\S]*?role="alert"[\s\S]*?snapshot\?\.stageStatus/,
+  "the review panel displays the controller's actual non-persisting reason beside the save button");
+assert.match(reviewControlsPanel, /classList\.remove\("workflow-review-attention"\)[\s\S]*?offsetWidth[\s\S]*?classList\.add\("workflow-review-attention"\)[\s\S]*?snapshot\?\.updatedAt/,
+  "each blocked save attempt restarts the two-cycle attention animation");
 assert.match(controller, /reviewAttention:\s*"reviewer"/,
   "missing reviewer paths publish a reviewer-specific attention reason");
 assert.match(reviewPolicy, /photo_visibility_limited_candidate[\s\S]*?attention:\s*"decision"/,
@@ -288,7 +355,7 @@ const pointerHandler = controller.slice(
 );
 assert.ok(pointerHandler.indexOf("if (state.markerMode)") < pointerHandler.indexOf("workflowSurfaceRefAtSource"),
   "controlled-marker detection starts from photo coordinates before surface-hit validation");
-assert.match(pointerHandler, /if \(mobileMarkerTouch\) \{\s*event\.preventDefault\(\);\s*return;\s*\}[\s\S]*?const sourcePoint = planning\.clientToSource/,
+assert.match(pointerHandler, /if \(mobileMarkerTouch\) \{\s*event\.preventDefault\(\);\s*return;\s*\}[\s\S]*?const sourcePoint = sourcePointAtClient/,
   "mobile marker touches return before desktop point mapping so pinch fingers cannot publish false selection errors");
 assert.match(pointerHandler, /if \(state\.markerMode\) \{[\s\S]*?void runControlledMarker\(state, sourcePoint\)/,
   "desktop marker clicks retain their immediate click-to-detect branch");
@@ -336,24 +403,23 @@ assert.match(controller, /case "controlled_marker":[\s\S]*?state\.boundaryMode =
   "clicking the visually disabled marker control in freehand mode publishes its reason without starting acquisition");
 assert.match(controlledMarkerHandler, /controlledMarkerPixelsPerMm\(state, frame, seed, photoProjection\.surfaceLandmarks\)/,
   "controlled-marker detection uses the same stable scale as its scan circle");
-assert.match(controlledMarkerHandler, /workflowControlledMarkerCrop\([\s\S]*?context\.getImageData\(0, 0, crop\.width, crop\.height\)/,
-  "controlled-marker detection reads only the bounded scan crop instead of copying the full phone photo");
-assert.match(controlledMarkerHandler, /detectControlledMarker\(image, crop\.seed, options\)[\s\S]*?translateControlledMarkerDetection\(localDetection, \{ x: crop\.x, y: crop\.y \}\)/,
-  "cropped detector coordinates are translated back to the unchanged source-photo space");
+assert.match(controlledMarkerHandler, /canvas\.width = frame\.width;[\s\S]*?context\.getImageData\(0, 0, frame\.width, frame\.height\)/,
+  "controlled-marker detection restores the proven full-photo input used by the stable reference workflow");
+assert.match(controlledMarkerHandler, /detectControlledMarker\(image, seed, options\)/,
+  "the stable detector receives the unchanged source-photo seed instead of crop-local coordinates");
+assert.doesNotMatch(controlledMarkerHandler, /workflowControlledMarkerCrop|translateControlledMarkerDetection/,
+  "the merged workflow does not alter the stable detector input with an extra crop/translation layer");
 assert.ok(
   controlledMarkerHandler.indexOf("setSelection({ centerRef: null, boundaryRefs: [] })")
     < controlledMarkerHandler.indexOf("detectControlledMarker"),
   "every controlled-marker attempt clears the previous shared selection before detection",
 );
+assert.doesNotMatch(controlledMarkerHandler, /workflowPhotoOpeningIntersection/,
+  "a broad 2D opening polygon cannot discard a detected skin boundary before surface mapping");
 assert.ok(
-  controlledMarkerHandler.indexOf("workflowPhotoOpeningIntersection")
-    < controlledMarkerHandler.indexOf("detectControlledMarker"),
-  "the complete photo-space scan footprint is rejected before detector failure copy can mask the opening warning",
-);
-assert.ok(
-  controlledMarkerHandler.lastIndexOf("workflowPhotoOpeningIntersection")
-    < controlledMarkerHandler.indexOf("workflowSurfaceRefAtSource(state, frame, detection.center"),
-  "the detected photo footprint is checked before surface snapping can erase opening information",
+  controlledMarkerHandler.indexOf("workflowSurfaceRefAtSource(state, frame, detection.center")
+    < controlledMarkerHandler.indexOf("inspectTumorEngineeringExclusions"),
+  "detected boundaries still pass through surface mapping and the 3D non-skin-opening safety gate",
 );
 assert.match(controlledMarkerHandler, /detection\.boundary[\s\S]*?workflowSurfaceRefAtSource\(state, frame, point\)/,
   "controlled-marker boundaries share the bounded outer-face recovery used by ordinary photo picks");
@@ -432,10 +498,15 @@ assert.match(render2d, /CustomEvent\("langerface:focus-crop-changed"\)/,
   "focus crop changes publish an explicit redraw signal for the workflow SVG");
 assert.match(controller, /addEventListener\("langerface:focus-crop-changed"[\s\S]*?scheduleOverlayDraw/,
   "the workflow SVG redraws after the canvas focus crop has been computed");
-assert.match(canvasTools, /aria-label="切口标注图例"[\s\S]*?病灶中心[\s\S]*?肿物范围[\s\S]*?候选切口[\s\S]*?端点控制/,
-  "workflow restores the four-item canvas legend in the shared stage");
+assert.match(canvasTools, /aria-label="切口标注图例"[\s\S]*?病灶中心[\s\S]*?肿物范围/,
+  "workflow keeps the two clinician-requested canvas legend items");
+assert.doesNotMatch(canvasTools, />候选切口<|>端点控制</,
+  "workflow hides candidate and endpoint legend labels without removing their SVG layers");
 assert.doesNotMatch(incisionRail, /打开独立切口工作台/, "workflow no longer substitutes navigation for incision controls");
-assert.doesNotMatch(controller, /createPhotoPlanningController|incisionRuntime|sessionStorage/, "workflow incision controller owns no canvas runtime or page handoff storage");
+assert.doesNotMatch(controller, /createPhotoPlanningController|incisionRuntime|sessionStorage/,
+  "workflow incision controller owns no second canvas runtime and delegates short-lived storage to the session service");
+assert.match(controller, /saveWorkflowIncisionDraft/,
+  "workflow controller supplies only serializable low-frequency incision state to the draft service");
 assert.match(controller, /sourceState\.planning2d\?\.getFrameState\(\)/, "workflow incision controller consumes the shared live planning frame");
 assert.match(controller, /assessReviewReadiness/, "workflow keeps the established clinician review gate");
 assert.match(controller, /renderState\.incisionOverlay = overlay/, "approved candidates activate directly on the current live renderer");
@@ -495,10 +566,12 @@ assert.doesNotMatch(mobileControls, /if \(!nextRstl && !nextWrinkles\) return;/,
   "mobile operators may hide RSTL and wrinkles together to inspect the unmodified source image");
 assert.match(mobileControls, /setMobileRstlLayerVisible\(rstlVisible\)[\s\S]*?setMobileWrinkleLayerVisible\(wrinklesVisible\)[\s\S]*?setMobileIncisionCandidateVisible\(incisionVisible\)/,
   "all three phone overlay switches have independent display-only visibility gates");
-assert.match(styles, /\.workflow-canvas-tools\s*\{[^}]*flex-wrap:\s*wrap;[^}]*width:\s*100%;[^}]*overflow:\s*visible;/,
-  "the phone marker toolbar wraps instead of clipping the recognition action outside the viewport");
-assert.match(styles, /\.workflow-marker-scan\s*\{[^}]*order:\s*3;[^}]*width:\s*100%;/,
-  "the scan-diameter control receives a full-width phone row after the primary marker actions");
+assert.match(styles, /\.workflow-canvas-tools\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);[^}]*overflow:\s*hidden;/,
+  "the phone marker toolbar uses a fixed grid instead of growing when recognition controls appear");
+assert.match(styles, /\.workflow-canvas-tools > button\s*\{[^}]*font-size:\s*11px;[^}]*white-space:\s*nowrap;/,
+  "phone marker action labels stay on one line inside the stable four-column grid");
+assert.match(styles, /\.workflow-marker-scan\s*\{[^}]*grid-area:\s*2 \/ 2 \/ 3 \/ 5;[^}]*width:\s*100%;/,
+  "the scan-diameter control occupies the reserved second phone tool row");
 assert.match(styles, /\[data-workflow-marker-scan-label\]\s*\{[^}]*display:\s*none;/,
   "the face-obscuring scan-diameter label is hidden only inside the phone media query");
 assert.match(mobileControls, /preview_edit", "uniformScale"[\s\S]*?commit_edit", "uniformScale"/,
@@ -509,7 +582,7 @@ assert.match(controller, /function handleMobileEditCommand[\s\S]*?if \(!mobileWo
   "workflow candidate editing rejects the phone UI event outside the mobile viewport contract");
 assert.match(controller, /state\.edit\.angle_offset_deg = Math\.max\(-35,[\s\S]*?state\.edit\.length_scale = Math\.max\(1,[\s\S]*?state\.edit\.width_scale = Math\.max\(1,/,
   "workflow clamps the two mobile-only adjustment dimensions before applying the existing candidate editor");
-assert.match(controller, /workflowFusiformPlaneNormal\(state\.baseResult\.candidate, fallbackNormal\)/,
+assert.match(controller, /workflowFusiformPlaneNormal\(baseResult\.candidate, fallbackNormal\)/,
   "mobile direction adjustment rotates in the candidate's original plane instead of a potentially different nearby mesh plane");
 assert.match(controller, /scheduleMobileCandidateEdit[\s\S]*?requestAnimationFrame[\s\S]*?cancelMobileEditPreview/,
   "mobile adjustment previews are coalesced to one expensive candidate rebuild per display frame");
@@ -519,6 +592,16 @@ assert.match(controller, /liveParameterCommands[\s\S]*?candidateRecomputeTimer =
   "continuous tumor-parameter input keeps the visible candidate and debounces live recomputation");
 assert.match(controller, /committedParameterCommands[\s\S]*?runWorkflow\(state, false, true\)/,
   "committed tumor-parameter changes replace the retained candidate atomically");
+assert.match(controller, /state\.baseResult = \{[\s\S]*?const retainedEdit = retainedCandidate \? cloneIncisionEdit\(state\.edit\)[\s\S]*?state\.edit = state\.baseResult\.candidate\?\.type === "fusiform" \? retainedEdit[\s\S]*?applyCandidateEdit/,
+  "tumor-parameter recomputation reapplies the existing fusiform scale and direction instead of clearing them");
+assert.match(controller, /candidateDirectionEdited:[\s\S]*?state\.edit\.angle_offset_deg/,
+  "photo projection is told when the clinician explicitly changed candidate direction");
+assert.match(controller, /currentRstlFingerprint !== rstlFingerprint[\s\S]*?workflow_stale_rstl/,
+  "an async candidate computed from an obsolete RSTL snapshot is discarded");
+assert.match(controller, /langerface:refine2d-state[\s\S]*?reconcileProjectedRstlSnapshot/,
+  "manual or wrinkle-guided RSTL changes invalidate the old candidate without continuously rotating it");
+assert.match(styles, /\.mobile-candidate-adjust\s*\{[^}]*background:\s*#0f141b;[^}]*border-left:\s*3px solid var\(--clinical-accent\);/s,
+  "candidate adjustment uses the established dark navy panel and clinical blue accent");
 assert.match(pipelineLoop, /setOverlaySummary\(renderState\.workflowPhotoOverlay[\s\S]*?\? \{ rstlLineCount: lineCount \}/,
   "RSTL redraws retain the workflow draft summary instead of clearing the lesion and incision candidate");
 assert.match(controller, /frame\.transform\?\.viewportLeft \?\? rect\.left[\s\S]*?frame\.transform\?\.viewportTop \?\? rect\.top/,
@@ -793,6 +876,12 @@ const scanCircle = workflowScanCircleGeometry({
 });
 assert.deepEqual(scanCircle, { center: { x: 60, y: 60 }, radius: 10 },
   "scan diameter follows the current display transform instead of using stale source pixels");
+assert.deepEqual(workflowPlanningClientPoint(
+  { x: 180, y: 420 },
+  { left: 0, top: -240 },
+  { viewportLeft: 0, viewportTop: 0 },
+), { x: 180, y: 660 },
+"a page scroll is compensated before a mobile touch is mapped through the cached planning viewport");
 assert.deepEqual(
   workflowFusiformPlaneNormal({ axis: [1, 0, 0], width_axis: [0, 1, 0] }, [0, 1, 0]),
   [0, 0, 1],

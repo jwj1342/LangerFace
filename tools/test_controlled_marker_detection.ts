@@ -1294,6 +1294,82 @@ function relativeStrokeLine(
 }
 
 {
+  const target = texturedGradientImage(180, 160, 195, 218);
+  ring(target, 90, 80, 28, 3, 32);
+  disk(target, 90, 80, 5, 28);
+  const recovered = controlledMarkerInternals.recoverBySeedNeighborhoodConsensus(
+    target,
+    { x: 90, y: 80 },
+    { roiRadius: 58, expectedDiameterPx: 56, scanDiameterMm: 30 },
+    58,
+    {
+      ok: false,
+      failure_code: "unstable_enclosure",
+      center: null,
+      boundary: [],
+      area_px: 0,
+      bbox: null,
+      geometry_mode: null,
+      seed_relation: null,
+      marker_area_px: 0,
+      marker_bbox: null,
+      confidence: 0,
+      candidate_count: 2,
+      warnings: ["unstable_enclosure"],
+      diagnostics: {
+        method: "seed_first_barrier",
+        failure_stage: "enclosure_disproportionate_to_marker_extent",
+      },
+      audit: { local_only: true, raw_media_retained: false, network_request_made: false },
+    },
+  );
+  assert.equal(recovered.ok, true,
+    `multi-seed recovery continues past a tiny inner feature to the traceable outer stroke: ${JSON.stringify(recovered)}`);
+  assert.ok(recovered.bbox && recovered.bbox.width >= 52 && recovered.bbox.height >= 52,
+    "the recovered geometry describes the outer marker instead of the inner dot");
+  assert.ok(recovered.warnings.includes("radial_outer_boundary_consensus"),
+    "radial recovery is auditable and requires neighborhood consensus");
+  assert.ok((recovered.diagnostics?.scan_probe_consensus_count || 0) >= 3,
+    "at least three neighboring radial probes support the promoted boundary");
+  assert.equal(recovered.diagnostics?.traceable_stroke_quadrant_count, 4,
+    "the promoted outer stroke is backed by all four quadrants");
+}
+
+{
+  const target = texturedGradientImage(180, 160, 195, 218);
+  disk(target, 90, 80, 5, 28);
+  const rejected = controlledMarkerInternals.recoverBySeedNeighborhoodConsensus(
+    target,
+    { x: 90, y: 80 },
+    { roiRadius: 58, expectedDiameterPx: 56, scanDiameterMm: 30 },
+    58,
+    {
+      ok: false,
+      failure_code: "unstable_enclosure",
+      center: null,
+      boundary: [],
+      area_px: 0,
+      bbox: null,
+      geometry_mode: null,
+      seed_relation: null,
+      marker_area_px: 0,
+      marker_bbox: null,
+      confidence: 0,
+      candidate_count: 1,
+      warnings: ["unstable_enclosure"],
+      diagnostics: {
+        method: "seed_first_barrier",
+        failure_stage: "enclosure_disproportionate_to_marker_extent",
+      },
+      audit: { local_only: true, raw_media_retained: false, network_request_made: false },
+    },
+  );
+  assert.equal(rejected.ok, false,
+    "an isolated inner dot cannot be expanded into an expected-size boundary without outer stroke pixels");
+  assert.equal(rejected.failure_code, "unstable_enclosure");
+}
+
+{
   const target = image();
   disk(target, 34, 40, 6);
   disk(target, 68, 40, 5);

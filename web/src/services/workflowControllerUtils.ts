@@ -67,6 +67,20 @@ export function workflowInvalidationNeedsLiveFrame(hadActiveOverlay: boolean): b
   return hadActiveOverlay;
 }
 
+export function workflowPlanningClientPoint(
+  point: { x: number; y: number },
+  currentViewport: { left: number; top: number },
+  planningViewport: { viewportLeft?: number; viewportTop?: number } | null | undefined,
+): { x: number; y: number } {
+  if (!planningViewport) return { x: point.x, y: point.y };
+  const viewportLeft = Number(planningViewport.viewportLeft);
+  const viewportTop = Number(planningViewport.viewportTop);
+  return {
+    x: point.x + (Number.isFinite(viewportLeft) ? viewportLeft - currentViewport.left : 0),
+    y: point.y + (Number.isFinite(viewportTop) ? viewportTop - currentViewport.top : 0),
+  };
+}
+
 export function workflowFusiformPlaneNormal(
   candidate: { axis?: ArrayLike<number>; width_axis?: ArrayLike<number> } | null | undefined,
   fallback: ArrayLike<number> = [0, 0, 1],
@@ -79,6 +93,24 @@ export function workflowFusiformPlaneNormal(
   }
   const fallbackNormal = norm(fallback);
   return Math.hypot(...fallbackNormal) > 1e-9 ? fallbackNormal : [0, 0, 1];
+}
+
+type WorkflowCandidatePlan = Record<string, any>;
+
+export function workflowFusiformEditBase(
+  result: WorkflowCandidatePlan | null | undefined,
+  baseResult: WorkflowCandidatePlan | null | undefined,
+): WorkflowCandidatePlan | null {
+  if (result?.candidate?.type !== "fusiform") return null;
+  const storedBaseCandidate = baseResult?.original_candidate || baseResult?.candidate;
+  if (storedBaseCandidate?.type === "fusiform") return baseResult || null;
+  const originalCandidate = result.original_candidate;
+  if (originalCandidate?.type !== "fusiform") return null;
+  return {
+    ...result,
+    candidate: originalCandidate,
+    original_candidate: originalCandidate,
+  };
 }
 
 export function workflowCandidateDisplayAllowed(
