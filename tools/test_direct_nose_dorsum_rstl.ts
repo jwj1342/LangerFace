@@ -34,6 +34,23 @@ assert.deepEqual(result.diagnostics.source_fine_line_ids.sort(),
 assert.equal(JSON.stringify(payload.lines), sourceSnapshot,
   "direct generation must not mutate wrinkle evidence");
 
+for (const detectedCount of [1, 2, 3]) {
+  const sourceFineLineIds = DIRECT_NOSE_DORSUM_FINE_LINE_IDS.slice(0, detectedCount);
+  const dynamicResult = buildDirectNoseDorsumRstl({
+    fineLines: payload.lines,
+    sourceFineLineIds,
+    faceWidthPx: 622,
+    eyePolygons: safeEyePolygons,
+    existingCurves: [{ pts: [[300, 700], [900, 700]] }],
+  });
+  assert.equal(dynamicResult.curves.length, detectedCount,
+    `live direct generation must accept ${detectedCount} detected nose wrinkle(s)`);
+  assert.deepEqual(
+    [...dynamicResult.diagnostics.source_fine_line_ids as string[]].sort(),
+    [...sourceFineLineIds].sort(),
+  );
+}
+
 for (const curve of result.curves) {
   assert.equal(curve.region, DIRECT_NOSE_DORSUM_RSTL_REGION);
   assert.equal(curve.generatedFromWrinkle, true);

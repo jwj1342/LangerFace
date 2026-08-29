@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { Readable } from "node:stream";
 
 import {
+  inspectLocalWrinkleRuntime,
   localWrinkleV10Plugin,
   LocalProviderError,
   PersistentDetector,
+  pythonCandidates,
 } from "../web/dev/localWrinkleV10Plugin.ts";
 import {
   WRINKLE_V10_CHECKPOINT_SHA256,
@@ -36,6 +38,75 @@ const hangingChild = () => spawn(process.execPath, ["-e", "process.stdin.resume(
   stdio: ["pipe", "pipe", "pipe"],
 });
 
+const failingChild = () => spawn(process.execPath, ["-e", `
+  process.stderr.write("ModuleNotFoundError: No module named 'torch'\\n");
+  process.exit(1);
+`], { stdio: ["pipe", "pipe", "pipe"] });
+
+const repositoryCandidates = pythonCandidates({
+  environment: {},
+  platform: "linux",
+  repositoryRoot: "/work/LangerFace",
+});
+assert.deepEqual(repositoryCandidates, [
+  "/work/LangerFace/.venv/bin/python",
+  "python3",
+  "python",
+]);
+assert.ok(repositoryCandidates.every((candidate) => !candidate.includes("anaconda3")),
+  "local runtime discovery must not contain paths from a contributor's computer");
+const bridgeSource = await readFile(
+  new URL("../web/dev/localWrinkleV10Plugin.ts", import.meta.url),
+  "utf8",
+);
+assert.doesNotMatch(bridgeSource, /\/opt\/anaconda3|Users\/huang/,
+  "the local bridge must not contain paths from a contributor's computer");
+const wrinkleConstraints = await readFile(
+  new URL("../requirements-wrinkle-lock.txt", import.meta.url),
+  "utf8",
+);
+for (const pinned of [
+  "numpy==2.2.6",
+  "opencv-python==4.12.0.88",
+  "scipy==1.15.3",
+  "torch==2.9.1",
+]) {
+  assert.ok(wrinkleConstraints.includes(pinned), `missing reproducibility constraint ${pinned}`);
+}
+
+const configuredCandidates = pythonCandidates({
+  environment: {
+    LANGERFACE_WRINKLE_PYTHON: "/custom/python",
+    VIRTUAL_ENV: "/active/venv",
+  },
+  platform: "linux",
+  repositoryRoot: "/work/LangerFace",
+});
+assert.deepEqual(configuredCandidates.slice(0, 3), [
+  "/custom/python",
+  "/active/venv/bin/python",
+  "/work/LangerFace/.venv/bin/python",
+]);
+
+const windowsCandidates = pythonCandidates({
+  environment: { VIRTUAL_ENV: "C:\\active\\venv" },
+  platform: "win32",
+  repositoryRoot: "C:\\work\\LangerFace",
+});
+assert.deepEqual(windowsCandidates.slice(0, 2), [
+  "C:\\active\\venv\\Scripts\\python.exe",
+  "C:\\work\\LangerFace\\.venv\\Scripts\\python.exe",
+]);
+
+assert.throws(
+  () => inspectLocalWrinkleRuntime({
+    environment: { LANGERFACE_WRINKLE_PYTHON: "/missing/python" },
+  }),
+  (error) => error instanceof Error
+    && error.message.includes("本地 V10 环境未就绪")
+    && error.message.includes("requirements-wrinkle-lock.txt"),
+);
+
 const successful = new PersistentDetector({ spawnDetector: respondingChild, requestTimeoutMs: 500 });
 await successful.run("request", "rgba", "output", new AbortController().signal);
 successful.close();
@@ -54,6 +125,14 @@ const timed = new PersistentDetector({ spawnDetector: hangingChild, requestTimeo
 await assert.rejects(
   timed.run("request", "rgba", "output", new AbortController().signal),
   (error) => error instanceof LocalProviderError && error.statusCode === 504,
+);
+
+const failed = new PersistentDetector({ spawnDetector: failingChild, requestTimeoutMs: 500 });
+await assert.rejects(
+  failed.start(),
+  (error) => error instanceof Error
+    && error.message.includes("ModuleNotFoundError: No module named 'torch'")
+    && error.message.includes("npm run doctor:wrinkle"),
 );
 
 class FakeHttpResponse extends EventEmitter {

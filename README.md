@@ -183,8 +183,11 @@ Live 只有 **2D 贴合**一条运行时路线：每帧把图谱按重心坐标�
 在 Compute Canada / Alliance 集群上，前端开发可先运行 `module load nodejs/24.15.0`。
 
 ```bash
-# 1) 依赖（包含 V10 四区域检测所需的 PyTorch）
-pip install -e ".[all]"
+# 1) 固定使用仓库 .venv（包含 V10 四区域检测所需的 PyTorch）
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -c requirements-wrinkle-lock.txt -e ".[all]"
 
 # 2) 下载 MediaPipe 资产到 assets/（标准脸 obj + 人脸/手部关键点模型，单一权威源）
 python3 tools/download_assets.py
@@ -209,6 +212,7 @@ python3 tools/reconstruct_3d.py local_media/IMG_3458.MOV    # -> local_outputs/r
 pytest -q                         # Python 端
 cd web
 npm ci
+npm run doctor:wrinkle             # 必须输出 ready: true 和预期 V10/checkpoint
 npm run build                      # Vite 生产构建
 npm test                           # Web TypeScript 几何/遮挡/Umeyama 对拍
 npx playwright install chromium    # 首次运行浏览器回归前安装 Chromium
@@ -220,17 +224,21 @@ cd web
 npm run dev                      # Vite dev server，默认 http://127.0.0.1:5173
 ```
 
-如果需要指定已安装 `numpy` / `opencv-python` / `torch` 的 Python，启动前设置
-`LANGERFACE_WRINKLE_PYTHON=/absolute/path/to/python` 。不设置时会优先使用当前虚拟环境，再尝试
-`python3` / `python`。浏览器打开 Vite 提示的本地地址 → 上传照片或点「摄像头」。
+网页依次查找 `LANGERFACE_WRINKLE_PYTHON`、已激活虚拟环境、仓库 `.venv`、
+`python3` / `python`，不依赖任何贡献者电脑的 Conda 路径。即使忘记 `source .venv/bin/activate`，
+仓库 `.venv` 也会自动被发现。启动前用 `npm run doctor:wrinkle` 核对 Python 3.10–3.12、
+`numpy/cv2/scipy/torch` 锁定版本、V10 版本和 checkpoint 哈希。浏览器打开 Vite 提示的本地地址 → 上传照片或点「摄像头」。
 首次加载会从 CDN 下载 MediaPipe wasm（数秒）；V10 checkpoint 已跟随仓库分发。
+本地必须使用 `npm run dev` 或 `npm run preview`；普通静态服务器只托管 `dist/` 时不会运行
+Vite 的本地 Python V10 API，因而不支持四区域检测。
 
 单图皱纹/RSTL runner 只用于受控研究复放。真实人脸原图和浏览器冻结产物不会随公开仓库分发；运行前必须
 通过 `WRINKLE_LOCAL_INPUT` / `WRINKLE_LOCAL_BASELINE` 或 `WRINKLE_CROWS_INPUT` /
 `WRINKLE_CROWS_BASELINE` 指向本地受控材料。输出始终保持 `validated:false`，工程复放成功不等于临床验证。
 完整变量、目录和命令见 [个性化 RSTL：受控单图复放](docs/tracks/PERSONALIZED_RSTL.md#41-受控单图复放与直接鱼尾纹实验)。
 
-部署或交接前先在 `web/` 目录运行 `npm run verify:latest-wrinkle`。它会检查当前检出是否确实包含
+部署或交接前先在 `web/` 目录运行 `npm run doctor:wrinkle` 和
+`npm run verify:latest-wrinkle`。它们会检查本地运行环境以及当前检出是否确实包含
 RSTL v8.1.96、V10 四区域皱纹检测和 V9 `v9-regional-smooth-7.2` 微调；PR 编号或分支名称本身不能证明版本正确。
 
 ---

@@ -134,6 +134,15 @@ function requestBody(
   return body;
 }
 
+async function sha256Json(value: unknown): Promise<string> {
+  if (!globalThis.crypto?.subtle) return "unavailable-in-insecure-context";
+  const bytes = new TextEncoder().encode(JSON.stringify(value));
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 async function dynamicFourRegionDetection(
   request: LiveWrinkleWorkerRequest,
   baselineLines: LiveWrinkleWorkerEvidence["lines"],
@@ -190,9 +199,6 @@ function appendDirectNoseCurves(
   refined: ReturnType<typeof refineV6>,
 ) {
   const noseLines = payload.lines.filter((line) => line.anatomicalClass === "nasal_dorsum");
-  if (noseLines.length !== 3) {
-    throw new Error(`鼻背纹应生成 3 条直接 RSTL，实际检测到 ${noseLines.length} 条`);
-  }
   const landmarks = pixelLandmarks(request);
   const directNose = buildDirectNoseDorsumRstl({
     fineLines: noseLines,
@@ -268,6 +274,7 @@ const api: LiveWrinklePipelineWorkerApi = {
       throw new Error("实时 YOLO 未提取到可供 V10 使用的基础中心线");
     }
     const baselineExtractionMs = performance.now() - baselineStart;
+    const browserBaselineSha256 = await sha256Json(baseline.lines);
     // Acquire the short-lived direct-upload ticket only after local model work,
     // so slow first-load devices cannot expire it before the image POST begins.
     const session = await providerSession();
@@ -294,7 +301,11 @@ const api: LiveWrinklePipelineWorkerApi = {
     );
     const evidence: LiveWrinkleWorkerEvidence = {
       lines: payload.lines,
-      summary: displayEvidence.summary,
+      summary: {
+        ...displayEvidence.summary,
+        browserBaselineSha256,
+        v10InputImageSha256: payload.source.imageSha256,
+      },
     };
     const evidenceBuildMs = performance.now() - evidenceStart;
     emit(onEvent, { type: "evidence", evidence });

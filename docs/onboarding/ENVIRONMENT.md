@@ -15,7 +15,7 @@
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip
-python -m pip install -e ".[all]"
+python -m pip install -c requirements-wrinkle-lock.txt -e ".[all]"
 
 python tools/download_assets.py
 python3 tools/build_field_atlas_standard_v1.py \
@@ -27,6 +27,7 @@ python tools/export_web_assets.py
 
 cd web
 npm ci
+npm run doctor:wrinkle
 npm run build
 npm test
 npx playwright install chromium
@@ -44,6 +45,15 @@ ruff check .
 cd web
 npm run dev
 ```
+
+`npm run doctor:wrinkle` 必须显示 `ready: true`、V10 检测器版本和预期 checkpoint
+哈希。本地插件会优先使用 `LANGERFACE_WRINKLE_PYTHON`、已激活虚拟环境和仓库根
+`.venv`，然后才尝试 `python3` / `python`。自检还会按 `requirements-wrinkle-lock.txt`
+校验四个数值依赖版本。建议每台电脑都使用仓库 `.venv`，不要依赖个人 Conda 路径。
+
+四区域 V10 需要 Vite 的本地 API 插件，因此必须使用 `npm run dev` 或
+`npm run preview`。用普通静态服务器托管 `web/dist/` 只有前端文件，不会提供本地
+`/api/wrinkle-v10`，不能作为本地皱纹检测的启动方式。
 
 ## Preview / 部署访问
 
