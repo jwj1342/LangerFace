@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 const compatibilityHtml = fs.readFileSync("index.html", "utf8");
 const liveRoute = fs.readFileSync("src/routes/LiveWorkbench.tsx", "utf8");
 const liveControlRail = fs.readFileSync("src/components/LiveControlRail.tsx", "utf8");
+const liveIncisionOverlayPanel = fs.readFileSync("src/components/LiveIncisionOverlayPanel.tsx", "utf8");
 const liveUi = [
   liveRoute,
   liveControlRail,
@@ -32,6 +33,10 @@ assert.ok(liveRoute.includes("LiveControlRail"),
   "live page mounts the shared live control rail");
 assert.ok(liveControlRail.includes("LiveIncisionOverlayPanel"),
   "shared live control rail mounts the incision overlay card");
+assert.ok(liveIncisionOverlayPanel.includes("!overlay?.loaded && !overlay?.qaLabel"),
+  "a blocked loaded candidate keeps a persistent live-overlay status card");
+assert.ok(liveIncisionOverlayPanel.includes("这不是加载故障"),
+  "the blocked live-overlay card explicitly distinguishes review gating from a loading bug");
 assert.ok(source.includes('setSource(prepared.source, "image"'), "uploaded photos enter the shared live render source");
 assert.ok(source.includes("仅支持上传照片；如需连续画面请开启摄像头。"), "uploaded videos are rejected before changing the active source");
 assert.ok(!source.includes('setSource(els.video, "video"'), "uploaded videos cannot enter the shared live render source");
@@ -61,16 +66,29 @@ assert.ok(exporter.includes("createCompositeSource(extras)"), "export controller
 assert.ok(exporter.includes("drawContain(g, extra.canvas"), "export controller draws extra canvases into recording");
 assert.ok(exporter.includes('mimeType: "video/webm"'), "export controller records playable webm output");
 assert.ok(render.includes("drawIncisionOverlay(lm"), "renderer draws incision overlay on every frame");
-assert.ok(render.includes("incisionOverlayStyle(W, overlay.candidate_type)"),
-  "renderer reads candidate presentation from the shared cross-media style contract");
+assert.ok(render.includes("incisionOverlayScreenStyle(overlay.candidate_type")
+  && render.includes("compact: mobileWorkflowViewportActive()"),
+"renderer reads the same responsive screen-space contract as the workflow photo overlay");
+assert.ok(render.includes("overlayStyle.boundary.haloColor") && render.includes("overlayStyle.boundary.color"),
+  "live tumor boundaries receive the same solid yellow foreground plus a contrast edge");
+assert.ok(!render.includes("dash: [overlayStyle.boundary.lineWidth"),
+  "live tumor boundaries are no longer rendered as a visually disappearing dashed circle");
+assert.ok(render.includes("overlayStyle.center.strokeColor") && render.includes("overlayStyle.center.radiusCss"),
+  "live lesion centres consume the shared softer centre token instead of a hard-coded black ring");
 assert.ok(render.includes("overlayStyle.candidate.haloColor"),
   "renderer gives the candidate line the shared dark contrast halo");
 assert.ok(render.includes("overlayStyle.candidate.lineWidth"),
   "renderer gives the candidate line the shared foreground width");
+assert.ok(render.includes("overlayStyle.boundary.lineWidth / cssScale")
+  && render.includes("overlayStyle.candidate.lineWidth / cssScale"),
+"camera drawing converts shared CSS-pixel tokens back to source pixels exactly once");
 assert.ok(overlayStyle.includes("nominalCandidateLineWidth = Math.max(0.3, rstlLineWidth / 6)"),
   "shared live media retain the nominal one-sixth RSTL candidate width");
 assert.ok(overlayStyle.includes("visibleCandidateSourceWidth"),
   "photo-only rendering may enforce a bounded final-display visibility floor without changing RSTL");
+assert.ok(overlayStyle.includes("incisionOverlayScreenStyle")
+  && overlayStyle.includes("viewScale?: number"),
+"shared incision presentation has an explicit capped photo-zoom contract");
 assert.ok(render.includes("estimateFacePoseQuality"), "renderer estimates pose quality before drawing incision overlay");
 assert.ok(poseQuality.includes("incision-overlay-pose-gate/v0.2"), "renderer exports a versioned incision overlay pose gate");
 assert.ok(poseQuality.includes("rapid_frame_motion"), "pose gate blocks rapid frame-to-frame motion");

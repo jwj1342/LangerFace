@@ -449,7 +449,7 @@ function bindLiveEvents(signal: AbortSignal, root: ParentNode | Document): void 
       return Boolean(
         els.mainWrap.closest(".workflow-workbench")
         && window.matchMedia("(max-width: 560px) and (pointer: coarse) and (hover: none)").matches
-        && (!pointerMode || pointerMode === "marker")
+        && (!pointerMode || pointerMode === "marker" || pointerMode === "freehand")
       );
     },
     beginRefinePointer,

@@ -88,6 +88,7 @@ export const INCISION_LIBRARY_COMMANDS = [
   "export_png",
   "stage_live_overlay",
   "load_candidate",
+  "toggle_candidate_review_status",
   "remove_candidate",
 ] as const;
 export const WORKFLOW_INCISION_TOOL_COMMANDS = [

@@ -1,4 +1,10 @@
-import { clearCanvasDisplayFit, fitCanvasDisplayToStage } from "./liveCanvasFit.ts";
+import {
+  captureImageViewState,
+  clearCanvasDisplayFit,
+  fitCanvasDisplayToStage,
+  restoreImageViewState,
+  type ImageViewResumeState,
+} from "./liveCanvasFit.ts";
 import {
   describeCameraError,
   openPreferredCameraStream,
@@ -16,9 +22,20 @@ import {
   renderState,
   sourceState,
 } from "./liveState.ts";
-import { resetRefineForNewSource } from "./liveRefine2d";
+import {
+  captureRefineDisplayState,
+  hasLiveRefinementForCamera,
+  resetRefineForNewSource,
+  restoreRefineDisplayState,
+  type RefineDisplayResumeState,
+} from "./liveRefine2d";
 import { LiveFrameScheduler } from "./liveFrameScheduler.ts";
-import { resetLiveWrinkleAnalysis } from "./liveWrinkleAnalysis.ts";
+import {
+  captureWrinkleDisplayState,
+  resetLiveWrinkleAnalysis,
+  restoreWrinkleDisplayState,
+  type WrinkleDisplayResumeState,
+} from "./liveWrinkleAnalysis.ts";
 import { setLive, setMsg, setTransientMsg } from "./liveUi.ts";
 import { cancelFrame, requestFrame } from "./pipelineLoop.ts";
 import { ensureImageReady, ensureReady } from "./pipelineModels.ts";
@@ -28,8 +45,59 @@ type SourceKind = "camera" | "video" | "image";
 let sourceOperationId = 0;
 const sourceLayoutScheduler = new LiveFrameScheduler();
 
+interface StaticSourceResumeState {
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  imageView: ImageViewResumeState;
+  refinement: RefineDisplayResumeState;
+  wrinkle: WrinkleDisplayResumeState;
+}
+
+let lastStaticSource: StaticSourceResumeState | null = null;
+
 export interface StartCameraOptions {
   onFacingMode?: (facingMode: CameraFacingMode) => void;
+}
+
+function captureCurrentStaticSource(): void {
+  const frame = sourceState.planning2d?.getFrameState();
+  if (!sourceState.running || frame?.kind !== "image" || !frame.source) return;
+  lastStaticSource = {
+    source: frame.source as CanvasImageSource,
+    width: frame.width,
+    height: frame.height,
+    imageView: captureImageViewState(),
+    refinement: captureRefineDisplayState(),
+    wrinkle: captureWrinkleDisplayState(),
+  };
+}
+
+function restoreStaticSourceOrPlaceholder(activeIncisionOverlay: typeof renderState.incisionOverlay): void {
+  const resume = lastStaticSource;
+  const preserveRefinementForLive = Boolean(resume?.refinement.liveTransport);
+  stopSource({
+    preserveOperation: true,
+    preserveRefinementForLive,
+    preserveStaticResume: true,
+  });
+  if (!resume) {
+    renderState.incisionOverlay = activeIncisionOverlay;
+    showCameraPlaceholder();
+    setLive(false, "待机");
+    setTransientMsg("已关闭后置摄像头；当前没有可恢复的照片。", 3_000);
+    return;
+  }
+  setSource(resume.source, "image", resume.width, resume.height, {
+    preserveRefinementForLive,
+    imageViewResume: resume.imageView,
+  });
+  restoreRefineDisplayState(resume.refinement);
+  restoreWrinkleDisplayState(resume.wrinkle);
+  renderState.incisionOverlay = activeIncisionOverlay;
+  lastStaticSource = resume;
+  setTransientMsg("已关闭后置摄像头，并恢复上一张照片及其显示状态。", 3_000);
+  requestFrame();
 }
 
 export async function startCamera(options: StartCameraOptions = {}): Promise<void> {
@@ -43,8 +111,7 @@ export async function startCamera(options: StartCameraOptions = {}): Promise<voi
     pendingStream = null;
   };
   if (currentLiveSourceKind() === "camera") {
-    stopSource();
-    setLive(false, "待机");
+    restoreStaticSourceOrPlaceholder(renderState.incisionOverlay);
     els.cam.setAttribute("aria-pressed", "false");
     return;
   }
@@ -62,7 +129,11 @@ export async function startCamera(options: StartCameraOptions = {}): Promise<voi
       releasePendingStream();
       return;
     }
-    stopSource({ preserveOperation: true });
+    captureCurrentStaticSource();
+    const activeIncisionOverlay = renderState.incisionOverlay;
+    const preserveRefinementForLive = currentLiveSourceKind() === "image"
+      && hasLiveRefinementForCamera();
+    stopSource({ preserveOperation: true, preserveRefinementForLive, preserveStaticResume: true });
     els.video.srcObject = pendingStream;
     await els.video.play();
     if (operationId !== sourceOperationId) {
@@ -74,7 +145,10 @@ export async function startCamera(options: StartCameraOptions = {}): Promise<voi
     if (!stream) return;
     setSource(els.video, "camera", els.video.videoWidth, els.video.videoHeight, {
       release: () => stopCameraStream(stream),
+      preserveRefinementForLive,
     });
+    renderState.incisionOverlay = activeIncisionOverlay;
+    requestFrame();
     pendingStream = null;
     els.cam.setAttribute("aria-pressed", "true");
   } catch (error) {
@@ -203,7 +277,15 @@ export function setSource(
   kind: SourceKind,
   width?: number,
   height?: number,
-  { release }: { release?: () => void } = {},
+  {
+    release,
+    preserveRefinementForLive = false,
+    imageViewResume,
+  }: {
+    release?: () => void;
+    preserveRefinementForLive?: boolean;
+    imageViewResume?: ImageViewResumeState;
+  } = {},
 ): void {
   const planning2d = sourceState.planning2d;
   if (!planning2d) throw new Error("live photo planning controller is not mounted");
@@ -226,10 +308,12 @@ export function setSource(
   els.mainWrap.classList.toggle("image-viewer", kind === "image");
   els.canvas.classList.toggle("image-source", kind === "image");
   if (kind === "image") {
-    fitCanvasDisplayToStage({ resetView: true });
+    fitCanvasDisplayToStage({ resetView: !imageViewResume });
+    if (imageViewResume) restoreImageViewState(imageViewResume);
     sourceLayoutScheduler.request(() => {
       if (sourceState.running && currentLiveSourceKind() === "image") {
-        fitCanvasDisplayToStage({ resetView: true });
+        fitCanvasDisplayToStage({ resetView: !imageViewResume });
+        if (imageViewResume) restoreImageViewState(imageViewResume);
       }
     });
   } else {
@@ -237,7 +321,7 @@ export function setSource(
     clearCanvasDisplayFit();
   }
   renderState.smoother.reset();
-  resetRefineForNewSource();
+  resetRefineForNewSource({ preserveLiveTransport: preserveRefinementForLive });
   resetLiveWrinkleAnalysis();
   sourceState.presence = 0;
   sourceState.lastLM = null;
@@ -259,10 +343,28 @@ export function setSource(
   els.pause.textContent = "⏸ 暂停";
   setMsg(null);
   setLive(true, kind === "camera" ? "实时摄像头" : kind === "video" ? "视频" : "照片");
+  if (kind === "image") {
+    lastStaticSource = {
+      source: src,
+      width: sourceWidth,
+      height: sourceHeight,
+      imageView: captureImageViewState(),
+      refinement: captureRefineDisplayState(),
+      wrinkle: captureWrinkleDisplayState(),
+    };
+  }
   requestFrame();
 }
 
-export function stopSource({ preserveOperation = false }: { preserveOperation?: boolean } = {}): void {
+export function stopSource({
+  preserveOperation = false,
+  preserveRefinementForLive = false,
+  preserveStaticResume = false,
+}: {
+  preserveOperation?: boolean;
+  preserveRefinementForLive?: boolean;
+  preserveStaticResume?: boolean;
+} = {}): void {
   if (!preserveOperation) sourceOperationId += 1;
   if (!preserveOperation) setMsg(null);
   cancelFrame();
@@ -287,8 +389,9 @@ export function stopSource({ preserveOperation = false }: { preserveOperation?: 
   sourceState.eyeBlinkRight = 0;
   sourceState.qualityGate = null;
   sourceState.localRegionQuality = null;
-  resetRefineForNewSource();
+  resetRefineForNewSource({ preserveLiveTransport: preserveRefinementForLive });
   resetLiveWrinkleAnalysis();
+  if (!preserveStaticResume) lastStaticSource = null;
   els.pause.disabled = true;
   els.pause.textContent = "⏸ 暂停";
 }

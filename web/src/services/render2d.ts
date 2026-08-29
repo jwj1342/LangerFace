@@ -23,7 +23,7 @@ import {
 import type { Triangle, Vec3 } from "./softBody.ts";
 import { mapSurfaceRefs, measureIncisionOverlayJitter, measureIncisionOverlayRegistration } from "./incisionOverlay.ts";
 import type { SurfaceRef } from "./incisionOverlay.ts";
-import { incisionOverlayStyle } from "./incisionOverlayStyle.ts";
+import { incisionOverlayScreenStyle } from "./incisionOverlayStyle.ts";
 import { countMetric, recordMetricSample, setDiagnosticSection } from "./logger.ts";
 import { lineIndicesForDensity } from "./lineDensity.ts";
 import {
@@ -43,6 +43,7 @@ import { modelState, renderState, sourceState } from "./liveState.ts";
 import {
   mobileIncisionCandidateVisible,
   mobileRstlLayerVisible,
+  mobileWorkflowViewportActive,
   mobileWrinkleLayerVisible,
 } from "./mobileWorkflowVisibility.ts";
 import { setIncisionOverlayQa, setLive } from "./liveUi.ts";
@@ -864,21 +865,30 @@ function drawIncisionOverlay(
   if (sourceState.sourceKind === "image" && renderState.workflowPhotoOverlay) return;
   ctx.save();
   ctx.globalAlpha = 0.98;
-  const overlayStyle = incisionOverlayStyle(W, overlay.candidate_type);
-  strokeOverlayRefs(surfaceRefs(overlay.tumor?.boundary_refs), lm, masks, vis, innerMouth, {
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  const cssScale = Math.max(0.1, els.canvas.getBoundingClientRect().width / Math.max(W, 1));
+  const overlayStyle = incisionOverlayScreenStyle(overlay.candidate_type, {
+    compact: mobileWorkflowViewportActive(),
+  });
+  const boundaryRefs = surfaceRefs(overlay.tumor?.boundary_refs);
+  strokeOverlayRefs(boundaryRefs, lm, masks, vis, innerMouth, {
+    color: overlayStyle.boundary.haloColor,
+    lineWidth: overlayStyle.boundary.haloWidth / cssScale,
+  }, localRegionMasks);
+  strokeOverlayRefs(boundaryRefs, lm, masks, vis, innerMouth, {
     color: overlayStyle.boundary.color,
-    lineWidth: overlayStyle.boundary.lineWidth,
-    dash: [overlayStyle.boundary.lineWidth * 3, overlayStyle.boundary.lineWidth * 2],
+    lineWidth: overlayStyle.boundary.lineWidth / cssScale,
   }, localRegionMasks);
   const candidateRefs = surfaceRefs(overlay.candidate?.polyline_refs);
   if (mobileIncisionCandidateVisible()) {
     strokeOverlayRefs(candidateRefs, lm, masks, vis, innerMouth, {
       color: overlayStyle.candidate.haloColor,
-      lineWidth: overlayStyle.candidate.haloWidth,
+      lineWidth: overlayStyle.candidate.haloWidth / cssScale,
     }, localRegionMasks);
     strokeOverlayRefs(candidateRefs, lm, masks, vis, innerMouth, {
       color: overlayStyle.candidate.color,
-      lineWidth: overlayStyle.candidate.lineWidth,
+      lineWidth: overlayStyle.candidate.lineWidth / cssScale,
     }, localRegionMasks);
   }
   const center = mapSurfaceRefs(optionalSurfaceRef(overlay.tumor?.center_ref), lm, modelTriangles()).pts[0];
@@ -887,12 +897,11 @@ function drawIncisionOverlay(
   if (center && centerLocalAction.action !== "freeze" && !centerOccluded) {
     const savedAlpha = ctx.globalAlpha;
     if (centerLocalAction.action === "dim") ctx.globalAlpha = savedAlpha * centerLocalAction.opacityScale;
-    const cssScale = Math.max(0.1, els.canvas.getBoundingClientRect().width / Math.max(W, 1));
-    ctx.fillStyle = "#f43f5e";
-    ctx.strokeStyle = "#111820";
-    ctx.lineWidth = 2 / cssScale;
+    ctx.fillStyle = overlayStyle.center.color;
+    ctx.strokeStyle = overlayStyle.center.strokeColor;
+    ctx.lineWidth = overlayStyle.center.strokeWidthCss / cssScale;
     ctx.beginPath();
-    ctx.arc(center[0], center[1], 5 / cssScale, 0, Math.PI * 2);
+    ctx.arc(center[0], center[1], overlayStyle.center.radiusCss / cssScale, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.globalAlpha = savedAlpha;

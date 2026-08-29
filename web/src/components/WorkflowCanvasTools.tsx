@@ -146,7 +146,9 @@ export function WorkflowCanvasOverlay() {
   return (
     <>
       <svg id="workflowIncisionOverlay" className="workflow-incision-overlay" aria-hidden="true">
+        <path data-workflow-boundary-halo />
         <path data-workflow-boundary />
+        <path data-workflow-candidate-halo />
         <path data-workflow-candidate />
         <path data-workflow-diagnostic-candidate />
         <circle data-workflow-center r="6" />

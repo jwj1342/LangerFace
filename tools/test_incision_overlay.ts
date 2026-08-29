@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { __incisionOverlayForTests as T } from "../web/src/services/incisionOverlay.ts";
 import {
   incisionCandidateScreenStyle,
+  incisionOverlayScreenStyle,
   incisionOverlayStyle,
+  visibleBoundarySourceWidth,
   visibleCandidateSourceWidth,
 } from "../web/src/services/incisionOverlayStyle.ts";
 
@@ -71,6 +73,16 @@ assert.equal(overlay.review_gate.live_overlay_ready, true, "overlay carries live
 assert.equal(overlay.guardrail_summary.passed, true, "overlay carries guardrail summary");
 assert.equal(overlay.candidate.polyline_refs.length, 2, "candidate line is encoded as surface refs");
 assert.equal(overlay.tumor.boundary_refs.length, 4, "tumor boundary is encoded as surface refs");
+
+const openBoundaryOverlay = T.compileIncisionOverlay({
+  ...record,
+  tumor: { ...record.tumor, boundary: record.tumor.boundary.slice(0, -1) },
+}, verts, tris);
+assert.ok(openBoundaryOverlay, "an open sampled tumor boundary still compiles for live overlay");
+assert.equal(openBoundaryOverlay.tumor.boundary_refs.length, 4,
+  "a sampled tumor ring is explicitly closed for live canvas rendering");
+assert.deepEqual(openBoundaryOverlay.tumor.boundary_refs.at(-1), openBoundaryOverlay.tumor.boundary_refs[0],
+  "live tumor boundary closure reuses the first surface reference without a projection seam");
 
 const mapped = T.mapSurfaceRefs(overlay.candidate.polyline_refs, landmarks, tris);
 assert.equal(mapped.pts.length, 2, "surface refs map to runtime landmark pixels");
@@ -195,11 +207,41 @@ assert.equal(visibleCandidateSourceWidth(0.3, 2, 1), 1,
   "photo rendering raises a subpixel source stroke to the one CSS-pixel visibility floor");
 assert.equal(visibleCandidateSourceWidth(0.3, 2, 0.5), 1,
   "extreme downscaling remains capped at half the RSTL width instead of producing a thick sticker outline");
+assert.equal(visibleBoundarySourceWidth(0.9, undefined), 0.9,
+  "unscaled overlay media retain the nominal tumor-boundary width");
+assert.equal(visibleBoundarySourceWidth(0.9, 0.5), 1.7,
+  "downscaled live media keep the yellow tumor boundary at a visible 0.85 CSS pixels");
+assert.deepEqual(incisionOverlayStyle(1300, "fusiform").center, {
+  color: "#fb7185",
+  strokeColor: "#fff1f2",
+  radiusCss: 4,
+  strokeWidthCss: 0.8,
+}, "photo, video and camera share the softer lesion-centre presentation token");
 assert.deepEqual(incisionCandidateScreenStyle("fusiform"), {
   color: "#003b73",
   lineWidth: 1,
   haloColor: "#003b73",
   haloWidth: 1,
 }, "photo fusiform uses an opaque one-CSS-pixel screen-space stroke without a glow halo");
+const compactFullPhotoStyle = incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 1 });
+const compactCameraStyle = incisionOverlayScreenStyle("fusiform", { compact: true });
+const compactZoomedPhotoStyle = incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 2 });
+assert.deepEqual(compactFullPhotoStyle, compactCameraStyle,
+  "the full-photo view and camera use identical compact screen-space tokens");
+assert.equal(compactFullPhotoStyle.candidate.lineWidth, 0.65,
+  "the full-photo incision line no longer uses the oversized fixed mobile width");
+assert.equal(compactFullPhotoStyle.boundary.lineWidth, 0.7,
+  "the full-photo tumor boundary no longer uses the oversized fixed mobile width");
+assert.equal(compactFullPhotoStyle.center.radiusCss, 3,
+  "the full-photo lesion center is reduced from the previous four-pixel radius");
+assert.ok(compactZoomedPhotoStyle.candidate.lineWidth > compactFullPhotoStyle.candidate.lineWidth
+  && compactZoomedPhotoStyle.boundary.lineWidth > compactFullPhotoStyle.boundary.lineWidth
+  && compactZoomedPhotoStyle.center.radiusCss > compactFullPhotoStyle.center.radiusCss,
+"zooming in increases, rather than inversely decreases, all incision screen-space marks");
+assert.deepEqual(
+  incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 5 }),
+  compactZoomedPhotoStyle,
+  "high photo zoom is capped so incision marks cannot grow into thick sticker-like graphics",
+);
 
 console.log("test_incision_overlay: projection contract assertions passed");

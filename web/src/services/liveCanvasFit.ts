@@ -13,6 +13,12 @@ interface ResetImageViewOptions {
   apply?: boolean;
 }
 
+export interface ImageViewResumeState {
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
+}
+
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
 export function fitCanvasDisplayToStage({ resetView = false }: CanvasFitOptions = {}): CanvasFitResult | null {
@@ -50,6 +56,24 @@ export function resetImageView({ apply = true }: ResetImageViewOptions = {}): vo
   view.offsetX = 0;
   view.offsetY = 0;
   if (apply) applyImageViewStyle();
+}
+
+export function captureImageViewState(): ImageViewResumeState {
+  const view = renderState.imageView;
+  return {
+    zoom: view.zoom,
+    offsetX: view.offsetX,
+    offsetY: view.offsetY,
+  };
+}
+
+export function restoreImageViewState(snapshot: ImageViewResumeState): void {
+  const view = renderState.imageView;
+  view.zoom = clamp(snapshot.zoom, view.minZoom, view.maxZoom);
+  view.offsetX = Number.isFinite(snapshot.offsetX) ? snapshot.offsetX : 0;
+  view.offsetY = Number.isFinite(snapshot.offsetY) ? snapshot.offsetY : 0;
+  clampImageViewOffset();
+  applyImageViewStyle();
 }
 
 export function setRefineCanvasViewActive(active: boolean): void {

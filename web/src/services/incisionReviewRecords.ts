@@ -2,7 +2,11 @@ import {
   directionSourceLabel,
   reviewStatusLabel,
 } from "./incisionClinicalCopy.ts";
-import { summarizeGuardrails } from "./incisionReviewPolicy.ts";
+import {
+  assessReviewReadiness,
+  buildReviewGate,
+  summarizeGuardrails,
+} from "./incisionReviewPolicy.ts";
 import {
   compareCandidateRecords,
   workflowTraceGate,
@@ -158,6 +162,103 @@ export function buildIncisionReviewRecord(
           high_guardrail_codes: reviewGate.high_guardrail_codes,
         }]),
     ],
+  };
+}
+
+export type CandidateReviewTransitionStatus =
+  | "pending_clinician_confirmation"
+  | "approved_for_discussion";
+
+export interface CandidateReviewTransitionResult {
+  ok: boolean;
+  record: AnyRecord;
+  attention: "reviewer" | "decision" | "notes" | null;
+  message: string;
+}
+
+export function transitionIncisionReviewRecord({
+  record,
+  targetStatus,
+  reviewContext,
+  transitionedAt = new Date().toISOString(),
+}: {
+  record: AnyRecord;
+  targetStatus: CandidateReviewTransitionStatus;
+  reviewContext?: AnyRecord | null;
+  transitionedAt?: string;
+}): CandidateReviewTransitionResult {
+  const previousStatus = String(
+    record.review?.status || record.review_status || "pending_clinician_confirmation",
+  );
+  const sourceReview = reviewContext || record.review || {};
+  const review = {
+    ...record.review,
+    ...sourceReview,
+    status: targetStatus,
+    label: reviewStatusLabel(targetStatus),
+    reviewer: String(sourceReview.reviewer || "").trim(),
+    notes: String(sourceReview.notes || "").trim(),
+    reviewed_at: targetStatus === "approved_for_discussion" ? transitionedAt : null,
+  };
+
+  if (targetStatus === "approved_for_discussion") {
+    const readiness = assessReviewReadiness({
+      status: targetStatus,
+      result: record,
+      reviewer: review.reviewer,
+      notes: review.notes,
+    });
+    if (!readiness.ok) {
+      return {
+        ok: false,
+        record,
+        attention: readiness.attention,
+        message: readiness.message,
+      };
+    }
+  }
+
+  const reviewGate = buildReviewGate({
+    review,
+    result: record,
+    topologyId: record.head_asset?.topologyId,
+    topologyVersion: record.head_asset?.topologyVersion,
+  });
+  if (targetStatus === "approved_for_discussion" && reviewGate.approval_ready !== true) {
+    return {
+      ok: false,
+      record,
+      attention: "decision",
+      message: "候选尚未通过全部审阅与显示检查，不能转为已确认研究候选。",
+    };
+  }
+
+  const actor = review.reviewer || record.tumor?.author || "unknown";
+  return {
+    ok: true,
+    attention: null,
+    message: targetStatus === "approved_for_discussion"
+      ? "已转为已确认研究候选。"
+      : "已转为待医生确认。",
+    record: {
+      ...record,
+      review_status: targetStatus,
+      review,
+      review_gate: reviewGate,
+      audit_events: [
+        ...(Array.isArray(record.audit_events) ? record.audit_events : []),
+        {
+          event: "candidate_review_status_changed",
+          at: transitionedAt,
+          actor,
+          from_status: previousStatus,
+          to_status: targetStatus,
+          notes_present: Boolean(review.notes),
+          approval_ready: reviewGate.approval_ready,
+          live_overlay_ready: reviewGate.live_overlay_ready,
+        },
+      ],
+    },
   };
 }
 

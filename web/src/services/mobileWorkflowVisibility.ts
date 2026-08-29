@@ -8,7 +8,7 @@ function workflowRoot(): HTMLElement | null {
   return document.querySelector<HTMLElement>(".workflow-workbench");
 }
 
-function mobileWorkflowViewportActive(): boolean {
+export function mobileWorkflowViewportActive(): boolean {
   return typeof window.matchMedia === "function"
     && window.matchMedia(MOBILE_WORKFLOW_MEDIA_QUERY).matches;
 }

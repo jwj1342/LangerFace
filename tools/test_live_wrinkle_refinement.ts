@@ -151,6 +151,22 @@ const analysisRuntime = fs.readFileSync(
   new URL("../web/src/services/liveWrinkleAnalysis.ts", import.meta.url),
   "utf8",
 );
+const refineMathRuntime = fs.readFileSync(
+  new URL("../web/src/services/liveRefineMath.ts", import.meta.url),
+  "utf8",
+);
+const pipelineSourceRuntime = fs.readFileSync(
+  new URL("../web/src/services/pipelineSource.ts", import.meta.url),
+  "utf8",
+);
+assert.match(analysisRuntime,
+  /replaceStaticRefineBaseline\(state\.autoRefinedLines, \{ liveBaseline: state\.standardLines \}\)/,
+  "applying wrinkle guidance must build a camera display transport from the accepted standard-frame baseline");
+assert.match(refineMathRuntime, /addedLines[\s\S]*anchorLineName[\s\S]*anchorPosition/,
+  "generated wrinkle-guided RSTL lines must follow named standard curves instead of frozen screen pixels");
+assert.match(pipelineSourceRuntime,
+  /currentLiveSourceKind\(\) === "image"[\s\S]*hasLiveRefinementForCamera\(\)[\s\S]*preserveRefinementForLive/,
+  "photo-to-camera source replacement must preserve an accepted wrinkle-guided display transport");
 assert.match(analysisRuntime, /delegate: "CPU"/,
   "single-frame refinement must use deterministic CPU landmarks");
 assert.match(analysisRuntime, /runningMode: "IMAGE"/,

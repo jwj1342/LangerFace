@@ -142,7 +142,11 @@ export function readIncisionLibraryCommand(
 ): IncisionLibraryCommandDetail | null {
   const detail = readControllerCommandDetail(eventDetail(event), INCISION_LIBRARY_COMMANDS);
   if (!detail) return null;
-  if (detail.command === "load_candidate" || detail.command === "remove_candidate") {
+  if (
+    detail.command === "load_candidate"
+    || detail.command === "toggle_candidate_review_status"
+    || detail.command === "remove_candidate"
+  ) {
     return typeof detail.id === "string" && detail.id.trim()
       ? detail as IncisionLibraryCommandDetail
       : null;

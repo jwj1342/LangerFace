@@ -42,7 +42,7 @@ import {
   workflowSubcutaneousLengthLimit,
 } from "../web/src/services/workflowControllerUtils.ts";
 import { svgOverlayExportViewBox } from "../web/src/services/incisionExport.ts";
-import { incisionCandidateScreenStyle } from "../web/src/services/incisionOverlayStyle.ts";
+import { incisionCandidateScreenStyle, incisionOverlayScreenStyle } from "../web/src/services/incisionOverlayStyle.ts";
 import { buildPhotoSpaceDiameterEstimate, type SurfaceProjectedFusiformFit } from "../web/src/services/incisionPhotoPlanning.ts";
 import type { Vec3 } from "../web/src/services/softBody.ts";
 import { tumorDiameterParameterInactive } from "../web/src/services/tumorInput.ts";
@@ -189,6 +189,12 @@ assert.match(canvasTools, /disabled=\{markerBusy\}[\s\S]*?commands\.tool\("reset
   "image reset is frozen while recognition is running");
 assert.match(controllerCommand, /"confirm_controlled_marker"/, "the mobile marker confirmation command is part of the typed command allowlist");
 assert.match(controllerCommand, /"cancel_controlled_marker"/, "explicit marker cancellation is part of the typed command allowlist");
+const scanDiameterCommand = controller.match(/case "scan_diameter_changed":[\s\S]*?break;/)?.[0] || "";
+assert.ok(scanDiameterCommand, "workflow controller keeps an explicit scan-diameter command branch");
+assert.doesNotMatch(scanDiameterCommand, /runControlledMarker\(/,
+  "changing the scan diameter only updates its preview and never starts lesion recognition");
+assert.match(scanDiameterCommand, /当前识别结果未更新[\s\S]*?点击“识别此处”/,
+  "mobile scan-size guidance requires an explicit confirmation before recognition");
 assert.match(styles, /\.workflow-canvas-tools \.workflow-mobile-marker-confirm\s*\{[^}]*display:\s*none;/s,
   "the controlled-marker confirmation action stays hidden from the desktop toolbar");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-mobile-marker-confirm\s*\{[^}]*display:\s*inline-flex;/s,
@@ -333,8 +339,10 @@ assert.match(tumorInputPanel, /showDepthControl\s*=\s*true/, "the standalone inc
 assert.match(tumorInputPanel, /visible={!cutaneous\s*&&\s*showDepthControl}/, "depth data remains mounted behind an explicit presentation boundary");
 assert.match(controller, /controlledMarkerScale\?\.sourceRevision === frame\.revision/, "workflow caches one marker scale per photo revision");
 assert.match(controller, /state\.controlledMarkerScale = null;[\s\S]*?state\.photoFrameRevision = frame\.revision/, "a new photo revision invalidates the cached marker scale");
-assert.match(controller, /function resetWorkflowForSourceChange\([\s\S]*?state\.centerRef = null;[\s\S]*?state\.boundaryRefs = \[\];[\s\S]*?invalidateCandidate\(state[\s\S]*?setSelection\(\{ centerRef: null, boundaryRefs: \[\] \}\)/,
-  "a new media revision clears the current lesion, boundary and candidate from the shared canvas");
+assert.match(controller, /function resetWorkflowForSourceChange\([\s\S]*?preserveActiveCandidate[\s\S]*?if \(preserveActiveCandidate\) resetFreehandPhotoBoundary\(state\);[\s\S]*?else \{[\s\S]*?state\.centerRef = null;[\s\S]*?state\.boundaryRefs = \[\];[\s\S]*?invalidateCandidate\(state\)/,
+  "source replacement preserves an activated reviewed candidate while still clearing unapproved media-bound drafts");
+assert.match(controller, /if \(preserveActiveCandidate\) \{[\s\S]*?syncSelection\(state\);[\s\S]*?publishLiveOverlayState\(state, true,[\s\S]*?requestFrame\(\);/,
+  "both load-then-camera and camera-then-load keep the approved surface overlay active on the new source");
 assert.match(controller, /function resetWorkflowForSourceChange\([\s\S]*?clearWorkflowDraftOverlay\(state\)/,
   "source replacement synchronously removes stale boundary and candidate SVG paths before new landmarks arrive");
 assert.match(controller, /revision !== state\.lastSourceRevision[\s\S]*?resetWorkflowForSourceChange\(state, revision\)/,
@@ -342,8 +350,10 @@ assert.match(controller, /revision !== state\.lastSourceRevision[\s\S]*?resetWor
 assert.match(controller, /downloadCanvasWithSvgOverlayPng/, "workflow screenshot export includes the merged SVG drawing layer");
 assert.match(controller, /async function importTumor[\s\S]*?resetMarkerRepair\(state\);[\s\S]*?state\.markerMode = false;/,
   "tumor import cancels an in-flight marker request before replacing planning state");
-assert.match(controller, /case "load_candidate":[\s\S]*?resetMarkerRepair\(state\);[\s\S]*?state\.markerMode = false;/,
+assert.match(controller, /function loadSavedCandidateState[\s\S]*?resetMarkerRepair\(state\);[\s\S]*?state\.markerMode = false;/,
   "candidate loading cancels an in-flight marker request before replacing planning state");
+assert.match(controller, /function loadSavedCandidateState[\s\S]*?state\.boundaryMode = record\.tumor\?\.boundary_mode === "freehand" \? "freehand" : "ellipse";/,
+  "candidate loading restores freehand only from its explicit mode instead of inferring it from boundary point count");
 assert.match(controller, /tumorPointEngineeringExclusionMessage/, "workflow restores the established non-skin-opening center gate");
 assert.match(controller, /inspectTumorEngineeringExclusions/, "controlled-marker results retain the full tumor opening gate");
 assert.match(controller, /workflowCandidateDisplayAllowed/, "workflow rendering consumes the deterministic candidate-display hard block");
@@ -385,6 +395,8 @@ assert.match(styles, /workflow-marker-busy="true"[\s\S]*?\.workflow-incision-rai
   "non-cancel planning controls and focus cards cannot receive accidental pointer input while recognition runs");
 assert.match(liveRuntime, /isMobileTouchImageGestureEnabled:[\s\S]*?\.workflow-workbench[\s\S]*?max-width: 560px[\s\S]*?pointer: coarse[\s\S]*?hover: none[\s\S]*?pointerMode === "marker"/,
   "pinch gestures are gated to the mobile workflow and do not alter desktop or standalone Live input");
+assert.match(liveRuntime, /pointerMode === "marker" \|\| pointerMode === "freehand"/,
+  "the mobile workflow keeps two-finger image gestures available while freehand drawing owns one finger");
 assert.match(liveRuntime, /transformImageViewGesture/,
   "the mobile workflow uses one atomic pinch transform so combined pan and zoom stay aligned");
 assert.match(liveCanvasInteraction, /callbacks\.transformImageViewGesture[\s\S]*?pinch\.centerX[\s\S]*?nextPinch\.centerX[\s\S]*?ratio/,
@@ -456,8 +468,8 @@ assert.doesNotMatch(incisionRail, /IncisionStatePanel/,
   "workflow removes the duplicate incision state card while the standalone incision page keeps it");
 assert.match(incisionRail, /<CandidateResultPanel\s+showWorkflowGuidance={false}\s*\/>/,
   "workflow keeps the candidate result card but hides duplicate generated/review guidance");
-assert.match(incisionRail, /<CandidateLibraryPanel[\s\S]*?automaticOverlay[\s\S]*?showHandoffStatus={false}[\s\S]*?showDirectionVariants={false}[\s\S]*?showJsonExport={false}[\s\S]*?showSaveAndExportActions={false}[\s\S]*?showCandidateRowActions[\s\S]*?\/>/,
-  "workflow hides redundant top-level actions while retaining each record's load and delete controls");
+assert.match(incisionRail, /<CandidateLibraryPanel[\s\S]*?automaticOverlay[\s\S]*?showHandoffStatus={false}[\s\S]*?showDirectionVariants={false}[\s\S]*?showJsonExport={false}[\s\S]*?showSaveAndExportActions={false}[\s\S]*?showCandidateRowActions[\s\S]*?showReviewTransitions[\s\S]*?\/>/,
+  "workflow hides redundant top-level actions while retaining record load, delete, and guarded review-transition controls");
 assert.match(candidateResultPanel, /showWorkflowGuidance\s*=\s*true/,
   "standalone candidate results retain their existing guidance by default");
 assert.match(candidateLibraryPanel, /showHandoffStatus\s*=\s*true/,
@@ -470,6 +482,22 @@ assert.match(candidateLibraryPanel, /showSaveAndExportActions\s*=\s*true/,
   "standalone candidate library retains its historical save and export actions by default");
 assert.match(candidateLibraryPanel, /showCandidateRowActions\s*=\s*true/,
   "standalone candidate library retains its historical candidate-row actions by default");
+assert.match(candidateLibraryPanel, /showReviewTransitions\s*=\s*false/,
+  "review status transitions stay scoped to the merged workflow controller that implements the gate");
+assert.match(candidateLibraryPanel, /toggle_candidate_review_status/,
+  "saved candidate cards expose the guarded pending/approved transition command");
+assert.match(candidateLibraryPanel, /candidate-row-actions[\s\S]*?three-cols[\s\S]*?load_candidate[\s\S]*?remove_candidate[\s\S]*?toggle_candidate_review_status/,
+  "candidate load, delete, and review-transition actions share one equal-width row in the requested order");
+assert.match(candidateLibraryPanel, /candidate-overlay-status[\s\S]*?overlayStatusLabel/,
+  "saved candidate cards keep the live-overlay eligibility explanation visible");
+assert.match(incisionSnapshots, /reviewTransitionLabel:[\s\S]*?转为已确认[\s\S]*?转为待确认/,
+  "saved candidate summaries derive both guarded review transition labels from the persisted status");
+assert.match(incisionSnapshots, /未进入实时叠加：该候选仍为“待医生确认”/,
+  "saved candidate summaries explain the pending live-overlay block in plain language");
+assert.match(controller, /function toggleSavedCandidateReviewStatus[\s\S]*?transitionIncisionReviewRecord/,
+  "saved candidate review transitions reuse the shared review gate instead of mutating a label only");
+assert.match(controller, /已载入待医生确认草案；照片中可继续核对，但实时摄像头不会显示该候选/,
+  "loading a pending candidate explicitly explains why it is absent from the live camera");
 assert.match(controller, /function saveReview[\s\S]*?state\.saved = \[\.\.\.state\.saved\.filter\(\(item\) => item\.id !== record\.id\), record\];/,
   "saving the selected review state also persists the reviewed candidate in the library");
 assert.match(controller, /candidate:\s*diagnosticCandidateVisible\s*\?\s*null\s*:\s*buildIncisionCandidateSnapshot\(state\.result\)/,
@@ -621,8 +649,15 @@ assert.ok(
     && incisionRail.indexOf("<MobileCandidateAdjustPanel") < incisionRail.indexOf("<CandidateResultPanel"),
   "the phone candidate adjustment panel follows the main parameter panel and precedes candidate results",
 );
-assert.match(controller, /centerCircle\.setAttribute\("r", mobileWorkflowViewportActive\(\) \? "4" : "6"\)/,
-  "the lesion center becomes finer only on the phone workflow and keeps the desktop radius");
+assert.match(controller, /incisionOverlayScreenStyle\(state\.result\?\.candidate\?\.type,[\s\S]*?compact: mobileWorkflowViewportActive\(\),[\s\S]*?viewScale: frame\.transform\?\.zoom/,
+  "the photo overlay derives its visual scale from the same compact contract and the current photo zoom");
+assert.match(controller, /centerCircle\.setAttribute\("r", String\(overlayStyle\.center\.radiusCss\)\)/,
+  "the photo lesion center consumes the shared responsive radius instead of a fixed mobile radius");
+assert.ok(canvasTools.includes("data-workflow-boundary-halo")
+  && canvasTools.includes("data-workflow-candidate-halo"),
+"photo boundary and incision strokes have the same explicit under-stroke structure as live canvas rendering");
+assert.equal(incisionOverlayScreenStyle("fusiform", { compact: true }).center.radiusCss, 3,
+  "the compact full-photo lesion center uses the finer baseline");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\[data-workflow-boundary\][\s\S]*?stroke:\s*#fde047;[\s\S]*?\[data-workflow-candidate\][\s\S]*?stroke:\s*#67e8f9;[\s\S]*?\[data-workflow-center\][\s\S]*?fill:\s*#fb7185;/,
   "phone drawing marks use the requested bright, thin clinical legend colors without restyling desktop");
 const clickIntent = beginWorkflowPointerIntent(1, 0, 10, 10);
@@ -784,6 +819,12 @@ const freehandPointerUpSource = controller.slice(
 );
 assert.doesNotMatch(freehandPointerUpSource, /recoverWorkflowFreehandBoundary|runWorkflow\(/,
   "pointer-up only pauses sampling; it cannot recognize the boundary or generate a candidate before explicit completion");
+assert.match(controller, /function claimFreehandPointer[\s\S]*?event\.preventDefault\(\);[\s\S]*?isMobileWorkflowTouch\(event\)\) return;/,
+  "mobile one-finger freehand drawing no longer stops the shared two-finger gesture listener");
+assert.match(controller, /mobileFreehandTouch[\s\S]*?mobileTouchPointers\.size > 1[\s\S]*?cancelFreehandStrokeForTouchGesture\(state\)/,
+  "a second touch cancels the current uncommitted stroke before pinch zoom or pan begins");
+assert.match(controller, /function cancelFreehandStrokeForTouchGesture[\s\S]*?splice\(state\.boundaryDrawingStartIndex\)[\s\S]*?boundaryDrawingPointerId = null/,
+  "pinch takeover rolls back only the active stroke segment and preserves earlier paused freehand segments");
 assert.match(controller, /case "toggle_boundary":[\s\S]*?finalizeWorkflowFreehandBoundary\(state\)/,
   "the explicit end-drawing command owns freehand recognition and candidate generation");
 assert.match(controller, /boundaryMode === "freehand"[\s\S]*?当前已有自由轮廓肿物边界[\s\S]*?再次点击“开始描绘”[\s\S]*?切换为“椭圆近似”[\s\S]*?freehand_inactive_canvas_click_blocked/,

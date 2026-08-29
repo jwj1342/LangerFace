@@ -33,6 +33,7 @@ const REVIEW_SAVE_NOTICE_REASONS = new Set([
   "review_missing_candidate",
   "diagnostic_review_blocked",
   "diagnostic_review_acknowledged",
+  "candidate_review_transition_blocked",
 ]);
 
 export function ReviewControlsPanel() {

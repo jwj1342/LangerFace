@@ -44,6 +44,7 @@ export function MobileWorkflowControls() {
   const running = Boolean(liveSnapshot?.source.running);
   const paused = Boolean(liveSnapshot?.source.paused);
   const recording = Boolean(liveSnapshot?.recording);
+  const cameraActive = running && liveSnapshot?.source.kind === "camera";
   const hasSource = running || Boolean(liveSnapshot?.source.kind);
 
   useEffect(() => {
@@ -99,10 +100,10 @@ export function MobileWorkflowControls() {
           <Button
             variant="workbench"
             type="button"
-            aria-pressed={running && liveSnapshot?.source.kind === "camera"}
+            aria-pressed={cameraActive}
             onClick={() => liveCommands.source("camera_toggle")}
           >
-            <Camera size={15} /> 后置摄像头
+            <Camera size={15} /> {cameraActive ? "关闭后置摄像头" : "开启后置摄像头"}
           </Button>
           <Button variant="workbench" type="button" disabled={!running} onClick={() => liveCommands.source("pause_toggle")}>
             {paused ? <Play size={15} /> : <Pause size={15} />} {paused ? "继续" : "暂停"}

@@ -575,7 +575,25 @@
     vector-effect: non-scaling-stroke;
   }
 
+  .workflow-incision-overlay [data-workflow-boundary-halo] {
+    fill: none;
+    stroke: rgb(3 7 18 / 88%);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
   .workflow-incision-overlay [data-workflow-candidate] {
+    fill: none;
+    stroke: #003b73;
+    stroke-width: 1;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-incision-overlay [data-workflow-candidate-halo] {
     fill: none;
     stroke: #003b73;
     stroke-width: 1;
@@ -1098,6 +1116,18 @@
     line-height: 1.45;
   }
 
+  .incision-workbench .candidate-row .candidate-overlay-status {
+    border-left: 3px solid var(--green);
+    padding-left: 7px;
+    color: var(--green-d);
+    font-weight: 700;
+  }
+
+  .incision-workbench .candidate-row .candidate-overlay-status.warning {
+    border-left-color: #b7791f;
+    color: #8a5a00;
+  }
+
   .incision-workbench .text-input {
     width: 100%;
     padding: 9px 12px;
@@ -1296,6 +1326,17 @@
 
   .incision-workbench .btn-row.three-cols {
     grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .incision-workbench .candidate-row-actions.three-cols {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .incision-workbench .candidate-row-actions.three-cols .btn {
+    min-width: 0;
+    padding-inline: 4px;
+    font-size: clamp(10px, 2.8vw, 12px);
+    white-space: nowrap;
   }
 
   .incision-workbench #incisionCanvas {
@@ -2043,6 +2084,11 @@
   color: var(--clinical-dark-muted);
 }
 
+.dark-workbench-page .badge[data-tone="warning"],
+.dark-workbench-page .candidate-overlay-blocked-hint {
+  color: #f1c21b;
+}
+
 .dark-workbench-page .react-nav-link,
 .dark-workbench-page .btn {
   border-color: var(--clinical-dark-border);
@@ -2570,6 +2616,16 @@ body:has(.dark-workbench-page) {
     overflow-x: hidden;
   }
 
+  .incision-workbench.clinical-compat-workbench .candidate-row .candidate-overlay-status {
+    border-left-color: #42be65;
+    color: #42be65;
+  }
+
+  .incision-workbench.clinical-compat-workbench .candidate-row .candidate-overlay-status.warning {
+    border-left-color: #f1c21b;
+    color: #f1c21b;
+  }
+
   .workflow-workbench > .workflow-live-rail,
   .workflow-workbench #liveWrinkleCard,
   .workflow-workbench #wrinkleSummary {
@@ -3004,6 +3060,8 @@ body:has(.dark-workbench-page) {
   .workflow-workbench[data-mobile-incision-candidate-visible="false"]
     .workflow-incision-overlay [data-workflow-candidate],
   .workflow-workbench[data-mobile-incision-candidate-visible="false"]
+    .workflow-incision-overlay [data-workflow-candidate-halo],
+  .workflow-workbench[data-mobile-incision-candidate-visible="false"]
     .workflow-incision-overlay [data-workflow-diagnostic-candidate] {
     display: none;
   }
@@ -3014,13 +3072,15 @@ body:has(.dark-workbench-page) {
     stroke-width: 0.85;
     stroke-linecap: round;
     stroke-linejoin: round;
-    filter: drop-shadow(0 0 2px rgb(253 224 71 / 74%));
+  }
+
+  .workflow-workbench .workflow-incision-overlay [data-workflow-boundary-halo] {
+    fill: none;
   }
 
   .workflow-workbench .workflow-incision-overlay [data-workflow-candidate] {
     stroke: #67e8f9;
     stroke-width: 0.8;
-    filter: drop-shadow(0 0 2px rgb(103 232 249 / 78%));
   }
 
   .workflow-workbench .workflow-incision-overlay [data-workflow-diagnostic-candidate] {
@@ -3031,7 +3091,6 @@ body:has(.dark-workbench-page) {
     fill: #fb7185;
     stroke: #fff1f2;
     stroke-width: 0.8;
-    filter: drop-shadow(0 0 2px rgb(251 113 133 / 78%));
   }
 
   .workflow-workbench .canvas-legend {

@@ -21,6 +21,7 @@ import {
   renderState,
   sourceState,
   type EditableRefineLine,
+  type LiveRefine2dState,
   type RefineMode,
   type RefinePick,
 } from "./liveState.ts";
@@ -40,6 +41,15 @@ const cloneLines = (lines: readonly RefineLine[] | null | undefined): EditableRe
 }))
 );
 const requestRefineFrame = () => window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
+
+export interface RefineDisplayResumeState {
+  lines: EditableRefineLine[] | null;
+  latestAutoLines: EditableRefineLine[] | null;
+  liveBaselineLines: EditableRefineLine[] | null;
+  liveTransport: LiveRefine2dState["liveTransport"];
+  dirty: boolean;
+  quality: LiveRefine2dState["quality"];
+}
 
 function state() {
   return renderState.refine2d;
@@ -161,12 +171,19 @@ export function setLatestAutoLines(mapped: readonly RefineLine[]): void {
  * Keeping both arrays in lockstep lets a doctor start manual refinement after
  * automatic refinement without changing the safety/reset reference.
  */
-export function replaceStaticRefineBaseline(mapped: readonly RefineLine[]): void {
+export function replaceStaticRefineBaseline(
+  mapped: readonly RefineLine[],
+  { liveBaseline = null }: { liveBaseline?: readonly RefineLine[] | null } = {},
+): void {
   const s = state();
   s.latestAutoLines = cloneLines(mapped);
   s.lines = cloneLines(mapped);
   if (!sourceState.paused) s.liveBaselineLines = null;
-  s.liveTransport = null;
+  s.liveTransport = liveBaseline?.length ? {
+    ...buildCurveRefinementTransport(liveBaseline, mapped),
+    system: renderState.system,
+    committedAt: new Date().toISOString(),
+  } : null;
   s.selected = null;
   s.dirty = false;
   s.quality = null;
@@ -275,8 +292,46 @@ export function setRefineAvailability(): void {
   }
 }
 
-export function resetRefineForNewSource(): void {
+export function hasLiveRefinementForCamera(): boolean {
+  return Boolean(state().liveTransport?.system === renderState.system);
+}
+
+export function captureRefineDisplayState(): RefineDisplayResumeState {
   const s = state();
+  return {
+    lines: s.lines ? cloneLines(s.lines) : null,
+    latestAutoLines: s.latestAutoLines ? cloneLines(s.latestAutoLines) : null,
+    liveBaselineLines: s.liveBaselineLines ? cloneLines(s.liveBaselineLines) : null,
+    liveTransport: s.liveTransport,
+    dirty: s.dirty,
+    quality: s.quality,
+  };
+}
+
+export function restoreRefineDisplayState(snapshot: RefineDisplayResumeState): void {
+  const s = state();
+  s.active = false;
+  s.mode = "view";
+  s.lines = snapshot.lines ? cloneLines(snapshot.lines) : null;
+  s.latestAutoLines = snapshot.latestAutoLines ? cloneLines(snapshot.latestAutoLines) : null;
+  s.liveBaselineLines = snapshot.liveBaselineLines ? cloneLines(snapshot.liveBaselineLines) : null;
+  s.liveTransport = snapshot.liveTransport;
+  s.selected = null;
+  s.dirty = snapshot.dirty;
+  s.quality = snapshot.quality;
+  s.undoStack = [];
+  s.drag = null;
+  setRefineCanvasViewActive(false);
+  updateRefineUi();
+  setRefineAvailability();
+  requestRefineFrame();
+}
+
+export function resetRefineForNewSource(
+  { preserveLiveTransport = false }: { preserveLiveTransport?: boolean } = {},
+): void {
+  const s = state();
+  const liveTransport = preserveLiveTransport ? s.liveTransport : null;
   s.active = false;
   s.mode = "view";
   s.spread = 0.28;
@@ -287,7 +342,7 @@ export function resetRefineForNewSource(): void {
   s.lines = null;
   s.latestAutoLines = null;
   s.liveBaselineLines = null;
-  s.liveTransport = null;
+  s.liveTransport = liveTransport;
   s.selected = null;
   s.dirty = false;
   s.quality = null;

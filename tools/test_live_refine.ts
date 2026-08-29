@@ -61,6 +61,45 @@ const transport = buildCurveRefinementTransport(automatic, [{ ...automatic[0], p
 const nextFrame = [{ name: "left", pts: [[20, 40, 0], [40, 40, 0], [60, 40, 0]] }];
 const transported = applyCurveRefinementTransport(nextFrame, transport, { width: 100, height: 100 });
 assert.ok(transported[0].pts[1][1] > 50, "frozen-frame edit must scale onto a later live frame");
+
+const guidedBaseline = [{
+  name: "nose_reference",
+  region: "nose",
+  pts: [[20, 10, 0], [20, 30, 0], [20, 50, 0]],
+  tris: [1, 2, 3],
+}];
+const guidedResult = [{
+  ...guidedBaseline[0],
+  hiddenPointRuns: [[0, 1] as [number, number]],
+  pts: [[22, 10, 0], [22, 30, 0], [22, 50, 0]],
+}, {
+  name: "personalized_nose_dorsum_wrinkle_1",
+  region: "personalized_nose_dorsum_wrinkle_v1",
+  pts: [[26, 15, 0], [27, 30, 0], [26, 45, 0]],
+  tris: [],
+}];
+const guidedTransport = buildCurveRefinementTransport(guidedBaseline, guidedResult);
+assert.equal(guidedTransport.addedLines?.length, 1,
+  "wrinkle-guided curves outside the standard atlas must become display-only live attachments");
+const guidedLiveFrame = [{
+  name: "nose_reference",
+  region: "nose",
+  pts: [[40, 20, 0], [40, 60, 0], [40, 100, 0]],
+  tris: [11, 12, 13],
+}];
+const guidedLive = applyCurveRefinementTransport(guidedLiveFrame, guidedTransport, {
+  width: 200,
+  height: 200,
+});
+assert.equal(guidedLive.length, 2,
+  "the live frame must append wrinkle-guided generated lines instead of falling back to standard RSTL only");
+assert.equal(guidedLive[1].name, "personalized_nose_dorsum_wrinkle_1");
+assert.deepEqual(guidedLive[1].tris, [11, 12, 13],
+  "generated live lines inherit current-frame face visibility anchors rather than frozen screen coordinates");
+assert.deepEqual(guidedLive[0].hiddenPointRuns, [[0, 1]],
+  "wrinkle-guided visibility gaps must survive transport into the camera renderer");
+assert.ok(guidedLive[1].pts.every((point) => point[0] > 40),
+  "generated lines must retain their local offset while following the current face frame");
 assert.deepEqual(curveEraseTargets(2, 7, true), [2, 7], "symmetry erase must include the partner curve");
 assert.deepEqual(curveEraseTargets(2, 7, false), [2], "independent erase must affect only the selected curve");
 assert.equal(explicitSymmetryPartnerIndex([

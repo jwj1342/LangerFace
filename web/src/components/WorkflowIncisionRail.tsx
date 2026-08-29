@@ -27,6 +27,7 @@ export function WorkflowIncisionRail() {
         showJsonExport={false}
         showSaveAndExportActions={false}
         showCandidateRowActions
+        showReviewTransitions
       />
       <PrivacyAuditPanel />
       <Disclaimer>临床辅助设计：候选切口由规则工具生成，仅供执业医师结合查体审阅确认；不替代最终手术决策。</Disclaimer>

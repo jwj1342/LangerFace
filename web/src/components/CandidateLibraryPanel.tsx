@@ -15,6 +15,7 @@ export function CandidateLibraryPanel({
   showJsonExport = true,
   showSaveAndExportActions = true,
   showCandidateRowActions = true,
+  showReviewTransitions = false,
 }: {
   automaticOverlay?: boolean;
   showHandoffStatus?: boolean;
@@ -22,6 +23,7 @@ export function CandidateLibraryPanel({
   showJsonExport?: boolean;
   showSaveAndExportActions?: boolean;
   showCandidateRowActions?: boolean;
+  showReviewTransitions?: boolean;
 }) {
   const commands = useIncisionControllerCommands();
   const snapshot = useIncisionStore((state) => state.snapshot);
@@ -106,8 +108,16 @@ export function CandidateLibraryPanel({
             <CandidateRowMeta>{item.meta}</CandidateRowMeta>
             <CandidateRowMeta>{item.reviewerLabel}</CandidateRowMeta>
             <CandidateRowMeta>{item.reviewNotesLabel}</CandidateRowMeta>
+            <CandidateRowMeta
+              className={item.overlayStatusWarning ? "candidate-overlay-status warning" : "candidate-overlay-status"}
+              role="status"
+            >
+              {item.overlayStatusLabel}
+            </CandidateRowMeta>
             {showCandidateRowActions ? (
-              <ButtonRow className="two-cols">
+              <ButtonRow
+                className={`candidate-row-actions ${showReviewTransitions && item.reviewTransitionLabel ? "three-cols" : "two-cols"}`}
+              >
                 <Button
                   variant="workbench"
                   type="button"
@@ -120,6 +130,16 @@ export function CandidateLibraryPanel({
                   {activeCandidateId === item.id ? "已载入" : "载入"}
                 </Button>
                 <Button variant="workbench" type="button" onClick={() => commands.library("remove_candidate", item.id)}>删除</Button>
+                {showReviewTransitions && item.reviewTransitionLabel ? (
+                  <Button
+                    variant="workbench"
+                    type="button"
+                    data-candidate-review-toggle={item.reviewStatus}
+                    onClick={() => commands.library("toggle_candidate_review_status", item.id)}
+                  >
+                    {item.reviewTransitionLabel}
+                  </Button>
+                ) : null}
               </ButtonRow>
             ) : null}
           </CandidateRow>

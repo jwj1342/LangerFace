@@ -116,7 +116,7 @@ export function describeCameraError(error: unknown): CameraErrorDescription {
   if (name === "NotAllowedError" || name === "SecurityError") {
     return {
       reason: "permission_denied",
-      message: "摄像头权限被拒，请在地址栏左侧重新允许后重试。",
+      message: "本次摄像头权限未获允许。可再次点击“开启后置摄像头”重新申请；若手机不再弹出授权框，请到手机系统设置或浏览器的网站权限中允许本网站使用摄像头后重试。",
     };
   }
   if (name === "NotReadableError" || name === "TrackStartError") {

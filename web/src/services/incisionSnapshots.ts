@@ -134,11 +134,15 @@ export interface IncisionResultViewState {
 export interface IncisionSavedCandidateSummary {
   id: string;
   title: string;
+  reviewStatus: string;
   statusLabel: string;
   statusDanger: boolean;
   meta: string;
   reviewerLabel: string;
   reviewNotesLabel: string;
+  overlayStatusLabel: string;
+  overlayStatusWarning: boolean;
+  reviewTransitionLabel: string | null;
 }
 
 export interface IncisionWorkflowRuntime {
@@ -230,6 +234,9 @@ export interface IncisionSavedCandidateRecordLike {
     notes?: string;
   } | null;
   review_status?: string;
+  review_gate?: {
+    live_overlay_ready?: boolean;
+  } | null;
   guardrails?: {
     passed?: boolean | null;
   } | null;
@@ -475,11 +482,23 @@ export function buildIncisionSavedCandidateSummaries({
     return {
       id: rec.id,
       title: `${rec.label} · ${rec.candidate?.type === "linear" ? "线性" : "梭形"}`,
+      reviewStatus: rec.review_status || "pending_clinician_confirmation",
       statusLabel: reviewStatusLabel(rec.review_status),
       statusDanger: rec.review_status === "rejected_by_clinician" || !rec.guardrails?.passed,
       meta: `${rank}长度 ${formatIncisionMetric(rec.candidate?.length_mm)} mm · 区域 ${rec.anatomy?.region || "—"} · ${guardrails} · ${rec.created_at}`,
       reviewerLabel: `审阅人：${rec.review?.reviewer || "未填写"}`,
       reviewNotesLabel: `审阅备注：${rec.review?.notes || "无"}`,
+      overlayStatusLabel: rec.review_status === "pending_clinician_confirmation"
+        ? "未进入实时叠加：该候选仍为“待医生确认”。完成确认后才能显示在摄像头中。"
+        : rec.review_status === "approved_for_discussion" && rec.review_gate?.live_overlay_ready === true
+          ? "实时叠加已就绪：该候选已通过审阅与显示检查。"
+          : "未进入实时叠加：该候选尚未通过全部显示检查。",
+      overlayStatusWarning: rec.review_gate?.live_overlay_ready !== true,
+      reviewTransitionLabel: rec.review_status === "pending_clinician_confirmation"
+        ? "转为已确认"
+        : rec.review_status === "approved_for_discussion"
+          ? "转为待确认"
+          : null,
     };
   });
 }
