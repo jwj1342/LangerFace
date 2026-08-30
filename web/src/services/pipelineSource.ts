@@ -56,6 +56,13 @@ interface StaticSourceResumeState {
 
 let lastStaticSource: StaticSourceResumeState | null = null;
 
+function resetAutomaticSourceMirror(): void {
+  renderState.mirror = false;
+  els.mirror.checked = false;
+  els.canvas.classList.remove("mirror");
+  renderState.zoomCards.forEach((zoomCard) => zoomCard.canvas.classList.remove("mirror"));
+}
+
 export interface StartCameraOptions {
   onFacingMode?: (facingMode: CameraFacingMode) => void;
 }
@@ -289,6 +296,9 @@ export function setSource(
 ): void {
   const planning2d = sourceState.planning2d;
   if (!planning2d) throw new Error("live photo planning controller is not mounted");
+  // Every new media source starts in anatomical orientation. Mirroring remains
+  // available as an explicit, per-source display choice after the source loads.
+  resetAutomaticSourceMirror();
   const sourceWidth = width || 1280;
   const sourceHeight = height || 720;
   const revision = planning2d.replaceSource({

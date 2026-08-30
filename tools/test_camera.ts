@@ -179,6 +179,16 @@ assert.match(
 );
 assert.match(
   pipelineSource,
+  /function resetAutomaticSourceMirror\(\): void \{\s*renderState\.mirror = false;\s*els\.mirror\.checked = false;\s*els\.canvas\.classList\.remove\("mirror"\);\s*renderState\.zoomCards\.forEach\(\(zoomCard\) => zoomCard\.canvas\.classList\.remove\("mirror"\)\);\s*\}/,
+  "new media sources reset the canvas, zoom cards, controller state, and visible mirror control to anatomical orientation",
+);
+assert.match(
+  pipelineSource,
+  /export function setSource\([\s\S]*?if \(!planning2d\) throw new Error\("live photo planning controller is not mounted"\);\s*[\s\S]*?resetAutomaticSourceMirror\(\);\s*const sourceWidth/,
+  "uploaded photos, restored photos, and cameras clear inherited mirroring before their first source frame",
+);
+assert.match(
+  pipelineSource,
   /if \(!resume\) \{[\s\S]*?showCameraPlaceholder\(\);[\s\S]*?setLive\(false, "待机"\)/,
   "closing a camera without an earlier photo returns to the default dark standby canvas",
 );
