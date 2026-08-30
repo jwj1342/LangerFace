@@ -1654,10 +1654,10 @@ for (const id of [
 }
 assert.ok(incisionStore.includes("IncisionEditState"), "incision Zustand store keeps typed edit state");
 assert.ok(incisionWorkbench.includes("EditControlsPanel"), "React incision workbench renders the edit controls as a React component");
-assert.match(
+assert.doesNotMatch(
   incisionWorkbench,
   /<div hidden>\s*<EditControlsPanel\s*\/>\s*<\/div>/,
-  "React incision workbench keeps the edit controls mounted but hidden",
+  "React incision workbench does not hide the clinician edit controls",
 );
 assert.ok(editPanel.includes("useIncisionControllerCommands"), "React edit panel uses typed incision command callbacks");
 assert.ok(!editPanel.includes("dispatchIncisionEditCommand"), "React edit panel does not import low-level command dispatch helpers directly");

@@ -35,9 +35,7 @@ export function IncisionWorkbench() {
 
       <CandidateResultPanel />
 
-      <div hidden>
-        <EditControlsPanel />
-      </div>
+      <EditControlsPanel />
 
       <ReviewControlsPanel />
 

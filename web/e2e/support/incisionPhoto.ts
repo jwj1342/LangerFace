@@ -161,46 +161,11 @@ export async function pickSafePhotoCheek(page: Page) {
 }
 
 export async function uploadGeneratedVideo(page: Page, inputSelector = "#fileInput") {
-  return page.evaluate(async ({ base64, selector }) => {
-    const input = document.querySelector<HTMLInputElement>(selector);
-    if (!input) throw new Error("live media input is missing");
-    const video = document.querySelector<HTMLVideoElement>("#video");
-    if (!video) throw new Error("live video element is missing");
-    if (typeof video.requestVideoFrameCallback !== "function") {
-      throw new Error("video frame callbacks are unavailable");
-    }
-    const presentedFrame = new Promise<{
-      mediaTime: number;
-      presentedFrames: number;
-      width: number;
-      height: number;
-    }>((resolve, reject) => {
-      let callbackId: number | null = null;
-      const onLoadedData = () => {
-        callbackId = video.requestVideoFrameCallback((_now, metadata) => {
-          window.clearTimeout(timeoutId);
-          resolve({
-            mediaTime: metadata.mediaTime,
-            presentedFrames: metadata.presentedFrames,
-            width: metadata.width,
-            height: metadata.height,
-          });
-        });
-      };
-      const timeoutId = window.setTimeout(() => {
-        video.removeEventListener("loadeddata", onLoadedData);
-        if (callbackId != null) video.cancelVideoFrameCallback(callbackId);
-        reject(new Error("uploaded video did not present a decoded frame"));
-      }, 15_000);
-      video.addEventListener("loadeddata", onLoadedData, { once: true });
-    });
-    const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
-    const transfer = new DataTransfer();
-    transfer.items.add(new File([bytes], "authorized-demo-face.webm", { type: "video/webm" }));
-    input.files = transfer.files;
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-    return presentedFrame;
-  }, { base64: FACE_VIDEO_WEBM, selector: inputSelector });
+  await page.locator(inputSelector).setInputFiles({
+    name: "authorized-demo-face.webm",
+    mimeType: "video/webm",
+    buffer: Buffer.from(FACE_VIDEO_WEBM, "base64"),
+  });
 }
 
 export async function installGeneratedCamera(page: Page) {

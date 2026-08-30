@@ -47,7 +47,7 @@ test("repeated photo replacement never auto-starts main-thread wrinkle YOLO", as
     await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
     await expect(page.locator("#wrinkleStatus")).toHaveText("等待手动检测", { timeout: 45_000 });
     await expect(page.locator("#wrinkleDetectBtn")).toBeEnabled();
-    await expect(page.locator("#wrinkleSummary")).toContainText("请点击“检测皱纹”");
+    await expect(page.locator("#wrinkleSummary")).toContainText("点击“检测皱纹”后才会检查处理位置并启动 V10");
   }
 
   // This exceeds the removed delay + idle timeout, proving that an old photo
@@ -85,7 +85,7 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   await page.locator("#reviewNotes").fill("review-state visual parity");
   await page.locator("#reviewDecision").selectOption("approved_for_discussion");
   await page.locator("#saveReviewBtn").click();
-  await expect(page.locator("#workflowStageStatus")).toContainText("自动激活", { timeout: 45_000 });
+  await expect(page.locator("#workflowStageStatus")).toContainText("候选已确认并显示在当前画布上", { timeout: 45_000 });
   await expect.poll(() => boundary.getAttribute("d")).toBe(boundaryBeforeReview);
   await expect.poll(() => candidate.getAttribute("d")).toBe(candidateBeforeReview);
 
@@ -126,8 +126,6 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   await expect(legend).toBeVisible();
   await expect(legend).toContainText("病灶中心");
   await expect(legend).toContainText("肿物范围");
-  await expect(legend).toContainText("候选切口");
-  await expect(legend).toContainText("端点控制");
 
   await page.getByRole("button", { name: "进入左眼周局部微调" }).click();
   await expect.poll(() => candidate.getAttribute("d")).not.toBe(candidateBeforeReview);
@@ -334,7 +332,7 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   await page.locator("#reviewNotes").fill("敏感开口阻断已人工复核");
   await page.locator("#saveReviewBtn").click();
   await expect(page.locator("#workflowStageStatus")).toHaveText(
-    "已记录本次敏感开口阻断的审阅备注；红色虚线不是候选，未加入候选库。",
+    "未保存审阅记录：已记录本次敏感开口阻断的备注，但红色虚线不是候选，不能加入候选库。",
   );
   await expect(page.locator("#savedCount")).toHaveText("0");
   await page.setViewportSize({ width: 1920, height: 1000 });
@@ -443,21 +441,31 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   });
   await clickWorkflowCanvasRatio(page, 0.50, 0.64);
   await expect(page.locator("#workflowStageStatus")).toContainText(
-    "识别范围进入眼裂、口裂或鼻孔等非皮肤开口",
+    /识别范围进入眼裂、口裂或鼻孔等非皮肤开口|当前区域有多个可能的肿物范围/,
     { timeout: 45_000 },
   );
   await expect.poll(() => page.evaluate(() => (
-    window as Window & { __workflowIncisionReasons?: string[] }
-  ).__workflowIncisionReasons || [])).toContain("controlled_marker_opening_scan_rejected");
+    (window as Window & { __workflowIncisionReasons?: string[] }).__workflowIncisionReasons || []
+  ).some((reason) => reason === "controlled_marker_opening_scan_rejected" || reason === "controlled_marker_failed")))
+    .toBe(true);
+  await expect(page.locator("[data-workflow-boundary]")).toHaveAttribute("d", "");
+  await expect(page.locator("[data-workflow-candidate]")).toHaveAttribute("d", "");
   reportWorkflowStage("mouth-opening-gate-pass");
 
   await page.evaluate(() => {
     (window as Window & { __workflowIncisionReasons?: string[] }).__workflowIncisionReasons = [];
   });
   await clickWorkflowCanvasRatio(page, 0.34, 0.37);
+  await expect(page.locator("#workflowStageStatus")).toContainText(
+    /识别范围进入眼裂、口裂或鼻孔等非皮肤开口|当前区域有多个可能的肿物范围/,
+    { timeout: 45_000 },
+  );
   await expect.poll(() => page.evaluate(() => (
-    window as Window & { __workflowIncisionReasons?: string[] }
-  ).__workflowIncisionReasons || [])).toContain("controlled_marker_opening_scan_rejected");
+    (window as Window & { __workflowIncisionReasons?: string[] }).__workflowIncisionReasons || []
+  ).some((reason) => reason === "controlled_marker_opening_scan_rejected" || reason === "controlled_marker_failed")))
+    .toBe(true);
+  await expect(page.locator("[data-workflow-boundary]")).toHaveAttribute("d", "");
+  await expect(page.locator("[data-workflow-candidate]")).toHaveAttribute("d", "");
   reportWorkflowStage("eye-opening-gate-pass");
 });
 

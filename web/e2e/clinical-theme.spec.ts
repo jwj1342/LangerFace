@@ -10,10 +10,11 @@ const DARK_PANEL = "rgb(18, 24, 32)";
 test("public workflow entrypoints share the blue clinical action theme", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".react-page")).toHaveClass(/dark-workbench-page/);
-  await expect(page.locator(".react-shell-sidebar")).toHaveCSS("background-color", DARK_SIDEBAR);
-  await expect(page.locator(".react-shell-sidebar .card").first()).toHaveCSS("background-color", DARK_PANEL);
   const dashboardEyebrow = page.getByText("STATELESS WORKBENCH");
   await expect(dashboardEyebrow).toHaveClass(/text-blue-300/);
+  const dashboardPrimary = page.getByRole("link", { name: "打开工具" }).first();
+  await expect(dashboardPrimary).toHaveCSS("background-color", CLINICAL_BLUE);
+  expect((await measureContrast(dashboardPrimary)).ratio).toBeGreaterThanOrEqual(4.5);
 
   await page.goto("/personalized", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".personalized-page")).toHaveCSS("background-color", DARK_PAGE);
