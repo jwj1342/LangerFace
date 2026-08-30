@@ -58,6 +58,7 @@ export interface LiveRenderState {
   opacity: number;
   smoother: MotionStabilizedOneEuro;
   incisionOverlay: IncisionOverlayPayload | null;
+  workflowPhotoOverlay: boolean;
   [key: string]: unknown;
 }
 
@@ -200,6 +201,7 @@ export const renderState: LiveRenderState = {
   opacity: 0.60,
   smoother: new MotionStabilizedOneEuro({ minCutoff: 1.5, beta: 0.05 }),
   incisionOverlay: null,
+  workflowPhotoOverlay: false,
 };
 
 export const sourceState: LiveSourceState = {

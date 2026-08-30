@@ -25,6 +25,7 @@ export interface TumorInput extends AnyRecord {
   boundary: Vec3[];
   boundary_mode: string;
   boundary_source: string;
+  photo_boundary_enclosing_diameter_mm?: number | null;
   source: string;
   author: string;
   units: string;
@@ -53,6 +54,10 @@ export function normalizeTumorInput(tumor: Partial<TumorInput> & AnyRecord): Tum
       : [],
     boundary_mode: tumor.boundary_mode || "center_diameter",
     boundary_source: tumor.boundary_source || "manual",
+    photo_boundary_enclosing_diameter_mm: Number.isFinite(Number(tumor.photo_boundary_enclosing_diameter_mm))
+      && Number(tumor.photo_boundary_enclosing_diameter_mm) > 0
+      ? Number(tumor.photo_boundary_enclosing_diameter_mm)
+      : null,
     source: tumor.source || "manual",
     author: tumor.author || "",
     units: tumor.units || "mm",
@@ -446,20 +451,39 @@ export function generateFusiformIncision(
   const perp = tangentPerp(axis, normal);
   const lesionNormalization = normalizePlanningLesion(tumor, unitsPerMm, normal);
   const planningDiameterMm = lesionNormalization.planning_diameter_mm;
+  const center = lesionNormalization.planning_center;
+  const photoBoundaryDiameterMm = lesionNormalization.photo_boundary_enclosing_diameter_mm;
+  const photoBoundaryDefinesControlledScale = lesionNormalization.clinical_scale_source === "controlled_marker_enclosing_circle"
+    && photoBoundaryDiameterMm != null;
+  const planningBoundary = photoBoundaryDefinesControlledScale
+    ? Array.from({ length: 32 }, (_value, index) => {
+      const angle = index / 32 * Math.PI * 2;
+      const radius = planningDiameterMm * unitsPerMm / 2;
+      return add(add(center, mul(axis, Math.cos(angle) * radius)), mul(perp, Math.sin(angle) * radius));
+    })
+    : tumor.boundary;
   const planningTumor = lesionNormalization.applied
-    ? { ...tumor, diameter_mm: planningDiameterMm }
+    ? { ...tumor, diameter_mm: planningDiameterMm, boundary: planningBoundary }
     : tumor;
   const boundary = boundaryProfile(planningTumor, axis, perp, unitsPerMm);
-  const boundaryDrivesCandidateGeometry = Boolean(boundary);
+  const boundaryDrivesCandidateGeometry = lesionNormalization.applied && Boolean(boundary);
+  const boundaryUsesClassRoundScale = lesionNormalization.clinical_scale_source === "controlled_marker_enclosing_circle";
   // Keep one authoritative center from detection through planning and display.
   // An asymmetric boundary is handled by symmetric extent growth, never by
   // silently replacing the lesion center with a centroid or envelope midpoint.
-  const center = lesionNormalization.planning_center;
   const lesionAxisMm = boundaryDrivesCandidateGeometry
-    ? Math.max(planningDiameterMm, Number(boundary?.selected_center_axis_diameter_mm || 0))
+    ? photoBoundaryDefinesControlledScale
+      ? planningDiameterMm
+      : boundaryUsesClassRoundScale
+      ? Math.max(planningDiameterMm, Number(boundary?.selected_center_axis_diameter_mm || 0))
+      : Number(boundary?.selected_center_axis_diameter_mm || 0)
     : planningDiameterMm;
   const lesionWidthMm = boundaryDrivesCandidateGeometry
-    ? Math.max(planningDiameterMm, Number(boundary?.selected_center_perp_diameter_mm || 0))
+    ? photoBoundaryDefinesControlledScale
+      ? planningDiameterMm
+      : boundaryUsesClassRoundScale
+      ? Math.max(planningDiameterMm, Number(boundary?.selected_center_perp_diameter_mm || 0))
+      : Number(boundary?.selected_center_perp_diameter_mm || 0)
     : planningDiameterMm;
   const requestedWidthMm = lesionWidthMm + 2 * tumor.margin_mm;
   let widthMm = requestedWidthMm;
@@ -491,7 +515,7 @@ export function generateFusiformIncision(
       axis,
       perp,
       unitsPerMm,
-      boundaryUsed: Boolean(boundary),
+      boundaryUsed: boundaryDrivesCandidateGeometry,
     });
     if (!boundaryDrivesCandidateGeometry || Number(outlineMetrics.boundary_envelope_outside_count || 0) === 0) break;
     const upperProjected = projectToAxisPlane(upper, center, axis, perp);
@@ -558,6 +582,9 @@ export function generateFusiformIncision(
       length_clamped_by_max: targetLengthMm > cfg.max_length_mm,
       boundary_used: Boolean(boundary),
       boundary_drives_candidate_geometry: boundaryDrivesCandidateGeometry,
+      boundary_scale_shape: boundaryDrivesCandidateGeometry
+        ? boundaryUsesClassRoundScale ? "enclosing_circle" : "directional_extents"
+        : "operator_diameter",
       lesion_normalization_schema: lesionNormalization.schema,
       lesion_normalization_applied: lesionNormalization.applied,
       lesion_normalization_status: lesionNormalization.status,
@@ -565,6 +592,7 @@ export function generateFusiformIncision(
       detected_lesion_area_mm2: lesionNormalization.detected_area_mm2,
       detected_equivalent_diameter_mm: lesionNormalization.detected_equivalent_diameter_mm,
       detected_enclosing_diameter_mm: lesionNormalization.detected_enclosing_diameter_mm,
+      photo_boundary_enclosing_diameter_mm: lesionNormalization.photo_boundary_enclosing_diameter_mm,
       detected_lesion_compactness: lesionNormalization.detected_compactness,
       detected_boundary_centroid: lesionNormalization.detected_centroid,
       detected_center_shift_mm: lesionNormalization.detected_center_shift_mm,
@@ -846,7 +874,13 @@ export function evaluateGuardrails(candidate: IncisionCandidate, anatomy: AnyRec
     }
 
     const centerShift = candidate.metrics?.boundary_center_shift_mm;
-    const lesionDiameter = Number(candidate.metrics?.diameter_mm || 0);
+    const lesionDiameter = Number(
+      candidate.metrics?.clinical_scale_source === "manual_freehand_enclosing_circle"
+        ? candidate.metrics?.detected_equivalent_diameter_mm
+          ?? candidate.metrics?.boundary_axis_diameter_mm
+          ?? candidate.metrics?.diameter_mm
+        : candidate.metrics?.diameter_mm,
+    );
     const multiplier = Number(cfg.boundary_center_shift_diameter_multiplier || 1);
     if (centerShift != null && lesionDiameter > 0) {
       const threshold = Math.max(lesionDiameter * multiplier, 1e-6);

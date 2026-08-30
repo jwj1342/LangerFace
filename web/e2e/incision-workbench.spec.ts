@@ -204,9 +204,8 @@ test("active controls remain readable and clinician sliders retain edits", async
   await expect(page.locator("#candidateTipAngle")).toContainText("31.0°");
 
   for (const [value, label] of [
+    ["pending_clinician_confirmation", "待医生确认"],
     ["approved_for_discussion", "已确认研究候选"],
-    ["needs_revision", "退回修改"],
-    ["rejected_by_clinician", "医生已否决"],
   ]) {
     await page.locator("#reviewDecision").selectOption(value);
     await expect(page.locator("#reviewState")).toHaveText(label);
@@ -217,7 +216,7 @@ test("active controls remain readable and clinician sliders retain edits", async
 test("invalid tumor imports report errors without mutating the active plan", async ({ page }) => {
   await waitForWorkbench(page);
   await page.locator("#reviewerName").fill("Import safety reviewer");
-  await page.locator("#reviewDecision").selectOption("needs_revision");
+  await page.locator("#reviewDecision").selectOption("approved_for_discussion");
 
   const activePlanState = () => page.evaluate(() => {
     const value = (id: string) => (document.getElementById(id) as HTMLInputElement | HTMLSelectElement).value;

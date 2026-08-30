@@ -38,7 +38,7 @@ function detailTone(view: IncisionResultViewState): "neutral" | "warn" | "danger
   return "neutral";
 }
 
-export function CandidateResultPanel() {
+export function CandidateResultPanel({ showWorkflowGuidance = true }: { showWorkflowGuidance?: boolean }) {
   const view = useIncisionStore((state) => state.snapshot?.resultView) || DEFAULT_RESULT_VIEW;
 
   return (
@@ -61,8 +61,8 @@ export function CandidateResultPanel() {
           valueProps={{ id: "guardrailVal", style: { color: view.guardrailWarn ? "#b45309" : undefined } }}
         />
       </MetricGrid>
-      <Hint id="workflowSummary">{view.workflowSummary}</Hint>
-      <Hint id="nextStep">{view.nextStep}</Hint>
+      {showWorkflowGuidance ? <Hint id="workflowSummary">{view.workflowSummary}</Hint> : null}
+      {showWorkflowGuidance ? <Hint id="nextStep">{view.nextStep}</Hint> : null}
       <GuardrailDetails tone={detailTone(view)} id="guardrailDetails">{view.guardrailDetails}</GuardrailDetails>
       <HelpDisclosure className="incision-technical-details" open={false} title="技术详情与审计 trace">
         <GuardrailDetails tone={view.directionSourceWarn ? "warn" : "neutral"} id="directionSource">{view.directionSource}</GuardrailDetails>

@@ -29,7 +29,9 @@ export function IncisionWorkbench() {
 
       <TumorInputPanel />
 
-      <SecondaryCuePanel />
+      <div hidden aria-hidden="true" data-retired-secondary-cue-compatibility>
+        <SecondaryCuePanel />
+      </div>
 
       <CandidateResultPanel />
 

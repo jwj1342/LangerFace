@@ -4,7 +4,7 @@ import {
   planIncisionWorkflow,
   summarizeTumorInputQuality,
 } from "../services/incisionTools.ts";
-import { detectControlledMarker } from "../services/controlledMarkerDetection.ts";
+import { detectControlledMarker } from "../services/controlledMarkerDetectionProfile.ts";
 import type { AnyRecord } from "../services/incisionToolCore.ts";
 import type { WorkflowWorkerApi } from "./workflowWorkerContract";
 

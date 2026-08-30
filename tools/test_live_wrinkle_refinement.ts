@@ -151,6 +151,22 @@ const analysisRuntime = fs.readFileSync(
   new URL("../web/src/services/liveWrinkleAnalysis.ts", import.meta.url),
   "utf8",
 );
+const refineMathRuntime = fs.readFileSync(
+  new URL("../web/src/services/liveRefineMath.ts", import.meta.url),
+  "utf8",
+);
+const pipelineSourceRuntime = fs.readFileSync(
+  new URL("../web/src/services/pipelineSource.ts", import.meta.url),
+  "utf8",
+);
+assert.match(analysisRuntime,
+  /replaceStaticRefineBaseline\(state\.autoRefinedLines, \{ liveBaseline: state\.standardLines \}\)/,
+  "applying wrinkle guidance must build a camera display transport from the accepted standard-frame baseline");
+assert.match(refineMathRuntime, /addedLines[\s\S]*anchorLineName[\s\S]*anchorPosition/,
+  "generated wrinkle-guided RSTL lines must follow named standard curves instead of frozen screen pixels");
+assert.match(pipelineSourceRuntime,
+  /currentLiveSourceKind\(\) === "image"[\s\S]*hasLiveRefinementForCamera\(\)[\s\S]*preserveRefinementForLive/,
+  "photo-to-camera source replacement must preserve an accepted wrinkle-guided display transport");
 assert.match(analysisRuntime, /delegate: "CPU"/,
   "single-frame refinement must use deterministic CPU landmarks");
 assert.match(analysisRuntime, /runningMode: "IMAGE"/,
@@ -342,6 +358,15 @@ assert.doesNotMatch(generalPipelineRuntime,
   assert.equal(first.refinementProfile, LATEST_WRINKLE_REFINEMENT_PROFILE);
   assert.equal(second.refinementProfile, LATEST_WRINKLE_REFINEMENT_PROFILE);
 }
+
+const webPackage = JSON.parse(fs.readFileSync(
+  new URL("../web/package.json", import.meta.url),
+  "utf8",
+));
+assert.equal(webPackage.scripts.predev, "node ../tools/check_web_dependency_isolation.mjs",
+  "the dev server must reject dependencies shared across worktrees");
+assert.match(webPackage.scripts.dev, /vite --force\b/,
+  "the dev server must rebuild optimizer output instead of reusing copied worktree caches");
 
 {
   // The helper and checked-in evidence remain available to the explicit

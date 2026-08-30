@@ -36,6 +36,30 @@ export function summarizeGuardrails(guardrails: AnyRecord = {}) {
   };
 }
 
+export function assessDiagnosticReviewAcknowledgement({
+  reviewer,
+  notes,
+}: {
+  reviewer: string;
+  notes: string;
+}): { ok: boolean; attention: "reviewer" | "notes" | null; message: string } {
+  if (!reviewer.trim()) {
+    return {
+      ok: false,
+      attention: "reviewer",
+      message: "记录红色阻断审阅前请填写审阅人。",
+    };
+  }
+  if (!notes.trim()) {
+    return {
+      ok: false,
+      attention: "notes",
+      message: "红色虚线表示候选进入敏感开口；记录本次阻断审阅前请填写审阅备注。",
+    };
+  }
+  return { ok: true, attention: null, message: "" };
+}
+
 export function assessReviewReadiness({
   status,
   result,
@@ -46,13 +70,15 @@ export function assessReviewReadiness({
   result: AnyRecord | null | undefined;
   reviewer: string;
   notes: string;
-}) {
-  if (!result) return { ok: false, message: "没有可审阅的候选" };
-  if (status !== "approved_for_discussion") return { ok: true, message: "" };
+}): { ok: boolean; attention: "reviewer" | "decision" | "notes" | null; message: string } {
+  if (!result) return { ok: false, attention: null, message: "没有可审阅的候选" };
+  if (!reviewer.trim()) return { ok: false, attention: "reviewer", message: "保存候选记录前请填写审阅人。" };
+  if (status !== "approved_for_discussion") return { ok: true, attention: null, message: "" };
 
   if (result?.candidate?.metrics?.photo_visibility_limited_candidate === true) {
     return {
       ok: false,
+      attention: "decision",
       message: "当前为视野受限参考：可保存为待确认草案；补充另一视角并复核隐藏区域后，方可确认或进入实时叠加。",
     };
   }
@@ -60,24 +86,24 @@ export function assessReviewReadiness({
   if (result?.candidate?.metrics?.photo_reference_candidate === true) {
     return {
       ok: false,
+      attention: "decision",
       message: "当前为受限参考候选，不满足标准 3:1 梭形要求；可保存为待确认草案，但不能直接确认或发送到实时叠加。",
     };
   }
 
   const violations = hardViolations(result);
   if (violations.length > 0) {
-    return { ok: false, message: `候选存在 ${violations.length} 项不可覆盖的工程几何错误；请修复后再确认。` };
+    return { ok: false, attention: null, message: `候选存在 ${violations.length} 项不可覆盖的工程几何错误；请修复后再确认。` };
   }
 
   const traceGate = workflowTraceGate(result);
   if (!traceGate.passed) {
-    return { ok: false, message: "工作流工具 trace 未通过门控；缺少必要工具动作或顺序异常，不能确认候选。" };
+    return { ok: false, attention: null, message: "候选生成过程记录不完整或顺序异常，请重新计算后再确认。" };
   }
-  if (!reviewer.trim()) return { ok: false, message: "确认候选前请填写审阅人。" };
   if (summarizeGuardrails(result.guardrails).high_count > 0 && !notes.trim()) {
-    return { ok: false, message: "当前候选有高风险保护提示；确认前请填写审阅备注或覆盖原因。" };
+    return { ok: false, attention: "notes", message: "当前候选有高风险保护提示；确认前请填写审阅备注或覆盖原因。" };
   }
-  return { ok: true, message: "" };
+  return { ok: true, attention: null, message: "" };
 }
 
 export function reviewForCandidateRecord({
@@ -120,8 +146,8 @@ export function buildReviewGate({
 }) {
   const summary = summarizeGuardrails(result.guardrails);
   const traceGate = workflowTraceGate(result);
-  const reviewerRequired = review.status === "approved_for_discussion";
-  const notesRequired = reviewerRequired && summary.high_count > 0;
+  const reviewerRequired = true;
+  const notesRequired = review.status === "approved_for_discussion" && summary.high_count > 0;
   const reviewerPresent = Boolean(review.reviewer);
   const notesPresent = Boolean(review.notes);
   const violations = hardViolations(result);

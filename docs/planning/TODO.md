@@ -24,19 +24,22 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
       · Ready PR #121；共享金标覆盖 atlas、低置信、FLAME `points3d` 和 ±180° 轴向 wrap。
       · Ready PR #119；补齐可编辑尖端角、轮廓重算、guardrail 与 provenance。
 - [ ] Epic：2D 静态照片切口规划交付闭环 — [#167](https://github.com/jwj1342/LangerFace/issues/167)
-      · 主实现 PR #166 已合并；真实媒体、人工验收及切口 2A 剩余门禁由 #171 / #172 / #209–#212 跟踪。
+      · 主实现 PR #166 已合并；真实媒体、人工验收及切口 2A 剩余门禁由 #171 / #172 / #209 / #210 / #212 跟踪；#211 的工程防越界范围已完成。
 - [ ] 单页工作流：统一照片规划、候选审阅、导出与实时叠加状态 — [#170](https://github.com/jwj1342/LangerFace/issues/170)
       · PR #166 已完成 workspace 恢复、审阅门禁、实时状态和清除/返回流程；保留 issue 继续核对端到端交付。
+      · 2026-08-21 组会补充：先完成皱纹识别和 RSTL 自动/手动微调并冻结最终版本，再允许生成切口。候选必须记录所消费的 RSTL revision；最终 RSTL 解冻、换源或 revision 变化后旧候选失效并要求重新计算。
+      · 页面进一步精简等待张医生查看真实页面后的具体反馈；除会议已提出的独立上传视频入口外，不预判其他删除项。
 - [ ] 2D RSTL 手动兜底验收与质量边界 — [#171](https://github.com/jwj1342/LangerFace/issues/171)
       · PR #166 已补交叉/密度质量门禁；PR #186 修复单帧皱纹细化在 live transport 中位移归零。仍缺 3 张授权照片的 before/after 人工评审证据。
 - [ ] 真实媒体验收：照片、视频与摄像头切口叠加稳定性证据 — [#172](https://github.com/jwj1342/LangerFace/issues/172)
       · PR #166 已补严格设备矩阵审计；仍缺 2 段固定视频和 1 个固定摄像头的真实 evidence/audit，不能用合成值替代。
+      · 2026-08-21 会议建议移除临床可见的独立上传视频入口；在团队正式调整本 issue 的验收定义前，保留底层连续帧、离线回放与摄像头共享渲染链，不把“隐藏入口”误写为“视频技术链已删除”或“原验收已取消”。
 - [ ] RSTL 跨页面同源与坐标契约回归 — [#209](https://github.com/jwj1342/LangerFace/issues/209)
       · PR #213 已随 #166 合并确定性 source contract；仍需补齐 mirror、pan/zoom、DPR、display filter 与浏览器跨页一致性回归。
 - [ ] 受控黑点/贴纸病灶定位 baseline — [#210](https://github.com/jwj1342/LangerFace/issues/210)
       · PR #214 已随 #166 合并本地草案与显式确认链路；仍需浏览器交互矩阵及取消/退出隐私清理验收。
-- [ ] 候选全路径敏感区域相交与工程防越界 — [#211](https://github.com/jwj1342/LangerFace/issues/211)
-      · PR #215 已随 #166 合并工程 hard violation 基础；仍需 transform 浏览器矩阵、可信工程排除区接线及 #212 边界确认。
+- [x] 候选全路径敏感区域相交与工程防越界 — [#211](https://github.com/jwj1342/LangerFace/issues/211)
+      · PR #215 已随 #166 合并，PR #217 已进入 `master`；完整路径相交/包含、可信工程排除区、不可覆盖 hard violation、transform 与实时叠加门禁均有回归。医学阈值和覆盖规则继续由 #212 独立跟踪。
 - [ ] 临床 Gate：确认切口敏感结构阈值、硬阻断与覆盖规则 — [#212](https://github.com/jwj1342/LangerFace/issues/212)
       · 等待领域专家形成可核验决策表；未知值保持 draft，不由工程实现猜测医学阈值。
 - [x] 修复 React 受控输入 snapshot echo — [#109](https://github.com/jwj1342/LangerFace/issues/109)
@@ -71,7 +74,7 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
 - [x] 皮下肿物切口生成：按超声直径生成平行 RSTL 的线性切口 — [#15](https://github.com/jwj1342/LangerFace/issues/15)
       · 本 PR 已支持 RSTL 轴向线性候选、端点/长度编辑、目标长度 metrics、最大长度截断记录和直径覆盖不足 high guardrail
 - [x] 皮表肿物梭形切口生成器：长轴、比例、尖端角与平滑对称约束 — [#16](https://github.com/jwj1342/LangerFace/issues/16)
-      · 已支持边界投影覆盖、面积/自交质量指标、3:1 默认长宽比、cubic Hermite 轮廓、30° 默认尖端角目标和实际误差 metrics；Python `langerface.incision` 与 Web 生成器共用金标，测试覆盖比例、端点角、中点 C1 连续、对称单调收窄、面积和自由轮廓包络；医生可调整梭形宽度、长度、方向、中心和尖端角，系统会重算 outline/envelope 指标、复跑 guardrails，并把尖端角覆盖写入 edit history 与导出 provenance；真实病例曲线调参仍需医生 review
+      · 已支持边界投影覆盖、面积/自交质量指标、3:1 默认长宽比、cubic Hermite 轮廓、30° 默认尖端角目标和实际误差 metrics；皮表最小候选长度为 6 mm，零切缘的 2/3/4 mm 模拟肿物分别生成 6/9/12 mm；Python `langerface.incision` 与 Web 生成器共用规则版本和金标，测试覆盖比例、端点角、中点 C1 连续、对称单调收窄、面积和自由轮廓包络；医生可调整梭形宽度、长度、方向、中心和尖端角，系统会重算 outline/envelope 指标、复跑 guardrails，并把尖端角覆盖写入 edit history 与导出 provenance；真实病例曲线调参仍需医生 review
 - [x] 敏感结构保护规则：下睑、唇红缘、鼻翼等游离边缘风险提示与方向例外 — [#17](https://github.com/jwj1342/LangerFace/issues/17)
       · 本 PR 已支持敏感区提示、中心点和候选几何到敏感锚点/简化游离缘线段的距离筛查，并按下睑、唇红缘、鼻翼、鼻尖、口角使用 draft 阈值表；命中敏感结构时会输出 `protective_direction` 保护性方向建议并要求医生记录覆盖原因；JS 合约测试会比较 `free_margin_distance_thresholds_mm` 与 `protective_direction_hints`，防止浏览器实现和 JSON 资产不一致；真实解剖边界、阈值和保护性方向仍需临床确认
 
@@ -98,6 +101,8 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
 
 ## 维护 / 部署
 
+- [ ] 完成 V10 公网部署与生产链路验证 — [#224](https://github.com/jwj1342/LangerFace/issues/224)
+      · 当前暂不启用可能产生费用的公网运行资源；后续需独立批准承载完整 V10 的受控服务，并验证短期令牌、限流、超时、临时数据清理、监控和回滚。未完成前不得宣称远程生产链路已部署或验证。
 - [ ] 清理 Vercel 历史 Deployment，保持 GitHub / Vercel UI 只突出 `master` production 和当前远端 branch head
       · 2026-06-26 已完成 GitHub Deployments records 清理：从 309 条降到 44 条，保留 37 条 Production 和 7 条当前远端 branch HEAD Preview。Vercel 侧已确认实际项目为 team `team_hKrCHY2HEmfQcq5Jfs8sYznn`、project `prj_IZ6vLQva5NQtCU3DfYNNaOWRzZM2`（本地 `web/.vercel/project.json` 里的旧 `orgId/projectId` 不匹配当前 token 可访问项目）。Vercel 初始 dry-run 为 311 条，计划保留 37 条 production + 7 条 branch-head preview，删除 267 条旧 preview/canceled deployment；第一轮已删除 203 条，1 条已提前删除，随后触发 `now-rm` 429 限流（约 10 分钟 / 200 次 remove），第二轮在用户要求暂停时中断。下次继续前不要复用旧删除列表，先重新 list deployments、重新按 production + branch-head 规则 dry-run，再删除剩余旧 preview。不要把 Vercel 删除动作放进 CI；清理完成后撤销本次暴露过的 Vercel token。
 

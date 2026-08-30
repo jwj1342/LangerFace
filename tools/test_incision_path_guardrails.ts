@@ -11,7 +11,11 @@ import {
   inspectTumorEngineeringExclusions,
   inspectTumorPointEngineeringExclusion,
 } from "../web/src/services/incisionToolCore.ts";
-import { assessReviewReadiness, buildReviewGate } from "../web/src/services/incisionReviewPolicy.ts";
+import {
+  assessDiagnosticReviewAcknowledgement,
+  assessReviewReadiness,
+  buildReviewGate,
+} from "../web/src/services/incisionReviewPolicy.ts";
 
 const exclusion = [[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]] as Array<[number, number]>;
 
@@ -125,11 +129,13 @@ assert.equal(inspectTumorPointEngineeringExclusion([3.7, 6.6, 0], mediapipeVerts
 assert.equal(inspectTumorPointEngineeringExclusion([5, 5, 0], mediapipeVerts), null);
 assert.equal(inspectTumorPointEngineeringExclusion([5, 2.2, 0], mediapipeVerts), null,
   "the conservative vermilion candidate gate does not prohibit a lip lesion center");
-assert.equal(inspectTumorPointEngineeringExclusion([4.05, 5.3, 0], mediapipeVerts)?.zone_id,
-  "left-nostril-opening", "lesion centers inside the audited nostril aperture are rejected");
-assert.equal(inspectTumorPointEngineeringExclusion([3.65, 5.3, 0], mediapipeVerts), null,
+assert.equal(inspectTumorPointEngineeringExclusion([4.05, 4.7, 0], mediapipeVerts)?.zone_id,
+  "left-nostril-opening", "model-y-up coordinates invert the audited photo-space nostril center");
+assert.equal(inspectTumorPointEngineeringExclusion([4.05, 5.3, 0], mediapipeVerts), null,
+  "nasal-bridge skin is no longer mistaken for the model-space nostril aperture");
+assert.equal(inspectTumorPointEngineeringExclusion([3.65, 4.7, 0], mediapipeVerts), null,
   "visible nasal-ala skin outside the aperture is not rejected");
-const nostrilCrossingCandidate = { type: "linear", polyline: [[3.8, 5.3, 0], [4.3, 5.3, 0]] };
+const nostrilCrossingCandidate = { type: "linear", polyline: [[3.8, 4.7, 0], [4.3, 4.7, 0]] };
 annotateCandidateEngineeringViolations(nostrilCrossingCandidate, mediapipeVerts);
 assert.ok(nostrilCrossingCandidate.hard_violations.some((item) =>
   item.code === "candidate_intersects_non_skin_opening"
@@ -180,12 +186,39 @@ const clinicalWarningResult = {
   guardrails: { passed: false, hard_violations: [], warnings: [{ code: "sensitive_region_lower_eyelid", severity: "high" }] },
   trace: requiredActions.map((action) => ({ action })),
 };
+const missingDraftReviewer = assessReviewReadiness({
+  status: "pending_clinician_confirmation",
+  result: clinicalWarningResult,
+  reviewer: "",
+  notes: "",
+});
+assert.equal(missingDraftReviewer.ok, false, "a pending candidate record still requires an identified reviewer");
+assert.match(missingDraftReviewer.message, /填写审阅人/);
 assert.equal(assessReviewReadiness({
   status: "approved_for_discussion",
   result: clinicalWarningResult,
   reviewer: "doctor",
   notes: "reviewed warning",
 }).ok, true, "clinical warnings retain the documented review path");
+assert.equal(assessReviewReadiness({
+  status: "approved_for_discussion",
+  result: clinicalWarningResult,
+  reviewer: "doctor",
+  notes: "",
+}).ok, false, "a high-risk guardrail candidate requires a review note before confirmation");
+
+assert.deepEqual(assessDiagnosticReviewAcknowledgement({ reviewer: "", notes: "" }), {
+  ok: false,
+  attention: "reviewer",
+  message: "记录红色阻断审阅前请填写审阅人。",
+}, "a red diagnostic review still requires an identified reviewer first");
+assert.deepEqual(assessDiagnosticReviewAcknowledgement({ reviewer: "doctor", notes: "" }), {
+  ok: false,
+  attention: "notes",
+  message: "红色虚线表示候选进入敏感开口；记录本次阻断审阅前请填写审阅备注。",
+}, "a red diagnostic review cannot be acknowledged without notes");
+assert.equal(assessDiagnosticReviewAcknowledgement({ reviewer: "doctor", notes: "opening crossed" }).ok, true,
+  "a documented red diagnostic review can be acknowledged without turning it into a candidate");
 
 const referenceCandidateResult = structuredClone(clinicalWarningResult);
 referenceCandidateResult.candidate.metrics = { photo_reference_candidate: true };

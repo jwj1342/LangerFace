@@ -1,8 +1,20 @@
-import { clearCanvasDisplayFit, fitCanvasDisplayToStage } from "./liveCanvasFit.ts";
-import { CAMERA_CONSTRAINTS, describeCameraError, openCameraStream, stopCameraStream } from "./cameraSource.ts";
+import {
+  captureImageViewState,
+  clearCanvasDisplayFit,
+  fitCanvasDisplayToStage,
+  restoreImageViewState,
+  type ImageViewResumeState,
+} from "./liveCanvasFit.ts";
+import {
+  describeCameraError,
+  openPreferredCameraStream,
+  stopCameraStream,
+  type CameraFacingMode,
+} from "./cameraSource.ts";
 import { ctx, els } from "./liveDom.ts";
 import { prepareImageSource } from "./imageSource.ts";
-import { countMetric, logWarn } from "./logger.ts";
+import { confirmLikelyScreenshotUpload } from "./imageUploadPreflight.ts";
+import { countMetric, logWarn, recordMetricSample } from "./logger.ts";
 import {
   currentLiveSource,
   currentLiveSourceKind,
@@ -10,18 +22,92 @@ import {
   renderState,
   sourceState,
 } from "./liveState.ts";
-import { resetRefineForNewSource } from "./liveRefine2d";
+import {
+  captureRefineDisplayState,
+  hasLiveRefinementForCamera,
+  resetRefineForNewSource,
+  restoreRefineDisplayState,
+  type RefineDisplayResumeState,
+} from "./liveRefine2d";
 import { LiveFrameScheduler } from "./liveFrameScheduler.ts";
-import { resetLiveWrinkleAnalysis } from "./liveWrinkleAnalysis.ts";
+import {
+  captureWrinkleDisplayState,
+  resetLiveWrinkleAnalysis,
+  restoreWrinkleDisplayState,
+  type WrinkleDisplayResumeState,
+} from "./liveWrinkleAnalysis.ts";
 import { setLive, setMsg, setTransientMsg } from "./liveUi.ts";
 import { cancelFrame, requestFrame } from "./pipelineLoop.ts";
 import { ensureImageReady, ensureReady } from "./pipelineModels.ts";
+import { buildWorkflowDraftPhoto, saveWorkflowDraftPhoto } from "./workflowDraftSession.ts";
 
 type SourceKind = "camera" | "video" | "image";
 let sourceOperationId = 0;
 const sourceLayoutScheduler = new LiveFrameScheduler();
 
-export async function startCamera(): Promise<void> {
+interface StaticSourceResumeState {
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  imageView: ImageViewResumeState;
+  refinement: RefineDisplayResumeState;
+  wrinkle: WrinkleDisplayResumeState;
+}
+
+let lastStaticSource: StaticSourceResumeState | null = null;
+
+function resetAutomaticSourceMirror(): void {
+  renderState.mirror = false;
+  els.mirror.checked = false;
+  els.canvas.classList.remove("mirror");
+  renderState.zoomCards.forEach((zoomCard) => zoomCard.canvas.classList.remove("mirror"));
+}
+
+export interface StartCameraOptions {
+  onFacingMode?: (facingMode: CameraFacingMode) => void;
+}
+
+function captureCurrentStaticSource(): void {
+  const frame = sourceState.planning2d?.getFrameState();
+  if (!sourceState.running || frame?.kind !== "image" || !frame.source) return;
+  lastStaticSource = {
+    source: frame.source as CanvasImageSource,
+    width: frame.width,
+    height: frame.height,
+    imageView: captureImageViewState(),
+    refinement: captureRefineDisplayState(),
+    wrinkle: captureWrinkleDisplayState(),
+  };
+}
+
+function restoreStaticSourceOrPlaceholder(activeIncisionOverlay: typeof renderState.incisionOverlay): void {
+  const resume = lastStaticSource;
+  const preserveRefinementForLive = Boolean(resume?.refinement.liveTransport);
+  stopSource({
+    preserveOperation: true,
+    preserveRefinementForLive,
+    preserveStaticResume: true,
+  });
+  if (!resume) {
+    renderState.incisionOverlay = activeIncisionOverlay;
+    showCameraPlaceholder();
+    setLive(false, "待机");
+    setTransientMsg("已关闭后置摄像头；当前没有可恢复的照片。", 3_000);
+    return;
+  }
+  setSource(resume.source, "image", resume.width, resume.height, {
+    preserveRefinementForLive,
+    imageViewResume: resume.imageView,
+  });
+  restoreRefineDisplayState(resume.refinement);
+  restoreWrinkleDisplayState(resume.wrinkle);
+  renderState.incisionOverlay = activeIncisionOverlay;
+  lastStaticSource = resume;
+  setTransientMsg("已关闭后置摄像头，并恢复上一张照片及其显示状态。", 3_000);
+  requestFrame();
+}
+
+export async function startCamera(options: StartCameraOptions = {}): Promise<void> {
   const operationId = ++sourceOperationId;
   let pendingStream: MediaStream | null = null;
   const releasePendingStream = (): void => {
@@ -32,8 +118,7 @@ export async function startCamera(): Promise<void> {
     pendingStream = null;
   };
   if (currentLiveSourceKind() === "camera") {
-    stopSource();
-    setLive(false, "待机");
+    restoreStaticSourceOrPlaceholder(renderState.incisionOverlay);
     els.cam.setAttribute("aria-pressed", "false");
     return;
   }
@@ -42,23 +127,35 @@ export async function startCamera(): Promise<void> {
     await ensureReady();
     if (operationId !== sourceOperationId) return;
     setMsg("请求摄像头权限…");
-    pendingStream = await openCameraStream(CAMERA_CONSTRAINTS);
+    const openedCamera = await openPreferredCameraStream(
+      undefined,
+      () => operationId === sourceOperationId,
+    );
+    pendingStream = openedCamera.stream;
     if (operationId !== sourceOperationId) {
       releasePendingStream();
       return;
     }
-    stopSource({ preserveOperation: true });
+    captureCurrentStaticSource();
+    const activeIncisionOverlay = renderState.incisionOverlay;
+    const preserveRefinementForLive = currentLiveSourceKind() === "image"
+      && hasLiveRefinementForCamera();
+    stopSource({ preserveOperation: true, preserveRefinementForLive, preserveStaticResume: true });
     els.video.srcObject = pendingStream;
     await els.video.play();
     if (operationId !== sourceOperationId) {
       releasePendingStream();
       return;
     }
+    options.onFacingMode?.(openedCamera.facingMode);
     const stream = pendingStream;
     if (!stream) return;
     setSource(els.video, "camera", els.video.videoWidth, els.video.videoHeight, {
       release: () => stopCameraStream(stream),
+      preserveRefinementForLive,
     });
+    renderState.incisionOverlay = activeIncisionOverlay;
+    requestFrame();
     pendingStream = null;
     els.cam.setAttribute("aria-pressed", "true");
   } catch (error) {
@@ -93,45 +190,77 @@ export function showCameraPlaceholder(message = ""): void {
   ctx.restore();
 }
 
-export async function handleFile(file?: File): Promise<void> {
+export async function handleFile(
+  file?: File,
+  { suppressScreenshotWarning = false }: { suppressScreenshotWarning?: boolean } = {},
+): Promise<void> {
   if (!file) return;
+  els.file.value = "";
+  if (!file.type.startsWith("image/")) {
+    setTransientMsg("仅支持上传照片；如需连续画面请开启摄像头。");
+    return;
+  }
+  const startedAt = performance.now();
   const operationId = ++sourceOperationId;
   let pendingObjectUrl: string | null = null;
-  els.file.value = "";
-  stopSource({ preserveOperation: true });
-  setLive(false, "待机");
-  setMsg(file.type.startsWith("image/") ? "加载图片检测模型…" : "加载模型…");
+  let sourceReplaced = false;
+  const workflowUpload = Boolean(document.querySelector(".workflow-workbench"));
+  if (!workflowUpload) {
+    stopSource({ preserveOperation: true });
+    sourceReplaced = true;
+    setLive(false, "待机");
+    setMsg("图片加载中", 0, true);
+  }
   try {
-    await ensureReady();
-    if (file.type.startsWith("image/")) await ensureImageReady();
-    if (operationId !== sourceOperationId) return;
-
     const url = URL.createObjectURL(file);
     pendingObjectUrl = url;
-    if (file.type.startsWith("image/")) {
-      try {
-        const img = new Image();
-        img.src = url;
-        await img.decode();
-        if (operationId !== sourceOperationId) return;
-        const prepared = prepareImageSource(img);
-        setSource(prepared.source, "image", prepared.width, prepared.height);
-        if (prepared.scaled) {
-          setTransientMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
-        }
-      } finally {
-        URL.revokeObjectURL(url);
-        pendingObjectUrl = null;
-      }
-    } else {
-      els.video.srcObject = null;
-      els.video.src = url;
-      els.video.loop = true;
-      await els.video.play();
-      if (operationId !== sourceOperationId) return;
-      setSource(els.video, "video", els.video.videoWidth, els.video.videoHeight, {
-        release: () => URL.revokeObjectURL(url),
+    try {
+      const img = new Image();
+      img.src = url;
+      let modelReadyAt = startedAt;
+      let decodedAt = startedAt;
+      const modelReady = ensureImageReady().then(() => {
+        modelReadyAt = performance.now();
       });
+      const decoded = img.decode().then(() => {
+        decodedAt = performance.now();
+      });
+      await Promise.all([modelReady, decoded]);
+      if (operationId !== sourceOperationId) return;
+      const dimensions = {
+        width: img.naturalWidth || img.width,
+        height: img.naturalHeight || img.height,
+      };
+      if (workflowUpload && !suppressScreenshotWarning && !confirmLikelyScreenshotUpload(file, dimensions)) {
+        setTransientMsg("已取消疑似手机截图；请重新选择不包含网页界面的原始人像。", 4_000);
+        return;
+      }
+      if (workflowUpload) {
+        stopSource({ preserveOperation: true });
+        sourceReplaced = true;
+        setLive(false, "待机");
+        setMsg("图片加载中", 0, true);
+      }
+      const prepared = prepareImageSource(img);
+      setSource(prepared.source, "image", prepared.width, prepared.height);
+      if (workflowUpload) {
+        const draftPhoto = buildWorkflowDraftPhoto(file, prepared.source, prepared.width, prepared.height);
+        if (draftPhoto) saveWorkflowDraftPhoto(draftPhoto);
+      }
+      const sourceSetAt = performance.now();
+      recordMetricSample("source.imageModelWaitMs", modelReadyAt - startedAt, { bytes: file.size });
+      recordMetricSample("source.imageDecodeMs", decodedAt - startedAt, { bytes: file.size });
+      recordMetricSample("source.imageUploadToSourceSetMs", sourceSetAt - startedAt, {
+        bytes: file.size,
+        width: prepared.width,
+        height: prepared.height,
+        scaled: prepared.scaled,
+      });
+      if (prepared.scaled) {
+        setTransientMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
+      }
+    } finally {
+      URL.revokeObjectURL(url);
       pendingObjectUrl = null;
     }
     els.cam.setAttribute("aria-pressed", "false");
@@ -139,8 +268,12 @@ export async function handleFile(file?: File): Promise<void> {
     if (operationId !== sourceOperationId) return;
     countMetric("source.fileLoadFailure");
     logWarn("上传文件加载失败。", error);
-    setLive(false, "待机");
-    setMsg("无法读取或检测该文件。请重新上传；若仍失败，请换用受支持的清晰图片或视频。");
+    if (sourceReplaced) {
+      setLive(false, "待机");
+      setMsg("无法读取或检测该照片。请重新上传；若仍失败，请换用受支持的清晰照片。");
+    } else {
+      setTransientMsg("无法读取该照片；当前画面未被替换。请重新选择受支持的清晰照片。", 4_000);
+    }
   } finally {
     if (pendingObjectUrl) URL.revokeObjectURL(pendingObjectUrl);
   }
@@ -151,10 +284,21 @@ export function setSource(
   kind: SourceKind,
   width?: number,
   height?: number,
-  { release }: { release?: () => void } = {},
+  {
+    release,
+    preserveRefinementForLive = false,
+    imageViewResume,
+  }: {
+    release?: () => void;
+    preserveRefinementForLive?: boolean;
+    imageViewResume?: ImageViewResumeState;
+  } = {},
 ): void {
   const planning2d = sourceState.planning2d;
   if (!planning2d) throw new Error("live photo planning controller is not mounted");
+  // Every new media source starts in anatomical orientation. Mirroring remains
+  // available as an explicit, per-source display choice after the source loads.
+  resetAutomaticSourceMirror();
   const sourceWidth = width || 1280;
   const sourceHeight = height || 720;
   const revision = planning2d.replaceSource({
@@ -174,10 +318,12 @@ export function setSource(
   els.mainWrap.classList.toggle("image-viewer", kind === "image");
   els.canvas.classList.toggle("image-source", kind === "image");
   if (kind === "image") {
-    fitCanvasDisplayToStage({ resetView: true });
+    fitCanvasDisplayToStage({ resetView: !imageViewResume });
+    if (imageViewResume) restoreImageViewState(imageViewResume);
     sourceLayoutScheduler.request(() => {
       if (sourceState.running && currentLiveSourceKind() === "image") {
-        fitCanvasDisplayToStage({ resetView: true });
+        fitCanvasDisplayToStage({ resetView: !imageViewResume });
+        if (imageViewResume) restoreImageViewState(imageViewResume);
       }
     });
   } else {
@@ -185,7 +331,7 @@ export function setSource(
     clearCanvasDisplayFit();
   }
   renderState.smoother.reset();
-  resetRefineForNewSource();
+  resetRefineForNewSource({ preserveLiveTransport: preserveRefinementForLive });
   resetLiveWrinkleAnalysis();
   sourceState.presence = 0;
   sourceState.lastLM = null;
@@ -204,14 +350,33 @@ export function setSource(
   sourceState.paused = false;
   els.pause.disabled = kind === "image";
   els.export.disabled = false;
-  els.pause.textContent = kind === "camera" ? "📷 定格微调" : "⏸ 暂停";
+  els.pause.textContent = "⏸ 暂停";
   setMsg(null);
   setLive(true, kind === "camera" ? "实时摄像头" : kind === "video" ? "视频" : "照片");
+  if (kind === "image") {
+    lastStaticSource = {
+      source: src,
+      width: sourceWidth,
+      height: sourceHeight,
+      imageView: captureImageViewState(),
+      refinement: captureRefineDisplayState(),
+      wrinkle: captureWrinkleDisplayState(),
+    };
+  }
   requestFrame();
 }
 
-export function stopSource({ preserveOperation = false }: { preserveOperation?: boolean } = {}): void {
+export function stopSource({
+  preserveOperation = false,
+  preserveRefinementForLive = false,
+  preserveStaticResume = false,
+}: {
+  preserveOperation?: boolean;
+  preserveRefinementForLive?: boolean;
+  preserveStaticResume?: boolean;
+} = {}): void {
   if (!preserveOperation) sourceOperationId += 1;
+  if (!preserveOperation) setMsg(null);
   cancelFrame();
   sourceLayoutScheduler.cancel();
   sourceState.planning2d?.clearSource();
@@ -234,8 +399,9 @@ export function stopSource({ preserveOperation = false }: { preserveOperation?: 
   sourceState.eyeBlinkRight = 0;
   sourceState.qualityGate = null;
   sourceState.localRegionQuality = null;
-  resetRefineForNewSource();
+  resetRefineForNewSource({ preserveLiveTransport: preserveRefinementForLive });
   resetLiveWrinkleAnalysis();
+  if (!preserveStaticResume) lastStaticSource = null;
   els.pause.disabled = true;
-  els.pause.textContent = "📷 定格微调";
+  els.pause.textContent = "⏸ 暂停";
 }

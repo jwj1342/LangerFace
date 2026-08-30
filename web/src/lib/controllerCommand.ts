@@ -7,6 +7,7 @@ import {
   INCISION_REVIEW_REACT_COMMAND_EVENT,
   INCISION_SECONDARY_CUE_REACT_COMMAND_EVENT,
   INCISION_TUMOR_REACT_COMMAND_EVENT,
+  WORKFLOW_INCISION_TOOL_REACT_COMMAND_EVENT,
   LIVE_RENDER_REACT_COMMAND_EVENT,
   LIVE_SOURCE_REACT_COMMAND_EVENT,
 } from "./controllerEvents.ts";
@@ -46,6 +47,7 @@ export const INCISION_TUMOR_COMMANDS = [
   "kind_changed",
   "diameter_input",
   "diameter_changed",
+  "diameter_inactive_hint",
   "author_changed",
   "depth_input",
   "depth_changed",
@@ -86,7 +88,19 @@ export const INCISION_LIBRARY_COMMANDS = [
   "export_png",
   "stage_live_overlay",
   "load_candidate",
+  "toggle_candidate_review_status",
   "remove_candidate",
+] as const;
+export const WORKFLOW_INCISION_TOOL_COMMANDS = [
+  "select_lesion",
+  "controlled_marker",
+  "confirm_controlled_marker",
+  "cancel_controlled_marker",
+  "repair_marker",
+  "undo_repair",
+  "clear_repair",
+  "scan_diameter_changed",
+  "reset_view",
 ] as const;
 
 export type LiveSourceCommand = (typeof LIVE_SOURCE_COMMANDS)[number];
@@ -99,6 +113,7 @@ export type IncisionSecondaryCueCommand = (typeof INCISION_SECONDARY_CUE_COMMAND
 export type IncisionEditCommand = (typeof INCISION_EDIT_COMMANDS)[number];
 export type IncisionEditControlId =
   | "angleOffsetDeg"
+  | "uniformScale"
   | "lengthScale"
   | "widthScale"
   | "tipAngleDeg"
@@ -107,6 +122,7 @@ export type IncisionEditControlId =
   | "editReason";
 export type IncisionReviewCommand = (typeof INCISION_REVIEW_COMMANDS)[number];
 export type IncisionLibraryCommand = (typeof INCISION_LIBRARY_COMMANDS)[number];
+export type WorkflowIncisionToolCommand = (typeof WORKFLOW_INCISION_TOOL_COMMANDS)[number];
 
 function isDetailRecord(detail: unknown): detail is Record<string, unknown> {
   return typeof detail === "object" && detail !== null;
@@ -194,4 +210,11 @@ export function dispatchIncisionReviewCommand(command: IncisionReviewCommand) {
 
 export function dispatchIncisionLibraryCommand(command: IncisionLibraryCommand, id?: string) {
   dispatchControllerCommand(INCISION_LIBRARY_REACT_COMMAND_EVENT, { command, id });
+}
+
+export function dispatchWorkflowIncisionToolCommand(
+  command: WorkflowIncisionToolCommand,
+  value?: string | number,
+) {
+  dispatchControllerCommand(WORKFLOW_INCISION_TOOL_REACT_COMMAND_EVENT, { command, value });
 }

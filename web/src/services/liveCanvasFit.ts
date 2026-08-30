@@ -1,4 +1,4 @@
-import { fitContainSize, type FitContainResult } from "./fitMath";
+import { fitContainSize, nextImageGestureViewState, type FitContainResult } from "./fitMath";
 import { els } from "./liveDom";
 import { renderState, sourceState } from "./liveState";
 
@@ -11,6 +11,12 @@ interface CanvasFitOptions {
 
 interface ResetImageViewOptions {
   apply?: boolean;
+}
+
+export interface ImageViewResumeState {
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
 }
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
@@ -52,6 +58,24 @@ export function resetImageView({ apply = true }: ResetImageViewOptions = {}): vo
   if (apply) applyImageViewStyle();
 }
 
+export function captureImageViewState(): ImageViewResumeState {
+  const view = renderState.imageView;
+  return {
+    zoom: view.zoom,
+    offsetX: view.offsetX,
+    offsetY: view.offsetY,
+  };
+}
+
+export function restoreImageViewState(snapshot: ImageViewResumeState): void {
+  const view = renderState.imageView;
+  view.zoom = clamp(snapshot.zoom, view.minZoom, view.maxZoom);
+  view.offsetX = Number.isFinite(snapshot.offsetX) ? snapshot.offsetX : 0;
+  view.offsetY = Number.isFinite(snapshot.offsetY) ? snapshot.offsetY : 0;
+  clampImageViewOffset();
+  applyImageViewStyle();
+}
+
 export function setRefineCanvasViewActive(active: boolean): void {
   els.canvas.classList.toggle("refine-image-source", active);
   if (active) {
@@ -71,21 +95,49 @@ export function stepImageViewZoom(direction: -1 | 1): boolean {
 }
 
 export function zoomImageViewAt(clientX: number, clientY: number, deltaY: number): boolean {
+  const factor = Math.exp(-clamp(deltaY || 0, -160, 160) * 0.0018);
+  return zoomImageViewByFactorAt(clientX, clientY, factor);
+}
+
+export function zoomImageViewByFactorAt(clientX: number, clientY: number, factor: number): boolean {
+  return transformImageViewGesture(clientX, clientY, clientX, clientY, factor);
+}
+
+export function transformImageViewGesture(
+  previousClientX: number,
+  previousClientY: number,
+  nextClientX: number,
+  nextClientY: number,
+  factor: number,
+): boolean {
   const view = renderState.imageView;
-  if (!view.baseWidth || !view.baseHeight) return false;
+  if (!view.baseWidth || !view.baseHeight || !Number.isFinite(factor) || factor <= 0) return false;
 
   const wrap = els.mainWrap.getBoundingClientRect();
-  const pointerX = clientX - (wrap.left + wrap.width / 2);
-  const pointerY = clientY - (wrap.top + wrap.height / 2);
+  const viewportCenterX = wrap.left + wrap.width / 2;
+  const viewportCenterY = wrap.top + wrap.height / 2;
+  const previousPointerX = previousClientX - viewportCenterX;
+  const previousPointerY = previousClientY - viewportCenterY;
+  const nextPointerX = nextClientX - viewportCenterX;
+  const nextPointerY = nextClientY - viewportCenterY;
   const oldZoom = view.zoom;
-  const factor = Math.exp(-clamp(deltaY || 0, -160, 160) * 0.0018);
-  const nextZoom = clamp(oldZoom * factor, view.minZoom, view.maxZoom);
-  if (Math.abs(nextZoom - oldZoom) < 0.001) return false;
-
-  view.offsetX = pointerX - ((pointerX - view.offsetX) / oldZoom) * nextZoom;
-  view.offsetY = pointerY - ((pointerY - view.offsetY) / oldZoom) * nextZoom;
-  view.zoom = nextZoom;
+  const previousOffsetX = view.offsetX;
+  const previousOffsetY = view.offsetY;
+  const nextView = nextImageGestureViewState(
+    view,
+    { x: previousPointerX, y: previousPointerY },
+    { x: nextPointerX, y: nextPointerY },
+    factor,
+  );
+  if (!nextView) return false;
+  view.offsetX = nextView.offsetX;
+  view.offsetY = nextView.offsetY;
+  view.zoom = nextView.zoom;
   clampImageViewOffset();
+  const changed = Math.abs(view.zoom - oldZoom) >= 0.001
+    || Math.abs(view.offsetX - previousOffsetX) >= 0.001
+    || Math.abs(view.offsetY - previousOffsetY) >= 0.001;
+  if (!changed) return false;
   applyImageViewStyle();
   return true;
 }

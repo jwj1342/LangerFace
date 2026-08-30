@@ -106,6 +106,21 @@ def test_default_tip_angle_is_expressed_by_endpoint_tangents() -> None:
     assert profile["metrics"]["tip_angle_estimated_deg"] == pytest.approx(30.0)
 
 
+@pytest.mark.parametrize(("diameter_mm", "expected_length_mm"), [(2.0, 6.0), (3.0, 9.0), (4.0, 12.0)])
+def test_small_default_candidates_preserve_three_to_one_scale(
+    diameter_mm: float,
+    expected_length_mm: float,
+) -> None:
+    candidate = generate_fusiform_incision(
+        {"kind": "cutaneous", "center": [0, 0, 0], "diameter_mm": diameter_mm, "margin_mm": 0},
+        {"vector": [1, 0, 0]},
+        1.0,
+    )
+
+    assert candidate["width_mm"] == pytest.approx(diameter_mm)
+    assert candidate["length_mm"] == pytest.approx(expected_length_mm)
+
+
 def test_rejects_invalid_geometry_and_non_cutaneous_input() -> None:
     with pytest.raises(ValueError, match="cutaneous"):
         generate_fusiform_incision(

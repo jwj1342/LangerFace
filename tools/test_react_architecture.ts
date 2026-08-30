@@ -94,6 +94,7 @@ const tumorPanel = read("src/components/TumorInputPanel.tsx");
 const secondaryCuePanel = read("src/components/SecondaryCuePanel.tsx");
 const candidateResultPanel = read("src/components/CandidateResultPanel.tsx");
 const candidateLibraryPanel = read("src/components/CandidateLibraryPanel.tsx");
+const workflowIncisionRail = read("src/components/WorkflowIncisionRail.tsx");
 const privacyAuditPanel = read("src/components/PrivacyAuditPanel.tsx");
 const editPanel = read("src/components/EditControlsPanel.tsx");
 const reviewPanel = read("src/components/ReviewControlsPanel.tsx");
@@ -103,6 +104,7 @@ const workflowWorkerProbeHook = read("src/hooks/useWorkflowWorkerProbe.ts");
 const liveBridge = read("src/hooks/useLiveControllerBridge.ts");
 const liveStatePanel = read("src/components/LiveStatePanel.tsx");
 const liveRouteControlsPanel = read("src/components/LiveRouteControlsPanel.tsx");
+const liveControlRail = read("src/components/LiveControlRail.tsx");
 const liveSourceControlsPanel = read("src/components/LiveSourceControlsPanel.tsx");
 const liveRenderControlsPanel = read("src/components/LiveRenderControlsPanel.tsx");
 const liveQualityPanel = read("src/components/LiveQualityPanel.tsx");
@@ -681,7 +683,7 @@ assert.ok(!app.includes('to="/annotate" replace'), "atlas settings is no longer 
 assert.ok(!app.includes('to="/three-preview" replace'), "developer settings is no longer a direct redirect to the R3F preview");
 assert.ok(dashboardRoute.includes("useReactRouteLifecycle"), "React dashboard uses the shared pure route lifecycle hook");
 assert.ok(dashboardRoute.includes('workspace: "dashboard"'), "React dashboard publishes its active workspace");
-assert.ok(dashboardRoute.includes("WorkbenchBrand"), "React dashboard uses the shared workbench brand");
+assert.ok(!dashboardRoute.includes("WorkbenchBrand"), "React dashboard omits the removed sidebar brand");
 assert.ok(dashboardRoute.includes("Card"), "React dashboard uses the shared shadcn-style card component");
 assert.ok(workbenchBrand.includes('className="brand"'), "React shell uses a shared workbench brand component");
 assert.ok(workbenchBrand.includes('className="brand-top"'), "shared workbench brand keeps the existing brand-top structure");
@@ -732,16 +734,18 @@ assert.ok(surgeryRoute.includes("ReactRouteHost"), "SurgeryRoute should render t
 assert.ok(surgeryRoute.includes('workspace="surgery"'), "SurgeryRoute should declare its ReactRouteHost workspace");
 assert.ok(!surgeryRoute.includes('className="react-surgery-host"'), "SurgeryRoute should not hand-write its route host class");
 assert.ok(app.includes("ReactPage"), "React route fallback uses the shared React page primitive");
-assert.ok(dashboardRoute.includes("ReactShellNavLink"), "React dashboard uses shared shell nav links");
+assert.ok(!dashboardRoute.includes("ReactShellNavLink"), "React dashboard omits the removed sidebar shortcuts");
 assert.ok(!dashboardRoute.includes("ReactShellExternalLink"), "React dashboard should not send users back to legacy HTML entrypoints");
 assert.ok(!dashboardRoute.includes("/index.html"), "React dashboard should not link to the legacy live HTML entrypoint");
-for (const route of ["/live", "/incision"]) {
+for (const route of ["/live", "/incision", "/app/workflow"]) {
   assert.ok(dashboardRoute.includes(`to: "${route}"`), `React dashboard exposes stateless tool route ${route}`);
 }
+assert.ok(dashboardRoute.includes("合并工作流（开发中）"), "React dashboard labels the merged workflow entry as unfinished");
 assert.ok(!dashboardRoute.includes('to: "/three-preview"'), "React dashboard should not expose the public R3F preview card");
-assert.ok(dashboardRoute.includes('to: "/personalized"'), "React dashboard exposes the personalized browser tool as an SPA route");
+assert.ok(app.includes('path="/personalized"'), "React Router preserves the legacy personalized browser tool route");
+assert.ok(!dashboardRoute.includes('to: "/personalized"'), "React dashboard hides the personalized browser tool entry");
 assert.ok(!dashboardRoute.includes("/cases"), "React dashboard does not expose a case lobby");
-assert.ok(dashboardRoute.includes("不创建、恢复或保存病例"), "React dashboard states the no-case-storage boundary");
+assert.ok(dashboardRoute.includes("不维护病例大厅、患者档案、历史记录或云端病例库"), "React dashboard states the no-case-storage boundary");
 for (const [name, html, expected] of [
   ["annotate.html", legacyAnnotateHtml, ["/app/annotate"]],
   ["incision_workflow.html", legacyIncisionHtml, ["/app/incision"]],
@@ -879,7 +883,8 @@ assert.ok(workbenchLayout.includes("type WorkbenchLayoutWorkspace"), "React Work
 assert.ok(workbenchLayout.includes("Extract<Workspace"), "React WorkbenchLayout keeps a narrowed workbench workspace type from the shared Workspace union");
 assert.ok(workbenchLayout.includes("workspace: WorkbenchLayoutWorkspace"), "React WorkbenchLayout requires a typed workspace prop");
 assert.ok(workbenchLayout.includes("`${workspace}-workbench`"), "React WorkbenchLayout derives workspace shell classes centrally");
-assert.ok(workbenchLayout.includes('className="sidebar"'), "React WorkbenchLayout preserves the legacy sidebar class");
+assert.ok(workbenchLayout.includes('cn("sidebar", sidebarClassName)'), "React WorkbenchLayout preserves the legacy sidebar class through its shared primitive");
+assert.ok(workbenchLayout.includes("secondarySidebar"), "React WorkbenchLayout supports an optional shared trailing sidebar");
 assert.ok(workbenchLayout.includes('cn("disclaimer"'), "React Disclaimer preserves the legacy disclaimer class");
 for (const [name, source, workspace] of [
   ["AnnotateWorkbench.tsx", annotateWorkbench, "annotate"],
@@ -992,7 +997,8 @@ assert.deepEqual(
   "React incision form panels should use FieldGroup/ButtonRow visible and native hidden inputs instead of hand-written hidden classes",
 );
 assert.ok(tumorPanel.includes("FieldGroup"), "React tumor input panel uses FieldGroup for conditional tumor fields");
-assert.ok(tumorPanel.includes('id="depthWrap" visible={!cutaneous}'), "React tumor input panel shows depth only for subcutaneous lesions through FieldGroup visible");
+assert.ok(tumorPanel.includes('showDepthControl = true'), "React tumor input panel preserves the standalone depth-control default");
+assert.ok(tumorPanel.includes('id="depthWrap" visible={!cutaneous && showDepthControl}'), "React tumor input panel can hide the non-operative workflow depth control without deleting its data contract");
 assert.ok(tumorPanel.includes('id="marginWrap" visible={cutaneous}'), "React tumor input panel shows cutaneous margin through FieldGroup visible");
 assert.ok(tumorPanel.includes('id="ellipseWrap" visible={cutaneous && boundaryMode === "ellipse"}'), "React tumor input panel shows ellipse controls through FieldGroup visible");
 assert.ok(tumorPanel.includes('id="freehandControls" visible={freehand}'), "React tumor input panel shows freehand controls through ButtonRow visible");
@@ -1531,7 +1537,10 @@ for (const id of [
   assert.ok(exposesId(secondaryCuePanel, id), `React secondary cue panel exposes #${id}`);
 }
 assert.ok(incisionStore.includes("IncisionSecondaryCueState"), "incision Zustand store keeps typed secondary cue state");
-assert.ok(incisionWorkbench.includes("SecondaryCuePanel"), "React incision workbench renders the secondary cue controls as a React component");
+assert.ok(incisionWorkbench.includes("SecondaryCuePanel")
+  && incisionWorkbench.includes("data-retired-secondary-cue-compatibility")
+  && incisionWorkbench.includes('aria-hidden="true"'),
+"React incision workbench retains the retired cue DOM only as a hidden controller compatibility layer");
 assert.ok(secondaryCuePanel.includes("useIncisionControllerCommands"), "React secondary cue panel uses typed incision command callbacks");
 assert.ok(!secondaryCuePanel.includes("dispatchIncisionSecondaryCueCommand"), "React secondary cue panel does not import low-level command dispatch helpers directly");
 assert.ok(!secondaryCuePanel.includes("../lib/controllerEvents"), "React secondary cue panel does not import controller event names directly");
@@ -1586,6 +1595,12 @@ assert.ok(candidateLibraryPanel.includes("useState"), "React candidate library o
 assert.ok(candidateLibraryPanel.includes("confirmClear"), "React candidate library renders a controlled clear confirmation state");
 assert.ok(!candidateLibraryPanel.includes("window.confirm"), "React candidate library does not use browser-native confirm dialogs");
 assert.ok(candidateLibraryPanel.includes("Button"), "React candidate library uses the shared shadcn-style button primitive");
+assert.ok(workflowIncisionRail.includes("showDirectionVariants={false}")
+  && workflowIncisionRail.includes("showJsonExport={false}")
+  && workflowIncisionRail.includes("showSaveAndExportActions={false}")
+  && workflowIncisionRail.includes("showCandidateRowActions")
+  && !workflowIncisionRail.includes("showCandidateRowActions={false}"),
+"merged workflow hides redundant top-level actions and retains record-level load/delete controls");
 assert.ok(candidateLibraryPanel.includes("ButtonRow"), "React candidate library uses the shared shadcn-style button row primitive");
 assert.ok(candidateLibraryPanel.includes("CandidateList"), "React candidate library uses the shared candidate list primitive");
 assert.ok(candidateLibraryPanel.includes("CandidateRow"), "React candidate library uses the shared candidate row primitive");
@@ -1639,6 +1654,11 @@ for (const id of [
 }
 assert.ok(incisionStore.includes("IncisionEditState"), "incision Zustand store keeps typed edit state");
 assert.ok(incisionWorkbench.includes("EditControlsPanel"), "React incision workbench renders the edit controls as a React component");
+assert.doesNotMatch(
+  incisionWorkbench,
+  /<div hidden>\s*<EditControlsPanel\s*\/>\s*<\/div>/,
+  "React incision workbench does not hide the clinician edit controls",
+);
 assert.ok(editPanel.includes("useIncisionControllerCommands"), "React edit panel uses typed incision command callbacks");
 assert.ok(!editPanel.includes("dispatchIncisionEditCommand"), "React edit panel does not import low-level command dispatch helpers directly");
 assert.ok(!editPanel.includes("../lib/controllerEvents"), "React edit panel does not import controller event names directly");
@@ -2084,7 +2104,7 @@ for (const id of [
   "modelBadge",
   "overlayMsg",
 ]) {
-  const source = id === "modelBadge" ? liveWorkbench : liveStagePanel;
+  const source = id === "modelBadge" ? liveControlRail : liveStagePanel;
   assert.ok(source.includes(`id="${id}"`), `React live surface exposes #${id}`);
 }
 for (const id of [
@@ -2139,16 +2159,17 @@ for (const id of [
 ]) {
   assert.ok(liveStagePanel.includes(`id="${id}"`), `React live stage exposes #${id}`);
 }
-assert.ok(liveWorkbench.includes("LiveStatePanel"), "React live workbench renders the controller state panel");
-assert.ok(liveWorkbench.includes("WorkbenchBrand"), "React live workbench uses the shared workbench brand");
-assert.ok(liveWorkbench.includes("Card"), "React live workbench uses the shared shadcn-style card primitive");
-assert.ok(liveWorkbench.includes("LiveRouteControlsPanel"), "React live workbench renders route controls as a React component");
-assert.ok(liveWorkbench.includes("LiveSourceControlsPanel"), "React live workbench renders source controls as a React component");
-assert.ok(liveWorkbench.includes("LiveRenderControlsPanel"), "React live workbench renders render controls as a React component");
-assert.ok(liveWorkbench.includes("LiveQualityPanel"), "React live workbench renders quality and overlay QA as a React component");
+assert.ok(liveWorkbench.includes("LiveControlRail"), "React live workbench renders the shared live control rail");
+assert.ok(liveControlRail.includes("LiveStatePanel"), "React live control rail renders the controller state panel");
+assert.ok(liveControlRail.includes("WorkbenchBrand"), "React live control rail uses the shared workbench brand");
+assert.ok(liveControlRail.includes("Card"), "React live control rail uses the shared shadcn-style card primitive");
+assert.ok(liveControlRail.includes("LiveRouteControlsPanel"), "React live control rail renders route controls as a React component");
+assert.ok(liveControlRail.includes("LiveSourceControlsPanel"), "React live control rail renders source controls as a React component");
+assert.ok(liveControlRail.includes("LiveRenderControlsPanel"), "React live control rail renders render controls as a React component");
+assert.ok(liveControlRail.includes("LiveQualityPanel"), "React live control rail renders quality and overlay QA as a React component");
 assert.ok(liveWorkbench.includes("LiveStagePanel"), "React live workbench renders the stage shell as a React component");
 assert.ok(liveWorkbench.includes("WorkbenchLayout"), "React live workbench uses the shared workbench layout shell");
-assert.ok(liveWorkbench.includes("Disclaimer"), "React live workbench uses the shared disclaimer primitive");
+assert.ok(liveControlRail.includes("Disclaimer"), "React live control rail uses the shared disclaimer primitive");
 assert.ok(liveStagePanel.includes("StageShell"), "React live stage uses the shared stage shell primitive");
 assert.ok(liveStagePanel.includes("StageViewport"), "React live stage uses the shared stage viewport primitive");
 assert.ok(liveStagePanel.includes("StageStatus"), "React live stage uses the shared stage status primitive");
@@ -2196,8 +2217,8 @@ assert.ok(liveRenderControlsPanel.includes("useLiveStore"), "React live render c
 assert.ok(liveRouteControlsPanel.includes("2D 实时贴合"), "React Live surface declares the supported 2D runtime");
 assert.ok(!/扫描人脸重建|投影到画面|用示例脸|实时 3D/.test(liveRouteControlsPanel), "React Live surface contains no retired 3D affordances");
 assert.ok(!liveSourceControlsPanel.includes('route !== "3d"'), "React live source card has no retired route gate");
-assert.ok(liveWorkbench.includes("Button asChild"), "React live workbench uses shared Button asChild for Router links");
-assert.ok(liveWorkbench.includes("Label"), "React live workbench uses the shared shadcn-style label primitive");
+assert.ok(liveControlRail.includes("Button asChild"), "React live control rail uses shared Button asChild for Router links");
+assert.ok(liveControlRail.includes("Label"), "React live control rail uses the shared shadcn-style label primitive");
 assert.ok(liveRouteControlsPanel.includes("Label"), "React live route controls use the shared shadcn-style label primitive");
 assert.ok(liveRouteControlsPanel.includes("<Card"), "React live route controls use the shared shadcn-style card primitive");
 for (const className of ["scan-panel", "scan-row", "yaw-meter"]) {
@@ -2230,7 +2251,7 @@ assert.ok(liveSnapshotsService.includes("buildLiveControllerSnapshot"), "shared 
 assert.ok(liveSnapshotsService.includes("liveTextOf"), "shared live snapshot service owns text normalization helpers");
 assert.ok(liveSnapshotsService.includes("visibleLiveTextOf"), "shared live snapshot service owns visible text normalization helpers");
 assert.ok(liveSnapshotsService.includes("../lib/controllerSnapshotSchemas"), "shared live snapshot service re-exports the lightweight schema version");
-assert.ok(liveWorkbench.includes('to="/incision"'), "React live workbench links to the React incision route");
+assert.ok(liveControlRail.includes('to="/incision"'), "React live control rail links to the React incision route");
 assert.ok(!fs.existsSync(path.join(web, "dom.js")), "legacy dom.js facade has been removed after TypeScript service migration");
 assert.ok(!fs.existsSync(path.join(web, "dom.d.ts")), "legacy DOM declaration facade has been removed after TypeScript service migration");
 assert.ok(liveDomService.includes("export function bindDom"), "TypeScript live DOM service can rebind element references for SPA route mounts");

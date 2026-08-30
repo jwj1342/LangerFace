@@ -5,7 +5,7 @@ import { Link, type LinkProps } from "react-router-dom";
 import { cn } from "../lib/cn";
 import type { Workspace } from "../stores/appStore";
 
-type ReactRouteWorkspace = Extract<Workspace, "annotate" | "incision" | "live" | "surgery">;
+type ReactRouteWorkspace = Extract<Workspace, "annotate" | "incision" | "live" | "surgery" | "workflow">;
 
 interface ReactRouteHostProps extends HTMLAttributes<HTMLDivElement> {
   workspace: ReactRouteWorkspace;

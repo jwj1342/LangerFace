@@ -80,6 +80,19 @@ export function normalizeTumorBoundaryMode(kind?: string, boundaryMode?: string)
   return boundaryMode === "freehand" ? "freehand" : "ellipse";
 }
 
+export function tumorDiameterParameterInactive({
+  kind,
+  boundaryMode,
+  controlledMarkerMode = false,
+}: {
+  kind?: string;
+  boundaryMode?: string;
+  controlledMarkerMode?: boolean;
+}): boolean {
+  return normalizeTumorKind(kind) === "cutaneous"
+    && (normalizeTumorBoundaryMode(kind, boundaryMode) === "freehand" || controlledMarkerMode);
+}
+
 export function shouldClearFreehandBoundaryOnLesionRepick({
   kind,
   boundaryMode,
@@ -174,7 +187,8 @@ export function importedTumorFormState(
     : payload;
   const tumor = normalizeTumorInput(raw as TumorInput);
   const boundary = Array.isArray(tumor.boundary) ? (tumor.boundary as Vec3[]) : [];
-  const boundaryPoints = tumor.kind === "cutaneous" && boundary.length >= 3
+  const explicitFreehand = tumor.kind === "cutaneous" && tumor.boundary_mode === "freehand";
+  const boundaryPoints = explicitFreehand && boundary.length >= 3
     ? boundary.map((point) => point.map(Number) as Vec3)
     : [];
   return {
@@ -184,11 +198,7 @@ export function importedTumorFormState(
     depthValue: clampRounded(tumor.depth_mm, controls.depthMin, controls.depthMax, controls.depthFallback),
     marginValue: clampRounded(tumor.margin_mm, controls.marginMin, controls.marginMax, controls.marginMin),
     author: tumor.author || controls.authorFallback,
-    boundaryMode: tumor.kind === "cutaneous" && boundaryPoints.length >= 3
-      ? "freehand"
-      : tumor.kind === "cutaneous" && tumor.boundary_mode === "freehand"
-        ? "freehand"
-        : "ellipse",
+    boundaryMode: explicitFreehand ? "freehand" : "ellipse",
     boundaryPoints,
     pickState: boundaryPoints.length >= 3
       ? `已导入肿物：自由轮廓 ${boundaryPoints.length} 点`

@@ -25,10 +25,10 @@ class FusiformRules:
 
     length_to_width_ratio: float = 3.0
     tip_angle_deg: float = 30.0
-    min_length_mm: float = 12.0
+    min_length_mm: float = 6.0
     max_length_mm: float = 80.0
     samples: int = 56
-    version: str = "0.3-deterministic-incision-workflow"
+    version: str = "0.4-deterministic-incision-workflow"
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any] | None) -> FusiformRules:
@@ -37,10 +37,10 @@ class FusiformRules:
         return cls(
             length_to_width_ratio=float(value.get("length_to_width_ratio", 3.0)),
             tip_angle_deg=float(value.get("tip_angle_deg", 30.0)),
-            min_length_mm=float(value.get("min_length_mm", 12.0)),
+            min_length_mm=float(value.get("min_length_mm", 6.0)),
             max_length_mm=float(value.get("max_length_mm", 80.0)),
             samples=int(value.get("samples", 56)),
-            version=str(value.get("version", "0.3-deterministic-incision-workflow")),
+            version=str(value.get("version", "0.4-deterministic-incision-workflow")),
         )
 
     def validate(self) -> None:
@@ -345,16 +345,31 @@ def generate_fusiform_incision(
         perpendicular,
         units_per_mm,
     )
-    # The detector-confirmed center is authoritative. An asymmetric boundary
-    # grows the symmetric candidate; it never silently moves that center.
-    center = tumor_center
-    lesion_axis_mm = max(
-        diameter_mm,
-        float(boundary_summary["selected_center_axis_diameter_mm"]) if boundary_summary else 0.0,
+    boundary_mode = str(tumor.get("boundary_mode", ""))
+    boundary_source = str(tumor.get("boundary_source", ""))
+    boundary_drives_scale = boundary_summary is not None and (
+        boundary_mode in {"freehand", "controlled_marker"}
+        or boundary_source in {"manual_freehand", "controlled_marker_confirmed"}
     )
-    lesion_width_mm = max(
-        diameter_mm,
-        float(boundary_summary["selected_center_perp_diameter_mm"]) if boundary_summary else 0.0,
+    # The confirmed center is authoritative. A drawn boundary supplies its
+    # directional extents; it never silently moves that center or falls back
+    # to the operator diameter as a minimum size.
+    center = tumor_center
+    lesion_axis_mm = (
+        float(boundary_summary["selected_center_axis_diameter_mm"])
+        if boundary_drives_scale and boundary_summary
+        else max(
+            diameter_mm,
+            float(boundary_summary["selected_center_axis_diameter_mm"]) if boundary_summary else 0.0,
+        )
+    )
+    lesion_width_mm = (
+        float(boundary_summary["selected_center_perp_diameter_mm"])
+        if boundary_drives_scale and boundary_summary
+        else max(
+            diameter_mm,
+            float(boundary_summary["selected_center_perp_diameter_mm"]) if boundary_summary else 0.0,
+        )
     )
     requested_width_mm = lesion_width_mm + 2.0 * margin_mm
     width_mm = requested_width_mm
@@ -436,6 +451,9 @@ def generate_fusiform_incision(
         "length_clamped_by_min": target_length_mm < cfg.min_length_mm,
         "length_clamped_by_max": target_length_mm > cfg.max_length_mm,
         "boundary_used": boundary_summary is not None,
+        "boundary_drives_candidate_geometry": boundary_drives_scale,
+        "boundary_scale_shape": "directional_extents" if boundary_drives_scale else "operator_diameter",
+        "operator_diameter_mm": diameter_mm,
         "boundary_point_count": int(boundary_summary["point_count"]) if boundary_summary else len(boundary),
         "boundary_axis_diameter_mm": (
             float(boundary_summary["axis_diameter_mm"]) if boundary_summary else None

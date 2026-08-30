@@ -1,8 +1,8 @@
 // Live workbench runtime: wires DOM events and model bootstrap under the React route adapter.
 import { bindDom, clearDomBinding, els } from "./liveDom.ts";
-import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, zoomImageViewAt } from "./liveCanvasFit.ts";
+import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, transformImageViewGesture, zoomImageViewAt, zoomImageViewByFactorAt } from "./liveCanvasFit.ts";
 import { validateIncisionOverlay } from "./incisionOverlay.ts";
-import { ensureReady, handleFile, redrawPausedFrame, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.ts";
+import { ensureImageReady, handleFile, redrawPausedFrame, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.ts";
 import { adjustFocusZoom, buildZoomCards } from "./render2d.ts";
 import {
   LIVE_CONTROLLER_STATE_EVENT,
@@ -129,7 +129,9 @@ function publishLiveState(reason = "state_update"): void {
     previewMeta,
     atlasContract: modelState.atlasContracts[renderState.system] || null,
     incisionOverlayLoaded: Boolean(renderState.incisionOverlay),
-    incisionOverlayQaLabel: liveTextOf(els.incisionOverlayQaState) || null,
+    incisionOverlayQaLabel: renderState.incisionOverlay
+      ? liveTextOf(els.incisionOverlayQaState) || null
+      : null,
     recording: Boolean(recordingState.recorder),
   }));
 }
@@ -202,13 +204,13 @@ function applyStagedIncisionOverlay(): void {
   renderState.incisionOverlay = overlay;
   setIncisionOverlayQa({
     label: "等待画面",
-    detail: "上传照片、视频或开启摄像头后开始检查。",
+    detail: "上传照片或开启摄像头后开始检查。",
   });
   buildZoomCards(refreshStaticImage);
   const highCodes = overlay.guardrail_summary?.high_codes || overlay.review_gate?.high_guardrail_codes || [];
   const reviewLabel = overlay.review?.status === "approved_for_discussion" ? "已确认候选草案" : "待复核候选";
   const riskText = highCodes.length ? `；高风险项 ${highCodes.join("、")}` : "";
-  setMsg(`已载入切口候选叠加（${reviewLabel}${riskText}）。上传照片、视频或开启摄像头后，会随 RSTL 一起显示。`);
+  setMsg(`已载入切口候选叠加（${reviewLabel}${riskText}）。上传照片或开启摄像头后，会随 RSTL 一起显示。`);
   scheduleLiveState("staged_incision_overlay");
 }
 
@@ -255,10 +257,10 @@ function handlePauseToggle(): void {
     sourceState.frozenFrame = frozen;
     sourceState.paused = true;
     beginFrozenRefineSession();
-    els.pause.textContent = "▶ 继续实时";
+    els.pause.textContent = "▶ 继续";
     els.pause.setAttribute("aria-pressed", "true");
     setLive(false, "已定格 · 可微调");
-    setTransientMsg("已定格当前帧。如需皱纹引导，请手动点击“检测皱纹”。");
+    setTransientMsg("已暂停当前画面。可点击“检测皱纹”，或使用“医生手动微调（2D）”继续处理。");
     redrawPausedFrame();
     setRefineAvailability();
     return;
@@ -267,7 +269,7 @@ function handlePauseToggle(): void {
   sourceState.frozenFrame = null;
   const refinementCommitted = commitRefineForLive();
   resetLiveWrinkleAnalysis();
-  els.pause.textContent = sourceState.sourceKind === "camera" ? "📷 定格微调" : "⏸ 暂停";
+  els.pause.textContent = "⏸ 暂停";
   els.pause.setAttribute("aria-pressed", "false");
   setMsg(refinementCommitted ? "已返回实时画面，当前微调曲线会继续跟随人脸。" : null);
   setLive(true, sourceState.sourceKind === "camera" ? "实时摄像头" : "视频");
@@ -314,6 +316,7 @@ function handleHandOccChange(e: Event | CheckedControlEvent): void {
 
 function handleMirrorChange(e: Event | CheckedControlEvent): void {
   renderState.mirror = eventChecked(e);
+  els.mirror.checked = renderState.mirror;
   els.canvas.classList.toggle("mirror", renderState.mirror);
   renderState.zoomCards.forEach((zc: LiveZoomCard) => zc.canvas.classList.toggle("mirror", renderState.mirror));
   refreshStaticImage();
@@ -354,7 +357,11 @@ function toggleRecording(): void {
 const liveCommands = new LiveCommandRouter({
   run: runLiveAction,
   uploadSource: () => els.file.click(),
-  cameraToggle: startCamera,
+  cameraToggle: () => startCamera({
+    onFacingMode() {
+      handleMirrorChange(checkedEvent(false));
+    },
+  }),
   pauseToggle: handlePauseToggle,
   recordingToggle: toggleRecording,
   templateChange: (value) => handleTemplateChange(valueEvent(value)),
@@ -369,7 +376,7 @@ const liveCommands = new LiveCommandRouter({
   clearIncisionOverlay,
 });
 
-function bindLiveEvents(signal: AbortSignal): void {
+function bindLiveEvents(signal: AbortSignal, root: ParentNode | Document): void {
   els.file.addEventListener("change", (e) => runLiveAction("file_source", () => handleFile((e.target as HTMLInputElement | null)?.files?.[0])), { signal });
   els.wrinkleDisplayMode.addEventListener("change", (event) => {
     runLiveAction("wrinkle_display_mode", () => setWrinkleDisplayMode((event.target as HTMLSelectElement).value));
@@ -405,6 +412,9 @@ function bindLiveEvents(signal: AbortSignal): void {
   window.addEventListener("langerface:refine2d-redraw", () => {
     refreshStaticImage();
   }, { signal });
+  window.addEventListener("langerface:live-quality-relocated", () => {
+    bindDom(root);
+  }, { signal });
   window.addEventListener("langerface:refine2d-state", updateWrinkleUi, { signal });
   window.addEventListener("langerface:source-frame-ready", () => {
     updateWrinkleUi();
@@ -435,15 +445,27 @@ function bindLiveEvents(signal: AbortSignal): void {
 
   bindLiveCanvasInteractions(els.mainWrap, {
     isRefineActive,
+    isImagePointerInteractionBlocked: () => Boolean(els.mainWrap.dataset.workflowPointerMode),
+    isMobileTouchImageGestureEnabled: () => {
+      const pointerMode = els.mainWrap.dataset.workflowPointerMode || "";
+      return Boolean(
+        els.mainWrap.closest(".workflow-workbench")
+        && window.matchMedia("(max-width: 560px) and (pointer: coarse) and (hover: none)").matches
+        && (!pointerMode || pointerMode === "marker" || pointerMode === "freehand")
+      );
+    },
     beginRefinePointer,
     moveRefinePointer,
     endRefinePointer,
     sourceKind: () => sourceState.sourceKind,
     panImageViewBy,
     zoomImageViewAt,
+    zoomImageViewByFactorAt,
+    transformImageViewGesture,
     adjustFocusZoom,
     updateRefineUi,
     refreshStaticImage,
+    onImageViewChanged: () => window.dispatchEvent(new Event("langerface:image-view-changed")),
   }, { signal });
 }
 
@@ -482,7 +504,7 @@ export function mountLiveWorkbench(root: ParentNode | Document = document) {
   previewSystem = null;
   previewMeta = null;
   recordingController = null;
-  bindLiveEvents(abortController.signal);
+  bindLiveEvents(abortController.signal, root);
   updateRefineUi();
   updateWrinkleUi();
   buildZoomCards(refreshStaticImage);
@@ -493,11 +515,11 @@ export function mountLiveWorkbench(root: ParentNode | Document = document) {
   configureLandmarkSmoothing();
   scheduleLiveState("mounted");
 
-  // 预加载模型并反馈状态
+  // 合并页优先预热静态图片模型；视频/摄像头模型在对应媒体首次使用时再加载。
   const session = activeSession;
-  ensureReady().then(() => {
+  ensureImageReady().then(() => {
     if (!isActiveSession(session)) return;
-    els.badge.textContent = "模型就绪";
+    els.badge.textContent = "照片模型就绪";
     els.badge.classList.remove("loading");
     sourceState.planning2d?.setTopology(modelState.triangles || []);
     sourceState.planning2d?.setDetectorLease({ detector: modelState.imageLandmarker || modelState.landmarker });

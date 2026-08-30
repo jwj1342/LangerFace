@@ -4,7 +4,7 @@ import { PrivacyAuditMessage, PrivacyStateText } from "./ui/privacy-audit";
 
 const DEFAULT_PRIVACY_AUDIT: IncisionPrivacyAuditState = {
   stateLabel: "本地几何",
-  message: "切口 workflow 仅在浏览器本地处理肿物参数、抽象坐标、规则和候选几何，不上传原始影像。",
+  message: "切口 workflow 仅在当前设备处理肿物参数、抽象坐标、规则和候选几何，不上传原始影像。",
   blocked: false,
 };
 
