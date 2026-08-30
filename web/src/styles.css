@@ -2736,6 +2736,8 @@ body:has(.dark-workbench-page) {
   }
 
   .workflow-workbench .zoom-strip {
+    /* Phone users zoom the shared canvas directly; retain the card rail for desktop and rollback. */
+    display: none;
     width: 100%;
     max-height: none;
     justify-content: flex-start;

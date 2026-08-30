@@ -576,14 +576,16 @@ assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workb
   "phone workflow stage contains its canvas and focus cards instead of spilling over the next section");
 assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.main-wrap\s*\{[^}]*flex:\s*0 0 clamp\(300px,\s*54dvh,\s*480px\);/,
   "phone workflow keeps the shared face canvas prominent without consuming an unbounded viewport height");
-assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.zoom-strip\s*\{[^}]*overflow-x:\s*auto;[^}]*scroll-snap-type:\s*x mandatory;/,
-  "phone focus previews form a readable horizontal snap rail");
+assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.zoom-strip\s*\{[^}]*display:\s*none;/,
+  "phone workflow hides the redundant focus-preview rail while direct canvas zoom is available");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-tumor-transfer-actions,[\s\S]*?\.workflow-recalculate-action\s*\{[^}]*display:\s*none;/,
   "phone workflow hides tumor transfer and manual recalculation without removing their desktop actions");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-stage-status\s*\{[^}]*block-size:\s*56px;[^}]*overflow-y:\s*auto;/,
   "phone workflow reserves a stable status row so recognition copy cannot move the face canvas");
+assert.match(render2d, /const zoomItems:[\s\S]*?\{ label: "全脸", region: null \}[\s\S]*?\.\.\.ZOOM_REGIONS/,
+  "focus-preview generation remains available for desktop and future rollback");
 assert.match(styles, /--workflow-mobile-zoom-card-size:\s*calc\(\(100vw - 44px\) \/ 3\)[\s\S]*?\.workflow-workbench \.zoom-card\s*\{[^}]*flex:\s*0 0 var\(--workflow-mobile-zoom-card-size\);[^}]*min-width:\s*var\(--workflow-mobile-zoom-card-size\);[^}]*max-width:\s*var\(--workflow-mobile-zoom-card-size\);/,
-  "phone focus previews fit three cards inside one viewport while retaining the horizontal rail for later regions");
+  "hidden phone focus-card sizing remains intact instead of deleting the reversible implementation");
 assert.match(liveQualityPanel, /MOBILE_WORKFLOW_MEDIA_QUERY[\s\S]*?media\.matches \? document\.querySelector\(mobilePortalSelector\) : null/,
   "quality relocation is gated to phone-class coarse-pointer viewports and leaves desktop placement unchanged");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.mobile-workflow-dock\s*\{[^}]*display:\s*grid;/,

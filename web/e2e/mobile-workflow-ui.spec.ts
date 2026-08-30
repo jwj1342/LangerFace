@@ -53,6 +53,9 @@ test("phone review fixes stay visible, independent, and desktop-isolated", async
   expect(await page.evaluate(() => window.matchMedia(
     "(max-width: 560px) and (pointer: coarse) and (hover: none)",
   ).matches)).toBe(true);
+  const zoomStrip = page.locator("#zoomStrip");
+  await expect(zoomStrip).toBeHidden();
+  expect(await zoomStrip.locator(".zoom-card").count()).toBeGreaterThan(0);
 
   const qualityPanel = page.locator(".mobile-canvas-quality");
   await expect(page.locator("#qualityVal")).toHaveCount(1);
@@ -147,6 +150,7 @@ test("phone review fixes stay visible, independent, and desktop-isolated", async
   expect(await page.evaluate(() => window.matchMedia(
     "(max-width: 560px) and (pointer: coarse) and (hover: none)",
   ).matches)).toBe(false);
+  await expect(zoomStrip).toBeVisible();
   await expect(page.locator(".mobile-workflow-dock")).toBeHidden();
   await expect(page.locator(".mobile-candidate-adjust")).toBeHidden();
   await expect(page.locator(".mobile-canvas-quality")).toHaveCount(0);
