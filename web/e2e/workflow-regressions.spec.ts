@@ -455,7 +455,7 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   await page.evaluate(() => {
     (window as Window & { __workflowIncisionReasons?: string[] }).__workflowIncisionReasons = [];
   });
-  await clickWorkflowCanvasRatio(page, 0.34, 0.37);
+  await clickWorkflowCanvasRatio(page, 0.66, 0.37);
   await expect(page.locator("#workflowStageStatus")).toContainText(
     /识别范围进入眼裂、口裂或鼻孔等非皮肤开口|当前区域有多个可能的肿物范围/,
     { timeout: 45_000 },
