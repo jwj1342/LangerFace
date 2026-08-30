@@ -24,7 +24,7 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
       · Ready PR #121；共享金标覆盖 atlas、低置信、FLAME `points3d` 和 ±180° 轴向 wrap。
       · Ready PR #119；补齐可编辑尖端角、轮廓重算、guardrail 与 provenance。
 - [ ] Epic：2D 静态照片切口规划交付闭环 — [#167](https://github.com/jwj1342/LangerFace/issues/167)
-      · 主实现 PR #166 已合并；真实媒体、人工验收及切口 2A 剩余门禁由 #171 / #172 / #209–#212 跟踪。
+      · 主实现 PR #166 已合并；真实媒体、人工验收及切口 2A 剩余门禁由 #171 / #172 / #209 / #210 / #212 跟踪；#211 的工程防越界范围已完成。
 - [ ] 单页工作流：统一照片规划、候选审阅、导出与实时叠加状态 — [#170](https://github.com/jwj1342/LangerFace/issues/170)
       · PR #166 已完成 workspace 恢复、审阅门禁、实时状态和清除/返回流程；保留 issue 继续核对端到端交付。
       · 2026-08-21 组会补充：先完成皱纹识别和 RSTL 自动/手动微调并冻结最终版本，再允许生成切口。候选必须记录所消费的 RSTL revision；最终 RSTL 解冻、换源或 revision 变化后旧候选失效并要求重新计算。
@@ -38,8 +38,8 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
       · PR #213 已随 #166 合并确定性 source contract；仍需补齐 mirror、pan/zoom、DPR、display filter 与浏览器跨页一致性回归。
 - [ ] 受控黑点/贴纸病灶定位 baseline — [#210](https://github.com/jwj1342/LangerFace/issues/210)
       · PR #214 已随 #166 合并本地草案与显式确认链路；仍需浏览器交互矩阵及取消/退出隐私清理验收。
-- [ ] 候选全路径敏感区域相交与工程防越界 — [#211](https://github.com/jwj1342/LangerFace/issues/211)
-      · PR #215 已随 #166 合并工程 hard violation 基础；仍需 transform 浏览器矩阵、可信工程排除区接线及 #212 边界确认。
+- [x] 候选全路径敏感区域相交与工程防越界 — [#211](https://github.com/jwj1342/LangerFace/issues/211)
+      · PR #215 已随 #166 合并，PR #217 已进入 `master`；完整路径相交/包含、可信工程排除区、不可覆盖 hard violation、transform 与实时叠加门禁均有回归。医学阈值和覆盖规则继续由 #212 独立跟踪。
 - [ ] 临床 Gate：确认切口敏感结构阈值、硬阻断与覆盖规则 — [#212](https://github.com/jwj1342/LangerFace/issues/212)
       · 等待领域专家形成可核验决策表；未知值保持 draft，不由工程实现猜测医学阈值。
 - [x] 修复 React 受控输入 snapshot echo — [#109](https://github.com/jwj1342/LangerFace/issues/109)
