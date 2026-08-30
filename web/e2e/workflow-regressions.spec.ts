@@ -66,9 +66,9 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   await uploadGeneratedPhoto(page, "single", "#fileInput");
   await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
 
-  // The merged canvas is mirrored by default; this is the displayed counterpart
-  // of the established source-photo safe-cheek point used by incision E2E tests.
-  await clickWorkflowCanvasRatio(page, 0.28, 0.50);
+  // New media sources preserve source-photo orientation, so display-space test
+  // coordinates now use the established source-photo safe-cheek point directly.
+  await clickWorkflowCanvasRatio(page, 0.72, 0.50);
   await expect(page.locator("#candidateType")).toContainText("梭形", { timeout: 45_000 });
   const boundary = page.locator("[data-workflow-boundary]");
   const candidate = page.locator("[data-workflow-candidate]");
@@ -227,7 +227,7 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   );
   reportWorkflowStage("photo-ready");
 
-  await clickWorkflowCanvasRatio(page, 0.68, 0.52);
+  await clickWorkflowCanvasRatio(page, 0.32, 0.52);
   await expect(page.locator("#candidateType")).toContainText("梭形", { timeout: 45_000 });
   await expect(page.locator("#candidateLength")).toContainText("24.0 mm");
   await expect.poll(() => page.locator("[data-workflow-boundary]").getAttribute("d"))
@@ -257,10 +257,10 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   expect(foreheadBoundary.height / foreheadBoundary.width).toBeGreaterThan(0.82);
   reportWorkflowStage("forehead-geometry-pass");
 
-  // The mirrored right edge maps to the visible left cheek silhouette in the
-  // authorized single-face fixture. Only the continuous on-face portion may be
-  // blue; a general face-edge exit must never borrow the sensitive red layer.
-  await clickWorkflowCanvasRatio(page, 0.90, 0.55);
+  // The source-photo left edge remains on the left in anatomical orientation.
+  // Only the continuous on-face portion may be blue; a general face-edge exit
+  // must never borrow the sensitive red layer.
+  await clickWorkflowCanvasRatio(page, 0.10, 0.55);
   await expect(page.locator("#workflowStageStatus")).toHaveText(
     "已识别肿物边界，当前为视野受限参考，不能确认完整长度及不可见区域，请结合另一视角复核",
     { timeout: 45_000 },
@@ -419,7 +419,7 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("[data-workflow-marker-scan-circle]")).toHaveCSS("stroke-dasharray", "none");
-  await clickWorkflowCanvasRatio(page, 0.68, 0.52);
+  await clickWorkflowCanvasRatio(page, 0.32, 0.52);
   await expect.poll(() => page.evaluate(() => (
     window as Window & { __workflowMarkerReasons?: string[] }
   ).__workflowMarkerReasons || []), { timeout: 45_000 }).toContain("controlled_marker_applied");
