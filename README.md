@@ -429,6 +429,7 @@ Stage 2 切口 workflow 只在浏览器本地处理肿物参数、标准化坐�
 | [WRINKLE_LESION_CUES.md](docs/clinical/WRINKLE_LESION_CUES.md) | 辅助线索、Python texture warp、浏览器个性化边界与 checkpoint 许可（issue #22）|
 | **规划** — `docs/planning/` | |
 | [TODO.md](docs/planning/TODO.md) | open issues 路线图（自动和 GitHub 同步）|
+| [WRINKLE_PIPELINE_AUDIT.md](docs/planning/WRINKLE_PIPELINE_AUDIT.md) | 皱纹 checkpoint、跨肤色偏移、照片到最终皱纹线的端到端审计与代码收敛任务（DRI：`mingzhen`） |
 
 > 医学声明、图谱状态与临床局限见 README [已知局限与医学声明](#已知局限与医学声明)。
 

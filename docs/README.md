@@ -9,7 +9,7 @@
 | [`tracks/`](#tracks--技术轨与功能专题) | 某一条技术路线的设计与现状 | 4 |
 | [`quality/`](#quality--质量与运维) | 怎么证明它没坏、怎么部署和观测 | 4 |
 | [`clinical/`](#clinical--临床边界与合规) | 医学上能说什么、数据边界在哪 | 3 |
-| [`planning/`](#planning--路线图) | 接下来做什么 | 1 |
+| [`planning/`](#planning--路线图) | 接下来做什么 | 2 |
 
 ---
 
@@ -35,7 +35,7 @@
 
 ## `planning/` — 路线图
 
-**这个目录回答「接下来做什么」，只有一篇。** [TODO.md](planning/TODO.md) 是与 GitHub Issues 自动核对的路线图与待办，按临床出口、待合并修复和文档架构分组。GitHub Issues 是状态的唯一真源，本文只做分组与上下文；产品承诺边界不放在可频繁变动的路线图里。
+**这个目录回答「接下来做什么」。** [TODO.md](planning/TODO.md) 是与 GitHub Issues 自动核对的路线图与待办，按临床出口、待合并修复和文档架构分组；[WRINKLE_PIPELINE_AUDIT.md](planning/WRINKLE_PIPELINE_AUDIT.md) 定义由 `mingzhen` 负责的皱纹检测 checkpoint、跨肤色偏移、照片到最终皱纹线的端到端审计和重复实现收敛 gate。GitHub Issues 是状态的唯一真源，本文只做分组与上下文；产品承诺边界不放在可频繁变动的路线图里。
 
 ---
 
