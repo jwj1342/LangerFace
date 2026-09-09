@@ -421,6 +421,7 @@ Stage 2 切口 workflow 只在浏览器本地处理肿物参数、标准化坐�
 | [CROSS_LANG_PARITY.md](docs/quality/CROSS_LANG_PARITY.md) | Python ⇄ Web TypeScript ⇄ 金标逐点对拍不变式与金标重生成 |
 | [OBSERVABILITY.md](docs/quality/OBSERVABILITY.md) | 浏览器诊断 JSON、结构化事件字段、计数器与运行时指标（issue #51）|
 | [CI_CD_VERCEL.md](docs/quality/CI_CD_VERCEL.md) | Vercel 设置、Preview 访问策略、branch protection 与排障 |
+| [MARKER_RUNTIME_ACCEPTANCE.md](docs/quality/MARKER_RUNTIME_ACCEPTANCE.md) | 受控标记运行身份核验、本地样本最小回归包与验收边界 |
 | [LABELS.md](docs/onboarding/LABELS.md) | issue / PR 标签规范 |
 | **临床 / 合规** — `docs/clinical/` | |
 | [VALIDATION.md](docs/quality/VALIDATION.md) | 临床验证数据集、Stage 1/2 指标、失败分类、人工评审表（issue #20）|
