@@ -321,20 +321,20 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   await setWorkflowDiameter(page, 8);
   await clickWorkflowCanvasRatio(page, 0.50, 0.64);
   await expect(page.locator("#workflowStageStatus")).toHaveText(
-    "红色虚线表示候选进入敏感开口，已阻断且不会保存；请调整位置或范围。",
+    "红色虚线仅供查看被阻断的轮廓：候选切口经过眼裂、口裂或鼻孔；候选切口进入默认唇红保护区域。不可确认、保存或用于实时叠加；请调整位置或范围。",
     { timeout: 45_000 },
   );
   await expect.poll(() => page.locator("[data-workflow-diagnostic-candidate]").getAttribute("d")).toMatch(/^M /);
   await expect(page.locator("#savedCount")).toHaveText("0");
   await page.locator("#saveReviewBtn").click();
   await expect(page.locator("#workflowStageStatus")).toHaveText(
-    "红色虚线表示候选进入敏感开口；记录本次阻断审阅前请填写审阅备注。",
+    "红色虚线表示候选已被规则阻断；记录本次阻断审阅前请填写审阅备注。",
   );
   await expect(page.locator("#reviewNotes")).toHaveAttribute("aria-invalid", "true");
   await page.locator("#reviewNotes").fill("敏感开口阻断已人工复核");
   await page.locator("#saveReviewBtn").click();
   await expect(page.locator("#workflowStageStatus")).toHaveText(
-    "未保存审阅记录：已记录本次敏感开口阻断的备注，但红色虚线不是候选，不能加入候选库。",
+    "未保存审阅记录：已记录本次规则阻断的备注，但红色虚线仅作阻断参考，不能加入候选库。",
   );
   await expect(page.locator("#savedCount")).toHaveText("0");
   await page.setViewportSize({ width: 1920, height: 1000 });
@@ -510,10 +510,27 @@ test("subcutaneous overlay stays centered and cutaneous scan follows diameter", 
   });
   await page.getByTitle("点击照片中的受控黑色标记并识别边界").click();
   const scan = page.locator(".workflow-marker-scan input[type=range]");
-  await expect(scan).toHaveAttribute("min", "40");
-  const scanValues = await scan.evaluate((input: HTMLInputElement) => ({
-    minimum: Number(input.min),
-    current: Number(input.value),
-  }));
-  expect(scanValues.current).toBeGreaterThanOrEqual(scanValues.minimum);
+  await expect(scan).toHaveAttribute("min", "10");
+  await expect(scan).toHaveAttribute("max", "60");
+  await expect(scan).toHaveAttribute("step", "5");
+  // The fixed slider endpoint is not the tumor-dependent detection minimum.
+  await expect.poll(async () => Number(await scan.inputValue())).toBeGreaterThanOrEqual(40);
+  await scan.focus();
+  await scan.press("Home");
+  await expect(scan).toHaveValue("10");
+  await page.evaluate(() => {
+    const auditWindow = window as Window & { __scanCoverageReasons?: string[] };
+    auditWindow.__scanCoverageReasons = [];
+    window.addEventListener("langerface:incision-state", (event) => {
+      const reason = (event as CustomEvent<{ reason?: string }>).detail?.reason;
+      if (reason) auditWindow.__scanCoverageReasons?.push(reason);
+    });
+  });
+  await clickWorkflowCanvasRatio(page, 0.32, 0.52);
+  await expect(page.locator("#workflowStageStatus")).toHaveText(
+    "当前 10 mm 扫描面小于肿物直径所需覆盖范围，请扩大到至少 40 mm 后重试。",
+  );
+  await expect.poll(() => page.evaluate(() => (
+    window as Window & { __scanCoverageReasons?: string[] }
+  ).__scanCoverageReasons || [])).toContain("controlled_marker_scan_too_small");
 });

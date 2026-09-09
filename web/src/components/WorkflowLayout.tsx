@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 
-import { WorkbenchLayout } from "./WorkbenchLayout";
+import { WorkbenchFrame, WorkbenchLayout, WorkbenchSidebar } from "./WorkbenchLayout";
 
 const MOBILE_WORKFLOW_LAYOUT_QUERY = "(max-width: 560px) and (pointer: coarse) and (hover: none)";
 
@@ -26,19 +26,19 @@ export function WorkflowLayout({ liveRail, mobileOperations, stage, incisionRail
 
   if (mobileViewport) {
     return (
-      <div className="app clinical-compat-workbench workflow-workbench">
+      <WorkbenchFrame workspace="workflow">
         {stage}
         <div className="workflow-mobile-operation-pane" aria-label="移动端操作台">
           <div className="workflow-mobile-recovery-slot" />
           {mobileOperations}
-          <aside aria-label="实时 RSTL 操作台" className="sidebar workflow-live-rail live-workbench">
+          <WorkbenchSidebar aria-label="实时 RSTL 操作台" className="workflow-live-rail live-workbench">
             {liveRail}
-          </aside>
-          <aside aria-label="切口规划操作台" className="sidebar workflow-incision-rail incision-workbench">
+          </WorkbenchSidebar>
+          <WorkbenchSidebar aria-label="切口规划操作台" className="workflow-incision-rail incision-workbench">
             {incisionRail}
-          </aside>
+          </WorkbenchSidebar>
         </div>
-      </div>
+      </WorkbenchFrame>
     );
   }
 

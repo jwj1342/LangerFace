@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
+import { createRequire } from "node:module";
 
 import {
   beginWorkflowPointerIntent,
@@ -87,6 +88,68 @@ const layout = read("web/src/components/WorkflowLayout.tsx");
 const sharedLayout = read("web/src/components/WorkbenchLayout.tsx");
 const styles = read("web/src/styles.css");
 const persistentTooltip = read("web/src/components/ui/persistent-tooltip.tsx");
+
+// Render only the layout shells: no runtime, browser, assets, or models are loaded.
+const requireWeb = createRequire(path.join(root, "web/package.json"));
+const ts = requireWeb("typescript");
+const react = requireWeb("react");
+const { renderToStaticMarkup } = requireWeb("react-dom/server");
+const { clsx } = requireWeb("clsx");
+const { twMerge } = requireWeb("tailwind-merge");
+const h = react.createElement;
+const loadLayout = (source: string, phone: boolean, shared?: unknown) => {
+  const exports = {};
+  const compiled = ts.transpileModule(source, { compilerOptions: {
+    jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS,
+  } }).outputText;
+  runInNewContext(compiled, { exports, require: (name: string) => {
+    if (name === "react/jsx-runtime") return requireWeb(name);
+    if (name === "react") return { ...react, useState: () => [phone], useEffect: () => {} };
+    if (name === "../lib/cn") return { cn: (...values: unknown[]) => twMerge(clsx(values)) };
+    if (name === "./WorkbenchLayout") return shared;
+    throw new Error(`Unexpected layout dependency: ${name}`);
+  } });
+  return exports;
+};
+const layoutExports = loadLayout(sharedLayout, false) as Record<string, typeof react.Component>;
+const stageFixture = h("main", { id: "stage-fixture" }, "stage");
+const liveFixture = h("button", { id: "live-fixture" }, "live");
+const incisionFixture = h("button", { id: "incision-fixture" }, "incision");
+// Attribute order is immaterial; compare the complete element/attribute tree.
+const canonicalMarkup = (element: unknown) => renderToStaticMarkup(element).replace(
+  /<([a-z][\w-]*)(\s[^<>]*?)?>/g,
+  (_: string, tag: string, attrs = "") => `<${tag}${(attrs.match(/\s+[\w:-]+(?:="[^"]*")?/g) || []).sort().join("")}>`,
+);
+for (const workspace of ["annotate", "incision", "live", "surgery", "workflow"]) {
+  for (const secondary of [null, incisionFixture]) {
+    const sidebar = h("aside", { "aria-label": "live", className: "sidebar live-rail" }, liveFixture);
+    const trailing = secondary ? h("aside", { "aria-label": "incision", className: "sidebar incision-rail" }, secondary) : null;
+    const expected = h("div", { className: `app clinical-compat-workbench ${workspace}-workbench`, id: "frame" },
+      workspace === "incision" ? stageFixture : sidebar,
+      workspace === "incision" ? sidebar : stageFixture, trailing);
+    const actual = h(layoutExports.WorkbenchLayout, { workspace, id: "frame", stage: stageFixture,
+      sidebarLabel: "live", sidebarClassName: "live-rail", secondarySidebar: secondary,
+      secondarySidebarLabel: "incision", secondarySidebarClassName: "incision-rail" }, liveFixture);
+    assert.equal(canonicalMarkup(actual), canonicalMarkup(expected), `${workspace}: shell DOM and order stay unchanged`);
+  }
+}
+for (const phone of [false, true]) {
+  for (const operations of [null, h("button", { id: "operations-fixture" }, "operations")]) {
+    const { WorkflowLayout } = loadLayout(layout, phone, layoutExports) as Record<string, typeof react.Component>;
+    const actual = h(WorkflowLayout, { stage: stageFixture, liveRail: liveFixture, incisionRail: incisionFixture, mobileOperations: operations });
+    const expected = phone
+      ? h("div", { className: "app clinical-compat-workbench workflow-workbench" }, stageFixture,
+        h("div", { className: "workflow-mobile-operation-pane", "aria-label": "移动端操作台" },
+          h("div", { className: "workflow-mobile-recovery-slot" }), operations,
+          h("aside", { "aria-label": "实时 RSTL 操作台", className: "sidebar workflow-live-rail live-workbench" }, liveFixture),
+          h("aside", { "aria-label": "切口规划操作台", className: "sidebar workflow-incision-rail incision-workbench" }, incisionFixture)))
+      : h(layoutExports.WorkbenchLayout, { workspace: "workflow", stage: stageFixture,
+        sidebarLabel: "实时 RSTL 操作台", sidebarClassName: "workflow-live-rail live-workbench",
+        secondarySidebarLabel: "切口规划操作台", secondarySidebarClassName: "workflow-incision-rail incision-workbench",
+        secondarySidebar: incisionFixture }, liveFixture);
+    assert.equal(canonicalMarkup(actual), canonicalMarkup(expected), `phone=${phone}: workflow DOM stays unchanged`);
+  }
+}
 
 assert.match(app, /path="\/app\/workflow"\s+element={<WorkflowRoute\s*\/>}/, "workflow route stays inside the React SPA");
 assert.match(route, /import\("\.\.\/services\/liveRuntime"\)/, "workflow route reuses the live media runtime");

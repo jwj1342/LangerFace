@@ -883,7 +883,11 @@ assert.ok(workbenchLayout.includes("type WorkbenchLayoutWorkspace"), "React Work
 assert.ok(workbenchLayout.includes("Extract<Workspace"), "React WorkbenchLayout keeps a narrowed workbench workspace type from the shared Workspace union");
 assert.ok(workbenchLayout.includes("workspace: WorkbenchLayoutWorkspace"), "React WorkbenchLayout requires a typed workspace prop");
 assert.ok(workbenchLayout.includes("`${workspace}-workbench`"), "React WorkbenchLayout derives workspace shell classes centrally");
-assert.ok(workbenchLayout.includes('cn("sidebar", sidebarClassName)'), "React WorkbenchLayout preserves the legacy sidebar class through its shared primitive");
+assert.ok(workbenchLayout.includes('cn("sidebar", className)'), "React WorkbenchSidebar preserves the legacy sidebar class through its shared primitive");
+assert.ok(workbenchLayout.includes("export function WorkbenchFrame"), "shared layout exports its frame primitive");
+assert.ok(workbenchLayout.includes("export function WorkbenchSidebar"), "shared layout exports its sidebar primitive");
+assert.ok(workbenchLayout.includes("<WorkbenchFrame workspace={workspace}"), "desktop layout uses the shared frame");
+assert.equal((workbenchLayout.match(/<WorkbenchSidebar\b/g) || []).length, 2, "both desktop rails use the shared sidebar");
 assert.ok(workbenchLayout.includes("secondarySidebar"), "React WorkbenchLayout supports an optional shared trailing sidebar");
 assert.ok(workbenchLayout.includes('cn("disclaimer"'), "React Disclaimer preserves the legacy disclaimer class");
 for (const [name, source, workspace] of [
@@ -1000,7 +1004,7 @@ assert.ok(tumorPanel.includes("FieldGroup"), "React tumor input panel uses Field
 assert.ok(tumorPanel.includes('showDepthControl = true'), "React tumor input panel preserves the standalone depth-control default");
 assert.ok(tumorPanel.includes('id="depthWrap" visible={!cutaneous && showDepthControl}'), "React tumor input panel can hide the non-operative workflow depth control without deleting its data contract");
 assert.ok(tumorPanel.includes('id="marginWrap" visible={cutaneous}'), "React tumor input panel shows cutaneous margin through FieldGroup visible");
-assert.ok(tumorPanel.includes('id="ellipseWrap" visible={cutaneous && boundaryMode === "ellipse"}'), "React tumor input panel shows ellipse controls through FieldGroup visible");
+assert.match(tumorPanel, /<FieldGroup\s+id="ellipseWrap"\s+visible=\{cutaneous && boundaryMode === "ellipse"\}/, "React tumor input panel shows ellipse controls through FieldGroup visible regardless of attribute line breaks");
 assert.ok(tumorPanel.includes('id="freehandControls" visible={freehand}'), "React tumor input panel shows freehand controls through ButtonRow visible");
 assert.ok(tumorPanel.includes('<Input id="tumorImportFile" hidden'), "React tumor input panel uses native hidden file input semantics");
 assert.ok(editPanel.includes("FieldGroup"), "React edit controls panel uses FieldGroup for conditional edit controls");

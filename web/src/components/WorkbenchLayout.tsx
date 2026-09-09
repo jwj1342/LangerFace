@@ -5,6 +5,18 @@ import type { Workspace } from "../stores/appStore";
 
 type WorkbenchLayoutWorkspace = Extract<Workspace, "annotate" | "incision" | "live" | "surgery" | "workflow">;
 
+interface WorkbenchFrameProps extends HTMLAttributes<HTMLDivElement> {
+  workspace: WorkbenchLayoutWorkspace;
+}
+
+export function WorkbenchFrame({ workspace, className, ...props }: WorkbenchFrameProps) {
+  return <div className={cn("app", "clinical-compat-workbench", `${workspace}-workbench`, className)} {...props} />;
+}
+
+export function WorkbenchSidebar({ className, ...props }: HTMLAttributes<HTMLElement>) {
+  return <aside className={cn("sidebar", className)} {...props} />;
+}
+
 interface WorkbenchLayoutProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
   secondarySidebar?: ReactNode;
@@ -29,22 +41,22 @@ export function WorkbenchLayout({
   ...props
 }: WorkbenchLayoutProps) {
   const sidebar = (
-    <aside aria-label={sidebarLabel} className={cn("sidebar", sidebarClassName)}>
+    <WorkbenchSidebar aria-label={sidebarLabel} className={sidebarClassName}>
       {children}
-    </aside>
+    </WorkbenchSidebar>
   );
   const trailingSidebar = secondarySidebar ? (
-    <aside aria-label={secondarySidebarLabel} className={cn("sidebar", secondarySidebarClassName)}>
+    <WorkbenchSidebar aria-label={secondarySidebarLabel} className={secondarySidebarClassName}>
       {secondarySidebar}
-    </aside>
+    </WorkbenchSidebar>
   ) : null;
 
   return (
-    <div className={cn("app", "clinical-compat-workbench", `${workspace}-workbench`, className)} {...props}>
+    <WorkbenchFrame workspace={workspace} className={className} {...props}>
       {workspace === "incision" ? stage : sidebar}
       {workspace === "incision" ? sidebar : stage}
       {trailingSidebar}
-    </div>
+    </WorkbenchFrame>
   );
 }
 
