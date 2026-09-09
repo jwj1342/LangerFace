@@ -2,6 +2,8 @@ import { standardRstlStrokeWidth } from "./rstlRenderPlan.ts";
 
 export type IncisionOverlayCandidateType = "linear" | "fusiform" | string;
 
+const FUSIFORM_HIGHLIGHT_COLOR = "#67e8f9";
+
 export interface IncisionOverlayStyle {
   rstlLineWidth: number;
   candidate: {
@@ -31,7 +33,7 @@ export interface IncisionOverlayStyleOptions {
 }
 
 export interface IncisionOverlayScreenStyleOptions {
-  /** Phone workflow uses a deliberately lighter visual treatment. */
+  /** Phone workflow keeps its compact stroke sizing. */
   compact?: boolean;
   /** Photo-only view zoom. Camera/video stay at 1. */
   viewScale?: number;
@@ -60,9 +62,9 @@ export function incisionOverlayScreenStyle(
   const boundaryLineWidth = (compact ? 0.7 : 2) * viewScale;
   return {
     candidate: {
-      color: compact ? (linear ? "#4ade80" : "#67e8f9") : (linear ? "#166534" : "#003b73"),
+      color: linear ? (compact ? "#4ade80" : "#166534") : FUSIFORM_HIGHLIGHT_COLOR,
       lineWidth: candidateLineWidth,
-      haloColor: linear ? "rgba(3, 7, 18, 0.9)" : compact ? "#67e8f9" : "#003b73",
+      haloColor: linear ? "rgba(3, 7, 18, 0.9)" : FUSIFORM_HIGHLIGHT_COLOR,
       haloWidth: linear
         ? candidateLineWidth + (compact ? 0.3 : 0.5) * viewScale
         : candidateLineWidth,
@@ -86,11 +88,11 @@ export function incisionOverlayScreenStyle(
 export function incisionCandidateScreenStyle(candidateType: IncisionOverlayCandidateType = "fusiform") {
   const linear = candidateType === "linear";
   return {
-    // Opaque matte cobalt separates the incision from both warm skin and the
-    // magenta RSTL layer without using a luminous glow or a toy-like halo.
-    color: linear ? "#166534" : "#003b73",
+    // Keep the established one-pixel desktop width while sharing the bright
+    // cyan fusiform hue used by the compact workflow.
+    color: linear ? "#166534" : FUSIFORM_HIGHLIGHT_COLOR,
     lineWidth: 1,
-    haloColor: linear ? "rgba(3, 7, 18, 0.82)" : "#003b73",
+    haloColor: linear ? "rgba(3, 7, 18, 0.82)" : FUSIFORM_HIGHLIGHT_COLOR,
     haloWidth: linear ? 1.5 : 1,
   };
 }

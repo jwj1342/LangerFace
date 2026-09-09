@@ -143,6 +143,8 @@ export interface IncisionSavedCandidateSummary {
   overlayStatusLabel: string;
   overlayStatusWarning: boolean;
   reviewTransitionLabel: string | null;
+  reviewTransitionDisabled: boolean;
+  reviewTransitionReason: string | null;
 }
 
 export interface IncisionWorkflowRuntime {
@@ -228,6 +230,10 @@ export interface IncisionSavedCandidateRecordLike {
   candidate?: {
     type?: string | null;
     length_mm?: unknown;
+    metrics?: {
+      photo_visibility_limited_candidate?: boolean;
+      photo_reference_candidate?: boolean;
+    } | null;
   } | null;
   review?: {
     reviewer?: string;
@@ -236,6 +242,9 @@ export interface IncisionSavedCandidateRecordLike {
   review_status?: string;
   review_gate?: {
     live_overlay_ready?: boolean;
+    live_overlay_blocked_reason?: string | null;
+    hard_violation_count?: number;
+    workflow_trace_gate_passed?: boolean;
   } | null;
   guardrails?: {
     passed?: boolean | null;
@@ -476,6 +485,21 @@ export function buildIncisionSavedCandidateSummaries({
   return records.map((rec) => {
     const comparison = comparisonById.get(rec.id);
     const guardrails = rec.guardrails?.passed ? "guardrails 通过" : "guardrails 需复核";
+    const pendingApproval = (rec.review_status || "pending_clinician_confirmation") === "pending_clinician_confirmation";
+    const blockedReason = rec.review_gate?.live_overlay_blocked_reason;
+    const reviewTransitionReason = !pendingApproval
+      ? null
+      : rec.candidate?.metrics?.photo_visibility_limited_candidate === true
+          || blockedReason === "visibility_limited_reference_candidate"
+        ? "暂不能确认：当前候选只覆盖照片可见区域；请补充另一视角并复核隐藏区域。"
+        : rec.candidate?.metrics?.photo_reference_candidate === true
+            || blockedReason === "nonstandard_reference_candidate"
+          ? "暂不能确认：当前候选未达到标准梭形要求；请调整参数或重新计算。"
+          : blockedReason === "engineering_hard_violation" || Number(rec.review_gate?.hard_violation_count || 0) > 0
+            ? "暂不能确认：候选存在不可覆盖的工程几何错误；请修复后重新计算。"
+            : rec.review_gate?.workflow_trace_gate_passed === false
+              ? "暂不能确认：候选生成记录不完整；请重新计算后再审阅。"
+              : null;
     const rank = comparison
       ? `工程排序 #${comparison.rank} · 分 ${formatIncisionMetric(comparison.score, 1)} · ${(comparison.reasons || []).slice(0, 2).join("；")} · `
       : "";
@@ -499,6 +523,8 @@ export function buildIncisionSavedCandidateSummaries({
         : rec.review_status === "approved_for_discussion"
           ? "转为待确认"
           : null,
+      reviewTransitionDisabled: Boolean(reviewTransitionReason),
+      reviewTransitionReason,
     };
   });
 }

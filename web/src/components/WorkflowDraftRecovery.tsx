@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { RotateCw, Trash2 } from "lucide-react";
+import { createPortal } from "react-dom";
 
 import { handleFile } from "../services/pipelineSource";
 import {
@@ -13,10 +14,17 @@ import {
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
 
-export function WorkflowDraftRecovery() {
+interface WorkflowDraftRecoveryProps {
+  mobilePortalSelector?: string;
+}
+
+const MOBILE_WORKFLOW_MEDIA_QUERY = "(max-width: 560px) and (pointer: coarse) and (hover: none)";
+
+export function WorkflowDraftRecovery({ mobilePortalSelector }: WorkflowDraftRecoveryProps = {}) {
   const sourceKind = useLiveStore((state) => state.snapshot?.source.kind || null);
   const [draft, setDraft] = useState<WorkflowDraftSession | null>(() => loadWorkflowDraftSession());
   const [restoring, setRestoring] = useState(false);
+  const [mobileTarget, setMobileTarget] = useState<Element | null>(null);
 
   useEffect(() => {
     const refresh = () => setDraft(loadWorkflowDraftSession());
@@ -24,9 +32,18 @@ export function WorkflowDraftRecovery() {
     return () => window.removeEventListener(WORKFLOW_DRAFT_CHANGED_EVENT, refresh);
   }, []);
 
+  useEffect(() => {
+    if (!mobilePortalSelector || typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia(MOBILE_WORKFLOW_MEDIA_QUERY);
+    const sync = () => setMobileTarget(media.matches ? document.querySelector(mobilePortalSelector) : null);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, [mobilePortalSelector]);
+
   if (!draft || sourceKind === "image") return null;
 
-  return (
+  const panel = (
     <section className="workflow-draft-recovery" aria-label="临时草稿">
       <div>
         <strong>发现未完成的本地草稿</strong>
@@ -60,4 +77,6 @@ export function WorkflowDraftRecovery() {
       </div>
     </section>
   );
+
+  return mobileTarget ? createPortal(panel, mobileTarget) : panel;
 }

@@ -101,6 +101,7 @@ Stage 1 = 稳定显示并临床校验张力线；Stage 2 = 肿物表达、确定
 
 ## 维护 / 部署
 
+- [ ] 审计皱纹 checkpoints、跨肤色偏移并收敛检测代码 — [#229](https://github.com/jwj1342/LangerFace/issues/229)
 - [ ] 完成 V10 公网部署与生产链路验证 — [#224](https://github.com/jwj1342/LangerFace/issues/224)
       · 当前暂不启用可能产生费用的公网运行资源；后续需独立批准承载完整 V10 的受控服务，并验证短期令牌、限流、超时、临时数据清理、监控和回滚。未完成前不得宣称远程生产链路已部署或验证。
 - [ ] 清理 Vercel 历史 Deployment，保持 GitHub / Vercel UI 只突出 `master` production 和当前远端 branch head

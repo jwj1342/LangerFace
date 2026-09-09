@@ -191,10 +191,10 @@ for (const tumorKind of ["cutaneous", "subcutaneous"] as const) {
       `${tumorKind}/${inputMode}: video and camera share candidate presentation tokens`);
     assert.ok(Math.abs(styles[0].style.candidate.lineWidth - styles[0].style.rstlLineWidth / 6) < 1e-9);
     if (tumorKind === "cutaneous") {
-      assert.equal(styles[0].style.candidate.color, "#003b73",
-        "fusiform candidate uses an opaque matte cobalt ink stroke");
-      assert.equal(styles[0].style.candidate.haloColor, "#003b73",
-        "fusiform candidate does not mix a wider dark under-stroke into the thin line");
+      assert.equal(styles[0].style.candidate.color, "#67e8f9",
+        "fusiform candidate uses the shared bright-cyan highlight stroke");
+      assert.equal(styles[0].style.candidate.haloColor, "#67e8f9",
+        "fusiform candidate keeps the highlight without adding a wider under-stroke");
       assert.equal(styles[0].style.candidate.haloWidth, styles[0].style.candidate.lineWidth,
         "repeated fusiform stroke increases pixel coverage without increasing nominal width");
     }
@@ -218,11 +218,11 @@ assert.deepEqual(incisionOverlayStyle(1300, "fusiform").center, {
   strokeWidthCss: 0.8,
 }, "photo, video and camera share the softer lesion-centre presentation token");
 assert.deepEqual(incisionCandidateScreenStyle("fusiform"), {
-  color: "#003b73",
+  color: "#67e8f9",
   lineWidth: 1,
-  haloColor: "#003b73",
+  haloColor: "#67e8f9",
   haloWidth: 1,
-}, "photo fusiform uses an opaque one-CSS-pixel screen-space stroke without a glow halo");
+}, "desktop photo fusiform keeps its one-CSS-pixel width while using the mobile highlight hue");
 const compactFullPhotoStyle = incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 1 });
 const compactCameraStyle = incisionOverlayScreenStyle("fusiform", { compact: true });
 const compactZoomedPhotoStyle = incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 2 });

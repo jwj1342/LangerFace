@@ -10,6 +10,12 @@
   "scripts": {
     "predev": "node ../tools/check_web_dependency_isolation.mjs",
     "dev": "vite --force --host 127.0.0.1",
+    "predev:marker-v035": "node ../tools/check_web_dependency_isolation.mjs && node ../tools/doctor_wrinkle_runtime.ts && node ../tools/run_controlled_marker_v035_dev.mjs --check",
+    "dev:marker-v035": "node ../tools/run_controlled_marker_v035_dev.mjs",
+    "doctor:marker-v035": "node ../tools/run_controlled_marker_v035_dev.mjs --check",
+    "verify:marker-v035": "node scripts/verify-marker-runtime.ts",
+    "test:marker-identity": "node ../tools/test_marker_runtime_identity.ts",
+    "test:marker-regression": "node ../tools/run_marker_regression.mjs",
     "local:wrinkle": "node ../tools/verify_latest_wrinkle_pipeline.mjs && node ../tools/run_wrinkle_rstl_local.mjs",
     "experiment:direct-crows": "node ../tools/verify_latest_wrinkle_pipeline.mjs && node ../tools/run_crows_feet_direct_rstl_experiment.mjs",
     "verify:latest-wrinkle": "node ../tools/verify_latest_wrinkle_pipeline.mjs",
@@ -26,7 +32,9 @@
     "test:wrinkle-provider": "node ../tools/test_wrinkle_v10_provider.ts && node ../tools/test_local_wrinkle_v10_bridge.ts",
     "test:annotate": "node ../tools/test_annotation_export.ts && node ../tools/test_annotate_model.ts && node ../tools/test_annotation_services.ts && node ../tools/test_annotation_pointer_controller.ts && node ../tools/test_annotation_mesh_service.ts && node ../tools/test_annotation_slicer_import.ts && node ../tools/test_annotate_ui.ts && node ../tools/test_3d_route_ui.ts && node ../tools/test_surgery_ui.ts",
     "test:incision": "node ../tools/test_incision_atlas_source.ts && node ../tools/test_incision_scene_geometry.ts && node ../tools/test_incision_export.ts && node ../tools/test_incision_picking.ts && node ../tools/test_incision_command_schemas.ts && node ../tools/test_incision_command_router.ts && node ../tools/test_incision_session.ts && node ../tools/test_incision_edit_history.ts && node ../tools/test_incision_review_records.ts && node ../tools/test_incision_workspace_session.ts && node ../tools/test_workflow_draft_session.ts && node ../tools/test_incision_presenter.ts && node ../tools/test_incision_overlay.ts && node ../tools/test_incision_overlay_replay_qa.ts && node ../tools/test_incision_overlay_acceptance_audit.ts && node ../tools/test_incision_overlay_acceptance_evidence.ts && node ../tools/test_incision_overlay_device_matrix.ts && node ../tools/test_live_incision_overlay_ui.ts && node ../tools/test_incision_lesion_normalization.ts && node ../tools/test_incision_local_rstl_direction.ts && node ../tools/test_incision_tools.ts && node ../tools/test_incision_path_guardrails.ts && node ../tools/test_incision_workflow_ui.ts",
-    "test:lesion-adapter": "node ../tools/test_lesion_detection_adapter.ts && node ../tools/test_controlled_marker_detection.ts",
+    "test:lesion-adapter": "node ../tools/test_lesion_detection_adapter.ts && node ../tools/test_controlled_marker_detection.ts && node ../tools/test_controlled_marker_detection_profile.ts && node ../tools/test_controlled_marker_candidate_completeness.ts && node ../tools/test_controlled_marker_color_difference.ts",
+    "test:lesion-local-samples": "node ../tools/test_controlled_marker_color_difference_real_sample.ts && node ../tools/test_controlled_marker_image10.ts && node ../tools/test_controlled_marker_image13.ts",
+    "test:workflow-local-sample": "node ../tools/test_workflow_rejected_fusiform.ts",
     "test:privacy": "node ../tools/test_export_privacy.ts",
     "test": "npm run typecheck && npm run test:arch && npm run test:geometry && npm run test:live && npm run test:wrinkle-provider && npm run test:annotate && npm run test:incision && npm run test:lesion-adapter && npm run test:privacy && npm run test:personalized"
   },

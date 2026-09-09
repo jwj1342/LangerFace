@@ -1,14 +1,47 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { WorkbenchLayout } from "./WorkbenchLayout";
 
+const MOBILE_WORKFLOW_LAYOUT_QUERY = "(max-width: 560px) and (pointer: coarse) and (hover: none)";
+
 interface WorkflowLayoutProps {
   liveRail: ReactNode;
+  mobileOperations?: ReactNode;
   stage: ReactNode;
   incisionRail: ReactNode;
 }
 
-export function WorkflowLayout({ liveRail, stage, incisionRail }: WorkflowLayoutProps) {
+export function WorkflowLayout({ liveRail, mobileOperations, stage, incisionRail }: WorkflowLayoutProps) {
+  const [mobileViewport, setMobileViewport] = useState(() => (
+    typeof window !== "undefined" && window.matchMedia(MOBILE_WORKFLOW_LAYOUT_QUERY).matches
+  ));
+
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_WORKFLOW_LAYOUT_QUERY);
+    const syncViewport = () => setMobileViewport(media.matches);
+    syncViewport();
+    media.addEventListener("change", syncViewport);
+    return () => media.removeEventListener("change", syncViewport);
+  }, []);
+
+  if (mobileViewport) {
+    return (
+      <div className="app clinical-compat-workbench workflow-workbench">
+        {stage}
+        <div className="workflow-mobile-operation-pane" aria-label="移动端操作台">
+          <div className="workflow-mobile-recovery-slot" />
+          {mobileOperations}
+          <aside aria-label="实时 RSTL 操作台" className="sidebar workflow-live-rail live-workbench">
+            {liveRail}
+          </aside>
+          <aside aria-label="切口规划操作台" className="sidebar workflow-incision-rail incision-workbench">
+            {incisionRail}
+          </aside>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <WorkbenchLayout
       secondarySidebar={incisionRail}

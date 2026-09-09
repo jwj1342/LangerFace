@@ -62,8 +62,30 @@ test("phone review fixes stay visible, independent, and desktop-isolated", async
   await expect(qualityPanel).toHaveCount(1);
   await expect(qualityPanel).toContainText("跟踪质量参考");
   await expect(qualityPanel).toContainText("受分辨率与光线影响");
-  await expect(page.locator(".main-wrap > .mobile-canvas-quality")).toHaveCount(1);
+  await expect(page.locator(".workflow-mobile-quality-slot > .mobile-canvas-quality")).toHaveCount(1);
+  await expect(page.locator(".main-wrap > .mobile-canvas-quality")).toHaveCount(0);
   await expect(page.locator("#qualityBar")).toHaveCount(1);
+
+  const mobileOperationPane = page.locator(".workflow-mobile-operation-pane");
+  await expect(mobileOperationPane).toBeVisible();
+  await expect(page.locator(".workflow-mobile-scroll-zone")).toHaveCount(0);
+  await expect(page.locator("#livePill")).toBeHidden();
+  await expect(page.locator("#fps")).toBeHidden();
+  expect(await mobileOperationPane.evaluate((pane) => {
+    const style = getComputedStyle(pane);
+    return style.overflowY === "auto" && style.scrollbarWidth === "none"
+      && pane.scrollHeight > pane.clientHeight;
+  })).toBe(true);
+
+  const stageTopBeforeScroll = await page.locator(".workflow-workbench > .stage").evaluate(
+    (stage) => stage.getBoundingClientRect().top,
+  );
+  await mobileOperationPane.evaluate((pane) => { pane.scrollTop = 180; });
+  const stageTopAfterScroll = await page.locator(".workflow-workbench > .stage").evaluate(
+    (stage) => stage.getBoundingClientRect().top,
+  );
+  expect(stageTopAfterScroll).toBeCloseTo(stageTopBeforeScroll, 1);
+  await mobileOperationPane.evaluate((pane) => { pane.scrollTop = 0; });
 
   const layerGrid = page.locator(".mobile-layer-grid");
   const rstl = layerGrid.getByRole("button", { name: "RSTL", exact: true });

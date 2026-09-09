@@ -109,6 +109,10 @@ export type AnnotateMeshCommand = (typeof ANNOTATE_MESH_COMMANDS)[number];
 export type AnnotateDrawCommand = (typeof ANNOTATE_DRAW_COMMANDS)[number];
 export type AnnotateLibraryCommand = (typeof ANNOTATE_LIBRARY_COMMANDS)[number];
 export type IncisionTumorCommand = (typeof INCISION_TUMOR_COMMANDS)[number];
+export const MARKER_DIAGNOSTIC_COMMANDS = ["export_marker_diagnostic", "import_marker_diagnostic", "replay_marker_diagnostic"] as const;
+export function dispatchMarkerDiagnosticCommand(command: (typeof MARKER_DIAGNOSTIC_COMMANDS)[number], value?: string) {
+  dispatchControllerCommand(INCISION_TUMOR_REACT_COMMAND_EVENT, { command, value });
+}
 export type IncisionSecondaryCueCommand = (typeof INCISION_SECONDARY_CUE_COMMANDS)[number];
 export type IncisionEditCommand = (typeof INCISION_EDIT_COMMANDS)[number];
 export type IncisionEditControlId =

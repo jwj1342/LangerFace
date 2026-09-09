@@ -20,6 +20,7 @@ const liveRouteControls = read("src/components/LiveRouteControlsPanel.tsx");
 const liveControllerBridge = read("src/hooks/useLiveControllerBridge.ts");
 const liveDom = read("src/services/liveDom.ts");
 const liveRuntime = read("src/services/liveRuntime.ts");
+const liveSnapshots = read("src/services/liveSnapshots.ts");
 const liveRefine2d = read("src/services/liveRefine2d.ts");
 const liveCommandRouter = read("src/services/liveCommandRouter.ts");
 const pipelineSource = read("src/services/pipelineSource.ts");
@@ -90,6 +91,10 @@ includesAll(liveSourceControls, [
   'id="exportBtn"',
   'commands.source("upload_source")',
   'commands.source("camera_toggle")',
+  '当前已载入图片：',
+  'event.pointerType === "mouse"',
+  'onPointerLeave={() => setUploadTooltipOpen(false)}',
+  'id="currentImageFileTooltip"',
 ], "live acquisition controls");
 includesAll(liveSourceControls, [
   'paused ? "▶ 继续" : "⏸ 暂停"',
@@ -144,7 +149,13 @@ includesAll(pipelineSource, [
   'file.type.startsWith("image/")',
   "仅支持上传照片；如需连续画面请开启摄像头。",
   'setSource(prepared.source, "image"',
+  "sourceState.imageFileName = file.name",
 ], "live photo upload pipeline");
+includesAll(liveSnapshots, [
+  "sourceFileName?: string | null",
+  'sourceKind === "image" && sourceFileName?.trim()',
+  "fileName: sourceKind ===",
+], "live source snapshot file-name contract");
 assert.ok(!pipelineSource.includes('setSource(els.video, "video"'), "file upload pipeline does not accept videos");
 
 for (const retiredLiveRuntime of ["mode3d.ts", "projection3d.ts", "liveScanLifecycle.ts"]) {

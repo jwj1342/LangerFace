@@ -15,6 +15,7 @@ export interface LiveTextLike {
 
 export interface LiveSourceState {
   kind: "camera" | "video" | "image" | null;
+  fileName: string | null;
   running: boolean;
   paused: boolean;
   liveLabel: string;
@@ -62,6 +63,7 @@ export interface LiveSnapshotInput {
   modelBadge?: string;
   overlayMessage?: string;
   sourceKind?: LiveSourceState["kind"];
+  sourceFileName?: string | null;
   sourceRunning?: boolean;
   sourcePaused?: boolean;
   liveLabel?: string;
@@ -105,6 +107,7 @@ export function buildLiveControllerSnapshot({
   modelBadge = "",
   overlayMessage = "",
   sourceKind = null,
+  sourceFileName = null,
   sourceRunning = false,
   sourcePaused = false,
   liveLabel = "待机",
@@ -131,6 +134,7 @@ export function buildLiveControllerSnapshot({
     overlayMessage,
     source: {
       kind: sourceKind,
+      fileName: sourceKind === "image" && sourceFileName?.trim() ? sourceFileName.trim() : null,
       running: Boolean(sourceRunning),
       paused: Boolean(sourcePaused),
       liveLabel: liveLabel || "待机",

@@ -56,7 +56,7 @@ export function LiveControlRail({
       <LiveWrinklePanel showAdvancedCaptureHint={showPersonalizedHint} />
       <LiveRefinePanel />
       <LiveRenderControlsPanel />
-      <LiveQualityPanel mobilePortalSelector={moveQualityToMobileStage ? ".workflow-workbench .main-wrap" : undefined} />
+      <LiveQualityPanel mobilePortalSelector={moveQualityToMobileStage ? ".workflow-workbench .workflow-mobile-quality-slot" : undefined} />
 
       <Disclaimer>
         内置图谱为示意性首版（未经临床验证），方向参考 Borges RSTL。

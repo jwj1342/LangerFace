@@ -4,7 +4,7 @@ import { useWorkflowIncisionToolCommands } from "../hooks/useControllerCommands"
 import { FREEHAND_MARKER_DISABLED_MESSAGE } from "../services/incisionClinicalCopy";
 import { useIncisionStore } from "../stores/incisionStore";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
+import { RangeInput } from "./ui/slider";
 import { CanvasLegendItem, Legend } from "./ui/legend";
 import { PersistentTooltip, usePersistentTooltip } from "./ui/persistent-tooltip";
 
@@ -72,9 +72,8 @@ export function WorkflowCanvasTools() {
           <>
             <label className="workflow-marker-scan" title="受控标记扫描直径">
               <span>扫描 {tools?.scanDiameterMm || 20} mm</span>
-              <Input
-                type="range"
-                min={tools?.minimumScanDiameterMm || 10}
+              <RangeInput
+                min="10"
                 max="60"
                 step="5"
                 value={tools?.scanDiameterMm || 20}

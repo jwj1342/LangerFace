@@ -109,11 +109,13 @@ export function usePersistentTooltip<T extends HTMLElement>(active: boolean) {
 
 export function PersistentTooltip<T extends HTMLElement>({
   anchorRef,
+  className,
   id,
   message,
   open,
 }: {
   anchorRef: RefObject<T | null>;
+  className?: string;
   id: string;
   message: string;
   open: boolean;
@@ -165,7 +167,7 @@ export function PersistentTooltip<T extends HTMLElement>({
     <div
       ref={tooltipRef}
       id={id}
-      className="persistent-disabled-tooltip"
+      className={`persistent-disabled-tooltip${className ? ` ${className}` : ""}`}
       role="tooltip"
       style={position ? {
         left: position.left,

@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { MARKER_DIAGNOSTIC_EVENT } from "../services/controlledMarkerRunDiagnostics";
+import { dispatchMarkerDiagnosticCommand } from "../lib/controllerCommand";
 
 import { useIncisionControllerCommands } from "../hooks/useControllerCommands";
 import { useIncisionStore } from "../stores/incisionStore";
@@ -26,6 +28,17 @@ export function TumorInputPanel({
   continuousFreehand = false,
 }: TumorInputPanelProps) {
   const commands = useIncisionControllerCommands();
+  const [diagnosticEnabled] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("markerDiagnostics") === "1");
+  const [diagnosticMessage, setDiagnosticMessage] = useState("仅本地取证；请重新上传原图后识别，客户端源码身份仍待确认。");
+  useEffect(() => {
+    if (!diagnosticEnabled) return;
+    const listener = (event: Event) => {
+      const detail = (event as CustomEvent<{ message?: string }>).detail;
+      if (typeof detail?.message === "string") setDiagnosticMessage(detail.message);
+    };
+    window.addEventListener(MARKER_DIAGNOSTIC_EVENT, listener);
+    return () => window.removeEventListener(MARKER_DIAGNOSTIC_EVENT, listener);
+  }, [diagnosticEnabled]);
   const snapshot = useIncisionStore((state) => state.snapshot);
   const [kind, setKind] = useState("cutaneous");
   const [diameter, setDiameter] = useState("8");
@@ -70,6 +83,7 @@ export function TumorInputPanel({
     boundaryMode,
     controlledMarkerMode: Boolean(snapshot?.workflowTools?.controlledMarkerMode),
   });
+  const ellipseRatioDisabled = Boolean(snapshot?.workflowTools?.controlledMarkerMode);
   const diameterTooltip = usePersistentTooltip<HTMLButtonElement>(diameterDisabled);
   const boundaryButtonLabel = boundaryActive
     ? continuousFreehand ? "结束描绘" : "结束轮廓"
@@ -213,13 +227,24 @@ export function TumorInputPanel({
           <option value="freehand">{continuousFreehand ? "自由轮廓鼠绘" : "自由轮廓点"}</option>
         </Select>
       </FieldGroup>
-      <FieldGroup id="ellipseWrap" visible={cutaneous && boundaryMode === "ellipse"}>
+      <FieldGroup
+        id="ellipseWrap"
+        visible={cutaneous && boundaryMode === "ellipse"}
+        className={ellipseRatioDisabled ? "ellipse-ratio-field-disabled" : undefined}
+        aria-disabled={ellipseRatioDisabled}
+      >
         <Label htmlFor="ellipseRatio">轮廓纵/横比例 <FieldValue id="ellipseRatioVal">{ellipseRatio}%</FieldValue></Label>
         <RangeInput
           id="ellipseRatio"
           min="40"
           max="200"
-          title="100% 为正圆；低于 100% 时纵向较短，高于 100% 时纵向较长。"
+          disabled={ellipseRatioDisabled}
+          aria-label={ellipseRatioDisabled
+            ? "轮廓纵横比例；受控标记使用已识别的真实边界，暂不可调整"
+            : "轮廓纵横比例；调整形状并保持模拟轮廓面积不变"}
+          title={ellipseRatioDisabled
+            ? "受控标记使用已识别的真实肿物边界，不使用模拟类圆的纵横比例。"
+            : "只改变模拟类圆的纵横形状；直径按等面积圆计算，轮廓面积保持不变。"}
           value={ellipseRatio}
           onInput={(event) => {
             const value = event.currentTarget.value;
@@ -238,7 +263,6 @@ export function TumorInputPanel({
           id="startBoundaryBtn"
           type="button"
           onClick={() => {
-            setBoundaryActive((value) => !value);
             commands.tumor("toggle_boundary");
           }}
         >
@@ -263,6 +287,22 @@ export function TumorInputPanel({
         <Button variant="workbench" id="importTumorBtn" type="button" onClick={() => commands.tumor("import_tumor")}>导入肿物</Button>
       </ButtonRow>
       <Input id="tumorImportFile" hidden type="file" accept="application/json,.json" />
+      {diagnosticEnabled ? <section aria-label="图13本地诊断" id="markerDiagnosticPanel">
+        <WorkbenchNote>诊断取证，不改变识别算法；不是临床验收。</WorkbenchNote>
+        <ButtonRow className="two-cols">
+          <Button variant="workbench" id="exportMarkerDiagnosticBtn" type="button" onClick={() => dispatchMarkerDiagnosticCommand("export_marker_diagnostic")}>导出本次诊断</Button>
+          <Button variant="workbench" id="replayMarkerDiagnosticBtn" type="button" onClick={() => dispatchMarkerDiagnosticCommand("replay_marker_diagnostic")}>核对并复放</Button>
+        </ButtonRow>
+        <Label htmlFor="markerDiagnosticImport">导入另一端诊断（JSON，不导入图片）</Label>
+        <Input id="markerDiagnosticImport" type="file" accept="application/json,.json" onChange={async (event) => {
+          const file = event.currentTarget.files?.[0];
+          if (!file) return;
+          if (file.size > 2_000_000) { setDiagnosticMessage("诊断文件超过2MB"); return; }
+          try { dispatchMarkerDiagnosticCommand("import_marker_diagnostic", await file.text()); }
+          catch { setDiagnosticMessage("诊断文件读取失败"); }
+        }} />
+        <WorkbenchNote id="markerDiagnosticStatus" role="status">{diagnosticMessage}</WorkbenchNote>
+      </section> : null}
       <Button className="workflow-recalculate-action" variant="workbenchPrimary" id="runWorkflowBtn" type="button" onClick={() => commands.tumor("run_workflow")}>重新计算候选</Button>
       <WorkbenchNote id="pickState">{freehand ? boundaryHint : pickState}</WorkbenchNote>
       <AnatomyPreview warn={anatomyPreviewWarn} id="anatomyPreview">{anatomyPreview}</AnatomyPreview>

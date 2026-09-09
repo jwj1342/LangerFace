@@ -123,12 +123,37 @@ export function workflowCandidateDisplayAllowed(
 export function workflowDiagnosticCandidateVisible(
   result: Record<string, any> | null | undefined,
   projectionValid: boolean,
-  candidatePointCount: number,
+  candidatePoints: readonly Vec3[],
   photoOpeningIntersection?: string | null,
 ): boolean {
-  return candidatePointCount >= 2
-    && (result?.candidate_display_blocked === true || !projectionValid)
+  if (!result || !(result.candidate_display_blocked === true || !projectionValid)) return false;
+  if (result.candidate?.type === "fusiform") return workflowDiagnosticOutlineValid(candidatePoints);
+  return candidatePoints.length >= 2
+    && candidatePoints.every((point) => point.length === 3 && point.every(Number.isFinite))
     && workflowSensitiveOpeningDiagnosticEligible(result, photoOpeningIntersection);
+}
+
+/** Use only the complete fit produced by photo planning; never close a clipped segment or source fallback. */
+export function workflowDiagnosticCandidateOutline(
+  candidateType: unknown,
+  geometry: IncisionPhotoGeometry | null | undefined,
+): readonly Vec3[] {
+  if (!geometry) return [];
+  if (candidateType !== "fusiform") {
+    return geometry.candidateProjection.valid ? geometry.candidate : geometry.diagnosticCandidate;
+  }
+  const fit = geometry.candidateProjection.valid ? geometry.fusiformRendering : geometry.diagnosticFusiformRendering;
+  return fit?.outline || [];
+}
+
+export function workflowDiagnosticOutlineValid(outline: readonly Vec3[]): boolean {
+  if (outline.length < 4 || !outline.every((point) => point.length === 3 && point.every(Number.isFinite))) return false;
+  const first = outline[0], last = outline[outline.length - 1];
+  if (first.some((value, axis) => Math.abs(value - last[axis]) > 1e-6)) return false;
+  const polygon = outline.slice(0, -1).map((point) => ({ x: point[0], y: point[1] }));
+  return Math.abs(workflowBoundaryArea(polygon)) > 1e-6
+    && !workflowBoundarySelfIntersects(polygon)
+    && !workflowBoundaryHasNonAdjacentTouch(polygon);
 }
 
 function displayedCandidateHardViolationCodes(result: Record<string, any> | null | undefined): string[] {
@@ -388,15 +413,34 @@ export type WorkflowBoundaryMode = "ellipse" | "freehand";
 export function workflowBoundaryModeTransition(
   mode: WorkflowBoundaryMode,
   action: "select" | "clear",
-): { boundaryActive: boolean; clearCenter: boolean; mayGenerateCandidate: boolean } {
+): {
+  boundaryActive: boolean;
+  clearCenter: boolean;
+  mayGenerateCandidate: boolean;
+  exitControlledMarker: boolean;
+} {
   if (mode === "freehand") {
-    return { boundaryActive: true, clearCenter: true, mayGenerateCandidate: false };
+    return {
+      boundaryActive: true,
+      clearCenter: true,
+      mayGenerateCandidate: false,
+      exitControlledMarker: action === "select",
+    };
   }
   return {
     boundaryActive: false,
     clearCenter: action === "clear",
     mayGenerateCandidate: action === "select",
+    exitControlledMarker: false,
   };
+}
+
+export function workflowFreehandToggleAction(
+  boundaryActive: boolean,
+  boundaryPointCount: number,
+): "start" | "cancel_empty" | "finalize" {
+  if (!boundaryActive) return "start";
+  return boundaryPointCount > 0 ? "finalize" : "cancel_empty";
 }
 
 function workflowPointDistance(first: SvgPoint, second: SvgPoint): number {
@@ -725,6 +769,20 @@ export function workflowClosedBoundarySvgPath(points: readonly SvgPoint[]): stri
   return `M ${svgPoint(start)} ${commands.join(" ")} Z`;
 }
 
+export function workflowEquivalentAreaEllipseRadii(
+  diameter: number,
+  ellipseRatio: number,
+): { radiusX: number; radiusY: number } | null {
+  const radius = Number(diameter) / 2;
+  const ratio = Number(ellipseRatio) / 100;
+  if (![radius, ratio].every(Number.isFinite) || !(radius > 0) || !(ratio > 0)) return null;
+  const ratioScale = Math.sqrt(ratio);
+  return {
+    radiusX: radius / ratioScale,
+    radiusY: radius * ratioScale,
+  };
+}
+
 export function workflowPhotoEllipseBoundary({
   center,
   diameterMm,
@@ -738,8 +796,9 @@ export function workflowPhotoEllipseBoundary({
   pixelsPerMm: number;
   samples?: number;
 }): SvgPoint[] {
-  const radiusX = Number(diameterMm) * Number(pixelsPerMm) / 2;
-  const radiusY = radiusX * Number(ellipseRatio) / 100;
+  const radiiMm = workflowEquivalentAreaEllipseRadii(diameterMm, ellipseRatio);
+  const radiusX = radiiMm ? radiiMm.radiusX * Number(pixelsPerMm) : Number.NaN;
+  const radiusY = radiiMm ? radiiMm.radiusY * Number(pixelsPerMm) : Number.NaN;
   if (![center.x, center.y, radiusX, radiusY].every(Number.isFinite)
     || !(radiusX > 0)
     || !(radiusY > 0)
@@ -887,6 +946,17 @@ function projectCurve(
 ): SvgPoint[] | null {
   const points = curve.map((point) => project(point));
   return points.some((point) => point === null) ? null : points as SvgPoint[];
+}
+
+/** Rejected reference only. Normal solid paths retain their visibility clipping below. */
+export function workflowDiagnosticFusiformSvgPath(
+  outline: readonly Vec3[],
+  project: (point: Vec3) => SvgPoint | null,
+): string {
+  if (!workflowDiagnosticOutlineValid(outline)) return "";
+  const points = projectCurve(outline, project);
+  if (!points || points.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) return "";
+  return `M ${svgPoint(points[0])} L ${points.slice(1, -1).map(svgPoint).join(" L ")} Z`;
 }
 
 export function workflowFusiformSvgPath(

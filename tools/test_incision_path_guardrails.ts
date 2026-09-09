@@ -215,7 +215,7 @@ assert.deepEqual(assessDiagnosticReviewAcknowledgement({ reviewer: "", notes: ""
 assert.deepEqual(assessDiagnosticReviewAcknowledgement({ reviewer: "doctor", notes: "" }), {
   ok: false,
   attention: "notes",
-  message: "红色虚线表示候选进入敏感开口；记录本次阻断审阅前请填写审阅备注。",
+  message: "红色虚线表示候选已被规则阻断；记录本次阻断审阅前请填写审阅备注。",
 }, "a red diagnostic review cannot be acknowledged without notes");
 assert.equal(assessDiagnosticReviewAcknowledgement({ reviewer: "doctor", notes: "opening crossed" }).ok, true,
   "a documented red diagnostic review can be acknowledged without turning it into a candidate");

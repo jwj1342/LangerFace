@@ -243,6 +243,7 @@ export async function handleFile(
       }
       const prepared = prepareImageSource(img);
       setSource(prepared.source, "image", prepared.width, prepared.height);
+      sourceState.imageFileName = file.name;
       if (workflowUpload) {
         const draftPhoto = buildWorkflowDraftPhoto(file, prepared.source, prepared.width, prepared.height);
         if (draftPhoto) saveWorkflowDraftPhoto(draftPhoto);
@@ -402,6 +403,7 @@ export function stopSource({
   resetRefineForNewSource({ preserveLiveTransport: preserveRefinementForLive });
   resetLiveWrinkleAnalysis();
   if (!preserveStaticResume) lastStaticSource = null;
+  if (!preserveStaticResume) sourceState.imageFileName = null;
   els.pause.disabled = true;
   els.pause.textContent = "⏸ 暂停";
 }

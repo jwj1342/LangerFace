@@ -114,6 +114,15 @@ export function CandidateLibraryPanel({
             >
               {item.overlayStatusLabel}
             </CandidateRowMeta>
+            {item.reviewTransitionReason ? (
+              <CandidateRowMeta
+                id={`candidate-review-condition-${item.id}`}
+                className="candidate-review-condition warning"
+                role="note"
+              >
+                {item.reviewTransitionReason}
+              </CandidateRowMeta>
+            ) : null}
             {showCandidateRowActions ? (
               <ButtonRow
                 className={`candidate-actions ${showReviewTransitions && item.reviewTransitionLabel ? "three-cols" : "two-cols"}`}
@@ -135,9 +144,12 @@ export function CandidateLibraryPanel({
                     variant="workbench"
                     type="button"
                     data-candidate-review-toggle={item.reviewStatus}
+                    disabled={item.reviewTransitionDisabled}
+                    aria-describedby={item.reviewTransitionReason ? `candidate-review-condition-${item.id}` : undefined}
+                    title={item.reviewTransitionReason || undefined}
                     onClick={() => commands.library("toggle_candidate_review_status", item.id)}
                   >
-                    {item.reviewTransitionLabel}
+                    {item.reviewTransitionDisabled ? "暂不能确认" : item.reviewTransitionLabel}
                   </Button>
                 ) : null}
               </ButtonRow>

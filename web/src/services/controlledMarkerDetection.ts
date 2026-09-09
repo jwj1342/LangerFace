@@ -76,11 +76,14 @@ export interface ControlledMarkerDetection {
     boundary_smoothing_passes?: number;
     boundary_smoothing_outside_ratio?: number;
     boundary_smoothing_max_miss_ratio?: number;
-    boundary_regularization?: "convex_hull";
+    boundary_regularization?: "convex_hull" | "supported_radial_bridge";
     boundary_regularization_area_ratio?: number;
     boundary_regularization_solidity?: number;
     boundary_regularization_p90_displacement_ratio?: number;
     boundary_regularization_max_displacement_ratio?: number;
+    boundary_regularization_arc_fraction?: number;
+    boundary_regularization_replacement_support_ratio?: number;
+    boundary_regularization_replacement_support_p20?: number;
     boundary_stroke_reconciliation?: "radial_ridge" | "bounded_marker_bbox" | "normal_stroke_band";
     boundary_stroke_scale?: number;
     boundary_stroke_scale_x?: number;

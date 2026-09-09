@@ -106,6 +106,58 @@ interface MarkerCandidate {
   compact: boolean;
 }
 
+export interface ControlledMarkerDiagnosticEvent {
+  node: "19" | "20" | "21" | "22" | "23" | "24" | "25" | "26" | "27" | "28" | "29" | "30" | "31";
+  stage: string;
+  context: string;
+  data: Record<string, unknown>;
+}
+
+export interface ControlledMarkerDiagnosticRun {
+  result: ControlledMarkerDetection;
+  events: ControlledMarkerDiagnosticEvent[];
+}
+
+let controlledMarkerDiagnosticSink: ((event: ControlledMarkerDiagnosticEvent) => void) | null = null;
+let controlledMarkerDiagnosticContext = "";
+let controlledMarkerDiagnosticMuteDepth = 0;
+
+function emitControlledMarkerDiagnostic(
+  node: ControlledMarkerDiagnosticEvent["node"],
+  stage: string,
+  data: Record<string, unknown>,
+): void {
+  if (controlledMarkerDiagnosticMuteDepth > 0) return;
+  controlledMarkerDiagnosticSink?.({ node, stage, context: controlledMarkerDiagnosticContext, data });
+}
+
+function diagnosticDetectionSnapshot(result: ControlledMarkerDetection): ControlledMarkerDetection {
+  return {
+    ...result,
+    center: result.center ? { ...result.center } : null,
+    boundary: result.boundary.map((point) => ({ ...point })),
+    bbox: result.bbox ? { ...result.bbox } : null,
+    marker_bbox: result.marker_bbox ? { ...result.marker_bbox } : null,
+    warnings: [...result.warnings],
+    scan: result.scan ? { ...result.scan } : undefined,
+    diagnostics: result.diagnostics ? { ...result.diagnostics } : undefined,
+    audit: { ...result.audit },
+  };
+}
+
+function diagnosticCandidateSnapshot(candidate: MarkerCandidate) {
+  return {
+    area: candidate.component.pixels.length,
+    meanLuma: candidate.component.meanLuma,
+    boundary: candidate.boundary.map((point) => ({ ...point })),
+    bbox: { ...candidate.bbox },
+    containsSeed: candidate.containsSeed,
+    distance: candidate.distance,
+    enclosed: candidate.enclosed,
+    compact: candidate.compact,
+  };
+}
+
 const clamp = (value: number, low: number, high: number): number => Math.max(low, Math.min(high, value));
 const luma = (data: ArrayLike<number>, index: number): number => (
   0.2126 * Number(data[index]) + 0.7152 * Number(data[index + 1]) + 0.0722 * Number(data[index + 2])
@@ -901,7 +953,17 @@ function weakNearCircularBoundaryRecovery(
   // This path is intentionally unavailable without the explicit controlled-
   // scan size prior. A permissive whole-photo weak-edge search would promote
   // wrinkles, pigmentation and illumination boundaries to lesion contours.
-  if (!(expectedDiameterPx >= 8) || roiRadius < 8) return null;
+  if (!(expectedDiameterPx >= 8) || roiRadius < 8) {
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("28", "weak_circular_rejected", {
+        reason: "missing_size_prior",
+        seed: { ...seed },
+        roiRadius,
+        expectedDiameterPx,
+      });
+    }
+    return null;
+  }
 
   const rayCount = 96;
   const maximumRadius = Math.floor(roiRadius * 0.82);
@@ -916,13 +978,31 @@ function weakNearCircularBoundaryRecovery(
     minimumSearchRadius + 3,
     maximumRadius,
   );
-  if (maximumSearchRadius <= minimumSearchRadius) return null;
+  if (maximumSearchRadius <= minimumSearchRadius) {
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("28", "weak_circular_rejected", {
+        reason: "invalid_search_radius",
+        seed: { ...seed },
+        minimumSearchRadius,
+        maximumSearchRadius,
+      });
+    }
+    return null;
+  }
 
   const normalOffset = clamp(expectedRadius * 0.13, 2.5, 5);
   const samplingMargin = maximumSearchRadius + normalOffset + 3;
   if (seed.x < samplingMargin || seed.y < samplingMargin
     || seed.x > Math.floor(image.width) - 1 - samplingMargin
     || seed.y > Math.floor(image.height) - 1 - samplingMargin) {
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("28", "weak_circular_rejected", {
+        reason: "sampling_margin_outside_image",
+        seed: { ...seed },
+        samplingMargin,
+        imageSize: { width: image.width, height: image.height },
+      });
+    }
     return null;
   }
   const minimumRidgeContrast = Math.max(4, minContrast * 0.18);
@@ -998,7 +1078,28 @@ function weakNearCircularBoundaryRecovery(
       dominantScore = score;
     }
   }
-  if (dominantSupport < rayCount * 0.8) return null;
+  if (dominantSupport < rayCount * 0.8) {
+    if (controlledMarkerDiagnosticSink) {
+      const selected = raySamples.map((samples) => samples
+        .filter((sample) => Math.abs(sample.radius - dominantRadius) <= shapeBand)
+        .sort((first, second) => second.score - first.score)[0] || null);
+      emitControlledMarkerDiagnostic("28", "weak_circular_rejected", {
+        reason: "insufficient_dominant_support",
+        seed: { ...seed },
+        rayCount,
+        expectedRadius,
+        minimumSearchRadius,
+        maximumSearchRadius,
+        minimumRidgeContrast,
+        dominantRadius,
+        dominantSupport,
+        dominantScore,
+        radii: selected.map((sample) => sample?.radius ?? null),
+        contrasts: selected.map((sample) => sample?.contrast ?? null),
+      });
+    }
+    return null;
+  }
 
   const selectedRadii: Array<number | null> = [];
   const selectedContrasts: number[] = [];
@@ -1019,20 +1120,67 @@ function weakNearCircularBoundaryRecovery(
   const supportedCount = selectedRadii.filter((radius) => radius !== null).length;
   const supportRatio = supportedCount / rayCount;
   const maximumMissingRun = maximumCircularMissingRun(selectedRadii);
-  if (supportRatio < 0.8 || maximumMissingRun > 4) return null;
+  if (supportRatio < 0.8 || maximumMissingRun > 4) {
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("28", "weak_circular_rejected", {
+        reason: "angular_support_or_gap",
+        seed: { ...seed },
+        rayCount,
+        expectedRadius,
+        dominantRadius,
+        dominantSupport,
+        supportRatio,
+        maximumMissingRun,
+        maximumGapDegrees: maximumMissingRun * 360 / rayCount,
+        radii: selectedRadii,
+        contrasts: selectedContrasts,
+      });
+    }
+    return null;
+  }
 
   const radialDeviations = selectedRadii
     .filter((radius): radius is number => radius !== null)
     .map((radius) => Math.abs(radius - radiusMedian));
   const radialVariationRatio = median(radialDeviations) / Math.max(1, radiusMedian);
-  if (radialVariationRatio > 0.16) return null;
+  if (radialVariationRatio > 0.16) {
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("28", "weak_circular_rejected", {
+        reason: "radial_variation_high",
+        seed: { ...seed },
+        supportRatio,
+        maximumMissingRun,
+        radiusMedian,
+        radialVariationRatio,
+        radii: selectedRadii,
+        contrasts: selectedContrasts,
+      });
+    }
+    return null;
+  }
   const neighbourJumps: number[] = [];
   for (let index = 0; index < selectedRadii.length; index += 1) {
     const current = selectedRadii[index];
     const next = selectedRadii[(index + 1) % rayCount];
     if (current !== null && next !== null) neighbourJumps.push(Math.abs(current - next) / Math.max(1, radiusMedian));
   }
-  if (percentile(neighbourJumps, 0.9) > 0.2) return null;
+  const neighbourJumpP90 = percentile(neighbourJumps, 0.9);
+  if (neighbourJumpP90 > 0.2) {
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("28", "weak_circular_rejected", {
+        reason: "neighbour_jump_high",
+        seed: { ...seed },
+        supportRatio,
+        maximumMissingRun,
+        radiusMedian,
+        radialVariationRatio,
+        neighbourJumpP90,
+        radii: selectedRadii,
+        contrasts: selectedContrasts,
+      });
+    }
+    return null;
+  }
 
   const filled = [...selectedRadii];
   for (let index = 0; index < filled.length; index += 1) {
@@ -1075,10 +1223,52 @@ function weakNearCircularBoundaryRecovery(
     || detectedDiameterPx < expectedDiameterPx * 0.6
     || detectedDiameterPx > expectedDiameterPx * 1.7
     || medianRidgeContrast < minimumRidgeContrast * 1.15) {
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("28", "weak_circular_rejected", {
+        reason: "geometry_or_contrast_gate",
+        seed: { ...seed },
+        supportRatio,
+        maximumMissingRun,
+        radiusMedian,
+        radialVariationRatio,
+        neighbourJumpP90,
+        area,
+        compactness,
+        aspectRatio,
+        detectedDiameterPx,
+        expectedDiameterPx,
+        medianRidgeContrast,
+        minimumRidgeContrast,
+        radii: selectedRadii,
+        contrasts: selectedContrasts,
+        boundary: boundary.map((point) => ({ ...point })),
+      });
+    }
     return null;
   }
 
   const center = polygonCentroid(boundary);
+  if (controlledMarkerDiagnosticSink) {
+    emitControlledMarkerDiagnostic("28", "weak_circular_accepted", {
+      seed: { ...seed },
+      supportRatio,
+      maximumMissingRun,
+      maximumGapDegrees: maximumMissingRun * 360 / rayCount,
+      radiusMedian,
+      radialVariationRatio,
+      neighbourJumpP90,
+      area,
+      compactness,
+      aspectRatio,
+      detectedDiameterPx,
+      expectedDiameterPx,
+      medianRidgeContrast,
+      minimumRidgeContrast,
+      radii: selectedRadii,
+      contrasts: selectedContrasts,
+      boundary: boundary.map((point) => ({ ...point })),
+    });
+  }
   return {
     ok: true,
     failure_code: null,
@@ -1195,6 +1385,19 @@ function radialBoundaryRecovery(
   const maximumMissingRun = maximumCircularMissingRun(radii);
   const maximumGapDegrees = maximumMissingRun * 360 / rayCount;
   if (supportRatio < 0.82 || maximumMissingRun > 6) {
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("28", "radial_boundary_rejected", {
+        reason: "angular_support_or_gap",
+        seed: { ...seed },
+        rayCount,
+        expectedRadius,
+        supportRatio,
+        maximumMissingRun,
+        maximumGapDegrees,
+        radii,
+        contrasts,
+      });
+    }
     return { detection: null, supportRatio, maximumGapDegrees };
   }
 
@@ -1222,10 +1425,35 @@ function radialBoundaryRecovery(
   });
   const area = Math.abs(polygonArea(boundary));
   if (area < Math.max(minAreaPx * 4, 16) || !pointInPolygon(seed, boundary)) {
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("28", "radial_boundary_rejected", {
+        reason: "geometry_gate",
+        seed: { ...seed },
+        supportRatio,
+        maximumMissingRun,
+        maximumGapDegrees,
+        area,
+        radii,
+        contrasts,
+        boundary: boundary.map((point) => ({ ...point })),
+      });
+    }
     return { detection: null, supportRatio, maximumGapDegrees };
   }
   const bbox = pixelExtent(boundary, seed).bbox;
   const center = polygonCentroid(boundary);
+  if (controlledMarkerDiagnosticSink) {
+    emitControlledMarkerDiagnostic("28", "radial_boundary_observed", {
+      seed: { ...seed },
+      supportRatio,
+      maximumMissingRun,
+      maximumGapDegrees,
+      area,
+      radii,
+      contrasts,
+      boundary: boundary.map((point) => ({ ...point })),
+    });
+  }
   return {
     detection: {
       ok: true,
@@ -2125,6 +2353,18 @@ function seedFirstBarrierDetection(
   const seedY = clamp(Math.round(seed.y) - y0, 0, roiHeight - 1);
   clearOutsideScanCircle(adaptive.mask, roiWidth, roiHeight, seedX, seedY, roiRadius);
   const seedIndex = seedY * roiWidth + seedX;
+  if (controlledMarkerDiagnosticSink) {
+    emitControlledMarkerDiagnostic("23", "adaptive_barrier", {
+      width: roiWidth,
+      height: roiHeight,
+      origin: { x: x0, y: y0 },
+      seed: { x: seedX, y: seedY },
+      localWindowRadius: adaptive.localWindowRadius,
+      strongMask: adaptive.strongMask.slice(),
+      weakMask: adaptive.weakMask.slice(),
+      retainedMask: adaptive.mask.slice(),
+    });
+  }
   const regionLimit = roiWidth * roiHeight * 0.65;
   const markerLimit = roiWidth * roiHeight * maxAreaFraction;
   let bestFailure = {
@@ -2181,8 +2421,22 @@ function seedFirstBarrierDetection(
   ];
   for (const { repairRadius, build } of repairAttempts) {
     const repaired = build();
-    if (!repaired) continue;
+    if (!repaired) {
+      if (controlledMarkerDiagnosticSink) {
+        emitControlledMarkerDiagnostic("24", "repair_unavailable", { repairRadius });
+      }
+      continue;
+    }
     clearOutsideScanCircle(repaired, roiWidth, roiHeight, seedX, seedY, roiRadius);
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("24", "repair_attempt", {
+        width: roiWidth,
+        height: roiHeight,
+        origin: { x: x0, y: y0 },
+        repairRadius,
+        mask: repaired.slice(),
+      });
+    }
     const selectedRegion = enclosedRegionNearSeed(
       repaired,
       roiWidth,
@@ -2192,11 +2446,28 @@ function seedFirstBarrierDetection(
       regionLimit,
     );
     if (!selectedRegion) {
+      if (controlledMarkerDiagnosticSink) {
+        emitControlledMarkerDiagnostic("25", "enclosure_rejected", {
+          repairRadius,
+          failureStage: repaired[seedIndex] ? "seed_on_barrier" : "seed_region_leaks_to_roi_border",
+        });
+      }
       noteFailure(1, repaired[seedIndex] ? "seed_on_barrier" : "seed_region_leaks_to_roi_border", repairRadius);
       continue;
     }
     const regionMask = selectedRegion.mask;
     const tail = selectedRegion.count;
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("25", "enclosure_found", {
+        width: roiWidth,
+        height: roiHeight,
+        origin: { x: x0, y: y0 },
+        repairRadius,
+        count: tail,
+        relocatedPx: selectedRegion.relocatedPx,
+        mask: regionMask.slice(),
+      });
+    }
 
     const regionPixels: MarkerPoint[] = [];
     for (let index = 0; index < regionMask.length; index += 1) {
@@ -2205,6 +2476,9 @@ function seedFirstBarrierDetection(
     }
     const boundary = componentOuterBoundary(regionPixels);
     if (boundary.length < 3) {
+      if (controlledMarkerDiagnosticSink) {
+        emitControlledMarkerDiagnostic("26", "gate_rejected", { repairRadius, reason: "region_boundary_invalid" });
+      }
       noteFailure(2, "region_boundary_invalid", repairRadius);
       continue;
     }
@@ -2214,6 +2488,15 @@ function seedFirstBarrierDetection(
     // enclosed region near the seed. Do not return it and prevent the later
     // endpoint-repair passes from finding the complete marked contour.
     if (expectedDiameterPx > 0 && detectedDiameterPx < expectedDiameterPx * 0.35) {
+      if (controlledMarkerDiagnosticSink) {
+        emitControlledMarkerDiagnostic("26", "gate_rejected", {
+          repairRadius,
+          reason: "local_enclosure_too_small",
+          detectedDiameterPx,
+          expectedDiameterPx,
+          boundary: boundary.map((point) => ({ ...point })),
+        });
+      }
       noteFailure(3, "local_enclosure_too_small", repairRadius);
       continue;
     }
@@ -2250,12 +2533,38 @@ function seedFirstBarrierDetection(
       if (originalNearby) originalSupportCount += 1;
     }
     if (supportCount < Math.max(minAreaPx, 8)) {
+      if (controlledMarkerDiagnosticSink) {
+        emitControlledMarkerDiagnostic("26", "gate_rejected", {
+          repairRadius,
+          reason: "boundary_support_missing",
+          supportCount,
+          supportMask: supportMask.slice(),
+          width: roiWidth,
+          height: roiHeight,
+          origin: { x: x0, y: y0 },
+        });
+      }
       noteFailure(3, "boundary_support_missing", repairRadius);
       continue;
     }
     const boundarySupportRatio = originalSupportCount / supportCount;
     const minimumBoundarySupport = repairRadius > 3 ? 0.72 : 0.55;
     if (boundarySupportRatio < minimumBoundarySupport) {
+      if (controlledMarkerDiagnosticSink) {
+        emitControlledMarkerDiagnostic("26", "gate_rejected", {
+          repairRadius,
+          reason: "boundary_support_low",
+          supportCount,
+          originalSupportCount,
+          boundarySupportRatio,
+          minimumBoundarySupport,
+          supportMask: supportMask.slice(),
+          width: roiWidth,
+          height: roiHeight,
+          origin: { x: x0, y: y0 },
+          boundary: boundary.map((point) => ({ ...point })),
+        });
+      }
       noteFailure(4, "boundary_support_low", repairRadius, boundarySupportRatio);
       continue;
     }
@@ -2267,6 +2576,16 @@ function seedFirstBarrierDetection(
     const supportingComponents = extractComponents(supportMask, roiWidth, roiHeight, x0, y0, image);
     const markerPixels = supportingComponents.flatMap((component) => component.pixels);
     if (markerPixels.length < minAreaPx || markerPixels.length > markerLimit) {
+      if (controlledMarkerDiagnosticSink) {
+        emitControlledMarkerDiagnostic("26", "gate_rejected", {
+          repairRadius,
+          reason: "marker_area_invalid",
+          markerPixelCount: markerPixels.length,
+          minimumMarkerArea: minAreaPx,
+          maximumMarkerArea: markerLimit,
+          boundarySupportRatio,
+        });
+      }
       noteFailure(5, "marker_area_invalid", repairRadius, boundarySupportRatio);
       continue;
     }
@@ -2274,12 +2593,28 @@ function seedFirstBarrierDetection(
       .filter((point) => adaptive.mask[(point.y - y0) * roiWidth + point.x - x0])
       .map((point) => luma(image.data, (point.y * Math.floor(image.width) + point.x) * 4));
     if (!originalMarkerLumas.length) {
+      if (controlledMarkerDiagnosticSink) {
+        emitControlledMarkerDiagnostic("26", "gate_rejected", {
+          repairRadius,
+          reason: "original_marker_support_missing",
+          boundarySupportRatio,
+        });
+      }
       noteFailure(6, "original_marker_support_missing", repairRadius, boundarySupportRatio);
       continue;
     }
     const markerLuma = originalMarkerLumas.reduce((sum, value) => sum + value, 0) / originalMarkerLumas.length;
     const contrast = backgroundLuma - markerLuma;
     if (contrast < minContrast) {
+      if (controlledMarkerDiagnosticSink) {
+        emitControlledMarkerDiagnostic("26", "gate_rejected", {
+          repairRadius,
+          reason: "marker_contrast_low",
+          contrast,
+          minimumContrast: minContrast,
+          boundarySupportRatio,
+        });
+      }
       noteFailure(7, "marker_contrast_low", repairRadius, boundarySupportRatio);
       continue;
     }
@@ -2321,6 +2656,17 @@ function seedFirstBarrierDetection(
       },
       audit: { local_only: true, raw_media_retained: false, network_request_made: false },
     });
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("26", "gate_accepted", {
+        repairRadius,
+        detectedDiameterPx,
+        boundarySupportRatio,
+        minimumBoundarySupport,
+        markerPixelCount: markerPixels.length,
+        contrast,
+        boundary: boundary.map((point) => ({ ...point })),
+      });
+    }
   }
   if (acceptedEnclosures.length) {
     // A thick or uneven stroke can contain several small, formally closed
@@ -2421,6 +2767,7 @@ export interface ControlledMarkerOptions {
   minContrast?: number;
   enableSeedFirstBarrier?: boolean;
   canonicalizeFromDetectedCenter?: boolean;
+  acceptBoundaryWithinFullScan?: boolean;
   expectedDiameterPx?: number;
   scanDiameterMm?: number;
 }
@@ -2487,6 +2834,40 @@ function detectControlledMarkerInRoi(
       }
     }
   }
+  if (controlledMarkerDiagnosticSink) {
+    const lumaImage = new Uint8Array(roiWidth * roiHeight);
+    const roiMask = new Uint8Array(roiWidth * roiHeight);
+    for (let localY = 0; localY < roiHeight; localY += 1) {
+      for (let localX = 0; localX < roiWidth; localX += 1) {
+        const index = localY * roiWidth + localX;
+        const x = x0 + localX;
+        const y = y0 + localY;
+        lumaImage[index] = clamp(Math.round(luma(image.data, (y * width + x) * 4)), 0, 255);
+        roiMask[index] = Number(insideScanCircle(localX, localY, localSeedX, localSeedY, roiRadius));
+      }
+    }
+    emitControlledMarkerDiagnostic("19", "roi_luma", {
+      width: roiWidth,
+      height: roiHeight,
+      origin: { x: x0, y: y0 },
+      sourceSeed: { ...seed },
+      localSeed: { x: localSeedX, y: localSeedY },
+      roiRadius,
+      lumaImage,
+      roiMask,
+      roiPixelCount: roiLumas.length,
+    });
+    emitControlledMarkerDiagnostic("20", "fixed_dark_mask", {
+      width: roiWidth,
+      height: roiHeight,
+      origin: { x: x0, y: y0 },
+      backgroundLuma,
+      minimumContrast: minContrast,
+      darkThreshold,
+      darkPixelCount: dark.reduce((sum, value) => sum + value, 0),
+      mask: dark.slice(),
+    });
+  }
   let seedFirstResult: ControlledMarkerDetection | null | undefined;
   const seedFirstFallback = (): ControlledMarkerDetection | null => {
     if (!enableSeedFirstBarrier) return null;
@@ -2530,6 +2911,20 @@ function detectControlledMarkerInRoi(
     ? rawExpectedCandidates
     : findRelevantCandidates(rawComponents, seed, scanCandidateRadius, minAreaPx)
       .filter(isScanSurfaceCandidate);
+  if (controlledMarkerDiagnosticSink) {
+    emitControlledMarkerDiagnostic("21", "raw_components", {
+      componentCount: rawComponents.length,
+      components: rawComponents.map((component) => ({
+        area: component.pixels.length,
+        meanLuma: component.meanLuma,
+        bbox: pixelExtent(component.pixels, seed).bbox,
+        pixels: component.pixels.map((point) => ({ ...point })),
+      })),
+      directCandidateCount: rawDirectCandidates.length,
+      selectedCandidateCount: rawCandidates.length,
+      candidates: rawCandidates.map(diagnosticCandidateSnapshot),
+    });
+  }
   let repairedComponents: PixelComponent[] = [];
   let repairedCandidates: MarkerCandidate[] = [];
   const hasSeedSizedComponent = rawComponents.some((component) => {
@@ -2558,8 +2953,9 @@ function detectControlledMarkerInRoi(
   }
   const hasSeedNeighborhoodEvidence = seedNeighborhoodDarkPixels >= Math.max(minAreaPx * 2, 12);
   if (hasSeedSizedComponent || hasSeedNeighborhoodEvidence) {
+    const repairedMask1 = repairBarrier(dark, roiWidth, roiHeight, 1);
     repairedComponents = extractComponents(
-      repairBarrier(dark, roiWidth, roiHeight, 1),
+      repairedMask1,
       roiWidth,
       roiHeight,
       x0,
@@ -2572,25 +2968,22 @@ function detectControlledMarkerInRoi(
       ? directCandidates
       : findRelevantCandidates(repairedComponents, seed, scanCandidateRadius, minAreaPx)
         .filter(isScanSurfaceCandidate);
-    if (!repairedCandidates.length) {
-      repairedComponents = extractComponents(
-        repairBarrier(dark, roiWidth, roiHeight, 2),
-        roiWidth,
-        roiHeight,
-        x0,
-        y0,
-        image,
-      );
-      const directCandidates = findRelevantCandidates(repairedComponents, seed, seedSnapRadius, minAreaPx)
-        .filter(isExpectedSizeCandidate);
-      repairedCandidates = directCandidates.length
-        ? directCandidates
-        : findRelevantCandidates(repairedComponents, seed, scanCandidateRadius, minAreaPx)
-          .filter(isScanSurfaceCandidate);
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("22", "fixed_mask_repair", {
+        width: roiWidth,
+        height: roiHeight,
+        origin: { x: x0, y: y0 },
+        repairRadius: 1,
+        mask: repairedMask1.slice(),
+        componentCount: repairedComponents.length,
+        candidateCount: repairedCandidates.length,
+        candidates: repairedCandidates.map(diagnosticCandidateSnapshot),
+      });
     }
     if (!repairedCandidates.length) {
+      const repairedMask2 = repairBarrier(dark, roiWidth, roiHeight, 2);
       repairedComponents = extractComponents(
-        repairBarrier(dark, roiWidth, roiHeight, 3),
+        repairedMask2,
         roiWidth,
         roiHeight,
         x0,
@@ -2603,6 +2996,47 @@ function detectControlledMarkerInRoi(
         ? directCandidates
         : findRelevantCandidates(repairedComponents, seed, scanCandidateRadius, minAreaPx)
           .filter(isScanSurfaceCandidate);
+      if (controlledMarkerDiagnosticSink) {
+        emitControlledMarkerDiagnostic("22", "fixed_mask_repair", {
+          width: roiWidth,
+          height: roiHeight,
+          origin: { x: x0, y: y0 },
+          repairRadius: 2,
+          mask: repairedMask2.slice(),
+          componentCount: repairedComponents.length,
+          candidateCount: repairedCandidates.length,
+          candidates: repairedCandidates.map(diagnosticCandidateSnapshot),
+        });
+      }
+    }
+    if (!repairedCandidates.length) {
+      const repairedMask3 = repairBarrier(dark, roiWidth, roiHeight, 3);
+      repairedComponents = extractComponents(
+        repairedMask3,
+        roiWidth,
+        roiHeight,
+        x0,
+        y0,
+        image,
+      );
+      const directCandidates = findRelevantCandidates(repairedComponents, seed, seedSnapRadius, minAreaPx)
+        .filter(isExpectedSizeCandidate);
+      repairedCandidates = directCandidates.length
+        ? directCandidates
+        : findRelevantCandidates(repairedComponents, seed, scanCandidateRadius, minAreaPx)
+          .filter(isScanSurfaceCandidate);
+      if (controlledMarkerDiagnosticSink) {
+        emitControlledMarkerDiagnostic("22", "fixed_mask_repair", {
+          width: roiWidth,
+          height: roiHeight,
+          origin: { x: x0, y: y0 },
+          repairRadius: 3,
+          mask: repairedMask3.slice(),
+          componentCount: repairedComponents.length,
+          candidateCount: repairedCandidates.length,
+          candidates: repairedCandidates.map(diagnosticCandidateSnapshot),
+        });
+      }
     }
   }
   const relevantCandidates = rawCandidates.length ? rawCandidates : repairedCandidates;
@@ -2801,7 +3235,10 @@ function validateScanSuccess(
   const maximumBoundaryRadius = Math.max(
     ...result.boundary.map((point) => Math.hypot(point.x - seed.x, point.y - seed.y)),
   );
-  if (maximumBoundaryRadius >= roiRadius * 0.88) {
+  const outsideAcceptedScan = options.acceptBoundaryWithinFullScan
+    ? maximumBoundaryRadius > roiRadius + 1
+    : maximumBoundaryRadius >= roiRadius * 0.88;
+  if (outsideAcceptedScan) {
     return rejectedScanResult("scan_range_too_small", result);
   }
   const expectedDiameterPx = Number(options.expectedDiameterPx || 0);
@@ -2852,7 +3289,14 @@ function recoverBySeedNeighborhoodConsensus(
     "seed_not_enclosed",
     "edge_discontinuous",
     "unstable_enclosure",
-  ].includes(sourceResult.failure_code || ""))) return sourceResult;
+  ].includes(sourceResult.failure_code || ""))) {
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("29", "consensus_not_required", {
+        source: diagnosticDetectionSnapshot(sourceResult),
+      });
+    }
+    return sourceResult;
+  }
 
   const step = clamp(Math.round(roiRadius * 0.0625), 4, 8);
   const probeDistances = [...new Set([
@@ -2874,16 +3318,30 @@ function recoverBySeedNeighborhoodConsensus(
     && sourceResult.boundary.length
     ? [sourceResult]
     : [];
+  const diagnosticProbes: Array<Record<string, unknown>> = [];
   for (const [dx, dy] of offsets) {
     const neighbourSeed = { x: seed.x + dx, y: seed.y + dy };
     if (neighbourSeed.x < 0 || neighbourSeed.x >= width || neighbourSeed.y < 0 || neighbourSeed.y >= height) continue;
-    let candidate = detectControlledMarkerInRoi(
-      image,
-      neighbourSeed,
-      { ...options, canonicalizeFromDetectedCenter: false },
-      roiRadius,
-    );
+    let candidate: ControlledMarkerDetection;
+    controlledMarkerDiagnosticMuteDepth += 1;
+    try {
+      candidate = detectControlledMarkerInRoi(
+        image,
+        neighbourSeed,
+        { ...options, canonicalizeFromDetectedCenter: false },
+        roiRadius,
+      );
+    } finally {
+      controlledMarkerDiagnosticMuteDepth -= 1;
+    }
     candidate = validateScanSuccess(candidate, seed, options, roiRadius);
+    if (controlledMarkerDiagnosticSink) {
+      diagnosticProbes.push({
+        offset: { x: dx, y: dy },
+        seed: neighbourSeed,
+        result: diagnosticDetectionSnapshot(candidate),
+      });
+    }
     if (!candidate.ok || candidate.geometry_mode !== "enclosed_region" || !candidate.boundary.length) continue;
     successes.push(candidate);
   }
@@ -2893,6 +3351,14 @@ function recoverBySeedNeighborhoodConsensus(
       scan_probe_count: offsets.length,
       scan_probe_success_count: successes.length,
     };
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("29", "consensus_rejected", {
+        sourceNeedsStabilityCheck,
+        probeCount: offsets.length,
+        successCount: successes.length,
+        probes: diagnosticProbes,
+      });
+    }
     return sourceNeedsStabilityCheck
       ? rejectedScanResult("unstable_enclosure", sourceResult)
       : sourceResult;
@@ -2913,6 +3379,15 @@ function recoverBySeedNeighborhoodConsensus(
       scan_probe_success_count: successes.length,
       scan_probe_group_sizes: groups.map((group) => group.length),
     };
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("29", "consensus_unsupported", {
+        sourceNeedsStabilityCheck,
+        probeCount: offsets.length,
+        successCount: successes.length,
+        groupSizes: groups.map((group) => group.length),
+        probes: diagnosticProbes,
+      });
+    }
     return sourceNeedsStabilityCheck
       ? rejectedScanResult("unstable_enclosure", sourceResult)
       : sourceResult;
@@ -2938,6 +3413,16 @@ function recoverBySeedNeighborhoodConsensus(
     scan_probe_consensus_count: selectedGroup.length,
     scan_probe_group_sizes: groups.map((group) => group.length),
   };
+  if (controlledMarkerDiagnosticSink) {
+    emitControlledMarkerDiagnostic("29", "consensus_accepted", {
+      probeCount: offsets.length,
+      successCount: successes.length,
+      consensusCount: selectedGroup.length,
+      groupSizes: groups.map((group) => group.length),
+      probes: diagnosticProbes,
+      selected: diagnosticDetectionSnapshot(selected),
+    });
+  }
   return selected;
 }
 
@@ -2975,6 +3460,12 @@ export function detectControlledMarker(
       options,
       roiRadius,
     );
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("27", "initial_roi_result", {
+        seed: { ...seed },
+        result: diagnosticDetectionSnapshot(result),
+      });
+    }
     if (result.ok
       && result.geometry_mode === "enclosed_region"
       && result.center
@@ -2987,7 +3478,16 @@ export function detectControlledMarker(
         { ...options, canonicalizeFromDetectedCenter: false },
         roiRadius,
       );
-      if (!compatibleCanonicalRegion(result, canonical)) {
+      const compatible = compatibleCanonicalRegion(result, canonical);
+      if (controlledMarkerDiagnosticSink) {
+        emitControlledMarkerDiagnostic("27", "canonical_replay", {
+          originalSeed: { ...seed },
+          canonicalSeed: result.center ? { ...result.center } : null,
+          compatible,
+          result: diagnosticDetectionSnapshot(canonical),
+        });
+      }
+      if (!compatible) {
         // A closed region already proven to be wholly inside the scan must not
         // be discarded only because re-seeding from its centroid follows a
         // different weak-stroke repair path. Preserve the first enclosure and
@@ -2999,11 +3499,42 @@ export function detectControlledMarker(
         result = canonical;
       }
     }
+    const beforeScanValidation = controlledMarkerDiagnosticSink
+      ? diagnosticDetectionSnapshot(result)
+      : null;
     result = classifyScanFailure(image, seed, options, roiRadius, result);
+    const afterFailureClassification = controlledMarkerDiagnosticSink
+      ? diagnosticDetectionSnapshot(result)
+      : null;
     result = validateScanSuccess(result, seed, options, roiRadius);
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("28", "scan_validation", {
+        before: beforeScanValidation,
+        afterFailureClassification,
+        after: diagnosticDetectionSnapshot(result),
+      });
+    }
     result = recoverBySeedNeighborhoodConsensus(image, seed, options, roiRadius, result);
+    const beforeFinalization = controlledMarkerDiagnosticSink
+      ? diagnosticDetectionSnapshot(result)
+      : null;
     result = finalizeControlledMarkerBoundary(result);
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("30", "boundary_finalization", {
+        before: beforeFinalization,
+        after: diagnosticDetectionSnapshot(result),
+      });
+    }
+    const beforeStrokeReconciliation = controlledMarkerDiagnosticSink
+      ? diagnosticDetectionSnapshot(result)
+      : null;
     result = reconcileMarkerStrokeCoverage(image, seed, options, roiRadius, result);
+    if (controlledMarkerDiagnosticSink) {
+      emitControlledMarkerDiagnostic("31", "stroke_reconciliation", {
+        before: beforeStrokeReconciliation,
+        after: diagnosticDetectionSnapshot(result),
+      });
+    }
     return attachScanMetadata(result, options, roiRadius);
   }
 
@@ -3088,3 +3619,26 @@ export const __controlledMarkerForTests = {
   weakNearCircularBoundaryRecovery,
 };
 
+export function diagnoseControlledMarker(
+  image: MarkerImageData,
+  seed: MarkerPoint,
+  options: ControlledMarkerOptions = {},
+  context = "diagnostic",
+): ControlledMarkerDiagnosticRun {
+  if (controlledMarkerDiagnosticSink) {
+    throw new Error("Controlled marker diagnostics must run serially");
+  }
+  const events: ControlledMarkerDiagnosticEvent[] = [];
+  controlledMarkerDiagnosticContext = context;
+  controlledMarkerDiagnosticSink = (event) => events.push(event);
+  try {
+    return {
+      result: detectControlledMarker(image, seed, options),
+      events,
+    };
+  } finally {
+    controlledMarkerDiagnosticSink = null;
+    controlledMarkerDiagnosticContext = "";
+    controlledMarkerDiagnosticMuteDepth = 0;
+  }
+}

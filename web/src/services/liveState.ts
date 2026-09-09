@@ -120,6 +120,7 @@ export interface LiveSourceState {
   planning2d: PhotoPlanningController | null;
   readonly source: unknown | null;
   readonly sourceKind: "camera" | "video" | "image" | null;
+  imageFileName: string | null;
   running: boolean;
   paused: boolean;
   presence: number;
@@ -212,6 +213,7 @@ export const sourceState: LiveSourceState = {
   get sourceKind() {
     return this.planning2d?.getFrameState().kind ?? null;
   },
+  imageFileName: null,
   running: false,
   paused: false,
   presence: 0,

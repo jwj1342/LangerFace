@@ -114,6 +114,7 @@ function publishLiveState(reason = "state_update"): void {
     modelBadge: liveTextOf(els.badge),
     overlayMessage: visibleLiveTextOf(els.msg),
     sourceKind: sourceState.sourceKind,
+    sourceFileName: sourceState.imageFileName,
     sourceRunning: sourceState.running,
     sourcePaused: sourceState.paused,
     liveLabel: els.live?.dataset?.k || liveTextOf(els.live) || "待机",

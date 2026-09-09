@@ -74,6 +74,8 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   const candidate = page.locator("[data-workflow-candidate]");
   await expect.poll(() => boundary.getAttribute("d")).toMatch(/^M /);
   await expect.poll(() => candidate.getAttribute("d")).toMatch(/^M /);
+  await expect(candidate).toHaveCSS("stroke", "rgb(103, 232, 249)");
+  await expect(candidate).toHaveCSS("stroke-width", "1px");
   const boundaryBeforeReview = await boundary.getAttribute("d");
   const candidateBeforeReview = await candidate.getAttribute("d");
 

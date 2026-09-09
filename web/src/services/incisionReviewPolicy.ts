@@ -54,7 +54,7 @@ export function assessDiagnosticReviewAcknowledgement({
     return {
       ok: false,
       attention: "notes",
-      message: "红色虚线表示候选进入敏感开口；记录本次阻断审阅前请填写审阅备注。",
+      message: "红色虚线表示候选已被规则阻断；记录本次阻断审阅前请填写审阅备注。",
     };
   }
   return { ok: true, attention: null, message: "" };

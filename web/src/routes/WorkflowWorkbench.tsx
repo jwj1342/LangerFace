@@ -16,9 +16,9 @@ export function WorkflowWorkbench() {
           showPersonalizedHint={false}
         />
       )}
+      mobileOperations={<MobileWorkflowControls />}
       stage={(
         <LiveStagePanel
-          mobileControls={<MobileWorkflowControls />}
           workflowActions={<WorkflowCanvasTools />}
           workflowOverlay={<WorkflowCanvasOverlay />}
           workflowStatus={<WorkflowStageStatus />}

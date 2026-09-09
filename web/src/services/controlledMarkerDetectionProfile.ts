@@ -11,6 +11,10 @@ import {
   CONTROLLED_MARKER_DETECTOR_VERSION as LEGACY_DETECTOR_VERSION,
   detectControlledMarker as detectWithLegacyCore,
 } from "./controlledMarkerDetectionLegacyV023.ts";
+import {
+  CONTROLLED_MARKER_DETECTOR_VERSION as COLOR_DIFFERENCE_DETECTOR_VERSION,
+  detectControlledMarker as detectWithColorDifferenceCore,
+} from "./controlledMarkerDetectionColorV035.ts";
 
 export type {
   ControlledMarkerDetection,
@@ -20,7 +24,10 @@ export type {
 } from "./controlledMarkerDetection.ts";
 export { translateControlledMarkerDetection };
 
-export type ControlledMarkerDetectorProfile = "current-v0.34" | "legacy-v0.23";
+export type ControlledMarkerDetectorProfile =
+  | "color-difference-v0.35"
+  | "current-v0.34"
+  | "legacy-v0.23";
 
 export const LEGACY_CONTROLLED_MARKER_SOURCE_COMMIT = "fe703e2bb37d837f339f2b4fb9861d202568b8e6";
 export const DEFAULT_CONTROLLED_MARKER_DETECTOR_PROFILE: ControlledMarkerDetectorProfile = "legacy-v0.23";
@@ -30,6 +37,10 @@ export function resolveControlledMarkerDetectorProfile(value?: string | null): C
   if (!normalized) return DEFAULT_CONTROLLED_MARKER_DETECTOR_PROFILE;
   if (normalized === "current" || normalized === "current-v0.34" || normalized === "v0.34") {
     return "current-v0.34";
+  }
+  if (normalized === "color" || normalized === "color-difference"
+    || normalized === "color-difference-v0.35" || normalized === "v0.35") {
+    return "color-difference-v0.35";
   }
   if (normalized === "legacy" || normalized === "legacy-v0.23" || normalized === "v0.23") {
     return "legacy-v0.23";
@@ -54,7 +65,9 @@ export const CONTROLLED_MARKER_DETECTOR_PROFILE = resolveControlledMarkerDetecto
 );
 
 export function detectorVersionForProfile(profile: ControlledMarkerDetectorProfile): string {
-  return profile === "legacy-v0.23" ? LEGACY_DETECTOR_VERSION : CURRENT_DETECTOR_VERSION;
+  if (profile === "legacy-v0.23") return LEGACY_DETECTOR_VERSION;
+  if (profile === "color-difference-v0.35") return COLOR_DIFFERENCE_DETECTOR_VERSION;
+  return CURRENT_DETECTOR_VERSION;
 }
 
 export const CONTROLLED_MARKER_DETECTOR_VERSION = detectorVersionForProfile(
@@ -69,7 +82,9 @@ export function detectControlledMarkerWithProfile(
 ): ControlledMarkerDetection {
   const result = profile === "legacy-v0.23"
     ? detectWithLegacyCore(image, seed, options) as unknown as ControlledMarkerDetection
-    : detectWithCurrentCore(image, seed, options);
+    : profile === "color-difference-v0.35"
+      ? detectWithColorDifferenceCore(image, seed, options)
+      : detectWithCurrentCore(image, seed, options);
   if (controlledMarkerDiagnosticsEnabled) {
     console.info(`[LangerFace] controlled marker profile result ${JSON.stringify({
       profile,

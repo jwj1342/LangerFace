@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runInNewContext } from "node:vm";
 
 import {
   beginWorkflowPointerIntent,
@@ -20,6 +21,7 @@ import {
   workflowClosedBoundarySvgPath,
   workflowFreehandBoundaryClosed,
   workflowFreehandContinuationAllowed,
+  workflowFreehandToggleAction,
   workflowFocusViewportPoint,
   workflowFusiformEditBase,
   workflowFusiformPlaneNormal,
@@ -91,22 +93,28 @@ assert.match(route, /import\("\.\.\/services\/liveRuntime"\)/, "workflow route r
 assert.match(route, /import\("\.\.\/services\/workflowIncisionController"\)/, "workflow route mounts the canvas-free incision controller");
 assert.doesNotMatch(route, /incisionRuntime/, "workflow route must not mount the legacy incision runtime beside liveRuntime");
 assert.equal((workbench.match(/<LiveStagePanel\b/g) || []).length, 1, "workflow renders one visible live stage");
-assert.match(liveStagePanel, /workflow-mobile-scroll-zone[\s\S]*?从这里向上滑动，查看更多操作/,
-  "mobile workflow keeps a dedicated page-scroll touch target outside the shared canvas");
-assert.match(styles, /\.workflow-workbench \.workflow-mobile-scroll-zone\s*{[^}]*flex:\s*0 0 56px;[^}]*touch-action:\s*pan-y;/s,
-  "the mobile scroll target is finger-sized and explicitly permits vertical page panning");
+assert.doesNotMatch(liveStagePanel, /workflow-mobile-scroll-zone|从这里向上滑动，查看更多操作/,
+  "the fixed mobile stage no longer renders the obsolete page-scroll prompt");
+assert.doesNotMatch(sharedLayout, /mobileOperations|workflow-mobile-operation-pane/,
+  "the shared desktop workbench keeps its original source order and has no workflow-only mobile branch");
+assert.match(layout, /MOBILE_WORKFLOW_LAYOUT_QUERY[\s\S]*?if \(mobileViewport\)[\s\S]*?stage[\s\S]*?workflow-mobile-operation-pane[\s\S]*?mobileOperations[\s\S]*?workflow-live-rail[\s\S]*?workflow-incision-rail/,
+  "the workflow-only phone branch keeps the fixed stage before its ordered independent operation pane");
+assert.match(layout, /if \(mobileViewport\)[\s\S]*?return \([\s\S]*?<WorkbenchLayout/,
+  "non-phone viewports continue through the unchanged shared desktop workbench");
+assert.match(styles, /\.workflow-workbench > \.workflow-mobile-operation-pane\s*{[^}]*display:\s*flex;[^}]*overflow-y:\s*auto;[^}]*scrollbar-width:\s*none;[^}]*touch-action:\s*pan-y;/s,
+  "the phone operation pane owns vertical touch scrolling without a visible scrollbar");
 assert.match(controller, /dataset\.workflowMarkerMode = String\(state\.markerMode\)/,
   "the workflow root exposes controlled-marker mode for mobile layout containment");
 assert.match(controller, /delete state\.root\.dataset\.workflowMarkerMode/,
   "disposing the workflow controller removes its controlled-marker layout state");
 assert.doesNotMatch(styles, /workflow-marker-mode="true"[^}]*\.main-wrap\s*{[^}]*flex-basis:/s,
   "controlled-marker mode does not resize the shared face canvas");
-assert.doesNotMatch(styles, /workflow-marker-mode="true"[^}]*\.workflow-mobile-scroll-zone\s*{[^}]*order:/s,
-  "controlled-marker mode keeps the page-scroll prompt after the shared canvas");
-assert.match(styles, /"live-status incision-status fps"[\s\S]*?"workflow-actions workflow-actions workflow-actions"/,
-  "phone workflow moves the incision status beside the live photo pill");
-assert.match(styles, /grid-template-rows:\s*repeat\(2, 40px\);[\s\S]*?block-size:\s*104px;/,
-  "phone workflow reserves the same two-row tool slot before and during controlled marking");
+assert.doesNotMatch(styles, /workflow-mobile-scroll-zone/,
+  "the removed mobile scroll prompt has no stale styling contract");
+assert.match(styles, /"quality incision-status"[\s\S]*?"workflow-actions workflow-actions"/,
+  "phone workflow keeps compact quality and result information above the face instead of over it");
+assert.match(styles, /\.workflow-canvas-tools\s*{[^}]*grid-template-rows:\s*40px;[^}]*block-size:\s*42px;[^}]*padding:\s*0;[\s\S]*?\.workflow-canvas-tools\[data-marker-mode="true"\]\s*{[^}]*grid-template-rows:\s*repeat\(2, 40px\);[^}]*block-size:\s*88px;/s,
+  "phone workflow uses one tool row normally and adds the second row only during controlled marking");
 assert.match(canvasTools, /data-marker-mode={String\(markerMode\)}[\s\S]*?data-marker-busy={String\(markerBusy\)}/,
   "phone tool layout exposes marker state without changing command semantics");
 assert.match(styles, /#wrinkleSummary\s*{[^}]*overflow-wrap:\s*anywhere;[^}]*word-break:\s*break-word;/s,
@@ -144,10 +152,10 @@ assert.doesNotMatch(workflowDraftSession, /indexedDB|localStorage/,
 assert.match(workbench, /workflowActions={<WorkflowCanvasTools\s*\/>}/, "workflow places incision actions in the shared stage header");
 assert.match(workbench, /workflowOverlay={<WorkflowCanvasOverlay\s*\/>}/, "workflow keeps only the incision drawing layer over the shared canvas");
 assert.match(workbench, /workflowStatus={<WorkflowStageStatus\s*\/>}/, "workflow places incision status in the shared stage header");
-assert.match(workbench, /mobileControls={<MobileWorkflowControls\s*\/>}/,
-  "workflow mounts one phone-only control dock beside the shared canvas");
+assert.match(workbench, /mobileOperations={<MobileWorkflowControls\s*\/>}/,
+  "workflow mounts one phone-only control dock inside the independent operation pane");
 assert.match(workbench, /<LiveControlRail[\s\S]*?moveQualityToMobileStage/,
-  "workflow moves its existing quality panel to the phone canvas instead of mounting a duplicate badge");
+  "workflow moves its existing quality panel to the phone stage header instead of mounting a duplicate badge");
 assert.doesNotMatch(workbench, /MobileCanvasQualityBadge|mobileOverlay=/,
   "workflow no longer creates a second quality readout beside the original panel");
 assert.match(liveQualityPanel, /createPortal\(panel, mobileTarget\)/,
@@ -162,6 +170,14 @@ assert.match(stageStatus, /snapshot\?\.stageStatus/, "workflow stage status rend
 assert.match(stageStatus, /snapshot\?\.stageBusy/, "workflow stage status consumes the incision-only busy state");
 assert.match(stageStatus, /workflow-stage-spinner/, "workflow renders an explicit waiting animation for incision work");
 assert.match(stageStatus, /aria-busy={busy}/, "workflow exposes waiting state to assistive technology");
+assert.match(stageStatus, /window\.setTimeout\(\(\) => setVisible\(false\), 4_000\)/,
+  "ordinary mobile result copy visually clears after four seconds");
+assert.match(stageStatus, /MOBILE_WORKFLOW_MEDIA_QUERY[\s\S]*?if \(!mobileViewport \|\| persistent\) return;/,
+  "the four-second result presentation is gated to phone-class coarse-pointer viewports");
+assert.match(stageStatus, /busy \|\| warning \|\| activeTool/,
+  "busy, warning, and active-tool guidance remains persistent instead of being timed away");
+assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-stage-status\.is-collapsed\s*{[^}]*visibility:\s*hidden;/,
+  "desktop workflow status cannot inherit the phone-only timed presentation style");
 assert.match(styles, /\.workflow-workbench \.workflow-stage-status\s*\{[^}]*white-space:\s*normal;[^}]*overflow:\s*visible;/s,
   "workflow canvas status wraps instead of truncating operator guidance");
 assert.match(styles, /\.workflow-workbench \.workflow-stage-status > span:last-child\s*\{[^}]*overflow:\s*visible;[^}]*text-overflow:\s*clip;/s,
@@ -293,6 +309,10 @@ assert.match(controller, /ellipseRatio:\s*state\.kind === "cutaneous" \? state\.
 assert.match(tumorInputPanel, /tumor\.ellipseRatio != null\) setEllipseRatio/,
   "the cutaneous ellipse control stays synchronized with the merged controller default");
 assert.match(controller, /ellipseRatio:\s*100,/, "the merged controller defaults cutaneous boundaries to a circle");
+assert.match(tumorInputPanel, /ellipseRatioDisabled[\s\S]*?controlledMarkerMode[\s\S]*?id="ellipseRatio"[\s\S]*?disabled={ellipseRatioDisabled}/,
+  "controlled-marker mode disables the simulated ellipse aspect-ratio slider without hiding it");
+assert.match(controller, /detail\.command === "ellipse_ratio_input"[\s\S]*?state\.markerMode[\s\S]*?ellipse_ratio_inactive[\s\S]*?return;/,
+  "the controller ignores stale aspect-ratio events while controlled-marker mode owns the real boundary");
 assert.match(tumorInputPanel, /useState\("100"\)/, "the ellipse slider displays the circular default before the first snapshot");
 assert.match(tumorInputPanel, /轮廓纵\/横比例[\s\S]*?min="40"[\s\S]*?max="200"/,
   "the unambiguous vertical-to-horizontal ratio supports either axis becoming visually longer");
@@ -492,6 +512,10 @@ assert.match(candidateLibraryPanel, /candidate-overlay-status[\s\S]*?overlayStat
   "saved candidate cards keep the live-overlay eligibility explanation visible");
 assert.match(incisionSnapshots, /reviewTransitionLabel:[\s\S]*?转为已确认[\s\S]*?转为待确认/,
   "saved candidate summaries derive both guarded review transition labels from the persisted status");
+assert.match(incisionSnapshots, /visibility_limited_reference_candidate[\s\S]*?暂不能确认：[\s\S]*?reviewTransitionDisabled:/,
+  "intrinsically blocked saved candidates expose an adjacent plain-language confirmation reason");
+assert.match(candidateLibraryPanel, /candidate-review-condition-[\s\S]*?reviewTransitionReason[\s\S]*?disabled={item\.reviewTransitionDisabled}[\s\S]*?暂不能确认/,
+  "the candidate library disables misleading approval actions and keeps their reason beside the record");
 assert.match(incisionSnapshots, /未进入实时叠加：该候选仍为“待医生确认”/,
   "saved candidate summaries explain the pending live-overlay block in plain language");
 assert.match(controller, /function toggleSavedCandidateReviewStatus[\s\S]*?transitionIncisionReviewRecord/,
@@ -506,7 +530,7 @@ assert.match(controller, /assessDiagnosticReviewAcknowledgement[\s\S]*?diagnosti
   "red diagnostic review uses the shared note gate and a non-candidate acknowledgement path");
 assert.match(reviewControlsPanel, /id="reviewNotes"[\s\S]*?notesAttentionRequired[\s\S]*?aria-invalid/,
   "a missing diagnostic or high-risk review note is highlighted at the nearby notes field");
-assert.match(controller, /红色虚线表示候选进入敏感开口，已阻断且不会保存；请调整位置或范围。/,
+assert.match(controller, /diagnosticCandidateBlockMessage\(state\.result,/,
   "the red diagnostic canvas warning is concise and explicitly says it is not saved");
 assert.match(controller, /无法导出肿物：请先在中央照片上选择肿物位置。/,
   "tumor export explains its required position instead of appearing unresponsive");
@@ -547,8 +571,8 @@ assert.match(layout, /workflow-incision-rail incision-workbench/, "workflow inci
 assert.match(sharedLayout, /secondarySidebar/, "shared workbench shell owns the optional third-column primitive");
 assert.match(styles, /grid-template-columns:\s*clamp\(320px,\s*21\.25vw,\s*340px\)\s+minmax\(640px,\s*1fr\)\s+clamp\(320px,\s*21\.25vw,\s*340px\)/, "desktop layout reserves a large central canvas with balanced legacy-width rails");
 assert.match(styles, /\.workflow-workbench \.zoom-strip\s*{[^}]*max-height:/s, "zoom strip is bounded so it cannot crowd out the main face canvas");
-assert.match(styles, /\.workflow-incision-overlay \[data-workflow-candidate\]\s*{[^}]*stroke:\s*#003b73;[^}]*stroke-width:\s*1;/s,
-  "workflow restores the legacy matte dark-blue one-CSS-pixel candidate stroke");
+assert.match(styles, /\.workflow-incision-overlay \[data-workflow-candidate\]\s*{[^}]*stroke:\s*#67e8f9;[^}]*stroke-width:\s*1;/s,
+  "desktop workflow keeps the one-CSS-pixel candidate width while using the mobile highlight hue");
 assert.match(canvasTools, /data-workflow-diagnostic-candidate/,
   "the merged SVG owns a separate display-only diagnostic candidate layer");
 assert.match(styles, /\[data-workflow-diagnostic-candidate\]\s*{[^}]*stroke:\s*#ef4444;[^}]*stroke-dasharray:/s,
@@ -564,30 +588,36 @@ assert.match(styles.slice(unlayeredWarningTone), /color:\s*#fde68a;/,
 assert.match(styles, /\.workflow-workbench \.stage-top\s*{[^}]*display:\s*grid;/s, "workflow owns explicit status and action regions in the stage header");
 assert.match(styles, /\.workflow-workbench \.workflow-stage-spinner\s*{[^}]*animation:\s*workflow-stage-spin/s,
   "the incision waiting indicator is scoped to the merged workflow rather than the RSTL runtime");
-assert.match(styles, /\.workflow-workbench\.app\s*{[^}]*grid-template-columns:[^}]*}\s*\.workflow-workbench \.stage-top\s*{[^}]*display:\s*grid;/s,
+assert.match(styles, /\.workflow-workbench\.app\s*{[^}]*grid-template-columns:[^}]*}[\s\S]*?\.workflow-workbench \.stage-top\s*{[^}]*display:\s*grid;/s,
   "the unlayered workflow layout overrides the imported legacy flex header on wide screens");
 assert.match(styles, /@media \(min-width:\s*1281px\) and \(max-width:\s*1760px\)\s*{[\s\S]*?\.workflow-workbench \.stage-top\s*{[^}]*display:\s*grid;[^}]*grid-template-areas:[\s\S]*?workflow-actions workflow-actions workflow-actions[\s\S]*?min-height:\s*92px;/,
   "intermediate desktop widths keep the complete tool strip in a second header row instead of clipping actions");
 assert.match(styles, /@media \(max-width:\s*1280px\)\s*{[\s\S]*?\.workflow-workbench\.app\s*{[\s\S]*?grid-template-columns:\s*1fr;/, "workflow collapses before its readable three-column minimum can overflow");
 
-assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench\.app\s*\{[^}]*grid-template-rows:\s*auto auto auto;[^}]*overflow-x:\s*hidden;/,
-  "phone workflow rows grow with their content instead of overlapping the following control rail");
+assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench\.app\s*\{[^}]*--workflow-mobile-stage-height:\s*max\([\s\S]*?min\(calc\(100dvh - 170px\),\s*calc\(100vw \+ 100px\)\)[\s\S]*?grid-template-rows:\s*var\(--workflow-mobile-stage-height\) minmax\(0, 1fr\);[^}]*height:\s*100dvh;[^}]*overflow:\s*hidden;/,
+  "phone workflow sizes the observation region from both usable height and the width needed for a full photo");
+assert.match(styles, /\.react-workflow-host\[data-workflow-marker-mode="true"\] \.workflow-workbench\.app\s*\{[^}]*--workflow-mobile-stage-height:\s*max\([\s\S]*?min\(calc\(100dvh - 130px\),\s*calc\(100vw \+ 150px\)\)/,
+  "controlled-marker mode reserves stage height for the second toolbar row without shrinking the photo");
 assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.stage-body\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/,
   "phone workflow stage contains its canvas and focus cards instead of spilling over the next section");
-assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.main-wrap\s*\{[^}]*flex:\s*0 0 clamp\(300px,\s*54dvh,\s*480px\);/,
-  "phone workflow keeps the shared face canvas prominent without consuming an unbounded viewport height");
+assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.main-wrap\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;/,
+  "phone workflow lets the shared face canvas fill its fixed observation region without entering the control scroll pane");
 assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.zoom-strip\s*\{[^}]*display:\s*none;/,
   "phone workflow hides the redundant focus-preview rail while direct canvas zoom is available");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-tumor-transfer-actions,[\s\S]*?\.workflow-recalculate-action\s*\{[^}]*display:\s*none;/,
   "phone workflow hides tumor transfer and manual recalculation without removing their desktop actions");
-assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-stage-status\s*\{[^}]*block-size:\s*56px;[^}]*overflow-y:\s*auto;/,
-  "phone workflow reserves a stable status row so recognition copy cannot move the face canvas");
+assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-stage-status\s*\{[^}]*min-block-size:\s*34px;[^}]*max-block-size:\s*48px;[^}]*overflow-y:\s*auto;/,
+  "phone workflow bounds persistent recognition guidance above the face canvas");
 assert.match(render2d, /const zoomItems:[\s\S]*?\{ label: "全脸", region: null \}[\s\S]*?\.\.\.ZOOM_REGIONS/,
   "focus-preview generation remains available for desktop and future rollback");
 assert.match(styles, /--workflow-mobile-zoom-card-size:\s*calc\(\(100vw - 44px\) \/ 3\)[\s\S]*?\.workflow-workbench \.zoom-card\s*\{[^}]*flex:\s*0 0 var\(--workflow-mobile-zoom-card-size\);[^}]*min-width:\s*var\(--workflow-mobile-zoom-card-size\);[^}]*max-width:\s*var\(--workflow-mobile-zoom-card-size\);/,
   "hidden phone focus-card sizing remains intact instead of deleting the reversible implementation");
 assert.match(liveQualityPanel, /MOBILE_WORKFLOW_MEDIA_QUERY[\s\S]*?media\.matches \? document\.querySelector\(mobilePortalSelector\) : null/,
   "quality relocation is gated to phone-class coarse-pointer viewports and leaves desktop placement unchanged");
+assert.match(liveRail, /workflow-mobile-quality-slot/,
+  "phone quality feedback is relocated to the stage header rather than covering the face");
+assert.match(styles, /\.workflow-workbench \.stage-top > #livePill\s*\{[^}]*display:\s*none;[\s\S]*?\.workflow-workbench \.stage-top > #fps\s*\{[^}]*display:\s*none;/s,
+  "redundant phone source and FPS labels are hidden while their underlying runtime data remains intact");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.mobile-workflow-dock\s*\{[^}]*display:\s*grid;/,
   "the compact input and layer dock is exposed only on phone-class coarse pointers");
 assert.match(mobileControls, /upload_source[\s\S]*?camera_toggle[\s\S]*?pause_toggle[\s\S]*?recording_toggle/,
@@ -636,6 +666,58 @@ assert.match(pipelineLoop, /setOverlaySummary\(renderState\.workflowPhotoOverlay
   "RSTL redraws retain the workflow draft summary instead of clearing the lesion and incision candidate");
 assert.match(controller, /frame\.transform\?\.viewportLeft \?\? rect\.left[\s\S]*?frame\.transform\?\.viewportTop \?\? rect\.top/,
   "workflow overlays use the same cached viewport origin as their source mapping while mobile controls reflow");
+{
+  const start = controller.indexOf("function observeWorkflowOverlayResize(");
+  const end = controller.indexOf("\nfunction drawRepairStrokes", start);
+  assert.ok(start >= 0 && end > start, "overlay resize observer is isolated from source-coordinate mutations");
+  const source = controller.slice(start, end)
+    .replace("state: WorkflowIncisionState", "state")
+    .replace(/querySelector<(?:HTMLElement|HTMLCanvasElement)>/g, "querySelector");
+  const frames = new Map<number, () => void>();
+  let nextFrame = 0;
+  let notify = () => {};
+  let disconnected = false;
+  const observed: unknown[] = [];
+  const wrap = {};
+  const canvas = {};
+  const state = { mounted: true, root: { querySelector: (selector: string) => selector === ".main-wrap" ? wrap : canvas } };
+  let displayWidth = 430;
+  const draws: number[] = [];
+  const context = {
+    ResizeObserver: class {
+      constructor(callback: () => void) { notify = callback; }
+      observe(element: unknown) { observed.push(element); }
+      disconnect() { disconnected = true; }
+    },
+    requestAnimationFrame(callback: () => void) { frames.set(++nextFrame, callback); return nextFrame; },
+    cancelAnimationFrame(id: number) { frames.delete(id); },
+    drawDraftOverlay() { draws.push(displayWidth); },
+  };
+  const observe = runInNewContext(`(${source})`, context);
+  const cleanup = observe(state);
+  assert.deepEqual(observed, [wrap, canvas], "observe both stage reflow and the fitted image size");
+  const tick = () => { const pending = [...frames.values()]; frames.clear(); pending.forEach((callback) => callback()); };
+  notify(); notify();
+  assert.equal(frames.size, 1, "coalesce resize notifications");
+  tick();
+  assert.equal(draws.length, 0, "do not draw before the Live fit callback in the first frame");
+  displayWidth = 426;
+  tick();
+  assert.deepEqual(draws, [426], "draw with the updated image transform, not the 430px stale fit");
+  notify(); tick(); cleanup(); tick(); notify(); tick();
+  assert.equal(draws.length, 1, "cleanup cancels queued redraw and ignores late observer notifications");
+  assert.equal(disconnected, true);
+  const cleanupAgain = observe(state);
+  notify(); state.mounted = false; tick(); tick();
+  assert.equal(draws.length, 1, "unmounted controller never redraws");
+  cleanupAgain();
+  const withoutObserver = runInNewContext(`(${source})`, { ...context, ResizeObserver: undefined });
+  withoutObserver(state)();
+  const missingWrap = { mounted: true, root: { querySelector: () => null } };
+  observe(missingWrap)();
+  assert.match(controller, /const cleanupOverlayResize = observeWorkflowOverlayResize\(state\)/);
+  assert.match(controller, /state\.cleanup = \(\) => \{\s*cleanupOverlayResize\(\)/);
+}
 assert.match(mobileVisibility, /let rstlLayerVisible = true;[\s\S]*?let wrinkleLayerVisible = true;[\s\S]*?let incisionCandidateVisible = true;/,
   "all phone display layers default to visible");
 assert.match(mobileVisibility, /resetMobileWorkflowVisibility[\s\S]*?rstlLayerVisible = true;[\s\S]*?wrinkleLayerVisible = true;[\s\S]*?incisionCandidateVisible = true;/,
@@ -693,24 +775,18 @@ assert.equal(workflowCandidateDisplayAllowed({ candidate_display_blocked: true }
   "hard-blocked candidates never reach the merged draft renderer");
 assert.equal(workflowCandidateDisplayAllowed({ candidate_display_blocked: false }, true), true,
   "valid projected candidates remain visible");
-assert.equal(workflowDiagnosticCandidateVisible({
-  candidate_display_blocked: true,
-  candidate: { hard_violations: [{ code: "candidate_outside_canonical_surface" }] },
-} as any, true, 40), false,
-"a general face-surface exit never borrows the red style reserved for sensitive openings");
-assert.equal(workflowDiagnosticCandidateVisible({
-  candidate_display_blocked: true,
-  candidate: { hard_violations: [{ code: "candidate_intersects_non_skin_opening" }] },
-} as any, true, 40), true,
-"an eye, mouth or nostril opening rejection remains available to the red diagnostic renderer");
-assert.equal(workflowDiagnosticCandidateVisible({ candidate_display_blocked: true }, true, 40, "left-nostril-opening"), true,
-  "a photo-space nostril crossing independently qualifies for the sensitive red diagnostic layer");
-assert.equal(workflowDiagnosticCandidateVisible({ candidate_display_blocked: false }, false, 40), false,
-  "a generic failed photo projection is withheld instead of being colored as a sensitive-opening diagnosis");
-assert.equal(workflowDiagnosticCandidateVisible({ candidate_display_blocked: false }, true, 40), false,
-  "a valid candidate never receives the red diagnostic style");
-assert.equal(workflowDiagnosticCandidateVisible({ candidate_display_blocked: true }, false, 0), false,
-  "the diagnostic layer does not invent geometry when no candidate points exist");
+const rejectedOutline: [number, number, number][] = [[0, 0, 0], [4, 2, 0], [0, 4, 0], [-4, 2, 0], [0, 0, 0]];
+for (const code of ["candidate_outside_canonical_surface", "candidate_intersects_non_skin_opening", "candidate_intersects_default_vermilion_protection", "other_gate"]) {
+  assert.equal(workflowDiagnosticCandidateVisible({ candidate_display_blocked: true,
+    candidate: { type: "fusiform", hard_violations: [{ code }] },
+  }, true, rejectedOutline), true, "all blocked fusiform categories can show their real complete outline");
+}
+assert.equal(workflowDiagnosticCandidateVisible({ candidate: { type: "fusiform" } }, false, rejectedOutline), true,
+  "a failed photo projection may show a valid complete rejected fit");
+assert.equal(workflowDiagnosticCandidateVisible({ candidate_display_blocked: false, candidate: { type: "fusiform" } }, true, rejectedOutline), false,
+  "a valid allowed candidate never receives the red diagnostic style");
+assert.equal(workflowDiagnosticCandidateVisible({ candidate_display_blocked: true, candidate: { type: "fusiform" } }, false, []), false,
+  "the diagnostic layer does not invent missing geometry");
 assert.equal(workflowUpperForeheadSurfaceRecoveryActive({
   canonicalSurfaceOnly: true,
   projectionValid: true,
@@ -797,14 +873,14 @@ for (const unsafeRecovery of [
   assert.equal(workflowUpperForeheadSurfaceRecoveryActive(unsafeRecovery), false,
     "other hard violations, invalid projections, incomplete RSTL support, and nonstandard references stay blocked");
 }
-assert.match(controller, /geometry\.candidateProjection\.valid\s*\?\s*geometry\.candidate\.length\s*:\s*geometry\.diagnosticCandidate\.length/,
-  "diagnostic visibility counts the actual rejected geometry rather than the undersized source fallback");
-assert.match(controller, /geometry\?\.candidateProjection\.valid[\s\S]*?geometry\?\.diagnosticCandidate \|\| \[\][\s\S]*?geometry\?\.diagnosticFusiformRendering/,
-  "the red path switches to the separate rejected fit whenever photo projection fails");
+assert.match(controller, /workflowDiagnosticCandidateOutline\(state\.result\.candidate\?\.type, geometry\)/,
+  "diagnostic visibility uses the real complete fit");
+assert.match(controller, /workflowDiagnosticFusiformSvgPath\(diagnosticCandidate,/,
+  "the red layer uses its own complete-outline renderer");
 assert.match(photoPlanning, /const projectionGateReason[\s\S]*?diagnosticFusiformRendering[\s\S]*?"photo_surface_exit"/,
   "the reported failure reason stays tied to the actual rejected outline shown in red");
-assert.match(controller, /红色虚线表示候选进入敏感开口，已阻断且不会保存/,
-  "the status reserves the red line for a sensitive non-skin opening instead of a general face-surface exit");
+assert.match(controller, /diagnosticCandidateBlockMessage\(state\.result,/,
+  "the red status explains the actual blocked candidate");
 assert.match(controller, /无法完整覆盖肿物边界，因此不显示容易误解的红色轮廓/,
   "a boundary-coverage failure produces a precise warning without drawing an undersized candidate");
 assert.equal(workflowProjectionStatusMayOverride("candidate_result", "候选已生成并等待审阅"), true,
@@ -906,11 +982,20 @@ const recoveredMainOverSpike = recoverWorkflowFreehandBoundary(
 assert.ok(recoveredMainOverSpike.length === 48 && Math.max(...recoveredMainOverSpike.map((point) => point.x)) < 26,
   "a small exact crossed spike cannot outrank a substantially larger near-closed lesion loop");
 assert.deepEqual(workflowBoundaryModeTransition("freehand", "select"), {
-  boundaryActive: true, clearCenter: true, mayGenerateCandidate: false,
-}, "switching into freehand mode invalidates the ellipse center and cannot regenerate the old candidate");
+  boundaryActive: true, clearCenter: true, mayGenerateCandidate: false, exitControlledMarker: true,
+}, "switching into freehand mode exits controlled-marker display suppression and cannot regenerate the old candidate");
 assert.deepEqual(workflowBoundaryModeTransition("freehand", "clear"), {
-  boundaryActive: true, clearCenter: true, mayGenerateCandidate: false,
+  boundaryActive: true, clearCenter: true, mayGenerateCandidate: false, exitControlledMarker: false,
 }, "clearing a freehand boundary keeps drawing active while preventing the old ellipse candidate from returning");
+assert.deepEqual(workflowBoundaryModeTransition("ellipse", "select"), {
+  boundaryActive: false, clearCenter: false, mayGenerateCandidate: true, exitControlledMarker: false,
+}, "ellipse mode preserves its existing marker transition contract");
+assert.equal(workflowFreehandToggleAction(false, 0), "start",
+  "the freehand action starts when drawing is inactive");
+assert.equal(workflowFreehandToggleAction(true, 0), "cancel_empty",
+  "ending an empty freehand session exits instead of trapping the operator in drawing mode");
+assert.equal(workflowFreehandToggleAction(true, 12), "finalize",
+  "ending a non-empty freehand session still submits the recorded boundary");
 const scanCircle = workflowScanCircleGeometry({
   sourcePoint: { x: 100, y: 80 },
   scanDiameterMm: 20,
@@ -952,6 +1037,27 @@ assert.deepEqual(workflowControlledMarkerCrop({
 assert.equal(minimumWorkflowMarkerScanDiameterMm(12), 15, "controlled-marker scan covers at least 1.2 times the lesion diameter");
 assert.equal(minimumWorkflowMarkerScanDiameterMm(40), 50, "scan coverage rounds upward in the legacy five-millimetre steps");
 assert.equal(minimumWorkflowMarkerScanDiameterMm(100), 60, "scan coverage respects the established maximum");
+assert.match(canvasTools, /<RangeInput\s+min="10"\s+max="60"\s+step="5"/,
+  "scan control uses the native range component with fixed 10–60 mm endpoints");
+assert.doesNotMatch(canvasTools, /minimumScanDiameterMm/,
+  "tumor-dependent detection coverage must not move the slider's minimum");
+const manualScanStart = controller.indexOf('case "scan_diameter_changed":');
+const manualScanEnd = controller.indexOf('case "reset_view":', manualScanStart);
+assert.ok(manualScanStart >= 0 && manualScanEnd > manualScanStart);
+const changeManualScan = runInNewContext(
+  `(function(state, detail) { switch(detail.command) { ${controller.slice(manualScanStart, manualScanEnd)} } return state; })`,
+  { scheduleOverlayDraw() {} },
+);
+for (const diameterMm of [8, 28, 50]) {
+  for (const [requested, expected] of [[-5, 10], [10, 10], [35, 35], [60, 60], [100, 60], [NaN, 10], [Infinity, 10]]) {
+    const state = { diameterMm, scanDiameterMm: 35, markerRequestId: 4, markerBusy: false, markerMode: false };
+    changeManualScan(state, { command: "scan_diameter_changed", value: requested });
+    assert.equal(state.scanDiameterMm, expected, "manual slider endpoint must not depend on tumor diameter");
+    assert.equal(state.markerRequestId, 5, "range changes still invalidate stale requests");
+  }
+}
+assert.match(controller, /if \(started.scanDiameterMm < minimumScanDiameterMm\)[\s\S]*?controlled_marker_scan_too_small[\s\S]*?return;/,
+  "choosing a small scan must not bypass the existing detection coverage precondition");
 assert.equal(workflowMarkerScanDiameterForTumor(30, 33), 40,
   "changing cutaneous diameter automatically expands an undersized controlled-marker scan");
 assert.equal(workflowMarkerScanDiameterForTumor(50, 20), 50,
@@ -985,27 +1091,52 @@ const secondEllipseSpan = ellipseSpan(ellipseAt(420, 260));
 assert.ok(Math.abs(firstEllipseSpan.width - secondEllipseSpan.width) < 1e-9
   && Math.abs(firstEllipseSpan.height - secondEllipseSpan.height) < 1e-9,
   "identical cutaneous parameters keep identical photo-space axes at different face locations");
-assert.ok(Math.abs(firstEllipseSpan.width - 28) < 1e-9
-  && Math.abs(firstEllipseSpan.height - 19.6) < 1e-9,
-  "photo-space ellipse axes follow the stable millimetre scale and requested aspect ratio");
+const equivalentCircleDiameterPx = 28;
+assert.ok(Math.abs(firstEllipseSpan.height / firstEllipseSpan.width - 0.7) < 1e-9
+  && Math.abs(firstEllipseSpan.width * firstEllipseSpan.height - equivalentCircleDiameterPx ** 2) < 1e-9,
+  "photo-space ellipse changes its axis ratio while preserving the equivalent-circle area");
+const circularEllipseSpan = ellipseSpan(workflowPhotoEllipseBoundary({
+  center: { x: 100, y: 80 },
+  diameterMm: 14,
+  ellipseRatio: 100,
+  pixelsPerMm: 2,
+}));
+assert.ok(Math.abs(circularEllipseSpan.width - equivalentCircleDiameterPx) < 1e-9
+  && Math.abs(circularEllipseSpan.height - equivalentCircleDiameterPx) < 1e-9,
+  "100 percent remains the circle defined by the requested diameter");
 const mildEllipseSpan = ellipseSpan(workflowPhotoEllipseBoundary({
   center: { x: 100, y: 80 },
   diameterMm: 14,
   ellipseRatio: 90,
   pixelsPerMm: 2,
 }));
-assert.ok(Math.abs(mildEllipseSpan.width - 28) < 1e-9
-  && Math.abs(mildEllipseSpan.height - 25.2) < 1e-9,
-"the merged-page default can represent a near-circular cutaneous lesion without a strong 70% flattening");
+assert.ok(Math.abs(mildEllipseSpan.height / mildEllipseSpan.width - 0.9) < 1e-9
+  && Math.abs(mildEllipseSpan.width * mildEllipseSpan.height - equivalentCircleDiameterPx ** 2) < 1e-9,
+  "a near-circular ratio preserves the same simulated lesion area");
 const verticalEllipseSpan = ellipseSpan(workflowPhotoEllipseBoundary({
   center: { x: 100, y: 80 },
   diameterMm: 14,
   ellipseRatio: 150,
   pixelsPerMm: 2,
 }));
-assert.ok(Math.abs(verticalEllipseSpan.width - 28) < 1e-9
-  && Math.abs(verticalEllipseSpan.height - 42) < 1e-9,
-"a ratio above 100 percent makes the vertical reference axis longer without pretending it is a fixed minor axis");
+assert.ok(Math.abs(verticalEllipseSpan.height / verticalEllipseSpan.width - 1.5) < 1e-9
+  && Math.abs(verticalEllipseSpan.width * verticalEllipseSpan.height - equivalentCircleDiameterPx ** 2) < 1e-9,
+  "a ratio above 100 percent makes the vertical reference axis longer without changing area");
+const horizontalHalfSpan = ellipseSpan(workflowPhotoEllipseBoundary({
+  center: { x: 100, y: 80 },
+  diameterMm: 14,
+  ellipseRatio: 50,
+  pixelsPerMm: 2,
+}));
+const verticalDoubleSpan = ellipseSpan(workflowPhotoEllipseBoundary({
+  center: { x: 100, y: 80 },
+  diameterMm: 14,
+  ellipseRatio: 200,
+  pixelsPerMm: 2,
+}));
+assert.ok(Math.abs(horizontalHalfSpan.width - verticalDoubleSpan.height) < 1e-9
+  && Math.abs(horizontalHalfSpan.height - verticalDoubleSpan.width) < 1e-9,
+  "50 and 200 percent produce the same ellipse rotated by ninety degrees");
 
 assert.deepEqual(
   workflowCenteredLinearPath([[0, 0, 0], [10, 0, 0]], [5, 1, 0]),
@@ -1119,13 +1250,13 @@ assert.deepEqual(svgOverlayExportViewBox(
   { left: 20, top: 30, width: 900, height: 500 },
 ), { x: 80, y: 50, width: 640, height: 360 }, "workflow PNG export crops the workbench SVG to the displayed canvas rectangle");
 
-const legacyFusiformStyle = incisionCandidateScreenStyle("fusiform");
-assert.deepEqual(legacyFusiformStyle, {
-  color: "#003b73",
+const desktopFusiformStyle = incisionCandidateScreenStyle("fusiform");
+assert.deepEqual(desktopFusiformStyle, {
+  color: "#67e8f9",
   lineWidth: 1,
-  haloColor: "#003b73",
+  haloColor: "#67e8f9",
   haloWidth: 1,
-}, "workflow style contract stays identical to the standalone photo candidate");
+}, "desktop workflow style stays identical to the standalone highlighted photo candidate");
 const smoothFit = {
   outline: [],
   sourceOutline: [],
