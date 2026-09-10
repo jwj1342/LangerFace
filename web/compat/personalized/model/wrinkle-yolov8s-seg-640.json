@@ -53,7 +53,7 @@
   "onnx_sha256": "F58BED3A49734597BB3A8651B3BE571DACC2F55AABBBDBCB7994DC9D8D8DB76C",
   "exporter": "ultralytics 8.4.138",
   "hugging_face": {
-    "repository": "KKKenny0119/langerface-wrinkle-yolov8s-seg",
+    "repository": "LangerFace-Research/langerface-wrinkle-yolov8s-seg",
     "revision": "main",
     "filename": "wrinkle-yolov8s-seg-640.onnx",
     "visibility": "private"
