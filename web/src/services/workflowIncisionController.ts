@@ -172,6 +172,7 @@ import {
 import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
 import { createWorkflowWorkerClient, type WorkflowWorkerClient } from "./workflowWorkerClient";
 import {
+  consumeWorkflowDraftRestoreRequest,
   saveWorkflowIncisionDraft,
   WORKFLOW_DRAFT_RESTORE_EVENT,
   type WorkflowIncisionDraft,
@@ -3615,7 +3616,9 @@ function bindDom(state: WorkflowIncisionState) {
     [INCISION_LIBRARY_REACT_COMMAND_EVENT, (event) => handleLibraryCommand(state, event)],
     [WORKFLOW_INCISION_TOOL_REACT_COMMAND_EVENT, (event) => handleToolCommand(state, event)],
     [WORKFLOW_DRAFT_RESTORE_EVENT, (event) => {
-      state.pendingDraftRestore = (event as CustomEvent<WorkflowIncisionDraft | null>).detail ?? null;
+      state.pendingDraftRestore = consumeWorkflowDraftRestoreRequest()
+        ?? (event as CustomEvent<WorkflowIncisionDraft | null>).detail
+        ?? null;
       applyWorkflowDraftRestore(state);
     }],
     [LIVE_CONTROLLER_STATE_EVENT, (event) => {
@@ -3713,6 +3716,8 @@ export function mountWorkflowIncisionController(root: HTMLElement) {
   }
   renderState.workflowPhotoOverlay = true;
   bindDom(state);
+  const pendingDraftRestore = consumeWorkflowDraftRestoreRequest();
+  if (pendingDraftRestore !== undefined) state.pendingDraftRestore = pendingDraftRestore;
   publish(state, "mounted");
   void loadAssets(state);
   return disposeWorkflowIncisionController;
