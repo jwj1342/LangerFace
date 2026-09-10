@@ -17,6 +17,11 @@ import {
   type StaticImageDetector,
 } from "./staticImageDetection.ts";
 import { LiveFrameScheduler } from "./liveFrameScheduler.ts";
+import { liveBenchmark } from "./liveBenchmark.ts";
+import {
+  updateLiveWrinkleMeshTracking,
+  updateLiveWrinkleTracking,
+} from "./liveWrinkleAnalysis.ts";
 
 interface VideoDetector {
   detectForVideo: (source: unknown, timeMs: number) => {
@@ -38,16 +43,32 @@ interface BlendshapeCategory {
 }
 
 export function detectHands(timeMs: number, width: number, height: number): HandMask[] {
+  const sample = liveBenchmark()?.current;
+  if (sample) {
+    sample.stages.handDetector = 0;
+    sample.stages.handMasks = 0;
+    sample.handCount = 0;
+    sample.handDetectorRan = false;
+  }
   if (!renderState.handOcc) return [];
   const imageMode = currentLiveSourceKind() === "image";
   const detector = (imageMode ? modelState.imageHandLandmarker : modelState.handLandmarker) as HandDetector | null;
   if (!detector) return [];
+  const start = sample ? performance.now() : 0;
   const result = imageMode
     ? detector.detect?.(currentLiveSource())
-    : detector.detectForVideo(currentLiveSource(), timeMs);
+    : detector.detectForVideo(liveBenchmark()?.handInput === "canvas" ? els.canvas : currentLiveSource(), timeMs);
+  const maskStart = sample ? performance.now() : 0;
+  if (sample) {
+    sample.stages.handDetector = maskStart - start;
+    sample.handCount = result?.landmarks?.length || 0;
+    sample.handDetectorRan = true;
+  }
   if (!result?.landmarks || !result.landmarks.length) return [];
   const margin = Math.max(5, width * 0.006);
-  return buildHandMasks(result.landmarks.map((hand) => toPixels(hand, width, height).map((point) => [point[0], point[1]] as [number, number])), 0.16, margin);
+  const masks = buildHandMasks(result.landmarks.map((hand) => toPixels(hand, width, height).map((point) => [point[0], point[1]] as [number, number])), 0.16, margin);
+  if (sample) sample.stages.handMasks = performance.now() - maskStart;
+  return masks;
 }
 
 let fpsEMA = 0;
@@ -74,7 +95,9 @@ function updateFaceExpression(faceBlendshapes: Array<{ categories?: BlendshapeCa
 
 export function requestFrame(): void {
   if (!sourceState.running || sourceState.paused) return;
-  frameScheduler.request(loop);
+  const video = liveBenchmark()?.scheduler !== "animation"
+    && currentLiveSourceKind() !== "image" ? currentLiveSource() as HTMLVideoElement : null;
+  frameScheduler.request(loop, video);
 }
 
 export function cancelFrame(): void {
@@ -89,10 +112,21 @@ export function loop(): void {
   const sourceKind = currentLiveSourceKind();
   const width = els.canvas.width;
   const height = els.canvas.height;
+  const benchmark = liveBenchmark();
+  const sample = benchmark?.recording ? {
+    wallTime: performance.now(), mediaTime: source.currentTime || 0,
+    presentedFrames: benchmark.presented?.presentedFrames,
+    presentedMediaTime: benchmark.presented?.mediaTime,
+    expectedDisplayTime: benchmark.presented?.expectedDisplayTime,
+    stages: {} as Record<string, number>,
+  } : null;
+  if (benchmark) benchmark.current = sample || undefined;
   ctx.drawImage(source, 0, 0, width, height);
   const timeMs = performance.now();
+  if (sample) sample.stages.capture = timeMs - sample.wallTime;
 
   let landmarks: Vec3[] | null = null;
+  let wrinkleLandmarks: Vec3[] | null = null;
   let hulls: HandMask[] = [];
   if (sourceKind === "image") {
     if (!sourceState.imageDetectionComplete) {
@@ -143,10 +177,17 @@ export function loop(): void {
     }
   } else if (source.currentTime !== undefined) {
     const landmarker = modelState.landmarker as VideoDetector | null;
-    const result = landmarker?.detectForVideo(source, timeMs);
+    // Detect the pixels already copied for display, so video advancement cannot
+    // put landmarks and wrinkle evidence on different frames.
+    const faceStart = sample ? performance.now() : 0;
+    const result = landmarker?.detectForVideo(els.canvas, timeMs);
+    const facePostStart = sample ? performance.now() : 0;
+    if (sample) sample.stages.faceDetector = facePostStart - faceStart;
     updateFaceExpression(result?.faceBlendshapes);
     if (result?.faceLandmarks && result.faceLandmarks.length) {
-      landmarks = toPixels(result.faceLandmarks[0], width, height);
+      const currentLandmarks = toPixels(result.faceLandmarks[0], width, height);
+      wrinkleLandmarks = currentLandmarks.map((point) => [...point] as Vec3);
+      landmarks = currentLandmarks;
       if (renderState.smoothLevel > 0) landmarks = renderState.smoother.filter(landmarks, timeMs / 1000);
       sourceState.lastLM = landmarks;
       if (sourceState.planning2d?.getSnapshot().detection.status !== "ready") {
@@ -166,17 +207,31 @@ export function loop(): void {
       }
       landmarks = sourceState.lastLM as Vec3[] | null;
     }
+    if (sample) sample.stages.facePostprocess = performance.now() - facePostStart;
     hulls = detectHands(timeMs, width, height);
   }
   sourceState.lastHulls = hulls;
+  const trackingStart = sample ? performance.now() : 0;
+  if (sample) sample.stages.landmarksAndHands = trackingStart - timeMs;
+  if (sourceKind === "camera" || sourceKind === "video") {
+    updateLiveWrinkleTracking(wrinkleLandmarks || [], timeMs);
+    updateLiveWrinkleMeshTracking(els.canvas, wrinkleLandmarks || []);
+  }
+  if (sample) sample.stages.wrinkleTracking = performance.now() - trackingStart;
 
   let lineCount = 0;
   if (landmarks && sourceState.presence > 0) {
     const displayLandmarks = landmarks;
     try {
+      const drawStart = sample ? performance.now() : 0;
       lineCount = draw(displayLandmarks, width, height, hulls);
+      const zoomStart = sample ? performance.now() : 0;
+      if (sample) sample.stages.mainDraw = zoomStart - drawStart;
       drawZooms(displayLandmarks, width);
+      const focusStart = sample ? performance.now() : 0;
+      if (sample) sample.stages.zooms = focusStart - zoomStart;
       drawFocusedRegion(displayLandmarks, width, height);
+      if (sample) sample.stages.focus = performance.now() - focusStart;
       drawFailureLogged = false;
     } catch (error) {
       if (!drawFailureLogged) logWarn("渲染图谱失败，本帧已跳过。", error);
@@ -195,6 +250,11 @@ export function loop(): void {
   });
 
   const now = performance.now();
+  if (sample && benchmark) {
+    sample.stages.total = now - sample.wallTime;
+    benchmark.samples.push(sample);
+    benchmark.current = undefined;
+  }
   fpsEMA = fpsEMA ? fpsEMA * 0.9 + (1000 / Math.max(1, now - lastT)) * 0.1 : 30;
   frameMetricsSeen += 1;
   if (sourceKind !== "image" && frameMetricsSeen % 30 === 0) {

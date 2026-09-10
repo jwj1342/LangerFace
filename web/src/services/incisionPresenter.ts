@@ -316,8 +316,10 @@ export function buildIncisionResultPresentation(
       : candidateMetrics.isReference
       ? "该参考不满足项目原定比例；请医生结合查体在本页记录原因，不能直接确认或发送实时叠加。"
       : String(result.next_step || "医生审阅、编辑或拒绝该候选。"),
-    privacyState: "浏览器本地",
-    privacyAudit: `不上传原始影像；${input.privacyAudit.local_workflow_fields?.length || 0} 类抽象字段只在浏览器确定性 workflow 内处理，不配置或调用远程模型。${input.privacyAudit.secondary_cues_present ? " 辅助线索仅随审阅导出，不参与几何。" : ""}`,
+    privacyState: import.meta.env?.VITE_SERVER_COMPUTE === 'true' ? '浏览器 + 服务器 GPU' : "浏览器本地",
+    privacyAudit: import.meta.env?.VITE_SERVER_COMPUTE === 'true'
+      ? '交互和候选几何在当前浏览器处理；YOLO 请求由服务器 GPU 处理。'
+      : `不上传原始影像；${input.privacyAudit.local_workflow_fields?.length || 0} 类抽象字段只在浏览器确定性 workflow 内处理，不配置或调用远程模型。${input.privacyAudit.secondary_cues_present ? " 辅助线索仅随审阅导出，不参与几何。" : ""}`,
     stageStatus: generationLabel,
   };
 }

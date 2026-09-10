@@ -9,6 +9,7 @@ baseline to distinguish independent additions from endpoint extensions.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -45,9 +46,29 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint", type=Path, default=DEFAULT_CHECKPOINT)
     parser.add_argument("--baseline", type=Path, default=DEFAULT_BASELINE)
     parser.add_argument(
+        "--traditional-input",
+        type=Path,
+        help="Optional image used by the traditional image-analysis branch.",
+    )
+    parser.add_argument(
+        "--unet-input",
+        type=Path,
+        help="Optional image used by the U-Net branch.",
+    )
+    parser.add_argument(
+        "--skip-baseline-source-check",
+        action="store_true",
+        help="Allow an experimentally generated baseline from another same-size image.",
+    )
+    parser.add_argument(
         "--without-baseline",
         action="store_true",
         help="Run semantic paired-edge screening without a precomputed centerline baseline.",
+    )
+    parser.add_argument(
+        "--trace",
+        action="store_true",
+        help="Write intermediate images for inspection.",
     )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     return parser.parse_args()
@@ -152,6 +173,54 @@ def experiment_regions(
         crow_gate |= current.astype(np.uint8)
     regions["crow_feet"] &= crow_gate
     return regions, face, anatomy
+
+
+def extended_forehead_region(
+    anatomy: dict,
+    width: int,
+    height: int,
+) -> np.ndarray:
+    """Approximate the full forehead above MediaPipe's truncated face oval."""
+    face_width = float(anatomy["faceWidthPx"])
+    center_x = float(anatomy["centerX"])
+    brow_y = float(anatomy["browY"])
+    top_y = max(0.0, brow_y - 0.38 * face_width)
+    bottom_y = min(float(height - 1), brow_y - 0.04 * face_width)
+    if bottom_y <= top_y:
+        return np.zeros((height, width), dtype=np.uint8)
+    yy, xx = np.mgrid[:height, :width]
+    vertical = np.clip((yy - top_y) / (bottom_y - top_y), 0.0, 1.0)
+    half_width = face_width * (0.29 + 0.11 * vertical)
+    region = (
+        (yy >= top_y)
+        & (yy <= bottom_y)
+        & (np.abs(xx - center_x) <= half_width)
+    )
+    return region.astype(np.uint8)
+
+
+def full_face_illumination_masks(
+    face_mask: np.ndarray,
+    anatomy: dict,
+    width: int,
+    height: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Cover the full forehead and move the correction seam outside facial skin."""
+    forehead = extended_forehead_region(anatomy, width, height)
+    estimation_mask = (
+        (face_mask > 0) | (forehead > 0)
+    ).astype(np.uint8)
+    face_width = float(anatomy["faceWidthPx"])
+    context_radius = max(1, int(round(0.030 * face_width)))
+    context_kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE,
+        (2 * context_radius + 1, 2 * context_radius + 1),
+    )
+    expanded_forehead = cv2.dilate(forehead, context_kernel)
+    application_mask = (
+        (face_mask > 0) | (expanded_forehead > 0)
+    ).astype(np.uint8)
+    return estimation_mask, application_mask
 
 
 def paired_hysteresis(
@@ -1115,16 +1184,22 @@ def candidate_decision(
             <= line["medianY"]
             <= nose_root_y + 0.04 * face_width
         )
+        chord_ratio_minimum = 0.84 if line.get("bundleSupported", False) else 0.90
         if (
             in_root_band
             and line.get("meanNasalTraceSupport", 0.0) >= 0.30
             and line.get("nasalTraceCoverage", 0.0) >= 0.68
-            and line.get("chordRatio", 0.0) >= 0.90
+            and line.get("chordRatio", 0.0) >= chord_ratio_minimum
             and line.get("lengthPx", 0.0) >= 0.075 * face_width
         ):
             return "addition", "nasal_horizontal_dark_ridge_trace_replacement"
         return "rejected", "weak_or_misaligned_nasal_horizontal_trace"
-    if line["nearBaselineFraction"] >= 0.35:
+    sparse_crow_baseline = (
+        class_name == "crow_feet"
+        and baseline_class_count < MAXIMUM_ADDITIONS["crow_feet"]
+    )
+    represented_fraction = 0.55 if sparse_crow_baseline else 0.35
+    if line["nearBaselineFraction"] >= represented_fraction:
         return "rejected", "mostly_already_represented_by_baseline"
     endpoint_limit = {
         "forehead": 0.025,
@@ -1132,12 +1207,33 @@ def candidate_decision(
         "nasal_dorsum": 0.018,
         "crow_feet": 0.025,
     }[class_name] * face_width
-    if (
+    nearest_baseline = next(
+        (
+            baseline
+            for baseline in baseline_lines
+            if str(baseline.get("id")) == str(line.get("nearestBaselineId"))
+        ),
+        None,
+    )
+    axis_aligned = True
+    if nearest_baseline is not None and line.get("points") and nearest_baseline.get("points"):
+        line_axis = line_geometry(line)["axis"]
+        baseline_axis = line_geometry(nearest_baseline)["axis"]
+        axis_aligned = axis_angle_degrees(line_axis, baseline_axis) <= 30.0
+    endpoint_related = (
         baseline_class_count
         and line["endpointDistancePx"] <= endpoint_limit
         and line["minimumBaselineDistancePx"] <= 6.0
         and line["meanOrientationSupport"] >= 0.48
-    ):
+        and axis_aligned
+    )
+    if endpoint_related:
+        if (
+            class_name == "crow_feet"
+            and line["nearBaselineFraction"] <= 0.34
+            and line.get("lengthPx", 0.0) >= 0.10 * face_width
+        ):
+            return "addition", "mostly_independent_long_radial_line"
         return "extension", "continuous_baseline_endpoint"
 
     median_semantic_distance = line["medianSemanticDistancePx"]
@@ -1177,7 +1273,24 @@ def candidate_decision(
         return "addition", "semantic_radial_crow_feet_line"
     if line.get("bundleSupported", False):
         return "addition", "topology_supported_crow_feet_fan"
+    if (
+        line.get("confidence", 0.0) >= 0.56
+        and line.get("lengthPx", 0.0) >= 0.035 * face_width
+        and line.get("meanPairedEdge", 0.0) >= 0.40
+        and line.get("meanRidgeSupport", 0.0) >= 0.40
+        and line.get("meanPairBalance", 0.0) >= 0.30
+    ):
+        return "addition", "strong_multicue_radial_crow_feet_line"
     return "rejected", "crow_feet_without_semantic_support"
+
+
+def independent_addition_limit(class_name: str, baseline_lines: list[dict]) -> int:
+    limit = MAXIMUM_ADDITIONS[class_name]
+    if class_name == "crow_feet":
+        baseline_count = sum(line["class"] == class_name for line in baseline_lines)
+        if baseline_count < MAXIMUM_ADDITIONS[class_name]:
+            limit += 1
+    return limit
 
 
 def merge_extension(baseline_line: dict, extension: dict) -> dict:
@@ -1230,15 +1343,161 @@ def draw_additions(image: np.ndarray, lines: list[dict], thickness: int) -> np.n
     return output
 
 
+def trace_response_overlay(
+    image: np.ndarray,
+    response: np.ndarray,
+    region: np.ndarray | None = None,
+) -> np.ndarray:
+    """Render a 0-1 response without coloring pixels outside the active region."""
+    heat = cv2.applyColorMap(
+        np.clip(response * 255.0, 0, 255).astype(np.uint8),
+        cv2.COLORMAP_TURBO,
+    )
+    blended = cv2.addWeighted(image, 0.42, heat, 0.58, 0.0)
+    if region is None:
+        return blended
+    output = image.copy()
+    selected = region > 0
+    output[selected] = blended[selected]
+    contours, _ = cv2.findContours(
+        selected.astype(np.uint8),
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE,
+    )
+    cv2.drawContours(output, contours, -1, (235, 235, 235), 1, cv2.LINE_AA)
+    return output
+
+
+def trace_mask_overlay(
+    image: np.ndarray,
+    mask: np.ndarray,
+    region: np.ndarray,
+    color: tuple[int, int, int] = (255, 180, 0),
+) -> np.ndarray:
+    output = image.copy()
+    selected = mask > 0
+    color_layer = np.zeros_like(image)
+    color_layer[:] = color
+    output[selected] = cv2.addWeighted(image, 0.20, color_layer, 0.80, 0.0)[selected]
+    contours, _ = cv2.findContours(
+        (region > 0).astype(np.uint8),
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE,
+    )
+    cv2.drawContours(output, contours, -1, (235, 235, 235), 1, cv2.LINE_AA)
+    return output
+
+
+def trace_component_overlay(
+    image: np.ndarray,
+    labels: np.ndarray,
+    count: int,
+    region: np.ndarray,
+) -> np.ndarray:
+    output = image.copy()
+    for component_id in range(1, count):
+        hue = int((37 * component_id) % 180)
+        hsv = np.uint8([[[hue, 205, 245]]])
+        color = tuple(int(value) for value in cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)[0, 0])
+        selected = labels == component_id
+        output[selected] = color
+    contours, _ = cv2.findContours(
+        (region > 0).astype(np.uint8),
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE,
+    )
+    cv2.drawContours(output, contours, -1, (235, 235, 235), 1, cv2.LINE_AA)
+    return output
+
+
+def trace_line_overlay(
+    image: np.ndarray,
+    lines: list[dict],
+    *,
+    default_color: tuple[int, int, int] = (255, 180, 0),
+    decision_colors: bool = False,
+    thickness: int = 2,
+) -> np.ndarray:
+    output = image.copy()
+    colors = {
+        "accepted": (60, 220, 70),
+        "addition": (60, 220, 70),
+        "extension": (40, 185, 245),
+        "rejected": (40, 40, 235),
+    }
+    for line in lines:
+        points = np.asarray(line.get("points"), dtype=np.float32)
+        if points.ndim != 2 or len(points) < 2 or points.shape[1] < 2:
+            continue
+        color = colors.get(str(line.get("decision")), default_color) if decision_colors else default_color
+        cv2.polylines(
+            output,
+            [np.round(points[:, :2]).astype(np.int32)],
+            False,
+            color,
+            thickness,
+            cv2.LINE_AA,
+        )
+    return output
+
+
+def trace_orientation_overlay(
+    image: np.ndarray,
+    tangent: np.ndarray,
+    region: np.ndarray,
+) -> np.ndarray:
+    hsv = np.zeros((*tangent.shape, 3), dtype=np.uint8)
+    hsv[..., 0] = np.mod((tangent + math.pi) * (180.0 / math.pi), 180.0).astype(np.uint8)
+    hsv[..., 1] = 220
+    hsv[..., 2] = 245
+    direction = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    output = image.copy()
+    selected = region > 0
+    output[selected] = cv2.addWeighted(image, 0.25, direction, 0.75, 0.0)[selected]
+    return output
+
+
+def trace_write(path: Path, image: np.ndarray) -> None:
+    if not cv2.imwrite(str(path), image):
+        raise RuntimeError(f"Unable to write trace image: {path}")
+
+
 def run(args: argparse.Namespace) -> None:
     if args.output.exists():
         raise FileExistsError(f"Refusing to overwrite existing output directory: {args.output}")
     args.output.mkdir(parents=True)
     debug = args.output / "debug"
     debug.mkdir()
+    trace_enabled = bool(getattr(args, "trace", False))
+    timeline = args.output / "timeline"
+    global_timeline = timeline / "global"
+    region_timeline = timeline / "regions"
+    post_timeline = timeline / "post"
+    if trace_enabled:
+        global_timeline.mkdir(parents=True)
+        region_timeline.mkdir()
+        post_timeline.mkdir()
     image = cv2.imread(str(args.input), cv2.IMREAD_COLOR)
     if image is None:
         raise FileNotFoundError(args.input)
+    traditional_input = getattr(args, "traditional_input", None)
+    unet_input = getattr(args, "unet_input", None)
+    traditional_image = image if traditional_input is None else cv2.imread(
+        str(traditional_input),
+        cv2.IMREAD_COLOR,
+    )
+    unet_image = image if unet_input is None else cv2.imread(
+        str(unet_input),
+        cv2.IMREAD_COLOR,
+    )
+    if traditional_image is None:
+        raise FileNotFoundError(traditional_input)
+    if unet_image is None:
+        raise FileNotFoundError(unet_input)
+    if traditional_image.shape != image.shape:
+        raise ValueError("--traditional-input must have the same dimensions as --input")
+    if unet_image.shape != image.shape:
+        raise ValueError("--unet-input must have the same dimensions as --input")
     height, width = image.shape[:2]
     source_sha256 = v1.sha256(args.input)
     if args.without_baseline:
@@ -1246,7 +1505,10 @@ def run(args: argparse.Namespace) -> None:
         baseline_lines: list[dict] = []
     else:
         baseline_payload = json.loads(args.baseline.read_text(encoding="utf-8"))
-        if baseline_payload["source"]["sha256"].upper() != source_sha256.upper():
+        if (
+            not getattr(args, "skip_baseline_source_check", False)
+            and baseline_payload["source"]["sha256"].upper() != source_sha256.upper()
+        ):
             raise RuntimeError("Baseline and input image SHA-256 do not match")
         baseline_lines = baseline_payload["lines"]
     landmark_input = args.landmark_input
@@ -1260,12 +1522,59 @@ def run(args: argparse.Namespace) -> None:
     )
     regions, face_mask, anatomy = experiment_regions(landmarks, width, height)
 
+    target_region = getattr(args, "target_region", None)
+    if target_region is not None:
+        if target_region not in regions:
+            raise ValueError(f"Unsupported target region: {target_region}")
+        if target_region == "forehead":
+            regions["forehead"] = extended_forehead_region(
+                anatomy,
+                width,
+                height,
+            )
+        context_radius = max(1, int(round(0.025 * float(anatomy["faceWidthPx"]))))
+        context_kernel = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE,
+            (2 * context_radius + 1, 2 * context_radius + 1),
+        )
+        correction_mask = cv2.dilate(regions[target_region], context_kernel)
+        if target_region != "forehead":
+            correction_mask = (
+                correction_mask.astype(bool) & (face_mask > 0)
+            ).astype(np.uint8)
+    else:
+        correction_mask, application_mask = full_face_illumination_masks(
+            face_mask,
+            anatomy,
+            width,
+            height,
+        )
+
     original_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
-    correction = wrinkle_illumination.correct_illumination(
-        image,
-        face_mask,
-        float(anatomy["faceWidthPx"]),
-    )
+    if traditional_input is None:
+        correction = wrinkle_illumination.correct_illumination(
+            image,
+            correction_mask,
+            float(anatomy["faceWidthPx"]),
+            application_mask=(application_mask if target_region is None else None),
+        )
+    else:
+        # In the input-matrix experiment the traditional branch must consume
+        # the supplied image exactly once, without silently correcting it again.
+        traditional_gray = cv2.cvtColor(
+            traditional_image,
+            cv2.COLOR_BGR2GRAY,
+        ).astype(np.float32) / 255.0
+        correction = wrinkle_illumination.IlluminationCorrection(
+            corrected_bgr=traditional_image,
+            corrected_gray=traditional_gray,
+            illumination=np.ones_like(traditional_gray, dtype=np.float32),
+            gain=np.ones_like(traditional_gray, dtype=np.float32),
+            diagnostics={
+                "inputOverride": str(traditional_input),
+                "correctionApplied": False,
+            },
+        )
     ridge_raw, tangent, _ = fine.dark_ridge_field(correction.corrected_gray)
     pair_raw, width_map, pair_balance, scale_agreement = paired_edge_center_field(
         correction.corrected_gray,
@@ -1296,8 +1605,15 @@ def run(args: argparse.Namespace) -> None:
         regions["glabellar"],
     )
     pair_before, _, _, _ = paired_edge_center_field(original_gray, tangent)
-    texture = v1.hessian_texture(image)
-    model_probability, checkpoint_metadata = v1.run_unet(image, texture, args.checkpoint)
+    texture = v1.hessian_texture(unet_image)
+    _, unet_size, _ = v1._cached_unet(args.checkpoint)
+    unet_tensor = v1.prepare_unet_input(unet_image, texture, unet_size)
+    unet_input_sha256 = hashlib.sha256(unet_tensor.tobytes()).hexdigest()
+    model_probability, checkpoint_metadata = v1.run_unet(
+        unet_image,
+        texture,
+        args.checkpoint,
+    )
     semantic_seed = model_probability >= 0.35
     if semantic_seed.any():
         semantic_distance = cv2.distanceTransform(
@@ -1308,18 +1624,74 @@ def run(args: argparse.Namespace) -> None:
     else:
         semantic_distance = np.full((height, width), float(max(height, width)), dtype=np.float32)
 
+    if trace_enabled:
+        trace_write(global_timeline / "01_input.png", image)
+        trace_write(
+            global_timeline / "02_estimated_illumination.png",
+            wrinkle_illumination.grayscale_debug_image(correction.illumination),
+        )
+        trace_write(
+            global_timeline / "03_applied_gain.png",
+            wrinkle_illumination.gain_debug_image(correction.gain),
+        )
+        trace_write(global_timeline / "04_corrected_input.png", correction.corrected_bgr)
+        trace_write(
+            global_timeline / "05_dark_ridge_response_raw.png",
+            trace_response_overlay(correction.corrected_bgr, ridge_raw, face_mask),
+        )
+        trace_write(
+            global_timeline / "06_dark_ridge_tangent_direction.png",
+            trace_orientation_overlay(correction.corrected_bgr, tangent, face_mask),
+        )
+        trace_write(
+            global_timeline / "07_paired_edge_response_raw.png",
+            trace_response_overlay(correction.corrected_bgr, pair_raw, face_mask),
+        )
+        trace_write(
+            global_timeline / "08_nasal_trace_response.png",
+            trace_response_overlay(
+                correction.corrected_bgr,
+                nasal_trace_response * nasal_trace_roi,
+                nasal_trace_roi,
+            ),
+        )
+        trace_write(
+            global_timeline / "09_frangi_glabellar_response_raw.png",
+            trace_response_overlay(correction.corrected_bgr, frangi_raw, regions["glabellar"]),
+        )
+        trace_write(
+            global_timeline / "10_paired_edge_before_correction_comparison_only.png",
+            trace_response_overlay(image, pair_before, face_mask),
+        )
+        trace_write(
+            global_timeline / "11_hessian_texture.png",
+            trace_response_overlay(image, texture, face_mask),
+        )
+        trace_write(
+            global_timeline / "12_unet_probability.png",
+            trace_response_overlay(image, model_probability, face_mask),
+        )
+        trace_write(
+            global_timeline / "13_unet_semantic_seed.png",
+            trace_mask_overlay(image, semantic_seed, face_mask, (255, 180, 40)),
+        )
+
     all_candidates = np.zeros((height, width), dtype=np.uint8)
     accepted_candidates: list[dict] = []
     weak_glabellar_fragments: list[dict] = []
     baseline_evidence: dict[str, dict] = {}
     response_union = np.zeros((height, width), dtype=np.float32)
     class_diagnostics = {}
+    rejected_candidates: list[dict] = []
     baseline_distance_by_class = {
         class_name: baseline_distance(baseline_lines, class_name, (height, width))
         for class_name in fine.CLASS_ORDER
     }
     for class_name in fine.CLASS_ORDER:
         region = regions[class_name]
+        class_trace = region_timeline / class_name
+        if trace_enabled:
+            class_trace.mkdir()
         pair_score = fine.robust_unit(pair_raw, region)
         ridge = fine.robust_unit(ridge_raw, region)
         frangi = fine.robust_unit(frangi_raw, region)
@@ -1355,6 +1727,7 @@ def run(args: argparse.Namespace) -> None:
         response_union = np.maximum(response_union, score)
         nms = fine.directional_nms(score, tangent, region)
         candidates = paired_hysteresis(class_name, score, nms, region)
+        generated_before_morphology = candidates.copy()
         close_size = scaled_odd_kernel({
             "forehead": (23, 3),
             "glabellar": (3, 9),
@@ -1366,24 +1739,46 @@ def run(args: argparse.Namespace) -> None:
             cv2.MORPH_CLOSE,
             cv2.getStructuringElement(cv2.MORPH_ELLIPSE, close_size),
         )
+        after_close = candidates.copy()
         candidates = v1.morphological_skeleton(candidates)
         all_candidates |= candidates
         count, labels, stats, _ = cv2.connectedComponentsWithStats(candidates, 8)
         rejection_counts: dict[str, int] = {}
+        component_diagnostics: list[dict] = []
+        trace_raw_paths: list[dict] = []
+        trace_smoothed_paths: list[dict] = []
+        trace_initial_decisions: list[dict] = []
         accepted_before = len(accepted_candidates)
         for component_id in range(1, count):
+            x, y, component_width, component_height, component_area = stats[component_id]
+            component_record = {
+                "componentId": int(component_id),
+                "areaPx": int(component_area),
+                "bbox": [int(x), int(y), int(component_width), int(component_height)],
+                "stage": "generated",
+            }
             minimum_component_area = max(
                 3,
                 int(round(5.0 * float(anatomy["faceWidthPx"]) / 680.0)),
             )
             if int(stats[component_id, cv2.CC_STAT_AREA]) < minimum_component_area:
                 rejection_counts["tiny"] = rejection_counts.get("tiny", 0) + 1
+                component_record.update({"decision": "rejected", "decisionReason": "tiny"})
+                component_diagnostics.append(component_record)
+                rejected_candidates.append({"class": class_name, **component_record})
                 continue
             component = (labels == component_id).astype(np.uint8)
             path, length = fine.longest_path(component)
+            if len(path) >= 2:
+                trace_raw_paths.append({"points": path.tolist()})
             path = fine.smooth_path(path)
+            if len(path) >= 2:
+                trace_smoothed_paths.append({"points": path.tolist()})
             if len(path) < 2:
                 rejection_counts["no_path"] = rejection_counts.get("no_path", 0) + 1
+                component_record.update({"decision": "rejected", "decisionReason": "no_path"})
+                component_diagnostics.append(component_record)
+                rejected_candidates.append({"class": class_name, **component_record})
                 continue
             metrics = paired_component_metrics(
                 path,
@@ -1408,6 +1803,27 @@ def run(args: argparse.Namespace) -> None:
             near_baseline_fraction = float((distance[xy[:, 1], xy[:, 0]] <= 5.0).mean())
             if not accepted:
                 rejection_counts[reason] = rejection_counts.get(reason, 0) + 1
+                component_record.update({
+                    "decision": "rejected",
+                    "decisionReason": reason,
+                    "lengthPx": round(float(length), 3),
+                    "pathPointCount": int(len(path)),
+                    "confidence": round(float(max(
+                        metrics["meanPairedEdge"],
+                        metrics["meanFrangi"],
+                    )), 6),
+                    "metrics": {
+                        key: round(float(value), 6)
+                        for key, value in metrics.items()
+                        if key not in {"medianY"}
+                    },
+                })
+                component_diagnostics.append(component_record)
+                rejected_candidates.append({"class": class_name, **component_record})
+                trace_initial_decisions.append({
+                    "points": path.tolist(),
+                    "decision": "rejected",
+                })
                 if class_name == "glabellar" and accept_glabellar_extension_fragment(
                     metrics,
                     float(anatomy["faceWidthPx"]),
@@ -1427,7 +1843,7 @@ def run(args: argparse.Namespace) -> None:
                 if reason == "accepted_frangi_glabellar_dark_ridge"
                 else "multi_scale_opposite_polarity_paired_edges"
             )
-            accepted_candidates.append(component_line_record(
+            accepted_record = component_line_record(
                 class_name,
                 path,
                 length,
@@ -1435,11 +1851,90 @@ def run(args: argparse.Namespace) -> None:
                 near_baseline_fraction,
                 reason,
                 source=source,
-            ))
+            )
+            accepted_candidates.append(accepted_record)
+            trace_initial_decisions.append({
+                "points": path.tolist(),
+                "decision": "accepted",
+            })
+            component_record.update({
+                "decision": "accepted",
+                "decisionReason": reason,
+                "lengthPx": accepted_record["lengthPx"],
+                "pathPointCount": int(len(path)),
+                "confidence": accepted_record["confidence"],
+            })
+            component_diagnostics.append(component_record)
+        if trace_enabled:
+            trace_write(
+                class_trace / "01_pair_local_normalization.png",
+                trace_response_overlay(correction.corrected_bgr, pair_score, region),
+            )
+            trace_write(
+                class_trace / "02_ridge_local_normalization.png",
+                trace_response_overlay(correction.corrected_bgr, ridge, region),
+            )
+            trace_write(
+                class_trace / "03_frangi_local_normalization.png",
+                trace_response_overlay(correction.corrected_bgr, frangi, region),
+            )
+            trace_write(
+                class_trace / "04_orientation_support.png",
+                trace_response_overlay(correction.corrected_bgr, orientation * region, region),
+            )
+            trace_write(
+                class_trace / "05_combined_score.png",
+                trace_response_overlay(correction.corrected_bgr, score, region),
+            )
+            trace_write(
+                class_trace / "06_directional_nms.png",
+                trace_response_overlay(correction.corrected_bgr, score * nms, region),
+            )
+            trace_write(
+                class_trace / "07_hysteresis.png",
+                trace_mask_overlay(correction.corrected_bgr, generated_before_morphology, region),
+            )
+            trace_write(
+                class_trace / "08_after_morphology_close.png",
+                trace_mask_overlay(correction.corrected_bgr, after_close, region),
+            )
+            trace_write(
+                class_trace / "09_skeleton.png",
+                trace_mask_overlay(correction.corrected_bgr, candidates, region),
+            )
+            trace_write(
+                class_trace / "10_connected_components.png",
+                trace_component_overlay(correction.corrected_bgr, labels, count, region),
+            )
+            trace_write(
+                class_trace / "11_longest_paths.png",
+                trace_line_overlay(correction.corrected_bgr, trace_raw_paths),
+            )
+            trace_write(
+                class_trace / "12_smoothed_paths.png",
+                trace_line_overlay(correction.corrected_bgr, trace_smoothed_paths),
+            )
+            trace_write(
+                class_trace / "13_initial_quality_decisions.png",
+                trace_line_overlay(
+                    correction.corrected_bgr,
+                    trace_initial_decisions,
+                    decision_colors=True,
+                ),
+            )
         class_diagnostics[class_name] = {
+            "candidateGeneration": {
+                "status": "generated" if int(generated_before_morphology.sum()) else "none",
+                "scorePositivePixels": int(np.count_nonzero(score > 0)),
+                "nmsPositivePixels": int(np.count_nonzero(nms > 0)),
+                "hysteresisPixelsBeforeMorphology": int(generated_before_morphology.sum()),
+                "pixelsAfterMorphology": int(candidates.sum()),
+                "connectedComponentsAfterMorphology": max(0, int(count) - 1),
+            },
             "candidatePixels": int(candidates.sum()),
             "acceptedBeforeBaselineDedup": len(accepted_candidates) - accepted_before,
             "rejectionCounts": rejection_counts,
+            "components": component_diagnostics,
         }
 
     raw_candidate_count = len(accepted_candidates)
@@ -1448,10 +1943,13 @@ def run(args: argparse.Namespace) -> None:
     for index, line in enumerate(weak_glabellar_fragments, start=1):
         line["id"] = f"paired-edge-weak-glabellar-{index:03d}"
 
+    initial_quality_candidates = [dict(line) for line in accepted_candidates]
+
     accepted_candidates = merge_candidate_fragments(
         accepted_candidates,
         float(anatomy["faceWidthPx"]),
     )
+    merged_paired_candidates = [dict(line) for line in accepted_candidates]
     nasal_trace_candidates = [
         nasal_trace_line_record(
             trace,
@@ -1512,7 +2010,8 @@ def run(args: argparse.Namespace) -> None:
             ),
             reverse=True,
         )
-        additions.extend(current[: MAXIMUM_ADDITIONS[class_name]])
+        addition_limit = independent_addition_limit(class_name, baseline_lines)
+        additions.extend(current[:addition_limit])
         decisions = [
             line["decisionReason"]
             for line in accepted_candidates
@@ -1523,7 +2022,7 @@ def run(args: argparse.Namespace) -> None:
         }
         class_diagnostics[class_name]["selectedIndependentAdditions"] = min(
             len(current),
-            MAXIMUM_ADDITIONS[class_name],
+            addition_limit,
         )
         class_diagnostics[class_name]["mergedCandidateCount"] = sum(
             line["class"] == class_name for line in accepted_candidates
@@ -1566,6 +2065,64 @@ def run(args: argparse.Namespace) -> None:
                 break
     fused_lines = fused_baseline_lines + additions
 
+    if trace_enabled:
+        trace_write(
+            post_timeline / "01_after_initial_quality_gate.png",
+            trace_line_overlay(image, initial_quality_candidates, default_color=(60, 220, 70)),
+        )
+        trace_write(
+            post_timeline / "02_after_fragment_merge.png",
+            trace_line_overlay(image, merged_paired_candidates, default_color=(255, 180, 0)),
+        )
+        trace_write(
+            post_timeline / "03_after_nasal_trace_candidates.png",
+            trace_line_overlay(image, accepted_candidates, default_color=(255, 180, 0)),
+        )
+        trace_write(
+            post_timeline / "04_yolo_unet_relationship_decisions.png",
+            trace_line_overlay(image, accepted_candidates, decision_colors=True),
+        )
+        trace_write(
+            post_timeline / "05_selected_additions.png",
+            trace_line_overlay(image, additions, default_color=(60, 220, 70), thickness=3),
+        )
+        trace_write(
+            post_timeline / "06_selected_extensions.png",
+            trace_line_overlay(image, selected_extensions, default_color=(40, 185, 245), thickness=3),
+        )
+        trace_write(
+            post_timeline / "07_baseline_after_extensions.png",
+            trace_line_overlay(image, fused_baseline_lines, default_color=(30, 220, 245), thickness=3),
+        )
+        trace_write(
+            post_timeline / "08_baseline_plus_additions.png",
+            trace_line_overlay(image, fused_lines, default_color=(60, 220, 70), thickness=3),
+        )
+        normalization_record = {}
+        for class_name in fine.CLASS_ORDER:
+            selected_pair = pair_raw[regions[class_name] > 0]
+            selected_ridge = ridge_raw[regions[class_name] > 0]
+            normalization_record[class_name] = {
+                "pairPercentile45": float(np.percentile(selected_pair, 45.0)),
+                "pairPercentile99_65": float(np.percentile(selected_pair, 99.65)),
+                "ridgePercentile45": float(np.percentile(selected_ridge, 45.0)),
+                "ridgePercentile99_65": float(np.percentile(selected_ridge, 99.65)),
+            }
+        (timeline / "timeline_data.json").write_text(
+            json.dumps({
+                "regionOrder": list(fine.CLASS_ORDER),
+                "normalization": normalization_record,
+                "initialQualityCandidateCount": len(initial_quality_candidates),
+                "afterFragmentMergeCount": len(merged_paired_candidates),
+                "afterNasalTraceCount": len(accepted_candidates),
+                "selectedAdditionCount": len(additions),
+                "selectedExtensionCount": len(selected_extensions),
+                "baselineAfterExtensionCount": len(fused_baseline_lines),
+                "baselinePlusAdditionCount": len(fused_lines),
+            }, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
     baseline_image = fine.draw_paths(image, baseline_lines, 1)
     review_image = draw_additions(image, accepted_candidates, 1)
     addition_image = draw_additions(image, additions, 2)
@@ -1595,6 +2152,21 @@ def run(args: argparse.Namespace) -> None:
         fine.response_heatmap(correction.corrected_bgr, pair_raw),
     )
     cv2.imwrite(str(debug / "06_fused_response.png"), fine.response_heatmap(image, response_union))
+    if getattr(args, "trace", False):
+        unet_heatmap = cv2.applyColorMap(
+            np.clip(model_probability * 255.0, 0, 255).astype(np.uint8),
+            cv2.COLORMAP_TURBO,
+        )
+        cv2.imwrite(
+            str(debug / "06d_unet_probability.png"),
+            cv2.addWeighted(image, 0.45, unet_heatmap, 0.55, 0.0),
+        )
+        unet_seed_overlay = image.copy()
+        unet_seed_overlay[semantic_seed] = (255, 180, 40)
+        cv2.imwrite(
+            str(debug / "06e_unet_semantic_seed.png"),
+            cv2.addWeighted(image, 0.65, unet_seed_overlay, 0.35, 0.0),
+        )
     cv2.imwrite(
         str(debug / "06a_frangi_glabellar_response.png"),
         fine.response_heatmap(image, fine.robust_unit(frangi_raw, regions["glabellar"])),
@@ -1683,7 +2255,11 @@ def run(args: argparse.Namespace) -> None:
             "illuminationCorrection": {
                 "trainingFree": True,
                 "colorSpace": "Lab luminance only",
-                "fieldEstimator": "face-masked normalized Gaussian smoothing",
+                "fieldEstimator": (
+                    "target-region-context-masked normalized Gaussian smoothing"
+                    if target_region is not None
+                    else "full-face-including-forehead masked normalized Gaussian smoothing"
+                ),
                 "fieldScale": "0.065 times measured face width, clipped to 4-96 px",
                 "gainBounds": [0.67, 1.50],
                 "diagnostics": correction.diagnostics,
@@ -1719,6 +2295,7 @@ def run(args: argparse.Namespace) -> None:
         "model": {
             "checkpoint": str(args.checkpoint),
             "metadata": checkpoint_metadata,
+            "inputTensorSha256": unet_input_sha256,
         },
         "summary": {
             "baselineLineCount": len(baseline_lines),
@@ -1737,6 +2314,7 @@ def run(args: argparse.Namespace) -> None:
         "baselinePairedEdgeEvidence": baseline_evidence,
         "classDiagnostics": class_diagnostics,
         "candidateDecisions": accepted_candidates,
+        "rejectedCandidates": rejected_candidates,
         "independentAdditions": additions,
         "appliedExtensions": selected_extensions,
         "fusedLines": fused_lines,
@@ -1757,7 +2335,12 @@ def run(args: argparse.Namespace) -> None:
     diagnostics = {
         key: value
         for key, value in payload.items()
-        if key not in {"candidateDecisions", "independentAdditions", "appliedExtensions", "fusedLines"}
+        if key not in {
+            "candidateDecisions",
+            "independentAdditions",
+            "appliedExtensions",
+            "fusedLines",
+        }
     }
     (args.output / "diagnostics.json").write_text(
         json.dumps(diagnostics, ensure_ascii=False, indent=2) + "\n",

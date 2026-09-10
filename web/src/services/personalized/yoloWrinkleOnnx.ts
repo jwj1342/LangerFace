@@ -13,15 +13,15 @@ import {
   type ModelAssetCacheStorage,
 } from "./modelAssetCache.ts";
 
-export const YOLO_WRINKLE_ONNX_VERSION = "yolov8-seg-browser-0.1.0";
+export const YOLO_WRINKLE_ONNX_VERSION = "yolov8s-seg-clean92-mask2-browser-0.2.0";
 export const YOLO_WRINKLE_CLASSES = Object.freeze(["forehead", "frown", "wrinkle"]);
 export const YOLO_WRINKLE_INPUT_SIZE = 640;
 export const YOLO_WRINKLE_CONFIDENCE = 0.07;
 // These values describe the checked-in four-part browser artifact. They are
 // intentionally verified independently of the source PyTorch checkpoint.
-export const YOLO_WRINKLE_MODEL_BYTES = 47_378_404;
+export const YOLO_WRINKLE_MODEL_BYTES = 47_346_620;
 export const YOLO_WRINKLE_MODEL_SHA256 =
-  "4BB6ECD9C5FDDDDF1A4559813FB40293F6AE552EA1287912219157B91408A744";
+  "63E257B4789E11AA1416192D2DB026423ED624581282B95D179FD17CCABF7ABF";
 export const YOLO_WRINKLE_MODEL_CACHE_PREFIX = "langerface-yolo-wrinkle-";
 export const YOLO_WRINKLE_MODEL_CACHE_NAME = `${YOLO_WRINKLE_MODEL_CACHE_PREFIX}${YOLO_WRINKLE_MODEL_SHA256.slice(0, 16).toLowerCase()}`;
 
@@ -128,11 +128,26 @@ interface WrinkleResultLike {
   directionConsistency?: NumericField;
   consistency?: NumericField;
   classMasks?: Record<string, NumericField>;
+  classConfidenceMaps?: Record<string, NumericField>;
 }
 
 interface InferenceSessionLike {
   inputNames?: string[];
   run(feeds: Record<string, TensorLike>): Promise<Record<string, TensorLike>>;
+  runClassMasks?: (input: Float32Array) => Promise<{
+    width: number;
+    height: number;
+    classMasks: Record<string, Uint8Array>;
+    detections: Array<{ classId: number; score: number; box: Box }>;
+    diagnostics: Record<string, number>;
+  }>;
+  runClassMasksImageData?: (imageData: ImageData) => Promise<{
+    width: number;
+    height: number;
+    classMasks: Record<string, Uint8Array>;
+    detections: Array<{ classId: number; score: number; box: Box }>;
+    diagnostics: Record<string, number>;
+  }>;
   release?: () => void | Promise<void>;
 }
 
@@ -448,6 +463,10 @@ export function combinePrototypeMasks(
   const binaryMask = new Uint8Array(pixels);
   const confidence = new Float32Array(pixels);
   const classMasks = Array.from({ length: classCount }, () => new Uint8Array(pixels));
+  const classConfidenceMaps = Array.from(
+    { length: classCount },
+    () => new Float32Array(pixels),
+  );
 
   for (const detection of detections || []) {
     if (detection.classId < 0 || detection.classId >= classCount) continue;
@@ -464,15 +483,18 @@ export function combinePrototypeMasks(
       const protoX = modelX / transform.inputSize * protoWidth - 0.5;
       const protoY = modelY / transform.inputSize * protoHeight - 0.5;
       const probability = sampleBilinear(instance, protoX, protoY, protoWidth, protoHeight);
-      if (probability < maskThreshold) continue;
       const index = y * width + x;
       const value = detection.score * probability;
+      if (value > classConfidenceMaps[detection.classId][index]) {
+        classConfidenceMaps[detection.classId][index] = value;
+      }
+      if (probability < maskThreshold) continue;
       binaryMask[index] = 1;
       classMasks[detection.classId][index] = 1;
       if (value > confidence[index]) confidence[index] = value;
     }
   }
-  return { binaryMask, confidence, classMasks, width, height };
+  return { binaryMask, confidence, classMasks, classConfidenceMaps, width, height };
 }
 
 /** Restrict evidence to skin and remove eyes, brows, lips and other forbidden regions. */
@@ -903,6 +925,14 @@ export class YoloWrinkleOnnx {
   private async loadSession(onProgress?: (progress: ModelProgress) => void): Promise<this> {
     if (this.session) return this;
     const generation = this.loadGeneration;
+    if (import.meta.env?.VITE_SERVER_COMPUTE === 'true') {
+      const { createServerYoloSession, ServerTensor } = await import('./serverYoloSession.ts');
+      const session = await createServerYoloSession(this.expectedModelSha256);
+      if (generation !== this.loadGeneration) throw new Error('YOLO model load was cancelled');
+      this.runtime = { Tensor: ServerTensor, InferenceSession: { create: async () => session } };
+      this.session = session;
+      return this;
+    }
     const runtime = this.runtime || await import("onnxruntime-web/wasm") as unknown as OrtRuntimeLike;
     if (runtime.env?.wasm) {
       runtime.env.wasm.numThreads = 1;
@@ -1052,6 +1082,19 @@ export class YoloWrinkleOnnx {
         }
         return [name, gatedClass];
       }));
+      const classConfidenceMaps = Object.fromEntries(YOLO_WRINKLE_CLASSES.map((name, classId) => {
+        const current = combined.classConfidenceMaps[classId];
+        const gatedClass = new Float32Array(current.length);
+        for (let index = 0; index < current.length; index++) {
+          const regionWeight = Number(options.regionGate?.[index] ?? 1);
+          if (skinAllows(options.skinMask, index)
+              && !maskEnabled(options.forbiddenMask, index)
+              && regionWeight >= Number(options.regionGateThreshold ?? 0.18)) {
+            gatedClass[index] = current[index] * Math.max(0, Math.min(1, regionWeight));
+          }
+        }
+        return [name, gatedClass];
+      }));
       return {
         version: YOLO_WRINKLE_ONNX_VERSION,
         width: combined.width,
@@ -1064,6 +1107,7 @@ export class YoloWrinkleOnnx {
         directionQ: directions.q,
         directionConsistency: directions.consistency,
         classMasks,
+        classConfidenceMaps,
         detections: detections.map((detection) => ({
           classId: detection.classId,
           className: YOLO_WRINKLE_CLASSES[detection.classId],
@@ -1089,6 +1133,62 @@ export class YoloWrinkleOnnx {
 
   async detect(imageData: ImageData, options: YoloOptions = {}) {
     return this.infer(imageData, options);
+  }
+
+  detectClassMasks(imageData: ImageData, options: YoloOptions = {}) {
+    return this.enqueueSessionOperation(async () => {
+      await this.loadSession(options.onModelProgress);
+      if (!this.session?.runClassMasks) return this.inferExclusive(imageData, options);
+      if ((options.confidenceThreshold ?? this.confidenceThreshold) !== YOLO_WRINKLE_CONFIDENCE) {
+        return this.inferExclusive(imageData, options);
+      }
+      if (this.session.runClassMasksImageData
+          && imageData.width === this.inputSize && imageData.height === this.inputSize) {
+        const compact = await this.session.runClassMasksImageData(imageData);
+        return {
+          version: YOLO_WRINKLE_ONNX_VERSION,
+          width: compact.width,
+          height: compact.height,
+          classMasks: compact.classMasks,
+          detections: compact.detections.map(detection => ({
+            ...detection,
+            className: YOLO_WRINKLE_CLASSES[detection.classId],
+          })),
+          diagnostics: compact.diagnostics,
+          transform: {
+            inputSize: this.inputSize,
+            sourceWidth: this.inputSize,
+            sourceHeight: this.inputSize,
+            resizedWidth: this.inputSize,
+            resizedHeight: this.inputSize,
+            padX: 0,
+            padY: 0,
+            scale: 1,
+            scaleX: 1,
+            scaleY: 1,
+          },
+        };
+      }
+      const prepared = preprocessImageData(imageData, this.inputSize);
+      if (prepared.transform.sourceWidth !== this.inputSize
+          || prepared.transform.sourceHeight !== this.inputSize
+          || prepared.transform.padX !== 0 || prepared.transform.padY !== 0) {
+        return this.inferExclusive(imageData, options);
+      }
+      const compact = await this.session.runClassMasks(prepared.data);
+      return {
+        version: YOLO_WRINKLE_ONNX_VERSION,
+        width: compact.width,
+        height: compact.height,
+        classMasks: compact.classMasks,
+        detections: compact.detections.map(detection => ({
+          ...detection,
+          className: YOLO_WRINKLE_CLASSES[detection.classId],
+        })),
+        diagnostics: compact.diagnostics,
+        transform: prepared.transform,
+      };
+    });
   }
 
   async close(): Promise<void> {

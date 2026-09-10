@@ -2,6 +2,38 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { describeCameraError, stopCameraStream } from "../web/src/services/cameraSource.ts";
+import { loadVideoFirstFrame } from "../web/src/services/videoSource.ts";
+
+class FakeVideo extends EventTarget {
+  readyState = 0;
+  currentTime = 0;
+  autoplay = true;
+  preload = "none";
+  srcObject = {};
+  src = "";
+  paused = false;
+  loadCount = 0;
+  pause() { this.paused = true; }
+  load() { this.loadCount += 1; }
+}
+
+const video = new FakeVideo();
+let decoded = false;
+const firstFrame = loadVideoFirstFrame(video as unknown as HTMLVideoElement, "blob:first")
+  .then(() => { decoded = true; });
+await Promise.resolve();
+assert.equal(decoded, false, "initialization waits for decoded pixels");
+assert.equal(video.paused, true);
+assert.equal(video.autoplay, false);
+assert.equal(video.loadCount, 1);
+video.dispatchEvent(new Event("loadeddata"));
+await firstFrame;
+assert.equal(video.currentTime, 0, "decoding does not advance playback");
+assert.equal(video.paused, true, "playback waits for first-frame extraction");
+const brokenVideo = new FakeVideo();
+const failedFrame = loadVideoFirstFrame(brokenVideo as unknown as HTMLVideoElement, "blob:bad");
+brokenVideo.dispatchEvent(new Event("error"));
+await assert.rejects(failedFrame, /first video frame/);
 
 assert.deepEqual(describeCameraError({ name: "NotAllowedError" }), {
   reason: "permission_denied",
@@ -32,6 +64,12 @@ assert.equal(stoppedTracks, 2, "camera stream cleanup stops every acquired track
 stopCameraStream(null);
 
 const pipelineSource = readFileSync(new URL("../web/src/services/pipelineSource.ts", import.meta.url), "utf8");
+assert.match(pipelineSource,
+  /await loadVideoFirstFrame[\s\S]*loop\(\);\s*cancelFrame\(\);\s*await waitForLiveWrinkleAnalysis\(\);\s*if \(operationId !== sourceOperationId\) return;\s*await els\.video\.play\(\)/,
+  "uploaded video extracts the first frame before playback and ignores replaced sources");
+assert.match(pipelineSource,
+  /VITE_SERVER_COMPUTE[\s\S]*fetch\("\/api\/gpu\/media\/video"[\s\S]*preparedVideo\.release/,
+  "server builds upload videos for browser-compatible playback and release them with the source");
 assert.match(pipelineSource, /await els\.video\.play\(\);\s*if \(operationId !== sourceOperationId\)/,
   "camera startup rechecks operation ownership after asynchronous video playback");
 assert.match(pipelineSource, /catch \(error\) \{\s*releasePendingStream\(\);/,

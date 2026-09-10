@@ -1,24 +1,26 @@
 # NOTICE · wrinkle-yolov8s-seg-640 权重来源与再分发状态
 
-本目录下的 4 个 `wrinkle-yolov8s-seg-640.onnx.part0*` 分片是**第三方权重的派生产物**，不是本项目训练的模型。
+本目录下的 4 个 `wrinkle-yolov8s-seg-640.onnx.part0*` 分片是从第三方权重继续微调后导出的**派生产物**。
 合并前请先读完本文件与同目录的 [MODEL_CARD.md](MODEL_CARD.md)。
 
 ## 来源链条
 
 | 项 | 值 |
 |---|---|
-| 上游权重 | `Wrinkle-Detection-StreamLit/best.pt`（23,846,637 bytes） |
+| 上游基础权重 | `Wrinkle-Detection-StreamLit/best.pt`（23,846,637 bytes） |
 | 上游声明的许可证 | **无**（截至 2026-07-28，上游仓库未附带 LICENSE 文件） |
-| 导出工具 | ultralytics 8.4.98（PyTorch → ONNX，opset 17） |
-| 导出产物 | `wrinkle-yolov8s-seg-640.onnx`，47,378,404 bytes |
-| SHA-256 | `4BB6ECD9C5FDDDDF1A4559813FB40293F6AE552EA1287912219157B91408A744` |
+| 本次微调权重 | `best_new_分辨率改成mask2_clean版本.pt`（23,941,044 bytes） |
+| 微调权重 SHA-256 | `15542156d7cd4f720279ba4317ab924231cb0d76621d0529a341b6fec7b80dd3` |
+| 导出工具 | ultralytics 8.4.138（PyTorch → ONNX，opset 12） |
+| 导出产物 | `wrinkle-yolov8s-seg-640.onnx`，47,346,620 bytes |
+| SHA-256 | `63E257B4789E11AA1416192D2DB026423ED624581282B95D179FD17CCABF7ABF` |
 | 分片方式 | 按字节切成 4 份，运行时顺序拼接后校验总字节数与 SHA-256 |
 
 ## 许可状态：未确认（**明确记录，不做推定**）
 
-- 上游仓库**没有声明许可证**，因此本项目**没有**得到明确的再分发授权。
+- 上游基础权重**没有声明许可证**；继续微调和格式转换不会自动消除这一许可缺口。
 - "无 LICENSE" 不等于公共领域：在多数司法辖区，未声明许可的作品默认保留全部权利。
-- 导出工具 ultralytics 8.4.98 本身是 **AGPL-3.0**；它只用于一次性离线导出，未随本仓库分发，
+- 导出工具 ultralytics 8.4.138 本身是 **AGPL-3.0**；它只用于一次性离线导出，未随本仓库分发，
   但如果上游权重本身是用 ultralytics 训练的，其权重的许可继承关系同样**未经确认**。
 
 因此当前状态是：**权重在仓库内，许可未确认**。这是一个已知的、被记录的合规缺口，不是已解决项。

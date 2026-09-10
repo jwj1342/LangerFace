@@ -28,7 +28,7 @@ CHECKPOINT = Path(os.environ.get(
     REPO / "assets" / "models" / "wrinkle_unet_patient_finetuned.pth",
 ))
 PROVIDER_SCHEMA = "langerface.wrinkle-v10-provider.v1"
-DETECTOR_VERSION = "paired-edge-v10-dynamic-four-region-1.0"
+DETECTOR_VERSION = "paired-edge-v10-dynamic-four-region-1.1"
 CHECKPOINT_SHA256 = "e301b8f70c8239c01504a0616b61acdf9ab9b5796f513d6e7294d4fa52b6a6c2"
 # The browser sends lossless RGBA pixels; a 1280x1280 frame is over 6 MiB.
 MAXIMUM_REQUEST_BYTES = 32 * 1024 * 1024

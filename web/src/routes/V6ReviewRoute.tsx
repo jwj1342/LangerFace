@@ -53,7 +53,7 @@ export function V6ReviewRoute() {
           <div className="example-grid"><div className="image-panel"><img id="exampleImage" alt="V6 实验结果" /></div><aside className="v6-metrics" id="exampleMetrics" aria-live="polite" /></div>
         </div></section>
         <section className="section" id="review"><div className="v6-shell">
-          <SectionHead eyebrow="Local-only reviewer" title="审核你自己的 V6 输出">一次选择 `personalized_rstl.json`、中性脸图像和可选的 `wrinkle_mask.png`。文件只在当前浏览器中读取，不上传服务器。</SectionHead>
+          <SectionHead eyebrow={import.meta.env?.VITE_SERVER_COMPUTE === 'true' ? 'Server reviewer' : 'Local-only reviewer'} title="审核你自己的 V6 输出">{'一次选择 `personalized_rstl.json`、中性脸图像和可选的 `wrinkle_mask.png`。' + (import.meta.env?.VITE_SERVER_COMPUTE === 'true' ? '文件在服务器会话中读取。' : '文件只在当前浏览器中读取，不上传服务器。')}</SectionHead>
           <div className="review-grid">
             <aside className="control-panel">
               <label className="drop-zone" id="dropZone" htmlFor="fileInput"><strong>选择或拖入 V6 文件</strong><span>JSON + 中性脸图像 + 可选 wrinkle mask</span></label>

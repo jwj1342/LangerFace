@@ -195,9 +195,6 @@ export function buildNoseRootIntersectionVisibilityPlan({
   const directIndices = curves.map((curve, index) => ({ curve, index }))
     .filter(({ curve }) => String(curve.region || "") === DIRECT_NOSE_DORSUM_RSTL_REGION)
     .map(({ index }) => index);
-  if (directIndices.length !== 3) {
-    throw new Error(`nose-root visibility requires 3 direct nose curves, got ${directIndices.length}`);
-  }
   const directPoints = directIndices.flatMap((index) => pointsForCurve(curves[index]));
   if (!directPoints.length) throw new Error("direct nose curves have no valid points");
   const marginRatio = 0.04;

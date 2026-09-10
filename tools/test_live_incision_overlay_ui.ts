@@ -77,7 +77,7 @@ assert.ok(render.includes('const canDrawAtlas = sourceState.sourceKind === "imag
 assert.ok(render.includes('gate && !gate.passed ? "需复核"'), "quality indicator reflects gated frames as review-needed");
 assert.ok(poseQuality.includes("rstl-local-region-quality-gate/v0.1"), "renderer exports versioned local region quality gate");
 assert.ok(render.includes("buildLocalRegionMasks"), "renderer maps local quality regions to screen regions");
-assert.ok(render.includes('localActionForPoints([p], localRegionMasks).action === "freeze"'), "renderer freezes unstable local RSTL regions");
+assert.ok(render.includes('region.action === "freeze"') && render.includes('frozenBoxes.some((box) => pointInBox(p, box))'), "renderer freezes unstable local RSTL regions");
 assert.ok(render.includes('localLineAction.action === "dim"'), "renderer dims locally unstable RSTL regions");
 assert.ok(render.includes('"局部复核"'), "quality indicator reflects local region review state");
 assert.ok(render.includes("incisionOverlay.poseGate.frameMotionNorm"), "renderer records overlay motion gate metric");

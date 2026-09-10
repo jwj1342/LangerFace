@@ -29,6 +29,7 @@ import { WRINKLE_PIPELINE_VERSION } from
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const paths = {
   live: resolve(root, "web/src/services/liveWrinkleAnalysis.ts"),
+  loop: resolve(root, "web/src/services/pipelineLoop.ts"),
   pipeline: resolve(root, "web/src/services/personalized/liveWrinklePipeline.ts"),
   worker: resolve(root, "web/src/workers/liveWrinklePipeline.worker.ts"),
   workerClient: resolve(root, "web/src/services/personalized/liveWrinklePipelineWorkerClient.ts"),
@@ -37,8 +38,9 @@ const paths = {
   experiment: resolve(root, "web/compat/personalized/wrinkleRstlExperiment.ts"),
   atlas: resolve(root, "web/assets/atlas_rstl.json"),
 };
-const [live, pipeline, worker, workerClient, localDetector, runtime, experiment, atlasText] = await Promise.all([
+const [live, loop, pipeline, worker, workerClient, localDetector, runtime, experiment, atlasText] = await Promise.all([
   readFile(paths.live, "utf8"),
+  readFile(paths.loop, "utf8"),
   readFile(paths.pipeline, "utf8"),
   readFile(paths.worker, "utf8"),
   readFile(paths.workerClient, "utf8"),
@@ -52,7 +54,7 @@ const atlas = JSON.parse(atlasText);
 assertStandardRstlAtlas(atlas);
 assert.equal(WRINKLE_PIPELINE_VERSION.rstlAtlas, RSTL_STANDARD_CONTRACT.atlasVersion);
 assert.equal(WRINKLE_PIPELINE_VERSION.wrinkleDetection,
-  "paired-edge-v10-dynamic-four-region-1.0");
+  "paired-edge-v10-dynamic-four-region-1.1");
 assert.equal(WRINKLE_PIPELINE_VERSION.baselineDetection, YOLO_WRINKLE_ONNX_VERSION);
 assert.equal(WRINKLE_PIPELINE_VERSION.refinementProfile, LATEST_WRINKLE_REFINEMENT_PROFILE);
 assert.equal(WRINKLE_PIPELINE_VERSION.refinementMode,
@@ -72,11 +74,20 @@ for (const token of forbiddenLiveTokens) {
   assert.ok(!worker.includes(token), `worker pipeline contains controlled-image token: ${token}`);
 }
 assert.match(live, /createLiveWrinklePipelineWorkerClient/);
-assert.match(live, /wrinkleWorkerInstance\(\)\.analyze\(\{/);
+assert.match(live, /wrinkleWorkerInstance\(\)\.detect\(\{/);
+assert.match(live, /updateLiveWrinkleTracking[\s\S]*mode: "yolo-only"/,
+  "video and camera modes must use only the released YOLO detector");
+assert.match(live, /value === "camera" \|\| value === "video"/,
+  "video and camera must share the dynamic wrinkle tracking policy");
+assert.match(loop, /sourceKind === "camera" \|\| sourceKind === "video"/,
+  "the live frame loop must schedule YOLO tracking for video and camera frames");
+assert.match(live, /applyWrinkleGuidedRefinement[\s\S]*wrinkleWorkerInstance\(\)\.refine\(\{/,
+  "RSTL refinement must require a separate user action");
 assert.ok(!live.includes("runGeneralLiveWrinklePipeline"),
   "released live page must not execute the CPU-heavy pipeline on its own thread");
 assert.match(worker,
-  /detector\.detect[\s\S]*extractFineWrinkleLines[\s\S]*dynamicFourRegionDetection[\s\S]*refineV6/);
+  /async detect[\s\S]*detector\.detect[\s\S]*extractFineWrinkleLines[\s\S]*request\.mode === "yolo-only"[\s\S]*dynamicFourRegionDetection/);
+assert.match(worker, /async refine[\s\S]*cachedFullDetection[\s\S]*refineV6/);
 assert.match(worker, /WRINKLE_V10_ENDPOINT/);
 assert.match(worker, /buildDirectNoseDorsumRstl/);
 assert.match(worker, /buildNoseRootIntersectionVisibilityPlan/);
@@ -147,6 +158,6 @@ console.log(JSON.stringify({
   baselineDetection: YOLO_WRINKLE_ONNX_VERSION,
   refinement: LATEST_WRINKLE_REFINEMENT_PROFILE,
   executionThread: WRINKLE_PIPELINE_VERSION.executionThread,
-  inputPolicy: "every_input_runs_dynamic_four_region_detection_and_refinement",
+  inputPolicy: "photos_detect_then_refine_on_explicit_action;video_and_camera_run_yolo_only",
   controlledEvidenceScope: "compat_experiment_only",
 }, null, 2));

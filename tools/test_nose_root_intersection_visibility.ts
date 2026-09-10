@@ -35,6 +35,13 @@ const curves = [...preserved, crossing, ...direct];
 const snapshot = snapshotNoseRootVisibilityGeometry(curves);
 const plan = buildNoseRootIntersectionVisibilityPlan({ curves, faceWidthPx: 100 });
 
+const twoDirectCurvePlan = buildNoseRootIntersectionVisibilityPlan({
+  curves: curves.slice(0, -1),
+  faceWidthPx: 100,
+});
+assert.equal(twoDirectCurvePlan.directNoseCurveIndices.length, 2,
+  "two detected direct nose curves must be accepted");
+
 assert.deepEqual(plan.roi, {
   minX: 6, minY: 6, maxX: 24, maxY: 22, width: 18, height: 16,
 });

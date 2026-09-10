@@ -8,10 +8,10 @@ export interface LiveWrinkleWorkerRequest {
   pixels: Uint8ClampedArray;
   width: number;
   height: number;
-  seeds: V6Seed[];
   size: number;
-  faceWidthPx: number;
   landmarks: Array<[number, number, number]>;
+  mode: "full" | "yolo-only";
+  includeFingerprint?: boolean;
 }
 
 export interface LiveWrinkleWorkerEvidence {
@@ -47,18 +47,33 @@ export interface LiveWrinkleWorkerTimings {
   baselineExtractionMs: number;
   fourRegionDetectionMs: number;
   evidenceBuildMs: number;
-  refinementMs: number;
-  noseAndVisibilityMs: number;
   totalMs: number;
 }
 
-export interface LiveWrinkleWorkerResult {
+export interface LiveWrinkleDetectionResult {
+  executionThread: "web_worker";
+  detectorVersion: string;
+  detectionId: string | null;
+  mode: "full" | "yolo-only";
+  provider: WrinkleV10ProviderCapability | null;
+  timings: LiveWrinkleWorkerTimings;
+  evidence: LiveWrinkleWorkerEvidence;
+}
+
+export interface LiveWrinkleRefinementRequest {
+  detectionId: string;
+  seeds: V6Seed[];
+  size: number;
+  faceWidthPx: number;
+  landmarks: Array<[number, number, number]>;
+}
+
+export interface LiveWrinkleRefinementResult {
   executionThread: "web_worker";
   detectorVersion: string;
   refinementProfile: string;
-  provider: WrinkleV10ProviderCapability;
-  timings: LiveWrinkleWorkerTimings;
-  evidence: LiveWrinkleWorkerEvidence;
+  refinementMs: number;
+  noseAndVisibilityMs: number;
   refined: {
     curves: LiveWrinkleWorkerCurve[];
     diagnostics: Record<string, unknown>;
@@ -68,9 +83,10 @@ export interface LiveWrinkleWorkerResult {
 }
 
 export interface LiveWrinklePipelineWorkerApi {
-  analyze(
+  detect(
     request: LiveWrinkleWorkerRequest,
     onEvent?: LiveWrinkleWorkerEventSink,
-  ): Promise<LiveWrinkleWorkerResult>;
+  ): Promise<LiveWrinkleDetectionResult>;
+  refine(request: LiveWrinkleRefinementRequest): Promise<LiveWrinkleRefinementResult>;
   close(): Promise<void>;
 }

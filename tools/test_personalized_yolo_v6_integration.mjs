@@ -128,8 +128,8 @@ for (const part of modelParts) {
   bytes += payload.byteLength;
   hash.update(payload);
 }
-assert.equal(bytes, 47_378_404);
+assert.equal(bytes, 47_346_620);
 assert.equal(hash.digest("hex").toUpperCase(),
-  "4BB6ECD9C5FDDDDF1A4559813FB40293F6AE552EA1287912219157B91408A744");
+  "63E257B4789E11AA1416192D2DB026423ED624581282B95D179FD17CCABF7ABF");
 
 console.log(`personalized YOLO/V6 integration test passed (${root}; ${bytes} model bytes)`);

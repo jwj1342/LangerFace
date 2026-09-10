@@ -32,7 +32,9 @@ const TOOLS = [
   },
   {
     title: "个性化 RSTL",
-    description: "在浏览器本地完成多表情采集、皱纹分割与 V6 微调。",
+    description: import.meta.env?.VITE_SERVER_COMPUTE === 'true'
+      ? '在服务器完成多表情采集、皱纹分割与 V6 微调。'
+      : "在浏览器本地完成多表情采集、皱纹分割与 V6 微调。",
     to: "/personalized",
     icon: Sparkles,
   },
@@ -90,7 +92,9 @@ export function DashboardRoute() {
           </details>
 
           <Hint>
-            本入口不创建、恢复或保存病例。照片、视频和摄像头画面只由对应工具在当前浏览器会话中处理。
+            {import.meta.env?.VITE_SERVER_COMPUTE === 'true'
+              ? '本入口不创建、恢复或保存病例。Live 界面在当前浏览器运行，YOLO 请求由服务器 GPU 处理。'
+              : '本入口不创建、恢复或保存病例。照片、视频和摄像头画面只由对应工具在当前浏览器会话中处理。'}
           </Hint>
         </ReactShellSidebar>
 

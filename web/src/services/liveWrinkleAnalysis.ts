@@ -11,7 +11,24 @@ import {
   replaceStaticRefineBaseline,
 } from "./liveRefine2d.ts";
 import { modelState, renderState, sourceState, type EditableRefineLine } from "./liveState.ts";
-import type { Vec3 } from "./softBody.ts";
+import type { Triangle, Vec3 } from "./softBody.ts";
+import { liveBenchmark } from "./liveBenchmark.ts";
+import { LatestFrameProcessor } from "./latestFrameProcessor.ts";
+import { WrinkleOpticalFlowTracker } from "./liveWrinkleOpticalFlow.ts";
+import {
+  evaluateWrinkleCorrection,
+  type WrinkleCorrectionGateResult,
+} from "./liveWrinkleCorrection.ts";
+import {
+  bindWrinkleLinesToFace,
+  mapTrackedWrinkleLines,
+  type TrackedWrinkleLine,
+} from "./liveWrinkleTracking.ts";
+import {
+  captureWrinkleTextureFrame,
+  type WrinkleRidgeSnapDiagnostics,
+} from "./liveWrinkleTextureTracking.ts";
+import { TemporalWrinkleStabilizer } from "./temporalWrinkleStabilizer.ts";
 import {
   fromWrinkleWorkingPoint,
   toWrinkleWorkingPoint,
@@ -33,6 +50,8 @@ import {
 import { RSTL_STANDARD_CONTRACT } from "./rstlStandardContract.ts";
 import type { LiveWrinkleWorkerEvidence } from
   "../workers/liveWrinklePipelineWorkerContract.ts";
+import type { LiveWrinkleDetectionResult } from
+  "../workers/liveWrinklePipelineWorkerContract.ts";
 import type { LiveWrinkleWorkerTimings } from
   "../workers/liveWrinklePipelineWorkerContract.ts";
 
@@ -41,8 +60,11 @@ type AnalysisStatus =
   | "idle"
   | "loading"
   | "detecting"
+  | "detected"
   | "refining"
   | "evidence"
+  | "live-detecting"
+  | "live-ready"
   | "ready"
   | "applied"
   | "error";
@@ -61,6 +83,14 @@ interface WorkingFrame {
   offsetY: number;
 }
 
+interface FramewiseDetectionFrame {
+  generation: number;
+  sourceKind: "camera" | "video";
+  timestamp: number;
+  working: WorkingFrame;
+  landmarks: Vec3[];
+}
+
 interface WrinkleAnalysisState {
   generation: number;
   status: AnalysisStatus;
@@ -72,12 +102,20 @@ interface WrinkleAnalysisState {
   movedPointCount: number;
   fineLineCount: number;
   sourceComponentCount: number;
-  evidenceSource: "paired-edge-v10-dynamic" | null;
+  evidenceSource: "paired-edge-v10-dynamic" | "yolo-live" | null;
   diagnostics: Record<string, any> | null;
   audit: Record<string, any> | null;
   timings: LiveWrinkleWorkerTimings | null;
   provider: WrinkleV10ProviderCapability | null;
   reproducibility: Record<string, unknown> | null;
+  detectionId: string | null;
+  refinementContext: {
+    working: WorkingFrame;
+    workLandmarks: Vec3[];
+    seeds: Array<{ id: number; name: string; region: string; pts: Array<[number, number]> }>;
+    faceWidthPx: number;
+  } | null;
+  trackedLines: TrackedWrinkleLine[];
   error: string | null;
 }
 
@@ -98,12 +136,50 @@ const state: WrinkleAnalysisState = {
   timings: null,
   provider: null,
   reproducibility: null,
+  detectionId: null,
+  refinementContext: null,
+  trackedLines: [],
   error: null,
 };
 
 let wrinkleWorker: LiveWrinklePipelineWorkerClient | null = null;
 let wrinkleFaceLandmarker: FaceLandmarker | null = null;
 const activeAnalyses = new Set<Promise<void>>();
+const LIVE_YOLO_INPUT_SIZE = 640;
+const LIVE_YOLO_CORRECTION_INTERVAL_SECONDS = 2;
+let liveDetectionInFlight = false;
+let liveDetectionAttempted = false;
+let liveDetectionCount = 0;
+let liveCorrectionInFlight = false;
+let lastLiveCorrectionMediaTime = Number.NaN;
+let liveCorrectionDiagnostics: (WrinkleCorrectionGateResult & {
+  attemptedAt: number;
+  acceptedCount: number;
+  rejectedCount: number;
+}) | null = null;
+let liveCorrectionAcceptedCount = 0;
+let liveCorrectionRejectedCount = 0;
+let skinTracker: WrinkleOpticalFlowTracker | null = null;
+let wrinkleTextureScratch: HTMLCanvasElement | null = null;
+let wrinkleWorkingScratch: HTMLCanvasElement | null = null;
+let wrinkleWorkingContext: CanvasRenderingContext2D | null = null;
+let trackingGrayBuffer: Uint8Array | undefined;
+let liveDisplayLines: LiveWrinkleEvidenceLine[] = [];
+let ridgeSnapDiagnostics: WrinkleRidgeSnapDiagnostics | null = null;
+let framewiseProcessor: LatestFrameProcessor<FramewiseDetectionFrame, LiveWrinkleDetectionResult> | null = null;
+const temporalFramewiseStabilizer = new TemporalWrinkleStabilizer();
+
+export function liveWrinkleProcessingMode(_search = ""): "tracking" | "framewise" {
+  return "tracking";
+}
+
+export function isDynamicWrinkleSourceKind(value: string | null): boolean {
+  return value === "camera" || value === "video";
+}
+
+function dynamicWrinkleSourceLabel(): "摄像头" | "视频" {
+  return sourceState.sourceKind === "video" ? "视频" : "摄像头";
+}
 
 const cloneMappedLines = (lines: readonly MappedAtlasLine[]): EditableRefineLine[] => (
   lines.map((line) => ({
@@ -120,7 +196,6 @@ const cloneMappedLines = (lines: readonly MappedAtlasLine[]): EditableRefineLine
 
 function currentPixelSource(): CanvasImageSource | null {
   if (sourceState.sourceKind === "image") return sourceState.source as CanvasImageSource | null;
-  if (sourceState.paused) return sourceState.frozenFrame;
   return null;
 }
 
@@ -156,9 +231,9 @@ async function detectV9ReferenceLandmarks(
 
 export function isWrinkleFrameReady(): boolean {
   const imageReady = sourceState.sourceKind === "image" && Boolean(sourceState.imageCacheLM);
-  const frozenReady = (sourceState.sourceKind === "camera" || sourceState.sourceKind === "video")
-    && sourceState.paused && Boolean(sourceState.frozenFrame) && Boolean(sourceState.lastLM);
-  return sourceState.running && Boolean(imageReady || frozenReady);
+  const dynamicReady = isDynamicWrinkleSourceKind(sourceState.sourceKind)
+    && !sourceState.paused && Boolean(sourceState.lastLM);
+  return sourceState.running && Boolean(imageReady || dynamicReady);
 }
 
 export function buildWrinkleWorkingFrame(
@@ -169,10 +244,10 @@ export function buildWrinkleWorkingFrame(
 ): WorkingFrame {
   const { size, scale, targetWidth, targetHeight, offsetX, offsetY } =
     wrinkleWorkingTransform(width, height, maximumSize);
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const canvas = wrinkleWorkingScratch ||= document.createElement("canvas");
+  if (canvas.width !== size) canvas.width = size;
+  if (canvas.height !== size) canvas.height = size;
+  const context = wrinkleWorkingContext ||= canvas.getContext("2d", { willReadFrequently: true });
   if (!context) throw new Error("无法建立皱纹检测画布");
   context.fillStyle = "#000";
   context.fillRect(0, 0, size, size);
@@ -248,20 +323,32 @@ function updateStatus(status: AnalysisStatus, error: string | null = null): void
 }
 
 function statusLabel(): string {
+  if (state.status === "live-detecting") return state.evidenceLines.length
+    ? liveWrinkleProcessingMode() === "framewise" ? "逐帧检测中 · 正在更新" : "实时跟踪中 · 正在更新"
+    : "正在启动实时皱纹检测";
+  if (state.status === "live-ready") return liveWrinkleProcessingMode() === "framewise"
+    ? "GPU 逐帧皱纹检测中"
+    : "实时皱纹跟踪中";
   if (state.status === "loading") return "正在准备最新检测流程";
   if (state.status === "detecting") return "正在检测皱纹";
+  if (state.status === "detected") return "皱纹检测完成";
   if (state.status === "refining") return "正在计算自动微调";
   if (state.status === "evidence") return "皱纹已检测 · 自动微调未通过门禁";
   if (state.status === "ready") return "检测完成 · 待选择";
   if (state.status === "applied") return "已应用皱纹引导微调";
   if (state.status === "error") return "检测失败";
-  return isWrinkleFrameReady() ? "等待手动检测" : "等待照片或定格帧";
+  if (isDynamicWrinkleSourceKind(sourceState.sourceKind)) {
+    return `等待${dynamicWrinkleSourceLabel()}人脸`;
+  }
+  return isWrinkleFrameReady() ? "等待手动检测" : "等待照片";
 }
 
 export function updateWrinkleUi(): void {
   if (!els.wrinkleStatus) return;
   const frameReady = isWrinkleFrameReady();
-  const analysisReady = state.status === "ready" || state.status === "applied";
+  const imageMode = sourceState.sourceKind === "image";
+  const detectionReady = imageMode && state.status === "detected"
+    && Boolean(state.detectionId && state.refinementContext);
   const busy = state.status === "loading" || state.status === "detecting" || state.status === "refining";
   const processingLocation = wrinkleV10ProcessingLocationLabel(
     state.provider,
@@ -270,18 +357,30 @@ export function updateWrinkleUi(): void {
   els.wrinkleStatus.textContent = statusLabel();
   els.wrinkleDisplayMode.value = state.displayMode;
   els.wrinkleDisplayMode.disabled = !frameReady;
-  els.wrinkleDetect.disabled = !frameReady || busy;
+  els.wrinkleDetect.disabled = !imageMode || !frameReady || busy;
   els.wrinkleDetect.textContent = state.status === "error"
     ? "重试皱纹检测"
     : state.status === "idle" ? "检测皱纹" : "重新检测皱纹";
-  els.wrinkleAutoRefine.disabled = !analysisReady || hasManualRefineChanges() || state.status === "applied";
+  els.wrinkleAutoRefine.disabled = !detectionReady || hasManualRefineChanges();
   els.wrinkleRestore.disabled = !state.standardLines
     || (state.status !== "applied" && !hasManualRefineChanges());
-  if (state.status === "error") {
+  if (isDynamicWrinkleSourceKind(sourceState.sourceKind)) {
+    const sourceLabel = dynamicWrinkleSourceLabel();
+    const elapsed = state.timings?.totalMs;
+    els.wrinkleSummary.textContent = state.evidenceLines.length
+      ? liveWrinkleProcessingMode() === "framewise"
+        ? `YOLO 当前检测 ${state.fineLineCount} 条皱纹；每次处理使用新帧，仅做相邻结果时间稳定` +
+          `${elapsed ? `；最近一帧 ${Math.round(elapsed)} ms` : ""}。`
+        : `YOLO 已锁定 ${state.fineLineCount} 条皱纹，正逐帧跟踪并每 2 秒进行可信纠偏` +
+          `${elapsed ? `；最近检测 ${Math.round(elapsed)} ms` : ""}。${sourceLabel}模式不运行微调。`
+      : `${sourceLabel}模式仅运行 YOLO 皱纹检测；检测结果会随人脸实时移动，不运行微调。`;
+  } else if (state.status === "error") {
     els.wrinkleSummary.textContent = state.error || "请重试，或更换正面、清晰、光线均匀的照片。";
   } else if (state.status === "evidence") {
     els.wrinkleSummary.textContent = `已绘制 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域）；${state.error || "自动微调未通过安全门禁"}，标准 RSTL 保持不变。`;
-  } else if (analysisReady) {
+  } else if (state.status === "detected") {
+    els.wrinkleSummary.textContent = `YOLO 已检测 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域）。`;
+  } else if (state.status === "ready" || state.status === "applied") {
     const evidenceVersion = "V10 四区域实时检测";
     const moved = `RSTL v${RSTL_STANDARD_CONTRACT.atlasVersion} · ${evidenceVersion} · V9 7.2 · ${processingLocation}；` +
       `识别 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域），` +
@@ -290,11 +389,15 @@ export function updateWrinkleUi(): void {
       ? `${moved} 已有医生手动修改，自动应用已锁定；可恢复后重新应用。`
       : moved;
   } else if (busy) {
-    els.wrinkleSummary.textContent = state.provider
+    els.wrinkleSummary.textContent = state.status === "refining"
+      ? "正在使用已缓存的皱纹检测结果运行 RSTL 微调。"
+      : state.provider
       ? `正在${processingLocation}运行 V10 四区域检测。`
-      : "正在检查 V10 检测服务和实际处理位置。";
+      : import.meta.env?.VITE_SERVER_COMPUTE === 'true'
+      ? '正在服务器运行 YOLO 皱纹检测。'
+      : "正在当前浏览器运行 YOLO 皱纹检测。";
   } else {
-    els.wrinkleSummary.textContent = "标准 RSTL 已显示；点击“检测皱纹”后才会检查处理位置并启动 V10。";
+    els.wrinkleSummary.textContent = "点击“检测皱纹”只运行皱纹检测；微调算法仅在点击“皱纹引导自动微调”后启动。";
   }
 }
 
@@ -314,7 +417,89 @@ export function shouldDrawWrinkleLayer(): boolean {
 }
 
 export function getWrinkleEvidenceLines(): readonly LiveWrinkleEvidenceLine[] {
+  if (isDynamicWrinkleSourceKind(sourceState.sourceKind)) {
+    return liveDisplayLines;
+  }
   return state.evidenceLines;
+}
+
+export function updateLiveWrinkleMeshTracking(
+  canvas: HTMLCanvasElement,
+  landmarks: Vec3[],
+): void {
+  if (isDynamicWrinkleSourceKind(sourceState.sourceKind)
+      && liveWrinkleProcessingMode() === "framewise") {
+    skinTracker?.suspend();
+    if (new URLSearchParams(window.location.search).has("wrinkleDebug")) {
+      canvas.dataset.wrinkleTextureTracking = JSON.stringify({
+        mode: "fresh-detection-temporal-stabilization",
+        extractionCount: liveDetectionCount,
+        mediaTime: (sourceState.source as HTMLVideoElement).currentTime,
+        lineCount: liveDisplayLines.length,
+        scheduler: framewiseProcessor?.diagnostics() || null,
+      });
+    }
+    return;
+  }
+  if (!isDynamicWrinkleSourceKind(sourceState.sourceKind)
+      || !state.trackedLines.length || !landmarks.length) {
+    liveDisplayLines = [];
+    skinTracker?.suspend();
+    delete canvas.dataset.wrinkleTextureTracking;
+    delete (canvas as HTMLCanvasElement & {
+      __wrinkleDisplayLines?: LiveWrinkleEvidenceLine[];
+    }).__wrinkleDisplayLines;
+    return;
+  }
+  const sample = liveBenchmark()?.current;
+  const meshStart = sample ? performance.now() : 0;
+  const meshLines = mapTrackedWrinkleLines(
+    state.trackedLines,
+    landmarks,
+    modelState.triangles as Triangle[],
+  );
+  const mediaTime = (sourceState.source as HTMLVideoElement).currentTime;
+  if (sample) sample.stages.wrinkleMesh = performance.now() - meshStart;
+  if (skinTracker && !skinTracker.hasFrame(mediaTime)) {
+    wrinkleTextureScratch ||= document.createElement("canvas");
+    const captureStart = sample ? performance.now() : 0;
+    // The tracker copies gray pixels into its owned Mat synchronously. This
+    // buffer is only for subsequent frames; the asynchronous seed owns its data.
+    const frame = captureWrinkleTextureFrame(canvas, wrinkleTextureScratch, 640, sample?.stages, trackingGrayBuffer);
+    if (frame) trackingGrayBuffer = frame.gray;
+    if (sample) sample.stages.textureCapture = performance.now() - captureStart;
+    try {
+      const flowStart = sample ? performance.now() : 0;
+      liveDisplayLines = frame ? skinTracker.update(frame, meshLines, mediaTime) : [];
+      if (sample) sample.stages.opticalFlow = performance.now() - flowStart;
+      if (!frame) skinTracker.suspend();
+    } catch (error) {
+      skinTracker.suspend();
+      liveDisplayLines = [];
+      logWarn("皱纹皮肤点跟踪失败，本帧已隐藏。", error);
+    }
+  }
+  if (sample) sample.wrinkles = liveDisplayLines.map((line) => ({
+    id: line.id, points: line.points.filter((_, index) => index % 8 === 0)
+      .map((point, index) => [point[0], point[1], index * 8]),
+  }));
+  if (new URLSearchParams(window.location.search).has("wrinkleDebug")) {
+    (canvas as HTMLCanvasElement & {
+      __wrinkleDisplayLines?: LiveWrinkleEvidenceLine[];
+    }).__wrinkleDisplayLines = liveDisplayLines;
+    canvas.dataset.wrinkleTextureTracking = JSON.stringify(
+      {
+        mode: "first-frame-evidence-skin-tracking-with-gated-yolo-correction",
+        extractionCount: liveDetectionCount,
+        mediaTime,
+        opticalFlow: skinTracker?.diagnostics() || null,
+        lineCount: liveDisplayLines.length,
+        pointCount: liveDisplayLines.reduce((sum, line) => sum + line.points.length, 0),
+        ridgeLockedLineCount: 0,
+        meanRidgeCorrectionPx: 0,
+      },
+    );
+  }
 }
 
 /**
@@ -339,6 +524,16 @@ export function getLiveWrinkleAnalysisDebugSnapshot() {
     timings: state.timings ? { ...state.timings } : null,
     provider: state.provider ? { ...state.provider } : null,
     reproducibility: state.reproducibility ? { ...state.reproducibility } : null,
+    detectionId: state.detectionId,
+    liveTracked: state.trackedLines.length > 0,
+    liveTrackingMode: "first-frame-evidence-skin-tracking-with-gated-yolo-correction",
+    textureFlowTracking: "opencv-pyramidal-lk-forward-backward",
+    extractionCount: liveDetectionCount,
+    yoloCorrectionIntervalSeconds: LIVE_YOLO_CORRECTION_INTERVAL_SECONDS,
+    yoloCorrection: liveCorrectionDiagnostics ? { ...liveCorrectionDiagnostics } : null,
+    opticalFlow: skinTracker?.diagnostics() || null,
+    ridgeSnapDiagnostics: ridgeSnapDiagnostics ? { ...ridgeSnapDiagnostics } : null,
+    maintenanceRidgeSnapDiagnostics: null,
     error: state.error,
     evidenceLines: state.evidenceLines.map((line) => ({
       id: line.id,
@@ -373,7 +568,7 @@ function publishDebugSnapshot(): void {
 }
 
 async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } = {}): Promise<void> {
-  if (!isWrinkleFrameReady()) {
+  if (sourceState.sourceKind !== "image" || !isWrinkleFrameReady()) {
     updateWrinkleUi();
     return;
   }
@@ -394,6 +589,9 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
   state.timings = null;
   state.provider = null;
   state.reproducibility = null;
+  state.detectionId = null;
+  state.refinementContext = null;
+  state.trackedLines = [];
   updateStatus("loading");
   try {
     const sourceSize = wrinkleSourceSize(source);
@@ -438,7 +636,7 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
     const commitEvidence = (evidence: LiveWrinkleWorkerEvidence) => {
       if (generation !== state.generation || evidenceCommitted) return;
       evidenceCommitted = true;
-      state.evidenceSource = "paired-edge-v10-dynamic";
+      state.evidenceSource = "yolo-live";
       state.evidenceLines = evidence.lines.map((line) => ({
         id: line.id,
         className: line.class,
@@ -455,18 +653,16 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
         lineCountByAnatomicalClass: evidence.summary.lineCountByAnatomicalClass,
       };
       window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
-      updateStatus("refining");
     };
-    const pipeline = await wrinkleWorkerInstance().analyze({
+    const pipeline = await wrinkleWorkerInstance().detect({
       imageData: working.imageData,
-      seeds,
       size: working.size,
-      faceWidthPx: faceWidth,
       landmarks: workLandmarks.map((point) => [
         point[0] / working.size,
         point[1] / working.size,
         point[2] / working.size,
       ]),
+      mode: "yolo-only",
     }, (event) => {
       if (pipelineCompleted) return;
       if (event.type === "model-progress") {
@@ -488,7 +684,7 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
         els.wrinkleSummary.textContent = event.stage === "four-region"
           ? `正在${wrinkleV10ProcessingLocationLabel(state.provider, window.location.hostname)}` +
             "运行 V10 四区域检测……"
-          : "四区域检测完成，正在运行 V9 7.2 微调……";
+          : "正在运行 V9 7.2 微调……";
         return;
       }
       if (event.type === "evidence") return;
@@ -496,7 +692,377 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
     if (generation !== state.generation) return;
     pipelineCompleted = true;
     commitEvidence(pipeline.evidence);
-    const { refined } = pipeline;
+    state.detectionId = pipeline.detectionId;
+    state.refinementContext = null;
+    state.timings = pipeline.timings;
+    state.provider = pipeline.provider;
+    updateStatus("detected");
+    countMetric("wrinkle.singleFrame.detected");
+    window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
+  } catch (error) {
+    if (generation !== state.generation) return;
+    const message = error instanceof Error ? error.message : "未知错误";
+    if (state.evidenceLines.length > 0) {
+      logWarn("皱纹中心线已生成，但检测结果未通过最终提交。", error);
+      countMetric("wrinkle.singleFrame.partialFailure");
+      updateStatus("evidence", message);
+      window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
+      return;
+    }
+    logWarn("单帧皱纹检测失败。", error);
+    countMetric("wrinkle.singleFrame.failure");
+    updateStatus("error", message);
+  }
+}
+
+export function analyzeCurrentWrinkles(options: { force?: boolean } = {}): Promise<void> {
+  const analysis = runCurrentWrinkleAnalysis(options);
+  activeAnalyses.add(analysis);
+  void analysis.finally(() => activeAnalyses.delete(analysis));
+  return analysis;
+}
+
+export function updateLiveWrinkleTracking(
+  landmarks: Vec3[],
+  timeMs: number,
+): void {
+  const sourceKind = sourceState.sourceKind;
+  if (!isDynamicWrinkleSourceKind(sourceKind) || sourceState.paused || !sourceState.running) return;
+  if (liveWrinkleProcessingMode() === "framewise") {
+    updateFramewiseWrinkleDetection(landmarks, timeMs, sourceKind as "camera" | "video");
+    return;
+  }
+  if (liveDetectionAttempted) {
+    scheduleLiveWrinkleCorrection(landmarks, sourceKind as "camera" | "video");
+    return;
+  }
+  // An empty result or failure also completes the single extraction attempt.
+  if (liveDetectionInFlight) return;
+  if (landmarks.length < 468) {
+    if (sourceKind === "video") {
+      liveDetectionAttempted = true;
+      updateStatus("error", "视频第一帧未检测到人脸，无法建立皱纹跟踪。");
+    }
+    return;
+  }
+  const source = els.canvas;
+  if (!source || landmarks.length < 468) return;
+  const generation = state.generation;
+  const detectionLandmarks = landmarks.map((point) => [...point] as Vec3);
+  const detectionMediaTime = (sourceState.source as HTMLVideoElement).currentTime;
+  liveDetectionAttempted = true;
+  liveDetectionInFlight = true;
+  if (!state.evidenceLines.length) updateStatus("live-detecting");
+  const analysis = (async () => {
+    let candidateTracker: WrinkleOpticalFlowTracker | null = null;
+    try {
+      const width = els.canvas.width;
+      const height = els.canvas.height;
+      wrinkleTextureScratch ||= document.createElement("canvas");
+      const detectionTextureFrame = captureWrinkleTextureFrame(
+        els.canvas,
+        wrinkleTextureScratch,
+        640,
+      );
+      const working = buildWrinkleWorkingFrame(source, width, height, LIVE_YOLO_INPUT_SIZE);
+      if (!detectionTextureFrame) throw new Error("无法读取首帧皮肤纹理");
+      candidateTracker = await WrinkleOpticalFlowTracker.create();
+      if (generation !== state.generation) return;
+      liveDetectionCount += 1;
+      const result = await wrinkleWorkerInstance().detect({
+        imageData: working.imageData,
+        size: working.size,
+        mode: "yolo-only",
+        includeFingerprint: false,
+      });
+      if (generation !== state.generation || sourceState.sourceKind !== sourceKind
+          || sourceState.paused || !sourceState.running) return;
+      const sourceLines = result.evidence.lines.map((line) => ({
+        id: line.id,
+        className: line.class,
+        points: line.points.map((point) => fromWrinkleWorkingPoint(point, working)),
+      }));
+      lastLiveCorrectionMediaTime = detectionMediaTime;
+      state.evidenceLines = sourceLines;
+      const displaySeed = { lines: sourceLines, diagnostics: null };
+      ridgeSnapDiagnostics = displaySeed.diagnostics;
+      const benchmark = liveBenchmark();
+      if (benchmark) benchmark.seed = displaySeed.lines.map((line) => ({
+        id: line.id, points: line.points.map((point) => [...point]),
+      }));
+      candidateTracker.seed(detectionTextureFrame, displaySeed.lines, detectionMediaTime);
+      skinTracker?.dispose();
+      skinTracker = candidateTracker;
+      candidateTracker = null;
+      liveDisplayLines = displaySeed.lines;
+      state.trackedLines = bindWrinkleLinesToFace(
+        displaySeed.lines,
+        detectionLandmarks,
+        modelState.triangles as Triangle[],
+      );
+      state.evidenceSource = "yolo-live";
+      state.fineLineCount = sourceLines.length;
+      state.sourceComponentCount = Number(result.evidence.summary.sourceConnectedComponents)
+        || sourceLines.length;
+      state.timings = result.timings;
+      state.provider = null;
+      state.error = null;
+      updateStatus("live-ready");
+      countMetric("wrinkle.liveYolo.ready");
+    } catch (error) {
+      if (generation !== state.generation) return;
+      const message = error instanceof Error ? error.message : "未知错误";
+      logWarn("实时 YOLO 皱纹检测失败。", error);
+      countMetric("wrinkle.liveYolo.failure");
+      if (!state.evidenceLines.length) updateStatus("error", message);
+    } finally {
+      candidateTracker?.dispose();
+      if (generation === state.generation) liveDetectionInFlight = false;
+    }
+  })();
+  activeAnalyses.add(analysis);
+  void analysis.finally(() => activeAnalyses.delete(analysis));
+}
+
+function numericSummaryArray(summary: Record<string, unknown>, key: string): number[] {
+  const value = summary[key];
+  return Array.isArray(value)
+    ? value.map(Number).filter((item) => Number.isFinite(item))
+    : [];
+}
+
+function scheduleLiveWrinkleCorrection(
+  landmarks: Vec3[],
+  sourceKind: "camera" | "video",
+): void {
+  if (liveCorrectionInFlight || !skinTracker || state.trackedLines.length === 0
+      || landmarks.length < 468) return;
+  const source = sourceState.source as HTMLVideoElement;
+  const mediaTime = Number(source.currentTime);
+  if (!Number.isFinite(mediaTime)) return;
+  if (Number.isFinite(lastLiveCorrectionMediaTime)) {
+    const elapsed = mediaTime - lastLiveCorrectionMediaTime;
+    if (elapsed >= 0 && elapsed < LIVE_YOLO_CORRECTION_INTERVAL_SECONDS) return;
+    if (elapsed < 0) {
+      lastLiveCorrectionMediaTime = mediaTime;
+      return;
+    }
+  }
+
+  const width = els.canvas.width;
+  const height = els.canvas.height;
+  if (!width || !height) return;
+  const generation = state.generation;
+  const correctionLandmarks = landmarks.map((point) => [...point] as Vec3);
+  const comparisonLines = mapTrackedWrinkleLines(
+    state.trackedLines,
+    correctionLandmarks,
+    modelState.triangles as Triangle[],
+  );
+  wrinkleTextureScratch ||= document.createElement("canvas");
+  const textureFrame = captureWrinkleTextureFrame(els.canvas, wrinkleTextureScratch, 640);
+  if (!textureFrame) return;
+  const working = buildWrinkleWorkingFrame(els.canvas, width, height, LIVE_YOLO_INPUT_SIZE);
+  const xs = correctionLandmarks.slice(0, 468).map((point) => point[0]);
+  const faceWidthPx = Math.max(...xs) - Math.min(...xs);
+  lastLiveCorrectionMediaTime = mediaTime;
+  liveCorrectionInFlight = true;
+
+  const correction = (async () => {
+    let candidateTracker: WrinkleOpticalFlowTracker | null = null;
+    try {
+      const result = await wrinkleWorkerInstance().detect({
+        imageData: working.imageData,
+        size: working.size,
+        mode: "yolo-only",
+        includeFingerprint: false,
+      });
+      if (generation !== state.generation || sourceState.sourceKind !== sourceKind
+          || sourceState.paused || !sourceState.running) return;
+      const candidateLines = result.evidence.lines.map((line) => ({
+        id: line.id,
+        className: line.class,
+        points: line.points.map((point) => fromWrinkleWorkingPoint(point, working)),
+      }));
+      const yoloDiagnostics = result.evidence.summary.yoloDiagnostics;
+      const confidenceThreshold = yoloDiagnostics && typeof yoloDiagnostics === "object"
+        ? Number((yoloDiagnostics as Record<string, unknown>).confidenceThreshold) || 0.07
+        : 0.07;
+      const gate = evaluateWrinkleCorrection({
+        current: comparisonLines,
+        candidate: candidateLines,
+        faceWidthPx,
+        yoloScores: numericSummaryArray(result.evidence.summary, "yoloScores"),
+        yoloConfidenceThreshold: confidenceThreshold,
+      });
+      if (!gate.accepted) {
+        liveCorrectionRejectedCount += 1;
+        liveCorrectionDiagnostics = {
+          ...gate,
+          attemptedAt: mediaTime,
+          acceptedCount: liveCorrectionAcceptedCount,
+          rejectedCount: liveCorrectionRejectedCount,
+        };
+        countMetric(`wrinkle.liveYolo.correctionRejected.${gate.reason}`);
+        publishDebugSnapshot();
+        return;
+      }
+
+      candidateTracker = await WrinkleOpticalFlowTracker.create();
+      if (generation !== state.generation || sourceState.sourceKind !== sourceKind) return;
+      candidateTracker.seed(textureFrame, candidateLines, mediaTime);
+      skinTracker?.dispose();
+      skinTracker = candidateTracker;
+      candidateTracker = null;
+      liveDisplayLines = candidateLines;
+      state.evidenceLines = candidateLines;
+      state.trackedLines = bindWrinkleLinesToFace(
+        candidateLines,
+        correctionLandmarks,
+        modelState.triangles as Triangle[],
+      );
+      state.fineLineCount = candidateLines.length;
+      state.sourceComponentCount = Number(result.evidence.summary.sourceConnectedComponents)
+        || candidateLines.length;
+      state.timings = result.timings;
+      liveDetectionCount += 1;
+      liveCorrectionAcceptedCount += 1;
+      liveCorrectionDiagnostics = {
+        ...gate,
+        attemptedAt: mediaTime,
+        acceptedCount: liveCorrectionAcceptedCount,
+        rejectedCount: liveCorrectionRejectedCount,
+      };
+      countMetric("wrinkle.liveYolo.correctionAccepted");
+      publishDebugSnapshot();
+    } catch (error) {
+      if (generation !== state.generation) return;
+      liveCorrectionRejectedCount += 1;
+      logWarn("低频 YOLO 纠偏失败，继续使用当前跟踪结果。", error);
+      countMetric("wrinkle.liveYolo.correctionFailure");
+    } finally {
+      candidateTracker?.dispose();
+      if (generation === state.generation) liveCorrectionInFlight = false;
+    }
+  })();
+  activeAnalyses.add(correction);
+  void correction.finally(() => activeAnalyses.delete(correction));
+}
+
+function clearFramewiseEvidence(): void {
+  temporalFramewiseStabilizer.reset();
+  liveDisplayLines = [];
+  state.evidenceLines = [];
+  state.trackedLines = [];
+  state.fineLineCount = 0;
+  state.sourceComponentCount = 0;
+  window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
+}
+
+function framewiseDetectionProcessor(): LatestFrameProcessor<FramewiseDetectionFrame, LiveWrinkleDetectionResult> {
+  framewiseProcessor ||= new LatestFrameProcessor({
+    timestamp: frame => frame.timestamp,
+    process: frame => wrinkleWorkerInstance().detect({
+      imageData: frame.working.imageData,
+      size: frame.working.size,
+      mode: "yolo-only",
+      includeFingerprint: false,
+    }),
+    commit: (result, frame) => {
+      if (frame.generation !== state.generation || sourceState.sourceKind !== frame.sourceKind
+          || sourceState.paused || !sourceState.running) return;
+      const detected = result.evidence.lines.map((line) => ({
+        id: line.id,
+        className: line.class,
+        points: line.points.map((point) => fromWrinkleWorkingPoint(point, frame.working)),
+      }));
+      const xs = frame.landmarks.slice(0, 468).map((point) => point[0]);
+      const faceWidthPx = Math.max(...xs) - Math.min(...xs);
+      const stabilized = temporalFramewiseStabilizer.update(detected, faceWidthPx);
+      liveDetectionCount += 1;
+      liveDisplayLines = stabilized;
+      state.evidenceLines = stabilized;
+      state.trackedLines = [];
+      state.evidenceSource = "yolo-live";
+      state.fineLineCount = stabilized.length;
+      state.sourceComponentCount = Number(result.evidence.summary.sourceConnectedComponents)
+        || stabilized.length;
+      state.timings = result.timings;
+      state.provider = null;
+      state.error = null;
+      updateStatus("live-ready");
+      countMetric("wrinkle.liveYolo.framewiseReady");
+      window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
+    },
+    onError: (error, frame) => {
+      if (frame.generation !== state.generation || sourceState.sourceKind !== frame.sourceKind) return;
+      clearFramewiseEvidence();
+      const message = error instanceof Error ? error.message : "未知错误";
+      logWarn("逐帧 YOLO 皱纹检测失败。", error);
+      updateStatus("error", message);
+    },
+  });
+  return framewiseProcessor;
+}
+
+function updateFramewiseWrinkleDetection(
+  landmarks: Vec3[],
+  timeMs: number,
+  sourceKind: "camera" | "video",
+): void {
+  if (landmarks.length < 468) {
+    framewiseProcessor?.cancel();
+    if (liveDisplayLines.length) clearFramewiseEvidence();
+    return;
+  }
+  const width = els.canvas.width;
+  const height = els.canvas.height;
+  if (!width || !height) return;
+  const processor = framewiseDetectionProcessor();
+  const diagnostics = processor.diagnostics();
+  if (diagnostics.active || diagnostics.pending) return;
+  const mediaTime = Number((sourceState.source as HTMLVideoElement).currentTime);
+  const timestamp = Number.isFinite(mediaTime) ? mediaTime * 1000 : timeMs;
+  const working = buildWrinkleWorkingFrame(els.canvas, width, height, LIVE_YOLO_INPUT_SIZE);
+  if (!state.evidenceLines.length) updateStatus("live-detecting");
+  processor.submit({
+    generation: state.generation,
+    sourceKind,
+    timestamp,
+    working,
+    landmarks: landmarks.map((point) => [...point] as Vec3),
+  });
+}
+
+export async function waitForLiveWrinkleAnalysis(): Promise<void> {
+  await framewiseProcessor?.waitForIdle();
+  await Promise.allSettled([...activeAnalyses]);
+}
+
+export async function applyWrinkleGuidedRefinement(): Promise<void> {
+  if (sourceState.sourceKind !== "image" || state.status !== "detected"
+      || !state.detectionId || !state.refinementContext || !state.standardLines) return;
+  if (hasManualRefineChanges()) {
+    updateWrinkleUi();
+    return;
+  }
+  const generation = state.generation;
+  const context = state.refinementContext;
+  updateStatus("refining");
+  try {
+    const result = await wrinkleWorkerInstance().refine({
+      detectionId: state.detectionId,
+      seeds: context.seeds,
+      size: context.working.size,
+      faceWidthPx: context.faceWidthPx,
+      landmarks: context.workLandmarks.map((point) => [
+        point[0] / context.working.size,
+        point[1] / context.working.size,
+        point[2] / context.working.size,
+      ]),
+    });
+    if (generation !== state.generation) return;
+    const { refined } = result;
     assertRefinementGate(refined.diagnostics);
     if (refined.standardCurveCount !== state.standardLines.length
         || refined.curves.length < refined.standardCurveCount) {
@@ -513,7 +1079,7 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
           .map((run) => [run[0], run[1]] as [number, number]),
         tris: [...line.tris],
         pts: points.map((point: number[], pointIndex: number) => {
-          const [x, y] = fromWrinkleWorkingPoint(point, working);
+          const [x, y] = fromWrinkleWorkingPoint(point, context.working);
           return [x, y, line.pts[pointIndex]?.[2] || 0] as Vec3;
         }),
       };
@@ -529,70 +1095,55 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
           .map((run) => [run[0], run[1]] as [number, number]),
         tris: [],
         pts: curve.pts.map((point) => {
-          const [x, y] = fromWrinkleWorkingPoint(point, working);
+          const [x, y] = fromWrinkleWorkingPoint(point, context.working);
           return [x, y, 0] as Vec3;
         }),
       });
     }
-    Object.assign(refined.diagnostics, {
-      refinement_profile: LATEST_WRINKLE_REFINEMENT_PROFILE,
-    });
+    Object.assign(refined.diagnostics, { refinement_profile: result.refinementProfile });
     state.autoRefinedLines = autoRefinedLines;
     state.diagnostics = refined.diagnostics;
     state.audit = refined.audit;
-    state.timings = pipeline.timings;
-    state.provider = pipeline.provider;
     state.movedCurveCount = (Number(refined.diagnostics.moved_curve_count) || 0)
       + Number(refined.diagnostics.direct_nose_dorsum_generated_curve_count || 0);
     state.movedPointCount = Number(refined.diagnostics.moved_point_count) || 0;
-    updateStatus("ready");
-    countMetric("wrinkle.singleFrame.ready");
+    replaceStaticRefineBaseline(autoRefinedLines);
+    updateStatus("applied");
+    countMetric("wrinkle.singleFrame.applied");
     window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
   } catch (error) {
     if (generation !== state.generation) return;
     const message = error instanceof Error ? error.message : "未知错误";
-    if (state.evidenceLines.length > 0) {
-      logWarn("皱纹已检测，但自动微调未通过安全门禁。", error);
-      countMetric("wrinkle.singleFrame.gateRejected");
-      updateStatus("evidence", message);
-      window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
-      return;
-    }
-    logWarn("单帧皱纹检测或自动微调失败。", error);
-    countMetric("wrinkle.singleFrame.failure");
-    updateStatus("error", message);
+    logWarn("皱纹已检测，但自动微调未通过安全门禁。", error);
+    countMetric("wrinkle.singleFrame.gateRejected");
+    updateStatus("evidence", message);
   }
-}
-
-export function analyzeCurrentWrinkles(options: { force?: boolean } = {}): Promise<void> {
-  const analysis = runCurrentWrinkleAnalysis(options);
-  activeAnalyses.add(analysis);
-  void analysis.finally(() => activeAnalyses.delete(analysis));
-  return analysis;
-}
-
-export function applyWrinkleGuidedRefinement(): void {
-  if (!state.autoRefinedLines || (state.status !== "ready" && state.status !== "applied")) return;
-  if (hasManualRefineChanges()) {
-    updateWrinkleUi();
-    return;
-  }
-  replaceStaticRefineBaseline(state.autoRefinedLines);
-  updateStatus("applied");
-  countMetric("wrinkle.singleFrame.applied");
 }
 
 export function restoreStandardRstl(): void {
   if (!state.standardLines) return;
   replaceStaticRefineBaseline(state.standardLines);
-  updateStatus("ready");
+  updateStatus(state.detectionId ? "detected" : "ready");
   countMetric("wrinkle.singleFrame.standardRestored");
 }
 
 export function resetLiveWrinkleAnalysis(): void {
+  framewiseProcessor?.cancel();
+  framewiseProcessor = null;
+  temporalFramewiseStabilizer.reset();
+  trackingGrayBuffer = undefined;
+  skinTracker?.dispose();
+  skinTracker = null;
+  liveDetectionCount = 0;
+  liveCorrectionAcceptedCount = 0;
+  liveCorrectionRejectedCount = 0;
+  liveCorrectionDiagnostics = null;
+  lastLiveCorrectionMediaTime = Number.NaN;
+  liveCorrectionInFlight = false;
   state.generation += 1;
   terminateWrinkleWorker();
   state.status = "idle";
+  state.displayMode = isDynamicWrinkleSourceKind(sourceState.sourceKind) ? "wrinkles" : "both";
   state.evidenceLines = [];
   state.standardLines = null;
   state.autoRefinedLines = null;
@@ -606,6 +1157,13 @@ export function resetLiveWrinkleAnalysis(): void {
   state.timings = null;
   state.provider = null;
   state.reproducibility = null;
+  state.detectionId = null;
+  state.refinementContext = null;
+  state.trackedLines = [];
+  liveDisplayLines = [];
+  ridgeSnapDiagnostics = null;
+  liveDetectionInFlight = false;
+  liveDetectionAttempted = false;
   state.error = null;
   updateWrinkleUi();
   publishDebugSnapshot();

@@ -148,8 +148,10 @@ export class MotionStabilizedOneEuro {
 
   configureForSmoothLevel(smoothLevel: number): void {
     const level = Math.max(0, Math.min(1, Number(smoothLevel) || 0));
-    this.globalMinCutoff = 3.0 - 2.25 * level;
-    this.globalBeta = 0.004 + 0.014 * level;
+    // Keep rigid head motion responsive while suppressing subpixel detector
+    // noise. Higher beta releases the filter quickly during deliberate motion.
+    this.globalMinCutoff = 3.2 - 2.35 * level;
+    this.globalBeta = 0.006 + 0.016 * level;
   }
 
   reset(): void {

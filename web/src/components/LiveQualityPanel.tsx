@@ -29,7 +29,9 @@ export function LiveQualityPanel() {
         </LiveOverlayQaHeader>
         <p id="incisionOverlayQaDetail">上传照片、视频或开启摄像头后开始检查。</p>
       </LiveOverlayQa>
-      <Hint>姿态与光照自适应 · 标准 RSTL 在当前浏览器计算；V10 处理位置见上方皱纹板块</Hint>
+      <Hint>{import.meta.env?.VITE_SERVER_COMPUTE === 'true'
+        ? '姿态与光照自适应 · RSTL 在当前浏览器实时映射'
+        : '姿态与光照自适应 · 标准 RSTL 在当前浏览器计算；V10 处理位置见上方皱纹板块'}</Hint>
     </Card>
   );
 }

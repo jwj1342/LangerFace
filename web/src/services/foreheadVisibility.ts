@@ -89,6 +89,44 @@ export function labDistance(a: Lab, b: Lab): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 }
 
+function median(values: readonly number[]): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
+function normalizedRgb(rgb: Rgb): Rgb {
+  const total = Math.max(1, rgb[0] + rgb[1] + rgb[2]);
+  return [rgb[0] / total, rgb[1] / total, rgb[2] / total];
+}
+
+/**
+ * A side reference is sampled just inside the MediaPipe forehead boundary, so
+ * it may legitimately be much darker than the central face under lateral
+ * lighting. Accept that lightness change while still rejecting achromatic
+ * hair and strongly different background colours.
+ */
+function plausibleForeheadReference(rgb: Rgb, centralReferences: readonly Rgb[]): boolean {
+  if (!centralReferences.length) return true;
+  const sampleLab = rgbToLab(rgb);
+  const referenceLabs = centralReferences.map(rgbToLab);
+  const referenceChroma = median(referenceLabs.map((reference) => Math.hypot(
+    reference[1], reference[2],
+  )));
+  const sampleChroma = Math.hypot(sampleLab[1], sampleLab[2]);
+  if (sampleLab[0] < 5 || sampleChroma < Math.max(7, referenceChroma * 0.45)) return false;
+  const sampleRgb = normalizedRgb(rgb);
+  const chromaticityDistance = Math.min(...centralReferences.map((reference) => {
+    const normalized = normalizedRgb(reference);
+    return Math.hypot(
+      sampleRgb[0] - normalized[0],
+      sampleRgb[1] - normalized[1],
+      sampleRgb[2] - normalized[2],
+    );
+  }));
+  return chromaticityDistance <= 0.18;
+}
+
 /**
  * 采样颜色是否属于「脸上可见皮肤」。参考色取自可信的中面部关键点。
  * 三个拒绝条件：与所有参考色都远、明显偏暗（头发阴影）、色度过低（灰白发）。
@@ -98,13 +136,11 @@ export function skinColorMatchesReferences(rgb: Rgb | null, referenceRgbs: Rgb[]
   const sample = rgbToLab(rgb);
   const references = referenceRgbs.map(rgbToLab);
   const distance = Math.min(...references.map((reference) => labDistance(sample, reference)));
-  const referenceChroma = references
-    .map((reference) => Math.hypot(reference[1], reference[2]))
-    .sort((a, b) => a - b)[Math.floor(references.length / 2)];
+  const referenceChroma = median(references.map((reference) => Math.hypot(
+    reference[1], reference[2],
+  )));
   const sampleChroma = Math.hypot(sample[1], sample[2]);
-  const referenceLightness = references
-    .map((reference) => reference[0])
-    .sort((a, b) => a - b)[Math.floor(references.length / 2)];
+  const referenceLightness = median(references.map((reference) => reference[0]));
   const tooDark = sample[0] < referenceLightness * 0.52 && distance > 10;
   const achromaticHair = sampleChroma < Math.max(5, referenceChroma * 0.70) && distance > 10;
   return !tooDark && !achromaticHair && distance <= 26;
@@ -138,31 +174,75 @@ export function buildForeheadSkinVisibility(
   width: number,
   height: number,
   landmarks: Vec3[] | null | undefined,
+  pixelScale = 1,
 ): VisibilityPredicate {
   if (!image || !landmarks?.length || width <= 0 || height <= 0) return () => true;
+  const samplePatch = (x: number, y: number): Rgb | null => meanPatch(
+    image,
+    image.width,
+    image.height,
+    x * pixelScale,
+    y * pixelScale,
+    Math.max(1, Math.round(3 * pixelScale)),
+  );
   const trustedReferences = [1, 4, 5, 195, 197, 205, 425]
     .map((index) => landmarks[index])
     .filter(Boolean)
-    .map((point) => meanPatch(image, width, height, point[0], point[1], 3))
+    .map((point) => samplePatch(point[0], point[1]))
     .filter((color): color is Rgb => Boolean(color));
   if (!trustedReferences.length) return () => true;
 
+  const xs = landmarks.filter(Boolean).map((point) => point[0]);
+  const faceWidth = xs.length ? Math.max(...xs) - Math.min(...xs) : width * 0.5;
+  const axisCandidates = [10, 151, 9, 8, 168, 6, 1, 4]
+    .map((index) => landmarks[index]?.[0])
+    .filter(Number.isFinite) as number[];
+  const axisX = axisCandidates.length ? median(axisCandidates) : width * 0.5;
   const foreheadOffset = Math.max(4, 0.0165 * width);
-  const foreheadReferences = [10, 338, 109]
+  const inwardOffset = Math.max(2, 0.012 * faceWidth);
+  const sampleSideReferences = (indices: readonly number[], side: -1 | 1): Rgb[] => indices
     .map((index) => landmarks[index])
     .filter(Boolean)
-    .map((point) => meanPatch(image, width, height, point[0], point[1] + foreheadOffset, 3))
+    .map((point) => samplePatch(
+      point[0] - side * inwardOffset,
+      point[1] + foreheadOffset,
+    ))
     .filter((color): color is Rgb => Boolean(color))
-    .filter((color) => skinColorMatchesReferences(color, trustedReferences));
-  const references = trustedReferences.concat(foreheadReferences);
+    .filter((color) => plausibleForeheadReference(color, trustedReferences));
+  const centralForeheadReferences = [10]
+    .map((index) => landmarks[index])
+    .filter(Boolean)
+    .map((point) => samplePatch(point[0], point[1] + foreheadOffset))
+    .filter((color): color is Rgb => Boolean(color))
+    .filter((color) => plausibleForeheadReference(color, trustedReferences));
+  // These ordered boundary landmarks stay on skin while spanning the upper
+  // forehead and temple. Keeping references per side prevents one illuminated
+  // half of the face from setting the rejection threshold for the shadowed half.
+  const leftReferences = trustedReferences.concat(
+    centralForeheadReferences,
+    sampleSideReferences([109, 67, 103, 54], -1),
+  );
+  const rightReferences = trustedReferences.concat(
+    centralForeheadReferences,
+    sampleSideReferences([338, 297, 332, 284], 1),
+  );
   const browY = [9, 8, 107, 336].map((index) => landmarks[index]?.[1]).filter(Number.isFinite) as number[];
   const browLine = browY.length ? browY.reduce((a, b) => a + b, 0) / browY.length : height * 0.38;
   const foreheadFloor = browLine + Math.max(8, height * 0.018);
+  const centerBlendHalfWidth = Math.max(4, faceWidth * 0.06);
 
   return (point) => {
     if (!point) return false;
     if (point[1] > foreheadFloor) return true;
-    return skinColorMatchesReferences(meanPatch(image, width, height, point[0], point[1], 3), references);
+    const references = point[0] < axisX - centerBlendHalfWidth
+      ? leftReferences
+      : point[0] > axisX + centerBlendHalfWidth
+        ? rightReferences
+        : leftReferences.concat(rightReferences);
+    return skinColorMatchesReferences(
+      samplePatch(point[0], point[1]),
+      references,
+    );
   };
 }
 

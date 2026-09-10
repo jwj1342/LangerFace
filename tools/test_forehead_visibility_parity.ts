@@ -58,6 +58,33 @@ assert.equal(skinVisible([320, 185, 0]), false, "合成帧的头发区域必须�
 assert.equal(buildForeheadSkinVisibility(null, width, height, landmarks)([1, 1, 0]), true,
   "无像素数据时应安全降级为不裁剪");
 
+// Deep skin under side lighting must not be classified as hair merely because
+// one half is substantially darker than the central face. The side-specific
+// MediaPipe boundary references should admit both halves while the grey hair
+// above them remains excluded.
+const shadowData = new Uint8ClampedArray(width * height * 4);
+for (let y = 0; y < height; y++) {
+  for (let x = 0; x < width; x++) {
+    const offset = (y * width + x) * 4;
+    const hair = y < 200;
+    const color = hair
+      ? [96, 92, 89]
+      : x < 320
+        ? [126, 66, 38]
+        : [60, 30, 17];
+    shadowData[offset] = color[0];
+    shadowData[offset + 1] = color[1];
+    shadowData[offset + 2] = color[2];
+    shadowData[offset + 3] = 255;
+  }
+}
+const shadowVisible = buildForeheadSkinVisibility(
+  { data: shadowData, width, height }, width, height, landmarks,
+);
+assert.equal(shadowVisible([250, 225, 0]), true, "深肤色亮侧额头应保持可见");
+assert.equal(shadowVisible([390, 225, 0]), true, "深肤色阴影侧额头应保持可见");
+assert.equal(shadowVisible([390, 180, 0]), false, "阴影侧上方的灰色头发仍应被拒绝");
+
 const splitByGap = (left: number, gap: number, right: number) => [
   ...new Array(left).fill(1), ...new Array(gap).fill(0), ...new Array(right).fill(1),
 ];

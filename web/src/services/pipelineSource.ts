@@ -12,14 +12,46 @@ import {
 } from "./liveState.ts";
 import { resetRefineForNewSource } from "./liveRefine2d";
 import { LiveFrameScheduler } from "./liveFrameScheduler.ts";
-import { resetLiveWrinkleAnalysis } from "./liveWrinkleAnalysis.ts";
+import { resetLiveWrinkleAnalysis, waitForLiveWrinkleAnalysis } from "./liveWrinkleAnalysis.ts";
+import { loadVideoFirstFrame } from "./videoSource.ts";
 import { setLive, setMsg, setTransientMsg } from "./liveUi.ts";
-import { cancelFrame, requestFrame } from "./pipelineLoop.ts";
+import { cancelFrame, loop, requestFrame } from "./pipelineLoop.ts";
 import { ensureImageReady, ensureReady } from "./pipelineModels.ts";
 
 type SourceKind = "camera" | "video" | "image";
 let sourceOperationId = 0;
 const sourceLayoutScheduler = new LiveFrameScheduler();
+
+async function prepareVideoUrl(file: File): Promise<{ url: string; release: () => void }> {
+  if (import.meta.env?.VITE_SERVER_COMPUTE !== "true") {
+    const url = URL.createObjectURL(file);
+    return { url, release: () => URL.revokeObjectURL(url) };
+  }
+  setMsg("正在上传并准备视频…");
+  const response = await fetch("/api/gpu/media/video", {
+    method: "POST",
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+      "X-LangerFace-Filename": encodeURIComponent(file.name),
+    },
+    body: file,
+    signal: AbortSignal.timeout(10 * 60_000),
+  });
+  if (!response.ok) throw new Error(`Video preparation failed: ${response.status}`);
+  const payload = await response.json() as { url?: unknown };
+  if (typeof payload.url !== "string" || !payload.url.startsWith("/api/gpu/media/video/")) {
+    throw new Error("Video preparation returned an invalid URL");
+  }
+  let released = false;
+  return {
+    url: payload.url,
+    release: () => {
+      if (released) return;
+      released = true;
+      void fetch(payload.url as string, { method: "DELETE", keepalive: true }).catch(() => {});
+    },
+  };
+}
 
 export async function startCamera(): Promise<void> {
   const operationId = ++sourceOperationId;
@@ -97,6 +129,7 @@ export async function handleFile(file?: File): Promise<void> {
   if (!file) return;
   const operationId = ++sourceOperationId;
   let pendingObjectUrl: string | null = null;
+  let pendingVideoRelease: (() => void) | null = null;
   els.file.value = "";
   stopSource({ preserveOperation: true });
   setLive(false, "待机");
@@ -106,9 +139,9 @@ export async function handleFile(file?: File): Promise<void> {
     if (file.type.startsWith("image/")) await ensureImageReady();
     if (operationId !== sourceOperationId) return;
 
-    const url = URL.createObjectURL(file);
-    pendingObjectUrl = url;
     if (file.type.startsWith("image/")) {
+      const url = URL.createObjectURL(file);
+      pendingObjectUrl = url;
       try {
         const img = new Image();
         img.src = url;
@@ -124,15 +157,28 @@ export async function handleFile(file?: File): Promise<void> {
         pendingObjectUrl = null;
       }
     } else {
-      els.video.srcObject = null;
-      els.video.src = url;
+      const preparedVideo = await prepareVideoUrl(file);
+      const url = preparedVideo.url;
+      pendingVideoRelease = preparedVideo.release;
+      if (operationId !== sourceOperationId) return;
       els.video.loop = true;
-      await els.video.play();
+      await loadVideoFirstFrame(els.video, url);
       if (operationId !== sourceOperationId) return;
       setSource(els.video, "video", els.video.videoWidth, els.video.videoHeight, {
-        release: () => URL.revokeObjectURL(url),
+        release: preparedVideo.release,
       });
-      pendingObjectUrl = null;
+      pendingVideoRelease = null;
+      els.pause.disabled = true;
+      // Render and extract once while the media clock is still at the first frame.
+      cancelFrame();
+      loop();
+      cancelFrame();
+      await waitForLiveWrinkleAnalysis();
+      if (operationId !== sourceOperationId) return;
+      await els.video.play();
+      if (operationId !== sourceOperationId) return;
+      els.pause.disabled = false;
+      requestFrame();
     }
     els.cam.setAttribute("aria-pressed", "false");
   } catch (error) {
@@ -143,6 +189,7 @@ export async function handleFile(file?: File): Promise<void> {
     setMsg("无法读取或检测该文件。请重新上传；若仍失败，请换用受支持的清晰图片或视频。");
   } finally {
     if (pendingObjectUrl) URL.revokeObjectURL(pendingObjectUrl);
+    pendingVideoRelease?.();
   }
 }
 

@@ -993,7 +993,9 @@ function consentToDebugRecording(): boolean {
   const agreed = typeof confirm !== "function" || confirm(
     "将录制静息及每个表情每轮的人脸视频与同步关键点。\n\n"
     + "用途：仅用于本机算法调试。\n"
-    + "留存：只在当前标签页内存中，不上传服务器、不写入本地存储。\n"
+    + (import.meta.env?.VITE_SERVER_COMPUTE === 'true'
+      ? '留存：在服务器会话中录制并处理。\n'
+      : "留存：只在当前标签页内存中，不上传服务器、不写入本地存储。\n")
     + "生命周期：刷新、关闭页面、重新开始采集或点「丢弃调试录制」即清除。\n\n"
     + "确认开启人脸视频录制？",
   );
