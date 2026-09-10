@@ -47,10 +47,14 @@ def test_python_generator_matches_shared_golden(parity_cases: list[dict], case_i
     )
     metrics = candidate["metrics"]
     for key, value in expected.get("normalization", {}).items():
-        assert metrics[key] == (pytest.approx(value) if type(value) in (int, float) else value), (case["name"], key)
+        assert metrics[key] == (pytest.approx(value) if type(value) in (int, float) else value), (
+            case["name"], key
+        )
     if "normalization" in expected:
         assert candidate["provenance"]["boundary_source"] == case["tumor"]["boundary_source"]
-        assert candidate["provenance"]["lesion_normalization_status"] == metrics["lesion_normalization_status"]
+        assert (
+            candidate["provenance"]["lesion_normalization_status"] == metrics["lesion_normalization_status"]
+        )
         if len(case["tumor"]["boundary"]) == 4:
             assert metrics["detected_lesion_area_mm2"] == pytest.approx(4)
             assert metrics["detected_enclosing_diameter_mm"] == pytest.approx(4)
