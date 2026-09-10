@@ -58,8 +58,8 @@ export function WorkflowDraftRecovery({ mobilePortalSelector }: WorkflowDraftRec
             setRestoring(true);
             try {
               const file = await workflowDraftPhotoFile(draft.photo);
-              await handleFile(file, { suppressScreenshotWarning: true });
               requestWorkflowDraftRestore(draft.incision);
+              await handleFile(file, { suppressScreenshotWarning: true });
             } finally {
               setRestoring(false);
             }
