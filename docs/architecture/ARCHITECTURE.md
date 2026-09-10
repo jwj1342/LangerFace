@@ -468,6 +468,12 @@ candidate = segment(center, axis, length)
 
 #### 皮表肿物
 
+受控标记的 Python/Web 尺度契约：正有限的 `photo_boundary_enclosing_diameter_mm` 优先，以输入中心、长短轴生成 32 点圆形规划边界；原检测边界仅提供检测审计指标。无有效照片直径时，先以 Newell 平面投影的面积质心计算外接圆直径，并兼顾相对选定中心的轴向范围；边界不足或退化时回退人工直径。质心只作审计，不移动规划中心。共享案例包含显式、缺失、无效照片尺度和不对称边界；原普通及自由轮廓案例保留。Python 没有完整 Web 工作流门禁引擎，几何一致性不代表全部安全门禁跨语言等价。
+
+单页控制器单独保存活动审阅记录 ID，避免将生成结果 ID 与审阅 UUID 混用。降级、删除活动记录或清空候选库后，切口叠加变为空、`loaded=false` 并重绘；无关记录删除不影响当前叠加。照片内 RSTL 指纹变化（包括有来源变为无来源）使旧候选及同批历史记录失效，禁止经载入或批准恢复；正常跨媒体曲面投影保留。失效只写切口状态，RSTL 线和模型链不变。
+
+草稿缺少完整来源证明，因此只恢复照片及可解析肿物输入，清除当前候选、微调与批准状态，保留历史记录供审计；不会自动生成。`runWorkflow` 返回 `success/failure/stale/not-ready` 和请求 ID，调用方仅对仍为当前请求的成功结果提示生成成功。
+
 皮表肿物生成梭形候选。医生给出的当前默认规则是：长轴平行 RSTL；长轴与类圆化后的肿物直径按 3:1 控制；两端尖角默认 30°；两侧弧线对称平滑，从最宽处向两端逐渐收窄至尖点。当前阶段验收输入是近似圆形（允许轻度椭圆）病灶，复杂或明显狭长的自由轮廓只走兼容性路径。当前实现使用对称 cubic Hermite profile：端点切线由 `tip_angle_deg` 决定，中点达到最大宽度且切线水平，导出 `tip_angle_target_deg`、`tip_angle_estimated_deg` 和 `tip_angle_error_deg`。Python `src/langerface/incision/fusiform.py` 与 Web `incisionCandidateTools.ts` 共用 `tests/fixtures/fusiform_candidates.json` 金标，防止规则和曲线跨语言漂移。同时导出 `boundary_point_count`、`boundary_area_mm2`、`boundary_self_intersection`、`boundary_center_shift_mm`、`axis_coverage_required_mm`、`axis_coverage_deficit_mm`、`outline_area_mm2`、`outline_half_width_monotone`、`outline_symmetry_max_error_mm`、`outline_self_intersection`、`boundary_envelope_min_margin_mm` 与 `boundary_envelope_outside_count`；当自由轮廓点数过少、面积退化、自交、边界中心明显偏离选中肿物中心、候选 outline 自交 / 非单调收窄、自由轮廓点落在实际梭形包络之外，或最大长度规则导致候选短于边界加切缘覆盖需求时，guardrails 必须提示医生复核。肿物输入还会先经过 `summarize_tumor_input_quality`，把缺作者、非 mm 单位、缺皮下深度、缺皮表切缘或边界过稀记录到 trace、审阅 JSON 和报告中。
 
 实现时要把这些写成**参数化临床规则**，不要硬编码为不可变数学常量。原因是 3:1 与 30°在几何上并不总能同时严格成立；工程上应显示实际指标，让医生在比例、尖端角、邻近解剖结构和可直接拉拢缝合之间做判断。

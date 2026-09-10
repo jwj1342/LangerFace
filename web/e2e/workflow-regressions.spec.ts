@@ -1,6 +1,283 @@
 import { expect, test, type Page } from "@playwright/test";
+import fs from "node:fs";
+import path from "node:path";
+import { createHash } from "node:crypto";
 
 import { uploadGeneratedPhoto, uploadGeneratedPhotoWithControlledMarkers } from "./support/incisionPhoto";
+
+async function captureReviewState(page: Page) {
+  await page.addInitScript(() => {
+    window.addEventListener("langerface:live-state", event => {
+      Reflect.set(window, "__pr226Live", (event as CustomEvent).detail);
+    });
+    window.addEventListener("langerface:incision-state", event => {
+      Reflect.set(window, "__pr226Incision", (event as CustomEvent).detail);
+    });
+  });
+}
+
+async function expectActiveOverlay(page: Page, loaded: boolean) {
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Live")?.incisionOverlay?.loaded)).toBe(loaded);
+}
+
+test.beforeEach(async ({ page }, info) => {
+  if (!process.env.PR226_B_RUN) return;
+  const run = JSON.parse(fs.readFileSync(path.join(process.env.PR226_B_RUN, "identity.json"), "utf8"));
+  const v035 = info.title.includes("PR226 v035");
+  const expected = v035 ? run.v035 : run.ci;
+  const baseURL = v035 ? run.v035URL : run.ciURL;
+  const identityPath = v035 ? "/__runtime-identity" : "/pr226-identity.html";
+  await page.goto(baseURL + identityPath);
+  await expect.poll(() => page.evaluate(() => Boolean(Reflect.get(window, "__markerRuntimeProof")))).toBe(true);
+  const proof = await page.evaluate(() => Reflect.get(window, "__markerRuntimeProof"));
+  expect(proof.identity).toMatchObject(expected);
+  expect(proof.browser).toEqual({ profile: expected.profile, implementationVersion: expected.implementationVersion });
+  await info.attach("runtime-identity", { body: Buffer.from(JSON.stringify(proof, null, 2)), contentType: "application/json" });
+  await captureReviewState(page);
+  await page.route(/wrinkle.*\.onnx|\/api\/wrinkle-v10/, route => route.abort("blockedbyclient"));
+});
+
+test.afterEach(async ({ page }, info) => {
+  if (!process.env.PR226_B_RUN) return;
+  const state = await page.evaluate(() => ({ live: Reflect.get(window, "__pr226Live"), incision: Reflect.get(window, "__pr226Incision"),
+    paths: Array.from(document.querySelectorAll("[data-workflow-candidate], [data-workflow-boundary]"), element => element.getAttribute("d")) })).catch(() => ({ unavailable: true }));
+  await info.attach("final-state-and-coordinates", { body: Buffer.from(JSON.stringify(state, null, 2)), contentType: "application/json" });
+});
+
+async function approveWorkflowCandidate(page: Page) {
+  await page.locator("#reviewerName").fill("E2E research reviewer");
+  await page.locator("#reviewNotes").fill("Engineering regression only; not clinical approval.");
+  await page.locator("#reviewDecision").selectOption("approved_for_discussion");
+  await page.locator("#saveReviewBtn").click();
+  await expectActiveOverlay(page, true);
+}
+
+async function preparePr226PhotoCandidate(page: Page) {
+  await uploadGeneratedPhoto(page, "single", "#fileInput");
+  await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.workflowTools?.photoReady),
+    { timeout: 45_000 }).toBe(true);
+  const canvas = page.locator("#canvas");
+  await expect(canvas).toHaveAttribute("width", "768");
+  await expect(canvas).toHaveAttribute("height", "768");
+  await expect(canvas).not.toHaveClass(/mirror/);
+  // Photo decoding changes both aspect ratio and layout; measure only after readiness.
+  await canvas.click({ trial: true });
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("ready workflow photo has no layout box");
+  const point = { x: box.width * 0.72, y: box.height * 0.50 };
+  await test.info().attach("photo-click-input", { body: Buffer.from(JSON.stringify({
+    source: "single-face.jpg", sourceSize: { width: 768, height: 768 }, box, point,
+  }, null, 2)), contentType: "application/json" });
+  await canvas.click({ position: point });
+}
+
+test("PR226 revokes the active review on downgrade removal and clear", async ({ page }) => {
+  test.setTimeout(120_000);
+  await captureReviewState(page);
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/app/workflow");
+  await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
+  await preparePr226PhotoCandidate(page);
+  await expect(page.locator("#candidateType")).toContainText("梭形", { timeout: 45_000 });
+  await approveWorkflowCandidate(page);
+  await approveWorkflowCandidate(page);
+  await expect(page.locator("#savedCount")).toHaveText("2");
+  await page.locator("#candidateList").getByRole("button", { name: "删除", exact: true }).first().click();
+  await expect(page.locator("#savedCount")).toHaveText("1");
+  await expectActiveOverlay(page, true);
+  await page.locator('[data-candidate-review-toggle="approved_for_discussion"]').click();
+  await expectActiveOverlay(page, false);
+  // Pending photo geometry is separate from the active live overlay.
+  await expect(page.locator("[data-workflow-candidate]")).toHaveAttribute("d", /^M /);
+  await page.locator('[data-candidate-review-toggle="pending_clinician_confirmation"]').click();
+  await expectActiveOverlay(page, true);
+  await page.locator("#candidateList").getByRole("button", { name: "删除", exact: true }).click();
+  await expectActiveOverlay(page, false);
+  await approveWorkflowCandidate(page);
+  await page.locator("#clearSavedBtn").click();
+  await page.getByRole("button", { name: "确认清空", exact: true }).click();
+  await expect(page.locator("#savedCount")).toHaveText("0");
+  await expectActiveOverlay(page, false);
+});
+
+for (const mobile of [false, true]) {
+  test.describe(`PR226 draft ${mobile ? "mobile" : "desktop"}`, () => {
+    test.use({ viewport: mobile ? { width: 390, height: 844 } : { width: 1600, height: 1000 }, hasTouch: mobile, isMobile: mobile });
+    test("restores inputs but cannot reload or approve historical candidates", async ({ page }) => {
+      test.setTimeout(150_000);
+      await captureReviewState(page);
+      await page.goto("/app/workflow");
+      await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
+      await preparePr226PhotoCandidate(page);
+      await expect(page.locator("#candidateType")).toContainText("梭形", { timeout: 45_000 });
+      await approveWorkflowCandidate(page);
+      await expect.poll(() => page.evaluate(() => {
+        const draft = JSON.parse(sessionStorage.getItem("langerface:workflow-draft:v1") || "null");
+        return draft?.incision?.workspace?.saved?.length;
+      })).toBe(1);
+      await page.reload();
+      await page.getByRole("button", { name: "恢复草稿", exact: true }).click();
+      await expect(page.locator("#workflowStageStatus")).toContainText("旧候选仅供审计", { timeout: 45_000 });
+      await expectActiveOverlay(page, false);
+      await expect(page.locator("#savedCount")).toHaveText("1");
+      await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.candidate ?? null)).toBeNull();
+      await page.locator("#candidateList").getByRole("button", { name: "载入", exact: true }).click();
+      await expect(page.locator("#workflowStageStatus")).toContainText("历史候选来源已失效");
+      await page.locator("[data-candidate-review-toggle]").click();
+      await expectActiveOverlay(page, false);
+      await page.locator("#saveReviewBtn").click();
+      await expect(page.locator("#savedCount")).toHaveText("1");
+      await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.candidate ?? null)).toBeNull();
+      // Use an existing, enabled parameter input on both layouts to regenerate.
+      const margin = page.locator("#marginMm");
+      await margin.scrollIntoViewIfNeeded();
+      await expect(margin).toBeEnabled();
+      if (mobile) {
+        const box = await margin.boundingBox();
+        if (!box) throw new Error("mobile margin slider is unavailable");
+        const point = { x: box.x + box.width * 0.15, y: box.y + box.height / 2 };
+        expect(await margin.evaluate((element, point) => document.elementFromPoint(point.x, point.y) === element, point)).toBe(true);
+        await page.touchscreen.tap(point.x, point.y);
+      } else {
+        await margin.focus();
+        await margin.press("ArrowRight");
+        await margin.press("Tab");
+      }
+      await expect(page.locator("#candidateType")).toContainText("梭形", { timeout: 45_000 });
+      await expect(page.locator("#reviewDecision")).toHaveValue("pending_clinician_confirmation");
+      await expectActiveOverlay(page, false);
+      await page.locator("#candidateList").getByRole("button", { name: "已载入", exact: true }).click();
+      await expect(page.locator("#workflowStageStatus")).toContainText("历史候选来源已失效");
+    });
+  });
+}
+
+test("PR226 v035 reviewed original generates and activates a fresh incision", async ({ page }, info) => {
+  test.skip(!process.env.PR226_B_RUN, "The original-photo chain runs only in the explicitly authorized B batch.");
+  test.setTimeout(150_000);
+  const run = JSON.parse(fs.readFileSync(path.join(process.env.PR226_B_RUN!, "identity.json"), "utf8"));
+  const samples = JSON.parse(fs.readFileSync(new URL("../../tools/fixtures/controlled_marker_browser_samples.local.json", import.meta.url), "utf8"));
+  const sample = run.originalSample ?? samples.find((value: any) => value.id === "15-dark-skin-holdout-chin");
+  const original = path.join(run.sampleDirectory, sample.fileName);
+  expect(createHash("sha256").update(fs.readFileSync(original)).digest("hex").toUpperCase()).toBe(sample.sourceHash);
+  const diagnostics: any[] = [];
+  page.on("console", message => {
+    const prefix = "[LangerFace] controlled marker profile result ";
+    if (message.text().startsWith(prefix)) diagnostics.push(JSON.parse(message.text().slice(prefix.length)));
+  });
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto(run.v035URL + "/app/workflow");
+  await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
+  await page.locator("#fileInput").setInputFiles(original);
+  await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.workflowTools?.photoReady),
+    { timeout: 45_000 }).toBe(true);
+  await expect(page.locator("#canvas")).not.toHaveClass(/mirror/);
+  await page.getByTitle("点击照片中的受控黑色标记并识别边界").click();
+  await page.locator("#canvas").click({ trial: true });
+  const point = await page.locator("#canvas").evaluate((canvas: HTMLCanvasElement, input: any) => {
+    const rect = canvas.getBoundingClientRect();
+    const scale = Math.min(canvas.width, canvas.height) / input.sourceSize;
+    return { x: ((canvas.width - input.sourceSize * scale) / 2 + input.seed.x * scale) / canvas.width * rect.width,
+      y: ((canvas.height - input.sourceSize * scale) / 2 + input.seed.y * scale) / canvas.height * rect.height };
+  }, sample);
+  await page.locator("#canvas").click({ position: point });
+  await expect.poll(() => diagnostics.at(-1), { timeout: 60_000 }).toMatchObject({
+    profile: "color-difference-v0.35", version: run.v035.implementationVersion, result: { ok: true },
+  });
+  await info.attach("original-detection", { body: Buffer.from(JSON.stringify({ sample, point, diagnostics }, null, 2)), contentType: "application/json" });
+  expect(Math.hypot(diagnostics.at(-1).seed.x - sample.seed.x, diagnostics.at(-1).seed.y - sample.seed.y)).toBeLessThanOrEqual(1);
+  await expect(page.locator("#workflowStageStatus")).toContainText("候选已生成并等待审阅", { timeout: 60_000 });
+  expect(diagnostics.some(value => value.profile === "color-difference-v0.35" && value.version === run.v035.implementationVersion)).toBe(true);
+  const metrics = await page.locator("[data-workflow-boundary]").evaluate((element: SVGGeometryElement, input: any) => {
+    const canvas = document.querySelector<HTMLCanvasElement>("#canvas")!;
+    const rect = canvas.getBoundingClientRect();
+    const scale = Math.min(canvas.width, canvas.height) / input.sourceSize;
+    const left = (canvas.width - input.sourceSize * scale) / 2;
+    const top = (canvas.height - input.sourceSize * scale) / 2;
+    const ctm = element.getScreenCTM();
+    if (!ctm) throw new Error("boundary transform unavailable");
+    const inverse = ctm.inverse();
+    const toSource = (point: DOMPoint) => ({
+      x: ((point.x - rect.left) / rect.width * canvas.width - left) / scale,
+      y: ((point.y - rect.top) / rect.height * canvas.height - top) / scale,
+    });
+    const box = element.getBBox();
+    const corners = [[box.x, box.y], [box.x + box.width, box.y], [box.x, box.y + box.height], [box.x + box.width, box.y + box.height]]
+      .map(([x, y]) => toSource(new DOMPoint(x, y).matrixTransform(ctm)));
+    const polygon: { x: number; y: number }[] | undefined = input.truthBoundary;
+    const truth = input.truth;
+    const cosine = Math.cos(truth?.rotationRad ?? 0), sine = Math.sin(truth?.rotationRad ?? 0);
+    const extentX = truth ? Math.hypot(truth.radiusX * cosine, truth.radiusY * sine) : 0;
+    const extentY = truth ? Math.hypot(truth.radiusX * sine, truth.radiusY * cosine) : 0;
+    const truthBounds = polygon ? {
+      left: Math.min(...polygon.map(p => p.x)), right: Math.max(...polygon.map(p => p.x)),
+      top: Math.min(...polygon.map(p => p.y)), bottom: Math.max(...polygon.map(p => p.y)),
+    } : { left: truth.centerX - extentX, right: truth.centerX + extentX,
+      top: truth.centerY - extentY, bottom: truth.centerY + extentY };
+    function polygonContains(poly: { x: number; y: number }[], x: number, y: number) {
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const a = poly[i], b = poly[j];
+        if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) inside = !inside;
+      }
+      return inside;
+    }
+    const bounds = {
+      left: Math.max(0, Math.floor(Math.min(truthBounds.left, ...corners.map(p => p.x), ...(input.baselineBoundary ?? []).map((p: any) => p.x)) - 4)),
+      right: Math.min(input.sourceSize - 1, Math.ceil(Math.max(truthBounds.right, ...corners.map(p => p.x), ...(input.baselineBoundary ?? []).map((p: any) => p.x)) + 4)),
+      top: Math.max(0, Math.floor(Math.min(truthBounds.top, ...corners.map(p => p.y), ...(input.baselineBoundary ?? []).map((p: any) => p.y)) - 4)),
+      bottom: Math.min(input.sourceSize - 1, Math.ceil(Math.max(truthBounds.bottom, ...corners.map(p => p.y), ...(input.baselineBoundary ?? []).map((p: any) => p.y)) + 4)),
+    };
+    let intersection = 0, union = 0, prediction = 0, expected = 0;
+    let upperExpected = 0, upperHit = 0, baselinePrediction = 0, baselineHit = 0;
+    for (let y = bounds.top; y <= bounds.bottom; y += 1) for (let x = bounds.left; x <= bounds.right; x += 1) {
+      const point = new DOMPoint(rect.left + (left + (x + 0.5) * scale) / canvas.width * rect.width,
+        rect.top + (top + (y + 0.5) * scale) / canvas.height * rect.height).matrixTransform(inverse);
+      const predicted = element.isPointInFill(point);
+      const dx = x + 0.5 - (truth?.centerX ?? 0), dy = y + 0.5 - (truth?.centerY ?? 0);
+      const actual = polygon ? polygonContains(polygon, x + 0.5, y + 0.5)
+        : ((dx * cosine + dy * sine) / truth.radiusX) ** 2 + ((-dx * sine + dy * cosine) / truth.radiusY) ** 2 <= 1;
+      if (predicted) prediction += 1;
+      if (actual) expected += 1;
+      if (predicted && actual) intersection += 1;
+      if (predicted || actual) union += 1;
+      if (actual && input.upperLeftRegion && x + 0.5 < input.upperLeftRegion.xLessThan && y + 0.5 < input.upperLeftRegion.yLessThan) {
+        upperExpected += 1;
+        if (predicted) upperHit += 1;
+      }
+      if (input.baselineBoundary && polygonContains(input.baselineBoundary, x + 0.5, y + 0.5)) {
+        baselinePrediction += 1;
+        if (actual) baselineHit += 1;
+      }
+    }
+    const center = toSource(new DOMPoint(box.x + box.width / 2, box.y + box.height / 2).matrixTransform(ctm));
+    return { bounds, centerErrorPx: Math.hypot(center.x - (truthBounds.left + truthBounds.right) / 2,
+      center.y - (truthBounds.top + truthBounds.bottom) / 2),
+      upperLeftCoverage: upperHit / Math.max(1, upperExpected), baselinePrecision: baselineHit / Math.max(1, baselinePrediction),
+      iou: intersection / Math.max(1, union), coverage: intersection / Math.max(1, expected), precision: intersection / Math.max(1, prediction) };
+  }, sample);
+  await info.attach("original-boundary-metrics", { body: Buffer.from(JSON.stringify(metrics, null, 2)), contentType: "application/json" });
+  // Keep the existing reviewed-original thresholds; this is engineering truth.
+  expect(metrics.centerErrorPx).toBeLessThanOrEqual(5);
+  expect(metrics.iou).toBeGreaterThanOrEqual(0.8);
+  expect(metrics.coverage).toBeGreaterThanOrEqual(0.84);
+  expect(metrics.precision).toBeGreaterThanOrEqual(0.84);
+  if (sample.truthBoundary) {
+    expect(metrics.upperLeftCoverage).toBeGreaterThanOrEqual(0.90);
+    expect(metrics.precision).toBeGreaterThanOrEqual(metrics.baselinePrecision);
+  }
+  const candidate = page.locator("[data-workflow-candidate]");
+  const before = await candidate.getAttribute("d");
+  expect(before).toMatch(/^M /);
+  await approveWorkflowCandidate(page);
+  await expect(candidate).toHaveAttribute("d", before!);
+  await expect(page.locator("#reviewDecision")).toHaveValue("approved_for_discussion");
+  await page.screenshot({ path: info.outputPath("original-approved-overlay.png"), fullPage: true });
+  await info.attach("original-source-and-diagnostics", { body: Buffer.from(JSON.stringify({ sourceHash: sample.sourceHash,
+    seed: sample.seed, click: point, diagnostics, metrics, candidate: before }, null, 2)), contentType: "application/json" });
+});
 
 async function clickWorkflowCanvasRatio(page: Page, xRatio: number, yRatio: number) {
   const canvas = page.locator("#canvas");
@@ -341,7 +618,7 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   await expect.poll(() => page.locator("#workflowStageStatus").evaluate((status) => {
     const text = status.querySelector("span:last-child") as HTMLElement | null;
     const style = getComputedStyle(status);
-    return Boolean(text)
+    return text !== null
       && style.whiteSpace === "normal"
       && style.overflow === "visible"
       && text.scrollWidth <= text.clientWidth + 1;

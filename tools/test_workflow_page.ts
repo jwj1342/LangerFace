@@ -92,6 +92,242 @@ const persistentTooltip = read("web/src/components/ui/persistent-tooltip.tsx");
 // Render only the layout shells: no runtime, browser, assets, or models are loaded.
 const requireWeb = createRequire(path.join(root, "web/package.json"));
 const ts = requireWeb("typescript");
+// Execute the production state transitions; only rendering, storage and planning
+// boundaries are substituted, so this remains a CPU-only controller regression.
+const controllerAst = ts.createSourceFile("controller.ts", controller, ts.ScriptTarget.Latest, true);
+const markerFunction = controllerAst.statements.find((node: any) => ts.isFunctionDeclaration(node) && node.name?.text === "runControlledMarker");
+const markerTry = markerFunction.body.statements.find((node: any) => ts.isTryStatement(node)
+  && node.getText(controllerAst).includes("const outcome = await runWorkflow(state)"));
+const markerCompletion = markerTry.tryBlock.statements;
+const completionStart = markerCompletion.findIndex((node: any) => node.getText(controllerAst).startsWith("completeControlledMarkerAttempt(state, mobileRetrySeed)"));
+const completionSource = markerCompletion.slice(completionStart).map((node: any) => node.getText(controllerAst)).join("\n");
+assert.ok(completionStart >= 0, "extract the actual post-planning marker completion path");
+const settleMarker = runInNewContext(ts.transpileModule(`(function(state, outcome) { const mobileRetrySeed = null; ${completionSource} })`, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+}).outputText, {
+  completeControlledMarkerAttempt: (state: any) => { state.markerBusy = false; },
+  publish: (state: any, reason: string) => { state.published = { reason, markerBusy: state.markerBusy, status: state.stageStatus }; },
+  setStatus: (state: any, message: string) => { state.stageStatus = message; },
+  CONTROLLED_MARKER_DETECTOR_VERSION: "test",
+});
+const staleMarker = { markerBusy: true, workflowRequestId: 2, stageStatus: "newer workflow status" };
+settleMarker(staleMarker, { status: "stale", requestId: 1 });
+assert.deepEqual(JSON.parse(JSON.stringify(staleMarker)), {
+  markerBusy: false, workflowRequestId: 2, stageStatus: "newer workflow status",
+  published: { reason: "controlled_marker_candidate_stale", markerBusy: false, status: "newer workflow status" },
+}, "stale candidate completion releases the marker UI without replacing newer status");
+const transitionNames = ["createState", "publishLiveOverlayState", "invalidateCandidate", "markCandidatePendingReview", "revokeActiveRecord",
+  "invalidateSavedSources", "savedCandidateUsable", "activateRecord", "loadSavedCandidateState",
+  "toggleSavedCandidateReviewStatus", "handleLibraryCommand", "reconcileProjectedRstlSnapshot",
+  "activeProjectedRstlLines", "projectedRstlFingerprint", "applyWorkflowDraftRestore", "runWorkflow"];
+const transitionSource = controllerAst.statements.filter((node: any) => ts.isFunctionDeclaration(node)
+  && transitionNames.includes(node.name?.text)).map((node: any) => node.getText(controllerAst)).join("\n");
+function controllerHarness() {
+  const frame = { kind: "image", revision: 1, source: {}, landmarks: [] };
+  const render = { incisionOverlay: null as any, refine2d: { lines: [{ pts: [[1, 2, 3]] }] } };
+  const events: string[] = [];
+  let redraws = 0;
+  let planner: () => Promise<any> = async () => ({ result: { candidate: { type: "fusiform" }, guardrails: { passed: true } } });
+  const neutral = () => ({ angle_offset_deg: 0, length_scale: 1, width_scale: 1, reason: "" });
+  const context = {
+    sourceState: { sourceKind: "image", paused: false, planning2d: { getFrameState: () => frame, setOverlaySummary() {} } },
+    renderState: render, neutralIncisionEdit: neutral, cloneIncisionEdit: (edit: any) => ({ ...edit }),
+    cancelCandidateRecompute() {}, cancelMobileEditPreview() {}, resetMarkerRepair() {},
+    resetFreehandPhotoBoundary() {}, syncSelection() {}, rootInput: () => null,
+    publish: (_state: any, reason: string) => events.push(reason),
+    LIVE_CONTROLLER_STATE_EVENT: "live-state", workflowLiveOverlayChanged,
+    dispatchControllerEvent: (_name: string, detail: any) => events.push(detail.reason),
+    setStatus: (state: any, message: string) => { state.stageStatus = message; },
+    requestFrame: () => { redraws += 1; }, workflowInvalidationNeedsLiveFrame: (had: boolean) => had,
+    compileIncisionOverlay: (record: any) => record.review?.status === "approved_for_discussion" ? { id: record.id } : null,
+    currentReview: (state: any) => state.review,
+    transitionIncisionReviewRecord: ({ record, targetStatus }: any) => ({ ok: true,
+      record: { ...record, review: { ...record.review, status: targetStatus }, review_status: targetStatus } }),
+    readIncisionLibraryCommand: (event: any) => event.detail,
+    pointToSurfaceRef: (point: any) => point, pointsToSurfaceRefs: (points: any) => points,
+    workflowPhotoReady: () => true,
+    importedTumorFormState: (tumor: any) => ({ tumor, kind: "cutaneous", diameterValue: 8, depthValue: 6,
+      marginValue: 0, author: "test", boundaryPoints: [] }),
+    tumorContextsMatch: () => true, restoredWorkflowEdit: (edit: any) => edit,
+    currentTumor: (state: any) => state.centerRef ? { center: [0, 0, 0] } : null,
+    workflowPhotoProjection: () => null, activeAtlas: () => ({}), queryIncisionPhotoRstlDirection: () => null,
+    nearestVertex: () => 0, ensureWorker: () => null, incisionEditIsActive: () => false,
+    planIncisionWithWorkflowFallback: () => planner(),
+  };
+  const presentNames = controllerAst.statements.filter((node: any) => ts.isFunctionDeclaration(node)
+    && transitionNames.includes(node.name?.text)).map((node: any) => node.name.text);
+  const api = runInNewContext(ts.transpileModule(`${transitionSource}\n({${presentNames.join(",")}})`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+  }).outputText, context);
+  const state = api.createState({});
+  Object.assign(state, { loading: false, verts: [[0, 0, 0]], tris: [[0, 0, 0]], atlas: {}, centerRef: [0, 0, 0],
+    liveSnapshot: { incisionOverlay: { loaded: false } } });
+  const record = { id: "review-uuid", candidate: {}, tumor: { center: [0, 0, 0] },
+    review: { status: "approved_for_discussion", reviewer: "test" } };
+  state.result = { id: "planner-result-id", candidate: {} };
+  state.saved = [record, { ...record, id: "other" }];
+  return { api, state, record, frame, render, events, context, redraws: () => redraws,
+    plan: (fn: () => Promise<any>) => { planner = fn; } };
+}
+const stateFailures: string[] = [];
+async function stateRegression(name: string, check: () => unknown) {
+  try { await check(); } catch (error) { stateFailures.push(`${name}: ${error}`); }
+}
+for (const command of ["toggle_candidate_review_status", "remove_candidate", "clear_saved"]) {
+  await stateRegression(`active ${command}`, () => {
+    const h = controllerHarness();
+    h.api.activateRecord(h.state, h.record);
+    const before = h.redraws();
+    h.api.handleLibraryCommand(h.state, { detail: { command, id: h.record.id } });
+    assert.equal(h.render.incisionOverlay, null);
+    assert.equal(h.state.liveSnapshot.incisionOverlay.loaded, false);
+    assert.equal(h.state.activeReviewRecordId, null);
+    assert.equal(h.redraws(), before + 1, "one redraw for revocation");
+  });
+}
+await stateRegression("remove unrelated record", () => {
+  const h = controllerHarness();
+  h.api.activateRecord(h.state, h.record);
+  const before = h.redraws();
+  h.api.handleLibraryCommand(h.state, { detail: { command: "remove_candidate", id: "other" } });
+  assert.equal(h.render.incisionOverlay.id, h.record.id);
+  assert.equal(h.redraws(), before);
+});
+for (const nextLines of [[], [{ pts: [[4, 5, 6]] }]]) {
+  await stateRegression(`RSTL A to ${nextLines.length ? "B" : "none"}`, () => {
+    const h = controllerHarness();
+    h.api.activateRecord(h.state, h.record);
+    h.state.candidateRstlFingerprint = h.api.projectedRstlFingerprint(h.render.refine2d.lines);
+    h.render.refine2d.lines = nextLines;
+    assert.equal(h.api.reconcileProjectedRstlSnapshot(h.state), true);
+    assert.equal(h.state.result, null);
+    for (const command of ["load_candidate", "toggle_candidate_review_status"]) {
+      h.api.handleLibraryCommand(h.state, { detail: { command, id: h.record.id } });
+      assert.equal(h.state.result, null, "invalid source cannot re-enter by library");
+      assert.equal(h.render.incisionOverlay, null);
+    }
+  });
+}
+await stateRegression("camera projection keeps approved overlay", () => {
+  const h = controllerHarness();
+  h.api.activateRecord(h.state, h.record);
+  h.state.candidateRstlFingerprint = h.api.projectedRstlFingerprint(h.render.refine2d.lines);
+  h.context.sourceState.sourceKind = "camera";
+  h.frame.kind = "video";
+  assert.equal(h.api.reconcileProjectedRstlSnapshot(h.state), false);
+  assert.equal(h.render.incisionOverlay.id, h.record.id);
+});
+await stateRegression("draft restores input only and blocks old library", () => {
+  const h = controllerHarness();
+  h.api.activateRecord(h.state, h.record);
+  h.state.pendingDraftRestore = { workspace: { tumor: { center: [0, 0, 0] }, result: h.state.result,
+    baseResult: h.state.result, saved: h.state.saved, review: h.record.review, generationCount: 2 },
+    edit: { angle_offset_deg: 20 }, boundaryMode: "ellipse" };
+  assert.equal(h.api.applyWorkflowDraftRestore(h.state), true);
+  assert.equal(h.state.result, null);
+  assert.equal(h.state.baseResult, null);
+  assert.equal(h.state.edit.angle_offset_deg, 0);
+  assert.equal(h.state.review.status, "pending_clinician_confirmation");
+  assert.equal(h.state.saved.length, 2, "history retained");
+  for (const command of ["load_candidate", "toggle_candidate_review_status"]) {
+    h.api.handleLibraryCommand(h.state, { detail: { command, id: h.record.id } });
+    assert.equal(h.state.result, null);
+    assert.equal(h.render.incisionOverlay, null);
+  }
+  assert.ok(!h.events.includes("workflow_running"), "restore must not generate automatically");
+});
+await stateRegression("workflow outcome distinguishes failure and not-ready", async () => {
+  const h = controllerHarness();
+  h.plan(async () => { throw new Error("planned failure"); });
+  assert.equal((await h.api.runWorkflow(h.state)).status, "failure");
+  assert.match(h.state.stageStatus, /planned failure/);
+  h.state.centerRef = null;
+  assert.equal((await h.api.runWorkflow(h.state)).status, "not-ready");
+});
+await stateRegression("late success or failure cannot overwrite newer request", async () => {
+  for (const rejectLate of [false, true]) {
+    const h = controllerHarness();
+    let settle: (value?: any) => void = () => {};
+    h.plan(() => new Promise((resolve, reject) => { settle = rejectLate ? reject : resolve; }));
+    const pending = h.api.runWorkflow(h.state);
+    h.state.workflowRequestId += 1;
+    h.state.stageStatus = "newer request";
+    settle(rejectLate ? new Error("old failure") : { result: { candidate: {} } });
+    assert.equal((await pending).status, "stale");
+    assert.equal(h.state.stageStatus, "newer request");
+    assert.equal(h.state.result, null);
+  }
+});
+await stateRegression("clear library cancels a pending result", async () => {
+  const h = controllerHarness();
+  let finish: (value: any) => void = () => {};
+  h.plan(() => new Promise(resolve => { finish = resolve; }));
+  const pending = h.api.runWorkflow(h.state);
+  h.api.handleLibraryCommand(h.state, { detail: { command: "clear_saved" } });
+  finish({ result: { candidate: {} } });
+  assert.equal((await pending).status, "stale");
+  assert.equal(h.state.result, null);
+  assert.equal(h.render.incisionOverlay, null);
+});
+await stateRegression("source change makes late rejection stale", async () => {
+  const h = controllerHarness();
+  let fail: (value: any) => void = () => {};
+  h.plan(() => new Promise((_resolve, reject) => { fail = reject; }));
+  const pending = h.api.runWorkflow(h.state);
+  h.frame.revision += 1;
+  fail(new Error("old source failure"));
+  assert.equal((await pending).status, "stale");
+  assert.ok(!h.state.stageStatus.includes("old source failure"));
+});
+await stateRegression("successful request is explicit and becomes unapproved", async () => {
+  const h = controllerHarness();
+  const outcome = await h.api.runWorkflow(h.state);
+  assert.equal(outcome.status, "success");
+  assert.equal(outcome.requestId, h.state.workflowRequestId);
+  assert.equal(h.state.review.status, "pending_clinician_confirmation");
+  assert.equal(h.render.incisionOverlay, null);
+});
+await stateRegression("empty planner result is not a successful generation", async () => {
+  const h = controllerHarness();
+  h.plan(async () => ({ result: {} }));
+  assert.equal((await h.api.runWorkflow(h.state)).status, "failure");
+  assert.equal(h.state.result, null);
+});
+await stateRegression("stale source also clears retained photo geometry", async () => {
+  const h = controllerHarness();
+  let finish: (value: any) => void = () => {};
+  h.plan(() => new Promise(resolve => { finish = resolve; }));
+  const pending = h.api.runWorkflow(h.state, false, true);
+  h.frame.revision += 1;
+  finish({ result: { candidate: {} } });
+  assert.equal((await pending).status, "stale");
+  assert.equal(h.state.result, null);
+});
+await stateRegression("photo-only restore revokes the active overlay", () => {
+  const h = controllerHarness();
+  h.api.activateRecord(h.state, h.record);
+  h.state.pendingDraftRestore = null;
+  h.api.applyWorkflowDraftRestore(h.state);
+  assert.equal(h.state.result, null);
+  assert.equal(h.render.incisionOverlay, null);
+});
+await stateRegression("invalidation event cannot recursively modify RSTL", () => {
+  const h = controllerHarness();
+  h.api.activateRecord(h.state, h.record);
+  h.state.candidateRstlFingerprint = h.api.projectedRstlFingerprint(h.render.refine2d.lines);
+  h.render.refine2d.lines = [{ pts: [[4, 5, 6]] }];
+  const sourceBefore = JSON.stringify(h.render.refine2d);
+  let calls = 0;
+  h.context.dispatchControllerEvent = () => {
+    calls += 1;
+    assert.ok(calls <= 1, "invalidation event must settle");
+    h.api.reconcileProjectedRstlSnapshot(h.state);
+  };
+  h.api.reconcileProjectedRstlSnapshot(h.state);
+  assert.equal(calls, 1);
+  assert.equal(JSON.stringify(h.render.refine2d), sourceBefore);
+});
+assert.deepEqual(stateFailures, [], "production controller state regressions");
 const react = requireWeb("react");
 const { renderToStaticMarkup } = requireWeb("react-dom/server");
 const { clsx } = requireWeb("clsx");

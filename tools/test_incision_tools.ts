@@ -59,6 +59,27 @@ for (const fixture of fusiformParity.cases) {
     rules,
   );
   const expected = fixture.expected;
+  for (const [key, value] of Object.entries(expected.normalization || {})) {
+    ok(typeof value === "number" ? near(candidate.metrics[key], value) : candidate.metrics[key] === value,
+      `${fixture.name}: normalization ${key}`);
+  }
+  if (expected.normalization) {
+    if (fixture.tumor.boundary.length === 4) {
+      ok(near(candidate.metrics.detected_lesion_area_mm2, 4), `${fixture.name}: analytic diamond area`);
+      ok(near(candidate.metrics.detected_enclosing_diameter_mm, 4), `${fixture.name}: analytic enclosing diameter`);
+      ok(near(candidate.metrics.detected_equivalent_diameter_mm, 4 / Math.sqrt(Math.PI)), `${fixture.name}: equivalent diameter`);
+      ok(near(candidate.metrics.detected_lesion_compactness, Math.PI / 5), `${fixture.name}: compactness`);
+      ok(vectorNear(candidate.metrics.detected_boundary_centroid, [2, 0, 0]), `${fixture.name}: area centroid retained for audit`);
+    }
+    if (fixture.tumor.photo_boundary_enclosing_diameter_mm === 2) {
+      ok(candidate.metrics.boundary_point_count === 32, `${fixture.name}: planning circle samples`);
+      ok(near(candidate.metrics.boundary_area_mm2, 16 * Math.sin(Math.PI / 16)), `${fixture.name}: analytic 32-gon area`);
+      ok(candidate.metrics.boundary_scale_shape === "enclosing_circle", `${fixture.name}: circular scale contract`);
+    }
+    ok(candidate.provenance.boundary_source === fixture.tumor.boundary_source, `${fixture.name}: source retained`);
+    ok(candidate.provenance.lesion_normalization_status === candidate.metrics.lesion_normalization_status,
+      `${fixture.name}: provenance and metrics agree`);
+  }
   ok(vectorNear(candidate.center, expected.center), `${fixture.name}: center matches shared golden`);
   ok(vectorNear(candidate.axis, expected.axis), `${fixture.name}: axis matches shared golden`);
   ok(vectorNear(candidate.width_axis, expected.width_axis), `${fixture.name}: width axis matches shared golden`);

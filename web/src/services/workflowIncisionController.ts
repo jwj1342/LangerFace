@@ -225,6 +225,8 @@ interface WorkflowIncisionState {
   edit: IncisionEdit;
   result: DynamicRecord | null;
   saved: DynamicRecord[];
+  activeReviewRecordId: string | null;
+  candidateSourceRevision: number | null;
   secondaryCues: DynamicRecord | null;
   review: { status: string; reviewer: string; notes: string };
   reviewAttention: "reviewer" | "decision" | "notes" | null;
@@ -337,6 +339,8 @@ function createState(root: HTMLElement): WorkflowIncisionState {
     edit: neutralIncisionEdit(),
     result: null,
     saved: [],
+    activeReviewRecordId: null,
+    candidateSourceRevision: null,
     secondaryCues: null,
     review: { status: "pending_clinician_confirmation", reviewer: "", notes: "" },
     reviewAttention: null,
@@ -480,20 +484,13 @@ function scheduleWorkflowDraftSave(state: WorkflowIncisionState): void {
   }, 300);
 }
 
-function restoredWorkflowEdit(edit: Partial<IncisionEdit>): IncisionEdit {
-  return {
-    ...neutralIncisionEdit(),
-    angle_offset_deg: Math.max(-35, Math.min(35, Number(edit.angle_offset_deg) || 0)),
-    length_scale: Math.max(1, Math.min(1.5, Number(edit.length_scale) || 1)),
-    width_scale: Math.max(1, Math.min(1.5, Number(edit.width_scale) || 1)),
-    reason: String(edit.reason || ""),
-  };
-}
-
 function applyWorkflowDraftRestore(state: WorkflowIncisionState): boolean {
   const draft = state.pendingDraftRestore;
   if (draft === undefined || state.loading || !workflowPhotoReady(state)) return false;
   state.pendingDraftRestore = undefined;
+  resetMarkerRepair(state);
+  invalidateSavedSources(state);
+  invalidateCandidate(state);
   if (draft === null) {
     setStatus(state, "已恢复照片；该草稿没有可恢复的切口操作。", "normal");
     publish(state, "workflow_draft_photo_restored");
@@ -511,7 +508,6 @@ function applyWorkflowDraftRestore(state: WorkflowIncisionState): boolean {
       marginMax: 10,
       authorFallback: state.author,
     });
-    resetMarkerRepair(state);
     state.markerMode = false;
     state.markerPointerSource = null;
     state.markerPreviewSuppressed = false;
@@ -523,7 +519,7 @@ function applyWorkflowDraftRestore(state: WorkflowIncisionState): boolean {
     state.boundaryMode = draft.boundaryMode;
     state.ellipseRatio = Math.max(40, Math.min(200, Number(draft.ellipseRatio) || 100));
     state.centerRef = pointToSurfaceRef(imported.tumor.center as Vec3, state.verts, state.tris);
-    state.boundaryRefs = draft.boundaryMode === "freehand"
+    state.boundaryRefs = draft.controlledBoundary || draft.boundaryMode === "freehand"
       ? pointsToSurfaceRefs(imported.boundaryPoints, state.verts, state.tris)
       : [];
     resetFreehandPhotoBoundary(state);
@@ -534,13 +530,10 @@ function applyWorkflowDraftRestore(state: WorkflowIncisionState): boolean {
       ? Number(draft.controlledBoundaryPhotoDiameterMm) || null
       : null;
     state.saved = session.saved;
+    invalidateSavedSources(state);
     state.generationCount = session.generationCount;
-    const resultMatchesTumor = Boolean(session.result && tumorContextsMatch(session.result.tumor, session.tumor));
-    state.baseResult = resultMatchesTumor ? session.baseResult : null;
-    state.result = resultMatchesTumor ? session.result : null;
-    state.edit = resultMatchesTumor ? restoredWorkflowEdit(draft.edit) : neutralIncisionEdit();
     state.review = {
-      status: String(session.review.status || "pending_clinician_confirmation"),
+      status: "pending_clinician_confirmation",
       reviewer: String(session.review.reviewer || ""),
       notes: String(session.review.notes || ""),
     };
@@ -552,13 +545,8 @@ function applyWorkflowDraftRestore(state: WorkflowIncisionState): boolean {
     if (notes) notes.value = state.review.notes;
     if (decision) decision.value = state.review.status;
     syncSelection(state);
-    if (resultMatchesTumor) {
-      setStatus(state, "已恢复照片、肿物范围、候选微调和审阅草稿。", "normal");
-      publish(state, "workflow_draft_restored");
-    } else {
-      setStatus(state, "已恢复照片与肿物范围，正在用当前工具重新生成候选。", "normal");
-      void runWorkflow(state);
-    }
+    setStatus(state, "已恢复照片与肿物输入；旧候选仅供审计。请重新选择肿物或调整有效参数，生成后重新审阅。", "warning");
+    publish(state, "workflow_draft_restored");
     return true;
   } catch (error) {
     setStatus(state, `草稿中的切口状态无法恢复：${error instanceof Error ? error.message : String(error)}`, "warning");
@@ -1249,6 +1237,7 @@ function publishLiveOverlayState(
   qaLabel: string | null,
   reason: string,
 ) {
+  if (!loaded) state.activeReviewRecordId = null;
   if (!state.liveSnapshot) return;
   if (!workflowLiveOverlayChanged(state.liveSnapshot.incisionOverlay, loaded, qaLabel)) return;
   state.liveSnapshot = {
@@ -1291,6 +1280,7 @@ function invalidateCandidate(state: WorkflowIncisionState, message?: string) {
   state.edit = neutralIncisionEdit();
   state.result = null;
   state.candidateRstlFingerprint = null;
+  state.candidateSourceRevision = null;
   state.pendingRstlFingerprint = null;
   state.review.status = "pending_clinician_confirmation";
   state.reviewAttention = null;
@@ -1299,6 +1289,32 @@ function invalidateCandidate(state: WorkflowIncisionState, message?: string) {
   if (message) setStatus(state, message, "warning");
   sourceState.planning2d?.setOverlaySummary({ candidatePointCount: 0 });
   if (workflowInvalidationNeedsLiveFrame(hadActiveOverlay)) requestFrame();
+}
+
+function revokeActiveRecord(state: WorkflowIncisionState) {
+  cancelCandidateRecompute(state);
+  cancelMobileEditPreview(state);
+  state.workflowRequestId += 1;
+  state.workflowBusy = false;
+  state.pendingRstlFingerprint = null;
+  markCandidatePendingReview(state, "workflow_incision_record_revoked");
+}
+
+function invalidateSavedSources(state: WorkflowIncisionState) {
+  state.saved = state.saved.map(record => ({ ...record, workflow_source_invalidated: true }));
+}
+
+function savedCandidateUsable(state: WorkflowIncisionState, record: DynamicRecord): boolean {
+  const frame = sourceState.planning2d?.getFrameState();
+  const source = record.workflow_source;
+  const sourceChanged = frame?.kind === "image" && source?.photo_revision === frame.revision
+    && source.rstl_fingerprint !== projectedRstlFingerprint(activeProjectedRstlLines());
+  if (!record.workflow_source_invalidated && !sourceChanged) return true;
+  record.workflow_source_invalidated = true;
+  if (state.activeReviewRecordId === record.id) invalidateCandidate(state);
+  setStatus(state, "该历史候选来源已失效，仅供审计；请重新生成并审阅。", "warning");
+  publish(state, "candidate_source_invalidated");
+  return false;
 }
 
 function resetMarkerRepair(state: WorkflowIncisionState) {
@@ -1450,13 +1466,21 @@ function projectedRstlFingerprint(lines: readonly ProjectedRstlLineInput[] | nul
 }
 
 function reconcileProjectedRstlSnapshot(state: WorkflowIncisionState): boolean {
+  const frame = sourceState.planning2d?.getFrameState();
+  // Photo-source invalidation must not revoke normal cross-media projection.
+  if (frame?.kind !== "image") return false;
   const currentFingerprint = projectedRstlFingerprint(activeProjectedRstlLines());
   state.lastProjectedRstlFingerprint = currentFingerprint;
-  if (!currentFingerprint) return false;
+  for (const record of state.saved) {
+    if (record.workflow_source?.photo_revision === frame.revision
+      && record.workflow_source.rstl_fingerprint !== currentFingerprint) record.workflow_source_invalidated = true;
+  }
+  if (state.candidateSourceRevision !== null && state.candidateSourceRevision !== frame.revision) return false;
   const consumedFingerprint = state.workflowBusy
     ? state.pendingRstlFingerprint
     : state.candidateRstlFingerprint;
   if (!(state.workflowBusy || state.result) || consumedFingerprint === currentFingerprint) return false;
+  invalidateSavedSources(state);
   invalidateCandidate(
     state,
     "最终 RSTL 已更新，旧候选已失效；请重新选择肿物或调整任一参数生成新候选。",
@@ -1475,12 +1499,14 @@ function ensureWorker(state: WorkflowIncisionState) {
   return state.worker;
 }
 
-async function runWorkflow(state: WorkflowIncisionState, explicit = false, preserveVisibleCandidate = false) {
+type WorkflowOutcome = { status: "success" | "failure" | "stale" | "not-ready"; requestId: number };
+
+async function runWorkflow(state: WorkflowIncisionState, explicit = false, preserveVisibleCandidate = false): Promise<WorkflowOutcome> {
   const tumor = currentTumor(state);
   if (!tumor || !state.verts.length || !state.tris.length || !state.atlas) {
     setStatus(state, state.loading ? "切口规划功能仍在加载，请稍候。" : "请先在照片上选择肿物位置。", "warning");
     publish(state, "workflow_not_ready");
-    return;
+    return { status: "not-ready", requestId: state.workflowRequestId };
   }
   cancelCandidateRecompute(state);
   const retainedCandidate = preserveVisibleCandidate && Boolean(state.result);
@@ -1495,6 +1521,7 @@ async function runWorkflow(state: WorkflowIncisionState, explicit = false, prese
   publish(state, "workflow_running");
   const frame = sourceState.planning2d?.getFrameState();
   const sourceRevision = frame?.kind === "image" ? frame.revision : null;
+  state.candidateSourceRevision = sourceRevision;
   const photoProjection = frame ? workflowPhotoProjection(state, frame) : null;
   const atlas = activeAtlas(state);
   const projectedRstlLines = activeProjectedRstlLines();
@@ -1526,21 +1553,20 @@ async function runWorkflow(state: WorkflowIncisionState, explicit = false, prese
       client: ensureWorker(state),
       request: { tumor, verts: state.verts, tris: state.tris, atlas, normal, directionOverride },
     });
-    if (!state.mounted || requestId !== state.workflowRequestId) return;
+    if (!state.mounted || requestId !== state.workflowRequestId) return { status: "stale", requestId };
     if (sourceRevision !== null && sourceState.planning2d?.getFrameState().revision !== sourceRevision) {
-      state.pendingRstlFingerprint = null;
-      state.workflowBusy = false;
-      setStatus(state, "照片在候选生成期间已变化，旧结果已丢弃；请在新照片上重新选择肿物。", "warning");
+      invalidateCandidate(state, "照片在候选生成期间已变化，旧结果已丢弃；请在新照片上重新选择肿物。");
       publish(state, "workflow_stale_source");
-      return;
+      return { status: "stale", requestId };
     }
     const currentRstlFingerprint = projectedRstlFingerprint(activeProjectedRstlLines());
     if (currentRstlFingerprint !== rstlFingerprint) {
       invalidateCandidate(state, "RSTL 在候选生成期间已更新，旧结果已丢弃；请重新生成候选。");
       state.lastProjectedRstlFingerprint = currentRstlFingerprint;
       publish(state, "workflow_stale_rstl");
-      return;
+      return { status: "stale", requestId };
     }
+    if (!execution.result?.candidate) throw new Error("生成器未返回切口候选。");
     state.baseResult = {
       ...execution.result,
       original_candidate: execution.result?.candidate,
@@ -1587,8 +1613,15 @@ async function runWorkflow(state: WorkflowIncisionState, explicit = false, prese
     }
     syncSelection(state);
     publish(state, "candidate_result");
+    return { status: "success", requestId };
   } catch (error) {
-    if (!state.mounted || requestId !== state.workflowRequestId) return;
+    if (!state.mounted || requestId !== state.workflowRequestId) return { status: "stale", requestId };
+    if ((sourceRevision !== null && sourceState.planning2d?.getFrameState().revision !== sourceRevision)
+      || projectedRstlFingerprint(activeProjectedRstlLines()) !== rstlFingerprint) {
+      invalidateCandidate(state, "候选来源在生成期间已变化，请重新生成。");
+      publish(state, "workflow_stale_failure");
+      return { status: "stale", requestId };
+    }
     state.pendingRstlFingerprint = null;
     state.workflowBusy = false;
     setStatus(
@@ -1597,6 +1630,7 @@ async function runWorkflow(state: WorkflowIncisionState, explicit = false, prese
       "warning",
     );
     publish(state, "workflow_failed");
+    return { status: "failure", requestId };
   }
 }
 
@@ -1621,7 +1655,7 @@ function boundarySummary(state: WorkflowIncisionState, result: DynamicRecord) {
   return summarizeTumorBoundary(tumor, result.candidate?.axis || [1, 0, 0], normal, state.unitsPerMm);
 }
 
-function buildRecord(state: WorkflowIncisionState, result = state.result, label = "候选", forceDraft = false) {
+function buildRecord(state: WorkflowIncisionState, result = state.result, label = "候选", forceDraft = false): DynamicRecord | null {
   if (!result) return null;
   const recordResult = resultWithCenteredLinearPath(result);
   const createdAt = new Date().toISOString();
@@ -1635,7 +1669,7 @@ function buildRecord(state: WorkflowIncisionState, result = state.result, label 
     topologyId: state.headAsset?.topologyId,
     topologyVersion: state.headAsset?.topologyVersion,
   });
-  return buildIncisionReviewRecord({
+  const record = buildIncisionReviewRecord({
     result: recordResult,
     label,
     createdAt,
@@ -1649,9 +1683,14 @@ function buildRecord(state: WorkflowIncisionState, result = state.result, label 
     sensitiveStructureInspection: findSensitiveStructureInspection(recordResult),
     privacyAudit: privacyAudit(state),
   });
+  return { ...record, workflow_source: {
+    photo_revision: state.candidateSourceRevision,
+    rstl_fingerprint: state.candidateRstlFingerprint,
+  } };
 }
 
 function activateRecord(state: WorkflowIncisionState, record: DynamicRecord) {
+  if (!savedCandidateUsable(state, record)) return false;
   const overlay = compileIncisionOverlay(record, state.verts, state.tris);
   if (!overlay) {
     const reviewStatus = record.review?.status || record.review_status;
@@ -1674,6 +1713,7 @@ function activateRecord(state: WorkflowIncisionState, record: DynamicRecord) {
     return false;
   }
   renderState.incisionOverlay = overlay;
+  state.activeReviewRecordId = record.id;
   publishLiveOverlayState(state, true, "已自动激活", "workflow_incision_overlay_activated");
   setStatus(state, "候选已确认并显示在当前画布上；切换同一人的视频或摄像头后，系统会按面部位置重新显示。");
   requestFrame();
@@ -1836,9 +1876,11 @@ async function importTumor(state: WorkflowIncisionState, file: File) {
       ? Number(imported.tumor.photo_boundary_enclosing_diameter_mm) || null
       : null;
     syncSelection(state);
-    await runWorkflow(state);
-    setStatus(state, "已导入肿物输入并重新生成候选");
-    publish(state, "tumor_imported");
+    const outcome = await runWorkflow(state);
+    if (outcome.status === "success" && outcome.requestId === state.workflowRequestId && state.mounted) {
+      setStatus(state, "已导入肿物输入并重新生成候选");
+      publish(state, "tumor_imported");
+    }
   } catch (error) {
     setStatus(state, `导入肿物失败：${error instanceof Error ? error.message : String(error)}`, "warning");
     publish(state, "tumor_import_failed");
@@ -2109,10 +2151,19 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
     state.repairAvailable = state.repairStrokes.length > 0;
     state.markerPreviewSuppressed = false;
     syncSelection(state);
-    await runWorkflow(state);
+    const outcome = await runWorkflow(state);
     if (!state.mounted || requestId !== state.markerRequestId) return;
     if (sourceState.planning2d?.getFrameState().revision !== frame.revision) return;
     completeControlledMarkerAttempt(state, mobileRetrySeed);
+    if (outcome.status === "stale" || outcome.requestId !== state.workflowRequestId) {
+      publish(state, "controlled_marker_candidate_stale");
+      return;
+    }
+    if (outcome.status !== "success") {
+      setStatus(state, `受控标记边界已识别；${state.stageStatus}`, "warning");
+      publish(state, "controlled_marker_candidate_failed");
+      return;
+    }
     setStatus(
       state,
       `已识别受控标记边界（本地检测器 v${CONTROLLED_MARKER_DETECTOR_VERSION}），候选已生成并等待审阅。`,
@@ -3206,6 +3257,12 @@ function handleReviewCommand(state: WorkflowIncisionState, event: Event) {
 }
 
 function loadSavedCandidateState(state: WorkflowIncisionState, record: DynamicRecord) {
+  if (!savedCandidateUsable(state, record)) return;
+  state.workflowRequestId += 1;
+  state.workflowBusy = false;
+  state.pendingRstlFingerprint = null;
+  state.candidateSourceRevision = record.workflow_source?.photo_revision ?? null;
+  state.candidateRstlFingerprint = record.workflow_source?.rstl_fingerprint ?? null;
   resetMarkerRepair(state);
   state.markerMode = false;
   state.markerPointerSource = null;
@@ -3251,6 +3308,7 @@ function toggleSavedCandidateReviewStatus(state: WorkflowIncisionState, id: stri
   const recordIndex = state.saved.findIndex((item) => item.id === id);
   if (recordIndex < 0) return;
   const record = state.saved[recordIndex];
+  if (!savedCandidateUsable(state, record)) return;
   const currentStatus = String(record.review?.status || record.review_status || "pending_clinician_confirmation");
   if (currentStatus !== "pending_clinician_confirmation" && currentStatus !== "approved_for_discussion") {
     setStatus(state, "当前候选状态不能使用待确认/已确认切换按钮。", "warning");
@@ -3258,7 +3316,7 @@ function toggleSavedCandidateReviewStatus(state: WorkflowIncisionState, id: stri
     return;
   }
 
-  const wasCurrentCandidate = state.result?.id === record.id;
+  const wasCurrentCandidate = state.activeReviewRecordId === record.id || state.result?.id === record.id;
   const reviewContext = wasCurrentCandidate
     ? currentReview(state)
     : record.review;
@@ -3331,17 +3389,27 @@ function handleLibraryCommand(state: WorkflowIncisionState, event: Event) {
       publish(state, "variants_saved");
       return;
     }
-    case "clear_saved": state.saved = []; setStatus(state, "已清空候选库"); publish(state, "saved_cleared"); return;
+    case "clear_saved":
+      revokeActiveRecord(state);
+      state.saved = [];
+      setStatus(state, "已清空候选库");
+      publish(state, "saved_cleared");
+      return;
     case "load_candidate": {
       const record = state.saved.find((item) => item.id === detail.id);
       if (!record) return;
+      if (!savedCandidateUsable(state, record)) return;
       loadSavedCandidateState(state, record);
       activateRecord(state, record);
       publish(state, "candidate_loaded");
       return;
     }
     case "toggle_candidate_review_status": toggleSavedCandidateReviewStatus(state, detail.id as string); return;
-    case "remove_candidate": state.saved = state.saved.filter((item) => item.id !== detail.id); publish(state, "candidate_removed"); return;
+    case "remove_candidate":
+      if (state.activeReviewRecordId === detail.id) revokeActiveRecord(state);
+      state.saved = state.saved.filter((item) => item.id !== detail.id);
+      publish(state, "candidate_removed");
+      return;
     case "export_json": exportReview(state); return;
     case "export_report": {
       const current = currentDiagnosticCandidateVisible(state)
