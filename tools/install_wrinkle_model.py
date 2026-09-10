@@ -15,7 +15,6 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIR = ROOT / "web" / "compat" / "personalized" / "model"
 METADATA_PATH = MODEL_DIR / "wrinkle-yolov8s-seg-640.json"
@@ -56,7 +55,10 @@ def main() -> int:
         description="Download, verify, and install the private wrinkle model without path edits."
     )
     parser.add_argument("--repo", default=os.environ.get("LANGERFACE_HF_MODEL_REPO") or hf.get("repository"))
-    parser.add_argument("--revision", default=os.environ.get("LANGERFACE_HF_MODEL_REVISION") or hf.get("revision") or "main")
+    parser.add_argument(
+        "--revision",
+        default=os.environ.get("LANGERFACE_HF_MODEL_REVISION") or hf.get("revision") or "main",
+    )
     parser.add_argument("--filename", default=hf.get("filename") or "wrinkle-yolov8s-seg-640.onnx")
     parser.add_argument("--source", type=Path, help="Install from a local ONNX file instead of Hugging Face")
     args = parser.parse_args()
@@ -92,7 +94,7 @@ def main() -> int:
                 f"{expected_bytes} bytes / {expected_sha256}."
             )
 
-        chunks = [payload[offset:offset + CHUNK_BYTES] for offset in range(0, len(payload), CHUNK_BYTES)]
+        chunks = [payload[offset : offset + CHUNK_BYTES] for offset in range(0, len(payload), CHUNK_BYTES)]
         expected_names = list(metadata["chunks"])
         if len(chunks) != len(expected_names):
             raise RuntimeError(f"Expected {len(expected_names)} chunks, generated {len(chunks)}")

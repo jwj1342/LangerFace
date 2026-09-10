@@ -6,9 +6,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-import sys
 from pathlib import Path
-
 
 ROOT = Path(__file__).resolve().parents[2]
 MODEL_DIR = ROOT / "web" / "compat" / "personalized" / "model"
@@ -19,10 +17,9 @@ def command_version(command: str, arguments: list[str]) -> bool:
     if not executable:
         print(f"[missing] {command} is not on PATH")
         return False
-    result = subprocess.run(
-        [executable, *arguments], capture_output=True, text=True, timeout=20, check=False
-    )
-    first_line = (result.stdout or result.stderr).splitlines()[0] if (result.stdout or result.stderr) else "unknown version"
+    result = subprocess.run([executable, *arguments], capture_output=True, text=True, timeout=20, check=False)
+    version_output = result.stdout or result.stderr
+    first_line = version_output.splitlines()[0] if version_output else "unknown version"
     print(f"[ok] {command}: {first_line}")
     return result.returncode == 0
 
