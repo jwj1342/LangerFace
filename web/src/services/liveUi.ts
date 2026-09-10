@@ -31,14 +31,24 @@ export function clearLiveUiMessageTimer(): void {
   transientMessageTimer = null;
 }
 
-export function setMsg(message: string | null): void {
+export function setMsg(message: string | null, autoHideMs = 0, imageLoading = false): void {
   clearLiveUiMessageTimer();
   const ui = els();
   if (message == null) {
     ui.msg.classList.add("hidden");
+    ui.msg.classList.remove("image-loading");
   } else {
     ui.msg.textContent = message;
     ui.msg.classList.remove("hidden");
+    ui.msg.classList.toggle("image-loading", imageLoading);
+    if (autoHideMs > 0) {
+      const messageElement = ui.msg;
+      transientMessageTimer = setTimeout(() => {
+        transientMessageTimer = null;
+        messageElement.classList.add("hidden");
+        messageElement.classList.remove("image-loading");
+      }, Math.max(0, autoHideMs));
+    }
   }
 }
 
@@ -46,12 +56,7 @@ export function setTransientMsg(
   message: string,
   durationMs = LIVE_TRANSIENT_MESSAGE_DURATION_MS,
 ): void {
-  setMsg(message);
-  const messageElement = els().msg;
-  transientMessageTimer = setTimeout(() => {
-    transientMessageTimer = null;
-    messageElement.classList.add("hidden");
-  }, Math.max(0, durationMs));
+  setMsg(message, durationMs);
 }
 
 export function setLive(on: boolean, label: string): void {
@@ -88,7 +93,7 @@ export function setIncisionOverlayQa(state: IncisionOverlayQaState | null = null
   if (tone === "ok") ui.incisionOverlayQa.classList.add("ok");
   if (tone === "warn") ui.incisionOverlayQa.classList.add("warn");
   ui.incisionOverlayQaState.textContent = state.label || "等待画面";
-  ui.incisionOverlayQaDetail.textContent = state.detail || "上传照片、视频或开启摄像头后开始检查。";
+  ui.incisionOverlayQaDetail.textContent = state.detail || "上传照片或开启摄像头后开始检查。";
 }
 
 export function smoothLabel(value: number): string {

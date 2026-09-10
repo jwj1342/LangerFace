@@ -10,7 +10,7 @@ import {
   type Vec3,
 } from "./incisionToolCore.ts";
 
-export const INCISION_LESION_NORMALIZATION_SCHEMA = "incision-lesion-normalization/v0.2";
+export const INCISION_LESION_NORMALIZATION_SCHEMA = "incision-lesion-normalization/v0.3";
 
 export interface PlanningLesionInput {
   center: Vec3;
@@ -18,6 +18,7 @@ export interface PlanningLesionInput {
   diameter_mm: number;
   boundary_mode?: string;
   boundary_source?: string;
+  photo_boundary_enclosing_diameter_mm?: number | null;
 }
 
 export interface PlanningLesionNormalization {
@@ -31,11 +32,12 @@ export interface PlanningLesionNormalization {
   detected_area_mm2: number | null;
   detected_equivalent_diameter_mm: number | null;
   detected_enclosing_diameter_mm: number | null;
+  photo_boundary_enclosing_diameter_mm: number | null;
   detected_compactness: number | null;
   detected_centroid: Vec3 | null;
   detected_center_shift_mm: number | null;
   detected_to_planning_diameter_ratio: number | null;
-  clinical_scale_source: "operator_input" | "controlled_marker_enclosing_circle";
+  clinical_scale_source: "operator_input" | "controlled_marker_enclosing_circle" | "manual_freehand_enclosing_circle";
   clinical_scale_status: "requires_clinician_confirmation" | "derived_from_detected_boundary";
 }
 
@@ -143,6 +145,11 @@ export function isControlledMarkerLesion(input: Pick<PlanningLesionInput, "bound
     || input.boundary_source === "controlled_marker_confirmed";
 }
 
+export function isManualFreehandLesion(input: Pick<PlanningLesionInput, "boundary_mode" | "boundary_source">): boolean {
+  return input.boundary_mode === "freehand"
+    || input.boundary_source === "manual_freehand";
+}
+
 export function normalizePlanningLesion(
   input: PlanningLesionInput,
   unitsPerMm: number,
@@ -150,26 +157,35 @@ export function normalizePlanningLesion(
 ): PlanningLesionNormalization {
   const boundary = finiteBoundary(input.boundary);
   const controlledMarker = isControlledMarkerLesion(input);
+  const manualFreehand = isManualFreehandLesion(input);
+  const boundaryDefinesScale = controlledMarker || manualFreehand;
   const measurements = projectedMeasurements(boundary, input.center, unitsPerMm, fallbackNormal);
-  const applied = controlledMarker && measurements.valid;
+  const photoBoundaryEnclosingDiameterMm = controlledMarker
+    && Number.isFinite(Number(input.photo_boundary_enclosing_diameter_mm))
+    && Number(input.photo_boundary_enclosing_diameter_mm) > 0
+    ? Number(input.photo_boundary_enclosing_diameter_mm)
+    : null;
+  const applied = boundaryDefinesScale && (measurements.valid || photoBoundaryEnclosingDiameterMm != null);
   const equivalentDiameter = measurements.equivalentDiameterMm;
   const enclosingDiameter = measurements.enclosingDiameterMm;
-  const planningDiameter = applied && enclosingDiameter != null
-    ? enclosingDiameter
+  const planningDiameter = applied && photoBoundaryEnclosingDiameterMm != null
+    ? photoBoundaryEnclosingDiameterMm
+    : applied && enclosingDiameter != null
+      ? enclosingDiameter
     : Number(input.diameter_mm);
   return {
     schema: INCISION_LESION_NORMALIZATION_SCHEMA,
     applied,
     status: applied
       ? "normalized"
-      : !controlledMarker
+      : !boundaryDefinesScale
         ? "not_applicable"
         : boundary.length < 3
           ? "insufficient_boundary"
           : "degenerate_boundary",
-    // The detector-confirmed center is the stable lesion/planning anchor. A
+    // The confirmed visible center is the stable lesion/planning anchor. A
     // boundary-derived centroid is useful for scale and audit, but must not
-    // silently move the visible lesion or the incision axis after detection.
+    // silently move the visible lesion or the incision axis.
     boundary_role: boundary.length < 3 ? "unavailable" : applied ? "planning_scale" : "planning_geometry",
     boundary_point_count: boundary.length,
     planning_center: input.center,
@@ -177,13 +193,18 @@ export function normalizePlanningLesion(
     detected_area_mm2: measurements.areaMm2,
     detected_equivalent_diameter_mm: equivalentDiameter,
     detected_enclosing_diameter_mm: enclosingDiameter,
+    photo_boundary_enclosing_diameter_mm: photoBoundaryEnclosingDiameterMm,
     detected_compactness: measurements.compactness,
     detected_centroid: measurements.valid ? measurements.center : null,
     detected_center_shift_mm: measurements.centerShiftMm,
     detected_to_planning_diameter_ratio: equivalentDiameter == null || !(planningDiameter > 0)
       ? null
       : equivalentDiameter / planningDiameter,
-    clinical_scale_source: applied ? "controlled_marker_enclosing_circle" : "operator_input",
+    clinical_scale_source: applied
+      ? controlledMarker
+        ? "controlled_marker_enclosing_circle"
+        : "manual_freehand_enclosing_circle"
+      : "operator_input",
     clinical_scale_status: applied ? "derived_from_detected_boundary" : "requires_clinician_confirmation",
   };
 }

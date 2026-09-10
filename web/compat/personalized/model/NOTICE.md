@@ -1,6 +1,6 @@
 # NOTICE · wrinkle-yolov8s-seg-640 权重来源与再分发状态
 
-本目录下的 4 个 `wrinkle-yolov8s-seg-640.onnx.part0*` 分片是从第三方权重继续微调后导出的**派生产物**。
+运行时安装的 4 个 `wrinkle-yolov8s-seg-640.onnx.part0*` 分片是从第三方权重继续微调后导出的**派生产物**。
 合并前请先读完本文件与同目录的 [MODEL_CARD.md](MODEL_CARD.md)。
 
 ## 来源链条
@@ -12,8 +12,8 @@
 | 本次微调权重 | `best_new_分辨率改成mask2_clean版本.pt`（23,941,044 bytes） |
 | 微调权重 SHA-256 | `15542156d7cd4f720279ba4317ab924231cb0d76621d0529a341b6fec7b80dd3` |
 | 导出工具 | ultralytics 8.4.138（PyTorch → ONNX，opset 12） |
-| 导出产物 | `wrinkle-yolov8s-seg-640.onnx`，47,346,620 bytes |
-| SHA-256 | `63E257B4789E11AA1416192D2DB026423ED624581282B95D179FD17CCABF7ABF` |
+| 导出产物 | `wrinkle-yolov8s-seg-640.onnx`，47,346,561 bytes（已移除训练机绝对路径元数据） |
+| SHA-256 | `F58BED3A49734597BB3A8651B3BE571DACC2F55AABBBDBCB7994DC9D8D8DB76C` |
 | 分片方式 | 按字节切成 4 份，运行时顺序拼接后校验总字节数与 SHA-256 |
 
 ## 许可状态：未确认（**明确记录，不做推定**）
@@ -23,18 +23,16 @@
 - 导出工具 ultralytics 8.4.138 本身是 **AGPL-3.0**；它只用于一次性离线导出，未随本仓库分发，
   但如果上游权重本身是用 ultralytics 训练的，其权重的许可继承关系同样**未经确认**。
 
-因此当前状态是：**权重在仓库内，许可未确认**。这是一个已知的、被记录的合规缺口，不是已解决项。
+因此当前状态是：**权重已从当前 Git 树移除，仅计划放入限制访问的私有 Hugging Face 仓库，但许可仍未确认**。私有存储降低新的公开再分发，不会补齐授权。
 
 ## 使用边界
 
 - 仅用于**研究性**皱纹分割证据：产出低置信度 secondary cue，喂给 V6 RSTL 微调。
 - **不**作为临床判断依据，**不**参与切口几何硬约束，**不**进入任何 LLM prompt。
-- 推理全程在浏览器 WASM 内本地完成，不上传人脸图像，见 [`docs/tracks/PERSONALIZED_RSTL.md`](../../../../docs/tracks/PERSONALIZED_RSTL.md)。
+- 本地模式在浏览器 WASM 内推理；服务器模式会把 YOLO 所需图像发给服务器 GPU。
 
 ## 未关闭的后续动作
 
 1. 联系上游作者取得明确的再分发许可，或换用许可清晰的等价权重。
 2. 在取得许可前，**不要**把这份权重用于任何对外发布、商用或临床用途。
-3. 若最终确认不可再分发：按 `assets/flame/` 与 `assets/rstl_3dmm_prior_manifest.json` 的既有做法
-   改为 gitignored + manifest 按需下载。注意此时**仅删除文件不足以清除 git 历史**——权重自
-   PR #106 合并起即留存在历史中，需要专门的历史重写流程。
+3. 权重虽已从当前 Git 树删除，但自 PR #106 起仍存在于历史中；若需从 GitHub 彻底清除，必须单独安排历史重写和协作者重新拉取。

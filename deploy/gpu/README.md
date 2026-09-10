@@ -34,12 +34,22 @@ python3 -m venv .venv-gpu
 . .venv-gpu/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r deploy/gpu/requirements.txt
+
+# Authenticate once, then download, verify, and install the private model.
+hf auth login
+python tools/install_wrinkle_model.py --repo OWNER/PRIVATE_MODEL_REPOSITORY
+
+# Check Node, FFmpeg, NVIDIA, CUDA/cuDNN provider, and model availability.
+python deploy/gpu/doctor.py
 ```
 
-The four tracked ONNX model chunks under
-`web/compat/personalized/model/` are required. Startup joins them in memory and
-checks their SHA-256 against the adjacent metadata before creating the CUDA
-session.
+The model weights are not distributed through Git. The installer downloads the
+single ONNX file from the private Hugging Face repository, checks its byte size
+and SHA-256, and writes the four runtime chunks to the fixed
+`web/compat/personalized/model/` path. Teammates do not download files manually
+or edit application paths, but they do need repository access and a Hugging Face
+login (or `HF_TOKEN`). The repository owner will replace the placeholder
+`OWNER/PRIVATE_MODEL_REPOSITORY` after creating the private model repository.
 
 ## Start
 
@@ -85,6 +95,24 @@ curl http://127.0.0.1:19420/api/gpu/health
 
 `ready` must be `true`, `yoloProvider` must be `CUDAExecutionProvider`, and
 `imageWorkerAlive` must be `true`.
+
+Example healthy response (version and hash values may change with an intentional
+model/runtime upgrade):
+
+```json
+{
+  "ready": true,
+  "yoloProvider": "CUDAExecutionProvider",
+  "modelSha256": "F58BED3A49734597BB3A8651B3BE571DACC2F55AABBBDBCB7994DC9D8D8DB76C",
+  "imageWorkerAlive": true
+}
+```
+
+If `doctor.py` does not list `CUDAExecutionProvider`, fix the NVIDIA driver,
+CUDA 12, cuDNN 9, or `onnxruntime-gpu` installation before starting the service.
+The service intentionally does not continue on CPU. If video preparation fails,
+confirm that both `ffmpeg -version` and `ffprobe -version` succeed in the same
+shell used to start the service.
 
 ## Runtime behavior
 

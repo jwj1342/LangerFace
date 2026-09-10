@@ -39,12 +39,26 @@ DIRECT_VIDEO_CODECS = {'h264', 'vp8', 'vp9', 'av1'}
 class CudaDetector:
     def __init__(self):
         metadata = json.loads((MODEL_DIR / 'wrinkle-yolov8s-seg-640.json').read_text())
-        model = b''.join((MODEL_DIR / f'wrinkle-yolov8s-seg-640.onnx.part0{i}').read_bytes()
-                         for i in range(4))
+        part_paths = [MODEL_DIR / name for name in metadata['chunks']]
+        missing = [str(path.relative_to(ROOT)) for path in part_paths if not path.is_file()]
+        if missing:
+            raise RuntimeError(
+                'Wrinkle model is not installed. Run '
+                '`python tools/install_wrinkle_model.py` after authenticating to Hugging Face. '
+                f'Missing: {", ".join(missing)}'
+            )
+        model = b''.join(path.read_bytes() for path in part_paths)
         self.sha256 = hashlib.sha256(model).hexdigest()
         if self.sha256 != metadata['onnx_sha256'].lower():
             raise RuntimeError('Model checksum mismatch')
         ort.preload_dlls()
+        available_providers = ort.get_available_providers()
+        if 'CUDAExecutionProvider' not in available_providers:
+            raise RuntimeError(
+                'CUDAExecutionProvider is unavailable. Run `python deploy/gpu/doctor.py` '
+                'and check the NVIDIA driver, CUDA 12, cuDNN 9, and onnxruntime-gpu. '
+                f'Available providers: {available_providers}'
+            )
         self.session = ort.InferenceSession(model, providers=[
             ('CUDAExecutionProvider', {'use_tf32': '0'}), 'CPUExecutionProvider'])
         if self.session.get_providers()[0] != 'CUDAExecutionProvider':
@@ -128,6 +142,12 @@ class CudaDetector:
 
 @asynccontextmanager
 async def lifespan(app):
+    missing_media_tools = [name for name in ('ffmpeg', 'ffprobe') if not shutil.which(name)]
+    if missing_media_tools:
+        raise RuntimeError(
+            f'Missing required video tools: {", ".join(missing_media_tools)}. '
+            'Run `python deploy/gpu/doctor.py` for deployment diagnostics.'
+        )
     app.state.detector = await asyncio.to_thread(CudaDetector)
     app.state.inference_lock = asyncio.Lock()
     app.state.image_lock = asyncio.Lock()

@@ -15,8 +15,9 @@
 | 类别 | `forehead`、`frown`、`wrinkle` |
 | 推理置信阈值 | **0.07**（低阈值刻意取高召回，详见 §4） |
 | NMS IoU / mask 阈值 | 0.45 / 0.5 |
-| 运行位置 | 浏览器 `onnxruntime-web` WASM，execution provider `wasm` |
+| 运行位置 | 本地模式为浏览器 WASM；服务器模式为 ONNX Runtime CUDA |
 | 完整性校验 | 分片拼接后校验总字节数 + SHA-256（生产默认开启，见 `yolo_wrinkle_onnx.js`） |
+| 分发 | 权重不进入 Git；授权成员通过私有 Hugging Face 仓库安装 |
 
 ## 2. 训练数据
 
@@ -54,5 +55,5 @@
 
 ## 6. 隐私
 
-推理与后处理全部在当前浏览器本地完成：人脸帧不上传服务器，不写入 localStorage / IndexedDB。
+本地模式下，YOLO 推理与后处理在当前浏览器完成。服务器模式下，YOLO 所需图像会发送给服务器 GPU；采集、关键点、RSTL/V6、跟踪与绘制仍在当前浏览器完成。
 调试用人脸视频录制默认关闭，勾选后还需显式同意，且只留在当前标签页内存中。

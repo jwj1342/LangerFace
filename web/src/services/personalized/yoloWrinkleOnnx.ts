@@ -19,20 +19,26 @@ export const YOLO_WRINKLE_INPUT_SIZE = 640;
 export const YOLO_WRINKLE_CONFIDENCE = 0.07;
 // These values describe the checked-in four-part browser artifact. They are
 // intentionally verified independently of the source PyTorch checkpoint.
-export const YOLO_WRINKLE_MODEL_BYTES = 47_346_620;
+export const YOLO_WRINKLE_MODEL_BYTES = 47_346_561;
 export const YOLO_WRINKLE_MODEL_SHA256 =
-  "63E257B4789E11AA1416192D2DB026423ED624581282B95D179FD17CCABF7ABF";
+  "F58BED3A49734597BB3A8651B3BE571DACC2F55AABBBDBCB7994DC9D8D8DB76C";
 export const YOLO_WRINKLE_MODEL_CACHE_PREFIX = "langerface-yolo-wrinkle-";
 export const YOLO_WRINKLE_MODEL_CACHE_NAME = `${YOLO_WRINKLE_MODEL_CACHE_PREFIX}${YOLO_WRINKLE_MODEL_SHA256.slice(0, 16).toLowerCase()}`;
 
 // `new URL(..., import.meta.url)` works in Node tests, Vite development and
 // Vite production builds without teaching Node how to import the binary parts.
-export const DEFAULT_MODEL_CHUNK_URLS = Object.freeze([
-  new URL("../../../compat/personalized/model/wrinkle-yolov8s-seg-640.onnx.part00", import.meta.url).href,
-  new URL("../../../compat/personalized/model/wrinkle-yolov8s-seg-640.onnx.part01", import.meta.url).href,
-  new URL("../../../compat/personalized/model/wrinkle-yolov8s-seg-640.onnx.part02", import.meta.url).href,
-  new URL("../../../compat/personalized/model/wrinkle-yolov8s-seg-640.onnx.part03", import.meta.url).href,
+const MODEL_CHUNK_NAMES = Object.freeze([
+  "wrinkle-yolov8s-seg-640.onnx.part00",
+  "wrinkle-yolov8s-seg-640.onnx.part01",
+  "wrinkle-yolov8s-seg-640.onnx.part02",
+  "wrinkle-yolov8s-seg-640.onnx.part03",
 ]);
+const modelChunkBaseUrl = typeof globalThis.location?.origin === "string"
+  ? new URL("/compat/personalized/model/", globalThis.location.origin).href
+  : new URL(/* @vite-ignore */ "../../../compat/personalized/model/", import.meta.url).href;
+export const DEFAULT_MODEL_CHUNK_URLS = Object.freeze(
+  MODEL_CHUNK_NAMES.map((name) => new URL(name, modelChunkBaseUrl).href),
+);
 
 type NumericField = ArrayLike<number>;
 type NumericTypedArray = Float32Array | Float64Array | Int8Array | Uint8Array |
@@ -224,7 +230,10 @@ export async function fetchBinaryChunks(urls: readonly string[], options: FetchC
         source: "network" as const,
       };
     const { response } = loaded;
-    if (!response?.ok) throw new Error(`Failed to load model chunk ${url}: HTTP ${response?.status ?? "unknown"}`);
+    if (!response?.ok) throw new Error(
+      `Failed to load model chunk ${url}: HTTP ${response?.status ?? "unknown"}. `
+      + "Install the private model with `python tools/install_wrinkle_model.py`."
+    );
     const chunk = new Uint8Array(await response.arrayBuffer());
     total += chunk.byteLength;
     if (loaded.source === "persistent-cache") persistentCacheHits += 1;

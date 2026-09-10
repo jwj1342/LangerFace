@@ -3,6 +3,9 @@ const TUMOR_KIND_LABELS: Record<string, string> = {
   cutaneous: "皮表肿物",
 };
 
+export const TUMOR_DIAMETER_DISABLED_MESSAGE = "当前肿物范围由已绘制或已识别的边界决定，直径参数暂不参与候选生成。";
+export const FREEHAND_MARKER_DISABLED_MESSAGE = "当前肿物边界由“自由轮廓鼠绘”的曲线决定，受控标记暂不参与候选生成；请切换为“椭圆近似”模式后使用。";
+
 const CANDIDATE_TYPE_LABELS: Record<string, string> = {
   linear: "线性切口",
   fusiform: "梭形切口",
@@ -155,6 +158,27 @@ export const regionLabel = (value: unknown) => labelOf(REGION_LABELS, value, "�
 export const subunitLabel = (value: unknown) => labelOf(SUBUNIT_LABELS, value, "尚未定位");
 export const reasonLabel = (value: unknown) => labelOf(REASON_LABELS, value);
 export const guardrailLabel = (value: unknown) => labelOf(GUARDRAIL_LABELS, value);
+
+export function diagnosticCandidateBlockMessage(
+  result: Record<string, any> | null | undefined,
+  projectionReasonCodes: readonly string[] = [],
+  photoOpeningIntersection?: string | null,
+): string {
+  // Only explain the displayed candidate, not failures from other alternatives.
+  const violations = [result?.candidate?.hard_violations, result?.tumor_engineering_validation?.violations]
+    .flatMap((items) => Array.isArray(items) ? items : []);
+  const projectionLabels: Record<string, string> = {
+    candidate_surface_exit: "候选切口超出照片中的可用面部表面",
+    candidate_boundary_not_enclosed: "候选切口未完整覆盖肿物边界",
+    candidate_center_or_direction_unresolved: "候选中心或方向无法确定",
+  };
+  const reasons = violations.filter((item) => item?.code)
+    .map((item) => GUARDRAIL_LABELS[item.code] || "其他候选规则检查未通过");
+  reasons.push(...projectionReasonCodes.map((code) => projectionLabels[code] || GUARDRAIL_LABELS[code] || "照片中的候选几何检查未通过"));
+  if (photoOpeningIntersection) reasons.push("候选切口经过眼裂、口裂或鼻孔");
+  const detail = [...new Set(reasons)].join("；") || "候选未通过生成或显示检查";
+  return `红色虚线仅供查看被阻断的轮廓：${detail}。不可确认、保存或用于实时叠加；请调整位置或范围。`;
+}
 export const directionSourceLabel = (value: unknown) => labelOf(DIRECTION_SOURCE_LABELS, value);
 export const directionHintLabel = (value: unknown) => labelOf(DIRECTION_HINT_LABELS, value);
 export const overrideLabel = (value: unknown) => labelOf(OVERRIDE_LABELS, value, "请医生复核");
@@ -223,6 +247,9 @@ export function controlledMarkerFailureMessage(
     return "当前肿物边缘仍不连续，请扩大扫描范围或补线后重试。";
   }
   if (detection.failure_code === "unstable_enclosure") {
+    if (stage === "detected_boundary_below_size_prior") {
+      return "当前只识别到明显偏小的局部轮廓，可能是皮肤纹理或笔迹碎片；请把扫描中心放在完整肿物范围内后重试。";
+    }
     return "当前只识别到局部轮廓，结果不足以代表完整肿物；请扩大扫描范围或补线后重试。";
   }
   if (detection.failure_code === "component_too_large" || stage === "marker_area_invalid") {

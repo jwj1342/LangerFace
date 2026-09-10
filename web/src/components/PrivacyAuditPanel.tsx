@@ -3,10 +3,8 @@ import { Card, CardHeader } from "./ui/card";
 import { PrivacyAuditMessage, PrivacyStateText } from "./ui/privacy-audit";
 
 const DEFAULT_PRIVACY_AUDIT: IncisionPrivacyAuditState = {
-  stateLabel: import.meta.env?.VITE_SERVER_COMPUTE === 'true' ? '服务器几何' : "本地几何",
-  message: import.meta.env?.VITE_SERVER_COMPUTE === 'true'
-    ? '原始影像、肿物参数、抽象坐标、规则和候选几何由服务器处理。'
-    : "切口 workflow 仅在浏览器本地处理肿物参数、抽象坐标、规则和候选几何，不上传原始影像。",
+  stateLabel: "本地几何",
+  message: "切口 workflow 仅在当前设备处理肿物参数、抽象坐标、规则和候选几何，不上传原始影像。",
   blocked: false,
 };
 

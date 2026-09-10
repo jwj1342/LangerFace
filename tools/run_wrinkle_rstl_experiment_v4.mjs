@@ -11,7 +11,9 @@ const { chromium } = playwright;
 
 const repositoryRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const projectRoot = resolve(repositoryRoot, "..");
-const sourcePath = resolve(projectRoot, "langer线-cc/wrinkle.png");
+const configuredSourcePath = process.env.WRINKLE_EXPERIMENT_INPUT?.trim();
+const sourcePath = configuredSourcePath ? resolve(configuredSourcePath) :
+  resolve(projectRoot, "langer线-cc/wrinkle.png");
 const requestedVersion = process.env.WRINKLE_EXPERIMENT_VERSION;
 const experimentVersion = ["v7", "v8"].includes(requestedVersion) ? requestedVersion : "v8";
 const refinementMode = process.env.WRINKLE_REFINEMENT_MODE === "v9" ? "v9" : "current";
@@ -20,17 +22,31 @@ const outputDirectory = process.env.WRINKLE_EXPERIMENT_OUTPUT ?
   resolve(projectRoot, `langer线-cc/wrinkle_rstl_experiment_${experimentVersion}_${refinementMode}`);
 const baseUrl = process.env.WRINKLE_EXPERIMENT_URL || "http://127.0.0.1:5174";
 const visualizationOnly = process.env.WRINKLE_VISUALIZATION_ONLY === "1";
-const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const configuredChromePath = process.env.WRINKLE_EXPERIMENT_CHROME?.trim();
+const defaultMacChromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const chromePath = configuredChromePath ? resolve(configuredChromePath) :
+  (process.platform === "darwin" && existsSync(defaultMacChromePath) ? defaultMacChromePath : null);
+
+if (configuredChromePath && !existsSync(chromePath)) {
+  throw new Error(`WRINKLE_EXPERIMENT_CHROME does not exist: ${chromePath}`);
+}
+if (!existsSync(sourcePath)) {
+  throw new Error(
+    `Wrinkle experiment input does not exist: ${sourcePath}. ` +
+    "Set WRINKLE_EXPERIMENT_INPUT to the controlled local wrinkle.png.",
+  );
+}
 
 if (existsSync(outputDirectory)) {
   throw new Error(`Refusing to overwrite existing experiment directory: ${outputDirectory}`);
 }
 
-const browser = await chromium.launch({
+const browserLaunchOptions = {
   headless: true,
-  executablePath: chromePath,
   args: ["--disable-gpu"],
-});
+};
+if (chromePath) browserLaunchOptions.executablePath = chromePath;
+const browser = await chromium.launch(browserLaunchOptions);
 const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
 const browserMessages = [];
 page.on("console", (message) => browserMessages.push(`${message.type()}: ${message.text()}`));

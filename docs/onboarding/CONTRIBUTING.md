@@ -40,9 +40,11 @@ cd ..
 
 ## 运行测试
 
+受控标记 v0.35 当前成果的本地验收使用 [运行身份与最小回归包](../quality/MARKER_RUNTIME_ACCEPTANCE.md)。该专用入口先核对实际算法与目标工作区，再运行固定的 UI/原图对照；下方通用浏览器命令不替代目标算法部署核验。
+
 ```bash
 pytest                       # Python 单元/集成测试
-cd web && npm test           # 全量：typecheck + 下面 7 组（共 49 支脚本）
+cd web && npm test           # 工程检查：typecheck + package.json 中的默认测试组
 cd web && npm run test:browser # 生产构建上的 Playwright UI/对比度回归
 ruff check .                 # 代码风格
 ```
@@ -51,7 +53,7 @@ ruff check .                 # 代码风格
 
 各测试覆盖（从 README 收口到此，作为测试事实来源）：
 
-`npm test` 按语义分成 7 组，调试时可以只跑相关的一组（组名即职责，全部由 `npm test` 串起来，不会漏跑）：
+`npm test` 按语义分组，调试时可以只跑相关的一组（实际入口以 `web/package.json` 为准；本地样本专用组不在默认链中）：
 
 | 组 | 覆盖 |
 |---|---|
@@ -60,6 +62,8 @@ ruff check .                 # 代码风格
 | `npm run test:live` | 实时页与采集源：摄像头、图片源、画布适配、资产加载、导出、诊断 JSON |
 | `npm run test:annotate` | 标注与 3D 路线 |
 | `npm run test:incision` | 切口工作台：overlay、回放 QA、验收审计、工具契约 |
+| `npm run test:lesion-adapter` | 5 支无需个人测试图片的适配器、受控标记、profile、完整性及色差检查 |
+| `npm run test:wrinkle-provider` | 既有皱纹 provider 与本地 bridge 合约检查 |
 | `npm run test:privacy` | 隐私与 Provider 边界 |
 | `npm run test:personalized` | `/personalized` 浏览器个性化链路（含 YOLO/V6） |
 
@@ -72,6 +76,20 @@ ruff check .                 # 代码风格
 - **浏览器实测**：UI/3D 查看通过截图核对；实时摄像头链路需在带摄像头的浏览器中确认。
 
 跨语言对拍的不变式与金标重生成见 [CROSS_LANG_PARITY.md](../quality/CROSS_LANG_PARITY.md)。
+
+### 本地样本与工程检查分离
+
+本项目本次发布不携带个人测试图片、编码像素、参考边界、冻结结果、截图或日志。产品识别其他输入不依赖这些测试素材；依赖素材的是指定的自动检查。
+
+默认 `npm test` 保留 `test:lesion-adapter` 的5支无个人图片检查，原 real-sample、image10、image13 三支检查改由 `npm run test:lesion-local-samples` 显式执行；图05冻结结果检查由 `npm run test:workflow-local-sample` 执行。后两者仅在本地输入完整且获得相应测试授权后运行，缺输入时报错，不计通过。
+
+默认 `npm run test:browser` 精确排除 `controlled-marker-color-difference-real-sample.spec.ts`、`controlled-marker-image10.spec.ts`、`controlled-marker-image13.spec.ts`。专用 `playwright.marker-v035.config.ts` 和 `playwright.image13.config.ts` 仍收集各自样本用例。没有删除几何/效果断言，也没有把缺素材用例的跳过记作成功。
+
+`tools/fixtures/controlled_marker_reviewed_samples.local.json` 保存裁剪图样本参数，`controlled_marker_browser_samples.local.json` 保存整图样本参数；两者由已有本地参考表提取并精确忽略，不随仓库提供。裁剪像素/冻结JSON保持原有 `tools/fixtures/` 路径；浏览器原图目录通过 `CONTROLLED_MARKER_REAL_SAMPLE_DIR` 指定。参考数值是工程近似，不是医学真值。只有运行样本专项时才需由操作者提供完整本地参考包，不以下载未知图片或虚构边界补齐。
+
+CI 仍使用原 `npm test` 和 `npm run test:browser` 入口，因此不覆盖上述本地样本效果；CI 通过不能替代其验收。与本次发布前的本地默认链相比，明确减少3支图片检查和3份样本浏览器文件；远端旧 PR 尚未包含这些新增样本检查，原有远端检查继续保留。具体专用范围见 [运行验收](../quality/MARKER_RUNTIME_ACCEPTANCE.md)。
+
+`.gitignore` 只防止未跟踪文件被误加入，不会清除已跟踪数据或历史。发布核账必须同时检查最终文件树与待上传提交祖先；原有含排除数据的本地历史应保留为恢复依据，不直接推送。
 
 ### 3D 标注人工验收
 
@@ -152,6 +170,7 @@ Preview 人工验收清单：
 - 摄像头入口在 HTTPS Preview 中能请求权限。
 - `/app/annotate` 能打开，标准脸能加载，不出现 `/assets/*.json` 404；旧 `annotate.html` 只需跳转到 React SPA。
 - `/app/incision` 能打开，切口工作台标准脸 / RSTL 资产能加载；Network 面板里的运行时资产应请求 `/assets/...`，不能请求 `/app/assets/...`。
+- RSTL、皱纹检测等受保护效果发生同步或实现变化时，使用同一原始输入在目标产品入口对拍算法/profile、模型与资产指纹、关键诊断和视觉结果；实验页、`compat`、冻结产物复放、模型加载或静态门禁通过不能替代该项验收。资料或真实运行门禁未满足时只能写“运行已恢复、效果待验收”。
 - 如果控制台出现 `Unexpected token '<'` 或 `<!DOCTYPE` JSON 解析错误，优先检查资产 URL 是否被嵌套 SPA 路由错误解析。
 - 浏览器控制台没有新的应用级错误。MediaPipe 的 WebGL / XNNPACK 初始化日志通常是正常信息。
 

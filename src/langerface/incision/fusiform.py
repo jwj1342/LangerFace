@@ -25,10 +25,10 @@ class FusiformRules:
 
     length_to_width_ratio: float = 3.0
     tip_angle_deg: float = 30.0
-    min_length_mm: float = 12.0
+    min_length_mm: float = 6.0
     max_length_mm: float = 80.0
     samples: int = 56
-    version: str = "0.3-deterministic-incision-workflow"
+    version: str = "0.4-deterministic-incision-workflow"
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any] | None) -> FusiformRules:
@@ -37,10 +37,10 @@ class FusiformRules:
         return cls(
             length_to_width_ratio=float(value.get("length_to_width_ratio", 3.0)),
             tip_angle_deg=float(value.get("tip_angle_deg", 30.0)),
-            min_length_mm=float(value.get("min_length_mm", 12.0)),
+            min_length_mm=float(value.get("min_length_mm", 6.0)),
             max_length_mm=float(value.get("max_length_mm", 80.0)),
             samples=int(value.get("samples", 56)),
-            version=str(value.get("version", "0.3-deterministic-incision-workflow")),
+            version=str(value.get("version", "0.4-deterministic-incision-workflow")),
         )
 
     def validate(self) -> None:
@@ -303,6 +303,73 @@ def _optional_direction_value(direction: Mapping[str, Any], key: str) -> Any:
     return value if value is not None else None
 
 
+def _controlled_normalization(
+    tumor: Mapping[str, Any], boundary: FloatArray, center: FloatArray,
+    units_per_mm: float, normal: Point3,
+) -> dict[str, Any]:
+    """Mirror the Web's projected area centroid and enclosing-circle scale."""
+    area = equivalent = enclosing = compactness = shift = centroid = None
+    if len(boundary) >= 3:
+        nxt = np.roll(boundary, -1, axis=0)
+        newell = np.sum(np.cross(boundary, nxt), axis=0)
+        n = _norm(newell if np.linalg.norm(newell) > 1e-9 else normal, "boundary normal")
+        tangents = boundary - center
+        tangents = tangents - np.outer(tangents @ n, n)
+        u = next((point / np.linalg.norm(point) for point in tangents if np.linalg.norm(point) > 1e-9), None)
+        if u is None:
+            reference = [0, 0, 1] if abs(n[2]) < 0.9 else [0, 1, 0]
+            u = _norm(np.cross(reference, n), "boundary axis")
+        v = _norm(np.cross(n, u), "boundary perpendicular")
+        projected = _project(boundary, center, u, v)
+        following = np.roll(projected, -1, axis=0)
+        cross2 = projected[:, 0] * following[:, 1] - following[:, 0] * projected[:, 1]
+        twice_area = float(np.sum(cross2))
+        perimeter = float(np.sum(np.linalg.norm(following - projected, axis=1)))
+        if abs(twice_area) * 0.5 > 1e-10 and perimeter > 1e-9:
+            centroid_uv = np.sum((projected + following) * cross2[:, None], axis=0) / (3 * twice_area)
+            centroid = center + u * centroid_uv[0] + v * centroid_uv[1]
+            area = abs(twice_area) * 0.5 / units_per_mm**2
+            equivalent = 2 * (area / pi)**0.5
+            enclosing = 2 * float(np.max(np.linalg.norm(projected - centroid_uv, axis=1))) / units_per_mm
+            compactness = _clamp(4 * pi * area / max((perimeter / units_per_mm)**2, 1e-12), 0, 1)
+            shift = float(np.linalg.norm(centroid - center)) / units_per_mm
+    try:
+        photo = float(tumor.get("photo_boundary_enclosing_diameter_mm"))
+        if not isfinite(photo) or photo <= 0:
+            photo = None
+    except (TypeError, ValueError):
+        photo = None
+    applied = area is not None or photo is not None
+    diameter = (
+        photo if photo is not None else enclosing if enclosing is not None else float(tumor["diameter_mm"])
+    )
+    return {
+        "lesion_normalization_schema": "incision-lesion-normalization/v0.3",
+        "lesion_normalization_applied": applied,
+        "lesion_normalization_status": (
+            "normalized" if applied
+            else "insufficient_boundary" if len(boundary) < 3
+            else "degenerate_boundary"
+        ),
+        "lesion_boundary_role": (
+            "unavailable" if len(boundary) < 3 else "planning_scale" if applied else "planning_geometry"
+        ),
+        "planning_diameter_mm": diameter,
+        "detected_lesion_area_mm2": area,
+        "detected_equivalent_diameter_mm": equivalent,
+        "detected_enclosing_diameter_mm": enclosing,
+        "photo_boundary_enclosing_diameter_mm": photo,
+        "detected_lesion_compactness": compactness,
+        "detected_boundary_centroid": centroid.tolist() if centroid is not None else None,
+        "detected_center_shift_mm": shift,
+        "detected_to_planning_diameter_ratio": equivalent / diameter if equivalent is not None else None,
+        "clinical_scale_source": "controlled_marker_enclosing_circle" if applied else "operator_input",
+        "clinical_scale_status": (
+            "derived_from_detected_boundary" if applied else "requires_clinician_confirmation"
+        ),
+    }
+
+
 def generate_fusiform_incision(
     tumor: Mapping[str, Any],
     direction: Mapping[str, Any],
@@ -337,25 +404,76 @@ def generate_fusiform_incision(
     raw_boundary = tumor.get("boundary", [])
     boundary_points = [_vec3(point, "tumor.boundary point") for point in raw_boundary]
     boundary = np.asarray(boundary_points, dtype=np.float64).reshape((-1, 3))
+    controlled = (
+        tumor.get("boundary_mode") == "controlled_marker"
+        or tumor.get("boundary_source") == "controlled_marker_confirmed"
+    )
+    normalization = (
+        _controlled_normalization(tumor, boundary, tumor_center, units_per_mm, normal) if controlled else {}
+    )
+    planning_diameter = normalization.get("planning_diameter_mm", diameter_mm)
+    photo_scale = normalization.get("photo_boundary_enclosing_diameter_mm") is not None
+    if photo_scale:
+        angles = np.arange(32) * 2 * pi / 32
+        radius = planning_diameter * units_per_mm / 2
+        boundary = (
+            tumor_center
+            + np.outer(np.cos(angles) * radius, axis)
+            + np.outer(np.sin(angles) * radius, perpendicular)
+        )
     boundary_summary = _boundary_profile(
         boundary,
         tumor_center,
-        diameter_mm,
+        planning_diameter,
         axis,
         perpendicular,
         units_per_mm,
     )
-    # The detector-confirmed center is authoritative. An asymmetric boundary
-    # grows the symmetric candidate; it never silently moves that center.
+    boundary_mode = str(tumor.get("boundary_mode", ""))
+    boundary_source = str(tumor.get("boundary_source", ""))
+    boundary_drives_scale = boundary_summary is not None and (
+        boundary_mode in {"freehand", "controlled_marker"}
+        or boundary_source in {"manual_freehand", "controlled_marker_confirmed"}
+    )
+    # The confirmed center is authoritative. A drawn boundary supplies its
+    # directional extents; it never silently moves that center or falls back
+    # to the operator diameter as a minimum size.
     center = tumor_center
-    lesion_axis_mm = max(
-        diameter_mm,
-        float(boundary_summary["selected_center_axis_diameter_mm"]) if boundary_summary else 0.0,
+    lesion_axis_mm = (
+        float(boundary_summary["selected_center_axis_diameter_mm"])
+        if boundary_drives_scale and boundary_summary
+        else max(
+            diameter_mm,
+            float(boundary_summary["selected_center_axis_diameter_mm"]) if boundary_summary else 0.0,
+        )
     )
-    lesion_width_mm = max(
-        diameter_mm,
-        float(boundary_summary["selected_center_perp_diameter_mm"]) if boundary_summary else 0.0,
+    lesion_width_mm = (
+        float(boundary_summary["selected_center_perp_diameter_mm"])
+        if boundary_drives_scale and boundary_summary
+        else max(
+            diameter_mm,
+            float(boundary_summary["selected_center_perp_diameter_mm"]) if boundary_summary else 0.0,
+        )
     )
+    if controlled:
+        boundary_drives_scale = normalization["lesion_normalization_applied"] and boundary_summary is not None
+        lesion_axis_mm = planning_diameter
+        lesion_width_mm = planning_diameter
+        if boundary_summary:
+            boundary_center = boundary_summary["center"]
+            projected = _project(boundary, boundary_center, axis, perpendicular)
+            span = np.ptp(projected, axis=0)
+            envelope_center = (boundary_center
+                               + axis * (np.min(projected[:, 0]) + np.max(projected[:, 0])) / 2
+                               + perpendicular * (np.min(projected[:, 1]) + np.max(projected[:, 1])) / 2)
+            boundary_summary["axis_diameter_mm"] = float(span[0]) / units_per_mm
+            boundary_summary["perp_diameter_mm"] = float(span[1]) / units_per_mm
+            boundary_summary["envelope_center_shift_mm"] = (
+                float(np.linalg.norm(envelope_center - tumor_center)) / units_per_mm
+            )
+        if boundary_drives_scale and not photo_scale:
+            lesion_axis_mm = max(planning_diameter, boundary_summary["selected_center_axis_diameter_mm"])
+            lesion_width_mm = max(planning_diameter, boundary_summary["selected_center_perp_diameter_mm"])
     requested_width_mm = lesion_width_mm + 2.0 * margin_mm
     width_mm = requested_width_mm
     axis_coverage_mm = lesion_axis_mm + 2.0 * margin_mm
@@ -385,13 +503,17 @@ def generate_fusiform_incision(
             upper,
             lower,
             outline,
-            boundary,
+            boundary if not controlled or boundary_drives_scale else np.empty((0, 3)),
             center,
             axis,
             perpendicular,
             units_per_mm,
         )
-        if not boundary_summary or int(outline_metrics["boundary_envelope_outside_count"]) == 0:
+        if (
+            not boundary_summary
+            or (controlled and not boundary_drives_scale)
+            or int(outline_metrics["boundary_envelope_outside_count"]) == 0
+        ):
             break
         upper_projected = _project(upper, center, axis, perpendicular)
         boundary_projected = _project(boundary, center, axis, perpendicular)
@@ -436,6 +558,9 @@ def generate_fusiform_incision(
         "length_clamped_by_min": target_length_mm < cfg.min_length_mm,
         "length_clamped_by_max": target_length_mm > cfg.max_length_mm,
         "boundary_used": boundary_summary is not None,
+        "boundary_drives_candidate_geometry": boundary_drives_scale,
+        "boundary_scale_shape": "directional_extents" if boundary_drives_scale else "operator_diameter",
+        "operator_diameter_mm": diameter_mm,
         "boundary_point_count": int(boundary_summary["point_count"]) if boundary_summary else len(boundary),
         "boundary_axis_diameter_mm": (
             float(boundary_summary["axis_diameter_mm"]) if boundary_summary else None
@@ -462,6 +587,28 @@ def generate_fusiform_incision(
         **outline_metrics,
     }
     direction_confidence = direction.get("confidence")
+    if controlled:
+        metrics.update(normalization)
+        metrics.update({
+            "diameter_mm": planning_diameter,
+            "boundary_scale_shape": "enclosing_circle" if boundary_drives_scale else "operator_diameter",
+            "boundary_envelope_length_expanded": (
+                length_mm > _clamp(target_length_mm, cfg.min_length_mm, cfg.max_length_mm) + 1e-9
+            ),
+            "length_ratio_basis_mm": requested_width_mm,
+            "length_ratio_basis": "lesion_perp_diameter_plus_bilateral_margin",
+            "clinical_ratio_basis_status": "requires_clinician_confirmation",
+            "boundary_envelope_center_shift_mm": (
+                boundary_summary.get("envelope_center_shift_mm") or None if boundary_summary else None
+            ),
+        })
+        for key in (
+            "boundary_axis_diameter_mm", "boundary_perp_diameter_mm",
+            "boundary_selected_center_axis_diameter_mm",
+            "boundary_selected_center_perp_diameter_mm", "boundary_area_mm2",
+            "boundary_area_ratio_to_diameter_disk", "boundary_center_shift_mm",
+        ):
+            metrics[key] = metrics[key] or None
     return {
         "id": "fusiform_cutaneous_candidate",
         "type": "fusiform",
@@ -480,6 +627,12 @@ def generate_fusiform_incision(
         "direction_confidence": float(direction_confidence) if direction_confidence is not None else None,
         "metrics": metrics,
         "provenance": {
+            **(
+                {"boundary_source": tumor.get("boundary_source") or "manual",
+                 "lesion_normalization_schema": normalization["lesion_normalization_schema"],
+                 "lesion_normalization_status": normalization["lesion_normalization_status"]}
+                if controlled else {}
+            ),
             "generator": "generateFusiformIncision",
             "rules_version": cfg.version,
             "candidate_version": 1,

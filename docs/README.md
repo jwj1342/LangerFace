@@ -7,7 +7,7 @@
 | [`onboarding/`](#onboarding--上手与协作) | 我要把它跑起来、并按规矩提交 | 4 |
 | [`architecture/`](#architecture--架构与算法) | 它是怎么实现的、公式是什么 | 3 |
 | [`tracks/`](#tracks--技术轨与功能专题) | 某一条技术路线的设计与现状 | 4 |
-| [`quality/`](#quality--质量与运维) | 怎么证明它没坏、怎么部署和观测 | 4 |
+| [`quality/`](#quality--质量与运维) | 怎么证明它没坏、怎么部署和观测 | 5 |
 | [`clinical/`](#clinical--临床边界与合规) | 医学上能说什么、数据边界在哪 | 3 |
 | [`planning/`](#planning--路线图) | 接下来做什么 | 1 |
 
@@ -28,6 +28,8 @@
 ## `quality/` — 质量与运维
 
 **这个目录回答「凭什么相信它没坏、以及它是怎么上线和被观测的」。** [CROSS_LANG_PARITY.md](quality/CROSS_LANG_PARITY.md) 定义 Python 与 Web TypeScript 对共同金标的逐点等价；[CI_CD_VERCEL.md](quality/CI_CD_VERCEL.md) 是 Vercel、Preview、branch protection 与排障的唯一 owner；[OBSERVABILITY.md](quality/OBSERVABILITY.md) 定义浏览器诊断字段与指标；[VALIDATION.md](quality/VALIDATION.md) 定义临床验证数据集、Stage 1/2 指标、失败分类与人工评审表。3D 标注人工验收已归入 CONTRIBUTING。
+
+[MARKER_RUNTIME_ACCEPTANCE.md](quality/MARKER_RUNTIME_ACCEPTANCE.md) 说明受控标记的运行身份核验、本地样本最小回归包与验收边界。
 
 ## `clinical/` — 临床边界与合规
 

@@ -8,6 +8,19 @@ export interface FitContainResult {
   scale: number;
 }
 
+export interface ImageGestureViewState {
+  zoom: number;
+  minZoom: number;
+  maxZoom: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+export interface ImageGesturePoint {
+  x: number;
+  y: number;
+}
+
 export function fitContainSize(
   contentWidth: number,
   contentHeight: number,
@@ -27,5 +40,21 @@ export function fitContainSize(
     width: Math.max(1, Math.round(srcW * scale)),
     height: Math.max(1, Math.round(srcH * scale)),
     scale,
+  };
+}
+
+export function nextImageGestureViewState(
+  view: ImageGestureViewState,
+  previousPoint: ImageGesturePoint,
+  nextPoint: ImageGesturePoint,
+  factor: number,
+): ImageGestureViewState | null {
+  if (!Number.isFinite(factor) || factor <= 0 || !Number.isFinite(view.zoom) || view.zoom <= 0) return null;
+  const nextZoom = Math.max(view.minZoom, Math.min(view.maxZoom, view.zoom * factor));
+  return {
+    ...view,
+    zoom: nextZoom,
+    offsetX: nextPoint.x - ((previousPoint.x - view.offsetX) / view.zoom) * nextZoom,
+    offsetY: nextPoint.y - ((previousPoint.y - view.offsetY) / view.zoom) * nextZoom,
   };
 }

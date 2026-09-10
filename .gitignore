@@ -7,6 +7,7 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 .venv/
+.venv-gpu/
 venv/
 .ipynb_checkpoints/
 
@@ -39,6 +40,10 @@ local_outputs/
 web/test/face.jpg
 web/test/face_small.jpg
 
+# License-gated wrinkle model. Install with tools/install_wrinkle_model.py.
+/local_models/
+/web/compat/personalized/model/*.onnx.part*
+
 # 3D head-scan datasets (HeadSpace / FaceScape — licensed, real biometric; never commit)
 tools/headspace/data/
 
@@ -54,3 +59,21 @@ web/assets/flame_*.json
 web/dist-server/
 web/playwright-report/
 web/test-results/
+
+# Local acceptance data and browser artifacts; do not blanket-ignore fixtures.
+/.playwright-cli/
+/tools/fixtures/controlled_marker_dark_skin_11_marker.rgba.gz.b64
+/tools/fixtures/controlled_marker_dark_skin_11_unmarked_cheek.rgba.gz.b64
+/tools/fixtures/controlled_marker_dark_skin_12_holdout.rgba.gz.b64
+/tools/fixtures/controlled_marker_dark_skin_13_holdout.rgba.gz.b64
+/tools/fixtures/controlled_marker_dark_skin_14_holdout.rgba.gz.b64
+/tools/fixtures/controlled_marker_dark_skin_15_holdout.rgba.gz.b64
+/tools/fixtures/controlled_marker_image13_spur.json
+/tools/fixtures/controlled_marker_light_skin_01_marker.rgba.gz.b64
+/tools/fixtures/controlled_marker_light_skin_10_incomplete.json
+/tools/fixtures/controlled_marker_light_skin_10_incomplete.rgba.gz.b64
+/tools/fixtures/controlled_marker_medium_skin_06_marker.rgba.gz.b64
+/tools/fixtures/controlled_marker_medium_skin_08_marker.rgba.gz.b64
+/tools/fixtures/workflow_rejected_fusiform_05.json
+/tools/fixtures/controlled_marker_reviewed_samples.local.json
+/tools/fixtures/controlled_marker_browser_samples.local.json

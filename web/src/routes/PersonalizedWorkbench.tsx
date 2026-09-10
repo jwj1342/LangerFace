@@ -33,7 +33,7 @@ export function PersonalizedWorkbench() {
             </label>
             <div className="personalized-privacy-note">默认只保留聚合诊断。勾选仅增加可下载的调试视频，不改变表情识别或质量门控；视频与关键点只留在当前标签页内存中。</div>
             <div className="personalized-privacy-note">{import.meta.env?.VITE_SERVER_COMPUTE === 'true'
-              ? '人脸图像、YOLO 推理和 V6 微调由服务器处理。'
+              ? '采集与 V6 微调在当前浏览器处理；YOLO 所需图像会发送到服务器 GPU 推理。'
               : '人脸图像、YOLO 推理和 V6 微调全部在当前浏览器本地完成，不上传服务器。'}</div>
             <button className="personalized-button" id="debugBtn" type="button" disabled>导出采集数据 JSON（含关键点）</button>
             <div id="debugMediaStatus" className="personalized-hint">尚未开始调试录制</div>
@@ -49,9 +49,9 @@ export function PersonalizedWorkbench() {
           <div className="personalized-card">
             <div className="personalized-card-label">皱纹证据与 V6 微调前后</div>
             <div className="personalized-local-pipeline">
-              <strong>本地个性化处理</strong>
+              <strong>个性化处理</strong>
               <progress id="localPipelineProgress" max="100" value="0" />
-              <div id="localPipelineStatus">采集完成后将在本机运行 YOLO 0.07 与 V6。</div>
+              <div id="localPipelineStatus">采集完成后将运行 YOLO 0.07 与 V6。</div>
             </div>
             <div id="compareSummary" className="personalized-hint">完成后显示相对原始 atlas 的偏移</div>
             <canvas id="compareCanvas" width="320" height="320" className="personalized-evidence-canvas is-hidden" />

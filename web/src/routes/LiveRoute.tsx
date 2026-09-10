@@ -15,7 +15,7 @@ export function LiveRoute() {
     <ManagedWorkbenchRoute
       failedStatus="实时显示加载失败"
       legacyNotice={import.meta.env?.VITE_SERVER_COMPUTE === 'true'
-        ? ''
+        ? '实时张力线研究工具：界面、RSTL、跟踪与绘制在当前浏览器运行；视频可上传转换，YOLO 在服务器 GPU 运行。'
         : '实时张力线研究工具：在当前浏览器会话中处理摄像头、照片或视频。'}
       loadModule={loadLiveRuntime}
       loadingStatus="加载实时显示"

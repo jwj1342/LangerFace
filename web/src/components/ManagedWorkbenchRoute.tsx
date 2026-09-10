@@ -4,7 +4,7 @@ import { useManagedWorkbenchController } from "../hooks/useManagedWorkbenchContr
 import type { Workspace } from "../stores/appStore";
 import { ReactRouteHost } from "./ReactShell";
 
-type ManagedWorkbenchWorkspace = Extract<Workspace, "annotate" | "incision" | "live">;
+type ManagedWorkbenchWorkspace = Extract<Workspace, "annotate" | "incision" | "live" | "workflow">;
 
 interface ManagedWorkbenchRouteProps<TModule> {
   children: ReactNode;

@@ -71,6 +71,18 @@ assert.equal(restoredForm.boundaryMode, "freehand");
 assert.deepEqual(restoredForm.boundaryPoints, tumor.boundary,
   "loading a saved candidate restores its center-independent freehand boundary");
 
+for (const boundaryMode of ["ellipse", "controlled_marker"] as const) {
+  const importedNonFreehand = importedTumorFormState({
+    ...tumor,
+    boundary_mode: boundaryMode,
+    boundary_source: boundaryMode === "controlled_marker" ? "controlled_marker_confirmed" : "ellipse_model",
+  }, tumorControls);
+  assert.equal(importedNonFreehand.boundaryMode, "ellipse",
+    `${boundaryMode} imports do not become freehand merely because they carry a sampled boundary`);
+  assert.deepEqual(importedNonFreehand.boundaryPoints, [],
+    `${boundaryMode} sampled geometry is not exposed as an editable freehand stroke`);
+}
+
 const invalidImport = {
   tumor: {
     kind: "cutaneous",

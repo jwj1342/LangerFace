@@ -54,7 +54,7 @@ function visibleSourcePixelCount() {
   return count;
 }
 
-test("approved incision reaches photo, uploaded video, and MediaStream camera renderers", async ({ page }) => {
+test("approved incision reaches photo and MediaStream camera while unsupported video fails safely", async ({ page }) => {
   test.setTimeout(180_000);
   await page.goto("/app/incision");
   await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
@@ -70,6 +70,14 @@ test("approved incision reaches photo, uploaded video, and MediaStream camera re
 
   await page.locator("#reviewerName").fill("E2E clinician");
   await page.locator("#reviewNotes").fill("Browser handoff verification");
+  await page.locator("#reviewDecision").selectOption("approved_for_discussion");
+  await page.locator("#saveReviewBtn").click();
+  await expect(page.locator("#savedCount")).toHaveText("0");
+  await expect(page.locator("#stageStatus")).toContainText("工程几何错误");
+
+  await page.locator("#resetEditBtn").click();
+  await expect(page.locator("#lengthScale")).toHaveValue(String(lengthBefore));
+  await expect(page.locator("#reviewDecision")).toHaveValue("pending_clinician_confirmation");
   await page.locator("#reviewDecision").selectOption("approved_for_discussion");
   await page.locator("#saveReviewBtn").click();
   await expect(page.locator("#savedCount")).toHaveText("1");
@@ -124,23 +132,12 @@ test("approved incision reaches photo, uploaded video, and MediaStream camera re
   }).toBeGreaterThan(keypointsBefore + 100);
 
   await page.locator("#meshPts").uncheck();
-  const uploadedVideoFrame = await uploadGeneratedVideo(page);
-  expect(uploadedVideoFrame).toMatchObject({
-    width: 512,
-    height: 512,
-  });
-  expect(uploadedVideoFrame.presentedFrames).toBeGreaterThanOrEqual(1);
-  expect(uploadedVideoFrame.mediaTime).toBeGreaterThanOrEqual(0);
-  await expect(page.locator("#livePill")).toContainText("视频", { timeout: 60_000 });
-  await expect(page.locator("#incisionOverlayQaState")).not.toHaveText("等待画面", { timeout: 60_000 });
+  await uploadGeneratedVideo(page);
+  await expect(page.locator("#overlayMsg")).toHaveText("仅支持上传照片；如需连续画面请开启摄像头。");
+  await expect(page.locator("#livePill")).toContainText("照片");
   await expect.poll(() => page.evaluate(candidatePixelCount), {
-    message: "the uploaded WebM path must draw the staged incision candidate",
+    message: "rejecting an unsupported WebM must preserve the photo incision overlay",
   }).toBeGreaterThan(8);
-  const uploadedVideoState = await page.locator("#video").evaluate((video: HTMLVideoElement) => ({
-    hasObjectUrl: video.currentSrc.startsWith("blob:"),
-    hasStream: video.srcObject instanceof MediaStream,
-  }));
-  expect(uploadedVideoState).toMatchObject({ hasObjectUrl: true, hasStream: false });
 
   // This deterministic MediaStream covers the browser camera pipeline; fixed-device evidence remains manual.
   await installGeneratedCamera(page);
@@ -175,5 +172,6 @@ test("approved incision reaches photo, uploaded video, and MediaStream camera re
   await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
   await expect(page.locator("#candidateType")).not.toHaveText("—");
   await expect(page.locator("#savedCount")).toHaveText("1");
-  await expect(page.locator("#reviewDecision")).toHaveValue("approved_for_discussion");
+  await expect(page.locator("#candidateList")).toContainText("已确认研究候选");
+  await expect(page.locator("#reviewDecision")).toHaveValue("pending_clinician_confirmation");
 });

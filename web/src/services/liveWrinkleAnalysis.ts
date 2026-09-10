@@ -119,6 +119,8 @@ interface WrinkleAnalysisState {
   error: string | null;
 }
 
+export type WrinkleDisplayResumeState = Omit<WrinkleAnalysisState, "generation">;
+
 const state: WrinkleAnalysisState = {
   generation: 0,
   status: "idle",
@@ -190,6 +192,15 @@ const cloneMappedLines = (lines: readonly MappedAtlasLine[]): EditableRefineLine
     hidden: false,
     hiddenPointRuns: [],
     tris: [...(line.tris || [])],
+    pts: line.pts.map((point) => [point[0], point[1], point[2] || 0] as Vec3),
+  }))
+);
+
+const cloneEditableLines = (lines: readonly EditableRefineLine[]): EditableRefineLine[] => (
+  lines.map((line) => ({
+    ...line,
+    hiddenPointRuns: line.hiddenPointRuns.map((run) => [run[0], run[1]]),
+    tris: [...line.tris],
     pts: line.pts.map((point) => [point[0], point[1], point[2] || 0] as Vec3),
   }))
 );
@@ -500,6 +511,89 @@ export function updateLiveWrinkleMeshTracking(
       },
     );
   }
+}
+
+export function captureWrinkleDisplayState(): WrinkleDisplayResumeState {
+  return {
+    status: state.status,
+    displayMode: state.displayMode,
+    evidenceLines: state.evidenceLines.map((line) => ({
+      ...line,
+      points: line.points.map((point) => [point[0], point[1]]),
+    })),
+    standardLines: state.standardLines ? cloneEditableLines(state.standardLines) : null,
+    autoRefinedLines: state.autoRefinedLines ? cloneEditableLines(state.autoRefinedLines) : null,
+    movedCurveCount: state.movedCurveCount,
+    movedPointCount: state.movedPointCount,
+    fineLineCount: state.fineLineCount,
+    sourceComponentCount: state.sourceComponentCount,
+    evidenceSource: state.evidenceSource,
+    diagnostics: state.diagnostics,
+    audit: state.audit,
+    timings: state.timings,
+    provider: state.provider,
+    reproducibility: state.reproducibility,
+    detectionId: state.detectionId,
+    refinementContext: state.refinementContext,
+    trackedLines: state.trackedLines.map((line) => ({
+      ...line,
+      points: line.points.map((point) => ({
+        ...point,
+        source: [...point.source] as [number, number],
+        surfaceRef: point.surfaceRef ? { ...point.surfaceRef } : null,
+        fallback: point.fallback.map((anchor) => ({
+          ...anchor,
+          reference: [...anchor.reference] as [number, number],
+        })),
+        fallbackOffset: [...point.fallbackOffset] as [number, number],
+      })),
+    })),
+    error: state.error,
+  };
+}
+
+export function restoreWrinkleDisplayState(snapshot: WrinkleDisplayResumeState): void {
+  const interrupted = snapshot.status === "loading"
+    || snapshot.status === "detecting"
+    || snapshot.status === "refining"
+    || snapshot.status === "evidence";
+  state.status = interrupted ? "idle" : snapshot.status;
+  state.displayMode = snapshot.displayMode;
+  state.evidenceLines = interrupted ? [] : snapshot.evidenceLines.map((line) => ({
+    ...line,
+    points: line.points.map((point) => [point[0], point[1]]),
+  }));
+  state.standardLines = interrupted || !snapshot.standardLines ? null : cloneEditableLines(snapshot.standardLines);
+  state.autoRefinedLines = interrupted || !snapshot.autoRefinedLines ? null : cloneEditableLines(snapshot.autoRefinedLines);
+  state.movedCurveCount = interrupted ? 0 : snapshot.movedCurveCount;
+  state.movedPointCount = interrupted ? 0 : snapshot.movedPointCount;
+  state.fineLineCount = interrupted ? 0 : snapshot.fineLineCount;
+  state.sourceComponentCount = interrupted ? 0 : snapshot.sourceComponentCount;
+  state.evidenceSource = interrupted ? null : snapshot.evidenceSource;
+  state.diagnostics = interrupted ? null : snapshot.diagnostics;
+  state.audit = interrupted ? null : snapshot.audit;
+  state.timings = interrupted ? null : snapshot.timings;
+  state.provider = interrupted ? null : snapshot.provider;
+  state.reproducibility = interrupted ? null : snapshot.reproducibility;
+  state.detectionId = interrupted ? null : snapshot.detectionId;
+  state.refinementContext = interrupted ? null : snapshot.refinementContext;
+  state.trackedLines = interrupted ? [] : snapshot.trackedLines.map((line) => ({
+    ...line,
+    points: line.points.map((point) => ({
+      ...point,
+      source: [...point.source] as [number, number],
+      surfaceRef: point.surfaceRef ? { ...point.surfaceRef } : null,
+      fallback: point.fallback.map((anchor) => ({
+        ...anchor,
+        reference: [...anchor.reference] as [number, number],
+      })),
+      fallbackOffset: [...point.fallbackOffset] as [number, number],
+    })),
+  }));
+  state.error = interrupted ? null : snapshot.error;
+  updateWrinkleUi();
+  publishDebugSnapshot();
+  window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
 }
 
 /**
@@ -1107,7 +1201,7 @@ export async function applyWrinkleGuidedRefinement(): Promise<void> {
     state.movedCurveCount = (Number(refined.diagnostics.moved_curve_count) || 0)
       + Number(refined.diagnostics.direct_nose_dorsum_generated_curve_count || 0);
     state.movedPointCount = Number(refined.diagnostics.moved_point_count) || 0;
-    replaceStaticRefineBaseline(autoRefinedLines);
+    replaceStaticRefineBaseline(state.autoRefinedLines, { liveBaseline: state.standardLines });
     updateStatus("applied");
     countMetric("wrinkle.singleFrame.applied");
     window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
