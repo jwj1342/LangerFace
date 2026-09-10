@@ -261,6 +261,7 @@ interface WorkflowIncisionState {
   candidateRecomputeTimer: number | null;
   mobileEditPreviewFrame: number | null;
   draftSaveTimer: number | null;
+  draftRestoreTimer: number | null;
   pendingDraftRestore: WorkflowIncisionDraft | null | undefined;
   pendingClick: WorkflowPointerIntent | null;
   photoFrameRevision: number | null;
@@ -375,6 +376,7 @@ function createState(root: HTMLElement): WorkflowIncisionState {
     candidateRecomputeTimer: null,
     mobileEditPreviewFrame: null,
     draftSaveTimer: null,
+    draftRestoreTimer: null,
     pendingDraftRestore: undefined,
     pendingClick: null,
     photoFrameRevision: null,
@@ -486,9 +488,30 @@ function scheduleWorkflowDraftSave(state: WorkflowIncisionState): void {
   }, 300);
 }
 
+function cancelWorkflowDraftRestoreRetry(state: WorkflowIncisionState): void {
+  if (state.draftRestoreTimer === null) return;
+  window.clearTimeout(state.draftRestoreTimer);
+  state.draftRestoreTimer = null;
+}
+
+function scheduleWorkflowDraftRestoreRetry(state: WorkflowIncisionState): void {
+  if (state.draftRestoreTimer !== null) return;
+  state.draftRestoreTimer = window.setTimeout(() => {
+    state.draftRestoreTimer = null;
+    if (!state.mounted || state.pendingDraftRestore === undefined) return;
+    requestFrame();
+    applyWorkflowDraftRestore(state);
+  }, 100);
+}
+
 function applyWorkflowDraftRestore(state: WorkflowIncisionState): boolean {
   const draft = state.pendingDraftRestore;
-  if (draft === undefined || state.loading || !workflowPhotoReady(state)) return false;
+  if (draft === undefined) return false;
+  if (state.loading || !workflowPhotoReady(state)) {
+    scheduleWorkflowDraftRestoreRetry(state);
+    return false;
+  }
+  cancelWorkflowDraftRestoreRetry(state);
   state.pendingDraftRestore = undefined;
   completeWorkflowDraftRestoreRequest();
   resetMarkerRepair(state);
@@ -3691,6 +3714,7 @@ export function disposeWorkflowIncisionController() {
   markerDiagnostics.get(state)?.dispose();
   markerDiagnostics.delete(state);
   cancelWorkflowDraftSave(state);
+  cancelWorkflowDraftRestoreRetry(state);
   persistWorkflowDraft(state);
   state.mounted = false;
   state.markerRequestId += 1;
