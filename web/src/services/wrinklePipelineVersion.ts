@@ -8,7 +8,7 @@ import { YOLO_WRINKLE_ONNX_VERSION } from "./personalized/yoloWrinkleOnnx.ts";
  */
 export const WRINKLE_PIPELINE_VERSION = Object.freeze({
   rstlAtlas: "8.1.96",
-  wrinkleDetection: "paired-edge-v10-dynamic-four-region-1.0",
+  wrinkleDetection: "paired-edge-v10-dynamic-four-region-1.1",
   baselineDetection: YOLO_WRINKLE_ONNX_VERSION,
   refinementProfile: LATEST_WRINKLE_REFINEMENT_PROFILE,
   refinementMode: "v10_four_region_guided_direct_nose_v9_7_2",

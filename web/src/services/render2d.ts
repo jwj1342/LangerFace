@@ -1,5 +1,7 @@
 // 2D 渲染：线条叠加、细节放大窗、统计面板。
 import { SOLID, BAND, ZOOM_REGIONS } from "./constants.ts";
+import { liveBenchmark, sampleBenchmarkLines } from "./liveBenchmark.ts";
+import { LivePreviewCadence } from "./livePreviewCadence.ts";
 import type { ZoomRegion } from "./constants.ts";
 import { ctx as boundCtx, els } from "./liveDom.ts";
 import {
@@ -122,12 +124,26 @@ const isIncisionZoomRegion = (region: RenderRegion): region is IncisionZoomRegio
 
 const focusScratch = document.createElement("canvas");
 const focusCtx = focusScratch.getContext("2d") as CanvasRenderingContext2D;
+const foreheadScratch = document.createElement("canvas");
+const foreheadCtx = foreheadScratch.getContext("2d", {
+  willReadFrequently: true,
+}) as CanvasRenderingContext2D;
+const FOREHEAD_SAMPLE_MAX_WIDTH = 320;
 const focusZoomRange = { min: 1, max: 4.5 };
 /** 读取当前帧像素供肤色判定使用；跨源画布读取失败时返回 null（退化为不按肤色裁剪）。 */
-function readFrameImageData(W: number, H: number): ImageData | null {
-  if (!(W > 0 && H > 0)) return null;
+function readForeheadImageData(W: number, H: number): {
+  image: ImageData;
+  scale: number;
+} | null {
+  if (!(W > 0 && H > 0) || !foreheadCtx) return null;
   try {
-    return ctx.getImageData(0, 0, W, H);
+    const scale = Math.min(1, FOREHEAD_SAMPLE_MAX_WIDTH / W);
+    const width = Math.max(1, Math.round(W * scale));
+    const height = Math.max(1, Math.round(H * scale));
+    if (foreheadScratch.width !== width) foreheadScratch.width = width;
+    if (foreheadScratch.height !== height) foreheadScratch.height = height;
+    foreheadCtx.drawImage(els.canvas, 0, 0, width, height);
+    return { image: foreheadCtx.getImageData(0, 0, width, height), scale };
   } catch {
     // 跨源图像在更早阶段就被拒绝，这里只是保证读取失败不会中断渲染。
     return null;
@@ -189,6 +205,11 @@ function estimateRenderQualityGate(lm: Vec3[], W: number, H: number): AnyRecord 
 }
 
 export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): number {
+  // Resolve once per frame, avoiding proxy lookups and method binding per point.
+  const ctx = currentCtx();
+  const benchmark = liveBenchmark();
+  const sample = benchmark?.current;
+  const begin = sample ? performance.now() : 0;
   // modelState.atlases 存的是 lines 数组本身（pipelineModels 的 loadAtlas 返回 atlas.lines），
   // 不是 atlas payload。名字写成 atlasLines 是因为写成 atlas 时曾经诱发过 `atlas?.lines` 这个
   // 恒为 undefined 的取值，导致密度筛选返回空集、整页一条线都不画（#141）。
@@ -200,9 +221,12 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
     : null;
   const innerMouth = innerMouthTriangles(modelTriangles()); // 口裂三角面（张嘴会落进口内/牙齿），永久排除
   const mapped = mapAtlas(atlasLines, lm, modelTriangles());
+  if (sample) sample.stages.rstlMapping = performance.now() - begin;
   if (sourceState.sourceKind === "image" || sourceState.paused) setLatestAutoLines(mapped);
   const refineActive = isRefineActive();
   const displayLines = getDisplayLines(mapped);
+  if (benchmark && !benchmark.seedRstl) benchmark.seedRstl = sampleBenchmarkLines(displayLines);
+  if (sample) sample.rstl = sampleBenchmarkLines(displayLines);
   const selectedLine = refineActive ? selectedLineIndex() : null;
   const selectedPoint = refineActive ? selectedPointIndex() : null;
   const pointMode = refineActive && isPointRefineMode();
@@ -212,13 +236,22 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   const visibleLineIndices = refineActive ? null : lineIndicesForDensity(displayLines || [], renderState.densityFrac);
   const hasMasks = masks.length > 0;
   // 外推的额头弧线要按头部包络 + 肤色再裁一次，否则会画到头发/背景/脸外（#141）
-  const foreheadImage = readFrameImageData(W, H);
-  const skinVisible = buildForeheadSkinVisibility(foreheadImage, W, H, lm);
+  const foreheadSample = shouldDrawRstlLayer() ? readForeheadImageData(W, H) : null;
+  const skinVisible = buildForeheadSkinVisibility(
+    foreheadSample?.image || null,
+    W,
+    H,
+    lm,
+    foreheadSample?.scale || 1,
+  );
   const headVisible = buildHeadVisibility(lm);
   const frameQualityGate = estimateRenderQualityGate(lm, W, H);
   const canDrawAtlas = sourceState.sourceKind === "image" || frameQualityGate.passed;
   const localRegionQuality = frameQualityGate.local_region_quality;
   const localRegionMasks = buildLocalRegionMasks(lm, localRegionQuality);
+  const frozenBoxes = localRegionMasks.filter((region) => region.action === "freeze").flatMap((region) => region.boxes);
+  const dimRegions = localRegionMasks.filter((region) => region.action === "dim");
+  const linesStart = sample ? performance.now() : 0;
 
   ctx.save();
   ctx.globalAlpha = renderState.opacity; ctx.lineWidth = Math.max(2, W / 1300);
@@ -261,10 +294,10 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
         const v = vis && Number.isInteger(triangleIndex) ? vis[triangleIndex] : 1;
         if (innerMouth.has(ln.tris[i])) return 0; // 口裂三角面无论朝向都排除（#38）
         if (!onVisibleSkin[i]) return 0;
-        if (localActionForPoints([p], localRegionMasks).action === "freeze") return 0;
+        if (frozenBoxes.some((box) => pointInBox(p, box))) return 0;
         return v && !(hasMasks && pointInHandMasks(toPoint2(p), masks)) ? 1 : 0;
       });
-      const localLineAction = localActionForPoints(ln.pts, localRegionMasks.filter((region: LocalRegionMask) => region.action === "dim"));
+      const localLineAction = localActionForPoints(ln.pts, dimRegions);
       const savedAlpha = ctx.globalAlpha;
       if (localLineAction.action === "dim") ctx.globalAlpha = savedAlpha * localLineAction.opacityScale;
       for (const run of visibleRuns(ln.pts, mask)) {
@@ -277,29 +310,42 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
       count++;
     }
   }
+  if (sample) sample.stages.rstlStrokes = performance.now() - linesStart;
+  const wrinklesStart = sample ? performance.now() : 0;
   if (canDrawAtlas && shouldDrawWrinkleLayer() && mobileWrinkleLayerVisible()) {
-    const evidenceColors: Record<string, string> = {
-      forehead: "#ff9f1c",
-      frown: "#ff4d6d",
-      wrinkle: "#00d4ff",
-    };
+    const evidenceLines = getWrinkleEvidenceLines();
+    const evidenceColors = [
+      ["forehead", "#ff9f1c"],
+      ["frown", "#ff4d6d"],
+      ["wrinkle", "#00d4ff"],
+      ["", "#ff832b"],
+    ] as const;
     ctx.save();
     ctx.globalAlpha = 0.96;
     ctx.lineWidth = Math.max(2.4, W / 620);
     ctx.setLineDash([]);
-    for (const line of getWrinkleEvidenceLines()) {
-      if (line.points.length < 2) continue;
-      ctx.strokeStyle = evidenceColors[line.className] || "#ff832b";
+    for (const [className, color] of evidenceColors) {
       ctx.beginPath();
-      ctx.moveTo(line.points[0][0], line.points[0][1]);
-      for (let index = 1; index < line.points.length; index++) {
-        ctx.lineTo(line.points[index][0], line.points[index][1]);
+      let hasSegments = false;
+      for (const line of evidenceLines) {
+        if ((className ? line.className !== className :
+          line.className === "forehead" || line.className === "frown" || line.className === "wrinkle")
+          || line.points.length < 2) continue;
+        ctx.moveTo(line.points[0][0], line.points[0][1]);
+        for (let index = 1; index < line.points.length; index++) {
+          ctx.lineTo(line.points[index][0], line.points[index][1]);
+        }
+        hasSegments = true;
+        count++;
       }
-      ctx.stroke();
-      count++;
+      if (hasSegments) {
+        ctx.strokeStyle = color;
+        ctx.stroke();
+      }
     }
     ctx.restore();
   }
+  if (sample) sample.stages.wrinkleStrokes = performance.now() - wrinklesStart;
   if (showSymmetryAxis()) {
     const axis = symmetryAxisX();
     ctx.save();
@@ -964,13 +1010,25 @@ function syncFocusCards() {
   });
 }
 
+const zoomCadence = new LivePreviewCadence();
+let zoomSource: unknown = null;
+
 export function clearZooms(): void {
+  zoomCadence.reset();
   for (const zc of renderState.zoomCards as LiveZoomCard[]) { zc.ctx.fillStyle = "#05070a"; zc.ctx.fillRect(0, 0, zc.canvas.width, zc.canvas.height); }
 }
 
 // 从已叠加线条的主画布上裁剪关键区域并放大到各窗口（线条随之放大显示）
 export function drawZooms(lm: Vec3[], W: number): void {
-  if (!renderState.zoom || !renderState.zoomCards.length) return;
+  if (!renderState.zoom || !renderState.zoomCards.length) {
+    zoomCadence.reset();
+    return;
+  }
+  if (zoomSource !== sourceState.source) {
+    zoomSource = sourceState.source;
+    zoomCadence.reset();
+  }
+  if (!zoomCadence.shouldDraw(performance.now(), sourceState.sourceKind === "image" || sourceState.paused)) return;
   const faceW = faceBBox(lm).w || W;
   for (const zc of renderState.zoomCards as LiveZoomCard[]) {
     const g = zc.ctx, dw = zc.canvas.width, dh = zc.canvas.height;

@@ -4,7 +4,10 @@ import { neutralIncisionEdit } from "../web/src/services/incisionEditHistory.ts"
 import { buildIncisionWorkspaceSession } from "../web/src/services/incisionWorkspaceSession.ts";
 import {
   clearWorkflowDraftSession,
+  completeWorkflowDraftRestoreRequest,
   loadWorkflowDraftSession,
+  pendingWorkflowDraftRestoreRequest,
+  requestWorkflowDraftRestore,
   saveWorkflowDraftPhoto,
   saveWorkflowIncisionDraft,
   WORKFLOW_DRAFT_SESSION_KEY,
@@ -73,5 +76,14 @@ assert.equal(storage.getItem(WORKFLOW_DRAFT_SESSION_KEY), null, "expired drafts 
 saveWorkflowDraftPhoto(photo, storage, now);
 clearWorkflowDraftSession(storage);
 assert.equal(loadWorkflowDraftSession(storage, now), null, "explicit clear removes the temporary draft");
+
+requestWorkflowDraftRestore(incision);
+assert.deepEqual(pendingWorkflowDraftRestoreRequest(), incision,
+  "a restore request survives until the workflow controller can apply it");
+assert.deepEqual(pendingWorkflowDraftRestoreRequest(), incision,
+  "checking a restore request does not lose it during a controller remount");
+completeWorkflowDraftRestoreRequest();
+assert.equal(pendingWorkflowDraftRestoreRequest(), undefined,
+  "a restore request is cleared after it is applied");
 
 console.log("test_workflow_draft_session: session-only photo and incision recovery contracts passed");

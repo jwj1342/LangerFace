@@ -59,8 +59,8 @@ export function LiveRenderControlsPanel() {
           />
         </FieldGroup>
         <FieldGroup visible={false}>
-          <Label htmlFor="smooth">平滑 <FieldValue id="smoothVal">{render?.smoothLabel || "中"}</FieldValue></Label>
-          <RangeInput id="smooth" min="0" max="100" defaultValue="60" />
+          <Label htmlFor="smooth">平滑 <FieldValue id="smoothVal">{render?.smoothLabel || "关"}</FieldValue></Label>
+          <RangeInput id="smooth" min="0" max="100" defaultValue="45" />
         </FieldGroup>
         <FieldGroup>
           <Label htmlFor="opacity">透明度 <FieldValue id="opacityVal">{opacity}%</FieldValue></Label>

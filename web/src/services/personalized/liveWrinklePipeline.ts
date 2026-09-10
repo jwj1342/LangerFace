@@ -78,7 +78,12 @@ export async function runGeneralLiveWrinklePipeline({
     detection.classMasks,
     size,
     size,
-    { minimumLineLengthPx: 20, resampleSpacingPx: 1, maximumSkeletonIterations: 96 },
+    {
+      minimumLineLengthPx: 20,
+      resampleSpacingPx: 1,
+      maximumSkeletonIterations: 96,
+      sourceImageRgba: imageData.data,
+    },
   );
   if (!evidence.lines.length || !evidence.validation.passed) {
     throw new Error("未提取到通过质量门禁的细皱纹线");

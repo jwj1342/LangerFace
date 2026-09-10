@@ -40,6 +40,7 @@ import type {
   LiveWrinkleWorkerEventSink,
   LiveWrinkleWorkerEvidence,
   LiveWrinkleWorkerRequest,
+  LiveWrinkleRefinementRequest,
 } from "./liveWrinklePipelineWorkerContract.ts";
 
 const LEFT_EYE_CONTOUR = [
@@ -71,6 +72,8 @@ const detector = new YoloWrinkleOnnx({
   confidenceThreshold: YOLO_WRINKLE_CONFIDENCE,
   wasmPaths: { mjs: ortWasmModuleUrl, wasm: ortWasmBinaryUrl },
 });
+let fullDetectionSequence = 0;
+let cachedFullDetection: { id: string; payload: DynamicFourRegionPayload } | null = null;
 
 async function fetchWithTimeout(
   url: string,
@@ -186,7 +189,9 @@ async function dynamicFourRegionDetection(
   return payload;
 }
 
-function pixelLandmarks(request: LiveWrinkleWorkerRequest): Array<[number, number]> {
+function pixelLandmarks(
+  request: Pick<LiveWrinkleRefinementRequest, "landmarks" | "size">,
+): Array<[number, number]> {
   return request.landmarks.map((point) => [
     point[0] * request.size,
     point[1] * request.size,
@@ -194,7 +199,7 @@ function pixelLandmarks(request: LiveWrinkleWorkerRequest): Array<[number, numbe
 }
 
 function appendDirectNoseCurves(
-  request: LiveWrinkleWorkerRequest,
+  request: LiveWrinkleRefinementRequest,
   payload: DynamicFourRegionPayload,
   refined: ReturnType<typeof refineV6>,
 ) {
@@ -248,17 +253,20 @@ function appendDirectNoseCurves(
 }
 
 const api: LiveWrinklePipelineWorkerApi = {
-  async analyze(request, onEvent) {
+  async detect(request, onEvent) {
     const totalStart = performance.now();
     const modelLoadStart = performance.now();
     await detector.load((progress) => emit(onEvent, { type: "model-progress", progress }));
     const modelLoadMs = performance.now() - modelLoadStart;
     const yoloStart = performance.now();
-    const detection = await detector.detect({
+    const imageData = {
       width: request.width,
       height: request.height,
       data: request.pixels,
-    } as ImageData, { confidenceThreshold: YOLO_WRINKLE_CONFIDENCE });
+    } as ImageData;
+    const detection = request.mode === "yolo-only"
+      ? await detector.detectClassMasks(imageData, { confidenceThreshold: YOLO_WRINKLE_CONFIDENCE })
+      : await detector.detect(imageData, { confidenceThreshold: YOLO_WRINKLE_CONFIDENCE });
     if (detection.version !== YOLO_WRINKLE_ONNX_VERSION) {
       throw new Error(`皱纹检测器版本不匹配：${detection.version}`);
     }
@@ -268,13 +276,60 @@ const api: LiveWrinklePipelineWorkerApi = {
       detection.classMasks,
       request.size,
       request.size,
-      { minimumLineLengthPx: 20, resampleSpacingPx: 1, maximumSkeletonIterations: 96 },
+      {
+        minimumLineLengthPx: 20,
+        resampleSpacingPx: 1,
+        maximumSkeletonIterations: 96,
+        sourceImageRgba: request.mode === "yolo-only" ? undefined : request.pixels,
+      },
     );
     if (!baseline.lines.length || !baseline.validation.passed) {
-      throw new Error("实时 YOLO 未提取到可供 V10 使用的基础中心线");
+      throw new Error("YOLO 未提取到有效皱纹中心线");
     }
     const baselineExtractionMs = performance.now() - baselineStart;
-    const browserBaselineSha256 = await sha256Json(baseline.lines);
+    // Periodic correction only consumes geometry and scores. Avoid creating a
+    // large JSON string and digest for results that never enter reproducibility logs.
+    const browserBaselineSha256 = request.includeFingerprint === false
+      ? null
+      : await sha256Json(baseline.lines);
+    if (request.mode === "yolo-only") {
+      const yoloScores = detection.detections
+        .map((item) => Number(item.score))
+        .filter((score) => Number.isFinite(score));
+      const evidence: LiveWrinkleWorkerEvidence = {
+        lines: baseline.lines.map((line) => ({
+          id: line.id,
+          class: line.class,
+          anatomicalClass: line.class,
+          points: line.points.map((point) => [point[0], point[1]]),
+        })),
+        summary: {
+          fineLineCount: baseline.lines.length,
+          sourceConnectedComponents: baseline.validation.renderedConnectedComponents,
+          browserBaselineSha256,
+          yoloDiagnostics: detection.diagnostics || {},
+          yoloScores,
+        },
+      };
+      emit(onEvent, { type: "evidence", evidence });
+      return {
+        executionThread: "web_worker",
+        detectorVersion: detection.version,
+        detectionId: null,
+        mode: request.mode,
+        provider: null,
+        timings: {
+          modelLoadMs,
+          yoloDetectionMs,
+          baselineExtractionMs,
+          fourRegionDetectionMs: 0,
+          evidenceBuildMs: 0,
+          totalMs: performance.now() - totalStart,
+        },
+        evidence,
+      };
+    }
+
     // Acquire the short-lived direct-upload ticket only after local model work,
     // so slow first-load devices cannot expire it before the image POST begins.
     const session = await providerSession();
@@ -309,7 +364,41 @@ const api: LiveWrinklePipelineWorkerApi = {
     };
     const evidenceBuildMs = performance.now() - evidenceStart;
     emit(onEvent, { type: "evidence", evidence });
-    emit(onEvent, { type: "pipeline-progress", stage: "refining" });
+    const detectionId = `full-${++fullDetectionSequence}`;
+    cachedFullDetection = { id: detectionId, payload };
+    return {
+      executionThread: "web_worker",
+      detectorVersion: payload.detectorVersion,
+      detectionId,
+      mode: request.mode,
+      provider,
+      timings: {
+        modelLoadMs,
+        yoloDetectionMs,
+        baselineExtractionMs,
+        fourRegionDetectionMs,
+        evidenceBuildMs,
+        totalMs: performance.now() - totalStart,
+      },
+      evidence,
+    };
+  },
+
+  async refine(request) {
+    const cached = cachedFullDetection;
+    if (!cached || cached.id !== request.detectionId) {
+      throw new Error("皱纹检测结果已失效，请重新检测后再微调");
+    }
+    const payload = cached.payload;
+    const guidancePayload: DynamicFourRegionPayload = {
+      ...payload,
+      lines: payload.lines.filter((line) => line.anatomicalClass !== "nasal_dorsum"),
+    };
+    const guidanceEvidence = buildPrecomputedFineWrinkleEvidence(
+      guidancePayload,
+      request.size,
+      payload.source.imageSha256,
+    );
     const refinementStart = performance.now();
     const refined = refineV6({
       seeds: request.seeds,
@@ -321,6 +410,7 @@ const api: LiveWrinklePipelineWorkerApi = {
       options: latestV9RstlRefinementOptions(request.faceWidthPx),
     });
     const refinementMs = performance.now() - refinementStart;
+    const standardCurveCount = refined.curves.length;
     const noseStart = performance.now();
     const curves = appendDirectNoseCurves(request, payload, refined);
     const noseAndVisibilityMs = performance.now() - noseStart;
@@ -328,23 +418,13 @@ const api: LiveWrinklePipelineWorkerApi = {
       executionThread: "web_worker",
       detectorVersion: payload.detectorVersion,
       refinementProfile: LATEST_WRINKLE_REFINEMENT_PROFILE,
-      provider,
-      timings: {
-        modelLoadMs,
-        yoloDetectionMs,
-        baselineExtractionMs,
-        fourRegionDetectionMs,
-        evidenceBuildMs,
-        refinementMs,
-        noseAndVisibilityMs,
-        totalMs: performance.now() - totalStart,
-      },
-      evidence,
+      refinementMs,
+      noseAndVisibilityMs,
       refined: {
         curves,
         diagnostics: refined.diagnostics,
         audit: refined.audit,
-        standardCurveCount: refined.curves.length,
+        standardCurveCount,
       },
     };
   },

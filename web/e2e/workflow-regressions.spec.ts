@@ -324,7 +324,7 @@ test("repeated photo replacement never auto-starts main-thread wrinkle YOLO", as
     await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
     await expect(page.locator("#wrinkleStatus")).toHaveText("等待手动检测", { timeout: 45_000 });
     await expect(page.locator("#wrinkleDetectBtn")).toBeEnabled();
-    await expect(page.locator("#wrinkleSummary")).toContainText("点击“检测皱纹”后才会检查处理位置并启动 V10");
+    await expect(page.locator("#wrinkleSummary")).toContainText("点击“检测皱纹”只运行皱纹检测");
   }
 
   // This exceeds the removed delay + idle timeout, proving that an old photo

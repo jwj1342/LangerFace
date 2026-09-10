@@ -20,7 +20,7 @@ import {
 const respondingChild = () => spawn(process.execPath, ["-e", `
   process.stdout.write(JSON.stringify({
     type: "ready",
-    detectorVersion: "paired-edge-v10-dynamic-four-region-1.0",
+    detectorVersion: "paired-edge-v10-dynamic-four-region-1.1",
     checkpointSha256: "e301b8f70c8239c01504a0616b61acdf9ab9b5796f513d6e7294d4fa52b6a6c2"
   }) + "\\n");
   process.stdin.setEncoding("utf8");

@@ -31,7 +31,7 @@ export function LiveSourceControlsPanel() {
         id="uploadBtn"
         type="button"
         aria-describedby={uploadTooltipOpen ? "currentImageFileTooltip" : undefined}
-        aria-label={`上传照片；${uploadTooltipMessage}`}
+        aria-label={`上传照片或视频；${uploadTooltipMessage}`}
         onPointerEnter={(event) => {
           const desktopHover = event.pointerType === "mouse"
             && (!window.matchMedia || window.matchMedia("(hover: hover) and (pointer: fine)").matches);
@@ -40,7 +40,7 @@ export function LiveSourceControlsPanel() {
         onPointerLeave={() => setUploadTooltipOpen(false)}
         onPointerCancel={() => setUploadTooltipOpen(false)}
         onClick={() => commands.source("upload_source")}
-      >⬆&nbsp; 上传照片</Button>
+      >⬆&nbsp; 上传照片/视频</Button>
       <PersistentTooltip
         anchorRef={uploadTooltipAnchor}
         className="upload-source-tooltip"
@@ -48,7 +48,7 @@ export function LiveSourceControlsPanel() {
         message={uploadTooltipMessage}
         open={uploadTooltipOpen}
       />
-      <Input type="file" id="fileInput" accept="image/*" hidden />
+      <Input type="file" id="fileInput" accept="image/*,video/*" hidden />
       <ButtonRow>
         <Button variant="workbench" id="camBtn" type="button" aria-pressed={cameraActive} onClick={() => commands.source("camera_toggle")}>{cameraActive ? "■ 关闭摄像头" : "◉ 开启摄像头"}</Button>
         <Button variant="workbench" id="pauseBtn" type="button" disabled={!running} onClick={() => commands.source("pause_toggle")}>{paused ? "▶ 继续" : "⏸ 暂停"}</Button>

@@ -60,7 +60,9 @@ export function LiveQualityPanel({ mobilePortalSelector }: LiveQualityPanelProps
       <Hint>
         {mobileTarget
           ? "受分辨率与光线影响"
-          : "姿态与光照自适应 · 标准 RSTL 在当前浏览器计算；V10 处理位置见上方皱纹板块"}
+          : import.meta.env?.VITE_SERVER_COMPUTE === "true"
+            ? "姿态与光照自适应 · RSTL 在当前浏览器实时映射；YOLO 在服务器 GPU 运行"
+            : "姿态与光照自适应 · 标准 RSTL 与 YOLO 在当前浏览器计算"}
       </Hint>
     </Card>
   );

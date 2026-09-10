@@ -149,8 +149,8 @@ for (const rel of ["web/src/services/pipelineSource.ts"]) {
     `${rel} preserves the established source-replacement order outside the workflow route`);
   assert.match(source, /if \(workflowUpload && !suppressScreenshotWarning/,
     `${rel} does not change the protected standalone RSTL upload interaction`);
-  assert.match(source, /if \(!file\.type\.startsWith\("image\/"\)\) \{[\s\S]*?return;[\s\S]*?const startedAt/,
-    `${rel} rejects non-photo files before stopping or replacing the active source`);
+  assert.match(source, /if \(!isImage && !isVideo\) \{[\s\S]*?return;[\s\S]*?const startedAt/,
+    `${rel} rejects unsupported files before stopping or replacing the active source`);
   assert.match(source, /const modelReady = ensureImageReady\(\)\.then[\s\S]*?const decoded = img\.decode\(\)\.then[\s\S]*?await Promise\.all\(\[modelReady, decoded\]\)/,
     `${rel} overlaps image decoding with cached static-model initialization while timing both stages`);
   assert.doesNotMatch(source, /await ensureReady\(\);\s*if \(imageFile\) await ensureImageReady\(\)/,
@@ -176,8 +176,8 @@ for (const rel of ["web/src/services/pipelineSource.ts"]) {
     "repeated file-picker use has no hidden wrinkle-analysis timer to cancel or revive");
   assert.doesNotMatch(wrinkleSource, /AUTO_WRINKLE_ANALYSIS_DELAY_MS|requestIdleCallback/,
     "YOLO is explicit user work rather than a delayed automatic main-thread task");
-  assert.match(wrinklePanelSource, /点击“检测皱纹”后才会启动 V10/,
-    "the panel tells operators that V10 runs only after an explicit action");
+  assert.match(wrinklePanelSource, /照片在点击“检测皱纹”后才会启动 YOLO/,
+    "the panel tells operators that static-photo YOLO runs only after an explicit action");
   assert.match(wrinkleSource, /return isWrinkleFrameReady\(\) \? "等待手动检测"/,
     "the ready state cannot imply that automatic YOLO is pending");
 }

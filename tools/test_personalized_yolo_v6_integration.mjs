@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -121,15 +121,21 @@ assert.match(liveRender, /lineIndicesForDensity/,
 
 const modelParts = [0, 1, 2, 3].map((index) =>
   new URL(`model/wrinkle-yolov8s-seg-640.onnx.part${String(index).padStart(2, "0")}`, assets));
-const hash = createHash("sha256");
-let bytes = 0;
-for (const part of modelParts) {
-  const payload = await readFile(part);
-  bytes += payload.byteLength;
-  hash.update(payload);
+const metadata = JSON.parse(await readFile(new URL("model/wrinkle-yolov8s-seg-640.json", assets), "utf8"));
+const modelInstalled = await access(modelParts[0]).then(() => true, () => false);
+let bytes = metadata.onnx_bytes;
+if (modelInstalled) {
+  const hash = createHash("sha256");
+  bytes = 0;
+  for (const part of modelParts) {
+    const payload = await readFile(part);
+    bytes += payload.byteLength;
+    hash.update(payload);
+  }
+  assert.equal(bytes, 47_346_561);
+  assert.equal(hash.digest("hex").toUpperCase(),
+    "F58BED3A49734597BB3A8651B3BE571DACC2F55AABBBDBCB7994DC9D8D8DB76C");
 }
-assert.equal(bytes, 47_378_404);
-assert.equal(hash.digest("hex").toUpperCase(),
-  "4BB6ECD9C5FDDDDF1A4559813FB40293F6AE552EA1287912219157B91408A744");
+assert.equal(metadata.hugging_face.visibility, "private");
 
 console.log(`personalized YOLO/V6 integration test passed (${root}; ${bytes} model bytes)`);

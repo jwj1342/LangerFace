@@ -88,9 +88,9 @@ async function initializeAssetsReady(): Promise<void> {
   visionResolver = localVisionWasmFileset;
   recordMetricSample("model.assetsAndVisionReadyMs", performance.now() - startedAt);
   logInfo("图谱与 MediaPipe Vision 运行时加载完成。", {
-    triangles: tri.length,
-    rstlLines: rstl.lines.length,
-    langerLines: langer.lines.length,
+    triangles: modelState.triangles.length,
+    rstlLines: modelState.atlases.rstl?.length || 0,
+    langerLines: modelState.atlases.langer?.length || 0,
   });
 }
 
@@ -120,10 +120,13 @@ async function initializeReady(): Promise<void> {
   });
   try {
     modelState.landmarker = await build("GPU");
+    modelState.videoFaceDelegate = "GPU";
   } catch (error) {
+    if (import.meta.env?.VITE_SERVER_COMPUTE === 'true') throw error;
     countMetric("faceLandmarker.gpuFallback");
     logWarn("Face Landmarker GPU 初始化失败，回退到 CPU。", error);
     modelState.landmarker = await build("CPU");
+    modelState.videoFaceDelegate = "CPU";
   }
 
   const buildHand = (delegate: Delegate) => HandLandmarker.createFromOptions(resolver, {
@@ -136,18 +139,26 @@ async function initializeReady(): Promise<void> {
   });
   try {
     modelState.handLandmarker = await buildHand("GPU");
+    modelState.videoHandDelegate = "GPU";
   } catch (error) {
+    if (import.meta.env?.VITE_SERVER_COMPUTE === 'true') throw error;
     countMetric("handLandmarker.gpuFallback");
     logWarn("Hand Landmarker GPU 初始化失败，回退到 CPU。", error);
     try {
       modelState.handLandmarker = await buildHand("CPU");
+      modelState.videoHandDelegate = "CPU";
     } catch (err) {
       countMetric("handLandmarker.loadFailure");
       logWarn("手部模型加载失败，手部遮挡功能将暂不可用。", err);
     }
   }
 
-  logInfo("连续帧 MediaPipe 模型加载完成。", {
+  logInfo("连续帧 MediaPipe 模型与图谱加载完成。", {
+    videoFaceDelegate: modelState.videoFaceDelegate,
+    videoHandDelegate: modelState.videoHandDelegate || "unavailable",
+    triangles: modelState.triangles.length,
+    rstlLines: modelState.atlases.rstl?.length || 0,
+    langerLines: modelState.atlases.langer?.length || 0,
     handOcclusionReady: Boolean(modelState.handLandmarker),
   });
 }
@@ -176,6 +187,7 @@ async function initializeImageFaceReady(): Promise<void> {
   try {
     modelState.imageLandmarker = await build("GPU");
   } catch (error) {
+    if (import.meta.env?.VITE_SERVER_COMPUTE === 'true') throw error;
     countMetric("faceLandmarker.imageGpuFallback");
     logWarn("静态图片 Face Landmarker GPU 初始化失败，回退到 CPU。", error);
     modelState.imageLandmarker = await build("CPU");
@@ -195,6 +207,7 @@ async function initializeImageHandReady(): Promise<void> {
   try {
     modelState.imageHandLandmarker = await buildHand("GPU");
   } catch (error) {
+    if (import.meta.env?.VITE_SERVER_COMPUTE === 'true') throw error;
     countMetric("handLandmarker.imageGpuFallback");
     logWarn("静态图片 Hand Landmarker GPU 初始化失败，回退到 CPU。", error);
     try {

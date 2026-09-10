@@ -1,6 +1,6 @@
 export const WRINKLE_V10_ENDPOINT = "/api/wrinkle-v10";
 export const WRINKLE_V10_PROVIDER_SCHEMA = "langerface.wrinkle-v10-provider.v1";
-export const WRINKLE_V10_DETECTOR_VERSION = "paired-edge-v10-dynamic-four-region-1.0";
+export const WRINKLE_V10_DETECTOR_VERSION = "paired-edge-v10-dynamic-four-region-1.1";
 export const WRINKLE_V10_CHECKPOINT_SHA256 =
   "e301b8f70c8239c01504a0616b61acdf9ab9b5796f513d6e7294d4fa52b6a6c2";
 export const WRINKLE_V10_HEALTH_TIMEOUT_MS = 5_000;

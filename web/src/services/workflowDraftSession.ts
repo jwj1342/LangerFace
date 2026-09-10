@@ -9,6 +9,8 @@ export const WORKFLOW_DRAFT_TTL_MS = 30 * 60 * 1000;
 export const WORKFLOW_DRAFT_CHANGED_EVENT = "langerface:workflow-draft-changed";
 export const WORKFLOW_DRAFT_RESTORE_EVENT = "langerface:workflow-draft-restore";
 
+let pendingWorkflowDraftRestore: WorkflowIncisionDraft | null | undefined;
+
 export interface WorkflowDraftPhoto {
   dataUrl: string;
   fileName: string;
@@ -203,6 +205,15 @@ export async function workflowDraftPhotoFile(photo: WorkflowDraftPhoto): Promise
 }
 
 export function requestWorkflowDraftRestore(incision: WorkflowIncisionDraft | null): void {
+  pendingWorkflowDraftRestore = incision;
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(WORKFLOW_DRAFT_RESTORE_EVENT, { detail: incision }));
+}
+
+export function pendingWorkflowDraftRestoreRequest(): WorkflowIncisionDraft | null | undefined {
+  return pendingWorkflowDraftRestore;
+}
+
+export function completeWorkflowDraftRestoreRequest(): void {
+  pendingWorkflowDraftRestore = undefined;
 }

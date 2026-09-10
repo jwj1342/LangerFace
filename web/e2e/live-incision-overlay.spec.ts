@@ -54,7 +54,7 @@ function visibleSourcePixelCount() {
   return count;
 }
 
-test("approved incision reaches photo and MediaStream camera while unsupported video fails safely", async ({ page }) => {
+test("approved incision reaches photo, uploaded video, and MediaStream camera", async ({ page }) => {
   test.setTimeout(180_000);
   await page.goto("/app/incision");
   await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
@@ -133,10 +133,10 @@ test("approved incision reaches photo and MediaStream camera while unsupported v
 
   await page.locator("#meshPts").uncheck();
   await uploadGeneratedVideo(page);
-  await expect(page.locator("#overlayMsg")).toHaveText("仅支持上传照片；如需连续画面请开启摄像头。");
-  await expect(page.locator("#livePill")).toContainText("照片");
+  await expect(page.locator("#livePill")).toContainText("视频", { timeout: 60_000 });
+  await expect(page.locator("#incisionOverlayQaState")).not.toHaveText("等待画面", { timeout: 60_000 });
   await expect.poll(() => page.evaluate(candidatePixelCount), {
-    message: "rejecting an unsupported WebM must preserve the photo incision overlay",
+    message: "the uploaded video must draw the staged incision candidate",
   }).toBeGreaterThan(8);
 
   // This deterministic MediaStream covers the browser camera pipeline; fixed-device evidence remains manual.

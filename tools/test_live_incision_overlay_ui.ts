@@ -25,8 +25,7 @@ const controllerSnapshotSchemas = fs.readFileSync("src/lib/controllerSnapshotSch
 
 assert.ok(compatibilityHtml.includes("/src/main.tsx"), "root HTML mounts the React tool launcher");
 assert.ok(!compatibilityHtml.includes("main.js"), "legacy live HTML no longer mounts the live controller directly");
-assert.ok(liveUi.includes('accept="image/*"'), "React live page accepts uploaded photos");
-assert.ok(!liveUi.includes("video/*"), "React live page does not expose uploaded video files");
+assert.ok(liveUi.includes('accept="image/*,video/*"'), "React live page accepts uploaded photos and videos");
 assert.ok(liveUi.includes('id="camBtn"'), "React live page exposes camera entry for realtime overlay");
 assert.ok(liveUi.includes('id="exportBtn"'), "React live page exposes export action");
 assert.ok(liveRoute.includes("LiveControlRail"),
@@ -38,8 +37,8 @@ assert.ok(liveIncisionOverlayPanel.includes("!overlay?.loaded && !overlay?.qaLab
 assert.ok(liveIncisionOverlayPanel.includes("这不是加载故障"),
   "the blocked live-overlay card explicitly distinguishes review gating from a loading bug");
 assert.ok(source.includes('setSource(prepared.source, "image"'), "uploaded photos enter the shared live render source");
-assert.ok(source.includes("仅支持上传照片；如需连续画面请开启摄像头。"), "uploaded videos are rejected before changing the active source");
-assert.ok(!source.includes('setSource(els.video, "video"'), "uploaded videos cannot enter the shared live render source");
+assert.ok(source.includes("仅支持上传照片或视频。"), "unsupported uploads are rejected before changing the active source");
+assert.ok(source.includes('setSource(els.video, "video"'), "uploaded videos enter the shared live render source");
 assert.ok(source.includes('setSource(els.video, "camera"'), "camera frames enter the shared live render source");
 assert.match(loop, /if \((?:sourceState\.sourceKind|sourceKind) !== "image"\) requestFrame\(\)/, "video and camera sources schedule continuous overlay frames");
 assert.ok(loop.includes("eyeBlinkLeft"), "pipeline extracts left blink blendshape for overlay quality gate");
@@ -101,7 +100,7 @@ assert.ok(render.includes('const canDrawAtlas = sourceState.sourceKind === "imag
 assert.ok(render.includes('gate && !gate.passed ? "需复核"'), "quality indicator reflects gated frames as review-needed");
 assert.ok(poseQuality.includes("rstl-local-region-quality-gate/v0.1"), "renderer exports versioned local region quality gate");
 assert.ok(render.includes("buildLocalRegionMasks"), "renderer maps local quality regions to screen regions");
-assert.ok(render.includes('localActionForPoints([p], localRegionMasks).action === "freeze"'), "renderer freezes unstable local RSTL regions");
+assert.ok(render.includes('region.action === "freeze"') && render.includes('frozenBoxes.some((box) => pointInBox(p, box))'), "renderer freezes unstable local RSTL regions");
 assert.ok(render.includes('localLineAction.action === "dim"'), "renderer dims locally unstable RSTL regions");
 assert.ok(render.includes('"局部复核"'), "quality indicator reflects local region review state");
 assert.ok(render.includes("incisionOverlay.poseGate.frameMotionNorm"), "renderer records overlay motion gate metric");

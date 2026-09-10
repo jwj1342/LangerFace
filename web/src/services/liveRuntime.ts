@@ -152,8 +152,8 @@ function syncPreviewControls(): void {
 }
 
 function configureLandmarkSmoothing(): void {
-  renderState.smoother.minCutoff = 6.0 - 5.5 * renderState.smoothLevel;
-  renderState.smoother.beta = 0.02 + 0.06 * renderState.smoothLevel;
+  renderState.smoother.minCutoff = 5.2 - 4.3 * renderState.smoothLevel;
+  renderState.smoother.beta = 0.035 + 0.075 * renderState.smoothLevel;
   if (typeof renderState.smoother.configureForSmoothLevel === "function") {
     renderState.smoother.configureForSmoothLevel(renderState.smoothLevel);
   }

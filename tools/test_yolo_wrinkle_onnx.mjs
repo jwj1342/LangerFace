@@ -372,6 +372,9 @@ assert.equal(boxIou([0, 0, 2, 2], [3, 3, 4, 4]), 0);
   assert.deepEqual([...combined.binaryMask], [1, 1, 1, 0]);
   assert.deepEqual([...combined.classMasks[1]], [1, 1, 1, 0]);
   assert.ok(combined.confidence[0] > 0.78 && combined.confidence[3] === 0);
+  assert.ok(combined.classConfidenceMaps[1][0] > 0.78);
+  assert.ok(combined.classConfidenceMaps[1][3] > 0 && combined.classConfidenceMaps[1][3] < 0.02,
+    "dense class evidence remains available below the binary mask threshold");
 }
 
 {

@@ -4,6 +4,14 @@ export type FrameCancel = (frameId: number) => void;
 interface PendingFrame {
   id: number | null;
   generation: number;
+  cancel: FrameCancel;
+}
+
+export interface VideoFrameSource {
+  paused: boolean;
+  ended: boolean;
+  requestVideoFrameCallback?: (callback: (now: number, metadata: VideoFrameCallbackMetadata) => void) => number;
+  cancelVideoFrameCallback?: FrameCancel;
 }
 
 export interface LiveFrameSchedulerOptions {
@@ -25,11 +33,19 @@ export class LiveFrameScheduler {
     this.cancelFrame = cancelFrame;
   }
 
-  request(callback: (timeMs: number) => void): boolean {
+  request(callback: (timeMs: number) => void, video?: VideoFrameSource | null): boolean {
     if (this.pending) return false;
-    const pending: PendingFrame = { id: null, generation: this.generation };
+    const useVideo = video && !video.paused && !video.ended
+      && video.requestVideoFrameCallback && video.cancelVideoFrameCallback;
+    const request = useVideo
+      ? (cb: (now: number) => void) => video.requestVideoFrameCallback!(cb)
+      : this.requestFrame;
+    const cancel = useVideo
+      ? (id: number) => video.cancelVideoFrameCallback!(id)
+      : this.cancelFrame;
+    const pending: PendingFrame = { id: null, generation: this.generation, cancel };
     this.pending = pending;
-    pending.id = this.requestFrame((timeMs) => {
+    pending.id = request((timeMs) => {
       if (this.pending !== pending || pending.generation !== this.generation) return;
       this.pending = null;
       callback(timeMs);
@@ -41,7 +57,7 @@ export class LiveFrameScheduler {
     this.generation += 1;
     const pending = this.pending;
     this.pending = null;
-    if (pending?.id != null) this.cancelFrame(pending.id);
+    if (pending?.id != null) pending.cancel(pending.id);
   }
 
   hasPending(): boolean {

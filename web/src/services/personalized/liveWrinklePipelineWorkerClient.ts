@@ -1,25 +1,27 @@
 import * as Comlink from "comlink";
 
-import type { V6Seed } from "./v6RstlRefinementV9.ts";
 import type {
+  LiveWrinkleDetectionResult,
   LiveWrinklePipelineWorkerApi,
   LiveWrinkleWorkerEvent,
-  LiveWrinkleWorkerResult,
+  LiveWrinkleRefinementRequest,
+  LiveWrinkleRefinementResult,
 } from "../../workers/liveWrinklePipelineWorkerContract.ts";
 
 export interface LiveWrinkleWorkerAnalysisInput {
   imageData: ImageData;
-  seeds: V6Seed[];
   size: number;
-  faceWidthPx: number;
-  landmarks: Array<[number, number, number]>;
+  landmarks?: Array<[number, number, number]>;
+  mode: "full" | "yolo-only";
+  includeFingerprint?: boolean;
 }
 
 export interface LiveWrinklePipelineWorkerClient {
-  analyze(
+  detect(
     input: LiveWrinkleWorkerAnalysisInput,
     onEvent?: (event: LiveWrinkleWorkerEvent) => void,
-  ): Promise<LiveWrinkleWorkerResult>;
+  ): Promise<LiveWrinkleDetectionResult>;
+  refine(input: LiveWrinkleRefinementRequest): Promise<LiveWrinkleRefinementResult>;
   dispose(): void;
 }
 
@@ -32,22 +34,29 @@ export function createLiveWrinklePipelineWorkerClient(): LiveWrinklePipelineWork
   let disposed = false;
 
   return {
-    analyze(input, onEvent) {
+    detect(input, onEvent) {
       if (disposed) return Promise.reject(new Error("皱纹 Worker 已关闭"));
       const request = {
         pixels: input.imageData.data,
         width: input.imageData.width,
         height: input.imageData.height,
-        seeds: input.seeds,
         size: input.size,
-        faceWidthPx: input.faceWidthPx,
-        landmarks: input.landmarks,
+        // YOLO-only extraction never reads landmarks. Avoid cloning hundreds
+        // of nested point arrays across the worker boundary on every correction.
+        landmarks: input.mode === "full" ? input.landmarks || [] : [],
+        mode: input.mode,
+        includeFingerprint: input.includeFingerprint,
       };
       const eventSink = onEvent ? Comlink.proxy(onEvent) : undefined;
-      return api.analyze(
+      return api.detect(
         Comlink.transfer(request, [request.pixels.buffer as ArrayBuffer]),
         eventSink,
       );
+    },
+
+    refine(input) {
+      if (disposed) return Promise.reject(new Error("皱纹 Worker 已关闭"));
+      return api.refine(input);
     },
 
     dispose() {

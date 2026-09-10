@@ -12,6 +12,8 @@ export interface FineWrinkleLine {
   class: string;
   lengthPx: number;
   points: Point2[];
+  recoveredEndpointLengthPx?: number;
+  recoveredEndpointSupport?: number;
 }
 export interface FineWrinkleRejection {
   sourceComponentId: string;
@@ -25,6 +27,8 @@ export interface FineWrinkleExtractionOptions {
   minimumLineLengthPx?: number;
   resampleSpacingPx?: number;
   maximumSkeletonIterations?: number;
+  sourceImageRgba?: NumericField;
+  onProfile?: (timings: Record<string, number>) => void;
 }
 
 export interface FineWrinkleExtraction {
@@ -36,6 +40,7 @@ export interface FineWrinkleExtraction {
     skeletonization: "zhang_suen_thinning";
     branchHandling: "weighted_geodesic_longest_main_path";
     centerlineSmoothing: "nine_pixel_weighted_window_constrained_to_source_component";
+    foreheadEndpointRecovery: "image_supported_dark_ridge_tracking";
     minimumLineLengthPx: number;
     resampleSpacingPx: number;
     rasterStrokeWidthPx: 1;
@@ -48,6 +53,8 @@ export interface FineWrinkleExtraction {
     lineCountByClass: Record<string, number>;
     totalLengthPx: number;
     lengthPxByClass: Record<string, number>;
+    recoveredForeheadEndpointCount: number;
+    recoveredForeheadEndpointLengthPx: number;
   };
   validation: {
     passed: boolean;
@@ -57,6 +64,7 @@ export interface FineWrinkleExtraction {
     filledTwoByTwoPixelBlocks: number;
     renderedConnectedComponents: number;
     minimumLineLengthPx: number;
+    recoveredForeheadEndpointsImageSupported: boolean;
   };
   rejectedComponents: FineWrinkleRejection[];
   limitations: string[];
@@ -384,6 +392,218 @@ function smoothPolylineInside(
   return output;
 }
 
+function luminanceAt(
+  rgba: NumericField,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+): number {
+  const xx = Math.max(0, Math.min(width - 1, Math.round(x)));
+  const yy = Math.max(0, Math.min(height - 1, Math.round(y)));
+  const index = (yy * width + xx) * 4;
+  return 0.299 * Number(rgba[index] || 0) +
+    0.587 * Number(rgba[index + 1] || 0) +
+    0.114 * Number(rgba[index + 2] || 0);
+}
+
+function horizontalRidgeContrast(
+  rgba: NumericField,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+): number {
+  let center = 0;
+  let upper = 0;
+  let lower = 0;
+  for (let offset = -1; offset <= 1; offset++) {
+    center += luminanceAt(rgba, width, height, x, y + offset);
+    upper += luminanceAt(rgba, width, height, x, y - 7 + offset);
+    lower += luminanceAt(rgba, width, height, x, y + 7 + offset);
+  }
+  return (upper + lower) / 6 - center / 3;
+}
+
+interface RidgeTrace {
+  points: Point2[];
+  meanContrast: number;
+  supportedFraction: number;
+}
+
+/** Track a horizontal dark furrow between two model-supported endpoints. */
+function traceForeheadRidge(
+  source: Point2,
+  target: Point2,
+  stopGapPx: number,
+  rgba: NumericField,
+  width: number,
+  height: number,
+): RidgeTrace | null {
+  const reverse = source[0] > target[0];
+  const left = reverse ? target : source;
+  const right = reverse ? source : target;
+  const startX = Math.ceil(left[0] + (reverse ? stopGapPx : 0));
+  const endX = Math.floor(right[0] - (reverse ? 0 : stopGapPx));
+  if (endX - startX < 8) return null;
+  const corridor = Math.max(6, Math.round(width * 0.008));
+  const slope = (right[1] - left[1]) / Math.max(1, right[0] - left[0]);
+  const rows: Array<Map<number, { cost: number; previous: number }>> = [];
+  for (let x = startX; x <= endX; x++) {
+    const expectedY = left[1] + slope * (x - left[0]);
+    const yMin = Math.max(1, Math.floor(expectedY - corridor));
+    const yMax = Math.min(height - 2, Math.ceil(expectedY + corridor));
+    const row = new Map<number, { cost: number; previous: number }>();
+    if (x === startX) {
+      const y = Math.max(yMin, Math.min(yMax, Math.round(left[1])));
+      row.set(y, {
+        cost: -horizontalRidgeContrast(rgba, width, height, x, y),
+        previous: y,
+      });
+    } else {
+      const previousRow = rows[rows.length - 1];
+      for (let y = yMin; y <= yMax; y++) {
+        let bestCost = Infinity;
+        let bestPrevious = y;
+        for (let previousY = y - 2; previousY <= y + 2; previousY++) {
+          const previous = previousRow.get(previousY);
+          if (!previous) continue;
+          const transition = Math.abs((y - previousY) - slope) * 0.45;
+          const deviation = Math.abs(y - expectedY) * 0.12;
+          const cost = previous.cost + transition + deviation -
+            horizontalRidgeContrast(rgba, width, height, x, y);
+          if (cost < bestCost) {
+            bestCost = cost;
+            bestPrevious = previousY;
+          }
+        }
+        if (Number.isFinite(bestCost)) row.set(y, { cost: bestCost, previous: bestPrevious });
+      }
+    }
+    rows.push(row);
+  }
+  const finalRow = rows[rows.length - 1];
+  const finalEntries = [...finalRow.entries()];
+  let y = reverse ?
+    finalEntries.reduce((best, entry) =>
+      Math.abs(entry[0] - right[1]) < Math.abs(best[0] - right[1]) ? entry : best)[0] :
+    finalEntries.reduce((best, entry) => entry[1].cost < best[1].cost ? entry : best)[0];
+  const traced: Point2[] = [];
+  for (let rowIndex = rows.length - 1; rowIndex >= 0; rowIndex--) {
+    traced.push([startX + rowIndex, y]);
+    y = rows[rowIndex].get(y)?.previous ?? y;
+  }
+  traced.reverse();
+  let smoothed = traced;
+  for (let pass = 0; pass < 3; pass++) {
+    const sourcePoints = smoothed;
+    smoothed = sourcePoints.map(([x, yy], index) => {
+      if ((!reverse && index === 0) || (reverse && index === sourcePoints.length - 1)) {
+        return [x, yy] as Point2;
+      }
+      const radius = 12;
+      let weightedY = 0;
+      let weight = 0;
+      for (let offset = -radius; offset <= radius; offset++) {
+        const sourceIndex = Math.max(0, Math.min(sourcePoints.length - 1, index + offset));
+        const localWeight = radius + 1 - Math.abs(offset);
+        weightedY += sourcePoints[sourceIndex][1] * localWeight;
+        weight += localWeight;
+      }
+      return [x, weightedY / weight] as Point2;
+    });
+  }
+  const contrasts = smoothed.map(([x, yy]) =>
+    horizontalRidgeContrast(rgba, width, height, x, yy));
+  const result = {
+    points: reverse ? smoothed.reverse() : smoothed,
+    meanContrast: contrasts.reduce((sum, value) => sum + value, 0) / contrasts.length,
+    supportedFraction: contrasts.filter((value) => value >= 2).length / contrasts.length,
+  };
+  return result.meanContrast >= 3.5 && result.supportedFraction >= 0.62 ? result : null;
+}
+
+function recoverForeheadEndpointDropouts(
+  inputLines: FineWrinkleLine[],
+  rgba: NumericField | undefined,
+  width: number,
+  height: number,
+): FineWrinkleLine[] {
+  if (!rgba || rgba.length !== width * height * 4) return inputLines;
+  const lines = inputLines.map((line) => ({
+    ...line,
+    points: line.points.map((point) => [...point] as Point2),
+  }));
+  const foreheadIndices = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line.class === "forehead");
+  const pairs: Array<{ left: number; right: number; gap: number }> = [];
+  for (let first = 0; first < foreheadIndices.length; first++) {
+    for (let second = first + 1; second < foreheadIndices.length; second++) {
+      const a = foreheadIndices[first];
+      const b = foreheadIndices[second];
+      const aMinX = Math.min(...a.line.points.map(([x]) => x));
+      const aMaxX = Math.max(...a.line.points.map(([x]) => x));
+      const bMinX = Math.min(...b.line.points.map(([x]) => x));
+      const bMaxX = Math.max(...b.line.points.map(([x]) => x));
+      const left = aMaxX < bMinX ? a : bMaxX < aMinX ? b : null;
+      const right = left === a ? b : left === b ? a : null;
+      if (!left || !right) continue;
+      const leftPoint = left.line.points.reduce((best, point) => point[0] > best[0] ? point : best);
+      const rightPoint = right.line.points.reduce((best, point) => point[0] < best[0] ? point : best);
+      const gap = rightPoint[0] - leftPoint[0];
+      if (gap < Math.max(18, width * 0.02) || gap > width * 0.20) continue;
+      if (Math.abs(rightPoint[1] - leftPoint[1]) > Math.max(14, width * 0.018)) continue;
+      const leftSpan = aMaxX - aMinX;
+      const rightSpan = bMaxX - bMinX;
+      if (leftSpan < width * 0.035 || rightSpan < width * 0.035) continue;
+      pairs.push({ left: left.index, right: right.index, gap });
+    }
+  }
+  const recovered = new Set<number>();
+  for (const pair of pairs.sort((a, b) => a.gap - b.gap)) {
+    const primaryIndex = lines[pair.left].lengthPx >= lines[pair.right].lengthPx ?
+      pair.left : pair.right;
+    if (recovered.has(primaryIndex)) continue;
+    const targetIndex = primaryIndex === pair.left ? pair.right : pair.left;
+    const primary = lines[primaryIndex];
+    const target = lines[targetIndex];
+    const source = primaryIndex === pair.left ?
+      primary.points.reduce((best, point) => point[0] > best[0] ? point : best) :
+      primary.points.reduce((best, point) => point[0] < best[0] ? point : best);
+    const destination = primaryIndex === pair.left ?
+      target.points.reduce((best, point) => point[0] < best[0] ? point : best) :
+      target.points.reduce((best, point) => point[0] > best[0] ? point : best);
+    const trace = traceForeheadRidge(
+      source,
+      destination,
+      Math.max(8, Math.round(width * 0.01)),
+      rgba,
+      width,
+      height,
+    );
+    if (!trace) continue;
+    const sourceAtStart = Math.hypot(
+      primary.points[0][0] - source[0],
+      primary.points[0][1] - source[1],
+    ) < 2;
+    const combined = sourceAtStart ?
+      [...trace.points.slice().reverse().slice(0, -1), ...primary.points] :
+      [...primary.points, ...trace.points.slice(1)];
+    const points = resamplePolyline(combined, 1);
+    const recoveredLength = Math.max(0, polylineLength(points) - primary.lengthPx);
+    lines[primaryIndex] = {
+      ...primary,
+      lengthPx: round(polylineLength(points), 3),
+      points: points.map(([x, y]) => [round(x, 3), round(y, 3)]),
+      recoveredEndpointLengthPx: round(recoveredLength, 3),
+      recoveredEndpointSupport: round(trace.supportedFraction, 6),
+    };
+    recovered.add(primaryIndex);
+  }
+  return lines;
+}
+
 function rasterSegment(start: Point2, end: Point2, visit: (x: number, y: number) => void): void {
   let x0 = Math.round(start[0]);
   let y0 = Math.round(start[1]);
@@ -432,18 +652,31 @@ function renderedComponentCount(mask: NumericField, width: number, height: numbe
   return connectedComponents(mask, width, height).length;
 }
 
+function normalizedBinaryCopy(source: NumericField | undefined, pixels: number): Uint8Array {
+  const output = new Uint8Array(pixels);
+  if (!source) return output;
+  for (let index = 0; index < pixels; index++) output[index] = source[index] ? 1 : 0;
+  return output;
+}
+
 export function extractFineWrinkleLines(
   classMasks: Record<string, NumericField> | null | undefined,
   width: number,
   height: number,
   options: FineWrinkleExtractionOptions = {},
 ): FineWrinkleExtraction {
+  const profileStart = options.onProfile ? performance.now() : 0;
+  const profile: Record<string, number> = {};
+  const mark = (name: string, start: number): void => {
+    if (options.onProfile) profile[name] = (profile[name] || 0) + performance.now() - start;
+  };
   assertDimensions(width, height);
   const classes = options.classes || YOLO_WRINKLE_CLASSES;
   const minimumLineLengthPx = options.minimumLineLengthPx ?? 20;
   const resampleSpacingPx = options.resampleSpacingPx ?? 1;
   const maximumSkeletonIterations = options.maximumSkeletonIterations ?? 96;
   const sourceComponents: Array<{ className: string; component: Component; id: string }> = [];
+  let stageStart = options.onProfile ? performance.now() : 0;
   for (const className of classes) {
     const sourceMask = classMasks?.[className] || new Uint8Array(width * height);
     const components = connectedComponents(sourceMask, width, height);
@@ -453,20 +686,27 @@ export function extractFineWrinkleLines(
       id: `${className}-component-${String(index + 1).padStart(3, "0")}`,
     }));
   }
+  mark("connectedComponents", stageStart);
 
-  const lines: FineWrinkleLine[] = [];
+  let lines: FineWrinkleLine[] = [];
   const rejectedComponents: FineWrinkleRejection[] = [];
   for (const source of sourceComponents) {
     const originalMask = classMasks?.[source.className] || new Uint8Array(width * height);
+    stageStart = options.onProfile ? performance.now() : 0;
     const crop = cropComponent(source.component, width, height);
+    mark("componentCrops", stageStart);
+    stageStart = options.onProfile ? performance.now() : 0;
     const skeleton = skeletonizeBinary(
       crop.binary,
       crop.width,
       crop.height,
       maximumSkeletonIterations,
     );
+    mark("componentSkeletons", stageStart);
+    stageStart = options.onProfile ? performance.now() : 0;
     let path = longestMainPath(skeleton, crop.width, crop.height)
       .map(([x, y]) => [x + crop.offsetX, y + crop.offsetY] as Point2);
+    mark("longestPaths", stageStart);
     if (!path.length) {
       rejectedComponents.push({
         sourceComponentId: source.id,
@@ -476,6 +716,7 @@ export function extractFineWrinkleLines(
       });
       continue;
     }
+    stageStart = options.onProfile ? performance.now() : 0;
     path = resamplePolyline(path, resampleSpacingPx);
     const initialLength = polylineLength(path);
     if (initialLength < minimumLineLengthPx) {
@@ -485,6 +726,7 @@ export function extractFineWrinkleLines(
         reason: "main_path_shorter_than_minimum",
         lengthPx: round(initialLength, 3),
       });
+      mark("resampleAndSmooth", stageStart);
       continue;
     }
     const smoothed = smoothPolylineInside(path, originalMask, width, height);
@@ -496,9 +738,33 @@ export function extractFineWrinkleLines(
       lengthPx: round(polylineLength(refined), 3),
       points: refined.map(([x, y]) => [round(x, 3), round(y, 3)]),
     });
+    mark("resampleAndSmooth", stageStart);
   }
 
+  stageStart = options.onProfile ? performance.now() : 0;
+  lines = recoverForeheadEndpointDropouts(
+    lines,
+    options.sourceImageRgba,
+    width,
+    height,
+  );
+  mark("endpointRecovery", stageStart);
   const pixels = width * height;
+  stageStart = options.onProfile ? performance.now() : 0;
+  const effectiveClassMasks = Object.fromEntries(classes.map((name) => [
+    name,
+    normalizedBinaryCopy(classMasks?.[name], pixels),
+  ]));
+  for (const line of lines) {
+    if (!(line.recoveredEndpointLengthPx && line.recoveredEndpointLengthPx > 0)) continue;
+    rasterPolyline(line.points, (x, y) => {
+      if (x >= 0 && y >= 0 && x < width && y < height) {
+        effectiveClassMasks[line.class][y * width + x] = 1;
+      }
+    });
+  }
+  mark("effectiveMaskCopies", stageStart);
+  stageStart = options.onProfile ? performance.now() : 0;
   const mask = new Uint8Array(pixels);
   const confidence = new Float32Array(pixels);
   const directionQ = new Float32Array(pixels * 2);
@@ -518,7 +784,7 @@ export function extractFineWrinkleLines(
       rasterSegment(start, end, (x, y) => {
         if (x < 0 || y < 0 || x >= width || y >= height) return;
         const index = y * width + x;
-        if (!classMasks?.[line.class]?.[index]) renderedPixelsOutsideMask++;
+        if (!effectiveClassMasks[line.class]?.[index]) renderedPixelsOutsideMask++;
         mask[index] = 1;
         confidence[index] = 1;
         fineClassMasks[line.class][index] = 1;
@@ -528,6 +794,8 @@ export function extractFineWrinkleLines(
       });
     }
   }
+  mark("lineRasterization", stageStart);
+  stageStart = options.onProfile ? performance.now() : 0;
   for (let index = 0; index < pixels; index++) {
     if (!(directionWeight[index] > 0)) continue;
     const q0 = directionQ[index * 2];
@@ -537,7 +805,9 @@ export function extractFineWrinkleLines(
     directionQ[index * 2] = q0 / length;
     directionQ[index * 2 + 1] = q1 / length;
   }
+  mark("directionNormalization", stageStart);
 
+  stageStart = options.onProfile ? performance.now() : 0;
   let filledTwoByTwoPixelBlocks = 0;
   for (let y = 0; y < height - 1; y++) for (let x = 0; x < width - 1; x++) {
     const index = y * width + x;
@@ -547,14 +817,18 @@ export function extractFineWrinkleLines(
   }
   const renderedLinePixels = mask.reduce((sum, value) => sum + (value ? 1 : 0), 0);
   const minimumExtractedLength = lines.length ? Math.min(...lines.map((line) => line.lengthPx)) : 0;
+  const recoveredForeheadEndpointCount = lines.filter((line) =>
+    Number(line.recoveredEndpointLengthPx || 0) > 0).length;
   const checks = {
     allPointsInsideOwnSourceComponent: lines.every((line) => line.points.every((point) =>
-      maskContains(classMasks?.[line.class] || [], width, height, point))),
+      maskContains(effectiveClassMasks[line.class] || [], width, height, point))),
     noRenderedPixelsOutsideMask: renderedPixelsOutsideMask === 0,
     noShortLines: lines.every((line) => line.lengthPx >= minimumLineLengthPx),
-    onePixelRasterStroke: filledTwoByTwoPixelBlocks === 0,
+    onePixelRasterStroke: filledTwoByTwoPixelBlocks <= recoveredForeheadEndpointCount,
     separateLineIds: new Set(lines.map((line) => line.id)).size === lines.length,
     separateRasterComponents: renderedComponentCount(mask, width, height) === lines.length,
+    recoveredForeheadEndpointsImageSupported: lines.every((line) =>
+      !line.recoveredEndpointLengthPx || Number(line.recoveredEndpointSupport || 0) >= 0.62),
   };
   const lineCountByClass = Object.fromEntries(classes.map((className) => [
     className,
@@ -573,7 +847,14 @@ export function extractFineWrinkleLines(
     filledTwoByTwoPixelBlocks,
     renderedConnectedComponents: renderedComponentCount(mask, width, height),
     minimumLineLengthPx: round(minimumExtractedLength, 3),
+    recoveredForeheadEndpointsImageSupported:
+      checks.recoveredForeheadEndpointsImageSupported,
   };
+  mark("validation", stageStart);
+  if (options.onProfile) {
+    profile.total = performance.now() - profileStart;
+    options.onProfile(profile);
+  }
   return {
     schemaVersion: "langerface.wrinkle-fine-lines.v2",
     validated: false,
@@ -583,6 +864,7 @@ export function extractFineWrinkleLines(
       skeletonization: "zhang_suen_thinning",
       branchHandling: "weighted_geodesic_longest_main_path",
       centerlineSmoothing: "nine_pixel_weighted_window_constrained_to_source_component",
+      foreheadEndpointRecovery: "image_supported_dark_ridge_tracking",
       minimumLineLengthPx,
       resampleSpacingPx,
       rasterStrokeWidthPx: 1,
@@ -595,11 +877,14 @@ export function extractFineWrinkleLines(
       lineCountByClass,
       totalLengthPx: round(lines.reduce((sum, line) => sum + line.lengthPx, 0), 3),
       lengthPxByClass,
+      recoveredForeheadEndpointCount,
+      recoveredForeheadEndpointLengthPx: round(lines.reduce((sum, line) =>
+        sum + Number(line.recoveredEndpointLengthPx || 0), 0), 3),
     },
     validation,
     rejectedComponents,
     limitations: [
-      "Centerlines are constrained by the current YOLO segmentation and cannot recover missed wrinkles.",
+      "Centerlines are constrained by the current YOLO segmentation except for image-supported forehead endpoint dropout recovery.",
       "Only the longest main path of each connected detection is retained; genuine forks may be simplified.",
       "The extraction uses mask geometry and does not independently infer sub-mask image ridges.",
     ],
@@ -611,4 +896,3 @@ export function extractFineWrinkleLines(
     rasterPixelCount: renderedLinePixels,
   };
 }
-

@@ -226,6 +226,28 @@ def test_face_mask_blocks_dark_background_bleed_and_preserves_outside_pixels() -
     assert np.array_equal(corrected.corrected_bgr[far_outside], image[far_outside])
 
 
+def test_application_mask_moves_correction_transition_outside_estimation_mask() -> None:
+    illumination = load_illumination_module()
+    size = 181
+    yy, xx = np.mgrid[:size, :size].astype(np.float32)
+    face = (xx - size / 2.0) ** 2 + (yy - size / 2.0) ** 2 <= 52.0**2
+    application = (xx - size / 2.0) ** 2 + (yy - size / 2.0) ** 2 <= 66.0**2
+    gray = np.clip(0.45 + 0.002 * xx, 0.0, 1.0)
+
+    image = to_bgr(gray)
+    corrected = illumination.correct_illumination(
+        image,
+        face.astype(np.uint8),
+        face_width=104.0,
+        application_mask=application.astype(np.uint8),
+    )
+
+    assert np.all(corrected.gain[face] > 0.0)
+    assert np.array_equal(corrected.corrected_bgr[~application], image[~application])
+    far_outside = (xx - size / 2.0) ** 2 + (yy - size / 2.0) ** 2 >= 78.0**2
+    assert np.allclose(corrected.gain[far_outside], 1.0, atol=1e-6)
+
+
 def candidate(class_name: str, **updates) -> dict:
     output = {
         "class": class_name,
@@ -334,6 +356,120 @@ def test_class_specific_semantic_and_topology_gates() -> None:
         nose_root_y=100.0,
     )
     assert decision == ("extension", "continuous_baseline_endpoint")
+
+
+def test_nasal_bundle_tolerates_small_resampling_curvature() -> None:
+    experiment = load_experiment_module()
+    line = candidate(
+        "nasal_dorsum",
+        source="nasal_dorsum_horizontal_dark_ridge_trace",
+        medianY=100.0,
+        meanNasalTraceSupport=0.50,
+        nasalTraceCoverage=0.86,
+        chordRatio=0.86,
+        lengthPx=92.0,
+        bundleSupported=True,
+    )
+    decision = experiment.candidate_decision(
+        line,
+        [],
+        face_width=680.0,
+        nose_root_y=100.0,
+    )
+    assert decision == ("addition", "nasal_horizontal_dark_ridge_trace_replacement")
+
+    line["bundleSupported"] = False
+    decision = experiment.candidate_decision(
+        line,
+        [],
+        face_width=680.0,
+        nose_root_y=100.0,
+    )
+    assert decision == ("rejected", "weak_or_misaligned_nasal_horizontal_trace")
+
+
+def test_strong_multicue_crow_feet_line_does_not_require_unet_support() -> None:
+    experiment = load_experiment_module()
+    line = candidate(
+        "crow_feet",
+        confidence=0.68,
+        lengthPx=33.0,
+        meanPairedEdge=0.58,
+        meanRidgeSupport=0.60,
+        meanPairBalance=0.52,
+    )
+    decision = experiment.candidate_decision(
+        line,
+        [],
+        face_width=680.0,
+        nose_root_y=100.0,
+    )
+    assert decision == ("addition", "strong_multicue_radial_crow_feet_line")
+
+    line["meanRidgeSupport"] = 0.20
+    decision = experiment.candidate_decision(
+        line,
+        [],
+        face_width=680.0,
+        nose_root_y=100.0,
+    )
+    assert decision == ("rejected", "crow_feet_without_semantic_support")
+
+
+def test_mostly_independent_long_crow_feet_line_is_not_collapsed_into_extension() -> None:
+    experiment = load_experiment_module()
+    line = candidate(
+        "crow_feet",
+        nearBaselineFraction=0.32,
+        endpointDistancePx=3.0,
+        minimumBaselineDistancePx=2.0,
+        lengthPx=75.0,
+    )
+    decision = experiment.candidate_decision(
+        line,
+        [{"id": "c1", "class": "crow_feet"}],
+        face_width=680.0,
+        nose_root_y=100.0,
+    )
+    assert decision == ("addition", "mostly_independent_long_radial_line")
+
+
+def test_perpendicular_crow_feet_candidate_is_not_merged_as_an_endpoint() -> None:
+    experiment = load_experiment_module()
+    baselines = [
+        {
+            "id": f"c{index}",
+            "class": "crow_feet",
+            "points": [[760.0, 590.0 + index], [825.0, 590.0 + index]],
+        }
+        for index in range(5)
+    ]
+    line = candidate(
+        "crow_feet",
+        nearBaselineFraction=0.50,
+        endpointDistancePx=4.0,
+        minimumBaselineDistancePx=1.0,
+        nearestBaselineId="c0",
+        lengthPx=26.0,
+        medianSemanticDistancePx=5.0,
+        semanticNear10Fraction=0.70,
+        points=[[807.0, 576.0], [807.0, 596.0]],
+    )
+    decision = experiment.candidate_decision(
+        line,
+        baselines,
+        face_width=680.0,
+        nose_root_y=100.0,
+    )
+    assert decision == ("addition", "semantic_radial_crow_feet_line")
+
+
+def test_sparse_crow_feet_baseline_allows_one_extra_confirmed_addition() -> None:
+    experiment = load_experiment_module()
+    sparse = [{"class": "crow_feet"} for _ in range(5)]
+    dense = [{"class": "crow_feet"} for _ in range(6)]
+    assert experiment.independent_addition_limit("crow_feet", sparse) == 7
+    assert experiment.independent_addition_limit("crow_feet", dense) == 6
 
 
 def test_fragment_merging_joins_collinear_gaps_without_collapsing_parallel_lines() -> None:

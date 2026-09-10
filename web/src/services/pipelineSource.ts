@@ -34,16 +34,49 @@ import {
   captureWrinkleDisplayState,
   resetLiveWrinkleAnalysis,
   restoreWrinkleDisplayState,
+  waitForLiveWrinkleAnalysis,
   type WrinkleDisplayResumeState,
 } from "./liveWrinkleAnalysis.ts";
+import { loadVideoFirstFrame } from "./videoSource.ts";
 import { setLive, setMsg, setTransientMsg } from "./liveUi.ts";
-import { cancelFrame, requestFrame } from "./pipelineLoop.ts";
+import { cancelFrame, loop, requestFrame } from "./pipelineLoop.ts";
 import { ensureImageReady, ensureReady } from "./pipelineModels.ts";
 import { buildWorkflowDraftPhoto, saveWorkflowDraftPhoto } from "./workflowDraftSession.ts";
 
 type SourceKind = "camera" | "video" | "image";
 let sourceOperationId = 0;
 const sourceLayoutScheduler = new LiveFrameScheduler();
+
+async function prepareVideoUrl(file: File): Promise<{ url: string; release: () => void }> {
+  if (import.meta.env?.VITE_SERVER_COMPUTE !== "true") {
+    const url = URL.createObjectURL(file);
+    return { url, release: () => URL.revokeObjectURL(url) };
+  }
+  setMsg("正在上传并准备视频…");
+  const response = await fetch("/api/gpu/media/video", {
+    method: "POST",
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+      "X-LangerFace-Filename": encodeURIComponent(file.name),
+    },
+    body: file,
+    signal: AbortSignal.timeout(10 * 60_000),
+  });
+  if (!response.ok) throw new Error(`Video preparation failed: ${response.status}`);
+  const payload = await response.json() as { url?: unknown };
+  if (typeof payload.url !== "string" || !payload.url.startsWith("/api/gpu/media/video/")) {
+    throw new Error("Video preparation returned an invalid URL");
+  }
+  let released = false;
+  return {
+    url: payload.url,
+    release: () => {
+      if (released) return;
+      released = true;
+      void fetch(payload.url as string, { method: "DELETE", keepalive: true }).catch(() => {});
+    },
+  };
+}
 
 interface StaticSourceResumeState {
   source: CanvasImageSource;
@@ -196,73 +229,107 @@ export async function handleFile(
 ): Promise<void> {
   if (!file) return;
   els.file.value = "";
-  if (!file.type.startsWith("image/")) {
-    setTransientMsg("仅支持上传照片；如需连续画面请开启摄像头。");
+  const isImage = file.type.startsWith("image/");
+  const isVideo = file.type.startsWith("video/");
+  if (!isImage && !isVideo) {
+    setTransientMsg("仅支持上传照片或视频。");
     return;
   }
   const startedAt = performance.now();
   const operationId = ++sourceOperationId;
   let pendingObjectUrl: string | null = null;
+  let pendingVideoRelease: (() => void) | null = null;
   let sourceReplaced = false;
   const workflowUpload = Boolean(document.querySelector(".workflow-workbench"));
+  if (workflowUpload && isVideo) {
+    setTransientMsg("合并工作流仅支持照片；请在实时 2D 工具中上传视频。");
+    return;
+  }
   if (!workflowUpload) {
     stopSource({ preserveOperation: true });
     sourceReplaced = true;
     setLive(false, "待机");
-    setMsg("图片加载中", 0, true);
+    setMsg(isImage ? "图片加载中" : "正在准备视频…", 0, true);
   }
   try {
-    const url = URL.createObjectURL(file);
-    pendingObjectUrl = url;
-    try {
-      const img = new Image();
-      img.src = url;
-      let modelReadyAt = startedAt;
-      let decodedAt = startedAt;
-      const modelReady = ensureImageReady().then(() => {
-        modelReadyAt = performance.now();
-      });
-      const decoded = img.decode().then(() => {
-        decodedAt = performance.now();
-      });
-      await Promise.all([modelReady, decoded]);
+    if (isImage) {
+      const url = URL.createObjectURL(file);
+      pendingObjectUrl = url;
+      try {
+        const img = new Image();
+        img.src = url;
+        let modelReadyAt = startedAt;
+        let decodedAt = startedAt;
+        const modelReady = ensureImageReady().then(() => {
+          modelReadyAt = performance.now();
+        });
+        const decoded = img.decode().then(() => {
+          decodedAt = performance.now();
+        });
+        await Promise.all([modelReady, decoded]);
+        if (operationId !== sourceOperationId) return;
+        const dimensions = {
+          width: img.naturalWidth || img.width,
+          height: img.naturalHeight || img.height,
+        };
+        if (workflowUpload && !suppressScreenshotWarning && !confirmLikelyScreenshotUpload(file, dimensions)) {
+          setTransientMsg("已取消疑似手机截图；请重新选择不包含网页界面的原始人像。", 4_000);
+          return;
+        }
+        if (workflowUpload) {
+          stopSource({ preserveOperation: true });
+          sourceReplaced = true;
+          setLive(false, "待机");
+          setMsg("图片加载中", 0, true);
+        }
+        const prepared = prepareImageSource(img);
+        setSource(prepared.source, "image", prepared.width, prepared.height);
+        sourceState.imageFileName = file.name;
+        if (workflowUpload) {
+          const draftPhoto = buildWorkflowDraftPhoto(file, prepared.source, prepared.width, prepared.height);
+          if (draftPhoto) saveWorkflowDraftPhoto(draftPhoto);
+        }
+        const sourceSetAt = performance.now();
+        recordMetricSample("source.imageModelWaitMs", modelReadyAt - startedAt, { bytes: file.size });
+        recordMetricSample("source.imageDecodeMs", decodedAt - startedAt, { bytes: file.size });
+        recordMetricSample("source.imageUploadToSourceSetMs", sourceSetAt - startedAt, {
+          bytes: file.size,
+          width: prepared.width,
+          height: prepared.height,
+          scaled: prepared.scaled,
+        });
+        if (prepared.scaled) {
+          setTransientMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
+        }
+      } finally {
+        URL.revokeObjectURL(url);
+        pendingObjectUrl = null;
+      }
+    } else {
+      await ensureReady();
       if (operationId !== sourceOperationId) return;
-      const dimensions = {
-        width: img.naturalWidth || img.width,
-        height: img.naturalHeight || img.height,
-      };
-      if (workflowUpload && !suppressScreenshotWarning && !confirmLikelyScreenshotUpload(file, dimensions)) {
-        setTransientMsg("已取消疑似手机截图；请重新选择不包含网页界面的原始人像。", 4_000);
-        return;
-      }
-      if (workflowUpload) {
-        stopSource({ preserveOperation: true });
-        sourceReplaced = true;
-        setLive(false, "待机");
-        setMsg("图片加载中", 0, true);
-      }
-      const prepared = prepareImageSource(img);
-      setSource(prepared.source, "image", prepared.width, prepared.height);
-      sourceState.imageFileName = file.name;
-      if (workflowUpload) {
-        const draftPhoto = buildWorkflowDraftPhoto(file, prepared.source, prepared.width, prepared.height);
-        if (draftPhoto) saveWorkflowDraftPhoto(draftPhoto);
-      }
-      const sourceSetAt = performance.now();
-      recordMetricSample("source.imageModelWaitMs", modelReadyAt - startedAt, { bytes: file.size });
-      recordMetricSample("source.imageDecodeMs", decodedAt - startedAt, { bytes: file.size });
-      recordMetricSample("source.imageUploadToSourceSetMs", sourceSetAt - startedAt, {
-        bytes: file.size,
-        width: prepared.width,
-        height: prepared.height,
-        scaled: prepared.scaled,
+      const preparedVideo = await prepareVideoUrl(file);
+      const url = preparedVideo.url;
+      pendingVideoRelease = preparedVideo.release;
+      if (operationId !== sourceOperationId) return;
+      els.video.loop = true;
+      await loadVideoFirstFrame(els.video, url);
+      if (operationId !== sourceOperationId) return;
+      setSource(els.video, "video", els.video.videoWidth, els.video.videoHeight, {
+        release: preparedVideo.release,
       });
-      if (prepared.scaled) {
-        setTransientMsg(`已自动降采样到 ${prepared.width}×${prepared.height}，以保证流畅。`);
-      }
-    } finally {
-      URL.revokeObjectURL(url);
-      pendingObjectUrl = null;
+      pendingVideoRelease = null;
+      els.pause.disabled = true;
+      // Render and extract once while the media clock is still at the first frame.
+      cancelFrame();
+      loop();
+      cancelFrame();
+      await waitForLiveWrinkleAnalysis();
+      if (operationId !== sourceOperationId) return;
+      await els.video.play();
+      if (operationId !== sourceOperationId) return;
+      els.pause.disabled = false;
+      requestFrame();
     }
     els.cam.setAttribute("aria-pressed", "false");
   } catch (error) {
@@ -271,12 +338,13 @@ export async function handleFile(
     logWarn("上传文件加载失败。", error);
     if (sourceReplaced) {
       setLive(false, "待机");
-      setMsg("无法读取或检测该照片。请重新上传；若仍失败，请换用受支持的清晰照片。");
+      setMsg("无法读取或检测该文件。请重新上传；若仍失败，请换用受支持的清晰照片或视频。");
     } else {
-      setTransientMsg("无法读取该照片；当前画面未被替换。请重新选择受支持的清晰照片。", 4_000);
+      setTransientMsg("无法读取该文件；当前画面未被替换。请重新选择受支持的清晰照片。", 4_000);
     }
   } finally {
     if (pendingObjectUrl) URL.revokeObjectURL(pendingObjectUrl);
+    pendingVideoRelease?.();
   }
 }
 

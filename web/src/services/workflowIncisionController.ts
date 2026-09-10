@@ -172,6 +172,8 @@ import {
 import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
 import { createWorkflowWorkerClient, type WorkflowWorkerClient } from "./workflowWorkerClient";
 import {
+  completeWorkflowDraftRestoreRequest,
+  pendingWorkflowDraftRestoreRequest,
   saveWorkflowIncisionDraft,
   WORKFLOW_DRAFT_RESTORE_EVENT,
   type WorkflowIncisionDraft,
@@ -259,6 +261,7 @@ interface WorkflowIncisionState {
   candidateRecomputeTimer: number | null;
   mobileEditPreviewFrame: number | null;
   draftSaveTimer: number | null;
+  draftRestoreTimer: number | null;
   pendingDraftRestore: WorkflowIncisionDraft | null | undefined;
   pendingClick: WorkflowPointerIntent | null;
   photoFrameRevision: number | null;
@@ -373,6 +376,7 @@ function createState(root: HTMLElement): WorkflowIncisionState {
     candidateRecomputeTimer: null,
     mobileEditPreviewFrame: null,
     draftSaveTimer: null,
+    draftRestoreTimer: null,
     pendingDraftRestore: undefined,
     pendingClick: null,
     photoFrameRevision: null,
@@ -484,10 +488,32 @@ function scheduleWorkflowDraftSave(state: WorkflowIncisionState): void {
   }, 300);
 }
 
+function cancelWorkflowDraftRestoreRetry(state: WorkflowIncisionState): void {
+  if (state.draftRestoreTimer === null) return;
+  window.clearTimeout(state.draftRestoreTimer);
+  state.draftRestoreTimer = null;
+}
+
+function scheduleWorkflowDraftRestoreRetry(state: WorkflowIncisionState): void {
+  if (state.draftRestoreTimer !== null) return;
+  state.draftRestoreTimer = window.setTimeout(() => {
+    state.draftRestoreTimer = null;
+    if (!state.mounted || state.pendingDraftRestore === undefined) return;
+    requestFrame();
+    applyWorkflowDraftRestore(state);
+  }, 100);
+}
+
 function applyWorkflowDraftRestore(state: WorkflowIncisionState): boolean {
   const draft = state.pendingDraftRestore;
-  if (draft === undefined || state.loading || !workflowPhotoReady(state)) return false;
+  if (draft === undefined) return false;
+  if (state.loading || !workflowPhotoReady(state)) {
+    scheduleWorkflowDraftRestoreRetry(state);
+    return false;
+  }
+  cancelWorkflowDraftRestoreRetry(state);
   state.pendingDraftRestore = undefined;
+  completeWorkflowDraftRestoreRequest();
   resetMarkerRepair(state);
   invalidateSavedSources(state);
   invalidateCandidate(state);
@@ -3615,7 +3641,9 @@ function bindDom(state: WorkflowIncisionState) {
     [INCISION_LIBRARY_REACT_COMMAND_EVENT, (event) => handleLibraryCommand(state, event)],
     [WORKFLOW_INCISION_TOOL_REACT_COMMAND_EVENT, (event) => handleToolCommand(state, event)],
     [WORKFLOW_DRAFT_RESTORE_EVENT, (event) => {
-      state.pendingDraftRestore = (event as CustomEvent<WorkflowIncisionDraft | null>).detail ?? null;
+      state.pendingDraftRestore = pendingWorkflowDraftRestoreRequest()
+        ?? (event as CustomEvent<WorkflowIncisionDraft | null>).detail
+        ?? null;
       applyWorkflowDraftRestore(state);
     }],
     [LIVE_CONTROLLER_STATE_EVENT, (event) => {
@@ -3686,6 +3714,7 @@ export function disposeWorkflowIncisionController() {
   markerDiagnostics.get(state)?.dispose();
   markerDiagnostics.delete(state);
   cancelWorkflowDraftSave(state);
+  cancelWorkflowDraftRestoreRetry(state);
   persistWorkflowDraft(state);
   state.mounted = false;
   state.markerRequestId += 1;
@@ -3713,6 +3742,8 @@ export function mountWorkflowIncisionController(root: HTMLElement) {
   }
   renderState.workflowPhotoOverlay = true;
   bindDom(state);
+  const pendingDraftRestore = pendingWorkflowDraftRestoreRequest();
+  if (pendingDraftRestore !== undefined) state.pendingDraftRestore = pendingDraftRestore;
   publish(state, "mounted");
   void loadAssets(state);
   return disposeWorkflowIncisionController;

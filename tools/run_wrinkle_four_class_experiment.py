@@ -250,16 +250,24 @@ def warm_unet(checkpoint_path: Path) -> None:
     _cached_unet(checkpoint_path)
 
 
-def run_unet(image_bgr: np.ndarray, texture: np.ndarray, checkpoint_path: Path):
-    import torch
-
-    model, size, metadata = _cached_unet(checkpoint_path)
+def prepare_unet_input(
+    image_bgr: np.ndarray,
+    texture: np.ndarray,
+    size: int,
+) -> np.ndarray:
     image = cv2.resize(image_bgr, (size, size), interpolation=cv2.INTER_AREA)
     resized_texture = cv2.resize(texture, (size, size), interpolation=cv2.INTER_AREA)
     rgb = image[:, :, ::-1].astype(np.float32) / 255.0
     rgb = rgb * 2.0 - 1.0
     tex = resized_texture.astype(np.float32) * 2.0 - 1.0
-    array = np.concatenate([np.transpose(rgb, (2, 0, 1)), tex[None]], axis=0)
+    return np.concatenate([np.transpose(rgb, (2, 0, 1)), tex[None]], axis=0)
+
+
+def run_unet(image_bgr: np.ndarray, texture: np.ndarray, checkpoint_path: Path):
+    import torch
+
+    model, size, metadata = _cached_unet(checkpoint_path)
+    array = prepare_unet_input(image_bgr, texture, size)
     with torch.inference_mode():
         logits = model(torch.from_numpy(array[None]))
         probability = torch.softmax(logits, dim=1)[0, 1].numpy()

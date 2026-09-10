@@ -2,7 +2,9 @@
 // from constants.py through constantsGenerated.ts.
 export { ATLAS_VERSION, RIGID3D, TOPOLOGY_ID, TOPOLOGY_VERSION } from "./constantsGenerated.ts";
 
-export const CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35";
+export const CDN = import.meta.env?.VITE_SERVER_COMPUTE === 'true'
+  ? '/internal/vision/vendor'
+  : "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35";
 
 export const SOLID = { rstl: "#c800c8", langer: "#06b6d4" } as const;
 export const BAND = { top: "#f0c24b", mid: "#56bdf2", low: "#3fd39c" } as const;

@@ -16,7 +16,7 @@ browser detector when this service is unavailable.
    process with the tracked V10 checkpoint.
 
 The provider health response is validated against detector version
-`paired-edge-v10-dynamic-four-region-1.0` before an image is processed.
+`paired-edge-v10-dynamic-four-region-1.1` before an image is processed.
 
 ## Render deployment
 
@@ -37,7 +37,7 @@ The provider health response is validated against detector version
 6. Verify `GET https://<web-host>/api/wrinkle-v10` returns:
 
    - `schemaVersion: langerface.wrinkle-v10-provider.v1`
-   - `detectorVersion: paired-edge-v10-dynamic-four-region-1.0`
+   - `detectorVersion: paired-edge-v10-dynamic-four-region-1.1`
    - `checkpointSha256: e301b8f70c8239c01504a0616b61acdf9ab9b5796f513d6e7294d4fa52b6a6c2`
    - `processingLocation: remote_service`
    - `ready: true`

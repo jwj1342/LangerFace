@@ -85,7 +85,7 @@ includesAll(liveStage, [
 includesAll(liveSourceControls, [
   'id="uploadBtn"',
   'id="fileInput"',
-  'accept="image/*"',
+  'accept="image/*,video/*"',
   'id="camBtn"',
   'id="pauseBtn"',
   'id="exportBtn"',
@@ -147,7 +147,7 @@ includesAll(pipelineSource, [
   "handleFile",
   "URL.createObjectURL(file)",
   'file.type.startsWith("image/")',
-  "仅支持上传照片；如需连续画面请开启摄像头。",
+  "仅支持上传照片或视频。",
   'setSource(prepared.source, "image"',
   "sourceState.imageFileName = file.name",
 ], "live photo upload pipeline");
@@ -156,7 +156,7 @@ includesAll(liveSnapshots, [
   'sourceKind === "image" && sourceFileName?.trim()',
   "fileName: sourceKind ===",
 ], "live source snapshot file-name contract");
-assert.ok(!pipelineSource.includes('setSource(els.video, "video"'), "file upload pipeline does not accept videos");
+assert.ok(pipelineSource.includes('setSource(els.video, "video"'), "file upload pipeline accepts videos in the live tool");
 
 for (const retiredLiveRuntime of ["mode3d.ts", "projection3d.ts", "liveScanLifecycle.ts"]) {
   assert.ok(!fs.existsSync(path.join(process.cwd(), "src/services", retiredLiveRuntime)), `${retiredLiveRuntime} is removed from Live`);

@@ -27,6 +27,7 @@ def correct_illumination(
     face_mask: np.ndarray,
     face_width: float,
     *,
+    application_mask: np.ndarray | None = None,
     minimum_gain: float = 0.67,
     maximum_gain: float = 1.50,
 ) -> IlluminationCorrection:
@@ -39,6 +40,8 @@ def correct_illumination(
         raise ValueError("image_bgr must have shape (height, width, 3)")
     if face_mask.shape != image_bgr.shape[:2]:
         raise ValueError("face_mask must match the image height and width")
+    if application_mask is not None and application_mask.shape != image_bgr.shape[:2]:
+        raise ValueError("application_mask must match the image height and width")
     if not np.isfinite(face_width) or face_width <= 0.0:
         raise ValueError("face_width must be finite and positive")
     if not (0.0 < minimum_gain <= 1.0 <= maximum_gain):
@@ -47,22 +50,29 @@ def correct_illumination(
     image_u8 = np.clip(image_bgr, 0, 255).astype(np.uint8, copy=False)
     lab = cv2.cvtColor(image_u8, cv2.COLOR_BGR2LAB)
     luminance = lab[:, :, 0].astype(np.float32) / 255.0
-    mask = (face_mask > 0).astype(np.float32)
-    if not np.any(mask):
+    estimation_mask = (face_mask > 0).astype(np.float32)
+    if not np.any(estimation_mask):
         raise ValueError("face_mask must contain at least one face pixel")
+    correction_mask = (
+        estimation_mask
+        if application_mask is None
+        else (application_mask > 0).astype(np.float32)
+    )
+    if not np.any(correction_mask):
+        raise ValueError("application_mask must contain at least one correction pixel")
 
     # The broad field tracks lighting changes, not wrinkle-width structures.
     sigma = float(np.clip(0.065 * face_width, 4.0, 96.0))
-    blurred_mask = gaussian_filter(mask, sigma=sigma, mode="constant", cval=0.0)
+    blurred_mask = gaussian_filter(estimation_mask, sigma=sigma, mode="constant", cval=0.0)
     blurred_signal = gaussian_filter(
-        luminance * mask,
+        luminance * estimation_mask,
         sigma=sigma,
         mode="constant",
         cval=0.0,
     )
     illumination = blurred_signal / np.maximum(blurred_mask, 1e-4)
 
-    valid = mask > 0.5
+    valid = estimation_mask > 0.5
     reference = float(np.median(illumination[valid]))
     raw_gain = reference / np.maximum(illumination, 1e-3)
     bounded_gain = np.clip(raw_gain, minimum_gain, maximum_gain).astype(np.float32)
@@ -70,8 +80,23 @@ def correct_illumination(
     # Feather only the correction boundary. The interior receives the full
     # bounded gain and pixels away from the face remain exactly unchanged.
     feather_sigma = float(max(1.0, 0.01 * face_width))
-    feather = gaussian_filter(mask, sigma=feather_sigma, mode="constant", cval=0.0)
-    feather = np.clip(feather, 0.0, 1.0)
+    if application_mask is None:
+        feather = gaussian_filter(
+            correction_mask,
+            sigma=feather_sigma,
+            mode="constant",
+            cval=0.0,
+        )
+        feather = np.clip(feather, 0.0, 1.0)
+    else:
+        # Keep the background byte-identical. The expanded application mask
+        # gives the full facial skin area unit gain before this inward fade.
+        distance_inside = cv2.distanceTransform(
+            correction_mask.astype(np.uint8),
+            cv2.DIST_L2,
+            cv2.DIST_MASK_PRECISE,
+        )
+        feather = np.clip(distance_inside / feather_sigma, 0.0, 1.0)
     applied_gain = 1.0 + feather * (bounded_gain - 1.0)
     corrected_luminance = np.clip(luminance * applied_gain, 0.0, 1.0)
 

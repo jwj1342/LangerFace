@@ -96,8 +96,8 @@ assert.match(panel, /只显示皱纹/);
 assert.match(panel, /RSTL 与皱纹同时显示/);
 assert.match(panel, /皱纹引导自动微调/);
 assert.match(panel, /医生手动微调（2D）/);
-assert.match(panel, /Tailscale[\s\S]*远程 V10 服务/,
-  "the wrinkle panel must disclose local-network and remote pixel processing");
+assert.match(panel, /当前皱纹检测在浏览器内完成，不向 V10 服务发送图像/,
+  "the active YOLO-only panel must describe browser processing");
 
 const qualityPanel = fs.readFileSync(
   new URL("../web/src/components/LiveQualityPanel.tsx", import.meta.url),
@@ -151,6 +151,10 @@ const analysisRuntime = fs.readFileSync(
   new URL("../web/src/services/liveWrinkleAnalysis.ts", import.meta.url),
   "utf8",
 );
+const pipelineLoop = fs.readFileSync(
+  new URL("../web/src/services/pipelineLoop.ts", import.meta.url),
+  "utf8",
+);
 const refineMathRuntime = fs.readFileSync(
   new URL("../web/src/services/liveRefineMath.ts", import.meta.url),
   "utf8",
@@ -190,15 +194,57 @@ assert.doesNotMatch(analysisRuntime,
   /WRINKLE_PHOTO_SHA256|canonicalWrinkleV10Evidence|wrinkleV10FineLinesUrl|buildPrecomputedFineWrinkleEvidence|wrinkle-v10|DIRECT_NOSE_DORSUM_FINE_LINE_IDS/,
   "the released live path must never select precomputed evidence for one image");
 assert.match(analysisRuntime,
-  /createLiveWrinklePipelineWorkerClient[\s\S]*wrinkleWorkerInstance\(\)\.analyze\(\{/,
+  /createLiveWrinklePipelineWorkerClient[\s\S]*wrinkleWorkerInstance\(\)\.detect\(\{/,
   "the deployed live page must route every source through the non-blocking worker client");
 assert.doesNotMatch(analysisRuntime, /runGeneralLiveWrinklePipeline|new YoloWrinkleOnnx/,
   "YOLO, centerline extraction and V9 refinement must not execute on the live page thread");
 assert.match(analysisRuntime, /commitEvidence[\s\S]*state\.evidenceLines = evidence\.lines\.map[\s\S]*assertRefinementGate/,
-  "validated wrinkle evidence must be committed before refinement safety gates run");
+  "validated wrinkle evidence must be retained for the later refinement action");
 assert.match(analysisRuntime,
-  /if \(event\.type === "evidence"\) return;[\s\S]*pipelineCompleted = true;[\s\S]*commitEvidence\(pipeline\.evidence\);[\s\S]*updateStatus\("ready"\)/,
-  "wrinkle evidence and its auto-refined result must become visible atomically");
+  /if \(event\.type === "evidence"\) return;[\s\S]*pipelineCompleted = true;[\s\S]*commitEvidence\(pipeline\.evidence\);[\s\S]*updateStatus\("detected"\)/,
+  "the detect action must stop after making wrinkle evidence visible");
+assert.match(analysisRuntime,
+  /applyWrinkleGuidedRefinement[\s\S]*updateStatus\("refining"\)[\s\S]*wrinkleWorkerInstance\(\)\.refine\(\{/,
+  "refinement must start only from the explicit refinement action");
+assert.match(analysisRuntime,
+  /updateLiveWrinkleTracking[\s\S]*mode: "yolo-only"/,
+  "video and camera frames must use the YOLO-only detection mode");
+assert.match(analysisRuntime, /value === "camera" \|\| value === "video"/,
+  "video and camera must share the dynamic wrinkle tracking policy");
+assert.match(pipelineLoop, /sourceKind === "camera" \|\| sourceKind === "video"/,
+  "the frame loop must schedule wrinkle tracking for video and camera frames");
+assert.match(pipelineLoop,
+  /updateLiveWrinkleTracking\(wrinkleLandmarks \|\| \[\], timeMs\);[\s\S]*updateLiveWrinkleMeshTracking\(els\.canvas, wrinkleLandmarks \|\| \[\]\)/,
+  "wrinkles must use current unsmoothed landmarks and clear the overlay when face detection fails");
+assert.match(pipelineLoop, /detectForVideo\(els\.canvas, timeMs\)/,
+  "face landmarks must come from the frozen pixels displayed this frame");
+assert.match(pipelineLoop, /wrinkleLandmarks = currentLandmarks\.map[\s\S]*smoother\.filter/,
+  "wrinkle landmarks must be copied before optional RSTL smoothing");
+assert.match(analysisRuntime,
+  /if \(liveDetectionAttempted\) \{\s*scheduleLiveWrinkleCorrection[\s\S]*if \(liveDetectionInFlight\) return;/,
+  "first-frame extraction must transition only to low-frequency correction");
+assert.match(analysisRuntime, /const source = els\.canvas;/,
+  "asynchronous wrinkle inference must capture the same displayed frame as the face detector");
+assert.doesNotMatch(pipelineLoop, /buildLowLatencyWrinkleLandmarks|updateLiveWrinkleTextureTracking/,
+  "the live wrinkle overlay must not estimate motion independently of the current frame");
+assert.match(analysisRuntime,
+  /liveTrackingMode: "first-frame-evidence-skin-tracking-with-gated-yolo-correction"[\s\S]*textureFlowTracking: "opencv-pyramidal-lk-forward-backward"/,
+  "live diagnostics must identify first-frame extraction, guarded correction and skin tracking");
+assert.match(analysisRuntime,
+  /LIVE_YOLO_CORRECTION_INTERVAL_SECONDS = 2[\s\S]*evaluateWrinkleCorrection[\s\S]*if \(!gate\.accepted\)/,
+  "periodic YOLO results must pass confidence gating before replacing tracked lines");
+assert.match(analysisRuntime,
+  /if \(!gate\.accepted\)[\s\S]*return;[\s\S]*candidateTracker = await WrinkleOpticalFlowTracker\.create/,
+  "a rejected correction must retain the current tracker and visible wrinkle lines");
+assert.match(analysisRuntime,
+  /function liveWrinkleProcessingMode\([^)]*\)[^{]*\{\s*return "tracking";/,
+  "the deployed live runtime must stay on first-frame detection plus per-frame tracking");
+assert.doesNotMatch(analysisRuntime, /searchParams\.get\("wrinkleMode"\)/,
+  "URL parameters must not reactivate the rejected framewise experiment");
+assert.doesNotMatch(analysisRuntime, /phase: "maintenance"/,
+  "later frames must not alter the extracted lines using texture snapping");
+assert.match(analysisRuntime, /skinTracker\.update\(frame, meshLines, mediaTime\)/,
+  "skin tracking must be tied to the displayed video frame with mesh motion as its prior");
 assert.doesNotMatch(analysisRuntime, /bundlePropagation: true/,
   "live refinement must not propagate one wrinkle to neighboring RSTL curves");
 assert.match(analysisRuntime, /maximum_selected_rstl_curves_per_wrinkle\) > 2/,
@@ -216,6 +262,14 @@ const workerRuntime = fs.readFileSync(
   new URL("../web/src/workers/liveWrinklePipeline.worker.ts", import.meta.url),
   "utf8",
 );
+assert.equal((analysisRuntime.match(/mode: "yolo-only"/g) || []).length, 4,
+  "all current detection implementations must select YOLO-only");
+assert.doesNotMatch(analysisRuntime, /mode: "full"|snapWrinkleLinesToRidges/,
+  "active detection cannot request V10 or snap lines to traditional image ridges");
+assert.match(workerRuntime, /sourceImageRgba: request.mode === "yolo-only" \? undefined : request.pixels/,
+  "YOLO-only centerlines must not use image-supported endpoint recovery");
+assert.doesNotMatch(analysisRuntime, /if \(!pipeline.detectionId\) throw/,
+  "YOLO photo detection must succeed without a server detection id");
 assert.match(workerRuntime, /browserBaselineSha256[\s\S]*v10InputImageSha256/,
   "the worker must expose baseline and V10 input fingerprints for cross-machine comparison");
 assert.match(workerRuntime,
@@ -252,8 +306,11 @@ const fourRegionExperiment = fs.readFileSync(
   "utf8",
 );
 assert.match(workerRuntime,
-  /detector\.detect[\s\S]*extractFineWrinkleLines[\s\S]*dynamicFourRegionDetection[\s\S]*refineV6/,
-  "the worker must run live YOLO, dynamic four-region detection and V9 refinement in order");
+  /async detect[\s\S]*detector\.detect[\s\S]*extractFineWrinkleLines[\s\S]*request\.mode === "yolo-only"[\s\S]*dynamicFourRegionDetection/,
+  "the worker must provide a YOLO-only camera branch before optional four-region detection");
+assert.match(workerRuntime,
+  /async refine[\s\S]*cachedFullDetection[\s\S]*refineV6/,
+  "the worker must expose refinement as a separate operation over cached detection evidence");
 assert.match(workerRuntime, /new YoloWrinkleOnnx\([\s\S]*YOLO_WRINKLE_CONFIDENCE/,
   "the worker must use the same released YOLO model and confidence threshold");
 assert.match(workerRuntime, /WRINKLE_V10_ENDPOINT/,
@@ -266,12 +323,12 @@ assert.match(workerRuntime, /buildNoseRootIntersectionVisibilityPlan/,
   "direct nasal RSTL must retain the reviewed intersection visibility rule");
 assert.match(workerRuntime, /Comlink\.expose\(api\)/,
   "the wrinkle pipeline must be exposed from a real Web Worker boundary");
-assert.match(workerRuntime, /fourRegionDetectionMs[\s\S]*refinementMs[\s\S]*totalMs/,
-  "the worker must report stage timings for reproducible performance regression");
+assert.match(workerRuntime, /fourRegionDetectionMs[\s\S]*totalMs/,
+  "the worker must report detection timings for reproducible performance regression");
 assert.match(workerRuntime, /minimumLineLengthPx: 20/);
 assert.match(workerRuntime, /latestV9RstlRefinementOptions\(request\.faceWidthPx\)/);
 assert.match(workerClientRuntime, /new Worker\(new URL/);
-assert.match(workerClientRuntime, /Comlink\.transfer\(request, \[request\.pixels\.buffer as ArrayBuffer\]\)/,
+assert.match(workerClientRuntime, /api\.detect[\s\S]*Comlink\.transfer\(request, \[request\.pixels\.buffer as ArrayBuffer\]\)/,
   "the full-resolution input must be transferred without a main-thread copy or resize");
 assert.match(workerClientRuntime, /worker\.terminate\(\)/,
   "source replacement must be able to terminate stale CPU work immediately");
