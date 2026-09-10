@@ -133,6 +133,7 @@ function controllerHarness() {
     sourceState: { sourceKind: "image", paused: false, planning2d: { getFrameState: () => frame, setOverlaySummary() {} } },
     renderState: render, neutralIncisionEdit: neutral, cloneIncisionEdit: (edit: any) => ({ ...edit }),
     cancelCandidateRecompute() {}, cancelMobileEditPreview() {}, resetMarkerRepair() {},
+    completeWorkflowDraftRestoreRequest() {},
     resetFreehandPhotoBoundary() {}, syncSelection() {}, rootInput: () => null,
     publish: (_state: any, reason: string) => events.push(reason),
     LIVE_CONTROLLER_STATE_EVENT: "live-state", workflowLiveOverlayChanged,
