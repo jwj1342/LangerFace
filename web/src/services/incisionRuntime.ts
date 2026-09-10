@@ -142,6 +142,7 @@ import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
 import { createWorkflowWorkerClient } from "./workflowWorkerClient";
 import { Head3D, buildLineGeometry, vertexNormals } from "./three3d.ts";
 import type { Vec3 } from "./softBody";
+import { workflowEquivalentAreaEllipseRadii } from "./workflowControllerUtils";
 type DynamicRecord = Record<string, any>;
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -667,10 +668,13 @@ function ellipseBoundaryPoints(samples = 32): Vec3[] {
   const center = (S.lesionRef && surfaceRefToModelPoint(S.lesionRef, S.verts, S.tris)) || S.verts[S.lesion];
   const normal = S.normals[S.lesion];
   const { u, v } = tangentFrame(normal, [0, 1, 0]);
-  const radiusMm = Number(els.diameter.value) / 2;
-  const ratio = Number(els.ellipseRatio.value) / 100;
-  const a = radiusMm * S.unitsPerMm;
-  const b = radiusMm * ratio * S.unitsPerMm;
+  const radiiMm = workflowEquivalentAreaEllipseRadii(
+    Number(els.diameter.value),
+    Number(els.ellipseRatio.value),
+  );
+  if (!radiiMm) return [];
+  const a = radiiMm.radiusX * S.unitsPerMm;
+  const b = radiiMm.radiusY * S.unitsPerMm;
   const pts: Vec3[] = [];
   for (let i = 0; i < samples; i++) {
     const t = i / samples * Math.PI * 2;

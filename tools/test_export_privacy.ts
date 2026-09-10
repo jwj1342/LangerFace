@@ -44,6 +44,32 @@ assert.equal(report.schema_version, "browser-export-privacy-preflight/v0.1");
 assert.equal(report.passed, true);
 assert.equal(report.violation_count, 0);
 
+const safeTumorExport = {
+  schema_version: "tumor-input/v0.2",
+  exported_at: "2026-06-25T12:34:56.000Z",
+  tumor: {
+    kind: "cutaneous",
+    center: [0.1, 0.2, 0],
+    boundary: [[0.1, 0.2, 0]],
+    author: "clinician",
+  },
+  privacy_audit: {
+    raw_image_sent: false,
+    raw_video_sent: false,
+    contains_face_image: false,
+  },
+};
+report = auditExportPayload(safeTumorExport);
+assert.equal(report.passed, true, "the contract-defined tumor export timestamp is safe metadata, not a phone number");
+
+const tumorExportWithUntrustedTimestamp = structuredClone(safeTumorExport) as typeof safeTumorExport & {
+  tumor: typeof safeTumorExport.tumor & { notes_at?: string };
+};
+tumorExportWithUntrustedTimestamp.tumor.notes_at = "2026-06-25T12:34:56.000Z";
+report = auditExportPayload(tumorExportWithUntrustedTimestamp);
+assert.equal(report.passed, false, "tumor export timestamp exemptions remain limited to the top-level contract field");
+assert.ok(report.violations.some((item) => item.path === "tumor.notes_at" && item.code === "pii_pattern_present"));
+
 const unsafe = safeReviewExport();
 unsafe.current.credentials.token = "test-not-redacted";
 unsafe.current.privacy_audit.raw_image_sent = true;

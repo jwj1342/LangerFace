@@ -80,6 +80,18 @@ const [runner, runnerV7, runnerV8, runnerV9Logic] = await Promise.all([
 ]);
 assert.match(runner, /WRINKLE_EXPERIMENT_OUTPUT/,
   "determinism reruns must use a separate output directory");
+assert.match(runner, /WRINKLE_EXPERIMENT_INPUT/,
+  "the browser runner must accept a controlled input outside the repository parent");
+assert.match(runner, /Wrinkle experiment input does not exist/,
+  "the browser runner must reject a missing input before browser launch");
+assert.match(runner, /WRINKLE_EXPERIMENT_CHROME/,
+  "the browser runner must allow an explicit local Chrome path");
+assert.match(runner, /process\.platform\s*===\s*"darwin"/,
+  "the macOS Chrome default must be platform-gated");
+assert.match(runner, /browserLaunchOptions\.executablePath\s*=\s*chromePath/,
+  "the browser runner must fall back to Playwright Chromium when no Chrome path is available");
+assert.doesNotMatch(runner, /executablePath:\s*chromePath,/,
+  "the browser runner must not require one hard-coded Chrome executable");
 assert.match(runner, /version=\$\{experimentVersion\}/);
 assert.match(runnerV7, /WRINKLE_EXPERIMENT_VERSION\s*=\s*"v7"/);
 assert.match(runnerV8, /WRINKLE_EXPERIMENT_VERSION\s*=\s*"v8"/);

@@ -125,8 +125,12 @@ function isAllowedMetadataUuid(payload: unknown, path: string[], text: string): 
 function isAllowedMetadataTimestamp(payload: unknown, path: string[], text: string): boolean {
   if (!isStrictIsoUtcTimestamp(text)) return false;
   const exportPayload = objectRecord(payload);
-  if (exportPayload?.schema_version !== "incision-review-export/v0.4") return false;
-  if (path.length === 1 && path[0] === "exported_at") return true;
+  const schemaVersion = exportPayload?.schema_version;
+  if (path.length === 1 && path[0] === "exported_at") {
+    return schemaVersion === "incision-review-export/v0.4"
+      || schemaVersion === "tumor-input/v0.2";
+  }
+  if (schemaVersion !== "incision-review-export/v0.4") return false;
   if (!reviewExportRecordAtPath(payload, path)) return false;
   const recordOffset = path[0] === "saved" ? 2 : 1;
   if (path.length === recordOffset + 1 && path[recordOffset] === "created_at") return true;

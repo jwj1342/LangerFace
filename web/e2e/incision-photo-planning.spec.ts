@@ -15,21 +15,22 @@ async function explicitGenerationCount(page: Page) {
 async function candidateOverlayEvidence(page: Page) {
   return page.locator("#incisionCandidateCanvas").evaluate((canvas: HTMLCanvasElement) => {
     const context = canvas.getContext("2d");
-    if (!context) return { nonTransparent: 0, solidCore: 0, matteBlue: 0, width: 0, height: 0 };
+    if (!context) return { nonTransparent: 0, solidCore: 0, brightCyan: 0, width: 0, height: 0 };
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
     let nonTransparent = 0;
     let solidCore = 0;
-    let matteBlue = 0;
+    let brightCyan = 0;
     for (let index = 0; index < pixels.length; index += 4) {
       const alpha = pixels[index + 3];
       if (alpha > 0) nonTransparent += 1;
       if (alpha >= 220) solidCore += 1;
-      if (alpha > 80 && pixels[index] < 24 && pixels[index + 1] >= 36
-        && pixels[index + 1] <= 84 && pixels[index + 2] >= 90 && pixels[index + 2] <= 145) {
-        matteBlue += 1;
+      // #67e8f9, with bounded tolerance for canvas alpha quantization.
+      if (alpha > 80 && Math.abs(pixels[index] - 103) <= 8
+        && Math.abs(pixels[index + 1] - 232) <= 8 && Math.abs(pixels[index + 2] - 249) <= 8) {
+        brightCyan += 1;
       }
     }
-    return { nonTransparent, solidCore, matteBlue, width: canvas.width, height: canvas.height };
+    return { nonTransparent, solidCore, brightCyan, width: canvas.width, height: canvas.height };
   });
 }
 
@@ -109,7 +110,8 @@ test("patient photo is the mobile incision canvas and reuploads fail safely", as
   await page.locator("#tumorKind").selectOption("cutaneous");
   await expect(page.locator("#candidateType")).toHaveText("梭形");
   await expect.poll(() => explicitGenerationCount(page)).toBe(generationBefore + 1);
-  await expect.poll(async () => (await candidateOverlayEvidence(page)).matteBlue).toBeGreaterThan(4);
+  await expect(status).toContainText(/照片规划.*RSTL.*候选已叠加/);
+  await expect.poll(async () => (await candidateOverlayEvidence(page)).brightCyan).toBeGreaterThan(4);
   await page.screenshot({ path: testInfo.outputPath("incision-photo-fusiform.png"), fullPage: true });
 
   const serializedSnapshots = await page.evaluate(() => JSON.stringify(

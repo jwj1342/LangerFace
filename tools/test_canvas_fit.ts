@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { fitContainSize } from "../web/src/services/fitMath.ts";
+import { fitContainSize, nextImageGestureViewState } from "../web/src/services/fitMath.ts";
 
 {
   const fit = fitContainSize(1067, 1600, 920, 739);
@@ -26,6 +26,21 @@ import { fitContainSize } from "../web/src/services/fitMath.ts";
   assert.equal(fit.width, 320);
   assert.equal(fit.height, 240);
   assert.equal(fit.scale, 1);
+}
+
+{
+  const next = nextImageGestureViewState({
+    zoom: 1,
+    minZoom: 1,
+    maxZoom: 5,
+    offsetX: 0,
+    offsetY: 0,
+  }, { x: -20, y: -20 }, { x: -10, y: -20 }, 2);
+  assert.ok(next);
+  assert.equal(next.zoom, 2);
+  assert.equal(next.offsetX, 30,
+    "the source point under the old pinch centre must move to the new centre while scaling");
+  assert.equal(next.offsetY, 20);
 }
 
 console.log("test_canvas_fit: image display fit assertions passed");

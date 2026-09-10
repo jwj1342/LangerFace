@@ -17,6 +17,7 @@ export type {
   IncisionSecondaryCueState,
   IncisionTumorState,
   IncisionWorkflowRuntime,
+  WorkflowIncisionToolState,
 } from "../services/incisionSnapshots";
 
 interface IncisionStoreState {

@@ -59,6 +59,27 @@ for (const fixture of fusiformParity.cases) {
     rules,
   );
   const expected = fixture.expected;
+  for (const [key, value] of Object.entries(expected.normalization || {})) {
+    ok(typeof value === "number" ? near(candidate.metrics[key], value) : candidate.metrics[key] === value,
+      `${fixture.name}: normalization ${key}`);
+  }
+  if (expected.normalization) {
+    if (fixture.tumor.boundary.length === 4) {
+      ok(near(candidate.metrics.detected_lesion_area_mm2, 4), `${fixture.name}: analytic diamond area`);
+      ok(near(candidate.metrics.detected_enclosing_diameter_mm, 4), `${fixture.name}: analytic enclosing diameter`);
+      ok(near(candidate.metrics.detected_equivalent_diameter_mm, 4 / Math.sqrt(Math.PI)), `${fixture.name}: equivalent diameter`);
+      ok(near(candidate.metrics.detected_lesion_compactness, Math.PI / 5), `${fixture.name}: compactness`);
+      ok(vectorNear(candidate.metrics.detected_boundary_centroid, [2, 0, 0]), `${fixture.name}: area centroid retained for audit`);
+    }
+    if (fixture.tumor.photo_boundary_enclosing_diameter_mm === 2) {
+      ok(candidate.metrics.boundary_point_count === 32, `${fixture.name}: planning circle samples`);
+      ok(near(candidate.metrics.boundary_area_mm2, 16 * Math.sin(Math.PI / 16)), `${fixture.name}: analytic 32-gon area`);
+      ok(candidate.metrics.boundary_scale_shape === "enclosing_circle", `${fixture.name}: circular scale contract`);
+    }
+    ok(candidate.provenance.boundary_source === fixture.tumor.boundary_source, `${fixture.name}: source retained`);
+    ok(candidate.provenance.lesion_normalization_status === candidate.metrics.lesion_normalization_status,
+      `${fixture.name}: provenance and metrics agree`);
+  }
   ok(vectorNear(candidate.center, expected.center), `${fixture.name}: center matches shared golden`);
   ok(vectorNear(candidate.axis, expected.axis), `${fixture.name}: axis matches shared golden`);
   ok(vectorNear(candidate.width_axis, expected.width_axis), `${fixture.name}: width axis matches shared golden`);
@@ -265,6 +286,46 @@ ok(fusiform.metrics.boundary_envelope_outside_count === 0, "fusiform without bou
 ok(leftTipAngleDeg(fusiform) > 29 && leftTipAngleDeg(fusiform) < 32, "fusiform outline segment angle matches tip rule");
 ok(fusiform.outline.length > 20, "fusiform outline is renderable");
 
+for (const [diameterMm, expectedLengthMm] of [[2, 6], [3, 9], [4, 12]]) {
+  const smallFusiform = T.generateFusiformIncision(
+    {
+      kind: "cutaneous",
+      center: [0, 0, 0],
+      diameter_mm: diameterMm,
+      margin_mm: 0,
+      author: "clinician",
+    },
+    { vector: [1, 0, 0], confidence: 0.9 },
+    1,
+    [0, 0, 1],
+  );
+  ok(near(smallFusiform.width_mm, diameterMm),
+    `${diameterMm} mm cutaneous lesion keeps its own zero-margin candidate width`);
+  ok(near(smallFusiform.length_mm, expectedLengthMm),
+    `${diameterMm} mm cutaneous lesion keeps the 3:1 candidate length instead of reusing the 4 mm floor`);
+}
+
+const ellipseBoundaryIsDisplayOnly = T.generateFusiformIncision(
+  {
+    kind: "cutaneous",
+    center: [0, 0, 0],
+    diameter_mm: 8,
+    margin_mm: 0,
+    boundary: [[-1, -1, 0], [1, -1, 0], [1, 1, 0], [-1, 1, 0]],
+    boundary_mode: "ellipse",
+    boundary_source: "manual_ellipse",
+    author: "clinician",
+  },
+  { vector: [1, 0, 0], confidence: 0.9 },
+  1,
+  [0, 0, 1],
+);
+ok(near(ellipseBoundaryIsDisplayOnly.length_mm, 24)
+  && near(ellipseBoundaryIsDisplayOnly.width_mm, 8),
+"ellipse-mode candidate scale stays at the 8 mm operator diameter instead of changing with projected boundary size");
+ok(ellipseBoundaryIsDisplayOnly.metrics.boundary_drives_candidate_geometry === false,
+  "ellipse boundary is display geometry only; only drawn or detected boundaries may override the diameter");
+
 const boundaryTumor = {
   kind: "cutaneous",
   center: [4, 2, 0],
@@ -292,6 +353,19 @@ ok(boundaryFusiform.metrics.boundary_envelope_min_margin_mm >= 0,
   "fusiform records non-negative boundary envelope margin for contained freehand boundary");
 ok(boundaryFusiform.metrics.boundary_envelope_outside_count === 0,
   "fusiform records zero outside points for contained freehand boundary");
+ok(boundaryFusiform.metrics.lesion_normalization_applied === true,
+  "manual freehand enters the shared boundary-scale normalization contract");
+ok(boundaryFusiform.metrics.clinical_scale_source === "manual_freehand_enclosing_circle",
+  "manual freehand records the drawn boundary as its scale source");
+const boundaryFusiformWithDifferentSlider = T.generateFusiformIncision(
+  { ...boundaryTumor, diameter_mm: 30 },
+  { vector: [1, 0, 0], confidence: 0.9 },
+  0.1,
+  [0, 0, 1],
+);
+ok(near(boundaryFusiformWithDifferentSlider.width_mm, boundaryFusiform.width_mm)
+  && near(boundaryFusiformWithDifferentSlider.length_mm, boundaryFusiform.length_mm),
+"changing the disabled manual diameter does not resize a freehand cutaneous candidate");
 
 const controlledMarkerTumor = {
   ...boundaryTumor,
@@ -328,6 +402,24 @@ ok(controlledMarkerFusiform.metrics.clinical_scale_source === "controlled_marker
   "controlled marker candidate records the detected region as the scale source");
 ok(controlledMarkerFusiform.metrics.operator_diameter_mm === controlledMarkerTumor.diameter_mm,
   "the former operator diameter remains available as an audit value");
+const faceEdgePhotoScaledMarker = T.generateFusiformIncision(
+  {
+    ...controlledMarkerTumor,
+    center: [0, 0, 0],
+    margin_mm: 0,
+    boundary: [[-15, -8, 0], [12, -9, 0], [18, 0, 0], [10, 11, 0], [-14, 9, 0]],
+    photo_boundary_enclosing_diameter_mm: 4,
+  },
+  { vector: [1, 0, 0], confidence: 0.9 },
+  1,
+  [0, 0, 1],
+);
+ok(near(faceEdgePhotoScaledMarker.width_mm, 4),
+  "face-edge surface snapping cannot inflate a zero-margin controlled-marker candidate beyond its photo-space diameter");
+ok(near(faceEdgePhotoScaledMarker.length_mm, 12),
+  "photo-space controlled-marker scale keeps the standard 3:1 zero-margin fusiform size");
+ok(faceEdgePhotoScaledMarker.metrics.photo_boundary_enclosing_diameter_mm === 4,
+  "the preserved photo-space scale remains available for audit");
 const controlledMarkerWithDifferentManualDiameter = T.generateFusiformIncision(
   { ...controlledMarkerTumor, diameter_mm: 30 },
   { vector: [1, 0, 0], confidence: 0.9 },
@@ -357,9 +449,9 @@ const perpendicularCornerFusiform = T.generateFusiformIncision({
   boundary: [[-12, -12, 0], [12, -12, 0], [12, 12, 0], [-12, 12, 0]],
 }, { vector: [1, 0, 0], confidence: 0.9 }, 1, [0, 0, 1]);
 ok(perpendicularCornerFusiform.metrics.boundary_envelope_width_expanded === true,
-  "a perpendicular tapered-envelope miss expands width instead of blindly exhausting candidate length");
+  "boundary-driven tapered-envelope misses expand width without consulting the disabled diameter");
 ok(perpendicularCornerFusiform.metrics.boundary_envelope_length_expansion_iterations === 0,
-  "perpendicular coverage correction preserves an already sufficient long axis");
+  "perpendicular boundary coverage preserves an already sufficient long axis");
 ok(perpendicularCornerFusiform.metrics.boundary_envelope_outside_count === 0,
   "dimension-aware envelope growth contains every boundary corner around the fixed center");
 const editedBoundaryFusiform = T.applyCandidateEdit({

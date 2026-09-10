@@ -6,6 +6,7 @@ import {
   buildIncisionReviewReport,
   findSensitiveStructureInspection,
   formatRecoveredFailureSummary,
+  transitionIncisionReviewRecord,
 } from "../web/src/services/incisionReviewRecords.ts";
 import { auditExportPayload } from "../web/src/services/exportPrivacy.ts";
 
@@ -93,6 +94,71 @@ assert.equal(record.id, "candidate-fixture");
 assert.equal(record.audit_events.length, 1);
 assert.equal(record.audit_events[0].actor, "clinician");
 assert.equal(record.candidate_edit_session.edit_count, 1);
+
+const readyRecord = {
+  ...record,
+  candidate: {
+    ...record.candidate,
+    polyline: [[0, 0, 0], [1, 0, 0]],
+  },
+  trace: [
+    "summarize_tumor_input_quality",
+    "classify_region",
+    "query_rstl_direction",
+    "inspect_sensitive_structures",
+    "linear_subcutaneous_incision",
+    "evaluate_guardrails",
+    "preview_incision_on_face",
+  ].map((action) => ({ action })),
+  review: {
+    ...record.review,
+    reviewer: "医生甲",
+    notes: "已复核",
+  },
+};
+const approvedTransition = transitionIncisionReviewRecord({
+  record: readyRecord,
+  targetStatus: "approved_for_discussion",
+  transitionedAt: "2026-07-29T01:00:00.000Z",
+});
+assert.equal(approvedTransition.ok, true);
+assert.equal(approvedTransition.record.id, readyRecord.id, "review transition preserves candidate id");
+assert.equal(approvedTransition.record.created_at, readyRecord.created_at, "review transition preserves creation time");
+assert.equal(approvedTransition.record.review_status, "approved_for_discussion");
+assert.equal(approvedTransition.record.review_gate.live_overlay_ready, true);
+assert.equal(approvedTransition.record.audit_events.at(-1)?.event, "candidate_review_status_changed");
+
+const pendingTransition = transitionIncisionReviewRecord({
+  record: approvedTransition.record,
+  targetStatus: "pending_clinician_confirmation",
+  transitionedAt: "2026-07-29T02:00:00.000Z",
+});
+assert.equal(pendingTransition.ok, true);
+assert.equal(pendingTransition.record.id, readyRecord.id);
+assert.equal(pendingTransition.record.review_gate.live_overlay_ready, false);
+assert.equal(pendingTransition.record.review.reviewed_at, null);
+
+const blockedTransition = transitionIncisionReviewRecord({
+  record: { ...readyRecord, review: { ...readyRecord.review, reviewer: "" } },
+  targetStatus: "approved_for_discussion",
+});
+assert.equal(blockedTransition.ok, false);
+assert.equal(blockedTransition.attention, "reviewer");
+assert.equal(blockedTransition.record.review_status, "pending_clinician_confirmation");
+
+const highGuardrailTransition = transitionIncisionReviewRecord({
+  record: {
+    ...readyRecord,
+    guardrails: {
+      ...readyRecord.guardrails,
+      warnings: [{ code: "fixture_high_guardrail", severity: "high" }],
+    },
+    review: { ...readyRecord.review, notes: "" },
+  },
+  targetStatus: "approved_for_discussion",
+});
+assert.equal(highGuardrailTransition.ok, false);
+assert.equal(highGuardrailTransition.attention, "notes");
 
 const generatedRecord = buildIncisionReviewRecord({
   result,

@@ -5,11 +5,36 @@ import { fileURLToPath } from "node:url";
 
 import { fitImageToMaxSide, MAX_IMAGE_SOURCE_DIM } from "../web/src/services/imageSource.ts";
 import {
+  confirmLikelyScreenshotUpload,
+  likelyMobileScreenshot,
+} from "../web/src/services/imageUploadPreflight.ts";
+import {
   detectStaticImageWithRetries,
   STATIC_IMAGE_MAX_ATTEMPTS,
 } from "../web/src/services/staticImageDetection.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+{
+  assert.equal(likelyMobileScreenshot({ width: 1080, height: 2376 }), true,
+    "a common tall phone screenshot is warned before upload");
+  assert.equal(likelyMobileScreenshot({ width: 3024, height: 4032 }), false,
+    "a normal 3:4 portrait photo is not treated as a screenshot");
+  assert.equal(likelyMobileScreenshot({ width: 1080, height: 1920 }), false,
+    "the warning stays conservative at the exact 16:9 boundary");
+  let warning = "";
+  const accepted = confirmLikelyScreenshotUpload(
+    { name: "网页截图.jpg" },
+    { width: 1080, height: 2376 },
+    (message) => {
+      warning = message;
+      return false;
+    },
+  );
+  assert.equal(accepted, false);
+  assert.match(warning, /画中画/);
+  assert.match(warning, /1080×2376/);
+}
 
 {
   const fit = fitImageToMaxSide(6000, 4000);
@@ -88,6 +113,19 @@ for (const rel of ["web/src/services/pipelineModels.ts"]) {
   assert.match(source, /runningMode: "VIDEO"/, `${rel} keeps the camera/video detector in VIDEO mode`);
   assert.match(source, /runningMode: "IMAGE"/, `${rel} creates an independent IMAGE detector`);
   assert.match(source, /imageLandmarker/, `${rel} stores the IMAGE detector separately`);
+  const imageInitializer = source.match(/async function initializeImageReady[\s\S]*?export function ensureImageReady/)?.[0] || "";
+  assert.match(imageInitializer, /await ensureAssetsReady\(\)/,
+    `${rel} shares topology and WASM initialization with the image detector`);
+  assert.doesNotMatch(imageInitializer, /await ensureReady\(\)/,
+    `${rel} does not initialize VIDEO detectors before the independent IMAGE detector`);
+  assert.match(imageInitializer, /await Promise\.all\(\[\s*initializeImageFaceReady\(\),\s*initializeImageHandReady\(\),?\s*\]\)/,
+    `${rel} initializes face and hand IMAGE models in parallel instead of adding their cold-start times`);
+}
+
+for (const rel of ["web/src/services/liveRuntime.ts"]) {
+  const source = readFileSync(join(root, rel), "utf8");
+  assert.match(source, /ensureImageReady\(\)\.then/,
+    `${rel} prewarms the dominant static-photo path without starting unused VIDEO detector instances`);
 }
 
 for (const rel of ["web/src/services/pipelineLoop.ts"]) {
@@ -103,6 +141,45 @@ for (const rel of ["web/src/services/pipelineSource.ts"]) {
   assert.match(source, /imageDetectionComplete = false/, `${rel} resets per-image detection completion`);
   assert.match(source, /imageDetectionAttempts = 0/, `${rel} resets per-image attempt state`);
   assert.match(source, /operationId !== sourceOperationId/, `${rel} prevents stale uploads from replacing a newer source`);
+  assert.match(source, /setMsg\("图片加载中", 0, true\)/,
+    `${rel} exposes an explicit image-loading state on the central canvas`);
+  assert.match(source, /const workflowUpload = Boolean\(document\.querySelector\("\.workflow-workbench"\)\)/,
+    `${rel} scopes screenshot warnings and temporary face-photo drafts to the merged workflow`);
+  assert.match(source, /if \(!workflowUpload\) \{[\s\S]*?stopSource\(\{ preserveOperation: true \}\)[\s\S]*?setMsg\("图片加载中", 0, true\)/,
+    `${rel} preserves the established source-replacement order outside the workflow route`);
+  assert.match(source, /if \(workflowUpload && !suppressScreenshotWarning/,
+    `${rel} does not change the protected standalone RSTL upload interaction`);
+  assert.match(source, /if \(!file\.type\.startsWith\("image\/"\)\) \{[\s\S]*?return;[\s\S]*?const startedAt/,
+    `${rel} rejects non-photo files before stopping or replacing the active source`);
+  assert.match(source, /const modelReady = ensureImageReady\(\)\.then[\s\S]*?const decoded = img\.decode\(\)\.then[\s\S]*?await Promise\.all\(\[modelReady, decoded\]\)/,
+    `${rel} overlaps image decoding with cached static-model initialization while timing both stages`);
+  assert.doesNotMatch(source, /await ensureReady\(\);\s*if \(imageFile\) await ensureImageReady\(\)/,
+    `${rel} does not initialize the shared model twice in the image branch`);
+  assert.match(source, /recordMetricSample\("source\.imageUploadToSourceSetMs"/,
+    `${rel} records end-to-end upload readiness timing without logging image content`);
+}
+
+{
+  const loopSource = readFileSync(join(root, "web/src/services/pipelineLoop.ts"), "utf8");
+  const runtimeSource = readFileSync(join(root, "web/src/services/liveRuntime.ts"), "utf8");
+  const wrinkleSource = readFileSync(join(root, "web/src/services/liveWrinkleAnalysis.ts"), "utf8");
+  const wrinklePanelSource = readFileSync(join(root, "web/src/components/LiveWrinklePanel.tsx"), "utf8");
+  assert.doesNotMatch(loopSource, /scheduleCurrentWrinkleAnalysis|analyzeCurrentWrinkles/,
+    "static-photo rendering never starts optional YOLO work as a side effect of uploading or drawing");
+  assert.match(loopSource, /sourceState\.imageCacheLM[\s\S]*?dispatchEvent\(new CustomEvent\("langerface:source-frame-ready"\)\)/,
+    "completed face detection publishes readiness without starting optional wrinkle work");
+  assert.match(runtimeSource, /addEventListener\("langerface:source-frame-ready"[\s\S]*?updateWrinkleUi\(\)/,
+    "the live runtime consumes frame readiness and enables the explicit wrinkle action");
+  assert.doesNotMatch(loopSource, /void analyzeCurrentWrinkles\(\)/,
+    "the first photo frame no longer starts the extra CPU Face + YOLO chain immediately");
+  assert.doesNotMatch(runtimeSource, /scheduleCurrentWrinkleAnalysis|cancelScheduledCurrentWrinkleAnalysis/,
+    "repeated file-picker use has no hidden wrinkle-analysis timer to cancel or revive");
+  assert.doesNotMatch(wrinkleSource, /AUTO_WRINKLE_ANALYSIS_DELAY_MS|requestIdleCallback/,
+    "YOLO is explicit user work rather than a delayed automatic main-thread task");
+  assert.match(wrinklePanelSource, /点击“检测皱纹”后才会启动 V10/,
+    "the panel tells operators that V10 runs only after an explicit action");
+  assert.match(wrinkleSource, /return isWrinkleFrameReady\(\) \? "等待手动检测"/,
+    "the ready state cannot imply that automatic YOLO is pending");
 }
 
 for (const rel of ["web/src/services/pipelineLoop.ts"]) {

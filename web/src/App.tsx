@@ -13,6 +13,7 @@ const PersonalizedRoute = lazy(() => import("./routes/PersonalizedRoute").then((
 const SettingsRoute = lazy(() => import("./routes/SettingsRoute").then((module) => ({ default: module.SettingsRoute })));
 const SurgeryRoute = lazy(() => import("./routes/SurgeryRoute").then((module) => ({ default: module.SurgeryRoute })));
 const V6ReviewRoute = lazy(() => import("./routes/V6ReviewRoute").then((module) => ({ default: module.V6ReviewRoute })));
+const WorkflowRoute = lazy(() => import("./routes/WorkflowRoute").then((module) => ({ default: module.WorkflowRoute })));
 
 function RouteFallback() {
   return (
@@ -48,6 +49,7 @@ export function App() {
         <Route path="/app/personalized" element={<PersonalizedRoute />} />
         <Route path="/app/surgery" element={<SurgeryRoute />} />
         <Route path="/app/v6-review" element={<V6ReviewRoute />} />
+        <Route path="/app/workflow" element={<WorkflowRoute />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

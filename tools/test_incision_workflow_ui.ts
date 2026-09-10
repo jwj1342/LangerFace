@@ -245,7 +245,7 @@ assert.ok(tools.includes("inspect_sensitive_structures"), "workflow gate require
 assert.ok(tools.includes("linear_subcutaneous_incision"), "workflow gate accepts linear incision generation tool");
 assert.ok(tools.includes("fusiform_cutaneous_incision"), "workflow gate accepts fusiform incision generation tool");
 assert.ok(tools.includes("preview_incision_on_face"), "workflow gate requires deterministic face preview before review");
-assert.ok(reviewPolicy.includes("工作流工具 trace 未通过门控"), "approval is blocked when workflow trace gate fails");
+assert.ok(reviewPolicy.includes("候选生成过程记录不完整或顺序异常"), "approval is blocked when workflow trace gate fails");
 assert.ok(incisionReviewRecordsService.includes("工作流工具门控"), "markdown report includes workflow trace gate status");
 assert.ok(incisionReviewRecordsService.includes("工作流计划："), "markdown report includes workflow plan status");
 assert.ok(incisionReviewRecordsService.includes("candidate_comparison"), "review export includes candidate comparison");

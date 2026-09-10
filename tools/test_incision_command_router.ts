@@ -40,6 +40,7 @@ const actions: IncisionCommandActions = {
   makeVariants: () => record("makeVariants"),
   clearSaved: () => record("clearSaved"),
   loadCandidate: (id) => record("loadCandidate", id),
+  toggleCandidateReviewStatus: (id) => record("toggleCandidateReviewStatus", id),
   removeCandidate: (id) => record("removeCandidate", id),
   exportJson: () => record("exportJson"),
   exportReport: () => record("exportReport"),
@@ -82,6 +83,9 @@ assert.equal(boundaryState.controlledBoundaryActive, false,
   "tumor kind reset clears the accepted controlled-marker boundary mode");
 expectDispatch(tumor, { command: "diameter_input", value: "12" }, [
   ["applyTumorControl", "diameter_input", "12"], ["updateTumorRing"], ["publish", "tumor_diameter_input"],
+]);
+expectDispatch(tumor, { command: "diameter_inactive_hint" }, [
+  ["applyTumorControl", "diameter_inactive_hint", undefined], ["publish", "diameter_inactive_hint"],
 ]);
 for (const command of ["depth_input", "author_changed"] as const) {
   expectDispatch(tumor, { command, value: command === "depth_input" ? "6" : "clinician" }, [
@@ -161,6 +165,7 @@ for (const [command, action] of [
   expectDispatch(library, { command }, [[action]]);
 }
 expectDispatch(library, { command: "load_candidate", id: "candidate-1" }, [["loadCandidate", "candidate-1"]]);
+expectDispatch(library, { command: "toggle_candidate_review_status", id: "candidate-1" }, [["toggleCandidateReviewStatus", "candidate-1"]]);
 expectDispatch(library, { command: "remove_candidate", id: "candidate-2" }, [["removeCandidate", "candidate-2"]]);
 
 for (const [handler, detail] of [
@@ -171,6 +176,7 @@ for (const [handler, detail] of [
   [edit, { command: "commit_reason", controlId: "editReason", value: "unreviewed reason" }],
   [review, { command: "unknown" }],
   [library, { command: "load_candidate", id: "" }],
+  [library, { command: "toggle_candidate_review_status", id: "" }],
 ] as const) {
   calls.length = 0;
   assert.equal(handler(event(detail)), false);

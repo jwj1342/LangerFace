@@ -46,6 +46,14 @@ assert.equal(
   readIncisionLibraryCommand(event({ command: "load_candidate", id: "" })),
   null,
 );
+assert.deepEqual(
+  readIncisionLibraryCommand(event({ command: "toggle_candidate_review_status", id: "candidate-1" })),
+  { command: "toggle_candidate_review_status", id: "candidate-1" },
+);
+assert.equal(
+  readIncisionLibraryCommand(event({ command: "toggle_candidate_review_status", id: "" })),
+  null,
+);
 assert.equal(
   readIncisionLibraryCommand(event({ command: "remove_candidate", id: 4 })),
   null,
@@ -58,6 +66,10 @@ assert.deepEqual(
 assert.deepEqual(
   readIncisionEditCommand(event({ command: "commit_edit", controlId: "lengthScale", value: "110" })),
   { command: "commit_edit", controlId: "lengthScale", value: "110" },
+);
+assert.deepEqual(
+  readIncisionEditCommand(event({ command: "preview_edit", controlId: "uniformScale", value: "125" })),
+  { command: "preview_edit", controlId: "uniformScale", value: "125" },
 );
 assert.equal(
   readIncisionEditCommand(event({ command: "preview_edit" })),

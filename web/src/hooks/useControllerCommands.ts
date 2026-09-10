@@ -12,6 +12,7 @@ import {
   type IncisionTumorCommand,
   type LiveRenderCommand,
   type LiveSourceCommand,
+  type WorkflowIncisionToolCommand,
   dispatchAnnotateDrawCommand,
   dispatchAnnotateLibraryCommand,
   dispatchAnnotateMeshCommand,
@@ -22,6 +23,7 @@ import {
   dispatchIncisionTumorCommand,
   dispatchLiveRenderCommand,
   dispatchLiveSourceCommand,
+  dispatchWorkflowIncisionToolCommand,
 } from "../lib/controllerCommand";
 
 export function useLiveControllerCommands() {
@@ -32,6 +34,13 @@ export function useLiveControllerCommands() {
     dispatchLiveRenderCommand(command, value);
   }, []);
   return useMemo(() => ({ render, source }), [render, source]);
+}
+
+export function useWorkflowIncisionToolCommands() {
+  const tool = useCallback((command: WorkflowIncisionToolCommand, value?: string | number) => {
+    dispatchWorkflowIncisionToolCommand(command, value);
+  }, []);
+  return useMemo(() => ({ tool }), [tool]);
 }
 
 export function useAnnotateControllerCommands() {

@@ -224,9 +224,16 @@ function isSurfaceRef(value: SurfaceRef | null): value is SurfaceRef {
   return value !== null;
 }
 
-function refsFromPolyline(points: unknown, verts: Vec3[], tris: Triangle[]): SurfaceRef[] {
+function refsFromPolyline(
+  points: unknown,
+  verts: Vec3[],
+  tris: Triangle[],
+  close = false,
+): SurfaceRef[] {
   if (!Array.isArray(points)) return [];
-  return polylineToSurfaceRefs(points as Vec3[], verts, tris).filter(isSurfaceRef);
+  const refs = polylineToSurfaceRefs(points as Vec3[], verts, tris).filter(isSurfaceRef);
+  if (close && refs.length >= 3 && refs.at(-1) !== refs[0]) refs.push(refs[0]);
+  return refs;
 }
 
 function codesBySeverity(guardrails: AnyRecord | null | undefined, severity: string): string[] {
@@ -279,7 +286,7 @@ export function compileIncisionOverlay(
     tumor_kind: tumor.kind,
     tumor: {
       center_ref: pointToSurfaceRef(tumor.center, verts, tris),
-      boundary_refs: refsFromPolyline(tumor.boundary || [], verts, tris),
+      boundary_refs: refsFromPolyline(tumor.boundary || [], verts, tris, true),
       diameter_mm: tumor.diameter_mm,
       margin_mm: tumor.margin_mm,
     },

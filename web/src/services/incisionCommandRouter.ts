@@ -44,6 +44,7 @@ export interface IncisionCommandActions {
   makeVariants(): unknown;
   clearSaved(): unknown;
   loadCandidate(id: string): unknown;
+  toggleCandidateReviewStatus?(id: string): unknown;
   removeCandidate(id: string): unknown;
   exportJson(): unknown;
   exportReport(): unknown;
@@ -73,6 +74,9 @@ export class IncisionCommandRouter {
       case "diameter_input":
         this.actions.updateTumorRing();
         this.actions.publish("tumor_diameter_input");
+        return true;
+      case "diameter_inactive_hint":
+        this.actions.publish(command);
         return true;
       case "depth_input":
       case "author_changed":
@@ -190,6 +194,10 @@ export class IncisionCommandRouter {
         return true;
       case "load_candidate":
         this.actions.loadCandidate(detail.id as string);
+        return true;
+      case "toggle_candidate_review_status":
+        if (!this.actions.toggleCandidateReviewStatus) return false;
+        this.actions.toggleCandidateReviewStatus(detail.id as string);
         return true;
       case "remove_candidate":
         this.actions.removeCandidate(detail.id as string);

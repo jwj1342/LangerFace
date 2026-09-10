@@ -14,12 +14,31 @@ export interface RefineLine {
 export interface CurveRefinementTransportLine {
   name: string;
   hidden: boolean;
+  hiddenPointRuns?: Array<[number, number]>;
   offsets: Array<[number, number]>;
+}
+
+export interface CurveRefinementTransportAddedPoint {
+  anchorLineName: string;
+  anchorPosition: number;
+  tangentOffset: number;
+  normalOffset: number;
+}
+
+export interface CurveRefinementTransportAddedLine {
+  name: string;
+  region: string;
+  symmetryRole: string;
+  symmetryPairId: string;
+  hidden: boolean;
+  hiddenPointRuns: Array<[number, number]>;
+  points: CurveRefinementTransportAddedPoint[];
 }
 
 export interface CurveRefinementTransport {
   baseScale: number;
   lines: CurveRefinementTransportLine[];
+  addedLines?: CurveRefinementTransportAddedLine[];
   system?: string;
   committedAt?: string;
 }
@@ -366,6 +385,81 @@ function sampleOffset(offsets: readonly [number, number][], position: number): [
   ];
 }
 
+interface CurveAnchorProjection extends CurveRefinementTransportAddedPoint {
+  distanceSquared: number;
+}
+
+function nearestCurveAnchor(
+  lines: readonly RefineLine[],
+  target: RefinePoint,
+): CurveAnchorProjection | null {
+  let best: CurveAnchorProjection | null = null;
+  for (const line of lines) {
+    if (!line.name || !line.pts?.length) continue;
+    if (line.pts.length === 1) {
+      const point = line.pts[0];
+      const dx = target[0] - point[0], dy = target[1] - point[1];
+      const tangent = pointTangent(line.pts, 0);
+      const normal: [number, number] = [-tangent[1], tangent[0]];
+      const candidate: CurveAnchorProjection = {
+        anchorLineName: line.name,
+        anchorPosition: 0,
+        tangentOffset: dx * tangent[0] + dy * tangent[1],
+        normalOffset: dx * normal[0] + dy * normal[1],
+        distanceSquared: dx * dx + dy * dy,
+      };
+      if (!best || candidate.distanceSquared < best.distanceSquared) best = candidate;
+      continue;
+    }
+    for (let index = 0; index < line.pts.length - 1; index += 1) {
+      const a = line.pts[index], b = line.pts[index + 1];
+      const vx = b[0] - a[0], vy = b[1] - a[1];
+      const lengthSquared = vx * vx + vy * vy;
+      const fraction = lengthSquared > 1e-9
+        ? clamp(((target[0] - a[0]) * vx + (target[1] - a[1]) * vy) / lengthSquared, 0, 1)
+        : 0;
+      const anchorX = a[0] + vx * fraction, anchorY = a[1] + vy * fraction;
+      const dx = target[0] - anchorX, dy = target[1] - anchorY;
+      const length = Math.hypot(vx, vy) || 1;
+      const tangent: [number, number] = [vx / length, vy / length];
+      const normal: [number, number] = [-tangent[1], tangent[0]];
+      const candidate: CurveAnchorProjection = {
+        anchorLineName: line.name,
+        anchorPosition: (index + fraction) / (line.pts.length - 1),
+        tangentOffset: dx * tangent[0] + dy * tangent[1],
+        normalOffset: dx * normal[0] + dy * normal[1],
+        distanceSquared: dx * dx + dy * dy,
+      };
+      if (!best || candidate.distanceSquared < best.distanceSquared) best = candidate;
+    }
+  }
+  return best;
+}
+
+function sampleCurveFrame(
+  line: RefineLine,
+  position: number,
+): { point: RefinePoint; tangent: [number, number]; tri: number | null } | null {
+  if (!line.pts?.length) return null;
+  const cursor = clamp(position, 0, 1) * Math.max(0, line.pts.length - 1);
+  const lower = Math.floor(cursor), upper = Math.min(line.pts.length - 1, lower + 1);
+  const fraction = cursor - lower;
+  const a = line.pts[lower], b = line.pts[upper] || a;
+  const point: RefinePoint = [
+    a[0] * (1 - fraction) + b[0] * fraction,
+    a[1] * (1 - fraction) + b[1] * fraction,
+    (Number(a[2]) || 0) * (1 - fraction) + (Number(b[2]) || 0) * fraction,
+  ];
+  const vx = b[0] - a[0], vy = b[1] - a[1];
+  const length = Math.hypot(vx, vy);
+  const tangent = length > 1e-9
+    ? [vx / length, vy / length] as [number, number]
+    : pointTangent(line.pts, lower);
+  const triIndex = fraction < 0.5 ? lower : upper;
+  const tri = Number.isInteger(line.tris?.[triIndex]) ? Number(line.tris?.[triIndex]) : null;
+  return { point, tangent, tri };
+}
+
 /**
  * Store manual edits in each automatic curve's tangent/normal frame. This is
  * independent of the frozen camera's absolute pixels, so it can be transported
@@ -376,6 +470,7 @@ export function buildCurveRefinementTransport(
   refinedLines: readonly RefineLine[] | null | undefined,
 ): CurveRefinementTransport {
   const refinedByName = new Map((refinedLines || []).map((line) => [line.name, line]));
+  const automaticNames = new Set((autoLines || []).map((line) => line.name).filter(Boolean));
   const lines: CurveRefinementTransportLine[] = [];
   for (const automatic of autoLines || []) {
     const refined = refinedByName.get(automatic.name);
@@ -390,9 +485,34 @@ export function buildCurveRefinementTransport(
       const dx = target[0] - point[0], dy = target[1] - point[1];
       return [dx * tangent[0] + dy * tangent[1], dx * normal[0] + dy * normal[1]];
     });
-    lines.push({ name: automatic.name || "", hidden: Boolean(refined.hidden), offsets });
+    lines.push({
+      name: automatic.name || "",
+      hidden: Boolean(refined.hidden),
+      hiddenPointRuns: (refined.hiddenPointRuns || []).map((run) => [run[0], run[1]]),
+      offsets,
+    });
   }
-  return { baseScale: lineSetScale(autoLines), lines };
+  const addedLines: CurveRefinementTransportAddedLine[] = [];
+  for (const refined of refinedLines || []) {
+    if (!refined.name || automaticNames.has(refined.name) || !refined.pts?.length) continue;
+    const points = refined.pts.map((point) => nearestCurveAnchor(autoLines || [], point));
+    if (points.some((point) => !point)) continue;
+    addedLines.push({
+      name: refined.name,
+      region: refined.region || "",
+      symmetryRole: refined.symmetryRole || "",
+      symmetryPairId: refined.symmetryPairId || "",
+      hidden: Boolean(refined.hidden),
+      hiddenPointRuns: (refined.hiddenPointRuns || []).map((run) => [run[0], run[1]]),
+      points: points.map((point) => ({
+        anchorLineName: point!.anchorLineName,
+        anchorPosition: point!.anchorPosition,
+        tangentOffset: point!.tangentOffset,
+        normalOffset: point!.normalOffset,
+      })),
+    });
+  }
+  return { baseScale: lineSetScale(autoLines), lines, addedLines };
 }
 
 /** Apply a frozen-frame refinement to the corresponding curves on a live frame. */
@@ -401,12 +521,12 @@ export function applyCurveRefinementTransport<T extends RefineLine>(
   transport: CurveRefinementTransport | null | undefined,
   bounds: RefineBounds = {},
 ): T[] {
-  if (!transport?.lines?.length) return [...mappedLines];
+  if (!transport?.lines?.length && !transport?.addedLines?.length) return [...mappedLines];
   const byName = new Map(transport.lines.map((line) => [line.name, line]));
   const scale = clamp(lineSetScale(mappedLines) / Math.max(1, transport.baseScale || 1), 0.45, 2.4);
   const width = typeof bounds.width === "number" && Number.isFinite(bounds.width) ? bounds.width : Infinity;
   const height = typeof bounds.height === "number" && Number.isFinite(bounds.height) ? bounds.height : Infinity;
-  return (mappedLines || []).map((line) => {
+  const transported = (mappedLines || []).map((line) => {
     const template = byName.get(line.name || "");
     if (!template) return line;
     const points = (line.pts || []).map((point, index) => {
@@ -421,8 +541,53 @@ export function applyCurveRefinementTransport<T extends RefineLine>(
       ];
       return nextPoint;
     });
-    return { ...line, hidden: template.hidden, pts: points } as T;
+    return {
+      ...line,
+      hidden: template.hidden,
+      hiddenPointRuns: (template.hiddenPointRuns || []).map((run) => [run[0], run[1]]),
+      pts: points,
+    } as T;
   });
+  const mappedByName = new Map((mappedLines || []).map((line) => [line.name || "", line]));
+  const existingNames = new Set(transported.map((line) => line.name || ""));
+  for (const added of transport.addedLines || []) {
+    if (!added.name || existingNames.has(added.name)) continue;
+    const points: RefinePoint[] = [];
+    const tris: number[] = [];
+    let complete = true;
+    for (const anchor of added.points) {
+      const anchorLine = mappedByName.get(anchor.anchorLineName);
+      const frame = anchorLine ? sampleCurveFrame(anchorLine, anchor.anchorPosition) : null;
+      if (!frame || frame.tri === null) {
+        complete = false;
+        break;
+      }
+      const normal: [number, number] = [-frame.tangent[1], frame.tangent[0]];
+      points.push([
+        clamp(frame.point[0] + scale * (
+          anchor.tangentOffset * frame.tangent[0] + anchor.normalOffset * normal[0]
+        ), 0, width),
+        clamp(frame.point[1] + scale * (
+          anchor.tangentOffset * frame.tangent[1] + anchor.normalOffset * normal[1]
+        ), 0, height),
+        Number(frame.point[2]) || 0,
+      ]);
+      tris.push(frame.tri);
+    }
+    if (!complete || points.length < 2) continue;
+    transported.push({
+      name: added.name,
+      region: added.region,
+      symmetryRole: added.symmetryRole,
+      symmetryPairId: added.symmetryPairId,
+      hidden: added.hidden,
+      hiddenPointRuns: added.hiddenPointRuns.map((run) => [run[0], run[1]]),
+      pts: points,
+      tris,
+    } as T);
+    existingNames.add(added.name);
+  }
+  return transported;
 }
 
 /**

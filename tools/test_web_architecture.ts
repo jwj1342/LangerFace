@@ -19,6 +19,8 @@ const allLegacyJs = walk(root, (file) => file.endsWith(".js"))
   .filter((file) => !file.includes(`${path.sep}node_modules${path.sep}`))
   .filter((file) => !file.includes(`${path.sep}dist${path.sep}`))
   .filter((file) => !file.includes(`${path.sep}output${path.sep}`))
+  // Only the top-level test output directory is outside the product runtime.
+  .filter((file) => !path.relative(root, file).startsWith(`test-results${path.sep}`))
   .map((file) => path.relative(root, file).split(path.sep).join("/"));
 
 if (allLegacyJs.length) {
@@ -28,6 +30,23 @@ if (allLegacyJs.length) {
   process.exit(1);
 }
 console.log("ok: web 运行时没有遗留 JavaScript 源文件（owner #95）");
+
+const runtimeReferenceFiles = ["src", "dev", "compat", "api", "public", "assets"]
+  .map((directory) => path.join(root, directory))
+  .filter((directory) => fs.existsSync(directory))
+  .flatMap((directory) => walk(directory, (file) => /\.(?:tsx?|m?js|cjs|html|css|json)$/.test(file)))
+  .concat(fs.readdirSync(root)
+    .filter((name) => /\.(?:html|css)$/.test(name) || name === "vite.config.ts")
+    .map((name) => path.join(root, name)));
+// Conservatively reject literal references, including constructed paths and CSS URLs.
+const testOutputReferences = runtimeReferenceFiles.filter((file) =>
+  /\btest-results\b/.test(fs.readFileSync(file, "utf8")));
+if (testOutputReferences.length) {
+  console.error("FAIL product runtime must not reference historical test-results:");
+  for (const file of testOutputReferences) console.error(`  - ${path.relative(root, file)}`);
+  process.exit(1);
+}
+console.log("ok: product entries and runtime sources do not reference historical test-results");
 
 // #95 的迁移不能靠把 .js 改名为 .ts 后关闭检查来“完成”。所有 React
 // runtime 与算法服务都必须继续进入 strict TypeScript；需要表达动态边界时，

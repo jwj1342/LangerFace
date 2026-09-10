@@ -18,7 +18,7 @@ def parity_cases() -> list[dict]:
     return payload["cases"]
 
 
-@pytest.mark.parametrize("case_index", [0, 1, 2])
+@pytest.mark.parametrize("case_index", range(len(json.loads(FIXTURE.read_text(encoding="utf-8"))["cases"])))
 def test_python_generator_matches_shared_golden(parity_cases: list[dict], case_index: int) -> None:
     case = parity_cases[case_index]
     expected = case["expected"]
@@ -46,6 +46,25 @@ def test_python_generator_matches_shared_golden(parity_cases: list[dict], case_i
         atol=1e-12,
     )
     metrics = candidate["metrics"]
+    for key, value in expected.get("normalization", {}).items():
+        assert metrics[key] == (pytest.approx(value) if type(value) in (int, float) else value), (
+            case["name"], key
+        )
+    if "normalization" in expected:
+        assert candidate["provenance"]["boundary_source"] == case["tumor"]["boundary_source"]
+        assert (
+            candidate["provenance"]["lesion_normalization_status"] == metrics["lesion_normalization_status"]
+        )
+        if len(case["tumor"]["boundary"]) == 4:
+            assert metrics["detected_lesion_area_mm2"] == pytest.approx(4)
+            assert metrics["detected_enclosing_diameter_mm"] == pytest.approx(4)
+            assert metrics["detected_equivalent_diameter_mm"] == pytest.approx(4 / np.sqrt(np.pi))
+            assert metrics["detected_lesion_compactness"] == pytest.approx(np.pi / 5)
+            np.testing.assert_allclose(metrics["detected_boundary_centroid"], [2, 0, 0], atol=1e-12)
+        if case["tumor"].get("photo_boundary_enclosing_diameter_mm") == 2:
+            assert metrics["boundary_point_count"] == 32
+            assert metrics["boundary_area_mm2"] == pytest.approx(16 * np.sin(np.pi / 16))
+            assert metrics["boundary_scale_shape"] == "enclosing_circle"
     assert metrics["tip_angle_target_deg"] == pytest.approx(expected["tip_angle_target_deg"])
     assert metrics["tip_angle_limited_by_ratio"] is expected["tip_angle_limited_by_ratio"]
     assert metrics["boundary_used"] is expected["boundary_used"]
@@ -104,6 +123,21 @@ def test_default_tip_angle_is_expressed_by_endpoint_tangents() -> None:
 
     assert measured == pytest.approx(30.0, abs=0.03)
     assert profile["metrics"]["tip_angle_estimated_deg"] == pytest.approx(30.0)
+
+
+@pytest.mark.parametrize(("diameter_mm", "expected_length_mm"), [(2.0, 6.0), (3.0, 9.0), (4.0, 12.0)])
+def test_small_default_candidates_preserve_three_to_one_scale(
+    diameter_mm: float,
+    expected_length_mm: float,
+) -> None:
+    candidate = generate_fusiform_incision(
+        {"kind": "cutaneous", "center": [0, 0, 0], "diameter_mm": diameter_mm, "margin_mm": 0},
+        {"vector": [1, 0, 0]},
+        1.0,
+    )
+
+    assert candidate["width_mm"] == pytest.approx(diameter_mm)
+    assert candidate["length_mm"] == pytest.approx(expected_length_mm)
 
 
 def test_rejects_invalid_geometry_and_non_cutaneous_input() -> None:
