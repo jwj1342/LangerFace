@@ -36,7 +36,7 @@ python -m pip install --upgrade pip
 python -m pip install -r deploy/gpu/requirements.txt
 
 # Authenticate once, then download, verify, and install the private model.
-hf auth login
+python -c "from huggingface_hub import login; login()"
 python tools/install_wrinkle_model.py
 
 # Check Node, FFmpeg, NVIDIA, CUDA/cuDNN provider, and model availability.
