@@ -54,7 +54,7 @@
   "exporter": "ultralytics 8.4.138",
   "hugging_face": {
     "repository": "LangerFace-Research/langerface-wrinkle-yolov8s-seg",
-    "revision": "main",
+    "revision": "d82c61213eb7845a411f3b6bd4e9c79ca3cc65ee",
     "filename": "wrinkle-yolov8s-seg-640.onnx",
     "visibility": "private"
   },
