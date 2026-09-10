@@ -210,8 +210,10 @@ export function requestWorkflowDraftRestore(incision: WorkflowIncisionDraft | nu
   window.dispatchEvent(new CustomEvent(WORKFLOW_DRAFT_RESTORE_EVENT, { detail: incision }));
 }
 
-export function consumeWorkflowDraftRestoreRequest(): WorkflowIncisionDraft | null | undefined {
-  const pending = pendingWorkflowDraftRestore;
+export function pendingWorkflowDraftRestoreRequest(): WorkflowIncisionDraft | null | undefined {
+  return pendingWorkflowDraftRestore;
+}
+
+export function completeWorkflowDraftRestoreRequest(): void {
   pendingWorkflowDraftRestore = undefined;
-  return pending;
 }
