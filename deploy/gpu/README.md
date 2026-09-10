@@ -37,7 +37,7 @@ python -m pip install -r deploy/gpu/requirements.txt
 
 # Authenticate once, then download, verify, and install the private model.
 hf auth login
-python tools/install_wrinkle_model.py --repo OWNER/PRIVATE_MODEL_REPOSITORY
+python tools/install_wrinkle_model.py
 
 # Check Node, FFmpeg, NVIDIA, CUDA/cuDNN provider, and model availability.
 python deploy/gpu/doctor.py
@@ -48,8 +48,8 @@ single ONNX file from the private Hugging Face repository, checks its byte size
 and SHA-256, and writes the four runtime chunks to the fixed
 `web/compat/personalized/model/` path. Teammates do not download files manually
 or edit application paths, but they do need repository access and a Hugging Face
-login (or `HF_TOKEN`). The repository owner will replace the placeholder
-`OWNER/PRIVATE_MODEL_REPOSITORY` after creating the private model repository.
+login (or `HF_TOKEN`). The private repository address is stored in the model
+metadata and only needs to change if the model repository itself moves.
 
 ## Start
 
