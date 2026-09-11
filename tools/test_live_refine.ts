@@ -50,6 +50,21 @@ const preExistingCrossing = assessRefineLineQuality(
 assert.equal(preExistingCrossing.ok, true,
   "pre-existing atlas crossings must not be mislabeled as risks introduced by the edit");
 
+const denseAtlasBaseline = Array.from({ length: 204 }, (_, lineIndex) => ({
+  name: `dense_${lineIndex}`,
+  pts: Array.from({ length: 100 }, (_, pointIndex) => [pointIndex * 2, lineIndex * 12] as [number, number]),
+}));
+const denseAtlasEdited = denseAtlasBaseline.map((line) => ({
+  ...line,
+  pts: line.pts.map((point) => [...point] as [number, number]),
+}));
+denseAtlasEdited[100].pts[50][1] += 2;
+const denseAtlasStartedAt = performance.now();
+const denseAtlasQuality = assessRefineLineQuality(denseAtlasBaseline, denseAtlasEdited, { minimumSpacingPx: 6 });
+assert.equal(denseAtlasQuality.ok, true, "a local edit in a dense atlas must retain the same quality result");
+assert.ok(performance.now() - denseAtlasStartedAt < 1000,
+  "quality review must stay bounded to changed and nearby curves instead of comparing the full atlas");
+
 const automatic = [{ name: "left", pts: [[10, 20, 0], [20, 20, 0], [30, 20, 0]] }];
 const deformed = deformCurveWide(automatic[0].pts, 1, [20, 28], { width: 100, height: 100 });
 assert.deepEqual(deformed[1].slice(0, 2), [20, 28], "grabbed point must follow the pointer exactly");

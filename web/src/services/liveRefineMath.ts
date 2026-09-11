@@ -98,6 +98,7 @@ export function mapRefineViewportPoint(
 const clamp = (value: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, value));
 
 type Segment = { a: RefinePoint; b: RefinePoint };
+type LineBounds = { x0: number; y0: number; x1: number; y1: number };
 
 function lineLabel(line: RefineLine, index: number): string {
   return line.name || `curve_${index + 1}`;
@@ -109,6 +110,38 @@ function lineSegments(line: RefineLine): Segment[] {
     segments.push({ a: line.pts[index - 1], b: line.pts[index] });
   }
   return segments;
+}
+
+function lineBounds(line: RefineLine): LineBounds | null {
+  if (!line.pts?.length) return null;
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const point of line.pts) {
+    if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) return null;
+    x0 = Math.min(x0, point[0]);
+    y0 = Math.min(y0, point[1]);
+    x1 = Math.max(x1, point[0]);
+    y1 = Math.max(y1, point[1]);
+  }
+  return { x0, y0, x1, y1 };
+}
+
+function boundsDistance(first: LineBounds | null, second: LineBounds | null): number {
+  if (!first || !second) return 0;
+  const dx = Math.max(0, first.x0 - second.x1, second.x0 - first.x1);
+  const dy = Math.max(0, first.y0 - second.y1, second.y0 - first.y1);
+  return Math.hypot(dx, dy);
+}
+
+function lineGeometryChanged(automatic: RefineLine | undefined, edited: RefineLine): boolean {
+  if (!automatic || Boolean(automatic.hidden) !== Boolean(edited.hidden)) return true;
+  if ((automatic.pts?.length || 0) !== (edited.pts?.length || 0)) return true;
+  return edited.pts.some((point, index) => {
+    const baselinePoint = automatic.pts[index];
+    return !baselinePoint || point[0] !== baselinePoint[0] || point[1] !== baselinePoint[1];
+  });
 }
 
 function orientation(a: RefinePoint, b: RefinePoint, c: RefinePoint): number {
@@ -191,6 +224,12 @@ export function assessRefineLineQuality(
   const minimumSpacingPx = Math.max(0.5, Number(options.minimumSpacingPx) || 6);
   const visible = (editedLines || []).filter((line) => !line.hidden);
   const baselineByName = new Map((automaticLines || []).map((line, index) => [lineLabel(line, index), line]));
+  const changedNames = new Set<string>();
+  const boundsCache = new Map<RefineLine, LineBounds | null>();
+  const getBounds = (line: RefineLine): LineBounds | null => {
+    if (!boundsCache.has(line)) boundsCache.set(line, lineBounds(line));
+    return boundsCache.get(line) || null;
+  };
   const warnings: RefineQualityWarning[] = [];
 
   visible.forEach((line, index) => {
@@ -200,6 +239,8 @@ export function assessRefineLineQuality(
       return;
     }
     const baseline = baselineByName.get(name);
+    if (!lineGeometryChanged(baseline, line)) return;
+    changedNames.add(name);
     if (hasSelfIntersection(line) && !hasSelfIntersection(baseline || { pts: [] })) {
       warnings.push({ code: "new_self_intersection", lineNames: [name] });
     }
@@ -213,8 +254,18 @@ export function assessRefineLineQuality(
       const secondName = lineLabel(visible[second], second);
       const baselineSecond = baselineByName.get(secondName);
       if (!baselineSecond) continue;
+      if (!changedNames.has(firstName) && !changedNames.has(secondName)) continue;
+      // A bounding-box gap is a lower bound on curve distance. Most curves in
+      // the dense atlas are far apart, so avoid millions of needless segment
+      // comparisons after a one-line edit.
+      if (boundsDistance(getBounds(visible[first]), getBounds(visible[second])) >= minimumSpacingPx) continue;
       const currentDistance = linePairDistance(visible[first], visible[second]);
-      const baselineDistance = linePairDistance(baselineFirst, baselineSecond);
+      if (currentDistance >= minimumSpacingPx) continue;
+      const baselineThreshold = currentDistance === 0 ? 0 : minimumSpacingPx * 1.5;
+      const baselineBoundsDistance = boundsDistance(getBounds(baselineFirst), getBounds(baselineSecond));
+      const baselineDistance = baselineBoundsDistance > baselineThreshold
+        ? baselineBoundsDistance
+        : linePairDistance(baselineFirst, baselineSecond);
       if (currentDistance === 0 && baselineDistance > 0) {
         warnings.push({ code: "new_curve_intersection", lineNames: [firstName, secondName] });
       } else if (currentDistance > 0 && currentDistance < minimumSpacingPx
