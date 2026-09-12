@@ -12,6 +12,7 @@ export interface LiveWrinkleWorkerRequest {
   landmarks: Array<[number, number, number]>;
   mode: "full" | "yolo-only";
   includeFingerprint?: boolean;
+  cacheForRefinement?: boolean;
 }
 
 export interface LiveWrinkleWorkerEvidence {

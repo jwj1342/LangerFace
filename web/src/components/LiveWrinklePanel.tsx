@@ -44,7 +44,8 @@ export function LiveWrinklePanel({ showAdvancedCaptureHint = true }: { showAdvan
         恢复标准 RSTL
       </Button>
       <Hint>
-        自动微调不会打开医生手动编辑器；应用后仍可使用下方“医生手动微调（2D）”继续调整。
+        自动微调仅使用 YOLO 的额头和眉间皱纹，且只修改这两个区域的 RSTL；
+        不会打开医生手动编辑器，应用后仍可使用下方“医生手动微调（2D）”继续调整。
         {showAdvancedCaptureHint ? <>
           如需复现受控单图的完整审计图，可打开 <a href="/compat/personalized/wrinkle_rstl_experiment.html">
             v8.1.96 / v10 受控证据 / V9 单图实验

@@ -61,13 +61,17 @@ export function latestV9RstlRefinementOptions(
     foreheadBundleMaximumTurnDegrees: 8,
     foreheadBundleMaximumAddedSignChanges: 6,
     foreheadBundleMinimumReversalSpacingPx: 12,
-    curvatureFairingGlabellarMaximumTurnDegrees: 8,
+    // The atlas brow-upturn curves already contain ~15–17° local turns. A fixed
+    // 8° ceiling (plus only 0.75° baseline slack) rejected every otherwise
+    // smooth fit for long, nearly vertical frown lines. Keep this relaxation
+    // glabellar-only so forehead and all non-target regions retain their gates.
+    curvatureFairingGlabellarMaximumTurnDegrees: 20,
     curvatureFairingGlabellarMaximumAddedSignChanges: 4,
-    curvatureFairingGlabellarMaximumMeanAdherencePx: 2.6,
-    curvatureFairingGlabellarMaximumP90AdherencePx: 7,
+    curvatureFairingGlabellarMaximumMeanAdherencePx: 3,
+    curvatureFairingGlabellarMaximumP90AdherencePx: 11,
     curvatureFairingGlabellarMinimumReversalSpacingPx: 15,
-    glabellarAdherenceMeanThresholdPx: 2.6,
-    glabellarAdherenceP90ThresholdPx: 7,
+    glabellarAdherenceMeanThresholdPx: 3,
+    glabellarAdherenceP90ThresholdPx: 11,
     glabellarMaximumDisplacementPx: faceWidthPx * 0.08,
     glabellarTransitionLengthPx: faceWidthPx * 0.08,
     curvatureFairingCrowsFeetMaximumTurnDegrees: 9,

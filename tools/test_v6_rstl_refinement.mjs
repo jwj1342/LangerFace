@@ -7,6 +7,8 @@ import {
 } from "../web/src/services/personalized/v6RstlRefinement.ts";
 import { refineV6 as refineV9Smooth } from
   "../web/src/services/personalized/v6RstlRefinementV9.ts";
+import { latestV9RstlRefinementOptions } from
+  "../web/src/services/personalized/v9RstlRefinementProfile.ts";
 import { mapAtlas } from "../web/src/services/geometryAtlas.ts";
 
 const size = 96;
@@ -51,6 +53,31 @@ function directionalEvidence(lines, confidenceValue = 1) {
 
 function rangeLine(x0, x1, y) {
   return Array.from({ length: x1 - x0 + 1 }, (_, offset) => [x0 + offset, y]);
+}
+
+// A central vertical frown line must be allowed to guide the nearest glabellar
+// RSTL even when their mean x coordinates fall on opposite sides of size/2.
+{
+  const glabellar = {
+    name: "cross-midline-glabellar",
+    region: "orbital_brow_upturn_v11",
+    pts: Array.from({ length: 30 }, (_, pointIndex) => [44, 12 + pointIndex]),
+  };
+  const wrinkle = Array.from({ length: 29 }, (_, pointIndex) => [50, 13 + pointIndex]);
+  const fields = directionalEvidence([wrinkle]);
+  const result = refineV9Smooth({
+    seeds: [glabellar],
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 75,
+    options: latestV9RstlRefinementOptions(75),
+  });
+  assert.equal(result.diagnostics.glabellar_single_curve_selected_count, 1);
+  assert.equal(result.diagnostics.moved_curve_count, 1);
+  assert.ok(result.curves[0].pts.some((point, pointIndex) =>
+    Math.abs(point[0] - glabellar.pts[pointIndex][0]) > 0.05));
 }
 
 function meanVerticalDistance(points, wrinkle, x0, x1) {
