@@ -12,6 +12,7 @@ import {
 } from "../services/personalized/noseRootIntersectionVisibility.ts";
 import {
   buildPrecomputedFineWrinkleEvidence,
+  type PrecomputedFineWrinkleEvidence,
   type PrecomputedFineWrinklePayload,
 } from "../services/personalized/precomputedFineWrinkleEvidence.ts";
 import { refineV6 } from "../services/personalized/v6RstlRefinementV9.ts";
@@ -24,6 +25,13 @@ import {
   YOLO_WRINKLE_CONFIDENCE,
   YOLO_WRINKLE_ONNX_VERSION,
 } from "../services/personalized/yoloWrinkleOnnx.ts";
+import {
+  isYoloGuidedForeheadSeed,
+  isYoloGuidedGlabellarSeed,
+  isYoloGuidedRstlSeed,
+  mergeYoloGuidedRstlCurves,
+  YOLO_GUIDED_RSTL_SCOPE,
+} from "../services/personalized/yoloGuidedRstlScope.ts";
 import {
   parseWrinkleV10ProviderSession,
   WRINKLE_V10_CHECKPOINT_SHA256,
@@ -74,6 +82,29 @@ const detector = new YoloWrinkleOnnx({
 });
 let fullDetectionSequence = 0;
 let cachedFullDetection: { id: string; payload: DynamicFourRegionPayload } | null = null;
+let yoloDetectionSequence = 0;
+let cachedYoloDetection: {
+  id: string;
+  foreheadEvidence: PrecomputedFineWrinkleEvidence | null;
+  glabellarEvidence: PrecomputedFineWrinkleEvidence | null;
+} | null = null;
+
+function buildYoloGuidanceEvidence(
+  lines: LiveWrinkleWorkerEvidence["lines"],
+  className: "forehead" | "frown",
+  size: number,
+  cacheKey: string,
+  summary: Record<string, unknown>,
+): PrecomputedFineWrinkleEvidence | null {
+  const selected = lines.filter((line) => line.class === className);
+  if (!selected.length) return null;
+  return buildPrecomputedFineWrinkleEvidence({
+    schemaVersion: "langerface.wrinkle-fine-lines.v1",
+    source: { imageSha256: cacheKey, width: size, height: size },
+    summary,
+    lines: selected,
+  }, size, cacheKey);
+}
 
 async function fetchWithTimeout(
   url: string,
@@ -311,11 +342,29 @@ const api: LiveWrinklePipelineWorkerApi = {
           yoloScores,
         },
       };
+      let detectionId: string | null = null;
+      if (request.cacheForRefinement) {
+        if (baseline.lines.some((line) => line.class === "forehead" || line.class === "frown")) {
+          const cacheKey = `yolo-guidance-${++yoloDetectionSequence}`;
+          detectionId = `yolo-${yoloDetectionSequence}`;
+          cachedYoloDetection = {
+            id: detectionId,
+            foreheadEvidence: buildYoloGuidanceEvidence(
+              baseline.lines, "forehead", request.size, `${cacheKey}-forehead`, baseline.summary,
+            ),
+            glabellarEvidence: buildYoloGuidanceEvidence(
+              baseline.lines, "frown", request.size, `${cacheKey}-glabellar`, baseline.summary,
+            ),
+          };
+        } else {
+          cachedYoloDetection = null;
+        }
+      }
       emit(onEvent, { type: "evidence", evidence });
       return {
         executionThread: "web_worker",
         detectorVersion: detection.version,
-        detectionId: null,
+        detectionId,
         mode: request.mode,
         provider: null,
         timings: {
@@ -385,6 +434,121 @@ const api: LiveWrinklePipelineWorkerApi = {
   },
 
   async refine(request) {
+    const cachedYolo = cachedYoloDetection;
+    if (cachedYolo?.id === request.detectionId) {
+      const indexedSeeds = request.seeds.map((seed, index) => ({ seed, index }));
+      const foreheadSeeds = indexedSeeds.filter(({ seed }) => isYoloGuidedForeheadSeed(seed));
+      const glabellarSeeds = indexedSeeds.filter(({ seed }) => isYoloGuidedGlabellarSeed(seed));
+      const eligibleSeeds = indexedSeeds.filter(({ seed }) => isYoloGuidedRstlSeed(seed));
+      if (!eligibleSeeds.length) {
+        throw new Error("当前 RSTL 图谱中没有可用于额头或眉间微调的曲线");
+      }
+      const refinementStart = performance.now();
+      const refineChannel = (
+        seeds: typeof eligibleSeeds,
+        evidence: PrecomputedFineWrinkleEvidence | null,
+      ) => seeds.length && evidence ? refineV6({
+          seeds: seeds.map(({ seed }) => seed),
+          wrinkleMask: evidence.mask,
+          confidenceMap: evidence.confidence,
+          directionQ: evidence.directionQ,
+          size: request.size,
+          faceWidthPx: request.faceWidthPx,
+          options: latestV9RstlRefinementOptions(request.faceWidthPx),
+        }) : null;
+      const forehead = refineChannel(foreheadSeeds, cachedYolo.foreheadEvidence);
+      const glabellar = refineChannel(glabellarSeeds, cachedYolo.glabellarEvidence);
+      const channelCurves = new Map<number, ReturnType<typeof refineV6>["curves"][number]>();
+      foreheadSeeds.forEach(({ index }, scopedIndex) => {
+        if (forehead) channelCurves.set(index, forehead.curves[scopedIndex]);
+      });
+      glabellarSeeds.forEach(({ index }, scopedIndex) => {
+        if (glabellar) channelCurves.set(index, glabellar.curves[scopedIndex]);
+      });
+      const scopedCurves = eligibleSeeds.map(({ seed, index }) =>
+        channelCurves.get(index) || { ...seed, pts: Array.isArray(seed.pts) ? seed.pts : [] });
+      const curves: LiveWrinkleWorkerCurve[] = mergeYoloGuidedRstlCurves(
+        request.seeds,
+        scopedCurves,
+      );
+      const channelResults = [forehead, glabellar].filter(
+        (result): result is NonNullable<typeof result> => Boolean(result),
+      );
+      if (!channelResults.length) throw new Error("缓存中没有额头或眉间皱纹证据");
+      const diagnostics = {
+        ...channelResults[0].diagnostics,
+        refinement_scope: YOLO_GUIDED_RSTL_SCOPE,
+        refinement_scope_seed_count: eligibleSeeds.length,
+        excluded_rstl_curve_count: request.seeds.length - eligibleSeeds.length,
+        guidance_channels_isolated: true,
+        forehead_evidence_line_count: cachedYolo.foreheadEvidence?.lines.length || 0,
+        glabellar_evidence_line_count: cachedYolo.glabellarEvidence?.lines.length || 0,
+        forehead_moved_curve_count: Number(forehead?.diagnostics.moved_curve_count || 0),
+        glabellar_moved_curve_count: Number(glabellar?.diagnostics.moved_curve_count || 0),
+        glabellar_classified_trend_count: Array.isArray(glabellar?.diagnostics.wrinkle_trend_geometry)
+          ? glabellar.diagnostics.wrinkle_trend_geometry.filter(
+            (trend: Record<string, unknown>) => trend.classified_guided_region === "glabellar",
+          ).length
+          : 0,
+        glabellar_candidate_pair_count: Number(
+          glabellar?.diagnostics.band_candidate_pair_count || 0,
+        ),
+        glabellar_supported_curve_count: Array.isArray(glabellar?.diagnostics.curve_support_records)
+          ? glabellar.diagnostics.curve_support_records.filter(
+            (record: Record<string, unknown>) => record.minimum_support_passed === true,
+          ).length
+          : 0,
+        glabellar_selected_curve_count: Number(
+          glabellar?.diagnostics.glabellar_single_curve_selected_count || 0,
+        ),
+        glabellar_match_statuses: Array.isArray(glabellar?.audit.matchRecords)
+          ? glabellar.audit.matchRecords.reduce(
+            (counts: Record<string, number>, record: Record<string, unknown>) => {
+              const status = String(record.final_status || record.rejection_reason || "unknown");
+              counts[status] = (counts[status] || 0) + 1;
+              return counts;
+            },
+            {},
+          )
+          : {},
+        moved_curve_count: channelResults.reduce(
+          (sum, result) => sum + Number(result.diagnostics.moved_curve_count || 0), 0,
+        ),
+        moved_point_count: channelResults.reduce(
+          (sum, result) => sum + Number(result.diagnostics.moved_point_count || 0), 0,
+        ),
+        maximum_selected_rstl_curves_per_wrinkle: Math.max(...channelResults.map((result) =>
+          Number(result.diagnostics.maximum_selected_rstl_curves_per_wrinkle || 0))),
+        curve_unique_wrinkle_ownership: channelResults.every((result) =>
+          result.diagnostics.curve_unique_wrinkle_ownership === true),
+        wrinkle_with_single_side_selected_count: channelResults.reduce((sum, result) =>
+          sum + Number(result.diagnostics.wrinkle_with_single_side_selected_count || 0), 0),
+        nose_bridge_single_curve_selected_count: 0,
+        bundle_follower_moved_curve_count: channelResults.reduce((sum, result) =>
+          sum + Number(result.diagnostics.bundle_follower_moved_curve_count || 0), 0),
+        curvature_fairing_enabled: channelResults.every((result) =>
+          result.diagnostics.curvature_fairing_enabled === true),
+        topology_contract_preserved: channelResults.every((result) =>
+          result.diagnostics.topology_contract_preserved === true),
+        post_export_new_intersection_pair_count: channelResults.reduce((sum, result) =>
+          sum + Number(result.diagnostics.post_export_new_intersection_pair_count || 0), 0),
+        post_export_new_self_cross_curve_count: channelResults.reduce((sum, result) =>
+          sum + Number(result.diagnostics.post_export_new_self_cross_curve_count || 0), 0),
+      };
+      return {
+        executionThread: "web_worker",
+        detectorVersion: YOLO_WRINKLE_ONNX_VERSION,
+        refinementProfile: LATEST_WRINKLE_REFINEMENT_PROFILE,
+        refinementMs: performance.now() - refinementStart,
+        noseAndVisibilityMs: 0,
+        refined: {
+          curves,
+          diagnostics,
+          audit: { forehead: forehead?.audit || null, glabellar: glabellar?.audit || null },
+          standardCurveCount: request.seeds.length,
+        },
+      };
+    }
     const cached = cachedFullDetection;
     if (!cached || cached.id !== request.detectionId) {
       throw new Error("皱纹检测结果已失效，请重新检测后再微调");

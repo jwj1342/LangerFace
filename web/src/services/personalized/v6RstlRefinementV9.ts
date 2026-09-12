@@ -1495,7 +1495,10 @@ function guidedRegionCandidateCompatible(
 function guidedRegionSideCompatible(
   guidedRegion: GuidedWrinkleRegion, trend: Trend, curve: CurveGeometry, size: number,
 ): boolean {
-  if (guidedRegion === "nose_bridge") return true;
+  // Glabellar wrinkles live on the facial midline. Their nearest RSTL may sit
+  // just across the numerical x=size/2 boundary, so the lateral-side rule used
+  // for crow's-feet must not reject that valid central pairing.
+  if (guidedRegion === "glabellar" || guidedRegion === "nose_bridge") return true;
   const trendX = trend.points.reduce((sum, point) => sum + point[0], 0) /
     Math.max(1, trend.points.length);
   const xs = curve.prior.map((point) => point[0]);

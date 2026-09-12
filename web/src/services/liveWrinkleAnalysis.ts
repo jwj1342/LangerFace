@@ -44,6 +44,10 @@ import {
   LATEST_WRINKLE_REFINEMENT_PROFILE,
 } from "./personalized/v9RstlRefinementProfile.ts";
 import {
+  isYoloGuidedRstlSeed,
+  YOLO_GUIDED_RSTL_SCOPE,
+} from "./personalized/yoloGuidedRstlScope.ts";
+import {
   wrinkleV10ProcessingLocationLabel,
   type WrinkleV10ProviderCapability,
 } from "./personalized/wrinkleV10Provider.ts";
@@ -64,6 +68,7 @@ type AnalysisStatus =
   | "refining"
   | "evidence"
   | "live-detecting"
+  | "live-empty"
   | "live-ready"
   | "ready"
   | "applied"
@@ -149,9 +154,11 @@ let wrinkleFaceLandmarker: FaceLandmarker | null = null;
 const activeAnalyses = new Set<Promise<void>>();
 const LIVE_YOLO_INPUT_SIZE = 640;
 const LIVE_YOLO_CORRECTION_INTERVAL_SECONDS = 2;
+const LIVE_YOLO_INITIAL_RETRY_INTERVAL_SECONDS = 2;
 let liveDetectionInFlight = false;
 let liveDetectionAttempted = false;
 let liveDetectionCount = 0;
+let lastLiveDetectionAttemptMediaTime = Number.NaN;
 let liveCorrectionInFlight = false;
 let lastLiveCorrectionMediaTime = Number.NaN;
 let liveCorrectionDiagnostics: (WrinkleCorrectionGateResult & {
@@ -340,6 +347,7 @@ function statusLabel(): string {
   if (state.status === "live-ready") return liveWrinkleProcessingMode() === "framewise"
     ? "GPU 逐帧皱纹检测中"
     : "实时皱纹跟踪中";
+  if (state.status === "live-empty") return "暂未检测到明显皱纹 · 自动重试中";
   if (state.status === "loading") return "正在准备最新检测流程";
   if (state.status === "detecting") return "正在检测皱纹";
   if (state.status === "detected") return "皱纹检测完成";
@@ -377,25 +385,46 @@ export function updateWrinkleUi(): void {
     || (state.status !== "applied" && !hasManualRefineChanges());
   if (isDynamicWrinkleSourceKind(sourceState.sourceKind)) {
     const sourceLabel = dynamicWrinkleSourceLabel();
-    const elapsed = state.timings?.totalMs;
-    els.wrinkleSummary.textContent = state.evidenceLines.length
-      ? liveWrinkleProcessingMode() === "framewise"
-        ? `YOLO 当前检测 ${state.fineLineCount} 条皱纹；每次处理使用新帧，仅做相邻结果时间稳定` +
-          `${elapsed ? `；最近一帧 ${Math.round(elapsed)} ms` : ""}。`
-        : `YOLO 已锁定 ${state.fineLineCount} 条皱纹，正逐帧跟踪并每 2 秒进行可信纠偏` +
-          `${elapsed ? `；最近检测 ${Math.round(elapsed)} ms` : ""}。${sourceLabel}模式不运行微调。`
-      : `${sourceLabel}模式仅运行 YOLO 皱纹检测；检测结果会随人脸实时移动，不运行微调。`;
+    if (state.status === "error" || state.status === "live-empty") {
+      els.wrinkleSummary.textContent = state.error
+        || `${sourceLabel}皱纹检测失败，请重新启动${sourceLabel}后重试。`;
+    } else {
+      const elapsed = state.timings?.totalMs;
+      els.wrinkleSummary.textContent = state.evidenceLines.length
+        ? liveWrinkleProcessingMode() === "framewise"
+          ? `YOLO 当前检测 ${state.fineLineCount} 条皱纹；每次处理使用新帧，仅做相邻结果时间稳定` +
+            `${elapsed ? `；最近一帧 ${Math.round(elapsed)} ms` : ""}。`
+          : `YOLO 已锁定 ${state.fineLineCount} 条皱纹，正逐帧跟踪并每 2 秒进行可信纠偏` +
+            `${elapsed ? `；最近检测 ${Math.round(elapsed)} ms` : ""}。${sourceLabel}模式不运行微调。`
+        : `${sourceLabel}模式仅运行 YOLO 皱纹检测；检测结果会随人脸实时移动，不运行微调。`;
+    }
   } else if (state.status === "error") {
     els.wrinkleSummary.textContent = state.error || "请重试，或更换正面、清晰、光线均匀的照片。";
   } else if (state.status === "evidence") {
     els.wrinkleSummary.textContent = `已绘制 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域）；${state.error || "自动微调未通过安全门禁"}，标准 RSTL 保持不变。`;
   } else if (state.status === "detected") {
-    els.wrinkleSummary.textContent = `YOLO 已检测 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域）。`;
+    els.wrinkleSummary.textContent = `YOLO 已检测 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域）；` +
+      "额头或眉间证据可用时，可点击按钮微调对应 RSTL。";
   } else if (state.status === "ready" || state.status === "applied") {
-    const evidenceVersion = "V10 四区域实时检测";
+    const evidenceVersion = state.evidenceSource === "yolo-live"
+      ? "YOLO-only 额头/眉间引导"
+      : "V10 四区域实时检测";
+    const regionalMovement = state.evidenceSource === "yolo-live" && state.diagnostics
+      ? `额头移动 ${Number(state.diagnostics.forehead_moved_curve_count || 0)} 条，` +
+        `眉间移动 ${Number(state.diagnostics.glabellar_moved_curve_count || 0)} 条；`
+      : "";
+    const glabellarDiagnostic = state.evidenceSource === "yolo-live" && state.diagnostics
+      && Number(state.diagnostics.glabellar_moved_curve_count || 0) === 0
+      ? `眉间诊断：证据 ${Number(state.diagnostics.glabellar_evidence_line_count || 0)} 条，` +
+        `几何趋势 ${Number(state.diagnostics.glabellar_classified_trend_count || 0)} 条，` +
+        `候选 ${Number(state.diagnostics.glabellar_candidate_pair_count || 0)} 对，` +
+        `支持通过 ${Number(state.diagnostics.glabellar_supported_curve_count || 0)} 条，` +
+        `选中 ${Number(state.diagnostics.glabellar_selected_curve_count || 0)} 条。`
+      : "";
     const moved = `RSTL v${RSTL_STANDARD_CONTRACT.atlasVersion} · ${evidenceVersion} · V9 7.2 · ${processingLocation}；` +
       `识别 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域），` +
-      `可引导调整 ${state.movedCurveCount} 条 RSTL / ${state.movedPointCount} 个点。`;
+      regionalMovement + `共调整 ${state.movedCurveCount} 条 RSTL / ${state.movedPointCount} 个点。` +
+      glabellarDiagnostic;
     els.wrinkleSummary.textContent = hasManualRefineChanges()
       ? `${moved} 已有医生手动修改，自动应用已锁定；可恢复后重新应用。`
       : moved;
@@ -757,6 +786,7 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
         point[2] / working.size,
       ]),
       mode: "yolo-only",
+      cacheForRefinement: true,
     }, (event) => {
       if (pipelineCompleted) return;
       if (event.type === "model-progress") {
@@ -787,7 +817,12 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
     pipelineCompleted = true;
     commitEvidence(pipeline.evidence);
     state.detectionId = pipeline.detectionId;
-    state.refinementContext = null;
+    state.refinementContext = pipeline.detectionId ? {
+      working,
+      workLandmarks,
+      seeds,
+      faceWidthPx: faceWidth,
+    } : null;
     state.timings = pipeline.timings;
     state.provider = pipeline.provider;
     updateStatus("detected");
@@ -841,10 +876,17 @@ export function updateLiveWrinkleTracking(
   }
   const source = els.canvas;
   if (!source || landmarks.length < 468) return;
+  const dynamicSource = sourceState.source as HTMLVideoElement;
+  const currentMediaTime = Number(dynamicSource.currentTime);
+  if (Number.isFinite(lastLiveDetectionAttemptMediaTime) && Number.isFinite(currentMediaTime)) {
+    const elapsed = currentMediaTime - lastLiveDetectionAttemptMediaTime;
+    if (elapsed >= 0 && elapsed < LIVE_YOLO_INITIAL_RETRY_INTERVAL_SECONDS) return;
+  }
   const generation = state.generation;
   const detectionLandmarks = landmarks.map((point) => [...point] as Vec3);
-  const detectionMediaTime = (sourceState.source as HTMLVideoElement).currentTime;
+  const detectionMediaTime = currentMediaTime;
   liveDetectionAttempted = true;
+  lastLiveDetectionAttemptMediaTime = detectionMediaTime;
   liveDetectionInFlight = true;
   if (!state.evidenceLines.length) updateStatus("live-detecting");
   const analysis = (async () => {
@@ -906,6 +948,13 @@ export function updateLiveWrinkleTracking(
     } catch (error) {
       if (generation !== state.generation) return;
       const message = error instanceof Error ? error.message : "未知错误";
+      if (message === "YOLO 未提取到有效皱纹中心线") {
+        liveDetectionAttempted = false;
+        countMetric("wrinkle.liveYolo.empty");
+        updateStatus("live-empty",
+          "当前画面没有检测到达到阈值的皱纹中心线；可能皱纹较浅，也可能是光线或对焦不足。系统将每 2 秒自动重试。");
+        return;
+      }
       logWarn("实时 YOLO 皱纹检测失败。", error);
       countMetric("wrinkle.liveYolo.failure");
       if (!state.evidenceLines.length) updateStatus("error", message);
@@ -1140,6 +1189,13 @@ export async function applyWrinkleGuidedRefinement(): Promise<void> {
     updateWrinkleUi();
     return;
   }
+  if (state.autoRefinedLines) {
+    replaceStaticRefineBaseline(state.autoRefinedLines, { liveBaseline: state.standardLines });
+    updateStatus("applied");
+    countMetric("wrinkle.singleFrame.cachedRefinementApplied");
+    window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
+    return;
+  }
   const generation = state.generation;
   const context = state.refinementContext;
   updateStatus("refining");
@@ -1163,6 +1219,15 @@ export async function applyWrinkleGuidedRefinement(): Promise<void> {
       throw new Error("皱纹引导结果未保持 RSTL 曲线数量");
     }
     const autoRefinedLines = state.standardLines.map((line, index) => {
+      const yoloScoped = refined.diagnostics.refinement_scope === YOLO_GUIDED_RSTL_SCOPE;
+      if (yoloScoped && !isYoloGuidedRstlSeed(line)) {
+        return {
+          ...line,
+          hiddenPointRuns: line.hiddenPointRuns.map((run) => [run[0], run[1]] as [number, number]),
+          tris: [...line.tris],
+          pts: line.pts.map((point) => [...point] as Vec3),
+        };
+      }
       const points = refined.curves[index]?.pts;
       if (!Array.isArray(points) || points.length !== line.pts.length) {
         throw new Error(`皱纹引导结果第 ${index + 1} 条曲线点数不一致`);
@@ -1233,6 +1298,7 @@ export function resetLiveWrinkleAnalysis(): void {
   liveCorrectionRejectedCount = 0;
   liveCorrectionDiagnostics = null;
   lastLiveCorrectionMediaTime = Number.NaN;
+  lastLiveDetectionAttemptMediaTime = Number.NaN;
   liveCorrectionInFlight = false;
   state.generation += 1;
   terminateWrinkleWorker();
