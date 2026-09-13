@@ -26,6 +26,7 @@ import {
   YOLO_WRINKLE_ONNX_VERSION,
 } from "../services/personalized/yoloWrinkleOnnx.ts";
 import {
+  guardMergedYoloGuidedRstlCurves,
   isYoloGuidedForeheadSeed,
   isYoloGuidedGlabellarSeed,
   isYoloGuidedRstlSeed,
@@ -467,10 +468,12 @@ const api: LiveWrinklePipelineWorkerApi = {
       });
       const scopedCurves = eligibleSeeds.map(({ seed, index }) =>
         channelCurves.get(index) || { ...seed, pts: Array.isArray(seed.pts) ? seed.pts : [] });
-      const curves: LiveWrinkleWorkerCurve[] = mergeYoloGuidedRstlCurves(
+      const mergedCurves = mergeYoloGuidedRstlCurves(
         request.seeds,
         scopedCurves,
       );
+      const globalGuard = guardMergedYoloGuidedRstlCurves(request.seeds, mergedCurves);
+      const curves: LiveWrinkleWorkerCurve[] = globalGuard.curves;
       const channelResults = [forehead, glabellar].filter(
         (result): result is NonNullable<typeof result> => Boolean(result),
       );
@@ -483,8 +486,12 @@ const api: LiveWrinklePipelineWorkerApi = {
         guidance_channels_isolated: true,
         forehead_evidence_line_count: cachedYolo.foreheadEvidence?.lines.length || 0,
         glabellar_evidence_line_count: cachedYolo.glabellarEvidence?.lines.length || 0,
-        forehead_moved_curve_count: Number(forehead?.diagnostics.moved_curve_count || 0),
-        glabellar_moved_curve_count: Number(glabellar?.diagnostics.moved_curve_count || 0),
+        forehead_moved_curve_count: curves.filter((curve, index) =>
+          isYoloGuidedForeheadSeed(request.seeds[index]) &&
+          JSON.stringify(curve.pts) !== JSON.stringify(request.seeds[index].pts)).length,
+        glabellar_moved_curve_count: curves.filter((curve, index) =>
+          isYoloGuidedGlabellarSeed(request.seeds[index]) &&
+          JSON.stringify(curve.pts) !== JSON.stringify(request.seeds[index].pts)).length,
         glabellar_classified_trend_count: Array.isArray(glabellar?.diagnostics.wrinkle_trend_geometry)
           ? glabellar.diagnostics.wrinkle_trend_geometry.filter(
             (trend: Record<string, unknown>) => trend.classified_guided_region === "glabellar",
@@ -511,12 +518,20 @@ const api: LiveWrinklePipelineWorkerApi = {
             {},
           )
           : {},
-        moved_curve_count: channelResults.reduce(
-          (sum, result) => sum + Number(result.diagnostics.moved_curve_count || 0), 0,
-        ),
-        moved_point_count: channelResults.reduce(
-          (sum, result) => sum + Number(result.diagnostics.moved_point_count || 0), 0,
-        ),
+        moved_curve_count: curves.filter((curve, index) =>
+          JSON.stringify(curve.pts) !== JSON.stringify(request.seeds[index].pts)).length,
+        moved_point_count: curves.reduce((sum, curve, index) => sum + curve.pts.filter(
+          (point, pointIndex) => {
+            const seedPoints = Array.isArray(request.seeds[index].pts) ?
+              request.seeds[index].pts as ArrayLike<number>[] : [];
+            const prior = seedPoints[pointIndex];
+            return prior && Math.hypot(point[0] - Number(prior[0]),
+              point[1] - Number(prior[1])) > 0.05;
+          },
+        ).length, 0),
+        global_intersection_guard_enabled: true,
+        global_intersection_rollback_curve_count: globalGuard.rolledBackCurveIndices.length,
+        global_intersection_rollback_curve_indices: globalGuard.rolledBackCurveIndices,
         maximum_selected_rstl_curves_per_wrinkle: Math.max(...channelResults.map((result) =>
           Number(result.diagnostics.maximum_selected_rstl_curves_per_wrinkle || 0))),
         curve_unique_wrinkle_ownership: channelResults.every((result) =>
@@ -530,10 +545,8 @@ const api: LiveWrinklePipelineWorkerApi = {
           result.diagnostics.curvature_fairing_enabled === true),
         topology_contract_preserved: channelResults.every((result) =>
           result.diagnostics.topology_contract_preserved === true),
-        post_export_new_intersection_pair_count: channelResults.reduce((sum, result) =>
-          sum + Number(result.diagnostics.post_export_new_intersection_pair_count || 0), 0),
-        post_export_new_self_cross_curve_count: channelResults.reduce((sum, result) =>
-          sum + Number(result.diagnostics.post_export_new_self_cross_curve_count || 0), 0),
+        post_export_new_intersection_pair_count: globalGuard.newIntersectionPairCount,
+        post_export_new_self_cross_curve_count: globalGuard.newSelfCrossCurveCount,
       };
       return {
         executionThread: "web_worker",

@@ -61,10 +61,11 @@ export function latestV9RstlRefinementOptions(
     foreheadBundleMaximumTurnDegrees: 8,
     foreheadBundleMaximumAddedSignChanges: 6,
     foreheadBundleMinimumReversalSpacingPx: 12,
-    // The atlas brow-upturn curves already contain ~15–17° local turns. A fixed
-    // 8° ceiling (plus only 0.75° baseline slack) rejected every otherwise
-    // smooth fit for long, nearly vertical frown lines. Keep this relaxation
-    // glabellar-only so forehead and all non-target regions retain their gates.
+    // Four real-image ablations showed that widening adherence is the primary
+    // fix (yellow 0->1, black_2 0->1); the 20° turn allowance adds the yellow
+    // sample's second safe match. It only affects brow curves whose baseline
+    // turn plus slack is below 20°; curves with a higher baseline remain
+    // governed by their own baseline curvature.
     curvatureFairingGlabellarMaximumTurnDegrees: 20,
     curvatureFairingGlabellarMaximumAddedSignChanges: 4,
     curvatureFairingGlabellarMaximumMeanAdherencePx: 3,

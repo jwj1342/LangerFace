@@ -80,6 +80,51 @@ function rangeLine(x0, x1, y) {
     Math.abs(point[0] - glabellar.pts[pointIndex][0]) > 0.05));
 }
 
+// Outside the central tolerance band, a frown line must not guide an RSTL on
+// the opposite side of the face even when it falls inside the search radius.
+{
+  const oppositeSideCurve = {
+    name: "opposite-side-glabellar",
+    region: "orbital_brow_upturn_v11",
+    pts: Array.from({ length: 30 }, (_, pointIndex) => [47, 12 + pointIndex]),
+  };
+  const lateralWrinkle = Array.from({ length: 29 }, (_, pointIndex) => [55, 13 + pointIndex]);
+  const fields = directionalEvidence([lateralWrinkle]);
+  const result = refineV9Smooth({
+    seeds: [oppositeSideCurve],
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 75,
+    options: latestV9RstlRefinementOptions(75),
+  });
+  assert.equal(result.diagnostics.glabellar_single_curve_selected_count, 0);
+  assert.equal(result.diagnostics.moved_curve_count, 0);
+}
+
+// A same-side lateral frown line remains eligible.
+{
+  const sameSideCurve = {
+    name: "same-side-glabellar",
+    region: "orbital_brow_upturn_v11",
+    pts: Array.from({ length: 30 }, (_, pointIndex) => [60, 12 + pointIndex]),
+  };
+  const lateralWrinkle = Array.from({ length: 29 }, (_, pointIndex) => [55, 13 + pointIndex]);
+  const fields = directionalEvidence([lateralWrinkle]);
+  const result = refineV9Smooth({
+    seeds: [sameSideCurve],
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 75,
+    options: latestV9RstlRefinementOptions(75),
+  });
+  assert.equal(result.diagnostics.glabellar_single_curve_selected_count, 1);
+  assert.equal(result.diagnostics.moved_curve_count, 1);
+}
+
 function meanVerticalDistance(points, wrinkle, x0, x1) {
   const wrinkleY = new Map(wrinkle.map(([x, y]) => [x, y]));
   const distances = points

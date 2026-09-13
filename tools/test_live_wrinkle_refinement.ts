@@ -19,6 +19,7 @@ import {
 } from "../web/src/services/personalized/yoloWrinkleOnnx.ts";
 import { buildPrecomputedFineWrinkleEvidence } from "../web/src/services/personalized/precomputedFineWrinkleEvidence.ts";
 import {
+  guardMergedYoloGuidedRstlCurves,
   isYoloGuidedRstlSeed,
   mergeYoloGuidedRstlCurves,
   YOLO_GUIDED_RSTL_SCOPE,
@@ -55,6 +56,22 @@ class FakeTensor {
   }
 
   dispose(): void {}
+}
+{
+  const seeds = [
+    { name: "moved", region: "orbital_brow_upturn_v11", pts: [[0, 0], [2, 0]] },
+    { name: "untouched", region: "cheek_gap_density_v53", pts: [[0, 5], [10, 5]] },
+  ];
+  const guarded = guardMergedYoloGuidedRstlCurves(seeds, [
+    { ...seeds[0], pts: [[0, 0], [10, 10]] },
+    seeds[1],
+  ]);
+  assert.deepEqual(guarded.curves[1].pts, seeds[1].pts,
+    "a non-target curve is never changed by the global guard");
+  assert.deepEqual(guarded.curves[0].pts, seeds[0].pts,
+    "a changed target curve that creates a new global crossing is rolled back");
+  assert.equal(guarded.rolledBackCurveIndices.length, 1);
+  assert.equal(guarded.newIntersectionPairCount, 0);
 }
 
 const transform = {
@@ -312,10 +329,12 @@ assert.equal(isYoloGuidedRstlSeed({ region: "lateral_canthus_short_arc_v65" }), 
 assert.equal(isYoloGuidedRstlSeed({ region: "cheek_gap_density_v53" }), false);
 {
   const options = latestV9RstlRefinementOptions(622);
-  assert.ok(Number(options.curvatureFairingGlabellarMaximumTurnDegrees) >= 20,
-    "glabellar fairing must allow the atlas brow curves' existing local curvature");
-  assert.ok(Number(options.curvatureFairingGlabellarMaximumP90AdherencePx) >= 11,
-    "long vertical frown evidence must not be rejected by the old 7 px P90 ceiling");
+  assert.equal(options.curvatureFairingGlabellarMaximumTurnDegrees, 20,
+    "combined ablation keeps the turn allowance that adds the second yellow-sample match");
+  assert.equal(options.curvatureFairingGlabellarMaximumMeanAdherencePx, 3,
+    "distance-only ablation identifies adherence relaxation as the primary fix");
+  assert.equal(options.curvatureFairingGlabellarMaximumP90AdherencePx, 11,
+    "the accepted real-sample fits have P90 adherence above the former 7 px ceiling");
   assert.equal(options.curvatureFairingForeheadMaximumP90AdherencePx, 3,
     "the glabellar relaxation must not weaken forehead fairing gates");
 }
