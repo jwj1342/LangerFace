@@ -7,7 +7,7 @@ import {
 } from "../web/src/services/personalized/v6RstlRefinement.ts";
 import { refineV6 as refineV9Smooth } from
   "../web/src/services/personalized/v6RstlRefinementV9.ts";
-import { latestV9RstlRefinementOptions } from
+import { yoloGuidedV9RstlRefinementOptions } from
   "../web/src/services/personalized/v9RstlRefinementProfile.ts";
 import { mapAtlas } from "../web/src/services/geometryAtlas.ts";
 
@@ -72,7 +72,7 @@ function rangeLine(x0, x1, y) {
     directionQ: fields.q,
     size,
     faceWidthPx: 75,
-    options: latestV9RstlRefinementOptions(75),
+    options: yoloGuidedV9RstlRefinementOptions(75),
   });
   assert.equal(result.diagnostics.glabellar_single_curve_selected_count, 1);
   assert.equal(result.diagnostics.moved_curve_count, 1);
@@ -97,7 +97,7 @@ function rangeLine(x0, x1, y) {
     directionQ: fields.q,
     size,
     faceWidthPx: 75,
-    options: latestV9RstlRefinementOptions(75),
+    options: yoloGuidedV9RstlRefinementOptions(75),
   });
   assert.equal(result.diagnostics.glabellar_single_curve_selected_count, 0);
   assert.equal(result.diagnostics.moved_curve_count, 0);
@@ -119,7 +119,7 @@ function rangeLine(x0, x1, y) {
     directionQ: fields.q,
     size,
     faceWidthPx: 75,
-    options: latestV9RstlRefinementOptions(75),
+    options: yoloGuidedV9RstlRefinementOptions(75),
   });
   assert.equal(result.diagnostics.glabellar_single_curve_selected_count, 1);
   assert.equal(result.diagnostics.moved_curve_count, 1);

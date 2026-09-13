@@ -632,7 +632,9 @@ export function restoreWrinkleDisplayState(snapshot: WrinkleDisplayResumeState):
 export function getLiveWrinkleAnalysisDebugSnapshot() {
   return {
     atlasVersion: RSTL_STANDARD_CONTRACT.atlasVersion,
-    refinementProfile: LATEST_WRINKLE_REFINEMENT_PROFILE,
+    refinementProfile: String(
+      state.diagnostics?.refinement_profile || LATEST_WRINKLE_REFINEMENT_PROFILE,
+    ),
     executionThread: "web_worker",
     status: state.status,
     fineLineCount: state.fineLineCount,

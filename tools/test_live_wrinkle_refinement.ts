@@ -11,7 +11,11 @@ import { runGeneralLiveWrinklePipeline } from
   "../web/src/services/personalized/liveWrinklePipeline.ts";
 import { V6_RSTL_ALGORITHM } from
   "../web/src/services/personalized/v6RstlRefinementV9.ts";
-import { latestV9RstlRefinementOptions, LATEST_WRINKLE_REFINEMENT_PROFILE } from
+import {
+  latestV9RstlRefinementOptions,
+  LATEST_WRINKLE_REFINEMENT_PROFILE,
+  yoloGuidedV9RstlRefinementOptions,
+} from
   "../web/src/services/personalized/v9RstlRefinementProfile.ts";
 import {
   YoloWrinkleOnnx,
@@ -22,6 +26,7 @@ import {
   guardMergedYoloGuidedRstlCurves,
   isYoloGuidedRstlSeed,
   mergeYoloGuidedRstlCurves,
+  reconcileYoloGuidedAuditAfterGlobalGuard,
   YOLO_GUIDED_RSTL_SCOPE,
 } from "../web/src/services/personalized/yoloGuidedRstlScope.ts";
 
@@ -72,6 +77,45 @@ class FakeTensor {
     "a changed target curve that creates a new global crossing is rolled back");
   assert.equal(guarded.rolledBackCurveIndices.length, 1);
   assert.equal(guarded.newIntersectionPairCount, 0);
+  assert.equal(guarded.curves.filter((curve, index) =>
+    JSON.stringify(curve.pts) !== JSON.stringify(seeds[index].pts)).length, 0,
+  "the final moved-curve count must reflect rollback geometry");
+  const audit = reconcileYoloGuidedAuditAfterGlobalGuard({
+    wrinkleTrends: [{
+      id: 0,
+      finalAccepted: true,
+      finalStatus: "accepted",
+      acceptedCurveIndices: [0],
+      candidateCurveIndices: [0],
+      rejectionReason: null,
+    }],
+    matchRecords: [{
+      wrinkle_segment_id: 0,
+      rstl_curve_index: 0,
+      final_accepted: true,
+      final_status: "accepted",
+      rejection_reason: null,
+    }, {
+      wrinkle_segment_id: 1,
+      rstl_curve_index: 0,
+      final_accepted: false,
+      final_status: "rejected_before_refinement",
+      rejection_reason: "insufficient_segment_support",
+    }],
+    curveSupportRecords: [{ curve_index: 0, minimum_support_passed: true }],
+  }, [0], guarded.rolledBackCurveIndices);
+  assert.equal((audit?.matchRecords as Array<Record<string, unknown>>)[0].final_accepted, false);
+  assert.equal((audit?.matchRecords as Array<Record<string, unknown>>)[0].final_status,
+    "rolled_back");
+  assert.equal((audit?.matchRecords as Array<Record<string, unknown>>)[0].rollback_reason,
+    "global_intersection_guard");
+  assert.equal((audit?.matchRecords as Array<Record<string, unknown>>)[1].final_status,
+    "rejected_before_refinement", "an unrelated rejected candidate must retain its reason");
+  assert.equal((audit?.wrinkleTrends as Array<Record<string, unknown>>)[0].finalAccepted, false);
+  assert.equal((audit?.wrinkleTrends as Array<Record<string, unknown>>)[0].finalStatus,
+    "rolled_back");
+  assert.equal((audit?.curveSupportRecords as Array<Record<string, unknown>>)[0].final_status,
+    "rolled_back");
 }
 
 const transform = {
@@ -329,14 +373,20 @@ assert.equal(isYoloGuidedRstlSeed({ region: "lateral_canthus_short_arc_v65" }), 
 assert.equal(isYoloGuidedRstlSeed({ region: "cheek_gap_density_v53" }), false);
 {
   const options = latestV9RstlRefinementOptions(622);
-  assert.equal(options.curvatureFairingGlabellarMaximumTurnDegrees, 20,
-    "combined ablation keeps the turn allowance that adds the second yellow-sample match");
-  assert.equal(options.curvatureFairingGlabellarMaximumMeanAdherencePx, 3,
-    "distance-only ablation identifies adherence relaxation as the primary fix");
-  assert.equal(options.curvatureFairingGlabellarMaximumP90AdherencePx, 11,
-    "the accepted real-sample fits have P90 adherence above the former 7 px ceiling");
+  assert.equal(options.curvatureFairingGlabellarMaximumTurnDegrees, 8,
+    "the shared V9 profile must retain its established glabellar turn gate");
+  assert.equal(options.curvatureFairingGlabellarMaximumMeanAdherencePx, 2.6,
+    "the shared V9 profile must not inherit YOLO-only adherence relaxation");
+  assert.equal(options.curvatureFairingGlabellarMaximumP90AdherencePx, 7,
+    "the shared V9 profile must not inherit the YOLO-only P90 relaxation");
   assert.equal(options.curvatureFairingForeheadMaximumP90AdherencePx, 3,
     "the glabellar relaxation must not weaken forehead fairing gates");
+  const yoloOptions = yoloGuidedV9RstlRefinementOptions(622);
+  assert.equal(yoloOptions.curvatureFairingGlabellarMaximumTurnDegrees, 20);
+  assert.equal(yoloOptions.curvatureFairingGlabellarMaximumMeanAdherencePx, 3);
+  assert.equal(yoloOptions.curvatureFairingGlabellarMaximumP90AdherencePx, 11);
+  assert.equal(yoloOptions.glabellarAdherenceMeanThresholdPx, 3);
+  assert.equal(yoloOptions.glabellarAdherenceP90ThresholdPx, 11);
 }
 {
   const scopedSeeds = [
@@ -415,6 +465,12 @@ assert.match(workerRuntime, /fourRegionDetectionMs[\s\S]*totalMs/,
   "the worker must report detection timings for reproducible performance regression");
 assert.match(workerRuntime, /minimumLineLengthPx: 20/);
 assert.match(workerRuntime, /latestV9RstlRefinementOptions\(request\.faceWidthPx\)/);
+assert.match(workerRuntime,
+  /options: yoloGuidedV9RstlRefinementOptions\(request\.faceWidthPx\)/,
+  "YOLO-guided refinement must use its isolated glabellar threshold overrides");
+assert.match(workerRuntime,
+  /reconcileYoloGuidedAuditAfterGlobalGuard\([\s\S]*globalGuard\.rolledBackCurveIndices/,
+  "the worker must reconcile channel audits after merged-geometry rollback");
 assert.match(workerClientRuntime, /new Worker\(new URL/);
 assert.match(workerClientRuntime, /api\.detect[\s\S]*Comlink\.transfer\(request, \[request\.pixels\.buffer as ArrayBuffer\]\)/,
   "the full-resolution input must be transferred without a main-thread copy or resize");

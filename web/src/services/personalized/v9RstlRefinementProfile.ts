@@ -3,6 +3,9 @@ import type { V6RefinementOptions } from "./v6RstlRefinementV9.ts";
 export const LATEST_WRINKLE_REFINEMENT_PROFILE =
   "v9-regional-smooth-7.2";
 
+export const YOLO_GUIDED_WRINKLE_REFINEMENT_PROFILE =
+  "v9-regional-smooth-7.2-yolo-guided-glabellar";
+
 /** Shared V9 profile used by the deployed live page and the controlled experiment. */
 export function latestV9RstlRefinementOptions(
   faceWidthPx: number,
@@ -61,18 +64,13 @@ export function latestV9RstlRefinementOptions(
     foreheadBundleMaximumTurnDegrees: 8,
     foreheadBundleMaximumAddedSignChanges: 6,
     foreheadBundleMinimumReversalSpacingPx: 12,
-    // Four real-image ablations showed that widening adherence is the primary
-    // fix (yellow 0->1, black_2 0->1); the 20° turn allowance adds the yellow
-    // sample's second safe match. It only affects brow curves whose baseline
-    // turn plus slack is below 20°; curves with a higher baseline remain
-    // governed by their own baseline curvature.
-    curvatureFairingGlabellarMaximumTurnDegrees: 20,
+    curvatureFairingGlabellarMaximumTurnDegrees: 8,
     curvatureFairingGlabellarMaximumAddedSignChanges: 4,
-    curvatureFairingGlabellarMaximumMeanAdherencePx: 3,
-    curvatureFairingGlabellarMaximumP90AdherencePx: 11,
+    curvatureFairingGlabellarMaximumMeanAdherencePx: 2.6,
+    curvatureFairingGlabellarMaximumP90AdherencePx: 7,
     curvatureFairingGlabellarMinimumReversalSpacingPx: 15,
-    glabellarAdherenceMeanThresholdPx: 3,
-    glabellarAdherenceP90ThresholdPx: 11,
+    glabellarAdherenceMeanThresholdPx: 2.6,
+    glabellarAdherenceP90ThresholdPx: 7,
     glabellarMaximumDisplacementPx: faceWidthPx * 0.08,
     glabellarTransitionLengthPx: faceWidthPx * 0.08,
     curvatureFairingCrowsFeetMaximumTurnDegrees: 9,
@@ -96,5 +94,26 @@ export function latestV9RstlRefinementOptions(
     crowsFeetNeighborMaximumTurnDegrees: 10,
     crowsFeetDirectionalBundleMinimumPriorDirectionDegrees: 20,
     bundlePropagation: false,
+  };
+}
+
+/**
+ * YOLO-only photo refinement needs a wider glabellar adherence envelope than
+ * the shared V9/V10 and advanced-personalization paths. Keep these overrides
+ * explicit so this workflow cannot silently change other callers.
+ */
+export function yoloGuidedV9RstlRefinementOptions(
+  faceWidthPx: number,
+): V6RefinementOptions {
+  return {
+    ...latestV9RstlRefinementOptions(faceWidthPx),
+    // Real-image ablations showed that widening adherence is the primary fix;
+    // the 20° allowance adds one further safe yellow-sample match. The effective
+    // turn limit remains max(20°, baseline maximum turn + 0.75°).
+    curvatureFairingGlabellarMaximumTurnDegrees: 20,
+    curvatureFairingGlabellarMaximumMeanAdherencePx: 3,
+    curvatureFairingGlabellarMaximumP90AdherencePx: 11,
+    glabellarAdherenceMeanThresholdPx: 3,
+    glabellarAdherenceP90ThresholdPx: 11,
   };
 }

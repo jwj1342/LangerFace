@@ -15,7 +15,70 @@ export interface YoloGuidedGlobalGuardResult {
   newSelfCrossCurveCount: number;
 }
 
+type YoloGuidedChannelAudit = Record<string, unknown>;
+
+const GLOBAL_INTERSECTION_ROLLBACK_REASON = "global_intersection_guard";
+
 export const YOLO_GUIDED_RSTL_SCOPE = "yolo_forehead_and_glabellar_only";
+
+/**
+ * Translate full-atlas guard rollbacks back into a channel-local V9 audit.
+ * Each isolated channel numbers its curves from zero, while the merged guard
+ * reports indices in the original full RSTL atlas.
+ */
+export function reconcileYoloGuidedAuditAfterGlobalGuard(
+  audit: YoloGuidedChannelAudit | null | undefined,
+  originalCurveIndices: number[],
+  rolledBackCurveIndices: number[],
+): YoloGuidedChannelAudit | null {
+  if (!audit) return null;
+  const rolledBackGlobal = new Set(rolledBackCurveIndices);
+  const rolledBackLocal = new Set(originalCurveIndices
+    .map((globalIndex, localIndex) => rolledBackGlobal.has(globalIndex) ? localIndex : -1)
+    .filter((index) => index >= 0));
+  const matchRecords = Array.isArray(audit.matchRecords) ? audit.matchRecords.map((value) => {
+    const record = { ...(value as Record<string, unknown>) };
+    if (rolledBackLocal.has(Number(record.rstl_curve_index)) &&
+        record.final_accepted === true) {
+      record.final_accepted = false;
+      record.final_status = "rolled_back";
+      record.rejection_reason = GLOBAL_INTERSECTION_ROLLBACK_REASON;
+      record.rollback_reason = GLOBAL_INTERSECTION_ROLLBACK_REASON;
+    }
+    return record;
+  }) : [];
+  const wrinkleTrends = Array.isArray(audit.wrinkleTrends) ? audit.wrinkleTrends.map((value) => {
+    const trend = { ...(value as Record<string, unknown>) };
+    const acceptedBefore = Array.isArray(trend.acceptedCurveIndices) ?
+      trend.acceptedCurveIndices.map(Number) : [];
+    const acceptedCurveIndices = acceptedBefore.filter((index) => !rolledBackLocal.has(index));
+    const lostAcceptedCurve = acceptedCurveIndices.length !== acceptedBefore.length;
+    trend.acceptedCurveIndices = acceptedCurveIndices;
+    trend.finalAccepted = acceptedCurveIndices.length > 0;
+    if (lostAcceptedCurve && acceptedCurveIndices.length === 0) {
+      trend.finalStatus = "rolled_back";
+      trend.rejectionReason = GLOBAL_INTERSECTION_ROLLBACK_REASON;
+      trend.rollbackReason = GLOBAL_INTERSECTION_ROLLBACK_REASON;
+    }
+    return trend;
+  }) : [];
+  const curveSupportRecords = Array.isArray(audit.curveSupportRecords) ?
+    audit.curveSupportRecords.map((value) => {
+      const record = { ...(value as Record<string, unknown>) };
+      if (rolledBackLocal.has(Number(record.curve_index))) {
+        record.final_status = "rolled_back";
+        record.rollback_reason = GLOBAL_INTERSECTION_ROLLBACK_REASON;
+      }
+      return record;
+    }) : [];
+  return {
+    ...audit,
+    matchRecords,
+    wrinkleTrends,
+    curveSupportRecords,
+    globalIntersectionRollbackCurveIndices: [...rolledBackLocal].sort((a, b) => a - b),
+  };
+}
 
 export function isYoloGuidedForeheadSeed(seed: Pick<V6Seed, "region">): boolean {
   return String(seed.region || "").includes("forehead");

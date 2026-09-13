@@ -19,6 +19,8 @@ import { refineV6 } from "../services/personalized/v6RstlRefinementV9.ts";
 import {
   latestV9RstlRefinementOptions,
   LATEST_WRINKLE_REFINEMENT_PROFILE,
+  yoloGuidedV9RstlRefinementOptions,
+  YOLO_GUIDED_WRINKLE_REFINEMENT_PROFILE,
 } from "../services/personalized/v9RstlRefinementProfile.ts";
 import {
   YoloWrinkleOnnx,
@@ -31,6 +33,7 @@ import {
   isYoloGuidedGlabellarSeed,
   isYoloGuidedRstlSeed,
   mergeYoloGuidedRstlCurves,
+  reconcileYoloGuidedAuditAfterGlobalGuard,
   YOLO_GUIDED_RSTL_SCOPE,
 } from "../services/personalized/yoloGuidedRstlScope.ts";
 import {
@@ -455,7 +458,7 @@ const api: LiveWrinklePipelineWorkerApi = {
           directionQ: evidence.directionQ,
           size: request.size,
           faceWidthPx: request.faceWidthPx,
-          options: latestV9RstlRefinementOptions(request.faceWidthPx),
+          options: yoloGuidedV9RstlRefinementOptions(request.faceWidthPx),
         }) : null;
       const forehead = refineChannel(foreheadSeeds, cachedYolo.foreheadEvidence);
       const glabellar = refineChannel(glabellarSeeds, cachedYolo.glabellarEvidence);
@@ -474,6 +477,14 @@ const api: LiveWrinklePipelineWorkerApi = {
       );
       const globalGuard = guardMergedYoloGuidedRstlCurves(request.seeds, mergedCurves);
       const curves: LiveWrinkleWorkerCurve[] = globalGuard.curves;
+      const foreheadAudit = reconcileYoloGuidedAuditAfterGlobalGuard(
+        forehead?.audit, foreheadSeeds.map(({ index }) => index),
+        globalGuard.rolledBackCurveIndices,
+      );
+      const glabellarAudit = reconcileYoloGuidedAuditAfterGlobalGuard(
+        glabellar?.audit, glabellarSeeds.map(({ index }) => index),
+        globalGuard.rolledBackCurveIndices,
+      );
       const channelResults = [forehead, glabellar].filter(
         (result): result is NonNullable<typeof result> => Boolean(result),
       );
@@ -505,11 +516,13 @@ const api: LiveWrinklePipelineWorkerApi = {
             (record: Record<string, unknown>) => record.minimum_support_passed === true,
           ).length
           : 0,
-        glabellar_selected_curve_count: Number(
-          glabellar?.diagnostics.glabellar_single_curve_selected_count || 0,
-        ),
-        glabellar_match_statuses: Array.isArray(glabellar?.audit.matchRecords)
-          ? glabellar.audit.matchRecords.reduce(
+        glabellar_selected_curve_count: Array.isArray(glabellarAudit?.matchRecords)
+          ? new Set(glabellarAudit.matchRecords.filter(
+            (record: Record<string, unknown>) => record.final_accepted === true,
+          ).map((record: Record<string, unknown>) => Number(record.wrinkle_segment_id))).size
+          : 0,
+        glabellar_match_statuses: Array.isArray(glabellarAudit?.matchRecords)
+          ? glabellarAudit.matchRecords.reduce(
             (counts: Record<string, number>, record: Record<string, unknown>) => {
               const status = String(record.final_status || record.rejection_reason || "unknown");
               counts[status] = (counts[status] || 0) + 1;
@@ -551,13 +564,20 @@ const api: LiveWrinklePipelineWorkerApi = {
       return {
         executionThread: "web_worker",
         detectorVersion: YOLO_WRINKLE_ONNX_VERSION,
-        refinementProfile: LATEST_WRINKLE_REFINEMENT_PROFILE,
+        refinementProfile: YOLO_GUIDED_WRINKLE_REFINEMENT_PROFILE,
         refinementMs: performance.now() - refinementStart,
         noseAndVisibilityMs: 0,
         refined: {
           curves,
           diagnostics,
-          audit: { forehead: forehead?.audit || null, glabellar: glabellar?.audit || null },
+          audit: {
+            forehead: foreheadAudit,
+            glabellar: glabellarAudit,
+            globalIntersectionGuard: {
+              rollbackReason: "global_intersection_guard",
+              rolledBackCurveIndices: globalGuard.rolledBackCurveIndices,
+            },
+          },
           standardCurveCount: request.seeds.length,
         },
       };
