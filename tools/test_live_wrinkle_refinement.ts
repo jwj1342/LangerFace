@@ -11,13 +11,24 @@ import { runGeneralLiveWrinklePipeline } from
   "../web/src/services/personalized/liveWrinklePipeline.ts";
 import { V6_RSTL_ALGORITHM } from
   "../web/src/services/personalized/v6RstlRefinementV9.ts";
-import { LATEST_WRINKLE_REFINEMENT_PROFILE } from
+import {
+  latestV9RstlRefinementOptions,
+  LATEST_WRINKLE_REFINEMENT_PROFILE,
+  yoloGuidedV9RstlRefinementOptions,
+} from
   "../web/src/services/personalized/v9RstlRefinementProfile.ts";
 import {
   YoloWrinkleOnnx,
   YOLO_WRINKLE_ONNX_VERSION,
 } from "../web/src/services/personalized/yoloWrinkleOnnx.ts";
 import { buildPrecomputedFineWrinkleEvidence } from "../web/src/services/personalized/precomputedFineWrinkleEvidence.ts";
+import {
+  guardMergedYoloGuidedRstlCurves,
+  isYoloGuidedRstlSeed,
+  mergeYoloGuidedRstlCurves,
+  reconcileYoloGuidedAuditAfterGlobalGuard,
+  YOLO_GUIDED_RSTL_SCOPE,
+} from "../web/src/services/personalized/yoloGuidedRstlScope.ts";
 
 const waitUntil = async (predicate: () => boolean, message: string): Promise<void> => {
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -50,6 +61,61 @@ class FakeTensor {
   }
 
   dispose(): void {}
+}
+{
+  const seeds = [
+    { name: "moved", region: "orbital_brow_upturn_v11", pts: [[0, 0], [2, 0]] },
+    { name: "untouched", region: "cheek_gap_density_v53", pts: [[0, 5], [10, 5]] },
+  ];
+  const guarded = guardMergedYoloGuidedRstlCurves(seeds, [
+    { ...seeds[0], pts: [[0, 0], [10, 10]] },
+    seeds[1],
+  ]);
+  assert.deepEqual(guarded.curves[1].pts, seeds[1].pts,
+    "a non-target curve is never changed by the global guard");
+  assert.deepEqual(guarded.curves[0].pts, seeds[0].pts,
+    "a changed target curve that creates a new global crossing is rolled back");
+  assert.equal(guarded.rolledBackCurveIndices.length, 1);
+  assert.equal(guarded.newIntersectionPairCount, 0);
+  assert.equal(guarded.curves.filter((curve, index) =>
+    JSON.stringify(curve.pts) !== JSON.stringify(seeds[index].pts)).length, 0,
+  "the final moved-curve count must reflect rollback geometry");
+  const audit = reconcileYoloGuidedAuditAfterGlobalGuard({
+    wrinkleTrends: [{
+      id: 0,
+      finalAccepted: true,
+      finalStatus: "accepted",
+      acceptedCurveIndices: [0],
+      candidateCurveIndices: [0],
+      rejectionReason: null,
+    }],
+    matchRecords: [{
+      wrinkle_segment_id: 0,
+      rstl_curve_index: 0,
+      final_accepted: true,
+      final_status: "accepted",
+      rejection_reason: null,
+    }, {
+      wrinkle_segment_id: 1,
+      rstl_curve_index: 0,
+      final_accepted: false,
+      final_status: "rejected_before_refinement",
+      rejection_reason: "insufficient_segment_support",
+    }],
+    curveSupportRecords: [{ curve_index: 0, minimum_support_passed: true }],
+  }, [0], guarded.rolledBackCurveIndices);
+  assert.equal((audit?.matchRecords as Array<Record<string, unknown>>)[0].final_accepted, false);
+  assert.equal((audit?.matchRecords as Array<Record<string, unknown>>)[0].final_status,
+    "rolled_back");
+  assert.equal((audit?.matchRecords as Array<Record<string, unknown>>)[0].rollback_reason,
+    "global_intersection_guard");
+  assert.equal((audit?.matchRecords as Array<Record<string, unknown>>)[1].final_status,
+    "rejected_before_refinement", "an unrelated rejected candidate must retain its reason");
+  assert.equal((audit?.wrinkleTrends as Array<Record<string, unknown>>)[0].finalAccepted, false);
+  assert.equal((audit?.wrinkleTrends as Array<Record<string, unknown>>)[0].finalStatus,
+    "rolled_back");
+  assert.equal((audit?.curveSupportRecords as Array<Record<string, unknown>>)[0].final_status,
+    "rolled_back");
 }
 
 const transform = {
@@ -95,6 +161,7 @@ assert.match(panel, /只显示 RSTL/);
 assert.match(panel, /只显示皱纹/);
 assert.match(panel, /RSTL 与皱纹同时显示/);
 assert.match(panel, /皱纹引导自动微调/);
+assert.match(panel, /仅使用 YOLO 的额头和眉间皱纹/);
 assert.match(panel, /医生手动微调（2D）/);
 assert.match(panel, /当前皱纹检测在浏览器内完成，不向 V10 服务发送图像/,
   "the active YOLO-only panel must describe browser processing");
@@ -207,10 +274,25 @@ assert.match(analysisRuntime,
   /applyWrinkleGuidedRefinement[\s\S]*updateStatus\("refining"\)[\s\S]*wrinkleWorkerInstance\(\)\.refine\(\{/,
   "refinement must start only from the explicit refinement action");
 assert.match(analysisRuntime,
+  /applyWrinkleGuidedRefinement[\s\S]*if \(state\.autoRefinedLines\) \{[\s\S]*replaceStaticRefineBaseline\(state\.autoRefinedLines, \{ liveBaseline: state\.standardLines \}\)[\s\S]*return;[\s\S]*updateStatus\("refining"\)/,
+  "restoring and reapplying must reuse the cached refinement without rerunning the worker");
+assert.match(analysisRuntime,
   /updateLiveWrinkleTracking[\s\S]*mode: "yolo-only"/,
   "video and camera frames must use the YOLO-only detection mode");
 assert.match(analysisRuntime, /value === "camera" \|\| value === "video"/,
   "video and camera must share the dynamic wrinkle tracking policy");
+assert.match(analysisRuntime,
+  /forehead_moved_curve_count[\s\S]*glabellar_moved_curve_count/,
+  "the result summary must expose separate forehead and glabellar movement counts");
+assert.match(analysisRuntime,
+  /if \(isDynamicWrinkleSourceKind\(sourceState\.sourceKind\)\) \{[\s\S]*if \(state\.status === "error"\) \{[\s\S]*els\.wrinkleSummary\.textContent = state\.error/,
+  "camera and video failures must expose their concrete runtime error");
+assert.match(analysisRuntime,
+  /message === "YOLO 未提取到有效皱纹中心线"[\s\S]*liveDetectionAttempted = false;[\s\S]*updateStatus\("live-empty"/,
+  "an empty camera detection must remain non-fatal and schedule another attempt");
+assert.match(analysisRuntime,
+  /LIVE_YOLO_INITIAL_RETRY_INTERVAL_SECONDS = 2[\s\S]*elapsed < LIVE_YOLO_INITIAL_RETRY_INTERVAL_SECONDS/,
+  "empty initial detections must retry at a bounded cadence");
 assert.match(pipelineLoop, /sourceKind === "camera" \|\| sourceKind === "video"/,
   "the frame loop must schedule wrinkle tracking for video and camera frames");
 assert.match(pipelineLoop,
@@ -264,12 +346,68 @@ const workerRuntime = fs.readFileSync(
 );
 assert.equal((analysisRuntime.match(/mode: "yolo-only"/g) || []).length, 4,
   "all current detection implementations must select YOLO-only");
+assert.match(analysisRuntime, /cacheForRefinement: true/,
+  "photo detection must retain its YOLO baseline for explicit refinement");
 assert.doesNotMatch(analysisRuntime, /mode: "full"|snapWrinkleLinesToRidges/,
   "active detection cannot request V10 or snap lines to traditional image ridges");
 assert.match(workerRuntime, /sourceImageRgba: request.mode === "yolo-only" \? undefined : request.pixels/,
   "YOLO-only centerlines must not use image-supported endpoint recovery");
 assert.doesNotMatch(analysisRuntime, /if \(!pipeline.detectionId\) throw/,
   "YOLO photo detection must succeed without a server detection id");
+assert.match(workerRuntime,
+  /line\.class === "forehead" \|\| line\.class === "frown"/,
+  "YOLO guidance must exclude generic wrinkles such as eye-corner evidence");
+assert.match(workerRuntime, /isYoloGuidedRstlSeed\(seed\)/,
+  "YOLO guidance must restrict the set of RSTL curves passed to refinement");
+assert.match(workerRuntime,
+  /foreheadEvidence: buildYoloGuidanceEvidence\([\s\S]*"forehead"[\s\S]*glabellarEvidence: buildYoloGuidanceEvidence\([\s\S]*"frown"/,
+  "forehead and glabellar evidence must be cached as isolated channels");
+assert.match(workerRuntime,
+  /const forehead = refineChannel\(foreheadSeeds, cachedYolo\.foreheadEvidence\);[\s\S]*const glabellar = refineChannel\(glabellarSeeds, cachedYolo\.glabellarEvidence\)/,
+  "forehead and glabellar evidence must be refined independently");
+assert.equal(YOLO_GUIDED_RSTL_SCOPE, "yolo_forehead_and_glabellar_only");
+assert.equal(isYoloGuidedRstlSeed({ region: "forehead_bridge_arc_v15" }), true);
+assert.equal(isYoloGuidedRstlSeed({ region: "orbital_brow_upturn_v11" }), true);
+assert.equal(isYoloGuidedRstlSeed({ region: "lateral_canthus_short_arc_v65" }), false,
+  "eye-corner RSTL must not enter YOLO-guided refinement");
+assert.equal(isYoloGuidedRstlSeed({ region: "cheek_gap_density_v53" }), false);
+{
+  const options = latestV9RstlRefinementOptions(622);
+  assert.equal(options.curvatureFairingGlabellarMaximumTurnDegrees, 8,
+    "the shared V9 profile must retain its established glabellar turn gate");
+  assert.equal(options.curvatureFairingGlabellarMaximumMeanAdherencePx, 2.6,
+    "the shared V9 profile must not inherit YOLO-only adherence relaxation");
+  assert.equal(options.curvatureFairingGlabellarMaximumP90AdherencePx, 7,
+    "the shared V9 profile must not inherit the YOLO-only P90 relaxation");
+  assert.equal(options.curvatureFairingForeheadMaximumP90AdherencePx, 3,
+    "the glabellar relaxation must not weaken forehead fairing gates");
+  const yoloOptions = yoloGuidedV9RstlRefinementOptions(622);
+  assert.equal(yoloOptions.curvatureFairingGlabellarMaximumTurnDegrees, 20);
+  assert.equal(yoloOptions.curvatureFairingGlabellarMaximumMeanAdherencePx, 3);
+  assert.equal(yoloOptions.curvatureFairingGlabellarMaximumP90AdherencePx, 11);
+  assert.equal(yoloOptions.glabellarAdherenceMeanThresholdPx, 3);
+  assert.equal(yoloOptions.glabellarAdherenceP90ThresholdPx, 11);
+}
+{
+  const scopedSeeds = [
+    { name: "forehead", region: "forehead_bridge_arc_v15", pts: [[1, 1], [2, 1]] },
+    { name: "eye-corner", region: "lateral_canthus_short_arc_v65", pts: [[3, 3], [4, 3]] },
+    { name: "glabellar", region: "orbital_brow_upturn_v11", pts: [[5, 5], [6, 5]] },
+    { name: "cheek", region: "cheek_gap_density_v53", pts: [[7, 7], [8, 7]] },
+  ];
+  const merged = mergeYoloGuidedRstlCurves(scopedSeeds, [
+    { pts: [[1, 2], [2, 2]] },
+    { pts: [[5, 6], [6, 6]] },
+  ]);
+  assert.deepEqual(merged[0].pts, [[1, 2], [2, 2]]);
+  assert.deepEqual(merged[2].pts, [[5, 6], [6, 6]]);
+  assert.deepEqual(merged[1].pts, scopedSeeds[1].pts,
+    "eye-corner RSTL coordinates must remain byte-for-byte equivalent");
+  assert.deepEqual(merged[3].pts, scopedSeeds[3].pts,
+    "non-target facial RSTL coordinates must remain unchanged");
+  assert.throws(() => mergeYoloGuidedRstlCurves(scopedSeeds, [{ pts: [[1, 2]] }]),
+    /结果数量与输入不一致/);
+}
 assert.match(workerRuntime, /browserBaselineSha256[\s\S]*v10InputImageSha256/,
   "the worker must expose baseline and V10 input fingerprints for cross-machine comparison");
 assert.match(workerRuntime,
@@ -327,6 +465,12 @@ assert.match(workerRuntime, /fourRegionDetectionMs[\s\S]*totalMs/,
   "the worker must report detection timings for reproducible performance regression");
 assert.match(workerRuntime, /minimumLineLengthPx: 20/);
 assert.match(workerRuntime, /latestV9RstlRefinementOptions\(request\.faceWidthPx\)/);
+assert.match(workerRuntime,
+  /options: yoloGuidedV9RstlRefinementOptions\(request\.faceWidthPx\)/,
+  "YOLO-guided refinement must use its isolated glabellar threshold overrides");
+assert.match(workerRuntime,
+  /reconcileYoloGuidedAuditAfterGlobalGuard\([\s\S]*globalGuard\.rolledBackCurveIndices/,
+  "the worker must reconcile channel audits after merged-geometry rollback");
 assert.match(workerClientRuntime, /new Worker\(new URL/);
 assert.match(workerClientRuntime, /api\.detect[\s\S]*Comlink\.transfer\(request, \[request\.pixels\.buffer as ArrayBuffer\]\)/,
   "the full-resolution input must be transferred without a main-thread copy or resize");

@@ -14,6 +14,7 @@ export interface LiveWrinkleWorkerAnalysisInput {
   landmarks?: Array<[number, number, number]>;
   mode: "full" | "yolo-only";
   includeFingerprint?: boolean;
+  cacheForRefinement?: boolean;
 }
 
 export interface LiveWrinklePipelineWorkerClient {
@@ -46,6 +47,7 @@ export function createLiveWrinklePipelineWorkerClient(): LiveWrinklePipelineWork
         landmarks: input.mode === "full" ? input.landmarks || [] : [],
         mode: input.mode,
         includeFingerprint: input.includeFingerprint,
+        cacheForRefinement: input.cacheForRefinement,
       };
       const eventSink = onEvent ? Comlink.proxy(onEvent) : undefined;
       return api.detect(

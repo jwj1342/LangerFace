@@ -910,7 +910,7 @@ function matchTrendsToCurves(
         (options.regionalCandidateFamilyFiltering !== true ||
           guidedRegionCandidateCompatible(guidedRegion, curves[group.curveIndex])) &&
         guidedRegionSideCompatible(
-          guidedRegion, trends[trendIndex], curves[group.curveIndex], size,
+          guidedRegion, trends[trendIndex], curves[group.curveIndex], size, faceWidth,
         ));
       const imageSides: Array<"left" | "right" | null> = [null];
       for (const imageSide of imageSides) {
@@ -1494,12 +1494,20 @@ function guidedRegionCandidateCompatible(
 
 function guidedRegionSideCompatible(
   guidedRegion: GuidedWrinkleRegion, trend: Trend, curve: CurveGeometry, size: number,
+  faceWidth: number,
 ): boolean {
   if (guidedRegion === "nose_bridge") return true;
   const trendX = trend.points.reduce((sum, point) => sum + point[0], 0) /
     Math.max(1, trend.points.length);
   const xs = curve.prior.map((point) => point[0]);
   const minimumX = Math.min(...xs), maximumX = Math.max(...xs);
+  // Frown lines very near the facial midline may legitimately guide the
+  // closest brow curve across the numerical x=size/2 boundary. Outside this
+  // narrow central band, retain same-side matching to prevent a lateral line
+  // from pulling the opposite brow. Six percent of face width covers the
+  // observed rounding/landmark offset without opening the whole glabella.
+  if (guidedRegion === "glabellar" &&
+      Math.abs(trendX - size * 0.5) <= faceWidth * 0.06) return true;
   if (minimumX < size * 0.48 && maximumX > size * 0.52) return true;
   const curveX = xs.reduce((sum, value) => sum + value, 0) / Math.max(1, xs.length);
   return (trendX < size * 0.5) === (curveX < size * 0.5);
