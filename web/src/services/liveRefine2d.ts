@@ -95,12 +95,12 @@ function sourceLabel() {
   return "未加载";
 }
 
-function captureHistory(label: string): void {
+function captureHistory(label: string, updateUi = true): void {
   const s = state();
   if (!s.lines) return;
   s.undoStack.push({ label, lines: cloneLines(s.lines) });
   if (s.undoStack.length > HISTORY_LIMIT) s.undoStack.shift();
-  updateRefineUi();
+  if (updateUi) updateRefineUi();
 }
 
 function markDirty(message: string): void {
@@ -725,7 +725,7 @@ export function moveRefinePointer(event: PointerEvent): boolean {
   if (!s.drag.moved && Math.hypot(offset[0], offset[1]) < 0.01) return true;
   if (!s.drag.moved) {
     const action = s.mode === "point" ? "拖点调整" : "拖线调整";
-    captureHistory(`${action} ${s.lines?.[s.drag.pick.lineIndex]?.name || "曲线"}`);
+    captureHistory(`${action} ${s.lines?.[s.drag.pick.lineIndex]?.name || "曲线"}`, false);
   }
   s.drag.moved = true;
   movePoint(s.drag.pick, offset);
@@ -739,7 +739,6 @@ export function moveRefinePointer(event: PointerEvent): boolean {
   );
   s.selected = s.drag.pick;
   s.dirty = true;
-  updateRefineUi();
   requestRefineFrame();
   return true;
 }
