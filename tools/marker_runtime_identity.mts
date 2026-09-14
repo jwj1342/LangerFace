@@ -26,7 +26,8 @@ export function captureMarkerIdentity(rawProfile: string | undefined, root = mar
   }
   for (const directory of ["web/src", "web/app", "web/dev"]) walk(directory);
   files.push("web/index.html", "web/vite.config.ts", "web/package.json", "web/package-lock.json",
-    "tools/marker_runtime_identity.mts", "tools/run_controlled_marker_v035_dev.mjs");
+    "tools/marker_runtime_identity.mts", "tools/run_controlled_marker_v035_dev.mjs",
+    "tools/run_controlled_marker_v035_build.mjs");
   const sourceHashes = files.sort().map((file) => [file, hash(readFileSync(resolve(root, file)))]);
   // Essential photo geometry/model inputs. This is not an RSTL effect-equivalence claim.
   const assetHashes = ["face_landmarker.task", "atlas_rstl.json", "atlas_langer.json",

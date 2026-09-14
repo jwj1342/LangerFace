@@ -2656,7 +2656,7 @@ body:has(.dark-workbench-page) {
   .react-workflow-host[data-workflow-marker-mode="true"] .workflow-workbench.app {
     --workflow-mobile-stage-height: max(
       320px,
-      min(calc(100dvh - 130px), calc(100vw + 150px))
+      min(calc(100dvh - 136px), calc(100vw + 134px))
     );
   }
 
@@ -2720,6 +2720,8 @@ body:has(.dark-workbench-page) {
       "workflow-actions workflow-actions";
     grid-template-columns: minmax(88px, auto) minmax(0, 1fr);
     grid-template-rows: auto auto;
+    height: auto;
+    flex: 0 0 auto;
     min-height: 0;
     padding: 4px 10px 2px;
     gap: 4px 8px;
@@ -2769,6 +2771,11 @@ body:has(.dark-workbench-page) {
   }
 
   .workflow-workbench .main-wrap.image-viewer {
+    touch-action: none;
+    overscroll-behavior: contain;
+  }
+
+  .workflow-workbench .main-wrap.refining {
     touch-action: none;
     overscroll-behavior: contain;
   }
@@ -2892,8 +2899,9 @@ body:has(.dark-workbench-page) {
   }
 
   .workflow-workbench .workflow-canvas-tools[data-marker-mode="true"] {
-    grid-template-rows: repeat(2, 40px);
-    block-size: 88px;
+    grid-template-rows: 40px 32px;
+    gap: 4px 6px;
+    block-size: 76px;
   }
 
   .workflow-workbench .workflow-canvas-tools > button {
@@ -3151,7 +3159,12 @@ body:has(.dark-workbench-page) {
 
   .workflow-workbench .workflow-incision-overlay [data-workflow-candidate] {
     stroke: #67e8f9;
-    stroke-width: 0.8;
+    stroke-width: 0.4;
+  }
+
+  .workflow-workbench .workflow-incision-overlay [data-workflow-candidate-halo] {
+    stroke: #082f49;
+    stroke-width: 0.4;
   }
 
   .workflow-workbench .workflow-incision-overlay [data-workflow-diagnostic-candidate] {

@@ -88,4 +88,15 @@ assert.match(markerLauncherSource, /defaultProfileUnchanged: DEFAULT_PROFILE/);
 assert.match(markerLauncherSource, /deferred_to_main_launcher/);
 assert.match(markerLauncherSource, /pageWideModelAssetsCheck/);
 
+assert.equal(
+  packageJson.scripts["build:marker-v035"],
+  "node ../tools/run_controlled_marker_v035_build.mjs",
+  "v0.35 has a stable, cross-platform production build entrypoint",
+);
+const markerBuildSource = fs.readFileSync("../tools/run_controlled_marker_v035_build.mjs", "utf8");
+assert.match(markerBuildSource, /TARGET_MARKER_PROFILE/);
+assert.match(markerBuildSource, /EXPECTED_VERSION = "0\.35"/);
+assert.match(markerBuildSource, /VITE_CONTROLLED_MARKER_DETECTOR_PROFILE: TARGET_MARKER_PROFILE/);
+assert.match(markerBuildSource, /verifyDistIdentity/);
+
 console.log("controlled marker detector profile tests passed");

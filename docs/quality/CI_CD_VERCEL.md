@@ -64,7 +64,7 @@ Vercel 的部署资源不是按“当前打开几个 PR”简单计算的。Git 
 | Framework Preset | Vite |
 | Root Directory | `web` |
 | Install Command | `npm ci` |
-| Build Command | `npm run build` |
+| Build Command | `npm run build:marker-v035` |
 | Output Directory | `dist` |
 | Production Branch | `master`（除非仓库改成 `main`） |
 | Node.js Version | 24.x；项目要求 Node `>=24.15.0`、npm `>=11.0.0` |
@@ -107,13 +107,15 @@ v8.1.67（133 条）并已部署到生产后，测试者浏览器里仍在跑 13
 
 本仓库已有 [web/vercel.json](../../web/vercel.json)，里面声明了：
 - `installCommand`: `npm ci`
-- `buildCommand`: `npm run build`
+- `buildCommand`: `npm run build:marker-v035`，固定生产受控标记 profile，并在构建后回读 `dist/marker-runtime-identity.json`
 - `ignoreCommand`: `node scripts/vercel-ignore-build.ts`，作为二级保护：只允许 `master` 构建，并且仅在 `web/` 有变化时构建
 - `outputDirectory`: `dist`
 - `git.deploymentEnabled`: 当前为 `false`，包括 `master` 在内均不自动部署；由 #224 决定何时恢复
 - `github.autoJobCancelation`: 同一 PR / 分支有新 commit 时取消较旧构建
 - `/assets/*` 是运行时资产根路径，承载 `.task` 模型、atlas JSON、triangles、标准脸等由 `copy-runtime-assets` 复制的文件
 - JS/MJS 的 `Content-Type`
+
+`build:marker-v035` 不启用部署，也不包含私有皱纹模型。它只让未来获准的生产构建在 profile、实现版本或身份清单不一致时失败；实际部署和私有皱纹服务仍由 #224 单独授权。
 
 如果 Dashboard 与 `web/vercel.json` 同时配置同一项，保持它们一致，避免不同环境行为不一致。
 

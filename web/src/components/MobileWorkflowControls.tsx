@@ -48,6 +48,8 @@ export function MobileWorkflowControls() {
   const hasSource = running || Boolean(liveSnapshot?.source.kind);
 
   useEffect(() => {
+    resetMobileWorkflowVisibility();
+    writeWrinkleDisplayMode("both");
     const select = document.querySelector<HTMLSelectElement>("#wrinkleDisplayMode");
     const sync = () => {
       const flags = displayModeFlags(readWrinkleDisplayMode());
@@ -56,7 +58,10 @@ export function MobileWorkflowControls() {
     };
     sync();
     select?.addEventListener("change", sync);
-    return () => select?.removeEventListener("change", sync);
+    return () => {
+      select?.removeEventListener("change", sync);
+      resetMobileWorkflowVisibility();
+    };
   }, []);
 
   useEffect(() => {
@@ -70,8 +75,6 @@ export function MobileWorkflowControls() {
   useEffect(() => {
     setMobileIncisionCandidateVisible(incisionVisible);
   }, [incisionVisible]);
-
-  useEffect(() => resetMobileWorkflowVisibility, []);
 
   const toggleWrinkleLayer = (layer: "rstl" | "wrinkles") => {
     const nextRstl = layer === "rstl" ? !rstlVisible : rstlVisible;

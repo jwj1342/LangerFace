@@ -92,6 +92,9 @@ test("phone review fixes stay visible, independent, and desktop-isolated", async
   const wrinkles = layerGrid.getByRole("button", { name: "皱纹", exact: true });
   const incision = layerGrid.getByRole("button", { name: "切口线", exact: true });
   for (const toggle of [rstl, wrinkles, incision]) {
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  }
+  for (const toggle of [rstl, wrinkles, incision]) {
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
   }
@@ -153,7 +156,7 @@ test("phone review fixes stay visible, independent, and desktop-isolated", async
   });
   expect(mobileStrokeMetrics).toEqual({
     boundary: "0.85px",
-    candidate: "0.8px",
+    candidate: "0.4px",
     diagnostic: "0.9px",
     centerRadius: "4",
     centerStroke: "0.8px",

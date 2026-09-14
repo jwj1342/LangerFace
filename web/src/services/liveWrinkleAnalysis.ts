@@ -1305,7 +1305,7 @@ export function resetLiveWrinkleAnalysis(): void {
   state.generation += 1;
   terminateWrinkleWorker();
   state.status = "idle";
-  state.displayMode = isDynamicWrinkleSourceKind(sourceState.sourceKind) ? "wrinkles" : "both";
+  state.displayMode = sourceState.sourceKind === "video" ? "wrinkles" : "both";
   state.evidenceLines = [];
   state.standardLines = null;
   state.autoRefinedLines = null;

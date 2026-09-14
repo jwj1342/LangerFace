@@ -228,8 +228,8 @@ const compactCameraStyle = incisionOverlayScreenStyle("fusiform", { compact: tru
 const compactZoomedPhotoStyle = incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 2 });
 assert.deepEqual(compactFullPhotoStyle, compactCameraStyle,
   "the full-photo view and camera use identical compact screen-space tokens");
-assert.equal(compactFullPhotoStyle.candidate.lineWidth, 0.65,
-  "the full-photo incision line no longer uses the oversized fixed mobile width");
+assert.equal(compactFullPhotoStyle.candidate.lineWidth, 0.4,
+  "the full-photo incision line uses the accepted fine mobile width");
 assert.equal(compactFullPhotoStyle.boundary.lineWidth, 0.7,
   "the full-photo tumor boundary no longer uses the oversized fixed mobile width");
 assert.equal(compactFullPhotoStyle.center.radiusCss, 3,
@@ -238,9 +238,12 @@ assert.ok(compactZoomedPhotoStyle.candidate.lineWidth > compactFullPhotoStyle.ca
   && compactZoomedPhotoStyle.boundary.lineWidth > compactFullPhotoStyle.boundary.lineWidth
   && compactZoomedPhotoStyle.center.radiusCss > compactFullPhotoStyle.center.radiusCss,
 "zooming in increases, rather than inversely decreases, all incision screen-space marks");
+assert.ok(Math.abs(incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 5 }).candidate.lineWidth
+  - 0.4 * Math.sqrt(5)) < 1e-9,
+"the phone incision scales gently through the complete photo zoom range");
 assert.deepEqual(
+  incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 6 }),
   incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 5 }),
-  compactZoomedPhotoStyle,
   "high photo zoom is capped so incision marks cannot grow into thick sticker-like graphics",
 );
 

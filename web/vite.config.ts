@@ -5,7 +5,10 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
 import { localWrinkleV10Plugin } from "./dev/localWrinkleV10Plugin.ts";
-import { markerRuntimeIdentityPlugin } from "./dev/markerRuntimeIdentityPlugin.ts";
+import {
+  markerRuntimeIdentityBuildPlugin,
+  markerRuntimeIdentityPlugin,
+} from "./dev/markerRuntimeIdentityPlugin.ts";
 
 function shouldServeSpaIndex(url = "") {
   const pathname = url.split("?")[0] || "";
@@ -37,6 +40,7 @@ export default defineConfig({
     tailwindcss(),
     localWrinkleV10Plugin(),
     markerRuntimeIdentityPlugin(),
+    markerRuntimeIdentityBuildPlugin(),
     {
       name: "app-spa-history-fallback",
       configureServer(server) {

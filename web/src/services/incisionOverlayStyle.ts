@@ -3,6 +3,7 @@ import { standardRstlStrokeWidth } from "./rstlRenderPlan.ts";
 export type IncisionOverlayCandidateType = "linear" | "fusiform" | string;
 
 const FUSIFORM_HIGHLIGHT_COLOR = "#67e8f9";
+const FUSIFORM_COMPACT_HALO_COLOR = "#082f49";
 
 export interface IncisionOverlayStyle {
   rstlLineWidth: number;
@@ -45,6 +46,12 @@ function boundedOverlayViewScale(viewScale?: number, compact = false): number {
   return Math.min(value, compact ? 1.5 : 1.25);
 }
 
+function compactCandidateViewScale(viewScale?: number): number {
+  const value = Number(viewScale);
+  if (!Number.isFinite(value) || value <= 1) return 1;
+  return Math.sqrt(Math.min(value, 5));
+}
+
 /**
  * Final screen-space tokens shared by the workflow photo SVG and live canvas.
  * The compact baseline is intentionally finer at the full-photo view; zoom may
@@ -56,17 +63,20 @@ export function incisionOverlayScreenStyle(
 ): Omit<IncisionOverlayStyle, "rstlLineWidth"> {
   const compact = options.compact === true;
   const viewScale = boundedOverlayViewScale(options.viewScale, compact);
+  const candidateViewScale = compact ? compactCandidateViewScale(options.viewScale) : viewScale;
   const centerScale = compact ? Math.min(viewScale, 4 / 3) : viewScale;
   const linear = candidateType === "linear";
-  const candidateLineWidth = (compact ? 0.65 : 1) * viewScale;
+  const candidateLineWidth = (compact ? 0.4 : 1) * candidateViewScale;
   const boundaryLineWidth = (compact ? 0.7 : 2) * viewScale;
   return {
     candidate: {
       color: linear ? (compact ? "#4ade80" : "#166534") : FUSIFORM_HIGHLIGHT_COLOR,
       lineWidth: candidateLineWidth,
-      haloColor: linear ? "rgba(3, 7, 18, 0.9)" : FUSIFORM_HIGHLIGHT_COLOR,
+      haloColor: linear
+        ? "rgba(3, 7, 18, 0.9)"
+        : compact ? FUSIFORM_COMPACT_HALO_COLOR : FUSIFORM_HIGHLIGHT_COLOR,
       haloWidth: linear
-        ? candidateLineWidth + (compact ? 0.3 : 0.5) * viewScale
+        ? candidateLineWidth + (compact ? 0.3 * candidateViewScale : 0.5 * viewScale)
         : candidateLineWidth,
     },
     boundary: {
