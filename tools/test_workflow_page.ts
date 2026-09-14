@@ -414,7 +414,7 @@ assert.doesNotMatch(styles, /workflow-mobile-scroll-zone/,
   "the removed mobile scroll prompt has no stale styling contract");
 assert.match(styles, /"quality incision-status"[\s\S]*?"workflow-actions workflow-actions"/,
   "phone workflow keeps compact quality and result information above the face instead of over it");
-assert.match(styles, /\.workflow-canvas-tools\s*{[^}]*grid-template-rows:\s*40px;[^}]*block-size:\s*42px;[^}]*padding:\s*0;[\s\S]*?\.workflow-canvas-tools\[data-marker-mode="true"\]\s*{[^}]*grid-template-rows:\s*repeat\(2, 40px\);[^}]*block-size:\s*88px;/s,
+assert.match(styles, /\.workflow-canvas-tools\s*{[^}]*grid-template-rows:\s*40px;[^}]*block-size:\s*42px;[^}]*padding:\s*0;[\s\S]*?\.workflow-canvas-tools\[data-marker-mode="true"\]\s*{[^}]*grid-template-rows:\s*40px 32px;[^}]*gap:\s*4px 6px;[^}]*block-size:\s*76px;/s,
   "phone workflow uses one tool row normally and adds the second row only during controlled marking");
 assert.match(canvasTools, /data-marker-mode={String\(markerMode\)}[\s\S]*?data-marker-busy={String\(markerBusy\)}/,
   "phone tool layout exposes marker state without changing command semantics");
@@ -897,12 +897,14 @@ assert.match(styles, /@media \(max-width:\s*1280px\)\s*{[\s\S]*?\.workflow-workb
 
 assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench\.app\s*\{[^}]*--workflow-mobile-stage-height:\s*max\([\s\S]*?min\(calc\(100dvh - 170px\),\s*calc\(100vw \+ 100px\)\)[\s\S]*?grid-template-rows:\s*var\(--workflow-mobile-stage-height\) minmax\(0, 1fr\);[^}]*height:\s*100dvh;[^}]*overflow:\s*hidden;/,
   "phone workflow sizes the observation region from both usable height and the width needed for a full photo");
-assert.match(styles, /\.react-workflow-host\[data-workflow-marker-mode="true"\] \.workflow-workbench\.app\s*\{[^}]*--workflow-mobile-stage-height:\s*max\([\s\S]*?min\(calc\(100dvh - 130px\),\s*calc\(100vw \+ 150px\)\)/,
-  "controlled-marker mode reserves stage height for the second toolbar row without shrinking the photo");
+assert.match(styles, /\.react-workflow-host\[data-workflow-marker-mode="true"\] \.workflow-workbench\.app\s*\{[^}]*--workflow-mobile-stage-height:\s*max\([\s\S]*?min\(calc\(100dvh - 136px\),\s*calc\(100vw \+ 134px\)\)/,
+  "controlled-marker mode compensates only for the compact second toolbar row without shrinking the photo");
 assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.stage-body\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/,
   "phone workflow stage contains its canvas and focus cards instead of spilling over the next section");
 assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.main-wrap\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;/,
   "phone workflow lets the shared face canvas fill its fixed observation region without entering the control scroll pane");
+assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.stage-top\s*\{[^}]*grid-template-rows:\s*auto auto;[^}]*height:\s*auto;[^}]*flex:\s*0 0 auto;/,
+  "the two-row phone toolbar contributes its full height instead of overlapping the camera viewport");
 assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.zoom-strip\s*\{[^}]*display:\s*none;/,
   "phone workflow hides the redundant focus-preview rail while direct canvas zoom is available");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-tumor-transfer-actions,[\s\S]*?\.workflow-recalculate-action\s*\{[^}]*display:\s*none;/,
@@ -927,6 +929,12 @@ assert.doesNotMatch(mobileControls, /if \(!nextRstl && !nextWrinkles\) return;/,
   "mobile operators may hide RSTL and wrinkles together to inspect the unmodified source image");
 assert.match(mobileControls, /setMobileRstlLayerVisible\(rstlVisible\)[\s\S]*?setMobileWrinkleLayerVisible\(wrinklesVisible\)[\s\S]*?setMobileIncisionCandidateVisible\(incisionVisible\)/,
   "all three phone overlay switches have independent display-only visibility gates");
+assert.match(mobileControls, /useState\(true\)[\s\S]*?useState\(true\)[\s\S]*?useState\(true\)/,
+  "RSTL, wrinkle, and incision buttons are visibly enabled on the first phone render");
+assert.match(mobileControls, /resetMobileWorkflowVisibility\(\);\s*writeWrinkleDisplayMode\("both"\);/,
+  "the phone workflow initializes all three display gates without requiring a wake-up click");
+assert.match(liveRuntime, /root\.querySelector\("\.workflow-workbench"\)[\s\S]*?resetMobileWorkflowVisibility\(\);\s*setWrinkleDisplayMode\("both"\);/,
+  "the workflow runtime and visible phone controls share the same all-layers-on default");
 assert.match(styles, /\.workflow-canvas-tools\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);[^}]*overflow:\s*hidden;/,
   "the phone marker toolbar uses a fixed grid instead of growing when recognition controls appear");
 assert.match(styles, /\.workflow-canvas-tools > button\s*\{[^}]*font-size:\s*11px;[^}]*white-space:\s*nowrap;/,
@@ -1043,8 +1051,18 @@ assert.ok(canvasTools.includes("data-workflow-boundary-halo")
 "photo boundary and incision strokes have the same explicit under-stroke structure as live canvas rendering");
 assert.equal(incisionOverlayScreenStyle("fusiform", { compact: true }).center.radiusCss, 3,
   "the compact full-photo lesion center uses the finer baseline");
+assert.equal(incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 1 }).candidate.lineWidth, 0.4,
+  "the compact full-photo incision uses the accepted fine mobile width");
+assert.ok(Math.abs(incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 5 }).candidate.lineWidth
+  - 0.4 * Math.sqrt(5)) < 1e-9,
+"the phone incision continues to scale gently through the complete photo zoom range");
+assert.ok(incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 5 }).candidate.lineWidth
+  > incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 1.5 }).candidate.lineWidth,
+"the incision stroke no longer freezes at 1.5x while the photo continues to enlarge");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\[data-workflow-boundary\][\s\S]*?stroke:\s*#fde047;[\s\S]*?\[data-workflow-candidate\][\s\S]*?stroke:\s*#67e8f9;[\s\S]*?\[data-workflow-center\][\s\S]*?fill:\s*#fb7185;/,
   "phone drawing marks use the requested bright, thin clinical legend colors without restyling desktop");
+assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\[data-workflow-candidate-halo\]\s*\{[^}]*stroke:\s*#082f49;[^}]*stroke-width:\s*0\.4;/,
+  "phone fallback keeps the candidate halo as fine as the primary incision stroke");
 const clickIntent = beginWorkflowPointerIntent(1, 0, 10, 10);
 updateWorkflowPointerIntent(clickIntent, 1, 13, 13);
 assert.equal(completesWorkflowCanvasClick(clickIntent, 1), true, "small pointer jitter remains a lesion-selection click");

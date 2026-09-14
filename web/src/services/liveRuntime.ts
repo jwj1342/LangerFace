@@ -27,6 +27,7 @@ import { bindLiveCanvasInteractions } from "./liveCanvasInteraction";
 import { LiveCommandRouter } from "./liveCommandRouter";
 import { createCanvasRecordingController, type CanvasRecordingController, type RecordingExtraCanvas } from "./canvasRecording";
 import { modelState, recordingState, renderState, sourceState } from "./liveState";
+import { resetMobileWorkflowVisibility } from "./mobileWorkflowVisibility";
 import { createPhotoPlanningController } from "./photoPlanningController";
 import {
   adjustRefineImageZoom,
@@ -506,6 +507,10 @@ export function mountLiveWorkbench(root: ParentNode | Document = document) {
   previewMeta = null;
   recordingController = null;
   bindLiveEvents(abortController.signal, root);
+  if (root.querySelector(".workflow-workbench")) {
+    resetMobileWorkflowVisibility();
+    setWrinkleDisplayMode("both");
+  }
   updateRefineUi();
   updateWrinkleUi();
   buildZoomCards(refreshStaticImage);
