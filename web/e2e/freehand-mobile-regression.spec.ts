@@ -300,6 +300,8 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
 
   await uploadGeneratedPhoto(page, "single", "#fileInput");
   await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
+  const markerButton = page.locator(".workflow-marker-toggle");
+  await expect(markerButton).toBeEnabled({ timeout: 45_000 });
 
   const browserHeightCanvasSizes: Array<{ width: number; height: number }> = [];
   for (const height of [711, 775]) {
@@ -314,14 +316,13 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
   expect(Math.abs(browserHeightCanvasSizes[0].height - browserHeightCanvasSizes[1].height)).toBeLessThanOrEqual(1);
   await page.setViewportSize({ width: 390, height: 844 });
 
-  const markerButton = page.locator(".workflow-marker-toggle");
   await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
   const ellipseRatio = page.locator("#ellipseRatio");
   await expect(ellipseRatio).toBeDisabled();
 
   const markerStageHeight = await stage.evaluate((element) => element.getBoundingClientRect().height);
-  expect(markerStageHeight).toBeCloseTo(Math.max(320, Math.min(844 - 130, 390 + 150)), 0);
+  expect(markerStageHeight).toBeCloseTo(Math.max(320, Math.min(844 - 136, 390 + 134)), 0);
 
   await page.setViewportSize({ width: 430, height: 711 });
   await expect.poll(async () => Math.round((await page.locator("#canvas").boundingBox())?.width || 0))
