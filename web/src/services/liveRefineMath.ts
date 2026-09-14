@@ -158,6 +158,9 @@ function pointOnSegment(point: RefinePoint, segment: Segment): boolean {
 }
 
 function segmentsIntersect(first: Segment, second: Segment): boolean {
+  // Reject disjoint segment boxes before orientation/distance work. Keep the
+  // same tolerance as pointOnSegment so near-touching cases are still checked.
+  if (segmentBoundsDistance(first, second) > 1e-7) return false;
   const o1 = orientation(first.a, first.b, second.a);
   const o2 = orientation(first.a, first.b, second.b);
   const o3 = orientation(second.a, second.b, first.a);
@@ -194,6 +197,16 @@ function segmentDistance(first: Segment, second: Segment): number {
   );
 }
 
+function segmentBoundsDistance(first: Segment, second: Segment): number {
+  const dx = Math.max(0,
+    Math.min(first.a[0], first.b[0]) - Math.max(second.a[0], second.b[0]),
+    Math.min(second.a[0], second.b[0]) - Math.max(first.a[0], first.b[0]));
+  const dy = Math.max(0,
+    Math.min(first.a[1], first.b[1]) - Math.max(second.a[1], second.b[1]),
+    Math.min(second.a[1], second.b[1]) - Math.max(first.a[1], first.b[1]));
+  return Math.hypot(dx, dy);
+}
+
 function hasSelfIntersection(line: RefineLine): boolean {
   const segments = lineSegments(line);
   for (let first = 0; first < segments.length; first++) {
@@ -209,6 +222,7 @@ function linePairDistance(first: RefineLine, second: RefineLine): number {
   const secondSegments = lineSegments(second);
   let minimum = Infinity;
   for (const a of firstSegments) for (const b of secondSegments) {
+    if (segmentBoundsDistance(a, b) >= minimum) continue;
     minimum = Math.min(minimum, segmentDistance(a, b));
     if (minimum === 0) return 0;
   }

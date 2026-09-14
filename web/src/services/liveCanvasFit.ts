@@ -77,6 +77,7 @@ export function restoreImageViewState(snapshot: ImageViewResumeState): void {
 }
 
 export function setRefineCanvasViewActive(active: boolean): void {
+  active = active || (sourceState.paused && Boolean(sourceState.frozenFrame));
   els.canvas.classList.toggle("refine-image-source", active);
   if (active) {
     fitCanvasDisplayToStage({ resetView: !renderState.imageView.baseWidth });

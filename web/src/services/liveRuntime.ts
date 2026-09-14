@@ -70,7 +70,6 @@ import {
   setWrinkleDisplayMode,
   updateWrinkleUi,
 } from "./liveWrinkleAnalysis.ts";
-
 interface ValueControlEvent {
   target: {
     value: unknown;
@@ -258,22 +257,30 @@ function handlePauseToggle(): void {
     frozen.getContext("2d")?.drawImage(sourceState.source as CanvasImageSource, 0, 0, frozen.width, frozen.height);
     sourceState.frozenFrame = frozen;
     sourceState.paused = true;
+    resetLiveWrinkleAnalysis();
     beginFrozenRefineSession();
+    els.mainWrap.classList.add("image-viewer");
+    els.canvas.classList.add("refine-image-source");
+    fitCanvasDisplayToStage({ resetView: true });
     els.pause.textContent = "▶ 继续";
     els.pause.setAttribute("aria-pressed", "true");
     setLive(false, "已定格 · 可微调");
     setTransientMsg("已暂停当前画面。可点击“检测皱纹”，或使用“医生手动微调（2D）”继续处理。");
     redrawPausedFrame();
     setRefineAvailability();
+    updateWrinkleUi();
     return;
   }
   sourceState.paused = false;
+  els.mainWrap.classList.remove("image-viewer");
+  els.canvas.classList.remove("refine-image-source");
   sourceState.frozenFrame = null;
   const refinementCommitted = commitRefineForLive();
   resetLiveWrinkleAnalysis();
   els.pause.textContent = "⏸ 暂停";
   els.pause.setAttribute("aria-pressed", "false");
-  setMsg(refinementCommitted ? "已返回实时画面，当前微调曲线会继续跟随人脸。" : null);
+  if (refinementCommitted) setTransientMsg("已返回实时画面，当前微调曲线会继续跟随人脸。");
+  else setMsg(null);
   setLive(true, sourceState.sourceKind === "camera" ? "实时摄像头" : "视频");
   requestFrame();
 }
@@ -460,6 +467,7 @@ function bindLiveEvents(signal: AbortSignal, root: ParentNode | Document): void 
     moveRefinePointer,
     endRefinePointer,
     sourceKind: () => sourceState.sourceKind,
+    isSourcePaused: () => sourceState.paused && Boolean(sourceState.frozenFrame),
     panImageViewBy,
     zoomImageViewAt,
     zoomImageViewByFactorAt,
@@ -474,7 +482,6 @@ function bindLiveEvents(signal: AbortSignal, root: ParentNode | Document): void 
 function isActiveSession(session: number): boolean {
   return mounted && session === activeSession;
 }
-
 export function disposeLiveWorkbench() {
   mounted = false;
   activeSession += 1;
@@ -495,7 +502,6 @@ export function disposeLiveWorkbench() {
   clearLiveUiMessageTimer();
   clearDomBinding();
 }
-
 export function mountLiveWorkbench(root: ParentNode | Document = document) {
   disposeLiveWorkbench();
   bindDom(root);

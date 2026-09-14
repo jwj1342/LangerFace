@@ -42,6 +42,7 @@ export function WorkflowDraftRecovery({ mobilePortalSelector }: WorkflowDraftRec
   }, [mobilePortalSelector]);
 
   if (!draft || sourceKind === "image") return null;
+  if (sourceKind === "camera" || sourceKind === "video") return null;
 
   const panel = (
     <section className="workflow-draft-recovery" aria-label="临时草稿">

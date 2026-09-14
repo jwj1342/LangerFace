@@ -69,9 +69,12 @@ try {
     "reacquisition uses saved first-frame patches without extracting new lines");
 
   const blank = { ...reference, gray: new Uint8Array(width * height).fill(128) };
-  assert.deepEqual(tracker.update(blank, [line], 1.04), [],
-    "lost skin patches must be hidden, never replaced by drifting mesh-only curves");
+  const fallback = tracker.update(blank, mesh, 1.04);
+  assert.deepEqual(fallback.flatMap((item) => item.points), mesh[0].points,
+    "lost texture follows the current face projection without stale optical-flow offsets");
   assert.equal(tracker.diagnostics().acceptedCount, 0);
+  assert.ok(tracker.update(reference, [line], 1.08).length,
+    "skin patches returning after total tracking loss must recover on the next frame");
   tracker.suspend();
   assert.ok(tracker.update(reference, [line], 2).length);
   console.log(`ok: OpenCV skin tracking, local deformation ${meanError.toFixed(3)} px, loop, loss and reacquisition`);
