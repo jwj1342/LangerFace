@@ -79,6 +79,7 @@ async function prepareVideoUrl(file: File): Promise<{ url: string; release: () =
 }
 
 interface StaticSourceResumeState {
+  densityFrac: number;
   source: CanvasImageSource;
   width: number;
   height: number;
@@ -104,6 +105,7 @@ function captureCurrentStaticSource(): void {
   const frame = sourceState.planning2d?.getFrameState();
   if (!sourceState.running || frame?.kind !== "image" || !frame.source) return;
   lastStaticSource = {
+    densityFrac: renderState.densityFrac,
     source: frame.source as CanvasImageSource,
     width: frame.width,
     height: frame.height,
@@ -134,6 +136,9 @@ function restoreStaticSourceOrPlaceholder(activeIncisionOverlay: typeof renderSt
   });
   restoreRefineDisplayState(resume.refinement);
   restoreWrinkleDisplayState(resume.wrinkle);
+  renderState.densityFrac = resume.densityFrac;
+  els.density.value = String(Math.round(resume.densityFrac * 100));
+  els.densityVal.textContent = `${Math.round(resume.densityFrac * 100)}%`;
   renderState.incisionOverlay = activeIncisionOverlay;
   lastStaticSource = resume;
   setTransientMsg("已关闭后置摄像头，并恢复上一张照片及其显示状态。", 3_000);
@@ -424,6 +429,7 @@ export function setSource(
   setLive(true, kind === "camera" ? "实时摄像头" : kind === "video" ? "视频" : "照片");
   if (kind === "image") {
     lastStaticSource = {
+      densityFrac: renderState.densityFrac,
       source: src,
       width: sourceWidth,
       height: sourceHeight,

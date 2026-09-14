@@ -6,6 +6,7 @@ export interface LiveCanvasInteractionCallbacks {
   moveRefinePointer(event: PointerEvent): boolean;
   endRefinePointer(event: PointerEvent): boolean;
   sourceKind(): string | null;
+  isSourcePaused?(): boolean;
   panImageViewBy(deltaX: number, deltaY: number): void;
   zoomImageViewAt(clientX: number, clientY: number, deltaY: number): boolean;
   zoomImageViewByFactorAt?(clientX: number, clientY: number, factor: number): boolean;
@@ -65,7 +66,7 @@ export function bindLiveCanvasInteractions(
 
   const mobileTouchGestureEnabled = (event: PointerEvent): boolean => (
     event.pointerType === "touch"
-    && callbacks.sourceKind() === "image"
+    && (callbacks.sourceKind() === "image" || callbacks.isSourcePaused?.() === true)
     && callbacks.isMobileTouchImageGestureEnabled?.() === true
     && !callbacks.isRefineActive()
   );

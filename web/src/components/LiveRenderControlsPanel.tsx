@@ -16,7 +16,7 @@ export function LiveRenderControlsPanel() {
   const snapshot = useLiveStore((state) => state.snapshot);
   const render = snapshot?.render;
   const atlasPreview = snapshot?.atlasPreview;
-  const [density, setDensity] = useState(render?.densityPct || 100);
+  const [density, setDensity] = useState(render?.densityPct ?? 100);
   const [opacity, setOpacity] = useState(render?.opacityPct || 60);
   const controllerMirror = render?.mirror ?? true;
   const controllerMeshPts = render?.meshPts ?? false;
@@ -25,6 +25,9 @@ export function LiveRenderControlsPanel() {
 
   useEffect(() => setMirror(controllerMirror), [controllerMirror]);
   useEffect(() => setMeshPts(controllerMeshPts), [controllerMeshPts]);
+  useEffect(() => {
+    if (render?.densityPct != null) setDensity(render.densityPct);
+  }, [render?.densityPct]);
 
   return (
     <>

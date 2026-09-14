@@ -258,16 +258,23 @@ function handlePauseToggle(): void {
     frozen.getContext("2d")?.drawImage(sourceState.source as CanvasImageSource, 0, 0, frozen.width, frozen.height);
     sourceState.frozenFrame = frozen;
     sourceState.paused = true;
+    resetLiveWrinkleAnalysis();
     beginFrozenRefineSession();
+    els.mainWrap.classList.add("image-viewer");
+    els.canvas.classList.add("refine-image-source");
+    fitCanvasDisplayToStage({ resetView: true });
     els.pause.textContent = "▶ 继续";
     els.pause.setAttribute("aria-pressed", "true");
     setLive(false, "已定格 · 可微调");
     setTransientMsg("已暂停当前画面。可点击“检测皱纹”，或使用“医生手动微调（2D）”继续处理。");
     redrawPausedFrame();
     setRefineAvailability();
+    updateWrinkleUi();
     return;
   }
   sourceState.paused = false;
+  els.mainWrap.classList.remove("image-viewer");
+  els.canvas.classList.remove("refine-image-source");
   sourceState.frozenFrame = null;
   const refinementCommitted = commitRefineForLive();
   resetLiveWrinkleAnalysis();
@@ -460,6 +467,7 @@ function bindLiveEvents(signal: AbortSignal, root: ParentNode | Document): void 
     moveRefinePointer,
     endRefinePointer,
     sourceKind: () => sourceState.sourceKind,
+    isSourcePaused: () => sourceState.paused && Boolean(sourceState.frozenFrame),
     panImageViewBy,
     zoomImageViewAt,
     zoomImageViewByFactorAt,

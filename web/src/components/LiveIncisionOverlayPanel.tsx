@@ -10,8 +10,9 @@ import { StatusBadge } from "./ui/status-badge";
 export function LiveIncisionOverlayPanel() {
   const commands = useLiveControllerCommands();
   const overlay = useLiveStore((state) => state.snapshot?.incisionOverlay);
+  const sourceKind = useLiveStore((state) => state.snapshot?.source.kind);
 
-  if (!overlay?.loaded && !overlay?.qaLabel) return null;
+  if (sourceKind === "camera" || (!overlay?.loaded && !overlay?.qaLabel)) return null;
   const blocked = !overlay.loaded;
 
   return (

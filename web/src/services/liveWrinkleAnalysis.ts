@@ -214,7 +214,14 @@ const cloneEditableLines = (lines: readonly EditableRefineLine[]): EditableRefin
 
 function currentPixelSource(): CanvasImageSource | null {
   if (sourceState.sourceKind === "image") return sourceState.source as CanvasImageSource | null;
+  if (sourceState.paused) return sourceState.frozenFrame;
   return null;
+}
+
+function isStaticWrinkleSource(): boolean {
+  return sourceState.sourceKind === "image"
+    || (isDynamicWrinkleSourceKind(sourceState.sourceKind)
+      && sourceState.paused && Boolean(sourceState.frozenFrame));
 }
 
 async function ensureWrinkleFaceLandmarker(): Promise<FaceLandmarker> {
@@ -250,7 +257,7 @@ async function detectV9ReferenceLandmarks(
 export function isWrinkleFrameReady(): boolean {
   const imageReady = sourceState.sourceKind === "image" && Boolean(sourceState.imageCacheLM);
   const dynamicReady = isDynamicWrinkleSourceKind(sourceState.sourceKind)
-    && !sourceState.paused && Boolean(sourceState.lastLM);
+    && (!sourceState.paused || Boolean(sourceState.frozenFrame)) && Boolean(sourceState.lastLM);
   return sourceState.running && Boolean(imageReady || dynamicReady);
 }
 
@@ -365,7 +372,7 @@ function statusLabel(): string {
 export function updateWrinkleUi(): void {
   if (!els.wrinkleStatus) return;
   const frameReady = isWrinkleFrameReady();
-  const imageMode = sourceState.sourceKind === "image";
+  const imageMode = isStaticWrinkleSource();
   const detectionReady = imageMode && state.status === "detected"
     && Boolean(state.detectionId && state.refinementContext);
   const busy = state.status === "loading" || state.status === "detecting" || state.status === "refining";
@@ -383,7 +390,7 @@ export function updateWrinkleUi(): void {
   els.wrinkleAutoRefine.disabled = !detectionReady || hasManualRefineChanges();
   els.wrinkleRestore.disabled = !state.standardLines
     || (state.status !== "applied" && !hasManualRefineChanges());
-  if (isDynamicWrinkleSourceKind(sourceState.sourceKind)) {
+  if (isDynamicWrinkleSourceKind(sourceState.sourceKind) && !sourceState.paused) {
     const sourceLabel = dynamicWrinkleSourceLabel();
     if (state.status === "error" || state.status === "live-empty") {
       els.wrinkleSummary.textContent = state.error
@@ -457,7 +464,7 @@ export function shouldDrawWrinkleLayer(): boolean {
 }
 
 export function getWrinkleEvidenceLines(): readonly LiveWrinkleEvidenceLine[] {
-  if (isDynamicWrinkleSourceKind(sourceState.sourceKind)) {
+  if (isDynamicWrinkleSourceKind(sourceState.sourceKind) && !isStaticWrinkleSource()) {
     return liveDisplayLines;
   }
   return state.evidenceLines;
@@ -693,7 +700,7 @@ function publishDebugSnapshot(): void {
 }
 
 async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } = {}): Promise<void> {
-  if (sourceState.sourceKind !== "image" || !isWrinkleFrameReady()) {
+  if (!isStaticWrinkleSource() || !isWrinkleFrameReady()) {
     updateWrinkleUi();
     return;
   }
@@ -1054,7 +1061,8 @@ function scheduleLiveWrinkleCorrection(
       }
 
       candidateTracker = await WrinkleOpticalFlowTracker.create();
-      if (generation !== state.generation || sourceState.sourceKind !== sourceKind) return;
+      if (generation !== state.generation || sourceState.sourceKind !== sourceKind
+          || sourceState.paused || !sourceState.running) return;
       candidateTracker.seed(textureFrame, candidateLines, mediaTime);
       skinTracker?.dispose();
       skinTracker = candidateTracker;
@@ -1185,7 +1193,7 @@ export async function waitForLiveWrinkleAnalysis(): Promise<void> {
 }
 
 export async function applyWrinkleGuidedRefinement(): Promise<void> {
-  if (sourceState.sourceKind !== "image" || state.status !== "detected"
+  if (!isStaticWrinkleSource() || state.status !== "detected"
       || !state.detectionId || !state.refinementContext || !state.standardLines) return;
   if (hasManualRefineChanges()) {
     updateWrinkleUi();

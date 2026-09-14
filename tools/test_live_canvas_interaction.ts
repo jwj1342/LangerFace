@@ -153,6 +153,8 @@ const pinchZoomFactors: Array<[number, number, number]> = [];
 const pinchPans: Array<[number, number]> = [];
 const pinchGestures: Array<[number, number, number, number, number]> = [];
 let pinchViewChanges = 0;
+let pinchSource = "image";
+let pinchPaused = false;
 bindLiveCanvasInteractions(pinchSurface as unknown as HTMLElement, {
   isRefineActive: () => false,
   isImagePointerInteractionBlocked: () => true,
@@ -160,7 +162,8 @@ bindLiveCanvasInteractions(pinchSurface as unknown as HTMLElement, {
   beginRefinePointer: () => false,
   moveRefinePointer: () => false,
   endRefinePointer: () => false,
-  sourceKind: () => "image",
+  sourceKind: () => pinchSource,
+  isSourcePaused: () => pinchPaused,
   panImageViewBy: (x, y) => { pinchPans.push([x, y]); },
   zoomImageViewAt: () => false,
   zoomImageViewByFactorAt: (x, y, factor) => { pinchZoomFactors.push([x, y, factor]); return true; },
@@ -191,6 +194,19 @@ assert.equal(pinchSurface.captured.size, 0, "ending a mobile pinch releases both
 pinchSurface.emit("pointerdown", event({ pointerId: 23, pointerType: "mouse" }));
 assert.equal(pinchSurface.captured.has(23), false, "desktop mouse input remains blocked by the workflow marker tool");
 assert.equal(pinchGestures.length, 1, "desktop mouse input never enters the mobile pinch path");
+pinchSource = "camera";
+pinchPaused = true;
+pinchSurface.emit("pointerdown", event({ pointerId: 31, pointerType: "touch", clientX: 20 }));
+pinchSurface.emit("pointerdown", event({ pointerId: 32, pointerType: "touch", clientX: 40 }));
+pinchSurface.emit("pointermove", event({ pointerId: 32, pointerType: "touch", clientX: 60 }));
+assert.equal(pinchGestures.length, 2, "paused camera supports pinch outside manual refinement");
+pinchSurface.emit("pointerup", event({ pointerId: 31, pointerType: "touch" }));
+pinchSurface.emit("pointerup", event({ pointerId: 32, pointerType: "touch" }));
+pinchPaused = false;
+pinchSurface.emit("pointerdown", event({ pointerId: 41, pointerType: "touch", clientX: 20 }));
+pinchSurface.emit("pointerdown", event({ pointerId: 42, pointerType: "touch", clientX: 40 }));
+pinchSurface.emit("pointermove", event({ pointerId: 42, pointerType: "touch", clientX: 60 }));
+assert.equal(pinchGestures.length, 2, "running camera does not enter frozen-frame pinch");
 pinchAbortController.abort();
 assert.equal(pinchSurface.listenerCount(), 0);
 

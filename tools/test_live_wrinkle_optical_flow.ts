@@ -72,6 +72,8 @@ try {
   assert.deepEqual(tracker.update(blank, [line], 1.04), [],
     "lost skin patches must be hidden, never replaced by drifting mesh-only curves");
   assert.equal(tracker.diagnostics().acceptedCount, 0);
+  assert.ok(tracker.update(reference, [line], 1.08).length,
+    "skin patches returning after total tracking loss must recover on the next frame");
   tracker.suspend();
   assert.ok(tracker.update(reference, [line], 2).length);
   console.log(`ok: OpenCV skin tracking, local deformation ${meanError.toFixed(3)} px, loop, loss and reacquisition`);

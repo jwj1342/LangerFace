@@ -186,7 +186,8 @@ export class WrinkleOpticalFlowTracker {
     current.data.set(frame.gray);
     try {
       const referenceMode = !this.previous || !Number.isFinite(this.mediaTime)
-        || time <= this.mediaTime || time - this.mediaTime > 0.25;
+        || time <= this.mediaTime || time - this.mediaTime > 0.25
+        || !this.valid.some(Boolean);
       const from = referenceMode ? this.reference : this.previous!;
       const points = referenceMode ? this.referencePoints : this.previousPoints;
       const guess = referenceMode ? currentMesh : currentMesh.map((value, index) => (
