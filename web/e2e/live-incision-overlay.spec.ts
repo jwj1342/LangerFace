@@ -156,14 +156,17 @@ test("approved incision reaches photo, uploaded video, and MediaStream camera", 
   }));
   expect(cameraState).toMatchObject({ hasStream: true, liveTracks: 1 });
 
-  await page.locator("#clearIncisionOverlayBtn").click();
   await expect(page.locator("#liveIncisionOverlayCard")).toBeHidden();
-  await expect(page.locator(".live-state-panel")).toContainText("无切口叠加");
+  await expect(page.locator("#clearIncisionOverlayBtn")).toBeHidden();
+  await expect(page.locator(".live-state-panel")).not.toContainText("无切口叠加");
+  await expect.poll(() => page.evaluate(candidatePixelCount), {
+    message: "hiding the camera-only controls must keep the staged incision candidate",
+  }).toBeGreaterThan(8);
   await expect.poll(() => page.evaluate(visibleSourcePixelCount), {
-    message: "clearing the overlay must keep the camera image on the live canvas",
+    message: "hiding the camera-only controls must keep the camera image on the live canvas",
   }).toBeGreaterThan(10_000);
   await expect.poll(() => page.locator("#video").evaluate((video: HTMLVideoElement) => video.currentTime), {
-    message: "clearing the overlay must not stop the MediaStream camera",
+    message: "hiding the camera-only controls must not stop the MediaStream camera",
   }).toBeGreaterThan(cameraState.currentTime);
   await expect(page.locator("#livePill")).toContainText("实时摄像头");
 
