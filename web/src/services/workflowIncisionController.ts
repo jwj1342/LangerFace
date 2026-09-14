@@ -2681,7 +2681,13 @@ function handleFreehandPointerUp(state: WorkflowIncisionState, event: PointerEve
   return true;
 }
 
+function manualRefineOwnsCanvasPointer(event: PointerEvent): boolean {
+  const currentTarget = event.currentTarget;
+  return currentTarget instanceof HTMLElement && currentTarget.classList.contains("refining");
+}
+
 function handleCanvasPointerDown(state: WorkflowIncisionState, event: PointerEvent) {
+  if (manualRefineOwnsCanvasPointer(event)) return;
   if (markerBusyToolbarPointer(state, event)) return;
   const planning = sourceState.planning2d;
   const frame = planning?.getFrameState();
@@ -2814,6 +2820,7 @@ function handleCanvasPointerDown(state: WorkflowIncisionState, event: PointerEve
 }
 
 function handleCanvasPointerMove(state: WorkflowIncisionState, event: PointerEvent) {
+  if (manualRefineOwnsCanvasPointer(event)) return;
   if (markerBusyToolbarPointer(state, event)) return;
   if (blockMarkerBusyPointer(state, event)) return;
   if (isMobileWorkflowTouch(event) && state.mobileTouchGestureActive
@@ -2853,6 +2860,7 @@ function handleCanvasPointerMove(state: WorkflowIncisionState, event: PointerEve
 }
 
 function handleCanvasPointerUp(state: WorkflowIncisionState, event: PointerEvent) {
+  if (manualRefineOwnsCanvasPointer(event)) return;
   if (markerBusyToolbarPointer(state, event)) return;
   if (blockMarkerBusyPointer(state, event)) return;
   const mobileFreehandTouch = isMobileWorkflowTouch(event)
@@ -2955,6 +2963,7 @@ function handleCanvasPointerUp(state: WorkflowIncisionState, event: PointerEvent
 }
 
 function handleCanvasPointerCancel(state: WorkflowIncisionState, event: PointerEvent) {
+  if (manualRefineOwnsCanvasPointer(event)) return;
   if (markerBusyToolbarPointer(state, event)) return;
   if (blockMarkerBusyPointer(state, event)) return;
   state.pendingClick = null;

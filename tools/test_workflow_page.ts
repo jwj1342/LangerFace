@@ -518,6 +518,14 @@ assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) an
   "the controlled-marker confirmation action is exposed only on narrow coarse-pointer devices");
 assert.match(styles, /@media \(max-width:\s*560px\)[\s\S]*?\.main-wrap\.image-viewer\s*\{[^}]*touch-action:\s*none;/s,
   "only the mobile workflow image owns browser touch gestures");
+assert.match(styles, /@media \(max-width:\s*560px\)[\s\S]*?\.main-wrap\.refining\s*\{[^}]*touch-action:\s*none;[^}]*overscroll-behavior:\s*contain;/s,
+  "mobile 2D refinement owns canvas touch gestures for images and paused camera frames");
+assert.match(controller, /function manualRefineOwnsCanvasPointer[\s\S]*?classList\.contains\("refining"\)/,
+  "the incision controller recognizes when manual RSTL refinement owns the shared canvas");
+for (const handler of ["Down", "Move", "Up", "Cancel"]) {
+  assert.match(controller, new RegExp(`function handleCanvasPointer${handler}\\([^)]*\\) \\{\\s*if \\(manualRefineOwnsCanvasPointer\\(event\\)\\) return;`),
+    `incision pointer ${handler.toLowerCase()} yields while manual RSTL refinement is active`);
+}
 assert.match(canvasTools, /commands\.tool\("clear_repair"\)/, "the text clear-repair control keeps its existing command");
 assert.match(canvasTools, /commands\.tool\("reset_view"\)/, "the reset control uses the workflow tool contract");
 assert.match(controller, /resetImageView\(\)/, "workflow reset reuses the existing Live image-view state");

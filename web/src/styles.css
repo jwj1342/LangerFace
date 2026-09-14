@@ -2775,6 +2775,11 @@ body:has(.dark-workbench-page) {
     overscroll-behavior: contain;
   }
 
+  .workflow-workbench .main-wrap.refining {
+    touch-action: none;
+    overscroll-behavior: contain;
+  }
+
   .workflow-workbench .workflow-draft-recovery {
     align-items: stretch;
     flex-direction: column;
