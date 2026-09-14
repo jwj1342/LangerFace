@@ -1,6 +1,12 @@
 import type { Plugin } from "vite";
 import { resolve } from "node:path";
-import { captureMarkerIdentity, assertMarkerIdentity } from "../../tools/marker_runtime_identity.mts";
+import {
+  captureMarkerIdentity,
+  assertMarkerIdentity,
+  TARGET_MARKER_PROFILE,
+} from "../../tools/marker_runtime_identity.mts";
+
+const EXPECTED_PRODUCTION_VERSION = "0.35";
 
 // Dev-only observation endpoint: no product entry import, DOM change or inference.
 export function markerRuntimeIdentityPlugin(): Plugin {
@@ -52,6 +58,32 @@ try {
  document.querySelector('#result').textContent='实际算法：'+profile+'\\n实现版本：'+implementationVersion+'\\n分支：'+identity.branch+'\\n提交：'+identity.head+'\\n工作区指纹：'+identity.worktreeId+'\\n含未提交修改的源码指纹：'+identity.sourceDigest+'\\n关键资产指纹：'+identity.assetDigest+'\\n服务启动：'+identity.capturedAt;
 } catch(error) { document.querySelector('#status').textContent='核对失败：'+error.message; }
 </script></html>`);
+      });
+    },
+  };
+}
+
+export function markerRuntimeIdentityBuildPlugin(): Plugin {
+  return {
+    name: "marker-runtime-identity-build",
+    apply: "build",
+    generateBundle() {
+      if (process.env.LANGERFACE_MARKER_V035_BUILD !== "1") return;
+      const identity = captureMarkerIdentity(
+        process.env.VITE_CONTROLLED_MARKER_DETECTOR_PROFILE,
+      );
+      if (identity.profile !== TARGET_MARKER_PROFILE
+          || identity.implementationVersion !== EXPECTED_PRODUCTION_VERSION) {
+        throw new Error("生产构建不是受控标记 v0.35，拒绝输出身份清单。");
+      }
+      this.emitFile({
+        type: "asset",
+        fileName: "marker-runtime-identity.json",
+        source: JSON.stringify({
+          ...identity,
+          mode: "production",
+          command: "npm run build:marker-v035",
+        }, null, 2),
       });
     },
   };

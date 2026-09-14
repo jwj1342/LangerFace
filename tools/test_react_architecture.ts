@@ -628,6 +628,10 @@ assert.deepEqual(
   false,
   "Vercel Git deployment must remain disabled until public deployment issue #224 is completed",
 );
+assert.equal(vercelConfig.buildCommand, "npm run build:marker-v035",
+  "Vercel production builds must use the fail-closed marker v0.35 entrypoint");
+assert.ok(vite.includes("markerRuntimeIdentityBuildPlugin"),
+  "Vite emits the production marker identity manifest only through the guarded build plugin");
 assert.equal(vercelConfig.installCommand, "npm ci", "Vercel should install from the committed npm lockfile");
 assert.equal(
   vercelConfig.ignoreCommand,
