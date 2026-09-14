@@ -775,7 +775,7 @@ export function nudgeSelected(direction: string): boolean {
   if (!vector) return false;
   const visualX = renderState.mirror ? -vector[0] : vector[0];
   const offset: [number, number] = [visualX * s.nudgeStep, vector[1] * s.nudgeStep];
-  captureHistory(`精调 ${line.name}`);
+  captureHistory(`精调 ${line.name}`, false);
   const original = line.pts.map((point) => [...point] as Vec3);
   const partnerIndex = s.symmetry ? findSymmetryPartner(selected.lineIndex) : null;
   const originalPartner = partnerIndex == null

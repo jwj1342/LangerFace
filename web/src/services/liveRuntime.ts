@@ -70,7 +70,6 @@ import {
   setWrinkleDisplayMode,
   updateWrinkleUi,
 } from "./liveWrinkleAnalysis.ts";
-
 interface ValueControlEvent {
   target: {
     value: unknown;
@@ -280,7 +279,8 @@ function handlePauseToggle(): void {
   resetLiveWrinkleAnalysis();
   els.pause.textContent = "⏸ 暂停";
   els.pause.setAttribute("aria-pressed", "false");
-  setMsg(refinementCommitted ? "已返回实时画面，当前微调曲线会继续跟随人脸。" : null);
+  if (refinementCommitted) setTransientMsg("已返回实时画面，当前微调曲线会继续跟随人脸。");
+  else setMsg(null);
   setLive(true, sourceState.sourceKind === "camera" ? "实时摄像头" : "视频");
   requestFrame();
 }
@@ -482,7 +482,6 @@ function bindLiveEvents(signal: AbortSignal, root: ParentNode | Document): void 
 function isActiveSession(session: number): boolean {
   return mounted && session === activeSession;
 }
-
 export function disposeLiveWorkbench() {
   mounted = false;
   activeSession += 1;
@@ -503,7 +502,6 @@ export function disposeLiveWorkbench() {
   clearLiveUiMessageTimer();
   clearDomBinding();
 }
-
 export function mountLiveWorkbench(root: ParentNode | Document = document) {
   disposeLiveWorkbench();
   bindDom(root);

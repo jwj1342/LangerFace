@@ -282,11 +282,24 @@ export class WrinkleOpticalFlowTracker {
         if (line.indices.length < 2) return;
         while (right < line.indices.length - 1 && index > line.indices[right]) right += 1;
         const left = right - 1;
-        const a = line.start + left;
-        const b = line.start + right;
-        // Do not bridge lost skin patches with plausible-looking mesh-only lines.
-        if (!this.valid[a] || !this.valid[b]) { flush(); return; }
-        const weight = (index - line.indices[left]) / (line.indices[right] - line.indices[left]);
+        let a = line.start + left;
+        let b = line.start + right;
+        // The stored detection remains bound to the current face. Optical flow
+        // refines that projection; a rejected texture match must not erase it.
+        // Never reuse a stale texture offset when either control is lost.
+        if (!this.valid[a] || !this.valid[b]) {
+          const reliable = line.indices.map((pointIndex, control) => ({ pointIndex, control: line.start + control }))
+            .filter((control) => this.valid[control.control]);
+          if (!reliable.length) {
+            if (!run.length) runStart = index;
+            run.push([x, y]);
+            return;
+          }
+          a = (reliable.filter((control) => control.pointIndex <= index).at(-1) || reliable[0]).control;
+          b = (reliable.find((control) => control.pointIndex >= index) || reliable[reliable.length - 1]).control;
+        }
+        const weight = a === b ? 0 : (index - line.indices[a - line.start])
+          / (line.indices[b - line.start] - line.indices[a - line.start]);
         const dx = (1 - weight) * (this.previousPoints[a * 2] - currentMesh[a * 2])
           + weight * (this.previousPoints[b * 2] - currentMesh[b * 2]);
         const dy = (1 - weight) * (this.previousPoints[a * 2 + 1] - currentMesh[a * 2 + 1])

@@ -941,6 +941,8 @@ assert.match(mobileControls, /useState\(true\)[\s\S]*?useState\(true\)[\s\S]*?us
   "RSTL, wrinkle, and incision buttons are visibly enabled on the first phone render");
 assert.match(mobileControls, /resetMobileWorkflowVisibility\(\);\s*writeWrinkleDisplayMode\("both"\);/,
   "the phone workflow initializes all three display gates without requiring a wake-up click");
+assert.match(mobileControls, /if \(!cameraActive\) return;[\s\S]*?setRstlVisible\(true\);[\s\S]*?setWrinklesVisible\(true\);[\s\S]*?setMobileRstlLayerVisible\(true\);[\s\S]*?setMobileWrinkleLayerVisible\(true\);[\s\S]*?writeWrinkleDisplayMode\("both"\);[\s\S]*?\}, \[cameraActive\]\);/,
+  "a successfully opened phone camera re-synchronizes pressed layer buttons with both renderer visibility gates");
 assert.match(liveRuntime, /root\.querySelector\("\.workflow-workbench"\)[\s\S]*?resetMobileWorkflowVisibility\(\);\s*setWrinkleDisplayMode\("both"\);/,
   "the workflow runtime and visible phone controls share the same all-layers-on default");
 assert.match(styles, /\.workflow-canvas-tools\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);[^}]*overflow:\s*hidden;/,

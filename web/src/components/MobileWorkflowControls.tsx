@@ -76,6 +76,17 @@ export function MobileWorkflowControls() {
     setMobileIncisionCandidateVisible(incisionVisible);
   }, [incisionVisible]);
 
+  useEffect(() => {
+    if (!cameraActive) return;
+    // Camera startup resets the wrinkle runtime. Re-apply the visible phone
+    // controls afterwards so their pressed state and both render gates agree.
+    setRstlVisible(true);
+    setWrinklesVisible(true);
+    setMobileRstlLayerVisible(true);
+    setMobileWrinkleLayerVisible(true);
+    writeWrinkleDisplayMode("both");
+  }, [cameraActive]);
+
   const toggleWrinkleLayer = (layer: "rstl" | "wrinkles") => {
     const nextRstl = layer === "rstl" ? !rstlVisible : rstlVisible;
     const nextWrinkles = layer === "wrinkles" ? !wrinklesVisible : wrinklesVisible;
