@@ -44,6 +44,8 @@ export function WorkflowStageStatus() {
       id="workflowStageStatus"
       className={`workflow-stage-status${!mobileViewport || visible || persistent ? "" : " is-collapsed"}`}
       data-tone={snapshot?.stageStatusTone || "normal"}
+      hidden
+      aria-hidden="true"
       role="status"
       aria-live="polite"
       aria-busy={busy}

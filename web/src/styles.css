@@ -2251,6 +2251,20 @@
   opacity: 0.45;
 }
 
+.workflow-workbench .workflow-disabled-field .field-label {
+  color: #7f8b99;
+}
+
+.workflow-workbench .select:disabled,
+.workflow-workbench .text-input:disabled {
+  cursor: not-allowed;
+  border-color: #3e4b59;
+  background: #20262d;
+  color: #7f8b99;
+  opacity: 0.68;
+  -webkit-text-fill-color: #7f8b99;
+}
+
 /* Keep the active manual-refinement mode obvious after the legacy button
    imports and the unlayered clinical overrides have both been applied. */
 .clinical-compat-workbench .live-refine-modes .btn[aria-pressed="true"]:not(:disabled) {
@@ -2888,7 +2902,7 @@ body:has(.dark-workbench-page) {
 
   .workflow-workbench .workflow-canvas-tools {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-rows: 40px;
     gap: 6px;
     width: 100%;
@@ -2927,16 +2941,12 @@ body:has(.dark-workbench-page) {
     grid-area: 1 / 3;
   }
 
-  .workflow-workbench .workflow-canvas-tools .workflow-reset-view {
-    grid-area: 1 / 4;
-  }
-
   .workflow-workbench .workflow-canvas-tools .workflow-mobile-marker-confirm {
     grid-area: 2 / 1;
   }
 
   .workflow-workbench .workflow-canvas-tools .workflow-marker-scan {
-    grid-area: 2 / 2 / 3 / 5;
+    grid-area: 2 / 2 / 3 / 4;
     grid-template-columns: max-content minmax(96px, 1fr);
     width: 100%;
     min-width: 0;
@@ -2957,7 +2967,7 @@ body:has(.dark-workbench-page) {
   }
 
   .workflow-workbench .workflow-canvas-tools[data-marker-busy="true"] .workflow-marker-scan {
-    grid-area: 2 / 3 / 3 / 5;
+    grid-area: 2 / 3 / 3 / 4;
   }
 
   .workflow-workbench #liveInputCard {

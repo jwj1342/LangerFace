@@ -77,6 +77,7 @@ const liveRenderControls = read("web/src/components/LiveRenderControlsPanel.tsx"
 const liveCanvasFit = read("web/src/services/liveCanvasFit.ts");
 const liveCanvasInteraction = read("web/src/services/liveCanvasInteraction.ts");
 const liveRuntime = read("web/src/services/liveRuntime.ts");
+const liveUi = read("web/src/services/liveUi.ts");
 const controllerCommand = read("web/src/lib/controllerCommand.ts");
 const incisionExport = read("web/src/services/incisionExport.ts");
 const reviewPolicy = read("web/src/services/incisionReviewPolicy.ts");
@@ -117,9 +118,11 @@ assert.deepEqual(JSON.parse(JSON.stringify(staleMarker)), {
   published: { reason: "controlled_marker_candidate_stale", markerBusy: false, status: "newer workflow status" },
 }, "stale candidate completion releases the marker UI without replacing newer status");
 const transitionNames = ["createState", "publishLiveOverlayState", "invalidateCandidate", "markCandidatePendingReview", "revokeActiveRecord",
-  "invalidateSavedSources", "savedCandidateUsable", "activateRecord", "loadSavedCandidateState",
+  "invalidateSavedSources", "savedCandidateUsable", "activateRecord", "loadSavedCandidateState", "loadAndActivateRecord",
   "toggleSavedCandidateReviewStatus", "handleLibraryCommand", "reconcileProjectedRstlSnapshot",
-  "activeProjectedRstlLines", "projectedRstlFingerprint", "applyWorkflowDraftRestore", "runWorkflow"];
+  "activeProjectedRstlLines", "projectedRstlFingerprint", "activatedCandidateShouldSurviveSourceChange",
+  "cameraIncisionActionsDisabled", "blockCameraIncisionAction",
+  "applyTumorCommand", "importTumor", "runWorkflow"];
 const transitionSource = controllerAst.statements.filter((node: any) => ts.isFunctionDeclaration(node)
   && transitionNames.includes(node.name?.text)).map((node: any) => node.getText(controllerAst)).join("\n");
 function controllerHarness() {
@@ -146,6 +149,8 @@ function controllerHarness() {
     transitionIncisionReviewRecord: ({ record, targetStatus }: any) => ({ ok: true,
       record: { ...record, review: { ...record.review, status: targetStatus }, review_status: targetStatus } }),
     readIncisionLibraryCommand: (event: any) => event.detail,
+    readControllerCommandDetail: () => null, MARKER_DIAGNOSTIC_COMMANDS: [],
+    readIncisionTumorCommand: (event: any) => event.detail,
     pointToSurfaceRef: (point: any) => point, pointsToSurfaceRefs: (points: any) => points,
     workflowPhotoReady: () => true,
     importedTumorFormState: (tumor: any) => ({ tumor, kind: "cutaneous", diameterValue: 8, depthValue: 6,
@@ -164,7 +169,8 @@ function controllerHarness() {
   const state = api.createState({});
   Object.assign(state, { loading: false, verts: [[0, 0, 0]], tris: [[0, 0, 0]], atlas: {}, centerRef: [0, 0, 0],
     liveSnapshot: { incisionOverlay: { loaded: false } } });
-  const record = { id: "review-uuid", candidate: {}, tumor: { center: [0, 0, 0] },
+  const record = { id: "review-uuid", candidate: { polyline: [[0, 0, 0], [1, 0, 0]] },
+    tumor: { center: [0, 0, 0], boundary: [[0, 0, 0], [1, 0, 0], [0, 1, 0]] },
     review: { status: "approved_for_discussion", reviewer: "test" } };
   state.result = { id: "planner-result-id", candidate: {} };
   state.saved = [record, { ...record, id: "other" }];
@@ -213,30 +219,73 @@ for (const nextLines of [[], [{ pts: [[4, 5, 6]] }]]) {
 await stateRegression("camera projection keeps approved overlay", () => {
   const h = controllerHarness();
   h.api.activateRecord(h.state, h.record);
+  h.render.incisionOverlay = null;
+  assert.equal(h.api.activatedCandidateShouldSurviveSourceChange(h.state), true,
+    "the activated record survives the source switch interval where the renderer temporarily has no overlay");
+  h.render.incisionOverlay = h.record;
   h.state.candidateRstlFingerprint = h.api.projectedRstlFingerprint(h.render.refine2d.lines);
   h.context.sourceState.sourceKind = "camera";
   h.frame.kind = "video";
   assert.equal(h.api.reconcileProjectedRstlSnapshot(h.state), false);
   assert.equal(h.render.incisionOverlay.id, h.record.id);
 });
-await stateRegression("draft restores input only and blocks old library", () => {
+await stateRegression("confirmation reuses the complete legacy load-and-activate path", () => {
   const h = controllerHarness();
-  h.api.activateRecord(h.state, h.record);
-  h.state.pendingDraftRestore = { workspace: { tumor: { center: [0, 0, 0] }, result: h.state.result,
-    baseResult: h.state.result, saved: h.state.saved, review: h.record.review, generationCount: 2 },
-    edit: { angle_offset_deg: 20 }, boundaryMode: "ellipse" };
-  assert.equal(h.api.applyWorkflowDraftRestore(h.state), true);
-  assert.equal(h.state.result, null);
-  assert.equal(h.state.baseResult, null);
-  assert.equal(h.state.edit.angle_offset_deg, 0);
-  assert.equal(h.state.review.status, "pending_clinician_confirmation");
-  assert.equal(h.state.saved.length, 2, "history retained");
-  for (const command of ["load_candidate", "toggle_candidate_review_status"]) {
-    h.api.handleLibraryCommand(h.state, { detail: { command, id: h.record.id } });
-    assert.equal(h.state.result, null);
-    assert.equal(h.render.incisionOverlay, null);
+  assert.equal(h.state.result.id, "planner-result-id");
+  assert.equal(h.api.loadAndActivateRecord(h.state, h.record), true);
+  assert.equal(h.state.result.id, h.record.id);
+  assert.deepEqual(h.state.centerRef, h.record.tumor.center);
+  assert.deepEqual(h.state.boundaryRefs, h.record.tumor.boundary);
+  assert.deepEqual(h.state.result.candidate.polyline, h.record.candidate.polyline);
+  assert.equal(h.state.activeReviewRecordId, h.record.id);
+  assert.equal(h.render.incisionOverlay.id, h.record.id);
+});
+await stateRegression("camera mode rejects incision generation without clearing the candidate", async () => {
+  const h = controllerHarness();
+  const result = h.state.result;
+  let plannerCalled = false;
+  h.context.sourceState.sourceKind = "camera";
+  h.plan(async () => {
+    plannerCalled = true;
+    return { result: { candidate: {} } };
+  });
+  assert.equal((await h.api.runWorkflow(h.state)).status, "not-ready");
+  assert.equal(plannerCalled, false);
+  assert.equal(h.state.result, result);
+  assert.ok(h.events.includes("camera_incision_generation_blocked"));
+});
+await stateRegression("camera mode rejects tumor input changes without clearing the candidate", () => {
+  const h = controllerHarness();
+  const result = h.state.result;
+  h.context.sourceState.sourceKind = "camera";
+  h.api.applyTumorCommand(h.state, { detail: { command: "kind_changed", value: "subcutaneous" } });
+  h.api.applyTumorCommand(h.state, { detail: { command: "boundary_mode_changed", value: "freehand" } });
+  assert.equal(h.state.kind, "cutaneous");
+  assert.equal(h.state.boundaryMode, "ellipse");
+  assert.equal(h.state.result, result);
+  assert.equal(h.events.filter((reason) => reason === "camera_tumor_input_change_blocked").length, 2);
+});
+await stateRegression("retired parameters cannot change hidden planning values", () => {
+  const h = controllerHarness();
+  for (const command of ["author_changed", "margin_input", "margin_changed", "ellipse_ratio_input", "ellipse_ratio_changed"]) {
+    const result = h.state.result;
+    h.api.applyTumorCommand(h.state, { detail: { command, value: "160" } });
+    assert.equal(h.state.marginMm, 0);
+    assert.equal(h.state.ellipseRatio, 100);
+    assert.equal(h.state.author, "clinician");
+    assert.equal(h.state.result, result, "ignored commands must not invalidate the candidate");
   }
-  assert.ok(!h.events.includes("workflow_running"), "restore must not generate automatically");
+});
+await stateRegression("import resets margin while retaining freehand source boundary", async () => {
+  const h = controllerHarness();
+  const points = [[1, 2, 3], [3, 4, 5], [7, 4, 3]];
+  h.context.importedTumorFormState = (tumor: any) => ({ tumor, kind: "cutaneous", diameterValue: 8, depthValue: 6,
+    marginValue: 7, author: "imported-source", boundaryMode: "freehand", boundaryPoints: points });
+  await h.api.importTumor(h.state, { text: async () => JSON.stringify({ center: [0, 0, 0] }) });
+  assert.equal(h.state.marginMm, 0);
+  assert.equal(h.state.ellipseRatio, 100);
+  assert.equal(h.state.boundaryMode, "freehand");
+  assert.deepEqual(h.state.boundaryRefs, points);
 });
 await stateRegression("workflow outcome distinguishes failure and not-ready", async () => {
   const h = controllerHarness();
@@ -305,14 +354,8 @@ await stateRegression("stale source also clears retained photo geometry", async 
   assert.equal((await pending).status, "stale");
   assert.equal(h.state.result, null);
 });
-await stateRegression("photo-only restore revokes the active overlay", () => {
-  const h = controllerHarness();
-  h.api.activateRecord(h.state, h.record);
-  h.state.pendingDraftRestore = null;
-  h.api.applyWorkflowDraftRestore(h.state);
-  assert.equal(h.state.result, null);
-  assert.equal(h.render.incisionOverlay, null);
-});
+assert.doesNotMatch(controller, /workflowDraftSession|pendingDraftRestore|persistWorkflowDraft|applyWorkflowDraftRestore/,
+  "retired drafts cannot save or restore through controller mount, events or dispose");
 await stateRegression("invalidation event cannot recursively modify RSTL", () => {
   const h = controllerHarness();
   h.api.activateRecord(h.state, h.record);
@@ -461,13 +504,32 @@ assert.doesNotMatch(workbench, /MobileCanvasQualityBadge|mobileOverlay=/,
   "workflow no longer creates a second quality readout beside the original panel");
 assert.match(liveQualityPanel, /createPortal\(panel, mobileTarget\)/,
   "the original quality panel moves to the phone canvas while retaining its existing DOM ids and updates");
+assert.match(liveQualityPanel, /data-frame-owned="true"[\s\S]*?id="qualityVal"[\s\S]*?id:\s*"qualityBar"/,
+  "workflow keeps the relocated quality card, its value and progress bar available on the phone canvas");
+assert.doesNotMatch(liveQualityPanel, /data-frame-owned="true"[\s\S]*?(?:hidden|aria-hidden="true")/,
+  "the relocated quality card is visually available instead of being retained only for diagnostics");
 assert.match(liveQualityPanel, /langerface:live-quality-relocated/,
   "quality relocation announces its DOM move so the running renderer can refresh cached element references");
 assert.match(liveRuntime, /langerface:live-quality-relocated[\s\S]*?bindDom\(root\)/,
   "the live runtime safely rebinds its original quality DOM references after a responsive relocation");
 assert.match(liveQualityPanel, /mobileTarget \? "跟踪质量参考" : "追踪质量"[\s\S]*?id="qualityVal"[\s\S]*?id:\s*"qualityBar"[\s\S]*?受分辨率与光线影响/,
   "the moved panel exposes the requested three-line phone copy and the existing dynamic quality scale");
-assert.match(stageStatus, /snapshot\?\.stageStatus/, "workflow stage status renders the current incision result or warning");
+assert.match(stageStatus, /<span>\{snapshot\?\.stageStatus \|\| "切口规划准备中"\}<\/span>/,
+  "the hidden workflow status retains the complete generated incision message and its baseline fallback");
+assert.doesNotMatch(stageStatus, /compactStatus|当前切口不可确认|当前操作未完成|请在画布中操作/,
+  "the hidden workflow status cannot replace generated diagnostic detail with presentation-only summaries");
+assert.match(stageStatus, /id="workflowStageStatus"[\s\S]*?hidden[\s\S]*?aria-hidden="true"/,
+  "workflow retains generated stage status in the DOM without visually rendering it");
+assert.match(liveStagePanel, /id="livePill" hidden aria-hidden="true"[\s\S]*?id="fps" hidden aria-hidden="true"[\s\S]*?id="overlayMsg" hidden aria-hidden="true"/,
+  "the shared stage keeps source, FPS and empty-state nodes for runtime updates while hiding every top-canvas text output");
+assert.match(liveStagePanel, /id="livePill" hidden aria-hidden="true">待机<\/StageStatus>[\s\S]*?id="fps" hidden aria-hidden="true">— fps<\/StageMeta>[\s\S]*?id="overlayMsg" hidden aria-hidden="true">点击「摄像头」或「上传照片」开始<\/StageOverlayMessage>/,
+  "hidden source, FPS and overlay-message nodes retain their baseline initial diagnostic content");
+assert.match(liveUi, /export function setMsg[\s\S]*?ui\.msg\.textContent = message;[\s\S]*?export function setLive[\s\S]*?ui\.live\.dataset\.k = label;[\s\S]*?ui\.live\.innerHTML = `<span class="dot"><\/span>\$\{label\}`;/,
+  "hidden overlay and source nodes retain the baseline runtime writers");
+assert.match(pipelineLoop, /els\.fps\.textContent = `\$\{fpsEMA\.toFixed\(0\)\} fps`;/,
+  "the hidden FPS node retains its baseline runtime writer");
+assert.match(render2d, /els\.qualityVal\.textContent = `\$\{label\} \$\{q\}%`; els\.qualityBar\.style\.width = q \+ "%";/,
+  "hidden quality text and progress retain their baseline runtime writers");
 assert.match(stageStatus, /snapshot\?\.stageBusy/, "workflow stage status consumes the incision-only busy state");
 assert.match(stageStatus, /workflow-stage-spinner/, "workflow renders an explicit waiting animation for incision work");
 assert.match(stageStatus, /aria-busy={busy}/, "workflow exposes waiting state to assistive technology");
@@ -493,17 +555,16 @@ for (const duplicateControl of ["incisionPhotoUploadLabel", "incisionPhotoMirror
 }
 assert.doesNotMatch(canvasTools, /选择肿物|MousePointer2|commands\.tool\("select_lesion"\)/, "direct canvas selection needs no extra lesion-selection button");
 assert.doesNotMatch(canvasTools, /Undo2|commands\.tool\("undo_repair"\)/, "workflow hides the undo-repair control without removing its command");
-for (const expectedControl of ["受控标记", "补线", "清除补线", "复位"]) {
+for (const expectedControl of ["受控标记", "补线", "清除补线"]) {
   assert.match(canvasTools, new RegExp(expectedControl), `workflow keeps the explicit ${expectedControl} control`);
 }
+assert.doesNotMatch(canvasTools, /复位|reset_view/, "the simplified workflow removes the reset control");
 assert.match(canvasTools, /workflow-mobile-marker-confirm/, "workflow renders a mobile-only controlled-marker confirmation action");
 assert.match(canvasTools, /commands\.tool\("confirm_controlled_marker"\)/, "mobile marker confirmation uses the typed workflow command bridge");
 assert.match(canvasTools, /commands\.tool\("cancel_controlled_marker"\)[\s\S]*?取消识别/,
   "controlled-marker detection exposes one explicit cancellation action");
-assert.match(canvasTools, /disabled=\{markerHardUnavailable \|\| markerBusy\}[\s\S]*?disabled=\{markerBusy\}[\s\S]*?scan_diameter_changed/,
-  "marker exit and scan-size changes are frozen while recognition is running");
-assert.match(canvasTools, /disabled=\{markerBusy\}[\s\S]*?commands\.tool\("reset_view"\)/,
-  "image reset is frozen while recognition is running");
+assert.match(canvasTools, /disabled=\{markerHardUnavailable \|\| markerBusy\}[\s\S]*?disabled=\{cameraMode \|\| markerBusy\}[\s\S]*?scan_diameter_changed/,
+  "marker exit and scan-size changes are frozen while recognition is running or the camera is active");
 assert.match(controllerCommand, /"confirm_controlled_marker"/, "the mobile marker confirmation command is part of the typed command allowlist");
 assert.match(controllerCommand, /"cancel_controlled_marker"/, "explicit marker cancellation is part of the typed command allowlist");
 const scanDiameterCommand = controller.match(/case "scan_diameter_changed":[\s\S]*?break;/)?.[0] || "";
@@ -527,7 +588,6 @@ for (const handler of ["Down", "Move", "Up", "Cancel"]) {
     `incision pointer ${handler.toLowerCase()} yields while manual RSTL refinement is active`);
 }
 assert.match(canvasTools, /commands\.tool\("clear_repair"\)/, "the text clear-repair control keeps its existing command");
-assert.match(canvasTools, /commands\.tool\("reset_view"\)/, "the reset control uses the workflow tool contract");
 assert.match(controller, /resetImageView\(\)/, "workflow reset reuses the existing Live image-view state");
 assert.match(controller, /workflowLiveOverlayChanged/, "workflow suppresses no-op Live overlay snapshots");
 assert.match(controller, /workflowInvalidationNeedsLiveFrame/, "workflow invalidation refreshes Live only when an active overlay was removed");
@@ -556,8 +616,8 @@ assert.match(canvasTools, /<PersistentTooltip[\s\S]*?id="freehandMarkerDisabledT
   "the controlled-marker explanation uses the shared persistent tooltip layer");
 assert.doesNotMatch(canvasTools, /freehandMarkerUnavailable[\s\S]{0,120}\? FREEHAND_MARKER_DISABLED_MESSAGE[\s\S]{0,120}: !cutaneous/,
   "the freehand marker no longer relies on a transient native title tooltip");
-assert.match(canvasTools, /disabled={markerBusy \|\| !tools\?\.repairAvailable}/,
-  "repair cannot change detector inputs while a request is running");
+assert.match(canvasTools, /disabled={cameraMode \|\| markerBusy \|\| !tools\?\.repairAvailable}/,
+  "repair cannot change detector inputs while a request is running or the camera is active");
 assert.match(controller, /const photoReady = workflowPhotoReady\(state\)/, "workflow snapshots expose shared-photo readiness to the merged toolbar");
 assert.match(controller, /workflowPhotoReady\(state\) !== state\.lastPublishedPhotoReady[\s\S]*?workflow_photo_readiness_changed/,
   "a newly detected photo republishes toolbar readiness without requiring a canvas click");
@@ -620,37 +680,43 @@ assert.match(tumorInputPanel, /tumor\.ellipseRatio != null\) setEllipseRatio/,
 assert.match(controller, /ellipseRatio:\s*100,/, "the merged controller defaults cutaneous boundaries to a circle");
 assert.match(tumorInputPanel, /ellipseRatioDisabled[\s\S]*?controlledMarkerMode[\s\S]*?id="ellipseRatio"[\s\S]*?disabled={ellipseRatioDisabled}/,
   "controlled-marker mode disables the simulated ellipse aspect-ratio slider without hiding it");
-assert.match(controller, /detail\.command === "ellipse_ratio_input"[\s\S]*?state\.markerMode[\s\S]*?ellipse_ratio_inactive[\s\S]*?return;/,
-  "the controller ignores stale aspect-ratio events while controlled-marker mode owns the real boundary");
+assert.match(controller, /retired_tumor_parameter_ignored/,
+  "retired controls cannot change hidden planning parameters");
 assert.match(tumorInputPanel, /useState\("100"\)/, "the ellipse slider displays the circular default before the first snapshot");
 assert.match(tumorInputPanel, /轮廓纵\/横比例[\s\S]*?min="40"[\s\S]*?max="200"/,
   "the unambiguous vertical-to-horizontal ratio supports either axis becoming visually longer");
-assert.equal((reviewControlsPanel.match(/<option\s/g) || []).length, 2,
-  "the current review selector exposes only pending and confirm-draft choices");
-assert.match(reviewControlsPanel, /待医生确认[\s\S]*确认候选草案/,
-  "the two visible review choices retain their requested Chinese labels");
+assert.doesNotMatch(reviewControlsPanel, /<select|<option|id="reviewDecision"|id="reviewNotes"/,
+  "the simplified review panel removes the status selector and notes field");
+assert.match(reviewControlsPanel, /id="reviewerName"[\s\S]*?id="saveReviewBtn"[\s\S]*?\{confirmed \? "已确认" : "确认"\}/,
+  "the simplified review panel keeps only reviewer and confirmation controls");
 assert.doesNotMatch(reviewControlsPanel, /status === "approved_for_discussion"[\s\S]*?return "approved"/,
   "confirmed research status uses the same clear text and background style as pending review");
 assert.match(controller, /function buildRecord[\s\S]*?if \(!rawReview\.reviewer\) return null;/,
   "candidate-record construction itself rejects a missing reviewer instead of relying only on the visible button path");
 assert.match(reviewControlsPanel, /id="reviewerName"[\s\S]*?reviewerAttentionRequired[\s\S]*?aria-invalid/,
   "a missing-reviewer block is repeated as an accessible local highlight on the reviewer input");
-assert.match(reviewControlsPanel, /id="reviewDecision"[\s\S]*?decisionAttentionRequired[\s\S]*?aria-invalid/,
-  "a limited-visibility confirmation block highlights the nearby review-decision control");
 assert.match(styles, /@keyframes workflow-review-attention[\s\S]*?prefers-reduced-motion/,
   "review attention has a breathing cue with a reduced-motion fallback");
 assert.match(styles, /animation:\s*workflow-review-attention\s+0\.85s\s+ease-in-out\s+2;/,
   "review attention breathes exactly twice instead of flashing forever");
 assert.match(reviewControlsPanel, /REVIEW_SAVE_NOTICE_REASONS[\s\S]*?review_blocked[\s\S]*?review_missing_candidate[\s\S]*?diagnostic_review_blocked[\s\S]*?diagnostic_review_acknowledged/,
   "review save notices cover every non-persisting save outcome without reacting to unrelated warnings");
-assert.match(reviewControlsPanel, /id="reviewSaveFeedback"[\s\S]*?role="alert"[\s\S]*?snapshot\?\.stageStatus/,
-  "the review panel displays the controller's actual non-persisting reason beside the save button");
+assert.match(reviewControlsPanel, /const reviewSaveFeedback[\s\S]*?当前方案不能确认[\s\S]*?id="reviewSaveFeedback"[\s\S]*?role="alert"[\s\S]*?\{reviewSaveFeedback\}/,
+  "the simplified review panel displays the concise reason-specific confirmation message beside the button");
+assert.match(reviewControlsPanel, /const confirmDisabled = cameraMode \|\| confirmed \|\| !snapshot\?\.candidate;/,
+  "a visible blue candidate remains confirmable without review notes; reviewer validation stays in the controller");
+assert.doesNotMatch(reviewControlsPanel, /const confirmDisabled =[^;]*reviewer\.trim\(\)/,
+  "a missing reviewer does not silently disable the confirmation button before the controller can explain the requirement");
+assert.match(reviewControlsPanel, /reviewerMissingNotice[\s\S]*?请填写审阅人后确认/,
+  "a missing reviewer produces a precise local prompt instead of mislabeling the candidate as invalid");
 assert.match(reviewControlsPanel, /classList\.remove\("workflow-review-attention"\)[\s\S]*?offsetWidth[\s\S]*?classList\.add\("workflow-review-attention"\)[\s\S]*?snapshot\?\.updatedAt/,
   "each blocked save attempt restarts the two-cycle attention animation");
 assert.match(controller, /reviewAttention:\s*"reviewer"/,
   "missing reviewer paths publish a reviewer-specific attention reason");
-assert.match(reviewPolicy, /photo_visibility_limited_candidate[\s\S]*?attention:\s*"decision"/,
-  "limited-visibility approval blocks publish a decision-specific attention reason through the shared policy");
+assert.match(reviewPolicy, /allowReferenceCandidates\s*=\s*false[\s\S]*?!allowReferenceCandidates && result\?\.candidate\?\.metrics\?\.photo_visibility_limited_candidate/,
+  "the shared policy keeps its conservative default unless the merged workflow opts in");
+assert.match(controller, /allowReferenceCandidates:\s*true[\s\S]*?requireHighRiskNotes:\s*false/,
+  "the merged workflow allows reference candidates and no longer requires risk notes");
 assert.match(controller, /state\.reviewAttention = readiness\.attention/,
   "the workflow publishes the shared policy's nearby-control attention reason");
 assert.match(controller, /function prepareControlledMarkerAttempt[\s\S]*?state\.centerRef = null;[\s\S]*?state\.boundaryRefs = \[\];[\s\S]*?invalidateCandidate/,
@@ -662,7 +728,7 @@ assert.match(controller, /candidateLengthMm:\s*Number\(candidate\.length_mm\)/,
   "the merged photo renderer consumes the computed linear length instead of re-projecting a curved standard face");
 assert.match(controller, /incisionPhotoStatusPresentation\(/,
   "the merged canvas status reuses the standalone photo projection status contract");
-assert.match(incisionRail, /<TumorInputPanel\s+showDepthControl={false}\s+continuousFreehand\s*\/>/,
+assert.match(incisionRail, /<TumorInputPanel\s+showDepthControl={false}\s+continuousFreehand\s+simplifiedWorkflow\s*\/>/,
   "workflow hides the non-operative depth control and explicitly enables continuous freehand drawing");
 assert.match(tumorInputPanel, /showDepthControl\s*=\s*true/, "the standalone incision page retains its legacy depth-control default");
 assert.match(tumorInputPanel, /visible={!cutaneous\s*&&\s*showDepthControl}/, "depth data remains mounted behind an explicit presentation boundary");
@@ -670,6 +736,26 @@ assert.match(controller, /controlledMarkerScale\?\.sourceRevision === frame\.rev
 assert.match(controller, /state\.controlledMarkerScale = null;[\s\S]*?state\.photoFrameRevision = frame\.revision/, "a new photo revision invalidates the cached marker scale");
 assert.match(controller, /function resetWorkflowForSourceChange\([\s\S]*?preserveActiveCandidate[\s\S]*?if \(preserveActiveCandidate\) resetFreehandPhotoBoundary\(state\);[\s\S]*?else \{[\s\S]*?state\.centerRef = null;[\s\S]*?state\.boundaryRefs = \[\];[\s\S]*?invalidateCandidate\(state\)/,
   "source replacement preserves an activated reviewed candidate while still clearing unapproved media-bound drafts");
+assert.match(controller, /function activatedCandidateShouldSurviveSourceChange[\s\S]*?state\.activeReviewRecordId && state\.result\?\.candidate/,
+  "camera startup uses the durable activated review record instead of the renderer's transient overlay slot");
+assert.match(controller, /function cameraIncisionActionsDisabled[\s\S]*?liveSnapshot\?\.source\?\.kind === "camera"[\s\S]*?sourceState\.sourceKind === "camera"/,
+  "camera incision gates cover both the published snapshot and the immediate runtime source");
+assert.match(controller, /async function runWorkflow[\s\S]*?camera_incision_generation_blocked/,
+  "camera mode rejects incision generation at the controller boundary");
+assert.match(controller, /function handleMobileEditCommand[\s\S]*?camera_candidate_edit_blocked/,
+  "camera mode rejects candidate edits at the controller boundary");
+assert.match(controller, /function handleReviewCommand[\s\S]*?camera_review_blocked/,
+  "camera mode rejects review commands at the controller boundary");
+assert.match(controller, /function handleToolCommand[\s\S]*?camera_tumor_recognition_blocked/,
+  "camera mode rejects tumor-recognition tools at the controller boundary");
+assert.match(controller, /function saveReview[\s\S]*?review\.status === "approved_for_discussion"\) loadAndActivateRecord\(state, record\)/,
+  "confirmation reuses the legacy candidate load-and-activate path");
+assert.match(controller, /reviewForCandidateRecord\(\{[\s\S]*?allowReferenceCandidates:\s*true,[\s\S]*?requireHighRiskNotes:\s*false/,
+  "record creation preserves the simplified review rules used by confirmation");
+assert.match(controller, /case "load_candidate":[\s\S]*?loadAndActivateRecord\(state, record\)/,
+  "the legacy load action and confirmation share one activation path");
+assert.match(controller, /function applyTumorCommand[\s\S]*?cameraIncisionActionsDisabled\(state\)[\s\S]*?\["kind_changed", "boundary_mode_changed"\][\s\S]*?camera_tumor_input_change_blocked/,
+  "camera mode rejects tumor-type and boundary-mode changes at the controller boundary");
 assert.match(controller, /if \(preserveActiveCandidate\) \{[\s\S]*?syncSelection\(state\);[\s\S]*?publishLiveOverlayState\(state, true,[\s\S]*?requestFrame\(\);/,
   "both load-then-camera and camera-then-load keep the approved surface overlay active on the new source");
 assert.match(controller, /function resetWorkflowForSourceChange\([\s\S]*?clearWorkflowDraftOverlay\(state\)/,
@@ -772,13 +858,12 @@ assert.doesNotMatch(canvasTools, /upload_source|mirror_toggle/, "the incision ov
 assert.match(liveCanvasFit, /mirror:\s*renderState\.mirror/, "shared planning coordinates consume the current Live mirror state");
 for (const panel of [
   "TumorInputPanel",
-  "CandidateResultPanel",
   "ReviewControlsPanel",
-  "CandidateLibraryPanel",
-  "PrivacyAuditPanel",
 ]) {
   assert.match(incisionRail, new RegExp(`<${panel}\\b`), `workflow incision rail includes ${panel}`);
 }
+assert.doesNotMatch(incisionRail, /CandidateLibraryPanel|PrivacyAuditPanel/,
+  "the simplified workflow removes the candidate library and privacy audit panels");
 assert.doesNotMatch(incisionRail, /SecondaryCuePanel|高级研究辅助线索/,
   "the merged workflow no longer mounts the retired advanced research cue panel");
 assert.match(standaloneIncision, /hidden aria-hidden="true" data-retired-secondary-cue-compatibility>[\s\S]*?<SecondaryCuePanel/,
@@ -787,6 +872,20 @@ assert.match(tumorInputPanel, /continuousFreehand\s*=\s*false/,
   "the standalone incision page keeps its historical point-by-point freehand contract by default");
 assert.match(tumorInputPanel, /id="runWorkflowBtn"[\s\S]*?>重新计算候选<\/Button>/,
   "the explicit workflow action is named as a recalculation rather than an unexplained first-time generation");
+assert.match(tumorInputPanel, /source\.kind === "camera"[\s\S]*?id="runWorkflowBtn"[\s\S]*?disabled=\{cameraMode\}/,
+  "camera mode disables explicit incision generation");
+assert.match(tumorInputPanel, /id="tumorKind"[\s\S]*?disabled=\{cameraMode\}/,
+  "camera mode disables tumor-type selection");
+assert.match(tumorInputPanel, /id="boundaryMode"[\s\S]*?disabled=\{cameraMode\}/,
+  "camera mode disables cutaneous-boundary selection");
+assert.match(styles, /\.workflow-workbench \.select:disabled,[\s\S]*?\.workflow-workbench \.text-input:disabled[\s\S]*?background:\s*#20262d;[\s\S]*?color:\s*#7f8b99;/,
+  "camera-disabled selects and reviewer input use an explicit grey visual state");
+assert.match(canvasTools, /source\.kind === "camera"[\s\S]*?const markerUnavailable = cameraMode/,
+  "camera mode disables controlled-marker tumor recognition");
+assert.match(mobileControls, /function MobileCandidateAdjustPanel[\s\S]*?source\.kind === "camera"[\s\S]*?disabled=\{cameraMode \|\| !candidateReady\}/,
+  "camera mode disables candidate adjustment controls");
+assert.match(reviewControlsPanel, /source\.kind === "camera"[\s\S]*?disabled=\{cameraMode\}[\s\S]*?disabled=\{confirmDisabled\}/,
+  "camera mode disables reviewer input and confirmation");
 assert.match(tumorInputPanel, /workflow-tumor-transfer-actions[\s\S]*?id="exportTumorBtn"[\s\S]*?id="importTumorBtn"/,
   "tumor import and export share one presentation-only mobile visibility hook");
 assert.match(tumorInputPanel, /className="workflow-recalculate-action"[\s\S]*?id="runWorkflowBtn"/,
@@ -795,10 +894,10 @@ assert.match(tumorInputPanel, /自由轮廓鼠绘/,
   "the merged panel names the continuous interaction as freehand drawing rather than discrete points");
 assert.doesNotMatch(incisionRail, /IncisionStatePanel/,
   "workflow removes the duplicate incision state card while the standalone incision page keeps it");
-assert.match(incisionRail, /<CandidateResultPanel\s+showWorkflowGuidance={false}\s*\/>/,
-  "workflow keeps the candidate result card but hides duplicate generated/review guidance");
-assert.match(incisionRail, /<CandidateLibraryPanel[\s\S]*?automaticOverlay[\s\S]*?showHandoffStatus={false}[\s\S]*?showDirectionVariants={false}[\s\S]*?showJsonExport={false}[\s\S]*?showSaveAndExportActions={false}[\s\S]*?showCandidateRowActions[\s\S]*?showReviewTransitions[\s\S]*?\/>/,
-  "workflow hides redundant top-level actions while retaining record load, delete, and guarded review-transition controls");
+assert.doesNotMatch(incisionRail, /CandidateResultPanel/,
+  "the simplified workflow removes the complete candidate result region");
+assert.match(incisionRail, /<TumorInputPanel[^>]*simplifiedWorkflow/,
+  "only the merged workflow opts into the simplified tumor controls");
 assert.match(candidateResultPanel, /showWorkflowGuidance\s*=\s*true/,
   "standalone candidate results retain their existing guidance by default");
 assert.match(candidateLibraryPanel, /showHandoffStatus\s*=\s*true/,
@@ -831,14 +930,12 @@ assert.match(controller, /function toggleSavedCandidateReviewStatus[\s\S]*?trans
   "saved candidate review transitions reuse the shared review gate instead of mutating a label only");
 assert.match(controller, /已载入待医生确认草案；照片中可继续核对，但实时摄像头不会显示该候选/,
   "loading a pending candidate explicitly explains why it is absent from the live camera");
-assert.match(controller, /function saveReview[\s\S]*?state\.saved = \[\.\.\.state\.saved\.filter\(\(item\) => item\.id !== record\.id\), record\];/,
-  "saving the selected review state also persists the reviewed candidate in the library");
+assert.match(controller, /function saveReview[\s\S]*?state\.saved = \[record\];/,
+  "confirmation retains only the current reviewed candidate");
 assert.match(controller, /candidate:\s*diagnosticCandidateVisible\s*\?\s*null\s*:\s*buildIncisionCandidateSnapshot\(state\.result\)/,
   "a red diagnostic outline is not exposed as a current candidate or counted by candidate actions");
-assert.match(controller, /assessDiagnosticReviewAcknowledgement[\s\S]*?diagnostic_review_acknowledged/,
-  "red diagnostic review uses the shared note gate and a non-candidate acknowledgement path");
-assert.match(reviewControlsPanel, /id="reviewNotes"[\s\S]*?notesAttentionRequired[\s\S]*?aria-invalid/,
-  "a missing diagnostic or high-risk review note is highlighted at the nearby notes field");
+assert.doesNotMatch(reviewControlsPanel, /reviewNotes|notesAttentionRequired/,
+  "diagnostic and high-risk notes are absent from the simplified review panel");
 assert.match(controller, /diagnosticCandidateBlockMessage\(state\.result,/,
   "the red diagnostic canvas warning is concise and explicitly says it is not saved");
 assert.match(controller, /无法导出肿物：请先在中央照片上选择肿物位置。/,
@@ -866,8 +963,12 @@ assert.doesNotMatch(canvasTools, />候选切口<|>端点控制</,
 assert.doesNotMatch(incisionRail, /打开独立切口工作台/, "workflow no longer substitutes navigation for incision controls");
 assert.doesNotMatch(controller, /createPhotoPlanningController|incisionRuntime|sessionStorage/,
   "workflow incision controller owns no second canvas runtime and delegates short-lived storage to the session service");
-assert.match(controller, /saveWorkflowIncisionDraft/,
-  "workflow controller supplies only serializable low-frequency incision state to the draft service");
+assert.doesNotMatch(controller, /saveWorkflowIncisionDraft/,
+  "the workflow no longer persists retired draft state");
+assert.doesNotMatch(liveStagePanel, /WorkflowDraftRecovery/,
+  "the live stage no longer offers draft recovery or automatic photo restoration");
+assert.doesNotMatch(read("web/src/services/pipelineSource.ts"), /buildWorkflowDraftPhoto|saveWorkflowDraftPhoto/,
+  "upload no longer creates a hidden browser photo draft");
 assert.match(controller, /sourceState\.planning2d\?\.getFrameState\(\)/, "workflow incision controller consumes the shared live planning frame");
 assert.match(controller, /assessReviewReadiness/, "workflow keeps the established clinician review gate");
 assert.match(controller, /renderState\.incisionOverlay = overlay/, "approved candidates activate directly on the current live renderer");
@@ -945,11 +1046,11 @@ assert.match(mobileControls, /if \(!cameraActive\) return;[\s\S]*?setRstlVisible
   "a successfully opened phone camera re-synchronizes pressed layer buttons with both renderer visibility gates");
 assert.match(liveRuntime, /root\.querySelector\("\.workflow-workbench"\)[\s\S]*?resetMobileWorkflowVisibility\(\);\s*setWrinkleDisplayMode\("both"\);/,
   "the workflow runtime and visible phone controls share the same all-layers-on default");
-assert.match(styles, /\.workflow-canvas-tools\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);[^}]*overflow:\s*hidden;/,
-  "the phone marker toolbar uses a fixed grid instead of growing when recognition controls appear");
+assert.match(styles, /\.workflow-canvas-tools\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);[^}]*overflow:\s*hidden;/,
+  "the phone marker toolbar uses a fixed three-column grid after the reset action was removed");
 assert.match(styles, /\.workflow-canvas-tools > button\s*\{[^}]*font-size:\s*11px;[^}]*white-space:\s*nowrap;/,
-  "phone marker action labels stay on one line inside the stable four-column grid");
-assert.match(styles, /\.workflow-marker-scan\s*\{[^}]*grid-area:\s*2 \/ 2 \/ 3 \/ 5;[^}]*width:\s*100%;/,
+  "phone marker action labels stay on one line inside the stable three-column grid");
+assert.match(styles, /\.workflow-marker-scan\s*\{[^}]*grid-area:\s*2 \/ 2 \/ 3 \/ 4;[^}]*width:\s*100%;/,
   "the scan-diameter control occupies the reserved second phone tool row");
 assert.match(styles, /\[data-workflow-marker-scan-label\]\s*\{[^}]*display:\s*none;/,
   "the face-obscuring scan-diameter label is hidden only inside the phone media query");
@@ -1049,8 +1150,8 @@ assert.match(render2d, /if \(mobileIncisionCandidateVisible\(\)\)\s*\{[\s\S]*?ov
   "the mobile visibility gate wraps only candidate strokes while retaining lesion boundary and center drawing");
 assert.ok(
   incisionRail.indexOf("<TumorInputPanel") < incisionRail.indexOf("<MobileCandidateAdjustPanel")
-    && incisionRail.indexOf("<MobileCandidateAdjustPanel") < incisionRail.indexOf("<CandidateResultPanel"),
-  "the phone candidate adjustment panel follows the main parameter panel and precedes candidate results",
+    && incisionRail.indexOf("<MobileCandidateAdjustPanel") < incisionRail.indexOf("<ReviewControlsPanel"),
+  "the phone candidate adjustment panel follows tumor parameters and precedes review",
 );
 assert.match(controller, /incisionOverlayScreenStyle\(state\.result\?\.candidate\?\.type,[\s\S]*?compact: mobileWorkflowViewportActive\(\),[\s\S]*?viewScale: frame\.transform\?\.zoom/,
   "the photo overlay derives its visual scale from the same compact contract and the current photo zoom");

@@ -10,8 +10,6 @@ import {
 } from "./StageShell";
 import type { ReactNode } from "react";
 
-import { WorkflowDraftRecovery } from "./WorkflowDraftRecovery";
-
 interface LiveStagePanelProps {
   workflowActions?: ReactNode;
   workflowOverlay?: ReactNode;
@@ -23,11 +21,11 @@ export function LiveStagePanel({ workflowActions, workflowOverlay, workflowStatu
     <StageShell
       top={(
         <>
-          <StageStatus id="livePill">待机</StageStatus>
+          <StageStatus id="livePill" hidden aria-hidden="true">待机</StageStatus>
           <div className="workflow-mobile-quality-slot" aria-label="画布质量状态" />
           {workflowStatus}
           {workflowActions ? <StageActions className="workflow-stage-actions">{workflowActions}</StageActions> : null}
-          <StageMeta id="fps">— fps</StageMeta>
+          <StageMeta id="fps" hidden aria-hidden="true">— fps</StageMeta>
         </>
       )}
     >
@@ -35,9 +33,8 @@ export function LiveStagePanel({ workflowActions, workflowOverlay, workflowStatu
         <video id="video" playsInline autoPlay muted />
         <StageCanvas id="canvas" mirror width="1280" height="720" />
         {workflowOverlay}
-        <StageOverlayMessage id="overlayMsg">点击「摄像头」或「上传照片」开始</StageOverlayMessage>
+        <StageOverlayMessage id="overlayMsg" hidden aria-hidden="true">点击「摄像头」或「上传照片」开始</StageOverlayMessage>
       </StageViewport>
-      <WorkflowDraftRecovery mobilePortalSelector=".workflow-workbench .workflow-mobile-recovery-slot" />
       <StageZoomStrip id="zoomStrip" />
     </StageShell>
   );

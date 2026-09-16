@@ -1,4 +1,4 @@
-import { Camera, Download, ImagePlus, Pause, Play, RotateCw, ScanLine } from "lucide-react";
+import { Camera, Download, ImagePlus, Pause, Play, ScanLine } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useIncisionControllerCommands, useLiveControllerCommands } from "../hooks/useControllerCommands";
@@ -175,6 +175,7 @@ export function MobileWorkflowControls() {
 export function MobileCandidateAdjustPanel() {
   const commands = useIncisionControllerCommands();
   const snapshot = useIncisionStore((state) => state.snapshot);
+  const cameraMode = useLiveStore((state) => state.snapshot?.source.kind === "camera");
   const edit = snapshot?.edit;
   const candidateReady = Boolean(edit?.widthScaleVisible);
   const [scalePct, setScalePct] = useState("100");
@@ -210,7 +211,7 @@ export function MobileCandidateAdjustPanel() {
           max="150"
           step="1"
           value={scalePct}
-          disabled={!candidateReady}
+          disabled={cameraMode || !candidateReady}
           onInput={(event) => {
             const value = event.currentTarget.value;
             setScalePct(value);
@@ -231,7 +232,7 @@ export function MobileCandidateAdjustPanel() {
           max="35"
           step="1"
           value={angleDeg}
-          disabled={!candidateReady}
+          disabled={cameraMode || !candidateReady}
           onInput={(event) => {
             const value = event.currentTarget.value;
             setAngleDeg(value);
@@ -244,10 +245,6 @@ export function MobileCandidateAdjustPanel() {
         />
         <small>拖动滑杆，以病灶中心为轴心旋转，不移动中心或改变梭形大小。</small>
       </div>
-      <Button variant="workbench" type="button" disabled={!candidateReady} onClick={() => commands.edit("reset_edit")}>
-        <RotateCw size={15} /> 恢复工具建议
-      </Button>
-      <p>{candidateReady ? "调整后审阅状态会回到待医生确认。" : "生成梭形候选后可在此调整。"}</p>
     </section>
   );
 }

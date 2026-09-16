@@ -41,7 +41,6 @@ import { loadVideoFirstFrame } from "./videoSource.ts";
 import { setLive, setMsg, setTransientMsg } from "./liveUi.ts";
 import { cancelFrame, loop, requestFrame } from "./pipelineLoop.ts";
 import { ensureImageReady, ensureReady } from "./pipelineModels.ts";
-import { buildWorkflowDraftPhoto, saveWorkflowDraftPhoto } from "./workflowDraftSession.ts";
 
 type SourceKind = "camera" | "video" | "image";
 let sourceOperationId = 0;
@@ -290,10 +289,6 @@ export async function handleFile(
         const prepared = prepareImageSource(img);
         setSource(prepared.source, "image", prepared.width, prepared.height);
         sourceState.imageFileName = file.name;
-        if (workflowUpload) {
-          const draftPhoto = buildWorkflowDraftPhoto(file, prepared.source, prepared.width, prepared.height);
-          if (draftPhoto) saveWorkflowDraftPhoto(draftPhoto);
-        }
         const sourceSetAt = performance.now();
         recordMetricSample("source.imageModelWaitMs", modelReadyAt - startedAt, { bytes: file.size });
         recordMetricSample("source.imageDecodeMs", decodedAt - startedAt, { bytes: file.size });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { reviewForCandidateRecord } from "../web/src/services/incisionReviewPolicy.ts";
+import { buildReviewGate, reviewForCandidateRecord } from "../web/src/services/incisionReviewPolicy.ts";
 import {
   buildIncisionWorkspaceSession,
   loadIncisionWorkspaceSession,
@@ -122,6 +122,30 @@ const validApproval = reviewForCandidateRecord({
 });
 assert.equal(validApproval.readiness.ok, true);
 assert.equal(validApproval.review.status, "approved_for_discussion");
+const simplifiedApproval = reviewForCandidateRecord({
+  review: { status: "approved_for_discussion", reviewer: "coded-reviewer", notes: "" },
+  result: {
+    ...validResult,
+    candidate: { ...validResult.candidate, metrics: { photo_reference_candidate: true } },
+    guardrails: { passed: false, warnings: [{ code: "fixture_high_guardrail", severity: "high" }] },
+  },
+  allowReferenceCandidates: true,
+  requireHighRiskNotes: false,
+});
+assert.equal(simplifiedApproval.readiness.ok, true);
+assert.equal(simplifiedApproval.review.status, "approved_for_discussion");
+const simplifiedGate = buildReviewGate({
+  review: simplifiedApproval.review,
+  result: {
+    ...validResult,
+    candidate: { ...validResult.candidate, metrics: { photo_reference_candidate: true } },
+    guardrails: { passed: false, warnings: [{ code: "fixture_high_guardrail", severity: "high" }] },
+  },
+  allowReferenceCandidates: true,
+  requireHighRiskNotes: false,
+});
+assert.equal(simplifiedGate.approval_ready, true);
+assert.equal(simplifiedGate.live_overlay_ready, true);
 const forcedDraft = reviewForCandidateRecord({
   review: validApproval.review,
   result: validResult,

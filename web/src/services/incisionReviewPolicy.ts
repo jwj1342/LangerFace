@@ -65,17 +65,21 @@ export function assessReviewReadiness({
   result,
   reviewer,
   notes,
+  allowReferenceCandidates = false,
+  requireHighRiskNotes = true,
 }: {
   status: string;
   result: AnyRecord | null | undefined;
   reviewer: string;
   notes: string;
+  allowReferenceCandidates?: boolean;
+  requireHighRiskNotes?: boolean;
 }): { ok: boolean; attention: "reviewer" | "decision" | "notes" | null; message: string } {
   if (!result) return { ok: false, attention: null, message: "没有可审阅的候选" };
   if (!reviewer.trim()) return { ok: false, attention: "reviewer", message: "保存候选记录前请填写审阅人。" };
   if (status !== "approved_for_discussion") return { ok: true, attention: null, message: "" };
 
-  if (result?.candidate?.metrics?.photo_visibility_limited_candidate === true) {
+  if (!allowReferenceCandidates && result?.candidate?.metrics?.photo_visibility_limited_candidate === true) {
     return {
       ok: false,
       attention: "decision",
@@ -83,7 +87,7 @@ export function assessReviewReadiness({
     };
   }
 
-  if (result?.candidate?.metrics?.photo_reference_candidate === true) {
+  if (!allowReferenceCandidates && result?.candidate?.metrics?.photo_reference_candidate === true) {
     return {
       ok: false,
       attention: "decision",
@@ -100,7 +104,7 @@ export function assessReviewReadiness({
   if (!traceGate.passed) {
     return { ok: false, attention: null, message: "候选生成过程记录不完整或顺序异常，请重新计算后再确认。" };
   }
-  if (summarizeGuardrails(result.guardrails).high_count > 0 && !notes.trim()) {
+  if (requireHighRiskNotes && summarizeGuardrails(result.guardrails).high_count > 0 && !notes.trim()) {
     return { ok: false, attention: "notes", message: "当前候选有高风险保护提示；确认前请填写审阅备注或覆盖原因。" };
   }
   return { ok: true, attention: null, message: "" };
@@ -110,16 +114,22 @@ export function reviewForCandidateRecord({
   review,
   result,
   forceDraft = false,
+  allowReferenceCandidates = false,
+  requireHighRiskNotes = true,
 }: {
   review: AnyRecord;
   result: AnyRecord | null | undefined;
   forceDraft?: boolean;
+  allowReferenceCandidates?: boolean;
+  requireHighRiskNotes?: boolean;
 }) {
   const readiness = assessReviewReadiness({
     status: review.status || "pending_clinician_confirmation",
     result,
     reviewer: String(review.reviewer || ""),
     notes: String(review.notes || ""),
+    allowReferenceCandidates,
+    requireHighRiskNotes,
   });
   if (!forceDraft && readiness.ok) return { review, readiness, downgraded: false };
   return {
@@ -138,22 +148,26 @@ export function buildReviewGate({
   result,
   topologyId,
   topologyVersion,
+  allowReferenceCandidates = false,
+  requireHighRiskNotes = true,
 }: {
   review: AnyRecord;
   result: AnyRecord;
   topologyId?: string | null;
   topologyVersion?: string | null;
+  allowReferenceCandidates?: boolean;
+  requireHighRiskNotes?: boolean;
 }) {
   const summary = summarizeGuardrails(result.guardrails);
   const traceGate = workflowTraceGate(result);
   const reviewerRequired = true;
-  const notesRequired = review.status === "approved_for_discussion" && summary.high_count > 0;
+  const notesRequired = requireHighRiskNotes && review.status === "approved_for_discussion" && summary.high_count > 0;
   const reviewerPresent = Boolean(review.reviewer);
   const notesPresent = Boolean(review.notes);
   const violations = hardViolations(result);
   const referenceCandidate = result?.candidate?.metrics?.photo_reference_candidate === true;
   const visibilityLimitedCandidate = result?.candidate?.metrics?.photo_visibility_limited_candidate === true;
-  const restrictedReferenceCandidate = referenceCandidate || visibilityLimitedCandidate;
+  const restrictedReferenceCandidate = !allowReferenceCandidates && (referenceCandidate || visibilityLimitedCandidate);
   const approvalReady = review.status === "approved_for_discussion"
     && !restrictedReferenceCandidate
     && violations.length === 0
@@ -173,9 +187,9 @@ export function buildReviewGate({
     workflow_trace_gate_missing: traceGate.missing_actions.map((item: AnyRecord) => item.key),
     approval_ready: approvalReady,
     live_overlay_ready: liveOverlayReady,
-    live_overlay_blocked_reason: visibilityLimitedCandidate
+    live_overlay_blocked_reason: !allowReferenceCandidates && visibilityLimitedCandidate
       ? "visibility_limited_reference_candidate"
-      : referenceCandidate
+      : !allowReferenceCandidates && referenceCandidate
         ? "nonstandard_reference_candidate"
       : violations.length > 0
         ? "engineering_hard_violation"
@@ -184,9 +198,9 @@ export function buildReviewGate({
     active_topology_version: topologyVersion || null,
     reason: liveOverlayReady
       ? "approved_candidate_ready_for_research_overlay"
-      : visibilityLimitedCandidate
+      : !allowReferenceCandidates && visibilityLimitedCandidate
         ? "visibility_limited_reference_candidate_requires_additional_view"
-        : referenceCandidate
+        : !allowReferenceCandidates && referenceCandidate
           ? "nonstandard_reference_candidate_requires_clinician_workflow"
         : violations.length > 0
           ? "engineering_hard_violation"

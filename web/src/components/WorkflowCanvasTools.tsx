@@ -1,8 +1,9 @@
-import { CircleStop, PencilLine, RotateCcw, ScanSearch } from "lucide-react";
+import { CircleStop, PencilLine, ScanSearch } from "lucide-react";
 
 import { useWorkflowIncisionToolCommands } from "../hooks/useControllerCommands";
 import { FREEHAND_MARKER_DISABLED_MESSAGE } from "../services/incisionClinicalCopy";
 import { useIncisionStore } from "../stores/incisionStore";
+import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
 import { RangeInput } from "./ui/slider";
 import { CanvasLegendItem, Legend } from "./ui/legend";
@@ -11,13 +12,14 @@ import { PersistentTooltip, usePersistentTooltip } from "./ui/persistent-tooltip
 export function WorkflowCanvasTools() {
   const commands = useWorkflowIncisionToolCommands();
   const snapshot = useIncisionStore((state) => state.snapshot);
+  const cameraMode = useLiveStore((state) => state.snapshot?.source.kind === "camera");
   const tools = snapshot?.workflowTools;
   const markerMode = tools?.controlledMarkerMode || false;
   const cutaneous = snapshot?.tumor.kind === "cutaneous";
   const freehandMarkerUnavailable = !markerMode
     && cutaneous
     && snapshot?.tumor.boundaryMode === "freehand";
-  const markerUnavailable = !markerMode && (!tools?.photoReady || !cutaneous || freehandMarkerUnavailable);
+  const markerUnavailable = cameraMode || (!markerMode && (!tools?.photoReady || !cutaneous || freehandMarkerUnavailable));
   // Native disabled buttons swallow click/touch events. Keep the freehand-mode
   // block actionable so the controller can explain how to restore the tool.
   const markerHardUnavailable = markerUnavailable && !freehandMarkerUnavailable;
@@ -44,7 +46,9 @@ export function WorkflowCanvasTools() {
           className={`workflow-marker-toggle${freehandMarkerUnavailable ? " workflow-disabled-action" : ""}`}
           title={freehandMarkerUnavailable
             ? undefined
-            : !cutaneous
+            : cameraMode
+              ? "摄像头模式下不可识别肿物"
+              : !cutaneous
               ? "受控标记仅用于皮表肿物"
               : !tools?.photoReady
                 ? "请先上传并完成人脸检测"
@@ -77,7 +81,7 @@ export function WorkflowCanvasTools() {
                 max="60"
                 step="5"
                 value={tools?.scanDiameterMm || 20}
-                disabled={markerBusy}
+                disabled={cameraMode || markerBusy}
                 onChange={(event) => commands.tool("scan_diameter_changed", event.currentTarget.value)}
               />
             </label>
@@ -97,7 +101,7 @@ export function WorkflowCanvasTools() {
               className="workflow-mobile-marker-confirm"
               size="sm"
               type="button"
-              disabled={markerBusy || !tools?.mobileMarkerPlacementReady}
+              disabled={cameraMode || markerBusy || !tools?.mobileMarkerPlacementReady}
               aria-label="识别已放置圆圈内的肿物"
               title="先轻触照片放置扫描圆圈，确认位置后再识别"
               onClick={() => commands.tool("confirm_controlled_marker")}
@@ -110,7 +114,7 @@ export function WorkflowCanvasTools() {
           className="workflow-repair-toggle"
           size="sm"
           type="button"
-          disabled={markerBusy || !tools?.repairAvailable}
+          disabled={cameraMode || markerBusy || !tools?.repairAvailable}
           aria-pressed={tools?.repairMode || false}
           title="补充照片中可见但不连续的肿物边缘"
           onClick={() => commands.tool("repair_marker")}
@@ -121,21 +125,11 @@ export function WorkflowCanvasTools() {
           className="workflow-clear-repair"
           size="sm"
           type="button"
-          disabled={markerBusy || !tools?.repairCount}
+          disabled={cameraMode || markerBusy || !tools?.repairCount}
           title="清除全部人工补线"
           onClick={() => commands.tool("clear_repair")}
         >
           <span>清除补线</span>
-        </Button>
-        <Button
-          className="workflow-reset-view"
-          size="sm"
-          type="button"
-          disabled={markerBusy}
-          title="将照片缩放和位置恢复为初始状态"
-          onClick={() => commands.tool("reset_view")}
-        >
-          <RotateCcw size={15} /><span>复位</span>
         </Button>
     </div>
   );

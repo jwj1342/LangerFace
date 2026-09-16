@@ -165,10 +165,10 @@ test("phone review fixes stay visible, independent, and desktop-isolated", async
   expect(await page.locator(".workflow-incision-rail").evaluate((rail) => {
     const mainParameters = rail.querySelector("#tumorKind")?.closest(".card");
     const adjustment = rail.querySelector(".mobile-candidate-adjust");
-    const candidateResult = rail.querySelector("#candidateType")?.closest(".card");
-    if (!mainParameters || !adjustment || !candidateResult) return false;
+    const review = rail.querySelector("#reviewerName");
+    if (!mainParameters || !adjustment || !review || rail.querySelector("#candidateType")) return false;
     return Boolean(mainParameters.compareDocumentPosition(adjustment) & Node.DOCUMENT_POSITION_FOLLOWING)
-      && Boolean(adjustment.compareDocumentPosition(candidateResult) & Node.DOCUMENT_POSITION_FOLLOWING);
+      && Boolean(adjustment.compareDocumentPosition(review) & Node.DOCUMENT_POSITION_FOLLOWING);
   })).toBe(true);
 
   await page.setViewportSize({ width: 1440, height: 960 });
