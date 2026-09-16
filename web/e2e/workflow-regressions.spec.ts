@@ -315,7 +315,7 @@ test("repeated photo replacement never auto-starts main-thread wrinkle YOLO", as
   // cannot revive a hidden YOLO job after the third replacement.
   await page.waitForTimeout(6_000);
   await expect(page.locator("#wrinkleStatus")).toHaveText("等待手动检测");
-  await expect(page.locator("#workflowStageStatus")).toBeVisible();
+  await expect(page.locator("#workflowStageStatus")).toBeHidden();
   expect(yoloModelRequests).toEqual([]);
 });
 
@@ -351,38 +351,8 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   await expect.poll(() => boundary.getAttribute("d")).toBe(boundaryBeforeReview);
   await expect.poll(() => candidate.getAttribute("d")).toBe(candidateBeforeReview);
 
-  await page.evaluate(() => {
-    const state = window as typeof window & {
-      __capturedTumorDownload?: { filename: string; href: string };
-      __originalTumorAnchorClick?: typeof HTMLAnchorElement.prototype.click;
-    };
-    state.__originalTumorAnchorClick = HTMLAnchorElement.prototype.click;
-    HTMLAnchorElement.prototype.click = function captureTumorDownload() {
-      state.__capturedTumorDownload = { filename: this.download, href: this.href };
-    };
-  });
-  await page.locator("#exportTumorBtn").click();
-  await expect.poll(() => page.evaluate(() => Boolean((window as typeof window & {
-    __capturedTumorDownload?: unknown;
-  }).__capturedTumorDownload))).toBe(true);
-  const tumorDownload = await page.evaluate(async () => {
-    const state = window as typeof window & {
-      __capturedTumorDownload?: { filename: string; href: string };
-      __originalTumorAnchorClick?: typeof HTMLAnchorElement.prototype.click;
-    };
-    const captured = state.__capturedTumorDownload!;
-    const result = {
-      filename: captured.filename,
-      payload: JSON.parse(await fetch(captured.href).then((response) => response.text())),
-    };
-    if (state.__originalTumorAnchorClick) HTMLAnchorElement.prototype.click = state.__originalTumorAnchorClick;
-    return result;
-  });
-  expect(tumorDownload.filename).toMatch(/^tumor_input_\d+\.json$/);
-  expect(tumorDownload.payload).toMatchObject({
-    schema_version: "tumor-input/v0.2",
-    privacy_audit: { contains_face_image: false },
-  });
+  await expect(page.locator("#exportTumorBtn, #importTumorBtn")).toHaveCount(0);
+  await expect(page.locator("#tumorImportFile")).toBeHidden();
 
   const legend = page.getByLabel("切口标注图例");
   await expect(legend).toBeVisible();
@@ -491,7 +461,10 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
     .toMatch(/^M /);
   const cheekBoundary = await workflowBoundaryBox(page);
 
-  await expect(page.locator("#saveReviewBtn")).toBeDisabled();
+  await expect(page.locator("#saveReviewBtn")).toBeEnabled();
+  await page.locator("#saveReviewBtn").click();
+  await expect(page.locator("#reviewSaveFeedback")).toContainText("请填写审阅人后确认");
+  await expect(page.locator("#reviewerName")).toHaveAttribute("aria-invalid", "true");
   await page.locator("#reviewerName").fill("E2E clinician");
   await expect(page.locator("#saveReviewBtn")).toBeEnabled();
 
@@ -538,15 +511,15 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   });
   await uploadGeneratedPhoto(page, "single", "#fileInput");
   await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
-  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateType), { timeout: 45_000 }).toBe("—");
-  await expect(page.locator("[data-workflow-boundary]")).toHaveAttribute("d", "");
-  await expect(page.locator("[data-workflow-candidate]")).toHaveAttribute("d", "");
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateType), { timeout: 45_000 }).toBe("视野受限参考");
+  await expectActiveOverlay(page, true);
+  await expect(page.locator("#saveReviewBtn")).toHaveText("已确认");
   await expect(page.locator("[data-workflow-diagnostic-candidate]")).toHaveAttribute("d", "");
   await expect(page.locator("#reviewDecision, #reviewNotes")).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => (
     window as Window & { __workflowSourceReasons?: string[] }
   ).__workflowSourceReasons || [])).toContain("workflow_source_changed");
-  reportWorkflowStage("photo-replacement-clear-pass");
+  reportWorkflowStage("photo-replacement-keeps-confirmed-candidate-pass");
 
   await expect.poll(async () => page.locator("#wrinkleStatus").textContent(), { timeout: 45_000 })
     .not.toMatch(/检测中|正在/);

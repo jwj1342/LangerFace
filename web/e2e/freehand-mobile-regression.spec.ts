@@ -159,7 +159,7 @@ async function expectAllVisibleButtonsReachable(page: Page) {
   }
 }
 
-test("desktop workflow keeps the saved three-column UI and status behavior", async ({ browser, baseURL }) => {
+test("desktop workflow keeps the three-column shell while status text remains hidden", async ({ browser, baseURL }) => {
   test.setTimeout(60_000);
   const context = await browser.newContext({
     baseURL,
@@ -172,14 +172,13 @@ test("desktop workflow keeps the saved three-column UI and status behavior", asy
   try {
     await page.goto("/app/workflow");
     await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
-    await expect(page.locator("#livePill")).toBeVisible();
-    await expect(page.locator("#fps")).toBeVisible();
+    await expect(page.locator("#livePill")).toBeHidden();
+    await expect(page.locator("#fps")).toBeHidden();
     await expect(page.locator(".mobile-workflow-dock")).toBeHidden();
     await expect(page.locator(".workflow-live-rail .live-quality-panel")).toHaveCount(1);
     await expect(page.locator(".workflow-mobile-quality-slot > .mobile-canvas-quality")).toHaveCount(0);
     await page.waitForTimeout(4_200);
-    await expect(page.locator("#workflowStageStatus")).toBeVisible();
-    await expect(page.locator("#workflowStageStatus")).not.toHaveClass(/is-collapsed/);
+    await expect(page.locator("#workflowStageStatus")).toBeHidden();
     const desktopLayout = await page.locator(".workflow-workbench").evaluate((root) => {
       const liveRail = root.querySelector<HTMLElement>(".workflow-live-rail");
       const stageElement = root.querySelector<HTMLElement>(":scope > .stage");
@@ -217,7 +216,7 @@ test("desktop workflow keeps the saved three-column UI and status behavior", asy
   }
 });
 
-test("a visibility-limited saved draft explains why confirmation is unavailable", async ({ page }) => {
+test("a visibility-limited candidate prompts for a reviewer before confirmation", async ({ page }) => {
   test.setTimeout(120_000);
   await page.goto("/app/workflow");
   await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
@@ -227,17 +226,13 @@ test("a visibility-limited saved draft explains why confirmation is unavailable"
   await clickCanvasRatio(page, 0.10, 0.55);
   await expect(page.locator("#workflowStageStatus")).toContainText("视野受限参考", { timeout: 45_000 });
 
-  await page.locator("#reviewerName").fill("E2E clinician");
-  await page.locator("#reviewDecision").selectOption("pending_clinician_confirmation");
   await page.locator("#saveReviewBtn").click();
-  await expect(page.locator("#savedCount")).toHaveText("1");
-
-  const transitionButton = page.locator('[data-candidate-review-toggle="pending_clinician_confirmation"]');
-  const transitionReason = page.locator(".candidate-review-condition.warning");
-  await expect(transitionReason).toContainText("只覆盖照片可见区域");
-  await expect(transitionReason).toContainText("暂不能确认");
-  await expect(transitionButton).toBeDisabled();
-  await expect(transitionButton).toHaveText("暂不能确认");
+  await expect(page.locator("#reviewSaveFeedback")).toContainText("请填写审阅人后确认");
+  await expect(page.locator("#reviewerName")).toHaveAttribute("aria-invalid", "true");
+  await page.locator("#reviewerName").fill("E2E clinician");
+  await page.locator("#saveReviewBtn").click();
+  await expect(page.locator("#saveReviewBtn")).toHaveText("已确认");
+  await expect(page.locator("#savedCount, #candidateList, [data-candidate-review-toggle]")).toHaveCount(0);
 });
 
 test("mobile freehand exits an empty session and draws after leaving controlled marker", async ({ page }) => {

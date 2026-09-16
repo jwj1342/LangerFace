@@ -6,7 +6,7 @@ import { EditControlsPanel } from "../components/EditControlsPanel";
 import { IncisionStatePanel } from "../components/IncisionStatePanel";
 import { IncisionStagePanel } from "../components/IncisionStagePanel";
 import { PrivacyAuditPanel } from "../components/PrivacyAuditPanel";
-import { ReviewControlsPanel } from "../components/ReviewControlsPanel";
+import { StandaloneReviewControlsPanel } from "../components/StandaloneReviewControlsPanel";
 import { SecondaryCuePanel } from "../components/SecondaryCuePanel";
 import { TumorInputPanel } from "../components/TumorInputPanel";
 import { Disclaimer, WorkbenchLayout } from "../components/WorkbenchLayout";
@@ -37,7 +37,7 @@ export function IncisionWorkbench() {
 
       <EditControlsPanel />
 
-      <ReviewControlsPanel />
+      <StandaloneReviewControlsPanel />
 
       <CandidateLibraryPanel />
 
