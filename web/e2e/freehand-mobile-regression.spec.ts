@@ -313,8 +313,7 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
 
   await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
-  const ellipseRatio = page.locator("#ellipseRatio");
-  await expect(ellipseRatio).toBeDisabled();
+  await expect(page.locator("#ellipseRatio")).toHaveCount(0);
 
   const markerStageHeight = await stage.evaluate((element) => element.getBoundingClientRect().height);
   expect(markerStageHeight).toBeCloseTo(Math.max(320, Math.min(844 - 136, 390 + 134)), 0);
@@ -337,10 +336,8 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
   await page.setViewportSize({ width: 390, height: 844 });
   await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "false");
-  await expect(ellipseRatio).toBeEnabled();
   await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
-  await expect(ellipseRatio).toBeDisabled();
 
   const boundaryMode = page.getByLabel("皮表边界");
   const boundaryButton = page.locator("#startBoundaryBtn");
@@ -359,7 +356,7 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
 
   await expect.poll(() => page.locator("[data-workflow-boundary]").getAttribute("d"))
     .toMatch(/^M /);
-  await expect(page.locator("#boundaryStatus")).toHaveText("轮廓轨迹已记录；请点击“结束描绘”后再识别并生成候选。");
+  await expect(page.locator("#boundaryStatus")).toHaveCount(0);
   await expect(page.locator("#workflowStageStatus")).toContainText("本段轮廓已记录");
   await expect(boundaryButton).toHaveText("结束描绘");
 });
