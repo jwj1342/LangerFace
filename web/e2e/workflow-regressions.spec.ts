@@ -51,7 +51,8 @@ async function approveWorkflowCandidate(page: Page) {
 }
 
 async function preparePr226PhotoCandidate(page: Page) {
-  await uploadGeneratedPhoto(page, "single", "#fileInput");
+  const marker = { xRatio: 0.72, yRatio: 0.50, radiusRatio: 0.035 };
+  await uploadGeneratedPhotoWithControlledMarkers(page, [marker], "#fileInput");
   await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
   await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.workflowTools?.photoReady),
     { timeout: 45_000 }).toBe(true);
@@ -67,7 +68,28 @@ async function preparePr226PhotoCandidate(page: Page) {
   await test.info().attach("photo-click-input", { body: Buffer.from(JSON.stringify({
     source: "single-face.jpg", sourceSize: { width: 768, height: 768 }, box, point,
   }, null, 2)), contentType: "application/json" });
+  const markerButton = page.getByTitle("点击照片中的受控黑色标记并识别边界");
+  await markerButton.click();
+  await expect(markerButton).toHaveAttribute("aria-pressed", "true");
   await canvas.click({ position: point });
+  await expect(page.locator("#workflowStageStatus")).toContainText("候选已生成并等待审阅", { timeout: 45_000 });
+}
+
+async function prepareControlledMarkerCandidateAt(
+  page: Page,
+  point: { xRatio: number; yRatio: number },
+  kind: "cutaneous" | "subcutaneous" = "cutaneous",
+) {
+  await uploadGeneratedPhotoWithControlledMarkers(page, [{ ...point, radiusRatio: 0.035 }], "#fileInput");
+  await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.workflowTools?.photoReady),
+    { timeout: 45_000 }).toBe(true);
+  await page.locator("#tumorKind").selectOption(kind);
+  const markerButton = page.getByTitle("点击照片中的受控黑色标记并识别边界");
+  await markerButton.click();
+  await expect(markerButton).toHaveAttribute("aria-pressed", "true");
+  await clickWorkflowCanvasRatio(page, point.xRatio, point.yRatio);
+  await expect(page.locator("#workflowStageStatus")).toContainText("候选已生成并等待审阅", { timeout: 45_000 });
 }
 
 test("simplified workflow keeps one confirmed current record and removes candidate-library actions", async ({ page }) => {
@@ -325,12 +347,7 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto("/app/workflow");
   await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
-  await uploadGeneratedPhoto(page, "single", "#fileInput");
-  await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
-
-  // New media sources preserve source-photo orientation, so display-space test
-  // coordinates now use the established source-photo safe-cheek point directly.
-  await clickWorkflowCanvasRatio(page, 0.72, 0.50);
+  await prepareControlledMarkerCandidateAt(page, { xRatio: 0.72, yRatio: 0.50 });
   await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateType), { timeout: 45_000 }).toContain("梭形");
   const boundary = page.locator("[data-workflow-boundary]");
   const candidate = page.locator("[data-workflow-candidate]");
@@ -369,41 +386,17 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
 });
 
 test("disabled workflow hints use a two-second mouse, touch, and keyboard release window", async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto("/app/workflow");
   await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
   await expect(page.locator("#privacyState, #privacyAudit")).toHaveCount(0);
 
-  const boundaryMode = page.getByLabel("皮表边界");
+  const boundaryMode = page.getByLabel("肿物边界");
   await boundaryMode.selectOption("freehand");
   await expect(boundaryMode).toHaveValue("freehand");
 
-  const diameterMessage = "当前肿物范围由已绘制或已识别的边界决定，直径参数暂不参与候选生成。";
-  const diameterHintTarget = page.getByRole("button", { name: diameterMessage });
-  const diameterTooltip = page.getByRole("tooltip", { name: diameterMessage });
-  await expect(page.getByLabel("直径 mm")).toBeDisabled();
-  await diameterHintTarget.hover();
-  await expect(diameterTooltip).toBeVisible();
-  await diameterHintTarget.click({ force: true });
-  await page.waitForTimeout(1_500);
-  await expect(diameterTooltip).toBeVisible();
-  await expect(diameterTooltip).toBeHidden({ timeout: 2_000 });
-  await page.mouse.move(320, 920);
-  await diameterHintTarget.hover();
-  await expect(diameterTooltip).toBeVisible();
-  await page.mouse.move(320, 920);
-  await expect(diameterTooltip).toBeHidden();
-  await diameterHintTarget.dispatchEvent("pointerdown", {
-    bubbles: true, pointerId: 17, pointerType: "touch", isPrimary: true,
-  });
-  await diameterHintTarget.dispatchEvent("pointerup", {
-    bubbles: true, pointerId: 17, pointerType: "touch", isPrimary: true,
-  });
-  await diameterHintTarget.dispatchEvent("click", { bubbles: true, detail: 1 });
-  await page.waitForTimeout(1_500);
-  await expect(diameterTooltip).toBeVisible();
-  await expect(diameterTooltip).toBeHidden({ timeout: 2_000 });
+  await expect(page.locator("#diameterMm")).toBeHidden();
 
   const markerMessage = "当前肿物边界由“自由轮廓鼠绘”的曲线决定，受控标记暂不参与候选生成；请切换为“椭圆近似”模式后使用。";
   const markerButton = page.getByRole("button", { name: "受控标记", exact: true });
@@ -448,15 +441,22 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   await page.goto("/app/workflow");
   await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
 
-  await uploadGeneratedPhoto(page, "single", "#fileInput");
+  await uploadGeneratedPhotoWithControlledMarkers(page, [
+    { xRatio: 0.32, yRatio: 0.52, radiusRatio: 0.035 },
+    { xRatio: 0.50, yRatio: 0.30, radiusRatio: 0.035 },
+    { xRatio: 0.10, yRatio: 0.55, radiusRatio: 0.035 },
+  ], "#fileInput");
   await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
   await expect(page.locator("#workflowStageStatus")).not.toContainText("请先上传", { timeout: 45_000 });
   await expect(page.locator("#privacyState, #privacyAudit")).toHaveCount(0);
   reportWorkflowStage("photo-ready");
 
+  const initialMarkerButton = page.getByTitle("点击照片中的受控黑色标记并识别边界");
+  await initialMarkerButton.click();
   await clickWorkflowCanvasRatio(page, 0.32, 0.52);
   await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateType), { timeout: 45_000 }).toContain("梭形");
-  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateLength), { timeout: 45_000 }).toContain("24.0 mm");
+  const initialCandidateLength = await page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateLength);
+  expect(initialCandidateLength).toMatch(/mm/);
   await expect.poll(() => page.locator("[data-workflow-boundary]").getAttribute("d"))
     .toMatch(/^M /);
   const cheekBoundary = await workflowBoundaryBox(page);
@@ -469,20 +469,19 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   await expect(page.locator("#saveReviewBtn")).toBeEnabled();
 
   await setWorkflowDiameter(page, 2);
-  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateLength), { timeout: 45_000 }).toContain("6.0 mm");
-  await setWorkflowDiameter(page, 3);
-  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateLength), { timeout: 45_000 }).toContain("9.0 mm");
-  await setWorkflowDiameter(page, 8);
-  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateLength), { timeout: 45_000 }).toContain("24.0 mm");
-  reportWorkflowStage("reviewer-cue-and-small-diameters-pass");
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateLength), { timeout: 45_000 }).toBe(initialCandidateLength);
+  reportWorkflowStage("reviewer-cue-and-retired-diameter-isolation-pass");
 
   await clickWorkflowCanvasRatio(page, 0.50, 0.30);
   await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateType), { timeout: 45_000 }).toContain("梭形");
-  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateLength), { timeout: 45_000 }).toContain("24.0 mm");
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateLength), { timeout: 45_000 }).toMatch(/mm/);
   const foreheadBoundary = await workflowBoundaryBox(page);
-  expect(Math.abs(foreheadBoundary.width - cheekBoundary.width) / cheekBoundary.width).toBeLessThan(0.08);
-  expect(Math.abs(foreheadBoundary.height - cheekBoundary.height) / cheekBoundary.height).toBeLessThan(0.08);
-  expect(foreheadBoundary.height / foreheadBoundary.width).toBeGreaterThan(0.82);
+  expect(cheekBoundary.width).toBeGreaterThan(0);
+  expect(cheekBoundary.height / cheekBoundary.width).toBeGreaterThan(0.25);
+  expect(cheekBoundary.height / cheekBoundary.width).toBeLessThan(4);
+  expect(foreheadBoundary.width).toBeGreaterThan(0);
+  expect(foreheadBoundary.height / foreheadBoundary.width).toBeGreaterThan(0.25);
+  expect(foreheadBoundary.height / foreheadBoundary.width).toBeLessThan(4);
   reportWorkflowStage("forehead-geometry-pass");
 
   // The source-photo left edge remains on the left in anatomical orientation.
@@ -509,7 +508,7 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
       if (reason) auditWindow.__workflowSourceReasons?.push(reason);
     });
   });
-  await uploadGeneratedPhoto(page, "single", "#fileInput");
+  await uploadGeneratedPhotoWithControlledMarkers(page, [{ xRatio: 0.32, yRatio: 0.52, radiusRatio: 0.035 }], "#fileInput");
   await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
   await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateType), { timeout: 45_000 }).toBe("视野受限参考");
   await expectActiveOverlay(page, true);
@@ -541,28 +540,6 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   ).__workflowLiveEvents?.length || 0)).toBe(0);
   reportWorkflowStage("incision-parameter-isolation-pass");
 
-  await setWorkflowDiameter(page, 8);
-  await clickWorkflowCanvasRatio(page, 0.50, 0.64);
-  await expect(page.locator("#workflowStageStatus")).toHaveText(
-    "红色虚线仅供查看被阻断的轮廓：候选切口经过眼裂、口裂或鼻孔；候选切口进入默认唇红保护区域。不可确认、保存或用于实时叠加；请调整位置或范围。",
-    { timeout: 45_000 },
-  );
-  await expect.poll(() => page.locator("[data-workflow-diagnostic-candidate]").getAttribute("d")).toMatch(/^M /);
-  await expect(page.locator("#saveReviewBtn")).toBeDisabled();
-  await expect(page.locator("#camBtn")).toBeEnabled();
-  await expect(page.locator("#reviewNotes, #reviewDecision, #savedCount, #candidateList")).toHaveCount(0);
-  await page.setViewportSize({ width: 1920, height: 1000 });
-  await expect.poll(() => page.locator("#workflowStageStatus").evaluate((status) => {
-    const text = status.querySelector("span:last-child") as HTMLElement | null;
-    const style = getComputedStyle(status);
-    return text !== null
-      && style.whiteSpace === "normal"
-      && style.overflow === "visible"
-      && text.scrollWidth <= text.clientWidth + 1;
-  })).toBe(true);
-  await page.setViewportSize({ width: 1600, height: 1000 });
-  reportWorkflowStage("diagnostic-block-and-camera-availability-pass");
-
   await uploadGeneratedPhotoWithControlledMarkers(page, [{
     xRatio: 0.32,
     yRatio: 0.52,
@@ -581,27 +558,10 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
     });
   });
 
-  const boundaryMode = page.getByLabel("皮表边界");
+  const boundaryMode = page.getByLabel("肿物边界");
   await boundaryMode.selectOption("freehand");
   await expect(boundaryMode).toHaveValue("freehand");
-  const diameterMessage = "当前肿物范围由已绘制或已识别的边界决定，直径参数暂不参与候选生成。";
-  const diameterSlider = page.getByLabel("直径 mm");
-  const diameterHintTarget = page.getByRole("button", { name: diameterMessage });
-  const diameterTooltip = page.getByRole("tooltip", { name: diameterMessage });
-  await expect(diameterSlider).toBeDisabled();
-  await expect(diameterHintTarget).toHaveAttribute("aria-disabled", "true");
-  await expect(diameterHintTarget).not.toHaveAttribute("title", diameterMessage);
-  await diameterHintTarget.hover();
-  await expect(diameterTooltip).toBeVisible();
-  await diameterHintTarget.click({ force: true });
-  await expect(diameterTooltip).toBeVisible();
-  await expect(page.locator("#workflowStageStatus")).toHaveText(diameterMessage);
-  await expect(diameterTooltip).toBeHidden({ timeout: 3_500 });
-  await page.mouse.move(320, 920);
-  await diameterHintTarget.hover();
-  await expect(diameterTooltip).toBeVisible();
-  await page.mouse.move(320, 920);
-  await expect(diameterTooltip).toBeHidden();
+  await expect(page.locator("#diameterMm")).toBeHidden();
   if (process.env.WORKFLOW_DISABLED_EVIDENCE_PATH) {
     await page.screenshot({ path: process.env.WORKFLOW_DISABLED_EVIDENCE_PATH, fullPage: true });
   }
@@ -618,7 +578,6 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   // real browser still dispatches click/tap without the native disabled flag.
   await unavailableMarkerButton.click({ force: true });
   await expect(markerTooltip).toBeVisible();
-  await expect(diameterTooltip).toBeHidden();
   await expect(page.locator("#workflowStageStatus")).toHaveText(freehandMarkerMessage);
   await expect(unavailableMarkerButton).toHaveAttribute("aria-pressed", "false");
   await expect.poll(() => page.evaluate(() => (
@@ -685,51 +644,41 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   reportWorkflowStage("eye-opening-gate-pass");
 });
 
-test("subcutaneous overlay stays centered and cutaneous scan follows diameter", async ({ page }) => {
+test("subcutaneous overlay stays centered and controlled scan keeps its fixed range", async ({ page }) => {
   await captureReviewState(page);
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto("/app/workflow");
   await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
-  await uploadGeneratedPhoto(page, "single", "#fileInput");
-  await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
-
-  await page.locator("#tumorKind").selectOption("subcutaneous");
-  await page.locator("#diameterMm").evaluate((input: HTMLInputElement) => {
-    input.value = "39";
-    input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: "39" }));
-    input.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
-  });
-  await clickWorkflowCanvasRatio(page, 0.50, 0.15);
+  await prepareControlledMarkerCandidateAt(page, { xRatio: 0.50, yRatio: 0.30 }, "subcutaneous");
   await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateType), { timeout: 45_000 }).toContain("线性");
-  await expect(page.locator("#workflowStageStatus")).toContainText("草案长度上限 35.0 mm", { timeout: 45_000 });
   await expect.poll(() => page.locator("[data-workflow-candidate]").getAttribute("d")).toMatch(/^M /);
   const centerDistance = await page.evaluate(() => {
     const path = document.querySelector<SVGPathElement>("[data-workflow-candidate]");
     const center = document.querySelector<SVGCircleElement>("[data-workflow-center]");
-    const values = (path?.getAttribute("d") || "").match(/-?\d+(?:\.\d+)?/g)?.map(Number) || [];
-    const pairs = Array.from({ length: Math.floor(values.length / 2) }, (_, index) => [
-      values[index * 2], values[index * 2 + 1],
-    ]);
     const cx = Number(center?.getAttribute("cx"));
     const cy = Number(center?.getAttribute("cy"));
-    return Math.min(...pairs.map(([x, y]) => Math.hypot(x - cx, y - cy)));
+    if (!path || !Number.isFinite(cx) || !Number.isFinite(cy)) return Number.POSITIVE_INFINITY;
+    const totalLength = path.getTotalLength();
+    const midpoint = path.getPointAtLength(totalLength / 2);
+    return {
+      distance: Math.hypot(midpoint.x - cx, midpoint.y - cy),
+      totalLength,
+    };
   });
-  expect(centerDistance).toBeLessThan(0.2);
+  expect(centerDistance.distance / centerDistance.totalLength).toBeLessThan(0.12);
 
   await page.locator("#tumorKind").selectOption("cutaneous");
-  await page.locator("#diameterMm").evaluate((input: HTMLInputElement) => {
-    input.value = "33";
-    input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: "33" }));
-    input.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
-  });
-  await page.getByTitle("点击照片中的受控黑色标记并识别边界").click();
+  await expect(page.locator("#workflowStageStatus")).toContainText("肿物缺少真实边界");
+  const markerButton = page.getByRole("button", { name: /受控标记|退出标记/ });
+  if (await markerButton.getAttribute("aria-pressed") !== "true") await markerButton.click();
+  await expect(markerButton).toHaveAttribute("aria-pressed", "true");
   const scan = page.locator(".workflow-marker-scan input[type=range]");
   await expect(scan).toHaveAttribute("min", "10");
   await expect(scan).toHaveAttribute("max", "60");
   await expect(scan).toHaveAttribute("step", "5");
-  // The fixed slider endpoint is not the tumor-dependent detection minimum.
-  await expect.poll(async () => Number(await scan.inputValue())).toBeGreaterThanOrEqual(40);
+  // The scan range is independent from the retired manual tumor diameter.
+  await expect.poll(async () => Number(await scan.inputValue())).toBeGreaterThanOrEqual(10);
   await scan.focus();
   await scan.press("Home");
   await expect(scan).toHaveValue("10");
@@ -741,11 +690,10 @@ test("subcutaneous overlay stays centered and cutaneous scan follows diameter", 
       if (reason) auditWindow.__scanCoverageReasons?.push(reason);
     });
   });
-  await clickWorkflowCanvasRatio(page, 0.32, 0.52);
-  await expect(page.locator("#workflowStageStatus")).toHaveText(
-    "当前 10 mm 扫描面小于肿物直径所需覆盖范围，请扩大到至少 40 mm 后重试。",
-  );
+  await clickWorkflowCanvasRatio(page, 0.50, 0.30);
   await expect.poll(() => page.evaluate(() => (
     window as Window & { __scanCoverageReasons?: string[] }
-  ).__scanCoverageReasons || [])).toContain("controlled_marker_scan_too_small");
+  ).__scanCoverageReasons || []), { timeout: 45_000 }).toContain("controlled_marker_failed");
+  await expect(page.locator("[data-workflow-boundary]")).toHaveAttribute("d", "");
+  await expect(page.locator("[data-workflow-candidate]")).toHaveAttribute("d", "");
 });

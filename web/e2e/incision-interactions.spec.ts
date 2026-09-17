@@ -156,7 +156,7 @@ test("clinician edit sliders retain real mouse drags after the controller echo",
 test("only the explicit generation button increments the candidate generation count", async ({ page }, testInfo) => {
   await waitForWorkbench(page);
 
-  const parameterIds = ["tumorKind", "diameterMm", "tumorAuthor", "depthMm"];
+  const parameterIds = ["tumorKind", "tumorAuthor", "depthMm"];
   const parametersBefore = await page.locator(parameterIds.map((id) => `#${id}`).join(",")).evaluateAll(
     (elements) => elements.map((element) => (element as HTMLInputElement | HTMLSelectElement).value),
   );
@@ -164,13 +164,9 @@ test("only the explicit generation button increments the candidate generation co
   await page.locator("#runWorkflowBtn").click();
   await expect(page.locator("#stageStatus")).toContainText("已明确生成 1 次");
 
-  const initialTumorKind = String(parametersBefore[0]);
-  await page.locator("#tumorKind").selectOption("cutaneous");
+  await page.locator("#reviewerName").fill("Generation count reviewer");
   await expect(page.locator("#stageStatus")).toContainText("已明确生成 1 次");
   await expect(page.locator("#stageStatus")).not.toContainText("已明确生成 2 次");
-  await page.locator("#tumorKind").selectOption("subcutaneous");
-  await expect(page.locator("#stageStatus")).toContainText("已明确生成 1 次");
-  await page.locator("#tumorKind").selectOption(initialTumorKind);
 
   await page.locator("#runWorkflowBtn").click();
   await expect(page.locator("#stageStatus")).toContainText("已明确生成 2 次");

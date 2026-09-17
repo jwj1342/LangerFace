@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { uploadGeneratedPhoto } from "./support/incisionPhoto";
+import { uploadGeneratedPhoto, uploadGeneratedPhotoWithControlledMarkers } from "./support/incisionPhoto";
 
 test.describe.configure({ mode: "serial" });
 test.use({
@@ -221,9 +221,13 @@ test("a visibility-limited candidate prompts for a reviewer before confirmation"
   await page.goto("/app/workflow");
   await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
 
-  await uploadGeneratedPhoto(page, "single", "#fileInput");
+  const marker = { xRatio: 0.10, yRatio: 0.55, radiusRatio: 0.035 };
+  await uploadGeneratedPhotoWithControlledMarkers(page, [marker], "#fileInput");
   await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
-  await clickCanvasRatio(page, 0.10, 0.55);
+  const markerButton = page.getByTitle("点击照片中的受控黑色标记并识别边界");
+  await markerButton.click();
+  await expect(markerButton).toHaveAttribute("aria-pressed", "true");
+  await clickCanvasRatio(page, marker.xRatio, marker.yRatio);
   await expect(page.locator("#workflowStageStatus")).toContainText("视野受限参考", { timeout: 45_000 });
 
   await page.locator("#saveReviewBtn").click();
@@ -339,7 +343,7 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
   await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
 
-  const boundaryMode = page.getByLabel("皮表边界");
+  const boundaryMode = page.getByLabel("肿物边界");
   const boundaryButton = page.locator("#startBoundaryBtn");
   await boundaryMode.selectOption("freehand");
   await expect(boundaryMode).toHaveValue("freehand");

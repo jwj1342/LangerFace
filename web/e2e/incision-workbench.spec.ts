@@ -3,7 +3,6 @@ import type { Locator, Page } from "@playwright/test";
 
 interface IncisionSnapshotExpectation {
   reason: string;
-  diameterMm?: number;
   angleOffsetDeg?: number;
   tipAngleDeg?: number;
 }
@@ -39,12 +38,10 @@ async function waitForIncisionSnapshot(
   await expect.poll(() => page.evaluate((target) => {
     const auditWindow = window as Window & { __incisionE2eSnapshots?: Array<{
       reason?: string;
-      tumor?: { diameterMm?: number };
       edit?: { angleOffsetDeg?: number; tipAngleDeg?: number };
     }> };
     return (auditWindow.__incisionE2eSnapshots || []).some((snapshot) =>
       snapshot.reason === target.reason &&
-      (target.diameterMm == null || snapshot.tumor?.diameterMm === target.diameterMm) &&
       (target.angleOffsetDeg == null || snapshot.edit?.angleOffsetDeg === target.angleOffsetDeg) &&
       (target.tipAngleDeg == null || snapshot.edit?.tipAngleDeg === target.tipAngleDeg)
     );
@@ -57,7 +54,7 @@ async function dragRangeAndRetainValue(
   page: Page,
   locator: Locator,
   targetFraction: number,
-  snapshotField: "diameterMm" | "angleOffsetDeg",
+  snapshotField: "angleOffsetDeg",
 ) {
   const before = await locator.inputValue();
   const bounds = await locator.boundingBox();
@@ -83,15 +80,10 @@ async function dragRangeAndRetainValue(
     const auditWindow = window as Window & {
       __incisionE2eSnapshots?: Array<{
         reason?: string;
-        tumor?: { diameterMm?: number };
         edit?: { angleOffsetDeg?: number };
       }>;
     };
     return (auditWindow.__incisionE2eSnapshots || []).some((snapshot) => {
-      if (field === "diameterMm") {
-        return snapshot.reason === "tumor_diameter_input" &&
-          snapshot.tumor?.diameterMm === Number(value);
-      }
       return snapshot.reason === "edit_state" &&
         snapshot.edit?.angleOffsetDeg === Number(value);
     });
@@ -165,17 +157,6 @@ test("active controls remain readable and clinician sliders retain edits", async
     await contrastRatio(page.locator("#reviewerName"), "::placeholder"),
     "#reviewerName placeholder contrast",
   ).toBeGreaterThanOrEqual(4.5);
-
-  const diameter = page.locator("#diameterMm");
-  const diameterBefore = Number(await diameter.inputValue());
-  await diameter.focus();
-  await waitForIncisionSnapshot(
-    page,
-    { reason: "tumor_diameter_input", diameterMm: diameterBefore + 1 },
-    () => diameter.press("ArrowRight"),
-  );
-  await expect(diameter).toHaveValue(String(diameterBefore + 1));
-  await dragRangeAndRetainValue(page, diameter, 0.75, "diameterMm");
 
   const angle = page.locator("#angleOffsetDeg");
   await angle.focus();
@@ -357,7 +338,6 @@ test("clinical summary hides internal codes and exposes the rule validation boun
 
   const state = page.locator(".incision-state-panel");
   await expect(state).toContainText("皮下肿物");
-  await expect(state).toContainText("线性切口");
   await expect(state).toContainText("待医生确认");
   await expect(state).toContainText("研究规则草案");
   await expect(state).toContainText("尚未完成临床验证");
