@@ -80,6 +80,7 @@ async function prepareVideoUrl(file: File): Promise<{ url: string; release: () =
 interface StaticSourceResumeState {
   densityFrac: number;
   source: CanvasImageSource;
+  imageFile: File | null;
   width: number;
   height: number;
   imageView: ImageViewResumeState;
@@ -106,6 +107,7 @@ function captureCurrentStaticSource(): void {
   lastStaticSource = {
     densityFrac: renderState.densityFrac,
     source: frame.source as CanvasImageSource,
+    imageFile: sourceState.imageFile,
     width: frame.width,
     height: frame.height,
     imageView: captureImageViewState(),
@@ -129,15 +131,16 @@ function restoreStaticSourceOrPlaceholder(activeIncisionOverlay: typeof renderSt
     setTransientMsg("已关闭后置摄像头；当前没有可恢复的照片。", 3_000);
     return;
   }
+  sourceState.imageFile = resume.imageFile;
   setSource(resume.source, "image", resume.width, resume.height, {
     preserveRefinementForLive,
     imageViewResume: resume.imageView,
   });
   restoreRefineDisplayState(resume.refinement);
   restoreWrinkleDisplayState(resume.wrinkle);
-  renderState.densityFrac = resume.densityFrac;
-  els.density.value = String(Math.round(resume.densityFrac * 100));
-  els.densityVal.textContent = `${Math.round(resume.densityFrac * 100)}%`;
+  renderState.densityFrac = 1;
+  els.density.value = "100";
+  els.densityVal.textContent = "100%";
   renderState.incisionOverlay = activeIncisionOverlay;
   lastStaticSource = resume;
   setTransientMsg("已关闭后置摄像头，并恢复上一张照片及其显示状态。", 3_000);
@@ -287,6 +290,7 @@ export async function handleFile(
           setMsg("图片加载中", 0, true);
         }
         const prepared = prepareImageSource(img);
+        sourceState.imageFile = file;
         setSource(prepared.source, "image", prepared.width, prepared.height);
         sourceState.imageFileName = file.name;
         const sourceSetAt = performance.now();
@@ -318,6 +322,7 @@ export async function handleFile(
       setSource(els.video, "video", els.video.videoWidth, els.video.videoHeight, {
         release: preparedVideo.release,
       });
+      sourceState.imageFile = null;
       pendingVideoRelease = null;
       els.pause.disabled = true;
       // Render and extract once while the media clock is still at the first frame.
@@ -426,6 +431,7 @@ export function setSource(
     lastStaticSource = {
       densityFrac: renderState.densityFrac,
       source: src,
+      imageFile: sourceState.imageFile,
       width: sourceWidth,
       height: sourceHeight,
       imageView: captureImageViewState(),
@@ -473,6 +479,7 @@ export function stopSource({
   resetLiveWrinkleAnalysis();
   if (!preserveStaticResume) lastStaticSource = null;
   if (!preserveStaticResume) sourceState.imageFileName = null;
+  if (!preserveStaticResume) sourceState.imageFile = null;
   els.pause.disabled = true;
   els.pause.textContent = "⏸ 暂停";
 }

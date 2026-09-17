@@ -85,6 +85,22 @@ The frontend and APIs must remain on the same origin. A server-compute build use
 `/api/gpu/*`; a normal `npm run dev` build keeps the browser-local development
 path and does not use the CUDA service.
 
+## AutoDL startup
+
+`deploy/gpu/autodl-start.sh` starts the deployed service from
+`/root/autodl-tmp/langerface-app` with the isolated Python and Node runtimes in
+`/root/autodl-tmp/langerface-runtime`. It is safe to call repeatedly and keeps
+the existing healthy CUDA process running.
+
+On AutoDL, the startup script reads `AutoDLService6006URL` from
+`/etc/profile.d/autodl.env.sh` and writes the platform-provided stable HTTPS
+address to `/root/autodl-tmp/langerface-runtime/public-url.txt`.
+
+Set `LANGERFACE_ENABLE_QUICK_TUNNEL=1` only for short-lived fallback testing.
+When that flag is absent, any tunnel previously started by this deployment is
+stopped. Neither the AutoDL proxy nor the fallback tunnel adds application login
+controls, so patient-image use still requires an authenticated gateway.
+
 ## Health check
 
 After startup:
@@ -121,8 +137,14 @@ shell used to start the service.
 - `POST /api/gpu/media/video` stores and, when needed, converts an uploaded video
   for browser playback. Temporary media is removed when the process exits.
 - `POST /api/gpu/wrinkles/image` runs the complete server image-to-lines helper.
-- Concurrent YOLO requests are rejected with HTTP 429 instead of accumulating
-  stale video frames.
+- JPEG, PNG, WebP, HEIC, and HEIF photos are decoded on the server so phone and
+  desktop uploads use the same orientation and resize path.
+- Static photos use the same 1280-pixel maximum working scale as the reviewed
+  wrinkle-to-RSTL refinement experiments. The YOLO model still performs CUDA
+  inference at its native input size before masks are mapped back to that scale.
+- Static photo requests queue behind the active photo so simultaneous phone and
+  desktop uploads do not fail. Stale live-video corrections are still rejected
+  with HTTP 429 and retried by the tracking loop.
 
 Live video uses first-frame detection, per-frame browser tracking, low-frequency
 YOLO correction, confidence gating, temporal smoothing, and batched drawing. This

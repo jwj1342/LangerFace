@@ -16,8 +16,8 @@ export function LiveRenderControlsPanel() {
   const snapshot = useLiveStore((state) => state.snapshot);
   const render = snapshot?.render;
   const atlasPreview = snapshot?.atlasPreview;
-  const [density, setDensity] = useState(render?.densityPct ?? 100);
-  const [opacity, setOpacity] = useState(render?.opacityPct || 60);
+  const [density, setDensity] = useState(100);
+  const [opacity, setOpacity] = useState(90);
   const controllerMirror = render?.mirror ?? true;
   const controllerMeshPts = render?.meshPts ?? false;
   const [mirror, setMirror] = useState(controllerMirror);
@@ -25,14 +25,11 @@ export function LiveRenderControlsPanel() {
 
   useEffect(() => setMirror(controllerMirror), [controllerMirror]);
   useEffect(() => setMeshPts(controllerMeshPts), [controllerMeshPts]);
-  useEffect(() => {
-    if (render?.densityPct != null) setDensity(render.densityPct);
-  }, [render?.densityPct]);
 
   return (
     <>
-      <Card>
-        <FieldGroup>
+      <Card visible={false}>
+        <FieldGroup visible={false}>
           <Label htmlFor="templateSel">模板</Label>
           <Select
             id="templateSel"
@@ -47,7 +44,7 @@ export function LiveRenderControlsPanel() {
           </Hint>
           <Button variant="workbench" visible={Boolean(atlasPreview?.active)} id="restoreAtlasBtn" type="button" onClick={() => commands.render("restore_atlas")}>恢复官方图谱</Button>
         </FieldGroup>
-        <FieldGroup>
+        <FieldGroup visible={false}>
           <Label htmlFor="density">线密度 <FieldValue id="densityVal">{density}%</FieldValue></Label>
           <RangeInput
             id="density"
@@ -65,7 +62,7 @@ export function LiveRenderControlsPanel() {
           <Label htmlFor="smooth">平滑 <FieldValue id="smoothVal">{render?.smoothLabel || "关"}</FieldValue></Label>
           <RangeInput id="smooth" min="0" max="100" defaultValue="45" />
         </FieldGroup>
-        <FieldGroup>
+        <FieldGroup visible={false}>
           <Label htmlFor="opacity">透明度 <FieldValue id="opacityVal">{opacity}%</FieldValue></Label>
           <RangeInput
             id="opacity"
@@ -81,10 +78,10 @@ export function LiveRenderControlsPanel() {
         </FieldGroup>
       </Card>
 
-      <Card>
+      <Card visible={false}>
         <CheckboxField visible={false} checkboxProps={{ id: "clip", defaultChecked: true }}>限制在面部轮廓内（背面剔除）</CheckboxField>
         <CheckboxField visible={false} checkboxProps={{ id: "handOcc", defaultChecked: true }}>前方手部遮挡（仅识别手部）</CheckboxField>
-        <CheckboxField
+        <CheckboxField visible={false}
           checkboxProps={{
             id: "mirror",
             checked: mirror,
@@ -99,7 +96,7 @@ export function LiveRenderControlsPanel() {
         </CheckboxField>
         <CheckboxField visible={false} checkboxProps={{ id: "bands" }}>按面部分区着色</CheckboxField>
         <CheckboxField visible={false} checkboxProps={{ id: "zoom", defaultChecked: true }}>细节放大窗（关键区域）</CheckboxField>
-        <CheckboxField
+        <CheckboxField visible={false}
           checkboxProps={{
             id: "meshPts",
             checked: meshPts,

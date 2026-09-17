@@ -57,13 +57,10 @@ test("phone review fixes stay visible, independent, and desktop-isolated", async
   await expect(zoomStrip).toBeHidden();
   expect(await zoomStrip.locator(".zoom-card").count()).toBeGreaterThan(0);
 
-  const qualityPanel = page.locator(".mobile-canvas-quality");
   await expect(page.locator("#qualityVal")).toHaveCount(1);
-  await expect(qualityPanel).toHaveCount(1);
-  await expect(qualityPanel).toContainText("跟踪质量参考");
-  await expect(qualityPanel).toContainText("受分辨率与光线影响");
-  await expect(page.locator(".workflow-mobile-quality-slot > .mobile-canvas-quality")).toHaveCount(1);
-  await expect(page.locator(".main-wrap > .mobile-canvas-quality")).toHaveCount(0);
+  await expect(page.locator('[data-quality-runtime="true"]')).toBeHidden();
+  await expect(page.locator(".mobile-canvas-quality")).toHaveCount(0);
+  await expect(page.locator(".workflow-mobile-quality-slot")).toHaveCount(0);
   await expect(page.locator("#qualityBar")).toHaveCount(1);
 
   const mobileOperationPane = page.locator(".workflow-mobile-operation-pane");
@@ -180,6 +177,6 @@ test("phone review fixes stay visible, independent, and desktop-isolated", async
   await expect(page.locator(".mobile-candidate-adjust")).toBeHidden();
   await expect(page.locator(".mobile-canvas-quality")).toHaveCount(0);
   await expect(page.locator(".workflow-live-rail #qualityVal")).toHaveCount(1);
-  await expect(page.locator(".workflow-live-rail .live-quality-panel")).toContainText("追踪质量");
+  await expect(page.locator('[data-quality-runtime="true"]')).toBeHidden();
   await expect(page.locator("#qualityVal")).toContainText(/\d+%/);
 });
