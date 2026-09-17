@@ -16,7 +16,7 @@ export default defineConfig({
   outputDir: "test-results/marker-v035",
   use: { ...base.use, baseURL: "http://127.0.0.1:4175", headless: true },
   webServer: {
-    command: "npm run dev:marker-v035 -- --port 4175",
+    command: "npm run dev:lesion-candidate -- --port 4175",
     url: "http://127.0.0.1:4175/__runtime-identity.json",
     // Existing services still pass globalSetup's source/profile/browser checks.
     reuseExistingServer: true,

@@ -12,8 +12,8 @@ import {
 } from "./marker_runtime_identity.mts";
 import { detectorVersionForProfile } from "../web/src/services/controlledMarkerDetectionProfile.ts";
 
-const EXPECTED_VERSION = "0.35";
-const BUILD_MARKER = "LANGERFACE_MARKER_V035_BUILD";
+const EXPECTED_VERSION = "task1-candidate";
+const BUILD_MARKER = "LANGERFACE_LESION_CANDIDATE_BUILD";
 const repoRoot = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const webRoot = resolve(repoRoot, "web");
 const viteEntry = resolve(webRoot, "node_modules/vite/bin/vite.js");
@@ -24,7 +24,7 @@ const verifyOnly = args.includes("--verify-dist");
 const unknownArgs = args.filter((arg) => arg !== "--check" && arg !== "--verify-dist");
 
 if (unknownArgs.length || (checkOnly && verifyOnly)) {
-  throw new Error(`build:marker-v035 收到不支持的参数：${args.join(" ")}`);
+  throw new Error(`build:lesion-candidate 收到不支持的参数：${args.join(" ")}`);
 }
 if (detectorVersionForProfile(TARGET_MARKER_PROFILE) !== EXPECTED_VERSION) {
   throw new Error(`受控标记实现版本不是 ${EXPECTED_VERSION}，拒绝生成生产包。`);
@@ -41,7 +41,7 @@ function expectedIdentity() {
   return {
     ...captureMarkerIdentity(TARGET_MARKER_PROFILE, repoRoot),
     mode: "production",
-    command: "npm run build:marker-v035",
+    command: "npm run build:lesion-candidate",
   };
 }
 
@@ -56,12 +56,12 @@ function verifyDistIdentity() {
     throw new Error("生产身份清单的构建模式或命令不匹配。");
   }
   if (actual.profile !== TARGET_MARKER_PROFILE || actual.implementationVersion !== EXPECTED_VERSION) {
-    throw new Error("生产身份清单不是受控标记 v0.35，拒绝放行。");
+    throw new Error("生产身份清单不是小肿物边界候选算法，拒绝放行。");
   }
-  console.log(`[marker-v035-build] 身份回读通过 ${manifestPath}`);
+  console.log(`[lesion-candidate-build] 身份回读通过 ${manifestPath}`);
 }
 
-console.log(`[marker-v035-build] profile=${TARGET_MARKER_PROFILE} version=${EXPECTED_VERSION}`);
+console.log(`[lesion-candidate-build] profile=${TARGET_MARKER_PROFILE} identity=${EXPECTED_VERSION}`);
 if (checkOnly) process.exit(0);
 if (verifyOnly) {
   verifyDistIdentity();

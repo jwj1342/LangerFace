@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { uploadGeneratedPhoto } from "./support/incisionPhoto";
+import { uploadGeneratedPhoto, uploadGeneratedPhotoWithControlledMarkers } from "./support/incisionPhoto";
 
 test.describe.configure({ mode: "serial" });
 test.use({
@@ -159,7 +159,7 @@ async function expectAllVisibleButtonsReachable(page: Page) {
   }
 }
 
-test("desktop workflow keeps the saved three-column UI and status behavior", async ({ browser, baseURL }) => {
+test("desktop workflow keeps the three-column shell while status text remains hidden", async ({ browser, baseURL }) => {
   test.setTimeout(60_000);
   const context = await browser.newContext({
     baseURL,
@@ -172,14 +172,13 @@ test("desktop workflow keeps the saved three-column UI and status behavior", asy
   try {
     await page.goto("/app/workflow");
     await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
-    await expect(page.locator("#livePill")).toBeVisible();
-    await expect(page.locator("#fps")).toBeVisible();
+    await expect(page.locator("#livePill")).toBeHidden();
+    await expect(page.locator("#fps")).toBeHidden();
     await expect(page.locator(".mobile-workflow-dock")).toBeHidden();
     await expect(page.locator(".workflow-live-rail .live-quality-panel")).toHaveCount(1);
     await expect(page.locator(".workflow-mobile-quality-slot > .mobile-canvas-quality")).toHaveCount(0);
     await page.waitForTimeout(4_200);
-    await expect(page.locator("#workflowStageStatus")).toBeVisible();
-    await expect(page.locator("#workflowStageStatus")).not.toHaveClass(/is-collapsed/);
+    await expect(page.locator("#workflowStageStatus")).toBeHidden();
     const desktopLayout = await page.locator(".workflow-workbench").evaluate((root) => {
       const liveRail = root.querySelector<HTMLElement>(".workflow-live-rail");
       const stageElement = root.querySelector<HTMLElement>(":scope > .stage");
@@ -217,27 +216,27 @@ test("desktop workflow keeps the saved three-column UI and status behavior", asy
   }
 });
 
-test("a visibility-limited saved draft explains why confirmation is unavailable", async ({ page }) => {
+test("a visibility-limited candidate prompts for a reviewer before confirmation", async ({ page }) => {
   test.setTimeout(120_000);
   await page.goto("/app/workflow");
   await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
 
-  await uploadGeneratedPhoto(page, "single", "#fileInput");
+  const marker = { xRatio: 0.10, yRatio: 0.55, radiusRatio: 0.035 };
+  await uploadGeneratedPhotoWithControlledMarkers(page, [marker], "#fileInput");
   await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
-  await clickCanvasRatio(page, 0.10, 0.55);
+  const markerButton = page.getByTitle("点击照片中的受控黑色标记并识别边界");
+  await markerButton.click();
+  await expect(markerButton).toHaveAttribute("aria-pressed", "true");
+  await clickCanvasRatio(page, marker.xRatio, marker.yRatio);
   await expect(page.locator("#workflowStageStatus")).toContainText("视野受限参考", { timeout: 45_000 });
 
-  await page.locator("#reviewerName").fill("E2E clinician");
-  await page.locator("#reviewDecision").selectOption("pending_clinician_confirmation");
   await page.locator("#saveReviewBtn").click();
-  await expect(page.locator("#savedCount")).toHaveText("1");
-
-  const transitionButton = page.locator('[data-candidate-review-toggle="pending_clinician_confirmation"]');
-  const transitionReason = page.locator(".candidate-review-condition.warning");
-  await expect(transitionReason).toContainText("只覆盖照片可见区域");
-  await expect(transitionReason).toContainText("暂不能确认");
-  await expect(transitionButton).toBeDisabled();
-  await expect(transitionButton).toHaveText("暂不能确认");
+  await expect(page.locator("#reviewSaveFeedback")).toContainText("请填写审阅人后确认");
+  await expect(page.locator("#reviewerName")).toHaveAttribute("aria-invalid", "true");
+  await page.locator("#reviewerName").fill("E2E clinician");
+  await page.locator("#saveReviewBtn").click();
+  await expect(page.locator("#saveReviewBtn")).toHaveText("已确认");
+  await expect(page.locator("#savedCount, #candidateList, [data-candidate-review-toggle]")).toHaveCount(0);
 });
 
 test("mobile freehand exits an empty session and draws after leaving controlled marker", async ({ page }) => {
@@ -318,8 +317,7 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
 
   await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
-  const ellipseRatio = page.locator("#ellipseRatio");
-  await expect(ellipseRatio).toBeDisabled();
+  await expect(page.locator("#ellipseRatio")).toHaveCount(0);
 
   const markerStageHeight = await stage.evaluate((element) => element.getBoundingClientRect().height);
   expect(markerStageHeight).toBeCloseTo(Math.max(320, Math.min(844 - 136, 390 + 134)), 0);
@@ -342,12 +340,10 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
   await page.setViewportSize({ width: 390, height: 844 });
   await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "false");
-  await expect(ellipseRatio).toBeEnabled();
   await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
-  await expect(ellipseRatio).toBeDisabled();
 
-  const boundaryMode = page.getByLabel("皮表边界");
+  const boundaryMode = page.getByLabel("肿物边界");
   const boundaryButton = page.locator("#startBoundaryBtn");
   await boundaryMode.selectOption("freehand");
   await expect(boundaryMode).toHaveValue("freehand");
@@ -364,7 +360,7 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
 
   await expect.poll(() => page.locator("[data-workflow-boundary]").getAttribute("d"))
     .toMatch(/^M /);
-  await expect(page.locator("#boundaryStatus")).toHaveText("轮廓轨迹已记录；请点击“结束描绘”后再识别并生成候选。");
+  await expect(page.locator("#boundaryStatus")).toHaveCount(0);
   await expect(page.locator("#workflowStageStatus")).toContainText("本段轮廓已记录");
   await expect(boundaryButton).toHaveText("结束描绘");
 });

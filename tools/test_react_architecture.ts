@@ -98,6 +98,7 @@ const workflowIncisionRail = read("src/components/WorkflowIncisionRail.tsx");
 const privacyAuditPanel = read("src/components/PrivacyAuditPanel.tsx");
 const editPanel = read("src/components/EditControlsPanel.tsx");
 const reviewPanel = read("src/components/ReviewControlsPanel.tsx");
+const standaloneReviewPanel = read("src/components/StandaloneReviewControlsPanel.tsx");
 const liveStore = read("src/stores/liveStore.ts");
 const managedWorkbenchHook = read("src/hooks/useManagedWorkbenchController.ts");
 const workflowWorkerProbeHook = read("src/hooks/useWorkflowWorkerProbe.ts");
@@ -628,8 +629,8 @@ assert.deepEqual(
   false,
   "Vercel Git deployment must remain disabled until public deployment issue #224 is completed",
 );
-assert.equal(vercelConfig.buildCommand, "npm run build:marker-v035",
-  "Vercel production builds must use the fail-closed marker v0.35 entrypoint");
+assert.equal(vercelConfig.buildCommand, "npm run build:lesion-candidate",
+  "Vercel production builds must use the fail-closed lesion candidate entrypoint");
 assert.ok(vite.includes("markerRuntimeIdentityBuildPlugin"),
   "Vite emits the production marker identity manifest only through the guarded build plugin");
 assert.equal(vercelConfig.installCommand, "npm ci", "Vercel should install from the committed npm lockfile");
@@ -1444,7 +1445,6 @@ assert.ok(incisionStagePanel.includes("Legend"), "React incision stage uses the 
 assert.ok(incisionStagePanel.includes("CanvasLegendItem"), "React incision stage uses the shared canvas legend item primitive");
 for (const id of [
   "tumorKind",
-  "diameterMm",
   "tumorAuthor",
   "depthMm",
   "marginMm",
@@ -1467,7 +1467,6 @@ assert.ok(tumorPanel.includes("useIncisionControllerCommands"), "React tumor pan
 assert.ok(!tumorPanel.includes("dispatchIncisionTumorCommand"), "React tumor panel does not import low-level command dispatch helpers directly");
 assert.ok(!tumorPanel.includes("../lib/controllerEvents"), "React tumor panel does not import controller event names directly");
 assert.ok(
-  tumorPanel.includes('commands.tumor("diameter_input", value)') &&
   tumorPanel.includes('commands.tumor("depth_input", value)') &&
   tumorPanel.includes('commands.tumor("margin_input", value)') &&
   tumorPanel.includes('commands.tumor("ellipse_ratio_input", value)'),
@@ -1603,12 +1602,16 @@ assert.ok(candidateLibraryPanel.includes("useState"), "React candidate library o
 assert.ok(candidateLibraryPanel.includes("confirmClear"), "React candidate library renders a controlled clear confirmation state");
 assert.ok(!candidateLibraryPanel.includes("window.confirm"), "React candidate library does not use browser-native confirm dialogs");
 assert.ok(candidateLibraryPanel.includes("Button"), "React candidate library uses the shared shadcn-style button primitive");
-assert.ok(workflowIncisionRail.includes("showDirectionVariants={false}")
-  && workflowIncisionRail.includes("showJsonExport={false}")
-  && workflowIncisionRail.includes("showSaveAndExportActions={false}")
-  && workflowIncisionRail.includes("showCandidateRowActions")
-  && !workflowIncisionRail.includes("showCandidateRowActions={false}"),
-"merged workflow hides redundant top-level actions and retains record-level load/delete controls");
+assert.ok(workflowIncisionRail.includes("simplifiedWorkflow"),
+  "merged workflow explicitly selects the simplified tumor-input contract");
+for (const retiredWorkflowPanel of [
+  "CandidateResultPanel",
+  "CandidateLibraryPanel",
+  "PrivacyAuditPanel",
+]) {
+  assert.ok(!workflowIncisionRail.includes(retiredWorkflowPanel),
+    `merged workflow does not mount the retired ${retiredWorkflowPanel} panel`);
+}
 assert.ok(candidateLibraryPanel.includes("ButtonRow"), "React candidate library uses the shared shadcn-style button row primitive");
 assert.ok(candidateLibraryPanel.includes("CandidateList"), "React candidate library uses the shared candidate list primitive");
 assert.ok(candidateLibraryPanel.includes("CandidateRow"), "React candidate library uses the shared candidate row primitive");
@@ -1702,24 +1705,27 @@ assert.ok(editPanel.includes("WorkbenchCard"), "React edit panel uses the shared
 for (const id of [
   "reviewState",
   "reviewerName",
-  "reviewDecision",
-  "reviewNotes",
   "saveReviewBtn",
+  "reviewSaveFeedback",
 ]) {
   assert.ok(reviewPanel.includes(`id="${id}"`), `React review panel exposes #${id}`);
 }
 assert.ok(!reviewPanel.includes('id="approveCandidateBtn"'), "React review panel removes the duplicate approval action");
 assert.ok(!reviewPanel.includes('id="rejectCandidateBtn"'), "React review panel removes the duplicate rejection action");
-assert.ok(incisionWorkbench.includes("ReviewControlsPanel"), "React incision workbench renders the review controls as a React component");
+assert.ok(incisionWorkbench.includes("StandaloneReviewControlsPanel"), "React incision workbench renders its complete review controls as a React component");
+assert.ok(standaloneReviewPanel.includes('id="reviewDecision"') && standaloneReviewPanel.includes('id="reviewNotes"'),
+  "standalone incision review retains its decision and notes contract");
 assert.ok(reviewPanel.includes("useIncisionControllerCommands"), "React review panel uses typed incision command callbacks");
 assert.ok(!reviewPanel.includes("dispatchIncisionReviewCommand"), "React review panel does not import low-level command dispatch helpers directly");
 assert.ok(!reviewPanel.includes("../lib/controllerEvents"), "React review panel does not import controller event names directly");
 assert.ok(reviewPanel.includes("useIncisionStore"), "React review panel syncs low-frequency review state from Zustand");
 assert.ok(reviewPanel.includes("Input"), "React review panel uses the shared shadcn-style input primitive");
 assert.ok(reviewPanel.includes("Label"), "React review panel uses the shared shadcn-style label primitive");
-assert.ok(reviewPanel.includes("Select"), "React review panel uses the shared shadcn-style select primitive");
-assert.ok(reviewPanel.includes("Textarea"), "React review panel uses the shared shadcn-style textarea primitive");
 assert.ok(reviewPanel.includes("Button"), "React review panel uses the shared shadcn-style button primitive");
+assert.ok(reviewPanel.includes("confirmDisabled") && reviewPanel.includes("reviewerMissingNotice"),
+  "React review panel keeps one confirmation action and reports a missing reviewer after the action is requested");
+assert.ok(!reviewPanel.includes('id="reviewDecision"') && !reviewPanel.includes('id="reviewNotes"'),
+  "React review panel removes retired decision and notes controls from the simplified workflow");
 assert.ok(!reviewPanel.includes("ButtonRow"), "React review panel exposes one unambiguous save action without a redundant button row");
 assert.ok(reviewPanel.includes("WorkbenchCard"), "React review panel uses the shared shadcn-style workbench card primitive");
 assert.ok(reviewPanel.includes('variant="workbenchPrimary"'), "React review panel keeps primary workbench button styling through Button variants");

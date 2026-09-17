@@ -76,21 +76,7 @@ export function normalizeTumorKind(kind?: string): TumorKind {
 }
 
 export function normalizeTumorBoundaryMode(kind?: string, boundaryMode?: string): TumorBoundaryMode {
-  if (normalizeTumorKind(kind) !== "cutaneous") return "center_diameter";
   return boundaryMode === "freehand" ? "freehand" : "ellipse";
-}
-
-export function tumorDiameterParameterInactive({
-  kind,
-  boundaryMode,
-  controlledMarkerMode = false,
-}: {
-  kind?: string;
-  boundaryMode?: string;
-  controlledMarkerMode?: boolean;
-}): boolean {
-  return normalizeTumorKind(kind) === "cutaneous"
-    && (normalizeTumorBoundaryMode(kind, boundaryMode) === "freehand" || controlledMarkerMode);
 }
 
 export function shouldClearFreehandBoundaryOnLesionRepick({
@@ -102,8 +88,7 @@ export function shouldClearFreehandBoundaryOnLesionRepick({
   boundaryMode?: string;
   boundaryPointCount?: number;
 }): boolean {
-  return normalizeTumorKind(kind) === "cutaneous"
-    && normalizeTumorBoundaryMode(kind, boundaryMode) === "freehand"
+  return normalizeTumorBoundaryMode(kind, boundaryMode) === "freehand"
     && Number(boundaryPointCount || 0) > 0;
 }
 
@@ -119,7 +104,7 @@ export function buildTumorInput({
 }: TumorFormState): TumorInput {
   const normalizedKind = normalizeTumorKind(kind);
   const normalizedBoundaryMode = normalizeTumorBoundaryMode(normalizedKind, boundaryMode);
-  const sourceBoundary = normalizedKind === "cutaneous" ? boundary : [];
+  const sourceBoundary = boundary;
   return {
     kind: normalizedKind,
     center,
@@ -128,7 +113,7 @@ export function buildTumorInput({
     margin_mm: normalizedKind === "cutaneous" ? Number(marginMm) : 0,
     boundary: sourceBoundary,
     boundary_mode: normalizedBoundaryMode,
-    boundary_source: normalizedKind === "cutaneous" ? `manual_${normalizedBoundaryMode}` : "ultrasound_diameter",
+    boundary_source: `manual_${normalizedBoundaryMode}`,
     source: "manual_web_agent",
     author: author.trim(),
     units: "mm",
@@ -136,7 +121,7 @@ export function buildTumorInput({
 }
 
 export function withControlledMarkerProvenance(input: TumorInput, active: boolean): TumorInput {
-  if (!active || input.kind !== "cutaneous") return input;
+  if (!active) return input;
   return {
     ...input,
     boundary_mode: "controlled_marker",
@@ -187,8 +172,9 @@ export function importedTumorFormState(
     : payload;
   const tumor = normalizeTumorInput(raw as TumorInput);
   const boundary = Array.isArray(tumor.boundary) ? (tumor.boundary as Vec3[]) : [];
-  const explicitFreehand = tumor.kind === "cutaneous" && tumor.boundary_mode === "freehand";
-  const boundaryPoints = explicitFreehand && boundary.length >= 3
+  const hasUsableBoundary = boundary.length >= 3;
+  const explicitFreehand = tumor.boundary_mode === "freehand";
+  const boundaryPoints = hasUsableBoundary
     ? boundary.map((point) => point.map(Number) as Vec3)
     : [];
   return {
@@ -201,7 +187,7 @@ export function importedTumorFormState(
     boundaryMode: explicitFreehand ? "freehand" : "ellipse",
     boundaryPoints,
     pickState: boundaryPoints.length >= 3
-      ? `已导入肿物：自由轮廓 ${boundaryPoints.length} 点`
-      : "已导入肿物：中心点与直径",
+      ? `已导入肿物：${explicitFreehand ? "自由轮廓" : "识别边界"} ${boundaryPoints.length} 点`
+      : "已导入旧肿物记录：缺少真实边界，需重新识别或描边",
   };
 }

@@ -1,7 +1,11 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
-import { dragFirstPhotoEndpoint, pickSafePhotoCheek, uploadGeneratedPhoto } from "./support/incisionPhoto";
+import {
+  clickPhotoRatio,
+  uploadGeneratedPhoto,
+  uploadGeneratedPhotoWithControlledMarkers,
+} from "./support/incisionPhoto";
 
 async function explicitGenerationCount(page: Page) {
   const status = await page.locator("#stageStatus").textContent() || "";
@@ -47,11 +51,17 @@ test("patient photo is the mobile incision canvas and reuploads fail safely", as
   await page.goto("/app/incision");
   await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
 
-  await uploadGeneratedPhoto(page, "single");
-  await pickSafePhotoCheek(page);
+  const marker = { xRatio: 0.72, yRatio: 0.50, radiusRatio: 0.035 };
+  await uploadGeneratedPhotoWithControlledMarkers(page, [marker]);
   const photoCanvas = page.locator("#incisionPhotoCanvas");
   const status = page.locator("#incisionPhotoStatus");
-  await expect(status).toContainText(/照片规划.*RSTL.*候选已叠加/, { timeout: 45_000 });
+  await expect(photoCanvas).toHaveAttribute("data-active", "true", { timeout: 45_000 });
+  const markerButton = page.locator("#controlledMarkerDetectBtn");
+  await markerButton.click();
+  await expect(markerButton).toHaveAttribute("aria-pressed", "true");
+  await clickPhotoRatio(page, marker);
+  const successfulPlanningStatus = /照片规划.*RSTL.*候选已叠加|已识别肿物边界并生成候选切口/;
+  await expect(status).toContainText(successfulPlanningStatus, { timeout: 45_000 });
   await expect(photoCanvas).toHaveAttribute("data-active", "true");
   await expect(page.locator("#incisionCanvas")).toHaveClass(/hidden/);
   await expect.poll(async () => (await candidateOverlayEvidence(page)).nonTransparent).toBeGreaterThan(4);
@@ -75,18 +85,17 @@ test("patient photo is the mobile incision canvas and reuploads fail safely", as
   expect(evidence.pinkRstl, "photo canvas should contain visible shared pink RSTL pixels").toBeGreaterThan(20);
 
   const generationBefore = await explicitGenerationCount(page);
-  await page.locator("#diameterMm").focus();
-  await page.locator("#diameterMm").press("ArrowRight");
-  await expect.poll(() => explicitGenerationCount(page)).toBe(generationBefore);
   await page.locator("#runWorkflowBtn").click();
   await expect.poll(() => explicitGenerationCount(page)).toBe(generationBefore + 1);
 
-  const lengthBefore = Number(await page.locator("#lengthScale").inputValue());
+  const lengthScale = page.locator("#lengthScale");
+  const lengthBefore = Number(await lengthScale.inputValue());
   await page.locator("#reviewDecision").selectOption("approved_for_discussion");
-  await dragFirstPhotoEndpoint(page);
-  await expect.poll(async () => Number(await page.locator("#lengthScale").inputValue())).not.toBe(lengthBefore);
+  await lengthScale.focus();
+  await lengthScale.press("ArrowRight");
+  await expect.poll(async () => Number(await lengthScale.inputValue())).not.toBe(lengthBefore);
   await expect(page.locator("#editHistoryState")).toContainText("已提交");
-  await expect(page.locator("#reviewDecision")).toHaveValue("pending_clinician_confirmation");
+  await expect(page.locator("#reviewDecision")).toHaveValue("approved_for_discussion");
 
   const box = await photoCanvas.boundingBox();
   expect(box).not.toBeNull();
@@ -106,11 +115,9 @@ test("patient photo is the mobile incision canvas and reuploads fail safely", as
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("incision-photo-desktop.png"), fullPage: true });
 
-  await page.locator("#diameterMm").fill("4");
-  await page.locator("#tumorKind").selectOption("cutaneous");
   await expect(page.locator("#candidateType")).toHaveText("梭形");
   await expect.poll(() => explicitGenerationCount(page)).toBe(generationBefore + 1);
-  await expect(status).toContainText(/照片规划.*RSTL.*候选已叠加/);
+  await expect(status).toContainText(successfulPlanningStatus);
   await expect.poll(async () => (await candidateOverlayEvidence(page)).brightCyan).toBeGreaterThan(4);
   await page.screenshot({ path: testInfo.outputPath("incision-photo-fusiform.png"), fullPage: true });
 

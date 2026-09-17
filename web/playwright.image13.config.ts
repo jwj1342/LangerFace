@@ -13,7 +13,7 @@ export default defineConfig({
   outputDir: "test-results/image13-v035",
   use: { ...base.use, baseURL: "http://127.0.0.1:4176", headless: true },
   webServer: {
-    command: "npm run dev:marker-v035 -- --port 4176",
+    command: "npm run dev:lesion-candidate -- --port 4176",
     url: "http://127.0.0.1:4176/__runtime-identity.json",
     reuseExistingServer: false,
     timeout: 120_000,

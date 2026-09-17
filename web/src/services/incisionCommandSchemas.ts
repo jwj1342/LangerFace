@@ -33,8 +33,6 @@ export interface IncisionEditCommandDetail
 }
 
 const NUMERIC_TUMOR_COMMANDS = new Set<IncisionTumorCommand>([
-  "diameter_input",
-  "diameter_changed",
   "depth_input",
   "depth_changed",
   "margin_input",

@@ -17,7 +17,7 @@ const html = normalizeTsxContracts([
   fs.readFileSync("src/components/SecondaryCuePanel.tsx", "utf8"),
   fs.readFileSync("src/components/CandidateResultPanel.tsx", "utf8"),
   fs.readFileSync("src/components/EditControlsPanel.tsx", "utf8"),
-  fs.readFileSync("src/components/ReviewControlsPanel.tsx", "utf8"),
+  fs.readFileSync("src/components/StandaloneReviewControlsPanel.tsx", "utf8"),
   fs.readFileSync("src/components/CandidateLibraryPanel.tsx", "utf8"),
   fs.readFileSync("src/components/PrivacyAuditPanel.tsx", "utf8"),
 ].join("\n"));

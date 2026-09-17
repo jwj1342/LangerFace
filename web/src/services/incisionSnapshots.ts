@@ -476,10 +476,12 @@ export function buildIncisionSavedCandidateSummaries({
   records = [],
   comparisons = [],
   reviewStatusLabel,
+  allowReferenceCandidates = false,
 }: {
   records?: IncisionSavedCandidateRecordLike[];
   comparisons?: IncisionComparisonLike[];
   reviewStatusLabel: (status?: string) => string;
+  allowReferenceCandidates?: boolean;
 }): IncisionSavedCandidateSummary[] {
   const comparisonById = new Map(comparisons.map((comparison) => [comparison.id, comparison]));
   return records.map((rec) => {
@@ -489,11 +491,13 @@ export function buildIncisionSavedCandidateSummaries({
     const blockedReason = rec.review_gate?.live_overlay_blocked_reason;
     const reviewTransitionReason = !pendingApproval
       ? null
-      : rec.candidate?.metrics?.photo_visibility_limited_candidate === true
+      : !allowReferenceCandidates && (rec.candidate?.metrics?.photo_visibility_limited_candidate === true
           || blockedReason === "visibility_limited_reference_candidate"
+        )
         ? "暂不能确认：当前候选只覆盖照片可见区域；请补充另一视角并复核隐藏区域。"
-        : rec.candidate?.metrics?.photo_reference_candidate === true
+        : !allowReferenceCandidates && (rec.candidate?.metrics?.photo_reference_candidate === true
             || blockedReason === "nonstandard_reference_candidate"
+          )
           ? "暂不能确认：当前候选未达到标准梭形要求；请调整参数或重新计算。"
           : blockedReason === "engineering_hard_violation" || Number(rec.review_gate?.hard_violation_count || 0) > 0
             ? "暂不能确认：候选存在不可覆盖的工程几何错误；请修复后重新计算。"

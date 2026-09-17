@@ -39,7 +39,7 @@ test("changing tumor kind before a photo pick does not create a default lesion",
     .toBe(before);
 });
 
-test("switching to a subcutaneous tumor exits controlled marking and restores linear photo picking", async ({ page }) => {
+test("switching to a subcutaneous tumor exits controlled marking without inventing a boundary", async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.goto("/app/incision");
@@ -59,9 +59,8 @@ test("switching to a subcutaneous tumor exits controlled marking and restores li
   await expect(canvas).toHaveAttribute("data-controlled-marker", "false");
   await expect(canvas).toHaveAttribute("data-controlled-marker-repair", "false");
 
-  await clickPhotoRatio(page, { xRatio: 0.68, yRatio: 0.58 });
-  await expect(page.locator("#candidateType")).toContainText("线性", { timeout: 45_000 });
-  await expect.poll(() => findPhotoEndpointHandles(page)).toHaveLength(2);
+  await expect(page.locator("#candidateType")).toHaveText("—");
+  await expect.poll(() => findPhotoEndpointHandles(page)).toHaveLength(0);
 });
 
 test("a second controlled-marker click replaces the previous result before reporting success", async ({ page }) => {
@@ -71,8 +70,6 @@ test("a second controlled-marker click replaces the previous result before repor
   await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
 
   await page.locator("#tumorKind").selectOption("cutaneous");
-  await page.locator("#diameterMm").fill("6");
-  await page.locator("#marginMm").fill("1");
   await uploadGeneratedPhotoWithControlledMarkers(page, [MARKER_A, MARKER_B]);
 
   const canvas = page.locator("#incisionPhotoCanvas");

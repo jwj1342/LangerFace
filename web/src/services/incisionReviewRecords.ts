@@ -181,11 +181,15 @@ export function transitionIncisionReviewRecord({
   targetStatus,
   reviewContext,
   transitionedAt = new Date().toISOString(),
+  allowReferenceCandidates = false,
+  requireHighRiskNotes = true,
 }: {
   record: AnyRecord;
   targetStatus: CandidateReviewTransitionStatus;
   reviewContext?: AnyRecord | null;
   transitionedAt?: string;
+  allowReferenceCandidates?: boolean;
+  requireHighRiskNotes?: boolean;
 }): CandidateReviewTransitionResult {
   const previousStatus = String(
     record.review?.status || record.review_status || "pending_clinician_confirmation",
@@ -207,6 +211,8 @@ export function transitionIncisionReviewRecord({
       result: record,
       reviewer: review.reviewer,
       notes: review.notes,
+      allowReferenceCandidates,
+      requireHighRiskNotes,
     });
     if (!readiness.ok) {
       return {
@@ -223,6 +229,8 @@ export function transitionIncisionReviewRecord({
     result: record,
     topologyId: record.head_asset?.topologyId,
     topologyVersion: record.head_asset?.topologyVersion,
+    allowReferenceCandidates,
+    requireHighRiskNotes,
   });
   if (targetStatus === "approved_for_discussion" && reviewGate.approval_ready !== true) {
     return {

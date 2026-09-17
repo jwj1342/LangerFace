@@ -1,4 +1,5 @@
 import {
+  __controlledMarkerForTests,
   CONTROLLED_MARKER_DETECTOR_VERSION as LEGACY_DETECTOR_VERSION,
   detectControlledMarker as detectWithLegacyCore,
 } from "./controlledMarkerDetectionLegacyV023.ts";
@@ -9,7 +10,9 @@ import type {
   MarkerPoint,
 } from "./controlledMarkerDetection.ts";
 
-export const CONTROLLED_MARKER_DETECTOR_VERSION = "0.35";
+// Candidate identity remains stable across tuning rounds until the operator
+// explicitly accepts a completed version iteration.
+export const CONTROLLED_MARKER_DETECTOR_VERSION = "task1-candidate";
 export const COLOR_DIFFERENCE_BASELINE_VERSION = LEGACY_DETECTOR_VERSION;
 
 interface LabColor {
@@ -234,6 +237,7 @@ const MAXIMUM_RETRY_SCALE = 1.45;
 const STROKE_RECONCILIATION_SCALES = [1.08, 1.15, 1.2] as const;
 const MINIMUM_REQUESTED_DIAMETER_RATIO = 0.65;
 const MAXIMUM_REQUESTED_DIAMETER_RATIO = 1.65 * MAXIMUM_RETRY_SCALE;
+const MINIMUM_SOLID_DIAMETER_MM = 3;
 
 function boundaryCompactness(boundary: MarkerPoint[]): number {
   if (boundary.length < 3) return 0;
@@ -317,14 +321,279 @@ function candidateShapeCompactness(result: ControlledMarkerDetection): number {
     && Number(diagnostics.boundary_regularization_replacement_support_p20) >= 45
     && Number(diagnostics.boundary_support_ratio) >= 0.95
     && Number(diagnostics.repair_fraction) <= 0.05;
+  const boundedSolidRegularization = result.geometry_mode === "dark_component"
+    && diagnostics?.solid_boundary_regularization === "periodic_constrained"
+    && Number(diagnostics.solid_boundary_area_ratio) >= 0.97
+    && Number(diagnostics.solid_boundary_area_ratio) <= 1.03
+    && Number(diagnostics.solid_boundary_max_displacement_ratio) <= 0.22;
 
   // shape_compactness describes the noisy pre-regularization raster outline.
   // Only when the frozen legacy core proves that its bounded regularization was
   // local and conservative should the color profile judge the emitted boundary
   // rather than reject an otherwise well-supported thin pen ring.
   return tightlyBoundedRegularization || tightlyBoundedStrokeEnvelope || supportedNarrowSpurTrim
+    || boundedSolidRegularization
     ? emittedCompactness
     : rawCompactness;
+}
+
+function percentile(values: number[], ratio: number): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * ratio)))];
+}
+
+function otsuThreshold(values: number[]): number {
+  const histogram = new Uint32Array(256);
+  for (const value of values) histogram[clamp(Math.round(value), 0, 255)] += 1;
+  const total = values.length;
+  const weightedTotal = histogram.reduce((sum, count, value) => sum + count * value, 0);
+  let backgroundWeight = 0;
+  let backgroundWeighted = 0;
+  let bestVariance = -1;
+  let bestThreshold = 0;
+  for (let value = 0; value < histogram.length; value += 1) {
+    backgroundWeight += histogram[value];
+    if (!backgroundWeight) continue;
+    const foregroundWeight = total - backgroundWeight;
+    if (!foregroundWeight) break;
+    backgroundWeighted += value * histogram[value];
+    const backgroundMean = backgroundWeighted / backgroundWeight;
+    const foregroundMean = (weightedTotal - backgroundWeighted) / foregroundWeight;
+    const betweenVariance = backgroundWeight * foregroundWeight * (backgroundMean - foregroundMean) ** 2;
+    if (betweenVariance > bestVariance) {
+      bestVariance = betweenVariance;
+      bestThreshold = value;
+    }
+  }
+  return bestThreshold;
+}
+
+function resampleClosedBoundary(points: MarkerPoint[], count = 48): MarkerPoint[] {
+  if (points.length < 3) return [];
+  const lengths = points.map((point, index) => Math.hypot(
+    points[(index + 1) % points.length].x - point.x,
+    points[(index + 1) % points.length].y - point.y,
+  ));
+  const perimeter = lengths.reduce((sum, length) => sum + length, 0);
+  if (!(perimeter > 1e-6)) return [];
+  const output: MarkerPoint[] = [];
+  let segment = 0;
+  let segmentStart = 0;
+  for (let sample = 0; sample < count; sample += 1) {
+    const target = perimeter * sample / count;
+    while (segment < lengths.length - 1 && segmentStart + lengths[segment] < target) {
+      segmentStart += lengths[segment];
+      segment += 1;
+    }
+    const start = points[segment];
+    const end = points[(segment + 1) % points.length];
+    const t = lengths[segment] > 1e-9 ? (target - segmentStart) / lengths[segment] : 0;
+    output.push({ x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t });
+  }
+  return output;
+}
+
+function regularizeSolidBoundary(result: ControlledMarkerDetection): ControlledMarkerDetection {
+  if (!result.ok || result.geometry_mode !== "dark_component" || result.boundary.length < 8) return result;
+  const sourceGeometry = boundaryGeometry(result.boundary);
+  const resampled = resampleClosedBoundary(result.boundary);
+  if (!sourceGeometry || resampled.length < 8) return result;
+  let smoothed = resampled;
+  for (let pass = 0; pass < 5; pass += 1) {
+    smoothed = smoothed.map((point, index, source) => {
+      const previous = source[(index - 1 + source.length) % source.length];
+      const next = source[(index + 1) % source.length];
+      return {
+        x: previous.x * 0.25 + point.x * 0.5 + next.x * 0.25,
+        y: previous.y * 0.25 + point.y * 0.5 + next.y * 0.25,
+      };
+    });
+  }
+  const smoothGeometry = boundaryGeometry(smoothed);
+  if (!smoothGeometry) return result;
+  const areaScale = Math.sqrt(sourceGeometry.area / Math.max(1e-6, smoothGeometry.area));
+  const boundary = smoothed.map((point) => ({
+    x: sourceGeometry.center.x + (point.x - smoothGeometry.center.x) * areaScale,
+    y: sourceGeometry.center.y + (point.y - smoothGeometry.center.y) * areaScale,
+  }));
+  const finalGeometry = boundaryGeometry(boundary);
+  if (!finalGeometry || __controlledMarkerForTests.boundarySelfIntersects(boundary)) return result;
+  const equivalentRadius = Math.sqrt(sourceGeometry.area / Math.PI);
+  const displacements = boundary.map((point) => boundaryDistance(point, result.boundary));
+  const maximumDisplacementRatio = Math.max(...displacements) / Math.max(1, equivalentRadius);
+  const areaRatio = finalGeometry.area / sourceGeometry.area;
+  if (areaRatio < 0.97 || areaRatio > 1.03 || maximumDisplacementRatio > 0.22) return result;
+  return {
+    ...result,
+    boundary,
+    center: finalGeometry.center,
+    area_px: Math.round(finalGeometry.area),
+    bbox: finalGeometry.bbox,
+    warnings: [...new Set([...result.warnings, "solid_boundary_periodic_regularized"])],
+    diagnostics: {
+      ...(result.diagnostics || {}),
+      solid_boundary_regularization: "periodic_constrained",
+      solid_boundary_area_ratio: Number(areaRatio.toFixed(3)),
+      solid_boundary_max_displacement_ratio: Number(maximumDisplacementRatio.toFixed(3)),
+    },
+  };
+}
+
+function recoverSolidComponentNearSeed(
+  image: MarkerImageData,
+  seed: MarkerPoint,
+  witness: ControlledMarkerDetection,
+  options: ControlledMarkerOptions,
+): ControlledMarkerDetection | null {
+  const width = Math.floor(image.width);
+  const height = Math.floor(image.height);
+  const roiRadius = clamp(Math.round(options.roiRadius ?? fallbackRoiRadius(image)), 1, Math.max(width, height));
+  const scanDiameterMm = Number(options.scanDiameterMm || 0);
+  const pixelsPerMm = scanDiameterMm > 0 ? roiRadius * 2 / scanDiameterMm : 0;
+  const minimumDiameterPx = pixelsPerMm > 0 ? MINIMUM_SOLID_DIAMETER_MM * pixelsPerMm * 0.65 : 8;
+  const maximumDiameterPx = Math.min(roiRadius * 1.35, pixelsPerMm > 0 ? pixelsPerMm * 9 : roiRadius * 1.35);
+  const x0 = clamp(Math.floor(seed.x - roiRadius), 0, width - 1);
+  const y0 = clamp(Math.floor(seed.y - roiRadius), 0, height - 1);
+  const x1 = clamp(Math.ceil(seed.x + roiRadius), 0, width - 1);
+  const y1 = clamp(Math.ceil(seed.y + roiRadius), 0, height - 1);
+  const localWidth = x1 - x0 + 1;
+  const localHeight = y1 - y0 + 1;
+  const lumas = new Float32Array(localWidth * localHeight);
+  const roiLumas: number[] = [];
+  for (let y = y0; y <= y1; y += 1) {
+    for (let x = x0; x <= x1; x += 1) {
+      if ((x - seed.x) ** 2 + (y - seed.y) ** 2 > roiRadius ** 2) continue;
+      const index = (y * width + x) * 4;
+      const value = 0.2126 * Number(image.data[index])
+        + 0.7152 * Number(image.data[index + 1])
+        + 0.0722 * Number(image.data[index + 2]);
+      lumas[(y - y0) * localWidth + x - x0] = value;
+      roiLumas.push(value);
+    }
+  }
+  if (roiLumas.length < 32) return null;
+  const backgroundLuma = percentile(roiLumas, 0.70);
+  const candidates: Array<{
+    pixels: MarkerPoint[];
+    boundary: MarkerPoint[];
+    score: number;
+    fill: number;
+    contrast: number;
+    coreDarkRatio: number;
+    coreMeanLuma: number;
+  }> = [];
+  const thresholdCandidates = [...new Set([
+    otsuThreshold(roiLumas),
+    Math.round(percentile(roiLumas, 0.08)),
+    Math.round(percentile(roiLumas, 0.12)),
+    Math.round(percentile(roiLumas, 0.18)),
+    Math.round(percentile(roiLumas, 0.25)),
+    Math.round(backgroundLuma - Math.max(8, backgroundLuma * 0.16)),
+  ].map((value) => clamp(value, 0, 255)))].sort((left, right) => left - right);
+  for (const threshold of thresholdCandidates) {
+    const dark = new Uint8Array(localWidth * localHeight);
+    for (let y = y0; y <= y1; y += 1) {
+      for (let x = x0; x <= x1; x += 1) {
+        if ((x - seed.x) ** 2 + (y - seed.y) ** 2 > roiRadius ** 2) continue;
+        const local = (y - y0) * localWidth + x - x0;
+        dark[local] = Number(lumas[local] <= threshold);
+      }
+    }
+    const visited = new Uint8Array(dark.length);
+    for (let start = 0; start < dark.length; start += 1) {
+      if (!dark[start] || visited[start]) continue;
+      const queue = [start];
+      const pixels: MarkerPoint[] = [];
+      visited[start] = 1;
+      for (let head = 0; head < queue.length; head += 1) {
+        const current = queue[head];
+        const cx = current % localWidth;
+        const cy = Math.floor(current / localWidth);
+        pixels.push({ x: x0 + cx, y: y0 + cy });
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) {
+            if (!dx && !dy) continue;
+            const nx = cx + dx;
+            const ny = cy + dy;
+            if (nx < 0 || nx >= localWidth || ny < 0 || ny >= localHeight) continue;
+            const next = ny * localWidth + nx;
+            if (dark[next] && !visited[next]) {
+              visited[next] = 1;
+              queue.push(next);
+            }
+          }
+        }
+      }
+      if (pixels.length < 12) continue;
+      const boundary = __controlledMarkerForTests.componentOuterBoundary(pixels);
+      const geometry = boundaryGeometry(boundary);
+      if (!geometry || boundary.length < 8) continue;
+      const diameter = Math.max(geometry.bbox.width, geometry.bbox.height);
+      const aspectRatio = Math.min(geometry.bbox.width, geometry.bbox.height) / Math.max(1, diameter);
+      const fill = pixels.length / Math.max(1, geometry.bbox.width * geometry.bbox.height);
+      const compactness = boundaryCompactness(boundary);
+      const distance = pixels.reduce((closest, point) => Math.min(closest, Math.hypot(point.x - seed.x, point.y - seed.y)), Infinity);
+      const meanLuma = pixels.reduce((sum, point) => sum + lumas[(point.y - y0) * localWidth + point.x - x0], 0) / pixels.length;
+      const contrast = backgroundLuma - meanLuma;
+      const coreRadius = Math.min(geometry.bbox.width, geometry.bbox.height) * 0.24;
+      const coreLumas: number[] = [];
+      for (let y = Math.floor(geometry.center.y - coreRadius); y <= Math.ceil(geometry.center.y + coreRadius); y += 1) {
+        for (let x = Math.floor(geometry.center.x - coreRadius); x <= Math.ceil(geometry.center.x + coreRadius); x += 1) {
+          if (x < x0 || x > x1 || y < y0 || y > y1
+            || Math.hypot(x - geometry.center.x, y - geometry.center.y) > coreRadius) continue;
+          coreLumas.push(lumas[(y - y0) * localWidth + x - x0]);
+        }
+      }
+      const coreDarkRatio = coreLumas.filter((value) => value <= threshold).length / Math.max(1, coreLumas.length);
+      const coreMeanLuma = coreLumas.reduce((sum, value) => sum + value, 0) / Math.max(1, coreLumas.length);
+      if (diameter < minimumDiameterPx || diameter > maximumDiameterPx || aspectRatio < 0.55
+        || fill < 0.30 || compactness < 0.35 || contrast < Math.max(6, backgroundLuma * 0.08)
+        // A pen ring can produce a dense dark connected component, but its
+        // central disk remains skin-coloured. A filled lesion must therefore
+        // keep at least half of its central disk on the selected dark side.
+        || coreDarkRatio < 0.50
+        || distance > Math.max(5, diameter * 0.55)) continue;
+      const requestedCenterDistance = Math.hypot(geometry.center.x - seed.x, geometry.center.y - seed.y);
+      const score = requestedCenterDistance * 2 + distance * 2 + Math.abs(1 - aspectRatio) * 24
+        + Math.max(0, 0.62 - fill) * 24 + Math.abs(diameter - minimumDiameterPx * 1.45) * 0.25
+        - contrast * 0.25 - Math.min(pixels.length, 700) * 0.015;
+      candidates.push({ pixels, boundary, score, fill, contrast, coreDarkRatio, coreMeanLuma });
+    }
+  }
+  const selected = candidates.sort((left, right) => left.score - right.score)[0];
+  if (!selected) return null;
+  const boundary = selected.boundary;
+  const geometry = boundaryGeometry(boundary);
+  if (!geometry) return null;
+  return regularizeSolidBoundary({
+    ...witness,
+    ok: true,
+    failure_code: null,
+    center: geometry.center,
+    boundary,
+    area_px: Math.round(geometry.area),
+    bbox: geometry.bbox,
+    geometry_mode: "dark_component",
+    seed_relation: boundaryContains(seed, boundary) ? "enclosed" : "on_marker",
+    marker_area_px: selected.pixels.length,
+    marker_bbox: geometry.bbox,
+    confidence: clamp(selected.contrast / Math.max(24, backgroundLuma * 0.35), 0, 1),
+    warnings: [...new Set([
+      ...witness.warnings,
+      "solid_component_outer_boundary_recovered",
+      "solid_component_local_background_recovered",
+    ])],
+    diagnostics: {
+      ...(witness.diagnostics || {}),
+      solid_background_luma: Number(backgroundLuma.toFixed(2)),
+      solid_threshold_luma: Number((backgroundLuma - selected.contrast).toFixed(2)),
+      solid_component_fill_ratio: Number(selected.fill.toFixed(3)),
+      solid_component_contrast: Number(selected.contrast.toFixed(2)),
+      solid_component_core_dark_ratio: Number(selected.coreDarkRatio.toFixed(3)),
+      solid_component_core_mean_luma: Number(selected.coreMeanLuma.toFixed(2)),
+    },
+  });
 }
 
 interface SupportedNarrowSpurTrial {
@@ -575,11 +844,12 @@ function candidateGate(
   requestedExpectedDiameter: number,
   evidenceImage: MarkerImageData,
   roiRadius: number,
+  scanDiameterMm = 0,
 ): CandidateGate {
   const reasons: string[] = [];
   if (!result.ok || !result.center || !result.bbox || result.boundary.length < 3
-    || result.geometry_mode !== "enclosed_region") {
-    return { valid: false, reasons: ["not_enclosed_region"] };
+    || !["enclosed_region", "dark_component"].includes(result.geometry_mode || "")) {
+    return { valid: false, reasons: ["not_supported_boundary"] };
   }
   const detectedDiameter = Math.max(result.bbox.width, result.bbox.height);
   const aspectRatio = Math.min(result.bbox.width, result.bbox.height) / Math.max(1, detectedDiameter);
@@ -589,6 +859,19 @@ function candidateGate(
     : 1;
   const colorSupport = boundaryColorSupport(evidenceImage, result.boundary);
 
+  // A one-pixel hole or speck can look perfectly compact and dark, but it is
+  // not a usable lesion boundary. Reject raster-degenerate geometry before it
+  // can outrank the already detected enclosing dark component.
+  if (result.bbox.width < 3 || result.bbox.height < 3 || result.area_px < 4) {
+    reasons.push("candidate_geometry_degenerate");
+  }
+  const pixelsPerMm = scanDiameterMm > 0 ? roiRadius * 2 / scanDiameterMm : 0;
+  const minimumPhysicalDiameterPx = pixelsPerMm * MINIMUM_SOLID_DIAMETER_MM * 0.65;
+  if (result.geometry_mode === "dark_component" && minimumPhysicalDiameterPx > 0
+    && (detectedDiameter < minimumPhysicalDiameterPx
+      || result.area_px < Math.PI * (minimumPhysicalDiameterPx / 2) ** 2 * 0.35)) {
+    reasons.push("candidate_below_minimum_physical_size");
+  }
   if (aspectRatio < 0.52) reasons.push("candidate_too_elongated");
   if (compactness < 0.55) reasons.push("candidate_not_compact");
   // The pointer selects a scan surface; it is not the lesion's geometric
@@ -599,11 +882,12 @@ function candidateGate(
   if (result.boundary.some((point) => (
     Math.hypot(point.x - seed.x, point.y - seed.y) > roiRadius + 1
   ))) reasons.push("candidate_outside_scan_roi");
-  if (requestedRatio < MINIMUM_REQUESTED_DIAMETER_RATIO
-    || requestedRatio > MAXIMUM_REQUESTED_DIAMETER_RATIO) {
+  if (requestedExpectedDiameter > 0 && (requestedRatio < MINIMUM_REQUESTED_DIAMETER_RATIO
+    || requestedRatio > MAXIMUM_REQUESTED_DIAMETER_RATIO)) {
     reasons.push("candidate_size_mismatch");
   }
-  if (colorSupport.p20 < 45 || colorSupport.supportRatio < 0.65) {
+  if (result.geometry_mode === "enclosed_region"
+    && (colorSupport.p20 < 45 || colorSupport.supportRatio < 0.65)) {
     reasons.push("candidate_color_ring_incomplete");
   }
   return { valid: reasons.length === 0, reasons };
@@ -768,6 +1052,50 @@ function acceptRecovered(
   return result;
 }
 
+// Last-resort repair of a shallow inward pocket. Every added arc must still
+// follow dark pixels; deep concavity, ambiguity and scan limits remain blocked.
+function repairSupportedInwardPocket(
+  result: ControlledMarkerDetection,
+  evidence: MarkerImageData,
+): ControlledMarkerDetection | null {
+  if (!result.ok || result.geometry_mode !== "enclosed_region" || result.boundary.length < 8) return null;
+  const original = boundaryGeometry(result.boundary);
+  if (!original || original.area < 30 || !isSimpleBoundary(result.boundary, evidence)) return null;
+  const sorted = [...result.boundary].sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (a: MarkerPoint, b: MarkerPoint, c: MarkerPoint) =>
+    (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const half = (points: MarkerPoint[]) => {
+    const hull: MarkerPoint[] = [];
+    for (const p of points) {
+      while (hull.length > 1 && cross(hull[hull.length - 2], hull[hull.length - 1], p) <= 0) hull.pop();
+      hull.push(p);
+    }
+    return hull.slice(0, -1);
+  };
+  const hull = [...half(sorted), ...half([...sorted].reverse())];
+  const geometry = boundaryGeometry(hull);
+  if (!geometry || hull.length < 8) return null;
+  const ratio = geometry.area / original.area;
+  const radius = Math.sqrt(original.area / Math.PI);
+  const samples = sampleBoundaryByLength(hull);
+  const distances = samples.map(p => boundaryDistance(p, result.boundary));
+  const added = samples.filter((_, i) => distances[i] > 0.75);
+  if (ratio <= 1.002 || ratio > 1.15 || added.length / samples.length > 0.25
+    || Math.max(...distances) > radius * 0.30
+    || Math.max(...result.boundary.map(p => boundaryDistance(p, hull))) > radius * 0.30
+    || Math.hypot(geometry.center.x - original.center.x, geometry.center.y - original.center.y) > radius * 0.10
+    || boundaryCompactness(hull) < 0.75 || !added.length) return null;
+  const support = boundaryColorSupport(evidence, added);
+  if (support.p20 < 50 || support.supportRatio < 0.90) return null;
+  return {
+    ...result, boundary: samples, center: geometry.center, bbox: geometry.bbox, area_px: geometry.area,
+    warnings: [...result.warnings, "supported_inward_pocket_repaired"],
+    diagnostics: { ...result.diagnostics, shape_compactness: boundaryCompactness(samples),
+      inward_pocket_area_ratio: ratio, inward_pocket_added_arc_ratio: added.length / samples.length,
+      inward_pocket_support_ratio: support.supportRatio },
+  };
+}
+
 function rejectCandidate(
   result: ControlledMarkerDetection,
   legacyFailure: string | null,
@@ -786,6 +1114,11 @@ function rejectCandidate(
     marker_area_px: 0,
     marker_bbox: null,
     confidence: 0,
+    ...(result.boundary.length >= 3 && result.bbox ? {
+      rejected_boundary: result.boundary.map((point) => ({ ...point })),
+      rejected_geometry_mode: result.geometry_mode,
+      rejected_reasons: [...new Set(reasons)],
+    } : {}),
     warnings: [...new Set([
       ...result.warnings,
       "color_difference_candidate_rejected",
@@ -827,15 +1160,51 @@ function detectControlledMarkerInternal(
     requestedExpectedDiameter,
     evidenceImage,
     roiRadius,
+    Number(options.scanDiameterMm || 0),
   );
+  if (!legacyGate.valid) {
+    const solid = recoverSolidComponentNearSeed(image, seed, legacy, options);
+    if (solid && candidateGate(solid, seed, requestedExpectedDiameter, evidenceImage, roiRadius, Number(options.scanDiameterMm || 0)).valid) {
+      return acceptRecovered(solid, ["color_difference_solid_component_recovered"]);
+    }
+    if (allowCandidateCenterRetry) {
+      const step = clamp(Math.round(roiRadius * 0.28), 6, 12);
+      const nearbySeeds: MarkerPoint[] = [
+        { x: seed.x + step, y: seed.y }, { x: seed.x - step, y: seed.y },
+        { x: seed.x, y: seed.y + step }, { x: seed.x, y: seed.y - step },
+        { x: seed.x + step, y: seed.y + step }, { x: seed.x - step, y: seed.y - step },
+        { x: seed.x + step, y: seed.y - step }, { x: seed.x - step, y: seed.y + step },
+      ];
+      for (const nearbySeed of nearbySeeds) {
+        if (nearbySeed.x < 0 || nearbySeed.x >= image.width || nearbySeed.y < 0 || nearbySeed.y >= image.height) continue;
+        const nearbySolid = recoverSolidComponentNearSeed(image, nearbySeed, legacy, options);
+        if (!nearbySolid?.center || !nearbySolid.bbox
+          || Math.hypot(nearbySolid.center.x - seed.x, nearbySolid.center.y - seed.y) > roiRadius * 0.70) continue;
+        const nearbyGate = candidateGate(
+          nearbySolid,
+          seed,
+          requestedExpectedDiameter,
+          evidenceImage,
+          roiRadius,
+          Number(options.scanDiameterMm || 0),
+        );
+        if (nearbyGate.valid) {
+          return acceptRecovered(nearbySolid, [
+            "color_difference_solid_component_recovered",
+            "solid_component_nearby_seed_recovered",
+          ]);
+        }
+      }
+    }
+  }
   if (legacyGate.valid) {
     if (!allowAcceptedCandidateComparison) return legacy;
     try {
       // One original-scale comparison only. Never enter scale/denoise/retry recovery here.
       const alternative = detectWithLegacyCore(evidenceImage, seed, legacyOptions) as unknown as ControlledMarkerDetection;
-      if (candidateGate(alternative, seed, requestedExpectedDiameter, evidenceImage, roiRadius).valid
+      if (candidateGate(alternative, seed, requestedExpectedDiameter, evidenceImage, roiRadius, Number(options.scanDiameterMm || 0)).valid
         && compareAcceptedCandidateCompleteness(legacy.boundary, alternative.boundary, evidenceImage).preferCandidate
-        && candidateGate(alternative, seed, requestedExpectedDiameter, evidenceImage, roiRadius).valid) {
+        && candidateGate(alternative, seed, requestedExpectedDiameter, evidenceImage, roiRadius, Number(options.scanDiameterMm || 0)).valid) {
         return acceptRecovered(alternative, ["color_difference_completeness_recovered"]);
       }
     } catch {
@@ -856,6 +1225,7 @@ function detectControlledMarkerInternal(
     requestedExpectedDiameter,
     evidenceImage,
     roiRadius,
+    Number(options.scanDiameterMm || 0),
   );
   if (colorRequestedGate.valid) {
     if (requestedExpectedDiameter > 0) {
@@ -873,6 +1243,7 @@ function detectControlledMarkerInternal(
           requestedExpectedDiameter,
           evidenceImage,
           roiRadius,
+          Number(options.scanDiameterMm || 0),
         );
         if (!expandedColorGate.valid
           || !shouldPreferExpandedStrokeBoundary(colorAtRequested, expandedColor)
@@ -911,6 +1282,7 @@ function detectControlledMarkerInternal(
       requestedExpectedDiameter,
       evidenceImage,
       roiRadius,
+      Number(options.scanDiameterMm || 0),
     );
     if (scaledLegacyGate.valid) {
       return acceptRecovered(scaledLegacy, [
@@ -931,6 +1303,7 @@ function detectControlledMarkerInternal(
       requestedExpectedDiameter,
       evidenceImage,
       roiRadius,
+      Number(options.scanDiameterMm || 0),
     );
     if (scaledColorGate.valid) {
       return acceptRecovered(scaledColor, [
@@ -961,6 +1334,7 @@ function detectControlledMarkerInternal(
     requestedExpectedDiameter,
     evidenceImage,
     roiRadius,
+    Number(options.scanDiameterMm || 0),
   );
   if (denoisedColorGate.valid) {
     return acceptRecovered(denoisedColor, [
@@ -992,6 +1366,7 @@ function detectControlledMarkerInternal(
       requestedExpectedDiameter,
       evidenceImage,
       roiRadius,
+      Number(options.scanDiameterMm || 0),
     );
     if (canonicalGate.valid) {
       return acceptRecovered(canonical, [
@@ -1003,6 +1378,11 @@ function detectControlledMarkerInternal(
     rejectedReasons.push(...canonicalGate.reasons);
   }
   rejectedReasons.push(...denoisedColorGate.reasons);
+  for (const raw of [legacy, colorAtRequested, denoisedColor]) {
+    const repaired = repairSupportedInwardPocket(raw, evidenceImage);
+    if (repaired && candidateGate(repaired, seed, requestedExpectedDiameter, evidenceImage, roiRadius,
+      Number(options.scanDiameterMm || 0)).valid) return repaired;
+  }
   return rejectCandidate(
     colorAtRequested.ok ? colorAtRequested : legacy,
     legacy.failure_code,
@@ -1019,12 +1399,14 @@ export function detectControlledMarker(
 }
 
 export const __controlledMarkerColorForTests = {
+  repairSupportedInwardPocket,
   compareAcceptedCandidateCompleteness,
   boundaryColorSupport,
   candidateGate,
   candidateShapeCompactness,
   colorDifferenceEvidenceImage,
   denoisedColorDifferenceEvidenceImage,
+  recoverSolidComponentNearSeed,
   reconcileDenoisedStrokeEnvelope,
   trimSupportedNarrowBoundarySpur,
   rgbToLab,

@@ -81,12 +81,6 @@ assert.deepEqual(boundaryState.boundaryRefs, [], "tumor kind reset clears incomp
 assert.equal(boundaryState.boundaryActive, false, "tumor kind reset stops active boundary drawing");
 assert.equal(boundaryState.controlledBoundaryActive, false,
   "tumor kind reset clears the accepted controlled-marker boundary mode");
-expectDispatch(tumor, { command: "diameter_input", value: "12" }, [
-  ["applyTumorControl", "diameter_input", "12"], ["updateTumorRing"], ["publish", "tumor_diameter_input"],
-]);
-expectDispatch(tumor, { command: "diameter_inactive_hint" }, [
-  ["applyTumorControl", "diameter_inactive_hint", undefined], ["publish", "diameter_inactive_hint"],
-]);
 for (const command of ["depth_input", "author_changed"] as const) {
   expectDispatch(tumor, { command, value: command === "depth_input" ? "6" : "clinician" }, [
     ["applyTumorControl", command, command === "depth_input" ? "6" : "clinician"], ["publish", command],
@@ -97,7 +91,7 @@ for (const command of ["margin_input", "ellipse_ratio_input"] as const) {
     ["applyTumorControl", command, "5"], ["updateTumorRing"], ["publish", command],
   ]);
 }
-for (const command of ["diameter_changed", "depth_changed", "margin_changed", "ellipse_ratio_changed"] as const) {
+for (const command of ["depth_changed", "margin_changed", "ellipse_ratio_changed"] as const) {
   expectDispatch(tumor, { command, value: "8" }, [
     ["applyTumorControl", command, "8"], ["previewWorkflow"],
   ]);

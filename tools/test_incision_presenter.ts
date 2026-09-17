@@ -181,6 +181,22 @@ assert.equal(visibilityLimitedPresentation.candidateType, "视野受限参考");
 assert.equal(visibilityLimitedPresentation.candidateWidth, "25.0 mm / 3.00:1（黄色参考）");
 assert.match(visibilityLimitedPresentation.workflowSummary, /标准参考投影.*3:1.*68%/);
 assert.match(visibilityLimitedPresentation.nextStep, /另一视角.*不能确认或进入实时叠加/);
+const simplifiedVisibilityLimitedPresentation = buildIncisionResultPresentation({
+  ...structuredClone({
+    result: {
+      candidate: {
+        type: "fusiform", length_mm: 75, width_mm: 25, tip_angle_deg: 30,
+        metrics: { photo_visibility_limited_candidate: true, photo_visible_fraction: 0.68 },
+      },
+      direction: {}, anatomy: {}, guardrails: { passed: true },
+    },
+    workflowGate: { passed: true }, tumorQuality: {}, secondaryCuesPresent: false,
+    generationCount: 1, privacyAudit: { local_workflow_fields: [] },
+  }),
+  allowReferenceCandidates: true,
+});
+assert.match(simplifiedVisibilityLimitedPresentation.nextStep,
+  /确认且系统门禁通过后可进入实时叠加/);
 
 const nonstandardVisibilityLimitedPresentation = buildIncisionResultPresentation({
   ...structuredClone({

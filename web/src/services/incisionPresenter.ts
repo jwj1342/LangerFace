@@ -115,6 +115,7 @@ export interface BuildIncisionResultPresentationInput {
   secondaryCuesPresent: boolean;
   generationCount: number;
   headStatusLabel?: string;
+  allowReferenceCandidates?: boolean;
   privacyAudit: {
     local_workflow_fields?: unknown[];
     secondary_cues_present?: boolean;
@@ -312,9 +313,13 @@ export function buildIncisionResultPresentation(
       ? `当前显示 ${formatMetric(candidateMetrics.referenceRatio, 2)}:1 黄色受限参考；原定 3:1 候选未通过可用面部区域门禁。`
       : String(result.summary || "已生成候选。"),
     nextStep: candidateMetrics.isVisibilityLimited
-      ? "请补充另一视角并复核隐藏区域；完成前不能确认或进入实时叠加。"
+      ? input.allowReferenceCandidates
+        ? "当前照片仅显示可见部分；请医生复核，确认且系统门禁通过后可进入实时叠加。"
+        : "请补充另一视角并复核隐藏区域；完成前不能确认或进入实时叠加。"
       : candidateMetrics.isReference
-      ? "该参考不满足项目原定比例；请医生结合查体在本页记录原因，不能直接确认或发送实时叠加。"
+      ? input.allowReferenceCandidates
+        ? "该参考不满足项目原定比例；请医生结合查体复核，确认且系统门禁通过后可进入实时叠加。"
+        : "该参考不满足项目原定比例；请医生结合查体在本页记录原因，不能直接确认或发送实时叠加。"
       : String(result.next_step || "医生审阅、编辑或拒绝该候选。"),
     privacyState: import.meta.env?.VITE_SERVER_COMPUTE === 'true' ? '浏览器 + 服务器 GPU' : "浏览器本地",
     privacyAudit: import.meta.env?.VITE_SERVER_COMPUTE === 'true'

@@ -32,10 +32,6 @@ import {
   type IncisionEdit,
 } from "./incisionEditHistory";
 import {
-  buildIncisionWorkspaceSession,
-  tumorContextsMatch,
-} from "./incisionWorkspaceSession";
-import {
   CONTROLLED_MARKER_DETECTOR_VERSION,
   CONTROLLED_MARKER_DETECTOR_PROFILE,
   detectControlledMarker,
@@ -43,7 +39,7 @@ import {
 } from "./controlledMarkerDetectionProfile";
 import { dataSource } from "./dataSource";
 import { auditExportPayload } from "./exportPrivacy";
-import { FREEHAND_MARKER_DISABLED_MESSAGE, TUMOR_DIAMETER_DISABLED_MESSAGE, controlledMarkerFailureMessage, diagnosticCandidateBlockMessage, engineeringBlockMessage, guardrailLabel, reasonLabel, regionLabel, reviewStatusLabel, subunitLabel } from "./incisionClinicalCopy";
+import { FREEHAND_MARKER_DISABLED_MESSAGE, controlledMarkerFailureMessage, diagnosticCandidateBlockMessage, engineeringBlockMessage, guardrailLabel, reasonLabel, regionLabel, reviewStatusLabel, subunitLabel } from "./incisionClinicalCopy";
 import { buildLocalIncisionPrivacyAudit, normalizeSecondaryCuePayload } from "./incisionAuxiliaryEvidence";
 import {
   buildReviewExportPayload,
@@ -119,7 +115,6 @@ import {
 import {
   buildTumorInput,
   importedTumorFormState,
-  tumorDiameterParameterInactive,
   withControlledMarkerProvenance,
 } from "./tumorInput";
 import { modelState, renderState, sourceState, type EditableRefineLine } from "./liveState";
@@ -131,7 +126,6 @@ import { vertexNormals } from "./three3d";
 import {
   beginWorkflowPointerIntent,
   completesWorkflowCanvasClick,
-  minimumWorkflowMarkerScanDiameterMm,
   updateWorkflowPointerIntent,
   workflowFusiformSvgPath,
   workflowCandidateDisplayAllowed,
@@ -154,7 +148,6 @@ import {
   workflowInvalidationNeedsLiveFrame,
   workflowLiveOverlayChanged,
   workflowMarkerRequestStillCurrent,
-  workflowMarkerScanDiameterForTumor,
   workflowCenteredLinearPath,
   workflowPhotoBoundaryEnclosingDiameterMm,
   workflowPhotoEllipseBoundary,
@@ -164,20 +157,12 @@ import {
   workflowPlanningClientPoint,
   workflowScanCircleGeometry,
   recoverWorkflowFreehandBoundary,
-  workflowSubcutaneousLengthLimit,
   type SvgPoint,
   type WorkflowMarkerRequestSnapshot,
   type WorkflowPointerIntent,
 } from "./workflowControllerUtils";
 import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
 import { createWorkflowWorkerClient, type WorkflowWorkerClient } from "./workflowWorkerClient";
-import {
-  completeWorkflowDraftRestoreRequest,
-  pendingWorkflowDraftRestoreRequest,
-  saveWorkflowIncisionDraft,
-  WORKFLOW_DRAFT_RESTORE_EVENT,
-  type WorkflowIncisionDraft,
-} from "./workflowDraftSession";
 
 type DynamicRecord = Record<string, any>;
 const MOBILE_WORKFLOW_MEDIA_QUERY = "(max-width: 560px) and (pointer: coarse) and (hover: none)";
@@ -195,6 +180,13 @@ type Cleanup = () => void;
 interface RepairStroke {
   points: Array<{ x: number; y: number }>;
   widthPx: number;
+}
+
+interface RejectedMarkerPreview {
+  boundary: SvgPoint[];
+  sourceRevision: number;
+  requestId: number;
+  reasons: string[];
 }
 
 interface WorkflowIncisionState {
@@ -219,10 +211,10 @@ interface WorkflowIncisionState {
   kind: "cutaneous" | "subcutaneous";
   diameterMm: number;
   depthMm: number;
-  marginMm: number;
+  marginMm: 0;
   author: string;
   boundaryMode: "ellipse" | "freehand";
-  ellipseRatio: number;
+  ellipseRatio: 100;
   baseResult: DynamicRecord | null;
   edit: IncisionEdit;
   result: DynamicRecord | null;
@@ -253,6 +245,7 @@ interface WorkflowIncisionState {
   mobileTouchGestureActive: boolean;
   markerPreviewSuppressed: boolean;
   markerSourceRevision: number | null;
+  rejectedMarkerPreview: RejectedMarkerPreview | null;
   controlledMarkerScale: { sourceRevision: number; pixelsPerMm: number } | null;
   scanDiameterMm: number;
   worker: WorkflowWorkerClient | null;
@@ -260,9 +253,6 @@ interface WorkflowIncisionState {
   workflowRequestId: number;
   candidateRecomputeTimer: number | null;
   mobileEditPreviewFrame: number | null;
-  draftSaveTimer: number | null;
-  draftRestoreTimer: number | null;
-  pendingDraftRestore: WorkflowIncisionDraft | null | undefined;
   pendingClick: WorkflowPointerIntent | null;
   photoFrameRevision: number | null;
   photoFrameLandmarks: readonly Vec3[] | null;
@@ -368,6 +358,7 @@ function createState(root: HTMLElement): WorkflowIncisionState {
     mobileTouchGestureActive: false,
     markerPreviewSuppressed: false,
     markerSourceRevision: null,
+    rejectedMarkerPreview: null,
     controlledMarkerScale: null,
     scanDiameterMm: 20,
     worker: null,
@@ -375,9 +366,6 @@ function createState(root: HTMLElement): WorkflowIncisionState {
     workflowRequestId: 0,
     candidateRecomputeTimer: null,
     mobileEditPreviewFrame: null,
-    draftSaveTimer: null,
-    draftRestoreTimer: null,
-    pendingDraftRestore: undefined,
     pendingClick: null,
     photoFrameRevision: null,
     photoFrameLandmarks: null,
@@ -408,6 +396,12 @@ function resetFreehandPhotoBoundary(state: WorkflowIncisionState, clearRefs = fa
     state.boundaryRefs = [];
     state.controlledBoundaryPhotoDiameterMm = null;
   }
+}
+
+function clearTumorBoundaryForCenterSelection(state: WorkflowIncisionState) {
+  resetFreehandPhotoBoundary(state, true);
+  state.controlledBoundary = false;
+  state.controlledBoundaryPhotoDiameterMm = null;
 }
 
 function fallbackHeadAsset(): IncisionHeadAssetState {
@@ -446,139 +440,6 @@ function currentReview(state: WorkflowIncisionState) {
   const notes = String(notesControl ? notesControl.value : state.review.notes).trim();
   state.review = { status, reviewer, notes };
   return state.review;
-}
-
-function persistWorkflowDraft(state: WorkflowIncisionState): void {
-  const frame = sourceState.planning2d?.getFrameState();
-  if (frame?.kind !== "image" || !frame.source) return;
-  const tumor = currentTumor(state);
-  if (!tumor) {
-    saveWorkflowIncisionDraft(null);
-    return;
-  }
-  const resultMatchesTumor = tumorContextsMatch(state.result?.tumor, tumor);
-  saveWorkflowIncisionDraft({
-    workspace: buildIncisionWorkspaceSession({
-      tumor,
-      result: resultMatchesTumor ? state.result : null,
-      baseResult: resultMatchesTumor ? state.baseResult : null,
-      saved: state.saved,
-      review: { ...currentReview(state) },
-      generationCount: state.generationCount,
-    }),
-    edit: { ...state.edit },
-    boundaryMode: state.boundaryMode,
-    ellipseRatio: state.ellipseRatio,
-    controlledBoundary: state.controlledBoundary,
-    controlledBoundaryPhotoDiameterMm: state.controlledBoundaryPhotoDiameterMm,
-  });
-}
-
-function cancelWorkflowDraftSave(state: WorkflowIncisionState): void {
-  if (state.draftSaveTimer === null) return;
-  window.clearTimeout(state.draftSaveTimer);
-  state.draftSaveTimer = null;
-}
-
-function scheduleWorkflowDraftSave(state: WorkflowIncisionState): void {
-  cancelWorkflowDraftSave(state);
-  state.draftSaveTimer = window.setTimeout(() => {
-    state.draftSaveTimer = null;
-    if (state.mounted) persistWorkflowDraft(state);
-  }, 300);
-}
-
-function cancelWorkflowDraftRestoreRetry(state: WorkflowIncisionState): void {
-  if (state.draftRestoreTimer === null) return;
-  window.clearTimeout(state.draftRestoreTimer);
-  state.draftRestoreTimer = null;
-}
-
-function scheduleWorkflowDraftRestoreRetry(state: WorkflowIncisionState): void {
-  if (state.draftRestoreTimer !== null) return;
-  state.draftRestoreTimer = window.setTimeout(() => {
-    state.draftRestoreTimer = null;
-    if (!state.mounted || state.pendingDraftRestore === undefined) return;
-    requestFrame();
-    applyWorkflowDraftRestore(state);
-  }, 100);
-}
-
-function applyWorkflowDraftRestore(state: WorkflowIncisionState): boolean {
-  const draft = state.pendingDraftRestore;
-  if (draft === undefined) return false;
-  if (state.loading || !workflowPhotoReady(state)) {
-    scheduleWorkflowDraftRestoreRetry(state);
-    return false;
-  }
-  cancelWorkflowDraftRestoreRetry(state);
-  state.pendingDraftRestore = undefined;
-  completeWorkflowDraftRestoreRequest();
-  resetMarkerRepair(state);
-  invalidateSavedSources(state);
-  invalidateCandidate(state);
-  if (draft === null) {
-    setStatus(state, "已恢复照片；该草稿没有可恢复的切口操作。", "normal");
-    publish(state, "workflow_draft_photo_restored");
-    return true;
-  }
-  try {
-    const session = draft.workspace;
-    const imported = importedTumorFormState(session.tumor, {
-      diameterMin: 2,
-      diameterMax: 40,
-      depthMin: 0,
-      depthMax: 35,
-      depthFallback: state.depthMm,
-      marginMin: 0,
-      marginMax: 10,
-      authorFallback: state.author,
-    });
-    state.markerMode = false;
-    state.markerPointerSource = null;
-    state.markerPreviewSuppressed = false;
-    state.kind = imported.kind === "subcutaneous" ? "subcutaneous" : "cutaneous";
-    state.diameterMm = Number(imported.diameterValue);
-    state.depthMm = Number(imported.depthValue);
-    state.marginMm = Number(imported.marginValue);
-    state.author = imported.author;
-    state.boundaryMode = draft.boundaryMode;
-    state.ellipseRatio = Math.max(40, Math.min(200, Number(draft.ellipseRatio) || 100));
-    state.centerRef = pointToSurfaceRef(imported.tumor.center as Vec3, state.verts, state.tris);
-    state.boundaryRefs = draft.controlledBoundary || draft.boundaryMode === "freehand"
-      ? pointsToSurfaceRefs(imported.boundaryPoints, state.verts, state.tris)
-      : [];
-    resetFreehandPhotoBoundary(state);
-    state.boundaryClosed = state.boundaryRefs.length >= 3;
-    state.boundaryActive = false;
-    state.controlledBoundary = Boolean(draft.controlledBoundary);
-    state.controlledBoundaryPhotoDiameterMm = draft.controlledBoundary
-      ? Number(draft.controlledBoundaryPhotoDiameterMm) || null
-      : null;
-    state.saved = session.saved;
-    invalidateSavedSources(state);
-    state.generationCount = session.generationCount;
-    state.review = {
-      status: "pending_clinician_confirmation",
-      reviewer: String(session.review.reviewer || ""),
-      notes: String(session.review.notes || ""),
-    };
-    state.reviewAttention = null;
-    const reviewer = rootInput(state, "reviewerName");
-    const notes = rootInput(state, "reviewNotes");
-    const decision = rootInput(state, "reviewDecision");
-    if (reviewer) reviewer.value = state.review.reviewer;
-    if (notes) notes.value = state.review.notes;
-    if (decision) decision.value = state.review.status;
-    syncSelection(state);
-    setStatus(state, "已恢复照片与肿物输入；旧候选仅供审计。请重新选择肿物或调整有效参数，生成后重新审阅。", "warning");
-    publish(state, "workflow_draft_restored");
-    return true;
-  } catch (error) {
-    setStatus(state, `草稿中的切口状态无法恢复：${error instanceof Error ? error.message : String(error)}`, "warning");
-    publish(state, "workflow_draft_restore_failed");
-    return true;
-  }
 }
 
 function privacyAudit(state: WorkflowIncisionState) {
@@ -738,11 +599,11 @@ function workflowPhotoGeometry(
     state.verts,
     state.tris,
   );
-  const boundaryRefs = state.kind === "cutaneous"
-    ? state.boundaryRefs.length >= 3
-      ? state.boundaryRefs
-      : ellipseBoundaryRefs(state)
-    : [];
+  const boundaryRefs = state.boundaryRefs.length >= 3
+    ? state.boundaryRefs
+    : state.kind === "cutaneous"
+      ? ellipseBoundaryRefs(state)
+      : [];
   const layerContract = incisionPhotoLayerContract(state.kind, candidate.type);
   const needsPhotoScale = layerContract.showDiameterEstimate
     || (state.kind === "cutaneous" && candidate.type === "fusiform");
@@ -757,8 +618,7 @@ function workflowPhotoGeometry(
   const centerSource = state.centerRef
     ? surfaceRefToSourcePoint(state.centerRef, projection.surfaceLandmarks, state.tris)
     : null;
-  const currentPhotoBoundary = state.kind === "cutaneous"
-    && state.boundaryClosed
+  const currentPhotoBoundary = state.boundaryClosed
     && state.boundaryPhotoRevision === frame.revision
     && state.boundaryPhotoPoints.length >= 3
     ? state.boundaryPhotoPoints.map((point) => [point.x, point.y, 0] as Vec3)
@@ -783,7 +643,7 @@ function workflowPhotoGeometry(
     projectedRstlLines: activeProjectedRstlLines(),
     centerRef: state.centerRef,
     diameterEstimateRefs: [],
-    photoDiameterEstimateMm: layerContract.showDiameterEstimate ? state.diameterMm : undefined,
+    photoDiameterEstimateMm: undefined,
     photoPixelsPerMm: photoPixelsPerMm || undefined,
     candidateLengthMm: Number(candidate.length_mm),
     boundaryRefs,
@@ -983,33 +843,53 @@ function ellipseBoundaryRefs(state: WorkflowIncisionState): SurfaceRef[] {
 }
 
 function boundaryPoints(state: WorkflowIncisionState): Vec3[] {
-  if (state.kind !== "cutaneous") return [];
   if (state.controlledBoundary || state.boundaryMode === "freehand") {
     return state.boundaryClosed && state.boundaryRefs.length >= 3
       ? state.boundaryRefs.map((ref) => modelPoint(state, ref)).filter((point): point is Vec3 => Boolean(point))
       : [];
   }
-  const refs = ellipseBoundaryRefs(state);
-  return refs.length >= 3
-    ? refs.map((ref) => modelPoint(state, ref)).filter((point): point is Vec3 => Boolean(point))
-    : ellipseBoundaryPoints(state);
+  return [];
 }
 
 function currentTumor(state: WorkflowIncisionState) {
   const center = modelPoint(state, state.centerRef);
   if (!center) return null;
+  const boundary = boundaryPoints(state);
+  const normal = state.normals[nearestVertex(state, center)] || [0, 0, 1];
+  const { u: boundaryAxis } = tangentFrame(normal, [0, 1, 0]);
+  const summary = boundary.length >= 3
+    ? summarizeTumorBoundary({
+      kind: state.kind,
+      center,
+      diameter_mm: state.controlledBoundaryPhotoDiameterMm || state.diameterMm,
+      boundary,
+    }, boundaryAxis, normal, state.unitsPerMm)
+    : null;
+  const equivalentDiameterMm = summary && Number(summary.area_mm2) > 0
+    ? 2 * Math.sqrt(Number(summary.area_mm2) / Math.PI)
+    : state.controlledBoundaryPhotoDiameterMm || state.diameterMm;
   const tumor = withControlledMarkerProvenance(buildTumorInput({
     kind: state.kind,
     center,
-    diameterMm: state.diameterMm,
+    diameterMm: equivalentDiameterMm,
     depthMm: state.depthMm,
     marginMm: state.marginMm,
-    boundary: boundaryPoints(state),
+    boundary,
     boundaryMode: state.controlledBoundary ? "freehand" : state.boundaryMode,
     author: state.author,
   }), state.controlledBoundary);
-  return state.controlledBoundary && state.controlledBoundaryPhotoDiameterMm
-    ? { ...tumor, photo_boundary_enclosing_diameter_mm: state.controlledBoundaryPhotoDiameterMm }
+  return summary && summary.boundary_used
+    ? {
+      ...tumor,
+      boundary_equivalent_diameter_mm: equivalentDiameterMm,
+      boundary_major_axis_mm: Math.max(Number(summary.axis_diameter_mm), Number(summary.perp_diameter_mm)),
+      boundary_minor_axis_mm: Math.min(Number(summary.axis_diameter_mm), Number(summary.perp_diameter_mm)),
+      photo_boundary_enclosing_diameter_mm: state.controlledBoundaryPhotoDiameterMm,
+      ...(state.controlledBoundary ? {
+        marker_detection_profile: CONTROLLED_MARKER_DETECTOR_PROFILE,
+        marker_implementation_version: CONTROLLED_MARKER_DETECTOR_VERSION,
+      } : {}),
+    }
     : tumor;
 }
 
@@ -1042,13 +922,11 @@ function tumorPresentation(state: WorkflowIncisionState) {
   const axis = state.result?.candidate?.axis || [1, 0, 0];
   const summary = summarizeTumorBoundary(tumor, axis, normal, state.unitsPerMm);
   const warnings = summary.warnings || [];
-  const boundaryStatus = tumor.kind === "cutaneous"
-    ? summary.boundary_used
+  const boundaryStatus = summary.boundary_used
       ? state.controlledBoundary && state.controlledBoundaryPhotoDiameterMm
-        ? `皮表边界：${summary.point_count} 点 · 照片估算最大直径 ${state.controlledBoundaryPhotoDiameterMm.toFixed(1)} mm${warnings.length ? ` · ${warnings.map((item: DynamicRecord) => guardrailLabel(item.code)).join("；")}` : ""}`
-        : `皮表边界：${summary.point_count} 点 · 横向 ${Number(summary.perp_diameter_mm || 0).toFixed(1)} mm${warnings.length ? ` · ${warnings.map((item: DynamicRecord) => guardrailLabel(item.code)).join("；")}` : ""}`
-      : "皮表边界：当前按中心直径近似"
-    : `皮下范围：直径估计 ${state.diameterMm.toFixed(1)} mm（非真实边界）`;
+        ? `${tumor.kind === "cutaneous" ? "皮表" : "皮下"}边界：${summary.point_count} 点 · 照片估算最大直径 ${state.controlledBoundaryPhotoDiameterMm.toFixed(1)} mm${warnings.length ? ` · ${warnings.map((item: DynamicRecord) => guardrailLabel(item.code)).join("；")}` : ""}`
+        : `${tumor.kind === "cutaneous" ? "皮表" : "皮下"}边界：${summary.point_count} 点 · 横向 ${Number(summary.perp_diameter_mm || 0).toFixed(1)} mm${warnings.length ? ` · ${warnings.map((item: DynamicRecord) => guardrailLabel(item.code)).join("；")}` : ""}`
+      : `${tumor.kind === "cutaneous" ? "皮表" : "皮下"}边界：需重新识别或描边`;
   const reasons = anatomy.confidence_reasons || [];
   return {
     boundaryStatus,
@@ -1069,6 +947,7 @@ function resultView(state: WorkflowIncisionState): IncisionResultViewState {
     secondaryCuesPresent: Boolean(state.secondaryCues),
     generationCount: state.generationCount,
     headStatusLabel: state.headAsset?.statusLabel,
+    allowReferenceCandidates: true,
     privacyAudit: privacyAudit(state),
   });
   return {
@@ -1102,7 +981,7 @@ function resultView(state: WorkflowIncisionState): IncisionResultViewState {
 function syncWorkflowPointerMode(state: WorkflowIncisionState) {
   const wrap = state.root.querySelector<HTMLElement>(".main-wrap");
   if (!wrap) return;
-  const mode = state.boundaryActive && state.kind === "cutaneous" && state.boundaryMode === "freehand"
+  const mode = state.boundaryActive && state.boundaryMode === "freehand"
     ? "freehand"
     : state.repairMode
       ? "repair"
@@ -1115,6 +994,19 @@ function syncWorkflowPointerMode(state: WorkflowIncisionState) {
 
 function publish(state: WorkflowIncisionState, reason = "state_update") {
   if (!state.mounted) return;
+  try {
+    markerDiagnostics.get(state)?.observeController({
+      reason, request_id: state.markerRequestId,
+      source_revision: sourceState.planning2d?.getFrameState()?.revision ?? null,
+      seed: state.markerPendingSeed || state.markerSeed || null,
+      scan_diameter_mm: state.scanDiameterMm, kind: state.kind,
+      marker_busy: state.markerBusy, boundary_points: state.boundaryRefs.length,
+      candidate_display_blocked: typeof state.result?.candidate_display_blocked === "boolean" ? state.result.candidate_display_blocked : null,
+      candidate_selection_reason: typeof state.result?.candidate_selection_reason === "string"
+        && /^[a-z0-9_:-]{1,160}$/.test(state.result.candidate_selection_reason) ? state.result.candidate_selection_reason : null,
+      candidate_guardrails_passed: typeof state.result?.guardrails?.passed === "boolean" ? state.result.guardrails.passed : null,
+    });
+  } catch { /* Diagnostic collection must not change product state or gates. */ }
   state.root.dataset.workflowMarkerBusy = String(state.markerBusy);
   state.root.dataset.workflowMarkerMode = String(state.markerMode);
   syncWorkflowPointerMode(state);
@@ -1152,6 +1044,7 @@ function publish(state: WorkflowIncisionState, reason = "state_update") {
         candidateSmoothingMode: geometry.candidateProjection.smoothingMode,
         candidateReferenceAspectRatio: geometry.candidateProjection.referenceAspectRatio,
         projectedRstlDeviationDeg: geometry.projectedRstlDeviationDeg,
+        allowReferenceCandidates: true,
       });
       const projectionStatusMayOverride = workflowProjectionStatusMayOverride(reason, state.stageStatus);
       if (projectionStatusMayOverride && diagnosticCandidateVisible) {
@@ -1237,6 +1130,7 @@ function publish(state: WorkflowIncisionState, reason = "state_update") {
       records: state.saved as any,
       comparisons: compareCandidateRecords(state.saved),
       reviewStatusLabel,
+      allowReferenceCandidates: true,
     }),
     workflowRuntime: state.result?.workflow_runtime || null,
     savedCount: state.saved.length,
@@ -1250,10 +1144,9 @@ function publish(state: WorkflowIncisionState, reason = "state_update") {
       repairMode: state.repairMode,
       repairCount: state.repairStrokes.length,
       scanDiameterMm: state.scanDiameterMm,
-      minimumScanDiameterMm: minimumWorkflowMarkerScanDiameterMm(state.diameterMm),
+      minimumScanDiameterMm: 10,
     },
   }));
-  scheduleWorkflowDraftSave(state);
   scheduleOverlayDraw(state);
 }
 
@@ -1356,10 +1249,12 @@ function resetMarkerRepair(state: WorkflowIncisionState) {
   state.mobileTouchPointers.clear();
   state.mobileTouchGestureActive = false;
   state.markerSourceRevision = null;
+  state.rejectedMarkerPreview = null;
   drawRepairStrokes(state);
 }
 
 function prepareControlledMarkerAttempt(state: WorkflowIncisionState) {
+  state.rejectedMarkerPreview = null;
   state.centerRef = null;
   state.boundaryRefs = [];
   resetFreehandPhotoBoundary(state, true);
@@ -1370,7 +1265,7 @@ function prepareControlledMarkerAttempt(state: WorkflowIncisionState) {
 }
 
 function resetWorkflowForSourceChange(state: WorkflowIncisionState, _revision: number | null) {
-  const preserveActiveCandidate = Boolean(renderState.incisionOverlay && state.result?.candidate);
+  const preserveActiveCandidate = activatedCandidateShouldSurviveSourceChange(state);
   if (preserveActiveCandidate) resetFreehandPhotoBoundary(state);
   else {
     state.centerRef = null;
@@ -1410,6 +1305,19 @@ function resetWorkflowForSourceChange(state: WorkflowIncisionState, _revision: n
   publish(state, "workflow_source_changed");
 }
 
+function activatedCandidateShouldSurviveSourceChange(state: WorkflowIncisionState): boolean {
+  return Boolean(state.activeReviewRecordId && state.result?.candidate);
+}
+
+function cameraIncisionActionsDisabled(state: WorkflowIncisionState): boolean {
+  return state.liveSnapshot?.source?.kind === "camera" || sourceState.sourceKind === "camera";
+}
+
+function blockCameraIncisionAction(state: WorkflowIncisionState, reason: string): void {
+  setStatus(state, "摄像头模式仅用于查看已确认切口叠加；请切回照片后再操作。", "warning");
+  publish(state, reason);
+}
+
 function workflowPhotoReady(state: WorkflowIncisionState) {
   const frame = sourceState.planning2d?.getFrameState();
   return !state.loading
@@ -1435,11 +1343,7 @@ function markerRequestSnapshot(state: WorkflowIncisionState): WorkflowMarkerRequ
 function syncSelection(state: WorkflowIncisionState) {
   const planning = sourceState.planning2d;
   if (!planning) return;
-  const refs = state.kind === "cutaneous"
-    ? state.boundaryRefs.length >= 3
-      ? state.boundaryRefs
-      : ellipseBoundaryRefs(state)
-    : [];
+  const refs = state.boundaryRefs.length >= 3 ? state.boundaryRefs : [];
   planning.setSelection({ centerRef: state.centerRef, boundaryRefs: refs });
   planning.setOverlaySummary({
     tumorVisible: Boolean(state.centerRef),
@@ -1528,10 +1432,19 @@ function ensureWorker(state: WorkflowIncisionState) {
 type WorkflowOutcome = { status: "success" | "failure" | "stale" | "not-ready"; requestId: number };
 
 async function runWorkflow(state: WorkflowIncisionState, explicit = false, preserveVisibleCandidate = false): Promise<WorkflowOutcome> {
+  if (cameraIncisionActionsDisabled(state)) {
+    blockCameraIncisionAction(state, "camera_incision_generation_blocked");
+    return { status: "not-ready", requestId: state.workflowRequestId };
+  }
   const tumor = currentTumor(state);
   if (!tumor || !state.verts.length || !state.tris.length || !state.atlas) {
     setStatus(state, state.loading ? "切口规划功能仍在加载，请稍候。" : "请先在照片上选择肿物位置。", "warning");
     publish(state, "workflow_not_ready");
+    return { status: "not-ready", requestId: state.workflowRequestId };
+  }
+  if (tumor.boundary.length < 3) {
+    invalidateCandidate(state, "肿物缺少真实边界，请重新识别或使用自由轮廓描边。");
+    publish(state, "workflow_boundary_required");
     return { status: "not-ready", requestId: state.workflowRequestId };
   }
   cancelCandidateRecompute(state);
@@ -1613,30 +1526,11 @@ async function runWorkflow(state: WorkflowIncisionState, explicit = false, prese
     state.workflowBusy = false;
     if (explicit) state.generationCount += 1;
     state.review.status = "pending_clinician_confirmation";
-    const lengthLimit = state.kind === "subcutaneous"
-      ? workflowSubcutaneousLengthLimit(state.result?.candidate, state.diameterMm)
-      : null;
-    if (lengthLimit) {
-      if (lengthLimit.deficitMm > 0) {
-        setStatus(
-          state,
-          `当前皮下线性候选达到草案长度上限 ${lengthLimit.lengthMm.toFixed(1)} mm，短于病灶直径 ${lengthLimit.diameterMm.toFixed(1)} mm；该候选已被高等级覆盖门禁拦截，不能按普通候选通过。`,
-          "warning",
-        );
-      } else {
-        setStatus(
-          state,
-          `当前皮下线性候选已达到草案长度上限 ${lengthLimit.lengthMm.toFixed(1)} mm；继续增大病灶直径时切口不会再增长。请先由医生确认术式和长度规则，不能把该上限当作通用手术规则。`,
-          "warning",
-        );
-      }
-    } else {
-      setStatus(
-        state,
-        execution.statusMessage || "候选已生成；请填写审阅人并保存审阅状态。符合显示条件的候选会自动显示在画布上。",
-        execution.workerFailed || !state.result?.guardrails?.passed ? "warning" : "normal",
-      );
-    }
+    setStatus(
+      state,
+      execution.statusMessage || "候选已生成；请填写审阅人并保存审阅状态。符合显示条件的候选会自动显示在画布上。",
+      execution.workerFailed || !state.result?.guardrails?.passed ? "warning" : "normal",
+    );
     syncSelection(state);
     publish(state, "candidate_result");
     return { status: "success", requestId };
@@ -1687,13 +1581,21 @@ function buildRecord(state: WorkflowIncisionState, result = state.result, label 
   const createdAt = new Date().toISOString();
   const rawReview = { ...currentReview(state), reviewed_at: createdAt };
   if (!rawReview.reviewer) return null;
-  const normalized = reviewForCandidateRecord({ review: rawReview, result: recordResult, forceDraft });
+  const normalized = reviewForCandidateRecord({
+    review: rawReview,
+    result: recordResult,
+    forceDraft,
+    allowReferenceCandidates: true,
+    requireHighRiskNotes: false,
+  });
   const review = { ...normalized.review, label: reviewStatusLabel(normalized.review.status) };
   const gate = buildReviewGate({
     review,
     result: recordResult,
     topologyId: state.headAsset?.topologyId,
     topologyVersion: state.headAsset?.topologyVersion,
+    allowReferenceCandidates: true,
+    requireHighRiskNotes: false,
   });
   const record = buildIncisionReviewRecord({
     result: recordResult,
@@ -1776,7 +1678,12 @@ function saveReview(state: WorkflowIncisionState) {
   const review = currentReview(state);
   state.reviewAttention = null;
   if (acknowledgeDiagnosticReview(state, review)) return;
-  const readiness = assessReviewReadiness({ ...review, result: state.result });
+  const readiness = assessReviewReadiness({
+    ...review,
+    result: state.result,
+    allowReferenceCandidates: true,
+    requireHighRiskNotes: false,
+  });
   if (!readiness.ok) {
     state.reviewAttention = readiness.attention;
     state.review.status = "pending_clinician_confirmation";
@@ -1793,9 +1700,9 @@ function saveReview(state: WorkflowIncisionState) {
     publish(state, "review_missing_candidate");
     return;
   }
-  state.saved = [...state.saved.filter((item) => item.id !== record.id), record];
+  state.saved = [record];
   state.reviewAttention = null;
-  if (review.status === "approved_for_discussion") activateRecord(state, record);
+  if (review.status === "approved_for_discussion") loadAndActivateRecord(state, record);
   else {
     renderState.incisionOverlay = null;
     publishLiveOverlayState(state, false, null, "workflow_incision_review_changed");
@@ -1889,7 +1796,9 @@ async function importTumor(state: WorkflowIncisionState, file: File) {
     state.kind = imported.kind === "subcutaneous" ? "subcutaneous" : "cutaneous";
     state.diameterMm = Number(imported.diameterValue);
     state.depthMm = Number(imported.depthValue);
-    state.marginMm = Number(imported.marginValue);
+    // The simplified workflow always starts new planning at zero margin.
+    state.marginMm = 0;
+    state.ellipseRatio = 100;
     state.author = imported.author;
     state.boundaryMode = imported.boundaryMode;
     state.centerRef = pointToSurfaceRef(imported.tumor.center as Vec3, state.verts, state.tris);
@@ -1965,7 +1874,7 @@ function markerDiagnosticInput(state: WorkflowIncisionState, frame: PhotoPlannin
   const { author: _author, ...parameters } = markerRequestSnapshot(state);
   return {
     revision: frame.revision, width: frame.width, height: frame.height, seed: { ...seed }, parameters,
-    options: { roiRadius: Math.max(8, Math.round(parameters.scanDiameterMm * pixelsPerMm / 2)), expectedDiameterPx: Math.max(1, parameters.diameterMm * pixelsPerMm), scanDiameterMm: parameters.scanDiameterMm },
+    options: { roiRadius: Math.max(8, Math.round(parameters.scanDiameterMm * pixelsPerMm / 2)), scanDiameterMm: parameters.scanDiameterMm },
     repairs: state.repairStrokes.map((stroke) => ({ ...stroke, points: stroke.points.map((point) => ({ ...point })) })),
     mirror: renderState.mirror, pixelsPerMm, profile: CONTROLLED_MARKER_DETECTOR_PROFILE, implementationVersion: CONTROLLED_MARKER_DETECTOR_VERSION,
   };
@@ -1978,7 +1887,7 @@ async function replayMarkerDiagnostic(state: WorkflowIncisionState) {
   try {
     const frame = sourceState.planning2d?.getFrameState();
     const seed = saved.input.seed;
-    if (!frame?.source || frame.kind !== "image" || state.markerBusy || state.kind !== "cutaneous" || state.boundaryMode === "freehand"
+    if (!frame?.source || frame.kind !== "image" || state.markerBusy || state.boundaryMode === "freehand"
       || !Number.isFinite(seed.x) || !Number.isFinite(seed.y) || seed.x < 0 || seed.y < 0 || seed.x >= frame.width || seed.y >= frame.height) throw new Error("当前图片或识别状态不满足复放条件");
     const projection = workflowPhotoProjection(state, frame);
     const ppm = projection && controlledMarkerPixelsPerMm(state, frame, seed, projection.surfaceLandmarks);
@@ -2013,11 +1922,6 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
     publish(state, "controlled_marker_freehand_blocked");
     return;
   }
-  if (state.kind !== "cutaneous") {
-    setStatus(state, "受控标记仅用于皮表肿物；皮下肿物请直接选择中心。", "warning");
-    publish(state, "controlled_marker_wrong_kind");
-    return;
-  }
   if (!frame?.source || frame.kind !== "image" || !frame.landmarks?.length) {
     setStatus(state, "请先上传并完成照片人脸检测，再使用受控标记。", "warning");
     publish(state, "controlled_marker_no_photo");
@@ -2025,16 +1929,6 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
   }
   if (state.markerBusy) return;
   const started = markerRequestSnapshot(state);
-  const minimumScanDiameterMm = minimumWorkflowMarkerScanDiameterMm(started.diameterMm);
-  if (started.scanDiameterMm < minimumScanDiameterMm) {
-    setStatus(
-      state,
-      `当前 ${started.scanDiameterMm} mm 扫描面小于肿物直径所需覆盖范围，请扩大到至少 ${minimumScanDiameterMm} mm 后重试。`,
-      "warning",
-    );
-    publish(state, "controlled_marker_scan_too_small");
-    return;
-  }
   const photoProjection = workflowPhotoProjection(state, frame);
   if (!photoProjection) {
     setStatus(state, "当前照片无法建立切口投影表面，请重新上传正面照片。", "warning");
@@ -2054,7 +1948,6 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
   requestFrame();
   const options = {
     roiRadius: Math.max(8, Math.round(started.scanDiameterMm * pixelsPerMm / 2)),
-    expectedDiameterPx: Math.max(1, started.diameterMm * pixelsPerMm),
     scanDiameterMm: started.scanDiameterMm,
   };
   const canvas = document.createElement("canvas");
@@ -2113,12 +2006,19 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
       return;
     }
     if (!mobileRetrySeed) state.markerBusy = false;
-    if (!detection.ok || !detection.center || detection.geometry_mode !== "enclosed_region") {
+    if (!detection.ok || !detection.center || !["enclosed_region", "dark_component"].includes(detection.geometry_mode || "")) {
       completeControlledMarkerAttempt(state, mobileRetrySeed);
+      const rejectedBoundary = detection.rejected_boundary || [];
+      state.rejectedMarkerPreview = rejectedBoundary.length >= 3 ? {
+        boundary: rejectedBoundary.map((point) => ({ x: point.x, y: point.y })),
+        sourceRevision: frame.revision,
+        requestId,
+        reasons: [...(detection.rejected_reasons || [])],
+      } : null;
       state.repairAvailable = controlledMarkerRepairable(detection) || state.repairStrokes.length > 0;
       setStatus(
         state,
-        `${controlledMarkerFailureMessage(detection)}${state.repairAvailable ? "可扩大扫描范围，或启用补线后沿照片中确实可见的缺口描画。" : "受控标记保持开启，可直接换位置重试。"}`,
+        `${state.rejectedMarkerPreview ? "检测到候选边界，但被识别门禁否决；亮紫色虚线仅供诊断，不会生成切口。" : controlledMarkerFailureMessage(detection)}${state.repairAvailable ? "可扩大扫描范围，或启用补线后沿照片中确实可见的缺口描画。" : "受控标记保持开启，可直接换位置重试。"}`,
         "warning",
       );
       publish(state, "controlled_marker_failed");
@@ -2141,7 +2041,7 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
       .filter((point): point is Vec3 => Boolean(point));
     const detectedTumor = detectedCenter
       ? withControlledMarkerProvenance(buildTumorInput({
-        kind: "cutaneous",
+        kind: started.kind,
         center: detectedCenter,
         diameterMm: started.diameterMm,
         depthMm: started.depthMm,
@@ -2159,6 +2059,7 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
       return;
     }
     state.centerRef = centerRef;
+    state.rejectedMarkerPreview = null;
     state.boundaryRefs = boundaryRefs;
     state.boundaryPhotoPoints = detection.boundary.map((point) => ({ x: point.x, y: point.y }));
     state.boundaryPhotoRevision = frame.revision;
@@ -2192,7 +2093,7 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
     }
     setStatus(
       state,
-      `已识别受控标记边界（本地检测器 v${CONTROLLED_MARKER_DETECTOR_VERSION}），候选已生成并等待审阅。`,
+      `已识别受控标记边界（小肿物边界候选算法 / ${CONTROLLED_MARKER_DETECTOR_VERSION}），候选已生成并等待审阅。`,
       state.result?.guardrails?.passed ? "normal" : "warning",
     );
     publish(state, "controlled_marker_applied");
@@ -2256,25 +2157,6 @@ function sourcePointAtClient(
   ));
 }
 
-function photoEllipseClientPoints(state: WorkflowIncisionState, frame: PhotoPlanningFrameState): SvgPoint[] {
-  if (state.kind !== "cutaneous" || state.boundaryMode !== "ellipse" || !state.centerRef) return [];
-  const projection = workflowPhotoProjection(state, frame);
-  const centerSource = projection
-    ? surfaceRefToSourcePoint(state.centerRef, projection.surfaceLandmarks, state.tris)
-    : null;
-  const pixelsPerMm = projection
-    ? stablePhotoPixelsPerMm(projection.surfaceLandmarks, frame.triangles, state.verts, state.unitsPerMm)
-    : null;
-  if (!centerSource || !pixelsPerMm) return [];
-  return workflowPhotoEllipseBoundary({
-    center: centerSource,
-    diameterMm: state.diameterMm,
-    ellipseRatio: state.ellipseRatio,
-    pixelsPerMm,
-  }).map((point) => sourceClientPoint(state, [point.x, point.y, 0]))
-    .filter((point): point is SvgPoint => Boolean(point));
-}
-
 function clearWorkflowDraftOverlay(state: WorkflowIncisionState) {
   const svg = state.root.querySelector<SVGSVGElement>("#workflowIncisionOverlay");
   if (!svg) return;
@@ -2284,6 +2166,7 @@ function clearWorkflowDraftOverlay(state: WorkflowIncisionState) {
     "[data-workflow-candidate-halo]",
     "[data-workflow-candidate]",
     "[data-workflow-diagnostic-candidate]",
+    "[data-workflow-rejected-marker]",
   ]) {
     svg.querySelector<SVGPathElement>(selector)?.setAttribute("d", "");
   }
@@ -2304,9 +2187,10 @@ function drawDraftOverlay(state: WorkflowIncisionState) {
   const geometry = workflowPhotoGeometry(state, frame);
   const planningVisible = !state.markerPreviewSuppressed;
   const center = planningVisible && state.centerRef ? clientPoints(state, [state.centerRef])[0] : null;
-  const tumorOutline = geometry ? workflowPhotoTumorOutline(state.kind, geometry) : [];
-  const photoEllipse = planningVisible ? photoEllipseClientPoints(state, frame) : [];
-  const photoBoundary = planningVisible
+  const boundaryVisible = planningVisible
+    && (state.controlledBoundary || state.boundaryMode === "freehand");
+  const tumorOutline = boundaryVisible && geometry ? workflowPhotoTumorOutline(state.kind, geometry) : [];
+  const photoBoundary = boundaryVisible
     && state.boundaryPhotoRevision === frame.revision
     && state.boundaryPhotoPoints.length > 0
     ? state.boundaryPhotoPoints
@@ -2319,12 +2203,13 @@ function drawDraftOverlay(state: WorkflowIncisionState) {
     ? planningVisible
       ? tumorOutline.map((point) => sourceClientPoint(state, point)).filter((point): point is { x: number; y: number } => Boolean(point))
       : []
-    : photoEllipse;
+    : [];
   const boundaryPath = svg.querySelector<SVGPathElement>("[data-workflow-boundary]");
   const boundaryHaloPath = svg.querySelector<SVGPathElement>("[data-workflow-boundary-halo]");
   const candidatePath = svg.querySelector<SVGPathElement>("[data-workflow-candidate]");
   const candidateHaloPath = svg.querySelector<SVGPathElement>("[data-workflow-candidate-halo]");
   const diagnosticCandidatePath = svg.querySelector<SVGPathElement>("[data-workflow-diagnostic-candidate]");
+  const rejectedMarkerPath = svg.querySelector<SVGPathElement>("[data-workflow-rejected-marker]");
   const centerCircle = svg.querySelector<SVGCircleElement>("[data-workflow-center]");
   const boundaryPathData = photoBoundary.length && !state.boundaryClosed
     ? pathData(boundary)
@@ -2360,6 +2245,15 @@ function drawDraftOverlay(state: WorkflowIncisionState) {
   candidatePath?.setAttribute("d", candidateVisible ? renderedCandidatePathData : "");
   candidateHaloPath?.setAttribute("d", candidateVisible ? renderedCandidatePathData : "");
   diagnosticCandidatePath?.setAttribute("d", diagnosticCandidateVisible ? diagnosticCandidatePathData : "");
+  const rejectedMarkerBoundary = state.rejectedMarkerPreview?.sourceRevision === frame.revision
+    && state.rejectedMarkerPreview.requestId === state.markerRequestId
+    ? state.rejectedMarkerPreview.boundary
+      .map((point) => sourceClientPoint(state, [point.x, point.y, 0]))
+      .filter((point): point is { x: number; y: number } => Boolean(point))
+    : [];
+  rejectedMarkerPath?.setAttribute("d", rejectedMarkerBoundary.length >= 3
+    ? workflowClosedBoundarySvgPath(rejectedMarkerBoundary)
+    : "");
   const overlayStyle = incisionOverlayScreenStyle(state.result?.candidate?.type, {
     compact: mobileWorkflowViewportActive(),
     viewScale: frame.transform?.zoom,
@@ -2405,7 +2299,7 @@ function drawControlledMarkerScan(state: WorkflowIncisionState) {
   const sourcePoint = state.markerPointerSource;
   if (
     !group || !circle || !label || !planning || !wrap || !sourcePoint
-    || !state.markerMode || state.repairMode || state.kind !== "cutaneous"
+    || !state.markerMode || state.repairMode
     || Boolean(renderState.focusRegion)
     || frame?.kind !== "image" || !frame.landmarks?.length
   ) {
@@ -2552,7 +2446,7 @@ function handleFreehandPointerDown(
   event: PointerEvent,
   frame: PhotoPlanningFrameState,
 ): boolean {
-  if (event.button !== 0 || state.kind !== "cutaneous" || state.boundaryMode !== "freehand") return false;
+  if (event.button !== 0 || state.boundaryMode !== "freehand") return false;
   const planning = sourceState.planning2d;
   const sourcePoint = sourcePointAtClient(state, { x: event.clientX, y: event.clientY });
   if (!planning) return false;
@@ -2586,7 +2480,7 @@ function handleFreehandPointerDown(
   state.controlledBoundary = false;
   state.controlledBoundaryPhotoDiameterMm = null;
   (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId);
-  setStatus(state, "正在描画皮表肿物边界；完成闭环后请松开鼠标，再点击“结束描绘”进行识别。", "normal");
+  setStatus(state, `正在描画${state.kind === "cutaneous" ? "皮表" : "皮下"}肿物边界；完成闭环后请松开鼠标，再点击“结束描绘”进行识别。`, "normal");
   syncSelection(state);
   publish(state, "freehand_boundary_started");
   claimFreehandPointer(event);
@@ -2704,7 +2598,6 @@ function handleCanvasPointerDown(state: WorkflowIncisionState, event: PointerEve
   }
   const mobileMarkerTouch = state.markerMode && !state.repairMode && isMobileWorkflowTouch(event);
   const mobileFreehandTouch = state.boundaryActive
-    && state.kind === "cutaneous"
     && state.boundaryMode === "freehand"
     && isMobileWorkflowTouch(event);
   if (mobileFreehandTouch) {
@@ -2753,7 +2646,7 @@ function handleCanvasPointerDown(state: WorkflowIncisionState, event: PointerEve
     claimWorkflowPointer(event);
     state.pendingClick = null;
     state.selectionMode = false;
-    setStatus(state, "当前已有自由轮廓肿物边界。如需重画，请再次点击“开始描绘”；如需生成模拟肿物，请切换为“椭圆近似”。", "warning");
+    setStatus(state, "当前已有自由轮廓肿物边界。如需重画，请再次点击“开始描绘”；如需自动识别，请切换为“受控标记识别”。", "warning");
     publish(state, "freehand_inactive_canvas_click_blocked");
     return;
   }
@@ -2812,9 +2705,7 @@ function handleCanvasPointerDown(state: WorkflowIncisionState, event: PointerEve
   invalidateCandidate(state, "肿物位置或边界已变化，旧活动候选已撤销。请重新审阅。 ");
   state.centerRef = ref;
   state.selectionMode = false;
-  state.controlledBoundary = false;
-  state.controlledBoundaryPhotoDiameterMm = null;
-  if (state.boundaryMode === "freehand") resetFreehandPhotoBoundary(state, true);
+  clearTumorBoundaryForCenterSelection(state);
   syncSelection(state);
   void runWorkflow(state);
 }
@@ -2944,9 +2835,7 @@ function handleCanvasPointerUp(state: WorkflowIncisionState, event: PointerEvent
     event.preventDefault();
     invalidateCandidate(state, "肿物位置或边界已变化，旧活动候选已撤销。请重新审阅。 ");
     state.centerRef = ref;
-    state.controlledBoundary = false;
-    state.controlledBoundaryPhotoDiameterMm = null;
-    if (state.boundaryMode === "freehand") resetFreehandPhotoBoundary(state, true);
+    clearTumorBoundaryForCenterSelection(state);
     syncSelection(state);
     void runWorkflow(state);
     return;
@@ -3029,7 +2918,7 @@ function applyTumorCommand(state: WorkflowIncisionState, event: Event) {
     if (!diagnostics) return;
     try {
       if (diagnosticDetail.command === "export_marker_diagnostic") {
-        const text = diagnostics.exportLatest();
+        const text = diagnostics.exportBundle();
         if (!auditMarkerDiagnosticExport(JSON.parse(text)).passed) throw new Error("诊断导出未通过隐私检查");
         downloadText(`marker_diagnostic_${Date.now()}.json`, text);
       } else if (diagnosticDetail.command === "import_marker_diagnostic") {
@@ -3042,17 +2931,18 @@ function applyTumorCommand(state: WorkflowIncisionState, event: Event) {
   const detail = readIncisionTumorCommand(event);
   if (!detail) return;
   const value = detail.value;
-  if (detail.command === "diameter_inactive_hint") {
-    setStatus(state, TUMOR_DIAMETER_DISABLED_MESSAGE, "warning");
-    publish(state, "diameter_inactive_hint");
+  if (cameraIncisionActionsDisabled(state)
+    && ["kind_changed", "boundary_mode_changed"].includes(detail.command)) {
+    blockCameraIncisionAction(state, "camera_tumor_input_change_blocked");
     return;
   }
-  if ((detail.command === "ellipse_ratio_input" || detail.command === "ellipse_ratio_changed") && state.markerMode) {
-    publish(state, "ellipse_ratio_inactive");
+  // Retired controls must not change hidden values or invalidate the current candidate.
+  if (["author_changed", "margin_input", "margin_changed", "ellipse_ratio_input", "ellipse_ratio_changed"].includes(detail.command)) {
+    publish(state, "retired_tumor_parameter_ignored");
     return;
   }
-  const liveParameterCommands = ["diameter_input", "depth_input", "margin_input", "ellipse_ratio_input"];
-  const committedParameterCommands = ["diameter_changed", "depth_changed", "margin_changed", "ellipse_ratio_changed"];
+  const liveParameterCommands = ["depth_input", "margin_input", "ellipse_ratio_input"];
+  const committedParameterCommands = ["depth_changed", "margin_changed", "ellipse_ratio_changed"];
   const geometryChange = !["author_changed", "export_tumor", "import_tumor", "run_workflow"].includes(detail.command);
   const parameterChange = liveParameterCommands.includes(detail.command) || committedParameterCommands.includes(detail.command);
   if (geometryChange && !parameterChange) {
@@ -3070,31 +2960,10 @@ function applyTumorCommand(state: WorkflowIncisionState, event: Event) {
       state.controlledBoundaryPhotoDiameterMm = null;
       resetFreehandPhotoBoundary(state, true);
       resetMarkerRepair(state);
-      if (state.kind === "subcutaneous") {
-        state.markerMode = false;
-        state.markerPointerSource = null;
-        state.markerPreviewSuppressed = false;
-      } else {
-        state.scanDiameterMm = workflowMarkerScanDiameterForTumor(state.scanDiameterMm, state.diameterMm);
-      }
+      state.scanDiameterMm = Math.max(10, state.scanDiameterMm);
       break;
-    case "diameter_input":
-    case "diameter_changed":
-      if (tumorDiameterParameterInactive({
-        kind: state.kind,
-        boundaryMode: state.boundaryMode,
-        controlledMarkerMode: state.markerMode,
-      })) break;
-      state.diameterMm = Number(value);
-      if (state.kind === "cutaneous") {
-        state.scanDiameterMm = workflowMarkerScanDiameterForTumor(state.scanDiameterMm, state.diameterMm);
-      }
-      break;
-    case "author_changed": state.author = String(value || ""); break;
     case "depth_input":
     case "depth_changed": state.depthMm = Number(value); break;
-    case "margin_input":
-    case "margin_changed": state.marginMm = Number(value); break;
     case "boundary_mode_changed":
       state.boundaryMode = value === "freehand" ? "freehand" : "ellipse";
       {
@@ -3117,8 +2986,6 @@ function applyTumorCommand(state: WorkflowIncisionState, event: Event) {
         setStatus(state, "自由轮廓鼠绘已开启：按住鼠标左键沿肿物边界描画，并让线条首尾相接。", "normal");
       }
       break;
-    case "ellipse_ratio_input":
-    case "ellipse_ratio_changed": state.ellipseRatio = Number(value); break;
     case "toggle_boundary":
       {
         const action = workflowFreehandToggleAction(state.boundaryActive, state.boundaryPhotoPoints.length);
@@ -3232,6 +3099,10 @@ function handleMobileEditCommand(state: WorkflowIncisionState, event: Event) {
   if (!mobileWorkflowViewportActive()) return;
   const detail = readIncisionEditCommand(event);
   if (!detail) return;
+  if (cameraIncisionActionsDisabled(state)) {
+    blockCameraIncisionAction(state, "camera_candidate_edit_blocked");
+    return;
+  }
   if (detail.command === "reset_edit") {
     cancelMobileEditPreview(state);
     state.edit = neutralIncisionEdit();
@@ -3274,6 +3145,10 @@ function handleMobileEditCommand(state: WorkflowIncisionState, event: Event) {
 function handleReviewCommand(state: WorkflowIncisionState, event: Event) {
   const detail = readIncisionReviewCommand(event);
   if (!detail) return;
+  if (cameraIncisionActionsDisabled(state)) {
+    blockCameraIncisionAction(state, "camera_review_blocked");
+    return;
+  }
   currentReview(state);
   if (state.reviewAttention === "reviewer" && state.review.reviewer) state.reviewAttention = null;
   if (state.reviewAttention === "decision" && state.review.status !== "approved_for_discussion") {
@@ -3288,7 +3163,10 @@ function handleReviewCommand(state: WorkflowIncisionState, event: Event) {
     publish(state, "review_state_changed");
     return;
   }
-  if (detail.command === "save_review") saveReview(state);
+  if (detail.command === "save_review") {
+    if (!rootInput(state, "reviewDecision")) state.review.status = "approved_for_discussion";
+    saveReview(state);
+  }
 }
 
 function loadSavedCandidateState(state: WorkflowIncisionState, record: DynamicRecord) {
@@ -3312,7 +3190,8 @@ function loadSavedCandidateState(state: WorkflowIncisionState, record: DynamicRe
   state.kind = record.tumor?.kind === "subcutaneous" ? "subcutaneous" : "cutaneous";
   state.diameterMm = Number(record.tumor?.diameter_mm || state.diameterMm);
   state.depthMm = Number(record.tumor?.depth_mm || state.depthMm);
-  state.marginMm = Number(record.tumor?.margin_mm || 0);
+  state.marginMm = 0;
+  state.ellipseRatio = 100;
   state.author = String(record.tumor?.author || state.author);
   state.centerRef = pointToSurfaceRef(record.tumor?.center, state.verts, state.tris);
   state.boundaryRefs = pointsToSurfaceRefs(record.tumor?.boundary || [], state.verts, state.tris);
@@ -3339,6 +3218,11 @@ function loadSavedCandidateState(state: WorkflowIncisionState, record: DynamicRe
   syncSelection(state);
 }
 
+function loadAndActivateRecord(state: WorkflowIncisionState, record: DynamicRecord): boolean {
+  loadSavedCandidateState(state, record);
+  return activateRecord(state, record);
+}
+
 function toggleSavedCandidateReviewStatus(state: WorkflowIncisionState, id: string) {
   const recordIndex = state.saved.findIndex((item) => item.id === id);
   if (recordIndex < 0) return;
@@ -3358,7 +3242,13 @@ function toggleSavedCandidateReviewStatus(state: WorkflowIncisionState, id: stri
   const targetStatus = currentStatus === "pending_clinician_confirmation"
     ? "approved_for_discussion"
     : "pending_clinician_confirmation";
-  const transition = transitionIncisionReviewRecord({ record, targetStatus, reviewContext });
+  const transition = transitionIncisionReviewRecord({
+    record,
+    targetStatus,
+    reviewContext,
+    allowReferenceCandidates: true,
+    requireHighRiskNotes: false,
+  });
 
   if (!transition.ok) {
     loadSavedCandidateState(state, record);
@@ -3430,13 +3320,12 @@ function handleLibraryCommand(state: WorkflowIncisionState, event: Event) {
       setStatus(state, "已清空候选库");
       publish(state, "saved_cleared");
       return;
-    case "load_candidate": {
-      const record = state.saved.find((item) => item.id === detail.id);
-      if (!record) return;
-      if (!savedCandidateUsable(state, record)) return;
-      loadSavedCandidateState(state, record);
-      activateRecord(state, record);
-      publish(state, "candidate_loaded");
+      case "load_candidate": {
+        const record = state.saved.find((item) => item.id === detail.id);
+        if (!record) return;
+        if (!savedCandidateUsable(state, record)) return;
+        loadAndActivateRecord(state, record);
+        publish(state, "candidate_loaded");
       return;
     }
     case "toggle_candidate_review_status": toggleSavedCandidateReviewStatus(state, detail.id as string); return;
@@ -3469,6 +3358,10 @@ function handleLibraryCommand(state: WorkflowIncisionState, event: Event) {
 function handleToolCommand(state: WorkflowIncisionState, event: Event) {
   const detail = readControllerCommandDetail(event as CustomEvent, WORKFLOW_INCISION_TOOL_COMMANDS);
   if (!detail) return;
+  if (detail.command !== "reset_view" && cameraIncisionActionsDisabled(state)) {
+    blockCameraIncisionAction(state, "camera_tumor_recognition_blocked");
+    return;
+  }
   let rerunAfterCommand = false;
   switch (detail.command) {
     case "select_lesion":
@@ -3487,11 +3380,6 @@ function handleToolCommand(state: WorkflowIncisionState, event: Event) {
         publish(state, "controlled_marker_freehand_blocked");
         return;
       }
-      if (!state.markerMode && state.kind !== "cutaneous") {
-        setStatus(state, "受控标记仅用于皮表肿物；皮下肿物请直接选择中心。", "warning");
-        publish(state, "controlled_marker_wrong_kind");
-        return;
-      }
       if (!state.markerMode && !workflowPhotoReady(state)) {
         setStatus(state, "请先上传并完成照片人脸检测，再使用受控标记。", "warning");
         publish(state, "controlled_marker_no_photo");
@@ -3500,7 +3388,7 @@ function handleToolCommand(state: WorkflowIncisionState, event: Event) {
       state.pendingClick = null;
       state.markerMode = !state.markerMode;
       if (state.markerMode) {
-        state.scanDiameterMm = workflowMarkerScanDiameterForTumor(state.scanDiameterMm, state.diameterMm);
+        state.scanDiameterMm = Math.max(10, state.scanDiameterMm);
       }
       state.selectionMode = false;
       state.repairMode = false;
@@ -3515,12 +3403,8 @@ function handleToolCommand(state: WorkflowIncisionState, event: Event) {
         ? sourceState.planning2d?.getFrameState().revision ?? null
         : null;
       if (!state.markerMode && state.controlledBoundary) {
-        invalidateCandidate(state, "已退出受控标记；当前点位已切回椭圆近似，请按直径参数重新审阅候选。");
-        state.controlledBoundary = false;
-        state.controlledBoundaryPhotoDiameterMm = null;
-        state.boundaryMode = "ellipse";
+        invalidateCandidate(state, "已退出受控标记；已识别边界保留，可重新进入识别或改用自由轮廓描边。");
         state.boundaryActive = false;
-        resetFreehandPhotoBoundary(state, true);
         rerunAfterCommand = Boolean(state.centerRef);
       }
       setStatus(
@@ -3576,6 +3460,7 @@ function handleToolCommand(state: WorkflowIncisionState, event: Event) {
     case "scan_diameter_changed": {
       state.markerRequestId += 1;
       state.markerBusy = false;
+      state.rejectedMarkerPreview = null;
       // Manual range is always 10–60 mm. Coverage is checked when detection starts,
       // rather than silently moving the user's slider back to a larger minimum.
       const requestedScan = Number(detail.value);
@@ -3617,6 +3502,13 @@ function bindDom(state: WorkflowIncisionState) {
   window.addEventListener("resize", () => scheduleOverlayDraw(state), { signal: abort.signal });
   window.addEventListener("langerface:image-view-changed", () => scheduleOverlayDraw(state), { signal: abort.signal });
   window.addEventListener("langerface:focus-crop-changed", () => scheduleOverlayDraw(state), { signal: abort.signal });
+  window.addEventListener("langerface:source-frame-ready", () => {
+    if (workflowPhotoReady(state) !== state.lastPublishedPhotoReady) {
+      publish(state, "workflow_photo_readiness_changed");
+    } else {
+      scheduleOverlayDraw(state);
+    }
+  }, { signal: abort.signal });
   const tumorFile = rootInput(state, "tumorImportFile") as HTMLInputElement | null;
   const cueFile = rootInput(state, "secondaryCueImportFile") as HTMLInputElement | null;
   tumorFile?.addEventListener("change", () => {
@@ -3626,18 +3518,6 @@ function bindDom(state: WorkflowIncisionState) {
   cueFile?.addEventListener("change", () => {
     if (cueFile.files?.[0]) void importSecondaryCue(state, cueFile.files[0]);
     cueFile.value = "";
-  }, { signal: abort.signal });
-  for (const id of ["reviewerName", "reviewNotes"]) {
-    rootInput(state, id)?.addEventListener("input", () => scheduleWorkflowDraftSave(state), { signal: abort.signal });
-  }
-  window.addEventListener("pagehide", () => {
-    cancelWorkflowDraftSave(state);
-    persistWorkflowDraft(state);
-  }, { signal: abort.signal });
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState !== "hidden") return;
-    cancelWorkflowDraftSave(state);
-    persistWorkflowDraft(state);
   }, { signal: abort.signal });
   window.addEventListener("langerface:refine2d-state", () => {
     if (!reconcileProjectedRstlSnapshot(state)) scheduleOverlayDraw(state);
@@ -3649,12 +3529,6 @@ function bindDom(state: WorkflowIncisionState) {
     [INCISION_REVIEW_REACT_COMMAND_EVENT, (event) => handleReviewCommand(state, event)],
     [INCISION_LIBRARY_REACT_COMMAND_EVENT, (event) => handleLibraryCommand(state, event)],
     [WORKFLOW_INCISION_TOOL_REACT_COMMAND_EVENT, (event) => handleToolCommand(state, event)],
-    [WORKFLOW_DRAFT_RESTORE_EVENT, (event) => {
-      state.pendingDraftRestore = pendingWorkflowDraftRestoreRequest()
-        ?? (event as CustomEvent<WorkflowIncisionDraft | null>).detail
-        ?? null;
-      applyWorkflowDraftRestore(state);
-    }],
     [LIVE_CONTROLLER_STATE_EVENT, (event) => {
       const snapshot = (event as CustomEvent<LiveControllerSnapshot>).detail;
       if (snapshot?.schema_version) state.liveSnapshot = snapshot;
@@ -3677,7 +3551,6 @@ function bindDom(state: WorkflowIncisionState) {
       } else {
         scheduleOverlayDraw(state);
       }
-      applyWorkflowDraftRestore(state);
     }],
   ]);
   state.cleanup = () => {
@@ -3686,7 +3559,6 @@ function bindDom(state: WorkflowIncisionState) {
     delete state.root.dataset.workflowMarkerBusy;
     delete state.root.dataset.workflowMarkerMode;
     commandCleanup();
-    cancelWorkflowDraftSave(state);
     if (wrap) delete wrap.dataset.workflowPointerMode;
   };
 }
@@ -3706,7 +3578,6 @@ async function loadAssets(state: WorkflowIncisionState) {
     state.unitsPerMm = unitsPerMmFromVertices(state.verts);
     state.headAsset = buildIncisionHeadAssetSnapshot({ head, atlas: resolved.atlas as DynamicRecord, resolved });
     state.loading = false;
-    if (applyWorkflowDraftRestore(state)) return;
     setStatus(state, "切口规划资产已就绪；上传照片后在中央画布选择或识别肿物。");
     publish(state, "assets_ready");
   } catch (error) {
@@ -3722,9 +3593,6 @@ export function disposeWorkflowIncisionController() {
   if (!state) return;
   markerDiagnostics.get(state)?.dispose();
   markerDiagnostics.delete(state);
-  cancelWorkflowDraftSave(state);
-  cancelWorkflowDraftRestoreRetry(state);
-  persistWorkflowDraft(state);
   state.mounted = false;
   state.markerRequestId += 1;
   state.workflowRequestId += 1;
@@ -3746,13 +3614,12 @@ export function mountWorkflowIncisionController(root: HTMLElement) {
   disposeWorkflowIncisionController();
   const state = createState(root);
   activeState = state;
-  if (new URLSearchParams(window.location.search).get("markerDiagnostics") === "1") {
+  if (import.meta.env.DEV && (new URLSearchParams(window.location.search).get("developer") === "1"
+    || new URLSearchParams(window.location.search).get("markerDiagnostics") === "1")) {
     markerDiagnostics.set(state, new MarkerRunDiagnostics(() => sourceState.planning2d?.getFrameState()));
   }
   renderState.workflowPhotoOverlay = true;
   bindDom(state);
-  const pendingDraftRestore = pendingWorkflowDraftRestoreRequest();
-  if (pendingDraftRestore !== undefined) state.pendingDraftRestore = pendingDraftRestore;
   publish(state, "mounted");
   void loadAssets(state);
   return disposeWorkflowIncisionController;

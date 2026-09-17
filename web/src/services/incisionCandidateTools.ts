@@ -26,6 +26,9 @@ export interface TumorInput extends AnyRecord {
   boundary_mode: string;
   boundary_source: string;
   photo_boundary_enclosing_diameter_mm?: number | null;
+  boundary_equivalent_diameter_mm?: number | null;
+  boundary_major_axis_mm?: number | null;
+  boundary_minor_axis_mm?: number | null;
   source: string;
   author: string;
   units: string;
@@ -58,6 +61,12 @@ export function normalizeTumorInput(tumor: Partial<TumorInput> & AnyRecord): Tum
       && Number(tumor.photo_boundary_enclosing_diameter_mm) > 0
       ? Number(tumor.photo_boundary_enclosing_diameter_mm)
       : null,
+    boundary_equivalent_diameter_mm: Number.isFinite(Number(tumor.boundary_equivalent_diameter_mm))
+      ? Number(tumor.boundary_equivalent_diameter_mm) : null,
+    boundary_major_axis_mm: Number.isFinite(Number(tumor.boundary_major_axis_mm))
+      ? Number(tumor.boundary_major_axis_mm) : null,
+    boundary_minor_axis_mm: Number.isFinite(Number(tumor.boundary_minor_axis_mm))
+      ? Number(tumor.boundary_minor_axis_mm) : null,
     source: tumor.source || "manual",
     author: tumor.author || "",
     units: tumor.units || "mm",
@@ -90,6 +99,13 @@ export function summarizeTumorInputQuality(tumorInput: Partial<TumorInput> & Any
       code: "missing_subcutaneous_depth",
       severity: "medium",
       message: "Subcutaneous tumor depth is missing; confirm ultrasound/source depth before review.",
+    });
+  }
+  if (tumor.kind === "subcutaneous" && tumor.boundary.length < 3) {
+    warnings.push({
+      code: "missing_subcutaneous_boundary",
+      severity: "high",
+      message: "Subcutaneous incision generation requires a detected or clinician-drawn boundary.",
     });
   }
   if (tumor.kind === "cutaneous") {
@@ -134,18 +150,25 @@ export function generateLinearIncision(
 ): IncisionCandidate {
   const tumor = validateTumor(tumorInput);
   if (tumor.kind !== "subcutaneous") throw new Error("linear incision requires subcutaneous tumor");
-  const cfg = rules.linear_subcutaneous;
   const axis = norm(direction.vector || [1, 0, 0]);
-  const targetLengthMm = tumor.diameter_mm * cfg.length_multiplier;
-  const lengthMm = clamp(targetLengthMm, cfg.min_length_mm, cfg.max_length_mm);
-  const diameterCoverageDeficitMm = Math.max(0, tumor.diameter_mm - lengthMm);
+  const perpendicular = tangentPerp(axis, direction.normal || [0, 0, 1]);
+  const boundary = boundaryProfile(tumor, axis, perpendicular, unitsPerMm);
+  if (!boundary || boundary.self_intersection || !(boundary.axis_diameter_mm > 0)) {
+    throw new Error("subcutaneous incision requires a valid detected or clinician-drawn boundary");
+  }
+  const lengthMm = Number(boundary.axis_diameter_mm);
   const half = mul(axis, lengthMm * unitsPerMm * 0.5);
-  const p0 = sub(tumor.center, half), p1 = add(tumor.center, half);
+  const center = boundary.envelope_center as Vec3;
+  const p0 = sub(center, half), p1 = add(center, half);
+  const equivalentDiameterMm = 2 * Math.sqrt(Number(boundary.area_mm2) / Math.PI);
+  const majorAxisMm = Math.max(Number(boundary.axis_diameter_mm), Number(boundary.perp_diameter_mm));
+  const minorAxisMm = Math.min(Number(boundary.axis_diameter_mm), Number(boundary.perp_diameter_mm));
+  const fitError = majorAxisMm > 0 ? Math.abs(majorAxisMm - minorAxisMm) / majorAxisMm : 0;
   return {
     id: "linear_subcutaneous_candidate",
     type: "linear",
     tumor_kind: tumor.kind,
-    center: tumor.center,
+    center,
     axis,
     endpoints: [p0, p1],
     polyline: [p0, p1],
@@ -154,19 +177,29 @@ export function generateLinearIncision(
     direction_confidence: direction.confidence,
     metrics: {
       rstl_deviation_deg: 0,
-      diameter_mm: tumor.diameter_mm,
-      diameter_coverage_required_mm: tumor.diameter_mm,
-      diameter_coverage_deficit_mm: diameterCoverageDeficitMm,
-      length_target_mm: targetLengthMm,
-      length_target_deficit_mm: Math.max(0, targetLengthMm - lengthMm),
-      length_clamped_by_min: targetLengthMm < cfg.min_length_mm,
-      length_clamped_by_max: targetLengthMm > cfg.max_length_mm,
-      length_multiplier: lengthMm / tumor.diameter_mm,
+      diameter_mm: equivalentDiameterMm,
+      boundary_directional_feret_diameter_mm: lengthMm,
+      boundary_equivalent_diameter_mm: equivalentDiameterMm,
+      boundary_major_axis_mm: majorAxisMm,
+      boundary_minor_axis_mm: minorAxisMm,
+      boundary_fit_error_ratio: fitError,
+      diameter_coverage_required_mm: lengthMm,
+      diameter_coverage_deficit_mm: 0,
+      length_target_mm: lengthMm,
+      length_target_deficit_mm: 0,
+      length_clamped_by_min: false,
+      length_clamped_by_max: false,
+      length_multiplier: 1,
+      boundary_used: true,
+      boundary_scale_shape: "directional_feret_diameter",
     },
     provenance: {
       generator: "generateLinearIncision",
       rules_version: rules.version,
-      candidate_version: 1,
+      candidate_version: 2,
+      boundary_source: tumor.boundary_source,
+      marker_detection_profile: tumor.marker_detection_profile || null,
+      marker_implementation_version: tumor.marker_implementation_version || null,
       edit_history: [],
       ...directionProvenance(direction),
     },

@@ -129,7 +129,7 @@ cd web && node ../tools/test_incision_tools.ts
 
 辅助线索当前只能作为医生审阅时的只读证据进入导出，不得自动改变肿物边界或候选切口。若未来重新引入任何远程模型，必须作为新的架构决策重新定义出域、访问控制和临床验证流程。
 
-肿物输入和审阅记录的结构化门禁已经迁到浏览器 workflow：导出中会保存 `tumor_quality`、`tumor_boundary_summary`、`sensitive_structure_inspection`、`workflow_trace_gate`、`workflow_plan_audit`、`workflow_execution_events` 和 `candidate_comparison`。前端 review gate 会检查 `approved_for_discussion` 是否有审阅人、高风险 guardrail 是否有备注或覆盖理由、`workflow_trace_gate` 是否通过，以及 `live_overlay_ready` 是否只在这些条件同时满足时为 `true`。它只检查导出状态自洽，不替代医生签名或病例系统权限控制。
+肿物输入和审阅记录的结构化门禁已经迁到浏览器 workflow：导出中会保存 `tumor_quality`、`tumor_boundary_summary`、`sensitive_structure_inspection`、`workflow_trace_gate`、`workflow_plan_audit`、`workflow_execution_events` 和 `candidate_comparison`。共享 review gate 默认检查 `approved_for_discussion` 是否有审阅人、高风险 guardrail 是否有备注或覆盖理由、`workflow_trace_gate` 是否通过；合并工作流显式关闭备注必填，但仍要求审阅人、完整 trace 且不存在不可覆盖的工程几何错误，只有这些条件满足时 `live_overlay_ready` 才能为 `true`。红色虚线诊断候选不能进入候选库或实时叠加。门禁只检查导出状态自洽，不替代医生签名或病例系统权限控制。
 
 workflow-only 审阅记录使用 `incision-review-record/v0.4`，导出容器使用
 `incision-review-export/v0.4`。Agentic 删除前的 `v0.3` 记录不得直接当作 `v0.4` 使用；

@@ -119,8 +119,8 @@ for (const sample of reviewedSamples) {
     })}`);
     expect(markerReasons).toContain("controlled_marker_applied");
     await expect.poll(() => detectorDiagnostics.at(-1)).toMatchObject({
-      profile: "color-difference-v0.35",
-      version: "0.35",
+      profile: "small-lesion-boundary-candidate",
+      version: "task1-candidate",
     });
     const actualSeed = detectorDiagnostics.at(-1)?.seed;
     expect(actualSeed, `${sample.id} detector diagnostic must include the actual source seed`).toBeTruthy();

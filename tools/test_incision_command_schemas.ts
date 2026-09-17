@@ -16,10 +16,6 @@ assert.equal(
   readIncisionTumorCommand(event({ command: "kind_changed", value: "remote" })),
   null,
 );
-assert.deepEqual(
-  readIncisionTumorCommand(event({ command: "diameter_input", value: "12.5" })),
-  { command: "diameter_input", value: "12.5" },
-);
 assert.equal(
   readIncisionTumorCommand(event({ command: "diameter_input", value: "not-a-number" })),
   null,

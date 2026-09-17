@@ -4,6 +4,7 @@ import { dispatchMarkerDiagnosticCommand } from "../lib/controllerCommand";
 
 import { useIncisionControllerCommands } from "../hooks/useControllerCommands";
 import { useIncisionStore } from "../stores/incisionStore";
+import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { WorkbenchCard } from "./ui/card";
@@ -14,22 +15,24 @@ import { Input } from "./ui/input";
 import { FieldValue, Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
-import { PersistentTooltip, usePersistentTooltip } from "./ui/persistent-tooltip";
-import { TUMOR_DIAMETER_DISABLED_MESSAGE } from "../services/incisionClinicalCopy";
-import { tumorDiameterParameterInactive } from "../services/tumorInput";
 
 export interface TumorInputPanelProps {
   showDepthControl?: boolean;
   continuousFreehand?: boolean;
+  simplifiedWorkflow?: boolean;
 }
 
 export function TumorInputPanel({
   showDepthControl = true,
   continuousFreehand = false,
+  simplifiedWorkflow = false,
 }: TumorInputPanelProps) {
   const commands = useIncisionControllerCommands();
-  const [diagnosticEnabled] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("markerDiagnostics") === "1");
+  const [diagnosticEnabled] = useState(() => import.meta.env.DEV && typeof window !== "undefined"
+    && (new URLSearchParams(window.location.search).get("developer") === "1"
+      || new URLSearchParams(window.location.search).get("markerDiagnostics") === "1"));
   const [diagnosticMessage, setDiagnosticMessage] = useState("仅本地取证；请重新上传原图后识别，客户端源码身份仍待确认。");
+  const [diagnosticDetailsOpen, setDiagnosticDetailsOpen] = useState(false);
   useEffect(() => {
     if (!diagnosticEnabled) return;
     const listener = (event: Event) => {
@@ -40,8 +43,8 @@ export function TumorInputPanel({
     return () => window.removeEventListener(MARKER_DIAGNOSTIC_EVENT, listener);
   }, [diagnosticEnabled]);
   const snapshot = useIncisionStore((state) => state.snapshot);
+  const cameraMode = useLiveStore((state) => state.snapshot?.source.kind === "camera");
   const [kind, setKind] = useState("cutaneous");
-  const [diameter, setDiameter] = useState("8");
   const [author, setAuthor] = useState("clinician");
   const [depth, setDepth] = useState("6");
   const [margin, setMargin] = useState("0");
@@ -60,11 +63,10 @@ export function TumorInputPanel({
     if (!tumor) return;
     setKind(tumor.kind || "cutaneous");
     if (tumor.author) setAuthor(tumor.author);
-    if (tumor.diameterMm != null) setDiameter(String(tumor.diameterMm));
     if (tumor.kind === "subcutaneous" && tumor.depthMm != null) setDepth(String(tumor.depthMm));
     if (tumor.kind === "cutaneous" && tumor.marginMm != null) setMargin(String(tumor.marginMm));
     if (tumor.kind === "cutaneous" && tumor.ellipseRatio != null) setEllipseRatio(String(tumor.ellipseRatio));
-    if (tumor.kind === "cutaneous" && (tumor.boundaryMode === "ellipse" || tumor.boundaryMode === "freehand")) {
+    if (tumor.boundaryMode === "ellipse" || tumor.boundaryMode === "freehand") {
       setBoundaryMode(tumor.boundaryMode);
     }
     setBoundaryActive(Boolean(tumor.boundaryActive));
@@ -77,14 +79,8 @@ export function TumorInputPanel({
   }, [snapshot?.tumor]);
 
   const cutaneous = kind === "cutaneous";
-  const freehand = cutaneous && boundaryMode === "freehand";
-  const diameterDisabled = tumorDiameterParameterInactive({
-    kind,
-    boundaryMode,
-    controlledMarkerMode: Boolean(snapshot?.workflowTools?.controlledMarkerMode),
-  });
+  const freehand = boundaryMode === "freehand";
   const ellipseRatioDisabled = Boolean(snapshot?.workflowTools?.controlledMarkerMode);
-  const diameterTooltip = usePersistentTooltip<HTMLButtonElement>(diameterDisabled);
   const boundaryButtonLabel = boundaryActive
     ? continuousFreehand ? "结束描绘" : "结束轮廓"
     : continuousFreehand ? "开始描绘" : "开始轮廓";
@@ -100,69 +96,27 @@ export function TumorInputPanel({
 
   return (
     <WorkbenchCard>
-      <Label htmlFor="tumorKind">肿物类型</Label>
-      <Select
-        id="tumorKind"
-        value={kind}
-        onChange={(event) => {
-          const value = event.currentTarget.value;
-          setKind(value);
-          setBoundaryActive(false);
-          commands.tumor("kind_changed", value);
-        }}
-      >
-        <option value="cutaneous">皮表肿物 · 梭形切口</option>
-        <option value="subcutaneous">皮下肿物 · 线性切口</option>
-      </Select>
-      <FieldGroup
-        className={diameterDisabled ? "diameter-field-disabled" : undefined}
-        aria-disabled={diameterDisabled}
-      >
-        <Label htmlFor="diameterMm">直径 mm <FieldValue id="diameterVal">{diameter}</FieldValue></Label>
-        <RangeInput
-          id="diameterMm"
-          min="2"
-          max="40"
-          value={diameter}
-          disabled={diameterDisabled}
-          onInput={(event) => {
+      <input id="diameterMm" type="hidden" min="2" max="40" value="8" readOnly aria-hidden="true" />
+      <output id="diameterVal" hidden aria-hidden="true">8</output>
+      <div className={cameraMode ? "workflow-disabled-field" : undefined}>
+        <Label htmlFor="tumorKind">肿物类型</Label>
+        <Select
+          id="tumorKind"
+          value={kind}
+          disabled={cameraMode}
+          title={cameraMode ? "摄像头模式下不可修改肿物类型" : undefined}
+          onChange={(event) => {
             const value = event.currentTarget.value;
-            setDiameter(value);
-            commands.tumor("diameter_input", value);
+            setKind(value);
+            setBoundaryActive(false);
+            commands.tumor("kind_changed", value);
           }}
-          onPointerUp={(event) => commands.tumor("diameter_changed", event.currentTarget.value)}
-          onKeyUp={(event) => commands.tumor("diameter_changed", event.currentTarget.value)}
-          onBlur={(event) => commands.tumor("diameter_changed", event.currentTarget.value)}
-          onChange={(event) => setDiameter(event.currentTarget.value)}
-        />
-        {diameterDisabled ? (
-          <button
-            ref={diameterTooltip.anchorRef}
-            id="diameterDisabledHint"
-            className="diameter-disabled-hint-target"
-            type="button"
-            aria-disabled="true"
-            aria-label={TUMOR_DIAMETER_DISABLED_MESSAGE}
-            aria-describedby="diameterDisabledTooltip"
-            onPointerEnter={diameterTooltip.onPointerEnter}
-            onPointerLeave={diameterTooltip.onPointerLeave}
-            onPointerDown={diameterTooltip.onPointerDown}
-            onPointerCancel={diameterTooltip.showForRelease}
-            onFocus={diameterTooltip.onFocus}
-            onBlur={diameterTooltip.onBlur}
-            onClick={() => {
-              diameterTooltip.showForRelease();
-              commands.tumor("diameter_inactive_hint");
-            }}
-          />
-        ) : null}
-        <PersistentTooltip
-          anchorRef={diameterTooltip.anchorRef}
-          id="diameterDisabledTooltip"
-          message={TUMOR_DIAMETER_DISABLED_MESSAGE}
-          open={diameterTooltip.open}
-        />
-      </FieldGroup>
+        >
+          <option value="cutaneous">皮表肿物 · 梭形切口</option>
+          <option value="subcutaneous">皮下肿物 · 线性切口</option>
+        </Select>
+      </div>
+      {!simplifiedWorkflow ? (
       <FieldGroup>
         <Label htmlFor="tumorAuthor">记录者</Label>
         <Input
@@ -175,6 +129,7 @@ export function TumorInputPanel({
           }}
         />
       </FieldGroup>
+      ) : null}
       <FieldGroup id="depthWrap" visible={!cutaneous && showDepthControl}>
         <Label htmlFor="depthMm">深度 mm <FieldValue id="depthVal">{depth}</FieldValue></Label>
         <RangeInput
@@ -193,6 +148,7 @@ export function TumorInputPanel({
           onChange={(event) => setDepth(event.currentTarget.value)}
         />
       </FieldGroup>
+      {!simplifiedWorkflow ? (
       <FieldGroup id="marginWrap" visible={cutaneous}>
         <Label htmlFor="marginMm">安全切缘 mm <FieldValue id="marginVal">{margin}</FieldValue></Label>
         <RangeInput
@@ -211,11 +167,14 @@ export function TumorInputPanel({
           onChange={(event) => setMargin(event.currentTarget.value)}
         />
       </FieldGroup>
-      <FieldGroup id="boundaryWrap" visible={cutaneous}>
-        <Label htmlFor="boundaryMode">皮表边界</Label>
+      ) : null}
+      <FieldGroup id="boundaryWrap" className={cameraMode ? "workflow-disabled-field" : undefined}>
+        <Label htmlFor="boundaryMode">肿物边界</Label>
         <Select
           id="boundaryMode"
           value={boundaryMode}
+          disabled={cameraMode}
+          title={cameraMode ? "摄像头模式下不可修改肿物边界" : undefined}
           onChange={(event) => {
             const value = event.currentTarget.value;
             setBoundaryMode(value);
@@ -223,10 +182,11 @@ export function TumorInputPanel({
             commands.tumor("boundary_mode_changed", value);
           }}
         >
-          <option value="ellipse">椭圆近似</option>
+          <option value="ellipse">受控标记识别</option>
           <option value="freehand">{continuousFreehand ? "自由轮廓鼠绘" : "自由轮廓点"}</option>
         </Select>
       </FieldGroup>
+      {!simplifiedWorkflow ? (
       <FieldGroup
         id="ellipseWrap"
         visible={cutaneous && boundaryMode === "ellipse"}
@@ -257,6 +217,7 @@ export function TumorInputPanel({
           onChange={(event) => setEllipseRatio(event.currentTarget.value)}
         />
       </FieldGroup>
+      ) : null}
       <ButtonRow className="two-cols" id="freehandControls" visible={freehand}>
         <Button
           variant="workbench"
@@ -281,16 +242,20 @@ export function TumorInputPanel({
           清空轮廓
         </Button>
       </ButtonRow>
-      <BoundaryStatus warn={boundaryStatusWarn} id="boundaryStatus">{boundaryStatus}</BoundaryStatus>
-      <ButtonRow className="two-cols workflow-tumor-transfer-actions">
+      {!simplifiedWorkflow ? <BoundaryStatus warn={boundaryStatusWarn} id="boundaryStatus">{boundaryStatus}</BoundaryStatus> : null}
+      {!simplifiedWorkflow ? <ButtonRow className="two-cols workflow-tumor-transfer-actions">
         <Button variant="workbench" id="exportTumorBtn" type="button" onClick={() => commands.tumor("export_tumor")}>导出肿物</Button>
         <Button variant="workbench" id="importTumorBtn" type="button" onClick={() => commands.tumor("import_tumor")}>导入肿物</Button>
-      </ButtonRow>
+      </ButtonRow> : null}
       <Input id="tumorImportFile" hidden type="file" accept="application/json,.json" />
-      {diagnosticEnabled ? <section aria-label="图13本地诊断" id="markerDiagnosticPanel">
-        <WorkbenchNote>诊断取证，不改变识别算法；不是临床验收。</WorkbenchNote>
+      {diagnosticEnabled ? <section aria-label="受控标记开发者诊断" id="markerDiagnosticPanel">
+        <div className="flex justify-end">
+          <Button variant="workbench" className="text-xs" id="exportMarkerDiagnosticBtn" type="button" onClick={() => { setDiagnosticDetailsOpen(true); dispatchMarkerDiagnosticCommand("export_marker_diagnostic"); }}>导出诊断日志</Button>
+        </div>
+        <details open={diagnosticDetailsOpen} onToggle={(event) => setDiagnosticDetailsOpen(event.currentTarget.open)}>
+        <summary className="cursor-pointer text-xs">开发者诊断详情</summary>
+        <WorkbenchNote>最近8次识别及处理原因；仅本页内存，刷新清空，不上传、不包含原图。生产构建关闭此入口。</WorkbenchNote>
         <ButtonRow className="two-cols">
-          <Button variant="workbench" id="exportMarkerDiagnosticBtn" type="button" onClick={() => dispatchMarkerDiagnosticCommand("export_marker_diagnostic")}>导出本次诊断</Button>
           <Button variant="workbench" id="replayMarkerDiagnosticBtn" type="button" onClick={() => dispatchMarkerDiagnosticCommand("replay_marker_diagnostic")}>核对并复放</Button>
         </ButtonRow>
         <Label htmlFor="markerDiagnosticImport">导入另一端诊断（JSON，不导入图片）</Label>
@@ -302,10 +267,11 @@ export function TumorInputPanel({
           catch { setDiagnosticMessage("诊断文件读取失败"); }
         }} />
         <WorkbenchNote id="markerDiagnosticStatus" role="status">{diagnosticMessage}</WorkbenchNote>
+        </details>
       </section> : null}
-      <Button className="workflow-recalculate-action" variant="workbenchPrimary" id="runWorkflowBtn" type="button" onClick={() => commands.tumor("run_workflow")}>重新计算候选</Button>
-      <WorkbenchNote id="pickState">{freehand ? boundaryHint : pickState}</WorkbenchNote>
-      <AnatomyPreview warn={anatomyPreviewWarn} id="anatomyPreview">{anatomyPreview}</AnatomyPreview>
+      <Button className="workflow-recalculate-action" variant="workbenchPrimary" id="runWorkflowBtn" type="button" disabled={cameraMode} title={cameraMode ? "摄像头模式下不可生成切口" : undefined} onClick={() => commands.tumor("run_workflow")}>重新计算候选</Button>
+      {!simplifiedWorkflow ? <WorkbenchNote id="pickState">{freehand ? boundaryHint : pickState}</WorkbenchNote> : null}
+      {!simplifiedWorkflow ? <AnatomyPreview warn={anatomyPreviewWarn} id="anatomyPreview">{anatomyPreview}</AnatomyPreview> : null}
     </WorkbenchCard>
   );
 }

@@ -25,7 +25,7 @@ export type {
 export { translateControlledMarkerDetection };
 
 export type ControlledMarkerDetectorProfile =
-  | "color-difference-v0.35"
+  | "small-lesion-boundary-candidate"
   | "current-v0.34"
   | "legacy-v0.23";
 
@@ -39,8 +39,11 @@ export function resolveControlledMarkerDetectorProfile(value?: string | null): C
     return "current-v0.34";
   }
   if (normalized === "color" || normalized === "color-difference"
+    || normalized === "small-lesion-boundary-candidate"
+    // Compatibility inputs only; the resolved runtime identity is the
+    // candidate name above and must not present these as the current version.
     || normalized === "color-difference-v0.35" || normalized === "v0.35") {
-    return "color-difference-v0.35";
+    return "small-lesion-boundary-candidate";
   }
   if (normalized === "legacy" || normalized === "legacy-v0.23" || normalized === "v0.23") {
     return "legacy-v0.23";
@@ -66,7 +69,7 @@ export const CONTROLLED_MARKER_DETECTOR_PROFILE = resolveControlledMarkerDetecto
 
 export function detectorVersionForProfile(profile: ControlledMarkerDetectorProfile): string {
   if (profile === "legacy-v0.23") return LEGACY_DETECTOR_VERSION;
-  if (profile === "color-difference-v0.35") return COLOR_DIFFERENCE_DETECTOR_VERSION;
+  if (profile === "small-lesion-boundary-candidate") return COLOR_DIFFERENCE_DETECTOR_VERSION;
   return CURRENT_DETECTOR_VERSION;
 }
 
@@ -82,7 +85,7 @@ export function detectControlledMarkerWithProfile(
 ): ControlledMarkerDetection {
   const result = profile === "legacy-v0.23"
     ? detectWithLegacyCore(image, seed, options) as unknown as ControlledMarkerDetection
-    : profile === "color-difference-v0.35"
+    : profile === "small-lesion-boundary-candidate"
       ? detectWithColorDifferenceCore(image, seed, options)
       : detectWithCurrentCore(image, seed, options);
   if (controlledMarkerDiagnosticsEnabled) {
