@@ -40,6 +40,15 @@ function sameJson(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+function rectangularBoundary(cx, cy, width, height) {
+  return [
+    [cx - width / 2, cy - height / 2, 0],
+    [cx + width / 2, cy - height / 2, 0],
+    [cx + width / 2, cy + height / 2, 0],
+    [cx - width / 2, cy + height / 2, 0],
+  ];
+}
+
 const clinicalRules = JSON.parse(
   fs.readFileSync(new URL("../assets/clinical_rules_face_incision.json", import.meta.url), "utf8"),
 );
@@ -216,19 +225,21 @@ ok(wrapDirection.angular_spread_deg < 3, "queryDirection treats 179/-179 as low 
 ok(wrapDirection.confidence > 0.9, "queryDirection does not penalize confidence across axial angle wrap");
 
 const linear = T.generateLinearIncision(
-  { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 10, depth_mm: 5 },
+  { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 10, depth_mm: 5,
+    boundary: rectangularBoundary(4, 2, 1.2, 0.6), boundary_source: "manual_freehand" },
   { vector: [1, 0, 0], confidence: 0.9 },
   0.1,
 );
 ok(linear.type === "linear", "linear candidate generated");
-ok(near(linear.length_mm, 12.5), "linear length follows multiplier");
-ok(near(linear.metrics.length_target_mm, 12.5), "linear records target length");
+ok(near(linear.length_mm, 12), "linear length equals the boundary projection along RSTL");
+ok(near(linear.metrics.length_target_mm, 12), "linear records the directional Feret target length");
 ok(near(linear.metrics.diameter_coverage_deficit_mm, 0), "linear records zero diameter coverage deficit");
-ok(near(linear.endpoints[0][0], 3.375) && near(linear.endpoints[1][0], 4.625), "linear endpoints centered on tumor");
-ok(linear.provenance.candidate_version === 1 && Array.isArray(linear.provenance.edit_history),
+ok(near(linear.endpoints[0][0], 3.4) && near(linear.endpoints[1][0], 4.6), "linear endpoints match the boundary projection limits");
+ok(linear.provenance.candidate_version === 2 && Array.isArray(linear.provenance.edit_history),
   "linear candidate starts with versioned provenance");
 const lowDirectionLinear = T.generateLinearIncision(
-  { kind: "subcutaneous", center: [10, 10, 0], diameter_mm: 10, depth_mm: 5 },
+  { kind: "subcutaneous", center: [10, 10, 0], diameter_mm: 10, depth_mm: 5,
+    boundary: rectangularBoundary(10, 10, 1, 0.5), boundary_source: "controlled_marker_confirmed" },
   farDirection,
   0.1,
 );
@@ -238,20 +249,25 @@ const lowDirectionGuard = T.evaluateGuardrails(lowDirectionLinear, { region: "ch
 ok(lowDirectionGuard.warnings.some((w) => w.code === "low_rstl_confidence" && w.message.includes("nearest_atlas_support_far")),
   "low RSTL guardrail reports confidence reason");
 
-const linearRules = structuredClone(T.DEFAULT_RULES);
-linearRules.linear_subcutaneous.max_length_mm = 30;
-const clampedLinear = T.generateLinearIncision(
-  { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 40, depth_mm: 5 },
+const longBoundaryLinear = T.generateLinearIncision(
+  { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 8, depth_mm: 5,
+    boundary: rectangularBoundary(4, 2, 4, 0.6), boundary_source: "manual_freehand" },
   { vector: [1, 0, 0], confidence: 0.9 },
   0.1,
-  linearRules,
 );
-ok(near(clampedLinear.length_mm, 30), "linear candidate respects max length");
-ok(near(clampedLinear.metrics.diameter_coverage_deficit_mm, 10), "linear records diameter coverage deficit");
-const linearCoverageGuard = T.evaluateGuardrails(clampedLinear, { region: "cheek", confidence: 0.8 }, linearRules);
-ok(linearCoverageGuard.passed === false, "linear diameter coverage deficit fails guardrails");
-ok(linearCoverageGuard.warnings.some((w) => w.code === "linear_diameter_coverage_deficit"),
-  "guardrails flag linear diameter coverage deficit");
+ok(near(longBoundaryLinear.length_mm, 40), "linear boundary length is not clipped by the retired 35 mm cap");
+ok(longBoundaryLinear.metrics.length_clamped_by_max === false, "linear metrics record that no legacy cap was applied");
+let missingBoundaryBlocked = false;
+try {
+  T.generateLinearIncision(
+    { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 10, depth_mm: 5 },
+    { vector: [1, 0, 0], confidence: 0.9 },
+    0.1,
+  );
+} catch (error) {
+  missingBoundaryBlocked = String(error).includes("requires a valid detected or clinician-drawn boundary");
+}
+ok(missingBoundaryBlocked, "subcutaneous generation blocks instead of inventing a circle when boundary is missing");
 
 const fusiform = T.generateFusiformIncision(
   {
@@ -717,7 +733,8 @@ for (const [region, point] of Object.entries(regionCases)) {
 }
 
 const plan = T.planIncisionDeterministic({
-  tumor: { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 10, depth_mm: 5 },
+  tumor: { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 10, depth_mm: 5,
+    boundary: rectangularBoundary(4, 2, 1.2, 0.6), boundary_source: "manual_freehand" },
   verts,
   tris,
   atlas,
@@ -749,7 +766,8 @@ ok(T.TOOL_SCHEMAS.some((s) => s.name === "compare_candidates"), "tool schemas in
 ok(T.TOOL_SCHEMAS.some((s) => s.name === "save_review_record"), "tool schemas include review record export");
 
 const workflow = T.planIncisionWorkflow({
-  tumor: { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 10, depth_mm: 5 },
+  tumor: { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 10, depth_mm: 5,
+    boundary: rectangularBoundary(4, 2, 1.2, 0.6), boundary_source: "manual_freehand" },
   verts,
   tris,
   atlas,
@@ -845,7 +863,8 @@ const eyeZones = buildMediaPipeEngineeringExclusionZones(openingVerts)
 ok(eyeZones.length >= 1 && eyeZones.every((zone) => zone.projection_buffer_scale === 1),
   "eye hard exclusions use the actual topology opening without an unvalidated expansion buffer");
 const openingWorkflow = T.planIncisionWorkflow({
-  tumor: { kind: "subcutaneous", center: [3.7, 6, 0], diameter_mm: 8, depth_mm: 4 },
+  tumor: { kind: "subcutaneous", center: [3.7, 6, 0], diameter_mm: 8, depth_mm: 4,
+    boundary: rectangularBoundary(3.7, 6, 0.8, 0.4), boundary_source: "manual_freehand" },
   verts: openingVerts,
   tris: openingTriangles,
   atlas: { lines: [{ points3d: [[2, 6.8, 0], [5, 6.8, 0]] }] },
@@ -887,15 +906,16 @@ const edited = T.applyCandidateEdit(plan, {
   reason: "manual free-margin protection",
 }, [0, 0, 1], 0.1);
 ok(edited.candidate.edited === true, "edited candidate is marked");
-ok(near(edited.candidate.length_mm, 15), "edited linear length is recalculated");
+ok(near(edited.candidate.length_mm, plan.candidate.length_mm * 1.2), "edited linear length is recalculated");
 ok(near(edited.candidate.metrics.rstl_deviation_deg, 20), "edited candidate records RSTL deviation");
 ok(edited.candidate.provenance.clinician_edit.reason.includes("free-margin"), "edited candidate records override reason");
-ok(edited.candidate.provenance.candidate_version === 2, "edited candidate increments candidate version");
+ok(edited.candidate.provenance.candidate_version === plan.candidate.provenance.candidate_version + 1,
+  "edited candidate increments candidate version");
 ok(edited.candidate.provenance.parent_candidate_id === plan.candidate.id,
   "edited candidate records parent candidate id");
 ok(edited.candidate.provenance.edit_history.length === 1,
   "edited candidate records edit history entry");
-ok(edited.candidate.provenance.edit_history[0].edit_id.startsWith("edit_v2_"),
+ok(edited.candidate.provenance.edit_history[0].edit_id.startsWith("edit_v3_"),
   "edited candidate records stable edit id");
 ok(edited.trace.some((step) => step.action === "clinician_edit_candidate"), "edited plan adds trace step");
 ok(edited.guardrails.warnings.some((w) => w.code === "rstl_deviation_override"), "edited deviation triggers guardrail warning");
@@ -926,14 +946,14 @@ const multiStepEdited = T.applyCandidateEdit(plan, {
     },
   ],
 }, [0, 0, 1], 0.1);
-ok(multiStepEdited.candidate.provenance.candidate_version === 3,
+ok(multiStepEdited.candidate.provenance.candidate_version === plan.candidate.provenance.candidate_version + 2,
   "multi-step edit history increments candidate version per committed edit");
 ok(multiStepEdited.candidate.provenance.edit_history.length === 2,
   "multi-step edit history is preserved in provenance");
 ok(multiStepEdited.candidate.provenance.clinician_edit.interaction === "endpoint_drag",
   "latest edit records the interaction source");
-ok(multiStepEdited.candidate.provenance.edit_history[0].edit_id.startsWith("edit_v2_") &&
-  multiStepEdited.candidate.provenance.edit_history[1].edit_id.startsWith("edit_v3_"),
+ok(multiStepEdited.candidate.provenance.edit_history[0].edit_id.startsWith("edit_v3_") &&
+  multiStepEdited.candidate.provenance.edit_history[1].edit_id.startsWith("edit_v4_"),
   "multi-step edit ids track resulting candidate versions");
 
 const comparison = T.compareCandidateRecords([

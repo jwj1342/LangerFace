@@ -9,7 +9,8 @@ import {
 } from "../web/src/services/controlledMarkerDetectionProfile.ts";
 
 export const markerRepoRoot = resolve(fileURLToPath(new URL("../", import.meta.url)));
-export const TARGET_MARKER_PROFILE = "color-difference-v0.35";
+export const TARGET_MARKER_PROFILE = "small-lesion-boundary-candidate";
+export const TARGET_MARKER_ALGORITHM_NAME = "小肿物边界候选算法";
 export const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 
 // Include unsaved-to-Git source, not just HEAD. Exclude logs, test output and secrets.
@@ -39,6 +40,7 @@ export function captureMarkerIdentity(rawProfile: string | undefined, root = mar
   const profile = resolveControlledMarkerDetectorProfile(rawProfile);
   return {
     schema: 1,
+    algorithmName: TARGET_MARKER_ALGORITHM_NAME,
     profile,
     implementationVersion: detectorVersionForProfile(profile),
     branch: git("branch", "--show-current"),
@@ -54,7 +56,7 @@ export function captureMarkerIdentity(rawProfile: string | undefined, root = mar
 
 export type MarkerIdentity = ReturnType<typeof captureMarkerIdentity>;
 export function assertMarkerIdentity(actual: Partial<MarkerIdentity>, expected: MarkerIdentity) {
-  for (const key of ["schema", "profile", "implementationVersion", "branch", "head", "worktreeId",
+  for (const key of ["schema", "algorithmName", "profile", "implementationVersion", "branch", "head", "worktreeId",
     "sourceDigest", "assetDigest"] as const) {
     if (actual?.[key] !== expected[key]) {
       throw new Error(`运行身份不匹配：${key}；期望 ${expected[key]}，实际 ${actual?.[key] ?? "缺失"}。请核对服务并重新启动，不能用 HTTP 200 放行。`);

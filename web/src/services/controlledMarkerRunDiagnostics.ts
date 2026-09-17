@@ -3,12 +3,21 @@ import { auditExportPayload } from "./exportPrivacy.ts";
 
 export const MARKER_DIAGNOSTIC_EVENT = "langerface:marker-run-diagnostic";
 export const MARKER_DIAGNOSTIC_SCHEMA = "marker-run-diagnostic/1";
+export const MARKER_DIAGNOSTIC_BUNDLE_SCHEMA = "marker-diagnostic-bundle/1";
+type ControllerObservation = {
+  reason: string; request_id: number; source_revision: number | null;
+  seed: { x: number; y: number } | null; scan_diameter_mm: number;
+  kind: string; marker_busy: boolean; boundary_points: number;
+  candidate_display_blocked?: boolean | null;
+  candidate_selection_reason?: string | null;
+  candidate_guardrails_passed?: boolean | null;
+};
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type FrameIdentity = { kind: string | null; revision: number; width: number; height: number };
 type SourceFile = { sha256: string; size: number; mime: string; width: number; height: number; rgba_sha256: string };
 export type RunInput = {
   revision: number; width: number; height: number; seed: { x: number; y: number };
-  options: { roiRadius: number; expectedDiameterPx: number; scanDiameterMm: number };
+  options: { roiRadius: number; expectedDiameterPx?: number; scanDiameterMm: number };
   parameters: { kind: string; diameterMm: number; depthMm: number; marginMm: number; scanDiameterMm: number };
   repairs: Json; mirror: boolean; pixelsPerMm: number; profile: string; implementationVersion: string;
 };
@@ -50,6 +59,14 @@ export function stableDiagnosticJson(value: unknown): string {
 /** Typed digest metadata is not free text. Keep the shared privacy scanner unchanged. */
 export function auditMarkerDiagnosticExport(value: unknown) {
   assertDiagnosticJson(value);
+  if (value && !Array.isArray(value) && typeof value === "object" && value.schema === MARKER_DIAGNOSTIC_BUNDLE_SCHEMA) {
+    if (!Array.isArray(value.runs) || value.runs.length > 8 || !Array.isArray(value.controller_events)
+      || value.controller_events.length > 64 || value.raw_image_embedded !== false || value.uploaded !== false) throw new Error("诊断包结构不合法");
+    for (const run of value.runs) {
+      if (!auditMarkerDiagnosticExport(run).passed) throw new Error("诊断记录未通过隐私检查");
+    }
+    return auditExportPayload({ ...value, runs: [] });
+  }
   if (!value || Array.isArray(value) || typeof value !== "object" || value.schema !== MARKER_DIAGNOSTIC_SCHEMA) throw new Error("诊断版本不支持导出");
   const auditCopy = structuredClone(value) as Record<string, Json>;
   const digest = (record: Record<string, Json>, key: string, length = 64) => {
@@ -103,7 +120,7 @@ function rawDetection(value: unknown): Json {
   const raw = value as Record<string, unknown>;
   const result: Record<string, Json> = {};
   // Only detector-owned geometric output, never form metadata or image bytes.
-  for (const key of ["ok", "failure_code", "center", "boundary", "area_px", "bbox", "geometry_mode", "seed_relation", "marker_area_px", "marker_bbox", "confidence", "candidate_count", "warnings", "scan", "diagnostics", "audit"]) {
+  for (const key of ["ok", "failure_code", "center", "boundary", "rejected_boundary", "rejected_geometry_mode", "rejected_reasons", "area_px", "bbox", "geometry_mode", "seed_relation", "marker_area_px", "marker_bbox", "confidence", "candidate_count", "warnings", "scan", "diagnostics", "audit"]) {
     if (raw[key] !== undefined) result[key] = JSON.parse(JSON.stringify(raw[key])) as Json;
   }
   assertDiagnosticJson(result);
@@ -113,6 +130,12 @@ export function parseDiagnosticRun(text: string): DiagnosticRun {
   if (text.length > 2_000_000) throw new Error("诊断文件超过2MB");
   const value: unknown = JSON.parse(text);
   assertDiagnosticJson(value);
+  if (value && !Array.isArray(value) && typeof value === "object" && value.schema === MARKER_DIAGNOSTIC_BUNDLE_SCHEMA) {
+    if (!auditMarkerDiagnosticExport(value).passed) throw new Error("诊断包未通过隐私检查");
+    const runs = value.runs as Json[];
+    if (!runs.length) throw new Error("该诊断包尚无已执行的识别记录");
+    return parseDiagnosticRun(JSON.stringify(runs.at(-1)));
+  }
   const r = value as unknown as DiagnosticRun;
   if (r.schema !== MARKER_DIAGNOSTIC_SCHEMA || r.status !== "recorded" || !r.input || !r.input.seed || !r.input.options || !r.input.parameters
     || r.raw_image_embedded !== false || r.uploaded !== false || r.client_source_binding !== "UNKNOWN"
@@ -140,6 +163,7 @@ export class MarkerRunDiagnostics {
   private selection: { generation: number; previousRevision: number; boundRevision: number | null; file: Promise<SourceFile | null> } | null = null;
   private sequence = 0;
   private runs: DiagnosticRun[] = [];
+  private controllerEvents: Array<ControllerObservation & { observed_at_ms: number }> = [];
   private alive = true;
   private initialIdentity = serviceIdentity();
   imported: DiagnosticRun | null = null;
@@ -229,10 +253,30 @@ export class MarkerRunDiagnostics {
     assertDiagnosticJson(run);
     return JSON.stringify(run, null, 2);
   }
+  observeController(event: ControllerObservation) {
+    if (!this.alive || !/^(controlled_marker_|mobile_marker_)/.test(event.reason)) return;
+    assertDiagnosticJson(event);
+    this.controllerEvents.push({ ...structuredClone(event), observed_at_ms: Date.now() });
+    this.controllerEvents = this.controllerEvents.slice(-64);
+    notify(`开发者诊断：${event.reason}；最近 ${this.runs.length} 次识别。日志仅保存在本页内存，刷新后清空。`);
+  }
+  exportBundle(): string {
+    if (!this.runs.length && !this.controllerEvents.length) throw new Error("请先在受控标记模式下操作一次");
+    if (this.runs.some(run => run.status === "pending")) throw new Error("诊断记录尚在生成，请稍后导出");
+    const payload = {
+      schema: MARKER_DIAGNOSTIC_BUNDLE_SCHEMA, exported_at_ms: Date.now(),
+      runs: this.runs, controller_events: this.controllerEvents,
+      raw_image_embedded: false, uploaded: false,
+    };
+    assertDiagnosticJson(payload);
+    const text = JSON.stringify(payload, null, 2);
+    if (new TextEncoder().encode(text).byteLength > 2_000_000) throw new Error("诊断包超过2MB，未导出；请保留当前页面并向开发者反馈，不要刷新以免丢失记录");
+    return text;
+  }
   import(text: string) { this.imported = parseDiagnosticRun(text); notify("诊断已导入；复放前将核对当前图片、参数和服务身份，不自动改参"); }
   message(text: string) { if (this.alive) notify(text); }
   dispose() {
-    this.alive = false; this.generation++; this.selection = null; this.runs = []; this.imported = null;
+    this.alive = false; this.generation++; this.selection = null; this.runs = []; this.controllerEvents = []; this.imported = null;
     document.removeEventListener("change", this.onFile, true); document.removeEventListener("cancel", this.onFile, true);
   }
 }

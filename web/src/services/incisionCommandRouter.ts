@@ -71,13 +71,6 @@ export class IncisionCommandRouter {
         this.actions.publish("tumor_kind_changed");
         this.actions.previewWorkflow();
         return true;
-      case "diameter_input":
-        this.actions.updateTumorRing();
-        this.actions.publish("tumor_diameter_input");
-        return true;
-      case "diameter_inactive_hint":
-        this.actions.publish(command);
-        return true;
       case "depth_input":
       case "author_changed":
         this.actions.publish(command);
@@ -87,7 +80,6 @@ export class IncisionCommandRouter {
         this.actions.updateTumorRing();
         this.actions.publish(command);
         return true;
-      case "diameter_changed":
       case "depth_changed":
       case "margin_changed":
       case "ellipse_ratio_changed":

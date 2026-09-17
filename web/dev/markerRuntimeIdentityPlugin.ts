@@ -6,7 +6,7 @@ import {
   TARGET_MARKER_PROFILE,
 } from "../../tools/marker_runtime_identity.mts";
 
-const EXPECTED_PRODUCTION_VERSION = "0.35";
+const EXPECTED_PRODUCTION_VERSION = "task1-candidate";
 
 // Dev-only observation endpoint: no product entry import, DOM change or inference.
 export function markerRuntimeIdentityPlugin(): Plugin {
@@ -54,8 +54,8 @@ try {
  if(profile!==identity.profile || implementationVersion!==identity.implementationVersion) throw new Error('浏览器算法与服务身份不一致');
  const proof={identity,browser:{profile,implementationVersion}};
  window.__markerRuntimeProof=proof;
- document.querySelector('#status').textContent=profile==='color-difference-v0.35'?'版本核对通过：当前是受控标记 v0.35 系列。':'注意：当前不是目标 v0.35 系列，请勿用于本轮验收。';
- document.querySelector('#result').textContent='实际算法：'+profile+'\\n实现版本：'+implementationVersion+'\\n分支：'+identity.branch+'\\n提交：'+identity.head+'\\n工作区指纹：'+identity.worktreeId+'\\n含未提交修改的源码指纹：'+identity.sourceDigest+'\\n关键资产指纹：'+identity.assetDigest+'\\n服务启动：'+identity.capturedAt;
+ document.querySelector('#status').textContent=profile==='small-lesion-boundary-candidate'?'身份核对通过：当前是小肿物边界候选算法。':'注意：当前不是目标候选算法，请勿用于本轮验收。';
+ document.querySelector('#result').textContent='算法名称：'+identity.algorithmName+'\\n内部 profile：'+profile+'\\n候选期身份：'+implementationVersion+'\\n分支：'+identity.branch+'\\n提交：'+identity.head+'\\n工作区指纹：'+identity.worktreeId+'\\n含未提交修改的源码指纹：'+identity.sourceDigest+'\\n关键资产指纹：'+identity.assetDigest+'\\n服务启动：'+identity.capturedAt;
 } catch(error) { document.querySelector('#status').textContent='核对失败：'+error.message; }
 </script></html>`);
       });
@@ -68,13 +68,13 @@ export function markerRuntimeIdentityBuildPlugin(): Plugin {
     name: "marker-runtime-identity-build",
     apply: "build",
     generateBundle() {
-      if (process.env.LANGERFACE_MARKER_V035_BUILD !== "1") return;
+      if (process.env.LANGERFACE_LESION_CANDIDATE_BUILD !== "1") return;
       const identity = captureMarkerIdentity(
         process.env.VITE_CONTROLLED_MARKER_DETECTOR_PROFILE,
       );
       if (identity.profile !== TARGET_MARKER_PROFILE
           || identity.implementationVersion !== EXPECTED_PRODUCTION_VERSION) {
-        throw new Error("生产构建不是受控标记 v0.35，拒绝输出身份清单。");
+        throw new Error("生产构建不是小肿物边界候选算法，拒绝输出身份清单。");
       }
       this.emitFile({
         type: "asset",
@@ -82,7 +82,7 @@ export function markerRuntimeIdentityBuildPlugin(): Plugin {
         source: JSON.stringify({
           ...identity,
           mode: "production",
-          command: "npm run build:marker-v035",
+          command: "npm run build:lesion-candidate",
         }, null, 2),
       });
     },

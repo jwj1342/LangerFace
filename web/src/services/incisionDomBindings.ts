@@ -112,7 +112,6 @@ function tumorCommandControl(
   command: IncisionTumorCommand,
 ): HTMLInputElement | HTMLSelectElement | null {
   if (command === "kind_changed") return elements.tumorKind;
-  if (command === "diameter_input" || command === "diameter_changed") return elements.diameter;
   if (command === "author_changed") return elements.tumorAuthor;
   if (command === "depth_input" || command === "depth_changed") return elements.depth;
   if (command === "margin_input" || command === "margin_changed") return elements.margin;

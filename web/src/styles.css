@@ -608,6 +608,16 @@
     vector-effect: non-scaling-stroke;
   }
 
+  .workflow-incision-overlay [data-workflow-rejected-marker] {
+    fill: rgb(217 70 239 / 10%);
+    stroke: #d946ef;
+    stroke-width: 1.5;
+    stroke-dasharray: 6 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
   .workflow-incision-overlay [data-workflow-center] {
     fill: #f43f5e;
     stroke: #0b1118;
@@ -3151,7 +3161,9 @@ body:has(.dark-workbench-page) {
   .workflow-workbench[data-mobile-incision-candidate-visible="false"]
     .workflow-incision-overlay [data-workflow-candidate-halo],
   .workflow-workbench[data-mobile-incision-candidate-visible="false"]
-    .workflow-incision-overlay [data-workflow-diagnostic-candidate] {
+    .workflow-incision-overlay [data-workflow-diagnostic-candidate],
+  .workflow-workbench[data-mobile-incision-candidate-visible="false"]
+    .workflow-incision-overlay [data-workflow-rejected-marker] {
     display: none;
   }
 
@@ -3178,6 +3190,10 @@ body:has(.dark-workbench-page) {
   }
 
   .workflow-workbench .workflow-incision-overlay [data-workflow-diagnostic-candidate] {
+    stroke-width: 0.9;
+  }
+
+  .workflow-workbench .workflow-incision-overlay [data-workflow-rejected-marker] {
     stroke-width: 0.9;
   }
 

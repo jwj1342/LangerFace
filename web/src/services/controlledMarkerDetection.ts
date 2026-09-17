@@ -40,6 +40,10 @@ export interface ControlledMarkerDetection {
   confidence: number;
   candidate_count: number;
   warnings: string[];
+  /** Detector-owned geometry that was found but rejected by the safety gate. */
+  rejected_boundary?: MarkerPoint[];
+  rejected_geometry_mode?: "enclosed_region" | "dark_component" | null;
+  rejected_reasons?: string[];
   scan?: {
     diameter_mm: number | null;
     radius_px: number;
@@ -94,6 +98,18 @@ export interface ControlledMarkerDetection {
     boundary_stroke_support_ratio?: number;
     boundary_stroke_coverage_ratio?: number;
     boundary_stroke_reverse_p90_px?: number;
+    solid_background_luma?: number;
+    solid_threshold_luma?: number;
+    solid_component_fill_ratio?: number;
+    solid_component_contrast?: number;
+    solid_component_core_dark_ratio?: number;
+    solid_component_core_mean_luma?: number;
+    solid_boundary_regularization?: "periodic_constrained";
+    solid_boundary_area_ratio?: number;
+    solid_boundary_max_displacement_ratio?: number;
+    inward_pocket_area_ratio?: number;
+    inward_pocket_added_arc_ratio?: number;
+    inward_pocket_support_ratio?: number;
   };
   audit: {
     local_only: true;

@@ -13,7 +13,7 @@ for (const mobile of [false, true]) {
     expect(directory, "image10 source directory is required; do not silently skip this regression").toBeTruthy();
     const source = path.join(directory!, "10.png");
     expect(crypto.createHash("sha256").update(fs.readFileSync(source)).digest("hex")).toBe(reference.sourceHash);
-    const expected = captureMarkerIdentity("color-difference-v0.35");
+    const expected = captureMarkerIdentity("small-lesion-boundary-candidate");
     const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1600, height: 1000 },
       deviceScaleFactor: mobile ? 3 : 1, isMobile: mobile, hasTouch: mobile });
     const page = await context.newPage();
@@ -29,7 +29,7 @@ for (const mobile of [false, true]) {
       await page.waitForFunction(() => "__markerRuntimeProof" in window);
       const proof = await page.evaluate(() => Reflect.get(window, "__markerRuntimeProof"));
       assertMarkerIdentity(proof.identity, expected);
-      expect(proof.browser.profile).toBe("color-difference-v0.35");
+      expect(proof.browser.profile).toBe("small-lesion-boundary-candidate");
       await page.goto(`${baseURL}/app/workflow`);
       await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
       await page.locator("#fileInput").setInputFiles(source);
@@ -54,7 +54,7 @@ for (const mobile of [false, true]) {
         await canvas.tap({ position });
         await page.getByTitle("先轻触照片放置扫描圆圈，确认位置后再识别").click();
       } else await canvas.click({ position });
-      await expect.poll(() => diagnostics.at(-1), { timeout: 45_000 }).toMatchObject({ profile: "color-difference-v0.35", version: "0.35", result: { ok: true } });
+      await expect.poll(() => diagnostics.at(-1), { timeout: 45_000 }).toMatchObject({ profile: "small-lesion-boundary-candidate", version: "task1-candidate", result: { ok: true } });
       const actual = diagnostics.at(-1);
       expect(actual.result.warnings).toContain("color_difference_completeness_recovered");
       expect(Math.hypot(actual.seed.x - 782, actual.seed.y - 625)).toBeLessThan(1);

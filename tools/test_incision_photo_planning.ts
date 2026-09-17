@@ -1147,7 +1147,7 @@ assert.deepEqual(incisionPhotoLayerContract("cutaneous", "fusiform"), {
 assert.deepEqual(incisionPhotoLayerContract("subcutaneous", "linear"), {
   expectedCandidateType: "linear",
   candidateTypeMatches: true,
-  showDiameterEstimate: true,
+  showDiameterEstimate: false,
 });
 assert.equal(incisionPhotoLayerContract("cutaneous", "linear").candidateTypeMatches, false,
   "cutaneous photo planning reports a mismatched linear candidate contract");

@@ -79,8 +79,8 @@ for (const boundaryMode of ["ellipse", "controlled_marker"] as const) {
   }, tumorControls);
   assert.equal(importedNonFreehand.boundaryMode, "ellipse",
     `${boundaryMode} imports do not become freehand merely because they carry a sampled boundary`);
-  assert.deepEqual(importedNonFreehand.boundaryPoints, [],
-    `${boundaryMode} sampled geometry is not exposed as an editable freehand stroke`);
+  assert.deepEqual(importedNonFreehand.boundaryPoints, tumor.boundary,
+    `${boundaryMode} imports preserve their real boundary geometry for regeneration`);
 }
 
 const invalidImport = {
@@ -163,6 +163,11 @@ assert.equal(shouldClearFreehandBoundaryOnLesionRepick({
   boundaryMode: "ellipse",
   boundaryPointCount: 7,
 }), false);
+assert.equal(shouldClearFreehandBoundaryOnLesionRepick({
+  kind: "subcutaneous",
+  boundaryMode: "freehand",
+  boundaryPointCount: 7,
+}), true);
 const controlledMarkerTumor = withControlledMarkerProvenance(tumor, true);
 assert.equal(controlledMarkerTumor.boundary_mode, "controlled_marker");
 assert.equal(controlledMarkerTumor.boundary_source, "controlled_marker_confirmed");
@@ -181,7 +186,8 @@ const importedSubcutaneous = importedTumorFormState({
   marginMax: 20,
   authorFallback: "fallback",
 });
-assert.deepEqual(importedSubcutaneous.boundaryPoints, [], "subcutaneous imports discard incompatible skin-boundary state");
+assert.deepEqual(importedSubcutaneous.boundaryPoints, tumor.boundary,
+  "subcutaneous imports preserve a usable real boundary for regeneration");
 
 storage.setItem("langerface:incision-workspace-session:v1", "{invalid");
 assert.equal(loadIncisionWorkspaceSession(storage), null, "corrupt session state fails closed");

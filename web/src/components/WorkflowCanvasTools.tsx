@@ -15,11 +15,9 @@ export function WorkflowCanvasTools() {
   const cameraMode = useLiveStore((state) => state.snapshot?.source.kind === "camera");
   const tools = snapshot?.workflowTools;
   const markerMode = tools?.controlledMarkerMode || false;
-  const cutaneous = snapshot?.tumor.kind === "cutaneous";
   const freehandMarkerUnavailable = !markerMode
-    && cutaneous
     && snapshot?.tumor.boundaryMode === "freehand";
-  const markerUnavailable = cameraMode || (!markerMode && (!tools?.photoReady || !cutaneous || freehandMarkerUnavailable));
+  const markerUnavailable = cameraMode || (!markerMode && (!tools?.photoReady || freehandMarkerUnavailable));
   // Native disabled buttons swallow click/touch events. Keep the freehand-mode
   // block actionable so the controller can explain how to restore the tool.
   const markerHardUnavailable = markerUnavailable && !freehandMarkerUnavailable;
@@ -48,8 +46,6 @@ export function WorkflowCanvasTools() {
             ? undefined
             : cameraMode
               ? "摄像头模式下不可识别肿物"
-              : !cutaneous
-              ? "受控标记仅用于皮表肿物"
               : !tools?.photoReady
                 ? "请先上传并完成人脸检测"
                 : "点击照片中的受控黑色标记并识别边界"}
@@ -144,6 +140,7 @@ export function WorkflowCanvasOverlay() {
         <path data-workflow-candidate-halo />
         <path data-workflow-candidate />
         <path data-workflow-diagnostic-candidate />
+        <path data-workflow-rejected-marker />
         <circle data-workflow-center r="6" />
         <g data-workflow-repairs />
         <g data-workflow-marker-scan style={{ display: "none" }}>

@@ -145,12 +145,12 @@ test("PR226 v035 reviewed original generates and activates a fresh incision", as
   }, sample);
   await page.locator("#canvas").click({ position: point });
   await expect.poll(() => diagnostics.at(-1), { timeout: 60_000 }).toMatchObject({
-    profile: "color-difference-v0.35", version: run.v035.implementationVersion, result: { ok: true },
+    profile: "small-lesion-boundary-candidate", version: run.v035.implementationVersion, result: { ok: true },
   });
   await info.attach("original-detection", { body: Buffer.from(JSON.stringify({ sample, point, diagnostics }, null, 2)), contentType: "application/json" });
   expect(Math.hypot(diagnostics.at(-1).seed.x - sample.seed.x, diagnostics.at(-1).seed.y - sample.seed.y)).toBeLessThanOrEqual(1);
   await expect(page.locator("#workflowStageStatus")).toContainText("候选已生成并等待审阅", { timeout: 60_000 });
-  expect(diagnostics.some(value => value.profile === "color-difference-v0.35" && value.version === run.v035.implementationVersion)).toBe(true);
+  expect(diagnostics.some(value => value.profile === "small-lesion-boundary-candidate" && value.version === run.v035.implementationVersion)).toBe(true);
   const metrics = await page.locator("[data-workflow-boundary]").evaluate((element: SVGGeometryElement, input: any) => {
     const canvas = document.querySelector<HTMLCanvasElement>("#canvas")!;
     const rect = canvas.getBoundingClientRect();

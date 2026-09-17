@@ -45,9 +45,6 @@ export const ANNOTATE_LIBRARY_COMMANDS = [
 
 export const INCISION_TUMOR_COMMANDS = [
   "kind_changed",
-  "diameter_input",
-  "diameter_changed",
-  "diameter_inactive_hint",
   "author_changed",
   "depth_input",
   "depth_changed",

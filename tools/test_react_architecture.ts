@@ -629,8 +629,8 @@ assert.deepEqual(
   false,
   "Vercel Git deployment must remain disabled until public deployment issue #224 is completed",
 );
-assert.equal(vercelConfig.buildCommand, "npm run build:marker-v035",
-  "Vercel production builds must use the fail-closed marker v0.35 entrypoint");
+assert.equal(vercelConfig.buildCommand, "npm run build:lesion-candidate",
+  "Vercel production builds must use the fail-closed lesion candidate entrypoint");
 assert.ok(vite.includes("markerRuntimeIdentityBuildPlugin"),
   "Vite emits the production marker identity manifest only through the guarded build plugin");
 assert.equal(vercelConfig.installCommand, "npm ci", "Vercel should install from the committed npm lockfile");
@@ -1445,7 +1445,6 @@ assert.ok(incisionStagePanel.includes("Legend"), "React incision stage uses the 
 assert.ok(incisionStagePanel.includes("CanvasLegendItem"), "React incision stage uses the shared canvas legend item primitive");
 for (const id of [
   "tumorKind",
-  "diameterMm",
   "tumorAuthor",
   "depthMm",
   "marginMm",
@@ -1468,7 +1467,6 @@ assert.ok(tumorPanel.includes("useIncisionControllerCommands"), "React tumor pan
 assert.ok(!tumorPanel.includes("dispatchIncisionTumorCommand"), "React tumor panel does not import low-level command dispatch helpers directly");
 assert.ok(!tumorPanel.includes("../lib/controllerEvents"), "React tumor panel does not import controller event names directly");
 assert.ok(
-  tumorPanel.includes('commands.tumor("diameter_input", value)') &&
   tumorPanel.includes('commands.tumor("depth_input", value)') &&
   tumorPanel.includes('commands.tumor("margin_input", value)') &&
   tumorPanel.includes('commands.tumor("ellipse_ratio_input", value)'),

@@ -98,7 +98,7 @@ export function incisionPhotoLayerContract(tumorKind: string, candidateType?: st
   return {
     expectedCandidateType,
     candidateTypeMatches: candidateType == null || candidateType === expectedCandidateType,
-    showDiameterEstimate: tumorKind === "subcutaneous",
+    showDiameterEstimate: false,
   };
 }
 

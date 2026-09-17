@@ -7,7 +7,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { detectorVersionForProfile } from "../web/src/services/controlledMarkerDetectionProfile.ts";
 
-const EXPECTED_PROFILE = "color-difference-v0.35";
+const EXPECTED_PROFILE = "small-lesion-boundary-candidate";
 const EXPECTED_VERSION = detectorVersionForProfile(EXPECTED_PROFILE);
 const DEFAULT_PROFILE = "legacy-v0.23";
 const repoRoot = resolve(fileURLToPath(new URL("../", import.meta.url)));
@@ -59,10 +59,10 @@ const viteArgs = rawArgs.filter((arg) => arg !== "--check");
 const requestedHost = readOption(viteArgs, "--host", "127.0.0.1");
 const requestedPort = readOption(viteArgs, "--port", checkOnly ? null : "5173");
 if (requestedHost !== "127.0.0.1") {
-  throw new Error(`dev:marker-v035 只允许绑定 127.0.0.1，拒绝 host=${requestedHost}`);
+  throw new Error(`dev:lesion-candidate 只允许绑定 127.0.0.1，拒绝 host=${requestedHost}`);
 }
 if (requestedPort !== null && (!/^\d+$/.test(requestedPort) || Number(requestedPort) < 1 || Number(requestedPort) > 65535)) {
-  throw new Error(`dev:marker-v035 收到无效端口：${requestedPort}`);
+  throw new Error(`dev:lesion-candidate 收到无效端口：${requestedPort}`);
 }
 
 if (!existsSync(viteEntry)) {
@@ -76,7 +76,7 @@ if (!actualViteEntry.startsWith(realpathSync(expectedNodeModules))) {
 
 const packageJson = JSON.parse(readFileSync(resolve(webRoot, "package.json"), "utf8"));
 const identity = {
-  command: "npm run dev:marker-v035",
+  command: "npm run dev:lesion-candidate",
   mode: "development",
   sourceRoot: repoRoot,
   git: {
@@ -103,10 +103,10 @@ const identity = {
     port: requestedPort === null ? null : Number(requestedPort),
     portStatus: requestedPort === null ? "deferred_to_main_launcher" : "resolved",
   },
-  pageWideModelAssetsCheck: "predev:marker-v035 runs doctor_wrinkle_runtime.ts before the main launcher",
+  pageWideModelAssetsCheck: "predev:lesion-candidate runs doctor_wrinkle_runtime.ts before the main launcher",
 };
 
-console.log(`[marker-v035-runtime] ${JSON.stringify(identity, null, 2)}`);
+console.log(`[lesion-candidate-runtime] ${JSON.stringify(identity, null, 2)}`);
 if (checkOnly) process.exit(0);
 
 const child = spawn(
@@ -130,12 +130,12 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 }
 
 child.on("error", (error) => {
-  console.error(`[marker-v035-runtime] Vite 启动失败：${error.message}`);
+  console.error(`[lesion-candidate-runtime] Vite 启动失败：${error.message}`);
   process.exitCode = 1;
 });
 child.on("exit", (code, signal) => {
   if (signal) {
-    console.log(`[marker-v035-runtime] Vite 已由 ${signal} 停止。`);
+    console.log(`[lesion-candidate-runtime] Vite 已由 ${signal} 停止。`);
   }
   process.exitCode = code ?? (signal ? 0 : 1);
 });

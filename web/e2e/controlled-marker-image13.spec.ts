@@ -19,7 +19,7 @@ test("image13 removes only the supported narrow spur in the product workflow", a
   const source = path.join(directory!, "13.png");
   expect(crypto.createHash("sha256").update(fs.readFileSync(source)).digest("hex")).toBe(SOURCE_HASH);
 
-  const expectedIdentity = captureMarkerIdentity("color-difference-v0.35");
+  const expectedIdentity = captureMarkerIdentity("small-lesion-boundary-candidate");
   const identityResponse = await page.request.get(`${baseURL}/__runtime-identity.json`);
   expect(identityResponse.ok()).toBeTruthy();
   const identityBefore = await identityResponse.json();
@@ -40,7 +40,7 @@ test("image13 removes only the supported narrow spur in the product workflow", a
   await page.waitForFunction(() => "__markerRuntimeProof" in window);
   const browserProof = await page.evaluate(() => Reflect.get(window, "__markerRuntimeProof"));
   assertMarkerIdentity(browserProof.identity, expectedIdentity);
-  expect(browserProof.browser).toMatchObject({ profile: "color-difference-v0.35", implementationVersion: "0.35" });
+  expect(browserProof.browser).toMatchObject({ profile: "small-lesion-boundary-candidate", implementationVersion: "task1-candidate" });
 
   await page.goto(`${baseURL}/app/workflow`);
   await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
@@ -73,8 +73,8 @@ test("image13 removes only the supported narrow spur in the product workflow", a
   await canvas.click({ position });
 
   await expect.poll(() => diagnostics.at(-1), { timeout: 60_000 }).toMatchObject({
-    profile: "color-difference-v0.35",
-    version: "0.35",
+    profile: "small-lesion-boundary-candidate",
+    version: "task1-candidate",
     result: {
       ok: true,
       diagnostics: { boundary_regularization: "supported_radial_bridge" },

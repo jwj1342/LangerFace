@@ -8,7 +8,6 @@ import { createRequire } from "node:module";
 import {
   beginWorkflowPointerIntent,
   completesWorkflowCanvasClick,
-  minimumWorkflowMarkerScanDiameterMm,
   updateWorkflowPointerIntent,
   workflowCandidateDisplayAllowed,
   workflowDiagnosticCandidateVisible,
@@ -30,7 +29,6 @@ import {
   workflowInvalidationNeedsLiveFrame,
   workflowLiveOverlayChanged,
   workflowMarkerRequestStillCurrent,
-  workflowMarkerScanDiameterForTumor,
   workflowCenteredLinearPath,
   workflowPhotoCircleFootprint,
   workflowPhotoBoundaryEnclosingDiameterMm,
@@ -42,13 +40,11 @@ import {
   workflowScanCircleGeometry,
   recoverWorkflowFreehandBoundary,
   smoothWorkflowClosedBoundary,
-  workflowSubcutaneousLengthLimit,
 } from "../web/src/services/workflowControllerUtils.ts";
 import { svgOverlayExportViewBox } from "../web/src/services/incisionExport.ts";
 import { incisionCandidateScreenStyle, incisionOverlayScreenStyle } from "../web/src/services/incisionOverlayStyle.ts";
 import { buildPhotoSpaceDiameterEstimate, type SurfaceProjectedFusiformFit } from "../web/src/services/incisionPhotoPlanning.ts";
 import type { Vec3 } from "../web/src/services/softBody.ts";
-import { tumorDiameterParameterInactive } from "../web/src/services/tumorInput.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (relative: string) => fs.readFileSync(path.join(root, relative), "utf8");
@@ -156,7 +152,10 @@ function controllerHarness() {
     importedTumorFormState: (tumor: any) => ({ tumor, kind: "cutaneous", diameterValue: 8, depthValue: 6,
       marginValue: 0, author: "test", boundaryPoints: [] }),
     tumorContextsMatch: () => true, restoredWorkflowEdit: (edit: any) => edit,
-    currentTumor: (state: any) => state.centerRef ? { center: [0, 0, 0] } : null,
+    currentTumor: (state: any) => state.centerRef ? {
+      center: [0, 0, 0],
+      boundary: [[-1, -1, 0], [1, -1, 0], [1, 1, 0], [-1, 1, 0]],
+    } : null,
     workflowPhotoProjection: () => null, activeAtlas: () => ({}), queryIncisionPhotoRstlDirection: () => null,
     nearestVertex: () => 0, ensureWorker: () => null, incisionEditIsActive: () => false,
     planIncisionWithWorkflowFallback: () => planner(),
@@ -602,6 +601,14 @@ assert.match(controller, /workflowFusiformSvgPath\(geometry\.fusiformRendering/,
 assert.match(canvasTools, /data-workflow-marker-scan-circle/, "workflow restores the controlled-marker circular scan feedback");
 assert.match(canvasTools, /data-workflow-marker-scan-label/, "workflow retains the desktop scan-diameter annotation source");
 assert.match(controller, /workflowScanCircleGeometry/, "workflow scan feedback follows the shared source-to-client transform");
+assert.doesNotMatch(controller, /state\.kind\s*!==\s*"cutaneous"[\s\S]{0,160}group\.style\.display\s*=\s*"none"/,
+  "controlled-marker scan feedback remains visible for both cutaneous and subcutaneous tumors");
+assert.match(controller, /const boundaryVisible = planningVisible[\s\S]*?state\.controlledBoundary \|\| state\.boundaryMode === "freehand"/,
+  "the yellow lesion boundary is drawn only from a controlled-marker or freehand boundary");
+assert.match(controller, /function clearTumorBoundaryForCenterSelection[\s\S]*?resetFreehandPhotoBoundary\(state, true\)[\s\S]*?state\.controlledBoundary = false/,
+  "ordinary center selection clears any previous boundary instead of reusing a yellow outline");
+assert.ok((controller.match(/clearTumorBoundaryForCenterSelection\(state\);/g) || []).length >= 2,
+  "both direct center-selection paths clear the previous lesion boundary");
 assert.match(canvasTools, /snapshot\?\.tumor\.boundaryMode === "freehand"/,
   "manual freehand is an explicit controlled-marker unavailable state");
 assert.match(canvasTools, /aria-disabled={markerUnavailable \|\| markerBusy}/,
@@ -621,26 +628,18 @@ assert.match(canvasTools, /disabled={cameraMode \|\| markerBusy \|\| !tools\?\.r
 assert.match(controller, /const photoReady = workflowPhotoReady\(state\)/, "workflow snapshots expose shared-photo readiness to the merged toolbar");
 assert.match(controller, /workflowPhotoReady\(state\) !== state\.lastPublishedPhotoReady[\s\S]*?workflow_photo_readiness_changed/,
   "a newly detected photo republishes toolbar readiness without requiring a canvas click");
-assert.match(controller, /minimumWorkflowMarkerScanDiameterMm/, "workflow restores the standalone minimum scan-coverage precondition");
+assert.match(controller, /addEventListener\("langerface:source-frame-ready"[\s\S]*?workflowPhotoReady\(state\)[\s\S]*?workflow_photo_readiness_changed/,
+  "the workflow republishes photo readiness after landmarks are committed");
+assert.doesNotMatch(controller, /minimumWorkflowMarkerScanDiameterMm|workflowMarkerScanDiameterForTumor/,
+  "controlled-marker scan size no longer depends on the removed manual lesion diameter");
 assert.match(controller, /workflowMarkerRequestStillCurrent/, "workflow discards controlled-marker results computed from stale parameters");
 assert.match(controller, /stablePhotoPixelsPerMm/, "workflow reuses the standalone face-wide controlled-marker scale");
 assert.match(controller, /workflowPhotoEllipseBoundary/, "workflow default cutaneous boundaries are constructed in current photo coordinates");
 assert.match(controller, /boundaryMode:\s*"ellipse",/, "workflow starts cutaneous planning in ellipse mode");
 assert.match(tumorInputPanel, /useState\("ellipse"\)/, "the React panel shows ellipse mode before its first controller snapshot");
 assert.match(controller, /diameterMm:\s*8,/, "workflow starts with the requested 8 mm cutaneous diameter");
-assert.match(tumorInputPanel, /useState\("8"\)/, "the React slider displays 8 mm before its first controller snapshot");
-assert.match(tumorInputPanel, /disabled={diameterDisabled}/,
-  "the diameter slider is physically disabled while boundary geometry overrides it");
-assert.match(tumorInputPanel, /id="diameterMm"[\s\S]*?min="2"[\s\S]*?max="40"/,
-  "the simulated lesion diameter can be reduced to the requested 2 mm minimum");
-assert.match(tumorInputPanel, /diameter-field-disabled/,
-  "the disabled diameter control has an explicit grey visual state");
-assert.match(tumorInputPanel, /aria-describedby="diameterDisabledTooltip"/,
-  "the disabled diameter trigger describes its persistent custom tooltip");
-assert.match(tumorInputPanel, /<PersistentTooltip[\s\S]*?id="diameterDisabledTooltip"[\s\S]*?message={TUMOR_DIAMETER_DISABLED_MESSAGE}/,
-  "the diameter explanation uses the shared persistent tooltip layer");
-assert.doesNotMatch(tumorInputPanel, /title={diameterDisabled \? TUMOR_DIAMETER_DISABLED_MESSAGE/,
-  "the disabled diameter no longer relies on a transient native title tooltip");
+assert.doesNotMatch(tumorInputPanel, /diameter_input|diameter_changed|TUMOR_DIAMETER_DISABLED_MESSAGE|type="range"[^>]*id="diameterMm"/,
+  "the retired manual lesion-diameter control and its commands are absent from the visible product panel");
 assert.match(persistentTooltip, /role="tooltip"/,
   "the shared persistent hint is exposed with tooltip semantics");
 assert.match(persistentTooltip, /TOOLTIP_RELEASE_DISMISS_MS\s*=\s*2_000/,
@@ -653,26 +652,16 @@ assert.match(persistentTooltip, /onPointerDown:[\s\S]*?pointerFocusRef\.current 
   "pointer-generated focus cannot keep a released tooltip open");
 assert.match(canvasTools, /onPointerDown={markerTooltip\.onPointerDown}[\s\S]*?markerTooltip\.showForRelease\(\)/,
   "the controlled-marker hint covers press and release-driven mouse or touch activation");
-assert.match(tumorInputPanel, /onPointerDown={diameterTooltip\.onPointerDown}[\s\S]*?diameterTooltip\.showForRelease\(\)/,
-  "the diameter hint covers press and release-driven mouse or touch activation");
 assert.match(styles, /\.persistent-disabled-tooltip\s*\{[^}]*position:\s*fixed;[^}]*max-width:[^}]*white-space:\s*normal;/s,
   "persistent hints escape clipped toolbars and wrap within the viewport");
 assert.match(controller, /stateLabel:\s*"设备本地"[\s\S]*?原始照片仅在当前设备中处理，不随候选记录上传；记录仅保留 \$\{privacyAudit\(state\)\.local_workflow_fields\.length\} 类必要参数。/,
   "the workflow privacy card uses device-neutral local-processing copy");
 assert.doesNotMatch(controller.slice(controller.indexOf("privacyAudit: buildIncisionPrivacyAuditSnapshot"), controller.indexOf("review: buildIncisionReviewSnapshot")), /浏览器/,
   "the workflow privacy snapshot does not limit its promise to a browser");
-assert.equal(tumorDiameterParameterInactive({ kind: "cutaneous", boundaryMode: "freehand" }), true,
-  "manual freehand disables the operator diameter");
-assert.equal(tumorDiameterParameterInactive({ kind: "cutaneous", boundaryMode: "ellipse", controlledMarkerMode: true }), true,
-  "controlled-marker acquisition disables the operator diameter before and after detection");
-assert.equal(tumorDiameterParameterInactive({ kind: "cutaneous", boundaryMode: "ellipse" }), false,
-  "switching back to ellipse restores the diameter control");
-assert.equal(tumorDiameterParameterInactive({ kind: "subcutaneous", boundaryMode: "freehand", controlledMarkerMode: true }), false,
-  "subcutaneous diameter remains operative");
-assert.match(controller, /case "diameter_input":\s*case "diameter_changed":[\s\S]*?tumorDiameterParameterInactive[\s\S]*?break;/,
-  "stale diameter events are ignored while a drawn or detected boundary owns candidate scale");
-assert.match(controller, /if \(!state\.markerMode && state\.controlledBoundary\)[\s\S]*?state\.boundaryMode = "ellipse";[\s\S]*?resetFreehandPhotoBoundary\(state, true\)/,
-  "exiting a confirmed controlled marker returns to ellipse mode and restores diameter semantics");
+assert.doesNotMatch(controller, /case "diameter_input":|case "diameter_changed":/,
+  "the merged controller has no active command path for the retired manual lesion diameter");
+assert.match(controller, /if \(!state\.markerMode && state\.controlledBoundary\)[\s\S]*?已识别边界保留/,
+  "exiting controlled marking preserves the recognized boundary instead of restoring a simulated diameter");
 assert.match(controller, /ellipseRatio:\s*state\.kind === "cutaneous" \? state\.ellipseRatio : null/,
   "the merged snapshot exposes the actual near-circular default instead of leaving the slider at its legacy 70% label");
 assert.match(tumorInputPanel, /tumor\.ellipseRatio != null\) setEllipseRatio/,
@@ -723,7 +712,7 @@ assert.match(controller, /function prepareControlledMarkerAttempt[\s\S]*?state\.
   "a new controlled-marker attempt removes the previous lesion and candidate before reporting a new failure");
 assert.match(controller, /照片估算最大直径 \$\{state\.controlledBoundaryPhotoDiameterMm\.toFixed\(1\)\}/,
   "controlled-marker feedback reports the preserved photo scale instead of the distorted face-edge surface extent");
-assert.match(controller, /photoDiameterEstimateMm:\s*layerContract\.showDiameterEstimate\s*\?\s*state\.diameterMm/, "workflow restores the standalone subcutaneous diameter estimate input");
+assert.match(controller, /photoDiameterEstimateMm:\s*undefined/, "workflow does not draw a fabricated subcutaneous diameter circle");
 assert.match(controller, /candidateLengthMm:\s*Number\(candidate\.length_mm\)/,
   "the merged photo renderer consumes the computed linear length instead of re-projecting a curved standard face");
 assert.match(controller, /incisionPhotoStatusPresentation\(/,
@@ -987,6 +976,12 @@ assert.match(canvasTools, /data-workflow-diagnostic-candidate/,
   "the merged SVG owns a separate display-only diagnostic candidate layer");
 assert.match(styles, /\[data-workflow-diagnostic-candidate\]\s*{[^}]*stroke:\s*#ef4444;[^}]*stroke-dasharray:/s,
   "a rejected diagnostic candidate is a distinct red dashed line without restyling the valid candidate");
+assert.match(canvasTools, /data-workflow-rejected-marker/,
+  "the merged SVG owns a separate rejected marker boundary layer");
+assert.match(styles, /\[data-workflow-rejected-marker\]\s*\{[^}]*stroke:\s*#d946ef;[^}]*stroke-dasharray:/s,
+  "a detector-rejected marker is a distinct purple dashed boundary");
+assert.match(controller, /rejected_boundary[\s\S]*?rejectedMarkerPreview[\s\S]*?不会生成切口/,
+  "only detector-owned rejected geometry is previewed and it remains explicitly non-actionable");
 assert.match(styles, /\.workflow-incision-overlay \[data-workflow-marker-scan-circle\]\s*{[^}]*border-radius|\.workflow-incision-overlay \[data-workflow-marker-scan-circle\]\s*{[^}]*stroke:/s,
   "workflow scan feedback has an explicit visible circular stroke");
 const unlayeredOverrides = styles.indexOf("/* Critical, unlayered overrides");
@@ -1335,7 +1330,7 @@ assert.match(controller, /function cancelFreehandStrokeForTouchGesture[\s\S]*?sp
   "pinch takeover rolls back only the active stroke segment and preserves earlier paused freehand segments");
 assert.match(controller, /case "toggle_boundary":[\s\S]*?finalizeWorkflowFreehandBoundary\(state\)/,
   "the explicit end-drawing command owns freehand recognition and candidate generation");
-assert.match(controller, /boundaryMode === "freehand"[\s\S]*?当前已有自由轮廓肿物边界[\s\S]*?再次点击“开始描绘”[\s\S]*?切换为“椭圆近似”[\s\S]*?freehand_inactive_canvas_click_blocked/,
+assert.match(controller, /boundaryMode === "freehand"[\s\S]*?当前已有自由轮廓肿物边界[\s\S]*?再次点击“开始描绘”[\s\S]*?切换为“受控标记识别”[\s\S]*?freehand_inactive_canvas_click_blocked/,
   "an inactive freehand mode explains how to redraw or return to ellipse simulation without ambiguous mode language");
 const closedDisplayStroke = [
   { x: 10, y: 10 }, { x: 20, y: 8 }, { x: 30, y: 10 }, { x: 32, y: 20 },
@@ -1464,9 +1459,6 @@ assert.deepEqual(workflowControlledMarkerCrop({
   roiRadius: 30,
 }), { x: 0, y: 0, width: 38, height: 37, seed: { x: 3, y: 2 } },
 "controlled-marker crops clamp safely at phone-photo edges without moving the seed");
-assert.equal(minimumWorkflowMarkerScanDiameterMm(12), 15, "controlled-marker scan covers at least 1.2 times the lesion diameter");
-assert.equal(minimumWorkflowMarkerScanDiameterMm(40), 50, "scan coverage rounds upward in the legacy five-millimetre steps");
-assert.equal(minimumWorkflowMarkerScanDiameterMm(100), 60, "scan coverage respects the established maximum");
 assert.match(canvasTools, /<RangeInput\s+min="10"\s+max="60"\s+step="5"/,
   "scan control uses the native range component with fixed 10–60 mm endpoints");
 assert.doesNotMatch(canvasTools, /minimumScanDiameterMm/,
@@ -1486,12 +1478,8 @@ for (const diameterMm of [8, 28, 50]) {
     assert.equal(state.markerRequestId, 5, "range changes still invalidate stale requests");
   }
 }
-assert.match(controller, /if \(started.scanDiameterMm < minimumScanDiameterMm\)[\s\S]*?controlled_marker_scan_too_small[\s\S]*?return;/,
-  "choosing a small scan must not bypass the existing detection coverage precondition");
-assert.equal(workflowMarkerScanDiameterForTumor(30, 33), 40,
-  "changing cutaneous diameter automatically expands an undersized controlled-marker scan");
-assert.equal(workflowMarkerScanDiameterForTumor(50, 20), 50,
-  "a deliberately larger controlled-marker scan remains unchanged");
+assert.doesNotMatch(controller, /started\.scanDiameterMm < minimumScanDiameterMm|controlled_marker_scan_too_small/,
+  "scan range limits the local search area without depending on a removed expected lesion diameter");
 const markerRequest = {
   kind: "cutaneous" as const,
   diameterMm: 12,
@@ -1573,18 +1561,6 @@ assert.deepEqual(
   [[0, 0, 0], [5, 1, 0], [10, 0, 0]],
   "the displayed subcutaneous line explicitly passes through the detector-confirmed lesion center",
 );
-assert.deepEqual(workflowSubcutaneousLengthLimit({
-  type: "linear",
-  length_mm: 35,
-  metrics: { diameter_coverage_deficit_mm: 4, length_clamped_by_max: true },
-}, 39), { lengthMm: 35, diameterMm: 39, deficitMm: 4 },
-"a max-clamped subcutaneous candidate is surfaced as a coverage limit instead of looking unchanged");
-assert.deepEqual(workflowSubcutaneousLengthLimit({
-  type: "linear",
-  length_mm: 35,
-  metrics: { diameter_coverage_deficit_mm: 0, length_clamped_by_max: true },
-}, 30), { lengthMm: 35, diameterMm: 30, deficitMm: 0 },
-"a capped but still covering candidate is distinguished from a true diameter-coverage failure");
 
 const projectedLandmarks = Array.from({ length: 468 }, () => [50, 50, 0] as Vec3);
 projectedLandmarks[0] = [0, 0, 0];
