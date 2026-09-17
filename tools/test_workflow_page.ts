@@ -67,6 +67,8 @@ const incisionSnapshots = read("web/src/services/incisionSnapshots.ts");
 const tumorInputPanel = read("web/src/components/TumorInputPanel.tsx");
 const reviewControlsPanel = read("web/src/components/ReviewControlsPanel.tsx");
 const liveRail = read("web/src/components/LiveControlRail.tsx");
+const liveWrinklePanel = read("web/src/components/LiveWrinklePanel.tsx");
+const liveRefinePanel = read("web/src/components/LiveRefinePanel.tsx");
 const liveQualityPanel = read("web/src/components/LiveQualityPanel.tsx");
 const liveSourceControls = read("web/src/components/LiveSourceControlsPanel.tsx");
 const liveRenderControls = read("web/src/components/LiveRenderControlsPanel.tsx");
@@ -454,14 +456,24 @@ assert.doesNotMatch(styles, /workflow-marker-mode="true"[^}]*\.main-wrap\s*{[^}]
   "controlled-marker mode does not resize the shared face canvas");
 assert.doesNotMatch(styles, /workflow-mobile-scroll-zone/,
   "the removed mobile scroll prompt has no stale styling contract");
-assert.match(styles, /"quality incision-status"[\s\S]*?"workflow-actions workflow-actions"/,
-  "phone workflow keeps compact quality and result information above the face instead of over it");
+assert.match(styles, /grid-template-areas:\s*"incision-status"\s*"workflow-actions workflow-actions";[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\);/,
+  "phone workflow lets status and tools use the full stage-header width after removing quality copy");
 assert.match(styles, /\.workflow-canvas-tools\s*{[^}]*grid-template-rows:\s*40px;[^}]*block-size:\s*42px;[^}]*padding:\s*0;[\s\S]*?\.workflow-canvas-tools\[data-marker-mode="true"\]\s*{[^}]*grid-template-rows:\s*40px 32px;[^}]*gap:\s*4px 6px;[^}]*block-size:\s*76px;/s,
   "phone workflow uses one tool row normally and adds the second row only during controlled marking");
 assert.match(canvasTools, /data-marker-mode={String\(markerMode\)}[\s\S]*?data-marker-busy={String\(markerBusy\)}/,
   "phone tool layout exposes marker state without changing command semantics");
-assert.match(styles, /#wrinkleSummary\s*{[^}]*overflow-wrap:\s*anywhere;[^}]*word-break:\s*break-word;/s,
-  "long local V10 runtime errors wrap inside the mobile workflow rail instead of widening the shared canvas");
+assert.match(liveWrinklePanel, /className="hidden"[\s\S]*?id="wrinkleSummary"/,
+  "verbose wrinkle-stage details remain hidden at every viewport size");
+assert.match(liveWrinklePanel, /<ButtonRow className="live-wrinkle-actions">/,
+  "the two wrinkle actions share the full card width evenly");
+assert.ok(styles.includes(".btn-row.live-wrinkle-actions{grid-template-columns:repeat(2,minmax(0,1fr));width:100%}"),
+  "the dedicated wrinkle action row has exactly two equal columns");
+assert.match(liveRefinePanel, />医生手动微调<\/Button>/,
+  "the manual refinement card exposes only the compact requested entry label");
+assert.match(liveRefinePanel, /className="hidden"[\s\S]*?id="refine2dHint"/,
+  "manual refinement feedback remains a hidden runtime target");
+assert.doesNotMatch(liveRefinePanel, /医生 2D 微调|手动拖动、隐藏或逐点调整当前结果|也可将鼠标放在图片上滚动缩放|以选中点为中心，连续控制指定数量的点|默认只修改选中的一根线/,
+  "the manual refinement card omits all requested explanatory copy");
 assert.match(mobileControls, /const candidateReady = Boolean\(edit\?\.widthScaleVisible\)/,
   "mobile candidate editing follows the controller capability instead of the intentionally hidden candidate summary");
 const fusiformBase = { candidate: { type: "fusiform", id: "base" } };
@@ -497,22 +509,19 @@ assert.match(workbench, /workflowOverlay={<WorkflowCanvasOverlay\s*\/>}/, "workf
 assert.match(workbench, /workflowStatus={<WorkflowStageStatus\s*\/>}/, "workflow places incision status in the shared stage header");
 assert.match(workbench, /mobileOperations={<MobileWorkflowControls\s*\/>}/,
   "workflow mounts one phone-only control dock inside the independent operation pane");
-assert.match(workbench, /<LiveControlRail[\s\S]*?moveQualityToMobileStage/,
-  "workflow moves its existing quality panel to the phone stage header instead of mounting a duplicate badge");
+assert.doesNotMatch(workbench, /moveQualityToMobileStage/,
+  "workflow no longer reserves a phone-stage position for the removed quality card");
 assert.doesNotMatch(workbench, /MobileCanvasQualityBadge|mobileOverlay=/,
   "workflow no longer creates a second quality readout beside the original panel");
-assert.match(liveQualityPanel, /createPortal\(panel, mobileTarget\)/,
-  "the original quality panel moves to the phone canvas while retaining its existing DOM ids and updates");
-assert.match(liveQualityPanel, /data-frame-owned="true"[\s\S]*?id="qualityVal"[\s\S]*?id:\s*"qualityBar"/,
-  "workflow keeps the relocated quality card, its value and progress bar available on the phone canvas");
-assert.doesNotMatch(liveQualityPanel, /data-frame-owned="true"[\s\S]*?(?:hidden|aria-hidden="true")/,
-  "the relocated quality card is visually available instead of being retained only for diagnostics");
-assert.match(liveQualityPanel, /langerface:live-quality-relocated/,
-  "quality relocation announces its DOM move so the running renderer can refresh cached element references");
+assert.match(liveQualityPanel, /className="hidden"[\s\S]*?data-quality-runtime="true"/,
+  "quality values remain as hidden runtime targets without rendering a visible card");
+for (const runtimeId of ["qualityVal", "qualityBar", "statState", "statFace", "statYaw", "statLines"]) {
+  assert.match(liveQualityPanel, new RegExp(`id="${runtimeId}"`), `quality runtime retains #${runtimeId}`);
+}
+assert.doesNotMatch(liveQualityPanel, /追踪质量|跟踪质量参考|姿态与光照自适应/,
+  "the removed quality description is not rendered on desktop or phone");
 assert.match(liveRuntime, /langerface:live-quality-relocated[\s\S]*?bindDom\(root\)/,
-  "the live runtime safely rebinds its original quality DOM references after a responsive relocation");
-assert.match(liveQualityPanel, /mobileTarget \? "跟踪质量参考" : "追踪质量"[\s\S]*?id="qualityVal"[\s\S]*?id:\s*"qualityBar"[\s\S]*?受分辨率与光线影响/,
-  "the moved panel exposes the requested three-line phone copy and the existing dynamic quality scale");
+  "the live runtime retains compatibility with any older relocation event");
 assert.match(stageStatus, /<span>\{snapshot\?\.stageStatus \|\| "切口规划准备中"\}<\/span>/,
   "the hidden workflow status retains the complete generated incision message and its baseline fallback");
 assert.doesNotMatch(stageStatus, /compactStatus|当前切口不可确认|当前操作未完成|请在画布中操作/,
@@ -546,10 +555,11 @@ assert.match(styles, /\.workflow-workbench \.workflow-stage-status\s*\{[^}]*whit
   "workflow canvas status wraps instead of truncating operator guidance");
 assert.match(styles, /\.workflow-workbench \.workflow-stage-status > span:last-child\s*\{[^}]*overflow:\s*visible;[^}]*text-overflow:\s*clip;/s,
   "the status text child does not reintroduce ellipsis truncation");
-assert.match(workbench, /<LiveControlRail[\s\S]*?showIncisionEntry={false}[\s\S]*?showStatusOverview={false}[\s\S]*?showPersonalizedHint={false}[\s\S]*?\/>/,
-  "workflow hides its duplicate RSTL status overview and personalized hint without changing the standalone rail");
+assert.match(workbench, /<LiveControlRail[\s\S]*?showIncisionEntry={false}[\s\S]*?showStatusOverview={false}[\s\S]*?\/>/,
+  "workflow hides its duplicate RSTL status overview");
 assert.match(liveRail, /showStatusOverview\s*=\s*true/, "the standalone RSTL page retains its status overview by default");
-assert.match(liveRail, /showPersonalizedHint\s*=\s*true/, "the standalone RSTL page retains its existing personalized hint by default");
+assert.doesNotMatch(liveRail, /showPersonalizedHint|免责声明|内置图谱为示意性首版/,
+  "the compact rail omits the removed guidance and disclaimer");
 assert.doesNotMatch(workbench, /IncisionStagePanel/, "workflow does not mount the legacy incision stage toolbar");
 for (const duplicateControl of ["incisionPhotoUploadLabel", "incisionPhotoMirrorBtn", "incisionSurfaceModeBtn"]) {
   assert.doesNotMatch(canvasTools, new RegExp(duplicateControl), `workflow omits duplicate legacy control ${duplicateControl}`);
@@ -656,10 +666,10 @@ assert.match(canvasTools, /onPointerDown={markerTooltip\.onPointerDown}[\s\S]*?m
   "the controlled-marker hint covers press and release-driven mouse or touch activation");
 assert.match(styles, /\.persistent-disabled-tooltip\s*\{[^}]*position:\s*fixed;[^}]*max-width:[^}]*white-space:\s*normal;/s,
   "persistent hints escape clipped toolbars and wrap within the viewport");
-assert.match(controller, /stateLabel:\s*"设备本地"[\s\S]*?原始照片仅在当前设备中处理，不随候选记录上传；记录仅保留 \$\{privacyAudit\(state\)\.local_workflow_fields\.length\} 类必要参数。/,
-  "the workflow privacy card uses device-neutral local-processing copy");
-assert.doesNotMatch(controller.slice(controller.indexOf("privacyAudit: buildIncisionPrivacyAuditSnapshot"), controller.indexOf("review: buildIncisionReviewSnapshot")), /浏览器/,
-  "the workflow privacy snapshot does not limit its promise to a browser");
+assert.match(controller, /VITE_SERVER_COMPUTE[\s\S]*?"浏览器 \+ 服务器 GPU"[\s\S]*?皱纹检测帧会临时发送到服务器 GPU，服务不持久化原始影像；候选记录仅保留 \$\{privacyAudit\(state\)\.local_workflow_fields\.length\} 类必要参数。/,
+  "the server workflow privacy card accurately discloses transient GPU processing");
+assert.match(controller, /:\s*"设备本地"[\s\S]*?原始照片仅在当前设备中处理，不随候选记录上传；记录仅保留 \$\{privacyAudit\(state\)\.local_workflow_fields\.length\} 类必要参数。/,
+  "the local workflow privacy card retains its device-local promise");
 assert.doesNotMatch(controller, /case "diameter_input":|case "diameter_changed":/,
   "the merged controller has no active command path for the retired manual lesion diameter");
 assert.match(controller, /if \(!state\.markerMode && state\.controlledBoundary\)[\s\S]*?已识别边界保留/,
@@ -1025,10 +1035,10 @@ assert.match(render2d, /const zoomItems:[\s\S]*?\{ label: "全脸", region: null
   "focus-preview generation remains available for desktop and future rollback");
 assert.match(styles, /--workflow-mobile-zoom-card-size:\s*calc\(\(100vw - 44px\) \/ 3\)[\s\S]*?\.workflow-workbench \.zoom-card\s*\{[^}]*flex:\s*0 0 var\(--workflow-mobile-zoom-card-size\);[^}]*min-width:\s*var\(--workflow-mobile-zoom-card-size\);[^}]*max-width:\s*var\(--workflow-mobile-zoom-card-size\);/,
   "hidden phone focus-card sizing remains intact instead of deleting the reversible implementation");
-assert.match(liveQualityPanel, /MOBILE_WORKFLOW_MEDIA_QUERY[\s\S]*?media\.matches \? document\.querySelector\(mobilePortalSelector\) : null/,
-  "quality relocation is gated to phone-class coarse-pointer viewports and leaves desktop placement unchanged");
-assert.match(liveRail, /workflow-mobile-quality-slot/,
-  "phone quality feedback is relocated to the stage header rather than covering the face");
+assert.doesNotMatch(liveQualityPanel, /MOBILE_WORKFLOW_MEDIA_QUERY|mobilePortalSelector|createPortal/,
+  "the hidden quality runtime no longer carries responsive presentation logic");
+assert.doesNotMatch(liveStagePanel, /workflow-mobile-quality-slot/,
+  "the removed phone quality card leaves no empty stage-header slot");
 assert.match(styles, /\.workflow-workbench \.stage-top > #livePill\s*\{[^}]*display:\s*none;[\s\S]*?\.workflow-workbench \.stage-top > #fps\s*\{[^}]*display:\s*none;/s,
   "redundant phone source and FPS labels are hidden while their underlying runtime data remains intact");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.mobile-workflow-dock\s*\{[^}]*display:\s*grid;/,

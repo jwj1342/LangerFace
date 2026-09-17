@@ -176,8 +176,10 @@ for (const rel of ["web/src/services/pipelineSource.ts"]) {
     "repeated file-picker use has no hidden wrinkle-analysis timer to cancel or revive");
   assert.doesNotMatch(wrinkleSource, /AUTO_WRINKLE_ANALYSIS_DELAY_MS|requestIdleCallback/,
     "YOLO is explicit user work rather than a delayed automatic main-thread task");
-  assert.match(wrinklePanelSource, /照片在点击“检测皱纹”后才会启动 YOLO/,
-    "the panel tells operators that static-photo YOLO runs only after an explicit action");
+  assert.match(wrinklePanelSource, /id="wrinkleDetectBtn"[\s\S]*?检测皱纹/,
+    "the panel retains the explicit wrinkle detection action");
+  assert.doesNotMatch(wrinklePanelSource, /照片在点击“检测皱纹”后才会启动 YOLO/,
+    "the simplified panel omits redundant detection instructions");
   assert.match(wrinkleSource, /return isWrinkleFrameReady\(\) \? "等待手动检测"/,
     "the ready state cannot imply that automatic YOLO is pending");
 }

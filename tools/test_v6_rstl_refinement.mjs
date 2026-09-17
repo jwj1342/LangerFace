@@ -10,6 +10,8 @@ import { refineV6 as refineV9Smooth } from
 import { yoloGuidedV9RstlRefinementOptions } from
   "../web/src/services/personalized/v9RstlRefinementProfile.ts";
 import { mapAtlas } from "../web/src/services/geometryAtlas.ts";
+import { guardMergedYoloGuidedRstlCurves } from
+  "../web/src/services/personalized/yoloGuidedRstlScope.ts";
 
 const size = 96;
 const index = (x, y) => y * size + x;
@@ -53,6 +55,24 @@ function directionalEvidence(lines, confidenceValue = 1) {
 
 function rangeLine(x0, x1, y) {
   return Array.from({ length: x1 - x0 + 1 }, (_, offset) => [x0 + offset, y]);
+}
+
+// A moved lowest forehead curve must survive the merged YOLO global guard when
+// its displacement introduces no new crossing with the untouched atlas.
+{
+  const seeds = [
+    { name: "forehead-upper", region: "forehead_bridge_arc_v15", pts: rangeLine(10, 85, 25) },
+    { name: "forehead-lower", region: "forehead_bridge_arc_v15", pts: rangeLine(10, 85, 55) },
+    { name: "cheek", region: "cheek", pts: [[20, 75], [40, 76], [60, 75], [80, 76]] },
+  ];
+  const movedLower = seeds.map((seed) => ({ ...seed, pts: seed.pts.map((point) => [...point]) }));
+  movedLower[1].pts = movedLower[1].pts.map(([x, y]) => [x, y - 5]);
+  const guarded = guardMergedYoloGuidedRstlCurves(seeds, movedLower);
+  assert.deepEqual(guarded.rolledBackCurveIndices, []);
+  assert.equal(guarded.newIntersectionPairCount, 0);
+  assert.ok(guarded.curves[1].pts.some((point, index) =>
+    point[1] !== seeds[1].pts[index][1]),
+    "merged global guard must preserve the lowest forehead displacement");
 }
 
 // A central vertical frown line must be allowed to guide the nearest glabellar
@@ -454,7 +474,11 @@ function maximumTurnDegrees(points) {
     horizontalSeed("shared-nearer-second", 40),
     horizontalSeed("lower-second", 54),
   ];
-  const fields = evidence([rangeLine(20, 74, 30), rangeLine(20, 74, 48)]);
+  const fields = evidence([
+    rangeLine(20, 74, 30),
+    rangeLine(20, 74, 48),
+    rangeLine(20, 74, 57),
+  ]);
   const result = refineV9Smooth({
     seeds,
     wrinkleMask: fields.mask,
@@ -528,7 +552,11 @@ function maximumTurnDegrees(points) {
     horizontalSeed("forehead-middle", 42),
     horizontalSeed("forehead-lower", 60),
   ].map((seed) => ({ ...seed, region: "forehead_bridge_arc_v15" }));
-  const fields = evidence([rangeLine(20, 74, 30), rangeLine(20, 74, 48)]);
+  const fields = evidence([
+    rangeLine(20, 74, 30),
+    rangeLine(20, 74, 48),
+    rangeLine(20, 74, 57),
+  ]);
   const result = refineV9Smooth({
     seeds,
     wrinkleMask: fields.mask,
@@ -547,13 +575,123 @@ function maximumTurnDegrees(points) {
     },
   });
   const selected = result.audit.matchRecords.filter((record) => record.selected_for_wrinkle);
-  assert.equal(selected.length, 2, JSON.stringify(selected));
-  assert.equal(new Set(selected.map((record) => record.wrinkle_segment_id)).size, 2);
-  assert.equal(new Set(selected.map((record) => record.rstl_curve_index)).size, 2);
+  assert.equal(selected.length, 3, JSON.stringify(selected));
+  assert.equal(new Set(selected.map((record) => record.wrinkle_segment_id)).size, 3);
+  assert.equal(new Set(selected.map((record) => record.rstl_curve_index)).size, 3);
+  assert.deepEqual(result.audit.wrinkleTrends.map((trend) => trend.acceptedCurveIndices), [[0], [1], [2]]);
+  assert.ok(result.curves[2].normalOffsetsPx.some((offset) => Math.abs(offset) > 0.05),
+    "the lowest forehead wrinkle must move its nearest RSTL curve");
   assert.ok(selected.every((record) => record.forehead_single_curve_selected === true));
   assert.equal(result.diagnostics.forehead_nearest_single_curve_matching, true);
-  assert.equal(result.diagnostics.forehead_single_curve_selected_count, 2);
+  assert.equal(result.diagnostics.forehead_single_curve_selected_count, 3);
   assert.equal(result.diagnostics.wrinkle_with_single_side_selected_count, 0);
+}
+
+// Multiple deep forehead furrows keep unique anchors while neighboring layers
+// move before topology rollback, preventing false rejection from stale layers.
+{
+  const seedYs = [16, 24, 32, 40, 48, 56, 64, 72, 80];
+  const seeds = seedYs.map((y, index) => ({
+    ...horizontalSeed(`forehead-dense-layer-${index}`, y),
+    region: "forehead_bridge_arc_v15",
+  }));
+  const fields = evidence([20, 36, 52, 68].map((y) => rangeLine(18, 76, y)));
+  const result = refineV9Smooth({
+    seeds,
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 75,
+    options: yoloGuidedV9RstlRefinementOptions(75),
+  });
+  assert.deepEqual(
+    result.audit.wrinkleTrends.map((trend) => trend.acceptedCurveIndices),
+    [[0], [2], [4], [6]],
+    "each dense forehead furrow must retain its own nearest RSTL anchor",
+  );
+  assert.equal(result.diagnostics.forehead_pre_topology_coherence_records[0].applied, true,
+    "neighboring forehead layers must move before the topology rollback stage");
+  assert.equal(result.diagnostics.topology_candidate_retry_count, 0);
+  assert.equal(result.diagnostics.post_export_new_intersection_pair_count, 0);
+  assert.equal(result.diagnostics.post_export_new_self_cross_curve_count, 0);
+}
+
+// A broken forehead wrinkle keeps its observed fragments but receives one
+// logical identity before RSTL assignment.
+{
+  const seeds = [{
+    ...horizontalSeed("forehead-fragment-anchor", 31),
+    region: "forehead_bridge_arc_v15",
+  }];
+  const fields = evidence([
+    rangeLine(12, 34, 33),
+    rangeLine(46, 78, 33),
+  ]);
+  const result = refineV9Smooth({
+    seeds,
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 180,
+    options: {
+      twoSidedNearestMatching: true,
+      foreheadNearestSingleCurveMatching: true,
+      logicalTrendGrouping: true,
+      softLinkDistancePx: 5.4,
+      foreheadSoftLinkDistancePx: 14.4,
+      foreheadSoftLinkTurnDegrees: 45,
+      globalLengthAwareMatching: true,
+      searchRadiusPx: 16,
+      p90LimitPx: 18,
+      maxDisplacementPx: 24,
+    },
+  });
+  assert.equal(result.diagnostics.wrinkle_segment_count, 1);
+  assert.equal(result.diagnostics.logical_wrinkle_composite_count, 1);
+  assert.equal(result.audit.wrinkleTrends[0].sourcePathCount, 2);
+  assert.equal(result.audit.matchRecords.filter((record) =>
+    record.selected_for_wrinkle).length, 1);
+}
+
+// Forehead ownership uses total evidence length and coverage before proximity,
+// so a nearby short fragment cannot reserve an anchor from a stronger wrinkle.
+{
+  const seeds = [{
+    ...horizontalSeed("forehead-length-aware-anchor", 29),
+    region: "forehead_bridge_arc_v15",
+  }];
+  const fields = evidence([
+    rangeLine(42, 50, 30),
+    rangeLine(12, 78, 36),
+  ]);
+  const result = refineV9Smooth({
+    seeds,
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 180,
+    options: {
+      twoSidedNearestMatching: true,
+      foreheadNearestSingleCurveMatching: true,
+      logicalTrendGrouping: true,
+      softLinkDistancePx: 5.4,
+      foreheadSoftLinkDistancePx: 5.4,
+      globalLengthAwareMatching: true,
+      searchRadiusPx: 16,
+      p90LimitPx: 18,
+      maxDisplacementPx: 24,
+    },
+  });
+  const selected = result.audit.matchRecords.filter((record) =>
+    record.selected_for_wrinkle);
+  assert.equal(selected.length, 1);
+  assert.ok(selected[0].direct_evidence_arc_length_px > 50);
+  assert.ok(result.audit.matchRecords.some((record) =>
+    record.direct_evidence_arc_length_px < 12 &&
+    record.rejection_reason === "curve_reserved_for_better_wrinkle"));
 }
 
 // Forehead anchors retain their wrinkle adherence while the surrounding layer
@@ -1320,4 +1458,5 @@ function maximumTurnDegrees(points) {
   assert.equal(result.audit.wrinkleTrends[0].finalStatus, "rejected_after_guard");
 }
 
+await import("./test_refinement_cache.mjs");
 console.log("v6 rstl refinement tests passed");

@@ -228,10 +228,10 @@ assert.ok(
   !foreheadVisibility.includes("longestRun"),
   "live forehead visibility must preserve every qualifying run instead of selecting one longest run (#145)",
 );
-assert.ok(liveState.includes("opacity: 0.60"), "typed live RSTL opacity must match the 60% reference");
+assert.ok(liveState.includes("opacity: 0.90"), "typed live RSTL opacity must match the 90% default");
 assert.ok(
-  liveRenderControls.includes("render?.opacityPct || 60"),
-  "React live opacity control must default to the 60% reference",
+  liveRenderControls.includes("useState(90)"),
+  "React live opacity control must default to the 90% reference",
 );
 
 includesAll(cameraSource, [

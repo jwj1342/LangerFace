@@ -212,8 +212,8 @@ assert.match(
 );
 assert.match(
   pipelineSource,
-  /restoreRefineDisplayState\(resume\.refinement\);\s*restoreWrinkleDisplayState\(resume\.wrinkle\);\s*renderState\.densityFrac = resume\.densityFrac;\s*els\.density\.value = String\(Math\.round\(resume\.densityFrac \* 100\)\);\s*els\.densityVal\.textContent = `\$\{Math\.round\(resume\.densityFrac \* 100\)\}%`;\s*renderState\.incisionOverlay = activeIncisionOverlay/,
-  "closing the camera restores static display-only RSTL, wrinkle, density, and incision state without rerunning their algorithms",
+  /restoreRefineDisplayState\(resume\.refinement\);\s*restoreWrinkleDisplayState\(resume\.wrinkle\);\s*renderState\.densityFrac = 1;\s*els\.density\.value = "100";\s*els\.densityVal\.textContent = "100%";\s*renderState\.incisionOverlay = activeIncisionOverlay/,
+  "closing the camera restores static RSTL, wrinkle, and incision state while resetting line density to 100%",
 );
 assert.match(
   pipelineSource,

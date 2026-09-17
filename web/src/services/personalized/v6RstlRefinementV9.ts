@@ -41,6 +41,8 @@ export interface V6RefinementOptions {
   regionalNearestSingleCurveMatching?: boolean;
   parallelDedupRadiusPx?: number;
   softLinkDistancePx?: number;
+  foreheadSoftLinkDistancePx?: number;
+  foreheadSoftLinkTurnDegrees?: number;
   tangentWindowPx?: number;
   searchRadiusPx?: number;
   directionToleranceDegrees?: number;
@@ -63,8 +65,11 @@ export interface V6RefinementOptions {
   curvatureFairingMaximumMeanAdherencePx?: number;
   curvatureFairingMaximumP90AdherencePx?: number;
   curvatureFairingForeheadMaximumTurnDegrees?: number;
+  curvatureFairingForeheadRecoveryTurnSlackDegrees?: number;
+  curvatureFairingForeheadRecoveryMinimumReversalSpacingRatio?: number;
   curvatureFairingForeheadMaximumMeanAdherencePx?: number;
   curvatureFairingForeheadMaximumP90AdherencePx?: number;
+  curvatureFairingForeheadCompositeMaximumTurnDegrees?: number;
   curvatureFairingGlabellarMaximumTurnDegrees?: number;
   curvatureFairingGlabellarMaximumAddedSignChanges?: number;
   curvatureFairingGlabellarMaximumMeanAdherencePx?: number;
@@ -84,6 +89,7 @@ export interface V6RefinementOptions {
   curvatureFairingCrowsFeetDirectionWeight?: number;
   foreheadAdherenceMeanThresholdPx?: number;
   foreheadAdherenceP90ThresholdPx?: number;
+  foreheadMinimumAdherenceImprovementPx?: number;
   glabellarAdherenceMeanThresholdPx?: number;
   glabellarAdherenceP90ThresholdPx?: number;
   glabellarMaximumDisplacementPx?: number;
@@ -221,6 +227,48 @@ export interface RefineV6Input {
   size: number;
   faceWidthPx: number;
   options?: V6RefinementOptions;
+  performance?: V6RefinementPerformance;
+  cacheGeometry?: boolean;
+}
+
+export interface V6RefinementPerformance {
+  totalMs?: number;
+  stages?: Record<string, { calls: number; totalMs: number }>;
+  counters?: Record<string, number>;
+  curveCount?: number;
+  pointCount?: number;
+  topologyRetryRounds?: number;
+  adherenceRetryRounds?: number;
+}
+
+interface RefinementExecution {
+  performance?: V6RefinementPerformance;
+  geometry?: WeakMap<Point2[], CachedIntersectionGeometry>;
+  crossings?: WeakMap<CachedIntersectionGeometry, WeakMap<CachedIntersectionGeometry, boolean>>;
+  priorSamples?: WeakMap<Point2[], Map<number, { index: number; fraction: number; xDistance: number } | null>>;
+}
+
+let refinementExecution: RefinementExecution | null = null;
+
+function countRefinementOperation(name: string, amount = 1): void {
+  const profile = refinementExecution?.performance;
+  if (!profile) return;
+  const counters = profile.counters ||= {};
+  counters[name] = (counters[name] || 0) + amount;
+}
+
+function measureRefinementStage<T>(name: string, operation: () => T): T {
+  const profile = refinementExecution?.performance;
+  if (!profile) return operation();
+  const start = performance.now();
+  try {
+    return operation();
+  } finally {
+    const stages = profile.stages ||= {};
+    const stage = stages[name] ||= { calls: 0, totalMs: 0 };
+    stage.calls += 1;
+    stage.totalMs += performance.now() - start;
+  }
 }
 
 const clamp = (value: number, lower = 0, upper = 1): number =>
@@ -659,7 +707,36 @@ function buildCurveGeometry(seed: V6Seed, tangentWindowPixels: number): CurveGeo
   return { seed, prior, normals, vertexArc: metrics.arc, segments };
 }
 
-function matchTrendsToCurves(
+function polylinesIntersect(first: Point2[], second: Point2[]): boolean {
+  const cross = (a: Point2, b: Point2, c: Point2) =>
+    (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  const onSegment = (a: Point2, b: Point2, p: Point2) =>
+    Math.abs(cross(a, b, p)) <= 1e-6 &&
+    p[0] >= Math.min(a[0], b[0]) - 1e-6 && p[0] <= Math.max(a[0], b[0]) + 1e-6 &&
+    p[1] >= Math.min(a[1], b[1]) - 1e-6 && p[1] <= Math.max(a[1], b[1]) + 1e-6;
+  for (let i = 1; i < first.length; i += 1) {
+    const a = first[i - 1], b = first[i];
+    for (let j = 1; j < second.length; j += 1) {
+      const c = second[j - 1], d = second[j];
+      const abMinX = Math.min(a[0], b[0]), abMaxX = Math.max(a[0], b[0]);
+      const abMinY = Math.min(a[1], b[1]), abMaxY = Math.max(a[1], b[1]);
+      if (abMaxX < Math.min(c[0], d[0]) - 1e-6 || abMinX > Math.max(c[0], d[0]) + 1e-6 ||
+          abMaxY < Math.min(c[1], d[1]) - 1e-6 || abMinY > Math.max(c[1], d[1]) + 1e-6) continue;
+      const abC = cross(a, b, c), abD = cross(a, b, d);
+      const cdA = cross(c, d, a), cdB = cross(c, d, b);
+      if ((abC * abD < -1e-8 && cdA * cdB < -1e-8) ||
+          onSegment(a, b, c) || onSegment(a, b, d) ||
+          onSegment(c, d, a) || onSegment(c, d, b)) return true;
+    }
+  }
+  return false;
+}
+
+function matchTrendsToCurves(...args: Parameters<typeof matchTrendsToCurvesImpl>) {
+  return measureRefinementStage("matching", () => matchTrendsToCurvesImpl(...args));
+}
+
+function matchTrendsToCurvesImpl(
   trends: Trend[],
   curves: CurveGeometry[],
   confidence: NumericField,
@@ -761,7 +838,11 @@ function matchTrendsToCurves(
     const coverageWeight = (1 - Math.exp(-directLength / Math.max(2, 0.010 * faceWidth))) *
       Math.sqrt(clamp(coverage));
     const influence = distanceWeight * direction * Math.sqrt(Math.max(0, coverageWeight * continuity));
-    const accepted = records.length >= 2 && directLength >= 0.75 && influence >= 0.025;
+    const foreheadCandidate = String(curves[curveIndex].seed.region || "")
+      .includes("forehead");
+    const accepted = records.length >= 2 &&
+      directLength >= (foreheadCandidate ? 0.50 : 0.75) &&
+      influence >= (foreheadCandidate ? 0.018 : 0.025);
     const summary: Record<string, any> = {
       wrinkle_segment_id: trendIndex,
       rstl_curve_index: curveIndex,
@@ -774,7 +855,11 @@ function matchTrendsToCurves(
       mean_match_distance_px: meanDistance,
       mean_signed_normal_offset_px: meanSignedNormalOffset,
       wrinkle_side: meanSignedNormalOffset >= 0 ? "upper" : "lower",
+      logical_source_path_count: trend.sourcePathCount,
+      logical_soft_link_count: trend.softLinkCount,
       accepted,
+      forehead_intersects_rstl: String(curves[curveIndex].seed.region || "").includes("forehead") &&
+        polylinesIntersect(trend.points, curves[curveIndex].prior),
     };
     if (options.globalLengthAwareMatching === true) {
       const baseAssignmentScore = influence /
@@ -807,8 +892,13 @@ function matchTrendsToCurves(
       curveGroups.length;
     const pointCount = curveGroups.reduce((sum, group) => sum + group.records.length, 0);
     const normalizedLength = directLength / faceWidth;
-    const accepted = (normalizedLength >= 0.010 && coverage >= 0.25) ||
-      (normalizedLength >= 0.006 && coverage >= 0.50 && pointCount >= 3);
+    const foreheadSupport = curveGroups.some((group) =>
+      String(curves[curveIndex].seed.region || "").includes("forehead"));
+    const accepted = foreheadSupport ?
+      ((normalizedLength >= 0.006 && coverage >= 0.18) ||
+        (normalizedLength >= 0.004 && coverage >= 0.35 && pointCount >= 3)) :
+      ((normalizedLength >= 0.010 && coverage >= 0.25) ||
+        (normalizedLength >= 0.006 && coverage >= 0.50 && pointCount >= 3));
     if (accepted) acceptedCurves.add(curveIndex);
     const allRecords = curveGroups.flatMap((group) => group.records);
     curveSupportRecords.push({
@@ -844,13 +934,36 @@ function matchTrendsToCurves(
     const foreheadAssignments = new Map<number, MatchGroup>();
     const foreheadOwnerByCurve = new Map<number, MatchGroup>();
     const foreheadCandidates = new Map<number, MatchGroup[]>();
+    const foreheadIntersectionTrends = new Set<number>();
+    const foreheadScore = (group: MatchGroup): number =>
+      (options.globalLengthAwareMatching === true
+        ? groupAssignmentScore(group)
+        : group.influence / (1 + group.meanDistance / Math.max(1, bandRadius))) +
+      (foreheadIntersectionTrends.has(group.trendIndex) &&
+        group.summary.forehead_intersects_rstl === true ? 1000 : 0);
+    const foreheadCandidateWins = (candidate: MatchGroup, owner: MatchGroup): boolean =>
+      foreheadScore(candidate) > foreheadScore(owner) + EPSILON ||
+      (Math.abs(foreheadScore(candidate) - foreheadScore(owner)) <= EPSILON &&
+       (candidate.meanDistance < owner.meanDistance - EPSILON ||
+        (Math.abs(candidate.meanDistance - owner.meanDistance) <= EPSILON &&
+         (candidate.influence > owner.influence + EPSILON ||
+          (Math.abs(candidate.influence - owner.influence) <= EPSILON &&
+           candidate.trendIndex < owner.trendIndex)))));
     for (const trendIndex of foreheadTrendIndices) {
       const candidates = curveEligibleGroups.filter((group) =>
         group.trendIndex === trendIndex &&
         String(curves[group.curveIndex].seed.region || "").includes("forehead"))
-        .sort((left, right) => left.meanDistance - right.meanDistance ||
+      if (candidates.some((group) => group.summary.forehead_intersects_rstl === true)) {
+        foreheadIntersectionTrends.add(trendIndex);
+      }
+      const preferredCandidates = candidates.some((group) =>
+        group.summary.forehead_intersects_rstl === true)
+        ? candidates.filter((group) => group.summary.forehead_intersects_rstl === true)
+        : candidates;
+      preferredCandidates.sort((left, right) => foreheadScore(right) - foreheadScore(left) ||
+          left.meanDistance - right.meanDistance ||
           right.influence - left.influence || left.curveIndex - right.curveIndex);
-      if (candidates.length) foreheadCandidates.set(trendIndex, candidates);
+      if (preferredCandidates.length) foreheadCandidates.set(trendIndex, preferredCandidates);
     }
     const nextForeheadCandidate = new Map<number, number>();
     const foreheadQueue = [...foreheadCandidates.keys()].sort((left, right) => left - right);
@@ -864,11 +977,7 @@ function matchTrendsToCurves(
         nextForeheadCandidate.set(trendIndex, candidateIndex + 1);
         candidateIndex += 1;
         const owner = foreheadOwnerByCurve.get(candidate.curveIndex);
-        const candidateWins = !owner || candidate.meanDistance < owner.meanDistance - EPSILON ||
-          (Math.abs(candidate.meanDistance - owner.meanDistance) <= EPSILON &&
-           (candidate.influence > owner.influence + EPSILON ||
-            (Math.abs(candidate.influence - owner.influence) <= EPSILON &&
-             candidate.trendIndex < owner.trendIndex)));
+        const candidateWins = !owner || foreheadCandidateWins(candidate, owner);
         if (!candidateWins) continue;
         if (owner) {
           foreheadAssignments.delete(owner.trendIndex);
@@ -1854,6 +1963,7 @@ function guidedVerticalTrajectory(
   taperArcPx: number,
   maximumDisplacementPx: number,
   targetGapPx: number,
+  fitForeheadHeight = false,
 ): { points: Point2[]; normalOffsets: Float64Array } {
   const normalOffsets = new Float64Array(curve.prior.length);
   if (!records.length) {
@@ -1863,16 +1973,18 @@ function guidedVerticalTrajectory(
   const maximumArc = Math.max(...records.map((record) => record.projectionArc));
   const centerArc = 0.5 * (minimumArc + maximumArc);
   const arcScale = Math.max(10, 0.5 * (maximumArc - minimumArc));
-  const coefficientCount = Math.max(1, Math.min(3, degree + 1));
+  const centerX = records.reduce((sum, record) => sum + record.wrinklePoint[0], 0) / records.length;
+  const xScale = Math.max(10, ...records.map(record => Math.abs(record.wrinklePoint[0] - centerX)));
+  const coefficientCount = Math.max(1, Math.min(fitForeheadHeight ? 6 : 3, degree + 1));
   const gram = Array.from({ length: coefficientCount }, () =>
     Array(coefficientCount).fill(0));
   const rhs = Array(coefficientCount).fill(0);
   for (const record of records) {
-    const parameter = clamp((record.projectionArc - centerArc) / arcScale, -2, 2);
+    const parameter = fitForeheadHeight ? (record.wrinklePoint[0] - centerX) / xScale : clamp((record.projectionArc - centerArc) / arcScale, -2, 2);
     const basis = Array.from({ length: coefficientCount }, (_, power) => parameter ** power);
     const projection = pointAtCurveArc(curve, record.projectionArc);
     const deltaY = record.wrinklePoint[1] - projection[1];
-    const target = Math.sign(deltaY) * Math.max(0, Math.abs(deltaY) - targetGapPx);
+    const target = fitForeheadHeight ? record.wrinklePoint[1] : Math.sign(deltaY) * Math.max(0, Math.abs(deltaY) - targetGapPx);
     const weight = Math.max(EPSILON, record.score * record.confidence);
     for (let row = 0; row < coefficientCount; row += 1) {
       rhs[row] += weight * basis[row] * target;
@@ -1894,11 +2006,12 @@ function guidedVerticalTrajectory(
     } else if (arc > maximumArc) {
       envelope = curvatureContinuousEnvelope(((maximumArc + taper) - arc) / taper);
     }
-    const parameter = clamp((arc - centerArc) / arcScale, -3, 3);
+    const parameter = fitForeheadHeight ? (point[0] - centerX) / xScale : clamp((arc - centerArc) / arcScale, -3, 3);
     let deltaY = 0;
     for (let power = 0; power < coefficients.length; power += 1) {
       deltaY += coefficients[power] * parameter ** power;
     }
+    if (fitForeheadHeight) deltaY -= point[1];
     deltaY = clamp(deltaY * envelope,
       -maximumDisplacementPx, maximumDisplacementPx);
     normalOffsets[index] = deltaY * curve.normals[index][1];
@@ -2179,7 +2292,11 @@ function suppressShortCurvatureReversals(
   return output;
 }
 
-function applyCurvatureFairing(
+function applyCurvatureFairing(...args: Parameters<typeof applyCurvatureFairingImpl>) {
+  return measureRefinementStage("curvatureFairing", () => applyCurvatureFairingImpl(...args));
+}
+
+function applyCurvatureFairingImpl(
   results: any[], size: number, options: V6RefinementOptions,
 ) {
   const events: any[] = [];
@@ -2246,6 +2363,9 @@ function applyCurvatureFairing(
     const forehead = guidedRegion === "forehead";
     const priorMetrics = curvatureMetrics(result.curve.prior, materialTurn);
     const beforeMetrics = curvatureMetrics(result.points, materialTurn);
+    const compositeForehead = forehead && (result.matchGroups || []).some(
+      (group: MatchGroup) => Number(group.summary.logical_source_path_count) > 1,
+    );
     const regionMaximumTurn = guidedRegion === "glabellar" ?
       explicitPositive(options.curvatureFairingGlabellarMaximumTurnDegrees,
         standardMaximumTurn, 1) : guidedRegion === "nose_bridge" ?
@@ -2253,12 +2373,18 @@ function applyCurvatureFairing(
           standardMaximumTurn, 1) : guidedRegion === "crows_feet" ?
           explicitPositive(options.curvatureFairingCrowsFeetMaximumTurnDegrees,
             strictMaximumTurn, 1) : forehead ?
-            explicitPositive(options.curvatureFairingForeheadMaximumTurnDegrees,
-              standardMaximumTurn, 1) : strict ? strictMaximumTurn : standardMaximumTurn;
+            explicitPositive(compositeForehead ?
+              options.curvatureFairingForeheadCompositeMaximumTurnDegrees ??
+                options.curvatureFairingForeheadMaximumTurnDegrees :
+              options.curvatureFairingForeheadMaximumTurnDegrees,
+            standardMaximumTurn, 1) : strict ? strictMaximumTurn : standardMaximumTurn;
     const maximumTurn = Math.max(
       regionMaximumTurn,
       priorMetrics.maximumTurnDegrees + baselineSlack,
     );
+    const foreheadRecoveryTurnSlack = forehead ? Math.max(0, Number(
+      options.curvatureFairingForeheadRecoveryTurnSlackDegrees,
+    ) || 0) : 0;
     const maximumMeanAdherence = guidedRegion === "glabellar" ?
       explicitPositive(options.curvatureFairingGlabellarMaximumMeanAdherencePx,
         defaultMaximumMeanAdherence, 0.25) : guidedRegion === "nose_bridge" ?
@@ -2301,6 +2427,9 @@ function applyCurvatureFairing(
           Math.max(12, size * 0.012), 6) : guidedRegion === "crows_feet" ?
           explicitPositive(options.curvatureFairingCrowsFeetMinimumReversalSpacingPx,
             Math.max(8, size * 0.008), 5) : Math.max(12, size * 0.020);
+    const foreheadRecoveryReversalSpacing = forehead ? minimumReversalSpacingPx * Math.max(0,
+      Math.min(1, Number(options.curvatureFairingForeheadRecoveryMinimumReversalSpacingRatio) || 0),
+    ) : 0;
     const enforceShortReversalGate = guidedRegion !== null;
     const allowOpenCurveEnds = guidedRegion !== null;
     const regionalMaximumEndpointTangentChange = guidedRegion === "crows_feet" ?
@@ -2389,6 +2518,14 @@ function applyCurvatureFairing(
       const newShortCurvatureReversal = enforceShortReversalGate && !priorHasShortReversal &&
         metrics.minimumMaterialSignChangeSpacingPx !== null &&
         metrics.minimumMaterialSignChangeSpacingPx < minimumReversalSpacingPx;
+      const foreheadRecoveryEligible = forehead && insideCanvas &&
+        metrics.maximumTurnDegrees <= maximumTurn + foreheadRecoveryTurnSlack + 1e-6 &&
+        (!newShortCurvatureReversal ||
+          (metrics.minimumMaterialSignChangeSpacingPx !== null &&
+            metrics.minimumMaterialSignChangeSpacingPx >= foreheadRecoveryReversalSpacing - 1e-6)) &&
+        metrics.materialSignChanges <= maximumSignChanges + 1 &&
+        endpointChange <= regionalMaximumEndpointTangentChange + 1e-6 &&
+        adherencePassed && directionPassed;
       const attempt = {
         ...metadata,
         inside_canvas: insideCanvas,
@@ -2428,9 +2565,10 @@ function applyCurvatureFairing(
           minimum_reversal_spacing_px: minimumReversalSpacingPx,
         });
       }
-      const candidateRejected = !insideCanvas || metrics.maximumTurnDegrees > maximumTurn + 1e-6 ||
-        metrics.materialSignChanges > maximumSignChanges ||
-        newShortCurvatureReversal ||
+      const candidateRejected = !insideCanvas ||
+        (metrics.maximumTurnDegrees > maximumTurn + foreheadRecoveryTurnSlack + 1e-6) ||
+        (metrics.materialSignChanges > maximumSignChanges + (foreheadRecoveryEligible ? 1 : 0)) ||
+        (newShortCurvatureReversal && !foreheadRecoveryEligible) ||
         endpointChange > regionalMaximumEndpointTangentChange + 1e-6 ||
         !topologyPassed ||
         !adherencePassed || !directionPassed;
@@ -2625,11 +2763,11 @@ function applyCurvatureFairing(
           }
         }
       }
-      if (guidedRegion === "nose_bridge") for (const degree of [0, 1, 2]) {
+      if (guidedRegion === "nose_bridge" || forehead) for (const degree of (forehead ? [2, 3, 4, 5] : [0, 1, 2])) {
         for (const taperScale of [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5]) {
           const trajectory = guidedVerticalTrajectory(
             result.curve, directRecords, degree, baseTaperArc * taperScale,
-            maximumRegionalDisplacement, targetGap,
+            maximumRegionalDisplacement, targetGap, forehead,
           );
           for (const scale of [1, 0.98, 0.95, 0.90, 0.85, 0.80, 0.70, 0.60]) {
             const points = trajectory.points.map((point: Point2, index: number): Point2 => [
@@ -2726,7 +2864,11 @@ function applyCurvatureFairing(
         data_weight: selectedDataWeight,
         displacement_scale: selectedScale,
         regional_cartesian_displacement: selectedRegionalCartesianDisplacement,
-        maximum_turn_limit_degrees: maximumTurn,
+        maximum_turn_limit_degrees: maximumTurn + foreheadRecoveryTurnSlack,
+        base_maximum_turn_limit_degrees: maximumTurn,
+        forehead_recovery_turn_slack_degrees: foreheadRecoveryTurnSlack,
+        forehead_recovery_minimum_reversal_spacing_px: foreheadRecoveryReversalSpacing,
+        forehead_recovery_eligible: selected !== null && foreheadRecoveryTurnSlack > 0,
         maximum_sign_changes: maximumSignChanges,
         minimum_reversal_spacing_px: minimumReversalSpacingPx,
         endpoint_tangent_change_degrees: selectedEndpointChange,
@@ -2758,6 +2900,9 @@ function applyCurvatureFairing(
       strict_region_gate: strict,
       passes,
       maximum_turn_limit_degrees: maximumTurn,
+      forehead_recovery_turn_slack_degrees: foreheadRecoveryTurnSlack,
+      forehead_recovery_minimum_reversal_spacing_px: foreheadRecoveryReversalSpacing,
+      forehead_recovery_eligible: foreheadRecoveryTurnSlack > 0,
       maximum_sign_changes: maximumSignChanges,
       minimum_reversal_spacing_px: minimumReversalSpacingPx,
       adherence_before_fairing: beforeAdherence,
@@ -2854,7 +2999,11 @@ function minimumPolylineDistance(first: Point2[], second: Point2[]): number {
   return Number.isFinite(minimum) ? minimum : 0;
 }
 
-function trajectoryAdherence(
+function trajectoryAdherence(...args: Parameters<typeof trajectoryAdherenceImpl>) {
+  return measureRefinementStage("trajectoryAdherence", () => trajectoryAdherenceImpl(...args));
+}
+
+function trajectoryAdherenceImpl(
   trends: Trend[], matching: MatchingResult, curves: CurveGeometry[], outputCurves: any[],
   faceWidth: number, options: V6RefinementOptions, applyGate = false,
 ) {
@@ -2868,12 +3017,15 @@ function trajectoryAdherence(
       (options.adherenceDirectionP90Degrees ?? 25));
   const directionThreshold = options.adherenceDirectionHardDegrees ??
     (options.adherenceDirectionP90Degrees ?? 25);
-  const minimumImprovement = options.minimumAdherenceImprovementPx ??
-    Math.max(0.10, 0.0005 * faceWidth);
   const priorMatchSegments = curves.map((curve) => polylineMatchSegments(curve.prior));
   const finalMatchSegments = outputCurves.map((curve) => polylineMatchSegments(curve.pts));
   for (const group of matching.acceptedGroups) {
     const forehead = String(curves[group.curveIndex].seed.region || "").includes("forehead");
+    const minimumImprovement = forehead ?
+      (options.foreheadMinimumAdherenceImprovementPx ??
+        Math.max(0.05, 0.00025 * faceWidth)) :
+      (options.minimumAdherenceImprovementPx ??
+        Math.max(0.10, 0.0005 * faceWidth));
     const guidedRegion = group.summary.guided_region as GuidedWrinkleRegion | undefined;
     const groupMeanThreshold = guidedRegion === "glabellar" ?
       explicitPositive(options.glabellarAdherenceMeanThresholdPx, meanThreshold, 0.25) :
@@ -3142,13 +3294,50 @@ function boundsOverlap(first: Bounds, second: Bounds): boolean {
     first.maxY > second.minY + 1e-7 && second.maxY > first.minY + 1e-7;
 }
 
+interface CachedIntersectionGeometry {
+  coordinates: Float64Array;
+  bounds: Bounds;
+  segments: BoundedSegment[];
+  selfCross?: boolean;
+}
+
+function intersectionGeometry(points: Point2[]): CachedIntersectionGeometry {
+  const cache = refinementExecution?.geometry;
+  const previous = cache?.get(points);
+  if (previous && previous.coordinates.length === points.length * 2 &&
+      points.every((point, index) =>
+        Object.is(point[0], previous.coordinates[index * 2]) &&
+        Object.is(point[1], previous.coordinates[index * 2 + 1]))) {
+    countRefinementOperation("geometryCacheHits");
+    return previous;
+  }
+  countRefinementOperation("geometryBuilds");
+  const geometry = {
+    coordinates: cache ? Float64Array.from(points.flat()) : new Float64Array(0),
+    bounds: curveBounds(points),
+    segments: boundedSegments(points),
+  };
+  cache?.set(points, geometry);
+  return geometry;
+}
+
 function selfCrosses(points: Point2[]): boolean {
-  const segments = boundedSegments(points);
+  countRefinementOperation("selfCrossChecks");
+  const geometry = intersectionGeometry(points);
+  if (geometry.selfCross !== undefined) {
+    countRefinementOperation("selfCrossCacheHits");
+    return geometry.selfCross;
+  }
+  const { segments } = geometry;
   for (let first = 0; first < segments.length; first += 1) {
     for (let second = first + 2; second < segments.length; second += 1) {
-      if (boundedSegmentsCross(segments[first], segments[second])) return true;
+      if (boundedSegmentsCross(segments[first], segments[second])) {
+        geometry.selfCross = true;
+        return true;
+      }
     }
   }
+  geometry.selfCross = false;
   return false;
 }
 
@@ -3167,14 +3356,37 @@ function curvesCross(
 }
 
 function intersectionPairs(curves: Point2[][]): Set<string> {
+  return measureRefinementStage("intersectionPairs", () => intersectionPairsImpl(curves));
+}
+
+function cachedCurvesCross(first: CachedIntersectionGeometry,
+  second: CachedIntersectionGeometry, firstPoints: Point2[], secondPoints: Point2[]): boolean {
+  const cache = refinementExecution?.crossings;
+  const previous = cache?.get(first)?.get(second);
+  if (previous !== undefined) {
+    countRefinementOperation("curvePairCacheHits");
+    return previous;
+  }
+  countRefinementOperation("exactCurvePairChecks");
+  const crossed = curvesCross(firstPoints, secondPoints, first.bounds, second.bounds,
+    first.segments, second.segments);
+  if (cache) {
+    let pairs = cache.get(first);
+    if (!pairs) cache.set(first, pairs = new WeakMap());
+    pairs.set(second, crossed);
+  }
+  return crossed;
+}
+
+function intersectionPairsImpl(curves: Point2[][]): Set<string> {
+  countRefinementOperation("intersectionChecks");
   const pairs = new Set<string>();
-  const bounds = curves.map(curveBounds);
-  const segments = curves.map(boundedSegments);
+  const geometry = curves.map(intersectionGeometry);
   for (let first = 0; first < curves.length; first += 1) {
     for (let second = first + 1; second < curves.length; second += 1) {
-      if (!boundsOverlap(bounds[first], bounds[second])) continue;
-      if (curvesCross(curves[first], curves[second], bounds[first], bounds[second],
-        segments[first], segments[second])) {
+      countRefinementOperation("curvePairVisits");
+      if (!boundsOverlap(geometry[first].bounds, geometry[second].bounds)) continue;
+      if (cachedCurvesCross(geometry[first], geometry[second], curves[first], curves[second])) {
         pairs.add(`${first}:${second}`);
       }
     }
@@ -3186,26 +3398,28 @@ function newIntersectionPairsForCurve(
   curves: Point2[][], priorPairs: Set<string>, changedCurveIndex: number,
 ): string[] {
   const changed = curves[changedCurveIndex];
-  const changedBounds = curveBounds(changed);
-  const bounds = curves.map((curve, index) =>
-    index === changedCurveIndex ? changedBounds : curveBounds(curve));
-  const segments = curves.map(boundedSegments);
+  countRefinementOperation("changedCurveIntersectionChecks");
+  const geometry = curves.map(intersectionGeometry);
+  const changedBounds = geometry[changedCurveIndex].bounds;
   const pairs: string[] = [];
   for (let other = 0; other < curves.length; other += 1) {
     if (other === changedCurveIndex) continue;
     const first = Math.min(changedCurveIndex, other);
     const second = Math.max(changedCurveIndex, other);
     if (priorPairs.has(`${first}:${second}`) ||
-        !boundsOverlap(changedBounds, bounds[other])) continue;
-    if (curvesCross(changed, curves[other], changedBounds, bounds[other],
-      segments[changedCurveIndex], segments[other])) {
+        !boundsOverlap(changedBounds, geometry[other].bounds)) continue;
+    if (cachedCurvesCross(geometry[changedCurveIndex], geometry[other], changed, curves[other])) {
       pairs.push(`${first}:${second}`);
     }
   }
   return pairs;
 }
 
-function rollbackNewIntersections(results: CurveRefineResult[], priorCurves: Point2[][]) {
+function rollbackNewIntersections(...args: Parameters<typeof rollbackNewIntersectionsImpl>) {
+  return measureRefinementStage("intersectionRollback", () => rollbackNewIntersectionsImpl(...args));
+}
+
+function rollbackNewIntersectionsImpl(results: CurveRefineResult[], priorCurves: Point2[][]) {
   const priorPairs = intersectionPairs(priorCurves);
   const priorSelf = priorCurves.map(selfCrosses);
   const rolledBack = new Set<number>();
@@ -4400,16 +4614,22 @@ function sampleCurveLayerAtX(
       displacement: [final[0][0] - prior[0][0], final[0][1] - prior[0][1]],
     };
   }
-  let selected: { index: number; fraction: number; xDistance: number } | null = null;
-  for (let index = 0; index < prior.length - 1; index += 1) {
-    const start = prior[index], end = prior[index + 1];
-    const dx = end[0] - start[0];
-    const fraction = Math.abs(dx) > EPSILON ? clamp((x - start[0]) / dx) : 0.5;
-    const projectedX = start[0] + fraction * dx;
-    const xDistance = Math.abs(projectedX - x);
-    if (!selected || xDistance < selected.xDistance - EPSILON) {
-      selected = { index, fraction, xDistance };
+  const cache = refinementExecution?.priorSamples?.get(prior);
+  let selected: { index: number; fraction: number; xDistance: number } | null = cache?.get(x) || null;
+  if (cache?.has(x)) countRefinementOperation("layerProjectionCacheHits");
+  else {
+    countRefinementOperation("layerProjectionBuilds");
+    for (let index = 0; index < prior.length - 1; index += 1) {
+      const start = prior[index], end = prior[index + 1];
+      const dx = end[0] - start[0];
+      const fraction = Math.abs(dx) > EPSILON ? clamp((x - start[0]) / dx) : 0.5;
+      const projectedX = start[0] + fraction * dx;
+      const xDistance = Math.abs(projectedX - x);
+      if (!selected || xDistance < selected.xDistance - EPSILON) {
+        selected = { index, fraction, xDistance };
+      }
     }
+    cache?.set(x, selected);
   }
   if (!selected) return null;
   const { index, fraction } = selected;
@@ -4512,7 +4732,11 @@ function measureForeheadSpacing(
   };
 }
 
-function applyForeheadBundleCoherence(
+function applyForeheadBundleCoherence(...args: Parameters<typeof applyForeheadBundleCoherenceImpl>) {
+  return measureRefinementStage("foreheadCoherence", () => applyForeheadBundleCoherenceImpl(...args));
+}
+
+function applyForeheadBundleCoherenceImpl(
   curves: CurveGeometry[], matching: MatchingResult, refined: RefinedState,
   size: number, options: V6RefinementOptions,
 ) {
@@ -4564,6 +4788,10 @@ function applyForeheadBundleCoherence(
     options.foreheadBundleMaximumSpacingRatio, 1.45, minimumSpacingRatio + 0.05,
   );
   const topBoundaryIndex = orderedIndices[0], bottomBoundaryIndex = orderedIndices.at(-1)!;
+  const candidateCache = refinementExecution?.geometry
+    ? new Map<number, Map<number, Map<number, { offsets: Float64Array; smoothed: Float64Array }>>>()
+    : null;
+  const priorCurvatureCache = refinementExecution?.geometry ? new Map<number, CurvatureMetrics>() : null;
 
   const candidateOffsetsForScale = (
     scale: number, sigmaArc: number, rawBlend: number,
@@ -4571,6 +4799,14 @@ function applyForeheadBundleCoherence(
     const output = new Map<number, Float64Array>();
     for (const curveIndex of followerCurveIndices) {
       const follower = curves[curveIndex];
+      const cached = candidateCache?.get(sigmaArc)?.get(scale)?.get(curveIndex);
+      if (cached) {
+        countRefinementOperation("coherenceCandidateCacheHits");
+        output.set(curveIndex, Float64Array.from(cached.smoothed, (value, index) =>
+          (1 - rawBlend) * value + rawBlend * cached.offsets[index]));
+        continue;
+      }
+      countRefinementOperation("coherenceCandidateBuilds");
       const offsets = new Float64Array(follower.prior.length);
       for (let pointIndex = 0; pointIndex < follower.prior.length; pointIndex += 1) {
         const point = follower.prior[pointIndex];
@@ -4620,6 +4856,13 @@ function applyForeheadBundleCoherence(
       const smoothed = gaussianFairNormalOffsets(
         follower, offsets, [[0, offsets.length]], sigmaArc, true,
       );
+      if (candidateCache) {
+        let scales = candidateCache.get(sigmaArc);
+        if (!scales) candidateCache.set(sigmaArc, scales = new Map());
+        let candidates = scales.get(scale);
+        if (!candidates) scales.set(scale, candidates = new Map());
+        candidates.set(curveIndex, { offsets, smoothed });
+      }
       output.set(curveIndex, Float64Array.from(smoothed, (value, index) =>
         (1 - rawBlend) * value + rawBlend * offsets[index]));
     }
@@ -4643,7 +4886,9 @@ function applyForeheadBundleCoherence(
     let observedMaximumTurnDegrees = 0, maximumTurnIncreaseDegrees = 0;
     let observedMaximumAddedSignChanges = 0;
     for (const curveIndex of followerCurveIndices) {
-      const priorMetrics = curvatureMetrics(curves[curveIndex].prior, materialTurn);
+      const priorMetrics = priorCurvatureCache?.get(curveIndex) ||
+        curvatureMetrics(curves[curveIndex].prior, materialTurn);
+      priorCurvatureCache?.set(curveIndex, priorMetrics);
       const afterMetrics = curvatureMetrics(candidatePoints[curveIndex], materialTurn);
       const turnIncrease = afterMetrics.maximumTurnDegrees - priorMetrics.maximumTurnDegrees;
       const addedSignChanges = afterMetrics.materialSignChanges - priorMetrics.materialSignChanges;
@@ -5264,7 +5509,11 @@ function applyCrowsFeetDirectionalBundle(
   };
 }
 
-function refineAnchorsAndBundle(
+function refineAnchorsAndBundle(...args: Parameters<typeof refineAnchorsAndBundleImpl>) {
+  return measureRefinementStage("refineAnchorsAndBundle", () => refineAnchorsAndBundleImpl(...args));
+}
+
+function refineAnchorsAndBundleImpl(
   curves: CurveGeometry[], matching: MatchingResult, faceWidth: number, size: number,
   options: V6RefinementOptions,
 ): RefinedState {
@@ -5281,7 +5530,24 @@ function refineAnchorsAndBundle(
  * The returned `curves` retain the same array order and point order. Every
  * changed point is represented as a scalar displacement along its prior normal.
  */
-export function refineV6({
+export function refineV6(input: RefineV6Input) {
+  const previousExecution = refinementExecution;
+  refinementExecution = {
+    performance: input.performance,
+    ...(input.cacheGeometry !== false ? {
+      geometry: new WeakMap(), crossings: new WeakMap(), priorSamples: new WeakMap(),
+    } : {}),
+  };
+  const start = input.performance ? performance.now() : 0;
+  try {
+    return refineV6Impl(input);
+  } finally {
+    if (input.performance) input.performance.totalMs = performance.now() - start;
+    refinementExecution = previousExecution;
+  }
+}
+
+function refineV6Impl({
   seeds, wrinkleMask, confidenceMap = null, directionQ = null,
   size, faceWidthPx, options = {},
 }: RefineV6Input) {
@@ -5289,43 +5555,67 @@ export function refineV6({
   if (!Array.isArray(seeds)) throw new Error("seeds must be an array");
   if (!(Number(faceWidthPx) > 0)) throw new Error("faceWidthPx must be positive");
   const faceWidth = Number(faceWidthPx), length = size * size;
-  const binary = normalizeMask(wrinkleMask, length);
+  const binary = measureRefinementStage("normalizeMask", () => normalizeMask(wrinkleMask, length));
   const confidence = normalizeScalarField(confidenceMap, length, 1);
   const wasSkeletonized = maskNeedsThinning(binary, size);
-  const rawSkeleton = wasSkeletonized ? skeletonize(binary, size) : new Uint8Array(binary);
+  const rawSkeleton = measureRefinementStage("skeletonize", () =>
+    wasSkeletonized ? skeletonize(binary, size) : new Uint8Array(binary));
   const duplicateRadius = options.parallelDedupRadiusPx ??
     PARALLEL_DEDUP_FACE_RATIO * faceWidth;
-  const deduplicated = suppressParallelDuplicateSkeleton(
+  const deduplicated = measureRefinementStage("skeletonDedup", () => suppressParallelDuplicateSkeleton(
     rawSkeleton, confidence, directionQ, size, duplicateRadius,
-  );
+  ));
   const skeleton = deduplicated.skeleton;
   const logicalGrouping = options.logicalTrendGrouping === true;
-  const softLinkDistance = options.softLinkDistancePx ??
-    (logicalGrouping ? 0.030 : SOFT_LINK_FACE_RATIO) * faceWidth;
-  const softLinkTurnDegrees = options.softLinkTurnDegrees ??
-    (logicalGrouping ? 18 : SOFT_LINK_TURN_DEGREES);
+  const foreheadOnly = seeds.length > 0 && seeds.every((seed) =>
+    String(seed.region || "").includes("forehead"));
+  const softLinkDistance = foreheadOnly && options.foreheadSoftLinkDistancePx !== undefined
+    ? options.foreheadSoftLinkDistancePx
+    : options.softLinkDistancePx ??
+      (logicalGrouping ? 0.030 : SOFT_LINK_FACE_RATIO) * faceWidth;
+  const softLinkTurnDegrees = foreheadOnly && options.foreheadSoftLinkTurnDegrees !== undefined
+    ? options.foreheadSoftLinkTurnDegrees
+    : options.softLinkTurnDegrees ??
+      (logicalGrouping ? 18 : SOFT_LINK_TURN_DEGREES);
   const softLinkTangentSpan = options.softLinkTangentSpanPx ??
     (logicalGrouping ? Math.max(4, Math.round(0.020 * faceWidth)) : 4);
   const tangentWindow = options.tangentWindowPx ?? SOFT_LINK_FACE_RATIO * faceWidth;
-  const rawPaths = orderedSkeletonPaths(skeleton, size);
-  const trends = mergeTrendPaths(
+  const rawPaths = measureRefinementStage("skeletonPaths", () => orderedSkeletonPaths(skeleton, size));
+  const trends = measureRefinementStage("trendGrouping", () => mergeTrendPaths(
     rawPaths, softLinkDistance, softLinkTurnDegrees, softLinkTangentSpan,
   ).map((trend) => ({
     ...trend,
     metrics: polylineMetrics(trend.points, tangentWindow, directionQ, size),
-  }));
-  const curves = seeds.map((seed) => buildCurveGeometry(seed, tangentWindow));
+  })));
+  const curves = measureRefinementStage("curveGeometry", () =>
+    seeds.map((seed) => buildCurveGeometry(seed, tangentWindow)));
+  // Only register owned baseline geometry: prior arrays never change during refinement.
+  for (const curve of curves) refinementExecution?.priorSamples?.set(curve.prior, new Map());
+  const profile = refinementExecution?.performance;
+  if (profile) {
+    profile.curveCount = curves.length;
+    profile.pointCount = curves.reduce((sum, curve) => sum + curve.prior.length, 0);
+    profile.topologyRetryRounds = 0;
+    profile.adherenceRetryRounds = 0;
+  }
   let matching = matchTrendsToCurves(
     trends, curves, confidence, size, faceWidth, options,
   );
   let refined = refineAnchorsAndBundle(curves, matching, faceWidth, size, options);
-  let intersection = rollbackNewIntersections(
-    refined.results, curves.map((curve) => curve.prior),
-  );
+  const deferForeheadTopology = foreheadOnly && options.foreheadBundleCoherence === true;
+  const foreheadPreTopologyCoherenceRecords: any[] = [];
+  const applyDeferredForeheadCoherence = () => {
+    const record = applyForeheadBundleCoherence(curves, matching, refined, size, options);
+    foreheadPreTopologyCoherenceRecords.push(record);
+    return record;
+  };
+  let intersection = deferForeheadTopology ? {
+    rolledBack: new Set<number>(), newPairs: [] as string[], newSelf: 0,
+  } : rollbackNewIntersections(refined.results, curves.map((curve) => curve.prior));
   const topologyRetryRecords = [];
   const excludedTrendCurvePairs = new Set();
   const excludedTrendCurvePairReasons = new Map();
-  const topologyRetryAttempts = Math.max(
+  const topologyRetryAttempts = deferForeheadTopology ? 0 : Math.max(
     0, Math.min(6, Number(options.topologyRetryAttempts) || 0),
   );
   for (let attempt = 1; attempt <= topologyRetryAttempts; attempt += 1) {
@@ -5350,6 +5640,7 @@ export function refineV6({
       added += 1;
     }
     if (!added) break;
+    if (profile) profile.topologyRetryRounds! += 1;
     matching = matchTrendsToCurves(
       trends, curves, confidence, size, faceWidth,
       { ...options, excludedTrendCurvePairs: [...excludedTrendCurvePairs],
@@ -5374,6 +5665,8 @@ export function refineV6({
     curveIndex,
   }));
   let curvatureFairing = applyCurvatureFairing(refined.results, size, options);
+  let foreheadBundleCoherence = deferForeheadTopology ?
+    applyDeferredForeheadCoherence() : null;
   if (options.curvatureFairing === true) {
     intersection = rollbackNewIntersections(
       refined.results, curves.map((curve) => curve.prior),
@@ -5427,6 +5720,7 @@ export function refineV6({
       added += 1;
     }
     if (!added) break;
+    if (profile) profile.adherenceRetryRounds! += 1;
     matching = matchTrendsToCurves(
       trends, curves, confidence, size, faceWidth,
       { ...options, excludedTrendCurvePairs: [...excludedTrendCurvePairs],
@@ -5434,6 +5728,9 @@ export function refineV6({
     );
     refined = refineAnchorsAndBundle(curves, matching, faceWidth, size, options);
     curvatureFairing = applyCurvatureFairing(refined.results, size, options);
+    if (deferForeheadTopology) {
+      foreheadBundleCoherence = applyDeferredForeheadCoherence();
+    }
     intersection = rollbackNewIntersections(
       refined.results, curves.map((curve) => curve.prior),
     );
@@ -5504,7 +5801,7 @@ export function refineV6({
     );
     outputCurves = makeOutputCurves();
   }
-  const foreheadBundleCoherence = applyForeheadBundleCoherence(
+  foreheadBundleCoherence = applyForeheadBundleCoherence(
     curves, matching, refined, size, options,
   );
   if (foreheadBundleCoherence.applied === true) {
@@ -5653,6 +5950,7 @@ export function refineV6({
     nose_bridge_ordered_cross_selected_count: completeFinalNoseBridgeTrends.size,
     nose_bridge_planar_warp: noseBridgePlanarWarp,
     forehead_bundle_coherence: foreheadBundleCoherence,
+    forehead_pre_topology_coherence_records: foreheadPreTopologyCoherenceRecords,
     crows_feet_bundle_coherence: crowsFeetBundleCoherence,
     crows_feet_directional_bundle: crowsFeetDirectionalBundle,
     glabellar_single_curve_selected_count: regionalSelectedCounts.glabellar,
@@ -5815,6 +6113,9 @@ export function refineV6({
       const records = recordsByTrend.get(trendIndex) || [];
       const accepted = records.filter((record: any) => record.final_accepted);
       const provisional = records.filter((record: any) => record.provisional_accepted);
+      const finalRejected = records.find((record: any) =>
+        record.final_accepted !== true && record.rejection_reason,
+      );
       const finalStatus = accepted[0]?.final_status || provisional[0]?.final_status ||
         "rejected_before_refinement";
       return {
@@ -5828,7 +6129,8 @@ export function refineV6({
         finalStatus,
         acceptedCurveIndices: accepted.map((record: any) => record.rstl_curve_index),
         candidateCurveIndices: provisional.map((record: any) => record.rstl_curve_index),
-        rejectionReason: accepted.length ? null : provisional[0]?.rejection_reason ||
+        rejectionReason: accepted.length ? null : finalRejected?.rejection_reason ||
+          provisional[0]?.rejection_reason ||
           (records.length ? records.some((record: any) => record.segment_support_passed)
             ? "insufficient_curve_support" : "insufficient_segment_support"
             : "no_nearby_direction_compatible_curve"),

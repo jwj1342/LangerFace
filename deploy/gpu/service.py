@@ -25,6 +25,7 @@ from compact_yolo_postprocess import compact_class_masks
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from PIL import Image, ImageOps, UnidentifiedImageError
+from pillow_heif import register_heif_opener
 
 ROOT = Path(__file__).resolve().parents[2]
 DIST = ROOT / 'web' / 'dist'
@@ -32,8 +33,12 @@ MODEL_DIR = ROOT / 'web' / 'compat' / 'personalized' / 'model'
 INPUT_BYTES = 1 * 3 * 640 * 640 * 4
 RGBA_INPUT_BYTES = 640 * 640 * 4
 MEDIA_UPLOAD_BYTES = 512 * 1024 * 1024
+IMAGE_MAX_PIXELS = 50 * 1024 * 1024
+IMAGE_PROCESSING_MAX_SIDE = 1280
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.mkv', '.avi', '.m4v', '.webm'}
 DIRECT_VIDEO_CODECS = {'h264', 'vp8', 'vp9', 'av1'}
+
+register_heif_opener()
 
 
 class CudaDetector:
@@ -270,9 +275,16 @@ async def delete_prepared_video(token: str):
 
 def decode_image(payload):
     with Image.open(io.BytesIO(payload)) as image:
-        if image.width * image.height > 2048 * 2048:
-            raise ValueError('Image exceeds 4 megapixel processing limit')
-        image = ImageOps.exif_transpose(image).convert('RGBA')
+        if image.width * image.height > IMAGE_MAX_PIXELS:
+            raise ValueError('Image exceeds 50 megapixel processing limit')
+        image = ImageOps.exif_transpose(image)
+        maximum = max(image.width, image.height)
+        if maximum > IMAGE_PROCESSING_MAX_SIDE:
+            scale = IMAGE_PROCESSING_MAX_SIDE / maximum
+            width = max(1, int(image.width * scale + 0.5))
+            height = max(1, int(image.height * scale + 0.5))
+            image = image.resize((width, height), Image.Resampling.LANCZOS)
+        image = image.convert('RGBA')
         return {'width': image.width, 'height': image.height,
                 'rgba': base64.b64encode(image.tobytes()).decode('ascii')}
 
@@ -284,8 +296,8 @@ async def wrinkles(request: Request):
         data.extend(chunk)
         if len(data) > 20*1024*1024:
             raise HTTPException(413, 'Image upload exceeds 20 MiB')
-    if app.state.image_lock.locked():
-        raise HTTPException(429, 'Image processor busy')
+    # Static photos may wait briefly behind another photo. Rejecting here made
+    # simultaneous desktop/mobile uploads fail nondeterministically.
     async with app.state.image_lock:
         start = time.perf_counter()
         try:
@@ -325,9 +337,8 @@ async def infer(request: Request):
             raise HTTPException(413, 'Input exceeds 640x640 FP32 tensor')
     if len(data) != INPUT_BYTES:
         raise HTTPException(400, 'Incorrect input tensor size')
-    # Reject overlapping requests instead of accumulating stale video work.
-    if app.state.inference_lock.locked():
-        raise HTTPException(429, 'Detector busy; retry after current request')
+    # The tensor endpoint backs the serialized static-image worker. Let it wait
+    # for an in-flight camera correction instead of failing the whole photo.
     async with app.state.inference_lock:
         try:
             result = await asyncio.to_thread(app.state.detector.infer, bytes(data))
