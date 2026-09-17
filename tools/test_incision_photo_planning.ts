@@ -1209,6 +1209,19 @@ assert.equal(
   "已识别肿物边界，当前为视野受限参考，不能确认完整长度及不可见区域，请结合另一视角复核",
   "the canvas warning matches the agreed view-limited wording exactly",
 );
+const simplifiedVisibilityLimitedStatus = incisionPhotoStatusPresentation({
+  rstlLineCount: 159,
+  candidateDisplayBlocked: false,
+  engineeringBlockMessage: "",
+  candidateProjectionValid: true,
+  candidatePointCount: 20,
+  candidateSmoothingMode: "limitedVisibility",
+  candidateReferenceAspectRatio: 3,
+  allowReferenceCandidates: true,
+});
+assert.match(simplifiedVisibilityLimitedStatus.message,
+  /仅显示照片可见部分.*确认且系统门禁通过后可进入实时叠加/,
+  "the merged workflow explains the clinician-confirmed reference policy without claiming camera validation");
 const nonstandardVisibilityLimitedStatus = incisionPhotoStatusPresentation({
   rstlLineCount: 159,
   candidateDisplayBlocked: false,

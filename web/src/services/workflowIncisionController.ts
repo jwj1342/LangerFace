@@ -947,6 +947,7 @@ function resultView(state: WorkflowIncisionState): IncisionResultViewState {
     secondaryCuesPresent: Boolean(state.secondaryCues),
     generationCount: state.generationCount,
     headStatusLabel: state.headAsset?.statusLabel,
+    allowReferenceCandidates: true,
     privacyAudit: privacyAudit(state),
   });
   return {
@@ -1043,6 +1044,7 @@ function publish(state: WorkflowIncisionState, reason = "state_update") {
         candidateSmoothingMode: geometry.candidateProjection.smoothingMode,
         candidateReferenceAspectRatio: geometry.candidateProjection.referenceAspectRatio,
         projectedRstlDeviationDeg: geometry.projectedRstlDeviationDeg,
+        allowReferenceCandidates: true,
       });
       const projectionStatusMayOverride = workflowProjectionStatusMayOverride(reason, state.stageStatus);
       if (projectionStatusMayOverride && diagnosticCandidateVisible) {
@@ -1128,6 +1130,7 @@ function publish(state: WorkflowIncisionState, reason = "state_update") {
       records: state.saved as any,
       comparisons: compareCandidateRecords(state.saved),
       reviewStatusLabel,
+      allowReferenceCandidates: true,
     }),
     workflowRuntime: state.result?.workflow_runtime || null,
     savedCount: state.saved.length,
@@ -3239,7 +3242,13 @@ function toggleSavedCandidateReviewStatus(state: WorkflowIncisionState, id: stri
   const targetStatus = currentStatus === "pending_clinician_confirmation"
     ? "approved_for_discussion"
     : "pending_clinician_confirmation";
-  const transition = transitionIncisionReviewRecord({ record, targetStatus, reviewContext });
+  const transition = transitionIncisionReviewRecord({
+    record,
+    targetStatus,
+    reviewContext,
+    allowReferenceCandidates: true,
+    requireHighRiskNotes: false,
+  });
 
   if (!transition.ok) {
     loadSavedCandidateState(state, record);

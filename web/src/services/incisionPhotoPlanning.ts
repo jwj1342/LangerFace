@@ -115,6 +115,7 @@ export function incisionPhotoStatusPresentation({
   candidateSmoothingMode = "notApplicable",
   candidateReferenceAspectRatio = null,
   projectedRstlDeviationDeg = null,
+  allowReferenceCandidates = false,
 }: {
   rstlLineCount: number;
   candidateDisplayBlocked: boolean;
@@ -124,6 +125,7 @@ export function incisionPhotoStatusPresentation({
   candidateSmoothingMode?: IncisionPhotoSmoothingMode;
   candidateReferenceAspectRatio?: number | null;
   projectedRstlDeviationDeg?: number | null;
+  allowReferenceCandidates?: boolean;
 }): { message: string; tone: IncisionPhotoStatusTone } {
   const projectedDirectionNeedsReview = projectedRstlDeviationDeg != null
     && Number.isFinite(projectedRstlDeviationDeg)
@@ -137,10 +139,16 @@ export function incisionPhotoStatusPresentation({
       : candidatePointCount > 0
         ? candidateSmoothingMode === "limitedVisibility"
           ? limitedVisibilityIsStandard
-            ? "已识别肿物边界，当前为视野受限参考，不能确认完整长度及不可见区域，请结合另一视角复核"
-            : `已识别肿物边界，当前为视野受限的非标准比例参考（${limitedVisibilityRatio.toFixed(2)}:1），不能确认完整长度及不可见区域，请结合另一视角复核`
+            ? allowReferenceCandidates
+              ? "已识别肿物边界，当前为视野受限参考，仅显示照片可见部分；请医生复核，确认且系统门禁通过后可进入实时叠加"
+              : "已识别肿物边界，当前为视野受限参考，不能确认完整长度及不可见区域，请结合另一视角复核"
+            : allowReferenceCandidates
+              ? `已识别肿物边界，当前为视野受限的非标准比例参考（${limitedVisibilityRatio.toFixed(2)}:1），仅显示照片可见部分；请医生复核，确认且系统门禁通过后可进入实时叠加`
+              : `已识别肿物边界，当前为视野受限的非标准比例参考（${limitedVisibilityRatio.toFixed(2)}:1），不能确认完整长度及不可见区域，请结合另一视角复核`
           : candidateSmoothingMode === "constrainedReference"
-          ? `受限参考候选已显示：原定 3:1 梭形超出可用面部区域，当前按 ${Number(candidateReferenceAspectRatio || 0).toFixed(2)}:1 显示；该结果不满足项目原定比例，只供医生评估约束原因`
+          ? allowReferenceCandidates
+            ? `受限参考候选已显示：原定 3:1 梭形超出可用面部区域，当前按 ${Number(candidateReferenceAspectRatio || 0).toFixed(2)}:1 显示；请医生复核，确认且系统门禁通过后可进入实时叠加`
+            : `受限参考候选已显示：原定 3:1 梭形超出可用面部区域，当前按 ${Number(candidateReferenceAspectRatio || 0).toFixed(2)}:1 显示；该结果不满足项目原定比例，只供医生评估约束原因`
           : candidateSmoothingMode === "sourceFallback"
           ? "候选已显示，但当前照片位置未完成平滑校正，请复核梭形轮廓"
           : projectedDirectionNeedsReview

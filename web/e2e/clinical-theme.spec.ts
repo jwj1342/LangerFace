@@ -26,6 +26,9 @@ test("public workflow entrypoints share the blue clinical action theme", async (
 
   await page.goto("/current/", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/live$/);
+  await expect(page.locator("#livePill")).toBeVisible();
+  await expect(page.locator("#fps")).toBeVisible();
+  await expect(page.locator("#overlayMsg")).toBeVisible();
   const livePrimary = page.locator("#uploadBtn");
   await expect(livePrimary).toHaveCSS("background-color", CLINICAL_BLUE);
   expect((await measureContrast(livePrimary)).ratio).toBeGreaterThanOrEqual(4.5);

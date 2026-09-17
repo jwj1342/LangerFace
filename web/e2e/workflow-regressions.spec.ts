@@ -489,7 +489,7 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   // must never borrow the sensitive red layer.
   await clickWorkflowCanvasRatio(page, 0.10, 0.55);
   await expect(page.locator("#workflowStageStatus")).toHaveText(
-    "已识别肿物边界，当前为视野受限参考，不能确认完整长度及不可见区域，请结合另一视角复核",
+    "已识别肿物边界，当前为视野受限参考，仅显示照片可见部分；请医生复核，确认且系统门禁通过后可进入实时叠加",
     { timeout: 45_000 },
   );
   await expect.poll(() => page.locator("[data-workflow-candidate]").getAttribute("d")).toMatch(/^M /);

@@ -519,10 +519,12 @@ assert.doesNotMatch(stageStatus, /compactStatus|当前切口不可确认|当前�
   "the hidden workflow status cannot replace generated diagnostic detail with presentation-only summaries");
 assert.match(stageStatus, /id="workflowStageStatus"[\s\S]*?hidden[\s\S]*?aria-hidden="true"/,
   "workflow retains generated stage status in the DOM without visually rendering it");
-assert.match(liveStagePanel, /id="livePill" hidden aria-hidden="true"[\s\S]*?id="fps" hidden aria-hidden="true"[\s\S]*?id="overlayMsg" hidden aria-hidden="true"/,
-  "the shared stage keeps source, FPS and empty-state nodes for runtime updates while hiding every top-canvas text output");
-assert.match(liveStagePanel, /id="livePill" hidden aria-hidden="true">待机<\/StageStatus>[\s\S]*?id="fps" hidden aria-hidden="true">— fps<\/StageMeta>[\s\S]*?id="overlayMsg" hidden aria-hidden="true">点击「摄像头」或「上传照片」开始<\/StageOverlayMessage>/,
-  "hidden source, FPS and overlay-message nodes retain their baseline initial diagnostic content");
+assert.match(liveStagePanel, /compactWorkflowChrome\s*=\s*false/,
+  "the shared live stage keeps runtime chrome visible unless a caller explicitly requests compact workflow chrome");
+assert.match(liveStagePanel, /id="livePill" hidden=\{compactWorkflowChrome\}[\s\S]*?id="fps" hidden=\{compactWorkflowChrome\}[\s\S]*?id="overlayMsg" hidden=\{compactWorkflowChrome\}/,
+  "source status, FPS and the empty-state prompt share the explicit workflow-only visibility mode");
+assert.match(workbench, /<LiveStagePanel[\s\S]*?compactWorkflowChrome[\s\S]*?workflowActions=/,
+  "the merged workflow opts into compact stage chrome without changing the standalone live page");
 assert.match(liveUi, /export function setMsg[\s\S]*?ui\.msg\.textContent = message;[\s\S]*?export function setLive[\s\S]*?ui\.live\.dataset\.k = label;[\s\S]*?ui\.live\.innerHTML = `<span class="dot"><\/span>\$\{label\}`;/,
   "hidden overlay and source nodes retain the baseline runtime writers");
 assert.match(pipelineLoop, /els\.fps\.textContent = `\$\{fpsEMA\.toFixed\(0\)\} fps`;/,
@@ -909,14 +911,18 @@ assert.match(candidateLibraryPanel, /candidate-overlay-status[\s\S]*?overlayStat
   "saved candidate cards keep the live-overlay eligibility explanation visible");
 assert.match(incisionSnapshots, /reviewTransitionLabel:[\s\S]*?转为已确认[\s\S]*?转为待确认/,
   "saved candidate summaries derive both guarded review transition labels from the persisted status");
-assert.match(incisionSnapshots, /visibility_limited_reference_candidate[\s\S]*?暂不能确认：[\s\S]*?reviewTransitionDisabled:/,
-  "intrinsically blocked saved candidates expose an adjacent plain-language confirmation reason");
+assert.match(incisionSnapshots, /allowReferenceCandidates\s*=\s*false[\s\S]*?!allowReferenceCandidates && \(rec\.candidate\?\.metrics\?\.photo_visibility_limited_candidate/,
+  "saved candidate summaries keep a conservative shared default for reference candidates");
+assert.match(controller, /buildIncisionSavedCandidateSummaries\(\{[\s\S]*?allowReferenceCandidates:\s*true/,
+  "the merged candidate library explicitly follows the clinician-confirmed reference policy");
 assert.match(candidateLibraryPanel, /candidate-review-condition-[\s\S]*?reviewTransitionReason[\s\S]*?disabled={item\.reviewTransitionDisabled}[\s\S]*?暂不能确认/,
   "the candidate library disables misleading approval actions and keeps their reason beside the record");
 assert.match(incisionSnapshots, /未进入实时叠加：该候选仍为“待医生确认”/,
   "saved candidate summaries explain the pending live-overlay block in plain language");
 assert.match(controller, /function toggleSavedCandidateReviewStatus[\s\S]*?transitionIncisionReviewRecord/,
   "saved candidate review transitions reuse the shared review gate instead of mutating a label only");
+assert.match(controller, /transitionIncisionReviewRecord\(\{[\s\S]*?allowReferenceCandidates:\s*true,[\s\S]*?requireHighRiskNotes:\s*false/,
+  "saved candidate transitions use the same simplified review policy as initial confirmation");
 assert.match(controller, /已载入待医生确认草案；照片中可继续核对，但实时摄像头不会显示该候选/,
   "loading a pending candidate explicitly explains why it is absent from the live camera");
 assert.match(controller, /function saveReview[\s\S]*?state\.saved = \[record\];/,

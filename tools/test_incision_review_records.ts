@@ -160,6 +160,37 @@ const highGuardrailTransition = transitionIncisionReviewRecord({
 assert.equal(highGuardrailTransition.ok, false);
 assert.equal(highGuardrailTransition.attention, "notes");
 
+const referenceRecord = {
+  ...readyRecord,
+  candidate: {
+    ...readyRecord.candidate,
+    metrics: {
+      ...readyRecord.candidate.metrics,
+      photo_visibility_limited_candidate: true,
+    },
+  },
+  guardrails: {
+    ...readyRecord.guardrails,
+    warnings: [{ code: "fixture_high_guardrail", severity: "high" }],
+  },
+  review: { ...readyRecord.review, notes: "" },
+};
+const conservativeReferenceTransition = transitionIncisionReviewRecord({
+  record: referenceRecord,
+  targetStatus: "approved_for_discussion",
+});
+assert.equal(conservativeReferenceTransition.ok, false,
+  "shared review transitions keep the conservative reference policy by default");
+const simplifiedReferenceTransition = transitionIncisionReviewRecord({
+  record: referenceRecord,
+  targetStatus: "approved_for_discussion",
+  allowReferenceCandidates: true,
+  requireHighRiskNotes: false,
+});
+assert.equal(simplifiedReferenceTransition.ok, true,
+  "the merged workflow may explicitly confirm a non-red reference without mandatory notes");
+assert.equal(simplifiedReferenceTransition.record.review_gate.live_overlay_ready, true);
+
 const generatedRecord = buildIncisionReviewRecord({
   result,
   label: "当前候选",
