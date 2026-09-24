@@ -1,6 +1,7 @@
 import { CircleStop, PencilLine, ScanSearch } from "lucide-react";
 
 import { useWorkflowIncisionToolCommands } from "../hooks/useControllerCommands";
+import { isDeveloperMode } from "../services/developerMode";
 import { FREEHAND_MARKER_DISABLED_MESSAGE } from "../services/incisionClinicalCopy";
 import { useIncisionStore } from "../stores/incisionStore";
 import { useLiveStore } from "../stores/liveStore";
@@ -12,7 +13,12 @@ import { PersistentTooltip, usePersistentTooltip } from "./ui/persistent-tooltip
 export function WorkflowCanvasTools() {
   const commands = useWorkflowIncisionToolCommands();
   const snapshot = useIncisionStore((state) => state.snapshot);
-  const cameraMode = useLiveStore((state) => state.snapshot?.source.kind === "camera");
+  const liveSnapshot = useLiveStore((state) => state.snapshot);
+  const cameraMode = liveSnapshot?.source.kind === "camera";
+  const developerMode = isDeveloperMode();
+  const sourceFileName = liveSnapshot?.source.kind === "image"
+    ? liveSnapshot.source.fileName
+    : null;
   const tools = snapshot?.workflowTools;
   const markerMode = tools?.controlledMarkerMode || false;
   const freehandMarkerUnavailable = !markerMode
@@ -127,6 +133,16 @@ export function WorkflowCanvasTools() {
         >
           <span>清除补线</span>
         </Button>
+        {developerMode ? (
+          <span
+            id="developerSourceFileName"
+            className="workflow-developer-source-name"
+            aria-label="开发者模式当前图片名称"
+            title={sourceFileName || "尚未载入图片"}
+          >
+            图片：{sourceFileName || "尚未载入"}
+          </span>
+        ) : null}
     </div>
   );
 }
@@ -141,7 +157,10 @@ export function WorkflowCanvasOverlay() {
         <path data-workflow-candidate />
         <path data-workflow-diagnostic-candidate />
         <path data-workflow-rejected-marker />
-        <circle data-workflow-center r="6" />
+        <g data-workflow-incision-center style={{ display: "none" }}>
+          <circle r="6" />
+        </g>
+        <circle data-workflow-center r="2" />
         <g data-workflow-repairs />
         <g data-workflow-marker-scan style={{ display: "none" }}>
           <circle data-workflow-marker-scan-circle />
@@ -149,7 +168,8 @@ export function WorkflowCanvasOverlay() {
         </g>
       </svg>
       <Legend variant="canvas" aria-label="切口标注图例">
-        <CanvasLegendItem swatchClassName="center">病灶中心</CanvasLegendItem>
+        <CanvasLegendItem swatchClassName="incision-center">切口中心</CanvasLegendItem>
+        <CanvasLegendItem swatchClassName="lesion-center">病灶中心</CanvasLegendItem>
         <CanvasLegendItem swatchClassName="ring">肿物范围</CanvasLegendItem>
       </Legend>
     </>

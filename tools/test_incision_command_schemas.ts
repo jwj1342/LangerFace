@@ -67,6 +67,14 @@ assert.deepEqual(
   readIncisionEditCommand(event({ command: "preview_edit", controlId: "uniformScale", value: "125" })),
   { command: "preview_edit", controlId: "uniformScale", value: "125" },
 );
+assert.deepEqual(
+  readIncisionEditCommand(event({ command: "cancel_edit", controlId: "uniformScale" })),
+  { command: "cancel_edit", controlId: "uniformScale" },
+);
+assert.equal(
+  readIncisionEditCommand(event({ command: "cancel_edit", controlId: "__proto__" })),
+  null,
+);
 assert.equal(
   readIncisionEditCommand(event({ command: "preview_edit" })),
   null,

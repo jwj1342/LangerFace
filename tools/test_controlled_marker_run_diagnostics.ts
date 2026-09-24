@@ -7,7 +7,7 @@ import { MarkerRunDiagnostics, DIAGNOSTIC_LIMITS, auditMarkerDiagnosticExport, d
 import { CANVAS_EXPORT_DIAGNOSTIC_EVENT } from "../web/src/services/canvasRecording.ts";
 
 const pixels = new Uint8ClampedArray([10, 20, 30, 255, 20, 30, 40, 255, 50, 60, 70, 255, 80, 90, 100, 255]);
-const identity = { algorithmName: "小肿物边界候选算法", profile: "small-lesion-boundary-candidate", implementationVersion: "task1-candidate", head: "66c838be4312e237056de5a5487cd9b3f9a42eea", branch: "test", worktreeId: "a".repeat(64), sourceDigest: "b6f9d35754eddb9513d156d3f662e932aa287ca4710223350f2f838ca6a0df95", assetDigest: "c".repeat(64), mode: "development" };
+const identity = { algorithmName: "小肿物边界候选算法", releaseName: "小肿物边界识别：稳定候选选择与中心一致性", changeSlug: "deterministic-selection-center-consistency", profile: "small-lesion-boundary-candidate", implementationVersion: "0.36.0-candidate.1", head: "66c838be4312e237056de5a5487cd9b3f9a42eea", branch: "test", worktreeId: "a".repeat(64), sourceDigest: "b6f9d35754eddb9513d156d3f662e932aa287ca4710223350f2f838ca6a0df95", assetDigest: "c".repeat(64), mode: "development" };
 let revision = 0;
 let fetchMode = "ok";
 let fetchCalls = 0;
@@ -26,7 +26,7 @@ const getFrame = () => ({ kind: "image", revision, width: 2, height: 2 });
 const input: RunInput = {
   revision: 2, width: 2, height: 2, seed: { x: 1, y: 1 }, options: { expectedDiameterPx: 2, roiRadius: 8, scanDiameterMm: 20 },
   parameters: { kind: "cutaneous", diameterMm: 8, marginMm: 0, depthMm: 6, scanDiameterMm: 20 }, repairs: [], mirror: false, pixelsPerMm: 1,
-  profile: "small-lesion-boundary-candidate", implementationVersion: "task1-candidate",
+  profile: "small-lesion-boundary-candidate", implementationVersion: "0.36.0-candidate.1",
 };
 const detection = { ok: true, geometry_mode: "enclosed_region", boundary: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }], center: { x: 1, y: 1 } };
 const diagnostics = new MarkerRunDiagnostics(getFrame);
@@ -44,6 +44,9 @@ assert.equal(run.run.detector_rgba_sha256, await diagnosticSha256(pixels));
 assert.equal(run.run.service_snapshot_binding, "PASS");
 assert.equal(run.run.client_source_binding, "UNKNOWN");
 assert.deepEqual(run.run.raw_result, detection);
+const linked = diagnostics.begin(input, 10, "web_worker", pixels, pixels, false, undefined, "controlled_marker-test-link");
+linked.finish(detection); await linked.evidence; await Promise.resolve();
+assert.equal(linked.run.action_id, "controlled_marker-test-link");
 const failure = { ...detection, ok: false, failure_code: "no_enclosed_region", area_px: 4, bbox: { x: 0, y: 0, width: 2, height: 2 }, warnings: ["weak_edge"], diagnostics: { failure_stage: "barrier" } };
 const rawFailure = diagnostics.begin(input, 11, "web_worker", pixels, pixels, false);
 rawFailure.finish(failure); await rawFailure.evidence; await Promise.resolve();
@@ -81,6 +84,14 @@ const bundle = diagnostics.exportBundle();
 assert.equal(auditMarkerDiagnosticExport(JSON.parse(bundle)).passed, true);
 assert.equal(JSON.parse(bundle).controller_events.at(-1).reason, "controlled_marker_opening_rejected");
 assert.equal(JSON.parse(bundle).controller_events.at(-1).operation_type, "controlled_marker");
+diagnostics.observeController({ reason: "controlled_marker_failed", request_id: 10, source_revision: 2,
+  action_id: "controlled_marker-test-link", diagnostic_run_id: linked.run.run_id,
+  seed: { x: 1, y: 1 }, scan_diameter_mm: 20, kind: "cutaneous", marker_busy: false, boundary_points: 0,
+  rejected_boundary_points: 48, rejected_reasons: ["candidate_not_compact"] });
+const linkedController = JSON.parse(diagnostics.exportBundle()).controller_events.at(-1);
+assert.equal(linkedController.action_id, linked.run.action_id);
+assert.equal(linkedController.diagnostic_run_id, linked.run.run_id);
+assert.deepEqual(linkedController.rejected_reasons, ["candidate_not_compact"]);
 assert.equal(parseDiagnosticRun(bundle).run_id, run.run.run_id, "bundle import keeps last actual detector run");
 const privateBundle = JSON.parse(bundle); privateBundle.controller_events[0].reason = "person@example.com";
 assert.equal(auditMarkerDiagnosticExport(privateBundle).passed, false);
@@ -171,7 +182,11 @@ const runSource = source.slice(runStart, runEnd);
 async function detectorBoundary(enabled: boolean, rejection = false) {
   const state = { mounted: true, markerMode: true, markerBusy: false, markerRequestId: 0, boundaryMode: "ellipse", kind: "cutaneous", repairStrokes: [] };
   let call: unknown; let finishCalls = 0;
-  const fake = { begin: () => ({ finish: () => { finishCalls++; } }), message() {} };
+  const fake = {
+    recordAction: () => "controlled_marker-test-action",
+    begin: () => ({ run: { run_id: 99 }, finish: () => { finishCalls++; } }),
+    message() {},
+  };
   const frame = { kind: "image", source: {}, landmarks: [1], revision: 2, width: 2, height: 2 };
   const environment = vm.createContext({
     state, testSeed: { x: 1, y: 1 }, mobileWorkflowViewportActive: () => false,

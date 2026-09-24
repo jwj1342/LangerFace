@@ -5,20 +5,24 @@
 在最新成果 worktree 的 `web` 目录执行。不得按版本名选择另一个较旧的干净工作区。
 
 ```powershell
-npm run dev:marker-v035 -- --port 4173
+npm run dev:lesion-candidate -- --port 4173
 ```
 
 另开终端核验这个服务（一个短时无头 Chromium，不启用模型或摄像头）：
 
 ```powershell
-npm run verify:marker-v035 -- http://127.0.0.1:4173
+npm run verify:lesion-candidate -- http://127.0.0.1:4173
 ```
 
 浏览器打开 `/__runtime-identity`，检查实际 profile、实现版本、分支、HEAD、工作区指纹、包含未提交代码的源码指纹和关键资产指纹，再进入 `/app/workflow`。此页是独立诊断入口，不增加操作画布上的按钮或文字。它显示的“版本核对通过”不代表整体算法准确率合格，也不单独证明此工作区是最新成果；交付命令还会与当前目标工作区逐项比较。
 
-当前 `color-difference-v0.35` 的实现常量仍是 `0.35`；“v0.35.1 初步测试合格”的 Git 回档名称不等于代码内的实现常量。不可为了让检查通过而改算法版本常量。
+当前候选 profile 固定为 `small-lesion-boundary-candidate`；实现版本、版本名称和源码指纹以
+`controlled-marker-release.json` 为准，当前候选为 `0.36.0-candidate.1`“稳定候选选择与中心一致性”。
+源码和部分测试文件仍保留 `v035` 历史文件名，兼容输入 `color-difference-v0.35` / `v0.35`
+也会解析到当前候选 profile；这些旧名称不是启动命令或正式版本声明。候选期迭代以源码指纹区分，
+不可为了让检查通过而复用、倒退或伪造算法身份。
 
-开发服务验收仍须拒绝普通 `preview`、旧服务、缺失 JSON 身份端点、错误 profile、错误工作区/HEAD，以及源码或关键资产变化。生产包使用 `npm run build:marker-v035`；该入口固定注入 `color-difference-v0.35`，实现版本不是 `0.35` 时失败，并在 `dist/marker-runtime-identity.json` 写入不含秘密的身份清单。构建后运行 `npm run verify:build-marker-v035` 回读。通用 `npm run build` 和默认 `legacy-v0.23` 保持原语义。
+开发服务验收仍须拒绝普通 `preview`、旧服务、缺失 JSON 身份端点、错误 profile、错误工作区/HEAD，以及源码或关键资产变化。生产包使用 `npm run build:lesion-candidate`；该入口固定注入 `small-lesion-boundary-candidate`，实现身份与发布登记不一致时失败，并在 `dist/marker-runtime-identity.json` 写入不含秘密的身份清单。构建后运行 `npm run verify:build-lesion-candidate` 回读。通用 `npm run build` 也执行最新算法部署门禁；旧版必须显式回退。
 
 生产身份清单只证明构建入口、profile、实现版本和源码/资产指纹一致，不证明部署已经发生，也不证明识别效果或皱纹/RSTL 效果通过。私有皱纹模型不进入静态构建产物，仍按 #224 的受控服务流程供应和验收。
 

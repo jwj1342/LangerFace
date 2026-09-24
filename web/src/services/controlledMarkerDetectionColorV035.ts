@@ -9,10 +9,11 @@ import type {
   MarkerImageData,
   MarkerPoint,
 } from "./controlledMarkerDetection.ts";
+import { CONTROLLED_MARKER_RELEASE } from "./controlledMarkerRelease.ts";
 
-// Candidate identity remains stable across tuning rounds until the operator
-// explicitly accepts a completed version iteration.
-export const CONTROLLED_MARKER_DETECTOR_VERSION = "task1-candidate";
+// The stable profile identifies this algorithm family. Each behavior-changing
+// iteration receives a new release version and a descriptive release name.
+export const CONTROLLED_MARKER_DETECTOR_VERSION = CONTROLLED_MARKER_RELEASE.version;
 export const COLOR_DIFFERENCE_BASELINE_VERSION = LEGACY_DETECTOR_VERSION;
 
 interface LabColor {
@@ -478,6 +479,12 @@ function recoverSolidComponentNearSeed(
     pixels: MarkerPoint[];
     boundary: MarkerPoint[];
     score: number;
+    threshold: number;
+    diameter: number;
+    aspectRatio: number;
+    compactness: number;
+    requestedCenterDistance: number;
+    seedDistance: number;
     fill: number;
     contrast: number;
     coreDarkRatio: number;
@@ -558,10 +565,39 @@ function recoverSolidComponentNearSeed(
       const score = requestedCenterDistance * 2 + distance * 2 + Math.abs(1 - aspectRatio) * 24
         + Math.max(0, 0.62 - fill) * 24 + Math.abs(diameter - minimumDiameterPx * 1.45) * 0.25
         - contrast * 0.25 - Math.min(pixels.length, 700) * 0.015;
-      candidates.push({ pixels, boundary, score, fill, contrast, coreDarkRatio, coreMeanLuma });
+      candidates.push({
+        pixels,
+        boundary,
+        score,
+        threshold,
+        diameter,
+        aspectRatio,
+        compactness,
+        requestedCenterDistance,
+        seedDistance: distance,
+        fill,
+        contrast,
+        coreDarkRatio,
+        coreMeanLuma,
+      });
     }
   }
-  const selected = candidates.sort((left, right) => left.score - right.score)[0];
+  // Keep the existing evidence score primary. When threshold candidates are
+  // effectively tied, resolve the tie from geometry/evidence rather than the
+  // order in which thresholds happened to be visited.
+  const rankedCandidates = candidates.slice().sort((left, right) => (
+    left.score - right.score
+    || Math.abs(left.fill - 0.62) - Math.abs(right.fill - 0.62)
+    || Math.abs(1 - left.aspectRatio) - Math.abs(1 - right.aspectRatio)
+    || right.compactness - left.compactness
+    || right.coreDarkRatio - left.coreDarkRatio
+    || right.contrast - left.contrast
+    || left.requestedCenterDistance - right.requestedCenterDistance
+    || left.seedDistance - right.seedDistance
+    || right.pixels.length - left.pixels.length
+    || left.threshold - right.threshold
+  ));
+  const selected = rankedCandidates[0];
   if (!selected) return null;
   const boundary = selected.boundary;
   const geometry = boundaryGeometry(boundary);
@@ -578,11 +614,13 @@ function recoverSolidComponentNearSeed(
     seed_relation: boundaryContains(seed, boundary) ? "enclosed" : "on_marker",
     marker_area_px: selected.pixels.length,
     marker_bbox: geometry.bbox,
+    candidate_count: rankedCandidates.length,
     confidence: clamp(selected.contrast / Math.max(24, backgroundLuma * 0.35), 0, 1),
     warnings: [...new Set([
       ...witness.warnings,
       "solid_component_outer_boundary_recovered",
       "solid_component_local_background_recovered",
+      "solid_component_selection_deterministic",
     ])],
     diagnostics: {
       ...(witness.diagnostics || {}),
@@ -1052,6 +1090,59 @@ function acceptRecovered(
   return result;
 }
 
+function canonicalizeSolidRecovery(
+  image: MarkerImageData,
+  result: ControlledMarkerDetection,
+  witness: ControlledMarkerDetection,
+  requestedSeed: MarkerPoint,
+  options: ControlledMarkerOptions,
+  evidenceImage: MarkerImageData,
+  roiRadius: number,
+  requestedExpectedDiameter: number,
+): ControlledMarkerDetection {
+  if (!result.center || !result.bbox || result.geometry_mode !== "dark_component") return result;
+  const canonical = recoverSolidComponentNearSeed(image, result.center, witness, options);
+  if (!canonical?.center || !canonical.bbox) return result;
+  const canonicalGate = candidateGate(
+    canonical,
+    requestedSeed,
+    requestedExpectedDiameter,
+    evidenceImage,
+    roiRadius,
+    Number(options.scanDiameterMm || 0),
+  );
+  if (!canonicalGate.valid) return result;
+  const areaRatio = Math.max(result.area_px, canonical.area_px) / Math.max(1, Math.min(result.area_px, canonical.area_px));
+  const referenceDiameter = Math.max(1, Math.max(result.bbox.width, result.bbox.height));
+  if (areaRatio > 1.40
+    || Math.hypot(result.center.x - canonical.center.x, result.center.y - canonical.center.y)
+      > Math.max(3, referenceDiameter * 0.20)) return result;
+  const sameBoundary = result.boundary.length === canonical.boundary.length
+    && result.boundary.every((point, index) => (
+      Math.hypot(point.x - canonical.boundary[index].x, point.y - canonical.boundary[index].y) <= 1e-9
+    ));
+  if (sameBoundary && Math.abs(result.area_px - canonical.area_px) <= 1e-9
+    && Math.hypot(result.center.x - canonical.center.x, result.center.y - canonical.center.y) <= 1e-9) return result;
+  canonical.warnings = [...new Set([...canonical.warnings, "solid_component_center_canonicalized"])];
+  return canonical;
+}
+
+function compatibleNeighborhoodRecovery(
+  first: ControlledMarkerDetection,
+  second: ControlledMarkerDetection,
+): boolean {
+  if (!first.center || !second.center || !first.bbox || !second.bbox
+    || first.geometry_mode !== second.geometry_mode) return false;
+  const areaRatio = Math.max(first.area_px, second.area_px) / Math.max(1, Math.min(first.area_px, second.area_px));
+  const referenceDiameter = Math.max(1, Math.min(
+    Math.max(first.bbox.width, first.bbox.height),
+    Math.max(second.bbox.width, second.bbox.height),
+  ));
+  return areaRatio <= 1.15
+    && Math.hypot(first.center.x - second.center.x, first.center.y - second.center.y)
+      <= Math.max(2, referenceDiameter * 0.12);
+}
+
 // Last-resort repair of a shallow inward pocket. Every added arc must still
 // follow dark pixels; deep concavity, ambiguity and scan limits remain blocked.
 function repairSupportedInwardPocket(
@@ -1165,7 +1256,9 @@ function detectControlledMarkerInternal(
   if (!legacyGate.valid) {
     const solid = recoverSolidComponentNearSeed(image, seed, legacy, options);
     if (solid && candidateGate(solid, seed, requestedExpectedDiameter, evidenceImage, roiRadius, Number(options.scanDiameterMm || 0)).valid) {
-      return acceptRecovered(solid, ["color_difference_solid_component_recovered"]);
+      return acceptRecovered(canonicalizeSolidRecovery(
+        image, solid, legacy, seed, options, evidenceImage, roiRadius, requestedExpectedDiameter,
+      ), ["color_difference_solid_component_recovered"]);
     }
     if (allowCandidateCenterRetry) {
       const step = clamp(Math.round(roiRadius * 0.28), 6, 12);
@@ -1189,7 +1282,9 @@ function detectControlledMarkerInternal(
           Number(options.scanDiameterMm || 0),
         );
         if (nearbyGate.valid) {
-          return acceptRecovered(nearbySolid, [
+          return acceptRecovered(canonicalizeSolidRecovery(
+            image, nearbySolid, legacy, seed, options, evidenceImage, roiRadius, requestedExpectedDiameter,
+          ), [
             "color_difference_solid_component_recovered",
             "solid_component_nearby_seed_recovered",
           ]);
@@ -1383,6 +1478,45 @@ function detectControlledMarkerInternal(
     if (repaired && candidateGate(repaired, seed, requestedExpectedDiameter, evidenceImage, roiRadius,
       Number(options.scanDiameterMm || 0)).valid) return repaired;
   }
+  const neighborhoodRecoveryReasons = new Set([
+    "candidate_geometry_degenerate",
+    "candidate_not_compact",
+    "not_supported_boundary",
+  ]);
+  const neighborhoodWitness = denoisedColor.ok ? denoisedColor : colorAtRequested;
+  const neighborhoodWitnessGate = denoisedColor.ok ? denoisedColorGate : colorRequestedGate;
+  const neighborhoodRecoveryEligible = allowCandidateCenterRetry
+    && neighborhoodWitness.ok
+    && neighborhoodWitness.center
+    && neighborhoodWitness.geometry_mode === "enclosed_region"
+    && neighborhoodWitnessGate.reasons.length > 0
+    && neighborhoodWitnessGate.reasons.every((reason) => neighborhoodRecoveryReasons.has(reason))
+    && Number(neighborhoodWitness.diagnostics?.boundary_support_ratio) >= 0.95
+    && Number(neighborhoodWitness.diagnostics?.repair_fraction) <= 0.05
+    && candidateShapeCompactness(neighborhoodWitness) >= 0.45;
+  if (neighborhoodRecoveryEligible) {
+    const step = clamp(Math.round(roiRadius * 0.28), 6, 12);
+    const nearbySeeds: MarkerPoint[] = [
+      { x: seed.x + step, y: seed.y }, { x: seed.x - step, y: seed.y },
+      { x: seed.x, y: seed.y + step }, { x: seed.x, y: seed.y - step },
+    ];
+    const recoveries: ControlledMarkerDetection[] = [];
+    for (const nearbySeed of nearbySeeds) {
+      if (nearbySeed.x < 0 || nearbySeed.x >= image.width || nearbySeed.y < 0 || nearbySeed.y >= image.height) continue;
+      const recovery = detectControlledMarkerInternal(image, nearbySeed, options, false);
+      if (candidateGate(recovery, seed, requestedExpectedDiameter, evidenceImage, roiRadius,
+        Number(options.scanDiameterMm || 0)).valid) {
+        const consensus = recoveries.find((candidate) => compatibleNeighborhoodRecovery(candidate, recovery));
+        if (consensus) {
+          return acceptRecovered(consensus, [
+            "color_difference_neighborhood_consensus_recovered",
+            `legacy_failure:${legacy.failure_code || "invalid_candidate"}`,
+          ]);
+        }
+        recoveries.push(recovery);
+      }
+    }
+  }
   return rejectCandidate(
     colorAtRequested.ok ? colorAtRequested : legacy,
     legacy.failure_code,
@@ -1395,7 +1529,27 @@ export function detectControlledMarker(
   seed: MarkerPoint,
   options: ControlledMarkerOptions = {},
 ): ControlledMarkerDetection {
-  return detectControlledMarkerInternal(image, seed, options, true, true);
+  const result = detectControlledMarkerInternal(image, seed, options, true, true);
+  if (!result.ok || !result.center || result.geometry_mode !== "enclosed_region") return result;
+  const canonical = detectControlledMarkerInternal(image, result.center, options, false);
+  const evidenceImage = colorDifferenceEvidenceImage(image, seed, options);
+  const roiRadius = clamp(
+    Math.round(options.roiRadius ?? fallbackRoiRadius(image)),
+    1,
+    Math.max(image.width, image.height),
+  );
+  const requestedExpectedDiameter = Number(options.expectedDiameterPx || 0) > 0
+    ? Number(options.expectedDiameterPx)
+    : 0;
+  if (!canonical.center || !candidateGate(canonical, seed, requestedExpectedDiameter, evidenceImage, roiRadius,
+    Number(options.scanDiameterMm || 0)).valid || !compatibleNeighborhoodRecovery(result, canonical)) return result;
+  const sameBoundary = result.boundary.length === canonical.boundary.length
+    && result.boundary.every((point, index) => (
+      Math.hypot(point.x - canonical.boundary[index].x, point.y - canonical.boundary[index].y) <= 1e-9
+    ));
+  if (sameBoundary && Math.abs(result.area_px - canonical.area_px) <= 1e-9
+    && Math.hypot(result.center.x - canonical.center.x, result.center.y - canonical.center.y) <= 1e-9) return result;
+  return acceptRecovered(canonical, ["enclosed_region_center_canonicalized"]);
 }
 
 export const __controlledMarkerColorForTests = {

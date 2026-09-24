@@ -119,6 +119,12 @@ for (const mobile of [false, true]) {
       const draftBefore = await page.evaluate(() => sessionStorage.getItem("langerface:workflow-draft:v1"));
       await preparePr226PhotoCandidate(page);
       await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateType), { timeout: 45_000 }).toContain("梭形");
+      await expect.poll(() => page.evaluate(() => {
+        const candidate = Reflect.get(window, "__pr226Incision")?.candidate;
+        return candidate?.lengthMm / candidate?.widthMm;
+      })).toBeCloseTo(3, 8);
+      await expect(page.locator("[data-workflow-center]")).toBeVisible();
+      await expect(page.locator("[data-workflow-incision-center]")).toBeVisible();
       await approveWorkflowCandidate(page);
       // Wait past the retired 300ms save debounce; no image or incision draft is written.
       await page.waitForTimeout(500);
@@ -351,8 +357,16 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateType), { timeout: 45_000 }).toContain("梭形");
   const boundary = page.locator("[data-workflow-boundary]");
   const candidate = page.locator("[data-workflow-candidate]");
+  const lesionCenter = page.locator("[data-workflow-center]");
+  const incisionCenter = page.locator("[data-workflow-incision-center]");
   await expect.poll(() => boundary.getAttribute("d")).toMatch(/^M /);
   await expect.poll(() => candidate.getAttribute("d")).toMatch(/^M /);
+  await expect(lesionCenter).toBeVisible();
+  await expect(incisionCenter).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const current = Reflect.get(window, "__pr226Incision")?.candidate;
+    return current?.lengthMm / current?.widthMm;
+  })).toBeCloseTo(3, 8);
   await expect(candidate).toHaveCSS("stroke", "rgb(103, 232, 249)");
   await expect(candidate).toHaveCSS("stroke-width", "1px");
   const boundaryBeforeReview = await boundary.getAttribute("d");
@@ -373,6 +387,7 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
 
   const legend = page.getByLabel("切口标注图例");
   await expect(legend).toBeVisible();
+  await expect(legend).toContainText("切口中心");
   await expect(legend).toContainText("病灶中心");
   await expect(legend).toContainText("肿物范围");
 

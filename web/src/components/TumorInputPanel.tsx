@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { MARKER_DIAGNOSTIC_EVENT } from "../services/controlledMarkerRunDiagnostics";
 import { dispatchMarkerDiagnosticCommand } from "../lib/controllerCommand";
+import { isDeveloperMode } from "../services/developerMode";
 
 import { useIncisionControllerCommands } from "../hooks/useControllerCommands";
 import { useIncisionStore } from "../stores/incisionStore";
@@ -28,9 +29,7 @@ export function TumorInputPanel({
   simplifiedWorkflow = false,
 }: TumorInputPanelProps) {
   const commands = useIncisionControllerCommands();
-  const [diagnosticEnabled] = useState(() => import.meta.env.DEV && typeof window !== "undefined"
-    && (new URLSearchParams(window.location.search).get("developer") === "1"
-      || new URLSearchParams(window.location.search).get("markerDiagnostics") === "1"));
+  const [diagnosticEnabled] = useState(() => isDeveloperMode());
   const [diagnosticMessage, setDiagnosticMessage] = useState("仅本地取证；请重新上传原图后识别，客户端源码身份仍待确认。");
   const [diagnosticDetailsOpen, setDiagnosticDetailsOpen] = useState(false);
   useEffect(() => {
@@ -254,7 +253,7 @@ export function TumorInputPanel({
         </div>
         <details open={diagnosticDetailsOpen} onToggle={(event) => setDiagnosticDetailsOpen(event.currentTarget.open)}>
         <summary className="cursor-pointer text-xs">开发者诊断详情</summary>
-        <WorkbenchNote>最近8次识别及处理原因；仅本页内存，刷新清空，不上传、不包含原图。生产构建关闭此入口。</WorkbenchNote>
+        <WorkbenchNote>记录本次诊断会话中的换图、肿物识别、切口生成、旋转和缩放；刷新后仍可接续。不上传，不包含原图、文件名、路径或患者信息。开发者模式的界面会显示当前图片名称，导出的诊断日志仍不包含文件名。受控标记可核对并复放，其他记录用于还原操作过程。生产构建关闭此入口。</WorkbenchNote>
         <ButtonRow className="two-cols">
           <Button variant="workbench" id="replayMarkerDiagnosticBtn" type="button" onClick={() => dispatchMarkerDiagnosticCommand("replay_marker_diagnostic")}>核对并复放</Button>
         </ButtonRow>

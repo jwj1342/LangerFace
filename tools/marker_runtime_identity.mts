@@ -7,6 +7,7 @@ import {
   resolveControlledMarkerDetectorProfile,
   detectorVersionForProfile,
 } from "../web/src/services/controlledMarkerDetectionProfile.ts";
+import { CONTROLLED_MARKER_RELEASE } from "../web/src/services/controlledMarkerRelease.ts";
 
 export const markerRepoRoot = resolve(fileURLToPath(new URL("../", import.meta.url)));
 export const TARGET_MARKER_PROFILE = "small-lesion-boundary-candidate";
@@ -41,6 +42,8 @@ export function captureMarkerIdentity(rawProfile: string | undefined, root = mar
   return {
     schema: 1,
     algorithmName: TARGET_MARKER_ALGORITHM_NAME,
+    releaseName: CONTROLLED_MARKER_RELEASE.name,
+    changeSlug: CONTROLLED_MARKER_RELEASE.changeSlug,
     profile,
     implementationVersion: detectorVersionForProfile(profile),
     branch: git("branch", "--show-current"),
@@ -56,7 +59,7 @@ export function captureMarkerIdentity(rawProfile: string | undefined, root = mar
 
 export type MarkerIdentity = ReturnType<typeof captureMarkerIdentity>;
 export function assertMarkerIdentity(actual: Partial<MarkerIdentity>, expected: MarkerIdentity) {
-  for (const key of ["schema", "algorithmName", "profile", "implementationVersion", "branch", "head", "worktreeId",
+  for (const key of ["schema", "algorithmName", "releaseName", "changeSlug", "profile", "implementationVersion", "branch", "head", "worktreeId",
     "sourceDigest", "assetDigest"] as const) {
     if (actual?.[key] !== expected[key]) {
       throw new Error(`运行身份不匹配：${key}；期望 ${expected[key]}，实际 ${actual?.[key] ?? "缺失"}。请核对服务并重新启动，不能用 HTTP 200 放行。`);

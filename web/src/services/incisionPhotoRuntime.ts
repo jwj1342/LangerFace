@@ -36,6 +36,7 @@ import { sourcePointToSurfaceRef } from "./photoPlanningController";
 import { ensureImageReady } from "./pipelineModels";
 import { detectStaticImageWithRetries } from "./staticImageDetection";
 import { shouldClearFreehandBoundaryOnLesionRepick } from "./tumorInput";
+import { isDeveloperMode } from "./developerMode";
 import {
   inspectTumorEngineeringExclusions,
   tumorPointEngineeringExclusionMessage,
@@ -332,7 +333,9 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
 
   const updatePhotoUploadTitle = (fileName = currentPhotoFileName) => {
     currentPhotoFileName = fileName;
-    elements.photoUploadLabel.title = `上传患者静态照片\n当前已上传照片：${fileName || "无"}`;
+    elements.photoUploadLabel.title = isDeveloperMode()
+      ? `上传患者静态照片\n当前已上传照片：${fileName || "无"}`
+      : "上传患者静态照片";
   };
 
   const setControlledMarkerActionState = (

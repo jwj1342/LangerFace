@@ -2,6 +2,9 @@
 @import "../clinical-theme.css";
 
 .live-refine-panel{display:flex;min-width:0;flex-direction:column;gap:9px;padding-top:4px}
+.live-refine-panel.hidden,.live-refine-quality.hidden,.live-refine-internal{display:none}
+.btn-row.live-refine-primary-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
+.live-refine-primary-actions .btn{min-width:0}
 .btn-row.live-refine-modes{grid-template-columns:repeat(4,minmax(0,1fr))}
 .live-refine-modes .btn{min-width:0;padding-inline:5px;font-size:12px}
 .live-refine-status,.live-refine-range,.live-refine-nudge-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px}
@@ -619,9 +622,9 @@
   }
 
   .workflow-incision-overlay [data-workflow-center] {
-    fill: #f43f5e;
-    stroke: #0b1118;
-    stroke-width: 2;
+    fill: transparent;
+    stroke: #ffffff;
+    stroke-width: 1;
     vector-effect: non-scaling-stroke;
   }
 
@@ -1301,9 +1304,18 @@
     border: 1px solid rgba(255, 255, 255, 0.32);
   }
 
-  .incision-workbench .legend-swatch.center,
-  .workflow-workbench .legend-swatch.center {
+  .incision-workbench .legend-swatch.lesion-center,
+  .workflow-workbench .legend-swatch.lesion-center {
+    width: 6px;
+    height: 6px;
+    background: transparent;
+    border-color: #ffffff;
+  }
+
+  .incision-workbench .legend-swatch.incision-center,
+  .workflow-workbench .legend-swatch.incision-center {
     background: #f43f5e;
+    border-color: #0b1118;
   }
 
   .incision-workbench .legend-swatch.ring,
@@ -2859,12 +2871,110 @@ body:has(.dark-workbench-page) {
   pointer-events: none;
 }
 
-.mobile-workflow-dock,
-.mobile-candidate-adjust {
+.mobile-workflow-dock {
   display: none;
 }
 
+.workflow-workbench .workflow-developer-source-name {
+  min-width: 0;
+  max-width: 240px;
+  padding: 6px 10px;
+  border: 1px solid rgb(148 163 184 / 38%);
+  border-radius: 4px;
+  color: #dbeafe;
+  font-size: 12px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-workbench .workflow-developer-source-name[title="尚未载入图片"] {
+  color: #94a3b8;
+}
+
+.desktop-layer-controls {
+  display: grid;
+  gap: 8px;
+}
+
+.desktop-layer-controls-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.desktop-layer-controls-heading > span {
+  font-weight: 650;
+}
+
+.desktop-layer-controls-heading > small {
+  color: var(--muted);
+  text-align: right;
+}
+
+.workflow-layer-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.workflow-layer-toggle[aria-pressed="true"] {
+  border-color: var(--clinical-accent);
+  color: var(--clinical-accent);
+  background: color-mix(in srgb, var(--clinical-accent) 12%, transparent);
+}
+
+.workflow-workbench .mobile-candidate-adjust {
+  display: grid;
+  gap: 12px;
+  padding: 13px;
+  color: #e5eaf0;
+  background: #0f141b;
+  border: 1px solid #34404d;
+  border-left: 3px solid var(--clinical-accent);
+  border-radius: 8px;
+}
+
+.workflow-workbench .mobile-candidate-adjust > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  color: #a6c8ff;
+}
+
+.workflow-workbench .mobile-candidate-adjust > header div,
+.workflow-workbench .mobile-adjust-field {
+  display: grid;
+  gap: 6px;
+}
+
+.workflow-workbench .mobile-candidate-adjust > header span {
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.workflow-workbench .mobile-candidate-adjust small,
+.workflow-workbench .mobile-candidate-adjust p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.workflow-workbench .mobile-candidate-adjust input[type="range"] {
+  width: 100%;
+  min-height: 30px;
+  accent-color: var(--clinical-accent);
+}
+
 @media (max-width: 560px) and (pointer: coarse) and (hover: none) {
+  .workflow-workbench .desktop-layer-controls {
+    display: none;
+  }
   .workflow-workbench .workflow-tumor-transfer-actions,
   .workflow-workbench .workflow-recalculate-action {
     display: none;
@@ -3111,51 +3221,6 @@ body:has(.dark-workbench-page) {
     display: none;
   }
 
-  .workflow-workbench .mobile-candidate-adjust {
-    display: grid;
-    gap: 12px;
-    padding: 13px;
-    color: #e5eaf0;
-    background: #0f141b;
-    border: 1px solid #34404d;
-    border-left: 3px solid var(--clinical-accent);
-    border-radius: 8px;
-  }
-
-  .workflow-workbench .mobile-candidate-adjust > header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    color: #a6c8ff;
-  }
-
-  .workflow-workbench .mobile-candidate-adjust > header div,
-  .workflow-workbench .mobile-adjust-field {
-    display: grid;
-    gap: 6px;
-  }
-
-  .workflow-workbench .mobile-candidate-adjust > header span {
-    color: #f8fafc;
-    font-size: 13px;
-    font-weight: 800;
-  }
-
-  .workflow-workbench .mobile-candidate-adjust small,
-  .workflow-workbench .mobile-candidate-adjust p {
-    margin: 0;
-    color: #94a3b8;
-    font-size: 10px;
-    line-height: 1.45;
-  }
-
-  .workflow-workbench .mobile-candidate-adjust input[type="range"] {
-    width: 100%;
-    min-height: 30px;
-    accent-color: var(--clinical-accent);
-  }
-
   .workflow-workbench[data-mobile-incision-candidate-visible="false"]
     .workflow-incision-overlay [data-workflow-candidate],
   .workflow-workbench[data-mobile-incision-candidate-visible="false"]
@@ -3198,9 +3263,24 @@ body:has(.dark-workbench-page) {
   }
 
   .workflow-workbench .workflow-incision-overlay [data-workflow-center] {
-    fill: #fb7185;
-    stroke: #fff1f2;
-    stroke-width: 0.8;
+    fill: transparent;
+    stroke: #ffffff;
+    stroke-width: 1;
+  }
+
+  .workflow-workbench .workflow-incision-overlay [data-workflow-incision-center] circle {
+    fill: #f43f5e;
+    stroke: #0b1118;
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-workbench .workflow-incision-overlay [data-workflow-incision-center] path {
+    fill: none;
+    stroke: #22d3ee;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
   }
 
   .workflow-workbench .canvas-legend {
@@ -3209,10 +3289,14 @@ body:has(.dark-workbench-page) {
     border-color: rgb(226 232 240 / 24%);
   }
 
-  .workflow-workbench .legend-swatch.center {
-    background: #fb7185;
-    border-color: #fff1f2;
-    box-shadow: 0 0 5px rgb(251 113 133 / 72%);
+  .workflow-workbench .legend-swatch.lesion-center {
+    background: transparent;
+    border-color: #ffffff;
+  }
+
+  .workflow-workbench .legend-swatch.incision-center {
+    background: #f43f5e;
+    border-color: #0b1118;
   }
 
   .workflow-workbench .legend-swatch.ring {

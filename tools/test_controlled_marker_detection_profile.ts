@@ -15,8 +15,8 @@ import {
 
 assert.equal(LEGACY_CONTROLLED_MARKER_SOURCE_COMMIT, "fe703e2bb37d837f339f2b4fb9861d202568b8e6");
 assert.equal(COLOR_DIFFERENCE_BASELINE_VERSION, "0.23");
-assert.equal(DEFAULT_CONTROLLED_MARKER_DETECTOR_PROFILE, "legacy-v0.23");
-assert.equal(resolveControlledMarkerDetectorProfile(), "legacy-v0.23");
+assert.equal(DEFAULT_CONTROLLED_MARKER_DETECTOR_PROFILE, "small-lesion-boundary-candidate");
+assert.equal(resolveControlledMarkerDetectorProfile(), "small-lesion-boundary-candidate");
 assert.equal(resolveControlledMarkerDetectorProfile("current"), "current-v0.34");
 assert.equal(resolveControlledMarkerDetectorProfile("color"), "small-lesion-boundary-candidate");
 assert.equal(resolveControlledMarkerDetectorProfile("color-difference"), "small-lesion-boundary-candidate");
@@ -26,7 +26,7 @@ assert.equal(resolveControlledMarkerDetectorProfile("legacy"), "legacy-v0.23");
 assert.equal(resolveControlledMarkerDetectorProfile("v0.23"), "legacy-v0.23");
 assert.throws(() => resolveControlledMarkerDetectorProfile("unknown"), /Unsupported controlled marker detector profile/);
 assert.equal(detectorVersionForProfile("current-v0.34"), "0.34");
-assert.equal(detectorVersionForProfile("small-lesion-boundary-candidate"), "task1-candidate");
+assert.equal(detectorVersionForProfile("small-lesion-boundary-candidate"), "0.36.0-candidate.1");
 assert.equal(detectorVersionForProfile("legacy-v0.23"), "0.23");
 const expectedActiveProfile = resolveControlledMarkerDetectorProfile(
   process.env.VITE_CONTROLLED_MARKER_DETECTOR_PROFILE,
@@ -85,7 +85,7 @@ assert.match(
 const markerLauncherSource = fs.readFileSync("../tools/run_controlled_marker_v035_dev.mjs", "utf8");
 assert.match(markerLauncherSource, /const EXPECTED_PROFILE = "small-lesion-boundary-candidate"/);
 assert.match(markerLauncherSource, /VITE_CONTROLLED_MARKER_DETECTOR_PROFILE: EXPECTED_PROFILE/);
-assert.match(markerLauncherSource, /defaultProfileUnchanged: DEFAULT_PROFILE/);
+assert.match(markerLauncherSource, /ordinaryDefaultProfile: DEFAULT_PROFILE/);
 assert.match(markerLauncherSource, /deferred_to_main_launcher/);
 assert.match(markerLauncherSource, /pageWideModelAssetsCheck/);
 
@@ -96,7 +96,7 @@ assert.equal(
 );
 const markerBuildSource = fs.readFileSync("../tools/run_controlled_marker_v035_build.mjs", "utf8");
 assert.match(markerBuildSource, /TARGET_MARKER_PROFILE/);
-assert.match(markerBuildSource, /EXPECTED_VERSION = "task1-candidate"/);
+assert.match(markerBuildSource, /EXPECTED_VERSION = "0\.36\.0-candidate\.1"/);
 assert.match(markerBuildSource, /VITE_CONTROLLED_MARKER_DETECTOR_PROFILE: TARGET_MARKER_PROFILE/);
 assert.match(markerBuildSource, /verifyDistIdentity/);
 

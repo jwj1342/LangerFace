@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 
 import {
   attemptConstrainedPhotoReferences,
@@ -44,6 +46,149 @@ const landmarks: Vec3[] = [
   [500, 500, 0],
 ];
 const triangles: Triangle[] = [[0, 1, 2], [1, 3, 2]];
+// Local human-rejection evidence: exercise the final photo fit, not just 3D geometry.
+const feedbackDir = path.resolve(import.meta.dirname, "../../../我负责的部分/切口设计/切口部分人工复核/第二代总指挥29号/1");
+for (const name of ["黑人空心01", "老人空心01"]) {
+  const filename = path.join(feedbackDir, `${name}诊断日志.json`);
+  if (!fs.existsSync(filename)) continue; // Private evidence is not a CI dependency.
+  const run = JSON.parse(fs.readFileSync(filename, "utf8")).runs[0];
+  const rawCenter = run.raw_result.center;
+  const boundary = run.raw_result.boundary.map((p: {x:number;y:number}) =>
+    [300 + p.x - rawCenter.x, 300 + p.y - rawCenter.y, 0] as Vec3);
+  const input = {
+    sourceCandidate: Array.from({length: 16}, (_, i) => [300 + 60 * Math.cos(i * Math.PI / 8), 300 + 20 * Math.sin(i * Math.PI / 8), 0] as Vec3),
+    sourceEndpoints: [[240,300,0],[360,300,0]] as Vec3[],
+    center: [300,300,0] as Vec3, boundary, aspectRatio: 3, tipAngleDeg: 30,
+    landmarks, triangles, boundaryFitScale: 1, boundaryMarginPx: 0,
+  };
+  const fit = buildPhotoSurfaceCanonicalFusiform(input);
+  assert.ok(fit.fit, `${name}: final photo fitting succeeds`);
+  assert.equal(fit.diagnostics.photoBoundaryOutsideCount, 0);
+  const curves = [...fit.fit.upperCurves, ...fit.fit.lowerCurves];
+  const dense = curves.flatMap(curve => Array.from({length: 1001}, (_, i) => {
+    const t = i / 1000, s = 1 - t;
+    return [0,1].map(axis => s*s*s*curve[0][axis] + 3*s*s*t*curve[1][axis]
+      + 3*s*t*t*curve[2][axis] + t*t*t*curve[3][axis]);
+  }));
+  const contacts = boundary.filter((p: Vec3) => dense.some(q => Math.hypot(p[0]-q[0], p[1]-q[1]) < 0.05));
+  assert.ok(contacts.length >= 2, `${name}: at least two displayed-curve contacts within 0.05 source pixel`);
+  assert.ok(Number(fit.diagnostics.photoCanonicalScale) < 1, `${name}: final photo can shrink`);
+  const zoom = buildPhotoSurfaceCanonicalFusiform({...input, boundaryFitScale: 1.2});
+  assert.ok(zoom.fit);
+  assert.ok(Math.abs(Number(zoom.diagnostics.candidateLength) / Number(fit.diagnostics.candidateLength) - 1.2) < 1e-5,
+    `${name}: manual enlargement remains proportional`);
+}
+
+const rotationLog = path.resolve(import.meta.dirname,
+  "../../../我负责的部分/切口设计/切口部分人工复核/第二代总指挥29号/2/切口旋转日志记录.json");
+if (fs.existsSync(rotationLog)) {
+  const run = JSON.parse(fs.readFileSync(rotationLog, "utf8")).runs[0];
+  const rawCenter = run.raw_result.center;
+  const boundary = run.raw_result.boundary.map((p: {x:number;y:number}) =>
+    [300 + p.x - rawCenter.x, 300 + p.y - rawCenter.y, 0] as Vec3);
+  for (const angleDeg of [-35, 35]) {
+    const angle = angleDeg * Math.PI / 180;
+    const axis = [Math.cos(angle), Math.sin(angle)];
+    const input = {
+      sourceCandidate: Array.from({length: 16}, (_, i) => {
+        const x = 60 * Math.cos(i * Math.PI / 8), y = 20 * Math.sin(i * Math.PI / 8);
+        return [300 + x * axis[0] - y * axis[1], 300 + x * axis[1] + y * axis[0], 0] as Vec3;
+      }),
+      sourceEndpoints: [[300 - 60 * axis[0], 300 - 60 * axis[1], 0],
+        [300 + 60 * axis[0], 300 + 60 * axis[1], 0]] as Vec3[],
+      center: [300,300,0] as Vec3, boundary, aspectRatio: 3, tipAngleDeg: 30,
+      landmarks, triangles, boundaryFitScale: 1, boundaryMarginPx: 0, lockCenter: true,
+    };
+    const fit = buildPhotoSurfaceCanonicalFusiform(input);
+    assert.ok(fit.fit, `29号/2 ${angleDeg}°: final photo fitting succeeds`);
+    assert.equal(fit.diagnostics.photoBoundaryOutsideCount, 0);
+    const curves = [...fit.fit.upperCurves, ...fit.fit.lowerCurves];
+    const dense = curves.flatMap(curve => Array.from({length: 1001}, (_, i) => {
+      const t = i / 1000, s = 1 - t;
+      return [0,1].map(d => s*s*s*curve[0][d] + 3*s*s*t*curve[1][d]
+        + 3*s*t*t*curve[2][d] + t*t*t*curve[3][d]);
+    }));
+    const distances = boundary.map((p: Vec3, index: number) => ({index,
+      distance: Math.min(...dense.map(q => Math.hypot(p[0]-q[0], p[1]-q[1]))) }));
+    const nearest = [...distances].sort((a, b) => a.distance - b.distance);
+    const firstContact = nearest[0];
+    assert.ok(firstContact.distance < 0.05,
+      `29号/2 ${angleDeg}°: rotated displayed curve keeps an exact numerical contact`);
+    assert.ok(nearest.filter((entry) => entry.distance < 0.2).length >= 2,
+      `29号/2 ${angleDeg}°: the contact neighbourhood remains visibly coincident within 0.2 source pixel`);
+    const firstTip = fit.fit.outline[0];
+    const oppositeTip = fit.fit.outline[Math.floor((fit.fit.outline.length - 1) / 2)];
+    const midpoint = [(firstTip[0] + oppositeTip[0]) / 2,
+      (firstTip[1] + oppositeTip[1]) / 2];
+    assert.ok(Math.hypot(midpoint[0] - 300, midpoint[1] - 300) < 1e-9,
+      `29号/2 ${angleDeg}°: manual rotation keeps incision center fixed`);
+  }
+}
+
+const rotationFeedbackDir = path.resolve(import.meta.dirname,
+  "../../../我负责的部分/切口设计/切口部分人工复核/第二代总指挥29号/3");
+const rotationFeedbackLogs = ["电脑端诊断日志.json", "手机端诊断日志.json"];
+for (const logName of rotationFeedbackLogs) {
+  const logPath = path.join(rotationFeedbackDir, logName);
+  if (!fs.existsSync(logPath)) continue; // Private evidence is not a CI dependency.
+  const session = JSON.parse(fs.readFileSync(logPath, "utf8"));
+  const runsBySource = new Map(session.runs.map((run: any) => [run.source_id, run]));
+  const edits = session.workflow_events.filter((event: any) =>
+    event.event_type === "candidate_edit" && event.stage === "preview" && event.control_id === "angleOffsetDeg");
+  assert.ok(edits.length > 0, `${logName}: contains the reported rotation sequence`);
+  assert.equal(session.workflow_events.some((event: any) => event.event_type === "candidate_edit"
+    && event.stage === "committed"), false,
+  `${logName}: captures the historical missing-commit diagnostic gap`);
+  for (const event of edits) {
+    const run: any = runsBySource.get(event.source_id);
+    assert.ok(run, `${logName}: rotation is bound to a detection run from the same image source`);
+    const rawCenter = run.raw_result.center;
+    const boundary = run.raw_result.boundary.map((point: {x:number;y:number}) =>
+      [300 + point.x - rawCenter.x, 300 + point.y - rawCenter.y, 0] as Vec3);
+    const angleDeg = Number(event.requested_value);
+    const angle = angleDeg * Math.PI / 180;
+    const axis = [Math.cos(angle), Math.sin(angle)];
+    const fit = buildPhotoSurfaceCanonicalFusiform({
+      sourceCandidate: Array.from({length: 16}, (_, index) => {
+        const x = 60 * Math.cos(index * Math.PI / 8), y = 20 * Math.sin(index * Math.PI / 8);
+        return [300 + x * axis[0] - y * axis[1], 300 + x * axis[1] + y * axis[0], 0] as Vec3;
+      }),
+      sourceEndpoints: [[300 - 60 * axis[0], 300 - 60 * axis[1], 0],
+        [300 + 60 * axis[0], 300 + 60 * axis[1], 0]] as Vec3[],
+      center: [300, 300, 0] as Vec3,
+      boundary,
+      aspectRatio: 3,
+      tipAngleDeg: 30,
+      landmarks,
+      triangles,
+      boundaryFitScale: 1,
+      boundaryMarginPx: 0,
+      lockCenter: true,
+    });
+    assert.ok(fit.fit, `${logName} ${event.source_id} ${angleDeg}°: final photo fitting succeeds`);
+    assert.equal(fit.diagnostics.photoBoundaryOutsideCount, 0,
+      `${logName} ${event.source_id} ${angleDeg}°: rotated candidate encloses every boundary point`);
+    assert.ok(Math.abs(Number(fit.diagnostics.candidateLength) / Number(fit.diagnostics.maxWidth) - 3) < 1e-6,
+      `${logName} ${event.source_id} ${angleDeg}°: rotated candidate remains 3:1`);
+    const firstTip = fit.fit.outline[0];
+    const oppositeTip = fit.fit.outline[Math.floor((fit.fit.outline.length - 1) / 2)];
+    assert.ok(Math.hypot((firstTip[0] + oppositeTip[0]) * 0.5 - 300,
+      (firstTip[1] + oppositeTip[1]) * 0.5 - 300) < 1e-9,
+    `${logName} ${event.source_id} ${angleDeg}°: manual rotation keeps the incision center fixed`);
+    const displayed = [...fit.fit.upperCurves, ...fit.fit.lowerCurves].flatMap(curve =>
+      Array.from({length: 1001}, (_, index) => {
+        const t = index / 1000, s = 1 - t;
+        return [0, 1].map(dimension => s*s*s*curve[0][dimension]
+          + 3*s*s*t*curve[1][dimension] + 3*s*t*t*curve[2][dimension] + t*t*t*curve[3][dimension]);
+      }));
+    const minimumDistance = Math.min(...boundary.map((point: Vec3) =>
+      Math.min(...displayed.map(candidatePoint => Math.hypot(
+        point[0] - candidatePoint[0], point[1] - candidatePoint[1],
+      )))));
+    assert.ok(minimumDistance < 0.25,
+      `${logName} ${event.source_id} ${angleDeg}°: displayed curve remains within sub-pixel contact tolerance`);
+  }
+}
 const refs = pointsToSurfaceRefs([[0.25, 0.25, 0], [0.75, 0.75, 0]], vertices, triangles);
 assert.equal(refs.length, 2);
 const firstModelPoint = surfaceRefToModelPoint(refs[0], vertices, triangles);
@@ -903,14 +1048,15 @@ const offCenterRenderedMidpointX = (
 ) * 0.5;
 assert.ok(Math.abs(offCenterSurfaceGeometry.center![0] - 268) < 1e-6,
   "the visible lesion center remains the detector-confirmed point instead of moving to the fusiform midpoint");
-assert.ok(Math.abs(offCenterSurfaceGeometry.planningCenter![0] - offCenterSurfaceGeometry.center![0]) < 1e-6);
+assert.ok(Math.abs(offCenterSurfaceGeometry.planningCenter![0] - offCenterSurfaceGeometry.center![0]) < 1e-6,
+  "a boundary-free legacy fallback remains centered on the lesion");
 assert.ok(Math.abs(offCenterSurfaceGeometry.lesionToPlanningCenterPx || 0) < 1e-6,
-  "a displayed fallback cannot retain an imported or stale candidate-center mismatch");
+  "a boundary-free legacy fallback cannot invent an independent incision center");
 assert.ok(Math.abs(
   (offCenterCandidate[0][0] + offCenterCandidate[offCenterFarTipIndex][0]) * 0.5
     - offCenterSurfaceGeometry.center![0],
 ) < 1e-6 && Math.abs(offCenterRenderedMidpointX - offCenterSurfaceGeometry.center![0]) < 1e-6,
-"both rendered tips and the smoothed outline remain symmetric around the detector-confirmed center");
+"a boundary-free legacy fallback remains symmetric around the lesion center");
 assert.ok(surfaceGeometry.fusiformRendering, "successful fusiform geometry exposes direct-render cubic controls");
 const surfaceGeometryFarTip = (surfaceGeometry.candidate.length - 1) / 2;
 assert.deepEqual(surfaceGeometry.endpoints, [surfaceGeometry.candidate[0], surfaceGeometry.candidate[surfaceGeometryFarTip]],
@@ -926,7 +1072,7 @@ assert.ok(Math.abs((surfaceGeometry.candidate[surfaceGeometryMiddleIndex][0]
   + surfaceGeometryLower[surfaceGeometryMiddleIndex][0]) * 0.5 - surfaceGeometry.center![0]) < 1e-6
   && Math.abs((surfaceGeometry.candidate[surfaceGeometryMiddleIndex][1]
     + surfaceGeometryLower[surfaceGeometryMiddleIndex][1]) * 0.5 - surfaceGeometry.center![1]) < 1e-6,
-"global low-frequency fit keeps the fusiform midpoint on the lesion center");
+"boundary-free global fit keeps the fusiform midpoint on the lesion center");
 const mappedSurfaceCandidate = surfaceCandidateRefs.length
   ? surfaceCandidateModel.map(([x, y]) => [100 + x * 400, 100 + y * 400])
   : [];
@@ -958,7 +1104,7 @@ assert.ok(Math.abs(farOffSelectionGeometry.lesionToPlanningCenterPx || 0) < 1e-6
 assert.ok(Math.abs(
   (farOffSelectionGeometry.endpoints[0][0] + farOffSelectionGeometry.endpoints[1][0]) * 0.5
     - farOffSelectionGeometry.center![0],
-) < 1e-6, "even a large legacy mismatch is corrected before a fallback is displayed");
+) < 1e-6, "even a large boundary-free legacy mismatch is corrected before display");
 
 const lowerEdgeSelectionRefs = pointsToSurfaceRefs([[0.5, 0.92, 0]], vertices, triangles);
 const lowerEdgeSurfaceGeometry = buildIncisionPhotoGeometry({

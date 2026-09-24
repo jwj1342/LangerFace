@@ -27,6 +27,7 @@ const DIAGNOSTIC_DB = "langerface-diagnostics-v2";
 const DIAGNOSTIC_STORE = "sessions";
 type ControllerObservation = {
   reason: string; request_id: number; source_revision: number | null;
+  action_id?: string | null; diagnostic_run_id?: number | null;
   seed: { x: number; y: number } | null; scan_diameter_mm: number;
   kind: string; marker_busy: boolean; boundary_points: number;
   boundary_mode?: "ellipse" | "freehand";
@@ -36,6 +37,8 @@ type ControllerObservation = {
   candidate_display_blocked?: boolean | null;
   candidate_selection_reason?: string | null;
   candidate_guardrails_passed?: boolean | null;
+  rejected_boundary_points?: number | null;
+  rejected_reasons?: string[] | null;
 };
 type DiagnosticOperationType = "controlled_marker" | "freehand";
 type RecordedControllerObservation = ControllerObservation & {
@@ -631,7 +634,7 @@ export class MarkerRunDiagnostics {
       return { sha256, rgba_sha256, size: file.size, mime: file.type, width: prepared.width, height: prepared.height };
     } catch { return null; } finally { URL.revokeObjectURL(url); }
   }
-  begin(input: RunInput, requestId: number, channel: string, before: Uint8ClampedArray, actual: Uint8ClampedArray, retain = true, replayOf?: DiagnosticRun) {
+  begin(input: RunInput, requestId: number, channel: string, before: Uint8ClampedArray, actual: Uint8ClampedArray, retain = true, replayOf?: DiagnosticRun, actionId?: string | null) {
     const selection = this.selection;
     const started = performance.now();
     const run: DiagnosticRun = {
@@ -642,7 +645,7 @@ export class MarkerRunDiagnostics {
       raw_result: null, raw_image_embedded: false, uploaded: false,
       replay_of: replayOf ? { run_id: replayOf.run_id, started_at_ms: replayOf.started_at_ms } : null, comparison: null,
       session_id: this.sessionId, page_instance_id: this.pageInstanceId,
-      source_id: selection?.sourceId || this.currentSourceId, action_id: randomDiagnosticId("detect"),
+      source_id: selection?.sourceId || this.currentSourceId, action_id: actionId || randomDiagnosticId("detect"),
       event_seq: ++this.eventSequence,
     };
     if (retain) {
@@ -738,8 +741,10 @@ export class MarkerRunDiagnostics {
         : null;
     if (!this.alive || !operationType) return;
     assertDiagnosticJson(event);
+    const actionId = typeof event.action_id === "string" && /^[a-z0-9_-]{1,128}$/.test(event.action_id)
+      ? event.action_id : randomDiagnosticId(operationType);
     this.controllerEvents.push({ ...structuredClone(event), operation_type: operationType, observed_at_ms: Date.now(),
-      event_seq: ++this.eventSequence, action_id: randomDiagnosticId(operationType),
+      event_seq: ++this.eventSequence, action_id: actionId,
       source_id: this.currentSourceId, page_instance_id: this.pageInstanceId });
     if (this.controllerEvents.length > DIAGNOSTIC_LIMITS.controllerEvents) {
       this.droppedControllerEvents += this.controllerEvents.length - DIAGNOSTIC_LIMITS.controllerEvents;

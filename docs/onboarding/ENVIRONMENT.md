@@ -28,7 +28,7 @@ python tools/export_web_assets.py
 cd web
 npm ci
 npm run doctor:wrinkle
-npm run build
+npm run build:lesion-candidate
 npm test
 npx playwright install chromium
 npm run test:browser
@@ -43,8 +43,12 @@ ruff check .
 
 ```bash
 cd web
-npm run dev
+npm run dev:lesion-candidate
 ```
+
+上述两个 `lesion-candidate` 入口会固定注入 `small-lesion-boundary-candidate` 并核验运行身份。
+普通 `npm run dev` / `npm run build` 也会先执行最新算法部署门禁并默认使用当前候选；
+只有显式设置 `VITE_CONTROLLED_MARKER_DETECTOR_PROFILE=legacy-v0.23` 才进入旧版回退模式。
 
 ### Git worktree 依赖隔离
 
@@ -53,7 +57,7 @@ npm run dev
 Vite 的依赖优化产物可能包含绝对资源路径；跨目录复用会让 WASM、Worker 或模型运行时
 继续请求旧 worktree，即使 Git 代码已经成功同步。
 
-`npm run dev` 会先执行依赖隔离检查，并强制重建 Vite optimizer 缓存。若检查报告
+`npm run dev` 与 `npm run dev:lesion-candidate` 都会先执行依赖隔离检查，并强制重建 Vite optimizer 缓存。若检查报告
 `node_modules` 指向其他 worktree，只移除当前 worktree 的链接，再在当前 `web` 目录运行
 `npm ci`；不要删除链接实际指向的依赖目录。远端代码合并后，如果 `web/package.json` 或
 `web/package-lock.json` 有变化，也应在当前 worktree 重新运行 `npm ci`。
@@ -65,7 +69,7 @@ Vite 的依赖优化产物可能包含绝对资源路径；跨目录复用会让
 `.venv`，然后才尝试 `python3` / `python`。自检还会按 `requirements-wrinkle-lock.txt`
 校验四个数值依赖版本。建议每台电脑都使用仓库 `.venv`，不要依赖个人 Conda 路径。
 
-四区域 V10 需要 Vite 的本地 API 插件，因此必须使用 `npm run dev` 或
+四区域 V10 需要 Vite 的本地 API 插件，因此必须使用 `npm run dev`、`npm run dev:lesion-candidate` 或
 `npm run preview`。用普通静态服务器托管 `web/dist/` 只有前端文件，不会提供本地
 `/api/wrinkle-v10`，不能作为本地皱纹检测的启动方式。
 
@@ -111,7 +115,7 @@ PYTHONPATH=src:$PYTHONPATH .venv/bin/ruff check .
 module load nodejs/24.15.0
 cd web
 npm ci
-npm run build
+npm run build:lesion-candidate
 npm test
 npx playwright install chromium
 npm run test:browser

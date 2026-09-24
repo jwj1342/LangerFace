@@ -30,7 +30,10 @@ export type ControlledMarkerDetectorProfile =
   | "legacy-v0.23";
 
 export const LEGACY_CONTROLLED_MARKER_SOURCE_COMMIT = "fe703e2bb37d837f339f2b4fb9861d202568b8e6";
-export const DEFAULT_CONTROLLED_MARKER_DETECTOR_PROFILE: ControlledMarkerDetectorProfile = "legacy-v0.23";
+// The candidate is the project default. `legacy-v0.23` remains selectable only
+// through an explicit profile value, so rollback is possible without silently
+// returning ordinary launches to the older detector.
+export const DEFAULT_CONTROLLED_MARKER_DETECTOR_PROFILE: ControlledMarkerDetectorProfile = "small-lesion-boundary-candidate";
 
 export function resolveControlledMarkerDetectorProfile(value?: string | null): ControlledMarkerDetectorProfile {
   const normalized = String(value || "").trim().toLowerCase();

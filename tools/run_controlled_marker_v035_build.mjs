@@ -12,7 +12,7 @@ import {
 } from "./marker_runtime_identity.mts";
 import { detectorVersionForProfile } from "../web/src/services/controlledMarkerDetectionProfile.ts";
 
-const EXPECTED_VERSION = "task1-candidate";
+const EXPECTED_VERSION = "0.36.0-candidate.1";
 const BUILD_MARKER = "LANGERFACE_LESION_CANDIDATE_BUILD";
 const repoRoot = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const webRoot = resolve(repoRoot, "web");
@@ -21,9 +21,10 @@ const manifestPath = resolve(webRoot, "dist/marker-runtime-identity.json");
 const args = process.argv.slice(2);
 const checkOnly = args.includes("--check");
 const verifyOnly = args.includes("--verify-dist");
-const unknownArgs = args.filter((arg) => arg !== "--check" && arg !== "--verify-dist");
+const verifyDefaultOnly = args.includes("--verify-default-dist");
+const unknownArgs = args.filter((arg) => arg !== "--check" && arg !== "--verify-dist" && arg !== "--verify-default-dist");
 
-if (unknownArgs.length || (checkOnly && verifyOnly)) {
+if (unknownArgs.length || [checkOnly, verifyOnly, verifyDefaultOnly].filter(Boolean).length > 1) {
   throw new Error(`build:lesion-candidate 收到不支持的参数：${args.join(" ")}`);
 }
 if (detectorVersionForProfile(TARGET_MARKER_PROFILE) !== EXPECTED_VERSION) {
@@ -37,20 +38,20 @@ if (!actualViteEntry.startsWith(realpathSync(resolve(webRoot, "node_modules"))))
   throw new Error("Vite 入口不属于当前 worktree 的 web/node_modules，拒绝构建。");
 }
 
-function expectedIdentity() {
+function expectedIdentity(command) {
   return {
     ...captureMarkerIdentity(TARGET_MARKER_PROFILE, repoRoot),
     mode: "production",
-    command: "npm run build:lesion-candidate",
+    command,
   };
 }
 
-function verifyDistIdentity() {
+function verifyDistIdentity(command) {
   if (!existsSync(manifestPath)) {
     throw new Error("生产身份清单缺失：dist/marker-runtime-identity.json");
   }
   const actual = JSON.parse(readFileSync(manifestPath, "utf8"));
-  const expected = expectedIdentity();
+  const expected = expectedIdentity(command);
   assertMarkerIdentity(actual, expected);
   if (actual.mode !== expected.mode || actual.command !== expected.command) {
     throw new Error("生产身份清单的构建模式或命令不匹配。");
@@ -64,7 +65,11 @@ function verifyDistIdentity() {
 console.log(`[lesion-candidate-build] profile=${TARGET_MARKER_PROFILE} identity=${EXPECTED_VERSION}`);
 if (checkOnly) process.exit(0);
 if (verifyOnly) {
-  verifyDistIdentity();
+  verifyDistIdentity("npm run build:lesion-candidate");
+  process.exit(0);
+}
+if (verifyDefaultOnly) {
+  verifyDistIdentity("npm run build");
   process.exit(0);
 }
 
@@ -80,4 +85,4 @@ const result = spawnSync(process.execPath, [actualViteEntry, "build"], {
 });
 if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status ?? 1);
-verifyDistIdentity();
+verifyDistIdentity("npm run build:lesion-candidate");

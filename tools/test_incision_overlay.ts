@@ -72,7 +72,19 @@ assert.equal(overlay.review.status, "approved_for_discussion", "overlay carries 
 assert.equal(overlay.review_gate.live_overlay_ready, true, "overlay carries live overlay gate");
 assert.equal(overlay.guardrail_summary.passed, true, "overlay carries guardrail summary");
 assert.equal(overlay.candidate.polyline_refs.length, 2, "candidate line is encoded as surface refs");
+assert.ok(overlay.candidate.center_ref, "candidate center is encoded as an independent surface ref");
 assert.equal(overlay.tumor.boundary_refs.length, 4, "tumor boundary is encoded as surface refs");
+
+const legacyCenterOverlay = T.compileIncisionOverlay({
+  ...record,
+  candidate: { ...record.candidate, center: undefined },
+}, verts, tris);
+assert.ok(legacyCenterOverlay, "legacy candidates without an independent center still compile");
+assert.deepEqual(
+  legacyCenterOverlay.candidate.center_ref,
+  legacyCenterOverlay.tumor.center_ref,
+  "legacy candidates use the lesion center only as a compatibility fallback",
+);
 
 const openBoundaryOverlay = T.compileIncisionOverlay({
   ...record,
@@ -212,11 +224,17 @@ assert.equal(visibleBoundarySourceWidth(0.9, undefined), 0.9,
 assert.equal(visibleBoundarySourceWidth(0.9, 0.5), 1.7,
   "downscaled live media keep the yellow tumor boundary at a visible 0.85 CSS pixels");
 assert.deepEqual(incisionOverlayStyle(1300, "fusiform").center, {
-  color: "#fb7185",
-  strokeColor: "#fff1f2",
-  radiusCss: 4,
-  strokeWidthCss: 0.8,
-}, "photo, video and camera share the softer lesion-centre presentation token");
+  color: "transparent",
+  strokeColor: "#ffffff",
+  radiusCss: 2,
+  strokeWidthCss: 1,
+}, "photo, video and camera share the visually subordinate lesion-centre token");
+assert.deepEqual(incisionOverlayStyle(1300, "fusiform").incisionCenter, {
+  color: "#f43f5e",
+  strokeColor: "#0b1118",
+  radiusCss: 6,
+  strokeWidthCss: 1,
+}, "photo, video and camera share the prominent incision-centre token");
 assert.deepEqual(incisionCandidateScreenStyle("fusiform"), {
   color: "#67e8f9",
   lineWidth: 1,
@@ -232,12 +250,16 @@ assert.equal(compactFullPhotoStyle.candidate.lineWidth, 0.4,
   "the full-photo incision line uses the accepted fine mobile width");
 assert.equal(compactFullPhotoStyle.boundary.lineWidth, 0.7,
   "the full-photo tumor boundary no longer uses the oversized fixed mobile width");
-assert.equal(compactFullPhotoStyle.center.radiusCss, 3,
+assert.equal(compactFullPhotoStyle.center.radiusCss, 2,
   "the full-photo lesion center is reduced from the previous four-pixel radius");
 assert.ok(compactZoomedPhotoStyle.candidate.lineWidth > compactFullPhotoStyle.candidate.lineWidth
   && compactZoomedPhotoStyle.boundary.lineWidth > compactFullPhotoStyle.boundary.lineWidth
-  && compactZoomedPhotoStyle.center.radiusCss > compactFullPhotoStyle.center.radiusCss,
+  && compactZoomedPhotoStyle.center.radiusCss === compactFullPhotoStyle.center.radiusCss,
 "zooming in increases, rather than inversely decreases, all incision screen-space marks");
+assert.deepEqual(compactFullPhotoStyle.center, incisionOverlayScreenStyle().center,
+  "desktop and mobile share the small hollow lesion center");
+assert.deepEqual(compactFullPhotoStyle.incisionCenter, incisionOverlayScreenStyle().incisionCenter,
+  "desktop and mobile share the red incision center size and color");
 assert.ok(Math.abs(incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 5 }).candidate.lineWidth
   - 0.4 * Math.sqrt(5)) < 1e-9,
 "the phone incision scales gently through the complete photo zoom range");

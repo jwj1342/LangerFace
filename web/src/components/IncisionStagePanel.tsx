@@ -110,7 +110,8 @@ export function IncisionStagePanel() {
           visible={assetLoading.visible}
         />
         <Legend variant="canvas" aria-label="3D 标注图例">
-          <CanvasLegendItem swatchClassName="center">病灶中心</CanvasLegendItem>
+          <CanvasLegendItem swatchClassName="incision-center">切口中心</CanvasLegendItem>
+          <CanvasLegendItem swatchClassName="lesion-center">病灶中心</CanvasLegendItem>
           <CanvasLegendItem swatchClassName="ring">肿物范围</CanvasLegendItem>
           <CanvasLegendItem swatchClassName="line">候选切口</CanvasLegendItem>
           <CanvasLegendItem swatchClassName="handle">端点控制</CanvasLegendItem>
