@@ -353,14 +353,54 @@ function toggleRecording(): void {
       system: () => renderState.system,
       onStateChange(recording: boolean) {
         recordingState.recorder = recording ? recordingController : null;
-        els.export.textContent = recording ? "■ 停止" : "⬇ 导出";
+        els.export.textContent = recording ? "■ 停止视频" : "⬇ 导出视频";
         if (recording) els.export.setAttribute("aria-pressed", "true");
         else els.export.removeAttribute("aria-pressed");
         scheduleLiveState("recording_state");
       },
+      onError(error) {
+        const detail = error instanceof Error ? error.message : "未知错误";
+        setMsg(`视频导出失败：${detail}`);
+        logError("video_export_failed", error);
+      },
+      onDownloadRequested(filename) {
+        setTransientMsg(`已向浏览器提交下载：${filename}。通常保存在“文件管理 → 下载（Download）”；是否完成请以浏览器下载记录为准。`);
+      },
     });
   }
   recordingController.toggle();
+}
+
+async function exportCurrentImage(): Promise<void> {
+  if (!recordingController) {
+    recordingController = createCanvasRecordingController({
+      canvas: els.canvas,
+      getExtraCanvases: visibleRecordingCanvases,
+      system: () => renderState.system,
+      onStateChange(recording: boolean) {
+        recordingState.recorder = recording ? recordingController : null;
+        els.export.textContent = recording ? "■ 停止视频" : "⬇ 导出视频";
+        if (recording) els.export.setAttribute("aria-pressed", "true");
+        else els.export.removeAttribute("aria-pressed");
+        scheduleLiveState("recording_state");
+      },
+      onError(error) {
+        const detail = error instanceof Error ? error.message : "未知错误";
+        setMsg(`视频导出失败：${detail}`);
+        logError("video_export_failed", error);
+      },
+      onDownloadRequested(filename) {
+        setTransientMsg(`已向浏览器提交下载：${filename}。通常保存在“文件管理 → 下载（Download）”；是否完成请以浏览器下载记录为准。`);
+      },
+    });
+  }
+  try {
+    await recordingController.exportImage();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "未知错误";
+    setMsg(`图片导出失败：${detail}`);
+    logError("image_export_failed", error);
+  }
 }
 
 const liveCommands = new LiveCommandRouter({
@@ -373,6 +413,7 @@ const liveCommands = new LiveCommandRouter({
   }),
   pauseToggle: handlePauseToggle,
   recordingToggle: toggleRecording,
+  imageExport: exportCurrentImage,
   templateChange: (value) => handleTemplateChange(valueEvent(value)),
   densityInput: (value) => handleDensityInput(valueEvent(value)),
   opacityInput: (value) => handleOpacityInput(valueEvent(value)),
