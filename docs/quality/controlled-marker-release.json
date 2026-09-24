@@ -8,19 +8,19 @@
     "featureSummary": "确定性候选选择、中心一致性和邻域共识恢复",
     "nameKeywords": ["候选选择", "中心一致性"],
     "status": "candidate",
-    "sourceDigest": "eed427b3bb78e1588ae655cd39b96361ca19266c838e20af768b0f2ab39b99e9"
+    "sourceDigest": "b942294e99613978fc76710efb508bd1ecb480a02ec7eddb0b72a3e1771874c3"
   },
   "archive": {
     "status": "verified",
-    "manifestPath": "local_outputs/recovery-packages/V0.36.0-candidate.1三算法与UI责任范围可恢复包—2026-09-24-R3/manifest.json",
-    "manifestSha256": "1407fdf8ed48a99fd122d474d0024e86ae57ac3b10345bc7122d15cf919ede5b",
+    "manifestPath": "local_outputs/recovery-packages/V0.36.0-candidate.1当前综合候选—2026-09-24/manifest.json",
+    "manifestSha256": "2f07aacc53b4915e86c26b7c3249a8edebe0c4fa9e5212204522b7f4894843cf",
     "scopeConfigSha256": "f699e045a18f3de44b2f816d84f3a25b9df9bf6da0e5e996c90bdf008ce3600c",
-    "sourceDigest": "eed427b3bb78e1588ae655cd39b96361ca19266c838e20af768b0f2ab39b99e9"
+    "sourceDigest": "b942294e99613978fc76710efb508bd1ecb480a02ec7eddb0b72a3e1771874c3"
   },
   "scopeBoundaryReview": {
     "status": "confirmed",
-    "manifestSha256": "1407fdf8ed48a99fd122d474d0024e86ae57ac3b10345bc7122d15cf919ede5b",
-    "evidence": "操作者在任务 01a0cf65-2f29-7571-bb7c-78d95e46af4d 确认：纯 UI/交互共享文件纳入本人责任范围；liveRefine2d、render2d、three3d 和皱纹微调测试维持跨团队排除。",
+    "manifestSha256": "2f07aacc53b4915e86c26b7c3249a8edebe0c4fa9e5212204522b7f4894843cf",
+    "evidence": "操作者在任务 01a0cf65-2f29-7571-bb7c-78d95e46af4d 确认：纯 UI/交互共享文件纳入本人责任范围；微调核心和皱纹微调测试维持跨团队排除；本次综合候选恢复包已重新生成并绑定当前源码指纹。",
     "confirmedAt": "2026-09-24T13:15:43.9333752+08:00"
   },
   "operatorEvaluation": {
@@ -30,9 +30,10 @@
     "evaluatedAt": null
   },
   "editorSaveConfirmation": {
-    "status": "pending",
-    "sourceDigest": null,
-    "confirmedAt": null
+    "status": "confirmed",
+    "sourceDigest": "b942294e99613978fc76710efb508bd1ecb480a02ec7eddb0b72a3e1771874c3",
+    "confirmedAt": "2026-09-24T23:31:30.7118911+08:00",
+    "evidence": "操作者在当前任务中明确确认编辑器内容已全部保存。"
   },
   "history": [
     { "version": "0.1.0", "legacyIdentifier": "0.1", "mainChange": "受控标记定位基线" },
