@@ -8,18 +8,18 @@
     "featureSummary": "确定性候选选择、中心一致性和邻域共识恢复",
     "nameKeywords": ["候选选择", "中心一致性"],
     "status": "candidate",
-    "sourceDigest": "b942294e99613978fc76710efb508bd1ecb480a02ec7eddb0b72a3e1771874c3"
+    "sourceDigest": "a0a3e2ea5ea32a78661d61cf747d45b4973df63c7afc89b7d76dd9a0361e5b94"
   },
   "archive": {
     "status": "verified",
-    "manifestPath": "local_outputs/recovery-packages/V0.36.0-candidate.1当前综合候选—2026-09-24/manifest.json",
-    "manifestSha256": "2f07aacc53b4915e86c26b7c3249a8edebe0c4fa9e5212204522b7f4894843cf",
+    "manifestPath": "local_outputs/recovery-packages/V0.36.0-candidate.1提交候选HEAD-v5—2026-09-24/manifest.json",
+    "manifestSha256": "35fa3eac653326d6392ac7e0f86ce30c2477fc4261ff2bfd8fcdb4f851606d7a",
     "scopeConfigSha256": "f699e045a18f3de44b2f816d84f3a25b9df9bf6da0e5e996c90bdf008ce3600c",
-    "sourceDigest": "b942294e99613978fc76710efb508bd1ecb480a02ec7eddb0b72a3e1771874c3"
+    "sourceDigest": "a0a3e2ea5ea32a78661d61cf747d45b4973df63c7afc89b7d76dd9a0361e5b94"
   },
   "scopeBoundaryReview": {
     "status": "confirmed",
-    "manifestSha256": "2f07aacc53b4915e86c26b7c3249a8edebe0c4fa9e5212204522b7f4894843cf",
+    "manifestSha256": "35fa3eac653326d6392ac7e0f86ce30c2477fc4261ff2bfd8fcdb4f851606d7a",
     "evidence": "操作者在任务 01a0cf65-2f29-7571-bb7c-78d95e46af4d 确认：纯 UI/交互共享文件纳入本人责任范围；微调核心和皱纹微调测试维持跨团队排除；本次综合候选恢复包已重新生成并绑定当前源码指纹。",
     "confirmedAt": "2026-09-24T13:15:43.9333752+08:00"
   },
@@ -31,7 +31,7 @@
   },
   "editorSaveConfirmation": {
     "status": "confirmed",
-    "sourceDigest": "b942294e99613978fc76710efb508bd1ecb480a02ec7eddb0b72a3e1771874c3",
+    "sourceDigest": "a0a3e2ea5ea32a78661d61cf747d45b4973df63c7afc89b7d76dd9a0361e5b94",
     "confirmedAt": "2026-09-24T23:31:30.7118911+08:00",
     "evidence": "操作者在当前任务中明确确认编辑器内容已全部保存。"
   },
