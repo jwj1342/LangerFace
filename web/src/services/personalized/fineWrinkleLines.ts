@@ -808,10 +808,23 @@ export function extractFineWrinkleLines(
 
   stageStart = options.onProfile ? performance.now() : 0;
   let filledTwoByTwoPixelBlocks = 0;
-  for (let y = 0; y < height - 1; y++) for (let x = 0; x < width - 1; x++) {
-    const index = y * width + x;
-    if (mask[index] && mask[index + 1] && mask[index + width] && mask[index + width + 1]) {
-      filledTwoByTwoPixelBlocks++;
+  if (renderedIndices.length < pixels / 8) {
+    // Every filled block starts at a rendered pixel. Sparse centerlines need
+    // no full-frame scan; each possible top-left pixel is visited exactly once.
+    for (const index of renderedIndices) {
+      const x = index % width;
+      const y = Math.floor(index / width);
+      if (x < width - 1 && y < height - 1 && mask[index + 1] &&
+          mask[index + width] && mask[index + width + 1]) {
+        filledTwoByTwoPixelBlocks++;
+      }
+    }
+  } else {
+    for (let y = 0; y < height - 1; y++) for (let x = 0; x < width - 1; x++) {
+      const index = y * width + x;
+      if (mask[index] && mask[index + 1] && mask[index + width] && mask[index + width + 1]) {
+        filledTwoByTwoPixelBlocks++;
+      }
     }
   }
   const renderedLinePixels = renderedIndices.length;
