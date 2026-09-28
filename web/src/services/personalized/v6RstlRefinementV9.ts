@@ -4798,6 +4798,8 @@ function applyForeheadBundleCoherenceImpl(
   const candidateCache = refinementExecution?.geometry
     ? new Map<number, Map<number, Map<number, { offsets: Float64Array; smoothed: Float64Array }>>>()
     : null;
+  const rawFollowerOffsets = refinementExecution?.geometry ?
+    new Map<number, Float64Array>() : null;
   const priorCurvatureCache = refinementExecution?.geometry ? new Map<number, CurvatureMetrics>() : null;
 
   const candidateOffsetsForScale = (
@@ -4814,52 +4816,57 @@ function applyForeheadBundleCoherenceImpl(
         continue;
       }
       countRefinementOperation("coherenceCandidateBuilds");
-      const offsets = new Float64Array(follower.prior.length);
-      for (let pointIndex = 0; pointIndex < follower.prior.length; pointIndex += 1) {
-        const point = follower.prior[pointIndex];
-        const controls = anchorCurveIndices.map((anchorIndex) => {
-          const sample = sampleCurveLayerAtX(
-            curves[anchorIndex].prior, snapshotPoints[anchorIndex], point[0],
+      let rawOffsets = rawFollowerOffsets?.get(curveIndex);
+      if (!rawOffsets) {
+        rawOffsets = new Float64Array(follower.prior.length);
+        for (let pointIndex = 0; pointIndex < follower.prior.length; pointIndex += 1) {
+          const point = follower.prior[pointIndex];
+          const controls = anchorCurveIndices.map((anchorIndex) => {
+            const sample = sampleCurveLayerAtX(
+              curves[anchorIndex].prior, snapshotPoints[anchorIndex], point[0],
+            );
+            return sample ? { y: sample.prior[1], displacement: sample.displacement } : null;
+          }).filter((control): control is { y: number; displacement: Point2 } => control !== null);
+          const top = sampleCurveLayerAtX(
+            curves[topBoundaryIndex].prior, curves[topBoundaryIndex].prior, point[0],
           );
-          return sample ? { y: sample.prior[1], displacement: sample.displacement } : null;
-        }).filter((control): control is { y: number; displacement: Point2 } => control !== null);
-        const top = sampleCurveLayerAtX(
-          curves[topBoundaryIndex].prior, curves[topBoundaryIndex].prior, point[0],
-        );
-        const bottom = sampleCurveLayerAtX(
-          curves[bottomBoundaryIndex].prior, curves[bottomBoundaryIndex].prior, point[0],
-        );
-        if (top && !anchorSet.has(topBoundaryIndex)) {
-          controls.push({ y: top.prior[1], displacement: [0, 0] });
-        }
-        if (bottom && !anchorSet.has(bottomBoundaryIndex)) {
-          controls.push({ y: bottom.prior[1], displacement: [0, 0] });
-        }
-        controls.sort((left, right) => left.y - right.y);
-        if (!controls.length) continue;
-        let lower = controls[0], upper = controls[0];
-        if (point[1] >= controls.at(-1)!.y) {
-          lower = upper = controls.at(-1)!;
-        } else if (point[1] > controls[0].y) {
-          for (let index = 1; index < controls.length; index += 1) {
-            if (point[1] <= controls[index].y) {
-              lower = controls[index - 1];
-              upper = controls[index];
-              break;
+          const bottom = sampleCurveLayerAtX(
+            curves[bottomBoundaryIndex].prior, curves[bottomBoundaryIndex].prior, point[0],
+          );
+          if (top && !anchorSet.has(topBoundaryIndex)) {
+            controls.push({ y: top.prior[1], displacement: [0, 0] });
+          }
+          if (bottom && !anchorSet.has(bottomBoundaryIndex)) {
+            controls.push({ y: bottom.prior[1], displacement: [0, 0] });
+          }
+          controls.sort((left, right) => left.y - right.y);
+          if (!controls.length) continue;
+          let lower = controls[0], upper = controls[0];
+          if (point[1] >= controls.at(-1)!.y) {
+            lower = upper = controls.at(-1)!;
+          } else if (point[1] > controls[0].y) {
+            for (let index = 1; index < controls.length; index += 1) {
+              if (point[1] <= controls[index].y) {
+                lower = controls[index - 1];
+                upper = controls[index];
+                break;
+              }
             }
           }
+          const fraction = upper.y > lower.y + EPSILON ?
+            clamp((point[1] - lower.y) / (upper.y - lower.y)) : 0;
+          const displacement: Point2 = [
+            lower.displacement[0] + fraction * (upper.displacement[0] - lower.displacement[0]),
+            lower.displacement[1] + fraction * (upper.displacement[1] - lower.displacement[1]),
+          ];
+          rawOffsets[pointIndex] = (
+            displacement[0] * follower.normals[pointIndex][0] +
+            displacement[1] * follower.normals[pointIndex][1]
+          );
         }
-        const fraction = upper.y > lower.y + EPSILON ?
-          clamp((point[1] - lower.y) / (upper.y - lower.y)) : 0;
-        const displacement: Point2 = [
-          lower.displacement[0] + fraction * (upper.displacement[0] - lower.displacement[0]),
-          lower.displacement[1] + fraction * (upper.displacement[1] - lower.displacement[1]),
-        ];
-        offsets[pointIndex] = scale * (
-          displacement[0] * follower.normals[pointIndex][0] +
-          displacement[1] * follower.normals[pointIndex][1]
-        );
+        rawFollowerOffsets?.set(curveIndex, rawOffsets);
       }
+      const offsets = Float64Array.from(rawOffsets, (value) => scale * value);
       const smoothed = gaussianFairNormalOffsets(
         follower, offsets, [[0, offsets.length]], sigmaArc, true,
       );
@@ -4884,8 +4891,11 @@ function applyForeheadBundleCoherenceImpl(
   for (const scale of [1, 1.05, 1.10, 1.15, 1.20, 1.25, 0.95]) {
   for (const rawBlend of [0, 0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.50, 0.60]) {
     const candidateOffsets = candidateOffsetsForScale(scale, sigmaArc, rawBlend);
-    const candidatePoints: Point2[][] = snapshotPoints.map((points) =>
-      points.map((point) => [...point] as Point2));
+    // Only followers change. Reusing the immutable snapshot also preserves their
+    // geometry-cache identity across candidates; the outer array is still private.
+    const candidatePoints: Point2[][] = refinementExecution?.geometry ?
+      snapshotPoints.slice() : snapshotPoints.map((points) =>
+        points.map((point) => [...point] as Point2));
     for (const [curveIndex, offsets] of candidateOffsets) {
       candidatePoints[curveIndex] = pointsFromOffsets(curves[curveIndex], offsets);
     }
