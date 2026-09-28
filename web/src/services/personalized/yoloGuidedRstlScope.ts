@@ -128,9 +128,43 @@ function segmentsCross(a: Point2, b: Point2, c: Point2, d: Point2): boolean {
   return first * second < -1e-7 && third * fourth < -1e-7;
 }
 
-function curvesCross(first: Point2[], second: Point2[]): boolean {
+export function yoloGuardCurvesCross(first: Point2[], second: Point2[],
+  useMonotoneWindow = false): boolean {
+  let secondIncreasingX = useMonotoneWindow && second.length > 1;
+  if (secondIncreasingX) {
+    for (let index = 1; index < second.length; index += 1) {
+      const start = second[index - 1], end = second[index];
+      if (end[0] < start[0] || !Number.isFinite(start[0]) ||
+          !Number.isFinite(start[1]) || !Number.isFinite(end[0]) ||
+          !Number.isFinite(end[1])) {
+        secondIncreasingX = false;
+        break;
+      }
+    }
+  }
   for (let firstIndex = 1; firstIndex < first.length; firstIndex += 1) {
-    for (let secondIndex = 1; secondIndex < second.length; secondIndex += 1) {
+    let firstCandidate = 1, lastCandidate = second.length;
+    if (secondIncreasingX) {
+      const a = first[firstIndex - 1], b = first[firstIndex];
+      const minimumX = Math.min(a[0], b[0]), maximumX = Math.max(a[0], b[0]);
+      if (Number.isFinite(minimumX) && Number.isFinite(maximumX)) {
+        let left = 1, right = second.length;
+        while (left < right) {
+          const middle = (left + right) >>> 1;
+          if (second[middle][0] < minimumX) left = middle + 1;
+          else right = middle;
+        }
+        firstCandidate = left;
+        left = firstCandidate; right = second.length;
+        while (left < right) {
+          const middle = (left + right) >>> 1;
+          if (second[middle - 1][0] <= maximumX) left = middle + 1;
+          else right = middle;
+        }
+        lastCandidate = left;
+      }
+    }
+    for (let secondIndex = firstCandidate; secondIndex < lastCandidate; secondIndex += 1) {
       if (segmentsCross(
         first[firstIndex - 1], first[firstIndex],
         second[secondIndex - 1], second[secondIndex],
@@ -159,7 +193,7 @@ export interface YoloGuidedGuardPerformance {
 }
 
 function intersectionPairs(curves: Array<{ pts: Point2[] }>,
-  cross = curvesCross, performance?: YoloGuidedGuardPerformance): Set<string> {
+  cross = yoloGuardCurvesCross, performance?: YoloGuidedGuardPerformance): Set<string> {
   if (performance) performance.intersectionChecks = (performance.intersectionChecks || 0) + 1;
   const pairs = new Set<string>();
   for (let first = 0; first < curves.length; first += 1) {
@@ -243,7 +277,7 @@ export function guardMergedYoloGuidedRstlCurves(
   const cachedCross = (first: Point2[], second: Point2[]) => {
     if (options.cacheGeometry === false) {
       count("exactCurvePairChecks");
-      return curvesCross(first, second);
+      return yoloGuardCurvesCross(first, second);
     }
     const previous = pairCache.get(first)?.get(second);
     if (previous !== undefined) {
@@ -256,7 +290,7 @@ export function guardMergedYoloGuidedRstlCurves(
       a.maxY < b.minY || b.maxY < a.minY;
     if (separated) count("boundsRejectedPairs");
     else count("exactCurvePairChecks");
-    const crossed = !separated && curvesCross(first, second);
+    const crossed = !separated && yoloGuardCurvesCross(first, second, true);
     let pairs = pairCache.get(first);
     if (!pairs) pairCache.set(first, pairs = new WeakMap());
     pairs.set(second, crossed);
