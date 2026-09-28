@@ -177,17 +177,20 @@ export function yoloGuardCurvesCross(first: Point2[], second: Point2[],
 export function yoloGuardSelfCrosses(points: Point2[]): boolean {
   // Nonadjacent segments of a finite x-monotone polyline can only meet at
   // a shared x boundary. The existing strict-crossing predicate rejects it.
-  let increasingX = true;
+  // Curve storage may run in either x direction, so preserve both cases.
+  let increasingX = true, decreasingX = true;
   for (let index = 1; index < points.length; index += 1) {
     const start = points[index - 1], end = points[index];
-    if (end[0] < start[0] || !Number.isFinite(start[0]) ||
-        !Number.isFinite(start[1]) || !Number.isFinite(end[0]) ||
+    if (!Number.isFinite(start[0]) || !Number.isFinite(start[1]) || !Number.isFinite(end[0]) ||
         !Number.isFinite(end[1])) {
-      increasingX = false;
+      increasingX = decreasingX = false;
       break;
     }
+    if (end[0] < start[0]) increasingX = false;
+    if (end[0] > start[0]) decreasingX = false;
+    if (!increasingX && !decreasingX) break;
   }
-  if (increasingX) return false;
+  if (increasingX || decreasingX) return false;
   for (let first = 1; first < points.length; first += 1) {
     for (let second = first + 2; second < points.length; second += 1) {
       if (segmentsCross(

@@ -56,6 +56,8 @@ const strictSelfCross = (points) => {
 for (const points of [
   [], [[0, 0]], [[0, 0], [0, 10], [0, -10], [0, 5]],
   [[0, 0], [10, 10], [0, 10], [10, 0]],
+  [[10, 0], [5, 4], [5, -4], [0, 0]],
+  [[10, 0], [5, 4], [0, 0]],
   [[0, 0], [1, 1], [2, Number.NaN], [3, 0]],
   [[0, 0], [1, 1], [2, Infinity], [3, 0]],
 ]) assert.equal(yoloGuardSelfCrosses(points), strictSelfCross(points));
