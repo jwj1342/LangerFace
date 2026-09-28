@@ -2490,16 +2490,32 @@ function applyCurvatureFairingImpl(
       0.22, 0.16, 0.13, 0.10, 0.07, 0.05, 0.03, 0.015, 0.008];
     const scales = [1, 0.95, 0.90, 0.85, 0.80, 0.70, 0.60, 0.50,
       0.40, 0.30, 0.20, 0.10];
+    let priorCandidatePoints: Point2[] | null = null;
+    let priorCandidateMetrics: CurvatureMetrics | null = null;
+    let priorCandidateFit: ReturnType<typeof candidateFitFor> | null = null;
+    // A cache-enabled refinement can generate identical adjacent point arrays
+    // from different smoothing parameters. Keep candidate order and audits;
+    // only reuse geometry-derived metrics after an exact point comparison.
     const evaluateCandidate = (
       candidateOffsets: Float64Array, metadata: any, candidatePointOverride?: Point2[],
     ) => {
       const candidatePoints = candidatePointOverride ||
         pointsFromOffsets(result.curve, candidateOffsets);
-      const metrics = curvatureMetrics(candidatePoints, materialTurn);
+      const previousPoints = priorCandidatePoints;
+      const sameAsPrior = Boolean(refinementExecution?.geometry && previousPoints &&
+        candidatePoints.length === previousPoints.length &&
+        candidatePoints.every((point, index) =>
+          Object.is(point[0], previousPoints[index][0]) &&
+          Object.is(point[1], previousPoints[index][1])));
+      const metrics = sameAsPrior ? priorCandidateMetrics! :
+        curvatureMetrics(candidatePoints, materialTurn);
       const endpointChange = endpointTangentChangeDegrees(result.curve.prior, candidatePoints);
       const insideCanvas = candidatePoints.every((point) =>
         point[0] >= 0 && point[1] >= 0 && point[0] < size && point[1] < size);
-      const candidateFit = candidateFitFor(candidatePoints);
+      const candidateFit = sameAsPrior ? priorCandidateFit! : candidateFitFor(candidatePoints);
+      priorCandidatePoints = candidatePoints;
+      priorCandidateMetrics = metrics;
+      priorCandidateFit = candidateFit;
       const candidateAdherence = candidateFit.adherence;
       const candidateDirection = candidateFit.direction;
       let newIntersectionPairs: string[] = [];
