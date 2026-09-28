@@ -3300,10 +3300,16 @@ interface BoundedSegment {
   maxY: number;
 }
 
-function boundedSegments(points: Point2[]): BoundedSegment[] {
-  const segments = new Array<BoundedSegment>(Math.max(0, points.length - 1));
+type BoundedSegments = BoundedSegment[] & { increasingX?: boolean };
+
+export function boundedSegments(points: Point2[]): BoundedSegments {
+  const segments = new Array<BoundedSegment>(Math.max(0, points.length - 1)) as BoundedSegments;
+  let increasingX = true;
   for (let index = 0; index < segments.length; index += 1) {
     const start = points[index], end = points[index + 1];
+    if (end[0] < start[0] || !Number.isFinite(start[0]) || !Number.isFinite(end[0])) {
+      increasingX = false;
+    }
     segments[index] = {
       start,
       end,
@@ -3313,6 +3319,7 @@ function boundedSegments(points: Point2[]): BoundedSegment[] {
       maxY: Math.max(start[1], end[1]),
     };
   }
+  segments.increasingX = increasingX;
   return segments;
 }
 
@@ -3391,14 +3398,36 @@ function selfCrosses(points: Point2[]): boolean {
   return false;
 }
 
-function curvesCross(
+export function curvesCross(
   first: Point2[], second: Point2[],
   firstBounds = curveBounds(first), secondBounds = curveBounds(second),
-  firstSegments = boundedSegments(first), secondSegments = boundedSegments(second),
+  firstSegments: BoundedSegments = boundedSegments(first),
+  secondSegments: BoundedSegments = boundedSegments(second),
+  useMonotoneWindow = Boolean(refinementExecution?.geometry),
 ): boolean {
   if (!boundsOverlap(firstBounds, secondBounds)) return false;
   for (const firstSegment of firstSegments) {
-    for (const secondSegment of secondSegments) {
+    let firstCandidate = 0, lastCandidate = secondSegments.length;
+    if (useMonotoneWindow && secondSegments.increasingX &&
+        Number.isFinite(firstSegment.minX) && Number.isFinite(firstSegment.maxX)) {
+      // Keep a superset of the original strict-overlap predicate, in original order.
+      let left = 0, right = secondSegments.length;
+      while (left < right) {
+        const middle = (left + right) >>> 1;
+        if (secondSegments[middle].maxX < firstSegment.minX) left = middle + 1;
+        else right = middle;
+      }
+      firstCandidate = left;
+      right = secondSegments.length;
+      while (left < right) {
+        const middle = (left + right) >>> 1;
+        if (secondSegments[middle].minX <= firstSegment.maxX) left = middle + 1;
+        else right = middle;
+      }
+      lastCandidate = left;
+    }
+    for (let index = firstCandidate; index < lastCandidate; index += 1) {
+      const secondSegment = secondSegments[index];
       if (boundedSegmentsCross(firstSegment, secondSegment)) return true;
     }
   }
