@@ -389,6 +389,7 @@ const api: LiveWrinklePipelineWorkerApi = {
         resampleSpacingPx: 1,
         maximumSkeletonIterations: 96,
         sourceImageRgba: request.mode === "yolo-only" ? undefined : request.pixels,
+        outputMode: "summary",
       },
     );
     if (!baseline.lines.length || !baseline.validation.passed) {

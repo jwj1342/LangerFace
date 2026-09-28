@@ -47,6 +47,18 @@ function paintRgbaPixel(rgba, width, x, y, value) {
     width,
     height,
   );
+  const summaryOnly = extractFineWrinkleLines(
+    { forehead, frown: new Uint8Array(width * height), wrinkle },
+    width,
+    height,
+    { outputMode: "summary" },
+  );
+  const { mask, confidence, directionQ, classMasks, ...expectedSummary } = first;
+  assert.deepStrictEqual(summaryOnly, expectedSummary,
+    "summary-only extraction must preserve every line, validation, and summary field");
+  assert.deepStrictEqual(Object.keys(first).slice(-5),
+    ["mask", "confidence", "directionQ", "classMasks", "rasterPixelCount"],
+    "default extraction must retain its serialized field order");
   assert.equal(first.schemaVersion, "langerface.wrinkle-fine-lines.v2");
   assert.equal(first.summary.sourceConnectedComponents, 3);
   assert.equal(first.summary.fineLineCount, 2);
