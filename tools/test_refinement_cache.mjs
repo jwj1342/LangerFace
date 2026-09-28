@@ -44,6 +44,46 @@ for (const region of ["forehead_bridge_arc_v15", "orbital_brow_upturn_v11"]) {
   assert.deepStrictEqual(await refinementOutputHashes(cached), await refinementOutputHashes(baseline));
 }
 
+// A topology retry must reuse only the raw geometric matches. Exclusions,
+// rejection reasons, and the rollback decision are rebuilt for the next round.
+{
+  const line = (start, end, y) => Array.from({ length: end - start + 1 },
+    (_, offset) => [start + offset, y]);
+  const horizontal = (name, y) => ({ name, region: "test",
+    pts: Array.from({ length: 40 }, (_, index) => [8 + index * 2, y]) });
+  const seeds = [horizontal("preferred", 30), horizontal("fallback", 36),
+    { name: "blocker", region: "test", pts: [[49, 30.25], [49, 32.5]] }];
+  const mask = new Uint8Array(size * size);
+  const confidence = new Float32Array(size * size);
+  const directionQ = new Float32Array(size * size * 2);
+  for (const [x, y] of line(18, 76, 32)) {
+    const index = y * size + x;
+    mask[index] = 1;
+    confidence[index] = 1;
+    directionQ[index * 2] = 1;
+  }
+  const input = {
+    seeds, wrinkleMask: mask, confidenceMap: confidence, directionQ, size,
+    faceWidthPx: 180,
+    options: {
+      oneToOneTrendCurveMatching: true, topologyRetryAttempts: 3,
+      postAdherenceGate: true, targetGapPx: 1.5, dataAttractionStrength: 20,
+      wrinkleDominantCoreStrength: 0.95, wrinkleDominantCoreSupportRatio: 0.08,
+      smoothingPasses: 12, searchRadiusPx: 16, p90LimitPx: 18,
+      maxDisplacementPx: 24, maxCurvatureChangeDegrees: 60,
+    },
+  };
+  const snapshot = structuredClone(input);
+  const baseline = refineV6({ ...input, cacheGeometry: false });
+  const performance = {};
+  const cached = refineV6({ ...input, cacheGeometry: true, performance });
+  assert.equal(cached.diagnostics.topology_candidate_retry_count, 1);
+  assert.ok(performance.counters?.matchingRecordCacheHits > 0);
+  assert.deepStrictEqual(cached, baseline, "topology retry must preserve every output field");
+  assert.deepStrictEqual(await refinementOutputHashes(cached), await refinementOutputHashes(baseline));
+  assert.deepStrictEqual(input, snapshot, "retry cache must not mutate its input");
+}
+
 let state = 0x12345678;
 const random = () => {
   state = (Math.imul(state, 1664525) + 1013904223) >>> 0;

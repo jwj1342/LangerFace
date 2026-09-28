@@ -246,6 +246,19 @@ interface RefinementExecution {
   geometry?: WeakMap<Point2[], CachedIntersectionGeometry>;
   crossings?: WeakMap<CachedIntersectionGeometry, WeakMap<CachedIntersectionGeometry, boolean>>;
   priorSamples?: WeakMap<Point2[], Map<number, { index: number; fraction: number; xDistance: number } | null>>;
+  matchingRecords?: {
+    trends: Trend[];
+    curves: CurveGeometry[];
+    confidence: NumericField;
+    size: number;
+    faceWidth: number;
+    bandRadius: number;
+    directionCosine: number;
+    minimumMatchScore: number;
+    groups: Map<string, MatchRecord[]>;
+    candidatePairCount: number;
+    directionRejectedPairCount: number;
+  };
 }
 
 let refinementExecution: RefinementExecution | null = null;
@@ -750,70 +763,89 @@ function matchTrendsToCurvesImpl(
   const directionCosine = Math.cos(
     (options.directionToleranceDegrees ?? DIRECTION_TOLERANCE_DEGREES) * Math.PI / 180,
   );
-  const groups = new Map<string, MatchRecord[]>();
-  const matchingBounds = curves.map((curve) => curveBounds(curve.prior));
+  let groups: Map<string, MatchRecord[]>;
   let candidatePairCount = 0, directionRejectedPairCount = 0;
-  for (let trendIndex = 0; trendIndex < trends.length; trendIndex += 1) {
-    const trend = trends[trendIndex];
-    const metrics = trend.metrics;
-    for (let pointOrder = 0; pointOrder < trend.points.length; pointOrder += 1) {
-      const point = trend.points[pointOrder], wrinkleTangent = metrics.tangents[pointOrder];
-      const wrinkleConfidence = confidenceAt(confidence, point, size);
-      if (!(wrinkleConfidence > 0) || !(wrinkleTangent[0] || wrinkleTangent[1])) continue;
-      for (let curveIndex = 0; curveIndex < curves.length; curveIndex += 1) {
-        const bounds = matchingBounds[curveIndex];
-        if (point[0] < bounds.minX - bandRadius || point[0] > bounds.maxX + bandRadius ||
-            point[1] < bounds.minY - bandRadius || point[1] > bounds.maxY + bandRadius) continue;
-        let best: MatchRecord | null = null;
-        for (const segment of curves[curveIndex].segments) {
-          if (point[0] < segment.minX - bandRadius || point[0] > segment.maxX + bandRadius ||
-              point[1] < segment.minY - bandRadius ||
-              point[1] > segment.maxY + bandRadius) continue;
-          const fromX = point[0] - segment.start[0];
-          const fromY = point[1] - segment.start[1];
-          const fraction = clamp((fromX * segment.dx + fromY * segment.dy) /
-            segment.lengthSquared);
-          const projection = [segment.start[0] + fraction * segment.dx,
-            segment.start[1] + fraction * segment.dy];
-          const deltaX = point[0] - projection[0], deltaY = point[1] - projection[1];
-          const distanceSquared = deltaX * deltaX + deltaY * deltaY;
-          if (distanceSquared > bandRadiusSquared) continue;
-          const distance = Math.hypot(deltaX, deltaY);
-          candidatePairCount += 1;
-          const alignment = Math.abs(segment.tangent[0] * wrinkleTangent[0] +
-            segment.tangent[1] * wrinkleTangent[1]);
-          if (alignment < directionCosine) {
-            directionRejectedPairCount += 1;
-            continue;
+  const minimumMatchScore = options.minimumMatchScore ?? 0.025;
+  const cached = refinementExecution?.matchingRecords;
+  if (refinementExecution?.geometry && cached && cached.trends === trends &&
+      cached.curves === curves && cached.confidence === confidence && cached.size === size &&
+      Object.is(cached.faceWidth, faceWidth) && Object.is(cached.bandRadius, bandRadius) &&
+      Object.is(cached.directionCosine, directionCosine) &&
+      Object.is(cached.minimumMatchScore, minimumMatchScore)) {
+    groups = cached.groups;
+    candidatePairCount = cached.candidatePairCount;
+    directionRejectedPairCount = cached.directionRejectedPairCount;
+    countRefinementOperation("matchingRecordCacheHits");
+  } else {
+    groups = new Map<string, MatchRecord[]>();
+    const matchingBounds = curves.map((curve) => curveBounds(curve.prior));
+    for (let trendIndex = 0; trendIndex < trends.length; trendIndex += 1) {
+      const trend = trends[trendIndex];
+      const metrics = trend.metrics;
+      for (let pointOrder = 0; pointOrder < trend.points.length; pointOrder += 1) {
+        const point = trend.points[pointOrder], wrinkleTangent = metrics.tangents[pointOrder];
+        const wrinkleConfidence = confidenceAt(confidence, point, size);
+        if (!(wrinkleConfidence > 0) || !(wrinkleTangent[0] || wrinkleTangent[1])) continue;
+        for (let curveIndex = 0; curveIndex < curves.length; curveIndex += 1) {
+          const bounds = matchingBounds[curveIndex];
+          if (point[0] < bounds.minX - bandRadius || point[0] > bounds.maxX + bandRadius ||
+              point[1] < bounds.minY - bandRadius || point[1] > bounds.maxY + bandRadius) continue;
+          let best: MatchRecord | null = null;
+          for (const segment of curves[curveIndex].segments) {
+            if (point[0] < segment.minX - bandRadius || point[0] > segment.maxX + bandRadius ||
+                point[1] < segment.minY - bandRadius ||
+                point[1] > segment.maxY + bandRadius) continue;
+            const fromX = point[0] - segment.start[0];
+            const fromY = point[1] - segment.start[1];
+            const fraction = clamp((fromX * segment.dx + fromY * segment.dy) /
+              segment.lengthSquared);
+            const projection = [segment.start[0] + fraction * segment.dx,
+              segment.start[1] + fraction * segment.dy];
+            const deltaX = point[0] - projection[0], deltaY = point[1] - projection[1];
+            const distanceSquared = deltaX * deltaX + deltaY * deltaY;
+            if (distanceSquared > bandRadiusSquared) continue;
+            const distance = Math.hypot(deltaX, deltaY);
+            candidatePairCount += 1;
+            const alignment = Math.abs(segment.tangent[0] * wrinkleTangent[0] +
+              segment.tangent[1] * wrinkleTangent[1]);
+            if (alignment < directionCosine) {
+              directionRejectedPairCount += 1;
+              continue;
+            }
+            const score = wrinkleConfidence * alignment * alignment *
+              Math.exp(-0.5 * (distance / normalScale) ** 2);
+            if (!best || score > best.score) {
+              best = {
+                trendIndex, pointOrder, curveIndex, score, alignment, distance,
+                confidence: wrinkleConfidence,
+                normalOffset: (deltaX * segment.normal[0] + deltaY * segment.normal[1]) *
+                  (segment.normal[1] > EPSILON ||
+                   (Math.abs(segment.normal[1]) <= EPSILON && segment.normal[0] >= 0) ? 1 : -1),
+                wrinklePoint: [...point],
+                wrinkleTangent: [...wrinkleTangent],
+                projectionArc: segment.arcStart + fraction * segment.length,
+                directArc: metrics.directArc[pointOrder],
+              };
+            }
           }
-          const score = wrinkleConfidence * alignment * alignment *
-            Math.exp(-0.5 * (distance / normalScale) ** 2);
-          if (!best || score > best.score) {
-            best = {
-              trendIndex, pointOrder, curveIndex, score, alignment, distance,
-              confidence: wrinkleConfidence,
-              normalOffset: (deltaX * segment.normal[0] + deltaY * segment.normal[1]) *
-                (segment.normal[1] > EPSILON ||
-                 (Math.abs(segment.normal[1]) <= EPSILON && segment.normal[0] >= 0) ? 1 : -1),
-              wrinklePoint: [...point],
-              wrinkleTangent: [...wrinkleTangent],
-              projectionArc: segment.arcStart + fraction * segment.length,
-              directArc: metrics.directArc[pointOrder],
-            };
-          }
+          if (!best || best.score < minimumMatchScore) continue;
+          const key = `${trendIndex}:${curveIndex}`;
+          const records = groups.get(key) || [];
+          records.push(best);
+          groups.set(key, records);
         }
-        if (!best || best.score < (options.minimumMatchScore ?? 0.025)) continue;
-        const key = `${trendIndex}:${curveIndex}`;
-        const records = groups.get(key) || [];
-        records.push(best);
-        groups.set(key, records);
       }
     }
+    if (refinementExecution?.geometry) refinementExecution.matchingRecords = {
+      trends, curves, confidence, size, faceWidth, bandRadius, directionCosine,
+      minimumMatchScore, groups, candidatePairCount, directionRejectedPairCount,
+    };
   }
 
   const acceptedGroups: MatchGroup[] = [];
   const groupRecords: Array<Record<string, any>> = [];
-  for (const [key, records] of groups) {
+  for (const [key, cachedRecords] of groups) {
+    const records = refinementExecution?.geometry ? [...cachedRecords] : cachedRecords;
     records.sort((a, b) => a.pointOrder - b.pointOrder);
     const [trendIndexText, curveIndexText] = key.split(":");
     const trendIndex = Number(trendIndexText), curveIndex = Number(curveIndexText);
