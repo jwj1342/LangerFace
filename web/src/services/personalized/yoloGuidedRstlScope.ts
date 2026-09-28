@@ -207,6 +207,19 @@ export function guardMergedYoloGuidedRstlCurves(
   const changed = new Set(curves.map((curve, index) =>
     JSON.stringify(curve.pts) === JSON.stringify(baseline[index].pts) ? -1 : index)
     .filter((index) => index >= 0));
+  if (options.cacheGeometry !== false) {
+    // Both arrays are private copies. Sharing an exactly unchanged curve lets
+    // the pair cache reuse its baseline result without changing the guard.
+    for (let index = 0; index < curves.length; index += 1) {
+      if (changed.has(index)) continue;
+      const current = curves[index].pts, prior = baseline[index].pts;
+      if (current.length === prior.length && current.every((point, pointIndex) =>
+        Object.is(point[0], prior[pointIndex][0]) &&
+        Object.is(point[1], prior[pointIndex][1]))) {
+        curves[index].pts = prior;
+      }
+    }
+  }
   // These arrays are owned by this call and are replaced, never mutated, on rollback.
   const bounds = new WeakMap<Point2[], { minX: number; minY: number; maxX: number; maxY: number }>();
   const pairCache = new WeakMap<Point2[], WeakMap<Point2[], boolean>>();

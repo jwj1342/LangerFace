@@ -67,6 +67,23 @@ for (let trial = 0; trial < 80; trial += 1) {
 }
 assert.ok(rollbackCases > 0, "randomized tests must exercise rollback invalidation");
 
+// The merged atlas normally changes only a few curves. Reusing private
+// unchanged copies must not affect intersections or the public result.
+for (let trial = 0; trial < 80; trial += 1) {
+  const seeds = Array.from({ length: 12 }, (_, curve) => ({
+    name: `mostly-unchanged-${curve}`, region: "forehead_bridge_arc_v15",
+    pts: Array.from({ length: 20 }, (_, i) => [i * 5, curve * 6 + random()]),
+  }));
+  const merged = seeds.map((seed, index) => ({ ...seed,
+    pts: seed.pts.map(([x, y]) => [x, index % 4 === 0 ? y + (random() - 0.5) * 20 : y]),
+  }));
+  const inputSnapshot = structuredClone({ seeds, merged });
+  const baseline = guardMergedYoloGuidedRstlCurves(seeds, merged, { cacheGeometry: false });
+  const cached = guardMergedYoloGuidedRstlCurves(seeds, merged, { cacheGeometry: true });
+  assert.deepStrictEqual(cached, baseline, `mostly-unchanged global guard trial ${trial}`);
+  assert.deepStrictEqual({ seeds, merged }, inputSnapshot);
+}
+
 // Touching boxes, zero-length segments and self-crossing paths retain the exact predicate.
 const boundarySeeds = [
   [[0, 0], [10, 10]], [[10, 10], [20, 0]], [[0, 10], [10, 0]],
