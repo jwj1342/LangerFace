@@ -2495,12 +2495,13 @@ function applyCurvatureFairingImpl(
       group.records);
     const candidateFitFor = (points: Point2[]) => {
       const distances: number[] = [];
-      const matchedTangents: Point2[] = [];
-      const matchSegments = polylineMatchSegments(points);
+      // Nearly every candidate needs distance; only a few need direction.
+      // Defer segment and winning-match tangents until that audit is requested.
+      const matchSegments = polylineMatchSegments(points, false);
       for (const record of targetRecords) {
-        const match = pointToPolylineMatch(record.wrinklePoint, points, matchSegments);
+        const match = pointToPolylineMatch(record.wrinklePoint, points, matchSegments,
+          Boolean(refinementExecution?.geometry), false);
         distances.push(match.distance);
-        matchedTangents.push(match.tangent);
       }
       let direction: { mean: number; p90: number } | null = null;
       return {
@@ -2511,8 +2512,10 @@ function applyCurvatureFairingImpl(
         },
         direction: () => {
           if (direction) return direction;
-          const directions = targetRecords.map((record: MatchRecord, index: number) =>
-            axialDirectionDifferenceDegrees(matchedTangents[index], record.wrinkleTangent));
+          const directions = targetRecords.map((record: MatchRecord) =>
+            axialDirectionDifferenceDegrees(
+              pointToPolylineMatch(record.wrinklePoint, points, matchSegments).tangent,
+              record.wrinkleTangent));
           direction = {
             mean: directions.reduce((sum: number, value: number) => sum + value, 0) /
               Math.max(1, directions.length),
@@ -3012,7 +3015,9 @@ type PolylineMatchSegments = PolylineMatchSegment[] & {
   decreasingX?: boolean;
 };
 
-export function polylineMatchSegments(polyline: Point2[]): PolylineMatchSegments {
+export function polylineMatchSegments(
+  polyline: Point2[], includeTangent = true,
+): PolylineMatchSegments {
   const segments = new Array<PolylineMatchSegment>(Math.max(0, polyline.length - 1)) as
     PolylineMatchSegments;
   let increasingX = true, decreasingX = true;
@@ -3034,7 +3039,7 @@ export function polylineMatchSegments(polyline: Point2[]): PolylineMatchSegments
       dy,
       lengthSquared: dx * dx + dy * dy,
     };
-    if (refinementExecution?.geometry) segment.tangent = normalize2(dx, dy);
+    if (includeTangent && refinementExecution?.geometry) segment.tangent = normalize2(dx, dy);
     segments[index] = segment;
   }
   segments.increasingX = increasingX;
@@ -3045,6 +3050,7 @@ export function polylineMatchSegments(polyline: Point2[]): PolylineMatchSegments
 export function pointToPolylineMatch(
   point: Point2, polyline: Point2[], segments: PolylineMatchSegments = polylineMatchSegments(polyline),
   useMonotoneWindow = Boolean(refinementExecution?.geometry),
+  includeTangent = true,
 ): { distance: number; tangent: Point2 } {
   let firstSegment = 0, lastSegment = segments.length;
   if (useMonotoneWindow && (segments.increasingX || segments.decreasingX) &&
@@ -3107,7 +3113,7 @@ export function pointToPolylineMatch(
   }
   return Number.isFinite(bestDistanceSquared) ? {
     distance: Math.hypot(bestDeltaX, bestDeltaY),
-    tangent: bestSegment?.tangent || normalize2(bestDx, bestDy),
+    tangent: includeTangent ? bestSegment?.tangent || normalize2(bestDx, bestDy) : [0, 0],
   } : { distance: 0, tangent: [0, 0] };
 }
 

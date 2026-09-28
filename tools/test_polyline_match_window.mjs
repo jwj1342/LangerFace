@@ -12,12 +12,23 @@ const random = () => {
 
 const check = (curve, points) => {
   const segments = polylineMatchSegments(curve);
+  const distanceOnlySegments = polylineMatchSegments(curve, false);
   for (const point of points) {
-    assert.deepStrictEqual(
-      pointToPolylineMatch(point, curve, segments, true),
+    const full = pointToPolylineMatch(point, curve, segments, true);
+    assert.deepStrictEqual(full,
       pointToPolylineMatch(point, curve, segments, false),
       `nearest segment changed for ${JSON.stringify({ curve, point })}`,
     );
+    assert.deepStrictEqual(
+      pointToPolylineMatch(point, curve, distanceOnlySegments, true), full,
+      `deferred tangent changed matching for ${JSON.stringify({ curve, point })}`,
+    );
+    const distanceOnly = pointToPolylineMatch(
+      point, curve, distanceOnlySegments, true, false,
+    );
+    assert.equal(distanceOnly.distance, full.distance,
+      `distance-only matching changed for ${JSON.stringify({ curve, point })}`);
+    assert.deepStrictEqual(distanceOnly.tangent, [0, 0]);
   }
 };
 
