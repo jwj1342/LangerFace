@@ -174,7 +174,20 @@ export function yoloGuardCurvesCross(first: Point2[], second: Point2[],
   return false;
 }
 
-function selfCrosses(points: Point2[]): boolean {
+export function yoloGuardSelfCrosses(points: Point2[]): boolean {
+  // Nonadjacent segments of a finite x-monotone polyline can only meet at
+  // a shared x boundary. The existing strict-crossing predicate rejects it.
+  let increasingX = true;
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1], end = points[index];
+    if (end[0] < start[0] || !Number.isFinite(start[0]) ||
+        !Number.isFinite(start[1]) || !Number.isFinite(end[0]) ||
+        !Number.isFinite(end[1])) {
+      increasingX = false;
+      break;
+    }
+  }
+  if (increasingX) return false;
   for (let first = 1; first < points.length; first += 1) {
     for (let second = first + 2; second < points.length; second += 1) {
       if (segmentsCross(
@@ -299,7 +312,7 @@ export function guardMergedYoloGuidedRstlCurves(
   const pairsFor = (items: Array<{ pts: Point2[] }>) =>
     intersectionPairs(items, cachedCross, options.performance);
   const baselinePairs = pairsFor(baseline);
-  const baselineSelf = baseline.map((curve) => selfCrosses(curve.pts));
+  const baselineSelf = baseline.map((curve) => yoloGuardSelfCrosses(curve.pts));
   const rolledBack = new Set<number>();
   const rollback = (index: number): void => {
     curves[index] = {
@@ -310,7 +323,7 @@ export function guardMergedYoloGuidedRstlCurves(
     rolledBack.add(index);
   };
   for (const index of [...changed]) {
-    if (!baselineSelf[index] && selfCrosses(curves[index].pts)) rollback(index);
+    if (!baselineSelf[index] && yoloGuardSelfCrosses(curves[index].pts)) rollback(index);
   }
   let repeat = true;
   while (repeat) {
@@ -331,6 +344,6 @@ export function guardMergedYoloGuidedRstlCurves(
     rolledBackCurveIndices: [...rolledBack].sort((left, right) => left - right),
     newIntersectionPairCount: [...finalPairs].filter((pair) => !baselinePairs.has(pair)).length,
     newSelfCrossCurveCount: curves.filter((curve, index) =>
-      !baselineSelf[index] && selfCrosses(curve.pts)).length,
+      !baselineSelf[index] && yoloGuardSelfCrosses(curve.pts)).length,
   };
 }
