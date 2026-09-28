@@ -2946,6 +2946,8 @@ interface PolylineMatchSegment {
   dx: number;
   dy: number;
   lengthSquared: number;
+  // Only filled in the cache-enabled path; selected segments can reuse it.
+  tangent?: Point2;
 }
 
 type PolylineMatchSegments = PolylineMatchSegment[] & { increasingX?: boolean };
@@ -2961,7 +2963,7 @@ export function polylineMatchSegments(polyline: Point2[]): PolylineMatchSegments
         !Number.isFinite(start[1]) || !Number.isFinite(end[1])) {
       increasingX = false;
     }
-    segments[index] = {
+    const segment: PolylineMatchSegment = {
       startX: start[0],
       startY: start[1],
       endX: end[0],
@@ -2969,6 +2971,8 @@ export function polylineMatchSegments(polyline: Point2[]): PolylineMatchSegments
       dy,
       lengthSquared: dx * dx + dy * dy,
     };
+    if (refinementExecution?.geometry) segment.tangent = normalize2(dx, dy);
+    segments[index] = segment;
   }
   segments.increasingX = increasingX;
   return segments;
@@ -3012,6 +3016,7 @@ export function pointToPolylineMatch(
   let bestDeltaY = 0;
   let bestDx = 0;
   let bestDy = 0;
+  let bestSegment: PolylineMatchSegment | null = null;
   for (let index = firstSegment; index < lastSegment; index += 1) {
     const segment = segments[index];
     const fraction = segment.lengthSquared > EPSILON ? clamp(
@@ -3029,11 +3034,12 @@ export function pointToPolylineMatch(
       bestDeltaY = deltaY;
       bestDx = segment.dx;
       bestDy = segment.dy;
+      bestSegment = segment;
     }
   }
   return Number.isFinite(bestDistanceSquared) ? {
     distance: Math.hypot(bestDeltaX, bestDeltaY),
-    tangent: normalize2(bestDx, bestDy),
+    tangent: bestSegment?.tangent || normalize2(bestDx, bestDy),
   } : { distance: 0, tangent: [0, 0] };
 }
 

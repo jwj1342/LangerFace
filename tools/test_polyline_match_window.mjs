@@ -21,6 +21,23 @@ const check = (curve, points) => {
   }
 };
 
+const checkCachedTangent = (curve, points) => {
+  const plain = polylineMatchSegments(curve);
+  const precomputed = polylineMatchSegments(curve);
+  for (const segment of precomputed) {
+    const length = Math.hypot(segment.dx, segment.dy);
+    segment.tangent = length > 1e-8 ?
+      [segment.dx / length, segment.dy / length] : [0, 0];
+  }
+  for (const point of points) {
+    assert.deepStrictEqual(
+      pointToPolylineMatch(point, curve, precomputed, true),
+      pointToPolylineMatch(point, curve, plain, true),
+      `precomputed tangent changed matching for ${JSON.stringify({ curve, point })}`,
+    );
+  }
+};
+
 for (const curve of [
   [], [[0, 0]], [[0, 0], [0, 0]],
   [[0, 0], [0, 10], [0, -10], [10, 0]],
@@ -45,6 +62,8 @@ for (let trial = 0; trial < 200; trial += 1) {
   if (trial % 5 === 0) curve.reverse();
   if (trial % 7 === 0) curve[Math.floor(length / 2)][0] -= 30;
   check(curve, Array.from({ length: 100 }, () =>
+    [-120 + random() * 400, (random() - 0.5) * 300]));
+  checkCachedTangent(curve, Array.from({ length: 20 }, () =>
     [-120 + random() * 400, (random() - 0.5) * 300]));
 }
 
