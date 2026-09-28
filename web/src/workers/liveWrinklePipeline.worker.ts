@@ -14,6 +14,7 @@ import {
 } from "../services/personalized/noseRootIntersectionVisibility.ts";
 import {
   buildPrecomputedFineWrinkleEvidence,
+  validatedPrecomputedFineWrinkleSummary,
   type PrecomputedFineWrinkleEvidence,
   type PrecomputedFineWrinklePayload,
 } from "../services/personalized/precomputedFineWrinkleEvidence.ts";
@@ -440,24 +441,15 @@ const api: LiveWrinklePipelineWorkerApi = {
     const payload = await dynamicFourRegionDetection(request, baseline.lines, session);
     const fourRegionDetectionMs = performance.now() - fourRegionStart;
     const evidenceStart = performance.now();
-    const displayEvidence = buildPrecomputedFineWrinkleEvidence(
+    const displaySummary = validatedPrecomputedFineWrinkleSummary(
       payload,
-      request.size,
-      payload.source.imageSha256,
-    );
-    const guidancePayload: DynamicFourRegionPayload = {
-      ...payload,
-      lines: payload.lines.filter((line) => line.anatomicalClass !== "nasal_dorsum"),
-    };
-    const guidanceEvidence = buildPrecomputedFineWrinkleEvidence(
-      guidancePayload,
       request.size,
       payload.source.imageSha256,
     );
     const evidence: LiveWrinkleWorkerEvidence = {
       lines: payload.lines,
       summary: {
-        ...displayEvidence.summary,
+        ...displaySummary,
         browserBaselineSha256,
         v10InputImageSha256: payload.source.imageSha256,
       },

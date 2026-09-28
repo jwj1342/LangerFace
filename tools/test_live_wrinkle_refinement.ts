@@ -21,7 +21,10 @@ import {
   YoloWrinkleOnnx,
   YOLO_WRINKLE_ONNX_VERSION,
 } from "../web/src/services/personalized/yoloWrinkleOnnx.ts";
-import { buildPrecomputedFineWrinkleEvidence } from "../web/src/services/personalized/precomputedFineWrinkleEvidence.ts";
+import {
+  buildPrecomputedFineWrinkleEvidence,
+  validatedPrecomputedFineWrinkleSummary,
+} from "../web/src/services/personalized/precomputedFineWrinkleEvidence.ts";
 import {
   guardMergedYoloGuidedRstlCurves,
   isYoloGuidedRstlSeed,
@@ -654,10 +657,20 @@ assert.match(webPackage.scripts.dev, /vite --force\b/,
     1254,
     "1c6a677ea8aa2ebccd871ea39a7507ae64d9f64e83b03c389f6b18854fae5458",
   );
+  const imageSha256 = "1c6a677ea8aa2ebccd871ea39a7507ae64d9f64e83b03c389f6b18854fae5458";
+  assert.deepEqual(validatedPrecomputedFineWrinkleSummary(payload, 1254, imageSha256),
+    evidence.summary, "summary-only detection must preserve the validated display summary");
   assert.equal(evidence.lines.length, 26, "the canonical v10 evidence must preserve all centerlines");
   assert.ok(evidence.rasterPixelCount > 0);
   assert.throws(() => buildPrecomputedFineWrinkleEvidence(payload, 1254, "different-image"),
     /different image/, "precomputed evidence cannot be reused for another image hash");
+  assert.throws(() => validatedPrecomputedFineWrinkleSummary(payload, 1254, "different-image"),
+    /different image/, "summary-only detection must retain the image ownership check");
+  assert.throws(() => validatedPrecomputedFineWrinkleSummary(payload, 1253, imageSha256),
+    /different working coordinate size/, "summary-only detection must retain the size check");
+  assert.throws(() => validatedPrecomputedFineWrinkleSummary({ ...payload, lines: [] },
+    1254, imageSha256), /invalid lines/,
+  "summary-only detection must still reject missing centerlines");
 }
 
 {

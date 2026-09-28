@@ -75,11 +75,11 @@ function parseLines(lines: unknown[]): PrecomputedFineWrinkleLine[] {
   });
 }
 
-export function buildPrecomputedFineWrinkleEvidence(
+function validatePrecomputedFineWrinklePayload(
   payload: PrecomputedFineWrinklePayload,
   size: number,
   expectedImageSha256: string,
-): PrecomputedFineWrinkleEvidence {
+): PrecomputedFineWrinkleLine[] {
   if (!Number.isInteger(size) || size <= 0) throw new TypeError("Fine wrinkle evidence size must be positive");
   if (payload?.schemaVersion !== "langerface.wrinkle-fine-lines.v1" || !Array.isArray(payload.lines)) {
     throw new Error("Precomputed fine wrinkle evidence has an invalid schema");
@@ -94,6 +94,24 @@ export function buildPrecomputedFineWrinkleEvidence(
   if (!lines.length || lines.length !== payload.lines.length) {
     throw new Error("Precomputed fine wrinkle evidence contains invalid lines");
   }
+  return lines;
+}
+
+export function validatedPrecomputedFineWrinkleSummary(
+  payload: PrecomputedFineWrinklePayload,
+  size: number,
+  expectedImageSha256: string,
+): Record<string, unknown> {
+  validatePrecomputedFineWrinklePayload(payload, size, expectedImageSha256);
+  return payload.summary || {};
+}
+
+export function buildPrecomputedFineWrinkleEvidence(
+  payload: PrecomputedFineWrinklePayload,
+  size: number,
+  expectedImageSha256: string,
+): PrecomputedFineWrinkleEvidence {
+  const lines = validatePrecomputedFineWrinklePayload(payload, size, expectedImageSha256);
 
   const pixels = size * size;
   const mask = new Uint8Array(pixels);
