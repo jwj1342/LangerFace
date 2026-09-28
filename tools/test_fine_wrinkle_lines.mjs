@@ -27,6 +27,35 @@ function paintRgbaPixel(rgba, width, x, y, value) {
   rgba[index + 2] = value;
 }
 
+function countRenderedComponents(mask, width, height) {
+  const visited = new Uint8Array(mask.length);
+  const queue = [];
+  let count = 0;
+  for (let start = 0; start < mask.length; start++) {
+    if (!mask[start] || visited[start]) continue;
+    count++;
+    visited[start] = 1;
+    queue.length = 0;
+    queue.push(start);
+    for (let head = 0; head < queue.length; head++) {
+      const index = queue[head];
+      const x = index % width;
+      const y = Math.floor(index / width);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx;
+        const yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= width || yy >= height) continue;
+        const neighbor = yy * width + xx;
+        if (mask[neighbor] && !visited[neighbor]) {
+          visited[neighbor] = 1;
+          queue.push(neighbor);
+        }
+      }
+    }
+  }
+  return count;
+}
+
 {
   const width = 72;
   const height = 48;
@@ -72,6 +101,42 @@ function paintRgbaPixel(rgba, width, x, y, value) {
   assert.deepEqual(first.lines, second.lines, "automatic extraction must be deterministic");
   assert.deepEqual(forehead, beforeForehead, "source class masks must not be mutated");
   assert.deepEqual(wrinkle, beforeWrinkle, "source class masks must not be mutated");
+}
+
+// The sparse rendered-pixel path must agree with a full-frame 8-neighbor
+// reference for empty, edge-touching, overlapping, and dense input masks.
+{
+  let seed = 72897;
+  const random = () => {
+    seed = (Math.imul(1664525, seed) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  for (let sample = 0; sample < 24; sample++) {
+    const width = 40 + Math.floor(random() * 40);
+    const height = 32 + Math.floor(random() * 32);
+    const masks = Object.fromEntries(["forehead", "frown", "wrinkle"].map((name) =>
+      [name, new Uint8Array(width * height)]));
+    if (sample > 0) {
+      for (const mask of Object.values(masks)) {
+        for (let region = 0; region < (sample % 6) + 1; region++) {
+          const x = Math.floor(random() * width);
+          const y = Math.floor(random() * height);
+          const length = 1 + Math.floor(random() * 45);
+          const thickness = sample % 4 === 0 ? 9 : 1 + Math.floor(random() * 5);
+          paintRect(mask, width, x, y,
+            Math.min(width - 1, x + length), Math.min(height - 1, y + thickness));
+        }
+      }
+    }
+    const full = extractFineWrinkleLines(masks, width, height);
+    const summaryOnly = extractFineWrinkleLines(masks, width, height,
+      { outputMode: "summary" });
+    assert.equal(full.validation.renderedConnectedComponents,
+      countRenderedComponents(full.mask, width, height),
+      `rendered component count must match a full-frame scan for sample ${sample}`);
+    assert.deepStrictEqual(summaryOnly.validation, full.validation,
+      `summary mode must preserve validation for sample ${sample}`);
+  }
 }
 
 // The retained line represents one physical wrinkle. A short fork in a thick

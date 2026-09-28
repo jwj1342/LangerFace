@@ -652,8 +652,38 @@ function rasterStaysInside(
   return inside;
 }
 
-function renderedComponentCount(mask: NumericField, width: number, height: number): number {
-  return connectedComponents(mask, width, height).length;
+function renderedComponentCount(
+  mask: NumericField, width: number, height: number, renderedIndices?: number[],
+): number {
+  if (!renderedIndices || renderedIndices.length >= mask.length / 8) {
+    return connectedComponents(mask, width, height).length;
+  }
+  const visited = new Uint8Array(mask.length);
+  const queue: number[] = [];
+  let count = 0;
+  for (const start of renderedIndices) {
+    if (visited[start]) continue;
+    count++;
+    visited[start] = 1;
+    queue.length = 0;
+    queue.push(start);
+    for (let head = 0; head < queue.length; head++) {
+      const index = queue[head];
+      const x = index % width;
+      const y = Math.floor(index / width);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const xx = x + dx;
+        const yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= width || yy >= height) continue;
+        const next = yy * width + xx;
+        if (!mask[next] || visited[next]) continue;
+        visited[next] = 1;
+        queue.push(next);
+      }
+    }
+  }
+  return count;
 }
 
 function normalizedBinaryCopy(source: NumericField | undefined, pixels: number): Uint8Array {
@@ -859,7 +889,7 @@ export function extractFineWrinkleLines(
   const minimumExtractedLength = lines.length ? Math.min(...lines.map((line) => line.lengthPx)) : 0;
   const recoveredForeheadEndpointCount = lines.filter((line) =>
     Number(line.recoveredEndpointLengthPx || 0) > 0).length;
-  const renderedConnectedComponents = renderedComponentCount(mask, width, height);
+  const renderedConnectedComponents = renderedComponentCount(mask, width, height, renderedIndices);
   const checks = {
     allPointsInsideOwnSourceComponent: lines.every((line) => line.points.every((point) =>
       maskContains(effectiveClassMasks[line.class] || [], width, height, point))),
