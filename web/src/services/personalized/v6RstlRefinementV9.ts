@@ -2495,26 +2495,30 @@ function applyCurvatureFairingImpl(
       group.records);
     const candidateFitFor = (points: Point2[]) => {
       const distances: number[] = [];
-      const directions: number[] = [];
+      const matchedTangents: Point2[] = [];
       const matchSegments = polylineMatchSegments(points);
       for (const record of targetRecords) {
         const match = pointToPolylineMatch(record.wrinklePoint, points, matchSegments);
         distances.push(match.distance);
-        directions.push(axialDirectionDifferenceDegrees(
-          match.tangent,
-          record.wrinkleTangent,
-        ));
+        matchedTangents.push(match.tangent);
       }
+      let direction: { mean: number; p90: number } | null = null;
       return {
         adherence: {
           mean: distances.reduce((sum: number, value: number) => sum + value, 0) /
             Math.max(1, distances.length),
           p90: percentile(distances, 0.9),
         },
-        direction: {
-          mean: directions.reduce((sum, value) => sum + value, 0) /
-            Math.max(1, directions.length),
-          p90: percentile(directions, 0.9),
+        direction: () => {
+          if (direction) return direction;
+          const directions = targetRecords.map((record: MatchRecord, index: number) =>
+            axialDirectionDifferenceDegrees(matchedTangents[index], record.wrinkleTangent));
+          direction = {
+            mean: directions.reduce((sum: number, value: number) => sum + value, 0) /
+              Math.max(1, directions.length),
+            p90: percentile(directions, 0.9),
+          };
+          return direction;
         },
       };
     };
@@ -2552,7 +2556,7 @@ function applyCurvatureFairingImpl(
       priorCandidateMetrics = metrics;
       priorCandidateFit = candidateFit;
       const candidateAdherence = candidateFit.adherence;
-      const candidateDirection = candidateFit.direction;
+      const candidateDirection = guidedRegion === "crows_feet" ? candidateFit.direction() : null;
       let newIntersectionPairs: string[] = [];
       let topologyPassed = true;
       if (guidedRegion === "crows_feet" && metadata.directional_target === true) {
@@ -2565,7 +2569,8 @@ function applyCurvatureFairingImpl(
       }
       const adherencePassed = candidateAdherence.mean <= maximumMeanAdherence + 1e-6 &&
         candidateAdherence.p90 <= maximumP90Adherence + 1e-6;
-      const directionPassed = candidateDirection.p90 <= maximumDirectionP90 + 1e-6;
+      const directionPassed = candidateDirection === null ||
+        candidateDirection.p90 <= maximumDirectionP90 + 1e-6;
       const newShortCurvatureReversal = enforceShortReversalGate && !priorHasShortReversal &&
         metrics.minimumMaterialSignChangeSpacingPx !== null &&
         metrics.minimumMaterialSignChangeSpacingPx < minimumReversalSpacingPx;
@@ -2595,9 +2600,10 @@ function applyCurvatureFairingImpl(
         Math.max(0, endpointChange - regionalMaximumEndpointTangentChange) +
         4 * Math.max(0, candidateAdherence.mean - maximumMeanAdherence) +
         Math.max(0, candidateAdherence.p90 - maximumP90Adherence) +
-        directionWeight * Math.max(0, candidateDirection.p90 - maximumDirectionP90);
+        directionWeight * Math.max(0, (candidateDirection?.p90 ?? 0) - maximumDirectionP90);
       if (!bestAttempt || violation < bestAttempt.violation) {
-        bestAttempt = { ...attempt, violation };
+        bestAttempt = { ...attempt,
+          direction_adherence: candidateDirection || candidateFit.direction(), violation };
       }
       if (!metadata.short_curvature_repair && !metadata.regional_cartesian_displacement &&
           enforceShortReversalGate && insideCanvas &&
@@ -2634,7 +2640,7 @@ function applyCurvatureFairingImpl(
             taper_arc_px: metadata.taper_arc_px,
             adherence_mean_px: candidateAdherence.mean,
             adherence_p90_px: candidateAdherence.p90,
-            direction_p90_degrees: candidateDirection.p90,
+            direction_p90_degrees: candidateDirection!.p90,
             maximum_turn_degrees: metrics.maximumTurnDegrees,
             material_sign_changes: metrics.materialSignChanges,
             endpoint_tangent_change_degrees: endpointChange,
@@ -2659,7 +2665,7 @@ function applyCurvatureFairingImpl(
               ...(!topologyPassed ? ["topology"] : []),
               ...(candidateAdherence.mean > maximumMeanAdherence + 1e-6 ? ["mean_adherence"] : []),
               ...(candidateAdherence.p90 > maximumP90Adherence + 1e-6 ? ["p90_adherence"] : []),
-              ...(candidateDirection.p90 > maximumDirectionP90 + 1e-6 ? ["direction"] : []),
+              ...(candidateDirection!.p90 > maximumDirectionP90 + 1e-6 ? ["direction"] : []),
             ],
           });
         }
@@ -2672,7 +2678,7 @@ function applyCurvatureFairingImpl(
       const offsetRmsError = Math.sqrt(squaredOffsetError /
         Math.max(1, originalOffsets.length));
       const score = candidateAdherence.mean + 0.15 * candidateAdherence.p90 +
-        directionWeight * candidateDirection.p90 +
+        directionWeight * (candidateDirection?.p90 ?? 0) +
         0.01 * offsetRmsError;
       if (metadata.directional_target === true &&
           (curveIndex === 134 || curveIndex === 137) &&
@@ -2684,7 +2690,7 @@ function applyCurvatureFairingImpl(
           taper_arc_px: metadata.taper_arc_px,
           adherence_mean_px: candidateAdherence.mean,
           adherence_p90_px: candidateAdherence.p90,
-          direction_p90_degrees: candidateDirection.p90,
+          direction_p90_degrees: candidateDirection!.p90,
           maximum_turn_degrees: metrics.maximumTurnDegrees,
           material_sign_changes: metrics.materialSignChanges,
           endpoint_tangent_change_degrees: endpointChange,
@@ -2713,7 +2719,7 @@ function applyCurvatureFairingImpl(
       selectedModeCount = metadata.mode_count ?? null;
       selectedEndpointChange = endpointChange;
       selectedAdherence = candidateAdherence;
-      selectedDirectionAdherence = candidateDirection;
+      selectedDirectionAdherence = candidateDirection || candidateFit.direction();
       selectedPoints = candidatePoints;
       selectedRegionalCartesianDisplacement = metadata.regional_cartesian_displacement === true;
       selectedScore = score;
