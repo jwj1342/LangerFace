@@ -2940,7 +2940,8 @@ function axialDirectionDifferenceDegrees(first: Point2, second: Point2): number 
 }
 
 interface PolylineMatchSegment {
-  start: Point2;
+  startX: number;
+  startY: number;
   dx: number;
   dy: number;
   lengthSquared: number;
@@ -2952,7 +2953,8 @@ function polylineMatchSegments(polyline: Point2[]): PolylineMatchSegment[] {
     const start = polyline[index], end = polyline[index + 1];
     const dx = end[0] - start[0], dy = end[1] - start[1];
     segments[index] = {
-      start,
+      startX: start[0],
+      startY: start[1],
       dx,
       dy,
       lengthSquared: dx * dx + dy * dy,
@@ -2971,11 +2973,11 @@ function pointToPolylineMatch(
   let bestDy = 0;
   for (const segment of segments) {
     const fraction = segment.lengthSquared > EPSILON ? clamp(
-      ((point[0] - segment.start[0]) * segment.dx +
-       (point[1] - segment.start[1]) * segment.dy) / segment.lengthSquared,
+      ((point[0] - segment.startX) * segment.dx +
+       (point[1] - segment.startY) * segment.dy) / segment.lengthSquared,
     ) : 0;
-    const projectionX = segment.start[0] + fraction * segment.dx;
-    const projectionY = segment.start[1] + fraction * segment.dy;
+    const projectionX = segment.startX + fraction * segment.dx;
+    const projectionY = segment.startY + fraction * segment.dy;
     const deltaX = point[0] - projectionX;
     const deltaY = point[1] - projectionY;
     const distanceSquared = deltaX * deltaX + deltaY * deltaY;
