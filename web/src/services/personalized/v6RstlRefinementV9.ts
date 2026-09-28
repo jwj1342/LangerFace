@@ -3356,7 +3356,7 @@ function boundsOverlap(first: Bounds, second: Bounds): boolean {
 interface CachedIntersectionGeometry {
   coordinates: Float64Array;
   bounds: Bounds;
-  segments: BoundedSegment[];
+  segments: BoundedSegments;
   selfCross?: boolean;
 }
 
@@ -3381,6 +3381,12 @@ function intersectionGeometry(points: Point2[]): CachedIntersectionGeometry {
 }
 
 function selfCrosses(points: Point2[]): boolean {
+  return selfCrossesWithWindow(points, Boolean(refinementExecution?.geometry));
+}
+
+export function selfCrossesWithWindow(
+  points: Point2[], useMonotoneWindow: boolean,
+): boolean {
   countRefinementOperation("selfCrossChecks");
   const geometry = intersectionGeometry(points);
   if (geometry.selfCross !== undefined) {
@@ -3388,6 +3394,12 @@ function selfCrosses(points: Point2[]): boolean {
     return geometry.selfCross;
   }
   const { segments } = geometry;
+  if (useMonotoneWindow && segments.increasingX) {
+    // For nonadjacent segments i and j >= i + 2, monotonicity gives
+    // maxX(i) <= minX(j). The original strict-overlap test must reject.
+    geometry.selfCross = false;
+    return false;
+  }
   for (let first = 0; first < segments.length; first += 1) {
     for (let second = first + 2; second < segments.length; second += 1) {
       if (boundedSegmentsCross(segments[first], segments[second])) {
