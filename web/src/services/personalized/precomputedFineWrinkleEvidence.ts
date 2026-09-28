@@ -117,7 +117,7 @@ export function buildPrecomputedFineWrinkleEvidence(
   const mask = new Uint8Array(pixels);
   const confidence = new Float32Array(pixels);
   const directionQ = new Float32Array(pixels * 2);
-  const directionWeight = new Float32Array(pixels);
+  const renderedIndices: number[] = [];
   const classMasks = Object.fromEntries(
     YOLO_WRINKLE_CLASSES.map((name) => [name, new Uint8Array(pixels)]),
   );
@@ -134,17 +134,16 @@ export function buildPrecomputedFineWrinkleEvidence(
       rasterSegment(start, end, (x, y) => {
         if (x < 0 || y < 0 || x >= size || y >= size) return;
         const pixelIndex = y * size + x;
+        if (!mask[pixelIndex]) renderedIndices.push(pixelIndex);
         mask[pixelIndex] = 1;
         confidence[pixelIndex] = 1;
         classMasks[line.class][pixelIndex] = 1;
         directionQ[pixelIndex * 2] += q0;
         directionQ[pixelIndex * 2 + 1] += q1;
-        directionWeight[pixelIndex] += 1;
       });
     }
   }
-  for (let pixelIndex = 0; pixelIndex < pixels; pixelIndex += 1) {
-    if (!(directionWeight[pixelIndex] > 0)) continue;
+  for (const pixelIndex of renderedIndices) {
     const q0 = directionQ[pixelIndex * 2];
     const q1 = directionQ[pixelIndex * 2 + 1];
     const length = Math.hypot(q0, q1);
@@ -159,6 +158,6 @@ export function buildPrecomputedFineWrinkleEvidence(
     classMasks,
     lines,
     summary: payload.summary || {},
-    rasterPixelCount: mask.reduce((sum, value) => sum + (value ? 1 : 0), 0),
+    rasterPixelCount: renderedIndices.length,
   };
 }

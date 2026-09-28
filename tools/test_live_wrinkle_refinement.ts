@@ -674,6 +674,45 @@ assert.match(webPackage.scripts.dev, /vite --force\b/,
 }
 
 {
+  const imageSha256 = "sparse-raster-test";
+  const source = { imageSha256, width: 8, height: 8 };
+  const evidence = buildPrecomputedFineWrinkleEvidence({
+    schemaVersion: "langerface.wrinkle-fine-lines.v1",
+    source,
+    lines: [
+      { id: "horizontal", class: "forehead", points: [[1, 1], [3, 1]] },
+      { id: "vertical", class: "frown", points: [[2, 0], [2, 2]] },
+    ],
+  }, 8, imageSha256);
+  const crossing = 1 * 8 + 2;
+  const blank = 7 * 8 + 7;
+  assert.equal(evidence.rasterPixelCount, 5,
+    "overlapping segments must count each rendered pixel only once");
+  assert.equal(evidence.mask.reduce((sum, value) => sum + value, 0), 5);
+  assert.equal(evidence.mask[crossing], 1);
+  assert.equal(evidence.confidence[crossing], 1);
+  assert.equal(evidence.classMasks.forehead[crossing], 1);
+  assert.equal(evidence.classMasks.frown[crossing], 1);
+  assert.equal(evidence.directionQ[crossing * 2], 0,
+    "opposing axial directions must cancel at a crossing");
+  assert.equal(evidence.directionQ[crossing * 2 + 1], 0);
+  assert.equal(evidence.directionQ[(1 * 8 + 1) * 2], 1);
+  assert.equal(evidence.directionQ[(0 * 8 + 2) * 2], -1);
+  assert.equal(evidence.mask[blank], 0);
+  assert.equal(evidence.confidence[blank], 0);
+  assert.equal(evidence.directionQ[blank * 2], 0);
+  assert.equal(evidence.directionQ[blank * 2 + 1], 0);
+  const emptyRaster = buildPrecomputedFineWrinkleEvidence({
+    schemaVersion: "langerface.wrinkle-fine-lines.v1",
+    source,
+    lines: [{ id: "point", class: "forehead", points: [[1, 1], [1, 1]] }],
+  }, 8, imageSha256);
+  assert.equal(emptyRaster.rasterPixelCount, 0,
+    "zero-length segments must not enter the rendered-pixel list");
+  assert.equal(emptyRaster.mask.reduce((sum, value) => sum + value, 0), 0);
+}
+
+{
   let fetchCalls = 0;
   let createCalls = 0;
   let releaseCalls = 0;
