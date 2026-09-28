@@ -44,6 +44,8 @@ for (const curve of [
   [[10, 0], [0, 0], [-10, 0]],
   [[-10, 0], [0, 10], [0, -10], [10, 0]],
   [[-10, 0], [-5, 0], [0, 0], [5, 0], [10, 0]],
+  [[0, 0], [0, 0], [0, 0], [10, 0], [10, 0]],
+  [[-1e9, 1e9], [0, 0], [1e9, -1e9]],
   [[0, 0], [10, Number.NaN], [20, 0]],
   [[0, 0], [10, Infinity], [20, 0]],
 ]) {
@@ -51,8 +53,10 @@ for (const curve of [
     [(random() - 0.5) * 100, (random() - 0.5) * 100]));
 }
 check([[0, 0], [10, 0], [20, 0]], [[Number.NaN, 0], [Infinity, 0]]);
+check([[0, 0], [0, 1], [0, 2], [1, 3], [1, 4]],
+  [[0, 0], [0, 1], [0, 4], [1, 3], [1, 4], [-1e9, 0], [1e9, 0]]);
 
-for (let trial = 0; trial < 200; trial += 1) {
+for (let trial = 0; trial < 2000; trial += 1) {
   const length = 2 + Math.floor(random() * 100);
   let x = -100;
   const curve = Array.from({ length }, () => {
@@ -61,7 +65,7 @@ for (let trial = 0; trial < 200; trial += 1) {
   });
   if (trial % 5 === 0) curve.reverse();
   if (trial % 7 === 0) curve[Math.floor(length / 2)][0] -= 30;
-  check(curve, Array.from({ length: 100 }, () =>
+  check(curve, Array.from({ length: 30 }, () =>
     [-120 + random() * 400, (random() - 0.5) * 300]));
   checkCachedTangent(curve, Array.from({ length: 20 }, () =>
     [-120 + random() * 400, (random() - 0.5) * 300]));
