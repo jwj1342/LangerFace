@@ -1654,14 +1654,21 @@ function guidedRegionSideCompatible(
   return (trendX < size * 0.5) === (curveX < size * 0.5);
 }
 
-function signedTurnAnglesDegrees(points: Point2[]): Float64Array {
+function signedTurnAnglesDegrees(points: Point2[], vertexArc?: Float64Array): Float64Array {
   const output = new Float64Array(points.length);
-  if (points.length < 3) return output;
-  let first = normalize2(points[1][0] - points[0][0],
-    points[1][1] - points[0][1]);
+  if (points.length < 2) return output;
+  const firstDx = points[1][0] - points[0][0];
+  const firstDy = points[1][1] - points[0][1];
+  const firstLength = Math.hypot(firstDx, firstDy);
+  if (vertexArc) vertexArc[1] = firstLength;
+  let first: Point2 = firstLength > EPSILON ?
+    [firstDx / firstLength, firstDy / firstLength] : [0, 0];
   for (let index = 1; index < points.length - 1; index += 1) {
-    const second = normalize2(points[index + 1][0] - points[index][0],
-      points[index + 1][1] - points[index][1]);
+    const dx = points[index + 1][0] - points[index][0];
+    const dy = points[index + 1][1] - points[index][1];
+    const length = Math.hypot(dx, dy);
+    if (vertexArc) vertexArc[index + 1] = vertexArc[index] + length;
+    const second: Point2 = length > EPSILON ? [dx / length, dy / length] : [0, 0];
     output[index] = Math.atan2(
       first[0] * second[1] - first[1] * second[0],
       clamp(first[0] * second[0] + first[1] * second[1], -1, 1),
@@ -1672,14 +1679,8 @@ function signedTurnAnglesDegrees(points: Point2[]): Float64Array {
 }
 
 function curvatureMetrics(points: Point2[], materialTurnDegrees: number): CurvatureMetrics {
-  const turns = signedTurnAnglesDegrees(points);
   const vertexArc = new Float64Array(points.length);
-  for (let index = 1; index < points.length; index += 1) {
-    vertexArc[index] = vertexArc[index - 1] + Math.hypot(
-      points[index][0] - points[index - 1][0],
-      points[index][1] - points[index - 1][1],
-    );
-  }
+  const turns = signedTurnAnglesDegrees(points, vertexArc);
   let maximumTurnDegrees = 0, materialSignChanges = 0, turnVariationDegrees = 0;
   let priorMaterialSign = 0, previousTurn = 0, hasPreviousTurn = false;
   const materialSignChangeArcPositionsPx = [];
