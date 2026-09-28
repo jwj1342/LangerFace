@@ -4679,12 +4679,71 @@ function foreheadCurveIndices(curves: CurveGeometry[]): number[] {
     .map(({ index }) => index);
 }
 
+interface ForeheadSpacingSample {
+  upperIndex: number;
+  lowerIndex: number;
+  x: number;
+  priorSpacing: number | null;
+}
+
+function foreheadSpacingSamples(
+  curves: CurveGeometry[], orderedIndices: number[],
+): ForeheadSpacingSample[] {
+  const samples: ForeheadSpacingSample[] = [];
+  for (let order = 0; order < orderedIndices.length - 1; order += 1) {
+    const upperIndex = orderedIndices[order], lowerIndex = orderedIndices[order + 1];
+    const upperPrior = curves[upperIndex].prior, lowerPrior = curves[lowerIndex].prior;
+    const minimumX = Math.max(
+      Math.min(...upperPrior.map((point) => point[0])),
+      Math.min(...lowerPrior.map((point) => point[0])),
+    );
+    const maximumX = Math.min(
+      Math.max(...upperPrior.map((point) => point[0])),
+      Math.max(...lowerPrior.map((point) => point[0])),
+    );
+    if (!(maximumX > minimumX + EPSILON)) continue;
+    const inset = 0.06 * (maximumX - minimumX);
+    for (let sample = 0; sample < 25; sample += 1) {
+      const x = minimumX + inset + (maximumX - minimumX - 2 * inset) * sample / 24;
+      const upperPriorSample = sampleCurveLayerAtX(upperPrior, upperPrior, x);
+      const lowerPriorSample = sampleCurveLayerAtX(lowerPrior, lowerPrior, x);
+      samples.push({ upperIndex, lowerIndex, x,
+        priorSpacing: upperPriorSample && lowerPriorSample ?
+          lowerPriorSample.prior[1] - upperPriorSample.prior[1] : null });
+    }
+  }
+  return samples;
+}
+
 function measureForeheadSpacing(
   curves: CurveGeometry[], points: Point2[][], orderedIndices: number[],
+  preparedSamples?: ForeheadSpacingSample[],
 ) {
   const ratios: number[] = [];
   const records: any[] = [];
   let orderPreserved = true;
+  if (preparedSamples) {
+    for (const { upperIndex, lowerIndex, x, priorSpacing } of preparedSamples) {
+      if (priorSpacing === null) continue;
+      const upperPrior = curves[upperIndex].prior, lowerPrior = curves[lowerIndex].prior;
+      const upperFinalSample = sampleCurveLayerAtX(upperPrior, points[upperIndex], x);
+      const lowerFinalSample = sampleCurveLayerAtX(lowerPrior, points[lowerIndex], x);
+      if (!upperFinalSample || !lowerFinalSample) continue;
+      const finalSpacing = lowerFinalSample.final[1] - upperFinalSample.final[1];
+      if (Math.abs(priorSpacing) < 2) continue;
+      const ratio = finalSpacing / priorSpacing;
+      if (!(ratio > 0)) orderPreserved = false;
+      ratios.push(ratio);
+      records.push({
+        upper_curve_index: upperIndex,
+        lower_curve_index: lowerIndex,
+        x,
+        prior_spacing_px: priorSpacing,
+        final_spacing_px: finalSpacing,
+        spacing_ratio: ratio,
+      });
+    }
+  } else {
   for (let order = 0; order < orderedIndices.length - 1; order += 1) {
     const upperIndex = orderedIndices[order], lowerIndex = orderedIndices[order + 1];
     const upperPrior = curves[upperIndex].prior, lowerPrior = curves[lowerIndex].prior;
@@ -4720,6 +4779,7 @@ function measureForeheadSpacing(
         spacing_ratio: ratio,
       });
     }
+  }
   }
   const sorted = ratios.filter(Number.isFinite).sort((left, right) => left - right);
   const worst = records.reduce((selected, record) => {
@@ -4884,6 +4944,8 @@ function applyForeheadBundleCoherenceImpl(
   };
 
   const beforeSpacing = measureForeheadSpacing(curves, snapshotPoints, orderedIndices);
+  const preparedSpacingSamples = refinementExecution?.geometry ?
+    foreheadSpacingSamples(curves, orderedIndices) : undefined;
   let selected: any = null, bestAttempt: any = null;
   const sigmaArcCandidates = [0.012, 0.018, 0.024, 0.030, 0.040]
     .map((ratio) => Math.max(3, size * ratio));
@@ -4930,7 +4992,9 @@ function applyForeheadBundleCoherenceImpl(
     const outOfBoundsPointCount = candidatePoints.reduce((count, points) => count +
       points.filter((point) => point[0] < 0 || point[1] < 0 ||
         point[0] >= size || point[1] >= size).length, 0);
-    const spacing = measureForeheadSpacing(curves, candidatePoints, orderedIndices);
+    const spacing = measureForeheadSpacing(
+      curves, candidatePoints, orderedIndices, preparedSpacingSamples,
+    );
     const spacingViolation = Math.max(0, minimumSpacingRatio - spacing.minimumRatio) +
       Math.max(0, spacing.maximumRatio - maximumSpacingRatio);
     const fieldGatesPassed = !curvatureViolations.length && !outOfBoundsPointCount &&
