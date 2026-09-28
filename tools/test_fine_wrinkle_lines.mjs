@@ -114,12 +114,24 @@ function paintRgbaPixel(rgba, width, x, y, value) {
       paintRgbaPixel(rgba, width, x, y + offset, 85);
     }
   }
+  const beforeForehead = forehead.slice();
   const result = extractFineWrinkleLines(
     { forehead, frown: new Uint8Array(width * height), wrinkle: new Uint8Array(width * height) },
     width,
     height,
     { sourceImageRgba: rgba },
   );
+  const summaryOnly = extractFineWrinkleLines(
+    { forehead, frown: new Uint8Array(width * height), wrinkle: new Uint8Array(width * height) },
+    width,
+    height,
+    { sourceImageRgba: rgba, outputMode: "summary" },
+  );
+  const { mask, confidence, directionQ, classMasks, ...expectedSummary } = result;
+  assert.deepStrictEqual(summaryOnly, expectedSummary,
+    "endpoint recovery must preserve summary and validation without raster output maps");
+  assert.deepStrictEqual(forehead, beforeForehead,
+    "endpoint recovery must write only to private copies, never the source mask");
   assert.equal(result.summary.recoveredForeheadEndpointCount, 1);
   assert.ok(result.summary.recoveredForeheadEndpointLengthPx > 15);
   assert.equal(result.validation.recoveredForeheadEndpointsImageSupported, true);

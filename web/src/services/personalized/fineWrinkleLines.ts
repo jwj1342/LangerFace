@@ -768,15 +768,21 @@ export function extractFineWrinkleLines(
   const pixels = width * height;
   const includeMaps = options.outputMode !== "summary";
   stageStart = options.onProfile ? performance.now() : 0;
-  const effectiveClassMasks = Object.fromEntries(classes.map((name) => [
-    name,
-    normalizedBinaryCopy(classMasks?.[name], pixels),
-  ]));
+  const hasRecoveredEndpoints = lines.some((line) =>
+    Boolean(line.recoveredEndpointLengthPx && line.recoveredEndpointLengthPx > 0));
+  const effectiveClassMasks: Record<string, NumericField> = hasRecoveredEndpoints ?
+    Object.fromEntries(classes.map((name) => [
+      name,
+      normalizedBinaryCopy(classMasks?.[name], pixels),
+    ])) : Object.fromEntries(classes.map((name) => [
+      name,
+      classMasks?.[name] || new Uint8Array(pixels),
+    ]));
   for (const line of lines) {
     if (!(line.recoveredEndpointLengthPx && line.recoveredEndpointLengthPx > 0)) continue;
     rasterPolyline(line.points, (x, y) => {
       if (x >= 0 && y >= 0 && x < width && y < height) {
-        effectiveClassMasks[line.class][y * width + x] = 1;
+        (effectiveClassMasks[line.class] as Uint8Array)[y * width + x] = 1;
       }
     });
   }
