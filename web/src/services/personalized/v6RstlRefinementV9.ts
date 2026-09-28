@@ -4824,6 +4824,8 @@ interface ForeheadSpacingSample {
   lowerIndex: number;
   x: number;
   priorSpacing: number | null;
+  upperProjection: { index: number; fraction: number } | null;
+  lowerProjection: { index: number; fraction: number } | null;
 }
 
 function foreheadSpacingSamples(
@@ -4849,7 +4851,11 @@ function foreheadSpacingSamples(
       const lowerPriorSample = sampleCurveLayerAtX(lowerPrior, lowerPrior, x);
       samples.push({ upperIndex, lowerIndex, x,
         priorSpacing: upperPriorSample && lowerPriorSample ?
-          lowerPriorSample.prior[1] - upperPriorSample.prior[1] : null });
+          lowerPriorSample.prior[1] - upperPriorSample.prior[1] : null,
+        upperProjection: upperPrior.length === 1 ? { index: 0, fraction: 0 } :
+          refinementExecution?.priorSamples?.get(upperPrior)?.get(x) ?? null,
+        lowerProjection: lowerPrior.length === 1 ? { index: 0, fraction: 0 } :
+          refinementExecution?.priorSamples?.get(lowerPrior)?.get(x) ?? null });
     }
   }
   return samples;
@@ -4863,13 +4869,23 @@ function measureForeheadSpacing(
   const records: any[] = [];
   let orderPreserved = true;
   if (preparedSamples) {
-    for (const { upperIndex, lowerIndex, x, priorSpacing } of preparedSamples) {
+    for (const { upperIndex, lowerIndex, x, priorSpacing,
+      upperProjection, lowerProjection } of preparedSamples) {
       if (priorSpacing === null) continue;
       const upperPrior = curves[upperIndex].prior, lowerPrior = curves[lowerIndex].prior;
-      const upperFinalSample = sampleCurveLayerAtX(upperPrior, points[upperIndex], x);
-      const lowerFinalSample = sampleCurveLayerAtX(lowerPrior, points[lowerIndex], x);
-      if (!upperFinalSample || !lowerFinalSample) continue;
-      const finalSpacing = lowerFinalSample.final[1] - upperFinalSample.final[1];
+      const upperFinal = points[upperIndex], lowerFinal = points[lowerIndex];
+      const upperFinalY = upperProjection && upperPrior.length === upperFinal.length ?
+        upperFinal.length === 1 ? upperFinal[0][1] :
+          upperFinal[upperProjection.index][1] + upperProjection.fraction *
+            (upperFinal[upperProjection.index + 1][1] - upperFinal[upperProjection.index][1]) :
+        sampleCurveLayerAtX(upperPrior, upperFinal, x)?.final[1];
+      const lowerFinalY = lowerProjection && lowerPrior.length === lowerFinal.length ?
+        lowerFinal.length === 1 ? lowerFinal[0][1] :
+          lowerFinal[lowerProjection.index][1] + lowerProjection.fraction *
+            (lowerFinal[lowerProjection.index + 1][1] - lowerFinal[lowerProjection.index][1]) :
+        sampleCurveLayerAtX(lowerPrior, lowerFinal, x)?.final[1];
+      if (upperFinalY === undefined || lowerFinalY === undefined) continue;
+      const finalSpacing = lowerFinalY - upperFinalY;
       if (Math.abs(priorSpacing) < 2) continue;
       const ratio = finalSpacing / priorSpacing;
       if (!(ratio > 0)) orderPreserved = false;

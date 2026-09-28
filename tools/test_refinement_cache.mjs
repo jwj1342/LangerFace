@@ -44,6 +44,35 @@ for (const region of ["forehead_bridge_arc_v15", "orbital_brow_upturn_v11"]) {
   assert.deepStrictEqual(await refinementOutputHashes(cached), await refinementOutputHashes(baseline));
 }
 
+// The prepared forehead spacing samples are read by many coherence candidates.
+// Projection reuse must preserve the full audit, not just the chosen curve points.
+{
+  const seeds = [18, 28, 38, 48, 58, 68, 78].map((y, index) => ({
+    name: `forehead-layer-${index}`, region: "forehead_bridge_arc_v15",
+    pts: Array.from({ length: 80 }, (_, pointIndex) => [8 + pointIndex, y]),
+  }));
+  const mask = new Uint8Array(size * size);
+  const confidence = new Float32Array(size * size);
+  const directionQ = new Float32Array(size * size * 2);
+  for (let x = 20; x <= 74; x += 1) {
+    const index = 64 * size + x;
+    mask[index] = 1;
+    confidence[index] = 1;
+    directionQ[index * 2] = 1;
+  }
+  const input = {
+    seeds, wrinkleMask: mask, confidenceMap: confidence, directionQ, size,
+    faceWidthPx: 75, options: yoloGuidedV9RstlRefinementOptions(75),
+  };
+  const snapshot = structuredClone(input);
+  const baseline = refineV6({ ...input, cacheGeometry: false });
+  const cached = refineV6({ ...input, cacheGeometry: true });
+  assert.equal(cached.diagnostics.forehead_bundle_coherence.applied, true);
+  assert.deepStrictEqual(cached, baseline, "forehead spacing audit must remain exact");
+  assert.deepStrictEqual(await refinementOutputHashes(cached), await refinementOutputHashes(baseline));
+  assert.deepStrictEqual(input, snapshot, "spacing cache must not mutate its input");
+}
+
 // A topology retry must reuse only the raw geometric matches. Exclusions,
 // rejection reasons, and the rollback decision are rebuilt for the next round.
 {
