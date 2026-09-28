@@ -1656,15 +1656,17 @@ function guidedRegionSideCompatible(
 
 function signedTurnAnglesDegrees(points: Point2[]): Float64Array {
   const output = new Float64Array(points.length);
+  if (points.length < 3) return output;
+  let first = normalize2(points[1][0] - points[0][0],
+    points[1][1] - points[0][1]);
   for (let index = 1; index < points.length - 1; index += 1) {
-    const first = normalize2(points[index][0] - points[index - 1][0],
-      points[index][1] - points[index - 1][1]);
     const second = normalize2(points[index + 1][0] - points[index][0],
       points[index + 1][1] - points[index][1]);
     output[index] = Math.atan2(
       first[0] * second[1] - first[1] * second[0],
       clamp(first[0] * second[0] + first[1] * second[1], -1, 1),
     ) * 180 / Math.PI;
+    first = second;
   }
   return output;
 }
