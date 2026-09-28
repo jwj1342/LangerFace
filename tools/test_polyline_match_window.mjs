@@ -13,15 +13,11 @@ const random = () => {
 const check = (curve, points) => {
   const segments = polylineMatchSegments(curve);
   for (const point of points) {
-    const full = pointToPolylineMatch(point, curve, segments, false);
-    const windowed = pointToPolylineMatch(point, curve, segments, true);
-    assert.deepStrictEqual(windowed, full,
+    assert.deepStrictEqual(
+      pointToPolylineMatch(point, curve, segments, true),
+      pointToPolylineMatch(point, curve, segments, false),
       `nearest segment changed for ${JSON.stringify({ curve, point })}`,
     );
-    const reusable = { distance: -1, tangent: [-1, -1] };
-    assert.strictEqual(pointToPolylineMatch(point, curve, segments, true, reusable), reusable);
-    assert.deepStrictEqual(reusable, full,
-      `reused nearest-segment output changed for ${JSON.stringify({ curve, point })}`);
   }
 };
 

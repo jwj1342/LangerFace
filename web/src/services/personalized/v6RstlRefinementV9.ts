@@ -2462,11 +2462,8 @@ function applyCurvatureFairingImpl(
       const distances: number[] = [];
       const directions: number[] = [];
       const matchSegments = polylineMatchSegments(points);
-      const reusableMatch = refinementExecution?.geometry ?
-        { distance: 0, tangent: [0, 0] as Point2 } : undefined;
       for (const record of targetRecords) {
-        const match = pointToPolylineMatch(record.wrinklePoint, points, matchSegments,
-          Boolean(refinementExecution?.geometry), reusableMatch);
+        const match = pointToPolylineMatch(record.wrinklePoint, points, matchSegments);
         distances.push(match.distance);
         directions.push(axialDirectionDifferenceDegrees(
           match.tangent,
@@ -2980,7 +2977,6 @@ export function polylineMatchSegments(polyline: Point2[]): PolylineMatchSegments
 export function pointToPolylineMatch(
   point: Point2, polyline: Point2[], segments: PolylineMatchSegments = polylineMatchSegments(polyline),
   useMonotoneWindow = Boolean(refinementExecution?.geometry),
-  reusableResult?: { distance: number; tangent: Point2 },
 ): { distance: number; tangent: Point2 } {
   let firstSegment = 0, lastSegment = segments.length;
   if (useMonotoneWindow && segments.increasingX && segments.length > 1 &&
@@ -3034,19 +3030,6 @@ export function pointToPolylineMatch(
       bestDx = segment.dx;
       bestDy = segment.dy;
     }
-  }
-  if (reusableResult) {
-    if (Number.isFinite(bestDistanceSquared)) {
-      reusableResult.distance = Math.hypot(bestDeltaX, bestDeltaY);
-      const length = Math.hypot(bestDx, bestDy);
-      reusableResult.tangent[0] = length > EPSILON ? bestDx / length : 0;
-      reusableResult.tangent[1] = length > EPSILON ? bestDy / length : 0;
-    } else {
-      reusableResult.distance = 0;
-      reusableResult.tangent[0] = 0;
-      reusableResult.tangent[1] = 0;
-    }
-    return reusableResult;
   }
   return Number.isFinite(bestDistanceSquared) ? {
     distance: Math.hypot(bestDeltaX, bestDeltaY),
