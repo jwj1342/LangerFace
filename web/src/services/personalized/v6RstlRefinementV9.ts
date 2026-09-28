@@ -2957,7 +2957,8 @@ export function polylineMatchSegments(polyline: Point2[]): PolylineMatchSegments
   for (let index = 0; index < segments.length; index += 1) {
     const start = polyline[index], end = polyline[index + 1];
     const dx = end[0] - start[0], dy = end[1] - start[1];
-    if (dx < 0 || !Number.isFinite(start[0]) || !Number.isFinite(end[0])) {
+    if (dx < 0 || !Number.isFinite(start[0]) || !Number.isFinite(end[0]) ||
+        !Number.isFinite(start[1]) || !Number.isFinite(end[1])) {
       increasingX = false;
     }
     segments[index] = {
@@ -3307,7 +3308,8 @@ export function boundedSegments(points: Point2[]): BoundedSegments {
   let increasingX = true;
   for (let index = 0; index < segments.length; index += 1) {
     const start = points[index], end = points[index + 1];
-    if (end[0] < start[0] || !Number.isFinite(start[0]) || !Number.isFinite(end[0])) {
+    if (end[0] < start[0] || !Number.isFinite(start[0]) || !Number.isFinite(end[0]) ||
+        !Number.isFinite(start[1]) || !Number.isFinite(end[1])) {
       increasingX = false;
     }
     segments[index] = {

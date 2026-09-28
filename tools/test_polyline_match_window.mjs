@@ -27,10 +27,13 @@ for (const curve of [
   [[10, 0], [0, 0], [-10, 0]],
   [[-10, 0], [0, 10], [0, -10], [10, 0]],
   [[-10, 0], [-5, 0], [0, 0], [5, 0], [10, 0]],
+  [[0, 0], [10, Number.NaN], [20, 0]],
+  [[0, 0], [10, Infinity], [20, 0]],
 ]) {
   check(curve, Array.from({ length: 50 }, () =>
     [(random() - 0.5) * 100, (random() - 0.5) * 100]));
 }
+check([[0, 0], [10, 0], [20, 0]], [[Number.NaN, 0], [Infinity, 0]]);
 
 for (let trial = 0; trial < 200; trial += 1) {
   const length = 2 + Math.floor(random() * 100);
