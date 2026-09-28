@@ -3007,18 +3007,24 @@ interface PolylineMatchSegment {
   tangent?: Point2;
 }
 
-type PolylineMatchSegments = PolylineMatchSegment[] & { increasingX?: boolean };
+type PolylineMatchSegments = PolylineMatchSegment[] & {
+  increasingX?: boolean;
+  decreasingX?: boolean;
+};
 
 export function polylineMatchSegments(polyline: Point2[]): PolylineMatchSegments {
   const segments = new Array<PolylineMatchSegment>(Math.max(0, polyline.length - 1)) as
     PolylineMatchSegments;
-  let increasingX = true;
+  let increasingX = true, decreasingX = true;
   for (let index = 0; index < segments.length; index += 1) {
     const start = polyline[index], end = polyline[index + 1];
     const dx = end[0] - start[0], dy = end[1] - start[1];
-    if (dx < 0 || !Number.isFinite(start[0]) || !Number.isFinite(end[0]) ||
+    if (!Number.isFinite(start[0]) || !Number.isFinite(end[0]) ||
         !Number.isFinite(start[1]) || !Number.isFinite(end[1])) {
-      increasingX = false;
+      increasingX = decreasingX = false;
+    } else {
+      if (dx < 0) increasingX = false;
+      if (dx > 0) decreasingX = false;
     }
     const segment: PolylineMatchSegment = {
       startX: start[0],
@@ -3032,6 +3038,7 @@ export function polylineMatchSegments(polyline: Point2[]): PolylineMatchSegments
     segments[index] = segment;
   }
   segments.increasingX = increasingX;
+  segments.decreasingX = decreasingX;
   return segments;
 }
 
@@ -3040,30 +3047,34 @@ export function pointToPolylineMatch(
   useMonotoneWindow = Boolean(refinementExecution?.geometry),
 ): { distance: number; tangent: Point2 } {
   let firstSegment = 0, lastSegment = segments.length;
-  if (useMonotoneWindow && segments.increasingX && segments.length > 1 &&
+  if (useMonotoneWindow && (segments.increasingX || segments.decreasingX) &&
+      segments.length > 1 &&
       Number.isFinite(point[0]) && Number.isFinite(point[1])) {
     // A nearby vertex supplies an upper bound on the true nearest distance.
-    // For increasing-x curves, segments outside this x window cannot win.
+    // Reflect decreasing-x curves into increasing-x coordinates, retaining
+    // original segment order so equal-distance ties resolve identically.
+    const sign = segments.increasingX ? 1 : -1;
+    const queryX = sign * point[0];
     let left = 0, right = segments.length;
     while (left < right) {
       const middle = (left + right) >>> 1;
-      if (segments[middle].startX < point[0]) left = middle + 1;
+      if (sign * segments[middle].startX < queryX) left = middle + 1;
       else right = middle;
     }
     const seed = segments[Math.min(segments.length - 1, Math.max(0, left - 1))];
     const radius = Math.hypot(point[0] - seed.startX, point[1] - seed.startY) + 1e-6;
-    const minimumX = point[0] - radius, maximumX = point[0] + radius;
+    const minimumX = queryX - radius, maximumX = queryX + radius;
     left = 0; right = segments.length;
     while (left < right) {
       const middle = (left + right) >>> 1;
-      if (segments[middle].endX < minimumX) left = middle + 1;
+      if (sign * segments[middle].endX < minimumX) left = middle + 1;
       else right = middle;
     }
     firstSegment = left;
     left = firstSegment; right = segments.length;
     while (left < right) {
       const middle = (left + right) >>> 1;
-      if (segments[middle].startX <= maximumX) left = middle + 1;
+      if (sign * segments[middle].startX <= maximumX) left = middle + 1;
       else right = middle;
     }
     lastSegment = left;

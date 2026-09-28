@@ -42,6 +42,8 @@ for (const curve of [
   [], [[0, 0]], [[0, 0], [0, 0]],
   [[0, 0], [0, 10], [0, -10], [10, 0]],
   [[10, 0], [0, 0], [-10, 0]],
+  [[10, 0], [10, 2], [5, 2], [5, -2], [0, 0]],
+  [[10, 0], [5, 0], [5, 0], [0, 0]],
   [[-10, 0], [0, 10], [0, -10], [10, 0]],
   [[-10, 0], [-5, 0], [0, 0], [5, 0], [10, 0]],
   [[0, 0], [0, 0], [0, 0], [10, 0], [10, 0]],
@@ -53,6 +55,7 @@ for (const curve of [
     [(random() - 0.5) * 100, (random() - 0.5) * 100]));
 }
 check([[0, 0], [10, 0], [20, 0]], [[Number.NaN, 0], [Infinity, 0]]);
+check([[20, 0], [10, 0], [0, 0]], [[Number.NaN, 0], [Infinity, 0]]);
 check([[0, 0], [0, 1], [0, 2], [1, 3], [1, 4]],
   [[0, 0], [0, 1], [0, 4], [1, 3], [1, 4], [-1e9, 0], [1e9, 0]]);
 
@@ -69,6 +72,19 @@ for (let trial = 0; trial < 2000; trial += 1) {
     [-120 + random() * 400, (random() - 0.5) * 300]));
   checkCachedTangent(curve, Array.from({ length: 20 }, () =>
     [-120 + random() * 400, (random() - 0.5) * 300]));
+}
+
+// Decreasing-x paths exercise the reflected search window over coincident
+// vertices and equal-distance segment ties.
+for (let trial = 0; trial < 1000; trial += 1) {
+  const length = 3 + Math.floor(random() * 80);
+  let x = 100;
+  const curve = Array.from({ length }, () => {
+    x -= trial % 3 === 0 ? 0 : random() * 5;
+    return [x, (random() - 0.5) * 180];
+  });
+  check(curve, Array.from({ length: 30 }, () =>
+    [-120 + random() * 280, (random() - 0.5) * 220]));
 }
 
 console.log("polyline match window exactly matches full scan on boundary and randomized cases");
