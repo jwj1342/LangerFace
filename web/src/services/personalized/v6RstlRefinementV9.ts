@@ -2792,12 +2792,19 @@ function applyCurvatureFairingImpl(
       }
     }
     for (const passCount of passCounts) {
+      // The fairing input does not depend on scale; retain its result for this pass count.
+      const fairedOffsetsByWeight = refinementExecution?.geometry ?
+        new Map<number, Float64Array>() : null;
       for (const scale of scales) {
         for (const dataWeight of dataWeights) {
-          const fairedOffsets = fairNormalOffsets(
-            result.curve, originalOffsets, result.intervals, passCount, dataWeight,
-            allowOpenCurveEnds,
-          );
+          let fairedOffsets = fairedOffsetsByWeight?.get(dataWeight);
+          if (!fairedOffsets) {
+            fairedOffsets = fairNormalOffsets(
+              result.curve, originalOffsets, result.intervals, passCount, dataWeight,
+              allowOpenCurveEnds,
+            );
+            fairedOffsetsByWeight?.set(dataWeight, fairedOffsets);
+          }
           evaluateCandidate(Float64Array.from(fairedOffsets, (value) => value * scale), {
             method: "iterative_arc_laplacian",
             passes: passCount,
