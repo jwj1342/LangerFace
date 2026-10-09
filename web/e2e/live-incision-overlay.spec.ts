@@ -126,12 +126,13 @@ test("approved incision reaches photo, uploaded video, and MediaStream camera", 
   }).toBeGreaterThan(8);
 
   const keypointsBefore = await page.evaluate(keypointPixelCount);
-  await page.locator("#meshPts").check();
+  await expect(page.locator("#meshPts")).toBeHidden();
+  await page.locator("#meshPts").evaluate((input: HTMLInputElement) => input.click());
   await expect.poll(() => page.evaluate(keypointPixelCount), {
-    message: "the visible face-keypoint toggle must add high-contrast point pixels",
+    message: "the runtime face-keypoint control must add high-contrast point pixels",
   }).toBeGreaterThan(keypointsBefore + 100);
 
-  await page.locator("#meshPts").uncheck();
+  await page.locator("#meshPts").evaluate((input: HTMLInputElement) => input.click());
   await uploadGeneratedVideo(page);
   await expect(page.locator("#livePill")).toContainText("视频", { timeout: 60_000 });
   await expect(page.locator("#incisionOverlayQaState")).not.toHaveText("等待画面", { timeout: 60_000 });
