@@ -356,7 +356,7 @@ export function resetRefineForNewSource(
 export function updateRefineUi(): void {
   const s = state();
   els.refine2d.setAttribute("aria-pressed", String(s.active));
-  els.refine2d.textContent = s.active ? "退出医生手动微调" : "医生手动微调（2D）";
+  els.refine2d.textContent = s.active ? "退出医生手动微调" : "医生手动微调";
   els.refine2dPanel.classList.toggle("hidden", !s.active);
   els.mainWrap.classList.toggle("refining", s.active);
   els.mainWrap.classList.toggle("refine-drag", s.active && s.mode === "drag");
@@ -417,11 +417,11 @@ export function toggleRefine2d(): void {
     return;
   }
   s.active = true;
-  s.mode = "drag";
+  s.mode = "point";
   s.lines = s.lines || cloneLines(s.latestAutoLines);
   s.selected = null;
   setRefineCanvasViewActive(true);
-  els.refine2dHint.textContent = `${sourceLabel()}结果已进入微调：可拖线或拖点调整。`;
+  els.refine2dHint.textContent = `${sourceLabel()}结果已进入微调：可拖点调整。`;
   updateRefineUi();
   requestRefineFrame();
 }

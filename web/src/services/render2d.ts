@@ -85,6 +85,13 @@ interface LocalRegionActionResult {
   opacityScale: number;
 }
 
+/** Convert a desired on-screen stroke width to the canvas's source pixels. */
+function strokeWidthForDisplay(cssPixels: number, sourceWidth: number): number {
+  const displayWidth = els.canvas.getBoundingClientRect().width;
+  if (!(displayWidth > 0) || !(sourceWidth > 0)) return cssPixels;
+  return cssPixels * sourceWidth / displayWidth;
+}
+
 interface ZoomItem {
   label: string;
   region: RenderRegion;
@@ -243,6 +250,7 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
     H,
     lm,
     foreheadSample?.scale || 1,
+    sourceState.sourceKind === "camera" || sourceState.sourceKind === "video",
   );
   const headVisible = buildHeadVisibility(lm);
   const frameQualityGate = estimateRenderQualityGate(lm, W, H);
@@ -322,7 +330,9 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
     ] as const;
     ctx.save();
     ctx.globalAlpha = 0.96;
-    ctx.lineWidth = Math.max(2.4, W / 620);
+    // Keep wrinkle evidence visually consistent when videos have different
+    // source resolutions or aspect ratios and are fitted into the same stage.
+    ctx.lineWidth = strokeWidthForDisplay(2.4, W);
     ctx.setLineDash([]);
     for (const [className, color] of evidenceColors) {
       ctx.beginPath();

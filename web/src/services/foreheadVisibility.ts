@@ -95,38 +95,6 @@ function median(values: readonly number[]): number {
   return sorted[Math.floor(sorted.length / 2)];
 }
 
-function normalizedRgb(rgb: Rgb): Rgb {
-  const total = Math.max(1, rgb[0] + rgb[1] + rgb[2]);
-  return [rgb[0] / total, rgb[1] / total, rgb[2] / total];
-}
-
-/**
- * A side reference is sampled just inside the MediaPipe forehead boundary, so
- * it may legitimately be much darker than the central face under lateral
- * lighting. Accept that lightness change while still rejecting achromatic
- * hair and strongly different background colours.
- */
-function plausibleForeheadReference(rgb: Rgb, centralReferences: readonly Rgb[]): boolean {
-  if (!centralReferences.length) return true;
-  const sampleLab = rgbToLab(rgb);
-  const referenceLabs = centralReferences.map(rgbToLab);
-  const referenceChroma = median(referenceLabs.map((reference) => Math.hypot(
-    reference[1], reference[2],
-  )));
-  const sampleChroma = Math.hypot(sampleLab[1], sampleLab[2]);
-  if (sampleLab[0] < 5 || sampleChroma < Math.max(7, referenceChroma * 0.45)) return false;
-  const sampleRgb = normalizedRgb(rgb);
-  const chromaticityDistance = Math.min(...centralReferences.map((reference) => {
-    const normalized = normalizedRgb(reference);
-    return Math.hypot(
-      sampleRgb[0] - normalized[0],
-      sampleRgb[1] - normalized[1],
-      sampleRgb[2] - normalized[2],
-    );
-  }));
-  return chromaticityDistance <= 0.18;
-}
-
 /**
  * 采样颜色是否属于「脸上可见皮肤」。参考色取自可信的中面部关键点。
  * 三个拒绝条件：与所有参考色都远、明显偏暗（头发阴影）、色度过低（灰白发）。
@@ -175,8 +143,9 @@ export function buildForeheadSkinVisibility(
   height: number,
   landmarks: Vec3[] | null | undefined,
   pixelScale = 1,
+  failClosed = false,
 ): VisibilityPredicate {
-  if (!image || !landmarks?.length || width <= 0 || height <= 0) return () => true;
+  if (!image || !landmarks?.length || width <= 0 || height <= 0) return () => !failClosed;
   const samplePatch = (x: number, y: number): Rgb | null => meanPatch(
     image,
     image.width,
@@ -185,12 +154,12 @@ export function buildForeheadSkinVisibility(
     y * pixelScale,
     Math.max(1, Math.round(3 * pixelScale)),
   );
-  const trustedReferences = [1, 4, 5, 195, 197, 205, 425]
+  const centralReferences = [1, 4, 5, 195, 197]
     .map((index) => landmarks[index])
     .filter(Boolean)
     .map((point) => samplePatch(point[0], point[1]))
     .filter((color): color is Rgb => Boolean(color));
-  if (!trustedReferences.length) return () => true;
+  if (!centralReferences.length) return () => !failClosed;
 
   const xs = landmarks.filter(Boolean).map((point) => point[0]);
   const faceWidth = xs.length ? Math.max(...xs) - Math.min(...xs) : width * 0.5;
@@ -198,34 +167,15 @@ export function buildForeheadSkinVisibility(
     .map((index) => landmarks[index]?.[0])
     .filter(Number.isFinite) as number[];
   const axisX = axisCandidates.length ? median(axisCandidates) : width * 0.5;
-  const foreheadOffset = Math.max(4, 0.0165 * width);
-  const inwardOffset = Math.max(2, 0.012 * faceWidth);
-  const sampleSideReferences = (indices: readonly number[], side: -1 | 1): Rgb[] => indices
+  const sampleFaceReferences = (indices: readonly number[]): Rgb[] => indices
     .map((index) => landmarks[index])
     .filter(Boolean)
-    .map((point) => samplePatch(
-      point[0] - side * inwardOffset,
-      point[1] + foreheadOffset,
-    ))
-    .filter((color): color is Rgb => Boolean(color))
-    .filter((color) => plausibleForeheadReference(color, trustedReferences));
-  const centralForeheadReferences = [10]
-    .map((index) => landmarks[index])
-    .filter(Boolean)
-    .map((point) => samplePatch(point[0], point[1] + foreheadOffset))
-    .filter((color): color is Rgb => Boolean(color))
-    .filter((color) => plausibleForeheadReference(color, trustedReferences));
-  // These ordered boundary landmarks stay on skin while spanning the upper
-  // forehead and temple. Keeping references per side prevents one illuminated
-  // half of the face from setting the rejection threshold for the shadowed half.
-  const leftReferences = trustedReferences.concat(
-    centralForeheadReferences,
-    sampleSideReferences([109, 67, 103, 54], -1),
-  );
-  const rightReferences = trustedReferences.concat(
-    centralForeheadReferences,
-    sampleSideReferences([338, 297, 332, 284], 1),
-  );
+    .map((point) => samplePatch(point[0], point[1]))
+    .filter((color): color is Rgb => Boolean(color));
+  // Forehead boundary landmarks can land directly on bangs. Only face-side
+  // cheek samples may extend the central reference under uneven lighting.
+  const leftReferences = centralReferences.concat(sampleFaceReferences([205]));
+  const rightReferences = centralReferences.concat(sampleFaceReferences([425]));
   const browY = [9, 8, 107, 336].map((index) => landmarks[index]?.[1]).filter(Number.isFinite) as number[];
   const browLine = browY.length ? browY.reduce((a, b) => a + b, 0) / browY.length : height * 0.38;
   const foreheadFloor = browLine + Math.max(8, height * 0.018);
@@ -239,10 +189,8 @@ export function buildForeheadSkinVisibility(
       : point[0] > axisX + centerBlendHalfWidth
         ? rightReferences
         : leftReferences.concat(rightReferences);
-    return skinColorMatchesReferences(
-      samplePatch(point[0], point[1]),
-      references,
-    );
+    const color = samplePatch(point[0], point[1]);
+    return color ? skinColorMatchesReferences(color, references) : !failClosed;
   };
 }
 

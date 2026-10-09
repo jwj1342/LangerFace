@@ -28,7 +28,6 @@ export function LiveStagePanel({
       top={(
         <>
           <StageStatus id="livePill" hidden={compactWorkflowChrome} aria-hidden={compactWorkflowChrome}>待机</StageStatus>
-          <div className="workflow-mobile-quality-slot" aria-label="画布质量状态" />
           {workflowStatus}
           {workflowActions ? <StageActions className="workflow-stage-actions">{workflowActions}</StageActions> : null}
           <StageMeta id="fps" hidden={compactWorkflowChrome} aria-hidden={compactWorkflowChrome}>— fps</StageMeta>

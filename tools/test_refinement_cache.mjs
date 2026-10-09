@@ -1,0 +1,165 @@
+import assert from "node:assert/strict";
+import { refineV6 } from "../web/src/services/personalized/v6RstlRefinementV9.ts";
+import { yoloGuidedV9RstlRefinementOptions } from
+  "../web/src/services/personalized/v9RstlRefinementProfile.ts";
+import { guardMergedYoloGuidedRstlCurves } from
+  "../web/src/services/personalized/yoloGuidedRstlScope.ts";
+import { refinementOutputHashes, stableRefinementSerialization } from
+  "../web/src/services/personalized/refinementOutputHash.ts";
+
+assert.equal(stableRefinementSerialization({ b: 2, a: 1 }),
+  stableRefinementSerialization({ a: 1, b: 2 }));
+for (const [first, second] of [[Infinity, null], [NaN, null], [-0, 0], [undefined, null]]) {
+  assert.notEqual(stableRefinementSerialization(first), stableRefinementSerialization(second));
+}
+assert.notEqual(stableRefinementSerialization(new Float32Array([1])),
+  stableRefinementSerialization(new Float64Array([1])));
+
+const size = 96;
+for (const region of ["forehead_bridge_arc_v15", "orbital_brow_upturn_v11"]) {
+  const forehead = region.includes("forehead");
+  const seeds = (forehead ? [18, 28, 38, 48, 58, 68, 78] : [44, 54]).map((offset, index) => ({
+    name: `${region}-${index}`, region,
+    pts: Array.from({ length: 80 }, (_, i) => forehead ? [8 + i, offset] : [offset, 8 + i]),
+  }));
+  const mask = new Uint8Array(size * size);
+  const confidence = new Float32Array(size * size);
+  const directionQ = new Float32Array(size * size * 2);
+  for (let i = 20; i <= 74; i += 1) {
+    const [x, y] = forehead ? [i, 64] : [50, i];
+    mask[y * size + x] = 1;
+    confidence[y * size + x] = 1;
+    directionQ[(y * size + x) * 2] = forehead ? 1 : -1;
+  }
+  const input = {
+    seeds, wrinkleMask: mask, confidenceMap: confidence, directionQ, size,
+    faceWidthPx: 75, options: yoloGuidedV9RstlRefinementOptions(75),
+  };
+  const snapshot = structuredClone(input);
+  const baseline = refineV6({ ...input, cacheGeometry: false });
+  const cached = refineV6({ ...input, cacheGeometry: true, performance: {} });
+  assert.deepStrictEqual(cached, baseline, `${region}: all output fields must be identical`);
+  assert.deepStrictEqual(refineV6(input), baseline, "default cache path must also be identical");
+  assert.deepStrictEqual(input, snapshot, "refinement must not mutate its input");
+  assert.deepStrictEqual(await refinementOutputHashes(cached), await refinementOutputHashes(baseline));
+}
+
+// The prepared forehead spacing samples are read by many coherence candidates.
+// Projection reuse must preserve the full audit, not just the chosen curve points.
+{
+  const seeds = [18, 28, 38, 48, 58, 68, 78].map((y, index) => ({
+    name: `forehead-layer-${index}`, region: "forehead_bridge_arc_v15",
+    pts: Array.from({ length: 80 }, (_, pointIndex) => [8 + pointIndex, y]),
+  }));
+  const mask = new Uint8Array(size * size);
+  const confidence = new Float32Array(size * size);
+  const directionQ = new Float32Array(size * size * 2);
+  for (let x = 20; x <= 74; x += 1) {
+    const index = 64 * size + x;
+    mask[index] = 1;
+    confidence[index] = 1;
+    directionQ[index * 2] = 1;
+  }
+  const input = {
+    seeds, wrinkleMask: mask, confidenceMap: confidence, directionQ, size,
+    faceWidthPx: 75, options: yoloGuidedV9RstlRefinementOptions(75),
+  };
+  const snapshot = structuredClone(input);
+  const baseline = refineV6({ ...input, cacheGeometry: false });
+  const cached = refineV6({ ...input, cacheGeometry: true });
+  assert.equal(cached.diagnostics.forehead_bundle_coherence.applied, true);
+  assert.deepStrictEqual(cached, baseline, "forehead spacing audit must remain exact");
+  assert.deepStrictEqual(await refinementOutputHashes(cached), await refinementOutputHashes(baseline));
+  assert.deepStrictEqual(input, snapshot, "spacing cache must not mutate its input");
+}
+
+// A topology retry must reuse only the raw geometric matches. Exclusions,
+// rejection reasons, and the rollback decision are rebuilt for the next round.
+{
+  const line = (start, end, y) => Array.from({ length: end - start + 1 },
+    (_, offset) => [start + offset, y]);
+  const horizontal = (name, y) => ({ name, region: "test",
+    pts: Array.from({ length: 40 }, (_, index) => [8 + index * 2, y]) });
+  const seeds = [horizontal("preferred", 30), horizontal("fallback", 36),
+    { name: "blocker", region: "test", pts: [[49, 30.25], [49, 32.5]] }];
+  const mask = new Uint8Array(size * size);
+  const confidence = new Float32Array(size * size);
+  const directionQ = new Float32Array(size * size * 2);
+  for (const [x, y] of line(18, 76, 32)) {
+    const index = y * size + x;
+    mask[index] = 1;
+    confidence[index] = 1;
+    directionQ[index * 2] = 1;
+  }
+  const input = {
+    seeds, wrinkleMask: mask, confidenceMap: confidence, directionQ, size,
+    faceWidthPx: 180,
+    options: {
+      oneToOneTrendCurveMatching: true, topologyRetryAttempts: 3,
+      postAdherenceGate: true, targetGapPx: 1.5, dataAttractionStrength: 20,
+      wrinkleDominantCoreStrength: 0.95, wrinkleDominantCoreSupportRatio: 0.08,
+      smoothingPasses: 12, searchRadiusPx: 16, p90LimitPx: 18,
+      maxDisplacementPx: 24, maxCurvatureChangeDegrees: 60,
+    },
+  };
+  const snapshot = structuredClone(input);
+  const baseline = refineV6({ ...input, cacheGeometry: false });
+  const performance = {};
+  const cached = refineV6({ ...input, cacheGeometry: true, performance });
+  assert.equal(cached.diagnostics.topology_candidate_retry_count, 1);
+  assert.ok(performance.counters?.matchingRecordCacheHits > 0);
+  assert.deepStrictEqual(cached, baseline, "topology retry must preserve every output field");
+  assert.deepStrictEqual(await refinementOutputHashes(cached), await refinementOutputHashes(baseline));
+  assert.deepStrictEqual(input, snapshot, "retry cache must not mutate its input");
+}
+
+let state = 0x12345678;
+const random = () => {
+  state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+  return state / 2 ** 32;
+};
+let rollbackCases = 0;
+for (let trial = 0; trial < 80; trial += 1) {
+  const seeds = Array.from({ length: 8 }, (_, curve) => ({
+    name: `curve-${curve}`, region: "forehead_bridge_arc_v15",
+    pts: Array.from({ length: 10 }, (_, i) => [i * 5, curve * 8 + random() * 3]),
+  }));
+  const merged = seeds.map(seed => ({ ...seed,
+    pts: seed.pts.map(([x, y]) => [x, y + (random() - 0.5) * 30]),
+  }));
+  const snapshot = structuredClone({ seeds, merged });
+  const baseline = guardMergedYoloGuidedRstlCurves(seeds, merged, { cacheGeometry: false });
+  const cached = guardMergedYoloGuidedRstlCurves(seeds, merged, { cacheGeometry: true });
+  assert.deepStrictEqual(cached, baseline, `global guard trial ${trial}`);
+  assert.deepStrictEqual({ seeds, merged }, snapshot);
+  if (cached.rolledBackCurveIndices.length) rollbackCases += 1;
+}
+assert.ok(rollbackCases > 0, "randomized tests must exercise rollback invalidation");
+
+// The merged atlas normally changes only a few curves. Reusing private
+// unchanged copies must not affect intersections or the public result.
+for (let trial = 0; trial < 80; trial += 1) {
+  const seeds = Array.from({ length: 12 }, (_, curve) => ({
+    name: `mostly-unchanged-${curve}`, region: "forehead_bridge_arc_v15",
+    pts: Array.from({ length: 20 }, (_, i) => [i * 5, curve * 6 + random()]),
+  }));
+  const merged = seeds.map((seed, index) => ({ ...seed,
+    pts: seed.pts.map(([x, y]) => [x, index % 4 === 0 ? y + (random() - 0.5) * 20 : y]),
+  }));
+  const inputSnapshot = structuredClone({ seeds, merged });
+  const baseline = guardMergedYoloGuidedRstlCurves(seeds, merged, { cacheGeometry: false });
+  const cached = guardMergedYoloGuidedRstlCurves(seeds, merged, { cacheGeometry: true });
+  assert.deepStrictEqual(cached, baseline, `mostly-unchanged global guard trial ${trial}`);
+  assert.deepStrictEqual({ seeds, merged }, inputSnapshot);
+}
+
+// Touching boxes, zero-length segments and self-crossing paths retain the exact predicate.
+const boundarySeeds = [
+  [[0, 0], [10, 10]], [[10, 10], [20, 0]], [[0, 10], [10, 0]],
+  [[5, 5], [5, 5]], [[0, 0], [10, 10], [0, 10], [10, 0]], [],
+].map((pts, i) => ({ name: `boundary-${i}`, region: "test", pts }));
+assert.deepStrictEqual(
+  guardMergedYoloGuidedRstlCurves(boundarySeeds, boundarySeeds, { cacheGeometry: true }),
+  guardMergedYoloGuidedRstlCurves(boundarySeeds, boundarySeeds, { cacheGeometry: false }),
+);
+console.log(`refinement cache and lossless hash tests passed (${rollbackCases} rollback cases)`);

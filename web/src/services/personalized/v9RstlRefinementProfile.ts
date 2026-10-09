@@ -4,7 +4,7 @@ export const LATEST_WRINKLE_REFINEMENT_PROFILE =
   "v9-regional-smooth-7.2";
 
 export const YOLO_GUIDED_WRINKLE_REFINEMENT_PROFILE =
-  "v9-regional-smooth-7.2-yolo-guided-glabellar";
+  "v9-regional-smooth-7.2-yolo-guided-forehead-groups-glabellar-direct-nose";
 
 /** Shared V9 profile used by the deployed live page and the controlled experiment. */
 export function latestV9RstlRefinementOptions(
@@ -22,6 +22,8 @@ export function latestV9RstlRefinementOptions(
     searchRadiusPx: faceWidthPx * 0.110,
     logicalTrendGrouping: true,
     softLinkDistancePx: faceWidthPx * 0.030,
+    foreheadSoftLinkDistancePx: faceWidthPx * 0.080,
+    foreheadSoftLinkTurnDegrees: 45,
     softLinkTurnDegrees: 18,
     softLinkTangentSpanPx: Math.round(faceWidthPx * 0.020),
     globalLengthAwareMatching: true,
@@ -54,10 +56,14 @@ export function latestV9RstlRefinementOptions(
     curvatureFairingMaximumMeanAdherencePx: Math.max(2, faceWidthPx * 0.0035),
     curvatureFairingMaximumP90AdherencePx: Math.max(4, faceWidthPx * 0.0065),
     curvatureFairingForeheadMaximumTurnDegrees: 8,
+    curvatureFairingForeheadRecoveryTurnSlackDegrees: 1.5,
+    curvatureFairingForeheadRecoveryMinimumReversalSpacingRatio: 0.50,
     curvatureFairingForeheadMaximumMeanAdherencePx: 1.5,
     curvatureFairingForeheadMaximumP90AdherencePx: 3,
+    curvatureFairingForeheadCompositeMaximumTurnDegrees: 16,
     foreheadAdherenceMeanThresholdPx: 1.5,
     foreheadAdherenceP90ThresholdPx: 3,
+    foreheadMinimumAdherenceImprovementPx: 0.05,
     foreheadBundleCoherence: true,
     foreheadBundleMinimumSpacingRatio: 0.65,
     foreheadBundleMaximumSpacingRatio: 1.45,
@@ -107,6 +113,16 @@ export function yoloGuidedV9RstlRefinementOptions(
 ): V6RefinementOptions {
   return {
     ...latestV9RstlRefinementOptions(faceWidthPx),
+    // Long, deeply curved forehead furrows can need slightly more shape freedom
+    // than the shared profile even after the neighboring forehead layers move
+    // coherently. These allowances remain guarded by final adherence and zero
+    // new intersections, and are intentionally local to YOLO-guided photos.
+    curvatureFairingForeheadMaximumAddedSignChanges: 5,
+    curvatureFairingForeheadRecoveryTurnSlackDegrees: 3,
+    curvatureFairingForeheadMaximumP90AdherencePx: 4.5,
+    foreheadAdherenceP90ThresholdPx: 4.5,
+    foreheadBundleMinimumSpacingRatio: 0.55,
+    foreheadBundleMaximumSpacingRatio: 1.85,
     // Real-image ablations showed that widening adherence is the primary fix;
     // the 20° allowance adds one further safe yellow-sample match. The effective
     // turn limit remains max(20°, baseline maximum turn + 0.75°).

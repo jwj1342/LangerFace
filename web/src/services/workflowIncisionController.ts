@@ -1104,8 +1104,12 @@ function publish(state: WorkflowIncisionState, reason = "state_update") {
       manualConfirmed: secondaryCueSummary(state).manual_confirmed,
     }),
     privacyAudit: buildIncisionPrivacyAuditSnapshot({
-      stateLabel: "设备本地",
-      message: `原始照片仅在当前设备中处理，不随候选记录上传；记录仅保留 ${privacyAudit(state).local_workflow_fields.length} 类必要参数。`,
+      stateLabel: import.meta.env?.VITE_SERVER_COMPUTE === "true"
+        ? "浏览器 + 服务器 GPU"
+        : "设备本地",
+      message: import.meta.env?.VITE_SERVER_COMPUTE === "true"
+        ? `照片会发送至服务器 GPU 检测；视频会整段上传并临时保存在服务器，切换媒体时请求删除，服务进程退出时也会清理。删除请求失败时可能继续暂存；候选记录仅保留 ${privacyAudit(state).local_workflow_fields.length} 类必要参数。`
+        : `原始照片仅在当前设备中处理，不随候选记录上传；记录仅保留 ${privacyAudit(state).local_workflow_fields.length} 类必要参数。`,
     }),
     review: buildIncisionReviewSnapshot({
       status: state.review.status,

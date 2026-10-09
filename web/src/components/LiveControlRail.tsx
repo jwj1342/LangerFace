@@ -9,7 +9,6 @@ import { LiveSourceControlsPanel } from "./LiveSourceControlsPanel";
 import { LiveStagePanel } from "./LiveStagePanel";
 import { LiveStatePanel } from "./LiveStatePanel";
 import { LiveWrinklePanel } from "./LiveWrinklePanel";
-import { Disclaimer } from "./WorkbenchLayout";
 import { WorkbenchBrand } from "./WorkbenchBrand";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
@@ -18,17 +17,13 @@ import { Label } from "./ui/label";
 import { StatusBadge } from "./ui/status-badge";
 
 interface LiveControlRailProps {
-  moveQualityToMobileStage?: boolean;
   showIncisionEntry?: boolean;
   showStatusOverview?: boolean;
-  showPersonalizedHint?: boolean;
 }
 
 export function LiveControlRail({
-  moveQualityToMobileStage = false,
   showIncisionEntry = true,
   showStatusOverview = true,
-  showPersonalizedHint = true,
 }: LiveControlRailProps) {
   return (
     <>
@@ -53,15 +48,11 @@ export function LiveControlRail({
       {showStatusOverview ? <LiveStatePanel /> : null}
       <LiveIncisionOverlayPanel />
       <LiveSourceControlsPanel />
-      <LiveWrinklePanel showAdvancedCaptureHint={showPersonalizedHint} />
+      <LiveWrinklePanel />
       <LiveRefinePanel />
       <LiveRenderControlsPanel />
-      <LiveQualityPanel mobilePortalSelector={moveQualityToMobileStage ? ".workflow-workbench .workflow-mobile-quality-slot" : undefined} />
+      <LiveQualityPanel />
 
-      <Disclaimer>
-        内置图谱为示意性首版（未经临床验证），方向参考 Borges RSTL。
-        决策辅助可视化，非手术指令、非医疗器械；最终切口由主刀医生负责。
-      </Disclaimer>
     </>
   );
 }

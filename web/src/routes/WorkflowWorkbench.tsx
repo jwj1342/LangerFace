@@ -10,10 +10,8 @@ export function WorkflowWorkbench() {
     <WorkflowLayout
       liveRail={(
         <LiveControlRail
-          moveQualityToMobileStage
           showIncisionEntry={false}
           showStatusOverview={false}
-          showPersonalizedHint={false}
         />
       )}
       mobileOperations={<MobileWorkflowControls />}

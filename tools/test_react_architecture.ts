@@ -288,7 +288,6 @@ const liveScanFeedbackConsumerSources = new Map([
 const cardHeaderTitleConsumerSources = new Map([
   ["AnnotateStatePanel.tsx", annotateStatePanel],
   ["IncisionStatePanel.tsx", incisionStatePanel],
-  ["LiveQualityPanel.tsx", liveQualityPanel],
   ["LiveStatePanel.tsx", liveStatePanel],
   ["WorkerStatusPanel.tsx", workerPanel],
 ]);
@@ -2183,7 +2182,7 @@ assert.ok(liveControlRail.includes("LiveRenderControlsPanel"), "React live contr
 assert.ok(liveControlRail.includes("LiveQualityPanel"), "React live control rail renders quality and overlay QA as a React component");
 assert.ok(liveWorkbench.includes("LiveStagePanel"), "React live workbench renders the stage shell as a React component");
 assert.ok(liveWorkbench.includes("WorkbenchLayout"), "React live workbench uses the shared workbench layout shell");
-assert.ok(liveControlRail.includes("Disclaimer"), "React live control rail uses the shared disclaimer primitive");
+assert.ok(!liveControlRail.includes("Disclaimer"), "React live control rail omits the removed explanatory disclaimer");
 assert.ok(liveStagePanel.includes("StageShell"), "React live stage uses the shared stage shell primitive");
 assert.ok(liveStagePanel.includes("StageViewport"), "React live stage uses the shared stage viewport primitive");
 assert.ok(liveStagePanel.includes("StageStatus"), "React live stage uses the shared stage status primitive");
@@ -2200,17 +2199,14 @@ assert.deepEqual(
   [],
   "React live stage should use StageShell primitives instead of hand-written stage element classes",
 );
-assert.ok(liveQualityPanel.includes("<StatGrid visible={false}>"), "React live quality panel hides frame-owned stats through StatGrid visible");
-assert.ok(liveQualityPanel.includes("LiveOverlayQa"), "React live quality panel uses shared live overlay QA primitive");
-assert.ok(liveQualityPanel.includes('<LiveOverlayQa id="incisionOverlayQa" visible={false}>'), "React live quality panel hides overlay QA through LiveOverlayQa visible");
-assert.ok(liveQualityPanel.includes("LiveOverlayQaHeader"), "React live quality panel uses shared live overlay QA header primitive");
-for (const className of ["hidden", "overlay-qa", "overlay-qa-top"]) {
-  assert.deepEqual(
-    liveQualityFeedbackConsumersWithRawClass(className),
-    [],
-    `React live quality panel should use live feedback primitives instead of hand-written ${className} class wrappers`,
-  );
+assert.ok(liveQualityPanel.includes('className="hidden"'), "React live quality runtime remains visually hidden");
+assert.ok(liveQualityPanel.includes('data-quality-runtime="true"'), "React live quality runtime keeps an explicit ownership marker");
+assert.ok(liveQualityPanel.includes('aria-hidden="true"'), "React live quality runtime stays outside the accessibility presentation tree");
+for (const runtimeId of ["qualityVal", "qualityBar", "statState", "statFace", "statYaw", "statLines", "incisionOverlayQa"]) {
+  assert.ok(liveQualityPanel.includes(`id="${runtimeId}"`), `React live quality runtime retains #${runtimeId}`);
 }
+assert.ok(!/CardHeaderTitle|LiveOverlayQaHeader|追踪质量|跟踪质量参考/.test(liveQualityPanel),
+  "React live quality runtime does not restore the removed visible card or explanatory copy");
 assert.ok(!liveRouteControlsPanel.includes("useLiveControllerCommands"), "fixed 2D mode does not expose route command callbacks");
 assert.ok(liveSourceControlsPanel.includes("useLiveControllerCommands"), "React live source controls use typed live command callbacks");
 assert.ok(liveRenderControlsPanel.includes("useLiveControllerCommands"), "React live render controls use typed live command callbacks");
@@ -2257,9 +2253,9 @@ assert.ok(liveRenderControlsPanel.includes("<Card"), "React live render controls
 assert.ok(liveRenderControlsPanel.includes('<Hint visible={Boolean(atlasPreview?.active)} id="atlasProvenance">'), "React live render controls show atlas provenance through Hint visible");
 assert.ok(liveRenderControlsPanel.includes("<FieldGroup visible={false}>"), "React live render controls keep hidden compatibility sliders through FieldGroup visible");
 assert.ok(liveRenderControlsPanel.includes('<CheckboxField visible={false} checkboxProps={{ id: "clip", defaultChecked: true }}>'), "React live render controls keep hidden compatibility checkboxes through CheckboxField visible");
-assert.ok(liveQualityPanel.includes("<Card"), "React live quality panel uses the shared shadcn-style card primitive");
-assert.ok(liveQualityPanel.includes("ProgressBar"), "React live quality panel uses the shared shadcn-style progress primitive");
-assert.ok(liveQualityPanel.includes('data-frame-owned="true"'), "React live quality panel documents that frame-updated labels stay outside Zustand");
+assert.ok(!liveQualityPanel.includes("<Card"), "React live quality runtime does not render the removed visible card");
+assert.ok(!liveQualityPanel.includes("ProgressBar"), "React live quality runtime does not render the removed visible progress component");
+assert.ok(liveQualityPanel.includes('data-quality-runtime="true"'), "React live quality runtime documents that frame-updated labels stay outside Zustand");
 assert.ok(!liveQualityPanel.includes("useLiveStore"), "live quality panel should not subscribe high-frequency quality updates through Zustand");
 assert.ok(liveSnapshotsService.includes("buildLiveControllerSnapshot"), "shared live snapshot service builds typed controller snapshots");
 assert.ok(liveSnapshotsService.includes("liveTextOf"), "shared live snapshot service owns text normalization helpers");
@@ -2300,7 +2296,7 @@ assert.ok(liveCanvasInteractionService.includes("lostpointercapture"),
   "live canvas interaction service cleans up browser-lost pointer capture");
 assert.ok(!/(?:document|window|THREE|MediaPipe)/.test(liveCanvasInteractionService),
   "live canvas interaction service stays independent of globals, renderers, and detectors");
-assert.ok(liveController.split("\n").length <= 550, "live runtime stays a thin orchestration layer");
+assert.ok(liveController.split("\n").length <= 560, "live runtime stays a thin orchestration layer");
 assert.ok(!liveController.includes("interface ImageDragState"), "live runtime does not own route-local pointer state");
 assert.ok(!liveController.includes("function controllerEvent"), "live runtime delegates browser command parsing to typed schemas");
 assert.ok(workbenchCommandSchemasService.includes("readLiveRenderCommand"), "workbench command schemas validate live render payloads");

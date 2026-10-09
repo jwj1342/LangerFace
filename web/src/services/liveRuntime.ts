@@ -265,7 +265,7 @@ function handlePauseToggle(): void {
     els.pause.textContent = "▶ 继续";
     els.pause.setAttribute("aria-pressed", "true");
     setLive(false, "已定格 · 可微调");
-    setTransientMsg("已暂停当前画面。可点击“检测皱纹”，或使用“医生手动微调（2D）”继续处理。");
+    setTransientMsg("已暂停当前画面。可点击“检测皱纹”，或使用“医生手动微调”继续处理。");
     redrawPausedFrame();
     setRefineAvailability();
     updateWrinkleUi();
@@ -294,8 +294,10 @@ function handleTemplateChange(e: Event | ValueControlEvent): void {
 }
 
 function handleDensityInput(e: Event | ValueControlEvent): void {
-  const value = Number(eventValue(e) ?? 0);
-  renderState.densityFrac = value / 100; els.densityVal.textContent = value + "%"; refreshStaticImage();
+  renderState.densityFrac = 1;
+  els.density.value = "100";
+  els.densityVal.textContent = "100%";
+  refreshStaticImage();
 }
 
 function handleSmoothInput(e: Event | ValueControlEvent): void {
@@ -305,8 +307,10 @@ function handleSmoothInput(e: Event | ValueControlEvent): void {
 }
 
 function handleOpacityInput(e: Event | ValueControlEvent): void {
-  const value = Number(eventValue(e) ?? 0);
-  renderState.opacity = value / 100; els.opacityVal.textContent = value + "%"; refreshStaticImage();
+  renderState.opacity = 0.90;
+  els.opacity.value = "90";
+  els.opacityVal.textContent = "90%";
+  refreshStaticImage();
 }
 
 function valueEvent(value: unknown): ValueControlEvent {

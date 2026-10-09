@@ -4,6 +4,7 @@ import type {
   LiveWrinkleDetectionResult,
   LiveWrinklePipelineWorkerApi,
   LiveWrinkleWorkerEvent,
+  LiveWrinklePrecomputedRequest,
   LiveWrinkleRefinementRequest,
   LiveWrinkleRefinementResult,
 } from "../../workers/liveWrinklePipelineWorkerContract.ts";
@@ -22,6 +23,7 @@ export interface LiveWrinklePipelineWorkerClient {
     input: LiveWrinkleWorkerAnalysisInput,
     onEvent?: (event: LiveWrinkleWorkerEvent) => void,
   ): Promise<LiveWrinkleDetectionResult>;
+  seedYoloEvidence(input: LiveWrinklePrecomputedRequest): Promise<LiveWrinkleDetectionResult>;
   refine(input: LiveWrinkleRefinementRequest): Promise<LiveWrinkleRefinementResult>;
   dispose(): void;
 }
@@ -42,9 +44,10 @@ export function createLiveWrinklePipelineWorkerClient(): LiveWrinklePipelineWork
         width: input.imageData.width,
         height: input.imageData.height,
         size: input.size,
-        // YOLO-only extraction never reads landmarks. Avoid cloning hundreds
-        // of nested point arrays across the worker boundary on every correction.
-        landmarks: input.mode === "full" ? input.landmarks || [] : [],
+        // Landmarks are also used by YOLO-only extraction to suppress only the
+        // lateral-canthus (crow's-feet) field while retaining other `wrinkle`
+        // lines such as the nose dorsum.
+        landmarks: input.landmarks || [],
         mode: input.mode,
         includeFingerprint: input.includeFingerprint,
         cacheForRefinement: input.cacheForRefinement,
@@ -54,6 +57,11 @@ export function createLiveWrinklePipelineWorkerClient(): LiveWrinklePipelineWork
         Comlink.transfer(request, [request.pixels.buffer as ArrayBuffer]),
         eventSink,
       );
+    },
+
+    seedYoloEvidence(input) {
+      if (disposed) return Promise.reject(new Error("皱纹 Worker 已关闭"));
+      return api.seedYoloEvidence(input);
     },
 
     refine(input) {

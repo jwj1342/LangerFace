@@ -13,6 +13,8 @@ const skinReferences: Rgb[] = [[205, 155, 130], [198, 148, 124], [210, 162, 138]
 assert.equal(skinColorMatchesReferences([180, 120, 96], skinReferences), true, "典型肤色应通过");
 assert.equal(skinColorMatchesReferences([35, 25, 20], skinReferences), false, "深色头发应被拒绝");
 assert.equal(skinColorMatchesReferences([40, 70, 190], skinReferences), false, "蓝色背景应被拒绝");
+assert.equal(skinColorMatchesReferences([107, 88, 89], [[149, 103, 93], [167, 121, 115]]), false,
+  "截图中的灰棕色刘海不能匹配露出的皮肤");
 assert.equal(skinColorMatchesReferences(null, skinReferences), true, "空采样应安全降级为不裁剪");
 assert.equal(skinColorMatchesReferences([180, 120, 96], []), true, "无参考色时应安全降级");
 
@@ -57,11 +59,30 @@ const skinVisible = buildForeheadSkinVisibility({ data, width, height }, width, 
 assert.equal(skinVisible([320, 185, 0]), false, "合成帧的头发区域必须被拒绝");
 assert.equal(buildForeheadSkinVisibility(null, width, height, landmarks)([1, 1, 0]), true,
   "无像素数据时应安全降级为不裁剪");
+assert.equal(buildForeheadSkinVisibility(null, width, height, landmarks, 1, true)([320, 185, 0]), false,
+  "实时画面无法读取像素时不能把遮挡区域当成皮肤");
 
-// Deep skin under side lighting must not be classified as hair merely because
-// one half is substantially darker than the central face. The side-specific
-// MediaPipe boundary references should admit both halves while the grey hair
-// above them remains excluded.
+const bangsData = new Uint8ClampedArray(width * height * 4);
+for (let y = 0; y < height; y++) {
+  for (let x = 0; x < width; x++) {
+    const offset = (y * width + x) * 4;
+    const color = y < 238 ? [100, 75, 60] : [205, 155, 130];
+    bangsData[offset] = color[0];
+    bangsData[offset + 1] = color[1];
+    bangsData[offset + 2] = color[2];
+    bangsData[offset + 3] = 255;
+  }
+}
+const bangsVisible = buildForeheadSkinVisibility(
+  { data: bangsData, width, height }, width, height, landmarks, 1, true,
+);
+assert.equal(bangsVisible([320, 220, 0]), false,
+  "即使额头边界关键点落在棕色刘海上，刘海区域也不能显示 RSTL");
+assert.equal(bangsVisible([320, 245, 0]), true,
+  "刘海下方露出的额头皮肤仍应显示 RSTL");
+
+// Cheek references preserve skin under side lighting while the hair above
+// the forehead remains excluded.
 const shadowData = new Uint8ClampedArray(width * height * 4);
 for (let y = 0; y < height; y++) {
   for (let x = 0; x < width; x++) {
