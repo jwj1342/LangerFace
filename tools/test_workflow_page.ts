@@ -456,7 +456,7 @@ assert.doesNotMatch(styles, /workflow-marker-mode="true"[^}]*\.main-wrap\s*{[^}]
   "controlled-marker mode does not resize the shared face canvas");
 assert.doesNotMatch(styles, /workflow-mobile-scroll-zone/,
   "the removed mobile scroll prompt has no stale styling contract");
-assert.match(styles, /grid-template-areas:\s*"incision-status"\s*"workflow-actions workflow-actions";[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\);/,
+assert.match(styles, /grid-template-areas:\s*"incision-status"\s*"workflow-actions";[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\);/,
   "phone workflow lets status and tools use the full stage-header width after removing quality copy");
 assert.match(styles, /\.workflow-canvas-tools\s*{[^}]*grid-template-rows:\s*40px;[^}]*block-size:\s*42px;[^}]*padding:\s*0;[\s\S]*?\.workflow-canvas-tools\[data-marker-mode="true"\]\s*{[^}]*grid-template-rows:\s*40px 32px;[^}]*gap:\s*4px 6px;[^}]*block-size:\s*76px;/s,
   "phone workflow uses one tool row normally and adds the second row only during controlled marking");
@@ -666,8 +666,8 @@ assert.match(canvasTools, /onPointerDown={markerTooltip\.onPointerDown}[\s\S]*?m
   "the controlled-marker hint covers press and release-driven mouse or touch activation");
 assert.match(styles, /\.persistent-disabled-tooltip\s*\{[^}]*position:\s*fixed;[^}]*max-width:[^}]*white-space:\s*normal;/s,
   "persistent hints escape clipped toolbars and wrap within the viewport");
-assert.match(controller, /VITE_SERVER_COMPUTE[\s\S]*?"浏览器 \+ 服务器 GPU"[\s\S]*?皱纹检测帧会临时发送到服务器 GPU，服务不持久化原始影像；候选记录仅保留 \$\{privacyAudit\(state\)\.local_workflow_fields\.length\} 类必要参数。/,
-  "the server workflow privacy card accurately discloses transient GPU processing");
+assert.match(controller, /VITE_SERVER_COMPUTE[\s\S]*?"浏览器 \+ 服务器 GPU"[\s\S]*?视频会整段上传并临时保存在服务器，切换媒体时请求删除，服务进程退出时也会清理。删除请求失败时可能继续暂存；候选记录仅保留 \$\{privacyAudit\(state\)\.local_workflow_fields\.length\} 类必要参数。/,
+  "the server workflow privacy snapshot discloses whole-video upload and temporary retention");
 assert.match(controller, /:\s*"设备本地"[\s\S]*?原始照片仅在当前设备中处理，不随候选记录上传；记录仅保留 \$\{privacyAudit\(state\)\.local_workflow_fields\.length\} 类必要参数。/,
   "the local workflow privacy card retains its device-local promise");
 assert.doesNotMatch(controller, /case "diameter_input":|case "diameter_changed":/,

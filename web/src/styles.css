@@ -2741,7 +2741,7 @@ body:has(.dark-workbench-page) {
   .workflow-workbench .stage-top {
     grid-template-areas:
       "incision-status"
-      "workflow-actions workflow-actions";
+      "workflow-actions";
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto;
     height: auto;

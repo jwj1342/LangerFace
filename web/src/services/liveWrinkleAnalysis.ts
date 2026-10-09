@@ -354,8 +354,9 @@ async function detectServerImageWrinkles(
   file: File,
   working: WorkingFrame,
   workLandmarks: Vec3[],
-): Promise<LiveWrinkleDetectionResult> {
-  els.wrinkleSummary.textContent = "正在服务器统一解码照片并运行 GPU 皱纹检测……";
+  generation: number,
+): Promise<LiveWrinkleDetectionResult | null> {
+  setWrinkleSummary("正在服务器统一解码照片并运行 GPU 皱纹检测……", true);
   const response = await fetch("/api/gpu/wrinkles/image", {
     method: "POST",
     headers: { "Content-Type": file.type || "application/octet-stream" },
@@ -380,6 +381,9 @@ async function detectServerImageWrinkles(
     points: line.points.map((point) => toWrinkleWorkingPoint(point, serverTransform)),
   }));
   const serverBaselineSha256 = await numericFingerprint(lines);
+  // A delayed response from an old photo must never seed the current source's
+  // worker cache after the user has selected another media source.
+  if (generation !== state.generation) return null;
   return wrinkleWorkerInstance().seedYoloEvidence({
     lines,
     summary: {
@@ -467,6 +471,13 @@ function statusLabel(): string {
   return isWrinkleFrameReady() ? "等待手动检测" : "等待照片";
 }
 
+function setWrinkleSummary(message: string, visible: boolean): void {
+  if (!els.wrinkleSummary) return;
+  els.wrinkleSummary.textContent = message;
+  els.wrinkleSummary.classList.toggle("hidden", !visible);
+  els.wrinkleSummary.setAttribute("aria-hidden", visible ? "false" : "true");
+}
+
 export function updateWrinkleUi(): void {
   if (!els.wrinkleStatus) return;
   const frameReady = isWrinkleFrameReady();
@@ -491,25 +502,24 @@ export function updateWrinkleUi(): void {
   if (isDynamicWrinkleSourceKind(sourceState.sourceKind) && !sourceState.paused) {
     const sourceLabel = dynamicWrinkleSourceLabel();
     if (state.status === "error" || state.status === "live-empty") {
-      els.wrinkleSummary.textContent = state.error
-        || `${sourceLabel}皱纹检测失败，请重新启动${sourceLabel}后重试。`;
+      setWrinkleSummary(`${state.error || `${sourceLabel}皱纹检测失败`}；请调整光线或角度后重试。`, true);
     } else {
       const elapsed = state.timings?.totalMs;
-      els.wrinkleSummary.textContent = state.evidenceLines.length
+      setWrinkleSummary(state.evidenceLines.length
         ? liveWrinkleProcessingMode() === "framewise"
           ? `YOLO 当前检测 ${state.fineLineCount} 条皱纹；每次处理使用新帧，仅做相邻结果时间稳定` +
             `${elapsed ? `；最近一帧 ${Math.round(elapsed)} ms` : ""}。`
           : `YOLO 已锁定 ${state.fineLineCount} 条皱纹，正逐帧跟踪并每 2 秒进行可信纠偏` +
             `${elapsed ? `；最近检测 ${Math.round(elapsed)} ms` : ""}。${sourceLabel}模式不运行微调。`
-        : `${sourceLabel}模式仅运行 YOLO 皱纹检测；检测结果会随人脸实时移动，不运行微调。`;
+        : `${sourceLabel}模式仅运行 YOLO 皱纹检测；检测结果会随人脸实时移动，不运行微调。`, false);
     }
   } else if (state.status === "error") {
-    els.wrinkleSummary.textContent = state.error || "请重试，或更换正面、清晰、光线均匀的照片。";
+    setWrinkleSummary(`${state.error || "皱纹检测失败"}；请稍后重试，或更换正面、清晰、光线均匀的照片。`, true);
   } else if (state.status === "evidence") {
-    els.wrinkleSummary.textContent = `已绘制 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域）；${state.error || "自动微调未通过安全门禁"}，标准 RSTL 保持不变。`;
+    setWrinkleSummary(`已绘制 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域）；${state.error || "自动微调未通过安全门禁"}，标准 RSTL 保持不变。可更换照片重新检测。`, true);
   } else if (state.status === "detected") {
-    els.wrinkleSummary.textContent = `YOLO 已检测 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域）；` +
-      "额头、眉间或鼻背证据可用时，可点击按钮微调对应 RSTL。";
+    setWrinkleSummary(`YOLO 已检测 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域）；` +
+      "额头、眉间或鼻背证据可用时，可点击按钮微调对应 RSTL。", false);
   } else if (state.status === "ready" || state.status === "applied") {
     const evidenceVersion = state.evidenceSource === "yolo-live"
       ? "YOLO-only 额头/眉间/鼻背引导"
@@ -553,19 +563,19 @@ export function updateWrinkleUi(): void {
       `识别 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域），` +
       regionalMovement + `共调整 ${state.movedCurveCount} 条 RSTL / ${state.movedPointCount} 个点。` +
       glabellarDiagnostic + foreheadDiagnostic;
-    els.wrinkleSummary.textContent = hasManualRefineChanges()
+    setWrinkleSummary(hasManualRefineChanges()
       ? `${moved} 已有医生手动修改，自动应用已锁定；可恢复后重新应用。`
-      : moved;
+      : moved, false);
   } else if (busy) {
-    els.wrinkleSummary.textContent = state.status === "refining"
+    setWrinkleSummary(state.status === "refining"
       ? "正在使用已缓存的皱纹检测结果运行 RSTL 微调。"
       : state.provider
       ? `正在${processingLocation}运行 V10 四区域检测。`
       : import.meta.env?.VITE_SERVER_COMPUTE === 'true'
       ? '正在服务器运行 YOLO 皱纹检测。'
-      : "正在当前浏览器运行 YOLO 皱纹检测。";
+      : "正在当前浏览器运行 YOLO 皱纹检测。", true);
   } else {
-    els.wrinkleSummary.textContent = "";
+    setWrinkleSummary("", false);
   }
 }
 
@@ -920,7 +930,7 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
         if (generation !== state.generation) return;
         const { progress } = event;
         const percent = Math.round(progress.loadedChunks / Math.max(1, progress.totalChunks) * 100);
-        els.wrinkleSummary.textContent = `正在当前设备加载 YOLO 模型：${percent}%`;
+        setWrinkleSummary(`正在当前设备加载 YOLO 模型：${percent}%`, true);
         return;
       }
       if (event.type === "provider-ready") {
@@ -932,16 +942,16 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
       }
       if (event.type === "pipeline-progress") {
         if (generation !== state.generation) return;
-        els.wrinkleSummary.textContent = event.stage === "four-region"
+        setWrinkleSummary(event.stage === "four-region"
           ? `正在${wrinkleV10ProcessingLocationLabel(state.provider, window.location.hostname)}` +
             "运行 V10 四区域检测……"
-          : "正在运行 V9 7.2 微调……";
+          : "正在运行 V9 7.2 微调……", true);
         return;
       }
       if (event.type === "evidence") return;
     };
     const pipeline = import.meta.env?.VITE_SERVER_COMPUTE === "true" && sourceState.imageFile
-      ? await detectServerImageWrinkles(sourceState.imageFile, working, workLandmarks)
+      ? await detectServerImageWrinkles(sourceState.imageFile, working, workLandmarks, generation)
       : await wrinkleWorkerInstance().detect({
         imageData: working.imageData,
         size: working.size,
@@ -953,7 +963,7 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
         mode: "yolo-only",
         cacheForRefinement: true,
       }, handleWorkerEvent);
-    if (generation !== state.generation) return;
+    if (generation !== state.generation || !pipeline) return;
     pipelineCompleted = true;
     commitEvidence(pipeline.evidence);
     state.detectionId = pipeline.detectionId;

@@ -169,7 +169,7 @@ assert.match(panel, /<ButtonRow className="live-wrinkle-actions">/,
 assert.match(panel, /id="wrinkleSummary"/,
   "the panel retains the dynamic wrinkle-result container");
 assert.match(panel, /className="hidden"[\s\S]*?id="wrinkleSummary"[\s\S]*?aria-hidden="true"/,
-  "detection and refinement details remain available to the runtime without visible copy");
+  "wrinkle feedback starts hidden and is made visible only for actionable states");
 for (const removedCopy of [
   "皱纹检测与可选微调",
   "照片、视频和摄像头均使用 YOLO 皱纹检测",
@@ -335,8 +335,8 @@ assert.match(analysisRuntime,
   /forehead_moved_curve_count[\s\S]*glabellar_moved_curve_count[\s\S]*nose_bridge_moved_curve_count/,
   "the result summary must expose separate forehead, glabellar and nose movement counts");
 assert.match(analysisRuntime,
-  /if \(isDynamicWrinkleSourceKind\(sourceState\.sourceKind\)\) \{[\s\S]*if \(state\.status === "error"\) \{[\s\S]*els\.wrinkleSummary\.textContent = state\.error/,
-  "camera and video failures must expose their concrete runtime error");
+  /function setWrinkleSummary\(message: string, visible: boolean\)[\s\S]*classList\.toggle\("hidden", !visible\)[\s\S]*setAttribute\("aria-hidden", visible \? "false" : "true"\)/,
+  "actionable wrinkle failures and processing feedback can be made visible");
 assert.match(analysisRuntime,
   /message === "YOLO 未提取到有效皱纹中心线"[\s\S]*liveDetectionAttempted = false;[\s\S]*updateStatus\("live-empty"/,
   "an empty camera detection must remain non-fatal and schedule another attempt");
