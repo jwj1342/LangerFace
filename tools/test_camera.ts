@@ -181,8 +181,11 @@ stopCameraStream(null);
 
 const pipelineSource = readFileSync(new URL("../web/src/services/pipelineSource.ts", import.meta.url), "utf8");
 assert.match(pipelineSource,
-  /await loadVideoFirstFrame[\s\S]*loop\(\);\s*cancelFrame\(\);\s*await waitForLiveWrinkleAnalysis\(\);\s*if \(operationId !== sourceOperationId\) return;\s*await els\.video\.play\(\)/,
-  "uploaded video extracts the first frame before playback and ignores replaced sources");
+  /await loadVideoFirstFrame[\s\S]*loop\(\);\s*cancelFrame\(\);[\s\S]*?await els\.video\.play\(\);\s*if \(operationId !== sourceOperationId\) return;/,
+  "uploaded video extracts the first frame and starts playback without waiting for optional wrinkle inference");
+assert.match(pipelineSource,
+  /els\.video\.pause\(\);\s*els\.video\.srcObject = null;\s*els\.video\.removeAttribute\("src"\);[\s\S]*?els\.video\.load\(\);/,
+  "replacing a source releases the previous video decoder and buffered media");
 assert.match(pipelineSource,
   /VITE_SERVER_COMPUTE[\s\S]*fetch\("\/api\/gpu\/media\/video"[\s\S]*preparedVideo\.release/,
   "server builds upload videos for browser-compatible playback and release them with the source");
@@ -202,8 +205,13 @@ assert.match(
 );
 assert.match(
   pipelineSource,
-  /captureCurrentStaticSource\(\);[\s\S]*?stopSource\(\{ preserveOperation: true, preserveRefinementForLive, preserveStaticResume: true \}\)[\s\S]*?renderState\.incisionOverlay = activeIncisionOverlay/,
-  "opening the camera snapshots the static session and restores the already-approved incision overlay after source replacement",
+  /captureCurrentStaticSource\(\);[\s\S]*?stopSource\(\{ preserveOperation: true, preserveStaticResume: true \}\)[\s\S]*?renderState\.incisionOverlay = activeIncisionOverlay/,
+  "opening the camera snapshots the static session without carrying photo refinement transport",
+);
+assert.doesNotMatch(
+  pipelineSource,
+  /currentLiveSourceKind\(\) === "image"[\s\S]*?hasLiveRefinementForCamera\(\)/,
+  "opening the camera must not reuse a photo-specific refinement transport",
 );
 assert.match(
   pipelineSource,

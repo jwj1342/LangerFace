@@ -280,8 +280,14 @@ assert.match(analysisRuntime,
 assert.match(refineMathRuntime, /addedLines[\s\S]*anchorLineName[\s\S]*anchorPosition/,
   "generated wrinkle-guided RSTL lines must follow named standard curves instead of frozen screen pixels");
 assert.match(pipelineSourceRuntime,
-  /currentLiveSourceKind\(\) === "image"[\s\S]*hasLiveRefinementForCamera\(\)[\s\S]*preserveRefinementForLive/,
-  "photo-to-camera source replacement must preserve an accepted wrinkle-guided display transport");
+  /captureCurrentStaticSource\(\);[\s\S]*stopSource\(\{ preserveOperation: true, preserveStaticResume: true \}\)/,
+  "photo-to-camera source replacement must snapshot the photo before clearing its refinement transport");
+assert.doesNotMatch(pipelineSourceRuntime,
+  /currentLiveSourceKind\(\) === "image"[\s\S]*?hasLiveRefinementForCamera\(\)/,
+  "camera startup does not reuse photo-specific refinement transport");
+assert.match(pipelineSourceRuntime,
+  /stopSource\(\{ preserveOperation: true, preserveStaticResume: true \}\)[\s\S]*?setSource\(els\.video, "camera",[\s\S]*?release: \(\) => stopCameraStream\(stream\)/,
+  "camera source starts without a refinement-preservation option");
 assert.match(analysisRuntime, /delegate: "CPU"/,
   "single-frame refinement must use deterministic CPU landmarks");
 assert.match(analysisRuntime, /runningMode: "IMAGE"/,

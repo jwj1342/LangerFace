@@ -145,10 +145,12 @@ for (const rel of ["web/src/services/pipelineSource.ts"]) {
     `${rel} exposes an explicit image-loading state on the central canvas`);
   assert.match(source, /const workflowUpload = Boolean\(document\.querySelector\("\.workflow-workbench"\)\)/,
     `${rel} scopes screenshot warnings and temporary face-photo drafts to the merged workflow`);
-  assert.match(source, /if \(!workflowUpload\) \{[\s\S]*?stopSource\(\{ preserveOperation: true \}\)[\s\S]*?setMsg\("图片加载中", 0, true\)/,
-    `${rel} preserves the established source-replacement order outside the workflow route`);
+  assert.match(source, /stopSource\(\{ preserveOperation: true \}\)/,
+    `${rel} replaces an existing source before loading a new image or video`);
   assert.match(source, /if \(workflowUpload && !suppressScreenshotWarning/,
     `${rel} does not change the protected standalone RSTL upload interaction`);
+  assert.doesNotMatch(source, /workflowUpload && isVideo[\s\S]*?return;/,
+    `${rel} keeps video uploads available from the merged workflow`);
   assert.match(source, /if \(!isImage && !isVideo\) \{[\s\S]*?return;[\s\S]*?const startedAt/,
     `${rel} rejects unsupported files before stopping or replacing the active source`);
   assert.match(source, /const modelReady = ensureImageReady\(\)\.then[\s\S]*?const decoded = img\.decode\(\)\.then[\s\S]*?await Promise\.all\(\[modelReady, decoded\]\)/,

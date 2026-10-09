@@ -24,7 +24,6 @@ import {
 } from "./liveState.ts";
 import {
   captureRefineDisplayState,
-  hasLiveRefinementForCamera,
   resetRefineForNewSource,
   restoreRefineDisplayState,
   type RefineDisplayResumeState,
@@ -34,7 +33,6 @@ import {
   captureWrinkleDisplayState,
   resetLiveWrinkleAnalysis,
   restoreWrinkleDisplayState,
-  waitForLiveWrinkleAnalysis,
   type WrinkleDisplayResumeState,
 } from "./liveWrinkleAnalysis.ts";
 import { loadVideoFirstFrame } from "./videoSource.ts";
@@ -118,10 +116,8 @@ function captureCurrentStaticSource(): void {
 
 function restoreStaticSourceOrPlaceholder(activeIncisionOverlay: typeof renderState.incisionOverlay): void {
   const resume = lastStaticSource;
-  const preserveRefinementForLive = Boolean(resume?.refinement.liveTransport);
   stopSource({
     preserveOperation: true,
-    preserveRefinementForLive,
     preserveStaticResume: true,
   });
   if (!resume) {
@@ -133,7 +129,6 @@ function restoreStaticSourceOrPlaceholder(activeIncisionOverlay: typeof renderSt
   }
   sourceState.imageFile = resume.imageFile;
   setSource(resume.source, "image", resume.width, resume.height, {
-    preserveRefinementForLive,
     imageViewResume: resume.imageView,
   });
   restoreRefineDisplayState(resume.refinement);
@@ -178,9 +173,9 @@ export async function startCamera(options: StartCameraOptions = {}): Promise<voi
     }
     captureCurrentStaticSource();
     const activeIncisionOverlay = renderState.incisionOverlay;
-    const preserveRefinementForLive = currentLiveSourceKind() === "image"
-      && hasLiveRefinementForCamera();
-    stopSource({ preserveOperation: true, preserveRefinementForLive, preserveStaticResume: true });
+    // Camera is a new subject/source. Never carry photo-specific refinement
+    // transport into it; the previous photo snapshot is restored on exit.
+    stopSource({ preserveOperation: true, preserveStaticResume: true });
     els.video.srcObject = pendingStream;
     await els.video.play();
     if (operationId !== sourceOperationId) {
@@ -192,7 +187,6 @@ export async function startCamera(options: StartCameraOptions = {}): Promise<voi
     if (!stream) return;
     setSource(els.video, "camera", els.video.videoWidth, els.video.videoHeight, {
       release: () => stopCameraStream(stream),
-      preserveRefinementForLive,
     });
     renderState.incisionOverlay = activeIncisionOverlay;
     requestFrame();
@@ -248,16 +242,10 @@ export async function handleFile(
   let pendingVideoRelease: (() => void) | null = null;
   let sourceReplaced = false;
   const workflowUpload = Boolean(document.querySelector(".workflow-workbench"));
-  if (workflowUpload && isVideo) {
-    setTransientMsg("合并工作流仅支持照片；请在实时 2D 工具中上传视频。");
-    return;
-  }
-  if (!workflowUpload) {
-    stopSource({ preserveOperation: true });
-    sourceReplaced = true;
-    setLive(false, "待机");
-    setMsg(isImage ? "图片加载中" : "正在准备视频…", 0, true);
-  }
+  stopSource({ preserveOperation: true });
+  sourceReplaced = true;
+  setLive(false, "待机");
+  setMsg(isImage ? "图片加载中" : "正在准备视频…", 0, true);
   try {
     if (isImage) {
       const url = URL.createObjectURL(file);
@@ -283,12 +271,7 @@ export async function handleFile(
           setTransientMsg("已取消疑似手机截图；请重新选择不包含网页界面的原始人像。", 4_000);
           return;
         }
-        if (workflowUpload) {
-          stopSource({ preserveOperation: true });
-          sourceReplaced = true;
-          setLive(false, "待机");
-          setMsg("图片加载中", 0, true);
-        }
+        if (workflowUpload) setMsg("图片加载中", 0, true);
         const prepared = prepareImageSource(img);
         sourceState.imageFile = file;
         setSource(prepared.source, "image", prepared.width, prepared.height);
@@ -329,8 +312,9 @@ export async function handleFile(
       cancelFrame();
       loop();
       cancelFrame();
-      await waitForLiveWrinkleAnalysis();
-      if (operationId !== sourceOperationId) return;
+      // Do not hold video playback behind optional wrinkle inference. The
+      // worker continues in the background and generation guards discard stale
+      // results if another source is selected meanwhile.
       await els.video.play();
       if (operationId !== sourceOperationId) return;
       els.pause.disabled = false;
@@ -456,8 +440,12 @@ export function stopSource({
   cancelFrame();
   sourceLayoutScheduler.cancel();
   sourceState.planning2d?.clearSource();
+  els.video.pause();
   els.video.srcObject = null;
   els.video.removeAttribute("src");
+  // Removing src alone can leave the browser's decoder and buffered media
+  // alive across repeated uploads. load() forces the element to release it.
+  els.video.load();
   sourceState.running = false;
   sourceState.paused = false;
   sourceState.frozenFrame = null;
