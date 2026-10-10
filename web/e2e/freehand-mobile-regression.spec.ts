@@ -278,7 +278,7 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
     });
     expect(layout).not.toBeNull();
     expect(layout!.rootHeight).toBeCloseTo(viewport.height, 0);
-    const expectedStageHeight = Math.max(320, Math.min(viewport.height - 170, viewport.width + 100));
+    const expectedStageHeight = Math.max(320, Math.min(viewport.height - 136, viewport.width + 134));
     expect(layout!.stageHeight).toBeCloseTo(expectedStageHeight, 0);
     expect(layout!.paneTop).toBeCloseTo(layout!.stageTop + layout!.stageHeight, 0);
     expect(layout!.paneOverflowY).toBe("auto");

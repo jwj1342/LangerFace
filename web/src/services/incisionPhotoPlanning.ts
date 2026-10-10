@@ -18,7 +18,9 @@ import type { Triangle, Vec3 } from "./softBody.ts";
 
 export const INCISION_PHOTO_MAX_BYTES = 20 * 1024 * 1024;
 export const INCISION_PHOTO_TYPES = new Set(["image/jpeg", "image/png"]);
-export const PHOTO_VISIBILITY_LIMITED_MIN_VISIBLE_FRACTION = 0.45;
+// Partial outlines are display references, not evidence of complete visibility.
+// Any drawable visible segment may be shown; confirmation/live gates are separate.
+export const PHOTO_VISIBILITY_LIMITED_MIN_VISIBLE_FRACTION = Number.EPSILON;
 export const PHOTO_FACE_EDGE_RECOVERY_MAX_WIDTH_FRACTION = 0.055;
 const MEDIAPIPE_FACE_OVAL = [
   10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378,
@@ -305,6 +307,9 @@ export interface IncisionPhotoRenderInput {
   photoDiameterEstimateMm?: number;
   photoPixelsPerMm?: number;
   candidateLengthMm?: number;
+  /** Explicit workflow boundary fit; undefined preserves compatibility renderers. */
+  candidateBoundaryFitScale?: number;
+  candidateMarginMm?: number;
   boundaryRefs: SurfaceRef[];
   photoBoundary?: Vec3[];
   candidateRefs: SurfaceRef[];
@@ -511,13 +516,18 @@ function circularVisibleSegments(points: readonly Vec3[], visibleMask: readonly 
   const start = visibleMask.findIndex((visible, index) => visible
     && !visibleMask[(index - 1 + visibleMask.length) % visibleMask.length]);
   if (start < 0) return [];
-  const segment: Vec3[] = [];
+  const segments: Vec3[][] = [];
+  let segment: Vec3[] = [];
   for (let offset = 0; offset < points.length; offset += 1) {
     const index = (start + offset) % points.length;
-    if (!visibleMask[index]) break;
-    segment.push([...points[index]] as Vec3);
+    if (visibleMask[index]) segment.push([...points[index]] as Vec3);
+    else {
+      if (segment.length >= 2) segments.push(segment);
+      segment = [];
+    }
   }
-  return segment.length >= 2 ? [segment] : [];
+  if (segment.length >= 2) segments.push(segment);
+  return segments;
 }
 
 function canonicalHalfWidthFactor(axisFraction: number, shapeSlope: number): number {
@@ -593,6 +603,9 @@ export function buildPhotoSurfaceCanonicalFusiform({
   referenceAspectRatio,
   minimumLengthScale = 0,
   candidateLengthPx,
+  boundaryFitScale,
+  boundaryMarginPx = 0,
+  lockCenter = false,
 }: {
   sourceCandidate: Vec3[];
   sourceEndpoints: Vec3[];
@@ -609,6 +622,9 @@ export function buildPhotoSurfaceCanonicalFusiform({
   referenceAspectRatio?: number | null;
   minimumLengthScale?: number;
   candidateLengthPx?: number;
+  boundaryFitScale?: number;
+  boundaryMarginPx?: number;
+  lockCenter?: boolean;
 }): PhotoSurfaceCanonicalFusiformAttempt {
   const diagnostics: FusiformFitDiagnostics = {
     ok: false,
@@ -659,7 +675,7 @@ export function buildPhotoSurfaceCanonicalFusiform({
   if (axis[0] * endpointAxis[0] + axis[1] * endpointAxis[1] < 0) axis = [-axis[0], -axis[1]];
   const perpendicular = [-axis[1], axis[0]] as const;
   const project = (point: Vec3) => {
-    const delta = [point[0] - center[0], point[1] - center[1]];
+    const delta = [point[0] - center![0], point[1] - center![1]];
     return [delta[0] * axis[0] + delta[1] * axis[1],
       delta[0] * perpendicular[0] + delta[1] * perpendicular[1]] as const;
   };
@@ -690,8 +706,9 @@ export function buildPhotoSurfaceCanonicalFusiform({
   const targetTipAngle = Math.max(8, Math.min(75, Number(tipAngleDeg || 30)));
   const shapeSlope = Math.min(ratio * Math.tan(targetTipAngle * Math.PI / 360), 2.95);
   const halfWidthProfile = canonicalHalfWidthProfile(shapeSlope);
-  const projectedBoundary = boundary.map(project);
-  const boundaryPaddingPx = 1.5;
+  let projectedBoundary = boundary.map(project);
+  const tightFit = boundaryFitScale != null && boundary.length >= 3 && referenceAspectRatio == null;
+  const boundaryPaddingPx = tightFit ? Math.max(0, boundaryMarginPx) : 1.5;
   const outsideBoundary = (scale: number) => projectedBoundary.filter(([axisDistance, perpendicularDistance]) => {
     const halfLength = baseHalfLength * scale;
     const halfWidth = baseHalfWidth * scale;
@@ -700,8 +717,45 @@ export function buildPhotoSurfaceCanonicalFusiform({
       || Math.abs(perpendicularDistance) + boundaryPaddingPx > factor * halfWidth + 1e-6;
   }).length;
   let scale = 1;
+  if (tightFit) {
+    // Solve against the displayed yellow boundary and this exact cubic profile.
+    // Do not reintroduce a pixel pad or a surface-derived minimum size here.
+    const originalBoundary = projectedBoundary;
+    const requiredScale = (dx: number, dy: number) => {
+      projectedBoundary = originalBoundary.map(([x, y]) => [x - dx, y - dy] as const);
+      let low = 1e-6, high = 1;
+      // An enclosing scale is independent of the initial reference-circle size.
+      // Bound retries; surface/skin validation below remains authoritative.
+      for (let expansion = 0; expansion < 20 && outsideBoundary(high); expansion++) high *= 2;
+      if (outsideBoundary(high)) return Infinity;
+      for (let i = 0; i < 28; i++) {
+        const middle = (low + high) / 2;
+        if (outsideBoundary(middle)) low = middle; else high = middle;
+      }
+      return high;
+    };
+    let best = { x: 0, y: 0, scale: requiredScale(0, 0) };
+    if (!lockCenter) {
+      let stepX = (Math.max(...originalBoundary.map(p => p[0])) - Math.min(...originalBoundary.map(p => p[0]))) / 2;
+      let stepY = (Math.max(...originalBoundary.map(p => p[1])) - Math.min(...originalBoundary.map(p => p[1]))) / 2;
+      for (let level = 0; level < 12; level++) {
+        const anchor = best;
+        for (let xi = -2; xi <= 2; xi++) for (let yi = -2; yi <= 2; yi++) {
+          const x = anchor.x + xi * stepX / 2, y = anchor.y + yi * stepY / 2;
+          const needed = requiredScale(x, y);
+          if (needed < best.scale - 1e-9) best = { x, y, scale: needed };
+        }
+        stepX /= 2; stepY /= 2;
+      }
+    }
+    if (!Number.isFinite(best.scale)) return fail("photo_boundary_not_enclosed");
+    center = [center[0] + axis[0] * best.x + perpendicular[0] * best.y,
+      center[1] + axis[1] * best.x + perpendicular[1] * best.y, center[2]];
+    projectedBoundary = boundary.map(project);
+    scale = best.scale * Math.max(1, Number(boundaryFitScale));
+  }
   let boundaryOutsideCount = outsideBoundary(scale);
-  while (boundaryOutsideCount > 0 && scale < 1.75 - 1e-9) {
+  while (!tightFit && boundaryOutsideCount > 0 && scale < 1.75 - 1e-9) {
     scale = Math.min(1.75, scale * 1.035);
     boundaryOutsideCount = outsideBoundary(scale);
   }
@@ -807,11 +861,8 @@ export function buildPhotoSurfaceCanonicalFusiform({
     && surfaceValidation.outsideCount > 0
     && candidateHiddenOnlyAtSilhouette
     && boundaryHiddenOnlyAtSilhouette
-    && hiddenSegmentCount === 1
-    && visibleSegmentCount === 1
     && visibleFraction >= PHOTO_VISIBILITY_LIMITED_MIN_VISIBLE_FRACTION
-    && visibleSegments.length === 1
-    && visibleSegments[0].length >= 8;
+    && visibleSegments.some(segment => segment.length >= 2);
   diagnostics.photoVisibleFraction = visibleFraction;
   diagnostics.photoVisibleSegmentCount = visibleSegmentCount;
   diagnostics.photoHiddenTipCount = hiddenTipCount;
@@ -821,7 +872,7 @@ export function buildPhotoSurfaceCanonicalFusiform({
       fit: null,
       diagnosticFit: fullFit,
       visibilityLimitedFit: visibilityLimitedEligible
-        ? { ...fullFit, visibleSegments }
+        ? { ...fullFit, visibleSegments: visibleSegments.filter(segment => segment.length >= 2) }
         : null,
       endpoints: [start, end],
       diagnostics: {
@@ -1859,6 +1910,8 @@ export function buildIncisionPhotoGeometry({
   photoDiameterEstimateMm,
   photoPixelsPerMm,
   candidateLengthMm,
+  candidateBoundaryFitScale,
+  candidateMarginMm,
   boundaryRefs,
   photoBoundary,
   candidateRefs,
@@ -1897,14 +1950,13 @@ export function buildIncisionPhotoGeometry({
       (sourceEndpoints[0][2] + sourceEndpoints[1][2]) * 0.5,
     ] as Vec3
     : detectedCenter;
-  // Rendering is not allowed to redefine the lesion center. The candidate
-  // generator must remain centered on the detector-confirmed center; if an old
-  // or imported candidate does not, keep that offset auditable instead of
-  // moving the red point after the async workflow finishes.
-  const candidateSmoothingCenter = detectedCenter || planningCenter;
   const boundary = photoBoundary?.length
     ? photoBoundary.map((point) => [...point] as Vec3)
     : mapSurfaceRefs(boundaryRefs, photoLandmarks, triangles).pts;
+  // The lesion center remains the detection result. The independently solved
+  // candidate center controls fusiform symmetry, RSTL lookup and rendering
+  // only when a real boundary exists to verify that the two remain related.
+  const candidateSmoothingCenter = boundary.length >= 3 ? planningCenter || detectedCenter : detectedCenter || planningCenter;
   const sourceProjection = inspectPhotoCandidateProjection(sourceCandidate, candidateType);
   const nearestPhotoRstl = candidateSmoothingCenter
     ? nearestProjectedRstlSegment(candidateSmoothingCenter, directionReferenceRstl)
@@ -1947,6 +1999,10 @@ export function buildIncisionPhotoGeometry({
     candidateLengthPx: Number(candidateLengthMm) > 0 && Number(photoPixelsPerMm) > 0
       ? Number(candidateLengthMm) * Number(photoPixelsPerMm)
       : undefined,
+    boundaryFitScale: candidateBoundaryFitScale,
+    boundaryMarginPx: Math.max(0, Number(candidateMarginMm) || 0) * (Number(photoPixelsPerMm) || 0),
+    // A manual direction overrides RSTL, but does not pin the fitting center.
+    lockCenter: false,
   };
   const standardPhotoCanonicalAttempt = candidateType === "fusiform" && candidateAspectRatio != null
     ? buildPhotoSurfaceCanonicalFusiform(photoCanonicalInput)
@@ -2026,7 +2082,10 @@ export function buildIncisionPhotoGeometry({
           || (!useEditedCandidateAxis && fallbackRstlDeviation != null && fallbackRstlDeviation > 1e-3)
           ? "invalid_sampling"
           : null;
-  const useCenteredFallback = !usePhotoCanonical && fallbackGateReason == null;
+  // The boundary-fit workflow promises a symmetric 3:1 canonical curve.
+  // A free segmented fit cannot silently replace that shape after a failure.
+  const useCenteredFallback = candidateBoundaryFitScale == null
+    && !usePhotoCanonical && fallbackGateReason == null;
   const fusiformFitAttempt = rawFusiformFitAttempt
     ? {
       fit: useCenteredFallback ? rawFusiformFitAttempt.fit : null,
@@ -2059,6 +2118,7 @@ export function buildIncisionPhotoGeometry({
     ? standardPhotoCanonicalAttempt.diagnosticFit
     : null;
   const fallbackDiagnosticFit = !canonicalDiagnosticFit
+    && candidateBoundaryFitScale == null
     && !useSurfaceSmoothedCandidate
     && fallbackGateReason === "photo_surface_exit"
     && fallbackBoundaryOutsideCount === 0

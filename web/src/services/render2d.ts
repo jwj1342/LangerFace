@@ -948,9 +948,10 @@ function drawIncisionOverlay(
     }, localRegionMasks);
   }
   const center = mapSurfaceRefs(optionalSurfaceRef(overlay.tumor?.center_ref), lm, modelTriangles()).pts[0];
+  const incisionCenter = mapSurfaceRefs(optionalSurfaceRef(overlay.candidate?.center_ref), lm, modelTriangles()).pts[0];
   const centerLocalAction = localActionForPoints([center], localRegionMasks);
   const centerOccluded = Boolean(center && masks.length && pointInHandMasks(toPoint2(center), masks));
-  if (center && centerLocalAction.action !== "freeze" && !centerOccluded) {
+  const drawLesionCenter = () => { if (center && centerLocalAction.action !== "freeze" && !centerOccluded) {
     const savedAlpha = ctx.globalAlpha;
     if (centerLocalAction.action === "dim") ctx.globalAlpha = savedAlpha * centerLocalAction.opacityScale;
     ctx.fillStyle = overlayStyle.center.color;
@@ -961,7 +962,18 @@ function drawIncisionOverlay(
     ctx.fill();
     ctx.stroke();
     ctx.globalAlpha = savedAlpha;
+  } };
+  if (incisionCenter) {
+    const radius = overlayStyle.incisionCenter.radiusCss / cssScale;
+    ctx.fillStyle = overlayStyle.incisionCenter.color;
+    ctx.strokeStyle = overlayStyle.incisionCenter.strokeColor;
+    ctx.lineWidth = overlayStyle.incisionCenter.strokeWidthCss / cssScale;
+    ctx.beginPath();
+    ctx.arc(incisionCenter[0], incisionCenter[1], radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
   }
+  drawLesionCenter();
   ctx.restore();
 }
 
@@ -1088,6 +1100,7 @@ function incisionOverlayBounds(lm: Vec3[]): Bounds | null {
   if (!overlay) return null;
   const refs = [
     overlay.tumor?.center_ref,
+    overlay.candidate?.center_ref,
     ...(overlay.tumor?.boundary_refs || []),
     ...(overlay.candidate?.polyline_refs || []),
   ].filter(Boolean);

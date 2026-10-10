@@ -130,6 +130,9 @@ export class IncisionCommandRouter {
     const detail = readIncisionEditCommand(event);
     if (!detail) return false;
     const command: IncisionEditCommand = detail.command;
+    // Preview rollback belongs to the shared photo workflow controller. The
+    // legacy standalone incision page has no transient preview transaction.
+    if (command === "cancel_edit") return true;
     if (detail.controlId !== undefined) {
       this.actions.applyEditControl(detail.controlId, detail.value);
     }

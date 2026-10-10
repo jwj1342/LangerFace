@@ -356,7 +356,7 @@ export function resetRefineForNewSource(
 export function updateRefineUi(): void {
   const s = state();
   els.refine2d.setAttribute("aria-pressed", String(s.active));
-  els.refine2d.textContent = s.active ? "退出医生手动微调" : "医生手动微调";
+  els.refine2d.textContent = s.active ? "结束微调" : "微调";
   els.refine2dPanel.classList.toggle("hidden", !s.active);
   els.mainWrap.classList.toggle("refining", s.active);
   els.mainWrap.classList.toggle("refine-drag", s.active && s.mode === "drag");
@@ -366,6 +366,7 @@ export function updateRefineUi(): void {
     : s.dirty ? "已修改" : "查看中";
   els.refine2dQuality.textContent = qualityMessage();
   els.refine2dQuality.dataset.state = !s.quality ? "idle" : s.quality.ok ? "ok" : "warning";
+  els.refine2dQuality.classList.toggle("hidden", !s.quality || s.quality.ok);
   const modeButtons: Array<[HTMLButtonElement, RefineMode]> = [
     [els.refineView, "view"],
     [els.refineDrag, "drag"],
@@ -421,7 +422,7 @@ export function toggleRefine2d(): void {
   s.lines = s.lines || cloneLines(s.latestAutoLines);
   s.selected = null;
   setRefineCanvasViewActive(true);
-  els.refine2dHint.textContent = `${sourceLabel()}结果已进入微调：可拖点调整。`;
+  els.refine2dHint.textContent = `${sourceLabel()}结果已进入微调：单指拖动选中的采样点，双指缩放图片。`;
   updateRefineUi();
   requestRefineFrame();
 }
@@ -705,6 +706,8 @@ export function beginRefinePointer(event: PointerEvent): boolean {
         : s.lines[partnerIndex]?.pts.map((partnerPoint) => [...partnerPoint] as Vec3) || null,
       moved: false,
       symmetryLinkedIndex: null,
+      dirtyBefore: s.dirty,
+      historyLengthBefore: s.undoStack.length,
     };
     els.canvas.setPointerCapture(event.pointerId);
   }
@@ -759,6 +762,30 @@ export function endRefinePointer(event: PointerEvent): boolean {
   } else {
     updateRefineUi();
   }
+  requestRefineFrame();
+  return true;
+}
+
+/** Cancel one unfinished touch drag before a second finger starts a view gesture. */
+export function cancelRefinePointer(pointerId: number): boolean {
+  const s = state();
+  if (!s.active || !s.drag || s.drag.pointerId !== pointerId) return false;
+  const drag = s.drag;
+  const line = s.lines?.[drag.pick.lineIndex];
+  if (line) line.pts = drag.original.map((point) => [...point] as Vec3);
+  if (drag.partnerIndex != null && drag.originalPartner) {
+    const partner = s.lines?.[drag.partnerIndex];
+    if (partner) partner.pts = drag.originalPartner.map((point) => [...point] as Vec3);
+  }
+  s.undoStack.splice(drag.historyLengthBefore);
+  s.dirty = drag.dirtyBefore;
+  s.drag = null;
+  refreshRefineQuality();
+  // Canvas gesture ownership keeps this pointer captured while the second
+  // finger is down. Releasing it here would emit lostpointercapture and drop
+  // the first touch from the new pinch before that pinch can move.
+  els.refine2dHint.textContent = "已切换为双指缩放，本次未完成的微调已取消。";
+  updateRefineUi();
   requestRefineFrame();
   return true;
 }

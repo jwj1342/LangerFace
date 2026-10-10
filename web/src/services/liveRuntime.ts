@@ -25,7 +25,8 @@ import { countMetric, logError } from "./logger";
 import { LiveActionScheduler } from "./liveActionScheduler";
 import { bindLiveCanvasInteractions } from "./liveCanvasInteraction";
 import { LiveCommandRouter } from "./liveCommandRouter";
-import { createCanvasRecordingController, type CanvasRecordingController, type RecordingExtraCanvas } from "./canvasRecording";
+import type { RecordingExtraCanvas } from "./canvasRecording";
+import { createLiveRecordingActions } from "./liveRecordingActions";
 import { modelState, recordingState, renderState, sourceState } from "./liveState";
 import { resetMobileWorkflowVisibility } from "./mobileWorkflowVisibility";
 import { createPhotoPlanningController } from "./photoPlanningController";
@@ -33,6 +34,7 @@ import {
   adjustRefineImageZoom,
   beginFrozenRefineSession,
   beginRefinePointer,
+  cancelRefinePointer,
   commitRefineForLive,
   endRefinePointer,
   exportRefine,
@@ -84,7 +86,6 @@ interface CheckedControlEvent {
 
 let previewSystem: string | null = null;
 let previewMeta: { source: string; validated: boolean; count: number } | null = null;
-let recordingController: CanvasRecordingController | null = null;
 let resizeCleanup: (() => void) | null = null;
 let abortController: AbortController | null = null;
 let mounted = false;
@@ -348,24 +349,21 @@ function restoreAtlasPreview(): void {
   setMsg(null);
 }
 
-// 导出：录制画布为 webm 下载
-function toggleRecording(): void {
-  if (!recordingController) {
-    recordingController = createCanvasRecordingController({
-      canvas: els.canvas,
-      getExtraCanvases: visibleRecordingCanvases,
-      system: () => renderState.system,
-      onStateChange(recording: boolean) {
-        recordingState.recorder = recording ? recordingController : null;
-        els.export.textContent = recording ? "■ 停止" : "⬇ 导出";
-        if (recording) els.export.setAttribute("aria-pressed", "true");
-        else els.export.removeAttribute("aria-pressed");
-        scheduleLiveState("recording_state");
-      },
-    });
-  }
-  recordingController.toggle();
-}
+const recordingActions = createLiveRecordingActions({
+  canvas: () => els.canvas,
+  getExtraCanvases: visibleRecordingCanvases,
+  system: () => renderState.system,
+  onStateChange(recording, controller) {
+    recordingState.recorder = recording ? controller : null;
+    els.export.textContent = recording ? "■ 停止视频" : "⬇ 导出视频";
+    if (recording) els.export.setAttribute("aria-pressed", "true");
+    else els.export.removeAttribute("aria-pressed");
+    scheduleLiveState("recording_state");
+  },
+  setMsg,
+  setTransientMsg,
+  logError,
+});
 
 const liveCommands = new LiveCommandRouter({
   run: runLiveAction,
@@ -376,7 +374,8 @@ const liveCommands = new LiveCommandRouter({
     },
   }),
   pauseToggle: handlePauseToggle,
-  recordingToggle: toggleRecording,
+  recordingToggle: recordingActions.toggleRecording,
+  imageExport: recordingActions.exportCurrentImage,
   templateChange: (value) => handleTemplateChange(valueEvent(value)),
   densityInput: (value) => handleDensityInput(valueEvent(value)),
   opacityInput: (value) => handleOpacityInput(valueEvent(value)),
@@ -468,6 +467,7 @@ function bindLiveEvents(signal: AbortSignal, root: ParentNode | Document): void 
       );
     },
     beginRefinePointer,
+    cancelRefinePointer,
     moveRefinePointer,
     endRefinePointer,
     sourceKind: () => sourceState.sourceKind,
@@ -494,8 +494,8 @@ export function disposeLiveWorkbench() {
   abortController = null;
   resizeCleanup?.();
   resizeCleanup = null;
-  recordingController?.stop?.();
-  recordingController = null;
+  recordingActions.stop();
+  recordingActions.reset();
   recordingState.recorder = null;
   if (hasBoundLiveDom()) {
     stopSource();
@@ -515,7 +515,7 @@ export function mountLiveWorkbench(root: ParentNode | Document = document) {
   abortController = new AbortController();
   previewSystem = null;
   previewMeta = null;
-  recordingController = null;
+  recordingActions.reset();
   bindLiveEvents(abortController.signal, root);
   if (root.querySelector(".workflow-workbench")) {
     resetMobileWorkflowVisibility();

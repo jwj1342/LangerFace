@@ -14,7 +14,7 @@ FIXTURE = Path(__file__).parent / "fixtures" / "fusiform_candidates.json"
 @pytest.fixture(scope="module")
 def parity_cases() -> list[dict]:
     payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    assert payload["schema"] == "fusiform-incision-parity/v0.1"
+    assert payload["schema"] == "fusiform-incision-parity/v0.2"
     return payload["cases"]
 
 

@@ -123,6 +123,7 @@ for (const [command, action] of [
 }
 
 const edit = router.handleEditEvent.bind(router);
+expectDispatch(edit, { command: "cancel_edit", controlId: "uniformScale" }, []);
 expectDispatch(edit, { command: "preview_edit", controlId: "angleOffsetDeg", value: "10" }, [
   ["applyEditControl", "angleOffsetDeg", "10"], ["applyEditControls"],
 ]);

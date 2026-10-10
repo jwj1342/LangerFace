@@ -4,7 +4,7 @@ const TUMOR_KIND_LABELS: Record<string, string> = {
 };
 
 export const TUMOR_DIAMETER_DISABLED_MESSAGE = "当前肿物范围由已绘制或已识别的边界决定，直径参数暂不参与候选生成。";
-export const FREEHAND_MARKER_DISABLED_MESSAGE = "当前肿物边界由“自由轮廓鼠绘”的曲线决定，受控标记暂不参与候选生成；请切换为“椭圆近似”模式后使用。";
+export const FREEHAND_MARKER_DISABLED_MESSAGE = "当前肿物边界由“自由轮廓手绘”的曲线决定，受控标记暂不参与候选生成；请切换为“椭圆近似”模式后使用。";
 
 const CANDIDATE_TYPE_LABELS: Record<string, string> = {
   linear: "线性切口",

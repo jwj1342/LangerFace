@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import { CONTROLLED_MARKER_RELEASE } from "../web/src/services/controlledMarkerRelease.ts";
 
 import { COLOR_DIFFERENCE_BASELINE_VERSION } from "../web/src/services/controlledMarkerDetectionColorV035.ts";
 import {
@@ -15,8 +16,8 @@ import {
 
 assert.equal(LEGACY_CONTROLLED_MARKER_SOURCE_COMMIT, "fe703e2bb37d837f339f2b4fb9861d202568b8e6");
 assert.equal(COLOR_DIFFERENCE_BASELINE_VERSION, "0.23");
-assert.equal(DEFAULT_CONTROLLED_MARKER_DETECTOR_PROFILE, "legacy-v0.23");
-assert.equal(resolveControlledMarkerDetectorProfile(), "legacy-v0.23");
+assert.equal(DEFAULT_CONTROLLED_MARKER_DETECTOR_PROFILE, "small-lesion-boundary-candidate");
+assert.equal(resolveControlledMarkerDetectorProfile(), "small-lesion-boundary-candidate");
 assert.equal(resolveControlledMarkerDetectorProfile("current"), "current-v0.34");
 assert.equal(resolveControlledMarkerDetectorProfile("color"), "small-lesion-boundary-candidate");
 assert.equal(resolveControlledMarkerDetectorProfile("color-difference"), "small-lesion-boundary-candidate");
@@ -26,7 +27,7 @@ assert.equal(resolveControlledMarkerDetectorProfile("legacy"), "legacy-v0.23");
 assert.equal(resolveControlledMarkerDetectorProfile("v0.23"), "legacy-v0.23");
 assert.throws(() => resolveControlledMarkerDetectorProfile("unknown"), /Unsupported controlled marker detector profile/);
 assert.equal(detectorVersionForProfile("current-v0.34"), "0.34");
-assert.equal(detectorVersionForProfile("small-lesion-boundary-candidate"), "task1-candidate");
+assert.equal(detectorVersionForProfile("small-lesion-boundary-candidate"), CONTROLLED_MARKER_RELEASE.version);
 assert.equal(detectorVersionForProfile("legacy-v0.23"), "0.23");
 const expectedActiveProfile = resolveControlledMarkerDetectorProfile(
   process.env.VITE_CONTROLLED_MARKER_DETECTOR_PROFILE,
@@ -39,8 +40,8 @@ const legacySource = fs.readFileSync("src/services/controlledMarkerDetectionLega
   .replace(/\n+$/, "\n");
 assert.equal(
   crypto.createHash("sha256").update(legacySource).digest("hex").toUpperCase(),
-  "FBD74F2C1E9265C2E4C55C382F634A2A72D8894088BF122B9722A05019E8105A",
-  "the audited diagnostic-instrumented legacy core changed; recheck v0.23 behavior before updating this fingerprint",
+  "F325DC64A90296320B868C2933A486A10EEA4368E3A9A180DCD9197DFCA447F5",
+  "the audited core adds opt-in degenerate/elongated candidate filtering; preserve default v0.23 selection semantics",
 );
 assert.match(legacySource, /acceptBoundaryWithinFullScan\?: boolean/,
   "the wider scan contract must remain an explicit opt-in rather than the v0.23 default");
@@ -85,7 +86,7 @@ assert.match(
 const markerLauncherSource = fs.readFileSync("../tools/run_controlled_marker_v035_dev.mjs", "utf8");
 assert.match(markerLauncherSource, /const EXPECTED_PROFILE = "small-lesion-boundary-candidate"/);
 assert.match(markerLauncherSource, /VITE_CONTROLLED_MARKER_DETECTOR_PROFILE: EXPECTED_PROFILE/);
-assert.match(markerLauncherSource, /defaultProfileUnchanged: DEFAULT_PROFILE/);
+assert.match(markerLauncherSource, /ordinaryDefaultProfile: DEFAULT_PROFILE/);
 assert.match(markerLauncherSource, /deferred_to_main_launcher/);
 assert.match(markerLauncherSource, /pageWideModelAssetsCheck/);
 
@@ -96,7 +97,7 @@ assert.equal(
 );
 const markerBuildSource = fs.readFileSync("../tools/run_controlled_marker_v035_build.mjs", "utf8");
 assert.match(markerBuildSource, /TARGET_MARKER_PROFILE/);
-assert.match(markerBuildSource, /EXPECTED_VERSION = "task1-candidate"/);
+assert.match(markerBuildSource, /EXPECTED_VERSION = detectorVersionForProfile\(TARGET_MARKER_PROFILE\)/);
 assert.match(markerBuildSource, /VITE_CONTROLLED_MARKER_DETECTOR_PROFILE: TARGET_MARKER_PROFILE/);
 assert.match(markerBuildSource, /verifyDistIdentity/);
 

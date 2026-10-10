@@ -186,11 +186,13 @@ const refinePanel = fs.readFileSync(
   new URL("../web/src/components/LiveRefinePanel.tsx", import.meta.url),
   "utf8",
 );
-assert.match(refinePanel, />医生手动微调<\/Button>/,
-  "the manual refinement entry uses the compact requested label");
-assert.match(refinePanel, /className="hidden"[\s\S]*?id="refine2dHint"[\s\S]*?aria-hidden="true"/,
-  "manual refinement feedback remains available to the runtime without visible copy");
-assert.doesNotMatch(refinePanel, /医生 2D 微调|医生手动微调（2D）|手动拖动、隐藏或逐点调整当前结果|也可将鼠标放在图片上滚动缩放|以选中点为中心，连续控制指定数量的点|默认只修改选中的一根线/,
+assert.match(refinePanel, /<ButtonRow className="live-refine-primary-actions">[\s\S]*?id="refine2dBtn"[^>]*>微调<\/Button>[\s\S]*?id="refineUndoBtn"[^>]*>撤销<\/Button>[\s\S]*?id="refineResetBtn"[^>]*>恢复<\/Button>[\s\S]*?<\/ButtonRow>/,
+  "the approved manual toolbar keeps refine, undo and reset in one row");
+assert.match(refinePanel, /<Hint id="refine2dHint">点按“微调”后，单指拖动线条；双指可缩放图片。<\/Hint>/,
+  "the approved manual hint explains the single and two-finger actions");
+assert.match(refinePanel, /className="live-refine-internal" aria-hidden="true"/,
+  "internal runtime controls remain outside the visible toolbar");
+assert.doesNotMatch(refinePanel, /医生手动微调（2D）|手动拖动、隐藏或逐点调整当前结果|也可将鼠标放在图片上滚动缩放|以选中点为中心，连续控制指定数量的点|默认只修改选中的一根线/,
   "the manual refinement card omits its redundant heading and introduction");
 
 const qualityPanel = fs.readFileSync(
@@ -646,8 +648,9 @@ const webPackage = JSON.parse(fs.readFileSync(
   new URL("../web/package.json", import.meta.url),
   "utf8",
 ));
-assert.equal(webPackage.scripts.predev, "node ../tools/check_web_dependency_isolation.mjs",
-  "the dev server must reject dependencies shared across worktrees");
+assert.match(webPackage.scripts.predev,
+  /^npm run verify:algorithm-release:deploy && node \.\.\/tools\/report_default_marker_profile\.mjs dev && node \.\.\/tools\/check_web_dependency_isolation\.mjs$/,
+  "the dev server must report the default profile before rejecting dependencies shared across worktrees");
 assert.match(webPackage.scripts.dev, /vite --force\b/,
   "the dev server must rebuild optimizer output instead of reusing copied worktree caches");
 

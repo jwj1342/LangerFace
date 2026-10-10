@@ -1648,6 +1648,70 @@ function enclosedBackgroundRegions(
 }
 
 function componentOuterBoundary(points: MarkerPoint[], maxPoints = 48): MarkerPoint[] {
+  if (!points.length) return [];
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const { x, y } of points) {
+    if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y)) return componentOuterBoundaryString(points, maxPoints);
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  }
+  const stride = maxX - minX + 3;
+  if (!Number.isSafeInteger(stride * (maxY - minY + 3))
+    || !Number.isSafeInteger(minX - 1) || !Number.isSafeInteger(maxX + 1)
+    || !Number.isSafeInteger(minY - 1) || !Number.isSafeInteger(maxY + 1)) {
+    return componentOuterBoundaryString(points, maxPoints);
+  }
+  // Padding makes pixel neighbours and boundary vertices distinct numeric keys.
+  const key = ({ x, y }: MarkerPoint) => (y - minY + 1) * stride + x - minX + 1;
+  const filled = new Set(points.map(key));
+  const outgoing = new Map<number, { start: MarkerPoint; targets: MarkerPoint[]; seen: Set<number> }>();
+  const addEdge = (start: MarkerPoint, end: MarkerPoint) => {
+    const id = key(start);
+    let node = outgoing.get(id);
+    if (!node) {
+      node = { start, targets: [], seen: new Set<number>() };
+      outgoing.set(id, node);
+    }
+    node.targets.push(end);
+  };
+  for (const { x, y } of points) {
+    if (!filled.has(key({ x, y: y - 1 }))) addEdge({ x, y }, { x: x + 1, y });
+    if (!filled.has(key({ x: x + 1, y }))) addEdge({ x: x + 1, y }, { x: x + 1, y: y + 1 });
+    if (!filled.has(key({ x, y: y + 1 }))) addEdge({ x: x + 1, y: y + 1 }, { x, y: y + 1 });
+    if (!filled.has(key({ x: x - 1, y }))) addEdge({ x, y: y + 1 }, { x, y });
+  }
+  const loops: MarkerPoint[][] = [];
+  for (const [startKey, node] of outgoing) {
+    for (const initialTarget of node.targets) {
+      if (node.seen.has(key(initialTarget))) continue;
+      const start = { x: node.start.x || 0, y: node.start.y || 0 };
+      const loop: MarkerPoint[] = [start];
+      let current = start;
+      let next = initialTarget;
+      for (let guard = 0; guard <= points.length * 8; guard += 1) {
+        outgoing.get(key(current))!.seen.add(key(next));
+        current = next;
+        if (key(current) === startKey) break;
+        loop.push(current);
+        const nextNode = outgoing.get(key(current));
+        const nextTarget = nextNode?.targets.find(candidate => !nextNode.seen.has(key(candidate)));
+        if (!nextTarget) break;
+        next = nextTarget;
+      }
+      if (loop.length >= 3 && key(current) === startKey) loops.push(loop);
+    }
+  }
+  const outer = loops.sort((a, b) => Math.abs(polygonArea(b)) - Math.abs(polygonArea(a)))[0] || [];
+  if (outer.length <= maxPoints) return outer;
+  return Array.from({ length: maxPoints }, (_, index) => outer[Math.floor(index * outer.length / maxPoints)]);
+}
+
+function componentOuterBoundaryString(points: MarkerPoint[], maxPoints = 48): MarkerPoint[] {
   const filled = new Set(points.map(pointKey));
   const outgoing = new Map<string, MarkerPoint[]>();
   const addEdge = (start: MarkerPoint, end: MarkerPoint) => {
@@ -2795,8 +2859,17 @@ function detectControlledMarkerInRoi(
     ? seedSnapRadius
     : Math.max(seedSnapRadius, Math.round(roiRadius * 0.6));
   const expectedDiameterPx = Number(options.expectedDiameterPx || 0);
-  const isExpectedSizeCandidate = (candidate: MarkerCandidate) => expectedDiameterPx <= 0
-    || Math.max(candidate.bbox.width, candidate.bbox.height) >= expectedDiameterPx * 0.35;
+  // Color evidence opts in so an unusable raster fragment cannot hide a repaired enclosure.
+  const rejectDegenerateCandidates = Boolean((options as ControlledMarkerOptions & {
+    __rejectDegenerateCandidates?: boolean;
+  }).__rejectDegenerateCandidates);
+  const isExpectedSizeCandidate = (candidate: MarkerCandidate) => (!rejectDegenerateCandidates
+    || (candidate.bbox.width >= 3 && candidate.bbox.height >= 3
+      && (candidate.enclosed
+        || Math.min(candidate.bbox.width, candidate.bbox.height)
+          / Math.max(candidate.bbox.width, candidate.bbox.height) >= 0.52)))
+    && (expectedDiameterPx <= 0
+      || Math.max(candidate.bbox.width, candidate.bbox.height) >= expectedDiameterPx * 0.35);
   const isScanSurfaceCandidate = (candidate: MarkerCandidate) => candidate.enclosed
     && isExpectedSizeCandidate(candidate);
   if (width <= 0 || height <= 0 || image.data.length < width * height * 4) return failure("invalid_image");
@@ -3514,7 +3587,15 @@ export function detectControlledMarker(
         after: diagnosticDetectionSnapshot(result),
       });
     }
-    result = recoverBySeedNeighborhoodConsensus(image, seed, options, roiRadius, result);
+    // Nested candidate probes already have an outer bounded consensus in the
+    // colour detector. Avoid launching the legacy detector's own 32-point
+    // neighbourhood search again for those probes; the top-level call keeps
+    // the original stability check.
+    if (!(options as ControlledMarkerOptions & {
+      __skipSeedNeighborhoodConsensus?: boolean;
+    }).__skipSeedNeighborhoodConsensus) {
+      result = recoverBySeedNeighborhoodConsensus(image, seed, options, roiRadius, result);
+    }
     const beforeFinalization = controlledMarkerDiagnosticSink
       ? diagnosticDetectionSnapshot(result)
       : null;

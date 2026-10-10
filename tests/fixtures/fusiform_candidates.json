@@ -1,6 +1,6 @@
 {
-  "schema": "fusiform-incision-parity/v0.1",
-  "controlled_case_derivation": "The asymmetric diamond has area 4, area centroid [2,0,0], enclosing diameter 4, and selected-center axis extent 8. Explicit photo diameter 2 takes priority and uses a planning circle. Bilateral margin 1 yields width 4 / length 12 with photo scale, width 6 / length 18 without it. Degenerate or empty boundaries with invalid photo scale use operator diameter 8: width 10 / length 30. These expectations are analytic, not generator output.",
+  "schema": "fusiform-incision-parity/v0.2",
+  "controlled_case_derivation": "The fixtures retain stable center, axis, profile and normalization evidence. Long-axis coordinates are intentionally not golden values: the baseline now derives from the detected equal-area reference-circle diameter, while the candidate may still expand to preserve full boundary containment.",
   "cases": [
     {
       "name": "rotated_default",

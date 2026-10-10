@@ -19,6 +19,7 @@ const actions: LiveCommandActions = {
   cameraToggle: () => action("cameraToggle"),
   pauseToggle: () => action("pauseToggle"),
   recordingToggle: () => action("recordingToggle"),
+  imageExport: () => action("imageExport"),
   templateChange: (value) => action("templateChange", value),
   densityInput: (value) => action("densityInput", value),
   opacityInput: (value) => action("opacityInput", value),
@@ -35,6 +36,7 @@ router.source("upload_source");
 router.source("camera_toggle");
 router.source("pause_toggle");
 router.source("recording_toggle");
+router.source("image_export");
 router.render("template_change", "langer");
 router.render("density_input", "72");
 router.render("opacity_input", 45);
@@ -48,6 +50,7 @@ assert.deepEqual(calls, [
   "run:camera_toggle", "cameraToggle",
   "run:pause_toggle", "pauseToggle",
   "run:recording_toggle", "recordingToggle",
+  "run:image_export", "imageExport",
   "run:template_change", "templateChange:langer",
   "run:density_input", "densityInput:72",
   "run:opacity_input", "opacityInput:45",

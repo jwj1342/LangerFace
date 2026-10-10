@@ -364,6 +364,138 @@ function interpolateHalfWidth(x: number, profile: Vec2[]): number {
   return 0;
 }
 
+function fixedRatioContainmentFit({
+  tumor,
+  lesionCenter,
+  axis,
+  perp,
+  unitsPerMm,
+  initialWidthMm,
+  ratio,
+  minLengthMm,
+  maxLengthMm,
+  samples,
+  tipAngleDeg,
+  fixedCenter,
+}: {
+  tumor: TumorInput;
+  lesionCenter: Vec3;
+  axis: Vec3;
+  perp: Vec3;
+  unitsPerMm: number;
+  initialWidthMm: number;
+  ratio: number;
+  minLengthMm: number;
+  maxLengthMm: number;
+  samples: number;
+  tipAngleDeg: number;
+  fixedCenter?: Vec3 | null;
+}): { center: Vec3; widthMm: number; feasible: boolean; iterations: number } {
+  const boundary = tumor.boundary || [];
+  const maximumWidthMm = Math.max(1e-3, maxLengthMm / ratio);
+  const minimumWidthMm = Math.min(
+    maximumWidthMm,
+    Math.max(minLengthMm / ratio, 1e-3),
+  );
+  if (boundary.length < 3) {
+    return { center: lesionCenter, widthMm: Math.min(maximumWidthMm, Math.max(initialWidthMm, minimumWidthMm)), feasible: true, iterations: 0 };
+  }
+
+  const projected = boundary.map((point) => {
+    const delta = sub(point, lesionCenter);
+    return [dot(delta, axis), dot(delta, perp)] as Vec2;
+  });
+  const xs = projected.map((point) => point[0]);
+  const ys = projected.map((point) => point[1]);
+  const xMin = Math.min(...xs), xMax = Math.max(...xs);
+  const yMin = Math.min(...ys), yMax = Math.max(...ys);
+  const marginUnits = Math.max(0, tumor.margin_mm) * unitsPerMm;
+  let iterations = 0;
+  const targetAngle = clamp(Number(tipAngleDeg || 30), 8, 75);
+  const targetSlope = Math.tan((targetAngle / 2) * Math.PI / 180);
+  const shapeSlope = Math.min(ratio * targetSlope, 2.95);
+  // Fit the same sampled outline that is rendered and checked downstream.
+  // An analytic curve can enclose points that fall outside its chord segments.
+  const profileWidths = Array.from({ length: samples + 1 }, (_, i) => {
+    const t = i / samples;
+    return hermiteHalfWidth(t <= 0.5 ? 2 * t : 2 * (1 - t), shapeSlope);
+  });
+
+  const fits = (centerX: number, centerY: number, widthMm: number): boolean => {
+    const halfW = widthMm * unitsPerMm * 0.5;
+    const halfL = halfW * ratio;
+    iterations += 1;
+    return projected.every(([x, y]) => {
+      const localX = x - centerX;
+      if (Math.abs(localX) + marginUnits > halfL + 1e-7) return false;
+      const samplePosition = clamp((localX / halfL + 1) * 0.5 * samples, 0, samples);
+      const index = Math.min(samples - 1, Math.floor(samplePosition));
+      const fraction = samplePosition - index;
+      const availableHalfWidth = (profileWidths[index]
+        + (profileWidths[index + 1] - profileWidths[index]) * fraction) * halfW;
+      return availableHalfWidth >= Math.abs(y - centerY) + marginUnits;
+    });
+  };
+
+  const requiredWidthAt = (centerX: number, centerY: number): { widthMm: number; feasible: boolean } => {
+    if (!fits(centerX, centerY, maximumWidthMm)) return { widthMm: maximumWidthMm, feasible: false };
+    if (fits(centerX, centerY, minimumWidthMm)) return { widthMm: minimumWidthMm, feasible: true };
+    let low = minimumWidthMm;
+    let high = maximumWidthMm;
+    for (let index = 0; index < 24; index += 1) {
+      const middle = (low + high) * 0.5;
+      if (fits(centerX, centerY, middle)) high = middle;
+      else low = middle;
+    }
+    return { widthMm: high + 1e-6, feasible: true };
+  };
+
+  if (fixedCenter) {
+    const fixedDelta = sub(fixedCenter, lesionCenter);
+    const fixedX = dot(fixedDelta, axis);
+    const fixedY = dot(fixedDelta, perp);
+    const fixedFit = requiredWidthAt(fixedX, fixedY);
+    return { center: fixedCenter, widthMm: fixedFit.widthMm, feasible: fixedFit.feasible, iterations };
+  }
+
+  let best = { x: 0, y: 0, widthMm: maximumWidthMm, feasible: false };
+  const consider = (x: number, y: number) => {
+    const fit = requiredWidthAt(x, y);
+    const shift = Math.hypot(x, y);
+    const bestShift = Math.hypot(best.x, best.y);
+    if ((fit.feasible && !best.feasible)
+      || (fit.feasible === best.feasible && fit.widthMm < best.widthMm - 1e-6)
+      || (fit.feasible === best.feasible && Math.abs(fit.widthMm - best.widthMm) <= 1e-6 && shift < bestShift)) {
+      best = { x, y, ...fit };
+    }
+  };
+
+  consider(0, 0);
+  consider((xMin + xMax) * 0.5, (yMin + yMax) * 0.5);
+  let searchMinX = xMin, searchMaxX = xMax;
+  let searchMinY = yMin, searchMaxY = yMax;
+  for (let level = 0; level < 12; level += 1) {
+    const xStep = (searchMaxX - searchMinX) / 4;
+    const yStep = (searchMaxY - searchMinY) / 4;
+    for (let xi = 0; xi <= 4; xi += 1) {
+      for (let yi = 0; yi <= 4; yi += 1) {
+        consider(searchMinX + xStep * xi, searchMinY + yStep * yi);
+      }
+    }
+    searchMinX = best.x - xStep;
+    searchMaxX = best.x + xStep;
+    searchMinY = best.y - yStep;
+    searchMaxY = best.y + yStep;
+  }
+
+  return {
+    center: add(add(lesionCenter, mul(axis, best.x)), mul(perp, best.y)),
+    widthMm: best.widthMm,
+    feasible: best.feasible,
+    iterations,
+  };
+}
+
 export function outlineQualityMetrics({
   upper,
   lower,
@@ -476,6 +608,7 @@ export function generateFusiformIncision(
   unitsPerMm: number,
   normal: Vec3 = [0, 0, 1],
   rules: IncisionRules = DEFAULT_RULES,
+  fixedCenter: Vec3 | null = null,
 ): IncisionCandidate {
   const tumor = validateTumor(tumorInput);
   if (tumor.kind !== "cutaneous") throw new Error("fusiform incision requires cutaneous tumor");
@@ -484,97 +617,71 @@ export function generateFusiformIncision(
   const perp = tangentPerp(axis, normal);
   const lesionNormalization = normalizePlanningLesion(tumor, unitsPerMm, normal);
   const planningDiameterMm = lesionNormalization.planning_diameter_mm;
-  const center = lesionNormalization.planning_center;
-  const photoBoundaryDiameterMm = lesionNormalization.photo_boundary_enclosing_diameter_mm;
-  const photoBoundaryDefinesControlledScale = lesionNormalization.clinical_scale_source === "controlled_marker_enclosing_circle"
-    && photoBoundaryDiameterMm != null;
-  const planningBoundary = photoBoundaryDefinesControlledScale
-    ? Array.from({ length: 32 }, (_value, index) => {
-      const angle = index / 32 * Math.PI * 2;
-      const radius = planningDiameterMm * unitsPerMm / 2;
-      return add(add(center, mul(axis, Math.cos(angle) * radius)), mul(perp, Math.sin(angle) * radius));
-    })
-    : tumor.boundary;
+  const equivalentAreaReferenceDiameterMm = Number(lesionNormalization.detected_equivalent_diameter_mm);
+  const referenceCircleDiameterMm = lesionNormalization.applied
+    && Number.isFinite(equivalentAreaReferenceDiameterMm)
+    && equivalentAreaReferenceDiameterMm > 0
+    ? equivalentAreaReferenceDiameterMm
+    : planningDiameterMm;
+  const lesionCenter = lesionNormalization.planning_center;
+  // Fit the actual boundary; the equal-area circle is only a size reference,
+  // never a lower bound on the final width or a replacement for that boundary.
+  const planningBoundary = tumor.boundary;
   const planningTumor = lesionNormalization.applied
     ? { ...tumor, diameter_mm: planningDiameterMm, boundary: planningBoundary }
     : tumor;
   const boundary = boundaryProfile(planningTumor, axis, perp, unitsPerMm);
   const boundaryDrivesCandidateGeometry = lesionNormalization.applied && Boolean(boundary);
-  const boundaryUsesClassRoundScale = lesionNormalization.clinical_scale_source === "controlled_marker_enclosing_circle";
-  // Keep one authoritative center from detection through planning and display.
-  // An asymmetric boundary is handled by symmetric extent growth, never by
-  // silently replacing the lesion center with a centroid or envelope midpoint.
-  const lesionAxisMm = boundaryDrivesCandidateGeometry
-    ? photoBoundaryDefinesControlledScale
-      ? planningDiameterMm
-      : boundaryUsesClassRoundScale
-      ? Math.max(planningDiameterMm, Number(boundary?.selected_center_axis_diameter_mm || 0))
-      : Number(boundary?.selected_center_axis_diameter_mm || 0)
-    : planningDiameterMm;
-  const lesionWidthMm = boundaryDrivesCandidateGeometry
-    ? photoBoundaryDefinesControlledScale
-      ? planningDiameterMm
-      : boundaryUsesClassRoundScale
-      ? Math.max(planningDiameterMm, Number(boundary?.selected_center_perp_diameter_mm || 0))
-      : Number(boundary?.selected_center_perp_diameter_mm || 0)
-    : planningDiameterMm;
-  const requestedWidthMm = lesionWidthMm + 2 * tumor.margin_mm;
-  let widthMm = requestedWidthMm;
-  const axisCoverageMm = lesionAxisMm + 2 * tumor.margin_mm;
-  const ratioLengthMm = requestedWidthMm * cfg.length_to_width_ratio;
-  const targetLengthMm = Math.max(ratioLengthMm, axisCoverageMm);
-  let lengthMm = clamp(targetLengthMm, cfg.min_length_mm, cfg.max_length_mm);
+  const fixedRatio = Math.max(1, Number(cfg.length_to_width_ratio || 3));
   const samples = Math.max(12, cfg.samples || 56);
-  let profile;
-  let upper: Vec3[] = [];
-  let lower: Vec3[] = [];
-  let outline: Vec3[] = [];
-  let outlineMetrics: AnyRecord = {};
-  let envelopeExpansionIterations = 0;
-  let envelopeWidthExpansionIterations = 0;
-  do {
-    const halfL = lengthMm * unitsPerMm * 0.5;
-    const halfW = widthMm * unitsPerMm * 0.5;
-    profile = fusiformProfile(center, axis, perp, halfL, halfW, samples, cfg.tip_angle_deg);
-    upper = profile.upper;
-    lower = profile.lower;
-    outline = upper.concat(lower.slice(1, -1).reverse());
-    outlineMetrics = outlineQualityMetrics({
-      upper,
-      lower,
-      outline,
-      tumor: planningTumor,
-      center,
-      axis,
-      perp,
-      unitsPerMm,
-      boundaryUsed: boundaryDrivesCandidateGeometry,
-    });
-    if (!boundaryDrivesCandidateGeometry || Number(outlineMetrics.boundary_envelope_outside_count || 0) === 0) break;
-    const upperProjected = projectToAxisPlane(upper, center, axis, perp);
-    const boundaryProjected = projectToAxisPlane(planningTumor.boundary, center, axis, perp);
-    const outside = boundaryProjected.filter(([x, y]) => interpolateHalfWidth(x, upperProjected) < Math.abs(y) - 1e-7);
-    const halfLengthUnits = lengthMm * unitsPerMm * 0.5;
-    const nearTaperedTip = outside.some(([x]) => Math.abs(x) >= halfLengthUnits * 0.88);
-    const maxWidthMm = Math.min(requestedWidthMm * 2, lengthMm / 2.2);
-    // Grow the dimension that actually caused the miss. The previous loop
-    // always exhausted length first, so a mostly perpendicular lesion could
-    // become an 80 mm candidate while still remaining too narrow.
-    if (!nearTaperedTip && widthMm < maxWidthMm - 1e-9) {
-      widthMm = Math.min(maxWidthMm, Math.max(widthMm + 0.5, widthMm * 1.1));
-      envelopeWidthExpansionIterations += 1;
-      continue;
-    }
-    const nextLengthMm = Math.min(cfg.max_length_mm, Math.max(lengthMm + 1, lengthMm * 1.08));
-    if (nextLengthMm > lengthMm + 1e-9) {
-      lengthMm = nextLengthMm;
-      envelopeExpansionIterations += 1;
-      continue;
-    }
-    if (widthMm >= maxWidthMm - 1e-9) break;
-    widthMm = Math.min(maxWidthMm, Math.max(widthMm + 0.5, widthMm * 1.1));
-    envelopeWidthExpansionIterations += 1;
-  } while (envelopeExpansionIterations + envelopeWidthExpansionIterations < 32);
+  const initialWidthMm = referenceCircleDiameterMm + 2 * tumor.margin_mm;
+  const fit = fixedRatioContainmentFit({
+    tumor: boundaryDrivesCandidateGeometry
+      ? planningTumor
+      : { ...planningTumor, boundary: [] },
+    lesionCenter,
+    axis,
+    perp,
+    unitsPerMm,
+    initialWidthMm,
+    ratio: fixedRatio,
+    minLengthMm: Number(cfg.min_length_mm || 0),
+    maxLengthMm: Number(cfg.max_length_mm || 80),
+    samples,
+    tipAngleDeg: cfg.tip_angle_deg,
+    fixedCenter,
+  });
+  const center = fit.center;
+  const widthMm = fit.widthMm;
+  const lengthMm = widthMm * fixedRatio;
+  const profile = fusiformProfile(
+    center, axis, perp,
+    lengthMm * unitsPerMm * 0.5,
+    widthMm * unitsPerMm * 0.5,
+    samples, cfg.tip_angle_deg,
+  );
+  const upper = profile.upper;
+  const lower = profile.lower;
+  const outline = upper.concat(lower.slice(1, -1).reverse());
+  const outlineMetrics = outlineQualityMetrics({
+    upper,
+    lower,
+    outline,
+    tumor: planningTumor,
+    center,
+    axis,
+    perp,
+    unitsPerMm,
+    boundaryUsed: boundaryDrivesCandidateGeometry,
+  });
+  const boundaryProjectedAtCenter = boundaryDrivesCandidateGeometry
+    ? projectToAxisPlane(planningTumor.boundary, center, axis, perp)
+    : [];
+  const axisCoverageMm = boundaryProjectedAtCenter.length
+    ? 2 * Math.max(...boundaryProjectedAtCenter.map(([x]) => Math.abs(x))) / unitsPerMm + 2 * tumor.margin_mm
+    : planningDiameterMm + 2 * tumor.margin_mm;
+  const ratioLengthMm = referenceCircleDiameterMm * fixedRatio;
+  const targetLengthMm = initialWidthMm * fixedRatio;
   const halfL = lengthMm * unitsPerMm * 0.5;
   const axisCoverageDeficitMm = Math.max(0, axisCoverageMm - lengthMm);
   return {
@@ -601,22 +708,28 @@ export function generateFusiformIncision(
       operator_diameter_mm: tumor.diameter_mm,
       margin_mm: tumor.margin_mm,
       length_target_mm: targetLengthMm,
-      boundary_envelope_length_expansion_iterations: envelopeExpansionIterations,
-      boundary_envelope_length_expanded: lengthMm > clamp(targetLengthMm, cfg.min_length_mm, cfg.max_length_mm) + 1e-9,
-      boundary_envelope_width_expansion_iterations: envelopeWidthExpansionIterations,
-      boundary_envelope_width_expanded: widthMm > requestedWidthMm + 1e-9,
+      boundary_envelope_length_expansion_iterations: fit.iterations,
+      boundary_envelope_length_expanded: lengthMm > targetLengthMm + 1e-6,
+      boundary_envelope_width_expansion_iterations: fit.iterations,
+      boundary_envelope_width_expanded: widthMm > initialWidthMm + 1e-6,
       length_ratio_target_mm: ratioLengthMm,
-      length_ratio_basis_mm: requestedWidthMm,
-      length_ratio_basis: "lesion_perp_diameter_plus_bilateral_margin",
-      clinical_ratio_basis_status: "requires_clinician_confirmation",
+      length_ratio_basis_mm: referenceCircleDiameterMm,
+      length_ratio_basis: "equivalent_area_reference_circle_diameter",
+      equivalent_area_reference_circle_diameter_mm: referenceCircleDiameterMm,
+      clinical_ratio_basis_status: "confirmed_equivalent_area_reference_circle",
+      fixed_length_to_width_ratio: fixedRatio,
+      fixed_ratio_containment_feasible: fit.feasible,
+      fixed_ratio_search_iterations: fit.iterations,
+      lesion_center: lesionCenter,
+      candidate_center_shift_mm: Math.hypot(...sub(center, lesionCenter)) / unitsPerMm,
       axis_coverage_required_mm: axisCoverageMm,
       axis_coverage_deficit_mm: axisCoverageDeficitMm,
-      length_clamped_by_min: targetLengthMm < cfg.min_length_mm,
-      length_clamped_by_max: targetLengthMm > cfg.max_length_mm,
+      length_clamped_by_min: lengthMm <= Number(cfg.min_length_mm || 0) + 1e-6,
+      length_clamped_by_max: lengthMm >= Number(cfg.max_length_mm || 80) - 1e-6,
       boundary_used: Boolean(boundary),
       boundary_drives_candidate_geometry: boundaryDrivesCandidateGeometry,
       boundary_scale_shape: boundaryDrivesCandidateGeometry
-        ? boundaryUsesClassRoundScale ? "enclosing_circle" : "directional_extents"
+        ? "directional_extents"
         : "operator_diameter",
       lesion_normalization_schema: lesionNormalization.schema,
       lesion_normalization_applied: lesionNormalization.applied,

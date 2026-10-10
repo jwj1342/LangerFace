@@ -17,7 +17,7 @@ export interface ControllerCommandDetail<TCommand extends string = string> {
   [key: string]: unknown;
 }
 
-export const LIVE_SOURCE_COMMANDS = ["upload_source", "camera_toggle", "pause_toggle", "recording_toggle"] as const;
+export const LIVE_SOURCE_COMMANDS = ["upload_source", "camera_toggle", "pause_toggle", "recording_toggle", "image_export"] as const;
 export const LIVE_RENDER_COMMANDS = [
   "template_change",
   "density_input",
@@ -67,6 +67,7 @@ export const INCISION_SECONDARY_CUE_COMMANDS = [
 export const INCISION_EDIT_COMMANDS = [
   "preview_edit",
   "commit_edit",
+  "cancel_edit",
   "commit_reason",
   "undo_edit",
   "redo_edit",

@@ -16,6 +16,7 @@ export interface LiveCommandActions {
   cameraToggle(): unknown;
   pauseToggle(): unknown;
   recordingToggle(): unknown;
+  imageExport(): unknown;
   templateChange(value: LiveTemplate): unknown;
   densityInput(value: number): unknown;
   opacityInput(value: number): unknown;
@@ -55,6 +56,8 @@ export class LiveCommandRouter {
         return this.execute(command, () => this.actions.pauseToggle());
       case "recording_toggle":
         return this.execute(command, () => this.actions.recordingToggle());
+      case "image_export":
+        return this.execute(command, () => this.actions.imageExport());
     }
   }
 

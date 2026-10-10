@@ -32,7 +32,7 @@ pip install pre-commit && pre-commit install
 # 4. 前端依赖与 Vite 构建
 cd web
 npm ci
-npm run build
+npm run build:lesion-candidate
 cd ..
 ```
 
@@ -40,7 +40,7 @@ cd ..
 
 ## 运行测试
 
-受控标记 v0.35 当前成果的本地验收使用 [运行身份与最小回归包](../quality/MARKER_RUNTIME_ACCEPTANCE.md)。该专用入口先核对实际算法与目标工作区，再运行固定的 UI/原图对照；下方通用浏览器命令不替代目标算法部署核验。
+小肿物边界候选算法的本地验收使用 [运行身份与最小回归包](../quality/MARKER_RUNTIME_ACCEPTANCE.md)。该专用入口先核对实际算法与目标工作区，再运行固定的 UI/原图对照；下方通用浏览器命令不替代目标算法部署核验。
 
 ```bash
 pytest                       # Python 单元/集成测试
@@ -118,14 +118,14 @@ CI 仍使用原 `npm test` 和 `npm run test:browser` 入口，因此不覆盖�
    ```bash
    ruff check .
    pytest -q
-   cd web && npm run build && npm test && npm run test:browser
+   cd web && npm run build:lesion-candidate && npm run verify:build-lesion-candidate && npm test && npm run test:browser
    ```
 3. push 分支并创建 PR。可以先开 Draft PR。
 4. 等 GitHub Actions 自动运行；当前不会创建 Vercel Preview。
 5. checks 全绿且至少 1 个 reviewer approval 后，把 Draft PR 标记为 ready。需要自动合并时，由维护者添加 `automerge:stack` 标签；GitHub 会在保护规则满足后 squash merge，不需要 reviewer 再点 Merge。
 6. 合并到 `master` 不会触发 Vercel；如需恢复 Preview 或 Production，必须在 #224 中完成资源、访问控制和真实部署验证后单独启用。
 
-PR 描述必须保留“技术资料 / 临床依据”小节。凡涉及医学规则、CV/AI 算法、模型、数据集、部署平台或隐私边界的改动，应在 PR 中列出使用的资料链接、医生团队说明、关联 issue 和设计文档；若不适用，也要显式写“不适用”。这样 reviewer 不需要反向猜测实现依据。
+PR 描述必须保留“技术资料 / 临床依据”和“运行身份”小节。凡涉及医学规则、CV/AI 算法、模型、数据集、部署平台或隐私边界的改动，应在 PR 中列出使用的资料链接、医生团队说明、关联 issue 和设计文档；涉及受控标记时还要写明启动或构建命令、profile、实现身份、Commit/worktree 和身份核验结果。若不适用，也要显式写“不适用”。
 
 ### 自动合并与 stacked PR
 
