@@ -33,6 +33,7 @@ import {
   adjustRefineImageZoom,
   beginFrozenRefineSession,
   beginRefinePointer,
+  cancelRefinePointer,
   commitRefineForLive,
   endRefinePointer,
   exportRefine,
@@ -505,6 +506,7 @@ function bindLiveEvents(signal: AbortSignal, root: ParentNode | Document): void 
       );
     },
     beginRefinePointer,
+    cancelRefinePointer,
     moveRefinePointer,
     endRefinePointer,
     sourceKind: () => sourceState.sourceKind,

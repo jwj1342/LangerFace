@@ -5,6 +5,7 @@ export interface LiveCanvasInteractionCallbacks {
   beginRefinePointer(event: PointerEvent): boolean;
   moveRefinePointer(event: PointerEvent): boolean;
   endRefinePointer(event: PointerEvent): boolean;
+  cancelRefinePointer?(pointerId: number): boolean;
   sourceKind(): string | null;
   isSourcePaused?(): boolean;
   panImageViewBy(deltaX: number, deltaY: number): void;
@@ -62,13 +63,13 @@ export function bindLiveCanvasInteractions(
   let imageDrag: ImageDragState | null = null;
   const touchPoints = new Map<number, TouchPoint>();
   let pinch: PinchState | null = null;
+  let waitForAllTouchesReleased = false;
   let disposed = false;
 
   const mobileTouchGestureEnabled = (event: PointerEvent): boolean => (
     event.pointerType === "touch"
     && (callbacks.sourceKind() === "image" || callbacks.isSourcePaused?.() === true)
     && callbacks.isMobileTouchImageGestureEnabled?.() === true
-    && !callbacks.isRefineActive()
   );
 
   const captureTouchPointers = (): void => {
@@ -93,19 +94,26 @@ export function bindLiveCanvasInteractions(
   };
 
   const pointerDown = (event: PointerEvent): void => {
-    if (callbacks.isRefineActive()) {
-      if (callbacks.beginRefinePointer(event)) event.preventDefault();
-      return;
-    }
     if (mobileTouchGestureEnabled(event)) {
       touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (touchPoints.size >= 2) {
+        const firstPointerId = [...touchPoints.keys()].find((pointerId) => pointerId !== event.pointerId);
+        if (firstPointerId != null) callbacks.cancelRefinePointer?.(firstPointerId);
         clearImageDrag();
         pinch = pinchState(touchPoints);
+        waitForAllTouchesReleased = true;
         captureTouchPointers();
         event.preventDefault();
         return;
       }
+      if (waitForAllTouchesReleased) {
+        event.preventDefault();
+        return;
+      }
+    }
+    if (callbacks.isRefineActive()) {
+      if (callbacks.beginRefinePointer(event)) event.preventDefault();
+      return;
     }
     if (callbacks.isImagePointerInteractionBlocked?.()) {
       clearImageDrag();
@@ -118,10 +126,6 @@ export function bindLiveCanvasInteractions(
   };
 
   const pointerMove = (event: PointerEvent): void => {
-    if (callbacks.isRefineActive()) {
-      if (callbacks.moveRefinePointer(event)) event.preventDefault();
-      return;
-    }
     if (mobileTouchGestureEnabled(event) && touchPoints.has(event.pointerId)) {
       touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (touchPoints.size >= 2) {
@@ -155,6 +159,14 @@ export function bindLiveCanvasInteractions(
         event.preventDefault();
         return;
       }
+      if (waitForAllTouchesReleased) {
+        event.preventDefault();
+        return;
+      }
+    }
+    if (callbacks.isRefineActive()) {
+      if (callbacks.moveRefinePointer(event)) event.preventDefault();
+      return;
     }
     if (callbacks.isImagePointerInteractionBlocked?.()) {
       clearImageDrag();
@@ -168,18 +180,24 @@ export function bindLiveCanvasInteractions(
   };
 
   const pointerEnd = (event: PointerEvent): void => {
+    const touchGesture = event.pointerType === "touch" && touchPoints.has(event.pointerId);
     touchPoints.delete(event.pointerId);
     if (touchPoints.size < 2) pinch = null;
     releaseTouchPointer(event.pointerId);
-    const refineHandled = callbacks.isRefineActive() && callbacks.endRefinePointer(event);
+    const suppressRefineEnd = touchGesture && waitForAllTouchesReleased;
+    if (!touchPoints.size) waitForAllTouchesReleased = false;
+    const refineHandled = !suppressRefineEnd && callbacks.isRefineActive() && callbacks.endRefinePointer(event);
     clearImageDrag(event.pointerId);
     if (refineHandled) event.preventDefault();
   };
 
   const pointerCaptureLost = (event: PointerEvent): void => {
+    const touchGesture = event.pointerType === "touch" && touchPoints.has(event.pointerId);
     touchPoints.delete(event.pointerId);
     if (touchPoints.size < 2) pinch = null;
-    const refineHandled = callbacks.isRefineActive() && callbacks.endRefinePointer(event);
+    const suppressRefineEnd = touchGesture && waitForAllTouchesReleased;
+    if (!touchPoints.size) waitForAllTouchesReleased = false;
+    const refineHandled = !suppressRefineEnd && callbacks.isRefineActive() && callbacks.endRefinePointer(event);
     clearImageDrag(event.pointerId, false);
     if (refineHandled) event.preventDefault();
   };
@@ -204,6 +222,7 @@ export function bindLiveCanvasInteractions(
     for (const pointerId of touchPoints.keys()) releaseTouchPointer(pointerId);
     touchPoints.clear();
     pinch = null;
+    waitForAllTouchesReleased = false;
     surface.removeEventListener("pointerdown", pointerDown);
     surface.removeEventListener("pointermove", pointerMove);
     surface.removeEventListener("pointerup", pointerEnd);
