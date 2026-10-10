@@ -39,7 +39,7 @@
       "capturedAt": "2026-10-10T10:30:54.590486+00:00",
       "previousManifest": "local_outputs/recovery-packages/发布准备—干净CI门禁修复—20261010-r2/manifest.json",
       "previousManifestSha256": "63cb20a0ad99f343316acdc49a48d05297fa7ab00ad8003a78371546a524d3f1",
-      "authorization": "操作者本轮4K允许有限发布工具修复、清单同步与必要本地维护；源码身份不变，不增加受保护修改或发布授权。",
+      "authorization": "操作者本轮4K允许有限发布工具修复、清单同步与必要本地维护；算法指纹不变，仅发布取证工具变化并以CRLF/LF归一化重算综合源码指纹，不增加受保护修改或发布授权。",
       "publicationBoundary": "pending: PR237 remote/runtime overlap must be resolved separately; original confirmation is not proof of full protected-scope approval"
     }
   },
