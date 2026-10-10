@@ -71,6 +71,16 @@ for (const sample of reviewedSamples) {
     });
     await page.setViewportSize({ width: 1600, height: 1000 });
     await page.goto("/app/workflow");
+    const runtimeIdentity = await page.evaluate(async () => {
+      const response = await fetch("/__runtime-identity.json", { cache: "no-store" });
+      if (!response.ok) throw new Error(`运行身份端点失败：${response.status}`);
+      return response.json();
+    });
+    expect(runtimeIdentity).toMatchObject({ profile: "small-lesion-boundary-candidate", mode: "development" });
+    await testInfo.attach("runtime-identity", {
+      body: Buffer.from(JSON.stringify(runtimeIdentity, null, 2), "utf8"),
+      contentType: "application/json",
+    });
     await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
 
     await page.locator("#fileInput").setInputFiles(samplePath);
@@ -106,10 +116,14 @@ for (const sample of reviewedSamples) {
       };
     }, { sourceSize: sample.sourceSize, seed: sample.seed });
     await canvas.click({ position: clickPosition });
-    await expect.poll(() => page.evaluate(() => (
-      window as Window & { __colorDifferenceMarkerReasons?: string[] }
-    ).__colorDifferenceMarkerReasons?.at(-1) || ""), { timeout: 45_000 })
-      .toMatch(/^controlled_marker_(applied|failed)$/);
+    try {
+      await expect.poll(() => page.evaluate(() => (
+        window as Window & { __colorDifferenceMarkerReasons?: string[] }
+      ).__colorDifferenceMarkerReasons?.at(-1) || ""), { timeout: 45_000 })
+        .toMatch(/^controlled_marker_(applied|failed)$/);
+    } catch (error) {
+      throw new Error(`HARNESS_INVALID: 未收到受控标记终态事件，不能把本样本计为算法失败。${String(error)}`);
+    }
     const markerReasons = await page.evaluate(() => (
       window as Window & { __colorDifferenceMarkerReasons?: string[] }
     ).__colorDifferenceMarkerReasons || []);
@@ -120,7 +134,7 @@ for (const sample of reviewedSamples) {
     expect(markerReasons).toContain("controlled_marker_applied");
     await expect.poll(() => detectorDiagnostics.at(-1)).toMatchObject({
       profile: "small-lesion-boundary-candidate",
-      version: "task1-candidate",
+      version: runtimeIdentity.implementationVersion,
     });
     const actualSeed = detectorDiagnostics.at(-1)?.seed;
     expect(actualSeed, `${sample.id} detector diagnostic must include the actual source seed`).toBeTruthy();

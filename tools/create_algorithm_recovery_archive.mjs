@@ -11,7 +11,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, extname, resolve } from "node:path";
+import { basename, dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { captureMarkerIdentity } from "./marker_runtime_identity.mts";
@@ -24,9 +24,30 @@ if (!archiveName || !/^[^\\/:*?"<>|]+$/.test(archiveName)) {
 
 const archiveRoot = resolve(repoRoot, "local_outputs/recovery-packages", archiveName);
 if (existsSync(archiveRoot)) throw new Error(`存档已存在，拒绝覆盖：${archiveRoot}`);
-mkdirSync(archiveRoot, { recursive: true });
 
 const sha256 = (data) => createHash("sha256").update(data).digest("hex");
+const recoveryRoot = realpathSync(resolve(repoRoot, "local_outputs/recovery-packages"));
+const baseManifestArgument = process.argv[3];
+let baseArchive = null;
+let baseCopied = new Map();
+if (baseManifestArgument) {
+  const baseManifestPath = realpathSync(resolve(repoRoot, baseManifestArgument));
+  if (!baseManifestPath.startsWith(`${recoveryRoot}${sep}`)
+    || basename(baseManifestPath) !== "manifest.json") {
+    throw new Error("基础恢复包必须位于受控恢复目录且指向 manifest.json");
+  }
+  const bytes = readFileSync(baseManifestPath);
+  const manifest = JSON.parse(bytes.toString("utf8"));
+  if (manifest.schema !== "skin-texture-algorithm-recovery/2") {
+    throw new Error("基础恢复包格式不受支持");
+  }
+  baseArchive = {
+    manifestPath: relative(repoRoot, baseManifestPath).replaceAll("\\", "/"),
+    manifestSha256: sha256(bytes),
+  };
+  baseCopied = new Map((manifest.copied || []).map((entry) => [entry.relativePath, entry]));
+}
+mkdirSync(archiveRoot, { recursive: true });
 const git = (...args) => execFileSync("git", ["-C", repoRoot, ...args], {
   encoding: "utf8",
   windowsHide: true,
@@ -45,9 +66,10 @@ const excludedPrefixes = [
 ];
 const scopePath = resolve(repoRoot, "docs/quality/algorithm-archive-scope.json");
 const archiveScope = JSON.parse(readFileSync(scopePath, "utf8"));
+const externalDependencies = new Set(archiveScope.externalDependencies || []);
 const normalizedExact = new Set(archiveScope.includeExact.map((path) => path.replaceAll("\\", "/")));
 const normalizedPrefixes = archiveScope.includePrefixes.map((path) => path.replaceAll("\\", "/"));
-const isInArchiveScope = (path) => normalizedExact.has(path)
+const isInArchiveScope = (path) => externalDependencies.has(path) || normalizedExact.has(path)
   || normalizedPrefixes.some((prefix) => path.startsWith(prefix));
 const fingerprintOnlyExtensions = new Set([
   ".base64", ".bin", ".bmp", ".cer", ".crt", ".db", ".gif", ".jpeg", ".jpg",
@@ -72,12 +94,22 @@ const changedPaths = [...new Set([
 const changedOutsideScope = changedPaths.filter((path) => !isInArchiveScope(path)).sort();
 
 const copied = [];
+const inherited = [];
 const omitted = [];
 for (const relativePath of [...new Set(candidates)].sort()) {
   const sourcePath = resolve(repoRoot, relativePath);
   if (!existsSync(sourcePath) || !statSync(sourcePath).isFile()) continue;
   const bytes = statSync(sourcePath).size;
   const digest = sha256(readFileSync(sourcePath));
+  const baseEntry = baseCopied.get(relativePath);
+  if (baseEntry?.sha256 === digest && baseEntry.bytes === bytes) {
+    const baseCopyPath = resolve(dirname(resolve(repoRoot, baseArchive.manifestPath)), "worktree", relativePath);
+    if (!existsSync(baseCopyPath) || sha256(readFileSync(baseCopyPath)) !== digest) {
+      throw new Error(`基础恢复包副本缺失或损坏：${relativePath}`);
+    }
+    inherited.push({ relativePath, bytes, sha256: digest });
+    continue;
+  }
   const fileName = basename(relativePath);
   const extension = extname(fileName).toLowerCase();
   if (fingerprintOnlyExtensions.has(extension) || sensitiveBasenamePattern.test(fileName)) {
@@ -113,18 +145,24 @@ const manifest = {
     owner: archiveScope.owner,
     defaultComponents: archiveScope.defaultComponents,
     excludedTeamAlgorithms: archiveScope.excludedTeamAlgorithms,
+    externalDependencies: [...externalDependencies].sort(),
     configPath: "docs/quality/algorithm-archive-scope.json",
     configSha256: sha256(readFileSync(scopePath)),
     changedOutsideScope,
   },
   algorithmIdentity: identity,
+  baseArchive,
   copied,
+  inherited,
   omitted,
   limitations: [
     "不包含 Git 对象库、node_modules、构建产物、浏览器过程输出或编辑器未保存缓冲。",
     "媒体、模型、数据库、密钥类文件及大于 10 MiB 的文件只记录原位指纹；原文件丢失时不能仅靠本包完整恢复。",
     "指纹项是否含真实患者数据不作推断；恢复前必须重新核对数据授权和原文件位置。",
     "只复制项目责任范围配置列出的肿物识别、切口生成、切口微调和 UI 设计材料；范围外工作区改动不在本包内。",
+    baseArchive
+      ? "未变的外部依赖仅记录指纹并引用基础恢复包；基础包丢失时，本增量包不能单独恢复完整运行环境。"
+      : "外部依赖文件仅为当前运行恢复而保存，不改变其团队责任归属，也不代表其效果已验收。",
     "存档和运行身份不代表算法效果、真机效果、医学结论或临床验收通过。",
   ],
 };
@@ -148,6 +186,7 @@ writeFileSync(resolve(archiveRoot, "恢复说明.md"), [
 console.log(JSON.stringify({
   archiveRoot,
   copied: copied.length,
+  inherited: inherited.length,
   omitted: omitted.length,
   manifestSha256: manifestDigest,
   algorithmIdentity: identity,

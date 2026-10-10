@@ -31,6 +31,17 @@ export function captureMarkerIdentity(rawProfile: string | undefined, root = mar
     "tools/marker_runtime_identity.mts", "tools/run_controlled_marker_v035_dev.mjs",
     "tools/run_controlled_marker_v035_build.mjs");
   const sourceHashes = files.sort().map((file) => [file, hash(readFileSync(resolve(root, file)))]);
+  const algorithmFiles = [
+    "web/src/services/controlledMarkerDetection.ts",
+    "web/src/services/controlledMarkerDetectionColorV035.ts",
+    "web/src/services/controlledMarkerDetectionLegacyV023.ts",
+    "web/src/services/controlledMarkerDetectionProfile.ts",
+    "web/src/services/controlledMarkerRelease.ts",
+  ];
+  const algorithmHashes = algorithmFiles.map((file) => [
+    file,
+    hash(readFileSync(resolve(root, file), "utf8").replace(/\r\n/g, "\n")),
+  ]);
   // Essential photo geometry/model inputs. This is not an RSTL effect-equivalence claim.
   const assetHashes = ["face_landmarker.task", "atlas_rstl.json", "atlas_langer.json",
     "canonical_vertices.json", "triangles.json", "topology_mediapipe_468.json"]
@@ -51,6 +62,7 @@ export function captureMarkerIdentity(rawProfile: string | undefined, root = mar
     // Do not publish a user's absolute path, credentials or image data.
     worktreeId: hash(realpathSync(root)),
     sourceDigest: hash(JSON.stringify(sourceHashes)),
+    algorithmDigest: hash(JSON.stringify(algorithmHashes)),
     assetDigest: hash(JSON.stringify(assetHashes)),
     sourceFileCount: sourceHashes.length,
     assetHashes: Object.fromEntries(assetHashes),
@@ -60,7 +72,7 @@ export function captureMarkerIdentity(rawProfile: string | undefined, root = mar
 export type MarkerIdentity = ReturnType<typeof captureMarkerIdentity>;
 export function assertMarkerIdentity(actual: Partial<MarkerIdentity>, expected: MarkerIdentity) {
   for (const key of ["schema", "algorithmName", "releaseName", "changeSlug", "profile", "implementationVersion", "branch", "head", "worktreeId",
-    "sourceDigest", "assetDigest"] as const) {
+    "sourceDigest", "algorithmDigest", "assetDigest"] as const) {
     if (actual?.[key] !== expected[key]) {
       throw new Error(`运行身份不匹配：${key}；期望 ${expected[key]}，实际 ${actual?.[key] ?? "缺失"}。请核对服务并重新启动，不能用 HTTP 200 放行。`);
     }

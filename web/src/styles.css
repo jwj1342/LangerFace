@@ -2388,6 +2388,29 @@
   animation: workflow-stage-spin 0.8s linear infinite;
 }
 
+/* 瞬时识别反馈不参与工具栏排版：显隐不能移动图片或改动按钮的锚点。 */
+.workflow-workbench .stage-top {
+  position: relative;
+}
+
+.workflow-workbench .stage-top > .workflow-stage-status:not([hidden]) {
+  position: absolute;
+  inset: calc(100% + 6px) auto auto 12px;
+  z-index: 10;
+  max-width: calc(100% - 24px);
+  max-height: 96px;
+  padding: 6px 10px;
+  margin: 0;
+  overflow: auto;
+  background: rgb(12 19 27 / 94%);
+  border: 1px solid rgb(190 205 218 / 32%);
+  border-radius: 6px;
+  box-sizing: border-box;
+  grid-area: auto;
+  align-self: auto;
+  pointer-events: none;
+}
+
 .clinical-compat-workbench .overlay-msg.image-loading {
   display: inline-flex;
   align-items: center;
@@ -2679,7 +2702,7 @@ body:has(.dark-workbench-page) {
   .workflow-workbench.app {
     --workflow-mobile-stage-height: max(
       320px,
-      min(calc(100dvh - 170px), calc(100vw + 100px))
+      min(calc(100dvh - 136px), calc(100vw + 134px))
     );
     grid-template-rows: var(--workflow-mobile-stage-height) minmax(0, 1fr);
     height: 100dvh;
@@ -2689,12 +2712,7 @@ body:has(.dark-workbench-page) {
     overflow: hidden;
   }
 
-  .react-workflow-host[data-workflow-marker-mode="true"] .workflow-workbench.app {
-    --workflow-mobile-stage-height: max(
-      320px,
-      min(calc(100dvh - 136px), calc(100vw + 134px))
-    );
-  }
+  /* 工具栏已恒定预留标记行，视野不再随标记状态补偿高度。 */
 
   .workflow-workbench > .workflow-mobile-operation-pane {
     display: flex;
@@ -2982,7 +3000,7 @@ body:has(.dark-workbench-page) {
 
   .workflow-workbench .workflow-stage-status {
     min-block-size: 34px;
-    max-block-size: 48px;
+    max-block-size: 96px;
     align-items: center;
     overflow-x: hidden;
     overflow-y: auto;
@@ -3023,10 +3041,11 @@ body:has(.dark-workbench-page) {
   .workflow-workbench .workflow-canvas-tools {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-template-rows: 40px;
+    grid-template-rows: 40px 32px;
     gap: 6px;
     width: 100%;
-    block-size: 42px;
+    /* 保留标记操作的第二行：进入/退出标记也不改变图片可用高度。 */
+    block-size: 76px;
     padding: 0;
     box-sizing: border-box;
     overflow: hidden;
@@ -3235,13 +3254,15 @@ body:has(.dark-workbench-page) {
   .workflow-workbench .workflow-incision-overlay [data-workflow-boundary] {
     fill: rgb(253 224 71 / 9%);
     stroke: #fde047;
-    stroke-width: 0.85;
+    /* A screen-space floor overrides the controller's subpixel compact width. */
+    stroke-width: 1.5 !important;
     stroke-linecap: round;
     stroke-linejoin: round;
   }
 
   .workflow-workbench .workflow-incision-overlay [data-workflow-boundary-halo] {
     fill: none;
+    stroke-width: 2.5 !important;
   }
 
   .workflow-workbench .workflow-incision-overlay [data-workflow-candidate] {

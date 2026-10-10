@@ -151,8 +151,6 @@ export function WorkflowCanvasOverlay() {
   return (
     <>
       <svg id="workflowIncisionOverlay" className="workflow-incision-overlay" aria-hidden="true">
-        <path data-workflow-boundary-halo />
-        <path data-workflow-boundary />
         <path data-workflow-candidate-halo />
         <path data-workflow-candidate />
         <path data-workflow-diagnostic-candidate />
@@ -161,6 +159,9 @@ export function WorkflowCanvasOverlay() {
           <circle r="6" />
         </g>
         <circle data-workflow-center r="2" />
+        {/* Keep small accepted boundaries visible above candidate and center markers. */}
+        <path data-workflow-boundary-halo />
+        <path data-workflow-boundary />
         <g data-workflow-repairs />
         <g data-workflow-marker-scan style={{ display: "none" }}>
           <circle data-workflow-marker-scan-circle />

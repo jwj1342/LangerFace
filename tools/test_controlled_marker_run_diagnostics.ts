@@ -3,7 +3,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { stripTypeScriptTypes } from "node:module";
 import { auditExportPayload } from "../web/src/services/exportPrivacy.ts";
-import { MarkerRunDiagnostics, DIAGNOSTIC_LIMITS, auditMarkerDiagnosticExport, diagnosticSha256, diagnosticPixelBinding, diagnosticReplayMismatches, parseDiagnosticRun, assertDiagnosticJson, type RunInput } from "../web/src/services/controlledMarkerRunDiagnostics.ts";
+import { MarkerRunDiagnostics, DIAGNOSTIC_LIMITS, auditMarkerDiagnosticExport, diagnosticSha256, diagnosticPixelBinding, diagnosticReplayMismatches, parseDiagnosticRun, assertDiagnosticJson, classifyDiagnosticEvidence, type RunInput } from "../web/src/services/controlledMarkerRunDiagnostics.ts";
 import { CANVAS_EXPORT_DIAGNOSTIC_EVENT } from "../web/src/services/canvasRecording.ts";
 
 const pixels = new Uint8ClampedArray([10, 20, 30, 255, 20, 30, 40, 255, 50, 60, 70, 255, 80, 90, 100, 255]);
@@ -40,6 +40,7 @@ run.finish(detection);
 await run.evidence; await Promise.resolve();
 assert.equal(run.run.file_binding, "PASS");
 assert.equal(run.run.status, "recorded");
+assert.equal(run.run.evidence_state, "ready_for_review");
 assert.equal(run.run.detector_rgba_sha256, await diagnosticSha256(pixels));
 assert.equal(run.run.service_snapshot_binding, "PASS");
 assert.equal(run.run.client_source_binding, "UNKNOWN");
@@ -51,6 +52,7 @@ const failure = { ...detection, ok: false, failure_code: "no_enclosed_region", a
 const rawFailure = diagnostics.begin(input, 11, "web_worker", pixels, pixels, false);
 rawFailure.finish(failure); await rawFailure.evidence; await Promise.resolve();
 assert.deepEqual(rawFailure.run.raw_result, failure);
+assert.equal(rawFailure.run.evidence_state, "detector_failed");
 const replayed = diagnostics.begin(input, 12, "web_worker", pixels, pixels, false, run.run);
 replayed.finish(detection); await replayed.evidence; await Promise.resolve();
 assert.deepEqual(replayed.run.comparison, { raw_result_equal: true, boundary_equal: true });
@@ -59,6 +61,7 @@ for (const status of ["discarded_request", "discarded_source", "discarded_parame
   const discarded = diagnostics.begin(input, 13, "web_worker", pixels, pixels, false);
   discarded.finish(detection, false, status); await discarded.evidence; await Promise.resolve();
   assert.equal(discarded.run.status, status);
+  assert.equal(discarded.run.evidence_state, "input_or_binding_invalid");
   assert.throws(() => parseDiagnosticRun(JSON.stringify(discarded.run)));
 }
 const exported = diagnostics.exportLatest();
@@ -119,6 +122,7 @@ const stale = diagnostics.begin(input, 4, "web_worker", pixels, pixels);
 select(); revision = 3;
 stale.finish(detection); await stale.evidence; await Promise.resolve();
 assert.equal(stale.run.file_binding, "UNKNOWN");
+assert.equal(classifyDiagnosticEvidence(stale.run), "input_or_binding_invalid");
 select(); revision += 4;
 const multipleRevisions = diagnostics.begin({ ...input, revision }, 14, "web_worker", pixels, pixels, false);
 multipleRevisions.finish(detection); await multipleRevisions.evidence; await Promise.resolve();
@@ -299,7 +303,7 @@ bounded.observeController({ reason: "unrelated_review_event", request_id: 99, so
 assert.equal(JSON.parse(bounded.exportBundle()).controller_events.at(-1).request_id, 70);
 bounded.dispose(); assert.throws(() => bounded.exportBundle(), /操作一次/);
 const panelSource = fs.readFileSync(new URL("../web/src/components/TumorInputPanel.tsx", import.meta.url), "utf8");
-assert.match(panelSource, /import\.meta\.env\.DEV/);
+assert.match(panelSource, /isDeveloperMode\(\)/, "developer diagnostics must follow the explicit developer-mode gate");
 assert.match(panelSource, /换图、肿物识别、切口生成、旋转和缩放/);
 assert.match(panelSource, /刷新后仍可接续/);
 const mountSource = source.slice(source.indexOf("export function mountWorkflowIncisionController"));

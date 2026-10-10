@@ -18,7 +18,9 @@ import type { Triangle, Vec3 } from "./softBody.ts";
 
 export const INCISION_PHOTO_MAX_BYTES = 20 * 1024 * 1024;
 export const INCISION_PHOTO_TYPES = new Set(["image/jpeg", "image/png"]);
-export const PHOTO_VISIBILITY_LIMITED_MIN_VISIBLE_FRACTION = 0.45;
+// Partial outlines are display references, not evidence of complete visibility.
+// Any drawable visible segment may be shown; confirmation/live gates are separate.
+export const PHOTO_VISIBILITY_LIMITED_MIN_VISIBLE_FRACTION = Number.EPSILON;
 export const PHOTO_FACE_EDGE_RECOVERY_MAX_WIDTH_FRACTION = 0.055;
 const MEDIAPIPE_FACE_OVAL = [
   10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378,
@@ -514,13 +516,18 @@ function circularVisibleSegments(points: readonly Vec3[], visibleMask: readonly 
   const start = visibleMask.findIndex((visible, index) => visible
     && !visibleMask[(index - 1 + visibleMask.length) % visibleMask.length]);
   if (start < 0) return [];
-  const segment: Vec3[] = [];
+  const segments: Vec3[][] = [];
+  let segment: Vec3[] = [];
   for (let offset = 0; offset < points.length; offset += 1) {
     const index = (start + offset) % points.length;
-    if (!visibleMask[index]) break;
-    segment.push([...points[index]] as Vec3);
+    if (visibleMask[index]) segment.push([...points[index]] as Vec3);
+    else {
+      if (segment.length >= 2) segments.push(segment);
+      segment = [];
+    }
   }
-  return segment.length >= 2 ? [segment] : [];
+  if (segment.length >= 2) segments.push(segment);
+  return segments;
 }
 
 function canonicalHalfWidthFactor(axisFraction: number, shapeSlope: number): number {
@@ -854,11 +861,8 @@ export function buildPhotoSurfaceCanonicalFusiform({
     && surfaceValidation.outsideCount > 0
     && candidateHiddenOnlyAtSilhouette
     && boundaryHiddenOnlyAtSilhouette
-    && hiddenSegmentCount === 1
-    && visibleSegmentCount === 1
     && visibleFraction >= PHOTO_VISIBILITY_LIMITED_MIN_VISIBLE_FRACTION
-    && visibleSegments.length === 1
-    && visibleSegments[0].length >= 8;
+    && visibleSegments.some(segment => segment.length >= 2);
   diagnostics.photoVisibleFraction = visibleFraction;
   diagnostics.photoVisibleSegmentCount = visibleSegmentCount;
   diagnostics.photoHiddenTipCount = hiddenTipCount;
@@ -868,7 +872,7 @@ export function buildPhotoSurfaceCanonicalFusiform({
       fit: null,
       diagnosticFit: fullFit,
       visibilityLimitedFit: visibilityLimitedEligible
-        ? { ...fullFit, visibleSegments }
+        ? { ...fullFit, visibleSegments: visibleSegments.filter(segment => segment.length >= 2) }
         : null,
       endpoints: [start, end],
       diagnostics: {

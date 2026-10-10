@@ -2031,7 +2031,11 @@ function markerDiagnosticInput(state: WorkflowIncisionState, frame: PhotoPlannin
   const { author: _author, ...parameters } = markerRequestSnapshot(state);
   return {
     revision: frame.revision, width: frame.width, height: frame.height, seed: { ...seed }, parameters,
-    options: { roiRadius: Math.max(8, Math.round(parameters.scanDiameterMm * pixelsPerMm / 2)), scanDiameterMm: parameters.scanDiameterMm },
+    options: {
+      roiRadius: Math.max(8, Math.round(parameters.scanDiameterMm * pixelsPerMm / 2)),
+      analysisRoiRadius: 36,
+      scanDiameterMm: parameters.scanDiameterMm,
+    },
     repairs: state.repairStrokes.map((stroke) => ({ ...stroke, points: stroke.points.map((point) => ({ ...point })) })),
     mirror: renderState.mirror, pixelsPerMm, profile: CONTROLLED_MARKER_DETECTOR_PROFILE, implementationVersion: CONTROLLED_MARKER_DETECTOR_VERSION,
   };
@@ -2105,6 +2109,7 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
   requestFrame();
   const options = {
     roiRadius: Math.max(8, Math.round(started.scanDiameterMm * pixelsPerMm / 2)),
+    analysisRoiRadius: 36,
     scanDiameterMm: started.scanDiameterMm,
   };
   const canvas = document.createElement("canvas");
@@ -2427,15 +2432,10 @@ function drawDraftOverlay(state: WorkflowIncisionState) {
   candidatePath?.setAttribute("d", candidateVisible ? renderedCandidatePathData : "");
   candidateHaloPath?.setAttribute("d", candidateVisible ? renderedCandidatePathData : "");
   diagnosticCandidatePath?.setAttribute("d", diagnosticCandidateVisible ? diagnosticCandidatePathData : "");
-  const rejectedMarkerBoundary = state.rejectedMarkerPreview?.sourceRevision === frame.revision
-    && state.rejectedMarkerPreview.requestId === state.markerRequestId
-    ? state.rejectedMarkerPreview.boundary
-      .map((point) => sourceClientPoint(state, [point.x, point.y, 0]))
-      .filter((point): point is { x: number; y: number } => Boolean(point))
-    : [];
-  rejectedMarkerPath?.setAttribute("d", rejectedMarkerBoundary.length >= 3
-    ? workflowClosedBoundarySvgPath(rejectedMarkerBoundary)
-    : "");
+  // Rejected detector geometry remains in the local diagnostic record and the
+  // warning text. Do not paint it over the photograph: a dashed outline is
+  // easily mistaken for an accepted tumor boundary or a usable incision cue.
+  rejectedMarkerPath?.setAttribute("d", "");
   const overlayStyle = incisionOverlayScreenStyle(state.result?.candidate?.type, {
     compact: mobileWorkflowViewportActive(),
     viewScale: frame.transform?.zoom,
@@ -3184,7 +3184,7 @@ function applyTumorCommand(state: WorkflowIncisionState, event: Event) {
       if (state.boundaryActive) {
         state.selectionMode = false;
         state.markerMode = false;
-        setStatus(state, "自由轮廓鼠绘已开启：按住鼠标左键沿肿物边界描画，并让线条首尾相接。", "normal");
+        setStatus(state, "自由轮廓手绘已开启：按住鼠标左键沿肿物边界描画，并让线条首尾相接。", "normal");
       }
       break;
     case "toggle_boundary":

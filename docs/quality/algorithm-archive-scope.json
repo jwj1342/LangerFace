@@ -8,6 +8,15 @@
     "ui-design"
   ],
   "requiresOperatorConfirmationOutsideDefault": true,
+  "externalDependencies": [
+    "tools/test_live_canvas_interaction.ts",
+    "tools/test_live_wrinkle_refinement.ts",
+    "web/src/components/LiveRefinePanel.tsx",
+    "web/src/services/liveCanvasInteraction.ts",
+    "web/src/services/liveRefine2d.ts",
+    "web/src/services/liveRuntime.ts",
+    "web/src/services/liveState.ts"
+  ],
   "includePrefixes": [
     ".planning/2026-09-16-task-1-lesion-recognition/",
     ".planning/2026-09-18-fusiform-geometry/",
@@ -52,6 +61,7 @@
     "docs/quality/MARKER_RUNTIME_ACCEPTANCE.md",
     "docs/quality/algorithm-archive-scope.json",
     "tools/check_algorithm_release_gate.mjs",
+    "tools/test_algorithm_release_gate.mjs",
     "tools/create_algorithm_recovery_archive.mjs",
     "tools/marker_runtime_identity.mts",
     "tools/report_default_marker_profile.mjs",

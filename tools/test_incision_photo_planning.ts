@@ -952,8 +952,12 @@ const bothTipsHidden = buildPhotoSurfaceCanonicalFusiform({
   center: [200, 250, 0],
   boundary: [[188, 240, 0], [212, 240, 0], [212, 260, 0], [188, 260, 0]],
 });
-assert.equal(bothTipsHidden.visibilityLimitedFit, null,
-  "two disconnected hidden tips are not presented as one trustworthy view-limited segment");
+assert.ok(bothTipsHidden.visibilityLimitedFit,
+  "two clipped tips retain their separately visible reference segments");
+assert.ok(bothTipsHidden.visibilityLimitedFit.visibleSegments!.every(segment => segment.length >= 2),
+  "isolated visible samples are not drawn as incision segments");
+assert.ok(bothTipsHidden.visibilityLimitedFit.visibleSegments!.length > 1,
+  "every drawable visible run is retained separately");
 assert.ok(Number(bothTipsHidden.diagnostics.photoVisibleSegmentCount) > 1,
   "multiple visible runs remain explicit in diagnostics instead of being joined across hidden regions");
 

@@ -12,7 +12,7 @@ import {
 } from "./marker_runtime_identity.mts";
 import { detectorVersionForProfile } from "../web/src/services/controlledMarkerDetectionProfile.ts";
 
-const EXPECTED_VERSION = "0.36.0-candidate.1";
+const EXPECTED_VERSION = detectorVersionForProfile(TARGET_MARKER_PROFILE);
 const BUILD_MARKER = "LANGERFACE_LESION_CANDIDATE_BUILD";
 const repoRoot = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const webRoot = resolve(repoRoot, "web");

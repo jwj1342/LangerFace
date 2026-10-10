@@ -50,8 +50,9 @@ export interface ControlledMarkerDetection {
     expected_diameter_px: number | null;
   };
   diagnostics?: {
-    method?: "seed_first_barrier" | "radial_seed_boundary" | "low_contrast_near_circular" | "connected_outer_marker_envelope";
+    method?: "seed_first_barrier" | "radial_seed_boundary" | "low_contrast_near_circular" | "connected_outer_marker_envelope" | "seed_connected_chromatic_component";
     roi_radius?: number;
+    analysis_roi_radius?: number;
     local_window_radius?: number;
     repair_radius?: number;
     boundary_support_ratio?: number;
@@ -98,6 +99,9 @@ export interface ControlledMarkerDetection {
     boundary_stroke_support_ratio?: number;
     boundary_stroke_coverage_ratio?: number;
     boundary_stroke_reverse_p90_px?: number;
+    boundary_marker_envelope_scale_x?: number;
+    boundary_marker_envelope_scale_y?: number;
+    boundary_marker_envelope_area_ratio?: number;
     solid_background_luma?: number;
     solid_threshold_luma?: number;
     solid_component_fill_ratio?: number;
@@ -107,9 +111,18 @@ export interface ControlledMarkerDetection {
     solid_boundary_regularization?: "periodic_constrained";
     solid_boundary_area_ratio?: number;
     solid_boundary_max_displacement_ratio?: number;
+    solid_boundary_envelope?: "bounded_raw_luma_support";
+    solid_boundary_envelope_scale?: number;
+    solid_boundary_envelope_area_ratio?: number;
+    solid_boundary_envelope_support_p20?: number;
+    solid_boundary_envelope_support_ratio?: number;
     inward_pocket_area_ratio?: number;
     inward_pocket_added_arc_ratio?: number;
     inward_pocket_support_ratio?: number;
+    hollow_boundary_contraction?: "low_luma_enclosed_margin" | "low_luma_color_preferred_margin" | "stable_enclosed_margin" | "low_luma_enclosed_margin_preserved";
+    hollow_boundary_contraction_scale?: number;
+    hollow_boundary_contraction_area_ratio?: number;
+    hollow_boundary_contraction_luma?: number;
   };
   audit: {
     local_only: true;
@@ -3032,6 +3045,8 @@ function seedFirstBarrierDetection(
 
 export interface ControlledMarkerOptions {
   roiRadius?: number;
+  /** Stable analysis radius; the scan circle radius remains the coverage gate. */
+  analysisRoiRadius?: number;
   seedSnapRadius?: number;
   minAreaPx?: number;
   maxAreaFraction?: number;

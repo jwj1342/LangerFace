@@ -103,7 +103,7 @@ export type FrameIdentity = { kind: string | null; revision: number; width: numb
 type SourceFile = { sha256: string; size: number; mime: string; width: number; height: number; rgba_sha256: string };
 export type RunInput = {
   revision: number; width: number; height: number; seed: { x: number; y: number };
-  options: { roiRadius: number; expectedDiameterPx?: number; scanDiameterMm: number };
+  options: { roiRadius: number; analysisRoiRadius?: number; expectedDiameterPx?: number; scanDiameterMm: number };
   parameters: { kind: string; diameterMm: number; depthMm: number; marginMm: number; scanDiameterMm: number };
   repairs: Json; mirror: boolean; pixelsPerMm: number; profile: string; implementationVersion: string;
 };
@@ -117,9 +117,38 @@ export type DiagnosticRun = {
   raw_result: Json; raw_image_embedded: false; uploaded: false;
   replay_of: { run_id: number; started_at_ms: number } | null;
   comparison: { raw_result_equal: boolean; boundary_equal: boolean } | null;
+  /** Evidence classification for acceptance; this never claims clinical accuracy. */
+  evidence_state?: DiagnosticEvidenceState;
   session_id?: string; page_instance_id?: string; source_id?: string | null; action_id?: string;
   event_seq?: number;
 };
+export type DiagnosticEvidenceState =
+  | "evidence_incomplete"
+  | "input_or_binding_invalid"
+  | "runtime_identity_mismatch"
+  | "detector_failed"
+  | "ready_for_review";
+
+/**
+ * Separates run/evidence health from visual or clinical correctness.
+ * `ready_for_review` only means the run is bound and reviewable; it does not
+ * mean that the predicted boundary is accurate.
+ */
+export function classifyDiagnosticEvidence(run: Pick<DiagnosticRun,
+  "status" | "file_binding" | "service_snapshot_binding" | "client_declared_contract_binding" | "raw_result">): DiagnosticEvidenceState {
+  if (run.status === "pending" || run.status === "evidence_error") return "evidence_incomplete";
+  if (run.status === "discarded_request" || run.status === "discarded_source" || run.status === "discarded_parameters"
+    || run.file_binding !== "PASS") return "input_or_binding_invalid";
+  if (run.service_snapshot_binding === "FAIL" || run.client_declared_contract_binding === "FAIL") {
+    return "runtime_identity_mismatch";
+  }
+  if (run.status === "detection_error"
+    || (run.raw_result && !Array.isArray(run.raw_result) && typeof run.raw_result === "object"
+      && run.raw_result.ok === false)) return "detector_failed";
+  if (run.status === "recorded" && run.service_snapshot_binding === "PASS"
+    && run.client_declared_contract_binding === "PASS") return "ready_for_review";
+  return "evidence_incomplete";
+}
 const forbidden = /^(?:name|basename|path|author|lastModified|password|token|secret|authorization|__proto__|constructor|prototype)$/i;
 
 /** Reject, rather than silently accepting, private or executable import content. */
@@ -637,13 +666,14 @@ export class MarkerRunDiagnostics {
   begin(input: RunInput, requestId: number, channel: string, before: Uint8ClampedArray, actual: Uint8ClampedArray, retain = true, replayOf?: DiagnosticRun, actionId?: string | null) {
     const selection = this.selection;
     const started = performance.now();
-    const run: DiagnosticRun = {
+  const run: DiagnosticRun = {
       schema: MARKER_DIAGNOSTIC_SCHEMA, run_id: ++this.sequence, request_id: requestId, started_at_ms: Date.now(),
       status: "pending", elapsed_ms: null, input: structuredClone(input), channel,
       source_file: null, file_binding: "UNKNOWN", prepared_rgba_sha256: null, detector_rgba_sha256: null,
       service_identity: null, service_snapshot_binding: "UNKNOWN", client_declared_contract_binding: "UNKNOWN", client_source_binding: "UNKNOWN",
       raw_result: null, raw_image_embedded: false, uploaded: false,
       replay_of: replayOf ? { run_id: replayOf.run_id, started_at_ms: replayOf.started_at_ms } : null, comparison: null,
+      evidence_state: "evidence_incomplete",
       session_id: this.sessionId, page_instance_id: this.pageInstanceId,
       source_id: selection?.sourceId || this.currentSourceId, action_id: actionId || randomDiagnosticId("detect"),
       event_seq: ++this.eventSequence,
@@ -688,6 +718,7 @@ export class MarkerRunDiagnostics {
         }
         void evidence.then(() => {
           if (run.status !== "evidence_error") run.status = status;
+          run.evidence_state = classifyDiagnosticEvidence(run);
           this.queuePersist();
           if (this.alive && retain && this.runs.at(-1) === run) notify(`诊断 #${run.run_id}：${run.status}；原图${run.file_binding}；客户端源码身份待确认${run.comparison ? `；复放边界${run.comparison.boundary_equal ? "完全一致" : "存在差异"}` : ""}`, run);
         });

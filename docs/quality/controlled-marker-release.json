@@ -3,48 +3,742 @@
   "policy": "docs/quality/ALGORITHM_VERSIONING.md",
   "current": {
     "profile": "small-lesion-boundary-candidate",
-    "version": "0.36.0-candidate.1",
-    "releaseName": "小肿物边界识别：稳定候选选择与中心一致性",
-    "featureSummary": "确定性候选选择、中心一致性和邻域共识恢复",
-    "nameKeywords": ["候选选择", "中心一致性"],
+    "version": "0.83.0-candidate.1",
+    "releaseName": "肿物边界识别：真人色斑的邻近落点共识与对象中心核验",
+    "featureSummary": "有限邻近锚点提案；对象自身中心再次颜色/形状核验；至少两个不同锚点支持，原点击归属与完整扫描覆盖保持。仅本例及有限反例工程回归，非真人泛用性或医学验收。",
+    "nameKeywords": [
+      "邻近落点共识",
+      "对象中心核验"
+    ],
     "status": "candidate",
-    "sourceDigest": "a0a3e2ea5ea32a78661d61cf747d45b4973df63c7afc89b7d76dd9a0361e5b94"
+    "sourceDigest": "bdb92ff70bec3f2f2438629029f2ad1b88283873c13160a7c77bfc48beed69ee",
+    "algorithmDigest": "a46cff9529c5ad86ed260c315a62bd084e6e0a558d180eed24bb2fe120a54faf"
+  },
+  "runtimeIntegration": {
+    "version": "0.1.0-candidate.1",
+    "name": "运行集成：微调外部依赖恢复与身份对齐",
+    "status": "candidate",
+    "sourceDigest": "14be7a48d1ccffa8437e3dacb91387bcae59de91a71f05fb5fffe55be6720edc",
+    "scope": "仅标识本地运行集成，不表示 RSTL 功能效果已验收"
   },
   "archive": {
     "status": "verified",
-    "manifestPath": "local_outputs/recovery-packages/V0.36.0-candidate.1提交候选HEAD-v5—2026-09-24/manifest.json",
-    "manifestSha256": "4f91b5316f69d63e17cb4b2187e00145f50bd9c8ecebab67cf8e055ca663971b",
-    "scopeConfigSha256": "f699e045a18f3de44b2f816d84f3a25b9df9bf6da0e5e996c90bdf008ce3600c",
-    "sourceDigest": "a0a3e2ea5ea32a78661d61cf747d45b4973df63c7afc89b7d76dd9a0361e5b94"
+    "manifestPath": "local_outputs/recovery-packages/发布准备—干净CI门禁修复—20261010-r2/manifest.json",
+    "manifestSha256": "63cb20a0ad99f343316acdc49a48d05297fa7ab00ad8003a78371546a524d3f1",
+    "sourceDigest": "bdb92ff70bec3f2f2438629029f2ad1b88283873c13160a7c77bfc48beed69ee",
+    "scopeConfigSha256": "ea5d4128d4a72007a7da245ce79db854aa075f3f4b7d51609073cf778c4dadac",
+    "note": "中文标签：发布准备—干净CI门禁修复；仅发布工具及清单维护，算法源码身份不变。原10月10日15点认可恢复包保留；本包不是算法或RSTL验收。"
   },
   "scopeBoundaryReview": {
     "status": "confirmed",
-    "manifestSha256": "4f91b5316f69d63e17cb4b2187e00145f50bd9c8ecebab67cf8e055ca663971b",
-    "evidence": "操作者在任务 01a0cf65-2f29-7571-bb7c-78d95e46af4d 确认：纯 UI/交互共享文件纳入本人责任范围；微调核心和皱纹微调测试维持跨团队排除；本次综合候选恢复包已重新生成并绑定当前源码指纹。",
-    "confirmedAt": "2026-09-24T13:15:43.9333752+08:00"
+    "manifestSha256": "63cb20a0ad99f343316acdc49a48d05297fa7ab00ad8003a78371546a524d3f1",
+    "scopeConfigSha256": "ea5d4128d4a72007a7da245ce79db854aa075f3f4b7d51609073cf778c4dadac",
+    "confirmedAt": "2026-10-10T06:25:50.635Z",
+    "evidence": "操作者明确要求两端鼠绘改手绘；仅三处共享文案及运行身份维护，未改RSTL/算法/布局/远端。",
+    "maintenanceRebinding": {
+      "capturedAt": "2026-10-10T10:23:13.264426+00:00",
+      "previousManifest": "local_outputs/recovery-packages/发布准备—干净CI门禁修复—20261010/manifest.json",
+      "previousManifestSha256": "2ce4cddca054fc3d0b7538a0aeedccd6ec4fa5740d3ecf5fffe69741282571f9",
+      "authorization": "操作者本轮4K允许有限发布工具修复、清单同步与必要本地维护；源码身份不变，不增加受保护修改或发布授权。",
+      "publicationBoundary": "pending: PR237 remote/runtime overlap must be resolved separately; original confirmation is not proof of full protected-scope approval"
+    }
   },
   "operatorEvaluation": {
     "status": "pending",
-    "sourceDigest": null,
-    "evidence": null,
-    "evaluatedAt": null
+    "sourceDigest": "bdb92ff70bec3f2f2438629029f2ad1b88283873c13160a7c77bfc48beed69ee",
+    "evidence": "本例原14落点双像素回放通过；实际页面及专业/真机证据分别登记feedback39-1-closeout.json。"
   },
   "editorSaveConfirmation": {
-    "status": "confirmed",
-    "sourceDigest": "a0a3e2ea5ea32a78661d61cf747d45b4973df63c7afc89b7d76dd9a0361e5b94",
-    "confirmedAt": "2026-09-24T23:31:30.7118911+08:00",
-    "evidence": "操作者在当前任务中明确确认编辑器内容已全部保存。"
+    "status": "unknown",
+    "sourceDigest": "bdb92ff70bec3f2f2438629029f2ad1b88283873c13160a7c77bfc48beed69ee"
   },
   "history": [
-    { "version": "0.1.0", "legacyIdentifier": "0.1", "mainChange": "受控标记定位基线" },
-    { "version": "0.2.0", "legacyIdentifier": "0.2", "mainChange": "切口工作流与标记控制加固" },
-    { "version": "0.12.0", "legacyIdentifier": "0.12", "mainChange": "本地规划与标记阶段保存" },
-    { "version": "0.18.0", "legacyIdentifier": "0.18", "mainChange": "标记检测与照片梭形稳定化" },
-    { "version": "0.23.0", "legacyIdentifier": "0.23", "mainChange": "2026-08-19 冻结回退基线" },
-    { "version": "0.26.0", "legacyIdentifier": "0.26", "mainChange": "受控标记边界拟合改进" },
-    { "version": "0.32.0", "legacyIdentifier": "0.32", "mainChange": "工作流页面状态保存" },
-    { "version": "0.33.0", "legacyIdentifier": "0.33", "mainChange": "手机工作流阶段保存" },
-    { "version": "0.34.0", "legacyIdentifier": "0.34", "mainChange": "受控标记审阅流程稳定化" },
-    { "version": "0.35.0", "legacyIdentifier": "0.35", "mainChange": "颜色差分检测实验" }
-  ]
+    {
+      "profile": "small-lesion-boundary-candidate",
+      "version": "0.82.0-candidate.1",
+      "releaseName": "肿物边界识别：较大实心色斑的种子颜色连通恢复",
+      "featureSummary": "种子颜色连通的大实心补充恢复；相邻颜色阈值稳定、实心核心/对比度/紧凑度/完整扫描覆盖保持。照片切口参考另行按可见段显示；候选，非医学验收。",
+      "nameKeywords": [
+        "实心色斑",
+        "颜色连通恢复"
+      ],
+      "status": "candidate",
+      "sourceDigest": "9e54e4472ba9f77084c043f10c7100fc7557177e54809648853196a3fcd7b01a",
+      "algorithmDigest": "c585370bada7e3b3887788008a2a4cfd8352d308d885ccf4891bb3997520e0dd",
+      "archive": {
+        "status": "verified",
+        "manifestPath": "local_outputs/recovery-packages/0.82.0-candidate.1-大实心色斑恢复与局部切口参考-20261010/manifest.json",
+        "manifestSha256": "0ced3b584257644e1478bcc093176ef5f1659dcaba119ae32b97ec2a1fd35978",
+        "sourceDigest": "9e54e4472ba9f77084c043f10c7100fc7557177e54809648853196a3fcd7b01a",
+        "scopeConfigSha256": "dab1d18b84d52b4bcb47d139af130707ff5f668e74662e16ae5c90cf02a9b549",
+        "note": "中文标签：大实心色斑恢复与局部切口参考；依赖基础包及原位指纹媒体/模型，非医学/完整环境恢复验收。"
+      },
+      "operatorEvaluation": {
+        "status": "failed",
+        "sourceDigest": "9e54e4472ba9f77084c043f10c7100fc7557177e54809648853196a3fcd7b01a",
+        "evidence": "操作者真人侧脸反馈：第二代总指挥39号/1，14次日志仅2次完整范围，另1次内部小块；原件指纹与冻结条件见feedback39-1-frozen-plan.json"
+      }
+    },
+    {
+      "profile": "small-lesion-boundary-candidate",
+      "version": "0.81.0-candidate.1",
+      "releaseName": "小肿物边界识别：多窗口实心提案共识与受限外缘恢复",
+      "featureSummary": "2C未验候选：允许分析窗口截断的实心提案进入候选池；按候选中心距离计数，至少2项支持才入选。总提案数≥3且核心暗度≥0.88时尝试1.42/1.36受限外包。计数尚未绑定独立窗口来源，不能声称真正多窗口共识已验证；最终产品回归未完成。",
+      "nameKeywords": [
+        "多窗口实心提案共识",
+        "受限外缘恢复"
+      ],
+      "status": "candidate",
+      "sourceDigest": "c5d397f32ea4064c04bd110bb1b34d6e454e65e23d87c028569e7644230cd8eb",
+      "algorithmDigest": "2ff63db28c52403070c3f770cb878ee21d2d15f2d30730cbadc961a66280981f"
+    },
+    {
+      "profile": "small-lesion-boundary-candidate",
+      "version": "0.80.0-candidate.1",
+      "releaseName": "小肿物边界识别：固定候选网格与有界部分平滑",
+      "featureSummary": "原图固定候选网格、对象中心光度核验；完整平滑位移处于22%–25%半径时尝试90/80/70%部分平滑，最终仍受22%上限与面积/自交门禁。865有效中574达工程标准；较基线9新增达标、0原达标退化；实心02/03仍失败，整体部分改善。",
+      "nameKeywords": [
+        "候选网格",
+        "部分平滑"
+      ],
+      "status": "candidate",
+      "sourceDigest": "9ce378dfb1eee1ba5193b69956aa3085652d81bab9f9b7df834979d8736f35eb",
+      "algorithmDigest": "b40db5b6eaf93116e47c443f6292f0aa71bc7484f2c283d7317b43efd76b9fba"
+    },
+    {
+      "profile": "small-lesion-boundary-candidate",
+      "version": "0.79.0-candidate.1",
+      "releaseName": "小肿物边界识别：固定候选网格与对象中心光度核验",
+      "sourceDigest": "e925b60b7683722630ebb41a3a541235947a591d0589e11a403fa66fb11267ed",
+      "algorithmDigest": "bb11177340922aa649d631ff3bc718dee070a18c28dcbc37a6682e27a370772c",
+      "status": "intermediate-candidate",
+      "evidence": "local_outputs/diagnosis-30-1/feedback38-3-round-2.json",
+      "archive": {
+        "status": "SOURCE_SNAPSHOTS_ONLY",
+        "path": "local_outputs/diagnosis-30-1"
+      }
+    },
+    {
+      "profile": "small-lesion-boundary-candidate",
+      "version": "0.78.0-candidate.1",
+      "releaseName": "小肿物边界识别：完整候选与受限低频轮廓平滑",
+      "featureSummary": "小于固定分析标尺的扫描圈仍搜索完整候选；紧凑接受轮廓受限低频平滑，原覆盖/颜色支持/拒识门禁保持。冻结548次544有效，349达标/192边界失败/3漏检，较0.76.1多32达标、0新失败；整体部分改善，未通过。",
+      "nameKeywords": [
+        "完整候选",
+        "低频"
+      ],
+      "status": "candidate",
+      "sourceDigest": "fdd5bf8f317ff116ba18211e04d3cd20200078058bac2efb41278f285c665f05",
+      "algorithmDigest": "850f217ce5004a3f63bb8716019e0f31733dc6c07e1ba66e7b2852bddb9dcb62",
+      "archive": {
+        "status": "verified",
+        "manifestPath": "local_outputs/recovery-packages/UI0.1.4-candidate.1-识别反馈与手机视野固定-20261008/manifest.json",
+        "manifestSha256": "143a5001efb31a4948e475819b5a6d6d165c686882cc7c63e8e34ebe2bb33a8f",
+        "sourceDigest": "fdd5bf8f317ff116ba18211e04d3cd20200078058bac2efb41278f285c665f05",
+        "scopeConfigSha256": "dab1d18b84d52b4bcb47d139af130707ff5f668e74662e16ae5c90cf02a9b549",
+        "note": "当前算法0.78与UI0.1.4联合恢复包；保留基础包，不等于独立完整环境恢复验收"
+      },
+      "operatorEvaluation": {
+        "status": "pending",
+        "sourceDigest": "fdd5bf8f317ff116ba18211e04d3cd20200078058bac2efb41278f285c665f05",
+        "evidence": "本轮UI待人工确认，算法已有部分通过记录保留"
+      }
+    },
+    {
+      "profile": "small-lesion-boundary-candidate",
+      "version": "0.77.0-candidate.1",
+      "releaseName": "小肿物边界识别：小扫描圈保持完整候选搜索",
+      "featureSummary": "扫描圈小于分析标尺时仍执行完整候选搜索；原扫描覆盖、候选判别与拒识门禁不变。第2轮工程回归进行中。",
+      "nameKeywords": [
+        "候选搜索"
+      ],
+      "status": "candidate",
+      "sourceDigest": "ab835bbd25366cfa98de1d37c9a19055eca70be6f0df2ade31f18646c9667202",
+      "algorithmDigest": "41a6f720f10b07f0392095b9343ea5c81bb63048db77c5c6c4668661f041fd22",
+      "archive": {
+        "status": "pending",
+        "sourceDigest": "ab835bbd25366cfa98de1d37c9a19055eca70be6f0df2ade31f18646c9667202"
+      },
+      "operatorEvaluation": {
+        "status": "pending",
+        "sourceDigest": "ab835bbd25366cfa98de1d37c9a19055eca70be6f0df2ade31f18646c9667202",
+        "evidence": "此前0.76.1有限人工认可不自动覆盖新版本"
+      }
+    },
+    {
+      "profile": "small-lesion-boundary-candidate",
+      "version": "0.76.1-candidate.1",
+      "releaseName": "小肿物边界识别：撤回外缘试验并保留完整实心候选搜索",
+      "featureSummary": "完整扫描内固定尺度实心候选搜索；R5局部外缘描边失败后撤回，检测逻辑恢复R4。可比227次原条件15次改善、0次新增失败，空心108次边界保持；实心01仍有2个触发失败，实心02/03覆盖不足，整体部分改善未通过。类型兼容修正不改变运行逻辑。",
+      "nameKeywords": [
+        "实心"
+      ],
+      "status": "candidate",
+      "sourceDigest": "37a2d56799057bab1375a8c50654212db219a844f69ee6eddc3a7b1ae72cae6e",
+      "algorithmDigest": "39e7e40d00bef0f8df220707eb5f4dc826a6096abc40b121111a3085faa04e6f",
+      "archive": {
+        "status": "verified",
+        "manifestPath": "local_outputs/recovery-packages/0.76.1-candidate.1-双类型大体轮廓有限人工认可阶段-20261008/manifest.json",
+        "manifestSha256": "45d4e4af92b188161a8f1e389acbab7881caa60809aaa827c907910c6ed76a3f",
+        "sourceDigest": "37a2d56799057bab1375a8c50654212db219a844f69ee6eddc3a7b1ae72cae6e",
+        "scopeConfigSha256": "dab1d18b84d52b4bcb47d139af130707ff5f668e74662e16ae5c90cf02a9b549",
+        "note": "本轮肿物候选恢复包；保留既有成果依赖，非全环境恢复验收。"
+      },
+      "operatorEvaluation": {
+        "status": "partial",
+        "sourceDigest": "37a2d56799057bab1375a8c50654212db219a844f69ee6eddc3a7b1ae72cae6e",
+        "evidence": "本轮操作者直接报告有限人工轮次中双类型大体轮廓稳定；边界精度/尖角部分通过。183日志含3漏检，与观感并列。阶段包旁证阶段说明-中文.md，不代表新版本评价。"
+      }
+    },
+    {
+      "profile": "small-lesion-boundary-candidate",
+      "version": "0.76.0-candidate.1",
+      "releaseName": "小肿物边界识别：撤回外缘试验并保留完整实心候选搜索",
+      "featureSummary": "精确恢复R4检测器；最终类型检查发现新增私有诊断对象声明缺口，已由0.76.1兼容修正；非新增优化轮。",
+      "nameKeywords": [
+        "实心"
+      ],
+      "status": "candidate",
+      "sourceDigest": "249e34fb4ab43e092123e330661b723a6e46c8e0a7546ea80e30e4a44d24b567",
+      "algorithmDigest": "4ccd1f367053b505b4176221319a356e1e7970237d71ff4963c7d7ef89169394",
+      "archive": {
+        "status": "verified",
+        "manifestPath": "local_outputs/recovery-packages/0.76.0-candidate.1-保留完整实心候选并撤回外缘试验-20261008/manifest.json",
+        "manifestSha256": "7c3beb2b73a742777a6392eef5680e7cb04e2540f21211e7ef25285ea593cb6e",
+        "sourceDigest": "249e34fb4ab43e092123e330661b723a6e46c8e0a7546ea80e30e4a44d24b567",
+        "scopeConfigSha256": "dab1d18b84d52b4bcb47d139af130707ff5f668e74662e16ae5c90cf02a9b549",
+        "note": "本轮肿物候选恢复包；保留既有成果依赖，非全环境恢复验收。"
+      },
+      "operatorEvaluation": {
+        "status": "pending",
+        "sourceDigest": "249e34fb4ab43e092123e330661b723a6e46c8e0a7546ea80e30e4a44d24b567",
+        "evidence": "旧0.71人工反馈是问题来源，不是当前候选评价。"
+      },
+      "subsequentFeedback": "local_outputs/diagnosis-30-1/feedback38-final-typecheck.stdout"
+    },
+    {
+      "profile": "small-lesion-boundary-candidate",
+      "version": "0.75.0-candidate.1",
+      "releaseName": "小肿物边界识别：实心重新居中与局部外缘描边",
+      "featureSummary": "第5轮六图261次完整回归；实心01 0/111达到工程条件，空心108次保持；实心02/03均未达标准。局部外缘描边退化，已撤回。",
+      "nameKeywords": [
+        "实心"
+      ],
+      "status": "candidate",
+      "sourceDigest": "bb0c7ee2da189ace948f4facdeb5bb8b082db46ea3b067fe4dca8a8df3f3a82e",
+      "algorithmDigest": "5ea4425f82b79c121695cb4dce3be17c59f8ce99ddbecaddbd8506cfbe9cdab6",
+      "archive": {
+        "status": "verified",
+        "manifestPath": "local_outputs/recovery-packages/0.75.0-candidate.1-实心重新居中与局部外缘候选-20261008/manifest.json",
+        "manifestSha256": "e2c48d9b1aca7b09a7f33c6c4c469536a811a910d9a26d567363be323695cdf2",
+        "sourceDigest": "bb0c7ee2da189ace948f4facdeb5bb8b082db46ea3b067fe4dca8a8df3f3a82e",
+        "scopeConfigSha256": "dab1d18b84d52b4bcb47d139af130707ff5f668e74662e16ae5c90cf02a9b549",
+        "note": "本轮肿物候选恢复包；保留既有成果依赖，非全环境恢复验收。"
+      },
+      "operatorEvaluation": {
+        "status": "pending",
+        "sourceDigest": "bb0c7ee2da189ace948f4facdeb5bb8b082db46ea3b067fe4dca8a8df3f3a82e",
+        "evidence": "旧0.71人工反馈是问题来源，不是当前候选评价。"
+      },
+      "subsequentFeedback": "local_outputs/diagnosis-30-1/feedback38-round-5.json"
+    },
+    {
+      "profile": "small-lesion-boundary-candidate",
+      "version": "0.74.0-candidate.1",
+      "releaseName": "小肿物边界识别：固定尺度完整实心候选搜索",
+      "featureSummary": "第4轮六图261次完整回归；实心01 105/111达到工程条件，空心108次保持；实心02/03均未达标准。仍有失败，未通过整体验收。",
+      "nameKeywords": [
+        "实心"
+      ],
+      "status": "candidate",
+      "sourceDigest": "f5bf16c2e88c349ce7b2e86fd2d33af0574bc9d4c35cb788768c3265f9b51bce",
+      "algorithmDigest": "42b525c9f27185c530a0657b73eb1cb8fe778ced26724146ae21ef0141a309b3",
+      "archive": {
+        "status": "pending",
+        "sourceDigest": "f5bf16c2e88c349ce7b2e86fd2d33af0574bc9d4c35cb788768c3265f9b51bce",
+        "note": "候选尚在回归；原0.71恢复包保留，新候选恢复包待生成，禁止交付为已验收。"
+      },
+      "operatorEvaluation": {
+        "status": "pending",
+        "sourceDigest": "f5bf16c2e88c349ce7b2e86fd2d33af0574bc9d4c35cb788768c3265f9b51bce",
+        "evidence": "旧0.71人工反馈是问题来源，不是当前候选评价。"
+      },
+      "subsequentFeedback": "local_outputs/diagnosis-30-1/feedback38-round-4.json"
+    },
+    {
+      "profile": "small-lesion-boundary-candidate",
+      "version": "0.73.0-candidate.1",
+      "releaseName": "小肿物边界识别：实心搜索范围与判别尺度解耦",
+      "featureSummary": "第3轮六图261次完整回归；实心01 99/111达到工程条件，空心108次保持；实心02/03均未达标准。仍有失败，未通过整体验收。",
+      "nameKeywords": [
+        "实心"
+      ],
+      "status": "candidate",
+      "sourceDigest": "b085544e302cfced32c9c29b83ae8e56e0f22fac3b3ee04a7bbba7c88f33f5f8",
+      "algorithmDigest": "e9e368b38d56c7b1ea00723ae663e4bd3cf3ffcf496d0a43dd5780d3ac0fbfb7",
+      "archive": {
+        "status": "pending",
+        "sourceDigest": "b085544e302cfced32c9c29b83ae8e56e0f22fac3b3ee04a7bbba7c88f33f5f8",
+        "note": "候选尚在回归；原0.71恢复包保留，新候选恢复包待生成，禁止交付为已验收。"
+      },
+      "operatorEvaluation": {
+        "status": "pending",
+        "sourceDigest": "b085544e302cfced32c9c29b83ae8e56e0f22fac3b3ee04a7bbba7c88f33f5f8",
+        "evidence": "旧0.71人工反馈是问题来源，不是当前候选评价。"
+      },
+      "subsequentFeedback": "local_outputs/diagnosis-30-1/feedback38-round-3.json"
+    },
+    {
+      "profile": "small-lesion-boundary-candidate",
+      "version": "0.72.0-candidate.1",
+      "releaseName": "小肿物边界识别：扫描圈实心核心定位与双类型候选竞争",
+      "featureSummary": "第2轮六图261次完整回归；实心01 102/111达到工程条件，空心108次保持；实心02/03均未达标准。仍有失败，未通过整体验收。",
+      "nameKeywords": [
+        "实心核心",
+        "候选竞争"
+      ],
+      "status": "candidate",
+      "sourceDigest": "85c81a2ce3c42ef2a704d7654dd6a0d59b84f7f5cdeb20cb679ee9b603b09418",
+      "algorithmDigest": "725866ae172dd3b1671d02b7e76bb9d30f9e04b1e3a178861a1dc31dfa35bf1a",
+      "archive": {
+        "status": "pending",
+        "sourceDigest": "85c81a2ce3c42ef2a704d7654dd6a0d59b84f7f5cdeb20cb679ee9b603b09418",
+        "note": "候选尚在回归；原0.71恢复包保留，新候选恢复包待生成，禁止交付为已验收。"
+      },
+      "operatorEvaluation": {
+        "status": "pending",
+        "sourceDigest": "85c81a2ce3c42ef2a704d7654dd6a0d59b84f7f5cdeb20cb679ee9b603b09418",
+        "evidence": "旧0.71人工反馈是问题来源，不是当前候选评价。"
+      },
+      "subsequentFeedback": "local_outputs/diagnosis-30-1/feedback38-round-2.json"
+    },
+    {
+      "profile": "small-lesion-boundary-candidate",
+      "version": "0.71.0-candidate.1",
+      "releaseName": "小肿物边界识别：扫描圈闭合环定位与局部亮度解耦",
+      "featureSummary": "扫描覆盖面内闭合环产生锚点；全局亮度与局部对比度双证据提出位置，固定36px原检测器及颜色/几何/覆盖门禁决定最终边界；三轮44用例，6漏检与3零重叠误选消除，2无肿物拒识保留；仍待操作者视觉确认",
+      "nameKeywords": [
+        "闭合环",
+        "亮度"
+      ],
+      "status": "candidate",
+      "sourceDigest": "82a59f4f0e1f261e8d8ffe86c352c179356e4c9a81fb08a5480638b2290b9f31",
+      "algorithmDigest": "daab5934137c4c3db4d82eaa548502d445b12d46343780329db6943a98391160",
+      "archive": {
+        "status": "verified",
+        "manifestPath": "local_outputs/recovery-packages/UI0.1.2-candidate.1-桌面反馈工具栏左侧对齐-2026-10-08/manifest.json",
+        "manifestSha256": "4fdca35b57f1adb1a71dc02cbf84fcd722f9a15b06f4bda6a4f33af7022b5291",
+        "sourceDigest": "82a59f4f0e1f261e8d8ffe86c352c179356e4c9a81fb08a5480638b2290b9f31",
+        "scopeConfigSha256": "dab1d18b84d52b4bcb47d139af130707ff5f668e74662e16ae5c90cf02a9b549",
+        "note": "本轮仅UI单行修复；基于既有0.70-v5恢复包增量保存，算法保持0.71；最终登记另存旁证，未做隔离完整环境恢复。"
+      },
+      "operatorEvaluation": {
+        "status": "pending",
+        "sourceDigest": "82a59f4f0e1f261e8d8ffe86c352c179356e4c9a81fb08a5480638b2290b9f31",
+        "evidence": "本轮UI修复待操作者实际复核；历史算法观察保留，不冒充本次源码整体接受。"
+      },
+      "subsequentFeedback": "local_outputs/diagnosis-30-1/feedback38-final-record.json"
+    },
+    {
+      "profile": "small-lesion-boundary-candidate",
+      "version": "0.70.0-candidate.1",
+      "releaseName": "小肿物边界识别：扩大扫描圈下实心候选中心约束",
+      "featureSummary": "扩大扫描圈时保持固定分析窗内的实心候选中心约束；超出分析窗的实心候选优先尝试颜色闭合候选，否则拒识；黑人空心01/02定点复放用于回归，03拒识行为单列待人工核验；未作医学或临床结论",
+      "nameKeywords": [
+        "扫描圈",
+        "候选中心"
+      ],
+      "status": "candidate",
+      "sourceDigest": "1ddbdf364676179301577d48bae4e3d5a0fc004e511e00861cf7ad26945dc96f",
+      "algorithmDigest": "fe55b62aec8d5cde49ee0ccc083c483148c86640640ca28d8ac5219fab25c7bf",
+      "archive": {
+        "status": "verified",
+        "manifestPath": "local_outputs/recovery-packages/V0.70.0-candidate.1-扩大扫描圈实心候选中心约束-2026-10-06-v5/manifest.json",
+        "manifestSha256": "1654509ab13de5bdd6f3c9c375dc81d8fa0d2802f564298016ce75949cbb32da",
+        "sourceDigest": "1ddbdf364676179301577d48bae4e3d5a0fc004e511e00861cf7ad26945dc96f",
+        "scopeConfigSha256": "dab1d18b84d52b4bcb47d139af130707ff5f668e74662e16ae5c90cf02a9b549",
+        "note": "本轮反馈修复候选；继承0.69联合恢复包。未包含医学或临床验收。"
+      },
+      "operatorEvaluation": {
+        "status": "partial_failed",
+        "sourceDigest": "1ddbdf364676179301577d48bae4e3d5a0fc004e511e00861cf7ad26945dc96f",
+        "evidence": "操作者直接反馈37/2，五类不合格现象；31条实际运行均为0.70"
+      }
+    },
+    {
+      "profile": "small-lesion-boundary-candidate",
+      "version": "0.69.0-candidate.1",
+      "releaseName": "小肿物边界识别：细长碎片不截断空心候选搜索",
+      "featureSummary": "初始颜色证据过滤细长非闭合碎片后继续完整环搜索；正式124次120正例接受/4阴性拒识，自交/扫描越界0，不一致2降0，与内存原型逐次相同；仅空心03两次变化，覆盖/IoU/精度提高但参考距离略退化；显示/真机/医学缺口保留；正式桌面/手机视口各6次，老人空心03六个完整几何签名唯一，轮廓显示与拒识提示隐藏限制仍保留",
+      "nameKeywords": [
+        "细长碎片",
+        "候选搜索"
+      ],
+      "status": "candidate",
+      "sourceDigest": "1a85279ba70bc5b4b430d75a2303f78380718ae5c549f91d3a39e8125e3aa107",
+      "algorithmDigest": "73780286fe585680b05f03f65c217d147691653ae4a0b150df07a9642aa48a00",
+      "archive": {
+        "status": "verified",
+        "manifestPath": "local_outputs/recovery-packages/UI0.1.1-candidate.1-收窄反馈与工具栏回归修复-2026-10-05-v1/manifest.json",
+        "manifestSha256": "3c581e31176266aa64906f0f2e681bf5806dfbf0b4ad06b7f9ee37a8c78a1b1d",
+        "sourceDigest": "1a85279ba70bc5b4b430d75a2303f78380718ae5c549f91d3a39e8125e3aa107",
+        "scopeConfigSha256": "dab1d18b84d52b4bcb47d139af130707ff5f668e74662e16ae5c90cf02a9b549",
+        "note": "UI返工联合恢复包；保留064v2继承基础。最终登记另存旁证，未运行隔离完整恢复。"
+      }
+    },
+    {
+      "version": "0.68.0-candidate.1",
+      "mainChange": "初始颜色证据排除退化碎片后继续完整环搜索；正式124次120正例接受/4阴性拒识，自交/扫描越界0，不一致4降2，与内存原型逐次相同，仅老人空心01两落点参考距离改善；老人空心03与显示/真机/医学缺口保留；正式桌面/手机视口各6次，空心01六个完整几何签名唯一，阴性终态约2.2–2.33秒，轮廓遮挡和拒识提示隐藏仍保留",
+      "sourceDigest": "beda5b7a3ab6eccc46bface6ed074b8ce3fe2d450244d5cfb3b6d3479f52457d",
+      "algorithmDigest": "5bb7378091bb9c8c3118affb3c5bc42fc82ae24db915567e36cc7d33a015abc1",
+      "archive": {
+        "status": "verified",
+        "manifestPath": "local_outputs/recovery-packages/V0.68.0-candidate.1-退化碎片不截断空心候选搜索-2026-10-05-v1/manifest.json",
+        "manifestSha256": "03d61520e7519ba9ae0790421ac983544cce0d8039a6ac5a2c3b67e1fe92ba9c",
+        "scopeConfigSha256": "dab1d18b84d52b4bcb47d139af130707ff5f668e74662e16ae5c90cf02a9b549",
+        "sourceDigest": "beda5b7a3ab6eccc46bface6ed074b8ce3fe2d450244d5cfb3b6d3479f52457d",
+        "note": "复用既有0661/067修改前恢复保障；本包与064v2继承包均必须保留。最终登记与原位证据另存旁证以避免manifest循环指纹。 最终登记、版本说明和证据索引存包内旁证；未做隔离环境恢复运行。"
+      }
+    },
+    {
+      "version": "0.67.0-candidate.1",
+      "mainChange": "只对已确认的相容实心二周期增加一次中点检测，原门禁及失败回退保留；124次120正例接受/4阴性拒识，无自交，差异8降4，部分参考贴合轻微退化；正式双端视口三落点几何一致，轮廓叠加遮挡及隐藏拒识文字未解决，真机与医学未验",
+      "sourceDigest": "d061ac48e4f31427da3d8ef2ac5da18143e5893c8db74e4b2ea0218d9b7b9c2c",
+      "algorithmDigest": "e9842bacc0a5e894b8b2b94db65c78692ca43fa294c17b6af53b30ffc87c688f",
+      "archive": {
+        "status": "verified",
+        "manifestPath": "local_outputs/recovery-packages/V0.67.0-candidate.1-实心中心二周期对称采样-2026-10-05-v1/manifest.json",
+        "manifestSha256": "5aa3d1cd17c9df798b7028a5212edcc2466c3d6490c1d8e09edc4d3528898aab",
+        "scopeConfigSha256": "dab1d18b84d52b4bcb47d139af130707ff5f668e74662e16ae5c90cf02a9b549",
+        "sourceDigest": "d061ac48e4f31427da3d8ef2ac5da18143e5893c8db74e4b2ea0218d9b7b9c2c",
+        "note": "0.67实心二周期候选；7项复制、227项继承0.64 v2并校验、17项仅指纹。复用0.66.1作为修改前回退点，旧包全部保留；124次及正式双端视口已有证据，贴合取舍与显示缺口保留。最终发布登记与原位验证证据索引另存恢复包旁证，不循环修改manifest。"
+      }
+    },
+    {
+      "version": "0.66.1-candidate.1",
+      "mainChange": "像素边界追踪数字索引提速；124次几何保持0.65，正式双端视口已有证据，显示缺口与几何残差保留"
+    },
+    {
+      "version": "0.66.0-candidate.1",
+      "mainChange": "单次识别重复计算复用；124次输出一致但无明显收益，实验已撤回，版本号保留"
+    },
+    {
+      "version": "0.65.0-candidate.1",
+      "mainChange": "空心内收与点击位置解耦；带8项几何残差、隐藏拒识提示和小边界显示缺口的可恢复阶段候选"
+    },
+    {
+      "version": "0.64.0-candidate.1",
+      "mainChange": "实心候选包络形状平滑；逐次几何与阴性速度缺口见2026-10-05新矩阵"
+    },
+    {
+      "version": "0.63.0-candidate.1",
+      "mainChange": "实心候选外包尺度上限扩展"
+    },
+    {
+      "version": "0.61.0-candidate.1",
+      "mainChange": "低亮度空心边界保留"
+    },
+    {
+      "version": "0.59.0-candidate.1",
+      "mainChange": "低亮度彩色空心边界轻度内收"
+    },
+    {
+      "version": "0.58.0-candidate.1",
+      "mainChange": "低亮度空心边界内收"
+    },
+    {
+      "version": "0.57.0-candidate.1",
+      "mainChange": "实心包络保守收缩"
+    },
+    {
+      "version": "0.56.0-candidate.1",
+      "mainChange": "偏移点击实心轮廓中心校正"
+    },
+    {
+      "version": "0.55.0-candidate.1",
+      "mainChange": "亮度失败时受限归一化恢复"
+    },
+    {
+      "version": "0.51.0-candidate.1",
+      "mainChange": "实心边界受限外包与候选尺度校准"
+    },
+    {
+      "version": "0.50.0-candidate.1",
+      "mainChange": "嵌套探针共识去重与耗时收敛"
+    },
+    {
+      "version": "0.49.0-candidate.1",
+      "mainChange": "空心优先与实心中心复核"
+    },
+    {
+      "mainChange": "空心环封套与实心证据隔离",
+      "version": "0.48.0-candidate.1"
+    },
+    {
+      "version": "0.47.0-candidate.1",
+      "mainChange": "空心优先、实心强证据回退与定向共识稳定化"
+    },
+    {
+      "version": "0.1.0",
+      "legacyIdentifier": "0.1",
+      "mainChange": "受控标记定位基线"
+    },
+    {
+      "version": "0.2.0",
+      "legacyIdentifier": "0.2",
+      "mainChange": "切口工作流与标记控制加固"
+    },
+    {
+      "version": "0.12.0",
+      "legacyIdentifier": "0.12",
+      "mainChange": "本地规划与标记阶段保存"
+    },
+    {
+      "version": "0.18.0",
+      "legacyIdentifier": "0.18",
+      "mainChange": "标记检测与照片梭形稳定化"
+    },
+    {
+      "version": "0.23.0",
+      "legacyIdentifier": "0.23",
+      "mainChange": "2026-08-19 冻结回退基线"
+    },
+    {
+      "version": "0.26.0",
+      "legacyIdentifier": "0.26",
+      "mainChange": "受控标记边界拟合改进"
+    },
+    {
+      "version": "0.32.0",
+      "legacyIdentifier": "0.32",
+      "mainChange": "工作流页面状态保存"
+    },
+    {
+      "version": "0.33.0",
+      "legacyIdentifier": "0.33",
+      "mainChange": "手机工作流阶段保存"
+    },
+    {
+      "version": "0.34.0",
+      "legacyIdentifier": "0.34",
+      "mainChange": "受控标记审阅流程稳定化"
+    },
+    {
+      "version": "0.35.0",
+      "legacyIdentifier": "0.35",
+      "mainChange": "颜色差分检测实验"
+    },
+    {
+      "version": "0.36.0-candidate.1",
+      "mainChange": "稳定候选选择与中心一致性；操作者反馈效果仍有严重问题，仅作修复前恢复点"
+    },
+    {
+      "version": "0.37.0-candidate.1",
+      "mainChange": "闭合候选尺寸受限重检"
+    },
+    {
+      "version": "0.38.0-candidate.1",
+      "mainChange": "实心候选阈值稳定与拒绝预览隔离"
+    },
+    {
+      "version": "0.39.0-candidate.1",
+      "mainChange": "固定分析窗口试验；回归发现分析窗仍随扫描半径变化，作为历史候选保留"
+    },
+    {
+      "version": "0.40.0-candidate.1",
+      "mainChange": "固定 36px 分析窗独立于扫描覆盖；默认底层检测回归失败后被阻断"
+    },
+    {
+      "version": "0.41.0-candidate.1",
+      "mainChange": "固定 36px 分析窗与默认检测兼容；2C 发现空心环在点击偏移下仍可能误走实心恢复"
+    },
+    {
+      "version": "0.42.0-candidate.1",
+      "mainChange": "实心恢复核心暗度门禁与固定分析窗兼容；空心微像素块误报和局部轮廓漏检仍待继续验证"
+    },
+    {
+      "version": "0.43.0-candidate.1",
+      "mainChange": "空心闭合候选最小尺寸门禁；空心局部轮廓漏检仍待继续验证"
+    },
+    {
+      "version": "0.44.0-candidate.1",
+      "mainChange": "空心候选二次规则化与邻域共识；人工复核仍发现扫描直径相关失败和轮廓质量问题"
+    },
+    {
+      "version": "0.46.0-candidate.1",
+      "mainChange": "空心证据优先与实心回退隔离"
+    }
+  ],
+  "uiIdentity": {
+    "version": "0.1.5-candidate.1",
+    "name": "界面文案：自由轮廓统一称为手绘",
+    "status": "candidate",
+    "sourceFiles": [
+      "web/src/components/WorkflowStageStatus.tsx",
+      "web/src/components/WorkflowCanvasTools.tsx",
+      "web/src/styles.css",
+      "web/src/components/TumorInputPanel.tsx",
+      "web/src/services/incisionClinicalCopy.ts",
+      "web/src/services/workflowIncisionController.ts"
+    ],
+    "sourceDigest": "78c38062b8e83eb1a3d75b7c0a5e223847ae83bfeb89453497adf124c13bf0c5",
+    "runtimeSourceDigest": "bdb92ff70bec3f2f2438629029f2ad1b88283873c13160a7c77bfc48beed69ee",
+    "algorithmVersion": "0.83.0-candidate.1",
+    "algorithmDigest": "a46cff9529c5ad86ed260c315a62bd084e6e0a558d180eed24bb2fe120a54faf",
+    "baselineSourceDigest": "953c62afa275c3b09b3210b59f36e52320ce0d7ab627fea6acf9393938c2b665",
+    "note": "只替换共享选项、提示中的鼠绘为手绘；不改绘制交互、手机布局或算法。双视口回读证据freehand-copy-page.json。"
+  },
+  "uiHistory": [
+    {
+      "version": "0.1.4-candidate.1",
+      "name": "识别反馈：固定提示布局与手机标记视野",
+      "status": "candidate",
+      "sourceFiles": [
+        "web/src/components/WorkflowStageStatus.tsx",
+        "web/src/components/WorkflowCanvasTools.tsx",
+        "web/src/styles.css"
+      ],
+      "sourceDigest": "a5f47e526f33863bab2d0d4a5d7c67b323fc382340951d77b2b47d36a6440ee5",
+      "runtimeSourceDigest": "953c62afa275c3b09b3210b59f36e52320ce0d7ab627fea6acf9393938c2b665",
+      "algorithmVersion": "0.83.0-candidate.1",
+      "algorithmDigest": "a46cff9529c5ad86ed260c315a62bd084e6e0a558d180eed24bb2fe120a54faf",
+      "baselineSourceDigest": "12259c8e63e7f7c8e6f0fbf1d9bef5d155fb0c5f16b47ba076fff59dbd0be3dc",
+      "note": "浮层反馈、恒定手机工具栏第二行，并移除手机页面外层标记状态的34px视野高度补偿；原图坐标/缩放与控件语义保持，实际入口验证见status-position-final.json，真机待验",
+      "automatedDisplayEvidence": {
+        "status": "passed-actual-page-position-invariance",
+        "path": "local_outputs/diagnosis-30-1/status-position-real.json",
+        "sha256": "df9dca2f1b77c77a18e95a8e3e82d0d4795a2bfd40b23eb195dfb5452eb9a938"
+      }
+    },
+    {
+      "version": "0.1.0-candidate.1",
+      "name": "识别显示：边界置顶与拒识提示可见",
+      "status": "candidate",
+      "sourceDigest": "4a33188268a3c4334f0b8c93f5c62df9a9bd33b7eec038f7e40ae7e86dc3d9e8",
+      "runtimeSourceDigest": "ed1cc5a0e85a038882f351c9016b44b6d2314eda6d0d6ac54129371fdcd34fe7",
+      "sourceFiles": [
+        "web/src/components/WorkflowStageStatus.tsx",
+        "web/src/components/WorkflowCanvasTools.tsx",
+        "web/src/styles.css"
+      ],
+      "algorithmVersion": "0.69.0-candidate.1",
+      "algorithmDigest": "73780286fe585680b05f03f65c217d147691653ae4a0b150df07a9642aa48a00",
+      "baselineSourceDigest": "aa7d159a671ff90a0c027f069804842b0f6992a0944bdcb4ad50bf27c59aa328",
+      "note": "独立UI身份首次登记；正式双端覆盖6正例/6阴性显示通过，同条件输出不变。单个有效慢例、真机/冷启/独立医学参考缺口保留；操作者评价仍pending。算法与RSTL源码不变。",
+      "automatedDisplayEvidence": {
+        "status": "passed-covered-cases",
+        "path": "local_outputs/diagnosis-30-1/display-cycle-069-20261005/verified-evidence.json",
+        "sha256": "9d8dafa5762c173410edd22b7449c082b75ccab8cc88cf33b356814c20b05cab"
+      },
+      "archive": {
+        "status": "verified",
+        "manifestPath": "local_outputs/recovery-packages/UI0.1.0-candidate.1-边界置顶与拒识提示可见-2026-10-05-v1/manifest.json",
+        "manifestSha256": "973619054852573bf342a2f27dd72f73fb83984df46a72ad13ec808b2da79fa6",
+        "sourceDigest": "ed1cc5a0e85a038882f351c9016b44b6d2314eda6d0d6ac54129371fdcd34fe7",
+        "scopeConfigSha256": "dab1d18b84d52b4bcb47d139af130707ff5f668e74662e16ae5c90cf02a9b549",
+        "note": "069算法不变；联合恢复包新增UI源码。必须保留所继承064v2。最终登记另存旁证，未运行隔离完整恢复。"
+      },
+      "subsequentIncident": "local_outputs/diagnosis-30-1/display-cycle-069-20261005/toolbar-scroll-incident.md"
+    },
+    {
+      "version": "0.1.1-candidate.1",
+      "name": "识别显示：收窄反馈并修复工具栏横向溢出",
+      "status": "candidate",
+      "sourceDigest": "05f0b0572e24cbc0389a717aec80894442a151d2ee26d9c2f81837a796f98778",
+      "runtimeSourceDigest": "1a85279ba70bc5b4b430d75a2303f78380718ae5c549f91d3a39e8125e3aa107",
+      "sourceFiles": [
+        "web/src/components/WorkflowStageStatus.tsx",
+        "web/src/components/WorkflowCanvasTools.tsx",
+        "web/src/styles.css"
+      ],
+      "algorithmVersion": "0.70.0-candidate.1",
+      "algorithmDigest": "fe55b62aec8d5cde49ee0ccc083c483148c86640640ca28d8ac5219fab25c7bf",
+      "baselineSourceDigest": "ed1cc5a0e85a038882f351c9016b44b6d2314eda6d0d6ac54129371fdcd34fe7",
+      "note": "仅提示组件和反馈状态桌面布局修复；普通状态恢复隐藏，忙碌/拒识可见。180项无新增溢出及可用控件遮挡，9项旧布局溢出保留。算法与RSTL不变，手机真机待验。",
+      "automatedDisplayEvidence": {
+        "status": "passed-no-new-layout-regression",
+        "path": "local_outputs/diagnosis-30-1/display-cycle-069-20261005/toolbar-repair-after-reviewed.json",
+        "sha256": "ad1adc9770f395f376899f2d0952034884679246c94ef9701c42f0822aa33606"
+      },
+      "archive": {
+        "status": "verified",
+        "sourceDigest": "72cf68c127ecef9f339c0ceed9faf8a9ae2b64d48a29f20d9b3f228e2daaf5e4",
+        "scopeConfigSha256": "dab1d18b84d52b4bcb47d139af130707ff5f668e74662e16ae5c90cf02a9b549",
+        "note": "仅本地肿物修复候选；UI和其他算法保持已有磁盘成果，未纳入新专业验收。",
+        "manifestPath": "local_outputs/recovery-packages/V0.71.0-candidate.1-扫描圈闭合环与局部亮度解耦-2026-10-06/manifest.json",
+        "manifestSha256": "21005c82a62f12ac9d1ef45fd5d6b0f2a2a84b715912508db91b9adf0e2c2f0e"
+      },
+      "subsequentIncident": "local_outputs/diagnosis-30-1/toolbar-offset-repro.json"
+    },
+    {
+      "version": "0.1.2-candidate.1",
+      "name": "识别工具栏：反馈出现时保持桌面左侧对齐",
+      "status": "candidate",
+      "sourceFiles": [
+        "web/src/components/WorkflowStageStatus.tsx",
+        "web/src/components/WorkflowCanvasTools.tsx",
+        "web/src/styles.css"
+      ],
+      "sourceDigest": "e1bf7d3528ffb1f27ed464b8e0048f5c07877a2b6d79201319a9e164c5041be0",
+      "runtimeSourceDigest": "12259c8e63e7f7c8e6f0fbf1d9bef5d155fb0c5f16b47ba076fff59dbd0be3dc",
+      "algorithmVersion": "0.78.0-candidate.1",
+      "algorithmDigest": "850f217ce5004a3f63bb8716019e0f31733dc6c07e1ba66e7b2852bddb9dcb62",
+      "baselineSourceDigest": "72cf68c127ecef9f339c0ceed9faf8a9ae2b64d48a29f20d9b3f228e2daaf5e4",
+      "note": "仅桌面反馈状态的justify-content从flex-end改为flex-start；普通/退出状态、提示显隐、移动端布局、控件语义和算法均保持。60组对照无新增内部溢出/可用控件遮挡，2组既有手机忙碌溢出保留；无模型运行，手机真机待验。",
+      "automatedDisplayEvidence": {
+        "status": "passed-no-new-layout-regression",
+        "path": "local_outputs/diagnosis-30-1/toolbar-offset-reviewed-38.json",
+        "sha256": "f3c2bc5e4131e96233367423d7d27f88e9894440082579c909f1f049813d898e"
+      },
+      "archive": {
+        "status": "verified",
+        "manifestPath": "local_outputs/recovery-packages/0.78.0-candidate.1-低频平滑文档回读同步-20261008/manifest.json",
+        "manifestSha256": "8b918c0ac8249bb7755aa5401f06b119559c43c9acb2016c966f2e3f3b567590",
+        "sourceDigest": "12259c8e63e7f7c8e6f0fbf1d9bef5d155fb0c5f16b47ba076fff59dbd0be3dc",
+        "scopeConfigSha256": "dab1d18b84d52b4bcb47d139af130707ff5f668e74662e16ae5c90cf02a9b549",
+        "note": "本轮肿物候选恢复包；保留既有成果依赖，非全环境恢复验收。"
+      },
+      "subsequentIncident": "status visibility caused vertical layout shift; local_outputs/diagnosis-30-1/status-position-before.json"
+    },
+    {
+      "version": "0.1.3-candidate.1",
+      "name": "识别反馈：提示显隐与标记切换保持图片位置",
+      "status": "candidate",
+      "sourceFiles": [
+        "web/src/components/WorkflowStageStatus.tsx",
+        "web/src/components/WorkflowCanvasTools.tsx",
+        "web/src/styles.css"
+      ],
+      "sourceDigest": "16920c6625bd392978dec57667f1d8e4096b57786426f36cbbe6ba31ddeee431",
+      "runtimeSourceDigest": "3837be32599367d69ea8c71ed3d42a29b2de91b5eb984453888d580aa1ba508a",
+      "algorithmVersion": "0.78.0-candidate.1",
+      "algorithmDigest": "850f217ce5004a3f63bb8716019e0f31733dc6c07e1ba66e7b2852bddb9dcb62",
+      "baselineSourceDigest": "12259c8e63e7f7c8e6f0fbf1d9bef5d155fb0c5f16b47ba076fff59dbd0be3dc",
+      "note": "提示浮层不参与工具栏布局、不截获画布点击；手机工具栏固定保留第二行，进入/退出标记不改变图片区域。72组状态对照42→0位移；未改算法/切口/RSTL或控件命令，手机真机待验。",
+      "automatedDisplayEvidence": {
+        "status": "passed-position-invariance",
+        "path": "local_outputs/diagnosis-30-1/status-position-after.json",
+        "sha256": "cf52da09d25c9fd004c65c9ee63509fa20d15490723bd3225790bcc3c782e445"
+      },
+      "archive": {
+        "status": "verified",
+        "manifestPath": "local_outputs/recovery-packages/UI0.1.3-candidate.1-识别提示与标记切换不移动图片-20261008/manifest.json",
+        "manifestSha256": "5b27db8ff82bcf1a91b1dc6506f37d0b91cb4fa5cb01347341c7ca32994112c2",
+        "sourceDigest": "3837be32599367d69ea8c71ed3d42a29b2de91b5eb984453888d580aa1ba508a",
+        "scopeConfigSha256": "dab1d18b84d52b4bcb47d139af130707ff5f668e74662e16ae5c90cf02a9b549",
+        "note": "当前算法0.78与UI0.1.3联合恢复包；保留基础包，不等于独立完整环境恢复验收"
+      },
+      "subsequentIncident": "local_outputs/diagnosis-30-1/status-position-real-failure.json; actual mobile host retained 34px state compensation"
+    }
+  ],
+  "incisionPhotoReference": {
+    "version": "0.1.0-candidate.1",
+    "name": "切口参考显示：保留每段可见的视野受限轮廓",
+    "status": "candidate",
+    "sourceFiles": [
+      "web/src/services/incisionPhotoPlanning.ts"
+    ],
+    "sourceDigest": "eb844ba18278487d7e9fff7ef89e08d63002d7dd33f4f7708f93b33c3c79a059",
+    "note": "独立显示组件身份；不改变切口生成/微调算法，完整确认和实时叠加安全门禁保留。"
+  }
 }

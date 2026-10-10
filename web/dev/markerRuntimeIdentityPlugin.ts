@@ -5,8 +5,9 @@ import {
   assertMarkerIdentity,
   TARGET_MARKER_PROFILE,
 } from "../../tools/marker_runtime_identity.mts";
+import { detectorVersionForProfile } from "../src/services/controlledMarkerDetectionProfile.ts";
 
-const EXPECTED_PRODUCTION_VERSION = "0.36.0-candidate.1";
+const EXPECTED_PRODUCTION_VERSION = detectorVersionForProfile(TARGET_MARKER_PROFILE);
 
 // Dev-only observation endpoint: no product entry import, DOM change or inference.
 export function markerRuntimeIdentityPlugin(): Plugin {

@@ -182,7 +182,7 @@ export function TumorInputPanel({
           }}
         >
           <option value="ellipse">受控标记识别</option>
-          <option value="freehand">{continuousFreehand ? "自由轮廓鼠绘" : "自由轮廓点"}</option>
+          <option value="freehand">{continuousFreehand ? "自由轮廓手绘" : "自由轮廓点"}</option>
         </Select>
       </FieldGroup>
       {!simplifiedWorkflow ? (
