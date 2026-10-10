@@ -19,7 +19,7 @@ type YoloGuidedChannelAudit = Record<string, unknown>;
 
 const GLOBAL_INTERSECTION_ROLLBACK_REASON = "global_intersection_guard";
 
-export const YOLO_GUIDED_RSTL_SCOPE = "yolo_forehead_and_glabellar_only";
+export const YOLO_GUIDED_RSTL_SCOPE = "yolo_forehead_glabellar_with_direct_nose";
 
 /**
  * Translate full-atlas guard rollbacks back into a channel-local V9 audit.
@@ -128,9 +128,43 @@ function segmentsCross(a: Point2, b: Point2, c: Point2, d: Point2): boolean {
   return first * second < -1e-7 && third * fourth < -1e-7;
 }
 
-function curvesCross(first: Point2[], second: Point2[]): boolean {
+export function yoloGuardCurvesCross(first: Point2[], second: Point2[],
+  useMonotoneWindow = false): boolean {
+  let secondIncreasingX = useMonotoneWindow && second.length > 1;
+  if (secondIncreasingX) {
+    for (let index = 1; index < second.length; index += 1) {
+      const start = second[index - 1], end = second[index];
+      if (end[0] < start[0] || !Number.isFinite(start[0]) ||
+          !Number.isFinite(start[1]) || !Number.isFinite(end[0]) ||
+          !Number.isFinite(end[1])) {
+        secondIncreasingX = false;
+        break;
+      }
+    }
+  }
   for (let firstIndex = 1; firstIndex < first.length; firstIndex += 1) {
-    for (let secondIndex = 1; secondIndex < second.length; secondIndex += 1) {
+    let firstCandidate = 1, lastCandidate = second.length;
+    if (secondIncreasingX) {
+      const a = first[firstIndex - 1], b = first[firstIndex];
+      const minimumX = Math.min(a[0], b[0]), maximumX = Math.max(a[0], b[0]);
+      if (Number.isFinite(minimumX) && Number.isFinite(maximumX)) {
+        let left = 1, right = second.length;
+        while (left < right) {
+          const middle = (left + right) >>> 1;
+          if (second[middle][0] < minimumX) left = middle + 1;
+          else right = middle;
+        }
+        firstCandidate = left;
+        left = firstCandidate; right = second.length;
+        while (left < right) {
+          const middle = (left + right) >>> 1;
+          if (second[middle - 1][0] <= maximumX) left = middle + 1;
+          else right = middle;
+        }
+        lastCandidate = left;
+      }
+    }
+    for (let secondIndex = firstCandidate; secondIndex < lastCandidate; secondIndex += 1) {
       if (segmentsCross(
         first[firstIndex - 1], first[firstIndex],
         second[secondIndex - 1], second[secondIndex],
@@ -140,7 +174,23 @@ function curvesCross(first: Point2[], second: Point2[]): boolean {
   return false;
 }
 
-function selfCrosses(points: Point2[]): boolean {
+export function yoloGuardSelfCrosses(points: Point2[]): boolean {
+  // Nonadjacent segments of a finite x-monotone polyline can only meet at
+  // a shared x boundary. The existing strict-crossing predicate rejects it.
+  // Curve storage may run in either x direction, so preserve both cases.
+  let increasingX = true, decreasingX = true;
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1], end = points[index];
+    if (!Number.isFinite(start[0]) || !Number.isFinite(start[1]) || !Number.isFinite(end[0]) ||
+        !Number.isFinite(end[1])) {
+      increasingX = decreasingX = false;
+      break;
+    }
+    if (end[0] < start[0]) increasingX = false;
+    if (end[0] > start[0]) decreasingX = false;
+    if (!increasingX && !decreasingX) break;
+  }
+  if (increasingX || decreasingX) return false;
   for (let first = 1; first < points.length; first += 1) {
     for (let second = first + 2; second < points.length; second += 1) {
       if (segmentsCross(
@@ -151,11 +201,20 @@ function selfCrosses(points: Point2[]): boolean {
   return false;
 }
 
-function intersectionPairs(curves: Array<{ pts: Point2[] }>): Set<string> {
+export interface YoloGuidedGuardPerformance {
+  intersectionChecks?: number;
+  exactCurvePairChecks?: number;
+  curvePairCacheHits?: number;
+  boundsRejectedPairs?: number;
+}
+
+function intersectionPairs(curves: Array<{ pts: Point2[] }>,
+  cross = yoloGuardCurvesCross, performance?: YoloGuidedGuardPerformance): Set<string> {
+  if (performance) performance.intersectionChecks = (performance.intersectionChecks || 0) + 1;
   const pairs = new Set<string>();
   for (let first = 0; first < curves.length; first += 1) {
     for (let second = first + 1; second < curves.length; second += 1) {
-      if (curvesCross(curves[first].pts, curves[second].pts)) {
+      if (cross(curves[first].pts, curves[second].pts)) {
         pairs.add(`${first}:${second}`);
       }
     }
@@ -172,6 +231,7 @@ function intersectionPairs(curves: Array<{ pts: Point2[] }>): Set<string> {
 export function guardMergedYoloGuidedRstlCurves(
   seeds: V6Seed[],
   mergedCurves: ScopedYoloGuidedCurve[],
+  options: { cacheGeometry?: boolean; performance?: YoloGuidedGuardPerformance } = {},
 ): YoloGuidedGlobalGuardResult {
   if (seeds.length !== mergedCurves.length) {
     throw new Error("全局交叉检查的 RSTL 数量与输入不一致");
@@ -197,8 +257,65 @@ export function guardMergedYoloGuidedRstlCurves(
   const changed = new Set(curves.map((curve, index) =>
     JSON.stringify(curve.pts) === JSON.stringify(baseline[index].pts) ? -1 : index)
     .filter((index) => index >= 0));
-  const baselinePairs = intersectionPairs(baseline);
-  const baselineSelf = baseline.map((curve) => selfCrosses(curve.pts));
+  if (options.cacheGeometry !== false) {
+    // Both arrays are private copies. Sharing an exactly unchanged curve lets
+    // the pair cache reuse its baseline result without changing the guard.
+    for (let index = 0; index < curves.length; index += 1) {
+      if (changed.has(index)) continue;
+      const current = curves[index].pts, prior = baseline[index].pts;
+      if (current.length === prior.length && current.every((point, pointIndex) =>
+        Object.is(point[0], prior[pointIndex][0]) &&
+        Object.is(point[1], prior[pointIndex][1]))) {
+        curves[index].pts = prior;
+      }
+    }
+  }
+  // These arrays are owned by this call and are replaced, never mutated, on rollback.
+  const bounds = new WeakMap<Point2[], { minX: number; minY: number; maxX: number; maxY: number }>();
+  const pairCache = new WeakMap<Point2[], WeakMap<Point2[], boolean>>();
+  const boundsFor = (points: Point2[]) => {
+    let result = bounds.get(points);
+    if (!result) {
+      result = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+      for (const point of points) {
+        result.minX = Math.min(result.minX, point[0]);
+        result.minY = Math.min(result.minY, point[1]);
+        result.maxX = Math.max(result.maxX, point[0]);
+        result.maxY = Math.max(result.maxY, point[1]);
+      }
+      bounds.set(points, result);
+    }
+    return result;
+  };
+  const count = (name: keyof YoloGuidedGuardPerformance) => {
+    if (options.performance) options.performance[name] = (options.performance[name] || 0) + 1;
+  };
+  const cachedCross = (first: Point2[], second: Point2[]) => {
+    if (options.cacheGeometry === false) {
+      count("exactCurvePairChecks");
+      return yoloGuardCurvesCross(first, second);
+    }
+    const previous = pairCache.get(first)?.get(second);
+    if (previous !== undefined) {
+      count("curvePairCacheHits");
+      return previous;
+    }
+    const a = boundsFor(first), b = boundsFor(second);
+    // Strict separation only: keep the original exact predicate for touching bounds.
+    const separated = a.maxX < b.minX || b.maxX < a.minX ||
+      a.maxY < b.minY || b.maxY < a.minY;
+    if (separated) count("boundsRejectedPairs");
+    else count("exactCurvePairChecks");
+    const crossed = !separated && yoloGuardCurvesCross(first, second, true);
+    let pairs = pairCache.get(first);
+    if (!pairs) pairCache.set(first, pairs = new WeakMap());
+    pairs.set(second, crossed);
+    return crossed;
+  };
+  const pairsFor = (items: Array<{ pts: Point2[] }>) =>
+    intersectionPairs(items, cachedCross, options.performance);
+  const baselinePairs = pairsFor(baseline);
+  const baselineSelf = baseline.map((curve) => yoloGuardSelfCrosses(curve.pts));
   const rolledBack = new Set<number>();
   const rollback = (index: number): void => {
     curves[index] = {
@@ -209,12 +326,12 @@ export function guardMergedYoloGuidedRstlCurves(
     rolledBack.add(index);
   };
   for (const index of [...changed]) {
-    if (!baselineSelf[index] && selfCrosses(curves[index].pts)) rollback(index);
+    if (!baselineSelf[index] && yoloGuardSelfCrosses(curves[index].pts)) rollback(index);
   }
   let repeat = true;
   while (repeat) {
     repeat = false;
-    const newPairs = [...intersectionPairs(curves)].filter((pair) => !baselinePairs.has(pair));
+    const newPairs = [...pairsFor(curves)].filter((pair) => !baselinePairs.has(pair));
     for (const pair of newPairs) {
       const [first, second] = pair.split(":").map(Number);
       const targets = [first, second].filter((index) => changed.has(index));
@@ -224,12 +341,12 @@ export function guardMergedYoloGuidedRstlCurves(
       break;
     }
   }
-  const finalPairs = intersectionPairs(curves);
+  const finalPairs = pairsFor(curves);
   return {
     curves,
     rolledBackCurveIndices: [...rolledBack].sort((left, right) => left - right),
     newIntersectionPairCount: [...finalPairs].filter((pair) => !baselinePairs.has(pair)).length,
     newSelfCrossCurveCount: curves.filter((curve, index) =>
-      !baselineSelf[index] && selfCrosses(curve.pts)).length,
+      !baselineSelf[index] && yoloGuardSelfCrosses(curve.pts)).length,
   };
 }

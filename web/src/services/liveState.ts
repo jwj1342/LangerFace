@@ -123,6 +123,7 @@ export interface LiveSourceState {
   readonly source: unknown | null;
   readonly sourceKind: "camera" | "video" | "image" | null;
   imageFileName: string | null;
+  imageFile: File | null;
   running: boolean;
   paused: boolean;
   presence: number;
@@ -201,7 +202,7 @@ export const renderState: LiveRenderState = {
   },
   densityFrac: 1,
   smoothLevel: 0.45,
-  opacity: 0.60,
+  opacity: 0.90,
   smoother: new MotionStabilizedOneEuro({ minCutoff: 1.5, beta: 0.05 }),
   incisionOverlay: null,
   workflowPhotoOverlay: false,
@@ -216,6 +217,7 @@ export const sourceState: LiveSourceState = {
     return this.planning2d?.getFrameState().kind ?? null;
   },
   imageFileName: null,
+  imageFile: null,
   running: false,
   paused: false,
   presence: 0,

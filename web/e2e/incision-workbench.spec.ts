@@ -307,9 +307,10 @@ test("route remount removes and rebinds one canvas listener set", async ({ page 
 
 test("live workbench controls use the same readable clinical theme", async ({ page }) => {
   await page.goto("/live");
-  await expect(page.locator("#templateSel")).toBeVisible();
+  await expect(page.locator("#uploadBtn")).toBeVisible();
+  await expect(page.locator("#templateSel")).toBeHidden();
 
-  for (const selector of ["#templateSel", "#uploadBtn", "#camBtn", "#exportBtn"]) {
+  for (const selector of ["#uploadBtn", "#camBtn", "#exportBtn"]) {
     expect(await contrastRatio(page.locator(selector)), `${selector} contrast`).toBeGreaterThanOrEqual(4.5);
   }
 });

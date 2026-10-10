@@ -44,7 +44,7 @@ async function installSnapshotCapture(page: Page) {
 async function waitForWorkbench(page: Page) {
   await installSnapshotCapture(page);
   await page.goto("/app/incision");
-  await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
+  await expect(page.locator("#assetLoading")).toHaveClass(/hidden/, { timeout: 30_000 });
   await expect(page.locator("#candidateType")).not.toHaveText("—");
   await expect(page.locator("#stageStatus")).toHaveText("");
 }

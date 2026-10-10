@@ -29,6 +29,7 @@ export interface FineWrinkleExtractionOptions {
   maximumSkeletonIterations?: number;
   sourceImageRgba?: NumericField;
   onProfile?: (timings: Record<string, number>) => void;
+  outputMode?: "full" | "summary";
 }
 
 export interface FineWrinkleExtraction {
@@ -75,6 +76,9 @@ export interface FineWrinkleExtraction {
   classMasks: Record<string, Uint8Array>;
   rasterPixelCount: number;
 }
+
+export type FineWrinkleExtractionSummary = Omit<FineWrinkleExtraction,
+  "mask" | "confidence" | "directionQ" | "classMasks">;
 
 interface Component {
   pixels: number[];
@@ -648,8 +652,38 @@ function rasterStaysInside(
   return inside;
 }
 
-function renderedComponentCount(mask: NumericField, width: number, height: number): number {
-  return connectedComponents(mask, width, height).length;
+function renderedComponentCount(
+  mask: NumericField, width: number, height: number, renderedIndices?: number[],
+): number {
+  if (!renderedIndices || renderedIndices.length >= mask.length / 8) {
+    return connectedComponents(mask, width, height).length;
+  }
+  const visited = new Uint8Array(mask.length);
+  const queue: number[] = [];
+  let count = 0;
+  for (const start of renderedIndices) {
+    if (visited[start]) continue;
+    count++;
+    visited[start] = 1;
+    queue.length = 0;
+    queue.push(start);
+    for (let head = 0; head < queue.length; head++) {
+      const index = queue[head];
+      const x = index % width;
+      const y = Math.floor(index / width);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const xx = x + dx;
+        const yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= width || yy >= height) continue;
+        const next = yy * width + xx;
+        if (!mask[next] || visited[next]) continue;
+        visited[next] = 1;
+        queue.push(next);
+      }
+    }
+  }
+  return count;
 }
 
 function normalizedBinaryCopy(source: NumericField | undefined, pixels: number): Uint8Array {
@@ -663,8 +697,20 @@ export function extractFineWrinkleLines(
   classMasks: Record<string, NumericField> | null | undefined,
   width: number,
   height: number,
+  options: FineWrinkleExtractionOptions & { outputMode: "summary" },
+): FineWrinkleExtractionSummary;
+export function extractFineWrinkleLines(
+  classMasks: Record<string, NumericField> | null | undefined,
+  width: number,
+  height: number,
+  options?: FineWrinkleExtractionOptions,
+): FineWrinkleExtraction;
+export function extractFineWrinkleLines(
+  classMasks: Record<string, NumericField> | null | undefined,
+  width: number,
+  height: number,
   options: FineWrinkleExtractionOptions = {},
-): FineWrinkleExtraction {
+): FineWrinkleExtraction | FineWrinkleExtractionSummary {
   const profileStart = options.onProfile ? performance.now() : 0;
   const profile: Record<string, number> = {};
   const mark = (name: string, start: number): void => {
@@ -750,26 +796,34 @@ export function extractFineWrinkleLines(
   );
   mark("endpointRecovery", stageStart);
   const pixels = width * height;
+  const includeMaps = options.outputMode !== "summary";
   stageStart = options.onProfile ? performance.now() : 0;
-  const effectiveClassMasks = Object.fromEntries(classes.map((name) => [
-    name,
-    normalizedBinaryCopy(classMasks?.[name], pixels),
-  ]));
+  const hasRecoveredEndpoints = lines.some((line) =>
+    Boolean(line.recoveredEndpointLengthPx && line.recoveredEndpointLengthPx > 0));
+  const effectiveClassMasks: Record<string, NumericField> = hasRecoveredEndpoints ?
+    Object.fromEntries(classes.map((name) => [
+      name,
+      normalizedBinaryCopy(classMasks?.[name], pixels),
+    ])) : Object.fromEntries(classes.map((name) => [
+      name,
+      classMasks?.[name] || new Uint8Array(pixels),
+    ]));
   for (const line of lines) {
     if (!(line.recoveredEndpointLengthPx && line.recoveredEndpointLengthPx > 0)) continue;
     rasterPolyline(line.points, (x, y) => {
       if (x >= 0 && y >= 0 && x < width && y < height) {
-        effectiveClassMasks[line.class][y * width + x] = 1;
+        (effectiveClassMasks[line.class] as Uint8Array)[y * width + x] = 1;
       }
     });
   }
   mark("effectiveMaskCopies", stageStart);
   stageStart = options.onProfile ? performance.now() : 0;
   const mask = new Uint8Array(pixels);
-  const confidence = new Float32Array(pixels);
-  const directionQ = new Float32Array(pixels * 2);
-  const directionWeight = new Float32Array(pixels);
-  const fineClassMasks = Object.fromEntries(classes.map((name) => [name, new Uint8Array(pixels)]));
+  const confidence = includeMaps ? new Float32Array(pixels) : null;
+  const directionQ = includeMaps ? new Float32Array(pixels * 2) : null;
+  const renderedIndices: number[] = [];
+  const fineClassMasks = includeMaps ? Object.fromEntries(
+    classes.map((name) => [name, new Uint8Array(pixels)])) : null;
   let renderedPixelsOutsideMask = 0;
   for (const line of lines) {
     for (let pointIndex = 1; pointIndex < line.points.length; pointIndex++) {
@@ -779,46 +833,63 @@ export function extractFineWrinkleLines(
       const dy = end[1] - start[1];
       const squared = dx * dx + dy * dy;
       if (!(squared > 1e-8)) continue;
-      const q0 = (dx * dx - dy * dy) / squared;
-      const q1 = 2 * dx * dy / squared;
+      const q0 = directionQ ? (dx * dx - dy * dy) / squared : 0;
+      const q1 = directionQ ? 2 * dx * dy / squared : 0;
       rasterSegment(start, end, (x, y) => {
         if (x < 0 || y < 0 || x >= width || y >= height) return;
         const index = y * width + x;
         if (!effectiveClassMasks[line.class]?.[index]) renderedPixelsOutsideMask++;
+        if (!mask[index]) renderedIndices.push(index);
         mask[index] = 1;
-        confidence[index] = 1;
-        fineClassMasks[line.class][index] = 1;
-        directionQ[index * 2] += q0;
-        directionQ[index * 2 + 1] += q1;
-        directionWeight[index] += 1;
+        if (confidence) confidence[index] = 1;
+        if (fineClassMasks) fineClassMasks[line.class][index] = 1;
+        if (directionQ) {
+          directionQ[index * 2] += q0;
+          directionQ[index * 2 + 1] += q1;
+        }
       });
     }
   }
   mark("lineRasterization", stageStart);
   stageStart = options.onProfile ? performance.now() : 0;
-  for (let index = 0; index < pixels; index++) {
-    if (!(directionWeight[index] > 0)) continue;
-    const q0 = directionQ[index * 2];
-    const q1 = directionQ[index * 2 + 1];
-    const length = Math.hypot(q0, q1);
-    if (!(length > 1e-8)) continue;
-    directionQ[index * 2] = q0 / length;
-    directionQ[index * 2 + 1] = q1 / length;
+  if (directionQ) {
+    for (const index of renderedIndices) {
+      const q0 = directionQ[index * 2];
+      const q1 = directionQ[index * 2 + 1];
+      const length = Math.hypot(q0, q1);
+      if (!(length > 1e-8)) continue;
+      directionQ[index * 2] = q0 / length;
+      directionQ[index * 2 + 1] = q1 / length;
+    }
   }
   mark("directionNormalization", stageStart);
 
   stageStart = options.onProfile ? performance.now() : 0;
   let filledTwoByTwoPixelBlocks = 0;
-  for (let y = 0; y < height - 1; y++) for (let x = 0; x < width - 1; x++) {
-    const index = y * width + x;
-    if (mask[index] && mask[index + 1] && mask[index + width] && mask[index + width + 1]) {
-      filledTwoByTwoPixelBlocks++;
+  if (renderedIndices.length < pixels / 8) {
+    // Every filled block starts at a rendered pixel. Sparse centerlines need
+    // no full-frame scan; each possible top-left pixel is visited exactly once.
+    for (const index of renderedIndices) {
+      const x = index % width;
+      const y = Math.floor(index / width);
+      if (x < width - 1 && y < height - 1 && mask[index + 1] &&
+          mask[index + width] && mask[index + width + 1]) {
+        filledTwoByTwoPixelBlocks++;
+      }
+    }
+  } else {
+    for (let y = 0; y < height - 1; y++) for (let x = 0; x < width - 1; x++) {
+      const index = y * width + x;
+      if (mask[index] && mask[index + 1] && mask[index + width] && mask[index + width + 1]) {
+        filledTwoByTwoPixelBlocks++;
+      }
     }
   }
-  const renderedLinePixels = mask.reduce((sum, value) => sum + (value ? 1 : 0), 0);
+  const renderedLinePixels = renderedIndices.length;
   const minimumExtractedLength = lines.length ? Math.min(...lines.map((line) => line.lengthPx)) : 0;
   const recoveredForeheadEndpointCount = lines.filter((line) =>
     Number(line.recoveredEndpointLengthPx || 0) > 0).length;
+  const renderedConnectedComponents = renderedComponentCount(mask, width, height, renderedIndices);
   const checks = {
     allPointsInsideOwnSourceComponent: lines.every((line) => line.points.every((point) =>
       maskContains(effectiveClassMasks[line.class] || [], width, height, point))),
@@ -826,7 +897,7 @@ export function extractFineWrinkleLines(
     noShortLines: lines.every((line) => line.lengthPx >= minimumLineLengthPx),
     onePixelRasterStroke: filledTwoByTwoPixelBlocks <= recoveredForeheadEndpointCount,
     separateLineIds: new Set(lines.map((line) => line.id)).size === lines.length,
-    separateRasterComponents: renderedComponentCount(mask, width, height) === lines.length,
+    separateRasterComponents: renderedConnectedComponents === lines.length,
     recoveredForeheadEndpointsImageSupported: lines.every((line) =>
       !line.recoveredEndpointLengthPx || Number(line.recoveredEndpointSupport || 0) >= 0.62),
   };
@@ -845,7 +916,7 @@ export function extractFineWrinkleLines(
     renderedLinePixels,
     renderedPixelsOutsideMask,
     filledTwoByTwoPixelBlocks,
-    renderedConnectedComponents: renderedComponentCount(mask, width, height),
+    renderedConnectedComponents,
     minimumLineLengthPx: round(minimumExtractedLength, 3),
     recoveredForeheadEndpointsImageSupported:
       checks.recoveredForeheadEndpointsImageSupported,
@@ -855,7 +926,7 @@ export function extractFineWrinkleLines(
     profile.total = performance.now() - profileStart;
     options.onProfile(profile);
   }
-  return {
+  const summary: FineWrinkleExtractionSummary = {
     schemaVersion: "langerface.wrinkle-fine-lines.v2",
     validated: false,
     purpose: "automatic_browser_fine_wrinkle_line_extraction_research_only",
@@ -889,10 +960,16 @@ export function extractFineWrinkleLines(
       "The extraction uses mask geometry and does not independently infer sub-mask image ridges.",
     ],
     lines,
-    mask,
-    confidence,
-    directionQ,
-    classMasks: fineClassMasks,
     rasterPixelCount: renderedLinePixels,
+  };
+  if (!includeMaps) return summary;
+  const { rasterPixelCount, ...fullFields } = summary;
+  return {
+    ...fullFields,
+    mask,
+    confidence: confidence!,
+    directionQ: directionQ!,
+    classMasks: fineClassMasks!,
+    rasterPixelCount,
   };
 }

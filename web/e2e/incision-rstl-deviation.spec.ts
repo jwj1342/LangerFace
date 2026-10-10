@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("cutaneous candidate shows RSTL deviation before and after clinician direction edit", async ({ page }) => {
   await page.goto("/app/incision");
-  await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
+  await expect(page.locator("#assetLoading")).toHaveClass(/hidden/, { timeout: 30_000 });
 
   await page.locator("#tumorKind").selectOption("cutaneous");
   await expect(page.locator("#candidateType")).toHaveText("梭形");

@@ -175,7 +175,7 @@ test("desktop workflow keeps the three-column shell while status text remains hi
     await expect(page.locator("#livePill")).toBeHidden();
     await expect(page.locator("#fps")).toBeHidden();
     await expect(page.locator(".mobile-workflow-dock")).toBeHidden();
-    await expect(page.locator(".workflow-live-rail .live-quality-panel")).toHaveCount(1);
+    await expect(page.locator('[data-quality-runtime="true"]')).toBeHidden();
     await expect(page.locator(".workflow-mobile-quality-slot > .mobile-canvas-quality")).toHaveCount(0);
     await page.waitForTimeout(4_200);
     await expect(page.locator("#workflowStageStatus")).toBeHidden();
@@ -250,8 +250,8 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
   await expect(page.locator(".workflow-mobile-scroll-zone")).toHaveCount(0);
   await expect(page.locator("#livePill")).toBeHidden();
   await expect(page.locator("#fps")).toBeHidden();
-  await expect(page.locator(".workflow-mobile-quality-slot > .mobile-canvas-quality")).toHaveCount(1);
-  await expect(page.locator(".main-wrap > .mobile-canvas-quality")).toHaveCount(0);
+  await expect(page.locator('[data-quality-runtime="true"]')).toBeHidden();
+  await expect(page.locator(".workflow-mobile-quality-slot")).toHaveCount(0);
 
   for (const viewport of [
     { width: 360, height: 640 },
