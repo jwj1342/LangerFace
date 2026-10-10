@@ -11,46 +11,55 @@
       "对象中心核验"
     ],
     "status": "candidate",
-    "sourceDigest": "db8284f198b9c7298cb55bf4a0a6140000cb27291a54b92f0e6e13c188c3035a",
+    "sourceDigest": "0d8c334893a8a74ebfa8104508a0ab06815a732ef183fdb30eb3971d169e4d99",
     "algorithmDigest": "a46cff9529c5ad86ed260c315a62bd084e6e0a558d180eed24bb2fe120a54faf"
   },
   "runtimeIntegration": {
-    "version": "0.1.0-candidate.1",
-    "name": "运行集成：微调外部依赖恢复与身份对齐",
+    "version": "0.1.1-candidate.1",
+    "name": "运行集成：共享图片视频导出与PR237汇合",
     "status": "candidate",
-    "sourceDigest": "14be7a48d1ccffa8437e3dacb91387bcae59de91a71f05fb5fffe55be6720edc",
-    "scope": "仅标识本地运行集成，不表示 RSTL 功能效果已验收"
+    "sourceDigest": "0d8c334893a8a74ebfa8104508a0ab06815a732ef183fdb30eb3971d169e4d99",
+    "scope": "仅运行集成与UI，非团队算法效果或医学验收"
   },
   "archive": {
     "status": "verified",
-    "manifestPath": "local_outputs/recovery-packages/发布准备—跨系统源码身份—20261010-r3/manifest.json",
-    "manifestSha256": "51e91364e38fb777fa68b8584a56eae54b437bbe22d9eeeccd13390a22704a57",
-    "sourceDigest": "db8284f198b9c7298cb55bf4a0a6140000cb27291a54b92f0e6e13c188c3035a",
-    "scopeConfigSha256": "ea5d4128d4a72007a7da245ce79db854aa075f3f4b7d51609073cf778c4dadac",
-    "note": "中文标签：发布准备—跨系统源码身份；仅发布取证工具及清单维护，算法指纹不变。原10月10日15点认可恢复包保留；本包不是算法或RSTL验收。"
+    "manifestPath": "local_outputs/recovery-packages/发布准备—双端界面责任与共享导出—20261010-r5/manifest.json",
+    "manifestSha256": "cd142e5cc1034eda4dcf6a3f3ef149d6ca3caace3a30bff2992d8a8323f079c4",
+    "sourceDigest": "0d8c334893a8a74ebfa8104508a0ab06815a732ef183fdb30eb3971d169e4d99",
+    "scopeConfigSha256": "3bc884fcc2813803e9e7c06293643514483723c161552f2d5607457d7ec2eaa7",
+    "note": "中文标签：双端界面责任与共享导出；逐文件复制核验，继承r3基础包及原位指纹资源。原10月10日15点认可恢复原件保留；不包含编辑器未保存缓冲，非医学或整环境恢复验收。"
   },
   "scopeBoundaryReview": {
     "status": "confirmed",
-    "manifestSha256": "51e91364e38fb777fa68b8584a56eae54b437bbe22d9eeeccd13390a22704a57",
-    "scopeConfigSha256": "ea5d4128d4a72007a7da245ce79db854aa075f3f4b7d51609073cf778c4dadac",
-    "confirmedAt": "2026-10-10T06:25:50.635Z",
-    "evidence": "操作者明确要求两端鼠绘改手绘；仅三处共享文案及运行身份维护，未改RSTL/算法/布局/远端。",
+    "manifestSha256": "cd142e5cc1034eda4dcf6a3f3ef149d6ca3caace3a30bff2992d8a8323f079c4",
+    "scopeConfigSha256": "3bc884fcc2813803e9e7c06293643514483723c161552f2d5607457d7ec2eaa7",
+    "confirmedAt": "2026-10-10T11:31:33.101Z",
+    "evidence": "操作者本轮明确与黄铭禛约定本次UI由操作者负责，包括RSTL生成/皱纹检测/RSTL微调界面；明确认可5产品文件的手动工具条和触控状态。团队核心保持远端基线；可复核证据见docs/quality/UI_RSTL_BOUNDARY_REVIEW.md。",
     "maintenanceRebinding": {
       "capturedAt": "2026-10-10T10:30:54.590486+00:00",
       "previousManifest": "local_outputs/recovery-packages/发布准备—干净CI门禁修复—20261010-r2/manifest.json",
       "previousManifestSha256": "63cb20a0ad99f343316acdc49a48d05297fa7ab00ad8003a78371546a524d3f1",
       "authorization": "操作者本轮4K允许有限发布工具修复、清单同步与必要本地维护；算法指纹不变，仅发布取证工具变化并以CRLF/LF归一化重算综合源码指纹，不增加受保护修改或发布授权。",
-      "publicationBoundary": "pending: PR237 remote/runtime overlap must be resolved separately; original confirmation is not proof of full protected-scope approval"
+      "publicationBoundary": "local integration and targeted checks complete; final build/browser/history review pending; no permission to auto-merge or modify team cores"
     }
   },
   "operatorEvaluation": {
-    "status": "pending",
-    "sourceDigest": "db8284f198b9c7298cb55bf4a0a6140000cb27291a54b92f0e6e13c188c3035a",
-    "evidence": "本例原14落点双像素回放通过；实际页面及专业/真机证据分别登记feedback39-1-closeout.json。"
+    "status": "accepted",
+    "sourceDigest": "0d8c334893a8a74ebfa8104508a0ab06815a732ef183fdb30eb3971d169e4d99",
+    "algorithmDigest": "a46cff9529c5ad86ed260c315a62bd084e6e0a558d180eed24bb2fe120a54faf",
+    "acceptedScope": "最后一轮肿物算法；选取两张典型人脸实际测试暂时合格；5产品手动UI改动本轮明确认可",
+    "evidence": "操作者本轮直接回答：不记得版本号，指最后一轮最新算法；过去AI合成人脸与张医生实拍材料中选取两张典型人脸，结果暂时合格，要求先合并。核心指纹绑定0.83；组合源码另经工程回归，不代签真人泛用性、真机或医学验收。",
+    "confirmedAt": "2026-10-10T11:31:33.101Z",
+    "fullDatasetAcceptance": false,
+    "professionalAcceptance": false
   },
   "editorSaveConfirmation": {
-    "status": "unknown",
-    "sourceDigest": "db8284f198b9c7298cb55bf4a0a6140000cb27291a54b92f0e6e13c188c3035a"
+    "status": "confirmed",
+    "sourceDigest": "0d8c334893a8a74ebfa8104508a0ab06815a732ef183fdb30eb3971d169e4d99",
+    "confirmedAt": "2026-10-10T11:31:33.101Z",
+    "confirmationBasis": "operator-approved-verified-disk-recovery-point",
+    "editorBuffersObserved": false,
+    "evidence": "操作者本轮明确要求AI自行核验可恢复磁盘断点，不再询问编辑器。confirmed仅指采用磁盘候选的决定与恢复核验，不表示已观察未保存的编辑器缓冲。"
   },
   "history": [
     {
@@ -744,9 +753,58 @@
   "sourceFingerprint": {
     "encoding": "UTF-8",
     "normalization": "CRLF-to-LF-only",
-    "previousSourceDigest": "bdb92ff70bec3f2f2438629029f2ad1b88283873c13160a7c77bfc48beed69ee",
-    "currentSourceDigest": "db8284f198b9c7298cb55bf4a0a6140000cb27291a54b92f0e6e13c188c3035a",
-    "capturedAt": "2026-10-10T10:30:52.626Z",
-    "reason": "portable release evidence; source/algorithm behavior unchanged; no acceptance inherited"
-  }
+    "previousSourceDigest": "3d18e37e97a7130d3dc12e7064623017723b432b52ca4805537347b14dfa7666",
+    "currentSourceDigest": "0d8c334893a8a74ebfa8104508a0ab06815a732ef183fdb30eb3971d169e4d99",
+    "capturedAt": "2026-10-10T11:31:33.101Z",
+    "reason": "共享导出模块收拢后的实际综合源码；肿物指纹不变，有限认可范围明确记录"
+  },
+  "integrationHistory": [
+    {
+      "capturedAt": "2026-10-10T11:13:39.901Z",
+      "previousSourceDigest": "db8284f198b9c7298cb55bf4a0a6140000cb27291a54b92f0e6e13c188c3035a",
+      "previousSourceFingerprint": {
+        "encoding": "UTF-8",
+        "normalization": "CRLF-to-LF-only",
+        "previousSourceDigest": "bdb92ff70bec3f2f2438629029f2ad1b88283873c13160a7c77bfc48beed69ee",
+        "currentSourceDigest": "db8284f198b9c7298cb55bf4a0a6140000cb27291a54b92f0e6e13c188c3035a",
+        "capturedAt": "2026-10-10T10:30:52.626Z",
+        "reason": "portable release evidence; source/algorithm behavior unchanged; no acceptance inherited"
+      },
+      "previousArchive": {
+        "status": "verified",
+        "manifestPath": "local_outputs/recovery-packages/发布准备—跨系统源码身份—20261010-r3/manifest.json",
+        "manifestSha256": "51e91364e38fb777fa68b8584a56eae54b437bbe22d9eeeccd13390a22704a57",
+        "sourceDigest": "db8284f198b9c7298cb55bf4a0a6140000cb27291a54b92f0e6e13c188c3035a",
+        "scopeConfigSha256": "ea5d4128d4a72007a7da245ce79db854aa075f3f4b7d51609073cf778c4dadac",
+        "note": "中文标签：发布准备—跨系统源码身份；仅发布取证工具及清单维护，算法指纹不变。原10月10日15点认可恢复包保留；本包不是算法或RSTL验收。"
+      },
+      "mergedHead": "92da1b39b10792bfbaff76105c39430f78cc63e5",
+      "remoteBaseline": "e8c34a61e847ba27b9fdaa21ad812545baa2696a",
+      "sourceDigest": "3d18e37e97a7130d3dc12e7064623017723b432b52ca4805537347b14dfa7666",
+      "reason": "本地汇合PR237远端更新与操作者认可的手动工具条/触控状态；肿物内核未变，远端团队算法实现已更新，不继承效果等价或人工验收。"
+    },
+    {
+      "capturedAt": "2026-10-10T11:31:33.101Z",
+      "previousSourceDigest": "3d18e37e97a7130d3dc12e7064623017723b432b52ca4805537347b14dfa7666",
+      "previousArchive": {
+        "status": "verified",
+        "manifestPath": "local_outputs/recovery-packages/发布准备—PR237汇合与认可手势—20261010-r4/manifest.json",
+        "manifestSha256": "dba136a363857be620ca32eb789954269f83173d495da63d6f81a6ce0668e628",
+        "sourceDigest": "3d18e37e97a7130d3dc12e7064623017723b432b52ca4805537347b14dfa7666",
+        "scopeConfigSha256": "ea5d4128d4a72007a7da245ce79db854aa075f3f4b7d51609073cf778c4dadac",
+        "note": "中文标签：PR237汇合与认可手势；增量恢复包依赖r3基础包及指纹媒体/模型；远端团队算法由已合并基线恢复，非效果等价或完整环境验收。原10月10日15点恢复原件保留。"
+      },
+      "previousSourceFingerprint": {
+        "encoding": "UTF-8",
+        "normalization": "CRLF-to-LF-only",
+        "previousSourceDigest": "db8284f198b9c7298cb55bf4a0a6140000cb27291a54b92f0e6e13c188c3035a",
+        "currentSourceDigest": "3d18e37e97a7130d3dc12e7064623017723b432b52ca4805537347b14dfa7666",
+        "capturedAt": "2026-10-10T11:13:39.902Z",
+        "reason": "实际本地合并改变综合源码；肿物算法指纹保持，团队更新与UI组合效果待验收"
+      },
+      "head": "b1daa04f3c38163c303ef4bb54ad8f4f6fe19497",
+      "sourceDigest": "0d8c334893a8a74ebfa8104508a0ab06815a732ef183fdb30eb3971d169e4d99",
+      "reason": "发布准备有限修复：导出重复初始化收拢，原错误/下载/清理语义保持；核心算法不变。"
+    }
+  ]
 }
