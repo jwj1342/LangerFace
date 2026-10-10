@@ -414,7 +414,7 @@ test("disabled workflow hints use a two-second mouse, touch, and keyboard releas
 
   await expect(page.locator("#diameterMm")).toBeHidden();
 
-  const markerMessage = "当前肿物边界由“自由轮廓鼠绘”的曲线决定，受控标记暂不参与候选生成；请切换为“椭圆近似”模式后使用。";
+  const markerMessage = "当前肿物边界由“自由轮廓手绘”的曲线决定，受控标记暂不参与候选生成；请切换为“椭圆近似”模式后使用。";
   const markerButton = page.getByRole("button", { name: "受控标记", exact: true });
   const markerTooltip = page.getByRole("tooltip", { name: markerMessage });
   await expect(markerButton).toHaveAttribute("aria-disabled", "true");
@@ -583,7 +583,7 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   }
 
   const unavailableMarkerButton = page.getByRole("button", { name: "受控标记", exact: true });
-  const freehandMarkerMessage = "当前肿物边界由“自由轮廓鼠绘”的曲线决定，受控标记暂不参与候选生成；请切换为“椭圆近似”模式后使用。";
+  const freehandMarkerMessage = "当前肿物边界由“自由轮廓手绘”的曲线决定，受控标记暂不参与候选生成；请切换为“椭圆近似”模式后使用。";
   const markerTooltip = page.getByRole("tooltip", { name: freehandMarkerMessage });
   await expect(unavailableMarkerButton).toHaveAttribute("aria-disabled", "true");
   await expect(unavailableMarkerButton).not.toHaveAttribute("title", freehandMarkerMessage);
