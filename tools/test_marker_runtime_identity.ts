@@ -5,7 +5,12 @@ import { createServer } from "node:http";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readMarkerRuntime } from "../web/e2e/support/verifyMarkerRuntime.ts";
-import { captureMarkerIdentity, assertMarkerIdentity, TARGET_MARKER_PROFILE } from "./marker_runtime_identity.mts";
+import { captureMarkerIdentity, assertMarkerIdentity, hashSourceText, TARGET_MARKER_PROFILE } from "./marker_runtime_identity.mts";
+
+assert.equal(hashSourceText(Buffer.from("const x = 1;\r\n// 中文\r\n")), hashSourceText("const x = 1;\n// 中文\n"));
+assert.notEqual(hashSourceText("const x = 1;\n"), hashSourceText("const x = 2;\n"));
+assert.notEqual(hashSourceText("const x = 1;\n"), hashSourceText("const  x = 1;\n"));
+assert.notEqual(hashSourceText("const x = 1;\n"), hashSourceText("const x = 1;"));
 
 const repoRoot = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const packageJson = JSON.parse(readFileSync(resolve(repoRoot, "web/package.json"), "utf8"));
@@ -24,7 +29,7 @@ for (const mode of ["dev", "build"]) {
 
 const expected = captureMarkerIdentity(TARGET_MARKER_PROFILE);
 assertMarkerIdentity(expected, expected);
-for (const key of ["algorithmName", "releaseName", "changeSlug", "profile", "implementationVersion", "branch", "head", "worktreeId", "sourceDigest", "assetDigest"] as const) {
+for (const key of ["algorithmName", "releaseName", "changeSlug", "profile", "implementationVersion", "branch", "head", "worktreeId", "sourceDigest", "algorithmDigest", "assetDigest"] as const) {
   assert.throws(() => assertMarkerIdentity({ ...expected, [key]: "wrong" }, expected), new RegExp(key));
 }
 assert.throws(() => assertMarkerIdentity({}, expected), /schema/);

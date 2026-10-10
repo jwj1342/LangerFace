@@ -13,6 +13,9 @@ export const markerRepoRoot = resolve(fileURLToPath(new URL("../", import.meta.u
 export const TARGET_MARKER_PROFILE = "small-lesion-boundary-candidate";
 export const TARGET_MARKER_ALGORITHM_NAME = "小肿物边界候选算法";
 export const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
+// The identity scope contains UTF-8 source/config text. Git may check it out
+// with CRLF on Windows and LF in CI; preserve every other content difference.
+export const hashSourceText = (value: string | Buffer) => hash(value.toString().replace(/\r\n/g, "\n"));
 
 // Include unsaved-to-Git source, not just HEAD. Exclude logs, test output and secrets.
 export function captureMarkerIdentity(rawProfile: string | undefined, root = markerRepoRoot) {
@@ -30,7 +33,7 @@ export function captureMarkerIdentity(rawProfile: string | undefined, root = mar
   files.push("web/index.html", "web/vite.config.ts", "web/package.json", "web/package-lock.json",
     "tools/marker_runtime_identity.mts", "tools/run_controlled_marker_v035_dev.mjs",
     "tools/run_controlled_marker_v035_build.mjs");
-  const sourceHashes = files.sort().map((file) => [file, hash(readFileSync(resolve(root, file)))]);
+  const sourceHashes = files.sort().map((file) => [file, hashSourceText(readFileSync(resolve(root, file)))]);
   const algorithmFiles = [
     "web/src/services/controlledMarkerDetection.ts",
     "web/src/services/controlledMarkerDetectionColorV035.ts",

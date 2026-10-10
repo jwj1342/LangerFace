@@ -11,7 +11,7 @@
       "对象中心核验"
     ],
     "status": "candidate",
-    "sourceDigest": "bdb92ff70bec3f2f2438629029f2ad1b88283873c13160a7c77bfc48beed69ee",
+    "sourceDigest": "db8284f198b9c7298cb55bf4a0a6140000cb27291a54b92f0e6e13c188c3035a",
     "algorithmDigest": "a46cff9529c5ad86ed260c315a62bd084e6e0a558d180eed24bb2fe120a54faf"
   },
   "runtimeIntegration": {
@@ -23,34 +23,34 @@
   },
   "archive": {
     "status": "verified",
-    "manifestPath": "local_outputs/recovery-packages/发布准备—干净CI门禁修复—20261010-r2/manifest.json",
-    "manifestSha256": "63cb20a0ad99f343316acdc49a48d05297fa7ab00ad8003a78371546a524d3f1",
-    "sourceDigest": "bdb92ff70bec3f2f2438629029f2ad1b88283873c13160a7c77bfc48beed69ee",
+    "manifestPath": "local_outputs/recovery-packages/发布准备—跨系统源码身份—20261010-r3/manifest.json",
+    "manifestSha256": "51e91364e38fb777fa68b8584a56eae54b437bbe22d9eeeccd13390a22704a57",
+    "sourceDigest": "db8284f198b9c7298cb55bf4a0a6140000cb27291a54b92f0e6e13c188c3035a",
     "scopeConfigSha256": "ea5d4128d4a72007a7da245ce79db854aa075f3f4b7d51609073cf778c4dadac",
-    "note": "中文标签：发布准备—干净CI门禁修复；仅发布工具及清单维护，算法源码身份不变。原10月10日15点认可恢复包保留；本包不是算法或RSTL验收。"
+    "note": "中文标签：发布准备—跨系统源码身份；仅发布取证工具及清单维护，算法指纹不变。原10月10日15点认可恢复包保留；本包不是算法或RSTL验收。"
   },
   "scopeBoundaryReview": {
     "status": "confirmed",
-    "manifestSha256": "63cb20a0ad99f343316acdc49a48d05297fa7ab00ad8003a78371546a524d3f1",
+    "manifestSha256": "51e91364e38fb777fa68b8584a56eae54b437bbe22d9eeeccd13390a22704a57",
     "scopeConfigSha256": "ea5d4128d4a72007a7da245ce79db854aa075f3f4b7d51609073cf778c4dadac",
     "confirmedAt": "2026-10-10T06:25:50.635Z",
     "evidence": "操作者明确要求两端鼠绘改手绘；仅三处共享文案及运行身份维护，未改RSTL/算法/布局/远端。",
     "maintenanceRebinding": {
-      "capturedAt": "2026-10-10T10:23:13.264426+00:00",
-      "previousManifest": "local_outputs/recovery-packages/发布准备—干净CI门禁修复—20261010/manifest.json",
-      "previousManifestSha256": "2ce4cddca054fc3d0b7538a0aeedccd6ec4fa5740d3ecf5fffe69741282571f9",
+      "capturedAt": "2026-10-10T10:30:54.590486+00:00",
+      "previousManifest": "local_outputs/recovery-packages/发布准备—干净CI门禁修复—20261010-r2/manifest.json",
+      "previousManifestSha256": "63cb20a0ad99f343316acdc49a48d05297fa7ab00ad8003a78371546a524d3f1",
       "authorization": "操作者本轮4K允许有限发布工具修复、清单同步与必要本地维护；源码身份不变，不增加受保护修改或发布授权。",
       "publicationBoundary": "pending: PR237 remote/runtime overlap must be resolved separately; original confirmation is not proof of full protected-scope approval"
     }
   },
   "operatorEvaluation": {
     "status": "pending",
-    "sourceDigest": "bdb92ff70bec3f2f2438629029f2ad1b88283873c13160a7c77bfc48beed69ee",
+    "sourceDigest": "db8284f198b9c7298cb55bf4a0a6140000cb27291a54b92f0e6e13c188c3035a",
     "evidence": "本例原14落点双像素回放通过；实际页面及专业/真机证据分别登记feedback39-1-closeout.json。"
   },
   "editorSaveConfirmation": {
     "status": "unknown",
-    "sourceDigest": "bdb92ff70bec3f2f2438629029f2ad1b88283873c13160a7c77bfc48beed69ee"
+    "sourceDigest": "db8284f198b9c7298cb55bf4a0a6140000cb27291a54b92f0e6e13c188c3035a"
   },
   "history": [
     {
@@ -740,5 +740,13 @@
     ],
     "sourceDigest": "eb844ba18278487d7e9fff7ef89e08d63002d7dd33f4f7708f93b33c3c79a059",
     "note": "独立显示组件身份；不改变切口生成/微调算法，完整确认和实时叠加安全门禁保留。"
+  },
+  "sourceFingerprint": {
+    "encoding": "UTF-8",
+    "normalization": "CRLF-to-LF-only",
+    "previousSourceDigest": "bdb92ff70bec3f2f2438629029f2ad1b88283873c13160a7c77bfc48beed69ee",
+    "currentSourceDigest": "db8284f198b9c7298cb55bf4a0a6140000cb27291a54b92f0e6e13c188c3035a",
+    "capturedAt": "2026-10-10T10:30:52.626Z",
+    "reason": "portable release evidence; source/algorithm behavior unchanged; no acceptance inherited"
   }
 }
