@@ -13,6 +13,7 @@ const liveUi = [
   fs.readFileSync("src/components/LiveQualityPanel.tsx", "utf8"),
 ].join("\n");
 const main = fs.readFileSync("src/services/liveRuntime.ts", "utf8");
+const recordingActions = fs.readFileSync("src/services/liveRecordingActions.ts", "utf8");
 const render = fs.readFileSync("src/services/render2d.ts", "utf8");
 const overlayStyle = fs.readFileSync("src/services/incisionOverlayStyle.ts", "utf8");
 const three3d = fs.readFileSync("src/services/three3d.ts", "utf8");
@@ -56,8 +57,8 @@ assert.ok(liveSnapshots.includes("buildLiveControllerSnapshot"), "shared live sn
 assert.ok(main.includes("setIncisionOverlayQa"), "live page shows pending overlay QA feedback after loading a candidate");
 assert.ok(main.includes("上传照片或开启摄像头后，会随 RSTL 一起显示"), "live page gives explicit overlay feedback");
 assert.ok(main.includes("buildZoomCards(refreshStaticImage)"), "live page rebuilds zoom cards after loading incision overlay");
-assert.ok(main.includes("createCanvasRecordingController"), "live page uses the tested canvas export controller");
-assert.ok(main.includes("canvas: els.canvas"), "live page exports the rendered main canvas, including incision overlay");
+assert.ok(main.includes("createLiveRecordingActions") && recordingActions.includes("createCanvasRecordingController"), "live page delegates to the tested canvas export controller");
+assert.ok(main.includes("canvas: () => els.canvas") && recordingActions.includes("canvas: options.canvas()"), "live page exports the current rendered main canvas, including incision overlay");
 assert.ok(main.includes("getExtraCanvases: visibleRecordingCanvases"), "live page includes visible zoom canvases in composite export");
 assert.ok(!main.includes('label: "3D 视图"'), "live export has no retired 3D canvas");
 assert.ok(exporter.includes("sourceCanvas.captureStream(fps)"), "export controller records the selected source canvas stream");

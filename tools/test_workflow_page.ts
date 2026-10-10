@@ -76,6 +76,7 @@ const liveRenderControls = read("web/src/components/LiveRenderControlsPanel.tsx"
 const liveCanvasFit = read("web/src/services/liveCanvasFit.ts");
 const liveCanvasInteraction = read("web/src/services/liveCanvasInteraction.ts");
 const liveRuntime = read("web/src/services/liveRuntime.ts");
+const liveRecordingActions = read("web/src/services/liveRecordingActions.ts");
 const liveUi = read("web/src/services/liveUi.ts");
 const controllerCommand = read("web/src/lib/controllerCommand.ts");
 const incisionExport = read("web/src/services/incisionExport.ts");
@@ -1102,7 +1103,9 @@ assert.match(mobileControls, /停止视频[\s\S]*?导出视频[\s\S]*?导出图�
   "the mobile dock distinguishes video recording from still PNG export");
 assert.match(liveSourceControls, /recording_toggle[\s\S]*?image_export/,
   "desktop source controls retain every phone export capability while keeping their desktop layout");
-assert.match(liveRuntime, /await recordingController\.exportImage\(\)[\s\S]*?图片导出失败/,
+assert.match(liveRuntime, /imageExport: recordingActions\.exportCurrentImage/,
+  "desktop and phone image export share the recording action adapter");
+assert.match(liveRecordingActions, /await controller\.exportImage\(\)[\s\S]*?图片导出失败/,
   "still image export reports browser or canvas failures instead of leaving an unhandled rejection");
 assert.doesNotMatch(mobileControls, /if \(!nextRstl && !nextWrinkles\) return;/,
   "operators may hide RSTL and wrinkles together to inspect the unmodified source image");

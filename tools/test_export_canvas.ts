@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createCanvasRecordingController } from "../web/src/services/canvasRecording.ts";
+import { createLiveRecordingActions } from "../web/src/services/liveRecordingActions.ts";
 
 const chunks = [
   { size: 7, payload: "frame-a" },
@@ -299,4 +300,57 @@ await new Promise((resolve) => setTimeout(resolve, 0));
 assert.deepEqual(emptyErrors, ["EmptyRecordingError"]);
 assert.equal(emptyController.recording, false);
 
-console.log("test_export_canvas: WebM recording and PNG still export assertions passed");
+// The route adapter must share one lazy controller across image/video actions,
+// preserve feedback, and release its controller when the route is reset.
+const actionCalls: string[] = [];
+const actionMessages: string[] = [];
+const actionErrors: string[] = [];
+let actionCreates = 0;
+let rejectActionImage = false;
+let actionOptions: Parameters<typeof createCanvasRecordingController>[0] | undefined;
+const fakeActionController = {
+  recording: false, chunkCount: 0,
+  start() { return true; },
+  stop() { actionCalls.push("stop"); return true; },
+  toggle() { actionCalls.push("toggle"); return true; },
+  async exportImage() {
+    actionCalls.push("image");
+    if (rejectActionImage) throw new Error("test image failure");
+    return true;
+  },
+};
+const recordingActions = createLiveRecordingActions({
+  canvas: () => canvas as HTMLCanvasElement,
+  getExtraCanvases: () => [], system: () => "RSTL",
+  onStateChange(recording, controller) {
+    assert.equal(controller, fakeActionController);
+    actionCalls.push(recording ? "recording" : "idle");
+  },
+  setMsg: (message) => actionMessages.push(message),
+  setTransientMsg: (message) => actionMessages.push(message),
+  logError: (event) => actionErrors.push(event),
+}, (options) => {
+  actionCreates += 1;
+  actionOptions = options;
+  return fakeActionController;
+});
+assert.equal(actionCreates, 0, "mounting the adapter does not start recording or export");
+await recordingActions.exportCurrentImage();
+recordingActions.toggleRecording();
+assert.equal(actionCreates, 1, "image and video use the same controller");
+actionOptions!.onStateChange!(true);
+actionOptions!.onDownloadRequested!("sample.webm");
+actionOptions!.onError!(new Error("test video failure"));
+rejectActionImage = true;
+await recordingActions.exportCurrentImage();
+assert.deepEqual(actionErrors, ["video_export_failed", "image_export_failed"]);
+assert.ok(actionMessages.some((message) => message.includes("sample.webm")));
+assert.ok(actionMessages.some((message) => message.includes("图片导出失败")));
+recordingActions.stop();
+recordingActions.reset();
+rejectActionImage = false;
+await recordingActions.exportCurrentImage();
+assert.equal(actionCreates, 2, "route reset gets a fresh controller");
+assert.deepEqual(actionCalls, ["image", "toggle", "recording", "image", "stop", "image"]);
+
+console.log("test_export_canvas: WebM, PNG and shared route-action lifecycle assertions passed");
