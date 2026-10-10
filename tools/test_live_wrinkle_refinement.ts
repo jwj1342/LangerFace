@@ -564,8 +564,9 @@ const webPackage = JSON.parse(fs.readFileSync(
   new URL("../web/package.json", import.meta.url),
   "utf8",
 ));
-assert.equal(webPackage.scripts.predev, "node ../tools/check_web_dependency_isolation.mjs",
-  "the dev server must reject dependencies shared across worktrees");
+assert.match(webPackage.scripts.predev,
+  /^npm run verify:algorithm-release:deploy && node \.\.\/tools\/report_default_marker_profile\.mjs dev && node \.\.\/tools\/check_web_dependency_isolation\.mjs$/,
+  "the dev server must report the default profile before rejecting dependencies shared across worktrees");
 assert.match(webPackage.scripts.dev, /vite --force\b/,
   "the dev server must rebuild optimizer output instead of reusing copied worktree caches");
 
