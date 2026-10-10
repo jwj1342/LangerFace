@@ -458,8 +458,8 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
 
   await uploadGeneratedPhotoWithControlledMarkers(page, [
-    { xRatio: 0.32, yRatio: 0.52, radiusRatio: 0.035 },
-    { xRatio: 0.50, yRatio: 0.30, radiusRatio: 0.035 },
+    { xRatio: 0.32, yRatio: 0.52, radiusRatio: 0.035, interiorRetrace: true },
+    { xRatio: 0.50, yRatio: 0.30, radiusRatio: 0.035, interiorRetrace: true },
     { xRatio: 0.10, yRatio: 0.55, radiusRatio: 0.035 },
   ], "#fileInput");
   await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
@@ -632,12 +632,12 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   });
   await clickWorkflowCanvasRatio(page, 0.50, 0.64);
   await expect(page.locator("#workflowStageStatus")).toContainText(
-    /识别范围进入眼裂、口裂或鼻孔等非皮肤开口|当前区域有多个可能的肿物范围/,
+    /识别范围进入眼裂、口裂或鼻孔等非皮肤开口|当前区域有多个可能的肿物范围|检测到候选边界，但被识别门禁否决/,
     { timeout: 45_000 },
   );
   await expect.poll(() => page.evaluate(() => (
     (window as Window & { __workflowIncisionReasons?: string[] }).__workflowIncisionReasons || []
-  ).some((reason) => reason === "controlled_marker_opening_scan_rejected" || reason === "controlled_marker_failed")))
+  ).some((reason) => reason === "controlled_marker_opening_rejected" || reason === "controlled_marker_failed")))
     .toBe(true);
   await expect(page.locator("[data-workflow-boundary]")).toHaveAttribute("d", "");
   await expect(page.locator("[data-workflow-candidate]")).toHaveAttribute("d", "");
@@ -648,12 +648,12 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   });
   await clickWorkflowCanvasRatio(page, 0.66, 0.37);
   await expect(page.locator("#workflowStageStatus")).toContainText(
-    /识别范围进入眼裂、口裂或鼻孔等非皮肤开口|当前区域有多个可能的肿物范围/,
+    /识别范围进入眼裂、口裂或鼻孔等非皮肤开口|当前区域有多个可能的肿物范围|检测到候选边界，但被识别门禁否决/,
     { timeout: 45_000 },
   );
   await expect.poll(() => page.evaluate(() => (
     (window as Window & { __workflowIncisionReasons?: string[] }).__workflowIncisionReasons || []
-  ).some((reason) => reason === "controlled_marker_opening_scan_rejected" || reason === "controlled_marker_failed")))
+  ).some((reason) => reason === "controlled_marker_opening_rejected" || reason === "controlled_marker_failed")))
     .toBe(true);
   await expect(page.locator("[data-workflow-boundary]")).toHaveAttribute("d", "");
   await expect(page.locator("[data-workflow-candidate]")).toHaveAttribute("d", "");
