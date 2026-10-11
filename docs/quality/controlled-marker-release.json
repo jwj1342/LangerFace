@@ -23,15 +23,15 @@
   },
   "archive": {
     "status": "verified",
-    "manifestPath": "local_outputs/recovery-packages/发布准备—普通本地门禁与设备本地导出修订—20261011-r6/manifest.json",
-    "manifestSha256": "8875916b21ff0f053c89438db9bbb72b83d171950eb229e58b257be55103a242",
+    "manifestPath": "local_outputs/recovery-packages/发布准备—普通本地门禁与设备本地导出修订—20261011-r7/manifest.json",
+    "manifestSha256": "836b43b15d8128c70db8e9a1823205d682185d977f690ea6303300263603b898",
     "sourceDigest": "e61525f1face338767fedd7b31312c3754bb1f40c11efd27e6af69a1e962b6d0",
     "scopeConfigSha256": "3bc884fcc2813803e9e7c06293643514483723c161552f2d5607457d7ec2eaa7",
     "note": "中文标签：普通本地门禁与设备本地导出修订；207 复制项、32 继承项、17 指纹省略项，继承 r5 基础包；未包含编辑器未保存缓冲，不代表医学或真机验收。"
   },
   "scopeBoundaryReview": {
     "status": "confirmed",
-    "manifestSha256": "8875916b21ff0f053c89438db9bbb72b83d171950eb229e58b257be55103a242",
+    "manifestSha256": "836b43b15d8128c70db8e9a1823205d682185d977f690ea6303300263603b898",
     "scopeConfigSha256": "3bc884fcc2813803e9e7c06293643514483723c161552f2d5607457d7ec2eaa7",
     "confirmedAt": "2026-10-10T11:31:33.101Z",
     "evidence": "操作者本轮明确与黄铭禛约定本次UI由操作者负责，包括RSTL生成/皱纹检测/RSTL微调界面；明确认可5产品文件的手动工具条和触控状态。团队核心保持远端基线；可复核证据见docs/quality/UI_RSTL_BOUNDARY_REVIEW.md。",
