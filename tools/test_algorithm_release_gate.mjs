@@ -46,7 +46,12 @@ function run(ci, mode = 'deploy', changes = {}) {
 }
 assert.equal(run('true').exitCode, 0, 'CI may use the validated archive registration without private files');
 assert.equal(run('true', 'pr').exitCode, 0, 'PR still requires the acceptance and editor fixtures');
-assert.match(run(undefined).messages, /恢复包 manifest 不存在/, 'local missing archive remains blocked');
+assert.equal(run(undefined, 'local').exitCode, 0, 'local runtime keeps identity checks without a private archive');
+assert.equal(run(undefined, 'local', { current: { sourceDigest: 'stale' } }).exitCode, 0,
+  'local runtime may contain unregistered integration source while preserving algorithm identity');
+assert.equal(run(undefined, 'local', { current: { algorithmDigest: 'stale' } }).exitCode, 1,
+  'local runtime still blocks stale algorithm identity');
+assert.match(run(undefined).messages, /恢复包 manifest 不存在/, 'deploy missing archive remains blocked');
 assert.equal(run(undefined).exitCode, 1);
 assert.match(run('true', 'deploy', { archive: { sourceDigest: 'stale' } }).messages, /不是当前源码指纹/);
 assert.equal(run('true', 'deploy', { current: { sourceDigest: 'stale' } }).exitCode, 1);

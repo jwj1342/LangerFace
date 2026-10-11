@@ -9,8 +9,8 @@ import { captureMarkerIdentity, TARGET_MARKER_PROFILE } from "./marker_runtime_i
 
 const repoRoot = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const mode = process.argv[2] || "deploy";
-if (!new Set(["deploy", "pr"]).has(mode)) {
-  throw new Error("算法发布门禁只接受 deploy 或 pr 模式");
+if (!new Set(["local", "deploy", "pr"]).has(mode)) {
+  throw new Error("算法发布门禁只接受 local、deploy 或 pr 模式");
 }
 
 const releasePath = resolve(repoRoot, "docs/quality/controlled-marker-release.json");
@@ -53,7 +53,7 @@ for (const key of ["version", "releaseName"] ) {
   const actual = key === "version" ? identity.implementationVersion : identity.releaseName;
   if (actual !== current[key]) fail(`${key} 与运行身份不一致：登记 ${current[key]}，实际 ${actual}`);
 }
-if (identity.sourceDigest !== current.sourceDigest) {
+if (mode !== "local" && identity.sourceDigest !== current.sourceDigest) {
   fail(`源码指纹与发布登记不一致：登记 ${current.sourceDigest}，实际 ${identity.sourceDigest}`);
 }
 if (identity.algorithmDigest !== current.algorithmDigest) {
@@ -72,12 +72,12 @@ if (currentNumeric && historyNumeric.length) {
 
 const archive = release.archive || {};
 const currentScopeConfigSha256 = sha256(readFileSync(scopeConfigPath));
-if (archive.scopeConfigSha256 !== currentScopeConfigSha256) {
+if (mode !== "local" && archive.scopeConfigSha256 !== currentScopeConfigSha256) {
   fail("责任范围配置指纹与发布登记不一致");
 }
-if (archive.status !== "verified" || !archive.manifestPath || !archive.manifestSha256) {
+if (mode !== "local" && (archive.status !== "verified" || !archive.manifestPath || !archive.manifestSha256)) {
   fail("当前算法没有已验证恢复包");
-} else {
+} else if (mode !== "local") {
   const archiveManifestPath = resolve(repoRoot, archive.manifestPath);
   if (!existsSync(archiveManifestPath) && process.env.CI !== "true") fail(`恢复包 manifest 不存在：${archive.manifestPath}`);
   else if (!existsSync(archiveManifestPath)) {
@@ -139,19 +139,19 @@ if (archive.status !== "verified" || !archive.manifestPath || !archive.manifestS
 }
 
 const scopeReview = release.scopeBoundaryReview || {};
-if (scopeReview.status === "pending") {
+if (mode !== "local" && scopeReview.status === "pending") {
   fail(boundaryCodePathCount === null
     ? "责任范围外共享代码改动尚未取得操作者边界确认"
     : `存在 ${boundaryCodePathCount} 个责任范围外共享代码改动，尚未取得操作者边界确认`);
-} else if (scopeReview.status === "confirmed") {
+} else if (mode !== "local" && scopeReview.status === "confirmed") {
   if (scopeReview.manifestSha256 !== archive.manifestSha256
     || !scopeReview.evidence
     || !scopeReview.confirmedAt) {
     fail("责任边界确认没有完整绑定当前恢复包");
   }
-} else if (scopeReview.status === "not_required" && boundaryCodePathCount) {
+} else if (mode !== "local" && scopeReview.status === "not_required" && boundaryCodePathCount) {
   fail(`存在 ${boundaryCodePathCount} 个责任范围外共享代码改动，不能标记为不需要确认`);
-} else if (scopeReview.status !== "not_required") {
+} else if (mode !== "local" && scopeReview.status !== "not_required") {
   fail("责任边界确认状态无效");
 }
 

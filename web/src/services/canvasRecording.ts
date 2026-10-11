@@ -240,7 +240,7 @@ export function createCanvasRecordingController({
     (timer as ReturnType<typeof setTimeout> & { unref?: () => void }).unref?.();
   },
   shareNavigator = globalThis.navigator,
-  presentFile = () => false,
+  presentFile = presentMobileFile,
   onError = (error) => console.error("视频保存失败", error),
   onDownloadRequested = () => {},
   requestFrame = (cb) => requestAnimationFrame(cb),
