@@ -6,7 +6,7 @@ import { buildDirectNoseDorsumRstl } from
   "../services/personalized/directNoseDorsumRstl.ts";
 import { extractFineWrinkleLines } from
   "../services/personalized/fineWrinkleLines.ts";
-import { removeCrowFeetWrinkleLines, selectNoseDorsumWrinkleLines } from
+import { keepTargetWrinkleLines } from
   "../services/personalized/crowFeetFilter.ts";
 import {
   buildNoseRootIntersectionVisibilityPlan,
@@ -304,7 +304,9 @@ async function seedYoloEvidence(
     point[1] * request.size,
     point[2] * request.size,
   ]);
-  const visibleLines = removeCrowFeetWrinkleLines(request.lines, detectionLandmarks);
+  const visibleLines = request.debugUnfilteredPreview
+    ? request.lines
+    : keepTargetWrinkleLines(request.lines, detectionLandmarks);
   if (!visibleLines.length) throw new Error("YOLO 未提取到有效皱纹中心线");
   const browserBaselineSha256 = typeof request.summary.browserBaselineSha256 === "string"
     ? request.summary.browserBaselineSha256
@@ -319,12 +321,13 @@ async function seedYoloEvidence(
     summary: {
       ...request.summary,
       fineLineCount: visibleLines.length,
-      excludedCrowFeetLineCount: request.lines.length - visibleLines.length,
+      sourceConnectedComponents: new Set(visibleLines.map((line) => line.sourceComponentId)).size,
+      excludedNonTargetLineCount: request.lines.length - visibleLines.length,
       browserBaselineSha256,
     },
   };
   let detectionId: string | null = null;
-  if (request.cacheForRefinement) {
+  if (request.cacheForRefinement && !request.debugUnfilteredPreview) {
     if (visibleLines.some((line) =>
       line.class === "forehead" || line.class === "frown" || line.class === "wrinkle")) {
       const cacheKey = `yolo-guidance-${++yoloDetectionSequence}`;
@@ -337,7 +340,7 @@ async function seedYoloEvidence(
         glabellarEvidence: buildYoloGuidanceEvidence(
           visibleLines, "frown", request.size, `${cacheKey}-glabellar`, request.summary,
         ),
-        noseDorsumLines: selectNoseDorsumWrinkleLines(visibleLines, detectionLandmarks)
+        noseDorsumLines: visibleLines.filter((line) => line.class === "wrinkle")
           .map((line) => ({
             id: line.id,
             class: line.class,
@@ -406,6 +409,7 @@ const api: LiveWrinklePipelineWorkerApi = {
         .map((item) => Number(item.score))
         .filter((score) => Number.isFinite(score));
       const result = await seedYoloEvidence({
+        debugUnfilteredPreview: request.debugUnfilteredPreview,
         lines: baseline.lines,
         summary: {
           ...baseline.summary,

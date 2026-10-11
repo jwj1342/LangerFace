@@ -35,6 +35,8 @@ export function createLiveWrinklePipelineWorkerClient(): LiveWrinklePipelineWork
   });
   const api = Comlink.wrap<LiveWrinklePipelineWorkerApi>(worker);
   let disposed = false;
+  const debugUnfilteredPreview = import.meta.env.DEV
+    && new URLSearchParams(window.location.search).get("wrinklePreview") === "unfiltered";
 
   return {
     detect(input, onEvent) {
@@ -44,13 +46,13 @@ export function createLiveWrinklePipelineWorkerClient(): LiveWrinklePipelineWork
         width: input.imageData.width,
         height: input.imageData.height,
         size: input.size,
-        // Landmarks are also used by YOLO-only extraction to suppress only the
-        // lateral-canthus (crow's-feet) field while retaining other `wrinkle`
-        // lines such as the nose dorsum.
+        // Landmarks constrain generic YOLO wrinkles to the nose bridge before
+        // evidence is displayed or cached for refinement.
         landmarks: input.landmarks || [],
         mode: input.mode,
         includeFingerprint: input.includeFingerprint,
         cacheForRefinement: input.cacheForRefinement,
+        debugUnfilteredPreview,
       };
       const eventSink = onEvent ? Comlink.proxy(onEvent) : undefined;
       return api.detect(
@@ -61,7 +63,7 @@ export function createLiveWrinklePipelineWorkerClient(): LiveWrinklePipelineWork
 
     seedYoloEvidence(input) {
       if (disposed) return Promise.reject(new Error("皱纹 Worker 已关闭"));
-      return api.seedYoloEvidence(input);
+      return api.seedYoloEvidence({ ...input, debugUnfilteredPreview });
     },
 
     refine(input) {

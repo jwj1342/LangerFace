@@ -406,14 +406,14 @@ assert.match(workerRuntime, /sourceImageRgba: request.mode === "yolo-only" \? un
   "YOLO-only centerlines must not use image-supported endpoint recovery");
 assert.doesNotMatch(analysisRuntime, /if \(!pipeline.detectionId\) throw/,
   "YOLO photo detection must succeed without a server detection id");
-assert.match(workerRuntime, /removeCrowFeetWrinkleLines\(request\.lines, detectionLandmarks\)/,
-  "YOLO guidance must remove eye-corner evidence before caching generic wrinkles");
+assert.match(workerRuntime, /keepTargetWrinkleLines\(request\.lines, detectionLandmarks\)/,
+  "YOLO evidence must keep only the three target regions before display or caching");
 assert.match(workerRuntime, /async function seedYoloEvidence[\s\S]*cachedYoloDetection/,
   "browser and server detections must share the same refinement cache path");
 assert.match(workerRuntime, /isYoloGuidedRstlSeed\(seed\)/,
   "YOLO guidance must restrict the set of RSTL curves passed to refinement");
 assert.match(workerRuntime,
-  /foreheadEvidence: buildYoloGuidanceEvidence\([\s\S]*"forehead"[\s\S]*glabellarEvidence: buildYoloGuidanceEvidence\([\s\S]*"frown"[\s\S]*noseDorsumLines: selectNoseDorsumWrinkleLines/,
+  /foreheadEvidence: buildYoloGuidanceEvidence\([\s\S]*"forehead"[\s\S]*glabellarEvidence: buildYoloGuidanceEvidence\([\s\S]*"frown"[\s\S]*noseDorsumLines: visibleLines\.filter/,
   "forehead and glabellar evidence plus direct nose-dorsum lines must be cached separately");
 assert.match(workerRuntime,
   /const forehead = refineChannel\(\s*foreheadSeeds,\s*cachedYolo\.foreheadEvidence,\s*"forehead",?\s*\);[\s\S]*const glabellar = refineChannel\(\s*glabellarSeeds,\s*cachedYolo\.glabellarEvidence,\s*"glabellar",?\s*\)/,
