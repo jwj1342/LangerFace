@@ -25,6 +25,7 @@ export interface IncisionOverlayPayload3D {
     boundary_refs?: SurfaceRef[];
   } | null;
   candidate?: {
+    center_ref?: SurfaceRef | null;
     polyline_refs?: SurfaceRef[];
   } | null;
 }
@@ -33,6 +34,7 @@ export interface IncisionOverlayPointsPayload {
   schema_version?: string;
   candidate_type?: "linear" | "fusiform" | string;
   tumor_center_point?: Vec3 | null;
+  candidate_center_point?: Vec3 | null;
   tumor_boundary_points?: Vec3[];
   candidate_points?: Vec3[];
 }
@@ -352,6 +354,7 @@ export class Head3D {
       schema_version: "incision-overlay-3d-points/v0.1",
       candidate_type: overlay.candidate_type,
       tumor_center_point: mapRefs([overlay.tumor?.center_ref])[0] || null,
+      candidate_center_point: mapRefs([overlay.candidate?.center_ref])[0] || null,
       tumor_boundary_points: mapRefs(overlay.tumor?.boundary_refs || []),
       candidate_points: mapRefs(overlay.candidate?.polyline_refs || []),
     });
@@ -363,6 +366,7 @@ export class Head3D {
     const boundary = overlay3d?.tumor_boundary_points || [];
     const candidate = overlay3d?.candidate_points || [];
     const center = overlay3d?.tumor_center_point || null;
+    const candidateCenter = overlay3d?.candidate_center_point || null;
     const boundaryLine = buildOverlayLine(boundary, INCISION_COLORS.tumor, boundary.length > 2);
     if (boundaryLine) group.add(boundaryLine);
     const candidateLine = buildOverlayLine(
@@ -372,13 +376,23 @@ export class Head3D {
     );
     if (candidateLine) group.add(candidateLine);
     if (Array.isArray(center) && center.length >= 3) {
-      const radius = Math.max(0.005, (this._maxDist || 1) * 0.006);
+      const radius = Math.max(0.003, (this._maxDist || 1) * 0.0035);
       const sphere = new THREE.Mesh(
         new THREE.SphereGeometry(radius, 16, 8),
-        new THREE.MeshBasicMaterial({ color: INCISION_COLORS.tumor, toneMapped: false }),
+        new THREE.MeshBasicMaterial({ color: 0x94a3b8, toneMapped: false }),
       );
       sphere.position.set(center[0], center[1], center[2]);
       sphere.renderOrder = 6;
+      group.add(sphere);
+    }
+    if (Array.isArray(candidateCenter) && candidateCenter.length >= 3) {
+      const radius = Math.max(0.006, (this._maxDist || 1) * 0.007);
+      const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(radius, 16, 8),
+        new THREE.MeshBasicMaterial({ color: 0x22d3ee, toneMapped: false }),
+      );
+      sphere.position.set(candidateCenter[0], candidateCenter[1], candidateCenter[2]);
+      sphere.renderOrder = 7;
       group.add(sphere);
     }
     if (!group.children.length) {

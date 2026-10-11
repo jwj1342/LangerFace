@@ -119,6 +119,12 @@ export function readIncisionEditCommand(
       && Number.isFinite(Number(detail.value))
     ) ? detail as IncisionEditCommandDetail : null;
   }
+  if (detail.command === "cancel_edit") {
+    return typeof detail.controlId === "string"
+      && NUMERIC_EDIT_CONTROLS.has(detail.controlId as IncisionEditControlId)
+      ? detail as IncisionEditCommandDetail
+      : null;
+  }
   if (detail.command === "commit_reason") {
     return detail.controlId === "editReason"
       && typeof detail.value === "string"

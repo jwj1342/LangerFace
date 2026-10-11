@@ -119,6 +119,12 @@ for (const mobile of [false, true]) {
       const draftBefore = await page.evaluate(() => sessionStorage.getItem("langerface:workflow-draft:v1"));
       await preparePr226PhotoCandidate(page);
       await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateType), { timeout: 45_000 }).toContain("梭形");
+      await expect.poll(() => page.evaluate(() => {
+        const candidate = Reflect.get(window, "__pr226Incision")?.candidate;
+        return candidate?.lengthMm / candidate?.widthMm;
+      })).toBeCloseTo(3, 8);
+      await expect(page.locator("[data-workflow-center]")).toBeVisible();
+      await expect(page.locator("[data-workflow-incision-center]")).toBeVisible();
       await approveWorkflowCandidate(page);
       // Wait past the retired 300ms save debounce; no image or incision draft is written.
       await page.waitForTimeout(500);
@@ -352,8 +358,16 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateType), { timeout: 45_000 }).toContain("梭形");
   const boundary = page.locator("[data-workflow-boundary]");
   const candidate = page.locator("[data-workflow-candidate]");
+  const lesionCenter = page.locator("[data-workflow-center]");
+  const incisionCenter = page.locator("[data-workflow-incision-center]");
   await expect.poll(() => boundary.getAttribute("d")).toMatch(/^M /);
   await expect.poll(() => candidate.getAttribute("d")).toMatch(/^M /);
+  await expect(lesionCenter).toBeVisible();
+  await expect(incisionCenter).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const current = Reflect.get(window, "__pr226Incision")?.candidate;
+    return current?.lengthMm / current?.widthMm;
+  })).toBeCloseTo(3, 8);
   await expect(candidate).toHaveCSS("stroke", "rgb(103, 232, 249)");
   await expect(candidate).toHaveCSS("stroke-width", "1px");
   const boundaryBeforeReview = await boundary.getAttribute("d");
@@ -374,6 +388,7 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
 
   const legend = page.getByLabel("切口标注图例");
   await expect(legend).toBeVisible();
+  await expect(legend).toContainText("切口中心");
   await expect(legend).toContainText("病灶中心");
   await expect(legend).toContainText("肿物范围");
 
@@ -399,7 +414,7 @@ test("disabled workflow hints use a two-second mouse, touch, and keyboard releas
 
   await expect(page.locator("#diameterMm")).toBeHidden();
 
-  const markerMessage = "当前肿物边界由“自由轮廓鼠绘”的曲线决定，受控标记暂不参与候选生成；请切换为“椭圆近似”模式后使用。";
+  const markerMessage = "当前肿物边界由“自由轮廓手绘”的曲线决定，受控标记暂不参与候选生成；请切换为“椭圆近似”模式后使用。";
   const markerButton = page.getByRole("button", { name: "受控标记", exact: true });
   const markerTooltip = page.getByRole("tooltip", { name: markerMessage });
   await expect(markerButton).toHaveAttribute("aria-disabled", "true");
@@ -443,8 +458,8 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
 
   await uploadGeneratedPhotoWithControlledMarkers(page, [
-    { xRatio: 0.32, yRatio: 0.52, radiusRatio: 0.035 },
-    { xRatio: 0.50, yRatio: 0.30, radiusRatio: 0.035 },
+    { xRatio: 0.32, yRatio: 0.52, radiusRatio: 0.035, interiorRetrace: true },
+    { xRatio: 0.50, yRatio: 0.30, radiusRatio: 0.035, interiorRetrace: true },
     { xRatio: 0.10, yRatio: 0.55, radiusRatio: 0.035 },
   ], "#fileInput");
   await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
@@ -568,7 +583,7 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   }
 
   const unavailableMarkerButton = page.getByRole("button", { name: "受控标记", exact: true });
-  const freehandMarkerMessage = "当前肿物边界由“自由轮廓鼠绘”的曲线决定，受控标记暂不参与候选生成；请切换为“椭圆近似”模式后使用。";
+  const freehandMarkerMessage = "当前肿物边界由“自由轮廓手绘”的曲线决定，受控标记暂不参与候选生成；请切换为“椭圆近似”模式后使用。";
   const markerTooltip = page.getByRole("tooltip", { name: freehandMarkerMessage });
   await expect(unavailableMarkerButton).toHaveAttribute("aria-disabled", "true");
   await expect(unavailableMarkerButton).not.toHaveAttribute("title", freehandMarkerMessage);
@@ -617,12 +632,12 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   });
   await clickWorkflowCanvasRatio(page, 0.50, 0.64);
   await expect(page.locator("#workflowStageStatus")).toContainText(
-    /识别范围进入眼裂、口裂或鼻孔等非皮肤开口|当前区域有多个可能的肿物范围/,
+    /识别范围进入眼裂、口裂或鼻孔等非皮肤开口|当前区域有多个可能的肿物范围|检测到候选边界，但被识别门禁否决/,
     { timeout: 45_000 },
   );
   await expect.poll(() => page.evaluate(() => (
     (window as Window & { __workflowIncisionReasons?: string[] }).__workflowIncisionReasons || []
-  ).some((reason) => reason === "controlled_marker_opening_scan_rejected" || reason === "controlled_marker_failed")))
+  ).some((reason) => reason === "controlled_marker_opening_rejected" || reason === "controlled_marker_failed")))
     .toBe(true);
   await expect(page.locator("[data-workflow-boundary]")).toHaveAttribute("d", "");
   await expect(page.locator("[data-workflow-candidate]")).toHaveAttribute("d", "");
@@ -633,12 +648,12 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   });
   await clickWorkflowCanvasRatio(page, 0.66, 0.37);
   await expect(page.locator("#workflowStageStatus")).toContainText(
-    /识别范围进入眼裂、口裂或鼻孔等非皮肤开口|当前区域有多个可能的肿物范围/,
+    /识别范围进入眼裂、口裂或鼻孔等非皮肤开口|当前区域有多个可能的肿物范围|检测到候选边界，但被识别门禁否决/,
     { timeout: 45_000 },
   );
   await expect.poll(() => page.evaluate(() => (
     (window as Window & { __workflowIncisionReasons?: string[] }).__workflowIncisionReasons || []
-  ).some((reason) => reason === "controlled_marker_opening_scan_rejected" || reason === "controlled_marker_failed")))
+  ).some((reason) => reason === "controlled_marker_opening_rejected" || reason === "controlled_marker_failed")))
     .toBe(true);
   await expect(page.locator("[data-workflow-boundary]")).toHaveAttribute("d", "");
   await expect(page.locator("[data-workflow-candidate]")).toHaveAttribute("d", "");

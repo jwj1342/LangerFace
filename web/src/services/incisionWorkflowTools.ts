@@ -99,8 +99,10 @@ function buildEditedFusiform(
 ): IncisionCandidate {
   const tumor = tumorInput ? validateTumor(tumorInput) : null;
   const widthAxis = tangentPerp(axis, normal);
-  const lengthMm = Math.max(1, Number(base.length_mm || 1) * Number(edit.length_scale || 1));
-  const widthMm = Math.max(1, Number(base.width_mm || 1) * Number(edit.width_scale || 1));
+  const fixedRatio = Math.max(1, Number(base.metrics?.fixed_length_to_width_ratio || 3));
+  const uniformScale = Math.max(Number(edit.length_scale || 1), Number(edit.width_scale || 1));
+  const widthMm = Math.max(1, Number(base.width_mm || 1) * uniformScale);
+  const lengthMm = widthMm * fixedRatio;
   const boundary = tumor ? boundaryProfile(tumor, axis, widthAxis, unitsPerMm) : null;
   const tumorDiameterMm = Number(tumor?.diameter_mm ?? base.metrics?.diameter_mm ?? 0);
   const tumorMarginMm = Number(tumor?.margin_mm ?? base.metrics?.margin_mm ?? 0);
@@ -146,6 +148,8 @@ function buildEditedFusiform(
       ...(base.metrics || {}),
       rstl_deviation_deg: Math.abs(Number(edit.angle_offset_deg || 0)),
       length_to_width_ratio: lengthMm / widthMm,
+      fixed_length_to_width_ratio: fixedRatio,
+      edit_uniform_scale: uniformScale,
       ...profile.metrics,
       axis_coverage_required_mm: axisCoverageRequiredMm,
       axis_coverage_deficit_mm: axisCoverageDeficitMm,
@@ -175,7 +179,7 @@ export function applyCandidateEdit(
   const axis0 = norm(base.axis || [1, 0, 0]);
   const perp0 = tangentPerp(axis0, normal);
   const axis = rotateInPlane(axis0, normal, Number(edit.angle_offset_deg || 0));
-  const center = add(
+  let center = add(
     add(base.center || plan.tumor.center, mul(axis0, Number(edit.shift_along_mm || 0) * unitsPerMm)),
     mul(perp0, Number(edit.shift_perp_mm || 0) * unitsPerMm),
   );
@@ -217,7 +221,25 @@ export function applyCandidateEdit(
       },
     };
   } else {
-    candidate = buildEditedFusiform(base, center, axis, normal, unitsPerMm, editRecord, plan.tumor);
+    const regenerated = generateFusiformIncision(
+      plan.tumor,
+      {
+        ...(plan.direction || {}),
+        vector: axis,
+        angle_offset_deg: editRecord.angle_offset_deg,
+        variant_source: editRecord.angle_offset_deg === 0 ? "rstl_primary" : "clinician_direction_override",
+      },
+      unitsPerMm,
+      normal,
+      DEFAULT_RULES,
+      null,
+    );
+    const regeneratedPerp = tangentPerp(regenerated.axis, normal);
+    center = add(
+      add(regenerated.center, mul(regenerated.axis, editRecord.shift_along_mm * unitsPerMm)),
+      mul(regeneratedPerp, editRecord.shift_perp_mm * unitsPerMm),
+    );
+    candidate = buildEditedFusiform(regenerated, center, regenerated.axis, normal, unitsPerMm, editRecord, plan.tumor);
   }
 
   if (verts) annotateCandidateSensitiveDistances(candidate, verts);

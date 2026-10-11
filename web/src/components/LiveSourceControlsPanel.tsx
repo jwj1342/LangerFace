@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useLiveControllerCommands } from "../hooks/useControllerCommands";
+import { isDeveloperMode } from "../services/developerMode";
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
@@ -16,12 +17,15 @@ export function LiveSourceControlsPanel() {
   const recording = Boolean(snapshot?.recording);
   const cameraActive = running && snapshot?.source.kind === "camera";
   const hasSource = running || Boolean(snapshot?.source.kind);
+  const developerMode = isDeveloperMode();
   const uploadTooltipAnchor = useRef<HTMLButtonElement>(null);
   const [uploadTooltipOpen, setUploadTooltipOpen] = useState(false);
-  const currentImageFileName = snapshot?.source.kind === "image"
+  const currentImageFileName = developerMode && snapshot?.source.kind === "image"
     ? snapshot.source.fileName
     : null;
-  const uploadTooltipMessage = `当前已载入图片：${currentImageFileName || "无"}`;
+  const uploadTooltipMessage = developerMode
+    ? `当前已载入图片：${currentImageFileName || "无"}`
+    : "上传照片或视频";
 
   return (
     <Card id="liveInputCard">
@@ -30,9 +34,10 @@ export function LiveSourceControlsPanel() {
         variant="workbenchPrimary"
         id="uploadBtn"
         type="button"
-        aria-describedby={uploadTooltipOpen ? "currentImageFileTooltip" : undefined}
-        aria-label={`上传照片或视频；${uploadTooltipMessage}`}
+        aria-describedby={developerMode && uploadTooltipOpen ? "currentImageFileTooltip" : undefined}
+        aria-label={developerMode ? `上传照片或视频；${uploadTooltipMessage}` : "上传照片或视频"}
         onPointerEnter={(event) => {
+          if (!developerMode) return;
           const desktopHover = event.pointerType === "mouse"
             && (!window.matchMedia || window.matchMedia("(hover: hover) and (pointer: fine)").matches);
           if (desktopHover) setUploadTooltipOpen(true);
@@ -41,18 +46,19 @@ export function LiveSourceControlsPanel() {
         onPointerCancel={() => setUploadTooltipOpen(false)}
         onClick={() => commands.source("upload_source")}
       >⬆&nbsp; 上传照片/视频</Button>
-      <PersistentTooltip
+      {developerMode ? <PersistentTooltip
         anchorRef={uploadTooltipAnchor}
         className="upload-source-tooltip"
         id="currentImageFileTooltip"
         message={uploadTooltipMessage}
         open={uploadTooltipOpen}
-      />
+      /> : null}
       <Input type="file" id="fileInput" accept="image/*,video/*" hidden />
       <ButtonRow>
         <Button variant="workbench" id="camBtn" type="button" aria-pressed={cameraActive} onClick={() => commands.source("camera_toggle")}>{cameraActive ? "■ 关闭摄像头" : "◉ 开启摄像头"}</Button>
         <Button variant="workbench" id="pauseBtn" type="button" disabled={!running} onClick={() => commands.source("pause_toggle")}>{paused ? "▶ 继续" : "⏸ 暂停"}</Button>
-        <Button variant="workbench" id="exportBtn" type="button" disabled={!hasSource} aria-pressed={recording || undefined} onClick={() => commands.source("recording_toggle")}>{recording ? "■ 停止" : "⬇ 导出"}</Button>
+        <Button variant="workbench" id="exportBtn" type="button" disabled={!hasSource} aria-pressed={recording || undefined} onClick={() => commands.source("recording_toggle")}>{recording ? "■ 停止视频" : "⬇ 导出视频"}</Button>
+        <Button variant="workbench" type="button" disabled={!hasSource} onClick={() => commands.source("image_export")}>▣ 导出图片</Button>
       </ButtonRow>
     </Card>
   );

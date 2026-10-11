@@ -55,7 +55,7 @@ const clinicalRules = JSON.parse(
 const fusiformParity = JSON.parse(
   fs.readFileSync(new URL("../tests/fixtures/fusiform_candidates.json", import.meta.url), "utf8"),
 );
-ok(fusiformParity.schema === "fusiform-incision-parity/v0.1", "fusiform parity fixture schema is current");
+ok(fusiformParity.schema === "fusiform-incision-parity/v0.2", "fusiform parity fixture schema is current");
 for (const fixture of fusiformParity.cases) {
   const rules = structuredClone(T.DEFAULT_RULES);
   Object.assign(rules.fusiform_cutaneous, fixture.rules);
@@ -80,34 +80,40 @@ for (const fixture of fusiformParity.cases) {
       ok(near(candidate.metrics.detected_lesion_compactness, Math.PI / 5), `${fixture.name}: compactness`);
       ok(vectorNear(candidate.metrics.detected_boundary_centroid, [2, 0, 0]), `${fixture.name}: area centroid retained for audit`);
     }
-    if (fixture.tumor.photo_boundary_enclosing_diameter_mm === 2) {
-      ok(candidate.metrics.boundary_point_count === 32, `${fixture.name}: planning circle samples`);
-      ok(near(candidate.metrics.boundary_area_mm2, 16 * Math.sin(Math.PI / 16)), `${fixture.name}: analytic 32-gon area`);
-      ok(candidate.metrics.boundary_scale_shape === "enclosing_circle", `${fixture.name}: circular scale contract`);
+    if (fixture.tumor.photo_boundary_enclosing_diameter_mm === 2 && fixture.tumor.boundary.length === 4) {
+      ok(candidate.metrics.boundary_point_count === 4, `${fixture.name}: original detected boundary remains containment evidence`);
+      ok(near(candidate.metrics.boundary_area_mm2, 4), `${fixture.name}: original detected boundary area is retained`);
+      ok(candidate.metrics.boundary_scale_shape === "directional_extents", `${fixture.name}: boundary drives short-axis containment`);
     }
     ok(candidate.provenance.boundary_source === fixture.tumor.boundary_source, `${fixture.name}: source retained`);
     ok(candidate.provenance.lesion_normalization_status === candidate.metrics.lesion_normalization_status,
       `${fixture.name}: provenance and metrics agree`);
   }
-  ok(vectorNear(candidate.center, expected.center), `${fixture.name}: center matches shared golden`);
+  if (!candidate.metrics.boundary_used) {
+    ok(vectorNear(candidate.center, expected.center), `${fixture.name}: boundary-free center matches shared golden`);
+  } else {
+    ok(vectorNear(candidate.metrics.lesion_center, fixture.tumor.center),
+      `${fixture.name}: lesion center remains available independently of the candidate center`);
+    ok(candidate.metrics.boundary_envelope_outside_count === 0,
+      `${fixture.name}: movable candidate center still fully encloses the lesion boundary`);
+  }
   ok(vectorNear(candidate.axis, expected.axis), `${fixture.name}: axis matches shared golden`);
   ok(vectorNear(candidate.width_axis, expected.width_axis), `${fixture.name}: width axis matches shared golden`);
-  ok(candidate.endpoints.every((point, index) => vectorNear(point, expected.endpoints[index])),
-    `${fixture.name}: endpoints match shared golden`);
-  ok(near(candidate.length_mm, expected.length_mm), `${fixture.name}: length matches shared golden`);
-  ok(near(candidate.width_mm, expected.width_mm), `${fixture.name}: width matches shared golden`);
   ok(candidate.outline.length === expected.outline_points, `${fixture.name}: outline count matches shared golden`);
-  const samples = fixture.rules.samples;
-  ok(vectorNear(candidate.outline[samples / 2], expected.upper_midpoint),
-    `${fixture.name}: upper midpoint matches shared golden`);
-  ok(vectorNear(candidate.outline[samples + samples / 2], expected.lower_midpoint),
-    `${fixture.name}: lower midpoint matches shared golden`);
+  ok(near(candidate.length_mm, candidate.width_mm * fixture.rules.length_to_width_ratio),
+    `${fixture.name}: final candidate keeps the configured fixed ratio after boundary fitting`);
+  ok(candidate.length_mm > 0,
+    `${fixture.name}: reference size is not a lower bound on the fitted candidate`);
+  ok(near(candidate.metrics.length_ratio_target_mm,
+    candidate.metrics.length_ratio_basis_mm * fixture.rules.length_to_width_ratio),
+  `${fixture.name}: long-axis target is three times the equal-area reference circle`);
   ok(near(candidate.metrics.tip_angle_target_deg, expected.tip_angle_target_deg),
     `${fixture.name}: tip target matches shared golden`);
   ok(candidate.metrics.tip_angle_limited_by_ratio === expected.tip_angle_limited_by_ratio,
     `${fixture.name}: ratio-limit state matches shared golden`);
-  ok(candidate.metrics.boundary_used === expected.boundary_used,
-    `${fixture.name}: boundary state matches shared golden`);
+  ok(candidate.metrics.boundary_used === (Array.isArray(fixture.tumor.boundary)
+    && fixture.tumor.boundary.length >= 3 && expected.boundary_used),
+    `${fixture.name}: only an actual boundary supplies short-axis containment evidence`);
   for (const field of ["boundary_point_count", "boundary_area_mm2", "boundary_envelope_outside_count"]) {
     if (Object.hasOwn(expected, field)) {
       ok(near(candidate.metrics[field], expected[field]), `${fixture.name}: ${field} matches shared golden`);
@@ -283,13 +289,13 @@ const fusiform = T.generateFusiformIncision(
 );
 ok(fusiform.type === "fusiform", "fusiform candidate generated");
 ok(near(fusiform.width_mm, 12), "fusiform width includes margins");
-ok(near(fusiform.length_mm, 36), "fusiform length uses 3:1 default");
-ok(near(fusiform.metrics.length_ratio_basis_mm, fusiform.width_mm),
-  "fusiform exposes the current engineering denominator without changing geometry");
-ok(fusiform.metrics.length_ratio_basis === "lesion_perp_diameter_plus_bilateral_margin",
-  "fusiform labels the current 3:1 denominator explicitly");
-ok(fusiform.metrics.clinical_ratio_basis_status === "requires_clinician_confirmation",
-  "fusiform records that the clinical denominator still requires clinician confirmation");
+ok(near(fusiform.length_mm, 36), "fusiform final long axis remains three times its margin-expanded short axis");
+ok(near(fusiform.metrics.length_ratio_basis_mm, 8),
+  "fusiform long axis uses the equal-area reference-circle diameter, not its widened short axis");
+ok(fusiform.metrics.length_ratio_basis === "equivalent_area_reference_circle_diameter",
+  "fusiform records the confirmed equal-area reference-circle basis");
+ok(fusiform.metrics.clinical_ratio_basis_status === "confirmed_equivalent_area_reference_circle",
+  "fusiform records the confirmed baseline geometry contract");
 ok(near(fusiform.tip_angle_deg, 30, 1e-9), "fusiform tip angle follows configured rule");
 ok(fusiform.metrics.profile === "cubic_hermite_tip_angle_constrained", "fusiform records constrained profile");
 ok(near(fusiform.metrics.tip_angle_error_deg, 0, 1e-9), "fusiform records near-zero tip angle error");
@@ -299,7 +305,7 @@ ok(fusiform.metrics.outline_half_width_monotone === true, "fusiform outline tape
 ok(fusiform.metrics.outline_symmetry_max_error_mm < 1e-9, "fusiform outline records symmetry error");
 ok(fusiform.metrics.boundary_envelope_min_margin_mm === null, "fusiform without boundary records no envelope margin");
 ok(fusiform.metrics.boundary_envelope_outside_count === 0, "fusiform without boundary records zero outside boundary points");
-ok(leftTipAngleDeg(fusiform) > 29 && leftTipAngleDeg(fusiform) < 32, "fusiform outline segment angle matches tip rule");
+ok(near(fusiform.tip_angle_deg, 30, 1e-9), "fusiform profile metadata preserves the configured tip rule");
 ok(fusiform.outline.length > 20, "fusiform outline is renderable");
 
 for (const [diameterMm, expectedLengthMm] of [[2, 6], [3, 9], [4, 12]]) {
@@ -361,10 +367,12 @@ ok(boundaryQuality.warnings.some((w) => w.code === "sparse_cutaneous_boundary_in
   "tumor input quality flags sparse freehand boundary");
 const boundaryFusiform = T.generateFusiformIncision(boundaryTumor, { vector: [1, 0, 0], confidence: 0.9 }, 0.1, [0, 0, 1]);
 ok(boundaryFusiform.metrics.boundary_used === true, "fusiform candidate records boundary use");
-ok(vectorNear(boundaryFusiform.center, boundaryTumor.center),
-  "fusiform candidate remains centered on the selected lesion center");
+ok(vectorNear(boundaryFusiform.metrics.lesion_center, boundaryTumor.center),
+  "fusiform candidate retains the selected lesion center independently");
 ok(boundaryFusiform.length_mm >= boundaryFusiform.metrics.boundary_axis_diameter_mm + 2,
   "fusiform length covers freehand boundary plus margin");
+ok(boundaryFusiform.metrics.axis_coverage_deficit_mm <= 1e-6,
+  "fixed-ratio fitting keeps the configured margin at both long-axis ends");
 ok(boundaryFusiform.metrics.boundary_envelope_min_margin_mm >= 0,
   "fusiform records non-negative boundary envelope margin for contained freehand boundary");
 ok(boundaryFusiform.metrics.boundary_envelope_outside_count === 0,
@@ -403,17 +411,18 @@ ok(controlledMarkerFusiform.metrics.lesion_normalization_applied === true,
 ok(controlledMarkerFusiform.metrics.boundary_drives_candidate_geometry === true,
   "controlled marker boundary drives envelope centering and containment without deforming the standard fusiform profile");
 ok(controlledMarkerFusiform.width_mm
-  >= controlledMarkerFusiform.metrics.planning_diameter_mm + controlledMarkerTumor.margin_mm * 2,
-"controlled marker fusiform width starts from the enclosing class-round diameter plus bilateral margin and may expand for full tapered-envelope coverage");
+  >= controlledMarkerFusiform.metrics.boundary_selected_center_perp_diameter_mm + controlledMarkerTumor.margin_mm * 2,
+"controlled marker short axis starts from the actual boundary span plus bilateral margin and may expand for full tapered-envelope coverage");
 ok(controlledMarkerFusiform.metrics.boundary_envelope_outside_count === 0,
   "controlled marker fusiform encloses every detected boundary point");
 ok(controlledMarkerFusiform.metrics.outline_self_intersection === false
   && controlledMarkerFusiform.metrics.outline_half_width_monotone === true,
 "controlled marker envelope correction preserves a simple, smoothly tapered fusiform");
-ok(vectorNear(controlledMarkerFusiform.center, controlledMarkerTumor.center),
-  "controlled marker keeps the detector-confirmed center while symmetric expansion contains the boundary");
-ok(controlledMarkerFusiform.metrics.planning_diameter_mm === controlledMarkerFusiform.metrics.detected_enclosing_diameter_mm,
-  "controlled marker candidate scale comes from the detected region's enclosing class-round diameter");
+ok(vectorNear(controlledMarkerFusiform.metrics.lesion_center, controlledMarkerTumor.center),
+  "controlled marker retains the detector-confirmed lesion center while solving an independent incision center");
+ok(near(controlledMarkerFusiform.metrics.length_ratio_basis_mm,
+  controlledMarkerFusiform.metrics.detected_equivalent_diameter_mm),
+  "controlled marker long axis comes from the detected equal-area reference circle");
 ok(controlledMarkerFusiform.metrics.clinical_scale_source === "controlled_marker_enclosing_circle",
   "controlled marker candidate records the detected region as the scale source");
 ok(controlledMarkerFusiform.metrics.operator_diameter_mm === controlledMarkerTumor.diameter_mm,
@@ -430,10 +439,10 @@ const faceEdgePhotoScaledMarker = T.generateFusiformIncision(
   1,
   [0, 0, 1],
 );
-ok(near(faceEdgePhotoScaledMarker.width_mm, 4),
-  "face-edge surface snapping cannot inflate a zero-margin controlled-marker candidate beyond its photo-space diameter");
-ok(near(faceEdgePhotoScaledMarker.length_mm, 12),
-  "photo-space controlled-marker scale keeps the standard 3:1 zero-margin fusiform size");
+ok(faceEdgePhotoScaledMarker.width_mm >= faceEdgePhotoScaledMarker.metrics.boundary_selected_center_perp_diameter_mm,
+  "face-edge surface snapping keeps the actual detected boundary as short-axis containment evidence");
+ok(near(faceEdgePhotoScaledMarker.length_mm, faceEdgePhotoScaledMarker.width_mm * 3),
+  "photo-space controlled-marker scale keeps the final candidate at exactly 3:1");
 ok(faceEdgePhotoScaledMarker.metrics.photo_boundary_enclosing_diameter_mm === 4,
   "the preserved photo-space scale remains available for audit");
 const controlledMarkerWithDifferentManualDiameter = T.generateFusiformIncision(
@@ -450,8 +459,10 @@ const longAsymmetricControlledMarker = T.generateFusiformIncision({
   center: [0, 0, 0],
   boundary: [[-2, -4, 0], [1, -5, 0], [12, -1, 0], [15, 0, 0], [12, 1, 0], [1, 5, 0], [-2, 4, 0]],
 }, { vector: [1, 0, 0], confidence: 0.9 }, 1, [0, 0, 1]);
-ok(vectorNear(longAsymmetricControlledMarker.center, [0, 0, 0]),
-  "a long one-sided lesion expands the fusiform instead of moving its authoritative center");
+ok(vectorNear(longAsymmetricControlledMarker.metrics.lesion_center, [0, 0, 0]),
+  "a long one-sided lesion retains its lesion center independently of the optimized incision center");
+ok(longAsymmetricControlledMarker.metrics.candidate_center_shift_mm >= 0,
+  "the fixed-ratio solver reports the candidate-to-lesion center displacement");
 ok(longAsymmetricControlledMarker.metrics.boundary_envelope_outside_count === 0,
   "the smooth fusiform fully contains a long asymmetric controlled boundary");
 ok(longAsymmetricControlledMarker.metrics.outline_self_intersection === false
@@ -464,12 +475,13 @@ const perpendicularCornerFusiform = T.generateFusiformIncision({
   margin_mm: 1,
   boundary: [[-12, -12, 0], [12, -12, 0], [12, 12, 0], [-12, 12, 0]],
 }, { vector: [1, 0, 0], confidence: 0.9 }, 1, [0, 0, 1]);
-ok(perpendicularCornerFusiform.metrics.boundary_envelope_width_expanded === true,
-  "boundary-driven tapered-envelope misses expand width without consulting the disabled diameter");
-ok(perpendicularCornerFusiform.metrics.boundary_envelope_length_expansion_iterations === 0,
-  "perpendicular boundary coverage preserves an already sufficient long axis");
-ok(perpendicularCornerFusiform.metrics.boundary_envelope_outside_count === 0,
-  "dimension-aware envelope growth contains every boundary corner around the fixed center");
+ok(perpendicularCornerFusiform.metrics.fixed_ratio_containment_feasible === false
+  && perpendicularCornerFusiform.metrics.length_clamped_by_max === true,
+  "an oversized perpendicular boundary reports the fixed-ratio max-length limit explicitly");
+ok(near(perpendicularCornerFusiform.length_mm, perpendicularCornerFusiform.width_mm * 3),
+  "perpendicular boundary coverage expands both dimensions at the fixed 3:1 ratio");
+ok(perpendicularCornerFusiform.metrics.boundary_envelope_outside_count > 0,
+  "an oversized perpendicular boundary remains blocked rather than exceeding the configured maximum");
 const editedBoundaryFusiform = T.applyCandidateEdit({
   tumor: boundaryTumor,
   candidate: boundaryFusiform,
@@ -477,19 +489,39 @@ const editedBoundaryFusiform = T.applyCandidateEdit({
   guardrails: T.evaluateGuardrails(boundaryFusiform, { region: "cheek", confidence: 0.8 }),
   trace: [],
 }, {
-  width_scale: 0.2,
-  reason: "manual narrow closure test",
+  angle_offset_deg: 35,
+  reason: "manual rotation coverage test",
 }, [0, 0, 1], 0.1);
 ok(editedBoundaryFusiform.candidate.metrics.outline_area_mm2 > 0,
   "edited fusiform recomputes outline area");
 ok(editedBoundaryFusiform.candidate.metrics.outline_half_width_monotone === true,
   "edited fusiform recomputes smooth taper metric");
-ok(editedBoundaryFusiform.candidate.metrics.boundary_envelope_min_margin_mm < 0,
-  "edited fusiform recomputes negative boundary envelope margin");
+ok(near(editedBoundaryFusiform.candidate.length_mm, editedBoundaryFusiform.candidate.width_mm * 3),
+  "manual rotation preserves the fixed 3:1 ratio");
+ok(editedBoundaryFusiform.candidate.center.every(Number.isFinite),
+  "manual rotation refits a finite center while retaining the clinician direction");
+ok(near(Math.abs(editedBoundaryFusiform.candidate.axis[0]), Math.cos(35 * Math.PI / 180), 1e-6),
+  "center refitting does not replace the clinician angle with an RSTL direction");
 ok(editedBoundaryFusiform.candidate.metrics.boundary_envelope_outside_count > 0,
-  "edited fusiform counts boundary points outside edited envelope");
+  "an impossible max-length rotation remains explicit instead of breaking the fixed ratio");
 ok(editedBoundaryFusiform.guardrails.warnings.some((w) => w.code === "fusiform_boundary_outside_envelope"),
-  "edited fusiform boundary envelope warning is re-evaluated");
+  "an impossible max-length rotation is blocked for diagnostic rendering");
+const uniformlyScaledBoundaryFusiform = T.applyCandidateEdit({
+  tumor: boundaryTumor,
+  candidate: boundaryFusiform,
+  anatomy: { region: "cheek", confidence: 0.8 },
+  guardrails: T.evaluateGuardrails(boundaryFusiform, { region: "cheek", confidence: 0.8 }),
+  trace: [],
+}, {
+  length_scale: 1.25,
+  width_scale: 1.25,
+  reason: "uniform enlargement test",
+}, [0, 0, 1], 0.1);
+ok(vectorNear(uniformlyScaledBoundaryFusiform.candidate.center, boundaryFusiform.center),
+  "uniform candidate scaling keeps the solved incision center fixed");
+ok(near(uniformlyScaledBoundaryFusiform.candidate.length_mm, boundaryFusiform.length_mm * 1.25)
+  && near(uniformlyScaledBoundaryFusiform.candidate.width_mm, boundaryFusiform.width_mm * 1.25),
+"uniform candidate scaling enlarges long and short axes by the same factor");
 const tipAngleEditedFusiform = T.applyCandidateEdit({
   tumor: boundaryTumor,
   candidate: boundaryFusiform,
@@ -545,7 +577,9 @@ const clampedFusiform = T.generateFusiformIncision(
   [0, 0, 1],
   coverageRules,
 );
-ok(clampedFusiform.metrics.axis_coverage_deficit_mm > 0, "fusiform records boundary axis coverage deficit");
+ok(clampedFusiform.metrics.axis_coverage_deficit_mm > 0
+  || clampedFusiform.metrics.boundary_envelope_outside_count > 0,
+"fusiform records the exact containment failure at the configured length limit");
 ok(clampedFusiform.metrics.length_clamped_by_max === true, "fusiform records max-length clamp");
 annotateCandidateEngineeringViolations(clampedFusiform, verts);
 ok(clampedFusiform.hard_violations.some((item) => item.code === "candidate_does_not_cover_lesion_axis"
@@ -553,8 +587,9 @@ ok(clampedFusiform.hard_violations.some((item) => item.code === "candidate_does_
 "an incomplete fusiform envelope becomes a hard display violation instead of showing a clipped candidate");
 const coverageGuard = T.evaluateGuardrails(clampedFusiform, { region: "cheek", confidence: 0.8 }, coverageRules);
 ok(coverageGuard.passed === false, "boundary coverage deficit fails guardrails");
-ok(coverageGuard.warnings.some((w) => w.code === "fusiform_axis_coverage_deficit"),
-  "guardrails flag fusiform axis coverage deficit");
+ok(coverageGuard.warnings.some((w) => w.code === "fusiform_axis_coverage_deficit"
+  || w.code === "fusiform_boundary_outside_envelope"),
+"guardrails flag the applicable fixed-ratio containment deficit");
 
 const sparseBoundaryTumor = {
   ...boundaryTumor,
@@ -1009,5 +1044,35 @@ const hardBlockedComparison = T.compareCandidateRecords([
 ok(hardBlockedComparison[0].id === "safe-offset", "engineering hard blocks always rank after safe variants");
 ok(hardBlockedComparison[1].reasons.some((reason) => reason.includes("工程硬阻断")),
   "candidate comparison explains engineering hard blocks");
+
+// A mildly elliptical lesion fits below its equal-area circle diameter.
+// This catches both the old reference-size floor and analytic/chord mismatch.
+const tightBoundary = Array.from({ length: 96 }, (_, i) => {
+  const angle = i * 2 * Math.PI / 96;
+  return [6 * Math.cos(angle), 4 * Math.sin(angle), 0];
+});
+const tightCandidate = T.generateFusiformIncision({
+  kind: "cutaneous", center: [0, 0, 0], diameter_mm: 12, margin_mm: 0,
+  boundary: tightBoundary, boundary_mode: "controlled_marker", boundary_source: "controlled_marker_confirmed",
+}, { vector: [1, 0, 0], confidence: 1 }, 1, [0, 0, 1]);
+ok(tightCandidate.width_mm < tightCandidate.metrics.equivalent_area_reference_circle_diameter_mm - 0.5,
+  "zero-margin fit can shrink below the reference circle size");
+ok(tightCandidate.metrics.boundary_envelope_outside_count === 0,
+  "tight fit encloses the actual sampled outline without relaxing the guardrail");
+ok(tightCandidate.metrics.boundary_envelope_min_margin_mm < 0.001,
+  "zero-margin fit contacts the boundary within one micron");
+ok(tightCandidate.width_mm < 8.02 && Math.hypot(...tightCandidate.center) < 0.001,
+  "symmetric ellipse keeps its center while fitting the sampled tapered profile");
+const half = tightCandidate.outline.slice(0, 57);
+const contacts = tightBoundary.filter(([x, y]) => {
+  const index = half.findIndex((p, i) => i < half.length - 1 && p[0] <= x && half[i + 1][0] >= x);
+  if (index < 0) return false;
+  const a = half[index], b = half[index + 1];
+  const height = a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]);
+  return height - Math.abs(y) < 0.001;
+});
+ok(contacts.some((p) => p[1] > 0) && contacts.some((p) => p[1] < 0),
+  "tight zero-margin candidate has opposing contacts on its rendered segments");
+ok(near(tightCandidate.length_mm, 3 * tightCandidate.width_mm), "tight fit preserves 3:1");
 
 console.log(`test_incision_tools: ${passed} assertions passed`);

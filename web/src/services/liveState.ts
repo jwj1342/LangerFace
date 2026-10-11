@@ -95,6 +95,8 @@ export interface RefineDrag {
   originalPartner: Vec3[] | null;
   moved: boolean;
   symmetryLinkedIndex: number | null;
+  dirtyBefore: boolean;
+  historyLengthBefore: number;
 }
 
 export interface LiveRefine2dState {

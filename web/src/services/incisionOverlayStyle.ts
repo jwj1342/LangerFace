@@ -25,6 +25,12 @@ export interface IncisionOverlayStyle {
     radiusCss: number;
     strokeWidthCss: number;
   };
+  incisionCenter: {
+    color: string;
+    strokeColor: string;
+    radiusCss: number;
+    strokeWidthCss: number;
+  };
   endpointRadius: number;
 }
 
@@ -86,10 +92,16 @@ export function incisionOverlayScreenStyle(
       haloWidth: boundaryLineWidth + (compact ? 0.5 : 1) * viewScale,
     },
     center: {
-      color: "#fb7185",
-      strokeColor: "#fff1f2",
-      radiusCss: (compact ? 3 : 6) * centerScale,
-      strokeWidthCss: (compact ? 0.65 : 2) * centerScale,
+      color: "transparent",
+      strokeColor: "#ffffff",
+      radiusCss: 2,
+      strokeWidthCss: 1,
+    },
+    incisionCenter: {
+      color: "#f43f5e",
+      strokeColor: "#0b1118",
+      radiusCss: 6,
+      strokeWidthCss: 1,
     },
     endpointRadius: compact ? 2.5 * centerScale : 3 * centerScale,
   };
@@ -163,10 +175,10 @@ export function incisionOverlayStyle(
       haloWidth: boundaryHaloWidth,
     },
     center: {
-      color: "#fb7185",
-      strokeColor: "#fff1f2",
-      radiusCss: 4,
-      strokeWidthCss: 0.8,
+      ...screenStyle.center,
+    },
+    incisionCenter: {
+      ...screenStyle.incisionCenter,
     },
     endpointRadius: 3,
   };

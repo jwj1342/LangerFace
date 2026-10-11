@@ -71,10 +71,12 @@ const liveWrinklePanel = read("web/src/components/LiveWrinklePanel.tsx");
 const liveRefinePanel = read("web/src/components/LiveRefinePanel.tsx");
 const liveQualityPanel = read("web/src/components/LiveQualityPanel.tsx");
 const liveSourceControls = read("web/src/components/LiveSourceControlsPanel.tsx");
+const liveIncisionOverlayPanel = read("web/src/components/LiveIncisionOverlayPanel.tsx");
 const liveRenderControls = read("web/src/components/LiveRenderControlsPanel.tsx");
 const liveCanvasFit = read("web/src/services/liveCanvasFit.ts");
 const liveCanvasInteraction = read("web/src/services/liveCanvasInteraction.ts");
 const liveRuntime = read("web/src/services/liveRuntime.ts");
+const liveRecordingActions = read("web/src/services/liveRecordingActions.ts");
 const liveUi = read("web/src/services/liveUi.ts");
 const controllerCommand = read("web/src/lib/controllerCommand.ts");
 const incisionExport = read("web/src/services/incisionExport.ts");
@@ -94,6 +96,35 @@ const ts = requireWeb("typescript");
 // Execute the production state transitions; only rendering, storage and planning
 // boundaries are substituted, so this remains a CPU-only controller regression.
 const controllerAst = ts.createSourceFile("controller.ts", controller, ts.ScriptTarget.Latest, true);
+const surfaceRefFunction = controllerAst.statements.find((node: any) => ts.isFunctionDeclaration(node)
+  && node.name?.text === "workflowSurfaceRefAtSource");
+assert.ok(surfaceRefFunction, "extract the production workflow surface mapping policy");
+const projectedSurfaceRef = { tri: 7, u: 0.2, v: 0.3, w: 0.5 };
+const resolveWorkflowSurfaceRef = runInNewContext(ts.transpileModule(`(${surfaceRefFunction.getText(controllerAst)})`, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+}).outputText, {
+  workflowPhotoProjection: () => ({
+    surfaceLandmarks: [[1, 0, 0]],
+    skinVisible: () => false,
+  }),
+  sourcePointToSurfaceRef: (_point: unknown, landmarks: number[][]) => landmarks[0]?.[0] === 1
+    ? projectedSurfaceRef
+    : null,
+  recoverPhotoFaceEdgeSurfaceRef: () => null,
+});
+const projectedSurfaceState = { tris: [[0, 0, 0]] };
+const projectedSurfaceFrame = { landmarks: [[0, 0, 0]] };
+assert.equal(resolveWorkflowSurfaceRef(projectedSurfaceState, projectedSurfaceFrame, { x: 10, y: 10 }), null,
+  "ordinary photo picking still rejects a non-skin pixel that exists only on the extended forehead surface");
+assert.deepEqual(
+  JSON.parse(JSON.stringify(resolveWorkflowSurfaceRef(
+    projectedSurfaceState, projectedSurfaceFrame, { x: 10, y: 10 }, true,
+  ))),
+  projectedSurfaceRef,
+  "a closed freehand boundary may map its dark lesion center through the extended forehead surface",
+);
+assert.match(controller, /const refs = recovered[\s\S]*?workflowSurfaceRefAtSource\(state, frame, point, true\)/,
+  "the complete closed freehand outline uses the same explicit-boundary surface trust as its center");
 const markerFunction = controllerAst.statements.find((node: any) => ts.isFunctionDeclaration(node) && node.name?.text === "runControlledMarker");
 const markerTry = markerFunction.body.statements.find((node: any) => ts.isTryStatement(node)
   && node.getText(controllerAst).includes("const outcome = await runWorkflow(state)"));
@@ -101,7 +132,7 @@ const markerCompletion = markerTry.tryBlock.statements;
 const completionStart = markerCompletion.findIndex((node: any) => node.getText(controllerAst).startsWith("completeControlledMarkerAttempt(state, mobileRetrySeed)"));
 const completionSource = markerCompletion.slice(completionStart).map((node: any) => node.getText(controllerAst)).join("\n");
 assert.ok(completionStart >= 0, "extract the actual post-planning marker completion path");
-const settleMarker = runInNewContext(ts.transpileModule(`(function(state, outcome) { const mobileRetrySeed = null; ${completionSource} })`, {
+const settleMarker = runInNewContext(ts.transpileModule(`(function(state, outcome) { const mobileRetrySeed = null; const diagnosticActionId = null; const diagnosticRun = undefined; ${completionSource} })`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
 }).outputText, {
   completeControlledMarkerAttempt: (state: any) => { state.markerBusy = false; },
@@ -161,6 +192,9 @@ function controllerHarness() {
     workflowPhotoProjection: () => null, activeAtlas: () => ({}), queryIncisionPhotoRstlDirection: () => null,
     nearestVertex: () => 0, ensureWorker: () => null, incisionEditIsActive: () => false,
     planIncisionWithWorkflowFallback: () => planner(),
+    workflowDiagnosticSnapshot: () => ({ geometry_revision: 0, workflow_request_id: 0, source_revision: 1, candidate: null, display: null }),
+    observeWorkflowDiagnostic() {},
+    diagnosticEditPending: new WeakMap(), mobileEditPreviewTransactions: new WeakMap(),
   };
   const presentNames = controllerAst.statements.filter((node: any) => ts.isFunctionDeclaration(node)
     && transitionNames.includes(node.name?.text)).map((node: any) => node.name.text);
@@ -458,8 +492,8 @@ assert.doesNotMatch(styles, /workflow-mobile-scroll-zone/,
   "the removed mobile scroll prompt has no stale styling contract");
 assert.match(styles, /grid-template-areas:\s*"incision-status"\s*"workflow-actions";[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\);/,
   "phone workflow lets status and tools use the full stage-header width after removing quality copy");
-assert.match(styles, /\.workflow-canvas-tools\s*{[^}]*grid-template-rows:\s*40px;[^}]*block-size:\s*42px;[^}]*padding:\s*0;[\s\S]*?\.workflow-canvas-tools\[data-marker-mode="true"\]\s*{[^}]*grid-template-rows:\s*40px 32px;[^}]*gap:\s*4px 6px;[^}]*block-size:\s*76px;/s,
-  "phone workflow uses one tool row normally and adds the second row only during controlled marking");
+assert.match(styles, /\.workflow-canvas-tools\s*{[^}]*grid-template-rows:\s*40px 32px;[^}]*block-size:\s*76px;[^}]*padding:\s*0;[\s\S]*?\.workflow-canvas-tools\[data-marker-mode="true"\]\s*{[^}]*grid-template-rows:\s*40px 32px;[^}]*gap:\s*4px 6px;[^}]*block-size:\s*76px;/s,
+  "phone workflow reserves the second tool row so entering controlled marking preserves image height");
 assert.match(canvasTools, /data-marker-mode={String\(markerMode\)}[\s\S]*?data-marker-busy={String\(markerBusy\)}/,
   "phone tool layout exposes marker state without changing command semantics");
 assert.match(liveWrinklePanel, /className="hidden"[\s\S]*?id="wrinkleSummary"/,
@@ -468,11 +502,13 @@ assert.match(liveWrinklePanel, /<ButtonRow className="live-wrinkle-actions">/,
   "the two wrinkle actions share the full card width evenly");
 assert.ok(styles.includes(".btn-row.live-wrinkle-actions{grid-template-columns:repeat(2,minmax(0,1fr));width:100%}"),
   "the dedicated wrinkle action row has exactly two equal columns");
-assert.match(liveRefinePanel, />医生手动微调<\/Button>/,
-  "the manual refinement card exposes only the compact requested entry label");
-assert.match(liveRefinePanel, /className="hidden"[\s\S]*?id="refine2dHint"/,
-  "manual refinement feedback remains a hidden runtime target");
-assert.doesNotMatch(liveRefinePanel, /医生 2D 微调|手动拖动、隐藏或逐点调整当前结果|也可将鼠标放在图片上滚动缩放|以选中点为中心，连续控制指定数量的点|默认只修改选中的一根线/,
+assert.match(liveRefinePanel, /<ButtonRow className="live-refine-primary-actions">[\s\S]*?id="refine2dBtn"[^>]*>微调<\/Button>[\s\S]*?id="refineUndoBtn"[^>]*>撤销<\/Button>[\s\S]*?id="refineResetBtn"[^>]*>恢复<\/Button>[\s\S]*?<\/ButtonRow>/,
+  "the approved manual card keeps refine, undo and reset together");
+assert.match(liveRefinePanel, /<Hint id="refine2dHint">点按“微调”后，单指拖动线条；双指可缩放图片。<\/Hint>/,
+  "the approved manual card provides visible gesture feedback");
+assert.match(liveRefinePanel, /className="live-refine-internal" aria-hidden="true"/,
+  "internal runtime controls remain hidden from the visible card");
+assert.doesNotMatch(liveRefinePanel, /手动拖动、隐藏或逐点调整当前结果|也可将鼠标放在图片上滚动缩放|以选中点为中心，连续控制指定数量的点|默认只修改选中的一根线/,
   "the manual refinement card omits all requested explanatory copy");
 assert.match(mobileControls, /const candidateReady = Boolean\(edit\?\.widthScaleVisible\)/,
   "mobile candidate editing follows the controller capability instead of the intentionally hidden candidate summary");
@@ -522,12 +558,16 @@ assert.doesNotMatch(liveQualityPanel, /追踪质量|跟踪质量参考|姿态与
   "the removed quality description is not rendered on desktop or phone");
 assert.match(liveRuntime, /langerface:live-quality-relocated[\s\S]*?bindDom\(root\)/,
   "the live runtime retains compatibility with any older relocation event");
-assert.match(stageStatus, /<span>\{snapshot\?\.stageStatus \|\| "切口规划准备中"\}<\/span>/,
-  "the hidden workflow status retains the complete generated incision message and its baseline fallback");
+assert.match(stageStatus, /const statusText = \(snapshot\?\.stageStatus \|\| "切口规划准备中"\)\s*\.replace\("亮紫色虚线仅供诊断", "候选边界仅保留在诊断日志中"\);/,
+  "workflow preserves generated status and fallback, correcting only the retired diagnostic-overlay wording");
+assert.match(stageStatus, /<span>\{statusText\}<\/span>/,
+  "workflow renders the preserved status text");
 assert.doesNotMatch(stageStatus, /compactStatus|当前切口不可确认|当前操作未完成|请在画布中操作/,
   "the hidden workflow status cannot replace generated diagnostic detail with presentation-only summaries");
-assert.match(stageStatus, /id="workflowStageStatus"[\s\S]*?hidden[\s\S]*?aria-hidden="true"/,
-  "workflow retains generated stage status in the DOM without visually rendering it");
+assert.match(stageStatus, /const showFeedback = busy \|\| warning;/,
+  "workflow exposes loading and warning feedback while hiding normal status");
+assert.match(stageStatus, /id="workflowStageStatus"[\s\S]*?hidden=\{!showFeedback\}[\s\S]*?aria-hidden=\{!showFeedback\}/,
+  "workflow keeps visual and accessibility status visibility synchronized");
 assert.match(liveStagePanel, /compactWorkflowChrome\s*=\s*false/,
   "the shared live stage keeps runtime chrome visible unless a caller explicitly requests compact workflow chrome");
 assert.match(liveStagePanel, /id="livePill" hidden=\{compactWorkflowChrome\}[\s\S]*?id="fps" hidden=\{compactWorkflowChrome\}[\s\S]*?id="overlayMsg" hidden=\{compactWorkflowChrome\}/,
@@ -543,12 +583,8 @@ assert.match(render2d, /els\.qualityVal\.textContent = `\$\{label\} \$\{q\}%`; e
 assert.match(stageStatus, /snapshot\?\.stageBusy/, "workflow stage status consumes the incision-only busy state");
 assert.match(stageStatus, /workflow-stage-spinner/, "workflow renders an explicit waiting animation for incision work");
 assert.match(stageStatus, /aria-busy={busy}/, "workflow exposes waiting state to assistive technology");
-assert.match(stageStatus, /window\.setTimeout\(\(\) => setVisible\(false\), 4_000\)/,
-  "ordinary mobile result copy visually clears after four seconds");
-assert.match(stageStatus, /MOBILE_WORKFLOW_MEDIA_QUERY[\s\S]*?if \(!mobileViewport \|\| persistent\) return;/,
-  "the four-second result presentation is gated to phone-class coarse-pointer viewports");
-assert.match(stageStatus, /busy \|\| warning \|\| activeTool/,
-  "busy, warning, and active-tool guidance remains persistent instead of being timed away");
+assert.doesNotMatch(stageStatus, /setTimeout|setVisible|mobileViewport|activeTool/,
+  "loading and warning feedback is not timed away or coupled to viewport/tool selection");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-stage-status\.is-collapsed\s*{[^}]*visibility:\s*hidden;/,
   "desktop workflow status cannot inherit the phone-only timed presentation style");
 assert.match(styles, /\.workflow-workbench \.workflow-stage-status\s*\{[^}]*white-space:\s*normal;[^}]*overflow:\s*visible;/s,
@@ -885,13 +921,31 @@ assert.match(canvasTools, /source\.kind === "camera"[\s\S]*?const markerUnavaila
   "camera mode disables controlled-marker tumor recognition");
 assert.match(mobileControls, /function MobileCandidateAdjustPanel[\s\S]*?source\.kind === "camera"[\s\S]*?disabled=\{cameraMode \|\| !candidateReady\}/,
   "camera mode disables candidate adjustment controls");
+assert.match(styles, /\.workflow-workbench \.mobile-candidate-adjust \{[\s\S]*?display:\s*grid/,
+  "candidate adjustment is visible in the shared desktop and mobile incision rail");
+assert.doesNotMatch(styles, /\.mobile-workflow-dock,\s*\.mobile-candidate-adjust\s*\{\s*display:\s*none/,
+  "candidate adjustment is not hidden with the mobile-only operations dock");
+assert.match(liveWrinklePanel, /WorkflowLayerVisibilityButtons/,
+  "the desktop wrinkle panel mounts the same shared layer switches as the phone dock");
+assert.match(mobileControls, /function WorkflowLayerVisibilityButtons[\s\S]*?>RSTL<[\s\S]*?>皱纹<[\s\S]*?>切口线</,
+  "the shared switch group exposes independent RSTL, wrinkle, and incision visibility controls");
+assert.match(mobileControls, /WorkflowLayerVisibilityButtons className="mobile-layer-grid" mobile/,
+  "the phone dock explicitly preserves the established mobile layer-button presentation");
+assert.match(mobileControls, /mobile \? "mobile-layer-toggle" : "workflow-layer-toggle"/,
+  "shared layer behavior keeps phone and desktop visual classes separate");
+assert.match(styles, /\.workflow-workbench \.mobile-layer-toggle\[aria-pressed="true"\]\s*\{[^}]*color:\s*#e0f2fe;[^}]*background:\s*rgb\(8 145 178 \/ 18%\);[^}]*border-color:\s*#67e8f9;/s,
+  "the established phone selected-state colors remain unchanged");
+assert.doesNotMatch(liveIncisionOverlayPanel, /setMobileIncisionCandidateVisible|workflow-layer-toggle/,
+  "the incision overlay panel does not keep a second independent visibility switch");
+assert.match(liveIncisionOverlayPanel, /clear_incision_overlay[\s\S]*?清除切口候选叠加/,
+  "removing a loaded candidate remains distinct from temporarily hiding its strokes");
 assert.match(reviewControlsPanel, /source\.kind === "camera"[\s\S]*?disabled=\{cameraMode\}[\s\S]*?disabled=\{confirmDisabled\}/,
   "camera mode disables reviewer input and confirmation");
 assert.match(tumorInputPanel, /workflow-tumor-transfer-actions[\s\S]*?id="exportTumorBtn"[\s\S]*?id="importTumorBtn"/,
   "tumor import and export share one presentation-only mobile visibility hook");
 assert.match(tumorInputPanel, /className="workflow-recalculate-action"[\s\S]*?id="runWorkflowBtn"/,
   "candidate recalculation has a presentation-only mobile visibility hook");
-assert.match(tumorInputPanel, /自由轮廓鼠绘/,
+assert.match(tumorInputPanel, /自由轮廓手绘/,
   "the merged panel names the continuous interaction as freehand drawing rather than discrete points");
 assert.doesNotMatch(incisionRail, /IncisionStatePanel/,
   "workflow removes the duplicate incision state card while the standalone incision page keeps it");
@@ -1015,10 +1069,10 @@ assert.match(styles, /@media \(min-width:\s*1281px\) and \(max-width:\s*1760px\)
   "intermediate desktop widths keep the complete tool strip in a second header row instead of clipping actions");
 assert.match(styles, /@media \(max-width:\s*1280px\)\s*{[\s\S]*?\.workflow-workbench\.app\s*{[\s\S]*?grid-template-columns:\s*1fr;/, "workflow collapses before its readable three-column minimum can overflow");
 
-assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench\.app\s*\{[^}]*--workflow-mobile-stage-height:\s*max\([\s\S]*?min\(calc\(100dvh - 170px\),\s*calc\(100vw \+ 100px\)\)[\s\S]*?grid-template-rows:\s*var\(--workflow-mobile-stage-height\) minmax\(0, 1fr\);[^}]*height:\s*100dvh;[^}]*overflow:\s*hidden;/,
+assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench\.app\s*\{[^}]*--workflow-mobile-stage-height:\s*max\([\s\S]*?min\(calc\(100dvh - 136px\),\s*calc\(100vw \+ 134px\)\)[\s\S]*?grid-template-rows:\s*var\(--workflow-mobile-stage-height\) minmax\(0, 1fr\);[^}]*height:\s*100dvh;[^}]*overflow:\s*hidden;/,
   "phone workflow sizes the observation region from both usable height and the width needed for a full photo");
-assert.match(styles, /\.react-workflow-host\[data-workflow-marker-mode="true"\] \.workflow-workbench\.app\s*\{[^}]*--workflow-mobile-stage-height:\s*max\([\s\S]*?min\(calc\(100dvh - 136px\),\s*calc\(100vw \+ 134px\)\)/,
-  "controlled-marker mode compensates only for the compact second toolbar row without shrinking the photo");
+assert.doesNotMatch(styles, /\.react-workflow-host\[data-workflow-marker-mode="true"\] \.workflow-workbench\.app\s*\{[^}]*--workflow-mobile-stage-height:/,
+  "controlled marking does not change the reserved observation-region height");
 assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.stage-body\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/,
   "phone workflow stage contains its canvas and focus cards instead of spilling over the next section");
 assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.main-wrap\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;/,
@@ -1029,7 +1083,7 @@ assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workb
   "phone workflow hides the redundant focus-preview rail while direct canvas zoom is available");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-tumor-transfer-actions,[\s\S]*?\.workflow-recalculate-action\s*\{[^}]*display:\s*none;/,
   "phone workflow hides tumor transfer and manual recalculation without removing their desktop actions");
-assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-stage-status\s*\{[^}]*min-block-size:\s*34px;[^}]*max-block-size:\s*48px;[^}]*overflow-y:\s*auto;/,
+assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-stage-status\s*\{[^}]*min-block-size:\s*34px;[^}]*max-block-size:\s*96px;[^}]*overflow-y:\s*auto;/,
   "phone workflow bounds persistent recognition guidance above the face canvas");
 assert.match(render2d, /const zoomItems:[\s\S]*?\{ label: "全脸", region: null \}[\s\S]*?\.\.\.ZOOM_REGIONS/,
   "focus-preview generation remains available for desktop and future rollback");
@@ -1043,20 +1097,28 @@ assert.match(styles, /\.workflow-workbench \.stage-top > #livePill\s*\{[^}]*disp
   "redundant phone source and FPS labels are hidden while their underlying runtime data remains intact");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.mobile-workflow-dock\s*\{[^}]*display:\s*grid;/,
   "the compact input and layer dock is exposed only on phone-class coarse pointers");
-assert.match(mobileControls, /upload_source[\s\S]*?camera_toggle[\s\S]*?pause_toggle[\s\S]*?recording_toggle/,
-  "the mobile dock retains photo, rear-camera, pause and export command paths");
+assert.match(mobileControls, /upload_source[\s\S]*?camera_toggle[\s\S]*?pause_toggle[\s\S]*?recording_toggle[\s\S]*?image_export/,
+  "the mobile dock retains photo, rear-camera, pause, video export, and image export command paths");
+assert.match(mobileControls, /停止视频[\s\S]*?导出视频[\s\S]*?导出图片/,
+  "the mobile dock distinguishes video recording from still PNG export");
+assert.match(liveSourceControls, /recording_toggle[\s\S]*?image_export/,
+  "desktop source controls retain every phone export capability while keeping their desktop layout");
+assert.match(liveRuntime, /imageExport: recordingActions\.exportCurrentImage/,
+  "desktop and phone image export share the recording action adapter");
+assert.match(liveRecordingActions, /await controller\.exportImage\(\)[\s\S]*?图片导出失败/,
+  "still image export reports browser or canvas failures instead of leaving an unhandled rejection");
 assert.doesNotMatch(mobileControls, /if \(!nextRstl && !nextWrinkles\) return;/,
-  "mobile operators may hide RSTL and wrinkles together to inspect the unmodified source image");
-assert.match(mobileControls, /setMobileRstlLayerVisible\(rstlVisible\)[\s\S]*?setMobileWrinkleLayerVisible\(wrinklesVisible\)[\s\S]*?setMobileIncisionCandidateVisible\(incisionVisible\)/,
-  "all three phone overlay switches have independent display-only visibility gates");
-assert.match(mobileControls, /useState\(true\)[\s\S]*?useState\(true\)[\s\S]*?useState\(true\)/,
-  "RSTL, wrinkle, and incision buttons are visibly enabled on the first phone render");
-assert.match(mobileControls, /resetMobileWorkflowVisibility\(\);\s*writeWrinkleDisplayMode\("both"\);/,
-  "the phone workflow initializes all three display gates without requiring a wake-up click");
-assert.match(mobileControls, /if \(!cameraActive\) return;[\s\S]*?setRstlVisible\(true\);[\s\S]*?setWrinklesVisible\(true\);[\s\S]*?setMobileRstlLayerVisible\(true\);[\s\S]*?setMobileWrinkleLayerVisible\(true\);[\s\S]*?writeWrinkleDisplayMode\("both"\);[\s\S]*?\}, \[cameraActive\]\);/,
-  "a successfully opened phone camera re-synchronizes pressed layer buttons with both renderer visibility gates");
+  "operators may hide RSTL and wrinkles together to inspect the unmodified source image");
+assert.match(mobileControls, /useSyncExternalStore\([\s\S]*?subscribeWorkflowLayerVisibility,[\s\S]*?workflowLayerVisibilitySnapshot/,
+  "desktop and phone switches render from one shared visibility snapshot");
+assert.match(mobileControls, /setMobileRstlLayerVisible\(nextRstl\)[\s\S]*?setMobileWrinkleLayerVisible\(nextWrinkles\)[\s\S]*?setMobileIncisionCandidateVisible\(!visibility\.incision\)/,
+  "all three overlay switches keep independent display-only visibility gates");
+assert.match(mobileControls, /aria-pressed=\{visibility\.rstl\}[\s\S]*?aria-pressed=\{visibility\.wrinkles\}[\s\S]*?aria-pressed=\{visibility\.incision\}/,
+  "both layouts expose the current shared pressed state instead of keeping local copies");
+assert.match(mobileControls, /if \(!cameraActive\) return;[\s\S]*?setMobileRstlLayerVisible\(true\);[\s\S]*?setMobileWrinkleLayerVisible\(true\);[\s\S]*?writeWrinkleDisplayMode\("both"\);[\s\S]*?\}, \[cameraActive\]\);/,
+  "camera startup re-synchronizes the shared RSTL and wrinkle display gates");
 assert.match(liveRuntime, /root\.querySelector\("\.workflow-workbench"\)[\s\S]*?resetMobileWorkflowVisibility\(\);\s*setWrinkleDisplayMode\("both"\);/,
-  "the workflow runtime and visible phone controls share the same all-layers-on default");
+  "the workflow runtime initializes the shared layer state to all visible");
 assert.match(styles, /\.workflow-canvas-tools\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);[^}]*overflow:\s*hidden;/,
   "the phone marker toolbar uses a fixed three-column grid after the reset action was removed");
 assert.match(styles, /\.workflow-canvas-tools > button\s*\{[^}]*font-size:\s*11px;[^}]*white-space:\s*nowrap;/,
@@ -1067,12 +1129,92 @@ assert.match(styles, /\[data-workflow-marker-scan-label\]\s*\{[^}]*display:\s*no
   "the face-obscuring scan-diameter label is hidden only inside the phone media query");
 assert.match(mobileControls, /preview_edit", "uniformScale"[\s\S]*?commit_edit", "uniformScale"/,
   "mobile margin adjustment changes fusiform length and width atomically");
-assert.match(mobileControls, /min="100"[\s\S]*?max="150"/,
-  "mobile margin adjustment only enlarges the tool suggestion within the existing upper bound");
-assert.match(controller, /function handleMobileEditCommand[\s\S]*?if \(!mobileWorkflowViewportActive\(\)\) return;/,
-  "workflow candidate editing rejects the phone UI event outside the mobile viewport contract");
+assert.match(mobileControls, /onPointerCancel[\s\S]*?cancel_edit", "uniformScale"[\s\S]*?onPointerCancel[\s\S]*?cancel_edit", "angleOffsetDeg"/,
+  "cancelled pointer gestures discard uncommitted scale and direction previews");
+assert.match(mobileControls, /min="0"[\s\S]*?max="50"/,
+  "mobile overall scaling shows 0% as the baseline and allows up to 50% enlargement");
+{
+  const editFunction = controllerAst.statements.find((statement: any) =>
+    ts.isFunctionDeclaration(statement) && statement.name?.text === "handleMobileEditCommand");
+  const rollbackEditFunction = controllerAst.statements.find((statement: any) =>
+    ts.isFunctionDeclaration(statement) && statement.name?.text === "rollbackMobileCandidateEditPreview");
+  assert.ok(editFunction);
+  assert.ok(rollbackEditFunction);
+  for (const mobile of [false, true]) {
+    let applied = 0;
+    let blocked = 0;
+    const diagnosticEvents: any[] = [];
+    let camera = false;
+    const state = { edit: { angle_offset_deg: 0, length_scale: 1, width_scale: 1 }, mobileEditPreviewFrame: null };
+    const pendingEdits = new WeakMap();
+    const previewTransactions = new WeakMap();
+    const handle = runInNewContext(ts.transpileModule(`(() => {
+      ${rollbackEditFunction.getText(controllerAst)}
+      ${editFunction.getText(controllerAst)}
+      return handleMobileEditCommand;
+    })()`, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022 },
+    }).outputText, {
+      mobileWorkflowViewportActive: () => mobile,
+      readIncisionEditCommand: (event: any) => event.detail,
+      cameraIncisionActionsDisabled: () => camera,
+      blockCameraIncisionAction: () => { blocked += 1; },
+      cancelMobileEditPreview: () => { state.mobileEditPreviewFrame = null; },
+      cloneIncisionEdit: (edit: any) => ({ ...edit }),
+      scheduleMobileCandidateEdit: () => {
+        state.mobileEditPreviewFrame = 1;
+        applied += 1;
+        state.mobileEditPreviewFrame = null;
+      },
+      applyMobileCandidateEdit: () => { applied += 1; },
+      workflowDiagnosticSnapshot: () => ({ geometry_revision: 0, workflow_request_id: 0, source_revision: 1, candidate: null, display: null }),
+      observeWorkflowDiagnostic(_state: any, event: any) { diagnosticEvents.push(event); },
+      diagnosticEditPending: pendingEdits,
+      mobileEditPreviewTransactions: previewTransactions,
+    });
+    handle(state, { detail: { command: "commit_edit", controlId: "uniformScale", value: 25 } });
+    assert.equal(state.edit.length_scale, 1.25);
+    assert.equal(state.edit.width_scale, 1.25);
+    handle(state, { detail: { command: "commit_edit", controlId: "angleOffsetDeg", value: 20 } });
+    assert.equal(state.edit.angle_offset_deg, 20);
+    handle(state, { detail: { command: "commit_edit", controlId: "uniformScale", value: 0 } });
+    assert.equal(state.edit.length_scale, 1);
+    assert.equal(applied, 3);
+    handle(state, { detail: { command: "preview_edit", controlId: "angleOffsetDeg", value: 15 } });
+    assert.equal(state.edit.angle_offset_deg, 15);
+    assert.equal(state.mobileEditPreviewFrame, null,
+      "the test RAF applies the preview before pointer-up, matching the reported failure path");
+    const appliedAfterPreview = applied;
+    handle(state, { detail: { command: "commit_edit", controlId: "angleOffsetDeg", value: 15 } });
+    assert.equal(applied, appliedAfterPreview,
+      "committing an already-rendered preview does not repeat the expensive geometry fit");
+    assert.equal(diagnosticEvents.at(-1)?.stage, "committed",
+      "every completed preview gesture records a final committed diagnostic state");
+    handle(state, { detail: { command: "preview_edit", controlId: "uniformScale", value: 49 } });
+    assert.equal(state.edit.length_scale, 1.49);
+    handle(state, { detail: { command: "commit_edit", controlId: "angleOffsetDeg", value: -25 } });
+    assert.equal(state.edit.length_scale, 1,
+      "an uncommitted scale preview is rolled back before a rotation begins");
+    assert.equal(state.edit.angle_offset_deg, -25);
+    assert.ok(diagnosticEvents.some((event) => event.stage === "discarded"
+      && event.reason === "mobile_edit_preview_superseded"),
+    "diagnostics distinguish an abandoned preview from a committed scale change");
+    handle(state, { detail: { command: "preview_edit", controlId: "uniformScale", value: 40 } });
+    handle(state, { detail: { command: "cancel_edit", controlId: "uniformScale" } });
+    assert.equal(state.edit.length_scale, 1,
+      "a cancelled pointer gesture restores the last committed scale");
+    camera = true;
+    handle(state, { detail: { command: "commit_edit", controlId: "uniformScale", value: 50 } });
+    assert.equal(state.edit.length_scale, 1);
+    assert.equal(blocked, 1);
+  }
+}
+assert.match(controller, /else if \(diagnosticPending\)[\s\S]*?stage: "committed"[\s\S]*?diagnosticEditPending\.delete\(state\)/,
+  "a pointer-up after an already-rendered preview still closes the diagnostic action");
 assert.match(controller, /state\.edit\.angle_offset_deg = Math\.max\(-35,[\s\S]*?state\.edit\.length_scale = Math\.max\(1,[\s\S]*?state\.edit\.width_scale = Math\.max\(1,/,
   "workflow clamps the two mobile-only adjustment dimensions before applying the existing candidate editor");
+assert.match(controller, /case "uniformScale":[\s\S]*?1 \+ value \/ 100[\s\S]*?state\.edit\.length_scale = scale;[\s\S]*?state\.edit\.width_scale = scale;/,
+  "mobile 0% scale maps to the 1.0 baseline and updates both candidate dimensions together");
 assert.match(controller, /workflowFusiformPlaneNormal\(baseResult\.candidate, fallbackNormal\)/,
   "mobile direction adjustment rotates in the candidate's original plane instead of a potentially different nearby mesh plane");
 assert.match(controller, /scheduleMobileCandidateEdit[\s\S]*?requestAnimationFrame[\s\S]*?cancelMobileEditPreview/,
@@ -1150,13 +1292,15 @@ assert.match(controller, /frame\.transform\?\.viewportLeft \?\? rect\.left[\s\S]
   assert.match(controller, /state\.cleanup = \(\) => \{\s*cleanupOverlayResize\(\)/);
 }
 assert.match(mobileVisibility, /let rstlLayerVisible = true;[\s\S]*?let wrinkleLayerVisible = true;[\s\S]*?let incisionCandidateVisible = true;/,
-  "all phone display layers default to visible");
+  "all shared display layers default to visible");
 assert.match(mobileVisibility, /resetMobileWorkflowVisibility[\s\S]*?rstlLayerVisible = true;[\s\S]*?wrinkleLayerVisible = true;[\s\S]*?incisionCandidateVisible = true;/,
-  "all phone display layers reset when the mobile workflow unmounts");
-assert.match(mobileVisibility, /return !mobileWorkflowViewportActive\(\) \|\| rstlLayerVisible;[\s\S]*?return !mobileWorkflowViewportActive\(\) \|\| wrinkleLayerVisible;[\s\S]*?return !mobileWorkflowViewportActive\(\) \|\| incisionCandidateVisible;/,
-  "phone visibility choices cannot suppress any desktop overlay after a viewport change");
+  "all shared display layers reset when the workflow runtime starts");
+assert.match(mobileVisibility, /return rstlLayerVisible;[\s\S]*?return wrinkleLayerVisible;[\s\S]*?return incisionCandidateVisible;/,
+  "the same visibility gates apply in desktop and phone layouts");
+assert.match(mobileVisibility, /visibilityListeners[\s\S]*?subscribeWorkflowLayerVisibility[\s\S]*?publishVisibility[\s\S]*?visibilitySnapshot/,
+  "visibility changes publish one shared snapshot to every mounted switch group");
 assert.match(render2d, /shouldDrawRstlLayer\(\) && mobileRstlLayerVisible\(\)[\s\S]*?shouldDrawWrinkleLayer\(\) && mobileWrinkleLayerVisible\(\)/,
-  "RSTL and wrinkle generation retain their established gates and add only phone display suppression");
+  "RSTL and wrinkle generation retain their established gates and add only shared display suppression");
 assert.match(render2d, /if \(mobileIncisionCandidateVisible\(\)\)\s*\{[\s\S]*?overlayStyle\.candidate\.haloColor[\s\S]*?overlayStyle\.candidate\.color/,
   "the mobile visibility gate wraps only candidate strokes while retaining lesion boundary and center drawing");
 assert.ok(
@@ -1167,11 +1311,17 @@ assert.ok(
 assert.match(controller, /incisionOverlayScreenStyle\(state\.result\?\.candidate\?\.type,[\s\S]*?compact: mobileWorkflowViewportActive\(\),[\s\S]*?viewScale: frame\.transform\?\.zoom/,
   "the photo overlay derives its visual scale from the same compact contract and the current photo zoom");
 assert.match(controller, /centerCircle\.setAttribute\("r", String\(overlayStyle\.center\.radiusCss\)\)/,
-  "the photo lesion center consumes the shared responsive radius instead of a fixed mobile radius");
+  "the photo lesion center is deliberately smaller than the shared primary-center radius");
+assert.ok(controller.includes("geometry?.planningCenter")
+  && controller.includes('[data-workflow-incision-center]'),
+  "the photo overlay renders the independent incision center from planned geometry");
+assert.ok(canvasTools.includes('swatchClassName="incision-center">切口中心')
+  && canvasTools.includes('swatchClassName="lesion-center">病灶中心'),
+"the workflow legend distinguishes the prominent incision center from the lesion center");
 assert.ok(canvasTools.includes("data-workflow-boundary-halo")
   && canvasTools.includes("data-workflow-candidate-halo"),
 "photo boundary and incision strokes have the same explicit under-stroke structure as live canvas rendering");
-assert.equal(incisionOverlayScreenStyle("fusiform", { compact: true }).center.radiusCss, 3,
+assert.equal(incisionOverlayScreenStyle("fusiform", { compact: true }).center.radiusCss, 2,
   "the compact full-photo lesion center uses the finer baseline");
 assert.equal(incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 1 }).candidate.lineWidth, 0.4,
   "the compact full-photo incision uses the accepted fine mobile width");
@@ -1181,8 +1331,8 @@ assert.ok(Math.abs(incisionOverlayScreenStyle("fusiform", { compact: true, viewS
 assert.ok(incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 5 }).candidate.lineWidth
   > incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 1.5 }).candidate.lineWidth,
 "the incision stroke no longer freezes at 1.5x while the photo continues to enlarge");
-assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\[data-workflow-boundary\][\s\S]*?stroke:\s*#fde047;[\s\S]*?\[data-workflow-candidate\][\s\S]*?stroke:\s*#67e8f9;[\s\S]*?\[data-workflow-center\][\s\S]*?fill:\s*#fb7185;/,
-  "phone drawing marks use the requested bright, thin clinical legend colors without restyling desktop");
+assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\[data-workflow-boundary\][\s\S]*?stroke:\s*#fde047;[\s\S]*?\[data-workflow-candidate\][\s\S]*?stroke:\s*#67e8f9;[\s\S]*?\[data-workflow-center\][\s\S]*?fill:\s*transparent;/,
+  "phone drawing marks keep the bright boundary/candidate colors while visually subordinating the lesion center");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\[data-workflow-candidate-halo\]\s*\{[^}]*stroke:\s*#082f49;[^}]*stroke-width:\s*0\.4;/,
   "phone fallback keeps the candidate halo as fine as the primary incision stroke");
 const clickIntent = beginWorkflowPointerIntent(1, 0, 10, 10);

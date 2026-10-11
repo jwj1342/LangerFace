@@ -8,8 +8,8 @@ import {
   type ControlledMarkerFixture,
 } from "./support/incisionPhoto";
 
-const MARKER_A: ControlledMarkerFixture = { xRatio: 0.30, yRatio: 0.48, radiusRatio: 0.035 };
-const MARKER_B: ControlledMarkerFixture = { xRatio: 0.70, yRatio: 0.58, radiusRatio: 0.035 };
+const MARKER_A: ControlledMarkerFixture = { xRatio: 0.30, yRatio: 0.48, radiusRatio: 0.035, interiorRetrace: true };
+const MARKER_B: ControlledMarkerFixture = { xRatio: 0.70, yRatio: 0.58, radiusRatio: 0.035, interiorRetrace: true };
 
 function handleMidpoint(handles: { x: number; y: number }[]) {
   expect(handles).toHaveLength(2);

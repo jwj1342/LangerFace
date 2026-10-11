@@ -177,8 +177,9 @@ Live 工作台不再发布实时 3D 路线。扫描重建、刚性投影、FLAME
 
 ## 9. 网页开发、构建与部署
 
-- 本地开发：`cd web && npm run doctor:wrinkle && npm run dev`，Vite 默认监听 `http://127.0.0.1:5173`。
-- 生产构建：`cd web && npm ci && npm run build`，输出 `web/dist/`。
+- 候选算法本地开发：`cd web && npm run doctor:wrinkle && npm run dev:lesion-candidate`，Vite 默认监听 `http://127.0.0.1:5173`。
+- 候选算法生产构建：`cd web && npm ci && npm run build:lesion-candidate`，输出 `web/dist/` 并写入运行身份清单。
+- 普通 `npm run dev` / `npm run build` 同样经过最新算法门禁并使用当前候选；`legacy-v0.23` 仅为显式回退身份，不得用其验收当前算法。
 - 生产预览：`cd web && npm run preview`，Vite 默认监听 `http://127.0.0.1:4173`。
 - Vite dev/preview 会挂载本地 Python V10 API；普通静态服务器托管 `dist/` 时不会挂载该 API，
   不能用于本地四区域皱纹检测。
@@ -196,7 +197,7 @@ Live 工作台不再发布实时 3D 路线。扫描重建、刚性投影、FLAME
 - 首次加载从 CDN 拉取 MediaPipe wasm（数秒）；之后浏览器缓存。
 
 ### 部署（Vercel 静态前端 + 受控 V10 provider）
-- Vercel 使用 [`web/vercel.json`](../../web/vercel.json) 运行 `npm run build`，输出目录为 `dist/`。
+- Vercel 使用 [`web/vercel.json`](../../web/vercel.json) 运行 `npm run build:lesion-candidate`，输出目录为 `dist/`。
 - [`web/vercel.json`](../../web/vercel.json)：`/app/*` 回退到 React SPA，`/assets/*` 保留为站点根运行时资产路径并设置缓存头。
   排查 `Unexpected token '<'` / `<!DOCTYPE` JSON 解析错误时，先看 Network 面板失败 URL 是否误落到 `/app/assets/...`。
 - [`web/.vercelignore`](../../web/.vercelignore)：排除本地测试/构建缓存。
@@ -215,8 +216,8 @@ Live 工作台不再发布实时 3D 路线。扫描重建、刚性投影、FLAME
 2. `download_assets.py` + 手部模型 → `build_field_atlas_standard_v1.py`（正式 RSTL，显式传参考与输出路径）
    → 需要 Langer 对照时再跑 `build_field_atlas.py`，并注意它会覆盖 RSTL 图谱 → `export_web_assets.py`。
 3.（可选）`reconstruct_3d.py` 生成 3D 示例。
-4. `pytest` + `cd web && npm test` 全绿；`cd web && npm run build` 可生产构建。
-5. `cd web && npm run dev` → 浏览器打开 Vite 地址，验证 2D 实时；Live 3D runtime 已删除，
+4. `pytest` + `cd web && npm test` 全绿；`cd web && npm run build:lesion-candidate` 可生成并核验候选算法生产包。
+5. `cd web && npm run dev:lesion-candidate` → 浏览器打开 Vite 地址并先核对运行身份，再验证 2D 实时；Live 3D runtime 已删除，
    `/annotate` 的 3D 标注工具与 `/surgery` 闭合演示仍可从界面进入（见 §4 与 §12）。
 6. `annotate_atlas.py` 只保存 `validated:false` 编辑草案；完成独立逐线临床复核、
    来源记录和显式签署后，才允许由受控 finalize 流程生成 `validated:true` 候选资产。
@@ -278,7 +279,7 @@ Live 工作台不再发布实时 3D 路线。扫描重建、刚性投影、FLAME
 
 ```bash
 cd web
-npm run dev
+npm run dev  # 仅打开独立 3D 标注工具；此流程不验收受控标记算法
 # 浏览器打开 Vite 地址下的 /app/annotate，例如 http://127.0.0.1:5173/app/annotate
 ```
 

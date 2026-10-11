@@ -13,6 +13,7 @@ const liveUi = [
   fs.readFileSync("src/components/LiveQualityPanel.tsx", "utf8"),
 ].join("\n");
 const main = fs.readFileSync("src/services/liveRuntime.ts", "utf8");
+const recordingActions = fs.readFileSync("src/services/liveRecordingActions.ts", "utf8");
 const render = fs.readFileSync("src/services/render2d.ts", "utf8");
 const overlayStyle = fs.readFileSync("src/services/incisionOverlayStyle.ts", "utf8");
 const three3d = fs.readFileSync("src/services/three3d.ts", "utf8");
@@ -56,14 +57,17 @@ assert.ok(liveSnapshots.includes("buildLiveControllerSnapshot"), "shared live sn
 assert.ok(main.includes("setIncisionOverlayQa"), "live page shows pending overlay QA feedback after loading a candidate");
 assert.ok(main.includes("上传照片或开启摄像头后，会随 RSTL 一起显示"), "live page gives explicit overlay feedback");
 assert.ok(main.includes("buildZoomCards(refreshStaticImage)"), "live page rebuilds zoom cards after loading incision overlay");
-assert.ok(main.includes("createCanvasRecordingController"), "live page uses the tested canvas export controller");
-assert.ok(main.includes("canvas: els.canvas"), "live page exports the rendered main canvas, including incision overlay");
+assert.ok(main.includes("createLiveRecordingActions") && recordingActions.includes("createCanvasRecordingController"), "live page delegates to the tested canvas export controller");
+assert.ok(main.includes("canvas: () => els.canvas") && recordingActions.includes("canvas: options.canvas()"), "live page exports the current rendered main canvas, including incision overlay");
 assert.ok(main.includes("getExtraCanvases: visibleRecordingCanvases"), "live page includes visible zoom canvases in composite export");
 assert.ok(!main.includes('label: "3D 视图"'), "live export has no retired 3D canvas");
 assert.ok(exporter.includes("sourceCanvas.captureStream(fps)"), "export controller records the selected source canvas stream");
-assert.ok(exporter.includes("createCompositeSource(extras)"), "export controller can compose detail canvases");
+assert.ok(exporter.includes("createCompositeSource(extras,"), "export controller can compose detail canvases");
 assert.ok(exporter.includes("drawContain(g, extra.canvas"), "export controller draws extra canvases into recording");
-assert.ok(exporter.includes('mimeType: "video/webm"'), "export controller records playable webm output");
+assert.ok(exporter.includes('selectedMime ? new Recorder(stream, { mimeType: selectedMime })'),
+  "export controller records with a supported browser MIME type");
+assert.ok(exporter.includes('actualMime.split(";", 1)[0] || "video/webm"'),
+  "export controller records a playable MIME type with a webm fallback");
 assert.ok(render.includes("drawIncisionOverlay(lm"), "renderer draws incision overlay on every frame");
 assert.ok(render.includes("incisionOverlayScreenStyle(overlay.candidate_type")
   && render.includes("compact: mobileWorkflowViewportActive()"),
@@ -131,12 +135,14 @@ assert.ok(render.includes("叠加稳定"), "renderer surfaces stable overlay fee
 assert.ok(render.includes("切口候选"), "zoom strip exposes a dedicated incision candidate detail card");
 assert.ok(render.includes("incisionOverlayBounds"), "renderer computes incision overlay bounds for detail zoom");
 assert.ok(render.includes("overlay.tumor?.center_ref"), "incision zoom includes tumor center");
+assert.ok(render.includes("overlay.candidate?.center_ref"), "incision zoom includes the independent incision center");
 assert.ok(render.includes("overlay.tumor?.boundary_refs"), "incision zoom includes tumor boundary");
 assert.ok(render.includes("overlay.candidate?.polyline_refs"), "incision zoom includes candidate incision line");
 assert.ok(render.includes("mapSurfaceRefs(refs, lm"), "incision zoom maps surface refs through runtime landmarks");
 assert.ok(three3d.includes("setIncisionOverlay("), "3D viewer can render incision overlay surface refs");
 assert.ok(three3d.includes("setIncisionOverlayPoints("), "3D viewer can render mapped overlay points");
 assert.ok(three3d.includes("tumor_boundary_points"), "3D viewer renders tumor boundary points");
+assert.ok(three3d.includes("candidate_center_point"), "3D viewer renders the independent incision center");
 assert.ok(three3d.includes("candidate_points"), "3D viewer renders candidate incision points");
 assert.ok(!fs.existsSync("src/services/mode3d.ts"), "Live overlay no longer ships the retired 3D runtime");
 

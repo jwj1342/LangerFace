@@ -217,7 +217,7 @@ pytest -q                         # Python 端
 cd web
 npm ci
 npm run doctor:wrinkle             # 必须输出 ready: true 和预期 V10/checkpoint
-npm run build                      # Vite 生产构建
+npm run build:lesion-candidate     # 候选算法生产构建，并写入运行身份清单
 npm test                           # Web TypeScript 几何/遮挡/Umeyama 对拍
 npx playwright install chromium    # 首次运行浏览器回归前安装 Chromium
 npm run test:browser               # 生产构建上的 Playwright UI/对比度回归
@@ -225,7 +225,7 @@ cd ..
 
 # 7) 启动网页
 cd web
-npm run dev                      # Vite dev server，默认 http://127.0.0.1:5173
+npm run dev:lesion-candidate     # 候选算法 Vite dev server，默认 http://127.0.0.1:5173
 ```
 
 网页依次查找 `LANGERFACE_WRINKLE_PYTHON`、已激活虚拟环境、仓库 `.venv`、
@@ -233,7 +233,10 @@ npm run dev                      # Vite dev server，默认 http://127.0.0.1:517
 仓库 `.venv` 也会自动被发现。启动前用 `npm run doctor:wrinkle` 核对 Python 3.10–3.12、
 `numpy/cv2/scipy/torch` 锁定版本、V10 版本和 checkpoint 哈希。浏览器打开 Vite 提示的本地地址 → 上传照片或点「摄像头」。
 首次加载会从 CDN 下载 MediaPipe wasm（数秒）；V10 checkpoint 已跟随仓库分发。
-本地必须使用 `npm run dev` 或 `npm run preview`；普通静态服务器只托管 `dist/` 时不会运行
+小肿物边界候选算法必须使用 `npm run dev:lesion-candidate`，生产包必须使用
+`npm run build:lesion-candidate`。普通 `npm run dev` / `npm run build` 也先核对发布登记并默认运行
+最新候选算法；`legacy-v0.23` 只允许通过环境变量显式回退，不能作为当前算法验收证据。Vite 本地服务或
+`npm run preview` 才能挂载本地 API；普通静态服务器只托管 `dist/` 时不会运行
 Vite 的本地 Python V10 API，因而不支持四区域检测。
 
 单图皱纹/RSTL runner 只用于受控研究复放。真实人脸原图和浏览器冻结产物不会随公开仓库分发；运行前必须
@@ -250,7 +253,7 @@ RSTL v8.1.96、V10 四区域皱纹检测和 V9 `v9-regional-smooth-7.2` 微调�
 ## 使用方式
 
 ### 网页（推荐，实时）
-进入 `web/` 后运行 `npm run dev`，打开 Vite 提示的本地地址：
+进入 `web/` 后运行 `npm run dev:lesion-candidate`，打开 Vite 提示的本地地址。普通 `npm run dev` 同样默认最新候选算法；只有显式设置 `VITE_CONTROLLED_MARKER_DETECTOR_PROFILE=legacy-v0.23` 才回退旧版：
 - **数据源**：上传照片/视频，或开摄像头；可暂停、导出（录制画布为 webm）。
 - **模板**：主 demo 只暴露 RSTL（首选）；Langer 对照图谱保留在资产、CLI 和标注器中。
 - **滑杆**：线密度、透明度；平滑参数仍在运行时存在，但主界面调试控件当前隐藏。
@@ -391,7 +394,7 @@ Stage 2 切口 workflow 只在浏览器本地处理肿物参数、标准化坐�
 
 ## 持续集成与部署（CI/CD）
 
-- **CI**：push 到 `master` / `refactor/**` 或发 PR 时，[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 跑四个并行 job —— `lint`（`ruff check .`）、`python-tests`（`pytest`，**Python 3.10 / 3.11 / 3.12** 矩阵，不装 mediapipe）、`js-tests`（**Node 24**：`npm ci` + `npm run build` + `npm test` 对拍 Web TypeScript 几何与 Python 一致）、`browser-tests`（Chromium 上运行生产构建的 `/surgery` UI/对比度回归）。提交前可装 `pre-commit`（[`.pre-commit-config.yaml`](.pre-commit-config.yaml)）做本地预检。
+- **CI**：push 到 `master` / `refactor/**` 或发 PR 时，[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 跑四个并行 job —— `lint`（`ruff check .`）、`python-tests`（`pytest`，**Python 3.10 / 3.11 / 3.12** 矩阵，不装 mediapipe）、`js-tests`（**Node 24**：先检查普通兼容构建，再运行 `build:lesion-candidate` 并回读候选身份，最后执行 `npm test`）、`browser-tests`（Chromium UI/对比度回归）。CI 通过证明候选构建身份和工程检查通过，不替代本地样本效果验收。提交前可装 `pre-commit`（[`.pre-commit-config.yaml`](.pre-commit-config.yaml)）做本地预检。
 - **CD**：当前通过 `web/vercel.json` 关闭所有 Vercel Git 自动部署，合并到 `master` 不会发布公网版本；恢复正式公网部署及其验证统一由 [#224](https://github.com/jwj1342/LangerFace/issues/224) 跟踪。网页仍可在本地构建为 `web/dist/`；预留的 Vercel Function `web/api/wrinkle-v10.mjs` 只签发小型短期令牌和检查 provider 能力，不接收图像。
 - **隐私**：离线重建默认写入 gitignored 的 `local_outputs/recon_demo.json`，不会随 Vercel 站点发布；真实患者头模仍不得提交到仓库。
 

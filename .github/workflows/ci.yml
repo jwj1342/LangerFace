@@ -84,8 +84,16 @@ jobs:
       - run: node tools/test_automerge_policy.mjs
       - working-directory: web
         run: npm ci
+      - name: Verify latest algorithm PR gate
+        working-directory: web
+        run: npm run verify:algorithm-release:pr
       - working-directory: web
         run: npm run build
+      - name: Build and verify lesion candidate runtime identity
+        working-directory: web
+        run: |
+          npm run build:lesion-candidate
+          npm run verify:build-lesion-candidate
       # Pure-node parity tests pin Web TypeScript geometry services against the
       # Python reference (web/test/expected.json).
       - name: Verify case features remain removed

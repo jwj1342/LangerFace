@@ -1,12 +1,13 @@
 import { Camera, Download, ImagePlus, Pause, Play, ScanLine } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useIncisionControllerCommands, useLiveControllerCommands } from "../hooks/useControllerCommands";
 import {
-  resetMobileWorkflowVisibility,
   setMobileIncisionCandidateVisible,
   setMobileRstlLayerVisible,
   setMobileWrinkleLayerVisible,
+  subscribeWorkflowLayerVisibility,
+  workflowLayerVisibilitySnapshot,
 } from "../services/mobileWorkflowVisibility";
 import { useIncisionStore } from "../stores/incisionStore";
 import { useLiveStore } from "../stores/liveStore";
@@ -38,9 +39,6 @@ function writeWrinkleDisplayMode(mode: WrinkleDisplayMode) {
 export function MobileWorkflowControls() {
   const liveCommands = useLiveControllerCommands();
   const liveSnapshot = useLiveStore((state) => state.snapshot);
-  const [rstlVisible, setRstlVisible] = useState(true);
-  const [wrinklesVisible, setWrinklesVisible] = useState(true);
-  const [incisionVisible, setIncisionVisible] = useState(true);
   const running = Boolean(liveSnapshot?.source.running);
   const paused = Boolean(liveSnapshot?.source.paused);
   const recording = Boolean(liveSnapshot?.recording);
@@ -48,57 +46,13 @@ export function MobileWorkflowControls() {
   const hasSource = running || Boolean(liveSnapshot?.source.kind);
 
   useEffect(() => {
-    resetMobileWorkflowVisibility();
-    writeWrinkleDisplayMode("both");
-    const select = document.querySelector<HTMLSelectElement>("#wrinkleDisplayMode");
-    const sync = () => {
-      const flags = displayModeFlags(readWrinkleDisplayMode());
-      setRstlVisible(flags.rstl);
-      setWrinklesVisible(flags.wrinkles);
-    };
-    sync();
-    select?.addEventListener("change", sync);
-    return () => {
-      select?.removeEventListener("change", sync);
-      resetMobileWorkflowVisibility();
-    };
-  }, []);
-
-  useEffect(() => {
-    setMobileRstlLayerVisible(rstlVisible);
-  }, [rstlVisible]);
-
-  useEffect(() => {
-    setMobileWrinkleLayerVisible(wrinklesVisible);
-  }, [wrinklesVisible]);
-
-  useEffect(() => {
-    setMobileIncisionCandidateVisible(incisionVisible);
-  }, [incisionVisible]);
-
-  useEffect(() => {
     if (!cameraActive) return;
     // Camera startup resets the wrinkle runtime. Re-apply the visible phone
     // controls afterwards so their pressed state and both render gates agree.
-    setRstlVisible(true);
-    setWrinklesVisible(true);
     setMobileRstlLayerVisible(true);
     setMobileWrinkleLayerVisible(true);
     writeWrinkleDisplayMode("both");
   }, [cameraActive]);
-
-  const toggleWrinkleLayer = (layer: "rstl" | "wrinkles") => {
-    const nextRstl = layer === "rstl" ? !rstlVisible : rstlVisible;
-    const nextWrinkles = layer === "wrinkles" ? !wrinklesVisible : wrinklesVisible;
-    setRstlVisible(nextRstl);
-    setWrinklesVisible(nextWrinkles);
-    if (nextRstl || nextWrinkles) {
-      const nextMode: WrinkleDisplayMode = nextRstl && nextWrinkles
-        ? "both"
-        : nextRstl ? "rstl" : "wrinkles";
-      writeWrinkleDisplayMode(nextMode);
-    }
-  };
 
   return (
     <section className="mobile-workflow-dock" aria-label="移动端常用操作">
@@ -129,7 +83,15 @@ export function MobileWorkflowControls() {
             aria-pressed={recording || undefined}
             onClick={() => liveCommands.source("recording_toggle")}
           >
-            <Download size={15} /> {recording ? "停止导出" : "导出"}
+            <Download size={15} /> {recording ? "停止视频" : "导出视频"}
+          </Button>
+          <Button
+            variant="workbench"
+            type="button"
+            disabled={!hasSource}
+            onClick={() => liveCommands.source("image_export")}
+          >
+            <ImagePlus size={15} /> 导出图片
           </Button>
         </div>
       </div>
@@ -138,37 +100,46 @@ export function MobileWorkflowControls() {
           <span>叠加图层</span>
           <small>可全部隐藏，结果仍会保留</small>
         </div>
-        <div className="mobile-layer-grid">
-          <Button
-            variant="workbench"
-            type="button"
-            className="mobile-layer-toggle"
-            aria-pressed={rstlVisible}
-            onClick={() => toggleWrinkleLayer("rstl")}
-          >
-            RSTL
-          </Button>
-          <Button
-            variant="workbench"
-            type="button"
-            className="mobile-layer-toggle"
-            aria-pressed={wrinklesVisible}
-            onClick={() => toggleWrinkleLayer("wrinkles")}
-          >
-            皱纹
-          </Button>
-          <Button
-            variant="workbench"
-            type="button"
-            className="mobile-layer-toggle"
-            aria-pressed={incisionVisible}
-            onClick={() => setIncisionVisible((visible) => !visible)}
-          >
-            切口线
-          </Button>
-        </div>
+        <WorkflowLayerVisibilityButtons className="mobile-layer-grid" mobile />
       </div>
     </section>
+  );
+}
+
+export function WorkflowLayerVisibilityButtons({ className = "", mobile = false }: { className?: string; mobile?: boolean }) {
+  const visibility = useSyncExternalStore(
+    subscribeWorkflowLayerVisibility,
+    workflowLayerVisibilitySnapshot,
+    workflowLayerVisibilitySnapshot,
+  );
+
+  useEffect(() => {
+    const select = document.querySelector<HTMLSelectElement>("#wrinkleDisplayMode");
+    const sync = () => {
+      const flags = displayModeFlags(readWrinkleDisplayMode());
+      setMobileRstlLayerVisible(flags.rstl);
+      setMobileWrinkleLayerVisible(flags.wrinkles);
+    };
+    select?.addEventListener("change", sync);
+    return () => select?.removeEventListener("change", sync);
+  }, []);
+
+  const toggleWrinkleLayer = (layer: "rstl" | "wrinkles") => {
+    const nextRstl = layer === "rstl" ? !visibility.rstl : visibility.rstl;
+    const nextWrinkles = layer === "wrinkles" ? !visibility.wrinkles : visibility.wrinkles;
+    setMobileRstlLayerVisible(nextRstl);
+    setMobileWrinkleLayerVisible(nextWrinkles);
+    if (nextRstl || nextWrinkles) {
+      writeWrinkleDisplayMode(nextRstl && nextWrinkles ? "both" : nextRstl ? "rstl" : "wrinkles");
+    }
+  };
+
+  return (
+    <div className={`workflow-layer-grid ${className}`.trim()} role="group" aria-label="叠加图层显示开关">
+      <Button variant="workbench" type="button" className={mobile ? "mobile-layer-toggle" : "workflow-layer-toggle"} aria-pressed={visibility.rstl} onClick={() => toggleWrinkleLayer("rstl")}>RSTL</Button>
+      <Button variant="workbench" type="button" className={mobile ? "mobile-layer-toggle" : "workflow-layer-toggle"} aria-pressed={visibility.wrinkles} onClick={() => toggleWrinkleLayer("wrinkles")}>皱纹</Button>
+      <Button variant="workbench" type="button" className={mobile ? "mobile-layer-toggle" : "workflow-layer-toggle"} aria-pressed={visibility.incision} onClick={() => setMobileIncisionCandidateVisible(!visibility.incision)}>切口线</Button>
+    </div>
   );
 }
 
@@ -178,12 +149,13 @@ export function MobileCandidateAdjustPanel() {
   const cameraMode = useLiveStore((state) => state.snapshot?.source.kind === "camera");
   const edit = snapshot?.edit;
   const candidateReady = Boolean(edit?.widthScaleVisible);
-  const [scalePct, setScalePct] = useState("100");
+  const [scalePct, setScalePct] = useState("0");
   const [angleDeg, setAngleDeg] = useState("0");
+  const cancelledGesture = useRef({ uniformScale: false, angleOffsetDeg: false });
 
   useEffect(() => {
     if (!edit) return;
-    setScalePct(String(Math.max(edit.lengthScalePct, edit.widthScalePct)));
+    setScalePct(String(Math.max(0, Math.max(edit.lengthScalePct, edit.widthScalePct) - 100)));
     setAngleDeg(String(edit.angleOffsetDeg));
   }, [edit?.angleOffsetDeg, edit?.lengthScalePct, edit?.widthScalePct]);
 
@@ -199,7 +171,7 @@ export function MobileCandidateAdjustPanel() {
       <header>
         <div>
           <span>候选微调</span>
-          <small>中心点固定 · 仅调整梭形草案</small>
+          <small>绕切口中心调整 · 仅调整梭形草案</small>
         </div>
         <ScanLine size={18} aria-hidden="true" />
       </header>
@@ -207,22 +179,36 @@ export function MobileCandidateAdjustPanel() {
         <Label htmlFor="mobileFusiformScale">梭形整体缩放 <FieldValue>{scalePct}%</FieldValue></Label>
         <RangeInput
           id="mobileFusiformScale"
-          min="100"
-          max="150"
+          min="0"
+          max="50"
           step="1"
           value={scalePct}
           disabled={cameraMode || !candidateReady}
+          onPointerDown={() => { cancelledGesture.current.uniformScale = false; }}
           onInput={(event) => {
             const value = event.currentTarget.value;
             setScalePct(value);
             previewUniformScale(value);
           }}
-          onPointerUp={(event) => commitUniformScale(event.currentTarget.value)}
+          onPointerUp={(event) => {
+            cancelledGesture.current.uniformScale = false;
+            commitUniformScale(event.currentTarget.value);
+          }}
+          onPointerCancel={() => {
+            cancelledGesture.current.uniformScale = true;
+            commands.edit("cancel_edit", "uniformScale");
+          }}
           onKeyUp={(event) => commitUniformScale(event.currentTarget.value)}
-          onBlur={(event) => commitUniformScale(event.currentTarget.value)}
+          onBlur={(event) => {
+            if (cancelledGesture.current.uniformScale) {
+              cancelledGesture.current.uniformScale = false;
+              return;
+            }
+            commitUniformScale(event.currentTarget.value);
+          }}
           onChange={(event) => setScalePct(event.currentTarget.value)}
         />
-        <small>长度和宽度等比放大；这是草案几何调整，不替代以毫米记录的医学安全切缘。</small>
+        <small>0% 为基础梭形；长度和宽度围绕中心等比放大，不替代以毫米记录的医学安全切缘。</small>
       </div>
       <div className="mobile-adjust-field">
         <Label htmlFor="mobileFusiformAngle">切口方向 <FieldValue>{Number(angleDeg) > 0 ? "+" : ""}{angleDeg}°</FieldValue></Label>
@@ -233,17 +219,31 @@ export function MobileCandidateAdjustPanel() {
           step="1"
           value={angleDeg}
           disabled={cameraMode || !candidateReady}
+          onPointerDown={() => { cancelledGesture.current.angleOffsetDeg = false; }}
           onInput={(event) => {
             const value = event.currentTarget.value;
             setAngleDeg(value);
             commands.edit("preview_edit", "angleOffsetDeg", value);
           }}
-          onPointerUp={(event) => commands.edit("commit_edit", "angleOffsetDeg", event.currentTarget.value)}
+          onPointerUp={(event) => {
+            cancelledGesture.current.angleOffsetDeg = false;
+            commands.edit("commit_edit", "angleOffsetDeg", event.currentTarget.value);
+          }}
+          onPointerCancel={() => {
+            cancelledGesture.current.angleOffsetDeg = true;
+            commands.edit("cancel_edit", "angleOffsetDeg");
+          }}
           onKeyUp={(event) => commands.edit("commit_edit", "angleOffsetDeg", event.currentTarget.value)}
-          onBlur={(event) => commands.edit("commit_edit", "angleOffsetDeg", event.currentTarget.value)}
+          onBlur={(event) => {
+            if (cancelledGesture.current.angleOffsetDeg) {
+              cancelledGesture.current.angleOffsetDeg = false;
+              return;
+            }
+            commands.edit("commit_edit", "angleOffsetDeg", event.currentTarget.value);
+          }}
           onChange={(event) => setAngleDeg(event.currentTarget.value)}
         />
-        <small>拖动滑杆，以病灶中心为轴心旋转，不移动中心或改变梭形大小。</small>
+        <small>拖动滑杆，以切口中心为轴心旋转；保持 3:1 并重新包住肿物，人工方向优先。</small>
       </div>
     </section>
   );

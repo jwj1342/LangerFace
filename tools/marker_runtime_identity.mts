@@ -7,11 +7,15 @@ import {
   resolveControlledMarkerDetectorProfile,
   detectorVersionForProfile,
 } from "../web/src/services/controlledMarkerDetectionProfile.ts";
+import { CONTROLLED_MARKER_RELEASE } from "../web/src/services/controlledMarkerRelease.ts";
 
 export const markerRepoRoot = resolve(fileURLToPath(new URL("../", import.meta.url)));
 export const TARGET_MARKER_PROFILE = "small-lesion-boundary-candidate";
 export const TARGET_MARKER_ALGORITHM_NAME = "小肿物边界候选算法";
 export const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
+// The identity scope contains UTF-8 source/config text. Git may check it out
+// with CRLF on Windows and LF in CI; preserve every other content difference.
+export const hashSourceText = (value: string | Buffer) => hash(value.toString().replace(/\r\n/g, "\n"));
 
 // Include unsaved-to-Git source, not just HEAD. Exclude logs, test output and secrets.
 export function captureMarkerIdentity(rawProfile: string | undefined, root = markerRepoRoot) {
@@ -29,7 +33,18 @@ export function captureMarkerIdentity(rawProfile: string | undefined, root = mar
   files.push("web/index.html", "web/vite.config.ts", "web/package.json", "web/package-lock.json",
     "tools/marker_runtime_identity.mts", "tools/run_controlled_marker_v035_dev.mjs",
     "tools/run_controlled_marker_v035_build.mjs");
-  const sourceHashes = files.sort().map((file) => [file, hash(readFileSync(resolve(root, file)))]);
+  const sourceHashes = files.sort().map((file) => [file, hashSourceText(readFileSync(resolve(root, file)))]);
+  const algorithmFiles = [
+    "web/src/services/controlledMarkerDetection.ts",
+    "web/src/services/controlledMarkerDetectionColorV035.ts",
+    "web/src/services/controlledMarkerDetectionLegacyV023.ts",
+    "web/src/services/controlledMarkerDetectionProfile.ts",
+    "web/src/services/controlledMarkerRelease.ts",
+  ];
+  const algorithmHashes = algorithmFiles.map((file) => [
+    file,
+    hash(readFileSync(resolve(root, file), "utf8").replace(/\r\n/g, "\n")),
+  ]);
   // Essential photo geometry/model inputs. This is not an RSTL effect-equivalence claim.
   const assetHashes = ["face_landmarker.task", "atlas_rstl.json", "atlas_langer.json",
     "canonical_vertices.json", "triangles.json", "topology_mediapipe_468.json"]
@@ -41,6 +56,8 @@ export function captureMarkerIdentity(rawProfile: string | undefined, root = mar
   return {
     schema: 1,
     algorithmName: TARGET_MARKER_ALGORITHM_NAME,
+    releaseName: CONTROLLED_MARKER_RELEASE.name,
+    changeSlug: CONTROLLED_MARKER_RELEASE.changeSlug,
     profile,
     implementationVersion: detectorVersionForProfile(profile),
     branch: git("branch", "--show-current"),
@@ -48,6 +65,7 @@ export function captureMarkerIdentity(rawProfile: string | undefined, root = mar
     // Do not publish a user's absolute path, credentials or image data.
     worktreeId: hash(realpathSync(root)),
     sourceDigest: hash(JSON.stringify(sourceHashes)),
+    algorithmDigest: hash(JSON.stringify(algorithmHashes)),
     assetDigest: hash(JSON.stringify(assetHashes)),
     sourceFileCount: sourceHashes.length,
     assetHashes: Object.fromEntries(assetHashes),
@@ -56,8 +74,8 @@ export function captureMarkerIdentity(rawProfile: string | undefined, root = mar
 
 export type MarkerIdentity = ReturnType<typeof captureMarkerIdentity>;
 export function assertMarkerIdentity(actual: Partial<MarkerIdentity>, expected: MarkerIdentity) {
-  for (const key of ["schema", "algorithmName", "profile", "implementationVersion", "branch", "head", "worktreeId",
-    "sourceDigest", "assetDigest"] as const) {
+  for (const key of ["schema", "algorithmName", "releaseName", "changeSlug", "profile", "implementationVersion", "branch", "head", "worktreeId",
+    "sourceDigest", "algorithmDigest", "assetDigest"] as const) {
     if (actual?.[key] !== expected[key]) {
       throw new Error(`运行身份不匹配：${key}；期望 ${expected[key]}，实际 ${actual?.[key] ?? "缺失"}。请核对服务并重新启动，不能用 HTTP 200 放行。`);
     }

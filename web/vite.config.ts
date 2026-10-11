@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
 import { localWrinkleV10Plugin } from "./dev/localWrinkleV10Plugin.ts";
+import { localExportDownloadPlugin } from "./dev/localExportDownloadPlugin.ts";
 import {
   markerRuntimeIdentityBuildPlugin,
   markerRuntimeIdentityPlugin,
@@ -38,6 +39,7 @@ export default defineConfig({
   assetsInclude: ["**/*.task"],
   plugins: [
     tailwindcss(),
+    localExportDownloadPlugin(),
     localWrinkleV10Plugin(),
     markerRuntimeIdentityPlugin(),
     markerRuntimeIdentityBuildPlugin(),

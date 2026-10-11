@@ -291,6 +291,11 @@ export function compileIncisionOverlay(
       margin_mm: tumor.margin_mm,
     },
     candidate: {
+      center_ref: pointToSurfaceRef(
+        Array.isArray(candidate.center) ? candidate.center : tumor.center,
+        verts,
+        tris,
+      ),
       polyline_refs: refsFromPolyline(candidate.polyline, verts, tris),
       length_mm: candidate.length_mm,
       width_mm: candidate.width_mm,
@@ -331,6 +336,7 @@ export function validateIncisionOverlay(overlay: unknown): overlay is IncisionOv
   const value = overlay as AnyRecord | null | undefined;
   if (!value || value.schema_version !== "incision-overlay/v0.1") return false;
   if (!validSurfaceRef(value.tumor?.center_ref)) return false;
+  if (value.candidate?.center_ref != null && !validSurfaceRef(value.candidate.center_ref)) return false;
   if (!Array.isArray(value.candidate?.polyline_refs) || value.candidate.polyline_refs.length < 2) return false;
   if (!value.candidate.polyline_refs.every(validSurfaceRef)) return false;
   if (value.audit?.raw_image_sent !== false || value.audit?.review_required !== true) return false;
@@ -370,6 +376,7 @@ function overlayRefGroups(overlay: AnyRecord | null | undefined): Array<[string,
   return [
     ["tumor_center", [overlay?.tumor?.center_ref].filter(Boolean)],
     ["tumor_boundary", overlay?.tumor?.boundary_refs || []],
+    ["candidate_center", [overlay?.candidate?.center_ref].filter(Boolean)],
     ["candidate_polyline", overlay?.candidate?.polyline_refs || []],
   ];
 }

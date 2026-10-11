@@ -9,7 +9,7 @@ import { detectorVersionForProfile } from "../web/src/services/controlledMarkerD
 
 const EXPECTED_PROFILE = "small-lesion-boundary-candidate";
 const EXPECTED_VERSION = detectorVersionForProfile(EXPECTED_PROFILE);
-const DEFAULT_PROFILE = "legacy-v0.23";
+const DEFAULT_PROFILE = "small-lesion-boundary-candidate";
 const repoRoot = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const webRoot = resolve(repoRoot, "web");
 const viteEntry = resolve(webRoot, "node_modules/vite/bin/vite.js");
@@ -88,7 +88,7 @@ const identity = {
     profile: EXPECTED_PROFILE,
     version: EXPECTED_VERSION,
     selector: "VITE_CONTROLLED_MARKER_DETECTOR_PROFILE (launcher-owned)",
-    defaultProfileUnchanged: DEFAULT_PROFILE,
+    ordinaryDefaultProfile: DEFAULT_PROFILE,
     modelDependency: "none; deterministic image processing",
     profileSourceSha256: sha256(resolve(webRoot, "src/services/controlledMarkerDetectionProfile.ts")),
     implementationSourceSha256: sha256(resolve(webRoot, "src/services/controlledMarkerDetectionColorV035.ts")),

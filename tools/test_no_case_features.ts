@@ -95,6 +95,10 @@ for (const forbidden of ["test_case_workflow_ui", "capture_case_workflow"]) {
 }
 
 assert.ok(!ci.includes("workers/api"), "CI should not install, test, or deploy the removed case API");
+// The bounded local diagnostic session store is explicitly allowed by the
+// product privacy boundary; it is not patient/case persistence. Keep the
+// guard focused on case-specific stores and routes instead of banning the
+// browser primitive used by that diagnostic recorder.
 for (const forbidden of [
   "/api/cases",
   "CLOUDFLARE_D1_DATABASE_ID",
@@ -103,7 +107,6 @@ for (const forbidden of [
   "CaseWorkflowRoute",
   "ClinicalCase",
   "caseStore",
-  "indexedDB",
   "langerface.cases",
 ]) {
   assert.ok(!frontendAndCi.includes(forbidden), `frontend and CI should not contain case-record implementation: ${forbidden}`);

@@ -210,6 +210,54 @@ assert.equal(pinchGestures.length, 2, "running camera does not enter frozen-fram
 pinchAbortController.abort();
 assert.equal(pinchSurface.listenerCount(), 0);
 
+const refineTouchSurface = new FakeSurface();
+const refineTouchAbort = new AbortController();
+const refineTouchGestures: Array<[number, number, number, number, number]> = [];
+const refineTouchBegins: number[] = [];
+const refineTouchMoves: number[] = [];
+const refineTouchEnds: number[] = [];
+const refineTouchCancels: number[] = [];
+bindLiveCanvasInteractions(refineTouchSurface as unknown as HTMLElement, {
+  isRefineActive: () => true,
+  isImagePointerInteractionBlocked: () => false,
+  isMobileTouchImageGestureEnabled: () => true,
+  beginRefinePointer: (pointer) => { refineTouchBegins.push(pointer.pointerId); return true; },
+  moveRefinePointer: (pointer) => { refineTouchMoves.push(pointer.pointerId); return true; },
+  endRefinePointer: (pointer) => { refineTouchEnds.push(pointer.pointerId); return true; },
+  cancelRefinePointer: (pointerId) => { refineTouchCancels.push(pointerId); return true; },
+  sourceKind: () => "image",
+  isSourcePaused: () => false,
+  panImageViewBy: () => undefined,
+  zoomImageViewAt: () => false,
+  transformImageViewGesture: (previousX, previousY, nextX, nextY, factor) => {
+    refineTouchGestures.push([previousX, previousY, nextX, nextY, factor]);
+    return true;
+  },
+  adjustFocusZoom: () => false,
+  updateRefineUi: () => undefined,
+  refreshStaticImage: () => undefined,
+}, { signal: refineTouchAbort.signal });
+
+refineTouchSurface.emit("pointerdown", event({ pointerId: 51, pointerType: "touch", clientX: 20, clientY: 40 }));
+refineTouchSurface.emit("pointermove", event({ pointerId: 51, pointerType: "touch", clientX: 24, clientY: 44 }));
+assert.deepEqual(refineTouchBegins, [51], "one finger enters manual RSTL refinement");
+assert.deepEqual(refineTouchMoves, [51], "one finger continues the active line drag");
+refineTouchSurface.emit("pointerdown", event({ pointerId: 52, pointerType: "touch", clientX: 40, clientY: 40 }));
+assert.deepEqual(refineTouchCancels, [51], "a second finger cancels the unfinished line drag before pinch starts");
+refineTouchSurface.emit("pointermove", event({ pointerId: 52, pointerType: "touch", clientX: 60, clientY: 40 }));
+assert.equal(refineTouchGestures.length, 1, "two fingers transform the image while refinement remains active");
+refineTouchSurface.emit("pointerup", event({ pointerId: 52, pointerType: "touch", clientX: 60, clientY: 40 }));
+refineTouchSurface.emit("pointermove", event({ pointerId: 51, pointerType: "touch", clientX: 30, clientY: 50 }));
+assert.deepEqual(refineTouchMoves, [51], "the remaining finger cannot resume a line drag after pinch");
+refineTouchSurface.emit("pointerup", event({ pointerId: 51, pointerType: "touch", clientX: 30, clientY: 50 }));
+assert.deepEqual(refineTouchEnds, [], "ending a pinch never commits the cancelled line drag");
+refineTouchSurface.emit("pointerdown", event({ pointerId: 53, pointerType: "touch", clientX: 25, clientY: 45 }));
+assert.deepEqual(refineTouchBegins, [51, 53], "a fresh one-finger gesture may refine after every pinch pointer is released");
+refineTouchSurface.emit("pointerup", event({ pointerId: 53, pointerType: "touch", clientX: 25, clientY: 45 }));
+assert.deepEqual(refineTouchEnds, [53], "the fresh one-finger refinement ends normally");
+refineTouchAbort.abort();
+assert.equal(refineTouchSurface.listenerCount(), 0);
+
 const abortedSurface = new FakeSurface();
 bindLiveCanvasInteractions(abortedSurface as unknown as HTMLElement, {
   isRefineActive: () => false,
