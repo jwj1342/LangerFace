@@ -17,12 +17,20 @@ export function LiveRefinePanel() {
       <div className="live-refine-panel hidden" id="refine2dPanel">
         <div className="live-refine-quality hidden" id="refine2dQuality" data-state="idle" role="status" />
         <Hint id="refine2dHint">点按“微调”后，单指拖动线条；双指可缩放图片。</Hint>
+        <ButtonRow className="live-refine-modes">
+          <Button variant="workbench" id="refinePointBtn" type="button" aria-pressed="true">拖点</Button>
+        </ButtonRow>
+        <div className="live-refine-point-count hidden" id="refinePointCountWrap">
+          <label className="live-refine-range" htmlFor="refinePointCount">
+            <span>拖点数量</span><output id="refinePointCountVal">1 个点</output>
+          </label>
+          <input id="refinePointCount" type="range" min="1" max="30" step="1" defaultValue="1" />
+        </div>
       </div>
       <div className="live-refine-internal" aria-hidden="true">
         <span id="refine2dStatus">未开始</span>
         <button id="refineViewBtn" type="button" />
         <button id="refineDragBtn" type="button" />
-        <button id="refinePointBtn" type="button" />
         <button id="refineEraseBtn" type="button" />
         <button id="refineExportBtn" type="button" />
         <button id="refineZoomOutBtn" type="button" />
@@ -31,8 +39,6 @@ export function LiveRefinePanel() {
         <output id="refineZoomVal">100%</output>
         <input id="refineSpread" type="range" min="12" max="60" step="1" defaultValue="28" />
         <output id="refineSpreadVal">28%</output>
-        <div id="refinePointCountWrap"><input id="refinePointCount" type="range" min="1" max="30" step="1" defaultValue="1" /></div>
-        <output id="refinePointCountVal">1 个点</output>
         <select id="refineNudgeStep" defaultValue="0.5"><option value="0.5">0.5 px</option></select>
         <input id="refineSymmetryToggle" type="checkbox" />
         <input id="refineAxisToggle" type="checkbox" defaultChecked />
