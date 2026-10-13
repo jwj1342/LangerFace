@@ -23,43 +23,33 @@
   },
   "archive": {
     "status": "verified",
-    "manifestPath": "local_outputs/recovery-packages/发布准备—普通本地门禁与设备本地导出修订—20261011-r7/manifest.json",
-    "manifestSha256": "836b43b15d8128c70db8e9a1823205d682185d977f690ea6303300263603b898",
+    "manifestPath": "local_outputs/recovery-packages/PR239-拖点数量恢复-20261013-r1/manifest.json",
+    "manifestSha256": "87be32c80f9713540cca24897d76231f9adc46195fbab1774893d92401c96977",
     "sourceDigest": "1a03d627713ba15abe6100a6310b5192868f1f0f2d70a8ba862a9b1bccf649df",
     "scopeConfigSha256": "3bc884fcc2813803e9e7c06293643514483723c161552f2d5607457d7ec2eaa7",
-    "note": "中文标签：普通本地门禁与设备本地导出修订；207 复制项、32 继承项、17 指纹省略项，继承 r5 基础包；未包含编辑器未保存缓冲，不代表医学或真机验收。"
+    "note": "PR #239 拖点数量恢复；226 复制项、0 继承项、1 指纹省略项；本地完整恢复包已逐文件回读，未包含编辑器未保存缓冲，不代表医学或真机验收。"
   },
   "scopeBoundaryReview": {
-    "status": "confirmed",
-    "manifestSha256": "836b43b15d8128c70db8e9a1823205d682185d977f690ea6303300263603b898",
-    "scopeConfigSha256": "3bc884fcc2813803e9e7c06293643514483723c161552f2d5607457d7ec2eaa7",
-    "confirmedAt": "2026-10-10T11:31:33.101Z",
-    "evidence": "操作者本轮明确与黄铭禛约定本次UI由操作者负责，包括RSTL生成/皱纹检测/RSTL微调界面；明确认可5产品文件的手动工具条和触控状态。团队核心保持远端基线；可复核证据见docs/quality/UI_RSTL_BOUNDARY_REVIEW.md。",
-    "maintenanceRebinding": {
-      "capturedAt": "2026-10-10T10:30:54.590486+00:00",
-      "previousManifest": "local_outputs/recovery-packages/发布准备—干净CI门禁修复—20261010-r2/manifest.json",
-      "previousManifestSha256": "63cb20a0ad99f343316acdc49a48d05297fa7ab00ad8003a78371546a524d3f1",
-      "authorization": "操作者本轮4K允许有限发布工具修复、清单同步与必要本地维护；算法指纹不变，仅发布取证工具变化并以CRLF/LF归一化重算综合源码指纹，不增加受保护修改或发布授权。",
-      "publicationBoundary": "local integration and targeted checks complete; final build/browser/history review pending; no permission to auto-merge or modify team cores"
-    }
+    "status": "not_required",
+    "reason": "PR #239 的改动均在当前恢复范围内；清单 changedOutsideScope 为空。"
   },
   "operatorEvaluation": {
     "status": "accepted",
     "sourceDigest": "1a03d627713ba15abe6100a6310b5192868f1f0f2d70a8ba862a9b1bccf649df",
     "algorithmDigest": "a46cff9529c5ad86ed260c315a62bd084e6e0a558d180eed24bb2fe120a54faf",
-    "acceptedScope": "最后一轮肿物算法与既有5项手动UI改动；本次运行门禁与设备本地导出修订由操作者明确要求执行，自动验证通过，未改变肿物算法",
-    "evidence": "操作者已明确要求执行本次审查修订；既有两张典型人脸评价仅绑定肿物算法，新增修订通过本地门禁、构建、导出隐私与类型验证，不代签真人泛用性、真机或医学验收",
-    "confirmedAt": "2026-10-11T11:52:37Z",
+    "acceptedScope": "PR #239 当前版本的拖点模式和 1–30 个控制点滑块；不扩展至肿物算法或医学效果",
+    "evidence": "操作者于 2026-10-13 在本对话中针对 PR #239 当前版本明确回答：已实际检查拖点数量滑块可用，并确认这版磁盘文件就是要提交的版本。",
+    "confirmedAt": "2026-10-13T13:21:46Z",
     "fullDatasetAcceptance": false,
     "professionalAcceptance": false
   },
   "editorSaveConfirmation": {
     "status": "confirmed",
     "sourceDigest": "1a03d627713ba15abe6100a6310b5192868f1f0f2d70a8ba862a9b1bccf649df",
-    "confirmedAt": "2026-10-11T11:52:37Z",
-    "confirmationBasis": "operator-approved-verified-disk-recovery-point",
+    "confirmedAt": "2026-10-13T13:21:46Z",
+    "confirmationBasis": "operator-confirmed-current-disk-version",
     "editorBuffersObserved": false,
-    "evidence": "操作者本轮明确要求AI自行核验可恢复磁盘断点，不再询问编辑器。confirmed仅指采用磁盘候选的决定与恢复核验，不表示已观察未保存的编辑器缓冲。"
+    "evidence": "操作者于 2026-10-13 在本对话中确认 PR #239 当前磁盘文件就是要提交的版本；本记录不声称读取了编辑器未保存缓冲。"
   },
   "history": [
     {
