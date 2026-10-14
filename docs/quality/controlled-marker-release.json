@@ -11,15 +11,22 @@
       "对象中心核验"
     ],
     "status": "candidate",
-    "sourceDigest": "1a03d627713ba15abe6100a6310b5192868f1f0f2d70a8ba862a9b1bccf649df",
+    "sourceDigest": "f77b3c7c08ee121db8c2865e951f0b29ee0dadf32db7dc6b82a3e8c4f4430aad",
     "algorithmDigest": "a46cff9529c5ad86ed260c315a62bd084e6e0a558d180eed24bb2fe120a54faf"
   },
   "runtimeIntegration": {
-    "version": "0.1.1-candidate.1",
-    "name": "运行集成：共享图片视频导出与PR237汇合",
+    "version": "0.1.2-candidate.1",
+    "name": "运行集成：开发测试与发布归档门禁分离",
     "status": "candidate",
-    "sourceDigest": "1a03d627713ba15abe6100a6310b5192868f1f0f2d70a8ba862a9b1bccf649df",
-    "scope": "仅运行集成与UI，非团队算法效果或医学验收"
+    "sourceDigest": "f77b3c7c08ee121db8c2865e951f0b29ee0dadf32db7dc6b82a3e8c4f4430aad",
+    "scope": "仅本地启动门禁；算法与页面功能不变；formal deploy/pr仍要求恢复包",
+    "previous": {
+      "version": "0.1.1-candidate.1",
+      "name": "运行集成：共享图片视频导出与PR237汇合",
+      "status": "candidate",
+      "sourceDigest": "1a03d627713ba15abe6100a6310b5192868f1f0f2d70a8ba862a9b1bccf649df",
+      "scope": "仅运行集成与UI，非团队算法效果或医学验收"
+    }
   },
   "archive": {
     "status": "verified",

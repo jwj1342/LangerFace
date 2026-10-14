@@ -4,14 +4,16 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 
 import { captureMarkerIdentity, TARGET_MARKER_PROFILE } from "./marker_runtime_identity.mts";
 
 const repoRoot = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const mode = process.argv[2] || "deploy";
-if (!new Set(["local", "deploy", "pr"]).has(mode)) {
-  throw new Error("算法发布门禁只接受 local、deploy 或 pr 模式");
+if (!new Set(["local", "dev", "deploy", "pr"]).has(mode)) {
+  throw new Error("算法发布门禁只接受 local、dev、deploy 或 pr 模式");
 }
+const requiresArchive = mode === "deploy" || mode === "pr";
 
 const releasePath = resolve(repoRoot, "docs/quality/controlled-marker-release.json");
 const release = JSON.parse(readFileSync(releasePath, "utf8"));
@@ -72,12 +74,43 @@ if (currentNumeric && historyNumeric.length) {
 
 const archive = release.archive || {};
 const currentScopeConfigSha256 = sha256(readFileSync(scopeConfigPath));
-if (mode !== "local" && archive.scopeConfigSha256 !== currentScopeConfigSha256) {
+if (mode === "dev") {
+  // The exemption applies to a committed checkout, not an arbitrary dirty experiment.
+  // Untracked evidence remains untouched; strict source identity is checked above.
+  try {
+    const git = (...args) => execFileSync("git", ["-C", repoRoot, ...args], {
+      encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
+    }).trim();
+    const head = git("rev-parse", "--verify", "HEAD^{commit}");
+    if (!identity.branch || head !== identity.head) fail("开发测试需要明确分支与已提交的当前 HEAD");
+    if (git("status", "--porcelain=v1", "--untracked-files=no")) {
+      fail("开发测试免恢复包条件不满足：仍有暂存或跟踪文件修改");
+    }
+    const runtimePaths = ["web/src", "web/app", "web/dev", "web/index.html", "web/vite.config.ts",
+      "web/package.json", "web/package-lock.json", "tools/marker_runtime_identity.mts",
+      "tools/run_controlled_marker_v035_dev.mjs", "tools/run_controlled_marker_v035_build.mjs"];
+    const untrackedRuntime = git("ls-files", "--others", "--exclude-standard", "--", ...runtimePaths);
+    const ignoredRuntime = git("ls-files", "--others", "--ignored", "--exclude-standard", "--", ...runtimePaths);
+    if (untrackedRuntime || ignoredRuntime) fail("运行源码范围内存在未提交文件，Git 回退点不能恢复这些文件");
+    const refs = git("for-each-ref", "--format=%(refname)", "refs/heads/backup/")
+      .split(/\r?\n/).filter(Boolean);
+    const recoveryRef = refs.find((ref) => {
+      try { git("merge-base", "--is-ancestor", ref, "HEAD"); return true; }
+      catch { return false; }
+    });
+    if (!recoveryRef) fail("开发测试需要指向当前提交或其祖先的本地 backup/ Git 回退点");
+    else console.log(`[algorithm-release:dev] Git 回退点 ${recoveryRef}；已提交 HEAD ${head}`);
+  } catch (error) {
+    fail(`无法核验开发测试 Git 恢复条件：${error.message}`);
+  }
+}
+if (requiresArchive && archive.scopeConfigSha256 !== currentScopeConfigSha256) {
   fail("责任范围配置指纹与发布登记不一致");
 }
-if (mode !== "local" && (archive.status !== "verified" || !archive.manifestPath || !archive.manifestSha256)) {
+if (requiresArchive && (archive.status !== "verified" || !archive.manifestPath || !archive.manifestSha256)) {
   fail("当前算法没有已验证恢复包");
-} else if (mode !== "local") {
+} else if (requiresArchive) {
   const archiveManifestPath = resolve(repoRoot, archive.manifestPath);
   if (!existsSync(archiveManifestPath) && process.env.CI !== "true") fail(`恢复包 manifest 不存在：${archive.manifestPath}`);
   else if (!existsSync(archiveManifestPath)) {
@@ -139,19 +172,19 @@ if (mode !== "local" && (archive.status !== "verified" || !archive.manifestPath 
 }
 
 const scopeReview = release.scopeBoundaryReview || {};
-if (mode !== "local" && scopeReview.status === "pending") {
+if (requiresArchive && scopeReview.status === "pending") {
   fail(boundaryCodePathCount === null
     ? "责任范围外共享代码改动尚未取得操作者边界确认"
     : `存在 ${boundaryCodePathCount} 个责任范围外共享代码改动，尚未取得操作者边界确认`);
-} else if (mode !== "local" && scopeReview.status === "confirmed") {
+} else if (requiresArchive && scopeReview.status === "confirmed") {
   if (scopeReview.manifestSha256 !== archive.manifestSha256
     || !scopeReview.evidence
     || !scopeReview.confirmedAt) {
     fail("责任边界确认没有完整绑定当前恢复包");
   }
-} else if (mode !== "local" && scopeReview.status === "not_required" && boundaryCodePathCount) {
+} else if (requiresArchive && scopeReview.status === "not_required" && boundaryCodePathCount) {
   fail(`存在 ${boundaryCodePathCount} 个责任范围外共享代码改动，不能标记为不需要确认`);
-} else if (mode !== "local" && scopeReview.status !== "not_required") {
+} else if (requiresArchive && scopeReview.status !== "not_required") {
   fail("责任边界确认状态无效");
 }
 

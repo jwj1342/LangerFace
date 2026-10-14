@@ -24,7 +24,7 @@ const source = readFileSync(new URL('./check_algorithm_release_gate.mjs', import
   .replace(/^#![^\n]*\n/, '')
   .replace(/^import [\s\S]*?;\s*$/gm, '')
   .replace('const repoRoot = resolve(fileURLToPath(new URL("../", import.meta.url)));', 'const repoRoot = resolve("fixture-repo");');
-function run(ci, mode = 'deploy', changes = {}) {
+function run(ci, mode = 'deploy', changes = {}, gitState = {}) {
   const fixture = structuredClone(release);
   for (const [key, values] of Object.entries(changes)) Object.assign(fixture[key], values);
   const messages = [];
@@ -32,7 +32,16 @@ function run(ci, mode = 'deploy', changes = {}) {
   const context = {
     createHash, basename, dirname, resolve, sep,
     TARGET_MARKER_PROFILE: identity.profile,
-    captureMarkerIdentity: () => identity,
+    captureMarkerIdentity: () => ({ ...identity, head: 'a'.repeat(40), branch: 'fixture', ...gitState.identity }),
+    execFileSync: (_bin, args) => {
+      const command = args.slice(2).join(' ');
+      if (command.startsWith('rev-parse')) return 'a'.repeat(40);
+      if (command.startsWith('status')) return gitState.dirty || '';
+      if (command.startsWith('ls-files')) return gitState.untrackedRuntime ? 'web/src/untracked.ts' : '';
+      if (command.startsWith('for-each-ref')) return gitState.noBackup ? '' : 'refs/heads/backup/fixture';
+      if (command.startsWith('merge-base')) { if (gitState.unrelatedBackup) throw new Error('not an ancestor'); return ''; }
+      throw new Error('unexpected fixture Git command: ' + command);
+    },
     readFileSync: (path) => String(path).endsWith('controlled-marker-release.json')
       ? JSON.stringify(fixture) : scopeBytes,
     existsSync: () => false,
@@ -58,3 +67,22 @@ assert.equal(run('true', 'deploy', { current: { sourceDigest: 'stale' } }).exitC
 assert.equal(run('true', 'pr', { operatorEvaluation: { status: 'pending' } }).exitCode, 1);
 assert.equal(run('true', 'pr', { editorSaveConfirmation: { status: 'unknown' } }).exitCode, 1);
 console.log('algorithm release gate: fresh CI, missing local archive, stale identity and PR evidence checks passed');
+
+assert.equal(run(undefined, 'dev').exitCode, 0, 'committed dev checkout with rollback reference needs no private archive');
+assert.equal(run(undefined, 'dev', {}, {noBackup: true}).exitCode, 1, 'dev must retain a Git rollback reference');
+assert.equal(run(undefined, 'dev', {}, {dirty: ' M web/src/app.ts'}).exitCode, 1, 'dev exemption refuses uncommitted tracked changes');
+assert.equal(run(undefined, 'dev', {}, {unrelatedBackup: true}).exitCode, 1, 'unrelated Git references are not rollback evidence');
+assert.equal(run(undefined, 'dev', {current: {sourceDigest: 'stale'}}).exitCode, 1, 'dev still checks exact source identity');
+assert.equal(run(undefined, 'dev', {current: {algorithmDigest: 'stale'}}).exitCode, 1, 'dev still checks algorithm identity');
+assert.equal(run('true', 'dev', {}, {noBackup: true}).exitCode, 1, 'CI cannot bypass dev rollback checks');
+assert.equal(run(undefined, 'dev', {}, {identity: {branch: ''}}).exitCode, 1, 'dev exemption requires a branch retaining the committed checkout');
+console.log('development gate: archive exemption, source checks, committed state and rollback boundary checks passed');
+
+const packageScripts = JSON.parse(readFileSync(new URL('../web/package.json', import.meta.url), 'utf8')).scripts;
+assert.match(packageScripts['predev:lesion-candidate'], /^npm run verify:algorithm-release:dev &&/);
+assert.match(packageScripts['predev:lesion-candidate'], /check_web_dependency_isolation[\s\S]*doctor_wrinkle_runtime[\s\S]*run_controlled_marker_v035_dev\.mjs --check/);
+assert.match(packageScripts['prebuild:lesion-candidate'], /^npm run verify:algorithm-release:deploy &&/);
+assert.equal(packageScripts['verify:algorithm-release:pr'], 'node ../tools/check_algorithm_release_gate.mjs pr');
+console.log('startup routing: development exemption retains resource checks and release gates');
+
+assert.equal(run(undefined, 'dev', {}, {untrackedRuntime: true}).exitCode, 1, 'untracked or ignored runtime source is not covered by a Git checkpoint');
