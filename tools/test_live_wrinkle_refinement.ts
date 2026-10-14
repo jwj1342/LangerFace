@@ -190,6 +190,10 @@ assert.match(refinePanel, /<ButtonRow className="live-refine-primary-actions">[\
   "the approved manual toolbar keeps refine, undo and reset in one row");
 assert.match(refinePanel, /<Hint id="refine2dHint">点按“微调”后，单指拖动线条；双指可缩放图片。<\/Hint>/,
   "the approved manual hint explains the single and two-finger actions");
+assert.match(refinePanel, /<ButtonRow className="live-refine-modes">[\s\S]*?id="refinePointBtn"[^>]*>拖点<\/Button>[\s\S]*?<\/ButtonRow>/,
+  "the manual refinement card keeps the drag-point mode selectable");
+assert.match(refinePanel, /<div className="live-refine-point-count hidden" id="refinePointCountWrap">[\s\S]*?拖点数量[\s\S]*?id="refinePointCount" type="range" min="1" max="30"/,
+  "the drag-point count slider remains available in the visible refinement panel");
 assert.match(refinePanel, /className="live-refine-internal" aria-hidden="true"/,
   "internal runtime controls remain outside the visible toolbar");
 assert.doesNotMatch(refinePanel, /医生手动微调（2D）|手动拖动、隐藏或逐点调整当前结果|也可将鼠标放在图片上滚动缩放|以选中点为中心，连续控制指定数量的点|默认只修改选中的一根线/,
