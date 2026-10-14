@@ -13,7 +13,7 @@ const mode = process.argv[2] || "deploy";
 if (!new Set(["local", "dev", "deploy", "pr"]).has(mode)) {
   throw new Error("算法发布门禁只接受 local、dev、deploy 或 pr 模式");
 }
-const requiresArchive = mode === "deploy" || mode === "pr";
+let requiresArchive = mode === "deploy" || mode === "pr";
 
 const releasePath = resolve(repoRoot, "docs/quality/controlled-marker-release.json");
 const release = JSON.parse(readFileSync(releasePath, "utf8"));
@@ -75,6 +75,7 @@ if (currentNumeric && historyNumeric.length) {
 const archive = release.archive || {};
 const currentScopeConfigSha256 = sha256(readFileSync(scopeConfigPath));
 if (mode === "dev") {
+  const recoveryGaps = [];
   // The exemption applies to a committed checkout, not an arbitrary dirty experiment.
   // Untracked evidence remains untouched; strict source identity is checked above.
   try {
@@ -83,26 +84,30 @@ if (mode === "dev") {
       env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
     }).trim();
     const head = git("rev-parse", "--verify", "HEAD^{commit}");
-    if (!identity.branch || head !== identity.head) fail("开发测试需要明确分支与已提交的当前 HEAD");
+    if (!identity.branch || head !== identity.head) recoveryGaps.push("开发测试需要明确分支与已提交的当前 HEAD");
     if (git("status", "--porcelain=v1", "--untracked-files=no")) {
-      fail("开发测试免恢复包条件不满足：仍有暂存或跟踪文件修改");
+      recoveryGaps.push("仍有暂存或跟踪文件修改");
     }
     const runtimePaths = ["web/src", "web/app", "web/dev", "web/index.html", "web/vite.config.ts",
       "web/package.json", "web/package-lock.json", "tools/marker_runtime_identity.mts",
       "tools/run_controlled_marker_v035_dev.mjs", "tools/run_controlled_marker_v035_build.mjs"];
     const untrackedRuntime = git("ls-files", "--others", "--exclude-standard", "--", ...runtimePaths);
     const ignoredRuntime = git("ls-files", "--others", "--ignored", "--exclude-standard", "--", ...runtimePaths);
-    if (untrackedRuntime || ignoredRuntime) fail("运行源码范围内存在未提交文件，Git 回退点不能恢复这些文件");
+    if (untrackedRuntime || ignoredRuntime) recoveryGaps.push("运行源码范围内存在未提交文件，Git 回退点不能恢复这些文件");
     const refs = git("for-each-ref", "--format=%(refname)", "refs/heads/backup/")
       .split(/\r?\n/).filter(Boolean);
     const recoveryRef = refs.find((ref) => {
       try { git("merge-base", "--is-ancestor", ref, "HEAD"); return true; }
       catch { return false; }
     });
-    if (!recoveryRef) fail("开发测试需要指向当前提交或其祖先的本地 backup/ Git 回退点");
+    if (!recoveryRef) recoveryGaps.push("开发测试需要指向当前提交或其祖先的本地 backup/ Git 回退点");
     else console.log(`[algorithm-release:dev] Git 回退点 ${recoveryRef}；已提交 HEAD ${head}`);
   } catch (error) {
-    fail(`无法核验开发测试 Git 恢复条件：${error.message}`);
+    recoveryGaps.push(`无法核验开发测试 Git 恢复条件：${error.message}`);
+  }
+  if (recoveryGaps.length) {
+    requiresArchive = true;
+    console.log('[algorithm-release:dev] Git 免重复恢复包条件未满足，改核当前完整恢复包：' + recoveryGaps.join('；'));
   }
 }
 if (requiresArchive && archive.scopeConfigSha256 !== currentScopeConfigSha256) {
@@ -112,7 +117,7 @@ if (requiresArchive && (archive.status !== "verified" || !archive.manifestPath |
   fail("当前算法没有已验证恢复包");
 } else if (requiresArchive) {
   const archiveManifestPath = resolve(repoRoot, archive.manifestPath);
-  if (!existsSync(archiveManifestPath) && process.env.CI !== "true") fail(`恢复包 manifest 不存在：${archive.manifestPath}`);
+  if (!existsSync(archiveManifestPath) && (process.env.CI !== "true" || mode === "dev")) fail(`恢复包 manifest 不存在：${archive.manifestPath}`);
   else if (!existsSync(archiveManifestPath)) {
     if (archive.sourceDigest !== identity.sourceDigest) fail("CI 中的恢复包登记不是当前源码指纹");
   }

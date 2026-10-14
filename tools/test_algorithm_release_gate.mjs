@@ -27,6 +27,9 @@ const source = readFileSync(new URL('./check_algorithm_release_gate.mjs', import
 function run(ci, mode = 'deploy', changes = {}, gitState = {}) {
   const fixture = structuredClone(release);
   for (const [key, values] of Object.entries(changes)) Object.assign(fixture[key], values);
+  const manifest = { archiveScope: { configSha256: scopeDigest, externalDependencies: [], changedOutsideScope: [] }, algorithmIdentity: identity, copied: [], inherited: [] };
+  const manifestBytes = JSON.stringify(manifest);
+  if (gitState.withArchive) fixture.archive.manifestSha256 = createHash('sha256').update(manifestBytes).digest('hex');
   const messages = [];
   let exitCode = 0;
   const context = {
@@ -43,9 +46,9 @@ function run(ci, mode = 'deploy', changes = {}, gitState = {}) {
       throw new Error('unexpected fixture Git command: ' + command);
     },
     readFileSync: (path) => String(path).endsWith('controlled-marker-release.json')
-      ? JSON.stringify(fixture) : scopeBytes,
-    existsSync: () => false,
-    realpathSync: () => { throw new Error('must not resolve an absent private archive'); },
+      ? JSON.stringify(fixture) : String(path).endsWith("manifest.json") ? manifestBytes : scopeBytes,
+    existsSync: () => Boolean(gitState.withArchive),
+    realpathSync: (path) => { if (gitState.withArchive) return String(path); throw new Error('must not resolve an absent private archive'); },
     process: { argv: ['node', 'gate', mode], env: { CI: ci }, exit: code => { exitCode = code; throw new Error('gate-exit'); } },
     console: { log: value => messages.push(value), error: value => messages.push(value) },
   };
@@ -86,3 +89,7 @@ assert.equal(packageScripts['verify:algorithm-release:pr'], 'node ../tools/check
 console.log('startup routing: development exemption retains resource checks and release gates');
 
 assert.equal(run(undefined, 'dev', {}, {untrackedRuntime: true}).exitCode, 1, 'untracked or ignored runtime source is not covered by a Git checkpoint');
+
+assert.equal(run(undefined, 'dev', {}, {dirty: ' M source', withArchive: true}).exitCode, 0, 'a candidate with a validated archive retains the original strict recovery path');
+assert.equal(run(undefined, 'dev', {}, {noBackup: true, withArchive: true}).exitCode, 0, 'archive-backed developer candidates do not need a redundant Git backup branch');
+assert.equal(run(undefined, 'dev', {current: {sourceDigest: 'stale'}}, {dirty: ' M source', withArchive: true}).exitCode, 1, 'archive fallback does not weaken source identity');
