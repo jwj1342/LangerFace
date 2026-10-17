@@ -303,7 +303,7 @@ for (const engine of ["Chrome/149.0.7827.55", "Chrome/145.0.7632.6", "Edg/149.0.
   assert.equal(auditMarkerDiagnosticExport(ticket).passed, true, `typed browser metadata: ${engine}`);
   assert.equal(JSON.stringify(ticket), original, "audit must preserve original browser evidence");
 }
-for (const engine of ["13800138000", "person@example.com", "Chrome/13800138000", "Chrome/149.0.7827.55 person@example.com", "Chrome/1..2", "Chrome/1.2.3.4.5", "Chrome/" + "1".repeat(200), 149, null, {}]) {
+for (const engine of ["13800138000", "person@example.com", "Chrome/13800138000", "Chrome/149.0.7827.55 person@example.com", "Chrome/1..2", "Chrome/149.0.7827.55\n", "unknown\n", "Chrome/1.2.3.4.5", "Chrome/" + "1".repeat(200), 149, null, {}]) {
   const ticket = structuredClone(session);
   ticket.page_instances[0].browser_engine = engine;
   assert.throws(() => auditMarkerDiagnosticExport(ticket), /浏览器元数据/, "invalid typed browser metadata must fail closed");
