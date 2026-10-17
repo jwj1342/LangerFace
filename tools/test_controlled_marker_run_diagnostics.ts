@@ -295,6 +295,24 @@ assert.equal(session.workflow_events[1].after.display.minimum_boundary_distance_
 assert.equal(session.runs.length, 240);
 assert.equal(session.action_events.length, 1);
 assert.equal(session.action_events[0].domain, "wrinkle");
+// Real session export: browser version metadata must not be mistaken for a phone.
+for (const engine of ["Chrome/149.0.7827.55", "Chrome/145.0.7632.6", "Edg/149.0.7827.55", "Firefox/145.0", "Version/18.1", "unknown"]) {
+  const ticket = structuredClone(session);
+  ticket.page_instances[0].browser_engine = engine;
+  const original = JSON.stringify(ticket);
+  assert.equal(auditMarkerDiagnosticExport(ticket).passed, true, `typed browser metadata: ${engine}`);
+  assert.equal(JSON.stringify(ticket), original, "audit must preserve original browser evidence");
+}
+for (const engine of ["13800138000", "person@example.com", "Chrome/13800138000", "Chrome/149.0.7827.55 person@example.com", "Chrome/1..2", "Chrome/1.2.3.4.5", "Chrome/" + "1".repeat(200), 149, null, {}]) {
+  const ticket = structuredClone(session);
+  ticket.page_instances[0].browser_engine = engine;
+  assert.throws(() => auditMarkerDiagnosticExport(ticket), /浏览器元数据/, "invalid typed browser metadata must fail closed");
+}
+for (const text of ["13800138000", "person@example.com"]) {
+  const ticket = structuredClone(session);
+  ticket.page_instances[0].navigation_type = text;
+  assert.equal(auditMarkerDiagnosticExport(ticket).passed, false, "other page free text remains scanned");
+}
 const sessionAudit = auditMarkerDiagnosticExport(session);
 assert.deepEqual(sessionAudit.violations, [], JSON.stringify(sessionAudit.violations));
 assert.equal(parseDiagnosticRun(JSON.stringify(session)).request_id, 239, "v2 session import keeps latest detector run");

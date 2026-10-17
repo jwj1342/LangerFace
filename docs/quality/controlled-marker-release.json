@@ -11,21 +11,28 @@
       "对象中心核验"
     ],
     "status": "candidate",
-    "sourceDigest": "f77b3c7c08ee121db8c2865e951f0b29ee0dadf32db7dc6b82a3e8c4f4430aad",
+    "sourceDigest": "116d262c725bb227b7a1eed3b4968dc33cff55077e7611256c1cd5dc146db4a0",
     "algorithmDigest": "a46cff9529c5ad86ed260c315a62bd084e6e0a558d180eed24bb2fe120a54faf"
   },
   "runtimeIntegration": {
-    "version": "0.1.2-candidate.1",
-    "name": "运行集成：开发测试与发布归档门禁分离",
+    "version": "0.1.3-candidate.1",
+    "name": "运行集成：浏览器版本诊断导出误报修复",
     "status": "candidate",
-    "sourceDigest": "f77b3c7c08ee121db8c2865e951f0b29ee0dadf32db7dc6b82a3e8c4f4430aad",
-    "scope": "仅本地启动门禁；算法与页面功能不变；formal deploy/pr仍要求恢复包",
+    "sourceDigest": "116d262c725bb227b7a1eed3b4968dc33cff55077e7611256c1cd5dc146db4a0",
+    "scope": "仅受控诊断审计副本中的严格浏览器元数据；原始导出保持，算法/UI/RSTL不变",
     "previous": {
-      "version": "0.1.1-candidate.1",
-      "name": "运行集成：共享图片视频导出与PR237汇合",
+      "version": "0.1.2-candidate.1",
+      "name": "运行集成：开发测试与发布归档门禁分离",
       "status": "candidate",
-      "sourceDigest": "1a03d627713ba15abe6100a6310b5192868f1f0f2d70a8ba862a9b1bccf649df",
-      "scope": "仅运行集成与UI，非团队算法效果或医学验收"
+      "sourceDigest": "f77b3c7c08ee121db8c2865e951f0b29ee0dadf32db7dc6b82a3e8c4f4430aad",
+      "scope": "仅本地启动门禁；算法与页面功能不变；formal deploy/pr仍要求恢复包",
+      "previous": {
+        "version": "0.1.1-candidate.1",
+        "name": "运行集成：共享图片视频导出与PR237汇合",
+        "status": "candidate",
+        "sourceDigest": "1a03d627713ba15abe6100a6310b5192868f1f0f2d70a8ba862a9b1bccf649df",
+        "scope": "仅运行集成与UI，非团队算法效果或医学验收"
+      }
     }
   },
   "archive": {
@@ -750,10 +757,10 @@
   "sourceFingerprint": {
     "encoding": "UTF-8",
     "normalization": "CRLF-to-LF-only",
-    "previousSourceDigest": "3d18e37e97a7130d3dc12e7064623017723b432b52ca4805537347b14dfa7666",
-    "currentSourceDigest": "0d8c334893a8a74ebfa8104508a0ab06815a732ef183fdb30eb3971d169e4d99",
-    "capturedAt": "2026-10-10T11:31:33.101Z",
-    "reason": "共享导出模块收拢后的实际综合源码；肿物指纹不变，有限认可范围明确记录"
+    "previousSourceDigest": "f77b3c7c08ee121db8c2865e951f0b29ee0dadf32db7dc6b82a3e8c4f4430aad",
+    "currentSourceDigest": "116d262c725bb227b7a1eed3b4968dc33cff55077e7611256c1cd5dc146db4a0",
+    "capturedAt": "2026-10-17T10:04:03.338Z",
+    "reason": "运行集成：浏览器版本诊断导出误报修复"
   },
   "integrationHistory": [
     {
@@ -802,6 +809,26 @@
       "head": "b1daa04f3c38163c303ef4bb54ad8f4f6fe19497",
       "sourceDigest": "0d8c334893a8a74ebfa8104508a0ab06815a732ef183fdb30eb3971d169e4d99",
       "reason": "发布准备有限修复：导出重复初始化收拢，原错误/下载/清理语义保持；核心算法不变。"
+    },
+    {
+      "capturedAt": "2026-10-17T10:04:03.328Z",
+      "previousRuntimeIntegration": {
+        "version": "0.1.2-candidate.1",
+        "name": "运行集成：开发测试与发布归档门禁分离",
+        "status": "candidate",
+        "sourceDigest": "f77b3c7c08ee121db8c2865e951f0b29ee0dadf32db7dc6b82a3e8c4f4430aad",
+        "scope": "仅本地启动门禁；算法与页面功能不变；formal deploy/pr仍要求恢复包",
+        "previous": {
+          "version": "0.1.1-candidate.1",
+          "name": "运行集成：共享图片视频导出与PR237汇合",
+          "status": "candidate",
+          "sourceDigest": "1a03d627713ba15abe6100a6310b5192868f1f0f2d70a8ba862a9b1bccf649df",
+          "scope": "仅运行集成与UI，非团队算法效果或医学验收"
+        }
+      },
+      "sourceDigest": "116d262c725bb227b7a1eed3b4968dc33cff55077e7611256c1cd5dc146db4a0",
+      "reason": "诊断导出：严格识别浏览器版本元数据，保留原值和通用隐私扫描；算法及UI/RSTL不变",
+      "evidence": "../../local_outputs/volunteer-validation-20261016/evidence/mainline-batch3/"
     }
   ]
 }
