@@ -2329,6 +2329,29 @@ function sourceClientPoint(state: WorkflowIncisionState, point: Vec3) {
   return { x: mapped.x - viewportLeft, y: mapped.y - viewportTop };
 }
 
+// Diagnostic only: keep the full rejected outline, including off-image points.
+// Normal candidate, lesion boundary and picking retain their existing mapping.
+function diagnosticSourceClientPoint(state: WorkflowIncisionState, point: Vec3) {
+  if (!point.every(Number.isFinite)) return null;
+  const planning = sourceState.planning2d;
+  const wrap = state.root.querySelector<HTMLElement>(".main-wrap");
+  if (!planning || !wrap) return null;
+  const frame = planning.getFrameState();
+  const transform = frame.transform;
+  if (!transform) return null;
+  const viewportPoint = workflowFocusViewportPoint(
+    { x: point[0], y: point[1] },
+    { width: frame.width, height: frame.height },
+    renderState.focusCrop,
+  );
+  let x = viewportPoint.x / transform.sourceWidth;
+  if (transform.mirror) x = 1 - x;
+  return {
+    x: transform.displayLeft + x * transform.displayWidth - transform.viewportLeft,
+    y: transform.displayTop + viewportPoint.y / transform.sourceHeight * transform.displayHeight - transform.viewportTop,
+  };
+}
+
 function sourcePointAtClient(
   state: WorkflowIncisionState,
   point: { x: number; y: number },
@@ -2424,7 +2447,7 @@ function drawDraftOverlay(state: WorkflowIncisionState) {
   const diagnosticCandidate = workflowDiagnosticCandidateOutline(state.result?.candidate?.type, geometry);
   const diagnosticCandidatePathData = geometry
     ? state.result?.candidate?.type === "fusiform"
-      ? workflowDiagnosticFusiformSvgPath(diagnosticCandidate, (point) => sourceClientPoint(state, point))
+      ? workflowDiagnosticFusiformSvgPath(diagnosticCandidate, (point) => diagnosticSourceClientPoint(state, point))
       : pathData(diagnosticCandidate.map((point) => sourceClientPoint(state, point)).filter((point): point is { x: number; y: number } => Boolean(point)))
     : "";
   const diagnosticCandidateVisible = planningVisible && workflowDiagnosticCandidateVisible(

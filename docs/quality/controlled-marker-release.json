@@ -11,29 +11,36 @@
       "对象中心核验"
     ],
     "status": "candidate",
-    "sourceDigest": "116d262c725bb227b7a1eed3b4968dc33cff55077e7611256c1cd5dc146db4a0",
+    "sourceDigest": "b384b450030c0422e59f4c79cb68534ac784e95cd2e560a74d96e5600c48aa47",
     "algorithmDigest": "a46cff9529c5ad86ed260c315a62bd084e6e0a558d180eed24bb2fe120a54faf"
   },
   "runtimeIntegration": {
-    "version": "0.1.3-candidate.1",
-    "name": "运行集成：浏览器版本诊断导出误报修复",
+    "version": "0.1.4-candidate.1",
+    "name": "运行集成：拒绝梭形红色诊断投影保留",
     "status": "candidate",
-    "sourceDigest": "116d262c725bb227b7a1eed3b4968dc33cff55077e7611256c1cd5dc146db4a0",
-    "scope": "仅受控诊断审计副本中的严格浏览器元数据；原始导出保持，算法/UI/RSTL不变",
+    "scope": "仅红色诊断轮廓允许图外有限坐标映射；蓝线、识别、生成、确认/保存/叠加及RSTL保持",
     "previous": {
-      "version": "0.1.2-candidate.1",
-      "name": "运行集成：开发测试与发布归档门禁分离",
+      "version": "0.1.3-candidate.1",
+      "name": "运行集成：浏览器版本诊断导出误报修复",
       "status": "candidate",
-      "sourceDigest": "f77b3c7c08ee121db8c2865e951f0b29ee0dadf32db7dc6b82a3e8c4f4430aad",
-      "scope": "仅本地启动门禁；算法与页面功能不变；formal deploy/pr仍要求恢复包",
+      "sourceDigest": "116d262c725bb227b7a1eed3b4968dc33cff55077e7611256c1cd5dc146db4a0",
+      "scope": "仅受控诊断审计副本中的严格浏览器元数据；原始导出保持，算法/UI/RSTL不变",
       "previous": {
-        "version": "0.1.1-candidate.1",
-        "name": "运行集成：共享图片视频导出与PR237汇合",
+        "version": "0.1.2-candidate.1",
+        "name": "运行集成：开发测试与发布归档门禁分离",
         "status": "candidate",
-        "sourceDigest": "1a03d627713ba15abe6100a6310b5192868f1f0f2d70a8ba862a9b1bccf649df",
-        "scope": "仅运行集成与UI，非团队算法效果或医学验收"
+        "sourceDigest": "f77b3c7c08ee121db8c2865e951f0b29ee0dadf32db7dc6b82a3e8c4f4430aad",
+        "scope": "仅本地启动门禁；算法与页面功能不变；formal deploy/pr仍要求恢复包",
+        "previous": {
+          "version": "0.1.1-candidate.1",
+          "name": "运行集成：共享图片视频导出与PR237汇合",
+          "status": "candidate",
+          "sourceDigest": "1a03d627713ba15abe6100a6310b5192868f1f0f2d70a8ba862a9b1bccf649df",
+          "scope": "仅运行集成与UI，非团队算法效果或医学验收"
+        }
       }
-    }
+    },
+    "sourceDigest": "b384b450030c0422e59f4c79cb68534ac784e95cd2e560a74d96e5600c48aa47"
   },
   "archive": {
     "status": "verified",
@@ -583,8 +590,8 @@
     }
   ],
   "uiIdentity": {
-    "version": "0.1.5-candidate.1",
-    "name": "界面文案：自由轮廓统一称为手绘",
+    "version": "0.1.6-candidate.1",
+    "name": "切口诊断显示：图外点不清空整条红梭形",
     "status": "candidate",
     "sourceFiles": [
       "web/src/components/WorkflowStageStatus.tsx",
@@ -594,14 +601,33 @@
       "web/src/services/incisionClinicalCopy.ts",
       "web/src/services/workflowIncisionController.ts"
     ],
-    "sourceDigest": "78c38062b8e83eb1a3d75b7c0a5e223847ae83bfeb89453497adf124c13bf0c5",
-    "runtimeSourceDigest": "bdb92ff70bec3f2f2438629029f2ad1b88283873c13160a7c77bfc48beed69ee",
+    "sourceDigest": "4172193befa273d99ac858202a15bf48b43ba8ed7f49c537206848b65480dc96",
+    "runtimeSourceDigest": "b384b450030c0422e59f4c79cb68534ac784e95cd2e560a74d96e5600c48aa47",
     "algorithmVersion": "0.83.0-candidate.1",
     "algorithmDigest": "a46cff9529c5ad86ed260c315a62bd084e6e0a558d180eed24bb2fe120a54faf",
-    "baselineSourceDigest": "953c62afa275c3b09b3210b59f36e52320ce0d7ab627fea6acf9393938c2b665",
-    "note": "只替换共享选项、提示中的鼠绘为手绘；不改绘制交互、手机布局或算法。双视口回读证据freehand-copy-page.json。"
+    "baselineSourceDigest": "116d262c725bb227b7a1eed3b4968dc33cff55077e7611256c1cd5dc146db4a0",
+    "note": "仅红色诊断梭形坐标投影；未改变肿物/切口算法与门禁。近似03复现，原鼠绘坐标缺失、真机未验。源码指纹按已登记sourceFiles顺序的路径/规范正文SHA对计算。"
   },
   "uiHistory": [
+    {
+      "version": "0.1.5-candidate.1",
+      "name": "界面文案：自由轮廓统一称为手绘",
+      "status": "candidate",
+      "sourceFiles": [
+        "web/src/components/WorkflowStageStatus.tsx",
+        "web/src/components/WorkflowCanvasTools.tsx",
+        "web/src/styles.css",
+        "web/src/components/TumorInputPanel.tsx",
+        "web/src/services/incisionClinicalCopy.ts",
+        "web/src/services/workflowIncisionController.ts"
+      ],
+      "sourceDigest": "78c38062b8e83eb1a3d75b7c0a5e223847ae83bfeb89453497adf124c13bf0c5",
+      "runtimeSourceDigest": "bdb92ff70bec3f2f2438629029f2ad1b88283873c13160a7c77bfc48beed69ee",
+      "algorithmVersion": "0.83.0-candidate.1",
+      "algorithmDigest": "a46cff9529c5ad86ed260c315a62bd084e6e0a558d180eed24bb2fe120a54faf",
+      "baselineSourceDigest": "953c62afa275c3b09b3210b59f36e52320ce0d7ab627fea6acf9393938c2b665",
+      "note": "只替换共享选项、提示中的鼠绘为手绘；不改绘制交互、手机布局或算法。双视口回读证据freehand-copy-page.json。"
+    },
     {
       "version": "0.1.4-candidate.1",
       "name": "识别反馈：固定提示布局与手机标记视野",
