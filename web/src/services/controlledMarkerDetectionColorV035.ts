@@ -1,3 +1,9 @@
+/**
+ * 新手阅读入口：这是交互式图像分割，不是训练好的病理诊断模型。
+ * 输入：原图RGBA像素、原图上的点击点、扫描/分析参数。输出：候选闭合边界或明确失败。
+ * ok、confidence、共识次数都只描述工程规则；不能替代医生确认。
+ * 教材会按函数名引用本文件。后续迭代请同步行为、注释、测试及算法版本指纹。
+ */
 import {
   __controlledMarkerForTests,
   CONTROLLED_MARKER_DETECTOR_VERSION as LEGACY_DETECTOR_VERSION,
@@ -45,6 +51,7 @@ function xyzPivot(value: number): number {
     : (24389 / 27 * value + 16) / 116;
 }
 
+/** 把相机的RGB颜色换到Lab空间。L近似明暗，a/b描述颜色方向；色差证据用于降低肤色和照明差异的影响，但不能据此诊断病变。 */
 function rgbToLab(red: number, green: number, blue: number): LabColor {
   const r = srgbToLinear(red);
   const g = srgbToLinear(green);
@@ -82,6 +89,7 @@ function integralMean(
   return total / ((right - left + 1) * (bottom - top + 1));
 }
 
+/** 构造给几何检测器使用的“证据图”：把局部颜色差异编码成强弱。它是派生图，不是原照片；最终候选还要回到原图检查。 */
 function colorDifferenceEvidenceImage(
   image: MarkerImageData,
   seed: MarkerPoint,
@@ -210,6 +218,7 @@ function hollowPointInPolygon(point: MarkerPoint, polygon: MarkerPoint[]): boole
   return inside;
 }
 
+/** 生成亮度归一化的备用输入，尝试恢复曝光影响下的结构。它只提出候选，不能绕过原扫描范围和候选质量门禁。 */
 function normalizeBrightnessImage(image: MarkerImageData): MarkerImageData {
   let sum = 0;
   let count = 0;
@@ -228,6 +237,7 @@ function normalizeBrightnessImage(image: MarkerImageData): MarkerImageData {
   return { width: image.width, height: image.height, data };
 }
 
+/** 用局部去噪后的颜色差生成备用证据，减少纹理干扰。去噪可能损失小边缘，因此不能把平滑后的轮廓当成真实边界。 */
 function denoisedColorDifferenceEvidenceImage(
   evidenceImage: MarkerImageData,
   seed: MarkerPoint,
@@ -433,6 +443,7 @@ function percentile(values: number[], ratio: number): number {
   return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * ratio)))];
 }
 
+/** 大津阈值法：在局部亮度直方图上寻找将明暗两组分开的阈值。它不知道哪组是肿物，后面仍须验证形状、暗核和背景对比。 */
 function otsuThreshold(values: number[]): number {
   const histogram = new Uint32Array(256);
   for (const value of values) histogram[clamp(Math.round(value), 0, 255)] += 1;
@@ -484,7 +495,8 @@ function resampleClosedBoundary(points: MarkerPoint[], count = 48): MarkerPoint[
   return output;
 }
 
-function regularizeSolidBoundary(result: ControlledMarkerDetection): ControlledMarkerDetection {
+/** 对实心组件的锯齿边缘做受限平滑。作用是减少像素台阶，不负责发现遗漏区域；面积和位移的约束用于防止平滑改坏形状。 */
+export function regularizeSolidBoundary(result: ControlledMarkerDetection): ControlledMarkerDetection {
   if (!result.ok || result.geometry_mode !== "dark_component" || result.boundary.length < 8) return result;
   const sourceGeometry = boundaryGeometry(result.boundary);
   const resampled = resampleClosedBoundary(result.boundary);
@@ -535,7 +547,8 @@ function regularizeSolidBoundary(result: ControlledMarkerDetection): ControlledM
 // 整体位置、长短轴与缓慢形变，去掉局部折角。不是把所有病灶强制画圆：
 // 深凹陷、明显不规则形状或双向位移超过等面积半径22%时保留原轮廓。
 // 面积保持及后续原扫描/颜色支持门禁仍必需，光滑不代表医学正确。
-function regularizeAcceptedBoundary(result: ControlledMarkerDetection): ControlledMarkerDetection {
+/** 对已接受的闭合轮廓做低频形状整理。这里只改善几何表现，不提高医学可信度；已有面积和最大位移限制继续生效。 */
+export function regularizeAcceptedBoundary(result: ControlledMarkerDetection): ControlledMarkerDetection {
   if (!result.ok || !["dark_component", "enclosed_region"].includes(result.geometry_mode || "")
     || result.boundary.length < 24
     || result.boundary.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) return result;
@@ -625,6 +638,7 @@ function smoothSolidEnvelopeBoundary(
   });
 }
 
+/** 尝试给较大的实心组件恢复外围包络。风险是把皮肤当作肿物：原始亮度支持并不等于前景支持。本轮仅阻止小组件的统一放大，大目标的既有路径保留。 */
 function expandSolidBoundaryEnvelope(
   result: ControlledMarkerDetection,
   image: MarkerImageData,
@@ -639,6 +653,14 @@ function expandSolidBoundaryEnvelope(
     || result.boundary.length < 8) return result;
   const source = boundaryGeometry(result.boundary);
   if (!source) return result;
+  // 小目标先保留真实像素组件，不用整圈等比例放大来猜外缘。
+  // roiRadius 在这里是固定分析半径（通常36像素），不是操作者的扫描半径。
+  // 当组件的最长边不超过这个半径时，它已经有足够的周围皮肤可作比较；
+  // 后续异步颜色复核仍会检查它。旧逻辑只要求扩张边缘亮度>=40，普通
+  // 皮肤也很容易满足，所以1.42倍长度扩张会把面积放大到约2倍。
+  // 这不是临床尺寸门槛，也不代表较大的组件就一定允许扩张；它们还须
+  // 通过下面既有的扫描覆盖、形状和支持检查。
+  if (Math.max(source.bbox.width, source.bbox.height) <= roiRadius) return result;
   const diagnosticRecord = result.diagnostics as Record<string, unknown> | undefined;
   const proposalSupportCount = Number(diagnosticRecord?.scan_solid_proposal_count || 0);
   const strongProposalConsensus = proposalSupportCount >= 3
@@ -699,6 +721,7 @@ function expandSolidBoundaryEnvelope(
   return result;
 }
 
+/** 实心候选生成器：在局部窗口试多个亮度阈值，找连通暗区域，再用尺寸、紧致度、填充率、核心暗度、对比度及点击距离筛选。发丝可能连接暗区域，因此这一步的结果仍是候选。 */
 function recoverSolidComponentNearSeed(
   image: MarkerImageData,
   seed: MarkerPoint,
@@ -1134,6 +1157,7 @@ function reconcileDenoisedStrokeEnvelope(
   };
 }
 
+/** 沿轮廓抽样，统计证据图上的低分位强度和支持比例。调用时须分清传入原照片还是派生证据图；原照片亮度高不能证明它属于肿物。 */
 function boundaryColorSupport(
   evidenceImage: MarkerImageData,
   boundary: MarkerPoint[],
@@ -1157,6 +1181,7 @@ function boundaryColorSupport(
   };
 }
 
+/** 候选的共同门禁。检查几何、尺寸、颜色支持和扫描覆盖等工程条件；返回valid只说明通过这些条件，不表示临床边界正确。 */
 function candidateGate(
   result: ControlledMarkerDetection,
   seed: MarkerPoint,
@@ -2709,9 +2734,11 @@ function recoverLargeChromaticSolid(
   };
 }
 
+/** 在扫描圈及固定分析窗口中寻找同一个实心目标。扫描圈表示允许搜索/归属的区域，固定窗口表示计算证据的尺度；两者不能混用。多个窗口的中心共识仍可能来自同一处发丝干扰，不是独立临床证据。 */
 function recoverScanSolidCandidate(
   image: MarkerImageData, seed: MarkerPoint, options: ControlledMarkerOptions,
   analysisRadius: number, scanRadius: number, witness: ControlledMarkerDetection,
+  pixelBoundary = false,
 ): ControlledMarkerDetection | null {
   const proposals: ControlledMarkerDetection[] = [];
   recoverSolidComponentNearSeed(image, seed, witness, {
@@ -2722,7 +2749,13 @@ function recoverScanSolidCandidate(
   // overlapping fixed-scale regions only to propose centres; clipped dark
   // components cannot provide complete-object evidence.
   const step = Math.max(8, Math.round(analysisRadius * 0.65));
-  for (const dy of [-step, 0, step]) for (const dx of [-step, 0, step]) {
+  // 常规路径保留原来的九窗口。像素复核路径需要在对象周围找完整
+  // 原始组件，而不是让点击点移动时改变全部观察窗口；最多13×13个
+  // 固定网格窗口，明确限制计算量。这里扩大的是观察上下文，最终
+  // 是否属于用户扫描圈，仍由调用方按原扫描中心逐点检查。
+  const extent = pixelBoundary ? Math.min(6, Math.ceil((scanRadius + analysisRadius) / step)) : 1;
+  const offsets = Array.from({ length: extent * 2 + 1 }, (_, index) => (index - extent) * step);
+  for (const dy of offsets) for (const dx of offsets) {
     // 提案窗口固定在原图网格上，避免轻微移动点击点就同时移动
     // 所有阈值窗口、漏掉完整暗色主体。原扫描圈仍决定最终归属。
     const localSeed = {
@@ -2730,7 +2763,7 @@ function recoverScanSolidCandidate(
       y: Math.round(seed.y / step) * step + dy,
     };
     if (localSeed.x < 0 || localSeed.y < 0 || localSeed.x >= image.width || localSeed.y >= image.height
-      || Math.hypot(dx, dy) > scanRadius) continue;
+      || (!pixelBoundary && Math.hypot(dx, dy) > scanRadius)) continue;
     const local: ControlledMarkerDetection[] = [];
     recoverSolidComponentNearSeed(image, localSeed, witness, {
       ...options, roiRadius: analysisRadius,
@@ -2760,11 +2793,48 @@ function recoverScanSolidCandidate(
     if (proposalConsensusCount < 2) continue;
     const localOptions = { ...options, roiRadius: analysisRadius, __scanCoverageRadius: scanRadius };
     const local = detectControlledMarkerInternal(image, proposal.center, localOptions, false, true);
-    if (!local.ok || local.geometry_mode !== "dark_component" || !local.center) continue;
+    const localSolid = local.ok && local.geometry_mode === "dark_component" && local.center
+      ? local
+      : null;
+    // Hair and fine texture can make the colour-ring verifier reject a
+    // genuinely compact filled candidate after the scan-wide threshold pass
+    // has already found the same object from several fixed windows. In that
+    // case the proposal itself is the stronger evidence: it is tied to the
+    // original scan, has a dark core, and still has to pass the complete
+    // geometry/coverage gate below. This bypass is deliberately narrow and
+    // cannot accept a single window or a weak core.
     const expected = Number(options.expectedDiameterPx || 0);
-    const canonical = canonicalizeSolidCycle(local, (candidate) => canonicalizeSolidRecovery(
-      image, candidate, local, seed, localOptions, evidence, analysisRadius, expected,
-    ));
+    const directProposal = !localSolid
+      && proposalConsensusCount >= 2
+      && Number(proposal.diagnostics?.solid_component_core_dark_ratio || 0) >= 0.92
+      // Click distance is not boundary evidence. A nearby click must retain
+      // the same multi-window, dark-core, geometry and scan-coverage gates.
+      && candidateGate(
+        proposal,
+        seed,
+        expected,
+        evidence,
+        analysisRadius,
+        Number(options.scanDiameterMm || 0),
+        scanRadius,
+      ).valid
+      ? {
+        ...proposal,
+        diagnostics: {
+          ...(proposal.diagnostics || {}),
+          scan_solid_proposal_count: proposals.length,
+          scan_solid_proposal_consensus_count: proposalConsensusCount,
+          scan_solid_direct_proposal: true,
+        },
+      }
+      : null;
+    const acceptedLocal = localSolid || directProposal;
+    if (!acceptedLocal) continue;
+    const canonical = localSolid
+      ? canonicalizeSolidCycle(localSolid, (candidate) => canonicalizeSolidRecovery(
+        image, candidate, localSolid, seed, localOptions, evidence, analysisRadius, expected,
+      ))
+      : acceptedLocal;
     // Envelope growth is evaluated against the operator's original scan,
     // rather than growing around the proposal and rejecting it afterwards.
     const canonicalWithSupport = {
@@ -2775,7 +2845,9 @@ function recoverScanSolidCandidate(
         scan_solid_proposal_consensus_count: proposalConsensusCount,
       },
     };
-    const centered = expandSolidBoundaryEnvelope(canonicalWithSupport, image, evidence, seed,
+    // 原像素组件用于后续独立颜色/边缘复核，不能先按统一倍数放大，
+    // 否则“候选像素证据”和“几何猜出的外边界”又混在了一起。
+    const centered = pixelBoundary ? canonicalWithSupport : expandSolidBoundaryEnvelope(canonicalWithSupport, image, evidence, seed,
       analysisRadius, expected, Number(options.scanDiameterMm || 0), scanRadius);
     if (!candidateGate(centered, seed, expected, evidence,
       analysisRadius, Number(options.scanDiameterMm || 0), scanRadius).valid) continue;
@@ -2788,11 +2860,32 @@ function recoverScanSolidCandidate(
         scan_solid_proposal_count: proposals.length,
         scan_solid_proposal_consensus_count: proposalConsensusCount,
       } as ControlledMarkerDetection["diagnostics"],
-    }, ["scan_solid_core_anchor_recovered", "fixed_scale_unclipped_solid_anchor_recovered"]));
+    }, [
+      "scan_solid_core_anchor_recovered",
+      "fixed_scale_unclipped_solid_anchor_recovered",
+      ...(directProposal ? ["scan_solid_direct_proposal_recovered"] : []),
+    ]));
   }
   return accepted.sort((a, b) => b.area_px - a.area_px)[0] || null;
 }
 
+/**
+ * 为异步复核提供对象周围的原始实心轮廓，不作为接受结果直接返回。
+ * witnessCenter是已选对象的位置，不是新的用户点击点。观察半径至少
+ * 为两倍分析半径，以便发现“扫描圈只截到目标一部分”的情况；调用方
+ * 必须保留原点击点和原扫描半径，核颜色、边缘、同一对象及完整覆盖。
+ * 普通同步识别仍走上面的默认九窗口，接口与扫描语义不变。
+ */
+export function recoverScanPixelSolidCandidate(
+  image: MarkerImageData, witnessCenter: MarkerPoint, options: ControlledMarkerOptions,
+  witness: ControlledMarkerDetection,
+): ControlledMarkerDetection | null {
+  const analysis = Number(options.analysisRoiRadius || options.roiRadius || 36);
+  const contextRadius = Math.max(Number(options.roiRadius || analysis), analysis * 2);
+  return recoverScanSolidCandidate(image, witnessCenter, options, analysis, contextRadius, witness, true);
+}
+
+/** 本模块公开同步入口。统一扫描半径与分析半径，调用各条候选恢复路线并按既有门禁选择。正式产品还会经过Profile模块的异步像素复核，单独调用本函数不等于完整产品结果。 */
 export function detectControlledMarker(
   image: MarkerImageData,
   seed: MarkerPoint,
@@ -2959,6 +3052,7 @@ export const __controlledMarkerColorForTests = {
   colorDifferenceEvidenceImage,
   denoisedColorDifferenceEvidenceImage,
   recoverSolidComponentNearSeed,
+  recoverScanSolidCandidate,
   reconcileDenoisedStrokeEnvelope,
   trimSupportedNarrowBoundarySpur,
   rgbToLab,

@@ -595,8 +595,8 @@
 
   .workflow-incision-overlay [data-workflow-candidate] {
     fill: none;
-    stroke: #67e8f9;
-    stroke-width: 1;
+    stroke: #2563eb;
+    stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
@@ -604,8 +604,8 @@
 
   .workflow-incision-overlay [data-workflow-candidate-halo] {
     fill: none;
-    stroke: #67e8f9;
-    stroke-width: 1;
+    stroke: #2563eb;
+    stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
@@ -2384,6 +2384,29 @@
   overflow-wrap: anywhere;
 }
 
+.workflow-workbench .workflow-stage-status .workflow-developer-detail {
+  flex: 1 1 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Keep desktop diagnostic paragraphs readable without changing normal/mobile feedback. */
+.workflow-workbench .stage-top > #workflowStageStatus[data-developer-details="true"] {
+  flex-direction: column;
+  align-items: flex-start;
+  max-height: min(320px, 40vh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+.workflow-workbench .workflow-stage-status[data-developer-details="true"] > .workflow-stage-status-copy,
+.workflow-workbench .workflow-stage-status[data-developer-details="true"] > .workflow-developer-detail {
+  flex: 0 0 auto;
+  width: 100%;
+}
+
 .workflow-workbench .workflow-stage-spinner {
   width: 12px;
   height: 12px;
@@ -3195,25 +3218,25 @@ body:has(.dark-workbench-page) {
   .workflow-workbench .workflow-incision-overlay [data-workflow-boundary] {
     fill: rgb(253 224 71 / 9%);
     stroke: #fde047;
-    /* A screen-space floor overrides the controller's subpixel compact width. */
-    stroke-width: 1.5 !important;
+    /* Fallback only: the controller owns the fine screen-space stroke. */
+    stroke-width: 1.4;
     stroke-linecap: round;
     stroke-linejoin: round;
   }
 
   .workflow-workbench .workflow-incision-overlay [data-workflow-boundary-halo] {
     fill: none;
-    stroke-width: 2.5 !important;
+    stroke-width: 2.2;
   }
 
   .workflow-workbench .workflow-incision-overlay [data-workflow-candidate] {
     stroke: #67e8f9;
-    stroke-width: 0.4;
+    stroke-width: 0.8;
   }
 
   .workflow-workbench .workflow-incision-overlay [data-workflow-candidate-halo] {
     stroke: #082f49;
-    stroke-width: 0.4;
+    stroke-width: 0.8;
   }
 
   .workflow-workbench .workflow-incision-overlay [data-workflow-diagnostic-candidate] {

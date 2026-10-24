@@ -29,14 +29,30 @@ test("changing tumor kind before a photo pick does not create a default lesion",
   const canvas = page.locator("#incisionPhotoCanvas");
   await expect(canvas).toHaveAttribute("data-active", "true", { timeout: 45_000 });
   await expect(page.locator("#stageStatus")).toContainText("尚未选择病灶位置");
-  const before = await canvas.evaluate((element) => (element as HTMLCanvasElement).toDataURL());
+  await canvas.evaluate((element) => {
+    const canvas = element as HTMLCanvasElement;
+    const pixels = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height);
+    Reflect.set(window, "__unpickedPhotoPixels", pixels);
+  });
 
   await page.locator("#tumorKind").selectOption("cutaneous");
   await expect(page.locator("#stageStatus")).toContainText("尚未选择病灶位置");
   await expect.poll(() => findPhotoEndpointHandles(page)).toHaveLength(0);
-  const after = await canvas.evaluate((element) => (element as HTMLCanvasElement).toDataURL());
-  expect(after, "tumor-kind changes must not draw a fallback center, boundary, or candidate on an unpicked photo")
-    .toBe(before);
+  const difference = await canvas.evaluate((element) => {
+    const canvas = element as HTMLCanvasElement;
+    const before = Reflect.get(window, "__unpickedPhotoPixels") as ImageData;
+    const after = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height);
+    let maxChannelDelta = 0;
+    if (before.width !== after.width || before.height !== after.height) return Infinity;
+    for (let index = 0; index < before.data.length; index += 1) {
+      maxChannelDelta = Math.max(maxChannelDelta, Math.abs(before.data[index] - after.data[index]));
+    }
+    return maxChannelDelta;
+  });
+  // Redrawing an unchanged photo can round an 8-bit channel by one. Compare
+  // decoded pixels instead of PNG bytes; an added centre/outline exceeds this.
+  expect(difference, "tumor-kind changes must not draw a fallback center, boundary, or candidate on an unpicked photo")
+    .toBeLessThanOrEqual(1);
 });
 
 test("switching to a subcutaneous tumor exits controlled marking without inventing a boundary", async ({ page }) => {

@@ -34,7 +34,7 @@ import {
 import {
   CONTROLLED_MARKER_DETECTOR_VERSION,
   CONTROLLED_MARKER_DETECTOR_PROFILE,
-  detectControlledMarker,
+  detectControlledMarkerAsync as detectControlledMarker,
   type ControlledMarkerDetection,
 } from "./controlledMarkerDetectionProfile";
 import { dataSource } from "./dataSource";
@@ -129,6 +129,7 @@ import {
   updateWorkflowPointerIntent,
   workflowFusiformSvgPath,
   workflowCandidateDisplayAllowed,
+  workflowPhotoCandidatePresentation,
   workflowDiagnosticCandidateVisible,
   workflowDiagnosticCandidateOutline,
   workflowDiagnosticFusiformSvgPath,
@@ -186,6 +187,7 @@ interface RejectedMarkerPreview {
   boundary: SvgPoint[];
   sourceRevision: number;
   requestId: number;
+  parameters: WorkflowMarkerRequestSnapshot;
   reasons: string[];
 }
 
@@ -688,6 +690,7 @@ function upperForeheadSurfaceRecoveryActive(
 }
 
 function visibilityLimitedReferenceGeometry(
+  state: WorkflowIncisionState,
   geometry: IncisionPhotoGeometry | null,
 ): boolean {
   return Boolean(geometry && workflowVisibilityLimitedReferenceDisplayActive({
@@ -697,7 +700,7 @@ function visibilityLimitedReferenceGeometry(
     visibilityLimited: geometry.candidateProjection.visibilityLimited,
     hiddenPointCount: geometry.candidateProjection.hiddenPointCount,
     visibleFraction: geometry.candidateProjection.visibleFraction,
-    openingIntersection: visibilityLimitedPhotoOpeningIntersection(geometry),
+    openingIntersection: visibilityLimitedPhotoOpeningIntersection(state, geometry),
   }));
 }
 
@@ -712,11 +715,12 @@ function visibilityLimitedReferenceRecoveryActive(
     visibilityLimited: geometry.candidateProjection.visibilityLimited,
     hiddenPointCount: geometry.candidateProjection.hiddenPointCount,
     visibleFraction: geometry.candidateProjection.visibleFraction,
-    openingIntersection: visibilityLimitedPhotoOpeningIntersection(geometry),
+    openingIntersection: visibilityLimitedPhotoOpeningIntersection(state, geometry),
   }));
 }
 
 function visibilityLimitedPhotoOpeningIntersection(
+  state: WorkflowIncisionState,
   geometry: IncisionPhotoGeometry | null,
 ): string | null {
   if (geometry?.candidateProjection.smoothingMode !== "limitedVisibility") return null;
@@ -728,10 +732,12 @@ function visibilityLimitedPhotoOpeningIntersection(
   return workflowPhotoOpeningIntersection(
     outline.slice(0, -1).map((point) => ({ x: point[0], y: point[1] })),
     landmarks,
+    { vertices: state.verts, triangles: state.tris },
   );
 }
 
 function photoDiagnosticOpeningIntersection(
+  state: WorkflowIncisionState,
   geometry: IncisionPhotoGeometry | null,
 ): string | null {
   const landmarks = sourceState.planning2d?.getFrameState().landmarks;
@@ -742,6 +748,7 @@ function photoDiagnosticOpeningIntersection(
   return workflowPhotoOpeningIntersection(
     outline.slice(0, -1).map((point) => ({ x: point[0], y: point[1] })),
     landmarks,
+    { vertices: state.verts, triangles: state.tris },
   );
 }
 
@@ -756,7 +763,7 @@ function photoDisplayRecoveryActive(
 function diagnosticCandidateVisibleForGeometry(
   state: WorkflowIncisionState,
   geometry: IncisionPhotoGeometry | null,
-  openingIntersection = photoDiagnosticOpeningIntersection(geometry),
+  openingIntersection = photoDiagnosticOpeningIntersection(state, geometry),
 ): boolean {
   if (!state.result || !geometry) return false;
   const candidateDisplayBlocked = (state.result.candidate_display_blocked === true
@@ -997,6 +1004,47 @@ function syncWorkflowPointerMode(state: WorkflowIncisionState) {
   else delete wrap.dataset.workflowPointerMode;
 }
 
+const CONTROLLED_MARKER_REASON_LABELS: Record<string, string> = {
+  candidate_too_elongated: "候选轮廓过于细长",
+  candidate_color_ring_incomplete: "候选轮廓颜色支持不完整",
+  candidate_not_compact: "候选轮廓不够紧凑",
+  candidate_geometry_degenerate: "候选轮廓几何退化",
+  candidate_below_minimum_enclosed_size: "闭合区域小于识别尺寸",
+  not_supported_boundary: "边界支持证据不足",
+  diffuse_or_inconsistent_boundary: "边界颜色或强度不一致",
+  gradual_shading_edge: "边界更像渐变阴影",
+  not_enclosed_within_scan: "边界没有完整落在扫描范围内",
+  seed_only_touches_candidate_edge: "点击位置靠近候选边缘",
+};
+
+function rejectedReasonLabelForStatus(code: string): string {
+  return CONTROLLED_MARKER_REASON_LABELS[code] || "边界证据不足";
+}
+
+function workflowDeveloperDetails(state: WorkflowIncisionState): string[] {
+  const details: string[] = [];
+  const rejected = state.rejectedMarkerPreview;
+  if (rejected?.reasons?.length) {
+    details.push(`肿物边界：${[...new Set(rejected.reasons.map(rejectedReasonLabelForStatus))].join("；")}`);
+  }
+  const result = state.result;
+  const guardrails = result?.guardrails;
+  const violations = Array.isArray(guardrails?.hard_violations) ? guardrails.hard_violations : [];
+  const warnings = Array.isArray(guardrails?.warnings) ? guardrails.warnings : [];
+  for (const item of [...violations.map((item: DynamicRecord) => ({ ...item, severity: "high" })), ...warnings]) {
+    const code = String(item?.code || "");
+    if (!code) continue;
+    const label = code === "near_sensitive_free_margin" || code === "candidate_near_sensitive_free_margin"
+      ? "靠近眼睑、鼻翼或口唇边缘"
+      : code === "low_region_confidence" ? "面部位置判断不确定"
+        : guardrailLabel(code);
+    details.push(`切口生成：${label.startsWith("未映射项") ? "存在尚未解释的限制，暂不能确认" : label}`);
+  }
+  if (result?.candidate_display_blocked === true && !details.some(detail => detail.startsWith("切口生成：")))
+    details.push("切口生成：当前没有可显示的切口方案");
+  return [...new Set(details)].slice(0, 12);
+}
+
 function publish(
   state: WorkflowIncisionState,
   reason = "state_update",
@@ -1033,9 +1081,9 @@ function publish(
   if (state.result && frame?.kind === "image") {
     const geometry = workflowPhotoGeometry(state, frame);
     const upperForeheadRecovery = upperForeheadSurfaceRecoveryActive(state, geometry);
-    const visibilityLimitedReference = visibilityLimitedReferenceGeometry(geometry);
+    const visibilityLimitedReference = visibilityLimitedReferenceGeometry(state, geometry);
     const visibilityLimitedRecovery = visibilityLimitedReferenceRecoveryActive(state, geometry);
-    const photoOpeningIntersection = photoDiagnosticOpeningIntersection(geometry);
+    const photoOpeningIntersection = photoDiagnosticOpeningIntersection(state, geometry);
     const displayRecoveryActive = (upperForeheadRecovery || visibilityLimitedRecovery)
       && !photoOpeningIntersection;
     const candidateDisplayBlocked = (state.result.candidate_display_blocked === true && !displayRecoveryActive)
@@ -1095,6 +1143,7 @@ function publish(
     stageStatus: state.stageStatus,
     stageStatusTone: state.stageStatusTone,
     stageBusy: state.loading || state.workflowBusy || state.markerBusy,
+    developerDetails: workflowDeveloperDetails(state),
     assetLoading: buildIncisionAssetLoadingSnapshot({
       visible: state.loading,
       text: state.loading ? "正在加载人脸定位与切口规划资源。" : "切口规划资源已加载。",
@@ -1589,61 +1638,23 @@ async function runWorkflow(state: WorkflowIncisionState, explicit = false, prese
       projectedRstlLines,
     })
     : null;
-  let directionOverride: (NonNullable<typeof queriedDirection> & Record<string, unknown>) | null = queriedDirection
+  const directionOverride: (NonNullable<typeof queriedDirection> & Record<string, unknown>) | null = queriedDirection
     ? {
       ...queriedDirection,
       rstl_snapshot_fingerprint: rstlFingerprint,
       rstl_snapshot_source: projectedRstlLines?.length ? "final_photo_refine2d" : "atlas_projection",
+      direction_query_center: "lesion_center",
     }
     : null;
   const center = tumor.center as Vec3;
   const normal = state.normals[nearestVertex(state, center)] || [0, 0, 1];
   try {
-    let execution = await planIncisionWithWorkflowFallback({
+    const execution = await planIncisionWithWorkflowFallback({
       client: ensureWorker(state),
       request: { tumor, verts: state.verts, tris: state.tris, atlas, normal, directionOverride },
     });
-    let finalCenterDirectionIterations = 0;
-    if (frame?.source && frame.landmarks?.length && state.edit.angle_offset_deg === 0) {
-      for (let iteration = 0; iteration < 2; iteration += 1) {
-        const candidateCenter = execution.result?.candidate?.center as Vec3 | undefined;
-        const candidateCenterRef = candidateCenter
-          ? pointToSurfaceRef(candidateCenter, state.verts, state.tris)
-          : null;
-        const finalCenterDirection = candidateCenterRef
-          ? queryIncisionPhotoRstlDirection({
-            centerRef: candidateCenterRef,
-            vertices: state.verts,
-            landmarks: frame.landmarks,
-            surfaceLandmarks: photoProjection?.surfaceLandmarks || frame.surfaceLandmarks,
-            triangles: state.tris,
-            atlasLines: atlas?.lines || [],
-            projectedRstlLines,
-          })
-          : null;
-        if (!finalCenterDirection) break;
-        const previous = directionOverride?.vector as Vec3 | undefined;
-        const next = finalCenterDirection.vector;
-        const alignment = previous
-          ? Math.abs(previous[0] * next[0] + previous[1] * next[1] + previous[2] * next[2])
-          : 0;
-        if (alignment >= Math.cos(0.5 * Math.PI / 180)) {
-          directionOverride = finalCenterDirection;
-          break;
-        }
-        directionOverride = {
-          ...finalCenterDirection,
-          rstl_snapshot_fingerprint: rstlFingerprint,
-          rstl_snapshot_source: projectedRstlLines?.length ? "final_photo_refine2d" : "atlas_projection",
-          direction_query_center: "candidate_center",
-        };
-        execution = await planIncisionWithWorkflowFallback({
-          client: ensureWorker(state),
-          request: { tumor, verts: state.verts, tris: state.tris, atlas, normal, directionOverride },
-        });
-        finalCenterDirectionIterations += 1;
-      }
-    }
+    // Envelope fitting may move the incision center. Its direction remains
+    // anchored to the lesion, not to whichever RSTL is nearest that new center.
     if (!state.mounted || requestId !== state.workflowRequestId) return { status: "stale", requestId };
     if (sourceRevision !== null && sourceState.planning2d?.getFrameState().revision !== sourceRevision) {
       invalidateCandidate(state, "照片在候选生成期间已变化，旧结果已丢弃；请在新照片上重新选择肿物。");
@@ -1660,8 +1671,8 @@ async function runWorkflow(state: WorkflowIncisionState, explicit = false, prese
     if (!execution.result?.candidate) throw new Error("生成器未返回切口候选。");
     execution.result.candidate.metrics = {
       ...(execution.result.candidate.metrics || {}),
-      final_center_direction_iterations: finalCenterDirectionIterations,
-      direction_query_center: "candidate_center",
+      final_center_direction_iterations: 0,
+      direction_query_center: "lesion_center",
     };
     state.baseResult = {
       ...execution.result,
@@ -2184,17 +2195,27 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
         boundary: rejectedBoundary.map((point) => ({ x: point.x, y: point.y })),
         sourceRevision: frame.revision,
         requestId,
+        parameters: started,
         reasons: [...(detection.rejected_reasons || [])],
       } : null;
       state.repairAvailable = controlledMarkerRepairable(detection) || state.repairStrokes.length > 0;
-      setStatus(
-        state,
-        `${state.rejectedMarkerPreview ? "检测到候选边界，但被识别门禁否决；亮紫色虚线仅供诊断，不会生成切口。" : controlledMarkerFailureMessage(detection)}${state.repairAvailable ? "可扩大扫描范围，或启用补线后沿照片中确实可见的缺口描画。" : "受控标记保持开启，可直接换位置重试。"}`,
-        "warning",
-      );
+      const rejectedReasonCopy = (detection.rejected_reasons || [])
+        .map((code) => rejectedReasonLabelForStatus(code))
+        .filter(Boolean);
+      const status = state.rejectedMarkerPreview
+        ? `肿物边界识别触碰门禁：${rejectedReasonCopy.join("；") || "边界证据不足"}`
+        : `肿物边界识别失败：${controlledMarkerFailureMessage(detection)}`;
+      setStatus(state, status, "warning");
       publish(state, "controlled_marker_failed", { actionId: diagnosticActionId, runId: diagnosticRun?.run.run_id });
       return;
     }
+    // Accepted photo-space geometry is independent of whether a surgical
+    // candidate can be mapped safely onto the face surface.
+    state.boundaryPhotoPoints = detection.boundary.map((point) => ({ x: point.x, y: point.y }));
+    state.boundaryPhotoRevision = frame.revision;
+    state.boundaryClosed = true;
+    state.controlledBoundary = true;
+    state.markerPreviewSuppressed = false;
     let centerRef = workflowSurfaceRefAtSource(state, frame, detection.center);
     let boundaryRefs = detection.boundary
       .map((point) => workflowSurfaceRefAtSource(state, frame, point))
@@ -2219,7 +2240,7 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
     if (!centerRef || boundaryRefs.length < 3) {
       completeControlledMarkerAttempt(state, mobileRetrySeed);
       state.repairAvailable = true;
-      setStatus(state, "识别边界有一部分超出可见面部皮肤范围；请换位置重试，或补齐照片中可见的缺口。", "warning");
+      setStatus(state, "黄色识别边界已保留；无法映射到可用面部表面，暂不能生成切口。可换位置重试或补齐可见缺口。", "warning");
       publish(state, "controlled_marker_unmapped", { actionId: diagnosticActionId, runId: diagnosticRun?.run.run_id });
       return;
     }
@@ -2242,7 +2263,7 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
     if (!detectedTumor || !inspectTumorEngineeringExclusions(detectedTumor, state.verts).passed) {
       completeControlledMarkerAttempt(state, mobileRetrySeed);
       state.repairAvailable = true;
-      setStatus(state, "识别范围进入眼裂、口裂或鼻孔等非皮肤开口；请移动扫描位置后重试。", "warning");
+      setStatus(state, "黄色识别边界已保留；识别范围进入眼裂、口裂或鼻孔等非皮肤开口，暂不能生成切口。", "warning");
       publish(state, "controlled_marker_opening_rejected", { actionId: diagnosticActionId, runId: diagnosticRun?.run.run_id });
       return;
     }
@@ -2329,6 +2350,29 @@ function sourceClientPoint(state: WorkflowIncisionState, point: Vec3) {
   return { x: mapped.x - viewportLeft, y: mapped.y - viewportTop };
 }
 
+// Diagnostic only: keep the full rejected outline, including off-image points.
+// Normal candidate, lesion boundary and picking retain their existing mapping.
+function diagnosticSourceClientPoint(state: WorkflowIncisionState, point: Vec3) {
+  if (!point.every(Number.isFinite)) return null;
+  const planning = sourceState.planning2d;
+  const wrap = state.root.querySelector<HTMLElement>(".main-wrap");
+  if (!planning || !wrap) return null;
+  const frame = planning.getFrameState();
+  const transform = frame.transform;
+  if (!transform) return null;
+  const viewportPoint = workflowFocusViewportPoint(
+    { x: point[0], y: point[1] },
+    { width: frame.width, height: frame.height },
+    renderState.focusCrop,
+  );
+  let x = viewportPoint.x / transform.sourceWidth;
+  if (transform.mirror) x = 1 - x;
+  return {
+    x: transform.displayLeft + x * transform.displayWidth - transform.viewportLeft,
+    y: transform.displayTop + viewportPoint.y / transform.sourceHeight * transform.displayHeight - transform.viewportTop,
+  };
+}
+
 function sourcePointAtClient(
   state: WorkflowIncisionState,
   point: { x: number; y: number },
@@ -2407,14 +2451,10 @@ function drawDraftOverlay(state: WorkflowIncisionState) {
     : workflowClosedBoundarySvgPath(boundary);
   boundaryPath?.setAttribute("d", boundaryPathData);
   boundaryHaloPath?.setAttribute("d", boundaryPathData);
-  const photoOpeningIntersection = photoDiagnosticOpeningIntersection(geometry);
+  const photoOpeningIntersection = photoDiagnosticOpeningIntersection(state, geometry);
   const effectiveCandidateDisplayBlocked = (state.result?.candidate_display_blocked === true
     && !photoDisplayRecoveryActive(state, geometry))
     || Boolean(photoOpeningIntersection);
-  const candidateVisible = workflowCandidateDisplayAllowed(
-    { candidate_display_blocked: effectiveCandidateDisplayBlocked },
-    planningVisible && Boolean(geometry?.candidateProjection.valid),
-  );
   const renderedCandidatePathData = geometry
     ? state.result?.candidate?.type === "fusiform"
       ? workflowFusiformSvgPath(geometry.fusiformRendering, (point) => sourceClientPoint(state, point))
@@ -2424,22 +2464,47 @@ function drawDraftOverlay(state: WorkflowIncisionState) {
   const diagnosticCandidate = workflowDiagnosticCandidateOutline(state.result?.candidate?.type, geometry);
   const diagnosticCandidatePathData = geometry
     ? state.result?.candidate?.type === "fusiform"
-      ? workflowDiagnosticFusiformSvgPath(diagnosticCandidate, (point) => sourceClientPoint(state, point))
+      ? workflowDiagnosticFusiformSvgPath(diagnosticCandidate, (point) => diagnosticSourceClientPoint(state, point))
       : pathData(diagnosticCandidate.map((point) => sourceClientPoint(state, point)).filter((point): point is { x: number; y: number } => Boolean(point)))
     : "";
-  const diagnosticCandidateVisible = planningVisible && workflowDiagnosticCandidateVisible(
+  const candidatePresentation = workflowPhotoCandidatePresentation(
     { ...state.result, candidate_display_blocked: effectiveCandidateDisplayBlocked },
     Boolean(geometry?.candidateProjection.valid),
     diagnosticCandidate,
     photoOpeningIntersection,
   );
-  candidatePath?.setAttribute("d", candidateVisible ? renderedCandidatePathData : "");
-  candidateHaloPath?.setAttribute("d", candidateVisible ? renderedCandidatePathData : "");
-  diagnosticCandidatePath?.setAttribute("d", diagnosticCandidateVisible ? diagnosticCandidatePathData : "");
-  // Rejected detector geometry remains in the local diagnostic record and the
-  // warning text. Do not paint it over the photograph: a dashed outline is
-  // easily mistaken for an accepted tumor boundary or a usable incision cue.
-  rejectedMarkerPath?.setAttribute("d", "");
+  // Risk changes colour only: preserve the original clipped/cubic photo path.
+  const displayedDiagnosticPathData = workflowCandidateDisplayAllowed(
+    { candidate_display_blocked: effectiveCandidateDisplayBlocked },
+    Boolean(geometry?.candidateProjection.valid),
+  ) ? renderedCandidatePathData : diagnosticCandidatePathData;
+  candidatePath?.setAttribute("d", planningVisible && candidatePresentation.normalVisible ? renderedCandidatePathData : "");
+  candidateHaloPath?.setAttribute("d", planningVisible && candidatePresentation.normalVisible ? renderedCandidatePathData : "");
+  diagnosticCandidatePath?.setAttribute("d", planningVisible && candidatePresentation.diagnosticVisible ? displayedDiagnosticPathData : "");
+  // A rejected detector outline is diagnostic-only. It is painted only while
+  // the same photo, request, and marker parameters are still active; it can
+  // never become the accepted yellow boundary or a confirmable incision.
+  const rejectedPreview = state.rejectedMarkerPreview;
+  const rejectedFresh = Boolean(
+    rejectedPreview
+      && !state.markerBusy
+      && frame
+      && rejectedPreview.sourceRevision === frame.revision
+      && rejectedPreview.requestId === state.markerRequestId
+      && workflowMarkerRequestStillCurrent(rejectedPreview.parameters, markerRequestSnapshot(state)),
+  );
+  const rejectedPoints = rejectedFresh && rejectedPreview
+    // A rejected outline is diagnostic photo geometry. It may sit on hair,
+    // the face edge, or outside the usable surface, so surface-aware mapping
+    // would erase exactly the cases this purple line is meant to expose.
+    ? rejectedPreview.boundary.map((point) => diagnosticSourceClientPoint(state, [point.x, point.y, 0]))
+    : [];
+  const rejectedMapped = rejectedFresh && rejectedPoints.length === rejectedPreview?.boundary.length
+    && rejectedPoints.every((point): point is { x: number; y: number } => point !== null
+      && Number.isFinite(point.x) && Number.isFinite(point.y))
+    ? rejectedPoints as Array<{ x: number; y: number }>
+    : [];
+  rejectedMarkerPath?.setAttribute("d", rejectedMapped.length >= 3 ? pathData(rejectedMapped, true) : "");
   const overlayStyle = incisionOverlayScreenStyle(state.result?.candidate?.type, {
     compact: mobileWorkflowViewportActive(),
     viewScale: frame.transform?.zoom,
@@ -2722,7 +2787,7 @@ async function finalizeWorkflowFreehandBoundary(state: WorkflowIncisionState): P
     publish(state, "freehand_boundary_stale_photo");
     return;
   }
-  if (workflowPhotoOpeningIntersection(recovered, frame.landmarks)) {
+  if (workflowPhotoOpeningIntersection(recovered, frame.landmarks, { vertices: state.verts, triangles: state.tris })) {
     state.boundaryClosed = false;
     setStatus(state, "轮廓进入眼裂、口裂或鼻孔等非皮肤开口；请清空后在可见皮肤内重新描画。", "warning");
     publish(state, "freehand_boundary_opening_rejected");
@@ -2886,6 +2951,7 @@ function handleCanvasPointerDown(state: WorkflowIncisionState, event: PointerEve
         ellipseRatio: state.ellipseRatio,
         pixelsPerMm,
         photoLandmarks,
+        reference: { vertices: state.verts, triangles: state.tris },
       })
       : null;
   if (photoOpening) {
@@ -3018,6 +3084,7 @@ function handleCanvasPointerUp(state: WorkflowIncisionState, event: PointerEvent
         ellipseRatio: state.ellipseRatio,
         pixelsPerMm,
         photoLandmarks,
+        reference: { vertices: state.verts, triangles: state.tris },
       })
       : null;
     if (photoOpening) {

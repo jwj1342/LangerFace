@@ -123,6 +123,12 @@ export interface ControlledMarkerDetection {
     hollow_boundary_contraction_scale?: number;
     hollow_boundary_contraction_area_ratio?: number;
     hollow_boundary_contraction_luma?: number;
+    relative_color_candidate?: boolean;
+    filled_candidate_route?: string;
+    filled_candidate_color_difference?: number;
+    filled_candidate_snr?: number;
+    filled_candidate_narrow_wide_ratio?: number;
+    scan_local_anchor_count?: number;
   };
   audit: {
     local_only: true;

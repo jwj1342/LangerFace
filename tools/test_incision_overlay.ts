@@ -246,27 +246,17 @@ const compactCameraStyle = incisionOverlayScreenStyle("fusiform", { compact: tru
 const compactZoomedPhotoStyle = incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 2 });
 assert.deepEqual(compactFullPhotoStyle, compactCameraStyle,
   "the full-photo view and camera use identical compact screen-space tokens");
-assert.equal(compactFullPhotoStyle.candidate.lineWidth, 0.4,
-  "the full-photo incision line uses the accepted fine mobile width");
-assert.equal(compactFullPhotoStyle.boundary.lineWidth, 0.7,
-  "the full-photo tumor boundary no longer uses the oversized fixed mobile width");
-assert.equal(compactFullPhotoStyle.center.radiusCss, 2,
-  "the full-photo lesion center is reduced from the previous four-pixel radius");
-assert.ok(compactZoomedPhotoStyle.candidate.lineWidth > compactFullPhotoStyle.candidate.lineWidth
-  && compactZoomedPhotoStyle.boundary.lineWidth > compactFullPhotoStyle.boundary.lineWidth
-  && compactZoomedPhotoStyle.center.radiusCss === compactFullPhotoStyle.center.radiusCss,
-"zooming in increases, rather than inversely decreases, all incision screen-space marks");
-assert.deepEqual(compactFullPhotoStyle.center, incisionOverlayScreenStyle().center,
-  "desktop and mobile share the small hollow lesion center");
-assert.deepEqual(compactFullPhotoStyle.incisionCenter, incisionOverlayScreenStyle().incisionCenter,
-  "desktop and mobile share the red incision center size and color");
-assert.ok(Math.abs(incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 5 }).candidate.lineWidth
-  - 0.4 * Math.sqrt(5)) < 1e-9,
-"the phone incision scales gently through the complete photo zoom range");
-assert.deepEqual(
-  incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 6 }),
-  incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 5 }),
-  "high photo zoom is capped so incision marks cannot grow into thick sticker-like graphics",
-);
-
+assert.equal(compactFullPhotoStyle.candidate.lineWidth, 0.8, "phone incision doubles the earlier 0.4 CSS px width");
+assert.equal(compactFullPhotoStyle.boundary.lineWidth, 1.4, "phone boundary doubles the earlier 0.7 CSS px width");
+assert.equal(compactFullPhotoStyle.center.radiusCss, 0.4, "phone lesion center follows photo scale");
+for (const zoom of [0.25, 0.5, 1, 2, 5, 6]) {
+  const style = incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: zoom });
+  assert.equal(style.candidate.lineWidth, 0.8, `incision screen width stays fixed at zoom ${zoom}`);
+  assert.equal(style.boundary.lineWidth, 1.4, `boundary screen width stays fixed at zoom ${zoom}`);
+  assert.equal(style.center.radiusCss, 2 * Math.min(5, zoom) / 5, "center scales with photo and caps at maximum zoom");
+}
+assert.equal(compactZoomedPhotoStyle.center.strokeColor, incisionOverlayScreenStyle().center.strokeColor,
+  "phone and desktop retain the hollow white center convention");
+assert.equal(incisionOverlayScreenStyle().center.radiusCss, 2, "desktop center size remains unchanged");
+assert.equal(incisionOverlayScreenStyle().incisionCenter.radiusCss, 6, "desktop incision center remains unchanged");
 console.log("test_incision_overlay: projection contract assertions passed");

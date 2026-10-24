@@ -40,6 +40,8 @@ export function captureMarkerIdentity(rawProfile: string | undefined, root = mar
     "web/src/services/controlledMarkerDetectionLegacyV023.ts",
     "web/src/services/controlledMarkerDetectionProfile.ts",
     "web/src/services/controlledMarkerRelease.ts",
+    "web/src/services/controlledMarkerFilledCandidate.ts",
+    "web/src/services/controlledMarkerOpenCvRuntime.ts",
   ];
   const algorithmHashes = algorithmFiles.map((file) => [
     file,

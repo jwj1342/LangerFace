@@ -7,7 +7,7 @@
 | [`onboarding/`](#onboarding--上手与协作) | 我要把它跑起来、并按规矩提交 | 4 |
 | [`architecture/`](#architecture--架构与算法) | 它是怎么实现的、公式是什么 | 3 |
 | [`tracks/`](#tracks--技术轨与功能专题) | 某一条技术路线的设计与现状 | 4 |
-| [`quality/`](#quality--质量与运维) | 怎么证明它没坏、怎么部署和观测 | 9 |
+| [`quality/`](#quality--质量与运维) | 怎么证明它没坏、怎么部署和观测 | 10 |
 | [`clinical/`](#clinical--临床边界与合规) | 医学上能说什么、数据边界在哪 | 3 |
 | [`planning/`](#planning--路线图) | 接下来做什么 | 1 |
 
@@ -34,6 +34,8 @@
 [ALGORITHM_VERSIONING.md](quality/ALGORITHM_VERSIONING.md) 规定算法版本、源码身份与恢复包门禁；[CONTROLLED_MARKER_TESTING.md](quality/CONTROLLED_MARKER_TESTING.md) 说明受控标记测试条件及参考边界的证据限制；[DIAGNOSTIC_EVENT_CONTRACT.md](quality/DIAGNOSTIC_EVENT_CONTRACT.md) 规定诊断事件字段及隐私约束。
 
 [UI_RSTL_BOUNDARY_REVIEW.md](quality/UI_RSTL_BOUNDARY_REVIEW.md) 记录双端界面分工、手动交互授权与可复核的 RSTL 核心边界证据。
+
+[LESION_CANDIDATE_REVIEW.md](quality/LESION_CANDIDATE_REVIEW.md) 说明照片肿物候选、切口显示的复现步骤、资源依赖和未通过范围。
 
 ## `clinical/` — 临床边界与合规
 
