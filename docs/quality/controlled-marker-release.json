@@ -229,17 +229,18 @@
     "evidence": "web/src/services/incisionRuntime.ts exact four-line diff; workflowRequestId read/write audit; full browser regression including RSTL ownership and refresh checks."
   },
   "operatorEvaluation": {
-    "status": "pending",
+    "status": "accepted",
     "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
-    "scope": "新增运行集成0.2.1异步过期结果修复待确认；此前UI线宽评价保留且不代表整算法验收",
-    "evidence": "本地CI修复自动回归完成后提交预览，当前不代签操作者对新增源码评价。",
+    "scope": "操作者接受本次CI修订及已展示的自动验证结果，并明确要求上传PR240；此前UI线宽实际评价保留，不代表新增真机操作或整算法/临床效果验收",
+    "evidence": "当前操作者在CI修订预览后直接确认：既然完成了修复，就一定要上传，不要再等待我去给你下达指令，这个是默认的规则，现在上传吧。评价仅绑定本轮已展示修订与自动回归，不声称操作者已亲自复测新增竞态修复。",
     "previous": {
       "status": "accepted",
       "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
       "scope": "UI 0.1.16-candidate.1 手机线宽加倍后的实际观感；仅此范围，不代表肿物算法整组或临床效果通过",
       "evidence": "当前操作者直接反馈：线宽加倍，我觉得效果可以。已知浅色瘢痕、鼻梁完整性及专业判据问题保留；授权以未完成研究候选提交PR。",
       "confirmedAt": "2026-10-24T13:29:25.719Z"
-    }
+    },
+    "confirmedAt": "2026-10-24T14:53:51.0396942Z"
   },
   "editorSaveConfirmation": {
     "status": "confirmed",
