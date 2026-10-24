@@ -77,8 +77,15 @@
     "web/package-lock.json",
     "web/package.json",
     "web/src/services/controlledMarkerRelease.ts",
+    "web/src/services/workflowControllerUtils.ts",
     "web/vite.config.ts",
-    "docs/tracks/INCISION_WORKFLOW.md"
+    "docs/tracks/INCISION_WORKFLOW.md",
+    "web/src/workers/workflow.worker.ts",
+    "web/src/workers/workflowWorkerContract.ts",
+    "tools/probe_marker_browser.mjs",
+    "tools/probe_marker_delivery.mjs",
+    "tools/test_probe_marker_delivery.mjs",
+    "docs/quality/LESION_CANDIDATE_REVIEW.md"
   ],
   "excludedTeamAlgorithms": [
     "standard-rstl-generation",
