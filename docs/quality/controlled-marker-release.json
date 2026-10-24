@@ -210,11 +210,11 @@
   },
   "archive": {
     "status": "verified",
-    "manifestPath": "local_outputs/recovery-packages/PR候选准备-0.93-UI0.1.16-20261024-r2/manifest.json",
+    "manifestPath": "local_outputs/recovery-packages/PR提交确认-0.93-UI0.1.16-20261024/manifest.json",
     "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
-    "manifestSha256": "42b2b80bbc980da1e8198191c680d098f15699dd2f7e5cf38fee8ef62f9aff99",
+    "manifestSha256": "74e481f5ed4178021ec97f122623575171288db75e95ce5132181db8363af340",
     "scopeConfigSha256": "4c0780c70315303ed2cbec016c15c8b8fbdab2ae7976fec63b450f84cd476635",
-    "note": "PR候选整理后的本地恢复包；不公开患者输入；未做干净环境完整恢复，不代替人工评价。"
+    "note": "提交前人工确认与复现说明同步；260项级别本地恢复，不等于整算法或临床通过。"
   },
   "scopeBoundaryReview": {
     "status": "not_required",
@@ -222,13 +222,17 @@
     "evidence": "Local-only validation record; not distributed with the PR"
   },
   "operatorEvaluation": {
-    "status": "pending",
+    "status": "accepted",
     "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
-    "evidence": "上一版用户基本合格；本次加倍后的真机观感待确认"
+    "scope": "UI 0.1.16-candidate.1 手机线宽加倍后的实际观感；仅此范围，不代表肿物算法整组或临床效果通过",
+    "evidence": "当前操作者直接反馈：线宽加倍，我觉得效果可以。已知浅色瘢痕、鼻梁完整性及专业判据问题保留；授权以未完成研究候选提交PR。",
+    "confirmedAt": "2026-10-24T13:29:25.719Z"
   },
   "editorSaveConfirmation": {
-    "status": "unknown",
-    "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0"
+    "status": "confirmed",
+    "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
+    "confirmedAt": "2026-10-24T13:29:25.719Z",
+    "evidence": "当前操作者直接确认：我没有自己打开编辑器改代码。AI已回读硬盘成果及本地Commit；不声称读取了编辑器缓冲区。"
   },
   "history": [
     {

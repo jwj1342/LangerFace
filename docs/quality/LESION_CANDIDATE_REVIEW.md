@@ -28,7 +28,7 @@
 4. `node ../tools/test_probe_marker_delivery.mjs`：错误身份、资源和超时负例。浏览器探针可通过 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` 指定已安装浏览器，不绑定作者安装路径。
 5. `test_workflow_photo_opening_projection.ts <获准的本地几何证据JSON>` 需要含 `geometryProbe` 的授权证据；私人回放输入不公开，不声称仅克隆即可复现这些照片结果。相关患者回归脚本和原始证据保留在作者本地，不作为公开测试依赖。
 
-最终 PR 应另附准确 Commit、测试结果、运行身份和未覆盖项。操作者评价仍 pending、编辑器保存确认仍 unknown；不可代签 PR 算法门禁，不以 Draft 或构建通过绕过它。
+最终 PR 应另附准确 Commit、测试结果、运行身份和未覆盖项。操作者已接受 UI 0.1.16 的线宽加倍观感，并确认未自行打开编辑器修改代码；评价仅覆盖该 UI，不代表整组肿物算法或临床效果通过。原算法失败继续保留，PR 作为未完成研究候选，不以 Draft 或构建通过代签专业验收。
 
 ## 技术依据与限制
 
