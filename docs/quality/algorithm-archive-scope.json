@@ -85,7 +85,9 @@
     "tools/probe_marker_browser.mjs",
     "tools/probe_marker_delivery.mjs",
     "tools/test_probe_marker_delivery.mjs",
-    "docs/quality/LESION_CANDIDATE_REVIEW.md"
+    "docs/quality/LESION_CANDIDATE_REVIEW.md",
+    "README.md",
+    "docs/README.md"
   ],
   "excludedTeamAlgorithms": [
     "standard-rstl-generation",
