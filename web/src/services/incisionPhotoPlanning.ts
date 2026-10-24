@@ -1954,12 +1954,15 @@ export function buildIncisionPhotoGeometry({
     ? photoBoundary.map((point) => [...point] as Vec3)
     : mapSurfaceRefs(boundaryRefs, photoLandmarks, triangles).pts;
   // The lesion center remains the detection result. The independently solved
-  // candidate center controls fusiform symmetry, RSTL lookup and rendering
+  // candidate center controls fusiform symmetry and rendering
   // only when a real boundary exists to verify that the two remain related.
   const candidateSmoothingCenter = boundary.length >= 3 ? planningCenter || detectedCenter : detectedCenter || planningCenter;
+  // Containment may move the incision center, but must not switch the RSTL
+  // reference away from the lesion that selected this candidate.
+  const directionSamplingCenter = detectedCenter || candidateSmoothingCenter;
   const sourceProjection = inspectPhotoCandidateProjection(sourceCandidate, candidateType);
-  const nearestPhotoRstl = candidateSmoothingCenter
-    ? nearestProjectedRstlSegment(candidateSmoothingCenter, directionReferenceRstl)
+  const nearestPhotoRstl = directionSamplingCenter
+    ? nearestProjectedRstlSegment(directionSamplingCenter, directionReferenceRstl)
     : null;
   const sourceEndpointAxis = sourceEndpoints.length >= 2
     ? [
@@ -2070,7 +2073,7 @@ export function buildIncisionPhotoGeometry({
     )
     : Infinity;
   const fallbackRstlDeviation = projectedRstlDeviation(
-    candidateSmoothingCenter, fallbackEndpoints, directionReferenceRstl,
+    directionSamplingCenter, fallbackEndpoints, directionReferenceRstl,
   );
   const fallbackGateReason: FusiformFitFailureReason | null = !rawFusiformFitAttempt?.fit
     ? rawFusiformFitAttempt?.diagnostics.reason || "invalid_sampling"

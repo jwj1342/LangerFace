@@ -52,16 +52,10 @@ function boundedOverlayViewScale(viewScale?: number, compact = false): number {
   return Math.min(value, compact ? 1.5 : 1.25);
 }
 
-function compactCandidateViewScale(viewScale?: number): number {
-  const value = Number(viewScale);
-  if (!Number.isFinite(value) || value <= 1) return 1;
-  return Math.sqrt(Math.min(value, 5));
-}
-
 /**
  * Final screen-space tokens shared by the workflow photo SVG and live canvas.
- * The compact baseline is intentionally finer at the full-photo view; zoom may
- * enlarge it modestly, but never inversely enlarge it while the photo shrinks.
+ * Phone strokes stay fine at every zoom. Phone centers follow photo zoom;
+ * desktop and live-canvas defaults retain their established appearance.
  */
 export function incisionOverlayScreenStyle(
   candidateType: IncisionOverlayCandidateType = "fusiform",
@@ -69,11 +63,16 @@ export function incisionOverlayScreenStyle(
 ): Omit<IncisionOverlayStyle, "rstlLineWidth"> {
   const compact = options.compact === true;
   const viewScale = boundedOverlayViewScale(options.viewScale, compact);
-  const candidateViewScale = compact ? compactCandidateViewScale(options.viewScale) : viewScale;
+  // The photo SVG is already in screen coordinates. Do not enlarge its strokes
+  // again when the image zooms. Small phone centers follow photo zoom instead
+  // of staying as a 12px dot that can cover an entire zoomed-out lesion.
+  const candidateViewScale = compact ? 1 : viewScale;
+  const photoZoom = Number(options.viewScale);
+  const phoneCenterScale = Math.min(5, Number.isFinite(photoZoom) && photoZoom > 0 ? photoZoom : 1) / 5;
   const centerScale = compact ? Math.min(viewScale, 4 / 3) : viewScale;
   const linear = candidateType === "linear";
-  const candidateLineWidth = (compact ? 0.4 : 1) * candidateViewScale;
-  const boundaryLineWidth = (compact ? 0.7 : 2) * viewScale;
+  const candidateLineWidth = (compact ? 0.8 : 1) * candidateViewScale;
+  const boundaryLineWidth = compact ? 1.4 : 2 * viewScale;
   return {
     candidate: {
       color: linear ? (compact ? "#4ade80" : "#166534") : FUSIFORM_HIGHLIGHT_COLOR,
@@ -82,26 +81,26 @@ export function incisionOverlayScreenStyle(
         ? "rgba(3, 7, 18, 0.9)"
         : compact ? FUSIFORM_COMPACT_HALO_COLOR : FUSIFORM_HIGHLIGHT_COLOR,
       haloWidth: linear
-        ? candidateLineWidth + (compact ? 0.3 * candidateViewScale : 0.5 * viewScale)
+        ? candidateLineWidth + (compact ? 0.6 * candidateViewScale : 0.5 * viewScale)
         : candidateLineWidth,
     },
     boundary: {
       color: compact ? "#fde047" : "#facc15",
       lineWidth: boundaryLineWidth,
       haloColor: "rgba(3, 7, 18, 0.88)",
-      haloWidth: boundaryLineWidth + (compact ? 0.5 : 1) * viewScale,
+      haloWidth: boundaryLineWidth + (compact ? 0.8 : viewScale),
     },
     center: {
       color: "transparent",
       strokeColor: "#ffffff",
-      radiusCss: 2,
-      strokeWidthCss: 1,
+      radiusCss: compact ? 2 * phoneCenterScale : 2,
+      strokeWidthCss: compact ? 0.5 : 1,
     },
     incisionCenter: {
       color: "#f43f5e",
       strokeColor: "#0b1118",
-      radiusCss: 6,
-      strokeWidthCss: 1,
+      radiusCss: compact ? 3 * phoneCenterScale : 6,
+      strokeWidthCss: compact ? 0.5 : 1,
     },
     endpointRadius: compact ? 2.5 * centerScale : 3 * centerScale,
   };

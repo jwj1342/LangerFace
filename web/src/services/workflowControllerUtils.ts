@@ -6,6 +6,7 @@ import {
   type SurfaceProjectedFusiformFit,
 } from "./incisionPhotoPlanning.ts";
 import type { Vec3 } from "./softBody";
+import { projectPhotoNostrilZones, type PhotoOpeningReference } from "./incisionPhotoOpeningProjection.ts";
 
 export interface WorkflowPointerIntent {
   pointerId: number;
@@ -131,6 +132,28 @@ export function workflowDiagnosticCandidateVisible(
   return candidatePoints.length >= 2
     && candidatePoints.every((point) => point.length === 3 && point.every(Number.isFinite))
     && workflowSensitiveOpeningDiagnosticEligible(result, photoOpeningIntersection);
+}
+
+/** Photo risk styling is separate from the hard diagnostic review/save gate. */
+export function workflowPhotoCandidatePresentation(
+  result: Record<string, any> | null | undefined,
+  projectionValid: boolean,
+  candidatePoints: readonly Vec3[],
+  photoOpeningIntersection?: string | null,
+): { normalVisible: boolean; diagnosticVisible: boolean } {
+  const displayAllowed = workflowCandidateDisplayAllowed(result, projectionValid);
+  const sensitiveRisk = workflowSensitiveOpeningDiagnosticEligible(result, photoOpeningIntersection);
+  const drawable = result?.candidate?.type === "fusiform"
+    ? workflowDiagnosticOutlineValid(candidatePoints)
+    : candidatePoints.length >= 2
+      && candidatePoints.every((point) => point.length === 3 && point.every(Number.isFinite));
+  return {
+    // A safety warning changes the display state only for sensitive openings.
+    // Other guardrail failures remain visible when the geometry is usable.
+    normalVisible: displayAllowed && !sensitiveRisk,
+    diagnosticVisible: workflowDiagnosticCandidateVisible(result, projectionValid, candidatePoints, photoOpeningIntersection)
+      || (sensitiveRisk && displayAllowed && drawable),
+  };
 }
 
 /** Use only the complete fit produced by photo planning; never close a clipped segment or source fallback. */
@@ -830,8 +853,13 @@ export function workflowPhotoCircleFootprint(
 export function workflowPhotoOpeningIntersection(
   footprint: readonly SvgPoint[],
   photoLandmarks: readonly Vec3[],
+  reference?: PhotoOpeningReference,
 ): string | null {
-  if (footprint.length < 3 || photoLandmarks.length < 468) return null;
+  if (footprint.length < 3 || photoLandmarks.length < 468) return reference ? "photo-opening-check-unavailable" : null;
+  if (reference && (footprint.some(p => !Number.isFinite(p.x) || !Number.isFinite(p.y))
+    || Array.from({ length: 468 }, (_, i) => photoLandmarks[i]).some(p => !p || !Number.isFinite(p[0]) || !Number.isFinite(p[1])))) {
+    return "photo-opening-check-unavailable";
+  }
   let minX = Number.POSITIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
@@ -845,15 +873,26 @@ export function workflowPhotoOpeningIntersection(
   }
   const width = maxX - minX;
   const height = maxY - minY;
-  if (!(width > 1e-9) || !(height > 1e-9)) return null;
+  if (!(width > 1e-9) || !(height > 1e-9)) return reference ? "photo-opening-check-unavailable" : null;
   const normalizedFootprint = footprint.map((point) => [
     (point.x - minX) / width,
     (point.y - minY) / height,
   ] as Point2);
   for (const zone of buildMediaPipeEngineeringExclusionZones([...photoLandmarks], "image_y_down")) {
+    // 有标准拓扑时鼻孔必须单独投影；眼/口原本已用照片关键点环，保持原检查。
+    if (reference && String(zone.id).includes("nostril-opening")) continue;
     if (zone.applies_to_tumor === false || !Array.isArray(zone.polygon)) continue;
     const relation = inspectPathPolygonRelation(normalizedFootprint, zone.polygon as Point2[], { closedPath: true });
     if (relation.intersects) return String(zone.id || "non-skin-opening");
+  }
+  if (reference) {
+    const projected = projectPhotoNostrilZones(photoLandmarks, reference);
+    if (!projected) return "photo-opening-check-unavailable";
+    for (const zone of projected) {
+      if (inspectPathPolygonRelation(footprint.map(p => [p.x, p.y] as Point2), zone.polygon, { closedPath: true }).intersects) {
+        return zone.id;
+      }
+    }
   }
   const upperInnerLip = [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308] as const;
   const lowerInnerLip = [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308] as const;
@@ -917,6 +956,7 @@ export function workflowPhotoTumorOpeningIntersection({
   ellipseRatio,
   pixelsPerMm,
   photoLandmarks,
+  reference,
 }: {
   center: SvgPoint;
   kind: "cutaneous" | "subcutaneous";
@@ -924,11 +964,12 @@ export function workflowPhotoTumorOpeningIntersection({
   ellipseRatio: number;
   pixelsPerMm: number;
   photoLandmarks: readonly Vec3[];
+  reference?: PhotoOpeningReference;
 }): string | null {
   const footprint = kind === "cutaneous"
     ? workflowPhotoEllipseBoundary({ center, diameterMm, ellipseRatio, pixelsPerMm })
     : workflowPhotoCircleFootprint(center, diameterMm * pixelsPerMm / 2);
-  return workflowPhotoOpeningIntersection(footprint, photoLandmarks);
+  return workflowPhotoOpeningIntersection(footprint, photoLandmarks, reference);
 }
 
 export function workflowPhotoTumorOutline(

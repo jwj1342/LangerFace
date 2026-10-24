@@ -357,19 +357,22 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   await prepareControlledMarkerCandidateAt(page, { xRatio: 0.72, yRatio: 0.50 });
   await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateType), { timeout: 45_000 }).toContain("梭形");
   const boundary = page.locator("[data-workflow-boundary]");
-  const candidate = page.locator("[data-workflow-candidate]");
+  const candidate = page.locator("[data-workflow-diagnostic-candidate]");
   const lesionCenter = page.locator("[data-workflow-center]");
   const incisionCenter = page.locator("[data-workflow-incision-center]");
   await expect.poll(() => boundary.getAttribute("d")).toMatch(/^M /);
   await expect.poll(() => candidate.getAttribute("d")).toMatch(/^M /);
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.candidate?.guardrailsPassed)).toBe(false);
+  await expect(page.locator("[data-workflow-candidate]")).toHaveAttribute("d", "");
   await expect(lesionCenter).toBeVisible();
   await expect(incisionCenter).toBeVisible();
   await expect.poll(() => page.evaluate(() => {
     const current = Reflect.get(window, "__pr226Incision")?.candidate;
     return current?.lengthMm / current?.widthMm;
   })).toBeCloseTo(3, 8);
-  await expect(candidate).toHaveCSS("stroke", "rgb(103, 232, 249)");
-  await expect(candidate).toHaveCSS("stroke-width", "1px");
+  await expect(candidate).toHaveCSS("stroke", "rgb(239, 68, 68)");
+  await expect(candidate).toHaveCSS("stroke-dasharray", "7px, 5px");
+  await expect(candidate).toHaveCSS("stroke-width", "1.5px");
   const boundaryBeforeReview = await boundary.getAttribute("d");
   const candidateBeforeReview = await candidate.getAttribute("d");
 
@@ -501,15 +504,18 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   reportWorkflowStage("forehead-geometry-pass");
 
   // The source-photo left edge remains on the left in anatomical orientation.
-  // Only the continuous on-face portion may be blue; a general face-edge exit
-  // must never borrow the sensitive red layer.
+  // This fixture has failed risk checks, so its existing visible path is red.
+  // Risk styling must not change the existing visibility review/save policy.
   await clickWorkflowCanvasRatio(page, 0.10, 0.55);
   await expect(page.locator("#workflowStageStatus")).toHaveText(
     "已识别肿物边界，当前为视野受限参考，仅显示照片可见部分；请医生复核，确认且系统门禁通过后可进入实时叠加",
     { timeout: 45_000 },
   );
-  await expect.poll(() => page.locator("[data-workflow-candidate]").getAttribute("d")).toMatch(/^M /);
-  await expect(page.locator("[data-workflow-diagnostic-candidate]")).toHaveAttribute("d", "");
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.candidate?.guardrailsPassed)).toBe(false);
+  await expect(page.locator("[data-workflow-candidate]")).toHaveAttribute("d", "");
+  await expect.poll(() => page.locator("[data-workflow-diagnostic-candidate]").getAttribute("d")).toMatch(/^M /);
+  await expect(page.locator("[data-workflow-diagnostic-candidate]")).toHaveCSS("stroke", "rgb(239, 68, 68)");
+  await expect(page.locator("[data-workflow-diagnostic-candidate]")).toHaveCSS("stroke-dasharray", "7px, 5px");
 
   await page.locator("#saveReviewBtn").click();
   await expectActiveOverlay(page, true);
@@ -529,7 +535,8 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateType), { timeout: 45_000 }).toBe("视野受限参考");
   await expectActiveOverlay(page, true);
   await expect(page.locator("#saveReviewBtn")).toHaveText("已确认");
-  await expect(page.locator("[data-workflow-diagnostic-candidate]")).toHaveAttribute("d", "");
+  await expect(page.locator("[data-workflow-candidate]")).toHaveAttribute("d", "");
+  await expect.poll(() => page.locator("[data-workflow-diagnostic-candidate]").getAttribute("d")).toMatch(/^M /);
   await expect(page.locator("#reviewDecision, #reviewNotes")).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => (
     window as Window & { __workflowSourceReasons?: string[] }
