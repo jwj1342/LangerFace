@@ -472,6 +472,10 @@ function fitSize() {
 }
 
 function clearTransientPlanningForPhoto() {
+  // A model-space preview may still be awaiting its worker result when a
+  // photo is uploaded. Invalidate it before clearing the selection, so that
+  // its eventual reply cannot repopulate the new, unpicked photo.
+  S.workflowRequestId += 1;
   S.boundaryPoints = [];
   S.boundaryRefs = [];
   S.boundaryActive = false;

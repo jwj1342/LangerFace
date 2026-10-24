@@ -9,6 +9,7 @@
   ],
   "requiresOperatorConfirmationOutsideDefault": true,
   "externalDependencies": [
+    "web/src/services/incisionRuntime.ts",
     "tools/test_live_canvas_interaction.ts",
     "tools/test_live_wrinkle_refinement.ts",
     "web/src/components/LiveRefinePanel.tsx",

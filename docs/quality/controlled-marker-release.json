@@ -11,7 +11,7 @@
       "原像素"
     ],
     "status": "candidate",
-    "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
+    "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
     "algorithmDigest": "2884bb66eb6066d1fd7cd23fd0f89cf84dc5d8fb4d0aff5d359ad83cb09b74f2",
     "changeSlug": "validate-recovered-pixel-boundaries-in-object-context",
     "previous": {
@@ -174,35 +174,42 @@
     }
   },
   "runtimeIntegration": {
-    "version": "0.2.0-candidate.1",
-    "name": "运行集成：照片鼻孔禁区随人脸拓扑投影",
+    "version": "0.2.1-candidate.1",
+    "name": "运行集成：上传照片时丢弃旧切口预览回包",
     "status": "candidate",
-    "scope": "仅照片鼻孔工程禁区从标准模型到照片的坐标投影；保留原掩膜、眼口环、闭嘴走廊、切口几何及RSTL实现；投影失败阻断。",
-    "sourceDigest": "8e8551423d4fb7755981a3fee5a4db5ed959c9836becc507e141d4d1194cb1ab",
+    "scope": "仅独立切口页清空照片规划时使旧异步workflow请求失效，防止旧候选回写未选病灶照片；不改识别、切口几何、UI线宽、RSTL或模型。",
+    "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
     "previous": {
-      "version": "0.1.13-candidate.1",
-      "name": "运行集成：门禁提示去重并隐藏技术字段",
+      "version": "0.2.0-candidate.1",
+      "name": "运行集成：照片鼻孔禁区随人脸拓扑投影",
       "status": "candidate",
-      "scope": "仅照片显示分级、拒绝肿物轮廓独立显示与简洁中文门禁提示；黄色肿物边界、蓝色合格切口、红色敏感区诊断、紫色低可信肿物；核心识别/几何/RSTL保持",
-      "sourceDigest": "581d762e9c036933bcffbe7983cdc4e028fc9718a860d16712703294469ac30d",
+      "scope": "仅照片鼻孔工程禁区从标准模型到照片的坐标投影；保留原掩膜、眼口环、闭嘴走廊、切口几何及RSTL实现；投影失败阻断。",
+      "sourceDigest": "8e8551423d4fb7755981a3fee5a4db5ed959c9836becc507e141d4d1194cb1ab",
       "previous": {
-        "version": "0.1.12-candidate.1",
-        "name": "运行集成：肿物与切口门禁分开显示",
+        "version": "0.1.13-candidate.1",
+        "name": "运行集成：门禁提示去重并隐藏技术字段",
         "status": "candidate",
         "scope": "仅照片显示分级、拒绝肿物轮廓独立显示与简洁中文门禁提示；黄色肿物边界、蓝色合格切口、红色敏感区诊断、紫色低可信肿物；核心识别/几何/RSTL保持",
-        "sourceDigest": "a774b6fe9efe56979b280472b0430e69a0cfa00b7eed521fd22e9a596177b9aa",
+        "sourceDigest": "581d762e9c036933bcffbe7983cdc4e028fc9718a860d16712703294469ac30d",
         "previous": {
-          "version": "0.1.11-candidate.1",
-          "name": "运行集成：肿物/切口实线优先与敏感区红线",
+          "version": "0.1.12-candidate.1",
+          "name": "运行集成：肿物与切口门禁分开显示",
           "status": "candidate",
-          "scope": "仅照片显示分级与可见线段裁剪；黄色肿物边界、蓝色合格切口、红色敏感区诊断、紫色低可信肿物；核心识别/几何/RSTL保持",
-          "sourceDigest": "da021f06d53bccc05a38bf00d4f3bad16bc228bb85de5277f8e48fb09dbb2df5",
+          "scope": "仅照片显示分级、拒绝肿物轮廓独立显示与简洁中文门禁提示；黄色肿物边界、蓝色合格切口、红色敏感区诊断、紫色低可信肿物；核心识别/几何/RSTL保持",
+          "sourceDigest": "a774b6fe9efe56979b280472b0430e69a0cfa00b7eed521fd22e9a596177b9aa",
           "previous": {
-            "version": "0.1.10-candidate.1",
-            "name": "运行集成：安全拒识候选与紫线诊断绑定",
+            "version": "0.1.11-candidate.1",
+            "name": "运行集成：肿物/切口实线优先与敏感区红线",
             "status": "candidate",
-            "scope": "边缘点击无法证明完整边界时保持拒识紫线；黄色边界、蓝/红切口确认保存和RSTL保持",
-            "sourceDigest": "b6a2ec045678fab257fb29ed09508eee48024f597687313d3c347b40804e76f2"
+            "scope": "仅照片显示分级与可见线段裁剪；黄色肿物边界、蓝色合格切口、红色敏感区诊断、紫色低可信肿物；核心识别/几何/RSTL保持",
+            "sourceDigest": "da021f06d53bccc05a38bf00d4f3bad16bc228bb85de5277f8e48fb09dbb2df5",
+            "previous": {
+              "version": "0.1.10-candidate.1",
+              "name": "运行集成：安全拒识候选与紫线诊断绑定",
+              "status": "candidate",
+              "scope": "边缘点击无法证明完整边界时保持拒识紫线；黄色边界、蓝/红切口确认保存和RSTL保持",
+              "sourceDigest": "b6a2ec045678fab257fb29ed09508eee48024f597687313d3c347b40804e76f2"
+            }
           }
         }
       }
@@ -210,29 +217,41 @@
   },
   "archive": {
     "status": "verified",
-    "manifestPath": "local_outputs/recovery-packages/PR240-文档索引回归-20261024/manifest.json",
-    "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
-    "manifestSha256": "68454d464ffc28f14d4ac1c75b6ae10d746a7139ef26b57f9f8a45d93b50d2e0",
-    "scopeConfigSha256": "9917e7196c83e880fc7614c6ef7c86897aef62db770848f78ef86ca6c4c81f4b",
-    "note": "PR240补齐文档入口索引；源码与UI人工评价绑定不变，非完整环境恢复。"
+    "manifestPath": "local_outputs/recovery-packages/PR240-CI完整修复与异步隔离-20261024/manifest.json",
+    "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
+    "manifestSha256": "1268fb26ba0d9aa38994cb9e461a4398fcbc3294250fc3399540600c00890e4e",
+    "scopeConfigSha256": "dde1ce1defadf40925d8722e0058503d09cf5da679f60976e913d5472bcbf0e1",
+    "note": "PR240浏览器契约回归及独立切口页过期回包修复；5文件复制、257基础包继承、17资源仅指纹，非独立完整环境。"
   },
   "scopeBoundaryReview": {
     "status": "not_required",
-    "basis": "Photo-only helper and controller consumers changed. incisionToolCore, model exclusions, standard assets, RSTL generation/refinement unchanged.",
-    "evidence": "Local-only validation record; not distributed with the PR"
+    "basis": "incisionRuntime change only increments its local workflowRequestId at photo reset. Its only result consumer drops stale incision previews; no RSTL generation, refinement, density, opacity, model or tracking code changes. Shared runtime is archived as an external dependency, not transferred ownership.",
+    "evidence": "web/src/services/incisionRuntime.ts exact four-line diff; workflowRequestId read/write audit; full browser regression including RSTL ownership and refresh checks."
   },
   "operatorEvaluation": {
-    "status": "accepted",
-    "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
-    "scope": "UI 0.1.16-candidate.1 手机线宽加倍后的实际观感；仅此范围，不代表肿物算法整组或临床效果通过",
-    "evidence": "当前操作者直接反馈：线宽加倍，我觉得效果可以。已知浅色瘢痕、鼻梁完整性及专业判据问题保留；授权以未完成研究候选提交PR。",
-    "confirmedAt": "2026-10-24T13:29:25.719Z"
+    "status": "pending",
+    "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
+    "scope": "新增运行集成0.2.1异步过期结果修复待确认；此前UI线宽评价保留且不代表整算法验收",
+    "evidence": "本地CI修复自动回归完成后提交预览，当前不代签操作者对新增源码评价。",
+    "previous": {
+      "status": "accepted",
+      "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
+      "scope": "UI 0.1.16-candidate.1 手机线宽加倍后的实际观感；仅此范围，不代表肿物算法整组或临床效果通过",
+      "evidence": "当前操作者直接反馈：线宽加倍，我觉得效果可以。已知浅色瘢痕、鼻梁完整性及专业判据问题保留；授权以未完成研究候选提交PR。",
+      "confirmedAt": "2026-10-24T13:29:25.719Z"
+    }
   },
   "editorSaveConfirmation": {
     "status": "confirmed",
-    "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
+    "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
     "confirmedAt": "2026-10-24T13:29:25.719Z",
-    "evidence": "当前操作者直接确认：我没有自己打开编辑器改代码。AI已回读硬盘成果及本地Commit；不声称读取了编辑器缓冲区。"
+    "evidence": "当前操作者直接确认：我没有自己打开编辑器改代码。AI已回读硬盘成果及本地Commit；不声称读取了编辑器缓冲区；随后本轮仅AI以文件工具落盘CI修订，当前磁盘与待提交Diff已回读。",
+    "previous": {
+      "status": "confirmed",
+      "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
+      "confirmedAt": "2026-10-24T13:29:25.719Z",
+      "evidence": "当前操作者直接确认：我没有自己打开编辑器改代码。AI已回读硬盘成果及本地Commit；不声称读取了编辑器缓冲区。"
+    }
   },
   "history": [
     {
