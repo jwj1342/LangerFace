@@ -2505,9 +2505,26 @@ function drawDraftOverlay(state: WorkflowIncisionState) {
     ? rejectedPoints as Array<{ x: number; y: number }>
     : [];
   rejectedMarkerPath?.setAttribute("d", rejectedMapped.length >= 3 ? pathData(rejectedMapped, true) : "");
+  const styleBoundary = boundary.length ? boundary : geometry
+    ? workflowPhotoTumorOutline(state.kind, geometry)
+      .map((point) => sourceClientPoint(state, point))
+      .filter((point): point is { x: number; y: number } => Boolean(point))
+    : [];
+  const styleBounds = styleBoundary.reduce((bounds, point) => ({
+    left: Math.min(bounds.left, point.x), right: Math.max(bounds.right, point.x),
+    top: Math.min(bounds.top, point.y), bottom: Math.max(bounds.bottom, point.y),
+  }), { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity });
+  const lesionExtentCss = styleBoundary.length >= 3
+    ? Math.min(styleBounds.right - styleBounds.left, styleBounds.bottom - styleBounds.top)
+    : undefined;
+  const photoWidthCss = frame.transform
+    ? frame.transform.displayWidth * frame.width / Math.max(1, renderState.focusCrop?.sw ?? frame.width)
+    : undefined;
   const overlayStyle = incisionOverlayScreenStyle(state.result?.candidate?.type, {
     compact: mobileWorkflowViewportActive(),
     viewScale: frame.transform?.zoom,
+    photoWidthCss,
+    lesionExtentCss,
   });
   if (boundaryPath) {
     boundaryPath.style.stroke = overlayStyle.boundary.color;
@@ -2524,6 +2541,16 @@ function drawDraftOverlay(state: WorkflowIncisionState) {
   if (candidateHaloPath) {
     candidateHaloPath.style.stroke = overlayStyle.candidate.haloColor;
     candidateHaloPath.style.strokeWidth = String(overlayStyle.candidate.haloWidth);
+  }
+  if (diagnosticCandidatePath) {
+    diagnosticCandidatePath.style.strokeWidth = String(overlayStyle.candidate.lineWidth);
+    const scale = (photoWidthCss ?? 650) / 650;
+    diagnosticCandidatePath.style.strokeDasharray = `${7 * scale} ${5 * scale}`;
+  }
+  if (rejectedMarkerPath) {
+    rejectedMarkerPath.style.strokeWidth = String(overlayStyle.boundary.lineWidth);
+    const scale = (photoWidthCss ?? 650) / 650;
+    rejectedMarkerPath.style.strokeDasharray = `${6 * scale} ${4 * scale}`;
   }
   if (center && centerCircle) {
     centerCircle.style.display = "";

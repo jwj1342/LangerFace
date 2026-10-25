@@ -1317,8 +1317,10 @@ assert.ok(
     && incisionRail.indexOf("<MobileCandidateAdjustPanel") < incisionRail.indexOf("<ReviewControlsPanel"),
   "the phone candidate adjustment panel follows tumor parameters and precedes review",
 );
-assert.match(controller, /incisionOverlayScreenStyle\(state\.result\?\.candidate\?\.type,[\s\S]*?compact: mobileWorkflowViewportActive\(\),[\s\S]*?viewScale: frame\.transform\?\.zoom/,
-  "the photo overlay derives its visual scale from the same compact contract and the current photo zoom");
+assert.match(controller, /incisionOverlayScreenStyle\(state\.result\?\.candidate\?\.type,[\s\S]*?photoWidthCss,[\s\S]*?lesionExtentCss/,
+  "the photo overlay passes actual photo and lesion dimensions rather than fixed screen widths");
+assert.ok(controller.includes("frame.transform.displayWidth * frame.width / Math.max(1, renderState.focusCrop?.sw ?? frame.width)"),
+  "photo paint includes contain-fit, zoom and focus-crop magnification exactly once");
 assert.match(controller, /centerCircle\.setAttribute\("r", String\(overlayStyle\.center\.radiusCss\)\)/,
   "the photo lesion center is deliberately smaller than the shared primary-center radius");
 assert.ok(controller.includes("geometry?.planningCenter")
@@ -1331,14 +1333,14 @@ assert.ok(canvasTools.includes("data-workflow-boundary-halo")
   && canvasTools.includes("data-workflow-candidate-halo"),
 "photo boundary and incision strokes have the same explicit under-stroke structure as live canvas rendering");
 assert.equal(incisionOverlayScreenStyle("fusiform", { compact: true }).center.radiusCss, 0.4,
-  "the compact full-photo lesion center shrinks with the photo");
+  "the compact live-canvas default lesion center remains unchanged");
 assert.equal(incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 1 }).candidate.lineWidth, 0.8,
-  "the compact full-photo incision uses the accepted fine mobile width");
+  "the compact live-canvas default keeps its accepted fine width");
 assert.equal(incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 5 }).candidate.lineWidth, 0.8,
-"the phone incision remains fine even at maximum photo zoom");
+"legacy callers without photo dimensions keep their previous stroke contract");
 assert.ok(incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 5 }).incisionCenter.radiusCss
   > incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 1.5 }).incisionCenter.radiusCss,
-"the phone center follows photo zoom instead of covering a shrinking lesion");
+"legacy callers without photo dimensions retain their center contract");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\[data-workflow-boundary\][\s\S]*?stroke:\s*#fde047;[\s\S]*?\[data-workflow-candidate\][\s\S]*?stroke:\s*#67e8f9;[\s\S]*?\[data-workflow-center\][\s\S]*?fill:\s*transparent;/,
   "phone drawing marks keep the bright boundary/candidate colors while visually subordinating the lesion center");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\[data-workflow-candidate-halo\]\s*\{[^}]*stroke:\s*#082f49;[^}]*stroke-width:\s*0\.8;/,

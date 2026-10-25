@@ -44,6 +44,10 @@ export interface IncisionOverlayScreenStyleOptions {
   compact?: boolean;
   /** Photo-only view zoom. Camera/video stay at 1. */
   viewScale?: number;
+  /** Full source-photo width after fit, focus crop and zoom, in CSS pixels. */
+  photoWidthCss?: number;
+  /** Short side of the displayed lesion bounds; no screen-pixel minimum. */
+  lesionExtentCss?: number;
 }
 
 function boundedOverlayViewScale(viewScale?: number, compact = false): number {
@@ -54,13 +58,46 @@ function boundedOverlayViewScale(viewScale?: number, compact = false): number {
 
 /**
  * Final screen-space tokens shared by the workflow photo SVG and live canvas.
- * Phone strokes stay fine at every zoom. Phone centers follow photo zoom;
- * desktop and live-canvas defaults retain their established appearance.
+ * Photo paint follows the projected photo width and lesion extent. Without
+ * photo dimensions, live-canvas defaults retain their established appearance.
  */
 export function incisionOverlayScreenStyle(
   candidateType: IncisionOverlayCandidateType = "fusiform",
   options: IncisionOverlayScreenStyleOptions = {},
 ): Omit<IncisionOverlayStyle, "rstlLineWidth"> {
+  if (Number.isFinite(options.photoWidthCss) && options.photoWidthCss! > 0) {
+    const base = incisionOverlayScreenStyle(candidateType, { compact: options.compact });
+    const scale = options.photoWidthCss! / 650;
+    const extent = Number.isFinite(options.lesionExtentCss) && options.lesionExtentCss! > 0
+      ? options.lesionExtentCss! : Infinity;
+    const candidateWidth = Math.min(0.5 * scale, 0.06 * extent);
+    // Photo paths are already projected into CSS pixels. Scale the paint once,
+    // and limit it by lesion size so small targets remain visible underneath.
+    return {
+      ...base,
+      candidate: {
+        ...base.candidate,
+        lineWidth: candidateWidth,
+        haloWidth: candidateType === "linear" ? Math.min(0.75 * scale, 0.09 * extent) : candidateWidth,
+      },
+      boundary: {
+        ...base.boundary,
+        lineWidth: Math.min(scale, 0.08 * extent),
+        haloWidth: Math.min(1.5 * scale, 0.12 * extent),
+      },
+      center: {
+        ...base.center,
+        radiusCss: Math.min(0.8 * scale, 0.08 * extent),
+        strokeWidthCss: Math.min(0.5 * scale, 0.025 * extent),
+      },
+      incisionCenter: {
+        ...base.incisionCenter,
+        radiusCss: Math.min(1.5 * scale, 0.12 * extent),
+        strokeWidthCss: Math.min(0.5 * scale, 0.025 * extent),
+      },
+      endpointRadius: Math.min(1.5 * scale, 0.12 * extent),
+    };
+  }
   const compact = options.compact === true;
   const viewScale = boundedOverlayViewScale(options.viewScale, compact);
   // The photo SVG is already in screen coordinates. Do not enlarge its strokes
