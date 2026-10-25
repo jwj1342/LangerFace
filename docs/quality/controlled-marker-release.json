@@ -262,9 +262,9 @@
     "recordedAt": "2026-10-25T08:36:59.421Z"
   },
   "editorSaveConfirmation": {
-    "status": "unknown",
+    "status": "confirmed",
     "sourceDigest": "6a80603dbb980edb6861674f5ff58d5251ebc7b8608a3ad24a2124b27f0cb786",
-    "evidence": "AI文件工具已落盘；未读取编辑器缓冲，不代签操作者保存确认",
+    "evidence": "Current operator explicitly confirms all project files have been saved and no manual code edits were made. This records that statement; it does not claim AI access to editor buffers.",
     "previous": {
       "status": "unknown",
       "sourceDigest": "b383afd1a577b2eddbb698e2dbbdd6947614a7877218bb2a5f46e9267695dddd",
@@ -281,7 +281,8 @@
           "evidence": "当前操作者直接确认：我没有自己打开编辑器改代码。AI已回读硬盘成果及本地Commit；不声称读取了编辑器缓冲区。"
         }
       }
-    }
+    },
+    "confirmedAt": "2026-10-25T08:50:38.428Z"
   },
   "history": [
     {

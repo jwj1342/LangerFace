@@ -54,7 +54,7 @@ UI 为 `0.1.17-candidate.1`，运行集成为 `0.2.2-candidate.1`。当前整体
 | 导出隐私、工程与发布身份 | `test_incision_export.ts`、`test_export_privacy.ts`、`test_algorithm_release_gate.mjs`、`test_docs_links.ts`、`test_web_architecture.ts`、`test_react_architecture.ts`、`npm run typecheck` | 通过 |
 | 规范构建与资源身份 | `npm run verify:algorithm-release:deploy`、`npm run build:lesion-candidate`、`npm run verify:build-lesion-candidate`、交付探针 | 本机通过；不是已部署、干净环境或成员复现完成 |
 
-`npm run verify:algorithm-release:pr` 当前因操作者编辑器全部保存确认缺失而阻断；不能把构建通过代替此门禁。操作者已报告当前照片标记体验无明显问题；没有另行宣称其手动测试了导出、真实手机、摄像头或医学效果。最终正文与 Files changed 的人工通读仍待执行。
+操作者已明确确认“都已保存，没有手动改过代码”，保存确认绑定当前源码摘要；`npm run verify:algorithm-release:pr` 仍需按当前候选独立执行，不能用构建通过代替。操作者已报告当前照片标记体验无明显问题；没有另行宣称其手动测试了导出、真实手机、摄像头或医学效果。最终正文与 Files changed 的人工通读仍待执行，未完成前只准备 Draft，不请求正式审阅。
 
 ## 人工和接收成员核验
 
