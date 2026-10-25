@@ -83,7 +83,7 @@ const controller = createCanvasRecordingController({
 });
 
 assert.equal(controller.recording, false);
-assert.equal(controller.start(), true);
+assert.equal(await controller.start(), true);
 assert.equal(controller.recording, true);
 assert.equal(controller.chunkCount, 2, "empty MediaRecorder chunks are ignored");
 assert.deepEqual(recordingStates, [true], "start reports recording state");
@@ -115,12 +115,12 @@ const mp4Controller = createCanvasRecordingController({
   createObjectURL: () => "blob://export/mp4",
   createLink: () => ({ href: "", download: "", click() { mp4Links.push(this.download); } }),
 });
-assert.equal(mp4Controller.start(), true);
+assert.equal(await mp4Controller.start(), true);
 assert.equal(mp4Controller.stop(), true);
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.deepEqual(mp4Links, ["langer_rstl_999.mp4"], "supported MP4 recording uses a matching extension");
 
-assert.throws(
+await assert.rejects(
   () => createCanvasRecordingController({ canvas: {}, Recorder: FakeMediaRecorder, BlobCtor: FakeBlob }).start(),
   /canvas\.captureStream/,
 );
@@ -187,7 +187,7 @@ const compositeController = createCanvasRecordingController({
   createLink() { return { click() {} }; },
 });
 
-assert.equal(compositeController.start(), true);
+assert.equal(await compositeController.start(), true);
 assert.equal(compositeCanvas.width, 1280 + Math.max(12, Math.round(1280 * 0.012)) + Math.max(240, Math.min(420, Math.round(1280 * 0.28))));
 assert.equal(compositeCanvas.height, 720);
 assert.equal(compositeRecorderCalls[0].stream.kind, "composite-stream");
@@ -294,11 +294,43 @@ const emptyController = createCanvasRecordingController({
   onError(error) { emptyErrors.push(error.name); },
   createObjectURL() { throw new Error("empty recordings must not download"); },
 });
-emptyController.start();
+await emptyController.start();
 emptyController.stop();
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.deepEqual(emptyErrors, ["EmptyRecordingError"]);
 assert.equal(emptyController.recording, false);
+
+let releaseFrame!: (canvas: HTMLCanvasElement) => void;
+let pendingStreamStarts = 0;
+const pendingCanvas = { ...compositeCanvas, captureStream() { pendingStreamStarts++; return {}; } };
+const pendingStates: boolean[] = [];
+const pendingController = createCanvasRecordingController({
+  canvas: mainCanvas as HTMLCanvasElement,
+  getMainCanvas: () => new Promise(resolve => { releaseFrame = resolve; }),
+  createCanvas: () => pendingCanvas as HTMLCanvasElement,
+  Recorder: FakeMediaRecorder as unknown as typeof MediaRecorder,
+  onStateChange: value => pendingStates.push(value),
+});
+const pendingStart = pendingController.start();
+assert.equal(pendingController.recording, true);
+assert.equal(pendingController.stop(), true);
+releaseFrame(mainCanvas as HTMLCanvasElement);
+assert.equal(await pendingStart, false, "cancelled SVG preparation must never start a stale recorder");
+assert.equal(pendingStreamStarts, 0);
+assert.deepEqual(pendingStates, [true, false]);
+
+const failedStates: boolean[] = [];
+class FailedRecorder extends FakeMediaRecorder {
+  constructor() { throw new Error("recorder unavailable"); }
+}
+const failedController = createCanvasRecordingController({
+  canvas: mainCanvas as HTMLCanvasElement,
+  Recorder: FailedRecorder as unknown as typeof MediaRecorder,
+  onStateChange: value => failedStates.push(value),
+});
+await assert.rejects(() => failedController.start(), /recorder unavailable/);
+assert.equal(failedController.recording, false);
+assert.deepEqual(failedStates, [true, false]);
 
 // The route adapter must share one lazy controller across image/video actions,
 // preserve feedback, and release its controller when the route is reset.
@@ -310,9 +342,9 @@ let rejectActionImage = false;
 let actionOptions: Parameters<typeof createCanvasRecordingController>[0] | undefined;
 const fakeActionController = {
   recording: false, chunkCount: 0,
-  start() { return true; },
+  async start() { return true; },
   stop() { actionCalls.push("stop"); return true; },
-  toggle() { actionCalls.push("toggle"); return true; },
+  async toggle() { actionCalls.push("toggle"); return true; },
   async exportImage() {
     actionCalls.push("image");
     if (rejectActionImage) throw new Error("test image failure");

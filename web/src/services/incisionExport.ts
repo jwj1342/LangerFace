@@ -106,9 +106,9 @@ export function svgOverlayExportViewBox(canvasRect: RectLike, overlayRect: RectL
 
 function inlineSvgPresentation(source: SVGSVGElement, clone: SVGSVGElement) {
   const properties = [
-    "display", "fill", "fill-opacity", "stroke", "stroke-opacity", "stroke-width",
+    "display", "visibility", "opacity", "fill", "fill-opacity", "stroke", "stroke-opacity", "stroke-width",
     "stroke-linecap", "stroke-linejoin", "stroke-dasharray", "font-family", "font-size",
-    "font-weight", "paint-order",
+    "font-weight", "paint-order", "vector-effect",
   ];
   const sourceElements = [source, ...source.querySelectorAll<SVGElement>("*")];
   const cloneElements = [clone, ...clone.querySelectorAll<SVGElement>("*")];
@@ -174,4 +174,36 @@ export async function downloadCanvasWithSvgOverlayPng(
   } catch {
     downloadCanvasPng(canvas, filename);
   }
+}
+
+// Snapshot the base before decoding SVG so a video frame never combines a newer
+// base with an older overlay. The SVG already owns the screen-space projection.
+export async function captureCanvasWithSvgOverlay(
+  canvas: HTMLCanvasElement,
+  overlay: SVGSVGElement | null,
+): Promise<HTMLCanvasElement> {
+  const output = document.createElement("canvas");
+  output.width = canvas.width;
+  output.height = canvas.height;
+  const context = output.getContext("2d");
+  if (!context) throw new Error("2d canvas context is required for overlay export");
+  if (canvas.classList.contains("mirror")) {
+    context.translate(output.width, 0);
+    context.scale(-1, 1);
+  }
+  context.drawImage(canvas, 0, 0);
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  if (!overlay || !overlay.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return output;
+  const rect = canvas.getBoundingClientRect();
+  const matrix = overlay.getScreenCTM();
+  if (!matrix || !(rect.width > 0 && rect.height > 0)) return output;
+  const inverse = matrix.inverse();
+  const topLeft = new DOMPoint(rect.left, rect.top).matrixTransform(inverse);
+  const bottomRight = new DOMPoint(rect.right, rect.bottom).matrixTransform(inverse);
+  const viewBox = { x: topLeft.x, y: topLeft.y,
+    width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y };
+  if (!(viewBox.width > 0 && viewBox.height > 0)) throw new Error("Invalid SVG export transform");
+  const image = await svgImage(overlay, viewBox);
+  context.drawImage(image, 0, 0, output.width, output.height);
+  return output;
 }

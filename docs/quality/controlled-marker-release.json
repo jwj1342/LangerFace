@@ -11,7 +11,7 @@
       "原像素"
     ],
     "status": "candidate",
-    "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
+    "sourceDigest": "b383afd1a577b2eddbb698e2dbbdd6947614a7877218bb2a5f46e9267695dddd",
     "algorithmDigest": "2884bb66eb6066d1fd7cd23fd0f89cf84dc5d8fb4d0aff5d359ad83cb09b74f2",
     "changeSlug": "validate-recovered-pixel-boundaries-in-object-context",
     "previous": {
@@ -174,41 +174,48 @@
     }
   },
   "runtimeIntegration": {
-    "version": "0.2.1-candidate.1",
-    "name": "运行集成：上传照片时丢弃旧切口预览回包",
+    "version": "0.2.2-candidate.1",
+    "name": "运行集成：图片视频导出补齐可见肿物与切口叠加",
     "status": "candidate",
-    "scope": "仅独立切口页清空照片规划时使旧异步workflow请求失效，防止旧候选回写未选病灶照片；不改识别、切口几何、UI线宽、RSTL或模型。",
-    "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
+    "scope": "仅导出读取既有主画布及工作流SVG；保持原额外视图、隐藏/清除、镜像/缩放；视频逐帧合成并隔离取消后的旧帧。不修改肿物识别、切口生成/微调、RSTL六项、页面样式、模型及资产。",
+    "sourceDigest": "b383afd1a577b2eddbb698e2dbbdd6947614a7877218bb2a5f46e9267695dddd",
     "previous": {
-      "version": "0.2.0-candidate.1",
-      "name": "运行集成：照片鼻孔禁区随人脸拓扑投影",
+      "version": "0.2.1-candidate.1",
+      "name": "运行集成：上传照片时丢弃旧切口预览回包",
       "status": "candidate",
-      "scope": "仅照片鼻孔工程禁区从标准模型到照片的坐标投影；保留原掩膜、眼口环、闭嘴走廊、切口几何及RSTL实现；投影失败阻断。",
-      "sourceDigest": "8e8551423d4fb7755981a3fee5a4db5ed959c9836becc507e141d4d1194cb1ab",
+      "scope": "仅独立切口页清空照片规划时使旧异步workflow请求失效，防止旧候选回写未选病灶照片；不改识别、切口几何、UI线宽、RSTL或模型。",
+      "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
       "previous": {
-        "version": "0.1.13-candidate.1",
-        "name": "运行集成：门禁提示去重并隐藏技术字段",
+        "version": "0.2.0-candidate.1",
+        "name": "运行集成：照片鼻孔禁区随人脸拓扑投影",
         "status": "candidate",
-        "scope": "仅照片显示分级、拒绝肿物轮廓独立显示与简洁中文门禁提示；黄色肿物边界、蓝色合格切口、红色敏感区诊断、紫色低可信肿物；核心识别/几何/RSTL保持",
-        "sourceDigest": "581d762e9c036933bcffbe7983cdc4e028fc9718a860d16712703294469ac30d",
+        "scope": "仅照片鼻孔工程禁区从标准模型到照片的坐标投影；保留原掩膜、眼口环、闭嘴走廊、切口几何及RSTL实现；投影失败阻断。",
+        "sourceDigest": "8e8551423d4fb7755981a3fee5a4db5ed959c9836becc507e141d4d1194cb1ab",
         "previous": {
-          "version": "0.1.12-candidate.1",
-          "name": "运行集成：肿物与切口门禁分开显示",
+          "version": "0.1.13-candidate.1",
+          "name": "运行集成：门禁提示去重并隐藏技术字段",
           "status": "candidate",
           "scope": "仅照片显示分级、拒绝肿物轮廓独立显示与简洁中文门禁提示；黄色肿物边界、蓝色合格切口、红色敏感区诊断、紫色低可信肿物；核心识别/几何/RSTL保持",
-          "sourceDigest": "a774b6fe9efe56979b280472b0430e69a0cfa00b7eed521fd22e9a596177b9aa",
+          "sourceDigest": "581d762e9c036933bcffbe7983cdc4e028fc9718a860d16712703294469ac30d",
           "previous": {
-            "version": "0.1.11-candidate.1",
-            "name": "运行集成：肿物/切口实线优先与敏感区红线",
+            "version": "0.1.12-candidate.1",
+            "name": "运行集成：肿物与切口门禁分开显示",
             "status": "candidate",
-            "scope": "仅照片显示分级与可见线段裁剪；黄色肿物边界、蓝色合格切口、红色敏感区诊断、紫色低可信肿物；核心识别/几何/RSTL保持",
-            "sourceDigest": "da021f06d53bccc05a38bf00d4f3bad16bc228bb85de5277f8e48fb09dbb2df5",
+            "scope": "仅照片显示分级、拒绝肿物轮廓独立显示与简洁中文门禁提示；黄色肿物边界、蓝色合格切口、红色敏感区诊断、紫色低可信肿物；核心识别/几何/RSTL保持",
+            "sourceDigest": "a774b6fe9efe56979b280472b0430e69a0cfa00b7eed521fd22e9a596177b9aa",
             "previous": {
-              "version": "0.1.10-candidate.1",
-              "name": "运行集成：安全拒识候选与紫线诊断绑定",
+              "version": "0.1.11-candidate.1",
+              "name": "运行集成：肿物/切口实线优先与敏感区红线",
               "status": "candidate",
-              "scope": "边缘点击无法证明完整边界时保持拒识紫线；黄色边界、蓝/红切口确认保存和RSTL保持",
-              "sourceDigest": "b6a2ec045678fab257fb29ed09508eee48024f597687313d3c347b40804e76f2"
+              "scope": "仅照片显示分级与可见线段裁剪；黄色肿物边界、蓝色合格切口、红色敏感区诊断、紫色低可信肿物；核心识别/几何/RSTL保持",
+              "sourceDigest": "da021f06d53bccc05a38bf00d4f3bad16bc228bb85de5277f8e48fb09dbb2df5",
+              "previous": {
+                "version": "0.1.10-candidate.1",
+                "name": "运行集成：安全拒识候选与紫线诊断绑定",
+                "status": "candidate",
+                "scope": "边缘点击无法证明完整边界时保持拒识紫线；黄色边界、蓝/红切口确认保存和RSTL保持",
+                "sourceDigest": "b6a2ec045678fab257fb29ed09508eee48024f597687313d3c347b40804e76f2"
+              }
             }
           }
         }
@@ -225,33 +232,43 @@
   },
   "scopeBoundaryReview": {
     "status": "not_required",
-    "basis": "incisionRuntime change only increments its local workflowRequestId at photo reset. Its only result consumer drops stale incision previews; no RSTL generation, refinement, density, opacity, model or tracking code changes. Shared runtime is archived as an external dependency, not transferred ownership.",
-    "evidence": "web/src/services/incisionRuntime.ts exact four-line diff; workflowRequestId read/write audit; full browser regression including RSTL ownership and refresh checks."
+    "basis": "本轮仅修改canvasRecording、liveRecordingActions、incisionExport导出链路及其测试；RSTL数据只经已有主canvas读取，不修改算法、微调、参数、模型、资产或主页面呈现。",
+    "evidence": "local_outputs/runtime-identity/service-recovery-20261021/export-overlay-20261025.json; actual scoped diff and export regression"
   },
   "operatorEvaluation": {
-    "status": "accepted",
-    "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
-    "scope": "操作者接受本次CI修订及已展示的自动验证结果，并明确要求上传PR240；此前UI线宽实际评价保留，不代表新增真机操作或整算法/临床效果验收",
-    "evidence": "当前操作者在CI修订预览后直接确认：既然完成了修复，就一定要上传，不要再等待我去给你下达指令，这个是默认的规则，现在上传吧。评价仅绑定本轮已展示修订与自动回归，不声称操作者已亲自复测新增竞态修复。",
+    "status": "pending",
+    "sourceDigest": "b383afd1a577b2eddbb698e2dbbdd6947614a7877218bb2a5f46e9267695dddd",
+    "scope": "等待操作者试用本次导出修复；本地提交授权不等于效果验收",
     "previous": {
       "status": "accepted",
-      "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
-      "scope": "UI 0.1.16-candidate.1 手机线宽加倍后的实际观感；仅此范围，不代表肿物算法整组或临床效果通过",
-      "evidence": "当前操作者直接反馈：线宽加倍，我觉得效果可以。已知浅色瘢痕、鼻梁完整性及专业判据问题保留；授权以未完成研究候选提交PR。",
-      "confirmedAt": "2026-10-24T13:29:25.719Z"
-    },
-    "confirmedAt": "2026-10-24T14:53:51.0396942Z"
+      "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
+      "scope": "操作者接受本次CI修订及已展示的自动验证结果，并明确要求上传PR240；此前UI线宽实际评价保留，不代表新增真机操作或整算法/临床效果验收",
+      "evidence": "当前操作者在CI修订预览后直接确认：既然完成了修复，就一定要上传，不要再等待我去给你下达指令，这个是默认的规则，现在上传吧。评价仅绑定本轮已展示修订与自动回归，不声称操作者已亲自复测新增竞态修复。",
+      "previous": {
+        "status": "accepted",
+        "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
+        "scope": "UI 0.1.16-candidate.1 手机线宽加倍后的实际观感；仅此范围，不代表肿物算法整组或临床效果通过",
+        "evidence": "当前操作者直接反馈：线宽加倍，我觉得效果可以。已知浅色瘢痕、鼻梁完整性及专业判据问题保留；授权以未完成研究候选提交PR。",
+        "confirmedAt": "2026-10-24T13:29:25.719Z"
+      },
+      "confirmedAt": "2026-10-24T14:53:51.0396942Z"
+    }
   },
   "editorSaveConfirmation": {
-    "status": "confirmed",
-    "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
-    "confirmedAt": "2026-10-24T13:29:25.719Z",
-    "evidence": "当前操作者直接确认：我没有自己打开编辑器改代码。AI已回读硬盘成果及本地Commit；不声称读取了编辑器缓冲区；随后本轮仅AI以文件工具落盘CI修订，当前磁盘与待提交Diff已回读。",
+    "status": "unknown",
+    "sourceDigest": "b383afd1a577b2eddbb698e2dbbdd6947614a7877218bb2a5f46e9267695dddd",
+    "evidence": "本次修复由AI落盘并定点提交；未读取编辑器缓冲，不继承历史保存签认",
     "previous": {
       "status": "confirmed",
-      "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
+      "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
       "confirmedAt": "2026-10-24T13:29:25.719Z",
-      "evidence": "当前操作者直接确认：我没有自己打开编辑器改代码。AI已回读硬盘成果及本地Commit；不声称读取了编辑器缓冲区。"
+      "evidence": "当前操作者直接确认：我没有自己打开编辑器改代码。AI已回读硬盘成果及本地Commit；不声称读取了编辑器缓冲区；随后本轮仅AI以文件工具落盘CI修订，当前磁盘与待提交Diff已回读。",
+      "previous": {
+        "status": "confirmed",
+        "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
+        "confirmedAt": "2026-10-24T13:29:25.719Z",
+        "evidence": "当前操作者直接确认：我没有自己打开编辑器改代码。AI已回读硬盘成果及本地Commit；不声称读取了编辑器缓冲区。"
+      }
     }
   },
   "history": [
@@ -1628,10 +1645,10 @@
   "sourceFingerprint": {
     "encoding": "UTF-8",
     "normalization": "CRLF-to-LF-only",
-    "previousSourceDigest": "4f3e2acebe2217d606201189ba7fac251bf359da10cfde234162c1f9ee7ee3db",
-    "currentSourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
-    "capturedAt": "2026-10-24T12:28:03.091Z",
-    "reason": "操作者反馈上一版基本合格但偏细。手机肿物边界0.7→1.4px、切口0.4→0.8px，描边同步加倍，各缩放档位保持固定屏幕线宽；中心大小、桌面、普通模式规则与算法保持。"
+    "previousSourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
+    "currentSourceDigest": "b383afd1a577b2eddbb698e2dbbdd6947614a7877218bb2a5f46e9267695dddd",
+    "capturedAt": "2026-10-25T07:18:33.933Z",
+    "reason": "运行集成：图片视频导出补齐可见肿物与切口叠加"
   },
   "integrationHistory": [
     {
@@ -1744,7 +1761,17 @@
       "scar failures remain",
       "no professional opening/lesion boundary acceptance",
       "historical pixel mismatch retained"
-    ]
+    ],
+    "overlayExport": {
+      "status": "passed-scoped-automated",
+      "evidence": "local_outputs/runtime-identity/service-recovery-20261021/export-overlay-browser-20261025.json",
+      "sourceDigest": "b383afd1a577b2eddbb698e2dbbdd6947614a7877218bb2a5f46e9267695dddd",
+      "excludes": [
+        "real-phone",
+        "clinical-effect",
+        "algorithm-equivalence"
+      ]
+    }
   },
   "incisionDirection": {
     "version": "0.1.0-candidate.1",
@@ -1823,6 +1850,14 @@
       "currentSourceDigest": "4f3e2acebe2217d606201189ba7fac251bf359da10cfde234162c1f9ee7ee3db",
       "capturedAt": "2026-10-24T12:13:52.805Z",
       "reason": "Feedback6 phone stroke/center presentation and explicit developer-only canvas subtitle; unchanged algorithm/assets"
+    },
+    {
+      "encoding": "UTF-8",
+      "normalization": "CRLF-to-LF-only",
+      "previousSourceDigest": "4f3e2acebe2217d606201189ba7fac251bf359da10cfde234162c1f9ee7ee3db",
+      "currentSourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
+      "capturedAt": "2026-10-24T12:28:03.091Z",
+      "reason": "操作者反馈上一版基本合格但偏细。手机肿物边界0.7→1.4px、切口0.4→0.8px，描边同步加倍，各缩放档位保持固定屏幕线宽；中心大小、桌面、普通模式规则与算法保持。"
     }
   ],
   "photoOpeningGuard": {
