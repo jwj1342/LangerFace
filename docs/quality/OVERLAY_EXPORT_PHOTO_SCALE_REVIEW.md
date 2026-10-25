@@ -1,0 +1,65 @@
+# 图片视频叠加导出与照片标记显示：审查说明
+
+## 目标和边界
+
+本候选修复同一条工作流中的两处显示不一致：页面可见的肿物、切口 SVG 没有进入主画布导出；照片缩放时标记使用屏幕固定或封顶尺寸，细小目标容易被笔画遮挡。二者共享照片标记及导出链，组合回归验证导出保留修复后的显示。
+
+仅修改肿物/切口的显示和导出，不改变识别、切口几何、确认/拒识规则、标准 RSTL、皱纹检测、医生手动微调、皱纹引导微调、密度/透明度、追踪质量、模型或图谱。独立切口照片 canvas 的显示规则不在本次修改内。
+
+## 来源与实现
+
+| 来源提交 | 连贯范围 | 依赖与保留 |
+| --- | --- | --- |
+| `c2a5014` | 导出主画布和可见 SVG，视频等待首帧并隔离取消后的异步帧 | 保留额外视图和原下载路径；`start/toggle` 改为 Promise，适配器与相关测试同步 |
+| `9db6772` | 照片笔画按照片显示宽度同比缩放，以病灶短边限制遮挡 | 只在显式传入照片尺寸时启用；live 画布默认和原配色保持 |
+| `45141ad` | 浏览器回归等待上传入口和真实规划控制器就绪 | 仅测试装置，不改变产品 |
+
+未整颗移植其他历史提交；前置成果已在默认分支包含。恢复时分别回退对应修复及配套登记，不重置其他成员成果；组合回退须核对共享登记文件，不能覆盖后续版本记录。
+
+## 并存入口与运行身份
+
+| 路径/实现 | 默认与本次范围 | 验证状态 |
+| --- | --- | --- |
+| `/app/workflow` 的照片 SVG | 本次显示和导出目标 | 实际挂载控制器重绘及合成 PNG/视频验证通过 |
+| 实时 canvas / `render2d` | 保留旧画笔尺寸；导出读取既有 canvas | 相关旧行为单测通过，真实摄像头效果未验 |
+| 独立切口照片 canvas | 不迁移、不删除、不改变默认 | 本次未作显示效果验收 |
+| `small-lesion-boundary-candidate` | 规范启动/构建的目标 profile | 肿物 `0.93.0-candidate.1`，算法摘要不变 |
+| `legacy-v0.23` | 仅显式回退，不作本候选验收 | 未运行，不替代当前候选 |
+
+UI 为 `0.1.17-candidate.1`，运行集成为 `0.2.2-candidate.1`。当前整体源码摘要为 `6a80603dbb980edb6861674f5ff58d5251ebc7b8608a3ad24a2124b27f0cb786`，算法摘要为 `2884bb66eb6066d1fd7cd23fd0f89cf84dc5d8fb4d0aff5d359ad83cb09b74f2`。正式值及恢复清单以 [发布登记](controlled-marker-release.json) 为准。
+
+代码已包含、开发与构建目标默认已选择、本机实际验证已运行，三者分别有证据。干净获取环境及另一成员的实际复现未执行，不能由本机成功代签。
+
+## 最小复现与资源限制
+
+使用仓库要求的 Node/npm 版本，在 `web` 执行 `npm ci`。开发服务用 `npm run dev:lesion-candidate -- --port 5199`，产品入口为 `/app/workflow?developer=1`；先用 `node ../tools/probe_marker_delivery.mjs http://127.0.0.1:5199` 核验身份及实际资源。私有来源目录、截图、患者影像、参考像素、诊断日志和恢复包不在 PR 内。
+
+构建使用 `npm run build:lesion-candidate`，回读使用 `npm run verify:build-lesion-candidate`。构建入口固定目标 profile；源码/资产或登记不匹配、错误模式、无效身份或未获准回退均应失败。普通静态托管不提供本地皱纹 API，不能据此宣称所有功能恢复。
+
+本次没有资源删除或迁移。产品必要的 MediaPipe 模型、网格和图谱沿用已跟踪资产，WASM 来自锁定的依赖。既有皱纹私有模型不进入 Git 或静态构建；拥有授权的成员使用现有 `tools/install_wrinkle_model.py --source <获准模型文件>`，或配置获准私有仓库后安装，并按仓库元数据核长度/哈希。模型供应权限仍由其所有者决定，本候选不分发模型，也不证明接收者已有权限。
+
+不依赖个人图像的新测试可复现显示和导出契约；真实识别样本效果仍按 [运行验收](MARKER_RUNTIME_ACCEPTANCE.md) 的本地专项要求准备，不用缺素材后的跳过冒充通过。
+
+## 变更与验证矩阵
+
+命令从 `web` 运行，下面结果绑定上述源码摘要；原始本机日志不公开，测试代码可供复核。
+
+| 契约 | 检查/断言 | 实际结果 |
+| --- | --- | --- |
+| PNG 与视频包含现有可见叠加 | `node ../tools/test_workflow_export_browser.mjs http://127.0.0.1:5199` | 桌面/手机模拟 × 镜像 × 缩放，共 8 组 PNG；2 组实际编码视频解码通过，动态线条无旧像素残留 |
+| 首帧准备取消/录制异常不恢复旧录制 | `node ../tools/test_export_canvas.ts` | Promise、额外视图、取消、空视频、失败状态与路由生命周期断言通过 |
+| 线宽、描边和中心点同比，细小目标仍可见 | `node ../tools/test_incision_photo_overlay_scale.ts` | 2 种布局 × 3 种直径 × 6 档缩放，共 36 组通过；保留 live 默认及同显示尺寸触控/桌面数值一致 |
+| 实际照片控制器重绘 | `node ../tools/test_workflow_photo_overlay_browser.mjs http://127.0.0.1:5199` | 80 组：2 视口 × DPR1/2 × 镜像 × 裁剪 × 5 档缩放；无新增页面异常 |
+| 旧功能和责任隔离 | `test_incision_mobile_overlay_scale.ts`、`test_incision_overlay.ts`、`test_incision_photo_planning.ts`、`test_workflow_page.ts`、`test_live_incision_overlay_ui.ts`、`test_live_command_router.ts`、`test_workbench_command_schemas.ts` | 相关回归通过；不是 RSTL 效果等价或摄像头验收 |
+| 导出隐私、工程与发布身份 | `test_incision_export.ts`、`test_export_privacy.ts`、`test_algorithm_release_gate.mjs`、`test_docs_links.ts`、`test_web_architecture.ts`、`test_react_architecture.ts`、`npm run typecheck` | 通过 |
+| 规范构建与资源身份 | `npm run verify:algorithm-release:deploy`、`npm run build:lesion-candidate`、`npm run verify:build-lesion-candidate`、交付探针 | 本机通过；不是已部署、干净环境或成员复现完成 |
+
+`npm run verify:algorithm-release:pr` 当前因操作者编辑器全部保存确认缺失而阻断；不能把构建通过代替此门禁。操作者已报告当前照片标记体验无明显问题；没有另行宣称其手动测试了导出、真实手机、摄像头或医学效果。最终正文与 Files changed 的人工通读仍待执行。
+
+## 人工和接收成员核验
+
+使用非患者演示照片，在身份核验通过的工作流中标记、生成切口，缩小/放大，再分别导出图片与短视频。预期页面当前可见的肿物/切口层均出现，隐藏或清除的层不出现，镜像和缩放不额外错位；任一遗漏、残留、错位或下载失败即不通过。只在本地操作，不上传照片到 PR 或 CI。
+
+另一成员应绑定合并后的精确提交、同一获准输入、profile、源码/资产摘要和显示尺寸，记录浏览器、DPR、缩放/裁剪及结果。历史两台电脑线宽截图差异的唯一根因仍未证实；本候选不能把新显示修复写成旧截图已查明。
+
+手机真机保存、全部算法矩阵、摄像头、独立切口照片入口、临床安全距离及专业效果仍未验证；已有识别失败保留。推荐审查者重点核异步录制生命周期、SVG/canvas 映射、小目标笔画上限及 RSTL 责任隔离。合并后由实现方核实际合并树、身份及上述受影响回归，再由接收成员定点复现；未取得合并或部署授权前不执行这些动作。

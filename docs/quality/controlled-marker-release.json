@@ -224,11 +224,11 @@
   },
   "archive": {
     "status": "verified",
-    "manifestPath": "local_outputs/recovery-packages/PR240-CI完整修复与异步隔离-20261024/manifest.json",
-    "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
-    "manifestSha256": "1268fb26ba0d9aa38994cb9e461a4398fcbc3294250fc3399540600c00890e4e",
+    "manifestPath": "local_outputs/recovery-packages/PR-overlay-export-photo-scale-20261025/manifest.json",
+    "sourceDigest": "6a80603dbb980edb6861674f5ff58d5251ebc7b8608a3ad24a2124b27f0cb786",
+    "manifestSha256": "07ebce970336619c26a4b9ad5e7a4faddd13803b51d2ba4644750cc464840946",
     "scopeConfigSha256": "dde1ce1defadf40925d8722e0058503d09cf5da679f60976e913d5472bcbf0e1",
-    "note": "PR240浏览器契约回归及独立切口页过期回包修复；5文件复制、257基础包继承、17资源仅指纹，非独立完整环境。"
+    "note": "Scoped tracked source recovery for overlay export and photo paint; no private resources or unrelated untracked files copied. Not a complete executable environment."
   },
   "scopeBoundaryReview": {
     "status": "not_required",
@@ -236,9 +236,9 @@
     "evidence": "tools/test_incision_photo_overlay_scale.ts; tools/test_workflow_page.ts; actual scoped diff"
   },
   "operatorEvaluation": {
-    "status": "pending",
+    "status": "accepted",
     "sourceDigest": "6a80603dbb980edb6861674f5ff58d5251ebc7b8608a3ad24a2124b27f0cb786",
-    "scope": "本轮照片标记显示修复待操作者体验；不继承历史线宽接受，也不代表RSTL或算法整组通过",
+    "scope": "Operator reported the current photo-marker experience has no apparent issue. Export has scoped automated evidence; no separate manual export, phone, camera, clinical or full algorithm acceptance is asserted.",
     "previous": {
       "status": "pending",
       "sourceDigest": "b383afd1a577b2eddbb698e2dbbdd6947614a7877218bb2a5f46e9267695dddd",
@@ -257,7 +257,9 @@
         },
         "confirmedAt": "2026-10-24T14:53:51.0396942Z"
       }
-    }
+    },
+    "evidence": "Current operator direct feedback: 我人工核验感觉没什么问题。 Limited to the tested photo-marker experience, with protected-function audit requested separately.",
+    "recordedAt": "2026-10-25T08:36:59.421Z"
   },
   "editorSaveConfirmation": {
     "status": "unknown",
@@ -1797,8 +1799,8 @@
     ],
     "overlayExport": {
       "status": "passed-scoped-automated",
-      "evidence": "local_outputs/runtime-identity/service-recovery-20261021/export-overlay-browser-20261025.json",
-      "sourceDigest": "b383afd1a577b2eddbb698e2dbbdd6947614a7877218bb2a5f46e9267695dddd",
+      "evidence": "tools/test_export_canvas.ts; tools/test_workflow_export_browser.mjs; scoped local validation retained outside Git",
+      "sourceDigest": "6a80603dbb980edb6861674f5ff58d5251ebc7b8608a3ad24a2124b27f0cb786",
       "excludes": [
         "real-phone",
         "clinical-effect",
@@ -1821,10 +1823,11 @@
   },
   "previousArchive": {
     "status": "verified",
-    "manifestPath": "local_outputs/recovery-packages/手机细线与普通模式提示-UI0.1.15-20261024/manifest.json",
-    "sourceDigest": "4f3e2acebe2217d606201189ba7fac251bf359da10cfde234162c1f9ee7ee3db",
-    "scopeConfigSha256": "5a024d8881af3c233dbf3c6e3da1558c3f682c08f3396dfe3bae30e8a2bd5cd4",
-    "manifestSha256": "d7e994ceb27c5a522117c8d445b27407ef51048da27f642a71bcd6417cd3001e"
+    "manifestPath": "local_outputs/recovery-packages/PR240-CI完整修复与异步隔离-20261024/manifest.json",
+    "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
+    "manifestSha256": "1268fb26ba0d9aa38994cb9e461a4398fcbc3294250fc3399540600c00890e4e",
+    "scopeConfigSha256": "dde1ce1defadf40925d8722e0058503d09cf5da679f60976e913d5472bcbf0e1",
+    "note": "PR240浏览器契约回归及独立切口页过期回包修复；5文件复制、257基础包继承、17资源仅指纹，非独立完整环境。"
   },
   "sourceFingerprintHistory": [
     {
