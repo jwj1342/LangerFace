@@ -24,6 +24,8 @@ try {
         page.on("pageerror", error => errors.push(error.message));
         await page.goto(new URL("/app/workflow?developer=1", base).href);
         await page.waitForSelector("#workflowIncisionOverlay", { state: "attached" });
+        await page.waitForFunction(() => document.querySelector("#fileInput")
+          && !document.querySelector("#fileInput").disabled);
         await page.waitForFunction(async () => {
           const { sourceState } = await import("/src/services/liveState.ts");
           return Boolean(sourceState.planning2d);
@@ -31,7 +33,12 @@ try {
         const rows = await page.evaluate(async () => {
           const { sourceState, renderState } = await import("/src/services/liveState.ts");
           const { createPhotoPlanningTransform } = await import("/src/services/photoPlanningController.ts");
+          const deadline = performance.now() + 10000;
+          while (!sourceState.planning2d && performance.now() < deadline) {
+            await new Promise(resolve => requestAnimationFrame(resolve));
+          }
           const planning = sourceState.planning2d;
+          if (!planning) throw new Error("Photo controller initialization timed out");
           const originalGetFrameState = planning.getFrameState;
           const originalCrop = renderState.focusCrop;
           const frame = originalGetFrameState();
