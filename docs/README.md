@@ -37,6 +37,8 @@
 
 [LESION_CANDIDATE_REVIEW.md](quality/LESION_CANDIDATE_REVIEW.md) 说明照片肿物候选、切口显示的复现步骤、资源依赖和未通过范围。
 
+[OVERLAY_EXPORT_PHOTO_SCALE_REVIEW.md](quality/OVERLAY_EXPORT_PHOTO_SCALE_REVIEW.md) 说明叠加导出和照片标记缩放修复的来源、组合回归与未验范围。
+
 ## `clinical/` — 临床边界与合规
 
 **这个目录回答「这套东西在医学上能声称什么、不能声称什么，以及哪些数据绝对不能出域」——它约束的是承诺而不是实现。** [PRODUCT_BOUNDARIES.md](clinical/PRODUCT_BOUNDARIES.md) 固定当前研究范围、明确暂缓项与未来重启条件；[PRIVACY_AND_AUDIT.md](clinical/PRIVACY_AND_AUDIT.md) 是敏感数据边界、禁止提交项、导出约束与审计字段的总纲；[WRINKLE_LESION_CUES.md](clinical/WRINKLE_LESION_CUES.md) 统一记录自然皱襞/皱纹/病灶边界、Python texture warp、浏览器个性化路径和 checkpoint 许可边界。

@@ -396,7 +396,29 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   // opening intersection. A warning remains visible without becoming a red gate.
   await expect(candidate).toHaveCSS("stroke", "rgb(103, 232, 249)");
   await expect(candidate).toHaveCSS("stroke-dasharray", "none");
-  await expect(candidate).toHaveCSS("stroke-width", "1px");
+  const readPhotoPaint = () => page.evaluate(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>("#canvas")!;
+    const viewport = canvas.closest(".main-wrap")!.getBoundingClientRect();
+    const zoom = Number(getComputedStyle(canvas).getPropertyValue("--img-zoom")) || 1;
+    const photoWidth = Math.round(Math.min(viewport.width / canvas.width, viewport.height / canvas.height) * canvas.width) * zoom;
+    const boundary = document.querySelector<SVGPathElement>("[data-workflow-boundary]")!.getBBox();
+    const width = parseFloat(getComputedStyle(document.querySelector("[data-workflow-candidate]")!).strokeWidth);
+    return { photoWidth, width, expectedWidth: 0.5 * photoWidth / 650,
+      sizeLimit: 0.06 * Math.min(boundary.width, boundary.height) };
+  });
+  const expectPhotoPaint = async () => {
+    // This full-face fixture is above the small-lesion cap. Derive the paint
+    // from the displayed photo, not the production helper or a fixed pixel value.
+    await expect.poll(async () => {
+      const paint = await readPhotoPaint();
+      return Math.abs(paint.width - paint.expectedWidth);
+    }).toBeLessThan(0.0001);
+    const paint = await readPhotoPaint();
+    expect(paint.width).toBeGreaterThan(0);
+    expect(paint.sizeLimit).toBeGreaterThan(paint.expectedWidth);
+    return paint;
+  };
+  const initialPaint = await expectPhotoPaint();
   const boundaryBeforeReview = await boundary.getAttribute("d");
   const candidateBeforeReview = await candidate.getAttribute("d");
 
@@ -407,6 +429,19 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   await page.locator("#reviewerName").fill("E2E clinician");
   await page.locator("#saveReviewBtn").click();
   await expect(page.locator("#workflowStageStatus")).toContainText("候选已确认并显示在当前画布上", { timeout: 45_000 });
+  await expect.poll(() => boundary.getAttribute("d")).toBe(boundaryBeforeReview);
+  await expect.poll(() => candidate.getAttribute("d")).toBe(candidateBeforeReview);
+  expect((await expectPhotoPaint()).width).toBeCloseTo(initialPaint.width, 4);
+
+  const canvas = page.locator("#canvas");
+  await canvas.hover();
+  await page.mouse.wheel(0, -120);
+  await expect.poll(async () => (await readPhotoPaint()).photoWidth).toBeGreaterThan(initialPaint.photoWidth);
+  const zoomedPaint = await expectPhotoPaint();
+  expect(zoomedPaint.width / initialPaint.width).toBeCloseTo(zoomedPaint.photoWidth / initialPaint.photoWidth, 4);
+  await page.mouse.wheel(0, 120);
+  await expect.poll(async () => (await readPhotoPaint()).photoWidth).toBeCloseTo(initialPaint.photoWidth, 4);
+  expect((await expectPhotoPaint()).width).toBeCloseTo(initialPaint.width, 4);
   await expect.poll(() => boundary.getAttribute("d")).toBe(boundaryBeforeReview);
   await expect.poll(() => candidate.getAttribute("d")).toBe(candidateBeforeReview);
 
@@ -426,6 +461,7 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   await page.getByRole("button", { name: "返回全脸视图" }).click();
   await expect.poll(() => boundary.getAttribute("d")).toBe(boundaryBeforeReview);
   await expect.poll(() => candidate.getAttribute("d")).toBe(candidateBeforeReview);
+  expect((await expectPhotoPaint()).width).toBeCloseTo(initialPaint.width, 4);
 });
 
 test("disabled workflow hints use a two-second mouse, touch, and keyboard release window", async ({ page }) => {
