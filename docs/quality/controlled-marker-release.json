@@ -417,80 +417,93 @@
     "manifestSha256": "e49daa7b9e6dc910e50b7c3f449a3580b7015bc01e3b7e02340f520b0801d1df"
   },
   "operatorEvaluation": {
-    "status": "pending",
+    "status": "accepted",
     "sourceDigest": "86d7f95b83981230f004093fa261b366399a07f9211ccb504f5e4b1b9a090622",
-    "scope": "既有实际反馈部分通过且仍有下巴失败；新注释候选没有新增人工签认。历史评价不代签当前候选。",
+    "scope": "操作者接受当前带已知细节缺陷的有限工程候选先进入PR流程；不代表低色差下巴目标、整组真人、真机或医学验收通过。",
+    "evidence": "当前操作者直接说明：当前操作者评价是允许推送 PR，还有细节需要修补，但是为了赶项目进度先提交一个可用版本。",
+    "confirmedAt": "2026-10-28T11:10:40.657Z",
     "previous": {
       "status": "pending",
-      "sourceDigest": "ba40b6a7adc963c75baad96701bad5449cf763aa9c7339e853cc6b541f2262f9",
-      "scope": "本批修改尚无操作者对新源码的实际评价；004/006自动回归与边界显示回归已完成，人工/真机/医学验收仍待定。",
+      "sourceDigest": "86d7f95b83981230f004093fa261b366399a07f9211ccb504f5e4b1b9a090622",
+      "scope": "既有实际反馈部分通过且仍有下巴失败；新注释候选没有新增人工签认。历史评价不代签当前候选。",
       "previous": {
         "status": "pending",
-        "sourceDigest": "3aca3f137b3f0be5a7ffeaa13adb7d47b7968f39ac96765f44c514969758f3c9",
-        "scope": "本批尚无操作者对新源码的实际评价；原反馈与已知失败保留。",
+        "sourceDigest": "ba40b6a7adc963c75baad96701bad5449cf763aa9c7339e853cc6b541f2262f9",
+        "scope": "本批修改尚无操作者对新源码的实际评价；004/006自动回归与边界显示回归已完成，人工/真机/医学验收仍待定。",
         "previous": {
-          "status": "accepted",
-          "sourceDigest": "6a80603dbb980edb6861674f5ff58d5251ebc7b8608a3ad24a2124b27f0cb786",
-          "scope": "Operator reported the current photo-marker experience has no apparent issue. Export has scoped automated evidence; no separate manual export, phone, camera, clinical or full algorithm acceptance is asserted.",
+          "status": "pending",
+          "sourceDigest": "3aca3f137b3f0be5a7ffeaa13adb7d47b7968f39ac96765f44c514969758f3c9",
+          "scope": "本批尚无操作者对新源码的实际评价；原反馈与已知失败保留。",
           "previous": {
-            "status": "pending",
-            "sourceDigest": "b383afd1a577b2eddbb698e2dbbdd6947614a7877218bb2a5f46e9267695dddd",
-            "scope": "等待操作者试用本次导出修复；本地提交授权不等于效果验收",
+            "status": "accepted",
+            "sourceDigest": "6a80603dbb980edb6861674f5ff58d5251ebc7b8608a3ad24a2124b27f0cb786",
+            "scope": "Operator reported the current photo-marker experience has no apparent issue. Export has scoped automated evidence; no separate manual export, phone, camera, clinical or full algorithm acceptance is asserted.",
             "previous": {
-              "status": "accepted",
-              "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
-              "scope": "操作者接受本次CI修订及已展示的自动验证结果，并明确要求上传PR240；此前UI线宽实际评价保留，不代表新增真机操作或整算法/临床效果验收",
-              "evidence": "当前操作者在CI修订预览后直接确认：既然完成了修复，就一定要上传，不要再等待我去给你下达指令，这个是默认的规则，现在上传吧。评价仅绑定本轮已展示修订与自动回归，不声称操作者已亲自复测新增竞态修复。",
+              "status": "pending",
+              "sourceDigest": "b383afd1a577b2eddbb698e2dbbdd6947614a7877218bb2a5f46e9267695dddd",
+              "scope": "等待操作者试用本次导出修复；本地提交授权不等于效果验收",
               "previous": {
                 "status": "accepted",
-                "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
-                "scope": "UI 0.1.16-candidate.1 手机线宽加倍后的实际观感；仅此范围，不代表肿物算法整组或临床效果通过",
-                "evidence": "当前操作者直接反馈：线宽加倍，我觉得效果可以。已知浅色瘢痕、鼻梁完整性及专业判据问题保留；授权以未完成研究候选提交PR。",
-                "confirmedAt": "2026-10-24T13:29:25.719Z"
-              },
-              "confirmedAt": "2026-10-24T14:53:51.0396942Z"
-            }
-          },
-          "evidence": "Current operator direct feedback: 我人工核验感觉没什么问题。 Limited to the tested photo-marker experience, with protected-function audit requested separately.",
-          "recordedAt": "2026-10-25T08:36:59.421Z"
+                "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
+                "scope": "操作者接受本次CI修订及已展示的自动验证结果，并明确要求上传PR240；此前UI线宽实际评价保留，不代表新增真机操作或整算法/临床效果验收",
+                "evidence": "当前操作者在CI修订预览后直接确认：既然完成了修复，就一定要上传，不要再等待我去给你下达指令，这个是默认的规则，现在上传吧。评价仅绑定本轮已展示修订与自动回归，不声称操作者已亲自复测新增竞态修复。",
+                "previous": {
+                  "status": "accepted",
+                  "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
+                  "scope": "UI 0.1.16-candidate.1 手机线宽加倍后的实际观感；仅此范围，不代表肿物算法整组或临床效果通过",
+                  "evidence": "当前操作者直接反馈：线宽加倍，我觉得效果可以。已知浅色瘢痕、鼻梁完整性及专业判据问题保留；授权以未完成研究候选提交PR。",
+                  "confirmedAt": "2026-10-24T13:29:25.719Z"
+                },
+                "confirmedAt": "2026-10-24T14:53:51.0396942Z"
+              }
+            },
+            "evidence": "Current operator direct feedback: 我人工核验感觉没什么问题。 Limited to the tested photo-marker experience, with protected-function audit requested separately.",
+            "recordedAt": "2026-10-25T08:36:59.421Z"
+          }
         }
       }
     }
   },
   "editorSaveConfirmation": {
-    "status": "pending",
+    "status": "confirmed",
     "sourceDigest": "86d7f95b83981230f004093fa261b366399a07f9211ccb504f5e4b1b9a090622",
-    "scope": "AI已回读磁盘，无法核编辑器未保存缓冲；等待当前操作者明确确认。",
+    "evidence": "当前操作者直接确认：编辑器文件全部保存了。AI核对磁盘，不冒称访问编辑器缓冲。",
+    "confirmedAt": "2026-10-28T11:10:40.657Z",
     "previous": {
       "status": "pending",
-      "sourceDigest": "ba40b6a7adc963c75baad96701bad5449cf763aa9c7339e853cc6b541f2262f9",
-      "scope": "等待本轮源码、登记和恢复包完成后回读。",
+      "sourceDigest": "86d7f95b83981230f004093fa261b366399a07f9211ccb504f5e4b1b9a090622",
+      "scope": "AI已回读磁盘，无法核编辑器未保存缓冲；等待当前操作者明确确认。",
       "previous": {
-        "status": "unknown",
-        "sourceDigest": "3aca3f137b3f0be5a7ffeaa13adb7d47b7968f39ac96765f44c514969758f3c9",
-        "evidence": "AI只核硬盘落盘；不继承旧源码的编辑器保存签认。",
+        "status": "pending",
+        "sourceDigest": "ba40b6a7adc963c75baad96701bad5449cf763aa9c7339e853cc6b541f2262f9",
+        "scope": "等待本轮源码、登记和恢复包完成后回读。",
         "previous": {
-          "status": "confirmed",
-          "sourceDigest": "6a80603dbb980edb6861674f5ff58d5251ebc7b8608a3ad24a2124b27f0cb786",
-          "evidence": "Current operator explicitly confirms all project files have been saved and no manual code edits were made. This records that statement; it does not claim AI access to editor buffers.",
+          "status": "unknown",
+          "sourceDigest": "3aca3f137b3f0be5a7ffeaa13adb7d47b7968f39ac96765f44c514969758f3c9",
+          "evidence": "AI只核硬盘落盘；不继承旧源码的编辑器保存签认。",
           "previous": {
-            "status": "unknown",
-            "sourceDigest": "b383afd1a577b2eddbb698e2dbbdd6947614a7877218bb2a5f46e9267695dddd",
-            "evidence": "本次修复由AI落盘并定点提交；未读取编辑器缓冲，不继承历史保存签认",
+            "status": "confirmed",
+            "sourceDigest": "6a80603dbb980edb6861674f5ff58d5251ebc7b8608a3ad24a2124b27f0cb786",
+            "evidence": "Current operator explicitly confirms all project files have been saved and no manual code edits were made. This records that statement; it does not claim AI access to editor buffers.",
             "previous": {
-              "status": "confirmed",
-              "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
-              "confirmedAt": "2026-10-24T13:29:25.719Z",
-              "evidence": "当前操作者直接确认：我没有自己打开编辑器改代码。AI已回读硬盘成果及本地Commit；不声称读取了编辑器缓冲区；随后本轮仅AI以文件工具落盘CI修订，当前磁盘与待提交Diff已回读。",
+              "status": "unknown",
+              "sourceDigest": "b383afd1a577b2eddbb698e2dbbdd6947614a7877218bb2a5f46e9267695dddd",
+              "evidence": "本次修复由AI落盘并定点提交；未读取编辑器缓冲，不继承历史保存签认",
               "previous": {
                 "status": "confirmed",
-                "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
+                "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
                 "confirmedAt": "2026-10-24T13:29:25.719Z",
-                "evidence": "当前操作者直接确认：我没有自己打开编辑器改代码。AI已回读硬盘成果及本地Commit；不声称读取了编辑器缓冲区。"
+                "evidence": "当前操作者直接确认：我没有自己打开编辑器改代码。AI已回读硬盘成果及本地Commit；不声称读取了编辑器缓冲区；随后本轮仅AI以文件工具落盘CI修订，当前磁盘与待提交Diff已回读。",
+                "previous": {
+                  "status": "confirmed",
+                  "sourceDigest": "247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0",
+                  "confirmedAt": "2026-10-24T13:29:25.719Z",
+                  "evidence": "当前操作者直接确认：我没有自己打开编辑器改代码。AI已回读硬盘成果及本地Commit；不声称读取了编辑器缓冲区。"
+                }
               }
-            }
-          },
-          "confirmedAt": "2026-10-25T08:50:38.428Z"
+            },
+            "confirmedAt": "2026-10-25T08:50:38.428Z"
+          }
         }
       }
     }
