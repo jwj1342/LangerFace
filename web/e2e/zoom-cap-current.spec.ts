@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import { uploadGeneratedPhoto } from "./support/incisionPhoto";
 
+const assetReadyTimeout = process.env.CI ? 60_000 : 30_000;
+
 async function wheelToCap(page: import("@playwright/test").Page, selector: string, count = 80) {
   const surface = page.locator(selector);
   await expect(surface).toBeVisible();
@@ -27,7 +29,9 @@ test("incision photo zoom reaches the desktop and touch-mobile caps", async ({ b
     });
     const page = await context.newPage();
     await page.goto("/app/incision");
-    await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
+    await expect(page.locator("#assetLoading")).toHaveClass(/hidden/, {
+      timeout: assetReadyTimeout,
+    });
     await uploadGeneratedPhoto(page, "single");
     const photoCanvas = page.locator("#incisionPhotoCanvas");
     await expect(photoCanvas).toHaveAttribute("data-active", "true", { timeout: 45_000 });
