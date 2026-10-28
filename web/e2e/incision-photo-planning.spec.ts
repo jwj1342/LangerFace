@@ -91,11 +91,20 @@ test("patient photo is the mobile incision canvas and reuploads fail safely", as
   const lengthScale = page.locator("#lengthScale");
   const lengthBefore = Number(await lengthScale.inputValue());
   await page.locator("#reviewDecision").selectOption("approved_for_discussion");
+  await expect(page.locator("#reviewState")).toHaveText("已确认研究候选");
   await lengthScale.focus();
   await lengthScale.press("ArrowRight");
   await expect.poll(async () => Number(await lengthScale.inputValue())).not.toBe(lengthBefore);
   await expect(page.locator("#editHistoryState")).toContainText("已提交");
-  await expect(page.locator("#reviewDecision")).toHaveValue("approved_for_discussion");
+  // 候选几何变更必须撤销旧确认；同时核对控件与控制器，防止提交时回写旧值。
+  await expect(page.locator("#reviewDecision")).toHaveValue("pending_clinician_confirmation");
+  await expect.poll(() => page.evaluate(() => {
+    const snapshots = (window as Window & {
+      __photoSnapshots?: Array<{ review?: { status?: string }; edit?: { lengthScalePct?: number } }>;
+    }).__photoSnapshots || [];
+    const latest = snapshots.at(-1);
+    return { status: latest?.review?.status, lengthScalePct: latest?.edit?.lengthScalePct };
+  })).toEqual({ status: "pending_clinician_confirmation", lengthScalePct: lengthBefore + 1 });
 
   const box = await photoCanvas.boundingBox();
   expect(box).not.toBeNull();
