@@ -31,7 +31,13 @@ import {
 import { incisionCandidateScreenStyle } from "./incisionOverlayStyle";
 import { buildCandidateMetricPresentation } from "./incisionPresenter";
 import { prepareImageSource } from "./imageSource";
-import { modelState } from "./liveState";
+import {
+  DESKTOP_IMAGE_MAX_ZOOM,
+  MOBILE_IMAGE_MAX_ZOOM,
+  imageMaxZoomForViewport,
+  imageViewportIsMobile,
+  modelState,
+} from "./liveState";
 import { sourcePointToSurfaceRef } from "./photoPlanningController";
 import { ensureImageReady } from "./pipelineModels";
 import { detectStaticImageWithRetries } from "./staticImageDetection";
@@ -42,6 +48,10 @@ import {
   tumorPointEngineeringExclusionMessage,
 } from "./incisionToolCore";
 import { workflowPhotoSurfaceReferenceRecoveryEligible } from "./workflowControllerUtils";
+import {
+  CONTROLLED_MARKER_MAX_SCAN_DIAMETER_MM,
+  CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM,
+} from "./controlledMarkerUiConfig";
 import type { Triangle, Vec3 } from "./softBody";
 
 interface IncisionPhotoRuntimeOptions {
@@ -87,6 +97,10 @@ export interface IncisionPhotoRuntime {
 
 const errorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error);
 const clamp = (value: number, low: number, high: number): number => Math.max(low, Math.min(high, value));
+export const DESKTOP_PHOTO_MAX_ZOOM = DESKTOP_IMAGE_MAX_ZOOM;
+export const MOBILE_PHOTO_MAX_ZOOM = MOBILE_IMAGE_MAX_ZOOM;
+export const photoMaxZoomForViewport = imageMaxZoomForViewport;
+const photoMaxZoom = (): number => photoMaxZoomForViewport(imageViewportIsMobile());
 
 function localPhotoPixelsPerMm(
   point: { x: number; y: number },
@@ -425,12 +439,20 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
 
   const recommendedScanDiameterMm = () => {
     const lesionDiameterMm = Math.max(0, Number(elements.diameter.value) || 0);
-    return clamp(Math.ceil(Math.max(10, lesionDiameterMm * 1.5) / 5) * 5, 10, 60);
+    return clamp(
+      Math.ceil(Math.max(CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM, lesionDiameterMm * 1.5) / 5) * 5,
+      CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM,
+      CONTROLLED_MARKER_MAX_SCAN_DIAMETER_MM,
+    );
   };
 
   const controlledMarkerScanDiameterMm = () => {
     const rawDiameterMm = Number(elements.controlledMarkerScanDiameter.value);
-    return clamp(Number.isFinite(rawDiameterMm) ? rawDiameterMm : recommendedScanDiameterMm(), 10, 60);
+    return clamp(
+      Number.isFinite(rawDiameterMm) ? rawDiameterMm : recommendedScanDiameterMm(),
+      CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM,
+      CONTROLLED_MARKER_MAX_SCAN_DIAMETER_MM,
+    );
   };
 
   const syncControlledMarkerScanControl = (useRecommendation: boolean) => {
@@ -441,11 +463,15 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     elements.controlledMarkerScanDiameter.value = String(diameterMm);
     elements.controlledMarkerScanValue.textContent = `${diameterMm} mm`;
     elements.controlledMarkerScanOverlayLabel.textContent = `扫描 ${diameterMm} mm`;
-    const presentationProgress = diameterMm / 60;
+    const presentationProgress = (
+      diameterMm - CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM
+    ) / (
+      CONTROLLED_MARKER_MAX_SCAN_DIAMETER_MM - CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM
+    );
     elements.controlledMarkerScanDiameter.style.setProperty("--scan-progress", `${presentationProgress * 100}%`);
     // A native range keeps the thumb centre inset by half its diameter. Offset
-    // the 14 px thumb so the visual centre follows the full 0-60 presentation
-    // track: 10 mm is 1/6 and 60 mm is exactly the right-hand endpoint.
+    // the 14 px thumb so the visual centre follows the full 5-60 presentation
+    // track: 5 mm is the left endpoint and 60 mm is the right-hand endpoint.
     elements.controlledMarkerScanDiameter.style.setProperty(
       "--scan-thumb-offset",
       `${7 * (2 * presentationProgress - 1)}px`,
@@ -736,6 +762,8 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     if (!frame.source || !frame.landmarks?.length) return;
     const context = elements.photoCanvas.getContext("2d");
     if (!context) return;
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
     const dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
     elements.photoCanvas.width = Math.max(1, Math.round(frame.width * dpr));
     elements.photoCanvas.height = Math.max(1, Math.round(frame.height * dpr));
@@ -964,6 +992,8 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
       if (!state.planning2d || revision == null) return;
       const context = elements.photoCanvas.getContext("2d");
       if (context) {
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
         const dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
         elements.photoCanvas.width = Math.max(1, Math.round(prepared.width * dpr));
         elements.photoCanvas.height = Math.max(1, Math.round(prepared.height * dpr));
@@ -1073,7 +1103,11 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
       setStatus("当前点击位置无法建立毫米扫描尺度，请在面部肿物边界内部重新点击。", "warning");
       return;
     }
-    const minimumScanDiameterMm = clamp(Math.ceil(Math.max(10, diameterMm * 1.2) / 5) * 5, 10, 60);
+    const minimumScanDiameterMm = clamp(
+      Math.ceil(Math.max(CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM, diameterMm * 1.2) / 5) * 5,
+      CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM,
+      CONTROLLED_MARKER_MAX_SCAN_DIAMETER_MM,
+    );
     if (scanDiameterMm < minimumScanDiameterMm) {
       keepControlledMarkerRetry("");
       setStatus(
@@ -1602,7 +1636,11 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     zoom(event) {
       if (!state.photoView.active || !state.planning2d) return;
       const sourcePoint = state.planning2d.clientToSource({ x: event.clientX, y: event.clientY });
-      const nextZoom = clamp(state.photoView.zoom * Math.exp(-clamp(event.deltaY, -160, 160) * 0.0018), 1, 5);
+      const nextZoom = clamp(
+        state.photoView.zoom * Math.exp(-clamp(event.deltaY, -160, 160) * 0.0018),
+        1,
+        photoMaxZoom(),
+      );
       if (Math.abs(nextZoom - state.photoView.zoom) < 0.001) return;
       state.photoView.zoom = nextZoom;
       fit();

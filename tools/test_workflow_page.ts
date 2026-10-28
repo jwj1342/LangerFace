@@ -1644,8 +1644,8 @@ assert.deepEqual(workflowControlledMarkerCrop({
   roiRadius: 30,
 }), { x: 0, y: 0, width: 38, height: 37, seed: { x: 3, y: 2 } },
 "controlled-marker crops clamp safely at phone-photo edges without moving the seed");
-assert.match(canvasTools, /<RangeInput\s+min="10"\s+max="60"\s+step="5"/,
-  "scan control uses the native range component with fixed 10–60 mm endpoints");
+assert.match(canvasTools, /<RangeInput\s+min="5"\s+max="60"\s+step="5"/,
+  "scan control uses the native range component with fixed 5–60 mm endpoints");
 assert.doesNotMatch(canvasTools, /minimumScanDiameterMm/,
   "tumor-dependent detection coverage must not move the slider's minimum");
 const manualScanStart = controller.indexOf('case "scan_diameter_changed":');
@@ -1653,10 +1653,14 @@ const manualScanEnd = controller.indexOf('case "reset_view":', manualScanStart);
 assert.ok(manualScanStart >= 0 && manualScanEnd > manualScanStart);
 const changeManualScan = runInNewContext(
   `(function(state, detail) { switch(detail.command) { ${controller.slice(manualScanStart, manualScanEnd)} } return state; })`,
-  { scheduleOverlayDraw() {} },
+  {
+    scheduleOverlayDraw() {},
+    CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM: 5,
+    CONTROLLED_MARKER_MAX_SCAN_DIAMETER_MM: 60,
+  },
 );
 for (const diameterMm of [8, 28, 50]) {
-  for (const [requested, expected] of [[-5, 10], [10, 10], [35, 35], [60, 60], [100, 60], [NaN, 10], [Infinity, 10]]) {
+  for (const [requested, expected] of [[-5, 5], [5, 5], [35, 35], [60, 60], [100, 60], [NaN, 5], [Infinity, 5]]) {
     const state = { diameterMm, scanDiameterMm: 35, markerRequestId: 4, markerBusy: false, markerMode: false };
     changeManualScan(state, { command: "scan_diameter_changed", value: requested });
     assert.equal(state.scanDiameterMm, expected, "manual slider endpoint must not depend on tumor diameter");

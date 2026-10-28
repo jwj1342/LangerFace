@@ -495,9 +495,44 @@ function resampleClosedBoundary(points: MarkerPoint[], count = 48): MarkerPoint[
   return output;
 }
 
-/** 对实心组件的锯齿边缘做受限平滑。作用是减少像素台阶，不负责发现遗漏区域；面积和位移的约束用于防止平滑改坏形状。 */
+/** 小面积强暗核恢复时保留原像素轮廓，避免弱边缘支撑下的平滑扩边；不另画圆。 */
+function shouldPreserveSmallRecoveredPixelBoundary(result: ControlledMarkerDetection): boolean {
+  const diagnostics = result.diagnostics || {};
+  const route = String(diagnostics.filled_candidate_route || "");
+  const recoveryRoute = new Set([
+    "validated_legacy_filled_candidate",
+    "preserved_supported_legacy_core",
+    "preserved_direct_scan_solid_boundary",
+  ]).has(route);
+  const boundarySupport = Number(diagnostics.boundary_support_ratio);
+  const lowBoundarySupport = !Number.isFinite(boundarySupport) || boundarySupport < 0.65;
+  return result.ok
+    && result.geometry_mode === "dark_component"
+    && result.area_px <= 400
+    && Number(diagnostics.solid_component_core_dark_ratio || 0) >= 0.95
+    && Number(diagnostics.scan_solid_proposal_consensus_count || 0) >= 2
+    && lowBoundarySupport
+    && (recoveryRoute || result.warnings.includes("scan_solid_core_anchor_recovered"));
+}
+
+function preserveSmallRecoveredPixelBoundary(result: ControlledMarkerDetection): ControlledMarkerDetection {
+  if (!shouldPreserveSmallRecoveredPixelBoundary(result)) return result;
+  return {
+    ...result,
+    warnings: [...new Set([...result.warnings, "small_recovered_pixel_boundary_preserved"])],
+    diagnostics: {
+      ...(result.diagnostics || {}),
+      solid_boundary_regularization: "skipped_small_recovered_pixel_boundary",
+      accepted_boundary_regularization: "skipped_small_recovered_pixel_boundary",
+    },
+  };
+}
+
+/** 对其余实心组件做受面积和位移约束的平滑，只减像素台阶，不负责补出遗漏区域。 */
 export function regularizeSolidBoundary(result: ControlledMarkerDetection): ControlledMarkerDetection {
   if (!result.ok || result.geometry_mode !== "dark_component" || result.boundary.length < 8) return result;
+  const preserved = preserveSmallRecoveredPixelBoundary(result);
+  if (preserved !== result) return preserved;
   const sourceGeometry = boundaryGeometry(result.boundary);
   const resampled = resampleClosedBoundary(result.boundary);
   if (!sourceGeometry || resampled.length < 8) return result;
@@ -552,6 +587,8 @@ export function regularizeAcceptedBoundary(result: ControlledMarkerDetection): C
   if (!result.ok || !["dark_component", "enclosed_region"].includes(result.geometry_mode || "")
     || result.boundary.length < 24
     || result.boundary.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) return result;
+  const preserved = preserveSmallRecoveredPixelBoundary(result);
+  if (preserved !== result) return preserved;
   const original = boundaryGeometry(result.boundary);
   if (!original || original.area < 30
     || Math.min(original.bbox.width, original.bbox.height) / Math.max(original.bbox.width, original.bbox.height) < 0.62
@@ -3040,6 +3077,7 @@ export function detectControlledMarker(
 }
 
 export const __controlledMarkerColorForTests = {
+  regularizeSolidBoundary,
   regularizeAcceptedBoundary,
   scanEnclosedAnchors,
   canonicalizeSolidCycle,

@@ -1,3 +1,4 @@
+import { refineAppearanceCandidate } from './controlledMarkerAppearanceCandidate.ts';
 /**
  * 新手阅读入口：这是交互式图像分割，不是训练好的病理诊断模型。
  * 输入：原图RGBA像素、原图上的点击点、扫描/分析参数。输出：候选闭合边界或明确失败。
@@ -181,7 +182,7 @@ function evaluateOne(image: MarkerImageData, seed: MarkerPoint, scanRadius: numb
     const features = { ...g, foreground, bg, difference, noiseEstimate, snr, stepMedian, stepSupport, narrowWideEdgeRatio, corePixels: core.length, backgroundPixels: background.length };
     if (reasons.length)
         return { result: baseline, route: 'retain_baseline', reasons, features };
-    const source: ControlledMarkerDetection = { ...baseline, ok: true, failure_code: null, geometry_mode: 'dark_component', warnings: [], diagnostics: {}, boundary: b, center: g.center, area_px: g.area, bbox: g.bbox }, regularized = regularizeAcceptedBoundary(source), boundary = regularized === source ? regularizeSolidBoundary(source).boundary : regularized.boundary;
+    const source: ControlledMarkerDetection = { ...baseline, ok: true, failure_code: null, geometry_mode: 'dark_component', warnings: [], diagnostics: { ...(baseline.diagnostics || {}) }, boundary: b, center: g.center, area_px: g.area, bbox: g.bbox }, regularized = regularizeAcceptedBoundary(source), boundary = regularized === source ? regularizeSolidBoundary(source).boundary : regularized.boundary;
     const finalGeometry = geometry(boundary), result: ControlledMarkerDetection = { ...baseline, ok: true, failure_code: null, geometry_mode: 'dark_component', boundary, center: finalGeometry.center, bbox: finalGeometry.bbox, area_px: finalGeometry.area, warnings: [...(baseline.warnings || []), 'relative_color_filled_candidate'], diagnostics: { ...(baseline.diagnostics || {}), relative_color_candidate: true, ...regularized.diagnostics } };
     return { result, route: 'relative_color_filled_candidate', reasons: [], features, regularization: { method: regularized === source ? 'local_corner_only' : 'existing_bounded_periodic_low_frequency', ...regularized.diagnostics } };
 }
@@ -525,11 +526,53 @@ function refineRecoveredPixelBoundary(
             filled_candidate_narrow_wide_ratio: evaluated.features?.narrowWideEdgeRatio } };
 }
 
+function shouldPreserveOriginalBaselineAgainstBroadCandidate(
+    original: ControlledMarkerDetection,
+    candidate: ControlledMarkerDetection,
+    options: ControlledMarkerOptions,
+): boolean {
+    if (!original.ok || original.geometry_mode !== 'dark_component'
+        || !candidate.ok || candidate.geometry_mode !== 'dark_component')
+        return false;
+    const originalDiagnostics = original.diagnostics as Record<string, unknown> | undefined;
+    const candidateRoute = String(candidate.diagnostics?.filled_candidate_route || '');
+    const originalWarnings = new Set(original.warnings || []);
+    const originalArea = Number(original.area_px);
+    const candidateArea = Number(candidate.area_px);
+    const analysisRadius = Number(options.analysisRoiRadius || options.roiRadius || 36);
+    // 大候选通过通用颜色门禁，不足以覆盖已有强证据的紧凑小组件。
+    return candidateRoute !== 'preserved_supported_baseline_boundary'
+        && candidateRoute !== 'preserved_direct_scan_solid_boundary'
+        && originalWarnings.has('solid_component_outer_boundary_recovered')
+        && originalWarnings.has('scan_solid_core_anchor_recovered')
+        && originalWarnings.has('fixed_scale_unclipped_solid_anchor_recovered')
+        && (originalWarnings.has('component_too_large:radial_boundary_incomplete')
+            || originalWarnings.has('small_recovered_pixel_boundary_preserved'))
+        && Number(originalDiagnostics?.solid_component_core_dark_ratio || 0) >= .95
+        && Number(originalDiagnostics?.scan_solid_proposal_consensus_count || 0) >= 2
+        && originalArea <= Math.PI * Math.max(12, analysisRadius) ** 2 * .35
+        && candidateArea > originalArea * 1.8;
+}
+
 /** 正式入口：先执行既有分割与门禁，再对少数强核心恢复分支补原像素复核。 */
 export async function refineFilledCandidate(
     image: MarkerImageData, seed: MarkerPoint, options: ControlledMarkerOptions,
     baseline: ControlledMarkerDetection,
 ): Promise<ControlledMarkerDetection> {
     const result = await refineFilledCandidateBaseline(image, seed, options, baseline);
-    return refineRecoveredPixelBoundary(image, seed, options, result);
+    if (shouldPreserveOriginalBaselineAgainstBroadCandidate(baseline, result, options)) {
+        return {
+            ...baseline,
+            warnings: [...new Set([
+                ...baseline.warnings,
+                'broad_filled_candidate_preserved_original_baseline',
+            ])],
+            diagnostics: {
+                ...baseline.diagnostics,
+                filled_candidate_route: 'preserved_original_baseline_against_broad_candidate',
+            },
+        };
+    }
+    const recovered = refineRecoveredPixelBoundary(image, seed, options, result);
+    return refineAppearanceCandidate(image, seed, options, recovered);
 }

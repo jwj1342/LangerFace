@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { incisionOverlayScreenStyle } from "../web/src/services/incisionOverlayStyle.ts";
 
-// The workflow SVG uses screen coordinates: style sizes must track the same
-// photo scale as its paths, without a screen-pixel floor or zoom ceiling.
+// The workflow SVG uses screen coordinates: the yellow boundary stays fixed
+// in screen pixels while centers and the cyan incision follow photo scaling.
 for (const compact of [false, true]) {
   for (const diameter of [1, 8, 40]) {
     const base = incisionOverlayScreenStyle("fusiform", {
@@ -12,27 +12,30 @@ for (const compact of [false, true]) {
       const style = incisionOverlayScreenStyle("fusiform", {
         compact, viewScale: zoom, photoWidthCss: 650 * zoom, lesionExtentCss: diameter * zoom,
       });
-      for (const key of ["candidate", "boundary"] as const) {
-        assert.ok(Math.abs(style[key].lineWidth - base[key].lineWidth * zoom) < 1e-9,
-          `${key} width must follow the photograph at zoom ${zoom}, compact=${compact}`);
-        assert.ok(Math.abs(style[key].haloWidth - base[key].haloWidth * zoom) < 1e-9);
-      }
+      assert.ok(Math.abs(style.candidate.lineWidth - base.candidate.lineWidth * zoom) < 1e-9,
+        `candidate width must follow the photograph at zoom ${zoom}, compact=${compact}`);
+      assert.ok(Math.abs(style.candidate.haloWidth - base.candidate.haloWidth * zoom) < 1e-9);
+      assert.equal(style.boundary.lineWidth, base.boundary.lineWidth,
+        `boundary width stays fixed at zoom ${zoom}, compact=${compact}`);
+      assert.equal(style.boundary.haloWidth, base.boundary.haloWidth);
       for (const key of ["center", "incisionCenter"] as const) {
         assert.ok(Math.abs(style[key].radiusCss - base[key].radiusCss * zoom) < 1e-9);
         assert.ok(style[key].radiusCss + style[key].strokeWidthCss / 2 < diameter * zoom / 4,
           "the center marker must leave most of a small lesion visible");
       }
-      assert.ok(style.boundary.haloWidth <= diameter * zoom * 0.12 + 1e-9,
-        "the boundary and its halo must not swallow a small lesion");
+      assert.ok(style.boundary.haloWidth <= 2,
+        "the boundary and its halo stay thin in screen space");
     }
   }
 }
 const phone = incisionOverlayScreenStyle("fusiform", { compact: true, photoWidthCss: 390, lesionExtentCss: 12 });
 const desktop = incisionOverlayScreenStyle("fusiform", { photoWidthCss: 390, lesionExtentCss: 12 });
-for (const key of ["candidate", "boundary"] as const) {
-  assert.equal(phone[key].lineWidth, desktop[key].lineWidth);
-  assert.equal(phone[key].haloWidth, desktop[key].haloWidth);
-}
+assert.equal(phone.boundary.lineWidth, 0.95);
+assert.equal(desktop.boundary.lineWidth, 1.33);
+assert.equal(phone.boundary.haloWidth, 1.45);
+assert.equal(desktop.boundary.haloWidth, 1.83);
+assert.equal(phone.candidate.lineWidth, desktop.candidate.lineWidth);
+assert.equal(phone.candidate.haloWidth, desktop.candidate.haloWidth);
 assert.equal(phone.incisionCenter.radiusCss, desktop.incisionCenter.radiusCss,
   "the same displayed photo must not change marker size with the pointer media query");
 assert.equal(phone.candidate.haloColor, incisionOverlayScreenStyle("fusiform", { compact: true }).candidate.haloColor,

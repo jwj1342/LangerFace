@@ -108,7 +108,7 @@ export interface ControlledMarkerDetection {
     solid_component_contrast?: number;
     solid_component_core_dark_ratio?: number;
     solid_component_core_mean_luma?: number;
-    solid_boundary_regularization?: "periodic_constrained";
+    solid_boundary_regularization?: "periodic_constrained" | "skipped_small_recovered_pixel_boundary";
     solid_boundary_area_ratio?: number;
     solid_boundary_max_displacement_ratio?: number;
     solid_boundary_envelope?: "bounded_raw_luma_support";
@@ -128,6 +128,10 @@ export interface ControlledMarkerDetection {
     filled_candidate_color_difference?: number;
     filled_candidate_snr?: number;
     filled_candidate_narrow_wide_ratio?: number;
+    scan_solid_proposal_core_dark_ratio?: number;
+    scan_solid_proposal_area_px?: number;
+    scan_solid_proposal_consensus_count?: number;
+    accepted_boundary_regularization?: "bounded_periodic_low_frequency" | "skipped_small_recovered_pixel_boundary";
     scan_local_anchor_count?: number;
   };
   audit: {

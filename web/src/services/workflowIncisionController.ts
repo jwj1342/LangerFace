@@ -164,6 +164,10 @@ import {
 } from "./workflowControllerUtils";
 import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
 import { createWorkflowWorkerClient, type WorkflowWorkerClient } from "./workflowWorkerClient";
+import {
+  CONTROLLED_MARKER_MAX_SCAN_DIAMETER_MM,
+  CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM,
+} from "./controlledMarkerUiConfig";
 
 type DynamicRecord = Record<string, any>;
 const MOBILE_WORKFLOW_MEDIA_QUERY = "(max-width: 560px) and (pointer: coarse) and (hover: none)";
@@ -3259,7 +3263,7 @@ function applyTumorCommand(state: WorkflowIncisionState, event: Event) {
       state.controlledBoundaryPhotoDiameterMm = null;
       resetFreehandPhotoBoundary(state, true);
       resetMarkerRepair(state);
-      state.scanDiameterMm = Math.max(10, state.scanDiameterMm);
+      state.scanDiameterMm = Math.max(CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM, state.scanDiameterMm);
       break;
     case "depth_input":
     case "depth_changed": state.depthMm = Number(value); break;
@@ -3756,7 +3760,7 @@ function handleToolCommand(state: WorkflowIncisionState, event: Event) {
       state.pendingClick = null;
       state.markerMode = !state.markerMode;
       if (state.markerMode) {
-        state.scanDiameterMm = Math.max(10, state.scanDiameterMm);
+        state.scanDiameterMm = Math.max(CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM, state.scanDiameterMm);
       }
       state.selectionMode = false;
       state.repairMode = false;
@@ -3829,12 +3833,11 @@ function handleToolCommand(state: WorkflowIncisionState, event: Event) {
       state.markerRequestId += 1;
       state.markerBusy = false;
       state.rejectedMarkerPreview = null;
-      // Manual range is always 10–60 mm. Coverage is checked when detection starts,
-      // rather than silently moving the user's slider back to a larger minimum.
+      // 手动范围为 5–60mm；开始检测时另核覆盖，不静默把滑条推回更大最小值。
       const requestedScan = Number(detail.value);
       state.scanDiameterMm = Number.isFinite(requestedScan)
-        ? Math.max(10, Math.min(60, Math.round(requestedScan / 5) * 5))
-        : 10;
+        ? Math.max(CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM, Math.min(CONTROLLED_MARKER_MAX_SCAN_DIAMETER_MM, Math.round(requestedScan / 5) * 5))
+        : CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM;
       if (state.markerMode) {
         setStatus(
           state,
