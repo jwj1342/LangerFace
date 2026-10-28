@@ -653,7 +653,7 @@ const webPackage = JSON.parse(fs.readFileSync(
   "utf8",
 ));
 assert.match(webPackage.scripts.predev,
-  /^npm run verify:algorithm-release:local && node \.\.\/tools\/report_default_marker_profile\.mjs dev && node \.\.\/tools\/check_web_dependency_isolation\.mjs$/,
+  /^npm run verify:algorithm-release:dev && node \.\.\/tools\/report_default_marker_profile\.mjs dev && node \.\.\/tools\/check_web_dependency_isolation\.mjs$/,
   "the dev server must report the default profile before rejecting dependencies shared across worktrees");
 assert.match(webPackage.scripts.dev, /vite --force\b/,
   "the dev server must rebuild optimizer output instead of reusing copied worktree caches");

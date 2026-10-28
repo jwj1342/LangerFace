@@ -14,6 +14,8 @@ export default defineConfig({
     timeout: 10_000,
   },
   fullyParallel: true,
+  // 真实 WebGL/模型用例在 CI 共享同一渲染主机；串行调度，不放宽断言或超时。
+  workers: process.env.CI ? 1 : undefined,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "line",

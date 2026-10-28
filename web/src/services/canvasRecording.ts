@@ -6,9 +6,9 @@ export interface RecordingExtraCanvas {
 export interface CanvasRecordingController {
   readonly recording: boolean;
   readonly chunkCount: number;
-  start(): boolean;
+  start(): Promise<boolean>;
   stop(): boolean;
-  toggle(): boolean;
+  toggle(): Promise<boolean>;
   exportImage(): Promise<boolean>;
 }
 
@@ -174,6 +174,7 @@ function presentMobileFile(blob: Blob, filename: string): boolean {
 
 export interface CanvasRecordingOptions {
   canvas?: HTMLCanvasElement;
+  getMainCanvas?: () => Promise<HTMLCanvasElement>;
   getExtraCanvases?: () => Array<RecordingExtraCanvas | HTMLCanvasElement>;
   system?: RecordingSystemName;
   fps?: number;
@@ -224,6 +225,7 @@ function drawContain(ctx: CanvasRenderingContext2D, source: HTMLCanvasElement, x
 
 export function createCanvasRecordingController({
   canvas,
+  getMainCanvas,
   getExtraCanvases = () => [],
   system = "rstl",
   fps = 30,
@@ -250,13 +252,15 @@ export function createCanvasRecordingController({
   let recorder: MediaRecorder | null = null;
   let chunks: Blob[] = [];
   let compositeFrame = 0;
+  let preparing = false;
+  let generation = 0;
   const downloadUrlLifetimeMs = 5 * 60 * 1000;
 
   function normalizeExtraCanvases(): RecordingExtraCanvas[] {
     return (getExtraCanvases?.() || []).map(drawableCanvas).filter((item): item is RecordingExtraCanvas => Boolean(item));
   }
 
-  function createCompositeSource(extras: RecordingExtraCanvas[], animate: boolean): HTMLCanvasElement {
+  async function createCompositeSource(extras: RecordingExtraCanvas[], animate: boolean): Promise<HTMLCanvasElement> {
     if (!canvas) throw new Error("canvas is required for overlay export");
     const exportCanvas = createCanvas();
     const mainWidth = canvas.width || 1280;
@@ -271,10 +275,13 @@ export function createCanvasRecordingController({
     const slotGap = Math.max(8, Math.round(mainHeight * 0.012));
     const slotHeight = Math.floor((mainHeight - slotGap * Math.max(0, extras.length - 1)) / Math.max(1, extras.length));
     const sideX = mainWidth + gap;
-    const paint = () => {
+    const epoch = generation;
+    const paint = async () => {
+      const main = getMainCanvas ? await getMainCanvas() : canvas;
+      if (animate && epoch !== generation) return;
       g.fillStyle = "#05070a";
       g.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
-      g.drawImage(canvas, 0, 0, mainWidth, mainHeight);
+      g.drawImage(main, 0, 0, mainWidth, mainHeight);
       g.fillStyle = "#111820";
       g.fillRect(mainWidth, 0, gap, mainHeight);
       g.font = `${Math.max(12, Math.round(mainHeight * 0.018))}px system-ui, sans-serif`;
@@ -290,13 +297,18 @@ export function createCanvasRecordingController({
         g.fillText(extra.label || `视图 ${index + 1}`, sideX + 10, y + 7);
         drawContain(g, extra.canvas, sideX + 8, y + labelHeight, sideWidth - 16, Math.max(1, slotHeight - labelHeight - 8));
       });
-      if (animate) compositeFrame = requestFrame(paint);
+      if (animate) compositeFrame = requestFrame(() => {
+        void paint().catch((error) => {
+          if (epoch === generation) { stop(); onError(error); }
+        });
+      });
     };
-    paint();
+    await paint();
     return exportCanvas;
   }
 
   function stopCompositeLoop(): void {
+    generation++;
     if (!compositeFrame) return;
     cancelFrame(compositeFrame);
     compositeFrame = 0;
@@ -344,70 +356,103 @@ export function createCanvasRecordingController({
   }
 
   function stop(): boolean {
+    if (preparing) {
+      preparing = false;
+      stopCompositeLoop();
+      onStateChange(false);
+      return true;
+    }
     if (!recorder) return false;
+    if (recorder.state === "inactive") return false;
+    stopCompositeLoop();
     recorder.stop();
     return true;
   }
 
-  function start(): boolean {
-    if (recorder) return stop();
+  async function start(): Promise<boolean> {
+    if (recorder || preparing) return stop();
     if (!canvas?.captureStream) throw new Error("canvas.captureStream is required for overlay export");
     if (!Recorder) throw new Error("MediaRecorder is not available in this browser");
     if (!BlobCtor) throw new Error("Blob is not available in this browser");
 
     const extras = normalizeExtraCanvases();
     const mobileLike = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
-    const sourceCanvas = extras.length || mobileLike ? createCompositeSource(extras, true) : canvas;
-    if (!sourceCanvas?.captureStream) throw new Error("canvas.captureStream is required for overlay export");
-    const stream = sourceCanvas.captureStream(fps);
-    chunks = [];
-    const selectedMime = recorderMimeType(Recorder);
-    recorder = selectedMime ? new Recorder(stream, { mimeType: selectedMime }) : new Recorder(stream);
-    const actualMime = recorder.mimeType || selectedMime || "video/webm";
-    const outputMime = actualMime.split(";", 1)[0] || "video/webm";
-    const extension = extensionForMime(outputMime);
-    const observeRecording = (stage: CanvasExportDiagnosticDetail["stage"], size = 0, error: string | null = null) =>
-      emitExportDiagnostic({ export_kind: "video", stage, mime: outputMime, extension, size_bytes: size,
-        share_api_available: Boolean(shareNavigator?.share), file_share_supported: false, error_code: error });
-    let receivedData = false;
-    recorder.ondataavailable = (event) => {
-      if (event?.data?.size) chunks.push(event.data);
-      if (!receivedData) { observeRecording("recording_data", event?.data?.size || 0); receivedData = true; }
-    };
-    recorder.onstop = async () => {
-      stopCompositeLoop();
-      observeRecording("recording_stopped", chunks.reduce((sum, chunk) => sum + chunk.size, 0));
-      const blob = new BlobCtor(chunks, { type: outputMime });
-      const systemName = typeof system === "function" ? system() : system;
-      try {
-        if (!blob.size) {
-          const error = new Error("浏览器未生成视频帧，未发起下载。请导出诊断日志，并记录录制时长和浏览器名称。");
-          error.name = "EmptyRecordingError";
-          throw error;
-        }
-        emitExportDiagnostic({ export_kind: "video", stage: "generated", mime: outputMime, extension,
-          size_bytes: blob.size, share_api_available: Boolean(shareNavigator?.share), file_share_supported: false, error_code: null });
-        await saveBlob(blob, `langer_${systemName || "rstl"}_${now()}.${extension}`);
-      } catch (error) {
-        emitExportDiagnostic({ export_kind: "video", stage: "generation_failed", mime: outputMime, extension,
-          size_bytes: blob.size, share_api_available: Boolean(shareNavigator?.share), file_share_supported: false,
-          error_code: safeErrorCode(error) });
-        onError(error);
-      } finally {
-        recorder = null;
-        onStateChange(false);
-      }
-    };
-    recorder.start(1000);
-    observeRecording("recording_started");
+    preparing = true;
     onStateChange(true);
-    return true;
+    const epoch = generation;
+    let sourceCanvas: HTMLCanvasElement;
+    try {
+      sourceCanvas = extras.length || mobileLike || getMainCanvas
+        ? await createCompositeSource(extras, true) : canvas;
+    } catch (error) {
+      if (epoch !== generation) return false;
+      preparing = false;
+      stopCompositeLoop();
+      onStateChange(false);
+      throw error;
+    }
+    if (epoch !== generation) return false;
+    preparing = false;
+    let stream: MediaStream | null = null;
+    try {
+      if (!sourceCanvas?.captureStream) throw new Error("canvas.captureStream is required for overlay export");
+      stream = sourceCanvas.captureStream(fps);
+      const recordingStream = stream;
+      chunks = [];
+      const selectedMime = recorderMimeType(Recorder);
+      recorder = selectedMime ? new Recorder(stream, { mimeType: selectedMime }) : new Recorder(stream);
+      const actualMime = recorder.mimeType || selectedMime || "video/webm";
+      const outputMime = actualMime.split(";", 1)[0] || "video/webm";
+      const extension = extensionForMime(outputMime);
+      const observeRecording = (stage: CanvasExportDiagnosticDetail["stage"], size = 0, error: string | null = null) =>
+        emitExportDiagnostic({ export_kind: "video", stage, mime: outputMime, extension, size_bytes: size,
+          share_api_available: Boolean(shareNavigator?.share), file_share_supported: false, error_code: error });
+      let receivedData = false;
+      recorder.ondataavailable = (event) => {
+        if (event?.data?.size) chunks.push(event.data);
+        if (!receivedData) { observeRecording("recording_data", event?.data?.size || 0); receivedData = true; }
+      };
+      recorder.onstop = async () => {
+        stopCompositeLoop();
+        recordingStream.getTracks?.().forEach((track) => track.stop());
+        observeRecording("recording_stopped", chunks.reduce((sum, chunk) => sum + chunk.size, 0));
+        const blob = new BlobCtor(chunks, { type: outputMime });
+        const systemName = typeof system === "function" ? system() : system;
+        try {
+          if (!blob.size) {
+            const error = new Error("浏览器未生成视频帧，未发起下载。请导出诊断日志，并记录录制时长和浏览器名称。");
+            error.name = "EmptyRecordingError";
+            throw error;
+          }
+          emitExportDiagnostic({ export_kind: "video", stage: "generated", mime: outputMime, extension,
+            size_bytes: blob.size, share_api_available: Boolean(shareNavigator?.share), file_share_supported: false, error_code: null });
+          await saveBlob(blob, `langer_${systemName || "rstl"}_${now()}.${extension}`);
+        } catch (error) {
+          emitExportDiagnostic({ export_kind: "video", stage: "generation_failed", mime: outputMime, extension,
+            size_bytes: blob.size, share_api_available: Boolean(shareNavigator?.share), file_share_supported: false,
+            error_code: safeErrorCode(error) });
+          onError(error);
+        } finally {
+          recorder = null;
+          onStateChange(false);
+        }
+      };
+      recorder.start(1000);
+      observeRecording("recording_started");
+      return true;
+    } catch (error) {
+      stopCompositeLoop();
+      stream?.getTracks?.().forEach((track) => track.stop());
+      recorder = null;
+      onStateChange(false);
+      throw error;
+    }
   }
 
   async function exportImage(): Promise<boolean> {
     if (!canvas?.width || !canvas.height) throw new Error("有效画布尚未准备好，无法导出图片");
     const extras = normalizeExtraCanvases();
-    const sourceCanvas = extras.length ? createCompositeSource(extras, false) : canvas;
+    const sourceCanvas = extras.length || getMainCanvas ? await createCompositeSource(extras, false) : canvas;
     if (typeof sourceCanvas.toBlob !== "function") throw new Error("当前浏览器不支持 PNG 图片导出");
     const blob = await new Promise<Blob>((resolve, reject) => {
       sourceCanvas.toBlob((value) => {
@@ -424,7 +469,7 @@ export function createCanvasRecordingController({
   }
 
   return {
-    get recording() { return Boolean(recorder); },
+    get recording() { return Boolean(recorder) || preparing; },
     get chunkCount() { return chunks.length; },
     start,
     stop,

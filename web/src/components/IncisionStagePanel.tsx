@@ -39,12 +39,12 @@ export function IncisionStagePanel() {
               <Input
                 id="controlledMarkerScanDiameter"
                 type="range"
-                min="0"
+                min="5"
                 max="60"
                 step="5"
                 defaultValue="10"
                 aria-label="受控标记扫描直径"
-                aria-valuemin={10}
+                aria-valuemin={5}
               />
             </label>
             <Button

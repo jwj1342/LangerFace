@@ -199,6 +199,17 @@ export function auditMarkerDiagnosticExport(value: unknown) {
     }
     const auditCopy = structuredClone(value) as Record<string, Json>;
     auditCopy.runs = [];
+    // Validate only recorded browser metadata; scan every other field unchanged.
+    // Keep the original ticket (including its exact version) intact for replay.
+    for (const page of auditCopy.page_instances as Json[]) {
+      if (!page || Array.isArray(page) || typeof page !== "object" || page.browser_engine === undefined) continue;
+      const engine = page.browser_engine;
+      if (typeof engine !== "string" || engine.length > 32
+        || !/^(?:unknown|(?:Edg|Chrome|Firefox|Version)\/[0-9]{1,3}(?:\.[0-9]{1,5}){0,3})$/.test(engine)) {
+        throw new Error("诊断浏览器元数据不合法");
+      }
+      page.browser_engine = "[redacted]";
+    }
     for (const key of ["session_id"]) if (typeof auditCopy[key] === "string") auditCopy[key] = "[redacted]";
     for (const listKey of ["page_instances", "workflow_events", "action_events"]) {
       const entries = auditCopy[listKey];

@@ -79,7 +79,7 @@ export function WorkflowCanvasTools() {
             <label className="workflow-marker-scan" title="受控标记扫描直径">
               <span>扫描 {tools?.scanDiameterMm || 20} mm</span>
               <RangeInput
-                min="10"
+                min="5"
                 max="60"
                 step="5"
                 value={tools?.scanDiameterMm || 20}

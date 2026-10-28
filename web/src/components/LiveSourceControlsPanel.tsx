@@ -12,6 +12,7 @@ import { PersistentTooltip } from "./ui/persistent-tooltip";
 export function LiveSourceControlsPanel() {
   const commands = useLiveControllerCommands();
   const snapshot = useLiveStore((state) => state.snapshot);
+  const sourceControlsReady = snapshot !== null;
   const running = Boolean(snapshot?.source.running);
   const paused = Boolean(snapshot?.source.paused);
   const recording = Boolean(snapshot?.recording);
@@ -34,6 +35,8 @@ export function LiveSourceControlsPanel() {
         variant="workbenchPrimary"
         id="uploadBtn"
         type="button"
+        disabled={!sourceControlsReady}
+        title={sourceControlsReady ? undefined : "工作台正在初始化，请稍候"}
         aria-describedby={developerMode && uploadTooltipOpen ? "currentImageFileTooltip" : undefined}
         aria-label={developerMode ? `上传照片或视频；${uploadTooltipMessage}` : "上传照片或视频"}
         onPointerEnter={(event) => {
@@ -53,7 +56,7 @@ export function LiveSourceControlsPanel() {
         message={uploadTooltipMessage}
         open={uploadTooltipOpen}
       /> : null}
-      <Input type="file" id="fileInput" accept="image/*,video/*" hidden />
+      <Input type="file" id="fileInput" accept="image/*,video/*" disabled={!sourceControlsReady} hidden />
       <ButtonRow>
         <Button variant="workbench" id="camBtn" type="button" aria-pressed={cameraActive} onClick={() => commands.source("camera_toggle")}>{cameraActive ? "■ 关闭摄像头" : "◉ 开启摄像头"}</Button>
         <Button variant="workbench" id="pauseBtn" type="button" disabled={!running} onClick={() => commands.source("pause_toggle")}>{paused ? "▶ 继续" : "⏸ 暂停"}</Button>

@@ -1,4 +1,5 @@
 import { createCanvasRecordingController, type CanvasRecordingController, type RecordingExtraCanvas } from "./canvasRecording.ts";
+import { captureCanvasWithSvgOverlay } from "./incisionExport.ts";
 
 interface LiveRecordingActionsOptions {
   canvas: () => HTMLCanvasElement;
@@ -17,6 +18,10 @@ export function createLiveRecordingActions(options: LiveRecordingActionsOptions,
     if (!recordingController) {
       recordingController = createController({
         canvas: options.canvas(),
+        getMainCanvas: () => captureCanvasWithSvgOverlay(
+          options.canvas(),
+          options.canvas().closest(".main-wrap")?.querySelector<SVGSVGElement>("#workflowIncisionOverlay") ?? null,
+        ),
         getExtraCanvases: options.getExtraCanvases,
         system: options.system,
         onStateChange(recording) {
@@ -35,7 +40,7 @@ export function createLiveRecordingActions(options: LiveRecordingActionsOptions,
     return recordingController;
   }
   return {
-    toggleRecording() { ensureController().toggle(); },
+    toggleRecording() { return ensureController().toggle(); },
     async exportCurrentImage(): Promise<void> {
       const controller = ensureController();
       try { await controller.exportImage(); }

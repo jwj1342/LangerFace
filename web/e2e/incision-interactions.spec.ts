@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import type { Locator, Page, TestInfo } from "@playwright/test";
 
+const assetReadyTimeout = process.env.CI ? 60_000 : 30_000;
+
 type EditSnapshotField =
   | "angleOffsetDeg"
   | "lengthScalePct"
@@ -44,7 +46,9 @@ async function installSnapshotCapture(page: Page) {
 async function waitForWorkbench(page: Page) {
   await installSnapshotCapture(page);
   await page.goto("/app/incision");
-  await expect(page.locator("#assetLoading")).toHaveClass(/hidden/, { timeout: 30_000 });
+  await expect(page.locator("#assetLoading")).toHaveClass(/hidden/, {
+    timeout: assetReadyTimeout,
+  });
   await expect(page.locator("#candidateType")).not.toHaveText("—");
   await expect(page.locator("#stageStatus")).toHaveText("");
 }

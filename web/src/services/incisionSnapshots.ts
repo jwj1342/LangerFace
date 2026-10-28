@@ -173,6 +173,7 @@ export interface IncisionControllerSnapshot {
   stageStatus: string;
   stageStatusTone?: "normal" | "warning";
   stageBusy?: boolean;
+  developerDetails?: readonly string[];
   assetLoading: IncisionAssetLoadingState;
   headAsset: IncisionHeadAssetState;
   tumor: IncisionTumorState;
@@ -538,6 +539,7 @@ export function buildIncisionControllerSnapshot({
   stageStatus = "",
   stageStatusTone = "normal",
   stageBusy = false,
+  developerDetails,
   assetLoading,
   headAsset,
   tumor,
@@ -559,6 +561,7 @@ export function buildIncisionControllerSnapshot({
     stageStatus,
     stageStatusTone,
     stageBusy,
+    ...(developerDetails?.length ? { developerDetails: [...developerDetails] } : {}),
     assetLoading,
     headAsset,
     tumor,

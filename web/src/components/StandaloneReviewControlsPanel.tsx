@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useIncisionControllerCommands } from "../hooks/useControllerCommands";
 import { reviewStatusLabel } from "../services/incisionClinicalCopy";
@@ -30,16 +30,17 @@ function reviewTone(status: string): "" | "approved" | "rejected" | "revision" {
 export function StandaloneReviewControlsPanel() {
   const commands = useIncisionControllerCommands();
   const snapshot = useIncisionStore((state) => state.snapshot);
-  const [status, setStatus] = useState("pending_clinician_confirmation");
+  const status = snapshot?.review.status || "pending_clinician_confirmation";
   const [reviewer, setReviewer] = useState("");
   const [notesPresent, setNotesPresent] = useState(false);
   const reviewerRef = useRef<HTMLInputElement>(null);
   const decisionRef = useRef<HTMLSelectElement>(null);
   const notesRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    if (snapshot?.review.status) setStatus(snapshot.review.status);
-  }, [snapshot?.review.status]);
+  useLayoutEffect(() => {
+    // 控制器会在几何改变时直接撤销旧确认；不要用滞后的 React 本地值重新写回。
+    if (decisionRef.current) decisionRef.current.value = status;
+  }, [status]);
 
   useEffect(() => {
     setReviewer(snapshot?.review.reviewer || "");
@@ -88,14 +89,11 @@ export function StandaloneReviewControlsPanel() {
       <Select
         ref={decisionRef}
         id="reviewDecision"
-        value={status}
+        defaultValue="pending_clinician_confirmation"
         className={decisionAttentionRequired ? "workflow-review-attention" : undefined}
         aria-invalid={decisionAttentionRequired}
         aria-describedby={decisionAttentionRequired ? "reviewSaveFeedback" : undefined}
-        onChange={(event) => {
-          setStatus(event.currentTarget.value);
-          commands.review("review_state_changed");
-        }}
+        onChange={() => commands.review("review_state_changed")}
       >
         <option value="pending_clinician_confirmation">待医生确认</option>
         <option value="approved_for_discussion">确认候选草案</option>

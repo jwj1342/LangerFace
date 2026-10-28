@@ -1219,6 +1219,82 @@ assert.equal(
 }
 
 {
+  const lesionCenterRef = pointsToSurfaceRefs([[0.4, 0.5, 0]], vertices, triangles)[0];
+  const currentRstl = [
+    { name: "lesion_horizontal", region: "cheek", pts: [[240, 300, 0], [275, 300, 0]] as Vec3[], tris: [] },
+    { name: "candidate_vertical", region: "cheek", pts: [[300, 260, 0], [300, 340, 0]] as Vec3[], tris: [] },
+  ];
+  const rstlBefore = JSON.stringify(currentRstl);
+  const lesionDirection = queryIncisionPhotoRstlDirection({
+    centerRef: lesionCenterRef, vertices, landmarks, triangles,
+    atlasLines: [], projectedRstlLines: currentRstl,
+  });
+  const candidateCenterDirection = queryIncisionPhotoRstlDirection({
+    centerRef: surfaceCenterRefs[0], vertices, landmarks, triangles,
+    atlasLines: [], projectedRstlLines: currentRstl,
+  });
+  assert.equal(lesionDirection?.line_id, "lesion_horizontal");
+  assert.equal(candidateCenterDirection?.line_id, "candidate_vertical",
+    "the fixture distinguishes lesion-centered sampling from moved-incision sampling");
+  const input = {
+    landmarks, triangles, atlasLines: [], projectedRstlLines: currentRstl,
+    centerRef: lesionCenterRef, boundaryRefs: [],
+    photoBoundary: [[260, 295, 0], [310, 295, 0], [310, 305, 0], [260, 305, 0]] as Vec3[],
+    candidateRefs: surfaceCandidateRefs, endpointRefs: surfaceEndpointRefs,
+    candidateType: "fusiform" as const, candidateAspectRatio: 3, candidateTipAngleDeg: 30,
+  };
+  const movedCenterGeometry = buildIncisionPhotoGeometry(input);
+  assert.equal(movedCenterGeometry.candidateProjection.valid, true);
+  const movedAxis = [
+    movedCenterGeometry.endpoints[1][0] - movedCenterGeometry.endpoints[0][0],
+    movedCenterGeometry.endpoints[1][1] - movedCenterGeometry.endpoints[0][1],
+  ];
+  assert.ok(Math.abs(movedAxis[1]) < Math.abs(movedAxis[0]) * 1e-9,
+    "a real boundary may move the incision center, but its displayed axis follows RSTL nearest the lesion center");
+  assert.ok(Math.abs(movedCenterGeometry.planningCenter![0] - 300) < 1e-6
+    && Math.abs(movedCenterGeometry.center![0] - 260) < 1e-6,
+  "direction anchoring does not pin the independent containment center to the lesion");
+  assert.ok(movedCenterGeometry.projectedRstlDeviationDeg != null
+    && movedCenterGeometry.projectedRstlDeviationDeg < 1e-6,
+    "displayed deviation uses the same lesion-centered direction contract");
+
+  const rotatedModel = surfaceCandidateModel.map(([x, y, z]) => [1 - y, x, z] as Vec3);
+  const editedGeometry = buildIncisionPhotoGeometry({
+    ...input,
+    candidateRefs: pointsToSurfaceRefs(rotatedModel, vertices, triangles),
+    endpointRefs: pointsToSurfaceRefs([rotatedModel[0], rotatedModel[6]], vertices, triangles),
+    candidateDirectionEdited: true,
+  });
+  assert.equal(editedGeometry.candidateProjection.valid, true);
+  assert.ok(Math.abs(editedGeometry.endpoints[1][0] - editedGeometry.endpoints[0][0]) < 1e-6,
+    "a clinician's vertical edit is not replaced by the lesion's horizontal RSTL direction");
+  assert.equal(editedGeometry.candidateProjection.smoothingDiagnostics?.photoCanonicalAxisSource, "source_endpoints");
+
+  const boundaryFreeGeometry = buildIncisionPhotoGeometry({ ...input, photoBoundary: [] });
+  assert.equal(boundaryFreeGeometry.candidateProjection.valid, true);
+  assert.ok(Math.abs(boundaryFreeGeometry.planningCenter![0] - boundaryFreeGeometry.center![0]) < 1e-6,
+    "boundary-free legacy geometry remains centered on the lesion");
+  const fallbackGeometry = buildIncisionPhotoGeometry({ ...input, candidateAspectRatio: undefined });
+  assert.equal(fallbackGeometry.candidateProjection.valid, true,
+    "the centered fallback's direction gate uses the lesion anchor too");
+  assert.ok(Math.abs(fallbackGeometry.endpoints[1][1] - fallbackGeometry.endpoints[0][1]) < 1e-6);
+  assert.ok(["globalBezier", "segmentedBezier"].includes(fallbackGeometry.candidateProjection.smoothingMode || ""));
+
+  const unanchoredGeometry = buildIncisionPhotoGeometry({ ...input, centerRef: null });
+  assert.equal(unanchoredGeometry.candidateProjection.valid, true);
+  assert.ok(Math.abs(unanchoredGeometry.endpoints[1][0] - unanchoredGeometry.endpoints[0][0]) < 1e-6,
+    "a missing lesion anchor retains the candidate-centered legacy fallback");
+  const hiddenLocalLineGeometry = buildIncisionPhotoGeometry({
+    ...input, projectedRstlLines: [{ ...currentRstl[0], hidden: true }, currentRstl[1]],
+  });
+  assert.equal(hiddenLocalLineGeometry.candidateProjection.valid, true);
+  assert.ok(Math.abs(hiddenLocalLineGeometry.endpoints[1][0] - hiddenLocalLineGeometry.endpoints[0][0]) < 1e-6,
+    "lesion anchoring still ignores RSTL lines hidden in the actual visible snapshot");
+  assert.equal(JSON.stringify(currentRstl), rstlBefore,
+    "lesion-centered direction consumption never mutates the shared visible RSTL snapshot");
+}
+
+{
   const surfaceLandmarks = landmarks.map(([x, y, z]) => [x, y + x * 0.2, z] as Vec3);
   const horizontalRefs = pointsToSurfaceRefs([[0.2, 0.5, 0], [0.8, 0.5, 0]], vertices, triangles);
   const atlasLines = [{ name: "local", region: "cheek", points: [[0, 0.3, 0.2], [1, 0.5, 0.3]] }];

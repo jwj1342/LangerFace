@@ -115,3 +115,10 @@ export function detectControlledMarker(
     options,
   );
 }
+
+/** Product entry: keep explicit legacy profiles synchronous-compatible and refine only the candidate. */
+/** 正式异步入口：先按稳定算法族生成同步基线，再对当前候选族执行原图填充复核。
+ * Profile是算法族，SemVer是实现版本；不能把同一Profile当成同一实现。
+ * 页面/Worker应等待这个Promise；只测同步函数会漏掉复核层的拒识和改选。 */
+export async function detectControlledMarkerWithProfileAsync(profile:ControlledMarkerDetectorProfile,image:MarkerImageData,seed:MarkerPoint,options:ControlledMarkerOptions={}):Promise<ControlledMarkerDetection> {const baseline=detectControlledMarkerWithProfile(profile,image,seed,options);if(profile!=="small-lesion-boundary-candidate")return baseline;const {refineFilledCandidate}=await import("./controlledMarkerFilledCandidate.ts");return refineFilledCandidate(image,seed,options,baseline);}
+export function detectControlledMarkerAsync(image:MarkerImageData,seed:MarkerPoint,options:ControlledMarkerOptions={}):Promise<ControlledMarkerDetection> {return detectControlledMarkerWithProfileAsync(CONTROLLED_MARKER_DETECTOR_PROFILE,image,seed,options);}

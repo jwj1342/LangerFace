@@ -55,5 +55,5 @@ export interface WorkflowWorkerApi {
     image: MarkerImageData,
     seed: MarkerPoint,
     options?: ControlledMarkerOptions,
-  ) => ControlledMarkerDetection;
+  ) => ControlledMarkerDetection | Promise<ControlledMarkerDetection>;
 }

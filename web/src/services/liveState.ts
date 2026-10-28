@@ -13,6 +13,23 @@ import type {
   RefineViewportCrop,
 } from "./liveRefineMath";
 
+export const DESKTOP_IMAGE_MAX_ZOOM = 10;
+export const MOBILE_IMAGE_MAX_ZOOM = 12;
+
+export function imageViewportIsMobile(): boolean {
+  // 窄屏触控设备兜底，避免浏览器未命中 pointer/hover 条件时仍使用桌面上限。
+  if (typeof window === "undefined" || window.innerWidth > 560) return false;
+  const mediaMatches = typeof window.matchMedia === "function"
+    && window.matchMedia("(max-width: 560px) and (pointer: coarse) and (hover: none)").matches;
+  if (mediaMatches) return true;
+  const touchPoints = typeof navigator === "undefined" ? 0 : Number(navigator.maxTouchPoints || 0);
+  return touchPoints > 0 || "ontouchstart" in window;
+}
+
+export function imageMaxZoomForViewport(mobile: boolean): number {
+  return mobile ? MOBILE_IMAGE_MAX_ZOOM : DESKTOP_IMAGE_MAX_ZOOM;
+}
+
 export interface LiveModelState {
   landmarker: any;
   imageLandmarker: any;
@@ -196,7 +213,7 @@ export const renderState: LiveRenderState = {
     fitScale: 1,
     zoom: 1,
     minZoom: 1,
-    maxZoom: 5,
+    maxZoom: imageMaxZoomForViewport(imageViewportIsMobile()),
     offsetX: 0,
     offsetY: 0,
   },

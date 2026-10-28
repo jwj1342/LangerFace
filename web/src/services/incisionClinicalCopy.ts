@@ -177,7 +177,7 @@ export function diagnosticCandidateBlockMessage(
   reasons.push(...projectionReasonCodes.map((code) => projectionLabels[code] || GUARDRAIL_LABELS[code] || "照片中的候选几何检查未通过"));
   if (photoOpeningIntersection) reasons.push("候选切口经过眼裂、口裂或鼻孔");
   const detail = [...new Set(reasons)].join("；") || "候选未通过生成或显示检查";
-  return `红色虚线仅供查看被阻断的轮廓：${detail}。不可确认、保存或用于实时叠加；请调整位置或范围。`;
+  return `切口生成触碰门禁：${detail}`;
 }
 export const directionSourceLabel = (value: unknown) => labelOf(DIRECTION_SOURCE_LABELS, value);
 export const directionHintLabel = (value: unknown) => labelOf(DIRECTION_HINT_LABELS, value);
@@ -209,14 +209,14 @@ export function engineeringBlockMessage(result: Record<string, any> | null | und
   const codes = [...new Set([...tumorViolations, ...candidateViolations]
     .map((item: Record<string, any>) => String(item?.code || ""))
     .filter(Boolean))];
-  if (!codes.length) return "候选未显示：允许的方向均未通过工程门禁；请调整病灶位置或范围后重试。";
+  if (!codes.length) return "切口生成触碰门禁：没有方向通过当前工程检查";
   const violations = [...tumorViolations, ...candidateViolations];
   const hasNostrilOpening = violations.some((item: Record<string, any>) =>
     String(item?.location?.zone_id || item?.zone_id || "").includes("nostril"));
   const reasons = [...new Set(codes.map((code) => hasNostrilOpening && code.includes("non_skin_opening")
     ? "候选或肿物范围进入鼻孔等非皮肤开口"
     : guardrailLabel(code)))];
-  return `候选未显示：${reasons.join("、")}；${engineeringRecoveryLabel(codes[0])}。`;
+  return `切口生成触碰门禁：${reasons.join("、")}`;
 }
 
 export function rulesReviewLabel(reviewStatus: unknown) {

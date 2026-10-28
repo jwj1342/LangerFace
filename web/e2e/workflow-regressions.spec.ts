@@ -2,6 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 import { installGeneratedCamera, uploadGeneratedPhoto, uploadGeneratedPhotoWithControlledMarkers } from "./support/incisionPhoto";
 
@@ -13,8 +15,18 @@ async function captureReviewState(page: Page) {
     window.addEventListener("langerface:incision-state", event => {
       Reflect.set(window, "__pr226Incision", (event as CustomEvent).detail);
     });
+    window.addEventListener("langerface:marker-run-diagnostic", event => {
+      Reflect.set(window, "__generatedPhotoDiagnostic", (event as CustomEvent).detail);
+    });
   });
 }
+
+test("photo risk policy preserves red opening violations and normal non-opening warnings", () => {
+  // Keep both sides of the display contract in CI: updating a photo fixture's
+  // expected colour must never remove the sensitive-opening fail-closed checks.
+  execFileSync(process.execPath, [fileURLToPath(new URL("../../tools/test_workflow_risk_candidate_display.ts", import.meta.url))],
+    { encoding: "utf8", timeout: 30_000 });
+});
 
 async function expectActiveOverlay(page: Page, loaded: boolean) {
   await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Live")?.incisionOverlay?.loaded)).toBe(loaded);
@@ -38,6 +50,16 @@ test.beforeEach(async ({ page }, info) => {
 });
 
 test.afterEach(async ({ page }, info) => {
+  if (info.status !== info.expectedStatus && (info.title.includes("reviewed photo geometry")
+    || info.title.includes("warning priority"))) {
+    const state = await page.evaluate(() => ({
+      incision: Reflect.get(window, "__pr226Incision"),
+      diagnostic: Reflect.get(window, "__generatedPhotoDiagnostic"),
+      paths: Array.from(document.querySelectorAll("[data-workflow-candidate], [data-workflow-diagnostic-candidate]"),
+        element => ({ tag: element.getAttribute("data-workflow-candidate") ? "normal" : "diagnostic", d: element.getAttribute("d") })),
+    })).catch(() => ({ unavailable: true }));
+    await info.attach("generated-photo-failure-state", { body: Buffer.from(JSON.stringify(state, null, 2)), contentType: "application/json" });
+  }
   if (!process.env.PR226_B_RUN) return;
   const state = await page.evaluate(() => ({ live: Reflect.get(window, "__pr226Live"), incision: Reflect.get(window, "__pr226Incision"),
     paths: Array.from(document.querySelectorAll("[data-workflow-candidate], [data-workflow-boundary]"), element => element.getAttribute("d")) })).catch(() => ({ unavailable: true }));
@@ -362,14 +384,41 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   const incisionCenter = page.locator("[data-workflow-incision-center]");
   await expect.poll(() => boundary.getAttribute("d")).toMatch(/^M /);
   await expect.poll(() => candidate.getAttribute("d")).toMatch(/^M /);
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.candidate?.guardrailsPassed)).toBe(false);
+  await expect(page.locator("[data-workflow-diagnostic-candidate]")).toHaveAttribute("d", "");
   await expect(lesionCenter).toBeVisible();
   await expect(incisionCenter).toBeVisible();
   await expect.poll(() => page.evaluate(() => {
     const current = Reflect.get(window, "__pr226Incision")?.candidate;
     return current?.lengthMm / current?.widthMm;
   })).toBeCloseTo(3, 8);
+  // The captured fixture warns about a free margin, not an eye/mouth/nostril
+  // opening intersection. A warning remains visible without becoming a red gate.
   await expect(candidate).toHaveCSS("stroke", "rgb(103, 232, 249)");
-  await expect(candidate).toHaveCSS("stroke-width", "1px");
+  await expect(candidate).toHaveCSS("stroke-dasharray", "none");
+  const readPhotoPaint = () => page.evaluate(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>("#canvas")!;
+    const viewport = canvas.closest(".main-wrap")!.getBoundingClientRect();
+    const zoom = Number(getComputedStyle(canvas).getPropertyValue("--img-zoom")) || 1;
+    const photoWidth = Math.round(Math.min(viewport.width / canvas.width, viewport.height / canvas.height) * canvas.width) * zoom;
+    const boundary = document.querySelector<SVGPathElement>("[data-workflow-boundary]")!.getBBox();
+    const width = parseFloat(getComputedStyle(document.querySelector("[data-workflow-candidate]")!).strokeWidth);
+    return { photoWidth, width, expectedWidth: 0.5 * photoWidth / 650,
+      sizeLimit: 0.06 * Math.min(boundary.width, boundary.height) };
+  });
+  const expectPhotoPaint = async () => {
+    // This full-face fixture is above the small-lesion cap. Derive the paint
+    // from the displayed photo, not the production helper or a fixed pixel value.
+    await expect.poll(async () => {
+      const paint = await readPhotoPaint();
+      return Math.abs(paint.width - paint.expectedWidth);
+    }).toBeLessThan(0.0001);
+    const paint = await readPhotoPaint();
+    expect(paint.width).toBeGreaterThan(0);
+    expect(paint.sizeLimit).toBeGreaterThan(paint.expectedWidth);
+    return paint;
+  };
+  const initialPaint = await expectPhotoPaint();
   const boundaryBeforeReview = await boundary.getAttribute("d");
   const candidateBeforeReview = await candidate.getAttribute("d");
 
@@ -380,6 +429,19 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   await page.locator("#reviewerName").fill("E2E clinician");
   await page.locator("#saveReviewBtn").click();
   await expect(page.locator("#workflowStageStatus")).toContainText("候选已确认并显示在当前画布上", { timeout: 45_000 });
+  await expect.poll(() => boundary.getAttribute("d")).toBe(boundaryBeforeReview);
+  await expect.poll(() => candidate.getAttribute("d")).toBe(candidateBeforeReview);
+  expect((await expectPhotoPaint()).width).toBeCloseTo(initialPaint.width, 4);
+
+  const canvas = page.locator("#canvas");
+  await canvas.hover();
+  await page.mouse.wheel(0, -120);
+  await expect.poll(async () => (await readPhotoPaint()).photoWidth).toBeGreaterThan(initialPaint.photoWidth);
+  const zoomedPaint = await expectPhotoPaint();
+  expect(zoomedPaint.width / initialPaint.width).toBeCloseTo(zoomedPaint.photoWidth / initialPaint.photoWidth, 4);
+  await page.mouse.wheel(0, 120);
+  await expect.poll(async () => (await readPhotoPaint()).photoWidth).toBeCloseTo(initialPaint.photoWidth, 4);
+  expect((await expectPhotoPaint()).width).toBeCloseTo(initialPaint.width, 4);
   await expect.poll(() => boundary.getAttribute("d")).toBe(boundaryBeforeReview);
   await expect.poll(() => candidate.getAttribute("d")).toBe(candidateBeforeReview);
 
@@ -399,6 +461,7 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   await page.getByRole("button", { name: "返回全脸视图" }).click();
   await expect.poll(() => boundary.getAttribute("d")).toBe(boundaryBeforeReview);
   await expect.poll(() => candidate.getAttribute("d")).toBe(candidateBeforeReview);
+  expect((await expectPhotoPaint()).width).toBeCloseTo(initialPaint.width, 4);
 });
 
 test("disabled workflow hints use a two-second mouse, touch, and keyboard release window", async ({ page }) => {
@@ -501,15 +564,18 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   reportWorkflowStage("forehead-geometry-pass");
 
   // The source-photo left edge remains on the left in anatomical orientation.
-  // Only the continuous on-face portion may be blue; a general face-edge exit
-  // must never borrow the sensitive red layer.
+  // This fixture has non-opening warnings; its usable path stays normal.
+  // Risk styling must not change the existing visibility review/save policy.
   await clickWorkflowCanvasRatio(page, 0.10, 0.55);
   await expect(page.locator("#workflowStageStatus")).toHaveText(
     "已识别肿物边界，当前为视野受限参考，仅显示照片可见部分；请医生复核，确认且系统门禁通过后可进入实时叠加",
     { timeout: 45_000 },
   );
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.candidate?.guardrailsPassed)).toBe(false);
   await expect.poll(() => page.locator("[data-workflow-candidate]").getAttribute("d")).toMatch(/^M /);
   await expect(page.locator("[data-workflow-diagnostic-candidate]")).toHaveAttribute("d", "");
+  await expect(page.locator("[data-workflow-candidate]")).toHaveCSS("stroke", "rgb(103, 232, 249)");
+  await expect(page.locator("[data-workflow-candidate]")).toHaveCSS("stroke-dasharray", "none");
 
   await page.locator("#saveReviewBtn").click();
   await expectActiveOverlay(page, true);
@@ -529,6 +595,7 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateType), { timeout: 45_000 }).toBe("视野受限参考");
   await expectActiveOverlay(page, true);
   await expect(page.locator("#saveReviewBtn")).toHaveText("已确认");
+  await expect.poll(() => page.locator("[data-workflow-candidate]").getAttribute("d")).toMatch(/^M /);
   await expect(page.locator("[data-workflow-diagnostic-candidate]")).toHaveAttribute("d", "");
   await expect(page.locator("#reviewDecision, #reviewNotes")).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => (
@@ -613,14 +680,28 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   await clickWorkflowCanvasRatio(page, 0.32, 0.52);
   await expect.poll(() => page.evaluate(() => (
     window as Window & { __workflowMarkerReasons?: string[] }
-  ).__workflowMarkerReasons || []), { timeout: 45_000 }).toContain("controlled_marker_applied");
-  await expect(page.locator("#workflowStageStatus")).not.toContainText("只识别到局部轮廓");
-  await expect.poll(() => page.locator("[data-workflow-boundary]").getAttribute("d")).toMatch(/^M /);
+  ).__workflowMarkerReasons || []), { timeout: 45_000 }).toContain("controlled_marker_failed");
+  // This unchanged 30%-opacity, internally divided ring used to report a
+  // 103px² fragment as success, rather than its complete enclosed region.
+  // The current evidence gate rejects it: verify the actual reason and stale
+  // geometry cleanup, not just an empty path or any generic failure event.
+  await expect.poll(() => page.evaluate(() =>
+    Reflect.get(window, "__generatedPhotoDiagnostic")?.run?.raw_result?.failure_code))
+    .toBe("unstable_enclosure");
+  const rejected = await page.evaluate(() =>
+    Reflect.get(window, "__generatedPhotoDiagnostic")?.run?.raw_result);
+  expect(rejected.ok).toBe(false);
+  expect(rejected.rejected_reasons).toEqual(expect.arrayContaining([
+    "outside_supported_scale", "insufficient_color_evidence",
+  ]));
+  await expect(page.locator("[data-workflow-boundary]")).toHaveAttribute("d", "");
+  await expect(page.locator("[data-workflow-candidate]")).toHaveAttribute("d", "");
+  await expect(page.locator("[data-workflow-diagnostic-candidate]")).toHaveAttribute("d", "");
   await expect(boundaryMode).toHaveValue("ellipse");
   if (process.env.WORKFLOW_DETECTION_EVIDENCE_PATH) {
     await page.screenshot({ path: process.env.WORKFLOW_DETECTION_EVIDENCE_PATH, fullPage: true });
   }
-  reportWorkflowStage("low-contrast-divided-marker-and-ellipse-mode-pass");
+  reportWorkflowStage("low-contrast-fragment-rejected-and-stale-geometry-cleared-pass");
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
   await page.evaluate(() => {
     const auditWindow = window as Window & { __workflowIncisionReasons?: string[] };
@@ -632,7 +713,7 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   });
   await clickWorkflowCanvasRatio(page, 0.50, 0.64);
   await expect(page.locator("#workflowStageStatus")).toContainText(
-    /识别范围进入眼裂、口裂或鼻孔等非皮肤开口|当前区域有多个可能的肿物范围|检测到候选边界，但被识别门禁否决/,
+    /识别范围进入眼裂、口裂或鼻孔等非皮肤开口|当前区域有多个可能的肿物范围|检测到候选边界，但被识别门禁否决|肿物边界识别触碰门禁/,
     { timeout: 45_000 },
   );
   await expect.poll(() => page.evaluate(() => (
@@ -648,7 +729,7 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   });
   await clickWorkflowCanvasRatio(page, 0.66, 0.37);
   await expect(page.locator("#workflowStageStatus")).toContainText(
-    /识别范围进入眼裂、口裂或鼻孔等非皮肤开口|当前区域有多个可能的肿物范围|检测到候选边界，但被识别门禁否决/,
+    /识别范围进入眼裂、口裂或鼻孔等非皮肤开口|当前区域有多个可能的肿物范围|检测到候选边界，但被识别门禁否决|肿物边界识别触碰门禁/,
     { timeout: 45_000 },
   );
   await expect.poll(() => page.evaluate(() => (
@@ -690,14 +771,20 @@ test("subcutaneous overlay stays centered and controlled scan keeps its fixed ra
   if (await markerButton.getAttribute("aria-pressed") !== "true") await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
   const scan = page.locator(".workflow-marker-scan input[type=range]");
-  await expect(scan).toHaveAttribute("min", "10");
+  await expect(scan).toHaveAttribute("min", "5");
   await expect(scan).toHaveAttribute("max", "60");
   await expect(scan).toHaveAttribute("step", "5");
-  // The scan range is independent from the retired manual tumor diameter.
-  await expect.poll(async () => Number(await scan.inputValue())).toBeGreaterThanOrEqual(10);
+  // 最小可选 5mm 与检测覆盖分开核验，不因肿物直径或模式切换抬高滑条最小值。
+  await expect.poll(async () => Number(await scan.inputValue())).toBeGreaterThanOrEqual(5);
   await scan.focus();
   await scan.press("Home");
+  await expect(scan).toHaveValue("5");
+  await scan.press("ArrowRight");
   await expect(scan).toHaveValue("10");
+  await scan.press("End");
+  await expect(scan).toHaveValue("60");
+  await scan.press("Home");
+  await expect(scan).toHaveValue("5");
   await page.evaluate(() => {
     const auditWindow = window as Window & { __scanCoverageReasons?: string[] };
     auditWindow.__scanCoverageReasons = [];

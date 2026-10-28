@@ -1710,16 +1710,17 @@ assert.ok(stagePanelSource.includes('id="controlledMarkerScanDiameter"')
   && runtimeSource.includes("expectedDiameterPx")
   && stylesSource.includes("controlled-marker-scan-overlay"),
 "controlled mode exposes a millimetre-labelled circular scan area backed by a stable photo scale");
-assert.ok(stagePanelSource.includes('min="0"')
+assert.ok(stagePanelSource.includes('min="5"')
   && stagePanelSource.includes('max="60"')
-  && stagePanelSource.includes('aria-valuemin={10}')
+  && stagePanelSource.includes('aria-valuemin={5}')
   && runtimeSource.includes("controlledMarkerScanDiameterMm")
   && runtimeSource.includes("Number.isFinite(rawDiameterMm)")
-  && runtimeSource.includes("const presentationProgress = diameterMm / 60")
+  && runtimeSource.includes("CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM")
+  && runtimeSource.includes("CONTROLLED_MARKER_MAX_SCAN_DIAMETER_MM")
   && runtimeSource.includes('"--scan-thumb-offset"')
   && stylesSource.includes("#controlledMarkerScanDiameter::-webkit-slider-thumb")
   && stylesSource.includes("background: #0f62fe"),
-"the scan control preserves the established blue track style, maps 10 mm to 1/6, reaches the right endpoint at 60 mm, and retains a 10 mm operational minimum");
+"the scan control preserves the established blue track style, exposes a 5-60 mm range, reaches the right endpoint at 60 mm, and keeps coverage checks separate from the selectable minimum");
 assert.ok(clinicalCopySource.includes('detection.failure_code === "scan_range_too_small"')
   && clinicalCopySource.includes('detection.failure_code === "edge_discontinuous"')
   && clinicalCopySource.includes('detection.failure_code === "unstable_enclosure"'),

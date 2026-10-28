@@ -39,6 +39,7 @@ function writeWrinkleDisplayMode(mode: WrinkleDisplayMode) {
 export function MobileWorkflowControls() {
   const liveCommands = useLiveControllerCommands();
   const liveSnapshot = useLiveStore((state) => state.snapshot);
+  const sourceControlsReady = liveSnapshot !== null;
   const running = Boolean(liveSnapshot?.source.running);
   const paused = Boolean(liveSnapshot?.source.paused);
   const recording = Boolean(liveSnapshot?.recording);
@@ -62,7 +63,13 @@ export function MobileWorkflowControls() {
           <small>{liveSnapshot?.source.liveLabel || "待机"}</small>
         </div>
         <div className="mobile-source-grid">
-          <Button variant="workbenchPrimary" type="button" onClick={() => liveCommands.source("upload_source")}>
+          <Button
+            variant="workbenchPrimary"
+            type="button"
+            disabled={!sourceControlsReady}
+            title={sourceControlsReady ? undefined : "工作台正在初始化，请稍候"}
+            onClick={() => liveCommands.source("upload_source")}
+          >
             <ImagePlus size={15} /> 上传照片
           </Button>
           <Button

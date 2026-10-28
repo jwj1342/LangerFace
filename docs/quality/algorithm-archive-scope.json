@@ -9,6 +9,7 @@
   ],
   "requiresOperatorConfirmationOutsideDefault": true,
   "externalDependencies": [
+    "web/src/services/incisionRuntime.ts",
     "tools/test_live_canvas_interaction.ts",
     "tools/test_live_wrinkle_refinement.ts",
     "web/src/components/LiveRefinePanel.tsx",
@@ -77,8 +78,17 @@
     "web/package-lock.json",
     "web/package.json",
     "web/src/services/controlledMarkerRelease.ts",
+    "web/src/services/workflowControllerUtils.ts",
     "web/vite.config.ts",
-    "docs/tracks/INCISION_WORKFLOW.md"
+    "docs/tracks/INCISION_WORKFLOW.md",
+    "web/src/workers/workflow.worker.ts",
+    "web/src/workers/workflowWorkerContract.ts",
+    "tools/probe_marker_browser.mjs",
+    "tools/probe_marker_delivery.mjs",
+    "tools/test_probe_marker_delivery.mjs",
+    "docs/quality/LESION_CANDIDATE_REVIEW.md",
+    "README.md",
+    "docs/README.md"
   ],
   "excludedTeamAlgorithms": [
     "standard-rstl-generation",

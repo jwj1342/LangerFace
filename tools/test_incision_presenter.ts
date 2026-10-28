@@ -50,7 +50,7 @@ assert.equal(engineeringBlockMessage({
   tumor_engineering_validation: {
     violations: [{ code: "tumor_diameter_intersects_non_skin_opening" }],
   },
-}), "候选未显示：肿物直径范围进入眼裂、口裂或鼻孔；缩小不准确的范围，或把病灶中心移到可见皮肤。");
+}), "切口生成触碰门禁：肿物直径范围进入眼裂、口裂或鼻孔");
 assert.equal(engineeringBlockMessage({
   tumor_engineering_validation: {
     violations: [{
@@ -58,19 +58,19 @@ assert.equal(engineeringBlockMessage({
       location: { zone_id: "left-nostril-opening" },
     }],
   },
-}), "候选未显示：候选或肿物范围进入鼻孔等非皮肤开口；缩小不准确的范围，或把病灶中心移到可见皮肤。");
+}), "切口生成触碰门禁：候选或肿物范围进入鼻孔等非皮肤开口");
 assert.equal(engineeringBlockMessage({
   candidate_alternatives: [
     { candidate: { hard_violations: [{ code: "candidate_intersects_non_skin_opening", location: { zone_id: "left-nostril-opening" } }] } },
     { candidate: { hard_violations: [{ code: "candidate_intersects_non_skin_opening", location: { zone_id: "left-nostril-opening" } }] } },
   ],
-}), "候选未显示：候选或肿物范围进入鼻孔等非皮肤开口；移动病灶或调整范围，确保完整候选不经过非皮肤开口。",
+}), "切口生成触碰门禁：候选或肿物范围进入鼻孔等非皮肤开口",
 "repeated candidate failures do not duplicate the same user-facing reason");
 assert.equal(engineeringBlockMessage({
   candidate_alternatives: [{
     candidate: { hard_violations: [{ code: "candidate_intersects_default_vermilion_protection" }] },
   }],
-}), "候选未显示：候选切口进入默认唇红保护区域；调整位置或范围，确保完整候选避开唇红保护区域。",
+}), "切口生成触碰门禁：候选切口进入默认唇红保护区域",
 "the vermilion hard gate is described professionally without exposing an internal English code");
 
 const failedGate = buildWorkflowGatePresentation({
