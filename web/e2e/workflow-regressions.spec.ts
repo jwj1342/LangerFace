@@ -771,14 +771,20 @@ test("subcutaneous overlay stays centered and controlled scan keeps its fixed ra
   if (await markerButton.getAttribute("aria-pressed") !== "true") await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
   const scan = page.locator(".workflow-marker-scan input[type=range]");
-  await expect(scan).toHaveAttribute("min", "10");
+  await expect(scan).toHaveAttribute("min", "5");
   await expect(scan).toHaveAttribute("max", "60");
   await expect(scan).toHaveAttribute("step", "5");
-  // The scan range is independent from the retired manual tumor diameter.
-  await expect.poll(async () => Number(await scan.inputValue())).toBeGreaterThanOrEqual(10);
+  // 最小可选 5mm 与检测覆盖分开核验，不因肿物直径或模式切换抬高滑条最小值。
+  await expect.poll(async () => Number(await scan.inputValue())).toBeGreaterThanOrEqual(5);
   await scan.focus();
   await scan.press("Home");
+  await expect(scan).toHaveValue("5");
+  await scan.press("ArrowRight");
   await expect(scan).toHaveValue("10");
+  await scan.press("End");
+  await expect(scan).toHaveValue("60");
+  await scan.press("Home");
+  await expect(scan).toHaveValue("5");
   await page.evaluate(() => {
     const auditWindow = window as Window & { __scanCoverageReasons?: string[] };
     auditWindow.__scanCoverageReasons = [];
