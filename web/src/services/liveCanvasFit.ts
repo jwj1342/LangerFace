@@ -1,6 +1,11 @@
 import { fitContainSize, nextImageGestureViewState, type FitContainResult } from "./fitMath";
 import { els } from "./liveDom";
-import { renderState, sourceState } from "./liveState";
+import {
+  imageMaxZoomForViewport,
+  imageViewportIsMobile,
+  renderState,
+  sourceState,
+} from "./liveState";
 
 export { fitContainSize };
 export type CanvasFitResult = FitContainResult;
@@ -30,6 +35,7 @@ export function fitCanvasDisplayToStage({ resetView = false }: CanvasFitOptions 
   view.baseWidth = fit.width;
   view.baseHeight = fit.height;
   view.fitScale = fit.scale;
+  view.maxZoom = imageMaxZoomForViewport(imageViewportIsMobile());
   if (resetView) resetImageView();
   else clampImageViewOffset();
   applyImageViewStyle();
@@ -69,6 +75,7 @@ export function captureImageViewState(): ImageViewResumeState {
 
 export function restoreImageViewState(snapshot: ImageViewResumeState): void {
   const view = renderState.imageView;
+  view.maxZoom = imageMaxZoomForViewport(imageViewportIsMobile());
   view.zoom = clamp(snapshot.zoom, view.minZoom, view.maxZoom);
   view.offsetX = Number.isFinite(snapshot.offsetX) ? snapshot.offsetX : 0;
   view.offsetY = Number.isFinite(snapshot.offsetY) ? snapshot.offsetY : 0;

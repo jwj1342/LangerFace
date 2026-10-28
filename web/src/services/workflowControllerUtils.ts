@@ -7,6 +7,10 @@ import {
 } from "./incisionPhotoPlanning.ts";
 import type { Vec3 } from "./softBody";
 import { projectPhotoNostrilZones, type PhotoOpeningReference } from "./incisionPhotoOpeningProjection.ts";
+import {
+  CONTROLLED_MARKER_MAX_SCAN_DIAMETER_MM,
+  CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM,
+} from "./controlledMarkerUiConfig.ts";
 
 export interface WorkflowPointerIntent {
   pointerId: number;
@@ -298,8 +302,8 @@ export function workflowProjectionStatusMayOverride(
 
 export function minimumWorkflowMarkerScanDiameterMm(diameterMm: number): number {
   const normalizedDiameter = Number.isFinite(diameterMm) ? Math.max(0, diameterMm) : 0;
-  const roundedCoverage = Math.ceil(Math.max(10, normalizedDiameter * 1.2) / 5) * 5;
-  return Math.max(10, Math.min(60, roundedCoverage));
+  const roundedCoverage = Math.ceil(Math.max(CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM, normalizedDiameter * 1.2) / 5) * 5;
+  return Math.max(CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM, Math.min(CONTROLLED_MARKER_MAX_SCAN_DIAMETER_MM, roundedCoverage));
 }
 
 export function workflowMarkerScanDiameterForTumor(
@@ -307,8 +311,8 @@ export function workflowMarkerScanDiameterForTumor(
   tumorDiameterMm: number,
 ): number {
   const normalizedScan = Number.isFinite(scanDiameterMm)
-    ? Math.max(10, Math.min(60, Math.round(scanDiameterMm / 5) * 5))
-    : 10;
+    ? Math.max(CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM, Math.min(CONTROLLED_MARKER_MAX_SCAN_DIAMETER_MM, Math.round(scanDiameterMm / 5) * 5))
+    : CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM;
   return Math.max(normalizedScan, minimumWorkflowMarkerScanDiameterMm(tumorDiameterMm));
 }
 

@@ -4,6 +4,7 @@ export type IncisionOverlayCandidateType = "linear" | "fusiform" | string;
 
 const FUSIFORM_HIGHLIGHT_COLOR = "#67e8f9";
 const FUSIFORM_COMPACT_HALO_COLOR = "#082f49";
+const LINEAR_HIGHLIGHT_COLOR = "#4ade80";
 
 export interface IncisionOverlayStyle {
   rstlLineWidth: number;
@@ -71,8 +72,9 @@ export function incisionOverlayScreenStyle(
     const extent = Number.isFinite(options.lesionExtentCss) && options.lesionExtentCss! > 0
       ? options.lesionExtentCss! : Infinity;
     const candidateWidth = Math.min(0.5 * scale, 0.06 * extent);
-    // Photo paths are already projected into CSS pixels. Scale the paint once,
-    // and limit it by lesion size so small targets remain visible underneath.
+    const fixedBoundaryWidth = options.compact ? 0.95 : 1.33;
+    // Photo paths are already in CSS pixels. Keep the yellow boundary in
+    // screen space so image zoom cannot make it visually thicker.
     return {
       ...base,
       candidate: {
@@ -82,8 +84,8 @@ export function incisionOverlayScreenStyle(
       },
       boundary: {
         ...base.boundary,
-        lineWidth: Math.min(scale, 0.08 * extent),
-        haloWidth: Math.min(1.5 * scale, 0.12 * extent),
+        lineWidth: fixedBoundaryWidth,
+        haloWidth: fixedBoundaryWidth + 0.5,
       },
       center: {
         ...base.center,
@@ -109,10 +111,10 @@ export function incisionOverlayScreenStyle(
   const centerScale = compact ? Math.min(viewScale, 4 / 3) : viewScale;
   const linear = candidateType === "linear";
   const candidateLineWidth = (compact ? 0.8 : 1) * candidateViewScale;
-  const boundaryLineWidth = compact ? 1.4 : 2 * viewScale;
+  const boundaryLineWidth = compact ? 0.95 : 1.33;
   return {
     candidate: {
-      color: linear ? (compact ? "#4ade80" : "#166534") : FUSIFORM_HIGHLIGHT_COLOR,
+      color: linear ? LINEAR_HIGHLIGHT_COLOR : FUSIFORM_HIGHLIGHT_COLOR,
       lineWidth: candidateLineWidth,
       haloColor: linear
         ? "rgba(3, 7, 18, 0.9)"
@@ -125,7 +127,7 @@ export function incisionOverlayScreenStyle(
       color: compact ? "#fde047" : "#facc15",
       lineWidth: boundaryLineWidth,
       haloColor: "rgba(3, 7, 18, 0.88)",
-      haloWidth: boundaryLineWidth + (compact ? 0.8 : viewScale),
+      haloWidth: boundaryLineWidth + 0.5,
     },
     center: {
       color: "transparent",
@@ -148,7 +150,7 @@ export function incisionCandidateScreenStyle(candidateType: IncisionOverlayCandi
   return {
     // Keep the established one-pixel desktop width while sharing the bright
     // cyan fusiform hue used by the compact workflow.
-    color: linear ? "#166534" : FUSIFORM_HIGHLIGHT_COLOR,
+    color: linear ? LINEAR_HIGHLIGHT_COLOR : FUSIFORM_HIGHLIGHT_COLOR,
     lineWidth: 1,
     haloColor: linear ? "rgba(3, 7, 18, 0.82)" : FUSIFORM_HIGHLIGHT_COLOR,
     haloWidth: linear ? 1.5 : 1,
