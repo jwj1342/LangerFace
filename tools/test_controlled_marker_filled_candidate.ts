@@ -1,6 +1,30 @@
 import assert from "node:assert/strict";
 import { detectControlledMarkerWithProfileAsync } from "../web/src/services/controlledMarkerDetectionProfile.ts";
 import type { ControlledMarkerDetection, MarkerPoint } from "../web/src/services/controlledMarkerDetection.ts";
+import { evaluateCandidate } from "../web/src/services/controlledMarkerFilledCandidate.ts";
+
+// Controlled shape evidence isolates the surround check from candidate search.
+for (const brightness of [.7, 1]) for (const angle of [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2]) {
+  for (const attached of [false, true]) {
+    const width = 128, height = 128, data = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const dx = x - 64, dy = y - 64, r = Math.hypot(dx, dy);
+      const theta = Math.atan2(dy, dx) - angle;
+      const inCrease = attached && Math.abs(Math.atan2(Math.sin(theta), Math.cos(theta))) < .65;
+      const shade = r <= 14 ? .55 : inCrease ? .4 : 1;
+      data.set([...[211, 174, 150].map(v => Math.round(v * shade * brightness)), 255], (y * width + x) * 4);
+    }
+    const boundary = Array.from({ length: 64 }, (_, i) => ({
+      x: 64 + 14 * Math.cos(i * 2 * Math.PI / 64), y: 64 + 14 * Math.sin(i * 2 * Math.PI / 64),
+    }));
+    const baseline = { ok: false, boundary: [], warnings: [], diagnostics: {} } as unknown as ControlledMarkerDetection;
+    const evaluated = evaluateCandidate({ width, height, data }, { x: 64, y: 64 }, 48, 36, baseline,
+      { ok: true, boundary, area_px: Math.PI * 14 ** 2 });
+    assert.equal(evaluated.reasons.includes('achromatic_boundary_continues_into_surround'), attached,
+      `attached=${attached}, brightness=${brightness}, rotation=${angle}`);
+    if (!attached) assert.equal(evaluated.result.ok, true, 'closed neutral target remains eligible');
+  }
+}
 
 // Mathematical engineering inputs, not clinical boundary references.
 function contains(point: MarkerPoint, boundary: MarkerPoint[]): boolean {
@@ -13,7 +37,7 @@ function contains(point: MarkerPoint, boundary: MarkerPoint[]): boolean {
   return inside;
 }
 
-const cases = ["solid", "highlight", "weak", "soft", "pen", "pen-gradient", "blank", "noise", "shadow", "hair"] as const;
+const cases = ["solid", "highlight", "weak", "soft", "neutral-solid", "neutral-soft", "pen", "pen-gradient", "blank", "noise", "shadow", "hair"] as const;
 for (const name of cases) {
   const width = 192, height = 192, data = new Uint8ClampedArray(width * height * 4);
   const truth = new Uint8Array(width * height);
@@ -30,6 +54,11 @@ for (const name of cases) {
       const alpha = 1 / (1 + Math.exp((d - 17) / 1.4));
       rgb = [220, 185, 160].map((v, k) => v + ([93, 64, 48][k] - v) * alpha + noise);
       truth[y * width + x] = Number(d <= 17);
+    } else if (name === "neutral-solid" || name === "neutral-soft") {
+      // Same chromaticity as skin: low colour change alone is not a veto.
+      const alpha = name === "neutral-solid" ? Number(d <= 18) : 1 / (1 + Math.exp((d - 18) / 1.2));
+      rgb = rgb.map(v => v * (1 - .45 * alpha));
+      truth[y * width + x] = Number(d <= 18);
     } else if ((name === "pen" || name === "pen-gradient")) {
       if (name === "pen-gradient") rgb = rgb.map(v => v - 8 * Math.exp(-d * d / 800));
       if (d >= 15 && d <= 18) rgb = [40, 35, 32];
@@ -61,4 +90,4 @@ for (const name of cases) {
   assert.equal(new Set(signatures).size, 1, `${name}: non-deterministic`);
   if (name.startsWith("pen")) assert.equal(first!.geometry_mode, "enclosed_region", "pen path changed");
 }
-console.log("filled candidate tests passed: 10 inputs × 3, including highlight, weak/soft target, pen and negatives");
+console.log("filled candidate tests passed: 12 inputs x 3, including neutral compact targets, highlight, weak/soft target, pen and negatives");

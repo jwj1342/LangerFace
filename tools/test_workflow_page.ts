@@ -1049,8 +1049,8 @@ assert.match(layout, /workflow-incision-rail incision-workbench/, "workflow inci
 assert.match(sharedLayout, /secondarySidebar/, "shared workbench shell owns the optional third-column primitive");
 assert.match(styles, /grid-template-columns:\s*clamp\(320px,\s*21\.25vw,\s*340px\)\s+minmax\(640px,\s*1fr\)\s+clamp\(320px,\s*21\.25vw,\s*340px\)/, "desktop layout reserves a large central canvas with balanced legacy-width rails");
 assert.match(styles, /\.workflow-workbench \.zoom-strip\s*{[^}]*max-height:/s, "zoom strip is bounded so it cannot crowd out the main face canvas");
-assert.match(styles, /\.workflow-incision-overlay \[data-workflow-candidate\]\s*{[^}]*stroke:\s*#2563eb;[^}]*stroke-width:\s*2;/s,
-  "workflow renders a usable incision as a blue solid line");
+assert.match(styles, /\.workflow-incision-overlay \[data-workflow-candidate\]\s*{[^}]*stroke:\s*#67e8f9;[^}]*stroke-width:\s*0\.95;/s,
+  "workflow renders a usable incision with the shared thin cyan fallback");
 assert.match(canvasTools, /data-workflow-diagnostic-candidate/,
   "the merged SVG owns a separate display-only diagnostic candidate layer");
 assert.match(styles, /\[data-workflow-diagnostic-candidate\]\s*{[^}]*stroke:\s*#ef4444;[^}]*stroke-dasharray:/s,
@@ -1332,19 +1332,16 @@ assert.ok(canvasTools.includes('swatchClassName="incision-center">切口中心')
 assert.ok(canvasTools.includes("data-workflow-boundary-halo")
   && canvasTools.includes("data-workflow-candidate-halo"),
 "photo boundary and incision strokes have the same explicit under-stroke structure as live canvas rendering");
-assert.equal(incisionOverlayScreenStyle("fusiform", { compact: true }).center.radiusCss, 0.4,
-  "the compact live-canvas default lesion center remains unchanged");
-assert.equal(incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 1 }).candidate.lineWidth, 0.8,
-  "the compact live-canvas default keeps its accepted fine width");
-assert.equal(incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 5 }).candidate.lineWidth, 0.8,
-"legacy callers without photo dimensions keep their previous stroke contract");
-assert.ok(incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 5 }).incisionCenter.radiusCss
-  > incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 1.5 }).incisionCenter.radiusCss,
-"legacy callers without photo dimensions retain their center contract");
-assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\[data-workflow-boundary\][\s\S]*?stroke:\s*#fde047;[\s\S]*?\[data-workflow-candidate\][\s\S]*?stroke:\s*#67e8f9;[\s\S]*?\[data-workflow-center\][\s\S]*?fill:\s*transparent;/,
-  "phone drawing marks keep the bright boundary/candidate colors while visually subordinating the lesion center");
-assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\[data-workflow-candidate-halo\]\s*\{[^}]*stroke:\s*#082f49;[^}]*stroke-width:\s*0\.8;/,
-  "phone fallback keeps the candidate halo as fine as the primary incision stroke");
+for (const zoom of [0.1, 1, 1.5, 5]) {
+  const shared = incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: zoom });
+  assert.equal(shared.candidate.lineWidth, 0.95, "fallback candidate stroke stays fixed");
+  assert.deepEqual(shared, incisionOverlayScreenStyle("fusiform", { compact: false, viewScale: zoom }),
+    "workflow fallback paint follows the same complete contract on both layouts");
+}
+assert.match(styles, /\.workflow-incision-overlay \[data-workflow-boundary\]\s*\{[^}]*stroke:\s*#fde047;[^}]*stroke-width:\s*0\.95;/,
+  "shared CSS fallback uses the same fine yellow boundary on both layouts");
+assert.match(styles, /\.workflow-incision-overlay \[data-workflow-candidate-halo\]\s*\{[^}]*stroke:\s*#082f49;[^}]*stroke-width:\s*0\.95;/,
+  "shared CSS fallback keeps the halo as fine as the incision on both layouts");
 const clickIntent = beginWorkflowPointerIntent(1, 0, 10, 10);
 updateWorkflowPointerIntent(clickIntent, 1, 13, 13);
 assert.equal(completesWorkflowCanvasClick(clickIntent, 1), true, "small pointer jitter remains a lesion-selection click");

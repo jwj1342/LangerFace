@@ -156,6 +156,7 @@ import {
   workflowPhotoTumorOpeningIntersection,
   workflowPhotoTumorOutline,
   workflowPlanningClientPoint,
+  workflowPhotoDetectionFeedback,
   workflowScanCircleGeometry,
   recoverWorkflowFreehandBoundary,
   type SvgPoint,
@@ -272,6 +273,7 @@ interface WorkflowIncisionState {
   cleanup: Cleanup | null;
   liveSnapshot: LiveControllerSnapshot | null;
   lastPublishedPhotoReady: boolean;
+  lastPublishedPhotoDetectionKey: string | null;
   lastSourceRevision: number | null;
   lastProjectedRstlFingerprint: string | null;
   candidateRstlFingerprint: string | null;
@@ -385,6 +387,7 @@ function createState(root: HTMLElement): WorkflowIncisionState {
     cleanup: null,
     liveSnapshot: null,
     lastPublishedPhotoReady: false,
+    lastPublishedPhotoDetectionKey: null,
     lastSourceRevision: sourceState.planning2d?.getFrameState().revision ?? null,
     lastProjectedRstlFingerprint: null,
     candidateRstlFingerprint: null,
@@ -1027,6 +1030,8 @@ function rejectedReasonLabelForStatus(code: string): string {
 
 function workflowDeveloperDetails(state: WorkflowIncisionState): string[] {
   const details: string[] = [];
+  const photoDetection = workflowPhotoDetectionFeedback(sourceState.planning2d?.getSnapshot());
+  if (photoDetection?.failed) details.push(photoDetection.message);
   const rejected = state.rejectedMarkerPreview;
   if (rejected?.reasons?.length) {
     details.push(`肿物边界：${[...new Set(rejected.reasons.map(rejectedReasonLabelForStatus))].join("；")}`);
@@ -1055,6 +1060,35 @@ function publish(
   diagnosticLink: { actionId?: string | null; runId?: number | null } = {},
 ) {
   if (!state.mounted) return;
+  const photoDetection = workflowPhotoDetectionFeedback(sourceState.planning2d?.getSnapshot());
+  // Observe terminal source state once; render frames must not flood the local log.
+  if (photoDetection && photoDetection.key !== state.lastPublishedPhotoDetectionKey) {
+    try {
+      markerDiagnostics.get(state)?.recordAction({
+        domain: "photo_detection",
+        action: "image_face_detection",
+        stage: photoDetection.failed ? "failed" : "completed",
+        reason: photoDetection.reason,
+        details: {
+          status: photoDetection.status,
+          reason: photoDetection.reason,
+          source_revision: photoDetection.sourceRevision,
+          width: photoDetection.width,
+          height: photoDetection.height,
+          attempts: photoDetection.attempts,
+          accepted_landmark_count: photoDetection.landmarkCount,
+          blocked_actions: photoDetection.failed ? ["zoom_regions", "controlled_marker"] : [],
+          message: photoDetection.message,
+        },
+      });
+      observeWorkflowDiagnostic(state, {
+        event_type: "source_state",
+        stage: photoDetection.failed ? "failed" : "completed",
+        reason: photoDetection.reason,
+      });
+    } catch { /* Diagnostic failures must not change photo acceptance or rendering. */ }
+  }
+  state.lastPublishedPhotoDetectionKey = photoDetection?.key ?? null;
   try {
     markerDiagnostics.get(state)?.observeController({
       reason, request_id: state.markerRequestId,
@@ -1144,8 +1178,8 @@ function publish(
   const tumorUi = tumorPresentation(state);
   dispatchControllerEvent(INCISION_CONTROLLER_STATE_EVENT, buildIncisionControllerSnapshot({
     reason,
-    stageStatus: state.stageStatus,
-    stageStatusTone: state.stageStatusTone,
+    stageStatus: photoDetection?.failed ? photoDetection.message : state.stageStatus,
+    stageStatusTone: photoDetection?.failed ? "warning" : state.stageStatusTone,
     stageBusy: state.loading || state.workflowBusy || state.markerBusy,
     developerDetails: workflowDeveloperDetails(state),
     assetLoading: buildIncisionAssetLoadingSnapshot({
@@ -3874,7 +3908,9 @@ function bindDom(state: WorkflowIncisionState) {
   window.addEventListener("langerface:image-view-changed", () => scheduleOverlayDraw(state), { signal: abort.signal });
   window.addEventListener("langerface:focus-crop-changed", () => scheduleOverlayDraw(state), { signal: abort.signal });
   window.addEventListener("langerface:source-frame-ready", () => {
-    if (workflowPhotoReady(state) !== state.lastPublishedPhotoReady) {
+    const detectionKey = workflowPhotoDetectionFeedback(sourceState.planning2d?.getSnapshot())?.key ?? null;
+    if (workflowPhotoReady(state) !== state.lastPublishedPhotoReady
+      || detectionKey !== state.lastPublishedPhotoDetectionKey) {
       publish(state, "workflow_photo_readiness_changed");
     } else {
       scheduleOverlayDraw(state);

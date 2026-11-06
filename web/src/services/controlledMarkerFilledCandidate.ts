@@ -30,6 +30,8 @@ interface Features {
     narrowWideEdgeRatio: number;
     corePixels: number;
     backgroundPixels: number;
+    chromaticFraction: number;
+    darkSurroundRun: number;
 }
 interface Evaluation {
     result: ControlledMarkerDetection;
@@ -179,7 +181,39 @@ function evaluateOne(image: MarkerImageData, seed: MarkerPoint, scanRadius: numb
         && chromaticFraction >= .45 && stepSupport >= .8;
     if (narrowWideEdgeRatio < P.minimumNarrowWideEdgeRatio && !compactChromaticSoftEdge)
         reasons.push('gradual_shading_edge');
-    const features = { ...g, foreground, bg, difference, noiseEstimate, snr, stepMedian, stepSupport, narrowWideEdgeRatio, corePixels: core.length, backgroundPixels: background.length };
+    // A median background can hide an attached crease on one side. Require
+    // spatial evidence of that continuation, not low chroma alone: neutral
+    // grey targets with an independently enclosed edge must remain eligible.
+    const darkSectors: boolean[] = [];
+    if (chromaticFraction < .2) {
+        for (let i = 0; i < 16; i++) {
+            const angle = 2 * Math.PI * i / 16;
+            const angularDistance = (p: MarkerPoint) => {
+                const a = Math.atan2(p.y - g.center.y, p.x - g.center.x) - angle;
+                return Math.abs(Math.atan2(Math.sin(a), Math.cos(a)));
+            };
+            const edge = b.reduce((a, p) => angularDistance(p) < angularDistance(a) ? p : a);
+            const radius = Math.hypot(edge.x - g.center.x, edge.y - g.center.y);
+            const continuesDark = [4, 7, 10].every(offset => {
+                const p = { x: g.center.x + Math.cos(angle) * (radius + offset),
+                    y: g.center.y + Math.sin(angle) * (radius + offset) };
+                if (p.x < 1 || p.y < 1 || p.x >= image.width - 1 || p.y >= image.height - 1)
+                    return false;
+                const value = rgb(image, p, 1);
+                return value.reduce((sum, v, k) => sum + (v - foreground[k]) * unit[k], 0)
+                    / Math.max(1, difference) < .25;
+            });
+            darkSectors.push(continuesDark);
+        }
+    }
+    let darkSurroundRun = 0, run = 0;
+    for (const dark of [...darkSectors, ...darkSectors]) {
+        run = dark ? run + 1 : 0;
+        darkSurroundRun = Math.max(darkSurroundRun, Math.min(16, run));
+    }
+    if (darkSurroundRun >= 3)
+        reasons.push('achromatic_boundary_continues_into_surround');
+    const features = { ...g, foreground, bg, difference, noiseEstimate, snr, stepMedian, stepSupport, narrowWideEdgeRatio, corePixels: core.length, backgroundPixels: background.length, chromaticFraction, darkSurroundRun };
     if (reasons.length)
         return { result: baseline, route: 'retain_baseline', reasons, features };
     const source: ControlledMarkerDetection = { ...baseline, ok: true, failure_code: null, geometry_mode: 'dark_component', warnings: [], diagnostics: { ...(baseline.diagnostics || {}) }, boundary: b, center: g.center, area_px: g.area, bbox: g.bbox }, regularized = regularizeAcceptedBoundary(source), boundary = regularized === source ? regularizeSolidBoundary(source).boundary : regularized.boundary;

@@ -578,16 +578,18 @@
   }
 
   .workflow-incision-overlay [data-workflow-boundary] {
-    fill: rgb(250 204 21 / 12%);
-    stroke: #facc15;
-    stroke-width: 2;
+    fill: rgb(253 224 71 / 9%);
+    stroke: #fde047;
+    stroke-width: 0.95;
+    stroke-linecap: round;
+    stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
   }
 
   .workflow-incision-overlay [data-workflow-boundary-halo] {
     fill: none;
     stroke: rgb(3 7 18 / 88%);
-    stroke-width: 3;
+    stroke-width: 1.45;
     stroke-linecap: round;
     stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
@@ -595,8 +597,8 @@
 
   .workflow-incision-overlay [data-workflow-candidate] {
     fill: none;
-    stroke: #2563eb;
-    stroke-width: 2;
+    stroke: #67e8f9;
+    stroke-width: 0.95;
     stroke-linecap: round;
     stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
@@ -604,8 +606,8 @@
 
   .workflow-incision-overlay [data-workflow-candidate-halo] {
     fill: none;
-    stroke: #2563eb;
-    stroke-width: 2;
+    stroke: #082f49;
+    stroke-width: 0.95;
     stroke-linecap: round;
     stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
@@ -614,7 +616,7 @@
   .workflow-incision-overlay [data-workflow-diagnostic-candidate] {
     fill: none;
     stroke: #ef4444;
-    stroke-width: 1.5;
+    stroke-width: 0.95;
     stroke-dasharray: 7 5;
     stroke-linecap: round;
     stroke-linejoin: round;
@@ -624,7 +626,7 @@
   .workflow-incision-overlay [data-workflow-rejected-marker] {
     fill: rgb(217 70 239 / 10%);
     stroke: #d946ef;
-    stroke-width: 1.5;
+    stroke-width: 0.95;
     stroke-dasharray: 6 4;
     stroke-linecap: round;
     stroke-linejoin: round;
@@ -634,6 +636,13 @@
   .workflow-incision-overlay [data-workflow-center] {
     fill: transparent;
     stroke: #ffffff;
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-incision-overlay [data-workflow-incision-center] circle {
+    fill: #f43f5e;
+    stroke: #0b1118;
     stroke-width: 1;
     vector-effect: non-scaling-stroke;
   }
@@ -3213,59 +3222,6 @@ body:has(.dark-workbench-page) {
   .workflow-workbench[data-mobile-incision-candidate-visible="false"]
     .workflow-incision-overlay [data-workflow-rejected-marker] {
     display: none;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-boundary] {
-    fill: rgb(253 224 71 / 9%);
-    stroke: #fde047;
-    /* Fallback only: the controller owns the fine screen-space stroke. */
-    stroke-width: 1.4;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-boundary-halo] {
-    fill: none;
-    stroke-width: 2.2;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-candidate] {
-    stroke: #67e8f9;
-    stroke-width: 0.8;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-candidate-halo] {
-    stroke: #082f49;
-    stroke-width: 0.8;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-diagnostic-candidate] {
-    stroke-width: 0.9;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-rejected-marker] {
-    stroke-width: 0.9;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-center] {
-    fill: transparent;
-    stroke: #ffffff;
-    stroke-width: 1;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-incision-center] circle {
-    fill: #f43f5e;
-    stroke: #0b1118;
-    stroke-width: 1;
-    vector-effect: non-scaling-stroke;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-incision-center] path {
-    fill: none;
-    stroke: #22d3ee;
-    stroke-width: 1.8;
-    stroke-linecap: round;
-    vector-effect: non-scaling-stroke;
   }
 
   .workflow-workbench .canvas-legend {

@@ -45,11 +45,11 @@ try {
           const landmarks = Array.from({ length: 468 }, (_, i) => [100 + (i % 26) * 40, 100 + Math.floor(i / 26) * 40, 0]);
           const rows = [];
           try {
-            for (const crop of [false, true]) {
+            for (const fixedSize of [false, true]) for (const crop of [false, true]) {
               for (const mirror of [false, true]) {
                 for (const zoom of [0.1, 0.5, 1, 2, 5]) {
                   const transform = createPhotoPlanningTransform(1300, 1000, {
-                    viewportWidth: innerWidth, viewportHeight: innerHeight, zoom, mirror,
+                    viewportWidth: fixedSize ? 650 : innerWidth, viewportHeight: fixedSize ? 500 : innerHeight, zoom, mirror,
                   });
                   renderState.focusCrop = crop ? { sx: 200, sy: 100, sw: 650, sh: 500 } : null;
                   planning.getFrameState = () => ({ ...frame, revision: 10000 + rows.length,
@@ -58,7 +58,10 @@ try {
                   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
                   const svg = document.querySelector("#workflowIncisionOverlay");
                   const width = key => parseFloat(getComputedStyle(svg.querySelector(`[data-workflow-${key}]`)).strokeWidth);
-                  rows.push({ crop, mirror, zoom, displayWidth: transform.displayWidth,
+                  const paint = ["boundary", "boundary-halo", "candidate", "candidate-halo", "diagnostic-candidate", "rejected-marker", "center"]
+                    .map(key => { const element=svg.querySelector(`[data-workflow-${key}]`), style=getComputedStyle(element);
+                      return {key,stroke:style.stroke,width:style.strokeWidth,fill:style.fill,opacity:style.opacity,radius:element.getAttribute("r")}; });
+                  rows.push({ fixedSize, crop, mirror, zoom, displayWidth: transform.displayWidth, paint,
                     boundary: width("boundary"), halo: width("boundary-halo"), candidate: width("candidate"),
                     diagnostic: width("diagnostic-candidate"), rejected: width("rejected-marker") });
                 }
@@ -72,9 +75,8 @@ try {
           return rows;
         });
         for (const row of rows) {
-          const scale = row.displayWidth / 650 * (row.crop ? 2 : 1);
-          for (const [field, expectedWidth] of Object.entries({ boundary: scale, halo: 1.5 * scale,
-            candidate: 0.5 * scale, diagnostic: 0.5 * scale, rejected: scale })) {
+          for (const [field, expectedWidth] of Object.entries({ boundary: 0.95, halo: 1.45,
+            candidate: 0.95, diagnostic: 0.95, rejected: 0.95 })) {
             assert.ok(Math.abs(row[field] - expectedWidth) < 1e-4, `${field}: ${JSON.stringify(row)}`);
           }
         }
@@ -82,6 +84,11 @@ try {
         results.push({ mobileSimulation: mobile, dpr, cases: rows.length, status: "PASS", rows });
       } finally { await context.close(); }
     }
+  }
+  const baseline = results[0].rows.filter(row => row.fixedSize).map(row => row.paint);
+  for (const result of results.slice(1)) {
+    assert.deepEqual(result.rows.filter(row => row.fixedSize).map(row => row.paint), baseline,
+      "same projected photo size must produce identical complete SVG paint across layout and DPR");
   }
   console.log(JSON.stringify({ status: "PASS", identity: expected, results }, null, 2));
 } finally { await browser.close(); }

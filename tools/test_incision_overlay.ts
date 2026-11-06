@@ -246,14 +246,15 @@ const compactCameraStyle = incisionOverlayScreenStyle("fusiform", { compact: tru
 const compactZoomedPhotoStyle = incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 2 });
 assert.deepEqual(compactFullPhotoStyle, compactCameraStyle,
   "the full-photo view and camera use identical compact screen-space tokens");
-assert.equal(compactFullPhotoStyle.candidate.lineWidth, 0.8, "phone incision doubles the earlier 0.4 CSS px width");
+assert.equal(compactFullPhotoStyle.candidate.lineWidth, 0.95, "both devices share a fixed thin incision stroke");
 assert.equal(compactFullPhotoStyle.boundary.lineWidth, 0.95, "phone boundary is reduced to roughly two-thirds of the earlier width");
-assert.equal(compactFullPhotoStyle.center.radiusCss, 0.4, "phone lesion center follows photo scale");
+assert.equal(compactFullPhotoStyle.center.radiusCss, 2, "no-photo fallback centers use the shared device-independent default");
 for (const zoom of [0.25, 0.5, 1, 2, 5, 6]) {
   const style = incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: zoom });
-  assert.equal(style.candidate.lineWidth, 0.8, `incision screen width stays fixed at zoom ${zoom}`);
+  assert.equal(style.candidate.lineWidth, 0.95, `incision screen width stays fixed at zoom ${zoom}`);
   assert.equal(style.boundary.lineWidth, 0.95, `boundary screen width stays fixed at zoom ${zoom}`);
-  assert.equal(style.center.radiusCss, 2 * Math.min(5, zoom) / 5, "center scales with photo and caps at maximum zoom");
+  assert.deepEqual(style, incisionOverlayScreenStyle("fusiform", { compact: false, viewScale: zoom }),
+    "no-photo fallback paint is identical on both devices");
 }
 assert.equal(compactZoomedPhotoStyle.center.strokeColor, incisionOverlayScreenStyle().center.strokeColor,
   "phone and desktop retain the hollow white center convention");
