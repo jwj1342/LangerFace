@@ -10,7 +10,7 @@
       "孤立色素候选纠偏"
     ],
     "status": "candidate",
-    "sourceDigest": "e750103813ee909681755ceac0acb9e00b061671dbe0e8ee0f6ed45b7585c376",
+    "sourceDigest": "8f76f12988065e0bfa09008501ad0e0af8563cbaaa0d3eb10776da7b6b0a845e",
     "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
     "changeSlug": "isolated-pigment-after-validation",
     "previous": {
@@ -1746,8 +1746,8 @@
     }
   ],
   "uiIdentity": {
-    "version": "0.1.30-candidate.1",
-    "name": "交互诊断：记录输入分流与手势现场",
+    "version": "0.1.31-candidate.1",
+    "name": "交互诊断：识别进行中也可保存故障快照",
     "status": "candidate",
     "sourceFiles": [
       "web/src/components/IncisionStagePanel.tsx",
@@ -1769,14 +1769,45 @@
       "web/src/services/workflowIncisionController.ts",
       "web/src/styles.css"
     ],
-    "sourceDigest": "8e4270cbb5c93421714295dd7508706002396a3d4dd576df94fd53be4a59ed10",
+    "sourceDigest": "9f02b30642bd161c6b3b085b356c5eedfaff90523be98a6de222fcd35ff8a18c",
     "digestMethod": "SHA256(JSON.stringify(sorted [path, SHA256(CRLF-to-LF source)]))",
-    "runtimeSourceDigest": "e750103813ee909681755ceac0acb9e00b061671dbe0e8ee0f6ed45b7585c376",
+    "runtimeSourceDigest": "8f76f12988065e0bfa09008501ad0e0af8563cbaaa0d3eb10776da7b6b0a845e",
     "algorithmVersion": "0.100.3-candidate.1",
     "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
-    "note": "仅补现有本机诊断：媒体/视口、被动输入、布局与延后状态、每页128条独立限量记录。设备分流、布局、手势处理及核心算法不变；手机真机原因待新日志确认。"
+    "note": "仅放开会话故障快照导出，未完成识别仍为pending并单列计数；复放门禁、业务手势、布局与算法不变。"
   },
   "uiHistory": [
+    {
+      "version": "0.1.30-candidate.1",
+      "name": "交互诊断：记录输入分流与手势现场",
+      "status": "candidate",
+      "sourceFiles": [
+        "web/src/components/IncisionStagePanel.tsx",
+        "web/src/components/LiveSourceControlsPanel.tsx",
+        "web/src/components/MobileWorkflowControls.tsx",
+        "web/src/components/StandaloneReviewControlsPanel.tsx",
+        "web/src/components/TumorInputPanel.tsx",
+        "web/src/components/WorkflowCanvasTools.tsx",
+        "web/src/components/WorkflowLayout.tsx",
+        "web/src/components/WorkflowStageStatus.tsx",
+        "web/src/services/controlledMarkerRunDiagnostics.ts",
+        "web/src/services/controlledMarkerUiConfig.ts",
+        "web/src/services/incisionClinicalCopy.ts",
+        "web/src/services/incisionOverlayStyle.ts",
+        "web/src/services/incisionPhotoRuntime.ts",
+        "web/src/services/liveCanvasFit.ts",
+        "web/src/services/liveState.ts",
+        "web/src/services/workflowControllerUtils.ts",
+        "web/src/services/workflowIncisionController.ts",
+        "web/src/styles.css"
+      ],
+      "sourceDigest": "8e4270cbb5c93421714295dd7508706002396a3d4dd576df94fd53be4a59ed10",
+      "digestMethod": "SHA256(JSON.stringify(sorted [path, SHA256(CRLF-to-LF source)]))",
+      "runtimeSourceDigest": "e750103813ee909681755ceac0acb9e00b061671dbe0e8ee0f6ed45b7585c376",
+      "algorithmVersion": "0.100.3-candidate.1",
+      "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
+      "note": "仅补现有本机诊断：媒体/视口、被动输入、布局与延后状态、每页128条独立限量记录。设备分流、布局、手势处理及核心算法不变；手机真机原因待新日志确认。"
+    },
     {
       "version": "0.1.29-candidate.1",
       "name": "工作流滚动：保留原DOM与画布的窄屏滚动退路",
@@ -2760,10 +2791,10 @@
   "sourceFingerprint": {
     "encoding": "UTF-8",
     "normalization": "CRLF-to-LF-only",
-    "previousSourceDigest": "22250be09792f95b7d43118f2083c7d96dcfe0a69ecf7f8dfbe3ffc444a97eab",
-    "currentSourceDigest": "e750103813ee909681755ceac0acb9e00b061671dbe0e8ee0f6ed45b7585c376",
-    "capturedAt": "2026-11-09T16:48:43.763Z",
-    "reason": "UI0.1.30：仅补本机交互诊断；算法及资产不变。"
+    "previousSourceDigest": "e750103813ee909681755ceac0acb9e00b061671dbe0e8ee0f6ed45b7585c376",
+    "currentSourceDigest": "8f76f12988065e0bfa09008501ad0e0af8563cbaaa0d3eb10776da7b6b0a845e",
+    "capturedAt": "2026-11-09T16:55:29.868Z",
+    "reason": "UI0.1.31：识别进行中保留真实pending状态导出现场，复放门禁不变。"
   },
   "integrationHistory": [
     {
@@ -2913,6 +2944,14 @@
     "scopeConfigSha256": "dde1ce1defadf40925d8722e0058503d09cf5da679f60976e913d5472bcbf0e1"
   },
   "sourceFingerprintHistory": [
+    {
+      "encoding": "UTF-8",
+      "normalization": "CRLF-to-LF-only",
+      "previousSourceDigest": "22250be09792f95b7d43118f2083c7d96dcfe0a69ecf7f8dfbe3ffc444a97eab",
+      "currentSourceDigest": "e750103813ee909681755ceac0acb9e00b061671dbe0e8ee0f6ed45b7585c376",
+      "capturedAt": "2026-11-09T16:48:43.763Z",
+      "reason": "UI0.1.30：仅补本机交互诊断；算法及资产不变。"
+    },
     {
       "encoding": "UTF-8",
       "normalization": "CRLF-to-LF-only",

@@ -398,7 +398,16 @@ assert.equal(uiEvent.details.after_phase, "later_task_sample");
 assert.equal(uiSession.page_instances.at(-1).interaction_context.media.primary_pointer_fine, true);
 assert.equal(auditMarkerDiagnosticExport(uiSession).passed, true);
 assert.equal(uiSession.runs.length, 0, "UI failure evidence must not require a detector run");
-const recordedBefore = uiSession.page_instances.at(-1).interaction_events.length;
+const inFlight = uiDiagnostic.begin(input, 999, "web_worker", pixels, pixels);
+const incidentSnapshot = JSON.parse(uiDiagnostic.exportSession());
+assert.equal(incidentSnapshot.pending_run_count, 1);
+assert.equal(incidentSnapshot.runs.at(-1).status, "pending", "export must not pretend the unfinished detector has completed");
+assert.equal(auditMarkerDiagnosticExport(incidentSnapshot).passed, true);
+assert.throws(() => parseDiagnosticRun(JSON.stringify(incidentSnapshot)), /不支持复放/,
+  "an in-flight incident snapshot is evidence only, never a replayable completed result");
+inFlight.finish(detection, false, "discarded_request");
+await inFlight.evidence;
+const recordedBefore = (uiDiagnostic as any).interactionEvents.length;
 for (let i = 0; i < DIAGNOSTIC_LIMITS.interactionEvents + 5; i++) doc.dispatchEvent(touchEvent);
 await new Promise(resolve => setTimeout(resolve, 5));
 const capped = JSON.parse(uiDiagnostic.exportSession());

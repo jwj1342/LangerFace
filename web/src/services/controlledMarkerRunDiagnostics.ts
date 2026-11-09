@@ -1053,8 +1053,8 @@ export class MarkerRunDiagnostics {
     try { this.captureInteraction("export_snapshot", {}); } catch { /* Optional observation. */ }
     if (!this.runs.length && !this.controllerEvents.length && !this.workflowEvents.length && !this.actionEvents.length
       && !this.interactionEvents.length) throw new Error("请先完成一次诊断动作");
-    if (this.runs.some(run => run.status === "pending")) throw new Error("诊断记录尚在生成，请稍后导出");
     const payload = { ...this.persisted(), exported_at_ms: Date.now(), export_events: this.exportEvents,
+      pending_run_count: this.runs.filter(run => run.status === "pending").length,
       raw_image_embedded: false, uploaded: false };
     assertDiagnosticJson(payload);
     let text = JSON.stringify(payload, null, 2);
